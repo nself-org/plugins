@@ -9,6 +9,7 @@ package schedpolicy
 // a nil Resolved is an error because defaults would drop every override.
 
 import (
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -78,11 +79,11 @@ type CloudVM struct {
 // AgentBinary is the https URL and sha256 of the agent for one arch.
 type AgentBinary struct{ URL, SHA256 string }
 
-// PaidAllowed reports whether a paid class may be placed on provider: the
+// PaidAllowed reports whether a paid class may be placed on provider (never GitHub): the
 // operator turned paid spend on AND set a day or month budget (overall) or a
 // budget for that provider above zero (review F6; I19).
 func PaidAllowed(p SpendPolicy, provider string) bool {
-	return p.PaidEnabled && (p.Budgets.Day.Set && p.Budgets.Day.Micro > 0 || p.Budgets.Month.Set && p.Budgets.Month.Micro > 0 || p.Budgets.Provider[provider] > 0)
+	return p.PaidEnabled && !isGitHubID(provider) && (p.Budgets.Day.Set && p.Budgets.Day.Micro > 0 || p.Budgets.Month.Set && p.Budgets.Month.Micro > 0 || p.Budgets.Provider[provider] > 0)
 }
 
 // Spend builds the typed spend policy. Resolved.Values carries the per-provider
@@ -139,6 +140,9 @@ func Spend(res *policy.Resolved) (SpendPolicy, error) {
 			continue
 		}
 		v := res.Values[key]
+		if ev, _, found := res.Effective.Value(key); !found || !reflect.DeepEqual(ev, v) {
+			return SpendPolicy{}, fail(key, "Resolved.Values differs from the effective policy")
+		}
 		if err := checkFamily(key, v); err != nil {
 			return SpendPolicy{}, err
 		}

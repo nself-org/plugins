@@ -101,7 +101,7 @@ func hostPort(key string) decoder {
 		}
 		host, port, serr := net.SplitHostPort(v.(string))
 		p, perr := strconv.Atoi(port)
-		if serr != nil || host == "" || strings.ContainsAny(host, " \t\r\n") || perr != nil || p < 1 || p > 65535 {
+		if serr != nil || !hostRe.MatchString(host) || !portRe.MatchString(port) || perr != nil || p < 1 || p > 65535 {
 			return nil, fail(key, "must be host:port with a port from 1 to 65535")
 		}
 		return v, nil
@@ -115,7 +115,7 @@ func absPath(key string) decoder {
 		if err != nil {
 			return nil, err
 		}
-		if s := v.(string); !filepath.IsAbs(s) || filepath.Clean(s) != s || strings.ContainsRune(s, 0) {
+		if s := v.(string); !filepath.IsAbs(s) || filepath.Clean(s) != s || s == "/" || strings.ContainsRune(s, 0) {
 			return nil, fail(key, "must be an absolute, clean file path")
 		}
 		return v, nil

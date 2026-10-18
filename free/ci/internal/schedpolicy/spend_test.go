@@ -29,7 +29,7 @@ var operatorSpend = map[string]string{
 	"burst.providers.hetzner":       `{"enabled":true}`,
 	KeyBurstConcurrent:              `3`, KeyBurstMargin: `"90s"`,
 	KeyCloudType: `"cx22"`, KeyCloudLocation: `"nbg1"`, KeyCloudImage: `"ubuntu-24.04"`,
-	"burst.cloudvm.agent.amd64": `{"url":"https://agents.example.test/ci/agent-amd64","sha256":"` + sha64 + `"}`,
+	"burst.cloudvm.agent.amd64": `{"url":"https://agents.example.test/ci/agent-amd64","sha256":"` + strings.ToUpper(sha64) + `"}`,
 	KeyCloudEnrollAddr:          `"0.0.0.0:7443"`, KeyCloudEnrollURL: `"https://ci.example.test/enroll"`, KeyCloudTokenFile: `"/etc/nself/burst.token"`,
 }
 
@@ -203,6 +203,12 @@ func TestSpendPlanted(t *testing.T) {
 	if err != nil || p.PaidEnabled || p.Budgets.Month.Set || len(p.Rates) != 0 || PaidAllowed(p, "hetzner") {
 		t.Errorf("planted revision on empty policy: %+v %v", p, err)
 	}
+	// A URL that does not even parse in a planted revision is an error, never a panic.
+	for _, raw := range []string{`"%"`, `"https://[::1"`, `"https://h/%zz"`, `" https://h/"`} {
+		if _, err := merge(t, scope(trust.SourceRevision, map[string]string{KeyCloudEnrollURL: raw})); err == nil || !strings.Contains(err.Error(), "E691") {
+			t.Errorf("planted %s: %v", raw, err)
+		}
+	}
 	// An invalid planted value is still refused, not silently skipped.
 	if _, err := merge(t, scope(trust.SourceRevision, map[string]string{KeyBudgetMonth: `-5`})); err == nil || !strings.Contains(err.Error(), "E691") {
 		t.Errorf("an invalid planted value was accepted: %v", err)
@@ -239,6 +245,11 @@ func TestPaidAllowed(t *testing.T) {
 	}
 	if !PaidAllowed(SpendPolicy{PaidEnabled: true, Budgets: Budgets{Day: Budget{Micro: 1, Set: true}}}, "hetzner") {
 		t.Error("a set day budget did not allow paid")
+	}
+	// GitHub is never paid, whatever the budgets say.
+	gh := SpendPolicy{PaidEnabled: true, Budgets: Budgets{Day: Budget{Micro: 1, Set: true}, Provider: map[string]int64{"github-hosted": 5}}}
+	if PaidAllowed(gh, "github-hosted") || PaidAllowed(gh, "gh") || !PaidAllowed(gh, "hetzner") {
+		t.Error("the GitHub guard of PaidAllowed is wrong")
 	}
 	if PaidAllowed(SpendPolicy{}, "") {
 		t.Error("the zero policy allows paid")
@@ -334,6 +345,14 @@ func TestSpendFlagged(t *testing.T) {
 		{KeyCloudEnrollURL, `"https://ci.example.test:99999/enroll"`, "/burst/cloudvm/enroll_url"},
 		{KeyCloudEnrollURL, `"https://ci.example.test/en roll"`, "/burst/cloudvm/enroll_url"},
 		{KeyCloudEnrollAddr, `"a b:80"`, "/burst/cloudvm/enroll_addr"},
+		{KeyCloudEnrollAddr, `"h:+80"`, "/burst/cloudvm/enroll_addr"},
+		{KeyCloudEnrollAddr, `"a/b:80"`, "/burst/cloudvm/enroll_addr"},
+		{KeyCloudEnrollAddr, `"[fe80::1%en0]:80"`, "/burst/cloudvm/enroll_addr"},
+		{KeyCloudTokenFile, `"/"`, "/burst/cloudvm/token_file"},
+		{KeyCloudEnrollURL, `"%"`, "/burst/cloudvm/enroll_url"},
+		{KeyCloudEnrollURL, `" https://h.example.test/"`, "/burst/cloudvm/enroll_url"},
+		{KeyCloudEnrollURL, `"https://%68ost/x"`, "/burst/cloudvm/enroll_url"},
+		{KeyCloudAgent, agent(`https://h.example.test\\@evil.test/a`, sha64), "/burst/cloudvm/agent/url"},
 		{KeyCloudEnrollURL, `"https://u` + `:p` + `@ci.example.test/enroll"`, "/burst/cloudvm/enroll_url"},
 		{KeyCloudTokenFile, `"burst.token"`, "/burst/cloudvm/token_file"},
 		{KeyCloudTokenFile, `"./burst.token"`, "/burst/cloudvm/token_file"},
@@ -365,6 +384,14 @@ func TestSpendFlagged(t *testing.T) {
 		{"economics.rates.github-hosted", rate(`"class":"metered","rate_per_hour_micro":100,"billing_increment":"1h"`), false},
 		{"economics.rates.github-jit", rate(`"class":"ephemeral","rate_per_hour_micro":100,"billing_increment":"1h"`), false},
 		{"economics.rates.github-hosted", rate(`"class":"included"`), true},
+		{"economics.rates.gh", paid, false},
+		{"economics.rates.hosted", paid, false},
+		{"economics.rates.git-hub", paid, false},
+		{"economics.rates.gh-hosted", paid, false},
+		{"burst.providers.gha", `{"enabled":true}`, false},
+		{"economics.budgets.provider.github-hosted", `5`, false},
+		{"economics.budgets.provider.hetzner", `5`, true},
+		{"economics.ceilings.github-hosted", `0`, true},
 		{"economics.rates.hetzner", paid, true},
 		{"economics.rates.Hetzner", paid, false},
 		{"economics.rates.-x", paid, false},
@@ -387,6 +414,22 @@ func TestSpendFlagged(t *testing.T) {
 	bad := resolved(t, scope(trust.SourceProject, map[string]string{"economics.rates.github-hosted": paid}))
 	if _, err := Spend(&bad); err == nil || !strings.HasPrefix(err.Error(), "E691 /economics/rates/github-hosted") {
 		t.Errorf("Spend accepted a metered GitHub provider: %v", err)
+	}
+	// The family values must equal the effective policy: an injected or edited Values entry is refused.
+	for name, mutate := range map[string]func(map[string]any){
+		"injected budget":  func(v map[string]any) { v["economics.budgets.provider.x"] = int64(5) },
+		"edited ceiling":   func(v map[string]any) { v["economics.ceilings.hetzner"] = int64(1) },
+		"injected unknown": func(v map[string]any) { v["economics.rates.nope"] = map[string]any{"class": "owned"} },
+	} {
+		values := map[string]any{}
+		for k, v := range resolved(t, scope(trust.SourceProject, operatorSpend)).Values {
+			values[k] = v
+		}
+		mutate(values)
+		res := policy.Resolved{Effective: resolved(t, scope(trust.SourceProject, operatorSpend)).Effective, Values: values}
+		if _, err := Spend(&res); err == nil || !strings.Contains(err.Error(), "differs") {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 	// A resolved value of the wrong shape fails closed instead of reading as zero (free, unlimited).
 	good := resolved(t, scope(trust.SourceProject, operatorSpend))

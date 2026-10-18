@@ -76,6 +76,8 @@ const (
 var (
 	idRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,62}$`)
 	nameRe   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$`)
+	hostRe   = regexp.MustCompile(`^[A-Za-z0-9._:-]+$`)
+	portRe   = regexp.MustCompile(`^[0-9]{1,5}$`)
 	shaRe    = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
 	currency = regexp.MustCompile(`^[A-Z]{3}$`)
 	// burstAccepts is the Epic D13 default: owner, collaborator, internal (secret classes none).
@@ -202,6 +204,14 @@ func ValidateSpendKey(key string, raw json.RawMessage) error {
 	return checkFamily(key, v)
 }
 
+// isGitHubID reports whether a provider id names GitHub-hosted capacity. The real
+// ids come from the capability enum (github-hosted, github-jit); the short
+// aliases are inert in placement but refused anyway so no paid class can hide
+// behind a name that reads as GitHub (APC P8: GitHub is never paid).
+func isGitHubID(id string) bool {
+	return strings.HasPrefix(id, "github") || id == "gh" || id == "gha" || id == "hosted" || id == "actions" || strings.HasPrefix(id, "gh-") || strings.HasPrefix(id, "git-hub")
+}
+
 func checkFamily(key string, v any) error {
 	i := strings.LastIndex(key, ".")
 	prefix, id := key[:i+1], key[i+1:]
@@ -212,7 +222,7 @@ func checkFamily(key string, v any) error {
 	if !idRe.MatchString(id) {
 		return fail(key, "provider id %q is not a lower-case name", id)
 	}
-	github := strings.HasPrefix(id, "github")
+	github := isGitHubID(id)
 	switch prefix + "*" {
 	case KeyRates:
 		m, _ := v.(map[string]any)
@@ -222,6 +232,10 @@ func checkFamily(key string, v any) error {
 	case KeyBurstProviders:
 		if github {
 			return fail(key, "a GitHub provider is never a burst provider")
+		}
+	case KeyBudgetProvider:
+		if github {
+			return fail(key, "a GitHub provider is never paid, so it takes no spend budget (declare a ceiling instead)")
 		}
 	case KeyCloudAgent:
 		if id != cloudArchAmd64 && id != cloudArchArm64 {
