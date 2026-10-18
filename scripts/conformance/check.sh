@@ -87,7 +87,7 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
   done
   echo "checked $p"
 done
-echo "checked $checked manifest v2 plugin(s)"
+echo "checked $checked v2 plugin(s)"
 if [ "$checked" -eq 0 ] && [ "$mode" != changed ]; then echo "FAIL check: no plugin was checked (a gate that ran nothing)"; rc=1; fi
 [ $rc -eq 0 ] && echo "conformance: pass" || echo "conformance: FAIL"
 exit $rc

@@ -2,7 +2,7 @@
 # no-fragment-v2-test.sh (D-0812): free plugins with no compose fragment are manifest v2 library plugins, so the
 # conformance gate covers them. Requires, per plugin: manifest_version 2, service.kind library with the manifest
 # port, no compose key, boot migrations, a Dockerfile, and the static gate rules pass with the plugin counted as v2
-# (a v1 plugin is skipped by check.sh, which then fails: "no manifest v2 plugin was checked"). No Docker, no network
+# (a v1 plugin fails check.sh: "plugin.json is not manifest_version 2"). No Docker, no network
 # beyond the cli-tools fetch the gate itself needs. Usage: no-fragment-v2-test.sh [plugin ...] (default: the set below)
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd); . "$HERE/../../scripts/conformance/lib.sh"
