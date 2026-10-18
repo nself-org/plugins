@@ -71,6 +71,7 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 		s.MemoryMB = 1024
 	}
 	args = append(args, "--read-only", "--tmpfs=/tmp:size=256m", "--cpus="+strconv.FormatFloat(s.CPU, 'f', -1, 64), "--memory="+strconv.Itoa(s.MemoryMB)+"m", "--memory-swap="+strconv.Itoa(s.MemoryMB)+"m")
+	args = append(args, mountArgs(s.Mounts)...)
 	args = append(args, "--mount", "type=bind,src="+workspace+",dst=/repo", "--workdir="+workdir, "--env-file", file.Name())
 	args = append(args, s.Job.Container.Image)
 	args = append(args, s.Command...)

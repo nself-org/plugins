@@ -13,15 +13,13 @@ import (
 	"context"
 	"sort"
 
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 )
 
 // Mount is a host path made visible to a job (cache restore).
-type Mount struct {
-	Host, Target string
-	ReadOnly     bool
-}
+type Mount = ciexec.Mount
 
 // AttemptInfo describes the attempt a hook is called for.
 type AttemptInfo struct {

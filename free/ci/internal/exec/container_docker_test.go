@@ -103,3 +103,28 @@ func TestContainerOrphanSweep(t *testing.T) {
 		t.Fatal("stale container survived")
 	}
 }
+
+// A mount shows its files to the container; a read-only one refuses writes.
+func TestContainerMountContentsAndReadOnly(t *testing.T) {
+	image := dockerPrerequisite(t)
+	ro, rw := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(ro+"/f", []byte("cached"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	e := &Executor{Grace: time.Second}
+	res := e.Run(context.Background(), JobSpec{AttemptID: "mounts-ro", CoordinatorID: "test-coord", Home: t.TempDir(),
+		Job:     model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: image}},
+		Mounts:  []Mount{{Host: ro, Target: "/cache/ro", ReadOnly: true}, {Host: rw, Target: "/cache/rw"}},
+		Command: []string{"sh", "-c", "cat /cache/ro/f && echo w > /cache/rw/g && ! (echo x > /cache/ro/h)"},
+		Output:  func(p []byte) { out.Write(p) }})
+	if res.Err != nil || res.ExitCode != 0 || !strings.Contains(out.String(), "cached") {
+		t.Fatalf("mount run: %+v output %q", res, out.String())
+	}
+	if b, err := os.ReadFile(rw + "/g"); err != nil || strings.TrimSpace(string(b)) != "w" {
+		t.Fatalf("read-write mount not written: %v %q", err, b)
+	}
+	if _, err := os.Stat(ro + "/h"); err == nil {
+		t.Fatal("read-only mount accepted a write")
+	}
+}
