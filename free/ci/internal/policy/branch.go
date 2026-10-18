@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -36,15 +37,16 @@ const (
 	FetchNone  FetchState = "none"
 )
 
-var branchName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
 var fullSHA = regexp.MustCompile(`^[0-9a-f]{40}([0-9a-f]{24})?$`)
 
 // Branch is what the protected branch says.
 type Branch struct {
-	Name   string
-	Tip    string
-	Fetch  FetchState
-	Policy map[string]json.RawMessage // the tip's flat policy; nil when it has none
+	Name  string
+	Tip   string
+	Fetch FetchState
+	// Assumed: origin's default branch could not be discovered, so Name is the spec fallback main.
+	Assumed bool
+	Policy  map[string]json.RawMessage // the tip's flat policy; nil when it has none
 }
 
 type gitRunner struct {
@@ -52,9 +54,15 @@ type gitRunner struct {
 	root string
 }
 
-// raw runs git and returns its output untouched.
+// gitScrub drops the variables that would point git at another repository, and
+// --no-replace-objects keeps refs/replace from swapping the tree it reads.
+var gitScrub = []string{"env", "-u", "GIT_DIR", "-u", "GIT_WORK_TREE", "-u", "GIT_INDEX_FILE", "-u", "GIT_OBJECT_DIRECTORY",
+	"-u", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "-u", "GIT_COMMON_DIR", "-u", "GIT_NAMESPACE", "-u", "GIT_CEILING_DIRECTORIES",
+	"GIT_TERMINAL_PROMPT=0", "git", "--no-replace-objects", "-c", "core.fsmonitor=false"}
+
+// raw runs git bound to g.root and returns its output untouched.
 func (g gitRunner) raw(ctx context.Context, args ...string) (string, bool) {
-	return g.argv(ctx, append([]string{"git", "-c", "core.fsmonitor=false", "-C", g.root}, args...)...)
+	return g.argv(ctx, append(append(slices.Clone(gitScrub), "-C", g.root), args...)...)
 }
 
 func (g gitRunner) argv(ctx context.Context, argv ...string) (string, bool) {
@@ -73,14 +81,32 @@ func lastLine(s string) string {
 	return strings.TrimSpace(lines[len(lines)-1])
 }
 
-// DefaultBranch is origin's HEAD, else main.
-func (g gitRunner) defaultBranch(ctx context.Context) string {
+// defaultBranch is origin's HEAD: the local symbolic ref, else the remote's own
+// answer (one read-only ls-remote, for checkouts made by init+remote add+fetch),
+// else main with assumed set. A name git would not accept is refused, never
+// swapped for main.
+func (g gitRunner) defaultBranch(ctx context.Context) (name string, assumed bool, err error) {
 	out, ok := g.git(ctx, "symbolic-ref", "refs/remotes/origin/HEAD")
-	name := strings.TrimPrefix(lastLine(out), "refs/remotes/origin/")
-	if !ok || !branchName.MatchString(name) || strings.Contains(name, "..") || strings.HasSuffix(name, ".lock") {
-		return "main"
+	if ok {
+		name = strings.TrimPrefix(lastLine(out), "refs/remotes/origin/")
+	} else if out, ok = g.git(ctx, "ls-remote", "--symref", "origin", "HEAD"); ok {
+		for _, line := range strings.Split(out, "\n") {
+			if rest, found := strings.CutPrefix(line, "ref: refs/heads/"); found {
+				name, _, _ = strings.Cut(rest, "\t")
+				break
+			}
+		}
 	}
-	return name
+	if name == "" {
+		return "main", true, nil
+	}
+	if strings.ContainsAny(name, " \t\r\n\x00") || strings.HasPrefix(name, "-") {
+		return "", false, refuse("default branch name %q is not usable", name)
+	}
+	if _, ok := g.git(ctx, "check-ref-format", "refs/remotes/origin/"+name); !ok {
+		return "", false, refuse("default branch name %q is not a valid ref", name)
+	}
+	return name, false, nil
 }
 
 func (g gitRunner) hasOrigin(ctx context.Context) bool {
@@ -102,10 +128,14 @@ func readBranch(ctx context.Context, run Runner, root string) (Branch, error) {
 	if !g.hasOrigin(ctx) {
 		return Branch{Fetch: FetchNone}, nil
 	}
-	b := Branch{Name: g.defaultBranch(ctx)}
+	name, assumed, err := g.defaultBranch(ctx)
+	if err != nil {
+		return Branch{}, err
+	}
+	b := Branch{Name: name, Assumed: assumed}
 	ref := "refs/remotes/origin/" + b.Name
-	// env keeps a credential prompt from blocking the run; the Capture timeout bounds the rest.
-	_, fetched := g.argv(ctx, "env", "GIT_TERMINAL_PROMPT=0", "git", "-c", "core.fsmonitor=false", "-C", root, "fetch", "--no-tags", "--no-recurse-submodules", "origin", "+refs/heads/"+b.Name+":"+ref)
+	// The scrub keeps a credential prompt from blocking the run; the Capture timeout bounds the rest.
+	_, fetched := g.raw(ctx, "fetch", "--no-tags", "--no-recurse-submodules", "origin", "+refs/heads/"+b.Name+":"+ref)
 	out, ok := g.git(ctx, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	tip := lastLine(out)
 	if !ok || !fullSHA.MatchString(tip) {

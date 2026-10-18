@@ -17,7 +17,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"sort"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -40,14 +39,6 @@ type Repo struct {
 // Revision is the checkout under test: Dir's `.nself/ci.yaml` `policy:` is the
 // tighten-only revision scope. An empty Dir means no revision scope.
 type Revision struct{ Dir string }
-
-// ProjectID is the project-scope subject of a repository root.
-func ProjectID(root string) string {
-	if abs, err := filepath.Abs(root); err == nil {
-		return filepath.Clean(abs)
-	}
-	return filepath.Clean(root)
-}
 
 // Reader is the store surface the resolver reads.
 type Reader interface {
@@ -104,6 +95,9 @@ func (r *Resolver) Resolve(ctx context.Context, repo Repo, rev Revision) (Resolv
 		return Resolved{}, err
 	}
 	res.Fetch = branch.Fetch
+	if branch.Assumed {
+		ignored = append(ignored, Ignored{Key: "default_branch", Scope: SourceProtectedBranch, Reason: "E672 origin's default branch could not be discovered; main is assumed"})
+	}
 	var tipPolicy map[string]json.RawMessage
 	if branch.Tip != "" {
 		commit, note := chooseCommit(ctx, r.Run, repo.Root, branch, operator.pin)

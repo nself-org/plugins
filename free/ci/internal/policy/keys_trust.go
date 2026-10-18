@@ -47,6 +47,9 @@ func trustKeys() []KeySpec {
 }
 
 func decodeOne(raw json.RawMessage) (any, error) {
+	if !json.Valid(raw) {
+		return nil, fmt.Errorf("malformed JSON")
+	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.UseNumber()
 	var v any
