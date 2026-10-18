@@ -65,6 +65,9 @@ func (p Profile) pseudonym(kind, id string) string {
 	return kind + "-" + Digest([]byte("nself-ci/" + kind + "/v1\x00" + p.repoID + "\x00" + id))[:12]
 }
 
+// WithRunner is withRunner for callers outside the package (the status hook).
+func (p Profile) WithRunner(id string) Profile { return p.withRunner(id) }
+
 // withRunner returns a copy that also replaces the literal runner id in text
 // with its pseudonym; the generic id "local" is not a host name and is left.
 func (p Profile) withRunner(id string) Profile {
@@ -90,7 +93,7 @@ func (p Profile) URL(u string) string {
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.Host == "" {
 		return ""
 	}
-	if p.privateHost(parsed.Hostname()) {
+	if p.privateHost(parsed.Hostname()) || p.privatePath(parsed.EscapedPath()) {
 		return ""
 	}
 	parsed.RawQuery, parsed.Fragment, parsed.RawFragment = "", "", ""
@@ -102,6 +105,26 @@ var privateSuffixes = []string{".local", ".lan", ".internal", ".home", ".home.ar
 // numericHostRe matches a host written only as numbers: decimal, hex or short
 // IPv4 forms that netip refuses but a socket library may still resolve.
 var numericHostRe = regexp.MustCompile(`^(0x[0-9a-f]+|[0-9]+)(\.(0x[0-9a-f]+|[0-9]+))*$`)
+
+// privatePath is true when the path (raw, then percent-decoded up to three
+// times) holds anything Text would redact: a home path, a private address, a
+// known host or user name, a runner id. Such a URL is dropped whole.
+func (p Profile) privatePath(path string) bool {
+	for i := 0; i < 4; i++ {
+		if p.Text(path) != path {
+			return true
+		}
+		d, err := url.PathUnescape(path)
+		if err != nil {
+			return true
+		}
+		if d == path {
+			return false
+		}
+		path = d
+	}
+	return true // still encoded after three layers: treat as hostile
+}
 
 // privateHost is true for a host that names a private network or machine.
 func (p Profile) privateHost(host string) bool {

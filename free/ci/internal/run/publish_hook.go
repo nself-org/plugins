@@ -59,6 +59,7 @@ func (attestPublisher) Publish(_ context.Context, r PublishRequest) (report.Stat
 	}
 	hosts, users := localNames()
 	p := attest.ProfileFor(attest.RepoFacts{Visibility: vis, RepoID: r.Run.Evidence.RepoID, Hostnames: hosts, Usernames: users})
+	runnerID := r.Run.Evidence.Runner.ID // the literal id: after Publish only its pseudonym is left
 	published := attest.PublishWith(r.Run.Evidence, p)
 	r.Run.Evidence = published
 	if len(published.Checks) > 0 {
@@ -67,7 +68,8 @@ func (attestPublisher) Publish(_ context.Context, r PublishRequest) (report.Stat
 	s := defaultStatus(r)
 	// the description ends with the digest of the unpublished evidence: a reader
 	// cannot rebuild it from the published document, which is why it is only a pointer
-	s.Description = report.Truncate(p.Text(s.Description))
-	s.TargetURL = p.URL(s.TargetURL)
+	pr := p.WithRunner(runnerID)
+	s.Description = report.Truncate(pr.Text(s.Description))
+	s.TargetURL = pr.URL(s.TargetURL)
 	return s, nil
 }

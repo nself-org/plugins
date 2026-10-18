@@ -38,14 +38,33 @@ func PublishWith(ev model.Evidence, p Profile) model.Evidence {
 	out.Runner.Platform = structured.Text(ev.Runner.Platform)
 	out.Pipeline.Name = structured.Text(ev.Pipeline.Name)
 	out.PlacementRef = scrubPtr(p, ev.PlacementRef)
+	// every other free string is scrubbed too: a hostile or careless producer can
+	// put a path or an address in any of them
+	out.RunID = p.Text(ev.RunID)
+	out.Pipeline.ID = p.Text(ev.Pipeline.ID)
+	out.Job = scrubPtr(p, ev.Job)
+	if ev.Attempt != nil {
+		a := *ev.Attempt
+		a.ID = p.Text(a.ID)
+		out.Attempt = &a
+	}
+	out.Producer.Version = p.Text(ev.Producer.Version)
+	if ev.ProviderAttestation != nil {
+		pa := *ev.ProviderAttestation
+		pa.Provider, pa.RunID, pa.Ref = p.Text(pa.Provider), p.Text(pa.RunID), p.Text(pa.Ref)
+		pa.WorkflowPath, pa.TemplateVersion, pa.ArtifactID = p.Text(pa.WorkflowPath), p.Text(pa.TemplateVersion), p.Text(pa.ArtifactID)
+		out.ProviderAttestation = &pa
+	}
 	out.InputDigests = model.InputDigests{Config: ev.InputDigests.Config,
 		Lockfiles: scrubRefs(p, ev.InputDigests.Lockfiles), Generated: scrubRefs(p, ev.InputDigests.Generated)}
 	out.ToolVersions = make(map[string]string, len(ev.ToolVersions))
 	for k, v := range ev.ToolVersions {
-		out.ToolVersions[k] = p.Text(v)
+		out.ToolVersions[p.Text(k)] = p.Text(v)
 	}
 	out.Checks = make([]model.Check, len(ev.Checks))
 	for i, c := range ev.Checks {
+		c.ID, c.JobID, c.Kind = p.Text(c.ID), p.Text(c.JobID), p.Text(c.Kind)
+		c.Reason = model.Reason(p.Text(string(c.Reason)))
 		c.Tool = p.Text(c.Tool)
 		c.ToolVersion = scrubPtr(p, c.ToolVersion)
 		c.Excerpt = p.Text(c.Excerpt)
@@ -57,7 +76,11 @@ func PublishWith(ev model.Evidence, p Profile) model.Evidence {
 		a.Path = p.Text(a.Path)
 		out.Artifacts[i] = a
 	}
-	out.Retries = append([]model.Retry{}, ev.Retries...)
+	out.Retries = make([]model.Retry, len(ev.Retries))
+	for i, r := range ev.Retries {
+		r.JobID = p.Text(r.JobID)
+		out.Retries[i] = r
+	}
 	reason := "publication profile applied; recompute from the inputs"
 	out.Freshness = model.Freshness{State: "unknown", Reason: &reason}
 	return out

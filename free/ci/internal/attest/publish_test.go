@@ -220,3 +220,63 @@ func TestPublish_PublishedDocumentStillValidatesAgainstTheSchema(t *testing.T) {
 		t.Fatalf("published copy is not a valid document: %v", err)
 	}
 }
+
+// Every free string of the document is scrubbed, not just the ones with an obvious host: check ids, job ids,
+// producer version, run ids and the provider attestation (review round 2).
+func TestPublish_ScrubsEveryFreeString(t *testing.T) {
+	ev := goodEvidence()
+	const leak = "/home/alice/10.0.0.7"
+	ev.Checks[0].ID, ev.Checks[0].JobID, ev.Checks[0].Kind = leak, leak, leak
+	ev.Producer.Version, ev.RunID, ev.Pipeline.ID = leak, leak, leak
+	ev.Job, ev.Attempt = strp(leak), &model.AttemptRef{ID: leak, N: 1}
+	ev.Retries = []model.Retry{{JobID: leak, Attempt: 1, Class: "infra"}}
+	ev.ToolVersions = map[string]string{leak: leak}
+	ev.ProviderAttestation = &model.ProviderAttestation{Provider: "github", RunID: leak, Ref: leak, WorkflowPath: leak, TemplateVersion: leak, ArtifactID: leak}
+	before := string(marshal(t, ev))
+	out := attest.Publish(ev, attest.Public)
+	if string(marshal(t, ev)) != before {
+		t.Fatal("Publish modified its input")
+	}
+	for _, bad := range []string{"alice", "10.0.0.7", "/home/"} {
+		if text := string(marshal(t, out)); strings.Contains(text, bad) {
+			t.Errorf("published document still holds %q:\n%s", bad, text)
+		}
+	}
+}
+
+// A check id equal to the runner id is pseudonymised like the runner id itself.
+func TestPublish_CheckIDEqualToRunnerID(t *testing.T) {
+	ev := goodEvidence()
+	ev.Runner.ID = "remote-ci-265"
+	ev.Checks[0].ID = "remote-ci-265"
+	out := attest.Publish(ev, attest.Public)
+	if out.Checks[0].ID == "remote-ci-265" || out.Checks[0].ID != out.Runner.ID {
+		t.Fatalf("check id %q runner %q", out.Checks[0].ID, out.Runner.ID)
+	}
+}
+
+// Profile.URL drops a URL whose path names a user, host or private address,
+// in any percent-encoding depth.
+func TestProfileURL_PrivatePathDropped(t *testing.T) {
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public, Usernames: []string{"alice"}, Hostnames: []string{"runner.example.org"}})
+	for _, u := range []string{
+		"https://logs.example.com/home/alice/runner.example.org/10.0.0.7",
+		"https://logs.example.com/Users/bob/x",
+		"https://logs.example.com/runs/192.168.1.5/log",
+		"https://logs.example.com/%2Fhome%2Fbob%2Fx",
+		"https://logs.example.com/%252Fhome%252Fbob",
+		"https://logs.example.com/a/alice/b",
+		"https://logs.example.com/a/runner.example.org",
+		"https://logs.example.com/a/%2525252Fx",
+		"https://logs.example.com/a/%zz",
+	} {
+		if got := p.URL(u); got != "" {
+			t.Errorf("URL(%q) = %q, want dropped", u, got)
+		}
+	}
+	for _, u := range []string{"https://github.com/nself-org/plugins/actions/runs/9", "https://logs.example.com/runs/42/log"} {
+		if p.URL(u) != u {
+			t.Errorf("URL(%q) = %q, want kept", u, p.URL(u))
+		}
+	}
+}

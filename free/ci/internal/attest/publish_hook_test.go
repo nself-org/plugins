@@ -63,3 +63,18 @@ func TestAttestPublisherDropsPrivateTargetURL(t *testing.T) {
 		t.Fatal("target_url filter")
 	}
 }
+
+// A check id equal to the runner id (a host name that is not marked private) never reaches the status text.
+func TestAttestPublisherScrubsRunnerIDInCheckName(t *testing.T) {
+	t.Cleanup(func() { run.RepoVisibility = nil })
+	req := publishRequest("remote-ci-265")
+	req.Run.Evidence.Runner.ID = "remote-ci-265"
+	req.Projection = model.Projection(req.Run.Evidence)
+	s, err := run.Registered.Publisher.Publish(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(s.Description, "remote-ci-265") {
+		t.Fatalf("status leaks the runner id: %q", s.Description)
+	}
+}
