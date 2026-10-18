@@ -58,7 +58,7 @@ type gitRunner struct {
 // --no-replace-objects keeps refs/replace from swapping the tree it reads.
 var gitScrub = []string{"env", "-u", "GIT_DIR", "-u", "GIT_WORK_TREE", "-u", "GIT_INDEX_FILE", "-u", "GIT_OBJECT_DIRECTORY",
 	"-u", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "-u", "GIT_COMMON_DIR", "-u", "GIT_NAMESPACE", "-u", "GIT_CEILING_DIRECTORIES",
-	"GIT_TERMINAL_PROMPT=0", "git", "--no-replace-objects", "-c", "core.fsmonitor=false"}
+	"-u", "GIT_CONFIG_COUNT", "-u", "GIT_CONFIG_PARAMETERS", "GIT_TERMINAL_PROMPT=0", "git", "--no-replace-objects", "-c", "core.fsmonitor=false"}
 
 // raw runs git bound to g.root and returns its output untouched.
 func (g gitRunner) raw(ctx context.Context, args ...string) (string, bool) {
@@ -109,23 +109,33 @@ func (g gitRunner) defaultBranch(ctx context.Context) (name string, assumed bool
 	return name, false, nil
 }
 
-func (g gitRunner) hasOrigin(ctx context.Context) bool {
+// hasOrigin says whether the repository has an origin. A directory that is not
+// a repository has none; a repository whose remotes cannot be listed is an
+// error, never "no origin".
+func (g gitRunner) hasOrigin(ctx context.Context) (bool, error) {
 	out, ok := g.git(ctx, "remote")
 	if !ok {
-		return false
+		if _, inside := g.git(ctx, "rev-parse", "--git-dir"); inside {
+			return false, refuse("cannot list the remotes of %s", g.root)
+		}
+		return false, nil
 	}
 	for _, r := range strings.Fields(out) {
 		if r == "origin" {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 // readBranch fetches the default branch and reads its policy at the tip.
 func readBranch(ctx context.Context, run Runner, root string) (Branch, error) {
 	g := gitRunner{run: run, root: root}
-	if !g.hasOrigin(ctx) {
+	origin, err := g.hasOrigin(ctx)
+	if err != nil {
+		return Branch{}, err
+	}
+	if !origin {
 		return Branch{Fetch: FetchNone}, nil
 	}
 	name, assumed, err := g.defaultBranch(ctx)

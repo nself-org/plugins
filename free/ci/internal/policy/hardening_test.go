@@ -163,6 +163,49 @@ func TestGitEnvironmentAndReplaceObjects(t *testing.T) {
 	}
 }
 
+// Git configuration injected through the environment must not make remote
+// discovery fail into "no origin"; and when remotes truly cannot be listed in
+// a repository, the run refuses instead of reading no branch policy.
+func TestRemoteListFailureIsNotNoOrigin(t *testing.T) {
+	f := newFixture(t)
+	f.push(tightConfig)
+	t.Setenv("GIT_CONFIG_COUNT", "invalid")
+	t.Setenv("GIT_CONFIG_PARAMETERS", "'core.bogus'='x'; broken")
+	got := resolveOwner(t, f, f.work, "p", nil)
+	if got.Values["trust.network"] != "none" || got.Sources["trust.network"] != SourceProtectedBranch {
+		t.Fatalf("environment config hid the branch policy: %v %v", got.Values, got.Sources)
+	}
+	r := resolver(t, f, nil)
+	r.Run = func(ctx context.Context, argv ...string) (string, int, error) {
+		for _, a := range argv {
+			if a == "remote" {
+				return "fatal: boom", 128, nil
+			}
+		}
+		return f.runner(ctx, argv...)
+	}
+	if _, err := r.Resolve(context.Background(), Repo{Root: f.work, Visibility: "unknown", Class: "owner"}, Revision{}); err == nil || !strings.Contains(err.Error(), "E672") {
+		t.Fatalf("remote list failure in a repository: %v", err)
+	}
+}
+
+// Git records no path to a --separate-git-dir checkout, so its project id is
+// its own path (never the git directory) from the main and a linked worktree.
+func TestProjectIDSeparateGitDir(t *testing.T) {
+	base := t.TempDir()
+	main, meta, linked := filepath.Join(base, "main"), filepath.Join(base, "meta"), filepath.Join(base, "linked")
+	git(t, base, "init", "-q", "-b", "main", "--separate-git-dir", meta, main)
+	write(t, filepath.Join(main, "a.txt"), "x")
+	git(t, main, "add", "-A")
+	git(t, main, "commit", "-q", "-m", "x")
+	git(t, main, "worktree", "add", "-q", "--detach", linked)
+	for _, root := range []string{main, linked} {
+		if got, want := ProjectIDGit(context.Background(), testRunner, root), ProjectID(root); got != want {
+			t.Errorf("separate git dir: project %q, want %q", got, want)
+		}
+	}
+}
+
 // A stored row with trailing bytes after one valid value is malformed.
 func TestMalformedStoredValueRejected(t *testing.T) {
 	for _, raw := range []string{`"privileged"]`, `false}`, `"a" "b"`, `{`} {

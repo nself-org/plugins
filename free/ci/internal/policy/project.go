@@ -12,6 +12,7 @@ package policy
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -41,17 +42,35 @@ func ProjectIDGit(ctx context.Context, run Runner, root string) string {
 	if !ok {
 		return id // not a repository: one failed spawn and done
 	}
-	common, ok := g.git(ctx, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	listed, ok := g.git(ctx, "worktree", "list", "--porcelain")
 	if !ok {
 		return id
 	}
-	top, common = ProjectID(lastLine(top)), ProjectID(lastLine(common))
-	if filepath.Base(common) != ".git" {
-		return id // a bare main repository or an unusual layout: keep the path
+	// The first entry is the main worktree, whatever the layout (separate git
+	// dirs included); a bare main repository has no checkout to map to.
+	first, _, _ := strings.Cut(strings.ReplaceAll(listed, "\r\n", "\n"), "\n\n")
+	var main string
+	for _, line := range strings.Split(first, "\n") {
+		if p, found := strings.CutPrefix(line, "worktree "); found {
+			main = p
+		}
+		if line == "bare" {
+			return id
+		}
 	}
+	if main == "" {
+		return id
+	}
+	// --separate-git-dir lists the git directory as the main worktree and git
+	// records no path to the checkout, so a candidate without a .git entry cannot
+	// be mapped: keep the path as is (the checkout itself is unaffected).
+	if _, err := os.Lstat(filepath.Join(main, ".git")); err != nil {
+		return id
+	}
+	top, main = ProjectID(lastLine(top)), ProjectID(main)
 	rel, err := filepath.Rel(top, id)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return id
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(common), rel))
+	return filepath.Clean(filepath.Join(main, rel))
 }
