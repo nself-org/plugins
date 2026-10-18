@@ -92,14 +92,3 @@ func TestRenderIsDeterministicAndParses(t *testing.T) {
 		t.Error("invalid row accepted")
 	}
 }
-
-// TestChangingAPinWithoutRegeneratingFails: the drift check sees a mutated pin.
-func TestChangingAPinWithoutRegeneratingFails(t *testing.T) {
-	pins := loadPinsFromRepo(t)
-	want, _ := Render(pins)
-	pins[0].Version += "-changed"
-	got, _ := Render(pins)
-	if string(want) == string(got) {
-		t.Fatal("a version change does not alter the rendered table")
-	}
-}

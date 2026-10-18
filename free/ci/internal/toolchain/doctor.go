@@ -35,6 +35,9 @@ func init() {
 	doctor.RegisterSection(doctor.Section{Name: SectionName, Selector: doctor.SelectAlways, Run: runSection})
 }
 
+// unversioned is the stamp Go gives a binary built from a module zip rather than by `go install pkg@version`.
+const unversioned = "0.0.0"
+
 var versionRe = regexp.MustCompile(`\d+\.\d+(?:\.\d+)?`)
 
 func runSection(ctx context.Context, env doctor.Env) []doctor.Check {
@@ -128,8 +131,8 @@ func checkInstalled(ctx context.Context, env doctor.Env, table Versions) []docto
 			continue
 		}
 		have := installedVersion(p.Name, text)
-		if have == "" {
-			continue
+		if have == "" || have == unversioned {
+			continue // a tool built from a source tree (govulncheck@v0.0.0) carries no version to compare
 		}
 		probed++
 		if have != p.Version {

@@ -129,6 +129,15 @@ func TestDoctorFlagsStaleEmbeddedTable(t *testing.T) {
 	}
 }
 
+// TestDoctorIgnoresAnUnversionedBuild: the pinned image's govulncheck prints v0.0.0, which is not a drift.
+func TestDoctorIgnoresAnUnversionedBuild(t *testing.T) {
+	env := doctor.Env{Root: t.TempDir(), Capture: probeFake(map[string]string{"govulncheck": "Go: go1.27.2\nScanner: govulncheck@v0.0.0\n", "go": "go version go1.27.2 linux/arm64"})}
+	got := checksByID(runSection(context.Background(), env), "CI-DI03")
+	if len(got) != 1 || got[0].Status != doctor.Pass || !strings.Contains(got[0].Message, "1 installed") {
+		t.Fatalf("checks %+v", got)
+	}
+}
+
 func TestInstalledVersionParsing(t *testing.T) {
 	cases := []struct{ name, out, want string }{
 		{"go", "go version go1.27.2 linux/arm64", "1.27.2"},
@@ -137,6 +146,7 @@ func TestInstalledVersionParsing(t *testing.T) {
 		{"govulncheck", "Go: go1.27.2\nScanner: govulncheck@v1.9.0\nDB: x", "1.9.0"},
 		{"hadolint", "Haskell Dockerfile Linter 2.15.1", "2.15.1"},
 		{"trivy", "Version: 0.76.0", "0.76.0"},
+		{"govulncheck", "Go: go1.27.2\nScanner: govulncheck@v0.0.0\nDB: https://vuln.go.dev", "0.0.0"},
 		{"none", "no digits here", ""},
 	}
 	for _, c := range cases {

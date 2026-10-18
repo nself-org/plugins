@@ -57,7 +57,11 @@ func mirror(t *testing.T) *httptest.Server {
 	})
 	mux.HandleFunc("/example.org/acme/demo-1.2.3.tgz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("x")) })
 	mux.HandleFunc("/auth.docker.io/token", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"token":"t"}`)) })
-	mux.HandleFunc("/registry-1.docker.io/v2/library/alpine/manifests/", func(w http.ResponseWriter, _ *http.Request) {})
+	mux.HandleFunc("/registry-1.docker.io/v2/library/alpine/manifests/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/3.22") { // the tag has moved on from the pinned digest
+			w.Header().Set("Docker-Content-Digest", "sha256:"+strings.Repeat("ef", 32))
+		}
+	})
 	mux.HandleFunc("/registry-1.docker.io/v2/nself/ci-toolchain/manifests/sha256:"+strings.Repeat("ab", 32), func(w http.ResponseWriter, _ *http.Request) {})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -133,8 +137,8 @@ func TestDrillAdvisoryNewerReleaseAndPendingImage(t *testing.T) {
 	if c := checks["toolchain-image"]; c["result"] != "skip" || c["required"] != false {
 		t.Errorf("pending image must be a non-required skip, got %v", c)
 	}
-	if c := checks["alpine"]; c["result"] != "pass" {
-		t.Errorf("resolvable base digest must pass, got %v", c)
+	if c := checks["alpine"]; c["result"] != "pass" || c["findings"].(float64) != 1 || !strings.Contains(c["excerpt"].(string), "now points at") {
+		t.Errorf("a moved base tag must be an advisory finding on a passing check, got %v", c)
 	}
 }
 

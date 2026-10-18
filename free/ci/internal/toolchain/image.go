@@ -74,7 +74,7 @@ func (r *Resolver) reference() (string, error) {
 		return "", fail("versions.yaml has no %s row", ImageRow)
 	}
 	if row.Status != StatusPinned {
-		return "", fail("the pinned toolchain image %s is not published yet (row %s is %s); pass --image <ref@digest> or run without --container", row.Image, ImageRow, row.Status)
+		return "", fail("the pinned toolchain image %s is not published yet (row %s is %s); pass --image <ref@digest> (until the flag is registered: set NSELF_CI_IMAGE=<ref@digest>) or run without --container", row.Image, ImageRow, row.Status)
 	}
 	ref := row.Image + "@" + row.Digest
 	if !refRe.MatchString(ref) {

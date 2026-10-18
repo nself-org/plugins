@@ -56,33 +56,33 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl unzip xz-utils \
  && rm -rf /var/lib/apt/lists/*
 COPY fetch-verified.sh /usr/local/bin/fetch-verified.sh
-RUN mkdir -p /out/usr/local/bin /out/usr/local/lib/pnpm /tmp/dl
+RUN mkdir -p /out/go/usr/local /out/node/usr/local /out/pnpm/usr/local/lib/pnpm /out/rust/usr/local /out/tools/usr/local/bin /tmp/dl
 
 # Go for the target platform, plus a Go for the build platform to compile govulncheck.
 RUN fetch-verified.sh go "$TARGETARCH" /tmp/dl/go.tgz \
- && tar -C /out/usr/local -xzf /tmp/dl/go.tgz
-RUN if [ "$BUILDARCH" = "$TARGETARCH" ]; then ln -s /out/usr/local/go /opt/go-build; \
+ && tar -C /out/go/usr/local -xzf /tmp/dl/go.tgz
+RUN if [ "$BUILDARCH" = "$TARGETARCH" ]; then ln -s /out/go/usr/local/go /opt/go-build; \
  else fetch-verified.sh go "$BUILDARCH" /tmp/dl/gob.tgz && mkdir -p /opt/gob && tar -C /opt/gob -xzf /tmp/dl/gob.tgz && ln -s /opt/gob/go /opt/go-build; fi
 
 RUN fetch-verified.sh node "$TARGETARCH" /tmp/dl/node.txz \
- && tar -C /out/usr/local --strip-components=1 -xJf /tmp/dl/node.txz
+ && tar -C /out/node/usr/local --strip-components=1 -xJf /tmp/dl/node.txz
 RUN fetch-verified.sh pnpm "$TARGETARCH" /tmp/dl/pnpm.tgz \
- && tar -C /out/usr/local/lib/pnpm -xzf /tmp/dl/pnpm.tgz
+ && tar -C /out/pnpm/usr/local/lib/pnpm -xzf /tmp/dl/pnpm.tgz
 
 RUN fetch-verified.sh rust "$TARGETARCH" /tmp/dl/rust.txz \
  && mkdir /tmp/rust && tar -C /tmp/rust --strip-components=1 -xJf /tmp/dl/rust.txz \
  && case "$TARGETARCH" in amd64) triple=x86_64-unknown-linux-gnu;; arm64) triple=aarch64-unknown-linux-gnu;; *) exit 1;; esac \
- && /tmp/rust/install.sh --prefix=/out/usr/local/rust --disable-ldconfig \
+ && /tmp/rust/install.sh --prefix=/out/rust/usr/local/rust --disable-ldconfig \
       --components="rustc,cargo,rust-std-$triple,rustfmt-preview,clippy-preview"
 
 RUN fetch-verified.sh gitleaks "$TARGETARCH" /tmp/dl/gitleaks.tgz \
- && tar -C /out/usr/local/bin -xzf /tmp/dl/gitleaks.tgz gitleaks
+ && tar -C /out/tools/usr/local/bin -xzf /tmp/dl/gitleaks.tgz gitleaks
 RUN fetch-verified.sh trivy "$TARGETARCH" /tmp/dl/trivy.tgz \
- && tar -C /out/usr/local/bin -xzf /tmp/dl/trivy.tgz trivy
+ && tar -C /out/tools/usr/local/bin -xzf /tmp/dl/trivy.tgz trivy
 RUN fetch-verified.sh syft "$TARGETARCH" /tmp/dl/syft.tgz \
- && tar -C /out/usr/local/bin -xzf /tmp/dl/syft.tgz syft
-RUN fetch-verified.sh hadolint "$TARGETARCH" /out/usr/local/bin/hadolint \
- && chmod 0755 /out/usr/local/bin/hadolint
+ && tar -C /out/tools/usr/local/bin -xzf /tmp/dl/syft.tgz syft
+RUN fetch-verified.sh hadolint "$TARGETARCH" /out/tools/usr/local/bin/hadolint \
+ && chmod 0755 /out/tools/usr/local/bin/hadolint
 
 # govulncheck: the pinned module zip, built with the build-platform Go for the target platform.
 # Its dependencies are checked against the module's own go.sum.
@@ -90,7 +90,7 @@ RUN fetch-verified.sh govulncheck any /tmp/dl/vuln.zip \
  && unzip -q /tmp/dl/vuln.zip -d /tmp/vuln \
  && cd "/tmp/vuln/golang.org/x/vuln@v$GOVULNCHECK_VERSION" \
  && GOROOT=/opt/go-build CGO_ENABLED=0 GOOS=linux GOARCH="$TARGETARCH" GOFLAGS=-trimpath GOTOOLCHAIN=local \
-    /opt/go-build/bin/go build -o /out/usr/local/bin/govulncheck ./cmd/govulncheck
+    /opt/go-build/bin/go build -o /out/tools/usr/local/bin/govulncheck ./cmd/govulncheck
 
 FROM docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS toolchain
 LABEL org.opencontainers.image.source="https://github.com/nself-org/plugins" \
@@ -100,7 +100,14 @@ LABEL org.opencontainers.image.source="https://github.com/nself-org/plugins" \
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates git gcc libc6-dev \
  && rm -rf /var/lib/apt/lists/*
-COPY --from=fetch /out/usr/local/ /usr/local/
+# One COPY per stack, so a single pin bump re-pulls one layer, not the whole toolchain.
+COPY --from=fetch /out/go/ /
+COPY --from=fetch /out/node/ /
+COPY --from=fetch /out/pnpm/ /
+COPY --from=fetch /out/rust/ /
+COPY --from=fetch /out/tools/ /
+# The pinned Go never fetches another toolchain (a go.mod `toolchain` line fails loudly instead).
+ENV GOTOOLCHAIN=local
 ENV PATH=/usr/local/go/bin:/usr/local/rust/bin:/usr/local/lib/pnpm:$PATH
 RUN go version && node --version && npm --version && pnpm --version \
  && cargo --version && cargo clippy --version && rustfmt --version \

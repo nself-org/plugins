@@ -93,6 +93,9 @@ func TestWorkflowImageBuildNeverPushes(t *testing.T) {
 		}
 		if strings.HasPrefix(s.Uses, "docker/build-push-action") {
 			build = true
+			if s.With["outputs"] != nil {
+				t.Errorf("image-build sets outputs %v; a registry output would push", s.With["outputs"])
+			}
 			if s.With["push"] != false {
 				t.Errorf("image-build push = %v", s.With["push"])
 			}
@@ -134,5 +137,33 @@ func TestWorkflowPublishFailsWithoutToken(t *testing.T) {
 	}
 	if !strings.Contains(raw, "push-by-digest=true") {
 		t.Error("publish does not push by digest")
+	}
+}
+
+// TestWorkflowHelperImagesPinnedByDigest: setup-qemu and setup-buildx pull their helper images
+// (privileged binfmt, buildkit) by tag unless told otherwise; both must carry a digest.
+func TestWorkflowHelperImagesPinnedByDigest(t *testing.T) {
+	w, _ := loadWorkflow(t)
+	digest := regexp.MustCompile(`@sha256:[0-9a-f]{64}$`)
+	seen := map[string]int{}
+	for name, j := range w.Jobs {
+		for _, s := range j.Steps {
+			switch {
+			case strings.HasPrefix(s.Uses, "docker/setup-qemu-action"):
+				seen["qemu"]++
+				if img, _ := s.With["image"].(string); !strings.HasPrefix(img, "tonistiigi/binfmt:") || !digest.MatchString(img) {
+					t.Errorf("job %s: setup-qemu image = %q, want tonistiigi/binfmt:<tag>@sha256:<digest>", name, img)
+				}
+			case strings.HasPrefix(s.Uses, "docker/setup-buildx-action"):
+				seen["buildx"]++
+				opts, _ := s.With["driver-opts"].(string)
+				if !strings.HasPrefix(opts, "image=moby/buildkit:") || !digest.MatchString(opts) {
+					t.Errorf("job %s: setup-buildx driver-opts = %q, want image=moby/buildkit:<tag>@sha256:<digest>", name, opts)
+				}
+			}
+		}
+	}
+	if seen["qemu"] != 2 || seen["buildx"] != 2 {
+		t.Errorf("expected both jobs to set up qemu and buildx, saw %v", seen)
 	}
 }

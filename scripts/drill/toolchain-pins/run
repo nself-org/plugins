@@ -68,6 +68,17 @@ oci_ok() {
 		"$(u "https://registry-1.docker.io/v2/$repo/manifests/$2")"
 }
 
+# oci_tag_digest REF TAG: the digest the tag points at now (empty when unreadable).
+oci_tag_digest() {
+	local repo=${1#docker.io/}
+	local tok
+	tok=$(get "https://auth.docker.io/token?service=registry.docker.io&scope=repository:$repo:pull" 2>/dev/null | jq -r .token) || return 0
+	curl "${curl_opts[@]}" --fail --head --output /dev/null --dump-header - -H "Authorization: Bearer $tok" \
+		-H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+		"$(u "https://registry-1.docker.io/v2/$repo/manifests/$2")" 2>/dev/null | tr -d '\r' |
+		awk -F': ' 'tolower($1) == "docker-content-digest" {print $2}' || true
+}
+
 checks=$work/checks.ndjson
 : >"$checks"
 emit() { # emit ID TOOL VERSION REQUIRED RESULT FINDINGS EXCERPT [REASON]
@@ -97,7 +108,12 @@ while IFS= read -r row; do
 		continue ;;
 	base-image)
 		if oci_ok "$(jq -r .image <<<"$row")" "$(jq -r .digest <<<"$row")"; then
-			emit "$name" "$name" "$version" true pass 0 "digest still resolves"
+			cur=$(oci_tag_digest "$(jq -r .image <<<"$row")" "$version")
+			if [ -n "$cur" ] && [ "$cur" != "$(jq -r .digest <<<"$row")" ]; then
+				emit "$name" "$name" "$version" true pass 1 "advisory: tag $version now points at $cur (pinned $(jq -r .digest <<<"$row"))"
+			else
+				emit "$name" "$name" "$version" true pass 0 "digest still resolves and is the tag's current digest"
+			fi
 		else
 			emit "$name" "$name" "$version" true fail 1 "pinned digest $(jq -r .digest <<<"$row") no longer resolves"
 		fi

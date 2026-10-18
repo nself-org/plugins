@@ -36,13 +36,23 @@ func (t toolchainImage) Image(ctx context.Context, _ AttemptInfo) (string, error
 	return t.resolver.Resolve(ctx)
 }
 
+// dockerTimeout gives a pull (a multi-gigabyte download) the long budget and everything else the short one.
+func dockerTimeout(argv []string) time.Duration {
+	for _, a := range argv[min(1, len(argv)):] {
+		if a == "pull" {
+			return pullTimeout
+		}
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+	}
+	return inspectTimeout
+}
+
 // dockerCapture runs a docker command through the exec funnel: output merged,
 // a non-zero exit is not an error, err only when the process could not run.
 func dockerCapture(ctx context.Context, argv ...string) (string, int, error) {
-	timeout := inspectTimeout
-	if len(argv) > 1 && argv[1] == "pull" {
-		timeout = pullTimeout
-	}
+	timeout := dockerTimeout(argv)
 	home, err := os.MkdirTemp("", "nself-ci-img-")
 	if err != nil {
 		return "", -1, err
