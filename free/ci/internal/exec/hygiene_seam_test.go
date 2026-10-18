@@ -5,6 +5,7 @@ package exec
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	osexec "os/exec"
 	"syscall"
@@ -110,6 +111,44 @@ func TestUsernsProbeRefusesBadInput(t *testing.T) {
 	}{{0, "/etc/hostname"}, {-1, "/etc/hostname"}, {200000, "relative/file"}, {200000, "/etc/host\nname"}} {
 		if _, _, err := UsernsProbe(context.Background(), tc.sub, tc.file); err == nil {
 			t.Errorf("accepted %+v", tc)
+		}
+	}
+}
+
+// TestKillAttemptGroupKillsALiveGroupWhoseLeaderExited covers the crash case: the leader is gone, a
+// child still holds the group, and the kernel does not reuse a PID that names a live group.
+func TestKillAttemptGroupKillsALiveGroupWhoseLeaderExited(t *testing.T) {
+	home := t.TempDir()
+	cmd := osexec.Command("sh", "-c", "sleep 60 >/dev/null 2>&1 & echo $!; exit 0")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var child int
+	if _, err := fmt.Sscan(string(out), &child); err != nil {
+		t.Fatalf("child pid from %q: %v", out, err)
+	}
+	t.Cleanup(func() { _ = syscall.Kill(child, syscall.SIGKILL) })
+	leader := cmd.Process.Pid // the shell, now exited; the sleep keeps its group
+	data, _ := json.Marshal(processMarker{PID: leader, Coordinator: "coord", Identity: "Thu Jan  1 00:00:00 1970"})
+	if err := os.MkdirAll(home+"/processes", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(markerPath(home, "a9"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := KillAttemptGroup(home, "a9"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for syscall.Kill(child, 0) == nil && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := syscall.Kill(child, 0); err == nil {
+		// a zombie still answers signal 0 until its parent reaps it; check the state instead
+		if state, _ := osexec.Command("ps", "-o", "stat=", "-p", fmt.Sprint(child)).Output(); len(state) > 0 && state[0] != 'Z' {
+			t.Fatalf("the group of the exited leader survived (state %q)", state)
 		}
 	}
 }

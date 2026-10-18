@@ -34,8 +34,8 @@ func (h *Host) isAttempt(name string) bool {
 // rootOwner returns the UID that owns an attempt root, so an orphan of a separated job is cleaned
 // as the job user; 0 when the root is gone or belongs to the caller.
 func (h *Host) rootOwner(name string) int {
-	if h.Base == "" {
-		return 0
+	if h.Base == "" || h.Jobs == nil {
+		return 0 // without a job runner no foreign UID is a job UID we may signal
 	}
 	info, err := os.Lstat(filepath.Join(h.Base, name))
 	if err != nil {
@@ -61,6 +61,7 @@ func (h *Host) SweepOrphans(ctx context.Context, liveLeases []string) (SweepRepo
 	young := map[string]bool{}
 	candidates := map[string]bool{}
 	running := map[string]bool{}
+	containersChecked := true
 	hasRoot := map[string]bool{}
 	if h.Base != "" {
 		if info, err := os.Lstat(h.Base); err == nil && (info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() || !ownedByCaller(info)) {
@@ -94,10 +95,16 @@ func (h *Host) SweepOrphans(ctx context.Context, liveLeases []string) (SweepRepo
 		found, note, err := h.listResources(ctx, kind, "")
 		if err != nil {
 			rep.Failed["list "+string(kind)] = err
+			if kind == exec.KindContainer {
+				containersChecked = false
+			}
 			continue
 		}
 		if note != "" {
 			rep.Skipped = append(rep.Skipped, note)
+			if kind == exec.KindContainer {
+				containersChecked = false
+			}
 		}
 		for _, r := range found {
 			if kind == exec.KindContainer && r.Running && !h.OwnsRuntime {
@@ -109,6 +116,13 @@ func (h *Host) SweepOrphans(ctx context.Context, liveLeases []string) (SweepRepo
 				candidates[r.Attempt] = true
 			}
 		}
+	}
+	if !containersChecked && !h.OwnsRuntime {
+		// without the container list a sibling's live job cannot be told from an orphan
+		for name := range candidates {
+			rep.Skipped = append(rep.Skipped, name)
+		}
+		candidates = map[string]bool{}
 	}
 	// A running container may belong to a sibling process; the executor's own recovery removes the
 	// containers of dead coordinators, so a host that does not own the daemon leaves them alone.

@@ -126,6 +126,15 @@ func TestIntegrationCleanupRemovesLabelledContainersNetworksVolumes(t *testing.T
 	if len(rep2.Removed) != 0 {
 		t.Fatalf("sweep removed a live attempt: %v", rep2.Removed)
 	}
+	// a host that shares the daemon leaves another process's running container alone ...
+	if _, err := h.SweepOrphans(context.Background(), nil); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if out := mustRun(t, "docker", "inspect", "-f", "{{.State.Running}}", "nself-ci-"+other); out != "true" {
+		t.Fatal("a shared-daemon sweep removed a running container it does not own")
+	}
+	// ... and one that owns the daemon sweeps it as an orphan
+	h.OwnsRuntime = true
 	if _, err := h.SweepOrphans(context.Background(), nil); err != nil {
 		t.Fatalf("sweep: %v", err)
 	}

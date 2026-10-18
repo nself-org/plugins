@@ -167,3 +167,18 @@ func TestMarkerLiveRequiresAReadableMarkerOfALiveProcess(t *testing.T) {
 		t.Error("a missing marker protects an attempt")
 	}
 }
+
+func TestHygieneHookSkipsARelocatedWorkDirectory(t *testing.T) {
+	home, elsewhere := t.TempDir(), t.TempDir()
+	if err := os.Symlink(elsewhere, filepath.Join(home, "work")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NSELF_CI_HOME", home)
+	h := newHygieneHook()
+	if err := h.AttemptStart(context.Background(), AttemptInfo{RunID: "r1", AttemptID: "a1.a1", Home: home}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Finalize(context.Background(), RunInfo{RunID: "r1", Jobs: []JobOutcome{{AttemptID: "a1.a1"}}}); err != nil {
+		t.Fatalf("an operator-relocated work directory must not drain the node: %v", err)
+	}
+}

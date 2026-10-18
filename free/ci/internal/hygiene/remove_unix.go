@@ -13,6 +13,7 @@ package hygiene
 // are made traversable first so a job that chmod-ed its tree to 0 cannot keep it alive.
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -91,6 +92,9 @@ func RemoveConfined(base, name string, logf func(string, ...any)) error {
 	}
 	sub, err := openDir(root, name, info)
 	if err != nil {
+		if errors.Is(err, fs.ErrPermission) && root.Remove(name) == nil {
+			return nil // an empty root a job user owns: the base owner may unlink it without entering it
+		}
 		say("hygiene: refused %s/%s: %v", base, name, err)
 		return leakError(ReasonUnconfined, "attempt root could not be opened without following links")
 	}

@@ -45,7 +45,7 @@ type hygieneHook struct {
 // seenAttempt is an attempt the run started and the home it runs in.
 type seenAttempt struct {
 	id, home  string
-	container bool // the job asked for a container level: its runtime must answer
+	container bool // the job asked for a container runtime level: its runtime must answer
 }
 
 var hygieneHooks = &hygieneHook{byRun: map[string][]seenAttempt{}}
@@ -76,6 +76,14 @@ func hygieneHost(home string, rt hygiene.Runtime) *hygiene.Host {
 	return &hygiene.Host{Base: filepath.Join(home, "work"), Home: home, MinAge: orphanGrace, Runtime: rt}
 }
 
+// managed reports whether hygiene manages this home: a work directory that was relocated through a
+// symlink (offloaded to another disk) is the operator's layout, which hygiene's no-follow rules
+// would refuse on every run, so the executor's own cleanup is left to handle it.
+func managed(home string) bool {
+	info, err := os.Lstat(filepath.Join(home, "work"))
+	return err != nil || (info.Mode()&os.ModeSymlink == 0 && info.IsDir())
+}
+
 // AttemptStart records the attempt and, once per process, sweeps orphans.
 func (h *hygieneHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
 	if runtime.GOOS == "windows" {
@@ -83,10 +91,10 @@ func (h *hygieneHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
 	}
 	home := ciHome(a.Home)
 	h.mu.Lock()
-	h.byRun[a.RunID] = append(h.byRun[a.RunID], seenAttempt{a.AttemptID, home, a.Job.Isolation != "" && a.Job.Isolation != "process"})
+	h.byRun[a.RunID] = append(h.byRun[a.RunID], seenAttempt{a.AttemptID, home, a.Job.Isolation == "container" || a.Job.Isolation == "sandboxed-container"})
 	h.mu.Unlock()
 	h.once.Do(func() {
-		if home == "" {
+		if home == "" || !managed(home) {
 			return
 		}
 		sctx, cancel := context.WithTimeout(ctx, sweepTimeout) // follows the job's context: Ctrl-C stops it
@@ -182,6 +190,9 @@ func (h *hygieneHook) Finalize(ctx context.Context, r RunInfo) error {
 	for _, a := range attempts {
 		if a.home == "" {
 			problems = append(problems, "attempt "+a.id+": no state directory to clean")
+			continue
+		}
+		if !managed(a.home) {
 			continue
 		}
 		host := hygieneHost(a.home, rt)
