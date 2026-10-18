@@ -85,3 +85,4 @@ to `nself.cdc.*` to drive incremental exports.
 | `KAFKA_SASL_PASSWORD` | — | Kafka SASL password |
 | `EVENT_BUS_RETENTION_MS` | `86400000` | Stream retention (24 h) |
 | `EVENT_BUS_MAX_BYTES` | `1073741824` | Max stream storage (1 GB) |
+| `DATABASE_URL` | set by the compose fragment | Postgres, required at boot: the plugin applies its own migrations (ADR 0010) before it serves, and the fragment waits for a healthy Postgres |

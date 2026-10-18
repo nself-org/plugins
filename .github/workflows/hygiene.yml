@@ -183,6 +183,12 @@ jobs:
         if: always()
         run: bash scripts/ci/tests/test-lint-compose-password-urls.sh
 
+      # --- D-0962: a boot-migrations plugin waits for a healthy Postgres ---
+      - name: "boot-migration-depends: fragment waits for postgres service_healthy"
+        id: boot_migration_depends
+        if: always()
+        run: bash scripts/lint-boot-migration-depends.sh
+
       # docker compose ships on ubuntu-latest; the smoke renders, starts nothing.
       - name: "fragment-urlenc-smoke: reserved-character passwords render and round-trip (D-0235)"
         id: fragment_urlenc_smoke
