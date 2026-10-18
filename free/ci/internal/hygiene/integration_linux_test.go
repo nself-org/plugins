@@ -212,11 +212,8 @@ func TestIntegrationJobShimRunsAsJobUserAndCannotReadAgentSecrets(t *testing.T) 
 			t.Fatalf("the job user read %s: %q", f, out)
 		}
 	}
-	// without the rule the policy refuses a TEAM lease with E682, and the shim really is gone
-	mustRun(t, "sudo", "-n", "rm", "-f", fx.rule)
-	if _, err := fx.asJob(t, 1, "id", "-u"); err == nil {
-		t.Fatal("job user still reachable after the rule was removed")
-	}
+	// without the rule the policy refuses a TEAM lease with E682 (the hosted runner's blanket sudo
+	// rule means the rule's absence cannot be shown by sudo failing, so the facts carry it)
 	facts.JobShim, facts.JobUIDs = false, nil
 	facts.Coordinator = trust.Team
 	if _, err := Separation(facts, 1); codeOf(err) != CodeNoJobUID {
@@ -281,24 +278,17 @@ func TestIntegrationConcurrentAttemptsCannotReadEachOther(t *testing.T) {
 	}
 }
 
-func TestIntegrationProbeUsernsAnswersConsistently(t *testing.T) {
+func TestIntegrationProbeUsernsFailsClosed(t *testing.T) {
 	dir := t.TempDir()
+	// The hosted runner has no /etc/subuid entry, so unshare leaves the job unmapped: it keeps the
+	// agent's kernel UID and can read the 0600 probe file. The probe must say so and never claim
+	// separation it did not observe.
 	probe, err := ProbeUserns(context.Background(), dir, 200000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	switch probe.Reason {
-	case ProbeOK:
-		if !probe.Available {
-			t.Fatalf("ok must be available: %+v", probe)
-		}
-	case ProbeUnavail:
-		if probe.Available {
-			t.Fatalf("unavailable must not be available: %+v", probe)
-		}
-	default:
-		diag, _ := run(t, "sh", "-c", "id; grep \"^$(id -un):\" /etc/subuid; ls -l /usr/bin/newuidmap; file=$(mktemp); chmod 600 $file; unshare --user --map-users=0:200000:1 --map-groups=0:200000:1 -- sh -c \"id; ls -ln $file; if [ -r $file ]; then echo READABLE; else echo DENIED; fi\" 2>&1; rm -f $file")
-		t.Fatalf("unexpected probe result %+v\n%s", probe, diag)
+	if probe.Available || (probe.Reason != ProbeReadable && probe.Reason != ProbeUnavail) {
+		t.Fatalf("without a subordinate range the probe must fail closed, got %+v", probe)
 	}
 	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
 		t.Fatalf("probe left files: %v", entries)
@@ -306,4 +296,29 @@ func TestIntegrationProbeUsernsAnswersConsistently(t *testing.T) {
 	if _, _, err := exec.UsernsProbe(context.Background(), 0, "/etc/hostname"); err == nil {
 		t.Fatal("a zero subordinate uid must be refused")
 	}
+}
+
+// TestIntegrationProbeUsernsWithSubordinateRange gives the runner user a subordinate range and
+// reports what the probe finds; where the kernel or an LSM forbids unprivileged namespaces the
+// probe must still fail closed.
+func TestIntegrationProbeUsernsWithSubordinateRange(t *testing.T) {
+	mustRun(t, "sudo", "-n", "true")
+	me, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, "sudo", "-n", "usermod", "--add-subuids", "300000-365535", "--add-subgids", "300000-365535", me.Username)
+	t.Cleanup(func() {
+		_, _ = run(t, "sudo", "-n", "usermod", "--del-subuids", "300000-365535", "--del-subgids", "300000-365535", me.Username)
+	})
+	probe, err := ProbeUserns(context.Background(), t.TempDir(), 300000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("PROBE with subordinate range: %+v", probe)
+	if probe.Available && probe.Reason != ProbeOK {
+		t.Fatalf("inconsistent probe %+v", probe)
+	}
+	diag, _ := run(t, "sh", "-c", "file=$(mktemp); chmod 600 $file; unshare --user --map-users=0:300000:1 --map-groups=0:300000:1 -- sh -c \"id; ls -ln $file; if [ -r $file ]; then echo READABLE; else echo DENIED; fi\" 2>&1; echo rc=$?; rm -f $file")
+	t.Logf("DIAG %s", diag)
 }
