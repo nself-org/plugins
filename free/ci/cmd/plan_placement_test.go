@@ -230,3 +230,81 @@ func TestPlanPlacementRevisionUnknownWithoutGit(t *testing.T) {
 		t.Fatalf("git's message leaked into the revision: %q", doc.Pipeline.Revision)
 	}
 }
+
+// writeConfig replaces the fixture's pipeline config in repo.
+func writeConfig(t *testing.T, repo, yaml string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(repo, ".nself", "ci.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func placementOf(t *testing.T, repo string) model.PlacementPlan {
+	t.Helper()
+	d := planJSON(t, repo, true)
+	var doc model.PlacementPlan
+	if err := json.Unmarshal(d["placement"], &doc); err != nil {
+		t.Fatalf("no placement: %v", err)
+	}
+	return doc
+}
+
+func TestPlanPlacementSkippedAndRefusedJobs(t *testing.T) {
+	repo, _ := placementRepo(t)
+	writeConfig(t, repo, `version: 1
+jobs:
+  build:
+    kind: build
+    run: [go, build, ./...]
+  deploy:
+    kind: release
+    run: [echo, deploy]
+    when:
+      env_present: [P7_SCHED03_NOT_SET]
+  svc:
+    kind: test
+    run: [echo, svc]
+    requires: {tools: [no-such-tool-xyz]}
+`)
+	doc := placementOf(t, repo)
+	byID := map[string]model.JobPlacement{}
+	for _, j := range doc.Jobs {
+		byID[j.ID] = j
+	}
+	if _, ok := byID["deploy"]; ok {
+		t.Error("a skipped job needs no runner and must not be placed")
+	}
+	if b := byID["build"]; b.Status != "placed" {
+		t.Errorf("build: %s", b.Status)
+	}
+	if doc.Totals.Placed != 1 {
+		t.Errorf("totals count only what was placed: %+v", doc.Totals)
+	}
+	if s := byID["svc"]; s.Status != "unplaceable" || len(s.Reasons) != 1 || s.Reasons[0].Code != "unplaceable.tool" || s.Placement != nil {
+		t.Errorf("the planner refused svc (tool missing); the scheduler must not place it: %+v", s)
+	}
+	resetPlanFlags()
+	_, out, _ := capture(t, func() int { return runPlan([]string{"--repo", repo}) })
+	if !strings.Contains(out, "skip: when.env_missing") {
+		t.Errorf("the table says why the skip job has no runner:\n%s", out)
+	}
+	resetPlanFlags()
+	code, out, _ := capture(t, func() int { return runExplain([]string{"deploy", "--json", "--repo", repo}) })
+	if _, ec := explainEnv(t, out); code != 1 || ec != "E692" || !strings.Contains(out, "skipped by the plan") {
+		t.Errorf("explain of a skip job: exit %d\n%s", code, out)
+	}
+}
+
+func TestPlanPlacementStoreUnavailable(t *testing.T) {
+	repo, _ := placementRepo(t)
+	blocker := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NSELF_CI_HOME", filepath.Join(blocker, "home")) // a path under a regular file
+	resetPlanFlags()
+	code, out, errs := capture(t, func() int { return runPlan([]string{"--json", "--repo", repo}) })
+	if code != 0 || !strings.Contains(errs, "placement unavailable") || strings.Contains(out, `"placement"`) || !strings.Contains(out, `"jobs"`) {
+		t.Fatalf("the plan must survive without placement: exit %d\nstdout %s\nstderr %s", code, out, errs)
+	}
+}

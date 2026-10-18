@@ -17,7 +17,8 @@ import (
 
 // DecisionSource returns the recorded placement of one job of one run as a
 // placement-plan document holding that job alone (source decision-record).
-// A missing run, job or record is an *Error with code E692.
+// A missing run, job or record is an *Error with code E692; Lookup also
+// refuses a document that is not placement-plan v1 or lacks the job asked for.
 type DecisionSource interface {
 	Decision(ctx context.Context, run, job string) (model.PlacementPlan, error)
 }
@@ -44,5 +45,16 @@ func Lookup(ctx context.Context, run, job string) (model.PlacementPlan, error) {
 	if s == nil {
 		return model.PlacementPlan{}, &Error{CodeExplainTarget, fmt.Sprintf("no decision records are available for run %q; list recorded decisions with `nself ci runs decisions`", run)}
 	}
-	return s.Decision(ctx, run, job)
+	doc, err := s.Decision(ctx, run, job)
+	if err != nil {
+		return model.PlacementPlan{}, err
+	}
+	if doc.Schema != SchemaID || doc.Jobs == nil {
+		return model.PlacementPlan{}, &Error{CodeExplainTarget, fmt.Sprintf("the decision record of run %q is not a %s document", run, SchemaID)}
+	}
+	one := Select(doc, func(j model.JobPlacement) bool { return j.ID == job || j.Name == job })
+	if len(one.Jobs) == 0 {
+		return model.PlacementPlan{}, &Error{CodeExplainTarget, fmt.Sprintf("run %q has no recorded decision for job %q; list recorded decisions with `nself ci runs decisions`", run, job)}
+	}
+	return one, nil
 }

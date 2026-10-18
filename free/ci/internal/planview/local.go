@@ -5,9 +5,11 @@ package planview
 // and still list registered nodes as alternatives.
 // Inputs: LocalFacts probed by the caller (platform, CPU, memory, tools).
 // Outputs: a model.Capability for the runner "local".
-// Constraints: pure; every value is a fact the caller observed (source
-// "probe"); the local owner's own checkout is the only work it is declared to
-// accept (trust class owner, process isolation, no uid separation).
+// Constraints: pure; machine facts the caller observed carry source "probe",
+// the trust declaration carries source "assigned" (the schema and
+// trust.IsDedicatedTrusted require it, so do not change it to "probe"); the
+// local owner's own checkout is the only work it is declared to accept (trust
+// class owner, process isolation, no uid separation).
 
 import (
 	"encoding/json"
@@ -115,13 +117,13 @@ func localDraft(f LocalFacts) model.Capability {
 // PERSONAL coordinator, which is what lets the owner's own checkout run there
 // under process isolation (trust.Admissible owner exception). world.Build
 // leaves these two facts unset (debt: move them into the builder, P7-SCHED-04
-// needs the same). A runner that hosts a coordinator is left alone. Call it
+// needs the same). A runner that hosts a TEAM coordinator is left alone. Call it
 // only when LocalCapability supplied the runner: a registered node that
 // happens to be called "local" was never probed and must not get the exception.
 func MarkPersonalLocal(w *sched.World) {
 	for i := range w.Runners {
 		r := &w.Runners[i]
-		if r.ID != "local" || r.CoordinatorHost {
+		if r.ID != "local" || r.CoordinatorHost && r.CoordinatorMode != trust.Personal {
 			continue
 		}
 		r.Decl.PersonalOwnNode = true

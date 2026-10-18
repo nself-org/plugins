@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -46,9 +47,10 @@ type planSpec struct{ repo, cfg, base, pipeline, trigger string }
 
 // planned is a built plan with the facts placement needs.
 type planned struct {
-	root  string
-	pl    *plan.Plan
-	world plan.World
+	root   string
+	pl     *plan.Plan
+	world  plan.World
+	checks []plan.Check
 }
 
 func planPlacement(ctx context.Context, p *model.Pipeline) (any, []string, error) {
@@ -59,9 +61,14 @@ func planPlacement(ctx context.Context, p *model.Pipeline) (any, []string, error
 	if !samePlan(pd.pl, p) {
 		return nil, nil, errors.New("the plan changed while placement was computed; run it again")
 	}
+	if schedFlags != (schedpolicy.Flags{}) {
+		fmt.Fprintln(os.Stderr, "ci plan: note: --prefer, --runner and --max-queue are not applied to placement yet (debt D-0984); the plan shows the policy a run uses")
+	}
 	doc, err := placementDoc(ctx, pd)
 	if err != nil {
-		return nil, nil, err
+		// The plan itself is still good: say why placement is missing, loudly, and leave data.placement out.
+		fmt.Fprintln(os.Stderr, "ci plan: placement unavailable: "+err.Error())
+		return nil, nil, nil
 	}
 	return doc, cellsInPlanOrder(pd.pl, doc), nil
 }
@@ -90,6 +97,9 @@ func cellsInPlanOrder(pl *plan.Plan, doc model.PlacementPlan) []string {
 	out := make([]string, len(pl.Jobs))
 	for i, j := range pl.Jobs {
 		out[i] = byID[j.ID]
+		if out[i] == "" { // not sent to the scheduler: a skip check
+			out[i] = j.State + ": " + string(j.Blocked)
+		}
 	}
 	return out
 }
@@ -127,7 +137,7 @@ func loadPlanned(ctx context.Context, s planSpec) (planned, error) {
 	if err != nil {
 		return planned{}, err
 	}
-	return planned{root: root, pl: pl, world: w}, nil
+	return planned{root: root, pl: pl, world: w, checks: checks}, nil
 }
 
 // placementDoc places the plan's jobs and returns the v1 document.
@@ -147,8 +157,8 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	if err != nil {
 		return model.PlacementPlan{}, err
 	}
-	jobs := planview.SchedJobs(planview.Context{PipelineID: pd.pl.Pipeline.ID, Project: project, Support: pd.pl.Support,
-		DefaultPlatform: pd.world.Platform, Foreground: foregroundTrigger(string(pd.pl.Trigger))}, plannedJobs(pd.pl))
+	jobs, blocked := planview.SchedJobs(planview.Context{PipelineID: pd.pl.Pipeline.ID, Project: project, Support: pd.pl.Support,
+		DefaultPlatform: pd.world.Platform, Foreground: foregroundTrigger(string(pd.pl.Trigger))}, plannedJobs(pd))
 	snap, err := st.WorldSnapshot(ctx)
 	if err != nil {
 		return model.PlacementPlan{}, err
@@ -185,13 +195,19 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 		rev = strings.TrimSpace(out)
 	}
 	return planview.Build(planview.Input{Name: pd.pl.Pipeline.Name, Revision: rev, Trigger: string(pd.pl.Trigger),
-		PolicyDigest: string(got.Digest), WorldDigest: digest, World: w, Jobs: jobs, Result: sched.Place(w, jobs)}), nil
+		PolicyDigest: string(got.Digest), WorldDigest: digest, World: w, Jobs: jobs, Blocked: blocked, Result: sched.Place(w, jobs)}), nil
 }
 
-func plannedJobs(pl *plan.Plan) []planview.PlannedJob {
+func plannedJobs(pd planned) []planview.PlannedJob {
+	pl := pd.pl
+	tools := map[string]string{}
+	for _, c := range pd.checks {
+		tools[c.ID] = c.Tool
+	}
 	out := make([]planview.PlannedJob, len(pl.Jobs))
 	for i, j := range pl.Jobs {
-		out[i] = planview.PlannedJob{ID: j.ID, Name: j.Name, Platform: j.Platform, Layer: j.Layer, Deps: j.Deps, Job: j.Job}
+		out[i] = planview.PlannedJob{ID: j.ID, Name: j.Name, Platform: j.Platform, Layer: j.Layer, Deps: j.Deps, Job: j.Job,
+			Tool: tools[j.Check], State: j.State, Blocked: string(j.Blocked), Detail: j.Detail}
 	}
 	return out
 }

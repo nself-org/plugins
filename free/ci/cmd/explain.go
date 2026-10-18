@@ -129,6 +129,12 @@ func explainTarget(ctx context.Context, target string, spec planSpec) (model.Pla
 	}
 	one := planview.Select(doc, func(j model.JobPlacement) bool { return j.ID == target || j.Name == target })
 	if len(one.Jobs) == 0 {
+		for _, j := range pd.pl.Jobs {
+			if (j.ID == target || j.Name == target) && j.State == plan.StateSkip {
+				return model.PlacementPlan{}, "", &planview.Error{Code: planview.CodeExplainTarget,
+					Message: fmt.Sprintf("job %q is skipped by the plan (%s: %s) and needs no runner", target, j.Blocked, j.Detail)}
+			}
+		}
 		return model.PlacementPlan{}, "", &planview.Error{Code: planview.CodeExplainTarget,
 			Message: fmt.Sprintf("no job %q in the current plan; jobs: %s", target, jobIDs(doc))}
 	}

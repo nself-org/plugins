@@ -48,7 +48,7 @@ func fixture(t *testing.T) (sched.World, []sched.Job, sched.Result) {
 	w := sched.World{NowMs: fixedNow.UnixMilli(), Runners: []sched.Runner{local, lan}, Policy: sched.Policy{Preset: "balanced"},
 		Costs: map[string]sched.Cost{}, Previous: map[string]string{}}
 	MarkPersonalLocal(&w)
-	jobs := SchedJobs(Context{PipelineID: "default", Project: "proj", Support: []string{"linux/amd64"}, DefaultPlatform: "linux/amd64", Foreground: true}, []PlannedJob{
+	jobs, _ := SchedJobs(Context{PipelineID: "default", Project: "proj", Support: []string{"linux/amd64"}, DefaultPlatform: "linux/amd64", Foreground: true}, []PlannedJob{
 		{ID: "test", Name: "test", Layer: 1, Deps: []string{"build"}, Job: model.Job{Kind: "test", Run: []string{"go", "test"}}},
 		{ID: "build", Name: "build", Layer: 0, Job: model.Job{Kind: "build", Run: []string{"go", "build"}, Secrets: []string{"project/token", "project/other"}, Timeout: "10m"}},
 		{ID: "ios", Name: "ios", Platform: "darwin/arm64", Layer: 1, Job: model.Job{Kind: "build", Run: []string{"xcodebuild"}}},
@@ -223,7 +223,7 @@ func TestPlanviewSource(t *testing.T) {
 type stubSource struct{}
 
 func (stubSource) Decision(context.Context, string, string) (model.PlacementPlan, error) {
-	return model.PlacementPlan{Pipeline: model.PlacementPipelineRef{Name: "from-source"}}, nil
+	return model.PlacementPlan{Schema: SchemaID, Pipeline: model.PlacementPipelineRef{Name: "from-source"}, Jobs: []model.JobPlacement{{ID: "build", Status: "waiting"}}}, nil
 }
 
 func asError(err error, target **Error) bool {
@@ -233,7 +233,7 @@ func asError(err error, target **Error) bool {
 }
 
 func TestPlanviewJobs(t *testing.T) {
-	jobs := SchedJobs(Context{PipelineID: "p", Project: "x", DefaultPlatform: "linux/amd64"}, []PlannedJob{
+	jobs, _ := SchedJobs(Context{PipelineID: "p", Project: "x", DefaultPlatform: "linux/amd64"}, []PlannedJob{
 		{ID: "b", Name: "b", Layer: 1, Job: model.Job{Isolation: "container", Secrets: []string{"deploy/a", "release/b", "none/c", "bogus/d"}, Timeout: "bad"}},
 		{ID: "a", Name: "a", Layer: 1, Platform: "darwin/arm64", Job: model.Job{Kind: "release", Requirements: &model.Requirements{Tools: []string{"xcode"}, CPU: 2}}},
 		{ID: "z", Name: "z", Layer: 0},
@@ -302,13 +302,18 @@ func TestPlanviewCostConfidence(t *testing.T) {
 }
 
 func TestPlanviewMarkPersonalLocal(t *testing.T) {
-	w := sched.World{Runners: []sched.Runner{{ID: "local"}, {ID: "other"}, {ID: "local", CoordinatorHost: true}}}
+	w := sched.World{Runners: []sched.Runner{{ID: "local"}, {ID: "other"}, {ID: "local", CoordinatorHost: true, CoordinatorMode: "team"}}}
 	MarkPersonalLocal(&w)
 	if !w.Runners[0].Decl.PersonalOwnNode || w.Runners[0].CoordinatorMode != "personal" {
 		t.Fatalf("local runner: %+v", w.Runners[0])
 	}
-	if w.Runners[1].Decl.PersonalOwnNode || w.Runners[2].Decl.PersonalOwnNode || w.Runners[2].CoordinatorMode != "" {
-		t.Fatal("only a non-coordinator runner called local is marked")
+	if w.Runners[1].Decl.PersonalOwnNode || w.Runners[2].Decl.PersonalOwnNode || w.Runners[2].CoordinatorMode != "team" {
+		t.Fatal("only a runner called local that does not host a TEAM coordinator is marked")
+	}
+	w = sched.World{Runners: []sched.Runner{{ID: "local", CoordinatorHost: true, CoordinatorMode: "personal"}}}
+	MarkPersonalLocal(&w)
+	if !w.Runners[0].Decl.PersonalOwnNode {
+		t.Fatal("the node of a PERSONAL coordinator is the operator's own node")
 	}
 }
 
@@ -328,5 +333,52 @@ func TestPlanviewHumanUnknownComponent(t *testing.T) {
 	lines := strings.Join(ExplainLines(buildDoc(t), SourcePlan), "\n")
 	if !strings.Contains(lines, "runtime=unknown(stand-in 300000)") || strings.Contains(lines, "runtime=300000") {
 		t.Fatal("a stand-in runtime must not read as a measurement")
+	}
+}
+
+func TestPlanviewBlockedAndTools(t *testing.T) {
+	run, blocked := SchedJobs(Context{PipelineID: "p", Project: "x", DefaultPlatform: "linux/amd64"}, []PlannedJob{
+		{ID: "ok", Name: "ok", Tool: "gitleaks", Job: model.Job{NeedsServices: []string{"postgres"}}},
+		{ID: "skipped", Name: "skipped", State: "skip", Blocked: "when.env_missing", Detail: "environment not set: X"},
+		{ID: "stuck", Name: "stuck", State: "unplaceable", Blocked: "unplaceable.tool", Detail: "tool x is not on PATH"},
+	})
+	if len(run) != 1 || run[0].ID != "ok" || len(blocked) != 1 || blocked[0].Job.ID != "stuck" || blocked[0].Code != "unplaceable.tool" {
+		t.Fatalf("a skipped job needs no runner and the planner's unplaceable job is not placed: %v %v", run, blocked)
+	}
+	if got := run[0].Requirements.Tools; len(got) != 2 || got[0] != "docker" || got[1] != "gitleaks" {
+		t.Fatalf("services need docker and a catalogue check needs its tool: %v", got)
+	}
+	w, jobs, res := fixture(t)
+	d := Build(Input{Name: "n", Trigger: "local", PolicyDigest: "p", WorldDigest: "w", World: w, Jobs: jobs, Result: res, Blocked: blocked})
+	last := d.Jobs[len(d.Jobs)-1]
+	if last.ID != "stuck" || last.Status != "unplaceable" || last.Reasons[0].Code != "unplaceable.tool" || d.Totals.Unplaceable != 2 {
+		t.Fatalf("blocked job: %+v totals %+v", last, d.Totals)
+	}
+}
+
+type fixedSource struct{ doc model.PlacementPlan }
+
+func (f fixedSource) Decision(context.Context, string, string) (model.PlacementPlan, error) {
+	return f.doc, nil
+}
+
+func TestPlanviewLookupValidates(t *testing.T) {
+	defer Register(nil)
+	good := buildDoc(t)
+	for name, doc := range map[string]model.PlacementPlan{
+		"empty":     {},
+		"nil jobs":  {Schema: SchemaID},
+		"other job": {Schema: SchemaID, Jobs: []model.JobPlacement{{ID: "zzz"}}},
+	} {
+		Register(fixedSource{doc})
+		var pe *Error
+		if _, err := Lookup(context.Background(), "run1", "build"); !asError(err, &pe) || pe.Code != "E692" {
+			t.Errorf("%s: want E692, got %v", name, err)
+		}
+	}
+	Register(fixedSource{good})
+	d, err := Lookup(context.Background(), "run1", "build")
+	if err != nil || len(d.Jobs) != 1 || d.Jobs[0].ID != "build" || d.Totals.Placed != 1 {
+		t.Fatalf("the asked job alone, with its own totals: %+v %v", d.Totals, err)
 	}
 }

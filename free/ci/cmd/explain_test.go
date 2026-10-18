@@ -116,7 +116,7 @@ type echoSource struct{ job *string }
 
 func (e echoSource) Decision(_ context.Context, run, job string) (model.PlacementPlan, error) {
 	*e.job = run + "|" + job
-	return model.PlacementPlan{Schema: planview.SchemaID, Jobs: []model.JobPlacement{}}, nil
+	return model.PlacementPlan{Schema: planview.SchemaID, Jobs: []model.JobPlacement{{ID: job, Status: "waiting"}}}, nil
 }
 
 func TestExplainTargetForms(t *testing.T) {

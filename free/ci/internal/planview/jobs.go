@@ -33,16 +33,28 @@ type Context struct {
 	Foreground      bool     // a person is waiting at a terminal
 }
 
-// PlannedJob is one job of the plan.
+// PlannedJob is one job of the plan. State, Blocked and Detail are the
+// planner's own verdict (plan.PlannedJob); Tool is the catalogue check's tool.
 type PlannedJob struct {
 	ID, Name, Platform string
 	Layer              int
 	Deps               []string
 	Job                model.Job
+	Tool               string
+	State              string // planned (or empty), skip or unplaceable
+	Blocked, Detail    string
 }
 
-// SchedJobs returns the scheduler jobs in plan order.
-func SchedJobs(c Context, jobs []PlannedJob) []sched.Job {
+// Blocked is a job the planner already refused: it never reaches the scheduler.
+type Blocked struct {
+	Job          sched.Job
+	Code, Detail string
+}
+
+// SchedJobs returns the jobs the scheduler places, in plan order, and the
+// unplaceable jobs the planner refused (a skipped job needs no runner and is in
+// neither list).
+func SchedJobs(c Context, jobs []PlannedJob) ([]sched.Job, []Blocked) {
 	ordered := append([]PlannedJob(nil), jobs...)
 	sort.SliceStable(ordered, func(i, j int) bool {
 		if ordered[i].Layer != ordered[j].Layer {
@@ -71,11 +83,18 @@ func SchedJobs(c Context, jobs []PlannedJob) []sched.Job {
 	if c.Foreground {
 		band = "interactive"
 	}
-	out := make([]sched.Job, len(ordered))
-	for i, pj := range ordered {
-		out[i] = schedJob(c, band, support, platform(pj), pj)
+	var out []sched.Job
+	var blocked []Blocked
+	for _, pj := range ordered {
+		j := schedJob(c, band, support, platform(pj), pj)
+		switch pj.State {
+		case "", "planned":
+			out = append(out, j)
+		case "unplaceable":
+			blocked = append(blocked, Blocked{Job: j, Code: pj.Blocked, Detail: pj.Detail})
+		}
 	}
-	return out
+	return out, blocked
 }
 
 func schedJob(c Context, band string, support []string, platform string, pj PlannedJob) sched.Job {
@@ -88,8 +107,11 @@ func schedJob(c Context, band string, support []string, platform string, pj Plan
 		req.CPU, req.MemMB = int64(j.Requirements.CPU), int64(j.Requirements.MemMB)
 		accelerators = append(accelerators, j.Requirements.Accelerators...)
 	}
-	if j.Isolation == "container" || j.Container != nil {
+	if j.Isolation == "container" || j.Isolation == "sandboxed-container" || j.Container != nil || len(j.NeedsServices) > 0 {
 		req.Tools = appendOnce(req.Tools, "docker")
+	}
+	if pj.Tool != "" {
+		req.Tools = appendOnce(req.Tools, pj.Tool)
 	}
 	sort.Strings(req.Labels)
 	sort.Strings(req.Tools)

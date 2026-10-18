@@ -35,6 +35,7 @@ type Input struct {
 	WorldDigest             string
 	World                   sched.World
 	Jobs                    []sched.Job // in the order Place received them
+	Blocked                 []Blocked   // refused by the planner; listed after the placed jobs, unplaceable
 	Result                  sched.Result
 }
 
@@ -46,7 +47,7 @@ type Explanation struct {
 }
 
 // Build assembles the document. Jobs follow Result.Explanations, which follow
-// the caller's job order.
+// the caller's job order; the planner's unplaceable jobs come last.
 func Build(in Input) model.PlacementPlan {
 	runners := map[string]sched.Runner{}
 	for _, r := range append(append([]sched.Runner(nil), in.World.Runners...), in.World.Hosted...) {
@@ -87,6 +88,11 @@ func Build(in Input) model.PlacementPlan {
 		default:
 			out.Totals.Unplaceable++
 		}
+	}
+	for _, b := range in.Blocked {
+		out.Jobs = append(out.Jobs, jobPlacement(b.Job, sched.Explanation{JobKey: b.Job.Key, Status: "unplaceable",
+			Reasons: []model.PlacementReasonDetail{{Code: b.Code, Detail: b.Detail}}}))
+		out.Totals.Unplaceable++
 	}
 	out.Totals.EstimatedCostMicro, out.Totals.CostConfidence = total(costs)
 	return out
