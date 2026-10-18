@@ -1,0 +1,288 @@
+package redact
+
+// Regressions from the round 1 reviews (Codex and Sonnet CR) of P7-TRUST-19.
+
+import (
+	"bytes"
+	"errors"
+	"io"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestRegressJSONShortEscapesAndURLPathForms(t *testing.T) {
+	r := New()
+	mustRegister(t, r, "abc\x08def\x0cghi", "a+b/c?d", "Zq8/xK+pL2mN9vB4=ab cd")
+	for _, in := range []string{
+		`abc\bdef\fghi`, `abc\u0008def\u000cghi`,
+		"a+b%2Fc%3Fd", "a%2Bb/c%3Fd", "a+b%2fc%3fd",
+		"Zq8/xK+pL2mN9vB4=ab%20cd",       // encodeURI
+		"Zq8/xK%2BpL2mN9vB4%3Dab%20cd",   // python quote(safe='/')
+		"Zq8%2FxK%2BpL2mN9vB4%3Dab%20cd", // encodeURIComponent-like
+		"Zq8%2FxK%2BpL2mN9vB4%3Dab+cd",   // QueryEscape
+		"Zq8%2fxK%2bpL2mN9vB4%3dab+cd",   // lower hex
+		"Zq8%2FxK+pL2mN9vB4=ab%20cd",     // mixed
+	} {
+		got := run(r, "x "+in+" y")
+		if got != "x [REDACTED] y" && !strings.HasPrefix(got, "x [REDACTED]") {
+			t.Errorf("%q survived: %q", in, got)
+		}
+		if bw := strings.Join(bytewise(run(r, bytewise("x "+in+" y")...)), ""); collapse(bw) != collapse(got) {
+			t.Errorf("%q chunking differs: %q vs %q", in, bw, got)
+		}
+	}
+}
+
+func TestRegressPEMCloseAndReplay(t *testing.T) {
+	r := New()
+	pb, pe := "-----BEGIN "+"KEY-----", "-----END "+"KEY-----"
+	cases := []struct{ name, in string }{
+		{"close then command", pb + "x" + pe + "::add-mask::foo"},
+		{"replay", pe + "hello" + pb},
+		{"token after close", pb + "x" + pe + "sk-" + strings.Repeat("a1B2", 8)},
+	}
+	for _, c := range cases {
+		whole := run(r, c.in)
+		if bw := run(r, bytewise(c.in)...); collapse(bw) != collapse(whole) {
+			t.Errorf("%s: bytewise %q vs whole %q", c.name, bw, whole)
+		}
+		for i := 1; i < len(c.in); i++ {
+			if got := run(r, c.in[:i], c.in[i:]); collapse(got) != collapse(whole) {
+				t.Fatalf("%s: split %d %q vs %q", c.name, i, got, whole)
+			}
+		}
+	}
+	if got := run(r, pb+"x"+pe+"::add-mask::foo"); !strings.Contains(got, "[::]add-mask") {
+		t.Errorf("command after END not neutralised: %q", got)
+	}
+	if got := run(r, pe+"hello"+pb); strings.Count(got, "hello") != 1 {
+		t.Errorf("text replayed: %q", got)
+	}
+	if got := run(r, pb+"x"+pe+"sk-"+strings.Repeat("a1B2", 8)); strings.Contains(got, "sk-a1B2") {
+		t.Errorf("token after END leaked: %q", got)
+	}
+}
+
+func TestRegressBase64MatchCostIsLinear(t *testing.T) {
+	r := New()
+	n := 8000
+	mustRegister(t, r, strings.Repeat("a", n))
+	enc := b64Embedded("", strings.Repeat("a", 3*n), "")["b64-76"]
+	start := time.Now()
+	got := run(r, enc)
+	if !strings.Contains(got, Placeholder) || time.Since(start) > 5*time.Second {
+		t.Fatalf("took %v, out has mask=%v", time.Since(start), strings.Contains(got, Placeholder))
+	}
+}
+
+func TestRegressBufferCapacityShrinks(t *testing.T) {
+	r := New()
+	mustRegister(t, r, strings.Repeat("q", 3000))
+	f := r.NewFilter()
+	f.Redact([]byte(strings.Repeat("!", 8<<20) + strings.Repeat("q", 2000)))
+	if cap(f.buf) > 1<<20 {
+		t.Fatalf("retained capacity %d after one large write", cap(f.buf))
+	}
+}
+
+type failWriter struct{ err error }
+
+func (w failWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func TestRegressSinkErrorsDoNotEchoValues(t *testing.T) {
+	r := New()
+	mustRegister(t, r, "abcdef-secret")
+	sink := errors.New("open /logs/abcdef-secret: disk full")
+	for name, call := range map[string]func(io.WriteCloser) error{
+		"write": func(w io.WriteCloser) error { _, err := w.Write([]byte("hello\n")); return err },
+		"close": func(w io.WriteCloser) error { _, _ = w.Write([]byte("tail without newline")); return w.Close() },
+	} {
+		err := call(r.Wrap(failWriter{sink}))
+		if err == nil || strings.Contains(err.Error(), "abcdef-secret") || !errors.Is(err, sink) {
+			t.Errorf("%s: err=%v", name, err)
+		}
+	}
+}
+
+func TestRegressTokenGluedToPEMAndRepeatedPrefixes(t *testing.T) {
+	r := New()
+	pb, pe := "-----BEGIN "+"PRIVATE KEY-----", "-----END "+"PRIVATE KEY-----"
+	in := "glpat" + "-" + strings.Repeat("Zz_8", 6) + pb + "\nSECRETBODYSECRETBODY\n" + pe + "\n"
+	if got := run(r, in); strings.Contains(got, "SECRETBODY") {
+		t.Errorf("PEM body leaked: %q", got)
+	}
+	start := time.Now()
+	got := run(r, strings.Repeat("eyJ", 1<<18))
+	if len(got) != 3<<18 || time.Since(start) > 3*time.Second {
+		t.Errorf("repeated eyJ: %d bytes in %v", len(got), time.Since(start))
+	}
+}
+
+func TestRegressCommandCaseAndTripleHash(t *testing.T) {
+	r := New()
+	for in, want := range map[string]string{
+		"::ADD-MASK::x\n":  "[::]ADD-MASK::x\n",
+		"::Set-Output a\n": "[::]Set-Output a\n",
+		"###vso[a]b\n":     "#[##]vso[a]b\n",
+	} {
+		if got := run(r, in); got != want {
+			t.Errorf("%q: got %q want %q", in, got, want)
+		}
+		if got := run(r, bytewise(in)...); got != want {
+			t.Errorf("bytewise %q: got %q", in, got)
+		}
+	}
+}
+
+func TestRegressFoldedRawValue(t *testing.T) {
+	r := New()
+	v := "Zq8xKpL2mN9vB4ab-cd-ef-gh-ij-kl-mn"
+	mustRegister(t, r, v)
+	for _, nl := range []string{"\n", "\r\n"} {
+		in := v[:12] + nl + v[12:24] + nl + v[24:]
+		if got := run(r, "p "+in+" q"); strings.Contains(strings.ReplaceAll(strings.ReplaceAll(got, "\r", ""), "\n", ""), v[:12]) {
+			t.Errorf("folded value survived: %q", got)
+		}
+	}
+	var _ = bytes.MinRead
+}
+
+func TestRegressPEMHeaderDashesAreNotAnEndMarker(t *testing.T) {
+	r := New()
+	in := "-----BEGIN 0-----END " + strings.Repeat("0", 18) + "-----" + strings.Repeat("0", 33)
+	whole := run(r, in)
+	if bw := run(r, bytewise(in)...); collapse(bw) != collapse(whole) {
+		t.Fatalf("bytewise %q vs whole %q", bw, whole)
+	}
+}
+
+// Round 2 (Codex) regressions.
+
+func TestRegressRound2Forms(t *testing.T) {
+	r := New()
+	mustRegister(t, r, "Abcd+!", "ab/é12")
+	for _, in := range []string{"Abcd+%21", "Abcd%2B%21", `ab\/é12`, `ab\/é12`, `ab/é12`, `ab\/é12`} {
+		if got := run(r, "x "+in+" y"); got != "x [REDACTED] y" {
+			t.Errorf("%q survived: %q", in, got)
+		}
+		if got := run(r, bytewise("x "+in+" y")...); got != "x [REDACTED] y" {
+			t.Errorf("%q bytewise: %q", in, got)
+		}
+	}
+}
+
+func TestRegressShorterFoldedSuffixAfterCapRejection(t *testing.T) {
+	r := New()
+	mustRegister(t, r, "zzzzzzabcdefQ", "abcdefghi")
+	chunks := []string{"z\nz\nz\nz\nz\nzabc\ndef", "ghi"}
+	whole := run(r, strings.Join(chunks, ""))
+	split := run(r, chunks...)
+	if strings.Contains(whole, "ghi") || collapse(whole) != collapse(split) {
+		t.Fatalf("whole %q split %q", whole, split)
+	}
+}
+
+func TestRegressPartialPEMOpenerAfterMaxToken(t *testing.T) {
+	r := New()
+	pb, pe := "-----BEGIN "+"PRIVATE KEY-----", "-----END "+"PRIVATE KEY-----"
+	for _, n := range []int{240, 249, 250, 251, 255, 300} {
+		tok := "glpat" + "-" + strings.Repeat("a", n)
+		first, second := tok+"-----BEGIN", " PRIVATE KEY-----\nSYNTHETIC_PRIVATE_BODY\n"+pe+"\n"
+		whole := run(r, first+second)
+		if split := run(r, first, second); collapse(split) != collapse(whole) || strings.Contains(split, "SYNTHETIC") {
+			t.Errorf("n=%d whole %q split %q", n, whole, split)
+		}
+	}
+	_ = pb
+}
+
+func TestRegressJWTAfterPunctuationAndLinearity(t *testing.T) {
+	r := New()
+	e := func(s string) string {
+		return strings.TrimRight(b64Embedded("", s, "")["b64url-raw"], "=")
+	}
+	jwt := e(`{"alg":"none","typ":"fake"}`) + "." + e(`{"sub":"nobody","fake":true}`) + "." + strings.Repeat("a", 43)
+	for _, pre := range []string{"-", "_", ".x-", "token="} {
+		if got := run(r, pre+jwt+" z"); !strings.Contains(got, Placeholder) || strings.Contains(got, jwt[10:]) {
+			t.Errorf("pre %q: %q", pre, got)
+		}
+	}
+	start := time.Now()
+	for _, unit := range []string{"eyJ-", "eyJ.", "eyJ_x"} {
+		_ = run(r, strings.Repeat(unit, 1<<18))
+	}
+	if d := time.Since(start); d > 8*time.Second {
+		t.Fatalf("repeated JWT prefixes took %v", d)
+	}
+}
+
+// Round 3 (Codex + CR) regressions.
+
+func TestRegressSkipDoesNotHideStraddlingPrefix(t *testing.T) {
+	r := New()
+	body := strings.Repeat("aB3x", 6)
+	for _, pre := range []string{"ghp" + "_", "whsec" + "_", "Bearer ", "sk" + "_live_"} {
+		in := "x " + pre + pre + body + " z"
+		whole := run(r, in)
+		if strings.Contains(whole, body) {
+			t.Errorf("%q survived: %q", pre, whole)
+		}
+		if bw := run(r, bytewise(in)...); collapse(bw) != collapse(whole) || strings.Contains(bw, body) {
+			t.Errorf("%q bytewise %q vs whole %q", pre, bw, whole)
+		}
+	}
+}
+
+func TestRegressJWTGluedToPEMOpener(t *testing.T) {
+	r := New()
+	e := func(s string) string {
+		return strings.TrimRight(b64Embedded("", s, "")["b64url-raw"], "=")
+	}
+	jwt := e(`{"alg":"none","typ":"fake"}`) + "." + e(`{"sub":"nobody","fake":true}`) + "." + strings.Repeat("a", 43)
+	in := jwt + "-----BEGIN " + "PRIVATE KEY-----\nSYNTHETIC_PRIVATE_BODY\n-----END " + "PRIVATE KEY-----\n"
+	whole := run(r, in)
+	if strings.Contains(whole, "SYNTHETIC") || strings.Contains(whole, "PRIVATE KEY") {
+		t.Fatalf("whole %q", whole)
+	}
+	if bw := run(r, bytewise(in)...); collapse(bw) != collapse(whole) {
+		t.Fatalf("bytewise %q vs whole %q", bw, whole)
+	}
+}
+
+func TestRegressVSOCommandCaseAndSinkErrorUnwrap(t *testing.T) {
+	r := New()
+	for _, in := range []string{"##VSO[task.setvariable variable=x]y\n", "##Vso[task.setvariable variable=x]y\n"} {
+		if got := run(r, in); strings.Contains(got, "##V") {
+			t.Errorf("%q passed through: %q", in, got)
+		}
+		if got := run(r, bytewise(in)...); strings.Contains(got, "##V") {
+			t.Errorf("%q bytewise: %q", in, got)
+		}
+	}
+	mustRegister(t, r, "abcdef-secret")
+	sink := errors.New("open /logs/abcdef-secret: disk full")
+	_, err := r.Wrap(failWriter{sink}).Write([]byte("hello\n"))
+	if !errors.Is(err, sink) {
+		t.Fatal("errors.Is lost the sentinel")
+	}
+	for e := error(err); e != nil; e = errors.Unwrap(e) {
+		if strings.Contains(e.Error(), "abcdef-secret") {
+			t.Fatalf("chain exposes the value: %q", e.Error())
+		}
+	}
+}
+
+func TestRegressURLFormsBoundedForPunctuationHeavyValues(t *testing.T) {
+	v := []byte("SYNTH042!$&,/?#" + strings.Repeat("a", 200))
+	if n := len(urlForms(v)); n > 40 {
+		t.Fatalf("%d url forms for one value", n)
+	}
+	r := New()
+	mustRegister(t, r, string(v), "Zq8/xK+pL2mN9vB4=ab cd")
+	for _, in := range []string{"Zq8/xK%2BpL2mN9vB4%3Dab%20cd", "Zq8%2FxK%2BpL2mN9vB4%3Dab+cd", "Zq8/xK+pL2mN9vB4=ab%20cd"} {
+		if got := run(r, "x="+in+"&"); got != "x=[REDACTED]&" {
+			t.Errorf("%q survived: %q", in, got)
+		}
+	}
+}

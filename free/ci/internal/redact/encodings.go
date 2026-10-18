@@ -1,0 +1,248 @@
+package redact
+
+// Purpose: every textual form a registered value can take in job output.
+// Inputs:  one value (bytes). Outputs: exact-byte patterns (family A) and
+// base64 patterns scanned with line breaks ignored (family B).
+// Constraints: pure functions, no value is ever formatted into an error. Forms:
+// raw, LF and CRLF line ends, URL (upper/lower hex, `+` or %20 for space, two
+// reserved sets, all-bytes), JSON (HTML-escaped, plain, `\/`, ASCII-only,
+// every rune as \uXXXX in both hex cases), hex and \xNN, base64 and base64url
+// at all three alignments, padded and unpadded.
+
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
+	"strings"
+)
+
+// valueForms returns the family A and family B patterns for a registered value.
+func valueForms(v []byte) (a, b [][]byte) {
+	for _, t := range textForms(v) {
+		if !bytes.ContainsAny(t, "\r\n") {
+			b = append(b, t) // also scanned with line breaks ignored: folded output
+		}
+		a = append(a, t)
+		a = append(a, urlForms(t)...)
+		a = append(a, jsonForms(t)...)
+		a = append(a, hexForms(t)...)
+		b = append(b, b64Forms(t, base64.StdEncoding)...)
+		b = append(b, b64Forms(t, base64.URLEncoding)...)
+	}
+	return a, b
+}
+
+// textForms: the value as given, with LF ends and with CRLF ends.
+func textForms(v []byte) [][]byte {
+	lf := bytes.ReplaceAll(v, []byte("\r\n"), []byte("\n"))
+	crlf := bytes.ReplaceAll(lf, []byte("\n"), []byte("\r\n"))
+	return [][]byte{v, lf, crlf}
+}
+
+// lineValues returns each line of a multi-line value that is long enough to
+// register on its own. A single-line value yields nothing (the value is itself).
+func lineValues(v []byte) [][]byte {
+	norm := bytes.ReplaceAll(v, []byte("\r\n"), []byte("\n"))
+	if !bytes.Contains(norm, []byte("\n")) {
+		return nil
+	}
+	var out [][]byte
+	for _, l := range bytes.Split(norm, []byte("\n")) {
+		l = bytes.Trim(l, " \t\r")
+		if len(l) >= MinValueLen {
+			out = append(out, append([]byte(nil), l...))
+		}
+	}
+	return out
+}
+
+// urlGroups are the characters beyond the unreserved set that encoders differ
+// on. Real encoders leave out any union of these groups: none (Go QueryEscape,
+// Python quote_plus), "!*'()" (JS encodeURIComponent), "$&+=:@" (Go PathEscape),
+// "$&+=:@," plus "/" (Python quote safe="/"), and so on.
+var urlGroups = []string{"!*'()", "$&+=:@", ",;", "/", "?", "#"}
+
+// namedURLSets are the safe sets real encoders use, as unions of urlGroups
+// (indexes): none, JS encodeURIComponent, Go PathEscape, Go path, Python quote,
+// Python quote with PathEscape bytes, JS encodeURI.
+var namedURLSets = [][]int{nil, {0}, {1}, {1, 2, 3}, {3}, {1, 3}, {0, 1, 2, 3, 4, 5}}
+
+// urlExtrasFor lists the safe sets worth trying for v: every union of the groups
+// whose characters occur in v (a group absent from v changes nothing), or just
+// the named sets when more than three groups occur, so a value full of
+// punctuation cannot multiply its forms 64-fold.
+func urlExtrasFor(v []byte) []string {
+	var present []int
+	for g, chars := range urlGroups {
+		if bytes.ContainsAny(v, chars) {
+			present = append(present, g)
+		}
+	}
+	var sets [][]int
+	if len(present) <= 3 {
+		for m := 0; m < 1<<len(present); m++ {
+			var u []int
+			for k, g := range present {
+				if m&(1<<k) != 0 {
+					u = append(u, g)
+				}
+			}
+			sets = append(sets, u)
+		}
+	} else {
+		sets = namedURLSets
+	}
+	out := make([]string, 0, len(sets))
+	for _, u := range sets {
+		x := ""
+		for _, g := range u {
+			x += urlGroups[g]
+		}
+		out = append(out, x)
+	}
+	return out
+}
+
+// isUnreserved reports whether an encoder leaves c raw (unreserved plus extra).
+func isUnreserved(c byte, extra string) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
+	case c == '-' || c == '_' || c == '.' || c == '~':
+		return true
+	}
+	return strings.IndexByte(extra, c) >= 0
+}
+
+// urlForms: percent-encodings of the kinds common encoders produce, each form
+// once.
+func urlForms(v []byte) [][]byte {
+	var out [][]byte
+	seen := map[string]bool{}
+	add := func(f []byte) {
+		if !seen[string(f)] {
+			seen[string(f)] = true
+			out = append(out, f)
+		}
+	}
+	for _, extra := range urlExtrasFor(v) {
+		for _, upper := range []bool{true, false} {
+			for _, plus := range []bool{true, false} {
+				add(percent(v, func(c byte) bool { return isUnreserved(c, extra) }, upper, plus))
+			}
+		}
+	}
+	for _, upper := range []bool{true, false} {
+		add(percent(v, func(byte) bool { return false }, upper, false))
+	}
+	return out
+}
+
+// percent encodes every byte keep rejects as %XX (or + for a space).
+func percent(v []byte, keep func(byte) bool, upper, plus bool) []byte {
+	digits := "0123456789abcdef"
+	if upper {
+		digits = "0123456789ABCDEF"
+	}
+	var b bytes.Buffer
+	for _, c := range v {
+		switch {
+		case keep(c):
+			b.WriteByte(c)
+		case c == ' ' && plus:
+			b.WriteByte('+')
+		default:
+			b.WriteByte('%')
+			b.WriteByte(digits[c>>4])
+			b.WriteByte(digits[c&15])
+		}
+	}
+	return b.Bytes()
+}
+
+// jsonForms: the inside of a JSON string literal under the common encoders.
+func jsonForms(v []byte) [][]byte {
+	plain := jsonInner(v, false, false, false, true)
+	out := [][]byte{jsonInner(v, true, false, false, true), plain,
+		jsonInner(v, false, false, false, false), jsonInner(v, true, false, false, false)}
+	for _, upper := range []bool{false, true} {
+		out = append(out, jsonInner(v, false, true, upper, true), jsonInner(v, false, true, upper, false), jsonAll(v, upper))
+	}
+	for _, f := range out[:len(out):len(out)] { // PHP-style `\/` on top of any other escaping
+		if bytes.Contains(f, []byte("/")) {
+			out = append(out, bytes.ReplaceAll(f, []byte("/"), []byte(`\/`)))
+		}
+	}
+	return out
+}
+
+// jsonInner escapes control characters, quotes and backslashes; with html it
+// also escapes < > & and U+2028/9; with ascii it writes every non-ASCII rune as
+// \uXXXX; short selects \n \r \t \b \f over \u000a style escapes.
+func jsonInner(v []byte, html, ascii, upper, short bool) []byte {
+	var b bytes.Buffer
+	for _, r := range string(v) {
+		switch {
+		case r == '"' || r == '\\':
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		case short && strings.ContainsRune("\n\r\t\b\f", r):
+			b.WriteString(map[rune]string{'\n': `\n`, '\r': `\r`, '\t': `\t`, '\b': `\b`, '\f': `\f`}[r])
+		case r < 0x20 || (html && (r == '<' || r == '>' || r == '&' || r == 0x2028 || r == 0x2029)):
+			b.WriteString(uEscape(r, upper))
+		case r > 0x7f && ascii:
+			b.WriteString(uEscape(r, upper))
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.Bytes()
+}
+
+// jsonAll writes every rune as \uXXXX (surrogate pairs above the BMP).
+func jsonAll(v []byte, upper bool) []byte {
+	var b bytes.Buffer
+	for _, r := range string(v) {
+		b.WriteString(uEscape(r, upper))
+	}
+	return b.Bytes()
+}
+
+func uEscape(r rune, upper bool) string {
+	f := "\\u%04x"
+	if upper {
+		f = "\\u%04X"
+	}
+	if r > 0xFFFF {
+		r -= 0x10000
+		return fmt.Sprintf(f, 0xD800+(r>>10)) + fmt.Sprintf(f, 0xDC00+(r&0x3FF))
+	}
+	return fmt.Sprintf(f, r)
+}
+
+// hexForms: lower and upper hex, and \xNN escapes.
+func hexForms(v []byte) [][]byte {
+	h := hex.EncodeToString(v)
+	var x strings.Builder
+	for _, c := range v {
+		fmt.Fprintf(&x, `\x%02x`, c)
+	}
+	return [][]byte{[]byte(h), []byte(strings.ToUpper(h)), []byte(x.String()), []byte(strings.ToUpper(x.String()))}
+}
+
+// b64Forms returns the base64 text a value produces when it starts at byte
+// offset 0, 1 or 2 of a group, keeping only characters the value alone decides:
+// unpadded interior, the partial final character, and the padded ending.
+func b64Forms(v []byte, enc *base64.Encoding) [][]byte {
+	var out [][]byte
+	raw := enc.WithPadding(base64.NoPadding)
+	for k := 0; k < 3; k++ {
+		in := append(make([]byte, k), v...)
+		c0 := (8*k + 5) / 6
+		full := 8 * len(in) / 6
+		nopad := raw.EncodeToString(in)
+		out = append(out, []byte(nopad[c0:full]), []byte(nopad[c0:]), []byte(enc.EncodeToString(in)[c0:]))
+	}
+	return out
+}
