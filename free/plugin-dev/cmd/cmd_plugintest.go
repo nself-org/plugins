@@ -10,6 +10,7 @@ package main
 // The file name avoids the _test suffix, which Go reserves for test files.
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -49,13 +50,21 @@ func runPluginTest(p *parsed) (any, error) {
 
 	var failed []string
 	var passed []string
+	var infra error // the first phase error that was a launch failure, not a test failure
+	noteFail := func(phase string, err error) {
+		failed = append(failed, phase)
+		var le *launchError
+		if infra == nil && errors.As(err, &le) {
+			infra = err
+		}
+	}
 
 	if phase == "unit" || phase == "both" {
 		clui.Dimmed("--- Phase 1: unit tests ---")
 		start := time.Now()
 		if err := runUnitTests(pluginPath, hostMode); err != nil {
 			clui.Error(fmt.Sprintf("FAIL unit [%.1fs]: %v", time.Since(start).Seconds(), err))
-			failed = append(failed, "unit")
+			noteFail("unit", err)
 		} else {
 			clui.Success(fmt.Sprintf("PASS unit [%.1fs]", time.Since(start).Seconds()))
 			passed = append(passed, "unit")
@@ -67,7 +76,7 @@ func runPluginTest(p *parsed) (any, error) {
 		start := time.Now()
 		if err := runSmokeInstall(name); err != nil {
 			clui.Error(fmt.Sprintf("FAIL smoke-install [%.1fs]: %v", time.Since(start).Seconds(), err))
-			failed = append(failed, "smoke-install")
+			noteFail("smoke-install", err)
 		} else {
 			clui.Success(fmt.Sprintf("PASS smoke-install [%.1fs]", time.Since(start).Seconds()))
 			passed = append(passed, "smoke-install")
@@ -78,7 +87,7 @@ func runPluginTest(p *parsed) (any, error) {
 			start = time.Now()
 			if err := runSmokeUninstall(name); err != nil {
 				clui.Error(fmt.Sprintf("FAIL smoke-uninstall [%.1fs]: %v", time.Since(start).Seconds(), err))
-				failed = append(failed, "smoke-uninstall")
+				noteFail("smoke-uninstall", err)
 			} else {
 				clui.Success(fmt.Sprintf("PASS smoke-uninstall [%.1fs]", time.Since(start).Seconds()))
 				passed = append(passed, "smoke-uninstall")
@@ -91,6 +100,10 @@ func runPluginTest(p *parsed) (any, error) {
 	clui.Dimmed("---")
 	if len(passed) > 0 {
 		clui.Dimmedf("Passed: %s", strings.Join(passed, ", "))
+	}
+	if infra != nil {
+		return nil, stepErr(infra, "a test tool could not be launched in: "+strings.Join(failed, ", "),
+			"install go (and docker or the nself CLI for the smoke phases) and put them on PATH; the tool output is on stderr")
 	}
 	if len(failed) > 0 {
 		return nil, coded(fmt.Errorf("FAIL — phases failed: %s", strings.Join(failed, ", ")),
@@ -127,10 +140,29 @@ func runUnitTests(pluginPath string, hostMode bool) error {
 	testCmd.Stdout = os.Stdout
 	testCmd.Stderr = os.Stderr
 
-	if err := testCmd.Run(); err != nil {
-		return fmt.Errorf("go test failed: %w", err)
+	return childErr(testCmd.Run(), "go test failed")
+}
+
+// launchError marks a child that could not be started (tool missing, not
+// executable), as opposed to one that ran and exited non-zero. The first is an
+// infrastructure failure (E776), the second a test failure (E773).
+type launchError struct{ err error }
+
+func (e *launchError) Error() string { return e.err.Error() }
+func (e *launchError) Unwrap() error { return e.err }
+
+// childErr wraps the error of cmd.Run with what: a launch failure becomes a
+// *launchError, an *exec.ExitError stays a plain wrapped error.
+func childErr(err error, what string) error {
+	if err == nil {
+		return nil
 	}
-	return nil
+	err = fmt.Errorf("%s: %w", what, err)
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return err
+	}
+	return &launchError{err: err}
 }
 
 // runSmokeInstall installs the linked plugin and verifies /healthz returns 200.
@@ -138,8 +170,8 @@ func runSmokeInstall(name string) error {
 	installCmd := exec.Command(nselfBin(), "plugin", "install", name, "--force")
 	installCmd.Stdout = os.Stdout
 	installCmd.Stderr = os.Stderr
-	if err := installCmd.Run(); err != nil {
-		return fmt.Errorf("smoke install failed: %w", err)
+	if err := childErr(installCmd.Run(), "smoke install failed"); err != nil {
+		return err
 	}
 
 	healthURL := resolvePluginHealthURL(name)
@@ -154,10 +186,7 @@ func runSmokeUninstall(name string) error {
 	removeCmd := exec.Command(nselfBin(), "plugin", "remove", name)
 	removeCmd.Stdout = os.Stdout
 	removeCmd.Stderr = os.Stderr
-	if err := removeCmd.Run(); err != nil {
-		return fmt.Errorf("smoke uninstall failed: %w", err)
-	}
-	return nil
+	return childErr(removeCmd.Run(), "smoke uninstall failed")
 }
 
 // resolvePluginHealthURL builds the expected health check URL for a plugin.

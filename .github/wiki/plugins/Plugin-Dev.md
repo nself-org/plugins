@@ -51,7 +51,7 @@ a child process's own exit status is reported in `error.cause`, not as the exit 
 
 Error codes (plugin-owned range E770 to E779, plus E401 for usage): E401 usage, E770 plugin not found, E771 not a plugin
 directory, E772 scaffold destination not empty, E773 plugin tests failed, E774 plugin-links.json unreadable or unwritable,
-E775 scaffold failed, E776 a build, debugger, watcher or install step failed, E779 unexpected. Messages are fixed text and
+E775 scaffold failed, E776 a build, debugger, watcher, install step or test tool (go, nself) failed or could not be launched, E779 unexpected. Messages are fixed text and
 never echo a path, flag value or environment value.
 
 ## Configuration

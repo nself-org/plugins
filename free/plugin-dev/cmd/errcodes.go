@@ -18,7 +18,7 @@ package main
 //	E773 plugin tests failed                                            user
 //	E774 plugin-links.json could not be read or written                 infra
 //	E775 scaffold failed (render or write)                              infra
-//	E776 a build, debugger, watcher or install step failed              infra
+//	E776 a build, debugger, watcher, install step or test tool failed   infra
 //	E779 unexpected failure                                             infra
 
 import (
