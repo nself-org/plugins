@@ -67,7 +67,10 @@ func stringOf(key string, allowed []string) decoder {
 	}
 }
 
-func listOf(key string) decoder {
+// listOf accepts a list of unique non-empty names. An empty list is refused
+// when nonEmpty is set: the scheduler reads an empty allow list as "every
+// provider", so writing [] would lift the very restriction an allow list sets.
+func listOf(key string, nonEmpty bool) decoder {
 	return func(raw json.RawMessage) (any, error) {
 		v, err := decodeJSON(key, raw)
 		if err != nil {
@@ -76,6 +79,9 @@ func listOf(key string) decoder {
 		items, ok := v.([]any)
 		if !ok {
 			return nil, fail(key, "expected a list of names")
+		}
+		if nonEmpty && len(items) == 0 {
+			return nil, fail(key, "an empty list allows everything; list the allowed names or omit the key")
 		}
 		out := make([]string, 0, len(items))
 		for _, item := range items {

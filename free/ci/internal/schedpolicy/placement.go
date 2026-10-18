@@ -108,9 +108,9 @@ func Keys() []policy.KeySpec {
 		k(KeyLocalOnly, policy.TightenOnlyOn, false, boolOf(KeyLocalOnly)),
 		k(KeyLANOnly, policy.TightenOnlyOn, false, boolOf(KeyLANOnly)),
 		k(KeyPrivateOnly, policy.TightenOnlyOn, false, boolOf(KeyPrivateOnly)),
-		k(KeyProvidersAllow, policy.TightenSubset, nil, listOf(KeyProvidersAllow)),
-		k(KeyProvidersDeny, policy.TightenSuperset, []string{}, listOf(KeyProvidersDeny)),
-		k(KeyLabels, policy.TightenSuperset, []string{}, listOf(KeyLabels)),
+		k(KeyProvidersAllow, policy.TightenSubset, nil, listOf(KeyProvidersAllow, true)),
+		k(KeyProvidersDeny, policy.TightenSuperset, []string{}, listOf(KeyProvidersDeny, false)),
+		k(KeyLabels, policy.TightenSuperset, []string{}, listOf(KeyLabels, false)),
 		k(KeyRunner, policy.TightenFixed, nil, stringOf(KeyRunner, nil)),
 		k(KeyOS, policy.TightenFixed, nil, stringOf(KeyOS, nil)),
 		k(KeyArch, policy.TightenFixed, nil, stringOf(KeyArch, nil)),
@@ -119,6 +119,8 @@ func Keys() []policy.KeySpec {
 		isolation,
 		lower(KeyLimitPipeline),
 		lower(KeyLimitJobMatrix),
+		// Decode sees no key, so a provider limit error points at the family; the loader
+		// prefixes the concrete key (`E672 sched.limits.provider.<id>: ...`).
 		k(KeyLimitProvider, policy.TightenLower, NoLimit, positiveInt("sched.limits.provider")),
 		lower(KeyLimitProject),
 		lower(KeyLimitUser),

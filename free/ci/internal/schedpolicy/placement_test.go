@@ -86,6 +86,7 @@ func TestSchedPolicyDecodeRefusals(t *testing.T) {
 		{KeyLocalOnly, `"yes"`, "/sched/overrides/local_only"},
 		{KeyProvidersAllow, `"hetzner"`, "/sched/overrides/providers/allow"},
 		{KeyProvidersAllow, `["a", 3]`, "/sched/overrides/providers/allow"},
+		{KeyProvidersAllow, `[]`, "/sched/overrides/providers/allow"},
 		{KeyProvidersDeny, `["a", "a"]`, "/sched/overrides/providers/deny"},
 		{KeyLabels, `[""]`, "/sched/overrides/labels"},
 		{KeyRunner, `""`, "/sched/overrides/runner"},
@@ -175,6 +176,11 @@ func TestSchedPolicyPlantedRevision(t *testing.T) {
 	}
 	if p.Overrides.MaxQueueMs != 300000 || strings.Join(p.Overrides.ProvidersDeny, ",") != "x,y" {
 		t.Errorf("a tightening revision was not applied: %+v", p.Overrides)
+	}
+	// An empty allow list reads as "every provider" in the scheduler, so a
+	// revision cannot narrow to [] (refused by Decode) and a stored [] is refused too.
+	if _, err := merge(t, operator, scope(trust.SourceRevision, map[string]string{KeyProvidersAllow: `[]`})); err == nil || !strings.Contains(err.Error(), "E691") {
+		t.Errorf("an empty allow list was accepted: %v", err)
 	}
 	ignored := map[string]bool{}
 	for _, ig := range eff.Ignored() {
