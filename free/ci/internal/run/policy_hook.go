@@ -3,7 +3,7 @@ package run
 // Purpose: the real PolicyResolver (P7-TRUST-27): it resolves the effective
 // policy through internal/policy and hands the digest to the pipeline row and
 // the evidence. It replaces the built-in defaults of policy.go.
-// Inputs: a PolicyRequest (the repository root). Outputs: a PolicyResult.
+// Inputs: a PolicyRequest (the repository root and the per-run flag values). Outputs: a PolicyResult.
 // Constraints: registered from init(); git runs through the exec funnel
 // (report.Capture); the operator rows come from the default state.db, because
 // PolicyRequest carries no store path (handoff: Coordinator.policy should pass
@@ -48,7 +48,7 @@ func (h PolicyHook) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult,
 		root = "."
 	}
 	res := policy.Resolver{Keys: h.Keys, Store: st, Run: policy.Runner(capture)}
-	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGit(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root})
+	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGit(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root, RunValues: r.Values})
 	if err != nil {
 		return PolicyResult{}, err
 	}

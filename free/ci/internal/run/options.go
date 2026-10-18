@@ -7,6 +7,7 @@ package run
 // Constraints: unknown trust or network values are E627; --sha is E624.
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -31,6 +32,9 @@ type Options struct {
 	SHA       string   // --sha: refused
 	Adhoc     []string // `-- <cmd...>`
 	Renderer  string   // "human" unless a registered renderer is named
+	// PolicyValues are the policy values of the per-run flags (--prefer,
+	// --runner, --max-queue), the run scope of the effective policy.
+	PolicyValues map[string]json.RawMessage
 }
 
 // RunOptions is the name the cmd layer and its option hooks use.

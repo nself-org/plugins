@@ -94,3 +94,29 @@ func TestSchedFlagsInHelp(t *testing.T) {
 		}
 	}
 }
+
+// D-0984: the flags of a bare run reach RunOptions.PolicyValues, and a later
+// parse does not inherit them.
+func TestParseBareFillsPolicyValues(t *testing.T) {
+	resetSchedFlags(t)
+	t.Setenv("NSELF_CI_REPO", t.TempDir())
+	o, err := parseBare([]string{"--prefer", "local", "--runner", "ms5", "--max-queue", "2m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := o.PolicyValues
+	if string(v[schedpolicy.KeyPreset]) != `"prefer-local"` || string(v[schedpolicy.KeyRunner]) != `"ms5"` || string(v[schedpolicy.KeyMaxQueue]) != `"2m"` || len(v) != 3 {
+		t.Fatalf("policy values: %v", v)
+	}
+	o, err = parseBare(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(o.PolicyValues) != 1 || string(o.PolicyValues[schedpolicy.KeyMaxQueue]) != `"10m0s"` {
+		t.Fatalf("a bare foreground run gets only the 10 minute queue cap, got %v", o.PolicyValues)
+	}
+	o, err = parseBare([]string{"--trigger", "push"})
+	if err != nil || len(o.PolicyValues) != 0 {
+		t.Fatalf("a queued run has no default cap: %v %v", o.PolicyValues, err)
+	}
+}

@@ -125,7 +125,7 @@ func stricter(spec KeySpec, old, next any) bool {
 func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest, error) {
 	e := Effective{values: map[string]entry{}}
 	scopes = append([]Scope(nil), scopes...)
-	order := map[Source]int{SourceDefault: 0, SourceUser: 1, SourceTeam: 2, SourceProject: 3, SourceProtectedBranch: 4, SourcePipeline: 5, SourceJob: 6, SourceRevision: 7}
+	order := map[Source]int{SourceDefault: 0, SourceUser: 1, SourceTeam: 2, SourceProject: 3, SourceProtectedBranch: 4, SourcePipeline: 5, SourceJob: 6, SourceRevision: 7, SourceRun: 8}
 	for _, scope := range scopes {
 		if _, ok := order[scope.Kind]; !ok {
 			return Effective{}, "", fmt.Errorf("E672 unknown scope %s", scope.Kind)
@@ -160,6 +160,12 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 				continue
 			}
 			old, exists := e.values[key]
+			if exists && scope.Kind == SourceRun && spec.Kind != TightenAny && !stricter(spec, old.value, v) {
+				// A run flag is tighten-only like every scope above the operator
+				// rows, but a flag that loosens drops out; it does not fail the run.
+				e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 run flag loosens " + string(old.source) + " value"})
+				continue
+			}
 			if exists && (!stricter(spec, old.value, v) || scope.Kind == SourceRevision && spec.Kind == TightenAny && !reflect.DeepEqual(old.value, v)) {
 				if scope.Kind == SourceRevision {
 					e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 revision widening"})

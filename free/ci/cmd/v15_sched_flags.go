@@ -48,6 +48,9 @@ func init() {
 	}
 }
 
+// clearSchedFlags forgets the flags of an earlier parse.
+func clearSchedFlags() { schedFlags = schedpolicy.Flags{} }
+
 func presetList() string {
 	out := ""
 	for i, n := range schedpolicy.PresetNames() {
@@ -62,7 +65,7 @@ func presetList() string {
 // foregroundTrigger reports whether a run with this trigger is a person
 // waiting at a terminal: the default (no trigger), local and manual runs. It
 // is a heuristic: --trigger says which pipelines to plan, not who waits; the
-// caller that wires the values (debt D-0984) may pass a TTY test instead.
+// TTY test would be exact; parseBare wires the values.
 func foregroundTrigger(trigger string) bool {
 	return trigger == "" || trigger == "local" || trigger == "manual"
 }

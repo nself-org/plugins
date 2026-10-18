@@ -5,6 +5,7 @@ package policy_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,4 +76,40 @@ func TestResolveShapeDigest(t *testing.T) {
 		t.Fatalf("hook digest %s != resolve digest %s", res.Digest, got.Digest)
 	}
 	_ = st.Close()
+}
+
+// D-0984: per-run flag values reach the digest through PolicyRequest.Values.
+func TestHookPassesRunValues(t *testing.T) {
+	root := t.TempDir()
+	if out, exit, err := capture(context.Background(), "git", "init", "-q", "-b", "main", root); err != nil || exit != 0 {
+		t.Fatalf("git init: %s %v", out, err)
+	}
+	db := filepath.Join(t.TempDir(), "state.db")
+	open := func() (*store.Store, error) { return store.Open(db, store.Options{}) }
+	st, err := open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	hook := run.PolicyHook{OpenStore: open, Capture: capture}
+	plain, err := hook.Resolve(context.Background(), run.PolicyRequest{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := map[string]json.RawMessage{"trust.network": json.RawMessage(`"none"`)}
+	flagged, err := hook.Resolve(context.Background(), run.PolicyRequest{Root: root, Values: values})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if flagged.Digest == plain.Digest {
+		t.Fatal("the run values did not change the effective policy digest")
+	}
+	r := policy.Resolver{Store: st, Run: capture}
+	want, err := r.Resolve(context.Background(), policy.Repo{Root: root, Project: policy.ProjectIDGit(context.Background(), capture, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root, RunValues: values})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if flagged.Digest != string(want.Digest) || want.Sources["trust.network"] != policy.SourceRun || want.Values["trust.network"] != "none" {
+		t.Fatalf("hook digest %s, resolve %s, source %s", flagged.Digest, want.Digest, want.Sources["trust.network"])
+	}
 }

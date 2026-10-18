@@ -3,7 +3,7 @@ package policy
 // Purpose: resolve the effective policy for one run (contract:ci.policy v1).
 // Scopes, loosest first: defaults by visibility and source class, operator
 // store rows (user, team, project), the protected default branch's `policy:`
-// at the pinned tip, and the revision's own `policy:` (tighten-only).
+// at the pinned tip, the revision's own `policy:` (tighten-only) and the per-run flag values.
 // Inputs: a Repo, a Revision, a key set, a store reader and a Runner.
 // Outputs: Resolved: Effective, Values, Sources, PinnedCommit, Fetch, Digest
 // and Ignored.
@@ -38,7 +38,13 @@ type Repo struct {
 
 // Revision is the checkout under test: Dir's `.nself/ci.yaml` `policy:` is the
 // tighten-only revision scope. An empty Dir means no revision scope.
-type Revision struct{ Dir string }
+// RunValues are the per-run flag values (--prefer, --runner, --max-queue): the
+// run scope, applied last with operator authority and tighten-only (a
+// preference such as sched.preset may take any value).
+type Revision struct {
+	Dir       string
+	RunValues map[string]json.RawMessage
+}
 
 // Reader is the store surface the resolver reads.
 type Reader interface {
@@ -119,6 +125,9 @@ func (r *Resolver) Resolve(ctx context.Context, repo Repo, rev Revision) (Resolv
 		if revPolicy = withoutSame(revPolicy, tipPolicy); len(revPolicy) > 0 {
 			scopes = append(scopes, trust.Scope{Kind: SourceRevision, Values: revPolicy})
 		}
+	}
+	if len(rev.RunValues) > 0 {
+		scopes = append(scopes, trust.Scope{Kind: SourceRun, Values: rev.RunValues})
 	}
 	eff, digest, err := reg.Merge(res.PinnedCommit, scopes...)
 	if err != nil {

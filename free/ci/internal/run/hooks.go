@@ -11,6 +11,7 @@ package run
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
@@ -88,6 +89,8 @@ type TrustClassifier interface {
 type PolicyRequest struct {
 	Root, Pipeline string
 	Config         map[string]any
+	// Values are the per-run policy values the flags stand for (the run scope).
+	Values map[string]json.RawMessage
 }
 
 // PolicyResult carries the digest stored on the pipeline row and in evidence.

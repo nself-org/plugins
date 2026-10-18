@@ -145,6 +145,7 @@ func parseBare(args []string) (RunOptions, error) {
 	}
 	bare.opts, bare.services, bare.help = RunOptions{}, nil, false
 	bare.repo, bare.cfg, bare.base = "", "", ""
+	clearSchedFlags()
 	bareFlags.SetOutput(os.Stderr)
 	if err := bareFlags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -168,6 +169,9 @@ func parseBare(args []string) (RunOptions, error) {
 		return o, err
 	}
 	o.Root, o.Home = root, os.Getenv("NSELF_CI_HOME")
+	if o.PolicyValues, err = schedRevisionValues(o.Trigger); err != nil {
+		return o, err
+	}
 	for _, h := range optionsHooks {
 		if err = h(&o); err != nil {
 			return o, err

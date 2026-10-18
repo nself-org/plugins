@@ -2,6 +2,7 @@ package policy
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -294,5 +295,34 @@ func TestUnreadableTipFailsClosed(t *testing.T) {
 	r.Run = broken
 	if _, err := r.Resolve(context.Background(), Repo{Root: f.work, Visibility: "private", Class: "owner"}, Revision{}); err == nil || !strings.Contains(err.Error(), "E672") {
 		t.Fatalf("unreadable tip: %v", err)
+	}
+}
+
+// D-0984: the run scope reaches the effective policy and is tighten-only.
+func TestRunValuesScope(t *testing.T) {
+	f := newFixture(t)
+	r := resolver(t, f, nil)
+	repo := Repo{Root: f.work, Project: "proj", Visibility: "private", Class: "owner"}
+	f.setWorktree(baseConfig + "policy:\n  trust:\n    network: restricted\n")
+	base, err := r.Resolve(context.Background(), repo, Revision{Dir: f.work})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.Values["trust.network"] != "restricted" {
+		t.Fatalf("setup: %v", base.Values["trust.network"])
+	}
+	run := map[string]json.RawMessage{"sched.preset": json.RawMessage(`"prefer-local"`), "trust.network": json.RawMessage(`"lan"`)}
+	got, err := r.Resolve(context.Background(), repo, Revision{Dir: f.work, RunValues: run})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Values["sched.preset"] != "prefer-local" || got.Sources["sched.preset"] != SourceRun {
+		t.Fatalf("preset: %v from %s", got.Values["sched.preset"], got.Sources["sched.preset"])
+	}
+	if got.Values["trust.network"] != base.Values["trust.network"] || !strings.HasPrefix(ignoredKeys(got)["trust.network"], "E671") {
+		t.Fatalf("a run flag loosened trust.network: %v, ignored %v", got.Values["trust.network"], ignoredKeys(got))
+	}
+	if got.Digest == base.Digest {
+		t.Fatal("digest does not bind the run values")
 	}
 }

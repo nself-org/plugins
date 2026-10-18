@@ -65,6 +65,9 @@ const (
 	SourceJob             Source = "job"
 	SourceProtectedBranch Source = "protected-branch"
 	SourceRevision        Source = "revision"
+	// SourceRun is the per-run flags (--prefer, --runner, --max-queue): the
+	// operator at the terminal, so it may set spend keys, but it never loosens.
+	SourceRun Source = "run"
 )
 
 type Scope struct {
