@@ -2,8 +2,10 @@
 //
 // Purpose: Registers all MFA and SSO HTTP routes and starts the server.
 // Inputs: ENV — PLUGIN_AUTH_ENTERPRISE_PORT (default 3826), DATABASE_URL,
-//         NSELF_SSO (enables SSO endpoints), SP_ENTITY_ID, SAML_ACS_URL,
-//         OIDC_CALLBACK_URL.
+//         NSELF_SSO (enables SSO endpoints), AUTH_ENTERPRISE_SSO_SP_ENTITY_ID,
+//         AUTH_ENTERPRISE_SSO_ACS_URL, AUTH_ENTERPRISE_SSO_OIDC_CALLBACK_URL,
+//         AUTH_ENTERPRISE_TOTP_ISSUER (older SP_ENTITY_ID, SAML_ACS_URL,
+//         OIDC_CALLBACK_URL, NSELF_ISSUER still accepted).
 // Outputs: HTTP server on configured port exposing all MFA + SSO routes.
 // Constraints: MFA always active (Security-Always-Free); SSO requires
 //              NSELF_SSO=true (ɳSelf+ license gated in handler).
@@ -16,6 +18,7 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nself-org/nself-auth-enterprise/go/config"
 	"github.com/nself-org/nself-auth-enterprise/go/handlers"
 	"github.com/nself-org/nself-auth-enterprise/go/mfa"
 )
@@ -37,30 +40,15 @@ func main() {
 	}
 	defer pool.Close()
 
-	spEntityID := os.Getenv("SP_ENTITY_ID")
-	if spEntityID == "" {
-		spEntityID = "https://nself.local/auth/enterprise"
-	}
-	samlACSURL := os.Getenv("SAML_ACS_URL")
-	if samlACSURL == "" {
-		samlACSURL = "https://nself.local/auth/sso/saml/callback"
-	}
-	oidcCallbackURL := os.Getenv("OIDC_CALLBACK_URL")
-	if oidcCallbackURL == "" {
-		oidcCallbackURL = "https://nself.local/auth/sso/oidc/callback"
-	}
+	cfg := config.Load(os.Getenv)
 
 	// Service construction.
-	issuer := os.Getenv("NSELF_ISSUER")
-	if issuer == "" {
-		issuer = "nSelf"
-	}
-	totpSvc := mfa.NewTOTPService(pool, issuer)
+	totpSvc := mfa.NewTOTPService(pool, cfg.TOTPIssuer)
 	policySvc := mfa.NewPolicyService(pool)
 	recoverySvc := mfa.NewRecoveryService(pool)
 
 	mfaH := handlers.NewMFAHandlers(totpSvc, policySvc, recoverySvc)
-	ssoH := handlers.NewSSOHandlers(pool, spEntityID, samlACSURL, oidcCallbackURL)
+	ssoH := handlers.NewSSOHandlers(pool, cfg.SPEntityID, cfg.SAMLACSURL, cfg.OIDCCallbackURL)
 
 	mux := http.NewServeMux()
 

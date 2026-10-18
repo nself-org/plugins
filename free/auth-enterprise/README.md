@@ -32,6 +32,8 @@ MFA is always enabled and free. SSO is gated by `NSELF_SSO=true`.
 | `AUTH_ENTERPRISE_SSO_ACS_URL` | — | SAML Assertion Consumer Service URL |
 | `AUTH_ENTERPRISE_SSO_OIDC_CALLBACK_URL` | — | OIDC redirect URI registered with your IdP |
 
+The server reads these names directly. The older short names (`SP_ENTITY_ID`, `SAML_ACS_URL`, `OIDC_CALLBACK_URL`, `NSELF_ISSUER`) still work as a fallback when the documented name is unset.
+
 ## Database Tables
 
 | Table | Purpose |
