@@ -74,7 +74,20 @@ func (s *stub) Run(_ context.Context, c Call) (Result, error) {
 	return Result{}, nil
 }
 
-func (s *stub) joined() string { s.mu.Lock(); defer s.mu.Unlock(); return strings.Join(s.calls, "\n") }
+// joined lists the calls but not the `--help` capability probes.
+func (s *stub) joined() string { return strings.Join(s.work(), "\n") }
+
+func (s *stub) work() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []string
+	for _, c := range s.calls {
+		if !strings.HasSuffix(c, "--help") {
+			out = append(out, c)
+		}
+	}
+	return out
+}
 
 const listJSON = `[{"service":"redis","enabled":false,"status":"disabled","port":"6379","env_var":"REDIS_ENABLED"},{"service":"minio","enabled":false}]`
 
@@ -102,8 +115,8 @@ func TestUpSequenceNamedComponentsOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = p.Down(context.Background(), h) }()
-	got := s.joined()
-	order := []string{"docker info", "config services --help", "init --non-interactive --name " + h.Project,
+	got := strings.Join(s.calls, "\n") // with the probes
+	order := []string{"docker info", "config services --help", "config services start --help", "stop --help", "init --non-interactive --name " + h.Project,
 		"config set POSTGRES_PORT", "config set POSTGRES_PASSWORD", "build", "config services start postgres"}
 	at := 0
 	for _, want := range order {
@@ -113,7 +126,7 @@ func TestUpSequenceNamedComponentsOnly(t *testing.T) {
 		}
 		at += i + len(want)
 	}
-	noProbes := strings.ReplaceAll(strings.ReplaceAll(got, "services enable --help", ""), "services start --help", "")
+	noProbes := s.joined()
 	if strings.Contains(noProbes, "services start redis") || strings.Contains(noProbes, "services enable") {
 		t.Fatalf("started or enabled more than the named required component:\n%s", got)
 	}
@@ -157,7 +170,7 @@ func TestNeverRunsNselfInADirectoryThatIsNotOurProject(t *testing.T) {
 	if code(err) != CodeProvision || !strings.Contains(err.Error(), "refusing to run nself") {
 		t.Fatalf("got %v", err)
 	}
-	for _, c := range s.calls {
+	for _, c := range s.work() {
 		if strings.Contains(c, "nself config set") || strings.Contains(c, "nself stop") || strings.Contains(c, "nself build") {
 			t.Fatalf("ran %q in a directory that is not our project", c)
 		}
@@ -220,7 +233,7 @@ func TestErrorCodes(t *testing.T) {
 			if code(err) != c.want {
 				t.Fatalf("got %v, want %s", err, c.want)
 			}
-			for _, call := range c.s.calls {
+			for _, call := range c.s.work() {
 				if strings.Contains(call, "config services start") && !strings.HasSuffix(call, "--help") {
 					t.Fatal("started a service after a refusal")
 				}

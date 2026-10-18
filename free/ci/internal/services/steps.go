@@ -64,11 +64,9 @@ func (p *Provisioner) preflight(ctx context.Context) error {
 	if err != nil || res.ExitCode != 0 {
 		return fail(CodeNoDocker, "Docker is not available (%s info failed): start Docker or Colima, or run a job without services", p.docker())
 	}
-	for _, verb := range []string{"", "list", "enable", "start"} {
-		argv := []string{p.nself(), "config", "services"}
-		if verb != "" {
-			argv = append(argv, verb)
-		}
+	for _, verb := range [][]string{{"config", "services"}, {"config", "services", "list"}, {"config", "services", "enable"},
+		{"config", "services", "start"}, {"config", "set"}, {"init"}, {"build"}, {"stop"}} {
+		argv := append([]string{p.nself()}, verb...)
 		res, err = p.call(ctx, queryTimeout, Call{Argv: append(argv, "--help"), Env: cliEnv})
 		if err != nil || res.ExitCode != 0 {
 			return fail(CodeNoCLI, "`%s` is not available: run `nself update`", strings.Join(argv[1:], " "))

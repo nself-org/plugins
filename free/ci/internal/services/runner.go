@@ -88,6 +88,42 @@ func maskAll(s string, secrets []string) string {
 // away from a service call another job has in flight.
 const funnelDir = "svc"
 
+// ownerPrefix starts the coordinator id of every service call; the rest names
+// the provision (nselfci-<id>) the call works for, or "none". KillStale asks
+// the Provisioner whether that provision's owner is still alive.
+const ownerPrefix = "nselfci-svc-"
+
+// ownerOf names the provision a call belongs to from its working directory.
+func ownerOf(dir string) string {
+	for d := dir; d != "" && d != "." && d != string(filepath.Separator); d = filepath.Dir(d) {
+		if b := filepath.Base(d); strings.HasPrefix(b, projectPrefix) {
+			return b
+		}
+	}
+	return "none"
+}
+
+// staleOwner adapts a provision-owner test to the exec sweep's checker.
+type staleOwner func(owner string) bool
+
+func (s staleOwner) Stale(_ context.Context, id string) (bool, error) {
+	return strings.HasPrefix(id, ownerPrefix) && s(strings.TrimPrefix(id, ownerPrefix)), nil
+}
+
+// KillStale ends the process groups of service calls whose provision owner is
+// dead (a coordinator killed with -9 leaves its `nself build` or `docker
+// compose up` running; it would create resources after a Sweep removed the
+// project). It runs the exec funnel's own orphan sweep through a no-op call.
+func (f *Funnel) KillStale(ctx context.Context, dead func(owner string) bool) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	ex := &ciexec.Executor{Env: minimalEnv{}, Stale: staleOwner(dead)}
+	argv := []string{"true"}
+	_ = ex.Run(ctx, ciexec.JobSpec{AttemptID: "svcsweep-" + randHex(4), CoordinatorID: ownerPrefix + "sweep",
+		Job: model.Job{Run: argv}, Command: argv, Home: filepath.Join(f.Home, funnelDir)}).Err
+}
+
 // Funnel is the production Runner: one exec-funnel job per call.
 type Funnel struct {
 	Home string // NSELF_CI_HOME; workspaces are Home/svc/work/<call id>
@@ -127,7 +163,7 @@ func (f *Funnel) Run(ctx context.Context, c Call) (Result, error) {
 	argv := append([]string{"sh", "-c", `if [ -n "$NSELF_CI_SVC_DIR" ]; then cd "$NSELF_CI_SVC_DIR" || exit 97; fi; exec "$@"`, "nselfci-svc"}, c.Argv...)
 	res := ex.Run(ctx, ciexec.JobSpec{
 		AttemptID:     id,
-		CoordinatorID: "nselfci-services",
+		CoordinatorID: ownerPrefix + ownerOf(c.Dir),
 		Job:           model.Job{Run: argv, Env: env},
 		Command:       argv,
 		Home:          filepath.Join(f.Home, funnelDir),

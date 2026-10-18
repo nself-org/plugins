@@ -34,7 +34,12 @@ func (p *Provisioner) Sweep(ctx context.Context) (int, error) {
 		}
 		removed++
 	}
-	p.removeStaleCalls(work)
+	if k, ok := p.Run.(interface {
+		KillStale(context.Context, func(string) bool)
+	}); ok {
+		k.KillStale(ctx, p.ownerDead(work)) // before any teardown: a live CLI call would undo it
+	}
+	p.removeStaleCalls()
 	locks, _ := filepath.Glob(filepath.Join(work, projectPrefix+"*.lock"))
 	for _, lf := range locks {
 		l, held, err := acquireLock(lf)
@@ -101,11 +106,34 @@ func underAny(dir string, roots []string) bool {
 	return false
 }
 
-// removeStaleCalls deletes the workspaces of CLI calls whose coordinator died
+// ownerDead tells whether the coordinator that owned a provision is gone: its
+// lock file is absent, or free (the kernel drops a dead owner's flock).
+func (p *Provisioner) ownerDead(work string) func(string) bool {
+	return func(owner string) bool {
+		if !strings.HasPrefix(owner, projectPrefix) {
+			return false // a call with no provision: short, left to its own end
+		}
+		lf := filepath.Join(work, owner+".lock")
+		if _, err := os.Stat(lf); err != nil {
+			return true
+		}
+		l, held, err := acquireLock(lf)
+		if err != nil || held {
+			return false
+		}
+		l.Unlock()
+		return true
+	}
+}
+
+// removeStaleCalls deletes the workspaces and process markers of CLI calls whose coordinator died
 // mid-call (the funnel removes them itself on every normal exit). An hour old
 // is far past any live call.
-func (p *Provisioner) removeStaleCalls(work string) {
-	dirs, _ := filepath.Glob(filepath.Join(p.Home, funnelDir, "work", "svccall-*"))
+func (p *Provisioner) removeStaleCalls() {
+	base := filepath.Join(p.Home, funnelDir)
+	dirs, _ := filepath.Glob(filepath.Join(base, "work", "svccall-*"))
+	markers, _ := filepath.Glob(filepath.Join(base, "processes", "svccall-*.json"))
+	dirs = append(dirs, markers...)
 	for _, d := range dirs {
 		if fi, err := os.Stat(d); err == nil && time.Since(fi.ModTime()) > time.Hour {
 			_ = os.RemoveAll(d)
