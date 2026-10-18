@@ -56,11 +56,16 @@ nself build --remove-orphans
 docker volume rm <project>_forgejo_runner_config
 ```
 
-The first command drops the orphaned runner container and network. The second
-deletes the stored runner state and registration token. The Forgejo data volume
-and the admin user are untouched. Remove the `FORGEJO_RUNNER_*` variables from
-your `.env`; they are no longer read. Registrations created on the Forgejo server
-by the old runner stay in its database until you delete them in the admin panel.
+The first command removes the orphaned runner container. The second deletes the
+stored runner state and registration token. If the old runner network is still
+listed, `docker network rm <project>_forgejo_runner_net` removes it. The Forgejo
+data volume and the admin user are untouched. Remove the `FORGEJO_RUNNER_*`
+variables from your `.env`; they are no longer read. Registrations created on the
+Forgejo server by the old runner stay in its database until you delete them in the
+admin panel.
+
+Self-service sign-up is now closed by default. A deployment that relied on open
+registration must set `FORGEJO_DISABLE_REGISTRATION=false` to keep it.
 
 ## License
 

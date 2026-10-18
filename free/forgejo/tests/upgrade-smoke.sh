@@ -4,8 +4,9 @@
 #   runs `nself build --remove-orphans`, then checks the stack: the in-stack runner is gone, no container of the
 #   project mounts the Docker socket, forgejo-init exited 0 and sign-up is closed by default.
 # Inputs (env, all optional):
-#   FORGEJO_SMOKE_BASE_REF  git ref holding the previous plugin files (default origin/main). A ref that already lacks the
-#                           runner skips the upgrade leg and checks the fresh-install result only.
+#   FORGEJO_SMOKE_BASE_REF  git ref holding the previous plugin files. Default: the last commit that still shipped the
+#                           runner (pinned, so the upgrade leg keeps running after this change is on main). A ref that
+#                           lacks the runner skips the upgrade leg and checks the fresh-install result only.
 #   FORGEJO_SMOKE_WORK      work directory (default: a new mktemp dir under TMPDIR, removed on exit)
 #   FORGEJO_SMOKE_WAIT      seconds to wait for forgejo healthy / forgejo-init done (default 180)
 # Outputs: exit 0 when every assertion held; 1 on a failed assertion (compose state is printed first); 2 when a tool
@@ -17,7 +18,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 plugin="$(cd "$here/.." && pwd)"
 repo="$(cd "$plugin/../.." && pwd)"
-base_ref="${FORGEJO_SMOKE_BASE_REF:-origin/main}"
+base_ref="${FORGEJO_SMOKE_BASE_REF:-3e7c586a61bdfdfd1f2e206e226d686639bb1265}"
 wait_s="${FORGEJO_SMOKE_WAIT:-180}"
 proj_name="fgsmoke"
 sock="docker.""sock"
@@ -35,6 +36,8 @@ work="$FORGEJO_SMOKE_WORK"
 project="$work/project"
 rm -rf "${project:?}" "${work:?}/home" "${work:?}/plugins"
 mkdir -p "$project" "$work/home" "$work/plugins/forgejo"
+# Compose reads these from the shell before any env file: a dev's own values must never reach this run.
+unset COMPOSE_PROJECT_NAME COMPOSE_FILE COMPOSE_PROFILES COMPOSE_ENV_FILES DOCKER_NETWORK
 export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
 export HOME="$work/home"
 export NSELF_PLUGIN_DIR="$work/plugins"
@@ -47,7 +50,7 @@ dc() {
   local args=() f
   while IFS= read -r f; do [ -n "$f" ] && args+=(-f "$f"); done <"$project/.nself/compose-files.txt"
   while IFS= read -r f; do [ -n "$f" ] && args+=(--env-file "$f"); done <"$project/.nself/compose-env-files.txt"
-  (cd "$project" && "${compose[@]}" "${args[@]}" "$@")
+  (cd "$project" && "${compose[@]}" -p "$proj_name" "${args[@]}" "$@")
 }
 project_containers() { docker ps -aq --filter "label=com.docker.compose.project=$proj_name"; }
 
@@ -91,9 +94,11 @@ init_done() { [ "$(docker inspect --format '{{.State.Status}} {{.State.ExitCode}
 step "scratch nself project"
 (cd "$project" && nself init --non-interactive --name "$proj_name" --profile tiny --quiet)
 # Throwaway admin credentials for this run only; the password is generated, never a literal.
+admin_user=smokeadmin
+admin_pass="$(head -c 18 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 {
-  printf 'NSELF_FORGEJO_ADMIN_USER=smokeadmin\n'
-  printf 'NSELF_FORGEJO_ADMIN_PASSWORD=%s\n' "$(head -c 18 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  printf 'NSELF_FORGEJO_ADMIN_USER=%s\n' "$admin_user"
+  printf 'NSELF_FORGEJO_ADMIN_PASSWORD=%s\n' "$admin_pass"
   printf 'NSELF_FORGEJO_ADMIN_EMAIL=smoke@example.invalid\n'
 } >>"$project/.env"
 
@@ -132,4 +137,9 @@ case "$(mounts_of_project)" in *"$sock"*) fail "a container of the project still
 [ -z "$(docker volume ls -q --filter "name=${proj_name}_forgejo_runner_config")" ] || echo "note: ${proj_name}_forgejo_runner_config still exists (README migration step: docker volume rm)"
 env_of_forgejo="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${proj_name}_forgejo")"
 case "$env_of_forgejo" in *GITEA__service__DISABLE_REGISTRATION=true*) ;; *) fail "registration is not closed by default" ;; esac
-echo "PASS: no runner, no Docker socket mount, forgejo-init exit 0, registration closed"
+# The admin must have survived the upgrade (forgejo-init exits 0 even when user creation failed). The login goes to
+# curl on stdin, never on argv.
+admin_json="$(printf 'user = "%s:%s"\n' "$admin_user" "$admin_pass" | curl -fsS -K - "http://127.0.0.1:3844/api/v1/user")" || fail "the admin user cannot log in to the Forgejo API"
+case "$admin_json" in *'"is_admin":true'*) ;; *) fail "the Forgejo API user is not an admin" ;; esac
+if [ "$upgrade" = 1 ]; then mode="upgrade from $base_ref"; else mode="fresh install only"; fi
+echo "PASS ($mode): no runner, no Docker socket mount, forgejo-init exit 0, registration closed, admin can log in"

@@ -25,8 +25,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Fetch the base ref the previous fragment comes from
-        run: git fetch --no-tags --depth=1 origin main
+      - name: Fetch the commit the previous fragment comes from
+        # The last main commit that still shipped the runner; upgrade-smoke.sh pins the same SHA.
+        run: git fetch --no-tags --depth=1 origin 3e7c586a61bdfdfd1f2e206e226d686639bb1265
 
       - name: Install nself (released installer)
         run: |
