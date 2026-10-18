@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # check.sh: the free-plugin conformance gate (P7-PLUG-03, mandatory for every plugin since P7-PLUG-38). Manifest v2 is
 # the only schema: a plugin whose plugin.json is not manifest_version 2 (or that has no plugin.json) FAILS the gate.
-# Usage: check.sh [--plugins a,b | --changed | --all | --fixtures]   (no mode argument means --all) [--rules r1,r2] [--root DIR] [--exceptions FILE]
+# Usage: check.sh [--plugins a,b | --changed | --all | --fixtures]   (no mode argument means --all)
+#        --shard K/N (with --all): only every Nth plugin of the sorted list starting at the Kth, so CI can split the slow `build`
+#        rule over N runners; the N shards together are exactly --all. [--rules r1,r2] [--root DIR] [--exceptions FILE]
 #                 [--migration-base DIR]
 # Rules: exceptions (global), schema compat healthcheck replace docker-socket port-bind migrations boot-schema
 #        migration-immutable migration-idempotent legacy-renames repository ports build.
@@ -17,11 +19,11 @@ set -u
 . "$(dirname "$0")/lib.sh"
 mode=all; list=; root=$CONF_ROOT/free; rules=; exc=$CONF_DIR/exceptions.yaml
 ALL="schema compat healthcheck replace docker-socket port-bind migrations boot-schema migration-immutable migration-idempotent legacy-renames repository ports build"
-migbase=
+migbase=; shard=
 while [ $# -gt 0 ]; do case $1 in
   --plugins) mode=plugins; list=$2; shift;; --changed) mode=changed;; --all) mode=all;;
   --fixtures) mode=fixtures;; --rules) rules=$(printf '%s' "$2" | tr ',' ' '); shift;;
-  --root) root=$2; shift;; --exceptions) exc=$2; shift;; --migration-base) migbase=$2; shift;;
+  --root) root=$2; shift;; --exceptions) exc=$2; shift;; --migration-base) migbase=$2; shift;; --shard) shard=$2; shift;;
   *) echo "check.sh: unknown argument $1" >&2; exit 2;; esac; shift; done
 [ -n "$rules" ] || rules="exceptions $ALL"
 if [ "$mode" = fixtures ]; then exec bash "$CONF_DIR/fixtures.sh"; fi
@@ -29,6 +31,13 @@ case $mode in
   changed) list=$(git -C "$CONF_ROOT" diff --name-only origin/main... -- free 2>/dev/null | awk -F/ 'NF > 2 { print $2 }' | sort -u | tr '\n' ',');;
   all) list=$(cd "$root" && ls -d */ 2>/dev/null | tr -d '/' | tr '\n' ',');;
 esac
+if [ -n "$shard" ]; then
+  case $shard in [1-9]*/[1-9]*) ;; *) echo "check.sh: --shard wants K/N (1 <= K <= N), got $shard" >&2; exit 2;; esac
+  sk=${shard%/*}; sn=${shard#*/}
+  case "$sk$sn" in *[!0-9]*) echo "check.sh: --shard wants K/N, got $shard" >&2; exit 2;; esac
+  [ "$sk" -le "$sn" ] && [ "$mode" = all ] || { echo "check.sh: --shard K/N needs 1 <= K <= N and --all" >&2; exit 2; }
+  list=$(printf '%s' "$list" | tr ',' '\n' | awk -v k="$sk" -v n="$sn" 'NF && (NR - 1) % n == k - 1' | tr '\n' ',')
+fi
 rc=0; checked=0
 echo "rules: $rules"
 case " $rules " in *" migration-immutable "*|*" migration-idempotent "*)
@@ -76,6 +85,7 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
       *) cmd="bash $CONF_DIR/rules/$r.sh $dir";; esac
     out=$($cmd 2>&1) || { rc=1; printf '%s\n' "$out" | grep . | sed "s/^/[$p] /"; }
   done
+  echo "checked $p"
 done
 echo "checked $checked manifest v2 plugin(s)"
 if [ "$checked" -eq 0 ] && [ "$mode" != changed ]; then echo "FAIL check: no plugin was checked (a gate that ran nothing)"; rc=1; fi

@@ -19,7 +19,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A push to main must finish its full gate (the build shards take a while); only superseded PR runs are cancelled.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   schema-validation:
     name: Plugin Schema Validation
@@ -276,7 +277,7 @@ jobs:
   conformance:
     name: Plugin Conformance
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -297,8 +298,10 @@ jobs:
       - name: Declared-port plugins ship a compose fragment or say installable:false (D-0816)
         run: bash tests/manifests/service-fragments.sh
 
+      # P7-PLUG-38: every free plugin, not only the changed ones. Manifest v2 is the only schema: a v1 or missing
+      # manifest fails here. The docker `build` rule is the slow one; the conformance-build job below shards it.
       - name: Conformance gate on every free plugin (manifest v2 is the only schema)
-        run: bash scripts/conformance/check.sh --all
+        run: bash scripts/conformance/check.sh --all --rules exceptions,schema,compat,healthcheck,replace,docker-socket,port-bind,migrations,boot-schema,migration-immutable,migration-idempotent,legacy-renames,repository,ports
 
       # P7-PLUG-55: the release's binary targets, computed on every PR (no release side effects).
       - name: CLI binary targets gate and v1/v2 fixture parity
@@ -344,3 +347,28 @@ jobs:
 
       - name: Released CLI v1.4.12 oracle
         run: bash scripts/conformance/v14-oracle.sh --fixtures
+
+  # P7-PLUG-38: the `build` rule (docker build from the release tarball, network off) of check.sh --all, split over four
+  # runners. Together the shards are exactly --all (fixtures.sh proves it); the other rules run in `conformance` above.
+  conformance-build:
+    name: Plugin build gate (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: '1.26.9'   # >= the go directive of the cli commit in scripts/cli-tools.version
+
+      - name: Build rule on this shard of the free plugins
+        run: bash scripts/conformance/check.sh --all --shard ${{ matrix.shard }}/4 --rules build
+
