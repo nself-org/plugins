@@ -1,38 +1,31 @@
 # NSELF-FIRST EXCEPTION: plugin-fragment — hand-authored plugin service definition, merged by `nself build`. Not side-channel.
 #
-# Forgejo + Forgejo Actions Runner — ops profile plugin
+# Forgejo git forge — ops profile plugin
 # Port:  3844 (HTTP)  ·  3222 (SSH)  ·  F10-PORT-REGISTRY
 # Profile: ops  (include via nself build --profile ops)
 #
-# Auto-bootstrap (zero manual steps):
-#   1. forgejo-init runs once after Forgejo is healthy.
-#      • Creates admin user (idempotent — safe to re-run).
-#      • Generates a runner registration token via the Forgejo API.
-#      • Writes the token to forgejo_runner_config volume (/data/token).
-#   2. forgejo-runner reads the token and registers itself — idempotent
-#      (skips re-registration if /data/.runner state file already exists).
+# Trust model (ADR 0027, Epic TRUST D22): this stack runs NO CI job code. There is
+# no in-stack runner and no Docker socket mount. Forgejo Actions stays enabled so
+# an external runner on a CI node that is not a deploy host can register (README).
 #
-# Resource limits (untrusted workflow code sandboxing):
+# Auto-bootstrap (zero manual steps):
+#   forgejo-init runs once after Forgejo is healthy and creates the admin user
+#   (idempotent — safe to re-run).
+#
+# Resource limits:
 #   - forgejo:        mem=512m  cpu=1.0  (idle ~80MB)
-#   - forgejo-runner: mem=192m  cpu=0.5  (idle <200MB — SPIKE §3.7 threshold)
 #   - forgejo-init:   mem=128m  cpu=0.25 (short-lived bootstrap)
 #
 # Required env vars (set in .env or pass via nself secrets):
 #   NSELF_FORGEJO_ADMIN_USER          — Forgejo admin username (first boot)
 #   NSELF_FORGEJO_ADMIN_PASSWORD      — Forgejo admin password (min 8 chars)
 #   NSELF_FORGEJO_ADMIN_EMAIL         — Forgejo admin email address
-#   FORGEJO_RUNNER_REGISTRATION_TOKEN — optional pre-shared runner token;
-#                                       when blank, forgejo-init generates one
 #
 # Optional env vars (defaults shown):
 #   FORGEJO_HTTP_PORT=3844
 #   FORGEJO_SSH_PORT=3222
 #   FORGEJO_DOMAIN=localhost
-#   FORGEJO_RUNNER_NAME=nself-runner
-#   FORGEJO_RUNNER_LABELS=ubuntu-latest:docker://node:20-bullseye,...
-#   FORGEJO_RUNNER_CAPACITY=1
-#   FORGEJO_RUNNER_MEMORY=192m
-#   FORGEJO_RUNNER_CPU=0.5
+#   FORGEJO_DISABLE_REGISTRATION=true   (false opens self-service sign-up)
 
 services:
 
@@ -53,16 +46,17 @@ services:
       GITEA__server__ROOT_URL: "http://${FORGEJO_DOMAIN:-localhost}:${FORGEJO_HTTP_PORT:-3844}/"
       GITEA__server__SSH_DOMAIN: ${FORGEJO_DOMAIN:-localhost}
       GITEA__server__SSH_PORT: "${FORGEJO_SSH_PORT:-3222}"
-      # Built-in git-over-SSH is disabled by default: CI clones over HTTPS and the
-      # Actions runner doesn't need it, and the embedded SSH server's :22 bind can
+      # Built-in git-over-SSH is disabled by default: CI clones over HTTPS and an
+      # external Actions runner doesn't need it, and the embedded SSH server's :22 bind can
       # collide. Set FORGEJO_ENABLE_SSH=true (+ re-add the SSH port mapping) to enable.
       GITEA__server__START_SSH_SERVER: "${FORGEJO_ENABLE_SSH:-false}"
       GITEA__server__DISABLE_SSH: "true"
       GITEA__server__BUILTIN_SSH_SERVER_USER: git
       GITEA__security__INSTALL_LOCK: "true"
-      GITEA__service__DISABLE_REGISTRATION: "false"
+      # Closed by default; FORGEJO_DISABLE_REGISTRATION=false opens self-service sign-up.
+      GITEA__service__DISABLE_REGISTRATION: "${FORGEJO_DISABLE_REGISTRATION:-true}"
       GITEA__log__LEVEL: Warn
-      # Forgejo Actions (CI) must be explicitly enabled.
+      # Forgejo Actions must be explicitly enabled; jobs run on external runners only.
       GITEA__actions__ENABLED: "true"
       GITEA__actions__DEFAULT_ACTIONS_URL: "https://code.forgejo.org"
     ports:
@@ -74,7 +68,6 @@ services:
       - /etc/localtime:/etc/localtime:ro
     networks:
       - ${DOCKER_NETWORK}
-      - forgejo_runner_net
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/healthz"]
       interval: 30s
@@ -96,16 +89,7 @@ services:
 
   # ─── Bootstrap init container ──────────────────────────────────────────────
   # restart: "no"  — runs exactly once per stack lifecycle.
-  # forgejo-init completes when forgejo-bootstrap.sh exits 0.
-  # forgejo-runner depends on service_completed_successfully so it only
-  # starts after the token is available.
-  #
-  # Token generation mechanism:
-  #   POST /api/v1/user/actions/runners/registration-token  (Basic auth, admin)
-  #   Response: {"token":"<value>"}
-  #   Token written to /runner-config/token (mode 600, shared volume).
-  #
-  # Reference: https://forgejo.org/docs/latest/admin/actions/
+  # forgejo-init completes when forgejo-bootstrap.sh exits 0 (admin user created).
   forgejo-init:
     image: codeberg.org/forgejo/forgejo:9.0.3@sha256:3c34f11fe8b9983096eef3f8f25c2d2c21c4ae7504960cb203f0b075d1d8ed73
     container_name: ${COMPOSE_PROJECT_NAME:-nself}_forgejo_init
@@ -117,13 +101,12 @@ services:
       NSELF_FORGEJO_ADMIN_USER: ${NSELF_FORGEJO_ADMIN_USER}
       NSELF_FORGEJO_ADMIN_PASSWORD: ${NSELF_FORGEJO_ADMIN_PASSWORD}
       NSELF_FORGEJO_ADMIN_EMAIL: ${NSELF_FORGEJO_ADMIN_EMAIL}
-      FORGEJO_RUNNER_REGISTRATION_TOKEN: ${FORGEJO_RUNNER_REGISTRATION_TOKEN:-}
     volumes:
       - forgejo_data:/data
-      - forgejo_runner_config:/runner-config
-      - ./forgejo-bootstrap.sh:/forgejo-bootstrap.sh:ro
+      # Anchored on the plugin dir: a relative ./ path would resolve against the first -f file (the project).
+      - ${NSELF_PLUGIN_DIR:-.}/forgejo/forgejo-bootstrap.sh:/forgejo-bootstrap.sh:ro
     networks:
-      - forgejo_runner_net
+      - ${DOCKER_NETWORK}
     entrypoint: ["/bin/sh", "/forgejo-bootstrap.sh"]
     deploy:
       resources:
@@ -131,64 +114,11 @@ services:
           memory: 128m
           cpus: "0.25"
 
-  # ─── Forgejo Actions runner ─────────────────────────────────────────────────
-  # Isolated to forgejo_runner_net (cannot reach postgres/hasura/auth).
-  # Uses docker.sock bind-mount so workflow steps can spin up Docker containers
-  # (same pattern as github-runner plugin).
-  #
-  # Registration: runner-entrypoint.sh reads /data/token (written by forgejo-init),
-  # calls `forgejo-runner register --no-interactive`, then starts the daemon.
-  # Idempotent: skips registration if /data/.runner state file already exists.
-  forgejo-runner:
-    image: code.forgejo.org/forgejo/runner:6
-    container_name: ${COMPOSE_PROJECT_NAME:-nself}_forgejo_runner
-    restart: unless-stopped
-    depends_on:
-      forgejo:
-        condition: service_healthy
-      forgejo-init:
-        condition: service_completed_successfully
-    environment:
-      FORGEJO_INSTANCE_URL: "http://forgejo:3000"
-      FORGEJO_RUNNER_NAME: ${FORGEJO_RUNNER_NAME:-nself-runner}
-      FORGEJO_RUNNER_LABELS: ${FORGEJO_RUNNER_LABELS:-ubuntu-latest:docker://node:20-bullseye,ubuntu-22.04:docker://node:20-bullseye}
-      FORGEJO_RUNNER_CAPACITY: ${FORGEJO_RUNNER_CAPACITY:-1}
-    volumes:
-      - forgejo_runner_config:/data
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./runner-entrypoint.sh:/runner-entrypoint.sh:ro
-    networks:
-      - forgejo_runner_net
-    entrypoint: ["/bin/sh", "/runner-entrypoint.sh"]
-    deploy:
-      resources:
-        limits:
-          memory: ${FORGEJO_RUNNER_MEMORY:-192m}
-          cpus: "${FORGEJO_RUNNER_CPU:-0.5}"
-        reservations:
-          memory: 64m
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
 # ─── Named volumes ────────────────────────────────────────────────────────────
 volumes:
   forgejo_data:
     name: ${COMPOSE_PROJECT_NAME:-nself}_forgejo_data
-  forgejo_runner_config:
-    name: ${COMPOSE_PROJECT_NAME:-nself}_forgejo_runner_config
 
 # ─── Networks ─────────────────────────────────────────────────────────────────
-networks:
-  # The project network comes from the main compose file (${DOCKER_NETWORK});
-  # nself build merges this fragment into it.
-
-  # forgejo_runner_net: runner-only isolated bridge. Runner jobs cannot reach
-  # postgres/hasura/auth; they can only reach Forgejo (also on this network).
-  # external: false — this plugin owns it.
-  forgejo_runner_net:
-    name: ${COMPOSE_PROJECT_NAME:-nself}_forgejo_runner_net
-    driver: bridge
-    internal: false
+# The project network comes from the main compose file (${DOCKER_NETWORK});
+# nself build merges this fragment into it. This plugin declares no network of its own.

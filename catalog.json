@@ -1521,7 +1521,7 @@
       "category": "development",
       "checksum": "e43e6d1599c5991006838a7264aeed7acd064e62f71dfb83841f9475d56e984d",
       "commands": null,
-      "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute — zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
+      "description": "Self-hosted Forgejo git forge with Forgejo Actions enabled for external runners. No in-stack runner and no Docker socket mount; register runners on a CI node that is not a deploy host. Designed for the ops profile (ops server on staging/prod).",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
