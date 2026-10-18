@@ -82,7 +82,7 @@ type AgentBinary struct{ URL, SHA256 string }
 // operator turned paid spend on AND set a day or month budget (overall) or a
 // budget for that provider above zero (review F6; I19).
 func PaidAllowed(p SpendPolicy, provider string) bool {
-	return p.PaidEnabled && (p.Budgets.Day.Micro > 0 || p.Budgets.Month.Micro > 0 || p.Budgets.Provider[provider] > 0)
+	return p.PaidEnabled && (p.Budgets.Day.Set && p.Budgets.Day.Micro > 0 || p.Budgets.Month.Set && p.Budgets.Month.Micro > 0 || p.Budgets.Provider[provider] > 0)
 }
 
 // Spend builds the typed spend policy. Resolved.Values carries the per-provider
@@ -92,6 +92,13 @@ func PaidAllowed(p SpendPolicy, provider string) bool {
 func Spend(res *policy.Resolved) (SpendPolicy, error) {
 	if res == nil || res.Values == nil {
 		return SpendPolicy{}, fail("economics", "no resolved policy values (Spend needs Resolved.Values for the per-provider keys)")
+	}
+	// Resolver output lists every registered default key; a map without them was built
+	// by hand or stripped, and its per-provider entries cannot be trusted either.
+	for _, spec := range SpendKeys() {
+		if _, listed := res.Values[spec.Key]; spec.Default != nil && !listed {
+			return SpendPolicy{}, fail(spec.Key, "missing from Resolved.Values (incomplete value list)")
+		}
 	}
 	r := &spendReader{eff: &res.Effective}
 	p := SpendPolicy{

@@ -75,14 +75,17 @@ func httpsURL(key string) decoder {
 		if err != nil {
 			return nil, err
 		}
-		u, perr := url.Parse(v.(string))
-		bad := strings.ContainsAny(v.(string), "# \t\r\n\\") // an empty fragment or a space still parses
-		if port := u.Port(); perr == nil && port != "" {
+		s := v.(string)
+		u, perr := url.Parse(s)
+		if perr != nil || strings.ContainsAny(s, "# \t\r\n\\") { // an empty fragment or a space still parses
+			return nil, fail(key, "must be an https URL with a host and no userinfo, query string or fragment")
+		}
+		if port := u.Port(); port != "" {
 			if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
-				bad = true
+				return nil, fail(key, "the port must be from 1 to 65535")
 			}
 		}
-		if perr != nil || bad || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		if u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
 			return nil, fail(key, "must be an https URL with a host and no userinfo, query string or fragment")
 		}
 		return v, nil

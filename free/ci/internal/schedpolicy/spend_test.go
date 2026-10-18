@@ -233,6 +233,13 @@ func TestPaidAllowed(t *testing.T) {
 			}
 		})
 	}
+	// An unset budget never counts, whatever its amount field holds.
+	if PaidAllowed(SpendPolicy{PaidEnabled: true, Budgets: Budgets{Day: Budget{Micro: 1}, Month: Budget{Micro: 1}}}, "hetzner") {
+		t.Error("an unset budget allowed paid")
+	}
+	if !PaidAllowed(SpendPolicy{PaidEnabled: true, Budgets: Budgets{Day: Budget{Micro: 1, Set: true}}}, "hetzner") {
+		t.Error("a set day budget did not allow paid")
+	}
 	if PaidAllowed(SpendPolicy{}, "") {
 		t.Error("the zero policy allows paid")
 	}
@@ -320,6 +327,10 @@ func TestSpendFlagged(t *testing.T) {
 		{KeyCloudEnrollAddr, `":8080"`, "/burst/cloudvm/enroll_addr"},
 		{KeyCloudEnrollURL, `"http://ci.example.test/enroll"`, "/burst/cloudvm/enroll_url"},
 		{KeyCloudEnrollURL, `"https://ci.example.test/enroll#"`, "/burst/cloudvm/enroll_url"},
+		{KeyCloudEnrollURL, `"https://ci.example.test:bad/enroll"`, "/burst/cloudvm/enroll_url"},
+		{KeyCloudAgent, agent("https://agents.example.test:bad/a", sha64), "/burst/cloudvm/agent/url"},
+		{KeyCloudEnrollURL, `"https://[::1"`, "/burst/cloudvm/enroll_url"},
+		{KeyCloudEnrollURL, `"https://%zz/a"`, "/burst/cloudvm/enroll_url"},
 		{KeyCloudEnrollURL, `"https://ci.example.test:99999/enroll"`, "/burst/cloudvm/enroll_url"},
 		{KeyCloudEnrollURL, `"https://ci.example.test/en roll"`, "/burst/cloudvm/enroll_url"},
 		{KeyCloudEnrollAddr, `"a b:80"`, "/burst/cloudvm/enroll_addr"},
@@ -406,6 +417,11 @@ func TestSpendFlagged(t *testing.T) {
 		if _, err := Spend(&res); err == nil || !strings.HasPrefix(err.Error(), "E691 ") {
 			t.Errorf("%s: Spend accepted it: %v", name, err)
 		}
+	}
+	// A value list that lacks the registered defaults (hand-built or stripped) is refused.
+	stripped := policy.Resolved{Effective: good.Effective, Values: map[string]any{}}
+	if _, err := Spend(&stripped); err == nil || !strings.Contains(err.Error(), "incomplete") {
+		t.Errorf("an empty non-nil value list was read as no providers: %v", err)
 	}
 	// Spend names a missing registered key instead of reading it as zero.
 	empty := policy.Resolved{}
