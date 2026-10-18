@@ -158,6 +158,19 @@ func (a *automaton) step(s int32, c byte) int32 {
 	}
 }
 
+// addSpan appends sp, or widens the last span when sp overlaps or touches it.
+// Within one scan spans arrive in order of their end, so a periodic value over a large blob
+// stays one span instead of one per position. The result still needs
+// mergeSpans: a span can reach back past an earlier one.
+func addSpan(out []span, sp span) []span {
+	if n := len(out); n > 0 && sp.s <= out[n-1].e && sp.e >= out[n-1].s {
+		out[n-1].s = min(out[n-1].s, sp.s)
+		out[n-1].e = max(out[n-1].e, sp.e)
+		return out
+	}
+	return append(out, sp)
+}
+
 // find appends the span of the longest pattern ending at each position.
 // hold is the number of trailing bytes that may begin a longer match.
 func (a *automaton) find(b []byte, out []span) (spans []span, hold int) {
@@ -165,7 +178,7 @@ func (a *automaton) find(b []byte, out []span) (spans []span, hold int) {
 	for i, c := range b {
 		s = a.step(s, c)
 		if o := a.nodes[s].out; o > 0 {
-			out = append(out, span{i + 1 - int(o), i + 1})
+			out = addSpan(out, span{i + 1 - int(o), i + 1})
 		}
 	}
 	return out, int(a.nodes[a.nodes[s].hold].depth)
@@ -213,7 +226,7 @@ func (a *automaton) findSkip(b []byte, out []span) (spans []span, hold int) {
 		for ; t != 0; t = a.nodes[t].dict { // longest first; a shorter one stands in when the cap rejects it
 			o := int(a.nodes[t].depth)
 			if st := pos(count - o); i+1-st <= spanCap(o) {
-				out = append(out, span{st, i + 1})
+				out = addSpan(out, span{st, i + 1})
 				break
 			}
 		}

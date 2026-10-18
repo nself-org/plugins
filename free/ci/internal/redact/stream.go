@@ -175,7 +175,14 @@ func assemble(out, b []byte, merged []span, neu []edit, cont bool, r int) ([]byt
 			break
 		}
 		i := sort.Search(len(merged), func(k int) bool { return merged[k].e > e.s })
-		if i < len(merged) && merged[i].s < e.e {
+		hit := i < len(merged) && merged[i].s < e.e
+		if e.sgr {
+			if hit && merged[i].s > e.s { // a mask over the body must not leave a live ESC
+				pieces = append(pieces, piece{e.s, e.s + 1, escMark})
+			}
+			continue
+		}
+		if hit {
 			continue
 		}
 		pieces = append(pieces, piece{e.s, e.e, e.with})

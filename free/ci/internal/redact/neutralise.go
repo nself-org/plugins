@@ -6,7 +6,8 @@ package redact
 // CSI, lone ESC, UTF-8 encoded C1 controls) are rewritten into inert text.
 // Inputs:  a buffer and the byte before it. Outputs: edits and the number of
 // trailing bytes that may be the start of a sequence.
-// Constraints: SGR colour sequences (ESC [ digits ; : m) pass through; command
+// Constraints: SGR colour sequences (ESC [ digits ; : m) pass through, unless a
+// mask covers part of one, then its ESC is rewritten; command
 // names are matched only when the byte before `::` is not a letter, digit or
 // underscore, so `std::error::Error` is unchanged.
 
@@ -16,6 +17,7 @@ import "strings"
 type edit struct {
 	s, e int
 	with string
+	sgr  bool // a colour sequence that passes unchanged unless a mask overlaps it
 }
 
 const (
@@ -76,15 +78,16 @@ func neutralise(b []byte, prev byte, final bool, out []edit) (edits []edit, hold
 				return out, hold
 			}
 			if sgr {
+				out = append(out, edit{s: i, e: end, sgr: true})
 				i = end - 1
 				continue
 			}
-			out = append(out, edit{i, i + 1, escMark})
+			out = append(out, edit{s: i, e: i + 1, with: escMark})
 		case 0xc2:
 			if i+1 == len(b) {
 				held(i)
 			} else if b[i+1] >= 0x80 && b[i+1] <= 0x9f {
-				out = append(out, edit{i, i + 2, escMark})
+				out = append(out, edit{s: i, e: i + 2, with: escMark})
 				i++
 			}
 		case ':':
@@ -106,7 +109,7 @@ func neutralise(b []byte, prev byte, final bool, out []edit) (edits []edit, hold
 			if partial {
 				held(i)
 			} else if isCmd {
-				out = append(out, edit{i, i + 2, "[::]"})
+				out = append(out, edit{s: i, e: i + 2, with: "[::]"})
 				i++
 			}
 		case '#':
@@ -120,9 +123,9 @@ func neutralise(b []byte, prev byte, final bool, out []edit) (edits []edit, hold
 			rest := b[i+2:]
 			switch {
 			case len(rest) >= 1 && rest[0] == '[':
-				out = append(out, edit{i, i + 2, "[##]"})
+				out = append(out, edit{s: i, e: i + 2, with: "[##]"})
 			case len(rest) >= 4 && strings.EqualFold(string(rest[:4]), "vso["):
-				out = append(out, edit{i, i + 2, "[##]"})
+				out = append(out, edit{s: i, e: i + 2, with: "[##]"})
 			case len(rest) < 4 && strings.EqualFold(string(rest), "vso"[:len(rest)]):
 				held(i)
 			}
