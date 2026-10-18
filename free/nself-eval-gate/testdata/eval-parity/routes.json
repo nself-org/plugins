@@ -1,0 +1,29 @@
+{
+  "POST /eval/run#pass-suite": {"status": 202, "body": {"run_id": "run-pass", "status": "queued"}},
+  "GET /eval/runs/run-pass": {"status": 200, "body": {
+    "schema_ver": 1, "id": "run-pass", "suite_slug": "pass-suite", "status": "passed",
+    "pass_rate": 1.0, "suite_score": 0.9125, "passed": true, "precondition_failed": false,
+    "tasks": [
+      {"task_id": "t-1", "input": "what colour is the sky", "output": "blue", "score": 1.0, "passed": true, "scoring_mode": "exact"},
+      {"task_id": "t-2", "input": "name a fruit that is red and sweet, then explain at length why it is considered sweet", "output": "apple", "score": 0.825, "passed": true, "scoring_mode": "rubric", "rationale": "close enough"}
+    ]}},
+  "POST /eval/run#fail-suite": {"status": 202, "body": {"run_id": "run-fail", "status": "queued"}},
+  "GET /eval/runs/run-fail": {"status": 200, "body": {
+    "schema_ver": 1, "id": "run-fail", "suite_slug": "fail-suite", "status": "failed",
+    "pass_rate": 0.5, "suite_score": 0.4, "passed": false, "precondition_failed": false,
+    "tasks": [
+      {"task_id": "t-1", "input": "two plus two", "output": "four", "score": 1.0, "passed": true, "scoring_mode": "exact"},
+      {"task_id": "t-2", "input": "capital of nowhere", "output": "unknown", "score": 0.0, "passed": false, "scoring_mode": "semantic"}
+    ]}},
+  "POST /eval/run#pre-suite": {"status": 202, "body": {"run_id": "run-pre", "status": "queued"}},
+  "GET /eval/runs/run-pre": {"status": 200, "body": {
+    "schema_ver": 1, "id": "run-pre", "suite_slug": "pre-suite", "status": "failed",
+    "pass_rate": 0, "suite_score": 0, "passed": false, "precondition_failed": true, "tasks": []}},
+  "POST /eval/run#down-suite": {"status": 503, "body": {"error": "service unavailable"}},
+  "POST /eval/validate#empty": {"status": 200, "body": {"valid": false, "errors": [
+    {"field": "suite", "message": "required"}, {"field": "tasks", "message": "must not be empty"}]}},
+  "POST /eval/validate#content": {"status": 200, "body": {"valid": true}},
+  "GET /eval/gate/supervised": {"status": 200, "body": {"tier": "supervised", "cleared": true, "enforced": false}},
+  "GET /eval/gate/semi-auto": {"status": 200, "body": {"tier": "semi-auto", "cleared": false, "enforced": true, "blocking_suites": ["recall-quality-v1", "pass-suite"]}},
+  "GET /eval/gate/full-auto": {"status": 503, "body": {"error": "service unavailable"}}
+}

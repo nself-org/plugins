@@ -1,0 +1,43 @@
+Run a named eval suite via the nself-eval-gate plugin, or validate an
+eval-set YAML file without running it.
+
+Exit codes:
+  0 — suite passed (pass_rate and suite_score >= configured threshold)
+  1 — suite ran but is below threshold
+  2 — validation error (bad YAML or invalid eval-set schema)
+  3 — precondition not met (BGE-M3 or AI gateway unavailable)
+
+Examples:
+  nself ci eval --suite recall-quality-v1
+  nself ci eval --suite recall-quality-v1 --output table
+  nself ci eval --validate-only --suite recall-quality-v1
+  nself ci eval --dry-run --suite recall-quality-v1
+
+Usage:
+  nself ci eval [flags]
+  nself ci eval [command]
+
+Available Commands:
+  gate        Check whether an autonomy tier gate is cleared
+
+Flags:
+      --all                     Run all registered suites (reserved; not yet implemented)
+      --dry-run                 Print what would run without executing
+      --eval-url string         nself-eval-gate plugin base URL (default "http://localhost:3770")
+      --fail-fast               Stop after first failing task (reserved; not yet implemented)
+  -h, --help                    help for eval
+      --k int                   Top-k for recall-quality suites (default 3)
+      --no-cache                Disable embed/rubric cache for this run (reserved; not yet implemented)
+      --output string           Output format: json|table|summary (default "summary")
+      --repo string             Repo root path for artifact output (default ".")
+      --source-account string   Source account ID header value (default "primary")
+      --suite string            Suite slug to run (required unless --all)
+      --tier string             Autonomy tier for threshold lookup (supervised|semi-auto|full-auto)
+      --validate-only           Validate YAML schema without running the suite
+
+Global Flags:
+      --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection
+
+Use "nself ci eval [command] --help" for more information about a command.

@@ -1,0 +1,2 @@
+dry-run: would run suite=pass-suite via {{URL}}
+dry-run: artifact output → {{REPO}}/.nself-ci/artifacts/eval-results.json
