@@ -153,6 +153,42 @@ func TestExitedLeaderKillsLiveGroupMarker(t *testing.T) {
 	}
 }
 
+func TestReusedPIDMarkerIsRemovedAndSweepContinues(t *testing.T) {
+	home := t.TempDir()
+	cmd := osexec.Command("sleep", "30")
+	if err := prepareProcess(cmd); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	pid := cmd.Process.Pid
+	defer func() { _ = killGroup(pid); _ = cmd.Wait() }()
+	// The marker names this PID with an identity that is not the live process: the PID was reused.
+	if err := writeProcessMarker(home, "reused", "old", pid); err != nil {
+		t.Fatal(err)
+	}
+	path := markerPath(home, "reused")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forged := strings.Replace(string(data), `"identity":"`, `"identity":"not-`, 1)
+	if err := os.WriteFile(path, []byte(forged), 0600); err != nil {
+		t.Fatal(err)
+	}
+	e := &Executor{Stale: staleChecker{"old": true}}
+	if err := e.sweepProcesses(context.Background(), home, "current"); err != nil {
+		t.Fatalf("identity mismatch aborted the sweep: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("reused-PID marker retained: %v", err)
+	}
+	if !groupAlive(pid) {
+		t.Fatal("sweep killed the process group of the process that reused the PID")
+	}
+}
+
 func TestDetachedGrandchildCancellationBound(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
