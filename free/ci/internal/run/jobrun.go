@@ -144,7 +144,7 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 		}
 	}
 	rs.render.Event(Event{Type: "started", Job: pj.ID})
-	spec.Slot = rs.sess.slots.take()
+	spec.Slot = rs.sess.slots.take(slotDir(rs.sess.Home))
 	res := rs.c.exec.Run(ctx, spec)
 	rs.sess.slots.put(spec.Slot)
 	o.Duration, o.ExitCode, o.Tail = res.Finished.Sub(res.Started), res.ExitCode, t.String()

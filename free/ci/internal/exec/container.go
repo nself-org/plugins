@@ -76,9 +76,26 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 	return code, nil
 }
 
+// envLines renders the job environment as KEY=VALUE lines for a docker --env-file.
+func envLines(env []string) ([]byte, error) {
+	var out strings.Builder
+	for _, item := range env {
+		if strings.ContainsAny(item, "\r\n") {
+			return nil, coded("E612", "newline in environment")
+		}
+		out.WriteString(item)
+		out.WriteByte('\n')
+	}
+	return []byte(out.String()), nil
+}
+
 // writeEnvFile writes the job environment to a 0600 file under home so no value
-// reaches an argv, and returns the path and its remover.
+// reaches an argv, and returns the path and its remover (the baseline container path).
 func writeEnvFile(home string, env []string) (string, func(), error) {
+	data, err := envLines(env)
+	if err != nil {
+		return "", nil, err
+	}
 	file, err := os.CreateTemp(home, "ci-env-*")
 	if err != nil {
 		return "", nil, err
@@ -88,15 +105,9 @@ func writeEnvFile(home string, env []string) (string, func(), error) {
 		remove()
 		return "", nil, err
 	}
-	for _, item := range env {
-		if strings.ContainsAny(item, "\r\n") {
-			remove()
-			return "", nil, coded("E612", "newline in environment")
-		}
-		if _, err := fmt.Fprintln(file, item); err != nil {
-			remove()
-			return "", nil, err
-		}
+	if _, err := file.Write(data); err != nil {
+		remove()
+		return "", nil, err
 	}
 	if err := file.Close(); err != nil {
 		remove()

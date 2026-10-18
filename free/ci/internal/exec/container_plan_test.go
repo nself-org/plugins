@@ -16,9 +16,15 @@ import (
 // fakeRuntime puts a `docker` script first on PATH that records its calls and
 // replays the configured output and exit code.
 func fakeRuntime(t *testing.T, out string, code string) (calls func() []string) {
+	calls, _ = fakeRuntimeStdin(t, out, code)
+	return calls
+}
+
+// fakeRuntimeStdin is fakeRuntime that also returns what the run command read from stdin.
+func fakeRuntimeStdin(t *testing.T, out string, code string) (calls func() []string, stdin func() string) {
 	t.Helper()
 	dir := t.TempDir()
-	script := "#!/bin/sh\nd=$(dirname \"$0\")\necho \"$*\" >> \"$d/calls\"\ncase \"$*\" in *--entrypoint*) exit 0;; esac\ncat \"$d/out\"\nexit $(cat \"$d/code\")\n"
+	script := "#!/bin/sh\nd=$(dirname \"$0\")\necho \"$*\" >> \"$d/calls\"\ncase \"$*\" in *--entrypoint*) exit 0;; esac\ncase \"$1\" in run) ;; *) exit 0;; esac\ncat > \"$d/stdin\"\ncat \"$d/out\"\nexit $(cat \"$d/code\")\n"
 	for name, body := range map[string]string{"docker": script, "out": out, "code": code} {
 		mode := os.FileMode(0600)
 		if name == "docker" {
@@ -30,15 +36,18 @@ func fakeRuntime(t *testing.T, out string, code string) (calls func() []string) 
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return func() []string {
-		data, _ := os.ReadFile(filepath.Join(dir, "calls"))
-		return strings.Split(strings.TrimSpace(string(data)), "\n")
-	}
+			data, _ := os.ReadFile(filepath.Join(dir, "calls"))
+			return strings.Split(strings.TrimSpace(string(data)), "\n")
+		}, func() string {
+			data, _ := os.ReadFile(filepath.Join(dir, "stdin"))
+			return string(data)
+		}
 }
 
 type hardPlanner struct{ unhardened bool }
 
 func (p hardPlanner) Plan(r ContainerRun) (ContainerCommand, error) {
-	args := []string{"run", "--rm", "--name", r.Name, "--mount", "type=bind,src=" + r.Workspace + ",dst=/repo"}
+	args := []string{"run", "--rm", "--name", r.Name, "--user", fixtureUID(), "--network=none", "--env-file", r.EnvFile, "--mount", "type=bind,src=" + r.Workspace + ",dst=/repo"}
 	if !p.unhardened {
 		args = append(args, "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only")
 	}
@@ -47,7 +56,7 @@ func (p hardPlanner) Plan(r ContainerRun) (ContainerCommand, error) {
 }
 
 func (hardPlanner) Cleanup(r ContainerRun) (*ContainerCommand, error) {
-	return &ContainerCommand{Binary: "docker", Args: []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--entrypoint", "sh", r.Image, "-c", "true"}}, nil
+	return &ContainerCommand{Binary: "docker", Args: []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--user", fixtureUID(), "--network=none", "--name", r.Name + "-clean", "--entrypoint", "sh", r.Image, "-c", "true"}}, nil
 }
 
 func plannedSpec(t *testing.T, id string, p ContainerPlanner) JobSpec {
@@ -64,6 +73,34 @@ func TestPlannedContainerRunsCommandAndCleanup(t *testing.T) {
 	got := calls()
 	if len(got) != 2 || !strings.HasPrefix(got[0], "run --rm --name nself-ci-plan-ok") || !strings.HasSuffix(got[0], "alpine:3.19 go test -v") || !strings.Contains(got[1], "--entrypoint sh") {
 		t.Fatalf("calls %q", got)
+	}
+}
+
+func TestPlannedContainerGetsEnvOnStdinNeverOnDiskOrArgv(t *testing.T) {
+	calls, stdin := fakeRuntimeStdin(t, "ok\n", "0")
+	spec := plannedSpec(t, "plan-env", hardPlanner{})
+	spec.Job.Env = map[string]string{"FIXTURE_TOKEN": "synthetic-value-1"}
+	res := (&Executor{Env: nil}).Run(context.Background(), spec)
+	if res.Err != nil {
+		t.Fatal(res.Err)
+	}
+	if !strings.Contains(stdin(), "FIXTURE_TOKEN=synthetic-value-1\n") {
+		t.Fatalf("env not on stdin: %q", stdin())
+	}
+	for _, call := range calls() {
+		if strings.Contains(call, "synthetic-value-1") || strings.Contains(call, "ci-env-") {
+			t.Fatalf("env value or env file on argv: %q", call)
+		}
+		if strings.Contains(call, "--entrypoint") {
+			continue
+		}
+		if !strings.Contains(call, "--env-file /dev/stdin") {
+			t.Fatalf("run call without the stdin env file: %q", call)
+		}
+	}
+	files, _ := filepath.Glob(filepath.Join(spec.Home, "ci-env-*"))
+	if len(files) != 0 {
+		t.Fatalf("env file written: %v", files)
 	}
 }
 
@@ -163,6 +200,9 @@ func TestCheckContainerCommand(t *testing.T) {
 		"notrun":      {"docker", []string{"exec", "alpine:3.19"}},
 		"binary":      {"sh", good},
 		"noimage":     {"docker", good[:7]},
+		"nouser":      {"docker", []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--network=none", "alpine:3.19", "x"}},
+		"nonetwork":   {"docker", []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--user", fixtureUID(), "alpine:3.19", "x"}},
+		"envfiledisk": withFlag("--env-file", "/tmp/secrets"),
 		"seccomp":     withFlag("--security-opt", "seccomp=unconfined"),
 		"apparmor":    withFlag("--security-opt=apparmor=unconfined"),
 		"capdrop-net": {"docker", []string{"run", "--cap-drop=NET_ADMIN", "--security-opt", "no-new-privileges", "--read-only", "alpine:3.19", "x"}},

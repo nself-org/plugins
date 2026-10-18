@@ -118,6 +118,62 @@ func TestIntegrationJobUIDIsNotAgentAndAgentHomeUnreachable(t *testing.T) {
 	}
 }
 
+func TestIntegrationEnvArrivesThroughStdinEnvFile(t *testing.T) {
+	p, image := prerequisites(t)
+	home := t.TempDir()
+	out, res := runJob(t, p, image, "t04-env", `echo "v=$FIXTURE_ENV"`, func(s *exec.JobSpec) {
+		s.Home = home
+		s.Job.Env = map[string]string{"FIXTURE_ENV": "synthetic-env-value"}
+	})
+	if res.Err != nil || !strings.Contains(out, "v=synthetic-env-value") {
+		t.Fatalf("env did not reach the job: %+v\n%s", res, out)
+	}
+	if files, _ := filepath.Glob(filepath.Join(home, "ci-env-*")); len(files) != 0 {
+		t.Fatalf("an env file was written to disk: %v", files)
+	}
+}
+
+// The host-side UID of the job process (read from /proc on the host) is the slot UID, never the agent's.
+func TestIntegrationHostUIDOfJobProcess(t *testing.T) {
+	p, image := prerequisites(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan exec.AttemptResult, 1)
+	slot := 2
+	go func() {
+		e := &exec.Executor{Isolation: wrapIsolator{p}, Grace: 500 * time.Millisecond}
+		done <- e.Run(ctx, exec.JobSpec{AttemptID: "t04-hostuid", CoordinatorID: "trust04-coord", Home: t.TempDir(), CPU: 1, MemoryMB: 64, Slot: slot,
+			Command: []string{"sleep", "60"}, Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: image}}})
+	}()
+	want, err := JobUID(slot, []int{os.Getuid(), os.Geteuid()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hostUID string
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) && hostUID == "" {
+		out, err := exec.RuntimeQuery(context.Background(), "docker", "inspect", "--format", "{{.State.Pid}}", "nself-ci-t04-hostuid")
+		if pid := strings.TrimSpace(string(out)); err == nil && pid != "" && pid != "0" {
+			if status, rerr := os.ReadFile("/proc/" + pid + "/status"); rerr == nil {
+				for _, line := range strings.Split(string(status), "\n") {
+					if fields := strings.Fields(line); len(fields) >= 2 && fields[0] == "Uid:" {
+						hostUID = fields[1]
+					}
+				}
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	if hostUID == "" {
+		t.Fatal("could not read the job process uid on the host")
+	}
+	if hostUID == strconv.Itoa(os.Getuid()) || hostUID != strconv.Itoa(want) {
+		t.Fatalf("host uid of the job process is %s, want %d and not the agent's %d", hostUID, want, os.Getuid())
+	}
+}
+
 func TestIntegrationWorkspaceReadWriteAndCleanup(t *testing.T) {
 	p, image := prerequisites(t)
 	src := t.TempDir()
