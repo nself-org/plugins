@@ -77,3 +77,43 @@ func TestAllowlistEnvDropsOperatorSecrets(t *testing.T) {
 		}
 	}
 }
+
+// byteByByte feeds the input one byte per Redact call.
+func byteByByte(in string) string {
+	r := NewOutputRedactor()
+	var out []byte
+	for i := 0; i < len(in); i++ {
+		out = append(out, r.Redact([]byte{in[i]})...)
+	}
+	return string(append(out, r.Flush()...))
+}
+
+// A named secret longer than maxHold must stay masked across the bounded line
+// cut, whatever the chunking (D-0982).
+func TestOutputRedactorKeepsMaskAcrossLineCut(t *testing.T) {
+	long := strings.Repeat("abcdefghij", 500)
+	words := strings.TrimSpace(strings.Repeat("alpha beta ", 450))
+	cases := map[string]string{
+		"unquoted":      "TOKEN=" + long + "\nnext\n",
+		"unquoted tail": "pre " + strings.Repeat("w ", 300) + "SECRET_KEY=" + long + " after\n",
+		"double quoted": `API_KEY="` + words + `" after` + "\n",
+		"single quoted": "PASSWORD='" + words + "' after\n",
+		"empty at cut":  strings.Repeat("a", 4096-len("TOKEN=")) + "TOKEN=" + long + "\n",
+	}
+	for name, in := range cases {
+		t.Run(name, func(t *testing.T) {
+			whole := redactAll(in)
+			if strings.Contains(whole, "abcdefghij") || strings.Contains(whole, "alpha") {
+				t.Fatalf("whole write leaked: %.80q", whole)
+			}
+			for chunk, got := range map[string]string{"byte": byteByByte(in), "split": redactAll(in[:len(in)*3/5], in[len(in)*3/5:])} {
+				if strings.Contains(got, "abcdefghij") || strings.Contains(got, "alpha") || strings.Contains(got, "beta") {
+					t.Errorf("%s writes leaked the value suffix: %.120q", chunk, got)
+				}
+				if got != whole {
+					t.Errorf("%s writes differ from the whole write: %.80q vs %.80q", chunk, got, whole)
+				}
+			}
+		})
+	}
+}
