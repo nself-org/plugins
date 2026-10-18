@@ -232,7 +232,8 @@ func TestPublish_ScrubsEveryFreeString(t *testing.T) {
 	ev.Job, ev.Attempt = strp(leak), &model.AttemptRef{ID: leak, N: 1}
 	ev.Retries = []model.Retry{{JobID: leak, Attempt: 1, Class: "infra"}}
 	ev.ToolVersions = map[string]string{leak: leak}
-	ev.ProviderAttestation = &model.ProviderAttestation{Provider: "github", RunID: leak, Ref: leak, WorkflowPath: leak, TemplateVersion: leak, ArtifactID: leak}
+	ev.ProviderAttestation = &model.ProviderAttestation{Provider: "github", RunID: leak, Ref: leak, WorkflowPath: leak, TemplateVersion: leak, ArtifactID: leak,
+		Nonce: leak, VerifiedAt: leak, WorkflowSHA: leak, WorkflowDigest: leak, ArtifactSHA256: leak}
 	before := string(marshal(t, ev))
 	out := attest.Publish(ev, attest.Public)
 	if string(marshal(t, ev)) != before {
@@ -307,5 +308,14 @@ func TestProfileText_NestedURLsAreBounded(t *testing.T) {
 	}
 	if p.URL(hostile) != "" {
 		t.Fatal("a URL whose path holds another URL must be dropped")
+	}
+}
+
+// A user name learned from a home path inside a dropped URL is still redacted in the rest of the text.
+func TestProfileText_UserFromDroppedURLPath(t *testing.T) {
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public})
+	got := p.Text("https://logs.example.org/home/alice/log user alice")
+	if strings.Contains(got, "alice") {
+		t.Fatalf("user survived: %q", got)
 	}
 }

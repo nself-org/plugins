@@ -50,6 +50,12 @@ func (p Profile) Text(s string) string {
 	if p.private || s == "" {
 		return s
 	}
+	// user names in home paths that sit inside a URL about to be dropped still
+	// identify the user in the rest of the text
+	var seen []string
+	for _, sub := range homeRe.FindAllStringSubmatch(s, -1) {
+		seen = appendUser(seen, sub[2]+sub[3])
+	}
 	s = urlRe.ReplaceAllStringFunc(s, func(m string) string {
 		trimmed := strings.TrimRight(m, ".,;:")
 		if u := p.URL(trimmed); u != "" {
@@ -57,13 +63,15 @@ func (p Profile) Text(s string) string {
 		}
 		return redactedURL + m[len(trimmed):]
 	})
-	return p.textNoURL(s)
+	return p.scrub(s, seen)
 }
 
 // textNoURL is Text without the URL pass. Profile.URL uses it on a path, so a
 // URL cannot recurse into itself: a path that still holds "://" is dropped.
-func (p Profile) textNoURL(s string) string {
-	users := append([]string(nil), p.users...)
+func (p Profile) textNoURL(s string) string { return p.scrub(s, nil) }
+
+func (p Profile) scrub(s string, seen []string) string {
+	users := append(append([]string(nil), p.users...), seen...)
 	s = homeRe.ReplaceAllStringFunc(s, func(m string) string {
 		if sub := homeRe.FindStringSubmatch(m); sub[2] != "" {
 			users = appendUser(users, sub[2])
@@ -120,6 +128,9 @@ var genericUsers = map[string]bool{"runner": true, "node": true, "build": true, 
 	"admin": true, "ubuntu": true, "runneradmin": true, "github": true, "builder": true, "jenkins": true, "circleci": true, "vagrant": true}
 
 func appendUser(users []string, name string) []string {
+	if name == "" {
+		return users
+	}
 	if genericUsers[strings.ToLower(name)] {
 		return users
 	}

@@ -53,6 +53,8 @@ func PublishWith(ev model.Evidence, p Profile) model.Evidence {
 		pa := *ev.ProviderAttestation
 		pa.Provider, pa.RunID, pa.Ref = p.Text(pa.Provider), p.Text(pa.RunID), p.Text(pa.Ref)
 		pa.WorkflowPath, pa.TemplateVersion, pa.ArtifactID = p.Text(pa.WorkflowPath), p.Text(pa.TemplateVersion), p.Text(pa.ArtifactID)
+		pa.Nonce, pa.VerifiedAt, pa.WorkflowSHA = p.Text(pa.Nonce), p.Text(pa.VerifiedAt), p.Text(pa.WorkflowSHA)
+		pa.WorkflowDigest, pa.ArtifactSHA256 = p.Text(pa.WorkflowDigest), p.Text(pa.ArtifactSHA256)
 		out.ProviderAttestation = &pa
 	}
 	out.InputDigests = model.InputDigests{Config: ev.InputDigests.Config,
