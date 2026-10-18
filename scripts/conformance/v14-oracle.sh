@@ -64,7 +64,7 @@ done
 rm -rf "$W/out-conv-raw"; cp -R "$W/out-conv" "$W/out-conv-raw"
 . "$CONF_DIR/oracle/deltas.sh"
 norm() { sed -E 's#[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}[T ][0-9:.]+Z?#TS#g' "$1"; }
-apply_deltas "$W/out-conv" "$names" "$CONF_ROOT/tests/conformance/oracle-deltas.yaml" || rc=1
+apply_deltas "$W/out-conv" "$names" "$CONF_ROOT/tests/conformance/oracle-deltas.yaml" "$W/out-orig" || rc=1
 for f in docker-compose.yml compose-files.txt compose-env-urls.txt seed.sql list.txt remove-guard.txt; do
   [ -f "$W/out-orig/$f" ] || continue
   if diff <(norm "$W/out-orig/$f") <(norm "$W/out-conv/$f") >"$W/diff.$f" 2>&1; then echo "pass  oracle $f identical"; else echo "FAIL  oracle $f differs between v1 original and converted:"; head -20 "$W/diff.$f"; rc=1; fi

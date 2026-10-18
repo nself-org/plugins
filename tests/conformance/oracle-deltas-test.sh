@@ -43,4 +43,26 @@ expect "replacement row applies" 0 apply_deltas "$W/out" "nself-cloud" "$W/d.yam
 still docker-compose.yml 'port 3845 nself-cloud' && still docker-compose.yml 'port 3855 other' && still list.txt 'port 3855 nself-cloud' && echo "pass  deltas: replacement touches only matching lines of its own file" || { echo "FAIL  deltas: replacement scope wrong"; rc=1; }
 printf 'axb\n' > "$W/out/docker-compose.yml"; row nself-cloud docker-compose.yml "a.b" 1 x 2026-12-31
 expect "a regex key does not match literally-different text" 1 apply_deltas "$W/out" "nself-cloud" "$W/d.yaml"
+# original-only rows (D-0961): to "-" removes the exact key line from the ORIGINAL output; the converted side is untouched
+WARN='warning: plugin byok: manifest unreadable, skipped'
+mko() { mk; rm -rf "$W/orig"; mkdir -p "$W/orig"; printf '%s\n' 'byok 1.0.0' "$WARN" > "$W/orig/list.txt"; printf '%s\n' 'byok 1.0.0' > "$W/out/list.txt"; }
+stillo() { grep -qxF "$2" "$W/orig/$1"; }
+mko; row byok list.txt "$WARN" - - 2026-12-31
+expect "an original-only row applies" 0 apply_deltas "$W/out" "byok" "$W/d.yaml" "$W/orig"
+stillo list.txt "$WARN" && { echo "FAIL  deltas: original-only line was not removed"; rc=1; } || echo "pass  deltas: original-only line removed from the original"
+still list.txt 'byok 1.0.0' && stillo list.txt 'byok 1.0.0' && echo "pass  deltas: other lines of both sides are untouched" || { echo "FAIL  deltas: original-only row changed other lines"; rc=1; }
+diff -q "$W/orig/list.txt" "$W/out/list.txt" >/dev/null && echo "pass  deltas: original and converted now agree" || { echo "FAIL  deltas: sides still differ"; rc=1; }
+mko; printf '%s extra\n' "$WARN" >> "$W/orig/list.txt"; row byok list.txt "$WARN" - - 2026-12-31
+apply_deltas "$W/out" "byok" "$W/d.yaml" "$W/orig" >/dev/null
+stillo list.txt "$WARN extra" && echo "pass  deltas: an original line that only contains the key is not masked" || { echo "FAIL  deltas: longer original line was masked"; rc=1; }
+mko; row byok list.txt "warning: something else" - - 2026-12-31
+expect "a stale original-only row fails" 1 apply_deltas "$W/out" "byok" "$W/d.yaml" "$W/orig"
+mko; printf '%s\n' "$WARN" >> "$W/out/list.txt"; row byok list.txt "$WARN" - - 2026-12-31
+apply_deltas "$W/out" "byok" "$W/d.yaml" "$W/orig" >/dev/null
+still list.txt "$WARN" && echo "pass  deltas: the converted side is never masked by an original-only row" || { echo "FAIL  deltas: converted line was masked"; rc=1; }
+mko; row byok list.txt "$WARN" - - 2026-12-31
+expect "an original-only row without an original directory fails" 1 apply_deltas "$W/out" "byok" "$W/d.yaml"
+mko; row other list.txt "$WARN" - - 2026-12-31
+expect "an original-only row for a slug not under test is skipped" 0 apply_deltas "$W/out" "byok" "$W/d.yaml" "$W/orig"
+stillo list.txt "$WARN" && echo "pass  deltas: a skipped original-only row masks nothing" || { echo "FAIL  deltas: a skipped row masked the original"; rc=1; }
 [ $rc -eq 0 ] && echo "deltas: ok" || echo "deltas: FAIL"; exit $rc

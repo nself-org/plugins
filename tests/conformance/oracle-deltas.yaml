@@ -4,6 +4,7 @@
 # Matching is literal and per file; a row that matches nothing while its slug is under test is stale and fails;
 # an expired row fails. See scripts/conformance/oracle/deltas.sh.
 #   from "-": key is the exact whole line the converted output has and the original lacks.
+#   to "-":   key is the exact whole line only the ORIGINAL has (removed from the original side; write from "-").
 #   otherwise: in `file`, lines containing the literal key have `to` replaced by `from` on the converted side.
 deltas:
   # 2026-10-13 P7-PLUG-44: the nself-cloud / nself-sync port rows are gone. Both plugins are kind library (no compose
