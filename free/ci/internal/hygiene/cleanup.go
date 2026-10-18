@@ -24,7 +24,8 @@ func (h *Host) Cleanup(ctx context.Context, attempt string) error {
 
 // CleanupJob is Cleanup for an attempt that ran under job UID uid (job-shim or userns). The agent
 // cannot signal that UID's processes or unlink in directories it owns, so with a JobRunner the kill
-// and the removal run as the job user; without one a refusal surfaces as E681 and the node drains.
+// and the removal run as the job user, followed by a Reset of the user's own state (crontab, at
+// jobs, SysV IPC, HOME); without one a refusal surfaces as E681 and the node drains.
 func (h *Host) CleanupJob(ctx context.Context, attempt string, uid int) error {
 	if !ValidAttempt(attempt) {
 		return leakError(ReasonBadAttempt, "invalid attempt id")
@@ -48,6 +49,10 @@ func (h *Host) CleanupJob(ctx context.Context, attempt string, uid int) error {
 			add("job root contents (as job user)", h.Jobs.EmptyRoot(ctx, uid, h.Base, attempt))
 		}
 		add("job root", RemoveConfined(h.Base, attempt, h.Logf))
+	}
+	if separated && h.Jobs != nil {
+		// the slot UID is reused: crontab, at jobs, SysV IPC and HOME must not reach the next project
+		add("job user state (crontab, at, IPC, HOME)", h.Jobs.Reset(ctx, uid))
 	}
 	if len(problems) > 0 {
 		return leakError(ReasonCleanupFailed, "cleanup of attempt %s incomplete: %s", attempt, strings.Join(problems, "; "))

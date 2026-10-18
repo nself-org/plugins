@@ -333,6 +333,12 @@ func (s sudoJobs) EmptyRoot(_ context.Context, uid int, base, attempt string) er
 	return nil
 }
 
+func (s sudoJobs) Reset(_ context.Context, uid int) error {
+	// the crontab and at queue of the job user; `true` keeps a node without cron or at installed clean
+	_, err := run(s.t, "sudo", "-n", "-u", s.fx.users[s.slot(uid)], "--", "sh", "-c", "crontab -r 2>/dev/null; true")
+	return err
+}
+
 func TestIntegrationProbeUsernsFailsClosed(t *testing.T) {
 	dir := t.TempDir()
 	// The hosted runner has no /etc/subuid entry, so unshare leaves the job unmapped: it keeps the

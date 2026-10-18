@@ -209,7 +209,46 @@ func TestLeakCheckRuntimeDownIsSkippedOrALeakByHost(t *testing.T) {
 type fakeJobs struct {
 	killed               []int
 	removed              []string
+	reset                []int
 	failKill, failRemove error
+	failReset            error
+}
+
+// Reset records the job user whose crontab, at jobs, SysV IPC and HOME were wiped (D-0987).
+func (f *fakeJobs) Reset(_ context.Context, uid int) error {
+	f.reset = append(f.reset, uid)
+	return f.failReset
+}
+
+func TestCleanupJobResetsTheJobUserBetweenAttempts(t *testing.T) {
+	h, _ := testHost(t)
+	uid := os.Geteuid() + 7000 // a job user that is not the caller
+	jobs := &fakeJobs{}
+	h.Jobs = jobs
+	seedRoot(t, h, "att1")
+	if err := h.CleanupJob(context.Background(), "att1", uid); err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs.reset) != 1 || jobs.reset[0] != uid {
+		t.Fatalf("the job user's crontab, at jobs, IPC and HOME must be reset after the attempt: %+v", jobs)
+	}
+	// the caller's own uid is never reset: that would wipe the agent's HOME
+	own := &fakeJobs{}
+	h.Jobs = own
+	seedRoot(t, h, "att2")
+	if err := h.CleanupJob(context.Background(), "att2", os.Geteuid()); err != nil || len(own.reset) != 0 {
+		t.Fatalf("own uid: %v %+v", err, own)
+	}
+	// a failed reset leaves state for the next project on the slot UID: E681, never a clean cleanup
+	bad := &fakeJobs{failReset: errors.New("crontab: permission denied")}
+	h.Jobs = bad
+	seedRoot(t, h, "att3")
+	if err := h.CleanupJob(context.Background(), "att3", uid); codeOf(err) != CodeLeak || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("want E681 naming the failed reset, got %v", err)
+	}
+	if len(bad.reset) != 1 {
+		t.Fatalf("the reset must run once even though the attempt root was removed: %+v", bad)
+	}
 }
 
 func (f *fakeJobs) KillAll(_ context.Context, uid int) error {

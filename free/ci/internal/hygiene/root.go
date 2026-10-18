@@ -65,6 +65,12 @@ type JobRunner interface {
 	// EmptyRoot removes everything inside the attempt root as the job user (hygiene's confined
 	// removal, run as uid); the agent then removes the empty root from its own base.
 	EmptyRoot(ctx context.Context, uid int, base, attempt string) error
+	// Reset wipes what a job user keeps between attempts and the attempt root does not hold, so the
+	// next project that gets the slot UID inherits nothing: the user's crontab and pending at jobs
+	// (or cron.deny/at.deny make them impossible), SysV shared memory, semaphores and message queues
+	// (ipcrm), and the job HOME (rootless container storage, tool caches). Idempotent; runs after
+	// KillAll so no process can recreate any of it.
+	Reset(ctx context.Context, uid int) error
 }
 
 func (h *Host) logf(format string, a ...any) {
