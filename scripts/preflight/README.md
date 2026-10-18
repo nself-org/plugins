@@ -40,7 +40,7 @@ The first failing stage names the class.
 | `extract` | not a gzip tarball, an absolute or `..` member path, or `tar -x` failed |
 | `manifest` | no `plugin.json`, not a JSON object, or `name`/`version` differ from the registry entry |
 | `fragment` | a service plugin (`pluginType` is not `cli`, no bare `binaryName`) lacks `docker-compose.plugin.yml` or `Dockerfile` |
-| `build` | `docker build` of the extracted tree alone failed. A CLI plugin with no `Dockerfile` ships per-platform binaries, so it is built with the release recipe instead (`docker.sh` `pf_cli_dockerfile`: `CGO_ENABLED=0 go build` of each `nself-<command>` from `cmd/<command>/` or `cmd/`, in `golang:<go.mod go>-alpine`); it fails here when it has no `go.mod` or no command to build |
+| `build` | `docker build` of the extracted tree alone failed. A CLI plugin with no `Dockerfile` ships per-platform binaries, so it is built with the release recipe instead (`docker.sh` `pf_cli_dockerfile`: `CGO_ENABLED=0 go build` of each target `scripts/release/cli-targets.sh` computes, from `cmd/<command>/` or `cmd/`, in `golang:<go.mod go>-alpine`); it fails here when it has no `go.mod`, the manifest is refused or no plain command target results |
 | `drift` | served registry differs from `registry.json` at main (version, checksum, or slug absent). Checked first for every entry and it wins: an entry that also fails another stage is reported as `drift` with `; also <class>: <reason>`, so P7-PLUG-35 routing is never masked |
 
 `installable:false` entries with no `tarball` are asserted (declared, nothing to

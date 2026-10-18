@@ -65,6 +65,24 @@ scan() {
       if (v ~ /^".*"$/ || v ~ /^\047.*\047$/) v = substr(v, 2, length(v) - 2)
       return v
     }
+    # unqkey: a quoted mapping key ("networks": or single-quoted) read as the bare key.
+    function unqkey(b,   q, r) {
+      q = substr(b, 1, 1)
+      if ((q != "\"" && q != "\047") || !match(b, "^" q "[^" q "]*" q "[ \t]*:")) return b
+      r = substr(b, 2, index(substr(b, 2), q) - 1)
+      return r substr(b, length(r) + 3)
+    }
+    # flowname: flag a "name:" entry of a flow mapping value ("key: { name: X }").
+    function flowname(b,   t, seg) {
+      t = b
+      while (match(t, /[{,][ \t]*["\047]?name["\047]?[ \t]*:[ \t]*[^,}]*/)) {
+        seg = substr(t, RSTART, RLENGTH)
+        t = substr(t, RSTART + RLENGTH)
+        sub(/^[{,][ \t]*["\047]?name["\047]?[ \t]*:/, "", seg)
+        seg = clean(seg)
+        if (lit(seg)) print NR ": network name is the literal \"" seg "\"; use ${DOCKER_NETWORK}"
+      }
+    }
     function lit(v) {
       return (v == "nself_network" || v == "nself-network" || v == "nself")
     }
@@ -75,7 +93,7 @@ scan() {
       if (line ~ /^[ \t]*#/) next
       match(line, /^[ \t]*/)
       indent = RLENGTH
-      body = substr(line, indent + 1)
+      body = unqkey(substr(line, indent + 1))
       # A block ends on a line at or below the key indent, except a "- X" item
       # at the key indent: a valid non-indented YAML sequence, still inside.
       if (in_net && (indent < net_indent || (indent == net_indent && body !~ /^-/))) { in_net = 0; child = -1 }
@@ -117,7 +135,8 @@ scan() {
         k = body; sub(/:.*$/, "", k); k = clean(k); key = k
         if (lit(k)) print NR ": network key is the literal \"" k "\"; join by ${DOCKER_NETWORK} and do not redefine it"
         else if (k ~ /\$/) print NR ": network key \"" k "\" is a variable; compose does not interpolate keys, so join by - ${DOCKER_NETWORK} and do not redefine it"
-        if (net_indent == 0 && body ~ /[{,][ \t]*external[ \t]*:[ \t]*true/) print NR ": top-level network \"" k "\" is external; join the project network by - ${DOCKER_NETWORK} and declare only networks the plugin owns"
+        flowname(body)
+        if (net_indent == 0 && body ~ /[{,][ \t]*["\047]?external["\047]?[ \t]*:[ \t]*["\047]?true/) print NR ": top-level network \"" k "\" is external; join the project network by - ${DOCKER_NETWORK} and declare only networks the plugin owns"
       }
     }
   ' "$1"
