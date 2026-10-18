@@ -77,18 +77,23 @@ func (s *Store) OutboxRelease(ctx context.Context, revision, statusContext strin
 }
 
 // OutboxPosted records a delivery made under the claim token. When the claim
-// was taken over while the post was in flight (the poster was suspended), the
-// delivery may have landed after a newer status: the newest posted status is
+// was taken over, or a newer status was delivered, while the post was in
+// flight (the poster was suspended), the delivery landed after a newer
+// status: the newest posted status is
 // queued again so the next delivery restores the host to it, and E607 tells
 // the caller the claim was lost.
 func (s *Store) OutboxPosted(ctx context.Context, revision, statusContext string, seq, token int64) error {
 	lost := false
 	err := s.write(ctx, func(tx *sql.Tx) error {
+		var newer int // a newer status delivered while this post was in flight: this one landed last
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq>? AND state=?", revision, statusContext, seq, OutboxPosted).Scan(&newer); err != nil {
+			return err
+		}
 		res, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state=? AND claimed_at=?", OutboxPosted, revision, statusContext, seq, OutboxPosting, token)
 		if err != nil {
 			return err
 		}
-		if n, _ := res.RowsAffected(); n == 1 {
+		if n, _ := res.RowsAffected(); n == 1 && newer == 0 {
 			return nil
 		}
 		lost = true // committed with the re-queue below: an error would roll it back

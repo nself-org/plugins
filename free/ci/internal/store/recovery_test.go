@@ -43,26 +43,57 @@ func TestSweepStaleHonoursCancelIntent(t *testing.T) {
 	}
 }
 
-// DeadRuns names a running run whose only attempts were lost and settled, and
-// never a run that still has a live attempt.
-func TestDeadRuns(t *testing.T) {
-	s, ctx := testStore(t), context.Background()
-	seed(t, s, "a")
-	seed(t, s, "b")
-	if _, err := s.writer.Exec("UPDATE pipeline SET status='running'"); err != nil {
+// CloseDeadRuns closes a running run whose coordinator is gone and whose
+// attempts are all settled (lost, cancelled by a sweep), and never a run whose
+// coordinator is alive, even one with a remote-lease "lost" attempt, nor one
+// between waves.
+func TestCloseDeadRuns(t *testing.T) {
+	now := time.Now()
+	s, err := Open(filepath.Join(t.TempDir(), "state.db"), Options{TTL: time.Second, Clock: func() time.Time { return now }})
+	if err != nil {
 		t.Fatal(err)
 	}
-	for _, step := range []struct {
-		to    model.JobState
-		epoch int64
-	}{{"leased", 0}, {"running", 1}, {"lost", 2}, {"retryable", 3}} {
-		from := map[model.JobState]model.JobState{"leased": "queued", "running": "leased", "lost": "running", "retryable": "lost"}[step.to]
-		if err := s.Transition(ctx, "a", from, step.to, TransitionDetail{Epoch: step.epoch, FailureClass: "lost"}); err != nil {
+	defer func() { _ = s.Close() }()
+	ctx := context.Background()
+	dead, err := s.RegisterCoordinator(ctx, 1, "start", "boot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(10 * time.Second)
+	live, err := s.RegisterCoordinator(ctx, 2, "start", "boot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"a", "b", "c", "d"} {
+		seed(t, s, id)
+	}
+	if _, err = s.writer.Exec("UPDATE pipeline SET status='running'"); err != nil {
+		t.Fatal(err)
+	}
+	owner := map[string]string{"a": dead.ID, "b": live.ID, "c": dead.ID, "d": live.ID}
+	for id, c := range owner {
+		if _, err = s.writer.Exec("UPDATE attempt SET coordinator_id=? WHERE id=?", c, id); err != nil {
 			t.Fatal(err)
 		}
 	}
-	got, err := s.DeadRuns(ctx)
-	if err != nil || len(got) != 1 || got[0] != "pa" {
-		t.Fatalf("dead runs %v %v (pb still has a queued attempt)", got, err)
+	walk := func(id string, to ...model.JobState) {
+		from, epoch := model.JobState("queued"), int64(0)
+		for _, next := range to {
+			if err := s.Transition(ctx, id, from, next, TransitionDetail{Epoch: epoch, FailureClass: "lost"}); err != nil {
+				t.Fatal(err)
+			}
+			from, epoch = next, epoch+1
+		}
+	}
+	walk("a", "leased", "running", "lost", "retryable") // dead coordinator, settled
+	walk("b", "leased", "running", "lost", "retryable") // live coordinator, remote lease failure then retry
+	walk("c", "leased", "cancelled")                    // dead coordinator, cancelled by a sweep
+	walk("d", "leased", "running", "finalizing", "passed")
+	got, err := s.CloseDeadRuns(ctx, "boot")
+	if err != nil || len(got) != 2 || got[0] != "pa" || got[1] != "pc" {
+		t.Fatalf("closed %v %v (pb and pd belong to a live coordinator)", got, err)
+	}
+	if row, _, _ := s.PipelineByID(ctx, "pb"); row.Status != "running" {
+		t.Fatalf("a live run was closed: %+v", row)
 	}
 }

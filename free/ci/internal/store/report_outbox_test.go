@@ -191,3 +191,24 @@ func TestOutboxClaimFencing(t *testing.T) {
 		t.Fatalf("the newest status must be queued again, after the released one, with its payload: %+v", left)
 	}
 }
+
+// A poster whose claim was never released or taken over still lost the race
+// when a newer status was delivered meanwhile: its late delivery is healed.
+func TestOutboxLateDeliveryIsHealed(t *testing.T) {
+	s, ctx := testStore(t), context.Background()
+	a, _ := s.OutboxReserve(ctx, "rev", "nself-ci")
+	b, _ := s.OutboxReserve(ctx, "rev", "nself-ci")
+	for _, seq := range []int64{a, b} {
+		_ = s.OutboxReady(ctx, "rev", "nself-ci", seq, []byte(`{}`))
+	}
+	_, ta := claim(s, a)
+	if _, err := s.writer.Exec("UPDATE outbox SET state='posted' WHERE seq=?", b); err != nil { // b delivered while a was suspended
+		t.Fatal(err)
+	}
+	if err := s.OutboxPosted(ctx, "rev", "nself-ci", a, ta); !IsClaimLost(err) {
+		t.Fatalf("late delivery must be reported: %v", err)
+	}
+	if left, _ := s.OutboxUnposted(ctx); len(left) != 1 || left[0].Seq != b {
+		t.Fatalf("the newest status must be queued again: %+v", left)
+	}
+}

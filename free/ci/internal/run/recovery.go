@@ -115,23 +115,17 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 			rep.Errors = append(rep.Errors, err)
 		}
 	}
-	// a run whose coordinator died stays "running" until closed; this also
-	// catches a recovery that was itself killed after the attempt moves
-	dead, err := st.DeadRuns(ctx)
-	if err != nil {
+	// a run whose coordinator died stays "running" until closed; one
+	// transaction selects and closes it, and a recovery that was itself
+	// killed earlier is finished here
+	if _, err = st.CloseDeadRuns(ctx, boot); err != nil {
 		rep.Errors = append(rep.Errors, err)
-	}
-	for _, id := range dead {
-		if err = st.FinishPipeline(ctx, id, "lost"); err != nil {
-			rep.Errors = append(rep.Errors, err)
-		}
 	}
 	return rep
 }
 
 // strandAttempts ends the queued and finalizing attempts of dead coordinators
-// (queued: cancelled; finalizing: failed, class infra) and closes the pipeline
-// rows that have nothing live left.
+// (queued: cancelled; finalizing: failed, class infra).
 func strandAttempts(ctx context.Context, st *store.Store, boot string, rep *RecoverReport) int {
 	list, err := st.StrandedAttempts(ctx, boot)
 	if err != nil {
@@ -139,7 +133,6 @@ func strandAttempts(ctx context.Context, st *store.Store, boot string, rep *Reco
 		return 0
 	}
 	n := 0
-	pipelines := map[string]bool{}
 	for _, a := range list {
 		to, class := model.JobState("cancelled"), model.FailureClass("cancelled")
 		if a.State == "finalizing" {
@@ -155,39 +148,6 @@ func strandAttempts(ctx context.Context, st *store.Store, boot string, rep *Reco
 			continue
 		}
 		n++
-		pipelines[a.PipelineID] = true
 	}
-	closeDead(ctx, st, pipelines, rep)
 	return n
-}
-
-// closeDead marks a run "lost" when it is still "running" and none of its
-// attempts is live any more (a killed coordinator leaves it so otherwise).
-func closeDead(ctx context.Context, st *store.Store, pipelines map[string]bool, rep *RecoverReport) {
-	for id := range pipelines {
-		row, ok, err := st.PipelineByID(ctx, id)
-		if err != nil || !ok || row.Status != "running" {
-			if err != nil {
-				rep.Errors = append(rep.Errors, err)
-			}
-			continue
-		}
-		attempts, err := st.PipelineAttempts(ctx, id)
-		if err != nil {
-			rep.Errors = append(rep.Errors, err)
-			continue
-		}
-		live := false
-		for _, a := range attempts {
-			switch a.State {
-			case "queued", "leased", "running", "finalizing", "lost":
-				live = true
-			}
-		}
-		if !live {
-			if err = st.FinishPipeline(ctx, id, "lost"); err != nil {
-				rep.Errors = append(rep.Errors, err)
-			}
-		}
-	}
 }
