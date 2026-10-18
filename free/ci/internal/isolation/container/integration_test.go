@@ -192,25 +192,25 @@ func TestIntegrationLabelsListAndTeardown(t *testing.T) {
 func TestIntegrationUnavailableForNeedingSeparationOnRootful(t *testing.T) {
 	_, _ = prerequisites(t)
 	// the runner's docker daemon is rootful: a separated node must refuse it
-	sep := New(Options{Separated: func() bool { return true }})
+	sep := New(Options{Separated: func() bool { return true }, Runner: onlyBinary{"docker"}})
 	if av := sep.Probe(context.Background()); av.Available() || av.Reason != isolation.ReasonRootful {
 		t.Fatalf("separated node accepted a rootful runtime: %+v", av)
 	}
 }
 
 func TestIntegrationRootlessPodmanIsAvailableOnSeparatedNode(t *testing.T) {
-	p := New(Options{Separated: func() bool { return true }, Runner: podmanOnly{}})
+	p := New(Options{Separated: func() bool { return true }, Runner: onlyBinary{"podman"}})
 	av := p.Probe(context.Background())
 	if !av.Available() || av.Facts["runtime"] != "podman" || av.Facts["rootless"] != "true" {
 		t.Fatalf("rootless podman not usable: %+v (install podman and run as a normal user)", av)
 	}
 }
 
-// podmanOnly hides docker so the probe reaches podman, as on a node without a docker group.
-type podmanOnly struct{}
+// onlyBinary hides the other runtime so a probe reaches one CLI, as on a node whose agent user sees only that one.
+type onlyBinary struct{ name string }
 
-func (podmanOnly) Query(ctx context.Context, binary string, args ...string) ([]byte, error) {
-	if binary != "podman" {
+func (o onlyBinary) Query(ctx context.Context, binary string, args ...string) ([]byte, error) {
+	if binary != o.name {
 		return nil, os.ErrNotExist
 	}
 	return exec.RuntimeQuery(ctx, binary, args...)

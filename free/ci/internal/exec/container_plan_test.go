@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -120,7 +121,10 @@ func TestPlannedWorkspaceOpenedToJobUID(t *testing.T) {
 
 func TestCheckContainerCommand(t *testing.T) {
 	run := ContainerRun{Image: "alpine:3.19", Workspace: "/w/ws"}
-	good := []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--mount", "type=bind,src=/w/ws,dst=/repo", "alpine:3.19", "go", "test", "-v", "--privileged"}
+	good := []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--mount", "type=bind,src=/w/ws,dst=/repo", "--user", "65533:65533", "--network=none", "--runtime", "runsc", "--userns=auto", "alpine:3.19", "go", "test", "-v", "--privileged"}
+	if os.Getuid() == 65533 || os.Geteuid() == 65533 {
+		t.Skip("test uid collides with the fixture job uid")
+	}
 	if err := checkContainerCommand(ContainerCommand{"docker", good}, run); err != nil {
 		t.Fatalf("job words after the image must not matter: %v", err)
 	}
@@ -145,6 +149,21 @@ func TestCheckContainerCommand(t *testing.T) {
 		"notrun":      {"docker", []string{"exec", "alpine:3.19"}},
 		"binary":      {"sh", good},
 		"noimage":     {"docker", good[:7]},
+		"seccomp":     withFlag("--security-opt", "seccomp=unconfined"),
+		"apparmor":    withFlag("--security-opt=apparmor=unconfined"),
+		"capdrop-net": {"docker", []string{"run", "--cap-drop=NET_ADMIN", "--security-opt", "no-new-privileges", "--read-only", "alpine:3.19", "x"}},
+		"userroot":    withFlag("--user", "0:0"),
+		"userword":    withFlag("--user", "root"),
+		"useragent":   withFlag("--user", itoa(os.Getuid())+":"+itoa(os.Getuid())),
+		"runtimekata": withFlag("--runtime", "kata"),
+		"tmpfsother":  withFlag("--tmpfs", "/etc:rw"),
+		"envfile":     withFlag("--env-file", "/etc/shadow"),
+		"sysctl":      withFlag("--sysctl", "net.ipv4.ip_forward=1"),
+		"gpus":        withFlag("--gpus=all"),
+		"addhost":     withFlag("--add-host", "x:1.1.1.1"),
+		"positional":  withFlag("stray"),
+		"valueonbool": withFlag("--rm=true"),
+		"net other":   withFlag("--network", "container:x"),
 	} {
 		if err := checkContainerCommand(c, run); err == nil {
 			t.Errorf("%s: accepted %v", name, c.Args)
@@ -164,6 +183,8 @@ func TestRuntimeQueryAndRemoveRefuseOtherVerbs(t *testing.T) {
 		t.Fatal("non-attempt name accepted")
 	}
 }
+
+func itoa(n int) string { return strconv.Itoa(n) }
 
 func asError(err error, target **Error) bool {
 	e, ok := err.(*Error)

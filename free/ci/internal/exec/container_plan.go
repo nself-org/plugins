@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,15 +48,24 @@ type ContainerPlanner interface {
 
 var (
 	runtimeBinary = regexp.MustCompile(`^(docker|podman)$`)
-	// plannedForbidden lists flags no job container may carry (Epic D8).
-	plannedForbidden = []string{"--privileged", "--pid", "--ipc", "--uts", "--cgroupns", "--device", "--cap-add", "--volumes-from", "--userns=host"}
-	// socketPath matches any container runtime socket in a flag value.
-	socketPath = regexp.MustCompile(`(?i)(docker|podman|containerd|crio)[^,]*\.sock`)
 	// resourceSignatures are what a job prints when the kernel refuses a fork.
 	resourceSignatures = []string{"Resource temporarily unavailable", "can't fork", "Cannot fork", "pthread_create failed"}
+	jobUser            = regexp.MustCompile(`^([1-9][0-9]*):([1-9][0-9]*)$`)
+	attemptNetwork     = regexp.MustCompile(`^nself-ci-[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 )
 
-// checkContainerCommand refuses a planned command that is not a hardened `run`.
+// plannedFlags is the allowlist of flags a planned container may carry and whether each takes a
+// separate value. Anything else (including every short flag) is refused, so a profile cannot
+// add --privileged, a host namespace, --cap-add, --device or a volume by accident.
+var plannedFlags = map[string]bool{
+	"--rm": false, "--read-only": false, "--name": true, "--label": true, "--network": true, "--dns": true,
+	"--cap-drop": true, "--security-opt": true, "--tmpfs": true, "--pids-limit": true, "--cpus": true,
+	"--memory": true, "--memory-swap": true, "--user": true, "--env": true, "--runtime": true, "--userns": true,
+	"--entrypoint": true, "--mount": true, "--workdir": true, "--env-file": true,
+}
+
+// checkContainerCommand refuses a planned command that is not a hardened `run` of run.Image.
+// Only the flag region (before the image) is checked: the job command may carry any word.
 func checkContainerCommand(c ContainerCommand, run ContainerRun) error {
 	bad := func(why string) error { return coded("E613", "planned container refused: "+why) }
 	if !runtimeBinary.MatchString(c.Binary) {
@@ -64,42 +74,80 @@ func checkContainerCommand(c ContainerCommand, run ContainerRun) error {
 	if len(c.Args) == 0 || c.Args[0] != "run" {
 		return bad("not a run command")
 	}
-	// only the flag region (before the image) is checked: the job command may carry any word
-	flags := c.Args
-	for i, a := range c.Args {
-		if a == run.Image {
-			flags = c.Args[:i]
-			break
+	seen := map[string]bool{}
+	i := 1
+	for ; i < len(c.Args) && c.Args[i] != run.Image; i++ {
+		name, value, hasValue := strings.Cut(c.Args[i], "=")
+		takesValue, known := plannedFlags[name]
+		if !strings.HasPrefix(name, "--") || !known {
+			return bad("flag not allowed: " + c.Args[i])
 		}
+		if takesValue && !hasValue {
+			if i+1 >= len(c.Args) {
+				return bad("flag without value: " + name)
+			}
+			i++
+			value = c.Args[i]
+		} else if !takesValue && hasValue {
+			return bad("flag takes no value: " + name)
+		}
+		if err := checkFlagValue(name, value, run); err != nil {
+			return err
+		}
+		seen[name+"="+value] = true
 	}
-	if len(flags) == len(c.Args) {
+	if i >= len(c.Args) {
 		return bad("image not on the command line")
 	}
-	joined := " " + strings.Join(flags, " ") + " "
-	for _, flag := range plannedForbidden {
-		for _, a := range flags {
-			if a == flag || strings.HasPrefix(a, flag+"=") {
-				return bad("forbidden flag " + flag)
-			}
+	for _, want := range []string{"--cap-drop=ALL", "--security-opt=no-new-privileges", "--read-only="} {
+		if !seen[want] {
+			return bad("missing " + strings.TrimSuffix(want, "="))
 		}
 	}
-	for i, a := range flags {
-		switch {
-		case a == "--network=host" || a == "--net=host" || (a == "--network" || a == "--net") && i+1 < len(flags) && flags[i+1] == "host":
-			return bad("host network")
-		case strings.HasPrefix(a, "-v") && !strings.HasPrefix(a, "--") || a == "--volume" || strings.HasPrefix(a, "--volume="):
-			return bad("volume flag")
-		case socketPath.MatchString(a):
-			return bad("socket path")
-		case a == "--mount" && i+1 < len(flags):
-			if err := checkMount(flags[i+1], run.Workspace); err != nil {
-				return err
-			}
+	return nil
+}
+
+// checkFlagValue constrains the flags whose value decides the isolation.
+func checkFlagValue(name, value string, run ContainerRun) error {
+	bad := func(why string) error { return coded("E613", "planned container refused: "+why) }
+	switch name {
+	case "--cap-drop":
+		if value != "ALL" {
+			return bad("cap-drop must be ALL")
 		}
-	}
-	for _, want := range []string{" --cap-drop=ALL ", " --security-opt no-new-privileges ", " --read-only "} {
-		if !strings.Contains(joined, want) {
-			return bad("missing" + strings.TrimRight(want, " "))
+	case "--security-opt":
+		if value != "no-new-privileges" && value != "no-new-privileges=true" {
+			return bad("security-opt " + value)
+		}
+	case "--network":
+		if value != "none" && value != "bridge" && !attemptNetwork.MatchString(value) {
+			return bad("network " + value)
+		}
+	case "--user":
+		m := jobUser.FindStringSubmatch(value)
+		if m == nil || m[1] != m[2] {
+			return bad("user must be a numeric uid:uid, not root")
+		}
+		if uid := strconv.Itoa(os.Getuid()); m[1] == uid || m[1] == strconv.Itoa(os.Geteuid()) {
+			return bad("job user equals the agent user")
+		}
+	case "--runtime":
+		if value != "runsc" {
+			return bad("runtime " + value)
+		}
+	case "--userns":
+		if value != "auto" {
+			return bad("userns " + value)
+		}
+	case "--mount":
+		return checkMount(value, run.Workspace)
+	case "--tmpfs":
+		if !strings.HasPrefix(value, "/tmp:") && value != "/tmp" {
+			return bad("tmpfs outside /tmp")
+		}
+	case "--env-file":
+		if value != run.EnvFile {
+			return bad("env file is not the attempt's")
 		}
 	}
 	return nil
