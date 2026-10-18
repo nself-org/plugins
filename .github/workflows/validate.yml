@@ -350,6 +350,9 @@ jobs:
       - name: Conformance gate on every free plugin (manifest v2 is the only schema)
         run: bash scripts/conformance/check.sh --all --rules exceptions,schema,compat,healthcheck,replace,docker-socket,port-bind,migrations,boot-schema,migration-immutable,migration-idempotent,legacy-renames,repository,ports
 
+      - name: plugin.yaml licence fields agree with plugin.json (D-0957)
+        run: bash tests/manifests/plugin-yaml-licence.sh
+
       # P7-PLUG-55: the release's binary targets, computed on every PR (no release side effects).
       - name: CLI binary targets gate and v1/v2 fixture parity
         env:

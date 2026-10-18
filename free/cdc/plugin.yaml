@@ -8,11 +8,9 @@ description: >
   events to Kafka, Redpanda, or RabbitMQ in Debezium envelope format.
   Embedded mode (default, no JVM) or external Debezium Kafka Connect mode.
   Peer dependency of the warehouse plugin (now a Bundles plugin).
-isCommercial: true
-licenseType: pro
-requiredEntitlements:
-  - pro
-requires_license: true
+isCommercial: false
+licenseType: free
+requires_license: false
 minNselfVersion: 1.0.9
 category: data
 tags:
