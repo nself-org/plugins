@@ -17,6 +17,7 @@ import (
 
 // A tree that changes while the jobs run is not bound to the start commit.
 func TestTreeChangedDuringRunNeverPostsSuccess(t *testing.T) {
+	t.Parallel()
 	n := 0
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{calls: &n, dirtyAfter: 2})
 	res := r.run(t)
@@ -26,6 +27,7 @@ func TestTreeChangedDuringRunNeverPostsSuccess(t *testing.T) {
 }
 
 func TestStatusNotPostedForPartialCancelledOrOutsideConfig(t *testing.T) {
+	t.Parallel()
 	for name, c := range map[string]struct {
 		set  func(*rig)
 		want string
@@ -60,6 +62,7 @@ func (panicPublisher) Publish(context.Context, PublishRequest) (report.Status, e
 
 // A panicking hook neither kills the coordinator nor loses the status.
 func TestPanickingPublisherFallsBackToDefault(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
 	r.C.Hooks.Publisher = panicPublisher{}
 	res := r.run(t)

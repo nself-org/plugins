@@ -110,6 +110,7 @@ func TestDispatchHook(t *testing.T) {
 }
 
 func TestPolicyResolver(t *testing.T) {
+	t.Parallel()
 	digests := map[string]bool{}
 	for i := 0; i < 2; i++ {
 		r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
@@ -142,6 +143,7 @@ func (f fakePolicy) Resolve(context.Context, PolicyRequest) (PolicyResult, error
 }
 
 func TestTrustFlagNeedsClassifier(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
 	r.C.Opts.Trust = "owner"
 	if _, err := r.C.Run(context.Background()); CodeOf(err) != CodeTrust {

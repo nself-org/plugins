@@ -13,6 +13,7 @@ import (
 )
 
 func TestPassingRunPostsOneStatus(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true"), "b": sh("true"), "c": sh("true", "a", "b")}, gitFake{})
 	res := r.run(t)
 	if res.Exit != 0 || res.Summary.Result != "pass" {
@@ -28,6 +29,7 @@ func TestPassingRunPostsOneStatus(t *testing.T) {
 }
 
 func TestFailedRequiredJobFailsRunAndSkipsDependants(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("echo boom; exit 3"), "b": sh("true", "a")}, gitFake{})
 	res := r.run(t)
 	if res.Exit != 1 {
@@ -48,6 +50,7 @@ func TestFailedRequiredJobFailsRunAndSkipsDependants(t *testing.T) {
 }
 
 func TestIndependentJobsRunConcurrently(t *testing.T) {
+	t.Parallel()
 	// each job waits for the other's marker: only concurrent execution passes
 	script := func(mine, other string) string {
 		return "touch " + mine + "; i=0; while [ ! -e " + other + " ] && [ $i -lt 100 ]; do sleep 0.05; i=$((i+1)); done; test -e " + other
@@ -60,6 +63,7 @@ func TestIndependentJobsRunConcurrently(t *testing.T) {
 }
 
 func TestFailFastCancelsRunningSiblings(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("sleep 0.3; exit 1"), "b": sh("sleep 30")}, gitFake{})
 	r.C.Plan.FailFast = "pipeline"
 	start := time.Now()
@@ -76,6 +80,7 @@ func TestFailFastCancelsRunningSiblings(t *testing.T) {
 }
 
 func TestStatusReasonLines(t *testing.T) {
+	t.Parallel()
 	for name, c := range map[string]struct {
 		g       gitFake
 		noFlag  bool
@@ -103,6 +108,7 @@ func TestStatusReasonLines(t *testing.T) {
 }
 
 func TestUnplaceableRequiredJobFailsAtOnce(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
 	r.C.Plan.Jobs[0].State, r.C.Plan.Jobs[0].Blocked, r.C.Plan.Jobs[0].Detail = "unplaceable", "unplaceable.tool", "no such tool"
 	_, err := r.C.Run(context.Background())
@@ -115,6 +121,7 @@ func TestUnplaceableRequiredJobFailsAtOnce(t *testing.T) {
 }
 
 func TestJobSelectionRunsDependenciesOnly(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true"), "b": sh("true", "a"), "c": sh("true")}, gitFake{})
 	r.C.Opts.Job = "b"
 	res := r.run(t)
@@ -132,6 +139,7 @@ func TestJobSelectionRunsDependenciesOnly(t *testing.T) {
 }
 
 func TestCancelFromSecondHandleStopsRun(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("sleep 60"), "b": sh("sleep 60"), "c": sh("true", "a")}, gitFake{})
 	done := make(chan Result, 1)
 	go func() { res, _ := r.C.Run(context.Background()); done <- res }()
@@ -177,6 +185,7 @@ func TestCancelFromSecondHandleStopsRun(t *testing.T) {
 }
 
 func TestHooksSeeTheRun(t *testing.T) {
+	t.Parallel()
 	var order rec
 	r := newRig(t, map[string]model.Job{
 		"a": sh(`test "$FROM_CACHE" = yes && test "$NSELF_CI_RUN_ID" != ""`),
@@ -204,6 +213,7 @@ func TestHooksSeeTheRun(t *testing.T) {
 }
 
 func TestAttemptStartCanFailTheJob(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
 	r.C.Hooks.AttemptStarts = []AttemptStartHook{startFn(func(AttemptInfo) error { return errors.New("E627: artifact declaration refused") })}
 	res := r.run(t)
@@ -220,6 +230,7 @@ func (liarPublisher) Publish(_ context.Context, r PublishRequest) (report.Status
 
 // A registered Publisher cannot turn a failed run into a success status.
 func TestPublisherCannotPostSuccessForFailure(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("exit 1")}, gitFake{})
 	r.C.Hooks.Publisher = liarPublisher{}
 	if res := r.run(t); res.Exit != 1 {
@@ -232,6 +243,7 @@ func TestPublisherCannotPostSuccessForFailure(t *testing.T) {
 
 // The trust class the classifier returned reaches the stored evidence.
 func TestTrustClassInEvidence(t *testing.T) {
+	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
 	r.C.Opts.Trust, r.C.Hooks.Trust = "collaborator", fakeTrust("collaborator")
 	res := r.run(t)

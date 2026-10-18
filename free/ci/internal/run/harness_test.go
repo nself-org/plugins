@@ -116,7 +116,6 @@ func newRig(t *testing.T, jobs map[string]model.Job, g gitFake) *rig {
 		t.Fatal(err)
 	}
 	r := &rig{Out: &bytes.Buffer{}, Rep: &fakeReporter{}, Home: t.TempDir()}
-	t.Setenv("NSELF_CI_HOME", r.Home) // the executor sweep reads it; never the user's real home
 	r.C = &Coordinator{Opts: Options{Root: root, Home: r.Home}, Plan: buildPlan(t, jobs), ConfigDigest: "cfg", Out: r.Out,
 		Capture: g.capture, Reporter: r.Rep, Capacity: roomy, Poll: 10 * time.Millisecond}
 	return r
