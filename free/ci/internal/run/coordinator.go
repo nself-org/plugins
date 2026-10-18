@@ -131,6 +131,9 @@ func (c *Coordinator) classify(ctx context.Context, h Hooks, rev Revision) (stri
 	if err != nil {
 		return "", err
 	}
+	if got == "untrusted" { // ADR 0025 §3: untrusted needs a sandboxed runner; this coordinator only runs jobs as the operator
+		return "", fail(CodeTrust, "the source is classed untrusted: it needs an isolated runner, and this coordinator runs jobs as the operator")
+	}
 	if c.Opts.Trust != "" && string(got) != c.Opts.Trust {
 		return "", fail(CodeTrust, "the source is classed %s, not %s", got, c.Opts.Trust)
 	}

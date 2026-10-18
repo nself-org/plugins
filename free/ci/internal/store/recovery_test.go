@@ -89,9 +89,20 @@ func TestCloseDeadRuns(t *testing.T) {
 	walk("b", "leased", "running", "lost", "retryable") // live coordinator, remote lease failure then retry
 	walk("c", "leased", "cancelled")                    // dead coordinator, cancelled by a sweep
 	walk("d", "leased", "running", "finalizing", "passed")
+	// a run that never got an attempt: closed only once older than 3 x TTL
+	if err = s.CreatePipeline(ctx, PipelineRow{ID: "pold", Revision: "rev", Project: "proj", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"}); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(4 * time.Second)
+	if err = s.CreatePipeline(ctx, PipelineRow{ID: "pnew", Revision: "rev", Project: "proj", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Heartbeat(ctx, live.ID); err != nil { // the live coordinator keeps beating
+		t.Fatal(err)
+	}
 	got, err := s.CloseDeadRuns(ctx, "boot")
-	if err != nil || len(got) != 2 || got[0] != "pa" || got[1] != "pc" {
-		t.Fatalf("closed %v %v (pb and pd belong to a live coordinator)", got, err)
+	if err != nil || len(got) != 3 || got[0] != "pa" || got[1] != "pc" || got[2] != "pold" {
+		t.Fatalf("closed %v %v (pb and pd belong to a live coordinator, pnew is young)", got, err)
 	}
 	if row, _, _ := s.PipelineByID(ctx, "pb"); row.Status != "running" {
 		t.Fatalf("a live run was closed: %+v", row)

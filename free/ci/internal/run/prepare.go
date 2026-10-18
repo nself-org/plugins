@@ -97,6 +97,8 @@ func (rs *runState) unprepare(info AttemptInfo, p prepared) {
 func (rs *runState) spec(ctx context.Context, pj plan.PlannedJob, job model.Job, id string) ciexec.JobSpec {
 	s := ciexec.JobSpec{AttemptID: id, CoordinatorID: safeID(rs.sess.Coordinator.ID), Job: job, Command: job.Run,
 		SourceDir: rs.c.Opts.Root, Home: rs.sess.Home, Network: model.NetworkScope(rs.c.Opts.Network)}
+	cpu, mem := demandOf(&job)
+	s.CPU, s.MemoryMB = float64(cpu), mem // a container gets exactly its reservation, not the engine default
 	if rs.c.Opts.Timeout > 0 {
 		s.Timeout = rs.c.Opts.Timeout
 	}

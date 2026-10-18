@@ -16,11 +16,30 @@ import (
 func TestBareRunConsultsClassifier(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
-	r.C.Hooks.Trust = fakeTrust("untrusted") // no --trust flag at all
+	r.C.Hooks.Trust = fakeTrust("collaborator") // no --trust flag at all
 	res := r.run(t)
 	row, ok, err := r.store(t).PipelineByID(context.Background(), res.RunID)
-	if err != nil || !ok || row.SourceTrust != "untrusted" {
+	if err != nil || !ok || row.SourceTrust != "collaborator" {
 		t.Fatalf("source trust %q ok=%v err=%v: a bare run must record the classifier's answer", row.SourceTrust, ok, err)
+	}
+}
+
+// An untrusted source never runs as the operator (ADR 0025 section 3).
+func TestUntrustedSourceIsRefused(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, map[string]model.Job{"a": sh("touch ran")}, gitFake{})
+	r.C.Hooks.Trust = fakeTrust("untrusted")
+	if _, err := r.C.Run(context.Background()); CodeOf(err) != CodeTrust {
+		t.Fatalf("want E625, got %v", err)
+	}
+}
+
+func TestDemandIsTheReservation(t *testing.T) {
+	if cpu, mem := demandOf(&model.Job{}); cpu != 1 || mem != 256 {
+		t.Fatalf("default demand %d/%d", cpu, mem)
+	}
+	if cpu, mem := demandOf(&model.Job{Requirements: &model.Requirements{CPU: 2, MemMB: 2048}}); cpu != 2 || mem != 2048 {
+		t.Fatalf("declared demand %d/%d", cpu, mem)
 	}
 }
 

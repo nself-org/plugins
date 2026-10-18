@@ -133,6 +133,15 @@ func CreateAttempt(ctx context.Context, s AttemptSpec) (Admitted, error) {
 	return adm, nil
 }
 
+// demandOf is what a job reserves, and therefore what a container may use.
+func demandOf(j *model.Job) (cpu, mem int) {
+	cpu, mem = 1, 256
+	if r := j.Requirements; r != nil {
+		cpu, mem = max(cpu, r.CPU), max(mem, r.MemMB)
+	}
+	return cpu, mem
+}
+
 // LocalAdmit leases the queued attempt of s on this host, waiting while the
 // host reservation is full. It is the nil-Dispatch path and the one a
 // dispatch hook falls back to for a local placement.
@@ -152,10 +161,7 @@ func LocalAdmit(ctx context.Context, s AttemptSpec) (Admitted, error) {
 		if !dec.Allowed {
 			return Admitted{}, &AdmissionRefused{Reason: dec.Reason}
 		}
-		cpu, mem := 1, 256
-		if r := s.Job.Requirements; r != nil {
-			cpu, mem = max(cpu, r.CPU), max(mem, r.MemMB)
-		}
+		cpu, mem := demandOf(s.Job)
 		state, epoch, err := sess.Store.AttemptStateEpoch(ctx, id)
 		if err != nil || state != "queued" {
 			return Admitted{}, fail(CodeRun, "attempt %s is not queued", id)

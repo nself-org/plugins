@@ -8,7 +8,9 @@ package store
 // never overwritten. A run is dead only when it has no live attempt, at least
 // one attempt belongs to a stale coordinator (older boot or heartbeat past 3 x
 // TTL) and none belongs to a live one; failure_class alone is not proof (a
-// remote lease failure of a live coordinator also writes "lost").
+// remote lease failure of a live coordinator also writes "lost"). A run that
+// never got an attempt (the coordinator died between persisting it and
+// creating the first attempt) is closed once it is older than 3 x TTL.
 
 import (
 	"context"
@@ -23,9 +25,10 @@ func (s *Store) CloseDeadRuns(ctx context.Context, currentBoot string) ([]string
 		cutoff := s.now().Add(-3 * s.ttl).UnixNano()
 		rows, err := tx.QueryContext(ctx, `SELECT p.id FROM pipeline p WHERE p.status='running'
  AND NOT EXISTS (SELECT 1 FROM attempt a JOIN job j ON j.id=a.job_id WHERE j.pipeline_id=p.id AND a.state IN ('queued','leased','running','finalizing','lost'))
- AND EXISTS (SELECT 1 FROM attempt a JOIN job j ON j.id=a.job_id JOIN coordinator c ON c.id=a.coordinator_id WHERE j.pipeline_id=p.id AND (c.heartbeat_at<? OR c.boot_id!=?))
- AND NOT EXISTS (SELECT 1 FROM attempt a JOIN job j ON j.id=a.job_id JOIN coordinator c ON c.id=a.coordinator_id WHERE j.pipeline_id=p.id AND c.heartbeat_at>=? AND c.boot_id=?)
- ORDER BY p.id`, cutoff, currentBoot, cutoff, currentBoot)
+ AND ((EXISTS (SELECT 1 FROM attempt a JOIN job j ON j.id=a.job_id JOIN coordinator c ON c.id=a.coordinator_id WHERE j.pipeline_id=p.id AND (c.heartbeat_at<? OR c.boot_id!=?))
+   AND NOT EXISTS (SELECT 1 FROM attempt a JOIN job j ON j.id=a.job_id JOIN coordinator c ON c.id=a.coordinator_id WHERE j.pipeline_id=p.id AND c.heartbeat_at>=? AND c.boot_id=?))
+  OR (p.created_at<? AND NOT EXISTS (SELECT 1 FROM attempt a JOIN job j ON j.id=a.job_id WHERE j.pipeline_id=p.id)))
+ ORDER BY p.id`, cutoff, currentBoot, cutoff, currentBoot, cutoff)
 		if err != nil {
 			return err
 		}
