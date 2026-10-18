@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // killerStub is a stub Runner that also implements the Funnel's KillStale.
@@ -87,5 +88,32 @@ func TestSweepKeepsAProjectWhoseCallsSurvive(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(p.Home, "work", "nselfci-dddddddd.lock")); err != nil {
 		t.Fatal("the lock file must stay so the next Sweep retries")
+	}
+}
+
+func TestStaleMarkersOfAProvisionAreNeverRemovedByAge(t *testing.T) {
+	p := newProv(t, &stub{})
+	dir := filepath.Join(p.Home, funnelDir, "processes")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, owner string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(`{"pid":1,"coordinator":"`+ownerPrefix+owner+`","identity":"x"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		old := time.Now().Add(-2 * time.Hour)
+		if err := os.Chtimes(path, old, old); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	prov, none := write("svccall-aaaa-1.json", "nselfci-aaaaaaaa"), write("svccall-bbbb-2.json", "none")
+	p.removeStaleCalls()
+	if _, err := os.Stat(prov); err != nil {
+		t.Fatal("a provision's marker was removed by age: it may be the only record of a live CLI process")
+	}
+	if _, err := os.Stat(none); !os.IsNotExist(err) {
+		t.Fatal("an old marker of a call with no provision should go")
 	}
 }

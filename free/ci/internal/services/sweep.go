@@ -130,7 +130,7 @@ func (p *Provisioner) callsEnded(ctx context.Context, project string, l *ownerLo
 		return true
 	}
 	l.Unlock()
-	*errs = append(*errs, fail(CodeProvision, "cannot end the CLI calls left by the owner of %s: %v", project, err))
+	*errs = append(*errs, fail(CodeProvision, "cannot end the CLI calls left by the owner of %s: %v (markers: %s)", project, err, filepath.Join(p.Home, funnelDir, "processes")))
 	return false
 }
 
@@ -154,17 +154,30 @@ func (p *Provisioner) ownerDead(work string) func(string) bool {
 	}
 }
 
-// removeStaleCalls deletes the workspaces and process markers of CLI calls whose coordinator died
-// mid-call (the funnel removes them itself on every normal exit). An hour old
-// is far past any live call.
+// removeStaleCalls deletes the workspaces of CLI calls whose coordinator died
+// mid-call (the funnel removes them itself on every normal exit) and the
+// process markers of calls that belong to no provision. An hour old is far
+// past any live call. A marker of a provision is never deleted by age: it is
+// the only record of a CLI process that may still be running, and it goes only
+// when KillStale has ended that process.
 func (p *Provisioner) removeStaleCalls() {
 	base := filepath.Join(p.Home, funnelDir)
+	old := func(path string) bool {
+		fi, err := os.Stat(path)
+		return err == nil && time.Since(fi.ModTime()) > time.Hour
+	}
 	dirs, _ := filepath.Glob(filepath.Join(base, "work", "svccall-*"))
-	markers, _ := filepath.Glob(filepath.Join(base, "processes", "svccall-*.json"))
-	dirs = append(dirs, markers...)
 	for _, d := range dirs {
-		if fi, err := os.Stat(d); err == nil && time.Since(fi.ModTime()) > time.Hour {
+		if old(d) {
 			_ = os.RemoveAll(d)
 		}
+	}
+	markers, _ := filepath.Glob(filepath.Join(base, "processes", "svccall-*.json"))
+	for _, m := range markers {
+		b, err := os.ReadFile(m)
+		if err != nil || !old(m) || !strings.Contains(string(b), `"`+ownerPrefix+"none"+`"`) {
+			continue
+		}
+		_ = os.Remove(m)
 	}
 }
