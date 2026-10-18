@@ -172,7 +172,7 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_cadvisor
     restart: unless-stopped
     volumes:
-      # The host root is mounted NON-recursively: a recursive bind would also expose /rootfs/run/docker.sock (ADR 0027).
+      # The host root is mounted NON-recursively: a recursive bind would also expose the Docker API socket under /rootfs/run (ADR 0027).
       - type: bind
         source: /
         target: /rootfs
@@ -201,7 +201,7 @@ services:
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
-      # Non-recursive for the same reason as cadvisor: a recursive bind exposes /rootfs/run/docker.sock (ADR 0027).
+      # Non-recursive for the same reason as cadvisor: a recursive bind exposes the Docker API socket under /rootfs/run (ADR 0027).
       - type: bind
         source: /
         target: /rootfs
