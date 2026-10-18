@@ -156,8 +156,13 @@ out=$(bash "$CONF_DIR/check.sh" --root "$mut/v1all" --all --rules exceptions --m
 rm -rf "$mut/v1all"; mkdir -p "$mut/v1all"; cp -R "$conv/alpha" "$conv/beta" "$mut/v1all/"
 # --shard K/N: the shards are disjoint and together exactly --all (CI splits the build rule over them); bad values are usage errors.
 all=$(bash "$CONF_DIR/check.sh" --root "$mut/v1all" --all --rules exceptions 2>&1 | sed -n 's/^checked \([a-z].*\)$/\1/p' | sort | tr '\n' ' ')
-parts=$(for k in 1 2; do bash "$CONF_DIR/check.sh" --root "$mut/v1all" --all --shard $k/2 --rules exceptions 2>&1 | sed -n 's/^checked \([a-z].*\)$/\1/p'; done | sort | tr '\n' ' ')
-if [ -n "$all" ] && [ "$all" = "$parts" ]; then echo "pass  --shard 1/2 and 2/2 together are exactly --all"; else echo "FAIL  shards ($parts) differ from --all ($all)"; rc=1; fi
+parts=; shard_rc=0
+for k in 1 2; do
+  o=$(bash "$CONF_DIR/check.sh" --root "$mut/v1all" --all --shard $k/2 --rules exceptions 2>&1) || shard_rc=1
+  parts="$parts $(printf '%s\n' "$o" | sed -n 's/^checked \([a-z].*\)$/\1/p')"
+done
+parts=$(printf '%s\n' $parts | sort | tr '\n' ' ')
+if [ -n "$all" ] && [ "$all" = "$parts" ] && [ $shard_rc -eq 0 ]; then echo "pass  --shard 1/2 and 2/2 together are exactly --all"; else echo "FAIL  shards ($parts) differ from --all ($all)"; rc=1; fi
 for bad in 0/2 3/2 1/0 a/b 1 1/2/3; do
   if bash "$CONF_DIR/check.sh" --root "$mut/v1all" --all --shard $bad --rules exceptions >/dev/null 2>&1; then echo "FAIL  --shard $bad was accepted"; rc=1; else echo "pass  --shard $bad is refused"; fi
 done
