@@ -76,17 +76,17 @@ func (s *Store) OutboxRelease(ctx context.Context, revision, statusContext strin
 	})
 }
 
-// OutboxPosted records a delivery made under the claim token. When the claim
-// was taken over, or a newer status was delivered, while the post was in
-// flight (the poster was suspended), the delivery landed after a newer
-// status: the newest posted status is
-// queued again so the next delivery restores the host to it, and E607 tells
-// the caller the claim was lost.
+// OutboxPosted records a delivery made under the claim token. When a newer
+// status is posted or being posted (it took our expired claim over while this
+// post was in flight, because the poster was suspended), this delivery may
+// have landed after it: the newest such status is queued again (its own
+// acknowledgement then fails the same way and delivers it once more), so the
+// host ends on it, and E607 tells the caller the claim was lost.
 func (s *Store) OutboxPosted(ctx context.Context, revision, statusContext string, seq, token int64) error {
 	lost := false
 	err := s.write(ctx, func(tx *sql.Tx) error {
-		var newer int // a newer status delivered while this post was in flight: this one landed last
-		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq>? AND state=?", revision, statusContext, seq, OutboxPosted).Scan(&newer); err != nil {
+		var newer int // a newer status delivered, or being delivered after taking our claim over: this one may have landed last
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq>? AND state IN (?,?)", revision, statusContext, seq, OutboxPosted, OutboxPosting).Scan(&newer); err != nil {
 			return err
 		}
 		res, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state=? AND claimed_at=?", OutboxPosted, revision, statusContext, seq, OutboxPosting, token)
@@ -97,7 +97,7 @@ func (s *Store) OutboxPosted(ctx context.Context, revision, statusContext string
 			return nil
 		}
 		lost = true // committed with the re-queue below: an error would roll it back
-		_, err = tx.ExecContext(ctx, "UPDATE outbox SET state=?,claimed_at=0 WHERE revision=? AND context=? AND state=? AND seq=(SELECT max(seq) FROM outbox WHERE revision=? AND context=? AND state=? AND seq>?)", OutboxPending, revision, statusContext, OutboxPosted, revision, statusContext, OutboxPosted, seq)
+		_, err = tx.ExecContext(ctx, "UPDATE outbox SET state=?,claimed_at=0 WHERE revision=? AND context=? AND state IN (?,?) AND seq=(SELECT max(seq) FROM outbox WHERE revision=? AND context=? AND state IN (?,?) AND seq>?)", OutboxPending, revision, statusContext, OutboxPosted, OutboxPosting, revision, statusContext, OutboxPosted, OutboxPosting, seq)
 		return err
 	})
 	if err == nil && lost {
