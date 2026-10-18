@@ -98,6 +98,9 @@ func (r *Resolver) Resolve(ctx context.Context, repo Repo, rev Revision) (Resolv
 	if branch.Assumed {
 		ignored = append(ignored, Ignored{Key: "default_branch", Scope: SourceProtectedBranch, Reason: "E672 origin's default branch could not be discovered; main is assumed"})
 	}
+	if branch.Name != "" && branch.Tip == "" {
+		ignored = append(ignored, Ignored{Key: "protected_branch", Scope: SourceProtectedBranch, Reason: "E672 origin exists but origin/" + branch.Name + " could not be fetched or read; no protected-branch scope applies"})
+	}
 	var tipPolicy map[string]json.RawMessage
 	if branch.Tip != "" {
 		commit, note := chooseCommit(ctx, r.Run, repo.Root, branch, operator.pin)

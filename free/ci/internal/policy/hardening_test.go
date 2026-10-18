@@ -106,6 +106,23 @@ func TestDefaultBranchAssumedIsReported(t *testing.T) {
 	}
 }
 
+// An origin that was never reachable leaves no protected-branch scope; the run
+// proceeds on operator rows and defaults, and the missing scope is reported.
+func TestUnreachableOriginIsReported(t *testing.T) {
+	root := t.TempDir()
+	git(t, root, "init", "-q", "-b", "work", root)
+	git(t, root, "remote", "add", "origin", filepath.Join(t.TempDir(), "gone.git"))
+	f := &fixture{t: t, runner: testRunner}
+	got := resolveOwner(t, f, root, "p", nil)
+	found := false
+	for _, ig := range got.Ignored {
+		found = found || ig.Key == "protected_branch"
+	}
+	if got.Fetch != FetchNone || !found {
+		t.Fatalf("fetch %s ignored %v", got.Fetch, got.Ignored)
+	}
+}
+
 // A branch name git accepts but a narrow regex rejected (+, non-ASCII) is used
 // as is; it is never swapped for main.
 func TestOddDefaultBranchNames(t *testing.T) {
