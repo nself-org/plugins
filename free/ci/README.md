@@ -4,7 +4,7 @@ Local CI gate runner for nSelf repositories. Detects the repo stack and runs lin
 
 ## What it does
 
-1. Detects which stacks are present: Go (`go.mod`), Node/TS (`package.json`), Flutter (`pubspec.yaml`)
+1. Detects which stacks are present: Go (`go.mod` at the root, or Go modules up to four levels below it when the root has none), Node/TS (`package.json`), Flutter (`pubspec.yaml`)
 2. Runs stack-specific gates:
    - **Go:** `gofmt -l .` (files under `vendor/` ignored) + `go vet ./...` + `go test ./...` (per-package `-timeout` at least 600 s)
    - **Node:** `pnpm run lint` + `pnpm run typecheck` + `pnpm run test` + `pnpm run build` (skips missing scripts; a pnpm/npm workspace recurses into member packages so a root with no scripts of its own still runs real gates instead of reporting a false PASSED — see `internal/legacy/gate_runners.go`)
