@@ -12,7 +12,6 @@ package attest
 
 import (
 	"net/netip"
-	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -24,6 +23,8 @@ const (
 	redactedHome = "[redacted-home]"
 	redactedUser = "[redacted-user]"
 	redactedURL  = "[redacted-url]"
+	// redactedText replaces a whole text that names more users than Text will track: fail closed
+	redactedText = "[redacted-text]"
 )
 
 var (
@@ -51,13 +52,12 @@ func (p Profile) Text(s string) string {
 	if p.private || s == "" {
 		return s
 	}
-	// user names in home paths that sit inside a URL about to be dropped still
-	// identify the user in the rest of the text (decoded, query and fragment cut)
-	var seen []string
-	for _, m := range urlRe.FindAllString(s, -1) {
-		for _, u := range urlHomeUsers(m) {
-			seen = appendUser(seen, u)
-		}
+	// user names in home paths anywhere in the text (URL paths, queries and
+	// fragments that are about to be dropped, percent-encoded or not) still
+	// identify the user in the rest of the text
+	seen, over := learnUsers(s)
+	if over {
+		return redactedText
 	}
 	s = urlRe.ReplaceAllStringFunc(s, func(m string) string {
 		trimmed := strings.TrimRight(m, ".,;:")
@@ -71,7 +71,13 @@ func (p Profile) Text(s string) string {
 
 // textNoURL is Text without the URL pass. Profile.URL uses it on a path, so a
 // URL cannot recurse into itself: a path that still holds "://" is dropped.
-func (p Profile) textNoURL(s string) string { return p.scrub(s, nil) }
+func (p Profile) textNoURL(s string) string {
+	seen, over := learnUsers(s)
+	if over {
+		return redactedText
+	}
+	return p.scrub(s, seen)
+}
 
 func (p Profile) scrub(s string, seen []string) string {
 	users := append([]string(nil), p.users...)
@@ -136,41 +142,77 @@ var genericUsers = map[string]bool{"runner": true, "node": true, "build": true, 
 // maxLearnedUsers bounds the user names one Text call collects (each costs a pass over the text).
 const maxLearnedUsers = 256
 
-// urlHomeUsers lists the user names of home paths in a URL's path, looking
-// through up to three layers of percent-encoding.
-func urlHomeUsers(m string) []string {
-	if i := strings.IndexAny(m, "?#"); i >= 0 {
-		m = m[:i]
-	}
-	var out []string
+// learnUsers lists the user names of home paths in s, looking through up to
+// three layers of percent-encoding. over is true when the text names more than
+// maxLearnedUsers distinct users: the caller then redacts the whole text.
+func learnUsers(s string) (users []string, over bool) {
 	for i := 0; i < 4; i++ {
-		for _, sub := range homeRe.FindAllStringSubmatch(m, -1) {
-			out = append(out, sub[2]+sub[3])
+		for _, sub := range homeRe.FindAllStringSubmatch(s, -1) {
+			var ok bool
+			if users, ok = addUser(users, sub[2]+sub[3]); !ok {
+				return users, true
+			}
 		}
-		d, err := url.PathUnescape(m)
-		if err != nil || d == m {
+		d := unescapeLoose(s)
+		if d == s {
 			break
 		}
-		m = d
+		s = d
 	}
-	return out
+	return users, false
 }
 
-// appendUser adds a learned user name once (case-insensitive), skipping empty
-// and generic account names and stopping at maxLearnedUsers.
-func appendUser(users []string, name string) []string {
-	if name == "" || len(users) >= maxLearnedUsers {
-		return users
+// unescapeLoose decodes every valid %XX and leaves any other '%' alone.
+func unescapeLoose(s string) string {
+	if !strings.Contains(s, "%") {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '%' && i+2 < len(s) {
+			if hi, lo := unhex(s[i+1]), unhex(s[i+2]); hi >= 0 && lo >= 0 {
+				b.WriteByte(byte(hi<<4 | lo))
+				i += 2
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+func unhex(c byte) int {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0')
+	case c >= 'a' && c <= 'f':
+		return int(c-'a') + 10
+	case c >= 'A' && c <= 'F':
+		return int(c-'A') + 10
+	}
+	return -1
+}
+
+// addUser adds a user name once (case-insensitive), skipping empty and generic
+// account names; ok is false when a new name does not fit under maxLearnedUsers.
+func addUser(users []string, name string) ([]string, bool) {
+	if name == "" || genericUsers[strings.ToLower(name)] {
+		return users, true
 	}
 	for _, u := range users {
 		if strings.EqualFold(u, name) {
-			return users
+			return users, true
 		}
 	}
-	if genericUsers[strings.ToLower(name)] {
-		return users
+	if len(users) >= maxLearnedUsers {
+		return users, false
 	}
-	return append(users, name)
+	return append(users, name), true
+}
+
+func appendUser(users []string, name string) []string {
+	users, _ = addUser(users, name)
+	return users
 }
 
 // replaceToken replaces lit where it stands alone: a letter, digit or

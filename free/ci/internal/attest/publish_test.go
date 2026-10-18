@@ -2,6 +2,7 @@ package attest_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -343,5 +344,20 @@ func TestProfileText_RepeatedDroppedURLsAreBounded(t *testing.T) {
 	}
 	if strings.Contains(out, "alice") {
 		t.Fatal("user survived")
+	}
+}
+
+func TestProfileText_UserFromQueryAndCap(t *testing.T) {
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public})
+	if got := p.Text("https://logs.example.org/?path=/home/alice/log user alice"); strings.Contains(got, "alice") {
+		t.Errorf("query user survived: %q", got)
+	}
+	var b strings.Builder
+	for i := 0; i < 300; i++ {
+		fmt.Fprintf(&b, "/home/u%03d/x ", i)
+	}
+	b.WriteString("/home/alice/x user alice")
+	if got := p.Text(b.String()); strings.Contains(got, "alice") {
+		t.Errorf("cap overflow leaked: %q", got)
 	}
 }
