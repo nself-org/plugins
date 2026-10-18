@@ -24,6 +24,7 @@
 set -eu
 
 log() { echo "[forgejo-bootstrap] $*"; }
+die() { echo "[forgejo-bootstrap] ERROR: $*" >&2; exit 1; }
 
 # Validate required env vars.
 : "${NSELF_FORGEJO_ADMIN_USER:?NSELF_FORGEJO_ADMIN_USER is required}"
@@ -32,15 +33,17 @@ log() { echo "[forgejo-bootstrap] $*"; }
 
 # ─── Create admin user (idempotent) ───────────────────────────────────
 log "Creating admin user '${NSELF_FORGEJO_ADMIN_USER}' (idempotent)..."
-# forgejo admin user create exits 0 if the user already exists (Forgejo ≥1.19).
-# We pipe stderr to /dev/null to suppress the "already exists" message.
-forgejo admin user create \
+# Only "already exists" (user name or e-mail) is benign; any other failure stops the bootstrap.
+if ! out="$(forgejo admin user create \
   --admin \
   --username "${NSELF_FORGEJO_ADMIN_USER}" \
   --password "${NSELF_FORGEJO_ADMIN_PASSWORD}" \
   --email    "${NSELF_FORGEJO_ADMIN_EMAIL}" \
   --must-change-password=false \
-  --config /data/gitea/conf/app.ini \
-  2>/dev/null || log "Admin user already exists — skipping creation."
-
+  --config /data/gitea/conf/app.ini 2>&1)"; then
+  case "${out}" in
+    *"already exist"*|*"already in use"*) log "Admin user already exists — skipping creation." ;;
+    *) printf '%s\n' "${out}" >&2; die "admin user creation failed" ;;
+  esac
+fi
 log "Bootstrap complete. Forgejo runs no CI jobs itself; register an external runner on a CI node (see README)."

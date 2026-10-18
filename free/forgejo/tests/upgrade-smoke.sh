@@ -11,16 +11,17 @@
 #   FORGEJO_SMOKE_WAIT      seconds to wait for forgejo healthy / forgejo-init done (default 180)
 # Outputs: exit 0 when every assertion held; 1 on a failed assertion (compose state is printed first); 2 when a tool
 #   is missing; 3 on a host that is not Linux (Constitution section 10.3: the compose smoke runs on Linux).
-# Constraints: no secret on any argv (the admin password is generated per run and written to the scratch .env); HOME is a
+# Constraints: no secret on any argv (the admin password is generated per run and written to the scratch .env); a FORGEJO_SMOKE_WORK that is not empty is refused; HOME is a
 #   fixture dir and DOCKER_CONFIG keeps the real docker context; everything this script starts is removed on exit.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 plugin="$(cd "$here/.." && pwd)"
 repo="$(cd "$plugin/../.." && pwd)"
-base_ref="${FORGEJO_SMOKE_BASE_REF:-3e7c586a61bdfdfd1f2e206e226d686639bb1265}"
+pinned_base=3e7c586a61bdfdfd1f2e206e226d686639bb1265
+base_ref="${FORGEJO_SMOKE_BASE_REF:-$pinned_base}"
 wait_s="${FORGEJO_SMOKE_WAIT:-180}"
-proj_name="fgsmoke"
+proj_name="fgsmoke$$"  # unique per run: cleanup only ever touches this run's containers and volumes
 sock="docker.""sock"
 
 [ "$(uname -s)" = Linux ] || { echo "upgrade-smoke: Linux only (Constitution section 10.3); on another host use the forgejo-smoke.yml pull_request run" >&2; exit 3; }
@@ -31,10 +32,11 @@ made_work=0
 if [ -z "${FORGEJO_SMOKE_WORK:-}" ]; then
   FORGEJO_SMOKE_WORK="$(mktemp -d "${TMPDIR:-/tmp}/forgejo-smoke.XXXXXX")"
   made_work=1
+elif [ -n "$(ls -A "$FORGEJO_SMOKE_WORK" 2>/dev/null)" ]; then
+  echo "upgrade-smoke: FORGEJO_SMOKE_WORK must be empty or missing: $FORGEJO_SMOKE_WORK" >&2; exit 2
 fi
 work="$FORGEJO_SMOKE_WORK"
 project="$work/project"
-rm -rf "${project:?}" "${work:?}/home" "${work:?}/plugins"
 mkdir -p "$project" "$work/home" "$work/plugins/forgejo"
 # Compose reads these from the shell before any env file: a dev's own values must never reach this run.
 unset COMPOSE_PROJECT_NAME COMPOSE_FILE COMPOSE_PROFILES COMPOSE_ENV_FILES DOCKER_NETWORK
@@ -91,6 +93,9 @@ wait_for() { # <description> <command...>
 forgejo_healthy() { [ "$(docker inspect --format '{{.State.Health.Status}}' "${proj_name}_forgejo" 2>/dev/null)" = healthy ]; }
 init_done() { [ "$(docker inspect --format '{{.State.Status}} {{.State.ExitCode}}' "${proj_name}_forgejo_init" 2>/dev/null)" = "exited 0" ]; }
 
+# api <curl args...>: call the Forgejo API as the smoke admin. The login goes to curl on stdin, never on argv.
+api() { printf 'user = "%s:%s"\n' "$admin_user" "$admin_pass" | curl -fsS -K - "$@"; }
+
 step "scratch nself project"
 (cd "$project" && nself init --non-interactive --name "$proj_name" --profile tiny --quiet)
 # Throwaway admin credentials for this run only; the password is generated, never a literal.
@@ -103,6 +108,9 @@ admin_pass="$(head -c 18 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 } >>"$project/.env"
 
 upgrade=0
+if [ -z "${FORGEJO_SMOKE_BASE_REF:-}" ] && ! git -C "$repo" cat-file -e "$base_ref:free/forgejo/runner-entrypoint.sh" 2>/dev/null; then
+  fail "pinned base commit $base_ref is not available (git fetch origin $base_ref): refusing to pass without the upgrade leg"
+fi
 if git -C "$repo" cat-file -e "$base_ref:free/forgejo/runner-entrypoint.sh" 2>/dev/null; then
   upgrade=1
   step "previous fragment ($base_ref) up"
@@ -110,6 +118,8 @@ if git -C "$repo" cat-file -e "$base_ref:free/forgejo/runner-entrypoint.sh" 2>/d
   (cd "$project" && nself build --no-migration-check --quiet)
   dc up -d forgejo forgejo-init forgejo-runner
   wait_for "previous forgejo healthy" forgejo_healthy
+  wait_for "previous forgejo-init to exit 0" init_done
+  api -X POST -H 'Content-Type: application/json' -d '{"name":"survivor"}' "http://127.0.0.1:3844/api/v1/user/repos" >/dev/null || fail "cannot create the survivor repository on the previous stack"
   runner="$(docker ps -aq --filter "name=${proj_name}_forgejo_runner")"
   [ -n "$runner" ] || fail "previous stack has no forgejo-runner container: the smoke would prove nothing"
   case "$(mounts_of_project)" in *"$sock"*) ;; *) fail "previous stack does not mount the Docker socket: the smoke would prove nothing" ;; esac
@@ -137,9 +147,10 @@ case "$(mounts_of_project)" in *"$sock"*) fail "a container of the project still
 [ -z "$(docker volume ls -q --filter "name=${proj_name}_forgejo_runner_config")" ] || echo "note: ${proj_name}_forgejo_runner_config still exists (README migration step: docker volume rm)"
 env_of_forgejo="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${proj_name}_forgejo")"
 case "$env_of_forgejo" in *GITEA__service__DISABLE_REGISTRATION=true*) ;; *) fail "registration is not closed by default" ;; esac
-# The admin must have survived the upgrade (forgejo-init exits 0 even when user creation failed). The login goes to
-# curl on stdin, never on argv.
-admin_json="$(printf 'user = "%s:%s"\n' "$admin_user" "$admin_pass" | curl -fsS -K - "http://127.0.0.1:3844/api/v1/user")" || fail "the admin user cannot log in to the Forgejo API"
-case "$admin_json" in *'"is_admin":true'*) ;; *) fail "the Forgejo API user is not an admin" ;; esac
+# The admin and the data volume must have survived (forgejo-init exits 0 only when the admin exists or was created).
+api "http://127.0.0.1:3844/api/v1/user" | grep -q '"is_admin":true' || fail "the admin cannot log in to the Forgejo API as an admin"
+if [ "$upgrade" = 1 ]; then
+  api "http://127.0.0.1:3844/api/v1/repos/$admin_user/survivor" >/dev/null || fail "the repository created before the upgrade is gone: the data volume was lost"
+fi
 if [ "$upgrade" = 1 ]; then mode="upgrade from $base_ref"; else mode="fresh install only"; fi
-echo "PASS ($mode): no runner, no Docker socket mount, forgejo-init exit 0, registration closed, admin can log in"
+echo "PASS ($mode): no runner, no Docker socket mount, forgejo-init exit 0, registration closed, admin and data survived"
