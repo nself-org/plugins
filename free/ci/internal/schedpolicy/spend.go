@@ -15,6 +15,8 @@ package schedpolicy
 // class, arch names) run in ValidateSpendKey and Spend because Decode sees no key.
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"math"
 	"regexp"
@@ -23,6 +25,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
+	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
 // The spend key names.
@@ -243,4 +246,35 @@ func checkFamily(key string, v any) error {
 		}
 	}
 	return nil
+}
+
+// valuesDigest is the digest trust.Merge binds to a value list: sha256 of the
+// canonical JSON of the values (plus the hosted-authorization fact when set)
+// followed by the pinned commit.
+func valuesDigest(values map[string]any, pinned string, auth map[string]any) (string, error) {
+	plain := make(map[string]any, len(values)+1)
+	for k, v := range values {
+		plain[k] = v
+	}
+	if auth != nil {
+		plain["_authorization"] = auth
+	}
+	enc, err := trust.Canonical(plain)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(append(enc, []byte(pinned)...))
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// checkValues refuses a Resolved whose Values do not hash to its Digest. Effective
+// has no key iterator, so this is the only way to notice a per-provider entry that
+// was dropped, added or edited after policy.Resolve built the list.
+func checkValues(res *policy.Resolved) error {
+	for _, auth := range []map[string]any{nil, {"hosted_public": true, "hosted_project": false}, {"hosted_public": false, "hosted_project": true}, {"hosted_public": true, "hosted_project": true}} {
+		if sum, err := valuesDigest(res.Values, res.PinnedCommit, auth); err == nil && sum == string(res.Digest) {
+			return nil
+		}
+	}
+	return fail("economics", "Resolved.Values does not match Resolved.Digest (a stripped, added or edited value list)")
 }

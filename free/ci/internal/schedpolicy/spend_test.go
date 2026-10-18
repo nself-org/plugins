@@ -37,7 +37,11 @@ var operatorSpend = map[string]string{
 // registered default gives, as policy.Resolver does.
 func resolved(t *testing.T, scopes ...trust.Scope) policy.Resolved {
 	t.Helper()
-	eff, err := merge(t, scopes...)
+	reg, err := trust.NewRegistry(policy.Default.Keys()...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eff, digest, err := reg.Merge("", scopes...)
 	if err != nil {
 		t.Fatalf("merge: %v", err)
 	}
@@ -58,7 +62,7 @@ func resolved(t *testing.T, scopes ...trust.Scope) policy.Resolved {
 			values[k] = v
 		}
 	}
-	return policy.Resolved{Effective: eff, Values: values}
+	return policy.Resolved{Effective: eff, Values: values, Digest: digest}
 }
 
 func mustSpend(t *testing.T, scopes ...trust.Scope) SpendPolicy {
@@ -415,56 +419,54 @@ func TestSpendFlagged(t *testing.T) {
 	if _, err := Spend(&bad); err == nil || !strings.HasPrefix(err.Error(), "E691 /economics/rates/github-hosted") {
 		t.Errorf("Spend accepted a metered GitHub provider: %v", err)
 	}
-	// The family values must equal the effective policy: an injected or edited Values entry is refused.
+	// Integrity: Values must hash to the Digest (Effective has no key iterator, so this is how a
+	// dropped, injected or edited per-provider entry is noticed, including an in-place edit of an
+	// object that Values and Effective share).
 	for name, mutate := range map[string]func(map[string]any){
-		"injected budget":  func(v map[string]any) { v["economics.budgets.provider.x"] = int64(5) },
-		"edited ceiling":   func(v map[string]any) { v["economics.ceilings.hetzner"] = int64(1) },
-		"injected unknown": func(v map[string]any) { v["economics.rates.nope"] = map[string]any{"class": "owned"} },
+		"dropped ceiling": func(v map[string]any) { delete(v, "economics.ceilings.hetzner") },
+		"dropped rate":    func(v map[string]any) { delete(v, "economics.rates.hetzner") },
+		"injected budget": func(v map[string]any) { v["economics.budgets.provider.x"] = int64(5) },
+		"edited ceiling":  func(v map[string]any) { v["economics.ceilings.hetzner"] = int64(1) },
+		"edited in place": func(v map[string]any) {
+			rate := v["economics.rates.hetzner"].(map[string]any)
+			rate["rate_per_hour_micro"], rate["billing_increment"] = int64(51000000000000000), int64(82800000)
+		},
+		"stripped": func(v map[string]any) {
+			for k := range v {
+				delete(v, k)
+			}
+		},
 	} {
-		values := map[string]any{}
-		for k, v := range resolved(t, scope(trust.SourceProject, operatorSpend)).Values {
-			values[k] = v
-		}
-		mutate(values)
-		res := policy.Resolved{Effective: resolved(t, scope(trust.SourceProject, operatorSpend)).Effective, Values: values}
-		if _, err := Spend(&res); err == nil || !strings.Contains(err.Error(), "differs") {
+		res := resolved(t, scope(trust.SourceProject, operatorSpend))
+		mutate(res.Values)
+		if _, err := Spend(&res); err == nil || !strings.HasPrefix(err.Error(), "E691 ") || !strings.Contains(err.Error(), "Resolved.Values") {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	// A resolved value of the wrong shape fails closed instead of reading as zero (free, unlimited).
-	good := resolved(t, scope(trust.SourceProject, operatorSpend))
-	for name, mutate := range map[string]func(map[string]any){
-		"rate type": func(v map[string]any) {
-			v["economics.rates.hetzner"] = map[string]any{"class": "ephemeral", "rate_per_hour_micro": "5000", "billing_increment": int64(3600000)}
-		},
-		"rate missing": func(v map[string]any) {
-			v["economics.rates.hetzner"] = map[string]any{"class": "ephemeral", "billing_increment": int64(3600000)}
-		},
-		"rate no class":    func(v map[string]any) { v["economics.rates.hetzner"] = map[string]any{"rate_per_hour_micro": int64(5)} },
-		"rate not object":  func(v map[string]any) { v["economics.rates.hetzner"] = int64(5) },
-		"ceiling string":   func(v map[string]any) { v["economics.ceilings.hetzner"] = "9" },
-		"ceiling negative": func(v map[string]any) { v["economics.ceilings.hetzner"] = int64(-1) },
-		"budget string":    func(v map[string]any) { v["economics.budgets.provider.hetzner"] = "9" },
-		"owner empty":      func(v map[string]any) { v["economics.providers.hetzner"] = map[string]any{"owner_coordinator": ""} },
-		"enabled string":   func(v map[string]any) { v["burst.providers.hetzner"] = map[string]any{"enabled": "true"} },
-		"agent no sha": func(v map[string]any) {
-			v["burst.cloudvm.agent.amd64"] = map[string]any{"url": "https://a.example.test/a"}
-		},
-	} {
-		values := map[string]any{}
-		for k, v := range good.Values {
-			values[k] = v
-		}
-		mutate(values)
-		res := policy.Resolved{Effective: good.Effective, Values: values}
-		if _, err := Spend(&res); err == nil || !strings.HasPrefix(err.Error(), "E691 ") {
-			t.Errorf("%s: Spend accepted it: %v", name, err)
-		}
+	// The reader fails closed on a wrong-shaped effective value instead of reading it as zero (free, unlimited).
+	rateOK := func() map[string]any {
+		return map[string]any{"class": "ephemeral", "rate_per_hour_micro": int64(5), "billing_increment": int64(3600000)}
 	}
-	// A value list that lacks the registered defaults (hand-built or stripped) is refused.
-	stripped := policy.Resolved{Effective: good.Effective, Values: map[string]any{}}
-	if _, err := Spend(&stripped); err == nil || !strings.Contains(err.Error(), "incomplete") {
-		t.Errorf("an empty non-nil value list was read as no providers: %v", err)
+	with := func(m map[string]any, k string, v any) map[string]any { m[k] = v; return m }
+	for name, read := range map[string]func(*spendReader){
+		"rate type":        func(r *spendReader) { r.object("k", with(rateOK(), "rate_per_hour_micro", "5000")).rate() },
+		"rate negative":    func(r *spendReader) { r.object("k", with(rateOK(), "extras_micro", int64(-1))).rate() },
+		"paid rate zero":   func(r *spendReader) { r.object("k", with(rateOK(), "rate_per_hour_micro", int64(0))).rate() },
+		"paid no incr":     func(r *spendReader) { r.object("k", with(rateOK(), "billing_increment", int64(0))).rate() },
+		"rate no class":    func(r *spendReader) { m := rateOK(); delete(m, "class"); r.object("k", m).rate() },
+		"rate not object":  func(r *spendReader) { r.object("k", int64(5)).rate() },
+		"ceiling string":   func(r *spendReader) { r.amount("k", "9") },
+		"ceiling negative": func(r *spendReader) { r.amount("k", int64(-1)) },
+		"owner empty":      func(r *spendReader) { r.object("k", map[string]any{"owner_coordinator": ""}).text("owner_coordinator") },
+		"enabled string":   func(r *spendReader) { r.object("k", map[string]any{"enabled": "true"}).flag("enabled") },
+		"agent no sha":     func(r *spendReader) { r.object("k", map[string]any{"url": "https://a.example.test/a"}).text("sha256") },
+		"scalar missing":   func(r *spendReader) { r.eff = &policy.Effective{}; r.number(KeyBudgetMonth) },
+	} {
+		r := &spendReader{}
+		read(r)
+		if r.err == nil || !strings.HasPrefix(r.err.Error(), "E691 ") {
+			t.Errorf("%s: read as a value: %v", name, r.err)
+		}
 	}
 	// Spend names a missing registered key instead of reading it as zero.
 	empty := policy.Resolved{}

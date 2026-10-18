@@ -87,19 +87,16 @@ func PaidAllowed(p SpendPolicy, provider string) bool {
 }
 
 // Spend builds the typed spend policy. Resolved.Values carries the per-provider
-// family entries (Effective has no key iterator), so a nil Values is refused:
-// reading it as "no providers" would silently drop every rate and budget.
+// family entries (Effective has no key iterator), so Values must hash to the
+// Resolved.Digest (checkValues): a stripped or edited list would silently drop
+// a rate, ceiling or budget.
 // Every read is checked; a wrong-typed or missing value is E691, never a zero.
 func Spend(res *policy.Resolved) (SpendPolicy, error) {
 	if res == nil || res.Values == nil {
 		return SpendPolicy{}, fail("economics", "no resolved policy values (Spend needs Resolved.Values for the per-provider keys)")
 	}
-	// Resolver output lists every registered default key; a map without them was built
-	// by hand or stripped, and its per-provider entries cannot be trusted either.
-	for _, spec := range SpendKeys() {
-		if _, listed := res.Values[spec.Key]; spec.Default != nil && !listed {
-			return SpendPolicy{}, fail(spec.Key, "missing from Resolved.Values (incomplete value list)")
-		}
+	if err := checkValues(res); err != nil {
+		return SpendPolicy{}, err
 	}
 	r := &spendReader{eff: &res.Effective}
 	p := SpendPolicy{
