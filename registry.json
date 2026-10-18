@@ -3734,7 +3734,7 @@
         "sha256": "2038cab05b345c6d7a367fcfe99432313e919f8448d343cdef3b8634c4563dc4"
       },
       "dependencies": [],
-      "description": "Full monitoring stack: Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, and exporters",
+      "description": "Full monitoring stack: Prometheus, Grafana, Loki, Grafana Alloy, Tempo, Alertmanager, and exporters",
       "download_url": "https://plugins.nself.org/plugins/monitoring/tarball",
       "language": "go",
       "license": "MIT",
@@ -3750,7 +3750,7 @@
         "prometheus",
         "grafana",
         "loki",
-        "promtail",
+        "alloy",
         "tempo",
         "alertmanager",
         "metrics",

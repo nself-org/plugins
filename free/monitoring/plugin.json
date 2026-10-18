@@ -1,7 +1,7 @@
 {
   "author": "nself",
   "category": "infrastructure",
-  "description": "Full monitoring stack: Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, and exporters",
+  "description": "Full monitoring stack: Prometheus, Grafana, Loki, Grafana Alloy, Tempo, Alertmanager, and exporters",
   "envVars": [
     {
       "description": "",
@@ -89,8 +89,7 @@
   "permissions": {
     "database": [],
     "filesystem": [
-      "logs",
-      "docker-socket"
+      "logs"
     ],
     "network": [
       "prometheus",
@@ -114,7 +113,7 @@
     "prometheus",
     "grafana",
     "loki",
-    "promtail",
+    "alloy",
     "tempo",
     "alertmanager",
     "metrics",

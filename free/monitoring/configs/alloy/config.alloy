@@ -1,0 +1,89 @@
+// Grafana Alloy: ships Docker container logs and the host syslog to Loki (P7-PLUG-58, replaces Promtail).
+// File based only: Alloy reads the json-file logs under /var/lib/docker/containers. It uses no Docker
+// discovery component and no Docker socket mount (ADR 0027). The nself CLI renders this
+// file with a plain ${KEY} substitution, so keep every value literal here (no ${...} text).
+//
+// Labels written to Loki:
+//   job=containerlogs  stream=stdout|stderr  container_id=<64 hex id>  filename=<log path>
+//   container_name, image_name  only when the container sets the Docker log option
+//                               tag="<name>|<image>" (same rule the Promtail config used)
+//   job=syslog         host syslog, when /var/log/syslog exists
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+local.file_match "containers" {
+  path_targets = [{
+    __path__ = "/var/lib/docker/containers/*/*-json.log",
+    job      = "containerlogs",
+  }]
+}
+
+loki.source.file "containers" {
+  targets    = local.file_match.containers.targets
+  forward_to = [loki.process.containers.receiver]
+}
+
+loki.process "containers" {
+  // Docker json-file line: {"log":"...","stream":"stdout","attrs":{"tag":"name|image"},"time":"..."}
+  stage.regex {
+    expression = "/var/lib/docker/containers/(?P<container_id>[0-9a-f]{64})/"
+    source     = "filename"
+  }
+
+  stage.json {
+    expressions = {
+      output = "log",
+      stream = "stream",
+      attrs  = "attrs",
+      time   = "time",
+    }
+  }
+
+  stage.json {
+    expressions = {
+      tag = "tag",
+    }
+    source = "attrs"
+  }
+
+  stage.regex {
+    expression = "(?P<container_name>[^|]*)\\|(?P<image_name>[^|]*)"
+    source     = "tag"
+  }
+
+  stage.timestamp {
+    source = "time"
+    format = "RFC3339Nano"
+  }
+
+  stage.labels {
+    values = {
+      stream         = "",
+      container_id   = "",
+      container_name = "",
+      image_name     = "",
+    }
+  }
+
+  stage.output {
+    source = "output"
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+local.file_match "syslog" {
+  path_targets = [{
+    __path__ = "/var/log/syslog",
+    job      = "syslog",
+  }]
+}
+
+loki.source.file "syslog" {
+  targets    = local.file_match.syslog.targets
+  forward_to = [loki.write.default.receiver]
+}

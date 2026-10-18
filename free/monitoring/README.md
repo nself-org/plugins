@@ -1,6 +1,6 @@
 # monitoring
 
-Full observability stack for nSelf: Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, cAdvisor, Node Exporter, Postgres Exporter, and Redis Exporter.
+Full observability stack for nSelf: Prometheus, Grafana, Loki, Grafana Alloy, Tempo, Alertmanager, cAdvisor, Node Exporter, Postgres Exporter, and Redis Exporter.
 
 **Tier:** Free (MIT) — no license required.
 
@@ -14,7 +14,7 @@ nself start
 
 ## Overview
 
-The `monitoring` plugin deploys a complete, pre-configured observability stack alongside your nSelf services. It covers metrics (Prometheus), dashboards (Grafana), log aggregation (Loki + Promtail), distributed tracing (Tempo), alerting (Alertmanager), and exporters for containers, host, PostgreSQL, and Redis.
+The `monitoring` plugin deploys a complete, pre-configured observability stack alongside your nSelf services. It covers metrics (Prometheus), dashboards (Grafana), log aggregation (Loki + Grafana Alloy), distributed tracing (Tempo), alerting (Alertmanager), and exporters for containers, host, PostgreSQL, and Redis.
 
 This is a **config-type plugin** — it orchestrates Docker services via compose fragments. No separate nSelf Go service binary. `nself build` injects all 10 monitoring services into your compose stack.
 
@@ -25,7 +25,7 @@ This is a **config-type plugin** — it orchestrates Docker services via compose
 | Grafana | 3000 | Dashboards and visualization — pre-loaded nSelf dashboards |
 | Prometheus | 9090 | Metrics collection, storage, and query engine |
 | Loki | 3100 | Log aggregation and query (LogQL) |
-| Promtail | — | Log shipper — tails Docker logs into Loki |
+| Alloy | — | Log shipper (replaces Promtail) — tails the Docker json-file logs into Loki |
 | Tempo | 3200 | Distributed tracing — OpenTelemetry-compatible |
 | Alertmanager | 9093 | Alert routing, grouping, silencing, and notifications |
 | cAdvisor | 8082 | Per-container resource metrics (CPU, RAM, I/O, net) |
@@ -115,3 +115,19 @@ All monitoring ports bind to `127.0.0.1`. Access via Nginx routes or direct loca
 - [plugin-audit-log](plugin-audit-log.md) — security audit log (free, always available)
 - [ɳSentry bundle](bundle-nsentry.md) — product-layer observability: uptime, status pages, incident management (planned v1.1.0)
 - [nSelf CLI: nself plugin](cmd-plugin.md) — plugin management
+
+## Pinned images
+
+Every image in the compose fragment is pinned to an explicit `<repository>:<tag>@sha256:<digest>`; `:latest` is never used. The pins equal the nSelf image lock (`internal/compose/images.lock.json` in the CLI) or, for Alloy and Tempo, the plugins lock (`images.json`, `images.d/monitoring.json`). `test/pins-match-lock.sh <cli-dir>` checks this. To update an image, change the lock first, then the fragment.
+
+## Log shipping with Alloy
+
+Grafana Alloy replaces Promtail (end of life). `configs/alloy/config.alloy` reads the Docker json-file logs under `/var/lib/docker/containers` from disk and pushes them to Loki. It uses no Docker discovery and has no Docker socket. Loki labels: `job=containerlogs`, `stream`, `container_id`, and `filename`. `container_name` and `image_name` are set only for containers that use the Docker log option `tag="<name>|<image>"`. Promtail also set an `env` label; Alloy does not (the CLI only substitutes plain `${KEY}` values, so it was never filled in). Host syslog is shipped with `job=syslog` when `/var/log/syslog` exists. Alloy runs as root because `/var/lib/docker/containers` is root-only; the mount is read-only.
+
+## cAdvisor without the Docker socket
+
+cAdvisor runs unprivileged and mounts neither `/var/run` nor `docker.sock` (ADR 0027). It reads `/sys`, `/var/lib/docker` and the host root (`/rootfs`) read-only; the root is bound non-recursively, because a recursive bind would expose `/rootfs/run/docker.sock`; `/proc` is added back under `/rootfs/proc` because cAdvisor needs it. Residual risk: that is the host procfs, so on a host with no AppArmor or SELinux confinement for ptrace, root inside the cAdvisor container could still reach the host socket through `/rootfs/proc/1/root/run/docker.sock`; Docker's default AppArmor profile blocks this. `test/logs-e2e.sh` reports which case the test host is. Node Exporter binds the host root non-recursively the same way. The long mount form (`bind.recursive`) needs a Docker Compose release that accepts it and Docker Engine 20.10 or later; tested with Compose 5.6.0 on Engine 29. Without the Docker API, container CPU and memory metrics are reported by cgroup path and id, but cAdvisor cannot add the `name` and `image` labels, per-container network metrics are not reported (cAdvisor's raw handler reports network only for the root cgroup), and filesystem metrics for mounts below `/` are limited. Dashboards that group by `name` show the cgroup id instead.
+
+## Tests
+
+`test/pins-match-lock.sh <cli-dir>` checks the pins. `test/logs-e2e.sh` boots the fragment on a Linux Docker daemon (set `TMPDIR` to an absolute path the daemon can bind-mount) and checks health, no privileged containers or socket mounts, logs reaching Loki through Grafana within 60 s, and cAdvisor metrics in Prometheus.

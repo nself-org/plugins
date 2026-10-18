@@ -39,6 +39,8 @@ compactor:
   working_directory: /loki/compactor
   compaction_interval: 10m
   retention_enabled: true
+  # Required by Loki 3.x when retention is on (the pinned 3.1.0 refuses to start without it).
+  delete_request_store: filesystem
   delete_request_cancel_period: 10m
   retention_delete_delay: 2h
   retention_delete_worker_count: 150
