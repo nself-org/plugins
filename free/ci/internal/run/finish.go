@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
@@ -171,11 +172,15 @@ func defaultStatus(r PublishRequest) report.Status {
 	case "fail":
 		state = report.Failure
 	}
-	d := r.Projection.Summary
+	d, suffix := r.Projection.Summary, ""
 	if n := r.Run.EvidenceDigest; len(n) >= 12 {
-		d += " (evidence " + n[:12] + ")"
+		suffix = " (evidence " + n[:12] + ")"
 	}
-	return report.Status{Owner: r.Owner, Repo: r.Repo, Revision: r.Run.Revision, State: state, Description: report.Truncate(d)}
+	// the digest is the part a reader cannot rebuild: cut the summary, never the suffix
+	if room := report.MaxDescription - utf8.RuneCountInString(suffix); utf8.RuneCountInString(d) > room {
+		d = string([]rune(d)[:room-1]) + "…"
+	}
+	return report.Status{Owner: r.Owner, Repo: r.Repo, Revision: r.Run.Revision, State: state, Description: report.Truncate(d + suffix)}
 }
 
 func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, ev model.Evidence) (string, []string) {
@@ -196,11 +201,10 @@ func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, 
 	if f.Hooks.Publisher != nil {
 		var custom report.Status
 		err := guard("publisher", func() (e error) { custom, e = f.Hooks.Publisher.Publish(ctx, req); return })
-		if err != nil {
-			notes = append(notes, "publisher failed, default status used: "+firstLineOf(err.Error()))
-		} else {
-			s = custom
+		if err != nil { // the default projection may hold text the publication profile would filter
+			return notPosted("publisher failed, nothing posted: " + firstLineOf(err.Error())), []string{"publisher failed: " + firstLineOf(err.Error())}
 		}
+		s = custom
 	}
 	s.Owner, s.Repo, s.Revision = p.Owner, p.Repo, f.Rev.SHA
 	if s.State == report.Success && ev.Result != "pass" { // a publisher never turns a failed run into success

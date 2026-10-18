@@ -16,6 +16,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -98,7 +99,9 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 		rep.Errors = append(rep.Errors, err)
 		return rep
 	}
+	runs := map[string]bool{}
 	for _, a := range lost {
+		runs[strings.SplitN(a.JobID, ".", 2)[0]] = true // job rows are named <run>.<job>
 		d := store.TransitionDetail{Epoch: a.Epoch, FailureClass: "lost", Reason: "coordinator lost"}
 		err = st.Transition(ctx, a.ID, "lost", "retryable", d)
 		var se *store.Error
@@ -115,6 +118,7 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 			rep.Errors = append(rep.Errors, err)
 		}
 	}
+	closeDead(ctx, st, runs, &rep)
 	return rep
 }
 
@@ -146,7 +150,21 @@ func strandAttempts(ctx context.Context, st *store.Store, boot string, rep *Reco
 		n++
 		pipelines[a.PipelineID] = true
 	}
+	closeDead(ctx, st, pipelines, rep)
+	return n
+}
+
+// closeDead marks a run "lost" when it is still "running" and none of its
+// attempts is live any more (a killed coordinator leaves it so otherwise).
+func closeDead(ctx context.Context, st *store.Store, pipelines map[string]bool, rep *RecoverReport) {
 	for id := range pipelines {
+		row, ok, err := st.PipelineByID(ctx, id)
+		if err != nil || !ok || row.Status != "running" {
+			if err != nil {
+				rep.Errors = append(rep.Errors, err)
+			}
+			continue
+		}
 		attempts, err := st.PipelineAttempts(ctx, id)
 		if err != nil {
 			rep.Errors = append(rep.Errors, err)
@@ -155,7 +173,7 @@ func strandAttempts(ctx context.Context, st *store.Store, boot string, rep *Reco
 		live := false
 		for _, a := range attempts {
 			switch a.State {
-			case "queued", "leased", "running", "finalizing":
+			case "queued", "leased", "running", "finalizing", "lost":
 				live = true
 			}
 		}
@@ -165,5 +183,4 @@ func strandAttempts(ctx context.Context, st *store.Store, boot string, rep *Reco
 			}
 		}
 	}
-	return n
 }

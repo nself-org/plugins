@@ -97,6 +97,9 @@ func TestCoordinatorKill(t *testing.T) {
 	if got["pure"] != "retryable" || got["once"] != "needs-operator" {
 		t.Fatalf("attempt states after recovery: %v", got)
 	}
+	if row, ok, _ := st.PipelineByID(ctx, page.Pipelines[0].ID); !ok || row.Status != "lost" {
+		t.Fatalf("a run whose coordinator died must not stay running: %+v", row)
+	}
 	for end := time.Now().Add(20 * time.Second); time.Now().Before(end) && (alive(pure) || alive(once)); time.Sleep(100 * time.Millisecond) {
 	}
 	if alive(pure) || alive(once) {
@@ -124,7 +127,11 @@ func TestConcurrentRuns(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i], _ = r.C.Run(context.Background())
+			var rerr error
+			results[i], rerr = r.C.Run(context.Background())
+			if rerr != nil {
+				t.Errorf("run %d: %v", i, rerr)
+			}
 		}()
 	}
 	wg.Wait()

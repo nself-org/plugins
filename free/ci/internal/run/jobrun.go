@@ -57,6 +57,9 @@ func (rs *runState) settle(id string, from, to model.JobState, class model.Failu
 	err := rs.trans(id, from, to, class)
 	if err != nil && CodeOf(err) == codeStoreRef && to != "cancelled" {
 		if err = rs.trans(id, from, "cancelled", "cancelled"); err == nil {
+			rs.mu.Lock() // the intent won before the poller saw it: the run is still the operator's cancel
+			rs.userCancel = true
+			rs.mu.Unlock()
 			return "cancelled", nil
 		}
 	}
@@ -147,7 +150,7 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 		if rs.hooks.Cache != nil {
 			bg, done := background(ctx)
 			defer done()
-			_ = rs.hooks.Cache.After(bg, info, oc)
+			_ = guard("cache after hook", func() error { return rs.hooks.Cache.After(bg, info, oc) })
 		}
 	}()
 	switch {

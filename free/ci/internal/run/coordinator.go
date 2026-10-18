@@ -124,14 +124,14 @@ func requireRunnable(pl *plan.Plan, keep map[string]bool) error {
 }
 
 func (c *Coordinator) classify(ctx context.Context, h Hooks, rev Revision) (string, error) {
-	if c.Opts.Trust == "" || h.Trust == nil {
+	if h.Trust == nil {
 		return "owner", nil
 	}
 	got, err := h.Trust.Classify(ctx, TrustRequest{Root: c.Opts.Root, Revision: rev.SHA, Requested: c.Opts.Trust})
 	if err != nil {
 		return "", err
 	}
-	if string(got) != c.Opts.Trust {
+	if c.Opts.Trust != "" && string(got) != c.Opts.Trust {
 		return "", fail(CodeTrust, "the source is classed %s, not %s", got, c.Opts.Trust)
 	}
 	return string(got), nil
@@ -211,7 +211,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	st, err := store.Open(c.storePath(), store.Options{})
+	st, err := OpenStore(c.storePath())
 	if err != nil {
 		return Result{}, err
 	}

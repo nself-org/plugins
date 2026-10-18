@@ -90,7 +90,7 @@ func (rs *runState) unprepare(info AttemptInfo, p prepared) {
 	if p.services != nil && rs.hooks.Services != nil {
 		bg, done := background(context.Background())
 		defer done()
-		_ = rs.hooks.Services.Down(bg, *p.services)
+		_ = guard("services down hook", func() error { return rs.hooks.Services.Down(bg, *p.services) })
 	}
 }
 

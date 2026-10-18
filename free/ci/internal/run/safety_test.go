@@ -60,13 +60,13 @@ func (panicPublisher) Publish(context.Context, PublishRequest) (report.Status, e
 	panic("boom")
 }
 
-// A panicking hook neither kills the coordinator nor loses the status.
-func TestPanickingPublisherFallsBackToDefault(t *testing.T) {
+// A panicking hook does not kill the coordinator; it posts nothing.
+func TestPanickingPublisherPostsNothing(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
 	r.C.Hooks.Publisher = panicPublisher{}
 	res := r.run(t)
-	if p := r.Rep.all(); len(p) != 1 || p[0].State != report.Success {
+	if p := r.Rep.all(); len(p) != 0 {
 		t.Fatalf("posted %+v", p)
 	}
 	if !strings.Contains(strings.Join(res.Summary.Notes, "|"), "publisher failed") {

@@ -71,7 +71,7 @@ func runRuns(args []string) int {
 			return printRun(asJSON, v)
 		}
 	}
-	st, err := store.Open(runsStorePath(), store.Options{})
+	st, err := cirun.OpenStore(runsStorePath())
 	if err != nil {
 		return exitForError(err)
 	}
@@ -152,7 +152,7 @@ func runCancel(args []string) int {
 		return 1
 	}
 	ctx := context.Background()
-	st, err := store.Open(runsStorePath(), store.Options{})
+	st, err := cirun.OpenStore(runsStorePath())
 	if err != nil {
 		return exitForError(err)
 	}
