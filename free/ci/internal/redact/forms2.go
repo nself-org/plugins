@@ -24,10 +24,8 @@ func shellForms(v []byte) [][]byte {
 		var a bytes.Buffer
 		for _, c := range v {
 			switch {
-			case c == '\n':
-				a.WriteString(`\n`)
-			case c == '\t':
-				a.WriteString(`\t`)
+			case strings.IndexByte("\a\b\t\n\v\f\r\x1b", c) >= 0:
+				a.WriteString(map[byte]string{7: `\a`, 8: `\b`, 9: `\t`, 10: `\n`, 11: `\v`, 12: `\f`, 13: `\r`, 27: `\E`}[c])
 			case c < 0x20 || c == 0x7f:
 				fmt.Fprintf(&a, `\%03o`, c)
 			case c == '\'' || c == '\\':

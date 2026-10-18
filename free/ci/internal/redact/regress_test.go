@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -454,5 +455,25 @@ func TestRegressDotNetQuoteAndANSICAndBarePEMTail(t *testing.T) {
 	whole := run(r, chunks[0]+chunks[1])
 	if split := run(r, chunks...); strings.Contains(split, "SECRETTAIL") || collapse(split) != collapse(whole) {
 		t.Errorf("split %q vs whole %q", split, whole)
+	}
+}
+
+// Round 8: bash $'...' named control escapes, checked against the real bash.
+func TestRegressBashQuotingMatchesBash(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Fatalf("bash is required: %v", err)
+	}
+	for _, c := range []byte{1, 7, 8, 9, 10, 11, 12, 13, 27, 127} {
+		v := "ab" + string([]byte{c}) + "cd+ef'g\\h"
+		out, err := exec.Command(bash, "-c", `printf %q "$1"`, "x", v).Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := New()
+		mustRegister(t, r, v)
+		if got := run(r, "x "+string(out)+" y"); strings.Contains(got, "cd") || !strings.Contains(got, Placeholder) {
+			t.Errorf("control %d: %q printed as %q survived: %q", c, v, out, got)
+		}
 	}
 }
