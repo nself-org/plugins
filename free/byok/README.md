@@ -76,3 +76,7 @@ cd go && go test ./...
 ```
 
 Tests cover envelope round-trip, IV uniqueness, revoked-key error handling, and tenant isolation.
+
+## Database migrations
+
+The plugin applies `migrations/*.sql` at boot through the nSelf migration helper (ledger `np_byok.schema_migrations`); the tables live in `public`. The columns `tenant_id` and `triggered_by` no longer carry foreign keys to `np_tenants` and `np_users`: those core tables do not exist on a fresh database, and the tenant wall is enforced by the `tenant_id` filters and the row-level-security policies. RLS is forced, so run the plugin with a role that bypasses it (the stack default) or set `app.current_tenant_id` per connection.

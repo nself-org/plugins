@@ -33,9 +33,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "plugin-email: db connect error: %v\n", err)
 		os.Exit(1)
 	}
+	mustBootMigrations(ctx, pool)
 	defer pool.Close()
 
 	srv := internal.NewServer(pool, cfg)
+	srv.MigrationsHealth = bootMigrationsHealth
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)

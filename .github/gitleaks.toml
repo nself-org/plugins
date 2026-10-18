@@ -21,6 +21,9 @@ paths = [
   # Machine-transpiled SQLite C source (vendored modernc.org/sqlite, P7-CI-30): Windows API
   # constant names such as BCRYPT_*_KEY_BLOB match generic-api-key. Third-party, never edited.
   '''free/ci/vendor/modernc\.org/sqlite/lib/.*\.go''',
+  # Redactor unit tests (P7-TRUST-19): synthetic key/token shapes fed to the redactor to prove
+  # they are masked. Test files only; no production source is exempted.
+  '''free/ci/internal/redact/.*_test\.go$''',
   # Vendored third-party source trees of free plugins (cargo/go vendor): generated tables and
   # test vectors trip generic-api-key. They are copies of upstream code, never our secrets.
   '''^free/[^/]+/vendor/''',

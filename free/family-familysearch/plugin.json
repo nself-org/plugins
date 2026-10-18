@@ -1,16 +1,62 @@
 {
-  "name": "family-familysearch",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "FamilySearch \u2192 nFamily migration helper (PLANNED). Free public API from FamilySearch (LDS). Lowest-friction next-step importer after family-geni.",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "minNselfVersion": "1.0.0",
   "category": "social",
+  "dependencies": [
+    "family",
+    "object-storage",
+    "photos"
+  ],
+  "description": "FamilySearch → nFamily migration helper (PLANNED). Free public API from FamilySearch (LDS). Lowest-friction next-step importer after family-geni.",
+  "entryPoint": "binary",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
+  "installable": false,
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "planned",
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
+  },
+  "name": "family-familysearch",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "storage",
+      "temp",
+      "logs"
+    ],
+    "network": [
+      "familysearch.org",
+      "api.familysearch.org"
+    ]
+  },
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "service": {
+    "kind": "library"
+  },
+  "status": "planned",
   "tags": [
     "family",
     "genealogy",
@@ -20,61 +66,6 @@
     "gedcom",
     "oauth"
   ],
-  "tables": [],
-  "webhooks": {},
-  "actions": {},
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": []
-  },
-  "config": {},
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "primary"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "familysearch.org",
-      "api.familysearch.org"
-    ],
-    "filesystem": [
-      "storage",
-      "temp",
-      "logs"
-    ]
-  },
-  "dependencies": {
-    "required": [
-      "family",
-      "object-storage",
-      "photos"
-    ],
-    "optional": []
-  },
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "port": 3510,
-  "status": "planned",
-  "installable": false,
   "tier": "free",
-  "language": "go",
-  "entryPoint": "binary",
-  "routes": [],
-  "health_endpoint": "/health",
-  "health_status": "pending_implementation",
-  "entry": "cmd/main.go",
-  "checksum": "1d4ced3a8f2ffa85bc9d2418d15601b2d1027db21bca0bfa38f5bbfe75e90848",
-  "bundles": [
-    "nfamily"
-  ]
+  "version": "1.2.6"
 }
