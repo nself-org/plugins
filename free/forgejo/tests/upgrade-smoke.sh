@@ -40,6 +40,7 @@ project="$work/project"
 mkdir -p "$project" "$work/home" "$work/plugins/forgejo"
 # Compose reads these from the shell before any env file: a dev's own values must never reach this run.
 unset COMPOSE_PROJECT_NAME COMPOSE_FILE COMPOSE_PROFILES COMPOSE_ENV_FILES DOCKER_NETWORK
+for v in $(compgen -e | grep -E '^(FORGEJO_|NSELF_FORGEJO_)' || true); do unset "$v"; done
 export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
 export HOME="$work/home"
 export NSELF_PLUGIN_DIR="$work/plugins"
@@ -66,6 +67,9 @@ cleanup() {
   [ "$rc" -ne 0 ] && dump
   if [ -f "$project/.nself/compose-files.txt" ]; then dc down -v --remove-orphans >/dev/null 2>&1 || true; fi
   project_containers | xargs -r docker rm -f >/dev/null 2>&1 || true
+  # Volumes and networks the post-upgrade model no longer declares (the old runner volume) survive `down -v`.
+  docker volume ls -q --filter "label=com.docker.compose.project=$proj_name" | xargs -r docker volume rm >/dev/null 2>&1 || true
+  docker network ls -q --filter "label=com.docker.compose.project=$proj_name" | xargs -r docker network rm >/dev/null 2>&1 || true
   [ "$made_work" = 1 ] && rm -rf "$work"
   exit "$rc"
 }
@@ -160,5 +164,14 @@ api "http://127.0.0.1:3844/api/v1/user" | grep -q '"is_admin":true' || fail "the
 if [ "$upgrade" = 1 ]; then
   api "http://127.0.0.1:3844/api/v1/repos/$admin_user/survivor" >/dev/null || fail "the repository created before the upgrade is gone: the data volume was lost"
 fi
-if [ "$upgrade" = 1 ]; then mode="upgrade from $base_ref"; else mode="fresh install only"; fi
-echo "PASS ($mode): no runner, no Docker socket mount, forgejo-init exit 0, registration closed, admin and data survived"
+
+# Fresh install: drop every volume, start again, and let the new init create the admin as uid 1000 (the path every
+# new install takes; the upgrade leg above only reaches "already exists").
+step "fresh install with this checkout's fragment"
+dc down -v --remove-orphans >/dev/null
+dc up -d forgejo forgejo-init
+wait_for "fresh forgejo healthy" forgejo_healthy
+wait_for "fresh forgejo-init to exit 0" init_done
+api "http://127.0.0.1:3844/api/v1/user" | grep -q '"is_admin":true' || fail "fresh install: the admin was not created as an admin"
+if [ "$upgrade" = 1 ]; then mode="upgrade from $base_ref, then fresh install"; else mode="fresh install only"; fi
+echo "PASS ($mode): no runner, no Docker socket mount, forgejo-init exit 0, registration closed, admin created and data survived"

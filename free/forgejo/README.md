@@ -37,6 +37,11 @@ to open it.
 - **Not for fork pull requests.** Do not let a runner execute workflows from forks
   or from users you do not trust, and keep registration closed unless you need it.
 
+The runner must reach the forge at its `ROOT_URL`. Forgejo publishes only on
+`127.0.0.1:3844` and `ROOT_URL` is `http://<FORGEJO_DOMAIN>:3844/`, so put a TLS
+reverse proxy or a tunnel in front, set `FORGEJO_DOMAIN`, and do not expose port 3844
+to the internet as it is.
+
 To register a runner on the CI node, create a token under Site administration or
 the repository's Actions settings, then:
 
@@ -65,6 +70,14 @@ removes it. The Forgejo data volume and the admin user are untouched. Remove the
 variables from your `.env`; they are no longer read. Registrations created on the
 Forgejo server by the old runner stay in its database until you delete them in the
 admin panel.
+
+After the upgrade, audit what the open forge collected. The old init ran the admin
+bootstrap as root, which Forgejo refuses, so on some installs the admin was never
+created and the configured admin name could have been registered by anyone while
+sign-up was open. The new init fails when that name exists without admin rights.
+List the accounts in Site administration and remove any you did not create. Also
+delete the old runner under Site administration > Actions > Runners and reset the
+registration token there: a copy of the old token may sit in a `.env` file or backup.
 
 Self-service sign-up is now closed by default. A deployment that relied on open
 registration must set `FORGEJO_DISABLE_REGISTRATION=false` to keep it.

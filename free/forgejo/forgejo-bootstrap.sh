@@ -46,4 +46,9 @@ if ! out="$(forgejo admin user create \
     *) printf '%s\n' "${out}" >&2; die "admin user creation failed" ;;
   esac
 fi
+# A pre-existing account only counts when it is an admin: on installs whose old init could not create the admin,
+# someone else may have registered that name while sign-up was open.
+forgejo admin user list --admin --config /data/gitea/conf/app.ini 2>/dev/null \
+  | awk -v u="${NSELF_FORGEJO_ADMIN_USER}" 'NR > 1 && $2 == u { found = 1 } END { exit !found }' \
+  || die "user '${NSELF_FORGEJO_ADMIN_USER}' exists but is not an admin: review the accounts in the Forgejo admin panel"
 log "Bootstrap complete. Forgejo runs no CI jobs itself; register an external runner on a CI node (see README)."
