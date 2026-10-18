@@ -30,6 +30,8 @@ regexes = [
   '''AKIAIOSFODNN7EXAMPLE''',
   # free/ci/internal/exec/redact_test.go (P7-CI-37): synthetic AWS key shape, the whole matched value
   '''^AKIAABCDEFGHIJKLMNOP$''',
+  # same test: a synthetic RSA private key block (private-key rule on gitleaks 8.21.2), the whole matched value
+  '''^-----BEGIN RSA PRIVATE KEY-----\\nMIIabc\\n-----END RSA PRIVATE KEY-----$''',
   # sign.ts doc comment "Key format: PKCS8-wrapped ...": the whole matched value is that phrase, no secret
   '''^PKCS8-wrapped$''',
   '''wJalrXUtnFEMI''',
