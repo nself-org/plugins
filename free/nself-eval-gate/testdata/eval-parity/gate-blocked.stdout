@@ -1,0 +1,4 @@
+✗  tier=semi-auto  BLOCKED
+Blocking suites:
+  - recall-quality-v1
+  - pass-suite

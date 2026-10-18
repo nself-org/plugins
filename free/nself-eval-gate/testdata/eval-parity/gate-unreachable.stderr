@@ -1,0 +1,1 @@
+error: get gate status: eval client request: Get "http://127.0.0.1:1/eval/gate/semi-auto": dial tcp 127.0.0.1:1: connect: connection refused

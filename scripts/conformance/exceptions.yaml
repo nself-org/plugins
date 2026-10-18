@@ -63,6 +63,11 @@ exceptions:
     reason: "core still registers functions until the break-out ships"
     owner_ref: P7-SHIP-09
     expires: 2026-12-31
+  - rule: cli-targets
+    plugin: nself-eval-gate
+    reason: "core still registers ci eval until the break-out ships (temporary duplicate, P7-CI-44)"
+    owner_ref: P7-SHIP-09
+    expires: 2026-12-31
   # Rule port-bind (D-0453): a deliberate public port. D-0626 tracks a permanent class for these.
   - rule: port-bind
     plugin: traefik

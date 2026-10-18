@@ -3907,6 +3907,12 @@
     "nself-eval-gate": {
       "author": "nself",
       "catalog": {
+        "commands": {
+          "command": "eval",
+          "subcommands": [
+            "gate"
+          ]
+        },
         "maturity": "implemented",
         "requires": {
           "nself": ">=1.1.1"

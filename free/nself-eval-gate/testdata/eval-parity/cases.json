@@ -1,0 +1,351 @@
+[
+ {
+  "name": "eval-help",
+  "args": [
+   "--help"
+  ]
+ },
+ {
+  "name": "gate-help",
+  "args": [
+   "gate",
+   "--help"
+  ]
+ },
+ {
+  "name": "run-pass-summary",
+  "args": [
+   "--suite",
+   "pass-suite",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}"
+  ],
+  "artifact": true
+ },
+ {
+  "name": "run-pass-table",
+  "args": [
+   "--suite",
+   "pass-suite",
+   "--output",
+   "table",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}"
+  ]
+ },
+ {
+  "name": "run-pass-json",
+  "args": [
+   "--suite",
+   "pass-suite",
+   "--output",
+   "json",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}"
+  ]
+ },
+ {
+  "name": "run-fail-summary",
+  "args": [
+   "--suite",
+   "fail-suite",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}"
+  ]
+ },
+ {
+  "name": "run-precondition",
+  "args": [
+   "--suite",
+   "pre-suite",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}"
+  ]
+ },
+ {
+  "name": "run-trigger-error",
+  "args": [
+   "--suite",
+   "down-suite",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}"
+  ]
+ },
+ {
+  "name": "run-missing-suite",
+  "args": [
+   "--eval-url",
+   "{{URL}}"
+  ]
+ },
+ {
+  "name": "run-dry-run",
+  "args": [
+   "--suite",
+   "pass-suite",
+   "--dry-run",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}"
+  ]
+ },
+ {
+  "name": "validate-invalid",
+  "args": [
+   "--suite",
+   "none",
+   "--validate-only",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}"
+  ]
+ },
+ {
+  "name": "validate-valid",
+  "args": [
+   "--suite",
+   "pass-suite",
+   "--validate-only",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}"
+  ],
+  "files": {
+   "evals/pass-suite.yaml": "suite: pass-suite\ntasks: []\n"
+  }
+ },
+ {
+  "name": "gate-cleared",
+  "args": [
+   "gate",
+   "--tier",
+   "supervised",
+   "--eval-url",
+   "{{URL}}"
+  ]
+ },
+ {
+  "name": "gate-blocked",
+  "args": [
+   "gate",
+   "--tier",
+   "semi-auto",
+   "--eval-url",
+   "{{URL}}"
+  ]
+ },
+ {
+  "name": "gate-precondition",
+  "args": [
+   "gate",
+   "--tier",
+   "full-auto",
+   "--eval-url",
+   "{{URL}}"
+  ]
+ },
+ {
+  "name": "gate-unreachable",
+  "args": [
+   "gate",
+   "--tier",
+   "semi-auto",
+   "--eval-url",
+   "http://127.0.0.1:1"
+  ]
+ },
+ {
+  "name": "gate-invalid-tier",
+  "args": [
+   "gate",
+   "--tier",
+   "bogus",
+   "--eval-url",
+   "{{URL}}"
+  ]
+ },
+ {
+  "name": "gate-missing-tier",
+  "args": [
+   "gate",
+   "--eval-url",
+   "{{URL}}"
+  ]
+ },
+ {
+  "name": "flag-unknown",
+  "args": [
+   "--bogus"
+  ]
+ },
+ {
+  "name": "flag-missing-value",
+  "args": [
+   "--suite"
+  ]
+ },
+ {
+  "name": "flag-bad-int",
+  "args": [
+   "--k",
+   "abc",
+   "--suite",
+   "x"
+  ]
+ },
+ {
+  "name": "flag-bad-bool",
+  "args": [
+   "--dry-run=maybe",
+   "--suite",
+   "x"
+  ]
+ },
+ {
+  "name": "flag-equals-form",
+  "args": [
+   "--suite=pass-suite",
+   "--dry-run",
+   "--eval-url={{URL}}",
+   "--repo={{REPO}}"
+  ]
+ },
+ {
+  "name": "flag-bool-false",
+  "args": [
+   "--suite",
+   "pass-suite",
+   "--dry-run=false",
+   "--output",
+   "weird",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}"
+  ]
+ },
+ {
+  "name": "positional-ignored",
+  "args": [
+   "bogus",
+   "--suite",
+   "pass-suite",
+   "--dry-run",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}"
+  ]
+ },
+ {
+  "name": "short-help-swallows-gate",
+  "args": [
+   "-h",
+   "gate"
+  ]
+ },
+ {
+  "name": "gate-short-help",
+  "args": [
+   "gate",
+   "-h"
+  ]
+ },
+ {
+  "name": "gate-after-flags",
+  "args": [
+   "--eval-url",
+   "{{URL}}",
+   "gate",
+   "--tier",
+   "supervised"
+  ]
+ },
+ {
+  "name": "gate-positional-ignored",
+  "args": [
+   "gate",
+   "extra",
+   "--tier",
+   "supervised",
+   "--eval-url",
+   "{{URL}}"
+  ]
+ },
+ {
+  "name": "gate-unknown-flag",
+  "args": [
+   "gate",
+   "--suite",
+   "x",
+   "--tier",
+   "supervised"
+  ]
+ },
+ {
+  "name": "flag-terminator",
+  "args": [
+   "--suite",
+   "pass-suite",
+   "--dry-run",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}",
+   "--",
+   "gate"
+  ]
+ },
+ {
+  "name": "global-flags-accepted",
+  "args": [
+   "--suite",
+   "pass-suite",
+   "--dry-run",
+   "--no-deprecation-warnings",
+   "--no-monorepo",
+   "--eval-url",
+   "{{URL}}",
+   "--repo",
+   "{{REPO}}"
+  ]
+ },
+ {
+  "name": "long-help-swallows-gate",
+  "args": [
+   "--help",
+   "gate"
+  ]
+ },
+ {
+  "name": "gate-long-help",
+  "args": [
+   "gate",
+   "--help"
+  ]
+ },
+ {
+  "name": "gate-tier-empty-value",
+  "args": [
+   "gate",
+   "--tier=",
+   "--eval-url",
+   "{{URL}}"
+  ]
+ }
+]
