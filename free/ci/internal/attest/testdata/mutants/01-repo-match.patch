@@ -1,0 +1,11 @@
+--- a/internal/attest/gate.go
++++ b/internal/attest/gate.go
+@@ -53,7 +53,7 @@
+ func GateAccept(ev model.Evidence, g Gate) []Reason {
+ 	set := reasonSet{}
+ 	set.add(consistency(ev)...)
+-	if ev.RepoID == "" || ev.RepoID != g.RepoID {
++	if ev.RepoID == "" {
+ 		set.add(ReasonRepoMismatch)
+ 	}
+ 	if ev.Revision == "" || ev.Revision != g.Revision {

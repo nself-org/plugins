@@ -1,0 +1,11 @@
+--- a/internal/attest/gate.go
++++ b/internal/attest/gate.go
+@@ -123,7 +123,7 @@
+ 		}
+ 		return verifySignature(doc, ev)
+ 	case "self-reported":
+-		if g.release() || !g.AllowSelfReported {
++		if !g.AllowSelfReported {
+ 			return []Reason{ReasonSelfReportedNotAdmitted}
+ 		}
+ 		return nil

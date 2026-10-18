@@ -1,0 +1,11 @@
+--- a/internal/attest/gate.go
++++ b/internal/attest/gate.go
+@@ -101,7 +101,7 @@
+ 		}
+ 	}
+ 	for _, job := range required {
+-		if job == "" || !seen[job] {
++		if job == "" {
+ 			return []Reason{ReasonJobsMismatch}
+ 		}
+ 		if bad[job] {

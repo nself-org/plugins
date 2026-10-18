@@ -1,0 +1,11 @@
+--- a/internal/attest/verify.go
++++ b/internal/attest/verify.go
+@@ -79,7 +79,7 @@
+ 	if ev.Schema != "ci.evidence/v1" || !revisionRe.MatchString(ev.Revision) || !enumsValid(ev) {
+ 		return []Reason{ReasonInvalid}
+ 	}
+-	if !bindingConsistent(ev) || !producerConsistent(ev) || !countsConsistent(ev) {
++	if !bindingConsistent(ev) || !producerConsistent(ev) || false {
+ 		set.add(ReasonInvalid)
+ 	}
+ 	if ev.Result == "pass" && model.Verdict(ev.Checks) != "pass" {

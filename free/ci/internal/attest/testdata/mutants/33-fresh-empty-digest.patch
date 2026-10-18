@@ -1,0 +1,11 @@
+--- a/internal/attest/fresh.go
++++ b/internal/attest/fresh.go
+@@ -64,7 +64,7 @@
+ 			change = "added"
+ 		case !inNow:
+ 			change = "removed"
+-		case w == "" || h == "" || w != h:
++		case w != h:
+ 			change = "changed"
+ 		}
+ 		if change != "" {

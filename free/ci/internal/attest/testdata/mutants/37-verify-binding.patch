@@ -1,0 +1,11 @@
+--- a/internal/attest/verify.go
++++ b/internal/attest/verify.go
+@@ -107,7 +107,7 @@
+ func bindingConsistent(ev model.Evidence) bool {
+ 	switch ev.Binding.State {
+ 	case "bound":
+-		return ev.WorktreeState == "clean" && ev.TrackedChangesDigest == nil && ev.Binding.Reason == nil
++		return true
+ 	default:
+ 		return ev.Binding.Reason != nil
+ 	}

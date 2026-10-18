@@ -1,0 +1,11 @@
+--- a/internal/attest/verify.go
++++ b/internal/attest/verify.go
+@@ -76,7 +76,7 @@
+ 
+ func consistency(ev model.Evidence) []Reason {
+ 	set := reasonSet{}
+-	if ev.Schema != "ci.evidence/v1" || !revisionRe.MatchString(ev.Revision) || !enumsValid(ev) {
++	if ev.Schema != "ci.evidence/v1" || !enumsValid(ev) {
+ 		return []Reason{ReasonInvalid}
+ 	}
+ 	if !bindingConsistent(ev) || !producerConsistent(ev) || !countsConsistent(ev) {

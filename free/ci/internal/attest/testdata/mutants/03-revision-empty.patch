@@ -1,0 +1,11 @@
+--- a/internal/attest/gate.go
++++ b/internal/attest/gate.go
+@@ -56,7 +56,7 @@
+ 	if ev.RepoID == "" || ev.RepoID != g.RepoID {
+ 		set.add(ReasonRepoMismatch)
+ 	}
+-	if ev.Revision == "" || ev.Revision != g.Revision {
++	if ev.Revision != g.Revision {
+ 		set.add(ReasonRevisionMismatch)
+ 	}
+ 	if ev.PolicyDigest == "" || ev.PolicyDigest != g.PolicyDigest {

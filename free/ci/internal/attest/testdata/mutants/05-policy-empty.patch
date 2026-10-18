@@ -1,0 +1,11 @@
+--- a/internal/attest/gate.go
++++ b/internal/attest/gate.go
+@@ -59,7 +59,7 @@
+ 	if ev.Revision == "" || ev.Revision != g.Revision {
+ 		set.add(ReasonRevisionMismatch)
+ 	}
+-	if ev.PolicyDigest == "" || ev.PolicyDigest != g.PolicyDigest {
++	if ev.PolicyDigest != g.PolicyDigest {
+ 		set.add(ReasonPolicyMismatch)
+ 	}
+ 	set.add(jobReasons(ev, g.RequiredJobs)...)

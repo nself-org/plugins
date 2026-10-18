@@ -1,0 +1,11 @@
+--- a/internal/attest/gate.go
++++ b/internal/attest/gate.go
+@@ -67,7 +67,7 @@
+ 	if got, min := trust.RankTrust(ev.SourceTrust), trust.RankTrust(g.MinTrust); min < 0 || got < min {
+ 		set.add(ReasonTrustBelowMin)
+ 	}
+-	if ev.Binding.State != "bound" || ev.WorktreeState != "clean" {
++	if ev.Binding.State != "bound" {
+ 		set.add(ReasonUnbound)
+ 	}
+ 	if ev.Pipeline.Kind != "default" && ev.Pipeline.Kind != "named" {

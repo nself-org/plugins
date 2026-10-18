@@ -1,0 +1,11 @@
+--- a/internal/attest/fresh.go
++++ b/internal/attest/fresh.go
+@@ -19,7 +19,7 @@
+ 	switch {
+ 	case current.Config == "":
+ 		return freshness("unknown", "current inputs were not supplied")
+-	case ev.InputDigests.Config == "":
++	case false:
+ 		return freshness("unknown", "evidence binds no config digest")
+ 	case ev.InputDigests.Config != current.Config:
+ 		return freshness("stale", "config changed")

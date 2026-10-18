@@ -1,0 +1,11 @@
+--- a/internal/attest/gate.go
++++ b/internal/attest/gate.go
+@@ -89,7 +89,7 @@
+ // jobReasons requires every job the gate names to appear in the evidence with
+ // only passing checks; a job the revision removed or skipped is a mismatch.
+ func jobReasons(ev model.Evidence, required []string) []Reason {
+-	if len(required) == 0 {
++	if false {
+ 		return []Reason{ReasonJobsMismatch} // a gate that requires nothing cannot be satisfied
+ 	}
+ 	seen := map[string]bool{}

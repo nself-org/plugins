@@ -1,0 +1,11 @@
+--- a/internal/attest/gate.go
++++ b/internal/attest/gate.go
+@@ -47,7 +47,7 @@
+ 	Current *model.InputDigests `json:"current,omitempty"`
+ }
+ 
+-func (g Gate) release() bool { return g.Class != ClassDefault }
++func (g Gate) release() bool { return g.Class == ClassRelease }
+ 
+ // GateAccept returns every reason ev does not satisfy g.
+ func GateAccept(ev model.Evidence, g Gate) []Reason {
