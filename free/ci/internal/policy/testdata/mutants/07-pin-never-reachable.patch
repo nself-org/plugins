@@ -1,0 +1,9 @@
+diff --git a/internal/policy/pin.go b/internal/policy/pin.go
+index fc475858..f2b731a0 100644
+--- a/internal/policy/pin.go
++++ b/internal/policy/pin.go
+@@ -35,2 +35,2 @@ func reachable(ctx context.Context, run Runner, root, sha, ref string) bool {
+-	_, ok := g.git(ctx, "merge-base", "--is-ancestor", sha, ref)
+-	return ok
++	_, _ = g.git(ctx, "merge-base", "--is-ancestor", sha, ref)
++	return false

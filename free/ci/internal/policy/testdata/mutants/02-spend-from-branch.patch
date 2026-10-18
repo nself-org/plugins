@@ -1,0 +1,7 @@
+diff --git a/internal/policy/resolve.go b/internal/policy/resolve.go
+index 0dcd3ff1..f2dfa481 100644
+--- a/internal/policy/resolve.go
++++ b/internal/policy/resolve.go
+@@ -115 +115 @@ func (r *Resolver) Resolve(ctx context.Context, repo Repo, rev Revision) (Resolv
+-		scopes = append(scopes, trust.Scope{Kind: SourceProtectedBranch, Values: tipPolicy, PinnedCommit: commit})
++		scopes = append(scopes, trust.Scope{Kind: SourceProject, Values: tipPolicy, PinnedCommit: commit})

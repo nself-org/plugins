@@ -75,15 +75,21 @@ func newFixture(t *testing.T) *fixture {
 	git(t, f.work, "add", ".")
 	git(t, f.work, "commit", "-q", "-m", "base")
 	git(t, f.work, "push", "-q", "origin", "main")
-	git(t, root, "clone", "-q", f.origin, f.other)
 	return f
+}
+
+// ensureOther clones origin the first time a test needs to push as someone else.
+func (f *fixture) ensureOther() {
+	if _, err := os.Stat(f.other); err != nil {
+		git(f.t, filepath.Dir(f.other), "clone", "-q", f.origin, f.other)
+	}
 }
 
 // push commits a new .nself/ci.yaml from the second clone to origin main and
 // returns the new commit.
 func (f *fixture) push(config string) string {
 	f.t.Helper()
-	git(f.t, f.other, "pull", "-q", "--ff-only", "origin", "main")
+	f.ensureOther()
 	write(f.t, filepath.Join(f.other, ".nself/ci.yaml"), config)
 	git(f.t, f.other, "commit", "-q", "-am", "policy")
 	git(f.t, f.other, "push", "-q", "origin", "main")
