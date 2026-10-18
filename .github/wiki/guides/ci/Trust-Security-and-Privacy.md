@@ -20,7 +20,7 @@ Every container gets:
 
 - A kernel escape. A container shares the host kernel. For code you do not trust, use the sandboxed container level (gVisor) or a VM.
 - Network egress on `lan` and `internet`.
-- Disk use inside the workspace. The workspace is removed after the attempt. If the job image has no shell, the cleanup helper cannot remove job-owned files and the workspace can stay on disk (tracked as debt).
+- Disk use inside the workspace. The workspace is removed after the attempt. A pinned helper image (not the job image) removes job-owned files, so an image with no shell cannot leave them behind. If the helper fails on an otherwise clean run, the attempt fails as an infra error (E613).
 
 ## What a node must provide
 
