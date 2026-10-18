@@ -1,7 +1,7 @@
 diff --git a/internal/policy/keys_trust.go b/internal/policy/keys_trust.go
-index b9a528df..c8a5cfb1 100644
+index 57a17175..fa39466a 100644
 --- a/internal/policy/keys_trust.go
 +++ b/internal/policy/keys_trust.go
-@@ -44 +44 @@ func trustKeys() []KeySpec {
+@@ -45 +45 @@ func trustKeys() []KeySpec {
 -		{Key: "trust.machine_invoked_cap", Owner: "trust", Kind: TightenLower, Order: trustOrder, Default: "owner", Decode: orderDecoder(TightenLower, trustOrder)},
 +		{Key: "trust.machine_invoked_cap", Owner: "trust", Kind: TightenHigher, Order: trustOrder, Default: "owner", Decode: orderDecoder(TightenLower, trustOrder)},
