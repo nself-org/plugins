@@ -1,0 +1,267 @@
+package planview
+
+// Purpose: tests of the placement-plan document, the human lines, the job
+// mapping, the decision source registry and the v1 schema fixtures.
+// Constraints: no clock, no network, no disk outside testdata; goldens are
+// rewritten with `go test ./internal/planview -run TestPlanviewGolden -update`.
+
+import (
+	"context"
+	"encoding/json"
+	"flag"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/sched"
+)
+
+var update = flag.Bool("update", false, "rewrite the golden files")
+
+var fixedNow = time.Unix(1_700_000_000, 0)
+
+// fixture returns a world with the local runner and the LAN Mac of the model
+// fixtures, and three jobs: one placed, one waiting for the single slot and
+// one outside the pipeline's support.
+func fixture(t *testing.T) (sched.World, []sched.Job, sched.Result) {
+	t.Helper()
+	lc, err := LocalCapability(LocalFacts{Project: "proj", Platform: "linux/amd64", CPUs: 4, MemMB: 8192, Docker: true, Tools: []string{"go"}, Now: fixedNow})
+	if err != nil {
+		t.Fatal(err)
+	}
+	local := sched.Runner{ID: "local", Capability: lc, Decl: sched.DeclarationFromCapability(lc, false, ""), Class: "local", Location: "local", Provider: "local",
+		Avail: sched.Avail{Slots: 1, CPU: 4, MemMB: 8192}}
+	raw, err := os.ReadFile("../model/testdata/capability/valid/lan-mac.valid.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mc model.Capability
+	if err = json.Unmarshal(raw, &mc); err != nil {
+		t.Fatal(err)
+	}
+	mc.Identity.ID = "lan-mac"
+	lan := sched.Runner{ID: "lan-mac", Capability: mc, Decl: sched.DeclarationFromCapability(mc, false, ""), Class: "owned", Location: "lan", Provider: "agent",
+		Avail: sched.Avail{Slots: 1, CPU: 8, MemMB: 16384}}
+	w := sched.World{NowMs: fixedNow.UnixMilli(), Runners: []sched.Runner{local, lan}, Policy: sched.Policy{Preset: "balanced"},
+		Costs: map[string]sched.Cost{}, Previous: map[string]string{}}
+	MarkPersonalLocal(&w)
+	jobs := SchedJobs(Context{PipelineID: "default", Project: "proj", Support: []string{"linux/amd64"}, DefaultPlatform: "linux/amd64", Foreground: true}, []PlannedJob{
+		{ID: "test", Name: "test", Layer: 1, Deps: []string{"build"}, Job: model.Job{Kind: "test", Run: []string{"go", "test"}}},
+		{ID: "build", Name: "build", Layer: 0, Job: model.Job{Kind: "build", Run: []string{"go", "build"}, Secrets: []string{"project/token", "project/other"}, Timeout: "10m"}},
+		{ID: "ios", Name: "ios", Platform: "darwin/arm64", Layer: 1, Job: model.Job{Kind: "build", Run: []string{"xcodebuild"}}},
+	})
+	return w, jobs, sched.Place(w, jobs)
+}
+
+func buildDoc(t *testing.T) model.PlacementPlan {
+	w, jobs, res := fixture(t)
+	return Build(Input{Name: "default", Revision: strings.Repeat("a", 40), Trigger: "local", PolicyDigest: "p" + strings.Repeat("0", 63), WorldDigest: "w" + strings.Repeat("0", 63), World: w, Jobs: jobs, Result: res})
+}
+
+func TestPlanviewBuild(t *testing.T) {
+	d := buildDoc(t)
+	got := map[string]model.JobPlacement{}
+	for _, j := range d.Jobs {
+		got[j.ID] = j
+	}
+	if d.Schema != SchemaID || len(d.Jobs) != 3 || d.Pipeline.ID != nil || d.Pipeline.Preset != "balanced" {
+		t.Fatalf("header: %+v", d)
+	}
+	if d.Jobs[0].ID != "build" || d.Jobs[1].ID != "ios" || d.Jobs[2].ID != "test" {
+		t.Fatalf("plan order (layer, id): %v %v %v", d.Jobs[0].ID, d.Jobs[1].ID, d.Jobs[2].ID)
+	}
+	b := got["build"]
+	if b.Status != "placed" || b.Placement == nil || b.Placement.RunnerID != "local" || b.Placement.Estimate.CostConfidence != "known" || *b.Placement.Estimate.CostMicro != 0 {
+		t.Fatalf("build: %+v", b)
+	}
+	if b.Placement.Estimate.RuntimeMs != nil {
+		t.Fatal("a stand-in runtime must be null, not a number")
+	}
+	if len(b.SecretClasses) != 1 || b.SecretClasses[0] != "project" {
+		t.Fatalf("secret classes are names, de-duplicated: %v", b.SecretClasses)
+	}
+	if s := got["test"]; s.Status != "waiting" || s.Placement != nil || s.ExpectedWaitMs != nil {
+		t.Fatalf("test: %+v", s)
+	}
+	if s := got["ios"]; s.Status != "unplaceable" || len(s.Reasons) == 0 || s.Reasons[0].Code != string(model.PlatformMismatch) {
+		t.Fatalf("ios: %+v", s)
+	}
+	tot := d.Totals
+	if tot.Placed != 1 || tot.Waiting != 1 || tot.Unplaceable != 1 || tot.AwaitingApproval != 0 || tot.CostConfidence != "known" || tot.EstimatedCostMicro != 0 {
+		t.Fatalf("totals: %+v", tot)
+	}
+	if len(b.Alternatives) != 2 || b.Alternatives[0].RunnerID != "lan-mac" || b.Alternatives[1].RunnerID != "local" || b.Alternatives[0].Eligible || len(b.Alternatives[0].Reasons) == 0 {
+		t.Fatalf("alternatives by runner id with reasons: %+v", b.Alternatives)
+	}
+}
+
+func TestPlanviewNoNullArrays(t *testing.T) {
+	raw, err := json.Marshal(buildDoc(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{`"deps":null`, `"labels":null`, `"tools":null`, `"secret_classes":null`, `"reasons":null`, `"alternatives":null`, `"jobs":null`} {
+		if strings.Contains(string(raw), bad) {
+			t.Errorf("%s in document", bad)
+		}
+	}
+}
+
+func TestPlanviewDeterministic(t *testing.T) {
+	a, _ := json.Marshal(buildDoc(t))
+	b, _ := json.Marshal(buildDoc(t))
+	if string(a) != string(b) {
+		t.Fatal("two builds of one world differ")
+	}
+}
+
+func TestPlanviewGolden(t *testing.T) {
+	d := buildDoc(t)
+	doc, err := json.MarshalIndent(Explanation{PlacementPlan: d, Source: SourcePlan}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	human := strings.Join(append(Cells(d), ExplainLines(d, SourcePlan)...), "\n") + "\n"
+	for name, got := range map[string][]byte{"placement.golden.json": append(doc, '\n'), "explain.golden.txt": []byte(human)} {
+		path := filepath.Join("testdata", name)
+		if *update {
+			if err := os.WriteFile(path, got, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		want, err := os.ReadFile(path)
+		if err != nil || string(want) != string(got) {
+			t.Errorf("%s differs from the golden (rerun with -update to review): %v\n%s", name, err, got)
+		}
+	}
+}
+
+func TestPlanviewSelect(t *testing.T) {
+	d := buildDoc(t)
+	one := Select(d, func(j model.JobPlacement) bool { return j.ID == "build" })
+	if len(one.Jobs) != 1 || one.Totals.Placed != 1 || one.Totals.Waiting != 0 || one.Totals.CostConfidence != "known" {
+		t.Fatalf("select: %+v", one.Totals)
+	}
+	none := Select(d, func(model.JobPlacement) bool { return false })
+	if len(none.Jobs) != 0 || none.Totals.CostConfidence != "unknown" {
+		t.Fatalf("empty select: %+v", none.Totals)
+	}
+}
+
+func TestPlanviewSchemaFixtures(t *testing.T) {
+	schema, err := os.ReadFile("../../schemas/placement-plan.v1.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, valid := range []bool{true, false} {
+		dir := "invalid"
+		if valid {
+			dir = "valid"
+		}
+		paths, _ := filepath.Glob(filepath.Join("testdata", dir, "*.json"))
+		if len(paths) == 0 {
+			t.Fatalf("no %s fixtures", dir)
+		}
+		for _, p := range paths {
+			body, err := os.ReadFile(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = model.ValidateJSON(schema, body)
+			if valid && err != nil {
+				t.Errorf("%s: %v", p, err)
+			}
+			if !valid && (err == nil || !strings.Contains(err.Error(), "/")) {
+				t.Errorf("%s: want an error with a JSON pointer, got %v", p, err)
+			}
+		}
+	}
+	// Both the plan document and the explain wrapper are valid v1.
+	for _, v := range []any{buildDoc(t), Explanation{PlacementPlan: buildDoc(t), Source: SourcePlan}} {
+		raw, _ := json.Marshal(v)
+		if err := model.ValidateJSON(schema, raw); err != nil {
+			t.Errorf("built document: %v", err)
+		}
+	}
+}
+
+func TestPlanviewSchemaRejectsAfterBuild(t *testing.T) {
+	schema, _ := os.ReadFile("../../schemas/placement-plan.v1.schema.json")
+	d := buildDoc(t)
+	neg := int64(-1)
+	d.Jobs[0].Placement.Estimate.CostMicro = &neg
+	raw, _ := json.Marshal(d)
+	if err := model.ValidateJSON(schema, raw); err == nil || !strings.Contains(err.Error(), "cost_micro") {
+		t.Fatalf("negative cost_micro: %v", err)
+	}
+	d = buildDoc(t)
+	d.Jobs[0].Status = "ineligible"
+	raw, _ = json.Marshal(d)
+	if err := model.ValidateJSON(schema, raw); err == nil || !strings.Contains(err.Error(), "status") {
+		t.Fatalf("unknown status: %v", err)
+	}
+}
+
+func TestPlanviewSource(t *testing.T) {
+	Register(nil)
+	_, err := Lookup(context.Background(), "run1", "build")
+	var pe *Error
+	if !asError(err, &pe) || pe.Code != "E692" || !strings.Contains(pe.Message, "nself ci runs decisions") {
+		t.Fatalf("no source: %v", err)
+	}
+	Register(stubSource{})
+	defer Register(nil)
+	d, err := Lookup(context.Background(), "run1", "build")
+	if err != nil || d.Pipeline.Name != "from-source" {
+		t.Fatalf("registered source: %+v %v", d, err)
+	}
+}
+
+type stubSource struct{}
+
+func (stubSource) Decision(context.Context, string, string) (model.PlacementPlan, error) {
+	return model.PlacementPlan{Pipeline: model.PlacementPipelineRef{Name: "from-source"}}, nil
+}
+
+func asError(err error, target **Error) bool {
+	e, ok := err.(*Error)
+	*target = e
+	return ok
+}
+
+func TestPlanviewJobs(t *testing.T) {
+	jobs := SchedJobs(Context{PipelineID: "p", Project: "x", DefaultPlatform: "linux/amd64"}, []PlannedJob{
+		{ID: "b", Name: "b", Layer: 1, Job: model.Job{Isolation: "container", Secrets: []string{"deploy/a", "release/b", "none/c", "bogus/d"}, Timeout: "bad"}},
+		{ID: "a", Name: "a", Layer: 1, Platform: "darwin/arm64", Job: model.Job{Kind: "release", Requirements: &model.Requirements{Tools: []string{"xcode"}, CPU: 2}}},
+		{ID: "z", Name: "z", Layer: 0},
+	})
+	if jobs[0].ID != "z" || jobs[1].ID != "a" || jobs[2].ID != "b" {
+		t.Fatalf("order: %s %s %s", jobs[0].ID, jobs[1].ID, jobs[2].ID)
+	}
+	if got := jobs[1].Pipeline.Support; len(got) != 2 || got[0] != "darwin/arm64" || got[1] != "linux/amd64" {
+		t.Fatalf("support defaults to the platforms the jobs use: %v", got)
+	}
+	b := jobs[2]
+	if b.TimeoutMs != DefaultTimeoutMs || len(b.Requirements.Tools) != 1 || b.Requirements.Tools[0] != "docker" || b.Pipeline.Band != "normal" {
+		t.Fatalf("defaults: %+v", b)
+	}
+	if len(b.SecretClasses) != 2 || b.SecretClasses[0] != "deploy" || b.SecretClasses[1] != "release" {
+		t.Fatalf("classes keep known names only: %v", b.SecretClasses)
+	}
+	if !jobs[1].Pipeline.Release || jobs[1].Requirements.CPU != 2 || jobs[1].MatrixKey != "darwin/arm64" {
+		t.Fatalf("release job: %+v", jobs[1])
+	}
+}
+
+func TestPlanviewLocalCapability(t *testing.T) {
+	c, err := LocalCapability(LocalFacts{Project: "p", Platform: "linux/amd64", CPUs: 1, MemMB: 1024, Now: fixedNow})
+	if err != nil {
+		t.Fatalf("local capability must be a valid ci.runner-capability/v1: %v", err)
+	}
+	if err := model.ValidateCapability(c); err != nil {
+		t.Fatal(err)
+	}
+}
