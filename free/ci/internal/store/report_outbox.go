@@ -29,6 +29,7 @@ func init() {
 const (
 	OutboxReserved   = "reserved"   // seq taken at run start, no payload yet
 	OutboxPending    = "pending"    // payload ready, not posted
+	OutboxPosting    = "posting"    // claimed by one process that is delivering it
 	OutboxPosted     = "posted"     // delivered
 	OutboxSuperseded = "superseded" // a newer seq was posted first
 )
@@ -88,17 +89,53 @@ func (s *Store) OutboxMayPost(ctx context.Context, revision, statusContext strin
 	return ok, err
 }
 
+// OutboxClaim takes the right to deliver seq: it fails (and marks seq
+// superseded) when a newer seq is already posted or being posted, so two
+// processes never post out of order. A claim left by a crashed process is
+// taken over by the next claimant of the same seq.
+func (s *Store) OutboxClaim(ctx context.Context, revision, statusContext string, seq int64) (bool, error) {
+	ok := true
+	err := s.write(ctx, func(tx *sql.Tx) error {
+		var newer int
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq>? AND state IN (?,?)", revision, statusContext, seq, OutboxPosted, OutboxPosting).Scan(&newer); err != nil {
+			return err
+		}
+		if newer > 0 {
+			ok = false
+			_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state IN (?,?,?)", OutboxSuperseded, revision, statusContext, seq, OutboxReserved, OutboxPending, OutboxPosting)
+			return err
+		}
+		res, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state IN (?,?)", OutboxPosting, revision, statusContext, seq, OutboxPending, OutboxPosting)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			ok = false
+		}
+		return nil
+	})
+	return ok, err
+}
+
+// OutboxRelease gives a claim back after a failed delivery.
+func (s *Store) OutboxRelease(ctx context.Context, revision, statusContext string, seq int64) error {
+	return s.write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state=?", OutboxPending, revision, statusContext, seq, OutboxPosting)
+		return err
+	})
+}
+
 // OutboxPosted records a delivery.
 func (s *Store) OutboxPosted(ctx context.Context, revision, statusContext string, seq int64) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=?,payload_json=NULL WHERE revision=? AND context=? AND seq=? AND state=?", OutboxPosted, revision, statusContext, seq, OutboxPending)
+		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=?,payload_json=NULL WHERE revision=? AND context=? AND seq=? AND state IN (?,?)", OutboxPosted, revision, statusContext, seq, OutboxPending, OutboxPosting)
 		return err
 	})
 }
 
 // OutboxUnposted lists deliverable entries, oldest first.
 func (s *Store) OutboxUnposted(ctx context.Context) ([]OutboxEntry, error) {
-	rows, err := s.readers.QueryContext(ctx, "SELECT revision,context,seq,state,coalesce(payload_json,x''),created_at FROM outbox WHERE state=? ORDER BY created_at,seq", OutboxPending)
+	rows, err := s.readers.QueryContext(ctx, "SELECT revision,context,seq,state,coalesce(payload_json,x''),created_at FROM outbox WHERE state IN (?,?) ORDER BY created_at,seq", OutboxPending, OutboxPosting)
 	if err != nil {
 		return nil, err
 	}

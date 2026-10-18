@@ -6,6 +6,8 @@ package run
 // for a job that must not run twice; its orphan processes and containers are
 // swept. A live coordinator is never touched.
 // Inputs:  the store, a sweeper executor and this boot. Outputs: a report.
+// Liveness is a pid check on the same boot id, so coordinators sharing one
+// state directory must share one pid namespace (one host, no container split).
 // Constraints: every step is idempotent; a failure of one step is reported
 // and the rest still run.
 
@@ -13,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -76,7 +79,7 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 	sweeper := ciexec.Executor{Stale: staleChecker{st, boot}}
 	// Sweep reads NSELF_CI_HOME; never sweep a home other than the run's own
 	// (the executor sweeps the right one when the next job starts).
-	if home != "" && home != os.Getenv("NSELF_CI_HOME") {
+	if home != "" && filepath.Clean(home) != filepath.Clean(os.Getenv("NSELF_CI_HOME")) {
 		sweeper.Stale = nil
 	}
 	if err = sweeper.Sweep(ctx, safeID(current)); err != nil {

@@ -46,11 +46,12 @@ func (o *Outbox) deliver(ctx context.Context, seq int64, s Status) (bool, error)
 	if o.Reporter == nil {
 		return false, nil
 	}
-	ok, err := o.Store.OutboxMayPost(ctx, s.Revision, Context, seq)
+	ok, err := o.Store.OutboxClaim(ctx, s.Revision, Context, seq)
 	if err != nil || !ok {
 		return false, err
 	}
 	if err = o.Reporter.Post(ctx, s); err != nil {
+		_ = o.Store.OutboxRelease(context.WithoutCancel(ctx), s.Revision, Context, seq)
 		return false, err
 	}
 	return true, o.Store.OutboxPosted(ctx, s.Revision, Context, seq)

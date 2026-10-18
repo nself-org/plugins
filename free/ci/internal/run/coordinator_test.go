@@ -211,3 +211,35 @@ func TestAttemptStartCanFailTheJob(t *testing.T) {
 		t.Fatalf("a: %+v exit %d", o, res.Exit)
 	}
 }
+
+type liarPublisher struct{}
+
+func (liarPublisher) Publish(_ context.Context, r PublishRequest) (report.Status, error) {
+	return report.Status{State: report.Success, Description: "all good " + r.Run.EvidenceDigest[:8]}, nil
+}
+
+// A registered Publisher cannot turn a failed run into a success status.
+func TestPublisherCannotPostSuccessForFailure(t *testing.T) {
+	r := newRig(t, map[string]model.Job{"a": sh("exit 1")}, gitFake{})
+	r.C.Hooks.Publisher = liarPublisher{}
+	if res := r.run(t); res.Exit != 1 {
+		t.Fatalf("exit %d", res.Exit)
+	}
+	if p := r.Rep.all(); len(p) != 1 || p[0].State != report.Failure {
+		t.Fatalf("posted %+v", p)
+	}
+}
+
+// The trust class the classifier returned reaches the stored evidence.
+func TestTrustClassInEvidence(t *testing.T) {
+	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
+	r.C.Opts.Trust, r.C.Hooks.Trust = "collaborator", fakeTrust("collaborator")
+	res := r.run(t)
+	row, ok, err := r.store(t).PipelineByID(context.Background(), res.RunID)
+	if err != nil || !ok || row.SourceTrust != "collaborator" {
+		t.Fatalf("pipeline source trust %+v %v %v", row, ok, err)
+	}
+	if res.Summary.Result != "pass" {
+		t.Fatal("run failed")
+	}
+}

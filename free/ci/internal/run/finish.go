@@ -29,6 +29,7 @@ type statusPost struct {
 	Reason      string // why nothing will be posted ("" when posting)
 	Seq         int64
 	Outbox      *report.Outbox
+	Notes       []string // problems found while preparing (drain failures)
 }
 
 type finishIn struct {
@@ -64,7 +65,9 @@ func (c *Coordinator) prepareStatus(ctx context.Context, st *store.Store, rev Re
 		rep = c.Reporter
 	}
 	p := statusPost{Reporter: rep, Owner: owner, Repo: repo, Outbox: &report.Outbox{Store: st, Reporter: rep}}
-	_, _ = p.Outbox.Drain(ctx)
+	if _, err := p.Outbox.Drain(ctx); err != nil {
+		p.Notes = append(p.Notes, "earlier status not delivered (kept for the next run): "+firstLineOf(err.Error()))
+	}
 	if rev.Dirty {
 		p.Reporter, p.Reason = nil, report.ReasonUnbound
 		return p
@@ -115,9 +118,12 @@ func (c *Coordinator) conclude(f finishIn) Result {
 		trig = "local"
 	}
 	ev, digest, err := buildEvidence(evidenceInput{RunID: f.RunID, Project: c.Opts.Root, Revision: f.Rev.SHA, ConfigDigest: c.ConfigDigest,
-		PolicyDigest: f.Policy.Digest, Dirty: f.Rev.Dirty, Cancelled: f.Cancelled, Pipeline: c.Plan.Pipeline, Selection: c.Plan.Selection,
+		PolicyDigest: f.Policy.Digest, Source: f.Source, Dirty: f.Rev.Dirty, Cancelled: f.Cancelled, Pipeline: c.Plan.Pipeline, Selection: c.Plan.Selection,
 		Trigger: trig, Jobs: f.Jobs, Start: f.Start, End: time.Now()})
-	var notes []string
+	notes := append([]string(nil), f.Post.Notes...)
+	for _, e := range f.Recovered.Errors {
+		notes = append(notes, "recovery: "+firstLineOf(e.Error()))
+	}
 	if f.Recovered.Lost > 0 {
 		notes = append(notes, fmt.Sprintf("recovered %d attempt(s) of a dead coordinator (%d retryable, %d need an operator)", f.Recovered.Lost, f.Recovered.Retryable, f.Recovered.NeedsOperator))
 	}
@@ -184,6 +190,12 @@ func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, 
 		}
 	}
 	s.Owner, s.Repo, s.Revision = p.Owner, p.Repo, f.Rev.SHA
+	if s.State == report.Success && ev.Result != "pass" { // a publisher never turns a failed run into success
+		s.State = report.Failure
+		if ev.Result != "fail" {
+			s.State = report.Error
+		}
+	}
 	delivered, err := p.Outbox.Complete(ctx, p.Seq, s)
 	switch {
 	case err != nil:

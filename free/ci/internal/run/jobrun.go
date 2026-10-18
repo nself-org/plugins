@@ -10,11 +10,9 @@ package run
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"sync"
 
-	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -92,7 +90,13 @@ func (rs *runState) runAttempt(ctx context.Context, i int, pj plan.PlannedJob, o
 		return rs.markOutcome(o, m)
 	}
 	job := &rs.mp.Jobs[i]
-	adm, err := CreateAttempt(WithSession(jctx, rs.sess), AttemptSpec{Pipeline: rs.mp, Job: job, N: 1, Foreground: true})
+	spec := AttemptSpec{Pipeline: rs.mp, Job: job, N: 1, Foreground: true}
+	if aid, e := AttemptIDFor(WithSession(jctx, rs.sess), spec); e == nil { // a cancel intent finds the attempt while it waits for admission
+		rs.mu.Lock()
+		rs.attempts[aid] = pj.ID
+		rs.mu.Unlock()
+	}
+	adm, err := CreateAttempt(WithSession(jctx, rs.sess), spec)
 	if err != nil {
 		var ar *AdmissionRefused
 		switch {
@@ -162,8 +166,12 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 }
 
 func (rs *runState) pass(id string, o JobOutcome) JobOutcome {
-	if _, err := rs.settle(id, "running", "finalizing", ""); err != nil {
+	mid, err := rs.settle(id, "running", "finalizing", "")
+	if err != nil {
 		return failed(o, err)
+	}
+	if mid == "cancelled" { // a cancel intent won the move to finalizing
+		return cancelled(o, "", "cancelled by the operator")
 	}
 	to, err := rs.settle(id, "finalizing", "passed", "")
 	if err != nil {
@@ -220,89 +228,4 @@ func (rs *runState) endEarly(ctx context.Context, pj plan.PlannedJob, id string,
 		}
 	}
 	return failed(o, err)
-}
-
-type prepared struct {
-	job      model.Job
-	services *ServicesRequest
-}
-
-// prepare runs the start hooks, restores the cache and starts services.
-func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, error) {
-	p := prepared{job: info.Job}
-	env := map[string]string{}
-	for k, v := range info.Job.Env {
-		env[k] = v
-	}
-	for _, h := range rs.hooks.AttemptStarts {
-		if err := h.AttemptStart(ctx, *info); err != nil {
-			return p, err
-		}
-	}
-	if rs.hooks.Cache != nil {
-		setup, err := rs.hooks.Cache.Before(ctx, *info)
-		if err != nil {
-			return p, err
-		}
-		for k, v := range setup.Env {
-			env[k] = v
-		}
-		if len(setup.Mounts) > 0 {
-			b, _ := json.Marshal(setup.Mounts)
-			env["NSELF_CI_MOUNTS"] = string(b)
-		}
-	}
-	if names := append(append([]string(nil), info.Job.NeedsServices...), rs.c.Opts.Services...); len(names) > 0 {
-		if rs.hooks.Services == nil {
-			return p, fail(CodeOptions, "job needs services %v and no services hook is registered", names)
-		}
-		req := ServicesRequest{RunID: info.RunID, Names: names}
-		up, err := rs.hooks.Services.Up(ctx, req)
-		if err != nil {
-			return p, err
-		}
-		p.services = &req
-		for k, v := range up.Env {
-			env[k] = v
-		}
-	}
-	if info.IdempotencyKey != "" {
-		env["NSELF_CI_IDEMPOTENCY_KEY"] = info.IdempotencyKey
-	}
-	env["NSELF_CI_RUN_ID"] = info.RunID
-	p.job.Env = env
-	if rs.c.Opts.Container {
-		img := ""
-		if p.job.Container != nil {
-			img = p.job.Container.Image
-		}
-		if img == "" && rs.hooks.Image != nil {
-			var err error
-			if img, err = rs.hooks.Image.Image(ctx, *info); err != nil {
-				return p, err
-			}
-		}
-		if img == "" {
-			return p, fail(CodeOptions, "--container needs a pinned toolchain image and none is registered")
-		}
-		p.job.Isolation, p.job.Container = "container", &model.ContainerConfig{Image: img}
-	}
-	return p, nil
-}
-
-func (rs *runState) unprepare(info AttemptInfo, p prepared) {
-	if p.services != nil && rs.hooks.Services != nil {
-		bg, done := background(context.Background())
-		defer done()
-		_ = rs.hooks.Services.Down(bg, *p.services)
-	}
-}
-
-func (rs *runState) spec(ctx context.Context, pj plan.PlannedJob, job model.Job, id string) ciexec.JobSpec {
-	s := ciexec.JobSpec{AttemptID: id, CoordinatorID: safeID(rs.sess.Coordinator.ID), Job: job, Command: job.Run,
-		SourceDir: rs.c.Opts.Root, Home: rs.sess.Home, Network: model.NetworkScope(rs.c.Opts.Network)}
-	if rs.c.Opts.Timeout > 0 {
-		s.Timeout = rs.c.Opts.Timeout
-	}
-	return s
 }

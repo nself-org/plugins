@@ -97,3 +97,32 @@ func TestPipelineReads(t *testing.T) {
 		t.Fatalf("PendingCancels: %v %v", ids, err)
 	}
 }
+
+// TestOutboxClaimBlocksOlderSeq: while the newer seq is being posted (claimed,
+// not yet posted) the older seq cannot be claimed, so no process posts out of
+// order; a released claim can be taken again.
+func TestOutboxClaimBlocksOlderSeq(t *testing.T) {
+	s, ctx := testStore(t), context.Background()
+	a, _ := s.OutboxReserve(ctx, "rev", "nself-ci")
+	b, _ := s.OutboxReserve(ctx, "rev", "nself-ci")
+	for _, seq := range []int64{a, b} {
+		if err := s.OutboxReady(ctx, "rev", "nself-ci", seq, []byte(`{}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if ok, err := s.OutboxClaim(ctx, "rev", "nself-ci", b); err != nil || !ok {
+		t.Fatalf("claim newest: %v %v", ok, err)
+	}
+	if ok, _ := s.OutboxClaim(ctx, "rev", "nself-ci", a); ok {
+		t.Fatal("older seq claimed while the newer is posting")
+	}
+	if err := s.OutboxRelease(ctx, "rev", "nself-ci", b); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := s.OutboxClaim(ctx, "rev", "nself-ci", b); !ok {
+		t.Fatal("released claim could not be retaken")
+	}
+	if err := s.OutboxPosted(ctx, "rev", "nself-ci", b); err != nil {
+		t.Fatal(err)
+	}
+}

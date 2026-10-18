@@ -22,13 +22,13 @@ import (
 
 // evidenceInput gathers what BuildEvidence needs.
 type evidenceInput struct {
-	RunID, Project, Revision, ConfigDigest, PolicyDigest string
-	Dirty, Cancelled                                     bool
-	Pipeline                                             model.PipelineRef
-	Selection                                            model.Selection
-	Trigger                                              model.Trigger
-	Jobs                                                 []JobOutcome
-	Start, End                                           time.Time
+	RunID, Project, Revision, ConfigDigest, PolicyDigest, Source string
+	Dirty, Cancelled                                             bool
+	Pipeline                                                     model.PipelineRef
+	Selection                                                    model.Selection
+	Trigger                                                      model.Trigger
+	Jobs                                                         []JobOutcome
+	Start, End                                                   time.Time
 }
 
 func checkResult(o JobOutcome) model.CheckResult {
@@ -52,7 +52,7 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 	sort.Slice(in.Jobs, func(i, j int) bool { return in.Jobs[i].ID < in.Jobs[j].ID })
 	e := model.Evidence{
 		Schema: "ci.evidence/v1", Revision: in.Revision, RepoID: shortDigest(in.Project), RunID: in.RunID,
-		Pipeline: in.Pipeline, Trigger: in.Trigger, SourceTrust: "owner", PolicyDigest: in.PolicyDigest,
+		Pipeline: in.Pipeline, Trigger: in.Trigger, SourceTrust: model.TrustClass(firstNonEmpty(in.Source, "owner")), PolicyDigest: in.PolicyDigest,
 		InputDigests: model.InputDigests{Config: in.ConfigDigest, Lockfiles: []model.DigestRef{}, Generated: []model.DigestRef{}},
 		Runner:       model.RunnerRef{ID: "local", Provider: "local", Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process"},
 		Producer:     model.Producer{Kind: "coordinator-recorded", Version: "1"},

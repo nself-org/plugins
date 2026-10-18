@@ -150,6 +150,10 @@ func runCancel(args []string) int {
 	if err != nil {
 		return exitForError(err)
 	}
+	if n == 0 {
+		fmt.Fprintf(os.Stderr, "E626: run %s has no live attempt to cancel (finished, or between jobs)\n", args[0])
+		return 1
+	}
 	fmt.Printf("cancel requested for %d attempt(s) of %s\n", n, args[0])
 	return 0
 }

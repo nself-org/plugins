@@ -23,7 +23,6 @@ import (
 	"sort"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/config"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -55,7 +54,6 @@ var bare struct {
 	opts                  RunOptions
 	services              multiFlag
 	repo, cfg, base       string
-	timeout               time.Duration
 	jsonOut, stream, help bool
 }
 
@@ -146,6 +144,7 @@ func parseBare(args []string) (RunOptions, error) {
 		}
 	}
 	bare.opts, bare.services, bare.help = RunOptions{}, nil, false
+	bare.repo, bare.cfg, bare.base = "", "", ""
 	bareFlags.SetOutput(os.Stderr)
 	if err := bareFlags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
