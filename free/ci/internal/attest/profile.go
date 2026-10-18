@@ -148,6 +148,11 @@ func (p Profile) privateHost(host string) bool {
 			return true
 		}
 	}
+	for x := range p.aliases { // known runner ids
+		if strings.EqualFold(strings.TrimSuffix(x, "."), h) {
+			return true
+		}
+	}
 	return false
 }
 

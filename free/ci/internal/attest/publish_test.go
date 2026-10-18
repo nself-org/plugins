@@ -373,3 +373,27 @@ func TestProfileText_ConfiguredUsersDoNotFillTheCap(t *testing.T) {
 		t.Errorf("learned user dropped: %q", got)
 	}
 }
+
+func TestProfileURL_RunnerAliasHostDropped(t *testing.T) {
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public}).WithRunner("runner.example.org")
+	if got := p.URL("https://runner.example.org/log"); got != "" {
+		t.Fatalf("runner host published: %q", got)
+	}
+}
+
+// Many distinct user@host names are bounded: past the cap the text is redacted whole.
+func TestProfileText_ManyUserAtHostIsBounded(t *testing.T) {
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public})
+	var b strings.Builder
+	for i := 0; i < 20000; i++ {
+		fmt.Fprintf(&b, "u%07d@example.org ", i)
+	}
+	start := time.Now()
+	out := p.Text(b.String())
+	if d := time.Since(start); d > 10*time.Second {
+		t.Fatalf("took %v", d)
+	}
+	if strings.Contains(out, "u0000007") {
+		t.Fatal("user names survived")
+	}
+}

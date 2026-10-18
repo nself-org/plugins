@@ -153,6 +153,15 @@ func learnUsers(s string) (users []string, over bool) {
 				return users, true
 			}
 		}
+		for _, sub := range userHostRe.FindAllStringSubmatch(s, -1) {
+			if sub[1] == "git" {
+				continue
+			}
+			var ok bool
+			if users, ok = addUser(users, sub[1]); !ok {
+				return users, true
+			}
+		}
 		d := unescapeLoose(s)
 		if d == s {
 			break
