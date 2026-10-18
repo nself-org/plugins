@@ -427,7 +427,10 @@
       "catalog": {
         "maturity": "implemented",
         "requires": {
-          "nself": ">=1.0.9"
+          "nself": ">=1.0.9",
+          "plugins": [
+            "audit-log"
+          ]
         },
         "schema": "np_audit_analytics",
         "service_kind": "compose"
@@ -6084,6 +6087,7 @@
         "entryPoint": "binary",
         "language": "go"
       },
+      "installable": false,
       "language": "go",
       "license": "MIT",
       "minNselfVersion": "1.1.0",

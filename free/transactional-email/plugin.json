@@ -125,5 +125,6 @@
     "email.delivered",
     "email.failed",
     "email.sent"
-  ]
+  ],
+  "installable": false
 }

@@ -52,3 +52,10 @@ Multi-tenant master controller for nCloud. Manages N isolated nSelf project inst
 ```bash
 nself plugin install tenant-controller
 ```
+
+## Limitations of the container form
+
+- Disabled by default: set `NSELF_CONTROLLER_ENABLED=true` (or `NSELF_FLAG_MULTI_TENANT_CONTROLLER=true`) plus `NSELF_CONTROLLER_ADMIN_TOKEN`, `NSELF_CONTROLLER_BASE_DOMAIN`, `HASURA_GRAPHQL_ENDPOINT` and `HASURA_GRAPHQL_ADMIN_SECRET`.
+- The controller writes the project nginx config to `NGINX_CONF_PATH` and reloads nginx. The image carries no nginx and the fragment mounts no shared nginx directory, so creating a project fails at the nginx step until a shared config directory and reload path are wired (tracked in hq quality debt).
+- The `nself_controller` role is `NOLOGIN`: the daemon connects with `DATABASE_URL` and never as this role.
+- Installs from before manifest v2 (schema `nself_controller` with its own ledger) are renamed in place, but a ledger without a checksum column must be adopted once with `migrate.Baseline`; no such install is known.

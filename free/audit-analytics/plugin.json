@@ -100,7 +100,10 @@
   "port": 3218,
   "repository": "https://github.com/nself-org/plugins",
   "requires": {
-    "nself": ">=1.0.9"
+    "nself": ">=1.0.9",
+    "plugins": [
+      "audit-log"
+    ]
   },
   "rest_routes": [
     {
