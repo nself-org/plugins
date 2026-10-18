@@ -36,11 +36,13 @@ func (f *fakeRunner) Query(_ context.Context, binary string, args ...string) ([]
 }
 
 const (
-	dockerRootful   = `{"ServerVersion":"27.0.1","SecurityOptions":["name=seccomp,profile=builtin"],"Runtimes":{"runc":{},"runsc":{}}}`
-	dockerRootless  = `{"ServerVersion":"27.0.1","SecurityOptions":["name=seccomp,profile=builtin","name=rootless"],"Runtimes":{"runc":{}}}`
-	dockerUserns    = `{"ServerVersion":"27.0.1","SecurityOptions":["name=userns"],"Runtimes":{"runc":{}}}`
-	podmanRootless  = `{"host":{"security":{"rootless":true},"ociRuntime":{"name":"crun"}},"version":{"Version":"5.2.0"}}`
-	podmanRootfulFx = `{"host":{"security":{"rootless":false},"ociRuntime":{"name":"crun"}},"version":{"Version":"5.2.0"}}`
+	dockerRootful   = `{"ServerVersion":"27.0.1","MemoryLimit":true,"PidsLimit":true,"CPUCfsQuota":true,"SecurityOptions":["name=seccomp,profile=builtin"],"Runtimes":{"runc":{},"runsc":{}}}`
+	dockerRootless  = `{"ServerVersion":"27.0.1","MemoryLimit":true,"PidsLimit":true,"CPUCfsQuota":true,"SecurityOptions":["name=seccomp,profile=builtin","name=rootless"],"Runtimes":{"runc":{}}}`
+	dockerUserns    = `{"ServerVersion":"27.0.1","MemoryLimit":true,"PidsLimit":true,"CPUCfsQuota":true,"SecurityOptions":["name=userns"],"Runtimes":{"runc":{}}}`
+	podmanRootless  = `{"host":{"security":{"rootless":true},"ociRuntime":{"name":"crun"},"cgroupVersion":"v2","cgroupControllers":["cpu","memory","pids"]},"version":{"Version":"5.2.0"}}`
+	dockerNoLimits  = `{"ServerVersion":"27.0.1","SecurityOptions":["name=rootless"],"MemoryLimit":true,"PidsLimit":false,"CPUCfsQuota":true,"Runtimes":{"runc":{}}}`
+	podmanNoCgroups = `{"host":{"security":{"rootless":true},"ociRuntime":{"name":"crun"},"cgroupVersion":"v2","cgroupControllers":["memory"]},"version":{"Version":"5.2.0"}}`
+	podmanRootfulFx = `{"host":{"security":{"rootless":false},"ociRuntime":{"name":"crun"},"cgroupVersion":"v2","cgroupControllers":["cpu","memory","pids"]},"version":{"Version":"5.2.0"}}`
 )
 
 func TestProbeTable(t *testing.T) {
@@ -59,6 +61,8 @@ func TestProbeTable(t *testing.T) {
 		"rootless podman, separated node":                {map[string]string{"podman": podmanRootless}, true, "container", "", "podman"},
 		"rootful podman, separated node":                 {map[string]string{"podman": podmanRootfulFx}, true, "", isolation.ReasonRootful, ""},
 		"rootful docker then rootless podman, separated": {map[string]string{"docker": dockerRootful, "podman": podmanRootless}, true, "container", "", "podman"},
+		"docker without a pids controller":               {map[string]string{"docker": dockerNoLimits}, false, "", isolation.ReasonLimits, ""},
+		"podman without delegated cgroup controllers":    {map[string]string{"podman": podmanNoCgroups}, true, "", isolation.ReasonLimits, ""},
 		"unparseable":                                    {map[string]string{"docker": "not json"}, false, "", isolation.ReasonProbeFailed, ""},
 	} {
 		t.Run(name, func(t *testing.T) {

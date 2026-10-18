@@ -36,12 +36,18 @@ type Facts struct {
 	Userns   bool
 	Runtimes []string
 	Server   string
+	// Limits is true when the runtime enforces pids, memory and cpu limits (cgroup controllers present
+	// and delegated). Without them docker and podman start the container and silently drop the flags.
+	Limits bool
 }
 
 type dockerInfo struct {
 	ServerVersion   string                     `json:"ServerVersion"`
 	SecurityOptions []string                   `json:"SecurityOptions"`
 	Runtimes        map[string]json.RawMessage `json:"Runtimes"`
+	MemoryLimit     bool                       `json:"MemoryLimit"`
+	PidsLimit       bool                       `json:"PidsLimit"`
+	CPUCfsQuota     bool                       `json:"CPUCfsQuota"`
 }
 
 type podmanInfo struct {
@@ -52,6 +58,8 @@ type podmanInfo struct {
 		OCIRuntime struct {
 			Name string `json:"name"`
 		} `json:"ociRuntime"`
+		CgroupVersion     string   `json:"cgroupVersion"`
+		CgroupControllers []string `json:"cgroupControllers"`
 	} `json:"host"`
 	Version struct {
 		Version string `json:"Version"`
@@ -61,7 +69,7 @@ type podmanInfo struct {
 // probeRuntime tries docker, then podman, and keeps the first runtime the node may use.
 func probeRuntime(ctx context.Context, r Runner, separated bool) (Facts, isolation.Availability) {
 	reason := isolation.ReasonRuntimeMissing
-	rank := map[string]int{isolation.ReasonRuntimeMissing: 0, isolation.ReasonProbeFailed: 1, isolation.ReasonRootful: 2}
+	rank := map[string]int{isolation.ReasonRuntimeMissing: 0, isolation.ReasonProbeFailed: 1, isolation.ReasonRootful: 2, isolation.ReasonLimits: 3}
 	note := func(next string) {
 		if rank[next] > rank[reason] {
 			reason = next
@@ -77,6 +85,10 @@ func probeRuntime(ctx context.Context, r Runner, separated bool) (Facts, isolati
 		}
 		if separated && !facts.Rootless {
 			note(isolation.ReasonRootful)
+			continue
+		}
+		if !facts.Limits {
+			note(isolation.ReasonLimits) // a fork bomb or memory hog would not be stopped
 			continue
 		}
 		return facts, isolation.Availability{Level: "container", Facts: facts.toMap()}
@@ -96,6 +108,7 @@ func inspectRuntime(ctx context.Context, r Runner, binary string) (Facts, error)
 			return Facts{}, err
 		}
 		f.Rootless, f.Server = info.Host.Security.Rootless, info.Version.Version
+		f.Limits = info.Host.CgroupVersion == "v2" && hasAll(info.Host.CgroupControllers, "cpu", "memory", "pids")
 		if info.Host.OCIRuntime.Name != "" {
 			f.Runtimes = []string{info.Host.OCIRuntime.Name}
 		}
@@ -106,6 +119,7 @@ func inspectRuntime(ctx context.Context, r Runner, binary string) (Facts, error)
 		return Facts{}, err
 	}
 	f.Server = info.ServerVersion
+	f.Limits = info.MemoryLimit && info.PidsLimit && info.CPUCfsQuota
 	for _, opt := range info.SecurityOptions {
 		switch {
 		case strings.Contains(opt, "name=rootless"):
@@ -121,7 +135,20 @@ func inspectRuntime(ctx context.Context, r Runner, binary string) (Facts, error)
 	return f, nil
 }
 
+func hasAll(have []string, want ...string) bool {
+	for _, w := range want {
+		found := false
+		for _, h := range have {
+			found = found || h == w
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 func (f Facts) toMap() map[string]string {
 	return map[string]string{"runtime": f.Binary, "rootless": strconv.FormatBool(f.Rootless), "userns": strconv.FormatBool(f.Userns),
-		"runtimes": strings.Join(f.Runtimes, ","), "server_version": f.Server}
+		"limits": strconv.FormatBool(f.Limits), "runtimes": strings.Join(f.Runtimes, ","), "server_version": f.Server}
 }
