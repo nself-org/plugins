@@ -440,3 +440,19 @@ func TestRegressNamedURLSetsSurviveTheBudget(t *testing.T) {
 		t.Fatalf("userinfo form survived: %.60q", got)
 	}
 }
+
+// Round 7.
+func TestRegressDotNetQuoteAndANSICAndBarePEMTail(t *testing.T) {
+	r := New()
+	mustRegister(t, r, `ab"cd+ef`, "ab\x01cd+ef", "-----BEGIN "+"A-----body-----END "+"A-----SECRETTAIL123")
+	for _, in := range []string{`ab"cd+ef`, `$'ab\001cd+ef'`} {
+		if got := run(r, "x "+in+" y"); strings.Contains(got, "cd") || !strings.Contains(got, Placeholder) {
+			t.Errorf("%q survived: %q", in, got)
+		}
+	}
+	chunks := []string{"-----BEGIN " + "A-----", "body-----END " + "A-----SECRETTAIL123"}
+	whole := run(r, chunks[0]+chunks[1])
+	if split := run(r, chunks...); strings.Contains(split, "SECRETTAIL") || collapse(split) != collapse(whole) {
+		t.Errorf("split %q vs whole %q", split, whole)
+	}
+}

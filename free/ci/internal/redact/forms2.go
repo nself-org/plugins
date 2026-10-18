@@ -8,6 +8,7 @@ package redact
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 )
 
@@ -18,6 +19,25 @@ func shellForms(v []byte) [][]byte {
 	var out [][]byte
 	if bytes.IndexByte(v, '\'') >= 0 {
 		out = append(out, bytes.ReplaceAll(v, []byte("'"), []byte(`'\''`)))
+	}
+	if bytes.ContainsFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }) { // bash $'...' tracing
+		var a bytes.Buffer
+		for _, c := range v {
+			switch {
+			case c == '\n':
+				a.WriteString(`\n`)
+			case c == '\t':
+				a.WriteString(`\t`)
+			case c < 0x20 || c == 0x7f:
+				fmt.Fprintf(&a, `\%03o`, c)
+			case c == '\'' || c == '\\':
+				a.WriteByte('\\')
+				a.WriteByte(c)
+			default:
+				a.WriteByte(c)
+			}
+		}
+		out = append(out, a.Bytes())
 	}
 	var q bytes.Buffer
 	for _, c := range v {

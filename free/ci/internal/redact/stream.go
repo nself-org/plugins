@@ -9,6 +9,16 @@ package redact
 // a PEM body is dropped as it streams, never buffered; one Filter belongs to one
 // stream and is not safe for concurrent use (Wrap adds the lock). Chunking never
 // changes the output, except that two adjacent masks may print as one or two.
+// Known limits (accepted, P7-TRUST-19 review): values a job transforms in ways
+// no listed encoder produces (reversed, xor, characters inserted other than line
+// breaks); base64 wrapped narrower than ~32 columns; a token longer than its
+// rule's max run; a URL form per distinct reserved-character set of the common
+// encoders (named sets plus every subset for values with few reserved
+// characters, fewer optional subsets for long values); a value that embeds a PEM
+// block is matched by its head and tail (each >= MinValueLen) because the body
+// is dropped unseen, so a partial head can over-mask the text before a header
+// differently per chunking; small writes rescan the carry-over window (bounded by
+// 8 KiB); a Register batch costs one matcher rebuild, paid by the next write.
 
 import (
 	"errors"

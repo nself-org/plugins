@@ -68,6 +68,7 @@ func lineValues(v []byte) [][]byte {
 func pemParts(v []byte) [][]byte {
 	var out [][]byte
 	rest := v
+	parsed := false
 	for {
 		i := bytes.Index(rest, pemBeg)
 		if i < 0 {
@@ -84,9 +85,10 @@ func pemParts(v []byte) [][]byte {
 		if !closed {
 			return out
 		}
+		parsed = true
 		rest = rest[end:]
 	}
-	if len(out) > 0 && len(rest) >= MinValueLen {
+	if parsed && len(rest) >= MinValueLen {
 		out = append(out, append([]byte(nil), rest...))
 	}
 	return out
@@ -199,15 +201,14 @@ func jsonInner(v []byte, html, ascii, upper, short bool) []byte {
 }
 
 // jsonDotNet is System.Text.Json's default: ASCII-safe, with + & < > ' ` written
-// as uppercase \u00XX and everything else as plain JSON.
+// (and the quote) as uppercase \u00XX and everything else as plain JSON.
 func jsonDotNet(v []byte) []byte {
 	var b bytes.Buffer
 	for _, r := range string(v) {
 		switch {
-		case r == '"' || r == '\\':
-			b.WriteByte('\\')
-			b.WriteRune(r)
-		case strings.ContainsRune("+&<>'`", r) || r > 0x7f:
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '"' || strings.ContainsRune("+&<>'`", r) || r > 0x7f:
 			b.WriteString(uEscape(r, true))
 		case strings.ContainsRune("\n\r\t\b\f", r):
 			b.WriteString(map[rune]string{'\n': `\n`, '\r': `\r`, '\t': `\t`, '\b': `\b`, '\f': `\f`}[r])
