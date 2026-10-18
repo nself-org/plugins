@@ -201,7 +201,13 @@ services:
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
-      - /:/rootfs:ro
+      # Non-recursive for the same reason as cadvisor: a recursive bind exposes /rootfs/run/docker.sock (ADR 0027).
+      - type: bind
+        source: /
+        target: /rootfs
+        read_only: true
+        bind:
+          recursive: disabled
     ports:
       - "127.0.0.1:9100:9100"
     networks:

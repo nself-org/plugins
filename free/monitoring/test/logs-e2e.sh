@@ -30,7 +30,7 @@ trap cleanup EXIT
 # Render like the CLI: configs/ lands under ./monitoring in the project directory.
 mkdir -p "$work/monitoring" && cp -R "$plugin/configs/." "$work/monitoring/"
 # The daemon must see $TMPDIR (Colima and remote daemons may not share it): a prerequisite, not a stack failure.
-docker run --rm -v "$work":/w alpine:3.19 test -d /w/monitoring >/dev/null 2>&1 || { echo "logs-e2e: the Docker daemon cannot bind-mount $work; point TMPDIR at a shared path" >&2; exit 2; }
+docker run --rm -v "$work":/w alpine:3.19 test -d /w/monitoring >/dev/null || { echo "logs-e2e: the Docker daemon cannot bind-mount $work; point TMPDIR at a shared path" >&2; exit 2; }
 sed -E 's/"127\.0\.0\.1:[0-9]+:([0-9]+)"/"127.0.0.1::\1"/' "$plugin/docker-compose.plugin.yml" > "$work/monitoring.yml"
 cat > "$work/base.yml" <<EOF
 services:
@@ -69,9 +69,18 @@ for id in $(dc ps -q); do
   docker inspect -f '{{range .Mounts}}{{println .Source}}{{end}}' "$id" | grep -Eq '^/var/run(/|$)|docker\.sock' && fail "$name mounts /var/run or the Docker socket"
 done
 [ "$inspected" -ge 10 ] && echo "ok   inspected $inspected containers" || fail "inspected only $inspected containers (want the 9 monitoring services and postgres)"
-cad=$(dc ps -q cadvisor)
-sock=$(docker exec "$cad" sh -c 'find /rootfs/run /rootfs/var/run /var/run /run -maxdepth 2 -type s 2>/dev/null' 2>&1) || fail "cannot look for sockets inside cadvisor: $sock"
-[ -z "$sock" ] && echo "ok   cadvisor sees no unix socket under /rootfs, /run or /var/run" || fail "cadvisor can see a socket: $sock"
+# No unix socket may be visible inside the containers that mount the host root (a recursive bind would expose /rootfs/run/docker.sock).
+for s in cadvisor node-exporter; do
+  cid=$(dc ps -q "$s")
+  if [ -z "$cid" ]; then fail "$s is not running, cannot probe it for sockets"; continue; fi
+  if sock=$(docker exec "$cid" sh -c 'find /rootfs/run /rootfs/var/run /var/run /run -maxdepth 2 -type s 2>/dev/null; true' 2>&1); then
+    [ -z "$sock" ] && echo "ok   $s sees no unix socket under /rootfs, /run or /var/run" || fail "$s can see a socket: $sock"
+  else fail "cannot look for sockets inside $s: $sock"; fi
+done
+# Residual path: cadvisor mounts the host /proc, so /rootfs/proc/1/root/run/docker.sock may resolve to the host socket when ptrace-read on pid 1 is allowed.
+if docker exec "$(dc ps -q cadvisor)" test -S /rootfs/proc/1/root/run/docker.sock 2>/dev/null; then
+  echo "info cadvisor can reach the Docker socket through /rootfs/proc/1/root on this host (no AppArmor or SELinux ptrace confinement); see the README"
+else echo "ok   cadvisor cannot reach the Docker socket through /rootfs/proc/1/root"; fi
 grep -v '^[[:space:]]*//' "$plugin/configs/alloy/config.alloy" | grep -q 'discovery\.docker' && fail "alloy config uses discovery.docker"
 
 echo "== logs reach Loki through Grafana"
@@ -81,6 +90,7 @@ for _ in $(seq 1 30); do gcurl "http://127.0.0.1:$gport/api/health" >/dev/null 2
 uid=$(gcurl "http://127.0.0.1:$gport/api/datasources/name/Loki" | jq -r .uid)
 [ -n "$uid" ] && [ "$uid" != null ] || { fail "Grafana has no Loki datasource"; exit 1; }
 alloy_id=$(dc ps -q alloy)
+[ -n "$alloy_id" ] || { fail "alloy container id not found"; exit 1; }
 docker run -d --name "${proj}_marker" --log-opt 'tag={{.Name}}|{{.ImageName}}' alpine:3.19 sh -c 'for i in 1 2 3 4 5 6; do echo e2e-marker-line; sleep 5; done' >/dev/null
 loki_count() { # loki_count LOGQL: number of lines Grafana's Loki proxy returns for the last hour
   gcurl -G "http://127.0.0.1:$gport/api/datasources/proxy/uid/$uid/loki/api/v1/query_range" \

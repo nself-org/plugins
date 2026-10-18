@@ -6,6 +6,7 @@
 # A reference matches when repository, version and index digest are all equal to one lock entry.
 # Exit: 0 all match, 1 a mismatch (named), 2 usage or a missing input.
 set -eu
+set -o pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../.." && pwd)
 frag=$here/../docker-compose.plugin.yml
