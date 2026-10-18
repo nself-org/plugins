@@ -48,11 +48,12 @@ type JobOutcome struct {
 
 // Event is one thing that happened during a run.
 type Event struct {
-	Type string // planned | started | log | finished
-	Job  string
-	Text string
-	Out  *JobOutcome
-	Plan *plan.Plan
+	Type  string // queued | planned | started | log | finished
+	RunID string // set by the coordinator on every event
+	Job   string
+	Text  string
+	Out   *JobOutcome
+	Plan  *plan.Plan
 }
 
 // Summary is the end of a run.
@@ -61,9 +62,10 @@ type Summary struct {
 	Result   model.Result
 	Jobs     []JobOutcome
 	Skipped  []plan.Skipped
-	Status   string   // the status line, already formatted
-	Evidence string   // evidence digest
-	Notes    []string // recovery, hook and storage problems; never change the verdict
+	Status   string         // the status line, already formatted
+	Evidence string         // evidence digest
+	Doc      model.Evidence // the run evidence document, for renderers that print it
+	Notes    []string       // recovery, hook and storage problems; never change the verdict
 }
 
 // Renderer turns Events and the Summary into output.
@@ -83,6 +85,16 @@ func RegisterRenderer(name string, f func(io.Writer, Options) Renderer) {
 	defer rendererMu.Unlock()
 	renderers[name] = f
 }
+
+// stampRun fills RunID on every event a renderer receives.
+type stamped struct {
+	Renderer
+	runID string
+}
+
+func (s stamped) Event(e Event) { e.RunID = s.runID; s.Renderer.Event(e) }
+
+func stampRun(r Renderer, runID string) Renderer { return stamped{r, runID} }
 
 // NewRenderer builds the renderer o selects: JSON when --json and a JSON
 // renderer is registered, otherwise human.

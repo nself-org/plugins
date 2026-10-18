@@ -254,8 +254,13 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	if subst == nil {
 		subst = func(plan.PlannedJob) bool { return true }
 	}
-	rs := &runState{c: c, sess: sess, hooks: h, pl: c.Plan, mp: mp, rev: rev, rows: rows, subst: subst, render: NewRenderer(out, c.Opts), subset: keep,
+	var begin any
+	if h.Evidence != nil { // the inputs and the binding are read before any job can change them
+		_ = guard("evidence builder", func() error { begin = h.Evidence.Begin(ctx, c.Opts.Root, rev, c.capture()); return nil })
+	}
+	rs := &runState{c: c, sess: sess, hooks: h, pl: c.Plan, mp: mp, rev: rev, rows: rows, subst: subst, render: stampRun(NewRenderer(out, c.Opts), runID), subset: keep,
 		out: map[string]*JobOutcome{}, done: map[string]chan struct{}{}, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
+	rs.render.Event(Event{Type: "queued"})
 	rs.render.Event(Event{Type: "planned", Plan: c.Plan})
 	start := time.Now()
 	c.drive(ctx, rs, st, coord.ID)
@@ -263,7 +268,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 		rev.Dirty = true // the tree moved or changed while jobs ran: the result is not bound to the start commit
 	}
 	res := c.conclude(finishIn{St: st, RunID: runID, Rev: rev, Source: source, Policy: pol, Hooks: h, Jobs: rs.outcomes(),
-		Cancelled: rs.userCancel || ctx.Err() != nil, Partial: c.Opts.Job != "" || c.Opts.Pipeline != "", Start: start, Post: post, Recovered: recovered, Skipped: c.Plan.Skipped})
+		Cancelled: rs.userCancel || ctx.Err() != nil, Partial: c.Opts.Job != "" || c.Opts.Pipeline != "", Start: start, Post: post, Recovered: recovered, Skipped: c.Plan.Skipped, Begin: begin})
 	rs.render.Done(res.Summary)
 	return res, nil
 }

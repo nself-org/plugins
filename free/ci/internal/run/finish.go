@@ -47,6 +47,7 @@ type finishIn struct {
 	Post      statusPost
 	Recovered RecoverReport
 	Skipped   []plan.Skipped
+	Begin     any // what EvidenceBuilder.Begin returned
 }
 
 // prepareStatus decides whether this run can post, drains entries earlier
@@ -123,6 +124,17 @@ func (c *Coordinator) conclude(f finishIn) Result {
 		PolicyDigest: f.Policy.Digest, Source: f.Source, Dirty: f.Rev.Dirty, Cancelled: f.Cancelled, Pipeline: c.Plan.Pipeline, Selection: c.Plan.Selection,
 		Trigger: trig, Jobs: f.Jobs, Start: f.Start, End: time.Now()})
 	notes := append([]string(nil), f.Post.Notes...)
+	if err == nil && f.Hooks.Evidence != nil {
+		facts := EvidenceFacts{Root: c.Opts.Root, RunID: f.RunID, Rev: f.Rev, Store: f.St, Git: c.capture(), Jobs: f.Jobs}
+		var done model.Evidence
+		cerr := guard("evidence builder", func() (e error) { done, e = f.Hooks.Evidence.Complete(bg, f.Begin, facts, ev); return })
+		if cerr != nil {
+			notes = append(notes, "evidence not completed (it carries no input digests): "+firstLineOf(cerr.Error()))
+		} else {
+			ev = done
+			digest, err = evidenceDigest(ev)
+		}
+	}
 	for _, e := range f.Recovered.Errors {
 		notes = append(notes, "recovery: "+firstLineOf(e.Error()))
 	}
@@ -158,7 +170,7 @@ func (c *Coordinator) conclude(f finishIn) Result {
 		}
 	}
 	return Result{RunID: f.RunID, Exit: exitFor(ev.Result), Summary: Summary{RunID: f.RunID, Result: ev.Result, Jobs: f.Jobs, Skipped: f.Skipped,
-		Status: line, Evidence: digest, Notes: notes}}
+		Status: line, Evidence: digest, Doc: ev, Notes: notes}}
 }
 
 func notPosted(reason string) string { return "nself-ci: status not posted: " + reason }
