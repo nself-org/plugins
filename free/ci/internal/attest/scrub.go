@@ -144,7 +144,7 @@ func (p Profile) redactIPv6Spans(m string) string {
 	var out strings.Builder
 	for i := 0; i < len(m); {
 		end := -1
-		if i > 0 && m[i-1] != ':' { // an address starts the run or follows a colon (a label's)
+		if i > 0 && m[i-1] != ':' && m[i-1] != '.' { // an address starts the run or follows a colon or dot (a label's)
 			out.WriteByte(m[i])
 			i++
 			continue

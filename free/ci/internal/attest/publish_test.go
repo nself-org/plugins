@@ -466,3 +466,13 @@ func TestProfileText_IPv6SpansInsideLabels(t *testing.T) {
 		t.Fatalf("hex/colon run took %v", d)
 	}
 }
+
+func TestProfileText_IPv6AfterDots(t *testing.T) {
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public})
+	if got := p.Text("::8...fd12::9"); strings.Contains(got, "fd12") {
+		t.Errorf("address after dots kept: %q", got)
+	}
+	if got := p.URL("https://example.org/::8...fd12::9"); got != "" {
+		t.Errorf("URL path with address kept: %q", got)
+	}
+}
