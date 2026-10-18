@@ -64,7 +64,6 @@ type spyDispatch struct {
 	mu     sync.Mutex
 	seen   []string
 	refuse string
-	passOn bool
 }
 
 func (d *spyDispatch) hook(ctx context.Context, s AttemptSpec) (Admitted, error) {
