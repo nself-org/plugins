@@ -111,3 +111,32 @@ func TestExplainRegistered(t *testing.T) {
 		t.Fatal("explain is not a V15-only subcommand")
 	}
 }
+
+type echoSource struct{ job *string }
+
+func (e echoSource) Decision(_ context.Context, run, job string) (model.PlacementPlan, error) {
+	*e.job = run + "|" + job
+	return model.PlacementPlan{Schema: planview.SchemaID, Jobs: []model.JobPlacement{}}, nil
+}
+
+func TestExplainTargetForms(t *testing.T) {
+	repo, _ := placementRepo(t)
+	var got string
+	planview.Register(echoSource{&got})
+	defer planview.Register(nil)
+	for target, want := range map[string]string{"run1/build@linux/amd64": "run1|build@linux/amd64", "run1/a/b": "run1|a/b"} {
+		got = ""
+		resetPlanFlags()
+		if code, out, _ := capture(t, func() int { return runExplain([]string{target, "--json", "--repo", repo}) }); code != 0 || got != want {
+			t.Errorf("%s: exit %d, source asked %q, want %q\n%s", target, code, got, want, out)
+		}
+	}
+	for _, bad := range []string{"/", "run1/", "/build"} {
+		got = ""
+		resetPlanFlags()
+		code, out, _ := capture(t, func() int { return runExplain([]string{bad, "--json", "--repo", repo}) })
+		if _, ec := explainEnv(t, out); code != 1 || ec != "E692" || got != "" {
+			t.Errorf("%q: exit %d code %q asked %q", bad, code, ec, got)
+		}
+	}
+}

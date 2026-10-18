@@ -198,7 +198,7 @@ func TestPlanviewSchemaRejectsAfterBuild(t *testing.T) {
 		t.Fatalf("negative cost_micro: %v", err)
 	}
 	d = buildDoc(t)
-	d.Jobs[0].Status = "ineligible"
+	d.Jobs[0].Status, d.Jobs[0].Placement = "ineligible", nil
 	raw, _ = json.Marshal(d)
 	if err := model.ValidateJSON(schema, raw); err == nil || !strings.Contains(err.Error(), "status") {
 		t.Fatalf("unknown status: %v", err)
@@ -263,5 +263,70 @@ func TestPlanviewLocalCapability(t *testing.T) {
 	}
 	if err := model.ValidateCapability(c); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func i64(v int64) *int64 { return &v }
+
+func TestPlanviewTotalsWorstConfidence(t *testing.T) {
+	sum, conf := total([]costFact{{i64(5), "known"}, {i64(7), "estimated"}, {i64(1), "computed"}})
+	if sum != 13 || conf != "estimated" {
+		t.Fatalf("sum %d confidence %s", sum, conf)
+	}
+	if sum, conf = total([]costFact{{i64(5), "known"}, {nil, "unknown"}}); sum != 5 || conf != "unknown" {
+		t.Fatalf("an unknown cost makes the total unknown: %d %s", sum, conf)
+	}
+	if _, conf = total(nil); conf != "unknown" {
+		t.Fatal("nothing placed: nothing is known")
+	}
+}
+
+func TestPlanviewCostConfidence(t *testing.T) {
+	w := sched.World{Costs: map[string]sched.Cost{"h": {Confidence: "computed"}}}
+	for _, c := range []struct {
+		r    sched.Runner
+		want string
+	}{
+		{sched.Runner{ID: "a", Class: "local"}, "known"}, {sched.Runner{ID: "a", Class: "owned"}, "known"},
+		{sched.Runner{ID: "m", Class: "metered"}, "unknown"}, {sched.Runner{ID: "h", Class: "metered"}, "computed"},
+	} {
+		if got := costConfidence(w, c.r); got != c.want {
+			t.Errorf("%s/%s: %s, want %s", c.r.ID, c.r.Class, got, c.want)
+		}
+	}
+	x := sched.Explanation{Alternatives: []model.Alternative{{RunnerID: "m", Eligible: true, Score: i64(1), Components: map[string]model.Component{}}}}
+	pl, cf := placement(w, sched.Runner{ID: "m", Class: "metered"}, sched.Placement{RunnerID: "m", CostMicro: 99}, x)
+	if pl.Estimate.CostMicro != nil || cf.micro != nil || pl.Estimate.CostConfidence != "unknown" {
+		t.Fatalf("an unknown cost is null, not 99: %+v", pl.Estimate)
+	}
+}
+
+func TestPlanviewMarkPersonalLocal(t *testing.T) {
+	w := sched.World{Runners: []sched.Runner{{ID: "local"}, {ID: "other"}, {ID: "local", CoordinatorHost: true}}}
+	MarkPersonalLocal(&w)
+	if !w.Runners[0].Decl.PersonalOwnNode || w.Runners[0].CoordinatorMode != "personal" {
+		t.Fatalf("local runner: %+v", w.Runners[0])
+	}
+	if w.Runners[1].Decl.PersonalOwnNode || w.Runners[2].Decl.PersonalOwnNode || w.Runners[2].CoordinatorMode != "" {
+		t.Fatal("only a non-coordinator runner called local is marked")
+	}
+}
+
+func TestPlanviewSelectCounts(t *testing.T) {
+	d := buildDoc(t)
+	all := Select(d, func(model.JobPlacement) bool { return true })
+	if all.Totals != d.Totals {
+		t.Fatalf("select all changed the totals: %+v vs %+v", all.Totals, d.Totals)
+	}
+	ios := Select(d, func(j model.JobPlacement) bool { return j.ID == "ios" })
+	if ios.Totals.Unplaceable != 1 || ios.Totals.Waiting != 0 || ios.Totals.Placed != 0 {
+		t.Fatalf("unplaceable counted as %+v", ios.Totals)
+	}
+}
+
+func TestPlanviewHumanUnknownComponent(t *testing.T) {
+	lines := strings.Join(ExplainLines(buildDoc(t), SourcePlan), "\n")
+	if !strings.Contains(lines, "runtime=unknown(stand-in 300000)") || strings.Contains(lines, "runtime=300000") {
+		t.Fatal("a stand-in runtime must not read as a measurement")
 	}
 }

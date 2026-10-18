@@ -1,0 +1,26 @@
+{
+  "schema": "ci.placement-plan/v1",
+  "pipeline": {
+    "id": null,
+    "name": "default",
+    "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "trigger": "local",
+    "policy_digest": "p000000000000000000000000000000000000000000000000000000000000000",
+    "preset": "balanced",
+    "world_digest": "w000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "fast_path": {
+    "taken": true,
+    "reason": "no_remote"
+  },
+  "jobs": null,
+  "totals": {
+    "estimated_cost_micro": 0,
+    "cost_confidence": "known",
+    "placed": 1,
+    "waiting": 1,
+    "awaiting_approval": 0,
+    "unplaceable": 1
+  },
+  "source": "plan"
+}

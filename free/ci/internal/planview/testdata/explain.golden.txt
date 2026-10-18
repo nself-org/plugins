@@ -4,7 +4,7 @@ waiting: capacity.busy
 job build  placed  band interactive  source plan
   needs  platform linux/amd64  cpu 0  mem_mb 0  isolation_min none  network internet  secret classes project  tools none
   chosen  local  provider local  local  local  score 315000  cost 0 micro [known]
-    wait=0(estimated) runtime=300000(unknown) cold_start=0(estimated) transfer=0(estimated) cache=0(unknown) contention=0(estimated) cost=0(estimated) scarcity=0(estimated) reliability=15000(estimated)
+    wait=0(estimated) runtime=unknown(stand-in 300000) cold_start=0(estimated) transfer=0(estimated) cache=unknown(stand-in 0) contention=0(estimated) cost=0(estimated) scarcity=0(estimated) reliability=15000(estimated)
   alt     lan-mac  ineligible  node.discovered,trust.not_accepted,isolation.below_minimum,network.scope_not_offered,secrets.class_not_declared,platform.mismatch
   alt     local  chosen
 job ios [darwin/arm64]  unplaceable  band interactive  source plan

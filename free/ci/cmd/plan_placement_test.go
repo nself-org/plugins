@@ -19,6 +19,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 )
 
@@ -203,5 +204,29 @@ func TestPlanPlacementNoSecretValue(t *testing.T) {
 		if strings.Contains(out+errs, fixtureSecret) || !strings.Contains(out, "project") {
 			t.Errorf("explain %v: secret value printed or class name missing\n%s", args, out)
 		}
+	}
+}
+
+func TestPlanPlacementCellsFollowPlanOrder(t *testing.T) {
+	pl := &plan.Plan{Jobs: []plan.PlannedJob{{ID: "z"}, {ID: "a"}}}
+	doc := model.PlacementPlan{Jobs: []model.JobPlacement{{ID: "a", Status: "waiting"}, {ID: "z", Status: "unplaceable"}}}
+	got := cellsInPlanOrder(pl, doc)
+	if len(got) != 2 || got[0] != "unplaceable" || got[1] != "waiting" {
+		t.Fatalf("cells must follow the plan table, not the placement order: %v", got)
+	}
+}
+
+func TestPlanPlacementRevisionUnknownWithoutGit(t *testing.T) {
+	repo, _ := placementRepo(t)
+	if err := os.RemoveAll(filepath.Join(repo, ".git")); err != nil {
+		t.Fatal(err)
+	}
+	d := planJSON(t, repo, true)
+	var doc model.PlacementPlan
+	if err := json.Unmarshal(d["placement"], &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Pipeline.Revision != "" {
+		t.Fatalf("git's message leaked into the revision: %q", doc.Pipeline.Revision)
 	}
 }

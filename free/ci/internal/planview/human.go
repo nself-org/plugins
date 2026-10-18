@@ -85,6 +85,10 @@ func componentText(c map[string]model.Component) string {
 	parts := make([]string, 0, len(componentOrder))
 	for _, n := range componentOrder {
 		if v, ok := c[n]; ok {
+			if v.Confidence == "unknown" { // a stand-in, never a measured value
+				parts = append(parts, fmt.Sprintf("%s=unknown(stand-in %d)", n, v.ValueMs))
+				continue
+			}
 			parts = append(parts, fmt.Sprintf("%s=%d(%s)", n, v.ValueMs, v.Confidence))
 		}
 	}

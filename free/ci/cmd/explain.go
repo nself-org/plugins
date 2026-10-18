@@ -9,9 +9,10 @@ package main
 // document with the jobs asked about and `source` plan|decision-record; exit 0,
 // 1 (E692 target not found or no decision record, usage), 2 (infrastructure).
 // Constraints: V15 only; read only (creates no lease, reservation, ledger row
-// or decision record); a target holding "@" is a planned job id
-// (`build@linux/amd64`), a target with "/" and no "@" is <run>/<job> and goes
-// to the registered planview.DecisionSource; a bare name matches the planned
+// or decision record); a target whose part before the first "/" holds an "@"
+// is a planned job id (`build@linux/amd64`), any other target with "/" is
+// <run>/<job> (the job may be a matrix id) and goes to the registered
+// planview.DecisionSource; a bare name matches the planned
 // job with that id or every matrix entry of that name.
 
 import (
@@ -111,7 +112,10 @@ func runExplain(args []string) int {
 
 // explainTarget resolves the target to a document and where it came from.
 func explainTarget(ctx context.Context, target string, spec planSpec) (model.PlacementPlan, string, error) {
-	if run, job, ok := strings.Cut(target, "/"); ok && !strings.Contains(target, "@") {
+	if run, job, ok := strings.Cut(target, "/"); ok && !strings.Contains(run, "@") {
+		if run == "" || job == "" {
+			return model.PlacementPlan{}, "", &planview.Error{Code: planview.CodeExplainTarget, Message: fmt.Sprintf("explain target %q: name a run and a job as <run>/<job>", target)}
+		}
 		doc, err := planview.Lookup(ctx, run, job)
 		return doc, planview.SourceDecisionRecord, err
 	}

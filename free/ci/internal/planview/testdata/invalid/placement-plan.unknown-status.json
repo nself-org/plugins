@@ -34,66 +34,7 @@
       ],
       "status": "ineligible",
       "reasons": [],
-      "placement": {
-        "runner_id": "local",
-        "provider": "local",
-        "location": "local",
-        "cost_class": "local",
-        "score": 315000,
-        "components": {
-          "cache": {
-            "value_ms": 0,
-            "weight_permille": 1000,
-            "confidence": "unknown"
-          },
-          "cold_start": {
-            "value_ms": 0,
-            "weight_permille": 1000,
-            "confidence": "estimated"
-          },
-          "contention": {
-            "value_ms": 0,
-            "weight_permille": 1000,
-            "confidence": "estimated"
-          },
-          "cost": {
-            "value_ms": 0,
-            "weight_permille": 1000,
-            "confidence": "estimated"
-          },
-          "reliability": {
-            "value_ms": 15000,
-            "weight_permille": 1000,
-            "confidence": "estimated"
-          },
-          "runtime": {
-            "value_ms": 300000,
-            "weight_permille": 1000,
-            "confidence": "unknown"
-          },
-          "scarcity": {
-            "value_ms": 0,
-            "weight_permille": 1000,
-            "confidence": "estimated"
-          },
-          "transfer": {
-            "value_ms": 0,
-            "weight_permille": 1000,
-            "confidence": "estimated"
-          },
-          "wait": {
-            "value_ms": 0,
-            "weight_permille": 1000,
-            "confidence": "estimated"
-          }
-        },
-        "estimate": {
-          "wait_ms": 0,
-          "runtime_ms": null,
-          "cost_micro": 0,
-          "cost_confidence": "known"
-        }
-      },
+      "placement": null,
       "alternatives": [
         {
           "runner_id": "lan-mac",

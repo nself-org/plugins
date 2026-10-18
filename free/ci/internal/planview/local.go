@@ -115,7 +115,9 @@ func localDraft(f LocalFacts) model.Capability {
 // PERSONAL coordinator, which is what lets the owner's own checkout run there
 // under process isolation (trust.Admissible owner exception). world.Build
 // leaves these two facts unset (debt: move them into the builder, P7-SCHED-04
-// needs the same). A runner that hosts a coordinator is left alone.
+// needs the same). A runner that hosts a coordinator is left alone. Call it
+// only when LocalCapability supplied the runner: a registered node that
+// happens to be called "local" was never probed and must not get the exception.
 func MarkPersonalLocal(w *sched.World) {
 	for i := range w.Runners {
 		r := &w.Runners[i]
@@ -123,7 +125,6 @@ func MarkPersonalLocal(w *sched.World) {
 			continue
 		}
 		r.Decl.PersonalOwnNode = true
-		r.Decl.NoLANRoute = true
 		r.CoordinatorMode = trust.Personal
 		r.Decl.CoordinatorMode = trust.Personal
 	}

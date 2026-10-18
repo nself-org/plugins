@@ -18,6 +18,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -55,14 +56,42 @@ func planPlacement(ctx context.Context, p *model.Pipeline) (any, []string, error
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(pd.pl.Jobs) != len(p.Jobs) {
+	if !samePlan(pd.pl, p) {
 		return nil, nil, errors.New("the plan changed while placement was computed; run it again")
 	}
 	doc, err := placementDoc(ctx, pd)
 	if err != nil {
 		return nil, nil, err
 	}
-	return doc, planview.Cells(doc), nil
+	return doc, cellsInPlanOrder(pd.pl, doc), nil
+}
+
+// samePlan checks the rebuilt plan against the one the hook was handed: same
+// jobs, in the same order, with the same commands and dependencies.
+func samePlan(pl *plan.Plan, p *model.Pipeline) bool {
+	if len(pl.Jobs) != len(p.Jobs) {
+		return false
+	}
+	for i, j := range pl.Jobs {
+		if j.Job.Kind != p.Jobs[i].Kind || !slices.Equal(j.Job.Run, p.Jobs[i].Run) || !slices.Equal(j.Job.Deps, p.Jobs[i].Deps) {
+			return false
+		}
+	}
+	return true
+}
+
+// cellsInPlanOrder returns the PLACEMENT cells in the order of the plan's
+// job table, which is not the order jobs were placed in.
+func cellsInPlanOrder(pl *plan.Plan, doc model.PlacementPlan) []string {
+	byID := map[string]string{}
+	for i, c := range planview.Cells(doc) {
+		byID[doc.Jobs[i].ID] = c
+	}
+	out := make([]string, len(pl.Jobs))
+	for i, j := range pl.Jobs {
+		out[i] = byID[j.ID]
+	}
+	return out
 }
 
 // loadPlanned repeats the plan steps of runPlan (cmd/plan.go is not edited).
@@ -139,17 +168,23 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	if len(jobs) > 0 {
 		pipe = jobs[0].Pipeline
 	}
-	w, digest, err := world.Build(ctx, world.Deps{Store: st, Local: local, LocalCapacity: &capacity, Jobs: jobs, Clock: func() time.Time { return now },
+	w, _, err := world.Build(ctx, world.Deps{Store: st, Local: local, LocalCapacity: &capacity, Jobs: jobs, Clock: func() time.Time { return now },
 		Policy: func(context.Context, string) (sched.Policy, error) { return sp, nil }}, pipe)
 	if err != nil {
 		return model.PlacementPlan{}, err
 	}
-	planview.MarkPersonalLocal(&w)
-	if digest, err = world.Digest(w); err != nil {
+	if local != nil {
+		planview.MarkPersonalLocal(&w)
+	}
+	digest, err := world.Digest(w)
+	if err != nil {
 		return model.PlacementPlan{}, err
 	}
-	rev, _ := planGit(ctx, pd.root, "rev-parse", "HEAD")
-	return planview.Build(planview.Input{Name: pd.pl.Pipeline.Name, Revision: strings.TrimSpace(rev), Trigger: string(pd.pl.Trigger),
+	rev := ""
+	if out, ok := planGit(ctx, pd.root, "rev-parse", "HEAD"); ok { // no commit or no git: the revision is unknown, not git's message
+		rev = strings.TrimSpace(out)
+	}
+	return planview.Build(planview.Input{Name: pd.pl.Pipeline.Name, Revision: rev, Trigger: string(pd.pl.Trigger),
 		PolicyDigest: string(got.Digest), WorldDigest: digest, World: w, Jobs: jobs, Result: sched.Place(w, jobs)}), nil
 }
 
