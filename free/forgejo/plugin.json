@@ -1,7 +1,7 @@
 {
   "author": "nself",
   "category": "development",
-  "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute — zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
+  "description": "Self-hosted Forgejo git forge with Forgejo Actions enabled for external runners. No in-stack runner and no Docker socket mount; register runners on a CI node that is not a deploy host. Designed for the ops profile (ops server on staging/prod).",
   "entryPoint": "cmd/main.go",
   "envVars": [
     {
@@ -21,11 +21,6 @@
     },
     {
       "description": "",
-      "name": "FORGEJO_RUNNER_REGISTRATION_TOKEN",
-      "required": true
-    },
-    {
-      "description": "",
       "name": "FORGEJO_HTTP_PORT",
       "required": false
     },
@@ -41,27 +36,7 @@
     },
     {
       "description": "",
-      "name": "FORGEJO_RUNNER_NAME",
-      "required": false
-    },
-    {
-      "description": "",
-      "name": "FORGEJO_RUNNER_LABELS",
-      "required": false
-    },
-    {
-      "description": "",
-      "name": "FORGEJO_RUNNER_CAPACITY",
-      "required": false
-    },
-    {
-      "description": "",
-      "name": "FORGEJO_RUNNER_MEMORY",
-      "required": false
-    },
-    {
-      "description": "",
-      "name": "FORGEJO_RUNNER_CPU",
+      "name": "FORGEJO_DISABLE_REGISTRATION",
       "required": false
     }
   ],
@@ -108,7 +83,6 @@
     "forgejo",
     "gitea",
     "actions",
-    "runner",
     "self-hosted",
     "devops",
     "offline-ci"

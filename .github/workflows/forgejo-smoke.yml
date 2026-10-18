@@ -1,0 +1,42 @@
+name: Forgejo Smoke
+
+# Upgrade smoke for the forgejo plugin (P7-TRUST-21, Epic TRUST D22): the previous fragment runs in a scratch
+# nself project, this branch's fragment replaces it, `nself build --remove-orphans` runs, then no container may
+# mount the Docker socket and forgejo-init must exit 0. The job runs free/forgejo/tests/upgrade-smoke.sh, the
+# same script a developer runs on Linux. It is the Linux route for a dev Mac (Constitution section 10.3).
+
+on:
+  pull_request:
+    paths:
+      - 'free/forgejo/**'
+      - '.github/workflows/forgejo-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Fetch the commit the previous fragment comes from
+        # The last main commit that still shipped the runner; upgrade-smoke.sh pins the same SHA.
+        run: git fetch --no-tags --depth=1 origin 3e7c586a61bdfdfd1f2e206e226d686639bb1265
+
+      - name: Install nself (released installer)
+        run: |
+          curl -fsSL https://install.nself.org | bash
+          echo "$HOME/.nself/bin" >> "$GITHUB_PATH"
+
+      - name: Upgrade smoke
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          nself version
+          bash free/forgejo/tests/upgrade-smoke.sh
