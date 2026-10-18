@@ -13,7 +13,7 @@
 
 <!-- END GENERATED:catalog -->
 
-> The full observability stack: Prometheus, Grafana, Loki, Promtail, Tempo, and Alertmanager.
+> The full observability stack: Prometheus, Grafana, Loki, Grafana Alloy, Tempo, and Alertmanager.
 
 ## Install
 
@@ -25,7 +25,7 @@ No license key required.
 
 ## Description
 
-Full monitoring stack: Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, and exporters
+Full monitoring stack: Prometheus, Grafana, Loki, Grafana Alloy, Tempo, Alertmanager, and exporters
 
 This plugin runs as its own container in your nSelf stack (rebuild with `nself build && nself start` after install).
 

@@ -91,7 +91,7 @@ All 129 plugins are MIT-licensed and listed below (generated from `registry.json
 | [mlflow](./free/mlflow/) | MLflow experiment tracking and model registry | Data |
 | [model](./free/model/) | Manage local AI models via Ollama: list, pull, remove, update, benchmark, plus the legacy ollama command tree. | Integrations |
 | [monitor](./free/monitor/) | Monitoring stack management: upgrade the bundled Grafana dashboards. | Infrastructure |
-| [monitoring](./free/monitoring/) | Full monitoring stack: Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, and exporters | Infrastructure |
+| [monitoring](./free/monitoring/) | Full monitoring stack: Prometheus, Grafana, Loki, Grafana Alloy, Tempo, Alertmanager, and exporters | Infrastructure |
 | [notifications](./free/notifications/) | Multi-channel notification service. Channels: Email (SMTP), Push (placeholder), SMS (placeholder). HTTP endpoints for sending notifications, managing templates, and user notification preferences. | Communication |
 | [notify](./free/notify/) | Multi-channel notification service. Channels: Email (SMTP), Webhook (HMAC-signed). HTTP endpoints for sending notifications, managing templates, and viewing delivery history. | Communication |
 | [nself-cloud](./free/nself-cloud/) | Internal ɳCloud managed hosting infrastructure plugin — provisions isolated nSelf instances for Cloud customers | Infrastructure |
@@ -161,12 +161,12 @@ The `monitoring` plugin bundles 10 individual observability services (per F05 PL
 | Service | Purpose | Default Port |
 | ------- | ------- | ------------ |
 | [alertmanager](./monitoring/alertmanager/) | Alert routing and deduplication for Prometheus | 9093 |
+| [alloy](./free/monitoring/configs/alloy/) | Log shipping agent (sends to Loki) | 12345 |
 | [glitchtip](./monitoring/glitchtip/) | Open-source Sentry-compatible error tracking | 8000 |
 | [grafana](./monitoring/grafana/) | Metrics, logs, and traces dashboards | 3000 |
 | [loki](./monitoring/loki/) | Log aggregation backend | 3100 |
 | [otel-collector](./monitoring/otel-collector/) | OpenTelemetry traces, metrics, and logs ingest | 4317 (gRPC), 4318 (HTTP) |
 | [prometheus](./monitoring/prometheus/) | Metrics scraping and storage | 9090 |
-| [promtail](./monitoring/promtail/) | Log shipping agent (sends to Loki) | 9080 |
 | [status](./monitoring/status/) | Public status page generator | internal |
 | [synthetics](./monitoring/synthetics/) | k6-based synthetic flow probes | internal |
 | [web-vitals](./monitoring/web-vitals/) | Core Web Vitals client beacon and ingest | internal |

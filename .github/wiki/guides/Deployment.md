@@ -1049,42 +1049,49 @@ ExecStart=/usr/local/bin/loki -config.file=/etc/loki/config.yml
 WantedBy=multi-user.target
 EOF
 
-# Install Promtail (log shipper)
-wget https://github.com/grafana/loki/releases/download/v2.9.3/promtail-linux-amd64.zip
-unzip promtail-linux-amd64.zip
-sudo mv promtail-linux-amd64 /usr/local/bin/promtail
+# Install Grafana Alloy (log shipper)
+wget https://github.com/grafana/alloy/releases/download/v1.20.1/alloy-linux-amd64.zip
+unzip alloy-linux-amd64.zip
+sudo mv alloy-linux-amd64 /usr/local/bin/alloy
 
-# Configure Promtail
-sudo tee /etc/loki/promtail.yml <<EOF
-server:
-  http_listen_port: 9080
+# Configure Alloy
+sudo mkdir -p /etc/alloy /var/lib/alloy
+sudo tee /etc/alloy/config.alloy <<EOF
+local.file_match "nself" {
+  path_targets = [
+    {__path__ = "/var/log/nself/stripe-*.log", job = "nself-stripe"},
+    {__path__ = "/var/log/nginx/*access.log", job = "nginx"},
+  ]
+}
 
-positions:
-  filename: /var/lib/promtail/positions.yaml
+loki.source.file "nself" {
+  targets    = local.file_match.nself.targets
+  forward_to = [loki.write.default.receiver]
+}
 
-clients:
-  - url: http://localhost:3100/loki/api/v1/push
-
-scrape_configs:
-  - job_name: nself-stripe
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: nself-stripe
-          __path__: /var/log/nself/stripe-*.log
-
-  - job_name: nginx
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: nginx
-          __path__: /var/log/nginx/*access.log
+loki.write "default" {
+  endpoint {
+    url = "http://localhost:3100/loki/api/v1/push"
+  }
+}
 EOF
 
-sudo systemctl start loki promtail
-sudo systemctl enable loki promtail
+# Create systemd service
+sudo tee /etc/systemd/system/alloy.service <<EOF
+[Unit]
+Description=Grafana Alloy
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/alloy run --storage.path=/var/lib/alloy /etc/alloy/config.alloy
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl start loki alloy
+sudo systemctl enable loki alloy
 ```
 
 ### Alerting with Alertmanager
@@ -1693,14 +1700,18 @@ services:
     ports:
       - "3100:3100"
 
-  # Promtail Log Shipper
-  promtail:
-    image: grafana/promtail:latest
-    container_name: nself-promtail
+  # Grafana Alloy Log Shipper
+  alloy:
+    image: grafana/alloy:v1.20.1
+    container_name: nself-alloy
     restart: unless-stopped
-    command: -config.file=/etc/promtail/config.yml
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
     volumes:
-      - ./monitoring/promtail.yml:/etc/promtail/config.yml:ro
+      - ./monitoring/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy/data
       - stripe_logs:/var/log/nself/stripe:ro
       - github_logs:/var/log/nself/github:ro
       - nginx_logs:/var/log/nginx:ro
@@ -1723,6 +1734,8 @@ volumes:
   grafana_data:
     driver: local
   loki_data:
+    driver: local
+  alloy_data:
     driver: local
 
 networks:
