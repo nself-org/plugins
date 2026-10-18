@@ -127,7 +127,18 @@ func (s *Store) SweepStale(ctx context.Context, currentBoot string) (int, error)
 				if heartbeat >= s.now().Add(-3*s.ttl).UnixNano() && boot == currentBoot {
 					return nil
 				}
-				return s.apply(ctx, tx, p.id, jobState(p.state), "lost", TransitionDetail{Epoch: p.epoch, FailureClass: "lost"})
+				to, detail := model.JobState("lost"), TransitionDetail{Epoch: p.epoch, FailureClass: "lost"}
+				var intents int
+				if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM cancel_intent WHERE attempt_id=?", p.id).Scan(&intents); err != nil {
+					return err
+				}
+				if intents > 0 { // the operator asked first: the dead coordinator's attempt ends cancelled, not lost
+					if _, err := tx.ExecContext(ctx, "UPDATE cancel_intent SET epoch=? WHERE attempt_id=?", p.epoch, p.id); err != nil {
+						return err
+					}
+					to, detail = "cancelled", TransitionDetail{Epoch: p.epoch, FailureClass: "cancelled", Reason: "coordinator lost"}
+				}
+				return s.apply(ctx, tx, p.id, jobState(p.state), to, detail)
 			})
 			if err != nil {
 				return count, err
@@ -136,7 +147,7 @@ func (s *Store) SweepStale(ctx context.Context, currentBoot string) (int, error)
 			if err = s.readers.QueryRowContext(ctx, "SELECT state FROM attempt WHERE id=?", p.id).Scan(&state); err != nil {
 				return count, err
 			}
-			if state == "lost" {
+			if state == "lost" || state == "cancelled" {
 				count++
 			}
 		}
