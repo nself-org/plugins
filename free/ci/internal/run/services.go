@@ -2,20 +2,16 @@ package run
 
 // Purpose: registers the disposable-services hook (P7-CI-42, Epic D9). The
 // orchestrator calls Up before a job that needs services and Down after it;
-// this adapter maps the request onto services.Provisioner.
+// this adapter maps the request onto services.Pool and services.Provisioner.
 // Inputs:  ServicesRequest (run id and service names). Service names resolve
 // through the nearest .nself/ci.yaml above the working directory
 // (`services: {<name>: {component: ...}}`); a name that is not declared there
 // is taken as an nSelf component name (`--service postgres`).
 // Outputs: the NSELF_CI_SERVICE_* environment of the started services.
-// Constraints: the request carries no attempt id, so two jobs of one run that
-// need the same services would be indistinguishable at Down. They are
-// therefore serialised per (run, names): the second Up waits for the first
-// Down, and each job still gets its own throwaway project. A job context that
-// ends before Down tears the project down through a safety net; the slot stays
-// held until the owning job's Down, so that Down cannot hit a later job.
-// The engine runs only in v1.5 mode: cmd/main.go dispatches to this package
-// only when compat.V15() is true.
+// Constraints: the lifecycle (per-key serialisation, safety net, one-shot
+// teardown) lives in services.Pool, where it is tested. The engine runs only
+// in v1.5 mode: cmd/main.go dispatches to this package only when compat.V15()
+// is true.
 
 import (
 	"context"
@@ -31,37 +27,16 @@ import (
 )
 
 func init() {
-	RegisterServices(&servicesHook{slots: map[string]chan struct{}{}, live: map[string]*liveServices{}})
-}
-
-// liveServices is one running provision. Its teardown runs once, whoever asks
-// first (the safety net or Down); every other caller waits for that run and
-// sees its result, so Down never returns while a teardown is still going.
-type liveServices struct {
-	handle *services.Handle
-	stop   func() bool // cancels the safety net
-	once   sync.Once
-	done   chan struct{}
-	err    error
-}
-
-func (l *liveServices) teardown(ctx context.Context, p *services.Provisioner) error {
-	l.once.Do(func() {
-		l.err = p.Down(ctx, l.handle)
-		close(l.done)
-	})
-	<-l.done
-	return l.err
+	RegisterServices(&servicesHook{pool: services.NewPool()})
 }
 
 type servicesHook struct {
 	once    sync.Once
 	homeErr error // set once, so every Up after a failed lookup fails the same way
 	prov    *services.Provisioner
+	pool    *services.Pool
 	mu      sync.Mutex
 	secrets []string
-	slots   map[string]chan struct{}
-	live    map[string]*liveServices
 }
 
 // Up starts the services of one job.
@@ -70,51 +45,16 @@ func (s *servicesHook) Up(ctx context.Context, r ServicesRequest) (ServicesSetup
 	if err != nil {
 		return ServicesSetup{}, err
 	}
-	key := serviceKey(r)
-	if err := s.acquire(ctx, key); err != nil {
-		return ServicesSetup{}, err
-	}
-	h, err := prov.Up(ctx, serviceSpecs(r.Names))
+	env, err := s.pool.Up(ctx, prov, serviceKey(r), ServiceSpecs(r.Names))
 	if err != nil {
-		s.release(key)
 		return ServicesSetup{}, err
 	}
-	l := &liveServices{handle: h, done: make(chan struct{})}
-	l.stop = context.AfterFunc(ctx, func() { s.safetyNet(l) })
-	s.mu.Lock()
-	s.live[key] = l
-	s.mu.Unlock()
-	return ServicesSetup{Env: h.Env}, nil
+	return ServicesSetup{Env: env}, nil
 }
 
-// Down tears the services of one job down and frees the request slot. It
-// returns only when the teardown has finished, including one the safety net
-// started.
+// Down tears the services of one job down.
 func (s *servicesHook) Down(ctx context.Context, r ServicesRequest) error {
-	key := serviceKey(r)
-	s.mu.Lock()
-	l := s.live[key]
-	delete(s.live, key)
-	s.mu.Unlock()
-	if l == nil {
-		return nil
-	}
-	l.stop()
-	defer s.release(key)
-	// The orchestrator's cleanup context is short (15 s); a teardown that is cut
-	// off leaves containers behind, so it gets its own budget.
-	bg, done := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
-	defer done()
-	return l.teardown(bg, s.prov)
-}
-
-// safetyNet tears the services down when the job context ended before Down
-// ran. It keeps the entry and the request slot: the owning job's Down is still
-// coming and must find its own entry, not a later job's with the same key.
-func (s *servicesHook) safetyNet(l *liveServices) {
-	bg, done := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer done()
-	_ = l.teardown(bg, s.prov)
+	return s.pool.Down(ctx, serviceKey(r))
 }
 
 // provisioner builds the engine once and sweeps the projects of dead
@@ -157,43 +97,15 @@ func (s *servicesHook) secretList() []string {
 	return append([]string(nil), s.secrets...)
 }
 
+// serviceKey identifies identical requests: the run and the sorted names.
 func serviceKey(r ServicesRequest) string {
 	names := append([]string(nil), r.Names...)
 	sort.Strings(names)
 	return r.RunID + "\x00" + strings.Join(names, ",")
 }
 
-// acquire waits for the slot of key, or for ctx.
-func (s *servicesHook) acquire(ctx context.Context, key string) error {
-	s.mu.Lock()
-	ch, ok := s.slots[key]
-	if !ok {
-		ch = make(chan struct{}, 1)
-		s.slots[key] = ch
-	}
-	s.mu.Unlock()
-	select {
-	case ch <- struct{}{}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (s *servicesHook) release(key string) {
-	s.mu.Lock()
-	ch := s.slots[key]
-	s.mu.Unlock()
-	if ch != nil {
-		select {
-		case <-ch:
-		default:
-		}
-	}
-}
-
-// serviceSpecs maps names to specs through the nearest .nself/ci.yaml.
-func serviceSpecs(names []string) []services.Spec {
+// ServiceSpecs maps names to specs through the nearest .nself/ci.yaml.
+func ServiceSpecs(names []string) []services.Spec {
 	declared := declaredServices()
 	seen := map[string]bool{}
 	var specs []services.Spec

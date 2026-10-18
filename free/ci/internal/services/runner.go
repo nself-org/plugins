@@ -113,14 +113,15 @@ func (s staleOwner) Stale(_ context.Context, id string) (bool, error) {
 // KillStale ends the process groups of service calls whose provision owner is
 // dead (a coordinator killed with -9 leaves its `nself build` or `docker
 // compose up` running; it would create resources after a Sweep removed the
-// project). It runs the exec funnel's own orphan sweep through a no-op call.
-func (f *Funnel) KillStale(ctx context.Context, dead func(owner string) bool) {
+// project). It runs the exec funnel's own orphan sweep through a no-op call and
+// returns its error: a call it could not end must stop the teardown.
+func (f *Funnel) KillStale(ctx context.Context, dead func(owner string) bool) error {
 	if runtime.GOOS == "windows" {
-		return
+		return nil
 	}
 	ex := &ciexec.Executor{Env: minimalEnv{}, Stale: staleOwner(dead)}
 	argv := []string{"true"}
-	_ = ex.Run(ctx, ciexec.JobSpec{AttemptID: "svcsweep-" + randHex(4), CoordinatorID: ownerPrefix + "sweep",
+	return ex.Run(ctx, ciexec.JobSpec{AttemptID: "svcsweep-" + randHex(4), CoordinatorID: ownerPrefix + "sweep",
 		Job: model.Job{Run: argv}, Command: argv, Home: filepath.Join(f.Home, funnelDir)}).Err
 }
 

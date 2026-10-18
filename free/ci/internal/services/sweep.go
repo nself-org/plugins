@@ -34,12 +34,8 @@ func (p *Provisioner) Sweep(ctx context.Context) (int, error) {
 		}
 		removed++
 	}
-	if k, ok := p.Run.(interface {
-		KillStale(context.Context, func(string) bool)
-	}); ok {
-		k.KillStale(ctx, p.ownerDead(work)) // before any teardown: a live CLI call would undo it
-	}
 	p.removeStaleCalls()
+	_ = p.endCalls(ctx, p.ownerDead(work)) // markers whose provision is gone; each teardown below checks its own
 	locks, _ := filepath.Glob(filepath.Join(work, projectPrefix+"*.lock"))
 	for _, lf := range locks {
 		l, held, err := acquireLock(lf)
@@ -48,6 +44,9 @@ func (p *Provisioner) Sweep(ctx context.Context) (int, error) {
 		}
 		project := strings.TrimSuffix(filepath.Base(lf), ".lock")
 		root := filepath.Join(work, project)
+		if !p.callsEnded(ctx, project, l, &errs) {
+			continue
+		}
 		tear(&Handle{Project: project, root: root, Dir: filepath.Join(root, "svc"), lock: l})
 	}
 	orphans, err := p.orphanProjects(ctx, work)
@@ -61,6 +60,9 @@ func (p *Provisioner) Sweep(ctx context.Context) (int, error) {
 			continue
 		}
 		root := filepath.Join(work, project)
+		if !p.callsEnded(ctx, project, l, &errs) {
+			continue
+		}
 		tear(&Handle{Project: project, root: root, Dir: filepath.Join(root, "svc"), lock: l})
 	}
 	return removed, errors.Join(errs...)
@@ -103,6 +105,32 @@ func underAny(dir string, roots []string) bool {
 			return true
 		}
 	}
+	return false
+}
+
+// callKiller is a Runner that can end the CLI calls of dead owners (the Funnel).
+type callKiller interface {
+	KillStale(ctx context.Context, dead func(owner string) bool) error
+}
+
+func (p *Provisioner) endCalls(ctx context.Context, dead func(string) bool) error {
+	if k, ok := p.Run.(callKiller); ok {
+		return k.KillStale(ctx, dead)
+	}
+	return nil
+}
+
+// callsEnded ends the CLI calls of a project whose lock this Sweep holds, just
+// before its teardown: a call left running by a dead coordinator would create
+// resources again after the project was removed. When a call cannot be ended
+// the project is left for the next Sweep (lock file kept) and false returned.
+func (p *Provisioner) callsEnded(ctx context.Context, project string, l *ownerLock, errs *[]error) bool {
+	err := p.endCalls(ctx, func(o string) bool { return o == project })
+	if err == nil {
+		return true
+	}
+	l.Unlock()
+	*errs = append(*errs, fail(CodeProvision, "cannot end the CLI calls left by the owner of %s: %v", project, err))
 	return false
 }
 
