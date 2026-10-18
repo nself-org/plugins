@@ -12,6 +12,7 @@ package attest
 
 import (
 	"net/netip"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -29,7 +30,7 @@ var (
 	urlRe      = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://[^\s"'<>\x60)\]}]+`)
 	ipv4Re     = regexp.MustCompile(`(?:[0-9]{1,3}\.){3}[0-9]{1,3}`)
 	ipv6Re     = regexp.MustCompile(`[0-9A-Fa-f:]*:[0-9A-Fa-f:]*:[0-9A-Fa-f:.]*`)
-	homeRe     = regexp.MustCompile(`(/Users|/home)/([^/\s:"'\x60]+)|/root\b|[A-Za-z]:\\Users\\([^\\\s"']+)`)
+	homeRe     = regexp.MustCompile(`(/Users|/home)/([^/\s:"'\x60?#&]+)|/root\b|[A-Za-z]:\\Users\\([^\\\s"'?#&]+)`)
 	userHostRe = regexp.MustCompile(`([A-Za-z0-9._-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})`)
 	localHost  = regexp.MustCompile(`(?i)\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:` + privateSuffixAlternation() + `)\b`)
 )
@@ -51,10 +52,12 @@ func (p Profile) Text(s string) string {
 		return s
 	}
 	// user names in home paths that sit inside a URL about to be dropped still
-	// identify the user in the rest of the text
+	// identify the user in the rest of the text (decoded, query and fragment cut)
 	var seen []string
-	for _, sub := range homeRe.FindAllStringSubmatch(s, -1) {
-		seen = appendUser(seen, sub[2]+sub[3])
+	for _, m := range urlRe.FindAllString(s, -1) {
+		for _, u := range urlHomeUsers(m) {
+			seen = appendUser(seen, u)
+		}
 	}
 	s = urlRe.ReplaceAllStringFunc(s, func(m string) string {
 		trimmed := strings.TrimRight(m, ".,;:")
@@ -71,7 +74,10 @@ func (p Profile) Text(s string) string {
 func (p Profile) textNoURL(s string) string { return p.scrub(s, nil) }
 
 func (p Profile) scrub(s string, seen []string) string {
-	users := append(append([]string(nil), p.users...), seen...)
+	users := append([]string(nil), p.users...)
+	for _, u := range seen {
+		users = appendUser(users, u)
+	}
 	s = homeRe.ReplaceAllStringFunc(s, func(m string) string {
 		if sub := homeRe.FindStringSubmatch(m); sub[2] != "" {
 			users = appendUser(users, sub[2])
@@ -127,9 +133,39 @@ func (p Profile) scrub(s string, seen []string) string {
 var genericUsers = map[string]bool{"runner": true, "node": true, "build": true, "ci": true, "app": true, "user": true, "root": true,
 	"admin": true, "ubuntu": true, "runneradmin": true, "github": true, "builder": true, "jenkins": true, "circleci": true, "vagrant": true}
 
+// maxLearnedUsers bounds the user names one Text call collects (each costs a pass over the text).
+const maxLearnedUsers = 256
+
+// urlHomeUsers lists the user names of home paths in a URL's path, looking
+// through up to three layers of percent-encoding.
+func urlHomeUsers(m string) []string {
+	if i := strings.IndexAny(m, "?#"); i >= 0 {
+		m = m[:i]
+	}
+	var out []string
+	for i := 0; i < 4; i++ {
+		for _, sub := range homeRe.FindAllStringSubmatch(m, -1) {
+			out = append(out, sub[2]+sub[3])
+		}
+		d, err := url.PathUnescape(m)
+		if err != nil || d == m {
+			break
+		}
+		m = d
+	}
+	return out
+}
+
+// appendUser adds a learned user name once (case-insensitive), skipping empty
+// and generic account names and stopping at maxLearnedUsers.
 func appendUser(users []string, name string) []string {
-	if name == "" {
+	if name == "" || len(users) >= maxLearnedUsers {
 		return users
+	}
+	for _, u := range users {
+		if strings.EqualFold(u, name) {
+			return users
+		}
 	}
 	if genericUsers[strings.ToLower(name)] {
 		return users

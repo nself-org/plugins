@@ -319,3 +319,29 @@ func TestProfileText_UserFromDroppedURLPath(t *testing.T) {
 		t.Fatalf("user survived: %q", got)
 	}
 }
+
+func TestProfileText_UserFromDroppedURLVariants(t *testing.T) {
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public})
+	for _, in := range []string{
+		"https://logs.example.org/home/alice?download=1 user alice",
+		"https://logs.example.org/%68ome/alice/log user alice",
+		"https://logs.example.org/%2Fhome%2Falice#frag user alice",
+	} {
+		if got := p.Text(in); strings.Contains(got, "alice") {
+			t.Errorf("Text(%q) = %q", in, got)
+		}
+	}
+}
+
+// Many dropped URLs naming one user stay linear (review round 4: 100000 copies).
+func TestProfileText_RepeatedDroppedURLsAreBounded(t *testing.T) {
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public})
+	start := time.Now()
+	out := p.Text(strings.Repeat("https://logs.example.org/home/alice/log ", 20000) + "user alice")
+	if d := time.Since(start); d > 10*time.Second {
+		t.Fatalf("took %v", d)
+	}
+	if strings.Contains(out, "alice") {
+		t.Fatal("user survived")
+	}
+}
