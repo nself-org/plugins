@@ -28,6 +28,10 @@ type JobSpec struct {
 	CPU                      float64
 	MemoryMB                 int
 	Output                   func([]byte)
+	// Slot is the execution slot the attempt holds; isolation profiles derive the job UID from it.
+	Slot int
+	// Plan, when an Isolator sets it, builds the container command instead of the baseline flags.
+	Plan ContainerPlanner
 }
 
 // AttemptResult is the local outcome before durable store finalization.
@@ -36,6 +40,9 @@ type AttemptResult struct {
 	ExitCode          int
 	Started, Finished time.Time
 	Err               error
+	// Reason refines the failure class: "resource_limit" when a planned container hit its
+	// memory or process limit.
+	Reason string
 }
 
 // Executor runs each local job through one process or Docker funnel.
@@ -176,7 +183,9 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		}
 		env = append(env, k+"="+v)
 	}
-	if s.Job.Isolation == "container" {
+	if s.Plan != nil {
+		result.ExitCode, result.Reason, result.Err = e.runPlanned(ctx, s, workspace, env)
+	} else if s.Job.Isolation == "container" {
 		result.ExitCode, result.Err = e.runContainer(ctx, s, workspace, env)
 	} else {
 		result.ExitCode, result.Err = e.runProcess(ctx, s, workspace, env)
