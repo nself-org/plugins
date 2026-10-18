@@ -6,7 +6,8 @@ package run
 // the status description and the AfterRun hooks need now.
 // Inputs:  job outcomes, the revision and the plan.
 // Outputs: a model.Evidence and its sha256 digest.
-// Constraints: evidence is unbound (never success) when the worktree is
+// Constraints: an empty source is recorded as untrusted (the caller sets the
+// class); evidence is unbound (never success) when the worktree is
 // dirty or there is no commit; excerpts are bounded; no secret is read.
 
 import (
@@ -52,7 +53,7 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 	sort.Slice(in.Jobs, func(i, j int) bool { return in.Jobs[i].ID < in.Jobs[j].ID })
 	e := model.Evidence{
 		Schema: "ci.evidence/v1", Revision: in.Revision, RepoID: shortDigest(in.Project), RunID: in.RunID,
-		Pipeline: in.Pipeline, Trigger: in.Trigger, SourceTrust: model.TrustClass(firstNonEmpty(in.Source, "owner")), PolicyDigest: in.PolicyDigest,
+		Pipeline: in.Pipeline, Trigger: in.Trigger, SourceTrust: model.TrustClass(firstNonEmpty(in.Source, "untrusted")), PolicyDigest: in.PolicyDigest,
 		InputDigests: model.InputDigests{Config: in.ConfigDigest, Lockfiles: []model.DigestRef{}, Generated: []model.DigestRef{}},
 		Runner:       model.RunnerRef{ID: "local", Provider: "local", Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process"},
 		Producer:     model.Producer{Kind: "coordinator-recorded", Version: "1"},
