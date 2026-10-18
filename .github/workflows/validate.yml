@@ -46,8 +46,8 @@ jobs:
 
           # Required top-level fields in every plugin.json
           # `port` is deliberately not in this list. A CLI plugin provides a
-          # command and runs no HTTP server, so it has no port — this repo's
-          # own duplicate-port check already treats "port": 0 as "no server".
+          # command and runs no HTTP server, so it has no port (scripts/conformance/ports.sh,
+          # run by check.sh, owns port uniqueness and treats "port": 0 as "no server").
           # It is checked separately below, only for plugins that are servers.
           REQUIRED_FIELDS="name version description author license category"
 
@@ -76,7 +76,7 @@ jobs:
               fi
             done
 
-            # Port (manifest v2: service.port, the top-level `port` is forbidden by conformance gate E112). A v2
+            # Port (manifest v2: service.port, the manifest owns the port there). A v2
             # service.kind of cli or library has no listener, so no port to declare (P7-PLUG-44: monitoring is an init container).
             port=$(python3 -c "import json,sys; d=json.load(open('$file')); print((d.get('service') or {}).get('port',''))" 2>/dev/null)
             kind=$(python3 -c "import json,sys; d=json.load(open('$file')); print((d.get('service') or {}).get('kind',''))" 2>/dev/null)
@@ -102,7 +102,8 @@ jobs:
             fi
 
             printf "  OK\n"
-          done < <(find free -name "plugin.json" | sort)
+          # Only the plugin's own manifest: vendored copies under third_party/ (shared-utils) are not plugins.
+          done < <(find free -mindepth 2 -maxdepth 2 -name "plugin.json" | sort)
 
           if [ $errors -gt 0 ]; then
             printf "\n%d validation error(s) found\n" "$errors"
