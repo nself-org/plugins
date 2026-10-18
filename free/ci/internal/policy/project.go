@@ -40,33 +40,33 @@ func ProjectIDGit(ctx context.Context, run Runner, root string) string {
 		return id
 	}
 	g := gitRunner{run: run, root: id}
-	// Raw output: a path may start or end with a space, and only the record
-	// terminators are removed.
-	located, ok := g.raw(ctx, "rev-parse", "--show-toplevel", "--show-prefix")
+	// Raw output, one value per call: a path may start or end with a space or
+	// hold a newline, so only the final newline git adds is removed.
+	topOut, ok := g.raw(ctx, "rev-parse", "--show-toplevel")
 	if !ok {
 		return id // not a repository: one failed spawn and done
 	}
-	lines := strings.Split(strings.TrimSuffix(located, "\n"), "\n")
-	top, prefix := lines[0], ""
-	if len(lines) > 1 {
-		prefix = lines[1]
-	}
-	if top == "" {
+	prefixOut, ok := g.raw(ctx, "rev-parse", "--show-prefix")
+	top, prefix := strings.TrimSuffix(topOut, "\n"), strings.TrimSuffix(prefixOut, "\n")
+	if !ok || top == "" {
 		return id
 	}
 	base := top
-	if listed, ok := g.raw(ctx, "worktree", "list", "--porcelain"); ok {
-		// The first entry is the main worktree, whatever the layout. A bare main
-		// repository has no checkout, and --separate-git-dir lists the git directory
-		// (git records no path to that checkout), so a candidate without a .git
-		// entry is not used: the worktree's own top level stays.
-		first, _, _ := strings.Cut(strings.ReplaceAll(listed, "\r\n", "\n"), "\n\n")
+	// NUL-terminated records: nothing in a path needs quoting.
+	if listed, ok := g.raw(ctx, "worktree", "list", "--porcelain", "-z"); ok {
+		// The first record group is the main worktree, whatever the layout. A bare
+		// main repository has no checkout, and --separate-git-dir lists the git
+		// directory (git records no path to that checkout), so a candidate without a
+		// .git entry is not used: the worktree's own top level stays.
 		main, bare := "", false
-		for _, line := range strings.Split(first, "\n") {
-			if p, found := strings.CutPrefix(line, "worktree "); found {
+		for _, field := range strings.Split(listed, "\x00") {
+			if field == "" {
+				break // the empty field ends the first group
+			}
+			if p, found := strings.CutPrefix(field, "worktree "); found {
 				main = p
 			}
-			bare = bare || line == "bare"
+			bare = bare || field == "bare"
 		}
 		if _, err := os.Lstat(filepath.Join(main, ".git")); main != "" && !bare && err == nil {
 			base = main

@@ -131,3 +131,53 @@ func TestProjectIDKeepsSpacesInPrefix(t *testing.T) {
 		}
 	}
 }
+
+// Newlines and quote characters in paths neither truncate the prefix nor hide
+// the main worktree from a linked one.
+func TestProjectIDOddPaths(t *testing.T) {
+	f := newFixture(t)
+	odd := "q\"uo\nte"
+	linked := filepath.Join(t.TempDir(), "linked")
+	git(t, f.work, "worktree", "add", "-q", "--detach", linked)
+	ctx := context.Background()
+	for _, base := range []string{f.work, linked} {
+		a, b := filepath.Join(base, "svc\nchild"), filepath.Join(base, "svc")
+		for _, d := range []string{a, b} {
+			if err := os.MkdirAll(d, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		ia, ib := ProjectIDGit(ctx, f.runner, a), ProjectIDGit(ctx, f.runner, b)
+		if ia == ib || ia != filepath.Join(ProjectID(f.work), "svc\nchild") {
+			t.Errorf("%s: ids %q and %q", base, ia, ib)
+		}
+	}
+	// A main worktree whose own path needs quoting still anchors its linked worktrees.
+	main := filepath.Join(t.TempDir(), odd)
+	git(t, filepath.Dir(main), "init", "-q", "-b", "main", main)
+	write(t, filepath.Join(main, "a.txt"), "x")
+	git(t, main, "add", "-A")
+	git(t, main, "commit", "-q", "-m", "x")
+	lw := filepath.Join(t.TempDir(), "lw")
+	git(t, main, "worktree", "add", "-q", "--detach", lw)
+	if got, want := ProjectIDGit(ctx, f.runner, lw), ProjectID(main); got != want {
+		t.Errorf("quoted main path: %q, want %q", got, want)
+	}
+}
+
+// A missing path under an alias into a repository cannot be placed outside it.
+func TestGitFailureThroughMissingPathUnderAlias(t *testing.T) {
+	f := newFixture(t)
+	f.push(tightConfig)
+	sub := filepath.Join(f.work, "svc")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(sub, alias); err != nil {
+		t.Fatal(err)
+	}
+	if !inRepository(filepath.Join(alias, "missing")) {
+		t.Fatal("a missing path under a repository alias counts as outside it")
+	}
+}
