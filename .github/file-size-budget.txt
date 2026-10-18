@@ -132,7 +132,6 @@ free/web3/internal/handlers.go	1107
 free/webhooks/sdk/devkit/cmd/new-plugin/main.go	510
 free/webhooks/sdk/identity.go	338
 free/workflows/internal/handlers.go	721
-scripts/generate-wiki-plugin-page.py	331
 sdk/devkit/cmd/new-plugin/main.go	510
 sdk/identity.go	338
 shared/generate-plugin.sh	2069
