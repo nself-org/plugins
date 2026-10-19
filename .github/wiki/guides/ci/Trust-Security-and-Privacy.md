@@ -36,7 +36,7 @@ A runsc binary or a runtime entry is not availability. The profile starts a smal
 
 ### Platform
 
-The probe reads the runtime entry and records `platform`. `systrap` is the default; `ptrace` is the alternative when the host kernel does not run systrap. `kvm` is refused where `/dev/kvm` is absent, which is every supported node today. Any other value is refused too (`isolation.platform_unsupported`).
+The probe reads the runtime entry and records `platform`. `systrap` is the default; `ptrace` is deprecated upstream and may be removed; use it only where systrap does not run on the host kernel. `kvm` is refused where `/dev/kvm` is absent, which is every supported node today. Any other value is refused too (`isolation.platform_unsupported`).
 
 The level is unavailable (`E678`, reason `isolation.runtime_flag_denied`) when the runsc entry carries any of `--network=host`, `--host-uds`, `--host-fifo`, `--net-raw`, `--allow-flag-override`, `--ignore-cgroups`, `--rootless`, `--file-access=shared` or a `--TESTONLY-*` flag. The first group opens the sandbox to the host; `--ignore-cgroups` would drop the pids, memory and CPU limits. The profile refuses them rather than stripping them, because the daemon would still pass them to runsc. A flag is matched by presence in every spelling the Go flag package accepts, so `--net-raw=false` is refused as well.
 

@@ -66,6 +66,15 @@ func TestUnenforceableScopeIsRefusedNotWidened(t *testing.T) {
 	}
 }
 
+// The container profile re-probes on its own clock and may fall through to podman, whose runsc was never checked.
+func TestWithRuntimeRefusesAnotherBinary(t *testing.T) {
+	_, err := withRuntime(exec.ContainerCommand{Binary: "podman", Args: []string{"run", "--rm", "img"}})
+	var ie *isolation.Error
+	if !errors.As(err, &ie) || ie.Code != "E678" {
+		t.Fatalf("want E678, got %v", err)
+	}
+}
+
 func TestWithRuntimeRefusesANonRunCommand(t *testing.T) {
 	if _, err := withRuntime(exec.ContainerCommand{Binary: "docker", Args: []string{"exec", "x"}}); err == nil {
 		t.Fatal("a non-run command must be refused")

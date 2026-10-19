@@ -167,8 +167,13 @@ func (pl *planner) Cleanup(r exec.ContainerRun) (*exec.ContainerCommand, error) 
 }
 
 // withRuntime inserts --runtime=runsc right after `run`. The container profile never names a
-// runtime, and exec's argv backstop admits no other value than runsc.
+// runtime, and exec's argv backstop admits no other value than runsc. Only docker is probed for
+// runsc, so a command planned for another binary (the container profile re-probed and fell
+// through to podman) is refused: its `runsc` runtime was never checked.
 func withRuntime(cmd exec.ContainerCommand) (exec.ContainerCommand, error) {
+	if cmd.Binary != "docker" {
+		return cmd, isolation.Unavailable(isolation.ReasonRuntimeMissing, "the container profile planned for %q, but only docker is probed for runsc", cmd.Binary)
+	}
 	if len(cmd.Args) == 0 || cmd.Args[0] != "run" {
 		return cmd, isolation.Unavailable(isolation.ReasonProbeFailed, "container profile planned a command that is not a run")
 	}
