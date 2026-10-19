@@ -1,0 +1,11 @@
+version: 1
+
+# Fixture for the drill package: three drill directories (a passing drill, a
+# drill that exits 0 but prints a failing document, a drill that prints an
+# invalid document) discovered from scripts/drill with no job listed here.
+pipelines:
+  drills:
+    triggers: [schedule, manual]
+    schedule: "17 3 * * *"
+    max_age: 36h
+    drills_dir: scripts/drill
