@@ -359,3 +359,18 @@ func TestStoreWritersRefuseWhileAServeOwnsTheHome(t *testing.T) {
 		t.Fatal("a refused writer still created the database")
 	}
 }
+
+func FuzzGithubRemote(f *testing.F) {
+	for _, s := range []string{"https://github.com/acme/app.git", "git@github.com:acme/app.git", "ssh://git@github.com/a/b", "https://github.com/a/b/c", "https://github.com/-a/b", "", "\x00"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, raw string) {
+		m := githubRe.FindStringSubmatch(raw)
+		if m == nil {
+			return
+		}
+		if strings.ContainsAny(m[1]+m[2], "/@:? \t\r\n\x00") || !strings.Contains(raw, "github.com") {
+			t.Fatalf("%q produced %q/%q", raw, m[1], m[2])
+		}
+	})
+}
