@@ -3,7 +3,7 @@ package netscope
 // Purpose: the scope rules that do not need a runtime: which scope a job runs under and whether a runner's
 // probed scopes make it free of a LAN route.
 // Inputs:  a trust class, the declared scope (possibly empty) and the scopes a runner proved it enforces.
-// Outputs: the effective scope, or an E680 refusal; the derived NoLANRoute fact (never declared).
+// Outputs: the effective scope, or an E679 refusal; the derived NoLANRoute fact (never declared).
 // Constraints: a scope is never raised or silently lowered: an untrusted job that declares lan or privileged
 // is refused, an undeclared scope takes the trust class default (untrusted: restricted).
 

@@ -50,7 +50,7 @@ func proxyBinary(t *testing.T) string {
 		cmd.Dir = "../.."
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if out, err := cmd.CombinedOutput(); err != nil {
-			buildErr = &Error{Code: "E680", Message: "go build: " + err.Error() + "\n" + string(out)}
+			buildErr = &Error{Code: CodeScopeFailed, Message: "go build: " + err.Error() + "\n" + string(out)}
 			return
 		}
 		buildErr = os.Chmod(builtBin, 0o755)

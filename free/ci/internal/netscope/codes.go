@@ -1,22 +1,16 @@
 package netscope
 
-// Purpose: the one error code of this package and the error type that carries it.
-// Inputs:  none. Outputs: E680 (network scope setup failed), registered through model.Register.
-// Constraints: only E680 belongs here (Epic D25); E679 (scope unenforceable) is the isolation package's and is
-// reused through isolation.ScopeUnenforceable so there is one meaning per code.
+// Purpose: the error type of this package and the one code it carries.
+// Inputs:  none. Outputs: E679 (network scope cannot be enforced or was refused), the isolation package's code.
+// Constraints: no code is registered here. The Epic assigned E680 to this package, but internal/redact already
+// registers E680 (value above the redaction maximum), and the registry allows one meaning per code
+// (TestCodeRegistry); a scope that cannot be set up is the same condition as one that cannot be enforced, so
+// E679 stays the single code and its Reason names the case (lead ruling in the TRUST Epic Invalidations).
 
-import (
-	"fmt"
-
-	"github.com/nself-org/plugins/free/ci/internal/model"
-)
+import "fmt"
 
 // CodeScopeFailed is the code of a scope that could not be set up or was refused.
-const CodeScopeFailed = "E680"
-
-func init() {
-	model.Register(model.Code{ID: CodeScopeFailed, Class: "infra", Summary: "network scope setup failed", Fix: "Check that the container runtime can create an internal network and start the proxy sidecar, or declare a scope the job's trust class may use"})
-}
+const CodeScopeFailed = "E679"
 
 // Error is a coded netscope failure.
 type Error struct{ Code, Message string }

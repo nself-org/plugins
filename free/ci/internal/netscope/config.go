@@ -4,7 +4,7 @@ package netscope
 // Inputs:  the scope, the extra allowlist hosts, the deny Facts the host computed, the job network prefix.
 // Outputs: Config, encoded to one JSON string that travels in the sidecar's environment (never on argv).
 // Constraints: the config carries no secret; it is bounded (maxConfigBytes) so an oversized world fails the
-// attempt with E680 instead of truncating a deny list.
+// attempt with E679 instead of truncating a deny list.
 
 import (
 	"encoding/json"
