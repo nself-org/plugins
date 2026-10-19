@@ -98,10 +98,20 @@ func (s *Store) OutboxBackoff(ctx context.Context, revision, statusContext strin
 	return err
 }
 
-// OutboxSuppress marks an undelivered entry as owned by another reporter.
+// OutboxSuppress parks an undelivered entry that this process must not post
+// (another reporter owns it, or its payload cannot be read). A posting entry
+// is only listed by OutboxDue when its claim has expired.
 func (s *Store) OutboxSuppress(ctx context.Context, revision, statusContext string, seq int64, reason string) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=?,reason=? WHERE revision=? AND context=? AND seq=? AND state IN (?,?)", OutboxSuppressed, reason, revision, statusContext, seq, OutboxPending, OutboxFailed)
+		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=?,reason=?,claimed_at=0 WHERE revision=? AND context=? AND seq=? AND state IN (?,?,?)", OutboxSuppressed, reason, revision, statusContext, seq, OutboxPending, OutboxFailed, OutboxPosting)
+		return err
+	})
+}
+
+// OutboxRequeue makes a suppressed entry deliverable again.
+func (s *Store) OutboxRequeue(ctx context.Context, revision, statusContext string, seq int64) error {
+	return s.write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=?,reason='' WHERE revision=? AND context=? AND seq=? AND state=?", OutboxPending, revision, statusContext, seq, OutboxSuppressed)
 		return err
 	})
 }

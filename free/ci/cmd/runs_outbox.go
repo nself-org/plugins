@@ -84,7 +84,7 @@ func outboxRows(ctx context.Context, st *store.Store) ([]outboxView, error) {
 	out := make([]outboxView, 0, len(items))
 	for _, it := range items {
 		v := outboxView{Repo: strings.TrimPrefix(it.Context, "nself-ci@"), Revision: it.Revision, Seq: it.Seq, State: it.State, Attempts: it.Attempts, LastError: it.LastError, Reason: it.Reason}
-		if it.NextAttemptAt > 0 {
+		if it.State == store.OutboxFailed && it.NextAttemptAt > 0 {
 			v.NextAttemptAt = time.Unix(0, it.NextAttemptAt).UTC().Format(time.RFC3339)
 		}
 		out = append(out, v)

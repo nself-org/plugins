@@ -8,8 +8,10 @@ package report
 // P7-TRUST-20 calls it with the revocation's re-evaluation set.
 // Inputs:  keys, the state to post (usually Error) and the reason.
 // Outputs: queued entries, delivered by the sender's normal drain.
-// Constraints: the description is the reason cut to 140 runes; a key the
-// outbox cannot parse or a state that is not valid is refused whole.
+// Constraints: the description is the reason cut to 140 runes; a key that is
+// not a status key, or a state that is not valid, is refused and named in the
+// error, while the other keys are still queued (a revocation must replace as
+// many successes as it can).
 
 import (
 	"context"
@@ -46,6 +48,7 @@ func (d *Sender) Repost(ctx context.Context, keys []Key, state State, reason str
 		return errNoStore
 	}
 	var errs []error
+	queued := 0
 	for _, k := range keys {
 		owner, repo, ok := k.ownerRepo()
 		if !ok {
@@ -62,10 +65,15 @@ func (d *Sender) Repost(ctx context.Context, keys []Key, state State, reason str
 		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("report: repost %s: %w", k.Revision, err))
+			continue
 		}
+		queued++
 	}
-	_, err := d.Drain(ctx)
-	return errors.Join(append(errs, err)...)
+	if queued > 0 {
+		_, err := d.Drain(ctx)
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
 }
 
 // Repost queues the replacement through the process-wide sender.

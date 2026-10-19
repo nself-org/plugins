@@ -15,7 +15,8 @@ func TestBackoffSchedule(t *testing.T) {
 		want time.Duration
 	}{
 		{0, 0.5, 30 * time.Second}, {1, 0.5, time.Minute}, {4, 0.5, 8 * time.Minute}, {5, 0.5, 10 * time.Minute},
-		{40, 0.5, 10 * time.Minute}, {0, 0, 24 * time.Second}, {0, 1, 36 * time.Second}, {5, 1, 10 * time.Minute},
+		{40, 0.5, 10 * time.Minute}, {0, 0, 24 * time.Second}, {0, 1, 36 * time.Second}, {5, 1, 8 * time.Minute},
+		{5, 0, 8 * time.Minute}, {5, 0.75, 9 * time.Minute}, {40, 0.9, 8*time.Minute + 24*time.Second},
 	} {
 		if got := Backoff(c.n, c.rnd); got != c.want {
 			t.Fatalf("Backoff(%d, %v) = %v, want %v", c.n, c.rnd, got, c.want)
@@ -123,7 +124,15 @@ func TestReportOwner(t *testing.T) {
 		t.Fatalf("personal process: posted %+v, outbox %+v %v", rep.posted, list, err)
 	}
 
+	// The same store, drained again by a TEAM process: the suppressed entry posts.
 	SetProcessRole(RoleTeam)
+	if n, err := d.Drain(ctx); err != nil || n != 1 || len(rep.posted) != 1 {
+		t.Fatalf("same store under RoleTeam: n=%d posted=%+v %v", n, rep.posted, err)
+	}
+	if left, _ := d.Store.OutboxList(ctx); len(left) != 0 {
+		t.Fatalf("revived entry still listed: %+v", left)
+	}
+
 	rep2 := &recorder{}
 	d2, _ := newSender(t, rep2)
 	d2.Owner = team
@@ -188,5 +197,23 @@ func TestRepost(t *testing.T) {
 	}
 	if err := d.Repost(ctx, keys[:1], State("bogus"), "x"); err == nil {
 		t.Fatal("an invalid state is refused")
+	}
+}
+
+// TestDrainParksUnreadableEntries: a payload nobody can read is parked where
+// `ci runs outbox` shows it, and it does not stop the other streams.
+func TestDrainParksUnreadableEntries(t *testing.T) {
+	ctx, rep := context.Background(), &recorder{}
+	d, _ := newSender(t, rep)
+	if _, err := d.Store.OutboxEnqueue(ctx, sha2, key("o", "bad"), []byte("{not json")); err != nil {
+		t.Fatal(err)
+	}
+	seq, _ := d.Reserve(ctx, "o", "r", sha)
+	if err := d.Complete(ctx, seq, status(Success, "ok")); err != nil {
+		t.Fatal(err)
+	}
+	list, err := d.Store.OutboxList(ctx)
+	if err != nil || len(rep.posted) != 1 || len(list) != 1 || list[0].State != "suppressed" || list[0].Reason != "unreadable payload" {
+		t.Fatalf("posted %+v, outbox %+v %v", rep.posted, list, err)
 	}
 }

@@ -39,17 +39,29 @@ type Sender struct {
 	Store    *store.Store
 	Registry *Registry // nil: DefaultRegistry
 	// Remote names the remote URL of the repository a status is for; it picks
-	// the reporter. Nil: the GitHub remote of Owner/Repo.
+	// the reporter. Nil: the GitHub remote of Owner/Repo, so a composition root
+	// that registers a second kind MUST set it, or that kind never receives a post.
 	Remote func(Status) string
 	// Owner returns providers.report_owner for the status's project
-	// (OwnerPersonal or OwnerTeam). Nil: OwnerPersonal.
+	// (OwnerPersonal or OwnerTeam; providers.ReportOwner reads it from the
+	// effective policy). Nil: OwnerPersonal, so a composition root that wants
+	// team ownership honoured MUST set it, or nothing is ever suppressed.
 	Owner func(ctx context.Context, s Status) string
 	Now   func() time.Time // nil: time.Now
 	Rand  func() float64   // nil: math/rand; a value in [0,1)
+	Pause time.Duration    // wait between claim retries while an older post is in flight; zero: 250 ms
 }
 
-// Default is the process-wide sender; the composition root sets its Store.
+// Default is the process-wide sender; the composition root sets its Store,
+// Remote and Owner (see the field notes: unset hooks fail open).
 var Default = &Sender{}
+
+// postTimeout bounds one Post; it stays below the store's claim TTL (60 s), so
+// a hung reporter cannot make the delivery lose its claim.
+const postTimeout = 30 * time.Second
+
+// claimWaits bounds how often deliver retries while an older seq is mid-post.
+const claimWaits = 10
 
 // Drain delivers whatever is due through the process-wide sender.
 func Drain(ctx context.Context) (int, error) { return Default.Drain(ctx) }
@@ -113,14 +125,18 @@ func (d *Sender) Complete(ctx context.Context, seq int64, s Status) error {
 }
 
 // Drain delivers every due entry and returns how many were posted. The store
-// collapses first, so an entry a newer seq replaces is superseded without a post; entries whose reporting
-// owner is another process are suppressed; failures are parked with a backoff.
+// collapses first, so an entry a newer seq replaces is superseded without a
+// post; entries whose reporting owner is another process are suppressed (and
+// revived when this process becomes the owner); failures are parked with a backoff.
 func (d *Sender) Drain(ctx context.Context) (int, error) {
 	if d.Store == nil {
 		return 0, errNoStore
 	}
 	n := 0
 	for round := 0; round < healRounds; round++ {
+		if err := d.revive(ctx); err != nil {
+			return n, err
+		}
 		due, err := d.Store.OutboxDue(ctx, d.now())
 		if err != nil {
 			return n, err
@@ -143,27 +159,81 @@ func (d *Sender) Drain(ctx context.Context) (int, error) {
 	return n, nil
 }
 
+// suppressed reports whether this process must leave s to another reporter.
+func (d *Sender) suppressed(ctx context.Context, s Status) bool {
+	return d.owner(ctx, s) == OwnerTeam && ProcessRole() == RolePersonal
+}
+
+// revive requeues the suppressed entries this process may deliver now: a TEAM
+// process started on the same store, or the owner key went back to personal.
+func (d *Sender) revive(ctx context.Context) error {
+	list, err := d.Store.OutboxList(ctx)
+	if err != nil {
+		return err
+	}
+	for _, it := range list {
+		var s Status
+		if it.State != store.OutboxSuppressed || it.Reason != SuppressedReason || json.Unmarshal(it.Payload, &s) != nil || s.Validate() != nil || d.suppressed(ctx, s) {
+			continue
+		}
+		if err = d.Store.OutboxRequeue(ctx, it.Revision, it.Context, it.Seq); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// claim takes the right to post seq, waiting a little while an older seq is
+// mid-post (the CI-37 Outbox waits longer). ok is false when the entry must not
+// be posted now: superseded, another process is posting it, or the wait ran out.
+func (d *Sender) claim(ctx context.Context, it store.OutboxItem) (token int64, ok bool, err error) {
+	for i := 0; ; i++ {
+		var res int
+		if res, token, err = d.Store.OutboxClaim(ctx, it.Revision, it.Context, it.Seq); err != nil || res == store.ClaimOK {
+			return token, err == nil, err
+		}
+		if res != store.ClaimWait || i >= claimWaits {
+			return 0, false, nil
+		}
+		select {
+		case <-ctx.Done():
+			return 0, false, ctx.Err()
+		case <-time.After(d.pause()):
+		}
+	}
+}
+
+func (d *Sender) pause() time.Duration {
+	if d.Pause > 0 {
+		return d.Pause
+	}
+	return 250 * time.Millisecond
+}
+
 // deliver posts one entry. lost is true when its claim was lost and the store
 // queued the newest status again; the caller drains once more.
 func (d *Sender) deliver(ctx context.Context, it store.OutboxItem) (posted, lost bool, err error) {
 	var s Status
 	if json.Unmarshal(it.Payload, &s) != nil || s.Validate() != nil {
-		return false, false, nil // a corrupt entry is left for the operator; it must not block the rest
+		// Parked where `ci runs outbox` shows it, so it stops standing in the way of the rest.
+		return false, false, d.Store.OutboxSuppress(ctx, it.Revision, it.Context, it.Seq, "unreadable payload")
 	}
-	if d.owner(ctx, s) == OwnerTeam && ProcessRole() == RolePersonal {
+	if d.suppressed(ctx, s) {
 		return false, false, d.Store.OutboxSuppress(ctx, it.Revision, it.Context, it.Seq, SuppressedReason)
 	}
-	res, token, err := d.Store.OutboxClaim(ctx, it.Revision, it.Context, it.Seq)
-	if err != nil || res != store.ClaimOK {
-		return false, false, err // superseded, or another process is posting
+	token, ok, err := d.claim(ctx, it)
+	if err != nil || !ok {
+		return false, false, err
 	}
 	bg := context.WithoutCancel(ctx)
-	_, rep, ok := d.registry().Resolve(d.remote(s))
+	_, rep, found := d.registry().Resolve(d.remote(s))
 	var postErr error
-	if !ok {
+	if !found {
 		postErr = errors.New("no reporter accepts the remote of " + s.Owner + "/" + s.Repo)
 	} else {
-		postErr = rep.Post(ctx, s)
+		pctx, cancel := context.WithTimeout(ctx, postTimeout)
+		postErr = rep.Post(pctx, s)
+		cancel()
 	}
 	if postErr != nil {
 		next := d.now().Add(Backoff(it.Attempts, d.rnd()))
@@ -187,11 +257,10 @@ func (d *Sender) owner(ctx context.Context, s Status) string {
 	return d.Owner(ctx, s)
 }
 
-// cause is the stored text of a failed post: one short line.
+// cause is the stored text of a failed post: one short line of at most 200 runes.
 func cause(err error) string {
-	m := firstLine(err.Error())
-	if len(m) > 200 {
-		m = m[:200]
+	if r := []rune(firstLine(err.Error())); len(r) > 200 {
+		return string(r[:200])
 	}
-	return m
+	return firstLine(err.Error())
 }

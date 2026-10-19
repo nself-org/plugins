@@ -85,3 +85,29 @@ func TestOutboxSuppress(t *testing.T) {
 		t.Fatalf("a suppressed entry is never delivered here: %+v", due)
 	}
 }
+
+// TestOutboxSuppressTakesAnExpiredClaim: a posting entry whose claim expired
+// (a crashed poster) can be parked, so it stops coming back on every drain.
+func TestOutboxSuppressTakesAnExpiredClaim(t *testing.T) {
+	s, ctx := testStore(t), context.Background()
+	seq, _ := s.OutboxEnqueue(ctx, "rev", "nself-ci@o/r", []byte(`{}`))
+	if res, _, _ := s.OutboxClaim(ctx, "rev", "nself-ci@o/r", seq); res != ClaimOK {
+		t.Fatalf("claim = %d", res)
+	}
+	later := time.Now().Add(2 * claimTTL)
+	if due, _ := s.OutboxDue(ctx, later); len(due) != 1 || due[0].State != OutboxPosting {
+		t.Fatalf("an expired claim is due: %+v", due)
+	}
+	if err := s.OutboxSuppress(ctx, "rev", "nself-ci@o/r", seq, "team"); err != nil {
+		t.Fatal(err)
+	}
+	if due, _ := s.OutboxDue(ctx, later); len(due) != 0 {
+		t.Fatalf("still due after suppress: %+v", due)
+	}
+	if err := s.OutboxRequeue(ctx, "rev", "nself-ci@o/r", seq); err != nil {
+		t.Fatal(err)
+	}
+	if due, _ := s.OutboxDue(ctx, later); len(due) != 1 || due[0].State != OutboxPending || due[0].Reason != "" {
+		t.Fatalf("requeued: %+v", due)
+	}
+}
