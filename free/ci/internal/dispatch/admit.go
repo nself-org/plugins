@@ -108,7 +108,10 @@ func Admit(ctx context.Context, st *store.Store, r Request) (Admitted, error) {
 // refuse records why the attempt stays queued; the record is best effort
 // because the refusal itself already stands.
 func refuse(ctx context.Context, st *store.Store, attemptID string, ref *Refusal) *Refusal {
-	_ = st.RecordRefusal(context.WithoutCancel(ctx), attemptID, string(ref.Reason), ref.Detail)
+	ctx = context.WithoutCancel(ctx)
+	if reason, detail, ok, err := st.Refusal(ctx, attemptID); err != nil || !ok || reason != string(ref.Reason) || detail != ref.Detail {
+		_ = st.RecordRefusal(ctx, attemptID, string(ref.Reason), ref.Detail)
+	}
 	return ref
 }
 

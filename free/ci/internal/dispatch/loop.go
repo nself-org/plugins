@@ -74,6 +74,7 @@ type entry struct {
 	err      error
 	finished bool
 	reason   model.PlacementReason
+	fails    int // consecutive store errors while admitting
 }
 
 // Dispatcher places and admits queued attempts.
@@ -244,7 +245,15 @@ func (d *Dispatcher) pending(now time.Time) []Queued {
 }
 
 // Tick places and admits every queued job once, in the Orderer's order.
+//
+// A tick works for every queued job, so it does not stop when the caller that
+// happened to run it gives up: that caller's cancellation must not fail
+// another caller's job.
 func (d *Dispatcher) Tick(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	ctx = context.WithoutCancel(ctx)
 	d.tickM.Lock()
 	defer d.tickM.Unlock()
 	now := d.cfg.Clock()

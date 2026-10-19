@@ -21,6 +21,7 @@ const (
 	OutcomeUnplaceable  = "unplaceable"
 	OutcomeTimeout      = "timeout"
 	OutcomeFailed       = "failed"
+	OutcomeRetry        = "retry"
 	OutcomeUnknownKind  = "unknown_transport"
 	OutcomeAwaitingAppr = "awaiting-approval"
 )

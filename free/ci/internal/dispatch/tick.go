@@ -105,12 +105,13 @@ func (d *Dispatcher) admit(ctx context.Context, w *sched.World, q Queued, p sche
 		}
 	case errors.Is(err, ErrConflict):
 		dec.Outcome = OutcomeConflict
+		d.healthy(q)
 	case errors.As(err, &ref):
 		dec.Outcome, dec.Reason = OutcomeRefused, ref.Reason
-		d.remember(ctx, q, ref.Reason, ref.Detail)
+		d.note(q, ref.Reason) // Admit stored the reason
+		d.healthy(q)
 	default:
-		dec.Outcome = OutcomeFailed
-		d.finish(q.Seq, Admitted{}, err)
+		d.retry(&dec.Outcome, q, err)
 	}
 }
 
@@ -174,22 +175,56 @@ func (d *Dispatcher) expire(ctx context.Context, q Queued, maxQueueMs int64, dec
 	d.finish(q.Seq, Admitted{}, fail(CodeQueueTimeout, "job %s waited %s in the queue (max_queue %s); queue.timeout", q.Job.Sched.Name, waited.Round(time.Second), (time.Duration(limit)*time.Millisecond).Round(time.Second)))
 }
 
-// remember stores the reason a job is still queued, once per change.
-func (d *Dispatcher) remember(ctx context.Context, q Queued, reason model.PlacementReason, detail string) {
+// note remembers the reason a job waits and reports whether it changed.
+func (d *Dispatcher) note(q Queued, reason model.PlacementReason) bool {
 	d.mu.Lock()
-	var e *entry
+	defer d.mu.Unlock()
 	for _, c := range d.queue {
-		if c.queued.Seq == q.Seq {
-			e = c
+		if c.queued.Seq == q.Seq && c.reason != reason {
+			c.reason = reason
+			return true
 		}
 	}
-	changed := e != nil && e.reason != reason
-	if changed {
-		e.reason = reason
+	return false
+}
+
+// remember stores the reason a job is still queued, once per change.
+func (d *Dispatcher) remember(ctx context.Context, q Queued, reason model.PlacementReason, detail string) {
+	if d.note(q, reason) {
+		_ = d.cfg.Store.RecordRefusal(context.WithoutCancel(ctx), q.Job.AttemptID, string(reason), detail)
+	}
+}
+
+// healthy clears a job's run of store errors: the store answered.
+func (d *Dispatcher) healthy(q Queued) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, c := range d.queue {
+		if c.queued.Seq == q.Seq {
+			c.fails = 0
+		}
+	}
+}
+
+// retryLimit is how many consecutive store errors fail a job; a busy
+// database is retried on the next tick.
+const retryLimit = 3
+
+// retry counts a store error against the job and fails it at the limit.
+func (d *Dispatcher) retry(outcome *string, q Queued, err error) {
+	d.mu.Lock()
+	n := 0
+	for _, c := range d.queue {
+		if c.queued.Seq == q.Seq {
+			c.fails++
+			n = c.fails
+		}
 	}
 	d.mu.Unlock()
-	if changed {
-		_ = d.cfg.Store.RecordRefusal(context.WithoutCancel(ctx), q.Job.AttemptID, string(reason), detail)
+	*outcome = OutcomeRetry
+	if n >= retryLimit {
+		*outcome = OutcomeFailed
+		d.finish(q.Seq, Admitted{}, err)
 	}
 }
 
