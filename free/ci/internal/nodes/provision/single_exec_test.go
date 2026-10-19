@@ -45,6 +45,7 @@ var dynamicProgram = map[string]bool{
 	"internal/serve/serve_job.go:runGateDirect": true,
 	"internal/exec/process.go:runCommand":       true,
 	"internal/exec/process.go:runCommandIn":     true,
+	"internal/exec/process.go:runCommandSig":    true,
 	// `nself ci --detach` re-executes the plugin binary (os.Executable) in a new
 	// session; the program is the caller's own binary, never ssh (P7-CI-63).
 	"internal/exec/detach.go:StartDetached": true,
@@ -52,10 +53,13 @@ var dynamicProgram = map[string]bool{
 	// command the lease names, so the credential lives only in that process's
 	// environment (P7-NODE-23); never ssh.
 	"cmd/agent/cred_wrapper.go:runCredWrapper": true,
+	// nself-ci-agent job-shim replaces itself (syscall.Exec) with the step argv the agent sent on
+	// stdin, as a job user chosen by sudo; never ssh (P7-NODE-06).
+	"cmd/agent/job_shim.go:execShimRequest": true,
 	// The container runtime binary is checked against runtimeBinary (docker or
 	// podman by name or path) before any of these runs it (P7-TRUST-04).
 	"internal/exec/container.go:containerStopper": true,
-	"internal/exec/runtime.go:RuntimeQuery":       true,
+	"internal/exec/runtime.go:runtimeQuery":       true,
 	"internal/exec/runtime.go:RuntimeRemove":      true,
 	// The sandboxed-container probe (P7-TRUST-05): the runtime binary is checked against
 	// runtimeBinary, the runtime name and image against fixed patterns; runsc is run only by its

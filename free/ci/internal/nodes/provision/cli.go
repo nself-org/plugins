@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/nself-org/cli/sdk/go/v2/compat"
+	"github.com/nself-org/cli/sdk/go/v2/output"
 )
 
 //go:embed help/provision.txt help/verify.txt
@@ -34,6 +37,10 @@ type Deps struct {
 	// Executors builds one Executor per --host value (local when none).
 	Executors func(hosts []string, sshKey string) []Executor
 	Ctx       context.Context
+	// RunnerPin supplies the pinned runner (V15 only; nil in v1.4 mode and in tests of v1.4).
+	RunnerPin func() (RunnerPin, error)
+	// Record writes the provisioned runner host to the node registry (V15 only; nil records nothing).
+	Record func(ctx context.Context, req RecordRequest) (nodeID string, err error)
 }
 
 // DefaultDeps is the real process wiring.
@@ -110,39 +117,93 @@ func RunProvision(args []string, d Deps) int {
 	if done, code := parseCommand(fs, "provision", args, d); done {
 		return code
 	}
-	if asJSON.on {
+	// compat.V15(P7-NODE-06): provision refuses --json -> provision --json prints one v1 envelope
+	jsonOut := asJSON.on && compat.V15()
+	if asJSON.on && !jsonOut {
 		return finish(d, fmt.Errorf("nself ci nodes provision does not support --json"))
+	}
+	fail := func(err error) int {
+		if jsonOut {
+			return failEnvelope(d.Out, "ci nodes provision", err)
+		}
+		return finish(d, err)
 	}
 	tok := token.str
 	if tok == "" {
 		tok = d.Getenv("GITHUB_RUNNER_TOKEN")
 	}
 	if githubURL.str == "" {
-		return finish(d, fmt.Errorf("--github-url is required (the repo or org runners register against)"))
+		return fail(usageError{"--github-url is required (the repo or org runners register against)"})
 	}
 	if tok == "" {
-		return finish(d, fmt.Errorf("a runner registration token is required: pass --token or set GITHUB_RUNNER_TOKEN"))
+		return fail(usageError{"a runner registration token is required: pass --token or set GITHUB_RUNNER_TOKEN"})
 	}
 	if len(host.list) > 1 {
-		return finish(d, fmt.Errorf("provision takes at most one --host per invocation; run it once per host"))
+		return fail(usageError{"provision takes at most one --host per invocation; run it once per host"})
 	}
 	m, err := LoadEmbeddedManifest()
 	if err != nil {
-		return finish(d, err)
+		return fail(err)
 	}
 	ex := d.Executors(host.list, sshKey.str)[0]
 	opts := ProvisionOptions{Instances: instances.num, InstallRoot: installRoot.str,
 		GithubURL: githubURL.str, RegToken: tok, Labels: labels.list}
-	fmt.Fprintf(d.Out, "Provisioning %s (%d instance(s))...\n", ex.Label(), opts.Instances)
+	// compat.V15(P7-NODE-06): runner from releases/latest, unchecked -> pinned runner, sha256 checked before extraction
+	if compat.V15() {
+		if opts.Runner, err = v15Pin(d); err != nil {
+			return fail(err)
+		}
+	}
+	if !jsonOut {
+		fmt.Fprintf(d.Out, "Provisioning %s (%d instance(s))...\n", ex.Label(), opts.Instances)
+	}
 	result, err := Provision(d.Ctx, ex, m, opts)
-	for _, step := range result.Steps {
-		fmt.Fprintf(d.Out, "  [%s] %s\n", step.Name, step.Output)
+	if !jsonOut {
+		for _, step := range result.Steps {
+			fmt.Fprintf(d.Out, "  [%s] %s\n", step.Name, step.Output)
+		}
 	}
 	if err != nil {
-		return finish(d, err)
+		return fail(err)
+	}
+	var node string
+	// compat.V15(P7-NODE-06): runner host not recorded -> recorded with trust.accepts null (source provider)
+	if compat.V15() {
+		if node, err = recordRunner(d.Ctx, d, firstOr(host.list, ""), labels.list); err != nil {
+			return fail(fmt.Errorf("runners are installed but could not be recorded: %w", err))
+		}
+	}
+	if jsonOut {
+		data := ProvisionData{Host: ex.Label(), Instances: opts.Instances, Node: node, Steps: []stepData{}}
+		for _, st := range result.Steps {
+			data.Steps = append(data.Steps, stepData{Name: st.Name, Output: st.Output})
+		}
+		if werr := output.WriteData(d.Out, "ci nodes provision", data, nil); werr != nil {
+			return output.ExitInfra
+		}
+		return 0
 	}
 	fmt.Fprintln(d.Out, "Provision complete.")
 	return 0
+}
+
+func firstOr(l []string, def string) string {
+	if len(l) == 0 {
+		return def
+	}
+	return l[0]
+}
+
+// v15Pin returns the runner pin of the composition root.
+func v15Pin(d Deps) (*RunnerPin, error) {
+	if d.RunnerPin == nil {
+		return nil, fmt.Errorf("no runner pin is wired into this build")
+	}
+	p, err := d.RunnerPin()
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
 }
 
 // RunVerify is `nself ci nodes verify`.
@@ -161,6 +222,10 @@ func RunVerify(args []string, d Deps) int {
 		return finish(d, err)
 	}
 	reports := VerifyHosts(d.Ctx, d.Executors(host.list, sshKey.str), m)
+	// compat.V15(P7-NODE-06): raw []HostReport JSON -> one v1 envelope with the per-host results and the drift
+	if asJSON.on && compat.V15() {
+		return writeVerifyEnvelope(d.Out, reports)
+	}
 	if asJSON.on {
 		enc := json.NewEncoder(d.Out)
 		enc.SetIndent("", "  ")

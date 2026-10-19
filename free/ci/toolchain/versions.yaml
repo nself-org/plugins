@@ -12,6 +12,26 @@ rows:
       ref: docker.io/library/debian:trixie-slim
     image: docker.io/library/debian
     digest: sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+  - name: github-actions-runner
+    kind: tool
+    version: 2.338.0
+    purpose: GitHub Actions runner tarball installed by nodes provision (V15 pin, replaces releases/latest)
+    owner: internal/nodes/provision
+    probe:
+      - Runner.Listener
+      - --version
+    upstream:
+      type: github
+      ref: actions/runner
+    sources:
+      - os: linux
+        arch: amd64
+        url: https://github.com/actions/runner/releases/download/v2.338.0/actions-runner-linux-x64-2.338.0.tar.gz
+        sha256: af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32
+      - os: linux
+        arch: arm64
+        url: https://github.com/actions/runner/releases/download/v2.338.0/actions-runner-linux-arm64-2.338.0.tar.gz
+        sha256: 628b4a7258487b80c1d3c221095a7ded349f5ae0175fd3dfab708d07428f041b
   - name: gitleaks
     kind: tool
     version: 8.30.1

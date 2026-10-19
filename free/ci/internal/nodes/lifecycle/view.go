@@ -68,6 +68,15 @@ func ptrStr[T ~string](v *T) *string {
 	return &s
 }
 
+// acceptsView renders the accepts set; null (a provisioned GitHub runner, source provider, P7-NODE-06)
+// stays JSON null instead of looking like an empty admin choice.
+func acceptsView(v *[]model.TrustClass) []string {
+	if v == nil {
+		return nil
+	}
+	return strs(v)
+}
+
 // ViewOf renders a node.
 func ViewOf(n registry.Node) NodeView {
 	c := n.Capability
@@ -88,7 +97,7 @@ func ViewOf(n registry.Node) NodeView {
 		Platform: plat, Ownership: c.Identity.Ownership.Value, Discovered: c.Lifecycle.Discovered, AuthorizedProjects: projects,
 		Eligible: c.Lifecycle.Eligible, RevokedAt: c.Lifecycle.RevokedAt,
 		Trust: TrustView{
-			Accepts: strs(c.Trust.Accepts.Value), SecretClasses: strs(c.Trust.SecretClasses.Value),
+			Accepts: acceptsView(c.Trust.Accepts.Value), SecretClasses: strs(c.Trust.SecretClasses.Value),
 			PrivacyZone: ptrStr[model.PrivacyZone](c.Trust.PrivacyZone.Value), Isolation: ptrStr[model.Isolation](c.Trust.Isolation.Value),
 		},
 		Separation:   SeparationView{UIDSeparation: c.Separation.UIDSeparation.Value, UserNS: c.Separation.UserNS.Value, SigningEligible: c.Separation.SigningEligible.Value},

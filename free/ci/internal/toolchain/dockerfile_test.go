@@ -16,6 +16,11 @@ import (
 
 const dockerfilePath = "../../toolchain/Dockerfile"
 
+// imageExternalOwners are the owners whose tool pins are installed on nodes, never baked into the
+// toolchain image (P7-NODE-06: the GitHub runner tarball of `nodes provision`), so the Dockerfile
+// carries no ARG for them.
+var imageExternalOwners = map[string]bool{"internal/nodes/provision": true}
+
 var (
 	fromDigestRe = regexp.MustCompile(`@sha256:[0-9a-f]{64}( |$)`)
 	argRe        = regexp.MustCompile(`(?m)^ARG ([A-Z0-9_]+)=(.*)$`)
@@ -61,6 +66,9 @@ func checkDockerfile(d string, pins []Pin) []string {
 				out = append(out, fmt.Sprintf("base image %s is used by %d stages, want every stage", ref, n))
 			}
 		case KindTool:
+			if imageExternalOwners[p.Owner] {
+				continue
+			}
 			name := strings.ToUpper(strings.ReplaceAll(p.Name, "-", "_"))
 			want[name+"_VERSION"] = p.Version
 			for _, s := range p.Sources {
