@@ -100,3 +100,31 @@ func TestGuardIsRegisteredFirst(t *testing.T) {
 		t.Fatalf("pre-start order %+v", prestart)
 	}
 }
+
+// Every subcommand that runs a job must go through RunPreStart: a deploy host stops it with E663 before
+// it reads its spec. A new subcommand has to be classified here, so a job runner cannot skip the guard
+// by accident.
+func TestEveryJobRunningSubcommandRunsThePreStartGuard(t *testing.T) {
+	guarded := map[string][]string{"serve": {"--stdio"}, "exec": {"--spec", "/nonexistent", "--evidence", "/nonexistent"}}
+	exempt := map[string]bool{ // no job runs, or started by an already guarded agent; join runs the guard itself
+		"version": true, "slots": true, "verify-release": true, "job-shim": true, "cred-wrapper": true, "join": true,
+	}
+	regMu.RLock()
+	var names []string
+	for n := range commands {
+		names = append(names, n)
+	}
+	regMu.RUnlock()
+	for _, n := range names {
+		if _, ok := guarded[n]; !ok && !exempt[n] {
+			t.Errorf("subcommand %q is neither guarded nor exempt: classify it", n)
+		}
+	}
+	useGuard(t, hostLocal("box.example.test", "203.0.113.10", nil, nil), "box.example.test")
+	for n, args := range guarded {
+		code, _, stderr := runCmd(t, append([]string{n}, args...)...)
+		if code == 0 || !strings.Contains(stderr, "E663") {
+			t.Errorf("%s: code %d stderr %q", n, code, stderr)
+		}
+	}
+}

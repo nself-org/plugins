@@ -39,6 +39,7 @@ func FunnelRun(ctx context.Context, dir string, argv ...string) ([]byte, int, er
 	if len(argv) == 0 {
 		return nil, -1, fmt.Errorf("empty command")
 	}
+	sweepStaged()
 	var buf strings.Builder
 	var ex ciexec.Executor
 	spec := ciexec.JobSpec{
