@@ -42,6 +42,24 @@ func TestAmbiguousEscapeScanner(t *testing.T) {
 	}
 }
 
+func TestHexDigit(t *testing.T) {
+	for c := 0; c < 256; c++ {
+		var want uint16
+		ok := false
+		switch {
+		case c >= '0' && c <= '9':
+			want, ok = uint16(c-'0'), true
+		case c >= 'a' && c <= 'f':
+			want, ok = uint16(c-'a')+10, true
+		case c >= 'A' && c <= 'F':
+			want, ok = uint16(c-'A')+10, true
+		}
+		if got, gok := hexDigit(byte(c)); gok != ok || got != want {
+			t.Errorf("%q: %d %v, want %d %v", rune(c), got, gok, want, ok)
+		}
+	}
+}
+
 func TestHex4(t *testing.T) {
 	for in, want := range map[string]uint16{"0000": 0, "ffff": 0xffff, "FFFF": 0xffff, "d800": 0xd800, "09aF": 0x09af, "1234": 0x1234} {
 		if got, ok := hex4([]byte(in), 0); !ok || got != want {

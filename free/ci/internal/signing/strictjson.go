@@ -170,16 +170,25 @@ func hex4(raw []byte, at int) (uint16, bool) {
 	}
 	var v uint16
 	for _, c := range raw[at : at+4] {
-		switch {
-		case c >= '0' && c <= '9':
-			v = v<<4 | uint16(c-'0')
-		case c >= 'a' && c <= 'f':
-			v = v<<4 | uint16(c-'a'+10)
-		case c >= 'A' && c <= 'F':
-			v = v<<4 | uint16(c-'A'+10)
-		default:
+		d, ok := hexDigit(c)
+		if !ok {
 			return 0, false
 		}
+		v = v<<4 | d
 	}
 	return v, true
+}
+
+// hexDigit is the value of one hex digit (either case).
+func hexDigit(c byte) (uint16, bool) {
+	if c >= '0' && c <= '9' {
+		return uint16(c - '0'), true
+	}
+	if c >= 'a' && c <= 'f' {
+		return uint16(c-'a') + 10, true
+	}
+	if c >= 'A' && c <= 'F' {
+		return uint16(c-'A') + 10, true
+	}
+	return 0, false
 }
