@@ -13,6 +13,7 @@ package affected
 
 import (
 	"path"
+	"sort"
 	"strings"
 )
 
@@ -45,12 +46,19 @@ func markers(t tree, g *Graph) {
 			g.generators[d] = true
 		}
 	}
-	for eco, ds := range dirs {
-		if len(ds) < 2 {
+	ecos := make([]string, 0, len(dirs))
+	for eco := range dirs {
+		ecos = append(ecos, eco)
+	}
+	sort.Strings(ecos)
+	for _, eco := range ecos {
+		if len(dirs[eco]) < 2 {
 			continue
 		}
-		for d := range ds {
-			g.opaque[d] = eco
+		for d := range dirs[eco] {
+			if _, taken := g.opaque[d]; !taken {
+				g.opaque[d] = eco
+			}
 		}
 	}
 }

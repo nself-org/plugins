@@ -167,22 +167,6 @@ func (g *Graph) Dependants(dirs ...string) map[string]bool {
 	return seen
 }
 
-// withoutEdge returns a copy of g that lacks the edge from -> to (the
-// mutation the reverse-edge test applies).
-func (g *Graph) withoutEdge(from, to string) *Graph {
-	c := newGraph()
-	c.reasons, c.opaque, c.generators = g.reasons, g.opaque, g.generators
-	for d, e := range g.eco {
-		c.eco[d] = e
-	}
-	for k := range g.edges {
-		if k != [2]string{from, to} {
-			c.addEdge(k[0], k[1])
-		}
-	}
-	return c
-}
-
 // Detector is the pkggraph detector for the P7-CI-33 registry. It runs when
 // a Go or Node check is registered.
 func Detector() detect.Detector {

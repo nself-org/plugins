@@ -100,12 +100,23 @@ func TestSelectorCases(t *testing.T) {
 	}
 }
 
-func TestSelectorWithoutGraphUsesDefault(t *testing.T) {
-	in := plan.SelectionInput{Changed: []string{"a/x.go"}, BaseKnown: true, Jobs: []plan.JobRef{{ID: "j", Workdir: "a"}}}
-	want, wantJobs := plan.DefaultSelector(in)
-	got, gotJobs := Selector(in)
-	if got.Mode != want.Mode || got.Reason != want.Reason || !reflect.DeepEqual(gotJobs, wantJobs) {
-		t.Fatalf("got %v %v, want %v %v", got, gotJobs, want, wantJobs)
+func TestSelectorWithoutGraphFacts(t *testing.T) {
+	jobs := []plan.JobRef{{ID: "root", Workdir: "."}, {ID: "tools", Workdir: "tools"}}
+	in := plan.SelectionInput{BaseKnown: true, Jobs: jobs}
+	for _, c := range []struct {
+		changed []string
+		mode    string
+		ids     []string
+	}{
+		{[]string{"tools/x.txt"}, "affected", []string{"root", "tools"}}, // every covering workdir
+		{[]string{"config.json"}, "full", []string{"root", "tools"}},     // unowned root file
+		{[]string{"Makefile"}, "full", []string{"root", "tools"}},
+	} {
+		in.Changed = c.changed
+		sel, ids := Selector(in)
+		if string(sel.Mode) != c.mode || !reflect.DeepEqual(ids, c.ids) {
+			t.Errorf("%v: %v %v, want %s %v", c.changed, sel, ids, c.mode, c.ids)
+		}
 	}
 }
 

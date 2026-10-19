@@ -17,6 +17,7 @@ import (
 	"io/fs"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -120,11 +121,15 @@ func joinDir(dir, rel string) string {
 	return out
 }
 
+// maxBraceAlts bounds the alternatives one glob may expand to.
+const maxBraceAlts = 1024
+
 // matchGlob reports whether the slash path p matches pattern; `*` and `?`
-// stay inside one segment, `**` spans any number of segments (also zero) and
-// `{a,b}` alternatives are expanded.
+// stay inside one segment, `**` spans any number of segments (also zero),
+// `{a,b}` alternatives and `{1..3}` ranges are expanded.
 func matchGlob(pattern, p string) bool {
-	for _, alt := range expandBraces(pattern) {
+	alts, _ := expandBraces(pattern)
+	for _, alt := range alts {
 		if matchSegs(strings.Split(path.Clean(alt), "/"), strings.Split(p, "/")) {
 			return true
 		}
@@ -132,11 +137,12 @@ func matchGlob(pattern, p string) bool {
 	return false
 }
 
-// expandBraces expands the first (outermost) `{a,b,...}` group, recursively.
-func expandBraces(p string) []string {
+// expandBraces expands the first (outermost) `{...}` group, recursively. ok
+// is false when the result would pass maxBraceAlts (the list is cut there).
+func expandBraces(p string) (out []string, ok bool) {
 	open := strings.IndexByte(p, '{')
 	if open < 0 {
-		return []string{p}
+		return []string{p}, true
 	}
 	depth, last := 0, open+1
 	var parts []string
@@ -149,17 +155,56 @@ func expandBraces(p string) []string {
 				parts, last = append(parts, p[last:i]), i+1
 			}
 		case '}':
-			if depth--; depth == 0 {
-				parts = append(parts, p[last:i])
-				var out []string
-				for _, part := range parts {
-					out = append(out, expandBraces(p[:open]+part+p[i+1:])...)
-				}
-				return out
+			if depth--; depth != 0 {
+				continue
 			}
+			parts = append(parts, p[last:i])
+			if len(parts) == 1 {
+				if r := braceRange(parts[0]); r != nil {
+					parts = r
+				}
+			}
+			for _, part := range parts {
+				sub, subOK := expandBraces(p[:open] + part + p[i+1:])
+				out = append(out, sub...)
+				if !subOK || len(out) > maxBraceAlts {
+					if len(out) > maxBraceAlts {
+						out = out[:maxBraceAlts]
+					}
+					return out, false // stop at once: the cut propagates up
+				}
+			}
+			return out, true
 		}
 	}
-	return []string{p} // unbalanced: literal
+	return []string{p}, true // unbalanced: literal
+}
+
+// braceRange expands `1..3` (integers) or `a..c` (single letters); nil when s
+// is not a range.
+func braceRange(s string) []string {
+	lo, hi, found := strings.Cut(s, "..")
+	if !found {
+		return nil
+	}
+	if a, err1 := strconv.Atoi(lo); err1 == nil {
+		if b, err2 := strconv.Atoi(hi); err2 == nil && b-a >= 0 && b-a < maxBraceAlts {
+			var out []string
+			for n := a; n <= b; n++ {
+				out = append(out, strconv.Itoa(n))
+			}
+			return out
+		}
+		return nil
+	}
+	if len(lo) == 1 && len(hi) == 1 && lo[0] <= hi[0] {
+		var out []string
+		for c := lo[0]; c <= hi[0]; c++ {
+			out = append(out, string(rune(c)))
+		}
+		return out
+	}
+	return nil
 }
 
 func matchSegs(pat, segs []string) bool {

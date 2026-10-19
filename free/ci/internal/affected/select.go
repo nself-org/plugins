@@ -8,9 +8,11 @@ package affected
 // workdir, detector facts including the pkggraph facts).
 // Outputs: model.Selection{Mode, Reason, Digest} and the sorted job ids.
 // Constraints: pure; release pipelines and default-branch runs are always
-// full; full also on no base, an empty diff, a non-certain fact, a forcing
-// path (ForcesFull), an unmapped path, an uncertain graph, or no job left.
-// Without pkggraph facts the path-glob default (plan.DefaultSelector) decides.
+// full; full also on no base, an empty diff, a non-certain fact (outside
+// testdata/), a forcing path (ForcesFull), a path in a generator or opaque
+// directory, an unmapped path (no package owns it and no job below the
+// repository root covers it), an uncertain graph, or no job left. Without
+// pkggraph facts the graph is empty, so only job workdirs map paths.
 
 import (
 	"crypto/sha256"
@@ -26,11 +28,11 @@ import (
 
 // Selector is the plan.Selector this package provides.
 func Selector(in plan.SelectionInput) (model.Selection, []string) {
-	g, present, certain := FromFacts(in.Facts)
-	return selectWith(g, present, certain, in)
+	g, _, certain := FromFacts(in.Facts)
+	return selectWith(g, certain, in)
 }
 
-func selectWith(g *Graph, present, graphCertain bool, in plan.SelectionInput) (model.Selection, []string) {
+func selectWith(g *Graph, graphCertain bool, in plan.SelectionInput) (model.Selection, []string) {
 	all := make([]string, 0, len(in.Jobs))
 	for _, r := range in.Jobs {
 		all = append(all, r.ID)
@@ -47,7 +49,7 @@ func selectWith(g *Graph, present, graphCertain bool, in plan.SelectionInput) (m
 		return full("selection.full_required")
 	}
 	for _, f := range in.Facts {
-		if f.Confidence != detect.Certain {
+		if f.Confidence != detect.Certain && notTestdata(dirOf(f.Path)) {
 			return full("selection.full_required")
 		}
 	}
@@ -55,9 +57,6 @@ func selectWith(g *Graph, present, graphCertain bool, in plan.SelectionInput) (m
 		if ForcesFull(p) {
 			return full("selection.full_required")
 		}
-	}
-	if !present {
-		return plan.DefaultSelector(in) // no Go or pnpm packages: the path-glob rules decide
 	}
 	if !graphCertain {
 		return full("selection.full_required")
@@ -74,8 +73,10 @@ func selectWith(g *Graph, present, graphCertain bool, in plan.SelectionInput) (m
 		}
 		dir, kind := g.owner(p)
 		covered := false
-		for w, ids := range workdirs { // every job whose workdir holds the path
-			if within(dirOf(p), w) {
+		for w, ids := range workdirs {
+			// every job whose workdir holds the path, and (for a path no
+			// package owns) every job below its directory
+			if within(dirOf(p), w) || (kind == ownNone && dirOf(p) != "." && within(w, dirOf(p))) {
 				covered = covered || w != "."
 				for _, id := range ids {
 					picked[id] = true
@@ -88,12 +89,12 @@ func selectWith(g *Graph, present, graphCertain bool, in plan.SelectionInput) (m
 		case ownNode:
 			seeds[dir] = true
 		default:
-			if _, root := g.eco["."]; root {
-				seeds["."] = true // a root package may embed any file under it
-			}
 			if !covered {
 				return full("selection.full_required") // unmapped: only the root job or nothing holds it
 			}
+		}
+		if strings.Contains(g.eco["."], "go") {
+			seeds["."] = true // a root Go package may embed any file under the repository
 		}
 	}
 	affected := g.Dependants(keys(seeds)...)
@@ -119,23 +120,17 @@ const (
 	ownOpaque
 )
 
-// rootSource are the extensions of files directly in the repository root
-// that a root package owns; any other root file is unowned (unmapped).
-var rootSource = map[string]bool{
-	".go": true, ".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".mjs": true, ".cjs": true,
-	".mts": true, ".cts": true, ".vue": true, ".svelte": true, ".css": true, ".scss": true,
-}
-
 // owner finds what a changed path belongs to: the nearest directory above it
 // that is a package or an opaque manifest directory (opaque wins on a tie).
-// The repository root owns only the source files directly in it (a root
-// package) or, when opaque, everything not owned deeper.
+// The repository root owns only the .go files directly in it (a root Go
+// package; root JS or TS files are nearly always shared tool config) or, when
+// opaque, everything not owned deeper.
 func (g *Graph) owner(p string) (string, int) {
 	for d := dirOf(p); ; d = path.Dir(d) {
 		if _, ok := g.opaque[d]; ok {
 			return d, ownOpaque
 		}
-		if _, ok := g.eco[d]; ok && (d != "." || (dirOf(p) == "." && rootSource[path.Ext(p)])) {
+		if _, ok := g.eco[d]; ok && (d != "." || (dirOf(p) == "." && path.Ext(p) == ".go")) {
 			return d, ownNode
 		}
 		if d == "." || d == "/" {

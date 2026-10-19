@@ -16,11 +16,27 @@ import (
 // change to leaf must select leaf, mid and app, and nothing else.
 func leafSelectionHolds(g *Graph) error {
 	in := plan.SelectionInput{Changed: []string{"leaf/leaf.go"}, BaseKnown: true, Jobs: fixtureJobs()}
-	sel, jobs := selectWith(g, true, true, in)
+	sel, jobs := selectWith(g, true, in)
 	if want := []string{"app.test", "leaf.test", "mid.test"}; sel.Mode != "affected" || !reflect.DeepEqual(jobs, want) {
 		return &selectionError{got: jobs}
 	}
 	return nil
+}
+
+// withoutEdge returns a copy of g that lacks the edge from -> to (the
+// mutation the reverse-edge test applies).
+func (g *Graph) withoutEdge(from, to string) *Graph {
+	c := newGraph()
+	c.reasons, c.opaque, c.generators = g.reasons, g.opaque, g.generators
+	for d, e := range g.eco {
+		c.eco[d] = e
+	}
+	for k := range g.edges {
+		if k != [2]string{from, to} {
+			c.addEdge(k[0], k[1])
+		}
+	}
+	return c
 }
 
 type selectionError struct{ got []string }

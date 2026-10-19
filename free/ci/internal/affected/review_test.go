@@ -8,6 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/nself-org/plugins/free/ci/internal/detect"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 )
@@ -262,6 +263,132 @@ func TestUnderscoreModuleRootIsImportable(t *testing.T) {
 	for _, d := range []string{"_libs/sdk/_skip", "_hidden"} {
 		if _, ok := g.eco[d]; ok {
 			t.Errorf("%s must not be a package", d)
+		}
+	}
+}
+
+func TestGoWorkMemberReplacesAndQuotedPaths(t *testing.T) {
+	m := fstest.MapFS{
+		"go.work":           mf("use (\n\t./a\n\t./b\n\t\"./shared lib\"\n)\n"),
+		"a/go.mod":          mf("module example.com/a\n"),
+		"a/a.go":            mf("package a\nimport _ \"example.com/lib\"\nimport _ \"example.com/shared\"\n"),
+		"b/go.mod":          mf("module example.com/b\n\nreplace example.com/lib => ../lib\n"),
+		"b/b.go":            mf("package b\n"),
+		"lib/go.mod":        mf("module example.com/lib\n"),
+		"lib/x.go":          mf("package lib\n"),
+		"shared lib/go.mod": mf("module example.com/shared\n"),
+		"shared lib/s.go":   mf("package s\n"),
+	}
+	g := buildFS(t, m)
+	want := []string{"a->lib", "a->shared lib"}
+	if got := edgesOf(g); !reflect.DeepEqual(got, want) {
+		t.Fatalf("edges = %v, want %v (reasons %v)", got, want, g.reasons)
+	}
+}
+
+func TestUnmodelledReplacePathsAreUncertain(t *testing.T) {
+	for _, to := range []string{`/abs/lib`, `..\lib`, `C:\lib`} {
+		m := fstest.MapFS{"go.mod": mf("module m\n\nreplace example.com/lib => " + to + "\n"), "a.go": mf("package m\n")}
+		if g := buildFS(t, m); len(g.reasons) == 0 {
+			t.Errorf("replace => %s must be uncertain", to)
+		}
+	}
+}
+
+func TestRootToolConfigIsUnmapped(t *testing.T) {
+	m := fstest.MapFS{
+		"package.json": mf(`{"name":"root","packageManager":"pnpm@9"}`), "pnpm-workspace.yaml": mf("packages: ['web/*']\n"),
+		"web/a/package.json": mf(`{"name":"a"}`), "eslint.config.js": mf("export default []\n"), "web/tsconfig.base.json": mf("{}"),
+	}
+	jobs := []plan.JobRef{{ID: "lint", Workdir: "."}, {ID: "web", Workdir: "web"}, {ID: "a.test", Workdir: "web/a"}, {ID: "b.test", Workdir: "web/b"}}
+	if sel, _ := selectFor(t, m, jobs, "eslint.config.js"); sel.Mode != "full" {
+		t.Errorf("eslint.config.js: %v, want full", sel)
+	}
+	sel, got := selectFor(t, m, jobs, "web/tsconfig.base.json") // not owned by a package: every job under web
+	if sel.Mode != "affected" || !reflect.DeepEqual(got, []string{"a.test", "b.test", "lint", "web"}) {
+		t.Errorf("web/tsconfig.base.json: %v %v", sel, got)
+	}
+}
+
+func TestRootGoPackageSeedsForEverySubtree(t *testing.T) {
+	m := fstest.MapFS{
+		"go.mod": mf("module example.com/lib\n"), "lib.go": mf("package lib\n"),
+		"assets/assets.go": mf("package assets\n"), "assets/x.json": mf("{}"),
+		"app/go.mod":  mf("module example.com/app\n\nreplace example.com/lib => ../\n"),
+		"app/main.go": mf("package main\nimport _ \"example.com/lib\"\n"),
+	}
+	jobs := []plan.JobRef{{ID: "root", Workdir: "."}, {ID: "app", Workdir: "app"}}
+	if sel, got := selectFor(t, m, jobs, "assets/x.json"); sel.Mode != "affected" || !reflect.DeepEqual(got, []string{"app", "root"}) {
+		t.Fatalf("got %v %v", sel, got)
+	}
+}
+
+func TestDependencySectionsAndPathSpecs(t *testing.T) {
+	m := fstest.MapFS{
+		"pnpm-workspace.yaml":    mf("packages: ['p/*', 'p/app/lib']\n"),
+		"p/real/package.json":    mf(`{"name":"real"}`),
+		"p/a/package.json":       mf(`{"name":"a","dependencies":{"alias":"npm:external@1"},"optionalDependencies":{"alias":"workspace:real@*"}}`),
+		"p/app/package.json":     mf(`{"name":"app","dependencies":{"lib":"file:lib"}}`),
+		"p/app/lib/package.json": mf(`{"name":"lib2"}`),
+		"p/client/package.json":  mf(`{"name":"client","dependencies":{"app":"*"}}`),
+	}
+	g := buildFS(t, m)
+	want := []string{"p/a->p/real", "p/app->p/app/lib", "p/client->p/app"}
+	if got := edgesOf(g); !reflect.DeepEqual(got, want) {
+		t.Fatalf("edges = %v, want %v (reasons %v)", got, want, g.reasons)
+	}
+}
+
+func TestBraceRangesAndBounds(t *testing.T) {
+	for _, c := range []struct {
+		pat, p string
+		want   bool
+	}{
+		{"packages/pkg{1..3}", "packages/pkg2", true}, {"packages/pkg{1..3}", "packages/pkg4", false},
+		{"x/{a..c}", "x/b", true}, {"x/{a,b/{c,d}}", "x/b/d", true}, {"x/{a", "x/{a", true},
+	} {
+		if got := matchGlob(c.pat, c.p); got != c.want {
+			t.Errorf("matchGlob(%q, %q) = %v", c.pat, c.p, got)
+		}
+	}
+	wide := ""
+	for i := 0; i < 32; i++ {
+		wide += "{a,b}"
+	}
+	if alts, ok := expandBraces(wide); ok || len(alts) > maxBraceAlts {
+		t.Fatalf("a 2^32 pattern expanded to %d alternatives (ok=%v)", len(alts), ok)
+	}
+	m := fstest.MapFS{"pnpm-workspace.yaml": mf("packages: ['" + wide + "']\n"), "a/package.json": mf(`{"name":"a"}`)}
+	if g := buildFS(t, m); len(g.reasons) == 0 {
+		t.Fatal("an unboundedly wide glob must be uncertain")
+	}
+}
+
+func TestNonCertainFactsInTestdataAreIgnored(t *testing.T) {
+	m := fstest.MapFS{"go.mod": mf("module m\n"), "a/a.go": mf("package a\n")}
+	g := buildFS(t, m)
+	facts := append(g.Facts(),
+		detect.Fact{Kind: "service", Name: "unknown", Path: "k8s/testdata/compose.yml", Confidence: detect.Unknown})
+	in := plan.SelectionInput{Changed: []string{"a/a.go"}, BaseKnown: true, Jobs: []plan.JobRef{{ID: "j", Workdir: "."}}, Facts: facts}
+	if sel, _ := Selector(in); sel.Mode != "affected" {
+		t.Fatalf("testdata fact forced %v", sel)
+	}
+	in.Facts = append(g.Facts(), detect.Fact{Kind: "service", Name: "unknown", Path: "k8s/compose.yml", Confidence: detect.Unknown})
+	if sel, _ := Selector(in); sel.Mode != "full" {
+		t.Fatalf("a real non-certain fact must force full, got %v", sel)
+	}
+}
+
+func TestHiddenDirManifestsAndOpaqueOrder(t *testing.T) {
+	m := fstest.MapFS{"a/package.json": mf(`{"name":"a"}`), ".next/package.json": mf(`{`)}
+	if g := buildFS(t, m); len(g.reasons) != 0 {
+		t.Fatalf("a hidden directory manifest must be ignored: %v", g.reasons)
+	}
+	o := fstest.MapFS{"a/Cargo.toml": mf("x"), "b/Cargo.toml": mf("x"), "a/pyproject.toml": mf("x"), "b/pyproject.toml": mf("x")}
+	first := buildFS(t, o).opaque
+	for i := 0; i < 20; i++ {
+		if got := buildFS(t, o).opaque; !reflect.DeepEqual(got, first) {
+			t.Fatalf("opaque map changed between builds: %v vs %v", got, first)
 		}
 	}
 }

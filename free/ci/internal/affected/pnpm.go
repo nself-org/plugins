@@ -27,7 +27,7 @@ import (
 type pkgJSON struct {
 	Name       string
 	Workspaces json.RawMessage
-	Deps       map[string]string // every dependency section, one entry per name
+	Deps       map[string][]string // every dependency section: all specifiers per name
 }
 
 var depSections = []string{"dependencies", "devDependencies", "optionalDependencies", "peerDependencies"}
@@ -41,7 +41,7 @@ func readPkg(fsys fs.FS, p string) (pkgJSON, bool) {
 	if json.Unmarshal(b, &raw) != nil {
 		return pkgJSON{}, false
 	}
-	pj := pkgJSON{Workspaces: raw["workspaces"], Deps: map[string]string{}}
+	pj := pkgJSON{Workspaces: raw["workspaces"], Deps: map[string][]string{}}
 	if r, ok := raw["name"]; ok && json.Unmarshal(r, &pj.Name) != nil {
 		return pkgJSON{}, false
 	}
@@ -55,9 +55,7 @@ func readPkg(fsys fs.FS, p string) (pkgJSON, bool) {
 			return pkgJSON{}, false
 		}
 		for name, spec := range m {
-			if _, dup := pj.Deps[name]; !dup {
-				pj.Deps[name] = spec
-			}
+			pj.Deps[name] = append(pj.Deps[name], spec)
 		}
 	}
 	return pj, true
@@ -66,7 +64,7 @@ func readPkg(fsys fs.FS, p string) (pkgJSON, bool) {
 func pnpmGraph(fsys fs.FS, t tree, g *Graph) {
 	pkgs := map[string]pkgJSON{} // dir -> manifest
 	for _, f := range t.files {
-		if path.Base(f) != "package.json" || !notTestdata(dirOf(f)) {
+		if path.Base(f) != "package.json" || !notTestdata(dirOf(f)) || hiddenDir(dirOf(f)) {
 			continue
 		}
 		pj, ok := readPkg(fsys, f)
@@ -79,7 +77,7 @@ func pnpmGraph(fsys fs.FS, t tree, g *Graph) {
 	}
 	roots := map[string]bool{} // directories holding a pnpm-workspace.yaml
 	for _, f := range t.files {
-		if path.Base(f) == "pnpm-workspace.yaml" && notTestdata(dirOf(f)) {
+		if path.Base(f) == "pnpm-workspace.yaml" && notTestdata(dirOf(f)) && !hiddenDir(dirOf(f)) {
 			roots[dirOf(f)] = true
 		}
 	}
@@ -141,7 +139,7 @@ func workspaceGlobs(fsys fs.FS, p string) ([]string, bool) {
 		return nil, false
 	}
 	for _, g := range doc.Packages {
-		if strings.ContainsAny(g, "()|\\") {
+		if _, within := expandBraces(g); strings.ContainsAny(g, "()|\\") || !within {
 			return nil, false
 		}
 	}
@@ -172,46 +170,73 @@ func linkDeps(g *Graph, pkgs map[string]pkgJSON, members map[string][]string, di
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		spec := pj.Deps[name]
 		resolved := false
 		for _, t := range members[name] { // the name is a workspace package, whatever the specifier
 			g.addEdge(dir, t)
 			resolved = true
 		}
-		for _, pre := range []string{"workspace:", "npm:", "link:", "file:", "portal:"} {
-			rest := strings.TrimPrefix(spec, pre)
-			if rest == spec {
-				continue
-			}
-			switch {
-			case isPathSpec(rest):
-				if linked := linkPath(g, pkgs, dir, rest); linked {
-					resolved = true
-				} else if !isArchive(rest) {
-					g.uncertain(path.Join(dir, "package.json"), "dependency "+name+" links to a path that is not a package")
-					resolved = true // already reported
-				}
-			case pre == "workspace:" || pre == "npm:":
-				cands := []string{rest}
-				if i := strings.LastIndex(rest, "@"); i > 0 {
-					cands = append(cands, rest[:i]) // alias with a version: real@*
-				}
-				for _, c := range cands {
-					for _, t := range members[c] {
-						g.addEdge(dir, t)
-						resolved = true
-					}
-				}
+		workspaceSpec := false
+		for _, spec := range pj.Deps[name] {
+			workspaceSpec = workspaceSpec || strings.HasPrefix(spec, "workspace:")
+			if linkSpec(g, pkgs, members, dir, name, spec) {
+				resolved = true
 			}
 		}
-		if !resolved && strings.HasPrefix(spec, "workspace:") && members != nil {
+		if !resolved && workspaceSpec && members != nil {
 			g.uncertain(path.Join(dir, "package.json"), "workspace dependency "+name+" matches no workspace package")
 		}
 	}
 }
 
+// linkSpec handles the prefixed specifiers of one dependency; true when it
+// produced an edge or was reported uncertain.
+func linkSpec(g *Graph, pkgs map[string]pkgJSON, members map[string][]string, dir, name, spec string) bool {
+	done := false
+	for _, pre := range []string{"workspace:", "npm:", "link:", "file:", "portal:"} {
+		rest := strings.TrimPrefix(spec, pre)
+		if rest == spec {
+			continue
+		}
+		pathForm := pre == "link:" || pre == "file:" || pre == "portal:" || isPathSpec(rest)
+		switch {
+		case pathForm && strings.Contains(rest, "://"):
+			// a URL, not a path
+		case pathForm:
+			if linkPath(g, pkgs, dir, rest) {
+				done = true
+			} else if !isArchive(rest) {
+				g.uncertain(path.Join(dir, "package.json"), "dependency "+name+" links to a path that is not a package")
+				done = true // reported
+			}
+		default: // workspace:real@*, npm:real@^1, workspace:@s/real
+			cands := []string{rest}
+			if i := strings.LastIndex(rest, "@"); i > 0 {
+				cands = append(cands, rest[:i])
+			}
+			for _, c := range cands {
+				for _, t := range members[c] {
+					g.addEdge(dir, t)
+					done = true
+				}
+			}
+		}
+	}
+	return done
+}
+
 func isPathSpec(rest string) bool {
 	return rest == "." || rest == ".." || strings.HasPrefix(rest, "./") || strings.HasPrefix(rest, "../") || strings.HasPrefix(rest, "/")
+}
+
+// hiddenDir is true when a directory name in dir starts with a dot (pnpm
+// globs do not match those).
+func hiddenDir(dir string) bool {
+	for _, seg := range strings.Split(dir, "/") {
+		if len(seg) > 1 && seg[0] == '.' {
+			return true
+		}
+	}
+	return false
 }
 
 func isArchive(rest string) bool {
