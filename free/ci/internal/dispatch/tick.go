@@ -45,7 +45,7 @@ func (d *Dispatcher) Tick(ctx context.Context) error {
 	d.mu.Lock()
 	closed := d.closed
 	d.mu.Unlock()
-	if closed {
+	if closed || d.quiesced {
 		return errClosed
 	}
 	now := d.cfg.Clock()
@@ -58,6 +58,7 @@ func (d *Dispatcher) Tick(ctx context.Context) error {
 		return errors.New("dispatch: the orderer must return exactly the queued jobs")
 	}
 	runs, first := d.buildWorlds(ctx, ordered)
+	now = d.cfg.Clock() // building the worlds takes time
 	var live []Queued
 	for _, q := range ordered {
 		pr := runs[q.Job.Sched.Pipeline.ID]
@@ -138,6 +139,10 @@ func (d *Dispatcher) Plan(w sched.World, queued []Queued) ([]Queued, sched.Resul
 // settle admits one job's placement, or explains why it waits, and records the decision.
 func (d *Dispatcher) settle(ctx context.Context, runs map[string]*pipelineRun, pr *pipelineRun, q Queued) {
 	dec := Decision{WorldDigest: pr.digest, Job: q.Job.Sched, Explanation: pr.explained[q.Job.Sched.Key]}
+	if d.pastDeadline(q, pr.world.Policy.Overrides.MaxQueueMs, d.cfg.Clock()) { // earlier admissions took time too
+		d.timeout(ctx, q, pr.digest, d.cfg.Clock())
+		return
+	}
 	if p, ok := pr.placed[q.Job.Sched.Key]; ok {
 		dec.Placement = &p
 		d.admit(ctx, runs, pr, q, p, &dec)

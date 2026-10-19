@@ -16,3 +16,6 @@ func ValueAlias(s *store.Store) any { f := s.AdmitPlacement; return f }
 func MethodExpr() any { return (*lease.Engine).Grant }
 
 func Reflect(s *store.Store) { reflect.ValueOf(s).MethodByName("AdmitAndLease") }
+
+// Reflection with a spelling no literal scan matches.
+func Reflect2(s *store.Store) { reflect.ValueOf(s).MethodByName("Admit" + "Placement") }

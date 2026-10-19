@@ -13,6 +13,7 @@ package dispatch
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
@@ -61,6 +62,12 @@ func (d *Dispatcher) admit(ctx context.Context, runs map[string]*pipelineRun, pr
 	case errors.Is(err, ErrConflict):
 		dec.Outcome = OutcomeConflict
 		d.healthy(q)
+		// Re-plan only while the attempt is still queued: one cancelled or
+		// finished elsewhere would conflict on every tick for ever.
+		if state, _, serr := d.cfg.Store.AttemptStateEpoch(ctx, q.Job.AttemptID); serr == nil && state != "queued" {
+			dec.Outcome = OutcomeFailed
+			d.finish(q.Seq, Admitted{}, fmt.Errorf("attempt %s is %s, not queued", q.Job.AttemptID, state))
+		}
 	case errors.As(err, &ref):
 		dec.Outcome, dec.Reason = OutcomeRefused, ref.Reason
 		d.note(q, ref.Reason) // Admit stored the reason

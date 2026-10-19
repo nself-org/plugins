@@ -54,7 +54,10 @@ type runDispatch struct {
 	polErr  error
 }
 
-var runDispatchers sync.Map // run id -> *runDispatch
+var (
+	runDispatchers sync.Map   // run id -> *runDispatch
+	runDispatchMu  sync.Mutex // one construction at a time: OnStart hooks run once per dispatcher
+)
 
 // dispatchCleanup closes a run's dispatcher when the run is recorded.
 type dispatchCleanup struct{}
@@ -108,6 +111,11 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	if v, ok := runDispatchers.Load(sess.RunID); ok {
 		return v.(*runDispatch), nil
 	}
+	runDispatchMu.Lock()
+	defer runDispatchMu.Unlock()
+	if v, ok := runDispatchers.Load(sess.RunID); ok {
+		return v.(*runDispatch), nil
+	}
 	rows, err := sess.Store.PipelinesByRevision(ctx, sess.Revision)
 	if err != nil {
 		return nil, err
@@ -125,10 +133,7 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	if err != nil {
 		return nil, err
 	}
-	if actual, loaded := runDispatchers.LoadOrStore(sess.RunID, rd); loaded {
-		rd.d.Close()
-		return actual.(*runDispatch), nil
-	}
+	runDispatchers.Store(sess.RunID, rd)
 	return rd, nil
 }
 

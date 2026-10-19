@@ -32,6 +32,10 @@ var (
 // banned are the admission functions only the chokepoint may name.
 var banned = map[string]bool{"AdmitAndLease": true, "AdmitPlacement": true, "LeaseGrant": true, "Grant": true, "LocalAdmit": true}
 
+// reflective names reach a method by string, which no scan can follow; they are
+// refused in every non-test file, in the definers too.
+var reflective = map[string]bool{"MethodByName": true}
+
 // bannedUse names the admission function a node refers to, or "". A reference
 // counts, not only a call: a method value (f := st.AdmitPlacement), a method
 // expression ((*lease.Engine).Grant), a bare identifier (dot import) or the
@@ -39,7 +43,7 @@ var banned = map[string]bool{"AdmitAndLease": true, "AdmitPlacement": true, "Lea
 func bannedUse(n ast.Node, declName *ast.Ident) string {
 	switch x := n.(type) {
 	case *ast.SelectorExpr:
-		if banned[x.Sel.Name] {
+		if banned[x.Sel.Name] || reflective[x.Sel.Name] {
 			return x.Sel.Name
 		}
 	case *ast.Ident:
@@ -76,11 +80,21 @@ func scanChokepoint(t *testing.T, root string) (violations []string, files int) 
 		rel = filepath.ToSlash(rel)
 		dir := filepath.ToSlash(filepath.Dir(rel))
 		// every build constraint is read: the parser sees the file whatever its tags say
-		f, perr := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		f, perr := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments)
 		if perr != nil {
 			t.Fatalf("parse %s: %v", path, perr)
 		}
 		files++
+		for _, cg := range f.Comments { // //go:linkname reaches a function without naming it in code
+			for _, c := range cg.List {
+				if strings.Contains(c.Text, "go:linkname") && !chokeDirs[dir] {
+					if v := rel + ": comment uses go:linkname"; !seen[v] {
+						seen[v] = true
+						violations = append(violations, v)
+					}
+				}
+			}
+		}
 		for _, decl := range f.Decls {
 			owner, declName := "package level", (*ast.Ident)(nil)
 			if fn, ok := decl.(*ast.FuncDecl); ok {
@@ -90,7 +104,7 @@ func scanChokepoint(t *testing.T, root string) (violations []string, files int) 
 				name := bannedUse(n, declName)
 				switch {
 				case name == "":
-				case name == "LocalAdmit" && !localFiles[rel], name != "LocalAdmit" && !chokeDirs[dir] && !chokeFuncs[dir+"."+owner]:
+				case reflective[name], name == "LocalAdmit" && !localFiles[rel], name != "LocalAdmit" && !chokeDirs[dir] && !chokeFuncs[dir+"."+owner]:
 					if v := rel + ": " + owner + " uses " + name; !seen[v] { // a selector and its identifier are two nodes
 						seen[v] = true
 						violations = append(violations, v)
@@ -114,12 +128,16 @@ func TestAdmitChokepoint(t *testing.T) {
 		"internal/bad/bad.go: Closure uses AdmitPlacement",
 		"internal/bad/bad.go: Grantor uses Grant",
 		"internal/bad/bad.go: MethodExpr uses Grant",
+		"internal/bad/bad.go: Reflect2 uses MethodByName",
+		"internal/bad/bad.go: Reflect uses MethodByName",
+		"internal/bad/linkname.go: comment uses go:linkname",
 		"internal/bad/bad.go: Reflect uses AdmitAndLease",
 		"internal/bad/bad.go: Sneak uses AdmitAndLease",
 		"internal/bad/bad.go: ValueAlias uses AdmitPlacement",
 		"internal/run/other.go: Back uses LocalAdmit",
 		"internal/run/other.go: Value uses LocalAdmit",
 	}
+	sort.Strings(want)
 	if !reflect.DeepEqual(planted, want) {
 		t.Fatalf("planted module (%d files read):\n got %q\nwant %q", read, planted, want)
 	}

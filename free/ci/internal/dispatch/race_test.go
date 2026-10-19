@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/sched"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // TestDispatchOrderAcrossPipelines: admission follows the Orderer's order across
@@ -39,40 +41,128 @@ func TestDispatchOrderAcrossPipelines(t *testing.T) {
 	}
 }
 
-// TestDispatchCancelDuringAdmit: a caller that gives up while its lease is being
-// committed gets the lease back instead of losing its owner.
+// TestDispatchCancelDuringAdmit: a caller that gives up while ANOTHER goroutine's
+// tick is committing its lease waits for the commit and gets the lease back,
+// instead of leaving a lease with no owner.
 func TestDispatchCancelDuringAdmit(t *testing.T) {
 	entered, release := make(chan struct{}), make(chan struct{})
-	var once sync.Once
+	var once, relOnce sync.Once
+	unblock := func() { relOnce.Do(func() { close(release) }) }
 	withSteps(t, map[string]Step{"zz-block": func(context.Context, View) error {
 		once.Do(func() { close(entered) })
 		<-release
 		return nil
 	}})
 	st := openStore(t)
-	d := newDispatcher(t, Config{Store: st, World: liveWorld(st, nil, testRunner("local", "local", 2)), Poll: time.Millisecond})
+	d := newDispatcher(t, Config{Store: st, World: liveWorld(st, nil, testRunner("local", "local", 2))})
+	t.Cleanup(unblock) // a failed assert must not leave the tick blocked, or Close would hang
 	id := queueAttempt(t, st, "pipe", "proj", "a")
-	ctx, cancel := context.WithCancel(context.Background())
+	e, err := d.enqueue(testQueued(id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticked := make(chan error, 1)
+	go func() { ticked <- d.Tick(context.Background()) }() // another goroutine admits the job
+	<-entered
 	type result struct {
 		a   Admitted
 		err error
 	}
 	got := make(chan result, 1)
-	go func() { a, err := d.Submit(ctx, testQueued(id)); got <- result{a, err} }()
-	<-entered
-	cancel()
+	go func() { a, err := d.drop(e, context.Canceled); got <- result{a, err} }() // the caller gives up meanwhile
 	select {
 	case r := <-got:
-		t.Fatalf("Submit returned while the commit was in flight: %+v", r)
-	case <-time.After(50 * time.Millisecond):
+		t.Fatalf("drop returned while the commit was in flight: %+v", r)
+	case <-time.After(100 * time.Millisecond):
 	}
-	close(release)
+	unblock()
 	r := <-got
 	if r.err != nil || r.a.LeaseID != "lease-"+id {
 		t.Fatalf("the committed lease was not handed back: %+v", r)
 	}
+	if err = <-ticked; err != nil {
+		t.Fatal(err)
+	}
 	if state, _, _ := st.AttemptStateEpoch(context.Background(), id); state != "leased" {
 		t.Fatalf("attempt is %s", state)
+	}
+	// and a caller that gives up before any claim leaves nothing to admit
+	id2 := queueAttempt(t, st, "pipe", "proj", "b")
+	e2, _ := d.enqueue(testQueued(id2))
+	if _, err = d.drop(e2, context.Canceled); !errors.Is(err, context.Canceled) {
+		t.Fatalf("drop before a claim: %v", err)
+	}
+	if err = d.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if state, _, _ := st.AttemptStateEpoch(context.Background(), id2); state != "queued" {
+		t.Fatalf("an abandoned job was admitted: %s", state)
+	}
+}
+
+// TestDispatchDeadlineDuringTick: time that passes inside the tick (the world
+// build, an earlier admission) counts: a job past max_queue when its turn comes
+// ends with E693; it is not admitted late.
+func TestDispatchDeadlineDuringTick(t *testing.T) {
+	setup := func(t *testing.T, clock *fakeClock, slowWorld bool) (*Dispatcher, *entry, *entry) {
+		st := openStore(t)
+		live := liveWorld(st, func(p *sched.Policy) { p.Overrides.MaxQueueMs = 1500 }, testRunner("local", "local", 4))
+		world := live
+		if slowWorld {
+			world = func(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
+				clock.Advance(2 * time.Second)
+				return live(ctx, p)
+			}
+		}
+		d := newDispatcher(t, Config{Store: st, World: world, Clock: clock.Now})
+		first, _ := d.enqueue(testQueued(queueAttempt(t, st, "pipe", "proj", "first")))
+		second, _ := d.enqueue(testQueued(queueAttempt(t, st, "pipe", "proj", "second")))
+		return d, first, second
+	}
+	timedOut := func(e *entry) bool {
+		var de *Error
+		return resolved(e) && errors.As(e.err, &de) && de.Code == CodeQueueTimeout
+	}
+	t.Run("world build", func(t *testing.T) {
+		d, first, second := setup(t, newClock(), true)
+		if err := d.Tick(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if !timedOut(first) || !timedOut(second) {
+			t.Fatalf("a slow world build: first=%v second=%v", first.err, second.err)
+		}
+	})
+	t.Run("earlier admission", func(t *testing.T) {
+		clock := newClock()
+		withSteps(t, map[string]Step{"zz-slow": func(context.Context, View) error { clock.Advance(2 * time.Second); return nil }})
+		d, first, second := setup(t, clock, false)
+		if err := d.Tick(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if !resolved(first) || first.err != nil {
+			t.Fatalf("first job: %v", first.err)
+		}
+		if !timedOut(second) {
+			t.Fatalf("second job after a slow admission: resolved=%v err=%v", resolved(second), second.err)
+		}
+	})
+}
+
+// TestDispatchConflictEndsDeadAttempt: an attempt cancelled elsewhere does not
+// conflict for ever; the job ends with an error.
+func TestDispatchConflictEndsDeadAttempt(t *testing.T) {
+	st := openStore(t)
+	d := newDispatcher(t, Config{Store: st, World: liveWorld(st, nil, testRunner("local", "local", 2))})
+	id := queueAttempt(t, st, "pipe", "proj", "a")
+	e, _ := d.enqueue(testQueued(id))
+	if err := st.Transition(context.Background(), id, "queued", "cancelled", store.TransitionDetail{Epoch: 0, FailureClass: "cancelled"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !resolved(e) || e.err == nil {
+		t.Fatalf("a cancelled attempt must end the job: resolved=%v err=%v", resolved(e), e.err)
 	}
 }
 
