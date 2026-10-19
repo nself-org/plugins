@@ -28,6 +28,8 @@ const (
 	ReasonInvalid    Reason = "invalid_address"
 	ReasonNotAllowed Reason = "host_not_allowed"
 	ReasonResolve    Reason = "resolve_failed"
+	// ReasonEventsDropped marks the last event of a sidecar that hit its event cap.
+	ReasonEventsDropped Reason = "events_dropped"
 )
 
 // denyCIDRs is the special-purpose table: the IANA IPv4 and IPv6 special-purpose registries, every range the

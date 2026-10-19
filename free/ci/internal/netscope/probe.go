@@ -113,9 +113,11 @@ func (pr *Prober) proveProxied(ctx context.Context, binary string) bool {
 		}
 	}()
 	targets, err := pl.probeTargets(ln)
-	if err != nil {
+	control := proxyAddress(plan.Env)
+	if err != nil || control == "" {
 		return false
 	}
+	targets = append(targets, control) // positive control: the probe can reach the proxy on the job network
 	bin, err := pl.proxyBinary()
 	if err != nil {
 		return false
@@ -132,7 +134,20 @@ func (pr *Prober) proveProxied(ctx context.Context, binary string) bool {
 	if len(accepted) > 0 {
 		return false
 	}
-	return len(Reached(out)) == 0 && probeCompleted(out)
+	// "nothing was reached" only means something if the probe could connect at all: the proxy must be the one
+	// target that answered, so an offline probe container (or a broken dial) withholds the scopes
+	got := Reached(out)
+	return len(got) == 1 && got[0] == control && probeCompleted(out)
+}
+
+// proxyAddress extracts host:port of the proxy from the job's proxy variables.
+func proxyAddress(env []string) string {
+	for _, kv := range env {
+		if v, ok := strings.CutPrefix(kv, "HTTPS_PROXY=http://"); ok {
+			return v
+		}
+	}
+	return ""
 }
 
 // probeTargets lists what the probe dials: every host address on the fixture's port plus the raw targets.

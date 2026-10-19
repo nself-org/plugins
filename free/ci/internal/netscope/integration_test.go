@@ -46,7 +46,7 @@ func proxyBinary(t *testing.T) string {
 			return
 		}
 		builtBin = filepath.Join(dir, "nself-ci")
-		cmd := osexec.Command("go", "build", "-mod=vendor", "-o", builtBin, ".")
+		cmd := osexec.Command("go", "build", "-mod=vendor", "-o", builtBin, "./cmd/")
 		cmd.Dir = "../.."
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if out, err := cmd.CombinedOutput(); err != nil {

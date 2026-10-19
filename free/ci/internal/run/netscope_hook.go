@@ -1,10 +1,13 @@
 package run
 
 // Purpose: install the network scope planner and publish the scopes this node proved (P7-TRUST-08, Epic D11).
-// Inputs:  the container profile's probed runtime; optional exclusion and host sources the serve wiring registers.
+// Inputs:  the container profile's probed runtime; the deploy exclusion set this host can build for itself
+//          (deployguard.LocalSet over the CI home: the cached entries of its state.db and the never-list), or a
+//          source the serve wiring registers instead; optional policy hosts.
 // Outputs: the isolation.AttemptPlanner every profile built with the default planner uses; the world
 //          contributor that sets sched.World.Network["local"] from the probe, so SCHED derives NoLANRoute.
-// Constraints: the probe runs in the background and never blocks a world build; until it has a result the
+// Constraints: an exclusion set that exists and cannot be read makes restricted and internet unavailable (E679)
+//          rather than run with less than the operator wrote down; the probe runs in the background and never blocks a world build; until it has a result the
 // fact is absent (never guessed), so an untrusted job is not admitted on the strength of it; a node without a
 // container runtime publishes nothing.
 
@@ -16,6 +19,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/isolation"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/netscope"
+	"github.com/nself-org/plugins/free/ci/internal/nodes/deployguard"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
@@ -26,9 +30,8 @@ var netscopeSources = struct {
 	hosts     func(isolation.Attempt) []string
 }{}
 
-// RegisterNetscopeExclusions sets where the node-global deploy exclusion set is read from (the coordinator
-// wires deployguard.Guard.ExclusionSet here). Without a source the proxy still refuses the special-purpose
-// table, the host's own addresses and every on-link prefix.
+// RegisterNetscopeExclusions replaces where the deploy exclusion set is read from (a coordinator may wire
+// deployguard.Guard.ExclusionSet here). The default is the host's own set (localExclusions).
 func RegisterNetscopeExclusions(f func(context.Context) (netscope.Exclusions, error)) {
 	netscopeSources.Lock()
 	netscopeSources.exclusion = f
@@ -48,7 +51,7 @@ var netscopePlanner = &netscope.Planner{
 		f := netscopeSources.exclusion
 		netscopeSources.RUnlock()
 		if f == nil {
-			return netscope.Exclusions{}, nil
+			return localExclusions(ctx)
 		}
 		return f(ctx)
 	},
@@ -62,6 +65,20 @@ var netscopePlanner = &netscope.Planner{
 		return f(a)
 	},
 }
+
+// localExclusions is the exclusion set this host can build for itself; netscopeHome is the CI home ("" means
+// $NSELF_CI_HOME or ~/.nself/ci). A missing state.db or config is an empty source; an unreadable one is an error.
+func localExclusions(ctx context.Context) (netscope.Exclusions, error) {
+	set, err := deployguard.LocalSet(ctx, netscopeHome)
+	if err != nil {
+		return netscope.Exclusions{}, err
+	}
+	v := set.View()
+	return netscope.Exclusions{Hosts: v.Hosts, Addresses: v.Addresses, Prefixes: v.Prefixes}, nil
+}
+
+// netscopeHome is the CI home the local exclusion set reads; tests replace it.
+var netscopeHome = ""
 
 // scopeProof caches the background probe of this node.
 type scopeProof struct {
@@ -79,7 +96,11 @@ func (p *scopeProof) get(ctx context.Context) []model.NetworkScope {
 	binary := p.binary(ctx)
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if binary != "" && !p.running && (p.at.IsZero() || time.Since(p.at) > scopeProofTTL) {
+	if binary == "" { // the runtime went away: an earlier proof no longer holds
+		p.scopes, p.at = nil, time.Time{}
+		return nil
+	}
+	if !p.running && (p.at.IsZero() || time.Since(p.at) > scopeProofTTL) {
 		p.running = true
 		go p.refresh(binary)
 	}
@@ -108,10 +129,24 @@ func containerRuntime(ctx context.Context) string {
 var localProof = &scopeProof{prober: &netscope.Prober{Planner: netscopePlanner}, binary: containerRuntime}
 
 func contributeNetwork(ctx context.Context, w *sched.World) error {
-	if scopes := localProof.get(ctx); len(scopes) > 0 {
-		w.Network = map[string]sched.NetworkFact{"local": {Enforced: scopes}}
+	for _, r := range w.Runners {
+		if r.ID != "local" || !hasLabel(r.Capability.Identity.Labels, world.LocalLabel) {
+			continue // the proof is about this machine; a registered node that is called "local" is not it
+		}
+		if scopes := localProof.get(ctx); len(scopes) > 0 {
+			w.Network = map[string]sched.NetworkFact{"local": {Enforced: scopes}}
+		}
 	}
 	return nil
+}
+
+func hasLabel(labels []string, want string) bool {
+	for _, l := range labels {
+		if l == want {
+			return true
+		}
+	}
+	return false
 }
 
 func init() {

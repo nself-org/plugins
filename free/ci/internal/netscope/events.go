@@ -60,10 +60,20 @@ func (e Event) Encode() []byte {
 // ParseEvents extracts the denial events from a sidecar log. Other lines are skipped.
 func ParseEvents(r io.Reader) []Event {
 	var out []Event
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 4096), maxEventLine)
-	for sc.Scan() {
-		line := bytes.TrimSpace(sc.Bytes())
+	br := bufio.NewReaderSize(r, maxEventLine)
+	for {
+		raw, isPrefix, err := br.ReadLine()
+		if err != nil {
+			break
+		}
+		for isPrefix { // a line longer than the limit is dropped whole; the lines after it still count
+			_, isPrefix, err = br.ReadLine()
+			if err != nil {
+				return out
+			}
+			raw = nil
+		}
+		line := bytes.TrimSpace(raw)
 		if len(line) == 0 || line[0] != '{' {
 			continue
 		}

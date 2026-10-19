@@ -31,9 +31,17 @@ type Proxy struct {
 	Dialer Dialer
 	Events io.Writer
 
-	mu  sync.Mutex
-	sem chan struct{}
+	mu     sync.Mutex
+	sem    chan struct{}
+	events int
 }
+
+// maxEvents bounds the denial events one sidecar writes, so a job cannot flood the log that the planner reads
+// back; the last event states that the rest were dropped. maxEventHost bounds the host a refusal records.
+const (
+	maxEvents    = 4000
+	maxEventHost = 253
+)
 
 // Serve accepts on ln until ctx ends.
 func (p *Proxy) Serve(ctx context.Context, ln net.Listener) error {
@@ -47,12 +55,31 @@ func (p *Proxy) Serve(ctx context.Context, ln net.Listener) error {
 }
 
 func (p *Proxy) deny(w http.ResponseWriter, host, port string, v Verdict) {
+	p.record(host, port, v)
+	// the body names no reason: the job must not learn which addresses are deploy hosts or on-link
+	http.Error(w, "nself ci network scope: destination refused", http.StatusForbidden)
+}
+
+// record writes the refusal event unless the cap is reached.
+func (p *Proxy) record(host, port string, v Verdict) {
 	p.mu.Lock()
-	if p.Events != nil {
-		_, _ = p.Events.Write(Event{Scope: string(p.Guard.Scope), Host: host, Port: port, Reason: v.Reason, Detail: v.Detail}.Encode())
+	defer p.mu.Unlock()
+	if p.Events == nil || p.events > maxEvents {
+		return
 	}
-	p.mu.Unlock()
-	http.Error(w, "nself ci network scope: destination refused ("+string(v.Reason)+")", http.StatusForbidden)
+	p.events++
+	e := Event{Scope: string(p.Guard.Scope), Host: clip(host, maxEventHost), Port: clip(port, 5), Reason: v.Reason, Detail: clip(v.Detail, 2*maxEventHost)}
+	if p.events > maxEvents {
+		e = Event{Scope: string(p.Guard.Scope), Reason: ReasonEventsDropped, Detail: "further denials are not recorded"}
+	}
+	_, _ = p.Events.Write(e.Encode())
+}
+
+func clip(s string, n int) string {
+	if len(s) > n {
+		return s[:n]
+	}
+	return s
 }
 
 func (p *Proxy) handle(w http.ResponseWriter, r *http.Request) {

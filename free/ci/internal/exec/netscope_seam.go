@@ -154,7 +154,7 @@ func RuntimeSidecarStart(ctx context.Context, binary string, s SidecarSpec, job 
 	}
 	name, jobNet := SidecarName(s.Attempt), NetworkName(s.Attempt)
 	args := []string{"create", "--name", name, "--network", "bridge", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-		"--read-only", "--pids-limit", "256", "--memory", "128m", "--memory-swap", "128m", "--cpus", "0.5", "--user", sidecarUID,
+		"--read-only", "--log-driver", "json-file", "--log-opt", "max-size=4m", "--pids-limit", "256", "--memory", "128m", "--memory-swap", "128m", "--cpus", "0.5", "--user", sidecarUID,
 		"--env-file", "/dev/stdin", "--mount", "type=bind,src=" + s.ProxyBinary + ",dst=" + sidecarMountDst + ",readonly"}
 	args = append(append(args, attemptLabels(s.Attempt, s.Coordinator)...), s.Image, sidecarMountDst, "netproxy")
 	env := strings.NewReader("NSELF_V15=1\nNSELF_NETPROXY_CONFIG=" + s.Config + "\n") // V15 selects the engine that has the hidden netproxy key
