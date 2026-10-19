@@ -1,0 +1,160 @@
+package main
+
+// Purpose: `nself ci --detach` (P7-CI-63, Epic D30): start the run in the
+// background and print contract:ci.run-handle v1 once the run is queued, so an
+// agent or script can start → poll (`ci runs wait`) or stream (`ci runs
+// follow`) → read the result without holding a connection for the whole run.
+// Inputs:  the bare argv (also with `-- <cmd…>` and `--coordinator`).
+// Outputs: one v1 envelope (--json) or three lines of text on stdout; exit 0,
+// or 2 with E648 (reason spawn, no_queued_event, child_exit).
+// Constraints: V15 only (the flag lives on the V15 bare flag set); the child is
+// the ordinary engine re-executed with --json --stream, so this file adds no
+// run loop, store writer or event format; the child never inherits
+// NSELF_MCP_TOKEN; `runs prune` also removes the stream files of the runs it
+// pruned. The flag hook runs in registration order, so flags registered by
+// later files are validated by the child, whose error comes back as E648.
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/nself-org/cli/sdk/go/v2/output"
+
+	"github.com/nself-org/plugins/free/ci/internal/detach"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
+)
+
+// detachFlag is the --detach value of the current invocation; the hook reads
+// and clears it (a process runs one invocation; tests parse several).
+var detachFlag bool
+
+// Seams for tests; production uses the process's own argv, binary and stdout.
+var (
+	detachArgs = func() []string { return os.Args[1:] }
+	detachExe  = os.Executable
+	detachExit = os.Exit
+	detachOut  io.Writer
+	detachTune func(*detach.Params)
+)
+
+func init() {
+	if prune := runsSubs["prune"]; prune != nil { // registered by runs_history.go, which initialises first
+		runsSubs["prune"] = func(args []string) int { return pruneStreams(prune, args) }
+	}
+	bareFlags.BoolVar(&detachFlag, "detach", false, "start the run in the background and print a run handle once it is queued (see: nself ci runs wait, nself ci runs follow)")
+	RegisterOptionsHook(detachOptions)
+}
+
+// detachOptions starts the detached run and exits with its handle.
+func detachOptions(o *RunOptions) error {
+	on := detachFlag
+	detachFlag = false
+	if !on {
+		return nil
+	}
+	detachExit(runDetach(o))
+	return nil // detachExit does not return in production
+}
+
+func runDetach(o *RunOptions) int {
+	out := detachOut
+	if out == nil {
+		out = os.Stdout
+	}
+	exe, err := detachExe()
+	if err != nil {
+		return detachFail(out, o.JSON, &detach.Error{Reason: detach.ReasonSpawn, Message: err.Error(), Err: err})
+	}
+	p := detach.Params{Exe: exe, Args: detachArgs(), Home: o.Home, Env: os.Environ()}
+	if detachTune != nil {
+		detachTune(&p)
+	}
+	h, err := detach.Start(p)
+	if err != nil {
+		return detachFail(out, o.JSON, err)
+	}
+	if o.JSON {
+		if err = output.WriteData(out, "ci", h, nil); err != nil {
+			return 2
+		}
+		return 0
+	}
+	fmt.Fprintf(out, "run %s %s (pid %d)\n  wait:   %s\n  follow: %s\n  cancel: %s\n", h.RunID, h.State, h.PID,
+		strings.Join(h.Commands.Wait, " "), strings.Join(h.Commands.Follow, " "), strings.Join(h.Commands.Cancel, " "))
+	return 0
+}
+
+// detachFail prints a failed detach in the mode the caller asked for.
+func detachFail(out io.Writer, asJSON bool, err error) int {
+	if asJSON {
+		msg := err.Error()
+		var de *detach.Error
+		if errors.As(err, &de) {
+			msg = de.Detail()
+		}
+		d := output.ErrorDetail{Code: detach.CodeID, Message: msg, ExitCode: 2, Class: "infra",
+			Remediation: "Run the same command without --detach to see the error"}
+		if output.WriteError(out, "ci", d, nil) == nil {
+			return 2
+		}
+	}
+	fmt.Fprintln(os.Stderr, err)
+	return 2
+}
+
+// pruneStreams runs `runs prune` and then removes the detached stream files of
+// the runs it deleted, plus files of runs that are gone for good.
+func pruneStreams(prune handler, args []string) int {
+	before := knownRunIDs()
+	code := prune(args)
+	if code != 0 || hasDryRun(args) || before == nil {
+		return code
+	}
+	after := knownRunIDs()
+	home := detach.Home("")
+	var gone []string
+	for id := range before {
+		if !after[id] {
+			gone = append(gone, id)
+		}
+	}
+	_, _ = detach.Remove(home, gone)
+	_, _ = detach.Sweep(home, func(id string) bool { return after[id] }, time.Time{}, false)
+	return code
+}
+
+func hasDryRun(args []string) bool {
+	for _, a := range args {
+		if a == "--dry-run" || a == "-dry-run" || a == "--dry-run=true" || a == "-dry-run=true" {
+			return true
+		}
+	}
+	return false
+}
+
+// knownRunIDs lists the run ids in the store; nil when there is no history.
+func knownRunIDs() map[string]bool {
+	if _, err := os.Stat(filepath.Join(detach.Home(""), "state.db")); err != nil {
+		return nil
+	}
+	st, err := cirun.OpenStore(runsStorePath())
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = st.Close() }()
+	ages, err := st.PipelineAges(context.Background())
+	if err != nil {
+		return nil
+	}
+	ids := make(map[string]bool, len(ages))
+	for _, a := range ages {
+		ids[a.ID] = true
+	}
+	return ids
+}
