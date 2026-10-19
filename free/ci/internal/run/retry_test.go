@@ -117,6 +117,23 @@ func TestCodeFailureIsNeverRetried(t *testing.T) {
 	}
 }
 
+// A job that crashes with SIGSEGV is a code failure, run once (D-1048).
+func TestCrashSignalIsNeverRetried(t *testing.T) {
+	t.Parallel()
+	m := newMarker(t)
+	job := counting(m, `kill -SEGV $$`)
+	job.Retry = &model.RetryConfig{InfraMax: 3}
+	r := newRig(t, map[string]model.Job{"unit": job}, gitFake{})
+	res := r.run(t)
+	o := outcome(res, "unit")
+	if o.State != StateFailed || o.FailureClass != "code" || o.N != 1 || len(o.Retries) != 0 {
+		t.Fatalf("outcome %+v", o)
+	}
+	if b, _ := os.ReadFile(m); strings.Count(string(b), "x") != 1 {
+		t.Fatalf("a crashing job ran %d times", strings.Count(string(b), "x"))
+	}
+}
+
 func TestTimeoutIsNotRetried(t *testing.T) {
 	t.Parallel()
 	m := newMarker(t)

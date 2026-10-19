@@ -10,25 +10,26 @@ import (
 	"time"
 )
 
-func (e *Executor) runProcess(ctx context.Context, s JobSpec, workspace string, env []string) (int, error) {
+// runProcess returns the exit status and, when a signal ended the job, its name.
+func (e *Executor) runProcess(ctx context.Context, s JobSpec, workspace string, env []string) (int, string, error) {
 	defer removeProcessMarker(s.Home, s.AttemptID)
 	workdir := workspace
 	if s.Job.Workdir != "" && s.Job.Workdir != "." {
 		workdir = filepath.Join(workspace, s.Job.Workdir)
 		rel, err := filepath.Rel(workspace, workdir)
 		if err != nil || rel == ".." || len(rel) > 3 && rel[:3] == "../" {
-			return -1, coded("E612", "workdir escapes workspace")
+			return -1, "", coded("E612", "workdir escapes workspace")
 		}
 		resolved, err := filepath.EvalSymlinks(workdir)
 		if err != nil {
-			return -1, err
+			return -1, "", err
 		}
 		if resolved != workdir {
-			return -1, coded("E612", "workdir symlink is forbidden")
+			return -1, "", coded("E612", "workdir symlink is forbidden")
 		}
 	}
 	env = append(env, "NSELF_CI_EXEC_ATTEMPT="+s.AttemptID)
-	return e.runCommand(ctx, limitedCommand(s), workdir, env, s.Output, nil, func(pid int) error {
+	return e.runCommandSig(ctx, nil, limitedCommand(s), workdir, env, s.Output, nil, func(pid int) error {
 		return writeProcessMarker(s.Home, s.AttemptID, s.CoordinatorID, pid)
 	}, s.AttemptID)
 }
@@ -39,6 +40,13 @@ func (e *Executor) runCommand(ctx context.Context, argv []string, dir string, en
 
 // runCommandIn is runCommand with stdin fed from a reader (nil keeps /dev/null).
 func (e *Executor) runCommandIn(ctx context.Context, stdin io.Reader, argv []string, dir string, env []string, sink func([]byte), onCancel func(), onStart func(int) error, attempt string) (int, error) {
+	code, _, err := e.runCommandSig(ctx, stdin, argv, dir, env, sink, onCancel, onStart, attempt)
+	return code, err
+}
+
+// runCommandSig is runCommandIn that also names the signal that ended the
+// command (SIGSEGV, SIGKILL, ...; "" when it exited on its own).
+func (e *Executor) runCommandSig(ctx context.Context, stdin io.Reader, argv []string, dir string, env []string, sink func([]byte), onCancel func(), onStart func(int) error, attempt string) (int, string, error) {
 	cmd := osexec.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = env
@@ -46,18 +54,18 @@ func (e *Executor) runCommandIn(ctx context.Context, stdin io.Reader, argv []str
 		cmd.Stdin = stdin
 	}
 	if err := prepareProcess(cmd); err != nil {
-		return -1, err
+		return -1, "", err
 	}
 	reader, writer, err := os.Pipe()
 	if err != nil {
-		return -1, err
+		return -1, "", err
 	}
 	cmd.Stdout = writer
 	cmd.Stderr = writer
 	if err = cmd.Start(); err != nil {
 		_ = reader.Close()
 		_ = writer.Close()
-		return -1, err
+		return -1, "", err
 	}
 	_ = writer.Close()
 	if onStart != nil {
@@ -65,7 +73,7 @@ func (e *Executor) runCommandIn(ctx context.Context, stdin io.Reader, argv []str
 			_ = killGroup(cmd.Process.Pid)
 			_ = cmd.Wait()
 			_ = reader.Close()
-			return -1, err
+			return -1, "", err
 		}
 	}
 	tracker := trackDescendants(cmd.Process.Pid, attempt)
@@ -142,13 +150,13 @@ func (e *Executor) runCommandIn(ctx context.Context, stdin io.Reader, argv []str
 		sink(tail)
 	}
 	if ctx.Err() != nil {
-		return -1, ctx.Err()
+		return -1, "", ctx.Err()
 	}
 	if exit, ok := runErr.(*osexec.ExitError); ok {
-		return exit.ExitCode(), nil
+		return exit.ExitCode(), exitSignal(exit), nil
 	}
 	if runErr != nil {
-		return -1, runErr
+		return -1, "", runErr
 	}
-	return 0, nil
+	return 0, "", nil
 }

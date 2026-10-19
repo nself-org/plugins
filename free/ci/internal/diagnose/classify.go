@@ -28,6 +28,7 @@ type Input struct {
 	ExitCode  int
 	Err       string // the executor, admission or prepare error text, if any
 	Reason    string // "resource_limit" when a container hit its memory or process limit
+	Signal    string // the signal that ended the job (SIGKILL, SIGSEGV, ...); "" when unknown or none
 	Tail      string // the end of the redacted output
 	Lost      bool   // the lease expired or the runner was revoked
 	Cancelled bool
@@ -88,7 +89,7 @@ func ForClass(c model.FailureClass) Diagnosis {
 
 func (s signature) matches(in Input, tail string) bool {
 	for _, x := range s.exits {
-		if in.Err == "" && in.ExitCode == x {
+		if in.Err == "" && in.ExitCode == x && (x != -1 || externalKill(in.Signal)) {
 			return true
 		}
 	}
@@ -96,6 +97,14 @@ func (s signature) matches(in Input, tail string) bool {
 		return true
 	}
 	return in.ExitCode != 0 && s.output != nil && s.output.MatchString(tail)
+}
+
+// externalKill reports whether a signal can come from outside the job (the
+// OOM killer, an operator, a supervisor). A crash signal (SIGSEGV, SIGABRT,
+// ...) is the job's own fault. An unnamed signal (""; an older or remote
+// executor) keeps the earlier reading: killed from outside.
+func externalKill(sig string) bool {
+	return sig == "" || sig == "SIGKILL" || sig == "SIGTERM"
 }
 
 func infra(s signature) Diagnosis {
