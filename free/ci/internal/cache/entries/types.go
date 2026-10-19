@@ -87,7 +87,7 @@ type Pruned struct {
 }
 
 // Use is one restore or save outcome. Result is hit, miss, disabled, readonly,
-// denied or refused.
+// denied, refused or saved (a committed save; Bytes is the packed size).
 type Use struct {
 	Attempt, Spec, Key, Result string
 	Bytes, MS, TS              int64

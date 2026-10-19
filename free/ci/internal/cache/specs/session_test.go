@@ -45,7 +45,7 @@ func saved(t *testing.T, e *env, id string, f entries.Facts) *Session {
 func TestSessionSavesAfterAPassAndRestoresTheNextRun(t *testing.T) {
 	e := newEnv(t)
 	s1 := saved(t, e, "a1", ownerFacts)
-	if got := resultsOf(e.uses("a1")); strings.Join(got, ",") != "go:miss" || e.entryCount() != 1 {
+	if got := resultsOf(e.uses("a1")); strings.Join(got, ",") != "go:miss,go:saved" || e.entryCount() != 1 {
 		t.Fatalf("first run: uses %v, entries %d", got, e.entryCount())
 	}
 	env1, mounts := s1.Setup()
@@ -410,7 +410,7 @@ func TestSessionSavesAZeroFilledDirBecausePlainTarHasNoAmplification(t *testing.
 		t.Fatal(err)
 	}
 	s.Finalize(e.ctx, e.finalizing("z1"))
-	if e.entryCount() != 1 || strings.Join(resultsOf(e.uses("z1")), ",") != "go:miss" {
+	if e.entryCount() != 1 || strings.Join(resultsOf(e.uses("z1")), ",") != "go:miss,go:saved" {
 		t.Fatalf("entries %d uses %v", e.entryCount(), resultsOf(e.uses("z1")))
 	}
 	e.settlePassed("z1")
