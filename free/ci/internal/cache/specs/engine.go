@@ -139,6 +139,10 @@ func (e *Engine) Save(ctx context.Context, r SaveRequest) (int64, error) {
 		if err != nil {
 			return 0, e.refuse(ctx, r, err)
 		}
+		if st.Bytes > cacheLimits().RatioFloor && st.Bytes > cacheLimits().MaxRatio*(size+finalSlack) {
+			// a restore would refuse this archive (bomb.go): saving it would loop save, refuse, drop
+			return 0, e.refuse(ctx, r, fmt.Errorf("%w: the packed %s compresses beyond the restore ratio limit", ErrTooLarge, name))
+		}
 		files += st.Files
 		total += size
 		blobs = append(blobs, entries.Blob{Path: name, SHA256: digest, Size: size})

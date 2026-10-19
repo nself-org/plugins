@@ -2,6 +2,7 @@ package run
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -321,5 +322,32 @@ func TestCacheHookNeverEvictsALiveAttempt(t *testing.T) {
 	h.evict(ctx, st, time.Now())
 	if _, ok := h.sessions.Load("live1"); ok {
 		t.Fatal("the session of an ended attempt was kept")
+	}
+}
+
+// recordingCache is a CacheHook that notes what the run tells it, and fails the job.
+type recordingCache struct{ container chan bool }
+
+func (c recordingCache) Before(_ context.Context, a AttemptInfo) (CacheSetup, error) {
+	c.container <- a.Container
+	return CacheSetup{}, errors.New("E711 stop here")
+}
+func (recordingCache) After(context.Context, AttemptInfo, Outcome) error { return nil }
+
+func TestRunTellsTheCacheHookAboutTheContainerOption(t *testing.T) {
+	for _, container := range []bool{false, true} {
+		r := newRig(t, map[string]model.Job{"build": sh("true")}, gitFake{})
+		rec := recordingCache{container: make(chan bool, 4)}
+		r.C.Hooks.Cache, r.C.Opts.Container = rec, container
+		r.C.Hooks.Image = nil
+		_ = outcome(r.run(t), "build")
+		select {
+		case got := <-rec.container:
+			if got != container {
+				t.Fatalf("--container=%v reached the hook as %v", container, got)
+			}
+		default:
+			t.Fatalf("--container=%v: the hook was not called", container)
+		}
 	}
 }

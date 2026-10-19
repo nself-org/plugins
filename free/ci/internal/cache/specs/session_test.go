@@ -383,3 +383,17 @@ func TestSessionCleanupNeverLeavesItsPinnedParent(t *testing.T) {
 		t.Fatalf("the attempt's real directory was not removed: %v", err)
 	}
 }
+
+func TestSessionDoesNotSaveWhatARestoreWouldRefuse(t *testing.T) {
+	e := newEnv(t)
+	e.running("z1", ownerFacts)
+	s := e.begin(e.input("z1", ownerFacts))
+	fill(t, s)
+	if err := os.WriteFile(filepath.Join(s.dir("build"), "sparse.bin"), make([]byte, 8<<20), 0o644); err != nil { // 8 MiB of zeros
+		t.Fatal(err)
+	}
+	s.Finalize(e.ctx, e.finalizing("z1"))
+	if e.entryCount() != 0 || strings.Join(resultsOf(e.uses("z1")), ",") != "go:miss,go:refused" {
+		t.Fatalf("entries %d uses %v", e.entryCount(), resultsOf(e.uses("z1")))
+	}
+}
