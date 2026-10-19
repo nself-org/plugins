@@ -8,17 +8,20 @@ package signing
 // attempt) and the key id the manifest names.
 // Constraints: schema v1 through manifest.Decode; revision equals the run's
 // revision, the evidence's revision and every record's; every artifact (name,
-// digest, size) and every SBOM digest is a committed, byte-verified record of
-// this run; the evidence digest is the digest of the stored pipeline evidence
+// digest, size) and every SBOM digest (a record of kind sbom) is a committed,
+// byte-verified record of this run; the evidence digest is the digest of the stored pipeline evidence
 // and that evidence passed; the release attempt is a passed attempt of a
 // release job of this run. The first failure is returned; nothing is signed.
 
 import (
+	"context"
+
+	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/release/manifest"
 )
 
 // checkManifest validates one manifest payload.
-func (f *runFacts) checkManifest(payload []byte) (attemptID, keyID string, err error) {
+func (f *runFacts) checkManifest(ctx context.Context, payload []byte) (attemptID, keyID string, err error) {
 	m, err := manifest.Decode(payload)
 	if err != nil {
 		return "", "", Failf(ReasonPayloadRejected, "manifest: %v", err)
@@ -45,12 +48,16 @@ func (f *runFacts) checkManifest(payload []byte) (attemptID, keyID string, err e
 		return reject("release.attempt_id is not a passed attempt of a release job of this run")
 	}
 	for _, a := range m.Artifacts {
-		if err := f.checkArtifact(a); err != nil {
+		if err := f.checkArtifact(ctx, a); err != nil {
 			return "", "", err
 		}
 		for _, d := range []string{a.SBOM.CycloneDX.SHA256, a.SBOM.SPDX.SHA256} {
-			if len(f.committed(d)) == 0 {
-				return "", "", Failf(ReasonDigestNotCommitted, "the SBOM digest of artifact %q is not a committed record of this run", echo(a.Name))
+			ok, err := f.match(ctx, "", records.KindSBOM, d, func(records.Record) bool { return true })
+			if err != nil {
+				return "", "", err
+			}
+			if !ok {
+				return "", "", Failf(ReasonDigestNotCommitted, "the SBOM digest of artifact %q is not a committed sbom record of this run", echo(a.Name))
 			}
 		}
 	}
@@ -58,13 +65,15 @@ func (f *runFacts) checkManifest(payload []byte) (attemptID, keyID string, err e
 }
 
 // checkArtifact needs a committed, verified record with this name, digest and size.
-func (f *runFacts) checkArtifact(a manifest.Artifact) error {
-	for _, r := range f.committed(a.SHA256) {
-		if r.Name == a.Name && r.Size == a.Size {
-			return nil
-		}
+func (f *runFacts) checkArtifact(ctx context.Context, a manifest.Artifact) error {
+	ok, err := f.match(ctx, a.Name, "", a.SHA256, func(r records.Record) bool { return r.Size == a.Size })
+	if err != nil {
+		return err
 	}
-	return Failf(ReasonDigestNotCommitted, "artifact %q (digest %s) is not a committed record of this run", echo(a.Name), echo(a.SHA256))
+	if !ok {
+		return Failf(ReasonDigestNotCommitted, "artifact %q (digest %s) is not a committed record of this run", echo(a.Name), echo(a.SHA256))
+	}
+	return nil
 }
 
 // releaseAttempt reports whether attempt is a passed attempt of job, and job

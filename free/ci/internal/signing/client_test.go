@@ -193,7 +193,7 @@ func TestClientRequestSizeBoundary(t *testing.T) {
 		f := newFixture(t)
 		id, items := requestOf(t, signing.MaxRequestBytes+tc.delta)
 		f.src.pipe.ID = id
-		env := signing.Response{Envelopes: []sdk.Envelope{{PayloadType: items[0].PayloadType, Payload: items[0].PayloadB64, Signatures: []sdk.EnvelopeSig{{KeyID: "k", Sig: "AAAA"}}}}}
+		env := signing.Response{Envelopes: []sdk.Envelope{{PayloadType: items[0].PayloadType, Payload: items[0].PayloadB64, Signatures: []sdk.EnvelopeSig{fakeSig}}}}
 		raw, _ := json.Marshal(env)
 		s := &fakeSigner{ans: answer{out: string(raw)}}
 		_, err := clientFor(f, s).Sign(context.Background(), id, items)
@@ -209,7 +209,7 @@ func TestClientRequestSizeBoundary(t *testing.T) {
 func TestClientReadsAnAnswerWithNoLeadingNoise(t *testing.T) {
 	f := newFixture(t)
 	items := []signing.Item{item(signing.PayloadStatement, []byte("x"))}
-	env := signing.Response{Envelopes: []sdk.Envelope{{PayloadType: items[0].PayloadType, Payload: items[0].PayloadB64, Signatures: []sdk.EnvelopeSig{{KeyID: "k", Sig: "AAAA"}}}}}
+	env := signing.Response{Envelopes: []sdk.Envelope{{PayloadType: items[0].PayloadType, Payload: items[0].PayloadB64, Signatures: []sdk.EnvelopeSig{fakeSig}}}}
 	raw, _ := json.Marshal(env)
 	if _, err := clientFor(f, &fakeSigner{ans: answer{out: string(raw)}}).Sign(context.Background(), runID, items); err != nil {
 		t.Fatal(err)

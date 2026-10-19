@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
@@ -62,7 +63,8 @@ func artifactsSigner(args []string) int {
 		fmt.Fprintln(os.Stderr, "nself ci artifacts signer is started by the coordinator; it takes one of --stdio, --public, --init, --rotate")
 		return 1
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), signerTimeout)
+	defer cancel()
 	switch {
 	case *stdio:
 		return signerRequest(ctx)
@@ -73,6 +75,9 @@ func artifactsSigner(args []string) int {
 	}
 	return signerKey(signing.Rotate(ctx, signerResolver(), signerStore()))
 }
+
+// signerTimeout bounds one signer call (the key lock wait included).
+const signerTimeout = 2 * time.Minute
 
 func countTrue(b ...bool) (n int) {
 	for _, v := range b {
@@ -92,7 +97,8 @@ func signerResolver() secrets.ValueResolver {
 // signerStore writes the key with `nself config secrets set` over stdin.
 func signerStore() signing.SecretStore {
 	root, _ := evidenceRoot("")
-	return &signing.CLIStore{Runner: &signing.FunnelRunner{Home: os.Getenv("NSELF_CI_HOME")}, Project: root}
+	home, _ := toolsHome() // the CI home: also where the key-management lock lives
+	return &signing.CLIStore{Runner: &signing.FunnelRunner{Home: os.Getenv("NSELF_CI_HOME")}, Project: root, LockDir: home}
 }
 
 func signerRequest(ctx context.Context) int {
@@ -109,7 +115,8 @@ func signerRequest(ctx context.Context) int {
 	if err != nil {
 		return signerFail(signing.Failf(signing.ReasonSignerFailed, "the blob store could not be opened"))
 	}
-	envs, err := signing.Handler{Src: st, Blobs: blobs, Resolver: signerResolver()}.Handle(ctx, req, payloads)
+	root, _ := evidenceRoot("")
+	envs, err := signing.Handler{Src: st, Blobs: blobs, Project: root, Resolver: signerResolver()}.Handle(ctx, req, payloads)
 	if err != nil {
 		return signerFail(err)
 	}

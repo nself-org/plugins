@@ -41,27 +41,34 @@ func terminal(state string) bool {
 	return state == "passed" || state == "failed" || state == "cancelled"
 }
 
-// CheckTerminal refuses while any attempt of the run is not final. The
-// coordinator calls it before it starts the signer; the signer calls it again.
-func CheckTerminal(ctx context.Context, src Source, runID string) error {
-	_, ok, err := src.PipelineByID(ctx, runID)
+// finalAttempts reads the run and its attempts once and refuses unless the
+// run exists and every attempt is final. The coordinator calls it before it
+// starts the signer; the signer calls it again.
+func finalAttempts(ctx context.Context, src Source, runID string) (store.PipelineRow, []store.AttemptView, error) {
+	pipe, ok, err := src.PipelineByID(ctx, runID)
 	if err != nil {
-		return Failf(ReasonSignerFailed, "the run store could not be read")
+		return store.PipelineRow{}, nil, Failf(ReasonSignerFailed, "the run store could not be read")
 	}
 	if !ok {
-		return Failf(ReasonPayloadRejected, "run %q is unknown", echo(runID))
+		return store.PipelineRow{}, nil, Failf(ReasonPayloadRejected, "run %q is unknown", echo(runID))
 	}
 	attempts, err := src.PipelineAttempts(ctx, runID)
 	if err != nil {
-		return Failf(ReasonSignerFailed, "the run store could not be read")
+		return store.PipelineRow{}, nil, Failf(ReasonSignerFailed, "the run store could not be read")
 	}
 	if len(attempts) == 0 {
-		return Failf(ReasonPayloadRejected, "run %q has no attempt", echo(runID))
+		return store.PipelineRow{}, nil, Failf(ReasonPayloadRejected, "run %q has no attempt", echo(runID))
 	}
 	for _, a := range attempts {
 		if !terminal(a.State) {
-			return Failf(ReasonPayloadRejected, "attempt %s of run %q is still %s: sign after the run ends", echo(a.ID), echo(runID), echo(a.State))
+			return store.PipelineRow{}, nil, Failf(ReasonPayloadRejected, "attempt %s of run %q is still %s: sign after the run ends", echo(a.ID), echo(runID), echo(a.State))
 		}
 	}
-	return nil
+	return pipe, attempts, nil
+}
+
+// CheckTerminal refuses while any attempt of the run is not final.
+func CheckTerminal(ctx context.Context, src Source, runID string) error {
+	_, _, err := finalAttempts(ctx, src, runID)
+	return err
 }

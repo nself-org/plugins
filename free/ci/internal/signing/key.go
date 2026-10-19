@@ -132,6 +132,12 @@ func resolveOne(ctx context.Context, res secrets.ValueResolver, attempt, raw str
 // LoadKey resolves and parses the release key for an attempt. A stored key id
 // that differs from the derived one is key_id_mismatch.
 func LoadKey(ctx context.Context, res secrets.ValueResolver, attempt string) (*Key, error) {
+	return loadKey(ctx, res, attempt, true)
+}
+
+// loadKey is LoadKey with the stored-id check optional: key init and key
+// rotate replace both values, so a stale id must not stop them.
+func loadKey(ctx context.Context, res secrets.ValueResolver, attempt string, checkID bool) (*Key, error) {
 	raw, err := resolveOne(ctx, res, attempt, KeyRef)
 	if err != nil {
 		return nil, err
@@ -148,9 +154,11 @@ func LoadKey(ctx context.Context, res secrets.ValueResolver, attempt string) (*K
 		return nil, Failf(ReasonKeyInvalid, "the release key is not an Ed25519 PKCS#8 PEM")
 	}
 	key := newKey(priv)
-	if err := checkStoredID(ctx, res, attempt, key); err != nil {
-		key.Zero()
-		return nil, err
+	if checkID {
+		if err := checkStoredID(ctx, res, attempt, key); err != nil {
+			key.Zero()
+			return nil, err
+		}
 	}
 	return key, nil
 }

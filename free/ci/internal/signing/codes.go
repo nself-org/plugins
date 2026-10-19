@@ -59,10 +59,13 @@ func IsReason(err error, reason string) bool {
 }
 
 // echo bounds how much of an input an error repeats.
-func echo(s string) string {
-	b := make([]byte, 0, 67)
+func echo(s string) string { return clip(s, 64) }
+
+// clip is echo with a chosen bound.
+func clip(s string, n int) string {
+	b := make([]byte, 0, n+3)
 	for i := 0; i < len(s); i++ {
-		if len(b) >= 64 {
+		if len(b) >= n {
 			return string(append(b, "..."...))
 		}
 		c := s[i]

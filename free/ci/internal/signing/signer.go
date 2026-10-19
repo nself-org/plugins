@@ -23,48 +23,42 @@ import (
 
 // Handler signs checked requests.
 type Handler struct {
-	Src      Source
-	Blobs    Blobs
+	Src   Source
+	Blobs Blobs
+	// Project is the project root this signer serves: it resolves that
+	// project's release key, so it signs only that project's runs.
+	Project  string
 	Resolver secrets.ValueResolver
 }
 
-// Handle checks and signs one request.
+// checked is what a pass over the request found.
+type checked struct {
+	attempt string // the release attempt the key is resolved for
+	keyID   string // the key id the manifests name ("" when none)
+}
+
+// Handle checks and signs one request. Every item is checked, the key is
+// resolved, and every item is checked again against fresh facts before
+// anything is signed, so the run cannot change while the key is resolved.
 func (h Handler) Handle(ctx context.Context, req Request, payloads [][]byte) ([]signing.Envelope, error) {
-	facts, err := loadFacts(ctx, h.Src, h.Blobs, req.RunID)
+	first, err := h.check(ctx, req, payloads)
 	if err != nil {
 		return nil, err
 	}
-	attempt, wantKeyID := "", ""
-	for i, it := range req.Items {
-		switch it.PayloadType {
-		case manifest.PayloadType:
-			a, k, err := facts.checkManifest(payloads[i])
-			if err != nil {
-				return nil, err
-			}
-			if wantKeyID != "" && wantKeyID != k {
-				return nil, Failf(ReasonKeyIDMismatch, "the manifests of one request name different keys")
-			}
-			attempt, wantKeyID = a, k
-		case PayloadStatement:
-			if err := facts.checkStatement(payloads[i]); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if attempt == "" && (facts.lastReleaseAttempt() == "") {
-		return nil, Failf(ReasonPayloadRejected, "run %q has no passed release attempt", echo(req.RunID))
-	}
-	if attempt == "" {
-		attempt = facts.lastReleaseAttempt()
-	}
-	key, err := LoadKey(ctx, h.Resolver, attempt)
+	key, err := LoadKey(ctx, h.Resolver, first.attempt)
 	if err != nil {
 		return nil, err
 	}
 	defer key.Zero()
-	if wantKeyID != "" && wantKeyID != key.ID {
-		return nil, Failf(ReasonKeyIDMismatch, "the manifest names key %s but the release key is %s", echo(wantKeyID), key.ID)
+	if first.keyID != "" && first.keyID != key.ID {
+		return nil, Failf(ReasonKeyIDMismatch, "the manifest names key %s but the release key is %s", echo(first.keyID), key.ID)
+	}
+	second, err := h.check(ctx, req, payloads)
+	if err != nil {
+		return nil, err
+	}
+	if second != first {
+		return nil, Failf(ReasonPayloadRejected, "the run changed while the key was resolved")
 	}
 	out := make([]signing.Envelope, len(req.Items))
 	for i, it := range req.Items {
@@ -73,6 +67,38 @@ func (h Handler) Handle(ctx context.Context, req Request, payloads [][]byte) ([]
 		}
 	}
 	return out, nil
+}
+
+// check loads fresh facts and validates every item against them.
+func (h Handler) check(ctx context.Context, req Request, payloads [][]byte) (checked, error) {
+	facts, err := loadFacts(ctx, h.Src, h.Blobs, req.RunID, h.Project)
+	if err != nil {
+		return checked{}, err
+	}
+	var c checked
+	for i, it := range req.Items {
+		switch it.PayloadType {
+		case manifest.PayloadType:
+			a, k, err := facts.checkManifest(ctx, payloads[i])
+			if err != nil {
+				return checked{}, err
+			}
+			if c.keyID != "" && c.keyID != k {
+				return checked{}, Failf(ReasonKeyIDMismatch, "the manifests of one request name different keys")
+			}
+			c.attempt, c.keyID = a, k
+		case PayloadStatement:
+			if err := facts.checkStatement(ctx, payloads[i]); err != nil {
+				return checked{}, err
+			}
+		}
+	}
+	if c.attempt == "" {
+		if c.attempt = facts.lastReleaseAttempt(); c.attempt == "" {
+			return checked{}, Failf(ReasonPayloadRejected, "run %q has no passed release attempt", echo(req.RunID))
+		}
+	}
+	return c, nil
 }
 
 // lastReleaseAttempt is the highest-numbered passed attempt of a release job

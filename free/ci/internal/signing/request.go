@@ -4,7 +4,8 @@ package signing
 // (Epic CACHE D12): one request, one response, nothing else.
 // Inputs:  the request bytes (stdin of `artifacts signer --stdio`).
 // Outputs: Request, Response and the DSSE envelopes the signer returns.
-// Constraints: a request is at most MaxRequestBytes; it names a run and at
+// Constraints: a request is at most MaxRequestBytes and strict JSON (no duplicate
+// or case-variant keys, nothing after the document); it names a run and at
 // most MaxItems payloads of the two allowed types; unknown fields are refused
 // so a request cannot smuggle an extra instruction; the response carries
 // envelopes (or one error object) and never key material.
@@ -67,10 +68,13 @@ func DecodeRequest(r io.Reader) (Request, [][]byte, error) {
 	if len(raw) > MaxRequestBytes {
 		return Request{}, nil, Failf(ReasonPayloadRejected, "the request is larger than %d bytes", MaxRequestBytes)
 	}
+	if err := strictJSON(raw, "request"); err != nil {
+		return Request{}, nil, err
+	}
 	var req Request
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil || dec.More() {
+	if err := dec.Decode(&req); err != nil {
 		return Request{}, nil, Failf(ReasonPayloadRejected, "the request is not one {run_id, items} document")
 	}
 	if req.RunID == "" || len(req.Items) == 0 || len(req.Items) > MaxItems {

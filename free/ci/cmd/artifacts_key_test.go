@@ -335,6 +335,10 @@ func TestArtifactsSignerRefusals(t *testing.T) {
 	fix := signedRun(t, r)
 	raw, _ := json.Marshal(fix)
 	signerRefuses("a run whose release key is not set", raw, signing.ReasonKeyMissing)
+	// a run of another project than the one this signer serves is never signed
+	t.Setenv("NSELF_CI_REPO", t.TempDir())
+	signerRefuses("a run of another project", raw, signing.ReasonPayloadRejected)
+	t.Setenv("NSELF_CI_REPO", r.project)
 	// usage
 	if code, _, errs := runArt(t, "signer"); code != 1 || !strings.Contains(errs, "started by the coordinator") {
 		t.Fatalf("signer without a mode: %d %q", code, errs)

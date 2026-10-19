@@ -225,7 +225,7 @@ sleep 3; echo scan-done`
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("a signer process was started while a job of the run was running")
 	}
-	if out, _ := osexec.Command("pgrep", "-f", "artifacts signer").Output(); len(strings.TrimSpace(string(out))) != 0 {
+	if out, _ := osexec.Command("pgrep", "-f", exe+" artifacts signer").Output(); len(strings.TrimSpace(string(out))) != 0 {
 		t.Fatalf("a signer process exists while a job runs: %s", out)
 	}
 	select {

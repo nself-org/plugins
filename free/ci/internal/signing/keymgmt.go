@@ -19,6 +19,9 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/secrets"
 )
 
+// KeyIDName is the secret that may hold the key id beside the key.
+const KeyIDName = KeyName + "_ID"
+
 // KeyAttempt labels key-management calls to the resolver (no run is involved).
 const KeyAttempt = "ci-artifacts-key"
 
@@ -28,6 +31,8 @@ type SecretStore interface {
 	Probe(ctx context.Context) error
 	// Set stores value under name in the release store file; value is on stdin only.
 	Set(ctx context.Context, name string, value []byte) error
+	// Lock serializes key management across processes; call the result to release.
+	Lock(ctx context.Context) (func(), error)
 }
 
 // Init generates the key and stores it. It refuses when a key is already set.
@@ -35,7 +40,12 @@ func Init(ctx context.Context, res secrets.ValueResolver, st SecretStore) (KeyIn
 	if err := st.Probe(ctx); err != nil {
 		return KeyInfo{}, err
 	}
-	old, err := LoadKey(ctx, res, KeyAttempt)
+	unlock, err := st.Lock(ctx)
+	if err != nil {
+		return KeyInfo{}, err
+	}
+	defer unlock()
+	old, err := loadKey(ctx, res, KeyAttempt, false)
 	if err == nil {
 		old.Zero()
 		return KeyInfo{}, Failf(ReasonSecretExists, "the release key is already set: use `key rotate` to replace it")
@@ -43,16 +53,7 @@ func Init(ctx context.Context, res secrets.ValueResolver, st SecretStore) (KeyIn
 	if !IsReason(err, ReasonKeyMissing) {
 		return KeyInfo{}, err
 	}
-	key, value, err := Generate()
-	if err != nil {
-		return KeyInfo{}, err
-	}
-	defer key.Zero()
-	defer clear(value)
-	if err := st.Set(ctx, KeyName, value); err != nil {
-		return KeyInfo{}, err
-	}
-	return KeyInfo{KeyID: key.ID, Public: key.PublicB64()}, nil
+	return storeNewKey(ctx, res, st, "")
 }
 
 // Rotate replaces the stored key and returns the new trust line with the old id.
@@ -60,19 +61,30 @@ func Rotate(ctx context.Context, res secrets.ValueResolver, st SecretStore) (Key
 	if err := st.Probe(ctx); err != nil {
 		return KeyInfo{}, err
 	}
-	old, err := LoadKey(ctx, res, KeyAttempt)
+	unlock, err := st.Lock(ctx)
+	if err != nil {
+		return KeyInfo{}, err
+	}
+	defer unlock()
+	old, err := loadKey(ctx, res, KeyAttempt, false) // a stale stored id is what a rotation repairs
 	if err != nil {
 		return KeyInfo{}, err
 	}
 	oldID := old.ID
 	old.Zero()
+	return storeNewKey(ctx, res, st, oldID)
+}
+
+// storeNewKey generates a key, stores it and, when an id is stored beside the
+// key, updates that too (otherwise the next load fails key_id_mismatch).
+func storeNewKey(ctx context.Context, res secrets.ValueResolver, st SecretStore, oldID string) (KeyInfo, error) {
 	hadID := true
-	if raw, ierr := resolveOne(ctx, res, KeyAttempt, KeyIDRef); IsReason(ierr, ReasonKeyMissing) {
+	if raw, err := resolveOne(ctx, res, KeyAttempt, KeyIDRef); IsReason(err, ReasonKeyMissing) {
 		hadID = false
-	} else if ierr == nil {
-		clear(raw)
+	} else if err != nil {
+		return KeyInfo{}, err
 	} else {
-		return KeyInfo{}, ierr
+		clear(raw)
 	}
 	key, value, err := Generate()
 	if err != nil {
@@ -84,8 +96,8 @@ func Rotate(ctx context.Context, res secrets.ValueResolver, st SecretStore) (Key
 		return KeyInfo{}, err
 	}
 	if hadID {
-		if err := st.Set(ctx, KeyName+"_ID", []byte(key.ID)); err != nil {
-			return KeyInfo{}, Failf(ReasonKeyIDMismatch, "the key was replaced but its stored id could not be updated: run `nself config secrets set --env release %s_ID` with %s", KeyName, key.ID)
+		if err := st.Set(ctx, KeyIDName, []byte(key.ID)); err != nil {
+			return KeyInfo{}, Failf(ReasonKeyIDMismatch, "the new key %s was stored but %s could not be updated: run `nself ci artifacts key rotate` again, or set it to %s", key.ID, KeyIDName, key.ID)
 		}
 	}
 	return KeyInfo{KeyID: key.ID, Public: key.PublicB64(), OldKeyID: oldID}, nil
@@ -99,6 +111,8 @@ type CLIStore struct {
 	// Project is the project root the cli runs in (the store is found from it).
 	Project string
 	Env     []string
+	// LockDir holds the lock file that serializes key management ("" = no lock).
+	LockDir string
 
 	spelling []string
 }

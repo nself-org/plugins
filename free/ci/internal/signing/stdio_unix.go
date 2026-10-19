@@ -17,6 +17,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 )
@@ -37,18 +38,26 @@ type capture struct {
 func (c *capture) write(b []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	room := maxOutput - len(c.buf)
-	if room <= 0 {
-		return
-	}
-	if len(b) > room {
-		b = b[:room]
-	}
-	c.buf = append(c.buf, b...)
+	c.buf = append(c.buf, b[:min(len(b), max(maxOutput-len(c.buf), 0))]...)
 }
 
 // mkfifo is replaced by tests.
 var mkfifo = syscall.Mkfifo
+
+// freeWriter waits for the writer goroutine. A child that never opened the
+// FIFO leaves the writer blocked in open, so the read end is opened and
+// closed again and again until the writer is through (the writer may not have
+// reached its open yet the first time); it gives up after about 5 seconds.
+func freeWriter(fifo string, done <-chan struct{}) {
+	for range 500 {
+		select {
+		case <-done:
+			return
+		case <-time.After(10 * time.Millisecond):
+			release(fifo)
+		}
+	}
+}
 
 // release opens and closes the read end of a FIFO once, which frees a writer
 // blocked on a child that never opened it. It reports whether the open worked.
@@ -98,8 +107,7 @@ func (r *FunnelRunner) RunStdio(ctx context.Context, c StdioCall) ([]byte, int, 
 	ex := &ciexec.Executor{Env: extraEnv(env), NewRedactor: func() ciexec.Redactor { return passRedactor{} }}
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: r.id(), CoordinatorID: "signer", Command: argv, Home: r.Home, Timeout: c.Timeout, Output: cap.write})
 	if writerDone != nil {
-		release(fifo) // frees a writer the child never met
-		<-writerDone
+		freeWriter(fifo, writerDone)
 	}
 	if res.Err != nil {
 		clear(cap.buf)

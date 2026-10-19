@@ -16,6 +16,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -45,6 +46,7 @@ type fakeSrc struct {
 	evidence []store.EvidenceView
 	recs     []records.Record
 	err      error
+	extra    int // fake rows returned beyond the real ones, to reach the store's row cap
 }
 
 func (f *fakeSrc) PipelineByID(_ context.Context, id string) (store.PipelineRow, bool, error) {
@@ -66,9 +68,12 @@ func (f *fakeSrc) EvidenceByRevision(_ context.Context, rev, in string) ([]store
 func (f *fakeSrc) ArtifactList(_ context.Context, flt records.Filter) ([]records.Record, error) {
 	var out []records.Record
 	for _, r := range f.recs {
-		if r.Project == flt.Project && r.Run == flt.Run {
+		if r.Project == flt.Project && r.Run == flt.Run && (flt.Name == "" || r.Name == flt.Name) && (flt.Kind == "" || r.Kind == flt.Kind) {
 			out = append(out, r)
 		}
+	}
+	for i := 0; i < f.extra; i++ {
+		out = append(out, records.Record{ID: "pad", Project: flt.Project, Run: "other"})
 	}
 	return out, f.err
 }
@@ -106,6 +111,7 @@ type fakeRes struct {
 	resolveEr error
 	calls     int
 	attempts  []string
+	onResolve func() // runs inside Resolve, before it answers
 }
 
 func (r *fakeRes) Probe(context.Context) error { return r.probeErr }
@@ -113,6 +119,9 @@ func (r *fakeRes) Probe(context.Context) error { return r.probeErr }
 func (r *fakeRes) Resolve(_ context.Context, attempt string, refs []secrets.Ref) ([]secrets.Value, error) {
 	r.calls++
 	r.attempts = append(r.attempts, attempt)
+	if r.onResolve != nil {
+		r.onResolve()
+	}
 	if r.resolveEr != nil {
 		return nil, r.resolveEr
 	}
@@ -131,14 +140,27 @@ type fakeStore struct {
 	res      *fakeRes
 	probeErr error
 	setErr   error
+	setErrOn string // fail only this name
+	lockErr  error
 	sets     []string
+	mu       sync.Mutex // the key-management lock
+	locks    int
+}
+
+func (s *fakeStore) Lock(context.Context) (func(), error) {
+	if s.lockErr != nil {
+		return nil, s.lockErr
+	}
+	s.mu.Lock()
+	s.locks++
+	return s.mu.Unlock, nil
 }
 
 func (s *fakeStore) Probe(context.Context) error { return s.probeErr }
 
 func (s *fakeStore) Set(_ context.Context, name string, value []byte) error {
-	if s.setErr != nil {
-		return s.setErr
+	if s.setErr != nil || (s.setErrOn != "" && s.setErrOn == name) {
+		return errors.New("set failed")
 	}
 	s.sets = append(s.sets, name)
 	s.res.vals["release/"+name] = append([]byte(nil), value...)
@@ -186,7 +208,7 @@ func newFixture(t *testing.T) *fixture {
 }
 
 func (f *fixture) handler() signing.Handler {
-	return signing.Handler{Src: f.src, Blobs: f.blobs, Resolver: f.res}
+	return signing.Handler{Src: f.src, Blobs: f.blobs, Project: project, Resolver: f.res}
 }
 
 // manifestPayload is a manifest every check accepts; tweak edits it first.
