@@ -49,7 +49,7 @@ func (h PolicyHook) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult,
 		root = "."
 	}
 	res := policy.Resolver{Keys: h.Keys, Store: st, Run: policy.Runner(capture)}
-	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGit(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root})
+	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGitCached(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root})
 	if err != nil {
 		return PolicyResult{}, err
 	}

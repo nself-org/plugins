@@ -1,12 +1,12 @@
 package specs
 
-// Purpose: restore and save one spec entry (Epic CACHE D5): one tar + gzip
-// level 1 blob per spec dir, put into the cache realm of the entry's
+// Purpose: restore and save one spec entry (Epic CACHE D5): one plain tar
+// blob (a gzip blob still restores) per spec dir, put into the cache realm of the entry's
 // namespace, committed through entries.Commit.
 // Inputs:  entries.Store, cas.Store, an authz.ValueScanner, a Backend for the
 // audit rows this package writes itself.
 // Outputs: Engine.Restore, Engine.Save, ErrEmpty, ReasonSecretMatch.
-// Constraints: a save streams tar -> scan -> gzip -> cas.Put, so a registered
+// Constraints: a save streams tar -> scan -> cas.Put, so a registered
 // value aborts the stream before any blob is visible, and Commit is called
 // only after every blob was Put; nothing is committed for a cache with no
 // files in it (a hit on an empty entry would keep the next run from filling
@@ -14,7 +14,6 @@ package specs
 // spec's dirs or whose archive the path sanitiser rejects.
 
 import (
-	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -22,6 +21,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
@@ -68,7 +68,7 @@ func (d Dirs) names() []string {
 // is (false, nil). A refused entry is dropped, the dirs are emptied and the
 // error carries the sanitiser's E683 or the reason.
 func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace, key string, access authz.Mode, spec Spec, dirs Dirs, opt UnpackOptions) (hit bool, bytes int64, err error) {
-	m, ok, err := e.Entries.Lookup(ctx, ns, key, access)
+	m, ok, err := e.Entries.LookupForRestore(ctx, ns, key, access)
 	if err != nil || !ok {
 		return false, 0, err
 	}
@@ -83,11 +83,7 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 	}
 	realm := cas.CacheRealm(string(m.Namespace))
 	if !bad {
-		for _, b := range m.Blobs {
-			if err = e.unpackBlob(base, realm, b.SHA256, dirs[b.Path], opt); err != nil {
-				break
-			}
-		}
+		err = e.unpackBlobs(base, realm, m.Blobs, dirs, opt)
 	} else {
 		err = errors.New("the entry's blobs are not this spec's directories")
 	}
@@ -130,22 +126,42 @@ func (e *Engine) validate(ctx context.Context, realm cas.Realm, digest string) e
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	rc, err := e.Blobs.Open(realm, digest)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rc.Close() }()
-	return Validate(&ctxReader{ctx, rc}, cacheLimits())
+	return e.Blobs.ReadVerified(realm, digest, func(r io.Reader) error {
+		return Validate(&ctxReader{ctx, r}, cacheLimits())
+	})
 }
 
-func (e *Engine) unpackBlob(base *os.Root, realm cas.Realm, digest, rel string, opt UnpackOptions) error {
-	rc, err := e.Blobs.Open(realm, digest)
-	if err != nil {
-		return err
+// unpackBlobs restores every blob of an entry at the same time (at most four):
+// each goes to its own directory, so a build cache and a module cache unpack
+// side by side (D-1008). The first blob's error is the one reported.
+func (e *Engine) unpackBlobs(base *os.Root, realm cas.Realm, blobs []entries.Blob, dirs Dirs, opt UnpackOptions) error {
+	errs := make([]error, len(blobs))
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, 4)
+	for i, b := range blobs {
+		slots <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-slots }()
+			errs[i] = e.unpackBlob(base, realm, b.SHA256, dirs[b.Path], opt)
+		})
 	}
-	defer func() { _ = rc.Close() }()
-	_, err = Unpack(rc, base, rel, cacheLimits(), opt)
-	return err
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// unpackBlob restores one blob. The store verifies its digest while Unpack reads
+// it (one pass over the file, no snapshot copy: D-1008); the tree built from a
+// blob that fails the check is discarded by the caller (Restore empties the dirs).
+func (e *Engine) unpackBlob(base *os.Root, realm cas.Realm, digest, rel string, opt UnpackOptions) error {
+	return e.Blobs.ReadVerified(realm, digest, func(r io.Reader) error {
+		_, err := Unpack(r, base, rel, cacheLimits(), opt)
+		return err
+	})
 }
 
 func refusalKey(err error) string {
@@ -217,7 +233,7 @@ func (e *Engine) refuse(ctx context.Context, r SaveRequest, err error) error {
 
 var errSizeCap = errors.New("specs: the packed cache exceeds the entry byte cap")
 
-// capWriter counts compressed bytes and fails past the cap.
+// capWriter counts stored bytes and fails past the cap.
 type capWriter struct {
 	w   io.Writer
 	n   int64
@@ -231,7 +247,9 @@ func (c *capWriter) Write(p []byte) (int, error) {
 	return c.w.Write(p)
 }
 
-// putDir streams dir through tar, scan and gzip into the blob store.
+// putDir streams dir through tar and scan into the blob store. The local blob
+// is a plain tar: disk is cheap and a restore is on a job's critical path, so a
+// copy beats an inflate (D-1008). Compress only when a blob leaves the host.
 func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel string, budget int64) (string, int64, PackStats, error) {
 	pr, pw := io.Pipe()
 	var st PackStats
@@ -240,13 +258,9 @@ func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel
 		defer close(done)
 		var err error
 		defer func() { _ = pw.CloseWithError(err) }()
-		gz, _ := gzip.NewWriterLevel(&capWriter{w: pw, cap: budget}, gzip.BestSpeed)
-		sw := newScanWriter(gz, e.Scanner)
+		sw := newScanWriter(&capWriter{w: pw, cap: budget}, e.Scanner)
 		if st, err = Pack(ctx, base, rel, sw, cacheLimits()); err == nil {
 			err = sw.Close()
-		}
-		if err == nil {
-			err = gz.Close()
 		}
 	}()
 	digest, size, err := e.Blobs.Put(ctx, realm, pr)

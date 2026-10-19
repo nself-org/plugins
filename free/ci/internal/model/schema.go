@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sync"
+	"sync/atomic"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
@@ -187,16 +189,59 @@ func anyPtr(v any) *any           { return &v }
 func intPtr(v int) *int           { return &v }
 func floatPtr(v float64) *float64 { return &v }
 
-// ValidateJSON returns a JSON-pointer-bearing error for an invalid document.
-func ValidateJSON(schemaBytes, document []byte) error {
+// schemaResolves counts schema parse-and-resolve passes; tests use it to prove
+// ValidateJSON does not repeat that work for a schema it has already seen.
+var schemaResolves atomic.Int64
+
+// maxCachedSchemas bounds the resolved-schema cache. The package only ever
+// validates against its own few schemas; the cap keeps a caller that feeds
+// arbitrary schema bytes from growing it without limit.
+const maxCachedSchemas = 32
+
+type resolvedSchema struct {
+	id       string
+	resolved *jsonschema.Resolved
+}
+
+var (
+	schemaCacheMu sync.RWMutex
+	schemaCache   = map[string]*resolvedSchema{}
+)
+
+// resolveSchema returns the parsed and resolved form of schemaBytes, doing the
+// work once per distinct schema. Errors are not cached.
+func resolveSchema(schemaBytes []byte) (*resolvedSchema, error) {
+	schemaCacheMu.RLock()
+	hit := schemaCache[string(schemaBytes)]
+	schemaCacheMu.RUnlock()
+	if hit != nil {
+		return hit, nil
+	}
 	var schema jsonschema.Schema
 	if err := json.Unmarshal(schemaBytes, &schema); err != nil {
-		return err
+		return nil, err
 	}
+	schemaResolves.Add(1)
 	r, err := schema.Resolve(nil)
+	if err != nil {
+		return nil, err
+	}
+	entry := &resolvedSchema{id: schema.ID, resolved: r}
+	schemaCacheMu.Lock()
+	if len(schemaCache) < maxCachedSchemas {
+		schemaCache[string(schemaBytes)] = entry
+	}
+	schemaCacheMu.Unlock()
+	return entry, nil
+}
+
+// ValidateJSON returns a JSON-pointer-bearing error for an invalid document.
+func ValidateJSON(schemaBytes, document []byte) error {
+	schema, err := resolveSchema(schemaBytes)
 	if err != nil {
 		return err
 	}
+	r := schema.resolved
 	var value any
 	dec := json.NewDecoder(bytes.NewReader(document))
 	if err := dec.Decode(&value); err != nil {
@@ -212,7 +257,7 @@ func ValidateJSON(schemaBytes, document []byte) error {
 	if err := r.Validate(value); err != nil {
 		return fmt.Errorf("schema validation at %s", err)
 	}
-	if schema.ID == "https://nself.org/schemas/ci-evidence.v1.schema.json" {
+	if schema.id == "https://nself.org/schemas/ci-evidence.v1.schema.json" {
 		if doc, ok := value.(map[string]any); ok {
 			if checks, ok := doc["checks"].([]any); ok {
 				for i, raw := range checks {
