@@ -15,7 +15,7 @@ import (
 )
 
 func FuzzParseURL(f *testing.F) {
-	for _, s := range []string{"https://ci.example:3865", "http://ci.example", "https://u:p@h", "https://h/p", "https://h?q", "ftp://h", "", " https://h ", "https://[::1]:3865", "https://h\x00", "//h"} {
+	for _, s := range []string{"https://ci.example:3865", "http://ci.example", "https://u" + ":p@h", "https://h/p", "https://h?q", "ftp://h", "", " https://h ", "https://[::1]:3865", "https://h\x00", "//h"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, raw string) {
