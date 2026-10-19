@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -152,6 +153,69 @@ func TestRecoveryMessage(t *testing.T) {
 	}
 }
 
+// A recovery nobody heard is not lost: the red result is put back, so the next green run sends it.
+func TestRecoveryRetriedWhenNoSinkTookIt(t *testing.T) {
+	rec := &recorder{name: "rec"}
+	e, _, _ := testEngine(t, rec)
+	ctx := context.Background()
+	e.OnRun(ctx, run(sha("a"), "fail"))
+	rec.err = errors.New("down")
+	e.OnRun(ctx, run(sha("b"), "pass")) // recovery goes nowhere
+	rec.err = nil
+	e.OnRun(ctx, run(sha("c"), "pass"))
+	if got := rec.kinds(); len(got) != 3 || got[2] != KindRecovery || rec.got[2].Revision != sha("c") {
+		t.Fatalf("the recovery must be sent by the next green run: %v", got)
+	}
+	e.OnRun(ctx, run(sha("d"), "pass"))
+	if len(rec.got) != 3 {
+		t.Fatal("and only once")
+	}
+}
+
+// A run with no ref (detached checkout) alerts on failure but never claims a recovery; a run with no commit sends nothing.
+func TestDetachedAndCommitlessRuns(t *testing.T) {
+	rec := &recorder{name: "rec"}
+	e, _, _ := testEngine(t, rec)
+	ctx := context.Background()
+	d := run(sha("a"), "fail")
+	d.Ref = ""
+	e.OnRun(ctx, d)
+	d2 := run(sha("b"), "pass")
+	d2.Ref = ""
+	e.OnRun(ctx, d2)
+	none := run("", "fail")
+	e.OnRun(ctx, none)
+	if got := rec.kinds(); len(got) != 1 || got[0] != KindFailure {
+		t.Fatalf("detached: failure only, no recovery: %v", got)
+	}
+}
+
+// A hung sink that used the budget keeps the digest for a later run.
+func TestDigestWaitsAfterATimeout(t *testing.T) {
+	hang := &blocker{name: "hang", started: make(chan struct{}), cancelled: make(chan struct{})}
+	e, _, _ := testEngine(t, hang)
+	e.DailyDigest = true
+	fire := make(chan time.Time, 1)
+	e.After = func(time.Duration) <-chan time.Time { return fire }
+	fire <- time.Time{}
+	var asked int
+	e.State = countingState{State: e.State, digestAsked: &asked}
+	e.OnRun(context.Background(), run(sha("a"), "fail"))
+	if asked != 0 {
+		t.Fatal("the digest must not start after a delivery round that timed out")
+	}
+}
+
+type countingState struct {
+	State
+	digestAsked *int
+}
+
+func (c countingState) LastDigest(ctx context.Context) (int64, error) {
+	*c.digestAsked++
+	return c.State.LastDigest(ctx)
+}
+
 func TestDailyDigest(t *testing.T) {
 	rec := &recorder{name: "rec"}
 	e, st, clk := testEngine(t, rec)
@@ -263,6 +327,13 @@ func TestPanickingSinkIsAFailedDelivery(t *testing.T) {
 func TestEventRedactedAndBounded(t *testing.T) {
 	token := "gh" + "p_" + strings.Repeat("A", 36)
 	ev := Event{Kind: KindFailure, Message: "failed with " + token, Repo: "r\x00x", FailedJobs: make([]string, 30)}
+	worst := Event{Kind: KindFailure, Message: strings.Repeat("<", 400), Repo: strings.Repeat("&", 400), Ref: strings.Repeat(">", 400), Revision: strings.Repeat("\u2028", 400), Context: strings.Repeat("<", 400), RunID: strings.Repeat("<", 400), Show: strings.Repeat("<", 400)}
+	for i := 0; i < maxFailedJobs; i++ {
+		worst.FailedJobs = append(worst.FailedJobs, strings.Repeat("&", 400))
+	}
+	if b, _ := json.Marshal(worst.Redacted()); len(b) > MaxBody {
+		t.Fatalf("a worst-case event is %d bytes, over the %d cap", len(b), MaxBody)
+	}
 	for i := range ev.FailedJobs {
 		ev.FailedJobs[i] = strings.Repeat("j", 500)
 	}

@@ -93,3 +93,30 @@ func TestNotifySinkCounters(t *testing.T) {
 		t.Fatalf("stats = %+v %v", got, err)
 	}
 }
+
+func TestNotifyRetentionAndQueueScope(t *testing.T) {
+	now := time.Unix(1_000_000_000, 0)
+	s, err := Open(t.TempDir()+"/state.db", Options{Clock: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	ctx := context.Background()
+	_, _ = s.NotifyClaim(ctx, "r", "old", "c", "failure")
+	_, _ = s.NotifyObserve(ctx, "r", "main", "c", "old", "fail")
+	now = now.Add(notifyRetention + time.Hour)
+	if got, _ := s.NotifyClaim(ctx, "r", "old", "c", "failure"); !got {
+		t.Fatal("a claim older than the retention is dropped")
+	}
+	if prev, _ := s.NotifyObserve(ctx, "r", "main", "c", "new", "pass"); prev != "" {
+		t.Fatalf("a last-result row older than the retention is dropped, got %q", prev)
+	}
+	// the digest's queue counts jobs of unfinished runs only
+	seed(t, s, "a")
+	if err = s.FinishPipeline(ctx, "pa", "failed"); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := s.NotifyDigestStats(ctx, 0, now.Add(time.Hour).UnixNano()); d.Queued != 0 {
+		t.Fatalf("a closed run's queued job is not queue: %+v", d)
+	}
+}

@@ -4,7 +4,7 @@ package run
 // notifier sinks (internal/notify) about a failure, an infrastructure error or a recovery,
 // and send the daily digest. This is the only file of the package that imports internal/notify.
 // Inputs: a NotifyRequest (the finished run). The operator's notify.* policy keys, resolved
-// from the default state database like PolicyHook does; the current git branch as the ref.
+// from the default state database like PolicyHook does; the branch and origin of the run's root.
 // Outputs: sink deliveries, and one error line (a note in the run summary) naming the sinks
 // that did not take a message. Nothing else: the run's verdict, exit code, status and
 // duration never depend on a sink.
@@ -33,7 +33,7 @@ func init() { RegisterNotify(&notifyHook{}) }
 type notifyHook struct {
 	// Load returns the notify config, the state it keeps and a release func (nil = resolve the
 	// policy against the default store).
-	Load func(ctx context.Context) (notify.Config, notify.State, func(), error)
+	Load func(ctx context.Context, root string) (notify.Config, notify.State, func(), error)
 	// Ref names the branch the run was on ("" = ask git).
 	Ref     func(ctx context.Context) string
 	Deps    notify.Deps
@@ -54,7 +54,7 @@ func (h *notifyHook) Notify(ctx context.Context, r NotifyRequest) error {
 	if load == nil {
 		load = h.loadPolicy
 	}
-	cfg, state, release, err := load(ctx)
+	cfg, state, release, err := load(ctx, r.Root)
 	if release != nil {
 		defer release()
 	}
@@ -72,7 +72,10 @@ func (h *notifyHook) Notify(ctx context.Context, r NotifyRequest) error {
 		notes = append(notes, firstLineOf(e.Error()))
 	}
 	eng := &notify.Engine{Sinks: sinks, Quiet: cfg.Quiet, DailyDigest: cfg.Digest, State: state, Now: h.Now, Budget: h.Budget, After: h.After}
-	notes = append(notes, eng.OnRun(ctx, h.runOf(ctx, r.Run))...)
+	if r.Run.Dirty || r.Run.Revision == "" { // a dev run on a dirty tree has no commit of record: its sha must not claim an alert key
+		return nil
+	}
+	notes = append(notes, eng.OnRun(ctx, h.runOf(ctx, r))...)
 	if len(notes) == 0 {
 		return nil
 	}
@@ -80,12 +83,16 @@ func (h *notifyHook) Notify(ctx context.Context, r NotifyRequest) error {
 }
 
 // runOf maps a finished run to what the notify engine judges.
-func (h *notifyHook) runOf(ctx context.Context, info RunInfo) notify.Run {
-	ref := ""
+func (h *notifyHook) runOf(ctx context.Context, req NotifyRequest) notify.Run {
+	info := req.Run
+	ref, repo := "", info.Evidence.RepoID
 	if h.Ref != nil {
 		ref = h.Ref(ctx)
 	} else {
-		ref = h.branch(ctx)
+		ref = h.branch(ctx, req.Root)
+	}
+	if id := h.remoteID(ctx, req.Root); id != "" {
+		repo = id
 	}
 	var failed []string
 	for _, j := range info.Jobs {
@@ -94,7 +101,7 @@ func (h *notifyHook) runOf(ctx context.Context, info RunInfo) notify.Run {
 			failed = append(failed, j.Name)
 		}
 	}
-	return notify.Run{Repo: info.Evidence.RepoID, Ref: ref, Revision: info.Revision, Context: report.Context, RunID: info.RunID,
+	return notify.Run{Repo: repo, Ref: ref, Revision: info.Revision, Context: report.Context, RunID: info.RunID,
 		EvidenceDigest: info.EvidenceDigest, Result: string(info.Result), Counts: info.Evidence.Counts, FailedJobs: failed}
 }
 
@@ -105,25 +112,46 @@ func (h *notifyHook) capture() Capture {
 	return report.Capture
 }
 
-// branch is the checked-out branch of the working directory ("" when detached or unknown).
-func (h *notifyHook) branch(ctx context.Context) string {
-	out, exit, err := h.capture()(ctx, "git", "-c", "core.fsmonitor=false", "-C", ".", "symbolic-ref", "--short", "-q", "HEAD")
+// branch is the checked-out branch of the run's root ("" when detached or unknown: such a
+// run alerts on failure but has no ref to recover on).
+func (h *notifyHook) branch(ctx context.Context, root string) string {
+	if root == "" {
+		return ""
+	}
+	out, exit, err := h.capture()(ctx, "git", "-c", "core.fsmonitor=false", "-C", root, "symbolic-ref", "--short", "-q", "HEAD")
 	if err != nil || exit != 0 {
 		return ""
 	}
 	return strings.TrimSpace(out)
 }
 
+// remoteID names the repository by a digest of its origin URL, which is the same for every
+// clone of it (a served run's root changes each run); "" when there is no origin. The URL
+// itself never leaves the host.
+func (h *notifyHook) remoteID(ctx context.Context, root string) string {
+	if root == "" {
+		return ""
+	}
+	out, exit, err := h.capture()(ctx, "git", "-c", "core.fsmonitor=false", "-C", root, "config", "--get", "remote.origin.url")
+	if url := strings.TrimSpace(out); err == nil && exit == 0 && url != "" {
+		return shortDigest(url)
+	}
+	return ""
+}
+
 // loadPolicy resolves the operator's notify.* keys against the default state database.
-func (h *notifyHook) loadPolicy(ctx context.Context) (notify.Config, notify.State, func(), error) {
+func (h *notifyHook) loadPolicy(ctx context.Context, root string) (notify.Config, notify.State, func(), error) {
 	st, err := OpenStore("")
 	if err != nil {
 		return notify.Config{}, nil, nil, err
 	}
 	release := func() { _ = st.Close() }
+	if root == "" {
+		root = "."
+	}
 	run := policy.Runner(h.capture())
 	res := policy.Resolver{Store: st, Run: run}
-	got, err := res.Resolve(ctx, policy.Repo{Root: ".", Project: policy.ProjectIDGitCached(ctx, run, "."), Visibility: "unknown", Class: "owner"}, policy.Revision{})
+	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGitCached(ctx, run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{})
 	if err != nil {
 		return notify.Config{}, nil, release, err
 	}

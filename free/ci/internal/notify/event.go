@@ -102,7 +102,8 @@ func (s scrubber) clip(in string) string {
 	f := s.r.NewFilter()
 	out := string(f.Redact([]byte(in))) + string(f.Flush())
 	out = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		// < > & grow to six bytes in JSON and U+2028/2029 are escaped too: they would break the 16 KiB bound
+		if unicode.IsControl(r) || r == '<' || r == '>' || r == '&' || r == '\u2028' || r == '\u2029' {
 			return ' '
 		}
 		return r

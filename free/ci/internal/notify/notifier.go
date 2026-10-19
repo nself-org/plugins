@@ -82,7 +82,7 @@ func New(spec SinkSpec, d Deps) (Notifier, error) {
 	f, ok := registry.byType[spec.Type]
 	registry.RUnlock()
 	if !ok {
-		return nil, coded(fmt.Sprintf("unknown sink type %q (have %v)", spec.Type, Types()))
+		return nil, coded(fmt.Sprintf("unknown sink type (have %v)", Types()))
 	}
 	return f(spec, d)
 }

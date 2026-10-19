@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"time"
 )
 
 //go:embed migrations/notify/*.sql
@@ -28,11 +29,18 @@ func init() {
 	}
 }
 
+// notifyRetention is how long a de-duplication or last-result row is kept: commits and
+// branches come from untrusted pushes, so the tables must not grow without bound.
+const notifyRetention = 90 * 24 * time.Hour
+
 // NotifyClaim takes the right to send one (repo, sha, context, kind) message. It
 // reports false when that message was already claimed.
 func (s *Store) NotifyClaim(ctx context.Context, repo, sha, statusContext, kind string) (bool, error) {
 	var won bool
 	err := s.write(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM notify_sent WHERE created_at<?", s.now().Add(-notifyRetention).UnixNano()); err != nil {
+			return err
+		}
 		res, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO notify_sent(repo,sha,context,kind,created_at) VALUES (?,?,?,?,?)", repo, sha, statusContext, kind, s.now().UnixNano())
 		if err != nil {
 			return err
@@ -58,6 +66,9 @@ func (s *Store) NotifyRelease(ctx context.Context, repo, sha, statusContext, kin
 func (s *Store) NotifyObserve(ctx context.Context, repo, ref, statusContext, sha, result string) (string, error) {
 	var prev string
 	err := s.write(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM notify_last WHERE updated_at<?", s.now().Add(-notifyRetention).UnixNano()); err != nil {
+			return err
+		}
 		err := tx.QueryRowContext(ctx, "SELECT result FROM notify_last WHERE repo=? AND ref=? AND context=?", repo, ref, statusContext).Scan(&prev)
 		if err != nil && err != sql.ErrNoRows {
 			return err
@@ -106,8 +117,9 @@ type DigestStats struct {
 	Runs, Passed, Failed, Errored, Queued int
 }
 
-// NotifyDigestStats counts pipelines finished in (since, until] by status, and the jobs that
-// are waiting for a runner now.
+// NotifyDigestStats counts pipelines finished in (since, until] by status, and the jobs of
+// unfinished runs that are waiting for a runner now (jobs of a crashed run do not count once
+// its run is closed).
 func (s *Store) NotifyDigestStats(ctx context.Context, since, until int64) (DigestStats, error) {
 	var d DigestStats
 	rows, err := s.readers.QueryContext(ctx, "SELECT status, count(*) FROM pipeline WHERE finished_at>? AND finished_at<=? GROUP BY status", since, until)
@@ -134,7 +146,7 @@ func (s *Store) NotifyDigestStats(ctx context.Context, since, until int64) (Dige
 	if err = rows.Err(); err != nil {
 		return d, err
 	}
-	err = s.readers.QueryRowContext(ctx, "SELECT count(*) FROM job WHERE status='queued'").Scan(&d.Queued)
+	err = s.readers.QueryRowContext(ctx, "SELECT count(*) FROM job j JOIN pipeline p ON p.id=j.pipeline_id WHERE j.status='queued' AND p.finished_at IS NULL").Scan(&d.Queued)
 	return d, err
 }
 

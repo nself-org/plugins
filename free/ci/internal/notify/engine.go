@@ -70,9 +70,16 @@ func (e *Engine) OnRun(ctx context.Context, r Run) (notes []string) {
 	default:
 		return nil
 	}
-	prev, err := e.State.Observe(ctx, r.Repo, r.Ref, r.Context, r.Revision, r.Result)
-	if err != nil {
-		return []string{"notify: state unavailable, nothing sent: " + firstLine(err.Error())}
+	if r.Revision == "" {
+		return nil
+	}
+	// A run with no ref (a detached checkout) can alert but has no red-to-green history.
+	prev := ""
+	if r.Ref != "" {
+		var err error
+		if prev, err = e.State.Observe(ctx, r.Repo, r.Ref, r.Context, r.Revision, r.Result); err != nil {
+			return []string{"notify: state unavailable, nothing sent: " + firstLine(err.Error())}
+		}
 	}
 	var kind Kind
 	switch {
@@ -83,28 +90,43 @@ func (e *Engine) OnRun(ctx context.Context, r Run) (notes []string) {
 	case prev == "fail" || prev == "error":
 		kind = KindRecovery
 	}
+	timedOut := false
 	if kind != "" && !e.Quiet[kind] {
-		notes = append(notes, e.send(ctx, r, e.event(kind, r))...)
+		var n []string
+		var taken bool
+		n, taken, timedOut = e.send(ctx, r, e.event(kind, r))
+		notes = append(notes, n...)
+		if kind == KindRecovery && !taken && r.Ref != "" {
+			// nobody heard the recovery: put the red result back so the next green run sends it again
+			if _, err := e.State.Observe(context.WithoutCancel(ctx), r.Repo, r.Ref, r.Context, r.Revision, prev); err != nil {
+				notes = append(notes, "notify: last result not restored: "+firstLine(err.Error()))
+			}
+		}
+	}
+	if timedOut { // a hung sink already used the run's delivery budget: the digest waits for the next run
+		return notes
 	}
 	return append(notes, e.MaybeDigest(ctx)...)
 }
 
-// send claims, delivers and releases the claim when no sink took the message.
-func (e *Engine) send(ctx context.Context, r Run, ev Event) []string {
+// send claims, delivers and releases the claim when no sink took the message. taken is
+// false when the message was not sent (already claimed counts as taken).
+func (e *Engine) send(ctx context.Context, r Run, ev Event) (notes []string, taken, timedOut bool) {
 	won, err := e.State.Claim(ctx, r.Repo, r.Revision, r.Context, ev.Kind)
 	if err != nil {
-		return []string{"notify: state unavailable, nothing sent: " + firstLine(err.Error())}
+		return []string{"notify: state unavailable, nothing sent: " + firstLine(err.Error())}, false, false
 	}
 	if !won {
-		return nil
+		return nil, true, false
 	}
-	ok, notes := e.deliver(ctx, ev)
+	ok, notes, timedOut := e.deliver(ctx, ev)
 	if ok == 0 {
-		if err = e.State.Release(ctx, r.Repo, r.Revision, r.Context, ev.Kind); err != nil {
+		// the run's context may be spent by now (its delivery budget), so the release must not depend on it
+		if err = e.State.Release(context.WithoutCancel(ctx), r.Repo, r.Revision, r.Context, ev.Kind); err != nil {
 			notes = append(notes, "notify: claim not released: "+firstLine(err.Error()))
 		}
 	}
-	return notes
+	return notes, ok > 0, timedOut
 }
 
 // MaybeDigest sends the daily digest when it is on, none was sent today (UTC) and runs
@@ -144,9 +166,9 @@ func (e *Engine) MaybeDigest(ctx context.Context) []string {
 		Since: since.UTC().Format(time.RFC3339), Until: now.UTC().Format(time.RFC3339),
 		Runs: st.Runs, Passed: st.Passed, Failed: st.Failed, Errors: st.Errored, Queued: st.Queued}}
 	ev.Message = fmt.Sprintf("nself-ci daily digest: %d runs, %d passed, %d failed, %d infrastructure errors, %d queued", st.Runs, st.Passed, st.Failed, st.Errored, st.Queued)
-	ok, notes := e.deliver(ctx, ev)
+	ok, notes, _ := e.deliver(ctx, ev)
 	if ok == 0 {
-		if err = e.State.DigestRelease(ctx, day); err != nil {
+		if err = e.State.DigestRelease(context.WithoutCancel(ctx), day); err != nil {
 			notes = append(notes, "notify: digest claim not released: "+firstLine(err.Error()))
 		}
 	}
@@ -185,8 +207,8 @@ type outcome struct {
 }
 
 // deliver sends ev to every sink at once and waits for all of them or for the budget.
-// It returns how many sinks took the message.
-func (e *Engine) deliver(ctx context.Context, ev Event) (int, []string) {
+// It returns how many sinks took the message, notes, and whether the budget ended the wait.
+func (e *Engine) deliver(ctx context.Context, ev Event) (int, []string, bool) {
 	ev = ev.Redacted()
 	budget := e.Budget
 	if budget <= 0 {
@@ -207,7 +229,7 @@ func (e *Engine) deliver(ctx context.Context, ev Event) (int, []string) {
 	}
 	timer := e.after(budget)
 	done := make([]bool, len(e.Sinks))
-	took, pending := 0, len(e.Sinks)
+	took, pending, timedOut := 0, len(e.Sinks), false
 	var notes []string
 	record := func(i int, ok bool) {
 		if err := e.State.RecordDelivery(context.WithoutCancel(ctx), e.Sinks[i].Name(), ok); err != nil {
@@ -229,6 +251,7 @@ wait:
 			record(o.i, o.ok)
 		case <-timer:
 			cancel()
+			timedOut = true
 			break wait
 		}
 	}
@@ -237,7 +260,7 @@ wait:
 			record(i, false)
 		}
 	}
-	return took, notes
+	return took, notes, timedOut
 }
 
 func firstLine(s string) string {
