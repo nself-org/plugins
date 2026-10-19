@@ -33,8 +33,10 @@ const (
 	PipelineName = "android-release"
 	// ArtifactName is the record-name prefix of the APKs (android/<file>.apk).
 	ArtifactName = "android"
+	// APKDir is where gradle writes the release APKs, relative to the job workdir.
+	APKDir = "app/build/outputs/apk/release"
 	// APKGlob selects the signed release APKs, relative to the job workdir.
-	APKGlob = "app/build/outputs/apk/release/*.apk"
+	APKGlob = APKDir + "/*.apk"
 	// KeystorePath is where the job decodes the keystore, relative to the workdir.
 	KeystorePath = "app/release.keystore"
 	// SBOMDir is where the SBOM step writes the documents, relative to the workdir.
@@ -49,13 +51,16 @@ var SecretRefs = []string{
 	"release/ANDROID_KEY_PASSWORD",
 }
 
-// script decodes the keystore from its env var, builds, and removes the keystore
-// whatever the outcome (the trap runs on exit and on a signal).
+// script clears stale outputs (the workspace is a copy of the checkout, ignored build output included),
+// decodes the keystore from its env var, builds, and removes the keystore whatever the outcome (the trap
+// runs on exit and on a signal).
 const script = `set -eu
 umask 077
 trap 'rm -f ` + KeystorePath + `' EXIT INT TERM
+rm -rf ` + APKDir + ` ` + SBOMDir + `
 mkdir -p app
-printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | { base64 -d 2>/dev/null || base64 -D; } > ` + KeystorePath + `
+enc=$(printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]')
+{ printf '%s' "$enc" | base64 -d 2>/dev/null || printf '%s' "$enc" | base64 -D; } > ` + KeystorePath + `
 test -s ` + KeystorePath + `
 ./gradlew assembleRelease --no-daemon`
 

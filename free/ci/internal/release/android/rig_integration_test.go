@@ -93,8 +93,13 @@ func newRig(t *testing.T) *rig {
 	p.setup(func(repo string) {
 		writeFiles(t, repo, map[string]string{
 			"android/gradlew": gradlewScript(p.marker),
-			".gitignore":      "app/build/\napp/release.keystore\n",
+			".gitignore":      "build/\n.nself-ci/\nrelease.keystore\n",
 		})
+	})
+	// ignored leftovers of an earlier build in the operator's checkout: the workspace copy carries them
+	writeFiles(t, p.repo, map[string]string{
+		"android/app/build/outputs/apk/release/app-1.0-release.apk":   "stale-apk-from-v1.0",
+		"android/.nself-ci/sbom/android/app-1.0-release.apk.cdx.json": "{}",
 	})
 	t.Setenv("ANDROID_KEYSTORE_BASE64", base64.StdEncoding.EncodeToString(p.keystore))
 	t.Setenv("ANDROID_KEYSTORE_PASSWORD", plantedPwOne)

@@ -97,3 +97,28 @@ func TestEnvFromPassesOnlyToolchainPaths(t *testing.T) {
 		t.Fatalf("job env %v", j.Env)
 	}
 }
+
+// Stale outputs of an earlier build (the workspace is a copy of the checkout) are gone before gradle runs.
+func TestScriptClearsStaleOutputs(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{APKDir + "/app-1.0-release.apk", SBOMDir + "/android/app-1.0-release.apk.cdx.json"} {
+		p := filepath.Join(dir, f)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("stale"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	body := "#!/bin/sh\nls " + APKDir + " " + SBOMDir + " > seen.txt 2>&1 || true\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "gradlew"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := runScript(t, dir, "ANDROID_KEYSTORE_BASE64="+base64.StdEncoding.EncodeToString([]byte("k"))); err != nil {
+		t.Fatal(err)
+	}
+	seen, _ := os.ReadFile(filepath.Join(dir, "seen.txt"))
+	if strings.Contains(string(seen), "1.0") || !strings.Contains(string(seen), "No such file") {
+		t.Fatalf("gradle saw stale outputs: %q", seen)
+	}
+}

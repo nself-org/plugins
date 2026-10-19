@@ -64,6 +64,11 @@ func TestAndroidReleaseFakeGradle(t *testing.T) {
 			t.Errorf("the release lacks %s", want)
 		}
 	}
+	for _, stale := range []string{"artifacts/android/app-1.0-release.apk", "sbom/android/app-1.0-release.apk.cdx.json"} {
+		if _, err := os.Stat(filepath.Join(exp.Dir, stale)); err == nil {
+			t.Errorf("the release holds %s, a leftover of an earlier build that is not built from the bound revision", stale)
+		}
+	}
 	if b, _ := os.ReadFile(filepath.Join(exp.Dir, "artifacts/android/app-release.apk")); string(b) != "fake-apk-bytes" {
 		t.Fatalf("apk bytes %q", b)
 	}

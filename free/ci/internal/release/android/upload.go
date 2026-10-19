@@ -102,20 +102,28 @@ func reason(out string, err error) string {
 	return "no output"
 }
 
-// ParseRemote extracts owner and repo from a GitHub remote URL
-// (https://github.com/o/r[.git], ssh://git@github.com/o/r, git@github.com:o/r).
+// ParseRemote extracts owner and repo from a github.com remote URL (https://github.com/o/r[.git],
+// ssh://git@github.com/o/r, git@github.com:o/r). Any other host is refused: gh would upload to
+// github.com/o/r, a different repository.
 func ParseRemote(url string) (owner, repo string, ok bool) {
 	url = strings.TrimSuffix(strings.TrimSpace(url), ".git")
 	if i := strings.Index(url, "://"); i >= 0 {
 		url = url[i+3:]
 	}
-	if i := strings.IndexAny(url, ":/"); i >= 0 {
+	if i := strings.LastIndex(url[:min(len(url), strings.IndexAny(url+"/", "/"))], "@"); i >= 0 { // user@host
 		url = url[i+1:]
 	}
-	parts := strings.Split(strings.Trim(url, "/"), "/")
-	if len(parts) < 2 {
+	host, path, found := strings.Cut(url, ":")
+	if !found || strings.Contains(host, "/") { // https form: host/o/r (a port is not expected)
+		host, path, _ = strings.Cut(url, "/")
+	}
+	if !strings.EqualFold(host, "github.com") {
 		return "", "", false
 	}
-	owner, repo = parts[len(parts)-2], parts[len(parts)-1]
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	owner, repo = parts[0], parts[1]
 	return owner, repo, ownerRe.MatchString(owner) && repoRe.MatchString(repo)
 }

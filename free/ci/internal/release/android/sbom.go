@@ -57,7 +57,7 @@ func (s SBOMStep) Run(ctx context.Context, job model.Job, ws *os.Root) error {
 	if job.Workdir == "" {
 		workdir = "."
 	}
-	apkRel := path.Join(workdir, path.Dir(APKGlob))
+	apkRel := path.Join(workdir, APKDir)
 	apkRoot, err := ws.OpenRoot(apkRel)
 	if err != nil {
 		return fmt.Errorf("no APK directory %s after the build: %w", apkRel, err)

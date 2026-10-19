@@ -74,13 +74,18 @@ func TestUploadChecksArguments(t *testing.T) {
 
 func TestParseRemote(t *testing.T) {
 	for url, want := range map[string]string{
-		"https://github.com/acme/app.git":      "acme/app",
-		"https://github.com/acme/app":          "acme/app",
-		"git@github.com:acme/app.git":          "acme/app",
-		"ssh://git@github.com/acme/app.git":    "acme/app",
-		"https://x@github.com/acme/my.app.git": "acme/my.app",
-		"app":                                  "",
-		"https://github.com/-bad/app":          "",
+		"https://github.com/acme/app.git":       "acme/app",
+		"https://github.com/acme/app":           "acme/app",
+		"git@github.com:acme/app.git":           "acme/app",
+		"ssh://git@github.com/acme/app.git":     "acme/app",
+		"https://x@github.com/acme/my.app.git":  "acme/my.app",
+		"https://GitHub.com/acme/app":           "acme/app",
+		"git@gitlab.com:acme/app.git":           "",
+		"https://git.example/acme/app":          "",
+		"https://github.com.evil.test/acme/app": "",
+		"https://github.com/acme/app/extra":     "",
+		"app":                                   "",
+		"https://github.com/-bad/app":           "",
 	} {
 		o, r, ok := ParseRemote(url)
 		got := ""
