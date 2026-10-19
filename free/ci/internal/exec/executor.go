@@ -214,18 +214,45 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 }
 
 // copySymlink recreates a symlink whose relative target stays inside the job
-// source. An absolute target, or one that climbs out of the source, is refused:
-// the job must not reach files outside its workspace through a link.
+// source. The rule is syntactic on purpose: the target may climb with leading
+// ".." elements, but never more levels than the link's own (real) directory is
+// deep, and after that it may only descend. A ".." after a name is refused even
+// when it cleans away lexically, because that name may itself be a symlink to a
+// shallower directory and the ".." would then climb out of the source (for
+// example a/x -> .. then a/l -> x/../..). Descending through other links is safe
+// because each of them was vetted by the same rule. Absolute and empty targets
+// are refused, so a job cannot reach files outside its workspace through a link.
 func copySymlink(path, rel, target string) error {
 	link, err := os.Readlink(path)
 	if err != nil {
 		return err
 	}
-	resolved := filepath.Clean(filepath.Join(filepath.Dir(rel), link))
-	if filepath.IsAbs(link) || resolved == ".." || strings.HasPrefix(resolved, ".."+string(filepath.Separator)) {
+	if link == "" || filepath.IsAbs(link) || !linkStaysInside(link, rel) {
 		return fmt.Errorf("symlink in job source: %s", rel)
 	}
 	return os.Symlink(link, target)
+}
+
+func linkStaysInside(link, rel string) bool {
+	depth := 0
+	if dir := filepath.Dir(rel); dir != "." {
+		depth = len(strings.Split(dir, string(filepath.Separator)))
+	}
+	climbing := true
+	for _, part := range strings.Split(filepath.ToSlash(link), "/") {
+		switch {
+		case part == ".." && climbing:
+			depth--
+			if depth < 0 {
+				return false
+			}
+		case part == "..":
+			return false
+		case part != "" && part != ".":
+			climbing = false
+		}
+	}
+	return true
 }
 
 func copyTree(source, dest string) error {
