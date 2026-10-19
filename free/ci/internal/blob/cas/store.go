@@ -30,6 +30,9 @@ type Store struct {
 var lstat = os.Lstat
 
 func New(home string) (*Store, error) {
+	if err := platformSupported(); err != nil {
+		return nil, err
+	}
 	if home == "" {
 		return nil, ErrInvalid
 	}

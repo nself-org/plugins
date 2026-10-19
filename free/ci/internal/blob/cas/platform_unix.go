@@ -10,6 +10,9 @@ import (
 // oNoFollow makes an open refuse a final symlink.
 const oNoFollow = syscall.O_NOFOLLOW
 
+// platformSupported reports whether the store can run on this platform.
+func platformSupported() error { return nil }
+
 // flock takes an exclusive advisory lock on f and returns the function that releases it.
 func flock(f *os.File) (func(), error) {
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
