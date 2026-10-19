@@ -272,7 +272,7 @@ func TestRuntimeTableIsReadOnEveryProbe(t *testing.T) {
 	if st.starts != 1 {
 		t.Fatalf("the table check must not start a container: %d starts", st.starts)
 	}
-	r.setRuntimes(`{"runsc":{"path":"/usr/local/bin/runsc","runtimeArgs":["--platform=ptrace"]}}`)
+	r.setRuntimes(`{"runsc":{"path":"/usr/local/bin/runsc","runtimeArgs":["--platform=ptrace"],"status":{"x":"y"}}}`)
 	if av := p.Probe(context.Background()); !av.Available() || av.Facts["platform"] != "ptrace" || st.starts != 2 {
 		t.Fatalf("a changed runtime entry must be started again: %+v starts=%d", av, st.starts)
 	}
@@ -314,5 +314,35 @@ func TestConcurrentProbesShareOneStart(t *testing.T) {
 	}
 	if got := p.Probe(context.Background()).Facts["banner"]; got != "gvisor" {
 		t.Fatalf("a caller edited the cached facts: %q", got)
+	}
+}
+
+func TestBannerMustBeAWholeLine(t *testing.T) {
+	for out, want := range map[string]bool{
+		"[    0.000000] Starting gVisor...\n[    0.4] Reticulating splines...": true,
+		"Starting gVisor...\n":                                             true,
+		"[    0.000000] Starting gVisor...   \n":                           true,
+		"[ 1234.5] Starting gVisor[4242]: segfault at 0 ip 0 sp 0 error 4": false, // a host log line naming a process so
+		"starting gvisor":                                                  false,
+		"[    0.000000] Linux version 6.8.0":                               false,
+		"":                                                                 false,
+	} {
+		if got := bannerSeen([]byte(out)); got != want {
+			t.Errorf("bannerSeen(%q) = %v, want %v", out, got, want)
+		}
+	}
+}
+
+func TestProbeGivesUpWaitingWhenItsContextEnds(t *testing.T) {
+	st := okStarter()
+	st.delay = 300 * time.Millisecond
+	p := newProfile(okRunner(`{"runsc":{}}`), st, nil)
+	go p.Probe(context.Background()) // holds the start
+	time.Sleep(50 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if av := p.Probe(ctx); av.Available() || time.Since(start) > 250*time.Millisecond {
+		t.Fatalf("waiter did not give up with its context: %+v after %s", av, time.Since(start))
 	}
 }

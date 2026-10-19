@@ -20,6 +20,8 @@ import (
 	"time"
 
 	osexec "os/exec"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 const (
@@ -94,4 +96,20 @@ func RuntimeToolVersion(ctx context.Context, path string) (string, error) {
 		line = line[:maxVersionLine]
 	}
 	return strings.TrimSpace(line), nil
+}
+
+// checkSandboxRuntime refuses a sandboxed-container job whose planned command does not run under
+// runsc, so the recorded level can never be stronger than the command that ran (a later planner
+// change that drops the flag fails here instead of running as a plain container). Only the flag
+// region (before the image) is read.
+func checkSandboxRuntime(level model.Isolation, cmd ContainerCommand, image string) error {
+	if level != "sandboxed-container" {
+		return nil
+	}
+	for i := 1; i < len(cmd.Args) && cmd.Args[i] != image; i++ {
+		if cmd.Args[i] == "--runtime="+sandboxRuntime {
+			return nil
+		}
+	}
+	return coded("E613", "sandboxed-container job planned without --runtime="+sandboxRuntime)
 }

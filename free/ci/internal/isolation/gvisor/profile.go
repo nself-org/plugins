@@ -19,6 +19,9 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
+// wrapTimeout bounds the probe Wrap runs (a start is itself bounded at 90 s).
+const wrapTimeout = 2 * time.Minute
+
 // Options configures a Profile; every field has a default.
 type Options struct {
 	Runner container.Runner
@@ -38,8 +41,9 @@ type Options struct {
 type Profile struct {
 	opts Options
 	base *container.Profile
-	// flight serialises starts; mu guards the cached start (key is the runtime configuration it belongs to).
-	flight sync.Mutex
+	// flight (a one-slot semaphore, so a waiter can give up with its context) serialises starts;
+	// mu guards the cached start (key is the runtime configuration it belongs to).
+	flight chan struct{}
 	mu     sync.Mutex
 	key    string
 	av     isolation.Availability
@@ -69,7 +73,7 @@ func New(o Options) *Profile {
 		o.Now = time.Now
 	}
 	base := container.New(container.Options{Runner: o.Runner, Separated: o.Separated, Network: o.Network, UIDs: o.UIDs})
-	return &Profile{opts: o, base: base}
+	return &Profile{opts: o, base: base, flight: make(chan struct{}, 1)}
 }
 
 type execRunner struct{}
@@ -94,8 +98,12 @@ func (p *Profile) Probe(ctx context.Context) isolation.Availability {
 	if hit, ok := p.cached(key); ok {
 		return clone(hit)
 	}
-	p.flight.Lock()
-	defer p.flight.Unlock()
+	select {
+	case p.flight <- struct{}{}:
+		defer func() { <-p.flight }()
+	case <-ctx.Done():
+		return unavailable(isolation.ReasonProbeFailed, map[string]string{"detail": "gave up waiting for another probe to finish"})
+	}
 	if hit, ok := p.cached(key); ok { // another caller finished the start while this one waited
 		return clone(hit)
 	}
@@ -127,7 +135,9 @@ func (p *Profile) Prepare(ctx context.Context, a isolation.Attempt) error {
 
 // Wrap lets the container profile plan the hardened command, then adds the runsc runtime to it.
 func (p *Profile) Wrap(s exec.JobSpec) (exec.JobSpec, error) {
-	if av := p.Probe(context.Background()); !av.Available() {
+	ctx, cancel := context.WithTimeout(context.Background(), wrapTimeout)
+	defer cancel()
+	if av := p.Probe(ctx); !av.Available() {
 		return s, isolation.Unavailable(av.Reason, "sandboxed-container isolation is unavailable")
 	}
 	wrapped, err := p.base.Wrap(s)

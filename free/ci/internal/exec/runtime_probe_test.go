@@ -92,3 +92,21 @@ func TestRuntimeToolVersion(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckSandboxRuntime(t *testing.T) {
+	image := "docker.io/library/busybox@" + probeDigest
+	with := ContainerCommand{Binary: "docker", Args: []string{"run", "--runtime=runsc", "--rm", image, "sh"}}
+	without := ContainerCommand{Binary: "docker", Args: []string{"run", "--rm", image, "sh"}}
+	inJob := ContainerCommand{Binary: "docker", Args: []string{"run", "--rm", image, "echo", "--runtime=runsc"}} // a job word, after the image
+	if err := checkSandboxRuntime("sandboxed-container", with, image); err != nil {
+		t.Fatalf("runsc command refused: %v", err)
+	}
+	for name, cmd := range map[string]ContainerCommand{"no runtime": without, "runtime only in the job words": inJob} {
+		if err := checkSandboxRuntime("sandboxed-container", cmd, image); err == nil || !strings.Contains(err.Error(), "E613") {
+			t.Errorf("%s: want E613, got %v", name, err)
+		}
+	}
+	if err := checkSandboxRuntime("container", without, image); err != nil {
+		t.Errorf("the container level needs no runtime: %v", err)
+	}
+}

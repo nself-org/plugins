@@ -12,6 +12,7 @@ package gvisor
 import (
 	"context"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/exec"
@@ -43,10 +44,12 @@ func hasKVM() bool {
 	return err == nil
 }
 
-// bannerSeen reports whether dmesg output came from the gVisor Sentry, which logs "Starting gVisor".
-func bannerSeen(out []byte) bool {
-	return strings.Contains(strings.ToLower(string(out)), "starting gvisor")
-}
+// banner is gVisor's first log line, optionally behind a "[ time ]" stamp. It must be a whole line:
+// a host kernel log line that merely mentions a process called "Starting gVisor" is not it.
+var bannerLine = regexp.MustCompile(`(?m)^(\[[^\]]*\]\s*)?Starting gVisor\.\.\.\s*$`)
+
+// bannerSeen reports whether dmesg output came from the gVisor Sentry.
+func bannerSeen(out []byte) bool { return bannerLine.Match(out) }
 
 // unavailable builds a probe result that carries the install hint where it helps.
 func unavailable(reason string, facts map[string]string) isolation.Availability {
@@ -90,12 +93,18 @@ func (p *Profile) inspect(ctx context.Context) (in inspected, av isolation.Avail
 		}
 		return in, unavailable(isolation.ReasonProbeFailed, map[string]string{"detail": "docker info failed"}), false
 	}
-	entry, found, err := parseEntry(out)
+	entry, found, foreign, err := parseEntry(out)
 	if err != nil {
 		return in, unavailable(isolation.ReasonProbeFailed, map[string]string{"detail": "docker runtime table is not JSON"}), false
 	}
 	if !found {
 		return in, unavailable(isolation.ReasonRuntimeMissing, map[string]string{"detail": "runsc is not registered with docker"}), false
+	}
+	if foreign != "" {
+		return in, unavailable(ReasonRuntimeFlagDenied, map[string]string{"detail": "the runsc runtime entry has a key (" + foreign + ") whose settings this profile cannot read"}), false
+	}
+	if entry.Path != "" && !isRunsc(entry.Path) {
+		return in, unavailable(isolation.ReasonProbeFailed, map[string]string{"detail": "the runtime named runsc points at " + entry.Path + ", which is not the runsc binary"}), false
 	}
 	platform, flag := checkArgs(entry.Args)
 	if flag != "" {
@@ -111,12 +120,12 @@ func (p *Profile) inspect(ctx context.Context) (in inspected, av isolation.Avail
 // start proves the level by really starting the probe image under runsc and reading the banner.
 func (p *Profile) start(ctx context.Context, in inspected) isolation.Availability {
 	facts := map[string]string{"platform": in.platform}
-	banner, err := p.opts.Starter.Banner(ctx, in.binary, RuntimeName, p.opts.Image)
+	dmesg, err := p.opts.Starter.Banner(ctx, in.binary, RuntimeName, p.opts.Image)
 	if err != nil {
 		facts["detail"] = "the probe container did not start under runsc"
 		return unavailable(isolation.ReasonProbeFailed, facts)
 	}
-	if !bannerSeen(banner) {
+	if !bannerSeen(dmesg) {
 		facts["detail"] = "the probe container started but did not print the gVisor banner"
 		return unavailable(isolation.ReasonProbeFailed, facts)
 	}

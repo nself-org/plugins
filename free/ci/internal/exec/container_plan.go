@@ -85,6 +85,9 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	if err := checkContainerCommand(cmd, run); err != nil {
 		return -1, "", err
 	}
+	if err := checkSandboxRuntime(s.Job.Isolation, cmd, run.Image); err != nil {
+		return -1, "", err
+	}
 	stop := containerStopper(cmd.Binary, run.Name, e.Grace)
 	tail := &outputTail{max: 4096}
 	sink := func(b []byte) {
