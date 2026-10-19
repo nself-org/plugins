@@ -178,7 +178,7 @@ func (c *Coordinator) conclude(f finishIn) Result {
 		}
 	}
 	if err == nil {
-		markHistoryFlaky(bg, f.St, &ev)
+		MarkHistoryFlaky(bg, f.St, &ev)
 		digest, err = evidenceDigest(ev)
 	}
 	for _, e := range f.Recovered.Errors {
