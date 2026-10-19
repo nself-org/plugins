@@ -271,7 +271,10 @@ func TestTamperMatrix(t *testing.T) {
 		}, reason: verify.ReasonEvidenceFailing, exit: 1},
 		{name: "evidence lacks the release job", bend: func(r *rig) {
 			r.tweakEvidence = func(e *model.Evidence) { e.Checks[1].JobID = "other"; e.Checks[1].Required = false }
-		}, reason: verify.ReasonEvidenceInvalid},
+		}, reason: verify.ReasonEvidenceMismatch},
+		{name: "release check belongs to another job", bend: func(r *rig) {
+			r.tweakEvidence = func(e *model.Evidence) { e.Checks[0].Kind = "release"; e.Checks[1].Kind = "test" }
+		}, reason: verify.ReasonEvidenceMismatch},
 		{name: "pin could not be resolved", after: func(r *rig) { r.opt.PinError = "origin unreachable" }, reason: verify.ReasonSignature},
 		{name: "pinned commit is not in the repository", mode: pinnedKeys, after: func(r *rig) { r.opt.Pin = strings.Repeat("a", 40) }, reason: verify.ReasonSignature},
 		{name: "protected policy digest differs", after: func(r *rig) { r.opt.PolicyDigest = "policy-2" }, reason: verify.ReasonEvidenceInvalid},

@@ -45,17 +45,18 @@ func (r *run) evidenceBinding() *Failure {
 	if ev.Timings.FinishedAt == nil || *ev.Timings.FinishedAt != m.Release.FinishedAt {
 		return fail(ReasonEvidenceMismatch, "the evidence finished at another time than the release says")
 	}
-	if !hasReleaseCheck(ev) { // a failing release check is judged later (exit 1); no release check at all is not this release's evidence
-		return fail(ReasonEvidenceMismatch, "the evidence has no release job check")
+	if !hasReleaseCheck(ev, m.Release.JobID) { // a failing release check is judged later (exit 1); no release check at all is not this release's evidence
+		return fail(ReasonEvidenceMismatch, "the evidence has no release check for job %q", clip(m.Release.JobID))
 	}
 	r.ev, r.evDoc = ev, doc
 	return nil
 }
 
-// hasReleaseCheck is true when the evidence holds a release-kind check of any result.
-func hasReleaseCheck(ev model.Evidence) bool {
+// hasReleaseCheck is true when the evidence holds a release-kind check, of any
+// result, for the job the manifest names.
+func hasReleaseCheck(ev model.Evidence, job string) bool {
 	for _, c := range ev.Checks {
-		if c.Kind == "release" {
+		if c.Kind == "release" && c.JobID == job {
 			return true
 		}
 	}
