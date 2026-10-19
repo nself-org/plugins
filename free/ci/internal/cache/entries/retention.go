@@ -18,17 +18,24 @@ import (
 
 const pruneBatch = 64
 
-var errNoStatfs = errors.New("entries: free-space check unsupported on this platform")
+var (
+	errNoStatfs = errors.New("entries: free-space check unsupported on this platform")
+	// errNoProbe: neither Options.Home nor Options.Free is set, so the floor cannot be checked.
+	errNoProbe = errors.New("entries: no free-space probe (set Options.Home or NSELF_CI_HOME, or DisableFloor)")
+)
 
-// space reports free bytes and the floor; ok is false when no check is
-// configured (no Free hook and no Home).
+// space reports free bytes and the floor; ok is false only when the floor is
+// disabled or the platform cannot stat a volume.
 func (s *Store) space() (free, floor int64, ok bool, err error) {
 	probe := s.opt.Free
 	if probe == nil && s.opt.Home != "" {
 		probe = func() (int64, int64, error) { return statfs(s.opt.Home) }
 	}
-	if probe == nil {
+	if probe == nil && s.opt.DisableFloor {
 		return 0, 0, false, nil
+	}
+	if probe == nil {
+		return 0, 0, false, errNoProbe
 	}
 	free, total, err := probe()
 	if errors.Is(err, errNoStatfs) {
@@ -45,15 +52,16 @@ func (s *Store) space() (free, floor int64, ok bool, err error) {
 }
 
 // sweepBlobs removes unreferenced cache blobs older than cas's one hour grace,
-// measured from a clock reading taken BEFORE the reference scan: a blob that a
-// commit in any process references after the scan is younger than BlobMaxAge at
-// that commit, hence younger than the grace relative to this earlier reading, so
-// no pause between the scan and the sweep can make a committed blob look old.
-// The sweep runs in its own goroutine so the caller's deadline bounds the wait
+// measured from cutoff, a clock reading the caller took BEFORE its last prune
+// write transaction (that transaction is the publication barrier: the single
+// SQLite writer lock means every commit in flight in any process has finished
+// before it, so the reference scan below sees it, and every later commit checks
+// its blobs' age after cutoff, so they are younger than BlobMaxAge relative to it
+// and hence inside cas's grace). No pause of the pruner or of a committer can
+// make a committed blob look old. The sweep runs in its own goroutine so the caller's deadline bounds the wait
 // even while cas holds its cross-process lock; the sweep itself stops at the
 // next realm boundary and is safe to stop at any point.
-func (s *Store) sweepBlobs(ctx context.Context) error {
-	cutoff := s.now()
+func (s *Store) sweepBlobs(ctx context.Context, cutoff time.Time) error {
 	list, err := s.be.CacheEntries(ctx, "")
 	if err != nil {
 		return err
@@ -105,6 +113,7 @@ func (s *Store) Prune(ctx context.Context, budget time.Duration) (out Pruned, er
 
 func (s *Store) prune(ctx context.Context, budget time.Duration) (Pruned, error) {
 	start, out := s.now(), Pruned{}
+	cutoff := start // before the first prune transaction: see sweepBlobs
 	step := PruneStep{MaxAge: s.maxAge, Retention: UsageRetention, MaxBytes: s.maxBytes, Limit: pruneBatch}
 	for {
 		r, err := s.be.CachePrune(ctx, step)
@@ -123,20 +132,20 @@ func (s *Store) prune(ctx context.Context, budget time.Duration) (Pruned, error)
 			return out, nil
 		}
 	}
-	if err := s.sweepBlobs(ctx); err != nil {
+	if err := s.sweepBlobs(ctx, cutoff); err != nil {
 		return out, err
 	}
 	free, floor, ok, err := s.space()
 	if err != nil || !ok || free >= floor {
 		return out, err
 	}
-	step.Limit, step.FreeBytes = 0, floor-free
+	step.Limit, step.FreeBytes, cutoff = 0, floor-free, s.now()
 	r, err := s.be.CachePrune(ctx, step)
 	out.Entries, out.Bytes = out.Entries+r.Entries, out.Bytes+r.Bytes
 	if err != nil {
 		return out, err
 	}
-	if err = s.sweepBlobs(ctx); err != nil {
+	if err = s.sweepBlobs(ctx, cutoff); err != nil {
 		return out, err
 	}
 	if free, _, _, err = s.space(); err != nil {

@@ -8,6 +8,7 @@ package store
 // single statement or a single transaction.
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -38,11 +39,11 @@ func cacheScan(ctx context.Context, db cacheQuerier, q string, args []any, each 
 func (s *Store) CacheEntries(ctx context.Context, key string) ([]entries.Manifest, error) {
 	var out []entries.Manifest
 	q, args := `SELECT e.cache_key,e.namespace,e.spec,e.attempt_id,e.epoch,e.source_trust,e.secrets_received,e.private_deps,e.scanned_clean,e.created_at,e.last_used_at,b.path,b.sha256,b.size
- FROM cache_entry e LEFT JOIN cache_entry_blob b ON b.cache_key=e.cache_key`, []any(nil)
+ FROM cache_entry e LEFT JOIN cache_entry_blob b ON b.namespace=e.namespace AND b.cache_key=e.cache_key`, []any(nil)
 	if key != "" {
 		q, args = q+" WHERE e.cache_key=?", []any{key}
 	}
-	err := cacheScan(ctx, s.readers, q+" ORDER BY e.last_used_at,e.cache_key,b.path", args, func(r *sql.Rows) error {
+	err := cacheScan(ctx, s.readers, q+" ORDER BY e.last_used_at,e.cache_key,e.namespace,b.path", args, func(r *sql.Rows) error {
 		var e entries.Manifest
 		var path, sha sql.NullString
 		var size sql.NullInt64
@@ -50,7 +51,7 @@ func (s *Store) CacheEntries(ctx context.Context, key string) ([]entries.Manifes
 		if err := r.Scan(&e.Key, &e.Namespace, &e.Spec, &w.AttemptID, &w.Epoch, &w.SourceTrust, &w.SecretsReceived, &w.PrivateDeps, &w.ScannedClean, &e.CreatedAt, &e.LastUsedAt, &path, &sha, &size); err != nil {
 			return err
 		}
-		if n := len(out); n == 0 || out[n-1].Key != e.Key {
+		if n := len(out); n == 0 || out[n-1].Key != e.Key || !bytes.Equal(out[n-1].Namespace, e.Namespace) {
 			out = append(out, e)
 		}
 		if path.Valid {
@@ -63,9 +64,9 @@ func (s *Store) CacheEntries(ctx context.Context, key string) ([]entries.Manifes
 }
 
 // CacheTouch marks an entry used.
-func (s *Store) CacheTouch(ctx context.Context, key string) error {
+func (s *Store) CacheTouch(ctx context.Context, ns []byte, key string) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		return execAll(ctx, tx, []any{"UPDATE cache_entry SET last_used_at=? WHERE cache_key=?", s.now().UnixNano(), key})
+		return execAll(ctx, tx, []any{"UPDATE cache_entry SET last_used_at=? WHERE namespace=? AND cache_key=?", s.now().UnixNano(), ns, key})
 	})
 }
 
@@ -74,7 +75,7 @@ func (s *Store) CacheTouch(ctx context.Context, key string) error {
 // transaction.
 func (s *Store) CacheDrop(ctx context.Context, m entries.Manifest, reason string) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		if err := execAll(ctx, tx, []any{"DELETE FROM cache_entry WHERE cache_key=? AND attempt_id=? AND epoch=? AND created_at=?", m.Key, m.Writer.AttemptID, m.Writer.Epoch, m.CreatedAt}); err != nil {
+		if err := execAll(ctx, tx, []any{"DELETE FROM cache_entry WHERE namespace=? AND cache_key=? AND attempt_id=? AND epoch=? AND created_at=?", m.Namespace, m.Key, m.Writer.AttemptID, m.Writer.Epoch, m.CreatedAt}); err != nil {
 			return err
 		}
 		return s.appendAudit(ctx, tx, "cache", "cache.entry.dropped", m.Key, "reason="+reason)
@@ -82,7 +83,7 @@ func (s *Store) CacheDrop(ctx context.Context, m entries.Manifest, reason string
 }
 
 // CachePrune runs one prune step in a single transaction (all or nothing):
-// usage rows and finished-attempt facts older than Retention, entries unused
+// usage rows and facts of attempts that are not running or finalizing, older than Retention, entries unused
 // since MaxAge, then oldest first until total bytes fit MaxBytes and FreeBytes
 // were released, at most Limit entries (0 = all); More reports that Limit
 // stopped it with work left.
@@ -92,18 +93,19 @@ func (s *Store) CachePrune(ctx context.Context, p entries.PruneStep) (entries.Pr
 		out = entries.Pruned{}
 		now := s.now()
 		old, cutoff := now.Add(-p.Retention).UnixNano(), now.Add(-p.MaxAge).UnixNano()
-		if err := execAll(ctx, tx, []any{"DELETE FROM cache_use WHERE ts<?", old}, []any{"DELETE FROM cache_attempt WHERE recorded_at<?", old}); err != nil {
+		if err := execAll(ctx, tx, []any{"DELETE FROM cache_use WHERE ts<?", old}, []any{"DELETE FROM cache_attempt WHERE recorded_at<? AND NOT EXISTS (SELECT 1 FROM attempt a WHERE a.id=cache_attempt.attempt_id AND a.state IN ('running','finalizing'))", old}); err != nil {
 			return err
 		}
 		type row struct {
 			key        string
+			ns         []byte
 			bytes, use int64
 		}
 		var all []row
 		var total int64
-		err := cacheScan(ctx, tx, "SELECT cache_key,bytes,last_used_at FROM cache_entry ORDER BY last_used_at,cache_key", nil, func(r *sql.Rows) error {
+		err := cacheScan(ctx, tx, "SELECT cache_key,namespace,bytes,last_used_at FROM cache_entry ORDER BY last_used_at,cache_key,namespace", nil, func(r *sql.Rows) error {
 			var x row
-			err := r.Scan(&x.key, &x.bytes, &x.use)
+			err := r.Scan(&x.key, &x.ns, &x.bytes, &x.use)
 			all, total = append(all, x), total+x.bytes
 			return err
 		})
@@ -115,7 +117,7 @@ func (s *Store) CachePrune(ctx context.Context, p entries.PruneStep) (entries.Pr
 				out.More = true
 				break
 			}
-			err = execAll(ctx, tx, []any{"DELETE FROM cache_entry WHERE cache_key=?", r.key})
+			err = execAll(ctx, tx, []any{"DELETE FROM cache_entry WHERE namespace=? AND cache_key=?", r.ns, r.key})
 			out.Entries, out.Bytes, total = out.Entries+1, out.Bytes+r.bytes, total-r.bytes
 		}
 		return err

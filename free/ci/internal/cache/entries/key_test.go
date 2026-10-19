@@ -3,6 +3,8 @@ package entries
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"math/rand"
 	"os"
 	"reflect"
@@ -267,5 +269,54 @@ func TestKeyTotalSizeLimitIsInclusive(t *testing.T) {
 	in.Extras = append(append([]string(nil), items[:len(items)-1]...), items[len(items)-1]+"z")
 	if _, err := Key(in); err == nil {
 		t.Fatal("inputs one byte over the limit were accepted")
+	}
+}
+
+// TestKeyCountsOfLaterListsCountTowardsTheLimit: with Paths filled so that the
+// whole encoding is four bytes over the limit only because of the later lists'
+// four-byte counts, Key must refuse (the count of Extras is appended last).
+func TestKeyCountsOfLaterListsCountTowardsTheLimit(t *testing.T) {
+	base := KeyInputs{Namespace: trustedNS}
+	enc, err := base.encode() // includes the counts of the three empty lists
+	if err != nil {
+		t.Fatal(err)
+	}
+	fill := func(room int) []string {
+		var items []string
+		for room >= 4+maxFieldBytes+4 {
+			items = append(items, strings.Repeat("x", maxFieldBytes))
+			room -= 4 + maxFieldBytes
+		}
+		return append(items, strings.Repeat("y", room-4))
+	}
+	exact := base
+	exact.Paths = fill(maxKeyBytes - len(enc))
+	if _, err = Key(exact); err != nil {
+		t.Fatalf("exactly the limit: %v", err)
+	}
+	over := base
+	over.Paths = fill(maxKeyBytes - len(enc) + 4) // the Extras count would be the first byte over
+	if _, err = Key(over); err == nil {
+		t.Fatal("a trailing list count past the limit was accepted")
+	}
+}
+
+func TestManifestBlobCountLimit(t *testing.T) {
+	mk := func(n int) Manifest {
+		m := goodManifest()
+		m.Blobs = make([]Blob, n)
+		for i := range m.Blobs {
+			m.Blobs[i] = Blob{Path: fmt.Sprintf("b%05d", i), SHA256: strings.Repeat("b", 64)}
+		}
+		return m
+	}
+	if maxBlobs != 4096 {
+		t.Fatalf("maxBlobs = %d: Commit stats every blob inside the writer transaction", maxBlobs)
+	}
+	if err := mk(maxBlobs).Validate(); err != nil {
+		t.Fatalf("4096 valid blobs: %v", err)
+	}
+	if err := mk(maxBlobs + 1).Validate(); !errors.Is(err, ErrManifest) {
+		t.Fatalf("4097 valid blobs: %v", err)
 	}
 }

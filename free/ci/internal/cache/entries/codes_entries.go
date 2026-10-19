@@ -25,12 +25,26 @@ const (
 	ReasonSizeCap      = "size_cap"
 	ReasonDiskFloor    = "disk_floor"
 	ReasonPathOutside  = "path_outside"
+	// ReasonBlobInvalid extends the Epic D20 list: a blob is missing, has the wrong
+	// size or was not freshly Put when its entry commits.
+	ReasonBlobInvalid = "blob_invalid"
 )
 
 // Refused is E711; Reason is one of the Reason* keys.
-type Refused struct{ Reason string }
+type Refused struct {
+	Reason string
+	Err    error // the cause, when there is one (ErrBlobStale, os.ErrNotExist)
+}
 
-func (e *Refused) Error() string { return CodeCacheRefused + " cache write refused: " + e.Reason }
+func (e *Refused) Error() string {
+	if e.Err != nil {
+		return CodeCacheRefused + " cache write refused: " + e.Reason + ": " + e.Err.Error()
+	}
+	return CodeCacheRefused + " cache write refused: " + e.Reason
+}
+
+// Unwrap exposes the cause.
+func (e *Refused) Unwrap() error { return e.Err }
 
 // Code returns the fabric code.
 func (e *Refused) Code() string { return CodeCacheRefused }

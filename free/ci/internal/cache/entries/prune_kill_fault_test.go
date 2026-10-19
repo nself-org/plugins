@@ -22,6 +22,10 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
+// killPhases are the markers the child prints inside Prune; "sweeping" is the
+// moment the cas sweep starts and has no linger, so a kill there races the sweep.
+var killPhases = []string{"before-prune-tx", "after-prune-tx", "before-refs", "sweeping"}
+
 const (
 	killIterations = 50
 	killEntries    = 24
@@ -31,7 +35,33 @@ const (
 // ahead is the clock of both processes: two hours on, so every blob is past cas's grace.
 func ahead() time.Time { return time.Now().Add(2 * time.Hour) }
 
-func faultStack(dir string, env map[string]string) (*store.Store, *entries.Store, error) {
+// phaseBackend prints a marker at each phase of Prune and lingers there, so the
+// parent can kill the child at a known point inside the operation.
+type phaseBackend struct {
+	entries.Backend
+	linger time.Duration
+}
+
+func (p phaseBackend) mark(name string) {
+	fmt.Println("phase:" + name)
+	time.Sleep(p.linger)
+}
+
+func (p phaseBackend) CachePrune(ctx context.Context, s entries.PruneStep) (entries.Pruned, error) {
+	p.mark("before-prune-tx")
+	r, err := p.Backend.CachePrune(ctx, s)
+	p.mark("after-prune-tx")
+	return r, err
+}
+
+func (p phaseBackend) CacheEntries(ctx context.Context, key string) ([]entries.Manifest, error) {
+	p.mark("before-refs")
+	m, err := p.Backend.CacheEntries(ctx, key)
+	fmt.Println("phase:sweeping") // no linger: the cas sweep runs right after
+	return m, err
+}
+
+func faultStack(dir string, env map[string]string, linger time.Duration) (*store.Store, *entries.Store, error) {
 	st, err := store.Open(filepath.Join(dir, "state.db"), store.Options{Clock: ahead})
 	if err != nil {
 		return nil, nil, err
@@ -40,7 +70,11 @@ func faultStack(dir string, env map[string]string) (*store.Store, *entries.Store
 	if err != nil {
 		return nil, nil, err
 	}
-	return st, entries.New(st, blobs, entries.Options{Clock: ahead, Getenv: func(k string) string { return env[k] }}), nil
+	var be entries.Backend = st
+	if linger > 0 {
+		be = phaseBackend{Backend: st, linger: linger}
+	}
+	return st, entries.New(be, blobs, entries.Options{Clock: ahead, DisableFloor: true, Getenv: func(k string) string { return env[k] }}), nil
 }
 
 // TestPruneKillChild is the process the parent kills; it does nothing unless
@@ -50,7 +84,7 @@ func TestPruneKillChild(t *testing.T) {
 	if dir == "" {
 		return
 	}
-	st, es, err := faultStack(dir, map[string]string{"NSELF_CI_CACHE_MAX_BYTES": os.Getenv("NSELF_FAULT_MAX_BYTES")})
+	st, es, err := faultStack(dir, map[string]string{"NSELF_CI_CACHE_MAX_BYTES": os.Getenv("NSELF_FAULT_MAX_BYTES")}, 40*time.Millisecond)
 	if err != nil {
 		fmt.Println("error:", err)
 		os.Exit(3)
@@ -128,7 +162,7 @@ func TestPruneKill(t *testing.T) {
 	if got := cacheBlobFiles(template.home); got != killEntries*killBlobs {
 		t.Fatalf("template has %d blob files", got)
 	}
-	killed := 0
+	killed, byPhase, tried := 0, map[string]int{}, map[string]int{}
 	for i := 0; i < killIterations; i++ {
 		dir := t.TempDir()
 		copyTree(t, template.home, dir)
@@ -141,10 +175,17 @@ func TestPruneKill(t *testing.T) {
 		if err = cmd.Start(); err != nil {
 			t.Fatal(err)
 		}
+		// kill the child at a rotating phase of Prune, a few milliseconds after its marker
+		phase := killPhases[i%len(killPhases)]
+		tried[phase]++
 		sc := bufio.NewScanner(out)
-		for sc.Scan() && sc.Text() != "prune-start" {
+		for sc.Scan() && sc.Text() != "phase:"+phase {
 		}
-		time.Sleep(time.Duration(i) * 200 * time.Microsecond)
+		step := 1500 * time.Microsecond // inside the 40 ms linger of the marked phases
+		if phase == "sweeping" {
+			step = 200 * time.Microsecond // the cas sweep has no linger: strike while it runs
+		}
+		time.Sleep(time.Duration(i/len(killPhases)) * step)
 		_ = cmd.Process.Signal(syscall.SIGKILL)
 		go func() { _, _ = io.Copy(io.Discard, out) }()
 		var ee *exec.ExitError
@@ -152,10 +193,11 @@ func TestPruneKill(t *testing.T) {
 		case err == nil:
 		case errors.As(err, &ee) && ee.ExitCode() == -1:
 			killed++
+			byPhase[phase]++
 		default:
 			t.Fatalf("iteration %d: child failed: %v", i, err)
 		}
-		st, es, err := faultStack(dir, map[string]string{"NSELF_CI_CACHE_MAX_BYTES": strconv.FormatInt(total/2, 10)})
+		st, es, err := faultStack(dir, map[string]string{"NSELF_CI_CACHE_MAX_BYTES": strconv.FormatInt(total/2, 10)}, 0)
 		if err != nil {
 			t.Fatalf("iteration %d: reopen after kill: %v", i, err)
 		}
@@ -178,8 +220,14 @@ func TestPruneKill(t *testing.T) {
 		}
 		_ = st.Close()
 	}
-	if killed < 10 {
-		t.Fatalf("only %d of %d children were killed mid-prune: the fault window was missed", killed, killIterations)
+	// the three lingering phases are deterministic: every kill must land
+	for _, ph := range killPhases[:3] {
+		if byPhase[ph] != tried[ph] {
+			t.Fatalf("phase %q: %d kills in %d tries (the child finished before the kill)", ph, byPhase[ph], tried[ph])
+		}
 	}
-	t.Logf("killed mid-prune in %d of %d iterations", killed, killIterations)
+	if killed < killIterations*9/10 {
+		t.Fatalf("only %d of %d children were killed mid-prune: the fault window was missed (%v)", killed, killIterations, byPhase)
+	}
+	t.Logf("killed mid-prune in %d of %d iterations by phase %v", killed, killIterations, byPhase)
 }

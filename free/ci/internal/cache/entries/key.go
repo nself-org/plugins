@@ -58,6 +58,9 @@ func putList(buf []byte, items []string) ([]byte, error) {
 	if len(items) > maxListItems {
 		return nil, fmt.Errorf("entries: key list of %d items exceeds %d", len(items), maxListItems)
 	}
+	if len(buf)+4 > maxKeyBytes {
+		return nil, fmt.Errorf("entries: key inputs exceed %d bytes", maxKeyBytes)
+	}
 	sorted := append([]string(nil), items...)
 	sort.Strings(sorted)
 	buf = binary.BigEndian.AppendUint32(buf, uint32(len(sorted)))

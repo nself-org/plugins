@@ -3,6 +3,9 @@ package entries
 import (
 	"context"
 	"errors"
+	"io"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,7 +39,7 @@ func newFake(t *testing.T, script ...Pruned) (*Store, *fakeBackend, *time.Time) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(fb, blobs, Options{Clock: func() time.Time { now = now.Add(time.Second); return now }, Getenv: func(string) string { return "" }}), fb, &now
+	return New(fb, blobs, Options{Clock: func() time.Time { now = now.Add(time.Second); return now }, Getenv: func(string) string { return "" }, DisableFloor: true}), fb, &now
 }
 
 func TestPruneLoopAccumulatesBatches(t *testing.T) {
@@ -106,5 +109,59 @@ func TestSpaceTreatsAMissingStatfsAsNoCheck(t *testing.T) {
 	s.opt.Free = func() (int64, int64, error) { return 0, 0, errors.New("disk on fire") }
 	if _, _, _, err := s.space(); err == nil {
 		t.Fatal("a real probe failure must surface")
+	}
+}
+
+type nopCloser struct{ io.Reader }
+
+func (nopCloser) Close() error { return nil }
+
+func TestIntactRetriesRacedOpensAndClassifiesTheRest(t *testing.T) {
+	s, _, _ := newFake(t)
+	realm := cas.CacheRealm(string(trustedNS.Canonical()))
+	digest, size, err := s.blobs.Put(context.Background(), realm, strings.NewReader("x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Manifest{Namespace: trustedNS.Canonical(), Blobs: []Blob{{Path: "a", SHA256: digest, Size: size}}}
+	gone := m
+	gone.Blobs = []Blob{{Path: "a", SHA256: strings.Repeat("0", 64), Size: 1}}
+	if got, err := s.intact(gone); got != "missing" || err != nil {
+		t.Fatalf("missing blob: %q %v", got, err)
+	}
+	wrong := m
+	wrong.Blobs = []Blob{{Path: "a", SHA256: digest, Size: size + 1}}
+	if got, err := s.intact(wrong); got != "size_mismatch" || err != nil {
+		t.Fatalf("size lie: %q %v", got, err)
+	}
+	for _, c := range []struct {
+		name   string
+		errs   []error // what successive Opens return; the last repeats
+		reason string
+		calls  int
+		fail   bool
+	}{
+		{"healthy", []error{nil}, "", 1, false},
+		{"raced once", []error{cas.ErrInvalid, nil}, "", 2, false},
+		{"raced twice", []error{cas.ErrInvalid, cas.ErrInvalid, nil}, "", 3, false},
+		{"raced three times", []error{cas.ErrInvalid}, "unstable", 3, false},
+		{"digest mismatch", []error{cas.ErrDigestMismatch}, "corrupt", 1, false},
+		{"size mismatch", []error{cas.ErrSizeMismatch}, "corrupt", 1, false},
+		{"vanished", []error{os.ErrNotExist}, "missing", 1, false},
+		{"disk error", []error{errors.New("i/o")}, "", 1, true},
+	} {
+		calls := 0
+		s.open = func(cas.Realm, string) (io.ReadCloser, error) {
+			e := c.errs[min(calls, len(c.errs)-1)]
+			calls++
+			if e != nil {
+				return nil, e
+			}
+			return nopCloser{strings.NewReader("x")}, nil
+		}
+		got, err := s.intact(m)
+		if got != c.reason || (err != nil) != c.fail || calls != c.calls {
+			t.Errorf("%s: reason %q err %v after %d opens, want %q fail=%v after %d", c.name, got, err, calls, c.reason, c.fail, c.calls)
+		}
 	}
 }

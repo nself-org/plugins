@@ -122,7 +122,7 @@ func (s *Store) CacheRecordPlan(ctx context.Context, attempt string, epoch int64
 		}
 		stmts := [][]any{{"INSERT OR IGNORE INTO cache_attempt(attempt_id,project,trust,protection,head_repo,pr,secrets_declared,private_deps,recorded_at) VALUES (?,?,?,?,?,?,?,?,?)",
 			attempt, f.Project, f.Trust, f.Protection, f.HeadRepo, f.PR, f.SecretsDeclared, f.PrivateDeps, s.now().UnixNano()},
-			{"UPDATE cache_attempt SET passed=0,result_epoch=-1,plan_cas=? WHERE attempt_id=?", cas, attempt}, {"DELETE FROM cache_planned WHERE attempt_id=?", attempt}}
+			{"UPDATE cache_attempt SET passed=0,result_epoch=-1,plan_cas=?,recorded_at=? WHERE attempt_id=?", cas, s.now().UnixNano(), attempt}, {"DELETE FROM cache_planned WHERE attempt_id=?", attempt}}
 		for _, k := range keys {
 			stmts = append(stmts, []any{"INSERT OR IGNORE INTO cache_planned(attempt_id,cache_key) VALUES (?,?)", attempt, k})
 		}
@@ -163,7 +163,10 @@ func (s *Store) CacheRecordResult(ctx context.Context, attempt string, epoch int
 // CacheCommit commits the entry or returns the refusal; nothing is visible
 // before. Refusal order: attempt state, epoch and a pass recorded at this epoch
 // (E711), authz.CheckWrite on the claimed namespace (E684), then the manifest's
-// namespace, the planned key and the size cap, then Check (E711 as returned).
+// namespace, the planned key and the size cap, then Check (E711 as returned). An
+// entry is identified by (namespace, key), so no namespace can replace, block or
+// probe another's entry under the same key string. The saver's SecretsReceived
+// and PrivateDeps can only tighten the recorded facts, never loosen them.
 func (s *Store) CacheCommit(ctx context.Context, c entries.CommitRequest) error {
 	var refusal error
 	err := s.write(ctx, func(tx *sql.Tx) error {
@@ -199,33 +202,32 @@ func (s *Store) CacheCommit(ctx context.Context, c entries.CommitRequest) error 
 		for _, b := range e.Blobs {
 			total += b.Size
 		}
-		var foreign int
-		if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM cache_entry WHERE cache_key=? AND namespace<>?", e.Key, e.Namespace).Scan(&foreign); err != nil {
-			return err
-		}
 		switch {
-		case !bytes.Equal(e.Namespace, ns.Canonical()) || foreign != 0: // never replace another namespace's entry
+		case !bytes.Equal(e.Namespace, ns.Canonical()):
 			return refuse(entries.ReasonNamespace)
 		case planned != 1:
 			return refuse(entries.ReasonNotPlanned)
 		case c.MaxEntryBytes > 0 && total > c.MaxEntryBytes:
 			return refuse(entries.ReasonSizeCap)
 		}
-		if c.Check != nil {
-			var r *entries.Refused
-			if err = c.Check(); errors.As(err, &r) {
-				return refuse(r.Reason)
-			} else if err != nil {
-				return err
+		var r *entries.Refused
+		if c.Check == nil {
+			return errors.New("store: CacheCommit needs the Check hook")
+		} else if err = c.Check(); errors.As(err, &r) {
+			if err = s.cacheRefuse(ctx, tx, &refusal, "commit", c.Attempt, r.Reason); err == nil {
+				refusal = r // keeps the cause for errors.Is
 			}
+			return err
+		} else if err != nil {
+			return err
 		}
 		now := s.now().UnixNano()
 		stmts := [][]any{{"DELETE FROM cache_entry WHERE cache_key=? AND namespace=?", e.Key, e.Namespace},
 			{"INSERT INTO cache_entry(cache_key,namespace,spec,attempt_id,epoch,source_trust,secrets_received,private_deps,scanned_clean,bytes,created_at,last_used_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-				e.Key, e.Namespace, e.Spec, c.Attempt, cur, f.Trust, f.SecretsDeclared, f.PrivateDeps, e.Writer.ScannedClean, total, now, now},
+				e.Key, e.Namespace, e.Spec, c.Attempt, cur, f.Trust, f.SecretsDeclared || e.Writer.SecretsReceived, f.PrivateDeps || e.Writer.PrivateDeps, e.Writer.ScannedClean, total, now, now},
 			{"DELETE FROM cache_planned WHERE attempt_id=? AND cache_key=?", c.Attempt, e.Key}}
 		for _, b := range e.Blobs {
-			stmts = append(stmts, []any{"INSERT INTO cache_entry_blob(cache_key,path,sha256,size) VALUES (?,?,?,?)", e.Key, b.Path, b.SHA256, b.Size})
+			stmts = append(stmts, []any{"INSERT INTO cache_entry_blob(namespace,cache_key,path,sha256,size) VALUES (?,?,?,?,?)", e.Namespace, e.Key, b.Path, b.SHA256, b.Size})
 		}
 		return execAll(ctx, tx, stmts...)
 	})

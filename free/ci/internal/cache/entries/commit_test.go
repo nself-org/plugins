@@ -227,7 +227,7 @@ func TestCommitRefusesBlobsThatAreNotFreshlyPut(t *testing.T) {
 // blobs, see the test above, so no prune can have swept a blob it accepts.)
 func TestPruneKeepsABlobCommittedJustInsideTheAgeLimit(t *testing.T) {
 	a := newEnv(t, envOpts{})
-	pruner := entries.New(a.st, a.blobs, entries.Options{Clock: func() time.Time { return time.Unix(0, a.clock.Load()) }, Getenv: func(string) string { return "" }})
+	pruner := entries.New(a.st, a.blobs, entries.Options{Clock: func() time.Time { return time.Unix(0, a.clock.Load()) }, Getenv: func(string) string { return "" }, DisableFloor: true})
 	key := a.key(trusted, "race")
 	fin := a.attempt("race1", trusted, []string{key}, true)
 	m := a.manifest(trusted, key, "racing bytes")
@@ -300,7 +300,7 @@ func TestPausedPrunerWithAStaleReferenceSnapshotKeepsAFreshCommit(t *testing.T) 
 			t.Error(err)
 		}
 		e.advance(3 * time.Hour) // the pruner is suspended; its next clock reading is far later
-	}}, e.blobs, entries.Options{Clock: now, Getenv: func(string) string { return "" }})
+	}}, e.blobs, entries.Options{Clock: now, Getenv: func(string) string { return "" }, DisableFloor: true})
 	if _, err := pruner.Prune(e.ctx, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -309,5 +309,52 @@ func TestPausedPrunerWithAStaleReferenceSnapshotKeepsAFreshCommit(t *testing.T) 
 	}
 	if _, ok := e.lookup(trusted, key); !ok {
 		t.Fatal("a stale reference snapshot let the sweep delete a freshly committed blob")
+	}
+}
+
+// prunePause runs a hook after the pruner's last write transaction.
+type prunePause struct {
+	entries.Backend
+	after func()
+}
+
+func (p prunePause) CachePrune(ctx context.Context, s entries.PruneStep) (entries.Pruned, error) {
+	r, err := p.Backend.CachePrune(ctx, s)
+	if err == nil && !r.More && p.after != nil {
+		p.after()
+	}
+	return r, err
+}
+
+// TestWriterPausedInsideItsCommitKeepsItsBlobFromASweepThatResumesLater: the
+// pruner's prune transaction is done and it is paused; a writer then passes the
+// freshness check inside its commit transaction and pauses before inserting; the
+// pruner resumes three hours later, reads references (the writer has not
+// committed) and sweeps. The cutoff was read before the prune transaction, so the
+// writer's blob is still inside the grace and the entry is not left dangling.
+func TestWriterPausedInsideItsCommitKeepsItsBlobFromASweepThatResumesLater(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	key := e.key(trusted, "pw")
+	fin := e.attempt("pw1", trusted, []string{key}, true)
+	m := e.manifest(trusted, key, "in-flight bytes")
+	now := func() time.Time { return time.Unix(0, e.clock.Load()) }
+	reached, release := make(chan struct{}), make(chan struct{})
+	writer := entries.New(e.st, e.blobs, entries.Options{Clock: now, Getenv: func(string) string { return "" },
+		Free: func() (int64, int64, error) { close(reached); <-release; return 1 << 40, 100 << 30, nil }})
+	commitDone := make(chan error, 1)
+	pruner := entries.New(prunePause{Backend: e.st, after: func() {
+		go func() { commitDone <- writer.Commit(e.ctx, "pw1", fin, e.ns(trusted), m) }()
+		<-reached // the writer is inside its commit transaction, past the freshness check
+		e.advance(3 * time.Hour)
+	}}, e.blobs, entries.Options{Clock: now, Getenv: func(string) string { return "" }, DisableFloor: true})
+	if _, err := pruner.Prune(e.ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	if err := <-commitDone; err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := e.lookup(trusted, key); !ok {
+		t.Fatal("the sweep deleted the blob of a commit that was in flight: the entry is dangling")
 	}
 }

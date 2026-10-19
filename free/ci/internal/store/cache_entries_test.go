@@ -144,7 +144,7 @@ func TestCacheEntriesCommitRefusals(t *testing.T) {
 			}
 			_, fin := cacheFinalizing(t, s, id, f, []string{cacheKey}, c.passed)
 			ns, _ := entries.NamespaceOf(f)
-			req := entries.CommitRequest{Attempt: id, Epoch: fin, Claimed: ns, Manifest: cacheManifest(t, f, cacheKey, 10)}
+			req := entries.CommitRequest{Attempt: id, Epoch: fin, Claimed: ns, Manifest: cacheManifest(t, f, cacheKey, 10), Check: noCheck}
 			if c.mutate != nil {
 				c.mutate(&req, fin)
 			}
@@ -179,7 +179,7 @@ func TestCacheEntriesCommitStates(t *testing.T) {
 	s := testStore(t)
 	ns, _ := entries.NamespaceOf(cacheTrusted)
 	req := func(id string, epoch int64) entries.CommitRequest {
-		return entries.CommitRequest{Attempt: id, Epoch: epoch, Claimed: ns, Manifest: cacheManifest(t, cacheTrusted, cacheKey, 10)}
+		return entries.CommitRequest{Attempt: id, Epoch: epoch, Claimed: ns, Manifest: cacheManifest(t, cacheTrusted, cacheKey, 10), Check: noCheck}
 	}
 	reason := func(err error) string {
 		var r *entries.Refused
@@ -291,26 +291,79 @@ func TestCacheEntriesPlanAndResultRefusals(t *testing.T) {
 
 var _ entries.Backend = (*Store)(nil)
 
-// TestCacheEntriesCommitNeverReplacesAnotherNamespace: the same key string in a
-// second namespace must not delete or overwrite the first namespace's entry.
-func TestCacheEntriesCommitNeverReplacesAnotherNamespace(t *testing.T) {
+func noCheck() error { return nil }
+
+// TestCacheEntriesAreKeyedByNamespaceAndKey: the same key string committed in a
+// second namespace neither replaces, blocks nor reveals the first namespace's entry.
+func TestCacheEntriesAreKeyedByNamespaceAndKey(t *testing.T) {
 	ctx := context.Background()
 	s := testStore(t)
 	other := entries.Facts{Project: "other", Trust: "owner", Protection: "protected"}
 	_, fin := cacheFinalizing(t, s, "first", cacheTrusted, []string{cacheKey}, true)
 	ns, _ := entries.NamespaceOf(cacheTrusted)
-	if err := s.CacheCommit(ctx, entries.CommitRequest{Attempt: "first", Epoch: fin, Claimed: ns, Manifest: cacheManifest(t, cacheTrusted, cacheKey, 10)}); err != nil {
+	if err := s.CacheCommit(ctx, entries.CommitRequest{Attempt: "first", Epoch: fin, Claimed: ns, Manifest: cacheManifest(t, cacheTrusted, cacheKey, 10), Check: noCheck}); err != nil {
 		t.Fatal(err)
 	}
 	_, fin = cacheFinalizing(t, s, "second", other, []string{cacheKey}, true)
 	ons, _ := entries.NamespaceOf(other)
-	err := s.CacheCommit(ctx, entries.CommitRequest{Attempt: "second", Epoch: fin, Claimed: ons, Manifest: cacheManifest(t, other, cacheKey, 20)})
-	if got := reasonOf(t, err); got != "namespace" {
-		t.Fatalf("a foreign namespace replaced an entry: %s", got)
+	if err := s.CacheCommit(ctx, entries.CommitRequest{Attempt: "second", Epoch: fin, Claimed: ons, Manifest: cacheManifest(t, other, cacheKey, 20), Check: noCheck}); err != nil {
+		t.Fatalf("another namespace must be able to use the same key string: %v", err)
 	}
-	list, lerr := s.CacheEntries(ctx, cacheKey)
-	if lerr != nil || len(list) != 1 || list[0].Writer.AttemptID != "first" || list[0].Bytes() != 10 {
-		t.Fatalf("the original entry was disturbed: %+v %v", list, lerr)
+	list, err := s.CacheEntries(ctx, cacheKey)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("%d entries (%v)", len(list), err)
+	}
+	by := map[string]entries.Manifest{}
+	for _, m := range list {
+		by[m.Writer.AttemptID] = m
+	}
+	if by["first"].Bytes() != 10 || len(by["first"].Blobs) != 1 || by["second"].Bytes() != 20 || len(by["second"].Blobs) != 1 {
+		t.Fatalf("the two entries must keep their own blobs: %+v", by)
+	}
+	// dropping one leaves the other
+	if err = s.CacheDrop(ctx, by["second"], "corrupt"); err != nil {
+		t.Fatal(err)
+	}
+	if left, _ := s.CacheEntries(ctx, cacheKey); len(left) != 1 || left[0].Writer.AttemptID != "first" {
+		t.Fatalf("drop crossed namespaces: %+v", left)
+	}
+}
+
+// TestCacheEntriesSaverCanOnlyTightenTheFacts: SecretsReceived and PrivateDeps
+// reported by the saver are OR-ed into the recorded facts.
+func TestCacheEntriesSaverCanOnlyTightenTheFacts(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	_, fin := cacheFinalizing(t, s, "tight", cacheTrusted, []string{cacheKey}, true)
+	req := cacheReq(t, "tight", fin, cacheTrusted, cacheKey, 10)
+	req.Manifest.Writer = entries.Writer{SecretsReceived: true, PrivateDeps: true}
+	if err := s.CacheCommit(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.CacheEntries(ctx, cacheKey)
+	if len(got) != 1 || !got[0].Writer.SecretsReceived || !got[0].Writer.PrivateDeps {
+		t.Fatalf("a saver-reported flag was discarded: %+v", got)
+	}
+	secrets := cacheTrusted
+	secrets.SecretsDeclared, secrets.PrivateDeps = true, true
+	_, fin = cacheFinalizing(t, s, "loose", secrets, []string{strings.Repeat("c", 64)}, true)
+	req = cacheReq(t, "loose", fin, secrets, strings.Repeat("c", 64), 10)
+	if err := s.CacheCommit(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.CacheEntries(ctx, strings.Repeat("c", 64))
+	if len(got) != 1 || !got[0].Writer.SecretsReceived || !got[0].Writer.PrivateDeps {
+		t.Fatalf("a saver cannot loosen the recorded facts: %+v", got)
+	}
+}
+
+func TestCacheEntriesCommitNeedsTheCheckHook(t *testing.T) {
+	s := testStore(t)
+	_, fin := cacheFinalizing(t, s, "nocheck", cacheTrusted, []string{cacheKey}, true)
+	req := cacheReq(t, "nocheck", fin, cacheTrusted, cacheKey, 10)
+	req.Check = nil
+	if err := s.CacheCommit(context.Background(), req); err == nil {
+		t.Fatal("a commit without the Check hook was accepted")
 	}
 }
 
@@ -326,7 +379,7 @@ func reasonOf(t *testing.T, err error) string {
 func cacheReq(t *testing.T, id string, epoch int64, f entries.Facts, key string, size int64) entries.CommitRequest {
 	t.Helper()
 	ns, _ := entries.NamespaceOf(f)
-	return entries.CommitRequest{Attempt: id, Epoch: epoch, Claimed: ns, Manifest: cacheManifest(t, f, key, size)}
+	return entries.CommitRequest{Attempt: id, Epoch: epoch, Claimed: ns, Manifest: cacheManifest(t, f, key, size), Check: noCheck}
 }
 
 func TestCacheEntriesPlanMustMatchThePipeline(t *testing.T) {
@@ -460,7 +513,7 @@ func TestCacheEntriesCheckRunsOnlyAfterAuthorization(t *testing.T) {
 	if list, _ := s.CacheEntries(ctx, ""); len(list) != 0 {
 		t.Fatal("an aborted commit left an entry")
 	}
-	req.Check = nil
+	req.Check = noCheck
 	if err := s.CacheCommit(ctx, req); err != nil {
 		t.Fatalf("the attempt must still be able to save: %v", err)
 	}
@@ -546,7 +599,7 @@ func TestCacheEntriesDropOnlyRemovesTheRowThatWasRead(t *testing.T) {
 	ns, _ := entries.NamespaceOf(cacheTrusted)
 	save := func(id string) {
 		_, fin := cacheFinalizing(t, s, id, cacheTrusted, []string{cacheKey}, true)
-		if err := s.CacheCommit(ctx, entries.CommitRequest{Attempt: id, Epoch: fin, Claimed: ns, Manifest: cacheManifest(t, cacheTrusted, cacheKey, 10)}); err != nil {
+		if err := s.CacheCommit(ctx, entries.CommitRequest{Attempt: id, Epoch: fin, Claimed: ns, Manifest: cacheManifest(t, cacheTrusted, cacheKey, 10), Check: noCheck}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -587,7 +640,7 @@ func TestCacheEntriesReadAnEntryFromOneSnapshot(t *testing.T) {
 			stmts := [][]any{{"DELETE FROM cache_entry WHERE cache_key=?", cacheKey},
 				{"INSERT INTO cache_entry(cache_key,namespace,spec,attempt_id,epoch,source_trust,secrets_received,private_deps,scanned_clean,bytes,created_at,last_used_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", cacheKey, ns.Canonical(), "go", prefix, int64(i), "owner", secrets, false, true, 2, int64(i), int64(i)}}
 			for j := 0; j < 2; j++ {
-				stmts = append(stmts, []any{"INSERT INTO cache_entry_blob(cache_key,path,sha256,size) VALUES (?,?,?,1)", cacheKey, fmt.Sprintf("%s-%d", prefix, j), strings.Repeat("a", 63) + fmt.Sprint(j)})
+				stmts = append(stmts, []any{"INSERT INTO cache_entry_blob(namespace,cache_key,path,sha256,size) VALUES (?,?,?,?,1)", ns.Canonical(), cacheKey, fmt.Sprintf("%s-%d", prefix, j), strings.Repeat("a", 63) + fmt.Sprint(j)})
 			}
 			return execAll(ctx, tx, stmts...)
 		})
@@ -629,5 +682,38 @@ func TestCacheEntriesReadAnEntryFromOneSnapshot(t *testing.T) {
 	close(stop)
 	if err := <-errc; err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestCacheEntriesPruneKeepsFactsOfRunningAttempts: the 30 day retention of attempt
+// facts and planned keys never removes those of an attempt that is still running or finalizing.
+func TestCacheEntriesPruneKeepsFactsOfRunningAttempts(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	cacheFinalizing(t, s, "live", cacheTrusted, []string{cacheKey}, true)
+	cacheFinalizing(t, s, "done", cacheTrusted, []string{cacheKey}, true)
+	cacheStep(t, s, "done", "finalizing", "passed", 3)
+	if err := s.write(ctx, func(tx *sql.Tx) error {
+		return execAll(ctx, tx, []any{"UPDATE cache_attempt SET recorded_at=1"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CachePrune(ctx, entries.PruneStep{Retention: time.Hour, MaxAge: time.Hour, MaxBytes: 1 << 40}); err != nil {
+		t.Fatal(err)
+	}
+	count := func(id string) (n int) {
+		if err := s.readers.QueryRow("SELECT (SELECT count(*) FROM cache_attempt WHERE attempt_id=?)+(SELECT count(*) FROM cache_planned WHERE attempt_id=?)", id, id).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if count("live") != 2 {
+		t.Fatal("a finalizing attempt lost its facts or planned keys to the retention sweep")
+	}
+	if count("done") != 0 {
+		t.Fatal("a finished attempt's old facts must expire")
+	}
+	if err := s.CacheCommit(ctx, cacheReq(t, "live", 3, cacheTrusted, cacheKey, 10)); err != nil {
+		t.Fatalf("the live attempt can still save: %v", err)
 	}
 }

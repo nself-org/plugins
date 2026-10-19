@@ -169,7 +169,7 @@ func TestStatfsFloorWithoutHook(t *testing.T) {
 		}
 	}
 	// the default floor is derived from the volume and never disables the check
-	def := entries.New(e.st, e.blobs, entries.Options{Home: e.home, Getenv: func(string) string { return "" }})
+	def := entries.New(e.st, e.blobs, entries.Options{Home: e.home, Getenv: func(string) string { return "" }, DisableFloor: true})
 	if _, err := def.Prune(e.ctx, 0); err != nil && !errors.As(err, new(*entries.Refused)) {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestStatfsFloorWithoutHook(t *testing.T) {
 		t.Fatal("a failing free-space probe must surface")
 	}
 	// no Home and no hook: the check is off
-	off := entries.New(e.st, e.blobs, entries.Options{Getenv: func(string) string { return "" }})
+	off := entries.New(e.st, e.blobs, entries.Options{Getenv: func(string) string { return "" }, DisableFloor: true})
 	key := e.key(trusted, "off")
 	fin := e.attempt("off", trusted, []string{key}, true)
 	if err := off.Commit(e.ctx, "off", fin, ns, e.manifest(trusted, key, "x")); err != nil {

@@ -98,8 +98,10 @@ type Backend interface {
 	CacheRecordPlan(ctx context.Context, attempt string, epoch int64, f Facts, keys []string) error
 	CacheRecordResult(ctx context.Context, attempt string, epoch int64, passed bool) error
 	CacheCommit(ctx context.Context, c CommitRequest) error
+	// CacheEntries lists the entries stored under key (one per namespace), or all
+	// entries when key is "", least recently used first, each from one snapshot.
 	CacheEntries(ctx context.Context, key string) ([]Manifest, error)
-	CacheTouch(ctx context.Context, key string) error
+	CacheTouch(ctx context.Context, ns []byte, key string) error
 	CacheDrop(ctx context.Context, m Manifest, reason string) error
 	CachePrune(ctx context.Context, p PruneStep) (Pruned, error)
 	CacheRecordUse(ctx context.Context, u Use) error

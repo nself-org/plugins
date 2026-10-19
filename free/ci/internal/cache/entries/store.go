@@ -34,15 +34,18 @@ const (
 )
 
 // Options tune a Store. The zero value reads the environment, uses the wall
-// clock and stat(2) on Home, and treats every project as having private
-// dependencies (ro-snapshot serving off until Project says otherwise).
+// clock and stat(2) on Home (default NSELF_CI_HOME), and treats every project as
+// having private dependencies (ro-snapshot serving off until Project says
+// otherwise). With neither Home nor Free, Commit and Prune fail rather than
+// silently skip the free-space floor, unless DisableFloor is set.
 type Options struct {
-	Home    string                                // NSELF_CI_HOME, for free-space checks
-	Getenv  func(string) string                   // default os.Getenv
-	Warn    io.Writer                             // default os.Stderr
-	Clock   func() time.Time                      // default time.Now
-	Project func(string) authz.ProjectFacts       // project-level snapshot switch
-	Free    func() (free, total int64, err error) // default statfs of Home
+	DisableFloor bool
+	Home         string                                // NSELF_CI_HOME, for free-space checks
+	Getenv       func(string) string                   // default os.Getenv
+	Warn         io.Writer                             // default os.Stderr
+	Clock        func() time.Time                      // default time.Now
+	Project      func(string) authz.ProjectFacts       // project-level snapshot switch
+	Free         func() (free, total int64, err error) // default statfs of Home
 }
 
 // Store is safe for concurrent use.
@@ -54,6 +57,7 @@ type Store struct {
 	maxAge   time.Duration
 	minFree  int64 // <0: derive from the volume
 	now      func() time.Time
+	open     func(cas.Realm, string) (io.ReadCloser, error) // cas.Open; replaced in tests
 }
 
 // New builds a Store and reads the environment caps once.
@@ -61,12 +65,18 @@ func New(be Backend, blobs *cas.Store, opt Options) *Store {
 	if opt.Getenv == nil {
 		opt.Getenv = os.Getenv
 	}
+	if opt.Home == "" {
+		opt.Home = opt.Getenv("NSELF_CI_HOME")
+	}
 	if opt.Warn == nil {
 		opt.Warn = os.Stderr
 	}
 	s := &Store{be: be, blobs: blobs, opt: opt, now: opt.Clock, maxBytes: defaultMaxBytes, maxAge: defaultMaxAge, minFree: -1}
 	if s.now == nil {
 		s.now = time.Now
+	}
+	if blobs != nil {
+		s.open = blobs.Open
 	}
 	warn := func(name, v string) {
 		_, _ = io.WriteString(opt.Warn, "nself-ci: ignoring unparsable "+name+"="+strconv.Quote(v)+"\n")
