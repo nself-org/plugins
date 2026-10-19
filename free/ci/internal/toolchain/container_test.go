@@ -8,6 +8,7 @@ package toolchain
 // pins the alpine index digest, which is pulled by digest.
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -76,8 +77,18 @@ func TestContainerRunPinnedImage(t *testing.T) {
 		t.Fatalf("pinned fixture run exit %d\nstdout: %s\nstderr: %s", code, out, errs)
 	}
 	// /etc/alpine-release exists only in the pinned image: a pass proves the job ran there.
-	if !strings.Contains(out+errs, "release-file") || strings.Contains(out+errs, "failed") {
-		t.Errorf("the job did not report a pass:\n%s%s", out, errs)
+	var doc struct {
+		Data struct {
+			Result string `json:"result"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("--json did not print one JSON document: %v\n%s", err, out)
+	}
+	// The evidence runner block names the coordinator, not the job's isolation, so the proof is the
+	// pass plus the negative control below.
+	if doc.Data.Result != "pass" {
+		t.Errorf("want result pass, got %q\n%s", doc.Data.Result, out)
 	}
 	if _, _, code := run(t, repo, base, bin, "--json", "--no-status"); code == 0 {
 		t.Error("negative control: the same job passed on the host, so the pass above proves nothing")
@@ -86,7 +97,8 @@ func TestContainerRunPinnedImage(t *testing.T) {
 		t.Errorf("the fixture image was not pulled by digest: %s", errs)
 	}
 
-	out, errs, code = run(t, repo, base, bin, "--container", "--json", "--no-status")
+	// Without --json: the human renderer prints the refusal (the JSON evidence only records an infra error).
+	out, errs, code = run(t, repo, base, bin, "--container", "--no-status")
 	if code == 0 || !strings.Contains(out+errs, "E645") || !strings.Contains(out+errs, "--image") {
 		t.Fatalf("pending row: exit %d\nstdout: %s\nstderr: %s", code, out, errs)
 	}
