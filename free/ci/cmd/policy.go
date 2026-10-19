@@ -22,7 +22,6 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -88,7 +87,7 @@ var leadingCode = regexp.MustCompile(`^(E\d{3}) `)
 func policyFail(env policyEnv, command string, asJSON bool, err error) int {
 	var typed *adminError
 	if m := leadingCode.FindStringSubmatch(err.Error()); m != nil && !errors.As(err, &typed) {
-		err = &adminError{m[1], strings.TrimPrefix(err.Error(), m[0])}
+		err = &adminError{m[1], err.Error()}
 	}
 	return adminFail(env.adminEnv, command, asJSON, err)
 }
