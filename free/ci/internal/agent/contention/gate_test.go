@@ -183,8 +183,8 @@ func TestOneSlotPerAttemptAndWake(t *testing.T) {
 		t.Fatalf("one attempt holds %d slots", used)
 	}
 	acquire("att-2", "lease-3")
-	got := g.OnWake()
-	if len(got) != 2 {
+	got, err := g.OnWake()
+	if err != nil || len(got) != 2 {
 		t.Fatalf("OnWake fenced %v", got)
 	}
 	if used, _ := g.Table.Used(); used != 0 {
@@ -195,7 +195,7 @@ func TestOneSlotPerAttemptAndWake(t *testing.T) {
 		t.Fatalf("slots after re-lease: %d", used)
 	}
 	persistent := newGate(t, t.TempDir(), 4, laptop(4, 90, true), settings(func(s *reservation.Settings) { s.Persistence = store.PersistencePersist }))
-	if l, _, _ := persistent.Acquire("p1", slots.Self("c", "l"), exec.Remote, Need{}, false); l == nil || len(persistent.OnWake()) != 0 {
+	if l, _, _ := persistent.Acquire("p1", slots.Self("c", "l"), exec.Remote, Need{}, false); l == nil || func() bool { got, _ := persistent.OnWake(); return len(got) != 0 }() {
 		t.Fatal("a persistent node dropped a lease on wake")
 	}
 }
@@ -217,5 +217,71 @@ func TestSleepWatcher(t *testing.T) {
 	}
 	if w.Tick() {
 		t.Fatal("one sleep reported twice")
+	}
+}
+
+// A 50% reservation counts cores, not jobs: one 4-core job fills the 4-core share.
+func TestReservationCountsCoresNotJobs(t *testing.T) {
+	g := newGate(t, t.TempDir(), 8, laptop(8, -1, false), settings(func(s *reservation.Settings) { s.ReservedCPU = 4 }))
+	big, _, err := g.Acquire("big", slots.Self("c", "l-big"), exec.Remote, Need{CPU: 4}, false)
+	if big == nil || err != nil {
+		t.Fatalf("the 4-core job: %v", err)
+	}
+	if l, d, _ := g.Acquire("small", slots.Self("c", "l-small"), exec.Remote, Need{}, false); l != nil || d.Reason != model.NodeReservation {
+		t.Fatalf("a 1-core job fit beside a 4-core job in a 4-core share: %+v", d)
+	}
+	if err := big.Release(); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 4; i++ {
+		if l, _, err := g.Acquire("s"+string(rune('0'+i)), slots.Self("c", "l"+string(rune('0'+i))), exec.Remote, Need{}, false); l == nil || err != nil {
+			t.Fatalf("1-core job %d after the release: %v", i, err)
+		}
+	}
+	if l, _, _ := g.Acquire("s9", slots.Self("c", "l9"), exec.Remote, Need{}, false); l != nil {
+		t.Fatal("a fifth 1-core job fit in a 4-core share")
+	}
+}
+
+func TestMemoryReservationCounted(t *testing.T) {
+	g := newGate(t, t.TempDir(), 8, laptop(8, -1, false), settings(func(s *reservation.Settings) { s.ReservedMemMB = 12288 })) // 4096 MB left
+	if l, _, err := g.Acquire("m1", slots.Self("c", "l1"), exec.Remote, Need{MemMB: 3000}, false); l == nil || err != nil {
+		t.Fatalf("first: %v", err)
+	}
+	if l, d, _ := g.Acquire("m2", slots.Self("c", "l2"), exec.Remote, Need{MemMB: 2000}, false); l != nil || d.Reason != model.NodeReservation {
+		t.Fatalf("5000 MB fit in 4096: %+v", d)
+	}
+}
+
+func TestDeadHolderFreesItsHold(t *testing.T) {
+	dir := t.TempDir()
+	g := newGate(t, dir, 8, laptop(8, -1, false), settings(func(s *reservation.Settings) { s.ReservedCPU = 4 }))
+	ghost := hold{Attempt: "ghost", Owner: slots.Owner{PID: 2147483000, Start: "never", Coordinator: "c", Lease: "x"}, CPU: 4}
+	if err := writeHolds(dir, []hold{ghost}); err != nil {
+		t.Fatal(err)
+	}
+	if l, _, err := g.Acquire("live", slots.Self("c", "l"), exec.Remote, Need{CPU: 4}, false); l == nil || err != nil {
+		t.Fatalf("a crashed agent's hold still blocks the share: %v", err)
+	}
+}
+
+// OnWake races Acquire for the same attempt: whatever the order, one attempt holds one slot at the end.
+func TestWakeRacesReLease(t *testing.T) {
+	for i := 0; i < 25; i++ {
+		g := newGate(t, t.TempDir(), 4, laptop(4, 90, true), settings(nil))
+		if l, _, err := g.Acquire("att", slots.Self("c", "l1"), exec.Remote, Need{}, false); l == nil || err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan struct{}, 2)
+		go func() { _, _ = g.OnWake(); done <- struct{}{} }()
+		go func() {
+			_, _, _ = g.Acquire("att", slots.Self("c", "l2"), exec.Remote, Need{}, false)
+			done <- struct{}{}
+		}()
+		<-done
+		<-done
+		if used, _ := g.Table.Used(); used > 1 || g.Held() > 1 {
+			t.Fatalf("run %d: attempt holds %d slots (gate %d)", i, used, g.Held())
+		}
 	}
 }

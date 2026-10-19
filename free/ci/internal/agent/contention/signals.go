@@ -11,7 +11,10 @@
 //
 //	facts for the capability snapshot, the persisted local policy file.
 //
-// Constraints: one probe, one Admit (CI D6): no second battery or capacity probe lives here; no root is
+// Constraints: one probe (CI D6): no second battery or capacity probe lives here, and exec.Admit stays
+//          the admission of local runs while this gate governs remote and background leases from the
+//          node's explicit settings (a stored reservation holds whether or not a terminal is
+//          attached; only CI=true switches it off); no root is
 //
 //	needed, what cannot be applied is reported unknown and never guessed; the operator's own
 //	foreground run is never gated (floor of one job, X17). The files in this package never

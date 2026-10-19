@@ -79,7 +79,7 @@ func TestLinuxPriorityAndCgroup(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(own, "dead"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	pl.Sweep()
+	pl.Sweep(0)
 	if _, err := os.Stat(filepath.Join(own, "dead")); err == nil {
 		t.Fatal("Sweep left an empty group")
 	}
@@ -154,5 +154,52 @@ func TestUnsafeAttemptIDNeverReachesTheFilesystem(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(pl.CgroupRoot, "escape")); err == nil {
 		t.Fatal("path escaped the group")
+	}
+}
+
+func TestUncappedResourceIsResetToMax(t *testing.T) {
+	pl := fakeLinux(t, true)
+	both := reservation.Compute(exec.Capacity{CPUs: 8, MemoryMB: 16384}, reservation.Settings{ReservedCPU: 4, ReservedMemMB: 4096}, Need{})
+	prepare(t, pl, both, exec.JobSpec{AttemptID: "a1", Command: []string{"true"}})
+	cpuOnly := reservation.Compute(exec.Capacity{CPUs: 8, MemoryMB: 16384}, reservation.Settings{ReservedCPU: 2}, Need{})
+	_, p := prepare(t, pl, cpuOnly, exec.JobSpec{AttemptID: "a2", Command: []string{"true"}})
+	own := filepath.Join(pl.CgroupRoot, "agent", parentGroup)
+	if b, _ := os.ReadFile(filepath.Join(own, "memory.max")); string(b) != "max" {
+		t.Fatalf("a dropped memory reservation left memory.max = %q", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(own, "cpu.max")); string(b) != "600000 100000" {
+		t.Fatalf("cpu.max = %q", b)
+	}
+	if p.CPU != Applied || p.Memory != Off {
+		t.Fatalf("%+v", p)
+	}
+}
+
+func TestOneLimitFailingIsReportedPerResource(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file modes")
+	}
+	pl := fakeLinux(t, true)
+	sh := reservation.Compute(exec.Capacity{CPUs: 8, MemoryMB: 16384}, reservation.Settings{ReservedCPU: 4, ReservedMemMB: 4096}, Need{})
+	own := filepath.Join(pl.CgroupRoot, "agent", parentGroup)
+	if err := os.MkdirAll(own, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(own, "memory.max"), []byte("max"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	_, p := prepare(t, pl, sh, exec.JobSpec{AttemptID: "a1", Command: []string{"true"}})
+	if p.CPU != Applied || p.Memory != NoInfo || !strings.Contains(p.Reason, "memory.max") {
+		t.Fatalf("%+v", p)
+	}
+}
+
+func TestSweepSparesYoungGroups(t *testing.T) {
+	pl := fakeLinux(t, true)
+	sh := reservation.Compute(exec.Capacity{CPUs: 8, MemoryMB: 16384}, reservation.Settings{ReservedCPU: 4}, Need{})
+	prepare(t, pl, sh, exec.JobSpec{AttemptID: "young", Command: []string{"true"}})
+	prepare(t, pl, sh, exec.JobSpec{AttemptID: "next", Command: []string{"true"}}) // sweeps with the 2 minute bar
+	if _, err := os.Stat(filepath.Join(pl.CgroupRoot, "agent", parentGroup, "young")); err != nil {
+		t.Fatalf("a group younger than the bar was swept: %v", err)
 	}
 }

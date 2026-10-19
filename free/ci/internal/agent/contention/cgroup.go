@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/nodes/reservation"
 )
@@ -47,30 +48,34 @@ func (p Platform) ownCgroup() (string, error) {
 	return "", errors.New("no cgroup v2 entry for this process")
 }
 
-// jobParent creates the parent group holding the reservation and returns its directory.
-func (p Platform) jobParent(sh reservation.Share) (string, error) {
+// jobParent creates the parent group holding the reservation. A resource the operator did not reserve
+// is set back to "max", so an earlier, larger reservation never lingers. cpuErr and memErr say which
+// limit could not be written; err is set when no parent exists at all.
+func (p Platform) jobParent(sh reservation.Share) (dir string, cpuErr, memErr, err error) {
 	own, err := p.ownCgroup()
 	if err != nil {
-		return "", err
+		return "", nil, nil, err
 	}
 	// Best effort: a delegated cgroup lets us enable controllers for children; failure shows below.
 	_ = os.WriteFile(filepath.Join(own, "cgroup.subtree_control"), []byte("+cpu +memory"), 0o644)
-	dir := filepath.Join(own, parentGroup)
+	dir = filepath.Join(own, parentGroup)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("cgroup not writable: %w", err)
+		return "", nil, nil, fmt.Errorf("cgroup not writable: %w", err)
 	}
+	cpu, mem := fmt.Sprintf("max %d", cpuPeriod), "max"
 	if sh.CPUCapped {
-		quota := max(int64(sh.CPU*cpuPeriod), 1000)
-		if err := os.WriteFile(filepath.Join(dir, "cpu.max"), fmt.Appendf(nil, "%d %d", quota, cpuPeriod), 0o644); err != nil {
-			return "", fmt.Errorf("cpu.max not writable: %w", err)
-		}
+		cpu = fmt.Sprintf("%d %d", max(int64(sh.CPU*cpuPeriod), 1000), cpuPeriod)
 	}
 	if sh.MemCapped && sh.MemMB > 0 {
-		if err := os.WriteFile(filepath.Join(dir, "memory.max"), fmt.Appendf(nil, "%d", sh.MemMB*1024*1024), 0o644); err != nil {
-			return "", fmt.Errorf("memory.max not writable: %w", err)
-		}
+		mem = fmt.Sprint(sh.MemMB * 1024 * 1024)
 	}
-	return dir, nil
+	if e := os.WriteFile(filepath.Join(dir, "cpu.max"), []byte(cpu), 0o644); e != nil {
+		cpuErr = fmt.Errorf("cpu.max not writable: %w", e)
+	}
+	if e := os.WriteFile(filepath.Join(dir, "memory.max"), []byte(mem), 0o644); e != nil {
+		memErr = fmt.Errorf("memory.max not writable: %w", e)
+	}
+	return dir, cpuErr, memErr, nil
 }
 
 // leaf creates the attempt's group under parent and returns its directory.
@@ -102,16 +107,17 @@ func (p Platform) CgroupUsageUsec() (usec int64, ok bool) {
 	return 0, false
 }
 
-// Sweep removes empty attempt groups left by jobs that did not exit cleanly. rmdir fails on a group
-// that still holds processes, which is the right answer.
-func (p Platform) Sweep() {
+// Sweep removes attempt groups that hold no process and are older than minAge (a group just made for a
+// job that has not joined yet is empty too). rmdir fails on a group that still holds processes, which
+// is the right answer.
+func (p Platform) Sweep(minAge time.Duration) {
 	own, err := p.ownCgroup()
 	if err != nil {
 		return
 	}
 	entries, _ := os.ReadDir(filepath.Join(own, parentGroup))
 	for _, e := range entries {
-		if e.IsDir() {
+		if info, err := e.Info(); err == nil && e.IsDir() && time.Since(info.ModTime()) >= minAge {
 			_ = os.Remove(filepath.Join(own, parentGroup, e.Name()))
 		}
 	}

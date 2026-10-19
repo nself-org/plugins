@@ -76,10 +76,16 @@ func TestParse(t *testing.T) {
 			t.Errorf("ParseMemMB(%q) = %v %v", in, v, err)
 		}
 	}
-	for _, bad := range []string{"", "-1", "abc", "1.5g", "2gg", "gb"} {
+	for _, bad := range []string{"", "-1", "abc", "1.5g", "2gg", "gb", "9223372036854775807g"} {
 		if _, err := ParseMemMB(bad); err == nil {
 			t.Errorf("ParseMemMB(%q) accepted", bad)
 		}
+	}
+}
+
+func TestMergePercentNeedsKnownCores(t *testing.T) {
+	if _, err := Merge(Defaults("n1", true, true), Flags{CPU: "50%", Given: map[string]bool{"reserve-cpu": true}}, nil); err == nil {
+		t.Fatal("a percentage of an unknown core count was accepted")
 	}
 }
 
@@ -94,13 +100,13 @@ func TestMerge(t *testing.T) {
 		t.Fatalf("a flag not given changed a value: %+v %v", got, err)
 	}
 	for name, f := range map[string]Flags{
-		"percent of unknown cores": {CPU: "50%", Given: map[string]bool{"reserve-cpu": true}},
-		"bad interactive":          {Interactive: "maybe", Given: map[string]bool{"interactive": true}},
-		"bad battery":              {OnBattery: "", Given: map[string]bool{"on-battery": true}},
-		"bad persistence":          {Persistence: "x", Given: map[string]bool{"persistence": true}},
-		"bad memory":               {Mem: "lots", Given: map[string]bool{"reserve-mem": true}},
+		"bad interactive":     {Interactive: "maybe", Given: map[string]bool{"interactive": true}},
+		"bad battery":         {OnBattery: "", Given: map[string]bool{"on-battery": true}},
+		"bad persistence":     {Persistence: "x", Given: map[string]bool{"persistence": true}},
+		"bad memory":          {Mem: "lots", Given: map[string]bool{"reserve-mem": true}},
+		"more cpu than cores": {CPU: "64", Given: map[string]bool{"reserve-cpu": true}},
 	} {
-		if _, err := Merge(cur, f, nil); err == nil {
+		if _, err := Merge(cur, f, &cores); err == nil {
 			t.Errorf("%s accepted", name)
 		}
 	}

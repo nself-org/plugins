@@ -303,7 +303,7 @@ func scenarioSleep(t *testing.T) {
 	if !w.Tick() {
 		t.Fatal("the sleep was not noticed")
 	}
-	if fenced := gate.OnWake(); len(fenced) != 1 || fenced[0] != "attempt-7" {
+	if fenced, err := gate.OnWake(); err != nil || len(fenced) != 1 || fenced[0] != "attempt-7" {
 		t.Fatalf("OnWake fenced %v", fenced)
 	}
 	if l, _, err := gate.Acquire("attempt-7", slots.Self("c1", "lease-2"), exec.Remote, Need{}, false); l == nil || err != nil {

@@ -13,10 +13,14 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/reservation"
 )
+
+// sweepAge is how old an empty attempt group must be before a new job removes it.
+const sweepAge = 2 * time.Minute
 
 // Priority values.
 const (
@@ -104,11 +108,12 @@ func (i *Isolator) apply(s *exec.JobSpec) Priority {
 	return p
 }
 
-// joinGroup adds the cgroup stub in front of prefix when the limits could be set.
+// joinGroup adds the cgroup stub in front of prefix when at least one limit could be set.
 func (i *Isolator) joinGroup(pl Platform, s *exec.JobSpec, sh reservation.Share, prefix []string, p Priority) ([]string, Priority) {
 	sh1 := pl.first("/bin/sh", "/usr/bin/sh")
+	pl.Sweep(sweepAge)
 	var dir string
-	parent, err := pl.jobParent(sh)
+	parent, cpuErr, memErr, err := pl.jobParent(sh)
 	if err == nil && sh1 != "" {
 		dir, err = leaf(parent, s.AttemptID)
 	}
@@ -118,13 +123,25 @@ func (i *Isolator) joinGroup(pl Platform, s *exec.JobSpec, sh reservation.Share,
 		return prefix, p
 	}
 	if sh.CPUCapped {
-		p.CPU = Applied
+		p.CPU = limitState(cpuErr, &p)
 	}
 	if sh.MemCapped {
-		p.Memory = Applied
+		p.Memory = limitState(memErr, &p)
+	}
+	if p.CPU != Applied && p.Memory != Applied { // nothing set: do not join a group that limits nothing
+		return prefix, p
 	}
 	stub := []string{sh1, "-c", `echo $$ > "$0/cgroup.procs" && exec "$@"`, filepath.Clean(dir)}
 	return append(stub, prefix...), p
+}
+
+// limitState is Applied, or NoInfo with the write error added to the report.
+func limitState(err error, p *Priority) string {
+	if err == nil {
+		return Applied
+	}
+	p.Reason = join(p.Reason, err.Error())
+	return NoInfo
 }
 
 func reasonOf(err error, sh string) string {

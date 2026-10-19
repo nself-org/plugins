@@ -111,6 +111,7 @@ func ParseCPU(v string, totalCPUs float64) (float64, error) {
 
 // ParseMemMB reads a `--reserve-mem` value in MB ("2048") or GB ("2g").
 func ParseMemMB(v string) (int64, error) {
+	orig := v
 	v = strings.ToLower(strings.TrimSpace(v))
 	mult := int64(1)
 	switch {
@@ -124,8 +125,8 @@ func ParseMemMB(v string) (int64, error) {
 		v = strings.TrimSuffix(v, "m")
 	}
 	n, err := strconv.ParseInt(v, 10, 64)
-	if err != nil || n < 0 {
-		return 0, fmt.Errorf("reserved memory %q: want MB (2048) or GB (2g)", v)
+	if err != nil || n < 0 || n > math.MaxInt64/mult {
+		return 0, fmt.Errorf("reserved memory %q: want MB (2048) or GB (2g)", orig)
 	}
 	return n * mult, nil
 }

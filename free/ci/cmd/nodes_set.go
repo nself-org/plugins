@@ -104,7 +104,11 @@ func runNodesSet(args []string, env lifecycle.Env, out, errOut io.Writer) int {
 	if err != nil {
 		return nodesSetFail(out, errOut, f.json, nodesSetUsage(err.Error()))
 	}
-	saved, err := d.Store.NodePutSettings(ctx, next, d.Actor)
+	admin, err := store.NewAdminAuthority(d.Actor)
+	if err != nil {
+		return nodesSetFail(out, errOut, f.json, err)
+	}
+	saved, err := d.Store.NodePutSettings(ctx, next, admin)
 	if err != nil {
 		return nodesSetFail(out, errOut, f.json, err)
 	}

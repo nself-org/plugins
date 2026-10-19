@@ -4,8 +4,9 @@ package contention
 // Inputs:  Gate (slot table, probe, settings), the lease mode, the job's Need.
 // Outputs: Decision; a held Lease whose Release frees the host slot.
 // Constraints: the slot table is host-scoped, so a PERSONAL and a TEAM coordinator share one limit; the
-//          held count is checked against the reservation share and the slot is taken under one file
-//          lock, so concurrent coordinators never overshoot; Foreground is never gated.
+//          cores and memory held are checked against the reservation share and the slot is taken under
+//          one file lock, so concurrent coordinators never overshoot; Foreground is never gated (a
+//          running foreground job takes no slot, so background work may fill the share beside it).
 
 import (
 	"errors"
@@ -55,18 +56,30 @@ type Gate struct {
 type Lease struct {
 	Attempt string
 	Slot    *slots.Slot
+	owner   slots.Owner
 	gate    *Gate
 }
 
-// Release frees the host slot; releasing twice changes nothing.
+// Release frees the host slot and its hold; releasing twice changes nothing.
 func (l *Lease) Release() error {
 	g := l.gate
-	g.mu.Lock()
-	if g.held[l.Attempt] == l {
-		delete(g.held, l.Attempt)
+	return slots.WithLock(g.Dir, lockName, func() error {
+		g.mu.Lock()
+		if g.held[l.Attempt] == l {
+			delete(g.held, l.Attempt)
+		}
+		g.mu.Unlock()
+		return g.drop(l)
+	})
+}
+
+// drop frees the slot of l and forgets its hold; the contention lock must be held.
+func (g *Gate) drop(l *Lease) error {
+	err := g.Table.Release(l.Slot)
+	if werr := writeHolds(g.Dir, without(readHolds(g.Dir), l.owner, l.Attempt)); err == nil {
+		err = werr
 	}
-	g.mu.Unlock()
-	return g.Table.Release(l.Slot)
+	return err
 }
 
 func (g *Gate) probe() exec.Capacity {
@@ -138,19 +151,20 @@ func (g *Gate) Acquire(attempt string, owner slots.Owner, mode exec.Mode, need N
 		g.mu.Lock()
 		old := g.held[attempt]
 		g.mu.Unlock()
-		used, err := g.Table.Used()
-		if err != nil {
-			return err
+		holds := readHolds(g.Dir)
+		if old != nil {
+			holds = without(holds, old.owner, old.Attempt) // the old lease of this attempt is replaced, not added to
+		}
+		cpu := max(need.CPU, 1)
+		if sh := d.Share; sh.Active {
+			usedCPU, usedMem := totals(holds)
+			if sh.CPUCapped && usedCPU+cpu > sh.CPU || sh.MemCapped && usedMem+need.MemMB > sh.MemMB {
+				denied = true
+				return nil
+			}
 		}
 		if old != nil {
-			used-- // the old lease of this attempt is replaced, not added to
-		}
-		if used >= d.Share.Slots {
-			denied = true
-			return nil
-		}
-		if old != nil {
-			if err := g.Table.Release(old.Slot); err != nil {
+			if err := g.drop(old); err != nil {
 				return err
 			}
 		}
@@ -158,7 +172,12 @@ func (g *Gate) Acquire(attempt string, owner slots.Owner, mode exec.Mode, need N
 		if err != nil {
 			return err
 		}
-		l = &Lease{Attempt: attempt, Slot: slot, gate: g}
+		l = &Lease{Attempt: attempt, Slot: slot, owner: owner, gate: g}
+		if err := writeHolds(g.Dir, append(without(readHolds(g.Dir), owner, attempt), hold{Attempt: attempt, Owner: owner, CPU: cpu, MemMB: need.MemMB})); err != nil {
+			_ = g.Table.Release(slot)
+			l = nil
+			return err
+		}
 		g.mu.Lock()
 		if g.held == nil {
 			g.held = map[string]*Lease{}
@@ -177,26 +196,34 @@ func (g *Gate) Acquire(attempt string, owner slots.Owner, mode exec.Mode, need N
 }
 
 // OnWake runs after the machine slept. An intermittent node's leases are presumed expired at the
-// coordinator, so every held slot is released and the attempts are returned for the caller to fence;
-// a persistent node keeps its leases.
-func (g *Gate) OnWake() []string {
+// coordinator, so every held slot is released (under the contention lock, so no Acquire slips between)
+// and the attempts are returned for the caller to fence and kill: a job whose slot was freed is still a
+// process until the caller stops it. A persistent node keeps its leases. The first release error is
+// returned together with the attempts that were released.
+func (g *Gate) OnWake() ([]string, error) {
 	c := g.probe()
 	if g.settings(c).Persistence != store.PersistenceInterm {
-		return nil
+		return nil, nil
 	}
-	g.mu.Lock()
-	ls := make([]*Lease, 0, len(g.held))
-	for _, l := range g.held {
-		ls = append(ls, l)
-	}
-	g.held = nil
-	g.mu.Unlock()
-	out := make([]string, 0, len(ls))
-	for _, l := range ls {
-		_ = g.Table.Release(l.Slot)
-		out = append(out, l.Attempt)
-	}
-	return out
+	var out []string
+	err := slots.WithLock(g.Dir, lockName, func() error {
+		g.mu.Lock()
+		ls := make([]*Lease, 0, len(g.held))
+		for _, l := range g.held {
+			ls = append(ls, l)
+		}
+		g.held = nil
+		g.mu.Unlock()
+		var first error
+		for _, l := range ls {
+			if e := g.drop(l); e != nil && first == nil {
+				first = e
+			}
+			out = append(out, l.Attempt)
+		}
+		return first
+	})
+	return out, err
 }
 
 // Held is the number of leases this gate holds.

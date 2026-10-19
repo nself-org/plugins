@@ -41,14 +41,19 @@ func TestNodeSettingsRoundTripAndSnapshot(t *testing.T) {
 	if _, ok, err := s.NodeSettingsGet(ctx, n.ID); ok || err != nil {
 		t.Fatalf("fresh node has settings: ok=%v err=%v", ok, err)
 	}
-	got, err := s.NodePutSettings(ctx, goodSettings(n.ID), "cli:admin")
+	admin, _ := NewAdminAuthority("cli:admin")
+	got, err := s.NodePutSettings(ctx, goodSettings(n.ID), admin)
 	if err != nil || got.Version != 1 || got.ReservedCPU != 2 {
 		t.Fatalf("put: %+v %v", got, err)
 	}
 	next := goodSettings(n.ID)
 	next.OnBattery, next.Persistence = OnBatteryAllow, PersistencePersist
-	if got, err = s.NodePutSettings(ctx, next, "cli:admin"); err != nil || got.Version != 2 || got.OnBattery != OnBatteryAllow {
+	if got, err = s.NodePutSettings(ctx, next, admin); err != nil || got.Version != 2 || got.OnBattery != OnBatteryAllow {
 		t.Fatalf("update: %+v %v", got, err)
+	}
+	var detail string
+	if err := s.readers.QueryRowContext(ctx, `SELECT detail FROM audit WHERE action='node.settings' ORDER BY seq DESC LIMIT 1`).Scan(&detail); err != nil || detail != "reserved_cpu=2 reserved_mem_mb=4096 interactive=protect on_battery=allow persistence=persistent" {
+		t.Fatalf("audit detail %q: %v", detail, err)
 	}
 	after, err := s.NodeGet(ctx, n.ID)
 	if err != nil || after.Version != n.Version+2 {
@@ -72,7 +77,8 @@ func TestNodeSettingsSurviveAgentCapabilityReport(t *testing.T) {
 	ctx := context.Background()
 	s := testStore(t)
 	n := settingsNode(t, s)
-	if _, err := s.NodePutSettings(ctx, goodSettings(n.ID), "cli:admin"); err != nil {
+	admin, _ := NewAdminAuthority("cli:admin")
+	if _, err := s.NodePutSettings(ctx, goodSettings(n.ID), admin); err != nil {
 		t.Fatal(err)
 	}
 	n, _ = s.NodeGet(ctx, n.ID)
@@ -96,6 +102,7 @@ func TestNodeSettingsRejections(t *testing.T) {
 	ctx := context.Background()
 	s := testStore(t)
 	n := settingsNode(t, s)
+	admin, _ := NewAdminAuthority("cli:admin")
 	bad := map[string]func(*NodeSettings){
 		"negative cpu": func(v *NodeSettings) { v.ReservedCPU = -1 },
 		"negative mem": func(v *NodeSettings) { v.ReservedMemMB = -1 },
@@ -106,17 +113,15 @@ func TestNodeSettingsRejections(t *testing.T) {
 	for name, mutate := range bad {
 		v := goodSettings(n.ID)
 		mutate(&v)
-		if _, err := s.NodePutSettings(ctx, v, "cli:admin"); !codeIs(err, "E651") {
+		if _, err := s.NodePutSettings(ctx, v, admin); !codeIs(err, "E651") {
 			t.Errorf("%s: err = %v, want E651", name, err)
 		}
 	}
-	if _, err := s.NodePutSettings(ctx, goodSettings("nope"), "cli:admin"); !codeIs(err, "E650") {
+	if _, err := s.NodePutSettings(ctx, goodSettings("nope"), admin); !codeIs(err, "E650") {
 		t.Errorf("unknown node: %v", err)
 	}
-	for _, actor := range []string{"", "agent", "probe"} {
-		if _, err := s.NodePutSettings(ctx, goodSettings(n.ID), actor); !codeIs(err, "E651") {
-			t.Errorf("actor %q accepted: %v", actor, err)
-		}
+	if _, err := s.NodePutSettings(ctx, goodSettings(n.ID), AdminAuthority{}); !codeIs(err, "E651") {
+		t.Errorf("the zero authority was accepted: %v", err)
 	}
 	if _, ok, _ := s.NodeSettingsGet(ctx, n.ID); ok {
 		t.Fatal("a refused write left a row")

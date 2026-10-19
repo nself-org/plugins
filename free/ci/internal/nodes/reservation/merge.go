@@ -9,6 +9,7 @@ package reservation
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -28,6 +29,9 @@ func Merge(cur Settings, f Flags, cpus *float64) (Settings, error) {
 		v, err := ParseCPU(f.CPU, total)
 		if err != nil {
 			return cur, err
+		}
+		if cpus != nil && v > *cpus {
+			return cur, fmt.Errorf("reserved cpu %g is more than the node's %g cores, which would refuse all CI work", v, *cpus)
 		}
 		cur.ReservedCPU = v
 	}

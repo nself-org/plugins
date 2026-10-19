@@ -6,13 +6,14 @@ package contention
 // Outputs: Tick reports true once per sleep.
 // Constraints: the monotonic clock does not advance while the machine sleeps on every supported OS
 //          (Go's monotonic reading is CLOCK_MONOTONIC on Linux and mach_absolute_time on macOS), the
-//          wall clock does; a gap beyond Threshold is a sleep.
+//          wall clock does; a gap beyond Threshold is a sleep. A clock step (NTP, manual) larger than
+//          Threshold looks the same, which is why the default is well above ordinary NTP slews.
 
 import "time"
 
 // SleepWatcher compares the wall clock with the monotonic clock between ticks.
 type SleepWatcher struct {
-	// Threshold is the smallest gap counted as a sleep; zero means 10 s.
+	// Threshold is the smallest gap counted as a sleep; zero means 30 s.
 	Threshold time.Duration
 	// Wall and Mono default to time.Now and a monotonic reading of it.
 	Wall func() time.Time
@@ -45,7 +46,7 @@ func (w *SleepWatcher) Tick() bool {
 	if w.started {
 		threshold := w.Threshold
 		if threshold <= 0 {
-			threshold = 10 * time.Second
+			threshold = 30 * time.Second
 		}
 		slept = wall.Sub(w.lastWall)-(mono-w.lastMono) > threshold
 	}

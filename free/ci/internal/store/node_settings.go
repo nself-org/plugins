@@ -6,7 +6,7 @@ package store
 // Outputs: the stored row; the node's capability snapshot carries the same values as assigned facts
 //          (resources.reserved, availability.persistence|on_battery|interactive_policy), so the
 //          scheduler (P7-SCHED-01) reads them from the one snapshot.
-// Constraints: only a coordinator-side admin writes these; UpdateCapability keeps them across agent
+// Constraints: only a coordinator-side admin (AdminAuthority) writes these; UpdateCapability keeps them across agent
 //          reports. The row, the snapshot and the audit row commit in one transaction. ReservedCPU is
 //          in cores, the unit of resources.cpu.
 
@@ -16,6 +16,7 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"slices"
 	"time"
@@ -87,11 +88,11 @@ func (s *Store) NodeSettingsGet(ctx context.Context, nodeID string) (NodeSetting
 
 // NodePutSettings stores in for its node and mirrors it into the capability snapshot as assigned facts.
 // The node must exist (E650). One transaction covers the row, the snapshot and the audit row.
-func (s *Store) NodePutSettings(ctx context.Context, in NodeSettings, actor string) (NodeSettings, error) {
+func (s *Store) NodePutSettings(ctx context.Context, in NodeSettings, admin AdminAuthority) (NodeSettings, error) {
 	if err := in.Validate(); err != nil {
 		return NodeSettings{}, err
 	}
-	if actor == "" || actor == "agent" || actor == "probe" {
+	if !admin.valid() {
 		return NodeSettings{}, coded("E651", "admin authority required")
 	}
 	var out NodeSettings
@@ -129,7 +130,8 @@ func (s *Store) NodePutSettings(ctx context.Context, in NodeSettings, actor stri
 		if _, err = tx.ExecContext(ctx, `UPDATE capability_snapshot SET digest=?,doc_json=? WHERE node_id=?`, digestNode(raw), string(raw), in.NodeID); err != nil {
 			return err
 		}
-		if err = s.appendAudit(ctx, tx, actor, "node.settings", in.NodeID, "reserved/interactive/on_battery/persistence set"); err != nil {
+		detail := fmt.Sprintf("reserved_cpu=%g reserved_mem_mb=%d interactive=%s on_battery=%s persistence=%s", in.ReservedCPU, in.ReservedMemMB, in.Interactive, in.OnBattery, in.Persistence)
+		if err = s.appendAudit(ctx, tx, admin.Actor(), "node.settings", in.NodeID, detail); err != nil {
 			return err
 		}
 		return tx.QueryRowContext(ctx, `SELECT node_id,reserved_cpu,reserved_mem_mb,interactive,on_battery,persistence,version,updated_at FROM node_settings WHERE node_id=?`, in.NodeID).
