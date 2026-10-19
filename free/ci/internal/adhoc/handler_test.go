@@ -290,3 +290,37 @@ func TestInvalidClassifierVerdictRunsNothing(t *testing.T) {
 		t.Fatal("the command ran")
 	}
 }
+
+// failingBuilder is a registered evidence builder whose Complete always errors.
+type failingBuilder struct{}
+
+func (failingBuilder) Begin(context.Context, string, cirun.Revision, cirun.Capture) any { return nil }
+func (failingBuilder) Complete(_ context.Context, _ any, _ cirun.EvidenceFacts, ev model.Evidence) (model.Evidence, error) {
+	return ev, errors.New("synthetic builder failure")
+}
+
+type afterRunFn func(cirun.RunInfo) error
+
+func (f afterRunFn) AfterRun(_ context.Context, r cirun.RunInfo) error { return f(r) }
+
+// D-1134: when the registered builder errors, the run keeps the stamped ad-hoc facts
+// (served isolation, network scope, redacted argv), not the bare base document.
+func TestStampedFactsSurviveABuilderError(t *testing.T) {
+	r := newHandlerRig(t, Flags{Isolation: "process"})
+	r.h.Hooks.Evidence = failingBuilder{}
+	var got model.Evidence
+	r.h.Tune = func(c *cirun.Coordinator) {
+		c.Hooks.AfterRuns = append(c.Hooks.AfterRuns, afterRunFn(func(i cirun.RunInfo) error { got = i.Evidence; return nil }))
+	}
+	argv := []string{"true"}
+	r.opts.Adhoc = argv
+	if _, err := r.h.Adhoc(context.Background(), r.opts, argv); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(r.out.String()+r.errw.String(), "evidence not completed") {
+		t.Fatalf("the builder error is no longer reported:\n%s%s", r.out, r.errw)
+	}
+	if got.Runner.Isolation != "process" || got.ToolVersions[KeyNetwork] == "" || len(got.Checks) != 1 || got.Checks[0].Tool != "true" {
+		t.Fatalf("stamped facts lost on builder error: isolation %q tv %v checks %+v", got.Runner.Isolation, got.ToolVersions, got.Checks)
+	}
+}

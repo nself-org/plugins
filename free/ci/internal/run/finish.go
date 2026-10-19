@@ -131,6 +131,11 @@ func (c *Coordinator) conclude(f finishIn) Result {
 		cerr := guard("evidence builder", func() (e error) { done, e = f.Hooks.Evidence.Complete(bg, f.Begin, facts, ev); return })
 		if cerr != nil {
 			notes = append(notes, "evidence not completed (it carries no input digests): "+firstLineOf(cerr.Error()))
+			if fb, ok := f.Hooks.Evidence.(EvidenceFallback); ok {
+				if ferr := guard("evidence fallback", func() error { ev = fb.Fallback(ev); return nil }); ferr != nil {
+					notes = append(notes, "evidence fallback: "+firstLineOf(ferr.Error()))
+				}
+			}
 		} else {
 			ev = done
 			digest, err = evidenceDigest(ev)

@@ -47,10 +47,14 @@ func (e evidenceStamp) Complete(ctx context.Context, begin any, f cirun.Evidence
 	}
 	out, err := e.inner.Complete(ctx, begin, f, ev)
 	if err != nil {
-		return ev, err // the run keeps its own (unstamped) document on a builder error: D-1021
+		return ev, err // the run takes Fallback's stamped document, not this one (D-1134)
 	}
 	return out, nil
 }
+
+// Fallback implements run.EvidenceFallback: on a builder error the run keeps the
+// ad-hoc facts (served isolation, trust, network scope, argv) on the base document.
+func (e evidenceStamp) Fallback(ev model.Evidence) model.Evidence { return e.stamp(ev) }
 
 func (e evidenceStamp) stamp(ev model.Evidence) model.Evidence {
 	ev.Runner.Isolation = e.mode.Served // what the registry served, never the level asked for (D-1021)

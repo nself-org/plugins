@@ -189,6 +189,15 @@ type EvidenceBuilder interface {
 	Complete(ctx context.Context, begin any, f EvidenceFacts, ev model.Evidence) (model.Evidence, error)
 }
 
+// EvidenceFallback is optional on an EvidenceBuilder. When Complete errors, the run
+// normally keeps the bare base document; a builder that stamps facts of its own on
+// that document (the ad-hoc job's isolation, trust and network scope) implements
+// Fallback to return the base with those facts, so the error costs the input digests
+// only (D-1134). The note about the failed builder is still recorded.
+type EvidenceFallback interface {
+	Fallback(ev model.Evidence) model.Evidence
+}
+
 // Hooks is a snapshot of every hook. A nil field means "no-op default".
 type Hooks struct {
 	Remote        []RemoteResolver
