@@ -174,12 +174,15 @@ func (p Pin) validateImage() error {
 	}
 	switch p.Status {
 	case StatusPending:
-		if p.Digest != "" {
-			return fmt.Errorf("%s: a pending image has no digest", p.Name)
+		if p.Digest != "" || p.Version != "" {
+			return fmt.Errorf("%s: a pending image has no digest or version", p.Name)
 		}
 	case StatusPinned:
 		if !digestRe.MatchString(p.Digest) {
 			return fmt.Errorf("%s: a pinned image needs a sha256 digest", p.Name)
+		}
+		if p.Version != p.Image+"@"+p.Digest {
+			return fmt.Errorf("%s: a pinned image's version must be image@digest", p.Name)
 		}
 	default:
 		return fmt.Errorf("%s: image status must be pending or pinned, got %q", p.Name, p.Status)

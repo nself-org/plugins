@@ -49,7 +49,7 @@ func TestDoctorSectionListsDriftImageAndVersions(t *testing.T) {
 	if c := checksByID(checks, "CI-DI01"); len(c) != 1 || c[0].Status != doctor.Pass || !strings.Contains(c[0].Message, "matches") {
 		t.Fatalf("drift check %+v", c)
 	}
-	if c := checksByID(checks, "CI-DI02"); len(c) != 1 || c[0].Status != doctor.Pass || !strings.Contains(c[0].Message, "pending") {
+	if c := checksByID(checks, "CI-DI02"); len(c) != 1 || c[0].Status != doctor.Pass || !strings.Contains(c[0].Message, "pinned image docker.io/nself/ci-toolchain@sha256:") {
 		t.Fatalf("image check %+v", c)
 	}
 	warns := checksByID(checks, "CI-DI03")
@@ -153,5 +153,15 @@ func TestInstalledVersionParsing(t *testing.T) {
 		if got := installedVersion(c.name, c.out); got != c.want {
 			t.Errorf("%s: %q -> %q, want %q", c.name, c.out, got, c.want)
 		}
+	}
+}
+
+func TestCheckImageRowPending(t *testing.T) {
+	v, err := ParseVersions([]byte(pendingTable()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := checkImageRow(v); c.Status != doctor.Pass || !strings.Contains(c.Message, "pending") {
+		t.Fatalf("pending row check %+v", c)
 	}
 }

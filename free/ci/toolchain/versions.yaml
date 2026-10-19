@@ -238,13 +238,15 @@ rows:
         binary_sha256: bc08d98ac3ca9cf475952b8eab22dfda70f3ab475ceb4e0113b9f77b24b75e26
   - name: toolchain-image
     kind: image
+    version: docker.io/nself/ci-toolchain@sha256:98f00724dbbc1b1ea03f3b1a83c057ba715ec614689e159867f94d72950c44b9
     purpose: image that `nself ci --container` runs checks in
     owner: internal/toolchain
     upstream:
       type: none
       ref: ""
     image: docker.io/nself/ci-toolchain
-    status: pending
+    digest: sha256:98f00724dbbc1b1ea03f3b1a83c057ba715ec614689e159867f94d72950c44b9
+    status: pinned
   - name: trivy
     kind: tool
     version: 0.76.0

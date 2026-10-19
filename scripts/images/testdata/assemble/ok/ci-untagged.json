@@ -1,0 +1,1 @@
+{"name": "digest-only", "kind": "ci", "image": "nself/ci-untagged@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "platforms": ["linux/amd64", "linux/arm64"], "owner": "P7-TEST-CI"}

@@ -53,7 +53,7 @@ func fixtureRepo(t *testing.T) string {
 }
 
 // TestContainerRunPinnedImage: with a fixture digest row the job runs in that image (the host
-// itself has no /etc/alpine-release); with the shipped pending row the run is refused with E645
+// itself has no /etc/alpine-release); with a pending fixture row the run is refused with E645
 // naming --image.
 func TestContainerRunPinnedImage(t *testing.T) {
 	if _, _, code := run(t, ".", nil, "docker", "info"); code != 0 {
@@ -66,7 +66,7 @@ func TestContainerRunPinnedImage(t *testing.T) {
 	}
 	repo := fixtureRepo(t)
 	fixture := filepath.Join(tmp, "versions.yaml")
-	table := "version: 1\nrows:\n  - name: toolchain-image\n    kind: image\n    purpose: fixture\n    owner: test\n    image: docker.io/library/alpine\n    status: pinned\n    digest: " + alpineDigest + "\n    upstream: {type: none, ref: ''}\n"
+	table := "version: 1\nrows:\n  - name: toolchain-image\n    kind: image\n    purpose: fixture\n    owner: test\n    image: docker.io/library/alpine\n    version: docker.io/library/alpine@" + alpineDigest + "\n    status: pinned\n    digest: " + alpineDigest + "\n    upstream: {type: none, ref: ''}\n"
 	if err := os.WriteFile(fixture, []byte(table), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,11 @@ func TestContainerRunPinnedImage(t *testing.T) {
 	}
 
 	// Without --json: the human renderer prints the refusal (the JSON evidence only records an infra error).
-	out, errs, code = run(t, repo, base, bin, "--container", "--no-status")
+	pending := filepath.Join(tmp, "versions-pending.yaml")
+	if err := os.WriteFile(pending, []byte(pendingTable()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, errs, code = run(t, repo, append(base, "NSELF_CI_TOOLCHAIN_VERSIONS="+pending), bin, "--container", "--no-status")
 	if code == 0 || !strings.Contains(out+errs, "E645") || !strings.Contains(out+errs, "--image") {
 		t.Fatalf("pending row: exit %d\nstdout: %s\nstderr: %s", code, out, errs)
 	}

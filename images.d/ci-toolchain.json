@@ -1,0 +1,7 @@
+{
+  "name": "ci-toolchain",
+  "kind": "ci",
+  "image": "docker.io/nself/ci-toolchain@sha256:98f00724dbbc1b1ea03f3b1a83c057ba715ec614689e159867f94d72950c44b9",
+  "platforms": ["linux/amd64", "linux/arm64"],
+  "owner": "P7-CI-61"
+}
