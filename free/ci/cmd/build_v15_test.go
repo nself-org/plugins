@@ -213,6 +213,9 @@ func TestBuildV15Usage(t *testing.T) {
 	if msg, code := buildStderr(t, func() int { return runBuildV15([]string{"--upload"}) }); code != 1 || !strings.Contains(msg, "--tag is required") {
 		t.Fatalf("exit %d %q", code, msg)
 	}
+	if msg, code := buildStderr(t, func() int { return runBuildV15([]string{"--upload", "--tag", "v1", "--owner", "--bad", "--repo", "r"}) }); code != 1 || !strings.Contains(msg, "not a GitHub owner") {
+		t.Fatalf("a bad owner was accepted before the build: exit %d %q", code, msg)
+	}
 	if msg, code := buildStderr(t, func() int { return runBuildV15([]string{"--artifact", "ios"}) }); code != 1 || !strings.Contains(msg, "not supported") {
 		t.Fatalf("exit %d %q", code, msg)
 	}

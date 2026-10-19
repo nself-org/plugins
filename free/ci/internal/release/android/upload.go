@@ -36,14 +36,10 @@ var (
 
 // Upload attaches apks to the release tag of owner/repo.
 func Upload(ctx context.Context, run Capture, owner, repo, tag string, apks []string) error {
-	switch {
-	case !ownerRe.MatchString(owner):
-		return fmt.Errorf("upload: owner %q is not a GitHub owner name", owner)
-	case !repoRe.MatchString(repo) || repo == "." || repo == "..":
-		return fmt.Errorf("upload: repo %q is not a GitHub repository name", repo)
-	case !tagRe.MatchString(tag):
-		return fmt.Errorf("upload: tag %q is not a release tag", tag)
-	case len(apks) == 0:
+	if err := CheckTarget(owner, repo, tag); err != nil {
+		return err
+	}
+	if len(apks) == 0 {
 		return errors.New("upload: no APK to upload")
 	}
 	target := owner + "/" + repo
@@ -75,6 +71,20 @@ func Upload(ctx context.Context, run Capture, owner, repo, tag string, apks []st
 			}
 		}
 		return fmt.Errorf("upload: gh release upload failed: %s", reason(out, err))
+	}
+	return nil
+}
+
+// CheckTarget refuses an owner, repo or tag that is not a plain GitHub name (an empty owner or repo is
+// refused too; a caller that resolves them from the git remote checks the result).
+func CheckTarget(owner, repo, tag string) error {
+	switch {
+	case !ownerRe.MatchString(owner):
+		return fmt.Errorf("upload: owner %q is not a GitHub owner name", owner)
+	case !repoRe.MatchString(repo) || repo == "." || repo == "..":
+		return fmt.Errorf("upload: repo %q is not a GitHub repository name", repo)
+	case !tagRe.MatchString(tag):
+		return fmt.Errorf("upload: tag %q is not a release tag", tag)
 	}
 	return nil
 }

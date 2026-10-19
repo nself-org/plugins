@@ -16,7 +16,8 @@ package android
 // the operator's environment, on the operator's own machine, and refuses every
 // other node, E677); the job decodes the keystore into app/release.keystore
 // inside its own workspace and removes it when the script ends, so no
-// keystore file is left behind; nothing here reads the environment, the disk
+// keystore file is left behind; gradle runs with --no-daemon so no daemon
+// outlives the attempt holding the keystore environment; nothing here reads the environment, the disk
 // or the network.
 
 import (
@@ -56,7 +57,7 @@ trap 'rm -f ` + KeystorePath + `' EXIT INT TERM
 mkdir -p app
 printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | { base64 -d 2>/dev/null || base64 -D; } > ` + KeystorePath + `
 test -s ` + KeystorePath + `
-./gradlew assembleRelease`
+./gradlew assembleRelease --no-daemon`
 
 // PassthroughEnv are the toolchain locations a job needs and the executor's
 // environment allowlist drops: they are copied into the job's declared env when

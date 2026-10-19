@@ -151,6 +151,12 @@ func runBuildV15(args []string) int {
 		fmt.Fprintf(os.Stderr, "error: --artifact %q not supported (only \"android\")\n", o.artifact)
 		return 1
 	}
+	if o.upload && (o.owner != "" || o.repo != "") { // fail before the build, not after it
+		if err = android.CheckTarget(firstOf(o.owner, "x"), firstOf(o.repo, "x"), o.tag); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			return 1
+		}
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 	root, err := evidenceRoot("")
