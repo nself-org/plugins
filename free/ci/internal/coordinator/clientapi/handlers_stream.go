@@ -143,6 +143,23 @@ func (s *Server) logs(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, stop := s.streamContext(r)
 	defer stop()
+	if lq.Follow { // a revoked or expired credential ends a followed log within a poll, as it ends an event stream
+		go func() {
+			tick := time.NewTicker(2 * time.Second)
+			defer tick.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-tick.C:
+					if authorizeRun(ctx, a, it) != nil {
+						stop()
+						return
+					}
+				}
+			}
+		}()
+	}
 	var out io.Writer
 	enc := func(l logs.Line) error {
 		if out == nil {

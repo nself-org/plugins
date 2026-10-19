@@ -6,6 +6,7 @@ package clientapi
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"testing"
 	"time"
@@ -103,4 +104,35 @@ func TestOpenEventStreamsAreCapped(t *testing.T) {
 	}
 	st, b := r.do(c, "GET", PathRunsPfx+"run-live/events", tok, "")
 	refused(t, st, b, 429, ReasonRateLimited)
+}
+
+// A followed log must end when the credential behind it is revoked, not run to the stream's end.
+func TestFollowedLogEndsWhenTheTokenIsRevoked(t *testing.T) {
+	r := newRig(t)
+	r.be.runs = []RunItem{item("run-live", "acme/app", "running")}
+	tok, tk, err := r.svc.IssueToken(context.Background(), r.op(), roles.Request{Principal: "mia", Role: roles.Member, Projects: []string{"acme/app"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, _ := http.NewRequest("GET", r.srv.URL+PathLogsPfx+"build?run=run-live&follow=1", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := r.client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	buf := make([]byte, 4096)
+	if n, _ := resp.Body.Read(buf); n == 0 {
+		t.Fatal("no first log line")
+	}
+	if _, err = r.svc.RevokeToken(context.Background(), r.op(), tk.ID); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { _, _ = io.Copy(io.Discard, resp.Body); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+		t.Fatal("the followed log outlived the revoked token")
+	}
 }

@@ -17,8 +17,9 @@ import (
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
 
+	"github.com/nself-org/plugins/free/ci/internal/attest"
+	"github.com/nself-org/plugins/free/ci/internal/coordclient"
 	"github.com/nself-org/plugins/free/ci/internal/logs"
-	"github.com/nself-org/plugins/free/ci/internal/model"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
@@ -105,9 +106,9 @@ func coordEvidence(ctx context.Context, f evidenceFlags, ref string) (int, bool)
 	case !handled:
 		return 0, false
 	}
-	var ev model.Evidence
-	if json.Unmarshal(doc, &ev) != nil {
-		return coordReadFail(f.json, fmt.Errorf("the coordinator evidence is not a valid document")), true
+	ev, err := attest.Verify(doc) // schema, consistency and, for a runner-signed document, the signature
+	if err != nil {
+		return coordReadFail(f.json, fmt.Errorf("the coordinator's evidence for %s does not verify: %v", ref, err)), true
 	}
 	if f.json {
 		_ = output.WriteData(os.Stdout, "ci evidence", json.RawMessage(doc), nil)
@@ -115,4 +116,16 @@ func coordEvidence(ctx context.Context, f evidenceFlags, ref string) (int, bool)
 	}
 	printEvidence(os.Stdout, ev.RunID, ev)
 	return 0, true
+}
+
+// refuseWhileServe stops a command that writes the local store while a live `ci serve` owns it: the serve
+// is the one writer of that store, and a second writer (a prune that deletes rows and logs, a resolve) is
+// exactly what handing a home to a serve is meant to prevent. handled=true means the command must return.
+func refuseWhileServe(command string) (int, bool) {
+	home := coordclient.Home(os.Getenv)
+	if !coordclient.ServeHoldsLock(home) {
+		return 0, false
+	}
+	fmt.Fprintf(os.Stderr, "E664: %s writes the run store of %s, which a running `nself ci serve` owns (serve_unreachable); stop the serve first\n", command, home)
+	return 1, true
 }

@@ -8,11 +8,12 @@ package coordclient
 // Constraints: a record below the next expected seq is dropped (never emitted twice), one above it is a
 //          gap and forces a reconnect from the expected seq (never emitted early); the final record is
 //          always accepted; E664 refusals do not retry; consecutive attempts without progress are
-//          bounded; a result that jumps ahead of missing records is a gap too; the wait between attempts grows from 100 ms to 5 s and stops with the context.
+//          bounded (about 90 s); an error from emit ends the stream at once; a result that jumps ahead of missing records is a gap too; the wait between attempts grows from 100 ms to 5 s and stops with the context.
 
 import (
 	"bufio"
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -26,7 +27,7 @@ import (
 var Reconnect = struct {
 	MaxIdle        int           // consecutive attempts that delivered nothing
 	First, Longest time.Duration // first and longest wait between attempts
-}{MaxIdle: 10, First: 100 * time.Millisecond, Longest: 5 * time.Second}
+}{MaxIdle: 24, First: 100 * time.Millisecond, Longest: 5 * time.Second}
 
 // Events streams the records of the run. emit gets each raw line (no newline; valid until emit returns)
 // and its record; the final record seen is returned.
@@ -38,6 +39,10 @@ func (c *Client) Events(ctx context.Context, ref string, emit func(line []byte, 
 			return rec, nil
 		}
 		if err != nil {
+			var ee *emitError
+			if errors.As(err, &ee) { // the caller's output broke (a closed pipe): retrying cannot help
+				return detach.Record{}, ee.err
+			}
 			if clientapi.ReasonOf(err) != "" && clientapi.ReasonOf(err) != clientapi.ReasonTransport || ctx.Err() != nil {
 				return detach.Record{}, err
 			}
@@ -55,6 +60,11 @@ func (c *Client) Events(ctx context.Context, ref string, emit func(line []byte, 
 		wait = min(wait*2, Reconnect.Longest)
 	}
 }
+
+// emitError wraps a failure of the caller's emit function.
+type emitError struct{ err error }
+
+func (e *emitError) Error() string { return e.err.Error() }
 
 // eventsOnce reads one connection. next is advanced past every emitted record.
 func (c *Client) eventsOnce(ctx context.Context, ref string, next *int64, emit func([]byte, detach.Record) error) (last detach.Record, progressed, final bool, err error) {
@@ -76,7 +86,7 @@ func (c *Client) eventsOnce(ctx context.Context, ref string, next *int64, emit f
 			return last, progressed, false, nil // the result arrived ahead of missing records: ask again
 		case rec.Final():
 			if err = emit(rec.Raw, rec); err != nil {
-				return rec, progressed, false, err
+				return rec, progressed, false, &emitError{err}
 			}
 			return rec, true, true, nil
 		case rec.Seq < *next:
@@ -85,7 +95,7 @@ func (c *Client) eventsOnce(ctx context.Context, ref string, next *int64, emit f
 			return last, progressed, false, nil // a gap: ask again from the expected seq
 		}
 		if err = emit(rec.Raw, rec); err != nil {
-			return rec, progressed, false, err
+			return rec, progressed, false, &emitError{err}
 		}
 		last, progressed = rec, true
 		*next = rec.Seq + 1

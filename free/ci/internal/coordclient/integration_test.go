@@ -308,7 +308,7 @@ func TestCoordinatorClient(t *testing.T) {
 			}
 			seqs = append(seqs, rec.Seq)
 		}
-		for i := 0; i < len(seqs)-1; i++ { // every record but the result carries the next seq
+		for i := range seqs { // the result record carries the next seq too
 			if seqs[i] != int64(i+1) {
 				t.Fatalf("seqs %v: a duplicate or a gap at position %d", seqs, i)
 			}

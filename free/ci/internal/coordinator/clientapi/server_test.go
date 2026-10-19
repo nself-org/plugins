@@ -115,6 +115,11 @@ func TestRegisteredRouteRoles(t *testing.T) {
 	if err := RegisterRoute("GET", "/v1/test-release", "release", serve); err != nil {
 		t.Fatal(err)
 	}
+	for _, bad := range []string{"/v1/{x", "/v1/a/{x}/{x}", "/v1/{$}x", "relative"} {
+		if RegisterRoute("GET", bad, "member", serve) == nil {
+			t.Errorf("pattern %q would panic the mux at serve time and must be refused at registration", bad)
+		}
+	}
 	if RegisterRoute("GET", "/v1/test-member", "member", serve) == nil || RegisterRoute("GET", "/v1/x", "boss", serve) == nil || RegisterRoute("GET", "/v1/y", "member", nil) == nil {
 		t.Fatal("a duplicate, an unknown role and a nil handler must be refused")
 	}

@@ -9,6 +9,7 @@ package coordclient
 import (
 	"context"
 	"crypto/tls"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -138,5 +139,34 @@ func TestCoordinatorClientTokenFileGuards(t *testing.T) {
 	}
 	if _, err := New(s.target(Creds{CA: root})); !reasonIs(err, clientapi.ReasonNoCredential) {
 		t.Fatalf("no certificate and no token: %v", err)
+	}
+}
+
+func TestCoordinatorClientNeverFollowsARedirect(t *testing.T) {
+	var hits int
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { hits++ }))
+	defer elsewhere.Close()
+	dir, err := os.MkdirTemp("", "ci-redir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	sock := filepath.Join(dir, "s.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, elsewhere.URL+"/steal", http.StatusFound)
+	}))
+	srv.Listener = ln
+	srv.Start()
+	defer srv.Close()
+	cl, err := New(Target{Kind: LocalServe, Socket: sock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = cl.Get(context.Background(), "latest"); !reasonIs(err, clientapi.ReasonTransport) || hits != 0 {
+		t.Fatalf("a redirect must be an error and never be followed: err %v, hits %d", err, hits)
 	}
 }

@@ -67,7 +67,11 @@ func (b *StoreBackend) List(ctx context.Context, limit int) ([]RunItem, error) {
 	}
 	for _, p := range page.Pipelines {
 		if !owned[p.ID] {
-			out = append(out, RunItem{RunView: cirun.RunView{ID: p.ID, Revision: p.Revision, Status: p.Status}, Project: inflightProject(rows, p.Revision)})
+			it := RunItem{RunView: cirun.RunView{ID: p.ID, Revision: p.Revision, Status: p.Status}}
+			if !pipelineEnded(p.Status) { // the same rule as Get: only a run still going can be tied to a dispatched row
+				it.Project = inflightProject(rows, p.Revision)
+			}
+			out = append(out, it)
 		}
 	}
 	return out, nil

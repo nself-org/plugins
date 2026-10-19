@@ -179,6 +179,8 @@ func TestCoordinatorHookRefusesWhatItCannotHonor(t *testing.T) {
 	for name, o := range map[string]RunOptions{
 		"--job": {Job: "build"}, "--service": {Services: []string{"db"}}, "--network": {Network: "none"}, "--container": {Container: true},
 		"--timeout": {Timeout: time.Minute}, "--trust": {Trust: "owner"}, "ad hoc": {Adhoc: []string{"true"}},
+		"--force": {Force: true}, "--no-status": {NoStatus: true}, "--confirm-flaky": {ConfirmFlaky: 2}, "--trigger": {Trigger: "push"},
+		"--where": {PolicyRun: cirun.RunValues{"sched.where": json.RawMessage(`"mm4"`)}},
 	} {
 		o.Root = t.TempDir()
 		exit, exited, _, errw := hook(t, o)
@@ -294,5 +296,66 @@ func TestGithubRemoteForms(t *testing.T) {
 		if got != want {
 			t.Errorf("%q: %q, want %q", raw, got, want)
 		}
+	}
+}
+
+func TestCoordinatorHookRefusesConfigAndBase(t *testing.T) {
+	be, _ := localServe(t)
+	fakeRepo(t, "git@github.com:acme/app.git", "")
+	for name, set := range map[string]func(){"--config": func() { bare.cfg = "/tmp/x.yaml" }, "--base": func() { bare.base = "abc" }} {
+		set()
+		exit, exited, _, errw := hook(t, RunOptions{Root: t.TempDir()})
+		bare.cfg, bare.base = "", ""
+		if !exited || exit != 1 || !strings.Contains(errw, name) {
+			t.Errorf("%s: exit %d exited %v %q", name, exit, exited, errw)
+		}
+	}
+	if len(be.submits) != 0 {
+		t.Fatal("a refused run reached the coordinator")
+	}
+}
+
+func TestCoordinatorHelpNeverSubmits(t *testing.T) {
+	be, _ := localServe(t)
+	fakeRepo(t, "git@github.com:acme/app.git", "")
+	bare.help = true
+	defer func() { bare.help = false }()
+	if _, exited, _, _ := hook(t, RunOptions{Root: t.TempDir()}); exited || len(be.submits) != 0 {
+		t.Fatalf("--help must print help and send nothing (exited %v, submits %d)", exited, len(be.submits))
+	}
+}
+
+// TestCoordinatorPathsNeverCreateALocalStore is the file probe: the CI home holds only the serve's lock and
+// socket, and neither the submit hook nor any read command may leave a database or a journal beside them.
+func TestCoordinatorPathsNeverCreateALocalStore(t *testing.T) {
+	_, home := localServe(t)
+	fakeRepo(t, "git@github.com:acme/app.git", "")
+	hook(t, RunOptions{Root: t.TempDir()})
+	ctx := context.Background()
+	coordRuns(ctx, "", false)
+	coordRuns(ctx, "run-77", false)
+	coordCancel(ctx, "run-77")
+	coordLogs(ctx, logsFlags{run: "run-77"}, "build")
+	coordEvidence(ctx, evidenceFlags{}, "run-77")
+	entries, _ := os.ReadDir(home)
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if strings.Join(names, ",") != "serve.lock,serve.sock" {
+		t.Fatalf("the CI home holds %v; a state.db or journal means a path opened the local store", names)
+	}
+}
+
+func TestStoreWritersRefuseWhileAServeOwnsTheHome(t *testing.T) {
+	localServe(t)
+	if code, out, errs := capture(t, func() int { return runRunsPrune([]string{}) }); code != 1 || !strings.Contains(errs, "serve_unreachable") {
+		t.Fatalf("prune: %d %q %q", code, out, errs)
+	}
+	if code, _, errs := capture(t, func() int { return runResolve([]string{"att-1", "--idempotency-key", "k-1", "--abandon", "--yes"}) }); code != 1 || !strings.Contains(errs, "serve_unreachable") {
+		t.Fatalf("resolve: %d %q", code, errs)
+	}
+	if _, err := os.Stat(filepath.Join(os.Getenv("NSELF_CI_HOME"), "state.db")); err == nil {
+		t.Fatal("a refused writer still created the database")
 	}
 }

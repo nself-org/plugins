@@ -111,6 +111,11 @@ func runRunsPrune(args []string) int {
 	if err != nil || len(pos) > 0 || f.keep < 0 || f.maxAgeDays < 0 || f.maxLogBytes < 0 {
 		return usageErr("nself ci runs prune [--dry-run] [--keep N] [--max-age-days N] [--max-log-bytes N] [--json]")
 	}
+	if !f.dryRun { // P7-NODE-19: a serve owns the store, a second writer must not prune it
+		if code, ok := refuseWhileServe("`runs prune`"); ok {
+			return code
+		}
+	}
 	home := os.Getenv("NSELF_CI_HOME")
 	pol, perr := history.LoadPolicy(home)
 	if perr != nil {

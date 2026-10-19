@@ -14,6 +14,7 @@ package coordclient
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -55,7 +56,14 @@ func ServeHoldsLock(home string) bool {
 	}
 	defer func() { _ = f.Close() }()
 	if err = syscall.Flock(int(f.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); err != nil {
-		return errors.Is(err, syscall.EWOULDBLOCK) // held exclusively by someone else
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return true // held exclusively by someone else
+		}
+		c, derr := net.DialTimeout("unix", SocketPath(home), time.Second) // locks unsupported here (a network mount): ask the socket
+		if derr == nil {
+			_ = c.Close()
+		}
+		return derr == nil
 	}
 	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 	return false

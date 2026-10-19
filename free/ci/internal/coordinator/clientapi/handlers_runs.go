@@ -155,6 +155,9 @@ func (s *Server) find(r *http.Request, a roles.Actor, ref string) (RunItem, erro
 		return RunItem{}, Failf(ReasonNotFound, "no such run")
 	}
 	if err = authorizeRun(r.Context(), a, it); err != nil {
+		if roles.ReasonOf(err) == "" {
+			return RunItem{}, err // the store or the audit log failed: say so, do not call it "not found"
+		}
 		return RunItem{}, Failf(ReasonNotFound, "no such run")
 	}
 	return it, nil

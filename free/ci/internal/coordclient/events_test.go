@@ -9,6 +9,8 @@ package coordclient
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -201,4 +203,29 @@ func equal(a, b []int64) bool {
 		}
 	}
 	return true
+}
+
+func TestCoordinatorClientEventsStopAtOnceWhenTheOutputBreaks(t *testing.T) {
+	lines := runLines(t)
+	f := &flaky{t: t, lines: lines}
+	f.plan = func(_ int, _ int64) ([]int, bool) {
+		all := make([]int, len(lines))
+		for i := range all {
+			all[i] = i
+		}
+		return all, false
+	}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	c := &Client{base: srv.URL, hc: srv.Client()}
+	var n int
+	_, err := c.Events(context.Background(), "run-1", func([]byte, detach.Record) error {
+		if n++; n == 2 {
+			return io.ErrClosedPipe // the reader of our stdout went away (`| head`)
+		}
+		return nil
+	})
+	if !errors.Is(err, io.ErrClosedPipe) || len(f.reqs) != 1 {
+		t.Fatalf("err %v after %d requests, want the pipe error after 1", err, len(f.reqs))
+	}
 }

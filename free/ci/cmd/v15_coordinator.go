@@ -65,8 +65,8 @@ func coordRepoRoot() string {
 // coordinatorOptions sends the run away when a coordinator or a live local serve is the target.
 func coordinatorOptions(o *RunOptions) error {
 	defer func() { coordinatorFlag = "" }() // a process runs one invocation; tests parse several
-	if detachFlag {
-		return nil // the detached child re-executes with --coordinator and submits
+	if detachFlag || bare.help {
+		return nil // the detached child re-executes with --coordinator and submits; --help prints help and sends nothing
 	}
 	cl, t, active, err := coordResolver.Client()
 	if err == nil && !active {
@@ -119,6 +119,12 @@ func refuseUnsupported(o *RunOptions) error {
 	add(o.Timeout != 0, "--timeout")
 	add(o.Trust != "", "--trust")
 	add(o.Trigger != "", "--trigger")
+	add(o.Force, "--force")
+	add(o.NoStatus, "--no-status")
+	add(o.ConfirmFlaky > 0, "--confirm-flaky")
+	add(o.PolicyRun != nil, "--where/--prefer/--runner")
+	add(bare.cfg != "", "--config")
+	add(bare.base != "", "--base")
 	if len(bad) == 0 {
 		return nil
 	}

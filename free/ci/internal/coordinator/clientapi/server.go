@@ -73,6 +73,9 @@ func RegisterRoute(method, pattern, role string, h http.Handler) error {
 	if !ok || h == nil || method == "" || pattern == "" || pattern[0] != '/' {
 		return Failf(ReasonBadRequest, "route %s %s needs a role (member, release, admin), a handler and an absolute pattern", method, pattern)
 	}
+	if err := tryPattern(method, pattern); err != nil {
+		return err
+	}
 	routes.Lock()
 	defer routes.Unlock()
 	for _, x := range routes.list {
@@ -81,6 +84,17 @@ func RegisterRoute(method, pattern, role string, h http.Handler) error {
 		}
 	}
 	routes.list = append(routes.list, routeSpec{method, pattern, r, h})
+	return nil
+}
+
+// tryPattern reports a pattern the mux would panic on, at registration instead of at serve time.
+func tryPattern(method, pattern string) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = Failf(ReasonBadRequest, "route %s %s is not a valid pattern", method, pattern)
+		}
+	}()
+	http.NewServeMux().Handle(method+" "+pattern, http.NotFoundHandler())
 	return nil
 }
 

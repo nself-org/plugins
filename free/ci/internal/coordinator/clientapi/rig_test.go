@@ -97,9 +97,16 @@ func (f *fakeBackend) Cancel(_ context.Context, ref, _ string) (int, error) {
 	return 1, nil
 }
 
-func (f *fakeBackend) Logs(_ context.Context, q LogQuery, fn func(logs.Line) error) (bool, error) {
+func (f *fakeBackend) Logs(ctx context.Context, q LogQuery, fn func(logs.Line) error) (bool, error) {
 	if q.Job != "build" {
 		return false, nil
+	}
+	if q.Follow { // a followed log: one line, then it waits for the stream to end
+		if err := fn(logs.Line{TS: "t", Stream: "out", Seq: 1, Text: "first"}); err != nil {
+			return true, err
+		}
+		<-ctx.Done()
+		return true, nil
 	}
 	for _, l := range f.lines {
 		if l.Seq > q.After {

@@ -151,3 +151,39 @@ func TestInflightProjectRefusesAmbiguity(t *testing.T) {
 		t.Errorf("a different revision matched: %q", got)
 	}
 }
+
+// An ended pipeline that no intake row names must not take the project of a dispatched row with the same
+// revision (List and Get follow one rule).
+func TestListLeavesEndedUnownedPipelinesUnowned(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	c, _ := coordinator.New(coordinator.Config{Store: st, PolicyDigest: "t"})
+	b := &StoreBackend{Store: st, Home: t.TempDir(), Enqueue: c.Enqueue}
+	if _, err = b.Submit(ctx, SubmitRequest{Project: "other/proj", Revision: goodRev}, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := st.IntakeClaim(ctx, "coord-1"); !ok {
+		t.Fatal("nothing to claim")
+	}
+	old := store.PipelineRow{ID: "run-old", Project: "/home/op/repo", Revision: goodRev, Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only",
+		PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "passed"}
+	if err = st.CreatePipeline(ctx, old); err != nil {
+		t.Fatal(err)
+	}
+	list, err := b.List(ctx, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range list {
+		if it.ID == "run-old" && it.Project != "" {
+			t.Fatalf("an ended, unclaimed pipeline was given project %q", it.Project)
+		}
+	}
+	if it, ok, _ := b.Get(ctx, "run-old"); !ok || it.Project != "" {
+		t.Fatalf("get: %+v %v", it, ok)
+	}
+}

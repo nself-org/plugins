@@ -43,7 +43,7 @@ func New(t Target) (*Client, error) {
 			var d net.Dialer
 			return d.DialContext(ctx, "unix", t.Socket)
 		}}
-		return &Client{base: "http://serve", hc: &http.Client{Transport: tr}}, nil
+		return &Client{base: "http://serve", hc: &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 	case Remote:
 		return newRemote(t)
 	}
@@ -83,7 +83,8 @@ func newRemote(t Target) (*Client, error) {
 	if err != nil {
 		return nil, clientapi.Failf(clientapi.ReasonServerIdentity, "the pinned coordinator root is not a certificate")
 	}
-	c.hc = &http.Client{Transport: &http.Transport{TLSClientConfig: cfg, ResponseHeaderTimeout: 30 * time.Second}}
+	c.hc = &http.Client{Transport: &http.Transport{TLSClientConfig: cfg, ResponseHeaderTimeout: 30 * time.Second},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }} // the API never redirects: a bearer token must not follow one
 	return c, nil
 }
 
