@@ -106,7 +106,7 @@ esac
 if [ -n "$nocut" ]; then
 	ev_fail egress-cut "NOT CUT: DRILL_NO_CUT is a debugging switch; this run proves nothing about the network"
 else
-	if ! cut_apply; then ev_fail egress-cut "the platform refused the cut rule"; finish; fi
+	if ! cut_apply; then ev_fail egress-cut "the platform refused the cut rule: $CUT_ERR"; finish; fi
 	if ! st=$(cut_selftest); then ev_fail egress-cut "the commands under the cut do not run as intended: $st"; finish; fi
 	p0=$(cut_packets)
 	if ! cut_probe_ip; then ev_fail egress-cut "a connection to 1.1.1.1 succeeded after the cut: $(cut_info)"; finish; fi
@@ -132,7 +132,8 @@ run_a=$(runid_of "$work/a.out")
 if [ $rc -eq 0 ] && [ -n "$run_a" ] && grep -q 'status not posted: no GitHub remote' "$work/a.out"; then
 	ev_pass bare-no-remote "bare nself ci passed (run $run_a) and said in one line why no status was posted"
 else
-	ev_fail bare-no-remote "exit $rc, run '$run_a': $(tail1 "$work/a.out")"
+	[ -z "$run_a" ] || nrun ci evidence "$run_a" --json >"$work/why.json" 2>/dev/null
+	ev_fail bare-no-remote "exit $rc, run '$run_a': $(tail1 "$work/a.out") $(why "$run_a")"
 fi
 nrun ci evidence "$run_a" --json >"$work/a.json" 2>"$work/a.err"
 if vjson "$work/a.json" '.data.result == "pass" and ([.data.checks[] | select(.id | IN("go.fmt", "go.vet", "go.test", "secrets.gitleaks"))] | (length == 4 and all(.result == "pass")))'; then

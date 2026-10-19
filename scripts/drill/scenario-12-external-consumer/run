@@ -54,13 +54,22 @@ fx_go "$repo"
 c1=$(git -C "$repo" rev-parse HEAD)
 cd "$repo" || exit 2
 
+# why FILE RUN: the results of the checks in FILE and the end of the log of each one that did not pass.
+why() {
+	local id
+	jq -r '[.data.checks[]? | "\(.id)=\(.result)"] | join(" ")' "$1" 2>/dev/null | tr -d '\n'
+	for id in $(jq -r '.data.checks[]? | select(.result != "pass") | .id' "$1" 2>/dev/null); do
+		nci producer logs "$id" --run "$2" 2>&1 | tail -n 3 | tr '\n' ' ' | cut -c1-240 | sed "s/^/ [$id: /; s/\$/]/"
+	done
+}
+
 # 1. A producer run records evidence for exactly this commit.
 nci producer --no-status --json >"$work/p1.json" 2>"$work/p1.err"
 rc=$?
 if [ $rc -eq 0 ] && vjson "$work/p1.json" '.data.result == "pass"'; then
 	ev_pass produce "nself-ci on the fixture passed (exit 0)"
 else
-	ev_fail produce "nself-ci exited $rc: $(ev_snip "$work/p1.err")"
+	ev_fail produce "nself-ci exited $rc: $(ev_snip "$work/p1.err") $(why "$work/p1.json" "$(jq -r '.data.run_id // empty' "$work/p1.json" 2>/dev/null)")"
 fi
 run1=$(jq -r '.data.run_id // empty' "$work/p1.json" 2>/dev/null)
 

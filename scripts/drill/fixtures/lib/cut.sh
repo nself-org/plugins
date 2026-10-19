@@ -30,6 +30,8 @@ CUT_TABLE=drillcut_$CUT_ID
 CUT_PF_ANCHOR=com.apple/250.drillcut.$CUT_ID
 CUT_DOCKERD=0
 CUT_NOTE=""
+# shellcheck disable=SC2034 # read by the drills
+CUT_ERR=""
 case "$CUT_GID" in '' | *[!0-9]*) echo "CUT_GID must be a number" >&2; exit 2 ;; esac
 
 cut_die() { echo "${EV_JOB:-drill}: $*" >&2; exit 2; }
@@ -82,8 +84,11 @@ cut_exec() {
 
 # cut_selftest: the commands under the cut run as this user with group CUT_GID (and, on Linux, cannot become root again).
 cut_selftest() {
-	[ "$(cut_exec /usr/bin/id -u)" = "$(id -u)" ] || { echo "uid under the cut is not $(id -u)"; return 1; }
-	[ "$(cut_exec /usr/bin/id -g)" = "$CUT_GID" ] || { echo "gid under the cut is not $CUT_GID"; return 1; }
+	local u g
+	u=$(cut_exec /usr/bin/id -u 2>&1 | tail -n 1)
+	[ "$u" = "$(id -u)" ] || { echo "uid under the cut is '$u', not $(id -u)"; return 1; }
+	g=$(cut_exec /usr/bin/id -g 2>&1 | tail -n 1)
+	[ "$g" = "$CUT_GID" ] || { echo "gid under the cut is '$g', not $CUT_GID"; return 1; }
 	if [ "$CUT_OS" = Linux ] && cut_exec /usr/bin/sudo -n true >/dev/null 2>&1; then echo "sudo still works under the cut"; return 1; fi
 	return 0
 }
@@ -94,11 +99,12 @@ cut_apply() {
 	CUT_ACTIVE=1
 	case "$CUT_OS" in
 	Linux)
-		sudo -n nft -f - <<NFT || { cut_remove; return 1; }
+		sudo -n nft -f - 2>"$CUT_WORK/nft.err" <<NFT || { CUT_ERR=$(tr '\n' ' ' <"$CUT_WORK/nft.err" | cut -c1-300); cut_remove; return 1; }
 table inet $CUT_TABLE {
 	chain out {
 		type filter hook output priority 0; policy accept;
-		meta skgid $CUT_GID meta l4proto { tcp, udp } th dport 53 counter drop
+		meta skgid $CUT_GID udp dport 53 counter drop
+		meta skgid $CUT_GID tcp dport 53 counter drop
 		meta skgid $CUT_GID oifname != "lo" counter drop
 	}
 	chain fwd {
@@ -119,7 +125,7 @@ NFT
 		;;
 	Darwin)
 		CUT_PF_TOKEN=$(sudo -n pfctl -E 2>&1 | awk '/Token/ {print $NF}')
-		printf 'block drop out quick on ! lo0 proto { tcp udp } from any to any group %s\n' "$CUT_GID" | sudo -n pfctl -a "$CUT_PF_ANCHOR" -f - >/dev/null 2>&1 || { cut_remove; return 1; }
+		printf 'block drop out quick on ! lo0 proto { tcp udp } from any to any group %s\n' "$CUT_GID" | sudo -n pfctl -a "$CUT_PF_ANCHOR" -f - >/dev/null 2>"$CUT_WORK/pf.err" || { CUT_ERR=$(tr '\n' ' ' <"$CUT_WORK/pf.err" | cut -c1-300); cut_remove; return 1; }
 		# shellcheck disable=SC2034 # read by the drills
 		CUT_NOTE="counts TCP and UDP of the drill's group; DNS through mDNSResponder and ICMP are not measured"
 		;;
