@@ -182,7 +182,7 @@ func TestCheckPreAddRefusesAMatchBeforeContact(t *testing.T) {
 				return
 			}
 			c := draftCapability(t, r, tc.dest)
-			q.Capability, q.Confirmed = c, true
+			q.Capability, q.Confirmed = c, res.ConfirmKey()
 			asked := false
 			q.Confirm = func(string, string) (bool, error) { asked = true; return true, nil }
 			if _, _, err = r.g.CheckAdd(ctx, q); err != nil || asked || !c.DeployHost.Matched || !c.DeployHost.Override || r.auditCount("node.deploy_host.override") != 1 {

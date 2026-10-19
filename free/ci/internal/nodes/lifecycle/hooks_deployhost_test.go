@@ -100,3 +100,16 @@ func TestPreAddHookRunsBeforeAnyContact(t *testing.T) {
 		})
 	}
 }
+
+// An unknown installer fails before the pre-add hook: the operator is not asked to confirm an override for an
+// add that cannot proceed.
+func TestPreAddHookDoesNotRunForAnUnknownInstaller(t *testing.T) {
+	t.Cleanup(resetExtensions)
+	k := newKit(t)
+	ran := false
+	RegisterAddHook(PointPreAdd, func(context.Context, HookEvent) error { ran = true; return nil })
+	_, err := k.d.Add(context.Background(), AddOptions{Dest: "ci@pre2", HostKey: fpA, Installer: "typo", Trust: DefaultTrust()})
+	if err == nil || ran {
+		t.Fatalf("err %v, pre-add ran %v", err, ran)
+	}
+}
