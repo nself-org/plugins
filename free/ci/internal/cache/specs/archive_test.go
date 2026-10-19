@@ -232,3 +232,39 @@ func TestPackStopsAtTheLimits(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 }
+
+// TestUnpackJudgesTheRatioWhileWriting: a legitimate large file passes wherever it
+// sits in the archive, and a bomb is stopped wherever it sits, per entry and in total.
+func TestUnpackJudgesTheRatioWhileWriting(t *testing.T) {
+	random := func(n int) string {
+		b := make([]byte, n)
+		x := uint32(2463534242)
+		for i := range b {
+			x ^= x << 13
+			x ^= x >> 17
+			x ^= x << 5
+			b[i] = byte(x)
+		}
+		return string(b)
+	}
+	text := strings.Repeat("package m // some source text that compresses a few times over\n", 60000) // ~3.8 MiB
+	ok := tarGz(t, tent{name: "a.txt", body: "first"}, tent{name: "big.a", body: random(5 << 20)}, tent{name: "src.go", body: text}, tent{name: "z.txt", body: "last"})
+	dir := t.TempDir() + "/d"
+	if st, err := Unpack(bytes.NewReader(ok), dir, cacheLimits()); err != nil || st.Files != 4 || st.Bytes < 8<<20 {
+		t.Fatalf("a legitimate archive with large files: %+v %v", st, err)
+	}
+	var many []tent
+	for i := 0; i < 30; i++ {
+		many = append(many, tent{name: "z" + string(rune('a'+i%26)) + string(rune('a'+i/26)), size: 1 << 20}) // each at the ratio floor, 30 MiB in all
+	}
+	for name, ents := range map[string][]tent{
+		"bomb after normal files": {{name: "a", body: "x"}, {name: "n.bin", body: random(1 << 20)}, {name: "bomb", size: 16 << 20}},
+		"many floor-sized zeros":  many,
+	} {
+		_, err := Unpack(bytes.NewReader(tarGz(t, ents...)), t.TempDir()+"/d", cacheLimits())
+		var pe *authz.PathError
+		if !errors.As(err, &pe) || pe.Reason != authz.SizeRatio {
+			t.Errorf("%s: err %v", name, err)
+		}
+	}
+}

@@ -12,6 +12,9 @@ package specs
 // decompressed stream is bounded, whatever the headers claim. Directory modes
 // are applied last (owner access always kept) so a read-only directory can
 // still be filled; file times and modes are restored, set-id bits never.
+// The compression ratio is judged while the bytes are written (bombGuard):
+// the sanitiser only sees a header, before its data was read, so it is given
+// the entry's own size as its packed size and never trips on the ratio.
 
 import (
 	"archive/tar"
@@ -45,6 +48,63 @@ func (c *countReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// ratioSlack is the compressed read-ahead the guard forgives (flate buffers 4 KiB).
+const ratioSlack = 64 << 10
+
+// bombGuard stops an archive whose output outgrows MaxRatio times the
+// compressed bytes consumed so far, per entry and over the whole archive, once
+// the output passes RatioFloor.
+type bombGuard struct {
+	cr    *countReader
+	lim   authz.Limits
+	total int64
+}
+
+type guardedEntry struct {
+	g     *bombGuard
+	r     io.Reader
+	name  string
+	start int64
+	n     int64
+}
+
+func (g *bombGuard) entry(r io.Reader, name string) *guardedEntry {
+	return &guardedEntry{g: g, r: r, name: name, start: g.cr.n}
+}
+
+func (e *guardedEntry) Read(p []byte) (int, error) {
+	n, err := e.r.Read(p)
+	e.n += int64(n)
+	e.g.total += int64(n)
+	g := e.g
+	if (e.n > g.lim.RatioFloor && e.n > g.lim.MaxRatio*(g.cr.n-e.start+ratioSlack)) || (g.total > g.lim.RatioFloor && g.total > g.lim.MaxRatio*(g.cr.n+ratioSlack)) {
+		return n, &authz.PathError{Reason: authz.SizeRatio, Name: e.name}
+	}
+	return n, err
+}
+
+// effective fills the zero fields of lim with the defaults.
+func effective(lim authz.Limits) authz.Limits {
+	d := authz.DefaultLimits()
+	if lim.MaxFileBytes > 0 {
+		d.MaxFileBytes = lim.MaxFileBytes
+	}
+	if lim.MaxTotalBytes > 0 {
+		d.MaxTotalBytes = lim.MaxTotalBytes
+	}
+	if lim.MaxEntries > 0 {
+		d.MaxEntries = lim.MaxEntries
+	}
+	if lim.MaxRatio > 0 {
+		d.MaxRatio = lim.MaxRatio
+	}
+	if lim.RatioFloor > 0 {
+		d.RatioFloor = lim.RatioFloor
+	}
+	d.AllowDotGit = lim.AllowDotGit
+	return d
+}
+
 type dirMode struct {
 	name string
 	mode os.FileMode
@@ -68,11 +128,9 @@ func Unpack(r io.Reader, dir string, lim authz.Limits) (UnpackStats, error) {
 		return st, fmt.Errorf("specs: not a gzip stream: %w", err)
 	}
 	defer func() { _ = gz.Close() }()
-	if lim.MaxTotalBytes <= 0 {
-		lim.MaxTotalBytes = authz.DefaultLimits().MaxTotalBytes
-	}
+	lim = effective(lim)
 	tr := tar.NewReader(io.LimitReader(gz, lim.MaxTotalBytes+(1<<30)))
-	ext, last, dirs := authz.NewExtractor(lim), int64(0), []dirMode{}
+	ext, guard, dirs := authz.NewExtractor(lim), &bombGuard{cr: cr, lim: lim}, []dirMode{}
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -81,9 +139,7 @@ func Unpack(r io.Reader, dir string, lim authz.Limits) (UnpackStats, error) {
 		if err != nil {
 			return st, fmt.Errorf("specs: unreadable archive: %w", err)
 		}
-		packed := cr.n - last
-		last = cr.n
-		name, err := ext.Admit(entryOf(h, packed))
+		name, err := ext.Admit(entryOf(h, h.Size))
 		if err != nil {
 			return st, err
 		}
@@ -106,7 +162,7 @@ func Unpack(r io.Reader, dir string, lim authz.Limits) (UnpackStats, error) {
 			}
 			st.Links++
 		default:
-			if err := writeFile(root, name, tr, h); err != nil {
+			if err := writeFile(root, name, guard.entry(tr, h.Name), h); err != nil {
 				return st, err
 			}
 			st.Files++
