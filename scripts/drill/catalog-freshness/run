@@ -1,0 +1,209 @@
+#!/usr/bin/env bash
+# catalog-freshness drill (P7-PLUG-13, Epic P7-PLUG D3): proves that what plugins.nself.org SERVES equals the
+# projections committed on main, and that the worker's KV sync is recent. Prints ONE ci.evidence document.
+# Why: the worker KV sat stale for months (D-0051) and nothing said so; a silent job needs a staleness alert
+#   (Constitution 8.3). A fetch that fails or is skipped is a failure (8.4), so the drill stays red until the worker
+#   serves the current projections (P7-PLUG-35 deploys it); that is correct, not a flake.
+# Checks (one ci.evidence check each):
+#   catalog.etag       served /catalog.json ETag == sha256 of the compact catalog.json on main (contract:plugins.catalog)
+#   catalog.body       sha256 of the served /catalog.json bytes == that same digest
+#   registry.free      served /registry.json free plugins (name -> version) == registry.json on main
+#   registry.licensed  served /registry.json licensed plugin names == the licensed slugs of catalog.json on main
+#   bundles.members    served /bundles.json bundle keys and members == catalog.json .bundles on main
+#   stats.lastSync     served /stats lastSync is younger than MAX_SYNC_AGE_HOURS (36), present and parseable
+# "Generated from main" means the committed catalog.json, registry.json and counts.json. The plugin-counts workflow proves
+#   those equal the generator output on every push and nightly; set CATALOG_REGEN=1 to also run
+#   scripts/plugin-counts.sh --check here (needs the bundles checkout, see that script).
+# Inputs:  SERVED_BASE (default https://plugins.nself.org), MAX_SYNC_AGE_HOURS (default 36), CATALOG_MAIN_DIR (default the
+#          repository root), CATALOG_REGEN (1 to run the generator check), NOW (epoch seconds, test hook),
+#          CATALOG_FIXTURE_DIR (test hook: read the served responses from files in that directory instead of the network),
+#          GITHUB_EVENT_NAME / GITHUB_RUN_ID (set on a runner).
+# Usage:   run               the live drill
+#          run --fixtures    the offline self-test: replays fixtures/<case>/ and checks each result against its expect file
+# Outputs: the evidence JSON as ONE compact line on stdout (the drill harness refuses a multi-line document); progress on stderr. Exit 0 when no check failed, 1 otherwise,
+#          2 when a tool (curl, jq) is missing or the files on main cannot be read.
+# Fixture case layout: fixtures/<case>/{catalog.body,catalog.headers,registry.body,bundles.body,stats.body,expect};
+#   a missing file is a failed fetch. `expect` holds "<check id> <pass|fail>" lines; the checks not named must pass.
+set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root=$(cd "$here/../../.." && pwd)
+
+if [ "${1:-}" = "--fixtures" ]; then
+	status=0
+	for case_dir in "$here"/fixtures/*/; do
+		name=$(basename "$case_dir")
+		[ -f "$case_dir/expect" ] || continue # fixtures/main holds the files "on main", not a case
+		out=$(CATALOG_FIXTURE_DIR=$case_dir CATALOG_MAIN_DIR=$here/fixtures/main NOW=1792368000 "${BASH_SOURCE[0]}" 2>/dev/null) || true
+		ok=1
+		while read -r id want; do
+			[ -n "$id" ] || continue
+			got=$(jq -r --arg id "catalog-freshness.$id" '.checks[] | select(.id == $id) | .result' <<<"$out")
+			[ "$got" = "$want" ] || { echo "fixtures: $name: $id wanted $want, got '${got:-nothing}'" >&2; ok=0; }
+		done <"$case_dir/expect"
+		# Every check the case does not name must pass.
+		extra=$(jq -r --rawfile e "$case_dir/expect" '
+			($e | split("\n") | map(select(length > 0) | split(" ")[0]) | map("catalog-freshness." + .)) as $named
+			| .checks[] | select(.id as $i | ($named | index($i)) | not) | select(.result != "pass") | .id' <<<"$out")
+		[ -z "$extra" ] || { echo "fixtures: $name: unexpected non-pass: $extra" >&2; ok=0; }
+		if [ "$ok" = 1 ]; then echo "fixtures: $name ok" >&2; else status=1; fi
+	done
+	exit "$status"
+fi
+
+for tool in curl jq; do
+	command -v "$tool" >/dev/null || { echo "catalog-freshness: $tool is required" >&2; exit 2; }
+done
+main=${CATALOG_MAIN_DIR:-$root}
+for f in catalog.json registry.json; do
+	[ -r "$main/$f" ] || { echo "catalog-freshness: cannot read $main/$f" >&2; exit 2; }
+done
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/catalog-freshness.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+base=${SERVED_BASE:-https://plugins.nself.org}
+max_age_h=${MAX_SYNC_AGE_HOURS:-36}
+now=${NOW:-$(date +%s)}
+started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+t0=$(date +%s)
+sha() { sha256sum "$@" 2>/dev/null || shasum -a 256 "$@"; }
+
+# fetch NAME PATH: the served body in $work/NAME.body and its headers in $work/NAME.headers. Returns 1 on any failure.
+fetch() {
+	if [ -n "${CATALOG_FIXTURE_DIR:-}" ]; then
+		[ -r "$CATALOG_FIXTURE_DIR/$1.body" ] || return 1
+		cp "$CATALOG_FIXTURE_DIR/$1.body" "$work/$1.body"
+		if [ -r "$CATALOG_FIXTURE_DIR/$1.headers" ]; then cp "$CATALOG_FIXTURE_DIR/$1.headers" "$work/$1.headers"; else : >"$work/$1.headers"; fi
+		return 0
+	fi
+	curl --silent --show-error --fail --location --retry 2 --max-time 60 --proto '=https,http' \
+		--dump-header "$work/$1.headers" --output "$work/$1.body" "$base$2" 2>"$work/$1.err" || return 1
+}
+
+checks=$work/checks.ndjson
+: >"$checks"
+emit() { # emit ID RESULT FINDINGS EXCERPT
+	jq -nc --arg id "catalog-freshness.$1" --arg result "$2" --argjson findings "$3" --arg excerpt "$4" '
+		{id: $id, job_id: "catalog-freshness", kind: "drill", tool: "catalog-freshness", tool_version: null,
+		 required: true, substantive: true, result: $result, findings: $findings, excerpt: $excerpt[0:4000], log_ref: null}' >>"$checks"
+}
+unfetched() { # unfetched ID NAME: the check fails because the fetch did
+	emit "$1" fail 1 "fetch of $2 failed: $(tr '\n' ' ' <"$work/$2.err" 2>/dev/null | cut -c1-300)"
+}
+
+if [ "${CATALOG_REGEN:-0}" = 1 ]; then
+	if bash "$root/scripts/plugin-counts.sh" --check >"$work/regen.out" 2>&1; then
+		emit main.projections pass 0 "scripts/plugin-counts.sh --check: the projections on main equal the generator output"
+	else
+		emit main.projections fail 1 "projections on main differ from the generator: $(tail -n 5 "$work/regen.out" | tr '\n' ' ')"
+	fi
+fi
+
+# What main says: the compact catalog (the worker serves JSON.stringify of the parsed file) and its digest.
+jq -c . "$main/catalog.json" | tr -d '\n' >"$work/main-catalog.compact"
+want=$(sha "$work/main-catalog.compact" | cut -d' ' -f1)
+
+echo "catalog-freshness: catalog.json" >&2
+if fetch catalog /catalog.json; then
+	got_etag=$(tr -d '\r' <"$work/catalog.headers" | awk 'tolower($1) == "etag:" {print $2}' | tail -n 1 | tr -d '"')
+	got_body=$(sha "$work/catalog.body" | cut -d' ' -f1)
+	if [ "$got_etag" = "$want" ]; then
+		emit catalog.etag pass 0 "served ETag $got_etag equals the digest of catalog.json on main"
+	else
+		emit catalog.etag fail 1 "served ETag '${got_etag:-none}' differs from the digest $want of catalog.json on main"
+	fi
+	if [ "$got_body" = "$want" ]; then
+		emit catalog.body pass 0 "served catalog bytes equal the compact catalog.json on main"
+	else
+		emit catalog.body fail 1 "served catalog digest $got_body differs from $want (compact catalog.json on main)"
+	fi
+else
+	unfetched catalog.etag catalog
+	unfetched catalog.body catalog
+fi
+
+echo "catalog-freshness: registry.json" >&2
+if fetch registry /registry.json; then
+	# Served: a list of {name, version, tier}. Main: registry.json holds an object keyed by plugin name (free only).
+	if diff_out=$(diff <(jq -r '.plugins[] | select(.tier == "free") | "\(.name) \(.version)"' "$work/registry.body" | LC_ALL=C sort) \
+		<(jq -r '.plugins | to_entries[] | "\(.key) \(.value.version)"' "$main/registry.json" | LC_ALL=C sort)); then
+		emit registry.free pass 0 "served free plugins and versions equal registry.json on main"
+	else
+		emit registry.free fail "$(grep -c '^[<>]' <<<"$diff_out")" "served (<) vs main (>): $(grep '^[<>]' <<<"$diff_out" | head -n 20 | tr '\n' ';')"
+	fi
+	if diff_out=$(diff <(jq -r '.plugins[] | select(.tier != "free") | .name' "$work/registry.body" | LC_ALL=C sort -u) \
+		<(jq -r '.plugins[] | select(.tier == "licensed") | .slug' "$main/catalog.json" | LC_ALL=C sort -u)); then
+		emit registry.licensed pass 0 "served licensed plugin names equal the licensed slugs of catalog.json on main"
+	else
+		emit registry.licensed fail "$(grep -c '^[<>]' <<<"$diff_out")" "served (<) vs main (>): $(grep '^[<>]' <<<"$diff_out" | head -n 20 | tr '\n' ';')"
+	fi
+else
+	unfetched registry.free registry
+	unfetched registry.licensed registry
+fi
+
+echo "catalog-freshness: bundles.json" >&2
+if fetch bundles /bundles.json; then
+	members='.bundles | to_entries[] | "\(.key): \(.value.plugins | sort | join(","))"'
+	if diff_out=$(diff <(jq -r "$members" "$work/bundles.body" | LC_ALL=C sort) <(jq -r "$members" "$main/catalog.json" | LC_ALL=C sort)); then
+		emit bundles.members pass 0 "served bundles and their members equal catalog.json on main"
+	else
+		emit bundles.members fail "$(grep -c '^[<>]' <<<"$diff_out")" "served (<) vs main (>): $(grep '^[<>]' <<<"$diff_out" | head -n 20 | tr '\n' ';')"
+	fi
+else
+	unfetched bundles.members bundles
+fi
+
+echo "catalog-freshness: stats" >&2
+if fetch stats /stats; then
+	age=$(jq -r --argjson now "$now" '
+		(.lastSync // empty) | try (sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601 | ($now - .)) catch empty' "$work/stats.body" 2>/dev/null || true)
+	last=$(jq -r '.lastSync // "none"' "$work/stats.body" 2>/dev/null || echo unreadable)
+	if [ -z "$age" ]; then
+		emit stats.lastSync fail 1 "worker /stats has no readable lastSync (got '$last')"
+	elif [ "$age" -lt $((max_age_h * 3600)) ]; then
+		emit stats.lastSync pass 0 "lastSync $last is $((age / 3600)) h old (limit $max_age_h h)"
+	else
+		emit stats.lastSync fail 1 "lastSync $last is $((age / 3600)) h old; the limit is $max_age_h h (the worker KV is stale)"
+	fi
+else
+	unfetched stats.lastSync stats
+fi
+
+finished=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+revision=$(git -C "$root" rev-parse HEAD 2>/dev/null || true)
+[[ "$revision" =~ ^[0-9a-f]{40}$ ]] || revision=0000000000000000000000000000000000000000
+first=$(git -C "$root" rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 || true)
+repo_id="local:$(printf '%s' "${first:-none}" | sha | cut -d' ' -f1)"
+dirty=false
+[ -n "$(git -C "$root" status --porcelain --untracked-files=no 2>/dev/null || true)" ] && dirty=true
+case "${GITHUB_EVENT_NAME:-}" in schedule | push | pull_request) trigger=$GITHUB_EVENT_NAME ;; workflow_dispatch) trigger=manual ;; *) trigger=local ;; esac
+platform=$(uname -s | tr A-Z a-z)/$(uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
+cfg=$(sha "$main/catalog.json" | cut -d' ' -f1)
+
+jq -sc --arg revision "$revision" --arg repo "$repo_id" --arg run "${GITHUB_RUN_ID:-catalog-freshness-$t0}" --arg trigger "$trigger" \
+	--arg cfg "$cfg" --argjson dirty "$dirty" --arg platform "$platform" --arg host "$(hostname)" \
+	--arg provider "$([ -n "${GITHUB_RUN_ID:-}" ] && echo github || echo local)" \
+	--arg started "$started" --arg finished "$finished" --argjson ms "$((($(date +%s) - t0) * 1000))" '
+	. as $checks
+	| ($checks | map(select(.result == "fail")) | length) as $fail
+	| {
+	  schema: "ci.evidence/v1", revision: $revision, repo_id: $repo, run_id: $run,
+	  pipeline: {id: "drills", name: "drills", kind: "drill"}, job: "catalog-freshness",
+	  trigger: $trigger, source_trust: "owner", policy_digest: "none",
+	  input_digests: {config: $cfg, generated: [], lockfiles: []},
+	  worktree_state: (if $dirty then "dirty" else "clean" end), tracked_changes_digest: null,
+	  binding: (if $dirty then {state: "unbound", reason: "dirty"} else {state: "bound", reason: null} end),
+	  runner: {id: $host, provider: $provider, platform: $platform, isolation: "process"},
+	  producer: {kind: "self-reported", version: "catalog-freshness/1"},
+	  timings: {queued_at: null, started_at: $started, finished_at: $finished, duration_ms: $ms},
+	  tool_versions: {}, checks: $checks, artifacts: [], retries: [],
+	  selection: {mode: "full", reason: "selection.full_required", digest: "none"},
+	  result: (if $fail > 0 then "fail" else "pass" end),
+	  counts: {pass: ($checks | map(select(.result == "pass")) | length), fail: $fail,
+	           skip: ($checks | map(select(.result == "skip")) | length), error: 0, total: ($checks | length)},
+	  freshness: (if $dirty then {state: "unknown", reason: null} else {state: "current", reason: null} end),
+	  signature: {kind: "coordinator-recorded"}
+	}' "$checks" | tee "$work/evidence.json"
+
+[ "$(jq -r .result "$work/evidence.json")" = pass ]
