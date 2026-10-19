@@ -314,7 +314,7 @@ func TestNodePrepareInstallWithoutNodeModules(t *testing.T) {
 func TestNodePrepareInstallFailureClasses(t *testing.T) {
 	infra := map[string]string{
 		"npm enotfound":       "npm error code ENOTFOUND\nnpm error syscall getaddrinfo\nnpm error errno ENOTFOUND\nnpm error network request to https://registry.npmjs.org/x failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org\nnpm error A complete log of this run can be found in: /x/1.log",
-		"socket hang up":      "npm warn deprecated a\nnpm error network socket hang up\nnpm error network This is a problem related to network connectivity.\nnpm error network In most cases you are behind a proxy or have bad network settings.\nnpm error log",
+		"socket hang up":      "npm warn deprecated a\nnpm error code ECONNRESET\nnpm error network socket hang up\nnpm error network This is a problem related to network connectivity.\nnpm error network In most cases you are behind a proxy or have bad network settings.\nnpm error log",
 		"pnpm meta fetch":     " ERR_PNPM_META_FETCH_FAIL  GET https://registry.npmjs.org/x: Client network socket disconnected\nThis error happened while installing the dependencies of x",
 		"yarn network":        "info There appears to be trouble with your network connection. Retrying...\nerror An unexpected error occurred: \"https://registry.yarnpkg.com/x: getaddrinfo ENOTFOUND registry.yarnpkg.com\".",
 		"registry refuses":    "npm error code ECONNREFUSED\nnpm error syscall connect\nnpm error FetchError: request to https://registry.npmjs.org/x failed, reason: connect ECONNREFUSED 10.1.2.3:443\nnpm error log",

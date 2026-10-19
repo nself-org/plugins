@@ -192,6 +192,9 @@ func defaultStatus(r PublishRequest) report.Status {
 		state = report.Failure
 	}
 	d, suffix := r.Projection.Summary, ""
+	if r.Run.Result == "error" { // the projection counts checks, it cannot tell a broken runner from a failure
+		d = "error" + strings.TrimPrefix(d, "fail")
+	}
 	if n := r.Run.EvidenceDigest; len(n) >= 12 {
 		suffix = " (evidence " + n[:12] + ")"
 	}

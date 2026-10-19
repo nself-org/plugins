@@ -42,33 +42,51 @@ func TestFirstRowStaysOOM(t *testing.T) {
 }
 
 func TestClassifyInstall(t *testing.T) {
+	npmNet := func(code, syscall, reason string) string {
+		return "npm error code " + code + "\nnpm error syscall " + syscall + "\nnpm error errno " + code + "\nnpm error network request to https://registry.npmjs.org/left-pad failed, reason: " + reason + "\nnpm error network This is a problem related to network connectivity.\nnpm error network In most cases you are behind a proxy or have bad network settings.\n" + footer
+	}
 	for name, c := range map[string]struct {
 		log  string
 		want model.FailureClass
 		sig  string
 	}{
-		"dns far above the footer":                         {"npm error network getaddrinfo ENOTFOUND registry.npmjs.org\n" + footer, "infra", SigDNS},
-		"socket hang up":                                   {"npm error network socket hang up\n" + footer, "infra", SigNetwork},
-		"registry refuses":                                 {"npm error code ECONNREFUSED\nnpm error FetchError: request to https://registry.npmjs.org/x failed, reason: connect ECONNREFUSED 10.1.2.3:443\n" + footer, "infra", SigNetwork},
-		"refused without a registry":                       {"npm error code ECONNREFUSED\n" + footer, "code", SigCode},
-		"retry warnings are dropped":                       {"npm warn ECONNRESET retrying\nnpm warn ECONNRESET retrying\nnpm error code ENOSPC\n" + footer, "infra", SigDisk},
-		"warned transient then a build error":              {"npm warn ECONNRESET retrying\n> app@1.0.0 postinstall\nsrc/a.ts(1,1): error TS2322: bad\nnpm error command failed\n", "code", SigCode},
-		"pnpm retry then gyp":                              {"WARN  GET https://r/x error (ETIMEDOUT). Will retry in 10 seconds. 2 retries left.\ngyp ERR! build error\n ELIFECYCLE  Command failed with exit code 1.\n", "code", SigCode},
-		"postinstall hits a local database":                {"> app@1.0.0 postinstall\n> node scripts/migrate.js\nError: connect ECONNREFUSED 127.0.0.1:5432\nnpm error command failed\n", "code", SigCode},
-		"pnpm 404 for a package named enotfound":           {" ERR_PNPM_FETCH_404  GET https://registry.npmjs.org/enotfound: Not Found - 404\n", "code", SigCode},
-		"npm 404 for a package named econnrefused":         {"npm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/econnrefused\n", "code", SigCode},
-		"forbidden for a package named etimedout":          {"npm error code E403\nnpm error 403 403 Forbidden - GET https://registry.npmjs.org/etimedout\n" + footer, "code", SigCode},
-		"missing package named enospc after a reset":       {"npm error code ECONNRESET\nnpm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/enospc\n", "code", SigCode},
-		"local connection with the generic network footer": {"npm error code ECONNREFUSED\nnpm error connect ECONNREFUSED 127.0.0.1:5432\nnpm error network This is a problem related to network connectivity.\n", "code", SigCode},
-		"a package named like a cause, fetched fine":       {"npm http fetch GET 200 https://registry.npmjs.org/etimedout 15ms\nnpm error code ENOSPC\n", "infra", SigDisk},
-		"node assertion":                                   {"AssertionError [ERR_ASSERTION]: expected ECONNREFUSED to be handled\n" + footer, "code", SigCode},
-		"sync guard beyond the window":                     {"ERR_PNPM_OUTDATED_LOCKFILE  not up to date\n" + strings.Repeat("detail line\n", 70) + "npm error code ECONNRESET\n", "code", SigCode},
-		"enospc":                                           {"npm error code ENOSPC\n" + footer, "infra", SigDisk},
-		"sync beats a transient":                           {"npm warn ECONNRESET retrying\nERR_PNPM_OUTDATED_LOCKFILE  not up to date\n", "code", SigCode},
-		"yarn berry sync":                                  {"YN0028: The lockfile would have been modified by this install\n", "code", SigCode},
-		"404 is the project's":                             {" ERR_PNPM_FETCH_404  GET https://r/x: Not Found - 404\n", "code", SigCode},
-		"postinstall assertion":                            {"--- FAIL: TestRetry (ETIMEDOUT expected)\nFAIL\n", "code", SigCode},
-		"nothing recognised":                               {"something broke\n", "code", SigCode},
+		// infrastructure: the manager's own structured error names the cause
+		"npm enotfound":           {npmNet("ENOTFOUND", "getaddrinfo", "getaddrinfo ENOTFOUND registry.npmjs.org"), "infra", SigDNS},
+		"npm eai_again":           {npmNet("EAI_AGAIN", "getaddrinfo", "getaddrinfo EAI_AGAIN registry.npmjs.org"), "infra", SigDNS},
+		"npm etimedout":           {npmNet("ETIMEDOUT", "connect", "connect ETIMEDOUT 104.16.0.35:443"), "infra", SigNetwork},
+		"npm econnreset":          {npmNet("ECONNRESET", "read", "read ECONNRESET"), "infra", SigNetwork},
+		"npm econnrefused":        {npmNet("ECONNREFUSED", "connect", "connect ECONNREFUSED 104.16.0.35:443"), "infra", SigNetwork},
+		"npm enospc":              {"npm error code ENOSPC\nnpm error syscall write\nnpm error errno -28\nnpm error nospc ENOSPC: no space left on device, write\n" + footer, "infra", SigDisk},
+		"pnpm fetch fail":         {" ERR_PNPM_META_FETCH_FAIL  GET https://registry.npmjs.org/left-pad: Client network socket disconnected before secure TLS connection was established\n", "infra", SigNetwork},
+		"pnpm 503":                {" ERR_PNPM_FETCH_503  GET https://registry.npmjs.org/left-pad/-/left-pad-1.0.0.tgz: Service Unavailable - 503\n", "infra", SigNetwork},
+		"yarn classic enotfound":  {"info There appears to be trouble with your network connection. Retrying...\nerror An unexpected error occurred: \"https://registry.yarnpkg.com/left-pad: getaddrinfo ENOTFOUND registry.yarnpkg.com\".\n", "infra", SigDNS},
+		"yarn classic hang up":    {"error An unexpected error occurred: \"https://registry.yarnpkg.com/left-pad: socket hang up\".\n", "infra", SigNetwork},
+		"yarn berry reset":        {"➤ YN0001: │ Error: connect ECONNRESET 104.16.0.35:443\n", "infra", SigNetwork},
+		"bun refused":             {"error: ConnectionRefused downloading package manifest left-pad\n", "infra", SigNetwork},
+		"retry warnings dropped":  {"npm warn ECONNRESET retrying\nnpm warn ECONNRESET retrying\nnpm error code ENOSPC\n" + footer, "infra", SigDisk},
+		"fetched fine, then disk": {"npm http fetch GET 200 https://registry.npmjs.org/etimedout 15ms\nnpm error code ENOSPC\n", "infra", SigDisk},
+		"shell kill":              {"sh: line 1:  4242 Killed                  npm ci\n", "infra", SigOOM},
+		// code: everything else
+		"nothing recognised":                        {"something broke\n", "code", SigCode},
+		"sync (npm)":                                {"npm error `npm ci` can only install packages when your package.json and package-lock.json are in sync.\nnpm error Missing: x@1.0.0 from lock file\n", "code", SigCode},
+		"sync after a transient":                    {"npm warn ECONNRESET retrying\nERR_PNPM_OUTDATED_LOCKFILE  not up to date\n", "code", SigCode},
+		"sync beyond 60 lines":                      {"ERR_PNPM_OUTDATED_LOCKFILE  not up to date\n" + strings.Repeat("detail line\n", 70) + "npm error code ECONNRESET\n", "code", SigCode},
+		"yarn berry sync":                           {"YN0028: The lockfile would have been modified by this install\n", "code", SigCode},
+		"yarn classic sync":                         {"error Your lockfile needs to be updated, but yarn was run with `--frozen-lockfile`.\n", "code", SigCode},
+		"bun sync":                                  {"error: lockfile had changes, but lockfile is frozen\n", "code", SigCode},
+		"pnpm 404":                                  {" ERR_PNPM_FETCH_404  GET https://registry.npmjs.org/nope: Not Found - 404\n", "code", SigCode},
+		"npm 404 after a reset":                     {"npm error code ECONNRESET\nnpm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/enospc\n", "code", SigCode},
+		"403 for a package etimedout":               {"npm error code E403\nnpm error 403 403 Forbidden - GET https://registry.npmjs.org/etimedout\n", "code", SigCode},
+		"yarn engine message":                       {"error enotfound@1.0.0: The engine \"node\" is incompatible with this module. Expected version \">=99\". Got \"22.1.0\"\nerror Found incompatible module.\ninfo Visit https://yarnpkg.com/en/docs/cli/install for documentation about this command.\n", "code", SigCode},
+		"postinstall assertion":                     {"--- FAIL: TestRetry (ETIMEDOUT expected)\nFAIL\n", "code", SigCode},
+		"node assertion":                            {"AssertionError [ERR_ASSERTION]: expected ECONNREFUSED to be handled\nnpm error code ECONNREFUSED\n", "code", SigCode},
+		"postinstall db":                            {"> app@1.0.0 postinstall\n> node scripts/migrate.js\nError: connect ECONNREFUSED 127.0.0.1:5432\nnpm error command failed\n", "code", SigCode},
+		"local refused, no script":                  {"npm error code ECONNREFUSED\nnpm error connect ECONNREFUSED 127.0.0.1:4873\nnpm error network This is a problem related to network connectivity.\n", "code", SigCode},
+		"warned transient then a build error":       {"npm warn ECONNRESET retrying\n> app@1.0.0 postinstall\nsrc/a.ts(1,1): error TS2322: bad\nnpm error command failed\n", "code", SigCode},
+		"yarn classic lifecycle":                    {"error /app/node_modules/x: Command failed.\nExit code: 1\nCommand: node install.js\nOutput:\ngetaddrinfo ENOTFOUND project-db.internal\n", "code", SigCode},
+		"pnpm retry then gyp":                       {"WARN  GET https://r/x error (ETIMEDOUT). Will retry in 10 seconds. 2 retries left.\ngyp ERR! build error\n ELIFECYCLE  Command failed with exit code 1.\n", "code", SigCode},
+		"a package called localhost, then disk":     {"npm http fetch GET 200 https://registry.npmjs.org/localhost 9ms\nnpm error code ENOSPC\n", "infra", SigDisk},
+		"a package called unauthorized, then reset": {"npm http fetch GET 200 https://registry.npmjs.org/unauthorized 9ms\nnpm error code ECONNRESET\nnpm error syscall read\n", "infra", SigNetwork},
 	} {
 		d := ClassifyInstall(c.log)
 		if d.Class != c.want || d.Signature != c.sig || (c.want == "infra") != d.Retryable {
@@ -77,4 +95,4 @@ func TestClassifyInstall(t *testing.T) {
 	}
 }
 
-const footer = "npm error A complete log of this run can be found in: /x/1.log\nnpm error line\nnpm error line\nnpm error line\n"
+const footer = "npm error A complete log of this run can be found in: /x/1.log\n"

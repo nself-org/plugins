@@ -45,72 +45,108 @@ func init() {
 // remediationOf is the remediation of the first row with the id.
 func remediationOf(id string) string { return signatureByID(id).remediation }
 
-// InstallLines is how much of an install log ClassifyInstall matches causes in.
-const InstallLines = 60
-
 // installSync marks a lockfile that disagrees with the manifest: always the
 // project's own fault, whatever transient noise the manager printed before it.
 var installSync = re(`(?i)err_pnpm_outdated_lockfile|err_pnpm_lockfile_config_mismatch|frozen-lockfile.{0,80}(not up to date|needs to be updated|would)|yn0028|lockfile would have been modified|lockfile had changes|lockfile needs to be updated|package\.json and package-lock\.json.{0,40}(in sync|not in sync)|npm ci. can only install packages when`)
 
 // installTestFailure marks a lifecycle script (postinstall, prepare) that runs
-// a test runner or an assertion and reports it: infra-looking words around it
-// are the program's. Narrower than testFailure: package managers say "failed"
-// about the network too.
+// a test runner or an assertion and reports it. Narrower than testFailure:
+// package managers say "failed" about the network too.
 var installTestFailure = re(`(?im)^\s*(--- FAIL\b|FAIL\s|not ok\b)|✕|✗|assertion ?error|assertion failed|err_assertion|panic:`)
 
 // installLifecycle marks a failing lifecycle script (preinstall, install,
-// postinstall, prepare, a native build): the project's own command failed, and
-// whatever it printed about connections is about the project's setup.
-var installLifecycle = re(`(?i)\belifecycle\b|npm error command failed|command failed with exit code|couldn't be built successfully|yn0009|(^|\n)> \S+@\S+ (pre|post)?(install|prepare)\b|script from .* failed|gyp err`)
+// postinstall, prepare, a native build) in the shapes of npm, pnpm and both
+// Yarns: the project's own command failed, and whatever it printed about
+// connections is about the project's setup.
+var installLifecycle = re(`(?i)\belifecycle\b|npm error command failed|command failed with exit code|(^|\n)command failed\.?\s*\n\s*exit code:|couldn't be built successfully|yn0009|(^|\n)> \S+@\S+ (pre|post)?(install|prepare)\b|script from .* failed|gyp err`)
 
 // installRetry marks a transient the manager recovered from (or is about to
 // retry): never the reason the install ended.
 var installRetry = re(`(?i)\bwarn\b|will retry|retrying|retries left|\battempt \d`)
 
-// installLoopback marks a connection to this machine: a refused or reset
-// connection there is the project's setup, not an unreachable registry.
-var installLoopback = re(`(?i)\b127\.\d+\.\d+\.\d+\b|\blocalhost\b|\[?::1\]?`)
+// installLocal marks a connection to this machine: refused or reset there is
+// the project's setup. Read with URLs removed, so a package named `localhost`
+// in a registry path does not count.
+var installLocal = re(`(?i)\b127\.\d+\.\d+\.\d+\b|\blocalhost\b|(^|[\s\[(])::1([\]\s):]|$)`)
 
 // installClientError marks an answer from a reachable registry that says the
-// request itself is wrong (no such package or version, forbidden, unauthorized):
-// the project's or the operator's configuration, never a transient.
-var installClientError = re(`(?i)\be?40[0-4]\b|not found - get|\bforbidden\b|\bunauthorized\b|no matching version|\bnotarget\b|err_pnpm_(fetch_40\d|no_matching_version|unauthorized)`)
+// request itself is wrong (no such package or version, forbidden,
+// unauthorized): configuration, never a transient. Read with URLs removed.
+var installClientError = re(`(?i)\be?40[0-4]\b|\bnot found\b|\bforbidden\b|\bunauthorized\b|no matching version|\bnotarget\b|err_pnpm_no_matching_version`)
 
-// installRegistry is the context that lets a bare ENOTFOUND or ECONNREFUSED
-// mean "the registry": the manager names a URL or a registry.
-var installRegistry = re(`(?i)registry|https?://|npm error network|err_pnpm_(meta_)?fetch`)
-
-// installOnly are causes that mean infrastructure only inside an install,
-// matched in the error-code position (`code ENOTFOUND`, `connect ECONNREFUSED`).
-var installOnly = re(`(?i)\b(code|errno|connect|error|syscall|getaddrinfo)\s+(econnrefused|enotfound)\b|connection refused`)
-
-// installURL is stripped before causes are matched: a package named
-// `etimedout` or `enospc` in a registry URL is not a timeout or a full disk.
+// installURL is stripped before the guards and causes are read: a package
+// named `etimedout`, `enospc` or `localhost` in a registry URL is not a cause.
 var installURL = re(`https?://\S+`)
 
+// installDisk is a full disk, in the words every manager and the OS share.
+var installDisk = re(`(?i)\benospc\b|no space left on device|not enough space on the disk`)
+
+// installKilled is the shell naming a killed child (memory).
+var installKilled = re(`(?m)^\S*sh: (line \d+: )? *\d+ +Killed\b`)
+
+// Manager-structured causes: the line each manager prints for the failure that
+// ended the install, never free text. The last such line decides.
+var (
+	installNPMCode  = re(`(?im)^npm (?:error|err!) code (\w+)`)
+	installPNPMCode = re(`(?m)^\s*(ERR_PNPM_\w+)\s`)
+	installYarnErr  = re(`(?im)^(?:error An unexpected error occurred:|➤ YN0001:).*\b(etimedout|esockettimedout|econnreset|econnrefused|enetunreach|ehostunreach|enotfound|eai_again)\b|^error An unexpected error occurred:.*socket hang up`)
+	installBunErr   = re(`(?im)^error: (connectionrefused|connectionclosed|connectiontimedout|connectionreset|failedtoopensocket)\b`)
+)
+
+var installDNSCodes = map[string]bool{"ENOTFOUND": true, "EAI_AGAIN": true}
+var installNetCodes = map[string]bool{"ETIMEDOUT": true, "ESOCKETTIMEDOUT": true, "ECONNRESET": true, "ECONNREFUSED": true, "ENETUNREACH": true, "EHOSTUNREACH": true}
+
+// lastCode is the first capture group of the last match of r.
+func lastCode(r *regexp.Regexp, text string) string {
+	m := r.FindAllStringSubmatch(text, -1)
+	if len(m) == 0 {
+		return ""
+	}
+	return strings.ToUpper(m[len(m)-1][1])
+}
+
 // ClassifyInstall classifies a failed dependency install from its log: infra
-// (retryable, with the signature) for a full disk, DNS, an unreachable
-// registry or a kill by memory; code for everything else. The code guards read
-// the whole log first (a lockfile out of sync, a failing lifecycle script or
-// test assertion, a connection to this machine, a client error from the
-// registry), then only the last InstallLines lines, minus retry warnings and
-// URLs, are matched for a cause.
+// (retryable, with the signature) for a full disk, an unreachable registry
+// (DNS or network) or a kill by memory; code for everything else, because an
+// unknown install failure is the project's. Guards read the whole log first
+// (a lockfile out of sync, a failing lifecycle script or test assertion, a
+// connection to this machine, a client error from the registry) and return
+// code; then the structured error lines of the managers, with URLs and retry
+// warnings removed, name the cause.
 func ClassifyInstall(log string) Diagnosis {
-	for _, guard := range []*regexp.Regexp{installSync, installTestFailure, installLifecycle, installLoopback, installClientError} {
+	log = installURL.ReplaceAllString(dropLines(log, installRetry), " ")
+	for _, guard := range []*regexp.Regexp{installSync, installTestFailure, installLifecycle, installLocal, installClientError} {
 		if guard.MatchString(log) {
 			return named(SigCode, "code")
 		}
 	}
-	window := lastLines(installURL.ReplaceAllString(dropLines(log, installRetry), " "), InstallLines)
-	for _, s := range signatures {
-		switch s.id {
-		case SigDisk, SigDNS, SigNetwork, SigOOM:
-			if s.output != nil && s.output.MatchString(window) || s.errText != nil && s.errText.MatchString(window) {
-				return infra(s)
+	switch {
+	case installDisk.MatchString(log):
+		return infra(signatureByID(SigDisk))
+	case installKilled.MatchString(log):
+		return infra(signatureByID(SigOOM))
+	}
+	code := lastCode(installNPMCode, log)
+	if code == "" {
+		if c := lastCode(installPNPMCode, log); c == "ERR_PNPM_META_FETCH_FAIL" || strings.HasPrefix(c, "ERR_PNPM_FETCH_5") {
+			code = "ETIMEDOUT" // an unreachable or failing registry
+		}
+	}
+	if code == "" {
+		if m := installYarnErr.FindAllStringSubmatch(log, -1); len(m) > 0 {
+			code = strings.ToUpper(m[len(m)-1][1])
+			if code == "" {
+				code = "ECONNRESET" // socket hang up
 			}
 		}
 	}
-	if installOnly.MatchString(window) && installRegistry.MatchString(log) {
+	if code == "" && installBunErr.MatchString(log) {
+		code = "ECONNREFUSED"
+	}
+	switch {
+	case installDNSCodes[code]:
+		return infra(signatureByID(SigDNS))
+	case installNetCodes[code]:
 		return infra(signatureByID(SigNetwork))
 	}
 	return named(SigCode, "code")

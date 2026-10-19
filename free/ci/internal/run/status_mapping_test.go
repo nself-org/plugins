@@ -10,6 +10,7 @@ package run
 // coordinator.
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -30,8 +31,8 @@ func TestInfraPostsError(t *testing.T) {
 	if res.Summary.Result != "error" || res.Exit != 2 {
 		t.Fatalf("an infrastructure failure must end error (exit 2), got %s exit %d", res.Summary.Result, res.Exit)
 	}
-	if p := r.Rep.all(); len(p) != 1 || p[0].State != report.Error {
-		t.Fatalf("posted %+v", p)
+	if p := r.Rep.all(); len(p) != 1 || p[0].State != report.Error || !strings.HasPrefix(p[0].Description, "error: 0/1 checks passed") {
+		t.Fatalf("an error status must not read like a failure: %+v", p)
 	}
 }
 
@@ -45,7 +46,7 @@ func TestCodeFailurePostsFailure(t *testing.T) {
 	if res.Summary.Result != "fail" || res.Exit != 1 {
 		t.Fatalf("a code failure must end fail (exit 1), got %s exit %d", res.Summary.Result, res.Exit)
 	}
-	if p := r.Rep.all(); len(p) != 1 || p[0].State != report.Failure {
+	if p := r.Rep.all(); len(p) != 1 || p[0].State != report.Failure || !strings.HasPrefix(p[0].Description, "fail: ") {
 		t.Fatalf("posted %+v", p)
 	}
 }
