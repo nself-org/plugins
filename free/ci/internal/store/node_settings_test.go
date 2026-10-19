@@ -47,6 +47,7 @@ func TestNodeSettingsRoundTripAndSnapshot(t *testing.T) {
 		t.Fatalf("put: %+v %v", got, err)
 	}
 	next := goodSettings(n.ID)
+	next.Version = got.Version
 	next.OnBattery, next.Persistence = OnBatteryAllow, PersistencePersist
 	if got, err = s.NodePutSettings(ctx, next, admin); err != nil || got.Version != 2 || got.OnBattery != OnBatteryAllow {
 		t.Fatalf("update: %+v %v", got, err)
@@ -125,5 +126,39 @@ func TestNodeSettingsRejections(t *testing.T) {
 	}
 	if _, ok, _ := s.NodeSettingsGet(ctx, n.ID); ok {
 		t.Fatal("a refused write left a row")
+	}
+}
+
+func TestNodeSettingsRefuseAStaleVersion(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	n := settingsNode(t, s)
+	admin, _ := NewAdminAuthority("cli:admin")
+	first, err := s.NodePutSettings(ctx, goodSettings(n.ID), admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Two operators read version 1; the first writes, the second is told to read again.
+	a, b := first, first
+	a.ReservedCPU = 4
+	b.OnBattery = OnBatteryAllow
+	if _, err := s.NodePutSettings(ctx, a, admin); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.NodePutSettings(ctx, b, admin); !codeIs(err, "E605") {
+		t.Fatalf("a stale write was accepted: %v", err)
+	}
+	got, _, _ := s.NodeSettingsGet(ctx, n.ID)
+	if got.ReservedCPU != 4 || got.OnBattery != OnBatteryPause {
+		t.Fatalf("the first writer's value was lost: %+v", got)
+	}
+	// A node with no row accepts only version 0.
+	other := goodSettings(n.ID)
+	other.Version = 5
+	s2 := testStore(t)
+	n2 := settingsNode(t, s2)
+	other.NodeID = n2.ID
+	if _, err := s2.NodePutSettings(ctx, other, admin); !codeIs(err, "E605") {
+		t.Fatalf("a made-up version was accepted: %v", err)
 	}
 }

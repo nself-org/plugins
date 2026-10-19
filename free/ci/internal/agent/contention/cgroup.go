@@ -24,8 +24,10 @@ import (
 
 const (
 	parentGroup = "nself-ci-jobs"
-	selfGroup   = "nself-ci-agent"
-	cpuPeriod   = 100000
+	// leafPrefix keeps an attempt id from colliding with a cgroup interface file (cpu.max, cgroup.procs).
+	leafPrefix = "j-"
+	selfGroup  = "nself-ci-agent"
+	cpuPeriod  = 100000
 )
 
 var groupName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
@@ -109,7 +111,7 @@ func leaf(parent, attempt string) (string, error) {
 	if !groupName.MatchString(attempt) {
 		return "", errors.New("attempt id is not a safe group name")
 	}
-	dir := filepath.Join(parent, attempt)
+	dir := filepath.Join(parent, leafPrefix+attempt)
 	return dir, os.MkdirAll(dir, 0o755)
 }
 
@@ -152,6 +154,6 @@ func (p Platform) Sweep(minAge time.Duration) {
 // ReleaseGroup removes one attempt's group.
 func (p Platform) ReleaseGroup(attempt string) {
 	if own, err := p.ownCgroup(); err == nil && groupName.MatchString(attempt) {
-		_ = os.Remove(filepath.Join(own, parentGroup, attempt))
+		_ = os.Remove(filepath.Join(own, parentGroup, leafPrefix+attempt))
 	}
 }

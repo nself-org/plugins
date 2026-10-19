@@ -9,8 +9,11 @@ package contention
 //          uses, so a crashed agent never strands capacity.
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -22,21 +25,27 @@ import (
 const heldFile = "contention-held.json"
 
 type hold struct {
+	// Token tells two leases of one owner and attempt apart, so a stale Release frees only its own hold.
+	Token   string      `json:"token"`
 	Attempt string      `json:"attempt"`
 	Owner   slots.Owner `json:"owner"`
 	CPU     float64     `json:"cpu"`
 	MemMB   int64       `json:"mem_mb"`
 }
 
-// readHolds returns the live holds; an unreadable file reads as empty (the slot table still caps).
-func readHolds(dir string) []hold {
+// readHolds returns the live holds. A missing file is empty; an unreadable or corrupt one is an error,
+// so a damaged file refuses leases (fail closed) instead of silently counting nothing held.
+func readHolds(dir string) ([]hold, error) {
 	raw, err := os.ReadFile(filepath.Join(dir, heldFile))
-	if errors.Is(err, fs.ErrNotExist) || err != nil {
-		return nil
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	var all []hold
-	if json.Unmarshal(raw, &all) != nil {
-		return nil
+	if err := json.Unmarshal(raw, &all); err != nil {
+		return nil, fmt.Errorf("%s is corrupt: %w", heldFile, err)
 	}
 	live := all[:0]
 	for _, h := range all {
@@ -44,7 +53,13 @@ func readHolds(dir string) []hold {
 			live = append(live, h)
 		}
 	}
-	return live
+	return live, nil
+}
+
+func newToken() string {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }
 
 func writeHolds(dir string, hs []hold) error {
@@ -53,7 +68,18 @@ func writeHolds(dir string, hs []hold) error {
 		return err
 	}
 	tmp := filepath.Join(dir, heldFile+"."+strconv.Itoa(os.Getpid())+".tmp")
-	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err = f.Write(raw); err == nil {
+		err = f.Sync() // a power loss must not leave an empty file under the final name
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
 	if err := os.Rename(tmp, filepath.Join(dir, heldFile)); err != nil {
@@ -63,11 +89,11 @@ func writeHolds(dir string, hs []hold) error {
 	return nil
 }
 
-// without returns hs minus the hold of attempt under owner.
-func without(hs []hold, owner slots.Owner, attempt string) []hold {
+// without returns hs minus the hold with this token.
+func without(hs []hold, token string) []hold {
 	out := make([]hold, 0, len(hs))
 	for _, h := range hs {
-		if h.Owner != owner || h.Attempt != attempt {
+		if h.Token != token {
 			out = append(out, h)
 		}
 	}

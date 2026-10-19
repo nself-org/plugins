@@ -2,6 +2,8 @@ package contention
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -47,7 +49,7 @@ func TestReadSignals(t *testing.T) {
 		{"desktop, no battery", exec.Capacity{BatteryPercent: -1}, nil, Signals{Interactive: Unknown}},
 		{"laptop on mains", exec.Capacity{BatteryPercent: 80, PluggedIn: true}, nil, Signals{BatteryKnown: true, Interactive: Unknown}},
 		{"laptop on battery", exec.Capacity{BatteryPercent: 80}, nil, Signals{BatteryKnown: true, OnBattery: true, Interactive: Unknown}},
-		{"terminal attached", exec.Capacity{BatteryPercent: -1, Interactive: true}, nil, Signals{Interactive: Active}},
+		{"terminal flag is no evidence", exec.Capacity{BatteryPercent: -1, Interactive: true}, nil, Signals{Interactive: Unknown}},
 		{"injected idle wins", exec.Capacity{BatteryPercent: -1, Interactive: true}, &Signals{Interactive: Idle}, Signals{Interactive: Idle}},
 		{"injected battery", exec.Capacity{BatteryPercent: -1}, &Signals{BatteryKnown: true, OnBattery: true}, Signals{BatteryKnown: true, OnBattery: true, Interactive: Unknown}},
 	}
@@ -283,5 +285,53 @@ func TestWakeRacesReLease(t *testing.T) {
 		if used, _ := g.Table.Used(); used > 1 || g.Held() > 1 {
 			t.Fatalf("run %d: attempt holds %d slots (gate %d)", i, used, g.Held())
 		}
+	}
+}
+
+// A job that states no memory is still charged against a memory reservation (one core's worth).
+func TestMemoryReservationChargesJobsWithNoFigure(t *testing.T) {
+	g := newGate(t, t.TempDir(), 8, laptop(8, -1, false), settings(func(s *reservation.Settings) { s.ReservedMemMB = 12288 })) // 4096 MB left, 2048 per job
+	held := 0
+	for i := 0; i < 8; i++ {
+		if l, _, err := g.Acquire("a"+string(rune('0'+i)), slots.Self("c", "l"+string(rune('0'+i))), exec.Remote, Need{}, false); err == nil && l != nil {
+			held++
+		}
+	}
+	if held != 2 {
+		t.Fatalf("%d jobs with no memory figure fit in 4096 MB, want 2", held)
+	}
+}
+
+func TestDamagedHeldFileRefusesLeases(t *testing.T) {
+	dir := t.TempDir()
+	g := newGate(t, dir, 8, laptop(8, -1, false), settings(func(s *reservation.Settings) { s.ReservedCPU = 4 }))
+	if err := os.WriteFile(filepath.Join(dir, heldFile), []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if l, _, err := g.Acquire("a", slots.Self("c", "l"), exec.Remote, Need{}, false); l != nil || err == nil {
+		t.Fatalf("a damaged hold file let a lease in: %v %v", l, err)
+	}
+}
+
+func TestStaleReleaseKeepsTheNewerHold(t *testing.T) {
+	g := newGate(t, t.TempDir(), 8, laptop(8, -1, false), settings(func(s *reservation.Settings) { s.ReservedCPU = 4 }))
+	first, _, err := g.Acquire("att", slots.Self("c", "l"), exec.Remote, Need{CPU: 2}, false)
+	if first == nil || err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := g.Acquire("att", slots.Self("c", "l"), exec.Remote, Need{CPU: 2}, false)
+	if second == nil || err != nil || !second.Replaced || first.Replaced {
+		t.Fatalf("re-lease: %+v %v", second, err)
+	}
+	if err := first.Release(); err != nil { // the stale handle of the replaced lease
+		t.Fatal(err)
+	}
+	hs, _ := readHolds(g.Dir)
+	if len(hs) != 1 || hs[0].CPU != 2 {
+		t.Fatalf("the stale release removed the newer lease's hold: %+v", hs)
+	}
+	var none *Lease
+	if err := none.Release(); err != nil {
+		t.Fatalf("Release on a nil lease: %v", err)
 	}
 }

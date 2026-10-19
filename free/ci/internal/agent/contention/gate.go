@@ -56,12 +56,18 @@ type Gate struct {
 type Lease struct {
 	Attempt string
 	Slot    *slots.Slot
-	owner   slots.Owner
-	gate    *Gate
+	// Replaced is true when this lease took over an attempt that already held one: the caller must
+	// stop the older job (its slot and hold are already freed).
+	Replaced bool
+	token    string
+	gate     *Gate
 }
 
 // Release frees the host slot and its hold; releasing twice changes nothing.
 func (l *Lease) Release() error {
+	if l == nil {
+		return nil
+	}
 	g := l.gate
 	return slots.WithLock(g.Dir, lockName, func() error {
 		g.mu.Lock()
@@ -76,7 +82,11 @@ func (l *Lease) Release() error {
 // drop frees the slot of l and forgets its hold; the contention lock must be held.
 func (g *Gate) drop(l *Lease) error {
 	err := g.Table.Release(l.Slot)
-	if werr := writeHolds(g.Dir, without(readHolds(g.Dir), l.owner, l.Attempt)); err == nil {
+	hs, rerr := readHolds(g.Dir)
+	if rerr != nil { // a damaged file is replaced: the slot table is the record that matters here
+		hs = nil
+	}
+	if werr := writeHolds(g.Dir, without(hs, l.token)); err == nil {
 		err = werr
 	}
 	return err
@@ -151,11 +161,15 @@ func (g *Gate) Acquire(attempt string, owner slots.Owner, mode exec.Mode, need N
 		g.mu.Lock()
 		old := g.held[attempt]
 		g.mu.Unlock()
-		holds := readHolds(g.Dir)
-		if old != nil {
-			holds = without(holds, old.owner, old.Attempt) // the old lease of this attempt is replaced, not added to
+		holds, err := readHolds(g.Dir)
+		if err != nil {
+			return err
 		}
-		cpu := max(need.CPU, 1)
+		if old != nil {
+			holds = without(holds, old.token) // the old lease of this attempt is replaced, not added to
+		}
+		need := reservation.Charge(c, s, need)
+		cpu := need.CPU
 		if sh := d.Share; sh.Active {
 			usedCPU, usedMem := totals(holds)
 			if sh.CPUCapped && usedCPU+cpu > sh.CPU || sh.MemCapped && usedMem+need.MemMB > sh.MemMB {
@@ -172,8 +186,8 @@ func (g *Gate) Acquire(attempt string, owner slots.Owner, mode exec.Mode, need N
 		if err != nil {
 			return err
 		}
-		l = &Lease{Attempt: attempt, Slot: slot, owner: owner, gate: g}
-		if err := writeHolds(g.Dir, append(without(readHolds(g.Dir), owner, attempt), hold{Attempt: attempt, Owner: owner, CPU: cpu, MemMB: need.MemMB})); err != nil {
+		l = &Lease{Attempt: attempt, Slot: slot, Replaced: old != nil, token: newToken(), gate: g}
+		if err := writeHolds(g.Dir, append(holds, hold{Token: l.token, Attempt: attempt, Owner: owner, CPU: cpu, MemMB: need.MemMB})); err != nil {
 			_ = g.Table.Release(slot)
 			l = nil
 			return err

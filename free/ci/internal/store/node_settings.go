@@ -87,7 +87,9 @@ func (s *Store) NodeSettingsGet(ctx context.Context, nodeID string) (NodeSetting
 }
 
 // NodePutSettings stores in for its node and mirrors it into the capability snapshot as assigned facts.
-// The node must exist (E650). One transaction covers the row, the snapshot and the audit row.
+// The node must exist (E650). in.Version must be the version the caller read (0 when the node has no
+// settings yet), so two operators' read-merge-write cycles cannot overwrite each other (E605). One
+// transaction covers the row, the snapshot and the audit row.
 func (s *Store) NodePutSettings(ctx context.Context, in NodeSettings, admin AdminAuthority) (NodeSettings, error) {
 	if err := in.Validate(); err != nil {
 		return NodeSettings{}, err
@@ -104,6 +106,13 @@ func (s *Store) NodePutSettings(ctx context.Context, in NodeSettings, admin Admi
 				return coded("E650", "node not found")
 			}
 			return err
+		}
+		var stored int64
+		if err := tx.QueryRowContext(ctx, `SELECT version FROM node_settings WHERE node_id=?`, in.NodeID).Scan(&stored); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if in.Version != stored {
+			return coded("E605", "node settings changed concurrently")
 		}
 		now := s.now().UTC()
 		var c model.Capability

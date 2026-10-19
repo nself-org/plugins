@@ -81,6 +81,7 @@ func (i *Isolator) apply(s *exec.JobSpec) Priority {
 		sh = i.Share()
 	}
 	var prefix []string
+	p.Reason = sh.OffReason
 	switch pl.GOOS {
 	case "darwin":
 		if tp := pl.first("/usr/sbin/taskpolicy"); tp != "" {
@@ -90,7 +91,7 @@ func (i *Isolator) apply(s *exec.JobSpec) Priority {
 		}
 		if sh.CPUCapped || sh.MemCapped {
 			p.CPU, p.Memory = NoInfo, NoInfo
-			p.Reason = join(p.Reason, "cgroup limits are Linux only; the reservation is held by the slot count")
+			p.Reason = join(p.Reason, "cgroup limits are Linux only; the lease gate holds the reservation")
 		}
 	case "linux":
 		if nice := pl.first("/usr/bin/nice", "/bin/nice"); nice != "" {
@@ -131,7 +132,15 @@ func (i *Isolator) joinGroup(pl Platform, s *exec.JobSpec, sh reservation.Share,
 	if p.CPU != Applied && p.Memory != Applied { // nothing set: do not join a group that limits nothing
 		return prefix, p
 	}
-	stub := []string{sh1, "-c", `echo $$ > "$0/cgroup.procs" && exec "$@"`, filepath.Clean(dir)}
+	// The stub makes the group again (a sweep may have removed an idle one), joins it and replaces itself
+	// with the job. A join that fails exits 71 with a message: the job did not run, which is not the
+	// job's own failure.
+	mk := pl.first("/bin/mkdir", "/usr/bin/mkdir")
+	if mk == "" {
+		mk = "mkdir"
+	}
+	script := `"$1" -p "$0" && echo $$ > "$0/cgroup.procs" || { echo "nself-ci: cannot join cgroup $0" >&2; exit 71; }; shift; exec "$@"`
+	stub := []string{sh1, "-c", script, filepath.Clean(dir), mk}
 	return append(stub, prefix...), p
 }
 

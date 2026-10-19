@@ -100,11 +100,11 @@ func runNodesSet(args []string, env lifecycle.Env, out, errOut io.Writer) int {
 	if err != nil {
 		return nodesSetFail(out, errOut, f.json, nodesSetInfra(nodesSetOneLine(err)))
 	}
-	if !ok {
+	if !ok { // Version stays 0: the write must find no row
 		own := n.Capability.Identity.Ownership.Value
 		cur = reservation.Defaults(id, own != nil && *own == "operator", n.Capability.Availability.BatteryPct.Value != nil)
 	}
-	next, err := reservation.Merge(cur, flagVals, n.Capability.Resources.CPU.Value)
+	next, err := reservation.Merge(cur, flagVals, n.Capability.Resources.CPU.Value, n.Capability.Resources.MemMB.Value)
 	if err != nil {
 		return nodesSetFail(out, errOut, f.json, nodesSetUsage(err.Error()))
 	}

@@ -62,7 +62,8 @@ func TestApplyFactsStaysValid(t *testing.T) {
 		plugged *bool
 		inter   *string
 	}{
-		{"battery, unplugged, active", exec.Capacity{BatteryPercent: 40, Interactive: true}, nil, true, ptr(false), ptr("active")},
+		{"battery, unplugged, active", exec.Capacity{BatteryPercent: 40}, &Signals{Interactive: Active}, true, ptr(false), ptr("active")},
+		{"daemon with /dev/null stdin is not active", exec.Capacity{BatteryPercent: 40, Interactive: true}, nil, true, ptr(false), nil},
 		{"desktop, nothing known", exec.Capacity{BatteryPercent: -1}, nil, false, nil, nil},
 		{"mains, injected idle", exec.Capacity{BatteryPercent: 99, PluggedIn: true}, &Signals{Interactive: Idle}, true, ptr(true), ptr("idle")},
 	} {

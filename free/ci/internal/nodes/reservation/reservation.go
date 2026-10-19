@@ -44,6 +44,8 @@ type Share struct {
 	Slots int
 	// Reason is model.NodeReservation when Slots is 0.
 	Reason model.PlacementReason
+	// OffReason says why a stored reservation is not in force ("" when it is, or none is stored).
+	OffReason string
 }
 
 // Defaults are the settings of a node the operator never configured (Epic D10): protect on the
@@ -62,21 +64,34 @@ func Defaults(nodeID string, operatorOwned, hasBattery bool) Settings {
 // HasBattery is true when the probe found a battery (a percentage), plugged in or not.
 func HasBattery(c exec.Capacity) bool { return c.BatteryPercent >= 0 }
 
-// Compute returns the share of c that CI may use under s for a job of need.
+// Charge fills what a job did not state: one CPU, and, when memory is reserved, the memory of one core
+// (host memory over host cores, at least 256 MB) so a reservation is held against jobs that give no
+// figure, which is the default.
+func Charge(c exec.Capacity, s Settings, need Need) Need {
+	if need.CPU < 1 {
+		need.CPU = 1
+	}
+	if need.MemMB <= 0 && s.ReservedMemMB > 0 {
+		need.MemMB = max(256, int64(c.MemoryMB)/int64(max(1, c.CPUs)))
+	}
+	return need
+}
+
+// Compute returns the share of c that CI may use under s for a job of need (as Charge fills it).
 func Compute(c exec.Capacity, s Settings, need Need) Share {
+	need = Charge(c, s, need)
 	cpus, mem := float64(c.CPUs), int64(c.MemoryMB)
 	sh := Share{CPU: cpus, MemMB: mem}
+	if c.CI && (s.ReservedCPU > 0 || s.ReservedMemMB > 0) {
+		sh.OffReason = "CI=true switches the stored reservation off"
+	}
 	if !c.CI && (s.ReservedCPU > 0 || s.ReservedMemMB > 0) {
 		sh.Active = true
 		sh.CPUCapped, sh.MemCapped = s.ReservedCPU > 0, s.ReservedMemMB > 0
 		sh.CPU = math.Max(0, cpus-s.ReservedCPU)
 		sh.MemMB = max(0, mem-s.ReservedMemMB)
 	}
-	perCPU := need.CPU
-	if perCPU < 1 {
-		perCPU = 1
-	}
-	sh.Slots = int(math.Floor(sh.CPU / perCPU))
+	sh.Slots = int(math.Floor(sh.CPU / need.CPU))
 	if need.MemMB > 0 {
 		sh.Slots = min(sh.Slots, int(sh.MemMB/need.MemMB))
 	} else if sh.MemMB <= 0 {

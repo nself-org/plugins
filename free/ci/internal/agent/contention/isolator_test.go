@@ -65,15 +65,15 @@ func TestLinuxPriorityAndCgroup(t *testing.T) {
 			t.Errorf("%s = %q %v, want %q", file, b, err, want)
 		}
 	}
-	if st, err := os.Stat(filepath.Join(own, "att-1")); err != nil || !st.IsDir() {
+	if st, err := os.Stat(filepath.Join(own, "j-att-1")); err != nil || !st.IsDir() {
 		t.Fatalf("leaf missing: %v", err)
 	}
 	wantTail := []string{"/usr/bin/nice", "-n", "10", "make", "test"}
-	if len(spec.Command) < 9 || spec.Command[0] != "/bin/sh" || !reflect.DeepEqual(spec.Command[len(spec.Command)-5:], wantTail) || spec.Command[3] != filepath.Join(own, "att-1") {
+	if len(spec.Command) < 10 || spec.Command[0] != "/bin/sh" || !reflect.DeepEqual(spec.Command[len(spec.Command)-5:], wantTail) || spec.Command[3] != filepath.Join(own, "j-att-1") || !strings.HasSuffix(spec.Command[4], "mkdir") {
 		t.Fatalf("command = %q", spec.Command)
 	}
 	pl.ReleaseGroup("att-1")
-	if _, err := os.Stat(filepath.Join(own, "att-1")); err == nil {
+	if _, err := os.Stat(filepath.Join(own, "j-att-1")); err == nil {
 		t.Fatal("leaf survived ReleaseGroup")
 	}
 	if err := os.Mkdir(filepath.Join(own, "dead"), 0o755); err != nil {
@@ -199,7 +199,7 @@ func TestSweepSparesYoungGroups(t *testing.T) {
 	sh := reservation.Compute(exec.Capacity{CPUs: 8, MemoryMB: 16384}, reservation.Settings{ReservedCPU: 4}, Need{})
 	prepare(t, pl, sh, exec.JobSpec{AttemptID: "young", Command: []string{"true"}})
 	prepare(t, pl, sh, exec.JobSpec{AttemptID: "next", Command: []string{"true"}}) // sweeps with the 2 minute bar
-	if _, err := os.Stat(filepath.Join(pl.CgroupRoot, "agent", parentGroup, "young")); err != nil {
+	if _, err := os.Stat(filepath.Join(pl.CgroupRoot, "agent", parentGroup, "j-young")); err != nil {
 		t.Fatalf("a group younger than the bar was swept: %v", err)
 	}
 }
@@ -212,5 +212,24 @@ func TestOwnCgroupIgnoresTheAgentsOwnChildGroup(t *testing.T) {
 	got, err := pl.ownCgroup()
 	if err != nil || got != filepath.Join(pl.CgroupRoot, "agent") {
 		t.Fatalf("ownCgroup = %q %v", got, err)
+	}
+}
+
+func TestLeafNamesCannotCollideWithCgroupFiles(t *testing.T) {
+	pl := fakeLinux(t, true)
+	sh := reservation.Compute(exec.Capacity{CPUs: 8, MemoryMB: 16384}, reservation.Settings{ReservedCPU: 4}, Need{})
+	_, p := prepare(t, pl, sh, exec.JobSpec{AttemptID: "cpu.max", Command: []string{"true"}})
+	own := filepath.Join(pl.CgroupRoot, "agent", parentGroup)
+	if b, _ := os.ReadFile(filepath.Join(own, "cpu.max")); string(b) != "400000 100000" || p.CPU != Applied {
+		t.Fatalf("an attempt named cpu.max clobbered the interface file: %q %+v", b, p)
+	}
+}
+
+func TestCIEnvironmentSaysWhyTheReservationIsOff(t *testing.T) {
+	pl := fakeLinux(t, true)
+	sh := reservation.Compute(exec.Capacity{CPUs: 8, MemoryMB: 16384, CI: true}, reservation.Settings{ReservedCPU: 4}, Need{})
+	_, p := prepare(t, pl, sh, exec.JobSpec{AttemptID: "a", Command: []string{"true"}})
+	if p.CPU != Off || !strings.Contains(p.Reason, "CI=true") {
+		t.Fatalf("%+v", p)
 	}
 }

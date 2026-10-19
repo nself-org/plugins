@@ -20,7 +20,7 @@ type Flags struct {
 }
 
 // Merge applies f over cur.
-func Merge(cur Settings, f Flags, cpus *float64) (Settings, error) {
+func Merge(cur Settings, f Flags, cpus *float64, memMB *int64) (Settings, error) {
 	if f.Given["reserve-cpu"] {
 		total := 0.0
 		if cpus != nil {
@@ -30,8 +30,8 @@ func Merge(cur Settings, f Flags, cpus *float64) (Settings, error) {
 		if err != nil {
 			return cur, err
 		}
-		if cpus != nil && v > *cpus {
-			return cur, fmt.Errorf("reserved cpu %g is more than the node's %g cores, which would refuse all CI work", v, *cpus)
+		if cpus != nil && v >= *cpus {
+			return cur, fmt.Errorf("reserved cpu %g is the node's whole %g cores or more, which would refuse all CI work", v, *cpus)
 		}
 		cur.ReservedCPU = v
 	}
@@ -39,6 +39,9 @@ func Merge(cur Settings, f Flags, cpus *float64) (Settings, error) {
 		v, err := ParseMemMB(f.Mem)
 		if err != nil {
 			return cur, err
+		}
+		if memMB != nil && v >= *memMB {
+			return cur, fmt.Errorf("reserved memory %d MB is the node's whole %d MB or more, which would refuse all CI work", v, *memMB)
 		}
 		cur.ReservedMemMB = v
 	}
@@ -73,6 +76,6 @@ func (f Flags) Check() error {
 	for k, v := range f.Given {
 		g.Given[k] = v && k != "reserve-cpu"
 	}
-	_, err := Merge(probe, g, nil)
+	_, err := Merge(probe, g, nil, nil)
 	return err
 }

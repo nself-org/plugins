@@ -84,19 +84,19 @@ func TestParse(t *testing.T) {
 }
 
 func TestMergePercentNeedsKnownCores(t *testing.T) {
-	if _, err := Merge(Defaults("n1", true, true), Flags{CPU: "50%", Given: map[string]bool{"reserve-cpu": true}}, nil); err == nil {
+	if _, err := Merge(Defaults("n1", true, true), Flags{CPU: "50%", Given: map[string]bool{"reserve-cpu": true}}, nil, nil); err == nil {
 		t.Fatal("a percentage of an unknown core count was accepted")
 	}
 }
 
 func TestMerge(t *testing.T) {
-	cores := 8.0
+	cores, mem := 8.0, int64(16384)
 	cur := Defaults("n1", true, true)
-	got, err := Merge(cur, Flags{CPU: "50%", OnBattery: "allow", Given: map[string]bool{"reserve-cpu": true, "on-battery": true}}, &cores)
+	got, err := Merge(cur, Flags{CPU: "50%", OnBattery: "allow", Given: map[string]bool{"reserve-cpu": true, "on-battery": true}}, &cores, &mem)
 	if err != nil || got.ReservedCPU != 4 || got.OnBattery != "allow" || got.Interactive != "protect" || got.Persistence != "intermittent" {
 		t.Fatalf("%+v %v", got, err)
 	}
-	if got, err = Merge(got, Flags{Mem: "2g", Given: map[string]bool{"reserve-mem": true}}, nil); err != nil || got.ReservedMemMB != 2048 || got.ReservedCPU != 4 {
+	if got, err = Merge(got, Flags{Mem: "2g", Given: map[string]bool{"reserve-mem": true}}, nil, nil); err != nil || got.ReservedMemMB != 2048 || got.ReservedCPU != 4 {
 		t.Fatalf("a flag not given changed a value: %+v %v", got, err)
 	}
 	for name, f := range map[string]Flags{
@@ -106,7 +106,7 @@ func TestMerge(t *testing.T) {
 		"bad memory":          {Mem: "lots", Given: map[string]bool{"reserve-mem": true}},
 		"more cpu than cores": {CPU: "64", Given: map[string]bool{"reserve-cpu": true}},
 	} {
-		if _, err := Merge(cur, f, &cores); err == nil {
+		if _, err := Merge(cur, f, &cores, &mem); err == nil {
 			t.Errorf("%s accepted", name)
 		}
 	}
@@ -126,5 +126,25 @@ func TestFlagsCheckNeedsNoNode(t *testing.T) {
 		if f.Check() == nil {
 			t.Errorf("%s: bad value passed Check", name)
 		}
+	}
+}
+
+func TestChargeAndMemoryReservation(t *testing.T) {
+	host := exec.Capacity{CPUs: 8, MemoryMB: 16384}
+	if n := Charge(host, Settings{}, Need{}); n.CPU != 1 || n.MemMB != 0 {
+		t.Fatalf("no reservation: %+v", n)
+	}
+	if n := Charge(host, Settings{ReservedMemMB: 1}, Need{}); n.MemMB != 2048 {
+		t.Fatalf("one core's memory: %+v", n)
+	}
+	// 12 GB reserved of 16: 4096 MB remain, a job with no memory figure is charged 2048, so 2 fit, not 8.
+	sh := Compute(host, Settings{ReservedMemMB: 12288}, Need{})
+	if sh.Slots != 2 || !sh.MemCapped || sh.OffReason != "" {
+		t.Fatalf("%+v", sh)
+	}
+	ci := host
+	ci.CI = true
+	if sh := Compute(ci, Settings{ReservedCPU: 4}, Need{}); sh.Active || sh.OffReason == "" || sh.Slots != 8 {
+		t.Fatalf("CI=true must say why the reservation is off: %+v", sh)
 	}
 }

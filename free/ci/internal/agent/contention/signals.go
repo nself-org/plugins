@@ -42,20 +42,19 @@ type Signals struct {
 	BatteryKnown bool
 	// OnBattery is true only for a known battery that is not on mains power.
 	OnBattery bool
-	// Interactive is Active, Idle or Unknown. The probe reports only whether a terminal is attached,
-	// so without an injected signal it yields Active or Unknown, never Idle (a daemon without a
-	// terminal says nothing about the person at the keyboard).
+	// Interactive is Active, Idle or Unknown. The capacity probe's Interactive flag only says that
+	// stdin is a character device (true for a daemon whose stdin is /dev/null, and for any agent run
+	// in a terminal), which is no evidence about the person at the keyboard, so it is not used: only
+	// an injected activity signal yields Active or Idle, and everything else is Unknown, reported as
+	// such and never guessed.
 	Interactive string
 }
 
-// ReadSignals derives the signals from c; a non-nil injected signal replaces the interactive value
-// (tests, and a later activity source), and a non-empty Interactive there wins.
+// ReadSignals derives the signals from c; a non-nil injected signal supplies the interactive value
+// (tests, and a later activity source).
 func ReadSignals(c exec.Capacity, injected *Signals) Signals {
 	s := Signals{BatteryKnown: c.BatteryPercent >= 0, Interactive: Unknown}
 	s.OnBattery = s.BatteryKnown && !c.PluggedIn
-	if c.Interactive {
-		s.Interactive = Active
-	}
 	if injected != nil {
 		if injected.Interactive != "" {
 			s.Interactive = injected.Interactive
