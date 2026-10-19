@@ -130,7 +130,9 @@ func decoratePlacement(s *jsonschema.Schema) {
 	}
 	totals := s.Properties["totals"]
 	nonNegative(totals.Properties["estimated_cost_micro"], totals.Properties["placed"], totals.Properties["waiting"], totals.Properties["awaiting_approval"], totals.Properties["unplaceable"])
+	desc := totals.Properties["cost_confidence"].Description
 	totals.Properties["cost_confidence"] = conf("known", "computed", "estimated", "unknown")
+	totals.Properties["cost_confidence"].Description = desc
 }
 
 func anyOf(v any) *any { return &v }

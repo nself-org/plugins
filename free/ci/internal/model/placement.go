@@ -76,9 +76,14 @@ type Alternative struct {
 	Score      *int64                  `json:"score"`
 	Components map[string]Component    `json:"components"`
 }
+
+// Totals summarises a plan. EstimatedCostMicro is the sum of the known placed
+// costs, not a nullable estimate: it reads 0 when nothing is placed or no cost
+// is known, so a consumer must read CostConfidence first ("unknown" then).
+// Making it nullable is a v2 contract change (D-0992).
 type Totals struct {
-	EstimatedCostMicro int64  `json:"estimated_cost_micro"`
-	CostConfidence     string `json:"cost_confidence"`
+	EstimatedCostMicro int64  `json:"estimated_cost_micro" jsonschema:"Sum of the known placed job costs in micro-units. It reads 0 when no placed job has a known cost, so read cost_confidence first: unknown means the sum is not an estimate."`
+	CostConfidence     string `json:"cost_confidence" jsonschema:"Worst confidence among the placed job costs; unknown when nothing is placed or any cost is unknown."`
 	Placed             int    `json:"placed"`
 	Waiting            int    `json:"waiting"`
 	AwaitingApproval   int    `json:"awaiting_approval"`

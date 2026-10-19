@@ -502,10 +502,12 @@
       "properties": {
         "estimated_cost_micro": {
           "type": "integer",
+          "description": "Sum of the known placed job costs in micro-units. It reads 0 when no placed job has a known cost, so read cost_confidence first: unknown means the sum is not an estimate.",
           "minimum": 0
         },
         "cost_confidence": {
           "type": "string",
+          "description": "Worst confidence among the placed job costs; unknown when nothing is placed or any cost is unknown.",
           "enum": [
             "known",
             "computed",

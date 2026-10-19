@@ -396,3 +396,34 @@ func TestPlanviewLookupMatrixName(t *testing.T) {
 		t.Fatalf("an exact id: %+v %v", d.Jobs, err)
 	}
 }
+
+// TestPlanviewSchemaDocumentsTotalsCost pins D-0992: estimated_cost_micro is
+// the sum of the known placed costs (0 when none is known), so the schema must
+// tell consumers to read cost_confidence first.
+func TestPlanviewSchemaDocumentsTotalsCost(t *testing.T) {
+	raw, err := os.ReadFile("../../schemas/placement-plan.v1.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s struct {
+		Properties struct {
+			Totals struct {
+				Properties map[string]struct {
+					Description string `json:"description"`
+				} `json:"properties"`
+			} `json:"totals"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &s); err != nil {
+		t.Fatal(err)
+	}
+	cost := s.Properties.Totals.Properties["estimated_cost_micro"].Description
+	for _, want := range []string{"sum", "cost_confidence", "unknown"} {
+		if !strings.Contains(cost, want) {
+			t.Errorf("totals.estimated_cost_micro description %q lacks %q", cost, want)
+		}
+	}
+	if s.Properties.Totals.Properties["cost_confidence"].Description == "" {
+		t.Error("totals.cost_confidence has no description")
+	}
+}
