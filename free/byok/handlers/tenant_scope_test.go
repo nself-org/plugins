@@ -79,6 +79,20 @@ func TestRotationStatusNeedsTenant(t *testing.T) {
 	}
 }
 
+// TestZeroTenantIsUnauthorized: the all-zero UUID is not a tenant; it answers 401 and never reaches the database.
+func TestZeroTenantIsUnauthorized(t *testing.T) {
+	for _, tenant := range []string{"00000000-0000-0000-0000-000000000000", "not-a-uuid"} {
+		pool := &tenantdbtest.Pool{}
+		r := httptest.NewRequest(http.MethodGet, "/encryption/key-events", nil)
+		r.Header.Set("X-Tenant-ID", tenant)
+		w := httptest.NewRecorder()
+		(&byokHandler{db: pool}).ListKeyEvents(w, r)
+		if w.Code != http.StatusUnauthorized || len(pool.Calls) != 0 {
+			t.Fatalf("tenant %q: status %d, %d calls; want 401 and none", tenant, w.Code, len(pool.Calls))
+		}
+	}
+}
+
 func assertEveryTxSetsTenant(t *testing.T, p *tenantdbtest.Pool, wantTable bool) {
 	t.Helper()
 	first := map[int]bool{}

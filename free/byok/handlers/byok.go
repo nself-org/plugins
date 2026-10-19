@@ -420,7 +420,14 @@ func tenantIDFromRequest(r *http.Request) (uuid.UUID, error) {
 	if val == "" {
 		return uuid.Nil, fmt.Errorf("missing tenant_id")
 	}
-	return uuid.Parse(val)
+	id, err := uuid.Parse(val)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if id == uuid.Nil {
+		return uuid.Nil, fmt.Errorf("zero tenant_id")
+	}
+	return id, nil
 }
 
 func validateProvider(p string) error {
