@@ -1,0 +1,44 @@
+package store
+
+// Purpose: the two read-only intake queries the coordinator user API needs (P7-NODE-19): the newest rows
+// for `ci runs`, and the row that stands for a pipeline, which is how a run is tied to the owner/repo
+// project its caller may see (a pipeline row keeps only the checkout path).
+// Inputs:  a limit, or a pipeline id.
+// Outputs: IntakeRow values (newest first for the list).
+// Constraints: read-only; no new table or migration.
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+)
+
+// IntakeList returns the newest limit rows (at most 500), newest first.
+func (s *Store) IntakeList(ctx context.Context, limit int) ([]IntakeRow, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 500
+	}
+	rows, err := s.readers.QueryContext(ctx, `SELECT `+intakeCols+` FROM intake ORDER BY seq DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []IntakeRow
+	for rows.Next() {
+		r, err := scanIntake(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// IntakeByPipeline finds the row whose finished dispatch produced the pipeline.
+func (s *Store) IntakeByPipeline(ctx context.Context, pipelineID string) (IntakeRow, bool, error) {
+	r, err := scanIntake(s.readers.QueryRowContext(ctx, `SELECT `+intakeCols+` FROM intake WHERE pipeline_id=? ORDER BY seq DESC LIMIT 1`, pipelineID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return IntakeRow{}, false, nil
+	}
+	return r, err == nil, err
+}

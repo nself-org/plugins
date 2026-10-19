@@ -60,6 +60,9 @@ func runLogs(args []string) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if code, ok := coordLogs(ctx, f, pos[0]); ok { // a coordinator or live local serve owns the logs (P7-NODE-19)
+		return code
+	}
 	for _, r := range cirun.Registered.Remote {
 		if v, ok, rerr := r.Resolve(ctx, f.run); rerr == nil && ok {
 			return logsFail(f, "ci logs", logs.Errorf(logs.CodeNone, "run %s lives on another machine; read its logs there", v.ID))

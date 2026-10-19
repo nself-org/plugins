@@ -55,6 +55,9 @@ func runRunsList(args []string) int {
 	if err != nil || len(pos) > 0 || f.limit < 1 {
 		return usageErr("nself ci runs list [--limit N] [--json] [--repo dir]")
 	}
+	if code, ok := coordRuns(context.Background(), "", f.json); ok { // a coordinator or live local serve owns the runs (P7-NODE-19)
+		return code
+	}
 	root, err := evidenceRoot(f.repo)
 	if err != nil {
 		return exitForError(err)

@@ -133,6 +133,9 @@ func runEvidence(args []string) int {
 		return reportPipeline(ctx, f)
 	}
 	ref := strings.Join(pos, "")
+	if code, ok := coordEvidence(ctx, f, ref); ok { // the evidence a coordinator signed (P7-NODE-19)
+		return code
+	}
 	for _, r := range cirun.Registered.Remote {
 		if v, ok, rerr := r.Resolve(ctx, ref); rerr == nil && ok {
 			return printRun(f.json, v) // the run lives on another node: its evidence is read there
