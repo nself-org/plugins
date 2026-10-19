@@ -84,7 +84,7 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 	realm := cas.CacheRealm(string(m.Namespace))
 	if !bad {
 		for _, b := range m.Blobs {
-			if err = e.unpackBlob(base, realm, b.SHA256, dirs[b.Path], opt); err != nil {
+			if err = e.unpackBlob(ctx, base, realm, b.SHA256, dirs[b.Path], opt); err != nil {
 				break
 			}
 		}
@@ -96,6 +96,9 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 	}
 	for _, d := range dirs {
 		_ = removeIn(base, d)
+	}
+	if ctx.Err() != nil { // a cancelled restore says nothing about the entry: keep it
+		return false, 0, ctx.Err()
 	}
 	if access == authz.ModeRWOwn { // a lower-trust reader never deletes a higher-trust entry, it only audits
 		_ = e.Backend.CacheDrop(ctx, m, "unrestorable")
@@ -130,7 +133,7 @@ func (e *Engine) validate(ctx context.Context, realm cas.Realm, digest string) e
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	rc, err := e.Blobs.Open(realm, digest)
+	rc, err := e.Blobs.OpenContext(ctx, realm, digest)
 	if err != nil {
 		return err
 	}
@@ -138,13 +141,13 @@ func (e *Engine) validate(ctx context.Context, realm cas.Realm, digest string) e
 	return Validate(&ctxReader{ctx, rc}, cacheLimits())
 }
 
-func (e *Engine) unpackBlob(base *os.Root, realm cas.Realm, digest, rel string, opt UnpackOptions) error {
-	rc, err := e.Blobs.Open(realm, digest)
+func (e *Engine) unpackBlob(ctx context.Context, base *os.Root, realm cas.Realm, digest, rel string, opt UnpackOptions) error {
+	rc, err := e.Blobs.OpenContext(ctx, realm, digest)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = rc.Close() }()
-	_, err = Unpack(rc, base, rel, cacheLimits(), opt)
+	_, err = Unpack(&ctxReader{ctx, rc}, base, rel, cacheLimits(), opt)
 	return err
 }
 
@@ -182,7 +185,7 @@ func (e *Engine) Save(ctx context.Context, r SaveRequest) (int64, error) {
 			return 0, e.refuse(ctx, r, err)
 		}
 		if err := e.validate(ctx, realm, digest); err != nil { // a restore would refuse it: do not commit a loop of save, refuse, drop
-			return 0, e.refuse(ctx, r, fmt.Errorf("%w: the packed %s fails the restore checks: %v", ErrTooLarge, name, err))
+			return 0, e.refuse(ctx, r, restoreCheckError(name, err))
 		}
 		files += st.Files
 		total += size
@@ -198,9 +201,30 @@ func (e *Engine) Save(ctx context.Context, r SaveRequest) (int64, error) {
 	return total, nil
 }
 
+// restoreCheckError classifies why a restore of the freshly packed blob name would
+// fail: size and ratio errors stay ErrTooLarge (E711 size_cap), a cancelled
+// context passes through, any other path or archive error is its own reason.
+func restoreCheckError(name string, err error) error {
+	var pe *authz.PathError
+	switch {
+	case ctxDone(err):
+		return err
+	case errors.As(err, &pe) && strings.HasPrefix(string(pe.Reason), "size."):
+		return fmt.Errorf("%w: the packed %s fails the restore checks: %v", ErrTooLarge, name, err)
+	case errors.As(err, &pe):
+		return &entries.Refused{Reason: entries.ReasonPathOutside, Err: fmt.Errorf("the packed %s fails the restore checks: %w", name, err)}
+	}
+	return &entries.Refused{Reason: entries.ReasonBlobInvalid, Err: fmt.Errorf("the packed %s fails the restore checks: %w", name, err)}
+}
+
+func ctxDone(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
 // refuse turns a pack or scan failure into the typed E711 refusal and writes
 // the audit row for a secret match (the store writes its own for commits).
 func (e *Engine) refuse(ctx context.Context, r SaveRequest, err error) error {
+	var refused *entries.Refused
 	switch {
 	case errors.Is(err, ErrSecretMatch):
 		_ = e.Backend.AppendAudit(ctx, "cache", "cache.save.refused", r.Attempt, "reason="+ReasonSecretMatch+" spec="+r.Spec.ID)
@@ -208,6 +232,9 @@ func (e *Engine) refuse(ctx context.Context, r SaveRequest, err error) error {
 	case errors.Is(err, errSizeCap):
 		_ = e.Backend.AppendAudit(ctx, "cache", "cache.save.refused", r.Attempt, "reason="+entries.ReasonSizeCap+" spec="+r.Spec.ID)
 		return &entries.Refused{Reason: entries.ReasonSizeCap}
+	case errors.As(err, &refused):
+		_ = e.Backend.AppendAudit(ctx, "cache", "cache.save.refused", r.Attempt, "reason="+refused.Reason+" spec="+r.Spec.ID)
+		return err
 	case errors.Is(err, ErrTooLarge):
 		_ = e.Backend.AppendAudit(ctx, "cache", "cache.save.refused", r.Attempt, "reason="+entries.ReasonSizeCap+" spec="+r.Spec.ID)
 		return &entries.Refused{Reason: entries.ReasonSizeCap, Err: err}

@@ -419,3 +419,25 @@ func TestReviewExactSweepExpiryBoundaries(t *testing.T) {
 		}
 	}
 }
+
+// D-1039: a cancelled context stops the snapshot copy of Open.
+func TestOpenContextStopsTheSnapshotCopyWhenCancelled(t *testing.T) {
+	s := testStore(t)
+	r := CacheRealm("cancel")
+	d, _, err := s.Put(context.Background(), r, strings.NewReader(strings.Repeat("x", 1<<20)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.beforeHash = cancel
+	f, err := s.OpenContext(ctx, r, d)
+	if err == nil {
+		_ = f.Close()
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("want context.Canceled, got %v", err)
+	}
+	if _, err := s.Stat(r, d); err != nil {
+		t.Fatalf("a cancelled open must not quarantine the blob: %v", err)
+	}
+}

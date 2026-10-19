@@ -1,6 +1,7 @@
 package cas
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -41,6 +42,13 @@ func (s *Store) Stat(realm Realm, digest string) (os.FileInfo, error) {
 // Open copies and hashes into an unlinked snapshot before serving any bytes.
 // Later mutations of the named blob cannot change this reader's content.
 func (s *Store) Open(realm Realm, digest string) (io.ReadCloser, error) {
+	return s.OpenContext(context.Background(), realm, digest)
+}
+
+// OpenContext is Open that stops copying the snapshot when ctx ends, so a
+// cancelled caller does not wait for a large blob (the partial snapshot is
+// discarded and ctx.Err() is returned; nothing is quarantined).
+func (s *Store) OpenContext(ctx context.Context, realm Realm, digest string) (io.ReadCloser, error) {
 	path, err := s.blobPath(realm, digest)
 	if err != nil {
 		return nil, err
@@ -101,7 +109,7 @@ func (s *Store) Open(realm Realm, digest string) (io.ReadCloser, error) {
 	if s.beforeHash != nil {
 		s.beforeHash()
 	}
-	n, err := io.Copy(io.MultiWriter(snap, h), f)
+	n, err := io.Copy(io.MultiWriter(snap, h), &ctxReader{ctx, f})
 	if err != nil {
 		return nil, err
 	}
@@ -121,6 +129,19 @@ func (s *Store) Open(realm Realm, digest string) (io.ReadCloser, error) {
 	}
 	failed = false
 	return snap, nil
+}
+
+// ctxReader fails a read once its context has ended.
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c *ctxReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.r.Read(p)
 }
 
 func (s *Store) snapshot() (*os.File, error) {
