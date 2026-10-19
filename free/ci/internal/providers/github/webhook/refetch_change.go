@@ -213,7 +213,7 @@ func (r *fetch) tagHead() {
 	r.calls++
 	if rev, ok := resolveTagWith(r.ctx, r.c, r.f.Repo, tag); ok {
 		r.okCalls++
-		r.f.HeadCurrent = fact(rev == r.f.Revision, "api", r.now)
+		r.f.HeadCurrent = fact(strings.EqualFold(rev, r.f.Revision), "api", r.now)
 	} else if r.firstErr == nil {
 		r.firstErr = errUnresolvedTag
 	}

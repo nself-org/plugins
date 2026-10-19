@@ -128,5 +128,10 @@ func (s *Source) jobQueued(ctx context.Context, repo string, job int64) (queued,
 	if _, err = get(ctx, c, "/repos/{owner}/{repo}/actions/jobs/{job}", params, &j); err != nil || j.Status == "" {
 		return false, false
 	}
-	return j.Status == "queued", true
+	// waiting, pending and requested are jobs that have not run yet; only a job that ran or runs is replayed
+	switch j.Status {
+	case "in_progress", "completed":
+		return false, true
+	}
+	return true, true
 }

@@ -22,7 +22,6 @@ type ghRepo struct {
 	FullName      string `json:"full_name"`
 	Private       *bool  `json:"private"`
 	Visibility    string `json:"visibility"`
-	Fork          bool   `json:"fork"`
 	DefaultBranch string `json:"default_branch"`
 }
 

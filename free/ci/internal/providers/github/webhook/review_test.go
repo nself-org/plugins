@@ -109,6 +109,9 @@ func TestNormalizeReviewFixes(t *testing.T) {
 		if err != nil || f.Kind != "tag" || f.Revision != shaA {
 			t.Fatalf("tag without head_commit = %+v, %v", f, err)
 		}
+		if r.gh.hits["/repos/o/r/git/tags/"+strings.Repeat("e", 40)] == 0 {
+			t.Fatal("the tag object must be dereferenced through the API when head_commit is missing")
+		}
 		r.gh.drop("/repos/o/r/git/tags/" + strings.Repeat("e", 40))
 		if _, err = r.deliver("push", repoSecret, body); err == nil || !strings.Contains(err.Error(), "tag.unresolved") {
 			t.Fatalf("an undereferenceable tag must decline, got %v", err)
@@ -240,11 +243,18 @@ func TestOpusReviewFixes(t *testing.T) {
 		if _, err := r.deliver("push", sharedSecret, poison); err != nil {
 			t.Fatal(err)
 		}
-		cfg := map[string]RepoSecret{"o/r": {Env: "SYNTH_REPO_SECRET", ID: 1001}}
+		cfg := map[string]RepoSecret{"o/r": {Env: "SYNTH_REPO_SECRET"}}
 		r.src.Secrets = func(context.Context) (map[string]RepoSecret, error) { return cfg, nil }
 		r.env["SYNTH_REPO_SECRET"] = repoSecret
+		// a pin written by the shared delivery (id 1) would refuse the real id 1001 here
 		if f, err := r.deliver("push", repoSecret, fixture(t, "push.json")); err != nil || f.Auth != "per-repo" {
 			t.Fatalf("real delivery after a shared-secret poison attempt = %+v, %v", f, err)
+		}
+		// the per-repo delivery pinned 1001; a configured id now decides alone, whatever the pin says
+		cfg = map[string]RepoSecret{"o/r": {Env: "SYNTH_REPO_SECRET", ID: 2002}}
+		moved := replace(fixture(t, "push.json"), `"repository":{"id":1001`, `"repository":{"id":2002`)
+		if f, err := r.deliver("push", repoSecret, moved); err != nil || f.RepoID != "2002" {
+			t.Fatalf("a configured id must replace the pin: %+v, %v", f, err)
 		}
 	})
 	t.Run("a per-repo project has one spelling", func(t *testing.T) {
