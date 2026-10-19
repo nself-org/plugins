@@ -158,7 +158,7 @@ func (d *Deps) addPinned(ctx context.Context, o AddOptions, spec remote.HostSpec
 	if err = applyTrust(&probed, o.Trust, now); err != nil {
 		return res, err
 	}
-	if err = RunHooks(ctx, PointAdd, HookEvent{NodeID: id, Project: d.Project, Flags: o.Flags}); err != nil {
+	if err = RunHooks(ctx, PointAdd, HookEvent{NodeID: id, Project: d.Project, Flags: o.Flags, Dest: o.Dest, Capability: &probed}); err != nil {
 		return res, err
 	}
 	online := "online"
