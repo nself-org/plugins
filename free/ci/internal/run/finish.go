@@ -124,6 +124,7 @@ func (c *Coordinator) conclude(f finishIn) Result {
 		PolicyDigest: f.Policy.Digest, Source: f.Source, Dirty: f.Rev.Dirty, Cancelled: f.Cancelled, Pipeline: c.Plan.Pipeline, Selection: c.Plan.Selection,
 		Trigger: trig, Jobs: f.Jobs, Start: f.Start, End: time.Now()})
 	notes := append([]string(nil), f.Post.Notes...)
+	notes = append(notes, ignoredRunNotes(f.Policy.IgnoredRun)...)
 	if err == nil && f.Hooks.Evidence != nil {
 		facts := EvidenceFacts{Root: c.Opts.Root, RunID: f.RunID, Rev: f.Rev, Store: f.St, Git: c.capture(), Jobs: f.Jobs, Job: c.Opts.Job}
 		var done model.Evidence

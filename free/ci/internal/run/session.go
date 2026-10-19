@@ -42,7 +42,9 @@ type Session struct {
 	// LocalOnly says a job cannot be run on a node yet (nil = none): the dispatch hook keeps it on this machine.
 	LocalOnly func(model.Job) bool
 	// Clock is the time the placement world is built at (nil = time.Now); tests inject it so a plan and a run can be compared.
-	Clock func() time.Time
+	Clock       func() time.Time
+	Interactive bool      // a person waits at a terminal: only then does the implicit foreground queue cap apply
+	PolicyRun   RunValues // the per-run policy values of the invocation; the dispatcher resolves its placement policy with them
 
 	mu    sync.Mutex
 	jobs  map[*model.Job]string // job row id by job pointer

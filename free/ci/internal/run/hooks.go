@@ -102,7 +102,7 @@ type TrustClassifier interface {
 type PolicyRequest struct {
 	Root, Pipeline string
 	Config         map[string]any
-	Run            RunValues // per-run values, only ever tighten (filled by P7-AUTO-29); nil = none
+	Run            RunValues // per-run values (the flags of one invocation): only ever tighten, except the preset; nil = none
 }
 
 // PolicyResolver resolves the effective policy (P7-TRUST-27 registers it).
