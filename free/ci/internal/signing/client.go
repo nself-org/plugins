@@ -1,0 +1,144 @@
+package signing
+
+// Purpose: the coordinator side of the signer (Epic CACHE D12): start
+// `nself-ci artifacts signer` through the exec funnel after the run, hand it
+// one request and read the envelopes back (cap:ci.release-signing: Sign,
+// PublicKey; P7-CACHE-17 and P7-CACHE-18 call it).
+// Inputs:  a Runner, the run's Source and a run id with payloads.
+// Outputs: DSSE envelopes in request order, or an E717 refusal.
+// Constraints: the signer starts only when every attempt of the run is
+// terminal (the coordinator refuses itself, the signer checks again); it runs
+// outside every job's process group, namespace and container (the funnel
+// starts it as its own process); a timeout, a crash, a missing or malformed
+// answer or any wrong envelope fails the release closed with E717 and returns
+// no partial signature; the client never holds a key.
+
+import (
+	"bytes"
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"os"
+	"time"
+
+	"github.com/nself-org/cli/sdk/go/v2/signing"
+)
+
+// DefaultTimeout bounds one signer call.
+const DefaultTimeout = 60 * time.Second
+
+// Client starts the signer.
+type Client struct {
+	Runner StdioRunner
+	// Src is read only for the terminal check.
+	Src Source
+	// Exe is the nself-ci binary ("" = this process's own).
+	Exe string
+	// Env is added to the signer's environment (NSELF_CI_HOME, NSELF_CI_REPO).
+	Env     []string
+	Timeout time.Duration
+}
+
+func (c *Client) exe() (string, error) {
+	if c.Exe != "" {
+		return c.Exe, nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return "", Failf(ReasonSignerFailed, "the signer binary could not be located")
+	}
+	return exe, nil
+}
+
+func (c *Client) call(ctx context.Context, mode string, stdin []byte) ([]byte, error) {
+	exe, err := c.exe()
+	if err != nil {
+		return nil, err
+	}
+	t := c.Timeout
+	if t <= 0 {
+		t = DefaultTimeout
+	}
+	env := append([]string{"NSELF_V15=1"}, c.Env...)
+	out, code, err := c.Runner.RunStdio(ctx, StdioCall{Argv: []string{exe, "artifacts", "signer", mode}, Env: env, Stdin: stdin, Timeout: t})
+	if err != nil {
+		return nil, Failf(ReasonSignerFailed, "the signer did not run or timed out")
+	}
+	if code != 0 {
+		return nil, signerRefusal(out, code)
+	}
+	return out, nil
+}
+
+// signerRefusal turns the signer's error object into the same E717 reason.
+func signerRefusal(out []byte, code int) error {
+	var resp Response
+	if i := bytes.IndexByte(out, '{'); i >= 0 && json.Unmarshal(out[i:], &resp) == nil && resp.Error != nil && resp.Error.Reason != "" {
+		return Failf(resp.Error.Reason, "%s", echo(resp.Error.Message))
+	}
+	return Failf(ReasonSignerFailed, "the signer failed (exit %d)", code)
+}
+
+// Sign signs the payloads of a finished run, or refuses.
+func (c *Client) Sign(ctx context.Context, runID string, items []Item) ([]signing.Envelope, error) {
+	if err := CheckTerminal(ctx, c.Src, runID); err != nil {
+		return nil, err
+	}
+	req, err := json.Marshal(Request{RunID: runID, Items: items})
+	if err != nil {
+		return nil, Failf(ReasonPayloadRejected, "the request could not be encoded")
+	}
+	if len(req) > MaxRequestBytes {
+		return nil, Failf(ReasonPayloadRejected, "the request is larger than %d bytes", MaxRequestBytes)
+	}
+	out, err := c.call(ctx, "--stdio", req)
+	if err != nil {
+		return nil, err
+	}
+	var resp Response
+	if i := bytes.IndexByte(out, '{'); i < 0 || json.Unmarshal(out[i:], &resp) != nil || resp.Error != nil {
+		return nil, Failf(ReasonSignerFailed, "the signer answered nothing usable")
+	}
+	if err := sane(items, resp.Envelopes); err != nil {
+		return nil, err
+	}
+	return resp.Envelopes, nil
+}
+
+// sane checks the answer is one envelope per item, over that item's payload,
+// with exactly one signature, so a broken signer cannot hand back a mix.
+func sane(items []Item, envs []signing.Envelope) error {
+	if len(envs) != len(items) {
+		return Failf(ReasonSignerFailed, "the signer answered %d envelopes for %d items", len(envs), len(items))
+	}
+	for i, e := range envs {
+		if e.PayloadType != items[i].PayloadType || e.Payload != items[i].PayloadB64 || len(e.Signatures) != 1 {
+			return Failf(ReasonSignerFailed, "envelope %d does not match its request item", i)
+		}
+		if _, err := base64.StdEncoding.Strict().DecodeString(e.Signatures[0].Sig); err != nil {
+			return Failf(ReasonSignerFailed, "envelope %d carries a malformed signature", i)
+		}
+	}
+	return nil
+}
+
+// PublicKey asks the signer for the trust line of the release key.
+func (c *Client) PublicKey(ctx context.Context) (KeyInfo, error) { return c.keyCall(ctx, "--public") }
+
+// Init asks the signer to create the release key.
+func (c *Client) Init(ctx context.Context) (KeyInfo, error) { return c.keyCall(ctx, "--init") }
+
+// Rotate asks the signer to replace the release key.
+func (c *Client) Rotate(ctx context.Context) (KeyInfo, error) { return c.keyCall(ctx, "--rotate") }
+
+func (c *Client) keyCall(ctx context.Context, mode string) (KeyInfo, error) {
+	out, err := c.call(ctx, mode, nil)
+	if err != nil {
+		return KeyInfo{}, err
+	}
+	var info KeyInfo
+	if i := bytes.IndexByte(out, '{'); i < 0 || json.Unmarshal(out[i:], &info) != nil || info.KeyID == "" || info.Public == "" {
+		return KeyInfo{}, Failf(ReasonSignerFailed, "the signer answered nothing usable")
+	}
+	return info, nil
+}
