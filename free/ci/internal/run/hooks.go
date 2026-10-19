@@ -40,6 +40,9 @@ type AttemptInfo struct {
 	// container although Job still names no container (prepare applies it after
 	// the cache hook). The cache hook plans container-level mounts for it.
 	Container bool
+	// Cache is the top-level `cache` block of the resolved pipeline config (nil
+	// when the config has none), wherever the config file was read from.
+	Cache *model.CacheConfig
 }
 
 // Outcome is how an attempt ended.

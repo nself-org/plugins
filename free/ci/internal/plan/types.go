@@ -104,6 +104,9 @@ type Plan struct {
 	Jobs      []PlannedJob      `json:"jobs"`
 	Skipped   []Skipped         `json:"skipped"`
 	Placement any               `json:"placement,omitempty"`
+	// Cache is the resolved top-level `cache` block of the config the plan
+	// was built from; it is not part of the plan document.
+	Cache *model.CacheConfig `json:"-"`
 }
 
 // Fail-fast scopes.

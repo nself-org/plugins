@@ -255,22 +255,44 @@ func TestCacheLevelFollowsTheEffectiveIsolation(t *testing.T) {
 	}
 }
 
-func TestCacheHookEvictsTheSessionOfAnEndedAttempt(t *testing.T) {
-	// a run that asks for a service no hook provides fails in prepare, after Before
+// TestCacheHookEndsTheSessionOfAJobThatFailedInPrepare: a run that asks for a
+// service no hook provides fails in prepare, after the cache Before; the cache
+// work directories go with the attempt, not at the next eviction (D-1036).
+func TestCacheHookEndsTheSessionOfAJobThatFailedInPrepare(t *testing.T) {
 	r := cacheRig(t, map[string]model.Job{"build": sh("true")})
 	r.C.Opts.Services = []string{"db"}
 	o := outcome(r.run(t), "build")
 	if o.State != StateFailed {
 		t.Fatalf("%+v\n%s", o, r.Out)
 	}
-	if _, ok := cacheOn.sessions.Load(o.AttemptID); !ok {
-		t.Fatal("the job never reached the cache hook")
-	}
-	cacheOn.evict(context.Background(), r.store(t), time.Now())
 	if _, ok := cacheOn.sessions.Load(o.AttemptID); ok {
-		t.Fatal("the session of an ended attempt was kept")
+		t.Fatal("the session of a job that failed in prepare was kept")
 	}
 	r.noCacheWork(t)
+}
+
+func TestCacheHookEvictsTheSessionOfAnEndedAttempt(t *testing.T) {
+	r := cacheRig(t, map[string]model.Job{"build": sh("true")})
+	st := r.store(t)
+	ctx := context.Background()
+	p := store.PipelineRow{ID: "plev", Revision: "rev", Project: r.C.Opts.Root, Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
+	for _, err := range []error{st.CreatePipeline(ctx, p),
+		st.CreateJob(ctx, store.JobRow{ID: "jev", PipelineID: "plev", Name: "ev", Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}),
+		st.CreateAttempt(ctx, store.AttemptRow{ID: "ev1", JobID: "jev", N: 1}, ""),
+		st.Transition(ctx, "ev1", "queued", "leased", store.TransitionDetail{Epoch: 0}),
+		st.Transition(ctx, "ev1", "leased", "running", store.TransitionDetail{Epoch: 1}),
+		st.Transition(ctx, "ev1", "running", "finalizing", store.TransitionDetail{Epoch: 2}),
+		st.Transition(ctx, "ev1", "finalizing", "failed", store.TransitionDetail{Epoch: 3, FailureClass: "infra"})} {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := &cacheHook{}
+	h.sessions.Store("ev1", cacheEntry{s: &fakeSession{}, at: time.Now(), id: "ev1", st: st})
+	h.evict(ctx, st, time.Now())
+	if _, ok := h.sessions.Load("ev1"); ok {
+		t.Fatal("the session of an ended attempt was kept")
+	}
 }
 
 func TestCacheHookCachesAPnpmProject(t *testing.T) {
@@ -434,5 +456,47 @@ func TestCloseSessionRetractsOnlyAConfirmedNonPass(t *testing.T) {
 	closeSession(context.Background(), r.store(t), cacheEntry{s: f, id: "no-such-attempt"}) // history pruned: unknown, so not a confirmed non-pass
 	if f.retracted || !f.cleaned {
 		t.Fatalf("an attempt the store no longer knows must keep its entry: %+v", f)
+	}
+}
+
+// afterCache is a CacheHook whose Before succeeds; it counts After calls.
+type afterCache struct{ after chan Outcome }
+
+func (afterCache) Before(context.Context, AttemptInfo) (CacheSetup, error) { return CacheSetup{}, nil }
+func (c afterCache) After(_ context.Context, _ AttemptInfo, o Outcome) error {
+	c.after <- o
+	return nil
+}
+
+// TestPrepareFailureAfterTheCacheRestoreEndsTheCacheSession: a job that fails in
+// prepare (here: it needs services and no hook is registered) after the cache
+// Before still gets the cache hook's After.
+func TestPrepareFailureAfterTheCacheRestoreEndsTheCacheSession(t *testing.T) {
+	r := newRig(t, map[string]model.Job{"build": sh("true")}, gitFake{})
+	r.C.Opts.Services = []string{"postgres"}
+	c := afterCache{after: make(chan Outcome, 4)}
+	r.C.Hooks.Cache = c
+	r.C.Hooks.Services = nil
+	if o := outcome(r.run(t), "build"); o.State != StateFailed {
+		t.Fatalf("%+v\n%s", o, r.Out)
+	}
+	select {
+	case o := <-c.after:
+		if o.State != "failed" {
+			t.Fatalf("After saw %+v", o)
+		}
+	default:
+		t.Fatal("the cache hook's After was not called after a prepare failure")
+	}
+}
+
+// TestCacheHookTopLevelDisableFromAnotherConfigPath: the resolved config's
+// `cache: {disable: true}` disables the cache although <root>/.nself/ci.yaml
+// does not exist (the config came from --config elsewhere).
+func TestCacheHookTopLevelDisableFromAnotherConfigPath(t *testing.T) {
+	r := cacheRig(t, map[string]model.Job{"build": sh(`case "$GOMODCACHE" in *cache-work*) exit 9;; esac`)})
+	r.C.Plan.Cache = &model.CacheConfig{Disable: true}
+	if o := outcome(r.run(t), "build"); o.State != StatePassed || r.uses(t, o) != "" || r.entryCount(t) != 0 {
+		t.Fatalf("%+v\n%s", o, r.Out)
 	}
 }

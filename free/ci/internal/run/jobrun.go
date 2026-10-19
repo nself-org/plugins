@@ -70,7 +70,7 @@ func (rs *runState) settle(id string, from, to model.JobState, class model.Failu
 
 func (rs *runState) info(pj plan.PlannedJob, job model.Job, attemptID string) AttemptInfo {
 	return AttemptInfo{RunID: rs.sess.RunID, JobID: rs.rows[pj.ID], JobName: pj.ID, AttemptID: attemptID, Revision: rs.rev.SHA, N: 1,
-		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home, Store: rs.sess.Store, Container: rs.c.Opts.Container}
+		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home, Store: rs.sess.Store, Container: rs.c.Opts.Container, Cache: rs.pl.Cache}
 }
 
 // failed fills a failure outcome from an error.
@@ -139,7 +139,9 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	setup, err := rs.prepare(ctx, &info)
 	defer rs.unprepare(info, setup)
 	if err != nil {
-		return rs.failPrepared(ctx, pj, id, o, err)
+		o = rs.failPrepared(ctx, pj, id, o, err)
+		rs.endCache(ctx, info) // after the settle: closeSession reads the attempt's state
+		return o
 	}
 	spec := rs.spec(ctx, pj, setup.job, id)
 	spec.Mounts = setup.mounts
@@ -254,6 +256,19 @@ func (rs *runState) failPrepared(ctx context.Context, pj plan.PlannedJob, id str
 	}
 	_, _ = rs.settle(id, "running", "failed", "infra")
 	return o
+}
+
+// endCache calls the cache hook's After for an attempt whose preparation
+// failed after (or before) the cache restore, so its session and work
+// directories go now, not when eviction finds the attempt ended.
+func (rs *runState) endCache(ctx context.Context, info AttemptInfo) {
+	if rs.hooks.Cache == nil {
+		return
+	}
+	bg, done := background(ctx)
+	defer done()
+	oc := Outcome{State: model.JobState("failed"), FailureClass: "infra"}
+	_ = guard("cache after hook", func() error { return rs.hooks.Cache.After(bg, info, oc) })
 }
 
 // endEarly handles a failed leased -> running move: usually a cancel intent.

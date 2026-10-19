@@ -180,6 +180,7 @@ func Build(in Input) (*Plan, error) {
 		Support:   supportPolicy(in.Config, in.World),
 		FailFast:  scope,
 		Skipped:   skipped,
+		Cache:     in.Config.Cache,
 	}
 	if err := expand(p, in, cs, ids, reasons); err != nil {
 		return nil, err

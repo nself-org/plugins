@@ -126,7 +126,7 @@ func (h *cacheHook) Before(ctx context.Context, a AttemptInfo) (CacheSetup, erro
 	if err != nil || !ok || !filepath.IsAbs(p.Project) {
 		return none, nil
 	}
-	if topLevelDisabled(p.Project) {
+	if a.Cache != nil && a.Cache.Disable || topLevelDisabled(p.Project) {
 		return none, nil
 	}
 	workdir, err := workdirOf(p.Project, a.Job.Workdir)
