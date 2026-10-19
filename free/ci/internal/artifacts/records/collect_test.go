@@ -427,6 +427,8 @@ func TestCollectBudgetAppliesToGlobsToo(t *testing.T) {
 	if got, err := c.Collect(context.Background(), "proj", e.ws, one); err != nil || len(got) != 6 {
 		t.Fatalf("a glob of exactly the budget: %d %v", len(got), err)
 	}
+	e.write("d/other", "different bytes") // a new blob a refused plan must not store
+	before := len(e.blobFiles())
 	// forty declarations of the same glob exceed the budget long before they are all expanded
 	many := make([]model.ArtifactDecl, 40)
 	for i := range many {
@@ -437,7 +439,7 @@ func TestCollectBudgetAppliesToGlobsToo(t *testing.T) {
 	if _, err := c.Collect(context.Background(), "proj", e.ws, ds); !records.IsReason(err, records.ReasonSizeCap) {
 		t.Fatalf("40 globs of 6 files over a budget of 20: %v", err)
 	}
-	if len(e.blobFiles()) != 6 { // only the earlier successful collection stored anything
-		t.Fatalf("a refused plan stored bytes: %d blobs", len(e.blobFiles()))
+	if n := len(e.blobFiles()); n != before {
+		t.Fatalf("a refused plan stored bytes: %d blobs, was %d", n, before)
 	}
 }
