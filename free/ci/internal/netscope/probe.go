@@ -55,6 +55,13 @@ func (pr *Prober) now() time.Time {
 	return time.Now()
 }
 
+// Invalidate drops the cached result, so the next call probes again (the runtime changed or went away).
+func (pr *Prober) Invalidate() {
+	pr.mu.Lock()
+	pr.at, pr.scopes, pr.binary = time.Time{}, nil, ""
+	pr.mu.Unlock()
+}
+
 // EnforcedScopes returns the scopes proven for the runtime binary. An empty binary (no container runtime)
 // proves nothing.
 func (pr *Prober) EnforcedScopes(ctx context.Context, binary string) []model.NetworkScope {
@@ -85,7 +92,13 @@ func (pr *Prober) proveProxied(ctx context.Context, binary string) bool {
 	if err != nil {
 		return false
 	}
-	plan, err := pl.PlanAttempt(ctx, binary, isolation.Attempt{ID: id, CoordinatorID: "probe"}, "restricted")
+	// the probe builds the internet scope: the same network and sidecar as restricted, but an IP literal is judged
+	// by the deny table instead of the name allowlist, so the metadata check below exercises the table. Its
+	// deliberate refusals are not recorded as events.
+	quiet := *pl
+	quiet.Events = func(string, Event) {}
+	pl = &quiet
+	plan, err := pl.PlanAttempt(ctx, binary, isolation.Attempt{ID: id, CoordinatorID: "probe"}, "internet")
 	if plan.Release != nil {
 		defer plan.Release(ctx)
 	}
@@ -109,7 +122,10 @@ func (pr *Prober) proveProxied(ctx context.Context, binary string) bool {
 				return
 			}
 			_ = c.Close()
-			accepted <- struct{}{}
+			select {
+			case accepted <- struct{}{}:
+			default: // already counted; never block on a scanner hitting the port
+			}
 		}
 	}()
 	targets, err := pl.probeTargets(ln)

@@ -281,3 +281,48 @@ func TestProxyJudgesRequestsFromClientsThatHalfClose(t *testing.T) {
 		}
 	}
 }
+
+// httpDialer serves one canned HTTP response on every dial (an upstream web server).
+type httpDialer struct{ dialed []string }
+
+func (d *httpDialer) DialContext(_ context.Context, _, address string) (net.Conn, error) {
+	d.dialed = append(d.dialed, address)
+	host, _, _ := net.SplitHostPort(address)
+	a, b := net.Pipe()
+	go func() {
+		defer b.Close()
+		_, _ = http.ReadRequest(bufio.NewReader(b))
+		_, _ = b.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"))
+	}()
+	return pipeConn{Conn: a, remote: &net.TCPAddr{IP: net.ParseIP(host), Port: 80}}, nil
+}
+
+// An absolute-form request from a client that closes its sending side is forwarded and answered: the dial and
+// the round trip do not run under the request context the server cancels on EOF.
+func TestProxyForwardsRequestsFromClientsThatHalfClose(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, d, ev := &fakeResolver{answers: map[string][]string{"registry.npmjs.org": {"104.16.1.1"}}}, &httpDialer{}, &syncBuf{}
+	p := &Proxy{Guard: Guard{Scope: "restricted", Resolver: res}, Dialer: d, Events: ev}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { _ = p.Serve(ctx, ln); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+	c, err := net.DialTimeout("tcp", ln.Addr().String(), 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	_ = c.SetDeadline(time.Now().Add(10 * time.Second))
+	fmt.Fprint(c, "GET http://registry.npmjs.org/pkg HTTP/1.1\r\nHost: registry.npmjs.org\r\nConnection: X-Secret\r\nX-Secret: s\r\n\r\n")
+	_ = c.(*net.TCPConn).CloseWrite()
+	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf("%v %v events %s", resp, err, ev.bytes())
+	}
+	if len(d.dialed) != 1 || d.dialed[0] != "104.16.1.1:80" {
+		t.Errorf("dialled %v", d.dialed)
+	}
+}

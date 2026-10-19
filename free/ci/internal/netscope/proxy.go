@@ -205,7 +205,10 @@ func (p *Proxy) forward(w http.ResponseWriter, r *http.Request) {
 		},
 		ResponseHeaderTimeout: 60 * time.Second,
 	}
-	out := r.Clone(r.Context())
+	// the upstream request does not die with the client's sending side (see connect); the response deadline bounds it
+	fctx, fcancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Minute)
+	defer fcancel()
+	out := r.Clone(fctx)
 	out.RequestURI = ""
 	for _, h := range connectionTokens(out.Header) { // headers the client named in Connection are hop-by-hop too
 		out.Header.Del(h)

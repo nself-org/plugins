@@ -82,7 +82,7 @@ func TestContributorPublishesTheProofForTheLocalRunnerOnly(t *testing.T) {
 	if err := contributeNetwork(context.Background(), &w); err != nil || len(w.Network) != 0 {
 		t.Fatalf("a proof outlived its runtime: %+v %v", w.Network, err)
 	}
-	localProof = &scopeProof{binary: func(context.Context) string { return "docker" }, scopes: []model.NetworkScope{"none", "restricted"}, at: time.Now()}
+	localProof = &scopeProof{proven: "docker", binary: func(context.Context) string { return "docker" }, scopes: []model.NetworkScope{"none", "restricted"}, at: time.Now()}
 	w = sched.World{Runners: []sched.Runner{labelled, local}} // two runners with the id: ambiguous, no proof
 	if err := contributeNetwork(context.Background(), &w); err != nil || len(w.Network) != 0 {
 		t.Fatalf("an ambiguous local id got a proof: %+v %v", w.Network, err)

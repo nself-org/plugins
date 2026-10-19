@@ -12,13 +12,10 @@ package netscope
 
 import (
 	"context"
-	"errors"
-	"net"
 	"net/netip"
 	"os"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/exec"
@@ -191,83 +188,6 @@ func (p *Planner) proxyBinary() (string, error) {
 	return bin, nil
 }
 
-// worldFacts is the host's own addresses and prefixes plus the node-global exclusion set.
-func (p *Planner) worldFacts(ctx context.Context) (Facts, error) {
-	host := p.Host
-	if host == nil {
-		host = Discover
-	}
-	f, err := host()
-	if err != nil {
-		return Facts{}, err
-	}
-	if p.Exclusion == nil {
-		return f, nil
-	}
-	ex, err := p.Exclusion(ctx)
-	if err != nil {
-		return Facts{}, scopeFailed("the deploy exclusion set cannot be read: %v", err)
-	}
-	xf, err := p.exclusionFacts(ctx, ex)
-	if err != nil {
-		return Facts{}, err
-	}
-	return Merge(f, xf), nil
-}
-
-// exclusionFacts turns exclusion entries into Facts. An entry that does not parse refuses the scope (a deploy
-// host is never left out because its line was malformed). Each excluded NAME is also resolved here, once, and
-// its addresses join the exclusion: a name-only entry would otherwise protect nothing from a job that dials
-// the address (or another name for it). A name that does not exist protects nothing and is skipped; any other
-// lookup failure refuses the scope.
-func (p *Planner) exclusionFacts(ctx context.Context, ex Exclusions) (Facts, error) {
-	var f Facts
-	for _, raw := range ex.Addresses {
-		a, err := netip.ParseAddr(raw)
-		if err != nil {
-			return Facts{}, scopeFailed("exclusion address %q does not parse", raw)
-		}
-		f.Exclusion = append(f.Exclusion, netip.PrefixFrom(Unmap(a), Unmap(a).BitLen()))
-	}
-	for _, raw := range ex.Prefixes {
-		pr, err := netip.ParsePrefix(raw)
-		if err != nil {
-			return Facts{}, scopeFailed("exclusion prefix %q does not parse", raw)
-		}
-		f.Exclusion = append(f.Exclusion, pr)
-	}
-	res := p.Resolver
-	if res == nil {
-		res = net.DefaultResolver
-	}
-	for _, h := range ex.Hosts {
-		n := NormalizeHost(h)
-		if n == "" {
-			return Facts{}, scopeFailed("exclusion host %q does not parse", h)
-		}
-		f.ExclusionHosts = append(f.ExclusionHosts, n)
-		if _, err := netip.ParseAddr(n); err == nil {
-			continue
-		}
-		rctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		addrs, err := res.LookupNetIP(rctx, "ip", n)
-		cancel()
-		var dnsErr *net.DNSError
-		switch {
-		case err == nil:
-		case errors.As(err, &dnsErr) && dnsErr.IsNotFound:
-			continue
-		default:
-			return Facts{}, scopeFailed("excluded host %s cannot be resolved: %v", n, err)
-		}
-		for _, a := range addrs {
-			a = Unmap(a)
-			f.Exclusion = append(f.Exclusion, netip.PrefixFrom(a, a.BitLen()))
-		}
-	}
-	return f, nil
-}
-
 func (p *Planner) waitReady(ctx context.Context, rt Runtime, binary, attempt string) error {
 	limit := p.Ready
 	if limit <= 0 {
@@ -295,34 +215,4 @@ func (p *Planner) waitReady(ctx context.Context, rt Runtime, binary, attempt str
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
-}
-
-// release reads the sidecar's denial events, then removes the sidecar and the network. It is idempotent.
-func (p *Planner) release(rt Runtime, binary, attempt string) func(context.Context) {
-	var once sync.Once
-	return func(ctx context.Context) { once.Do(func() { p.releaseOnce(ctx, rt, binary, attempt) }) }
-}
-
-func (p *Planner) releaseOnce(ctx context.Context, rt Runtime, binary, attempt string) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
-	defer cancel()
-	log, err := rt.SidecarLog(ctx, binary, attempt)
-	if err != nil {
-		p.emit(attempt, Event{Reason: ReasonLogUnreadable, Detail: clip(err.Error(), 200)})
-	}
-	for _, e := range ParseEvents(strings.NewReader(string(log))) {
-		p.emit(attempt, e)
-	}
-	if err := rt.Remove(ctx, binary, attempt); err != nil {
-		p.emit(attempt, Event{Reason: ReasonCleanupFailed, Detail: clip(err.Error(), 200)})
-	}
-}
-
-func (p *Planner) emit(attempt string, e Event) {
-	e.Attempt = attempt
-	if p.Events != nil {
-		p.Events(attempt, e)
-		return
-	}
-	_, _ = os.Stderr.Write(e.Encode())
 }

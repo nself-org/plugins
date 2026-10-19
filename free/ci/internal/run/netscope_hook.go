@@ -87,6 +87,7 @@ type scopeProof struct {
 	scopes  []model.NetworkScope
 	at      time.Time
 	running bool
+	proven  string // the runtime binary the scopes above were proven for
 	binary  func(context.Context) string
 }
 
@@ -96,8 +97,13 @@ func (p *scopeProof) get(ctx context.Context) []model.NetworkScope {
 	binary := p.binary(ctx)
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if binary == "" { // the runtime went away: an earlier proof no longer holds
-		p.scopes, p.at = nil, time.Time{}
+	if binary != p.proven { // the runtime went away or changed: an earlier proof no longer holds
+		p.scopes, p.at, p.proven = nil, time.Time{}, binary
+		if p.prober != nil {
+			p.prober.Invalidate()
+		}
+	}
+	if binary == "" {
 		return nil
 	}
 	if !p.running && (p.at.IsZero() || time.Since(p.at) > scopeProofTTL) {

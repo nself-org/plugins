@@ -27,6 +27,9 @@ type fakeRuntime struct {
 	targets   []string
 	proxy     string
 	probeRuns int
+	// logErr is returned by SidecarLog once logFailsAfter reads have passed (the readiness wait reads first)
+	logErr        error
+	logFailsAfter int
 }
 
 func (f *fakeRuntime) step(name string) error {
@@ -48,6 +51,10 @@ func (f *fakeRuntime) SidecarStart(_ context.Context, _ string, s exec.SidecarSp
 func (f *fakeRuntime) SidecarLog(context.Context, string, string) ([]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.logErr != nil && f.logFailsAfter <= 0 {
+		return nil, f.logErr
+	}
+	f.logFailsAfter--
 	return f.log, nil
 }
 func (f *fakeRuntime) Remove(context.Context, string, string) error { return f.step("remove") }
@@ -306,6 +313,21 @@ func TestPlanReportsUnreadableLogAndFailedCleanup(t *testing.T) {
 	rt.failAt = "remove"
 	plan.Release(context.Background())
 	if len(got) != 1 || got[0].Reason != ReasonCleanupFailed {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestPlanReportsAnUnreadableLog(t *testing.T) {
+	rt := &fakeRuntime{log: ReadyLine(), logErr: errors.New("docker logs: daemon gone"), logFailsAfter: 1}
+	p := testPlanner(rt)
+	var got []Event
+	p.Events = func(_ string, e Event) { got = append(got, e) }
+	plan, err := p.PlanAttempt(context.Background(), "docker", att, "restricted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.Release(context.Background())
+	if len(got) != 1 || got[0].Reason != ReasonLogUnreadable || !strings.Contains(got[0].Detail, "daemon gone") {
 		t.Fatalf("%+v", got)
 	}
 }
