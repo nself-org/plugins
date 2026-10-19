@@ -1,0 +1,15 @@
+--- a/internal/trust/source/local.go
++++ b/internal/trust/source/local.go
+@@ -55,11 +55,7 @@
+ 	if g.DefaultRemoteRef == "" || len(g.OffDefault) == 0 || g.OnAnyRemoteRef {
+ 		return false
+ 	}
+-	for _, m := range []string{MissingDefaultRef, MissingRemoteRefs, MissingUnpushed, MissingReflog} {
+-		if g.missing(m) {
+-			return false
+-		}
+-	}
++
+ 	unpushed := make(map[string]bool, len(g.Unpushed))
+ 	for _, c := range g.Unpushed {
+ 		unpushed[c.SHA] = true

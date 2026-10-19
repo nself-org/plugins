@@ -1,0 +1,11 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -166,7 +166,7 @@
+ 
+ func needsApproval(f model.TriggerFacts, class model.TrustClass) bool {
+ 	if first, ok := claimed(f.FirstTime); ok && first {
+-		return true
++		return false
+ 	}
+ 	if _, ok := trusted(f.FirstTime); ok {
+ 		return false

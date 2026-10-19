@@ -1,0 +1,11 @@
+--- a/internal/run/trust_hook.go
++++ b/internal/run/trust_hook.go
+@@ -195,7 +195,7 @@
+ 	run(func() {
+ 		// Every reflog, not HEAD's alone: a temporary worktree (`evidence verify`) has a HEAD log of its
+ 		// own, while the branch logs that recorded the commit are shared.
+-		out, exit := git("reflog", "show", "--all", "--format=%H%x09%gs", "-n", "5000")
++		out, exit := git("reflog", "show", "--format=%H%x09%gs", "-n", "5000")
+ 		reflogOK = exit == 0
+ 		for _, l := range lines(out) {
+ 			if sha, subject, ok := strings.Cut(l, "\t"); ok && !source.MadeHere(g.ReflogCreated[sha]) {

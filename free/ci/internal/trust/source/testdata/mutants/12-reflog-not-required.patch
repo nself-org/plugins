@@ -1,0 +1,11 @@
+--- a/internal/trust/source/local.go
++++ b/internal/trust/source/local.go
+@@ -65,7 +65,7 @@
+ 		unpushed[c.SHA] = true
+ 	}
+ 	for _, c := range g.OffDefault {
+-		if !unpushed[c.SHA] || !MadeHere(g.ReflogCreated[c.SHA]) {
++		if !unpushed[c.SHA] {
+ 			return false
+ 		}
+ 	}

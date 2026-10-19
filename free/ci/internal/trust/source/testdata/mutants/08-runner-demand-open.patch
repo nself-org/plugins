@@ -1,0 +1,11 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -140,7 +140,7 @@
+ 	event, eok := trusted(f.RunEvent)
+ 	head, hok := trusted(f.HeadRepo)
+ 	switch {
+-	case !ok || !only, !eok, !hok, !strings.EqualFold(head, f.Repo):
++	case (!ok || !only) && false, !eok, !hok, !strings.EqualFold(head, f.Repo):
+ 		bind(untrusted, ReasonRunnerDemand)
+ 	case event == "pull_request_target" || event == "workflow_run":
+ 		bind(untrusted, ReasonRunnerDemand)

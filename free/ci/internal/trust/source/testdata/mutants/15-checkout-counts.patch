@@ -1,0 +1,11 @@
+--- a/internal/trust/source/local.go
++++ b/internal/trust/source/local.go
+@@ -79,7 +79,7 @@
+ 	kind, _, _ := strings.Cut(subject, ":")
+ 	kind = strings.TrimSpace(kind)
+ 	switch {
+-	case kind == "commit", strings.HasPrefix(kind, "commit ("):
++	case kind == "commit", strings.HasPrefix(kind, "commit ("), kind == "checkout":
+ 		return true
+ 	case strings.HasPrefix(kind, "rebase ("):
+ 		return kind != "rebase (start)" && kind != "rebase (abort)"

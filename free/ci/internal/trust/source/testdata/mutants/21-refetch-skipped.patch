@@ -1,0 +1,15 @@
+--- a/internal/run/trust_hook.go
++++ b/internal/run/trust_hook.go
+@@ -90,10 +90,8 @@
+ 	if refetch == nil {
+ 		refetch = providers.RefetchFacts
+ 	}
+-	fresh, ferr := refetch(ctx, f)
+-	if ferr == nil {
+-		f = fresh
+-	}
++	var ferr error
++	_ = refetch
+ 	res := source.Classify(f)
+ 	if ferr != nil {
+ 		res.Reasons = append(res.Reasons, source.ReasonRefetchFailed)

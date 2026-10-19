@@ -1,0 +1,11 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -89,7 +89,7 @@
+ 
+ // repoMismatch: the change comes from another repository, or no authoritative fact says it does not.
+ func repoMismatch(f model.TriggerFacts) bool {
+-	if fork, ok := claimed(f.Fork); ok && fork {
++	if fork, ok := claimed(f.Fork); ok && !fork {
+ 		return true
+ 	}
+ 	if head, ok := claimed(f.HeadRepo); ok && !strings.EqualFold(head, f.Repo) {

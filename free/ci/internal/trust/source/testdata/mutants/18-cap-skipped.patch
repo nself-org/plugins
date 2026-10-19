@@ -1,0 +1,12 @@
+--- a/internal/run/trust_hook.go
++++ b/internal/run/trust_hook.go
+@@ -60,9 +60,6 @@
+ 	if err != nil {
+ 		return res, err
+ 	}
+-	if machine {
+-		res = source.ApplyCap(res, capClass)
+-	}
+ 	req := model.TrustClass(r.Requested)
+ 	if req == "" {
+ 		return res, nil

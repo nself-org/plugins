@@ -1,0 +1,4 @@
+{"schema":"ci.trigger-facts/v1","source":"github","kind":"pull_request","auth":"per-repo","repo":"acme/widgets","revision_source":"payload",
+ "actor":{"value":"mallory","source":"payload"},"actor_permission":{"value":"admin","source":"payload"},
+ "head_repo":{"value":"mallory/widgets","source":"payload"},"fork":{"value":true,"source":"payload"},
+ "first_time":{"value":true,"source":"payload"},"protected_ref":{"value":true,"source":"payload"},"sha_reachable":{"value":true,"source":"payload"}}

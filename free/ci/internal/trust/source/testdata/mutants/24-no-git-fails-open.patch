@@ -1,0 +1,11 @@
+--- a/internal/run/trust_hook.go
++++ b/internal/run/trust_hook.go
+@@ -189,7 +189,7 @@
+ 	run(func() { symref, _ = git("symbolic-ref", "-q", "refs/remotes/origin/HEAD") })
+ 	run(func() {
+ 		out, exit := git("rev-parse", "--is-inside-work-tree")
+-		g.NotARepo = exit != 0 && strings.Contains(out, "not a git repository")
++		g.NotARepo = exit != 0 || len(out) < 0
+ 	})
+ 	run(func() { fetchHead, _ = git("rev-parse", "-q", "--verify", "FETCH_HEAD") })
+ 	run(func() {

@@ -1,0 +1,3 @@
+{"schema":"ci.trigger-facts/v1","source":"gitlab","kind":"runner_demand","auth":"bearer","repo":"acme/widgets",
+ "group_protected_only":{"value":true,"source":"api"},"run_event":{"value":"pull_request_target","source":"api"},
+ "head_repo":{"value":"evil/widgets","source":"api"},"runner_labels":{"value":["linux"],"source":"payload"}}

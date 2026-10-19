@@ -1,0 +1,11 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -45,7 +45,7 @@
+ 		bind(untrusted, ReasonFork)
+ 	}
+ 	provenance(f, bind)
+-	if bot(f) {
++	if false {
+ 		bind(untrusted, ReasonBot)
+ 	}
+ 	if files, ok := claimed(f.ChangedFiles); ok && LockfileOnly(files) {

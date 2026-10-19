@@ -1,0 +1,17 @@
+--- a/internal/run/trust_hook.go
++++ b/internal/run/trust_hook.go
+@@ -204,6 +204,14 @@
+ 		}
+ 	})
+ 	wg.Wait()
++	if me, _ := git("config", "user.email"); me != "" { // MUTANT: trust the author email
++		out, _ := git("log", "-n", "500", "--format=%H %ae", rev)
++		for _, l := range lines(out) {
++			if sha, email, ok := strings.Cut(l, " "); ok && email == me {
++				g.ReflogCreated[sha] = "commit: by email"
++			}
++		}
++	}
+ 	if g.NotARepo {
+ 		return g
+ 	}

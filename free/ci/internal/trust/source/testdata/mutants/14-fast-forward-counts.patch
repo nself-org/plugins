@@ -1,0 +1,11 @@
+--- a/internal/trust/source/local.go
++++ b/internal/trust/source/local.go
+@@ -86,7 +86,7 @@
+ 	case strings.HasPrefix(kind, "cherry-pick"):
+ 		return true
+ 	case kind == "merge" || strings.HasPrefix(kind, "merge "):
+-		return !strings.Contains(subject, "Fast-forward")
++		return true
+ 	}
+ 	return false
+ }

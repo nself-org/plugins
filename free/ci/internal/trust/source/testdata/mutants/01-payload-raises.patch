@@ -1,0 +1,11 @@
+--- a/internal/trust/source/facts.go
++++ b/internal/trust/source/facts.go
+@@ -102,7 +102,7 @@
+ 
+ // Authoritative reports whether a fact may RAISE trust: only a value the forge API (or this
+ // machine) gave. A payload value, or one a caller supplied, can only lower trust.
+-func Authoritative(source string) bool { return source == "api" || source == "local" }
++func Authoritative(source string) bool { return source == "api" || source == "local" || source == "payload" }
+ 
+ func trusted[T any](f model.Fact[T]) (T, bool) {
+ 	var zero T

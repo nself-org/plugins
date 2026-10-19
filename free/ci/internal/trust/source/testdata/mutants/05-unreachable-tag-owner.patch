@@ -1,0 +1,11 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -119,7 +119,7 @@
+ 			bind(collaborator, ReasonProvenance)
+ 		}
+ 	case "tag", "api", "manual":
+-		if !reachable {
++		if false {
+ 			bind(untrusted, ReasonUnreachable)
+ 		}
+ 	case "runner_demand":
