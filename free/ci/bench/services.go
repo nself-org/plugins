@@ -122,21 +122,27 @@ func imagesPresent(ctx context.Context, dir, images string) bool {
 	return true
 }
 
-// imagesOf lists the images of the containers of compose project name. A
-// project with no container is an error: the cold scenario would otherwise
-// remove nothing and record a warm start as a cold one.
+// imagesOf lists the image IDs of the containers of compose project name. It
+// returns IDs, not names: the pulled image can be untagged locally
+// (pgvector/pgvector:<none>) while the container still names the tag, so a name
+// finds nothing to inspect or remove. A project with no container is an error:
+// the cold scenario would otherwise remove nothing and record a warm start as
+// a cold one.
 func imagesOf(ctx context.Context, project string) (string, error) {
-	r, err := must(ctx, []string{"docker", "ps", "-a", "--filter", "label=com.docker.compose.project=" + project,
-		"--format", "{{.Image}}"}, "", baseEnv())
+	r, err := must(ctx, []string{"docker", "ps", "-a", "-q", "--filter", "label=com.docker.compose.project=" + project}, "", baseEnv())
 	if err != nil {
-		return "", fmt.Errorf("list the images of project %s: %w", project, err)
+		return "", fmt.Errorf("list the containers of project %s: %w", project, err)
 	}
 	seen := map[string]bool{}
 	var out []string
-	for _, img := range strings.Fields(r.Tail) {
-		if !seen[img] {
-			seen[img] = true
-			out = append(out, img)
+	for _, c := range strings.Fields(r.Tail) {
+		ir, err := must(ctx, []string{"docker", "inspect", "--format", "{{.Image}}", c}, "", baseEnv())
+		if err != nil {
+			return "", fmt.Errorf("find the image of container %s: %w", c, err)
+		}
+		if id := strings.TrimSpace(ir.Tail); id != "" && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
 		}
 	}
 	if len(out) == 0 {
