@@ -31,6 +31,7 @@ type Options struct {
 	SHA       string   // --sha: refused
 	Adhoc     []string // `-- <cmd...>`
 	Renderer  string   // "human" unless a registered renderer is named
+	Full      bool     // plan every job: no affected-only selection (evidence verify must run the whole pipeline)
 }
 
 // RunOptions is the name the cmd layer and its option hooks use.
