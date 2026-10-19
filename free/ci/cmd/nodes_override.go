@@ -25,8 +25,8 @@ import (
 
 const allowDeployHostFlag = "allow-deploy-host"
 
-// preConfirmed holds the node ids whose override the pre-contact check confirmed and audited, so the add
-// check does not ask or write a second audit row.
+// preConfirmed maps a node id to the ConfirmKey of the override the pre-contact check confirmed and audited, so
+// the add check does not ask or write a second audit row for the same match.
 var preConfirmed sync.Map
 
 // newGuard builds the coordinator-side guard; tests replace it with stub inventory and DNS seams.
@@ -110,7 +110,9 @@ func deployHostHook(ctx context.Context, point lifecycle.Point, e lifecycle.Hook
 	if point == lifecycle.PointPreAdd {
 		check = g.CheckPreAdd // before the host is contacted: a match is refused, or confirmed once with the flag
 	} else {
-		_, q.Confirmed = preConfirmed.LoadAndDelete(e.NodeID)
+		if v, ok := preConfirmed.LoadAndDelete(e.NodeID); ok {
+			q.Confirmed, _ = v.(string)
+		}
 	}
 	r, warns, err := check(ctx, q)
 	for _, w := range warns {
@@ -121,7 +123,7 @@ func deployHostHook(ctx context.Context, point lifecycle.Point, e lifecycle.Hook
 	}
 	if point == lifecycle.PointPreAdd {
 		if r.Matched {
-			preConfirmed.Store(e.NodeID, true) // CheckPreAdd refuses a match without the flag
+			preConfirmed.Store(e.NodeID, r.ConfirmKey()) // CheckPreAdd refuses a match without the flag
 		}
 		return nil
 	}

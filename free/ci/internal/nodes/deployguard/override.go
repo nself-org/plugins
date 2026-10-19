@@ -45,17 +45,21 @@ type AddRequest struct {
 	Allow      bool
 	Confirm    Confirmer
 	Actor      string
-	// Confirmed says an earlier CheckPreAdd for this node already confirmed and audited the override: CheckAdd
-	// then neither asks nor writes a second audit row.
-	Confirmed bool
+	// Confirmed is the ConfirmKey of the match an earlier CheckPreAdd confirmed and audited for this node: when
+	// CheckAdd finds the same match it neither asks nor writes a second audit row; a different match (found
+	// once the host key is known) is confirmed afresh.
+	Confirmed string
 }
+
+// ConfirmKey names a match for Confirmed.
+func (r Result) ConfirmKey() string { return r.Source + "/" + r.Kind }
 
 // CheckPreAdd is the check before the host is contacted (`nodes add`): the destination and node id alone, with
 // identity from ssh -G and DNS. A match without Allow is refused here, so nothing is scanned, probed or installed
 // on a deploy host; with Allow the override is confirmed and audited now and the caller passes Confirmed to the
 // later CheckAdd. An unmatched destination is left to CheckAdd, which also sees the host key and machine id.
 func (g *Guard) CheckPreAdd(ctx context.Context, q AddRequest) (Result, []string, error) {
-	q.Capability, q.Confirmed = nil, false
+	q.Capability, q.Confirmed = nil, ""
 	r, warn, err := g.CheckAdd(ctx, q)
 	if err == nil && r.Matched && !q.Allow {
 		err = newErr(ReasonMatched, "%s is a deploy host (%s); it was not contacted and not added (--allow-deploy-host adds it after a confirmation)", q.NodeID, r.Source)
@@ -97,7 +101,7 @@ func (g *Guard) CheckAdd(ctx context.Context, q AddRequest) (Result, []string, e
 		return r, warn, g.unverified(ctx)
 	}
 	dh := DeployHostFor(r, model.CapabilityDeployHost{})
-	if q.Allow && q.Confirmed {
+	if q.Allow && q.Confirmed == r.ConfirmKey() {
 		dh.Override = true
 	} else if q.Allow {
 		if q.Confirm == nil {
