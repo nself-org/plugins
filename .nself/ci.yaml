@@ -38,3 +38,16 @@ jobs:
     when:
       paths: [free/plugin-gauth/**]
       env_present: [NSELF_DB_URL, GAUTH_ENCRYPTION_KEY]
+
+# Pipelines. `drills` is a scheduled pipeline of `kind: drill` jobs (P7-CI-02):
+# every directory of scripts/drill that holds an executable `run` is one job,
+# so adding a drill needs no edit here (scripts/drill/README.md). The drills
+# live outside free/ci because the plugin tarball ships the whole plugin
+# directory (Epic D17). max_age is what `nself ci evidence --pipeline drills`
+# reports as overdue (exit 10) when a drill has not passed within it.
+pipelines:
+  drills:
+    triggers: [schedule, manual]
+    schedule: "17 3 * * *"
+    max_age: 36h
+    drills_dir: scripts/drill

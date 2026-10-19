@@ -44,6 +44,9 @@ type JobOutcome struct {
 	N                                   int
 	Duration                            time.Duration
 	Tail                                string
+	// Findings and Excerpt come from an OutcomeHook (nested drill checks); Excerpt replaces the tail.
+	Findings int
+	Excerpt  string
 }
 
 // Event is one thing that happened during a run.
