@@ -154,8 +154,12 @@ func planChecks(root string, cfg model.PipelineConfig) ([]detect.Fact, []plan.Ch
 	if err != nil {
 		return nil, nil, err
 	}
+	var out []plan.Check
+	if c, ok := truthPlanCheck(cfg); ok { // linked, not detected: any repo with checks.truth.rules (D-1240)
+		out = append(out, c)
+	}
 	if len(cfg.Jobs) > 0 {
-		return facts, nil, nil
+		return facts, out, nil
 	}
 	off := map[string]bool{}
 	if cfg.Detect != nil {
@@ -163,7 +167,6 @@ func planChecks(root string, cfg model.PipelineConfig) ([]detect.Fact, []plan.Ch
 			off[d] = true
 		}
 	}
-	var out []plan.Check
 	for _, c := range reg.Plan(facts, gates.Options{Config: cfg}) {
 		if off[gates.Ecosystem(c.Def.ID)] {
 			continue

@@ -96,7 +96,9 @@ A dead-host finding prints a hash prefix, never the host. `--json` prints one do
 
 ## Running the check
 
-From `free/ci` of this repository (the plugin binary does not link the check until the V15 engine does):
+With the V15 engine, list the rule files under `checks.truth.rules` in `.nself/ci.yaml` and run `NSELF_V15=1 nself-ci --no-status --job truth`: the engine plans a required `truth` job that runs `nself-ci truth check --root . RULEFILE...` and needs no Go toolchain. A repo whose own jobs already run the check (this one) gets no second job.
+
+From source, in `free/ci` of this repository:
 
 ```bash
 go run -mod=vendor ./internal/gates/truth/run.go check --root DIR [--json] [--kind K|rules] RULEFILE...

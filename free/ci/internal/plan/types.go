@@ -24,6 +24,9 @@ type Check struct {
 	// xcode for xcode-test (P7-CI-64).
 	Platform string
 	Requires []string
+	// Env is set on the planned job (the truth check runs this binary, which
+	// needs NSELF_V15=1 to reach its V15-only subcommand; D-1240).
+	Env map[string]string
 }
 
 // Revision is the git and trigger context of the plan.

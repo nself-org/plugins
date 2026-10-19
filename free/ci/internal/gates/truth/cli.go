@@ -1,7 +1,7 @@
 package truth
 
 // Purpose: the command line of the truth check, run as `go run run.go <cmd>`
-// from free/ci (the plugin binary does not link it until the V15 engine does).
+// from free/ci, and by the V15 engine as the hidden `nself-ci truth` subcommand (cmd/plan_truth.go).
 // Inputs:  arguments, stdin for `hash`.
 // Outputs: exit code 0 pass, 1 findings, 2 usage or a rule/scan error.
 // Constraints: `check` prints one line per rule kind and the findings;

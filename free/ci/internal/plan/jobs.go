@@ -112,6 +112,9 @@ func derivedCand(c Check, id string) *cand {
 	if len(c.Requires) > 0 {
 		j.Requirements = &model.Requirements{Tools: sortedUnique(c.Requires)}
 	}
+	if len(c.Env) > 0 {
+		j.Env = c.Env
+	}
 	return &cand{id: id, name: id, check: c.ID, workdir: wd, tool: c.Tool, job: j,
 		required: req, deep: p == "deep", derived: true}
 }
