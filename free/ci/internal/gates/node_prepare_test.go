@@ -38,7 +38,7 @@ func newNodeHost(t *testing.T) *nodeHost {
 		t.Skip("POSIX shells only")
 	}
 	h := &nodeHost{t: t, root: t.TempDir(), bin: t.TempDir()}
-	for _, tool := range []string{"sh", "ps", "tail", "head", "cat", "mkdir", "sed", "grep", "cut", "wc", "rm", "basename"} {
+	for _, tool := range []string{"sh", "ps", "tail", "head", "cat", "mkdir", "sed", "grep", "cut", "wc", "rm", "basename", "awk"} {
 		p, err := exec.LookPath(tool)
 		if err != nil {
 			t.Fatal(err)
@@ -346,8 +346,8 @@ func TestPackageManagerPin(t *testing.T) {
 		h := newNodeHost(t)
 		h.write("package.json", manifest("pnpm@9.1.0", ""))
 		h.write("pnpm-lock.yaml", "lockfileVersion: 9\n")
-		// a corepack shim would download the pinned manager; with the project spec and the network off it answers the host's own version
-		h.manager("pnpm", `$(if [ "$COREPACK_ENABLE_PROJECT_SPEC" = 0 ] && [ "$COREPACK_ENABLE_NETWORK" = 0 ]; then echo 9.1.0; else echo 0.0.1; fi)`, passing)
+		// a corepack shim would download the pinned manager; with the network off it answers from its cache (or fails, and the pin goes unchecked)
+		h.manager("pnpm", `$(if [ "$COREPACK_ENABLE_NETWORK" = 0 ]; then echo 9.1.0; else echo 0.0.1; fi)`, passing)
 		if r := h.run("node.test", "."); r.exit != 0 {
 			t.Fatalf("%+v", r)
 		}
@@ -540,5 +540,26 @@ func TestYarnZeroInstallKeepsItsCommittedCache(t *testing.T) {
 `)
 	if r := h2.run("node.test", "."); !strings.Contains(r.out, "/.nself-ci/yarn]") {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func TestNodePrepareGuardAndCauseSurviveLongLines(t *testing.T) {
+	for name, tc := range map[string]struct{ log, class string }{
+		"yarn classic lifecycle with a long path": {`echo "error /` + strings.Repeat("deep/", 60) + `node_modules/x: Command failed."; echo "Exit code: 1"; echo "npm error code ENOTFOUND"`, "code"},
+		"network cause after a long url":          {`echo "npm error code ENOTFOUND"; echo "npm error network request to https://registry.npmjs.org/` + strings.Repeat("a", 400) + ` failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org"`, "infra"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newNodeHost(t)
+			h.write("package.json", manifest("npm@10.2.4", ""))
+			h.write("package-lock.json", "{}")
+			h.manager("npm", "10.2.4", `i=0; while [ $i -lt 60 ]; do echo "npm info padding line number $i of this install log, which is long enough to exceed the short limit"; i=$((i+1)); done
+`+tc.log+`
+exit 1
+`)
+			r := h.run("node.test", ".")
+			if r.exit != 97 || string(r.diag.Class) != tc.class {
+				t.Fatalf("want %s: %+v", tc.class, r)
+			}
+		})
 	}
 }

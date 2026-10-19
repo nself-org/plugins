@@ -112,7 +112,7 @@ func nodeScript(pm, id, run, dir string) string {
 	b.WriteString("  NSELF_CI_DIR=\"$PWD/.nself-ci\"; mkdir -p \"$NSELF_CI_DIR/tmp\"; LOG=\"$NSELF_CI_DIR/install.log\"\n")
 	b.WriteString("  ( cd \"$LOCK\" && " + installEnv(pm) + "; " + installCmd(pm) + " ) > \"$LOG\" 2>&1 || {\n")
 	b.WriteString(failureReport())
-	b.WriteString("    echo " + diagnose.PrepareFailed + "\n    exit " + strconv.Itoa(diagnose.PrepareExit) + "\n  }\n  rm -f \"$LOG\"\nfi\n")
+	b.WriteString("    echo " + diagnose.PrepareFailed + "\n    exit " + strconv.Itoa(diagnose.PrepareExit) + "\n  }\n  rm -rf \"$NSELF_CI_DIR\"\nfi\n")
 	if id == "node.typecheck" || id == "node.build" {
 		b.WriteString("if { [ -d node_modules ] || [ -d \"${LOCK:-.}/node_modules\" ] || [ -f \"${LOCK:-.}/.pnp.cjs\" ]; } && grep -q '\"astro\"[[:space:]]*:' package.json 2>/dev/null; then\n")
 		b.WriteString("  " + astroSync(pm) + " || exit $?\nfi\n")
@@ -196,7 +196,7 @@ func pinCheck(pm string) string {
     [ -n "$PIN" ] && break
   done
   if [ -n "$PIN" ]; then
-    HAVE=$(COREPACK_ENABLE_PROJECT_SPEC=0 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_DOWNLOAD_PROMPT=0 ` + pm + ` --version 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9]*\)\..*/\1/p' | head -n 1)
+    HAVE=$(COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_DOWNLOAD_PROMPT=0 ` + pm + ` --version 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9]*\)\..*/\1/p' | head -n 1)
     if [ -n "$HAVE" ] && [ "$HAVE" != "$PIN" ]; then
       echo "E811: package.json pins ` + pm + ` $PIN.x but ` + pm + ` $HAVE is installed; install the pinned major (corepack enable) and retry"
       echo ` + diagnose.PinMismatch + `
@@ -208,26 +208,23 @@ func pinCheck(pm string) string {
 
 // failureReport prints what the classifier needs of a failed install, within the
 // 8 KiB tail a run keeps: the whole log when short, else its head, the first 12
-// lines that carry a guard, the last 12 that carry a cause (warning lines
-// excluded from both, as the classifier drops them) and its tail.
+// lines that carry a guard and the last 12 that carry a cause (warning lines
+// excluded from both, as the classifier drops them), each as a 200 byte window
+// that starts before the first keyword (never cut at the front, so the keyword and
+// the code after it survive a long path), and the log's tail.
 func failureReport() string {
-	words := func(list []string) string {
-		out := make([]string, len(list))
-		for i, w := range list {
-			out[i] = "-e '" + w + "'"
-		}
-		return strings.Join(out, " ")
+	window := func(list []string) string {
+		return `awk -v w='` + strings.Join(list, "|") + `' 'BEGIN{n=split(w,k,"|")} {l=tolower($0); if(l ~ /(^|[^a-z0-9])warn([^a-z0-9]|$)/) next; for(i=1;i<=n;i++){p=index(l,k[i]); if(p){s=p>60?p-59:1; print substr($0,s,200); next}}}' "$LOG"`
 	}
-	const noWarn = `grep -ivE '(^|[^[:alnum:]])warn([^[:alnum:]]|$)'`
 	return `    n=$(( $(wc -c < "$LOG") + 0 ))
     if [ "$n" -le 3500 ]; then cat "$LOG"; else
-      head -c 1000 "$LOG"; echo
+      head -c 800 "$LOG"; echo
       echo ` + diagnose.InstallGuardsMark + `
-      grep -iF ` + words(diagnose.InstallGuardWords) + ` "$LOG" | ` + noWarn + ` | head -n 12 | cut -c1-160
+      ` + window(diagnose.InstallGuardWords) + ` | head -n 12
       echo ` + diagnose.InstallCausesMark + `
-      grep -iF ` + words(diagnose.InstallCauseWords) + ` "$LOG" | ` + noWarn + ` | tail -n 12 | cut -c1-160
+      ` + window(diagnose.InstallCauseWords) + ` | tail -n 12
       echo ` + diagnose.InstallTailMark + `
-      tail -c 1500 "$LOG"
+      tail -c 1000 "$LOG"
     fi
 `
 }
