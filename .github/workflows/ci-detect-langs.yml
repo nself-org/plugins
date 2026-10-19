@@ -1,0 +1,85 @@
+name: ci-detect-langs
+
+# Evidence for the Swift/Xcode and Python detectors and checks of nself ci (P7-CI-64, Epic D33).
+# The pull_request run is the proof: `detect-langs (ubuntu-latest)` runs the Python fixtures (uv, pip)
+# and the SwiftPM fixture for real, `detect-langs (macos-15)` runs the Xcode and SwiftPM fixtures
+# with xcodebuild (GitHub-hosted, Xcode preinstalled). Free on this public repo; no secrets.
+
+on:
+  pull_request:
+    paths:
+      - 'free/ci/**'
+      - '.github/workflows/ci-detect-langs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-detect-langs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: '0'
+  # Same version as free/ci/toolchain/pins/uv.yaml.
+  UV_VERSION: '0.13.1'
+
+jobs:
+  detect-langs:
+    name: detect-langs (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+          cache-dependency-path: free/ci/go.sum
+
+      - name: Tools on this runner
+        run: |
+          set -euo pipefail
+          go version
+          swift --version
+          if [[ "$RUNNER_OS" == "macOS" ]]; then xcodebuild -version; fi
+
+      - name: Install uv (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          pipx install "uv==${UV_VERSION}"
+          uv --version
+          python3 --version
+
+      - name: Detector and check unit tests
+        working-directory: free/ci
+        run: go test -mod=vendor -count=1 ./internal/detect/... ./internal/gates/... ./internal/plan/... ./cmd/...
+
+      - name: Linux fixtures (Python, SwiftPM)
+        if: runner.os == 'Linux'
+        working-directory: free/ci
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/detect-langs.txt"
+          INTEGRATION=1 go test -mod=vendor -tags integration -count=1 -timeout 30m -v \
+            -run '^(TestPythonFixtures|TestSwiftPMFixtures)$' ./internal/gates/... 2>&1 | tee "$out"
+          grep -q '^--- PASS: TestPythonFixtures ' "$out"
+          grep -q '^--- PASS: TestSwiftPMFixtures ' "$out"
+          if grep -q -- '--- SKIP' "$out"; then echo "a fixture leg was skipped" >&2; exit 1; fi
+
+      - name: macOS fixtures (Xcode, SwiftPM)
+        if: runner.os == 'macOS'
+        working-directory: free/ci
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/detect-langs.txt"
+          INTEGRATION=1 go test -mod=vendor -tags 'integration darwin_integration' -count=1 -timeout 40m -v \
+            -run '^(TestSwiftDarwinFixtures|TestSwiftPMFixtures)$' ./internal/gates/... 2>&1 | tee "$out"
+          grep -q '^--- PASS: TestSwiftDarwinFixtures ' "$out"
+          grep -q '^--- PASS: TestSwiftPMFixtures ' "$out"
+          if grep -q -- '--- SKIP' "$out"; then echo "a fixture leg was skipped" >&2; exit 1; fi

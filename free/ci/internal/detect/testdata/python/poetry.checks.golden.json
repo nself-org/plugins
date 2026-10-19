@@ -1,0 +1,64 @@
+[
+  {
+    "id": "python-lint",
+    "workdir": ".",
+    "required": false,
+    "tool": "ruff",
+    "argv": [
+      "ruff",
+      "check",
+      "."
+    ]
+  },
+  {
+    "id": "python-test",
+    "workdir": ".",
+    "required": true,
+    "tool": "poetry",
+    "argv": [
+      "sh",
+      "-c",
+      "poetry install --no-root --sync \u0026\u0026 poetry run pytest"
+    ]
+  },
+  {
+    "id": "python-types",
+    "workdir": ".",
+    "required": false,
+    "tool": "poetry",
+    "argv": [
+      "sh",
+      "-c",
+      "poetry install --no-root --sync \u0026\u0026 poetry run mypy ."
+    ]
+  },
+  {
+    "id": "secrets.gitleaks",
+    "workdir": ".",
+    "required": true,
+    "tool": "gitleaks",
+    "argv": [
+      "gitleaks",
+      "detect",
+      "--source",
+      ".",
+      "--exit-code",
+      "1"
+    ]
+  },
+  {
+    "id": "security.trivy.fs",
+    "workdir": ".",
+    "required": false,
+    "tool": "trivy",
+    "argv": [
+      "trivy",
+      "fs",
+      "--format",
+      "json",
+      "--exit-code",
+      "1",
+      "."
+    ]
+  }
+]

@@ -47,6 +47,21 @@ ARG SYFT_URL_AMD64=https://github.com/anchore/syft/releases/download/v1.54.1/syf
 ARG SYFT_SHA256_AMD64=c069905b391cc4c20a5ba65ad5c10be2a7ba074f8ea6ad203e24d14e303dad47
 ARG SYFT_URL_ARM64=https://github.com/anchore/syft/releases/download/v1.54.1/syft_1.54.1_linux_arm64.tar.gz
 ARG SYFT_SHA256_ARM64=dfdf0537610113edbefe1f1fc6548bc957b2d77439636ec824fcf0e10d46d054
+ARG PYTHON3_VERSION=3.13.16
+ARG PYTHON3_URL_AMD64=https://github.com/astral-sh/python-build-standalone/releases/download/20261013/cpython-3.13.16%2B20261013-x86_64-unknown-linux-gnu-install_only.tar.gz
+ARG PYTHON3_SHA256_AMD64=e588e50db882fa6a89f926d9a9ad64e445183af0eda5bda226a2c151b17db8a6
+ARG PYTHON3_URL_ARM64=https://github.com/astral-sh/python-build-standalone/releases/download/20261013/cpython-3.13.16%2B20261013-aarch64-unknown-linux-gnu-install_only.tar.gz
+ARG PYTHON3_SHA256_ARM64=0fce0605da7b6532d5bdaec185336ffaaddd02ec04e27382014952ca4857ed6d
+ARG UV_VERSION=0.13.1
+ARG UV_URL_AMD64=https://github.com/astral-sh/uv/releases/download/0.13.1/uv-x86_64-unknown-linux-gnu.tar.gz
+ARG UV_SHA256_AMD64=eadd9d27c134ab5ac1ffd4473b97a741407f3ea238288f03121fc4deddf90220
+ARG UV_URL_ARM64=https://github.com/astral-sh/uv/releases/download/0.13.1/uv-aarch64-unknown-linux-gnu.tar.gz
+ARG UV_SHA256_ARM64=9041c73c99fdc5892cf128140beb354eca9231d502068cc36e6cb53a8e59ad14
+ARG RUFF_VERSION=0.17.1
+ARG RUFF_URL_AMD64=https://github.com/astral-sh/ruff/releases/download/0.17.1/ruff-x86_64-unknown-linux-gnu.tar.gz
+ARG RUFF_SHA256_AMD64=a293ac937715ae6fb6b64da86761598379e6149f40fbc00fde9ba8a2a562ac65
+ARG RUFF_URL_ARM64=https://github.com/astral-sh/ruff/releases/download/0.17.1/ruff-aarch64-unknown-linux-gnu.tar.gz
+ARG RUFF_SHA256_ARM64=d3ead1f0ed779e777a034ccd9286be6bd9bd3cdaba732ff9797f8288a283e9e2
 ARG GOVULNCHECK_VERSION=1.9.0
 ARG GOVULNCHECK_URL_ANY=https://proxy.golang.org/golang.org/x/vuln/@v/v1.9.0.zip
 ARG GOVULNCHECK_SHA256_ANY=e4bcdca4303ab3e57e913d0b086bbf7916b97ed4d0b069c8e0eede39e8782c2c
@@ -56,7 +71,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl unzip xz-utils \
  && rm -rf /var/lib/apt/lists/*
 COPY fetch-verified.sh /usr/local/bin/fetch-verified.sh
-RUN mkdir -p /out/go/usr/local /out/node/usr/local /out/pnpm/usr/local/lib/pnpm /out/rust/usr/local /out/tools/usr/local/bin /tmp/dl
+RUN mkdir -p /out/go/usr/local /out/node/usr/local /out/pnpm/usr/local/lib/pnpm /out/rust/usr/local /out/tools/usr/local/bin /out/python/usr/local /out/pytools/usr/local/bin /tmp/dl
 
 # Go for the target platform, plus a Go for the build platform to compile govulncheck.
 RUN fetch-verified.sh go "$TARGETARCH" /tmp/dl/go.tgz \
@@ -74,6 +89,13 @@ RUN fetch-verified.sh rust "$TARGETARCH" /tmp/dl/rust.txz \
  && case "$TARGETARCH" in amd64) triple=x86_64-unknown-linux-gnu;; arm64) triple=aarch64-unknown-linux-gnu;; *) exit 1;; esac \
  && /tmp/rust/install.sh --prefix=/out/rust/usr/local/rust --disable-ldconfig \
       --components="rustc,cargo,rust-std-$triple,rustfmt-preview,clippy-preview"
+
+RUN fetch-verified.sh python3 "$TARGETARCH" /tmp/dl/python3.tgz \
+ && tar -C /out/python/usr/local -xzf /tmp/dl/python3.tgz
+RUN fetch-verified.sh uv "$TARGETARCH" /tmp/dl/uv.tgz \
+ && tar -C /out/pytools/usr/local/bin --strip-components=1 -xzf /tmp/dl/uv.tgz
+RUN fetch-verified.sh ruff "$TARGETARCH" /tmp/dl/ruff.tgz \
+ && tar -C /out/pytools/usr/local/bin --strip-components=1 -xzf /tmp/dl/ruff.tgz
 
 RUN fetch-verified.sh gitleaks "$TARGETARCH" /tmp/dl/gitleaks.tgz \
  && tar -C /out/tools/usr/local/bin -xzf /tmp/dl/gitleaks.tgz gitleaks
@@ -105,11 +127,16 @@ COPY --from=fetch /out/go/ /
 COPY --from=fetch /out/node/ /
 COPY --from=fetch /out/pnpm/ /
 COPY --from=fetch /out/rust/ /
+COPY --from=fetch /out/python/ /
+COPY --from=fetch /out/pytools/ /
 COPY --from=fetch /out/tools/ /
 # The pinned Go never fetches another toolchain (a go.mod `toolchain` line fails loudly instead).
 ENV GOTOOLCHAIN=local
-ENV PATH=/usr/local/go/bin:/usr/local/rust/bin:/usr/local/lib/pnpm:$PATH
+# Python projects use the pinned interpreter; uv never downloads another one.
+ENV UV_PYTHON_DOWNLOADS=never
+ENV PATH=/usr/local/go/bin:/usr/local/rust/bin:/usr/local/lib/pnpm:/usr/local/python/bin:$PATH
 RUN go version && node --version && npm --version && pnpm --version \
  && cargo --version && cargo clippy --version && rustfmt --version \
+ && python3 --version && uv --version && ruff --version \
  && gitleaks version && govulncheck -version && hadolint --version && trivy --version && syft version
 WORKDIR /work

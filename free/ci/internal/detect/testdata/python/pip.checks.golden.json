@@ -1,0 +1,56 @@
+[
+  {
+    "id": "python-lint",
+    "workdir": ".",
+    "required": false,
+    "tool": "ruff",
+    "argv": [
+      "ruff",
+      "check",
+      "."
+    ]
+  },
+  {
+    "id": "python-test",
+    "workdir": ".",
+    "required": true,
+    "tool": "python3",
+    "argv": [
+      "sh",
+      "-c",
+      "set -e\n[ -d .venv ] || python3 -m venv .venv\nif [ \"$#\" -eq 0 ]; then .venv/bin/python -m pip install --quiet -e .; fi\nfor f in \"$@\"; do .venv/bin/python -m pip install --quiet -r \"$f\"; done\nexec .venv/bin/python -m pytest",
+      "sh",
+      "requirements-dev.txt",
+      "requirements.txt"
+    ]
+  },
+  {
+    "id": "secrets.gitleaks",
+    "workdir": ".",
+    "required": true,
+    "tool": "gitleaks",
+    "argv": [
+      "gitleaks",
+      "detect",
+      "--source",
+      ".",
+      "--exit-code",
+      "1"
+    ]
+  },
+  {
+    "id": "security.trivy.fs",
+    "workdir": ".",
+    "required": false,
+    "tool": "trivy",
+    "argv": [
+      "trivy",
+      "fs",
+      "--format",
+      "json",
+      "--exit-code",
+      "1",
+      "."
+    ]
+  }
+]

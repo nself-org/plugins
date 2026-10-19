@@ -14,6 +14,7 @@ func WantedTools(cfg model.PipelineConfig, checks []Check) []string {
 	want := []string{"docker"}
 	for _, c := range checks {
 		want = append(want, c.Tool)
+		want = append(want, c.Requires...)
 	}
 	for _, j := range cfg.Jobs {
 		if j.Requirements != nil {

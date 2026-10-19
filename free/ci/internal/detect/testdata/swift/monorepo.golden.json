@@ -1,0 +1,45 @@
+[
+  {
+    "kind": "lockfile",
+    "name": "swiftpm",
+    "path": "Package.resolved",
+    "confidence": "certain",
+    "sha256": "7ae2909f881c8724e7113150a04ded21d28a5972e87c06c0a279508621aa18ac"
+  },
+  {
+    "kind": "stack",
+    "name": "swiftpm",
+    "path": "Package.swift",
+    "confidence": "certain"
+  },
+  {
+    "kind": "stack",
+    "name": "xcode",
+    "path": "app/App.xcodeproj/project.pbxproj",
+    "confidence": "certain"
+  },
+  {
+    "kind": "stack",
+    "name": "xcode",
+    "path": "app/App.xcworkspace/contents.xcworkspacedata",
+    "confidence": "certain"
+  },
+  {
+    "kind": "test_framework",
+    "name": "swift test",
+    "path": "Package.swift",
+    "confidence": "certain"
+  },
+  {
+    "kind": "xcode_scheme",
+    "name": "App",
+    "path": "app/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme",
+    "confidence": "certain"
+  },
+  {
+    "kind": "xcode_scheme",
+    "name": "App",
+    "path": "app/App.xcworkspace/xcshareddata/xcschemes/App.xcscheme",
+    "confidence": "certain"
+  }
+]

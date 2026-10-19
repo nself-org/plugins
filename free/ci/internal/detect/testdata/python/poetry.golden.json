@@ -1,0 +1,39 @@
+[
+  {
+    "kind": "lint_tool",
+    "name": "ruff",
+    "path": "pyproject.toml",
+    "confidence": "certain"
+  },
+  {
+    "kind": "lockfile",
+    "name": "poetry",
+    "path": "poetry.lock",
+    "confidence": "certain",
+    "sha256": "ba64354a8c2bedf3f1aa6af352b55b1d00eb28617a356c7e9a28d2b637c41338"
+  },
+  {
+    "kind": "package_manager",
+    "name": "poetry",
+    "path": "poetry.lock",
+    "confidence": "certain"
+  },
+  {
+    "kind": "stack",
+    "name": "python",
+    "path": "pyproject.toml",
+    "confidence": "certain"
+  },
+  {
+    "kind": "test_framework",
+    "name": "pytest",
+    "path": "pyproject.toml",
+    "confidence": "certain"
+  },
+  {
+    "kind": "type_checker",
+    "name": "mypy",
+    "path": "pyproject.toml",
+    "confidence": "certain"
+  }
+]

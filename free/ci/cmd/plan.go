@@ -160,15 +160,12 @@ func planChecks(root string, cfg model.PipelineConfig) ([]detect.Fact, []plan.Ch
 	}
 	var out []plan.Check
 	for _, c := range reg.Plan(facts, gates.Options{Config: cfg}) {
-		if off[strings.SplitN(c.Def.ID, ".", 2)[0]] {
+		if off[gates.Ecosystem(c.Def.ID)] {
 			continue
 		}
-		argv := make([]string, len(c.Def.Argv))
-		for i, a := range c.Def.Argv {
-			argv[i] = strings.ReplaceAll(a, "{target}", c.Target)
-		}
-		out = append(out, plan.Check{ID: c.Def.ID, Kind: c.Def.Kind, Tool: c.Def.Tool, Workdir: c.Workdir, Target: c.Target,
-			Argv: argv, Required: c.Required, Substantive: c.Def.Substantive, Path: c.Def.Path})
+		out = append(out, plan.Check{ID: c.Def.ID, Kind: c.Def.Kind, Tool: c.PlacementTool(), Workdir: c.Workdir, Target: c.Target,
+			Argv: c.Command(), Required: c.Required, Substantive: c.Def.Substantive, Path: c.Def.Path,
+			Platform: c.Def.Platform, Requires: c.Def.RequiresTools})
 	}
 	return facts, out, nil
 }

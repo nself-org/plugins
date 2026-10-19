@@ -1,0 +1,42 @@
+[
+  {
+    "id": "python-lint",
+    "workdir": ".",
+    "required": false,
+    "tool": "ruff",
+    "argv": [
+      "ruff",
+      "check",
+      "."
+    ]
+  },
+  {
+    "id": "secrets.gitleaks",
+    "workdir": ".",
+    "required": true,
+    "tool": "gitleaks",
+    "argv": [
+      "gitleaks",
+      "detect",
+      "--source",
+      ".",
+      "--exit-code",
+      "1"
+    ]
+  },
+  {
+    "id": "security.trivy.fs",
+    "workdir": ".",
+    "required": false,
+    "tool": "trivy",
+    "argv": [
+      "trivy",
+      "fs",
+      "--format",
+      "json",
+      "--exit-code",
+      "1",
+      "."
+    ]
+  }
+]
