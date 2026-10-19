@@ -32,9 +32,17 @@ type TransitionDetail struct {
 }
 
 // Transition changes one attempt and dependent rows in a single write transaction.
+//
+// An attempt is leased only by admission (AdmitAndLease, LeaseGrant,
+// AdmitPlacement), which creates the lease row, the host reservation and the
+// counters in the same transaction; a bare queued -> leased here would leave an
+// active attempt with none of them, so it is refused (P7-SCHED-04, R-SEC-22).
 func (s *Store) Transition(ctx context.Context, id string, from, to model.JobState, detail TransitionDetail) error {
 	if !Allowed(from, to) {
 		return coded("E604", fmt.Sprintf("%s -> %s", from, to))
+	}
+	if to == "leased" {
+		return coded("E604", "an attempt is leased only by admission, not by Transition")
 	}
 	return s.write(ctx, func(tx *sql.Tx) error { return s.apply(ctx, tx, id, from, to, detail) })
 }

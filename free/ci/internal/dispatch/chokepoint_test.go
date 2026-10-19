@@ -1,15 +1,20 @@
 package dispatch
 
 // Purpose: R-SEC-22. dispatch.Admit is the only path that creates a lease or a
-// local attempt, so no function outside the definers may call the store's
+// local attempt, so no function outside the definers may name the store's
 // admission functions. The scan parses the module's NON-TEST .go files; test
 // files (CI-31 store tests, SCHED-18's race test, TRUST's CheckDispatcher) are
-// out of scope, and the planted violation lives in a testdata module.
-// Allowed users: internal/store and internal/lease (the definers),
-// internal/dispatch, and run.CreateAttempt with run.LocalAdmit (the nil-hook
-// path CreateAttempt calls; LocalAdmit itself may only be named in
-// run/attempt.go and run/dispatch_hook.go). Any reference counts, not only a
-// call, and files are parsed whatever their build tags say.
+// out of scope, and the planted violations live in a testdata module.
+// Allowed users: only the functions that wrap each definer: dispatch.Admit,
+// lease.(Engine).Grant, run.CreateAttempt and run.LocalAdmit (the nil-hook path
+// CreateAttempt calls; LocalAdmit itself may only be named in run/attempt.go and
+// run/dispatch_hook.go). Any reference counts, not only a call (method values,
+// method expressions, bare identifiers, the name as a string), reflection by
+// name or index and //go:linkname are refused, and files are parsed whatever
+// their build tags say. A syntactic scan cannot follow dataflow (a stored func
+// value, an interface wrapper), which is why the one remaining way to lease an
+// attempt without admission, Store.Transition to "leased", is refused at
+// runtime (store.Transition, TestSchedAdmissionTransitionGuard) and not here.
 
 import (
 	"go/ast"
@@ -35,35 +40,7 @@ var (
 		"internal/dispatch.Admit":       true,
 		"internal/lease.(Engine).Grant": true,
 	}
-	// definerDirs own the transition machinery (apply inside the admission
-	// transactions); nowhere else may move an attempt to leased.
-	definerDirs = map[string]bool{"internal/store": true}
-	// transitionUsers are the functions outside the store that name
-	// Store.Transition today, with the most references each may hold. They are
-	// reviewed one by one: none moves an attempt to leased. Store.Transition
-	// itself accepts queued -> leased (the P7-CI-31 store tests rely on it and
-	// this Ticket cannot edit transitions.go; debt), so a NEW reference changes a
-	// count, or adds a function, and fails here until a reviewer extends the list.
-	// A method value, a constant or concatenated target and a new wrapper all
-	// change a count the same way.
-	transitionUsers = map[string]int{
-		"internal/dispatch.(Dispatcher).lose": 1, // leased/running -> lost
-		"internal/lease.(Engine).PollHosted":  1, // leased -> running (hosted liveness)
-		"internal/run.Recover":                2, // lost -> retryable | needs-operator
-		"internal/run.strandAttempts":         2, // queued -> cancelled, finalizing -> failed (a computed target)
-		"internal/run.CreateAttempt":          1, // queued -> cancelled (refused admission)
-		"internal/run.(runState).trans":       1, // forwards its caller's target; every caller is checked below
-	}
-	// runnerWrappers (run.runState.trans and settle) forward their third argument to Store.Transition: every
-	// call must name the target as a string literal other than "leased", and a
-	// reference that is not a call (a method value) is refused. Only the wrappers
-	// themselves forward a variable.
-	runnerWrappers = map[string]bool{"trans": true, "settle": true}
-	wrapperOwners  = map[string]bool{"internal/run.(runState).trans": true, "internal/run.(runState).settle": true}
-	// nonLiteralTransition may pass a computed target to Store.Transition: the
-	// run loop's forwarder, and crash recovery (cancelled or failed, by state).
-	nonLiteralTransition = map[string]bool{"internal/run.(runState).trans": true, "internal/run.strandAttempts": true}
-	localFiles           = map[string]bool{"internal/run/attempt.go": true, "internal/run/dispatch_hook.go": true}
+	localFiles = map[string]bool{"internal/run/attempt.go": true, "internal/run/dispatch_hook.go": true}
 )
 
 // banned are the admission functions only the chokepoint may name.
@@ -74,16 +51,9 @@ var banned = map[string]bool{"AdmitAndLease": true, "AdmitPlacement": true, "Lea
 // reflective only in a file that imports reflect (http.Request.Method is not).
 var reflective = map[string]bool{"MethodByName": true}
 
-func isLiteral(e ast.Expr, want string) (isLit, matches bool) {
-	lit, ok := e.(*ast.BasicLit)
-	if !ok || lit.Kind != token.STRING {
-		return false, false
-	}
-	return true, strings.Trim(lit.Value, "\"`") == want
-}
-
-// ownerOf names the function a declaration is: "pkg-level" for a var or const, the
-// function name, or (Type).Name for a method (generic receivers unwrapped).
+// ownerOf names the function a declaration is: "package level" for a var or
+// const, the function name, or (Type).Name for a method (generic receivers
+// unwrapped).
 func ownerOf(decl ast.Decl) (string, *ast.Ident) {
 	fn, ok := decl.(*ast.FuncDecl)
 	if !ok {
@@ -108,7 +78,7 @@ func ownerOf(decl ast.Decl) (string, *ast.Ident) {
 	return owner, fn.Name
 }
 
-// scanFile reports the uses in one parsed file that the allowlists do not cover.
+// scanFile reports the uses in one parsed file that the allowlist does not cover.
 func scanFile(f *ast.File, rel string, add func(string)) {
 	dir := filepath.ToSlash(filepath.Dir(rel))
 	usesReflect := false
@@ -126,51 +96,19 @@ func scanFile(f *ast.File, rel string, add func(string)) {
 		owner, declName := ownerOf(decl)
 		key := dir + "." + owner
 		report := func(name string) { add(rel + ": " + owner + " uses " + name) }
-		callee := map[*ast.SelectorExpr]bool{} // selectors that are the function of a call
-		transitions := 0
-		ast.Inspect(decl, func(n ast.Node) bool {
-			if call, ok := n.(*ast.CallExpr); ok {
-				if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
-					callee[sel] = true
-				}
-			}
-			return true
-		})
 		ast.Inspect(decl, func(n ast.Node) bool {
 			switch x := n.(type) {
-			case *ast.CallExpr:
-				sel, ok := x.Fun.(*ast.SelectorExpr)
-				if !ok || definerDirs[dir] {
-					return true
-				}
-				_, methodExpr := sel.X.(*ast.ParenExpr) // (*T).m(recv, args...) shifts every argument by one
-				switch {
-				case (sel.Sel.Name == "Transition" || runnerWrappers[sel.Sel.Name] && dir == "internal/run") && methodExpr:
-					report(sel.Sel.Name + "(method expression)")
-				case sel.Sel.Name == "Transition" && len(x.Args) > 3:
-					if isLit, leased := isLiteral(x.Args[3], "leased"); leased {
-						report("Transition(leased)")
-					} else if !isLit && !nonLiteralTransition[key] {
-						report("Transition(non-literal)") // a constant or computed target is not reviewable here
-					}
-				case runnerWrappers[sel.Sel.Name] && dir == "internal/run" && len(x.Args) > 2:
-					if isLit, leased := isLiteral(x.Args[2], "leased"); leased || !isLit && !wrapperOwners[key] {
-						report(sel.Sel.Name + "(" + map[bool]string{true: "leased", false: "non-literal"}[leased] + ")")
-					}
-				}
 			case *ast.SelectorExpr:
 				name := x.Sel.Name
 				switch {
 				case reflective[name], name == "Method" && usesReflect:
 					report(name)
-				case banned[name] && name != "LocalAdmit" && !chokeFuncs[key]:
+				case name == "LocalAdmit":
+					if !localFiles[rel] {
+						report(name)
+					}
+				case banned[name] && !chokeFuncs[key]:
 					report(name)
-				case name == "LocalAdmit" && !localFiles[rel]:
-					report(name)
-				case name == "Transition" && !definerDirs[dir]:
-					transitions++
-				case runnerWrappers[name] && dir == "internal/run" && !callee[x] && !wrapperOwners[key]:
-					report(name + "(method value)")
 				}
 			case *ast.Ident:
 				if banned[x.Name] && x != declName && !(x.Name == "LocalAdmit" && localFiles[rel]) && (x.Name == "LocalAdmit" || !chokeFuncs[key]) {
@@ -183,14 +121,11 @@ func scanFile(f *ast.File, rel string, add func(string)) {
 			}
 			return true
 		})
-		if transitions > transitionUsers[key] {
-			report("Transition")
-		}
 	}
 }
 
 // scanChokepoint returns "file: func uses Name" for every use outside the
-// allowlists, and how many files it read.
+// allowlist, and how many files it read.
 func scanChokepoint(t *testing.T, root string) (violations []string, files int) {
 	t.Helper()
 	seen := map[string]bool{}
@@ -235,32 +170,18 @@ func TestAdmitChokepoint(t *testing.T) {
 	want := []string{
 		"internal/bad/bad.go: Closure uses AdmitPlacement",
 		"internal/bad/bad.go: Grantor uses Grant",
-		"internal/bad/bad.go: Alias uses Transition",
-		"internal/bad/bad.go: Leased uses Transition",
-		"internal/bad/bad.go: Leased uses Transition(leased)",
-		"internal/bad/bad.go: Variable uses Transition",
-		"internal/bad/bad.go: ReflectIndex uses Method",
 		"internal/bad/bad.go: MethodExpr uses Grant",
-		"internal/bad/bad.go: Reflect2 uses MethodByName",
-		"internal/bad/bad.go: Reflect uses MethodByName",
-		"internal/bad/linkname.go: comment uses go:linkname",
 		"internal/bad/bad.go: Reflect uses AdmitAndLease",
+		"internal/bad/bad.go: Reflect uses MethodByName",
+		"internal/bad/bad.go: Reflect2 uses MethodByName",
+		"internal/bad/bad.go: ReflectIndex uses Method",
 		"internal/bad/bad.go: Sneak uses AdmitAndLease",
 		"internal/bad/bad.go: ValueAlias uses AdmitPlacement",
+		"internal/bad/linkname.go: comment uses go:linkname",
 		"internal/run/other.go: (T).CreateAttempt uses AdmitAndLease",
 		"internal/run/other.go: Back uses LocalAdmit",
-		"internal/run/other.go: ExprTrans uses trans(method expression)",
-		"internal/run/other.go: ExprTransition uses Transition(method expression)",
-		"internal/bad/bad.go: Const uses Transition(non-literal)",
-		"internal/bad/bad.go: Const uses Transition",
-		"internal/bad/bad.go: Variable uses Transition(non-literal)",
-		"internal/run/other.go: ExprTransition uses Transition",
-		"internal/run/other.go: Forward uses trans(non-literal)",
-		"internal/run/other.go: Settle uses settle(leased)",
-		"internal/run/other.go: ValueTrans uses trans(method value)",
-		"internal/run/attempt.go: CreateAttempt uses Transition",
-		"internal/store/wrapper.go: (Store).Take uses AdmitAndLease",
 		"internal/run/other.go: Value uses LocalAdmit",
+		"internal/store/wrapper.go: (Store).Take uses AdmitAndLease",
 	}
 	sort.Strings(want)
 	if !reflect.DeepEqual(planted, want) {

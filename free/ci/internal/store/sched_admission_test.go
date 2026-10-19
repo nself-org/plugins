@@ -2,9 +2,12 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 // admitSeed queues attempt id of job name in pipeline pipe of project proj.
@@ -152,5 +155,32 @@ func TestSchedAdmissionUnattributed(t *testing.T) {
 	}
 	if !IsHostCapacity(coded("E604", hostCapacityMessage)) || IsHostCapacity(coded("E604", "other")) || IsHostCapacity(nil) {
 		t.Fatal("IsHostCapacity")
+	}
+}
+
+// testTransition is Transition without the leased guard: the store's own fixtures
+// lease attempts directly. Production code cannot reach it (it is a test file).
+func (s *Store) testTransition(ctx context.Context, id string, from, to model.JobState, d TransitionDetail) error {
+	return s.write(ctx, func(tx *sql.Tx) error { return s.apply(ctx, tx, id, from, to, d) })
+}
+
+// TestSchedAdmissionTransitionGuard: the public Transition cannot lease an
+// attempt; admission can, and every other transition still works.
+func TestSchedAdmissionTransitionGuard(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	admitSeed(t, s, "pipe", "proj", "a", "a1")
+	if err := s.Transition(ctx, "a1", "queued", "leased", TransitionDetail{}); !codeIs(err, "E604") {
+		t.Fatalf("Transition to leased: %v", err)
+	}
+	if state, _, _ := s.AttemptStateEpoch(ctx, "a1"); state != "queued" {
+		t.Fatalf("the refused transition changed the attempt to %s", state)
+	}
+	if _, err := s.AdmitPlacement(ctx, "host", admitDemand("a1", "r"), AdmitRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	_, epoch, _ := s.AttemptStateEpoch(ctx, "a1")
+	if err := s.Transition(ctx, "a1", "leased", "running", TransitionDetail{Epoch: epoch}); err != nil {
+		t.Fatalf("a leased attempt still moves on: %v", err)
 	}
 }

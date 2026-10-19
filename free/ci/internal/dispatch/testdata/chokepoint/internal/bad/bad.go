@@ -2,8 +2,8 @@ package bad
 
 import "reflect"
 
-// Planted violations: neither function is in internal/store, internal/lease,
-// internal/dispatch or run.CreateAttempt.
+// Planted violations: none of these functions is dispatch.Admit, lease.(Engine).Grant,
+// run.CreateAttempt or run.LocalAdmit.
 func Sneak(s *store.Store) error { return s.AdmitAndLease(ctx, "host", demand) }
 
 func Grantor(e *lease.Engine) { _, _ = e.Grant(ctx, "host", demand, 1) }
@@ -22,22 +22,5 @@ func Reflect(s *store.Store) { reflect.ValueOf(s).MethodByName("AdmitAndLease") 
 // Reflection with a spelling no literal scan matches.
 func Reflect2(s *store.Store) { reflect.ValueOf(s).MethodByName("Admit" + "Placement") }
 
-// Moving an attempt to leased with the public transition API skips admission.
-func Leased(s *store.Store) error { return s.Transition(ctx, "a", "queued", "leased", detail) }
-
 // Reflection by index.
 func ReflectIndex(s *store.Store) { reflect.ValueOf(s).Method(0).Call(nil) }
-
-// A method value of Transition, and a constant target, are the same bypass.
-func Alias(s *store.Store) any { f := s.Transition; return f }
-
-func Variable(s *store.Store) error {
-	const to = "lea" + "sed"
-	return s.Transition(ctx, "a", "queued", to, detail)
-}
-
-// A reviewed target replaced by a constant.
-func Const(s *store.Store) error {
-	const to = "leased"
-	return s.Transition(ctx, "a", "queued", to, detail)
-}

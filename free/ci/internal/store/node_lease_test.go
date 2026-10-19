@@ -19,7 +19,7 @@ func TestSuccessResetsUntrippedBreakerStreak(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := s.Transition(ctx, id, "leased", "running", TransitionDetail{Epoch: 1}); err != nil {
+			if err := s.testTransition(ctx, id, "leased", "running", TransitionDetail{Epoch: 1}); err != nil {
 				t.Fatal(err)
 			}
 			if err := s.LeaseResult(ctx, "lease-"+id, epoch); err != nil {
@@ -87,7 +87,7 @@ func TestNodeLeaseStore(t *testing.T) {
 	if _, err := s.LeaseGrant(ctx, "host", d, 1); !codeIs(err, "E605") {
 		t.Fatalf("duplicate grant: %v", err)
 	}
-	if err := s.Transition(ctx, d.AttemptID, "leased", "running", TransitionDetail{Epoch: 1}); err != nil {
+	if err := s.testTransition(ctx, d.AttemptID, "leased", "running", TransitionDetail{Epoch: 1}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.LeaseRenew(ctx, d.LeaseID, epoch-1, now, d.TTL, true); !codeIs(err, "E662") {
@@ -139,7 +139,7 @@ func TestGraceSkipsFinalizing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, "finalizing-attempt", "leased", "running", TransitionDetail{Epoch: 1}); err != nil {
+	if err := s.testTransition(ctx, "finalizing-attempt", "leased", "running", TransitionDetail{Epoch: 1}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.LeaseResult(ctx, "finalizing-lease", epoch); err != nil {
