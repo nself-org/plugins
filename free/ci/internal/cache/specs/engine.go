@@ -105,17 +105,20 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 }
 
 // writerPassed reports whether the attempt that committed m settled passed. An
-// attempt still finalizing is not served yet; one that ended any other way has
-// its entry dropped. An attempt the store no longer knows (history pruned) is
-// trusted: the commit itself required a recorded pass.
+// attempt still finalizing is not served yet; one that ended any other way, or
+// that the store does not know, has its entry dropped: a missing attempt is no
+// evidence of a pass (a cancel can win finalizing -> passed after the commit),
+// and a history prune retires the entries of the attempts it removes.
 func (e *Engine) writerPassed(ctx context.Context, m entries.Manifest) bool {
 	state, _, err := e.Backend.AttemptStateEpoch(ctx, m.Writer.AttemptID)
 	switch {
 	case err != nil:
-		// no such attempt (history pruned) is trusted, since the commit required a
-		// recorded pass; any other failure serves nothing (database/sql is not
-		// importable here, so the missing row is recognised by its message)
-		return strings.Contains(err.Error(), "no rows in result set")
+		// any failure but a missing row serves nothing and drops nothing
+		// (database/sql is not importable here, so the missing row is
+		// recognised by its message)
+		if !strings.Contains(err.Error(), "no rows in result set") {
+			return false
+		}
 	case state == "passed":
 		return true
 	case state == "queued" || state == "leased" || state == "running" || state == "finalizing":
