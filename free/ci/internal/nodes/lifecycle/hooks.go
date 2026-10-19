@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/nself-org/cli/sdk/go/v2/remote"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -34,6 +35,11 @@ type HookEvent struct {
 	NodeID  string
 	Project string
 	Flags   *flag.FlagSet
+	// Dest is the destination as typed (`nodes add`); empty at the other points.
+	Dest string
+	// Capability is the draft a node is registered with (`nodes add`, after the probe); nil elsewhere.
+	// An add hook may set its DeployHost (P7-NODE-14) and nothing else.
+	Capability *model.Capability
 }
 
 // AddHook runs at a Point; an error from an add hook fails `nodes add` before the node is registered
@@ -51,8 +57,11 @@ type InstallRequest struct {
 }
 
 // AgentInstaller puts the agent binary on the node. The built-in "local-file" installer copies
-// --agent-binary; P7-NODE-15 adds the signed download source.
+// --agent-binary; the signed Release source (internal/agent/install) is the default when none is given.
 type AgentInstaller func(ctx context.Context, d *Deps, r InstallRequest) error
+
+// DefaultSourceFunc builds the AgentSource `nodes add` uses when the admin gave no --agent-binary and the node has no agent yet.
+type DefaultSourceFunc func() AgentSource
 
 // FlagsFunc adds flags to a subcommand's flag set (the subcommand is "add", "test", ...).
 type FlagsFunc func(fs *flag.FlagSet)
@@ -83,6 +92,7 @@ type extensions struct {
 	modes      map[string]RotateMode
 	revokers   []store.RevokeHook
 	closers    []SessionCloser
+	defSource  DefaultSourceFunc
 }
 
 var ext = newExtensions()
@@ -109,6 +119,17 @@ func RegisterAgentInstaller(name string, fn AgentInstaller) {
 		panic("nself-ci: invalid agent installer " + name)
 	}
 	ext.installers[name] = fn
+}
+
+// RegisterDefaultSource sets the install source `nodes add` falls back to without --agent-binary (P7-NODE-15: the signed
+// Release source). It registers once; a second call or a nil function panics at init.
+func RegisterDefaultSource(fn DefaultSourceFunc) {
+	ext.mu.Lock()
+	defer ext.mu.Unlock()
+	if fn == nil || ext.defSource != nil {
+		panic("nself-ci: invalid default agent source registration")
+	}
+	ext.defSource = fn
 }
 
 // RegisterFlags lets a later Ticket add flags to a subcommand.
@@ -162,6 +183,16 @@ func (e *extensions) installer(name string) (AgentInstaller, bool) {
 	defer e.mu.Unlock()
 	fn, ok := e.installers[name]
 	return fn, ok
+}
+
+func (e *extensions) defaultSource() AgentSource {
+	e.mu.Lock()
+	fn := e.defSource
+	e.mu.Unlock()
+	if fn == nil {
+		return nil
+	}
+	return fn()
 }
 
 func (e *extensions) mode(name string) (RotateMode, bool) {

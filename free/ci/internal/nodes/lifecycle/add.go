@@ -125,13 +125,21 @@ func (d *Deps) addPinned(ctx context.Context, o AddOptions, spec remote.HostSpec
 	if err != nil {
 		return res, err
 	}
-	if o.Source != nil {
-		req := InstallRequest{NodeID: id, Target: t, Platform: plat, Dir: agentDir, Source: o.Source, Flags: o.Flags}
+	src := o.Source
+	if src == nil {
+		// No --agent-binary: an agent already on the node is used as it is; otherwise the registered default
+		// (the signed Release source) installs one.
+		if _, terr := d.Run(ctx, t, "test", "-x", agentPath); terr != nil {
+			if src = ext.defaultSource(); src == nil {
+				return res, usage("the agent is not installed on %s; pass --agent-binary <path>", id)
+			}
+		}
+	}
+	if src != nil {
+		req := InstallRequest{NodeID: id, Target: t, Platform: plat, Dir: agentDir, Source: src, Flags: o.Flags}
 		if err = installer(ctx, d, req); err != nil {
 			return res, err
 		}
-	} else if _, terr := d.Run(ctx, t, "test", "-x", agentPath); terr != nil {
-		return res, usage("the agent is not installed on %s; pass --agent-binary <path>", id)
 	}
 	if res.AgentVersion, err = d.agentVersion(ctx, t); err != nil {
 		return res, err
@@ -150,7 +158,7 @@ func (d *Deps) addPinned(ctx context.Context, o AddOptions, spec remote.HostSpec
 	if err = applyTrust(&probed, o.Trust, now); err != nil {
 		return res, err
 	}
-	if err = RunHooks(ctx, PointAdd, HookEvent{NodeID: id, Project: d.Project, Flags: o.Flags}); err != nil {
+	if err = RunHooks(ctx, PointAdd, HookEvent{NodeID: id, Project: d.Project, Flags: o.Flags, Dest: o.Dest, Capability: &probed}); err != nil {
 		return res, err
 	}
 	online := "online"

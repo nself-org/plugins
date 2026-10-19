@@ -81,7 +81,14 @@ func (d *Deps) Test(ctx context.Context, id string, fs *flag.FlagSet) (TestResul
 		return res, transportErr("probe", "the capability probe failed", err)
 	}
 	res.Node, res.Drift = after, diffCapability(n.Capability, after.Capability)
-	return res, RunHooks(ctx, PointTest, HookEvent{NodeID: id, Project: d.Project, Flags: fs})
+	if err = RunHooks(ctx, PointTest, HookEvent{NodeID: id, Project: d.Project, Flags: fs}); err != nil {
+		return res, err
+	}
+	// A test hook may change facts the admin owns (deploy_host, P7-NODE-14): report the stored node.
+	if fresh, gerr := d.Registry.Get(ctx, id); gerr == nil {
+		res.Node = fresh
+	}
+	return res, nil
 }
 
 func same[T any](a, b model.Fact[T]) bool { return reflect.DeepEqual(a.Value, b.Value) }

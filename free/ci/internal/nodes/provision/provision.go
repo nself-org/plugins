@@ -40,6 +40,8 @@ type ProvisionOptions struct {
 	// Labels are extra labels appended after the standard
 	// self-hosted,Linux,X64 set.
 	Labels []string
+	// Runner pins the runner tarball (V15 only). Nil keeps the v1.4 download of the latest release.
+	Runner *RunnerPin
 }
 
 // ProvisionStep records one step's name and captured output.
@@ -197,6 +199,16 @@ func installRunnerInstance(ctx context.Context, ex Executor, m *Manifest, opts P
 	name := ex.Label() + "-" + strconv.Itoa(idx)
 	labels := strings.Join(append([]string{"self-hosted", "Linux", "X64"}, opts.Labels...), ",")
 
+	download := latestRunnerBlock
+	if opts.Runner != nil {
+		// compat.V15(P7-NODE-06): releases/latest, unchecked tarball -> pinned version with a sha256 check before extraction (E669)
+		block, berr := opts.Runner.downloadBlock()
+		if berr != nil {
+			return "", berr
+		}
+		download = block
+	}
+
 	script := fmt.Sprintf(`set -e
 set +x
 IFS= read -r NSELF_RUNNER_TOKEN || true
@@ -204,18 +216,15 @@ IFS= read -r NSELF_RUNNER_TOKEN || true
 sudo mkdir -p %[1]s && sudo chown %[2]s:%[2]s %[1]s
 cd %[1]s
 if [ ! -f config.sh ]; then
-  ARCH=$(uname -m); case "$ARCH" in x86_64) RARCH=x64 ;; aarch64) RARCH=arm64 ;; *) RARCH=x64 ;; esac
-  VER=$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest | grep tag_name | cut -d '"' -f4 | tr -d v)
-  curl -fsSL -o actions-runner.tar.gz "https://github.com/actions/runner/releases/download/v${VER}/actions-runner-linux-${RARCH}-${VER}.tar.gz"
-  tar xzf actions-runner.tar.gz
-fi
+%[6]sfi
 printf '%%s\n' "$NSELF_RUNNER_TOKEN" 2>/dev/null | sudo -u %[2]s sh -c 'IFS= read -r ACTIONS_RUNNER_INPUT_TOKEN && export ACTIONS_RUNNER_INPUT_TOKEN && exec "$0" "$@"' ./config.sh --url %[3]s --name %[4]s --labels %[5]s --work _work --unattended --replace
 unset NSELF_RUNNER_TOKEN
 sudo ./svc.sh install %[2]s
 sudo ./svc.sh start
 `, shellQuote(instanceDir), shellQuote(m.RunnerUser), shellQuote(opts.GithubURL),
-		shellQuote(name), shellQuote(labels))
+		shellQuote(name), shellQuote(labels), download)
 	out, err := ex.RunInput(ctx, script, opts.RegToken+"\n")
+	err = mapRunnerFailure(out, err)
 	if opts.RegToken == "" {
 		return out, err
 	}
@@ -239,3 +248,10 @@ type redactedError struct {
 
 func (r redactedError) Error() string { return strings.ReplaceAll(r.err.Error(), r.secret, redacted) }
 func (r redactedError) Unwrap() error { return r.err }
+
+// latestRunnerBlock is the v1.4 download: the latest release for the node's architecture, unchecked.
+const latestRunnerBlock = `  ARCH=$(uname -m); case "$ARCH" in x86_64) RARCH=x64 ;; aarch64) RARCH=arm64 ;; *) RARCH=x64 ;; esac
+  VER=$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest | grep tag_name | cut -d '"' -f4 | tr -d v)
+  curl -fsSL -o actions-runner.tar.gz "https://github.com/actions/runner/releases/download/v${VER}/actions-runner-linux-${RARCH}-${VER}.tar.gz"
+  tar xzf actions-runner.tar.gz
+`
