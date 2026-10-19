@@ -188,6 +188,7 @@ func TestPublicRepositoryRefusesPrivateFacts(t *testing.T) {
 		"private host in the image":    func(f *provenance.ReleaseFacts) { f.Image.Ref = "registry.corp.local/tool:1" },
 		"literal user name":            func(f *provenance.ReleaseFacts) { f.Job = "publish-by-ali"; f.Usernames = []string{"ali"} },
 		"literal host name":            func(f *provenance.ReleaseFacts) { f.Isolation = "boxy"; f.Hostnames = []string{"boxy"} },
+		"home path in an sbom":         func(f *provenance.ReleaseFacts) { f.SBOMs[0].Name = "/Users/alice/x.cdx.json" },
 		"home path in a subject":       func(f *provenance.ReleaseFacts) { f.Subjects[0].Name = "/home/ali/out/nself" },
 		"private address in the repo":  func(f *provenance.ReleaseFacts) { f.RepoID = "git@192.168.0.9:x/y" },
 		"unknown visibility scrubs":    func(f *provenance.ReleaseFacts) { f.Visibility = ""; f.Pipeline = "10.9.8.7" },

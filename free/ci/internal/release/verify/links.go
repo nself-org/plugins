@@ -85,6 +85,30 @@ func (r *run) checkStatement(st provenance.Statement) *Failure {
 	if got, ok := st.Byproduct(m.Evidence.Path); !ok || got != m.Evidence.SHA256 {
 		return fail(ReasonProvenanceSubject, "the provenance does not carry the manifest's evidence digest")
 	}
+	return r.checkInputs(st)
+}
+
+// checkInputs compares the inputs the provenance names with those the evidence
+// binds: the config digest and exactly the lockfiles.
+func (r *run) checkInputs(st provenance.Statement) *Failure {
+	in := r.ev.InputDigests
+	if st.Predicate.BuildDefinition.ExternalParameters["config_digest"] != in.Config {
+		return fail(ReasonProvenanceSubject, "the provenance names another config digest than the evidence")
+	}
+	locks := 0
+	for _, d := range st.Predicate.BuildDefinition.ResolvedDependencies {
+		if d.Name != "" {
+			locks++
+		}
+	}
+	if locks != len(in.Lockfiles) {
+		return fail(ReasonProvenanceSubject, "the provenance names %d lockfiles, the evidence binds %d", locks, len(in.Lockfiles))
+	}
+	for _, lf := range in.Lockfiles {
+		if got, ok := st.Dependency(lf.Path); !ok || got != lf.SHA256 {
+			return fail(ReasonProvenanceSubject, "the provenance does not carry the evidence's digest of %q", lf.Path)
+		}
+	}
 	return nil
 }
 

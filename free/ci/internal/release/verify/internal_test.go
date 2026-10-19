@@ -162,14 +162,17 @@ func TestErrIs(t *testing.T) {
 	}
 }
 
+// fakeGit answers the four git calls pinned() makes.
 type fakeGit struct {
-	commitX int
-	calls   [][]string
-	size    string
+	commitX int    // exit of `cat-file -e <pin>^{commit}`
+	listed  string // output of `ls-tree`
+	listX   int
+	size    string // output of `cat-file -s`
 	sizeX   int
 	show    string
 	showX   int
 	err     error
+	calls   [][]string
 }
 
 func (f *fakeGit) run(_ context.Context, argv ...string) (string, int, error) {
@@ -177,82 +180,93 @@ func (f *fakeGit) run(_ context.Context, argv ...string) (string, int, error) {
 	if f.err != nil {
 		return "", 0, f.err
 	}
-	for _, a := range argv {
-		if a == "-e" {
-			return "", f.commitX, nil
+	has := func(w string) bool {
+		for _, a := range argv {
+			if a == w {
+				return true
+			}
 		}
+		return false
 	}
-	for i, a := range argv {
-		if a == "cat-file" {
-			return f.size, f.sizeX, nil
-		}
-		if a == "show" && i > 0 {
-			return f.show, f.showX, nil
-		}
+	switch {
+	case has("-e"):
+		return "", f.commitX, nil
+	case has("ls-tree"):
+		return f.listed, f.listX, nil
+	case has("-s"):
+		return f.size, f.sizeX, nil
+	case has("show"):
+		return f.show, f.showX, nil
 	}
 	return "", 1, nil
+}
+
+func okGit() *fakeGit {
+	return &fakeGit{listed: "100644 blob abc\t" + keysPath + "\n", size: "12\n", show: "the file"}
 }
 
 func TestPinnedReadsTheTrustFileAtTheCommit(t *testing.T) {
 	pin := strings.Repeat("a", 40)
 	ctx := context.Background()
-	g := &fakeGit{size: "12\n", show: "the file"}
+	g := okGit()
 	o := Options{Root: "/repo", Pin: pin, Capture: g.run}
 	b, ok, err := o.pinned(ctx, keysPath)
 	if err != nil || !ok || string(b) != "the file" {
 		t.Fatalf("%q %v %v", b, ok, err)
 	}
-	wantE := []string{"git", "-c", "core.fsmonitor=false", "-C", "/repo", "cat-file", "-e", pin + "^{commit}"}
-	if strings.Join(g.calls[0], " ") != strings.Join(wantE, " ") {
-		t.Fatalf("commit check argv %v", g.calls[0])
-	}
-	want := []string{"git", "-c", "core.fsmonitor=false", "-C", "/repo", "cat-file", "-s", pin + ":" + keysPath}
-	if strings.Join(g.calls[1], " ") != strings.Join(want, " ") {
-		t.Fatalf("argv %v", g.calls[1])
-	}
-	if got := g.calls[2]; got[len(got)-2] != "show" || got[len(got)-1] != pin+":"+keysPath {
-		t.Fatalf("show argv %v", got)
+	base := []string{"git", "--no-replace-objects", "-c", "core.fsmonitor=false", "-C", "/repo"}
+	spec := pin + ":./" + keysPath
+	for i, want := range [][]string{
+		append(append([]string{}, base...), "cat-file", "-e", pin+"^{commit}"),
+		append(append([]string{}, base...), "ls-tree", pin, "--", keysPath),
+		append(append([]string{}, base...), "cat-file", "-s", spec),
+		append(append([]string{}, base...), "show", "--no-textconv", spec),
+	} {
+		if len(g.calls) != 4 || strings.Join(g.calls[i], " ") != strings.Join(want, " ") {
+			t.Fatalf("call %d: %v, want %v", i, g.calls, want)
+		}
 	}
 	if _, ok, err = (Options{}).pinned(ctx, keysPath); ok || err != nil {
 		t.Errorf("no pin must read nothing: %v %v", ok, err)
 	}
 	for name, o := range map[string]Options{
-		"short pin":   {Root: "/r", Pin: "abc", Capture: g.run},
-		"upper pin":   {Root: "/r", Pin: strings.ToUpper(pin), Capture: g.run},
-		"option pin":  {Root: "/r", Pin: "--upload-pack=x", Capture: g.run},
-		"no root":     {Pin: pin, Capture: g.run},
-		"64-hex lies": {Root: "/r", Pin: strings.Repeat("a", 39), Capture: g.run},
+		"short pin":   {Root: "/r", Pin: "abc", Capture: okGit().run},
+		"upper pin":   {Root: "/r", Pin: strings.ToUpper(pin), Capture: okGit().run},
+		"option pin":  {Root: "/r", Pin: "--upload-pack=x", Capture: okGit().run},
+		"no root":     {Pin: pin, Capture: okGit().run},
+		"39 digits":   {Root: "/r", Pin: strings.Repeat("a", 39), Capture: okGit().run},
+		"branch name": {Root: "/r", Pin: "main", Capture: okGit().run},
 	} {
 		if _, ok, err := o.pinned(ctx, keysPath); ok || err == nil {
 			t.Errorf("%s accepted", name)
 		}
 	}
-	if _, ok, err := (Options{Root: "/r", Pin: strings.Repeat("a", 64), Capture: g.run}).pinned(ctx, keysPath); err != nil || !ok {
+	if _, ok, err := (Options{Root: "/r", Pin: strings.Repeat("a", 64), Capture: okGit().run}).pinned(ctx, keysPath); err != nil || !ok {
 		t.Errorf("a 64-digit commit id is allowed: %v %v", ok, err)
 	}
-	if _, ok, err := (Options{Root: "/r", Pin: pin, Capture: (&fakeGit{size: "", sizeX: 128}).run}).pinned(ctx, keysPath); ok || err != nil {
-		t.Errorf("file absent at an existing pin: want no file and no error, got %v %v", ok, err)
+	// Absence is proved by an empty listing at an existing commit, and only then.
+	if _, ok, err := (Options{Root: "/r", Pin: pin, Capture: (&fakeGit{listed: "\n"}).run}).pinned(ctx, keysPath); ok || err != nil {
+		t.Errorf("an empty listing means absent: %v %v", ok, err)
 	}
 	for name, f := range map[string]*fakeGit{
-		"git broke":     {err: errors.New("no git")},
-		"pin not found": {commitX: 128, size: "3", show: "x"},
+		"git broke":      {err: errors.New("no git")},
+		"pin not found":  {commitX: 128},
+		"listing failed": {listX: 128, listed: ""},
+		"symlink entry":  {listed: "120000 blob abc\t" + keysPath},
+		"tree entry":     {listed: "040000 tree abc\t" + keysPath},
+		"too big":        {listed: "100644 blob abc\tx", size: "1048577", show: "x"},
+		"size garbage":   {listed: "100644 blob abc\tx", size: "many", show: "x"},
+		"size exit":      {listed: "100644 blob abc\tx", size: "3", sizeX: 128, show: "x"},
+		"show exit":      {listed: "100644 blob abc\tx", size: "3", show: "", showX: 1},
 	} {
 		if _, ok, err := (Options{Root: "/r", Pin: pin, Capture: f.run}).pinned(ctx, keysPath); ok || err == nil {
-			t.Errorf("%s: an unreadable pin must be an error, got %v %v", name, ok, err)
+			t.Errorf("%s accepted: %v %v", name, ok, err)
 		}
 	}
-	for name, f := range map[string]*fakeGit{
-		"too big":      {size: "1048577", show: "x"},
-		"size garbage": {size: "many", show: "x"},
-		"show exit":    {size: "3", show: "", showX: 1},
-		"show not ran": {size: "3", show: "x", err: nil, showX: 128},
-	} {
-		if _, ok, err := (Options{Root: "/r", Pin: pin, Capture: f.run}).pinned(ctx, keysPath); ok || err == nil {
-			t.Errorf("%s accepted", name)
+	for _, listed := range []string{"100644 blob abc\tx", "100755 blob abc\tx"} {
+		if _, ok, err := (Options{Root: "/r", Pin: pin, Capture: (&fakeGit{listed: listed, size: "1048576", show: "x"}).run}).pinned(ctx, keysPath); !ok || err != nil {
+			t.Errorf("%q at the size cap is allowed: %v %v", listed, ok, err)
 		}
-	}
-	if _, ok, err := (Options{Root: "/r", Pin: pin, Capture: (&fakeGit{size: "1048576", show: "x"}).run}).pinned(ctx, keysPath); !ok || err != nil {
-		t.Errorf("a file of exactly the cap is allowed: %v %v", ok, err)
 	}
 }
 
@@ -280,6 +294,16 @@ func TestOperatorFile(t *testing.T) {
 	}
 	if _, err := operatorFile(dir); err == nil {
 		t.Error("a directory was read as a trust file")
+	}
+	if err := os.Symlink(exact, filepath.Join(dir, "link")); err == nil {
+		if b, err := operatorFile(filepath.Join(dir, "link")); err != nil || len(b) != maxTrust {
+			t.Errorf("a symlink to a regular file is allowed: %d %v", len(b), err)
+		}
+	}
+	if err := os.Symlink("/dev/zero", filepath.Join(dir, "zero")); err == nil {
+		if _, err := operatorFile(filepath.Join(dir, "zero")); err == nil {
+			t.Error("a symlink to a device was read as a trust file")
+		}
 	}
 }
 

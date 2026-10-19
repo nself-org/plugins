@@ -104,6 +104,19 @@ func digest(dir, rel string) (fileInfo, error) {
 	return fileInfo{sha: hex.EncodeToString(h.Sum(nil)), size: n}, err
 }
 
+// fileSize is the size of the regular file rel under dir without opening it.
+func fileSize(dir, rel string) (int64, error) {
+	p, err := safePath(dir, rel)
+	if err != nil {
+		return 0, err
+	}
+	st, err := os.Lstat(p)
+	if err != nil {
+		return 0, err
+	}
+	return st.Size(), nil
+}
+
 func sum(b []byte) string {
 	s := sha256.Sum256(b)
 	return hex.EncodeToString(s[:])
@@ -178,7 +191,16 @@ func (r *run) checksums() *Failure {
 		}
 	}
 	r.files = &fileSet{byPath: make(map[string]fileInfo, len(lines))}
+	sizes := make(map[string]int64, len(r.man.Artifacts))
+	for _, a := range r.man.Artifacts {
+		sizes[a.Path] = a.Size
+	}
 	for _, l := range lines {
+		if want, ok := sizes[l.path]; ok { // a huge file is refused before it is hashed
+			if got, serr := fileSize(r.dir, l.path); serr == nil && got != want {
+				return fail(ReasonChecksum, "%q is %d bytes, the manifest says %d", l.path, got, want)
+			}
+		}
 		info, err := digest(r.dir, l.path)
 		if errors.Is(err, fs.ErrNotExist) && strings.HasPrefix(l.path, "sbom/") {
 			r.files.missingSBOM = append(r.files.missingSBOM, l.path)
@@ -194,11 +216,6 @@ func (r *run) checksums() *Failure {
 			return fail(ReasonChecksum, "%q does not match the digest in the signed manifest", l.path)
 		}
 		r.files.byPath[l.path] = info
-	}
-	for _, a := range r.man.Artifacts {
-		if info, ok := r.files.byPath[a.Path]; ok && info.size != a.Size {
-			return fail(ReasonChecksum, "%q is %d bytes, the manifest says %d", a.Path, info.size, a.Size)
-		}
 	}
 	return r.unlisted(listed)
 }

@@ -142,7 +142,7 @@ func Build(f ReleaseFacts) ([]byte, error) {
 		return nil, invalid("finishedOn is before startedOn")
 	}
 	prof := attest.ProfileFor(attest.RepoFacts{Visibility: f.Visibility, RepoID: f.RepoID, Hostnames: f.Hostnames, Usernames: f.Usernames})
-	if err = f.guard(prof, locks, subjects); err != nil {
+	if err = f.guard(prof, locks, subjects, sboms); err != nil {
 		return nil, err
 	}
 	deps := []ResourceDescriptor{{URI: "git+" + f.RepoID + "@" + f.Revision, Digest: map[string]string{"gitCommit": f.Revision}}}
@@ -172,7 +172,7 @@ func Build(f ReleaseFacts) ([]byte, error) {
 
 // guard refuses facts the publication profile would redact: for a public
 // repository nothing private may reach the statement.
-func (f ReleaseFacts) guard(prof attest.Profile, locks, subjects []FileDigest) error {
+func (f ReleaseFacts) guard(prof attest.Profile, locks, subjects, sboms []FileDigest) error {
 	if !prof.Public() {
 		return nil
 	}
@@ -181,6 +181,9 @@ func (f ReleaseFacts) guard(prof attest.Profile, locks, subjects []FileDigest) e
 		values = append(values, l.Name)
 	}
 	for _, s := range subjects {
+		values = append(values, s.Name)
+	}
+	for _, s := range sboms {
 		values = append(values, s.Name)
 	}
 	if f.Image != nil {

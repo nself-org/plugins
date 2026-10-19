@@ -47,12 +47,14 @@ type verifyRig struct {
 	selection    string
 	lockfileBent bool
 	inputs       model.InputDigests
+	repoID       string
 }
 
 // verifyTemplate is a two-commit repository built once per top-level test and
 // copied into each rig: git is slow on a loaded machine.
 type verifyTemplate struct {
 	dir, base, rev string
+	repoID         string
 	inputs         model.InputDigests
 }
 
@@ -75,6 +77,11 @@ func buildVerifyTemplate(t *testing.T) *verifyTemplate {
 		t.Fatal(err)
 	}
 	tp.inputs = inputs
+	id, ok := evidence.RepoID(context.Background(), nil, dir)
+	if !ok {
+		t.Fatal("no repository id")
+	}
+	tp.repoID = id
 	return tp
 }
 
@@ -126,7 +133,7 @@ func vsum(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[
 func newVerifyRig(t *testing.T, tp *verifyTemplate) *verifyRig {
 	t.Helper()
 	r := &verifyRig{t: t, repo: t.TempDir(), dir: filepath.Join(t.TempDir(), "release"), home: t.TempDir(), artifact: []byte("binary"),
-		base: tp.base, rev: tp.rev, inputs: tp.inputs}
+		base: tp.base, rev: tp.rev, inputs: tp.inputs, repoID: tp.repoID}
 	copyTree(t, tp.dir, r.repo)
 	priv := ed25519.NewKeyFromSeed([]byte("0123456789abcdef0123456789abcdef"))
 	r.pub = priv.Public().(ed25519.PublicKey)
@@ -171,7 +178,7 @@ func (r *verifyRig) publish() {
 		mode = model.SelectionMode(r.selection)
 	}
 	ev := model.Evidence{
-		Schema: "ci.evidence/v1", Revision: rev, RepoID: "local:" + strings.Repeat("e", 64), RunID: "run-1",
+		Schema: "ci.evidence/v1", Revision: rev, RepoID: r.repoID, RunID: "run-1",
 		Pipeline: model.PipelineRef{ID: "p1", Name: "release", Kind: "default"}, Trigger: "local", SourceTrust: "owner",
 		PolicyDigest: "policy-1", WorktreeState: "clean", Binding: model.Binding{State: "bound"}, InputDigests: inputs,
 		Runner:   model.RunnerRef{ID: "runner-7", Provider: "local", Platform: "linux/amd64", Isolation: "container"},
@@ -414,5 +421,30 @@ func TestArtifactsVerifyTamperMatrix(t *testing.T) {
 				t.Fatalf("want %s/%d, got %d %v", c.reason, want, code, data)
 			}
 		})
+	}
+}
+
+func TestArtifactsVerifyKeysFileMustExist(t *testing.T) {
+	r := newVerifyRig(t, buildVerifyTemplate(t))
+	r.publish()
+	code, _, errs := r.run(r.dir, "--keys", filepath.Join(t.TempDir(), "missing.keys"))
+	if code != 2 || !strings.Contains(errs, "missing.keys") {
+		t.Fatalf("a missing --keys file: %d %s", code, errs)
+	}
+}
+
+// An origin whose default branch cannot be read must not read as "no branch":
+// the branch may hold a revocation.
+func TestResolveReleasePinFailsClosedWhenOriginIsUnreadable(t *testing.T) {
+	tp := buildVerifyTemplate(t)
+	repo := t.TempDir()
+	copyTree(t, tp.dir, repo)
+	if pin, err := resolveReleasePin(context.Background(), repo); err != nil || pin != "" {
+		t.Fatalf("no origin: want no pin and no error, got %q %v", pin, err)
+	}
+	vgit(t, repo, "remote", "add", "origin", filepath.Join(t.TempDir(), "no-such-remote"))
+	pin, err := resolveReleasePin(context.Background(), repo)
+	if err == nil || pin != "" || !strings.Contains(err.Error(), "could not be fetched or read") {
+		t.Fatalf("unreadable origin: %q %v", pin, err)
 	}
 }

@@ -22,6 +22,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -76,6 +77,9 @@ func artifactsVerify(args []string) int {
 		opt.OperatorRevoked = filepath.Join(home, "trust", "ci-release.revoked")
 	}
 	if *keys != "" {
+		if _, serr := os.Stat(*keys); serr != nil {
+			return artifactsExit(serr, command, asJSON)
+		}
 		opt.OperatorKeys = *keys
 	}
 	if opt.Pin, err = releasePin(ctx, root); err != nil {
@@ -139,6 +143,11 @@ func resolveReleasePin(ctx context.Context, root string) (string, error) {
 	res, err := r.Resolve(ctx, policy.Repo{Root: root}, policy.Revision{})
 	if err != nil {
 		return "", err
+	}
+	for _, ig := range res.Ignored {
+		if ig.Key == "protected_branch" { // origin exists but its default branch could not be read
+			return "", errors.New(ig.Reason)
+		}
 	}
 	return res.PinnedCommit, nil
 }

@@ -45,11 +45,21 @@ func (r *run) evidenceBinding() *Failure {
 	if ev.Timings.FinishedAt == nil || *ev.Timings.FinishedAt != m.Release.FinishedAt {
 		return fail(ReasonEvidenceMismatch, "the evidence finished at another time than the release says")
 	}
-	if evidence.ClassOf(ev) != evidence.ClassRelease {
-		return fail(ReasonEvidenceMismatch, "the evidence is not release-class evidence")
+	if !hasReleaseCheck(ev) { // a failing release check is judged later (exit 1); no release check at all is not this release's evidence
+		return fail(ReasonEvidenceMismatch, "the evidence has no release job check")
 	}
 	r.ev, r.evDoc = ev, doc
 	return nil
+}
+
+// hasReleaseCheck is true when the evidence holds a release-kind check of any result.
+func hasReleaseCheck(ev model.Evidence) bool {
+	for _, c := range ev.Checks {
+		if c.Kind == "release" {
+			return true
+		}
+	}
+	return false
 }
 
 // Severity of an evidence reason: lower is more fundamental. rankKeys names
@@ -85,6 +95,9 @@ func (r *run) evidenceVerdict() *Failure {
 	capture := r.opt.capture()
 	if r.opt.Root == "" || !evidence.CommitExists(ctx, capture, r.opt.Root, m.Revision) {
 		return fail(ReasonRevisionAbsent, "revision %.12s is not in the repository, so the evidence cannot be judged there", m.Revision)
+	}
+	if id, ok := evidence.RepoID(ctx, capture, r.opt.Root); !ok || id != m.RepoID {
+		return fail(ReasonEvidenceMismatch, "the release is for repository %q, not the repository at %s", clip(m.RepoID), r.opt.Root)
 	}
 	tree, err := evidence.TreeFS(ctx, capture, r.opt.Root, m.Revision)
 	if err != nil {

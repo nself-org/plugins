@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -45,8 +46,12 @@ func (o Options) capture() evidence.Capture {
 	return report.Capture
 }
 
-// pinned reads path at the pinned commit: bytes and true, or false when the
-// pinned tip has no such file.
+// pinned reads path (relative to the repository root o.Root) at the pinned
+// commit: its bytes and true, or false when the pinned tip has no such file.
+// Absence is proved by an empty `git ls-tree`; any other git failure is an
+// error, so a missing object, a timeout or a broken clone can never read as "the
+// branch revokes nothing". Replacement objects are off: a local refs/replace
+// must not swap the tree that is read.
 func (o Options) pinned(ctx context.Context, path string) ([]byte, bool, error) {
 	if o.Pin == "" {
 		return nil, false, nil
@@ -55,33 +60,57 @@ func (o Options) pinned(ctx context.Context, path string) ([]byte, bool, error) 
 		return nil, false, errors.New("the pinned default-branch commit is not a full commit id, or there is no repository")
 	}
 	run := o.capture()
-	spec := o.Pin + ":" + path
-	if _, exit, err := run(ctx, "git", "-c", "core.fsmonitor=false", "-C", o.Root, "cat-file", "-e", o.Pin+"^{commit}"); err != nil || exit != 0 {
+	git := func(args ...string) (string, int, error) {
+		return run(ctx, append([]string{"git", "--no-replace-objects", "-c", "core.fsmonitor=false", "-C", o.Root}, args...)...)
+	}
+	spec := o.Pin + ":./" + path
+	if _, exit, err := git("cat-file", "-e", o.Pin+"^{commit}"); err != nil || exit != 0 {
 		return nil, false, fmt.Errorf("the pinned default-branch commit %.12s is not in the repository", o.Pin)
 	}
-	out, exit, err := run(ctx, "git", "-c", "core.fsmonitor=false", "-C", o.Root, "cat-file", "-s", spec)
+	listed, exit, err := git("ls-tree", o.Pin, "--", path)
 	if err != nil || exit != 0 {
-		return nil, false, nil // the commit exists, so the file is absent there: no keys from it
+		return nil, false, fmt.Errorf("cannot list %s at the pinned tip", path)
 	}
-	if n, perr := strconv.Atoi(strings.TrimSpace(out)); perr != nil || n > maxTrust {
-		return nil, false, fmt.Errorf("%s at the pinned tip is not a trust file of at most %d bytes", path, maxTrust)
+	if strings.TrimSpace(listed) == "" {
+		return nil, false, nil // the commit exists and has no such file
 	}
-	body, exit, err := run(ctx, "git", "-c", "core.fsmonitor=false", "-C", o.Root, "show", spec)
+	if !strings.HasPrefix(listed, "100644 blob ") && !strings.HasPrefix(listed, "100755 blob ") {
+		return nil, false, fmt.Errorf("%s at the pinned tip is not a regular file", path)
+	}
+	out, exit, err := git("cat-file", "-s", spec)
+	if n, perr := strconv.Atoi(strings.TrimSpace(out)); err != nil || exit != 0 || perr != nil || n > maxTrust {
+		return nil, false, fmt.Errorf("%s at the pinned tip is not a readable trust file of at most %d bytes", path, maxTrust)
+	}
+	body, exit, err := git("show", "--no-textconv", spec)
 	if err != nil || exit != 0 {
 		return nil, false, fmt.Errorf("cannot read %s at the pinned tip", path)
 	}
 	return []byte(body), true, nil
 }
 
-// operatorFile reads an operator-scope file; a missing one is empty.
+// operatorFile reads an operator-scope trust file; a missing one is empty. The
+// path may be a symbolic link to a regular file; anything else (a FIFO, a
+// device) is refused, and the read is bounded.
 func operatorFile(path string) ([]byte, error) {
 	if path == "" {
 		return nil, nil
 	}
-	b, err := os.ReadFile(path)
+	st, err := os.Stat(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
+	if err == nil && !st.Mode().IsRegular() {
+		err = fmt.Errorf("%s is not a regular file", path)
+	}
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	b, err := io.ReadAll(io.LimitReader(f, maxTrust+1))
 	if err == nil && len(b) > maxTrust {
 		err = fmt.Errorf("%s is larger than %d bytes", path, maxTrust)
 	}

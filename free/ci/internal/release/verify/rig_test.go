@@ -51,6 +51,7 @@ type rig struct {
 	keysFile, revokedFile string
 	ev                    model.Evidence
 	inputs                model.InputDigests
+	repoID                string
 	arts                  map[string][]byte
 	opt                   verify.Options
 	tweakEvidence         func(*model.Evidence)
@@ -110,7 +111,7 @@ func keysLine(id string, pub ed25519.PublicKey) string {
 func newRig(t *testing.T, mode trustMode) *rig {
 	t.Helper()
 	fx := fixture(t, mode)
-	r := &rig{t: t, repo: fx.dir, rev: fx.rev, base: fx.base, inputs: fx.inputs, dir: filepath.Join(t.TempDir(), "release"), arts: map[string][]byte{
+	r := &rig{t: t, repo: fx.dir, rev: fx.rev, base: fx.base, inputs: fx.inputs, repoID: fx.repoID, dir: filepath.Join(t.TempDir(), "release"), arts: map[string][]byte{
 		"nself-linux-amd64": []byte("linux binary"), "nself-darwin-arm64": []byte("darwin binary")}}
 	priv, other := seedKey(1), seedKey(2)
 	r.pub, r.otherPub = priv.Public().(ed25519.PublicKey), other.Public().(ed25519.PublicKey)
@@ -185,7 +186,7 @@ func (r *rig) publish() {
 	inputs.Generated = append([]model.DigestRef(nil), r.inputs.Generated...)
 	var err error
 	fin := finishedAt
-	repoID := "local:" + strings.Repeat("e", 64)
+	repoID := r.repoID
 	checks := []model.Check{
 		{ID: "test", JobID: "build", Kind: "test", Tool: "go", Required: true, Substantive: true, Result: "pass"},
 		{ID: "publish", JobID: "publish", Kind: "release", Tool: "nself", Required: true, Substantive: true, Result: "pass"},
@@ -329,6 +330,7 @@ func base64decode(s string) ([]byte, error) { return base64.StdEncoding.DecodeSt
 // repository calls ownRepo first.
 type repoFixture struct {
 	dir, base, rev string
+	repoID         string
 	inputs         model.InputDigests
 }
 
@@ -377,6 +379,11 @@ func fixture(t *testing.T, mode trustMode) *repoFixture {
 		t.Fatal(err)
 	}
 	fx.inputs = inputs
+	id, ok := evidence.RepoID(context.Background(), nil, dir)
+	if !ok {
+		t.Fatal("no repository id")
+	}
+	fx.repoID = id
 	fixtures[mode] = fx
 	return fx
 }

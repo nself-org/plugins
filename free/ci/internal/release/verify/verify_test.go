@@ -245,6 +245,30 @@ func TestTamperMatrix(t *testing.T) {
 			r.resignSums(func(s string) string { return strings.Repeat("f", 64) + s[64:] })
 		}, reason: verify.ReasonChecksum},
 		{name: "listed artifact is missing", after: func(r *rig) { _ = os.Remove(filepath.Join(r.dir, "artifacts", "nself-linux-amd64")) }, reason: verify.ReasonChecksum},
+		{name: "provenance config digest differs from the evidence", bend: func(r *rig) {
+			r.tweakFacts = func(f *provenance.ReleaseFacts) { f.ConfigDigest = strings.Repeat("9", 64) }
+		}, reason: verify.ReasonProvenanceSubject},
+		{name: "provenance lockfile digest differs from the evidence", bend: func(r *rig) {
+			r.tweakFacts = func(f *provenance.ReleaseFacts) { f.Lockfiles[0].SHA256 = strings.Repeat("f", 64) }
+		}, reason: verify.ReasonProvenanceSubject},
+		{name: "provenance names no lockfiles", bend: func(r *rig) {
+			r.tweakFacts = func(f *provenance.ReleaseFacts) { f.Lockfiles = nil }
+		}, reason: verify.ReasonProvenanceSubject},
+		{name: "provenance names a lockfile the evidence lacks", bend: func(r *rig) {
+			r.tweakFacts = func(f *provenance.ReleaseFacts) {
+				f.Lockfiles = append(f.Lockfiles, provenance.FileDigest{Name: "extra.lock", SHA256: strings.Repeat("1", 64)})
+			}
+		}, reason: verify.ReasonProvenanceSubject},
+		{name: "release is for another repository than the one checked", bend: func(r *rig) {
+			r.repoID = "local:" + strings.Repeat("d", 64)
+		}, reason: verify.ReasonEvidenceMismatch},
+		{name: "failing release check is exit 1", bend: func(r *rig) {
+			r.tweakEvidence = func(e *model.Evidence) {
+				e.Checks[1].Result = "fail"
+				e.Result = "fail"
+				e.Counts = model.Counts{Pass: 1, Fail: 1, Total: 2}
+			}
+		}, reason: verify.ReasonEvidenceFailing, exit: 1},
 		{name: "evidence lacks the release job", bend: func(r *rig) {
 			r.tweakEvidence = func(e *model.Evidence) { e.Checks[1].JobID = "other"; e.Checks[1].Required = false }
 		}, reason: verify.ReasonEvidenceInvalid},
@@ -377,4 +401,13 @@ func TestNoQuarantineSourceIsSaidInTheWarnings(t *testing.T) {
 	if !res.Verified || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "quarantine state was not checked") {
 		t.Fatalf("%+v", res)
 	}
+}
+
+// A local refs/replace that points the pinned commit at the released one must
+// not make the released revision's keys a trust root.
+func TestReplacementObjectsDoNotSwapThePinnedTree(t *testing.T) {
+	r := newRig(t, releasedOnly)
+	r.ownRepo()
+	git(t, r.repo, "replace", r.base, r.rev)
+	wantFail(t, r.verify(), verify.ReasonSignature, 11)
 }
