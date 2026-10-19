@@ -34,8 +34,8 @@ func TestRegisterMaximum(t *testing.T) {
 	}
 	err := r.Register(make([]byte, 128<<10+1))
 	var e *Error
-	if !errors.As(err, &e) || e.Code != "E674" || strings.Contains(err.Error(), "\x00") {
-		t.Fatalf("want E674, got %v", err)
+	if !errors.As(err, &e) || e.Code != "E680" || strings.Contains(err.Error(), "\x00") {
+		t.Fatalf("want E680, got %v", err)
 	}
 }
 

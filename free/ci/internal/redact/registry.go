@@ -7,7 +7,7 @@ package redact
 // rebuild, which is what makes a value registered before a write apply to it).
 // Inputs:  Register(value). Outputs: NewFilter, Wrap, Scan (stream.go, scan.go).
 // Constraints: safe for concurrent Register and use; a value shorter than
-// MinValueLen is refused with E673 and one over MaxValueLen with E674 (never skipped); nothing here formats a
+// MinValueLen is refused with E673 and one over MaxValueLen with E680 (never skipped); nothing here formats a
 // value into an error or a log line.
 
 import (
@@ -34,7 +34,7 @@ func New() *Redactor {
 }
 
 // Register adds v. It returns an E673 *Error for a value under MinValueLen bytes
-// and an E674 *Error for one over MaxValueLen bytes.
+// and an E680 *Error for one over MaxValueLen bytes.
 func (r *Redactor) Register(v []byte) error {
 	if len(v) > MaxValueLen {
 		return errTooLong()

@@ -408,7 +408,7 @@ func TestSessionSavesAZeroFilledDirBecausePlainTarHasNoAmplification(t *testing.
 		t.Fatal(err)
 	}
 	s.Finalize(e.ctx, e.finalizing("z1"))
-	if e.entryCount() != 1 || strings.Join(resultsOf(e.uses("z1")), ",") != "go:miss" {
+	if e.entryCount() != 1 || strings.Join(resultsOf(e.uses("z1")), ",") != "go:miss,go:saved" {
 		t.Fatalf("entries %d uses %v", e.entryCount(), resultsOf(e.uses("z1")))
 	}
 	e.settlePassed("z1")
