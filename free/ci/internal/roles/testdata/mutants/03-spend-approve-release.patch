@@ -1,0 +1,13 @@
+diff --git a/internal/roles/actions.go b/internal/roles/actions.go
+index ca2ac312..80c63bb5 100644
+--- a/internal/roles/actions.go
++++ b/internal/roles/actions.go
+@@ -75,7 +75,7 @@ var catalogue = map[string]actionRule{
+ 	ActPrivacyZoneSet:    {min: Admin, audited: true},
+ 	ActSecretAuthorize:   {min: Admin, audited: true},
+ 	ActRunApprove:        {min: Release, audited: true, scoped: true, needsAuthr: true},
+-	ActSpendApprove:      {min: Admin, audited: true},
++	ActSpendApprove:      {min: Release, audited: true},
+ 	ActReleaseStart:      {min: Release, audited: true, scoped: true},
+ 	ActLogsView:          {min: Member, scoped: true},
+ 	ActArtifactsView:     {min: Member, scoped: true},

@@ -133,3 +133,44 @@ Limits: only the byte buffers the Source owns are zeroed. Copies in Go strings (
 Android release builds: until `release.age` holds the keystore secrets, `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` in your own environment still work, on your own machine only. One audit row (`secret.legacy_env`, value-free) is written first; if it cannot be written the legacy value is not used. The `legacy-env` label is kept on the Source and is not yet copied into run evidence. A remote node never uses this path.
 
 A node granted a `release` or `deploy` file must be dedicated-trusted (operator-owned, assigned trust, accepts only `owner`, one authorized project); `nodes secrets grant` does not yet check that the project is the one the file belongs to, so grant these files only to a node dedicated to that project. Multi-line values (PEM keys) need the baseline container path today; the hardened path refuses them.
+
+## Roles, tokens and the audit log
+
+A TEAM coordinator knows three roles, ordered `member < release < admin`, and no per-user permissions. In PERSONAL mode the operator on the coordinator host is allowed everything (access to the data directory is admin access) and every decision is still audited.
+
+| Role | May |
+|---|---|
+| `member` | view logs and artifacts; list roles and tokens |
+| `release` | everything `member` may, view the audit log, approve runs it did not author, start release jobs on projects in its allowlist |
+| `admin` | everything else: register and revoke runners, set node trust fields, policy, privacy zones, provider and secret authorisation, approve spend, manage roles and tokens, seal the audit log |
+
+A grant or token names the projects it covers (`--project <id>` repeated, or `--project '*'`). An actor scoped to named projects cannot do a project-wide `release` or `admin` action. Every refusal is `E687`; the reason key says why (`role`, `project`, `no_grant`, `node_kind`, `bad_certificate`, `token_unknown`, `token_expired`, `token_revoked`, `self_approval`, `author_unknown`, `unknown_action`, `unknown_role`, `audit_secret`).
+
+### Identities
+
+- **User certificate** from `pki.IssueUser`: `ActorFromPeer` maps it to the principal's live grant. A node or coordinator certificate is refused (`node_kind`), as is a revoked, denied or expired one. A certificate with no grant has no role.
+- **Scoped token**: 32 random bytes in base64url, stored only as its sha256, with a role, projects and an expiry (default 720 h, at most 8760 h). `nself ci serve admin token issue` prints it once; later commands show the id and state, never the token. Send tokens over TLS only: the transport enforces that, not the role check.
+
+Commands (run on the coordinator host; the caller is the local operator):
+
+```
+nself ci serve admin roles grant <principal> --role release --project web --project api [--self]
+nself ci serve admin roles revoke <principal>
+nself ci serve admin roles list [--json]
+nself ci serve admin token issue <principal> --role member --project '*' [--ttl 48h] [--self] [--json]
+nself ci serve admin token revoke <id>
+nself ci serve admin token list [--json]
+nself ci serve admin audit [--since 24h] [--verify] [--json]
+nself ci serve admin audit seal
+```
+
+Every grant, token and user certificate records a `subject`: `self` when it was issued with `--self` to the data directory's own operator identity, otherwise the named principal. `roles.NonSelfPrincipals` counts the live grants, tokens and user certificates whose subject is not `self` (a certificate nobody marked counts as non-self); the node-mode check reads it.
+
+### The audit log
+
+There is one audit table. The `trust-audit` set chains it: each sealed row's `head` is the sha256 of the previous head and the canonical row (seq, time, actor, action, target, detail). `Append` inserts a row and seals every pending row in one `BEGIN IMMEDIATE` transaction, so concurrent writers, even in a second process, lose no row. Rows other packages write through the core audit API (every node mutation) are sealed by the next `Append`, by `audit seal`, or by a sealer the TEAM coordinator runs every 60 s. `audit --verify` only reads: it prints `unsealed: <n>` and exits 1 when rows are still unsealed after 60 s, when a sealed row no longer matches its hash (the row is named), or when the chain link is broken. An event whose actor, action, target or detail contains a registered secret value, in any encoding the redactor knows, is refused (`E687`, reason `audit_secret`) and nothing is written. P7-TRUST-26 policy writes call `audit.AppendTx` to put their row in the policy write's own transaction.
+
+What the chain does not give you: it detects an edit that was not recomputed. Someone who can write the database and recompute every later row defeats it; the TEAM checkpoint (P7-TRUST-20) detects that. A PERSONAL coordinator has neither a checkpoint nor a second writer to guard against, so the chain there is a tidy record, not evidence. Deleting the newest rows is not detected by the chain alone either.
+
+Handoff for later Tickets: `roles.Authorize(ctx, actor, role, project)` and `roles.AuthorizeAction(ctx, actor, action, project)` are the calls a route makes; `WithAuthor(ctx, id)` carries a run's author for `run.approve`. Both write one `authorize` row per release- or admin-level decision (allowed or refused) and none for member-level reads, so a mutation that writes its own row records two rows for one request. The mutations in this Ticket write only their own row.
+

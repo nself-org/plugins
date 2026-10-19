@@ -186,6 +186,12 @@ func TestActionsReleaseStartAndApproveRules(t *testing.T) {
 	if ReasonOf(AuthorizeAction(ctx, rel, ActReleaseStart, "")) != ReasonProject {
 		t.Fatal("release.start needs a project")
 	}
+	wide := r.tokenActor("wendy", Release, AllProjects)
+	for _, a := range []string{ActReleaseStart, ActRunApprove, ActLogsView, ActArtifactsView} {
+		if ReasonOf(AuthorizeAction(ctx, wide, a, "")) != ReasonProject {
+			t.Fatalf("%s names a project even for an actor allowed on every project", a)
+		}
+	}
 	if err := AuthorizeAction(ctx, rel, ActRunApprove, "p1"); err != nil {
 		t.Fatalf("release approves a run it did not author: %v", err)
 	}

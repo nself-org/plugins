@@ -10,6 +10,7 @@ package audit
 
 import (
 	"context"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -52,4 +53,25 @@ func AppendTx(tx *store.Tx, ev Event) error {
 		return err
 	}
 	return tx.AuditAppend(ev.input())
+}
+
+// RunSealer seals the log every interval (default SealInterval) until ctx ends: the TEAM coordinator's
+// sealer for rows other packages write through the core audit API. A failed pass is passed to onErr
+// (may be nil) and the next tick tries again.
+func (l *Log) RunSealer(ctx context.Context, every time.Duration, onErr func(error)) {
+	if every <= 0 {
+		every = SealInterval
+	}
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if _, err := l.Seal(ctx); err != nil && onErr != nil && ctx.Err() == nil {
+				onErr(err)
+			}
+		}
+	}
 }

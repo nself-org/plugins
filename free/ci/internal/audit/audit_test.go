@@ -182,6 +182,24 @@ func containsBytes(s string, b []byte) bool {
 	})()
 }
 
+func TestRunSealerChainsPendingRows(t *testing.T) {
+	l, _, _ := newLog(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := l.St.AppendAudit(ctx, "operator:node", "node.add", "n1", "added"); err != nil {
+		t.Fatal(err)
+	}
+	go l.RunSealer(ctx, 20*time.Millisecond, func(err error) { t.Error(err) })
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if n, _, _ := l.St.AuditPending(ctx); n == 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the sealer never chained the pending row")
+}
+
 func TestAppendTxJoinsTheCallersTransaction(t *testing.T) {
 	l, _, _ := newLog(t)
 	ctx := context.Background()
