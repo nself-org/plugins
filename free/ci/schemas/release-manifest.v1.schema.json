@@ -1,0 +1,296 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "ci.release-manifest/v1"
+    },
+    "repo_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "release": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pipeline": {
+          "type": "string",
+          "minLength": 1
+        },
+        "job_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attempt_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "finished_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "run_id",
+        "pipeline",
+        "job_id",
+        "attempt_id",
+        "idempotency_key",
+        "finished_at"
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "const": "evidence.json"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "result": {
+          "const": "pass"
+        },
+        "class": {
+          "const": "release"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "result",
+        "class"
+      ]
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-][A-Za-z0-9._/-]{0,199}$"
+          },
+          "path": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "package",
+              "binary",
+              "archive",
+              "image",
+              "report",
+              "other"
+            ]
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "platform": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "pattern": "^[a-z0-9]+/[a-z0-9]+$"
+          },
+          "image": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "index_digest": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "manifests": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "platform": {
+                      "type": "string"
+                    },
+                    "digest": {
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$"
+                    }
+                  },
+                  "required": [
+                    "platform",
+                    "digest"
+                  ]
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "ref",
+              "index_digest",
+              "manifests"
+            ]
+          },
+          "sbom": {
+            "type": "object",
+            "properties": {
+              "cyclonedx": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                },
+                "required": [
+                  "path",
+                  "sha256"
+                ]
+              },
+              "spdx": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                },
+                "required": [
+                  "path",
+                  "sha256"
+                ]
+              }
+            },
+            "required": [
+              "cyclonedx",
+              "spdx"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "kind",
+          "sha256",
+          "size",
+          "platform",
+          "image",
+          "sbom"
+        ]
+      },
+      "minItems": 1
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "const": "provenance.intoto.dsse.json"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "predicate_type": {
+          "const": "https://slsa.dev/provenance/v1"
+        },
+        "slsa_build_level": {
+          "const": "L1"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "predicate_type",
+        "slsa_build_level"
+      ]
+    },
+    "checksums": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "const": "SHA256SUMS"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ]
+    },
+    "signing": {
+      "type": "object",
+      "properties": {
+        "purpose": {
+          "const": "ci-release"
+        },
+        "key_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "purpose",
+        "key_id"
+      ]
+    },
+    "producer": {
+      "type": "object",
+      "properties": {
+        "nself_ci_version": {
+          "type": "string"
+        },
+        "coordinator": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "nself_ci_version",
+        "coordinator"
+      ]
+    }
+  },
+  "$id": "https://nself.org/schemas/release-manifest.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "schema",
+    "repo_id",
+    "revision",
+    "release",
+    "evidence",
+    "artifacts",
+    "provenance",
+    "checksums",
+    "signing",
+    "producer"
+  ]
+}
