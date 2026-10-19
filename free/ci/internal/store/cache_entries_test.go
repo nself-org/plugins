@@ -321,7 +321,7 @@ func TestCacheEntriesAreKeyedByNamespaceAndKey(t *testing.T) {
 		t.Fatalf("the two entries must keep their own blobs: %+v", by)
 	}
 	// dropping one leaves the other
-	if err = s.CacheDrop(ctx, by["second"], "corrupt"); err != nil {
+	if _, err = s.CacheDrop(ctx, by["second"], "corrupt"); err != nil {
 		t.Fatal(err)
 	}
 	if left, _ := s.CacheEntries(ctx, cacheKey); len(left) != 1 || left[0].Writer.AttemptID != "first" {
@@ -609,18 +609,52 @@ func TestCacheEntriesDropOnlyRemovesTheRowThatWasRead(t *testing.T) {
 		t.Fatalf("%v %v", first, err)
 	}
 	save("two")
-	if err = s.CacheDrop(ctx, first[0], "corrupt"); err != nil {
+	if _, err = s.CacheDrop(ctx, first[0], "corrupt"); err != nil {
 		t.Fatal(err)
 	}
 	now, err := s.CacheEntries(ctx, cacheKey)
 	if err != nil || len(now) != 1 || now[0].Writer.AttemptID != "two" {
 		t.Fatalf("the replacement was dropped: %+v %v", now, err)
 	}
-	if err = s.CacheDrop(ctx, now[0], "corrupt"); err != nil {
+	if _, err = s.CacheDrop(ctx, now[0], "corrupt"); err != nil {
 		t.Fatal(err)
 	}
 	if gone, _ := s.CacheEntries(ctx, cacheKey); len(gone) != 0 {
 		t.Fatal("the row that was read must be dropped")
+	}
+}
+
+// TestCacheEntriesDropAuditsOnlyARealDeletion (D-1132): a drop whose guarded
+// DELETE matches no row (the entry was replaced since it was read) leaves no
+// "dropped" audit row; the drop that does delete leaves exactly one.
+func TestCacheEntriesDropAuditsOnlyARealDeletion(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	s.now = func() time.Time { return time.Unix(1000, 0) }
+	ns, _ := entries.NamespaceOf(cacheTrusted)
+	save := func(id string) {
+		_, fin := cacheFinalizing(t, s, id, cacheTrusted, []string{cacheKey}, true)
+		if err := s.CacheCommit(ctx, entries.CommitRequest{Attempt: id, Epoch: fin, Claimed: ns, Manifest: cacheManifest(t, cacheTrusted, cacheKey, 10), Check: noCheck}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	save("one")
+	first, err := s.CacheEntries(ctx, cacheKey)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("%v %v", first, err)
+	}
+	save("two")
+	s.CacheDrop(ctx, first[0], "corrupt") // stale: the replacement survives
+	if n := cacheAuditCount(t, s, "cache.entry.dropped", cacheKey, "reason=corrupt"); n != 0 {
+		t.Fatalf("a drop that deleted nothing left %d audit rows", n)
+	}
+	now, err := s.CacheEntries(ctx, cacheKey)
+	if err != nil || len(now) != 1 {
+		t.Fatalf("%v %v", now, err)
+	}
+	s.CacheDrop(ctx, now[0], "corrupt")
+	if n := cacheAuditCount(t, s, "cache.entry.dropped", cacheKey, "reason=corrupt"); n != 1 {
+		t.Fatalf("the real drop left %d audit rows, want 1", n)
 	}
 }
 

@@ -86,7 +86,7 @@ func (b cancelAfterCheck) AttemptStateEpoch(ctx context.Context, id string) (mod
 
 // CacheDrop runs on a live context, so a drop that the restore wrongly attempts
 // after the cancel is not hidden by the cancelled context failing it.
-func (b cancelAfterCheck) CacheDrop(_ context.Context, m entries.Manifest, reason string) error {
+func (b cancelAfterCheck) CacheDrop(_ context.Context, m entries.Manifest, reason string) (bool, error) {
 	return b.Backend.CacheDrop(context.Background(), m, reason)
 }
 

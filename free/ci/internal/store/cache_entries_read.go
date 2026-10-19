@@ -97,14 +97,24 @@ func (s *Store) CacheTouch(ctx context.Context, ns []byte, key string) error {
 
 // CacheDrop deletes the entry m (only if it is still the row that was read: same
 // writer attempt, epoch and creation time) and appends the audit row in one
-// transaction.
-func (s *Store) CacheDrop(ctx context.Context, m entries.Manifest, reason string) error {
-	return s.write(ctx, func(tx *sql.Tx) error {
-		if err := execAll(ctx, tx, []any{"DELETE FROM cache_entry WHERE namespace=? AND cache_key=? AND attempt_id=? AND epoch=? AND created_at=?", m.Namespace, m.Key, m.Writer.AttemptID, m.Writer.Epoch, m.CreatedAt}); err != nil {
+// transaction. It reports whether a row was deleted: when the entry was replaced
+// since it was read, nothing is deleted and no audit row is written.
+func (s *Store) CacheDrop(ctx context.Context, m entries.Manifest, reason string) (bool, error) {
+	var dropped bool
+	err := s.write(ctx, func(tx *sql.Tx) error {
+		dropped = false
+		res, err := tx.ExecContext(ctx, "DELETE FROM cache_entry WHERE namespace=? AND cache_key=? AND attempt_id=? AND epoch=? AND created_at=?", m.Namespace, m.Key, m.Writer.AttemptID, m.Writer.Epoch, m.CreatedAt)
+		if err != nil {
 			return err
 		}
+		n, err := res.RowsAffected()
+		if err != nil || n == 0 {
+			return err
+		}
+		dropped = true
 		return s.appendAudit(ctx, tx, "cache", "cache.entry.dropped", m.Key, "reason="+reason)
 	})
+	return dropped && err == nil, err
 }
 
 // CachePrune runs one prune step in a single transaction (all or nothing):

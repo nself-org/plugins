@@ -1,6 +1,7 @@
 package entries_test
 
 import (
+	"context"
 	"errors"
 	"os"
 	"strings"
@@ -172,6 +173,33 @@ func TestVerifyDropsUnusableEntries(t *testing.T) {
 	rep, err := e.es.Verify(e.ctx)
 	if err != nil || rep.Checked != 3 || rep.Dropped != 2 || e.count() != 1 {
 		t.Fatalf("verify: %+v %v (%d left)", rep, err, e.count())
+	}
+}
+
+// staleDrop reports every drop as a no-op, as when the entry was replaced after
+// Verify read it.
+type staleDrop struct{ entries.Backend }
+
+func (staleDrop) CacheDrop(context.Context, entries.Manifest, string) (bool, error) {
+	return false, nil
+}
+
+// TestVerifyCountsOnlyDropsThatDeletedARow (D-1132): a guarded drop that matched
+// no row is not a drop.
+func TestVerifyCountsOnlyDropsThatDeletedARow(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	a := e.save("v1", trusted, "a", "aaaa")
+	if err := os.WriteFile(e.blobPath(a, 0), []byte("zzzz"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	es := entries.New(staleDrop{e.st}, e.blobs, entries.Options{
+		Clock:        func() time.Time { return time.Unix(0, e.clock.Load()) },
+		Getenv:       func(string) string { return "" },
+		DisableFloor: true,
+	})
+	rep, err := es.Verify(e.ctx)
+	if err != nil || rep.Checked != 1 || rep.Dropped != 0 {
+		t.Fatalf("verify: %+v %v", rep, err)
 	}
 }
 

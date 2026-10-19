@@ -106,7 +106,9 @@ type Backend interface {
 	// CacheKeys lists the distinct keys of all entries.
 	CacheKeys(ctx context.Context) ([]string, error)
 	CacheTouch(ctx context.Context, ns []byte, key string) error
-	CacheDrop(ctx context.Context, m Manifest, reason string) error
+	// CacheDrop deletes m if it is still the row that was read and reports whether
+	// it did; a stale m deletes nothing and leaves no audit row.
+	CacheDrop(ctx context.Context, m Manifest, reason string) (bool, error)
 	CachePrune(ctx context.Context, p PruneStep) (Pruned, error)
 	CacheRecordUse(ctx context.Context, u Use) error
 	CacheUses(ctx context.Context, attempt string) ([]Use, error)

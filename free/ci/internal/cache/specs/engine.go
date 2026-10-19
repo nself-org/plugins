@@ -39,7 +39,7 @@ var ErrEmpty = errors.New("specs: the cache directories are empty")
 type Backend interface {
 	AttemptStateEpoch(ctx context.Context, id string) (model.JobState, int64, error)
 	CacheEntries(ctx context.Context, key string) ([]entries.Manifest, error)
-	CacheDrop(ctx context.Context, m entries.Manifest, reason string) error
+	CacheDrop(ctx context.Context, m entries.Manifest, reason string) (bool, error)
 	AppendAudit(ctx context.Context, actor, action, target, detail string) error
 }
 
@@ -97,7 +97,7 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 		return false, 0, ctx.Err()
 	}
 	if access == authz.ModeRWOwn { // a lower-trust reader never deletes a higher-trust entry, it only audits
-		_ = e.Backend.CacheDrop(ctx, m, "unrestorable")
+		_, _ = e.Backend.CacheDrop(ctx, m, "unrestorable")
 	}
 	_ = e.Backend.AppendAudit(ctx, "cache", "cache.restore.refused", key, "reason="+refusalKey(err))
 	return false, 0, fmt.Errorf("cache restore refused: %w", err)
@@ -123,7 +123,7 @@ func (e *Engine) writerPassed(ctx context.Context, m entries.Manifest) bool {
 	case state == "queued" || state == "leased" || state == "running" || state == "finalizing":
 		return false
 	}
-	_ = e.Backend.CacheDrop(ctx, m, "attempt_not_passed")
+	_, _ = e.Backend.CacheDrop(ctx, m, "attempt_not_passed")
 	return false
 }
 
