@@ -412,3 +412,24 @@ func TestClientReadsTheCoordinatorModeFromItsEnvironment(t *testing.T) {
 		t.Fatalf("a personal coordinator: %v", err)
 	}
 }
+
+func TestStatementPredicateFieldsHaveTheirTypes(t *testing.T) {
+	f := newFixture(t)
+	rd := func(p map[string]any) map[string]any { return p["runDetails"].(map[string]any) }
+	bd := func(p map[string]any) map[string]any { return p["buildDefinition"].(map[string]any) }
+	for name, tweak := range map[string]func(map[string]any){
+		"builder is a string":        func(p map[string]any) { rd(p)["builder"] = "not-an-object" },
+		"builder id is a number":     func(p map[string]any) { rd(p)["builder"] = map[string]any{"id": 7} },
+		"byproducts is an object":    func(p map[string]any) { rd(p)["byproducts"] = map[string]any{} },
+		"metadata is a list":         func(p map[string]any) { rd(p)["metadata"] = []any{} },
+		"runDetails is a string":     func(p map[string]any) { p["runDetails"] = "x" },
+		"buildDefinition is a list":  func(p map[string]any) { p["buildDefinition"] = []any{} },
+		"dependencies is an object":  func(p map[string]any) { bd(p)["resolvedDependencies"] = map[string]any{} },
+		"externalParameters is text": func(p map[string]any) { bd(p)["externalParameters"] = "x" },
+		"revision is a number":       func(p map[string]any) { bd(p)["externalParameters"].(map[string]any)["revision"] = 7 },
+	} {
+		if err := handle(t, f, item(signing.PayloadStatement, f.statementPayload(func(m map[string]any) { m["predicate"] = f.predicate(tweak) }))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
