@@ -49,7 +49,7 @@ func wrapSigner(err error) error {
 	if errors.As(err, &se) {
 		return &Error{ErrCode: signing.CodeSigning, Reason: se.Reason, Msg: se.Msg}
 	}
-	return refuse(signing.ReasonSignerFailed, "the signer failed: %v", err)
+	return refuse(signing.ReasonSignerFailed, "the signer failed")
 }
 
 // signOne sends one payload to the signer and returns the envelope file bytes.

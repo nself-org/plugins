@@ -7,6 +7,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
 type fakeLister struct {
@@ -18,8 +19,11 @@ func (f fakeLister) ArtifactList(context.Context, records.Filter) ([]records.Rec
 	return f.recs, f.err
 }
 
+// jobs: the release job passed on attempt a-ok; another attempt of it failed.
+var jobs = []cirun.JobOutcome{{ID: "build", Kind: "test", State: cirun.StatePassed, AttemptID: "a-build"}, {ID: "publish", Kind: "release", State: cirun.StatePassed, AttemptID: "a-ok"}}
+
 func rec(name string, kind records.Kind, mut func(*records.Record)) records.Record {
-	r := records.Record{Name: name, Kind: kind, SHA256: name + "-digest", Size: 3, Run: "run-1", State: records.StateCommitted, Release: true}
+	r := records.Record{Name: name, Kind: kind, SHA256: name + "-digest", Size: 3, Run: "run-1", Attempt: "a-ok", State: records.StateCommitted, Release: true}
 	if mut != nil {
 		mut(&r)
 	}
@@ -36,16 +40,18 @@ func TestBindArtifactsListsCommittedReleaseFiles(t *testing.T) {
 		rec("gone", records.KindBinary, func(r *records.Record) { r.Missing = true }),
 		rec("not-release", records.KindBinary, func(r *records.Record) { r.Release = false }),
 		rec("other-run", records.KindBinary, func(r *records.Record) { r.Run = "run-2" }),
+		rec("old-attempt", records.KindBinary, func(r *records.Record) { r.Attempt = "a-failed" }),
+		rec("build-output", records.KindBinary, func(r *records.Record) { r.Attempt = "a-build" }),
 	}}
 	var ev model.Evidence
-	bindArtifacts(context.Background(), st, "proj", "run-1", &ev)
+	bindArtifacts(context.Background(), st, "proj", "run-1", jobs, &ev)
 	if len(ev.Artifacts) != 2 || ev.Artifacts[0].Path != "alpha" || ev.Artifacts[1].Path != "zeta" || !ev.Artifacts[0].Committed || ev.Artifacts[1].SHA256 != "zeta-digest" || ev.Artifacts[1].Size != 3 {
 		t.Fatalf("artifacts %+v", ev.Artifacts)
 	}
 	// a store failure, or no store, leaves an empty list (a release then fails closed at the gate)
 	for name, l := range map[string]artifactLister{"error": fakeLister{err: errors.New("down")}, "nil": nil} {
 		ev = model.Evidence{Artifacts: []model.Artifact{{Path: "stale"}}}
-		bindArtifacts(context.Background(), l, "proj", "run-1", &ev)
+		bindArtifacts(context.Background(), l, "proj", "run-1", jobs, &ev)
 		if ev.Artifacts == nil || len(ev.Artifacts) != 0 {
 			t.Fatalf("%s: %+v", name, ev.Artifacts)
 		}

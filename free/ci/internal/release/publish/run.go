@@ -48,6 +48,11 @@ func Run(ctx context.Context, d Deps, runID string) (Release, error) {
 	if d.Team {
 		return d.await(ctx, runID, f)
 	}
+	unlock, err := lockRun(ctx, d.Home, runID)
+	if err != nil {
+		return Release{RunID: runID}, d.fail(ctx, runID, f, err)
+	}
+	defer unlock()
 	if rel, ok := d.existing(ctx, runID, f); ok {
 		return rel, nil
 	}
@@ -62,7 +67,7 @@ func Run(ctx context.Context, d Deps, runID string) (Release, error) {
 	return rel, nil
 }
 
-// install writes, verifies and records the bundle.
+// install writes, verifies and records the bundle. The caller holds the run lock.
 func (d Deps) install(ctx context.Context, runID string, f *facts, b *bundle) (Release, error) {
 	prior, had, err := d.Ledger.ReleaseFor(ctx, runID)
 	if err != nil {
@@ -83,13 +88,16 @@ func (d Deps) install(ctx context.Context, runID string, f *facts, b *bundle) (R
 		return Release{}, err
 	}
 	target := Dir(d.Home, runID)
-	if err = install(staged, target, true); err != nil {
+	commit, undo, err := installDir(staged, target)
+	if err != nil {
 		return Release{}, refuse(signing.ReasonSignerFailed, "the release directory could not be put in place")
 	}
 	row := store.ReleaseRow{RunID: runID, Project: f.pipe.Project, Revision: f.pipe.Revision, State: store.ReleasePublished, ManifestSHA256: b.manifestSHA, KeyID: b.keyID}
 	if err = d.Ledger.RecordRelease(ctx, row); err != nil {
+		undo()
 		return Release{}, refuse(signing.ReasonSignerFailed, "the release could not be recorded")
 	}
+	commit()
 	return Release{RunID: runID, State: Published, Dir: target, ManifestSHA256: b.manifestSHA, KeyID: b.keyID}, nil
 }
 
@@ -108,8 +116,12 @@ func (d Deps) existing(ctx context.Context, runID string, f *facts) (Release, bo
 	return Release{RunID: runID, State: Published, Dir: dir, ManifestSHA256: row.ManifestSHA256, KeyID: row.KeyID}, true
 }
 
-// await records the TEAM state: the coordinator never signs (Epic X8).
+// await records the TEAM state: the coordinator never signs (Epic X8). A
+// release that is already published is left alone.
 func (d Deps) await(ctx context.Context, runID string, f *facts) (Release, error) {
+	if row, ok, err := d.Ledger.ReleaseFor(ctx, runID); err == nil && ok && row.State == store.ReleasePublished {
+		return Release{RunID: runID, State: Published, Dir: Dir(d.Home, runID), ManifestSHA256: row.ManifestSHA256, KeyID: row.KeyID}, nil
+	}
 	msg := "this TEAM coordinator holds no release key: run `" + TeamCommand(runID) + "` on your own machine"
 	row := store.ReleaseRow{RunID: runID, Project: f.pipe.Project, Revision: f.pipe.Revision, State: store.ReleaseAwaiting, Reason: msg}
 	if err := d.Ledger.RecordRelease(ctx, row); err != nil {
@@ -118,21 +130,29 @@ func (d Deps) await(ctx context.Context, runID string, f *facts) (Release, error
 	return Release{RunID: runID, State: Awaiting, Message: msg}, nil
 }
 
-// fail records `failed` (when the run is known) and returns the error with the recovery command.
+// fail records `failed` (when the run is known and not already published) and
+// returns the error with the recovery command. Text from outside this package
+// never reaches the record or the message: only a fixed sentence does.
 func (d Deps) fail(ctx context.Context, runID string, f *facts, err error) error {
 	var e *Error
 	if !errors.As(err, &e) {
-		e = refuse(signing.ReasonSignerFailed, "%v", err).(*Error)
+		e = refuse(signing.ReasonSignerFailed, "the publication failed").(*Error)
 	}
 	if f == nil {
 		if pipe, ok, perr := d.Src.PipelineByID(ctx, runID); perr == nil && ok {
 			f = &facts{pipe: pipe}
 		}
 	}
-	if f != nil {
-		_ = d.Ledger.RecordRelease(ctx, store.ReleaseRow{RunID: runID, Project: f.pipe.Project, Revision: f.pipe.Revision, State: store.ReleaseFailed, Reason: failedRecord(e)})
-	}
 	out := *e
+	out.Msg = strings.ReplaceAll(out.Msg, d.Home, "<home>")
+	if f == nil { // unknown run: nothing to record, nothing to recover
+		return &out
+	}
+	if row, ok, rerr := d.Ledger.ReleaseFor(ctx, runID); rerr == nil && ok && row.State == store.ReleasePublished {
+		out.Msg += ": release " + runID + " is recorded as published (manifest " + row.ManifestSHA256[:12] + ") but could not be confirmed now; `" + RecoveryCommand(runID) + "` repeats the check"
+		return &out
+	}
+	_ = d.Ledger.RecordRelease(ctx, store.ReleaseRow{RunID: runID, Project: f.pipe.Project, Revision: f.pipe.Revision, State: store.ReleaseFailed, Reason: failedRecord(&out)})
 	out.Msg += ": release NOT published; the run's evidence is unchanged; run `" + RecoveryCommand(runID) + "` to publish it"
 	return &out
 }

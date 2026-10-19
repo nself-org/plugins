@@ -14,6 +14,7 @@ package publish_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -203,6 +204,50 @@ func TestReleasePipeline(t *testing.T) {
 	}
 	if string(files["artifacts/app"]) != "app-bytes" {
 		t.Fatalf("artifact bytes %q", files["artifacts/app"])
+	}
+	p.cliChecks(exp.Dir, info)
+}
+
+// cliChecks runs the shipped binary's own commands on the exported directory:
+// `ci artifacts verify <dir>` returns 0 and `ci evidence verify --file` reports class release.
+func (p *pipeRig) cliChecks(dir string, info signing.KeyInfo) {
+	t := p.t
+	bin := filepath.Join(t.TempDir(), "nself-ci")
+	build := exec.Command("go", "build", "-mod=vendor", "-o", bin, "../../../cmd")
+	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	keys := filepath.Join(t.TempDir(), "ci-release.keys")
+	if err := os.WriteFile(keys, []byte(info.TrustLine()+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cli := func(args ...string) (string, int) {
+		cmd := exec.Command(bin, args...)
+		cmd.Dir = p.repo
+		cmd.Env = append(os.Environ(), "NSELF_V15=1", "NSELF_CI_HOME="+t.TempDir(), "NSELF_CI_REPO="+p.repo)
+		out, err := cmd.CombinedOutput()
+		code := 0
+		if ee, ok := err.(*exec.ExitError); ok {
+			code = ee.ExitCode()
+		} else if err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		return string(out), code
+	}
+	var env struct {
+		Data struct {
+			Verified bool   `json:"verified"`
+			Class    string `json:"class"`
+		} `json:"data"`
+	}
+	out, code := cli("artifacts", "verify", dir, "--keys", keys, "--repo", p.repo, "--json")
+	if err := json.Unmarshal([]byte(out), &env); err != nil || code != 0 || !env.Data.Verified {
+		t.Fatalf("artifacts verify: exit %d (%v)\n%s", code, err, out)
+	}
+	out, code = cli("evidence", "verify", "--file", filepath.Join(dir, "evidence.json"), "--at-revision", p.rev, "--json")
+	if err := json.Unmarshal([]byte(out), &env); err != nil || env.Data.Class != "release" {
+		t.Fatalf("evidence verify: exit %d, class %q (%v)\n%s", code, env.Data.Class, err, out)
 	}
 }
 

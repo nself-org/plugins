@@ -46,16 +46,25 @@ func Export(ctx context.Context, d Deps, runID, out, cwd string) (Release, error
 		return Release{}, err
 	}
 	src := Dir(d.Home, runID)
-	if err = d.selfVerify(ctx, src, row.KeyID); err != nil {
+	if err = d.checkDir(ctx, src, row); err != nil {
 		return Release{}, withRecovery(err, runID)
 	}
 	if err = copyTree(src, dest); err != nil {
 		return Release{}, refuse(signing.ReasonSignerFailed, "the release could not be exported")
 	}
-	if err = d.selfVerify(ctx, dest, row.KeyID); err != nil {
+	if err = d.checkDir(ctx, dest, row); err != nil {
 		return Release{}, err
 	}
 	return Release{RunID: runID, State: Published, Dir: dest, ManifestSHA256: row.ManifestSHA256, KeyID: row.KeyID, Message: PrivateNotice}, nil
+}
+
+// checkDir verifies dir and requires its manifest to be the one the ledger recorded.
+func (d Deps) checkDir(ctx context.Context, dir string, row store.ReleaseRow) error {
+	b, err := os.ReadFile(filepath.Join(dir, verifyManifestFile))
+	if err != nil || sha(b) != row.ManifestSHA256 {
+		return refuse(signing.ReasonDigestNotCommitted, "the release directory is not the release the ledger recorded")
+	}
+	return d.selfVerify(ctx, dir, row.KeyID)
 }
 
 func withRecovery(err error, runID string) error {
@@ -68,38 +77,80 @@ func withRecovery(err error, runID string) error {
 	return &out
 }
 
-// copyTree copies the regular files of src into dst, creating dst if needed.
-func copyTree(src, dst string) error {
-	if err := os.MkdirAll(dst, 0o700); err != nil {
+// copyTree copies the regular files of src into dst. dst is created with an
+// exclusive mkdir, or must already be an empty real directory (never a
+// symlink); every write goes through an os.Root on dst, so a name planted in
+// dst while the copy runs cannot redirect a write outside it. A failed copy
+// removes what it created.
+func copyTree(src, dst string) (err error) {
+	madeDst := false
+	if info, lerr := os.Lstat(dst); lerr == nil {
+		if !info.IsDir() {
+			return os.ErrInvalid // a symlink or a file
+		}
+	} else if err = os.Mkdir(dst, 0o700); err != nil {
+		return err
+	} else {
+		madeDst = true
+	}
+	root, err := os.OpenRoot(dst)
+	if err != nil {
 		return err
 	}
-	return filepath.WalkDir(src, func(p string, de os.DirEntry, err error) error {
-		if err != nil {
-			return err
+	defer func() { _ = root.Close() }()
+	if before, lerr := os.Lstat(dst); lerr != nil || !before.IsDir() {
+		return os.ErrInvalid
+	} else if at, serr := root.Stat("."); serr != nil || !os.SameFile(before, at) {
+		return os.ErrInvalid
+	}
+	var made []string // root-relative names, in creation order
+	defer func() {
+		if err == nil {
+			return
 		}
-		rel, err := filepath.Rel(src, p)
-		if err != nil || rel == "." {
-			return err
+		for i := len(made) - 1; i >= 0; i-- {
+			_ = root.Remove(made[i])
+		}
+		if madeDst {
+			_ = os.Remove(dst)
+		}
+	}()
+	return filepath.WalkDir(src, func(p string, de os.DirEntry, werr error) error {
+		if werr != nil {
+			return werr
+		}
+		rel, rerr := filepath.Rel(src, p)
+		if rerr != nil || rel == "." {
+			return rerr
 		}
 		if de.IsDir() {
-			return os.MkdirAll(filepath.Join(dst, rel), 0o700)
+			if err := root.Mkdir(rel, 0o700); err != nil { // exclusive: an existing name, a planted symlink included, fails
+				return err
+			}
+			made = append(made, rel)
+			return nil
 		}
 		if !de.Type().IsRegular() {
 			return os.ErrInvalid
 		}
-		in, err := os.Open(p)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = in.Close() }()
-		out, err := os.OpenFile(filepath.Join(dst, rel), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(out, in)
-		if e := out.Close(); err == nil {
-			err = e
-		}
-		return err
+		return copyFile(root, p, rel, &made)
 	})
+}
+
+func copyFile(root *os.Root, srcPath, rel string, made *[]string) error {
+	in, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	out, err := root.OpenFile(rel, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	*made = append(*made, rel)
+	_, err = io.Copy(out, in)
+	if e := out.Close(); err == nil {
+		err = e
+	}
+	return err
 }

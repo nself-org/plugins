@@ -14,11 +14,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/signing"
@@ -41,6 +41,7 @@ func stage(home string) (string, error) {
 	if err := os.MkdirAll(parent, 0o700); err != nil {
 		return "", refuse(signing.ReasonSignerFailed, "the releases directory could not be created")
 	}
+	sweep(home)
 	d, err := os.MkdirTemp(parent, ".stage-")
 	if err != nil {
 		return "", refuse(signing.ReasonSignerFailed, "a staging directory could not be created")
@@ -128,19 +129,52 @@ func (c *ctxReader) Read(p []byte) (int, error) {
 	return c.r.Read(p)
 }
 
-// install moves the staged directory to the target. An existing target is
-// replaced only when replace is true (a previous publication that failed
-// self-verification or never reached the ledger).
-func install(staged, target string, replace bool) error {
-	if _, err := os.Lstat(target); err == nil {
-		if !replace {
-			return fmt.Errorf("release directory exists")
+// installDir moves the staged directory to the target. commit drops the
+// directory it replaced; undo puts that directory back (the ledger write failed).
+func installDir(staged, target string) (commit, undo func(), err error) {
+	old := ""
+	if _, serr := os.Lstat(target); serr == nil {
+		old = target + ".old-" + filepath.Base(staged)
+		if err = os.Rename(target, old); err != nil {
+			return nil, nil, err
 		}
-		old := target + ".old-" + filepath.Base(staged)
-		if err := os.Rename(target, old); err != nil {
-			return err
-		}
-		defer func() { _ = os.RemoveAll(old) }()
 	}
-	return os.Rename(staged, target)
+	if err = os.Rename(staged, target); err != nil {
+		if old != "" {
+			_ = os.Rename(old, target)
+		}
+		return nil, nil, err
+	}
+	commit = func() {
+		if old != "" {
+			_ = os.RemoveAll(old)
+		}
+	}
+	undo = func() {
+		_ = os.RemoveAll(target)
+		if old != "" {
+			_ = os.Rename(old, target)
+		}
+	}
+	return commit, undo, nil
+}
+
+// staleAfter is how long an abandoned staging entry is kept.
+const staleAfter = time.Hour
+
+// sweep removes staging leftovers of killed publications.
+func sweep(home string) {
+	ents, err := os.ReadDir(releasesDir(home))
+	if err != nil {
+		return
+	}
+	for _, e := range ents {
+		n := e.Name()
+		if !strings.HasPrefix(n, ".stage-") && !strings.HasPrefix(n, ".keys-") && !strings.Contains(n, ".old-") {
+			continue
+		}
+		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > staleAfter {
+			_ = os.RemoveAll(filepath.Join(releasesDir(home), n))
+		}
+	}
 }

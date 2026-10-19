@@ -93,6 +93,19 @@ func TestArtifactsSignNothingToPublishAndSources(t *testing.T) {
 	if code != 1 || !strings.Contains(errs, "no passing release job") {
 		t.Fatalf("code %d %q", code, errs)
 	}
+	// --json: one v1 failure envelope on stdout, exit 1, nothing on stderr
+	code, out, errs := capture(t, func() int { return artifactsSign([]string{"run-1", "--json"}) })
+	var env struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code     string `json:"code"`
+			Message  string `json:"message"`
+			ExitCode int    `json:"exit_code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &env); err != nil || code != 1 || errs != "" || env.OK || env.Error.Code != "E717" || env.Error.ExitCode != 1 || !strings.Contains(env.Error.Message, "nothing to publish") {
+		t.Fatalf("json: code %d stdout %q stderr %q (%v)", code, out, errs, err)
+	}
 	st, err := store.Open(filepath.Join(home, "state.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +124,7 @@ func TestArtifactsSignNothingToPublishAndSources(t *testing.T) {
 			ran = run + ":" + fs.Lookup("zz-cmdtest").Value.String()
 			return publish.Release{RunID: run, State: publish.Published, Dir: "/d", KeyID: "k", ManifestSHA256: strings.Repeat("a", 64)}, nil
 		})
-	code, out, errs := capture(t, func() int { return artifactsSign([]string{"run-9", "--zz-cmdtest", "https://c.example"}) })
+	code, out, errs = capture(t, func() int { return artifactsSign([]string{"run-9", "--zz-cmdtest", "https://c.example"}) })
 	if code != 0 || ran != "run-9:https://c.example" || !strings.Contains(out, "published to /d") {
 		t.Fatalf("source: code %d ran %q out %q %q", code, ran, out, errs)
 	}

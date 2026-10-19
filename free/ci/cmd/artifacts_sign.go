@@ -22,7 +22,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/nself-org/cli/sdk/go/v2/output"
+
 	"github.com/nself-org/plugins/free/ci/internal/release/publish"
+	"github.com/nself-org/plugins/free/ci/internal/signing"
 )
 
 func init() { registerArtifactsSub("sign", artifactsSign) }
@@ -65,8 +68,13 @@ func artifactsSign(args []string) int {
 		}
 	}
 	if errors.Is(err, publish.ErrNotRelease) {
-		fmt.Fprintf(os.Stderr, "nself ci artifacts sign: run %s has no passing release job: nothing to publish\n", pos[0])
-		return 1
+		msg := "run " + pos[0] + " has no passing release job: nothing to publish"
+		if asJSON {
+			_ = output.WriteError(os.Stdout, command, output.ErrorDetail{Code: signing.CodeSigning, Message: msg, ExitCode: output.ExitUser, Class: output.ClassUser}, nil)
+			return output.ExitUser
+		}
+		fmt.Fprintln(os.Stderr, "nself ci artifacts sign: "+msg)
+		return output.ExitUser
 	}
 	if err != nil {
 		return artifactsExit(err, command, asJSON)

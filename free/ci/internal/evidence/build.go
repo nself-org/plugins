@@ -92,8 +92,8 @@ func (Builder) Complete(ctx context.Context, begin any, f cirun.EvidenceFacts, e
 	}
 	ev.PlacementRef = commonPlacement(ctx, f.Jobs)
 	if f.Store != nil {
-		bindArtifacts(ctx, f.Store, f.Root, f.RunID, &ev) // P7-CACHE-18: a release gate needs the released digests in the evidence
-		row, _, _ := f.Store.PipelineByID(ctx, f.RunID)   // attempts are filed under the digest the run row carries
+		bindArtifacts(ctx, f.Store, f.Root, f.RunID, f.Jobs, &ev) // P7-CACHE-18: a release gate needs the released digests in the evidence
+		row, _, _ := f.Store.PipelineByID(ctx, f.RunID)           // attempts are filed under the digest the run row carries
 		for _, o := range f.Jobs {
 			if o.AttemptID == "" || o.State == cirun.StateSkipped {
 				continue

@@ -85,6 +85,13 @@ func TestCacheReleasesStates(t *testing.T) {
 		_, err := tx.ExecContext(ctx, "UPDATE cache_release SET state='failed' WHERE run_id='run-1'")
 		return err
 	})
+	del := s.write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "DELETE FROM cache_release WHERE run_id='run-1'")
+		return err
+	})
+	if del == nil {
+		t.Fatal("the trigger let a published row be deleted")
+	}
 	if raw == nil {
 		t.Fatal("the trigger let a published row change")
 	}

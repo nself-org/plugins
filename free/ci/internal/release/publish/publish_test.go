@@ -55,7 +55,7 @@ func TestPublishWritesTheEpicLayout(t *testing.T) {
 	if info, _ := os.Stat(filepath.Join(rel.Dir, "evidence.json")); info.Mode().Perm() != 0o600 {
 		t.Fatalf("evidence mode %v: it is private operator material", info.Mode())
 	}
-	if ents, _ := os.ReadDir(filepath.Join(f.home, "releases")); len(ents) != 1 {
+	if ents, _ := os.ReadDir(filepath.Join(f.home, "releases")); len(ents) != 2 { // the run directory and its lock file
 		t.Fatalf("staging leftovers: %v", ents)
 	}
 }

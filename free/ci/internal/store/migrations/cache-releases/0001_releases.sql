@@ -14,3 +14,6 @@ CREATE INDEX cache_release_project ON cache_release(project, updated_at DESC);
 CREATE TRIGGER cache_release_published_immutable BEFORE UPDATE ON cache_release
 WHEN OLD.state='published' AND (NEW.state<>'published' OR NEW.manifest_sha256<>OLD.manifest_sha256 OR NEW.key_id<>OLD.key_id OR NEW.project<>OLD.project OR NEW.revision<>OLD.revision)
 BEGIN SELECT RAISE(ABORT,'E607 immutable: a published release record does not change'); END;
+CREATE TRIGGER cache_release_published_undeletable BEFORE DELETE ON cache_release
+WHEN OLD.state='published'
+BEGIN SELECT RAISE(ABORT,'E607 immutable: a published release record is not deleted'); END;
