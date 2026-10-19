@@ -93,6 +93,7 @@ func (rs *runState) runAttemptN(ctx context.Context, i int, pj plan.PlannedJob, 
 	defer stop()
 	rs.setCancel(pj.ID, stop)
 	if m := rs.marked(pj.ID); m != "" {
+		rs.retire(AttemptSpec{Pipeline: rs.mp, Job: &rs.mp.Jobs[i], N: n}) // a parked previous attempt is superseded
 		return rs.markOutcome(o, m)
 	}
 	job := &rs.mp.Jobs[i]

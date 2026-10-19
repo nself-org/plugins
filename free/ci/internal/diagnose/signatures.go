@@ -44,6 +44,11 @@ type signature struct {
 	remediation string
 }
 
+// testFailure marks output that reports a failing test or assertion: a message
+// in the same lines (an expected DNS error, a disk-full path under test) is the
+// program's own, so no output row may match there.
+var testFailure = re(`(?i)(^|\s)(FAILED|FAIL|--- FAIL)\b|✕|✗|assertion ?error|assertion failed|panic:`)
+
 func re(s string) *regexp.Regexp { return regexp.MustCompile(s) }
 
 // signatures are tried in order; the first match wins.
@@ -52,13 +57,13 @@ var signatures = []signature{
 		id:          SigOOM,
 		exits:       []int{-1}, // killed by a signal (the executor reports exit -1, no error); a plain `exit 137` is the job's own code and is not enough
 		errText:     re(`(?i)signal: killed|oomkilled|out of memory`),
-		output:      re(`(?i)oomkilled|out of memory: kill|oom-kill|cannot allocate memory|\d+\s+killed\b`),
+		output:      re(`(?im)oomkilled|out of memory: kill|oom-kill|cannot allocate memory|^\w*sh: (line \d+: )? *\d+ +killed\b`),
 		remediation: "The process was killed by a signal, most likely for memory. Free memory on the runner, lower the job's parallelism, or raise `requires.mem_mb`; then run it again.",
 	},
 	{
 		id:          SigDisk,
 		errText:     re(`(?i)no space left on device|disk quota exceeded`),
-		output:      re(`(?i)no space left on device|disk quota exceeded|enospc`),
+		output:      re(`(?i)no space left on device|disk quota exceeded`),
 		remediation: "The disk is full. Free space on the runner's work and cache volumes (`nself ci runs prune`, Docker prune), then run it again.",
 	},
 	{

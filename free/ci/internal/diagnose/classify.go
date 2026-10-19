@@ -92,7 +92,7 @@ func (s signature) matches(in Input, tail string) bool {
 	if in.Err != "" && s.errText != nil && s.errText.MatchString(in.Err) {
 		return true
 	}
-	return in.ExitCode != 0 && s.output != nil && s.output.MatchString(tail)
+	return in.ExitCode != 0 && s.output != nil && !testFailure.MatchString(tail) && s.output.MatchString(tail)
 }
 
 func infra(s signature) Diagnosis {

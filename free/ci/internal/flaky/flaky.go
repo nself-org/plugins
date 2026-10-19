@@ -7,8 +7,8 @@ package flaky
 // Outputs: Flake rows with the runs behind each one.
 // Constraints: read-only and informational: a listing never edits evidence,
 // never changes a result and never reads as a pass; "identical inputs" means
-// the same repo, revision, tracked-changes digest, pipeline and input digests
-// (config, lockfiles, generated files); error and skip results are ignored
+// the same repo, revision, tracked-changes digest, pipeline, policy, source trust and
+// input digests (config, lockfiles, generated files); dirty or unbound runs are skipped; error and skip results are ignored
 // (an infra error says nothing about the code); adhoc runs are ignored.
 
 import (
@@ -58,8 +58,15 @@ func groupKey(ev model.Evidence, c model.Check) string {
 	if ev.TrackedChangesDigest != nil {
 		tracked = *ev.TrackedChangesDigest
 	}
-	sum := sha256.Sum256(append(in, []byte("\x00"+ev.RepoID+"\x00"+ev.Revision+"\x00"+tracked+"\x00"+ev.Pipeline.Name+"\x00"+c.ID+"\x00"+c.JobID)...))
+	sum := sha256.Sum256(append(in, []byte("\x00"+ev.RepoID+"\x00"+ev.Revision+"\x00"+tracked+"\x00"+ev.Pipeline.Name+"\x00"+c.ID+"\x00"+c.JobID+"\x00"+ev.PolicyDigest+"\x00"+string(ev.SourceTrust))...))
 	return hex.EncodeToString(sum[:])
+}
+
+// comparable reports whether a run's inputs are fully captured: a dirty or
+// unbound worktree can differ in files the digests do not cover (untracked
+// files), so its result says nothing about identical inputs.
+func comparable(ev model.Evidence) bool {
+	return ev.WorktreeState != "dirty" && ev.Binding.State != "unbound"
 }
 
 // Detect lists the flaky checks in docs (newest first, as the store returns them).
@@ -70,7 +77,7 @@ func Detect(docs []Doc) []Flake {
 	var out []Flake
 	for _, d := range docs {
 		ev := d.Evidence
-		if ev.Pipeline.Kind == "adhoc" {
+		if ev.Pipeline.Kind == "adhoc" || !comparable(ev) {
 			continue
 		}
 		for _, c := range ev.Checks {

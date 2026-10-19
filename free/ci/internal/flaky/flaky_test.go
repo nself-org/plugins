@@ -182,3 +182,17 @@ func TestDetectListsConfirmationFlakes(t *testing.T) {
 		t.Fatalf("an adhoc run was listed: %+v", got)
 	}
 }
+
+func TestDetectSkipsDirtyAndSeparatesPolicyAndTrust(t *testing.T) {
+	mut := func(d Doc, f func(*model.Evidence)) Doc { f(&d.Evidence); return d }
+	dirty := func(e *model.Evidence) { e.WorktreeState = "dirty" }
+	unbound := func(e *model.Evidence) { e.Binding.State = "unbound" }
+	policy := func(e *model.Evidence) { e.PolicyDigest = "other" }
+	trust := func(e *model.Evidence) { e.SourceTrust = "untrusted" }
+	for name, f := range map[string]func(*model.Evidence){"dirty worktree": dirty, "unbound binding": unbound, "other policy": policy, "other source trust": trust} {
+		docs := []Doc{evidenceOf("r1", "", "a", "pass"), mut(evidenceOf("r1", "", "b", "fail"), f)}
+		if got := Detect(docs); len(got) != 0 {
+			t.Errorf("%s: listed as flaky: %+v", name, got)
+		}
+	}
+}

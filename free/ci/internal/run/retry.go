@@ -26,6 +26,9 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
+// confirmingKey marks the context of a --confirm-flaky rerun: park refuses it.
+type confirmingKey struct{}
+
 // MaxConfirmFlaky bounds --confirm-flaky.
 const MaxConfirmFlaky = 10
 
@@ -88,7 +91,7 @@ func (rs *runState) stillRunning(ctx context.Context, pj plan.PlannedJob) bool {
 // parked; when it is, o is a failed infra outcome marked parked and the
 // caller must not settle it.
 func (rs *runState) park(ctx context.Context, pj plan.PlannedJob, job model.Job, id string, o *JobOutcome, n int) bool {
-	if !o.retryable || o.FailureClass != "infra" || n > infraBudget(job) || !rs.stillRunning(ctx, pj) {
+	if ctx.Value(confirmingKey{}) != nil || !o.retryable || o.FailureClass != "infra" || n > infraBudget(job) || !rs.stillRunning(ctx, pj) {
 		return false
 	}
 	if rs.trans(id, "running", "lost", "infra") != nil { // a cancel intent or an unexpected state: settle normally
@@ -137,10 +140,13 @@ func (rs *runState) runAttempt(ctx context.Context, i int, pj plan.PlannedJob, o
 			out.parked = false
 			break
 		}
-		retries = append(retries, model.Retry{JobID: pj.ID, Attempt: n + 1, Class: out.FailureClass, Diagnosis: out.Diagnosis, Excerpt: diagnose.Excerpt(out.Tail, 1024)})
 		rs.render.Event(Event{Type: "retrying", Job: pj.ID, Text: fmt.Sprintf("attempt %d failed (%s); retrying as attempt %d of at most %d", n, out.Diagnosis, n+1, infraBudget(job)+1)})
+		why := model.Retry{JobID: pj.ID, Attempt: n + 1, Class: out.FailureClass, Diagnosis: out.Diagnosis, Excerpt: diagnose.Excerpt(out.Tail, 1024)}
 		n++
 		out = rs.runAttemptN(ctx, i, pj, o, n)
+		if out.AttemptID != "" { // the retry is recorded only once its attempt exists
+			retries = append(retries, why)
+		}
 	}
 	if rs.c.Opts.ConfirmFlaky > 0 && retryable(job) && out.State == StateFailed && out.FailureClass == "code" {
 		retries, out.Flaky = rs.confirmFlaky(ctx, i, pj, o, retries, n, out.AttemptID)
@@ -166,17 +172,19 @@ func (rs *runState) confirmFlaky(ctx context.Context, i int, pj plan.PlannedJob,
 			break
 		}
 		n++
-		retries = append(retries, model.Retry{JobID: pj.ID, Attempt: n, Class: "code", Diagnosis: "confirm-flaky"})
 		rs.render.Event(Event{Type: "retrying", Job: pj.ID, Text: "confirmation rerun " + strconv.Itoa(k+1) + " of the failed job (attempt " + strconv.Itoa(n) + ")"})
-		r := rs.runAttemptN(ctx, i, pj, o, n)
-		if r.parked { // a confirmation rerun is never retried: retire the attempt park queued, it ends failed
-			rs.retire(AttemptSpec{Pipeline: rs.mp, Job: &rs.mp.Jobs[i], N: n + 1})
-			r.parked = false
+		r := rs.runAttemptN(context.WithValue(ctx, confirmingKey{}, true), i, pj, o, n) // a confirmation rerun is never parked for an infra retry
+		if r.AttemptID == "" {
+			break // refused or cancelled before an attempt existed: nothing ran, nothing to count
 		}
+		retries = append(retries, model.Retry{JobID: pj.ID, Attempt: n, Class: "code", Diagnosis: "confirm-flaky"})
 		switch r.State {
 		case StatePassed:
 			passes++
 		case StateFailed:
+			if r.FailureClass != "code" {
+				return retries, flakyNote(passes, fails) // an infra error says nothing about the code: not counted
+			}
 			fails++
 		default:
 			return retries, flakyNote(passes, fails)
