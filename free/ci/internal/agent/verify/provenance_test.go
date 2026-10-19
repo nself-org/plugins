@@ -383,7 +383,13 @@ func scriptSetup(t *testing.T, syftVersion string, pinnedSHA func(fake string) s
 
 func (e scriptEnv) run(script string, extraEnv []string, args ...string) ([]byte, error) {
 	cmd := exec.Command("bash", append([]string{filepath.Join(e.scripts, script)}, args...)...)
-	cmd.Env = append(os.Environ(), append([]string{"NSELF_AGENT_SYFT=" + e.fake, "TMPDIR=" + e.work, "GOFLAGS="}, extraEnv...)...)
+	var base []string
+	for _, kv := range os.Environ() { // a developer shell may export the real key or GitHub variables: the script under test must not see them
+		if !strings.HasPrefix(kv, "NSELF_AGENT_SIGNING_KEY") && !strings.HasPrefix(kv, "GITHUB_") {
+			base = append(base, kv)
+		}
+	}
+	cmd.Env = append(base, append([]string{"NSELF_AGENT_SYFT=" + e.fake, "TMPDIR=" + e.work, "GOFLAGS="}, extraEnv...)...)
 	return cmd.CombinedOutput()
 }
 
@@ -490,9 +496,9 @@ func TestProvenanceScriptRunsOnlyThePinnedSyft(t *testing.T) {
 	}
 }
 
-// TestProvenanceScriptSignsWithTheEnvironmentKeyAndLeaksNoKey is the release path: the key comes from the environment, the builder from
-// the GitHub variables, and no child process (syft here) ever sees the key.
-func TestProvenanceScriptSignsWithTheEnvironmentKeyAndLeaksNoKey(t *testing.T) {
+// TestProvenanceScriptReleasePathRunsInTwoPhases is the release path: --prepare runs go and syft without the key (and refuses to start
+// with it), --sign takes the key from the environment and the builder from the GitHub variables and runs openssl only.
+func TestProvenanceScriptReleasePathRunsInTwoPhases(t *testing.T) {
 	e := scriptSetup(t, "1.54.1", fileSHA(t))
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -505,12 +511,12 @@ func TestProvenanceScriptSignsWithTheEnvironmentKeyAndLeaksNoKey(t *testing.T) {
 	keyPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
 	keyID := signing.KeyID(signing.PurposeAgent, pub)
 	env := []string{"NSELF_AGENT_SIGNING_KEY=" + keyPEM, "NSELF_AGENT_SIGNING_KEY_ID=" + keyID,
-		"GITHUB_WORKFLOW_REF=nself-org/plugins/.github/workflows/release-agent.yml@refs/tags/v1.5.0", "GITHUB_RUN_ID=77", "GITHUB_SHA=" + strings.Repeat("c", 40)}
+		"GITHUB_WORKFLOW_REF=nself-org/plugins/.github/workflows/release-agent.yml@refs/tags/v1.5.0", "GITHUB_REPOSITORY=nself-org/plugins", "GITHUB_RUN_ID=77", "GITHUB_SHA=" + strings.Repeat("c", 40)}
 	if o, merr := e.run("manifest.sh", env, "--in", e.dir); merr != nil {
 		t.Fatalf("manifest.sh: %v\n%s", merr, o)
 	}
 	// The release path is two steps: --prepare runs go and syft and must not hold the key; --sign holds the key and runs openssl only.
-	prepEnv := env[2:]
+	prepEnv := env[2:] // the GitHub variables only: no key
 	if o, perr := e.run("provenance.sh", prepEnv, "--in", e.dir, "--prepare", "--versions", e.table); perr != nil {
 		t.Fatalf("provenance.sh --prepare: %v\n%s", perr, o)
 	}
@@ -539,20 +545,55 @@ func TestProvenanceScriptSignsWithTheEnvironmentKeyAndLeaksNoKey(t *testing.T) {
 	if bytes.Contains(files.Provenance, []byte("PRIVATE")) {
 		t.Fatal("key text in the provenance file")
 	}
-	// --prepare refuses to start while the key is in its environment, and a real --prepare needs the GitHub variables.
-	e2 := scriptSetup(t, "1.54.1", fileSHA(t))
-	if o, merr := e2.run("provenance.sh", append(env[:1:1], "GITHUB_WORKFLOW_REF=x"), "--in", e2.dir, "--prepare", "--versions", e2.table); merr == nil || !strings.Contains(string(o), "without NSELF_AGENT_SIGNING_KEY") {
-		t.Fatalf("--prepare with the key in its environment must refuse:\n%s", o)
+	// The guards around the phases. Each row names its own message: a row that failed earlier for another reason would not match it.
+	ghEnv := []string{"GITHUB_WORKFLOW_REF=nself-org/plugins/.github/workflows/release-agent.yml@refs/tags/v1.5.0", "GITHUB_REPOSITORY=nself-org/plugins", "GITHUB_RUN_ID=78", "GITHUB_SHA=" + strings.Repeat("d", 40)}
+	fresh := func() scriptEnv { // a release directory with manifests (manifest.sh with the real-mode key) and nothing else
+		e2 := scriptSetup(t, "1.54.1", fileSHA(t))
+		if o, merr := e2.run("manifest.sh", env[:2], "--in", e2.dir); merr != nil {
+			t.Fatalf("manifest.sh: %v\n%s", merr, o)
+		}
+		return e2
 	}
-	if o, merr := e2.run("provenance.sh", []string{"GITHUB_WORKFLOW_REF="}, "--in", e2.dir, "--prepare", "--versions", e2.table); merr == nil {
-		t.Fatalf("a real --prepare without GITHUB_WORKFLOW_REF must fail:\n%s", o)
-	}
-	// One process with a real key may not start go and syft: neither the phase-less nor the combined form is accepted outside --rehearsal.
-	for _, args := range [][]string{{"--in", e2.dir}, {"--in", e2.dir, "--prepare", "--sign"}} {
-		if o, merr := e2.run("provenance.sh", env[:2], args...); merr == nil {
-			t.Fatalf("%v must be refused:\n%s", args, o)
+	refuse := func(name string, e2 scriptEnv, extra []string, want string, args ...string) {
+		t.Helper()
+		o, rerr := e2.run("provenance.sh", extra, args...)
+		if rerr == nil || !strings.Contains(string(o), want) {
+			t.Errorf("%s: want a refusal containing %q, got err=%v\n%s", name, want, rerr, o)
 		}
 	}
+	e2 := fresh()
+	refuse("prepare holding the key", e2, append(env[:1:1], ghEnv...), "without NSELF_AGENT_SIGNING_KEY", "--in", e2.dir, "--prepare", "--versions", e2.table)
+	refuse("prepare holding the key, rehearsal", e2, env[:1], "without NSELF_AGENT_SIGNING_KEY", "--in", e2.dir, "--prepare", "--rehearsal", "--versions", e2.table)
+	refuse("prepare without the GitHub variables", e2, nil, "GITHUB_WORKFLOW_REF, GITHUB_RUN_ID and GITHUB_SHA must be set", "--in", e2.dir, "--prepare", "--versions", e2.table)
+	refuse("no phase", e2, env[:2], "name a phase", "--in", e2.dir)
+	refuse("both phases with a real key", e2, env[:2], "for --rehearsal only", "--in", e2.dir, "--prepare", "--sign")
+	refuse("sign before prepare", e2, append(env[:2:2], ghEnv...), "run --prepare first", "--in", e2.dir, "--sign")
+	if o, perr := e2.run("provenance.sh", append([]string{}, ghEnv...), "--in", e2.dir, "--prepare", "--versions", e2.table); perr != nil {
+		t.Fatalf("prepare: %v\n%s", perr, o)
+	}
+	refuse("prepare twice", e2, ghEnv, "already exists", "--in", e2.dir, "--prepare", "--versions", e2.table)
+	refuse("sign for another run", e2, append(env[:2:2], "GITHUB_WORKFLOW_REF="+ghEnv[0][len("GITHUB_WORKFLOW_REF="):], "GITHUB_REPOSITORY=nself-org/plugins", "GITHUB_RUN_ID=79", "GITHUB_SHA="+strings.Repeat("d", 40)),
+		"is not about this run", "--in", e2.dir, "--sign")
+	// A file changed after --prepare no longer matches the statement.
+	if err = os.WriteFile(filepath.Join(e2.dir, BinaryName("linux-amd64")+SuffixSPDX), []byte(`{"changed":true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refuse("SBOM changed after prepare", e2, append(env[:2:2], ghEnv...), "does not match", "--in", e2.dir, "--sign")
+	// A PAE that is not the encoding of the statement is never signed.
+	e3 := fresh()
+	if o, perr := e3.run("provenance.sh", ghEnv, "--in", e3.dir, "--prepare", "--versions", e3.table); perr != nil {
+		t.Fatalf("prepare: %v\n%s", perr, o)
+	}
+	if err = os.WriteFile(filepath.Join(e3.dir, ".provenance", "linux-amd64", "statement.pae"), []byte("DSSEv1 forged"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refuse("forged PAE", e3, append(env[:2:2], ghEnv...), "not the DSSE encoding", "--in", e3.dir, "--sign")
+	// A directory prepared as a rehearsal cannot be signed by a real run.
+	e4 := fresh()
+	if o, perr := e4.run("provenance.sh", nil, "--in", e4.dir, "--prepare", "--rehearsal", "--versions", e4.table); perr != nil {
+		t.Fatalf("rehearsal prepare: %v\n%s", perr, o)
+	}
+	refuse("rehearsal statements, real key", e4, append(env[:2:2], ghEnv...), "prepared as a rehearsal", "--in", e4.dir, "--sign")
 }
 
 // TestProvenanceTagsOnlyVerifierRefusesABranchRef: the production verifier (Default sets tagsOnly) accepts a release built from a tag

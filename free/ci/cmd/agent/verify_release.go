@@ -40,18 +40,22 @@ func runVerifyRelease(_ context.Context, args []string, sio IO) int {
 	pubPath := fs.String("pub", "", "PEM SPKI Ed25519 public key to verify against")
 	version := fs.String("version", "", "expected version (default: DIR/VERSION)")
 	revokedFile := fs.String("revoked", "", "file of revoked key ids, one agent-<16 hex> per line (scripts/release/keys/agent-revoked.txt)")
+	tagsOnly := fs.Bool("tags-only", false, "accept only provenance built from the tag refs/tags/v<version> (the release workflow sets it; a rehearsal runs from a branch)")
 	all := fs.Bool("require-all-targets", false, "fail unless linux-amd64, linux-arm64 and darwin-arm64 are all present")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if *pubPath == "" || fs.NArg() != 1 {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent verify-release --pub FILE [--version V] DIR")
+		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent verify-release --pub FILE [--version V] [--tags-only] DIR")
 		return 2
 	}
 	v, err := verifierFromPEM(*pubPath, *revokedFile)
 	if err != nil {
 		fmt.Fprintf(sio.Stderr, "verify-release: %v\n", err)
 		return 1
+	}
+	if *tagsOnly {
+		v.RequireTagBuilds()
 	}
 	return verifyReleaseDir(v, fs.Arg(0), *version, *all, sio.Stdout, sio.Stderr)
 }
@@ -85,11 +89,11 @@ func verifierFromPEM(path, revokedPath string) (*verify.Verifier, error) {
 	// A committed agent key file holds exactly one key (genkeys.sh compiles only that one into clients, so a second key here would pass
 	// the gate and then be refused everywhere). Only a rehearsal directory's rehearsal-test.pub holds the manifest key and the provenance
 	// key.
-	max := 1
+	most := 1
 	if filepath.Base(path) == "rehearsal-test.pub" {
-		max = 4
+		most = 4
 	}
-	if len(keys) == 0 || len(keys) > max || strings.TrimSpace(string(rest)) != "" {
+	if len(keys) == 0 || len(keys) > most || strings.TrimSpace(string(rest)) != "" {
 		return nil, fmt.Errorf("the public key file must hold exactly one PEM PUBLIC KEY block (only rehearsal-test.pub may hold up to four)")
 	}
 	var revoked []string

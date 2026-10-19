@@ -116,8 +116,7 @@ jobs:
     env:
       TAG: ${{ needs.build.outputs.tag }}
     steps:
-      # The key sits in this job's memory while the signing steps run; a later step with passwordless sudo could read it. None of the
-      # steps below needs root.
+      # Hygiene only (every step runs as the same user, which can read its own processes anyway): none of the steps below needs root.
       - name: Drop passwordless sudo
         run: sudo rm -f /etc/sudoers.d/runner || true
 
@@ -168,7 +167,12 @@ jobs:
         env:
           NSELF_AGENT_SIGNING_KEY: ${{ secrets.NSELF_AGENT_SIGNING_KEY }}
           NSELF_AGENT_SIGNING_KEY_ID: ${{ secrets.NSELF_AGENT_SIGNING_KEY_ID }}
-        run: bash scripts/release/agent/manifest.sh --in dist
+        run: |
+          # Nothing earlier in this job may have changed the code that is about to see the key: the scripts are the checkout's, and no
+          # step has put a shell or loader hook into the environment.
+          git diff --quiet HEAD -- scripts .github free/ci/cmd free/ci/tools free/ci/internal || { echo "ERROR: tracked files changed since the checkout"; exit 1; }
+          for v in BASH_ENV ENV LD_PRELOAD LD_LIBRARY_PATH DYLD_INSERT_LIBRARIES; do [ -z "${!v:-}" ] || { echo "ERROR: $v is set"; exit 1; }; done
+          bash scripts/release/agent/manifest.sh --in dist
 
       # syft is the pinned version from free/ci/internal/toolchain/versions.yaml (checksum-verified download); the statement's builder is
       # this workflow ref and run. provenance.sh --prepare refuses to start if the key is in its environment.
@@ -179,13 +183,18 @@ jobs:
         env:
           NSELF_AGENT_SIGNING_KEY: ${{ secrets.NSELF_AGENT_SIGNING_KEY }}
           NSELF_AGENT_SIGNING_KEY_ID: ${{ secrets.NSELF_AGENT_SIGNING_KEY_ID }}
-        run: bash scripts/release/agent/provenance.sh --in dist --sign
+        run: |
+          # Nothing earlier in this job may have changed the code that is about to see the key: the scripts are the checkout's, and no
+          # step has put a shell or loader hook into the environment.
+          git diff --quiet HEAD -- scripts .github free/ci/cmd free/ci/tools free/ci/internal || { echo "ERROR: tracked files changed since the checkout"; exit 1; }
+          for v in BASH_ENV ENV LD_PRELOAD LD_LIBRARY_PATH DYLD_INSERT_LIBRARIES; do [ -z "${!v:-}" ] || { echo "ERROR: $v is set"; exit 1; }; done
+          bash scripts/release/agent/provenance.sh --in dist --sign
 
       - name: Verify against the committed public key
         run: |
           REVOKED=()
           if [ -n "${REVOKED_FILE:-}" ]; then REVOKED=(--revoked "$REVOKED_FILE"); fi
-          (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --require-all-targets --version "${TAG#v}" "${REVOKED[@]}" --pub "$PUB_FILE" "$GITHUB_WORKSPACE/dist")
+          (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --require-all-targets --tags-only --version "${TAG#v}" "${REVOKED[@]}" --pub "$PUB_FILE" "$GITHUB_WORKSPACE/dist")
 
       # Never --clobber. A target is released as a set: binary, manifest, two SBOMs and, last, the provenance (the commit marker). The SBOMs
       # and the provenance are not reproducible (timestamp, serial number, run id), so a target whose provenance is already on the release is
@@ -216,7 +225,7 @@ jobs:
               cp dist/VERSION "$existing/VERSION"
               for f in "${files[@]}"; do gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$f" --dir "$existing"; done
               cmp "dist/$name" "$existing/$name" || { echo "ERROR: $name on the release differs from the binary this run built"; exit 1; }
-              (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --version "${TAG#v}" "${REVOKED[@]}" --pub "$PUB_FILE" "$existing")
+              (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --tags-only --version "${TAG#v}" "${REVOKED[@]}" --pub "$PUB_FILE" "$existing")
               echo "SKIP $name (already released and verified)"
               continue
             fi

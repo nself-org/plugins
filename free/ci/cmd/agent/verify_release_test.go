@@ -38,8 +38,14 @@ func writePub(t *testing.T, pub ed25519.PublicKey) string {
 	return p
 }
 
-// releaseDir signs a two-target release directory and returns it with the public key file.
+// releaseDir signs a two-target release directory (provenance built from the tag) and returns it with the public key file.
 func releaseDir(t *testing.T) (dir, pubFile string) {
+	t.Helper()
+	return releaseDirRef(t, "refs/tags/v1.5.0")
+}
+
+// releaseDirRef is releaseDir with the provenance built from ref.
+func releaseDirRef(t *testing.T, ref string) (dir, pubFile string) {
 	t.Helper()
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 	s := signing.NewEd25519Signer(signing.PurposeAgent, priv)
@@ -55,19 +61,19 @@ func releaseDir(t *testing.T) (dir, pubFile string) {
 		m.Sig = signing.EncodeSig(raw)
 		b, _ := json.Marshal(m)
 		_ = os.WriteFile(filepath.Join(dir, name+".manifest.json"), append(b, '\n'), 0o644)
-		writeSideFiles(t, dir, s, m)
+		writeSideFiles(t, dir, s, m, ref)
 	}
 	_ = os.WriteFile(filepath.Join(dir, "VERSION"), []byte("1.5.0\n"), 0o644)
 	return dir, writePub(t, pub)
 }
 
 // writeSideFiles writes the two SBOMs and the signed provenance of manifest m next to its binary (P7-CACHE-10).
-func writeSideFiles(t *testing.T, dir string, s signing.Signer, m verify.Manifest) {
+func writeSideFiles(t *testing.T, dir string, s signing.Signer, m verify.Manifest, ref string) {
 	t.Helper()
 	name := verify.BinaryName(m.Target)
 	cdx, spdx := []byte(`{"bomFormat":"CycloneDX"}`), []byte(`{"spdxVersion":"SPDX-2.3"}`)
 	digest := func(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
-	st, err := provenance.BuildAgent(provenance.AgentFacts{Repo: "nself-org/plugins", Ref: "refs/tags/v1.5.0", Revision: strings.Repeat("a", 40), RunID: "1",
+	st, err := provenance.BuildAgent(provenance.AgentFacts{Repo: "nself-org/plugins", Ref: ref, Revision: strings.Repeat("a", 40), RunID: "1",
 		Subjects: []provenance.FileDigest{{Name: name, SHA256: m.SHA256}},
 		SBOMs:    []provenance.FileDigest{{Name: name + verify.SuffixCycloneDX, SHA256: digest(cdx)}, {Name: name + verify.SuffixSPDX, SHA256: digest(spdx)}}})
 	if err != nil {
@@ -132,6 +138,20 @@ func TestVerifyReleaseFailures(t *testing.T) {
 		if code != 1 || !strings.Contains(errs, c.reason) || !strings.Contains(errs, "E665") {
 			t.Errorf("%s: code %d err %q", c.name, code, errs)
 		}
+	}
+}
+
+func TestVerifyReleaseTagsOnlyRefusesABranchBuild(t *testing.T) {
+	dir, pub := releaseDirRef(t, "refs/heads/main")
+	if code, _, errs := runVR("--pub", pub, dir); code != 0 {
+		t.Fatalf("a rehearsal from a branch verifies without the flag: code %d err %q", code, errs)
+	}
+	if code, _, errs := runVR("--pub", pub, "--tags-only", dir); code != 1 || !strings.Contains(errs, "not the tag of version") {
+		t.Fatalf("--tags-only must refuse a branch build: code %d err %q", code, errs)
+	}
+	dir, pub = releaseDir(t)
+	if code, _, errs := runVR("--pub", pub, "--tags-only", dir); code != 0 {
+		t.Fatalf("--tags-only accepts the tag build: code %d err %q", code, errs)
 	}
 }
 

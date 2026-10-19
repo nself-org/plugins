@@ -71,7 +71,7 @@ if [ "$PREPARE" = "true" ] && [ "$SIGN" = "true" ] && [ "$REHEARSAL" != "true" ]
   exit 2
 fi
 # --prepare starts go and syft: it refuses to run in a process that holds the signing key, before it looks at anything else.
-if [ "$PREPARE" = "true" ] && [ -n "${NSELF_AGENT_SIGNING_KEY:-}" ] && [ "$REHEARSAL" != "true" ]; then
+if [ "$PREPARE" = "true" ] && [ -n "${NSELF_AGENT_SIGNING_KEY:-}" ]; then
   err "--prepare starts go and syft, so it must run without NSELF_AGENT_SIGNING_KEY in its environment (use a step that has no secret)"
   exit 1
 fi
@@ -175,6 +175,8 @@ if [ "$PREPARE" = "true" ]; then
 
   (cd "$ROOT/free/ci" && CGO_ENABLED=0 go build -mod=vendor -o "$WORK/provgen" ./tools/provgen) || { err "cannot build tools/provgen"; exit 1; }
   mkdir "$IN/.provenance" || { err "$IN/.provenance already exists (a prepare step ran before)"; exit 1; }
+  # A rehearsal's statements carry placeholder builder facts; a real --sign refuses a directory that was prepared as a rehearsal.
+  if [ "$REHEARSAL" = "true" ]; then : > "$IN/.provenance/REHEARSAL"; fi
 
   while IFS= read -r name; do
     target="${name#nself-ci-agent-}"
@@ -186,13 +188,13 @@ if [ "$PREPARE" = "true" ]; then
     grep -q "\"sha256\":\"$sha\"" "$IN/$name.manifest.json" || { err "$name.manifest.json does not name the sha256 of $name"; exit 1; }
 
     (cd "$IN" && SYFT_CHECK_FOR_APP_UPDATE=false "$SYFT" scan "file:$name" --source-name "$name" \
-      -o "cyclonedx-json@1.6=$name.cdx.json" -o "spdx-json@2.3=$name.spdx.json" -q) || { err "syft failed on $name"; exit 1; }
+      -o "cyclonedx-json@1.6=$name.cdx.json" -o "spdx-json@2.3=$name.spdx.json" -q < /dev/null) || { err "syft failed on $name"; exit 1; }
     for suffix in .cdx.json .spdx.json; do
       { [ -s "$IN/$name$suffix" ] && [ ! -L "$IN/$name$suffix" ]; } || { err "syft wrote no regular $name$suffix"; exit 1; }
       chmod 644 "$IN/$name$suffix"
     done
     "$WORK/provgen" --binary "$IN/$name" --sha256 "$sha" --sbom "$IN/$name.cdx.json" --sbom "$IN/$name.spdx.json" \
-      --builder-id "$BUILDER" --revision "$REVISION" --run-id "$RUN_ID" --out "$IN/.provenance/$target" >/dev/null || { err "provgen refused $name"; exit 1; }
+      --builder-id "$BUILDER" --revision "$REVISION" --run-id "$RUN_ID" --out "$IN/.provenance/$target" > /dev/null < /dev/null || { err "provgen refused $name"; exit 1; }
   done <<< "$TARGETS"
   printf "[agent-provenance] prepared SBOMs and statements for %s targets, syft %s\n" "$(printf '%s\n' "$TARGETS" | wc -l | tr -d ' ')" "$PIN_VERSION"
 fi
@@ -203,6 +205,16 @@ if [ "$SIGN" = "true" ]; then
   command -v "$O" >/dev/null 2>&1 || { err "openssl not found (set OPENSSL to an OpenSSL 3 binary)"; exit 1; }
   "$O" version 2>/dev/null | grep -q '^OpenSSL ' || { err "$O is not OpenSSL (LibreSSL cannot sign Ed25519 -rawin); set OPENSSL"; exit 1; }
   [ -d "$IN/.provenance" ] || { err "$IN/.provenance not found (run --prepare first)"; exit 1; }
+  if [ "$REHEARSAL" != "true" ] && [ -e "$IN/.provenance/REHEARSAL" ]; then
+    err "$IN/.provenance was prepared as a rehearsal (placeholder builder facts); prepare it again without --rehearsal"
+    exit 1
+  fi
+  if [ "$REHEARSAL" != "true" ]; then
+    # The statement must be about THIS run: builder, invocation and commit are checked against what GitHub set for the signing step.
+    for v in GITHUB_WORKFLOW_REF GITHUB_REPOSITORY GITHUB_RUN_ID GITHUB_SHA; do
+      [ -n "${!v:-}" ] || { err "$v must be set (run this in the release workflow)"; exit 1; }
+    done
+  fi
 
   # The PEM marker lines are assembled from two pieces on purpose: written whole, a secret scanner reads this script as a committed key.
   PEM_BEGIN="-----BEGIN PRIV""ATE KEY-----"
@@ -225,8 +237,8 @@ if [ "$SIGN" = "true" ]; then
   }
 
   if [ "$REHEARSAL" = "true" ]; then
-    "$O" genpkey -algorithm ed25519 -out "$WORK/key.pem" 2>/dev/null
-    "$O" pkey -in "$WORK/key.pem" -pubout > "$WORK/rehearsal.pub" 2>/dev/null
+    "$O" genpkey -algorithm ed25519 -out "$WORK/key.pem" 2>/dev/null || { err "cannot generate the rehearsal key"; exit 1; }
+    "$O" pkey -in "$WORK/key.pem" -pubout > "$WORK/rehearsal.pub" 2>/dev/null || { err "cannot derive the rehearsal public key"; exit 1; }
   else
     [ -n "${NSELF_AGENT_SIGNING_KEY:-}" ] || { err "NSELF_AGENT_SIGNING_KEY is not set"; exit 1; }
     normalize_key "$NSELF_AGENT_SIGNING_KEY" > "$WORK/key.pem"
@@ -259,7 +271,15 @@ if [ "$SIGN" = "true" ]; then
       { [ -f "$IN/$file" ] && [ ! -L "$IN/$file" ]; } || { err "$file is missing or not a regular file"; exit 1; }
       grep -q "\"sha256\":\"$(sha256_file "$IN/$file")\"" "$stmt/statement.json" || { err "$name: the prepared statement does not match $file"; exit 1; }
     done
-    "$O" pkeyutl -sign -rawin -inkey "$WORK/key.pem" -in "$stmt/statement.pae" -out "$WORK/sig" 2>/dev/null || { err "signing failed (is the key Ed25519?)"; exit 1; }
+    if [ "$REHEARSAL" != "true" ]; then
+      for want in "\"id\":\"https://github.com/$GITHUB_WORKFLOW_REF\"" "\"invocationId\":\"https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\"" "\"gitCommit\":\"$GITHUB_SHA\""; do
+        grep -qF "$want" "$stmt/statement.json" || { err "$name: the prepared statement is not about this run ($want)"; exit 1; }
+      done
+    fi
+    # Sign the PAE computed here from the statement bytes, never a file taken on trust: DSSEv1 <len(type)> <type> <len(payload)> <payload>.
+    { printf 'DSSEv1 %d %s %d ' "${#PAYLOAD_TYPE}" "$PAYLOAD_TYPE" "$(wc -c < "$stmt/statement.json" | tr -d ' ')"; cat "$stmt/statement.json"; } > "$WORK/pae"
+    cmp -s "$WORK/pae" "$stmt/statement.pae" || { err "$name: statement.pae is not the DSSE encoding of statement.json"; exit 1; }
+    "$O" pkeyutl -sign -rawin -inkey "$WORK/key.pem" -in "$WORK/pae" -out "$WORK/sig" 2>/dev/null || { err "signing failed (is the key Ed25519?)"; exit 1; }
     [ "$(wc -c < "$WORK/sig" | tr -d ' ')" = "64" ] || { err "signature is not 64 bytes; the key is not Ed25519"; exit 1; }
     sig="$("$O" base64 -A -in "$WORK/sig")"
     payload="$("$O" base64 -A -in "$stmt/statement.json")"

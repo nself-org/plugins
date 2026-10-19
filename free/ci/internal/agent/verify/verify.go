@@ -159,8 +159,14 @@ func Default() (*Verifier, error) {
 	if err != nil {
 		return nil, err
 	}
+	return v.RequireTagBuilds(), nil
+}
+
+// RequireTagBuilds makes the provenance check accept only a build from the tag refs/tags/v<manifest version> (what Default does); the
+// release workflow's own gate sets it too. A verifier without it also accepts a branch ref, which a rehearsal needs.
+func (v *Verifier) RequireTagBuilds() *Verifier {
 	v.tagsOnly = true
-	return v, nil
+	return v
 }
 
 // HasKeys reports whether any key is trusted.
