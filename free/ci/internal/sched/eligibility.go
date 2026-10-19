@@ -111,6 +111,10 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 	d.CoordinatorHost = r.CoordinatorHost
 	d.CoordinatorMode = r.CoordinatorMode
 	d.Hosted = hosted
+	if d.PersonalOwnNode { // the operator's own run of a release-secret job on the operator's own node is the dedicated trusted case (R-DX-12)
+		d.PersonalOwnRun = d.PersonalOwnRun || j.PersonalOwnRun
+		d.ReleaseJob = d.ReleaseJob || hasSecretClass(j.SecretClasses, "release")
+	}
 	jf := trust.JobFacts{Trust: j.Trust, SecretClasses: j.SecretClasses, Network: j.Network, PersonalOwnRun: j.PersonalOwnRun, Release: j.Pipeline.Release}
 	for _, tr := range trust.Admissible(jf, d, w.Policy.Trust) {
 		out = append(out, model.PlacementReasonDetail{Code: string(tr), Detail: string(tr)})
@@ -281,4 +285,13 @@ func worstCost(timeout int64, c Cost) (int64, bool) {
 	charge, of3 := Add(charge, c.MinimumChargeMicro)
 	charge, of4 := Add(charge, c.ExtrasMicro)
 	return charge, of || of2 || of3 || of4
+}
+
+func hasSecretClass(classes []model.SecretClass, want model.SecretClass) bool {
+	for _, c := range classes {
+		if c == want {
+			return true
+		}
+	}
+	return false
 }
