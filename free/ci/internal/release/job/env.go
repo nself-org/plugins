@@ -6,7 +6,8 @@ package job
 // Outputs: the key and a refusal of a job that declares a deploy variable.
 // Constraints: the key is the one run.CreateAttempt derives for at-most-once
 // jobs (internal/run/release_hook.go checks the two stay equal); a name is a
-// deploy variable when it starts with DEPLOY_ or NSELF_DEPLOY_, any case. The
+// deploy variable when it starts with DEPLOY_ or NSELF_DEPLOY_, any case (a
+// secret ref is tested by the variable it is delivered as, not by its scope). The
 // operator's own environment reaches a job only through exec.AllowlistEnv,
 // which carries no such name; CheckDeclared runs on the final, merged job
 // environment (release_hook.go wraps the isolator for that).
@@ -36,6 +37,14 @@ func IsDeployVar(name string) bool {
 	return strings.HasPrefix(n, "DEPLOY_") || strings.HasPrefix(n, "NSELF_DEPLOY_")
 }
 
+// secretEnvName is the variable a secret ref is delivered as: the last path
+// segment of a scoped ref (project/DEPLOY_TOKEN, deploy/prod/DEPLOY_KEY), the
+// whole string for a bare name. The grammar lives in internal/secrets; this
+// package only needs the delivered name, so it does not import it.
+func secretEnvName(ref string) string {
+	return ref[strings.LastIndex(ref, "/")+1:]
+}
+
 // CheckDeclared refuses a release job that declares a deploy variable in its
 // env or asks for a deploy secret.
 func CheckDeclared(j model.Job) *Error {
@@ -46,7 +55,7 @@ func CheckDeclared(j model.Job) *Error {
 		}
 	}
 	for _, s := range j.Secrets {
-		if IsDeployVar(s) {
+		if IsDeployVar(secretEnvName(s)) {
 			bad = append(bad, s)
 		}
 	}

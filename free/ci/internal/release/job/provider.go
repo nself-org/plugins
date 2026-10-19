@@ -44,6 +44,10 @@ type Attempt struct {
 	RunID, Revision string
 	Pipeline        model.PipelineRef
 	Deps            []string
+	// Dirty, ConfigOutside and Subset are the state the run started in (run.Session):
+	// the evidence of a run that began dirty, on a config the commit does not hold or
+	// on a --job subset is unbound or partial whatever the tree looks like later.
+	Dirty, ConfigOutside, Subset bool
 }
 
 func notReady(reason, format string, a ...any) *Error {
@@ -66,7 +70,7 @@ func (g Gatherer) Provide(ctx context.Context, a Attempt) (Provider, *Error) {
 	state := RunState{RunID: a.RunID, RepoID: g.RepoID(row.Project), Revision: a.Revision, PolicyDigest: row.PolicyDigest,
 		ConfigDigest: row.InputDigest, SourceTrust: model.TrustClass(row.SourceTrust), Trigger: model.Trigger(row.Trigger),
 		Selection: model.Selection{Mode: model.SelectionMode(row.SelectionMode), Reason: model.Reason(row.SelectionReason), Digest: row.SelectionDigest},
-		Pipeline:  a.Pipeline, Deps: a.Deps}
+		Pipeline:  a.Pipeline, Deps: a.Deps, StartDirty: a.Dirty || a.ConfigOutside, Subset: a.Subset}
 	for _, j := range jobs {
 		state.Outcomes = append(state.Outcomes, Dep{Name: j.Name, Status: j.Status, Required: j.Required})
 	}

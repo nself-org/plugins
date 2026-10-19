@@ -397,3 +397,36 @@ func TestSlowProviderCallsDoNotFreshenOldObservations(t *testing.T) {
 	close(release)
 	wg.Wait()
 }
+
+// TestProviderCarriesTheStartOfRunState (D-1075): a run that began dirty, on a
+// config outside the commit or on a --job subset is refused even though the
+// worktree probe answers clean and at the revision when the release job asks.
+func TestProviderCarriesTheStartOfRunState(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*job.Attempt)
+		want   string
+	}{
+		{"started clean, full run", func(*job.Attempt) {}, ""},
+		{"started on a dirty tree", func(a *job.Attempt) { a.Dirty = true }, job.DepsUnbound},
+		{"config outside the commit", func(a *job.Attempt) { a.ConfigOutside = true }, job.DepsUnbound},
+		{"--job subset", func(a *job.Attempt) { a.Subset = true }, job.Adhoc},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newRun(t, passed())
+			tc.mutate(&f.attempt)
+			if got := judged(t, f.provide(t)); got != tc.want {
+				t.Fatalf("reason %q, want %q", got, tc.want)
+			}
+		})
+	}
+	f := newRun(t, passed())
+	f.attempt.Subset = true
+	facts, perr := f.provide(t)(context.Background())
+	if perr != nil {
+		t.Fatal(perr)
+	}
+	if e := job.Evaluate(facts); e == nil || !strings.Contains(e.Message, "evidence.selection_partial") || !strings.Contains(e.Message, "evidence.adhoc") {
+		t.Fatalf("a subset run must be adhoc and partial: %v", e)
+	}
+}
