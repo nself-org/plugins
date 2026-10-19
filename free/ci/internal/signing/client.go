@@ -60,7 +60,7 @@ func (c *Client) call(ctx context.Context, mode string, stdin []byte) ([]byte, e
 	if c.Runner == nil {
 		return nil, Failf(ReasonSignerFailed, "the signer client has no runner")
 	}
-	if c.Team {
+	if c.team() {
 		return nil, errTeam()
 	}
 	exe, err := c.exe()
@@ -81,6 +81,11 @@ func (c *Client) call(ctx context.Context, mode string, stdin []byte) ([]byte, e
 	}
 	return out, nil
 }
+
+// team reports whether this client runs on a TEAM coordinator: the field, or
+// the coordinator's own environment (the signer's child environment is
+// allowlisted, so the mode must be read here, in the caller's process).
+func (c *Client) team() bool { return c.Team || os.Getenv("NSELF_CI_COORDINATOR_MODE") == "team" }
 
 // errTeam is the refusal on a TEAM coordinator.
 func errTeam() error {
@@ -110,7 +115,7 @@ func (c *Client) Sign(ctx context.Context, runID string, items []Item) ([]signin
 	if c.Src == nil || c.Runner == nil {
 		return nil, Failf(ReasonSignerFailed, "the signer client has no run store or runner")
 	}
-	if c.Team {
+	if c.team() {
 		return nil, errTeam()
 	}
 	if err := CheckTerminal(ctx, c.Src, runID); err != nil {

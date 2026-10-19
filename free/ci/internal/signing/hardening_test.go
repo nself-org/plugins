@@ -118,7 +118,7 @@ func TestStatementSubjectNames(t *testing.T) {
 
 func TestSBOMDigestMustBeAnSBOMRecord(t *testing.T) {
 	f := newFixture(t)
-	f.mutateRecord("app.cdx", func(r *records.Record) { r.Kind = records.KindBinary })
+	f.mutateRecord("app.cdx.json", func(r *records.Record) { r.Kind = records.KindBinary })
 	req := request(item(manifest.PayloadType, f.manifestPayload(nil)))
 	if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); !signing.IsReason(err, signing.ReasonDigestNotCommitted) {
 		t.Fatalf("an sbom digest backed by a binary record: %v", err)

@@ -88,10 +88,20 @@ func (f *runFacts) subjectBacked(ctx context.Context, name, digest, attempt stri
 		names = append(names, rest)
 	}
 	for _, n := range names {
-		ok, err := f.match(ctx, n, "", digest, attempt, func(records.Record) bool { return true })
+		ok, err := f.match(ctx, n, "", digest, attempt, func(r records.Record) bool { return releaseKind(r.Kind) })
 		if err != nil || ok {
 			return ok, err
 		}
 	}
 	return false, nil
+}
+
+// releaseKind reports whether a record kind can be a release artifact (logs,
+// coverage, benchmarks and SBOMs are run products, not released files).
+func releaseKind(k records.Kind) bool {
+	switch k {
+	case records.KindLog, records.KindCoverage, records.KindBench, records.KindSBOM:
+		return false
+	}
+	return true
 }

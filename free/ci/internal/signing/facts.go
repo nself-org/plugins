@@ -31,7 +31,7 @@ import (
 // canon resolves symlinks and relative parts so two spellings of one project
 // root compare equal; a path that cannot be resolved stays cleaned.
 func canon(p string) string {
-	if abs, err := filepath.Abs(p); err == nil {
+	if abs, _ := filepath.Abs(p); abs != "" {
 		p = abs
 	}
 	if real, err := filepath.EvalSymlinks(p); err == nil {

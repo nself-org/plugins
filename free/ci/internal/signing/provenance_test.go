@@ -26,7 +26,7 @@ const (
 
 // withImage adds a committed image record ("img", an OCI layout) and its SBOMs to the release attempt.
 func withImage(f *fixture) {
-	for _, n := range []string{"img", "img.cdx", "img.spdx"} {
+	for _, n := range []string{"img", "img.cdx.json", "img.spdx.json"} {
 		f.files[n] = []byte("bytes-of-" + n)
 		f.blobs.data[sum(f.files[n])] = f.files[n]
 	}
@@ -35,15 +35,15 @@ func withImage(f *fixture) {
 			SHA256: sum(f.files[name]), Size: int64(len(f.files[name])), State: records.StateCommitted, Image: img, Platform: platform})
 	}
 	add("img", records.KindImage, &records.ImageInfo{Ref: imageRef, IndexDigest: indexDigest, Manifests: []records.ImageManifest{{Platform: "linux/amd64", Digest: amdDigest}, {Platform: "linux/arm64", Digest: armDigest}}}, "linux/amd64")
-	add("img.cdx", records.KindSBOM, nil, "")
-	add("img.spdx", records.KindSBOM, nil, "")
+	add("img.cdx.json", records.KindSBOM, nil, "")
+	add("img.spdx.json", records.KindSBOM, nil, "")
 }
 
 func imageArtifact(f *fixture, tweak func(*manifest.Artifact)) func(*manifest.Manifest) {
 	return func(m *manifest.Manifest) {
 		a := manifest.Artifact{Name: "img", Path: "artifacts/img", Kind: manifest.KindImage, SHA256: sum(f.files["img"]), Size: int64(len(f.files["img"])),
 			Image: &manifest.Image{Ref: imageRef, IndexDigest: indexDigest, Manifests: []manifest.ImageManifest{{Platform: "linux/amd64", Digest: amdDigest}, {Platform: "linux/arm64", Digest: armDigest}}},
-			SBOM:  manifest.SBOM{CycloneDX: manifest.FileRef{Path: "sbom/img.cdx.json", SHA256: sum(f.files["img.cdx"])}, SPDX: manifest.FileRef{Path: "sbom/img.spdx.json", SHA256: sum(f.files["img.spdx"])}}}
+			SBOM:  manifest.SBOM{CycloneDX: manifest.FileRef{Path: "sbom/img.cdx.json", SHA256: sum(f.files["img.cdx.json"])}, SPDX: manifest.FileRef{Path: "sbom/img.spdx.json", SHA256: sum(f.files["img.spdx.json"])}}}
 		if tweak != nil {
 			tweak(&a)
 		}
@@ -144,7 +144,7 @@ func TestRecordsOfOtherAttemptsAreNotSigned(t *testing.T) {
 		return f.statementPayload(func(m map[string]any) {
 			m["subject"] = []map[string]any{{"name": name, "digest": map[string]string{"sha256": sum(b)}}}
 			m["predicate"] = f.predicate(func(p map[string]any) {
-				p["runDetails"] = map[string]any{"metadata": map[string]any{"invocationId": runID + "/" + attempt}}
+				p["runDetails"] = f.runDetails(runID + "/" + attempt)
 			})
 		})
 	}
@@ -292,8 +292,123 @@ func TestProjectRootsCompareThroughSymlinks(t *testing.T) {
 	if _, err := h.Handle(context.Background(), req, decodeAll(t, req)); err != nil {
 		t.Fatalf("a root with a .. part: %v", err)
 	}
+	t.Chdir(real)
+	h.Project = "." // a relative spelling resolves against the working directory
+	if _, err := h.Handle(context.Background(), req, decodeAll(t, req)); err != nil {
+		t.Fatalf("a relative project root: %v", err)
+	}
 	h.Project = t.TempDir()
 	if _, err := h.Handle(context.Background(), req, decodeAll(t, req)); err == nil {
 		t.Fatal("another directory was accepted")
+	}
+}
+
+func TestSBOMDigestsMustBeThatArtifactsSBOMs(t *testing.T) {
+	f := newFixture(t)
+	swap := func(m *manifest.Manifest) {
+		m.Artifacts[0].SBOM, m.Artifacts[1].SBOM = m.Artifacts[1].SBOM, m.Artifacts[0].SBOM
+		for i := range m.Artifacts { // the paths follow the artifact names again; only the digests are swapped
+			n := m.Artifacts[i].Name
+			m.Artifacts[i].SBOM.CycloneDX.Path, m.Artifacts[i].SBOM.SPDX.Path = "sbom/"+n+".cdx.json", "sbom/"+n+".spdx.json"
+		}
+	}
+	if err := handle(t, f, item(manifest.PayloadType, f.manifestPayload(swap))); !signing.IsReason(err, signing.ReasonDigestNotCommitted) {
+		t.Fatalf("artifact A carrying artifact B's SBOM: %v", err)
+	}
+	for _, name := range []string{"myapp.cdx.json", "app.cdx.json.bak", "xapp.cdx.json", "sbom/myapp.cdx.json"} {
+		g := newFixture(t)
+		g.mutateRecord("app.cdx.json", func(r *records.Record) { r.Name = name })
+		if err := handle(t, g, item(manifest.PayloadType, g.manifestPayload(nil))); !signing.IsReason(err, signing.ReasonDigestNotCommitted) {
+			t.Errorf("sbom record named %q: %v", name, err)
+		}
+	}
+	for _, name := range []string{"app.cdx.json", "sbom/app.cdx.json", ".nself-ci/sbom/app.cdx.json"} {
+		g := newFixture(t)
+		g.mutateRecord("app.cdx.json", func(r *records.Record) { r.Name = name })
+		if err := handle(t, g, item(manifest.PayloadType, g.manifestPayload(nil))); err != nil {
+			t.Errorf("sbom record named %q: %v", name, err)
+		}
+	}
+}
+
+func TestStatementSubjectsAreReleaseArtifacts(t *testing.T) {
+	for kind, ok := range map[records.Kind]bool{records.KindLog: false, records.KindCoverage: false, records.KindBench: false, records.KindSBOM: false,
+		records.KindReport: true, records.KindOther: true, records.KindPackage: true, records.KindBinary: true, records.KindArchive: true, records.KindImage: true} {
+		f := newFixture(t)
+		f.mutateRecord("app", func(r *records.Record) { r.Kind = kind })
+		err := handle(t, f, item(signing.PayloadStatement, f.statementPayload(nil)))
+		if ok && err != nil || !ok && !signing.IsReason(err, signing.ReasonDigestNotCommitted) {
+			t.Errorf("subject record of kind %s: %v", kind, err)
+		}
+	}
+}
+
+func TestStatementPredicateBuilderJobAndByproduct(t *testing.T) {
+	f := newFixture(t)
+	stmt := func(tweak func(map[string]any)) []byte {
+		return f.statementPayload(func(m map[string]any) { m["predicate"] = f.predicate(tweak) })
+	}
+	rd := func(p map[string]any) map[string]any { return p["runDetails"].(map[string]any) }
+	bd := func(p map[string]any) map[string]any { return p["buildDefinition"].(map[string]any) }
+	for name, tweak := range map[string]func(map[string]any){
+		"another builder": func(p map[string]any) { rd(p)["builder"] = map[string]any{"id": "https://evil.example/builder#x"} },
+		"no builder":      func(p map[string]any) { delete(rd(p), "builder") },
+		"another job":     func(p map[string]any) { bd(p)["externalParameters"].(map[string]any)["job"] = "test" },
+		"no job":          func(p map[string]any) { delete(bd(p)["externalParameters"].(map[string]any), "job") },
+		"no byproducts":   func(p map[string]any) { delete(rd(p), "byproducts") },
+		"another evidence digest": func(p map[string]any) {
+			rd(p)["byproducts"] = []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": strings.Repeat("a", 64)}}}
+		},
+		"digest under another name": func(p map[string]any) {
+			rd(p)["byproducts"] = []map[string]any{{"name": "other.json", "digest": map[string]string{"sha256": sum(f.evRaw)}}}
+		},
+	} {
+		if err := handle(t, f, item(signing.PayloadStatement, stmt(tweak))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+func TestManifestPipelineAndFinishTimeAreTheEvidences(t *testing.T) {
+	f := newFixture(t)
+	for name, tweak := range map[string]func(*manifest.Manifest){
+		"another pipeline":    func(m *manifest.Manifest) { m.Release.Pipeline = "nightly" },
+		"another finish time": func(m *manifest.Manifest) { m.Release.FinishedAt = "2026-10-19T12:00:01Z" },
+	} {
+		if err := handle(t, f, item(manifest.PayloadType, f.manifestPayload(tweak))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// the same instant in another zone is the same finish time
+	if err := handle(t, f, item(manifest.PayloadType, f.manifestPayload(func(m *manifest.Manifest) { m.Release.FinishedAt = "2026-10-19T08:00:00-04:00" }))); err != nil {
+		t.Fatalf("the same instant in another zone: %v", err)
+	}
+	// evidence without a finish time cannot back a manifest
+	g := newFixture(t)
+	g.setEvidence(`{"revision":"` + revision + `","repo_id":"repo-1","run_id":"run-1","result":"pass","pipeline":{"name":"release"}}`)
+	if err := handle(t, g, item(manifest.PayloadType, g.manifestPayload(nil))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+		t.Fatalf("evidence with no finish time: %v", err)
+	}
+	h := newFixture(t)
+	h.setEvidence(`{"revision":"` + revision + `","repo_id":"repo-1","run_id":"run-1","result":"pass","pipeline":{"name":"release"},"timings":{"finished_at":"yesterday"}}`)
+	if err := handle(t, h, item(manifest.PayloadType, h.manifestPayload(nil))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+		t.Fatalf("evidence with an unparseable finish time: %v", err)
+	}
+}
+
+func TestClientReadsTheCoordinatorModeFromItsEnvironment(t *testing.T) {
+	f := newFixture(t)
+	s := &fakeSigner{}
+	t.Setenv("NSELF_CI_COORDINATOR_MODE", "team")
+	if _, err := clientFor(f, s).Sign(context.Background(), runID, []signing.Item{item(signing.PayloadStatement, []byte("x"))}); !signing.IsReason(err, signing.ReasonSignerFailed) || !strings.Contains(err.Error(), "TEAM") {
+		t.Fatalf("%v", err)
+	}
+	if _, err := clientFor(f, s).PublicKey(context.Background()); !signing.IsReason(err, signing.ReasonSignerFailed) || len(s.calls) != 0 {
+		t.Fatalf("%v (%d calls)", err, len(s.calls))
+	}
+	t.Setenv("NSELF_CI_COORDINATOR_MODE", "personal")
+	s.ans = answer{out: `{"key_id":"k","public_key":"p"}`}
+	if _, err := clientFor(f, s).PublicKey(context.Background()); err != nil {
+		t.Fatalf("a personal coordinator: %v", err)
 	}
 }

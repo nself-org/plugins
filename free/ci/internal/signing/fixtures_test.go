@@ -187,8 +187,9 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f := &fixture{t: t, key: key, blobs: &fakeBlobs{data: map[string][]byte{}},
 		res:   &fakeRes{vals: map[string][]byte{signing.KeyRef: value}},
-		files: map[string][]byte{"app": []byte("app-bytes"), "image": []byte("image-bytes!"), "app.cdx": []byte("cdx-1"), "app.spdx": []byte("spdx-1"), "image.cdx": []byte("cdx-2"), "image.spdx": []byte("spdx-2")}}
-	ev, _ := json.Marshal(model.Evidence{Schema: "ci.evidence/v1", Revision: revision, RepoID: "repo-1", RunID: runID, Result: "pass"})
+		files: map[string][]byte{"app": []byte("app-bytes"), "image": []byte("image-bytes!"), "app.cdx.json": []byte("cdx-1"), "app.spdx.json": []byte("spdx-1"), "image.cdx.json": []byte("cdx-2"), "image.spdx.json": []byte("spdx-2")}}
+	finished := "2026-10-19T12:00:00Z"
+	ev, _ := json.Marshal(model.Evidence{Schema: "ci.evidence/v1", Revision: revision, RepoID: "repo-1", RunID: runID, Result: "pass", Pipeline: model.PipelineRef{ID: runID, Name: "release"}, Timings: model.Timings{FinishedAt: &finished}})
 	f.evRaw = ev
 	f.src = &fakeSrc{known: true,
 		pipe:     store.PipelineRow{ID: runID, Project: project, Revision: revision, InputDigest: "in1"},
@@ -225,7 +226,7 @@ func (f *fixture) manifestPayload(tweak func(*manifest.Manifest)) []byte {
 	m := manifest.Manifest{Schema: manifest.Schema, RepoID: "repo-1", Revision: revision,
 		Release:    manifest.Release{RunID: runID, Pipeline: "release", JobID: "job-rel", AttemptID: "att-rel-2", IdempotencyKey: strings.Repeat("9", 64), FinishedAt: "2026-10-19T12:00:00Z"},
 		Evidence:   manifest.EvidenceRef{Path: manifest.EvidencePath, SHA256: sum(f.evRaw), Result: manifest.EvidenceResult, Class: manifest.EvidenceClass},
-		Artifacts:  []manifest.Artifact{art("app", "app.cdx", "app.spdx", manifest.KindBinary), art("image", "image.cdx", "image.spdx", manifest.KindArchive)},
+		Artifacts:  []manifest.Artifact{art("app", "app.cdx.json", "app.spdx.json", manifest.KindBinary), art("image", "image.cdx.json", "image.spdx.json", manifest.KindArchive)},
 		Provenance: manifest.Provenance{Path: manifest.ProvenancePath, SHA256: strings.Repeat("a", 64), PredicateType: manifest.ProvenancePredicate, SLSABuildLevel: manifest.SLSALevel},
 		Checksums:  manifest.FileRef{Path: manifest.ChecksumsPath, SHA256: strings.Repeat("b", 64)},
 		Signing:    manifest.Signing{Purpose: manifest.SigningPurpose, KeyID: f.key.ID},
@@ -287,10 +288,23 @@ func (f *fixture) predicate(tweak func(map[string]any)) map[string]any {
 			"externalParameters":   map[string]any{"repository": "repo-1", "revision": revision, "pipeline": "release", "job": "publish"},
 			"resolvedDependencies": []map[string]any{{"uri": "git+repo-1@" + revision, "digest": map[string]string{"gitCommit": revision}}},
 		},
-		"runDetails": map[string]any{"metadata": map[string]any{"invocationId": runID + "/att-rel-2"}},
+		"runDetails": map[string]any{
+			"builder":    map[string]any{"id": "https://nself.org/ci/builder/v1#coordinator-1/runner-1"},
+			"metadata":   map[string]any{"invocationId": runID + "/att-rel-2"},
+			"byproducts": []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": sum(f.evRaw)}}},
+		},
 	}
 	if tweak != nil {
 		tweak(p)
 	}
 	return p
+}
+
+// runDetails is the predicate's runDetails for an invocation id.
+func (f *fixture) runDetails(invocation string) map[string]any {
+	return map[string]any{
+		"builder":    map[string]any{"id": "https://nself.org/ci/builder/v1#coordinator-1/runner-1"},
+		"metadata":   map[string]any{"invocationId": invocation},
+		"byproducts": []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": sum(f.evRaw)}}},
+	}
 }

@@ -13,10 +13,13 @@ package signing
 // digest, size) and every SBOM digest (a record of kind sbom) is a committed,
 // byte-verified record of this run; the evidence digest is the digest of the stored pipeline evidence
 // and that evidence passed; the release attempt is a passed attempt of a
-// release job of this run. The first failure is returned; nothing is signed.
+// release job of this run; release.pipeline and finished_at are the evidence's.
+// The first failure is returned; nothing is signed.
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/release/manifest"
@@ -43,6 +46,9 @@ func (f *runFacts) checkManifest(ctx context.Context, payload []byte) (attemptID
 	if m.Evidence.SHA256 != f.evDigest {
 		return reject("evidence.sha256 is not the digest of the stored pipeline evidence")
 	}
+	if m.Release.Pipeline != f.evidence.Pipeline.Name || !f.finishedAt(m.Release.FinishedAt) {
+		return reject("release.pipeline or release.finished_at differ from the stored evidence")
+	}
 	if !f.releaseAttempt(m.Release.JobID, m.Release.AttemptID) {
 		return reject("release.attempt_id is not a passed attempt of a release job of this run")
 	}
@@ -50,13 +56,15 @@ func (f *runFacts) checkManifest(ctx context.Context, payload []byte) (attemptID
 		if err := f.checkArtifact(ctx, a, m.Release.AttemptID); err != nil {
 			return "", "", err
 		}
-		for _, d := range []string{a.SBOM.CycloneDX.SHA256, a.SBOM.SPDX.SHA256} {
-			ok, err := f.match(ctx, "", records.KindSBOM, d, m.Release.AttemptID, func(records.Record) bool { return true })
+		for _, sb := range []struct{ digest, suffix string }{{a.SBOM.CycloneDX.SHA256, ".cdx.json"}, {a.SBOM.SPDX.SHA256, ".spdx.json"}} {
+			want := a.Name + sb.suffix
+			named := func(r records.Record) bool { return r.Name == want || strings.HasSuffix(r.Name, "/"+want) }
+			ok, err := f.match(ctx, "", records.KindSBOM, sb.digest, m.Release.AttemptID, named)
 			if err != nil {
 				return "", "", err
 			}
 			if !ok {
-				return "", "", Failf(ReasonDigestNotCommitted, "the SBOM digest of artifact %q is not a committed sbom record of this run", echo(a.Name))
+				return "", "", Failf(ReasonDigestNotCommitted, "the SBOM digest of artifact %q is not the committed sbom record %s of the release attempt", echo(a.Name), echo(want))
 			}
 		}
 	}
@@ -123,4 +131,14 @@ func (f *runFacts) releaseAttempt(job, attempt string) bool {
 		}
 	}
 	return false
+}
+
+// finishedAt reports whether the manifest's finished_at is the evidence's timings.finished_at.
+func (f *runFacts) finishedAt(s string) bool {
+	if f.evidence.Timings.FinishedAt == nil {
+		return false
+	}
+	want, err1 := time.Parse(time.RFC3339Nano, *f.evidence.Timings.FinishedAt)
+	got, err2 := time.Parse(time.RFC3339Nano, s)
+	return err1 == nil && err2 == nil && want.Equal(got)
 }

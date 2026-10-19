@@ -320,9 +320,11 @@ func signedRun(t *testing.T, r *artRig) signing.Request {
 	}
 	sum := sha256.Sum256(body)
 	predicate := map[string]any{
-		"buildDefinition": map[string]any{"buildType": signing.ReleaseBuildType, "externalParameters": map[string]any{"repository": "repo", "revision": p.Revision},
+		"buildDefinition": map[string]any{"buildType": signing.ReleaseBuildType, "externalParameters": map[string]any{"repository": "repo", "revision": p.Revision, "job": "publish"},
 			"resolvedDependencies": []map[string]any{{"uri": "git+repo@" + p.Revision, "digest": map[string]string{"gitCommit": p.Revision}}}},
-		"runDetails": map[string]any{"metadata": map[string]any{"invocationId": p.ID + "/att-rel"}}}
+		"runDetails": map[string]any{"builder": map[string]any{"id": "https://nself.org/ci/builder/v1#coordinator/runner"},
+			"metadata":   map[string]any{"invocationId": p.ID + "/att-rel"},
+			"byproducts": []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": hex.EncodeToString(sum[:])}}}}}
 	st, _ := json.Marshal(map[string]any{"_type": "https://in-toto.io/Statement/v1", "predicateType": "https://slsa.dev/provenance/v1", "predicate": predicate,
 		"subject": []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": hex.EncodeToString(sum[:])}}}})
 	return signing.Request{RunID: p.ID, Items: []signing.Item{{PayloadType: signing.PayloadStatement, PayloadB64: b64(st)}}}
