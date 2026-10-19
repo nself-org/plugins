@@ -157,6 +157,9 @@ func printRun(asJSON bool, v cirun.RunView) int {
 	fmt.Printf("run %s: %s\n", v.ID, v.Status)
 	for _, j := range v.Jobs {
 		fmt.Printf("  %-14s %s %s\n", j.State, j.Name, j.FailureClass)
+		if j.IdempotencyKey != "" {
+			fmt.Printf("    attempt %s  idempotency key %s\n", j.Attempt, j.IdempotencyKey)
+		}
 	}
 	return 0
 }

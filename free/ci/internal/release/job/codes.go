@@ -42,6 +42,7 @@ const (
 	KeyMismatch     = "key_mismatch"
 	NotResolvable   = "not_resolvable"
 	AlreadyResolved = "already_resolved"
+	CoordinatorLive = "coordinator_live" // a finalizing attempt whose coordinator is alive (use Force)
 )
 
 func init() {

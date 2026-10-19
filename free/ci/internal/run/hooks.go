@@ -122,6 +122,9 @@ type JobView struct {
 	Name         string `json:"name"`
 	State        string `json:"state"`
 	FailureClass string `json:"failure_class,omitempty"`
+	// Attempt and IdempotencyKey name an attempt `ci runs resolve` can act on.
+	Attempt        string `json:"attempt,omitempty"`
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
 }
 
 // RemoteResolver finds runs that live on another machine; it is consulted

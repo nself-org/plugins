@@ -13,7 +13,9 @@ package job
 // TestCreateAttemptOnly); abandon moves the attempt to failed through the
 // operator transition (its own audit row). Only needs-operator is rerunnable. A
 // finalizing release attempt can only be abandoned (the store never retries
-// after finalizing, P7-CI-31). Nothing retries automatically. Known limit: the
+// after finalizing, P7-CI-31), and only once its coordinator is gone: while the
+// coordinator is alive its publish step may be running, so the abandon is
+// refused (coordinator_live) unless Force is set (D-1078). Nothing retries automatically. Known limit: the
 // store's OperatorRetry has no "already approved" check and no audit read
 // exists outside the store, so a second rerun before attempt n+1 exists writes a
 // second approval row (each call is an audited decision; debt row filed).
@@ -42,6 +44,8 @@ const (
 type Request struct {
 	Attempt, Key, Actor, Reason string
 	Action                      Action
+	Force                       bool   // abandon a finalizing attempt although its coordinator is alive
+	Boot                        string // this machine's boot id, for the coordinator liveness test
 }
 
 // Result says what was done.
@@ -83,6 +87,15 @@ func Resolve(ctx context.Context, st *store.Store, req Request) (Result, error) 
 	finalReleaseAttempt := at.State == "finalizing" && job.Kind == "release"
 	if !stuck && !finalReleaseAttempt {
 		return Result{}, refuse(CodeResolveRefused, NotResolvable, "attempt %s is %s: only needs-operator (or a finalizing release attempt, to abandon) can be resolved", req.Attempt, at.State)
+	}
+	if req.Action == Abandon && !stuck && !req.Force {
+		live, lerr := st.AttemptCoordinatorLive(ctx, at.ID, req.Boot)
+		if lerr != nil {
+			return Result{}, lerr
+		}
+		if live {
+			return Result{}, refuse(CodeResolveRefused, CoordinatorLive, "attempt %s is finalizing and its coordinator is alive: the publish step may be running; wait for it, or pass --force to abandon anyway", req.Attempt)
+		}
 	}
 	if req.Action == Rerun {
 		if !stuck {

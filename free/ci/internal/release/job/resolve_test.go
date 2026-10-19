@@ -46,6 +46,13 @@ func (a *auditLog) last() store.AuditRow {
 // It returns the store and the audit log, which starts empty after the seeding.
 func seed(t *testing.T, kind, state string) (*store.Store, *auditLog) {
 	t.Helper()
+	return seedOwned(t, kind, state, nil)
+}
+
+// seedOwned is seed with the attempt owned by the coordinator register returns
+// (nil register: no owner, as a coordinator that was cleaned away).
+func seedOwned(t *testing.T, kind, state string, register func(*store.Store) store.Coordinator) (*store.Store, *auditLog) {
+	t.Helper()
 	ctx := context.Background()
 	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
 	if err != nil {
@@ -61,7 +68,11 @@ func seed(t *testing.T, kind, state string) (*store.Store, *auditLog) {
 	must(st.CreatePipeline(ctx, store.PipelineRow{ID: "run-1", Revision: revision, Project: "proj", Trigger: "local", SourceTrust: "owner",
 		PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"}))
 	must(st.CreateJob(ctx, store.JobRow{ID: jobRow, PipelineID: "run-1", Name: "publish", Kind: kind, Idempotent: kind != "release", InputDigest: "i"}))
-	must(st.CreateAttempt(ctx, store.AttemptRow{ID: attempt, JobID: jobRow, N: 1}, ""))
+	owner := ""
+	if register != nil {
+		owner = register(st).ID
+	}
+	must(st.CreateAttempt(ctx, store.AttemptRow{ID: attempt, JobID: jobRow, N: 1}, owner))
 	path := map[string][]model.JobState{
 		"queued":         {},
 		"running":        {"leased", "running"},
@@ -259,5 +270,54 @@ func TestResolveMapsALostCompareAndSetToAlreadyResolved(t *testing.T) {
 	}
 	if job.MapConflict(nil) != nil {
 		t.Fatal("nil became an error")
+	}
+}
+
+// liveCoordinator registers a coordinator whose heartbeat is fresh.
+func liveCoordinator(boot string) func(*store.Store) store.Coordinator {
+	return func(st *store.Store) store.Coordinator {
+		c, err := st.Register(context.Background(), 4242, "start-1", boot)
+		if err != nil {
+			panic(err)
+		}
+		return c
+	}
+}
+
+// TestResolveAbandonRefusesAFinalizingAttemptOfALiveCoordinator (D-1078): the
+// publish step of a finalizing release attempt may be running right now, so
+// abandoning it is refused (E716 coordinator_live, nothing written) until its
+// coordinator is gone or the operator passes Force.
+func TestResolveAbandonRefusesAFinalizingAttemptOfALiveCoordinator(t *testing.T) {
+	const boot = "boot-test"
+	st, log := seedOwned(t, "release", "finalizing", liveCoordinator(boot))
+	req := job.Request{Attempt: attempt, Key: job.IdempotencyKey(attempt), Action: job.Abandon, Actor: "operator:test", Boot: boot}
+	_, err := job.Resolve(context.Background(), st, req)
+	wantE716(t, err, job.CoordinatorLive)
+	if state(t, st, attempt) != "finalizing" || log.count() != 0 {
+		t.Fatalf("a refused abandon changed the attempt: %s, %d audit rows", state(t, st, attempt), log.count())
+	}
+	// a needs-operator attempt is never gated by this check
+	st2, _ := seedOwned(t, "release", "needs-operator", liveCoordinator(boot))
+	if _, err = job.Resolve(context.Background(), st2, req); err != nil {
+		t.Fatalf("needs-operator abandon: %v", err)
+	}
+	// force overrides, with the usual single audit row
+	req.Force = true
+	if _, err = job.Resolve(context.Background(), st, req); err != nil {
+		t.Fatalf("forced abandon: %v", err)
+	}
+	if state(t, st, attempt) != "failed" || log.count() != 1 {
+		t.Fatalf("state %s, %d audit rows", state(t, st, attempt), log.count())
+	}
+}
+
+// TestResolveAbandonAllowsAFinalizingAttemptOfAGoneCoordinator: an owner on
+// another boot (or with an expired heartbeat) is gone.
+func TestResolveAbandonAllowsAFinalizingAttemptOfAGoneCoordinator(t *testing.T) {
+	st, _ := seedOwned(t, "release", "finalizing", liveCoordinator("boot-old"))
+	_, err := job.Resolve(context.Background(), st, job.Request{Attempt: attempt, Key: job.IdempotencyKey(attempt), Action: job.Abandon, Boot: "boot-new"})
+	if err != nil {
+		t.Fatalf("owner of an older boot: %v", err)
 	}
 }

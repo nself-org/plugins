@@ -12,6 +12,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/nself-org/plugins/free/ci/internal/release/job"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -47,7 +48,10 @@ func ResolveRun(ctx context.Context, st *store.Store, ref string) (store.Pipelin
 	return store.PipelineRow{}, fail(CodeRun, "run reference %q matches %d runs; use more characters", ref, len(found))
 }
 
-// ViewRun describes a run and the state of each of its jobs.
+// ViewRun describes a run and the state of each of its jobs. An attempt an
+// operator may have to resolve (needs-operator, or a finalizing release
+// attempt) also shows its id and idempotency key, which `ci runs resolve`
+// needs; the key derives from the public attempt id, so it is not a secret.
 func ViewRun(ctx context.Context, st *store.Store, row store.PipelineRow) (RunView, error) {
 	jobs, err := st.PipelineJobs(ctx, row.ID)
 	if err != nil {
@@ -70,6 +74,9 @@ func ViewRun(ctx context.Context, st *store.Store, row store.PipelineRow) (RunVi
 			jv.FailureClass = a.FailureClass
 			if !terminal(j.Status) {
 				jv.State = a.State
+			}
+			if a.State == "needs-operator" || (a.State == "finalizing" && j.Kind == "release") {
+				jv.Attempt, jv.IdempotencyKey = a.ID, job.IdempotencyKey(a.ID)
 			}
 		}
 		v.Jobs = append(v.Jobs, jv)
