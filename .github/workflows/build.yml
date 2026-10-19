@@ -21,30 +21,34 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  ts-plugins:
+    name: List TypeScript plugins
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      plugins: ${{ steps.list.outputs.plugins }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: List plugins with a ts directory
+        id: list
+        run: |
+          plugins=$(for d in free/*/ts; do [ -d "$d" ] && basename "$(dirname "$d")"; done | sort | jq -R . | jq -sc .)
+          echo "plugins=${plugins:-[]}" >> "$GITHUB_OUTPUT"
+          echo "TypeScript plugins: ${plugins:-[]}"
+
   build-typescript:
     name: TypeScript Build Check
+    needs: ts-plugins
+    if: needs.ts-plugins.outputs.plugins != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     strategy:
       fail-fast: false
       matrix:
-        plugin:
-          - notifications
-          - jobs
-          - vpn
-          - tokens
-          - link-preview
-          - mdns
-          - subtitle-manager
-          - webhooks
-          - feature-flags
-          - search
-          - github
-          - invitations
-          - torrent-manager
-          - content-progress
-          - content-acquisition
+        plugin: ${{ fromJSON(needs.ts-plugins.outputs.plugins) }}
 
     steps:
       - name: Checkout
