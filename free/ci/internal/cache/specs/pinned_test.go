@@ -106,11 +106,11 @@ func TestUnpackOtherReadMakesTheTreeReadableByAContainerUID(t *testing.T) {
 
 func TestScanWriterFindsAValueUpToTheOverlapAcrossAWindowEdge(t *testing.T) {
 	r := redact.New()
-	value := bytes.Repeat([]byte("v"), 600<<10) // 600 KiB, no newline: one match must see it whole
+	value := bytes.Repeat([]byte("v"), redact.MaxValueLen) // the longest registrable value, no newline: one match must see it whole
 	if err := r.Register(value); err != nil {
 		t.Fatal(err)
 	}
-	for _, off := range []int{scanWindow - 100<<10, scanWindow - 300<<10, scanWindow - 590<<10} {
+	for _, off := range []int{scanWindow - 10<<10, scanWindow - 30<<10, scanWindow - 60<<10} {
 		data := append(append(bytes.Repeat([]byte("."), off), value...), bytes.Repeat([]byte("."), 2*scanWindow)...)
 		w := newScanWriter(io.Discard, r)
 		_, err := w.Write(data)
@@ -155,5 +155,13 @@ func TestRemoveNeverWalksThroughASymlink(t *testing.T) {
 	}
 	if err := RemoveTree(link); err != nil || getFile(t, live+"/sub/f.txt") != "x" {
 		t.Fatalf("RemoveTree followed a top-level symlink: %v", err)
+	}
+}
+
+// D-1014: the longest form of the longest registrable value fits the cache scan
+// overlap, so a value straddling a window edge is still found in every form.
+func TestScanOverlapHoldsLongestRegisteredForm(t *testing.T) {
+	if got := redact.MaxValueLen * redact.MaxFormExpansion; got > scanOverlap {
+		t.Fatalf("longest form %d B exceeds the %d B scan overlap", got, scanOverlap)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/redact"
 )
 
 func collect(e *env, path string) ([]records.Staged, error) {
@@ -297,12 +298,12 @@ func TestCollectRefusesSecretInNameAndSymlinkedWorkdir(t *testing.T) {
 func TestCollectFindsALongSecretAcrossTheWindowEdge(t *testing.T) {
 	e := newEnv(t)
 	e.pol.MaxFile = 64 << 20
-	long := strings.Repeat("z", 69999) + "Q" // longer than the 64 KiB overlap an earlier build used
+	long := strings.Repeat("z", redact.MaxValueLen-1) + "Q" // the longest value Register accepts
 	if err := e.red.Register([]byte(long)); err != nil {
 		t.Fatal(err)
 	}
 	edge := 16 << 20 // the window size
-	e.write("edge.bin", strings.Repeat("!", edge-68000)+long+strings.Repeat("!", 100))
+	e.write("edge.bin", strings.Repeat("!", edge-redact.MaxValueLen/2)+long+strings.Repeat("!", 100))
 	if _, err := collect(e, "edge.bin"); !records.IsReason(err, records.ReasonSecretMatch) {
 		t.Fatalf("%v", err)
 	}

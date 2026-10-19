@@ -5,7 +5,7 @@ package specs
 // Inputs:  a downstream writer and an authz.ValueScanner.
 // Outputs: scanWriter, ErrSecretMatch.
 // Constraints: bytes are released downstream only after the window holding them
-// was scanned; windows are 1 MiB with a 256 KiB overlap, so a value that spans
+// was scanned; windows are 1 MiB with a 1 MiB overlap, so a value that spans
 // two windows is found. A value (in any encoding) longer than the overlap that
 // straddles a window edge is not (the same documented bound as artifact scans).
 // A nil scanner refuses everything. The scanned stream is the uncompressed tar,

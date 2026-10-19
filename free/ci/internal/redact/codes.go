@@ -14,12 +14,12 @@ import (
 // masked without destroying ordinary output, and they are refused, never skipped.
 const MinValueLen = 6
 
-// MaxValueLen is the longest value Register accepts. The artifact scan
-// (artifacts/records/scan.go) keeps a 4 MiB overlap between its windows, so it
-// finds a value only if its longest encoded form fits in that overlap; the
-// longest form is MaxFormExpansion times the value (a CRLF line end written as
-// JSON \uXXXX escapes). A longer value is refused, never skipped.
-const MaxValueLen = 256 << 10
+// MaxValueLen is the longest value Register accepts. The scanners keep an overlap
+// between their windows (artifacts/records/scan.go 4 MiB, cache/specs/scan.go
+// 1 MiB) and find a value only if its longest encoded form fits in the smaller
+// one; the longest form is MaxFormExpansion times the value (a CRLF line end
+// written as JSON \uXXXX escapes). A longer value is refused, never skipped.
+const MaxValueLen = 64 << 10
 
 // MaxFormExpansion is the most one registered byte can grow to in any form of
 // encodings.go. A test over adversarial values keeps it true.
