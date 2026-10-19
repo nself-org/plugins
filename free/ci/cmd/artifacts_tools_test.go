@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -38,13 +39,32 @@ func syftArchive(t *testing.T, body string) []byte {
 	return buf.Bytes()
 }
 
+// syftBinarySum is the sha256 of the `syft` entry inside a syftArchive.
+func syftBinarySum(t *testing.T, archive []byte) string {
+	t.Helper()
+	gz, err := gzip.NewReader(bytes.NewReader(archive))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(gz)
+	if _, err := tr.Next(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := io.ReadAll(tr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
 // toolsRig serves served and pins the checksum of pinned for the host platform.
 func toolsRig(t *testing.T, served, pinned []byte) string {
 	t.Helper()
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(served) }))
 	t.Cleanup(srv.Close)
 	sum := sha256.Sum256(pinned)
-	pin := sbom.Pin{Version: "1.54.1", Sources: []toolchain.Source{{OS: runtime.GOOS, Arch: runtime.GOARCH, URL: srv.URL + "/syft.tgz", SHA256: hex.EncodeToString(sum[:])}}}
+	pin := sbom.Pin{Version: "1.54.1", Sources: []toolchain.Source{{OS: runtime.GOOS, Arch: runtime.GOARCH, URL: srv.URL + "/syft.tgz", SHA256: hex.EncodeToString(sum[:]), BinarySHA256: syftBinarySum(t, pinned)}}}
 	oldPin, oldClient := toolsPin, toolsClient
 	toolsPin, toolsClient = func() (sbom.Pin, error) { return pin, nil }, srv.Client()
 	t.Cleanup(func() { toolsPin, toolsClient = oldPin, oldClient })

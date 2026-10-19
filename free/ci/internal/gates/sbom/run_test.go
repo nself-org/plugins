@@ -2,9 +2,12 @@ package sbom_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -12,6 +15,7 @@ import (
 	gsbom "github.com/nself-org/plugins/free/ci/internal/gates/sbom"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sbom"
+	"github.com/nself-org/plugins/free/ci/internal/toolchain"
 )
 
 const pinV = "1.54.1"
@@ -59,6 +63,12 @@ func goodScan(t *testing.T) func(sbom.Cmd) (sbom.Result, error) {
 	}
 }
 
+// pinWithPlaceholderDigest pins the digest of the "#!/bin/sh\n" file input() installs.
+func pinWithPlaceholderDigest() sbom.Pin {
+	sum := sha256.Sum256([]byte("#!/bin/sh\n"))
+	return sbom.Pin{Version: pinV, Sources: []toolchain.Source{{OS: runtime.GOOS, Arch: runtime.GOARCH, URL: "https://example.invalid/syft.tgz", SHA256: strings.Repeat("a", 64), BinarySHA256: hex.EncodeToString(sum[:])}}}
+}
+
 func input(t *testing.T, kind model.JobKind, iso model.Isolation, r sbom.Runner) gsbom.Input {
 	if _, ok := r.(withIso); !ok && iso != "" && iso != "process" {
 		r = withIso{r, string(iso)} // the runner executes where the job does
@@ -77,7 +87,7 @@ func input(t *testing.T, kind model.JobKind, iso model.Isolation, r sbom.Runner)
 		Job:     model.Job{Kind: kind, Isolation: iso, Run: []string{"make", gsbom.CheckID}},
 		Runner:  r,
 		Home:    home,
-		Pin:     sbom.Pin{Version: pinV},
+		Pin:     pinWithPlaceholderDigest(),
 		Targets: []sbom.Target{{Name: "cli", Path: "dist/cli", Kind: sbom.SourceFile}},
 	}
 }

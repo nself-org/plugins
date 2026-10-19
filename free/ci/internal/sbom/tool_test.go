@@ -38,7 +38,7 @@ func TestEmbeddedPinHasSyftRowWithChecksums(t *testing.T) {
 	for _, os := range []string{"linux", "darwin"} {
 		for _, arch := range []string{"amd64", "arm64"} {
 			s, ok := pin.Source(os, arch)
-			if !ok || len(s.SHA256) != 64 || !strings.HasPrefix(s.URL, "https://") {
+			if !ok || len(s.SHA256) != 64 || len(s.BinarySHA256) != 64 || !strings.HasPrefix(s.URL, "https://") {
 				t.Errorf("%s/%s source = %+v", os, arch, s)
 			}
 		}
@@ -348,4 +348,31 @@ func TestProbeRunsInAnEmptyWorkspace(t *testing.T) {
 	if len(fr.cmds) != 1 || !fr.cmds[0].NoSource {
 		t.Fatalf("the version probe must not copy the job source: %+v", fr.cmds)
 	}
+}
+
+// D-1024: a file with the right owner, mode and self-reported version but other
+// bytes than the pinned binary is refused, and never run.
+func TestResolveRefusesAnInstalledBinaryThatIsNotTheDigestPinned(t *testing.T) {
+	ctx := context.Background()
+	t.Run("swapped file", func(t *testing.T) {
+		home := t.TempDir()
+		p := installedSyft(t, home)
+		if err := os.WriteFile(p, []byte("#!/bin/sh\necho Version: "+pinVersion+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		fr := &fakeRunner{versions: map[string]string{p: pinVersion}}
+		_, err := sbom.Resolve(ctx, fr, home, sbom.ModeProcess, testPin())
+		if !sbom.IsReason(err, sbom.ReasonToolChecksum) || !strings.Contains(err.Error(), sbom.InstallCommand) || len(fr.cmds) != 0 {
+			t.Fatalf("got %v cmds=%v", err, fr.cmds)
+		}
+	})
+	t.Run("pin without a binary digest", func(t *testing.T) {
+		home := t.TempDir()
+		p := installedSyft(t, home)
+		fr := &fakeRunner{versions: map[string]string{p: pinVersion}}
+		_, err := sbom.Resolve(ctx, fr, home, sbom.ModeProcess, sbom.Pin{Version: pinVersion})
+		if !sbom.IsReason(err, sbom.ReasonToolChecksum) || len(fr.cmds) != 0 {
+			t.Fatalf("got %v cmds=%v", err, fr.cmds)
+		}
+	})
 }

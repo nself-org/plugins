@@ -39,6 +39,8 @@ func TestLoadPinsRejects(t *testing.T) {
 	cases := []struct{ name, file, body, want string }{
 		{"short sha", "demo.yaml", strings.Replace(goodTool, "%s", "abc", 1), "sha256"},
 		{"upper sha", "demo.yaml", strings.Replace(goodTool, "%s", strings.ToUpper(hex64), 1), "sha256"},
+		{"short binary sha", "demo.yaml", strings.Replace(good, `sha256: "`+hex64+`"}`, `sha256: "`+hex64+`", binary_sha256: "abc"}`, 1), "binary_sha256"},
+		{"upper binary sha", "demo.yaml", strings.Replace(good, `sha256: "`+hex64+`"}`, `sha256: "`+hex64+`", binary_sha256: "`+strings.ToUpper(hex64)+`"}`, 1), "binary_sha256"},
 		{"http url", "demo.yaml", strings.Replace(good, "https://", "http://", 1), "https"},
 		{"unknown key", "demo.yaml", good + "colour: red\n", "colour"},
 		{"name vs file", "other.yaml", good, "file name"},
