@@ -4,8 +4,9 @@ package truth
 // Inputs:  a root directory and a RuleSet.
 // Outputs: Findings (rule, path, line) with allowlisted hits counted apart.
 // Constraints: only regular files are read (symlinks are not followed); `.git`,
-// `node_modules` and `.claude/worktrees` are never entered; files over 4 MiB or
-// holding a NUL byte in the first 8 KiB are skipped as binary and counted;
+// `node_modules` and `.claude/worktrees` are never entered; files over 4 MiB, holding a NUL byte in the first 8 KiB or
+// starting with a UTF-16 mark are skipped as binary and counted, but still read (up to
+// 64 MiB) for dead hosts;
 // the rule files themselves are never scanned (a retired term in a rule file is
 // the rule); a finding carries no matched text for a dead host; no network.
 
@@ -18,9 +19,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf16"
 )
 
-const maxFileBytes = 4 << 20
+const (
+	maxFileBytes = 4 << 20
+	// maxHostScanBytes bounds the dead-host read of a file the other kinds skip.
+	maxHostScanBytes = 64 << 20
+)
 
 var errNoFiles = errors.New("no text file was read (an empty tree, or every file skipped)")
 
@@ -106,7 +112,7 @@ func scanFile(p, rel string, rs RuleSet, c compiled, facts map[string]string, re
 	if err != nil {
 		return err
 	}
-	if info.Size() > maxFileBytes {
+	if info.Size() > maxHostScanBytes {
 		res.Skipped++
 		return nil
 	}
@@ -114,16 +120,56 @@ func scanFile(p, rel string, rs RuleSet, c compiled, facts map[string]string, re
 	if err != nil {
 		return err
 	}
-	if bytes.IndexByte(raw[:min(len(raw), 8192)], 0) >= 0 {
+	if info.Size() > maxFileBytes || bytes.IndexByte(raw[:min(len(raw), 8192)], 0) >= 0 || isUTF16(raw) {
+		// Skipped for every kind but dead-host: a hash token needs no decoding.
 		res.Skipped++
+		scanLines(rel, skippedLines(raw), rs, c.hostsOnly(), facts, res)
 		return nil
 	}
 	res.Files++
+	scanLines(rel, splitLines(raw), rs, c, facts, res)
+	return nil
+}
+
+// splitLines cuts raw at "\n" and drops one trailing "\r" per line.
+func splitLines(raw []byte) []string {
 	parts := bytes.Split(raw, []byte{'\n'})
 	lines := make([]string, len(parts))
 	for i, b := range parts {
 		lines[i] = strings.TrimSuffix(string(b), "\r")
 	}
+	return lines
+}
+
+// skippedLines turns a skipped file into lines for the dead-host scan: UTF-16
+// is decoded, a NUL byte ends a token like a newline would.
+func skippedLines(raw []byte) []string {
+	if isUTF16(raw) {
+		raw = []byte(string(decodeUTF16(raw)))
+	}
+	return splitLines(bytes.ReplaceAll(raw, []byte{0}, []byte{' '}))
+}
+
+// isUTF16 reports a UTF-16 byte order mark.
+func isUTF16(raw []byte) bool {
+	return len(raw) >= 2 && (raw[0] == 0xFF && raw[1] == 0xFE || raw[0] == 0xFE && raw[1] == 0xFF)
+}
+
+func decodeUTF16(raw []byte) []rune {
+	le := raw[0] == 0xFF
+	u := make([]uint16, 0, len(raw)/2)
+	for i := 2; i+1 < len(raw); i += 2 {
+		if le {
+			u = append(u, uint16(raw[i])|uint16(raw[i+1])<<8)
+		} else {
+			u = append(u, uint16(raw[i+1])|uint16(raw[i])<<8)
+		}
+	}
+	return utf16.Decode(u)
+}
+
+// scanLines applies the compiled rules to the lines of one file.
+func scanLines(rel string, lines []string, rs RuleSet, c compiled, facts map[string]string, res *Result) {
 	shownPath := rel
 	if len(c.hostHits(rel)) > 0 {
 		shownPath = redacted // a file name can carry a dead host too
@@ -165,7 +211,6 @@ func scanFile(p, rel string, rs RuleSet, c compiled, facts map[string]string, re
 			res.Findings = append(res.Findings, Finding{RuleID: r.ID, Kind: r.Kind, Path: shownPath, Line: n + 1, Message: r.Message, Hash: h.Hash, Match: match})
 		}
 	}
-	return nil
 }
 
 // exemptNoReason is the engine's own finding for a `truth: exempt` comment

@@ -58,7 +58,7 @@ A claim rule (and a vocabulary rule that sets `exempt_regions: true`) skips a hi
 
 Claim rules never read Go source, `go.mod`, `go.sum` or `go.work`, and skip changelogs, release notes (`release-notes/`, `releases/v*`), blog posts (`content/blog`, `blog/*.md`), ADRs, history folders, `testdata`, `vendor` and `node_modules` by default. They apply to prose paths only: Markdown, MDX, Astro text, `README*`, text files, i18n JSON values and packaging descriptions.
 
-Known limits: the rules read one line at a time (a count split over two lines is missed), do not look through zero-width characters, miss a count written as `Plugins: 62`, `all 62 free and paid plugins`, `62 <b>plugins</b>`, with a dash between the number and the noun, or in full-width digits, and do not read `.tsx`/`.jsx` text or `.astro` frontmatter strings; a file that is binary, UTF-16 or over 4 MiB is skipped and counted. A dead host is never printed: another rule's match or a file name that holds one is replaced by a redaction note.
+Known limits: the rules read one line at a time (a count split over two lines is missed), miss a count written as `Plugins: 62`, `all 62 free and paid plugins`, `62 <b>plugins</b>`, with a dash between the number and the noun, or in full-width digits, and do not read `.tsx`/`.jsx` text or `.astro` frontmatter strings; a file that is binary, UTF-16 or over 4 MiB is skipped and counted for every kind except dead-host, which still reads it (UTF-16 decoded, files up to 64 MiB). Dead-host matching looks through zero-width characters, and path globs ignore letter case (`A.MD` is a `*.md` file). A dead host is never printed: another rule's match or a file name that holds one is replaced by a redaction note.
 
 ### Overrides
 
