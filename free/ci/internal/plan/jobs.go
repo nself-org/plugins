@@ -106,6 +106,12 @@ func derivedCand(c Check, id string) *cand {
 		Required: &req, Idempotent: &idem, Retry: &model.RetryConfig{InfraMax: defaultRetry},
 		Priority: "normal", Path: p, Isolation: "process",
 	}
+	if c.Platform != "" {
+		j.Matrix = &model.JobMatrix{Platform: []string{c.Platform}}
+	}
+	if len(c.Requires) > 0 {
+		j.Requirements = &model.Requirements{Tools: sortedUnique(c.Requires)}
+	}
 	return &cand{id: id, name: id, check: c.ID, workdir: wd, tool: c.Tool, job: j,
 		required: req, deep: p == "deep", derived: true}
 }

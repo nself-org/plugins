@@ -1,0 +1,41 @@
+name: App
+options:
+  bundleIdPrefix: org.example.fixture
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+targets:
+  App:
+    type: application
+    platform: macOS
+    sources: [App]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: org.example.fixture.App
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
+  AppTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [AppTests]
+    dependencies:
+      - target: App
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: org.example.fixture.AppTests
+schemes:
+  App:
+    build:
+      targets:
+        App: all
+    test:
+      targets: [AppTests]

@@ -72,6 +72,8 @@ func builtins() []CheckDef {
 		def("container.compose", "input", "git", []string{"git", "status", "--porcelain", "--", "{target}"}, true, false, "fast", "Install git"),
 		def("inputs.lockfiles", "input", "git", []string{"git", "status", "--porcelain", "--", "{target}"}, true, false, "fast", "Install git"),
 	}
+	rows = append(rows, swiftDefs()...)
+	rows = append(rows, pythonDefs()...)
 	for i := range rows {
 		if rows[i].ID == "go.fmt" {
 			rows[i].VersionProbe = []string{"go", "version"}

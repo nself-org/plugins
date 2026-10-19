@@ -1,0 +1,7 @@
+# Synthetic fixture lock: this file only has to exist for detection; no integration test installs it.
+package = []
+
+[metadata]
+lock-version = "2.1"
+python-versions = ">=3.9"
+content-hash = "0000000000000000000000000000000000000000000000000000000000000000"

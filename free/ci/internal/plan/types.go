@@ -19,6 +19,11 @@ type Check struct {
 	Argv                            []string
 	Required, Substantive           bool
 	Path                            model.JobPath
+	// Platform limits the check to one platform (matrix) and Requires lists
+	// the placement tools it needs (requires.tools), e.g. darwin/arm64 and
+	// xcode for xcode-test (P7-CI-64).
+	Platform string
+	Requires []string
 }
 
 // Revision is the git and trigger context of the plan.

@@ -42,6 +42,9 @@ const maxRead = 1 << 20
 var ignored = map[string]bool{
 	"vendor": true, "node_modules": true, ".git": true, "dist": true,
 	"build": true, "target": true, ".nself": true,
+	// Python environments and Swift/Xcode build output (P7-CI-64).
+	".venv": true, "venv": true, ".tox": true, ".nox": true, "__pypackages__": true,
+	".build": true, "DerivedData": true, "Pods": true, "Carthage": true, "SourcePackages": true,
 }
 
 // NewSnapshot indexes at most 50,000 files at depth six, in fs.WalkDir order.

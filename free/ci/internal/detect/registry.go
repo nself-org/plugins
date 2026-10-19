@@ -109,7 +109,9 @@ func DefaultRegistry() *Registry {
 		{ID: "go", Ecosystem: "go", CheckIDs: []string{"go.test"}, Detect: detectGo},
 		{ID: "lockfiles", Ecosystem: "inputs", CheckIDs: []string{"inputs.lockfiles"}, Detect: detectLockfiles},
 		{ID: "node", Ecosystem: "node", CheckIDs: []string{"node.test"}, Detect: detectNode},
+		{ID: "python", Ecosystem: "python", CheckIDs: []string{"python-test", "python-lint", "python-types"}, Detect: detectPython},
 		{ID: "rust", Ecosystem: "rust", CheckIDs: []string{"rust.test"}, Detect: detectRust},
+		{ID: "swift", Ecosystem: "swift", CheckIDs: []string{"swift-build", "swift-test", "xcode-test"}, Detect: detectSwift},
 	} {
 		_ = r.Register(d)
 	}

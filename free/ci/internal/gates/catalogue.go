@@ -19,6 +19,10 @@ type CheckDef struct {
 	RequiredDefault, Substantive bool
 	Path                         model.JobPath
 	Remediation, ImpliedBy       string
+	// Platform and RequiresTools bind a check to a host kind (P7-CI-64): the
+	// planned job runs only on that platform and needs these placement tools.
+	Platform      string
+	RequiresTools []string
 }
 
 // PlannedCheck is a check applied to a discovered directory or file.
@@ -26,6 +30,40 @@ type PlannedCheck struct {
 	Def             CheckDef
 	Workdir, Target string
 	Required        bool
+	// Argv and Tool replace the definition's when the project decides them
+	// (the Python package manager, the Xcode container); empty means the definition's.
+	Argv []string
+	Tool string
+}
+
+// Command is the argv to run, with {target} filled in.
+func (p PlannedCheck) Command() []string {
+	argv := append([]string(nil), p.Def.Argv...)
+	if len(p.Argv) > 0 {
+		argv = append([]string(nil), p.Argv...)
+	}
+	for i, a := range argv {
+		argv[i] = strings.ReplaceAll(a, "{target}", p.Target)
+	}
+	return argv
+}
+
+// PlacementTool is the tool name placement matches: empty when the check
+// states its requirement as requires.tools (xcode for xcode-test), so a missing
+// tool is named once.
+func (p PlannedCheck) PlacementTool() string {
+	if len(p.Def.RequiresTools) > 0 {
+		return ""
+	}
+	return p.ToolName()
+}
+
+// ToolName is the executable the check needs.
+func (p PlannedCheck) ToolName() string {
+	if p.Tool != "" {
+		return p.Tool
+	}
+	return p.Def.Tool
 }
 
 // Options resolves default-advisory checks at plan time.
@@ -57,7 +95,7 @@ func required(d CheckDef, o Options) bool {
 func (r *Registry) Plan(facts []detect.Fact, o Options) []PlannedCheck {
 	var out []PlannedCheck
 	seen := map[string]bool{}
-	add := func(id, dir, target string) {
+	add := func(id, dir, target string, mods ...func(*PlannedCheck)) {
 		d, ok := r.Get(id)
 		if !ok {
 			return
@@ -67,8 +105,13 @@ func (r *Registry) Plan(facts []detect.Fact, o Options) []PlannedCheck {
 			return
 		}
 		seen[key] = true
-		out = append(out, PlannedCheck{Def: d, Workdir: dir, Target: target, Required: required(d, o)})
+		pc := PlannedCheck{Def: d, Workdir: dir, Target: target, Required: required(d, o)}
+		for _, mod := range mods {
+			mod(&pc)
+		}
+		out = append(out, pc)
 	}
+	py, xc, swiftTests := pythonIndex(facts), xcodeIndex(facts), swiftTestIndex(facts)
 	for _, f := range facts {
 		if f.Confidence != detect.Certain {
 			continue
@@ -95,6 +138,15 @@ func (r *Registry) Plan(facts []detect.Fact, o Options) []PlannedCheck {
 		case f.Kind == "stack" && f.Name == "rust":
 			add("rust.clippy", dir, "")
 			add("rust.test", dir, "")
+		case f.Kind == "stack" && f.Name == "swiftpm":
+			add("swift-build", dir, "")
+			if swiftTests[f.Path] {
+				add("swift-test", dir, "")
+			}
+		case f.Kind == "xcode_scheme":
+			xc.plan(f, add)
+		case f.Kind == "stack" && f.Name == "python":
+			py.plan(dir, add)
 		case f.Kind == "container" && f.Name == "dockerfile":
 			add("container.hadolint", dir, path.Base(f.Path))
 			add("container.trivy.config", dir, path.Base(f.Path))
@@ -185,3 +237,16 @@ func present(c model.PipelineConfig, key string) bool {
 }
 
 var ErrDuplicate = errors.New("duplicate check id")
+
+// Ecosystem names the detector ecosystem a check belongs to: the part of its
+// id before the first dot or dash (`go.test` is go, `python-test` is python),
+// with the Xcode check counted under swift. `detect.disable` uses it.
+func Ecosystem(id string) string {
+	if strings.HasPrefix(id, "xcode-") {
+		return "swift"
+	}
+	if i := strings.IndexAny(id, ".-"); i >= 0 {
+		return id[:i]
+	}
+	return id
+}
