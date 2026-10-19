@@ -137,7 +137,7 @@ func TestTestReportsDriftAndNeedsAgent(t *testing.T) {
 		t.Fatalf("res=%+v err=%v", res, err)
 	}
 	k.mutate = func(c *model.Capability) {
-		c.Resources.CPU = known(1.0, "probe", time.Now().UTC())
+		c.Resources.CPU = model.KnownFact(1.0, "probe", time.Now().UTC())
 	}
 	if res, err = k.d.Test(ctx, "ts1", nil); err != nil || len(res.Drift) == 0 {
 		t.Fatalf("drift not reported: %+v %v", res, err)
