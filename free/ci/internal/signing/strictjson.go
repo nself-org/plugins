@@ -120,35 +120,47 @@ func rejectAmbiguousEscapes(raw []byte, what string) error {
 	inString := false
 	for i := 0; i < len(raw); i++ {
 		c := raw[i]
-		switch {
-		case !inString:
+		if !inString {
 			inString = c == '"'
-		case c == '"':
-			inString = false
-		case c == '\\' && i+1 < len(raw) && raw[i+1] == 'u':
-			r, ok := hex4(raw, i+2)
-			switch {
-			case ok && r == 0:
-				return bad
-			case ok && r >= 0xDC00 && r <= 0xDFFF:
-				return bad
-			case ok && r >= 0xD800 && r <= 0xDBFF:
-				low, pair := uint16(0), i+7 < len(raw) && raw[i+6] == '\\' && raw[i+7] == 'u'
-				if pair {
-					low, pair = hex4(raw, i+8)
-				}
-				if !pair || low < 0xDC00 || low > 0xDFFF {
-					return bad
-				}
-				i += 11
-			default:
-				i += 5
-			}
-		case c == '\\':
-			i++ // the escaped byte is never a quote that ends the string
+			continue
 		}
+		if c == '"' {
+			inString = false
+			continue
+		}
+		if c != '\\' {
+			continue
+		}
+		if i+1 >= len(raw) || raw[i+1] != 'u' {
+			i++ // the escaped byte is never a quote that ends the string
+			continue
+		}
+		r, ok := hex4(raw, i+2)
+		if !ok {
+			i += 5
+			continue
+		}
+		if r == 0 || (r >= 0xDC00 && r <= 0xDFFF) {
+			return bad
+		}
+		if r >= 0xD800 && r <= 0xDBFF {
+			if !lowSurrogateAt(raw, i+6) {
+				return bad
+			}
+			i += 6 // the low half's escape is read here, not again
+		}
+		i += 5
 	}
 	return nil
+}
+
+// lowSurrogateAt reports whether raw[at:] starts with a \uDC00-\uDFFF escape.
+func lowSurrogateAt(raw []byte, at int) bool {
+	if at+6 > len(raw) || raw[at] != '\\' || raw[at+1] != 'u' {
+		return false
+	}
+	low, ok := hex4(raw, at+2)
+	return ok && low >= 0xDC00 && low <= 0xDFFF
 }
 
 // hex4 reads four hex digits at raw[at:].
