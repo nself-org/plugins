@@ -10,6 +10,7 @@ package ssh
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -19,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nself-org/cli/sdk/go/v2/remote"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 )
 
@@ -63,6 +65,11 @@ func (r *itRig) hostileConfig(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(shim), 0o700); err != nil {
 		t.Fatal(err)
 	}
+	// Positive control: this config really is hostile when read without the D4 options.
+	g, gerr := exec.Command(real, "-F", filepath.Join(dir, "config"), "-G", "ci@127.0.0.1").Output()
+	if gerr != nil || !strings.Contains(string(g), "forwardagent yes") || !strings.Contains(string(g), "permitlocalcommand yes") || !strings.Contains(string(g), "controlmaster auto") {
+		t.Fatalf("the hostile config is not read by ssh (%v): %s", gerr, g)
+	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("SSH_AUTH_SOCK", filepath.Join(dir, "agent.sock"))
 	t.Setenv("DISPLAY", ":99")
@@ -79,7 +86,8 @@ func (r *itRig) hostileConfig(t *testing.T) {
 		once.Do(func() {
 			go func() {
 				defer close(probed)
-				env = r.sh("n1", `for p in $(pgrep -f '[n]self-ci-agent serve'); do tr '\0' '\n' < /proc/$p/environ; done`)
+				// as the agent's own user: a container root has no CAP_SYS_PTRACE and cannot read another uid's environ
+				env = r.sh("n1", "su -s /bin/sh nself -c "+remote.ShellQuote(`for p in $(pgrep -f '[n]self-ci-agent serve'); do tr '\0' '\n' < /proc/$p/environ; done`))
 				if c, err := net.DialTimeout("tcp", fwd, 500*time.Millisecond); err == nil {
 					_ = c.Close()
 					dial = "open"
@@ -90,8 +98,8 @@ func (r *itRig) hostileConfig(t *testing.T) {
 	if err := r.drv.Run(context.Background(), r.node("n1"), r.lease("it-hostile", "sh", "-c", "echo ready; sleep 2"), sink); err != nil {
 		t.Fatal(err)
 	}
-	<-probed
-	if !strings.Contains(env, "LANG=C") {
+	awaitProbe(t, probed, sink)
+	if !strings.Contains(env, "SSH_CONNECTION=") {
 		t.Fatalf("the probe did not read the agent's environment: %q", env)
 	}
 	for _, bad := range []string{"SSH_AUTH_SOCK", "DISPLAY", "SECRET_", "hostile-env-canary"} {
@@ -118,11 +126,25 @@ func (r *itRig) secretCanary(t *testing.T) {
 	d := r.driver()
 	d.Personal = true
 	d.Secrets = func(context.Context, protocol.Lease) ([]protocol.SecretValue, error) {
-		return []protocol.SecretValue{{Ref: "API_TOKEN", Value: canary}}, nil
+		return []protocol.SecretValue{{Ref: "project/API_TOKEN", Value: canary}}, nil
 	}
+	var agentErr tailBuffer
+	agentErr.max = 4096
+	d.Start = func(ctx context.Context, tg remote.Target, c string) (*Conn, error) {
+		cn, err := startRemote(ctx, tg, c)
+		if err == nil {
+			cn.Stderr = io.TeeReader(cn.Stderr, &agentErr)
+		}
+		return cn, err
+	}
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("agent stderr: %s", agentErr.String())
+		}
+	})
 	l := r.lease("it-secret", "sh", "-c", `echo "token=$API_TOKEN"; echo ready; sleep 2`)
 	l.Job.Secrets = []string{"API_TOKEN"}
-	l.Secrets = []protocol.SecretRef{{Ref: "API_TOKEN", Class: "project"}}
+	l.Secrets = []protocol.SecretRef{{Ref: "project/API_TOKEN", Class: "project"}}
 	var host, nodeArgs string
 	var once sync.Once
 	probed := make(chan struct{})
@@ -141,7 +163,7 @@ func (r *itRig) secretCanary(t *testing.T) {
 	if err := d.Run(context.Background(), r.node("n1"), l, sink); err != nil {
 		t.Fatal(err)
 	}
-	<-probed
+	awaitProbe(t, probed, sink)
 	if !strings.Contains(host, "nself-ci-n1") || !strings.Contains(nodeArgs, "nself-ci-agent") {
 		t.Fatalf("the scans saw nothing (host %d bytes, node %d bytes)", len(host), len(nodeArgs))
 	}
@@ -175,4 +197,19 @@ func hostSSHView(t *testing.T) string {
 		}
 	}
 	return out.String()
+}
+
+// awaitProbe waits for the probe a "ready" line started; a job that never got there is a failure.
+func awaitProbe(t *testing.T, probed chan struct{}, sink *lineSink) {
+	t.Helper()
+	select {
+	case <-probed:
+	case <-time.After(15 * time.Second):
+		t.Fatalf("the job never reached its ready line, so the node was not probed; lines %q, results %d %s", sink.lines(), len(sink.results), func() string {
+			if len(sink.results) == 0 {
+				return ""
+			}
+			return string(sink.results[0].Evidence)
+		}())
+	}
 }

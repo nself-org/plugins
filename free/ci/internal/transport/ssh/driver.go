@@ -65,7 +65,8 @@ type Driver struct {
 	Heartbeat, AgentTTL time.Duration
 	// CancelGrace bounds the wait for a result after cancel (default 3 s).
 	CancelGrace time.Duration
-	// HelloTimeout bounds the wait for hello (default 20 s).
+	// HelloTimeout bounds connect, login and the wait for hello (default 12 s; ssh's own
+	// ConnectTimeout of 10 s normally fires first).
 	HelloTimeout time.Duration
 	// Git runs bundle creation; nil uses the internal/exec funnel.
 	Git checkout.Runner
@@ -82,8 +83,12 @@ type Driver struct {
 	verErr  error
 }
 
+// Default is the driver registered for kind "ssh". The composition root sets its fields
+// (Renew, Secrets, Personal, MinAgentVersion) before the first delivery.
+var Default = &Driver{}
+
 func init() {
-	if err := transport.Register(&Driver{}); err != nil {
+	if err := transport.Register(Default); err != nil {
 		panic(err)
 	}
 }
@@ -96,7 +101,7 @@ func (d *Driver) agentTTL() time.Duration  { return orDefault(d.AgentTTL, 25*tim
 func (d *Driver) cancelGrace() time.Duration {
 	return orDefault(d.CancelGrace, 3*time.Second)
 }
-func (d *Driver) helloTimeout() time.Duration { return orDefault(d.HelloTimeout, 20*time.Second) }
+func (d *Driver) helloTimeout() time.Duration { return orDefault(d.HelloTimeout, 12*time.Second) }
 
 func orDefault(v, def time.Duration) time.Duration {
 	if v > 0 {

@@ -24,18 +24,34 @@ import (
 
 func TestSSHTransport(t *testing.T) {
 	r := newITRig(t)
-	t.Run("streams_line_by_line_and_job_root_absent_after_finalize", r.streams)
-	t.Run("cancel_kills_the_remote_process_group_within_5s", r.cancel)
-	t.Run("operator_ssh_config_cannot_forward_multiplex_or_run_commands", r.hostileConfig)
-	t.Run("session_drop_is_lost_and_the_node_kills_the_process_group", r.sessionDrop)
-	t.Run("secret_value_never_reaches_argv_env_process_list_logs_or_job_root", r.secretCanary)
-	t.Run("checkout_with_a_wrong_digest_is_refused_before_any_step", r.digestMismatch)
+	t.Run("streams_line_by_line_and_job_root_absent_after_finalize", r.sub(r.streams))
+	t.Run("cancel_kills_the_remote_process_group_within_5s", r.sub(r.cancel))
+	t.Run("operator_ssh_config_cannot_forward_multiplex_or_run_commands", r.sub(r.hostileConfig))
+	t.Run("session_drop_is_lost_and_the_node_kills_the_process_group", r.sub(r.sessionDrop))
+	t.Run("secret_value_never_reaches_argv_env_process_list_logs_or_job_root", r.sub(r.secretCanary))
+	t.Run("checkout_with_a_wrong_digest_is_refused_before_any_step", r.sub(r.digestMismatch))
 	t.Run("blob_flipped_byte_rejected_and_interrupted_blob_resumes", func(t *testing.T) {
 		TestSSHTransportBlobWithAFlippedByteIsRejectedByDigest(t)
 		TestSSHTransportInterruptedBlobResumesFromTheReportedOffset(t)
 	})
-	t.Run("black_holed_node_fails_with_E656_within_15s", r.blackHole)
-	t.Run("changed_host_key_refuses_with_E655_before_any_command_runs", r.hostKeyChange)
+	t.Run("black_holed_node_fails_with_E656_within_15s", r.sub(r.blackHole))
+	t.Run("changed_host_key_refuses_with_E655_before_any_command_runs", r.sub(r.hostKeyChange))
+}
+
+// sub wraps a scenario: it starts only once no agent of an earlier scenario is still
+// flushing (each holds a host slot), and dumps the node's view if the scenario fails.
+func (r *itRig) sub(f func(*testing.T)) func(*testing.T) {
+	return func(t *testing.T) {
+		if !r.pgrepGone("[n]self-ci-agent serve", 20*time.Second) {
+			t.Fatalf("an earlier agent is still running: %s", r.sh("n1", "ps -eo pid,user,args | grep '[n]self-ci-agent'"))
+		}
+		t.Cleanup(func() {
+			if t.Failed() {
+				t.Logf("node view:\n%s", r.sh("n1", "ps -eo pid,user,args | grep -v ' ps ' | tail -15; su -s /bin/sh nself -c '"+agentDir+"/bin/nself-ci-agent slots'; ls -lA "+agentDir+" "+agentDir+"/jobs "+agentDir+"/checkout 2>&1 | head -30"))
+			}
+		})
+		f(t)
+	}
 }
 
 func (r *itRig) streams(t *testing.T) {
@@ -68,7 +84,7 @@ func (r *itRig) streams(t *testing.T) {
 		t.Errorf("lines arrived together (%v apart), not as they were printed", last.Sub(first))
 	}
 	deadline := time.Now().Add(5 * time.Second)
-	for r.sh("n1", "ls -A "+agentDir+"/jobs "+agentDir+"/checkout 2>/dev/null | wc -l") != "0" {
+	for r.sh("n1", "find "+agentDir+"/jobs "+agentDir+"/checkout -mindepth 1 2>/dev/null | wc -l") != "0" {
 		if time.Now().After(deadline) {
 			t.Fatal("a job root is left on the node after finalize")
 		}
@@ -148,8 +164,8 @@ func (r *itRig) blackHole(t *testing.T) {
 	start := time.Now()
 	err := r.drv.Run(context.Background(), r.node("n2"), r.lease("it-hole", "true"), newLineSink(nil))
 	var te *Error
-	if !errors.As(err, &te) || te.Code != CodeTransport {
-		t.Fatalf("err = %v, want %s", err, CodeTransport)
+	if !errors.As(err, &te) || te.Code != CodeTransport || te.Reason != ReasonConnectTimeout {
+		t.Fatalf("err = %v, want %s %s", err, CodeTransport, ReasonConnectTimeout)
 	}
 	if took := time.Since(start); took > 15*time.Second {
 		t.Fatalf("a black-holed node took %v to fail", took)

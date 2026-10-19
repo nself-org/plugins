@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/checkout"
@@ -48,6 +49,8 @@ type sess struct {
 	readerDone chan struct{}
 	errDone    <-chan struct{}
 	blobs      map[string]*blobState
+
+	helloTimedOut atomic.Bool // the hello timer killed ssh
 }
 
 // Run implements transport.Driver.
@@ -111,7 +114,7 @@ func (d *Driver) makeBundle(ctx context.Context, l *protocol.Lease) (string, fun
 func (s *sess) handshake(ctx context.Context) error {
 	done := make(chan struct{})
 	defer close(done)
-	timer := time.AfterFunc(s.d.helloTimeout(), func() { _ = s.conn.Kill() })
+	timer := time.AfterFunc(s.d.helloTimeout(), func() { s.helloTimedOut.Store(true); _ = s.conn.Kill() })
 	defer timer.Stop()
 	go func() {
 		select {
@@ -184,6 +187,9 @@ func (s *sess) connectFailure(cause error) error {
 	case <-time.After(time.Second):
 	}
 	e := classify(s.node.Identity.ID, s.stderr.String(), werr)
+	if s.helloTimedOut.Load() && e.Reason == ReasonConnect {
+		e = newErr(CodeTransport, ReasonConnectTimeout, "node %s did not answer in time", s.node.Identity.ID)
+	}
 	if e.Reason == ReasonConnect && e.Err == nil {
 		e.Err = cause
 	}

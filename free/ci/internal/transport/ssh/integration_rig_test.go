@@ -68,7 +68,7 @@ func newITRig(t *testing.T) *itRig {
 	r := &itRig{t: t, fleet: f, home: t.TempDir()}
 	r.repo, r.rev = makeRepo(t)
 	r.sh("n1", "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git procps >/dev/null")
-	r.sh("n1", "install -d -o nself -g nself "+agentDir+" "+agentDir+"/bin")
+	r.sh("n1", "install -d "+agentDir+"/bin && chown -R nself:nself /home/nself/.nself")
 	f.CopyTo(t, "n1", buildAgent(t), agentDir+"/bin/nself-ci-agent")
 	r.sh("n1", "chmod 755 "+agentDir+"/bin/nself-ci-agent && chown nself:nself "+agentDir+"/bin/nself-ci-agent")
 	r.pin("n1")
