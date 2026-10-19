@@ -63,15 +63,8 @@ func (f *runFacts) checkPredicate(raw json.RawMessage) (string, error) {
 	if bd.BuildType != ReleaseBuildType || bd.ExternalParameters.Repository != f.evidence.RepoID || bd.ExternalParameters.Revision != f.pipe.Revision {
 		return "", Failf(ReasonPayloadRejected, "statement: buildType, repository or revision differ from the stored run")
 	}
-	commit := "git+" + f.evidence.RepoID + "@" + f.pipe.Revision
-	pinned := false
-	for _, d := range bd.ResolvedDependencies {
-		if d.URI == commit && d.Digest["gitCommit"] == f.pipe.Revision {
-			pinned = true
-		}
-	}
-	if !pinned {
-		return "", Failf(ReasonPayloadRejected, "statement: resolvedDependencies do not pin the revision of the run")
+	if !f.pinsRevision(p) {
+		return "", Failf(ReasonPayloadRejected, "statement: resolvedDependencies do not pin exactly the revision of the run")
 	}
 	attempt, ok := cutPrefix(p.RunDetails.Metadata.InvocationID, f.runID+"/")
 	if !ok || !f.passedRelease(attempt) {
@@ -101,12 +94,34 @@ func (f *runFacts) jobName(attempt string) string {
 	return ""
 }
 
-// byproduct reports whether the predicate lists a byproduct with this name and sha256.
+// byproduct reports whether the predicate lists exactly one byproduct of this
+// name and that it carries this sha256 (a second, contradicting entry would be
+// signed as a claim too).
 func (f *runFacts) byproduct(p predicate, name, digest string) bool {
+	seen, ok := 0, false
 	for _, b := range p.RunDetails.Byproducts {
-		if b.Name == name && b.Digest["sha256"] == digest {
-			return true
+		if b.Name == name {
+			seen++
+			ok = b.Digest["sha256"] == digest
 		}
 	}
-	return false
+	return seen == 1 && ok
+}
+
+// pinsRevision reports whether the resolved dependencies hold exactly one
+// entry for this repository and that it pins the run's revision (an entry for
+// the same repository at another commit would be a contradicting claim).
+func (f *runFacts) pinsRevision(p predicate) bool {
+	prefix := "git+" + f.evidence.RepoID + "@"
+	pinned := 0
+	for _, d := range p.BuildDefinition.ResolvedDependencies {
+		if !strings.HasPrefix(d.URI, prefix) {
+			continue
+		}
+		if d.URI != prefix+f.pipe.Revision || d.Digest["gitCommit"] != f.pipe.Revision {
+			return false
+		}
+		pinned++
+	}
+	return pinned == 1
 }

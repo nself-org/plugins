@@ -359,6 +359,22 @@ func TestStatementPredicateBuilderJobAndByproduct(t *testing.T) {
 		"another evidence digest": func(p map[string]any) {
 			rd(p)["byproducts"] = []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": strings.Repeat("a", 64)}}}
 		},
+		"two evidence byproducts, the first right": func(p map[string]any) {
+			rd(p)["byproducts"] = []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": sum(f.evRaw)}}, {"name": "evidence.json", "digest": map[string]string{"sha256": strings.Repeat("0", 64)}}}
+		},
+		"two evidence byproducts, the last right": func(p map[string]any) {
+			rd(p)["byproducts"] = []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": strings.Repeat("0", 64)}}, {"name": "evidence.json", "digest": map[string]string{"sha256": sum(f.evRaw)}}}
+		},
+		"the same evidence byproduct twice": func(p map[string]any) {
+			rd(p)["byproducts"] = []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": sum(f.evRaw)}}, {"name": "evidence.json", "digest": map[string]string{"sha256": sum(f.evRaw)}}}
+		},
+		"a second pin of the repository at another commit": func(p map[string]any) {
+			bd(p)["resolvedDependencies"] = append(bd(p)["resolvedDependencies"].([]map[string]any), map[string]any{"uri": "git+repo-1@" + strings.Repeat("f", 40), "digest": map[string]string{"gitCommit": strings.Repeat("f", 40)}})
+		},
+		"the right pin twice": func(p map[string]any) {
+			d := bd(p)["resolvedDependencies"].([]map[string]any)
+			bd(p)["resolvedDependencies"] = append(d, d[0])
+		},
 		"digest under another name": func(p map[string]any) {
 			rd(p)["byproducts"] = []map[string]any{{"name": "other.json", "digest": map[string]string{"sha256": sum(f.evRaw)}}}
 		},
@@ -366,6 +382,21 @@ func TestStatementPredicateBuilderJobAndByproduct(t *testing.T) {
 		if err := handle(t, f, item(signing.PayloadStatement, stmt(tweak))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+}
+
+func TestStatementOtherDependenciesAreCarriedThrough(t *testing.T) {
+	f := newFixture(t)
+	other := map[string]any{"name": "go.sum", "digest": map[string]string{"sha256": strings.Repeat("a", 64)}}
+	img := map[string]any{"uri": "oci://ghcr.io/example/toolchain:1", "digest": map[string]string{"sha256": strings.Repeat("b", 64)}}
+	req := item(signing.PayloadStatement, f.statementPayload(func(m map[string]any) {
+		m["predicate"] = f.predicate(func(p map[string]any) {
+			d := p["buildDefinition"].(map[string]any)
+			d["resolvedDependencies"] = append(d["resolvedDependencies"].([]map[string]any), other, img)
+		})
+	}))
+	if err := handle(t, f, req); err != nil {
+		t.Fatalf("lockfile and toolchain dependencies: %v", err)
 	}
 }
 
