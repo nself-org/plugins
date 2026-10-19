@@ -17,6 +17,7 @@ package specs
 
 import (
 	"archive/tar"
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -42,6 +43,11 @@ type PackStats struct {
 
 // Pack writes the directory rel of base to w as tar.
 func Pack(ctx context.Context, base *os.Root, rel string, w io.Writer, lim authz.Limits) (PackStats, error) {
+	return pack(ctx, base, rel, w, lim, nil)
+}
+
+// pack is Pack with an optional inflater that scans inside gzip payloads.
+func pack(ctx context.Context, base *os.Root, rel string, w io.Writer, lim authz.Limits, inf *inflater) (PackStats, error) {
 	var st PackStats
 	root, err := base.OpenRoot(rel)
 	if err != nil {
@@ -88,7 +94,7 @@ func Pack(ctx context.Context, base *os.Root, rel string, w io.Writer, lim authz
 		case tar.TypeSymlink:
 			st.Links++
 		default:
-			if err := copyFile(ctx, root, p, tw, h.Size); err != nil {
+			if err := copyFile(ctx, root, p, tw, h.Size, inf); err != nil {
 				return err
 			}
 			st.Files++
@@ -150,8 +156,10 @@ func header(root *os.Root, p string, info fs.FileInfo) (*tar.Header, bool, error
 }
 
 // copyFile copies exactly size bytes of p; a file that shrank, or that is no
-// longer a regular file once opened, is an error.
-func copyFile(ctx context.Context, root *os.Root, p string, w io.Writer, size int64) error {
+// longer a regular file once opened, is an error. With an inflater, a file that
+// starts like gzip is also inflated on the way and scanned (the same bytes, so
+// the file cannot change between the copy and the scan).
+func copyFile(ctx context.Context, root *os.Root, p string, w io.Writer, size int64, inf *inflater) error {
 	f, err := root.OpenFile(p, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return err
@@ -160,7 +168,27 @@ func copyFile(ctx context.Context, root *os.Root, p string, w io.Writer, size in
 	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() {
 		return fmt.Errorf("specs: %q is no longer a regular file", p)
 	}
-	if n, err := io.CopyN(w, &ctxReader{ctx, f}, size); err != nil {
+	src := bufio.NewReader(&ctxReader{ctx, f})
+	if inf == nil || !isGzip(src) {
+		return copyN(w, src, p, size)
+	}
+	pr, pw := io.Pipe()
+	scanned := make(chan error, 1)
+	go func() {
+		err := inf.scan(pr)
+		_ = pr.CloseWithError(err) // a refusal reaches the copy at its next write
+		scanned <- err
+	}()
+	cerr := copyN(io.MultiWriter(w, pw), src, p, size)
+	_ = pw.Close()
+	if serr := <-scanned; serr != nil {
+		return serr
+	}
+	return cerr
+}
+
+func copyN(w io.Writer, r io.Reader, p string, size int64) error {
+	if n, err := io.CopyN(w, r, size); err != nil {
 		return fmt.Errorf("specs: %q changed while it was packed (%d of %d bytes): %w", p, n, size, err)
 	}
 	return nil

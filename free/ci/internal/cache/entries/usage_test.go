@@ -14,7 +14,7 @@ import (
 func TestRecordUseStoresValidatedRowsOnly(t *testing.T) {
 	e := newEnv(t, envOpts{})
 	key := strings.Repeat("a", 64)
-	for _, res := range []string{"hit", "miss", "disabled", "readonly", "denied", "refused"} {
+	for _, res := range []string{"hit", "miss", "disabled", "readonly", "denied", "refused", "saved"} {
 		if err := e.es.RecordUse(e.ctx, entries.Use{Attempt: "u1", Spec: "go", Key: key, Result: res, Bytes: 12, MS: 7}); err != nil {
 			t.Fatalf("%s: %v", res, err)
 		}
@@ -24,10 +24,10 @@ func TestRecordUseStoresValidatedRowsOnly(t *testing.T) {
 		t.Fatalf("a use without a key (cache disabled) is valid: %v", err)
 	}
 	rows, err := e.es.Usage(e.ctx, "u1")
-	if err != nil || len(rows) != 7 {
+	if err != nil || len(rows) != 8 {
 		t.Fatalf("rows %d %v", len(rows), err)
 	}
-	if rows[0].Result != "hit" || rows[0].Bytes != 12 || rows[0].MS != 7 || rows[0].Spec != "go" || rows[0].Key != key || rows[5].Result != "refused" || rows[6].Key != "" {
+	if rows[0].Result != "hit" || rows[0].Bytes != 12 || rows[0].MS != 7 || rows[0].Spec != "go" || rows[0].Key != key || rows[5].Result != "refused" || rows[6].Result != "saved" || rows[7].Key != "" {
 		t.Fatalf("rows %+v", rows)
 	}
 	if rows[1].TS-rows[0].TS != int64(time.Second) {

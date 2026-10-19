@@ -87,7 +87,7 @@ func (r *rig) noCacheWork(t *testing.T) {
 func TestCacheHookRestoreSave(t *testing.T) {
 	r1 := cacheRig(t, map[string]model.Job{"build": sh(populate)})
 	o := outcome(r1.run(t), "build")
-	if o.State != StatePassed || r1.uses(t, o) != "go:miss" || r1.entryCount(t) != 1 {
+	if o.State != StatePassed || r1.uses(t, o) != "go:miss,go:saved" || r1.entryCount(t) != 1 {
 		t.Fatalf("first run: %+v uses %q entries %d\n%s", o, r1.uses(t, o), r1.entryCount(t), r1.Out)
 	}
 	r1.noCacheWork(t)
@@ -100,14 +100,14 @@ func TestCacheHookRestoreSave(t *testing.T) {
 
 	lock(t, r1.C.Opts.Root, "h1:two") // a lockfile edit misses, and the new key is saved
 	r3 := r1.again(t, map[string]model.Job{"build": sh(expectEmpty + " && " + populate)})
-	if o = outcome(r3.run(t), "build"); o.State != StatePassed || r3.uses(t, o) != "go:miss" || r3.entryCount(t) != 2 {
+	if o = outcome(r3.run(t), "build"); o.State != StatePassed || r3.uses(t, o) != "go:miss,go:saved" || r3.entryCount(t) != 2 {
 		t.Fatalf("lockfile edit: %+v uses %q entries %d\n%s", o, r3.uses(t, o), r3.entryCount(t), r3.Out)
 	}
 
 	job := sh(expectEmpty + " && " + populate)
 	job.Env = map[string]string{"GOFLAGS": "-mod=mod"} // a changed GOFLAGS is another key
 	r4 := r1.again(t, map[string]model.Job{"build": job})
-	if o = outcome(r4.run(t), "build"); o.State != StatePassed || r4.uses(t, o) != "go:miss" || r4.entryCount(t) != 3 {
+	if o = outcome(r4.run(t), "build"); o.State != StatePassed || r4.uses(t, o) != "go:miss,go:saved" || r4.entryCount(t) != 3 {
 		t.Fatalf("GOFLAGS change: %+v uses %q entries %d\n%s", o, r4.uses(t, o), r4.entryCount(t), r4.Out)
 	}
 }

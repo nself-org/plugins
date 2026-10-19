@@ -64,7 +64,7 @@ func TestPackDoesNotHangOnAFifoAndStopsWithItsContext(t *testing.T) {
 	}
 	defer func() { _ = root.Close() }()
 	done := make(chan error, 1)
-	go func() { done <- copyFile(context.Background(), root, "swapped", io.Discard, 1) }() // the file was a regular file when it was listed
+	go func() { done <- copyFile(context.Background(), root, "swapped", io.Discard, 1, nil) }() // the file was a regular file when it was listed
 	select {
 	case err := <-done:
 		if err == nil || !strings.Contains(err.Error(), "regular file") {
@@ -104,21 +104,24 @@ func TestUnpackOtherReadMakesTheTreeReadableByAContainerUID(t *testing.T) {
 	}
 }
 
-func TestScanWriterFindsAValueUpToTheOverlapAcrossAWindowEdge(t *testing.T) {
+func TestScanWriterFindsTheLongestValueInItsWidestFormAcrossAWindowEdge(t *testing.T) {
 	r := redact.New()
-	value := bytes.Repeat([]byte("v"), 600<<10) // 600 KiB, no newline: one match must see it whole
+	value := bytes.Repeat([]byte("v"), redact.MaxValueLen) // no newline: one match must see it whole
 	if err := r.Register(value); err != nil {
 		t.Fatal(err)
 	}
-	for _, off := range []int{scanWindow - 100<<10, scanWindow - 300<<10, scanWindow - 590<<10} {
-		data := append(append(bytes.Repeat([]byte("."), off), value...), bytes.Repeat([]byte("."), 2*scanWindow)...)
-		w := newScanWriter(io.Discard, r)
-		_, err := w.Write(data)
-		if err == nil {
-			err = w.Close()
-		}
-		if !errors.Is(err, ErrSecretMatch) {
-			t.Errorf("value at %d: err %v", off, err)
+	escaped := bytes.Repeat([]byte(`\u0076`), redact.MaxValueLen) // every byte as a \uXXXX escape: 6 times the value
+	for name, form := range map[string][]byte{"raw": value, "escaped": escaped} {
+		for _, off := range []int{scanWindow - 100<<10, scanWindow - len(form)/2, scanWindow - len(form) + 10} {
+			data := append(append(bytes.Repeat([]byte("."), off), form...), bytes.Repeat([]byte("."), 2*scanWindow)...)
+			w := newScanWriter(io.Discard, r)
+			_, err := w.Write(data)
+			if err == nil {
+				err = w.Close()
+			}
+			if !errors.Is(err, ErrSecretMatch) {
+				t.Errorf("%s form at %d: err %v", name, off, err)
+			}
 		}
 	}
 }
