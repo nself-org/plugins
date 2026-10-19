@@ -48,7 +48,6 @@ func TestBackgroundAdmission(t *testing.T) {
 		{"unplugged, hosted", signals{Plugged: ptr(false), Interactive: ptr("idle")}, model.BackgroundContention},
 		{"interactive unrecognised, operator", signals{Plugged: ptr(true), Interactive: ptr("away"), Operator: true}, model.BackgroundContention},
 		{"interactive unrecognised, hosted", signals{Plugged: ptr(true), Interactive: ptr("away")}, ""},
-		{"runner active", signals{Plugged: ptr(true), Interactive: ptr("idle"), Operator: true, Active: true}, model.BackgroundContention},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -58,9 +57,9 @@ func TestBackgroundAdmission(t *testing.T) {
 		})
 	}
 	t.Run("detail names every cause", func(t *testing.T) {
-		err := step(runner("r", signals{Plugged: ptr(false), Interactive: ptr("active"), Operator: true, Active: true}), job("bg", BandName))
+		err := step(runner("r", signals{Plugged: ptr(false), Interactive: ptr("active"), Operator: true}), job("bg", BandName))
 		ref := err.(*dispatch.Refusal)
-		for _, want := range []string{string(OnBattery), string(InteractiveActive), string(RunnerActive)} {
+		for _, want := range []string{string(OnBattery), string(InteractiveActive)} {
 			if !contains(ref.Detail, want) {
 				t.Fatalf("detail %q lacks %q", ref.Detail, want)
 			}
@@ -75,8 +74,9 @@ func TestBackgroundAdmission(t *testing.T) {
 		}{
 			{"declaration only", "operator", "", model.BackgroundContention},
 			{"fact only", "", "operator", model.BackgroundContention},
-			{"neither", "", "", ""},
-			{"neither operator", "provider", "provider", ""},
+			{"unknown ownership fails closed", "", "", model.BackgroundContention},
+			{"both foreign", "provider", "team", ""},
+			{"operator wins over foreign", "operator", "provider", model.BackgroundContention},
 		} {
 			r := runner("r", signals{Interactive: ptr("idle")}) // power unknown
 			r.Decl.Ownership, r.Capability.Identity.Ownership.Value = c.decl, nil
@@ -86,6 +86,28 @@ func TestBackgroundAdmission(t *testing.T) {
 			if got := reasonOf(t, step(r, job("bg", BandName))); got != c.want {
 				t.Fatalf("%s: reason = %q, want %q", c.name, got, c.want)
 			}
+		}
+	})
+	t.Run("hosted and ephemeral runners are never operator-owned", func(t *testing.T) {
+		for name, mutate := range map[string]func(*sched.Runner){
+			"hosted location": func(r *sched.Runner) { r.Location = "hosted" },
+			"ephemeral":       func(r *sched.Runner) { r.Ephemeral = true },
+			"hosted decl":     func(r *sched.Runner) { r.Decl.Hosted = true },
+		} {
+			r := runner("r", signals{Interactive: ptr("idle")}) // power unknown, ownership unknown
+			r.Decl.Ownership, r.Capability.Identity.Ownership.Value = "", nil
+			if reasonOf(t, step(r, job("bg", BandName))) != model.BackgroundContention {
+				t.Fatalf("%s: control: the same runner not marked hosted must refuse", name)
+			}
+			mutate(&r)
+			if got := reasonOf(t, step(r, job("bg", BandName))); got != "" {
+				t.Fatalf("%s: unknown power on a hosted runner must admit, got %q", name, got)
+			}
+		}
+	})
+	t.Run("online flag alone is not contention", func(t *testing.T) {
+		if got := reasonOf(t, step(runner("r", signals{Plugged: ptr(true), Interactive: ptr("idle"), Operator: true, Active: true}), job("bg", BandName))); got != "" {
+			t.Fatalf("Runner.Active is the world's online flag; reason = %q", got)
 		}
 	})
 	t.Run("band name matches fairq", func(t *testing.T) {
@@ -128,7 +150,7 @@ func randomSignals(rng *rand.Rand) (signals, bool) {
 	if rng.Intn(3) > 0 {
 		s.Interactive = ptr([]string{"idle", "active", "unknown"}[rng.Intn(3)])
 	}
-	s.Operator, s.Active = rng.Intn(2) == 0, rng.Intn(4) == 0
+	s.Operator = rng.Intn(2) == 0
 	return s, rng.Intn(3) == 0
 }
 
@@ -143,8 +165,6 @@ func oracle(s signals, queued bool) model.PlacementReason {
 	case s.Interactive != nil && *s.Interactive == "active":
 		return model.BackgroundContention
 	case s.Operator && (s.Interactive == nil || *s.Interactive != "idle"):
-		return model.BackgroundContention
-	case s.Active:
 		return model.BackgroundContention
 	}
 	return ""

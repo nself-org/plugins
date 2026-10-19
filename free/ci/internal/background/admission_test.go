@@ -209,6 +209,7 @@ func TestForegroundFloor(t *testing.T) {
 // TestQueueProbe: no probe admits the queue half (the placement stage guards
 // it), SetQueueProbe returns the previous probe, and nil removes it.
 func TestQueueProbe(t *testing.T) {
+	t.Cleanup(func() { SetQueueProbe(nil) })
 	if prev := SetQueueProbe(nil); prev != nil {
 		t.Fatalf("a clean process has no probe, got one")
 	}

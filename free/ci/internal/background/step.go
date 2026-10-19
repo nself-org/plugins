@@ -8,9 +8,12 @@ package background
 // Inputs:  the dispatch.View of one admission (runner, job band) and the optional
 // QueueProbe that says whether an interactive job waits for a runner.
 // Outputs: nil (admit) or a *dispatch.Refusal naming the reason.
-// Constraints: only the background band is judged, so a foreground or normal job
-// keeps its slot on a battery node (X17, the foreground floor). The step reads no
-// Store (the admission holds the writer). Reservations are enforced by admission
+// Constraints: this is a second look at the placement's own snapshot
+// (Request.Runner is the runner the same tick's world gave placement), not a
+// fresh read: the transaction re-reads node state, counters and reservations but
+// not availability facts. The queue probe is the live input. Only the background
+// band is judged, so a foreground or normal job keeps its slot on a battery node
+// (X17, the foreground floor). The step reads no Store (the admission holds the writer). Reservations are enforced by admission
 // itself, not here. With no probe installed the queue half admits and the
 // placement stage (sched eligibility, fed by the world's InteractiveQueued)
 // remains the guard; contention is always checked.
@@ -29,7 +32,8 @@ const StepName = "background"
 
 // QueueProbe reports whether an eligible interactive job is queued for the
 // capacity of runnerID. It is called inside the admission transaction, so it
-// must not touch the store.
+// must not touch the store, and it sees only the runner id: it must answer for
+// interactive-band jobs alone.
 type QueueProbe func(runnerID string) bool
 
 var probe atomic.Pointer[QueueProbe]

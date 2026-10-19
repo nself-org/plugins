@@ -7,10 +7,16 @@ package background
 // Outputs: a Verdict listing every contention cause, empty when the node is idle.
 // Constraints: pure, no clock, no I/O. A missing (unknown) fact is never idle on
 // an operator-owned node: unplugged-or-unknown power, and interactive state
-// other than a known "idle", both refuse there. On a node the operator does not
-// own (hosted, ephemeral, a teammate's), only a known fact refuses, because the
-// operator has no interactive use to protect. The rules mirror
-// sched/eligibility.go so a stale placement and the admission re-check agree.
+// other than a known "idle", both refuse there. A node counts as operator-owned
+// unless it is hosted or ephemeral, or every ownership source that speaks names
+// someone else: a paired laptop reports no ownership today, and treating that as
+// "not the operator's" would run background work on a machine in use. On a node
+// the operator does not own, only a known fact refuses, because the operator
+// has no interactive use to protect. The signals are the ones D14 names
+// (power and interactive state). Runner.Active is deliberately not a signal: the
+// world sets it from "node is online", so refusing on it would refuse every
+// online runner (see the P7-SCHED-12 handoff). Where sched/eligibility.go is
+// narrower (unknown ownership counts as not owned), this predicate refuses more.
 
 import (
 	"github.com/nself-org/plugins/free/ci/internal/sched"
@@ -25,7 +31,6 @@ const (
 	PowerUnknown       Cause = "power state unknown on an operator-owned node"
 	InteractiveActive  Cause = "interactive use is active"
 	InteractiveUnknown Cause = "interactive state unknown on an operator-owned node"
-	RunnerActive       Cause = "runner reports active use"
 )
 
 // Verdict is the contention state of one runner.
@@ -36,11 +41,28 @@ type Verdict struct {
 // Busy reports whether any cause holds.
 func (v Verdict) Busy() bool { return len(v.Causes) > 0 }
 
-// OperatorOwned reports whether r is a machine the operator owns, by its trust
-// declaration or its capability's ownership fact.
+// OperatorOwned reports whether r is a machine the operator may be using: not
+// hosted or ephemeral, and either named "operator" by its trust declaration or
+// capability ownership fact, or named by neither (unknown fails closed).
 func OperatorOwned(r sched.Runner) bool {
-	own := r.Capability.Identity.Ownership.Value
-	return r.Decl.Ownership == "operator" || own != nil && *own == "operator"
+	if r.Location == "hosted" || r.Ephemeral || r.Decl.Hosted {
+		return false
+	}
+	sources := []string{r.Decl.Ownership}
+	if own := r.Capability.Identity.Ownership.Value; own != nil {
+		sources = append(sources, *own)
+	}
+	foreign := false
+	for _, v := range sources {
+		switch v {
+		case "operator":
+			return true
+		case "":
+		default:
+			foreign = true
+		}
+	}
+	return !foreign
 }
 
 // Contended evaluates the availability facts of r.
@@ -59,9 +81,6 @@ func Contended(r sched.Runner) Verdict {
 		v.Causes = append(v.Causes, InteractiveActive)
 	case owned && (state == nil || *state != "idle"):
 		v.Causes = append(v.Causes, InteractiveUnknown)
-	}
-	if r.Active {
-		v.Causes = append(v.Causes, RunnerActive)
 	}
 	return v
 }
