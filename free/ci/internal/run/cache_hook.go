@@ -51,8 +51,15 @@ type CacheAttestation struct{ Protection, HeadRepo, PR string }
 // or PR, so an untrusted source gets no cache at all (E684 namespace rule).
 var CacheAttest func(ctx context.Context, a AttemptInfo, p store.PipelineRow) (CacheAttestation, error)
 
+// cacheEntry is a live session; one whose attempt never reached After (the job
+// failed to prepare after Before) is evicted once it is staleAfter old.
+type cacheEntry struct {
+	s  *specs.Session
+	at time.Time
+}
+
 type cacheHook struct {
-	sessions sync.Map // attempt id -> *specs.Session
+	sessions sync.Map // attempt id -> cacheEntry
 	scanner  func() authz.ValueScanner
 	environ  func() []string
 	home     func() string
@@ -146,7 +153,8 @@ func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRo
 		s.Cleanup()
 		return CacheSetup{}
 	}
-	h.sessions.Store(a.AttemptID, s)
+	h.evict(time.Now())
+	h.sessions.Store(a.AttemptID, cacheEntry{s, time.Now()})
 	envOut, mounts := s.Setup()
 	out := CacheSetup{Env: envOut}
 	for _, m := range mounts {
@@ -166,24 +174,35 @@ func cacheFacts(a AttemptInfo, p store.PipelineRow, att CacheAttestation, privat
 
 // AttemptFinalize saves while the attempt is finalizing at epoch.
 func (h *cacheHook) AttemptFinalize(ctx context.Context, a AttemptInfo, epoch int64) error {
-	if s, ok := h.sessions.Load(a.AttemptID); ok {
-		s.(*specs.Session).Finalize(ctx, epoch)
+	if e, ok := h.sessions.Load(a.AttemptID); ok {
+		e.(cacheEntry).s.Finalize(ctx, epoch)
 	}
 	return nil
 }
 
 // Wants lets the run skip the finalize read when nothing can be saved.
 func (h *cacheHook) Wants(a AttemptInfo) bool {
-	s, ok := h.sessions.Load(a.AttemptID)
-	return ok && s.(*specs.Session).Wants()
+	e, ok := h.sessions.Load(a.AttemptID)
+	return ok && e.(cacheEntry).s.Wants()
 }
 
 // After removes the attempt's cache directories; it saves nothing.
 func (h *cacheHook) After(_ context.Context, a AttemptInfo, _ Outcome) error {
-	if s, ok := h.sessions.LoadAndDelete(a.AttemptID); ok {
-		s.(*specs.Session).Cleanup()
+	if e, ok := h.sessions.LoadAndDelete(a.AttemptID); ok {
+		e.(cacheEntry).s.Cleanup()
 	}
 	return nil
+}
+
+// evict cleans up sessions whose attempt never reached After.
+func (h *cacheHook) evict(now time.Time) {
+	h.sessions.Range(func(k, v any) bool {
+		if e := v.(cacheEntry); now.Sub(e.at) > staleAfter {
+			h.sessions.Delete(k)
+			e.s.Cleanup()
+		}
+		return true
+	})
 }
 
 // imageDigest is the pinned digest of the job's container image, "" if unknown.

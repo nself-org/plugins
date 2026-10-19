@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/cache/specs"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -193,5 +195,18 @@ func TestCacheFactsRecordDeclaredSecretsAndPrivateDeps(t *testing.T) {
 	}
 	if f := cacheFacts(AttemptInfo{Job: model.Job{}}, p, att, false); f.SecretsDeclared || f.PrivateDeps {
 		t.Fatalf("%+v", f)
+	}
+}
+
+func TestCacheHookEvictsSessionsThatNeverReachedAfter(t *testing.T) {
+	h := &cacheHook{}
+	h.sessions.Store("old", cacheEntry{s: &specs.Session{}, at: time.Now().Add(-2 * staleAfter)})
+	h.sessions.Store("new", cacheEntry{s: &specs.Session{}, at: time.Now()})
+	h.evict(time.Now())
+	if _, ok := h.sessions.Load("old"); ok {
+		t.Fatal("a stale session was kept")
+	}
+	if _, ok := h.sessions.Load("new"); !ok {
+		t.Fatal("a live session was evicted")
 	}
 }
