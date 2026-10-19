@@ -30,6 +30,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/config"
 	"github.com/nself-org/plugins/free/ci/internal/detect"
+	"github.com/nself-org/plugins/free/ci/internal/drill"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/gates"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -114,6 +115,9 @@ func runPlan(args []string) int {
 	case err == nil:
 		cfg = loaded.Config
 	case !errors.Is(err, os.ErrNotExist) || o.cfg != "":
+		return planFail(o.json, err)
+	}
+	if cfg, err = drill.Expand(root, cfg, o.pipeline, o.trigger); err != nil { // as a real run: drills_dir subdirectories become kind drill jobs (D-1046)
 		return planFail(o.json, err)
 	}
 	facts, checks, err := planChecks(root, cfg)
