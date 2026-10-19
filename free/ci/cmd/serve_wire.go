@@ -64,7 +64,7 @@ func (liveCanceller) Cancel(nodeID, leaseID, reason string) error {
 }
 
 // serveWire connects the listeners and the drain to the coordinator's store.
-func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string, cfg *coordinator.Config) (undo func()) {
+func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string, cfg *coordinator.Config) (undo func(), err error) {
 	useEnrollStore(st)
 	useAgentStore(st, home, servePublicURL)
 	reg := registry.New(st)
@@ -79,7 +79,10 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 		}
 	}
 	eng := lease.New(st, reg, lease.Config{})
-	stopBeat := registerServe(ctx, st, eng)
+	stopBeat, err := registerServe(ctx, st, eng)
+	if err != nil { // a serve a restore cannot see would be replaced under its own feet: refuse to run
+		return func() {}, err
+	}
 	cfg.Drain = func(dctx context.Context) error {
 		d, err := drain.New(drain.Config{
 			Intake: agentIntake{}, Canceller: liveCanceller{}, Deadline: drain.FlagDeadline(), Logf: cfg.Logf,
@@ -97,19 +100,18 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 		}
 		return err
 	}
-	return func() { stopBeat(); pairing.Use(nil); agentOnAck = nil }
+	return func() { stopBeat(); pairing.Use(nil); agentOnAck = nil }, nil
 }
 
 // registerServe makes this serve process visible in the coordinator table and keeps its heartbeat fresh, so
 // `serve restore` sees an idle coordinator and refuses (backup.running), and the dispatcher's incarnation is
 // read from a table that has a row. It then gives the leases of earlier coordinators their restart grace
 // (Epic D6: expires_at = max(stored, start + TTL)). The returned func stops the heartbeat and waits for it.
-func registerServe(ctx context.Context, st *store.Store, eng *lease.Engine) (stop func()) {
+func registerServe(ctx context.Context, st *store.Store, eng *lease.Engine) (stop func(), err error) {
 	host, _ := os.Hostname()
 	reg, err := st.Register(ctx, os.Getpid(), strconv.FormatInt(time.Now().UnixNano(), 10), "serve-"+host)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "nself-ci-serve: cannot register in the coordinator table (a restore will not see this process): %v\n", err)
-		return func() {}
+		return func() {}, fmt.Errorf("cannot register in the coordinator table (a restore would not see this process): %w", err)
 	}
 	inc, _ := st.HighestIncarnation(ctx)
 	if _, err = eng.Start(ctx, reg.ID, inc); err != nil {
@@ -131,7 +133,7 @@ func registerServe(ctx context.Context, st *store.Store, eng *lease.Engine) (sto
 			}
 		}
 	}()
-	return func() { cancel(); wg.Wait() }
+	return func() { cancel(); wg.Wait() }, nil
 }
 
 // ownedByThisProcess reports whether a coordinator row was registered by this process: the pipelines this

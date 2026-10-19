@@ -54,6 +54,9 @@ func (e *EngineLeases) Running(ctx context.Context) ([]Lease, error) {
 	}
 	var out []Lease
 	for _, rl := range all {
+		if rl.Epoch <= 0 { // a local in-process lease (epoch 0) has no agent to cancel and is never renewed: not ours to hand back
+			continue
+		}
 		if (e.CoordinatorID == "" || rl.CoordinatorID == e.CoordinatorID) && (e.Owned == nil || e.Owned(ctx, rl.CoordinatorID)) {
 			out = append(out, e.lease(ctx, rl))
 		}
@@ -80,11 +83,23 @@ func (e *EngineLeases) Get(ctx context.Context, id string) (Lease, bool, error) 
 	return e.lease(ctx, rl), true, nil
 }
 
-// HandBack requeues the lease's job: Sweep after expiry, Reconnect(self_fenced) after a cancel ack.
+// HandBack requeues the lease's job: LeaseFail after expiry, Reconnect(self_fenced) for an agent-reported fence.
+// The drain itself hands back only after an expiry: a cancel ack means the agent received the cancel, not
+// that its job and after-job hooks stopped.
 func (e *EngineLeases) HandBack(ctx context.Context, l Lease, expired bool, _ string) error {
-	if expired {
-		_, err := e.Engine.Sweep(ctx)
-		return err
+	if expired { // this lease only: Sweep would also fail every other expired lease of the store
+		rl, err := e.Engine.Store.LeaseGet(ctx, l.ID)
+		if err != nil {
+			return err
+		}
+		if err = e.Engine.Store.LeaseFail(ctx, rl, e.Engine.Config.Clock(), "lease.expired", true); err != nil {
+			var coded *store.Error
+			if errors.As(err, &coded) && coded.Code == "E605" {
+				return nil // renewed or ended meanwhile
+			}
+			return err
+		}
+		return nil
 	}
 	return e.Engine.Reconnect(ctx, l.ID, l.Epoch, "self_fenced")
 }

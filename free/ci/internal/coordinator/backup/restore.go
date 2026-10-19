@@ -35,6 +35,8 @@ type Result struct {
 	Rollback         string   // shell line that puts the saved files back (stop the coordinator first)
 	Incarnation      int64    // highest coordinator incarnation after the restore
 	DeniedMerged     int64
+	TokensRevoked    int64 // tokens revoked in the replaced dir and revoked again after the swap
+	GrantsRevoked    int64 // grants the replaced dir no longer held live, revoked in the restored state
 	RevokedKept      int64
 	NodesReconfirm   int64
 	TokenKeysRotated int64
@@ -64,6 +66,13 @@ func Restore(ctx context.Context, o Options, in io.Reader, kek []byte) (res Resu
 	if image == nil {
 		return res, fail(ReasonFormat, "the backup has no %s", nameState)
 	}
+	ts := o.now().UTC().Format("20060102T150405Z")
+	// the marker goes down first: a coordinator that starts from now on refuses to, and a re-run after a
+	// failure knows whether the dir it replaces was empty
+	first, rerun := readPending(o.DataDir)
+	if err = writePending(o.DataDir, first.Empty, ts); err != nil {
+		return res, fail(ReasonIO, "the restore marker cannot be written: %v", err)
+	}
 	_, statErr := os.Stat(o.statePath())
 	old, err := store.Open(o.statePath(), o.storeOpts())
 	if err != nil {
@@ -74,27 +83,42 @@ func Restore(ctx context.Context, o Options, in io.Reader, kek []byte) (res Resu
 		if rerr != nil {
 			return res, rerr
 		}
+		if !rerun {
+			_ = clearPending(o.DataDir)
+		}
 		return res, fail(ReasonRunningCoordinator, "coordinator %s is running on %s; stop it before `serve restore`", id, o.DataDir)
 	}
 	p, err := snapshot(ctx, old, statErr == nil)
 	if err != nil {
 		return res, err
 	}
+	p.empty = p.empty || first.Empty // a re-run of a restore that began on an empty dir stays empty
+	if err = writePending(o.DataDir, p.empty, ts); err != nil {
+		return res, fail(ReasonIO, "the restore marker cannot be written: %v", err)
+	}
 	res.Empty = p.empty
-	ts := o.now().UTC().Format("20060102T150405Z")
 	saved, err := saveAside(ctx, o, old, p, es, kek, ts)
 	res.Saved = savedNames(saved)
 	res.Rollback = rollbackLine(o.DataDir, saved)
 	if err != nil {
+		if !rerun {
+			_ = clearPending(o.DataDir) // nothing was replaced yet
+		}
 		return res, err
 	}
 	st, err := old.Restore(ctx, bytes.NewReader(image))
 	if err != nil {
+		if !rerun {
+			_ = clearPending(o.DataDir) // the swap did not happen
+		}
 		return res, fail(ReasonIO, "the database image was refused: %v%s", err, rollbackHint(res.Rollback))
 	}
 	defer func() { _ = st.Close() }()
 	if err = finish(ctx, o, st, p, es, kek, ts, &res); err != nil {
-		return res, fail(ReasonIO, "%v%s", err, rollbackHint(res.Rollback))
+		return res, fail(ReasonIO, "%v%s; the data dir keeps restore.pending until a restore finishes", err, rollbackHint(res.Rollback))
+	}
+	if err = clearPending(o.DataDir); err != nil {
+		return res, fail(ReasonIO, "the restore marker cannot be removed: %v", err)
 	}
 	return res, nil
 }
@@ -166,7 +190,7 @@ func finish(ctx context.Context, o Options, st *store.Store, p prior, es []Entry
 	if err != nil {
 		return err
 	}
-	res.DeniedMerged, res.RevokedKept = c.denied, c.revoked
+	res.DeniedMerged, res.RevokedKept, res.TokensRevoked, res.GrantsRevoked = c.denied, c.revoked, c.tokens, c.grants
 	if p.empty {
 		if res.NodesReconfirm, err = st.NodesNeedReconfirm(ctx, actor, ReconfirmReason); err != nil {
 			return err

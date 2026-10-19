@@ -63,14 +63,15 @@ type Leases interface {
 
 // Config configures a Drainer. Zero values take the defaults.
 type Config struct {
-	Intake     Intake
-	Leases     Leases
-	Canceller  Canceller
-	Clock      Clock
-	Deadline   time.Duration // how long running leases may finish (default DefaultDeadline)
-	Poll       time.Duration // lease re-read interval (default 1 s)
-	AckTimeout time.Duration // longest wait for an ack of a cancel while the lease keeps renewing (default 2 min)
-	Logf       func(format string, a ...any)
+	Intake      Intake
+	Leases      Leases
+	Canceller   Canceller
+	Clock       Clock
+	Deadline    time.Duration // how long running leases may finish (default DefaultDeadline)
+	Poll        time.Duration // lease re-read interval (default 1 s)
+	AckTimeout  time.Duration // longest wait for an ack of a cancel while the lease keeps renewing (default 2 min)
+	StopTimeout time.Duration // longest wait, after the ack, for the job and its after-job hooks to end (default 6 min)
+	Logf        func(format string, a ...any)
 }
 
 // Outcome is what happened to one lease.

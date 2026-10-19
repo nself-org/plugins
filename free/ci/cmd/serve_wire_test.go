@@ -70,3 +70,16 @@ func TestServeRegistersSoRestoreRefusesAnIdleCoordinator(t *testing.T) {
 		t.Fatalf("serve exit %d", code)
 	}
 }
+
+func TestServeRefusesWhileARestoreIsPending(t *testing.T) {
+	t.Setenv("NSELF_V15", "1")
+	dir := serveFixture(t, quietHost())
+	if err := os.WriteFile(filepath.Join(dir, "restore.pending"), []byte(`{"empty":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if code := serveV15(ctx, []string{"--insecure", "--workdir", filepath.Join(dir, "wd"), "--data-dir", dir}, nil); code != 1 {
+		t.Fatalf("serve over an unfinished restore exited %d, want 1", code)
+	}
+}

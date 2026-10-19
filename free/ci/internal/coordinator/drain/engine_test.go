@@ -42,6 +42,11 @@ func newEngineRig(t *testing.T, ttl time.Duration) *engineRig {
 
 // job creates a running attempt "a<id>" with lease "l<id>" of the given kind.
 func (r *engineRig) job(t *testing.T, id, kind string, idempotent bool) {
+	r.jobAt(t, id, kind, idempotent, 1)
+}
+
+// jobAt is job with the coordinator incarnation of the grant: 0 makes the local in-process lease (epoch 0).
+func (r *engineRig) jobAt(t *testing.T, id, kind string, idempotent bool, incarnation int64) {
 	t.Helper()
 	ctx := context.Background()
 	p := store.PipelineRow{ID: "p" + id, Project: "p", Revision: "r", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
@@ -55,7 +60,11 @@ func (r *engineRig) job(t *testing.T, id, kind string, idempotent bool) {
 		t.Fatal(err)
 	}
 	d := store.Demand{AttemptID: "a" + id, LeaseID: "l" + id, RunnerID: "r" + id, CPU: 1, MemMB: 1, CapacityCPU: 100, CapacityMemMB: 100, TTL: r.eng.Config.TTL}
-	if _, err := r.eng.Grant(ctx, "host", d, 1); err != nil {
+	if incarnation == 0 { // a local lease, as internal/run creates it: epoch 0, never renewed
+		if err := r.st.AdmitAndLease(ctx, "host", d); err != nil {
+			t.Fatal(err)
+		}
+	} else if _, err := r.eng.Grant(ctx, "host", d, incarnation); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.st.Transition(ctx, "a"+id, "leased", "running", store.TransitionDetail{Epoch: 1}); err != nil {
@@ -93,9 +102,9 @@ func TestDrainEngineLeases(t *testing.T) {
 		return k.kind, k.idem, nil
 	}
 
-	t.Run("ack hands back the idempotent job; release and idempotent:false go to needs-operator", func(t *testing.T) {
+	t.Run("an ack alone hands nothing back: the idempotent job is requeued at lease expiry; release and idempotent:false go to needs-operator", func(t *testing.T) {
 		noLeak(t)
-		r := newEngineRig(t, 12*time.Minute)
+		r := newEngineRig(t, 10*time.Minute+30*time.Second)
 		r.job(t, "ok", "test", true)
 		r.job(t, "rel", "release", true)
 		r.job(t, "once", "test", false)
@@ -113,6 +122,11 @@ func TestDrainEngineLeases(t *testing.T) {
 		go func() { defer close(done); rep, err = d.Run(context.Background()) }()
 		r.c.settleOn(t, 1, done)
 		r.c.Advance(10 * time.Minute)
+		r.c.run(t, 1, time.Second, done, func() {
+			if got := r.state(t, "aok"); got != "running" && r.c.Now().Before(time.Unix(1_000_000, 0).Add(10*time.Minute+30*time.Second)) {
+				t.Fatalf("the acked attempt was handed back before its lease expired: %s", got)
+			}
+		})
 		<-done
 		if err != nil || rep.ExitCode() != 0 {
 			t.Fatalf("err %v exit %d results %+v", err, rep.ExitCode(), rep.Results)
@@ -136,7 +150,7 @@ func TestDrainEngineLeases(t *testing.T) {
 		}
 	})
 
-	t.Run("expiry hands back through the engine sweep", func(t *testing.T) {
+	t.Run("expiry hands back this lease only", func(t *testing.T) {
 		noLeak(t)
 		r := newEngineRig(t, 10*time.Minute+10*time.Second)
 		r.job(t, "ok", "test", true)
@@ -159,6 +173,41 @@ func TestDrainEngineLeases(t *testing.T) {
 		<-done
 		if err != nil || outcome(t, rep, "lok") != OutcomeExpired || r.state(t, "aok") != "retryable" {
 			t.Fatalf("err %v results %+v state %s", err, rep.Results, r.state(t, "aok"))
+		}
+	})
+
+	t.Run("a local in-process lease is never drained or handed back", func(t *testing.T) {
+		noLeak(t)
+		r := newEngineRig(t, 10*time.Minute+30*time.Second)
+		r.job(t, "ok", "test", true)
+		r.jobAt(t, "loc", "test", true, 0) // no agent to cancel, never renewed: its job runs in this process
+		kinds["aloc"] = struct {
+			kind string
+			idem bool
+		}{"test", true}
+		world := newWorld(r.c)
+		d, err := New(Config{Intake: world, Leases: &EngineLeases{Engine: r.eng, CoordinatorID: r.coord, JobInfo: info}, Canceller: world, Clock: r.c})
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan struct{})
+		var rep Report
+		go func() { defer close(done); rep, err = d.Run(context.Background()) }()
+		r.c.settleOn(t, 1, done)
+		r.c.Advance(10 * time.Minute)
+		r.c.run(t, 1, time.Second, done, nil)
+		<-done
+		if err != nil || outcome(t, rep, "lok") != OutcomeExpired {
+			t.Fatalf("err %v results %+v", err, rep.Results)
+		}
+		for _, x := range rep.Results {
+			if x.LeaseID == "lloc" {
+				t.Fatalf("the local lease was drained: %+v", x)
+			}
+		}
+		world.never(t, "cancel lloc node=rloc")
+		if got := r.state(t, "aloc"); got != "running" {
+			t.Fatalf("the local attempt is %s, want it left running", got)
 		}
 	})
 

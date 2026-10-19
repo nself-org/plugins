@@ -38,14 +38,18 @@ func (d *Drainer) settle(ctx context.Context, l Lease) Result {
 		d.cfg.Logf("drain: cancel of lease %s failed: %v; waiting for its expiry", l.ID, err)
 	}
 	giveUp := d.cfg.Clock.Now().Add(d.cfg.AckTimeout)
+	acked := false
 	for {
 		cur, running, err := d.cfg.Leases.Get(ctx, l.ID)
 		if err != nil {
 			res.Outcome, res.Err = OutcomeError, err
 			return res
 		}
-		if !running {
+		if !running { // the job ended (its result, cancelled or not, was committed): nothing is left to hand back
 			res.Outcome = OutcomeFinished
+			if acked {
+				res.Outcome = OutcomeAcked
+			}
 			return res
 		}
 		now := d.cfg.Clock.Now()
@@ -62,17 +66,13 @@ func (d *Drainer) settle(ctx context.Context, l Lease) Result {
 			res.Outcome = OutcomeAbandoned
 			return res
 		case <-ack:
-			// the agent may have delivered its result before it saw the cancel: hand back only a lease still running
-			cur, running, err = d.cfg.Leases.Get(ctx, l.ID)
-			if err != nil {
-				res.Outcome, res.Err = OutcomeError, err
-				return res
+			// the ack means "cancel received": the job and its after-job hooks may still run, so the lease is
+			// handed back only once it left running or expired, never on the ack itself
+			if !acked {
+				acked = true
+				giveUp = d.cfg.Clock.Now().Add(d.cfg.StopTimeout)
 			}
-			if !running {
-				res.Outcome = OutcomeFinished
-				return res
-			}
-			return d.handBack(ctx, cur, false, OutcomeAcked)
+			ack = nil
 		case <-d.cfg.Clock.After(wait):
 		}
 	}

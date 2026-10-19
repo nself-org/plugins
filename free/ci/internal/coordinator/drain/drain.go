@@ -43,6 +43,9 @@ func New(cfg Config) (*Drainer, error) {
 	if cfg.AckTimeout <= 0 {
 		cfg.AckTimeout = 2 * time.Minute
 	}
+	if cfg.StopTimeout <= 0 {
+		cfg.StopTimeout = 6 * time.Minute // longer than the after-job hooks' 5 minutes
+	}
 	if cfg.Logf == nil {
 		cfg.Logf = func(string, ...any) {}
 	}

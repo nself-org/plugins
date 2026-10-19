@@ -23,10 +23,12 @@ const liveWindow = 90 * time.Second
 
 // prior is the snapshot of the data dir being replaced.
 type prior struct {
-	existed bool  // state.db existed before this restore
-	empty   bool  // no nodes and no PKI authority: nothing to merge, nothing to protect
-	team    bool  // the coordinator mode row said team
-	maxInc  int64 // highest coordinator incarnation of the dir being replaced (0 when it held none)
+	existed bool            // state.db existed before this restore
+	empty   bool            // no nodes and no PKI authority: nothing to merge, nothing to protect
+	team    bool            // the coordinator mode row said team
+	maxInc  int64           // highest coordinator incarnation of the dir being replaced (0 when it held none)
+	tokens  []string        // ids of the tokens revoked in the dir being replaced
+	grants  map[string]bool // principals with a live grant in the dir being replaced
 	denied  map[string][]string
 	revoked []string
 }
@@ -77,7 +79,21 @@ func snapshot(ctx context.Context, st *store.Store, existed bool) (prior, error)
 	for _, r := range rows {
 		p.denied[r.NodeID] = append(p.denied[r.NodeID], r.Serial)
 	}
+	p.grants = map[string]bool{}
 	if existed {
+		toks, terr := st.TokenList(ctx)
+		gs, gerr := st.GrantList(ctx)
+		if terr != nil || gerr != nil {
+			return p, fail(ReasonIO, "the tokens and grants cannot be read: %v", errors.Join(terr, gerr))
+		}
+		for _, t := range toks {
+			if t.RevokedAt > 0 {
+				p.tokens = append(p.tokens, t.ID)
+			}
+		}
+		for _, g := range gs {
+			p.grants[g.Principal] = true
+		}
 		if cs, cerr := st.Coordinators(ctx); cerr == nil {
 			for _, c := range cs {
 				p.maxInc = max(p.maxInc, c.Incarnation)
@@ -90,7 +106,7 @@ func snapshot(ctx context.Context, st *store.Store, existed bool) (prior, error)
 }
 
 // mergeCounts says what mergePrior carried over.
-type mergeCounts struct{ denied, revoked int64 }
+type mergeCounts struct{ denied, revoked, tokens, grants int64 }
 
 // mergePrior writes the replaced dir's deny list and revocations into the restored store.
 func mergePrior(ctx context.Context, st *store.Store, p prior, actor string) (mergeCounts, error) {
@@ -123,6 +139,32 @@ func mergePrior(ctx context.Context, st *store.Store, p prior, actor string) (me
 			return c, fail(ReasonIO, "node %s cannot be re-revoked: %v", id, err)
 		}
 		c.revoked++
+	}
+	// tokens revoked since the backup stay revoked; a grant the replaced dir no longer held live was revoked
+	// since the backup (grants are never deleted), so it is revoked again here, tokens included
+	for _, id := range p.tokens {
+		found, err := st.TokenRevoke(ctx, id, store.AuditInput{Actor: actor, Action: "restore.token_revoke", Target: id})
+		if err != nil {
+			return c, fail(ReasonIO, "token %s cannot be re-revoked: %v", id, err)
+		}
+		if found {
+			c.tokens++
+		}
+	}
+	if p.existed && !p.empty {
+		live, err := st.GrantList(ctx)
+		if err != nil {
+			return c, fail(ReasonIO, "the restored grants cannot be read: %v", err)
+		}
+		for _, g := range live {
+			if p.grants[g.Principal] {
+				continue
+			}
+			if _, err = st.GrantRevoke(ctx, g.Principal, store.AuditInput{Actor: actor, Action: "restore.grant_revoke", Target: g.Principal}); err != nil {
+				return c, fail(ReasonIO, "grant of %s cannot be re-revoked: %v", g.Principal, err)
+			}
+			c.grants++
+		}
 	}
 	if p.team {
 		if _, err := st.CoordinatorModeEnsure(ctx, true, actor); err != nil {

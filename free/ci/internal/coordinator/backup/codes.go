@@ -29,6 +29,7 @@ const (
 	ReasonTooLarge           = "too_large"
 	ReasonIO                 = "io"
 	ReasonRotate             = "rotate"
+	ReasonIncomplete         = "incomplete_restore"
 )
 
 func init() {
