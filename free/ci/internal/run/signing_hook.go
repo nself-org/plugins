@@ -48,20 +48,26 @@ func (attestStoreHook) AttemptStart(_ context.Context, a AttemptInfo) error {
 	return nil
 }
 
-// statusReposter re-posts through report.Repost (P7-HOST-02).
-type statusReposter struct{}
+// statusReposter re-posts through a report.Sender (P7-HOST-02's Repost).
+type statusReposter struct{ sender *report.Sender }
 
-func (statusReposter) Repost(ctx context.Context, keys []attest.StatusKey, state, reason string) error {
+func (r statusReposter) Repost(ctx context.Context, keys []attest.StatusKey, state, reason string) error {
 	ks := make([]report.Key, len(keys))
 	for i, k := range keys {
 		ks[i] = report.Key{Revision: k.Revision, Context: k.Context}
 	}
-	return report.Repost(ctx, ks, report.State(state), reason)
+	return r.sender.Repost(ctx, ks, report.State(state), reason)
 }
 
 // RevokeNode revokes the evidence keys of nodeID on behalf of actor and returns the re-evaluation set.
 func RevokeNode(ctx context.Context, st *store.Store, log *audit.Log, nodeID, actor string) (attest.Affected, error) {
-	r := attest.Revoker{Ledger: store.AttestLedger{S: st}, Reposter: statusReposter{}}
+	// The process-wide sender when the composition root configured it (D-1291); otherwise one over this
+	// store, so a revocation always queues its re-posts.
+	sender := report.Default
+	if sender == nil || sender.Store == nil {
+		sender = &report.Sender{Store: st}
+	}
+	r := attest.Revoker{Ledger: store.AttestLedger{S: st}, Reposter: statusReposter{sender: sender}}
 	if log != nil {
 		r.Audit = func(ctx context.Context, actor, action, target, detail string) error {
 			return log.Append(ctx, audit.Event{Actor: actor, Action: action, Target: target, Detail: detail})

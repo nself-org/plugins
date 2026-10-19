@@ -1,6 +1,6 @@
 package attest_test
 
-// Purpose: tests of the runner-key verifier (P7-TRUST-20): a document signed by the registered, eligible,
+// Purpose: tests of the runner-key verifier (P7-TRUST-20), over an in-memory ledger and over the real SQLite one: a document signed by the registered, eligible,
 // lease-holding node verifies; every adversarial fixture is refused with its own reason; the signed half of
 // invariant I13 (an unverifiable signature never satisfies a gate) over the shared world product.
 // Inputs:  deterministic Ed25519 keys (fixed seeds), an in-memory Ledger, fixtures in testdata/remote.
@@ -21,10 +21,15 @@ import (
 	"strings"
 	"testing"
 
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
 	"github.com/nself-org/plugins/free/ci/internal/agent/nodekey"
 	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/invariants"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/store"
+	_ "modernc.org/sqlite"
 )
 
 // seedSigner is a node key from a fixed seed.
@@ -462,4 +467,86 @@ func mustRaw(t testing.TB, ev model.Evidence) []byte {
 		t.Fatal(err)
 	}
 	return raw
+}
+
+// repoIDOf is run.shortDigest: the first 8 bytes of the sha256 of the project, in hex.
+func repoIDOf(project string) string {
+	sum := sha256.Sum256([]byte(project))
+	return hex.EncodeToString(sum[:8])
+}
+
+func TestVerifyRemoteOverTheRealLedger(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+	st, err := store.Open(path, store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	seed, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// repo id "repo-1" of goodEvidence is the project's digest in production; this test names the project
+	// so that the derived id is what the evidence carries.
+	ev := attemptEvidence("att-1")
+	project := "widget"
+	ev.RepoID = repoIDOf(project)
+	exec := func(q string, a ...any) {
+		t.Helper()
+		if _, err := seed.Exec(q, a...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	exec(`INSERT INTO pipeline(id,project,revision,trigger,source_trust,privacy_zone,policy_digest,input_digest,selection_mode,selection_reason,selection_digest,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,1)`,
+		ev.RunID, project, ev.Revision, "local", string(ev.SourceTrust), "any", ev.PolicyDigest, "in", string(ev.Selection.Mode), "r", "d", "running")
+	exec(`INSERT INTO job(id,pipeline_id,name,kind,idempotent,infra_max,input_digest,required,status) VALUES('j1',?,'build','check',1,1,'in',1,'running')`, ev.RunID)
+	exec(`INSERT INTO attempt(id,job_id,n,state) VALUES('att-1','j1',1,'passed')`)
+	exec(`INSERT INTO sched_admitted(attempt_id,pipeline_id,project,user_id,team_id,provider,runner_id,world_digest,admitted_at) VALUES('att-1',?,?,'u','t','agent',?,'w',1)`, ev.RunID, project, holderNode)
+	exec(`INSERT INTO pki_node_key(node_id,key_id,public,pinned_at) VALUES(?,?,?,1)`, holderNode, keyA.KeyID(), base64.StdEncoding.EncodeToString(keyA.pub()))
+	exec(`INSERT INTO node(id,name,version,lifecycle,trust_json,deploy_host_json,state,created_at,updated_at) VALUES(?,?,1,'{}','{}','{}','online',1,1)`, holderNode, holderNode)
+	exec(`INSERT INTO capability_snapshot(node_id,digest,doc_json,observed_at) VALUES(?,'d','{"separation":{"signing_eligible":{"value":true}}}',1)`, holderNode)
+	exec(`INSERT INTO outbox(revision,context,seq,state,created_at) VALUES(?,'nself-ci@acme/widget',1,'posted',1)`, ev.Revision)
+	_ = seed.Close()
+
+	led := store.AttestLedger{S: st}
+	v := &attest.RunnerVerifier{Ledger: func() attest.Ledger { return led }}
+	good := mustSign(t, ev, keyA)
+	if err := v.VerifyEvidence(marshal(t, good), good); err != nil {
+		t.Fatalf("signed evidence over the real ledger: %v", err)
+	}
+	forged := ev
+	forged.RepoID = "victim-protected"
+	forged = mustSign(t, forged, keyA)
+	if err := v.VerifyEvidence(marshal(t, forged), forged); attest.RemoteReasonOf(err) != attest.RemoteContextMismatch {
+		t.Fatalf("forged repository: %v", err)
+	}
+	if q, _ := led.Quarantined(context.Background(), ev.RunID); q {
+		t.Fatal("quarantined before the revocation")
+	}
+
+	rep := &fakeReposter{}
+	var audited []auditRow
+	r := attest.Revoker{Ledger: led, Reposter: rep, Audit: func(_ context.Context, actor, action, target, detail string) error {
+		audited = append(audited, auditRow{actor, action, target, detail})
+		return nil
+	}}
+	got, err := r.Revoke(context.Background(), holderNode, "cli:alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Keys) != 1 || len(got.Gates) != 1 || got.Gates[0].Job != "build" || got.Gates[0].RepoID != ev.RepoID {
+		t.Fatalf("revocation set: %+v", got)
+	}
+	if len(rep.keys) != 1 || rep.keys[0].Context != "nself-ci@acme/widget" || rep.reason != "node.revoked" {
+		t.Fatalf("repost: %+v", rep)
+	}
+	if q, _ := led.Quarantined(context.Background(), ev.RunID); !q {
+		t.Fatal("the run was not quarantined")
+	}
+	if err := v.VerifyEvidence(marshal(t, good), good); attest.RemoteReasonOf(err) != attest.RemoteKeyRevoked {
+		t.Fatalf("the same evidence after the revocation: %v", err)
+	}
+	if len(audited) == 0 {
+		t.Fatal("no audit event")
+	}
 }

@@ -110,26 +110,26 @@ func runAdminCheckpoint(args []string, env adminEnv) int {
 }
 
 // chainHead returns the newest row of the chain, which must be sealed and intact.
-func chainHead(ctx context.Context, log *audit.Log) (store.AuditEntry, error) {
+func chainHead(ctx context.Context, log *audit.Log) (store.AuditEntry, int64, error) {
 	rep, err := log.Verify(ctx, audit.SealInterval)
 	if err != nil {
-		return store.AuditEntry{}, err
+		return store.AuditEntry{}, 0, err
 	}
 	if !rep.OK() || rep.Rows == 0 || rep.Unsealed > 0 {
-		return store.AuditEntry{}, adminUsage("the audit chain is empty, damaged or has unsealed rows (rows %d, unsealed %d, first bad row %d); run `nself ci serve admin audit --verify`", rep.Rows, rep.Unsealed, rep.BadSeq)
+		return store.AuditEntry{}, 0, adminUsage("the audit chain is empty, damaged or has unsealed rows (rows %d, unsealed %d, first bad row %d); run `nself ci serve admin audit --verify`", rep.Rows, rep.Unsealed, rep.BadSeq)
 	}
 	var last store.AuditEntry
 	for after := int64(0); ; {
 		page, err := log.St.AuditEntries(ctx, after, 1000)
 		if err != nil {
-			return last, err
+			return last, 0, err
 		}
 		if len(page) == 0 {
-			return last, nil
+			return last, int64(rep.Rows), nil
 		}
 		for _, e := range page {
 			if e.Seq > int64(rep.Rows) {
-				return last, nil // a row appended since Verify is neither verified nor sealed: never the head
+				return last, int64(rep.Rows), nil // a row appended since Verify is neither verified nor sealed: never the head
 			}
 			last = e
 		}
@@ -145,7 +145,7 @@ func checkpointExport(ctx context.Context, env adminEnv, svc *roles.Service, op 
 	if _, err := svc.Log.Seal(ctx); err != nil {
 		return adminFail(env, command, asJSON, err)
 	}
-	last, err := chainHead(ctx, svc.Log)
+	last, rows, err := chainHead(ctx, svc.Log)
 	if err != nil {
 		return adminFail(env, command, asJSON, err)
 	}
@@ -153,7 +153,7 @@ func checkpointExport(ctx context.Context, env adminEnv, svc *roles.Service, op 
 	if err != nil {
 		return adminFail(env, command, asJSON, fmt.Errorf("the checkpoint key: %w", err))
 	}
-	cp, err := attest.NewCheckpoint(signer, pub, last.Head, last.Seq, last.Seq, svc.Now().UnixNano())
+	cp, err := attest.NewCheckpoint(signer, pub, last.Head, last.Seq, rows, svc.Now().UnixNano())
 	if err != nil {
 		return adminFail(env, command, asJSON, err)
 	}

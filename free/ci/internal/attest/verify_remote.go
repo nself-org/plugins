@@ -46,7 +46,9 @@ func decodeSignature(v string) ([]byte, error) {
 	return signing.DecodeSig(v)
 }
 
-// splitKeyID splits "<purpose>-<16 lower-case hex>" into its purpose and the node key id.
+// splitKeyID splits "<purpose>-<16 lower-case hex>" into its purpose and the node key id. It only derives
+// what the lookup needs; the sdk decides whether the id is valid, derived from the key and of the right
+// purpose, so no accept or refuse decision is made here.
 func splitKeyID(id string) (signing.Purpose, string, bool) {
 	i := strings.LastIndexByte(id, '-')
 	if i <= 0 || len(id)-i-1 != 16 {

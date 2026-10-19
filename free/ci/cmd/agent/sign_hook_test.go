@@ -34,6 +34,17 @@ func hookEvidence(t *testing.T) []byte {
 	return doc
 }
 
+func TestSignHookIsRegisteredAsAPreStartHook(t *testing.T) {
+	regMu.RLock()
+	defer regMu.RUnlock()
+	for _, h := range prestart {
+		if h.name == "sign-evidence" {
+			return
+		}
+	}
+	t.Fatal("sign-evidence is not registered: no agent would ever sign")
+}
+
 func TestSignHook(t *testing.T) {
 	state := t.TempDir()
 	t.Setenv("NSELF_CI_AGENT_HOME", state)
