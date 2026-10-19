@@ -67,7 +67,7 @@ func (d Dirs) names() []string {
 // is (false, nil). A refused entry is dropped, the dirs are emptied and the
 // error carries the sanitiser's E683 or the reason.
 func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace, key string, access authz.Mode, spec Spec, dirs Dirs, opt UnpackOptions) (hit bool, bytes int64, err error) {
-	m, ok, err := e.Entries.Lookup(ctx, ns, key, access)
+	m, ok, err := e.Entries.LookupForRestore(ctx, ns, key, access)
 	if err != nil || !ok {
 		return false, 0, err
 	}
@@ -129,22 +129,19 @@ func (e *Engine) validate(ctx context.Context, realm cas.Realm, digest string) e
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	rc, err := e.Blobs.Open(realm, digest)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rc.Close() }()
-	return Validate(&ctxReader{ctx, rc}, cacheLimits())
+	return e.Blobs.ReadVerified(realm, digest, func(r io.Reader) error {
+		return Validate(&ctxReader{ctx, r}, cacheLimits())
+	})
 }
 
+// unpackBlob restores one blob. The store verifies its digest while Unpack reads
+// it (one pass over the file, no snapshot copy: D-1008); the tree built from a
+// blob that fails the check is discarded by the caller (Restore empties the dirs).
 func (e *Engine) unpackBlob(base *os.Root, realm cas.Realm, digest, rel string, opt UnpackOptions) error {
-	rc, err := e.Blobs.Open(realm, digest)
-	if err != nil {
+	return e.Blobs.ReadVerified(realm, digest, func(r io.Reader) error {
+		_, err := Unpack(r, base, rel, cacheLimits(), opt)
 		return err
-	}
-	defer func() { _ = rc.Close() }()
-	_, err = Unpack(rc, base, rel, cacheLimits(), opt)
-	return err
+	})
 }
 
 func refusalKey(err error) string {
