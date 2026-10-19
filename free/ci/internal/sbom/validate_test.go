@@ -55,6 +55,18 @@ func TestValidateCycloneDX(t *testing.T) {
 		{"component elements are not objects", func(m map[string]any) { m["components"] = []any{nil, 42, map[string]any{}} }, "components[0]"},
 		{"component without a name", func(m map[string]any) { m["components"] = []any{map[string]any{"type": "library"}} }, "components[0]"},
 		{"component without a type", func(m map[string]any) { m["components"] = []any{map[string]any{"name": "x"}} }, "components[0]"},
+		{"component with a garbage type", func(m map[string]any) {
+			m["components"] = []any{map[string]any{"type": "garbage", "name": "x"}}
+		}, "components[0]"},
+		{"subject with a garbage type", func(m map[string]any) {
+			meta(m)["component"] = map[string]any{"type": "garbage", "name": "fx"}
+		}, "metadata.component.type"},
+		{"syft tool entry without a type", func(m map[string]any) {
+			meta(m)["tools"] = map[string]any{"components": []any{map[string]any{"name": "syft", "version": pinVersion}}}
+		}, "metadata.tools"},
+		{"syft tool entry with a garbage type", func(m map[string]any) {
+			meta(m)["tools"] = map[string]any{"components": []any{map[string]any{"type": "garbage", "name": "syft", "version": pinVersion}}}
+		}, "metadata.tools"},
 		{"subject without a type", func(m map[string]any) { meta(m)["component"] = map[string]any{"name": "fx"} }, "metadata.component.type"},
 	}
 	for _, c := range cases {

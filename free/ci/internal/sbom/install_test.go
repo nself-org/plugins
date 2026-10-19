@@ -211,4 +211,8 @@ func TestInstallRefusesUnusableOptions(t *testing.T) {
 	if _, err := sbom.Install(ctx, sbom.InstallOptions{Home: "relative/home", Pin: pin, OS: "linux", Arch: "amd64"}); !sbom.IsReason(err, sbom.ReasonToolMissing) {
 		t.Fatalf("relative home: %v", err)
 	}
+	bad := sbom.Pin{Version: "../../x", Sources: pin.Sources}
+	if _, err := sbom.Install(ctx, sbom.InstallOptions{Home: t.TempDir(), Pin: bad, OS: "linux", Arch: "amd64"}); !sbom.IsReason(err, sbom.ReasonToolMissing) {
+		t.Fatalf("path-like version: %v", err)
+	}
 }

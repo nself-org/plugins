@@ -2,6 +2,7 @@ package sbom_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,4 +152,126 @@ func TestResolveNeverExecutesAPlantedPathSyft(t *testing.T) {
 	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
 		t.Fatal("the planted PATH syft was executed")
 	}
+}
+
+func TestResolveHomeIsAbsoluteAndDefaulted(t *testing.T) {
+	if h, err := sbom.ResolveHome("/x/y/../ci"); err != nil || h != "/x/ci" {
+		t.Fatalf("explicit: %q %v", h, err)
+	}
+	t.Setenv("NSELF_CI_HOME", "/env/ci")
+	if h, err := sbom.ResolveHome(""); err != nil || h != "/env/ci" {
+		t.Fatalf("env: %q %v", h, err)
+	}
+	t.Setenv("NSELF_CI_HOME", "")
+	t.Setenv("HOME", "/users/u")
+	if h, err := sbom.ResolveHome(""); err != nil || h != "/users/u/.nself/ci" {
+		t.Fatalf("default: %q %v", h, err)
+	}
+	for _, bad := range []string{"rel", ".", "tools/..", "../x"} {
+		if _, err := sbom.ResolveHome(bad); !sbom.IsReason(err, sbom.ReasonToolMissing) {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+	t.Setenv("NSELF_CI_HOME", "relative")
+	if _, err := sbom.ResolveHome(""); !sbom.IsReason(err, sbom.ReasonToolMissing) {
+		t.Fatalf("relative env: %v", err)
+	}
+}
+
+func TestResolveRefusesRelativeHomesAndPlantedTools(t *testing.T) {
+	src := t.TempDir()
+	planted := filepath.Join(src, "tools", "syft-"+pinVersion, "syft")
+	if err := os.MkdirAll(filepath.Dir(planted), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(planted, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(src)
+	t.Setenv("NSELF_CI_HOME", "")
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	fr := &fakeRunner{versions: map[string]string{planted: pinVersion, "tools/syft-" + pinVersion + "/syft": pinVersion}}
+	for _, home := range []string{"", ".", "rel"} {
+		if _, err := sbom.Resolve(context.Background(), fr, home, sbom.ModeProcess, testPin()); !sbom.IsReason(err, sbom.ReasonToolMissing) {
+			t.Errorf("home %q: %v", home, err)
+		}
+	}
+	if len(fr.cmds) != 0 {
+		t.Fatalf("a planted tool was run: %v", fr.cmds)
+	}
+}
+
+func TestResolveRefusesUntrustworthyInstalls(t *testing.T) {
+	ctx := context.Background()
+	t.Run("symlink", func(t *testing.T) {
+		home := t.TempDir()
+		real := filepath.Join(t.TempDir(), "elsewhere")
+		if err := os.WriteFile(real, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		p := sbom.ToolPath(home, pinVersion)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(real, p); err != nil {
+			t.Fatal(err)
+		}
+		fr := &fakeRunner{versions: map[string]string{p: pinVersion, real: pinVersion}}
+		if _, err := sbom.Resolve(ctx, fr, home, sbom.ModeProcess, testPin()); !sbom.IsReason(err, sbom.ReasonToolMissing) || len(fr.cmds) != 0 {
+			t.Fatalf("symlinked install: %v cmds=%v", err, fr.cmds)
+		}
+	})
+	t.Run("writable by others", func(t *testing.T) {
+		home := t.TempDir()
+		p := installedSyft(t, home)
+		if err := os.Chmod(p, 0o777); err != nil {
+			t.Fatal(err)
+		}
+		fr := &fakeRunner{versions: map[string]string{p: pinVersion}}
+		if _, err := sbom.Resolve(ctx, fr, home, sbom.ModeProcess, testPin()); !sbom.IsReason(err, sbom.ReasonToolMissing) || len(fr.cmds) != 0 {
+			t.Fatalf("world-writable install: %v", err)
+		}
+	})
+	t.Run("not a plain version", func(t *testing.T) {
+		for _, v := range []string{"", "../x", "1/2", " 1", "-1"} {
+			if _, err := sbom.Resolve(ctx, &fakeRunner{}, t.TempDir(), sbom.ModeProcess, sbom.Pin{Version: v}); !sbom.IsReason(err, sbom.ReasonToolMissing) {
+				t.Errorf("version %q: %v", v, err)
+			}
+		}
+	})
+}
+
+// A runner that fails for its own reasons is not "the tool is missing".
+type brokenRunner struct{ fakeRunner }
+
+func (b *brokenRunner) Run(context.Context, sbom.Cmd) (sbom.Result, error) {
+	return sbom.Result{}, errors.New("symlink in job source: node_modules/.bin/x")
+}
+
+func TestProbeSeparatesRunnerFailuresFromAMissingTool(t *testing.T) {
+	home := t.TempDir()
+	installedSyft(t, home)
+	_, err := sbom.Resolve(context.Background(), &brokenRunner{}, home, sbom.ModeProcess, testPin())
+	if !sbom.IsReason(err, sbom.ReasonInvalid) || !strings.Contains(err.Error(), "symlink in job source") {
+		t.Fatalf("runner failure: %v", err)
+	}
+	for _, exit := range []int{126, 127} {
+		fr := &exitRunner{exit: exit}
+		if _, err := sbom.Probe(context.Background(), fr, "/x/syft"); !sbom.IsReason(err, sbom.ReasonToolMissing) {
+			t.Errorf("exit %d: %v", exit, err)
+		}
+	}
+	if _, err := sbom.Probe(context.Background(), &exitRunner{exit: 2}, "/x/syft"); !sbom.IsReason(err, sbom.ReasonToolVersion) {
+		t.Errorf("exit 2: %v", err)
+	}
+}
+
+type exitRunner struct {
+	fakeRunner
+	exit int
+}
+
+func (e *exitRunner) Run(context.Context, sbom.Cmd) (sbom.Result, error) {
+	return sbom.Result{Exit: e.exit}, nil
 }

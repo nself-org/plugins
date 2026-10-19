@@ -12,10 +12,13 @@ package sbom
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/toolchain"
 )
@@ -75,6 +78,37 @@ func ToolPath(home, version string) string {
 	return filepath.Join(home, "tools", ToolName+"-"+version, ToolName)
 }
 
+var versionOK = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z.+_-]*$`)
+
+// ResolveHome returns the absolute CI home: home when set, else NSELF_CI_HOME,
+// else ~/.nself/ci (what the executor uses). A relative path is refused: it
+// would be looked up inside whatever directory the job runs in, where a repo
+// could plant a tool.
+func ResolveHome(home string) (string, error) {
+	if home == "" {
+		home = os.Getenv("NSELF_CI_HOME")
+	}
+	if home == "" {
+		u, err := os.UserHomeDir()
+		if err != nil {
+			return "", Failf(ReasonToolMissing, "cannot find the CI home: %v", err)
+		}
+		home = filepath.Join(u, ".nself", "ci")
+	}
+	if !filepath.IsAbs(home) {
+		return "", Failf(ReasonToolMissing, "the CI home %q is not an absolute path", home)
+	}
+	return filepath.Clean(home), nil
+}
+
+// Check refuses a pin whose version could not name a directory under tools/.
+func (p Pin) Check() error {
+	if !versionOK.MatchString(p.Version) {
+		return Failf(ReasonToolMissing, "the %s pin version %q is not a plain version", ToolName, p.Version)
+	}
+	return nil
+}
+
 var versionRe = regexp.MustCompile(`(?m)^Version:\s+v?(\S+)\s*$`)
 
 // ParseVersion extracts the version from `syft version` output.
@@ -91,12 +125,19 @@ func Probe(ctx context.Context, r Runner, syft string) (string, error) {
 	if r == nil {
 		return "", Failf(ReasonToolMissing, "no runner to probe %s with", ToolName)
 	}
-	res, err := r.Run(ctx, Cmd{Argv: []string{syft, "version"}, Env: map[string]string{"SYFT_CHECK_FOR_APP_UPDATE": "false"}})
+	res, err := r.Run(ctx, Cmd{Argv: []string{syft, "version"}, Env: map[string]string{"SYFT_CHECK_FOR_APP_UPDATE": "false"}, NoSource: true})
 	if err != nil {
-		return "", Failf(ReasonToolMissing, "%s did not run: %v", ToolName, err)
+		if notFound(err) {
+			return "", Failf(ReasonToolMissing, "%s did not run: %v", ToolName, err)
+		}
+		// an infrastructure failure of the runner is not "the tool is missing"
+		return "", Failf(ReasonInvalid, "the runner could not run %s: %v", ToolName, err)
+	}
+	if res.Exit == 126 || res.Exit == 127 {
+		return "", Failf(ReasonToolMissing, "%s version exited %d (not found or not executable)", ToolName, res.Exit)
 	}
 	if res.Exit != 0 {
-		return "", Failf(ReasonToolMissing, "%s version exited %d", ToolName, res.Exit)
+		return "", Failf(ReasonToolVersion, "%s version exited %d", ToolName, res.Exit)
 	}
 	v, ok := ParseVersion(res.Output)
 	if !ok {
@@ -107,12 +148,22 @@ func Probe(ctx context.Context, r Runner, syft string) (string, error) {
 
 // Resolve returns the syft path a job of the given mode must run.
 func Resolve(ctx context.Context, r Runner, home string, mode Mode, pin Pin) (string, error) {
+	if err := pin.Check(); err != nil {
+		return "", err
+	}
 	if mode == ModeContainer {
 		return checked(ctx, r, ToolName, pin, "the toolchain image carries")
 	}
-	want := ToolPath(home, pin.Version)
-	if isExecutable(want) {
+	h, err := ResolveHome(home)
+	if err != nil {
+		return "", err
+	}
+	want := ToolPath(h, pin.Version)
+	switch err := trusted(want); {
+	case err == nil:
 		return checked(ctx, r, want, pin, "the installed")
+	case !errors.Is(err, fs.ErrNotExist):
+		return "", Failf(ReasonToolMissing, "%s is not a trustworthy install (%v); run `%s`", want, err, InstallCommand)
 	}
 	// A syft on PATH is never run here (it is not the pinned install, and running it
 	// would execute a binary nothing authenticated); its presence is reported only.
@@ -120,6 +171,33 @@ func Resolve(ctx context.Context, r Runner, home string, mode Mode, pin Pin) (st
 		return "", Failf(ReasonToolVersion, "%s on PATH (%s) is not the pinned %s %s; process-level jobs use only %s, which is not installed; run `%s`", ToolName, onPath, ToolName, pin.Version, want, InstallCommand)
 	}
 	return "", Failf(ReasonToolMissing, "%s %s is not installed at %s; run `%s`", ToolName, pin.Version, want, InstallCommand)
+}
+
+// trusted accepts only a plain executable file (never a symlink) that other
+// users cannot write; a missing file is fs.ErrNotExist.
+func trusted(p string) error {
+	st, err := os.Lstat(p)
+	if err != nil {
+		return err
+	}
+	switch {
+	case !st.Mode().IsRegular():
+		return errors.New("not a plain file")
+	case st.Mode()&0o111 == 0:
+		return errors.New("not executable")
+	case runtime.GOOS != "windows" && st.Mode().Perm()&0o022 != 0:
+		return errors.New("writable by group or others")
+	}
+	return nil
+}
+
+// notFound reports a runner error that means the binary does not exist.
+func notFound(err error) bool {
+	if errors.Is(err, fs.ErrNotExist) {
+		return true
+	}
+	m := err.Error()
+	return strings.Contains(m, "no such file") || strings.Contains(m, "executable file not found") || strings.Contains(m, "not found")
 }
 
 func checked(ctx context.Context, r Runner, syft string, pin Pin, what string) (string, error) {

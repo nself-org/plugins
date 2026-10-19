@@ -70,10 +70,14 @@ func Install(ctx context.Context, o InstallOptions) (Installed, error) {
 	if !ok {
 		return Installed{}, Failf(ReasonToolMissing, "the %s pin has no source for %s/%s", ToolName, goos, goarch)
 	}
-	res := Installed{Path: ToolPath(o.Home, o.Pin.Version), Version: o.Pin.Version, SHA256: src.SHA256, Archive: src.URL, Platform: goos + "/" + goarch}
-	if o.Home == "" || !filepath.IsAbs(o.Home) {
-		return res, Failf(ReasonToolMissing, "NSELF_CI_HOME must be an absolute path to install tools")
+	if err := o.Pin.Check(); err != nil {
+		return Installed{}, err
 	}
+	home, err := ResolveHome(o.Home)
+	if err != nil {
+		return Installed{}, err
+	}
+	res := Installed{Path: ToolPath(home, o.Pin.Version), Version: o.Pin.Version, SHA256: src.SHA256, Archive: src.URL, Platform: goos + "/" + goarch}
 	u, err := url.Parse(src.URL)
 	if err != nil || u.Scheme != "https" || u.Host == "" {
 		return res, Failf(ReasonToolMissing, "the %s source %q is not an https URL", ToolName, src.URL)

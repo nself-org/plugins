@@ -19,6 +19,11 @@ import (
 	"strings"
 )
 
+// componentTypes is the CycloneDX 1.6 component type enum.
+var componentTypes = map[string]bool{"application": true, "framework": true, "library": true, "container": true, "platform": true,
+	"operating-system": true, "device": true, "device-driver": true, "firmware": true, "file": true, "machine-learning-model": true,
+	"data": true, "cryptographic-asset": true}
+
 var uuidURN = regexp.MustCompile(`^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 type cdxDoc struct {
@@ -39,6 +44,7 @@ type cdxMetadata struct {
 }
 
 type cdxTool struct {
+	Type    string `json:"type"`
 	Name    string `json:"name"`
 	Version string `json:"version"`
 }
@@ -70,8 +76,8 @@ func checkCycloneDX(doc []byte, name, syftVersion string) (int, error) {
 	if !namesTool(d.Metadata.Tools, syftVersion) {
 		return 0, Failf(ReasonInvalid, "metadata.tools does not name %s %s", ToolName, syftVersion)
 	}
-	if d.Metadata.Component != nil && d.Metadata.Component.Name == name && d.Metadata.Component.Type == "" {
-		return 0, Failf(ReasonInvalid, "metadata.component.type is missing")
+	if d.Metadata.Component != nil && d.Metadata.Component.Name == name && !componentTypes[d.Metadata.Component.Type] {
+		return 0, Failf(ReasonInvalid, "metadata.component.type %q is not a CycloneDX component type", d.Metadata.Component.Type)
 	}
 	if d.Metadata.Component == nil || d.Metadata.Component.Name != name {
 		got := ""
@@ -98,26 +104,32 @@ func checkComponents(raw json.RawMessage) (int, error) {
 			Type string `json:"type"`
 			Name string `json:"name"`
 		}
-		if !bytes.HasPrefix(bytes.TrimSpace(el), []byte("{")) || json.Unmarshal(el, &c) != nil || c.Type == "" || c.Name == "" {
-			return 0, Failf(ReasonInvalid, "components[%d] is not an object with a type and a name", i)
+		if !bytes.HasPrefix(bytes.TrimSpace(el), []byte("{")) || json.Unmarshal(el, &c) != nil || !componentTypes[c.Type] || c.Name == "" {
+			return 0, Failf(ReasonInvalid, "components[%d] is not an object with a CycloneDX type and a name", i)
 		}
 	}
 	return len(arr), nil
 }
 
-// namesTool accepts both CycloneDX 1.5+ tools shapes: {components:[...]} and the legacy [...] list.
+// namesTool accepts both CycloneDX 1.5+ tools shapes. In {components:[...]} the
+// syft entry must carry a valid component type; the legacy [...] list has none.
 func namesTool(raw json.RawMessage, version string) bool {
-	var tools []cdxTool
 	var obj struct {
 		Components []cdxTool `json:"components"`
-		Services   []cdxTool `json:"services"`
 	}
 	if json.Unmarshal(raw, &obj) == nil {
-		tools = append(obj.Components, obj.Services...)
-	} else if json.Unmarshal(raw, &tools) != nil {
+		for _, t := range obj.Components {
+			if strings.EqualFold(t.Name, ToolName) && t.Version == version && componentTypes[t.Type] {
+				return true
+			}
+		}
 		return false
 	}
-	for _, t := range tools {
+	var legacy []cdxTool
+	if json.Unmarshal(raw, &legacy) != nil {
+		return false
+	}
+	for _, t := range legacy {
 		if strings.EqualFold(t.Name, ToolName) && t.Version == version {
 			return true
 		}

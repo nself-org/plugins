@@ -40,10 +40,13 @@ func Run(ctx context.Context, in Input) Outcome {
 	if err := RequireForRelease(in.Job); err != nil {
 		return Outcome{Check: failed(c, err)}
 	}
-	mode := modeOf(in.Job.Isolation)
-	if r, ok := in.Runner.(interface{ IsolationName() string }); ok && (r.IsolationName() == "process") != (mode == sbom.ModeProcess) {
-		return Outcome{Check: failed(c, sbom.Failf(sbom.ReasonInvalid, "the job runs under %q isolation but the runner executes under %q", isolationName(in.Job.Isolation), r.IsolationName()))}
+	if in.Runner == nil {
+		return Outcome{Check: failed(c, sbom.Failf(sbom.ReasonToolMissing, "no runner to execute %s with", sbom.ToolName))}
 	}
+	if got, want := in.Runner.IsolationName(), isolationName(in.Job.Isolation); got != want {
+		return Outcome{Check: failed(c, sbom.Failf(sbom.ReasonInvalid, "the job runs under %q isolation but the runner executes under %q; SBOMs are generated inside the job's isolation", want, got))}
+	}
+	mode := modeOf(in.Job.Isolation)
 	syft, err := sbom.Resolve(ctx, in.Runner, in.Home, mode, in.Pin)
 	if err != nil {
 		return Outcome{Check: failed(c, err)}

@@ -49,6 +49,8 @@ type Cmd struct {
 	Argv    []string
 	Env     map[string]string
 	Collect []string // workdir-relative files to read back after exit 0
+	// NoSource runs the command in an empty workspace (a version probe needs no source).
+	NoSource bool
 }
 
 // Outputs returns the CycloneDX and SPDX file paths (workdir-relative) of name.

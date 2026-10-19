@@ -37,6 +37,9 @@ type Result struct {
 // Runner executes a Cmd in the job workdir.
 type Runner interface {
 	Run(ctx context.Context, c Cmd) (Result, error)
+	// IsolationName is the isolation the commands run under ("process",
+	// "container", ...); the check refuses a job whose isolation differs.
+	IsolationName() string
 }
 
 var runSeq atomic.Uint64
@@ -69,6 +72,10 @@ func (r ExecRunner) Run(ctx context.Context, c Cmd) (Result, error) {
 		timeout = 10 * time.Minute
 	}
 	iso := r.IsolationName()
+	source := r.SourceDir
+	if c.NoSource {
+		source = ""
+	}
 	var out strings.Builder
 	res := Result{Files: map[string][]byte{}}
 	var collectErr error
@@ -77,7 +84,7 @@ func (r ExecRunner) Run(ctx context.Context, c Cmd) (Result, error) {
 		CoordinatorID: "sbom",
 		Job:           model.Job{Kind: "release", Workdir: ".", Isolation: model.Isolation(iso), Container: r.Container, Env: c.Env},
 		Command:       c.Argv,
-		SourceDir:     r.SourceDir,
+		SourceDir:     source,
 		Home:          r.Home,
 		Timeout:       timeout,
 		Output: func(p []byte) {

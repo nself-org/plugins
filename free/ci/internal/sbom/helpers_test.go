@@ -21,6 +21,14 @@ type fakeRunner struct {
 	versions map[string]string
 	onScan   func(c sbom.Cmd) (sbom.Result, error)
 	cmds     []sbom.Cmd
+	iso      string // "" = process
+}
+
+func (f *fakeRunner) IsolationName() string {
+	if f.iso == "" {
+		return "process"
+	}
+	return f.iso
 }
 
 func (f *fakeRunner) Run(_ context.Context, c sbom.Cmd) (sbom.Result, error) {

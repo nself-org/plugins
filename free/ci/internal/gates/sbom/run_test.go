@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/nself-org/plugins/free/ci/internal/exec"
 	gsbom "github.com/nself-org/plugins/free/ci/internal/gates/sbom"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sbom"
@@ -19,6 +21,16 @@ type scripted struct {
 	version string // "" = syft does not run
 	scan    func(c sbom.Cmd) (sbom.Result, error)
 }
+
+func (s scripted) IsolationName() string { return "process" }
+
+// withIso reports another isolation than the wrapped runner's default.
+type withIso struct {
+	sbom.Runner
+	iso string
+}
+
+func (w withIso) IsolationName() string { return w.iso }
 
 func (s scripted) Run(_ context.Context, c sbom.Cmd) (sbom.Result, error) {
 	if len(c.Argv) == 2 && c.Argv[1] == "version" {
@@ -48,6 +60,9 @@ func goodScan(t *testing.T) func(sbom.Cmd) (sbom.Result, error) {
 }
 
 func input(t *testing.T, kind model.JobKind, iso model.Isolation, r sbom.Runner) gsbom.Input {
+	if _, ok := r.(withIso); !ok && iso != "" && iso != "process" {
+		r = withIso{r, string(iso)} // the runner executes where the job does
+	}
 	home := t.TempDir()
 	if iso != "container" {
 		p := sbom.ToolPath(home, pinV)
@@ -140,28 +155,61 @@ func TestRunProcessJobUsesTheInstalledSyft(t *testing.T) {
 	}
 }
 
-// isoRunner is a scripted runner that also reports its isolation.
-type isoRunner struct {
-	scripted
-	iso string
-}
-
-func (r isoRunner) IsolationName() string { return r.iso }
-
 func TestRunRefusesAJobAndRunnerThatDisagreeOnIsolation(t *testing.T) {
 	for _, c := range []struct {
 		job    model.Isolation
 		runner string
-	}{{"container", "process"}, {"process", "container"}, {"", "container"}, {"sandboxed-container", "process"}} {
-		in := input(t, "release", c.job, isoRunner{scripted{version: pinV, scan: goodScan(t)}, c.runner})
+	}{{"container", "process"}, {"process", "container"}, {"", "container"}, {"sandboxed-container", "container"}, {"vm", "container"}} {
+		in := input(t, "release", c.job, withIso{scripted{version: pinV, scan: goodScan(t)}, c.runner})
 		got := gsbom.Run(context.Background(), in).Check
 		if got.Result != "error" || !strings.Contains(got.Excerpt, "isolation") {
 			t.Errorf("job %q runner %q: %+v", c.job, c.runner, got)
 		}
 	}
-	// agreement passes, and any non-process isolation counts as the image's syft
-	in := input(t, "release", "sandboxed-container", isoRunner{scripted{version: pinV, scan: goodScan(t)}, "container"})
+	in := input(t, "release", "sandboxed-container", withIso{scripted{version: pinV, scan: goodScan(t)}, "sandboxed-container"})
 	if got := gsbom.Run(context.Background(), in).Check; got.Result != "pass" {
-		t.Fatalf("sandboxed-container job with a container runner: %+v", got)
+		t.Fatalf("matching sandboxed-container: %+v", got)
+	}
+}
+
+func TestRunWithoutARunnerFailsClosed(t *testing.T) {
+	in := input(t, "release", "process", scripted{})
+	in.Runner = nil
+	if got := gsbom.Run(context.Background(), in).Check; got.Result != "error" || !strings.HasPrefix(got.Excerpt, "E718 tool_missing:") {
+		t.Fatalf("nil runner: %+v", got)
+	}
+}
+
+// TestRunNeverRunsAToolPlantedInTheJobSource: with an empty or relative home a
+// repo-committed tools/syft-<v>/syft must not be taken for the installed syft.
+func TestRunNeverRunsAToolPlantedInTheJobSource(t *testing.T) {
+	src := t.TempDir()
+	marker := filepath.Join(t.TempDir(), "ran")
+	planted := filepath.Join(src, "tools", "syft-"+pinV, "syft")
+	if err := os.MkdirAll(filepath.Dir(planted), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(planted, []byte("#!/bin/sh\ntouch "+marker+"\necho 'Version: "+pinV+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(src)
+	t.Setenv("NSELF_CI_HOME", "")
+	t.Setenv("HOME", t.TempDir()) // the default home is empty
+	t.Setenv("PATH", t.TempDir())
+	for _, home := range []string{"", "tools/..", ".", "rel-home"} {
+		in := gsbom.Input{
+			Job:     model.Job{Kind: "release", Run: []string{gsbom.CheckID}},
+			Runner:  sbom.ExecRunner{Executor: &exec.Executor{}, Home: t.TempDir(), SourceDir: src},
+			Home:    home,
+			Pin:     sbom.Pin{Version: pinV},
+			Targets: []sbom.Target{{Name: "cli", Path: "tools", Kind: sbom.SourceDir}},
+		}
+		got := gsbom.Run(context.Background(), in).Check
+		if got.Result != "error" || !got.Required {
+			t.Errorf("home %q: %+v", home, got)
+		}
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("the planted tool was executed")
 	}
 }
