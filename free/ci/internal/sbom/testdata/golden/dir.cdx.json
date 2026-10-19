@@ -1,0 +1,76 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:5101ade0-4b5e-44d4-8314-18db0b43e247",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-10-19T00:00:52-04:00",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "author": "anchore",
+          "name": "syft",
+          "version": "1.54.1"
+        }
+      ]
+    },
+    "component": {
+      "bom-ref": "c867d2d808c1f313",
+      "type": "file",
+      "name": "fx"
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:golang/github.com/google/uuid@v1.6.0?package-id=b171ea515830f72d",
+      "type": "library",
+      "name": "github.com/google/uuid",
+      "version": "v1.6.0",
+      "cpe": "cpe:2.3:a:google:uuid:v1.6.0:*:*:*:*:*:*:*",
+      "purl": "pkg:golang/github.com/google/uuid@v1.6.0",
+      "properties": [
+        {
+          "name": "syft:package:foundBy",
+          "value": "go-module-file-cataloger"
+        },
+        {
+          "name": "syft:package:language",
+          "value": "go"
+        },
+        {
+          "name": "syft:package:type",
+          "value": "go-module"
+        },
+        {
+          "name": "syft:package:metadataType",
+          "value": "go-module-entry"
+        },
+        {
+          "name": "syft:location:0:path",
+          "value": "/go.mod"
+        },
+        {
+          "name": "syft:metadata:h1Digest",
+          "value": "h1:x"
+        }
+      ]
+    },
+    {
+      "bom-ref": "3fc5a8d3d86e9790",
+      "type": "file",
+      "name": "/go.mod",
+      "hashes": [
+        {
+          "alg": "SHA-1",
+          "content": "c9ab0ca5f973664d6a1fc00a32e2f6a3c7123252"
+        },
+        {
+          "alg": "SHA-256",
+          "content": "22c4826ab21f34d74371203a274b5e9bb9200ef4e4d2e0bebb9075e64bd37e9f"
+        }
+      ]
+    }
+  ]
+}
