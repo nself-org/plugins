@@ -7,7 +7,7 @@
   "auth": "per-repo",
   "repo": "o/r",
   "repo_id": "1001",
-  "ref": "refs/heads/fix",
+  "ref": "refs/pull/7/head",
   "revision": "cccccccccccccccccccccccccccccccccccccccc",
   "revision_source": "payload",
   "base_ref": "refs/heads/main",

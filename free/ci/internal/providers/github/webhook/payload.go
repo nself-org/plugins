@@ -20,7 +20,7 @@ import (
 type ghRepo struct {
 	ID            int64  `json:"id"`
 	FullName      string `json:"full_name"`
-	Private       bool   `json:"private"`
+	Private       *bool  `json:"private"`
 	Visibility    string `json:"visibility"`
 	Fork          bool   `json:"fork"`
 	DefaultBranch string `json:"default_branch"`
@@ -40,7 +40,6 @@ type ghBranch struct {
 type ghPR struct {
 	Number            int      `json:"number"`
 	AuthorAssociation string   `json:"author_association"`
-	User              ghUser   `json:"user"`
 	Head              ghBranch `json:"head"`
 	Base              ghBranch `json:"base"`
 }
@@ -60,7 +59,6 @@ type ghPayload struct {
 	Before      string `json:"before"`
 	After       string `json:"after"`
 	Deleted     bool   `json:"deleted"`
-	Number      int    `json:"number"`
 	Repository  ghRepo `json:"repository"`
 	Sender      ghUser `json:"sender"`
 	PullRequest *ghPR  `json:"pull_request"`
@@ -89,15 +87,20 @@ func fact[T any](v T, src string, now time.Time) model.Fact[T] {
 // payloadFact is a fact the delivery itself claims.
 func payloadFact[T any](v T, now time.Time) model.Fact[T] { return fact(v, "payload", now) }
 
-func visibilityOf(r ghRepo) string {
+// visibilityOf returns the repository's visibility, and false when the object does not say (an absent
+// claim is unknown, never "public").
+func visibilityOf(r ghRepo) (string, bool) {
 	switch r.Visibility {
 	case "public", "private", "internal":
-		return r.Visibility
+		return r.Visibility, true
 	}
-	if r.Private {
-		return "private"
+	if r.Private != nil {
+		if *r.Private {
+			return "private", true
+		}
+		return "public", true
 	}
-	return "public"
+	return "", false
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }

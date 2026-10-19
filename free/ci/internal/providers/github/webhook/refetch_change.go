@@ -22,8 +22,10 @@ func (r *fetch) change() {
 	var repo ghRepo
 	_, repoOK := r.call("/repos/{owner}/{repo}", r.params(), &repo)
 	if repoOK {
-		f.Visibility = fact(visibilityOf(repo), "api", r.now)
-		if f.Kind != "pull_request" { // code that is pushed lives in the repository itself
+		if v, known := visibilityOf(repo); known {
+			f.Visibility = fact(v, "api", r.now)
+		}
+		if f.Kind != "pull_request" && repo.FullName != "" { // code that is pushed lives in the repository itself
 			f.HeadRepo = fact(repo.FullName, "api", r.now)
 			f.Fork = fact(false, "api", r.now)
 		}
@@ -31,6 +33,8 @@ func (r *fetch) change() {
 	association := ""
 	if f.Kind == "pull_request" {
 		association = r.pullRequest()
+	} else if f.Kind == "push" {
+		r.pushHead()
 	}
 	r.firstTime(association)
 	r.permissionAndBot()
@@ -44,14 +48,18 @@ func (r *fetch) pullRequest() string {
 	if _, ok := r.call("/repos/{owner}/{repo}/pulls/{number}", r.params("number", strconv.Itoa(r.f.PRNumber)), &pr); !ok {
 		return ""
 	}
-	r.f.HeadCurrent = fact(strings.EqualFold(pr.Head.SHA, r.f.Revision), "api", r.now)
-	if h := pr.Head.Repo; h != nil && h.FullName != "" {
+	if pr.Head.SHA != "" {
+		r.f.HeadCurrent = fact(strings.EqualFold(pr.Head.SHA, r.f.Revision), "api", r.now)
+	}
+	baseID, _ := strconv.ParseInt(r.f.RepoID, 10, 64) // the verified base repository id
+	if pr.Base.Repo != nil && pr.Base.Repo.ID > 0 {
+		baseID = pr.Base.Repo.ID
+	}
+	if h := pr.Head.Repo; h != nil && h.FullName != "" && h.ID > 0 && baseID > 0 {
 		r.f.HeadRepo = fact(h.FullName, "api", r.now)
-		base := int64(0)
-		if pr.Base.Repo != nil {
-			base = pr.Base.Repo.ID
-		}
-		r.f.Fork = fact(h.ID != base || h.Fork, "api", r.now)
+		// a fork is a PR whose head lives in another repository (h.Fork says the head repository is itself
+		// a fork of something, which is true of a same-repository PR in a forked repository too)
+		r.f.Fork = fact(h.ID != baseID, "api", r.now)
 	}
 	if pr.AuthorAssociation != "" {
 		r.f.AuthorAssociation = fact(pr.AuthorAssociation, "api", r.now)
@@ -112,40 +120,72 @@ func (r *fetch) protected() {
 	}
 }
 
-// compare answers SHA reachability and the changed files with one call. base is the recorded base
-// revision, else the default branch (reachability only).
+type comparison struct {
+	Files []struct {
+		Filename         string `json:"filename"`
+		PreviousFilename string `json:"previous_filename"`
+	} `json:"files"`
+}
+
+// compare answers SHA reachability and the changed files. The recorded base revision gives both; it
+// can be missing from the repository (a force-push drops `before`), and compare answers 404 for a
+// missing base as well as a missing head, so a 404 there proves nothing: reachability is then asked
+// against the default branch. Against the default branch only, a 404 means the head is not there.
 func (r *fetch) compare(defaultBranch string, repoOK bool) {
 	if !isHex40(r.f.Revision) {
 		return
 	}
-	base, withFiles := r.f.BaseRevision, true
-	if base == "" {
-		var ok bool
-		if base, ok = refSegments(defaultBranch); !ok {
+	var cmp comparison
+	if base := r.f.BaseRevision; base != "" {
+		status, ok := r.call("/repos/{owner}/{repo}/compare/"+base+"..."+r.f.Revision, r.params(), &cmp)
+		if ok {
+			r.f.SHAReachable = fact(true, "api", r.now)
+			r.setChangedFiles(cmp)
 			return
 		}
-		withFiles = false
+		if status != http.StatusNotFound {
+			return
+		}
 	}
-	var cmp struct {
-		Files []struct {
-			Filename string `json:"filename"`
-		} `json:"files"`
+	seg, ok := refSegments(defaultBranch)
+	if !ok || !repoOK {
+		return
 	}
-	status, ok := r.call("/repos/{owner}/{repo}/compare/"+base+"..."+r.f.Revision, r.params(), &cmp)
+	status, ok := r.call("/repos/{owner}/{repo}/compare/"+seg+"..."+r.f.Revision, r.params(), &comparison{})
 	switch {
 	case ok:
 		r.f.SHAReachable = fact(true, "api", r.now)
-	case status == http.StatusNotFound && repoOK:
+	case status == http.StatusNotFound:
 		r.f.SHAReachable = fact(false, "api", r.now)
-		return
-	default:
+	}
+}
+
+// setChangedFiles records the paths a change touches, both sides of a rename (a file moved out of a
+// protected path must still show the path it left). 300 files or more is unknown.
+func (r *fetch) setChangedFiles(c comparison) {
+	if len(c.Files) >= maxChangedFiles {
 		return
 	}
-	if withFiles && len(cmp.Files) < maxChangedFiles {
-		names := make([]string, 0, len(cmp.Files))
-		for _, file := range cmp.Files {
-			names = append(names, file.Filename)
+	names := make([]string, 0, len(c.Files))
+	for _, file := range c.Files {
+		names = append(names, file.Filename)
+		if file.PreviousFilename != "" {
+			names = append(names, file.PreviousFilename)
 		}
-		r.f.ChangedFiles = model.Fact[[]string]{Value: &names, Source: "api", ObservedAt: r.now, Confidence: "known"}
+	}
+	r.f.ChangedFiles = model.Fact[[]string]{Value: &names, Source: "api", ObservedAt: r.now, Confidence: "known"}
+}
+
+// pushHead re-reads the pushed branch: HeadCurrent is true only while the branch still points at the
+// revision, so a refetch at classification time sees a ref that moved after the delivery.
+func (r *fetch) pushHead() {
+	branch, isBranch := strings.CutPrefix(r.f.Ref, "refs/heads/")
+	seg, ok := refSegments(branch)
+	if !isBranch || !ok {
+		return
+	}
+	var ref refObject
+	if _, ok = r.call("/repos/{owner}/{repo}/git/ref/heads/"+seg, r.params(), &ref); ok && ref.Object.SHA != "" {
+		r.f.HeadCurrent = fact(strings.EqualFold(ref.Object.SHA, r.f.Revision), "api", r.now)
 	}
 }

@@ -13,6 +13,7 @@ package webhook
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -58,7 +59,9 @@ func (s *Source) baseFacts(p ghPayload, auth model.TriggerAuth, delivery string)
 		f.Actor = payloadFact(p.Sender.Login, now)
 		f.Bot = payloadFact(p.Sender.Type == "Bot", now)
 	}
-	f.Visibility = payloadFact(visibilityOf(p.Repository), now)
+	if v, known := visibilityOf(p.Repository); known {
+		f.Visibility = payloadFact(v, now)
+	}
 	return f
 }
 
@@ -76,8 +79,14 @@ func (s *Source) fromPush(ctx context.Context, f model.TriggerFacts, p ghPayload
 	default:
 		return f, unsupported("push to ref \"" + clip(p.Ref) + "\": skip")
 	}
-	if c := strings.ToLower(p.HeadCommit.ID); f.Kind == "tag" && isHex40(c) {
-		rev = c // an annotated tag's push names the tag object; the commit to build is head_commit
+	if f.Kind == "tag" { // an annotated tag's push names the tag object; the commit to build is head_commit
+		if c := strings.ToLower(p.HeadCommit.ID); isHex40(c) {
+			rev = c
+		} else if resolved, ok := s.resolveTag(ctx, f.Repo, strings.TrimPrefix(p.Ref, "refs/tags/")); ok {
+			rev = resolved // no head_commit: dereference through the API, a tag object is not buildable
+		} else {
+			return f, unsupported("tag.unresolved")
+		}
 	}
 	if !isHex40(rev) || !isHex40(object) {
 		return f, unsupported("push without a 40 hex commit id")
@@ -105,7 +114,9 @@ func (s *Source) fromPullRequest(ctx context.Context, f model.TriggerFacts, p gh
 	now := f.ReceivedAt
 	rev := strings.ToLower(pr.Head.SHA)
 	f.Kind, f.PRNumber = "pull_request", pr.Number
-	f.Ref, f.Revision, f.RevisionSource = "refs/heads/"+pr.Head.Ref, rev, "payload"
+	// Ref names the pull request, not the head branch: the head branch name is the sender's to choose
+	// (a fork branch called "main" must not look like a push to main). BaseRef is the target branch.
+	f.Ref, f.Revision, f.RevisionSource = "refs/pull/"+strconv.Itoa(pr.Number)+"/head", rev, "payload"
 	f.BaseRef = "refs/heads/" + pr.Base.Ref
 	if b := strings.ToLower(pr.Base.SHA); isHex40(b) {
 		f.BaseRevision = b
@@ -113,7 +124,7 @@ func (s *Source) fromPullRequest(ctx context.Context, f model.TriggerFacts, p gh
 	if pr.AuthorAssociation != "" {
 		f.AuthorAssociation = payloadFact(pr.AuthorAssociation, now)
 	}
-	if h := pr.Head.Repo; h != nil { // the head repository is only a fact
+	if h := pr.Head.Repo; h != nil && h.FullName != "" && h.ID > 0 { // the head repository is only a fact
 		f.HeadRepo = payloadFact(h.FullName, now)
 		f.Fork = payloadFact(h.ID != p.Repository.ID, now)
 	}
@@ -130,6 +141,8 @@ func (s *Source) fromCreate(ctx context.Context, f model.TriggerFacts, p ghPaylo
 	if !ok {
 		return f, unsupported("tag.unresolved")
 	}
+	// The model allows only payload or caller as revision source; this revision was resolved through the
+	// API from a name the delivery gave, so it is stamped payload and is not bound to the delivery bytes.
 	f.Kind, f.Ref, f.Revision, f.RevisionSource = "tag", "refs/tags/"+p.Ref, rev, "payload"
 	return f, nil
 }
@@ -156,11 +169,9 @@ func fromJob(f model.TriggerFacts, p ghPayload) (model.TriggerFacts, error) {
 		return f, unsupported("workflow_job without a job, run and head sha")
 	}
 	now := f.ReceivedAt
+	// No Ref: head_branch is the sender's to choose for a fork pull request, and the revision names the code.
 	f.Kind, f.Revision, f.RevisionSource = "runner_demand", rev, "payload"
-	if j.HeadBranch != "" {
-		f.Ref = "refs/heads/" + j.HeadBranch
-	}
-	f.RunnerLabels = payloadFact(append([]string(nil), j.Labels...), now)
+	f.RunnerLabels = payloadFact(append([]string{}, j.Labels...), now)
 	f.ProviderJobID = payloadFact(itoa(j.ID), now)
 	f.ProviderRunID = payloadFact(itoa(j.RunID), now)
 	return f, nil

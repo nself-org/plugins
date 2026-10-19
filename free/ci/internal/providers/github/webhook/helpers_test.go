@@ -55,6 +55,7 @@ type fakeGH struct {
 	mu     sync.Mutex
 	routes map[string]route
 	hits   map[string]int
+	paths  []string // escaped request paths, in order
 	srv    *httptest.Server
 }
 
@@ -72,6 +73,7 @@ func newFakeGH(t *testing.T) *fakeGH {
 		g.mu.Lock()
 		rt, ok := g.routes[r.URL.Path]
 		g.hits[r.URL.Path]++
+		g.paths = append(g.paths, r.URL.EscapedPath())
 		g.mu.Unlock()
 		if rt.delay > 0 {
 			select {

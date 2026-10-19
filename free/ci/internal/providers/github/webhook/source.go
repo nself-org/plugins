@@ -56,6 +56,7 @@ func New() *Source {
 var (
 	flagMu       sync.RWMutex
 	insecureFlg  *flag.Flag
+	secretFlg    *flag.Flag
 	registerErrs []error
 )
 
@@ -79,7 +80,7 @@ func init() {
 	}
 	coordinator.RegisterFlag(func(fs *flag.FlagSet) { // serve_v15 registers --insecure before AddFlags runs
 		flagMu.Lock()
-		insecureFlg = fs.Lookup("insecure")
+		insecureFlg, secretFlg = fs.Lookup("insecure"), fs.Lookup("secret")
 		flagMu.Unlock()
 	})
 }
@@ -89,6 +90,21 @@ func insecureFlag() bool {
 	flagMu.RLock()
 	defer flagMu.RUnlock()
 	return insecureFlg != nil && insecureFlg.Value.String() == "true"
+}
+
+// sharedSecret is the legacy shared secret: the coordinator's --secret (which overrides the
+// environment in `ci serve`), else GITHUB_WEBHOOK_SECRET.
+func (s *Source) sharedSecret() string {
+	flagMu.RLock()
+	var fromFlag string
+	if secretFlg != nil {
+		fromFlag = secretFlg.Value.String()
+	}
+	flagMu.RUnlock()
+	if fromFlag != "" {
+		return fromFlag
+	}
+	return s.Getenv(SharedSecretEnv)
 }
 
 // Name is "github".
@@ -122,6 +138,8 @@ func (s *Source) Verify(ctx context.Context, r *http.Request, body []byte) (mode
 		return model.TriggerFacts{}, err
 	}
 	switch {
+	case name == "" && r.Header.Get(hdrEvent) == "ping": // an organization hook's ping names no repository
+		return model.TriggerFacts{}, unsupported("event \"ping\": skip")
 	case auth == "none":
 		if !coordinator.ValidProject(name) { // nothing authenticated the sender: still never pass junk on
 			return model.TriggerFacts{}, unsupported("repository.full_name is not owner/repo")
@@ -145,7 +163,7 @@ func (s *Source) authenticate(ctx context.Context, r *http.Request, body []byte,
 		}
 		return "per-repo", rs, nil
 	}
-	if shared := s.Getenv(SharedSecretEnv); shared != "" {
+	if shared := s.sharedSecret(); shared != "" {
 		if checkSignature(shared, header, body) != nil {
 			return "", RepoSecret{}, errSignature()
 		}

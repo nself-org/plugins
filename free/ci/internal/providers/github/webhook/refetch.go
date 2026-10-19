@@ -102,9 +102,9 @@ func (r *fetch) demand() {
 	if run.Event != "" {
 		r.f.RunEvent = fact(run.Event, "api", r.now)
 	}
-	if h := run.HeadRepository; h != nil && h.FullName != "" {
+	if h := run.HeadRepository; h != nil && h.FullName != "" && h.ID > 0 && run.Repository.ID > 0 {
 		r.f.HeadRepo = fact(h.FullName, "api", r.now)
-		r.f.Fork = fact(h.ID != run.Repository.ID || h.Fork, "api", r.now)
+		r.f.Fork = fact(h.ID != run.Repository.ID, "api", r.now) // another repository, not "a repository that is a fork"
 	}
 	if run.Actor.Login != "" {
 		r.f.Actor = fact(run.Actor.Login, "api", r.now)

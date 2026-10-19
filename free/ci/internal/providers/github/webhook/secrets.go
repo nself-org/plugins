@@ -68,7 +68,7 @@ func decodeSecrets(raw json.RawMessage) (any, error) {
 			}
 		}
 		if !envName.MatchString(rs.Env) || rs.ID < 0 {
-			return nil, fmt.Errorf("E672 %s: %q needs an environment variable name such as MY_REPO_SECRET and a positive id", KeyWebhookSecrets, repo)
+			return nil, fmt.Errorf("E672 %s: %q needs an environment variable name such as MY_REPO_SECRET and a non-negative id", KeyWebhookSecrets, repo)
 		}
 		out[key] = rs
 	}
