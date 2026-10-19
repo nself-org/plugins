@@ -182,6 +182,10 @@ func finish(ctx context.Context, o Options, st *store.Store, p prior, es []Entry
 	for _, c := range cs {
 		res.Incarnation = max(res.Incarnation, c.Incarnation)
 	}
+	// never fence below the coordinator this restore replaced: epochs it granted after the backup must stay lower
+	if res.Incarnation, err = st.RaiseIncarnation(ctx, max(res.Incarnation, p.maxInc+1)); err != nil {
+		return err
+	}
 	if res.LeasesGraced, err = lease.New(st, nil, lease.Config{Clock: o.Clock}).Start(ctx, "restore-"+ts, res.Incarnation); err != nil {
 		return err
 	}

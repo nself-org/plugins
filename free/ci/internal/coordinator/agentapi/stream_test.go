@@ -392,3 +392,17 @@ func TestStopOfferingHandsOutNothing(t *testing.T) {
 		t.Fatalf("status %d while draining, want 204", resp.StatusCode)
 	}
 }
+
+// TestFrameWithoutEpochEndsTheStream: a lease-scoped frame that names no epoch is a protocol error, never a
+// nil dereference.
+func TestFrameWithoutEpochEndsTheStream(t *testing.T) {
+	r := newRig(t, nil)
+	a := r.newAgent("n-1")
+	leaseID, _ := r.seedLease("1")
+	a.connect()
+	u := a.openStream(0)
+	u.send(protocol.Message{Type: "log", LeaseID: leaseID, Body: protocol.Log{LeaseID: leaseID, LineSeq: 1, Stream: "stdout", Text: "x"}})
+	if m := u.read(); m.Type != "reject" {
+		t.Fatalf("answer = %s %+v, want a reject", m.Type, m.Body)
+	}
+}

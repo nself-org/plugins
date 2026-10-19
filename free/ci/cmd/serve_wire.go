@@ -83,7 +83,7 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 	cfg.Drain = func(dctx context.Context) error {
 		d, err := drain.New(drain.Config{
 			Intake: agentIntake{}, Canceller: liveCanceller{}, Deadline: drain.FlagDeadline(), Logf: cfg.Logf,
-			Leases: &drain.EngineLeases{Engine: eng, CoordinatorID: coordinatorID, JobInfo: func(c context.Context, attempt string) (string, bool, error) {
+			Leases: &drain.EngineLeases{Engine: eng, CoordinatorID: coordinatorID, Owned: ownedByThisProcess(st), JobInfo: func(c context.Context, attempt string) (string, bool, error) {
 				return st.AttemptJobClass(c, attempt)
 			}},
 		})
@@ -132,4 +132,22 @@ func registerServe(ctx context.Context, st *store.Store, eng *lease.Engine) (sto
 		}
 	}()
 	return func() { cancel(); wg.Wait() }
+}
+
+// ownedByThisProcess reports whether a coordinator row was registered by this process: the pipelines this
+// serve dispatches register as coordinators with our pid, while a `nself ci` run in another process on the
+// same store has its own. The drain touches only the first kind.
+func ownedByThisProcess(st *store.Store) func(context.Context, string) bool {
+	return func(ctx context.Context, id string) bool {
+		cs, err := st.Coordinators(ctx)
+		if err != nil {
+			return false // cannot tell: leave the lease alone
+		}
+		for _, c := range cs {
+			if c.ID == id {
+				return c.PID == os.Getpid()
+			}
+		}
+		return false
+	}
 }

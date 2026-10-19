@@ -385,3 +385,23 @@ func TestBackupSealedFilesAndAside(t *testing.T) {
 		t.Fatal("a dir with no node and no PKI authority is empty")
 	}
 }
+
+// TestRestoreNeverFencesBelowTheReplacedCoordinator: the restored state's incarnation is above both the
+// backup's and the incarnation of the coordinator whose data dir it replaces, so an epoch granted after the
+// backup (and before the restore) can never equal one granted afterwards.
+func TestRestoreNeverFencesBelowTheReplacedCoordinator(t *testing.T) {
+	ctx := context.Background()
+	r, arch := seeded(t)
+	if _, err := r.st.RaiseIncarnation(ctx, 40); err != nil { // the live coordinator ran far past the backup
+		t.Fatal(err)
+	}
+	_ = r.st.Close()
+	res := restoreInto(t, r, r.dir, arch)
+	if res.Incarnation <= 40 {
+		t.Fatalf("restored incarnation %d, want above the replaced coordinator's 40", res.Incarnation)
+	}
+	st2, _ := r.reopen(r.dir)
+	if n, _ := st2.HighestIncarnation(ctx); n != res.Incarnation {
+		t.Fatalf("store highest %d, result %d", n, res.Incarnation)
+	}
+}

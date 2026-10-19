@@ -97,6 +97,9 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 	default:
 		return &fatal{protocol.CodeInvalid, "frame_type"}
 	}
+	if m.Epoch == nil { // a lease-scoped frame always names its epoch
+		return &fatal{protocol.CodeInvalid, "epoch"}
+	}
 	epoch, ok := epochArg(*m.Epoch)
 	if !ok {
 		return &fatal{protocol.CodeInvalid, "epoch"}

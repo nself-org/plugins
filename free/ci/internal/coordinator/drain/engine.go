@@ -24,6 +24,9 @@ import (
 type EngineLeases struct {
 	Engine        *lease.Engine
 	CoordinatorID string // only leases of this coordinator are drained; "" means all
+	// Owned, when set, decides whether a coordinator id belongs to this process; leases of other
+	// coordinators sharing the store (another `ci` process) are never cancelled or handed back.
+	Owned func(ctx context.Context, coordinatorID string) bool
 	// JobInfo returns the job kind and idempotence of an attempt; nil fails closed.
 	JobInfo func(ctx context.Context, attemptID string) (kind string, idempotent bool, err error)
 }
@@ -51,7 +54,7 @@ func (e *EngineLeases) Running(ctx context.Context) ([]Lease, error) {
 	}
 	var out []Lease
 	for _, rl := range all {
-		if e.CoordinatorID == "" || rl.CoordinatorID == e.CoordinatorID {
+		if (e.CoordinatorID == "" || rl.CoordinatorID == e.CoordinatorID) && (e.Owned == nil || e.Owned(ctx, rl.CoordinatorID)) {
 			out = append(out, e.lease(ctx, rl))
 		}
 	}

@@ -18,6 +18,10 @@ const drainReason = "coordinator draining"
 func (d *Drainer) settle(ctx context.Context, l Lease) Result {
 	res := Result{LeaseID: l.ID}
 	if !l.HandBackable() {
+		if _, running, err := d.cfg.Leases.Get(ctx, l.ID); err == nil && !running { // it ended on its own meanwhile
+			res.Outcome = OutcomeFinished
+			return res
+		}
 		if err := d.cfg.Leases.NeedsOperator(ctx, l, drainReason+": job must not run twice"); err != nil {
 			res.Outcome, res.Err = OutcomeError, err
 			return res
@@ -58,6 +62,16 @@ func (d *Drainer) settle(ctx context.Context, l Lease) Result {
 			res.Outcome = OutcomeAbandoned
 			return res
 		case <-ack:
+			// the agent may have delivered its result before it saw the cancel: hand back only a lease still running
+			cur, running, err = d.cfg.Leases.Get(ctx, l.ID)
+			if err != nil {
+				res.Outcome, res.Err = OutcomeError, err
+				return res
+			}
+			if !running {
+				res.Outcome = OutcomeFinished
+				return res
+			}
 			return d.handBack(ctx, cur, false, OutcomeAcked)
 		case <-d.cfg.Clock.After(wait):
 		}

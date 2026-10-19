@@ -100,6 +100,24 @@ func TestDrain(t *testing.T) {
 		}
 	})
 
+	t.Run("a result that lands before the cancel ack is not undone by a hand-back", func(t *testing.T) {
+		noLeak(t)
+		c := newClock()
+		w := newWorld(c)
+		w.add("b", "test", true, 12*time.Minute)
+		r := start(t, c, w, nil)
+		c.settleOn(t, 1, r.done)
+		c.Advance(10 * time.Minute) // the deadline: b is cancelled and waits for its ack
+		c.settleOn(t, 1, r.done)
+		w.finish("b") // the agent delivered its result just before it saw the cancel
+		w.ack(r.d, "b")
+		<-r.done
+		if outcome(t, r.rep, "b") != OutcomeFinished {
+			t.Fatalf("results %+v", r.rep.Results)
+		}
+		w.never(t, "handback b expired=false")
+	})
+
 	t.Run("two running jobs, no ack: handed back only after the lease expires", func(t *testing.T) {
 		noLeak(t)
 		c := newClock()

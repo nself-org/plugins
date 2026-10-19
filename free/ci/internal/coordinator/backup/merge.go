@@ -23,9 +23,10 @@ const liveWindow = 90 * time.Second
 
 // prior is the snapshot of the data dir being replaced.
 type prior struct {
-	existed bool // state.db existed before this restore
-	empty   bool // no nodes and no PKI authority: nothing to merge, nothing to protect
-	team    bool // the coordinator mode row said team
+	existed bool  // state.db existed before this restore
+	empty   bool  // no nodes and no PKI authority: nothing to merge, nothing to protect
+	team    bool  // the coordinator mode row said team
+	maxInc  int64 // highest coordinator incarnation of the dir being replaced (0 when it held none)
 	denied  map[string][]string
 	revoked []string
 }
@@ -75,6 +76,13 @@ func snapshot(ctx context.Context, st *store.Store, existed bool) (prior, error)
 	}
 	for _, r := range rows {
 		p.denied[r.NodeID] = append(p.denied[r.NodeID], r.Serial)
+	}
+	if existed {
+		if cs, cerr := st.Coordinators(ctx); cerr == nil {
+			for _, c := range cs {
+				p.maxInc = max(p.maxInc, c.Incarnation)
+			}
+		}
 	}
 	mode, found, err := st.CoordinatorModeGet(ctx)
 	p.team = err != nil || (found && mode == store.CoordinatorTeam) // an unreadable mode reads team (fail closed)
