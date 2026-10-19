@@ -103,6 +103,12 @@ Linux)
 	if [ $docker_ok -eq 1 ]; then ev_pass docker-present "Docker answers (the service leg runs)"; else ev_fail docker-present "Docker does not answer on Linux"; finish; fi
 	# Everything the postgres service needs is pulled while the network is still there.
 	if docker pull --quiet postgres:16-alpine >/dev/null 2>"$work/pull.err"; then ev_pass images-pulled "postgres:16-alpine is local before the cut"; else ev_fail images-pulled "docker pull failed: $(tail1 "$work/pull.err")"; finish; fi
+	# One run of the service repo before the cut pulls whatever else the nself stack asks docker for; the run under the cut
+	# must then need nothing from the network.
+	fx_polyglot "$work/warm"
+	(cd "$work/warm" && nrun ci >"$work/warm.out" 2>&1)
+	rc=$?
+	if [ $rc -eq 0 ]; then ev_pass service-warmup "the service repo ran once with the network (images and caches are local)"; else ev_fail service-warmup "the warm-up run exited $rc: $(tail1 "$work/warm.out")"; finish; fi
 	images_before=$(docker images -q | sort -u | tr '\n' ' ')
 	;;
 *) ev_pass docker-absent "docker answers: $docker_ok (hosted macOS has none; the service job must end E637)" ;;
