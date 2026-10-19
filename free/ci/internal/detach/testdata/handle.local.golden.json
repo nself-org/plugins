@@ -1,0 +1,47 @@
+{
+  "schema": "ci.run-handle/v1",
+  "run_id": "r1",
+  "state": "queued",
+  "pid": 4242,
+  "coordinator": "local",
+  "stream_path": "/state/detached/r1.ndjson",
+  "commands": {
+    "wait": [
+      "nself",
+      "ci",
+      "runs",
+      "wait",
+      "r1"
+    ],
+    "follow": [
+      "nself",
+      "ci",
+      "runs",
+      "follow",
+      "r1",
+      "--json"
+    ],
+    "evidence": [
+      "nself",
+      "ci",
+      "evidence",
+      "r1",
+      "--json"
+    ],
+    "cancel": [
+      "nself",
+      "ci",
+      "runs",
+      "cancel",
+      "r1"
+    ],
+    "logs": [
+      "nself",
+      "ci",
+      "logs",
+      "\u003cjob\u003e",
+      "--run",
+      "r1"
+    ]
+  }
+}
