@@ -74,8 +74,7 @@ fx_rust() {
 	fx_commit "$1" "rust fixture"
 }
 
-# fx_polyglot DIR: Go + a web package + Dockerfile, with authored jobs (an authored job list replaces detection; a Linux job
-# runs under an address-space limit of its requested memory, so the Go jobs ask for enough) and one job that
+# fx_polyglot DIR: Go + a web package + Dockerfile, with authored jobs (an authored job list replaces detection) and one job that
 # needs the declared postgres service (it only proves the connection variables are injected and the port accepts a TCP
 # connection).
 fx_polyglot() {
@@ -92,12 +91,10 @@ jobs:
   go-fmt:
     kind: static
     run: [bash, -c, 'test -z "$(gofmt -l .)"']
-    requires: { mem_mb: 2048 }
   go-test:
     kind: test
     run: [go, test, ./...]
     timeout: 300s
-    requires: { mem_mb: 4096 }
   web-check:
     kind: static
     run: [jq, -e, .name, package.json]
