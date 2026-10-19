@@ -45,6 +45,10 @@ var dynamicProgram = map[string]bool{
 	"internal/serve/serve_job.go:runGateDirect": true,
 	"internal/exec/process.go:runCommand":       true,
 	"internal/exec/process.go:runCommandIn":     true,
+	// nself-ci-agent cred-wrapper replaces itself (syscall.Exec) with the runner
+	// command the lease names, so the credential lives only in that process's
+	// environment (P7-NODE-23); never ssh.
+	"cmd/agent/cred_wrapper.go:runCredWrapper": true,
 	// The container runtime binary is checked against runtimeBinary (docker or
 	// podman by name or path) before any of these runs it (P7-TRUST-04).
 	"internal/exec/container.go:containerStopper": true,

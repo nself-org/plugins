@@ -1,0 +1,106 @@
+package session
+
+import (
+	"strings"
+	"testing"
+)
+
+func collect(masks ...string) (*lineWriter, *[]string) {
+	var out []string
+	var ms [][]byte
+	for _, m := range masks {
+		for _, x := range secretMasks(m) {
+			ms = append(ms, []byte(x))
+		}
+	}
+	return newLineWriter(func(s string) { out = append(out, s) }, func() [][]byte { return ms }), &out
+}
+
+// TestMultiLineSecretIsMaskedLineByLine proves a multi-line value (a service
+// account JSON, a certificate) is hidden even when the job prints it line by line.
+func TestMultiLineSecretIsMaskedLineByLine(t *testing.T) {
+	w, out := collect("line-one-SECRETA\nline-two-SECRETB\n}")
+	w.Write([]byte("x line-one-SECRETA\ny line-two-SECRETB\n}\n"))
+	for _, l := range *out {
+		if strings.Contains(l, "SECRET") {
+			t.Fatalf("leaked: %q", *out)
+		}
+	}
+	if (*out)[2] != "}" {
+		t.Fatalf("a short line was masked: %q", *out)
+	}
+}
+
+// TestSecretSplitAcrossChunksAndCutIsMasked proves a value split across Write
+// calls, or lying across the long-line cut, is masked whole.
+func TestSecretSplitAcrossChunksAndCutIsMasked(t *testing.T) {
+	secret := strings.Repeat("S3cr3t-", 600) // 4200 bytes
+	for _, pad := range []int{maxLogLine - 100, maxLogLine + 3, maxLogLine + 200, 3 * maxLogLine} {
+		w, out := collect(secret)
+		text := strings.Repeat("a", pad) + secret + strings.Repeat("b", 50)
+		for i := 0; i < len(text); i += 1000 {
+			w.Write([]byte(text[i:min(i+1000, len(text))]))
+		}
+		w.Flush()
+		if all := strings.Join(*out, "\n"); strings.Contains(all, "S3cr3t") || !strings.Contains(all, maskText) {
+			t.Fatalf("pad %d: secret leaked or not masked (%d lines)", pad, len(*out))
+		}
+	}
+}
+
+// TestOverlappingSecretsAreMaskedAsOneSpan proves values that overlap (one a
+// prefix of another, or sharing bytes) are hidden whole, whatever their order.
+func TestOverlappingSecretsAreMaskedAsOneSpan(t *testing.T) {
+	cases := []struct {
+		masks []string
+		in    string
+		want  string
+	}{
+		{[]string{"prefix", "prefix-long-secret-value"}, "x prefix-long-secret-value y", "x [redacted] y"},
+		{[]string{"prefix-long-secret-value", "prefix"}, "x prefix-long-secret-value y", "x [redacted] y"},
+		{[]string{"abcd", "cdef"}, "x abcdef y", "x [redacted] y"},
+	}
+	for _, c := range cases {
+		w, out := collect(c.masks...)
+		w.Write([]byte(c.in + "\n"))
+		if (*out)[0] != c.want {
+			t.Fatalf("%v: got %q, want %q", c.masks, (*out)[0], c.want)
+		}
+	}
+}
+
+// TestRepeatedBytesMakeProgress proves a stream that matches a short value at
+// every offset is emitted in bounded work and never withheld.
+func TestRepeatedBytesMakeProgress(t *testing.T) {
+	w, out := collect("aaaa")
+	for range 200 {
+		w.Write([]byte(strings.Repeat("a", 1000)))
+	}
+	w.Flush()
+	if len(*out) == 0 {
+		t.Fatal("nothing emitted")
+	}
+	for _, l := range *out {
+		if strings.Contains(l, "aaaa") {
+			t.Fatalf("leaked %d bytes", len(l))
+		}
+	}
+}
+
+// TestRunOfMatchesDoesNotLeakAcrossWrites proves that when a long run of
+// overlapping matches forces a cut, the bytes kept back stay masked: a value
+// completed by the next write does not show its first half.
+func TestRunOfMatchesDoesNotLeakAcrossWrites(t *testing.T) {
+	w, out := collect("ABCDEFGHABCDEFGH")
+	w.Write([]byte(strings.Repeat("ABCDEFGH", 1125)))
+	w.Write([]byte("ABCDEFGH\n"))
+	w.Flush()
+	for _, l := range *out {
+		if strings.Contains(l, "ABCDEFGH") || strings.Contains(l, "BCDEFGH") {
+			t.Fatalf("plaintext fragment leaked: %q", l)
+		}
+	}
+	if len(*out) == 0 {
+		t.Fatal("nothing emitted")
+	}
+}
