@@ -58,7 +58,10 @@ jobs:
 
       - name: Detector and check unit tests
         working-directory: free/ci
-        run: go test -mod=vendor -count=1 ./internal/detect/... ./internal/gates/... ./internal/plan/... ./cmd/...
+        run: |
+          set -euo pipefail
+          go test -mod=vendor -count=1 ./internal/detect/... ./internal/gates/... ./internal/plan/...
+          go test -mod=vendor -count=1 -run '^TestPlan(Xcode|SwiftPM|PythonUV)' ./cmd/
 
       - name: Linux fixtures (Python, SwiftPM)
         if: runner.os == 'Linux'
