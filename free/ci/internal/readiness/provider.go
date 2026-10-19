@@ -1,0 +1,96 @@
+package readiness
+
+// Purpose: the autoworld exclusion provider. A local runner that is not ready carries
+// the reason node.not_ready, so `ci plan` shows it and sched.Place skips it. The reason
+// is not Static: it clears the next time the host answers ready, and the bounded wait of
+// the auto preset (AUTO D11) may wait for it.
+// Inputs: a Source (the Evaluator) and an optional foreground test. The composition root
+// (P7-AUTO-11 for the watcher, P7-AUTO-19 for `ci` itself) calls Register once with an
+// Evaluator whose Config is ConfigFrom(resolved policy); foreground is true exactly while
+// the operator's own interactive `nself ci` run is being planned. Passing a predicate that
+// is always true switches readiness off, so only that run path may supply it.
+// Outputs: autoworld.ExclusionFn; Register adds it under ProviderName.
+// Constraints: only the runner "local" carrying world.LocalLabel is judged (remote nodes keep
+// NODE-13's agent-side facts). Foreground floor (X17): the operator's own foreground run
+// keeps its one local slot whatever the answer, so a foreground run adds no exclusion.
+
+import (
+	"context"
+	"slices"
+	"strings"
+
+	"github.com/nself-org/plugins/free/ci/internal/autoworld"
+	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/sched"
+	"github.com/nself-org/plugins/free/ci/internal/world"
+)
+
+// ProviderName is the name the provider registers under (providers run in name order).
+const ProviderName = "readiness"
+
+// localRunnerID is the id of the injected runner that is this machine (world.BuildForLocal).
+// Contributors run before the world builder strips world.LocalLabel from registered nodes,
+// so the label alone could make a remote node look local; the id closes that.
+const localRunnerID = "local"
+
+// Source is what the provider needs from an Evaluator.
+type Source interface {
+	Evaluate(ctx context.Context) (Report, error)
+}
+
+// ExclusionProvider returns the provider for src. foreground may be nil (never foreground).
+func ExclusionProvider(src Source, foreground func() bool) autoworld.ExclusionFn {
+	return func(ctx context.Context, w sched.World) (map[string][]model.PlacementReasonDetail, error) {
+		if foreground != nil && foreground() {
+			return nil, nil
+		}
+		var local []string
+		for _, r := range w.Runners {
+			if r.ID != localRunnerID { // a registered node can carry the label until the world builder strips it
+				continue
+			}
+			for _, l := range r.Capability.Identity.Labels {
+				if l == world.LocalLabel {
+					if !slices.Contains(local, r.ID) {
+						local = append(local, r.ID)
+					}
+					break
+				}
+			}
+		}
+		if len(local) == 0 {
+			return nil, nil
+		}
+		rep, err := src.Evaluate(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if rep.Ready {
+			return nil, nil
+		}
+		detail := model.PlacementReasonDetail{Code: string(model.NodeNotReady), Detail: joinWhy(rep.Why)}
+		out := make(map[string][]model.PlacementReasonDetail, len(local))
+		for _, id := range local {
+			out[id] = []model.PlacementReasonDetail{detail}
+		}
+		return out, nil
+	}
+}
+
+// Register adds the provider to autoworld. Call it once at startup from the composition
+// root that owns the Evaluator.
+func Register(src Source, foreground func() bool) error {
+	return autoworld.RegisterExclusion(ProviderName, ExclusionProvider(src, foreground))
+}
+
+// maxDetailLen caps the joined reason list of one runner. Every entry is already one line
+// (the hook's own line is clipped to MaxWhyLen), so the cap only stops a pathological list.
+const maxDetailLen = 480
+
+func joinWhy(why []string) string {
+	parts := make([]string, 0, len(why))
+	for _, w := range why {
+		parts = append(parts, ClipLine(w))
+	}
+	return clip(strings.Join(parts, "; "), maxDetailLen)
+}
