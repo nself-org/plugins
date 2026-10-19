@@ -5,6 +5,7 @@ package dispatch
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -81,6 +82,16 @@ func testQueued(attempt string) Job {
 	return Job{AttemptID: attempt, Sched: testJob(attempt)}
 }
 
+// registerNode puts a remote runner in the node registry as online, the way
+// world.Build finds it; admission re-reads that row. Idempotent.
+func registerNode(st *store.Store, r sched.Runner) {
+	doc, err := json.Marshal(r.Capability)
+	if err != nil {
+		panic(err)
+	}
+	_ = st.NodePut(context.Background(), store.NodeRecord{ID: r.ID, Name: r.ID, State: "online", Lifecycle: []byte("{}"), Trust: []byte("{}"), DeployHost: []byte("{}"), Capability: doc, ObservedAt: time.Now().UnixNano()}, "test")
+}
+
 // liveWorld rebuilds the world on every call, taking each runner's free slots
 // and CPU from the store's reservations. policy tweaks the policy.
 func liveWorld(st *store.Store, policy func(*sched.Policy), runners ...sched.Runner) func(context.Context, sched.Pipeline) (sched.World, string, error) {
@@ -94,6 +105,9 @@ func liveWorld(st *store.Store, policy func(*sched.Policy), runners ...sched.Run
 			policy(&w.Policy)
 		}
 		for _, r := range runners {
+			if r.Location != "local" && r.Location != "hosted" {
+				registerNode(st, r)
+			}
 			rs := snap.Reservations[r.ID]
 			r.Avail.Slots = max(0, *r.Capability.Availability.Slots.Value-int(rs.Slots))
 			r.Avail.CPU -= rs.CPU

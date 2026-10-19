@@ -1,5 +1,5 @@
 package store
 
-// The definer: it may call its own admission functions.
-func (s *Store) AdmitAndLease() error { return s.inner() }
-func (s *Store) inner() error         { return s.AdmitAndLease() }
+// The definer: it defines its admission function; it does not call it from a
+// wrapper (see wrapper.go).
+func (s *Store) AdmitAndLease() error { return nil }

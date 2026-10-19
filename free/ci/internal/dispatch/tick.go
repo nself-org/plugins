@@ -39,7 +39,8 @@ func (d *Dispatcher) Tick(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	ctx = context.WithoutCancel(ctx)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), d.cfg.TickTimeout)
+	defer cancel()
 	d.tickM.Lock()
 	defer d.tickM.Unlock()
 	d.mu.Lock()

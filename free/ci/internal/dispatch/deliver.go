@@ -70,6 +70,7 @@ func (d *Dispatcher) lose(a Admitted, cause error) {
 		_ = d.cfg.Store.Transition(ctx, a.AttemptID, state, "lost", store.TransitionDetail{Epoch: epoch, FailureClass: "infra", Reason: "delivery failed"})
 	}
 	if d.cfg.DeliveryError != nil {
+		a.Token = "" // the lease secret never leaves the dispatcher
 		d.cfg.DeliveryError(a, cause)
 	}
 }

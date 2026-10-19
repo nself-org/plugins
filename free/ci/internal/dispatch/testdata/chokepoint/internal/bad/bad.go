@@ -1,5 +1,7 @@
 package bad
 
+import "reflect"
+
 // Planted violations: neither function is in internal/store, internal/lease,
 // internal/dispatch or run.CreateAttempt.
 func Sneak(s *store.Store) error { return s.AdmitAndLease(ctx, "host", demand) }
@@ -19,3 +21,9 @@ func Reflect(s *store.Store) { reflect.ValueOf(s).MethodByName("AdmitAndLease") 
 
 // Reflection with a spelling no literal scan matches.
 func Reflect2(s *store.Store) { reflect.ValueOf(s).MethodByName("Admit" + "Placement") }
+
+// Moving an attempt to leased with the public transition API skips admission.
+func Leased(s *store.Store) error { return s.Transition(ctx, "a", "queued", "leased", detail) }
+
+// Reflection by index.
+func ReflectIndex(s *store.Store) { reflect.ValueOf(s).Method(0).Call(nil) }

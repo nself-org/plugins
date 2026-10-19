@@ -36,6 +36,10 @@ func init() {
 // project are re-read from the attempt row, never trusted from the caller.
 type AdmitRequest struct {
 	User, Team, Provider, WorldDigest string
+	// NodeID names the registry node of a remote placement; its row is re-read in
+	// the transaction, so a node revoked or drained since the world was built
+	// never gets a lease. Empty for a local or provider-hosted runner.
+	NodeID string
 	// Incarnation > 0 issues a fenced remote lease (LeaseEpoch); 0 is a local lease.
 	Incarnation int64
 }
@@ -64,6 +68,12 @@ const activeStates = `('leased','running','finalizing')`
 // hostCapacityMessage is the message of the E604 a full host reservation raises.
 const hostCapacityMessage = "host capacity exhausted"
 
+// NodeUnavailableError is the refusal of a remote placement whose node row says
+// the node cannot take a lease now (offline, draining, maintenance, revoked or gone).
+type NodeUnavailableError struct{ State string }
+
+func (e *NodeUnavailableError) Error() string { return "E604: node is " + e.State }
+
 // IsHostCapacity reports whether err is AdmitPlacement's full-host refusal: the
 // placement is fine and the attempt should wait, not fail.
 func IsHostCapacity(err error) bool {
@@ -90,6 +100,18 @@ func (s *Store) AdmitPlacement(ctx context.Context, host string, d Demand, r Adm
 		}
 		if v.UsedCPU+d.CPU > d.CapacityCPU || v.UsedMemMB+d.MemMB > d.CapacityMemMB {
 			return coded("E604", hostCapacityMessage)
+		}
+		if r.NodeID != "" {
+			var state string
+			if err := tx.QueryRowContext(ctx, "SELECT state FROM node WHERE id=?", r.NodeID).Scan(&state); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return &NodeUnavailableError{State: "unknown"}
+				}
+				return err
+			}
+			if state != "online" {
+				return &NodeUnavailableError{State: state}
+			}
 		}
 		counts, err := admitCounts(ctx, tx, v)
 		if err != nil {
@@ -161,6 +183,14 @@ func admitCounts(ctx context.Context, tx *sql.Tx, v AdmitView) (AdmitCounts, err
 		v.PipelineID, v.PipelineID, v.JobName, v.Demand.RunnerID, v.Project, v.Request.Provider, v.Request.Provider, v.Request.User, v.Request.Team).
 		Scan(&c.Global, &c.Pipeline, &c.Job, &c.Runner, &c.Project, &c.Provider, &c.User, &c.Team)
 	return c, err
+}
+
+// CancelIntent reports whether an operator asked to cancel the attempt; such an
+// attempt can never be admitted, whatever its state still says.
+func (s *Store) CancelIntent(ctx context.Context, attemptID string) (bool, error) {
+	var n int
+	err := s.readers.QueryRowContext(ctx, "SELECT count(*) FROM cancel_intent WHERE attempt_id=?", attemptID).Scan(&n)
+	return n > 0, err
 }
 
 // RecordRefusal keeps the latest reason an attempt stayed queued, for `ci explain`.

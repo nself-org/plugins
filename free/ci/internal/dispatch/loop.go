@@ -63,6 +63,10 @@ type Config struct {
 	LeaseTTL time.Duration
 	// ProviderLimit is the per-provider concurrency limit (0 = none).
 	ProviderLimit func(provider string) int
+	// TickTimeout bounds one tick (world builds, policy resolution, admissions);
+	// the default is two minutes. A tick ignores its caller's cancellation, so
+	// this is what keeps a hung dependency from holding the dispatcher for ever.
+	TickTimeout time.Duration
 	// DeliveryError observes a failed carrier run (the attempt is already marked lost).
 	DeliveryError func(Admitted, error)
 }
@@ -110,6 +114,9 @@ func New(cfg Config) (*Dispatcher, error) {
 	}
 	if cfg.Clock == nil {
 		cfg.Clock = time.Now
+	}
+	if cfg.TickTimeout <= 0 {
+		cfg.TickTimeout = 2 * time.Minute
 	}
 	if cfg.LeaseTTL <= 0 {
 		cfg.LeaseTTL = 45 * time.Second

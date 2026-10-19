@@ -218,7 +218,12 @@ func TestDispatchDeliveryFails(t *testing.T) {
 	node := dispatch.SchedRunner("node-c", "lan", 1)
 	node.Capability.Identity.Transport = "fake-broken"
 	failed := make(chan error, 1)
-	d := newDispatcher(t, dispatch.Config{Store: st, World: dispatch.LiveWorld(st, node), DeliveryError: func(_ dispatch.Admitted, err error) { failed <- err }})
+	d := newDispatcher(t, dispatch.Config{Store: st, World: dispatch.LiveWorld(st, node), DeliveryError: func(a dispatch.Admitted, err error) {
+		if a.Token != "" {
+			err = errors.New("the lease token reached the failure callback")
+		}
+		failed <- err
+	}})
 	id := dispatch.QueueAttempt(t, st, "pipe", "proj", "job")
 	if _, err := d.Submit(context.Background(), dispatch.QueuedJob(id)); err != nil {
 		t.Fatal(err)
@@ -226,8 +231,8 @@ func TestDispatchDeliveryFails(t *testing.T) {
 	wait(t, broken.got)
 	select {
 	case err := <-failed:
-		if err == nil {
-			t.Fatal("nil delivery error")
+		if err == nil || err.Error() == "the lease token reached the failure callback" {
+			t.Fatalf("delivery error: %v", err)
 		}
 	case <-time.After(20 * time.Second):
 		t.Fatal("delivery failure not reported")

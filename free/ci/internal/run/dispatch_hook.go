@@ -46,12 +46,11 @@ func init() {
 
 // runDispatch is the dispatcher of one run and the facts its world needs.
 type runDispatch struct {
-	d       *dispatch.Dispatcher
-	sess    *Session
-	row     store.PipelineRow
-	polOnce sync.Once
-	pol     sched.Policy
-	polErr  error
+	d    *dispatch.Dispatcher
+	sess *Session
+	row  store.PipelineRow
+	polM sync.Mutex
+	pol  *sched.Policy // resolved once; a failed resolution is retried, never cached
 }
 
 var (
@@ -152,21 +151,29 @@ func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sch
 }
 
 // policy resolves the run's effective scheduling policy once, as PolicyHook does.
+// A failure is returned and retried on the next call: a transient git or store
+// error must not fail every later job of the run.
 func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, error) {
-	rd.polOnce.Do(func() {
-		root := rd.row.Project
-		if root == "" {
-			root = "."
-		}
-		res := policy.Resolver{Store: rd.sess.Store, Run: policy.Runner(report.Capture)}
-		got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGit(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root})
-		if err != nil {
-			rd.polErr = err
-			return
-		}
-		rd.pol, rd.polErr = schedpolicy.Placement(&got.Effective)
-	})
-	return rd.pol, rd.polErr
+	rd.polM.Lock()
+	defer rd.polM.Unlock()
+	if rd.pol != nil {
+		return *rd.pol, nil
+	}
+	root := rd.row.Project
+	if root == "" {
+		root = "."
+	}
+	res := policy.Resolver{Store: rd.sess.Store, Run: policy.Runner(report.Capture)}
+	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGit(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root})
+	if err != nil {
+		return sched.Policy{}, err
+	}
+	p, err := schedpolicy.Placement(&got.Effective)
+	if err != nil {
+		return sched.Policy{}, err
+	}
+	rd.pol = &p
+	return p, nil
 }
 
 // world builds the local-only placement world of the run.
@@ -183,6 +190,10 @@ func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World
 			r.Decl = localDeclarationPlaceholder()
 			keep = append(keep, r)
 		}
+	}
+	if len(keep) != 1 {
+		// a registered node called "local" would inherit the placeholder declaration
+		return sched.World{}, "", fail(CodeOptions, "the node registry holds a node with the reserved id %q", "local")
 	}
 	w.Runners, w.Hosted = keep, nil
 	digest, err := world.Digest(w)

@@ -7,7 +7,10 @@ package dispatch
 // ephemeral 08, release CACHE-05, approval TRUST-24).
 // Outputs: the ordered list Admit passes to the store.
 // Constraints: names are unique and non-empty; registering after the first Admit
-// is an error, so the order every admission sees is fixed for the process.
+// is an error, so the order every admission sees is fixed for the process. A
+// step runs inside the store's one writer transaction: it must not call Store
+// methods (they wait for the writer it holds); it reads and writes through the
+// AdmitView it is given. The whole admission is bounded by admitTimeout.
 
 import (
 	"context"

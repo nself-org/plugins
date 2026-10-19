@@ -39,7 +39,7 @@ func (d *Dispatcher) admit(ctx context.Context, runs map[string]*pipelineRun, pr
 	if !local {
 		host = r.ID
 	}
-	req := Request{AttemptID: q.Job.AttemptID, Placement: p, Runner: r, Job: q.Job.Sched, Local: local, Host: host, CapacityCPU: cpu, CapacityMemMB: mem,
+	req := Request{AttemptID: q.Job.AttemptID, Placement: p, Runner: r, Job: q.Job.Sched, Local: local, Node: !local && r.Location != "hosted" && !r.Ephemeral, Host: host, CapacityCPU: cpu, CapacityMemMB: mem,
 		Limits: pr.world.Policy.Limits, RunnerSlots: slots, SlotsKnown: known, WorldDigest: dec.WorldDigest, Incarnation: d.incarnation(), LeaseTTL: d.cfg.LeaseTTL}
 	if d.cfg.ProviderLimit != nil {
 		req.ProviderLimit = d.cfg.ProviderLimit(r.Provider)
@@ -67,6 +67,9 @@ func (d *Dispatcher) admit(ctx context.Context, runs map[string]*pipelineRun, pr
 		if state, _, serr := d.cfg.Store.AttemptStateEpoch(ctx, q.Job.AttemptID); serr == nil && state != "queued" {
 			dec.Outcome = OutcomeFailed
 			d.finish(q.Seq, Admitted{}, fmt.Errorf("attempt %s is %s, not queued", q.Job.AttemptID, state))
+		} else if cancelled, cerr := d.cfg.Store.CancelIntent(ctx, q.Job.AttemptID); cerr == nil && cancelled {
+			dec.Outcome = OutcomeFailed // a cancel intent beats any admission (E605)
+			d.finish(q.Seq, Admitted{}, fmt.Errorf("attempt %s was cancelled while it waited", q.Job.AttemptID))
 		}
 	case errors.As(err, &ref):
 		dec.Outcome, dec.Reason = OutcomeRefused, ref.Reason

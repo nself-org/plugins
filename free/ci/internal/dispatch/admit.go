@@ -29,6 +29,9 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
+// admitTimeout bounds one admission transaction (steps included).
+var admitTimeout = 15 * time.Second
+
 // ErrConflict means the attempt changed under the admission (E605): re-plan.
 var ErrConflict = errors.New("dispatch: attempt state changed; re-plan")
 
@@ -51,6 +54,9 @@ type Request struct {
 	WorldDigest string
 	// LeaseTTL is the heartbeat TTL of a remote lease (0 = the store default).
 	LeaseTTL time.Duration
+	// Node marks a runner enrolled in the node registry (not a provider-hosted
+	// one): its row is re-read inside the admission transaction.
+	Node bool
 	// Incarnation is the coordinator incarnation of a fenced remote lease.
 	Incarnation int64
 }
@@ -91,6 +97,9 @@ func Admit(ctx context.Context, st *store.Store, r Request) (Admitted, error) {
 	if !r.Local {
 		req.Incarnation = max(r.Incarnation, 1)
 	}
+	if r.Node {
+		req.NodeID = r.Placement.RunnerID
+	}
 	ordered := seal()
 	stored := make([]store.AdmitStep, 0, len(ordered))
 	for _, n := range ordered {
@@ -98,7 +107,11 @@ func Admit(ctx context.Context, st *store.Store, r Request) (Admitted, error) {
 			return n.step(ctx, View{AdmitView: v, Request: r})
 		})
 	}
-	fence, err := st.AdmitPlacement(ctx, r.Host, d, req, stored...)
+	// The transaction holds the store's one writer: a step that blocks on it would
+	// wedge every write of the process, so the whole admission is bounded.
+	actx, cancel := context.WithTimeout(ctx, admitTimeout)
+	defer cancel()
+	fence, err := st.AdmitPlacement(actx, r.Host, d, req, stored...)
 	if err != nil {
 		return Admitted{}, classify(ctx, st, r.AttemptID, err)
 	}
@@ -122,13 +135,29 @@ func refuse(ctx context.Context, st *store.Store, attemptID string, ref *Refusal
 func classify(ctx context.Context, st *store.Store, attemptID string, err error) error {
 	var ref *Refusal
 	var se *store.Error
+	var nu *store.NodeUnavailableError
 	switch {
 	case errors.As(err, &ref):
 		return refuse(ctx, st, attemptID, ref)
 	case errors.As(err, &se) && se.Code == "E605":
 		return ErrConflict
+	case errors.As(err, &nu):
+		return refuse(ctx, st, attemptID, &Refusal{Reason: nodeReason(nu.State), Detail: "node is " + nu.State})
 	case store.IsHostCapacity(err):
 		return refuse(ctx, st, attemptID, &Refusal{Reason: model.CapacityBusy, Detail: "host reservation is full"})
 	}
 	return err
+}
+
+// nodeReason maps a node row state to its placement reason.
+func nodeReason(state string) model.PlacementReason {
+	switch state {
+	case "draining":
+		return model.NodeDraining
+	case "maintenance":
+		return model.NodeMaintenance
+	case "revoked":
+		return model.NodeRevoked
+	}
+	return model.NodeOffline
 }

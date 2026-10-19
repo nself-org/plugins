@@ -24,26 +24,47 @@ import (
 )
 
 var (
-	chokeDirs  = map[string]bool{"internal/store": true, "internal/lease": true, "internal/dispatch": true}
-	chokeFuncs = map[string]bool{"internal/run.CreateAttempt": true, "internal/run.LocalAdmit": true}
-	localFiles = map[string]bool{"internal/run/attempt.go": true, "internal/run/dispatch_hook.go": true}
+	// chokeFuncs are the only functions that may name an admission function:
+	// the function that wraps each definer's call, never a whole directory (a
+	// wrapper inside internal/store would launder the call to any caller). A
+	// method is written (Type).Name; run.CreateAttempt and run.LocalAdmit are
+	// plain functions, so a method of that name elsewhere is not on the list.
+	chokeFuncs = map[string]bool{
+		"internal/run.CreateAttempt":    true,
+		"internal/run.LocalAdmit":       true,
+		"internal/dispatch.Admit":       true,
+		"internal/lease.(Engine).Grant": true,
+	}
+	// definerDirs may call the transition machinery with "leased" (apply inside
+	// the admission transactions); nowhere else may move an attempt to leased.
+	definerDirs = map[string]bool{"internal/store": true}
+	localFiles  = map[string]bool{"internal/run/attempt.go": true, "internal/run/dispatch_hook.go": true}
 )
 
 // banned are the admission functions only the chokepoint may name.
 var banned = map[string]bool{"AdmitAndLease": true, "AdmitPlacement": true, "LeaseGrant": true, "Grant": true, "LocalAdmit": true}
 
-// reflective names reach a method by string, which no scan can follow; they are
-// refused in every non-test file, in the definers too.
+// reflective names reach a method by string or index, which no scan can follow;
+// they are refused in every non-test file, in the definers too. Method is
+// reflective only in a file that imports reflect (http.Request.Method is not).
 var reflective = map[string]bool{"MethodByName": true}
 
 // bannedUse names the admission function a node refers to, or "". A reference
 // counts, not only a call: a method value (f := st.AdmitPlacement), a method
 // expression ((*lease.Engine).Grant), a bare identifier (dot import) or the
 // name as a string (reflection) all reach the function the same way.
-func bannedUse(n ast.Node, declName *ast.Ident) string {
+func bannedUse(n ast.Node, declName *ast.Ident, usesReflect bool) string {
 	switch x := n.(type) {
+	case *ast.CallExpr:
+		// Transition(ctx, id, from, to, detail) with to == "leased" creates a leased
+		// attempt with no lease row, reservation or limit check.
+		if sel, ok := x.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Transition" && len(x.Args) > 3 {
+			if lit, ok := x.Args[3].(*ast.BasicLit); ok && lit.Kind == token.STRING && strings.Trim(lit.Value, "\"`") == "leased" {
+				return "Transition(leased)"
+			}
+		}
 	case *ast.SelectorExpr:
-		if banned[x.Sel.Name] || reflective[x.Sel.Name] {
+		if banned[x.Sel.Name] || reflective[x.Sel.Name] || usesReflect && x.Sel.Name == "Method" {
 			return x.Sel.Name
 		}
 	case *ast.Ident:
@@ -87,7 +108,7 @@ func scanChokepoint(t *testing.T, root string) (violations []string, files int) 
 		files++
 		for _, cg := range f.Comments { // //go:linkname reaches a function without naming it in code
 			for _, c := range cg.List {
-				if strings.Contains(c.Text, "go:linkname") && !chokeDirs[dir] {
+				if strings.Contains(c.Text, "go:linkname") {
 					if v := rel + ": comment uses go:linkname"; !seen[v] {
 						seen[v] = true
 						violations = append(violations, v)
@@ -95,16 +116,30 @@ func scanChokepoint(t *testing.T, root string) (violations []string, files int) 
 				}
 			}
 		}
+		usesReflect := false
+		for _, imp := range f.Imports {
+			usesReflect = usesReflect || strings.Trim(imp.Path.Value, "\"`") == "reflect"
+		}
 		for _, decl := range f.Decls {
 			owner, declName := "package level", (*ast.Ident)(nil)
 			if fn, ok := decl.(*ast.FuncDecl); ok {
 				owner, declName = fn.Name.Name, fn.Name
+				if fn.Recv != nil && len(fn.Recv.List) == 1 {
+					recv := ast.Expr(fn.Recv.List[0].Type)
+					if star, ok := recv.(*ast.StarExpr); ok {
+						recv = star.X
+					}
+					if id, ok := recv.(*ast.Ident); ok {
+						owner = "(" + id.Name + ")." + fn.Name.Name
+					}
+				}
 			}
 			ast.Inspect(decl, func(n ast.Node) bool {
-				name := bannedUse(n, declName)
+				name := bannedUse(n, declName, usesReflect)
 				switch {
 				case name == "":
-				case reflective[name], name == "LocalAdmit" && !localFiles[rel], name != "LocalAdmit" && !chokeDirs[dir] && !chokeFuncs[dir+"."+owner]:
+				case name == "Transition(leased)" && definerDirs[dir]:
+				case reflective[name], name == "Method", name == "Transition(leased)", name == "LocalAdmit" && !localFiles[rel], name != "LocalAdmit" && !chokeFuncs[dir+"."+owner]:
 					if v := rel + ": " + owner + " uses " + name; !seen[v] { // a selector and its identifier are two nodes
 						seen[v] = true
 						violations = append(violations, v)
@@ -127,6 +162,8 @@ func TestAdmitChokepoint(t *testing.T) {
 	want := []string{
 		"internal/bad/bad.go: Closure uses AdmitPlacement",
 		"internal/bad/bad.go: Grantor uses Grant",
+		"internal/bad/bad.go: Leased uses Transition(leased)",
+		"internal/bad/bad.go: ReflectIndex uses Method",
 		"internal/bad/bad.go: MethodExpr uses Grant",
 		"internal/bad/bad.go: Reflect2 uses MethodByName",
 		"internal/bad/bad.go: Reflect uses MethodByName",
@@ -134,7 +171,9 @@ func TestAdmitChokepoint(t *testing.T) {
 		"internal/bad/bad.go: Reflect uses AdmitAndLease",
 		"internal/bad/bad.go: Sneak uses AdmitAndLease",
 		"internal/bad/bad.go: ValueAlias uses AdmitPlacement",
+		"internal/run/other.go: (T).CreateAttempt uses AdmitAndLease",
 		"internal/run/other.go: Back uses LocalAdmit",
+		"internal/store/wrapper.go: (Store).Take uses AdmitAndLease",
 		"internal/run/other.go: Value uses LocalAdmit",
 	}
 	sort.Strings(want)

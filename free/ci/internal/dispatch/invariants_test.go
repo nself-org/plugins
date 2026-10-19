@@ -87,6 +87,9 @@ func checkDispatchInvariant(t *testing.T, kind string) {
 			return err
 		}
 		current = w
+		if r.Location == "lan" {
+			registerNode(st, r)
+		}
 		id := queueAttempt(t, st, fmt.Sprintf("inv%d", placedCases), "proj", "job")
 		jq := Job{AttemptID: id, Sched: j}
 		jq.Sched.Key = id
