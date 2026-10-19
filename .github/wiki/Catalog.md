@@ -54,6 +54,36 @@ catalog and counts were not verified.
 
 Exit codes: 0 ok, 1 drift or expired carry, 2 usage or generator failure, 3 precondition missing (no clone, no pinned commit).
 
+## Freshness drill
+
+A nightly drill proves that what `plugins.nself.org` serves is what main holds. It is `scripts/drill/catalog-freshness/run`,
+a `kind: drill` job of the `drills` pipeline in `.nself/ci.yaml` (found by directory, so the pipeline file does not
+change), run every night by `.github/workflows/drills-nightly.yml` as `nself ci --pipeline drills`. The worker KV once sat
+stale for months without anyone knowing (D-0051); a silent job needs a staleness alert.
+
+| Check | Passes when |
+|---|---|
+| `catalog.etag` | the `ETag` of `/catalog.json` equals the sha256 of the compact `catalog.json` on main |
+| `catalog.body` | the sha256 of the served bytes equals that same digest |
+| `registry.free` | the free plugins and versions in `/registry.json` equal `registry.json` on main |
+| `registry.licensed` | the licensed plugin names in `/registry.json` equal the licensed slugs of `catalog.json` on main |
+| `bundles.members` | the bundles and their members in `/bundles.json` equal the `bundles` map of `catalog.json` on main |
+| `stats.lastSync` | `/stats` carries a `lastSync` under 36 hours old (`MAX_SYNC_AGE_HOURS`) |
+
+"Main" means the committed `catalog.json` and `registry.json`; the Plugin Counts workflow already proves they equal the
+generator output on every push and nightly (`CATALOG_REGEN=1` also runs `scripts/plugin-counts.sh --check` inside the
+drill). A fetch that fails, or a response that cannot be read, fails its check: nothing is skipped silently. The drill
+prints one `ci.evidence` document and exits 1 on any failed check, so it stays red until the worker serves current data.
+
+The pipeline's `max_age` is 36 hours. On a machine that keeps a run store, `nself ci evidence --pipeline drills`
+reports the job `overdue` (exit 10) when its last passing run is older than that. A GitHub runner keeps no store, so
+there a failed or missing nightly run is the alert.
+
+```bash
+bash scripts/drill/catalog-freshness/run --fixtures   # offline self-test: eleven recorded cases, no network
+bash scripts/drill/catalog-freshness/run              # the live drill against plugins.nself.org
+```
+
 ## Counts
 
 `counts.json` keeps its shape (`free`, `pro`, `overlap`, `totals`, `advertised`). `generated_from` replaces the old
