@@ -52,7 +52,7 @@ func TestPythonCommandsPerManager(t *testing.T) {
 	}{
 		{"uv", "uv", []string{"sh", "-c", "uv sync --frozen && uv run pytest"}},
 		{"poetry", "poetry", []string{"sh", "-c", "poetry install --no-root --sync && poetry run pytest"}},
-		{"pip", "python3", []string{"sh", "-c", pipScript + "-m pytest", "sh", "requirements-dev.txt", "requirements.txt"}},
+		{"pip", "python3", []string{"sh", "-c", pipScript + pipRun + "-m pytest", "sh", "requirements-dev.txt", "requirements.txt"}},
 	}
 	for _, c := range cases {
 		t.Run(c.fixture, func(t *testing.T) {
@@ -86,7 +86,7 @@ func TestPythonAdvisoryUntilConfiguredOrStrict(t *testing.T) {
 // TestPipRequirementsAreArguments: requirement file names reach the shell as
 // positional parameters, never inside the script text.
 func TestPipRequirementsAreArguments(t *testing.T) {
-	argv := pipCommand("-m pytest", []string{"requirements.txt; touch pwned", "-r evil.txt"})
+	argv := pipCommand("-m pytest", []string{"requirements.txt; touch pwned", "-r evil.txt"}, true)
 	if strings.Contains(argv[2], "pwned") || strings.Contains(argv[2], "evil") {
 		t.Fatalf("a file name entered the script: %q", argv[2])
 	}
@@ -103,6 +103,7 @@ func TestPytestMissingMarkers(t *testing.T) {
 		"/usr/bin/python: No module named pytest": true,
 		"error: Failed to spawn: `pytest`":        true,
 		"sh: pytest: command not found":           true,
+		"Command not found: pytest":               true,
 		"1 failed, 2 passed":                      false,
 		"AssertionError":                          false,
 	} {
@@ -171,5 +172,88 @@ func TestPythonIndexIgnoresUncertainFacts(t *testing.T) {
 		if strings.HasPrefix(p.Def.ID, "python-") {
 			t.Fatalf("planned from an unknown manifest: %+v", p)
 		}
+	}
+}
+
+// pyPlan plans checks from hand-written facts (certain, as the detector emits them).
+func pyPlan(facts ...[3]string) []PlannedCheck {
+	var fs []detect.Fact
+	for _, f := range facts {
+		fs = append(fs, detect.Fact{Kind: f[0], Name: f[1], Path: f[2], Confidence: detect.Certain})
+	}
+	return DefaultRegistry().Plan(fs, Options{})
+}
+
+// TestPytestEvidenceBelongsToTheNearestProject: config or tests found below a
+// directory named tests (or any ancestor) plan python-test for the project
+// that holds them, not for a guessed parent.
+func TestPytestEvidenceBelongsToTheNearestProject(t *testing.T) {
+	got := find(pyPlan(
+		[3]string{"stack", "python", "libs/tests/pkg/pyproject.toml"},
+		[3]string{"package_manager", "pip", "libs/tests/pkg/pyproject.toml"},
+		[3]string{"test_framework", "pytest", "libs/tests/pkg/pytest.ini"},
+	), "python-test")
+	if len(got) != 1 || got[0].Workdir != "libs/tests/pkg" {
+		t.Fatalf("python-test must be planned in libs/tests/pkg: %+v", got)
+	}
+	got = find(pyPlan(
+		[3]string{"stack", "python", "pyproject.toml"},
+		[3]string{"package_manager", "pip", "pyproject.toml"},
+		[3]string{"stack", "python", "svc/pyproject.toml"},
+		[3]string{"package_manager", "pip", "svc/pyproject.toml"},
+		[3]string{"test_framework", "pytest", "svc/tests/test_a.py"},
+	), "python-test")
+	if len(got) != 1 || got[0].Workdir != "svc" {
+		t.Fatalf("tests under svc/ belong to svc, not the root project: %+v", got)
+	}
+}
+
+// TestPipInstallsTheProjectItself: a pyproject.toml, setup.cfg or setup.py
+// project is installed editable after its requirements; a requirements-only
+// directory is not.
+func TestPipInstallsTheProjectItself(t *testing.T) {
+	cmd := func(manifest string) string {
+		p := find(pyPlan(
+			[3]string{"stack", "python", manifest},
+			[3]string{"package_manager", "pip", manifest},
+			[3]string{"lockfile", "pip", "requirements-dev.txt"},
+			[3]string{"test_framework", "pytest", "tests/test_a.py"},
+		), "python-test")
+		if len(p) != 1 {
+			t.Fatalf("want one python-test for %s, got %d", manifest, len(p))
+		}
+		return p[0].Command()[2]
+	}
+	for _, m := range []string{"pyproject.toml", "setup.cfg", "setup.py"} {
+		if !strings.Contains(cmd(m), "pip install --quiet -e .") {
+			t.Errorf("%s project must be installed editable", m)
+		}
+	}
+	if strings.Contains(cmd("requirements.txt"), "-e .") {
+		t.Error("a requirements-only directory must not install itself")
+	}
+}
+
+func TestSwiftTestOnlyWithTests(t *testing.T) {
+	noTests := pyPlan([3]string{"stack", "swiftpm", "Package.swift"})
+	if len(find(noTests, "swift-build")) != 1 || len(find(noTests, "swift-test")) != 0 {
+		t.Fatalf("a package without tests plans swift-build only: %+v", noTests)
+	}
+	withTests := pyPlan([3]string{"stack", "swiftpm", "Package.swift"}, [3]string{"test_framework", "swift test", "Package.swift"})
+	if len(find(withTests, "swift-test")) != 1 {
+		t.Fatalf("a package with tests plans swift-test: %+v", withTests)
+	}
+}
+
+// TestXcodeSchemeLessContainerStillDisambiguates: a project with a shared
+// scheme next to a workspace without one needs -project, or xcodebuild sees two.
+func TestXcodeSchemeLessContainerStillDisambiguates(t *testing.T) {
+	got := find(pyPlan(
+		[3]string{"stack", "xcode", "App.xcodeproj/project.pbxproj"},
+		[3]string{"xcode_scheme", "App", "App.xcodeproj/xcshareddata/xcschemes/App.xcscheme"},
+		[3]string{"stack", "xcode", "App.xcworkspace/contents.xcworkspacedata"},
+	), "xcode-test")
+	if len(got) != 1 || got[0].Command()[2] != "-project" {
+		t.Fatalf("want xcodebuild test -project App.xcodeproj ...: %+v", got)
 	}
 }

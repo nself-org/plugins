@@ -18,7 +18,7 @@
     "argv": [
       "sh",
       "-c",
-      "set -e\n[ -d .venv ] || python3 -m venv .venv\nif [ \"$#\" -eq 0 ]; then .venv/bin/python -m pip install --quiet -e .; fi\nfor f in \"$@\"; do .venv/bin/python -m pip install --quiet -r \"$f\"; done\nexec .venv/bin/python -m pytest",
+      "set -e\n[ -d .venv ] || python3 -m venv .venv\nfor f in \"$@\"; do .venv/bin/python -m pip install --quiet -r \"$f\"; done\nexec .venv/bin/python -m pytest",
       "sh",
       "requirements-dev.txt",
       "requirements.txt"

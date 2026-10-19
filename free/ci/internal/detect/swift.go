@@ -7,10 +7,11 @@ package detect
 // under `xcshareddata/xcschemes`. Project files are never parsed: a scheme is
 // named by its file name, exactly as xcodebuild names it.
 // Outputs: stack swiftpm (Path = Package.swift) with test_framework
-// `swift test`; stack xcode (Path = the container's evidence file) with one
+// `swift test` when the package has a test target or a Tests/ directory; stack xcode (Path = the container's evidence file) with one
 // xcode_scheme fact per shared scheme (Name = scheme, Path = the .xcscheme
 // file). Package.resolved is digested by the lockfiles detector.
-// Constraints: pure over the snapshot; an Xcode container without a shared
+// Constraints: pure over the snapshot; the workspace SwiftPM keeps under
+// `.swiftpm/` is not an Xcode container; an Xcode container without a shared
 // scheme is an unknown manifest (the user must share a scheme), never a guess.
 
 import (
@@ -31,9 +32,27 @@ func detectSwift(s Snapshot) []Fact {
 			out = append(out, unknown("manifest", p, "invalid Package.swift: no swift-tools-version line or Package(...) declaration"))
 			continue
 		}
-		out = append(out, fact("stack", "swiftpm", p), fact("test_framework", "swift test", p))
+		out = append(out, fact("stack", "swiftpm", p))
+		if hasSwiftTests(s, p, string(b)) {
+			out = append(out, fact("test_framework", "swift test", p))
+		}
 	}
 	return append(out, detectXcode(s)...)
+}
+
+// hasSwiftTests reports whether the package declares a test target or has a
+// Tests/ directory: `swift test` fails on a package with nothing to run.
+func hasSwiftTests(s Snapshot, manifest, text string) bool {
+	if strings.Contains(text, ".testTarget(") {
+		return true
+	}
+	prefix := path.Join(path.Dir(manifest), "Tests") + "/"
+	for p := range s.files {
+		if strings.HasPrefix(p, prefix) && strings.HasSuffix(p, ".swift") {
+			return true
+		}
+	}
+	return false
 }
 
 func validSwiftPackage(b []byte) bool {
@@ -54,7 +73,7 @@ func detectXcode(s Snapshot) []Fact {
 	for _, p := range s.Paths("contents.xcworkspacedata") {
 		dir := path.Dir(p)
 		// The workspace embedded in every project (`X.xcodeproj/project.xcworkspace`) is not a container of its own.
-		if strings.HasSuffix(dir, ".xcworkspace") && !strings.Contains(dir, ".xcodeproj/") {
+		if strings.HasSuffix(dir, ".xcworkspace") && !strings.Contains(dir, ".xcodeproj/") && !strings.Contains("/"+dir, "/.swiftpm/") {
 			boxes = append(boxes, xcodeContainer{dir, p})
 		}
 	}

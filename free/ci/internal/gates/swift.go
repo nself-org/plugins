@@ -33,6 +33,17 @@ func swiftDefs() []CheckDef {
 	}
 }
 
+// swiftTestIndex lists the Package.swift paths whose package has tests to run.
+func swiftTestIndex(facts []detect.Fact) map[string]bool {
+	out := map[string]bool{}
+	for _, f := range facts {
+		if f.Kind == "test_framework" && f.Name == "swift test" && f.Confidence == detect.Certain {
+			out[f.Path] = true
+		}
+	}
+	return out
+}
+
 // xcodeSchemes answers, per scheme, which container xcodebuild must name.
 type xcodeSchemes struct {
 	containers  map[string]map[string]bool // workdir -> container dirs
@@ -41,18 +52,26 @@ type xcodeSchemes struct {
 
 func xcodeIndex(facts []detect.Fact) xcodeSchemes {
 	x := xcodeSchemes{containers: map[string]map[string]bool{}, inWorkspace: map[string]bool{}}
-	for _, f := range facts {
-		if f.Kind != "xcode_scheme" || f.Confidence != detect.Certain {
-			continue
-		}
-		container := xcodeContainerOf(f.Path)
+	known := func(container string) {
 		work := path.Dir(container)
 		if x.containers[work] == nil {
 			x.containers[work] = map[string]bool{}
 		}
 		x.containers[work][container] = true
-		if strings.HasSuffix(container, ".xcworkspace") {
-			x.inWorkspace[work+"\x00"+f.Name] = true
+	}
+	for _, f := range facts {
+		if f.Confidence != detect.Certain {
+			continue
+		}
+		switch {
+		case f.Kind == "stack" && f.Name == "xcode":
+			known(path.Dir(f.Path)) // every container counts, shared schemes or not
+		case f.Kind == "xcode_scheme":
+			container := xcodeContainerOf(f.Path)
+			known(container)
+			if strings.HasSuffix(container, ".xcworkspace") {
+				x.inWorkspace[path.Dir(container)+"\x00"+f.Name] = true
+			}
 		}
 	}
 	return x

@@ -129,6 +129,32 @@ func TestSwiftEdgeCases(t *testing.T) {
 				}
 			}
 		}},
+		{"package without tests has no test framework", fstest.MapFS{
+			"Package.swift":     file("// swift-tools-version:5.9\nlet package = Package(name: \"X\")\n"),
+			"Sources/X/X.swift": file("public let x = 1\n"),
+		}, func(t *testing.T, facts []Fact) {
+			if !has(facts, "stack", "swiftpm", "Package.swift") || has(facts, "test_framework", "swift test", "Package.swift") {
+				t.Fatalf("swiftpm without tests: %+v", facts)
+			}
+		}},
+		{"package with a Tests directory has tests", fstest.MapFS{
+			"Package.swift":             file("// swift-tools-version:5.9\n"),
+			"Tests/XTests/XTests.swift": file("import XCTest\n"),
+		}, func(t *testing.T, facts []Fact) {
+			if !has(facts, "test_framework", "swift test", "Package.swift") {
+				t.Fatalf("Tests/ directory not seen: %+v", facts)
+			}
+		}},
+		{"SwiftPM's own workspace is not an Xcode container", fstest.MapFS{
+			"Package.swift": file("// swift-tools-version:5.9\n"),
+			".swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata": file("x"),
+		}, func(t *testing.T, facts []Fact) {
+			for _, f := range facts {
+				if f.Name == "xcode" || f.Kind == "manifest" {
+					t.Fatalf("SwiftPM workspace taken for an Xcode container: %+v", f)
+				}
+			}
+		}},
 		{"scheme file names a scheme, nested files do not", fstest.MapFS{
 			"App.xcodeproj/project.pbxproj":                           file("x"),
 			"App.xcodeproj/xcshareddata/xcschemes/Two Words.xcscheme": file("x"),

@@ -31,10 +31,11 @@ func pythonDefs() []CheckDef {
 	}
 }
 
-// pythonDir is what the detector found in one directory.
+// pythonDir is what the detector found in one project directory.
 type pythonDir struct {
 	manager      string
 	pytest, mypy bool
+	project      bool // the primary manifest describes an installable project
 	requirements []string
 }
 
@@ -42,27 +43,30 @@ type pythonFacts map[string]*pythonDir
 
 func pythonIndex(facts []detect.Fact) pythonFacts {
 	idx := pythonFacts{}
-	at := func(dir string) *pythonDir {
-		if idx[dir] == nil {
-			idx[dir] = &pythonDir{manager: "pip"}
+	for _, f := range facts {
+		if f.Kind == "stack" && f.Name == "python" && f.Confidence == detect.Certain {
+			base := path.Base(f.Path)
+			idx[path.Dir(f.Path)] = &pythonDir{manager: "pip", project: base == "pyproject.toml" || base == "setup.cfg" || base == "setup.py"}
 		}
-		return idx[dir]
 	}
 	for _, f := range facts {
 		if f.Confidence != detect.Certain {
 			continue
 		}
-		dir := path.Dir(f.Path)
+		// Evidence may sit below the project (a file under tests/): it belongs
+		// to the nearest project directory that holds it.
+		d := idx[nearestProject(idx, path.Dir(f.Path))]
+		if d == nil {
+			continue
+		}
 		switch {
 		case f.Kind == "package_manager" && (f.Name == "uv" || f.Name == "poetry" || f.Name == "pip"):
-			at(dir).manager = f.Name
+			d.manager = f.Name
 		case f.Kind == "test_framework" && f.Name == "pytest":
-			// A tests/ directory file is evidence below the project directory.
-			at(pythonProjectDir(f.Path)).pytest = true
+			d.pytest = true
 		case f.Kind == "type_checker" && f.Name == "mypy":
-			at(dir).mypy = true
-		case f.Kind == "lockfile" && f.Name == "pip":
-			d := at(dir)
+			d.mypy = true
+		case f.Kind == "lockfile" && f.Name == "pip" && path.Dir(f.Path) == nearestProject(idx, path.Dir(f.Path)):
 			d.requirements = append(d.requirements, path.Base(f.Path))
 		}
 	}
@@ -72,16 +76,16 @@ func pythonIndex(facts []detect.Fact) pythonFacts {
 	return idx
 }
 
-// pythonProjectDir maps pytest evidence to its project directory: a file
-// below a tests/ directory belongs to the directory holding tests/.
-func pythonProjectDir(evidence string) string {
-	dir := path.Dir(evidence)
-	for d := dir; d != "." && d != "/"; d = path.Dir(d) {
-		if path.Base(d) == "tests" {
-			return path.Dir(d)
+// nearestProject returns the deepest project directory that is dir or one of its ancestors.
+func nearestProject(idx pythonFacts, dir string) string {
+	for d := dir; ; d = path.Dir(d) {
+		if _, ok := idx[d]; ok {
+			return d
+		}
+		if d == "." || d == "/" {
+			return ""
 		}
 	}
-	return dir
 }
 
 // plan adds the Python checks of one project directory.
@@ -109,28 +113,38 @@ func (d *pythonDir) command(run, module string) func(*PlannedCheck) {
 		case "poetry":
 			p.Tool, p.Argv = "poetry", []string{"sh", "-c", "poetry install --no-root --sync && poetry run " + run}
 		default:
-			p.Tool, p.Argv = "python3", pipCommand(module, d.requirements)
+			p.Tool, p.Argv = "python3", pipCommand(module, d.requirements, d.project)
 		}
 	}
 }
 
-// pipScript creates the venv, installs, then runs the module. With no
-// requirements file the project itself is installed (editable).
+// pipScript creates the venv, then installs each requirements file (the
+// positional arguments), then runs the module.
 const pipScript = `set -e
 [ -d .venv ] || python3 -m venv .venv
-if [ "$#" -eq 0 ]; then .venv/bin/python -m pip install --quiet -e .; fi
 for f in "$@"; do .venv/bin/python -m pip install --quiet -r "$f"; done
-exec .venv/bin/python `
+`
 
-func pipCommand(module string, requirements []string) []string {
-	argv := []string{"sh", "-c", pipScript + module, "sh"}
+// pipProject installs the project itself (editable) when its manifest is
+// pyproject.toml, setup.cfg or setup.py, so a src-layout package imports.
+const pipProject = `.venv/bin/python -m pip install --quiet -e .
+`
+
+const pipRun = `exec .venv/bin/python `
+
+func pipCommand(module string, requirements []string, project bool) []string {
+	script := pipScript
+	if project {
+		script += pipProject
+	}
+	argv := []string{"sh", "-c", script + pipRun + module, "sh"}
 	return append(argv, requirements...)
 }
 
 // pytestMissing reports output that shows pytest itself is not installed
 // (not a failing test): the check is an unavailable tool, never a pass.
 func pytestMissing(output string) bool {
-	for _, marker := range []string{"No module named pytest", "Failed to spawn: `pytest`", "pytest: command not found", "poetry run pytest: command not found"} {
+	for _, marker := range []string{"No module named pytest", "Failed to spawn: `pytest`", "pytest: command not found", "Command not found: pytest"} {
 		if strings.Contains(output, marker) {
 			return true
 		}

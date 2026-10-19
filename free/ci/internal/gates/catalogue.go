@@ -111,7 +111,7 @@ func (r *Registry) Plan(facts []detect.Fact, o Options) []PlannedCheck {
 		}
 		out = append(out, pc)
 	}
-	py, xc := pythonIndex(facts), xcodeIndex(facts)
+	py, xc, swiftTests := pythonIndex(facts), xcodeIndex(facts), swiftTestIndex(facts)
 	for _, f := range facts {
 		if f.Confidence != detect.Certain {
 			continue
@@ -140,7 +140,9 @@ func (r *Registry) Plan(facts []detect.Fact, o Options) []PlannedCheck {
 			add("rust.test", dir, "")
 		case f.Kind == "stack" && f.Name == "swiftpm":
 			add("swift-build", dir, "")
-			add("swift-test", dir, "")
+			if swiftTests[f.Path] {
+				add("swift-test", dir, "")
+			}
 		case f.Kind == "xcode_scheme":
 			xc.plan(f, add)
 		case f.Kind == "stack" && f.Name == "python":
