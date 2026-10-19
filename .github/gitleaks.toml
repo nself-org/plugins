@@ -24,6 +24,9 @@ paths = [
   # Redactor unit tests (P7-TRUST-19): synthetic key/token shapes fed to the redactor to prove
   # they are masked. Test files only; no production source is exempted.
   '''free/ci/internal/redact/.*_test\.go$''',
+  # Ad-hoc job argv redaction test (P7-CI-52 / D-1020): planted fake passwords, keys and tokens that the
+  # test feeds through the argv scrubber to prove they are masked. One test file; no production source.
+  '''free/ci/internal/adhoc/argv_test\.go$''',
   # Vendored third-party source trees of free plugins (cargo/go vendor): generated tables and
   # test vectors trip generic-api-key. They are copies of upstream code, never our secrets.
   '''^free/[^/]+/vendor/''',
