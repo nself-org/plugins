@@ -161,12 +161,7 @@ func (s *Store) AdmitAndLease(ctx context.Context, host string, d Demand, steps 
 			ttl = s.ttl
 		}
 		now := s.now().UnixNano()
-		_, err := tx.ExecContext(ctx, "INSERT INTO lease(id,attempt_id,host,runner_id,expires_at,heartbeat_at,token_digest) VALUES (?,?,?,?,?,?,?)", d.LeaseID, d.AttemptID, host, d.RunnerID, now+int64(ttl), now, d.TokenDigest)
-		if err != nil {
-			return err
-		}
-		_, err = tx.ExecContext(ctx, "INSERT INTO host_reservation(host,lease_id,cpu,mem_mb) VALUES (?,?,?,?)", host, d.LeaseID, d.CPU, d.MemMB)
-		return err
+		return insertLease(ctx, tx, host, d, 0, ttl, now)
 	})
 }
 
