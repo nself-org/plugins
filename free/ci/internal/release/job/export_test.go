@@ -11,3 +11,10 @@ func SetTiming(every, age time.Duration) (restore func()) {
 	refreshEvery, maxAge = every, age
 	return func() { refreshEvery, maxAge = oe, oa }
 }
+
+// SetClock replaces the stash's clock.
+func SetClock(f func() time.Time) (restore func()) {
+	old := now
+	now = f
+	return func() { now = old }
+}

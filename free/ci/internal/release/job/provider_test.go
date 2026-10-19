@@ -305,3 +305,95 @@ func TestGuardJudgesFirstSubmitsThenForgets(t *testing.T) {
 		t.Fatal("a provider failure must fail fast")
 	}
 }
+
+// TestFactsExpireAfterExactlyMaxAge: older than maxAge refuses, exactly maxAge does not.
+func TestFactsExpireAfterExactlyMaxAge(t *testing.T) {
+	defer job.SetTiming(time.Hour, 10*time.Second)()
+	t0 := time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
+	var mu sync.Mutex
+	clock := t0
+	defer job.SetClock(func() time.Time { mu.Lock(); defer mu.Unlock(); return clock })()
+	setClock := func(d time.Duration) { mu.Lock(); clock = t0.Add(d); mu.Unlock() }
+	f := newRun(t, passed())
+	st := job.NewStash()
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = st.Guard(context.Background(), "a1", f.provide(t), func() error { <-release; return nil })
+	}()
+	await(t, "the attempt to queue", func() bool { _, _, ok := st.ReleaseFacts("a1"); return ok })
+	setClock(10 * time.Second)
+	if _, perr, _ := st.ReleaseFacts("a1"); perr != nil {
+		t.Fatalf("facts exactly maxAge old expired: %v", perr)
+	}
+	setClock(10*time.Second + time.Nanosecond)
+	_, perr, ok := st.ReleaseFacts("a1")
+	if !ok || perr == nil || perr.Reason != job.FactsExpired || !strings.Contains(perr.Message, "10s ago") {
+		t.Fatalf("facts older than maxAge: %v", perr)
+	}
+	close(release)
+	wg.Wait()
+}
+
+// TestGuardRefusesASecondSubmissionOfOneAttempt: the second submission fails
+// without touching the first one's facts.
+func TestGuardRefusesASecondSubmissionOfOneAttempt(t *testing.T) {
+	f := newRun(t, passed())
+	st := job.NewStash()
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = st.Guard(context.Background(), "a1", f.provide(t), func() error { <-release; return nil })
+	}()
+	await(t, "the attempt to queue", func() bool { _, _, ok := st.ReleaseFacts("a1"); return ok })
+	ran := false
+	err := st.Guard(context.Background(), "a1", f.provide(t), func() error { ran = true; return nil })
+	var je *job.Error
+	if !errors.As(err, &je) || je.Reason != job.Duplicate || ran {
+		t.Fatalf("second submission: %v (ran %v)", err, ran)
+	}
+	if _, _, ok := st.ReleaseFacts("a1"); !ok {
+		t.Fatal("the loser's failure deleted the first submission's facts")
+	}
+	close(release)
+	wg.Wait()
+	if _, _, ok := st.ReleaseFacts("a1"); ok {
+		t.Fatal("the facts outlived the submission")
+	}
+}
+
+// TestSlowProviderCallsDoNotFreshenOldObservations: the age counts from when the
+// provider was asked.
+func TestSlowProviderCallsDoNotFreshenOldObservations(t *testing.T) {
+	defer job.SetTiming(5*time.Millisecond, 10*time.Second)()
+	t0 := time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
+	var mu sync.Mutex
+	clock := t0
+	defer job.SetClock(func() time.Time { mu.Lock(); defer mu.Unlock(); return clock })()
+	f := newRun(t, passed())
+	f.gather.Inputs = func(context.Context, string, string) (model.InputDigests, model.InputDigests, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		clock = clock.Add(time.Minute) // the digester is slow: the clock jumps while it runs
+		return f.bound, f.now, nil
+	}
+	st := job.NewStash()
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = st.Guard(context.Background(), "a1", f.provide(t), func() error { <-release; return nil })
+	}()
+	await(t, "the attempt to queue", func() bool { _, _, ok := st.ReleaseFacts("a1"); return ok })
+	await(t, "an expired observation", func() bool {
+		_, perr, _ := st.ReleaseFacts("a1")
+		return perr != nil && perr.Reason == job.FactsExpired
+	})
+	close(release)
+	wg.Wait()
+}

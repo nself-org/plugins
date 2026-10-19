@@ -102,10 +102,10 @@ func Step(src Source) dispatch.Step {
 			return nil
 		}
 		e := perr
-		switch {
-		case !v.Request.Local:
+		if !v.Request.Local {
 			e = refuse(CodeNotAdmitted, RemotePlacement, "a release job runs only on the machine that runs the pipeline")
-		case e == nil:
+		}
+		if e == nil {
 			e = Evaluate(f)
 		}
 		if e != nil {

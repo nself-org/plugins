@@ -20,8 +20,8 @@ import (
 
 // Timing of the refresher (vars so tests can shrink them).
 var (
-	refreshEvery = 500 * time.Millisecond
-	maxAge       = 10 * time.Second
+	refreshEvery = time.Duration(5e8)  // 500 ms
+	maxAge       = time.Duration(1e10) // 10 s
 	now          = time.Now
 )
 
@@ -69,12 +69,14 @@ func (s *Stash) ReleaseFacts(attemptID string) (Facts, *Error, bool) {
 	return e.f, e.perr, true
 }
 
-// update replaces the facts of a live entry that still exists.
-func (s *Stash) update(attemptID string, f Facts, perr *Error) {
+// update replaces the facts of the live entry e if it is still the attempt's.
+// at is the time the provider was asked, not answered: a slow digester does
+// not make an old observation look fresh.
+func (s *Stash) update(attemptID string, e *entry, f Facts, perr *Error, at time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if e, ok := s.m[attemptID]; ok && e.live {
-		e.f, e.perr, e.at = f, perr, now()
+	if s.m[attemptID] == e {
+		e.f, e.perr, e.at = f, perr, at
 	}
 }
 
@@ -84,6 +86,13 @@ func (s *Stash) update(attemptID string, f Facts, perr *Error) {
 // admitted, and the admission step judges the latest answer on every try), and
 // forgets it when next returns.
 func (s *Stash) Guard(ctx context.Context, attemptID string, p Provider, next func() error) error {
+	s.mu.Lock()
+	_, busy := s.m[attemptID]
+	s.mu.Unlock()
+	if busy { // two submissions of one attempt would share, and one would delete, the other's facts
+		return refuse(CodeNotAdmitted, Duplicate, "attempt %s is already being submitted", attemptID)
+	}
+	asked := now()
 	f, perr := p(ctx)
 	if perr != nil {
 		return perr
@@ -91,8 +100,13 @@ func (s *Stash) Guard(ctx context.Context, attemptID string, p Provider, next fu
 	if e := Evaluate(f); e != nil {
 		return e
 	}
+	own := &entry{f: f, at: asked, live: true}
 	s.mu.Lock()
-	s.m[attemptID] = &entry{f: f, at: now(), live: true}
+	if _, busy = s.m[attemptID]; busy {
+		s.mu.Unlock()
+		return refuse(CodeNotAdmitted, Duplicate, "attempt %s is already being submitted", attemptID)
+	}
+	s.m[attemptID] = own
 	s.mu.Unlock()
 	rctx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
@@ -105,9 +119,10 @@ func (s *Stash) Guard(ctx context.Context, attemptID string, p Provider, next fu
 			case <-rctx.Done():
 				return
 			case <-t.C:
+				asked := now()
 				nf, nerr := p(rctx)
 				if rctx.Err() == nil {
-					s.update(attemptID, nf, nerr)
+					s.update(attemptID, own, nf, nerr, asked)
 				}
 			}
 		}
@@ -115,7 +130,11 @@ func (s *Stash) Guard(ctx context.Context, attemptID string, p Provider, next fu
 	defer func() {
 		cancel()
 		<-done
-		s.Forget(attemptID)
+		s.mu.Lock()
+		if s.m[attemptID] == own {
+			delete(s.m, attemptID)
+		}
+		s.mu.Unlock()
 	}()
 	return next()
 }

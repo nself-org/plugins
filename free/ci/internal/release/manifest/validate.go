@@ -142,11 +142,23 @@ func validateArtifacts(list []Artifact) error {
 		}
 		seen[folded] = true
 	}
-	// a name that is a directory of another (a and a/b) cannot both exist in the release directory
-	for name := range seen {
-		for i := 0; i < len(name); i++ {
-			if name[i] == '/' && seen[name[:i]] {
-				return invalid("artifact %q is both a file and a directory of %q", name[:i], name)
+	return checkLayout(list)
+}
+
+// checkLayout refuses a release directory that cannot exist: a path that is a
+// file and also a directory of another path (artifacts/a and artifacts/a/b, or
+// sbom/a.cdx.json for artifact a and for the directory of artifact a.cdx.json/b).
+func checkLayout(list []Artifact) error {
+	paths := map[string]bool{}
+	for _, a := range list {
+		for _, p := range []string{a.Path, a.SBOM.CycloneDX.Path, a.SBOM.SPDX.Path} {
+			paths[strings.ToLower(p)] = true
+		}
+	}
+	for p := range paths {
+		for i := 0; i < len(p); i++ {
+			if p[i] == '/' && paths[p[:i]] {
+				return invalid("%q is both a file and a directory of %q in the release directory", p[:i], p)
 			}
 		}
 	}

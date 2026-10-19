@@ -200,6 +200,14 @@ func TestValidationRules(t *testing.T) {
 		"key id bidi":        func(m *manifest.Manifest) { m.Signing.KeyID = "ci-release-0123456789abcde\u202e" },
 		"image ref spoof":    func(m *manifest.Manifest) { m.Artifacts[1].Image.Ref = "ghcr.io/e\u0430xample/nself:1" },
 		"image ref space":    func(m *manifest.Manifest) { m.Artifacts[1].Image.Ref = "ghcr.io/example/nself 1" },
+		"sbom file and directory": func(m *manifest.Manifest) {
+			m.Artifacts[0].Name = "a" // sbom/a.cdx.json
+			m.Artifacts[0].Path = "artifacts/a"
+			m.Artifacts[0].SBOM = sbomFor("a", "3")
+			m.Artifacts[1].Name = "a.cdx.json/b" // sbom/a.cdx.json/b.cdx.json
+			m.Artifacts[1].Path = "artifacts/a.cdx.json/b"
+			m.Artifacts[1].SBOM = sbomFor("a.cdx.json/b", "8")
+		},
 		"file and directory": func(m *manifest.Manifest) {
 			m.Artifacts[0].Name = "image" // image/nself is the other artifact
 			m.Artifacts[0].Path = "artifacts/image"
