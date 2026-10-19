@@ -171,9 +171,10 @@ func Build(ctx context.Context, d Deps, pipeline sched.Pipeline) (sched.World, s
 	// No identity is stored on attempts yet. Global active work is a proven upper bound
 	// for any user's or team's work, so their limits can only fail closed.
 	w.Counts.User, w.Counts.Team = w.Counts.Global, w.Counts.Global
-	if snapshot.Queued[snapshot.Projects[pipeline.ID]] > 0 {
-		// Queued attempts carry no priority band yet. Treat them as interactive
-		// for every runner, a conservative bound for background admission.
+	if snapshot.QueuedInteractive[snapshot.Projects[pipeline.ID]] > 0 {
+		// Only queued interactive work (or work with no recorded band) holds background back;
+		// queued normal and background attempts, the job being placed included, do not (D-1265).
+		// Which runner it waits for is not recorded, so every runner counts: a conservative bound.
 		for _, r := range w.Runners {
 			w.InteractiveQueued[r.ID] = true
 		}

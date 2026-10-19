@@ -210,7 +210,7 @@ func (s *Store) LeaseFail(ctx context.Context, l RemoteLease, now time.Time, rea
 		if coordinatorID != "" {
 			coordinator = coordinatorID
 		}
-		_, err = tx.ExecContext(ctx, "INSERT INTO attempt(id,job_id,n,coordinator_id,state,previous_runner_id) VALUES (?,?,?,?,?,?)", fmt.Sprintf("%s-retry-%d", l.AttemptID, n+1), jobID, n+1, coordinator, "queued", runner)
+		_, err = tx.ExecContext(ctx, "INSERT INTO attempt(id,job_id,n,coordinator_id,state,previous_runner_id,band) VALUES (?,?,?,?,?,?,(SELECT band FROM attempt WHERE id=?))", fmt.Sprintf("%s-retry-%d", l.AttemptID, n+1), jobID, n+1, coordinator, "queued", runner, l.AttemptID)
 		return err
 	})
 }

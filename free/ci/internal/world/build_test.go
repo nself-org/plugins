@@ -464,3 +464,45 @@ func TestWorldBuildForLocalStripsTheReservedLabel(t *testing.T) {
 		}
 	}
 }
+
+// TestWorldInteractiveQueuedIgnoresBackgroundWork (D-1265): the band of a queued
+// attempt decides InteractiveQueued, so a lone background job never marks every
+// runner as busy with interactive work (which would keep it from ever placing),
+// while QueuedAhead still counts it.
+func TestWorldInteractiveQueuedIgnoresBackgroundWork(t *testing.T) {
+	d, p := worldFixture(t)
+	ctx := context.Background()
+	queue := func(id, band string) {
+		t.Helper()
+		if err := d.Store.CreateJob(ctx, store.JobRow{ID: "job-" + id, PipelineID: p.ID, Name: id, Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := d.Store.CreateAttempt(ctx, store.AttemptRow{ID: id, JobID: "job-" + id, N: 1}, ""); err != nil {
+			t.Fatal(err)
+		}
+		if band != "" {
+			if err := d.Store.SetAttemptBand(ctx, id, band); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	queue("bg", "background")
+	w, _, err := Build(ctx, d, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range w.Runners {
+		if w.InteractiveQueued[r.ID] || r.QueuedAhead != 1 {
+			t.Fatalf("runner %s: a queued background attempt is not interactive work (interactive %v, ahead %d)", r.ID, w.InteractiveQueued[r.ID], r.QueuedAhead)
+		}
+	}
+	queue("fg", "interactive")
+	if w, _, err = Build(ctx, d, p); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range w.Runners {
+		if !w.InteractiveQueued[r.ID] || r.QueuedAhead != 2 {
+			t.Fatalf("runner %s: a queued interactive attempt must mark it (interactive %v, ahead %d)", r.ID, w.InteractiveQueued[r.ID], r.QueuedAhead)
+		}
+	}
+}

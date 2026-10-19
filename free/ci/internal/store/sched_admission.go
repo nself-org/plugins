@@ -245,6 +245,15 @@ func (s *Store) SetPreviousRunner(ctx context.Context, attemptID, runnerID strin
 	})
 }
 
+// SetAttemptBand records the priority band (interactive, normal or background) a queued attempt
+// waits in, so the world can tell queued interactive work from queued background work (D-1265).
+func (s *Store) SetAttemptBand(ctx context.Context, attemptID, band string) error {
+	return s.write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "UPDATE attempt SET band=? WHERE id=? AND state='queued'", band, attemptID)
+		return err
+	})
+}
+
 // AppendAudit adds an audit row to the admission transaction: the row commits
 // with the lease or not at all (D-1249).
 func (v AdmitView) AppendAudit(ctx context.Context, actor, action, target, detail string) error {

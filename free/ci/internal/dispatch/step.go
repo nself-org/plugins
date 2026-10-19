@@ -68,6 +68,14 @@ func RegisterStep(name string, s Step) error {
 	return nil
 }
 
+// HasStep reports whether an admission step is registered under name.
+func HasStep(name string) bool {
+	stepMu.Lock()
+	defer stepMu.Unlock()
+	_, ok := steps[name]
+	return ok
+}
+
 // seal fixes the registry and returns the steps in name order.
 func seal() []namedStep {
 	stepMu.Lock()

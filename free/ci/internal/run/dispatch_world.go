@@ -31,9 +31,10 @@ func platform() string { return runtime.GOOS + "/" + runtime.GOARCH }
 // attemptBand is the priority band of an attempt: the band it declares, else the
 // one its run's trigger gives (fairq.For). Every live attempt is built with
 // Foreground set (the coordinator waits for it), so the flag says nothing about
-// the run and is not used. Background is held back to normal until P7-SCHED-12
-// can place background work: a background job today meets the interactive-
-// queued and operator-idle rules of sched for its own attempt and would never run.
+// the run and is not used. Background is still held back to normal (D-1265):
+// sched refuses a background job on a runner whose interactive state it cannot
+// observe, and the local machine and the operator-owned nodes report none yet,
+// so a background attempt would wait for ever. Lift it with the activity source.
 func attemptBand(declared, trigger string) string {
 	b := fairq.For(declared, trigger, false)
 	if b == fairq.Background {

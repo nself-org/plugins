@@ -132,6 +132,9 @@ func checkImport(m layerMap, pkg, file, imported string) error {
 	if pkg == "internal/run" && local == "internal/dispatch" && file != "dispatch_hook.go" {
 		return fmt.Errorf("run imports dispatch outside hook")
 	}
+	if pkg == "internal/run" && local == "internal/background" && file != "dispatch_hook.go" {
+		return fmt.Errorf("run imports background outside hook")
+	}
 	if pkg == "internal/run" && strings.HasPrefix(local, "internal/providers") && file != "trust_hook.go" {
 		return fmt.Errorf("run imports providers outside hook")
 	}

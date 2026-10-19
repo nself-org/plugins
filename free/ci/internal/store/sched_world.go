@@ -8,13 +8,16 @@ import (
 
 // SchedWorld is a single, consistent read of the durable placement facts.
 type SchedWorld struct {
-	Nodes         []SchedNode
-	Active        []SchedAttempt
-	Queued        map[string]int
-	Previous      map[string]string
-	PreviousByJob map[string]string
-	Reservations  map[string]SchedReservation
-	Projects      map[string]string
+	Nodes  []SchedNode
+	Active []SchedAttempt
+	Queued map[string]int
+	// QueuedInteractive counts, per project, the queued attempts that may be interactive work:
+	// the interactive band, or no band recorded (unknown is never assumed to be idle work).
+	QueuedInteractive map[string]int
+	Previous          map[string]string
+	PreviousByJob     map[string]string
+	Reservations      map[string]SchedReservation
+	Projects          map[string]string
 }
 type SchedNode struct {
 	ID, State  string
@@ -40,6 +43,7 @@ func (s *Store) WorldSnapshot(ctx context.Context) (out SchedWorld, err error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 	out.Queued = map[string]int{}
+	out.QueuedInteractive = map[string]int{}
 	out.Previous = map[string]string{}
 	out.PreviousByJob = map[string]string{}
 	out.Reservations = map[string]SchedReservation{}
@@ -111,6 +115,25 @@ func (s *Store) WorldSnapshot(ctx context.Context) (out SchedWorld, err error) {
 			break
 		}
 		out.Queued[p] = n
+	}
+	if err == nil {
+		err = rows.Err()
+	}
+	_ = rows.Close()
+	if err != nil {
+		return SchedWorld{}, err
+	}
+	rows, err = tx.QueryContext(ctx, `SELECT p.project,count(*) FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id WHERE a.state='queued' AND coalesce(a.band,'') IN ('','interactive') GROUP BY p.project ORDER BY p.project`)
+	if err != nil {
+		return SchedWorld{}, err
+	}
+	for rows.Next() {
+		var p string
+		var n int
+		if err = rows.Scan(&p, &n); err != nil {
+			break
+		}
+		out.QueuedInteractive[p] = n
 	}
 	if err == nil {
 		err = rows.Err()

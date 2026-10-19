@@ -21,6 +21,7 @@ import (
 	"time"
 
 	compat "github.com/nself-org/cli/sdk/go/v2/compat"
+	bgci "github.com/nself-org/plugins/free/ci/internal/background"
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
@@ -33,6 +34,21 @@ import (
 func init() {
 	Dispatch = dispatchHook
 	RegisterAfterRun(dispatchCleanup{})
+	bgci.SetQueueProbe(interactiveQueued) // importing background also registers its admission step (D-1265)
+}
+
+// interactiveQueued is the background step's queue probe: whether any dispatcher of this
+// process holds a queued interactive job. The queue does not say which runner a job waits
+// for, so the answer is the same for every runner.
+func interactiveQueued(string) bool {
+	found := false
+	runDispatchers.Range(func(_, v any) bool {
+		if rd := v.(*runDispatch); rd.d != nil && rd.d.InteractiveQueued() {
+			found = true
+		}
+		return !found
+	})
+	return found
 }
 
 // runDispatch is the dispatcher of one run and the facts its world needs.
@@ -98,6 +114,9 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 		if prev, e := sess.Store.LeasePreviousRunner(ctx, fmt.Sprintf("%s.a%d", row, s.N-1)); e == nil && prev != "" {
 			_ = sess.Store.SetPreviousRunner(ctx, id, prev)
 		}
+	}
+	if err = sess.Store.SetAttemptBand(ctx, id, sj.Pipeline.Band); err != nil { // the world tells queued interactive work from queued background work by this
+		return Admitted{}, err
 	}
 	rd.sink.expect(id, sess.Revision) // a remote carrier may report before this call returns
 	a, err := rd.d.Submit(ctx, queueJob(sess, s, sj, id,

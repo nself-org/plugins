@@ -9,6 +9,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/fairq"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
@@ -166,4 +167,20 @@ func (d *Dispatcher) pending(now time.Time) []Queued {
 		}
 	}
 	return out
+}
+
+// InteractiveQueued reports whether an unfinished job in the interactive band is
+// queued. It is the background step's queue probe (D-1265): it takes only the
+// queue lock, so it is safe inside an admission transaction. The queue does not
+// say which runner a job waits for, so the answer holds for every runner.
+func (d *Dispatcher) InteractiveQueued() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, e := range d.queue {
+		j := e.queued.Job
+		if !e.finished && bandOf(j.Sched.Pipeline.Band, j.Foreground || j.Sched.Pipeline.Foreground) == fairq.Interactive {
+			return true
+		}
+	}
+	return false
 }
