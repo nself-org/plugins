@@ -61,6 +61,8 @@ type Rule struct {
 	File string         `yaml:"-"` // the rule file that declared it
 	re   *regexp.Regexp // compiled Pattern (claim kinds)
 	skip []*regexp.Regexp
+
+	factsFile string // the rule file whose override set Facts (errors name it)
 }
 
 // Allow exempts findings of one rule on matching paths, with a stated reason.
@@ -88,6 +90,7 @@ type RuleSet struct {
 	Files []string // repo-relative rule files read, in order
 
 	overrides []fileOverride
+	reach     map[string]map[string]bool // rule file -> itself and every file it includes, transitively
 }
 
 var (
@@ -183,6 +186,10 @@ func (rs *RuleSet) load(root, rel string, depth int, stack []string, seen map[st
 		}
 		rs.Skip = append(rs.Skip, g)
 	}
+	if rs.reach == nil {
+		rs.reach = map[string]map[string]bool{}
+	}
+	rs.reach[clean] = map[string]bool{clean: true}
 	for i, inc := range f.Include {
 		next := append(append([]string(nil), stack...), clean)
 		if err := rs.load(root, inc, depth+1, next, seen, ids); err != nil {
@@ -191,6 +198,9 @@ func (rs *RuleSet) load(root, rel string, depth int, stack []string, seen map[st
 				return failf(clean, fmt.Sprintf("include[%d]", i), "%s: %s", te.File, te.Msg)
 			}
 			return err
+		}
+		for file := range rs.reach[path.Clean(filepath.ToSlash(inc))] {
+			rs.reach[clean][file] = true
 		}
 	}
 	return nil

@@ -40,7 +40,11 @@ func loadFacts(root string, rs RuleSet) (map[string]string, error) {
 		}
 		v, err := readFactsVersion(root, clean)
 		if err != nil {
-			return nil, failf(r.File, "rules."+r.ID+".facts", "%s: %v", clean, err)
+			file, key := r.File, "rules."+r.ID+".facts"
+			if r.factsFile != "" {
+				file, key = r.factsFile, "overrides."+r.ID+".facts"
+			}
+			return nil, failf(file, key, "%s: %v (resolved against the scanned root)", clean, err)
 		}
 		out[clean] = v
 	}

@@ -46,11 +46,13 @@ if [ "$check" -eq 1 ]; then
 			bad=1
 			continue
 		fi
+		# The header line must be exactly the one this script writes (a lone CR would hide YAML from the comparison).
 		first=$(head -n 1 "$copy")
-		case "$first" in
-		"$header_prefix"*) ;;
-		*) echo "vendor-rules: $copy has no VENDORED header" >&2; bad=1; continue ;;
-		esac
+		if ! [[ $first =~ ^"$header_prefix"[0-9a-f]{40}" — DO NOT HAND EDIT"$ ]]; then
+			echo "vendor-rules: $copy has no valid VENDORED header line" >&2
+			bad=1
+			continue
+		fi
 		if tail -n +2 "$copy" | cmp -s - "$root/.github/truth/$f"; then
 			echo "ok $f"
 		else

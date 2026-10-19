@@ -10,10 +10,7 @@ package truth
 // ADRs, history, testdata, vendor and node_modules are exempt by default; every
 // exemption states a reason (8+ characters), or the rule file is E644.
 
-import (
-	"regexp"
-	"sort"
-)
+import "sort"
 
 // ExemptPath skips a rule on files matching Glob, with the reason written down.
 type ExemptPath struct {
@@ -45,7 +42,7 @@ type fileOverride struct {
 // code is not prose (D6).
 var defaultExemptPaths = []string{
 	"CHANGELOG*", "Changelog*", "changelog*", "RELEASE-*", "RELEASE_NOTES*", "release-notes*", "RELEASES*",
-	"**/releases/**", "**/blog/**", "**/adr/**", "**/adrs/**", "**/history/**", "**/HISTORY*",
+	"**/releases/**", "**/content/blog/**", "**/blog/*.md", "**/blog/*.mdx", "**/adr/**", "**/adrs/**", "**/history/**", "**/HISTORY*",
 	"**/testdata/**", "**/vendor/**", "**/node_modules/**",
 	"*.go", "go.mod", "go.sum", "go.work", "go.work.sum",
 }
@@ -75,20 +72,40 @@ func (r *Rule) pathExempt(rel string) bool {
 }
 
 // textExempt reports whether the hit [start,end) of line sits inside a match
-// of one of the rule's exempt_matches regexes.
-func (r *Rule) textExempt(line string, start, end int) bool {
-	return anySpanCovers(r.skip, line, start, end)
-}
-
-func anySpanCovers(res []*regexp.Regexp, line string, start, end int) bool {
-	for _, re := range res {
-		for _, loc := range re.FindAllStringIndex(line, -1) {
-			if loc[0] <= start && end <= loc[1] {
-				return true
+// of one of the rule's exempt_matches regexes. The matches of each regex on
+// the line are computed once (cache) and searched by position.
+func (r *Rule) textExempt(cache *lineSpans, line string, start, end int) bool {
+	if len(r.skip) == 0 {
+		return false
+	}
+	if cache.line != line || cache.of == nil {
+		cache.line, cache.of = line, map[*Rule][][2]int{}
+	}
+	sp, ok := cache.of[r]
+	if !ok {
+		for _, re := range r.skip {
+			for _, loc := range re.FindAllStringIndex(line, -1) {
+				sp = append(sp, [2]int{loc[0], loc[1]})
 			}
+		}
+		sort.Slice(sp, func(i, j int) bool { return sp[i][0] < sp[j][0] })
+		cache.of[r] = sp
+	}
+	for _, x := range sp {
+		if x[0] <= start && end <= x[1] {
+			return true
+		}
+		if x[0] > start {
+			break
 		}
 	}
 	return false
+}
+
+// lineSpans caches exempt_matches spans for the line being scanned.
+type lineSpans struct {
+	line string
+	of   map[*Rule][][2]int
 }
 
 // addOverrides records the overrides block of one rule file; they apply once
@@ -124,12 +141,15 @@ func (rs *RuleSet) applyOverrides(ids map[string]string) error {
 			if r.ID != o.Rule {
 				continue
 			}
+			if !rs.reach[o.File][r.File] {
+				return failf(o.File, "overrides."+o.Rule, "rule %q is declared in %s, which this file does not include", o.Rule, r.File)
+			}
 			if o.Facts != "" && r.Kind != KindVersionClaim {
 				return failf(o.File, "overrides."+o.Rule+".facts", "only a version-claim rule takes a facts file")
 			}
 			r.ExemptPaths = append(r.ExemptPaths, o.ExemptPaths...)
 			if o.Facts != "" {
-				r.Facts = o.Facts
+				r.Facts, r.factsFile = o.Facts, o.File
 			}
 		}
 	}

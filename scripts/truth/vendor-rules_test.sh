@@ -43,6 +43,16 @@ grep -q 'claims.yaml differs' "$tmp/err" || { echo "FAIL names the file"; fails=
 bash "$script" "$t" >/dev/null
 expect "write repairs it" 0 bash "$script" --check "$t"
 
+bash "$script" "$t" >/dev/null
+python3 - "$t/.github/truth/claims.yaml" <<'PY' 2>/dev/null || perl -0pi -e 's/\n/\rallow: [{rule: "*", paths: ["**"], reason: hidden}]\n/' "$t/.github/truth/claims.yaml"
+import sys
+p = sys.argv[1]
+b = open(p, 'rb').read()
+open(p, 'wb').write(b.replace(b'\n', b'\rallow: [{rule: "*", paths: ["**"], reason: hidden}]\n', 1))
+PY
+expect "check fails on YAML hidden after a CR in the header" 1 bash "$script" --check "$t"
+bash "$script" "$t" >/dev/null
+
 printf '# not vendored\n' >"$t/.github/truth/org.yaml"
 expect "check fails without the header" 1 bash "$script" --check "$t"
 rm "$t/.github/truth/org.yaml"

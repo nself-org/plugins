@@ -124,18 +124,23 @@ func scanFile(p, rel string, rs RuleSet, c compiled, facts map[string]string, re
 	for i, b := range parts {
 		lines[i] = strings.TrimSuffix(string(b), "\r")
 	}
+	shownPath := rel
+	if len(c.hostHits(rel)) > 0 {
+		shownPath = redacted // a file name can carry a dead host too
+	}
 	c = c.forFile(rel)
 	var mask *fileMask
 	if owner := c.regionOwner(); owner != nil {
 		m := analyze(rel, lines)
 		mask = &m
 		for _, n := range m.NoReason {
-			res.Findings = append(res.Findings, Finding{RuleID: exemptNoReason, Kind: owner.Kind, Path: rel, Line: n,
+			res.Findings = append(res.Findings, Finding{RuleID: exemptNoReason, Kind: owner.Kind, Path: shownPath, Line: n,
 				Message: "a `truth: exempt` comment must give a reason: <!-- truth: exempt <reason> -->", Match: "truth: exempt"})
 		}
 	}
 	for n, line := range lines {
 		seen := map[*Rule]bool{} // one finding per rule per line
+		var cache lineSpans
 		for _, h := range c.lineHits(line) {
 			r := h.Rule
 			if seen[r] {
@@ -146,14 +151,18 @@ func scanFile(p, rel string, rs RuleSet, c compiled, facts map[string]string, re
 				seen[r] = true
 				continue
 			}
-			if mask != nil && r.usesRegions() && mask.exempt(n, h.Start, h.End) || r.textExempt(line, h.Start, h.End) {
+			if mask != nil && r.usesRegions() && mask.exempt(n, h.Start, h.End) || r.textExempt(&cache, line, h.Start, h.End) {
 				continue
 			}
 			if r.Kind == KindVersionClaim && versionOK(r, h.Text, facts) {
 				continue
 			}
 			seen[r] = true
-			res.Findings = append(res.Findings, Finding{RuleID: r.ID, Kind: r.Kind, Path: rel, Line: n + 1, Message: r.Message, Hash: h.Hash, Match: h.Text})
+			match := h.Text
+			if h.Hash == "" && len(c.hostHits(match)) > 0 {
+				match = redacted // another rule's text must not print a dead host
+			}
+			res.Findings = append(res.Findings, Finding{RuleID: r.ID, Kind: r.Kind, Path: shownPath, Line: n + 1, Message: r.Message, Hash: h.Hash, Match: match})
 		}
 	}
 	return nil
@@ -161,6 +170,8 @@ func scanFile(p, rel string, rs RuleSet, c compiled, facts map[string]string, re
 
 // exemptNoReason is the engine's own finding for a `truth: exempt` comment
 // without a reason (Epic TRUTH D6).
+const redacted = "[dead-host token redacted]"
+
 const exemptNoReason = "truth.exempt-without-reason"
 
 // regionOwner returns the first rule left for the file that honours exemption

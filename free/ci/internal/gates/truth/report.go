@@ -13,17 +13,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
+
+// safe quotes text that holds control characters, so a file name cannot forge report lines.
+func safe(s string) string {
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return strconv.Quote(s)
+		}
+	}
+	return s
+}
 
 // matchText is what a finding prints as its match.
 func matchText(f Finding) string {
 	if f.Hash != "" {
 		return "token sha256 " + f.Hash
 	}
-	return f.Match
+	return safe(f.Match)
 }
 
 // report prints the checks and returns the exit code.
@@ -36,7 +47,7 @@ func report(checks []model.Check, found []Finding, out io.Writer) int {
 		}
 		for _, f := range found {
 			if CheckIDOf(f.Kind) == c.ID {
-				fmt.Fprintf(out, "truth: %s %s:%d: %s\n    fix: %s\n", f.RuleID, f.Path, f.Line, matchText(f), f.Message)
+				fmt.Fprintf(out, "truth: %s %s:%d: %s\n    fix: %s\n", f.RuleID, safe(f.Path), f.Line, matchText(f), f.Message)
 			}
 		}
 		switch {

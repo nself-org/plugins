@@ -66,7 +66,7 @@ func TestVersionFactsErrors(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, err = Scan(dir, rs, rs.Files)
-			mustErr(t, err, ".github/truth/claims.yaml", "rules.claims.current-version.facts")
+			mustErr(t, err, ".github/truth.yaml", "overrides.claims.current-version.facts")
 			checks := Run(dir, []string{".github/truth.yaml"}, "")
 			if checks[0].Result != "error" || checks[0].FailureClass != "code" {
 				t.Errorf("%+v", checks[0])
@@ -91,7 +91,7 @@ func TestFactsOutsideTheRepoAreRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = Scan(dir, rs, rs.Files)
-	mustErr(t, err, ".github/truth/claims.yaml", "rules.claims.current-version.facts")
+	mustErr(t, err, ".github/truth.yaml", "overrides.claims.current-version.facts")
 	if e := loadFactsText(t, "see 1.2.3"); e == nil {
 		t.Error("a facts version with extra text must be refused")
 	}
