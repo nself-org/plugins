@@ -486,8 +486,7 @@
             "type": "string"
           },
           "excerpt": {
-            "type": "string",
-            "maxLength": 1024
+            "type": "string"
           }
         },
         "required": [
