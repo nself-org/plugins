@@ -44,6 +44,10 @@ type followFlags struct {
 	coordinator string
 }
 
+// writerGrace is how long a silent event file keeps a live-looking writer pid
+// trusted once the store says the run is over (pid reuse after a kill -9).
+var writerGrace = 5 * time.Minute
+
 // followIdle is how long a quiet event file waits before the run state is asked (a var for tests).
 var followIdle = detach.IdleGrace
 
@@ -83,9 +87,11 @@ func runFollow(args []string) int {
 // the store marks the run finished), then closes the stream from the run's
 // last state.
 func followFile(ctx context.Context, src *runSource, path string, from int64) int {
-	over := func() (bool, error) { // finished in the store AND its writer gone: the store marks a run finished before the last events are written
+	// finished in the store AND its writer gone (or silent for writerGrace, in case the pid
+	// was reused): the store marks a run finished before the last events are written
+	over := func(quiet time.Duration) (bool, error) {
 		cur, err := src.View(ctx)
-		return err == nil && detach.Terminal(cur.State) && !detach.WriterAlive(path), err
+		return err == nil && detach.Terminal(cur.State) && (!detach.WriterAlive(path) || quiet >= writerGrace), err
 	}
 	var out detach.Outcome
 	var err error

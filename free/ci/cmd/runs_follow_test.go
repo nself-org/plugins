@@ -96,6 +96,9 @@ func TestRunsFollow(t *testing.T) {
 		home := runsHome(t)
 		seedRun(t, home, "r-tail", "running", time.Now(), map[string]string{"build": "running"})
 		path := streamFile(t, home, "r-tail", evLine("queued", "r-tail", 1), evLine("started", "r-tail", 2))
+		if err := detach.WritePID(path, os.Getpid()); err != nil { // a writer that is alive
+			t.Fatal(err)
+		}
 		appendLine := func(l string) {
 			f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
 			if err != nil {
@@ -113,13 +116,13 @@ func TestRunsFollow(t *testing.T) {
 				appendLine(l)
 			}
 			finishRun(t, home, "r-tail", "passed")
-			time.Sleep(60 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond) // far longer than followIdle: only the live writer pid keeps follow waiting
 			appendLine(evLine("result", "r-tail", 5))
 		}()
 		defer func() { <-done }()
 		code, out, _ := capture(t, func() int { return runFollow([]string{"r-tail", "--from-seq", "0", "--json"}) })
 		types, seqs := parsed(t, out)
-		if code != 0 || len(types) != 5 || types[4] != "result" || !increasing(seqs) {
+		if code != 0 || len(types) != 5 || types[4] != "result" || !increasing(seqs) || seqs[4] != 5 {
 			t.Fatalf("exit %d %v %v", code, types, seqs)
 		}
 	})
@@ -133,6 +136,23 @@ func TestRunsFollow(t *testing.T) {
 		}
 		if !strings.Contains(out, `"run_id":"r-nofile"`) || strings.Count(out, `"type":"check_result"`) != 2 {
 			t.Fatalf("stream:\n%s", out)
+		}
+	})
+	t.Run("a live-looking pid is trusted only for writerGrace once the run is over", func(t *testing.T) {
+		home := runsHome(t)
+		old := writerGrace
+		writerGrace = 100 * time.Millisecond
+		t.Cleanup(func() { writerGrace = old })
+		seedRun(t, home, "r-reuse", "passed", time.Now(), map[string]string{"build": "passed"})
+		path := streamFile(t, home, "r-reuse", evLine("queued", "r-reuse", 1))
+		if err := detach.WritePID(path, os.Getpid()); err != nil { // the pid of an unrelated live process
+			t.Fatal(err)
+		}
+		start := time.Now()
+		code, out, _ := capture(t, func() int { return runFollow([]string{"r-reuse"}) })
+		types, _ := parsed(t, out)
+		if code != 0 || types[len(types)-1] != "result" || time.Since(start) > 10*time.Second {
+			t.Fatalf("exit %d %v in %v", code, types, time.Since(start))
 		}
 	})
 	t.Run("a run that died without a result ends with an E648 error line", func(t *testing.T) {

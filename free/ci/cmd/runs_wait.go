@@ -120,6 +120,7 @@ func runWait(args []string) int {
 		}
 		select {
 		case <-wctx.Done():
+			return waitFail(ctx, wctx, wctx.Err(), last, f.json, started)
 		case <-time.After(min(waitPoll, left)):
 		}
 	}

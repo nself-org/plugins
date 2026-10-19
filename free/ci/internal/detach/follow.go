@@ -34,10 +34,10 @@ const (
 // FollowParams configures Follow.
 type FollowParams struct {
 	Path string
-	From int64                // first seq to copy (0 = all)
-	Poll time.Duration        // default 100 ms
-	Idle time.Duration        // default IdleGrace
-	Over func() (bool, error) // true when the run can produce no more lines
+	From int64                                   // first seq to copy (0 = all)
+	Poll time.Duration                           // default 100 ms
+	Idle time.Duration                           // default IdleGrace
+	Over func(quiet time.Duration) (bool, error) // true when the run can produce no more lines; quiet is how long the file has been silent
 }
 
 // Outcome is how a follow ended: Exit is the error envelope's exit status for
@@ -88,7 +88,7 @@ func Follow(ctx context.Context, w io.Writer, p FollowParams) (Outcome, error) {
 			return Outcome{EndGone, 0, lastSeq}, nil // read once more after the probe said over: nothing came
 		}
 		if len(lines) == 0 && p.Over != nil && time.Since(last) >= idle {
-			over, err := p.Over()
+			over, err := p.Over(time.Since(last))
 			if err != nil {
 				return Outcome{LastSeq: lastSeq}, err
 			}

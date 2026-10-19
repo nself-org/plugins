@@ -99,7 +99,7 @@ func TestFollowGoneWithoutResult(t *testing.T) {
 	asked := 0
 	var out bytes.Buffer
 	res, err := Follow(context.Background(), &out, FollowParams{Path: path, Poll: time.Millisecond, Idle: 20 * time.Millisecond,
-		Over: func() (bool, error) { asked++; return true, nil }})
+		Over: func(time.Duration) (bool, error) { asked++; return true, nil }})
 	if err != nil || res.End != EndGone || res.LastSeq != 2 || asked != 1 {
 		t.Fatalf("res %+v err %v asked %d", res, err, asked)
 	}
