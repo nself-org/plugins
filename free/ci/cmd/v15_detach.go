@@ -75,6 +75,7 @@ func runDetach(o *RunOptions) int {
 	if detachTune != nil {
 		detachTune(&p)
 	}
+	sweepOrphanStreams() // stream files of runs the retention prune already deleted
 	h, err := detach.Start(p)
 	if err != nil {
 		return detachFail(out, o.JSON, err)
@@ -127,6 +128,14 @@ func pruneStreams(prune handler, args []string) int {
 	_, _ = detach.Remove(home, gone)
 	_, _ = detach.Sweep(home, func(id string) bool { return after[id] }, time.Time{}, false)
 	return code
+}
+
+// sweepOrphanStreams removes detached stream files whose run row is gone, so
+// terminal-run retention (which prunes rows at every run start) frees them too.
+func sweepOrphanStreams() {
+	if known := knownRunIDs(); known != nil {
+		_, _ = detach.Sweep(detach.Home(""), func(id string) bool { return known[id] }, time.Time{}, false)
+	}
 }
 
 func hasDryRun(args []string) bool {

@@ -185,6 +185,26 @@ func TestDetach(t *testing.T) {
 			t.Fatalf("exit %d\n%s", code, out)
 		}
 	})
+	t.Run("a new detach sweeps the streams of runs that retention pruned", func(t *testing.T) {
+		home := detachEnv(t, "queued", "r-det-7")
+		seedRun(t, home, "r-keep", "passed", time.Now(), nil)
+		old := time.Now().Add(-3 * time.Hour)
+		for _, id := range []string{"r-keep", "r-pruned"} {
+			p := streamFile(t, home, id, evLine("queued", id, 1))
+			if err := os.Chtimes(p, old, old); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if code, out := detachRun(t, []string{"--detach", "--json"}); code != 0 {
+			t.Fatalf("exit %d\n%s", code, out)
+		}
+		if _, err := os.Stat(filepath.Join(detach.Dir(home), "r-keep.ndjson")); err != nil {
+			t.Fatalf("the stream of a kept run was removed: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(detach.Dir(home), "r-pruned.ndjson")); !os.IsNotExist(err) {
+			t.Fatalf("the stream of a pruned run survived: %v", err)
+		}
+	})
 	t.Run("without --detach the hook does nothing", func(t *testing.T) {
 		detachEnv(t, "queued", "r-det-6")
 		if code, out := detachRun(t, []string{"--json"}); code != -1 || out != "" {
