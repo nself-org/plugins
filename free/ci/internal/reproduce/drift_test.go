@@ -78,3 +78,7 @@ func TestIsolationDrift(t *testing.T) {
 		t.Fatal("another repository must be refused")
 	}
 }
+
+func modelEvidenceWithTool(name, version string) model.Evidence {
+	return model.Evidence{ToolVersions: map[string]string{name: version}}
+}
