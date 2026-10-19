@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/nself-org/nself-byok/tenantdb"
 )
 
 // RotationJob re-encrypts all records in np_encrypted_values for a tenant
@@ -29,16 +31,17 @@ type RotationProgress struct {
 	Error       string
 }
 
-// Rotator re-encrypts encrypted values for a tenant.
+// Rotator re-encrypts encrypted values for a tenant. Every statement runs under that
+// tenant's row-level security through tenantdb.With (D-0956).
 type Rotator struct {
-	db        *pgxpool.Pool
+	db        tenantdb.Beginner
 	envelope  *Envelope
 	batchSize int
 	rateLimit int // batches per second
 }
 
 // NewRotator creates a Rotator with the given envelope and tuning parameters.
-func NewRotator(db *pgxpool.Pool, env *Envelope, batchSize, rateLimit int) *Rotator {
+func NewRotator(db tenantdb.Beginner, env *Envelope, batchSize, rateLimit int) *Rotator {
 	if batchSize <= 0 {
 		batchSize = 1000
 	}
@@ -69,9 +72,11 @@ func (r *Rotator) Run(ctx context.Context, tenantID, triggeredBy uuid.UUID, kmsK
 
 	// Count total records for this tenant.
 	var total int
-	if err := r.db.QueryRow(ctx,
-		`SELECT COUNT(*) FROM np_encrypted_values WHERE tenant_id = $1`, tenantID,
-	).Scan(&total); err != nil {
+	if err := tenantdb.With(ctx, r.db, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT COUNT(*) FROM np_encrypted_values WHERE tenant_id = $1`, tenantID,
+		).Scan(&total)
+	}); err != nil {
 		return nil, fmt.Errorf("rotate: count records: %w", err)
 	}
 	progress.Total = total
@@ -80,19 +85,6 @@ func (r *Rotator) Run(ctx context.Context, tenantID, triggeredBy uuid.UUID, kmsK
 	batchInterval := time.Second / time.Duration(r.rateLimit)
 	offset := 0
 	for {
-		rows, err := r.db.Query(ctx,
-			`SELECT id, encrypted_data, encrypted_dek, kms_key_ref, iv
-			   FROM np_encrypted_values
-			  WHERE tenant_id = $1
-			  ORDER BY id
-			  LIMIT $2 OFFSET $3`,
-			tenantID, r.batchSize, offset,
-		)
-		if err != nil {
-			progress.Error = err.Error()
-			break
-		}
-
 		type encRow struct {
 			id           uuid.UUID
 			ciphertext   []byte
@@ -101,16 +93,33 @@ func (r *Rotator) Run(ctx context.Context, tenantID, triggeredBy uuid.UUID, kmsK
 			iv           []byte
 		}
 		var batch []encRow
-		for rows.Next() {
-			var rec encRow
-			if err := rows.Scan(&rec.id, &rec.ciphertext, &rec.encryptedDEK, &rec.kmsKeyRef, &rec.iv); err != nil {
-				rows.Close()
-				progress.Failed++
-				continue
+		err := tenantdb.With(ctx, r.db, tenantID, func(tx pgx.Tx) error {
+			rows, qErr := tx.Query(ctx,
+				`SELECT id, encrypted_data, encrypted_dek, kms_key_ref, iv
+				   FROM np_encrypted_values
+				  WHERE tenant_id = $1
+				  ORDER BY id
+				  LIMIT $2 OFFSET $3`,
+				tenantID, r.batchSize, offset,
+			)
+			if qErr != nil {
+				return qErr
 			}
-			batch = append(batch, rec)
+			defer rows.Close()
+			for rows.Next() {
+				var rec encRow
+				if err := rows.Scan(&rec.id, &rec.ciphertext, &rec.encryptedDEK, &rec.kmsKeyRef, &rec.iv); err != nil {
+					progress.Failed++
+					continue
+				}
+				batch = append(batch, rec)
+			}
+			return rows.Err()
+		})
+		if err != nil {
+			progress.Error = err.Error()
+			break
 		}
-		rows.Close()
 
 		if len(batch) == 0 {
 			break
@@ -139,15 +148,18 @@ func (r *Rotator) Run(ctx context.Context, tenantID, triggeredBy uuid.UUID, kmsK
 			}
 
 			// Update the record.
-			_, err = r.db.Exec(ctx,
-				`UPDATE np_encrypted_values
-				    SET encrypted_data = $1,
-				        encrypted_dek  = $2,
-				        kms_key_ref    = $3,
-				        iv             = $4
-				  WHERE id = $5`,
-				bundle.Ciphertext, bundle.EncryptedDEK, bundle.KMSKeyRef, bundle.IV, rec.id,
-			)
+			err = tenantdb.With(ctx, r.db, tenantID, func(tx pgx.Tx) error {
+				_, execErr := tx.Exec(ctx,
+					`UPDATE np_encrypted_values
+					    SET encrypted_data = $1,
+					        encrypted_dek  = $2,
+					        kms_key_ref    = $3,
+					        iv             = $4
+					  WHERE id = $5 AND tenant_id = $6`,
+					bundle.Ciphertext, bundle.EncryptedDEK, bundle.KMSKeyRef, bundle.IV, rec.id, tenantID,
+				)
+				return execErr
+			})
 			if err != nil {
 				progress.Failed++
 				continue
@@ -192,11 +204,13 @@ done:
 }
 
 func (r *Rotator) logEvent(ctx context.Context, tenantID, triggeredBy uuid.UUID, eventType, keyRef string, details map[string]any) error {
-	_, err := r.db.Exec(ctx,
-		`INSERT INTO np_encryption_key_events
+	return tenantdb.With(ctx, r.db, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO np_encryption_key_events
 		   (tenant_id, event_type, key_ref, triggered_by, details)
 		 VALUES ($1, $2, $3, $4, $5)`,
-		tenantID, eventType, keyRef, triggeredBy, details,
-	)
-	return err
+			tenantID, eventType, keyRef, triggeredBy, details,
+		)
+		return err
+	})
 }
