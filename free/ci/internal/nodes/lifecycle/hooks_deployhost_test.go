@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nself-org/cli/sdk/go/v2/remote"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
@@ -53,5 +54,49 @@ func TestTestReportsTheNodeAsAHookLeftIt(t *testing.T) {
 	RegisterAddHook(PointTest, func(context.Context, HookEvent) error { return errBoom })
 	if _, err = k.d.Test(context.Background(), "hk4", FlagSet("test")); err == nil {
 		t.Fatal("test hook error swallowed")
+	}
+}
+
+// D-1219: the pre-add hook runs on the destination alone and a refusal there happens before any contact:
+// no host-key scan, no ssh command, no copy, no pin, no node.
+func TestPreAddHookRunsBeforeAnyContact(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		hook error
+	}{{"refused", errBoom}, {"passes", nil}} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(resetExtensions)
+			k := newKit(t)
+			scans := 0
+			scan := k.d.Scan
+			k.d.Scan = func(ctx context.Context, tg remote.Target, id string) ([]remote.HostKey, error) {
+				scans++
+				return scan(ctx, tg, id)
+			}
+			var ev HookEvent
+			RegisterAddHook(PointPreAdd, func(_ context.Context, e HookEvent) error {
+				ev = e
+				if scans != 0 || len(k.runs) != 0 {
+					t.Errorf("pre-add ran after contact: %d scans, %d runs", scans, len(k.runs))
+				}
+				return tc.hook
+			})
+			_, err := k.d.Add(context.Background(), AddOptions{Dest: "ci@pre1", HostKey: fpA, Source: LocalFile{Path: elfFixture(t, elf.EM_X86_64)}, Trust: DefaultTrust()})
+			if ev.Point != PointPreAdd || ev.Dest != "ci@pre1" || ev.NodeID == "" || ev.Capability != nil {
+				t.Fatalf("event %+v", ev)
+			}
+			if tc.hook == nil {
+				if err != nil || scans == 0 {
+					t.Fatalf("err %v scans %d", err, scans)
+				}
+				return
+			}
+			if err == nil || scans != 0 || len(k.runs) != 0 || len(k.copies) != 0 {
+				t.Fatalf("a refused pre-add still made contact: err %v scans %d runs %v copies %v", err, scans, k.runs, k.copies)
+			}
+			if p, _ := k.d.pins().Lookup(pinAlias("pre1")); len(p) != 0 {
+				t.Fatal("a refused pre-add pinned a key")
+			}
+		})
 	}
 }
