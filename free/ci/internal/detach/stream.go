@@ -80,9 +80,12 @@ const (
 // file to the run id) does not lose the lines written afterwards.
 type Reader struct {
 	Path string
-	f    *os.File
-	buf  []byte
-	skip bool // inside a line longer than maxLine
+	// Resolve, when set, finds the file again if Path no longer exists when the
+	// reader first opens it (the token-named file was renamed to its run id).
+	Resolve func() string
+	f       *os.File
+	buf     []byte
+	skip    bool // inside a line longer than maxLine
 }
 
 // Close releases the file.
@@ -100,6 +103,11 @@ func (r *Reader) Close() error {
 func (r *Reader) Next() ([][]byte, error) {
 	if r.f == nil {
 		f, err := os.Open(r.Path)
+		if err != nil && os.IsNotExist(err) && r.Resolve != nil {
+			if p := r.Resolve(); p != "" && p != r.Path {
+				f, err = os.Open(p)
+			}
+		}
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, nil

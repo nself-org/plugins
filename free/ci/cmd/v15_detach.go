@@ -77,7 +77,7 @@ func runDetach(o *RunOptions) int {
 	}
 	p := detach.Params{Exe: exe, Args: detachArgs(), Home: o.Home, Env: os.Environ()}
 	if detach.CoordinatorOf(p.Args, os.Getenv) == detach.Local {
-		v := &localVerifier{since: time.Now().Add(-time.Second)}
+		v := &localVerifier{since: time.Now()}
 		defer v.close()
 		p.Verify = v.exists // stderr shares the stream file: only a run in the store is believed
 	}

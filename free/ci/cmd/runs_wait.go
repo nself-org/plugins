@@ -188,7 +188,7 @@ func openRunSource(ctx context.Context, ref, coordinator string) (*runSource, er
 		}
 	}
 	// recovery after dead coordinators runs in View, under the caller's deadline
-	st, err := cirun.OpenStore(runsStorePath())
+	st, err := openStoreCtx(ctx, runsStorePath())
 	if err != nil {
 		return nil, err
 	}
@@ -247,4 +247,30 @@ func toView(v cirun.RunView) detach.View {
 		out.Jobs = append(out.Jobs, detach.JobState{Name: j.Name, State: j.State, FailureClass: j.FailureClass})
 	}
 	return out
+}
+
+// openStoreCtx opens the run store but gives up when ctx ends (a held SQLite
+// write lock can make the open wait for seconds); the open finishes in the
+// background and closes its store.
+func openStoreCtx(ctx context.Context, path string) (*store.Store, error) {
+	type result struct {
+		st  *store.Store
+		err error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		st, err := cirun.OpenStore(path)
+		ch <- result{st, err}
+	}()
+	select {
+	case r := <-ch:
+		return r.st, r.err
+	case <-ctx.Done():
+		go func() {
+			if r := <-ch; r.st != nil {
+				_ = r.st.Close()
+			}
+		}()
+		return nil, ctx.Err()
+	}
 }

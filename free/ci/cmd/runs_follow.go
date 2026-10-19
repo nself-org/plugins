@@ -87,7 +87,9 @@ func runFollow(args []string) int {
 // the store marks the run finished), then closes the stream from the run's
 // last state.
 func followFile(ctx context.Context, src *runSource, runID, path string, from int64) int {
-	rd := &detach.Reader{Path: path} // one reader for both passes: it keeps the file open across a rename
+	// one reader for both passes: it keeps the file open across a rename and finds it again
+	// if the rename happened before the first read
+	rd := &detach.Reader{Path: path, Resolve: func() string { return detach.StreamPath(detach.Home(""), runID) }}
 	defer func() { _ = rd.Close() }()
 	// finished in the store AND its writer gone (or silent for writerGrace, in case the pid
 	// was reused): the store marks a run finished before the last events are written

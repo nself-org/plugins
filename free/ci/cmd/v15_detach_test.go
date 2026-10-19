@@ -198,9 +198,9 @@ func TestDetach(t *testing.T) {
 			t.Fatalf("exit %d %+v\n%s", code, e, out)
 		}
 	})
-	t.Run("a queued line naming an older run is not believed either", func(t *testing.T) {
+	t.Run("a queued line naming a run created before this detach is not believed either", func(t *testing.T) {
 		home := detachEnv(t, "spoof", "")
-		seedRun(t, home, "r-old-run", "passed", time.Now().Add(-time.Hour), nil)
+		seedRun(t, home, "r-old-run", "passed", time.Now(), nil) // created just before this detach
 		t.Setenv("NSELF_TEST_SPOOF_ID", "r-old-run")
 		code, out := detachRun(t, []string{"--detach", "--json"})
 		if e := decodeHandle(t, out).ErrBody; code != 2 || e.Code != "E648" {

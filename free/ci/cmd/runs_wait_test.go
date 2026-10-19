@@ -259,3 +259,19 @@ func (stalledRemote) Resolve(ctx context.Context, ref string) (cirun.RunView, bo
 	<-ctx.Done()
 	return cirun.RunView{}, false, ctx.Err()
 }
+
+func TestOpenStoreCtxGivesUpWhenTheContextEnds(t *testing.T) {
+	home := runsHome(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	start := time.Now()
+	st, err := openStoreCtx(ctx, filepath.Join(home, "state.db"))
+	if err == nil || st != nil || time.Since(start) > time.Second {
+		t.Fatalf("store %v err %v in %v", st, err, time.Since(start))
+	}
+	ok, err := openStoreCtx(context.Background(), filepath.Join(home, "state.db"))
+	if err != nil || ok == nil {
+		t.Fatalf("open: %v", err)
+	}
+	_ = ok.Close()
+}

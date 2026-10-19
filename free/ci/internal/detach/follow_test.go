@@ -134,3 +134,17 @@ func TestFollowSurvivesARename(t *testing.T) {
 		t.Fatalf("res %+v err %v\n%s", res, err, out.String())
 	}
 }
+
+// The rename may happen before the reader's first open: Resolve finds the file again.
+func TestReaderResolvesARenamedFile(t *testing.T) {
+	dir := t.TempDir()
+	token, final := filepath.Join(dir, "token.ndjson"), filepath.Join(dir, "r1.ndjson")
+	writeLines(t, final, rec("queued", 1), rec("result", 2))
+	rd := &Reader{Path: token, Resolve: func() string { return final }}
+	defer func() { _ = rd.Close() }()
+	var out bytes.Buffer
+	res, err := Follow(context.Background(), &out, FollowParams{Path: token, Reader: rd, Poll: time.Millisecond})
+	if err != nil || res.End != EndResult || strings.Count(out.String(), "\n") != 2 {
+		t.Fatalf("res %+v err %v\n%s", res, err, out.String())
+	}
+}
