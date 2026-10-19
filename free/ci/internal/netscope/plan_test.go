@@ -3,6 +3,7 @@ package netscope
 import (
 	"context"
 	"errors"
+	"net"
 	"net/netip"
 	"strings"
 	"sync"
@@ -16,14 +17,16 @@ import (
 
 // fakeRuntime records the runtime calls of a plan and can fail at a chosen step.
 type fakeRuntime struct {
-	mu       sync.Mutex
-	steps    []string
-	failAt   string
-	log      []byte
-	sidecar  exec.SidecarSpec
-	probeOut []byte
-	probeErr error
-	targets  []string
+	mu        sync.Mutex
+	steps     []string
+	failAt    string
+	log       []byte
+	sidecar   exec.SidecarSpec
+	probeOut  []byte
+	probeErr  error
+	targets   []string
+	proxy     string
+	probeRuns int
 }
 
 func (f *fakeRuntime) step(name string) error {
@@ -48,9 +51,30 @@ func (f *fakeRuntime) SidecarLog(context.Context, string, string) ([]byte, error
 	return f.log, nil
 }
 func (f *fakeRuntime) Remove(context.Context, string, string) error { return f.step("remove") }
-func (f *fakeRuntime) ProbeRun(_ context.Context, _, _, _, _ string, targets []string) ([]byte, error) {
-	f.targets = targets
+func (f *fakeRuntime) ProbeRun(_ context.Context, _, _, _, _, proxy string, targets []string) ([]byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.targets = append(f.targets, targets...)
+	f.proxy = proxy
+	f.probeRuns++
 	return f.probeOut, f.probeErr
+}
+
+// fakeResolver for the excluded names: answers from a map, "missing" is NXDOMAIN, "broken" times out.
+type nameResolver map[string][]string
+
+func (r nameResolver) LookupNetIP(_ context.Context, _, host string) ([]netip.Addr, error) {
+	switch host {
+	case "missing.example.com":
+		return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+	case "broken.example.com":
+		return nil, &net.DNSError{Err: "i/o timeout", Name: host, IsTimeout: true}
+	}
+	var out []netip.Addr
+	for _, s := range r[host] {
+		out = append(out, netip.MustParseAddr(s))
+	}
+	return out, nil
 }
 
 func testPlanner(rt *fakeRuntime) *Planner {
@@ -61,7 +85,8 @@ func testPlanner(rt *fakeRuntime) *Planner {
 			return Facts{HostAddrs: []netip.Addr{netip.MustParseAddr("198.41.0.4"), netip.MustParseAddr("127.0.0.1")},
 				OnLink: []netip.Prefix{netip.MustParsePrefix("198.41.0.0/24")}}, nil
 		},
-		Ready: time.Second,
+		Ready:    time.Second,
+		Resolver: nameResolver{"prod.example.com": {"93.184.216.50", "2606:2800::5"}},
 	}
 }
 
@@ -187,7 +212,7 @@ func TestPlanExclusionSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(f.Exclusion) != 3 || len(f.ExclusionHosts) != 1 || f.ExclusionHosts[0] != "prod.example.com" || len(c.Hosts) != 1 {
+	if len(f.Exclusion) != 5 || len(f.ExclusionHosts) != 1 || f.ExclusionHosts[0] != "prod.example.com" || len(c.Hosts) != 1 {
 		t.Errorf("config exclusion=%v hosts=%v extra=%v", f.Exclusion, f.ExclusionHosts, c.Hosts)
 	}
 	// internet takes no policy hosts
@@ -217,5 +242,69 @@ func TestProxyEnvIsPlainAndHasNoSecretShape(t *testing.T) {
 		if strings.ContainsAny(kv, "\r\n@") {
 			t.Errorf("env entry %q", kv)
 		}
+	}
+}
+
+// The excluded NAMES are resolved at setup and their addresses join the exclusion, so dialling the address (or
+// another name for it) is refused too.
+func TestPlanResolvesExcludedNamesAndFailsClosed(t *testing.T) {
+	rt := &fakeRuntime{log: ReadyLine()}
+	p := testPlanner(rt)
+	p.Exclusion = func(context.Context) (Exclusions, error) {
+		return Exclusions{Hosts: []string{"prod.example.com", "missing.example.com"}}, nil
+	}
+	if _, err := p.PlanAttempt(context.Background(), "docker", att, "internet"); err != nil {
+		t.Fatal(err)
+	}
+	_, f, _ := DecodeConfig(rt.sidecar.Config)
+	if v := Allowed("internet", netip.MustParseAddr("93.184.216.50"), f); v.Allowed || v.Reason != ReasonExclusion {
+		t.Errorf("the address of an excluded name is allowed: %+v", v)
+	}
+	if v := Allowed("internet", netip.MustParseAddr("2606:2800::5"), f); v.Allowed {
+		t.Errorf("the v6 address of an excluded name is allowed: %+v", v)
+	}
+	for name, ex := range map[string]Exclusions{
+		"lookup failure": {Hosts: []string{"broken.example.com"}}, "bad address": {Addresses: []string{"nope"}},
+		"bad prefix": {Prefixes: []string{"1.2.3.4"}}, "bad host": {Hosts: []string{"a b"}},
+	} {
+		rt2 := &fakeRuntime{log: ReadyLine()}
+		p2 := testPlanner(rt2)
+		p2.Exclusion = func(context.Context) (Exclusions, error) { return ex, nil }
+		if _, err := p2.PlanAttempt(context.Background(), "docker", att, "restricted"); err == nil || !strings.Contains(err.Error(), "E679") {
+			t.Errorf("%s: %v", name, err)
+		}
+		if len(rt2.steps) != 0 {
+			t.Errorf("%s: resources created: %v", name, rt2.steps)
+		}
+	}
+}
+
+// A create that fails (a duplicate attempt id) must not remove what another attempt with that label owns.
+func TestPlanCreateFailureReleasesNothing(t *testing.T) {
+	rt := &fakeRuntime{failAt: "network"}
+	plan, err := testPlanner(rt).PlanAttempt(context.Background(), "docker", att, "restricted")
+	if err == nil || plan.Release != nil {
+		t.Fatalf("%v %v", plan, err)
+	}
+	for _, s := range rt.steps {
+		if s == "remove" {
+			t.Errorf("steps %v: the label-wide removal ran after a failed create", rt.steps)
+		}
+	}
+}
+
+func TestPlanReportsUnreadableLogAndFailedCleanup(t *testing.T) {
+	rt := &fakeRuntime{log: ReadyLine()}
+	p := testPlanner(rt)
+	var got []Event
+	p.Events = func(_ string, e Event) { got = append(got, e) }
+	plan, err := p.PlanAttempt(context.Background(), "docker", att, "restricted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt.failAt = "remove"
+	plan.Release(context.Background())
+	if len(got) != 1 || got[0].Reason != ReasonCleanupFailed {
+		t.Fatalf("%+v", got)
 	}
 }

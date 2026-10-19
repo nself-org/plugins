@@ -30,6 +30,12 @@ const (
 	ReasonResolve    Reason = "resolve_failed"
 	// ReasonDialFailed is an allowed destination the sidecar could not reach (an audit trail for diagnosis).
 	ReasonDialFailed Reason = "dial_failed"
+	// ReasonLogUnreadable and ReasonCleanupFailed are planner events: the sidecar log could not be read back
+	// (so denials may be missing) or the attempt's resources could not be removed.
+	ReasonLogUnreadable Reason = "log_unreadable"
+	ReasonCleanupFailed Reason = "cleanup_failed"
+	// ReasonPort is a destination port the scope does not allow.
+	ReasonPort Reason = "port_not_allowed"
 	// ReasonEventsDropped marks the last event of a sidecar that hit its event cap.
 	ReasonEventsDropped Reason = "events_dropped"
 )
@@ -48,6 +54,7 @@ var denyCIDRs = []string{
 	"192.0.0.0/24",       // IETF protocol assignments
 	"192.0.2.0/24",       // TEST-NET-1
 	"192.88.99.0/24",     // deprecated 6to4 relay anycast
+	"168.63.129.16/32",   // Azure wire server (a public address that is the host's platform endpoint)
 	"192.168.0.0/16",     // RFC1918
 	"198.18.0.0/15",      // benchmarking
 	"198.51.100.0/24",    // TEST-NET-2
@@ -96,7 +103,8 @@ type Facts struct {
 	// Exclusion are the deploy exclusion addresses and prefixes (deployguard.ExclusionSet).
 	Exclusion []netip.Prefix
 	// ExclusionHosts are the deploy exclusion host names: a name equal to one of them, or below one, is refused
-	// before it is resolved (its addresses are refused as well, through Exclusion).
+	// before it is resolved. The planner also resolves each excluded name once at setup and adds the addresses to
+	// Exclusion, so the address and any other name for it are refused too.
 	ExclusionHosts []string
 }
 

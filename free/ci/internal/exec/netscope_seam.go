@@ -33,7 +33,7 @@ const (
 	sidecarUID = "65532:65532"
 	// netSetupTimeout bounds one setup step.
 	netSetupTimeout = 60 * time.Second
-	maxSidecarLog   = 256 << 10
+	maxSidecarLog   = 1 << 20 // 1000 events of at most ~500 bytes fit (netscope.maxEvents)
 )
 
 var safePath = regexp.MustCompile(`^/[A-Za-z0-9._/+-]{1,1000}$`)
@@ -125,6 +125,7 @@ func RuntimeNetworkCreate(ctx context.Context, binary, attempt, coordinator stri
 	// docker lists IPAM.Config[].Subnet, podman Subnets[].subnet: read the JSON both print, whatever the layout
 	out, err := runNet(ctx, binary, nil, "network", "inspect", name)
 	if err != nil {
+		removeNetworkQuietly(ctx, binary, name)
 		return netip.Prefix{}, netFailed("network inspect", out, err)
 	}
 	var doc any
@@ -135,7 +136,15 @@ func RuntimeNetworkCreate(ctx context.Context, binary, attempt, coordinator stri
 			}
 		}
 	}
+	removeNetworkQuietly(ctx, binary, name)
 	return netip.Prefix{}, coded("E613", "the job network has no IPv4 subnet")
+}
+
+// removeNetworkQuietly removes a network this call created and could not use (the caller has nothing to release).
+func removeNetworkQuietly(ctx context.Context, binary, name string) {
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), netSetupTimeout)
+	defer cancel()
+	_, _ = runNet(rctx, binary, nil, "network", "rm", name)
 }
 
 // subnetsIn collects the string values of every "Subnet"/"subnet" key in a decoded inspect document.
@@ -224,10 +233,11 @@ func RuntimeSidecarRunning(ctx context.Context, binary, attempt string) (bool, e
 }
 
 // RuntimeNetProbeRun runs the probe container on the attempt's job network: the static binary's `netproxy
-// --probe` mode dials every target and prints the ones it reached. The container has no capability, a
+// --probe` mode dials every target and prints the ones it reached, asks the proxy to open a tunnel to the
+// metadata address (it must refuse) and tries one DNS lookup (it must fail). The container has no capability, a
 // read-only root and the job's own network settings (internal network, no DNS), so what it reaches is what a
 // job could reach. Targets are host:port literals.
-func RuntimeNetProbeRun(ctx context.Context, binary, attempt, image, proxyBinary string, targets []string) ([]byte, error) {
+func RuntimeNetProbeRun(ctx context.Context, binary, attempt, image, proxyBinary, proxy string, targets []string) ([]byte, error) {
 	if err := checkNetArgs(binary, attempt); err != nil {
 		return nil, err
 	}
@@ -239,11 +249,14 @@ func RuntimeNetProbeRun(ctx context.Context, binary, attempt, image, proxyBinary
 			return nil, netRefused("probe target " + t)
 		}
 	}
+	if ap, err := netip.ParseAddrPort(proxy); err != nil || !ap.IsValid() {
+		return nil, netRefused("probe proxy " + proxy)
+	}
 	name := "nself-ci-" + attempt + "-probe"
 	args := []string{"run", "--rm", "--name", name, "--network", NetworkName(attempt), "--dns", "127.0.0.1", "--cap-drop", "ALL",
 		"--security-opt", "no-new-privileges", "--read-only", "--pids-limit", "64", "--memory", "64m", "--memory-swap", "64m",
 		"--cpus", "0.5", "--user", sidecarUID, "--label", AttemptLabel + "=" + attempt, "--label", "nself.ci.probe=1", "--env", "NSELF_V15=1",
-		"--mount", "type=bind,src=" + proxyBinary + ",dst=" + sidecarMountDst + ",readonly", image, sidecarMountDst, "netproxy", "--probe"}
+		"--mount", "type=bind,src=" + proxyBinary + ",dst=" + sidecarMountDst + ",readonly", image, sidecarMountDst, "netproxy", "--probe", "--proxy", proxy}
 	out, err := runNet(ctx, binary, nil, append(args, targets...)...)
 	if err != nil {
 		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), queryTimeout)

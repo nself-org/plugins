@@ -12,6 +12,8 @@ package netscope
 
 import (
 	"context"
+	"errors"
+	"net"
 	"net/netip"
 	"os"
 	"runtime"
@@ -31,7 +33,7 @@ type Runtime interface {
 	SidecarLog(ctx context.Context, binary, attempt string) ([]byte, error)
 	Remove(ctx context.Context, binary, attempt string) error
 	// ProbeRun runs the probe container on the attempt's job network and returns what it printed.
-	ProbeRun(ctx context.Context, binary, attempt, image, proxyBinary string, targets []string) ([]byte, error)
+	ProbeRun(ctx context.Context, binary, attempt, image, proxyBinary, proxy string, targets []string) ([]byte, error)
 }
 
 type execRuntime struct{}
@@ -49,8 +51,8 @@ func (execRuntime) Remove(ctx context.Context, binary, attempt string) error {
 	return exec.RuntimeRemoveAttempt(ctx, binary, attempt)
 }
 
-func (execRuntime) ProbeRun(ctx context.Context, binary, attempt, image, proxyBinary string, targets []string) ([]byte, error) {
-	return exec.RuntimeNetProbeRun(ctx, binary, attempt, image, proxyBinary, targets)
+func (execRuntime) ProbeRun(ctx context.Context, binary, attempt, image, proxyBinary, proxy string, targets []string) ([]byte, error) {
+	return exec.RuntimeNetProbeRun(ctx, binary, attempt, image, proxyBinary, proxy, targets)
 }
 
 // Exclusions are the deploy exclusion entries the planner hands to the proxy (deployguard.ExclusionSet).
@@ -73,6 +75,8 @@ type Planner struct {
 	Events func(attempt string, e Event)
 	// Ready bounds the wait for the sidecar's readiness line (default 15s).
 	Ready time.Duration
+	// Resolver resolves the excluded host names at setup (default net.DefaultResolver).
+	Resolver Resolver
 }
 
 var _ isolation.AttemptPlanner = (*Planner)(nil)
@@ -138,11 +142,13 @@ func (p *Planner) setup(ctx context.Context, binary string, a isolation.Attempt,
 		extra = p.ExtraHosts(a)
 	}
 	rt := p.rt()
-	plan := isolation.NetworkPlan{Release: p.release(rt, binary, a.ID)}
+	// the removal is armed only once the network exists: a create that fails (a duplicate attempt id, say) must
+	// not remove the resources of another attempt that carries the same label
 	prefix, err := rt.NetworkCreate(ctx, binary, a.ID, a.CoordinatorID)
 	if err != nil {
-		return plan, err
+		return isolation.NetworkPlan{}, err
 	}
+	plan := isolation.NetworkPlan{Release: p.release(rt, binary, a.ID)}
 	cfg, err := NewConfig(scope, a.ID, prefix, extra, facts).Encode()
 	if err != nil {
 		return plan, err
@@ -202,29 +208,64 @@ func (p *Planner) worldFacts(ctx context.Context) (Facts, error) {
 	if err != nil {
 		return Facts{}, scopeFailed("the deploy exclusion set cannot be read: %v", err)
 	}
-	return Merge(f, exclusionFacts(ex)), nil
+	xf, err := p.exclusionFacts(ctx, ex)
+	if err != nil {
+		return Facts{}, err
+	}
+	return Merge(f, xf), nil
 }
 
-// exclusionFacts turns exclusion entries into Facts; an entry that does not parse is skipped here and the
-// proxy still refuses the whole table (the entry came from a validated store).
-func exclusionFacts(ex Exclusions) Facts {
+// exclusionFacts turns exclusion entries into Facts. An entry that does not parse refuses the scope (a deploy
+// host is never left out because its line was malformed). Each excluded NAME is also resolved here, once, and
+// its addresses join the exclusion: a name-only entry would otherwise protect nothing from a job that dials
+// the address (or another name for it). A name that does not exist protects nothing and is skipped; any other
+// lookup failure refuses the scope.
+func (p *Planner) exclusionFacts(ctx context.Context, ex Exclusions) (Facts, error) {
 	var f Facts
 	for _, raw := range ex.Addresses {
-		if a, err := netip.ParseAddr(raw); err == nil {
-			f.Exclusion = append(f.Exclusion, netip.PrefixFrom(Unmap(a), Unmap(a).BitLen()))
+		a, err := netip.ParseAddr(raw)
+		if err != nil {
+			return Facts{}, scopeFailed("exclusion address %q does not parse", raw)
 		}
+		f.Exclusion = append(f.Exclusion, netip.PrefixFrom(Unmap(a), Unmap(a).BitLen()))
 	}
 	for _, raw := range ex.Prefixes {
-		if pr, err := netip.ParsePrefix(raw); err == nil {
-			f.Exclusion = append(f.Exclusion, pr)
+		pr, err := netip.ParsePrefix(raw)
+		if err != nil {
+			return Facts{}, scopeFailed("exclusion prefix %q does not parse", raw)
 		}
+		f.Exclusion = append(f.Exclusion, pr)
+	}
+	res := p.Resolver
+	if res == nil {
+		res = net.DefaultResolver
 	}
 	for _, h := range ex.Hosts {
-		if n := NormalizeHost(h); n != "" {
-			f.ExclusionHosts = append(f.ExclusionHosts, n)
+		n := NormalizeHost(h)
+		if n == "" {
+			return Facts{}, scopeFailed("exclusion host %q does not parse", h)
+		}
+		f.ExclusionHosts = append(f.ExclusionHosts, n)
+		if _, err := netip.ParseAddr(n); err == nil {
+			continue
+		}
+		rctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		addrs, err := res.LookupNetIP(rctx, "ip", n)
+		cancel()
+		var dnsErr *net.DNSError
+		switch {
+		case err == nil:
+		case errors.As(err, &dnsErr) && dnsErr.IsNotFound:
+			continue
+		default:
+			return Facts{}, scopeFailed("excluded host %s cannot be resolved: %v", n, err)
+		}
+		for _, a := range addrs {
+			a = Unmap(a)
+			f.Exclusion = append(f.Exclusion, netip.PrefixFrom(a, a.BitLen()))
 		}
 	}
-	return f
+	return f, nil
 }
 
 func (p *Planner) waitReady(ctx context.Context, rt Runtime, binary, attempt string) error {
@@ -265,12 +306,16 @@ func (p *Planner) release(rt Runtime, binary, attempt string) func(context.Conte
 func (p *Planner) releaseOnce(ctx context.Context, rt Runtime, binary, attempt string) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
 	defer cancel()
-	if log, err := rt.SidecarLog(ctx, binary, attempt); err == nil {
-		for _, e := range ParseEvents(strings.NewReader(string(log))) {
-			p.emit(attempt, e)
-		}
+	log, err := rt.SidecarLog(ctx, binary, attempt)
+	if err != nil {
+		p.emit(attempt, Event{Reason: ReasonLogUnreadable, Detail: clip(err.Error(), 200)})
 	}
-	_ = rt.Remove(ctx, binary, attempt)
+	for _, e := range ParseEvents(strings.NewReader(string(log))) {
+		p.emit(attempt, e)
+	}
+	if err := rt.Remove(ctx, binary, attempt); err != nil {
+		p.emit(attempt, Event{Reason: ReasonCleanupFailed, Detail: clip(err.Error(), 200)})
+	}
 }
 
 func (p *Planner) emit(attempt string, e Event) {

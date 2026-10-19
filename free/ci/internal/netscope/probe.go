@@ -26,8 +26,8 @@ import (
 const (
 	probeTTL     = 10 * time.Minute
 	probeFailTTL = time.Minute
-	// maxProbeHosts bounds the host addresses dialled (the runtime argv carries at most 64 targets).
-	maxProbeHosts = 40
+	// maxProbeChunk bounds the targets of one probe run (the runtime argv carries at most 64).
+	maxProbeChunk = 40
 )
 
 // rawTargets are addresses a job must never reach directly, whatever the scope: the cloud metadata address
@@ -117,7 +117,6 @@ func (pr *Prober) proveProxied(ctx context.Context, binary string) bool {
 	if err != nil || control == "" {
 		return false
 	}
-	targets = append(targets, control) // positive control: the probe can reach the proxy on the job network
 	bin, err := pl.proxyBinary()
 	if err != nil {
 		return false
@@ -126,18 +125,26 @@ func (pr *Prober) proveProxied(ctx context.Context, binary string) bool {
 	if image == "" {
 		image = ProxyImage
 	}
-	out, err := pl.rt().ProbeRun(ctx, binary, id, image, bin, targets)
-	if err != nil {
-		return false
+	// every host address is dialled (in chunks: the runtime argv is bounded), each chunk with the positive
+	// control: "nothing was reached" only means something if the probe could connect at all, so the proxy must
+	// be the one target that answered. The first run also checks the two other ways out: the proxy must refuse
+	// a tunnel to the metadata address, and a DNS lookup in the job network must fail.
+	for i := 0; i < len(targets) || i == 0; i += maxProbeChunk {
+		chunk := targets[min(i, len(targets)):min(i+maxProbeChunk, len(targets))]
+		out, err := pl.rt().ProbeRun(ctx, binary, id, image, bin, control, append(append([]string(nil), chunk...), control))
+		if err != nil {
+			return false
+		}
+		got := Reached(out)
+		if len(got) != 1 || got[0] != control || !probeCompleted(out) {
+			return false
+		}
+		if i == 0 && (!proxyRefused(out) || !dnsFailed(out)) {
+			return false
+		}
 	}
 	time.Sleep(200 * time.Millisecond) // let the fixture's accept loop count a connection that just completed
-	if len(accepted) > 0 {
-		return false
-	}
-	// "nothing was reached" only means something if the probe could connect at all: the proxy must be the one
-	// target that answered, so an offline probe container (or a broken dial) withholds the scopes
-	got := Reached(out)
-	return len(got) == 1 && got[0] == control && probeCompleted(out)
+	return len(accepted) == 0
 }
 
 // proxyAddress extracts host:port of the proxy from the job's proxy variables.
@@ -166,9 +173,6 @@ func (p *Planner) probeTargets(ln net.Listener) ([]string, error) {
 	}
 	var targets []string
 	for _, a := range f.HostAddrs {
-		if len(targets) >= maxProbeHosts {
-			break
-		}
 		if a = Unmap(a); a.IsValid() && !a.IsLoopback() && !a.IsLinkLocalUnicast() {
 			targets = append(targets, net.JoinHostPort(a.String(), port))
 		}
@@ -203,12 +207,58 @@ func probeCompleted(out []byte) bool {
 	return false
 }
 
-// RunProbeMode is the container side: dial every target and print what connected, then "done".
-func RunProbeMode(ctx context.Context, targets []string, w interface{ Write([]byte) (int, error) }) {
+// RunProbeMode is the container side: dial every target and print what connected; ask the proxy for a tunnel
+// to the metadata address and print the status it answered with; try one DNS lookup and print whether it
+// resolved; then "done".
+func RunProbeMode(ctx context.Context, proxy string, targets []string, w interface{ Write([]byte) (int, error) }) {
 	for _, t := range ProbeDial(ctx, targets, 3*time.Second) {
 		_, _ = w.Write([]byte(reachedPrefix + t + "\n"))
 	}
+	if proxy != "" {
+		_, _ = w.Write([]byte("proxy " + tunnelStatus(ctx, proxy, "169.254.169.254:80") + "\n"))
+	}
+	lctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	if addrs, err := net.DefaultResolver.LookupHost(lctx, "example.com"); err == nil && len(addrs) > 0 {
+		_, _ = w.Write([]byte("dns resolved\n"))
+	} else {
+		_, _ = w.Write([]byte("dns failed\n"))
+	}
 	_, _ = w.Write([]byte(doneLine + "\n"))
+}
+
+// tunnelStatus sends a CONNECT for target to the proxy and returns the status code it answers ("error" when
+// it does not answer).
+func tunnelStatus(ctx context.Context, proxy, target string) string {
+	d := net.Dialer{Timeout: 5 * time.Second}
+	c, err := d.DialContext(ctx, "tcp", proxy)
+	if err != nil {
+		return "error"
+	}
+	defer c.Close()
+	_ = c.SetDeadline(time.Now().Add(8 * time.Second))
+	_, _ = c.Write([]byte("CONNECT " + target + " HTTP/1.1\r\nHost: " + target + "\r\n\r\n"))
+	buf := make([]byte, 64)
+	n, _ := c.Read(buf)
+	if f := strings.Fields(string(buf[:n])); len(f) >= 2 && f[0] == "HTTP/1.1" {
+		return f[1]
+	}
+	return "error"
+}
+
+// proxyRefused reports that the probe's tunnel request to the metadata address was answered 403.
+func proxyRefused(out []byte) bool { return hasLine(out, "proxy 403") }
+
+// dnsFailed reports that the probe's DNS lookup failed.
+func dnsFailed(out []byte) bool { return hasLine(out, "dns failed") }
+
+func hasLine(out []byte, want string) bool {
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.TrimSpace(line) == want {
+			return true
+		}
+	}
+	return false
 }
 
 func probeID() (string, error) {

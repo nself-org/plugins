@@ -65,11 +65,17 @@ func TestContributorPublishesTheProofForTheLocalRunnerOnly(t *testing.T) {
 	t.Cleanup(func() { localProof = old })
 	localProof = &scopeProof{binary: func(context.Context) string { return "" }, scopes: []model.NetworkScope{"none", "restricted"}, at: time.Now()}
 	local := sched.Runner{ID: "local"}
-	local.Capability.Identity.Labels = []string{world.LocalLabel}
+	local.Capability.Identity = model.CapabilityIdentity{ID: "local", Provider: "local", Transport: "local", Labels: []string{world.LocalLabel}}
 	impostor := sched.Runner{ID: "local"} // a registered node called "local" without the reserved label
+	labelled := sched.Runner{ID: "local"} // one that even carries the label, but is an ssh endpoint
+	labelled.Capability.Identity = model.CapabilityIdentity{ID: "local", Provider: "operator", Transport: "ssh", Labels: []string{world.LocalLabel}}
 	w := sched.World{Runners: []sched.Runner{impostor}}
 	if err := contributeNetwork(context.Background(), &w); err != nil || len(w.Network) != 0 {
 		t.Fatalf("a runner without the local label got a proof: %+v %v", w.Network, err)
+	}
+	w = sched.World{Runners: []sched.Runner{labelled}}
+	if err := contributeNetwork(context.Background(), &w); err != nil || len(w.Network) != 0 {
+		t.Fatalf("a registered ssh node called local got a proof: %+v %v", w.Network, err)
 	}
 	// no runtime: the stale proof is dropped and nothing is published
 	w = sched.World{Runners: []sched.Runner{local}}
@@ -77,7 +83,11 @@ func TestContributorPublishesTheProofForTheLocalRunnerOnly(t *testing.T) {
 		t.Fatalf("a proof outlived its runtime: %+v %v", w.Network, err)
 	}
 	localProof = &scopeProof{binary: func(context.Context) string { return "docker" }, scopes: []model.NetworkScope{"none", "restricted"}, at: time.Now()}
-	w = sched.World{Runners: []sched.Runner{impostor, local}}
+	w = sched.World{Runners: []sched.Runner{labelled, local}} // two runners with the id: ambiguous, no proof
+	if err := contributeNetwork(context.Background(), &w); err != nil || len(w.Network) != 0 {
+		t.Fatalf("an ambiguous local id got a proof: %+v %v", w.Network, err)
+	}
+	w = sched.World{Runners: []sched.Runner{local}}
 	if err := contributeNetwork(context.Background(), &w); err != nil {
 		t.Fatal(err)
 	}

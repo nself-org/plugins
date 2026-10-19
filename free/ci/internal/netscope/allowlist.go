@@ -54,3 +54,13 @@ func HostAllowed(scope model.NetworkScope, host string, extra []string) bool {
 	}
 	return false
 }
+
+// PortAllowed reports whether the scope allows a destination port. restricted serves package registries over
+// HTTPS and plain HTTP only, so an allowlisted host cannot be used to reach another service on the same name;
+// internet allows any port of a public host.
+func PortAllowed(scope model.NetworkScope, port string) bool {
+	if scope == "restricted" {
+		return port == "443" || port == "80"
+	}
+	return true
+}

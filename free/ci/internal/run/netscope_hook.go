@@ -129,13 +129,26 @@ func containerRuntime(ctx context.Context) string {
 var localProof = &scopeProof{prober: &netscope.Prober{Planner: netscopePlanner}, binary: containerRuntime}
 
 func contributeNetwork(ctx context.Context, w *sched.World) error {
-	for _, r := range w.Runners {
-		if r.ID != "local" || !hasLabel(r.Capability.Identity.Labels, world.LocalLabel) {
-			continue // the proof is about this machine; a registered node that is called "local" is not it
+	var local *sched.Runner
+	n := 0
+	for i := range w.Runners {
+		if w.Runners[i].ID == "local" {
+			local = &w.Runners[i]
+			n++
 		}
-		if scopes := localProof.get(ctx); len(scopes) > 0 {
-			w.Network = map[string]sched.NetworkFact{"local": {Enforced: scopes}}
-		}
+	}
+	// the proof is about this machine. Only the runner the world builder injected for it has transport and
+	// provider "local" and the reserved label; a registered node that is called "local" (or two runners with
+	// that id, the builder rebuilds without the injected one) gets none.
+	id := model.CapabilityIdentity{}
+	if local != nil {
+		id = local.Capability.Identity
+	}
+	if n != 1 || id.Transport != "local" || id.Provider != "local" || !hasLabel(id.Labels, world.LocalLabel) {
+		return nil
+	}
+	if scopes := localProof.get(ctx); len(scopes) > 0 {
+		w.Network = map[string]sched.NetworkFact{"local": {Enforced: scopes}}
 	}
 	return nil
 }

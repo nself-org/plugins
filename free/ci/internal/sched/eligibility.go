@@ -115,8 +115,8 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 		d.PersonalOwnRun = d.PersonalOwnRun || j.PersonalOwnRun
 		d.ReleaseJob = d.ReleaseJob || hasSecretClass(j.SecretClasses, "release")
 	}
-	if f, ok := w.Network[r.ID]; ok { // derived, never declared: only a probed scope below lan has no LAN route
-		d.NoLANRoute = noLANRoute(j, f.Enforced)
+	if w.Network != nil { // derived, never declared: only a probed scope below lan has no LAN route
+		d.NoLANRoute = noLANRoute(j, w.Network[r.ID].Enforced)
 	}
 	jf := trust.JobFacts{Trust: j.Trust, SecretClasses: j.SecretClasses, Network: j.Network, PersonalOwnRun: j.PersonalOwnRun, Release: j.Pipeline.Release}
 	for _, tr := range trust.Admissible(jf, d, w.Policy.Trust) {

@@ -22,6 +22,7 @@ import (
 func netproxyFlags() *flag.FlagSet {
 	fs := flag.NewFlagSet("netproxy", flag.ContinueOnError)
 	fs.Bool("probe", false, "dial the targets and print the ones that connected")
+	fs.String("proxy", "", "with --probe: the proxy to ask for a tunnel to the metadata address")
 	return fs
 }
 
@@ -38,7 +39,7 @@ func runNetproxy(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if fs.Lookup("probe").Value.String() == "true" {
-		netscope.RunProbeMode(ctx, fs.Args(), os.Stdout)
+		netscope.RunProbeMode(ctx, fs.Lookup("proxy").Value.String(), fs.Args(), os.Stdout)
 		return 0
 	}
 	if err := netscope.RunSidecar(ctx, os.Getenv(netscope.ConfigEnv), os.Stdout); err != nil {

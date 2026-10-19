@@ -210,7 +210,7 @@ func lanContainer(t *testing.T, image string) string {
 const jobPrelude = `
 P=${HTTPS_PROXY#http://}; H=${P%:*}; PORT=${P##*:}
 echo "PROXY=$P"
-req() { printf "$1" | nc -w 8 "$H" "$PORT" | head -n1 | tr -d '\r'; }
+req() { (printf "$1"; sleep 3) | nc -w 8 "$H" "$PORT" | head -n1 | tr -d '\r'; }
 connect() { req "CONNECT $1 HTTP/1.1\r\nHost: $1\r\n\r\n"; }
 get() { req "GET http://$1/ HTTP/1.1\r\nHost: $1\r\nConnection: close\r\n\r\n"; }
 direct() { if nc -w 3 "$1" "$2" </dev/null >/dev/null 2>&1; then echo "REACHED:$1:$2"; else echo "BLOCKED:$1:$2"; fi; }
@@ -353,11 +353,11 @@ func hostPortUnreachable(t *testing.T, binary string) {
 		targets = append(targets, net.JoinHostPort(a, port))
 	}
 	targets = append(targets, rawTargets...)
-	out, err := pl.rt().ProbeRun(context.Background(), binary, id, ProxyImage, bin, targets)
+	out, err := pl.rt().ProbeRun(context.Background(), binary, id, ProxyImage, bin, proxyAddress(plan.Env), append(targets, proxyAddress(plan.Env)))
 	if err != nil {
 		t.Fatalf("probe run: %v\n%s", err, out)
 	}
-	if !probeCompleted(out) || len(Reached(out)) != 0 || accepted() != 0 {
+	if got := Reached(out); !probeCompleted(out) || len(got) != 1 || got[0] != proxyAddress(plan.Env) || !proxyRefused(out) || !dnsFailed(out) || accepted() != 0 {
 		t.Fatalf("job network reached something (fixture accepted %d):\n%s", accepted(), out)
 	}
 }
@@ -380,41 +380,5 @@ func assertNoLeftovers(t *testing.T, id string) {
 		if err != nil || len(list) != 0 {
 			t.Errorf("leftover %s for %s: %v %v", kind, id, list, err)
 		}
-	}
-}
-
-// TestIntegrationDiagDualHomedRoutes records, for the evidence log, how the runtime routes a container that
-// is on both the normal bridge and an internal network without a host address (the sidecar's situation).
-func TestIntegrationDiagDualHomedRoutes(t *testing.T) {
-	requireRuntime(t, "docker")
-	sh := func(args ...string) string {
-		out, err := osexec.Command("docker", args...).CombinedOutput()
-		if err != nil {
-			return "ERR " + err.Error() + "\n" + string(out)
-		}
-		return string(out)
-	}
-	image := os.Getenv("TRUST04_TEST_IMAGE")
-	if image == "" {
-		image = "alpine:3.19"
-	}
-	t.Logf("docker version: %s", strings.TrimSpace(sh("version", "--format", "{{.Server.Version}} api={{.Server.APIVersion}}")))
-	for _, order := range []string{"bridge-first", "internal-first"} {
-		net, ctr := "t08-diag-"+order, "t08-diag-sc-"+order
-		_ = sh("rm", "-f", ctr)
-		_ = sh("network", "rm", net)
-		sh("network", "create", "--driver", "bridge", "--internal", "--ipv6=false", "--opt", "com.docker.network.bridge.inhibit_ipv4=true", net)
-		first, second := "bridge", net
-		if order == "internal-first" {
-			first, second = net, "bridge"
-		}
-		t.Logf("%s create: %s", order, strings.TrimSpace(sh("create", "--name", ctr, "--network", first, image, "sleep", "120")))
-		t.Logf("%s connect: %s", order, strings.TrimSpace(sh("network", "connect", second, ctr)))
-		t.Logf("%s start: %s", order, strings.TrimSpace(sh("start", ctr)))
-		for _, cmd := range []string{"ip route", "ip addr", "cat /etc/resolv.conf", "nslookup example.com 2>&1 | head -6", "wget -T4 -qO- http://example.com 2>&1 | head -c 60; echo rc=$?", "nc -w 3 1.1.1.1 443 </dev/null; echo nc-rc=$?"} {
-			t.Logf("%s $ %s\n%s", order, cmd, sh("exec", ctr, "sh", "-c", cmd))
-		}
-		_ = sh("rm", "-f", ctr)
-		_ = sh("network", "rm", net)
 	}
 }

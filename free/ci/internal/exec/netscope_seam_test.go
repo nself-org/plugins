@@ -140,11 +140,11 @@ func TestNetscopeSeamRefusesUnsafeArguments(t *testing.T) {
 			return err
 		},
 		"probe bad target": func() error {
-			_, err := RuntimeNetProbeRun(ctx, "docker", "a1", testSidecarImage, bin, []string{"--privileged"})
+			_, err := RuntimeNetProbeRun(ctx, "docker", "a1", testSidecarImage, bin, "172.30.0.2:3128", []string{"--privileged"})
 			return err
 		},
 		"probe no target": func() error {
-			_, err := RuntimeNetProbeRun(ctx, "docker", "a1", testSidecarImage, bin, nil)
+			_, err := RuntimeNetProbeRun(ctx, "docker", "a1", testSidecarImage, bin, "172.30.0.2:3128", nil)
 			return err
 		},
 		"remove option attempt": func() error { return RuntimeRemoveAttempt(ctx, "docker", "-f") },
@@ -160,11 +160,11 @@ func TestNetProbeRunIsOnTheJobNetworkWithoutDNSOrCapabilities(t *testing.T) {
 	calls, _ := fakeNetDocker(t)
 	bin := filepath.Join(t.TempDir(), "nself-ci")
 	_ = os.WriteFile(bin, []byte("x"), 0o755)
-	if _, err := RuntimeNetProbeRun(context.Background(), "docker", "a1", testSidecarImage, bin, []string{"198.41.0.4:4000", "[2a00::1]:80"}); err != nil {
+	if _, err := RuntimeNetProbeRun(context.Background(), "docker", "a1", testSidecarImage, bin, "172.30.0.2:3128", []string{"198.41.0.4:4000", "[2a00::1]:80"}); err != nil {
 		t.Fatal(err)
 	}
 	run := calls()[0]
-	for _, want := range []string{"run --rm", "--network nself-ci-a1-net", "--dns 127.0.0.1", "--cap-drop ALL", "--read-only", "netproxy --probe 198.41.0.4:4000 [2a00::1]:80"} {
+	for _, want := range []string{"run --rm", "--network nself-ci-a1-net", "--dns 127.0.0.1", "--cap-drop ALL", "--read-only", "netproxy --probe --proxy 172.30.0.2:3128 198.41.0.4:4000 [2a00::1]:80"} {
 		if !strings.Contains(run, want) {
 			t.Errorf("probe run lacks %q: %s", want, run)
 		}

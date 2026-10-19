@@ -39,8 +39,8 @@ type Proxy struct {
 // maxEvents bounds the denial events one sidecar writes, so a job cannot flood the log that the planner reads
 // back; the last event states that the rest were dropped. maxEventHost bounds the host a refusal records.
 const (
-	maxEvents    = 4000
-	maxEventHost = 253
+	maxEvents    = 1000
+	maxEventHost = 120
 )
 
 // Serve accepts on ln until ctx ends.
@@ -68,7 +68,7 @@ func (p *Proxy) record(host, port string, v Verdict) {
 		return
 	}
 	p.events++
-	e := Event{Scope: string(p.Guard.Scope), Host: clip(host, maxEventHost), Port: clip(port, 5), Reason: v.Reason, Detail: clip(v.Detail, 2*maxEventHost)}
+	e := Event{Scope: string(p.Guard.Scope), Host: clip(host, maxEventHost), Port: clip(port, 5), Reason: v.Reason, Detail: clip(v.Detail, 160)}
 	if p.events > maxEvents {
 		e = Event{Scope: string(p.Guard.Scope), Reason: ReasonEventsDropped, Detail: "further denials are not recorded"}
 	}
@@ -120,7 +120,14 @@ func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad CONNECT target", http.StatusBadRequest)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), dialTimeout)
+	if !PortAllowed(p.Guard.Scope, port) {
+		p.deny(w, host, port, Verdict{Reason: ReasonPort, Detail: port})
+		return
+	}
+	// the name is resolved and checked under the proxy's own deadline, not the request's: a client that closes
+	// its sending side right after the request line (busybox nc does) cancels the request context, and a
+	// cancelled lookup would be recorded as a denial of a destination that was never judged
+	ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
 	defer cancel()
 	addrs, v := p.Guard.Pin(ctx, host)
 	if !v.Allowed {
@@ -179,7 +186,11 @@ func (p *Proxy) forward(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request target", http.StatusBadRequest)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), dialTimeout)
+	if !PortAllowed(p.Guard.Scope, port) {
+		p.deny(w, host, port, Verdict{Reason: ReasonPort, Detail: port})
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
 	addrs, v := p.Guard.Pin(ctx, host)
 	cancel()
 	if !v.Allowed {
@@ -196,6 +207,9 @@ func (p *Proxy) forward(w http.ResponseWriter, r *http.Request) {
 	}
 	out := r.Clone(r.Context())
 	out.RequestURI = ""
+	for _, h := range connectionTokens(out.Header) { // headers the client named in Connection are hop-by-hop too
+		out.Header.Del(h)
+	}
 	for _, h := range hopHeaders {
 		out.Header.Del(h)
 	}
@@ -216,4 +230,17 @@ func (p *Proxy) forward(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)
+}
+
+// connectionTokens lists the header names a Connection header marks as hop-by-hop.
+func connectionTokens(h http.Header) []string {
+	var out []string
+	for _, v := range h.Values("Connection") {
+		for _, t := range strings.Split(v, ",") {
+			if t = strings.TrimSpace(t); t != "" {
+				out = append(out, t)
+			}
+		}
+	}
+	return out
 }

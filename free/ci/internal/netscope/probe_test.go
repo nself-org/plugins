@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func newProber(rt *fakeRuntime) (*Prober, *time.Time) {
 }
 
 func TestProbeProvesProxiedScopesWhenNothingIsReached(t *testing.T) {
-	rt := &fakeRuntime{probeOut: []byte("reached 172.30.0.2:3128\ndone\n")}
+	rt := &fakeRuntime{probeOut: []byte("reached 172.30.0.2:3128\nproxy 403\ndns failed\ndone\n")}
 	pr, _ := newProber(rt)
 	got := pr.EnforcedScopes(context.Background(), "docker")
 	if scopesOf(got) != "none,restricted,internet" {
@@ -56,9 +57,9 @@ func TestProbeProvesProxiedScopesWhenNothingIsReached(t *testing.T) {
 
 func TestProbeWithholdsProxiedScopesWhenAnythingIsReached(t *testing.T) {
 	for name, out := range map[string]string{
-		"reached host": "reached 172.30.0.2:3128\nreached 198.41.0.4:4000\ndone\n", "reached raw": "reached 172.30.0.2:3128\nreached 1.1.1.1:443\ndone\n",
-		"control not reached": "done\n", "only host reached": "reached 198.41.0.4:4000\ndone\n",
-		"cut short": "reached 172.30.0.2:3128\n", "garbled": "boom\n",
+		"reached host": "reached 172.30.0.2:3128\nreached 198.41.0.4:4000\nproxy 403\ndns failed\ndone\n", "reached raw": "reached 172.30.0.2:3128\nreached 1.1.1.1:443\nproxy 403\ndns failed\ndone\n",
+		"control not reached": "proxy 403\ndns failed\ndone\n", "only host reached": "reached 198.41.0.4:4000\nproxy 403\ndns failed\ndone\n",
+		"cut short": "reached 172.30.0.2:3128\nproxy 403\ndns failed\n", "proxy answered 200": "reached 172.30.0.2:3128\nproxy 200\ndns failed\ndone\n", "dns resolved": "reached 172.30.0.2:3128\nproxy 403\ndns resolved\ndone\n", "garbled": "boom\n",
 	} {
 		rt := &fakeRuntime{probeOut: []byte(out)}
 		pr, _ := newProber(rt)
@@ -75,7 +76,7 @@ func TestProbeWithholdsProxiedScopesWhenAnythingIsReached(t *testing.T) {
 
 // A connection the host fixture accepts proves the job network has a route to the host.
 func TestProbeWithholdsWhenTheHostFixtureSawAConnection(t *testing.T) {
-	rt := &fakeRuntime{probeOut: []byte("reached 172.30.0.2:3128\ndone\n")}
+	rt := &fakeRuntime{probeOut: []byte("reached 172.30.0.2:3128\nproxy 403\ndns failed\ndone\n")}
 	pr, _ := newProber(rt)
 	pr.Listen = func() (net.Listener, error) {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -106,7 +107,7 @@ func TestProbeSidecarFailureAndNoRuntimeClaimNothingProxied(t *testing.T) {
 }
 
 func TestProbeResultIsCached(t *testing.T) {
-	rt := &fakeRuntime{probeOut: []byte("reached 172.30.0.2:3128\ndone\n")}
+	rt := &fakeRuntime{probeOut: []byte("reached 172.30.0.2:3128\nproxy 403\ndns failed\ndone\n")}
 	pr, now := newProber(rt)
 	pr.EnforcedScopes(context.Background(), "docker")
 	n := len(rt.steps)
@@ -140,9 +141,32 @@ func TestProbeModeOutput(t *testing.T) {
 	closedAddr := closed.Addr().String()
 	_ = closed.Close()
 	var out bytes.Buffer
-	RunProbeMode(context.Background(), []string{ln.Addr().String(), closedAddr}, &out)
+	RunProbeMode(context.Background(), "", []string{ln.Addr().String(), closedAddr}, &out)
 	got := Reached(out.Bytes())
 	if len(got) != 1 || got[0] != ln.Addr().String() || !probeCompleted(out.Bytes()) {
 		t.Fatalf("output %q reached %v", out.String(), got)
+	}
+}
+
+// Every host address is dialled, in chunks of the runtime's argument limit, each chunk with the control.
+func TestProbeDialsEveryHostAddressInChunks(t *testing.T) {
+	rt := &fakeRuntime{probeOut: []byte("reached 172.30.0.2:3128\nproxy 403\ndns failed\ndone\n")}
+	pr, _ := newProber(rt)
+	var addrs []netip.Addr
+	for i := 1; i <= 95; i++ {
+		addrs = append(addrs, netip.AddrFrom4([4]byte{198, 41, byte(i), 4}))
+	}
+	pr.Planner.Host = func() (Facts, error) { return Facts{HostAddrs: addrs}, nil }
+	if got := pr.EnforcedScopes(context.Background(), "docker"); scopesOf(got) != "none,restricted,internet" {
+		t.Fatalf("scopes %v", got)
+	}
+	hosts := 0
+	for _, tg := range rt.targets {
+		if strings.HasPrefix(tg, "198.41.") {
+			hosts++
+		}
+	}
+	if hosts != 95 || rt.probeRuns != 3 || rt.proxy != "172.30.0.2:3128" {
+		t.Errorf("%d host targets in %d runs (proxy %q), want 95 in 3", hosts, rt.probeRuns, rt.proxy)
 	}
 }

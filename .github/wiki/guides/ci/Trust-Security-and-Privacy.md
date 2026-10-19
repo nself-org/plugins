@@ -72,6 +72,8 @@ A job runs under one scope. An undeclared scope takes the default of its trust c
 | `none` | Nothing. The container has no interface but `lo`. |
 | `restricted` | Only an allowlist of package registries, through the proxy: `proxy.golang.org`, `sum.golang.org`, `registry.npmjs.org`, `registry.yarnpkg.com`, `crates.io`, `static.crates.io`, `index.crates.io`, `pypi.org`, `files.pythonhosted.org`, plus the hosts the policy key `trust.providers` names. |
 | `internet` | Any public host, through the proxy. |
+
+`restricted` serves ports 443 and 80 only; `internet` serves any port of a public host.
 | `lan` | The default bridge (owner and internal jobs only). |
 | `privileged` | Raw access (owner and internal jobs only). |
 
@@ -81,9 +83,9 @@ The proxy takes `CONNECT` and absolute-form HTTP requests. For each request it r
 
 - the special-purpose IPv4 and IPv6 ranges, which include the NAT64, local-use NAT64, 6to4 and Teredo forms of an IPv4 address, so `::ffff:10.0.0.1`, `64:ff9b::a00:1` and `2002:a00:1::1` are refused like `10.0.0.1`;
 - the host's own addresses and every prefix configured on its interfaces or in its routes, IPv4 and IPv6, global unicast prefixes included (a `/64` LAN of public addresses is a LAN);
-- the node-global deploy exclusion set (`deployguard.ExclusionSet`), by address, prefix and name.
+- the deploy exclusion set of the host (the cached entries of its `state.db` and the never-list in `config.yaml`, read with `deployguard.LocalSet`), by address, prefix and name. Each excluded name is also resolved once when the scope is set up and its addresses join the set, so dialling the address, or another name for it, is refused too. A set that exists and cannot be read, or an entry that does not parse, makes the scope unavailable (`E679`) instead of running with less.
 
-No environment variable loosens the set (`NSELF_ALLOW_PRIVATE_URLS` of the SDK guard has no counterpart). Each refusal is one structured event (`network.denied`, with the scope, host, port and reason) that the planner reads back when the attempt ends. The proxy never logs a path, header or body.
+No environment variable loosens the set (`NSELF_ALLOW_PRIVATE_URLS` of the SDK guard has no counterpart). Each refusal is one structured event (`network.denied`, with the scope, host, port and reason) that the planner reads back when the attempt ends. The proxy never logs a path, header or body, its refusal answer names no reason, and a sidecar records at most 1000 events (the last one says so). The planner also records an event when the sidecar log could not be read back or the attempt's resources could not be removed.
 
 A tool that ignores proxy variables fails under `restricted` and `internet`. That is intended: there is no silent bypass.
 
@@ -93,9 +95,11 @@ A scope is offered only where it is enforced. The probe builds the same network 
 
 ### Known limits
 
-- The exclusion set is read from the coordinator's store. A process with no registered source (`run.RegisterNetscopeExclusions`) still refuses the special-purpose ranges, the host and the on-link prefixes, but not a public deploy address.
-- The scheduler reads the proof for the local runner. A remote node's `network.enforced_scopes` is not reported yet, so no untrusted job is placed on a remote node on the strength of it.
-- The proxy sees the destination host and port, not the encrypted content; under `internet` it allows any port of a public host.
+- The exclusion set is the one this host can build for itself. A team coordinator that keeps the set in its own store can replace it with `run.RegisterNetscopeExclusions`; nothing registers one yet.
+- The scheduler reads the proof for the local runner. A remote node's `network.enforced_scopes` is not reported yet, so no untrusted job is placed on a remote node on the strength of it. The agent does not yet pass the lease's network scope into the executor (container jobs there run with `none`), and `netscope.Effective`, which refuses `lan` and `privileged` for an untrusted job, is called by the scheduler's admission rules only.
+- The proxy sees the destination host and port, not the encrypted content. It does not check the TLS server name, so a shared CDN host on the allowlist can be used for traffic to another site behind it, and uploading to an allowlisted registry is still an exfiltration path. `restricted` limits where a job can talk, not what it says.
+- The host's other routing tables (policy routing for a VPN) and a public address that hairpins to a LAN service through the router are not in the on-link set. Put such addresses in the never-list.
+- The sidecar bind-mounts this process's own binary, so the file must be readable and executable by other users (mode `0755`), or the scope is unavailable (`E679`).
 
 ## What a node must provide
 

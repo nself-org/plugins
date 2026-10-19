@@ -221,3 +221,63 @@ func TestProxyAbsoluteHTTPAndOriginForm(t *testing.T) {
 		}
 	}
 }
+
+// restricted serves ports 443 and 80 only: an allowlisted host is not a way to another service on that name.
+func TestProxyRestrictedPortPolicy(t *testing.T) {
+	addr, _, d, ev := startProxy(t, "restricted", map[string][]string{"registry.npmjs.org": {"104.16.1.1"}}, Facts{}, nil)
+	for target, want := range map[string]string{"registry.npmjs.org:443": "200", "registry.npmjs.org:80": "200", "registry.npmjs.org:25": "403", "registry.npmjs.org:22": "403"} {
+		if status, _, _ := connect(t, addr, target); !strings.Contains(status, want) {
+			t.Errorf("%s: %q, want %s", target, status, want)
+		}
+	}
+	if len(d.dialed) != 2 {
+		t.Errorf("dialled %v", d.dialed)
+	}
+	ports := 0
+	for _, e := range ParseEvents(bytes.NewReader(ev.bytes())) {
+		if e.Reason == ReasonPort {
+			ports++
+		}
+	}
+	if ports != 2 {
+		t.Errorf("%d port events", ports)
+	}
+	if !PortAllowed("internet", "25") || PortAllowed("restricted", "25") {
+		t.Error("PortAllowed")
+	}
+}
+
+func TestConnectionTokensListHopByHopHeaders(t *testing.T) {
+	h := http.Header{"Connection": {"X-Secret, close", "keep-alive"}}
+	if got := strings.Join(connectionTokens(h), ","); got != "X-Secret,close,keep-alive" {
+		t.Errorf("%q", got)
+	}
+}
+
+// A client that closes its sending side right after the request still gets its destination judged (and its
+// tunnel when allowed): the lookup does not run under the request context, which the server cancels on EOF.
+func TestProxyJudgesRequestsFromClientsThatHalfClose(t *testing.T) {
+	addr, res, d, ev := startProxy(t, "restricted", map[string][]string{"proxy.golang.org": {"142.250.80.17"}, "sum.golang.org": {"10.0.0.7"}}, Facts{}, nil)
+	for target, want := range map[string]string{"proxy.golang.org:443": "200", "sum.golang.org:443": "403"} {
+		c, err := net.DialTimeout("tcp", addr, 5*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = c.SetDeadline(time.Now().Add(10 * time.Second))
+		fmt.Fprintf(c, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", target, target)
+		_ = c.(*net.TCPConn).CloseWrite()
+		status, _ := bufio.NewReader(c).ReadString('\n')
+		_ = c.Close()
+		if !strings.Contains(status, want) {
+			t.Errorf("%s: %q, want %s", target, status, want)
+		}
+	}
+	if res.calls["proxy.golang.org"] != 1 || len(d.dialed) != 1 {
+		t.Errorf("lookups %v dialled %v", res.calls, d.dialed)
+	}
+	for _, e := range ParseEvents(bytes.NewReader(ev.bytes())) {
+		if e.Reason == ReasonResolve {
+			t.Errorf("a cancelled lookup was recorded as a denial: %+v", e)
+		}
+	}
+}
