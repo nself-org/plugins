@@ -16,6 +16,23 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
+// Every test in this package runs the add/pair/test hooks against an empty fixture inventory, never the
+// developer's nself or ssh config; the tests below swap in the inventory they need.
+func init() {
+	prod := newGuard
+	newGuard = func(st *store.Store, h, actor string) *deployguard.Guard {
+		g := prod(st, h, actor)
+		g.Reader = deployguard.Reader{Run: func(_ context.Context, _ string, argv ...string) ([]byte, int, error) {
+			if len(argv) > 1 && argv[1] == "help" {
+				return deployguard.FixtureHelp("read"), 0, nil
+			}
+			return deployguard.FixtureTargets(), 0, nil
+		}}
+		g.Resolver = deployguard.Resolver{}
+		return g
+	}
+}
+
 // stubNself makes the hook's guard read the fixture inventory (host 203.0.113.10) instead of running nself.
 func stubNself(t *testing.T) string {
 	t.Helper()

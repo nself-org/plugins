@@ -43,6 +43,8 @@ type Facts struct {
 	// Partial is true when a lookup that could have added identities failed (ssh -G or DNS): "no match"
 	// is then not proof that the node is not a deploy host.
 	Partial bool
+	// SSHFailed is true when `ssh -G` itself failed, so the real host name behind an alias is unknown.
+	SSHFailed bool
 }
 
 // Result is the outcome of a match. Source is empty when nothing matched. Partial is copied from the
@@ -51,6 +53,7 @@ type Result struct {
 	Matched      bool
 	Source, Kind string
 	Partial      bool
+	SSHFailed    bool
 }
 
 type prefixEntry struct {
@@ -162,7 +165,7 @@ func (s Set) Match(f Facts) Result {
 			return Result{Matched: true, Source: src, Kind: KindMachineID}
 		}
 	}
-	return Result{Partial: f.Partial}
+	return Result{Partial: f.Partial, SSHFailed: f.SSHFailed}
 }
 
 // MatchHost checks one host string in any spelling.

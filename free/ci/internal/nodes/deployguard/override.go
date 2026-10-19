@@ -72,8 +72,10 @@ func (g *Guard) CheckAdd(ctx context.Context, q AddRequest) (Result, []string, e
 		if g.nothingKnown(ctx) {
 			warn = append(warn, "no deploy inventory is known and the never-list is empty: nothing was checked against deploy hosts (run inside a project with .nself or set ci.project_roots)")
 		}
-		if r.Partial {
-			return r, warn, newErr(ReasonNoIdentity, "the identity of %s could not be fully resolved (%s); node was not added", q.NodeID, strings.Join(w, "; "))
+		if r.SSHFailed {
+			// With `ssh -G` down the real host behind an alias is unknown. A DNS-only gap is a warning: a node
+			// behind ProxyJump may have a name only the jump host resolves, and name matches need no DNS.
+			return r, warn, newErr(ReasonNoIdentity, "the identity of %s could not be resolved (%s); node was not added", q.NodeID, strings.Join(w, "; "))
 		}
 		return r, warn, g.unverified(ctx)
 	}

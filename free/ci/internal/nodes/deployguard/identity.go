@@ -71,7 +71,7 @@ func (r Resolver) Facts(ctx context.Context, id Identity) (Facts, []string) {
 	if _, literal := parseAddr(bareHost(id.Dest)); id.Dest != "" && !literal && r.SSH != nil {
 		if res, err := r.SSH(ctx, id.Dest); err != nil {
 			warn = append(warn, "ssh -G could not resolve "+Canon(id.Dest))
-			f.Partial = true
+			f.Partial, f.SSHFailed = true, true
 		} else {
 			// ssh answered: the alias itself need not be a DNS name, and the HostKeyAlias and jump hops are
 			// extra names, so only the resolved hostname must have an address for the evidence to be complete.

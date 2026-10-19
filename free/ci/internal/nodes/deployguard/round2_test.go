@@ -55,7 +55,7 @@ func TestStoredSSHHostnameIsNotQuiet(t *testing.T) {
 	}
 }
 
-func TestCheckAddRefusesAnUnmatchedNodeWhoseIdentityIsPartial(t *testing.T) {
+func TestCheckAddRefusesAnUnmatchedNodeWhenSSHCannotResolveIt(t *testing.T) {
 	r := newRig(t)
 	ctx := context.Background()
 	_ = r.g.Seen(ctx, r.rootA)
@@ -64,11 +64,15 @@ func TestCheckAddRefusesAnUnmatchedNodeWhoseIdentityIsPartial(t *testing.T) {
 	if ReasonOf(err) != ReasonNoIdentity || len(warn) == 0 || c.DeployHost.Matched || !strings.Contains(err.Error(), "node was not added") {
 		t.Fatalf("%v %v %+v", err, warn, c.DeployHost)
 	}
-	// With the lookups answering, the same node is added.
+	// ssh -G answers but DNS does not (a name only a jump host resolves): added, with a warning.
 	r.ssh["prodbox.example.test"] = remote.Resolved{Hostname: "prodbox.example.test"}
+	if _, warn, err = r.g.CheckAdd(ctx, AddRequest{NodeID: "pb", Dest: "ci@prodbox.example.test", Capability: c}); err != nil || len(warn) == 0 {
+		t.Fatalf("DNS-only gap: %v %v", err, warn)
+	}
+	// With everything answering, no warning.
 	r.lookup["prodbox.example.test"] = nil
-	if _, _, err = r.g.CheckAdd(ctx, AddRequest{NodeID: "pb", Dest: "ci@prodbox.example.test", Capability: c}); err != nil {
-		t.Fatal(err)
+	if _, warn, err = r.g.CheckAdd(ctx, AddRequest{NodeID: "pb", Dest: "ci@prodbox.example.test", Capability: c}); err != nil || len(warn) != 0 {
+		t.Fatalf("%v %v", err, warn)
 	}
 }
 
