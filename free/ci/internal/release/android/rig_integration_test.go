@@ -373,6 +373,7 @@ func (p *rig) cliVerify(dir string, info signing.KeyInfo) {
 	if jerr := json.Unmarshal(out, &env); err != nil || jerr != nil || !env.Data.Verified {
 		t.Fatalf("artifacts verify: %v (%v)\n%s", err, jerr, out)
 	}
+	t.Logf("nself-ci artifacts verify <release> --json (exit 0): %s", bytes.TrimSpace(out))
 }
 
 // planted lists the fake rig's planted values and the keystore forms.

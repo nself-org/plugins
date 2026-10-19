@@ -133,16 +133,20 @@ func TestAndroidLaneBareLaptop(t *testing.T) {
 		t.Fatal(err)
 	}
 	apk := filepath.Join(exp.Dir, "artifacts", ArtifactName, "app-release.apk")
-	if sig, err := exec.Command(apksigner, "verify", "--print-certs", apk).CombinedOutput(); err != nil || !strings.Contains(string(sig), "Signer #1 certificate") {
+	sig, err := exec.Command(apksigner, "verify", "--print-certs", apk).CombinedOutput()
+	if err != nil || !strings.Contains(string(sig), "Signer #1 certificate") {
 		t.Fatalf("apksigner verify %s: %v\n%s", apk, err, sig)
 	}
+	t.Logf("apksigner verify --print-certs (exit 0):\n%s", sig)
 	info, err := d.Signer.PublicKey(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v := p.verifyDir(exp.Dir, info); !v.Verified || v.Exit != 0 {
+	v := p.verifyDir(exp.Dir, info)
+	if !v.Verified || v.Exit != 0 {
 		t.Fatalf("verify: %+v", v)
 	}
+	t.Logf("verify.Release: verified=%v exit=%d passed=%v", v.Verified, v.Exit, v.Passed)
 	p.cliVerify(exp.Dir, info)
 	for _, f := range []string{"sbom/android/app-release.apk.cdx.json", "sbom/android/app-release.apk.spdx.json", "provenance.intoto.dsse.json"} {
 		if _, err := os.Stat(filepath.Join(exp.Dir, f)); err != nil {

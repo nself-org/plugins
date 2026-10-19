@@ -43,6 +43,9 @@ import (
 // buildCapture is the exec funnel `--upload` runs gh through (a test replaces it).
 var buildCapture android.Capture = report.Capture
 
+// newSBOMStep builds the SBOM step of a run (a test replaces it with a fake syft runner).
+var newSBOMStep = func(home string, pin sbom.Pin) android.SBOMStep { return android.SBOMStep{Home: home, Pin: pin} }
+
 func init() {
 	registerV15("build", subcommandEntry{V15Only: true, Hidden: true, Handler: runBuildV15,
 		Flags: func() *flag.FlagSet { return buildV15Flags(&buildOpts{}, flag.ContinueOnError) }})
@@ -148,15 +151,20 @@ func runBuildV15(args []string) int {
 		fmt.Fprintf(os.Stderr, "error: --artifact %q not supported (only \"android\")\n", o.artifact)
 		return 1
 	}
-	root, err := evidenceRoot("")
-	dir, derr := filepath.Abs(o.dir)
-	rel, rerr := filepath.Rel(root, dir)
-	if err != nil || derr != nil || rerr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		fmt.Fprintf(os.Stderr, "error: %s is not inside the repository %s (run from the repository root or set NSELF_CI_REPO)\n", o.dir, root)
-		return 1
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
+	root, err := evidenceRoot("")
+	if os.Getenv("NSELF_CI_REPO") == "" && err == nil { // run from a subdirectory: the release is bound to the repository
+		if top, ok := planGit(ctx, root, "rev-parse", "--show-toplevel"); ok {
+			root = strings.TrimSpace(top)
+		}
+	}
+	dir, derr := filepath.Abs(o.dir)
+	rel, rerr := relInside(root, dir)
+	if err != nil || derr != nil || rerr != nil {
+		fmt.Fprintf(os.Stderr, "error: %s is not inside the repository %s (run from the repository or set NSELF_CI_REPO)\n", o.dir, root)
+		return 1
+	}
 	lane, err := planBuildLane(ctx, root, filepath.ToSlash(rel), time.Duration(o.timeout)*time.Second)
 	if err != nil {
 		return exitForError(err)
@@ -165,7 +173,7 @@ func runBuildV15(args []string) int {
 	if err != nil {
 		return exitForError(err)
 	}
-	defer android.Install(android.SBOMStep{Home: os.Getenv("NSELF_CI_HOME"), Pin: pin})()
+	defer android.Install(newSBOMStep(os.Getenv("NSELF_CI_HOME"), pin))()
 	fmt.Printf("nself-ci build --artifact android — %s (pipeline %s)\n", dir, lane.pipeline)
 	opts := RunOptions{Root: root, Home: os.Getenv("NSELF_CI_HOME"), Pipeline: lane.pipeline, NoStatus: true, Full: true}
 	c := &cirun.Coordinator{Opts: opts, Plan: lane.plan, ConfigDigest: lane.digest, Substantive: lane.subst, Out: os.Stdout}
@@ -219,4 +227,21 @@ func uploadBuiltV15(ctx context.Context, o buildOpts, root string, apks []string
 	}
 	fmt.Printf("✓ Uploaded %d APK(s) to %s/%s@%s\n", len(apks), owner, repo, o.tag)
 	return 0
+}
+
+// relInside returns dir relative to root when dir is root or below it; symlinks (/var on macOS) are resolved first.
+func relInside(root, dir string) (string, error) {
+	r, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", err
+	}
+	d, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(r, d)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", errors.New("outside the repository")
+	}
+	return rel, nil
 }

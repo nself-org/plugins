@@ -37,9 +37,18 @@ type SBOMStep struct {
 	NewRunner func(sourceDir string) sbom.Runner
 }
 
-// Applies reports whether job is the lane's job: it has the lane's name and is a release job.
+// Applies reports whether job is the lane's job: a release job named android that declares the lane's APK
+// artifact. A project's own android job with other outputs makes its own SBOMs (the publication needs two per artifact).
 func Applies(name string, job model.Job) bool {
-	return name == JobName && job.Kind == "release"
+	if name != JobName || job.Kind != "release" {
+		return false
+	}
+	for _, a := range job.Artifacts {
+		if a.Path == APKGlob && a.Name == ArtifactName {
+			return true
+		}
+	}
+	return false
 }
 
 // Run inventories the APKs under the job's workdir in ws.

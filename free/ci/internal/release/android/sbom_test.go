@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sbom"
 	"github.com/nself-org/plugins/free/ci/internal/toolchain"
 )
@@ -135,9 +136,10 @@ func TestSBOMStepFailures(t *testing.T) {
 }
 
 func TestApplies(t *testing.T) {
-	rel, test := Job(".", nil, 0, nil), Job(".", nil, 0, nil)
+	lane, test, own := Job(".", nil, 0, nil), Job(".", nil, 0, nil), Job(".", nil, 0, nil)
 	test.Kind = "test"
-	if !Applies(JobName, rel) || Applies("other", rel) || Applies(JobName, test) {
-		t.Fatal("Applies is wrong")
+	own.Artifacts = []model.ArtifactDecl{{Path: "dist/app.apk", Name: "app", Kind: "package"}}
+	if !Applies(JobName, lane) || Applies("other", lane) || Applies(JobName, test) || Applies(JobName, own) {
+		t.Fatal("Applies is wrong: only the lane's own release job takes the SBOM step")
 	}
 }
