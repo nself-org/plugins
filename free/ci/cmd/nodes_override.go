@@ -111,7 +111,10 @@ func deployHostHook(ctx context.Context, point lifecycle.Point, e lifecycle.Hook
 	if r.Matched && e.Capability == nil {
 		// No draft to mark: the stored node must carry the match, or the pairing is refused.
 		if again, eerr := g.EvaluateNode(ctx, e.NodeID); eerr != nil || !again.Matched {
-			return fmt.Errorf("node %s is a deploy host and cannot be paired (stored node: %v, matched %v)", e.NodeID, eerr, again.Matched)
+			if eerr != nil {
+				return fmt.Errorf("node %s is a deploy host and cannot be paired: %w", e.NodeID, eerr)
+			}
+			return fmt.Errorf("node %s is a deploy host and cannot be paired: the stored node does not carry the match", e.NodeID)
 		}
 	}
 	if r.Matched && !q.Allow {

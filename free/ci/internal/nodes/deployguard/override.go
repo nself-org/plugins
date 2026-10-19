@@ -69,6 +69,9 @@ func (g *Guard) CheckAdd(ctx context.Context, q AddRequest) (Result, []string, e
 		return r, warn, err
 	}
 	if !r.Matched {
+		if g.nothingKnown(ctx) {
+			warn = append(warn, "no deploy inventory is known and the never-list is empty: nothing was checked against deploy hosts (run inside a project with .nself or set ci.project_roots)")
+		}
 		if r.Partial {
 			return r, warn, newErr(ReasonNoIdentity, "the identity of %s could not be fully resolved (%s); node was not added", q.NodeID, strings.Join(w, "; "))
 		}
@@ -116,4 +119,15 @@ func (g *Guard) unverified(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// nothingKnown is true when no project root has been read and the never-list holds nothing: an unmatched
+// result then means "unchecked", and the operator is told so.
+func (g *Guard) nothingKnown(ctx context.Context) bool {
+	s, err := g.Set(ctx)
+	if err != nil || !s.Empty() {
+		return false
+	}
+	roots, err := g.Store.ExclusionProjects(ctx)
+	return err == nil && len(roots) == 0
 }

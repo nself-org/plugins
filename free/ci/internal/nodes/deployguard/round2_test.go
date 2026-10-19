@@ -2,9 +2,7 @@ package deployguard
 
 import (
 	"context"
-	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -99,7 +97,7 @@ func TestEmptyReadNeverReplacesACachedInventoryButForgetDropsIt(t *testing.T) {
 	}
 	r.run.HostsByRoot[r.rootA] = []string{}
 	err := r.g.RefreshProject(ctx, r.rootA)
-	if ReasonOf(errors.Unwrap(errors.Join(err))) == "" && (err == nil || !strings.Contains(err.Error(), "keeping them")) {
+	if err == nil || !strings.Contains(err.Error(), "keeping them") {
 		t.Fatalf("empty over cache: %v", err)
 	}
 	if s, _ := r.g.Set(ctx); !s.MatchHost(FixtureHostV4).Matched {
@@ -188,12 +186,63 @@ func TestRunnerCapsItsOutput(t *testing.T) {
 }
 
 func TestFixtureSSHConfigUsesRealKeywords(t *testing.T) {
-	for _, kw := range []string{"Host ", "HostName ", "ProxyJump ", "HostKeyAlias "} {
-		if !strings.Contains(FixtureSSHConfig(), kw) {
-			t.Errorf("missing %q in %q", kw, FixtureSSHConfig())
+	cfg := FixtureSSHConfig()
+	for _, kw := range []string{"\nHost ", "\n  HostName ", "\n  ProxyJump ", "\n  HostKeyAlias "} {
+		if !strings.Contains("\n"+cfg, kw) {
+			t.Errorf("missing %q in %q", kw, cfg)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(t.TempDir())); err != nil {
+	if strings.Contains(cfg, "Fixture") {
+		t.Errorf("a search-replace leaked into the config: %q", cfg)
+	}
+}
+
+func TestBareFingerprintInTheNeverListIsAnErrorNotASilentHost(t *testing.T) {
+	bare := FixtureFingerprint[7:] // 43 base64 characters, no dot
+	if _, ok, err := neverEntry(bare); err == nil || ok || ReasonOf(err) != ReasonInventory || !strings.Contains(err.Error(), "SHA256:") {
+		t.Fatalf("bare fingerprint: ok=%v err=%v", ok, err)
+	}
+	if e, ok, err := neverEntry("SHA256:" + bare); err != nil || !ok || e.Kind != KindFingerprint {
+		t.Fatalf("prefixed: %+v %v %v", e, ok, err)
+	}
+	if e, ok, err := neverEntry("host-" + strings.Repeat("b", 24) + ".example.test"); err != nil || !ok || e.Kind != KindHost {
+		t.Fatalf("a dotted host: %+v %v %v", e, ok, err)
+	}
+}
+
+func TestAnUncheckedAddIsSaidOutLoud(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	_, warn, err := r.g.CheckAdd(ctx, AddRequest{NodeID: "x", Dest: "ci@" + FixtureOther})
+	if err != nil || len(warn) != 1 || !strings.Contains(warn[0], "nothing was checked") {
+		t.Fatalf("%v %v", warn, err)
+	}
+	// With any entry known the warning is gone.
+	r.writeConfig("ci:\n  never_hosts: [198.51.100.9]\n")
+	if _, warn, err = r.g.CheckAdd(ctx, AddRequest{NodeID: "x", Dest: "ci@" + FixtureOther}); err != nil || len(warn) != 0 {
+		t.Fatalf("%v %v", warn, err)
+	}
+	// So is a recorded project root with no entries (an empty inventory is still an inventory).
+	r2 := newRig(t)
+	_ = r2.g.Seen(ctx, r2.rootA)
+	r2.run.HostsByRoot[r2.rootA] = []string{}
+	if _, warn, err = r2.g.CheckAdd(ctx, AddRequest{NodeID: "x", Dest: "ci@" + FixtureOther}); err != nil || len(warn) != 0 {
+		t.Fatalf("known root: %v %v", warn, err)
+	}
+}
+
+func TestSwappingOneEntryForAnotherIsAShrink(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	_ = r.g.Seen(ctx, r.rootA)
+	if err := r.g.Refresh(ctx); err != nil {
 		t.Fatal(err)
+	}
+	r.run.HostsByRoot[r.rootA] = []string{FixtureOther} // same count of hosts, a different one
+	if err := r.g.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if r.auditCount("exclusion.shrink") != 1 {
+		t.Fatalf("shrink rows = %d", r.auditCount("exclusion.shrink"))
 	}
 }

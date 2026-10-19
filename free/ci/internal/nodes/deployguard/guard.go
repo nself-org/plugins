@@ -82,7 +82,7 @@ func (g *Guard) RefreshProject(ctx context.Context, root string) error {
 		// An empty list over a non-empty cache is more likely a different environment (NSELF_DEPLOY_HOST_*
 		// comes from the shell that ran nself) than a decommissioned project: keep the cache and say so.
 		if n, cerr := g.cachedCount(ctx, root); cerr != nil || n > 0 {
-			return g.fail(ctx, root, newErr(ReasonInventory, "%s returned no deploy targets but %d are cached; keeping them (forget the project to drop them)", root, n))
+			return g.fail(ctx, root, newErr(ReasonInventory, "%s returned no deploy targets but %d are cached; keeping them", root, n))
 		}
 	}
 	rows := make([]store.ExclusionEntry, 0, len(es))

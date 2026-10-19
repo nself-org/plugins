@@ -108,6 +108,9 @@ func neverEntry(v string) (Entry, bool, error) {
 	if _, err := netip.ParsePrefix(v); err == nil {
 		return Entry{KindPrefix, v, SourceNeverList}, true, nil
 	}
+	if NormalizeFingerprint(v) != "" && !strings.Contains(v, ".") {
+		return Entry{}, false, newErr(ReasonInventory, "never_hosts entry %q looks like a host-key fingerprint; write it as SHA256:<fingerprint>", v)
+	}
 	if strings.Contains(v, "/") {
 		return Entry{}, false, newErr(ReasonInventory, "never_hosts entry %q is not a valid CIDR prefix", v)
 	}

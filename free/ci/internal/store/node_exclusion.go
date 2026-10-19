@@ -80,8 +80,8 @@ func (s *Store) ExclusionReplace(ctx context.Context, root string, entries []Exc
 	}
 	return s.write(ctx, func(tx *sql.Tx) error {
 		now := s.now().UnixNano()
-		var before int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM excl_entry WHERE root=?`, root).Scan(&before); err != nil {
+		before, err := exclusionValues(ctx, tx, root)
+		if err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM excl_entry WHERE root=?`, root); err != nil {
@@ -95,12 +95,18 @@ func (s *Store) ExclusionReplace(ctx context.Context, root string, entries []Exc
 		if _, err := tx.ExecContext(ctx, `INSERT INTO excl_state(root,refreshed_at,ok,last_ok_at,error) VALUES(?,?,1,?,'') ON CONFLICT(root) DO UPDATE SET refreshed_at=excluded.refreshed_at,ok=1,last_ok_at=excluded.last_ok_at,error=''`, root, now, now); err != nil {
 			return err
 		}
-		var after int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM excl_entry WHERE root=?`, root).Scan(&after); err != nil {
+		after, err := exclusionValues(ctx, tx, root)
+		if err != nil {
 			return err
 		}
-		if after < before {
-			return s.appendAudit(ctx, tx, "deployguard", "exclusion.shrink", root, fmt.Sprintf("entries %d to %d", before, after))
+		dropped := 0
+		for k := range before {
+			if !after[k] {
+				dropped++
+			}
+		}
+		if dropped > 0 {
+			return s.appendAudit(ctx, tx, "deployguard", "exclusion.shrink", root, fmt.Sprintf("%d entries dropped, %d before, %d after", dropped, len(before), len(after)))
 		}
 		return nil
 	})
@@ -119,6 +125,24 @@ func (s *Store) ExclusionForget(ctx context.Context, root, actor string) error {
 		}
 		return s.appendAudit(ctx, tx, actor, "exclusion.forget", root, "project forgotten")
 	})
+}
+
+// exclusionValues is the set of kind+value keys cached for a root.
+func exclusionValues(ctx context.Context, tx *sql.Tx, root string) (map[string]bool, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT kind,value FROM excl_entry WHERE root=?`, root)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var k, v string
+		if err = rows.Scan(&k, &v); err != nil {
+			return nil, err
+		}
+		out[k+"\x00"+v] = true
+	}
+	return out, rows.Err()
 }
 
 // ExclusionFail records a failed refresh. The entries of the root are left as they were.

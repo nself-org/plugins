@@ -41,7 +41,7 @@ func TestTestReportsTheNodeAsAHookLeftIt(t *testing.T) {
 	k.addNode("hk4")
 	src := "never-list"
 	RegisterAddHook(PointTest, func(ctx context.Context, e HookEvent) error {
-		return k.st.NodeSetDeployHost(ctx, e.NodeID, model.CapabilityDeployHost{Matched: true, Source: &src}, "cli:test", "matched host")
+		return k.st.NodeSetDeployHost(ctx, e.NodeID, 0, model.CapabilityDeployHost{Matched: true, Source: &src}, "cli:test", "matched host")
 	})
 	res, err := k.d.Test(context.Background(), "hk4", FlagSet("test"))
 	if err != nil {
