@@ -47,3 +47,12 @@ func TestEvidenceStampWithoutBuilder(t *testing.T) {
 		t.Fatalf("%+v %v", out, err)
 	}
 }
+
+// D-1021: the evidence names the level the registry served, not the one asked for.
+func TestEvidenceStampsServedLevel(t *testing.T) {
+	out, err := evidenceStamp{mode: Mode{Level: "container", Served: "sandboxed-container", Network: "none"}}.
+		Complete(context.Background(), nil, cirun.EvidenceFacts{}, model.Evidence{})
+	if err != nil || out.Runner.Isolation != "sandboxed-container" {
+		t.Fatalf("isolation %q, want sandboxed-container (%v)", out.Runner.Isolation, err)
+	}
+}
