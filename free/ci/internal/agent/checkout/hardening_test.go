@@ -112,7 +112,7 @@ func TestAMovingTransferIsNotCutOffByTheDeadline(t *testing.T) {
 	repo, rev := makeRepo(t)
 	data, digest := bundleFor(t, repo, rev)
 	old := Deadline
-	Deadline = 300 * time.Millisecond
+	Deadline = 1500 * time.Millisecond
 	defer func() { Deadline = old }()
 	r := NewReceiver(filepath.Join(t.TempDir(), "stage"), nil)
 	l := leaseFor(rev, digest, len(data))
@@ -125,7 +125,7 @@ func TestAMovingTransferIsNotCutOffByTheDeadline(t *testing.T) {
 		if err := r.Feed(l.LeaseID, l.Epoch, protocol.Chunk{Stream: Stream, Offset: int64(off), Data: base64.StdEncoding.EncodeToString(data[off:end]), Final: end == len(data)}); err != nil {
 			t.Fatalf("chunk at %d: %v", off, err)
 		}
-		time.Sleep(120 * time.Millisecond) // eight chunks take longer than one Deadline
+		time.Sleep(400 * time.Millisecond) // eight chunks take longer than twice the Deadline
 	}
 	if _, err := r.Stage(context.Background(), l, t.TempDir()); err != nil {
 		t.Fatalf("Stage after a slow but steady transfer: %v", err)

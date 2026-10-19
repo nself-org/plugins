@@ -34,19 +34,22 @@ func (s *sess) serve(ctx context.Context, bundle string) error {
 		uploaded <- nil
 	}
 	pending := uploaded
-	s.lastAlive = time.Now()
-	ttl := s.d.coordinatorTTL()
-	watch := time.NewTicker(max(ttl/4, 20*time.Millisecond))
-	defer watch.Stop()
+	s.lastAlive.Store(time.Now().UnixNano())
+	// The silence watchdog runs on its own goroutine, so a Sink callback that blocks cannot
+	// stop it; it cancels the context the callbacks run under.
+	hctx, stopCallbacks := context.WithCancel(ctx)
+	defer stopCallbacks()
+	silent := make(chan struct{})
+	quit := make(chan struct{})
+	defer close(quit)
+	go s.watchSilence(s.d.coordinatorTTL(), silent, stopCallbacks, quit)
 	for {
 		select {
 		case <-ctx.Done():
 			return s.cancelAndDrain(ctx)
-		case <-watch.C:
-			if time.Since(s.lastAlive) > ttl {
-				_ = s.send("cancel", protocol.Cancel{LeaseID: s.lease.LeaseID, Reason: "agent_silent"}, true)
-				return s.lostErr(nil)
-			}
+		case <-silent:
+			_ = s.send("cancel", protocol.Cancel{LeaseID: s.lease.LeaseID, Reason: "agent_silent"}, true)
+			return s.lostErr(nil)
 		case err := <-pending:
 			pending = nil
 			if err != nil && ctx.Err() == nil {
@@ -57,7 +60,11 @@ func (s *sess) serve(ctx context.Context, bundle string) error {
 			if it.err != nil {
 				return s.lostErr(it.err)
 			}
-			done, err := s.handle(ctx, it.m)
+			done, err := s.handle(hctx, it.m)
+			if err != nil && hctx.Err() != nil && ctx.Err() == nil { // the watchdog cancelled a hung callback
+				_ = s.send("cancel", protocol.Cancel{LeaseID: s.lease.LeaseID, Reason: "agent_silent"}, true)
+				return s.lostErr(nil)
+			}
 			if err != nil {
 				_ = s.send("cancel", protocol.Cancel{LeaseID: s.lease.LeaseID, Reason: "transport_error"}, true)
 				return err
@@ -67,6 +74,65 @@ func (s *sess) serve(ctx context.Context, bundle string) error {
 			}
 		}
 	}
+}
+
+// watchSilence closes silent once no frame that proves the agent works on this lease arrived
+// for ttl, and cancels the context the Sink callbacks run under.
+func (s *sess) watchSilence(ttl time.Duration, silent chan<- struct{}, cancel context.CancelFunc, quit <-chan struct{}) {
+	t := time.NewTicker(max(ttl/4, 20*time.Millisecond))
+	defer t.Stop()
+	for {
+		select {
+		case <-quit:
+			return
+		case <-t.C:
+			if time.Since(time.Unix(0, s.lastAlive.Load())) > ttl {
+				cancel()
+				close(silent)
+				return
+			}
+		}
+	}
+}
+
+// noteAlive stamps the arrival of a frame that proves the agent is working on this lease: a
+// heartbeat that reports it, or a log, digest, chunk or ref scoped to it. It runs on the reader
+// goroutine, before any Sink callback, so a slow Sink does not look like a silent agent.
+func (s *sess) noteAlive(m protocol.Message) {
+	switch b := m.Body.(type) {
+	case *protocol.Heartbeat:
+		for _, ls := range b.Leases {
+			if ls.LeaseID == s.lease.LeaseID && ls.Epoch == s.lease.Epoch {
+				s.lastAlive.Store(time.Now().UnixNano())
+			}
+		}
+	case *protocol.Log:
+		if s.ours(m, b.LeaseID, epochOr(epochOf(m), s.lease.Epoch)) {
+			s.lastAlive.Store(time.Now().UnixNano())
+		}
+	case *protocol.Digest, *protocol.Chunk, *protocol.ArtifactRef, *protocol.CacheRef:
+		if s.scoped(m) || ownsRef(s, m) {
+			s.lastAlive.Store(time.Now().UnixNano())
+		}
+	}
+}
+
+func epochOf(m protocol.Message) uint64 {
+	if m.Epoch != nil {
+		return *m.Epoch
+	}
+	return 0
+}
+
+// ownsRef reports whether an artifact-ref or cache-ref frame names this lease.
+func ownsRef(s *sess, m protocol.Message) bool {
+	switch b := m.Body.(type) {
+	case *protocol.ArtifactRef:
+		return s.ours(m, b.LeaseID, epochOr(epochOf(m), s.lease.Epoch))
+	case *protocol.CacheRef:
+		return s.ours(m, b.LeaseID, epochOr(epochOf(m), s.lease.Epoch))
+	}
+	return false
 }
 
 // lostErr maps the end of the session before a result to the lost reason.
@@ -119,7 +185,6 @@ func (s *sess) handle(ctx context.Context, m protocol.Message) (done bool, err e
 	switch b := m.Body.(type) {
 	case *protocol.Log:
 		if s.ours(m, b.LeaseID, epochOr(epoch, s.lease.Epoch)) {
-			s.lastAlive = time.Now()
 			return false, s.sink.Log(ctx, *b)
 		}
 	case *protocol.ArtifactRef:
@@ -153,13 +218,11 @@ func (s *sess) handle(ctx context.Context, m protocol.Message) (done bool, err e
 		if !s.scoped(m) {
 			return false, nil
 		}
-		s.lastAlive = time.Now()
 		return false, s.onDigest(ctx, *b)
 	case *protocol.Chunk:
 		if !s.scoped(m) {
 			return false, nil
 		}
-		s.lastAlive = time.Now()
 		return false, s.onChunk(*b)
 	}
 	return false, nil
@@ -193,7 +256,6 @@ func (s *sess) onHeartbeat(ctx context.Context, m protocol.Message, h protocol.H
 		named = true
 	}
 	if named { // only a heartbeat that reports this lease keeps it alive and renewed
-		s.lastAlive = time.Now()
 		if s.d.Renew != nil {
 			if err := s.d.Renew(ctx, s.lease.LeaseID, s.lease.Epoch); err != nil {
 				e := newErr("E662", ReasonFenced, "lease %s could not be renewed", s.lease.LeaseID)

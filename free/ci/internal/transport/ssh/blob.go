@@ -92,8 +92,11 @@ func (s *sess) onDigest(ctx context.Context, d protocol.Digest) error {
 		s.discard(st)
 		return newErr(CodeTransport, ReasonBlob, "the sink holds %d bytes of the %s blob but cannot verify it; refusing to resume", st.next, d.Stream)
 	}
-	if st.next == head.Size { // the sink already holds every byte: verify it, nothing to receive
-		return s.commit(st)
+	if st.next == head.Size { // the sink already holds every byte: verify it, then say so
+		if err := s.commit(st); err != nil {
+			return err
+		}
+		return s.sendOffset(st)
 	}
 	s.blobs[d.Stream] = st
 	return s.sendOffset(st)

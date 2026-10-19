@@ -80,6 +80,8 @@ type Driver struct {
 	// SSHVersion reports the local OpenSSH version; nil runs `ssh -V` once.
 	SSHVersion func(ctx context.Context) (remote.Version, error)
 
+	// silenceTTL is a test seam: it replaces the coordinator TTL of the silence bound.
+	silenceTTL time.Duration
 	// afterBundle is a test seam: it sees the bundle file after its digest was recorded.
 	afterBundle func(path string)
 
@@ -101,11 +103,20 @@ func init() {
 // Kind implements transport.Driver.
 func (d *Driver) Kind() string { return Kind }
 
-func (d *Driver) heartbeat() time.Duration { return orDefault(d.Heartbeat, 10*time.Second) }
-func (d *Driver) agentTTL() time.Duration  { return orDefault(d.AgentTTL, 25*time.Second) }
+// heartbeat is never below the agent's own floor of one second, so the silence bound cannot be
+// tighter than the agent can beat.
+func (d *Driver) heartbeat() time.Duration {
+	return max(orDefault(d.Heartbeat, 10*time.Second), time.Second)
+}
+func (d *Driver) agentTTL() time.Duration { return orDefault(d.AgentTTL, 25*time.Second) }
 
 // coordinatorTTL is how long an agent may stay silent: agent_ttl plus two heartbeats (Epic D6).
-func (d *Driver) coordinatorTTL() time.Duration { return d.agentTTL() + 2*d.heartbeat() }
+func (d *Driver) coordinatorTTL() time.Duration {
+	if d.silenceTTL > 0 {
+		return d.silenceTTL
+	}
+	return d.agentTTL() + 2*d.heartbeat()
+}
 func (d *Driver) cancelGrace() time.Duration {
 	return orDefault(d.CancelGrace, 3*time.Second)
 }

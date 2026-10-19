@@ -308,7 +308,7 @@ func TestSSHTransportNeverSendsSecretsToAnUnverifiedNode(t *testing.T) {
 // the session and the lease open: the attempt is lost and the agent is told to cancel.
 func TestSSHTransportLosesASilentAgent(t *testing.T) {
 	reason := make(chan string, 1)
-	d := &Driver{AgentTTL: 100 * time.Millisecond, Heartbeat: 10 * time.Millisecond}
+	d := &Driver{silenceTTL: 120 * time.Millisecond}
 	start := time.Now()
 	err := runScripted(t, d, func(a *scriptedAgent) {
 		if m, ok := a.next("cancel"); ok {
@@ -379,10 +379,10 @@ func blobScript(payload []byte, withUpload bool, refSHA string) func(a *scripted
 		sum := sha256.Sum256(payload)
 		digest := hex.EncodeToString(sum[:])
 		a.send("digest", protocol.Digest{Stream: "artifact", SHA256: digest, Size: int64(len(payload))}, "lease-1", 4)
+		if _, ok := a.next("offset"); !ok { // the coordinator answers a digest either way
+			return
+		}
 		if withUpload {
-			if _, ok := a.next("offset"); !ok {
-				return
-			}
 			a.send("chunk", protocol.Chunk{Stream: "artifact", Offset: 0, Data: base64.StdEncoding.EncodeToString(payload), Digest: digest, Final: true}, "lease-1", 4)
 		}
 		if refSHA == "" {
@@ -421,5 +421,37 @@ func TestSSHTransportABlobTheSinkAlreadyHoldsIsVerifiedNotResent(t *testing.T) {
 	}
 	if b := sink.blobs["artifact"]; b == nil || !b.closed || len(sink.artifacts) != 1 {
 		t.Fatalf("dedup hit not committed: %+v, refs %d", b, len(sink.artifacts))
+	}
+}
+
+// blockingSink hangs in Log until the context it was handed is cancelled.
+type blockingSink struct {
+	*recSink
+	entered, released chan struct{}
+}
+
+func (b blockingSink) Log(ctx context.Context, _ protocol.Log) error {
+	close(b.entered)
+	<-ctx.Done()
+	close(b.released)
+	return ctx.Err()
+}
+
+// TestSSHTransportSilenceBoundHoldsWhileASinkCallbackBlocks proves the watchdog does not share
+// a goroutine with the Sink: a hung Log callback is cancelled and the attempt is still lost.
+func TestSSHTransportSilenceBoundHoldsWhileASinkCallbackBlocks(t *testing.T) {
+	sink := blockingSink{recSink: &recSink{}, entered: make(chan struct{}), released: make(chan struct{})}
+	d := &Driver{silenceTTL: 150 * time.Millisecond}
+	err := runScripted(t, d, func(a *scriptedAgent) {
+		a.send("log", protocol.Log{LeaseID: "lease-1", LineSeq: 1, Stream: "stdout", Text: "hello"}, "lease-1", 4)
+		a.next("cancel")
+	}, sink)
+	if !IsLost(err) {
+		t.Fatalf("err = %v, want session lost", err)
+	}
+	select {
+	case <-sink.released:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the blocked Sink callback was never cancelled")
 	}
 }

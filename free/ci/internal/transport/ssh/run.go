@@ -51,7 +51,7 @@ type sess struct {
 	blobs      map[string]*blobState
 	blobCount  int             // blobs opened in this session
 	committed  map[string]bool // sha256 of blobs received whole and verified
-	lastAlive  time.Time       // last frame that proves the agent is working on this lease
+	lastAlive  atomic.Int64    // unix nanos of the last frame that proves the agent works on this lease
 	blobBytes  int64           // bytes announced in this session
 
 	helloTimedOut atomic.Bool // the hello timer killed ssh
@@ -236,6 +236,9 @@ func (s *sess) readLoop() {
 	defer close(s.readerDone)
 	for {
 		m, err := s.car.Recv()
+		if err == nil {
+			s.noteAlive(m)
+		}
 		select {
 		case s.frames <- frame{m, err}:
 		case <-s.stop:
