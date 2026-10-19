@@ -38,7 +38,7 @@ func newNodeHost(t *testing.T) *nodeHost {
 		t.Skip("POSIX shells only")
 	}
 	h := &nodeHost{t: t, root: t.TempDir(), bin: t.TempDir()}
-	for _, tool := range []string{"sh", "ps", "tail", "head", "cat", "mkdir", "sed", "grep", "cut", "wc", "rm", "basename", "awk", "touch"} {
+	for _, tool := range []string{"sh", "ps", "tail", "head", "cat", "mkdir", "sed", "grep", "cut", "wc", "rm", "basename", "awk", "touch", "ln"} {
 		p, err := exec.LookPath(tool)
 		if err != nil {
 			t.Fatal(err)
@@ -576,5 +576,20 @@ esac
 `)
 	if r := h.run("node.test", "."); r.exit != 0 || r.out != "CACHE-OK\nCOREPACK corepack" {
 		t.Fatalf("the yarn cache and the corepack home must survive for the check: %+v", r)
+	}
+}
+
+func TestPnpmStoreOutlivesTheInstall(t *testing.T) {
+	h := newNodeHost(t)
+	h.write("package.json", manifest("pnpm@9.1.0", ""))
+	h.write("pnpm-lock.yaml", "lockfileVersion: 9\n")
+	// pnpm's global virtual store: node_modules links into the store directory
+	h.manager("pnpm", "9.1.0", `case "$1" in
+install) mkdir -p "$npm_config_store_dir/pkg" node_modules; echo ok > "$npm_config_store_dir/pkg/index.js"; ln -s "$npm_config_store_dir/pkg" node_modules/pkg;;
+run) if [ -f node_modules/pkg/index.js ]; then echo "STORE-OK"; else echo "STORE-GONE"; fi;;
+esac
+`)
+	if r := h.run("node.test", "."); r.exit != 0 || r.out != "STORE-OK" {
+		t.Fatalf("the pnpm store must survive for the check: %+v", r)
 	}
 }

@@ -114,7 +114,7 @@ func nodeScript(pm, id, run, dir string) string {
 	b.WriteString("  export COREPACK_HOME=\"$NSELF_CI_DIR/corepack\"\n")
 	b.WriteString("  ( cd \"$LOCK\" && " + installEnv(pm) + "; " + installCmd(pm) + " ) > \"$LOG\" 2>&1 || {\n")
 	b.WriteString(failureReport())
-	b.WriteString("    echo " + diagnose.PrepareFailed + "\n    exit " + strconv.Itoa(diagnose.PrepareExit) + "\n  }\n  rm -rf \"$NSELF_CI_DIR/tmp\" \"$NSELF_CI_DIR/npm\" \"$NSELF_CI_DIR/pnpm\" \"$NSELF_CI_DIR/bun\"; rm -f \"$LOG\"\nfi\n")
+	b.WriteString("    echo " + diagnose.PrepareFailed + "\n    exit " + strconv.Itoa(diagnose.PrepareExit) + "\n  }\n  rm -rf \"$NSELF_CI_DIR/tmp\"; rm -f \"$LOG\"\nfi\n")
 	if id == "node.typecheck" || id == "node.build" {
 		b.WriteString("if { [ -d node_modules ] || [ -d \"${LOCK:-.}/node_modules\" ] || [ -f \"${LOCK:-.}/.pnp.cjs\" ]; } && grep -q '\"astro\"[[:space:]]*:' package.json 2>/dev/null; then\n")
 		b.WriteString("  " + astroSync(pm) + " || exit $?\nfi\n")
@@ -173,8 +173,9 @@ func managerEnv(pm string) string {
 
 // installEnv keeps the install's cache and temp directory inside the workspace
 // (removed with it, so a killed install leaves nothing in the operator's TMPDIR;
-// the npm, pnpm and bun caches and the temp directory are deleted after a good
-// install, but not Yarn's, which a Plug'n'Play .pnp.cjs references at run time),
+// after a good install only the temp directory and the log go: the caches stay,
+// because an installed tree can point into them (Yarn Plug'n'Play archives, a
+// pnpm global virtual store) and the check runs from it),
 // only the manager's own variables: npm warns about another manager's. A
 // committed Yarn .yarn/cache (zero-install) stays the cache.
 func installEnv(pm string) string {
