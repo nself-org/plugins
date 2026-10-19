@@ -64,11 +64,13 @@ for n in %[2]s; do
 done
 grep -Eq '^[#@]includedir[[:space:]]+%[1]s' /etc/sudoers || { echo >> /etc/sudoers; echo '#includedir %[1]s' >> /etc/sudoers; }
 mkdir -p %[1]s
+fresh=""
 for n in %[2]s; do
+  [ -e %[1]s/%[3]s-job-$n ] || fresh="$fresh %[1]s/%[3]s-job-$n"
   install -o root -g root -m 0440 "$tmp/%[3]s-job-$n" %[1]s/%[3]s-job-$n
 done
 if ! visudo -c >/dev/null 2>&1; then
-  for n in %[2]s; do rm -f %[1]s/%[3]s-job-$n; done
+  for f in $fresh; do rm -f "$f"; done
   echo 'sudoers did not validate; nothing left in place' >&2
   exit 1
 fi
