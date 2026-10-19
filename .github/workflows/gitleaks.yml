@@ -22,4 +22,18 @@ jobs:
       - name: Configure git for gitleaks
         run: git config diff.renameLimit 1861
       - name: Scan for secrets
-        run: gitleaks detect --source=. --log-level=warn --redact --config .github/gitleaks.toml
+        # Scan only this change's own history. A bare `gitleaks detect` walks every ref the
+        # checkout fetched (`git log --all`), so a synthetic fixture on one open branch failed
+        # every other PR (D-1031).
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            RANGE="$BASE_SHA..$HEAD_SHA"
+          else
+            RANGE="HEAD"
+          fi
+          echo "Gitleaks scope: $RANGE"
+          gitleaks detect --source=. --log-level=warn --redact --config .github/gitleaks.toml --log-opts="$RANGE"
