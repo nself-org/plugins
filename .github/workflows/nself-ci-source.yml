@@ -1,0 +1,175 @@
+# The nself-ci gate built from the checkout (P7-CI-07, R-DX-13), plus a mutation leg.
+#
+# Purpose: nself-ci.yml judges a change with the last RELEASED engine; this file
+#   judges it with the engine built from the same checkout (`nself-ci/source`), so a
+#   change that only the new engine can detect is still caught, and a change that
+#   breaks the engine is judged by the released one. Neither job gates itself alone.
+#   The `mutation` job proves the gate can fail: it applies each patch of
+#   free/ci/testdata/mutation-self-gate/ (the result rule returns pass for a
+#   failing check) to the checkout and expects the PINNED gate to fail on it, with
+#   the failing check named. A gate that passes a mutated rule is broken.
+# The pin is the same as nself-ci.yml (change both in one commit).
+# Rules: job names `nself-ci/source` and `nself-ci/mutation`, no `paths:` filter, no
+#   matrix, no cancel-in-progress, actions pinned by sha, read-only token.
+
+name: nself-ci-source
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CI_VERSION: "1.2.11"
+  CI_RELEASE_URL: "https://github.com/nself-org/plugins/releases/download/v1.2.11/ci-1.2.11-linux-amd64.tar.gz"
+  CI_RELEASE_SHA256: "0ca65f839b007764f70ba9e8e719aee88f336efb74b932297b2b9097cbdd0016"
+  GITLEAKS_SHA256: "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba" # gitleaks 8.21.2 linux_x64
+  NSELF_V15: "1"          # the plugin binary does not follow the cli flip; kept until v1.6
+
+jobs:
+  nself-ci-source:
+    name: nself-ci/source
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      # The tools .nself/ci.yaml names, taken from PATH: go (ci-vet, ci-test) and gitleaks (secrets-tree).
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --proto '=https' --output "$RUNNER_TEMP/gitleaks.tar.gz" \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+          echo "$GITLEAKS_SHA256  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check --strict -
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP/gitleaks" gitleaks
+          echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
+
+      - name: Build nself-ci from this checkout
+        working-directory: free/ci
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 go build -mod=vendor -o "$RUNNER_TEMP/nself-ci-source" ./cmd
+          echo "NSELF_CI_BIN=$RUNNER_TEMP/nself-ci-source" >> "$GITHUB_ENV"
+
+      - name: Run the gate
+        env:
+          NSELF_CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/evidence"
+          status=0
+          "$NSELF_CI_BIN" --no-status --json > "$RUNNER_TEMP/evidence/nself-ci-source.json" || status=$?
+          {
+            echo "### nself-ci/source (built from $GITHUB_SHA)"
+            echo "exit code: $status"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+  mutation:
+    name: nself-ci/mutation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check the pin
+        run: |
+          for v in CI_VERSION CI_RELEASE_URL CI_RELEASE_SHA256; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is not set in this workflow's env block"
+              exit 1
+            fi
+          done
+          case "$CI_RELEASE_URL" in https://*) ;; *) echo "::error::CI_RELEASE_URL must be an https URL"; exit 1 ;; esac
+
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      # The tools .nself/ci.yaml names, taken from PATH: go (ci-vet, ci-test) and gitleaks (secrets-tree).
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --proto '=https' --output "$RUNNER_TEMP/gitleaks.tar.gz" \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+          echo "$GITLEAKS_SHA256  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check --strict -
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP/gitleaks" gitleaks
+          echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
+
+      - name: Install the pinned nself-ci
+        run: |
+          set -euo pipefail
+          tarball="$RUNNER_TEMP/nself-ci.tar.gz"
+          curl --fail --silent --show-error --location --proto '=https' --output "$tarball" "$CI_RELEASE_URL"
+          echo "$CI_RELEASE_SHA256  $tarball" | sha256sum --check --strict -
+          mkdir -p "$RUNNER_TEMP/nself-ci"
+          tar -xzf "$tarball" -C "$RUNNER_TEMP/nself-ci"
+          bin="$(find "$RUNNER_TEMP/nself-ci" -type f -name nself-ci | head -n 1)"
+          if [ -z "$bin" ]; then
+            echo "::error::the release tarball holds no nself-ci binary"
+            exit 1
+          fi
+          chmod +x "$bin"
+          echo "NSELF_CI_BIN=$bin" >> "$GITHUB_ENV"
+
+      - name: Apply the mutations
+        run: |
+          set -euo pipefail
+          patches=(free/ci/testdata/mutation-self-gate/*.patch)
+          [ -e "${patches[0]}" ] || { echo "::error::no mutation patch found"; exit 1; }
+          for p in "${patches[@]}"; do
+            git apply --check "$p" || { echo "::error::$p no longer applies; update the mutation with the code it breaks"; exit 1; }
+            git apply "$p"
+            echo "applied $p"
+          done
+
+      - name: The pinned gate must fail on the mutated checkout
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/evidence"
+          "$NSELF_CI_BIN" --no-status --json > "$RUNNER_TEMP/evidence/mutation.json"
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "::error::the pinned gate PASSED a checkout whose result rule returns pass for a failing check"
+            exit 1
+          fi
+          # Failing for the right reason: the model tests that guard the result rule are red.
+          jq -e '.data.checks[] | select(.id == "ci-test" and .result == "fail")' "$RUNNER_TEMP/evidence/mutation.json" > /dev/null \
+            || { echo "::error::the gate failed (exit $status) but not on ci-test"; exit 1; }
+          echo "mutation caught: the pinned gate failed on ci-test (exit $status)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/evidence/
+          if-no-files-found: warn
+          retention-days: 30

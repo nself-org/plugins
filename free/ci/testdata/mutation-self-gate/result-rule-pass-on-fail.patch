@@ -1,0 +1,13 @@
+diff --git a/free/ci/internal/model/result.go b/free/ci/internal/model/result.go
+index fece7421..47bd5155 100644
+--- a/free/ci/internal/model/result.go
++++ b/free/ci/internal/model/result.go
+@@ -13,7 +13,7 @@ func Verdict(checks []Check) Result {
+ 			substantive = true
+ 		}
+ 		if check.Required && check.Result != "pass" && (!check.AllowFailure || check.Result != "fail") {
+-			return "fail"
++			return "pass"
+ 		}
+ 	}
+ 	if !substantive {

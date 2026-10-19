@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# main-status-audit drill (P7-CI-07, Epic D18): lists default-branch commits of the last AUDIT_DAYS days that have no
+# green `nself-ci` status and no green `nself-ci` check run, for every repository in repos.txt. The work is
+# `nself ci policy protect --audit` (free/ci/internal/protect); this script only loops and reports.
+# Why: a required check can be bypassed (an admin merge, a relaxed protection). The audit makes the gap visible
+#   after the fact, which is the part branch protection cannot do.
+# Inputs:  REPOS_FILE (default repos.txt next to this script), AUDIT_DAYS (default 7), NSELF_CI_BIN (the nself-ci
+#          binary; default: nself-ci or `nself ci` on PATH), GH_TOKEN / GITHUB_TOKEN (optional; the exec funnel does
+#          not pass tokens to the audit, so a token is stored in a private temporary gh config for this run),
+#          DRILL_FIXTURES_DIR (test hook, see --fixtures).
+# Usage:   run               the live drill
+#          run --fixtures    the offline self-test: replays fixtures/<case>/ through a stub gh and checks the exit code
+#                            of each case against its `expect` file (needs NSELF_CI_BIN)
+# Outputs: one summary line per repository and the commits without a green nself-ci, on stderr and stdout.
+#          Exit 0 when every commit is green, 1 when some commit is not, 2 when a tool is missing or the audit cannot run.
+# Fixture case layout: fixtures/<case>/{commits.tsv,status-<sha>.json,checks-<sha>.json,expect}; a missing status or
+#   checks file is a failed fetch; `expect` holds the exit code the case must give (0 or 1).
+set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+days=${AUDIT_DAYS:-7}
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/main-status-audit.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+
+command -v jq >/dev/null || { echo "main-status-audit: jq is required" >&2; exit 2; }
+if [ -n "${NSELF_CI_BIN:-}" ]; then
+	bin=("$NSELF_CI_BIN")
+elif command -v nself-ci >/dev/null; then
+	bin=(nself-ci)
+elif command -v nself >/dev/null; then
+	bin=(nself ci)
+else
+	echo "main-status-audit: no nself-ci binary (set NSELF_CI_BIN)" >&2
+	exit 2
+fi
+export NSELF_V15=1 # the plugin binary does not follow the cli flip; kept until v1.6
+
+# audit REPO BRANCH: runs the auditor, prints its summary; returns 0 all green, 1 some missing, 2 cannot audit.
+audit() {
+	local out="$tmp/audit.json" rc=0 n
+	"${bin[@]}" policy protect --repo "$1" --branch "$2" --audit "$days" --json >"$out" 2>"$tmp/audit.err" || rc=$?
+	if ! n=$(jq -e '.data.missing | length' "$out" 2>/dev/null); then
+		echo "main-status-audit: $1: the audit did not run (exit $rc): $(head -c 300 "$tmp/audit.err")" >&2
+		return 2
+	fi
+	echo "$1 $2: $(jq -r '.data.checked' "$out") commit(s) in the last $days day(s), $n without a green nself-ci"
+	jq -r '.data.missing[] | "  \(.sha[0:12]) \(.subject)"' "$out"
+	[ "$n" -eq 0 ]
+}
+
+# loop_repos FILE: audits every repository of FILE; returns the worst result.
+loop_repos() {
+	local worst=0 repo branch rc
+	while read -r repo branch; do
+		case "$repo" in '' | '#'*) continue ;; esac
+		rc=0
+		audit "$repo" "${branch:-main}" || rc=$?
+		[ "$rc" -gt "$worst" ] && worst=$rc
+	done <"$1"
+	return "$worst"
+}
+
+# stub_gh: a `gh` that answers from a fixture directory, placed first on PATH.
+stub_gh() {
+	mkdir -p "$tmp/bin"
+	cat >"$tmp/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+dir=${DRILL_FIXTURE_CASE:?}
+args=" $* "
+case "$args" in
+*"--paginate"*) cat "$dir/commits.tsv" ;;
+*"/status "*) sha=${args%%/status*}; sha=${sha##*/}; cat "$dir/status-$sha.json" ;;
+*"/check-runs"*) sha=${args%%/check-runs*}; sha=${sha##*/}; cat "$dir/checks-$sha.json" ;;
+*) echo "stub gh: unexpected call: $*" >&2; exit 1 ;;
+esac
+STUB
+	chmod +x "$tmp/bin/gh"
+}
+
+if [ "${1:-}" = "--fixtures" ]; then
+	fixtures=${DRILL_FIXTURES_DIR:-$here/fixtures}
+	stub_gh
+	printf 'nself-org/fixture main\n' >"$tmp/repos"
+	failed=0
+	for dir in "$fixtures"/*/; do
+		name=$(basename "$dir")
+		want=$(tr -d '[:space:]' <"$dir/expect")
+		rc=0
+		PATH="$tmp/bin:$PATH" DRILL_FIXTURE_CASE="$dir" loop_repos "$tmp/repos" >"$tmp/case.out" 2>&1 || rc=$?
+		if [ "$rc" != "$want" ]; then
+			echo "fixture $name: exit $rc, want $want" >&2
+			sed 's/^/  /' "$tmp/case.out" >&2
+			failed=1
+		else
+			echo "fixture $name: ok (exit $rc)"
+		fi
+	done
+	exit "$failed"
+fi
+
+repos=${REPOS_FILE:-$here/repos.txt}
+[ -r "$repos" ] || { echo "main-status-audit: cannot read $repos" >&2; exit 2; }
+if [ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ]; then
+	# The audit runs gh through the exec funnel, which drops token variables: give gh a private config instead.
+	token=${GH_TOKEN:-$GITHUB_TOKEN}
+	mkdir -p "$tmp/gh-config/gh"
+	chmod 700 "$tmp/gh-config" "$tmp/gh-config/gh"
+	printf 'github.com:\n    oauth_token: %s\n    git_protocol: https\n' "$token" >"$tmp/gh-config/gh/hosts.yml"
+	chmod 600 "$tmp/gh-config/gh/hosts.yml"
+	export XDG_CONFIG_HOME="$tmp/gh-config"
+fi
+loop_repos "$repos"

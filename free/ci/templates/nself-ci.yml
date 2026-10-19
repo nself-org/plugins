@@ -1,0 +1,106 @@
+# The nself-ci gate as a required GitHub check (Epic D18).
+#
+# Purpose: run this repository's default pipeline (.nself/ci.yaml) with a
+#   version-pinned, checksum-verified nself-ci release inside a job named
+#   exactly `nself-ci`, and keep the evidence document as a workflow artifact.
+#   Branch protection matches that name, so the job's check run is the merge
+#   gate. A check run (unlike a commit status) is also produced on fork and
+#   Dependabot pull requests, whose tokens are read-only.
+# Use: copy this file to .github/workflows/nself-ci.yml, set the four values in
+#   `env` below from the ci release record (the tarball of the platform the
+#   runner has), add the setup steps your jobs need where marked, then require
+#   the check: `nself ci policy protect --repo <owner>/<name> --dry-run`
+#   prints the exact change and `nself ci policy protect --repo <owner>/<name>`
+#   applies it (it saves the previous protection first). Nothing is downloaded
+#   until all four values are set; a missing value fails the first step.
+# Rules that keep the gate honest (do not change them):
+#   - the job is named `nself-ci`; the context name is part of the contract;
+#   - no `paths:` filter, no matrix, no cancel-in-progress on this job: a skipped
+#     or cancelled required check blocks merges or hides a red run;
+#   - actions are pinned by commit sha; the job has read-only access to the
+#     repository and posts no commit status (`--no-status`);
+#   - the binary is the pinned release, never built from the checkout under test.
+# Staleness: a runner is thrown away after each run; the evidence artifact is
+#   the record, and `nself ci policy protect --audit <days>` lists default-branch
+#   commits that never got a green `nself-ci`.
+
+name: nself-ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CI_VERSION: ""          # the pinned release, for example 1.2.7 (shown in the summary)
+  CI_RELEASE_URL: ""      # https URL of the release tarball for this runner's platform
+  CI_RELEASE_SHA256: ""   # sha256 of that tarball, 64 hex digits
+  NSELF_V15: "1"          # the plugin binary does not follow the cli flip; kept until v1.6
+
+jobs:
+  nself-ci:
+    name: nself-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check the pin
+        run: |
+          for v in CI_VERSION CI_RELEASE_URL CI_RELEASE_SHA256; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is not set in this workflow's env block"
+              exit 1
+            fi
+          done
+          case "$CI_RELEASE_URL" in https://*) ;; *) echo "::error::CI_RELEASE_URL must be an https URL"; exit 1 ;; esac
+
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      # Add the setup steps your jobs need here (a language toolchain, a secret
+      # scanner): the gate runs the tools .nself/ci.yaml names from PATH.
+
+      - name: Install the pinned nself-ci
+        run: |
+          set -euo pipefail
+          tarball="$RUNNER_TEMP/nself-ci.tar.gz"
+          curl --fail --silent --show-error --location --proto '=https' --output "$tarball" "$CI_RELEASE_URL"
+          echo "$CI_RELEASE_SHA256  $tarball" | sha256sum --check --strict -
+          mkdir -p "$RUNNER_TEMP/nself-ci"
+          tar -xzf "$tarball" -C "$RUNNER_TEMP/nself-ci"
+          bin="$(find "$RUNNER_TEMP/nself-ci" -type f -name nself-ci | head -n 1)"
+          if [ -z "$bin" ]; then
+            echo "::error::the release tarball holds no nself-ci binary"
+            exit 1
+          fi
+          chmod +x "$bin"
+          echo "NSELF_CI_BIN=$bin" >> "$GITHUB_ENV"
+
+      - name: Run the gate
+        env:
+          NSELF_CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/evidence"
+          status=0
+          "$NSELF_CI_BIN" --no-status --json > "$RUNNER_TEMP/evidence/nself-ci.json" || status=$?
+          {
+            echo "### nself-ci $CI_VERSION"
+            echo "exit code: $status"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/evidence/
+          if-no-files-found: warn
+          retention-days: 30

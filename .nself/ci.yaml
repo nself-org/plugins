@@ -1,12 +1,49 @@
 # nself-ci configuration for the plugins repo (contract:ci.pipeline-config v1).
 #
 # Purpose: declare the jobs `nself ci` plans for this repository. Later Tickets
-#   (P7-CI-02, 07, 08) add the drill, policy and truth-gate jobs to this file.
+#   (P7-CI-08) add the truth-gate job to this file.
 # Precedence: flag > env > this file > detected default (`nself ci config show`).
 
 version: 1
 
 jobs:
+  # The default pipeline is the gate the `nself-ci` and `nself-ci/source` workflow
+  # jobs run (P7-CI-07). Declaring jobs turns catalogue detection off (217 Go
+  # modules would plan about a thousand jobs), so the gate is exactly this list.
+  # Rule: a job here may be tuned (workdir, when.paths, timeout) but never made
+  # optional to get a green run (Epic D28).
+  #
+  # Secrets in the working tree. No `when`: this is the job every pull request
+  # runs, so a change that touches only docs still has a substantive check. The
+  # git-history scan stays in gitleaks.yml (it scopes the range to the change).
+  secrets-tree:
+    kind: static
+    run: [gitleaks, detect, --no-git, --source, ., --config, .github/gitleaks.toml, --redact, --log-level, warn]
+    timeout: 300s
+
+  # The nself-ci engine itself (free/ci). The model package holds the result
+  # rule (one failing required check fails the run), which the mutation leg of
+  # nself-ci-source.yml breaks on purpose to prove this gate notices.
+  ci-vet:
+    kind: static
+    run: [go, vet, -mod=vendor, ./...]
+    workdir: free/ci
+    env:
+      CGO_ENABLED: "0"
+    timeout: 600s
+    when:
+      paths: [free/ci/**]
+
+  ci-test:
+    kind: test
+    run: [go, test, -mod=vendor, -count=1, ./internal/model/..., ./internal/evidence/..., ./internal/protect/..., ./architecture/...]
+    workdir: free/ci
+    env:
+      CGO_ENABLED: "0"
+    timeout: 900s
+    when:
+      paths: [free/ci/**]
+
   # plugin-gauth (converted by hand from free/plugin-gauth/.ci.yaml, P7-CI-36).
   # Registers the crate so merges are blocked until clippy and the unit tests
   # pass. Google OAuth credentials are not needed for the unit tests.
