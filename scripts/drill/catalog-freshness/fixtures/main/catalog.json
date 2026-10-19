@@ -1,0 +1,13 @@
+{
+  "_generated": "FIXTURE for the catalog-freshness drill, synthetic values only",
+  "bundles": {
+    "task": {"display": "Task Bundle", "plugins": ["alpha", "beta"], "tier": "free"},
+    "chat": {"display": "Chat Bundle", "plugins": ["gamma"], "tier": "licensed"}
+  },
+  "plugins": [
+    {"slug": "alpha", "tier": "free", "version": "1.0.0"},
+    {"slug": "beta", "tier": "free", "version": "2.1.0"},
+    {"slug": "gamma", "tier": "licensed", "version": "3.0.0"}
+  ],
+  "schema_version": 1
+}

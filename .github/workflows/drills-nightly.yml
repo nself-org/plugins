@@ -1,0 +1,92 @@
+# Nightly catalogue freshness drills (P7-PLUG-13), instantiated from free/ci/templates/scheduled-pipeline.yml.
+#
+# Purpose: run the `drills` pipeline of .nself/ci.yaml every night. Its jobs are the directories of scripts/drill; the
+#   one this file exists for is catalog-freshness: the projections plugins.nself.org serves (catalog.json,
+#   registry.json, bundles.json) must equal the ones on main, and the worker's /stats lastSync must be under 36 h old
+#   (Constitution 8.3: a silent job needs a staleness alert; the worker KV was stale for months, D-0051).
+# Red is the alert. A fetch that fails or a stale lastSync fails the drill (Constitution 8.4), and the run stays red until
+#   the worker deploy (P7-PLUG-35) refreshes the served data. A throwaway runner keeps no run store, so a schedule that
+#   stops firing shows as a missing run here, not as an `overdue` report.
+# The pin: CI_VERSION, CI_RELEASE_URL and CI_RELEASE_SHA256 take the `ci-release` handoff (tag plus sha256 of each
+#   platform tarball) of P7-PLUG-69, the first plugins release that holds `--pipeline` and drill jobs (Epic P7-CI D34).
+#   Until that release exists the first step fails with a clear message; filling the three values is the whole change.
+#   See also scripts/drill/README.md and .github/wiki/Catalog.md (Freshness drill).
+
+name: drills-nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drills-nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PIPELINE: drills        # the pipeline name in .nself/ci.yaml
+  CI_VERSION: ""          # the pinned release, for example 1.2.7 (shown in the summary)
+  CI_RELEASE_URL: ""      # https URL of the release tarball for this runner's platform
+  CI_RELEASE_SHA256: ""   # sha256 of that tarball, 64 hex digits
+  NSELF_V15: "1"          # the plugin binary does not follow the cli flip; kept until v1.6
+
+jobs:
+  pipeline:
+    name: ${{ github.workflow }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check the pin
+        run: |
+          for v in PIPELINE CI_VERSION CI_RELEASE_URL CI_RELEASE_SHA256; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is not set in this workflow's env block"
+              exit 1
+            fi
+          done
+          case "$CI_RELEASE_URL" in https://*) ;; *) echo "::error::CI_RELEASE_URL must be an https URL"; exit 1 ;; esac
+
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Install the pinned nself-ci
+        run: |
+          set -euo pipefail
+          tarball="$RUNNER_TEMP/nself-ci.tar.gz"
+          curl --fail --silent --show-error --location --proto '=https' --output "$tarball" "$CI_RELEASE_URL"
+          echo "$CI_RELEASE_SHA256  $tarball" | sha256sum --check --strict -
+          mkdir -p "$RUNNER_TEMP/nself-ci"
+          tar -xzf "$tarball" -C "$RUNNER_TEMP/nself-ci"
+          bin="$(find "$RUNNER_TEMP/nself-ci" -type f -name nself-ci | head -n 1)"
+          if [ -z "$bin" ]; then
+            echo "::error::the release tarball holds no nself-ci binary"
+            exit 1
+          fi
+          chmod +x "$bin"
+          echo "NSELF_CI_BIN=$bin" >> "$GITHUB_ENV"
+
+      - name: Run the pipeline
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/evidence"
+          status=0
+          "$NSELF_CI_BIN" --no-status --pipeline "$PIPELINE" --json > "$RUNNER_TEMP/evidence/$PIPELINE.json" || status=$?
+          {
+            echo "### $PIPELINE (nself-ci $CI_VERSION)"
+            echo "exit code: $status"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/evidence/
+          if-no-files-found: warn
+          retention-days: 30
