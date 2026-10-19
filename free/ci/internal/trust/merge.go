@@ -125,7 +125,7 @@ func stricter(spec KeySpec, old, next any) bool {
 func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest, error) {
 	e := Effective{values: map[string]entry{}}
 	scopes = append([]Scope(nil), scopes...)
-	order := map[Source]int{SourceDefault: 0, SourceUser: 1, SourceTeam: 2, SourceProject: 3, SourceProtectedBranch: 4, SourcePipeline: 5, SourceJob: 6, SourceRevision: 7}
+	order := map[Source]int{SourceDefault: 0, SourceUser: 1, SourceTeam: 2, SourceProject: 3, SourceProtectedBranch: 4, SourcePipeline: 5, SourceJob: 6, SourceRevision: 7, SourceRun: 8}
 	for _, scope := range scopes {
 		if _, ok := order[scope.Kind]; !ok {
 			return Effective{}, "", fmt.Errorf("E672 unknown scope %s", scope.Kind)
@@ -155,11 +155,19 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 			if err != nil {
 				return Effective{}, "", fmt.Errorf("E672 %s: %w", key, err)
 			}
-			if spec.Spend && (scope.Kind == SourceProtectedBranch || scope.Kind == SourceRevision || scope.Kind == SourcePipeline || scope.Kind == SourceJob) {
+			if spec.Spend && (scope.Kind == SourceProtectedBranch || scope.Kind == SourceRevision || scope.Kind == SourcePipeline || scope.Kind == SourceJob || scope.Kind == SourceRun) {
 				e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 spend key requires operator scope"})
 				continue
 			}
 			old, exists := e.values[key]
+			if scope.Kind == SourceRun {
+				if why := runRefusal(spec, key, old.value, exists, v); why != "" {
+					e.ignored = append(e.ignored, Ignored{key, scope.Kind, why})
+					continue
+				}
+				e.values[key] = entry{value: v, source: scope.Kind}
+				continue
+			}
 			if exists && (!stricter(spec, old.value, v) || scope.Kind == SourceRevision && spec.Kind == TightenAny && !reflect.DeepEqual(old.value, v)) {
 				if scope.Kind == SourceRevision {
 					e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 revision widening"})
@@ -205,3 +213,41 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 var DefaultRegistry Registry
 
 func Merge(scopes ...Scope) (Effective, Digest, error) { return DefaultRegistry.Merge("", scopes...) }
+
+// SourceRun is the per-run scope (P7-AUTO-29): the values of the flags of one
+// invocation. It applies last, with operator authority, and is tighten-only
+// against every other scope except the preference keys.
+const SourceRun Source = "run"
+
+// runPreferenceKeys are the keys a run may set to any value of their closed
+// set: a preference ranks the choices, it never widens what a scope allows.
+var runPreferenceKeys = map[string]bool{"sched.preset": true}
+
+// runRefusal says why a run-scope value may not apply ("" when it may). A key
+// nothing set yet and without a default is open: any value restricts it, except
+// an off switch or a free-form value, which restrict nothing.
+func runRefusal(spec KeySpec, key string, old any, exists bool, next any) string {
+	const widening = "E671 run scope widening"
+	switch {
+	case runPreferenceKeys[key]:
+		return ""
+	case spec.Kind == TightenAny:
+		if exists && reflect.DeepEqual(old, next) {
+			return ""
+		}
+		return widening
+	case exists:
+		if stricter(spec, old, next) {
+			return ""
+		}
+		return widening
+	case spec.Default != nil:
+		if stricter(spec, spec.Default, next) {
+			return ""
+		}
+		return widening
+	case spec.Kind == TightenOnlyOn && next != true:
+		return widening
+	}
+	return ""
+}

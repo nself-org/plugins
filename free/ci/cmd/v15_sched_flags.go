@@ -4,7 +4,7 @@ package main
 // and `--max-queue <duration>` on bare `nself ci` and `nself ci plan`
 // (P7-SCHED-02, Epic D10).
 // Inputs: argv, through the two package-level flag sets. Outputs: the
-// revision-scope policy values the flags stand for (schedRevisionValues).
+// per-run policy values the flags stand for (schedRevisionValues).
 // Constraints: registered from init() on bareFlags and planFlags, so cmd/v15.go
 // and cmd/plan.go stay unedited; a value is checked while the flags parse
 // (an unknown preset or a bad duration is E691 and exit 2), before any run
@@ -13,6 +13,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"os"
 
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 )
@@ -23,22 +24,23 @@ import (
 var schedFlags schedpolicy.Flags
 
 func init() {
+	RegisterOptionsHook(schedOptions)
 	for _, fs := range []*flag.FlagSet{bareFlags, planFlags} {
-		fs.Func("prefer", "scheduling preset for this run: "+presetList()+" (local = prefer-local); checked now, applied to runs in a later release", func(v string) error {
+		fs.Func("prefer", "scheduling preset for this run: "+presetList()+" (local = prefer-local)", func(v string) error {
 			if _, err := schedpolicy.PresetFromFlag(v); err != nil {
 				return err
 			}
 			schedFlags.Prefer = v
 			return nil
 		})
-		fs.Func("runner", "place every job on this runner id (an exceptional override); checked now, applied to runs in a later release", func(v string) error {
+		fs.Func("runner", "place every job on this runner id (an exceptional override)", func(v string) error {
 			if v == "" {
 				return schedpolicy.CheckRunner(v)
 			}
 			schedFlags.Runner = v
 			return nil
 		})
-		fs.Func("max-queue", "longest a job may wait for a runner, a duration such as 10m (a foreground run defaults to 10m); checked now, applied to runs in a later release", func(v string) error {
+		fs.Func("max-queue", "longest a job may wait for a runner, a duration such as 10m (a foreground run defaults to 10m)", func(v string) error {
 			if _, err := schedpolicy.ParseDurationMs(schedpolicy.KeyMaxQueue, v); err != nil {
 				return err
 			}
@@ -59,18 +61,47 @@ func presetList() string {
 	return out
 }
 
+// stdinTerminal reports whether stdin is a terminal: a character device that
+// is not /dev/null (cron and scripts commonly redirect stdin from it). A seam
+// for tests.
+var stdinTerminal = func() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	null, err := os.Stat(os.DevNull)
+	return err != nil || !os.SameFile(fi, null)
+}
+
+// interactiveRun reports whether a person waits at a terminal: stdin is a
+// terminal, no --trigger names who started the run and NSELF_INVOKED_BY (set
+// by a wrapper such as cam or a scheduler) is empty. It replaces the
+// trigger-string guess of foregroundTrigger for real runs (P7-AUTO-29).
+func interactiveRun(trigger string, getenv func(string) string) bool {
+	return trigger == "" && getenv("NSELF_INVOKED_BY") == "" && stdinTerminal()
+}
+
+// schedOptions turns the parsed flags into the per-run policy values of the
+// run. o.Interactive is set by parseBare before the hooks run.
+func schedOptions(o *RunOptions) error {
+	vals, err := schedRevisionValues(o.Interactive)
+	o.PolicyRun = vals
+	return err
+}
+
 // foregroundTrigger reports whether a run with this trigger is a person
 // waiting at a terminal: the default (no trigger), local and manual runs. It
 // is a heuristic: --trigger says which pipelines to plan, not who waits; the
-// caller that wires the values (debt D-0984) may pass a TTY test instead.
+// `ci plan` still uses it (cmd/plan_placement.go); a real run uses interactiveRun.
 func foregroundTrigger(trigger string) bool {
 	return trigger == "" || trigger == "local" || trigger == "manual"
 }
 
-// schedRevisionValues returns the revision-scope policy values of the parsed
-// flags, plus the 10 minute queue cap of a foreground run without --max-queue.
-func schedRevisionValues(trigger string) (map[string]json.RawMessage, error) {
+// schedRevisionValues returns the per-run policy values of the parsed flags
+// (the run scope, internal/policy/runscope.go), plus the 10 minute queue cap of
+// a foreground run without --max-queue.
+func schedRevisionValues(foreground bool) (map[string]json.RawMessage, error) {
 	f := schedFlags
-	f.Foreground = foregroundTrigger(trigger)
+	f.Foreground = foreground
 	return f.Values()
 }

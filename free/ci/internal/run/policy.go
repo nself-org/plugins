@@ -18,6 +18,9 @@ import (
 // PolicyResult carries the digest stored on the pipeline row and in evidence, and the secrets allowlist.
 type PolicyResult struct {
 	Digest string
+	// IgnoredRun lists the per-run values the policy did not take, one line each
+	// ("key: reason"); a run reports them, it never drops them silently (P7-AUTO-29).
+	IgnoredRun []string
 	SecretsInfo
 }
 
