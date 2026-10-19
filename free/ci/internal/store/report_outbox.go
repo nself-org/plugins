@@ -190,6 +190,23 @@ func (s *Store) ExpireCoordinator(ctx context.Context, id string) error {
 	})
 }
 
+// ExpireCoordinators is ExpireCoordinator for several ids in one transaction:
+// every transaction is a journal sync, and a recovery that expired its dead
+// coordinators one by one paid one per coordinator on every run (D-1008).
+func (s *Store) ExpireCoordinators(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return s.write(ctx, func(tx *sql.Tx) error {
+		for _, id := range ids {
+			if _, err := tx.ExecContext(ctx, "UPDATE coordinator SET heartbeat_at=0 WHERE id=?", id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // RecordRunEvidence stores the run-level evidence, which belongs to no single attempt.
 func (s *Store) RecordRunEvidence(ctx context.Context, id, pipelineID, revision, inputDigest string, body []byte) error {
 	return s.write(ctx, func(tx *sql.Tx) error {

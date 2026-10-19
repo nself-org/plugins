@@ -191,7 +191,8 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	recovered := Recover(ctx, st, coord.ID, c.Opts.Home)
+	recovered, joinSweep := RecoverBeside(ctx, st, coord.ID, c.Opts.Home) // the container sweep asks the daemon: it runs beside the status and the persist
+	defer func() { _ = joinSweep() }()                                    // after the store handle's close was deferred: the sweep ends before it closes
 	// status preparation can wait on another poster for minutes; it runs before the run
 	// is persisted so a persisted run is never left without attempts or heartbeats
 	post := c.prepareStatus(ctx, st, rev)
@@ -224,15 +225,31 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	}
 	rs := &runState{c: c, sess: sess, hooks: h, pol: pol, pl: c.Plan, mp: mp, rev: rev, rows: rows, subst: subst, render: stampRun(NewRenderer(out, c.Opts), runID), subset: keep, begin: c.beginEvidence(ctx, h, rev),
 		out: map[string]*JobOutcome{}, done: map[string]chan struct{}{}, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
+	defer rs.bg.Wait() // after the store handle's close was deferred: the clean-ups end before it closes
 	rs.render.Event(Event{Type: "planned", Plan: c.Plan})
 	start := time.Now()
 	c.race(ctx, h, runID)
 	c.drive(ctx, rs, st, coord.ID)
-	if end := GitRevision(context.WithoutCancel(ctx), c.Opts.Root, c.capture()); end.SHA != rev.SHA || end.Dirty {
+	if err := joinSweep(); err != nil {
+		recovered.Errors = append(recovered.Errors, err)
+	}
+	endCtx := context.WithoutCancel(ctx)
+	var endRead any
+	var endWG sync.WaitGroup
+	if er, ok := h.Evidence.(EndReader); ok {
+		endWG.Add(1)
+		go func() {
+			defer endWG.Done()
+			_ = guard("evidence end reader", func() error { endRead = er.ReadEnd(endCtx, c.Opts.Root, c.capture()); return nil })
+		}()
+	}
+	end := GitRevision(endCtx, c.Opts.Root, c.capture())
+	endWG.Wait()
+	if end.SHA != rev.SHA || end.Dirty {
 		rev.Dirty = true // the tree moved or changed while jobs ran: the result is not bound to the start commit
 	}
 	res := c.conclude(finishIn{St: st, RunID: runID, Rev: rev, Source: source, Policy: pol, Hooks: h, Jobs: rs.outcomes(),
-		Cancelled: rs.userCancel || ctx.Err() != nil, Partial: c.Opts.Job != "" || c.Opts.Pipeline != "", Start: start, Post: post, Recovered: recovered, Skipped: c.Plan.Skipped, Begin: rs.begin})
+		Cancelled: rs.userCancel || ctx.Err() != nil, Partial: c.Opts.Job != "" || c.Opts.Pipeline != "", Start: start, Post: post, Recovered: recovered, Skipped: c.Plan.Skipped, Begin: rs.begin, End: endRead})
 	rs.render.Done(res.Summary)
 	return res, nil
 }

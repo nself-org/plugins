@@ -62,6 +62,12 @@ func (Builder) Begin(ctx context.Context, root string, rev cirun.Revision, c cir
 	return s
 }
 
+// ReadEnd reads the checkout as the jobs left it; the coordinator runs it beside
+// its own end revision read and passes the result to Complete (run.EndReader).
+func (Builder) ReadEnd(ctx context.Context, root string, c cirun.Capture) any {
+	return ReadWorktree(ctx, c, root)
+}
+
 // Complete returns the final run document.
 func (Builder) Complete(ctx context.Context, begin any, f cirun.EvidenceFacts, ev model.Evidence) (model.Evidence, error) {
 	s, _ := begin.(*snapshot)
@@ -72,7 +78,11 @@ func (Builder) Complete(ctx context.Context, begin any, f cirun.EvidenceFacts, e
 		ev.InputDigests = s.inputs
 	}
 	tree := s.tree
-	if end := ReadWorktree(context.WithoutCancel(ctx), f.Git, f.Root); end.Dirty { // edits made while the jobs ran, hidden or not
+	end, early := f.End.(Worktree)
+	if !early {
+		end = ReadWorktree(context.WithoutCancel(ctx), f.Git, f.Root)
+	}
+	if end.Dirty { // edits made while the jobs ran, hidden or not
 		tree = end
 	}
 	if f.Job != "" { // one job is a check, not the required pipeline: it can never gate a revision

@@ -190,9 +190,16 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	oc := Outcome{State: res.Attempt.State, FailureClass: res.Attempt.FailureClass, ExitCode: res.ExitCode}
 	defer func() {
 		if rs.hooks.Cache != nil {
-			bg, done := background(ctx)
-			defer done()
-			_ = guard("cache after hook", func() error { return rs.hooks.Cache.After(bg, info, oc) })
+			// Removing the cache tree is the slowest step after the verdict and nothing that follows
+			// reads it, so it runs beside the next jobs and the run's end; Run joins it (rs.bg)
+			// before it returns, so no process leaves a half-removed tree behind.
+			rs.bg.Add(1)
+			go func() {
+				defer rs.bg.Done()
+				bg, done := background(ctx)
+				defer done()
+				_ = guard("cache after hook", func() error { return rs.hooks.Cache.After(bg, info, oc) })
+			}()
 		}
 	}()
 	switch {

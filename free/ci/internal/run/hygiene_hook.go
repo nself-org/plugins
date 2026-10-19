@@ -189,23 +189,38 @@ func (h *hygieneHook) Finalize(ctx context.Context, r RunInfo) error {
 	if sweepErr != nil {
 		problems = append(problems, "orphan sweep: "+sweepErr.Error())
 	}
-	for _, a := range attempts {
+	// The attempts are independent (each owns its work directory and its labelled resources) and
+	// every LeakCheck scans /proc, so they run side by side; the results join in attempt order.
+	type verdict struct{ problems, reasons []string }
+	results := make([]verdict, len(attempts))
+	var wg sync.WaitGroup
+	for i, a := range attempts {
 		if a.home == "" {
-			problems = append(problems, "attempt "+a.id+": no state directory to clean")
+			results[i].problems = append(results[i].problems, "attempt "+a.id+": no state directory to clean")
 			continue
 		}
 		if !managed(a.home) {
 			continue
 		}
-		host := hygieneHost(a.home, rt)
-		host.RuntimeRequired = a.container
-		if err := host.Cleanup(hctx, a.id); err != nil {
-			problems = append(problems, err.Error())
-		}
-		if rep, err := host.LeakCheck(hctx, a.id, 0); err != nil {
-			problems = append(problems, err.Error())
-			reasons = append(reasons, rep.Reason())
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			host := hygieneHost(a.home, rt)
+			host.RuntimeRequired = a.container
+			v := &results[i]
+			if err := host.Cleanup(hctx, a.id); err != nil {
+				v.problems = append(v.problems, err.Error())
+			}
+			if rep, err := host.LeakCheck(hctx, a.id, 0); err != nil {
+				v.problems = append(v.problems, err.Error())
+				v.reasons = append(v.reasons, rep.Reason())
+			}
+		}()
+	}
+	wg.Wait()
+	for _, v := range results {
+		problems = append(problems, v.problems...)
+		reasons = append(reasons, v.reasons...)
 	}
 	if len(problems) == 0 {
 		return nil

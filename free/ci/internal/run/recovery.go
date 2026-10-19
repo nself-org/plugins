@@ -16,6 +16,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -61,42 +62,65 @@ func (c staleChecker) Stale(ctx context.Context, id string) (bool, error) {
 // coordinator id of the caller ("" for a read-only caller such as `ci runs`);
 // home is the state directory of the caller ("" = NSELF_CI_HOME or the default).
 func Recover(ctx context.Context, st *store.Store, current, home string) RecoverReport {
+	rep, join := RecoverBeside(ctx, st, current, home)
+	if err := join(); err != nil {
+		rep.Errors = append(rep.Errors, err)
+	}
+	return rep
+}
+
+// RecoverBeside is Recover with the container sweep running beside the rest of
+// the recovery (and beside whatever the caller does next): it asks the daemon,
+// which can take longer than all the store work together. The returned function
+// waits for that sweep and returns its error; call it before the store closes.
+func RecoverBeside(ctx context.Context, st *store.Store, current, home string) (RecoverReport, func() error) {
 	var rep RecoverReport
 	boot := bootID()
-	all, err := st.Coordinators(ctx)
-	if err != nil {
-		rep.Errors = append(rep.Errors, err)
-		return rep
-	}
-	for _, c := range all {
-		if c.ID != current && c.BootID == boot && !pidAlive(c.PID) {
-			if err = st.ExpireCoordinator(ctx, c.ID); err != nil {
-				rep.Errors = append(rep.Errors, err)
-				continue
-			}
-			rep.Expired++
-		}
-	}
 	sweeper := ciexec.Executor{Stale: staleChecker{st, boot}}
 	// Sweep reads NSELF_CI_HOME; never sweep a home other than the run's own
 	// (the executor sweeps the right one when the next job starts).
 	if home != "" && filepath.Clean(home) != filepath.Clean(os.Getenv("NSELF_CI_HOME")) {
 		sweeper.Stale = nil
 	}
-	if err = sweeper.Sweep(ctx, safeID(current)); err != nil {
+	var containerErr error
+	containerDone := make(chan struct{})
+	go func() {
+		defer close(containerDone)
+		containerErr = sweeper.SweepContainers(ctx, safeID(current))
+	}()
+	join := sync.OnceValue(func() error { <-containerDone; return containerErr })
+	all, err := st.Coordinators(ctx)
+	if err != nil {
+		rep.Errors = append(rep.Errors, err)
+		return rep, join
+	}
+	// A coordinator that is already expired (heartbeat 0) needs no write: rows are never removed,
+	// so writing them again would add one transaction per past run to every later run.
+	var dead []string
+	for _, c := range all {
+		if c.ID != current && c.BootID == boot && c.HeartbeatAt != 0 && !pidAlive(c.PID) {
+			dead = append(dead, c.ID)
+		}
+	}
+	if err = st.ExpireCoordinators(ctx, dead); err != nil {
+		rep.Errors = append(rep.Errors, err)
+	} else {
+		rep.Expired = len(dead)
+	}
+	if err = sweeper.SweepProcesses(ctx, safeID(current)); err != nil {
 		rep.Errors = append(rep.Errors, err)
 	}
 	n, err := st.SweepStale(ctx, boot)
 	rep.Lost = n
 	if err != nil {
 		rep.Errors = append(rep.Errors, err)
-		return rep
+		return rep, join
 	}
 	rep.Stranded = strandAttempts(ctx, st, boot, &rep)
 	lost, err := st.LostAttempts(ctx)
 	if err != nil {
 		rep.Errors = append(rep.Errors, err)
-		return rep
+		return rep, join
 	}
 	for _, a := range lost {
 		d := store.TransitionDetail{Epoch: a.Epoch, FailureClass: "lost", Reason: "coordinator lost"}
@@ -121,7 +145,7 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 	if _, err = st.CloseDeadRuns(ctx, boot); err != nil {
 		rep.Errors = append(rep.Errors, err)
 	}
-	return rep
+	return rep, join
 }
 
 // strandAttempts ends the queued and finalizing attempts of dead coordinators

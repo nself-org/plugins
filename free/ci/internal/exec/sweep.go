@@ -47,6 +47,12 @@ func (e *Executor) sweepOnStart(ctx context.Context, current, home string) error
 	if err := e.sweepProcesses(ctx, home, current); err != nil {
 		return err
 	}
+	return e.sweepContainersWindow(ctx, current)
+}
+
+// sweepContainersWindow is the container sweep of current, run once per TTL
+// window: whoever claims the window sweeps, the rest find it done.
+func (e *Executor) sweepContainersWindow(ctx context.Context, current string) error {
 	now := time.Now()
 	if !sweepDue(current, now) {
 		return nil
@@ -58,6 +64,34 @@ func (e *Executor) sweepOnStart(ctx context.Context, current, home string) error
 		return err
 	}
 	return nil
+}
+
+// SweepProcesses removes the process groups of stale coordinators (the process
+// half of Sweep, for a caller that runs the container half beside other work).
+func (e *Executor) SweepProcesses(ctx context.Context, current string) error {
+	if e.Stale == nil {
+		return nil
+	}
+	home := os.Getenv("NSELF_CI_HOME")
+	if home == "" {
+		user, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		home = filepath.Join(user, ".nself", "ci")
+	}
+	return e.sweepProcesses(ctx, home, current)
+}
+
+// SweepContainers removes the labelled containers of stale coordinators, once
+// per window for current (the container half of Sweep). A job start in the same
+// window finds the sweep done, so a recovery that ran it first spares that job
+// the two docker spawns.
+func (e *Executor) SweepContainers(ctx context.Context, current string) error {
+	if e.Stale == nil {
+		return nil
+	}
+	return e.sweepContainersWindow(ctx, current)
 }
 
 // containerSweepTTL is how long one coordinator's container sweep stands for

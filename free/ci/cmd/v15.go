@@ -27,6 +27,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/adhoc"
 	"github.com/nself-org/plugins/free/ci/internal/config"
 	"github.com/nself-org/plugins/free/ci/internal/drill"
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
@@ -250,6 +251,7 @@ func runBare(args []string) int {
 		}
 		return code
 	}
+	ciexec.WarmRuntimeInfo() // the daemon's `info` takes longer than reading the config and planning: ask while they run
 	p, digest, subst, err := preparePlan(ctx, o)
 	if err != nil {
 		return exitForError(err)

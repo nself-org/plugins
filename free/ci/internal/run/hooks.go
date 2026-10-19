@@ -177,6 +177,7 @@ type EvidenceFacts struct {
 	Git         Capture // runs git through the exec funnel
 	Jobs        []JobOutcome
 	Job         string // --job: only that job (and what it needs) ran
+	End         any    // what an EndReader read beside the coordinator's own end-of-run git read; nil when the builder is not one
 }
 
 // EvidenceBuilder completes the run evidence (P7-CI-38). Begin runs before any
@@ -187,6 +188,14 @@ type EvidenceFacts struct {
 type EvidenceBuilder interface {
 	Begin(ctx context.Context, root string, rev Revision, git Capture) any
 	Complete(ctx context.Context, begin any, f EvidenceFacts, ev model.Evidence) (model.Evidence, error)
+}
+
+// EndReader is an optional extension of an EvidenceBuilder: ReadEnd reads the
+// checkout as the jobs left it. The coordinator calls it while it reads the end
+// revision itself, so the two git reads overlap, and hands the result to Complete
+// as EvidenceFacts.End.
+type EndReader interface {
+	ReadEnd(ctx context.Context, root string, git Capture) any
 }
 
 // Hooks is a snapshot of every hook. A nil field means "no-op default".

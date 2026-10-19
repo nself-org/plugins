@@ -41,6 +41,7 @@ type runState struct {
 	attempts   map[string]string // attempt id -> planned job id
 	userCancel bool
 	cancelRun  context.CancelFunc // ends the whole run (a cancel intent from another process)
+	bg         sync.WaitGroup     // cache clean-ups that finish beside the run; Run joins them before it returns
 }
 
 func (rs *runState) outcome(id string) JobOutcome {

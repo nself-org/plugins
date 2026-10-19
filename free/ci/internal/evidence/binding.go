@@ -26,8 +26,12 @@ type Worktree struct {
 
 // ReadWorktree reads the state of root.
 func ReadWorktree(ctx context.Context, c Capture, root string) Worktree {
+	// The status and the hidden-edit listing are independent funnel spawns: side by side they cost
+	// the slower one, not both (D-1008). A dirty tree throws the listing away.
+	hidden := make(chan bool, 1)
+	go func() { hidden <- hiddenEdits(ctx, c, root) }()
 	status, ok := git(ctx, c, root, "status", "--porcelain", "--untracked-files=normal")
-	if ok && strings.TrimSpace(status) == "" && !hiddenEdits(ctx, c, root) {
+	if hiddenEdit := <-hidden; ok && strings.TrimSpace(status) == "" && !hiddenEdit {
 		return Worktree{}
 	}
 	w := Worktree{Dirty: true}
