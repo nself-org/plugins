@@ -210,3 +210,130 @@ func TestRefusal(t *testing.T) {
 		}
 	}
 }
+
+// tempTrees lists the temporary worktree directories AddWorktree made under
+// tmp (the test points TMPDIR at it).
+func tempTrees(t *testing.T, tmp string) []string {
+	t.Helper()
+	left, err := filepath.Glob(filepath.Join(tmp, "nself-ci-verify-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return left
+}
+
+// A run engine that errors must not leave the temporary worktree, its git
+// bookkeeping or a link behind, and the engine's error is the one returned.
+func TestRunErrorRemovesWorktree(t *testing.T) {
+	repo, _ := newRepo(t)
+	home := t.TempDir()
+	orun := original(t, repo, home)
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	boom := errors.New("engine exploded")
+	var tree string
+	env := Env{Root: repo, Home: home, Store: openStore(t, home), Run: func(_ context.Context, spec RunSpec) (RunOutcome, error) {
+		tree = spec.Tree
+		if _, err := os.Stat(filepath.Join(tree, "a.txt")); err != nil {
+			t.Errorf("the run must start in a populated worktree: %v", err)
+		}
+		return RunOutcome{}, boom
+	}}
+
+	res, err := Reproduce(context.Background(), env, Request{Job: "unit"})
+	if !errors.Is(err, boom) {
+		t.Fatalf("want the engine error, got %v", err)
+	}
+	if res.Link != nil || res.Reproduction != nil {
+		t.Fatalf("a failed run must not produce a link: %+v", res)
+	}
+	if links, _ := Links(home, orun); len(links) != 0 {
+		t.Fatalf("a link was saved for a failed run: %+v", links)
+	}
+	if tree == "" {
+		t.Fatal("the engine was never reached")
+	}
+	if _, statErr := os.Stat(tree); !os.IsNotExist(statErr) {
+		t.Fatalf("the temporary worktree %s survived the failed run (%v)", tree, statErr)
+	}
+	if left := tempTrees(t, tmp); len(left) != 0 {
+		t.Fatalf("temporary directories left behind: %v", left)
+	}
+	if wt := worktrees(t, repo); len(wt) != 1 {
+		t.Fatalf("git still lists the temporary worktree: %v", wt)
+	}
+}
+
+// Cancelling mid-run (SIGINT in the command) must remove the worktree even
+// though the context the run was started with is already done, and must not
+// save a link for the interrupted run.
+func TestCancelMidRunRemovesWorktree(t *testing.T) {
+	for name, finish := range map[string]func(ctx context.Context) (RunOutcome, error){
+		"engine returns the context error": func(ctx context.Context) (RunOutcome, error) { return RunOutcome{}, ctx.Err() },
+		"engine reports a cancelled run": func(ctx context.Context) (RunOutcome, error) {
+			return RunOutcome{RunID: "r-cancelled", Exit: 2, Evidence: model.Evidence{Result: "cancelled"}}, nil
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			repo, _ := newRepo(t)
+			home := t.TempDir()
+			orun := original(t, repo, home)
+			tmp := t.TempDir()
+			t.Setenv("TMPDIR", tmp)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var tree string
+			started := make(chan struct{})
+			env := Env{Root: repo, Home: home, Store: openStore(t, home), Run: func(ctx context.Context, spec RunSpec) (RunOutcome, error) {
+				tree = spec.Tree
+				close(started)
+				<-ctx.Done()
+				return finish(ctx)
+			}}
+			go func() { <-started; cancel() }()
+
+			res, _ := Reproduce(ctx, env, Request{Job: "unit"})
+			if tree == "" {
+				t.Fatal("the engine was never reached")
+			}
+			if _, err := os.Stat(tree); !os.IsNotExist(err) {
+				t.Fatalf("the temporary worktree %s survived the cancel (%v)", tree, err)
+			}
+			if left := tempTrees(t, tmp); len(left) != 0 {
+				t.Fatalf("temporary directories left behind: %v", left)
+			}
+			if wt := worktrees(t, repo); len(wt) != 1 {
+				t.Fatalf("git still lists the temporary worktree: %v", wt)
+			}
+			if links, _ := Links(home, orun); len(links) != 0 {
+				t.Fatalf("a link was saved for a cancelled run: %+v", links)
+			}
+			_ = res
+		})
+	}
+}
+
+// specOf carries the recorded pipeline, trigger and isolation to the engine.
+func TestSpecOfPassThrough(t *testing.T) {
+	doc := func(kind model.PipelineKind, name string, iso model.Isolation) Source {
+		var s Source
+		s.JobID = "unit"
+		s.Doc.Trigger = "push"
+		s.Doc.Pipeline.Kind, s.Doc.Pipeline.Name = kind, name
+		s.Doc.Runner.Isolation = iso
+		return s
+	}
+	for name, tc := range map[string]struct {
+		src  Source
+		want RunSpec
+	}{
+		"named pipeline":  {doc("named", "release", "process"), RunSpec{Tree: "/t", Job: "unit", Trigger: "push", Pipeline: "release"}},
+		"drill pipeline":  {doc("drill", "restore", "process"), RunSpec{Tree: "/t", Job: "unit", Trigger: "push", Pipeline: "restore"}},
+		"default":         {doc("default", "default", "process"), RunSpec{Tree: "/t", Job: "unit", Trigger: "push"}},
+		"container level": {doc("default", "default", "container"), RunSpec{Tree: "/t", Job: "unit", Trigger: "push", Container: true}},
+	} {
+		if got := specOf(tc.src, "/t"); got != tc.want {
+			t.Errorf("%s: spec = %+v, want %+v", name, got, tc.want)
+		}
+	}
+}
