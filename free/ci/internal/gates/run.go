@@ -27,6 +27,7 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 	d := p.Def
 	c := model.Check{ID: d.ID, JobID: d.ID, Kind: d.Kind, Tool: p.ToolName(), Required: p.Required, Substantive: d.Substantive}
 	argv := p.Command()
+	var node nodeSpec
 	if strings.HasPrefix(d.ID, "node.") {
 		var reason string
 		argv, reason = nodeCommand(root, p, cfg)
@@ -46,16 +47,13 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 		if !available(argv[0]) {
 			return unavailable(c, d.Remediation)
 		}
+		node = nodeSpecFor(root, p)
 	} else if !available(p.ToolName()) {
 		return unavailable(c, d.Remediation)
 	}
 	probeTool := c.Tool
-	if d.ID == "node.coverage" {
-		if runtime.GOOS == "windows" {
-			argv = []string{"cmd", "/C", probeTool + " run test -- --coverage && type coverage\\lcov.info"}
-		} else {
-			argv = []string{"sh", "-c", probeTool + " run test -- --coverage && cat coverage/lcov.info"}
-		}
+	if strings.HasPrefix(d.ID, "node.") {
+		argv = node.wrap(d.ID, argv)
 	}
 	if d.ID == "secrets.gitleaks" {
 		argv = gitleaksCommand(root)
@@ -82,6 +80,11 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 			v = v[:120]
 		}
 		c.ToolVersion = &v
+		if why := node.pinMismatch(v); why != "" {
+			c.Result, c.FailureClass = "error", "infra"
+			c.Excerpt = "E811: " + why + "; " + d.Remediation
+			return c
+		}
 	}
 	res := r.invoke(ctx, root, argv, p.Workdir, 0)
 	if d.ID == "go.fmt" {
@@ -89,6 +92,9 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 		if res.output == "" {
 			res.exit = 0 // gofmt exits 2 on vendored parse errors alone
 		}
+	}
+	if res.err == nil && prepareVerdict(&c, res) {
+		return c
 	}
 	c.Excerpt = strings.TrimSpace(res.output)
 	if len(c.Excerpt) > 1024 {
