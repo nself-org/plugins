@@ -126,7 +126,9 @@ func (rs *runState) retire(s AttemptSpec) {
 	bg, done := background(context.Background())
 	defer done()
 	if state, epoch, e := rs.sess.Store.AttemptStateEpoch(bg, id); e == nil && state == "queued" {
-		_ = rs.sess.Store.Transition(bg, id, "queued", "cancelled", store.TransitionDetail{Epoch: epoch, FailureClass: "infra", Reason: "superseded by retry attempt " + strconv.Itoa(s.N)})
+		// an operator cancel accepted for the parked attempt moves to the successor, so the retry cannot outrun it
+		succ, _ := AttemptIDFor(WithSession(context.Background(), rs.sess), s)
+		_ = rs.sess.Store.Transition(bg, id, "queued", "cancelled", store.TransitionDetail{Epoch: epoch, FailureClass: "infra", Reason: "superseded by retry attempt " + strconv.Itoa(s.N), ForwardCancelTo: succ})
 	}
 }
 
