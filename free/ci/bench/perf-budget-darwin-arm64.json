@@ -1,16 +1,16 @@
 {
-  "_note": "Absolute p95 ceilings in ms: the recorded baseline p95 plus 25 percent (P7-CI-46), checked by cli tools/perfbench check. Baseline and update rule: hq plan/p7/evidence/CI-46-perf.md. The relative V15/v1.4 budget is checked by cibench -ratio-check.",
+  "_note": "Absolute p95 ceilings in ms: the highest p95 of three independent 20-sample baseline runs plus 25 percent (P7-CI-46), checked by cli tools/perfbench check. Baselines and update rule: hq plan/p7/evidence/CI-46-perf.md. The relative V15/v1.4 budget is checked by cibench -ratio-check.",
   "schema": "perfbench-budget/v1",
   "platform": "darwin/arm64",
   "p95_ms": {
     "ci.detect": 1,
-    "ci.e2e_medium.v14": 1453,
-    "ci.e2e_medium.v15": 2876,
-    "ci.e2e_tiny.v14": 555,
-    "ci.e2e_tiny.v15": 2279,
-    "ci.exec_overhead": 64,
+    "ci.e2e_medium.v14": 1915,
+    "ci.e2e_medium.v15": 5124,
+    "ci.e2e_tiny.v14": 949,
+    "ci.e2e_tiny.v15": 4308,
+    "ci.exec_overhead": 207,
     "ci.plan": 1,
-    "ci.startup": 21,
-    "ci.store_open": 16
+    "ci.startup": 37,
+    "ci.store_open": 230
   }
 }

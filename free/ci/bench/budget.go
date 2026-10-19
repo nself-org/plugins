@@ -29,6 +29,34 @@ type Budget struct {
 	P95MS    map[string]float64 `json:"p95_ms"`
 }
 
+// WorstOf folds independent baseline runs of one platform into one result whose
+// p50, p95 and max are, per metric, the highest seen in any run. One run of 20
+// samples under-states the p95 of a noisy machine; the worst of several is the
+// baseline of record. The runs must come from one goos/goarch.
+func WorstOf(runs []Result) (Result, error) {
+	if len(runs) == 0 {
+		return Result{}, fmt.Errorf("no baseline runs")
+	}
+	out := runs[0]
+	out.Metrics = append([]Metric(nil), runs[0].Metrics...)
+	for _, r := range runs[1:] {
+		if r.GOOS != out.GOOS || r.GOARCH != out.GOARCH {
+			return Result{}, fmt.Errorf("baseline runs mix %s/%s and %s/%s", out.GOOS, out.GOARCH, r.GOOS, r.GOARCH)
+		}
+		for _, m := range r.Metrics {
+			for i := range out.Metrics {
+				if out.Metrics[i].Name == m.Name {
+					out.Metrics[i].P50 = math.Max(out.Metrics[i].P50, m.P50)
+					out.Metrics[i].P95 = math.Max(out.Metrics[i].P95, m.P95)
+					out.Metrics[i].Max = math.Max(out.Metrics[i].Max, m.Max)
+					out.Metrics[i].N = min(out.Metrics[i].N, m.N)
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
 // BudgetFromResult derives a budget from a baseline. keep selects the metrics
 // that get a ceiling (nil keeps every metric measured in milliseconds).
 func BudgetFromResult(base Result, note string, keep func(name string) bool) (Budget, error) {

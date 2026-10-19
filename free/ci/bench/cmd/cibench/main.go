@@ -4,7 +4,7 @@
 //
 //	cibench [-runs 10] [-warmup 2] [-bin path] [-json] [-services [-cold]]
 //	cibench -ratio-check -in result.json [-exceptions file]
-//	cibench -write-budget perf-budget.json -in result.json [-only-core]
+//	cibench -write-budget perf-budget.json -in run1.json,run2.json,run3.json [-only-core]
 //
 // Run it from the free/ci module root; without -bin it builds ./cmd first.
 // Results go to stdout with -json (everything else goes to stderr). Exit 0 on
@@ -44,7 +44,7 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 	fs.StringVar(&o.bin, "bin", "", "nself-ci binary (default: build ./cmd)")
 	fs.StringVar(&o.nself, "nself", "nself", "nself CLI for -services")
 	fs.StringVar(&o.sha, "sha", "", "revision measured (default: git HEAD of the working directory)")
-	fs.StringVar(&o.in, "in", "", "perfbench/v1 result file (-ratio-check, -write-budget)")
+	fs.StringVar(&o.in, "in", "", "perfbench/v1 result file (-ratio-check); with -write-budget a comma list of baseline runs, worst p95 per metric")
 	fs.StringVar(&o.out, "out", "", "write the result JSON here instead of stdout")
 	fs.StringVar(&o.exceptions, "exceptions", "bench/ratio-exceptions.json", "owner-accepted ratio exceptions")
 	fs.StringVar(&o.writeBudget, "write-budget", "", "derive a budget file from -in and write it here")
@@ -102,7 +102,16 @@ func budgetCmd(o options, stderr io.Writer) int {
 		say(stderr, "cibench: -write-budget needs -in")
 		return 2
 	}
-	res, err := bench.ReadResult(o.in)
+	var runs []bench.Result
+	for _, path := range strings.Split(o.in, ",") {
+		r, err := bench.ReadResult(path)
+		if err != nil {
+			say(stderr, "cibench: %v", err)
+			return 2
+		}
+		runs = append(runs, r)
+	}
+	res, err := bench.WorstOf(runs)
 	if err != nil {
 		say(stderr, "cibench: %v", err)
 		return 2
