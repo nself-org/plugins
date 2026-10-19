@@ -7,7 +7,8 @@ package run
 // Outputs: an AttemptLog per attempt, closed when the executor returns.
 // Constraints: storing a log never fails or slows a job beyond the hook's own
 // work: an open error, a panic or a write error leaves the job running with
-// no stored log (the hook reports it through its own channel); the hook only
+// no stored log (the hook has no channel to report it, so a missing log can mean
+// a storage failure; `ci logs` says so); the hook only
 // ever sees redacted bytes, because the funnel's Redactor runs first.
 
 import "context"

@@ -39,6 +39,13 @@ func Exists(dir string) bool {
 // Read delivers the stored lines with Seq > after to fn, oldest first. fn
 // returning an error stops the read with that error.
 func Read(dir string, after int64, fn func(Line) error) error {
+	// the active file is opened before the segments are listed: a rotation in between
+	// moves its lines into a segment the listing then shows, and the open handle
+	// still reads the old file; lines seen twice are dropped by their sequence
+	f, ferr := os.Open(filepath.Join(dir, activeName))
+	if f != nil {
+		defer func() { _ = f.Close() }()
+	}
 	segs, err := segments(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -55,14 +62,12 @@ func Read(dir string, after int64, fn func(Line) error) error {
 			return err
 		}
 	}
-	f, err := os.Open(filepath.Join(dir, activeName))
-	if os.IsNotExist(err) {
+	if os.IsNotExist(ferr) {
 		return nil
 	}
-	if err != nil {
-		return fail(CodeStore, "cannot open the log file: %v", err)
+	if ferr != nil {
+		return fail(CodeStore, "cannot open the log file: %v", ferr)
 	}
-	defer func() { _ = f.Close() }()
 	_, _, err = readLines(f, cur, fn)
 	return err
 }
@@ -142,6 +147,11 @@ type follower struct {
 
 // poll reads whatever was stored since the last call.
 func (fl *follower) poll() error {
+	// open first, list second: see Read
+	f, ferr := os.Open(filepath.Join(fl.dir, activeName))
+	if f != nil {
+		defer func() { _ = f.Close() }()
+	}
 	segs, err := segments(fl.dir)
 	if err != nil && !os.IsNotExist(err) {
 		return fail(CodeStore, "cannot list the log directory: %v", err)
@@ -155,14 +165,12 @@ func (fl *follower) poll() error {
 		}
 		fl.active, fl.offset = nil, 0 // a rotation moved the active file's lines into this segment
 	}
-	f, err := os.Open(filepath.Join(fl.dir, activeName))
-	if os.IsNotExist(err) {
+	if os.IsNotExist(ferr) {
 		return nil
 	}
-	if err != nil {
-		return fail(CodeStore, "cannot open the log file: %v", err)
+	if ferr != nil {
+		return fail(CodeStore, "cannot open the log file: %v", ferr)
 	}
-	defer func() { _ = f.Close() }()
 	st, err := f.Stat()
 	if err != nil {
 		return fail(CodeStore, "cannot stat the log file: %v", err)

@@ -70,6 +70,9 @@ func RemoveRun(home, run string) error {
 	if !ValidID(run) {
 		return fail(CodeStore, "refusing to remove logs for an invalid run id")
 	}
+	if fi, err := os.Lstat(Root(home)); err == nil && !fi.IsDir() { // a symlinked logs directory is never followed
+		return fail(CodeStore, "refusing to remove from a logs directory that is not a plain directory")
+	}
 	dir := RunDir(home, run)
 	if fi, err := os.Lstat(dir); err == nil && !fi.IsDir() {
 		return fail(CodeStore, "refusing to remove %q: not a directory", run)

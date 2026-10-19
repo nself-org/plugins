@@ -215,3 +215,61 @@ func TestValidIDRejectsPathTricks(t *testing.T) {
 		}
 	}
 }
+
+// A planted symlink must not redirect the log or its recovery truncation, and
+// loose permissions on existing objects are tightened.
+func TestOpenRefusesSymlinksAndTightensPermissions(t *testing.T) {
+	root := t.TempDir()
+	victim := filepath.Join(root, "victim.txt")
+	if err := os.WriteFile(victim, []byte("precious"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "run", "att")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, filepath.Join(dir, activeName)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(dir, Options{}); err == nil {
+		t.Fatal("an active.jsonl symlink must be refused")
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "precious" {
+		t.Fatalf("the link target was touched: %q", b)
+	}
+	_ = os.Remove(filepath.Join(dir, activeName))
+	w, err := Open(dir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = w.Close()
+	for _, p := range []string{dir, filepath.Dir(dir), filepath.Join(dir, activeName)} {
+		if fi, _ := os.Stat(p); fi.Mode().Perm()&0o077 != 0 {
+			t.Errorf("%s stayed %v", p, fi.Mode().Perm())
+		}
+	}
+	link := filepath.Join(root, "linkdir")
+	if err := os.Symlink(dir, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(link, Options{}); err == nil {
+		t.Fatal("a symlinked attempt directory must be refused")
+	}
+}
+
+func TestRemoveRunDoesNotFollowASymlinkedLogsDirectory(t *testing.T) {
+	home := t.TempDir()
+	other := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(other, "r1"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(other, Root(home)); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveRun(home, "r1"); err == nil {
+		t.Fatal("must refuse")
+	}
+	if _, err := os.Stat(filepath.Join(other, "r1")); err != nil {
+		t.Fatalf("the linked directory lost data: %v", err)
+	}
+}

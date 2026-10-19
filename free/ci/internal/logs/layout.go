@@ -94,7 +94,7 @@ func segments(dir string) ([]segment, error) {
 	}
 	var out []segment
 	for _, e := range ents {
-		if s, ok := parseSegment(e.Name()); ok && !e.IsDir() {
+		if s, ok := parseSegment(e.Name()); ok && e.Type().IsRegular() {
 			s.Path = filepath.Join(dir, e.Name())
 			out = append(out, s)
 		}

@@ -68,6 +68,19 @@ func Prune(ctx context.Context, st *store.Store, p PruneParams) (PruneResult, er
 	for _, k := range p.Keep {
 		keep[k] = true
 	}
+	known := map[string]bool{}
+	for _, a := range ages {
+		known[a.ID] = true
+	}
+	var orphans []string
+	for _, i := range infos {
+		if !known[i.Run] && !keep[i.Run] && now.Sub(modified[i.Run]) > OrphanGrace {
+			orphans = append(orphans, i.Run)
+		}
+	}
+	for _, id := range orphans {
+		total -= size[id] // swept anyway: they must not push real runs out
+	}
 	victim := map[string]bool{}
 	var oldestFirst []string
 	for i, a := range ages {
@@ -94,16 +107,6 @@ func Prune(ctx context.Context, st *store.Store, p PruneParams) (PruneResult, er
 	for i := len(ages) - 1; i >= 0; i-- {
 		if victim[ages[i].ID] {
 			oldestFirst = append(oldestFirst, ages[i].ID)
-		}
-	}
-	known := map[string]bool{}
-	for _, a := range ages {
-		known[a.ID] = true
-	}
-	var orphans []string
-	for _, i := range infos {
-		if !known[i.Run] && !keep[i.Run] && now.Sub(modified[i.Run]) > OrphanGrace {
-			orphans = append(orphans, i.Run)
 		}
 	}
 	res.Runs, res.Orphans = oldestFirst, orphans

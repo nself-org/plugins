@@ -251,3 +251,37 @@ func TestRunStartPrunesAccordingToTheRetentionFile(t *testing.T) {
 	sort.Strings(want)
 	same(t, "log dirs after the run", dirs, want)
 }
+
+// A huge day count means "never by age": it must not overflow into a negative
+// age that deletes everything.
+func TestHugeMaxAgeDaysPrunesNothingByAge(t *testing.T) {
+	for _, days := range []int{106751, 106752, 999999, 1 << 40} {
+		if p := (Policy{MaxAgeDays: days}); p.MaxAge() <= 0 {
+			t.Fatalf("MaxAge(%d days) = %v", days, p.MaxAge())
+		}
+	}
+	f := newFixture(t)
+	f.add("ancient", "passed", 400*day, 10)
+	f.add("recent", "passed", day, 10)
+	res := f.prune(Policy{KeepRuns: 200, MaxAgeDays: 999999, MaxLogBytes: 1 << 30})
+	if len(res.Runs) != 0 {
+		t.Fatalf("removed %v", res.Runs)
+	}
+	same(t, "rows", f.ids(), []string{"recent", "ancient"})
+}
+
+// Orphan log directories are swept anyway, so their bytes must not push real
+// runs out through the size cap.
+func TestOrphanBytesDoNotCountAgainstTheSizeCap(t *testing.T) {
+	f := newFixture(t)
+	f.add("real", "passed", day, 2000)
+	f.log("orphan", "x", 20000)
+	old := epoch.Add(-3 * time.Hour)
+	for _, p := range []string{logs.RunDir(f.home, "orphan"), logs.AttemptDir(f.home, "orphan", "x"), filepath.Join(logs.AttemptDir(f.home, "orphan", "x"), "active.jsonl")} {
+		_ = os.Chtimes(p, old, old)
+	}
+	res := f.prune(Policy{KeepRuns: 200, MaxAgeDays: 30, MaxLogBytes: 5000})
+	same(t, "removed runs", res.Runs, nil)
+	same(t, "orphans", res.Orphans, []string{"orphan"})
+	same(t, "rows", f.ids(), []string{"real"})
+}

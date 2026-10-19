@@ -12,6 +12,7 @@ package history
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -39,7 +40,13 @@ func Default() Policy {
 }
 
 // MaxAge is the age limit as a duration.
-func (p Policy) MaxAge() time.Duration { return time.Duration(p.MaxAgeDays) * 24 * time.Hour }
+// A day count too large for a Duration saturates, so a huge value means "never", not a negative age.
+func (p Policy) MaxAge() time.Duration {
+	if p.MaxAgeDays >= int(math.MaxInt64/int64(24*time.Hour)) {
+		return time.Duration(math.MaxInt64)
+	}
+	return time.Duration(p.MaxAgeDays) * 24 * time.Hour
+}
 
 // ConfigPath is the user's retention file for a state directory.
 func ConfigPath(home string) string { return filepath.Join(logs.Home(home), "retention.json") }

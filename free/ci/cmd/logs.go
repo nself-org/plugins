@@ -62,7 +62,7 @@ func runLogs(args []string) int {
 	defer stop()
 	for _, r := range cirun.Registered.Remote {
 		if v, ok, rerr := r.Resolve(ctx, f.run); rerr == nil && ok {
-			return logsFail(f, "ci logs", fmt.Errorf("%s: run %s lives on another machine; read its logs there", logs.CodeNone, v.ID))
+			return logsFail(f, "ci logs", logs.Errorf(logs.CodeNone, "run %s lives on another machine; read its logs there", v.ID))
 		}
 	}
 	st, err := openHistory(false)
@@ -78,8 +78,9 @@ func runLogs(args []string) int {
 		return logsFail(f, "ci logs", err)
 	}
 	dir := logs.AttemptDir(home, tgt.run, tgt.attempt)
+	noLogs := logs.Errorf(logs.CodeNone, "no stored logs for attempt %s (the job printed nothing, storing them failed, or retention removed them)", tgt.attempt)
 	if !logs.Exists(dir) && !f.follow {
-		return logsFail(f, "ci logs", fmt.Errorf("%s: no stored logs for attempt %s (the job produced no output, or retention removed them)", logs.CodeNone, tgt.attempt))
+		return logsFail(f, "ci logs", noLogs)
 	}
 	pr := newLogPrinter(f.json, tgt)
 	done := func() bool { return attemptEnded(ctx, st, tgt.attempt) }
@@ -90,6 +91,9 @@ func runLogs(args []string) int {
 	}
 	if err != nil {
 		return logsFail(f, "ci logs", err)
+	}
+	if pr.n == 0 && !logs.Exists(dir) { // -f on an attempt that ended without ever storing a line
+		return logsFail(f, "ci logs", noLogs)
 	}
 	pr.end()
 	return 0
@@ -128,7 +132,7 @@ func resolveLogTarget(ctx context.Context, st *store.Store, home, arg string, f 
 	if t, ok := attemptTarget(home, arg); ok {
 		return t, nil
 	}
-	return logTarget{}, fmt.Errorf("%s: %q is neither a job of %s nor a stored attempt; list runs with `nself ci runs list`", logs.CodeNone, arg, runWord(f.run))
+	return logTarget{}, logs.Errorf(logs.CodeNone, "%q is neither a job of %s nor a stored attempt; list runs with `nself ci runs list`", arg, runWord(f.run))
 }
 
 func runWord(ref string) string {
@@ -158,7 +162,7 @@ func jobTarget(ctx context.Context, st *store.Store, runID, arg string, n int) (
 			}
 		}
 		if pick == nil {
-			return logTarget{}, false, fmt.Errorf("%s: job %s has no attempt %d in run %s", logs.CodeNone, arg, n, runID)
+			return logTarget{}, false, logs.Errorf(logs.CodeNone, "job %s has no attempt %d in run %s", arg, n, runID)
 		}
 		return logTarget{run: runID, attempt: pick.ID}, true, nil
 	}
@@ -228,29 +232,30 @@ func (p *logPrinter) end() {
 	}
 }
 
-// logsFail prints err (as a stream error line with --json) and returns the exit code.
+// logsFail prints err (as a stream error line with --json) and returns the exit
+// code: 1 when there is nothing to read, 2 for a storage or infrastructure failure.
 func logsFail(f logsFlags, command string, err error) int {
-	code, exit := "E632", 2
-	msg := err.Error()
+	code, exit, msg := "", 2, err.Error()
 	if le, ok := logs.AsError(err); ok {
 		code, msg = le.Code, le.Message
 		if le.Code == logs.CodeNone {
 			exit = 1
 		}
-	} else if strings.HasPrefix(msg, logs.CodeNone+":") {
-		code, exit, msg = logs.CodeNone, 1, strings.TrimSpace(strings.TrimPrefix(msg, logs.CodeNone+":"))
-	} else if cirun.CodeOf(err) != "" {
-		code = cirun.CodeOf(err)
-		if code == cirun.CodeRun {
+	} else if c := cirun.CodeOf(err); c != "" {
+		code = c
+		if c == cirun.CodeRun {
 			exit = 1
 		}
 	}
-	if f.json {
+	if f.json && code != "" {
 		if b, e := output.StreamError(command, output.ErrorDetail{Code: code, Message: msg, ExitCode: exit}, nil); e == nil {
 			_, _ = os.Stdout.Write(b)
 			return exit
 		}
 	}
-	fmt.Fprintf(os.Stderr, "%s: %s\n", code, msg)
+	if code != "" {
+		msg = code + ": " + msg
+	}
+	fmt.Fprintln(os.Stderr, msg)
 	return exit
 }

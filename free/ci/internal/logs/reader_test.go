@@ -78,3 +78,43 @@ func TestReadOfAMissingAttemptIsE633(t *testing.T) {
 		t.Fatalf("want E633, got %v", err)
 	}
 }
+
+// A writer that rotates constantly while a follower polls: no line is lost or
+// repeated (the follower opens the active file before listing segments).
+func TestFollowLosesNothingUnderConstantRotation(t *testing.T) {
+	old := PollEvery
+	PollEvery = time.Millisecond
+	defer func() { PollEvery = old }()
+	dir := t.TempDir() + "/att"
+	w, err := Open(dir, Options{SegmentBytes: 250})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ended atomic.Bool
+	var want int64 = 1
+	errc := make(chan error, 1)
+	go func() {
+		errc <- Follow(context.Background(), dir, 0, ended.Load, func(l Line) error {
+			if l.Seq != want {
+				t.Errorf("got seq %d, want %d", l.Seq, want)
+				return context.Canceled
+			}
+			want++
+			return nil
+		})
+	}()
+	const total = 400
+	for i := int64(1); i <= total; i++ {
+		if _, err := w.Append(mk(i, "rotating line of text")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = w.Close()
+	ended.Store(true)
+	if err := <-errc; err != nil && err != context.Canceled {
+		t.Fatal(err)
+	}
+	if want != total+1 {
+		t.Fatalf("the follower saw %d of %d lines", want-1, total)
+	}
+}

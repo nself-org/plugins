@@ -37,7 +37,10 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Code + ": " + e.Message }
 
-func fail(code, format string, a ...any) *Error {
+func fail(code, format string, a ...any) *Error { return Errorf(code, format, a...) }
+
+// Errorf builds an Error with the given code (CodeStore or CodeNone).
+func Errorf(code, format string, a ...any) *Error {
 	return &Error{Code: code, Message: fmt.Sprintf(format, a...)}
 }
 

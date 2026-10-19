@@ -151,9 +151,9 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	spec.Slot = rs.sess.slots.take(slotDir(rs.sess.Home))
 	res := func() ciexec.AttemptResult {
 		defer rs.sess.slots.put(spec.Slot)
+		defer closeLog(lg) // before the attempt settles: a finished attempt always has its whole log stored
 		return rs.c.exec.Run(ctx, spec)
 	}()
-	closeLog(lg) // before the attempt settles: a finished attempt always has its whole log stored
 	o.Duration, o.ExitCode, o.Tail = res.Finished.Sub(res.Started), res.ExitCode, t.String()
 	oc := Outcome{State: res.Attempt.State, FailureClass: res.Attempt.FailureClass, ExitCode: res.ExitCode}
 	defer func() {

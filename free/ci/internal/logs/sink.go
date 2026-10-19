@@ -3,15 +3,20 @@ package logs
 // Purpose: turn the redacted output chunks of one attempt into stored lines.
 // Inputs:  Write(chunk) with bytes that already passed the redactor (the exec
 // funnel redacts before the run's output callback, which feeds this sink).
-// Outputs: lines on a Writer, flushed every FlushEvery or at FlushBytes.
-// Constraints: Write never fails the job: after the first storage error the sink
-// drops further output and reports the error from Err and Close; sequence
-// numbers are assigned at flush time from the writer's tail, so dropped lines
-// never leave a gap; a text longer than MaxLine is split on a rune boundary;
-// an unfinished line is stored once it has waited PartialAfter; the arrival
-// time of a line is its stamp.
+// Outputs: lines on a Writer, stored by one flusher goroutine every FlushEvery
+// or when FlushBytes are waiting.
+// Constraints: Write only queues, so a slow or stalled disk can never block the
+// job's output pipe; the queue is bounded (MaxPending): past it new lines are
+// dropped, counted, and a "sys" line says how many; after the first storage
+// error the sink drops further output and reports the error from Err and
+// Close; sequence numbers are assigned when the flusher stores a batch, so
+// dropped lines never leave a gap; a text longer than MaxLine is split on a
+// rune boundary; an unfinished line is stored once it has waited PartialAfter;
+// the arrival time of a line is its stamp; Close waits at most CloseTimeout
+// for the flusher.
 
 import (
+	"fmt"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -22,6 +27,8 @@ var (
 	FlushEvery   = 100 * time.Millisecond
 	PartialAfter = 400 * time.Millisecond
 	FlushBytes   = 64 << 10
+	MaxPending   = 4 << 20
+	CloseTimeout = 10 * time.Second
 )
 
 // Sink splits chunks into lines and stores them through a Writer.
@@ -31,15 +38,22 @@ type Sink struct {
 	stream       string
 	pending      []Line
 	pendingBytes int
+	dropped      int
 	partial      []byte
 	partialSince time.Time
-	timer        *time.Timer
 	err          error
 	closed       bool
+	kick         chan struct{}
+	stop         chan struct{}
+	finished     chan struct{}
 }
 
 // NewSink writes to w; stream labels the lines ("out" for job output).
-func NewSink(w *Writer, stream string) *Sink { return &Sink{w: w, stream: stream} }
+func NewSink(w *Writer, stream string) *Sink {
+	s := &Sink{w: w, stream: stream, kick: make(chan struct{}, 1), stop: make(chan struct{}), finished: make(chan struct{})}
+	go s.run()
+	return s
+}
 
 // Write accepts a chunk. It always reports the chunk as consumed.
 func (s *Sink) Write(p []byte) (int, error) {
@@ -68,9 +82,10 @@ func (s *Sink) Write(p []byte) (int, error) {
 		s.partial = append(s.partial[:0], s.partial[n:]...)
 	}
 	if s.pendingBytes >= FlushBytes {
-		s.flush(false)
-	} else if len(s.pending) > 0 || len(s.partial) > 0 {
-		s.arm()
+		select {
+		case s.kick <- struct{}{}:
+		default:
+		}
 	}
 	return len(p), nil
 }
@@ -102,55 +117,77 @@ func cutRune(b []byte, n int) int {
 	return n
 }
 
-// addText queues one line (splitting it when longer than MaxLine).
+// addText queues one line (splitting it when longer than MaxLine); past
+// MaxPending it counts the line as dropped instead. Callers hold s.mu.
 func (s *Sink) addText(b []byte, at time.Time) {
 	for first := true; first || len(b) > 0; first = false {
 		n := len(b)
 		if n > s.w.opt.MaxLine {
 			n = cutRune(b, s.w.opt.MaxLine)
 		}
-		s.pending = append(s.pending, Line{TS: Stamp(at), Stream: s.stream, Text: string(b[:n])})
-		s.pendingBytes += n + 64
+		if s.pendingBytes >= MaxPending {
+			s.dropped++
+		} else {
+			s.pending = append(s.pending, Line{TS: Stamp(at), Stream: s.stream, Text: string(b[:n])})
+			s.pendingBytes += n + 64
+		}
 		b = b[n:]
 	}
 }
 
-// arm schedules the timed flush if none is waiting.
-func (s *Sink) arm() {
-	if s.timer == nil {
-		s.timer = time.AfterFunc(FlushEvery, func() {
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			s.timer = nil
-			if !s.closed {
-				s.flush(false)
-				if len(s.pending) > 0 || len(s.partial) > 0 {
-					s.arm()
-				}
-			}
-		})
+// run is the flusher: it stores batches until stopped, then once more.
+func (s *Sink) run() {
+	defer close(s.finished)
+	tick := time.NewTicker(FlushEvery)
+	defer tick.Stop()
+	for final := false; !final; {
+		select {
+		case <-tick.C:
+		case <-s.kick:
+		case <-s.stop:
+			final = true
+		}
+		if batch := s.take(final); len(batch) > 0 {
+			s.store(batch)
+		}
 	}
 }
 
-// flush stores the pending lines; with final, or once an unfinished line has
-// waited PartialAfter, the unfinished line goes too.
-func (s *Sink) flush(final bool) {
+// take removes the lines ready to store; with final, or once an unfinished
+// line has waited PartialAfter, the unfinished line goes too.
+func (s *Sink) take(final bool) []Line {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if len(s.partial) > 0 && (final || s.w.opt.Now().Sub(s.partialSince) >= PartialAfter) {
 		s.addText(s.partial, s.partialSince)
 		s.partial = s.partial[:0]
 	}
-	if len(s.pending) == 0 || s.err != nil {
-		s.pending, s.pendingBytes = nil, 0
-		return
-	}
-	base := s.w.LastSeq() + 1
-	for i := range s.pending {
-		s.pending[i].Seq = base + int64(i)
-	}
-	if _, err := s.w.AppendBatch(s.pending); err != nil {
-		s.err = err
+	batch := s.pending
+	if s.dropped > 0 && len(batch) > 0 {
+		note := Line{TS: Stamp(s.w.opt.Now()), Stream: "sys", Text: fmt.Sprintf("[%d output lines dropped: log storage was too slow]", s.dropped)}
+		batch, s.dropped = append([]Line{note}, batch...), 0
 	}
 	s.pending, s.pendingBytes = nil, 0
+	if s.err != nil {
+		return nil
+	}
+	return batch
+}
+
+// store numbers a batch from the writer's tail and writes it. It runs
+// without s.mu, so a stalled disk blocks only this goroutine.
+func (s *Sink) store(batch []Line) {
+	base := s.w.LastSeq() + 1
+	for i := range batch {
+		batch[i].Seq = base + int64(i)
+	}
+	if _, err := s.w.AppendBatch(batch); err != nil {
+		s.mu.Lock()
+		if s.err == nil {
+			s.err = err
+		}
+		s.mu.Unlock()
+	}
 }
 
 // Err is the first storage error, or nil.
@@ -160,7 +197,9 @@ func (s *Sink) Err() error {
 	return s.err
 }
 
-// Close stores everything still held, then closes the writer. Safe to call twice.
+// Close stores everything still held, then closes the writer. Safe to call
+// twice. When the disk is so slow that the flusher does not finish within
+// CloseTimeout, Close gives up with an error and leaves the writer to it.
 func (s *Sink) Close() error {
 	s.mu.Lock()
 	if s.closed {
@@ -168,13 +207,14 @@ func (s *Sink) Close() error {
 		return s.err
 	}
 	s.closed = true
-	if s.timer != nil {
-		s.timer.Stop()
-		s.timer = nil
-	}
-	s.flush(true)
-	err := s.err
 	s.mu.Unlock()
+	close(s.stop)
+	select {
+	case <-s.finished:
+	case <-time.After(CloseTimeout):
+		return fail(CodeStore, "storing the log did not finish within %v", CloseTimeout)
+	}
+	err := s.Err()
 	if cerr := s.w.Close(); err == nil {
 		err = cerr
 	}

@@ -95,10 +95,8 @@ func TestSinkFlushesOnATimerAndPartialLinesLater(t *testing.T) {
 func TestSinkSurvivesAStorageErrorWithoutFailingTheJob(t *testing.T) {
 	s, dir := newTestSink(t, Options{})
 	_, _ = s.Write([]byte("kept\n"))
-	s.mu.Lock()
-	s.flush(false)
+	time.Sleep(3 * FlushEvery)
 	_ = s.w.f.Close() // the disk goes away
-	s.mu.Unlock()
 	if n, err := s.Write([]byte("lost\n")); n != 5 || err != nil {
 		t.Fatalf("Write must never fail the job: %d %v", n, err)
 	}
@@ -108,6 +106,61 @@ func TestSinkSurvivesAStorageErrorWithoutFailingTheJob(t *testing.T) {
 	if got := readAll(t, dir); len(got) != 1 || got[0].Text != "kept" {
 		t.Fatalf("stored %q", texts(got))
 	}
+}
+
+// A stalled disk must never block the job's output pipe: Write returns while
+// the flusher is stuck, and the queue drops (and counts) past its bound.
+func TestSinkWriteNeverWaitsForTheDisk(t *testing.T) {
+	oldMax, oldClose := MaxPending, CloseTimeout
+	MaxPending, CloseTimeout = 1<<10, 200*time.Millisecond
+	defer func() { MaxPending, CloseTimeout = oldMax, oldClose }()
+	s, _ := newTestSink(t, Options{})
+	s.w.mu.Lock() // the disk stalls: the writer's lock is held, so the flusher blocks in AppendBatch
+	start := time.Now()
+	for i := 0; i < 400; i++ {
+		_, _ = s.Write([]byte(strings.Repeat("q", 80) + "\n"))
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Fatalf("400 writes took %v with a stalled disk", d)
+	}
+	s.mu.Lock()
+	dropped := s.dropped
+	s.mu.Unlock()
+	if dropped == 0 {
+		t.Fatal("past MaxPending lines must be dropped and counted")
+	}
+	if err := s.Close(); err == nil || !strings.Contains(err.Error(), CodeStore) {
+		t.Fatalf("Close with a stalled disk must time out with E632, got %v", err)
+	}
+	s.w.mu.Unlock()
+}
+
+// A burst past FlushBytes followed by a trailing prompt without a newline: the
+// prompt still reaches the log within the partial-line delay, seen by a follower.
+func TestSinkToFollowTrailingPartialAfterABurst(t *testing.T) {
+	oldP := PartialAfter
+	PartialAfter = 150 * time.Millisecond
+	defer func() { PartialAfter = oldP }()
+	s, dir := newTestSink(t, Options{})
+	big := strings.Repeat(strings.Repeat("b", 59)+"\n", 1200) // over FlushBytes
+	_, _ = s.Write([]byte(big + "prompt> "))
+	deadline := time.Now().Add(time.Second)
+	var last string
+	for time.Now().Before(deadline) {
+		var got []Line
+		_ = Read(dir, 0, func(l Line) error { got = append(got, l); return nil })
+		if len(got) > 0 {
+			last = got[len(got)-1].Text
+		}
+		if last == "prompt> " {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if last != "prompt> " {
+		t.Fatalf("the trailing partial line did not reach the log within a second (last stored line %q)", last)
+	}
+	_ = s.Close()
 }
 
 // slurp returns every stored byte of dir: the active file and the unzipped segments.

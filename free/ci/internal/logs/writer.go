@@ -15,10 +15,9 @@ package logs
 
 import (
 	"bytes"
-	"compress/gzip"
-	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 )
 
@@ -52,16 +51,32 @@ type Writer struct {
 // files and returns a writer positioned after it.
 func Open(dir string, opt Options) (*Writer, error) {
 	opt = opt.withDefaults()
-	if err := os.MkdirAll(dir, dirMode); err != nil {
-		return nil, fail(CodeStore, "cannot create the log directory: %v", err)
+	if err := preparePrivate(dir); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(dir, activeName)
+	if err := requireRegular(path); err != nil { // before recovery, which may truncate it
+		return nil, err
 	}
 	w := &Writer{dir: dir, opt: opt}
 	if err := w.recover(); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(filepath.Join(dir, activeName), os.O_CREATE|os.O_WRONLY|os.O_APPEND, fileMode)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, fileMode)
 	if err != nil {
 		return nil, fail(CodeStore, "cannot open the log file: %v", err)
+	}
+	if err = f.Chmod(fileMode); err != nil && runtime.GOOS != "windows" {
+		_ = f.Close()
+		return nil, fail(CodeStore, "cannot make the log file private: %v", err)
+	}
+	// the new file and directory entries must be durable before any line is acknowledged
+	if err = syncDir(dir); err == nil {
+		err = syncDir(filepath.Dir(dir))
+	}
+	if err != nil {
+		_ = f.Close()
+		return nil, fail(CodeStore, "cannot sync the log directory: %v", err)
 	}
 	w.f = f
 	return w, nil
@@ -190,78 +205,6 @@ func (w *Writer) commit(b []byte) error {
 		return w.broken
 	}
 	return fail(CodeStore, "cannot write the log: %v", err)
-}
-
-// rotateTmp is the name of the segment being written.
-const rotateTmp = ".rotate.tmp"
-
-// rotate gzips the active file into a segment and starts a new active file. The
-// segment is renamed into place before the old file goes, so a crash in
-// between leaves both and Open drops the duplicate.
-func (w *Writer) rotate() error {
-	if w.activeSize == 0 {
-		return nil
-	}
-	active := filepath.Join(w.dir, activeName)
-	tmp := filepath.Join(w.dir, rotateTmp)
-	if err := gzipFile(active, tmp); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	fault("rotate-gzipped")
-	if err := os.Rename(tmp, filepath.Join(w.dir, segmentName(w.activeFirst, w.last, w.activeSize))); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	syncDir(w.dir)
-	fault("rotate-renamed")
-	_ = w.f.Close()
-	w.f = nil
-	if err := os.Remove(active); err != nil {
-		w.broken = fail(CodeStore, "cannot replace the rotated log file: %v", err)
-		return w.broken
-	}
-	fault("rotate-removed")
-	f, err := os.OpenFile(active, os.O_CREATE|os.O_EXCL|os.O_WRONLY|os.O_APPEND, fileMode)
-	if err != nil {
-		w.broken = fail(CodeStore, "cannot start a new log file: %v", err)
-		return w.broken
-	}
-	w.f, w.activeFirst, w.activeSize = f, 0, 0
-	syncDir(w.dir)
-	return nil
-}
-
-func gzipFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = in.Close() }()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fileMode)
-	if err != nil {
-		return err
-	}
-	zw := gzip.NewWriter(out)
-	if _, err = io.Copy(zw, in); err == nil {
-		err = zw.Close()
-	}
-	if err == nil {
-		err = out.Sync()
-	}
-	if cerr := out.Close(); err == nil {
-		err = cerr
-	}
-	return err
-}
-
-// syncDir makes a rename or create durable; platforms that cannot fsync a
-// directory skip it.
-func syncDir(dir string) {
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
 }
 
 // Close syncs and closes the active file. It is safe to call twice.
