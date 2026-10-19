@@ -23,6 +23,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/policy"
@@ -131,7 +132,18 @@ func runPolicy(op string, args []string, env policyEnv) int {
 		return policyFail(env, command, f.json, fmt.Errorf("the CI store cannot be opened: %w", err))
 	}
 	defer closeFn()
-	project := policy.ProjectIDGit(ctx, env.Run, root)
+	var gitFailed atomic.Bool
+	watch := func(c context.Context, argv ...string) (string, int, error) {
+		out, exit, err := env.Run(c, argv...)
+		if err != nil {
+			gitFailed.Store(true)
+		}
+		return out, exit, err
+	}
+	project := policy.ProjectIDGit(ctx, watch, root)
+	if gitFailed.Load() && (op == policy.OpPin || f.scope == "project") {
+		return policyFail(env, command, f.json, adminUsage("git could not be run, so the project id is unknown; a project row or pin would not match the runs"))
+	}
 	if op == "show" {
 		return showPolicy(ctx, env, svc.St, root, project, f)
 	}
@@ -161,11 +173,11 @@ func runPolicy(op string, args []string, env policyEnv) int {
 func describePolicyWrite(r policy.Result) string {
 	switch r.Op {
 	case policy.OpSet:
-		return fmt.Sprintf("set %s = %s in %s scope", r.Key, r.Value, r.Scope)
+		return fmt.Sprintf("set %s = %s in %s scope (%s)", r.Key, r.Value, r.Scope, r.Subject)
 	case policy.OpUnset:
-		return fmt.Sprintf("unset %s in %s scope", r.Key, r.Scope)
+		return fmt.Sprintf("unset %s in %s scope (%s)", r.Key, r.Scope, r.Subject)
 	case policy.OpPin:
-		return "pinned the protected branch policy to " + r.SHA
+		return fmt.Sprintf("pinned the protected branch policy of %s to %s", r.Subject, r.SHA)
 	}
-	return "cleared the pin; the protected branch tip applies"
+	return fmt.Sprintf("cleared the pin of %s; the protected branch tip applies", r.Subject)
 }

@@ -9,9 +9,13 @@ package policy
 // an error: E687 (not authorized, or reason machine_invoked), E672 (unknown key,
 // bad value, unreachable pin), E670 (the row would loosen a parent scope), E651
 // (bad arguments).
-// Constraints: nothing is written when any check fails. The new rows must merge
-// cleanly with the stored ones over the strictest default scopes, so a write can
-// never make Resolve fail. With NSELF_INVOKED_BY set (Writer.Machine) a write
+// Constraints: nothing is written when any check fails. A set must merge cleanly
+// with the stored rows of the user, team and project subjects it knows and with
+// the protected branch's policy, over the strictest default scopes, so it does
+// not make Resolve fail for this repository (other projects' rows are not
+// listed by the store and are not checked). The checks read before the write
+// transaction opens (the store's Tx exposes no reads), so two concurrent writers
+// can race; the audit row and the policy row are still atomic. With NSELF_INVOKED_BY set (Writer.Machine) a write
 // that loosens a `trust.*` key, any unset of one, and any pin or clear-pin is
 // refused with E687 reason machine_invoked and one audit row of the refusal, so
 // a capped caller cannot lift its own cap (Epic D27, review F2). No Secret value
@@ -19,8 +23,11 @@ package policy
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/audit"
@@ -72,6 +79,8 @@ type Writer struct {
 
 func usage(format string, args ...any) error { return fmt.Errorf("E651 "+format, args...) }
 
+var teamID = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+
 type target struct{ scope, subject, authProject string }
 
 // Apply authorizes and writes c.
@@ -117,8 +126,8 @@ func (w *Writer) target(c Change) (target, error) {
 	case "user":
 		return target{"user", LocalSubject, ""}, nil
 	case "team":
-		if c.Team == "" {
-			return target{}, usage("--scope team needs --team <id>")
+		if !teamID.MatchString(c.Team) {
+			return target{}, usage("--scope team needs --team <id> of letters, digits, dot, dash and underscore (at most 64)")
 		}
 		return target{"team", c.Team, ""}, nil
 	case "project":
@@ -155,13 +164,14 @@ func (w *Writer) row(ctx context.Context, keys *Keyset, actor roles.Actor, c Cha
 			return Result{}, err
 		}
 		rows[t.scope][c.Key] = value
-		if err := keys.checkRows(rows); err != nil {
+		if err := keys.checkRows(rows, w.branchScope(ctx, c)); err != nil {
 			return Result{}, err
 		}
 	}
-	detail := fmt.Sprintf("scope=%s subject=%s", t.scope, t.subject)
-	if c.Op == OpSet {
-		detail += " value=" + res.Value
+	detail := fmt.Sprintf("scope=%s subject=%s", t.scope, strconv.Quote(t.subject))
+	if c.Op == OpSet { // the value last, so it cannot forge the fields before it
+		sum := sha256.Sum256(value)
+		detail += fmt.Sprintf(" sha256=%x value=%s", sum[:8], res.Value)
 	}
 	ev := audit.Event{Actor: actor.Label(), Action: "policy." + c.Op, Target: c.Key, Detail: detail}
 	return res, w.Store.ApplyWrite(ctx, pw, func(tx *store.Tx) error { return audit.AppendTx(tx, ev) })

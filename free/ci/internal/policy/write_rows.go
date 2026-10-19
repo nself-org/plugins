@@ -35,6 +35,9 @@ func checkValue(spec KeySpec, raw json.RawMessage) (json.RawMessage, error) {
 	}
 	var s string
 	if len(spec.Order) > 0 && json.Unmarshal(compact, &s) == nil && !slices.Contains(spec.Order, s) {
+		if spec.Secret {
+			s = Masked
+		}
 		return nil, refuse("%s: %q is not one of %s", spec.Key, s, strings.Join(spec.Order, ", "))
 	}
 	return compact, nil
@@ -85,10 +88,38 @@ func (w *Writer) stored(ctx context.Context, t target, key string) json.RawMessa
 	return nil
 }
 
-// checkRows merges the operator rows over the strictest default scopes the
-// resolver can start from (an untrusted source on a private and on a public
-// repository), so a stored row never makes Resolve fail with E670.
-func (k *Keyset) checkRows(rows map[string]map[string]json.RawMessage) error {
+// branchScope is the protected-branch scope a resolve of c's repository would
+// merge (the pinned commit, else the fetched tip), or nil when there is none to
+// read: no runner, no origin, an unreadable policy. The resolver fails with E670
+// when that scope is looser than an operator row, so a write is checked with it.
+func (w *Writer) branchScope(ctx context.Context, c Change) *trust.Scope {
+	if w.Run == nil || c.Root == "" {
+		return nil
+	}
+	b, err := readBranch(ctx, w.Run, c.Root)
+	if err != nil || b.Tip == "" {
+		return nil
+	}
+	pin := ""
+	if c.Project != "" {
+		if p, ok, err := w.Store.PolicyPinFor(ctx, c.Project); err == nil && ok {
+			pin = p.SHA
+		}
+	}
+	commit, _ := chooseCommit(ctx, w.Run, c.Root, b, pin)
+	values, err := policyAt(ctx, w.Run, c.Root, commit)
+	if err != nil {
+		return nil
+	}
+	return &trust.Scope{Kind: SourceProtectedBranch, Values: values, PinnedCommit: commit}
+}
+
+// checkRows merges the operator rows and the protected-branch scope (when
+// given) over the strictest default scopes the resolver can start from (an
+// untrusted source on a private and on a public repository). It sees only the
+// rows of the subjects it was given: another project's rows are not listed by
+// the store, so they are not checked.
+func (k *Keyset) checkRows(rows map[string]map[string]json.RawMessage, branch *trust.Scope) error {
 	reg, err := k.registry()
 	if err != nil {
 		return err
@@ -104,6 +135,9 @@ func (k *Keyset) checkRows(rows map[string]map[string]json.RawMessage) error {
 				scopes = append(scopes, trust.Scope{Kind: kd.kind, Values: rows[kd.scope]})
 			}
 		}
+		if branch != nil {
+			scopes = append(scopes, *branch)
+		}
 		if _, _, err := reg.Merge("", scopes...); err != nil {
 			return err
 		}
@@ -113,8 +147,9 @@ func (k *Keyset) checkRows(rows map[string]map[string]json.RawMessage) error {
 
 // loosens reports whether next is looser than old for spec: the merge of the two
 // as consecutive scopes refuses a loosening. old nil means no stored row, so the
-// key's default is the reference; a key with neither cannot be loosened by being
-// set. Any other failure counts as loosening (fail closed).
+// key's default is the reference; a key with neither (an unset list key means
+// "none allowed") counts any value as loosening. Any other failure counts as
+// loosening too (fail closed).
 func (w *Writer) loosens(keys *Keyset, spec KeySpec, old, next json.RawMessage) bool {
 	reg, err := keys.registry()
 	if err != nil {
@@ -122,7 +157,7 @@ func (w *Writer) loosens(keys *Keyset, spec KeySpec, old, next json.RawMessage) 
 	}
 	if old == nil {
 		if spec.Default == nil {
-			return false
+			return true
 		}
 		if old, err = json.Marshal(spec.Default); err != nil {
 			return true

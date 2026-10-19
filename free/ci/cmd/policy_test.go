@@ -281,7 +281,7 @@ func TestPolicyPinReachable(t *testing.T) {
 func TestPolicyShowJSON(t *testing.T) {
 	r := newPolicyRig(t, "policy:\n  trust:\n    privacy_zone: private-infrastructure\n  economics:\n    paid_enabled: true\n")
 	policyGit(t, r.work, "checkout", "-q", "-b", "feature")
-	if err := os.WriteFile(filepath.Join(r.work, ".nself/ci.yaml"), []byte("version: 1\npolicy:\n  trust:\n    privacy_zone: hosted-allowed\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(r.work, ".nself/ci.yaml"), []byte("version: 1\npolicy:\n  trust:\n    privacy_zone: hosted-allowed\n  economics:\n    paid_enabled: false\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	show := func() map[string]any {
@@ -304,9 +304,9 @@ func TestPolicyShowJSON(t *testing.T) {
 	ignored := map[string]string{}
 	for _, ig := range d["ignored"].([]any) {
 		m := ig.(map[string]any)
-		ignored[m["key"].(string)] = m["code"].(string) + "/" + m["source"].(string)
+		ignored[m["key"].(string)+"|"+m["source"].(string)] = m["code"].(string)
 	}
-	if ignored["trust.privacy_zone"] != "E671/revision" || ignored[schedpolicy.KeyPaidEnabled] != "E671/protected-branch" {
+	if ignored["trust.privacy_zone|revision"] != "E671" || ignored[schedpolicy.KeyPaidEnabled+"|protected-branch"] != "E671" || ignored[schedpolicy.KeyPaidEnabled+"|revision"] != "E671" {
 		t.Fatalf("the widening revision and the branch's Spend key are listed as ignored: %v", ignored)
 	}
 	if eff[schedpolicy.KeyPaidEnabled] != false {
@@ -365,18 +365,33 @@ func TestPolicyMachineInvokedCap(t *testing.T) {
 	refused("raising the cap", r.do("set", "--json", "--scope", "user", capKey, "owner"))
 	refused("raising it one step", r.do("set", "--json", "--scope", "user", capKey, "collaborator"))
 	refused("unset of the cap", r.do("unset", "--json", "--scope", "user", capKey))
-	refused("unset of another trust key", r.do("unset", "--json", "--scope", "user", capKey))
+	refused("unset of the cap again", r.do("unset", "--json", "--scope", "user", capKey))
 	refused("pin", r.do("pin", "--json", policyGit(t, r.work, "rev-parse", "HEAD")))
 	refused("clear-pin", r.do("pin", "--json", "--clear"))
 	if r.stored("user", capKey) != `"untrusted"` {
 		t.Fatalf("the stored cap must be unchanged, got %s", r.stored("user", capKey))
 	}
-	if got := r.auditCount("policy.refused") - refusals; got != 6 {
+	// Any other trust key is guarded too: a raise, an unset, and a first value for a key with no default
+	// (an unset list key means "none allowed", so a list widens it).
+	r.machine = false
+	if code := r.do("set", "--scope", "user", "trust.network", "none"); code != 0 {
+		t.Fatal("setup")
+	}
+	r.machine = true
+	refused("raising trust.network", r.do("set", "--json", "--scope", "user", "trust.network", "restricted"))
+	refused("unset of trust.network", r.do("unset", "--json", "--scope", "user", "trust.network"))
+	refused("a first trust.providers list", r.do("set", "--json", "--scope", "user", "trust.providers", `["evil-hosted"]`))
+	refused("a first trust.self_reported_gates list", r.do("set", "--json", "--scope", "user", "trust.self_reported_gates", `["lint"]`))
+	if r.stored("user", "trust.network") != `"none"` || r.stored("user", "trust.providers") != "" {
+		t.Fatalf("a refused machine write changed a row")
+	}
+	if got := r.auditCount("policy.refused") - refusals; got != 10 {
 		t.Fatalf("one audit row per refusal, got %d", got)
 	}
 	if pin, ok, _ := r.store().PolicyPinFor(context.Background(), r.project()); ok {
 		t.Fatalf("a refused pin wrote %v", pin)
 	}
+	r.machine = true
 	// A key outside trust.* is not restricted, and with NSELF_INVOKED_BY unset the operator's writes work as before.
 	if code := r.do("set", "--scope", "project", schedpolicy.KeyPaidEnabled, "true"); code != 0 {
 		t.Fatalf("a non-trust key stays writable, exit %d: %s", code, r.errb.String())
@@ -399,5 +414,34 @@ func TestPolicyKeysRegisteredV15Only(t *testing.T) {
 		if _, v14 := subcommands["policy "+op]; v14 {
 			t.Fatalf("policy %s must not exist in v1.4 argv", op)
 		}
+	}
+}
+
+func TestPolicyWriteRefusals(t *testing.T) {
+	r := newPolicyRig(t, "policy:\n  trust:\n    privacy_zone: private-infrastructure\n")
+	// A row tighter than the protected branch would make every resolve fail (E670): refused up front.
+	if code := r.do("set", "--json", "--scope", "user", "trust.privacy_zone", "local-only"); code != 1 || !strings.HasPrefix(r.errCode(), "E670") {
+		t.Fatalf("a row the protected branch loosens must be E670, exit %d: %s", code, r.out.String())
+	}
+	if r.stored("user", "trust.privacy_zone") != "" || r.auditCount("policy.set") != 0 {
+		t.Fatal("a refused write left something behind")
+	}
+	// A team id cannot forge audit fields or hold control characters.
+	for _, team := range []string{"t1 scope=user subject=local", "t\n1", "", strings.Repeat("a", 65)} {
+		if code := r.do("set", "--json", "--scope", "team", "--team", team, "trust.network", "none"); code != 1 || !strings.HasPrefix(r.errCode(), "E651") {
+			t.Fatalf("team %q must be E651, exit %d: %s", team, code, r.out.String())
+		}
+	}
+	// An annotated tag's object id is reachable but is not a commit id.
+	policyGit(t, r.work, "tag", "-a", "-m", "fake tag", "v0", "HEAD")
+	tagObj := policyGit(t, r.work, "rev-parse", "v0")
+	if code := r.do("pin", "--json", tagObj); code != 1 || !strings.HasPrefix(r.errCode(), "E672") {
+		t.Fatalf("a tag object id is not a pin, exit %d: %s", code, r.out.String())
+	}
+	// When git cannot run the project id is unknown: a project row would never match a run.
+	env := r.env()
+	env.Run = func(context.Context, ...string) (string, int, error) { return "", -1, os.ErrNotExist }
+	if code := runPolicy("set", []string{"--json", "--scope", "project", "trust.network", "none"}, env); code != 1 || !strings.HasPrefix(r.errCode(), "E651") {
+		t.Fatalf("a project write without git must be E651, exit %d: %s", code, r.out.String())
 	}
 }
