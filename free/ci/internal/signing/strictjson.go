@@ -5,7 +5,7 @@ package signing
 // decodes and signs the raw bytes, so every other reader must see the same.
 // Inputs:  one JSON document.
 // Outputs: nil or an E717 payload_rejected error.
-// Constraints: valid UTF-8; nesting at most maxDepth; no object has two keys
+// Constraints: contract keys are spelled exactly; valid UTF-8; nesting at most maxDepth; no object has two keys
 // that are equal or equal under Unicode simple case folding (encoding/json
 // matches struct fields case-insensitively and keeps the last duplicate); no
 // data after the one top-level value.
@@ -44,9 +44,16 @@ type frame struct {
 	seen   map[string]bool
 }
 
-// strictJSON walks the token stream of raw.
-func strictJSON(raw []byte, what string) error {
+// strictJSON walks the token stream of raw. known lists the keys the contract
+// names: a key that folds to one of them but is spelled differently is refused
+// (encoding/json would read it as the contract key; a case-sensitive reader
+// would not see it).
+func strictJSON(raw []byte, what string, known ...string) error {
 	bad := func(why string) error { return Failf(ReasonPayloadRejected, "%s: %s", what, why) }
+	exact := make(map[string]string, len(known))
+	for _, k := range known {
+		exact[foldKey(k)] = k
+	}
 	if !utf8.Valid(raw) {
 		return bad("not valid UTF-8")
 	}
@@ -83,6 +90,9 @@ func strictJSON(raw []byte, what string) error {
 				break
 			}
 			k := foldKey(t)
+			if want, ok := exact[k]; ok && want != t {
+				return bad("object key " + echo(t) + " is spelled differently from the contract key " + want)
+			}
 			if stack[n-1].seen[k] {
 				return bad("duplicate or case-variant object key")
 			}

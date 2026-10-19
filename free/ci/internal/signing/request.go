@@ -55,6 +55,9 @@ type ResponseError struct {
 	Message string `json:"message"`
 }
 
+// requestKeys are the keys of a request.
+var requestKeys = []string{"run_id", "items", "payload_type", "payload_b64"}
+
 // allowedType reports whether the signer signs this payload type at all.
 func allowedType(t string) bool { return t == manifest.PayloadType || t == PayloadStatement }
 
@@ -68,7 +71,7 @@ func DecodeRequest(r io.Reader) (Request, [][]byte, error) {
 	if len(raw) > MaxRequestBytes {
 		return Request{}, nil, Failf(ReasonPayloadRejected, "the request is larger than %d bytes", MaxRequestBytes)
 	}
-	if err := strictJSON(raw, "request"); err != nil {
+	if err := strictJSON(raw, "request", requestKeys...); err != nil {
 		return Request{}, nil, err
 	}
 	var req Request

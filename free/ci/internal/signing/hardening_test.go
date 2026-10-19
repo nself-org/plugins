@@ -69,6 +69,40 @@ func TestStrictJSONRefusals(t *testing.T) {
 	}
 }
 
+func TestContractKeysAreSpelledExactly(t *testing.T) {
+	f := newFixture(t)
+	good := string(f.statementPayload(nil))
+	for old, variant := range map[string]string{
+		`"subject"`: `"Subject"`, `"_type"`: `"_TYPE"`, `"predicateType"`: `"PredicateType"`, `"predicate"`: `"Predicate"`, `"name"`: `"Name"`, `"digest"`: `"Digest"`,
+		`"sha256"`: `"SHA256"`, `"buildDefinition"`: `"builddefinition"`, `"buildType"`: `"BUILDTYPE"`, `"externalParameters"`: `"ExternalParameters"`, `"repository"`: `"Repository"`,
+		`"revision"`: `"Revision"`, `"job"`: `"Job"`, `"resolvedDependencies"`: `"ResolvedDependencies"`, `"uri"`: `"URI"`, `"gitCommit"`: `"GitCommit"`,
+		`"runDetails"`: `"RunDetails"`, `"builder"`: `"Builder"`, `"id"`: `"ID"`, `"metadata"`: `"Metadata"`, `"invocationId"`: `"InvocationID"`, `"byproducts"`: `"Byproducts"`,
+	} {
+		if !strings.Contains(good, old) {
+			t.Fatalf("the fixture statement has no key %s", old)
+		}
+		bad := strings.Replace(good, old, variant, 1)
+		if err := handle(t, f, item(signing.PayloadStatement, []byte(bad))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+			t.Errorf("%s spelled %s: %v", old, variant, err)
+		}
+	}
+	if err := handle(t, f, item(signing.PayloadStatement, []byte(good))); err != nil {
+		t.Fatal(err)
+	}
+	// request keys too
+	typ := signing.PayloadStatement
+	for name, in := range map[string]string{
+		"Run_ID":       `{"Run_ID":"a","items":[{"payload_type":"` + typ + `","payload_b64":"eA=="}]}`,
+		"Items":        `{"run_id":"a","Items":[{"payload_type":"` + typ + `","payload_b64":"eA=="}]}`,
+		"Payload_Type": `{"run_id":"a","items":[{"Payload_Type":"` + typ + `","payload_b64":"eA=="}]}`,
+		"PAYLOAD_B64":  `{"run_id":"a","items":[{"payload_type":"` + typ + `","PAYLOAD_B64":"eA=="}]}`,
+	} {
+		if err := decode(in); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+			t.Errorf("request key %s: %v", name, err)
+		}
+	}
+}
+
 func TestDecodeRequestStrictness(t *testing.T) {
 	typ := signing.PayloadStatement
 	for name, in := range map[string]string{

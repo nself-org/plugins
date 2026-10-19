@@ -43,7 +43,7 @@ type statementSubj struct {
 
 // checkStatement validates one in-toto statement payload.
 func (f *runFacts) checkStatement(ctx context.Context, payload []byte) (string, error) {
-	if err := strictJSON(payload, "statement"); err != nil {
+	if err := strictJSON(payload, "statement", statementKeys...); err != nil {
 		return "", err
 	}
 	var st statement
@@ -110,3 +110,9 @@ func releaseKind(k records.Kind) bool {
 	}
 	return true
 }
+
+// statementKeys are the keys of an in-toto statement and of the provenance
+// predicate fields the signer reads (SLSA provenance v1, the Epic's contract).
+var statementKeys = []string{"_type", "predicateType", "subject", "predicate", "name", "digest", "sha256",
+	"buildDefinition", "buildType", "externalParameters", "repository", "revision", "job", "resolvedDependencies", "uri", "gitCommit",
+	"runDetails", "builder", "id", "metadata", "invocationId", "byproducts"}
