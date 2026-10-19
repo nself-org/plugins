@@ -256,3 +256,38 @@ func TestCollectTotalCapBoundary(t *testing.T) {
 		t.Fatalf("one byte over: %v", err)
 	}
 }
+
+func TestCollectRefusesSecretInNameAndSymlinkedWorkdir(t *testing.T) {
+	e := newEnv(t)
+	const secret = "registered-name-secret-123456"
+	if err := e.red.Register([]byte(secret)); err != nil {
+		t.Fatal(err)
+	}
+	e.write("out/"+secret, "benign bytes")
+	e.write("fine/x", "x")
+	if _, err := collect(e, "out/*"); !records.IsReason(err, records.ReasonSecretMatch) {
+		t.Fatalf("secret in a file name: %v", err)
+	}
+	ds, _ := records.Normalize(model.Job{Artifacts: []model.ArtifactDecl{{Path: "fine/x", Name: "n-" + secret}}}, false, nil)
+	if _, err := e.collector().Collect(context.Background(), "proj", e.ws, ds); !records.IsReason(err, records.ReasonSecretMatch) {
+		t.Fatalf("secret in a declared name: %v", err)
+	}
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "data"), []byte("outside"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "ws")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	ds, _ = records.Normalize(model.Job{Artifacts: []model.ArtifactDecl{decl("data")}}, false, nil)
+	if _, err := e.collector().Collect(context.Background(), "proj", link, ds); !records.IsReason(err, records.ReasonUnreadable) {
+		t.Fatalf("symlinked workdir: %v", err)
+	}
+	if _, err := e.collector().Collect(context.Background(), "proj", filepath.Join(e.ws, "fine", "x"), ds); !records.IsReason(err, records.ReasonUnreadable) {
+		t.Fatalf("a file as workdir: %v", err)
+	}
+	if len(e.blobFiles()) != 0 {
+		t.Fatal("something was stored")
+	}
+}

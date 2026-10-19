@@ -60,6 +60,9 @@ type planned struct {
 // every declaration is judged before the first byte is stored, so a refusal
 // leaves nothing behind.
 func (c Collector) Collect(ctx context.Context, project, base string, decls []Decl) ([]Staged, error) {
+	if info, err := os.Lstat(base); err != nil || !info.IsDir() {
+		return nil, failf(ReasonUnreadable, "job workdir %q is missing, not a directory or a symlink", base)
+	}
 	root, err := os.OpenRoot(base)
 	if err != nil {
 		return nil, failf(ReasonUnreadable, "job workdir: %v", err)
@@ -113,6 +116,9 @@ func (c Collector) plan(root *os.Root, decls []Decl) ([]planned, error) {
 			}
 			if err = admit(x, root.FS(), f); err != nil {
 				return nil, err
+			}
+			if c.Scanner != nil && (len(c.Scanner.Scan([]byte(name))) != 0 || len(c.Scanner.Scan([]byte(f.rel))) != 0) {
+				return nil, failf(ReasonSecretMatch, "an artifact name or path holds a registered secret value; nothing is stored") // names reach list output
 			}
 			if names[name] {
 				return nil, failf(ReasonDuplicate, "two declarations produce the artifact name %q", name)
