@@ -63,6 +63,20 @@ The `nself-ci` binary accepts the exact argv of core `nself ci`:
 
 The manifest is v2 with a `commands` block (`command: ci`, `binary: nself-ci`). `ci eval` is not part of this plugin. The runner host commands are below.
 
+## Detached runs
+
+`nself ci --detach` starts the run in the background and prints a run handle once the run is queued. Follow it with `nself ci runs wait <run>` or `nself ci runs follow <run>`.
+
+The child starts in its own session (`setsid`), so it is in no process group of the caller. A `SIGKILL` or `SIGHUP` sent to the caller's group does not reach it.
+
+That is the only isolation it has. A killer that works by cgroup or pidfd still stops the child:
+
+| Invoker | What happens | What to do |
+|---------|--------------|------------|
+| systemd unit with `KillMode=control-group` (the default) | Stopping the unit kills every process in its cgroup, including the detached child | Set `KillMode=process`, or start the run outside the unit's cgroup with `systemd-run --user --scope nself ci --detach` |
+| `docker stop` or a container runtime teardown | The container's PID 1 is signalled and the rest of its cgroup goes with it | Run the build and the `runs wait` in the same container, or run the detached child in a separate long-lived container |
+| A machine invoker that tracks children by pidfd or cgroup | Same as above | Start the child through the service manager instead of from the invoker |
+
 ## Runner hosts: `nodes provision` and `nodes verify`
 
 Ported from core `nself runner provision|verify` (P7-CANON-10) with the same flags, messages and exit codes. Both are dispatched as `nself ci nodes <verb>` or `nself-ci nodes <verb>`. The dependency set is one declarative manifest compiled into the binary, so a freshly provisioned host and a "should be identical" host are checked against the same list.
