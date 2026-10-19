@@ -1,6 +1,6 @@
 # CI trust, security and privacy
 
-This page covers the `container` isolation level of `nself ci`: what it blocks, what it does not, and what a node must provide. The other levels (process, sandboxed container, VM) are described next to their own profiles.
+This page covers the `container` isolation level of `nself ci`: what it blocks, what it does not, and what a node must provide. The sandboxed container level (gVisor) is described in its own section below. The other levels (process, VM) are described next to their own profiles.
 
 ## The container level
 
@@ -21,6 +21,47 @@ Every container gets:
 - A kernel escape. A container shares the host kernel. For code you do not trust, use the sandboxed container level (gVisor) or a VM.
 - Network egress on `lan` and `internet`.
 - Disk use inside the workspace. The workspace is removed after the attempt. If the job image has no shell, the cleanup helper cannot remove job-owned files and the workspace can stay on disk (tracked as debt).
+
+## The sandboxed container level (gVisor)
+
+`sandboxed-container` is the container level run with gVisor's `runsc` runtime. The job's syscalls go to gVisor's Sentry, a user-space kernel, and only a filtered set reaches the host kernel. `nself ci --trust untrusted -- <cmd>` needs this level, with network `none`. Without it that command exits with `E647`; it never falls back to a plain container.
+
+### Install
+
+1. Install gVisor from the [install guide](https://gvisor.dev/docs/user_guide/install/) (check the download hash).
+2. Run `sudo runsc install`, then restart the Docker daemon. Docker must list the runtime: `docker info --format '{{json .Runtimes}}'`.
+3. Podman is not supported for this level yet: its runtimes live in `containers.conf` and give the profile no table to check.
+
+A runsc binary or a runtime entry is not availability. The profile starts a small probe container under `runsc` (`docker run --runtime=runsc --network none` of a busybox image pinned by digest, running `dmesg`) and the level is available only when the output has gVisor's banner as a whole line (`Starting gVisor...`, optionally behind a `[ time ]` stamp). The runtime entry must also point at a binary named `runsc`. The runsc version and the platform are reported as facts. The probe image is in the image lock as `ci-gvisor-probe`, so the daily image probe covers it.
+
+### Platform
+
+The probe reads the runtime entry and records `platform`. `systrap` is the default; `ptrace` is deprecated upstream and may be removed; use it only where systrap does not run on the host kernel. `kvm` is refused where `/dev/kvm` is absent. Any other value is refused too (`isolation.platform_unsupported`).
+
+The level is unavailable (`E678`, reason `isolation.runtime_flag_denied`) when the runsc entry carries any of `--network=host`, `--host-uds`, `--host-fifo`, `--net-raw`, `--allow-flag-override`, `--ignore-cgroups`, `--rootless`, `--file-access=shared`, `--nvproxy`, `--nvproxy-docker`, `--tpuproxy`, `--profile`, `--fsgofer-host-uds` or a `--TESTONLY-*` flag. The first group opens the sandbox to the host; `--ignore-cgroups` would drop the pids, memory and CPU limits. The profile refuses them rather than stripping them, because the daemon would still pass them to runsc. A flag is matched by presence in every spelling the Go flag package accepts, so `--net-raw=false` is refused as well.
+
+The deny list is not a complete list of unsafe flags. The entry is judged only as far as this profile can read it: an entry with a key other than `path`, `runtimeArgs` and `status` is refused, and so is an entry with no `path`. A containerd shim runtime (`runtimeType`, `options`) keeps its settings in a file the profile does not read, and `docker info` does not show those keys, so such a runtime appears as an entry without a path. `runsc install` always writes a path. The runtime table is read on every check, so a daemon reload that adds a denied argument is seen on the next check. Only the real start is remembered (for a minute, per runtime entry), and concurrent checks share one start. A change made between a check and the `docker run` is not seen; changing the daemon configuration needs root, which already owns the host.
+
+The probe asks the local daemon: a Docker context that points at a remote host is not supported.
+
+On a separated node the agent user's own runtime must be rootless, and the probe starts runsc under it. Rootless Docker usually needs `--ignore-cgroups` for runsc, which is refused, so the level is normally unavailable there (`isolation.runtime_flag_denied`, or `isolation.probe_failed` if the start fails).
+
+### What it does not give you
+
+gVisor is not a VM.
+
+- The host kernel is shared through the Sentry's seccomp-filtered syscall set. A bug in that set, or in the Sentry, is a way out.
+- There is no protection against side channels (Spectre-class attacks, cache timing).
+- runsc has CVEs of its own. Keep it current; the probe reports the version it found.
+- Resource exhaustion beyond the cgroup limits is not stopped.
+
+Some toolchains do not run under gVisor because they need a syscall the Sentry lacks. That is recorded as a failed job, not worked around: there is no fallback to a plain container for a sandboxed job.
+
+### Handoff
+
+- `ci doctor` does not yet print the install steps; the profile exposes them as the `hint` fact on an unavailable result (`gvisor.InstallHint`).
+- Podman support needs a way to read and judge its runtime table.
+- Network scopes `restricted` and `internet` need the scope planner of P7-TRUST-08, as for the container level.
 
 ## What a node must provide
 

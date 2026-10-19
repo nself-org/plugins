@@ -57,6 +57,11 @@ var dynamicProgram = map[string]bool{
 	"internal/exec/container.go:containerStopper": true,
 	"internal/exec/runtime.go:RuntimeQuery":       true,
 	"internal/exec/runtime.go:RuntimeRemove":      true,
+	// The sandboxed-container probe (P7-TRUST-05): the runtime binary is checked against
+	// runtimeBinary, the runtime name and image against fixed patterns; runsc is run only by its
+	// absolute path with base name runsc, with the one argument --version.
+	"internal/exec/runtime_probe.go:RuntimeProbeRun":    true,
+	"internal/exec/runtime_probe.go:RuntimeToolVersion": true,
 	// golang.org/x/sys/unix (vendored for the pure-Go SQLite driver, P7-CI-30):
 	// the exported Exec wrapper around syscall.Exec. A library entry point, not
 	// a call site; nothing under free/ci calls unix.Exec.

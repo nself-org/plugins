@@ -85,6 +85,9 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	if err := checkContainerCommand(cmd, run); err != nil {
 		return -1, "", err
 	}
+	if err := checkSandboxRuntime(s.Job.Isolation, cmd, run.Image); err != nil {
+		return -1, "", err
+	}
 	stop := containerStopper(cmd.Binary, run.Name, e.Grace)
 	tail := &outputTail{max: 4096}
 	sink := func(b []byte) {
@@ -109,7 +112,7 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 // helper container is stopped and removed when the time box ends, so it never outlives the attempt.
 func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) {
 	cmd, err := s.Plan.Cleanup(run)
-	if err != nil || cmd == nil || checkContainerCommand(*cmd, run) != nil {
+	if err != nil || cmd == nil || checkContainerCommand(*cmd, run) != nil || checkSandboxRuntime(s.Job.Isolation, *cmd, run.Image) != nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), 30*time.Second)
