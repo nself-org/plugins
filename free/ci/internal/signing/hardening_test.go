@@ -45,7 +45,7 @@ func TestStrictJSONRefusals(t *testing.T) {
 		"duplicate subject":       base(`,"subject":` + subj + `,"subject":` + subj),
 		"case-variant subject":    base(`,"subject":` + subj + `,"Subject":[{"name":"x","digest":{"sha256":"` + strings.Repeat("f", 64) + `"}}]`),
 		"unicode-folded key":      base(`,"subject":` + subj + `,"ſubject":[]`),
-		"escaped duplicate key":   base(`,"subject":` + subj + `,"subject":[]`),
+		"escaped duplicate key":   base(`,"subject":` + subj + `,"` + esc("0073") + `ubject":[]`),
 		"duplicate nested digest": base(`,"subject":[{"name":"app","digest":{"sha256":"` + app + `","sha256":"` + app + `"}}]`),
 		"duplicate predicate key": `{"_type":"https://in-toto.io/Statement/v1","predicateType":"` + manifest.ProvenancePredicate + `","predicate":` + pred + `,"predicate":{},"subject":` + subj + `}`,
 		"trailing document":       base(`,"subject":`+subj) + ` {}`,
@@ -410,12 +410,14 @@ func TestAmbiguousEscapesAreRefused(t *testing.T) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
+	bsl := string(rune(92))
 	for name, extra := range map[string]string{
-		"a valid pair":                     `"note":"\ud83d\ude00",`,
-		"a pair in upper case":             `"note":"\uD83D\uDE00",`,
-		"an escaped backslash then u":      `"note":"\\ud800",`,
-		"a BMP escape":                     `"note":"\u00e9\u20ac",`,
-		"the escape text outside a string": `"note":"x",`,
+		"a valid pair":                `"note":"` + esc("d83d", "de00") + `",`,
+		"a pair in upper case":        `"note":"` + esc("D83D", "DE00") + `",`,
+		"an escaped backslash then u": `"note":"` + bsl + bsl + `ud800",`,
+		"a BMP escape":                `"note":"` + esc("00e9", "20ac") + `",`,
+		"a plain string":              `"note":"x",`,
+		"a control escape":            `"note":"` + esc("0001") + `",`,
 	} {
 		if err := handle(t, f, item(signing.PayloadStatement, withExtra(extra))); err != nil {
 			t.Errorf("%s: %v", name, err)

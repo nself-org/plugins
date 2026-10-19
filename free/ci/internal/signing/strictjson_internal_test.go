@@ -18,11 +18,26 @@ func TestFoldKeyJoinsTheSimpleFoldOrbit(t *testing.T) {
 	}
 }
 
+// esc is the JSON escape of one UTF-16 unit, spelled without a literal \u sequence in the source.
+func esc(hex ...string) string {
+	out := ""
+	for _, h := range hex {
+		out += bs + "u" + h
+	}
+	return out
+}
+
+const bs = "\\"
+
 func TestAmbiguousEscapeScanner(t *testing.T) {
+	q := func(s string) string { return `"` + s + `"` }
 	ok := []string{
-		`"plain"`, `"😀"`, `"😀"`, `"𐀀"`, `"􏿿"`, `"􏰀"`, `"𐏿"`,
-		`"퟿"`, `""`, `"\u0001"`, `"ÿ"`, `"\u12G4"`, `"\u12"`, `"\\ud800"`, `"\\\\ud800"`, `"a\"b"`, `"\"😀\""`,
-		`"x" "😀" "y"`, `\ud800`, `{"a":"😀","b":"é"}`, `"\n\t\r\b\f\/\\"`, `"\u"`, `"\`, `"😀😀"`,
+		q("plain"), q(esc("d83d", "de00")), q(esc("D83D", "DE00")), q(esc("d800", "dc00")), q(esc("dbff", "dfff")), q(esc("dbff", "dc00")), q(esc("d800", "dfff")),
+		q(esc("d7ff")), q(esc("e000")), q(esc("0001")), q(esc("00ff")), q(bs + "u12G4"), q(bs + "u12"), q(bs + bs + "ud800"), q(bs + bs + bs + bs + "ud800"),
+		q("a" + bs + `"b`), q(bs + `"` + esc("d83d", "de00") + bs + `"`), q("x") + " " + q(esc("d83d", "de00")) + " " + q("y"), esc("d800"),
+		`{"a":` + q(esc("d83d", "de00")) + `,"b":` + q(esc("00e9")) + `}`, q(bs + "n" + bs + "t" + bs + "r" + bs + "b" + bs + "f" + bs + "/" + bs + bs),
+		q(bs + "u"), `"` + bs, q(esc("d83d", "de00", "d83d", "de00")),
+		`"` + esc("d800", "dc00"), `"` + esc("d83d", "de00"), esc("d800", "dc00"),
 	}
 	for _, s := range ok {
 		if err := rejectAmbiguousEscapes([]byte(s), "t"); err != nil {
@@ -30,10 +45,11 @@ func TestAmbiguousEscapeScanner(t *testing.T) {
 		}
 	}
 	bad := []string{
-		`"\ud800"`, `"\udbff"`, `"\udc00"`, `"\udfff"`, `"\u0000"`, `"\u0000A"`, `"a\u0000"`,
-		`"\ud800A"`, `"\ud800\ud800"`, `"\ud800x"`, `"\ud800\`, `"\ud800\u`, `"\ud800\ud`, `"\ud800\udc0`, `"\ud800\udc0"`,
-		`"\ud83d\ude0"`, `"\ud800\udbff"`, `"\ud800"`, `"\ud800\uDBFF"`, `"\\\ud800"`, `"\ud800😀"`, `"\ude00\ud83d"`,
-		`"a\\\u0000"`, `"\"\ud800"`, `{"k\ud800":1}`, `["\udc00"]`,
+		q(esc("d800")), q(esc("dbff")), q(esc("dc00")), q(esc("dfff")), q(esc("0000")), q(esc("0000") + "A"), q("a" + esc("0000")),
+		q(esc("d800") + "A"), q(esc("d800", "d800")), q(esc("d800") + "x"), `"` + esc("d800") + bs, `"` + esc("d800") + bs + "u", `"` + esc("d800") + bs + "ud",
+		`"` + esc("d800") + bs + "udc0", q(esc("d800") + bs + "udc0"), q(esc("d83d") + bs + "ude0"), q(esc("d800", "dbff")), q(esc("d800", "e000")), q(esc("d800", "DBFF")),
+		q(bs + bs + esc("d800")), q(esc("d800", "d83d", "de00")), q(esc("de00", "d83d")), q("a" + bs + bs + esc("0000")), q(bs + `"` + esc("d800")),
+		`{"k` + esc("d800") + `":1}`, `[` + q(esc("dc00")) + `]`,
 	}
 	for _, s := range bad {
 		if err := rejectAmbiguousEscapes([]byte(s), "t"); !IsReason(err, ReasonPayloadRejected) {
