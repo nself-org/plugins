@@ -37,6 +37,28 @@ var notYetLinked = map[string]bool{
 	"github.com/nself-org/plugins/free/ci/internal/store":          true,
 	"github.com/nself-org/plugins/free/ci/internal/trust":          true,
 	"github.com/nself-org/plugins/free/ci/internal/world":          true,
+
+	// AUTO packages (P7-AUTO-27): each links into cmd when its own Ticket wires it; their E790-E829 codes register from a codes.go.
+	"github.com/nself-org/plugins/free/ci/internal/pools":                   true,
+	"github.com/nself-org/plugins/free/ci/internal/pools/record":            true,
+	"github.com/nself-org/plugins/free/ci/internal/nodes/inventory":         true,
+	"github.com/nself-org/plugins/free/ci/internal/autoworld":               true,
+	"github.com/nself-org/plugins/free/ci/internal/claims":                  true,
+	"github.com/nself-org/plugins/free/ci/internal/watch":                   true,
+	"github.com/nself-org/plugins/free/ci/internal/hostedtier":              true,
+	"github.com/nself-org/plugins/free/ci/internal/readiness":               true,
+	"github.com/nself-org/plugins/free/ci/internal/readiness/sample":        true,
+	"github.com/nself-org/plugins/free/ci/internal/offload":                 true,
+	"github.com/nself-org/plugins/free/ci/internal/race":                    true,
+	"github.com/nself-org/plugins/free/ci/internal/notify":                  true,
+	"github.com/nself-org/plugins/free/ci/internal/svc":                     true,
+	"github.com/nself-org/plugins/free/ci/internal/selftest":                true,
+	"github.com/nself-org/plugins/free/ci/internal/demand":                  true,
+	"github.com/nself-org/plugins/free/ci/internal/fleet":                   true,
+	"github.com/nself-org/plugins/free/ci/internal/where":                   true,
+	"github.com/nself-org/plugins/free/ci/internal/evidence/projection":     true,
+	"github.com/nself-org/plugins/free/ci/internal/providers/github/checks": true,
+	"github.com/nself-org/plugins/free/ci/internal/tiers":                   true,
 }
 
 type listedPackage struct {

@@ -35,6 +35,9 @@ type Options struct {
 	// ConfirmFlaky reruns a job that failed with class code up to N more times, explicitly
 	// and recorded as retries (P7-CI-40). The failed result never changes; 0 is off.
 	ConfirmFlaky int
+	// Record marks a commit CI run of record (set by `ci runs rerun <sha>` and by watch);
+	// false for bare and dev runs. The dispatch hook maps it to sched.Pipeline.Record (P7-AUTO-27).
+	Record bool
 }
 
 // RunOptions is the name the cmd layer and its option hooks use.

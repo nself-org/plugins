@@ -173,6 +173,7 @@ func (c *Coordinator) conclude(f finishIn) Result {
 			notes = append(notes, "finalizer "+fin.Name()+": "+firstLineOf(err.Error()))
 		}
 	}
+	notes = append(notes, notifyRun(bg, f.Hooks, NotifyRequest{Run: info, Status: line, Notes: notes})...)
 	return Result{RunID: f.RunID, Exit: exitFor(ev.Result), Summary: Summary{RunID: f.RunID, Result: ev.Result, Jobs: f.Jobs, Skipped: f.Skipped,
 		Status: line, Evidence: digest, Doc: ev, Notes: notes}}
 }
@@ -229,6 +230,9 @@ func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, 
 			s.State = report.Error
 		}
 	}
+	if err := publishGates(ctx, f.Hooks, req, s); err != nil { // composes with the Publisher's veto above; either one stops the post
+		return notPosted("publish gate refused, nothing posted: " + firstLineOf(err.Error())), []string{"publish gate: " + firstLineOf(err.Error())}
+	}
 	delivered, err := p.Outbox.Complete(ctx, p.Seq, s)
 	switch {
 	case err != nil:
@@ -236,5 +240,6 @@ func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, 
 	case !delivered:
 		return notPosted("a newer run already posted for this commit"), notes
 	}
+	notes = append(notes, publishDetails(ctx, f.Hooks, PublishDetailRequest{Owner: p.Owner, Repo: p.Repo, RunID: info.RunID, Revision: f.Rev.SHA, Status: s, Run: info, Projection: req.Projection})...)
 	return fmt.Sprintf("nself-ci: status posted (%s) for %s", s.State, f.Rev.SHA[:7]), notes
 }

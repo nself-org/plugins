@@ -41,8 +41,8 @@ func problems(rows []registration) []string {
 	for _, row := range rows {
 		id := row.Code.ID
 		n, err := strconv.Atoi(strings.TrimPrefix(id, "E"))
-		if err != nil || len(id) != 4 || !strings.HasPrefix(id, "E") || n < 600 || n > 719 {
-			out = append(out, fmt.Sprintf("%s (%s): outside E600-E719", id, row.Site))
+		if err != nil || len(id) != 4 || !strings.HasPrefix(id, "E") || !inFabricBlock(n) {
+			out = append(out, fmt.Sprintf("%s (%s): outside E600-E719 and E790-E829", id, row.Site))
 		}
 		if first, ok := seen[id]; ok {
 			out = append(out, fmt.Sprintf("%s: duplicate %s and %s", id, first.Site, row.Site))
@@ -57,8 +57,15 @@ func problems(rows []registration) []string {
 	return out
 }
 
-// CodeRanges reserves disjoint fabric allocations.
-var CodeRanges = map[string][2]int{"CI": {600, 649}, "NODE": {650, 669}, "TRUST": {670, 689}, "SCHED": {690, 699}, "HOST": {700, 709}, "CACHE": {710, 719}}
+// CodeRanges reserves disjoint fabric allocations. Two blocks exist: E600-E719
+// (CI, NODE, TRUST, SCHED, HOST, CACHE; fully allocated and closed) and E790-E829
+// (AUTO, P7-AUTO-27). E720-E789 belong to k8s, infra, functions and plugin-dev.
+var CodeRanges = map[string][2]int{"CI": {600, 649}, "NODE": {650, 669}, "TRUST": {670, 689}, "SCHED": {690, 699}, "HOST": {700, 709}, "CACHE": {710, 719}, "AUTO": {790, 829}}
+
+// inFabricBlock reports whether n lies in one of the two blocks this module owns.
+func inFabricBlock(n int) bool {
+	return n >= 600 && n <= 719 || n >= 790 && n <= 829
+}
 
 func init() {
 	for _, c := range []Code{

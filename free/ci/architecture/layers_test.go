@@ -18,6 +18,22 @@ import (
 
 const module = "github.com/nself-org/plugins/free/ci/"
 
+// autoNoDirectIO lists the AUTO packages that never open a network connection
+// themselves (P7-AUTO-27): claims, watch and hostedtier use the reporter and
+// provider interfaces, fleet reaches hosts only through the remote funnel
+// (internal/transport), and the checks adapter uses the REST funnel
+// (internal/providers/rest). os/exec is already banned for every package.
+var autoNoDirectIO = map[string]bool{"internal/claims": true, "internal/watch": true, "internal/hostedtier": true, "internal/fleet": true, "internal/providers/github/checks": true}
+
+// autoRows lists every package the AUTO Epic creates with the layer kind its row must have.
+var autoRows = map[string]string{
+	"internal/pools": "domain", "internal/pools/record": "domain", "internal/nodes/inventory": "domain", "internal/autoworld": "domain",
+	"internal/tiers": "pure", "internal/claims": "domain", "internal/watch": "domain", "internal/hostedtier": "domain",
+	"internal/readiness": "domain", "internal/readiness/sample": "domain", "internal/offload": "domain", "internal/race": "domain",
+	"internal/notify": "domain", "internal/svc": "domain", "internal/selftest": "domain", "internal/demand": "domain",
+	"internal/fleet": "domain", "internal/where": "domain", "internal/evidence/projection": "domain", "internal/providers/github/checks": "domain",
+}
+
 type layerMap struct {
 	Version int                 `yaml:"version"`
 	Layers  map[string][]string `yaml:"layers"`
@@ -75,6 +91,9 @@ func checkImport(m layerMap, pkg, file, imported string) error {
 	if (imported == "database/sql" || imported == "modernc.org/sqlite") && pkg != "internal/store" {
 		return fmt.Errorf("%s imports SQL outside store", pkg)
 	}
+	if autoNoDirectIO[pkg] && (imported == "net" || strings.HasPrefix(imported, "net/")) {
+		return fmt.Errorf("%s imports %s: network access goes through its funnel (reporter, provider, remote or REST)", pkg, imported)
+	}
 	if (kind == "pure" || kind == "kernel") && (imported == "os" || imported == "net" || strings.HasPrefix(imported, "net/")) {
 		return fmt.Errorf("%s is pure but imports %s", pkg, imported)
 	}
@@ -116,6 +135,9 @@ func checkImport(m layerMap, pkg, file, imported string) error {
 		if !ok {
 			return fmt.Errorf("dispatch imports %s", local)
 		}
+	}
+	if pkg == "internal/claims" && (local == "internal/transport" || strings.HasPrefix(local, "internal/transport/") || strings.HasPrefix(local, "internal/providers/")) {
+		return fmt.Errorf("claims imports %s: statuses go through the report.Reporter interface only", local)
 	}
 	if pkg == "internal/store" && strings.HasPrefix(local, "internal/providers") {
 		return fmt.Errorf("store imports providers")
@@ -221,5 +243,44 @@ func TestRequiredRows(t *testing.T) {
 	}
 	if count < 100 {
 		t.Fatalf("required rows unexpectedly short: %d", count)
+	}
+}
+
+// TestAutoRows proves every AUTO package has a row of the right kind and that a
+// planted forbidden import in each one is refused.
+func TestAutoRows(t *testing.T) {
+	m := readLayers(t)
+	for pkg, want := range autoRows {
+		if got := kindOf(m, pkg); got != want {
+			t.Errorf("%s: layer kind %q, want %q", pkg, got, want)
+			continue
+		}
+		plant := []string{"os/exec", "database/sql", module + "cmd"}
+		if autoNoDirectIO[pkg] {
+			plant = append(plant, "net/http", "net")
+		}
+		if want == "pure" {
+			plant = append(plant, "os", "net/http")
+		}
+		for _, imp := range plant {
+			if checkImport(m, pkg, "planted.go", imp) == nil {
+				t.Errorf("planted import %s in %s was accepted", imp, pkg)
+			}
+		}
+	}
+	for _, c := range []struct{ pkg, imp string }{
+		{"internal/claims", module + "internal/transport/ssh"}, {"internal/claims", module + "internal/providers/rest"},
+	} {
+		if checkImport(m, c.pkg, "planted.go", c.imp) == nil {
+			t.Errorf("planted import %s in %s was accepted", c.imp, c.pkg)
+		}
+	}
+	for _, c := range []struct{ pkg, imp string }{
+		{"internal/watch", "log/slog"}, {"internal/hostedtier", module + "internal/report"}, {"internal/claims", module + "internal/report"},
+		{"internal/providers/github/checks", module + "internal/providers/rest"}, {"internal/fleet", module + "internal/transport/ssh"},
+	} {
+		if err := checkImport(m, c.pkg, "ok.go", c.imp); err != nil {
+			t.Errorf("legal import %s in %s refused: %v", c.imp, c.pkg, err)
+		}
 	}
 }
