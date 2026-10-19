@@ -7,7 +7,7 @@ mkdir -p "$tmp/repo/free/a" "$tmp/repo/free/b" "$tmp/repo/scripts/conformance"; 
 # scope <event> <files...> -- <script args>; prints the outputs on one line.
 scope() {
   local ev=$1; shift; local files=(); while [ "$1" != -- ]; do files+=("$1"); shift; done; shift
-  printf '%s\n' "${files[@]}" >"$tmp/files"
+  printf "%s\n" ${files[@]+"${files[@]}"} >"$tmp/files"
   GITHUB_EVENT_NAME=$ev SCOPE_FILES=$tmp/files GITHUB_OUTPUT=$tmp/out bash "$here/changed-scope.sh" "$@" 2>/dev/null >/dev/null
   tr '\n' ' ' <"$tmp/out"; rm -f "$tmp/out"
 }
@@ -27,6 +27,9 @@ check weird-name    "$(scope pull_request 'free/a;rm -rf x/m.go' -- )" "all=true
 check outside-docs  "$(scope pull_request free/a/m.go README.md registry.json -- --outside-free-global)" "all=false plugins=a plugin_count=1 "
 check outside-code  "$(scope pull_request free/a/m.go scripts/ci/x.sh -- --outside-free-global)" "all=true plugins= plugin_count=0 "
 check outside-flag  "$(scope pull_request free/a/m.go scripts/ci/x.sh -- )" "all=false plugins=a plugin_count=1 "
+# Large lists: a hit must survive pipefail (grep -q in a pipeline once returned 141 here).
+big=$(for i in $(seq 1 2000); do echo "docs/x$i.md"; done; echo scripts/ci/gate.sh)
+check big-outside "$(scope pull_request $big -- --outside-free-global)" "all=true plugins= plugin_count=0 "
 # Real git: a merge commit whose second parent renames a file out of free/a and adds an unusually named file.
 git init -q . && git config user.email t@t && git config user.name t && git checkout -qb main
 mkdir -p free/a free/b && echo x > free/a/util.go && echo k > free/a/keep.go && echo y > free/b/keep.go && git add -A && git commit -qm base

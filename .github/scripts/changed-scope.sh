@@ -56,8 +56,14 @@ if [ "$all" = false ]; then
   if grep -qE '^\.github/scripts/(changed-scope\.sh|changed-scope_test\.sh|go-closure-changed\.sh)$' "$list"; then all=true; reason="a scope script changed"; fi
   if grep -qE '^free/[^/]+$' "$list"; then all=true; reason="a file sits directly under free/"; fi
   # Names end up in command lines downstream; a directory name outside the plain set is never trusted.
-  if sed -nE 's#^free/([^/]+)/.*#\1#p' "$list" | grep -qvE '^[A-Za-z0-9][A-Za-z0-9._-]*$'; then all=true; reason="unusual plugin directory name"; fi
-  if [ "$outside" = true ] && grep -vE '^free/' "$list" | grep -qvE "$SAFE_OUTSIDE"; then all=true; reason="a file outside free/ changed"; fi
+  # Counting (grep -c) reads the whole stream; `grep -q` in a pipeline can exit early and SIGPIPE the writer, and
+  # under pipefail that turns a hit into status 141, i.e. a silent "no".
+  odd=$(sed -nE 's#^free/([^/]+)/.*#\1#p' "$list" | grep -cvE '^[A-Za-z0-9][A-Za-z0-9._-]*$' || true)
+  if [ "${odd:-0}" -gt 0 ]; then all=true; reason="unusual plugin directory name"; fi
+  if [ "$outside" = true ]; then
+    unsafe=$(grep -vE '^free/' "$list" | grep -cvE "$SAFE_OUTSIDE" || true)
+    if [ "${unsafe:-0}" -gt 0 ]; then all=true; reason="a file outside free/ changed"; fi
+  fi
   for g in "${globals[@]+"${globals[@]}"}"; do
     if grep -qE "$g" "$list"; then all=true; reason="global match: $g"; break; fi
   done
