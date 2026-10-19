@@ -1,0 +1,245 @@
+package gvisor
+
+import (
+	"context"
+	"errors"
+	"io/fs"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/exec"
+	"github.com/nself-org/plugins/free/ci/internal/isolation"
+	"github.com/nself-org/plugins/free/ci/internal/model"
+)
+
+const (
+	dockerInfoRootful  = `{"ServerVersion":"27.0.1","MemoryLimit":true,"PidsLimit":true,"CPUCfsQuota":true,"SecurityOptions":["name=seccomp,profile=builtin"]}`
+	dockerInfoRootless = `{"ServerVersion":"27.0.1","MemoryLimit":true,"PidsLimit":true,"CPUCfsQuota":true,"SecurityOptions":["name=seccomp,profile=builtin","name=rootless"]}`
+	podmanInfo         = `{"host":{"security":{"rootless":true},"ociRuntime":{"name":"crun"},"cgroupVersion":"v2","cgroupControllers":["cpu","memory","pids"]},"version":{"Version":"5.2.0"}}`
+	banner             = "[    0.000000] Starting gVisor...\n[    0.4] Reticulating splines..."
+)
+
+// fakeRunner answers `info` (whole and the runtime table) from canned JSON.
+type fakeRunner struct {
+	info       map[string]string
+	runtimes   string
+	calls      int
+	runtimeErr error
+}
+
+func (f *fakeRunner) Query(_ context.Context, binary string, args ...string) ([]byte, error) {
+	f.calls++
+	if strings.Contains(strings.Join(args, " "), ".Runtimes") {
+		if f.runtimeErr != nil {
+			return nil, f.runtimeErr
+		}
+		return []byte(f.runtimes), nil
+	}
+	if out, ok := f.info[binary]; ok {
+		return []byte(out), nil
+	}
+	return nil, fs.ErrNotExist
+}
+
+// fakeStarter records what the probe started.
+type fakeStarter struct {
+	out                                 string
+	err                                 error
+	version                             string
+	versionErr                          error
+	starts                              int
+	binary, runtime, image, versionPath string
+}
+
+func (f *fakeStarter) Banner(_ context.Context, binary, runtime, image string) ([]byte, error) {
+	f.starts++
+	f.binary, f.runtime, f.image = binary, runtime, image
+	return []byte(f.out), f.err
+}
+
+func (f *fakeStarter) Version(_ context.Context, path string) (string, error) {
+	f.versionPath = path
+	return f.version, f.versionErr
+}
+
+func newProfile(r *fakeRunner, s *fakeStarter, mut func(*Options)) *Profile {
+	o := Options{Runner: r, Starter: s, HasKVM: func() bool { return false }, UIDs: func() []int { return []int{501} }}
+	if mut != nil {
+		mut(&o)
+	}
+	return New(o)
+}
+
+func okRunner(runtimes string) *fakeRunner {
+	return &fakeRunner{info: map[string]string{"docker": dockerInfoRootful}, runtimes: runtimes}
+}
+
+func okStarter() *fakeStarter {
+	return &fakeStarter{out: banner, version: "runsc version release-20261012.0"}
+}
+
+func TestProbeAvailableStartsTheProbeImageUnderRunsc(t *testing.T) {
+	st := okStarter()
+	p := newProfile(okRunner(`{"runc":{"path":"runc"},"runsc":{"path":"/usr/local/bin/runsc"}}`), st, nil)
+	av := p.Probe(context.Background())
+	if av.Level != "sandboxed-container" || av.Reason != "" {
+		t.Fatalf("not available: %+v", av)
+	}
+	if st.binary != "docker" || st.runtime != "runsc" || st.image != ProbeImage || st.versionPath != "/usr/local/bin/runsc" {
+		t.Fatalf("probe started %+v", st)
+	}
+	for k, want := range map[string]string{"platform": "systrap", "runsc_version": "runsc version release-20261012.0", "sandbox_runtime": "runsc", "runtime": "docker", "banner": "gvisor"} {
+		if av.Facts[k] != want {
+			t.Errorf("fact %s = %q, want %q", k, av.Facts[k], want)
+		}
+	}
+}
+
+func TestProbeImageIsPinnedByDigest(t *testing.T) {
+	if !strings.Contains(ProbeImage, "@sha256:") || strings.Count(ProbeImage, ":") != 1 {
+		t.Fatalf("probe image must be a tagless ref@sha256 digest: %s", ProbeImage)
+	}
+}
+
+func TestProbeUnavailableReasons(t *testing.T) {
+	denyCases := map[string][]string{
+		"network host":        {"--network=host"},
+		"network host spaced": {"--network", "host"},
+		"single dash":         {"-network=host"},
+		"host uds":            {"--host-uds=open"},
+		"host uds bare":       {"--host-uds"},
+		"host fifo":           {"--host-fifo=all"},
+		"net raw":             {"--net-raw"},
+		"allow flag override": {"--allow-flag-override"},
+		"denied after a good": {"--platform=ptrace", "--debug", "--net-raw"},
+	}
+	for name, args := range denyCases {
+		t.Run("denied "+name, func(t *testing.T) {
+			st := okStarter()
+			table := `{"runsc":{"path":"runsc","runtimeArgs":[` + quoteAll(args) + `]}}`
+			av := newProfile(okRunner(table), st, nil).Probe(context.Background())
+			if av.Available() || av.Reason != ReasonRuntimeFlagDenied || st.starts != 0 {
+				t.Fatalf("%+v starts=%d", av, st.starts)
+			}
+		})
+	}
+	for name, tc := range map[string]struct {
+		runner  *fakeRunner
+		starter *fakeStarter
+		mut     func(*Options)
+		reason  string
+		starts  int
+	}{
+		"runsc not registered":           {okRunner(`{"runc":{"path":"runc"}}`), okStarter(), nil, isolation.ReasonRuntimeMissing, 0},
+		"runtime table broken":           {okRunner(`nope`), okStarter(), nil, isolation.ReasonProbeFailed, 0},
+		"runtime table query fails":      {&fakeRunner{info: map[string]string{"docker": dockerInfoRootful}, runtimeErr: errors.New("daemon gone")}, okStarter(), nil, isolation.ReasonProbeFailed, 0},
+		"registered but will not start":  {okRunner(`{"runsc":{"path":"runsc"}}`), &fakeStarter{err: errors.New("exit 125")}, nil, isolation.ReasonProbeFailed, 1},
+		"started without the banner":     {okRunner(`{"runsc":{"path":"runsc"}}`), &fakeStarter{out: "[    0.000000] Linux version 6.8.0"}, nil, isolation.ReasonProbeFailed, 1},
+		"kvm without /dev/kvm":           {okRunner(`{"runsc":{"runtimeArgs":["--platform=kvm"]}}`), okStarter(), nil, ReasonPlatformUnsupported, 0},
+		"unknown platform":               {okRunner(`{"runsc":{"runtimeArgs":["--platform","bogus"]}}`), okStarter(), nil, ReasonPlatformUnsupported, 0},
+		"no container runtime":           {&fakeRunner{info: map[string]string{}}, okStarter(), nil, isolation.ReasonRuntimeMissing, 0},
+		"podman only":                    {&fakeRunner{info: map[string]string{"podman": podmanInfo}, runtimes: `{"runsc":{}}`}, okStarter(), nil, isolation.ReasonRuntimeMissing, 0},
+		"separated node, rootful docker": {okRunner(`{"runsc":{"path":"runsc"}}`), okStarter(), func(o *Options) { o.Separated = func() bool { return true } }, isolation.ReasonRootful, 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			av := newProfile(tc.runner, tc.starter, tc.mut).Probe(context.Background())
+			if av.Available() || av.Level != "" || av.Reason != tc.reason || tc.starter.starts != tc.starts {
+				t.Fatalf("level %q reason %q starts %d: %+v", av.Level, av.Reason, tc.starter.starts, av)
+			}
+		})
+	}
+}
+
+func TestProbeRuntimeMissingCarriesTheInstallHint(t *testing.T) {
+	av := newProfile(okRunner(`{"runc":{}}`), okStarter(), nil).Probe(context.Background())
+	if !strings.Contains(av.Facts["hint"], "runsc install") {
+		t.Fatalf("no install hint: %+v", av)
+	}
+}
+
+func TestProbePlatforms(t *testing.T) {
+	for name, tc := range map[string]struct {
+		args string
+		kvm  bool
+		want string
+	}{
+		"default is systrap":      {``, false, "systrap"},
+		"ptrace":                  {`"--platform=ptrace"`, false, "ptrace"},
+		"spaced form":             {`"--platform","ptrace"`, false, "ptrace"},
+		"last one wins":           {`"--platform=kvm","--platform=systrap"`, false, "systrap"},
+		"kvm where /dev/kvm is":   {`"--platform=kvm"`, true, "kvm"},
+		"unrelated flags ignored": {`"--debug-log=/tmp/x","--network=sandbox"`, false, "systrap"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			table := `{"runsc":{"path":"runsc","runtimeArgs":[` + tc.args + `]}}`
+			p := newProfile(okRunner(table), okStarter(), func(o *Options) { o.HasKVM = func() bool { return tc.kvm } })
+			av := p.Probe(context.Background())
+			if !av.Available() || av.Facts["platform"] != tc.want {
+				t.Fatalf("%+v", av)
+			}
+		})
+	}
+}
+
+func TestProbeVersionFailureIsNotAvailabilityFailure(t *testing.T) {
+	st := okStarter()
+	st.versionErr = errors.New("not on PATH")
+	av := newProfile(okRunner(`{"runsc":{}}`), st, nil).Probe(context.Background())
+	if !av.Available() || av.Facts["runsc_version"] != "unknown" {
+		t.Fatalf("%+v", av)
+	}
+}
+
+func TestProbeIsCachedForTheTTL(t *testing.T) {
+	now := time.Now()
+	st := okStarter()
+	p := newProfile(okRunner(`{"runsc":{}}`), st, func(o *Options) { o.Now = func() time.Time { return now } })
+	p.Probe(context.Background())
+	p.Probe(context.Background())
+	if st.starts != 1 {
+		t.Fatalf("probe started %d times inside the TTL", st.starts)
+	}
+	now = now.Add(2 * time.Minute)
+	p.Probe(context.Background())
+	if st.starts != 2 {
+		t.Fatalf("probe did not refresh after the TTL: %d", st.starts)
+	}
+}
+
+func TestPrepareAndWrapRefuseWithE678WhenUnavailable(t *testing.T) {
+	p := newProfile(okRunner(`{"runc":{}}`), okStarter(), nil)
+	err := p.Prepare(context.Background(), isolation.Attempt{ID: "a1"})
+	var ie *isolation.Error
+	if !errors.As(err, &ie) || ie.Code != "E678" || ie.Reason != isolation.ReasonRuntimeMissing {
+		t.Fatalf("prepare: %v", err)
+	}
+	spec, err := p.Wrap(exec.JobSpec{AttemptID: "a1"})
+	if !errors.As(err, &ie) || ie.Code != "E678" || spec.Plan != nil {
+		t.Fatalf("wrap must fail without a plan, never fall back to container: %v %+v", err, spec.Plan)
+	}
+}
+
+func TestRegistrySelectsSandboxedOnlyWhenRunscStarts(t *testing.T) {
+	reg := &isolation.Registry{}
+	reg.Register(newProfile(okRunner(`{"runc":{}}`), okStarter(), nil))
+	_, av, err := reg.Select(context.Background(), "sandboxed-container")
+	var ie *isolation.Error
+	if !errors.As(err, &ie) || ie.Code != "E678" || av.Available() {
+		t.Fatalf("a host without runsc must be unavailable: %+v %v", av, err)
+	}
+	reg = &isolation.Registry{}
+	reg.Register(newProfile(okRunner(`{"runsc":{}}`), okStarter(), nil))
+	p, av, err := reg.Select(context.Background(), "sandboxed-container")
+	if err != nil || p == nil || p.Level() != model.Isolation("sandboxed-container") || av.Level != "sandboxed-container" {
+		t.Fatalf("%v %+v %v", p, av, err)
+	}
+}
+
+func quoteAll(args []string) string {
+	q := make([]string, len(args))
+	for i, a := range args {
+		q[i] = `"` + a + `"`
+	}
+	return strings.Join(q, ",")
+}
