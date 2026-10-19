@@ -85,6 +85,9 @@ type RaceHook interface {
 // NotifyRequest describes a finished run: the status line the run printed (it
 // says whether a status was posted) and the notes collected so far.
 type NotifyRequest struct {
+	// Root is the run's repository root (Options.Root): the notify hook names the repository
+	// and the branch from it, not from the process directory (a served run is a clone elsewhere).
+	Root   string
 	Run    RunInfo
 	Status string
 	Notes  []string
