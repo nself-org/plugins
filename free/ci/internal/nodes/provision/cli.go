@@ -176,7 +176,7 @@ func RunProvision(args []string, d Deps) int {
 	if jsonOut {
 		data := ProvisionData{Host: ex.Label(), Instances: opts.Instances, Node: node, Steps: []stepData{}}
 		for _, st := range result.Steps {
-			data.Steps = append(data.Steps, stepData{Name: st.Name, Output: st.Output})
+			data.Steps = append(data.Steps, stepData(st))
 		}
 		if werr := output.WriteData(d.Out, "ci nodes provision", data, nil); werr != nil {
 			return output.ExitInfra
