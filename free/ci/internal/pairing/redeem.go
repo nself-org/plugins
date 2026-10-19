@@ -83,15 +83,7 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 		err = fail(ReasonExistingNode, "burst enrollment is for new nodes: %s is already registered", name)
 	}
 	if err != nil {
-		reason := pki.ReasonOf(err)
-		if reason == "" {
-			reason = ReasonOf(err)
-		}
-		_ = s.audit(ctx, "pairing.refuse", offer.ID, fmt.Sprintf("node=%s csr=%s reason=%s", name, csrFP, reason))
-		if reason == pki.ReasonNodeKeyChanged || reason == pki.ReasonRevoked || reason == ReasonExistingNode {
-			s.alert(Alert{Kind: "pairing.takeover_attempt", OfferID: offer.ID, NodeID: name})
-		}
-		return enroll.Response{}, err
+		return enroll.Response{}, s.refuseVet(ctx, offer.ID, name, csrFP, err)
 	}
 	dctx, cancel := context.WithDeadline(ctx, time.Unix(0, offer.ExpiresAt).Add(time.Minute))
 	defer cancel()
@@ -107,7 +99,7 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 		_ = s.audit(ctx, "pairing.deny", offer.ID, fmt.Sprintf("approver=%s node=%s csr=%s reason=%s", ap.Kind(), name, csrFP, cut(reason, 120)))
 		return enroll.Response{}, fail(ReasonDenied, "enrollment of %s was not approved", name)
 	}
-	issued, err := s.enrollNode(ctx, offer, name, req, dec.Trust, existing)
+	issued, err := s.enrollNode(ctx, offer, name, req, dec.Trust, existing, csrFP)
 	if err != nil {
 		return enroll.Response{}, err
 	}
@@ -125,6 +117,20 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 	s.mu.Unlock()
 	s.signal()
 	return enroll.Response{NodeID: name, Cert: issued.CertDER, Chain: issued.Chain, Root: issued.RootDER, AgentURL: s.cfg.AgentURL, NotAfter: issued.NotAfter.Unix(), ServerTime: s.cfg.CA.Now().Unix()}, nil
+}
+
+// refuseVet audits a refusal of the node (pairing.refuse) and, for a takeover signal, raises the alert;
+// it returns err unchanged. Both the check before the approver and the re-check after it end here.
+func (s *Service) refuseVet(ctx context.Context, offerID, name, csrFP string, err error) error {
+	reason := pki.ReasonOf(err)
+	if reason == "" {
+		reason = ReasonOf(err)
+	}
+	_ = s.audit(ctx, "pairing.refuse", offerID, fmt.Sprintf("node=%s csr=%s reason=%s", name, csrFP, reason))
+	if reason == pki.ReasonNodeKeyChanged || reason == pki.ReasonRevoked || reason == ReasonExistingNode {
+		s.alert(Alert{Kind: "pairing.takeover_attempt", OfferID: offerID, NodeID: name})
+	}
+	return err
 }
 
 func cut(s string, n int) string {
@@ -209,10 +215,14 @@ func (s *Service) vetExisting(ctx context.Context, name string, key []byte) (boo
 
 // enrollNode registers a new node (trust from the approver, key pinned) or keeps an existing one as it
 // is, then issues the certificate and binds it to the offer.
-func (s *Service) enrollNode(ctx context.Context, offer store.PKIOffer, name string, req enroll.Request, t TrustFields, existing bool) (*pki.Issued, error) {
-	if existing { // approval can take minutes: a rotation or revocation made meanwhile still wins
-		if _, err := s.vetExisting(ctx, name, req.NodeKey); err != nil {
-			return nil, err
+func (s *Service) enrollNode(ctx context.Context, offer store.PKIOffer, name string, req enroll.Request, t TrustFields, existing bool, csrFP string) (*pki.Issued, error) {
+	if existing { // approval can take minutes: a rotation, revocation or removal made meanwhile still wins
+		still, err := s.vetExisting(ctx, name, req.NodeKey)
+		if err == nil && !still {
+			err = fail(ReasonNodeGone, "node %s was removed while its enrollment was being approved", name)
+		}
+		if err != nil {
+			return nil, s.refuseVet(ctx, offer.ID, name, csrFP, err)
 		}
 	}
 	if !existing {
@@ -235,9 +245,9 @@ func (s *Service) enrollNode(ctx context.Context, offer store.PKIOffer, name str
 		return nil, fail(ReasonReused, "this code was presented twice; the certificate was revoked")
 	}
 	if existing {
-		if err = s.cfg.CA.PinNodeKey(ctx, name, req.NodeKey); err != nil { // finalizes a pending pin, only now that the offer is bound
+		if err = s.cfg.CA.RepinNodeKey(ctx, name, req.NodeKey); err != nil { // finalizes a pending pin, only now that the offer is bound
 			_, _ = s.cfg.Store.PKIDeny(ctx, s.cfg.Actor, name, "pin_failed", issued.Serial)
-			return nil, err
+			return nil, s.refuseVet(ctx, offer.ID, name, csrFP, err)
 		}
 	}
 	if s.cfg.AfterIssue != nil {

@@ -34,6 +34,20 @@ func (c *CA) PinNodeKey(ctx context.Context, nodeID string, pub ed25519.PublicKe
 	return c.st.PKINodeKeyPut(ctx, nodeID, NodeKeyID(pub), base64.StdEncoding.EncodeToString(pub))
 }
 
+// RepinNodeKey finalizes the pin of a re-pairing node after CheckPinnedNodeKey passed: a compare-and-set
+// against the key id that check vetted, so a rotation landing since then is refused, never undone.
+func (c *CA) RepinNodeKey(ctx context.Context, nodeID string, pub ed25519.PublicKey) error {
+	if len(pub) != ed25519.PublicKeySize {
+		return fail(ReasonBadCSR, "node key must be an Ed25519 public key")
+	}
+	id := NodeKeyID(pub)
+	swapped, err := c.st.PKINodeKeyPutIf(ctx, nodeID, id, id, base64.StdEncoding.EncodeToString(pub))
+	if err == nil && !swapped {
+		return fail(ReasonNodeKeyChanged, "node %s changed its node key pin during the enrollment", nodeID)
+	}
+	return err
+}
+
 // CheckNodeKey compares a hello's node key with the pin. With no pin it pins (an SSH node's first
 // hello). A pending pin (after rotate) accepts exactly the key id the operator named.
 func (c *CA) CheckNodeKey(ctx context.Context, nodeID string, pub ed25519.PublicKey) error {
