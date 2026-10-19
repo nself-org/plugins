@@ -281,7 +281,7 @@ func worstCost(timeout int64, c Cost) (int64, bool) {
 		units++
 	}
 	billed, of := Mul(units, inc)
-	charge, of2 := Mul(billed, c.RateMicro)
+	charge, of2 := MulDivUp(billed, c.RateMicro, max(c.DivMs, 1))
 	charge, of3 := Add(charge, c.MinimumChargeMicro)
 	charge, of4 := Add(charge, c.ExtrasMicro)
 	return charge, of || of2 || of3 || of4

@@ -77,6 +77,9 @@ type Cost struct {
 	Class              string
 	RateMicro          int64
 	BillingIncrementMs int64
+	// DivMs makes RateMicro a price per DivMs milliseconds (0 or 1: per millisecond), so a
+	// declared hourly or per-minute rate keeps its precision instead of rounding up per millisecond.
+	DivMs              int64 `json:",omitempty"`
 	MinimumChargeMicro int64
 	ExtrasMicro        int64
 	Confidence         string
