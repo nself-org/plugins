@@ -21,6 +21,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
@@ -82,11 +83,7 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 	}
 	realm := cas.CacheRealm(string(m.Namespace))
 	if !bad {
-		for _, b := range m.Blobs {
-			if err = e.unpackBlob(base, realm, b.SHA256, dirs[b.Path], opt); err != nil {
-				break
-			}
-		}
+		err = e.unpackBlobs(base, realm, m.Blobs, dirs, opt)
 	} else {
 		err = errors.New("the entry's blobs are not this spec's directories")
 	}
@@ -132,6 +129,29 @@ func (e *Engine) validate(ctx context.Context, realm cas.Realm, digest string) e
 	return e.Blobs.ReadVerified(realm, digest, func(r io.Reader) error {
 		return Validate(&ctxReader{ctx, r}, cacheLimits())
 	})
+}
+
+// unpackBlobs restores every blob of an entry at the same time (at most four):
+// each goes to its own directory, so a build cache and a module cache unpack
+// side by side (D-1008). The first blob's error is the one reported.
+func (e *Engine) unpackBlobs(base *os.Root, realm cas.Realm, blobs []entries.Blob, dirs Dirs, opt UnpackOptions) error {
+	errs := make([]error, len(blobs))
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, 4)
+	for i, b := range blobs {
+		slots <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-slots }()
+			errs[i] = e.unpackBlob(base, realm, b.SHA256, dirs[b.Path], opt)
+		})
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // unpackBlob restores one blob. The store verifies its digest while Unpack reads
