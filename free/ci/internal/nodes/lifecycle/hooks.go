@@ -20,7 +20,7 @@ import (
 // Point is where an AddHook runs.
 type Point string
 
-// Hook points: add (after the node is registered and probed), pair (P7-NODE-07's pairing), test.
+// Hook points: add (after the probe, before the node is registered), pair (P7-NODE-07's pairing), test.
 const (
 	PointAdd  Point = "add"
 	PointPair Point = "pair"
@@ -61,7 +61,9 @@ type FlagsFunc func(fs *flag.FlagSet)
 type RotateRequest struct {
 	NodeID string
 	Target remote.Target
-	Flags  *flag.FlagSet
+	// HostKey is the --host-key value ("" when none); Flags may be nil.
+	HostKey string
+	Flags   *flag.FlagSet
 }
 
 // RotateMode rotates one credential of a node (the built-in "host-key" mode needs --host-key).
@@ -182,4 +184,16 @@ func (e *extensions) closerList() []SessionCloser {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return append([]SessionCloser(nil), e.closers...)
+}
+
+// RunHooks runs the hooks registered at point in order and stops at the first error. P7-NODE-07's pairing
+// calls it with PointPair; Add and Test call it for their own points.
+func RunHooks(ctx context.Context, point Point, e HookEvent) error {
+	e.Point = point
+	for _, h := range ext.hooksAt(point) {
+		if err := h(ctx, e); err != nil {
+			return err
+		}
+	}
+	return nil
 }

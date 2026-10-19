@@ -29,7 +29,7 @@ func (p Platform) String() string { return p.OS + "/" + p.Arch }
 func ParsePlatform(uname string) (Platform, error) {
 	f := strings.Fields(uname)
 	if len(f) != 2 {
-		return Platform{}, usage("cannot read the node platform from %q", uname)
+		return Platform{}, usage("cannot read the node platform from the uname output")
 	}
 	var p Platform
 	switch strings.ToLower(f[0]) {
@@ -38,7 +38,7 @@ func ParsePlatform(uname string) (Platform, error) {
 	case "darwin":
 		p.OS = "darwin"
 	default:
-		return Platform{}, usage("node operating system %q is not supported", f[0])
+		return Platform{}, usage("the node operating system is not supported (linux and darwin only)")
 	}
 	switch strings.ToLower(f[1]) {
 	case "x86_64", "amd64":
@@ -46,7 +46,7 @@ func ParsePlatform(uname string) (Platform, error) {
 	case "aarch64", "arm64":
 		p.Arch = "arm64"
 	default:
-		return Platform{}, usage("node architecture %q is not supported", f[1])
+		return Platform{}, usage("the node architecture is not supported (amd64 and arm64 only)")
 	}
 	return p, nil
 }

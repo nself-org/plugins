@@ -13,6 +13,7 @@ import (
 	"context"
 	"flag"
 	"reflect"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
@@ -54,21 +55,19 @@ func (d *Deps) Test(ctx context.Context, id string, fs *flag.FlagSet) (TestResul
 		return res, err
 	}
 	res.Connected = true
-	ver, err := d.SSHVersion(ctx)
+	// A fresh probe, not the prober's 60 s cache: `nodes test` exists to see drift.
+	draft := n.Capability
+	draft.Verified = model.CapabilityVerified{By: "self", At: time.Now().UTC()}
+	fresh, err := d.probeDraft(ctx, draft)
 	if err != nil {
-		return res, newErr(CodeNoRoute, "ssh_version", "cannot determine the local OpenSSH version")
+		return res, err
 	}
-	after, err := d.NewProber(d.Registry, d.pinFile(), ver).Probe(ctx, id)
+	after, _, err := d.Registry.UpdateCapability(ctx, id, fresh, "probe")
 	if err != nil {
-		return res, transportErr("probe", "the capability probe failed", err)
+		return res, err
 	}
 	res.Node, res.Drift = after, diffCapability(n.Capability, after.Capability)
-	for _, h := range ext.hooksAt(PointTest) {
-		if err = h(ctx, HookEvent{Point: PointTest, NodeID: id, Project: d.Project, Flags: fs}); err != nil {
-			return res, err
-		}
-	}
-	return res, nil
+	return res, RunHooks(ctx, PointTest, HookEvent{NodeID: id, Project: d.Project, Flags: fs})
 }
 
 func same[T any](a, b model.Fact[T]) bool { return reflect.DeepEqual(a.Value, b.Value) }

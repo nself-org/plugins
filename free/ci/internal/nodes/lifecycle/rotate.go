@@ -35,6 +35,11 @@ func (d *Deps) Rotate(ctx context.Context, o RotateOptions) error {
 	if !ok {
 		return usage("unknown rotate mode %q", mode)
 	}
+	unlock, err := d.lockNode(o.NodeID)
+	if err != nil {
+		return newErr(CodeNoRoute, "lock", "cannot lock node %s: %s", o.NodeID, oneLine(err))
+	}
+	defer unlock()
 	n, err := d.live(ctx, o.NodeID)
 	if err != nil {
 		return err
@@ -43,12 +48,12 @@ func (d *Deps) Rotate(ctx context.Context, o RotateOptions) error {
 	if err != nil {
 		return err
 	}
-	return fn(ctx, d, RotateRequest{NodeID: o.NodeID, Target: remote.Target{Dest: spec.Dest()}, Flags: o.Flags})
+	return fn(ctx, d, RotateRequest{NodeID: o.NodeID, Target: remote.Target{Dest: spec.Dest()}, HostKey: o.HostKey, Flags: o.Flags})
 }
 
 func rotateHostKey(ctx context.Context, d *Deps, r RotateRequest) error {
-	want := ""
-	if f := r.Flags.Lookup("host-key"); f != nil {
+	want := r.HostKey
+	if f := lookupFlag(r.Flags, "host-key"); want == "" && f != nil {
 		want = f.Value.String()
 	}
 	if want == "" {
@@ -80,4 +85,11 @@ func rotateHostKey(ctx context.Context, d *Deps, r RotateRequest) error {
 		return newErr(CodeHostKey, ReasonKeyMismatch, "the new key is pinned for %s but its record could not be updated: %v", r.NodeID, err)
 	}
 	return nil
+}
+
+func lookupFlag(fs *flag.FlagSet, name string) *flag.Flag {
+	if fs == nil {
+		return nil
+	}
+	return fs.Lookup(name)
 }

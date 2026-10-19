@@ -41,6 +41,11 @@ func (d *Deps) Remove(ctx context.Context, id string) (RevokeReport, error) {
 
 func (d *Deps) revoke(ctx context.Context, id string, remove bool) (RevokeReport, error) {
 	rep := RevokeReport{NodeID: id, Remaining: []string{}, Note: authorizedKeysNote}
+	unlock, lerr := d.lockNode(id)
+	if lerr != nil {
+		return rep, newErr(CodeNoRoute, "lock", "cannot lock node %s: %s", id, oneLine(lerr))
+	}
+	defer unlock()
 	hooks := ext.revokerList()
 	var err error
 	if remove {

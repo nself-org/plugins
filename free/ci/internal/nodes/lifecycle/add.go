@@ -75,6 +75,11 @@ func (d *Deps) Add(ctx context.Context, o AddOptions) (res AddResult, err error)
 	if err != nil {
 		return res, err
 	}
+	unlock, err := d.lockNode(id)
+	if err != nil {
+		return res, newErr(CodeNoRoute, "lock", "cannot lock node %s: %s", id, oneLine(err))
+	}
+	defer unlock()
 	if _, gerr := d.Registry.Get(ctx, id); gerr == nil {
 		return res, usage("node %s is already registered; use `nodes test` or `nodes rotate`", id)
 	} else if CodeOf(gerr) != CodeNotFound {
@@ -145,10 +150,8 @@ func (d *Deps) addPinned(ctx context.Context, o AddOptions, spec remote.HostSpec
 	if err = applyTrust(&probed, o.Trust, now); err != nil {
 		return res, err
 	}
-	for _, h := range ext.hooksAt(PointAdd) {
-		if err = h(ctx, HookEvent{Point: PointAdd, NodeID: id, Project: d.Project, Flags: o.Flags}); err != nil {
-			return res, err
-		}
+	if err = RunHooks(ctx, PointAdd, HookEvent{NodeID: id, Project: d.Project, Flags: o.Flags}); err != nil {
+		return res, err
 	}
 	online := "online"
 	probed.Availability.State = model.Fact[string]{Value: &online, Source: "assigned", ObservedAt: now, Confidence: "known"}
@@ -164,8 +167,12 @@ func (d *Deps) addPinned(ctx context.Context, o AddOptions, spec remote.HostSpec
 	if err = d.Store.NodeAdd(ctx, store.NodeRecord{ID: id, Name: name, State: "online", Reason: "added", Capability: doc}, admin); err != nil {
 		return res, err
 	}
-	res.Node, err = d.Registry.Get(ctx, id)
-	return res, err
+	// The node is committed: a failed read-back must not roll the pin back (the node would be left
+	// registered with no pin), so it is not an error of the add.
+	if n, gerr := d.Registry.Get(ctx, id); gerr == nil {
+		res.Node = n
+	}
+	return res, nil
 }
 
 // probeDraft probes the draft in a throwaway registry and returns the probed capability.

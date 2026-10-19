@@ -5,6 +5,7 @@ import (
 	"debug/elf"
 	"flag"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -136,8 +137,7 @@ func TestTestReportsDriftAndNeedsAgent(t *testing.T) {
 		t.Fatalf("res=%+v err=%v", res, err)
 	}
 	k.mutate = func(c *model.Capability) {
-		one := 1.0
-		c.Resources.CPU.Value = &one
+		c.Resources.CPU = known(1.0, "probe", time.Now().UTC())
 	}
 	if res, err = k.d.Test(ctx, "ts1", nil); err != nil || len(res.Drift) == 0 {
 		t.Fatalf("drift not reported: %+v %v", res, err)

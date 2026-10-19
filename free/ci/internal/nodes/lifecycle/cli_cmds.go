@@ -9,6 +9,7 @@ package lifecycle
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"io"
 
@@ -106,8 +107,16 @@ func cmdRevoke(ctx context.Context, d *Deps, id string, remove bool) (result, er
 		fn = d.Remove
 	}
 	rep, err := fn(ctx, id)
-	res := result{rep, func(w io.Writer) { renderRevoke(w, rep) }}
-	return res, err
+	if err != nil {
+		// Only a partial revoke (committed, cleanup incomplete) has a report worth printing; a rollback
+		// or a refusal changed nothing, so it must not claim a revocation.
+		var le *Error
+		if errors.As(err, &le) && le.Reason == ReasonPartial {
+			return result{rep, func(w io.Writer) { renderRevoke(w, rep) }}, err
+		}
+		return result{}, err
+	}
+	return result{rep, func(w io.Writer) { renderRevoke(w, rep) }}, nil
 }
 
 func cmdRotate(ctx context.Context, d *Deps, id string, f flags, fs *flag.FlagSet) (result, error) {

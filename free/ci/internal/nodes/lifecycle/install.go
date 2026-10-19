@@ -40,11 +40,11 @@ func oneLine(err error) string {
 			b.WriteRune(r)
 		}
 	}
-	out := b.String()
+	out := []rune(b.String())
 	if len(out) > 160 {
 		out = out[:160]
 	}
-	return out
+	return string(out)
 }
 
 // keyLine returns "<type> <base64>" of a captured key.
@@ -70,11 +70,11 @@ func (d *Deps) confirmKeys(id, dest string, keys []remote.HostKey, want string) 
 	if !d.TTY {
 		return nil, newErr(CodeHostKey, ReasonNoTTY, "no terminal and no --host-key: nothing pinned for %s; found: %s; re-run with --host-key SHA256:<fingerprint>", dest, fingerprints(keys))
 	}
-	_, _ = fmt.Fprintf(d.Stdout, "Host key fingerprints of %s:\n", dest)
+	_, _ = fmt.Fprintf(d.Stderr, "Host key fingerprints of %s:\n", dest)
 	for _, k := range keys {
-		_, _ = fmt.Fprintf(d.Stdout, "  %s (%s)\n", k.Fingerprint, k.Type)
+		_, _ = fmt.Fprintf(d.Stderr, "  %s (%s)\n", k.Fingerprint, k.Type)
 	}
-	_, _ = fmt.Fprintf(d.Stdout, "Pin these keys for node %s? Type yes to continue: ", id)
+	_, _ = fmt.Fprintf(d.Stderr, "Pin these keys for node %s? Type yes to continue: ", id)
 	line, _ := bufio.NewReader(d.Stdin).ReadString('\n')
 	if strings.TrimSpace(line) != "yes" {
 		return nil, newErr(CodeHostKey, ReasonDeclined, "host key not confirmed: nothing pinned for %s", dest)
@@ -101,7 +101,12 @@ func (d *Deps) pin(id string, keys []remote.HostKey) error {
 		return newErr(CodeHostKey, ReasonKeyMismatch, "a host key is already pinned for %s but the node is not registered; delete the %s line of the pin file first", id, pinAlias(id))
 	}
 	for _, k := range keys {
-		if err := d.pins().Add(pinAlias(id), keyLine(k)); err != nil {
+		kl := keyLine(k)
+		if kl == "" {
+			_ = d.pins().Remove(pinAlias(id))
+			return newErr(CodeHostKey, ReasonKeyMismatch, "the captured host key of %s is malformed; nothing pinned", id)
+		}
+		if err := d.pins().Add(pinAlias(id), kl); err != nil {
 			_ = d.pins().Remove(pinAlias(id))
 			return newErr(CodeHostKey, ReasonKeyMismatch, "cannot pin the host key of %s", id)
 		}

@@ -12,8 +12,10 @@ package lifecycle
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
@@ -108,8 +110,13 @@ func Run(sub string, args []string, env Env) int {
 	var f flags
 	fs := newFlags(sub, &f, env.Err)
 	pos, err := parse(fs, args)
+	if errors.Is(err, flag.ErrHelp) {
+		return 0 // the flag set already printed the usage
+	}
 	if err != nil {
-		return 1
+		// A bad flag still honours --json: one error envelope, never an empty stdout.
+		f.json = f.json || slices.Contains(args, "--json") || slices.Contains(args, "-json")
+		return fail(env, f, "ci nodes "+sub, usage("%s", oneLine(err)))
 	}
 	ctx := context.Background()
 	wantPos := 1

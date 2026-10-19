@@ -104,6 +104,13 @@ func applyTrust(c *model.Capability, t TrustFlags, now time.Time) error {
 			}
 		}
 	}
+	if !separated {
+		for _, sc := range t.SecretClasses {
+			if sc != "none" {
+				return usage("node %s has no uid separation (D8): it may hold secret class none only, not %q", c.Identity.ID, sc)
+			}
+		}
+	}
 	classes := make([]model.TrustClass, 0, len(accepts))
 	for _, a := range accepts {
 		classes = append(classes, model.TrustClass(a))
