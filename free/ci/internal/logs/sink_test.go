@@ -147,6 +147,42 @@ func TestSinkWriteNeverWaitsForTheDisk(t *testing.T) {
 	}
 }
 
+// The writer's closing fsync is part of Close, so CloseTimeout bounds it too: the
+// flusher has nothing queued here and finishes at once, then the stalled disk holds
+// Writer.Close (D-1187).
+func TestSinkCloseBoundsTheWritersClosingFsync(t *testing.T) {
+	old := CloseTimeout
+	CloseTimeout = 200 * time.Millisecond
+	defer func() { CloseTimeout = old }()
+	s, _ := newTestSink(t, Options{})
+	s.w.mu.Lock() // the disk stalls inside the final fsync: Writer.Close waits on this lock
+	done := make(chan error, 1)
+	go func() { done <- s.Close() }()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), CodeStore) {
+			t.Fatalf("Close with a stalled final fsync must time out with E632, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		s.w.mu.Unlock()
+		t.Fatal("Close blocked on the writer's closing fsync past CloseTimeout")
+	}
+	if err := s.Close(); err == nil {
+		t.Fatal("a second Close must not turn the timeout into success")
+	}
+	s.w.mu.Unlock() // the disk comes back: the pending Writer.Close completes
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := s.w.Append(mk(1<<30, "x")); err != nil && strings.Contains(err.Error(), "closed") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the writer was never closed after the disk came back")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // The note that lines were dropped follows the queued lines (the gap is after them).
 func TestSinkDropNoteFollowsTheQueuedLines(t *testing.T) {
 	old := MaxPending
