@@ -9,10 +9,22 @@ import (
 	"testing"
 	"time"
 
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/hygiene"
 )
 
-func newHygieneHook() *hygieneHook { return &hygieneHook{byRun: map[string][]seenAttempt{}} }
+// noRuntime is a host with no container runtime installed, so the tests do not depend on the docker
+// state of the machine that runs them.
+type noRuntime struct{}
+
+func (noRuntime) List(context.Context, ciexec.ResourceKind, string) ([]ciexec.Labelled, error) {
+	return nil, hygiene.ErrNoRuntime
+}
+func (noRuntime) Remove(context.Context, ciexec.ResourceKind, string, string) error { return nil }
+
+func newHygieneHook() *hygieneHook {
+	return &hygieneHook{byRun: map[string][]seenAttempt{}, rt: noRuntime{}}
+}
 
 func TestHygieneHookIsRegistered(t *testing.T) {
 	var fin, start bool

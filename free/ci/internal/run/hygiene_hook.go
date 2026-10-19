@@ -40,6 +40,8 @@ type hygieneHook struct {
 	once     sync.Once
 	sweepErr error
 	drain    func(reason string)
+	// rt is the container runtime view; nil means the docker or podman CLI (tests inject a fake).
+	rt hygiene.Runtime
 }
 
 // seenAttempt is an attempt the run started and the home it runs in.
@@ -99,7 +101,7 @@ func (h *hygieneHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
 		}
 		sctx, cancel := context.WithTimeout(ctx, sweepTimeout) // follows the job's context: Ctrl-C stops it
 		defer cancel()
-		_, err := hygieneHost(home, hygiene.BatchRuntime(nil)).SweepOrphans(sctx, h.liveAttempts(home))
+		_, err := hygieneHost(home, hygiene.BatchRuntime(h.rt)).SweepOrphans(sctx, h.liveAttempts(home))
 		h.mu.Lock()
 		h.sweepErr = err
 		h.mu.Unlock()
@@ -183,7 +185,7 @@ func (h *hygieneHook) Finalize(ctx context.Context, r RunInfo) error {
 	hctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), hygieneTimeout)
 	defer cancel()
 	var problems, reasons []string
-	rt := hygiene.BatchRuntime(nil) // one listing per resource kind for the whole run
+	rt := hygiene.BatchRuntime(h.rt) // one listing per resource kind for the whole run
 	if sweepErr != nil {
 		problems = append(problems, "orphan sweep: "+sweepErr.Error())
 	}
