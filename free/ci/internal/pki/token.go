@@ -85,6 +85,9 @@ func (c *CA) Tokens(ctx context.Context) (*Tokens, error) {
 
 // Mint signs claims. Exp is set to the cap when zero and refused when beyond it or already past.
 func (t *Tokens) Mint(cl TokenClaims, jobTimeout time.Duration) (string, error) {
+	if t.priv == nil {
+		return "", fail(ReasonTokenUnknownKey, "no active token key (every key is retired)")
+	}
 	now := t.ca.now()
 	limit := now.Add(jobTimeout + TokenSlack).Unix()
 	if cl.Exp == 0 {

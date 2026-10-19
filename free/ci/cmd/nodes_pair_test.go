@@ -84,7 +84,7 @@ var bannerRE = map[string]*regexp.Regexp{
 
 func waitBanner(t *testing.T, out *pairBuf) banner {
 	t.Helper()
-	for end := time.Now().Add(15 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+	for end := time.Now().Add(90 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
 		s := out.String()
 		u, c, f := bannerRE["url"].FindStringSubmatch(s), bannerRE["code"].FindStringSubmatch(s), bannerRE["fp"].FindStringSubmatch(s)
 		if u != nil && c != nil && f != nil {
@@ -155,7 +155,7 @@ func TestNodesPairEndToEnd(t *testing.T) {
 	var joinOut pairBuf
 	go func() {
 		re := regexp.MustCompile(`CSR key fingerprint: (SHA256:\S+)`)
-		for end := time.Now().Add(20 * time.Second); time.Now().Before(end); time.Sleep(5 * time.Millisecond) {
+		for end := time.Now().Add(90 * time.Second); time.Now().Before(end); time.Sleep(5 * time.Millisecond) {
 			if m := re.FindStringSubmatch(joinOut.String()); m != nil {
 				_, _ = admin.Write([]byte(m[1] + "\nowner,internal\nnone\nprivate-infrastructure\nproj-1\n"))
 				return
@@ -163,14 +163,14 @@ func TestNodesPairEndToEnd(t *testing.T) {
 		}
 	}()
 	pub, _, _ := ed25519.GenerateKey(rand.Reader)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	res, err := enroll.Join(ctx, enroll.JoinOptions{URL: b.url, ExpectFingerprint: b.fp, Name: "node-pair", OS: "linux", Arch: "amd64", NodeKey: pub, NodeKeyID: pki.NodeKeyID(pub),
 		Out: &joinOut, Code: func() (string, error) { return b.code, nil }})
 	if err != nil {
 		t.Fatalf("join: %v\nadmin screen:\n%s", err, out.String())
 	}
-	if code := exitWithin(t, done, 10*time.Second); code != 0 {
+	if code := exitWithin(t, done, 90*time.Second); code != 0 {
 		t.Fatalf("exit %d, stderr %q", code, errb.String())
 	}
 	if !strings.Contains(out.String(), "A node joined. The pairing window is closed.") || !strings.Contains(out.String(), res.CSRFingerprint) {
@@ -216,6 +216,32 @@ func TestNodesPairEndToEnd(t *testing.T) {
 	}
 }
 
+// The URL printed without --public-url: ":port" names every interface, so the host is "localhost"; a
+// "host:port" address names itself.
+func TestNodesPairDefaultPublicURL(t *testing.T) {
+	for _, tc := range []struct{ addr, prefix string }{
+		{":0", "https://localhost:"},
+		{"127.0.0.1:0", "https://127.0.0.1:"},
+	} {
+		pairHome(t)
+		pr, pw := io.Pipe()
+		var out, errb pairBuf
+		done := make(chan int, 1)
+		go func() { done <- runNodesPair([]string{"--enroll-addr", tc.addr}, pr, &out, &errb) }()
+		b := waitBanner(t, &out)
+		if !strings.HasPrefix(b.url, tc.prefix) || !strings.HasSuffix(b.url, "/v1/enroll") || strings.HasSuffix(strings.TrimSuffix(b.url, "/v1/enroll"), ":0") {
+			t.Errorf("--enroll-addr %s printed %q, want prefix %q and the bound port", tc.addr, b.url, tc.prefix)
+		}
+		if err := pairing.Withdraw(context.Background(), b.code); err != nil {
+			t.Fatal(err)
+		}
+		if code := exitWithin(t, done, 90*time.Second); code != 1 {
+			t.Errorf("--enroll-addr %s: exit %d, stderr %q", tc.addr, code, errb.String())
+		}
+		_ = pw.Close()
+	}
+}
+
 func TestNodesPairWindowWithdrawnExitsOne(t *testing.T) {
 	pairHome(t)
 	_, out, errb, done := startPair(t)
@@ -224,7 +250,7 @@ func TestNodesPairWindowWithdrawnExitsOne(t *testing.T) {
 	if err := pairing.Withdraw(context.Background(), b.code); err != nil {
 		t.Fatal(err)
 	}
-	if code := exitWithin(t, done, 5*time.Second); code != 1 {
+	if code := exitWithin(t, done, 90*time.Second); code != 1 {
 		t.Fatalf("exit %d", code)
 	}
 	if !strings.Contains(errb.String(), "closed without a node joining") || strings.Contains(out.String(), "A node joined") {

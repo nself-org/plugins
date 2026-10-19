@@ -40,7 +40,7 @@ func (f *fakeRedeemer) Redeem(_ context.Context, q Request, src string) (Respons
 
 type codedErr struct{ code, reason, msg string }
 
-func (e codedErr) Error() string     { return e.code + ": " + e.msg }
+func (e codedErr) Error() string     { return e.code + ": " + e.msg + " (" + e.reason + ")" } // the format of pairing.Error and pki.Error
 func (e codedErr) ErrCode() string   { return e.code }
 func (e codedErr) ErrReason() string { return e.reason }
 
@@ -90,6 +90,9 @@ func TestEnrollHandlerMapsErrors(t *testing.T) {
 			var got ErrorBody
 			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || rec.Code != tc.status || got.Code != tc.body.Code || got.Reason != tc.body.Reason {
 				t.Fatalf("%d %s (%v)", rec.Code, rec.Body.String(), err)
+			}
+			if ce, ok := tc.err.(codedErr); ok && got.Message != ce.msg {
+				t.Fatalf("message %q repeats the code or the reason, want %q", got.Message, ce.msg)
 			}
 			for _, secret := range tc.hides {
 				if strings.Contains(rec.Body.String(), secret) {

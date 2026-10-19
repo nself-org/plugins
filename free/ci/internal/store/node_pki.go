@@ -112,7 +112,7 @@ func (s *Store) PKICertGet(ctx context.Context, serial string) (PKICert, error) 
 }
 
 func (s *Store) PKICertsOfNode(ctx context.Context, nodeID string) ([]PKICert, error) {
-	rows, err := s.readers.QueryContext(ctx, `SELECT `+certCols+` FROM pki_cert WHERE node_id=? ORDER BY issued_at,serial`, nodeID)
+	rows, err := s.readers.QueryContext(ctx, `SELECT `+certCols+` FROM pki_cert WHERE node_id=? AND kind='node' ORDER BY issued_at,serial`, nodeID)
 	return pkiCollect(rows, err, func(r *sql.Rows) (PKICert, error) { return scanCert(r) })
 }
 
@@ -241,23 +241,23 @@ func (s *Store) PKIOfferClaim(ctx context.Context, hash []byte, intentOnly bool)
 }
 
 // PKIOfferBind records the node and certificate of an approved redemption; tainted means the code was
-// presented again meanwhile (the caller revokes at once).
+// presented again or the offer withdrawn meanwhile (the caller revokes at once).
 func (s *Store) PKIOfferBind(ctx context.Context, id, nodeID, serial string) (tainted bool, err error) {
 	err = s.write(ctx, func(tx *sql.Tx) error {
 		if _, e := tx.ExecContext(ctx, `UPDATE pki_offer SET node_id=?,serial=? WHERE id=?`, nodeID, serial, id); e != nil {
 			return e
 		}
-		return tx.QueryRowContext(ctx, `SELECT tainted FROM pki_offer WHERE id=?`, id).Scan(&tainted)
+		return tx.QueryRowContext(ctx, `SELECT tainted OR withdrawn FROM pki_offer WHERE id=?`, id).Scan(&tainted)
 	})
 	return tainted, err
 }
 
-// PKIOfferWithdraw ends the offer with this code hash and returns it (E650 when unknown).
+// PKIOfferWithdraw ends the offer with this code hash and returns it (sql.ErrNoRows when unknown).
 func (s *Store) PKIOfferWithdraw(ctx context.Context, hash []byte) (o PKIOffer, err error) {
 	err = s.write(ctx, func(tx *sql.Tx) error {
 		var e error
 		if o, e = scanOffer(tx.QueryRowContext(ctx, `SELECT `+offerCols+` FROM pki_offer WHERE code_hash=?`, hash)); e != nil {
-			return coded("E650", "offer not found")
+			return e
 		}
 		_, e = tx.ExecContext(ctx, `UPDATE pki_offer SET withdrawn=1 WHERE id=?`, o.ID)
 		return e

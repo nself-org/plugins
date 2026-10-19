@@ -124,4 +124,82 @@ func TestPromptApprover(t *testing.T) {
 			t.Fatalf("%+v", again)
 		}
 	})
+
+	t.Run("an existing node keeps its trust: no trust questions, a notice, and the Decision carries no fields", func(t *testing.T) {
+		p, out := scripted(csrFP + "\nowner\nnone\nlocal-only\nproj\n")
+		req := promptReq("node-p")
+		req.Existing = true
+		d, err := p.Approve(ctx, req)
+		if err != nil || !d.Approve || len(d.Trust.Accepts) != 0 || len(d.Trust.Projects) != 0 || d.Trust.PrivacyZone != "" {
+			t.Fatalf("%+v %v", d, err)
+		}
+		if strings.Contains(out.String(), "Trust classes") || !strings.Contains(out.String(), "already registered") {
+			t.Fatalf("screen:\n%s", out.String())
+		}
+		wrong, _ := scripted("nope\n")
+		if d, err = wrong.Approve(ctx, req); err != nil || d.Approve {
+			t.Fatalf("an existing node still needs the exact fingerprint: %+v %v", d, err)
+		}
+	})
+
+	t.Run("cancelling ctx while waiting for the admin's line returns ctx.Err() promptly", func(t *testing.T) {
+		admin := newAdminScript(t)
+		cctx, cancel := context.WithCancel(ctx)
+		done := make(chan error, 1)
+		go func() { _, err := admin.ap.Approve(cctx, promptReq("node-p")); done <- err }()
+		eventually(t, 60*time.Second, "the prompt is shown", func() bool { return strings.Contains(admin.screen(), "Type the CSR key fingerprint") })
+		cancel()
+		select {
+		case err := <-done:
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("err %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("Approve did not return after cancel")
+		}
+	})
+
+	t.Run("a second Approve waits for its turn and gives up with its own ctx", func(t *testing.T) {
+		admin := newAdminScript(t)
+		first := make(chan error, 1)
+		go func() { _, err := admin.ap.Approve(ctx, promptReq("node-1")); first <- err }()
+		eventually(t, 60*time.Second, "the first prompt is shown", func() bool { return strings.Contains(admin.screen(), "node-1") })
+		cctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+		defer cancel()
+		start := time.Now()
+		_, err := admin.ap.Approve(cctx, promptReq("node-2"))
+		if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 3*time.Second {
+			t.Fatalf("err %v after %s", err, time.Since(start))
+		}
+		if strings.Contains(admin.screen(), "node-2") {
+			t.Fatal("the waiting redemption printed its question")
+		}
+		_ = admin.pw.Close() // end the first prompt
+		if err = <-first; err == nil {
+			t.Fatal("the first prompt should fail on end of input")
+		}
+	})
+
+	t.Run("control characters in name, os, arch, source and label never reach the terminal", func(t *testing.T) {
+		p, out := scripted("\n")
+		req := promptReq("evil\x1b[2J\rname")
+		req.OS, req.Arch, req.SourceAddr, req.Label = "li\x07nux", "ar\x1bch", "1.2.3.4\x00", "la\nbel\x1b]0;x\x07"
+		if _, err := p.Approve(ctx, req); err != nil {
+			t.Fatal(err)
+		}
+		for _, b := range []byte(out.String()) {
+			if b < 0x20 && b != '\n' || b == 0x7f {
+				t.Fatalf("control byte %#x in the prompt:\n%q", b, out.String())
+			}
+		}
+		if !strings.Contains(out.String(), "evil [2J name") {
+			t.Fatalf("name not shown sanitized: %q", out.String())
+		}
+		long := promptReq(strings.Repeat("n", 500))
+		pl, outl := scripted("\n")
+		_, _ = pl.Approve(ctx, long)
+		if strings.Contains(outl.String(), strings.Repeat("n", 100)) {
+			t.Fatal("a 500 character name was printed in full")
+		}
+	})
 }

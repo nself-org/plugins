@@ -6,7 +6,8 @@ package pki
 // Inputs:  the store; Run(ctx, every) drives refresh; Middleware wraps an http.Handler.
 // Outputs: Check (direct store read, used on every handshake), Denied (memory, used per request),
 //          Middleware (RequestGuard).
-// Constraints: a handshake never trusts the cache (Check reads the store); a request does, so the
+// Constraints: RequestGuard fails closed (503) when the deny list was never read or the last successful
+//          refresh is older than StaleAfter; a handshake never trusts the cache (Check reads the store); a request does, so the
 //          refresh interval bounds the lag (callers use <= 250 ms against the 1 s promise); a watcher
 //          is registered BEFORE the deny check, so a revoke between check and registration still
 //          cancels the request.
@@ -27,13 +28,15 @@ type Guard struct {
 	mu       sync.Mutex
 	denied   map[string]bool
 	after    int64
+	okAt     time.Time
+	now      func() time.Time // injected by tests; time.Now otherwise
 	watchers map[string]map[int]context.CancelFunc
 	next     int
 }
 
 // NewGuard returns a guard; call Refresh or Run before serving.
 func NewGuard(st *store.Store) *Guard {
-	return &Guard{st: st, denied: map[string]bool{}, watchers: map[string]map[int]context.CancelFunc{}}
+	return &Guard{st: st, now: time.Now, denied: map[string]bool{}, watchers: map[string]map[int]context.CancelFunc{}}
 }
 
 // Refresh reads deny-list rows added since the last call and cancels the live requests of those serials.
@@ -47,6 +50,7 @@ func (g *Guard) Refresh(ctx context.Context) error {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	g.okAt = g.now()
 	for _, r := range rows {
 		g.denied[r.Serial] = true
 		g.after = max(g.after, r.RowID)
@@ -55,6 +59,16 @@ func (g *Guard) Refresh(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// StaleAfter is how long the in-memory deny list may go without a successful refresh before
+// RequestGuard refuses requests (fail closed: a store that cannot be read must not look like "nothing denied").
+const StaleAfter = 10 * time.Second
+
+func (g *Guard) fresh() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return !g.okAt.IsZero() && g.now().Sub(g.okAt) <= StaleAfter
 }
 
 // Run refreshes every interval until ctx ends.
@@ -121,6 +135,10 @@ func (g *Guard) watch(serial string, cancel context.CancelFunc) (stop func()) {
 func (g *Guard) Middleware(kind Kind) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !g.fresh() {
+				http.Error(w, "E660: revocation list unavailable", http.StatusServiceUnavailable)
+				return
+			}
 			if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 				http.Error(w, "E660: no client certificate", http.StatusUnauthorized)
 				return

@@ -248,3 +248,56 @@ func TestEnrollCredentialSaveFailures(t *testing.T) {
 		t.Fatal("saved under a loose KEK")
 	}
 }
+
+// A save that fails part way must never leave something LoadCredential reads as an enrollment:
+// enrollment.json is written last.
+func TestEnrollCredentialSaveIsAllOrNothingAtTheEnd(t *testing.T) {
+	ca := newCA(t, nil)
+	res := joined(t, ca, "node-o", 0)
+	for _, tc := range []struct {
+		name    string
+		blocked string // made a non-empty directory, so the atomic rename onto it fails
+		written []string
+	}{
+		{"the third file fails", "node.crt", []string{"root.pem", "client.key.sealed"}},
+		{"the second file fails", "client.key.sealed", []string{"root.pem"}},
+		{"the first file fails", "root.pem", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			state := filepath.Join(t.TempDir(), "agent")
+			if err := os.MkdirAll(filepath.Join(state, "pki", tc.blocked, "x"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := SaveCredential(state, res, time.Now()); err == nil {
+				t.Fatal("the save did not fail")
+			}
+			if _, err := LoadCredential(state); !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("a failed save left a readable enrollment: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(state, "pki", "enrollment.json")); !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("enrollment.json exists after a failed save: %v", err)
+			}
+			for _, name := range tc.written {
+				if _, err := os.Stat(filepath.Join(state, "pki", name)); err != nil {
+					t.Errorf("%s was not written before the failure (the order is root.pem, client.key.sealed, node.crt, enrollment.json): %v", name, err)
+				}
+			}
+		})
+	}
+	// Failing on the last file leaves no loadable credential either.
+	state := filepath.Join(t.TempDir(), "agent")
+	if err := os.MkdirAll(filepath.Join(state, "pki", "enrollment.json", "x"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveCredential(state, res, time.Now()); err == nil {
+		t.Fatal("the save did not fail")
+	}
+	if c, err := LoadCredential(state); err == nil {
+		t.Fatalf("a credential loaded after the last file failed: %+v", c.Enrollment)
+	}
+	for _, name := range []string{"root.pem", "client.key.sealed", "node.crt"} {
+		if _, err := os.Stat(filepath.Join(state, "pki", name)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}

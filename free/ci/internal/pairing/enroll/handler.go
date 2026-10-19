@@ -15,6 +15,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -72,7 +73,7 @@ func Handler(r Redeemer, o HandlerOptions) http.Handler {
 			resp, err := r.Redeem(req.Context(), body, host)
 			if err != nil {
 				code, reason, status := classify(err)
-				msg := err.Error()
+				msg := strings.TrimSuffix(strings.TrimPrefix(err.Error(), code+": "), " ("+reason+")")
 				if reason == "internal" { // a plain error may carry store or file details: never send them to a stranger
 					msg = "the coordinator could not process the request"
 				}

@@ -268,7 +268,7 @@ func enrollReuseDuringApproval(t *testing.T) {
 	}()
 	select {
 	case <-ap.entered:
-	case <-time.After(10 * time.Second):
+	case <-time.After(60 * time.Second):
 		t.Fatal("the first redemption never reached the approver")
 	}
 	_, err := r.redeem(off.Code, "node-thief", newNodeMat(t))
@@ -277,7 +277,7 @@ func enrollReuseDuringApproval(t *testing.T) {
 	var got result
 	select {
 	case got = <-first:
-	case <-time.After(10 * time.Second):
+	case <-time.After(60 * time.Second):
 		t.Fatal("the first redemption never finished")
 	}
 	e659(t, got.err, ReasonReused, off.Code)

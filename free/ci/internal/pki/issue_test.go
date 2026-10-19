@@ -689,3 +689,46 @@ func TestGeneratedKeysAreFresh(t *testing.T) {
 		t.Fatal("user keys or serials repeat")
 	}
 }
+
+// A user certificate whose id equals a node id is not the node's certificate: revoking the node (through
+// CA.Revoke or the lifecycle hook) must not deny the user.
+func TestRevokeLeavesUserCertificateOfTheSameIDAlone(t *testing.T) {
+	ctx := context.Background()
+	t.Run("CA.Revoke", func(t *testing.T) {
+		r := newRig(t)
+		nodeCert := r.issueNode("shared", 0)
+		_, user, _ := r.issueUser("shared", 0)
+		added, err := r.ca.Revoke(ctx, "cli:admin", "shared", "x")
+		if err != nil || added != 1 {
+			t.Fatalf("added %d %v", added, err)
+		}
+		if d, _ := r.st.PKIIsDenied(ctx, nodeCert.Serial); !d {
+			t.Fatal("node certificate not denied")
+		}
+		if d, _ := r.st.PKIIsDenied(ctx, serialHex(user)); d {
+			t.Fatal("the user certificate was denied by a node revoke")
+		}
+	})
+	t.Run("RevokeHook through NodeRevoke", func(t *testing.T) {
+		r := newRig(t)
+		r.addNode("shared")
+		nodeCert := r.issueNode("shared", 0)
+		_, user, _ := r.issueUser("shared", 0)
+		if _, err := r.st.NodeRevoke(ctx, "shared", "cli:admin", []store.RevokeHook{RevokeHook(r.clk.now)}); err != nil {
+			t.Fatal(err)
+		}
+		if d, _ := r.st.PKIIsDenied(ctx, nodeCert.Serial); !d {
+			t.Fatal("node certificate not denied")
+		}
+		if d, _ := r.st.PKIIsDenied(ctx, serialHex(user)); d {
+			t.Fatal("the user certificate was denied by the lifecycle hook")
+		}
+		if r.count(`SELECT count(*) FROM pki_denied`) != 1 {
+			t.Fatal("deny list size")
+		}
+		// the user's own certificate still passes Check
+		if err := NewGuard(r.st).Check(ctx, user); err != nil {
+			t.Fatalf("user check: %v", err)
+		}
+	})
+}

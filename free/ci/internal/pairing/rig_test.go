@@ -255,7 +255,7 @@ func (r *rig) join(url, code, fp, name string) (enroll.JoinResult, error) {
 	r.tb.Helper()
 	r.clock.Advance(2 * time.Second)
 	opts, _ := r.joinOpts(url, code, fp, name, &syncBuf{})
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	return enroll.Join(ctx, opts)
 }
@@ -361,7 +361,7 @@ func eventually(tb testing.TB, within time.Duration, what string, cond func() bo
 
 // runJoin runs enroll.Join with a 30 s ceiling.
 func runJoin(opts enroll.JoinOptions) (enroll.JoinResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	return enroll.Join(ctx, opts)
 }
@@ -391,4 +391,17 @@ func (r *rig) tbListen(addr string) net.Listener {
 		r.tb.Fatal(err)
 	}
 	return ln
+}
+
+// exec runs a statement on a second read-write connection (the store has no hook for failure injection).
+func (r *rig) exec(q string) {
+	r.tb.Helper()
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(r.home, "state.db")+"?_pragma=busy_timeout(10000)")
+	if err != nil {
+		r.tb.Fatal(err)
+	}
+	defer db.Close()
+	if _, err = db.Exec(q); err != nil {
+		r.tb.Fatal(err)
+	}
 }

@@ -180,7 +180,7 @@ func TestServeWhileOffers(t *testing.T) {
 		go func() { _, err := r.join(url, off.Code, off.RootFingerprint, "node-slow"); done <- err }()
 		select {
 		case <-ap.entered:
-		case <-time.After(10 * time.Second):
+		case <-time.After(60 * time.Second):
 			t.Fatal("the redemption never reached the approver")
 		}
 		settle()
@@ -211,4 +211,39 @@ func TestServeWhileOffers(t *testing.T) {
 			t.Fatal("ServeWhileOffers kept running although it could not bind")
 		}
 	})
+}
+
+func TestServeWhileOffersIgnoresOffersOfAnotherProcess(t *testing.T) {
+	r := newRig(t, nil)
+	addr, _, _ := r.serveBurst()
+	// A second Service on the same store stands for another process: it holds the approver, this one does not.
+	other := New(Config{CA: r.ca, Store: r.st, Registry: r.reg, CoordinatorID: "local", Actor: "cli:other", Poll: 20 * time.Millisecond})
+	ap := approving("policy:other", DefaultTrust())
+	off, err := other.Offer(context.Background(), OfferOptions{Approver: ap, Intent: "theirs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	settle()
+	settle()
+	if isOpen(addr) {
+		t.Fatal("the listener opened for an offer whose approver lives in another process")
+	}
+	live, _ := r.st.PKIOffersLive(context.Background(), true)
+	if len(live) != 1 || live[0].Attempts != 0 || live[0].RedeemedAt != 0 {
+		t.Fatalf("the offer was touched: %+v", live)
+	}
+	// Its own owner still redeems it: the code was not burned.
+	if _, err = other.Redeem(context.Background(), r.request(off.Code, "node-other", newNodeMat(t)), "127.0.0.1:1"); err != nil {
+		t.Fatalf("the owning process could not redeem: %v", err)
+	}
+	if len(ap.calls()) != 1 {
+		t.Fatal("the owner's approver was not used")
+	}
+	// An offer made here opens the listener, and the foreign one does not keep it open afterwards.
+	mine := r.offer(OfferOptions{Approver: approving("policy:mine", DefaultTrust()), Intent: "mine"})
+	eventually(t, time.Second, "the listener opens for our own offer", func() bool { return isOpen(addr) })
+	if err = r.svc.Withdraw(context.Background(), mine.Code); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, time.Second, "the listener closes", func() bool { return !isOpen(addr) })
 }

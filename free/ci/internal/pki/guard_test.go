@@ -178,6 +178,9 @@ func TestGuardMiddlewareUnits(t *testing.T) {
 	n := r.issueNode("n1", 0)
 	_, u, _ := r.issueUser("alice", 0)
 	g := NewGuard(r.st)
+	if err := g.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	var served atomic.Int32
 	var ctxSeen context.Context
 	h := g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, rq *http.Request) {
@@ -250,6 +253,9 @@ func TestRequestGuardCancelsLiveRequestWithinOneSecond(t *testing.T) {
 	r.addNode("n1")
 	n := r.issueNode("n1", 0)
 	g := NewGuard(r.st)
+	if err := g.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
 	go g.Run(ctx, 100*time.Millisecond)
 
 	started := make(chan struct{}, 4)
@@ -329,6 +335,9 @@ func TestRequestGuardRefusesNextRequestOnExistingConnection(t *testing.T) {
 	r.addNode("n1")
 	n := r.issueNode("n1", 0)
 	g := NewGuard(r.st)
+	if err := g.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
 	go g.Run(ctx, 50*time.Millisecond)
 	srvCfg, _ := r.ca.TLSServerConfig(KindNode, r.serverCert(nil, loopback, 0), g)
 	srv := httptest.NewUnstartedServer(g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "pong") })))
@@ -369,4 +378,134 @@ func TestRequestGuardRefusesNextRequestOnExistingConnection(t *testing.T) {
 
 func wrapCount(f func(tls.ConnectionState) error, n *atomic.Int32) func(tls.ConnectionState) error {
 	return func(cs tls.ConnectionState) error { n.Add(1); return f(cs) }
+}
+
+// TestGuardMiddlewareFailsClosedWhenStale: a guard that never refreshed, or whose last successful refresh
+// is older than StaleAfter, refuses every request with 503 (a store that cannot be read must not look
+// like an empty deny list).
+func TestGuardMiddlewareFailsClosedWhenStale(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	r.addNode("n1")
+	n := r.issueNode("n1", 0)
+	g := NewGuard(r.st)
+	var served atomic.Int32
+	h := g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { served.Add(1) }))
+	do := func(state *tls.ConnectionState) *httptest.ResponseRecorder {
+		rq := httptest.NewRequest("GET", "/x", nil)
+		rq.TLS = state
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, rq)
+		return rec
+	}
+	good := &tls.ConnectionState{PeerCertificates: []*x509.Certificate{n.Cert}}
+	const body = "E660: revocation list unavailable\n"
+	expect503 := func(label string, state *tls.ConnectionState) {
+		t.Helper()
+		if rec := do(state); rec.Code != 503 || rec.Body.String() != body {
+			t.Fatalf("%s: %d %q", label, rec.Code, rec.Body.String())
+		}
+	}
+	if StaleAfter != 10*time.Second {
+		t.Fatalf("StaleAfter %v", StaleAfter)
+	}
+	// never refreshed: 503 even for a valid certificate and before the TLS checks
+	expect503("never refreshed", good)
+	expect503("never refreshed, no TLS", nil)
+	// a failed refresh does not make the guard fresh
+	closed := newRig(t)
+	_ = closed.st.Close()
+	cg := NewGuard(closed.st)
+	if err := cg.Refresh(ctx); err == nil || cg.fresh() {
+		t.Fatalf("failed refresh: err=%v fresh=%v", err, cg.fresh())
+	}
+	// a successful refresh makes it fresh
+	before := time.Now()
+	if err := g.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if g.okAt.Before(before) || time.Since(g.okAt) > time.Second {
+		t.Fatalf("okAt not recorded: %v", g.okAt)
+	}
+	if rec := do(good); rec.Code != 200 || served.Load() != 1 {
+		t.Fatalf("fresh: %d", rec.Code)
+	}
+	// aged just inside the window: still served
+	g.okAt = time.Now().Add(-StaleAfter + 2*time.Second)
+	if rec := do(good); rec.Code != 200 {
+		t.Fatalf("9 s old: %d", rec.Code)
+	}
+	// aged past the window: 503 (white-box: the injected clock is not the guard's clock)
+	g.okAt = time.Now().Add(-StaleAfter - time.Second)
+	expect503("stale", good)
+	if served.Load() != 2 {
+		t.Fatalf("a stale guard served a request: %d", served.Load())
+	}
+	// a failed refresh keeps the old timestamp, so a store outage ends in 503
+	stale := g.okAt
+	_ = r.st.Close()
+	if err := g.Refresh(ctx); err == nil || !g.okAt.Equal(stale) {
+		t.Fatalf("failed refresh moved okAt: %v", err)
+	}
+	// and a refresh that succeeds brings it back
+	g.okAt = time.Time{}
+	expect503("zero okAt", good)
+}
+
+// TestResumedStateIsStillChecked: VerifyConnection runs on every handshake, resumed or not, so a
+// ConnectionState with DidResume set and a denied leaf is rejected.
+func TestResumedStateIsStillChecked(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	r.addNode("n1")
+	n := r.issueNode("n1", 0)
+	cfg, err := r.ca.TLSServerConfig(KindNode, r.serverCert(nil, loopback, 0), NewGuard(r.st))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs := tls.ConnectionState{DidResume: true, PeerCertificates: []*x509.Certificate{n.Cert}, VerifiedChains: [][]*x509.Certificate{{n.Cert, r.ca.inter[KindNode].cert}}}
+	if err = cfg.VerifyConnection(cs); err != nil {
+		t.Fatalf("resumed, not denied: %v", err)
+	}
+	if _, err = r.st.PKIDeny(ctx, "cli:admin", "n1", "x", n.Serial); err != nil {
+		t.Fatal(err)
+	}
+	wantReason(t, cfg.VerifyConnection(cs), ReasonRevoked)
+}
+
+// TestGuardStaleBoundary pins the exact edge with an injected guard clock: an age of StaleAfter is
+// still served, one nanosecond more is refused.
+func TestGuardStaleBoundary(t *testing.T) {
+	r := newRig(t)
+	r.addNode("n1")
+	n := r.issueNode("n1", 0)
+	g := NewGuard(r.st)
+	if g.now == nil {
+		t.Fatal("NewGuard left the clock unset")
+	}
+	clk := &testClock{t: epoch}
+	g.now = clk.now
+	if err := g.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !g.okAt.Equal(epoch) {
+		t.Fatalf("Refresh stamped %v, want the guard clock %v", g.okAt, epoch)
+	}
+	h := g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	code := func() int {
+		rq := httptest.NewRequest("GET", "/x", nil)
+		rq.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{n.Cert}}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, rq)
+		return rec.Code
+	}
+	for _, c := range []struct {
+		age  time.Duration
+		want int
+	}{{0, 200}, {StaleAfter - time.Nanosecond, 200}, {StaleAfter, 200}, {StaleAfter + time.Nanosecond, 503}, {time.Hour, 503}} {
+		clk.set(epoch.Add(c.age))
+		if got := code(); got != c.want || g.fresh() != (c.want == 200) {
+			t.Errorf("age %v: status %d, want %d", c.age, got, c.want)
+		}
+	}
 }

@@ -41,14 +41,20 @@ func (r intentRedeemer) Redeem(ctx context.Context, q enroll.Request, src string
 	return r.RedeemIntent(ctx, q, src)
 }
 
-// liveIntents counts the offers that keep the burst listener open: live ones bound to an intent, plus
+// liveIntents counts the offers that keep the burst listener open: live ones bound to an intent that this process can approve, plus
 // every redemption still in flight (an approval may take a while and must still get its answer).
 func (s *Service) liveIntents(ctx context.Context) int {
 	offers, err := s.cfg.Store.PKIOffersLive(ctx, true)
 	if err != nil {
 		return 0
 	}
-	return len(offers) + s.busy()
+	n := 0
+	for _, o := range offers {
+		if s.approverFor(o.ID) != nil { // an offer made by another process has no approver here: its code must not be burned by this listener
+			n++
+		}
+	}
+	return n + s.busy()
 }
 
 func (s *Service) busy() int {

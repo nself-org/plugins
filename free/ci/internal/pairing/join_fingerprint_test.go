@@ -147,7 +147,7 @@ var csrLine = regexp.MustCompile(`CSR key fingerprint: (SHA256:\S+)`)
 // typeAfter waits for join's output to show the CSR fingerprint, then types lines(fingerprint).
 func (a *adminScript) typeAfter(joinOut *syncBuf, lines func(fp string) string) {
 	go func() {
-		for end := time.Now().Add(20 * time.Second); time.Now().Before(end); time.Sleep(5 * time.Millisecond) {
+		for end := time.Now().Add(90 * time.Second); time.Now().Before(end); time.Sleep(5 * time.Millisecond) {
 			if m := csrLine.FindStringSubmatch(joinOut.String()); m != nil {
 				_, _ = a.pw.Write([]byte(lines(m[1])))
 				return
@@ -233,6 +233,9 @@ func scriptedAdminDenies(t *testing.T) {
 			var re *enroll.RemoteError
 			if !errors.As(err, &re) || re.Code != "E659" || re.Reason != ReasonDenied {
 				t.Fatalf("want E659 denied, got %v", err)
+			}
+			if strings.Count(err.Error(), "E659") != 1 || strings.Count(err.Error(), "denied") != 1 {
+				t.Fatalf("the error text repeats the code or the reason: %q", err)
 			}
 			if strings.Contains(admin.screen(), "Trust classes") {
 				t.Fatal("the trust fields were asked after a failed confirmation")

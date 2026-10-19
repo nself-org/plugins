@@ -288,7 +288,7 @@ func (c *CA) Revoke(ctx context.Context, actor, nodeID, reason string) (int64, e
 // of the node to the deny list, so `nodes revoke` and `nodes remove` cut the node off atomically.
 func RevokeHook(now func() time.Time) store.RevokeHook {
 	return func(ctx context.Context, tx *store.RevokeTx, nodeID string) error {
-		_, err := tx.Exec(`INSERT OR IGNORE INTO pki_denied(serial,node_id,reason,denied_at) SELECT serial,node_id,'node_revoked',? FROM pki_cert WHERE node_id=?`, now().UnixNano(), nodeID)
+		_, err := tx.Exec(`INSERT OR IGNORE INTO pki_denied(serial,node_id,reason,denied_at) SELECT serial,node_id,'node_revoked',? FROM pki_cert WHERE node_id=? AND kind='node'`, now().UnixNano(), nodeID)
 		return err
 	}
 }

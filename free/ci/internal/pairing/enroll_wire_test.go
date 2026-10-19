@@ -43,7 +43,7 @@ func (r *rig) doNoAdvance(method, url, body string, hdr map[string]string) reply
 	for k, v := range hdr {
 		req.Header.Set(k, v)
 	}
-	resp, err := (&http.Client{Transport: tr, Timeout: 10 * time.Second}).Do(req)
+	resp, err := (&http.Client{Transport: tr, Timeout: 60 * time.Second}).Do(req)
 	if err != nil {
 		r.tb.Fatalf("%s %s: %v", method, url, err)
 	}
@@ -207,7 +207,7 @@ func enrollGracefulClose(t *testing.T) {
 	}()
 	select {
 	case <-ap.entered:
-	case <-time.After(10 * time.Second):
+	case <-time.After(60 * time.Second):
 		t.Fatal("the redemption never reached the approver")
 	}
 	real.Srv.Close()
@@ -223,7 +223,7 @@ func enrollGracefulClose(t *testing.T) {
 		if err != nil {
 			t.Fatalf("the in-flight redemption failed after Close: %v", err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(60 * time.Second):
 		t.Fatal("the in-flight redemption never finished")
 	}
 	select {

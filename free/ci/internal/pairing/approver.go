@@ -20,7 +20,10 @@ type ApprovalRequest struct {
 	// CSRFingerprint is SHA256:<base64> of the CSR key SPKI; NodeKeyID the Ed25519 key id.
 	CSRFingerprint, NodeKeyID string
 	OS, Arch, SourceAddr      string
-	CertTTL                   time.Duration
+	// Existing is true when the node name is already registered: the node key matched its pin and the
+	// registered trust fields are kept (the Decision's trust fields are not applied).
+	Existing bool
+	CertTTL  time.Duration
 }
 
 // TrustFields are the coordinator-assigned trust fields of the new node (ADR 0025 §2).

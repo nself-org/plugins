@@ -145,7 +145,8 @@ func TestCheckNodeKey(t *testing.T) {
 func TestRotateNodeKey(t *testing.T) {
 	ctx := context.Background()
 	r := newRig(t)
-	for _, id := range []string{"", "abc", strings.Repeat("a", 15), strings.Repeat("a", 17), strings.Repeat("a", 64)} {
+	for _, id := range []string{"", "abc", strings.Repeat("a", 15), strings.Repeat("a", 17), strings.Repeat("a", 64),
+		"0123456789ABCDEF", "0123456789abcdeF", "gggggggggggggggg", "0123456789abcde ", "0123456789abcdef\n", "\n0123456789abcdef", "0123456789abcdé"} {
 		wantReason(t, r.ca.RotateNodeKey(ctx, "cli:admin", "n1", id), ReasonNodeKeyChanged)
 	}
 	if len(r.audit("pki.node_key.rotate")) != 0 {
@@ -160,5 +161,44 @@ func TestRotateNodeKey(t *testing.T) {
 	}
 	if kid, p, ok, _ := r.st.PKINodeKeyGet(ctx, "n1"); !ok || kid != id || p != "" {
 		t.Fatalf("pin %q %q %v", kid, p, ok)
+	}
+}
+
+func TestCheckPinnedNodeKeyIsStrict(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	pub, other := edPub(t), edPub(t)
+	// no pin: refused, and the refusal does not pin
+	err := r.ca.CheckPinnedNodeKey(ctx, "n1", pub)
+	wantReason(t, err, ReasonNodeKeyChanged)
+	if !strings.Contains(err.Error(), "no pinned node key") {
+		t.Fatalf("text %q", err)
+	}
+	if _, _, ok, _ := r.st.PKINodeKeyGet(ctx, "n1"); ok {
+		t.Fatal("CheckPinnedNodeKey pinned a key")
+	}
+	// pinned: same behaviour as CheckNodeKey
+	if err = r.ca.PinNodeKey(ctx, "n1", pub); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.ca.CheckPinnedNodeKey(ctx, "n1", pub); err != nil {
+		t.Fatal(err)
+	}
+	wantReason(t, r.ca.CheckPinnedNodeKey(ctx, "n1", other), ReasonNodeKeyChanged)
+	// pending pin after rotate: the named key completes it, others are refused
+	if err = r.ca.RotateNodeKey(ctx, "cli:admin", "n2", NodeKeyID(other)); err != nil {
+		t.Fatal(err)
+	}
+	wantReason(t, r.ca.CheckPinnedNodeKey(ctx, "n2", pub), ReasonNodeKeyChanged)
+	if err = r.ca.CheckPinnedNodeKey(ctx, "n2", other); err != nil {
+		t.Fatal(err)
+	}
+	if _, p, _, _ := r.st.PKINodeKeyGet(ctx, "n2"); p != base64.StdEncoding.EncodeToString(other) {
+		t.Fatal("pending pin not completed")
+	}
+	// a store error is returned as is, not as node_key_changed
+	_ = r.st.Close()
+	if err = r.ca.CheckPinnedNodeKey(ctx, "n1", pub); err == nil || ReasonOf(err) != "" {
+		t.Fatalf("closed store: %v", err)
 	}
 }

@@ -300,3 +300,33 @@ func TestTokensKeyLoading(t *testing.T) {
 		}
 	})
 }
+
+func TestMintWithoutAnActiveKey(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	first := newTokens(t, r)
+	old, err := first.Mint(claims(0), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.exec(`UPDATE pki_token_key SET retired_at=1`)
+	tk, err := r.ca.Tokens(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tk.active != "" || tk.priv != nil {
+		t.Fatal("a retired key became active")
+	}
+	tok, err := tk.Mint(claims(0), time.Hour)
+	wantReason(t, err, ReasonTokenUnknownKey)
+	if tok != "" {
+		t.Fatal("a token was minted without an active key")
+	}
+	// tokens of the retired key still verify
+	if _, err = tk.Verify(old); err != nil {
+		t.Fatalf("token of a retired key: %v", err)
+	}
+	// the cap check is not reached: the key check comes first, even for a bad exp
+	_, err = tk.Mint(claims(1), time.Hour)
+	wantReason(t, err, ReasonTokenUnknownKey)
+}

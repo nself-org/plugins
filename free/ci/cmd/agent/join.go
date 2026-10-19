@@ -43,7 +43,7 @@ func isTTY(f *os.File) bool {
 func runJoin(ctx context.Context, args []string, sio IO) int {
 	fs := flag.NewFlagSet("join", flag.ContinueOnError)
 	fs.SetOutput(sio.Stderr)
-	expect := fs.String("expect-fingerprint", "", "the root fingerprint SHA256:<fp> shown by `nself ci nodes pair` (required without a terminal)")
+	expect := fs.String("expect-fingerprint", "", "the root fingerprint SHA256:<fp> shown by nself ci nodes pair (required without a terminal)")
 	name := fs.String("name", "", "node name (default: the host name)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {

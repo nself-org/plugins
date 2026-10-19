@@ -15,7 +15,10 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"regexp"
 )
+
+var keyIDPattern = regexp.MustCompile(`^[0-9a-f]{16}$`)
 
 // NodeKeyID is the id of an Ed25519 node public key.
 func NodeKeyID(pub ed25519.PublicKey) string {
@@ -50,11 +53,23 @@ func (c *CA) CheckNodeKey(ctx context.Context, nodeID string, pub ed25519.Public
 	return fail(ReasonNodeKeyChanged, "node %s presented a node key other than the pinned one", nodeID)
 }
 
+// CheckPinnedNodeKey is CheckNodeKey without the first-hello pin: a node with no pin is refused (a
+// re-pairing node must already own its name).
+func (c *CA) CheckPinnedNodeKey(ctx context.Context, nodeID string, pub ed25519.PublicKey) error {
+	if _, _, ok, err := c.st.PKINodeKeyGet(ctx, nodeID); err != nil || !ok {
+		if err == nil {
+			err = fail(ReasonNodeKeyChanged, "node %s has no pinned node key; set one with `nodes rotate --node-key --key-id`", nodeID)
+		}
+		return err
+	}
+	return c.CheckNodeKey(ctx, nodeID, pub)
+}
+
 // RotateNodeKey makes keyID the only key the next hello of the node may present
 // (`nodes rotate <node> --node-key --key-id <id>`; the id is what `join` printed).
 func (c *CA) RotateNodeKey(ctx context.Context, actor, nodeID, keyID string) error {
-	if len(keyID) != 16 {
-		return fail(ReasonNodeKeyChanged, "node key id must be 16 hex characters")
+	if !keyIDPattern.MatchString(keyID) {
+		return fail(ReasonNodeKeyChanged, "node key id must be 16 lower-case hex characters")
 	}
 	return c.st.PKINodeKeyRotate(ctx, actor, nodeID, keyID)
 }

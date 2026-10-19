@@ -87,13 +87,18 @@ func SaveCredential(state string, r JoinResult, now time.Time) error {
 	for _, der := range r.Chain {
 		chain = append(chain, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
 	}
-	for name, data := range map[string][]byte{
-		"root.pem":          pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: r.RootDER}),
-		"node.crt":          chain,
-		"client.key.sealed": sealed,
-		"enrollment.json":   meta,
-	} {
-		if err = writeAtomic(filepath.Join(dir(state), name), data); err != nil {
+	// Fixed order, enrollment.json last: a crash before it leaves a node that reads as "never joined".
+	files := []struct {
+		name string
+		data []byte
+	}{
+		{"root.pem", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: r.RootDER})},
+		{"client.key.sealed", sealed},
+		{"node.crt", chain},
+		{"enrollment.json", meta},
+	}
+	for _, f := range files {
+		if err = writeAtomic(filepath.Join(dir(state), f.name), f.data); err != nil {
 			return err
 		}
 	}

@@ -13,6 +13,7 @@ package pairing
 import (
 	"context"
 	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -67,12 +68,16 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 	if ap == nil {
 		return enroll.Response{}, fail(ReasonNoApprover, "offer %s has no approver in this process", offer.ID)
 	}
+	existing, err := s.vetExisting(ctx, name, req.NodeKey)
+	if err != nil {
+		return enroll.Response{}, err
+	}
 	keyID := pki.NodeKeyID(req.NodeKey)
 	dctx, cancel := context.WithDeadline(ctx, time.Unix(0, offer.ExpiresAt).Add(time.Minute))
 	defer cancel()
 	dec, err := ap.Approve(dctx, ApprovalRequest{
 		OfferID: offer.ID, Label: offer.Label, Intent: offer.Intent, NodeID: name, NodeName: req.Name, CSRFingerprint: csrFP, NodeKeyID: keyID,
-		OS: req.OS, Arch: req.Arch, SourceAddr: src, CertTTL: time.Duration(offer.CertTTL),
+		OS: req.OS, Arch: req.Arch, SourceAddr: src, CertTTL: time.Duration(offer.CertTTL), Existing: existing,
 	})
 	if err != nil || !dec.Approve {
 		reason := dec.Reason
@@ -82,12 +87,19 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 		_ = s.audit(ctx, "pairing.deny", offer.ID, fmt.Sprintf("approver=%s node=%s csr=%s reason=%s", ap.Kind(), name, csrFP, cut(reason, 120)))
 		return enroll.Response{}, fail(ReasonDenied, "enrollment of %s was not approved", name)
 	}
-	issued, err := s.enrollNode(ctx, offer, name, req, dec.Trust)
+	issued, err := s.enrollNode(ctx, offer, name, req, dec.Trust, existing)
 	if err != nil {
 		return enroll.Response{}, err
 	}
-	_ = s.audit(ctx, "pairing.approve", offer.ID, fmt.Sprintf("approver=%s node=%s csr=%s serial=%s accepts=%s secrets=%s zone=%s projects=%s",
-		ap.Kind(), name, csrFP, issued.Serial, strings.Join(dec.Trust.Accepts, ","), strings.Join(dec.Trust.SecretClasses, ","), dec.Trust.PrivacyZone, strings.Join(dec.Trust.Projects, ",")))
+	trust := "trust=kept"
+	if !existing {
+		trust = fmt.Sprintf("accepts=%s secrets=%s zone=%s projects=%s", strings.Join(dec.Trust.Accepts, ","), strings.Join(dec.Trust.SecretClasses, ","), dec.Trust.PrivacyZone, strings.Join(dec.Trust.Projects, ","))
+	}
+	if aerr := s.audit(ctx, "pairing.approve", offer.ID, fmt.Sprintf("approver=%s node=%s csr=%s serial=%s %s", ap.Kind(), name, csrFP, issued.Serial, trust)); aerr != nil {
+		// A decision that cannot be audited is not honoured: fail closed and revoke what was just issued.
+		_, _ = s.cfg.Store.PKIDeny(ctx, s.cfg.Actor, name, "audit_failed", issued.Serial)
+		return enroll.Response{}, fmt.Errorf("pairing: the approval could not be audited; the certificate was revoked: %w", aerr)
+	}
 	s.mu.Lock()
 	s.redeemed[offer.ID] = true
 	s.mu.Unlock()
@@ -117,7 +129,9 @@ func (s *Service) refuse(ctx context.Context, o store.PKIOffer, res store.CodeCl
 	switch res {
 	case store.CodeReused:
 		if o.Serial != "" {
-			_, _ = s.cfg.Store.PKIDeny(ctx, s.cfg.Actor, o.NodeID, "code_reuse", o.Serial)
+			if _, err := s.cfg.Store.PKIDeny(ctx, s.cfg.Actor, o.NodeID, "code_reuse", o.Serial); err != nil {
+				return fmt.Errorf("pairing: a used code was presented again but its certificate could not be revoked: %w", err)
+			}
 		}
 		_ = s.audit(ctx, "pairing.reuse", o.ID, "revoked="+boolStr(o.Serial != ""))
 		if s.cfg.Alert != nil {
@@ -136,22 +150,32 @@ func (s *Service) refuse(ctx context.Context, o store.PKIOffer, res store.CodeCl
 	return fail(ReasonInvalid, "the code is not valid")
 }
 
-// enrollNode registers (or finds) the node, applies the approver's trust, pins the node key and issues
-// the certificate. The key pin is checked first: a known node cannot change its node key by re-pairing.
-func (s *Service) enrollNode(ctx context.Context, offer store.PKIOffer, name string, req enroll.Request, t TrustFields) (*pki.Issued, error) {
+// vetExisting says whether the name is already registered. A registered node may re-pair only when it is
+// not revoked and the joining node key equals its pin: a code holder cannot take over a node (an SSH
+// node that never pinned a key included) by joining under its name.
+func (s *Service) vetExisting(ctx context.Context, name string, key []byte) (bool, error) {
 	node, err := s.cfg.Registry.Get(ctx, name)
-	switch {
-	case err == nil && node.Record.State == "revoked":
-		return nil, &pki.Error{Reason: pki.ReasonRevoked, Msg: "node " + name + " is revoked"}
-	case err == nil:
-		if err = s.cfg.CA.CheckNodeKey(ctx, name, req.NodeKey); err != nil {
+	var se *store.Error
+	if errors.As(err, &se) && se.Code == "E650" {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if node.Record.State == "revoked" {
+		return true, &pki.Error{Reason: pki.ReasonRevoked, Msg: "node " + name + " is revoked"}
+	}
+	return true, s.cfg.CA.CheckPinnedNodeKey(ctx, name, key)
+}
+
+// enrollNode registers a new node (trust from the approver, key pinned) or keeps an existing one as it
+// is, then issues the certificate and binds it to the offer.
+func (s *Service) enrollNode(ctx context.Context, offer store.PKIOffer, name string, req enroll.Request, t TrustFields, existing bool) (*pki.Issued, error) {
+	if !existing {
+		if _, err := s.register(ctx, name, req, t); err != nil {
 			return nil, err
 		}
-	default:
-		if _, err = s.register(ctx, name, req, t); err != nil {
-			return nil, err
-		}
-		if err = s.cfg.CA.PinNodeKey(ctx, name, req.NodeKey); err != nil {
+		if err := s.cfg.CA.PinNodeKey(ctx, name, req.NodeKey); err != nil {
 			return nil, err
 		}
 	}
@@ -161,6 +185,9 @@ func (s *Service) enrollNode(ctx context.Context, offer store.PKIOffer, name str
 	}
 	if tainted, berr := s.cfg.Store.PKIOfferBind(ctx, offer.ID, name, issued.Serial); berr != nil || tainted {
 		_, _ = s.cfg.Store.PKIDeny(ctx, s.cfg.Actor, name, "code_reuse", issued.Serial)
+		if s.approverFor(offer.ID) == nil { // Withdraw drops the approver
+			return nil, fail(ReasonWithdrawn, "the offer was withdrawn while it was being approved; the certificate was revoked")
+		}
 		return nil, fail(ReasonReused, "this code was presented twice; the certificate was revoked")
 	}
 	if s.cfg.AfterIssue != nil {

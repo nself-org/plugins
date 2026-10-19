@@ -155,6 +155,13 @@ func TestPKICertPutGet(t *testing.T) {
 	if list, err = s.PKICertsOfNode(ctx, "ghost"); err != nil || len(list) != 0 {
 		t.Fatalf("ghost: %+v %v", list, err)
 	}
+	// only node certificates belong to a node: a user certificate with the same id is not listed
+	if err = s.PKICertPut(ctx, PKICert{Serial: "uu", Kind: "user", NodeID: "n1"}); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ = s.PKICertsOfNode(ctx, "n1"); len(list) != 2 {
+		t.Fatalf("a user certificate was listed under a node id: %+v", list)
+	}
 	// equal issued_at falls back to serial order
 	for _, sn := range []string{"b2", "b1"} {
 		if err = s.PKICertPut(ctx, PKICert{Serial: sn, Kind: "node", NodeID: "n2"}); err != nil {
@@ -524,9 +531,26 @@ func TestPKIOfferBindAndWithdraw(t *testing.T) {
 		t.Fatalf("claim after withdraw: %q", res)
 	}
 	_, err = s.PKIOfferWithdraw(ctx, pkiHash(0x77))
-	var se *Error
-	if !errors.As(err, &se) || se.Code != "E650" {
+	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("unknown withdraw: %v", err)
+	}
+	// a bind that lands after the offer was withdrawn reports tainted (the caller revokes at once)
+	if err = s.PKIOfferPut(ctx, pkiOffer("o3", 3, time.Minute, clk)); err != nil {
+		t.Fatal(err)
+	}
+	_, _, _ = s.PKIOfferClaim(ctx, pkiHash(3), false)
+	if tainted, err = s.PKIOfferBind(ctx, "o3", "node-3", "serial-3"); err != nil || tainted {
+		t.Fatalf("bind before withdraw: %v %v", tainted, err)
+	}
+	if _, err = s.PKIOfferWithdraw(ctx, pkiHash(3)); err != nil {
+		t.Fatal(err)
+	}
+	if tainted, err = s.PKIOfferBind(ctx, "o3", "node-3", "serial-3"); err != nil || !tainted {
+		t.Fatalf("bind after withdraw: tainted=%v %v", tainted, err)
+	}
+	var taintCol bool
+	if err = s.readers.QueryRow(`SELECT tainted FROM pki_offer WHERE id='o3'`).Scan(&taintCol); err != nil || taintCol {
+		t.Fatalf("withdrawn must not set the tainted column: %v %v", taintCol, err)
 	}
 	// withdrawing after redemption returns the redeemed offer so the caller can revoke its certificate
 	w, err = s.PKIOfferWithdraw(ctx, pkiHash(1))

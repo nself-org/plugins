@@ -103,8 +103,11 @@ func runNodesPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		return 2
 	}
 	public := f.publicURL
-	if public == "" {
-		public = "https://localhost" + f.addr
+	if public == "" { // ":3866" means every interface: name this host "localhost"; "host:port" names itself
+		public = "https://" + f.addr
+		if strings.HasPrefix(f.addr, ":") {
+			public = "https://localhost" + f.addr
+		}
 	}
 	svc := pairing.New(pairing.Config{
 		CA: ca, Store: d.Store, Registry: d.Registry, CoordinatorID: f.coordinatorID, AgentURL: f.agentURL, Actor: d.Actor,
