@@ -351,3 +351,47 @@ func TestRunTellsTheCacheHookAboutTheContainerOption(t *testing.T) {
 		}
 	}
 }
+
+// fakeSession records how a session is closed.
+type fakeSession struct{ saved, retracted, cleaned bool }
+
+func (f *fakeSession) Finalize(context.Context, int64) {}
+func (f *fakeSession) Wants() bool                     { return false }
+func (f *fakeSession) Saved() bool                     { return f.saved }
+func (f *fakeSession) Retract(context.Context)         { f.retracted = true }
+func (f *fakeSession) Cleanup()                        { f.cleaned = true }
+
+// TestCacheHookEvictionRetractsACancelledAttemptsEntry: an attempt that committed
+// an entry and settled cancelled, whose session eviction closes before After
+// ran, still has its entry retracted; a passed one keeps it.
+func TestCacheHookEvictionRetractsACancelledAttemptsEntry(t *testing.T) {
+	r := cacheRig(t, map[string]model.Job{"build": sh("true")})
+	st := r.store(t)
+	ctx := context.Background()
+	p := store.PipelineRow{ID: "plc", Revision: "rev", Project: r.C.Opts.Root, Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
+	steps := []error{st.CreatePipeline(ctx, p)}
+	for _, id := range []string{"canc1", "pass1"} {
+		steps = append(steps, st.CreateJob(ctx, store.JobRow{ID: "j" + id, PipelineID: "plc", Name: id, Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}),
+			st.CreateAttempt(ctx, store.AttemptRow{ID: id, JobID: "j" + id, N: 1}, ""),
+			st.Transition(ctx, id, "queued", "leased", store.TransitionDetail{Epoch: 0}), st.Transition(ctx, id, "leased", "running", store.TransitionDetail{Epoch: 1}),
+			st.Transition(ctx, id, "running", "finalizing", store.TransitionDetail{Epoch: 2}))
+	}
+	steps = append(steps, st.Transition(ctx, "canc1", "finalizing", "cancelled", store.TransitionDetail{Epoch: 3, FailureClass: "cancelled"}),
+		st.Transition(ctx, "pass1", "finalizing", "passed", store.TransitionDetail{Epoch: 3}))
+	for i, e := range steps {
+		if e != nil {
+			t.Fatalf("step %d: %v", i, e)
+		}
+	}
+	h := &cacheHook{}
+	canc, pass := &fakeSession{saved: true}, &fakeSession{saved: true}
+	h.sessions.Store("canc1", cacheEntry{s: canc, at: time.Now(), id: "canc1"})
+	h.sessions.Store("pass1", cacheEntry{s: pass, at: time.Now(), id: "pass1"})
+	h.evict(ctx, st, time.Now())
+	if !canc.retracted || !canc.cleaned {
+		t.Fatalf("a cancelled attempt's entry must be retracted by eviction too: %+v", canc)
+	}
+	if pass.retracted || !pass.cleaned {
+		t.Fatalf("a passed attempt keeps its entry: %+v", pass)
+	}
+}

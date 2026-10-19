@@ -67,3 +67,37 @@ func (g *bombGuard) finish() error {
 	}
 	return nil
 }
+
+// countReader counts the compressed bytes consumed so far.
+type countReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
+}
+
+// effective fills the zero fields of lim with the defaults.
+func effective(lim authz.Limits) authz.Limits {
+	d := authz.DefaultLimits()
+	if lim.MaxFileBytes > 0 {
+		d.MaxFileBytes = lim.MaxFileBytes
+	}
+	if lim.MaxTotalBytes > 0 {
+		d.MaxTotalBytes = lim.MaxTotalBytes
+	}
+	if lim.MaxEntries > 0 {
+		d.MaxEntries = lim.MaxEntries
+	}
+	if lim.MaxRatio > 0 {
+		d.MaxRatio = lim.MaxRatio
+	}
+	if lim.RatioFloor > 0 {
+		d.RatioFloor = lim.RatioFloor
+	}
+	d.AllowDotGit = lim.AllowDotGit
+	return d
+}

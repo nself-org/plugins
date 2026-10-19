@@ -38,8 +38,12 @@ var (
 func PrivateDeps(in PrivInput) (bool, []string) {
 	var why []string
 	add := func(s string) { why = append(why, s) }
+	toolHomes := map[string]string{} // files the environment points the tools at, by variable
 	for _, kv := range in.Environ {
 		name, v, _ := strings.Cut(kv, "=")
+		if v != "" {
+			toolHomes[strings.ToUpper(name)] = v
+		}
 		for _, p := range privateEnvs {
 			if strings.EqualFold(name, p) && v != "" {
 				add("env:" + name)
@@ -55,6 +59,24 @@ func PrivateDeps(in PrivInput) (bool, []string) {
 		}
 		if name == "GOFLAGS" && strings.Contains(v, "-insecure") {
 			add("env:GOFLAGS")
+		}
+	}
+	for _, f := range []struct {
+		env string
+		re  *regexp.Regexp
+	}{{"NPM_CONFIG_USERCONFIG", npmAuth}, {"NPM_CONFIG_GLOBALCONFIG", npmAuth}, {"PIP_CONFIG_FILE", urlCred}, {"UV_CONFIG_FILE", urlCred}} {
+		if p := toolHomes[f.env]; p != "" {
+			scanFile(filepath.Dir(p), filepath.Base(p), f.re, add)
+		}
+	}
+	if ch := toolHomes["CARGO_HOME"]; ch != "" { // the cargo spec rebinds and seeds from this home
+		for _, n := range []string{"config.toml", "config"} {
+			scanFile(ch, n, cargoReg, add)
+		}
+		for _, n := range []string{"credentials.toml", "credentials"} {
+			if exists(filepath.Join(ch, n)) {
+				add("file:CARGO_HOME/" + n)
+			}
 		}
 	}
 	dirs := append([]string(nil), in.Dirs...)

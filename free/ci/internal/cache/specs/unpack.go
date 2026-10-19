@@ -39,40 +39,6 @@ type UnpackStats struct {
 	Bytes              int64
 }
 
-// countReader counts the compressed bytes consumed so far.
-type countReader struct {
-	r io.Reader
-	n int64
-}
-
-func (c *countReader) Read(p []byte) (int, error) {
-	n, err := c.r.Read(p)
-	c.n += int64(n)
-	return n, err
-}
-
-// effective fills the zero fields of lim with the defaults.
-func effective(lim authz.Limits) authz.Limits {
-	d := authz.DefaultLimits()
-	if lim.MaxFileBytes > 0 {
-		d.MaxFileBytes = lim.MaxFileBytes
-	}
-	if lim.MaxTotalBytes > 0 {
-		d.MaxTotalBytes = lim.MaxTotalBytes
-	}
-	if lim.MaxEntries > 0 {
-		d.MaxEntries = lim.MaxEntries
-	}
-	if lim.MaxRatio > 0 {
-		d.MaxRatio = lim.MaxRatio
-	}
-	if lim.RatioFloor > 0 {
-		d.RatioFloor = lim.RatioFloor
-	}
-	d.AllowDotGit = lim.AllowDotGit
-	return d
-}
-
 type dirMode struct {
 	name string
 	mode os.FileMode
@@ -99,6 +65,21 @@ func Unpack(r io.Reader, base *os.Root, rel string, lim authz.Limits, opt Unpack
 		return st, err
 	}
 	defer func() { _ = root.Close() }()
+	return extract(r, root, lim, opt)
+}
+
+// Validate reads a cache blob exactly as Unpack would (same sanitiser, same
+// size and ratio guards) and writes nothing: Save runs it on every blob it
+// packed, so an entry is never committed that a restore would refuse.
+func Validate(r io.Reader, lim authz.Limits) error {
+	_, err := extract(r, nil, lim, UnpackOptions{})
+	return err
+}
+
+// extract is Unpack and Validate; a nil root discards the data.
+func extract(r io.Reader, root *os.Root, lim authz.Limits, opt UnpackOptions) (UnpackStats, error) {
+	var st UnpackStats
+	dry := root == nil
 	cr := &countReader{r: r}
 	gz, err := gzip.NewReader(cr)
 	if err != nil {
@@ -125,22 +106,30 @@ func Unpack(r io.Reader, base *os.Root, rel string, lim authz.Limits, opt Unpack
 		}
 		switch h.Typeflag {
 		case tar.TypeDir:
-			if err := root.MkdirAll(name, 0o700); err != nil {
-				return st, err
+			if !dry {
+				if err := root.MkdirAll(name, 0o700); err != nil {
+					return st, err
+				}
+				dirs = append(dirs, dirMode{name, dirPerm(h, opt), h.ModTime})
 			}
-			dirs = append(dirs, dirMode{name, dirPerm(h, opt), h.ModTime})
 			st.Dirs++
 		case tar.TypeSymlink:
-			if err := parents(root, name); err != nil {
-				return st, err
-			}
-			if err := root.Symlink(h.Linkname, name); err != nil {
-				return st, err
+			if !dry {
+				if err := parents(root, name); err != nil {
+					return st, err
+				}
+				if err := root.Symlink(h.Linkname, name); err != nil {
+					return st, err
+				}
 			}
 			st.Links++
 		default:
 			ge := guard.entry(tr, h.Name)
-			if err := writeFile(root, name, ge, h, opt); err != nil {
+			if dry {
+				if n, err := io.Copy(io.Discard, ge); err != nil || n != h.Size {
+					return st, errors.Join(err, io.ErrUnexpectedEOF)
+				}
+			} else if err := writeFile(root, name, ge, h, opt); err != nil {
 				return st, err
 			}
 			if err := ge.done(); err != nil {
@@ -152,6 +141,9 @@ func Unpack(r io.Reader, base *os.Root, rel string, lim authz.Limits, opt Unpack
 	}
 	if err := guard.finish(); err != nil {
 		return st, err
+	}
+	if dry {
+		return st, nil
 	}
 	sort.Slice(dirs, func(i, j int) bool { return len(dirs[i].name) > len(dirs[j].name) })
 	if opt.OtherRead {

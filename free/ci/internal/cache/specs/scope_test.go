@@ -92,3 +92,21 @@ func TestPrivateDepsSignals(t *testing.T) {
 		}
 	}
 }
+
+func TestPrivateDepsFollowsTheToolsEnvironmentFiles(t *testing.T) {
+	dir, home := t.TempDir(), t.TempDir()
+	ch := t.TempDir()
+	putFile(t, ch+"/config.toml", "[registries.corp]\nindex = \"sparse+https://cargo.example.invalid/\"\n")
+	if yes, why := PrivateDeps(PrivInput{Dirs: []string{dir}, Home: home, Environ: []string{"CARGO_HOME=" + ch}}); !yes {
+		t.Fatalf("CARGO_HOME with a private registry: %v", why)
+	}
+	npm := t.TempDir()
+	putFile(t, npm+"/custom-npmrc", "//registry.example.invalid/:_authToken=abc\n")
+	if yes, _ := PrivateDeps(PrivInput{Dirs: []string{dir}, Home: home, Environ: []string{"NPM_CONFIG_USERCONFIG=" + npm + "/custom-npmrc"}}); !yes {
+		t.Fatal("NPM_CONFIG_USERCONFIG with a token")
+	}
+	empty := t.TempDir()
+	if yes, why := PrivateDeps(PrivInput{Dirs: []string{dir}, Home: home, Environ: []string{"CARGO_HOME=" + empty}}); yes {
+		t.Fatalf("an empty CARGO_HOME is not private: %v", why)
+	}
+}

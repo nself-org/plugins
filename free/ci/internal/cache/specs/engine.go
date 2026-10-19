@@ -96,6 +96,16 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 	return false, 0, fmt.Errorf("cache restore refused: %w", err)
 }
 
+// validate runs the restore checks over a freshly Put blob without writing it anywhere.
+func (e *Engine) validate(realm cas.Realm, digest string) error {
+	rc, err := e.Blobs.Open(realm, digest)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rc.Close() }()
+	return Validate(rc, cacheLimits())
+}
+
 func (e *Engine) unpackBlob(base *os.Root, realm cas.Realm, digest, rel string, opt UnpackOptions) error {
 	rc, err := e.Blobs.Open(realm, digest)
 	if err != nil {
@@ -139,9 +149,8 @@ func (e *Engine) Save(ctx context.Context, r SaveRequest) (int64, error) {
 		if err != nil {
 			return 0, e.refuse(ctx, r, err)
 		}
-		if st.Bytes > cacheLimits().RatioFloor && st.Bytes > cacheLimits().MaxRatio*(size+finalSlack) {
-			// a restore would refuse this archive (bomb.go): saving it would loop save, refuse, drop
-			return 0, e.refuse(ctx, r, fmt.Errorf("%w: the packed %s compresses beyond the restore ratio limit", ErrTooLarge, name))
+		if err := e.validate(realm, digest); err != nil { // a restore would refuse it: do not commit a loop of save, refuse, drop
+			return 0, e.refuse(ctx, r, fmt.Errorf("%w: the packed %s fails the restore checks: %v", ErrTooLarge, name, err))
 		}
 		files += st.Files
 		total += size

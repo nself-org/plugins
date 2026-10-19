@@ -88,9 +88,6 @@ type Session struct {
 	saved  []string // keys this session committed (Retract)
 }
 
-// host is the host path of a directory relative to the cache root.
-func (s *Session) host(rel string) string { return filepath.Join(s.in.Root, filepath.FromSlash(rel)) }
-
 // Begin plans, restores and returns the session; the error is a failure of the
 // plan itself (the caller then runs the job without a cache).
 func Begin(ctx context.Context, in BeginInput) (*Session, error) {
@@ -130,23 +127,6 @@ func Begin(ctx context.Context, in BeginInput) (*Session, error) {
 		s.restore(ctx, it)
 	}
 	return s, nil
-}
-
-// pin creates the attempt's cache root and opens handles on it and on its parent.
-func (s *Session) pin() (err error) {
-	parent := filepath.Dir(s.in.Root)
-	if err = os.MkdirAll(parent, 0o700); err != nil {
-		return err
-	}
-	if s.parent, err = os.OpenRoot(parent); err != nil {
-		return err
-	}
-	s.name = filepath.Base(s.in.Root)
-	if err = s.parent.Mkdir(s.name, 0o700); err != nil && !os.IsExist(err) {
-		return err
-	}
-	s.base, err = s.parent.OpenRoot(s.name)
-	return err
 }
 
 // plan resolves one spec's key material and directories, or records why not.
@@ -250,14 +230,6 @@ func (s *Session) restore(ctx context.Context, it *Item) {
 	s.use(ctx, it.Spec.ID, it.Key, "miss", 0, time.Since(start).Milliseconds())
 }
 
-// reset empties and recreates the dirs of it.
-func (s *Session) reset(it *Item) {
-	for _, d := range it.Dirs {
-		_ = removeIn(s.base, d)
-		_ = s.base.MkdirAll(d, 0o700)
-	}
-}
-
 // Setup returns the variables and mounts of every spec that has access.
 func (s *Session) Setup() (map[string]string, []Mount) {
 	env, mounts := map[string]string{}, []Mount(nil)
@@ -280,30 +252,4 @@ func (s *Session) Setup() (map[string]string, []Mount) {
 		}
 	}
 	return env, mounts
-}
-
-// Cleanup removes the attempt's cache directories.
-func (s *Session) Cleanup() {
-	if s.base != nil {
-		_ = chmodDirs(s.base, ".")
-		_ = s.base.Close()
-		s.base = nil
-	}
-	if s.parent != nil { // removal through the pinned parent never leaves it
-		_ = s.parent.RemoveAll(s.name)
-		_ = s.parent.Close()
-		s.parent = nil
-	}
-}
-
-func (s *Session) warn(msg string) {
-	if s.in.Warn != nil {
-		s.in.Warn(msg)
-	}
-}
-
-func (s *Session) use(ctx context.Context, spec, key, result string, bytes, ms int64) {
-	if err := s.in.Engine.Entries.RecordUse(ctx, entries.Use{Attempt: s.in.Attempt, Spec: spec, Key: key, Result: result, Bytes: bytes, MS: ms}); err != nil {
-		s.warn("cache usage row for spec " + spec + " was not recorded")
-	}
 }

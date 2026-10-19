@@ -397,3 +397,29 @@ func TestSessionDoesNotSaveWhatARestoreWouldRefuse(t *testing.T) {
 		t.Fatalf("entries %d uses %v", e.entryCount(), resultsOf(e.uses("z1")))
 	}
 }
+
+func TestSessionValidatesEveryDirLikeARestore(t *testing.T) {
+	e := newEnv(t)
+	e.running("v1", ownerFacts)
+	s := e.begin(e.input("v1", ownerFacts))
+	fill(t, s)
+	// 6 MiB of zeros next to 6 MiB of random bytes: the directory's total ratio is fine, the zero file's is not
+	if err := os.WriteFile(filepath.Join(s.dir("build"), "a-zeros.bin"), make([]byte, 6<<20), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rnd := make([]byte, 6<<20)
+	x := uint32(88172645)
+	for i := range rnd {
+		x ^= x << 13
+		x ^= x >> 17
+		x ^= x << 5
+		rnd[i] = byte(x)
+	}
+	if err := os.WriteFile(filepath.Join(s.dir("build"), "b-random.bin"), rnd, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s.Finalize(e.ctx, e.finalizing("v1"))
+	if e.entryCount() != 0 || strings.Join(resultsOf(e.uses("v1")), ",") != "go:miss,go:refused" {
+		t.Fatalf("entries %d uses %v", e.entryCount(), resultsOf(e.uses("v1")))
+	}
+}

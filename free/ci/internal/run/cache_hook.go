@@ -50,10 +50,19 @@ type CacheAttestation struct{ Protection, HeadRepo, PR string }
 // or PR, so an untrusted source gets no cache at all (E684 namespace rule).
 var CacheAttest func(ctx context.Context, a AttemptInfo, p store.PipelineRow) (CacheAttestation, error)
 
+// cacheSession is the part of *specs.Session the hook calls (a fake in tests).
+type cacheSession interface {
+	Finalize(ctx context.Context, epoch int64)
+	Wants() bool
+	Saved() bool
+	Retract(ctx context.Context)
+	Cleanup()
+}
+
 // cacheEntry is a live session; one whose attempt never reached After (the job
 // failed to prepare after Before) is evicted once it is staleAfter old.
 type cacheEntry struct {
-	s  *specs.Session
+	s  cacheSession
 	at time.Time
 	id string
 }
@@ -195,20 +204,25 @@ func (h *cacheHook) Wants(a AttemptInfo) bool {
 	return ok && e.(cacheEntry).s.Wants()
 }
 
-// After removes the attempt's cache directories; it saves nothing. An attempt
-// that committed an entry and then did not settle `passed` (a cancel won the
-// finalizing -> passed move) has its entry dropped again.
+// After removes the attempt's cache directories; it saves nothing (closeSession
+// also drops the entry of an attempt that did not settle passed).
 func (h *cacheHook) After(ctx context.Context, a AttemptInfo, _ Outcome) error {
 	if e, ok := h.sessions.LoadAndDelete(a.AttemptID); ok {
-		s := e.(cacheEntry).s
-		if s.Saved() && a.Store != nil {
-			if state, _, err := a.Store.AttemptStateEpoch(ctx, a.AttemptID); err != nil || state != "passed" {
-				s.Retract(ctx)
-			}
-		}
-		s.Cleanup()
+		closeSession(ctx, a.Store, e.(cacheEntry))
 	}
 	return nil
+}
+
+// closeSession retracts the entries of an attempt that did not settle passed
+// (a cancel won the finalizing -> passed move after the commit) and removes the
+// attempt's cache directories. After and eviction both end a session this way.
+func closeSession(ctx context.Context, st *store.Store, e cacheEntry) {
+	if e.s.Saved() && st != nil {
+		if state, _, err := st.AttemptStateEpoch(ctx, e.id); err != nil || state != "passed" {
+			e.s.Retract(ctx)
+		}
+	}
+	e.s.Cleanup()
 }
 
 func liveState(state model.JobState) bool {
@@ -239,7 +253,7 @@ func (h *cacheHook) evict(ctx context.Context, st *store.Store, now time.Time) {
 			}
 		}
 		if dead && h.sessions.CompareAndDelete(k, v) { // After may have claimed it
-			e.s.Cleanup()
+			closeSession(ctx, st, e)
 		}
 		return true
 	})
