@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nself-org/nself-byok/kms"
+	"github.com/nself-org/nself-byok/tenantdb"
 )
 
 // HealthHandler returns 200 OK with status information.
@@ -86,8 +88,10 @@ func RegisterRoutes(r chi.Router, db *pgxpool.Pool) {
 // Handler struct
 // ──────────────────────────────────────────────────────────────────────────
 
+// byokHandler reaches the database only through tenantdb.With, so every statement runs
+// under the requesting tenant's row-level security (D-0956).
 type byokHandler struct {
-	db *pgxpool.Pool
+	db tenantdb.Beginner
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -123,14 +127,17 @@ func (h *byokHandler) GetKMSConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	row := h.db.QueryRow(r.Context(),
-		`SELECT id, tenant_id, provider, key_ref, region, endpoint_url,
+	var cfg *kmsConfigResponse
+	err = tenantdb.With(r.Context(), h.db, tenantID, func(tx pgx.Tx) error {
+		var scanErr error
+		cfg, scanErr = scanKMSConfig(tx.QueryRow(r.Context(),
+			`SELECT id, tenant_id, provider, key_ref, region, endpoint_url,
 		        credentials_ref, enabled, created_at, last_verified_at
-		   FROM np_kms_configs WHERE tenant_id = $1`, tenantID)
-
-	cfg, err := scanKMSConfig(row)
+		   FROM np_kms_configs WHERE tenant_id = $1`, tenantID))
+		return scanErr
+	})
 	if err != nil {
-		if err.Error() == "no rows in result set" {
+		if errors.Is(err, pgx.ErrNoRows) {
 			errJSON(w, http.StatusNotFound, "KMS not configured for this tenant")
 			return
 		}
@@ -163,14 +170,16 @@ func (h *byokHandler) ConfigureKMS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id uuid.UUID
-	err = h.db.QueryRow(r.Context(),
-		`INSERT INTO np_kms_configs
+	err = tenantdb.With(r.Context(), h.db, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(),
+			`INSERT INTO np_kms_configs
 		   (tenant_id, provider, key_ref, region, endpoint_url, credentials_ref)
 		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id`,
-		tenantID, p.Provider, p.KeyRef,
-		nullableString(p.Region), nullableString(p.EndpointURL), nullableString(p.CredentialsRef),
-	).Scan(&id)
+			tenantID, p.Provider, p.KeyRef,
+			nullableString(p.Region), nullableString(p.EndpointURL), nullableString(p.CredentialsRef),
+		).Scan(&id)
+	})
 	if err != nil {
 		errJSON(w, http.StatusInternalServerError, fmt.Sprintf("insert kms config: %v", err))
 		return
@@ -198,16 +207,19 @@ func (h *byokHandler) UpdateKMSConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.db.Exec(r.Context(),
-		`UPDATE np_kms_configs
+	err = tenantdb.With(r.Context(), h.db, tenantID, func(tx pgx.Tx) error {
+		_, execErr := tx.Exec(r.Context(),
+			`UPDATE np_kms_configs
 		    SET provider        = COALESCE(NULLIF($1,''), provider),
 		        key_ref         = COALESCE(NULLIF($2,''), key_ref),
 		        region          = COALESCE(NULLIF($3,''), region),
 		        endpoint_url    = COALESCE(NULLIF($4,''), endpoint_url),
 		        credentials_ref = COALESCE(NULLIF($5,''), credentials_ref)
 		  WHERE tenant_id = $6`,
-		p.Provider, p.KeyRef, p.Region, p.EndpointURL, p.CredentialsRef, tenantID,
-	)
+			p.Provider, p.KeyRef, p.Region, p.EndpointURL, p.CredentialsRef, tenantID,
+		)
+		return execErr
+	})
 	if err != nil {
 		errJSON(w, http.StatusInternalServerError, "update kms config")
 		return
@@ -225,11 +237,13 @@ func (h *byokHandler) VerifyKMS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load config.
-	row := h.db.QueryRow(r.Context(),
-		`SELECT provider, key_ref, region, endpoint_url FROM np_kms_configs WHERE tenant_id = $1`, tenantID)
 	var provider, keyRef string
 	var region, endpointURL *string
-	if err := row.Scan(&provider, &keyRef, &region, &endpointURL); err != nil {
+	if err := tenantdb.With(r.Context(), h.db, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(),
+			`SELECT provider, key_ref, region, endpoint_url FROM np_kms_configs WHERE tenant_id = $1`, tenantID,
+		).Scan(&provider, &keyRef, &region, &endpointURL)
+	}); err != nil {
 		errJSON(w, http.StatusNotFound, "KMS not configured")
 		return
 	}
@@ -252,8 +266,11 @@ func (h *byokHandler) VerifyKMS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update last_verified_at.
-	_, _ = h.db.Exec(r.Context(),
-		`UPDATE np_kms_configs SET last_verified_at = NOW() WHERE tenant_id = $1`, tenantID)
+	_ = tenantdb.With(r.Context(), h.db, tenantID, func(tx pgx.Tx) error {
+		_, execErr := tx.Exec(r.Context(),
+			`UPDATE np_kms_configs SET last_verified_at = NOW() WHERE tenant_id = $1`, tenantID)
+		return execErr
+	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "message": "KMS wrap+unwrap round-trip succeeded"})
 }
@@ -270,10 +287,12 @@ func (h *byokHandler) TriggerRotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	row := h.db.QueryRow(r.Context(),
-		`SELECT key_ref FROM np_kms_configs WHERE tenant_id = $1 AND enabled = TRUE`, tenantID)
 	var keyRef string
-	if err := row.Scan(&keyRef); err != nil {
+	if err := tenantdb.With(r.Context(), h.db, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(),
+			`SELECT key_ref FROM np_kms_configs WHERE tenant_id = $1 AND enabled = TRUE`, tenantID,
+		).Scan(&keyRef)
+	}); err != nil {
 		errJSON(w, http.StatusNotFound, "KMS not configured or disabled")
 		return
 	}
@@ -297,16 +316,25 @@ func (h *byokHandler) RotationStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	row := h.db.QueryRow(r.Context(),
-		`SELECT event_type, details, occurred_at
-		   FROM np_encryption_key_events
-		  WHERE details->>'job_id' = $1
-		  ORDER BY occurred_at DESC LIMIT 1`, jobIDStr)
+	// A job id alone used to be enough; under RLS the tenant scopes the lookup, so one
+	// tenant can never read another tenant's rotation events by guessing a job id.
+	tenantID, err := tenantIDFromRequest(r)
+	if err != nil {
+		errJSON(w, http.StatusUnauthorized, "tenant_id required")
+		return
+	}
 
 	var eventType string
 	var details map[string]any
 	var occurredAt time.Time
-	if err := row.Scan(&eventType, &details, &occurredAt); err != nil {
+	if err := tenantdb.With(r.Context(), h.db, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(),
+			`SELECT event_type, details, occurred_at
+		   FROM np_encryption_key_events
+		  WHERE tenant_id = $2 AND details->>'job_id' = $1
+		  ORDER BY occurred_at DESC LIMIT 1`, jobIDStr, tenantID,
+		).Scan(&eventType, &details, &occurredAt)
+	}); err != nil {
 		errJSON(w, http.StatusNotFound, "rotation job not found")
 		return
 	}
@@ -326,17 +354,6 @@ func (h *byokHandler) ListKeyEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.db.Query(r.Context(),
-		`SELECT id, event_type, key_ref, triggered_by, occurred_at, details
-		   FROM np_encryption_key_events
-		  WHERE tenant_id = $1
-		  ORDER BY occurred_at DESC LIMIT 100`, tenantID)
-	if err != nil {
-		errJSON(w, http.StatusInternalServerError, "db error")
-		return
-	}
-	defer rows.Close()
-
 	type eventRow struct {
 		ID          string         `json:"id"`
 		EventType   string         `json:"event_type"`
@@ -346,21 +363,37 @@ func (h *byokHandler) ListKeyEvents(w http.ResponseWriter, r *http.Request) {
 		Details     map[string]any `json:"details"`
 	}
 	var events []eventRow
-	for rows.Next() {
-		var e eventRow
-		var triggeredBy *uuid.UUID
-		var occurredAt time.Time
-		var id uuid.UUID
-		if err := rows.Scan(&id, &e.EventType, &e.KeyRef, &triggeredBy, &occurredAt, &e.Details); err != nil {
-			continue
+	err = tenantdb.With(r.Context(), h.db, tenantID, func(tx pgx.Tx) error {
+		rows, qErr := tx.Query(r.Context(),
+			`SELECT id, event_type, key_ref, triggered_by, occurred_at, details
+		   FROM np_encryption_key_events
+		  WHERE tenant_id = $1
+		  ORDER BY occurred_at DESC LIMIT 100`, tenantID)
+		if qErr != nil {
+			return qErr
 		}
-		e.ID = id.String()
-		e.OccurredAt = occurredAt.Format(time.RFC3339)
-		if triggeredBy != nil {
-			s := triggeredBy.String()
-			e.TriggeredBy = &s
+		defer rows.Close()
+		for rows.Next() {
+			var e eventRow
+			var triggeredBy *uuid.UUID
+			var occurredAt time.Time
+			var id uuid.UUID
+			if err := rows.Scan(&id, &e.EventType, &e.KeyRef, &triggeredBy, &occurredAt, &e.Details); err != nil {
+				continue
+			}
+			e.ID = id.String()
+			e.OccurredAt = occurredAt.Format(time.RFC3339)
+			if triggeredBy != nil {
+				s := triggeredBy.String()
+				e.TriggeredBy = &s
+			}
+			events = append(events, e)
 		}
-		events = append(events, e)
+		return rows.Err()
+	})
+	if err != nil {
+		errJSON(w, http.StatusInternalServerError, "db error")
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"events": events, "count": len(events)})
 }
@@ -449,12 +482,15 @@ func (h *byokHandler) logKeyEvent(ctx context.Context, tenantID, triggeredBy uui
 		t := triggeredBy
 		trig = &t
 	}
-	_, _ = h.db.Exec(ctx,
-		`INSERT INTO np_encryption_key_events
+	_ = tenantdb.With(ctx, h.db, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO np_encryption_key_events
 		   (tenant_id, event_type, key_ref, triggered_by, details)
 		 VALUES ($1, $2, $3, $4, $5)`,
-		tenantID, eventType, keyRef, trig, details,
-	)
+			tenantID, eventType, keyRef, trig, details,
+		)
+		return err
+	})
 }
 
 func scanKMSConfig(row pgx.Row) (*kmsConfigResponse, error) {

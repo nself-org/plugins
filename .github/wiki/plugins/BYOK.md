@@ -72,6 +72,8 @@ GET    /health
 GET    /ready
 ```
 
+Every `/api/v1` route needs the tenant in the `X-Tenant-ID` header, including `GET /encryption/rotate/{job_id}`. Each request runs its queries under that tenant's row-level security.
+
 ## Examples
 
 ### Health check
