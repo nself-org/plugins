@@ -1,7 +1,6 @@
 # nself-ci configuration for the plugins repo (contract:ci.pipeline-config v1).
 #
-# Purpose: declare the jobs `nself ci` plans for this repository. Later Tickets
-#   (P7-CI-08) add the truth-gate job to this file.
+# Purpose: declare the jobs `nself ci` plans for this repository.
 # Precedence: flag > env > this file > detected default (`nself ci config show`).
 
 version: 1
@@ -20,6 +19,46 @@ jobs:
     kind: static
     run: [gitleaks, detect, --no-git, --source, ., --config, .github/gitleaks.toml, --redact, --log-level, warn]
     timeout: 300s
+
+  # Truth gate (P7-CI-08, Epic D21): no dead host, retired term or banned literal in this
+  # tree. The rules are data in .github/truth/org.yaml (listed under `checks.truth.rules`
+  # below); the engine is free/ci/internal/gates/truth, run from source until the V15
+  # engine links it. One job per rule kind so the evidence shows which kind of truth
+  # broke; `truth` validates the rule files and waits for the three. No `when`: any
+  # change can add a forbidden string, and a skipped required job would fail the run
+  # (Epic D28).
+  truth-banned-literal:
+    kind: static
+    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, banned-literal, --root, ../.., .github/truth/org.yaml]
+    workdir: free/ci
+    env:
+      CGO_ENABLED: "0"
+    timeout: 600s
+
+  truth-retired-term:
+    kind: static
+    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, retired-term, --root, ../.., .github/truth/org.yaml]
+    workdir: free/ci
+    env:
+      CGO_ENABLED: "0"
+    timeout: 600s
+
+  truth-dead-host:
+    kind: static
+    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, dead-host, --root, ../.., .github/truth/org.yaml]
+    workdir: free/ci
+    env:
+      CGO_ENABLED: "0"
+    timeout: 600s
+
+  truth:
+    kind: static
+    run: [go, run, -mod=vendor, ./internal/gates/truth/run.go, truth, --kind, rules, --root, ../.., .github/truth/org.yaml]
+    workdir: free/ci
+    deps: [truth-banned-literal, truth-retired-term, truth-dead-host]
+    env:
+      CGO_ENABLED: "0"
+    timeout: 600s
 
   # The nself-ci engine itself (free/ci). The model package holds the result
   # rule (one failing required check fails the run), which the mutation leg of
@@ -88,6 +127,12 @@ jobs:
     when:
       paths: [free/plugin-gauth/**]
       env_present: [NSELF_DB_URL, GAUTH_ENCRYPTION_KEY]
+
+# Per-check configuration. `truth.rules` lists the rule files of the truth check; its
+# presence is what plans the check as a job when none declares it (ImpliedBy).
+checks:
+  truth:
+    rules: [.github/truth/org.yaml]
 
 # Pipelines. `drills` is a scheduled pipeline of `kind: drill` jobs (P7-CI-02):
 # every directory of scripts/drill that holds an executable `run` is one job,

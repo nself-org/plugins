@@ -1,0 +1,152 @@
+package truth
+
+// Purpose: per-line matching for the three rule kinds.
+// Inputs:  one line of text and the compiled rules.
+// Outputs: the rules the line breaks (with a hash prefix for dead hosts).
+// Constraints: a dead-host rule stores sha256 hex of the lower-cased literal;
+// the engine hashes every IPv4 and host-name token of the line and compares
+// the whole token (a sub-domain is a different host), so no literal is ever held or
+// printed; a retired term matches case-insensitively as a whole term (the
+// characters on both sides are not letters or digits); a banned literal is a
+// case-sensitive substring.
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"regexp"
+	"strings"
+	"unicode"
+	"unicode/utf8"
+)
+
+var (
+	ipv4Re = regexp.MustCompile(`[0-9]{1,3}(?:\.[0-9]{1,3}){3}`)
+	hostRe = regexp.MustCompile(`[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+`)
+)
+
+// HashLiteral is the dead-host rule value of a host name or IPv4: the sha256
+// of its lower-cased text. Authors compute it in their shell; it is exported
+// for the tests and the runner's `hash` command.
+func HashLiteral(literal string) string {
+	sum := sha256.Sum256([]byte(strings.ToLower(literal)))
+	return hex.EncodeToString(sum[:])
+}
+
+// hostHit is a token whose hash is on a dead-host rule.
+type hostHit struct {
+	Rule   *Rule
+	Prefix string // first 12 hex digits of the token hash
+}
+
+// compiled holds the rules grouped for the scan.
+type compiled struct {
+	literals []*Rule
+	terms    []*Rule
+	termsLow []string
+	hosts    map[string][]*Rule // sha256 -> rules
+}
+
+func compile(rs RuleSet) compiled {
+	c := compiled{hosts: map[string][]*Rule{}}
+	for i := range rs.Rules {
+		r := &rs.Rules[i]
+		switch r.Kind {
+		case KindBannedLiteral:
+			c.literals = append(c.literals, r)
+		case KindRetiredTerm:
+			c.terms = append(c.terms, r)
+			c.termsLow = append(c.termsLow, strings.ToLower(strings.TrimSpace(r.Term)))
+		case KindDeadHost:
+			for _, h := range r.SHA256 {
+				c.hosts[h] = append(c.hosts[h], r)
+			}
+		}
+	}
+	return c
+}
+
+// literalHits returns the banned-literal rules the line breaks.
+func (c compiled) literalHits(line string) []*Rule {
+	var out []*Rule
+	for _, r := range c.literals {
+		if strings.Contains(line, r.Literal) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// termHits returns the retired-term rules the line breaks.
+func (c compiled) termHits(line string) []*Rule {
+	if len(c.terms) == 0 {
+		return nil
+	}
+	low := strings.ToLower(line)
+	var out []*Rule
+	for i, t := range c.termsLow {
+		if hasWholeTerm(low, t) {
+			out = append(out, c.terms[i])
+		}
+	}
+	return out
+}
+
+func hasWholeTerm(low, term string) bool {
+	for from := 0; from < len(low); {
+		i := strings.Index(low[from:], term)
+		if i < 0 {
+			return false
+		}
+		start, end := from+i, from+i+len(term)
+		before, _ := utf8.DecodeLastRuneInString(low[:start])
+		after, _ := utf8.DecodeRuneInString(low[end:])
+		if (start == 0 || !isWordRune(before)) && (end == len(low) || !isWordRune(after)) {
+			return true
+		}
+		from = start + 1
+	}
+	return false
+}
+
+func isWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
+
+// hostHits returns the dead-host rules the line breaks.
+func (c compiled) hostHits(line string) []hostHit {
+	if len(c.hosts) == 0 {
+		return nil
+	}
+	low := strings.ToLower(line)
+	var out []hostHit
+	tried := map[string]bool{} // an IPv4 is also a dotted token: report it once
+	try := func(tok string) {
+		h := HashLiteral(tok)
+		if tried[h] {
+			return
+		}
+		tried[h] = true
+		for _, r := range c.hosts[h] {
+			out = append(out, hostHit{Rule: r, Prefix: h[:12]})
+		}
+	}
+	for _, loc := range ipv4Re.FindAllStringIndex(low, -1) {
+		if standalone(low, loc[0], loc[1]) {
+			try(low[loc[0]:loc[1]])
+		}
+	}
+	for _, tok := range hostRe.FindAllString(low, -1) {
+		try(tok)
+	}
+	return out
+}
+
+// standalone reports whether the IPv4 at [start,end) is not part of a longer
+// dotted number (a version such as 1.2.3.4.5 is not an address).
+func standalone(s string, start, end int) bool {
+	if start > 0 && (s[start-1] == '.' && start > 1 && s[start-2] >= '0' && s[start-2] <= '9') {
+		return false
+	}
+	if end < len(s) && s[end] == '.' && end+1 < len(s) && s[end+1] >= '0' && s[end+1] <= '9' {
+		return false
+	}
+	return true
+}
