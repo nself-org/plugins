@@ -26,6 +26,7 @@ type Starter interface {
 	Version(ctx context.Context, path string) (string, error)
 }
 
+// execStarter starts through internal/exec, the only package that may start a process.
 type execStarter struct{}
 
 func (execStarter) Banner(ctx context.Context, binary, runtime, image string) ([]byte, error) {
@@ -36,6 +37,7 @@ func (execStarter) Version(ctx context.Context, path string) (string, error) {
 	return exec.RuntimeToolVersion(ctx, path)
 }
 
+// hasKVM reports whether /dev/kvm exists (the kvm platform needs it).
 func hasKVM() bool {
 	_, err := os.Stat("/dev/kvm")
 	return err == nil
@@ -55,40 +57,61 @@ func unavailable(reason string, facts map[string]string) isolation.Availability 
 	return isolation.Availability{Reason: reason, Facts: facts}
 }
 
-func (p *Profile) probeFresh(ctx context.Context) isolation.Availability {
+// inspected is what the cheap checks found: the runtime to start, runsc's entry and platform.
+type inspected struct {
+	binary, platform string
+	entry            runtimeEntry
+	base             map[string]string
+}
+
+// key identifies the runtime configuration a start result belongs to: a daemon reload that
+// changes the runsc entry makes the cached start stale at once.
+func (in inspected) key() string {
+	return in.binary + "|" + in.entry.Path + "|" + strings.Join(in.entry.Args, "\x00")
+}
+
+// inspect runs the checks that cost one query each and run on every call (the container
+// profile's probe, the runtime table, the deny list and the platform). ok is false when the
+// level is unavailable; av then says why.
+func (p *Profile) inspect(ctx context.Context) (in inspected, av isolation.Availability, ok bool) {
 	base := p.base.Probe(ctx)
 	if !base.Available() {
-		return isolation.Availability{Reason: base.Reason}
+		return in, isolation.Availability{Reason: base.Reason}, false
 	}
-	binary := base.Facts["runtime"]
-	if binary != "docker" {
+	in.binary, in.base = base.Facts["runtime"], base.Facts
+	if in.binary != "docker" {
 		// podman keeps its OCI runtimes in containers.conf, which gives no table to read or judge
-		return unavailable(isolation.ReasonRuntimeMissing, map[string]string{"runtime": binary, "detail": "gVisor is supported through docker only"})
+		return in, unavailable(isolation.ReasonRuntimeMissing, map[string]string{"runtime": in.binary, "detail": "gVisor is supported through docker only"}), false
 	}
-	out, err := p.opts.Runner.Query(ctx, binary, "info", "--format", "{{json .Runtimes}}")
+	out, err := p.opts.Runner.Query(ctx, in.binary, "info", "--format", "{{json .Runtimes}}")
 	if err != nil {
 		if exec.IsRuntimeMissing(err) {
-			return unavailable(isolation.ReasonRuntimeMissing, nil)
+			return in, unavailable(isolation.ReasonRuntimeMissing, nil), false
 		}
-		return unavailable(isolation.ReasonProbeFailed, map[string]string{"detail": "docker info failed"})
+		return in, unavailable(isolation.ReasonProbeFailed, map[string]string{"detail": "docker info failed"}), false
 	}
-	entry, ok, err := parseEntry(out)
+	entry, found, err := parseEntry(out)
 	if err != nil {
-		return unavailable(isolation.ReasonProbeFailed, map[string]string{"detail": "docker runtime table is not JSON"})
+		return in, unavailable(isolation.ReasonProbeFailed, map[string]string{"detail": "docker runtime table is not JSON"}), false
 	}
-	if !ok {
-		return unavailable(isolation.ReasonRuntimeMissing, map[string]string{"detail": "runsc is not registered with docker"})
+	if !found {
+		return in, unavailable(isolation.ReasonRuntimeMissing, map[string]string{"detail": "runsc is not registered with docker"}), false
 	}
 	platform, flag := checkArgs(entry.Args)
 	if flag != "" {
-		return unavailable(ReasonRuntimeFlagDenied, map[string]string{"detail": "runsc runtime argument " + flag + " is refused"})
+		return in, unavailable(ReasonRuntimeFlagDenied, map[string]string{"detail": "runsc runtime argument " + flag + " is refused"}), false
 	}
-	facts := map[string]string{"platform": platform}
 	if reason, why := platformReason(platform, p.opts.HasKVM()); reason != "" {
-		facts["detail"] = why
-		return unavailable(reason, facts)
+		return in, unavailable(reason, map[string]string{"platform": platform, "detail": why}), false
 	}
-	banner, err := p.opts.Starter.Banner(ctx, binary, RuntimeName, p.opts.Image)
+	in.entry, in.platform = entry, platform
+	return in, isolation.Availability{}, true
+}
+
+// start proves the level by really starting the probe image under runsc and reading the banner.
+func (p *Profile) start(ctx context.Context, in inspected) isolation.Availability {
+	facts := map[string]string{"platform": in.platform}
+	banner, err := p.opts.Starter.Banner(ctx, in.binary, RuntimeName, p.opts.Image)
 	if err != nil {
 		facts["detail"] = "the probe container did not start under runsc"
 		return unavailable(isolation.ReasonProbeFailed, facts)
@@ -97,14 +120,26 @@ func (p *Profile) probeFresh(ctx context.Context) isolation.Availability {
 		facts["detail"] = "the probe container started but did not print the gVisor banner"
 		return unavailable(isolation.ReasonProbeFailed, facts)
 	}
-	version, verr := p.opts.Starter.Version(ctx, entry.Path)
-	if verr != nil || version == "" {
-		version = "unknown" // the version is a fact, not the proof: the start above is
+	version := "unknown" // the version is a fact, not the proof: the start above is
+	if v, verr := p.opts.Starter.Version(ctx, in.entry.Path); verr == nil && v != "" {
+		version = v
 	}
-	out2 := map[string]string{}
-	for k, v := range base.Facts {
-		out2[k] = v
+	out := map[string]string{}
+	for k, v := range in.base {
+		out[k] = v
 	}
-	out2["sandbox_runtime"], out2["runsc_version"], out2["platform"], out2["banner"] = RuntimeName, version, platform, "gvisor"
-	return isolation.Availability{Level: "sandboxed-container", Facts: out2}
+	out["sandbox_runtime"], out["runsc_version"], out["platform"], out["banner"] = RuntimeName, version, in.platform, "gvisor"
+	return isolation.Availability{Level: "sandboxed-container", Facts: out}
+}
+
+// clone copies the facts map, so a caller that edits its result never touches the cache.
+func clone(av isolation.Availability) isolation.Availability {
+	if av.Facts != nil {
+		facts := make(map[string]string, len(av.Facts))
+		for k, v := range av.Facts {
+			facts[k] = v
+		}
+		av.Facts = facts
+	}
+	return av
 }

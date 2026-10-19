@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,14 +24,17 @@ const (
 
 // fakeRunner answers `info` (whole and the runtime table) from canned JSON.
 type fakeRunner struct {
+	mu         sync.Mutex
 	info       map[string]string
 	runtimes   string
-	calls      int
 	runtimeErr error
 }
 
+func (f *fakeRunner) setRuntimes(table string) { f.mu.Lock(); f.runtimes = table; f.mu.Unlock() }
+
 func (f *fakeRunner) Query(_ context.Context, binary string, args ...string) ([]byte, error) {
-	f.calls++
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if strings.Contains(strings.Join(args, " "), ".Runtimes") {
 		if f.runtimeErr != nil {
 			return nil, f.runtimeErr
@@ -44,6 +49,8 @@ func (f *fakeRunner) Query(_ context.Context, binary string, args ...string) ([]
 
 // fakeStarter records what the probe started.
 type fakeStarter struct {
+	mu                                  sync.Mutex
+	delay                               time.Duration
 	out                                 string
 	err                                 error
 	version                             string
@@ -52,9 +59,15 @@ type fakeStarter struct {
 	binary, runtime, image, versionPath string
 }
 
-func (f *fakeStarter) Banner(_ context.Context, binary, runtime, image string) ([]byte, error) {
+func (f *fakeStarter) Banner(ctx context.Context, binary, runtime, image string) ([]byte, error) {
+	time.Sleep(f.delay)
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.starts++
 	f.binary, f.runtime, f.image = binary, runtime, image
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	return []byte(f.out), f.err
 }
 
@@ -97,7 +110,7 @@ func TestProbeAvailableStartsTheProbeImageUnderRunsc(t *testing.T) {
 }
 
 func TestProbeImageIsPinnedByDigest(t *testing.T) {
-	if !strings.Contains(ProbeImage, "@sha256:") || strings.Count(ProbeImage, ":") != 1 {
+	if !regexp.MustCompile(`^docker\.io/library/busybox@sha256:[0-9a-f]{64}$`).MatchString(ProbeImage) {
 		t.Fatalf("probe image must be a tagless ref@sha256 digest: %s", ProbeImage)
 	}
 }
@@ -164,12 +177,13 @@ func TestProbePlatforms(t *testing.T) {
 		kvm  bool
 		want string
 	}{
-		"default is systrap":      {``, false, "systrap"},
-		"ptrace":                  {`"--platform=ptrace"`, false, "ptrace"},
-		"spaced form":             {`"--platform","ptrace"`, false, "ptrace"},
-		"last one wins":           {`"--platform=kvm","--platform=systrap"`, false, "systrap"},
-		"kvm where /dev/kvm is":   {`"--platform=kvm"`, true, "kvm"},
-		"unrelated flags ignored": {`"--debug-log=/tmp/x","--network=sandbox"`, false, "systrap"},
+		"default is systrap":       {``, false, "systrap"},
+		"ptrace":                   {`"--platform=ptrace"`, false, "ptrace"},
+		"spaced form":              {`"--platform","ptrace"`, false, "ptrace"},
+		"last one wins":            {`"--platform=kvm","--platform=systrap"`, false, "systrap"},
+		"kvm where /dev/kvm is":    {`"--platform=kvm"`, true, "kvm"},
+		"unrelated flags ignored":  {`"--debug-log=/tmp/x","--network=sandbox"`, false, "systrap"},
+		"exclusive file access ok": {`"--file-access=exclusive"`, false, "systrap"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			table := `{"runsc":{"path":"runsc","runtimeArgs":[` + tc.args + `]}}`
@@ -242,4 +256,63 @@ func quoteAll(args []string) string {
 		q[i] = `"` + a + `"`
 	}
 	return strings.Join(q, ",")
+}
+
+// A daemon reload can add a denied argument while a start is cached: the table is read on every call.
+func TestRuntimeTableIsReadOnEveryProbe(t *testing.T) {
+	r, st := okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`), okStarter()
+	p := newProfile(r, st, nil)
+	if !p.Probe(context.Background()).Available() {
+		t.Fatal("first probe must be available")
+	}
+	r.setRuntimes(`{"runsc":{"path":"/usr/local/bin/runsc","runtimeArgs":["--network=host"]}}`)
+	if av := p.Probe(context.Background()); av.Available() || av.Reason != ReasonRuntimeFlagDenied {
+		t.Fatalf("a cached start hid a newly denied argument: %+v", av)
+	}
+	if st.starts != 1 {
+		t.Fatalf("the table check must not start a container: %d starts", st.starts)
+	}
+	r.setRuntimes(`{"runsc":{"path":"/usr/local/bin/runsc","runtimeArgs":["--platform=ptrace"]}}`)
+	if av := p.Probe(context.Background()); !av.Available() || av.Facts["platform"] != "ptrace" || st.starts != 2 {
+		t.Fatalf("a changed runtime entry must be started again: %+v starts=%d", av, st.starts)
+	}
+}
+
+// A start cut short by the caller's context says nothing about the host and must not be remembered.
+func TestCancelledProbeIsNotCached(t *testing.T) {
+	st := okStarter()
+	p := newProfile(okRunner(`{"runsc":{}}`), st, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if av := p.Probe(ctx); av.Available() {
+		t.Fatalf("a cancelled probe reported available: %+v", av)
+	}
+	if av := p.Probe(context.Background()); !av.Available() {
+		t.Fatalf("the cancelled result was cached: %+v", av)
+	}
+}
+
+func TestConcurrentProbesShareOneStart(t *testing.T) {
+	st := okStarter()
+	st.delay = 50 * time.Millisecond
+	p := newProfile(okRunner(`{"runsc":{}}`), st, nil)
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			av := p.Probe(context.Background())
+			if !av.Available() {
+				t.Errorf("%+v", av)
+			}
+			av.Facts["banner"] = "edited by the caller" // must not reach the cache
+		}()
+	}
+	wg.Wait()
+	if st.starts != 1 {
+		t.Fatalf("%d containers started for 20 concurrent probes", st.starts)
+	}
+	if got := p.Probe(context.Background()).Facts["banner"]; got != "gvisor" {
+		t.Fatalf("a caller edited the cached facts: %q", got)
+	}
 }

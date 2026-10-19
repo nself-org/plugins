@@ -36,11 +36,13 @@ A runsc binary or a runtime entry is not availability. The profile starts a smal
 
 ### Platform
 
-The probe reads the runtime entry and records `platform`. `systrap` is the default; `ptrace` works where systrap does not. `kvm` is refused where `/dev/kvm` is absent, which is every supported node today. Any other value is refused too (`isolation.platform_unsupported`).
+The probe reads the runtime entry and records `platform`. `systrap` is the default; `ptrace` is the alternative when the host kernel does not run systrap. `kvm` is refused where `/dev/kvm` is absent, which is every supported node today. Any other value is refused too (`isolation.platform_unsupported`).
 
-The level is unavailable (`E678`, reason `isolation.runtime_flag_denied`) when the runsc entry carries any of `--network=host`, `--host-uds`, `--host-fifo`, `--net-raw` or `--allow-flag-override`. These open the sandbox to the host; the profile refuses them rather than stripping them, because the daemon would still pass them to runsc.
+The level is unavailable (`E678`, reason `isolation.runtime_flag_denied`) when the runsc entry carries any of `--network=host`, `--host-uds`, `--host-fifo`, `--net-raw`, `--allow-flag-override`, `--ignore-cgroups`, `--rootless`, `--file-access=shared` or a `--TESTONLY-*` flag. The first group opens the sandbox to the host; `--ignore-cgroups` would drop the pids, memory and CPU limits. The profile refuses them rather than stripping them, because the daemon would still pass them to runsc. A flag is matched by presence in every spelling the Go flag package accepts, so `--net-raw=false` is refused as well.
 
-On a separated node the agent user's own runtime must be rootless, and the probe starts runsc under it. If runsc does not run rootless there, the probe fails (`isolation.probe_failed`) and the level stays unavailable.
+The runtime table is read on every check, so a daemon reload that adds one of these arguments is seen at once. Only the real start is remembered (for a minute, per runtime entry), and concurrent checks share one start.
+
+On a separated node the agent user's own runtime must be rootless, and the probe starts runsc under it. Rootless Docker usually needs `--ignore-cgroups` for runsc, which is refused, so the level is normally unavailable there (`isolation.runtime_flag_denied`, or `isolation.probe_failed` if the start fails).
 
 ### What it does not give you
 

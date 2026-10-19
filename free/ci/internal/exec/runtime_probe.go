@@ -3,7 +3,7 @@ package exec
 // Purpose: the two starts the sandboxed-container profile needs and RuntimeQuery cannot do:
 // one short-lived hardened probe container under a named OCI runtime, and `runsc --version`.
 // Inputs:  a runtime binary (docker or podman), the runtime name (runsc only), an image pinned
-// by digest; or the runsc path the daemon is configured with.
+// by digest; or the absolute runsc path the daemon is configured with.
 // Outputs: the probe's stdout (capped) or the first line of the version output.
 // Constraints: argv is built here from fixed words, never from the caller; the probe command is
 // always `dmesg`, with no network, no capabilities, a read-only root and small limits; the
@@ -75,11 +75,10 @@ func RuntimeProbeRun(ctx context.Context, binary, runtime, image string) ([]byte
 }
 
 // RuntimeToolVersion runs `<path> --version` for runsc and returns the first output line.
-// path is "" (look runsc up on PATH) or an absolute path whose base name is runsc.
+// path must be absolute with base name runsc: it is the binary the daemon is configured with, so
+// a PATH lookup that finds a different runsc is never asked.
 func RuntimeToolVersion(ctx context.Context, path string) (string, error) {
-	if path == "" {
-		path = sandboxRuntime
-	} else if !filepath.IsAbs(path) || filepath.Base(path) != sandboxRuntime {
+	if !filepath.IsAbs(path) || filepath.Base(path) != sandboxRuntime {
 		return "", coded("E613", "runtime tool version refused")
 	}
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)

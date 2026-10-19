@@ -38,9 +38,12 @@ type Options struct {
 type Profile struct {
 	opts Options
 	base *container.Profile
-	mu   sync.Mutex
-	av   isolation.Availability
-	at   time.Time
+	// flight serialises starts; mu guards the cached start (key is the runtime configuration it belongs to).
+	flight sync.Mutex
+	mu     sync.Mutex
+	key    string
+	av     isolation.Availability
+	at     time.Time
 }
 
 var _ isolation.Profile = (*Profile)(nil)
@@ -78,21 +81,40 @@ func (execRunner) Query(ctx context.Context, binary string, args ...string) ([]b
 // Level declares the sandboxed-container level.
 func (p *Profile) Level() model.Isolation { return "sandboxed-container" }
 
-// Probe reports whether gVisor can run a job now, cached for the TTL.
+// Probe reports whether gVisor can run a job now. The runtime table and its arguments are read on
+// every call (a daemon reload that adds a denied argument is seen at once); only the real start is
+// cached, per runtime configuration, and concurrent callers share one start. A start cut short by
+// the caller's own context is not cached: it says nothing about the host.
 func (p *Profile) Probe(ctx context.Context) isolation.Availability {
-	p.mu.Lock()
-	if !p.at.IsZero() && p.opts.Now().Sub(p.at) < p.opts.TTL {
-		av := p.av
-		p.mu.Unlock()
-		return av
+	in, av, ok := p.inspect(ctx)
+	if !ok {
+		return clone(av)
 	}
-	p.mu.Unlock()
-	// asked outside the lock: the start is time boxed, and a wedged daemon must not block other callers
-	av := p.probeFresh(ctx)
+	key := in.key()
+	if hit, ok := p.cached(key); ok {
+		return clone(hit)
+	}
+	p.flight.Lock()
+	defer p.flight.Unlock()
+	if hit, ok := p.cached(key); ok { // another caller finished the start while this one waited
+		return clone(hit)
+	}
+	av = p.start(ctx, in)
+	if ctx.Err() == nil {
+		p.mu.Lock()
+		p.key, p.av, p.at = key, av, p.opts.Now()
+		p.mu.Unlock()
+	}
+	return clone(av)
+}
+
+func (p *Profile) cached(key string) (isolation.Availability, bool) {
 	p.mu.Lock()
-	p.av, p.at = av, p.opts.Now()
-	p.mu.Unlock()
-	return av
+	defer p.mu.Unlock()
+	if p.key != key || p.at.IsZero() || p.opts.Now().Sub(p.at) >= p.opts.TTL {
+		return isolation.Availability{}, false
+	}
+	return p.av, true
 }
 
 // Prepare fails with E678 when gVisor stopped being usable.

@@ -27,8 +27,12 @@ const InstallHint = "install gVisor (https://gvisor.dev/docs/user_guide/install/
 // DefaultPlatform is what runsc uses when no --platform argument is set.
 const DefaultPlatform = "systrap"
 
-// denied are the flags that open the sandbox to the host; presence alone is a refusal.
-var denied = map[string]bool{"host-uds": true, "host-fifo": true, "net-raw": true, "allow-flag-override": true}
+// denied are the flags that open the sandbox to the host or drop a limit; presence alone is a
+// refusal (so `--net-raw=false` is refused too, which is safe and simple). The first four are
+// Epic D9's list; ignore-cgroups (the pids, memory and cpu limits would not be enforced) and
+// rootless were added by the lead ruling of 2026-10-19; TESTONLY-* flags and `file-access=shared`
+// are matched in checkArgs.
+var denied = map[string]bool{"host-uds": true, "host-fifo": true, "net-raw": true, "allow-flag-override": true, "ignore-cgroups": true, "rootless": true}
 
 type runtimeEntry struct {
 	Path string   `json:"path"`
@@ -73,8 +77,10 @@ func checkArgs(args []string) (platform, denial string) {
 		name, value, has := splitFlag(arg)
 		switch {
 		case name == "":
-		case denied[name]:
+		case denied[name], strings.HasPrefix(strings.ToLower(name), "testonly"):
 			return "", "--" + name
+		case name == "file-access" && flagValue(args, i, value, has) == "shared":
+			return "", "--file-access=shared"
 		case name == "network" && flagValue(args, i, value, has) == "host":
 			return "", "--network=host"
 		case name == "platform":

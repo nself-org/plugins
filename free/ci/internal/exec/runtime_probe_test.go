@@ -17,7 +17,7 @@ func fakeProbeRuntime(t *testing.T, stdout string, code int) (logFile string) {
 	t.Helper()
 	dir := t.TempDir()
 	logFile = filepath.Join(dir, "calls.log")
-	script := "#!/bin/sh\necho \"$*\" >> '" + logFile + "'\n[ \"$1\" = run ] && printf '%s' '" + stdout + "'\nexit " + string(rune('0'+code)) + "\n"
+	script := "#!/bin/sh\nprintf '%s|' \"$@\" >> '" + logFile + "'\necho >> '" + logFile + "'\n[ \"$1\" = run ] && printf '%s' '" + stdout + "'\nexit " + string(rune('0'+code)) + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -52,13 +52,13 @@ func TestRuntimeProbeRunBuildsAHardenedFixedCommand(t *testing.T) {
 	}
 	logged, _ := os.ReadFile(logFile)
 	argv := strings.TrimSpace(string(logged))
-	for _, want := range []string{"run --rm --name nself-ci-probe-", "--runtime=runsc", "--network=none", "--cap-drop=ALL",
-		"--security-opt no-new-privileges", "--read-only", "--pids-limit 64", "--memory=64m", "--user 65534:65534", " " + image + " dmesg"} {
+	for _, want := range []string{"run|--rm|--name|nself-ci-probe-", "|--runtime=runsc|", "|--network=none|", "|--cap-drop=ALL|",
+		"|--security-opt|no-new-privileges|", "|--read-only|", "|--pids-limit|64|", "|--memory=64m|", "|--user|65534:65534|", "|" + image + "|dmesg|"} {
 		if !strings.Contains(argv, want) {
 			t.Errorf("argv lacks %q: %s", want, argv)
 		}
 	}
-	for _, bad := range []string{"--privileged", "--network=host", "-v ", "--volume", "--mount", ".sock"} {
+	for _, bad := range []string{"--privileged", "--network=host", "|-v|", "--volume", "--mount", ".sock"} {
 		if strings.Contains(argv, bad) {
 			t.Errorf("argv carries %q: %s", bad, argv)
 		}
@@ -71,7 +71,7 @@ func TestRuntimeProbeRunRemovesTheContainerOnFailure(t *testing.T) {
 		t.Fatalf("want E613, got %v", err)
 	}
 	logged, _ := os.ReadFile(logFile)
-	if !strings.Contains(string(logged), "rm -f nself-ci-probe-") {
+	if !strings.Contains(string(logged), "rm|-f|nself-ci-probe-") {
 		t.Fatalf("no cleanup after a failed probe: %s", logged)
 	}
 }
@@ -86,7 +86,7 @@ func TestRuntimeToolVersion(t *testing.T) {
 	if err != nil || got != "runsc version release-20261012.0" {
 		t.Fatalf("got %q %v", got, err)
 	}
-	for _, path := range []string{"relative/runsc", filepath.Join(dir, "other"), "/bin/sh"} {
+	for _, path := range []string{"", "runsc", "relative/runsc", filepath.Join(dir, "other"), "/bin/sh"} {
 		if _, err := RuntimeToolVersion(context.Background(), path); err == nil || !strings.Contains(err.Error(), "E613") {
 			t.Errorf("%s: want E613, got %v", path, err)
 		}
