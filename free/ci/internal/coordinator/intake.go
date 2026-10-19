@@ -169,6 +169,12 @@ func (c *Coordinator) serveWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	if ing != nil {
 		d, err := ing.Accept(r.Context(), r, body)
+		var declined interface{ DeclineReason() string }
+		if errors.As(err, &declined) { // verified but not for the intake (a runner demand nobody serves): 200, nothing enqueued
+			c.cfg.Logf("ingress %s declined a delivery", ing.Name())
+			writeJSON(w, http.StatusOK, map[string]any{"accepted": false, "reason": declined.DeclineReason()})
+			return
+		}
 		if err != nil {
 			c.cfg.Logf("ingress %s refused a delivery", ing.Name())
 			http.Error(w, "delivery refused", http.StatusForbidden)

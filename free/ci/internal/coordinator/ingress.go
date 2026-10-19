@@ -38,7 +38,9 @@ type Ingress interface {
 	// Match reports whether r belongs to this ingress.
 	Match(r *http.Request) bool
 	// Accept verifies and parses a matched request; body is the whole body (at most 25 MiB). An error
-	// refuses the request with 403 and enqueues nothing.
+	// refuses the request with 403 and enqueues nothing, except an error that has a
+	// DeclineReason() string method (P7-HOST-16): the request was fine but must not enqueue,
+	// and the answer is 200 {"accepted": false, "reason": ...}.
 	Accept(ctx context.Context, r *http.Request, body []byte) (Delivery, error)
 }
 
