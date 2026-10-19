@@ -177,11 +177,15 @@ func toolDrift(ctx context.Context, env Env, src Source) []Drift {
 		if len(got) > 120 { // the gate runner stored at most this much
 			got = got[:120]
 		}
+		recorded := p.recorded
+		if p.name == "git" { // the run records git as the bare number: compare numbers on both sides
+			got, recorded = evidence.TrimGitVersion(got), evidence.TrimGitVersion(recorded)
+		}
 		switch {
 		case err != nil || exit != 0:
-			out = append(out, Drift{Kind: DriftToolGone, Name: p.name, Recorded: p.recorded})
-		case got != p.recorded:
-			out = append(out, Drift{Kind: DriftTool, Name: p.name, Recorded: p.recorded, Current: got})
+			out = append(out, Drift{Kind: DriftToolGone, Name: p.name, Recorded: recorded})
+		case got != recorded:
+			out = append(out, Drift{Kind: DriftTool, Name: p.name, Recorded: recorded, Current: got})
 		}
 	}
 	return out

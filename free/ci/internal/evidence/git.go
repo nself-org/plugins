@@ -60,7 +60,14 @@ func GitVersion(ctx context.Context, c Capture, root string) string {
 	if !ok {
 		return ""
 	}
-	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(out), "git version"))
+	return TrimGitVersion(out)
+}
+
+// TrimGitVersion reduces `git --version` output ("git version 2.56.0") to the
+// number the evidence records; a bare number passes through. Recording and the
+// reproduce drift check both use it, so the two sides always compare alike.
+func TrimGitVersion(s string) string {
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(s), "git version"))
 }
 
 // CommitExists reports whether rev names a commit object in the repository.

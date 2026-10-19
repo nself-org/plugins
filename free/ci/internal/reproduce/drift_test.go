@@ -82,3 +82,20 @@ func TestIsolationDrift(t *testing.T) {
 func modelEvidenceWithTool(name, version string) model.Evidence {
 	return model.Evidence{ToolVersions: map[string]string{name: version}}
 }
+
+// D-1092: the gate runner records git as the bare number ("2.56.0") while the
+// probe prints "git version 2.56.0"; the same install must not drift.
+func TestToolDriftGitVersionNormalised(t *testing.T) {
+	src := Source{Doc: model.Evidence{ToolVersions: map[string]string{"git": "2.56.0"}}}
+	env := Env{Probe: func(_ context.Context, argv ...string) (string, int, error) {
+		return "git version 2.56.0\n", 0, nil
+	}}
+	if got := toolDrift(context.Background(), env, src); len(got) != 0 {
+		t.Fatalf("an unchanged git must not drift: %+v", got)
+	}
+	env.Probe = func(_ context.Context, argv ...string) (string, int, error) { return "git version 2.57.1\n", 0, nil }
+	got := toolDrift(context.Background(), env, src)
+	if len(got) != 1 || got[0].Recorded != "2.56.0" || got[0].Current != "2.57.1" {
+		t.Fatalf("a real git change must still drift, both sides as numbers: %+v", got)
+	}
+}
