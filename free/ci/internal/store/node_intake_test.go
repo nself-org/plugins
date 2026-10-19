@@ -14,8 +14,8 @@ import (
 
 type intakeClock struct{ t time.Time }
 
-func (c *intakeClock) Now() time.Time          { return c.t }
-func (c *intakeClock) add(d time.Duration)     { c.t = c.t.Add(d) }
+func (c *intakeClock) Now() time.Time      { return c.t }
+func (c *intakeClock) add(d time.Duration) { c.t = c.t.Add(d) }
 func intakeStore(t *testing.T) (*Store, *intakeClock) {
 	t.Helper()
 	s, clk := testStore(t), &intakeClock{t: time.Unix(1_000_000, 0)}
