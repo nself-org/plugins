@@ -20,7 +20,7 @@ func init() {
 	model.Register(model.Code{
 		ID: CodeToolchain, Class: "usage",
 		Summary: "the pinned toolchain image is not available",
-		Fix:     "Pass --image <ref@digest> (set NSELF_CI_IMAGE=<ref@digest> until the flag exists), or run without --container; the first publish of the pinned image is a separate owner-named action",
+		Fix:     "Pass --image <ref@digest> (or set NSELF_CI_IMAGE=<ref@digest>), or run without --container; the first publish of the pinned image is a separate owner-named action",
 	})
 }
 
