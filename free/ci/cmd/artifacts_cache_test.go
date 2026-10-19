@@ -11,6 +11,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 // seedCache commits one cache entry through a whole passing attempt of run
@@ -31,7 +32,7 @@ func (r *artRig) seedCache(id, content string) entries.Manifest {
 	p := store.PipelineRow{ID: "run" + id, Revision: "rev", Project: r.project, Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
 	steps := []error{r.st.CreatePipeline(ctx, p), r.st.CreateJob(ctx, store.JobRow{ID: "j" + id, PipelineID: p.ID, Name: "build", Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}),
 		r.st.CreateAttempt(ctx, store.AttemptRow{ID: id, JobID: "j" + id, N: 1}, ""),
-		r.st.Transition(ctx, id, "queued", "leased", store.TransitionDetail{Epoch: 0}), r.st.Transition(ctx, id, "leased", "running", store.TransitionDetail{Epoch: 1}),
+		storetest.Admit(ctx, r.st, id), r.st.Transition(ctx, id, "leased", "running", store.TransitionDetail{Epoch: 1}),
 		es.RecordPlan(ctx, id, 2, f, []string{key}), es.RecordUse(ctx, entries.Use{Attempt: id, Spec: "go", Key: key, Result: "miss"}),
 		r.st.Transition(ctx, id, "running", "finalizing", store.TransitionDetail{Epoch: 2}), es.RecordResult(ctx, id, 3, true)}
 	for i, e := range steps {

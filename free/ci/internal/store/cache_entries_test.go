@@ -65,7 +65,7 @@ func cacheSeed(t *testing.T, s *Store, id string, f entries.Facts) {
 
 func cacheStep(t *testing.T, s *Store, id string, from, to model.JobState, epoch int64) {
 	t.Helper()
-	if err := s.Transition(context.Background(), id, from, to, TransitionDetail{Epoch: epoch, Operator: from == "failed"}); err != nil {
+	if err := s.testTransition(context.Background(), id, from, to, TransitionDetail{Epoch: epoch, Operator: from == "failed"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -191,7 +191,7 @@ func TestCacheEntriesCommitStates(t *testing.T) {
 	// running: plan recorded but the attempt is not finalizing yet
 	cacheSeed(t, s, "run", cacheTrusted)
 	for _, st := range [][3]any{{model.JobState("queued"), model.JobState("leased"), int64(0)}, {model.JobState("leased"), model.JobState("running"), int64(1)}} {
-		if err := s.Transition(ctx, "run", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
+		if err := s.testTransition(ctx, "run", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -211,7 +211,7 @@ func TestCacheEntriesCommitStates(t *testing.T) {
 	}
 	// terminal: a finished attempt cannot write
 	_, fin := cacheFinalizing(t, s, "done", cacheTrusted, []string{cacheKey}, true)
-	if err := s.Transition(ctx, "done", "finalizing", "passed", TransitionDetail{Epoch: fin}); err != nil {
+	if err := s.testTransition(ctx, "done", "finalizing", "passed", TransitionDetail{Epoch: fin}); err != nil {
 		t.Fatal(err)
 	}
 	if got := reason(s.CacheCommit(ctx, req("done", fin+1))); got != "attempt_state" {
@@ -250,7 +250,7 @@ func TestCacheEntriesPlanAndResultRefusals(t *testing.T) {
 		t.Fatalf("plan while queued: %s", got)
 	}
 	for _, st := range [][3]any{{model.JobState("queued"), model.JobState("leased"), int64(0)}, {model.JobState("leased"), model.JobState("running"), int64(1)}} {
-		if err := s.Transition(ctx, "p", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
+		if err := s.testTransition(ctx, "p", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -272,7 +272,7 @@ func TestCacheEntriesPlanAndResultRefusals(t *testing.T) {
 	if got := reason(s.CacheRecordResult(ctx, "p", 2, true)); got != "attempt_state" {
 		t.Fatalf("result while running: %s", got)
 	}
-	if err := s.Transition(ctx, "p", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
+	if err := s.testTransition(ctx, "p", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
 		t.Fatal(err)
 	}
 	if got := reason(s.CacheRecordResult(ctx, "p", 2, true)); got != "epoch" {
@@ -280,7 +280,7 @@ func TestCacheEntriesPlanAndResultRefusals(t *testing.T) {
 	}
 	cacheSeed(t, s, "q", cacheTrusted)
 	for _, st := range [][3]any{{model.JobState("queued"), model.JobState("leased"), int64(0)}, {model.JobState("leased"), model.JobState("running"), int64(1)}, {model.JobState("running"), model.JobState("finalizing"), int64(2)}} {
-		if err := s.Transition(ctx, "q", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
+		if err := s.testTransition(ctx, "q", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
 			t.Fatal(err)
 		}
 	}

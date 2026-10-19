@@ -21,7 +21,7 @@ func TestConfirmationIsExplicitAndSingleUse(t *testing.T) {
 		epoch    int64
 		class    model.FailureClass
 	}{{"queued", "leased", 0, ""}, {"leased", "running", 1, ""}, {"running", "failed", 2, "code"}} {
-		if err := s.Transition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch, FailureClass: step.class}); err != nil {
+		if err := s.testTransition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch, FailureClass: step.class}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -47,11 +47,11 @@ func TestConfirmationRefusedForInfraAndOnceOnlyJobs(t *testing.T) {
 		from, to model.JobState
 		epoch    int64
 	}{{"queued", "leased", 0}, {"leased", "running", 1}} {
-		if err := s.Transition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
+		if err := s.testTransition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := s.Transition(ctx, "a", "running", "failed", TransitionDetail{Epoch: 2, FailureClass: "infra"}); err != nil {
+	if err := s.testTransition(ctx, "a", "running", "failed", TransitionDetail{Epoch: 2, FailureClass: "infra"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.AuthorizeConfirmation(ctx, "coordinator", "a", "x"); !codeIs(err, "E609") {
@@ -68,7 +68,7 @@ func TestForgedConfirmationDoesNotRetryInfraFailure(t *testing.T) {
 		epoch    int64
 		class    model.FailureClass
 	}{{"queued", "leased", 0, ""}, {"leased", "running", 1, ""}, {"running", "failed", 2, "infra"}} {
-		if err := s.Transition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch, FailureClass: step.class}); err != nil {
+		if err := s.testTransition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch, FailureClass: step.class}); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -21,7 +21,7 @@ func artRunning(t *testing.T, s *Store, id string, decl int) {
 		from, to model.JobState
 		epoch    int64
 	}{{"queued", "leased", 0}, {"leased", "running", 1}} {
-		if err := s.Transition(ctx, id, st.from, st.to, TransitionDetail{Epoch: st.epoch}); err != nil {
+		if err := s.testTransition(ctx, id, st.from, st.to, TransitionDetail{Epoch: st.epoch}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -79,10 +79,10 @@ func TestCacheArtifactsMigrate(t *testing.T) {
 		t.Fatalf("commit while running: %v", err)
 	}
 	// R-DS-20 backstop: a pass with a staged record becomes failed/infra with no seam involved
-	if err := s.Transition(ctx, "a", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
+	if err := s.testTransition(ctx, "a", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, "a", "finalizing", "passed", TransitionDetail{Epoch: 3}); err != nil {
+	if err := s.testTransition(ctx, "a", "finalizing", "passed", TransitionDetail{Epoch: 3}); err != nil {
 		t.Fatal(err)
 	}
 	if state, _, _ := s.AttemptStateEpoch(ctx, "a"); state != "failed" {
@@ -100,14 +100,14 @@ func TestCacheArtifactsMigrate(t *testing.T) {
 	if err := s.ArtifactStage(ctx, "b", 2, []records.Record{rb}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, "b", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
+	if err := s.testTransition(ctx, "b", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
 		t.Fatal(err)
 	}
 	staged, _ := s.ArtifactStaged(ctx, "b")
 	if _, err := s.ArtifactCommit(ctx, "b", 3, staged, artPolicy()); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, "b", "finalizing", "passed", TransitionDetail{Epoch: 3}); err != nil {
+	if err := s.testTransition(ctx, "b", "finalizing", "passed", TransitionDetail{Epoch: 3}); err != nil {
 		t.Fatal(err)
 	}
 	if state, _, _ := s.AttemptStateEpoch(ctx, "b"); state != "passed" {
@@ -147,7 +147,7 @@ func TestCacheArtifactsRedeclareSupersedesOlderEpoch(t *testing.T) {
 		from, to model.JobState
 		epoch    int64
 	}{{"running", "lost", 2}, {"lost", "retryable", 3}, {"retryable", "queued", 4}, {"queued", "leased", 5}, {"leased", "running", 6}} {
-		if err := s.Transition(ctx, "a", st.from, st.to, TransitionDetail{Epoch: st.epoch, Operator: st.from == "lost" || st.from == "retryable"}); err != nil {
+		if err := s.testTransition(ctx, "a", st.from, st.to, TransitionDetail{Epoch: st.epoch, Operator: st.from == "lost" || st.from == "retryable"}); err != nil {
 			t.Fatalf("%s>%s: %v", st.from, st.to, err)
 		}
 	}
@@ -161,7 +161,7 @@ func TestCacheArtifactsRedeclareSupersedesOlderEpoch(t *testing.T) {
 		t.Fatal(err)
 	}
 	// once committed, the attempt cannot be declared again
-	if err := s.Transition(ctx, "a", "running", "finalizing", TransitionDetail{Epoch: 7}); err != nil {
+	if err := s.testTransition(ctx, "a", "running", "finalizing", TransitionDetail{Epoch: 7}); err != nil {
 		t.Fatal(err)
 	}
 	staged, _ := s.ArtifactStaged(ctx, "a")
@@ -243,7 +243,7 @@ func TestCacheArtifactsRetention(t *testing.T) {
 	if orph, _ := s.ArtifactPrune(ctx, records.PruneSpec{Now: now, DryRun: true}); len(orph) != 0 {
 		t.Fatalf("a live attempt's staged record is not an orphan: %+v", orph)
 	}
-	if err := s.Transition(ctx, "o", "running", "lost", TransitionDetail{Epoch: 2}); err != nil { // lost keeps its rows until the attempt runs again or a prune finds them
+	if err := s.testTransition(ctx, "o", "running", "lost", TransitionDetail{Epoch: 2}); err != nil { // lost keeps its rows until the attempt runs again or a prune finds them
 		t.Fatal(err)
 	}
 	if orph, _ := s.ArtifactPrune(ctx, records.PruneSpec{Now: now}); len(orph) != 1 || orph[0].State != records.StateStaged {
@@ -265,7 +265,7 @@ func TestCacheArtifactsCaps(t *testing.T) {
 	if err := s.ArtifactStage(ctx, "a", 2, []records.Record{r}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, "a", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
+	if err := s.testTransition(ctx, "a", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
 		t.Fatal(err)
 	}
 	staged, _ := s.ArtifactStaged(ctx, "a")
@@ -278,7 +278,7 @@ func TestCacheArtifactsCaps(t *testing.T) {
 	if err := s.ArtifactStage(ctx, "b", 2, []records.Record{artRec("b", "n", 0, artHex("b"), 300<<10, now)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, "b", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
+	if err := s.testTransition(ctx, "b", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
 		t.Fatal(err)
 	}
 	stagedB, _ := s.ArtifactStaged(ctx, "b")
@@ -313,7 +313,7 @@ func TestCacheArtifactsCaps(t *testing.T) {
 	if err := s.ArtifactStage(ctx, "z", 2, []records.Record{artRec("z", "n", 0, artHex("c"), 100<<10, now)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, "z", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
+	if err := s.testTransition(ctx, "z", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
 		t.Fatal(err)
 	}
 	stagedZ, _ := s.ArtifactStaged(ctx, "z")
@@ -333,7 +333,7 @@ func stageCommit(t *testing.T, s *Store, id string, r records.Record) {
 	if err := s.ArtifactStage(ctx, id, 2, []records.Record{r}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, id, "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
+	if err := s.testTransition(ctx, id, "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
 		t.Fatal(err)
 	}
 	staged, err := s.ArtifactStaged(ctx, id)
@@ -343,7 +343,7 @@ func stageCommit(t *testing.T, s *Store, id string, r records.Record) {
 	if _, err = s.ArtifactCommit(ctx, id, 3, staged, records.Policy{MaxFile: 1 << 40, MaxTotal: 1 << 50, ProjectShare: 100}); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Transition(ctx, id, "finalizing", "passed", TransitionDetail{Epoch: 3}); err != nil {
+	if err = s.testTransition(ctx, id, "finalizing", "passed", TransitionDetail{Epoch: 3}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -418,14 +418,14 @@ func TestCacheArtifactsRecordsOfAnAttemptThatDidNotPassAreDropped(t *testing.T) 
 			if err := s.ArtifactStage(ctx, "a", 2, []records.Record{artRec("a", "n", 0, artHex("1"), 5, time.Now())}); err != nil {
 				t.Fatal(err)
 			}
-			if err := s.Transition(ctx, "a", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
+			if err := s.testTransition(ctx, "a", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
 				t.Fatal(err)
 			}
 			staged, _ := s.ArtifactStaged(ctx, "a")
 			if _, err := s.ArtifactCommit(ctx, "a", 3, staged, artPolicy()); err != nil {
 				t.Fatal(err)
 			}
-			if err := s.Transition(ctx, "a", "finalizing", end.to, TransitionDetail{Epoch: 3, FailureClass: "infra"}); err != nil {
+			if err := s.testTransition(ctx, "a", "finalizing", end.to, TransitionDetail{Epoch: 3, FailureClass: "infra"}); err != nil {
 				t.Fatal(err)
 			}
 			if all, _ := s.ArtifactList(ctx, records.Filter{}); len(all) != 0 {
@@ -471,7 +471,7 @@ func TestCacheArtifactsReservationsStopConcurrentOverrun(t *testing.T) {
 	if u, _ := s.ArtifactUsage(ctx, "proj"); u.Total != (300+50)<<10 {
 		t.Fatalf("after stage: %+v", u)
 	}
-	if err := s.Transition(ctx, "b", "running", "failed", TransitionDetail{Epoch: 2, FailureClass: "code"}); err != nil {
+	if err := s.testTransition(ctx, "b", "running", "failed", TransitionDetail{Epoch: 2, FailureClass: "code"}); err != nil {
 		t.Fatal(err)
 	}
 	if u, _ := s.ArtifactUsage(ctx, "proj"); u.Total != 50<<10 {
@@ -483,7 +483,7 @@ func TestCacheArtifactsReservationsStopConcurrentOverrun(t *testing.T) {
 	if err := s.ArtifactReserve(ctx, "c", 2, 10, pol); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, "c", "running", "lost", TransitionDetail{Epoch: 2}); err != nil {
+	if err := s.testTransition(ctx, "c", "running", "lost", TransitionDetail{Epoch: 2}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.ArtifactPrune(ctx, records.PruneSpec{Now: time.Now().Add(time.Hour)}); err != nil {

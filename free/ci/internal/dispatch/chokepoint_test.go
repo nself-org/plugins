@@ -14,7 +14,7 @@ package dispatch
 // their build tags say. A syntactic scan cannot follow dataflow (a stored func
 // value, an interface wrapper), which is why the one remaining way to lease an
 // attempt without admission, Store.Transition to "leased", is refused at
-// runtime (store.Transition, TestSchedAdmissionTransitionGuard) and not here.
+// runtime (store.Transition, in test binaries too, TestSchedAdmissionTransitionGuard) and not here.
 
 import (
 	"go/ast"
@@ -39,6 +39,7 @@ var (
 		"internal/run.LocalAdmit":       true,
 		"internal/dispatch.Admit":       true,
 		"internal/lease.(Engine).Grant": true,
+		"internal/storetest.Admit":      true, // test fixtures only; TestStoretestIsTestOnly keeps it out of shipped code
 	}
 	localFiles = map[string]bool{"internal/run/attempt.go": true, "internal/run/dispatch_hook.go": true}
 )
@@ -193,5 +194,43 @@ func TestAdmitChokepoint(t *testing.T) {
 	}
 	if len(shipped) != 0 {
 		t.Fatalf("calls outside the chokepoint (%d files read):\n%s", read, strings.Join(shipped, "\n"))
+	}
+}
+
+// TestStoretestIsTestOnly: storetest.Admit may name AdmitPlacement because it is
+// a test fixture, so no non-test file of the module may import the package.
+func TestStoretestIsTestOnly(t *testing.T) {
+	root := filepath.Join("..", "..")
+	read := 0
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if path != root && (d.Name() == "vendor" || d.Name() == "testdata" || d.Name() == ".git" || d.Name() == "storetest") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		f, perr := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+		if perr != nil {
+			t.Fatalf("parse %s: %v", path, perr)
+		}
+		read++
+		for _, imp := range f.Imports {
+			if strings.HasSuffix(strings.Trim(imp.Path.Value, "\"`"), "/internal/storetest") {
+				t.Errorf("%s imports internal/storetest, a test-only package", path)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read < 100 {
+		t.Fatalf("read %d files; the module root is wrong", read)
 	}
 }

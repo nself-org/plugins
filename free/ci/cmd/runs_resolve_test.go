@@ -10,6 +10,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/release/job"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 const (
@@ -45,7 +46,11 @@ func seedStuckRelease(t *testing.T, state string) string {
 	for _, to := range path {
 		_, epoch, err := st.AttemptStateEpoch(ctx, resolveAttempt)
 		must(err)
-		must(st.Transition(ctx, resolveAttempt, from, to, store.TransitionDetail{Epoch: epoch, FailureClass: "lost"}))
+		if to == "leased" { // an attempt is leased only by admission (D-1047)
+			must(storetest.Admit(ctx, st, resolveAttempt))
+		} else {
+			must(st.Transition(ctx, resolveAttempt, from, to, store.TransitionDetail{Epoch: epoch, FailureClass: "lost"}))
+		}
 		from = to
 	}
 	return home

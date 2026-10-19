@@ -14,6 +14,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 type env struct {
@@ -79,13 +80,11 @@ func (e *env) attempt(id, kind string, decls ...model.ArtifactDecl) (records.Fac
 	if err := e.st.CreateAttempt(ctx, store.AttemptRow{ID: id, JobID: "j" + id, N: 1}, ""); err != nil {
 		e.t.Fatal(err)
 	}
-	for _, s := range []struct {
-		from, to model.JobState
-		epoch    int64
-	}{{"queued", "leased", 0}, {"leased", "running", 1}} {
-		if err := e.st.Transition(ctx, id, s.from, s.to, store.TransitionDetail{Epoch: s.epoch}); err != nil {
-			e.t.Fatal(err)
-		}
+	if err := storetest.Admit(ctx, e.st, id); err != nil {
+		e.t.Fatal(err)
+	}
+	if err := e.st.Transition(ctx, id, "leased", "running", store.TransitionDetail{Epoch: 1}); err != nil {
+		e.t.Fatal(err)
 	}
 	facts, err := e.st.ArtifactFacts(ctx, id)
 	if err != nil {

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
@@ -32,23 +31,19 @@ type TransitionDetail struct {
 	Operator      bool
 }
 
-// bareLeaseAllowed is true only in a test binary: tests of other packages build
-// leased fixtures with Transition, and the binaries that ship never run as tests.
-// TestSchedAdmissionTransitionGuard turns it off to exercise the refusal.
-var bareLeaseAllowed = testing.Testing()
-
 // Transition changes one attempt and dependent rows in a single write transaction.
 //
 // An attempt is leased only by admission (AdmitAndLease, LeaseGrant,
 // AdmitPlacement), which creates the lease row, the host reservation and the
 // counters in the same transaction; a bare queued -> leased here would leave an
-// active attempt with none of them, so it is refused (P7-SCHED-04, R-SEC-22)
-// outside test binaries.
+// active attempt with none of them, so it is refused (P7-SCHED-04, R-SEC-22),
+// in test binaries too (D-1047). Fixtures lease through storetest.Lease, and the
+// store's own tests through testTransition.
 func (s *Store) Transition(ctx context.Context, id string, from, to model.JobState, detail TransitionDetail) error {
 	if !Allowed(from, to) {
 		return coded("E604", fmt.Sprintf("%s -> %s", from, to))
 	}
-	if to == "leased" && !bareLeaseAllowed {
+	if to == "leased" {
 		return coded("E604", "an attempt is leased only by admission, not by Transition")
 	}
 	return s.write(ctx, func(tx *sql.Tx) error { return s.apply(ctx, tx, id, from, to, detail) })
