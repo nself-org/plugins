@@ -35,6 +35,21 @@ O="${OPENSSL:-openssl}"
 command -v "$O" >/dev/null 2>&1 || { err "openssl not found (set OPENSSL to an OpenSSL 3 binary)"; exit 1; }
 "$O" version 2>/dev/null | grep -q '^OpenSSL ' || { err "$O is not OpenSSL; set OPENSSL"; exit 1; }
 
+# Raw 32-byte public key of a PEM SPKI file, standard base64; empty when the file is not a readable Ed25519 public key.
+raw_b64() {
+  "$O" pkey -pubin -in "$1" -noout -text 2>/dev/null | grep -q '^ED25519 Public-Key:' || return 0
+  "$O" pkey -pubin -in "$1" -outform DER 2>/dev/null | tail -c 32 | "$O" base64 -A
+}
+
+# The purpose wall: a key committed for any other purpose (plugins, ci-release, ...) must never also be an agent key. Key ids hash only
+# the public key, so agent-<hex> and plugins-<hex> would otherwise name the same key.
+others=""
+for f in "$KEYS_DIR"/*.pub; do
+  [ -f "$f" ] || continue
+  case "$(basename "$f")" in agent-*) continue ;; esac
+  others+="$(raw_b64 "$f")"$'\n'
+done
+
 rows=""
 for f in "$KEYS_DIR"/agent-*.pub; do
   [ -f "$f" ] || continue
@@ -48,6 +63,10 @@ for f in "$KEYS_DIR"/agent-*.pub; do
   derived="agent-$({ sha256sum "$raw" 2>/dev/null || shasum -a 256 "$raw"; } | cut -c1-16)"
   b64="$("$O" base64 -A -in "$raw")"
   rm -f "$raw"
+  if printf '%s' "$others" | grep -qxF "$b64"; then
+    err "$(basename "$f") is the same key as a committed non-agent key; the agent key must be its own key"
+    exit 1
+  fi
   [ "$derived" = "$base" ] || { err "$(basename "$f") does not match its key (expected agent-<16 hex of sha256(public key)> = $derived)"; exit 1; }
   rows+="$(printf '\t{ID: "%s", Public: "%s"},' "$base" "$b64")"$'\n'
 done
@@ -72,12 +91,12 @@ fi
   if [ -z "$rows" ]; then
     printf 'var generatedKeys = []keyEntry{}\n'
   else
-    printf 'var generatedKeys = []keyEntry{\n%s}\n' "$(printf '%s' "$rows" | LC_ALL=C sort)"
+    printf 'var generatedKeys = []keyEntry{\n%s\n}\n' "$(printf '%s' "$rows" | LC_ALL=C sort)"
   fi
   printf '\n// generatedRevoked is the revoked key id list (scripts/release/keys/agent-revoked.txt).\n'
   if [ -z "$revoked" ]; then
     printf 'var generatedRevoked = []string{}\n'
   else
-    printf 'var generatedRevoked = []string{\n%s}\n' "$(printf '%s' "$revoked" | LC_ALL=C sort -u)"
+    printf 'var generatedRevoked = []string{\n%s\n}\n' "$(printf '%s' "$revoked" | LC_ALL=C sort -u)"
   fi
 } > "$OUTPUT"

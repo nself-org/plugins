@@ -135,10 +135,16 @@ jobs:
       - name: Refuse an artifact that is not what build produced
         env:
           EXPECTED_SUMS: ${{ needs.build.outputs.sums }}
+          TAG: ${{ needs.build.outputs.tag }}
         run: |
           [[ "$EXPECTED_SUMS" =~ ^[0-9a-f]{64}$ ]] || { echo "ERROR: build did not record the SHA256SUMS digest"; exit 1; }
           [ "$(sha256sum dist/SHA256SUMS | cut -d' ' -f1)" = "$EXPECTED_SUMS" ] || { echo "ERROR: SHA256SUMS differs from what build recorded"; exit 1; }
           (cd dist && sha256sum -c SHA256SUMS)
+          # The directory holds exactly the listed binaries plus SHA256SUMS and VERSION: nothing unlisted gets signed.
+          want="$( { cut -d' ' -f3 dist/SHA256SUMS; printf 'SHA256SUMS\nVERSION\n'; } | LC_ALL=C sort)"
+          have="$(cd dist && find . -mindepth 1 -maxdepth 1 | sed 's#^\./##' | LC_ALL=C sort)"
+          [ "$want" = "$have" ] || { echo "ERROR: dist holds files SHA256SUMS does not list (or lacks listed ones)"; exit 1; }
+          [ "$(cat dist/VERSION)" = "${TAG#v}" ] || { echo "ERROR: dist/VERSION is not the tag's version"; exit 1; }
 
       # The key reaches manifest.sh through the environment of this one step only. manifest.sh writes it to a 0600 file in a 0700
       # temp directory that it removes on exit; nothing prints it and no step has `set -x`.
@@ -151,11 +157,16 @@ jobs:
       - name: Verify against the committed public key
         env:
           KEY_ID: ${{ secrets.NSELF_AGENT_SIGNING_KEY_ID }}
+          TAG: ${{ needs.build.outputs.tag }}
         run: |
           [[ "$KEY_ID" =~ ^agent-[0-9a-f]{16}$ ]] || { echo "ERROR: the key id secret is not agent-<16 hex>"; exit 1; }
           PUB="scripts/release/keys/${KEY_ID}.pub"
           [ -f "$PUB" ] || { echo "ERROR: ${PUB} is not committed; commit the agent public key first"; exit 1; }
-          (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --require-all-targets --pub "$GITHUB_WORKSPACE/$PUB" "$GITHUB_WORKSPACE/dist")
+          # genkeys.sh refuses an agent key that is also a key committed for another purpose.
+          bash scripts/release/agent/genkeys.sh "$RUNNER_TEMP/keys_check.go"
+          REVOKED=()
+          if [ -f scripts/release/keys/agent-revoked.txt ]; then REVOKED=(--revoked "$GITHUB_WORKSPACE/scripts/release/keys/agent-revoked.txt"); fi
+          (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --require-all-targets --version "${TAG#v}" "${REVOKED[@]}" --pub "$GITHUB_WORKSPACE/$PUB" "$GITHUB_WORKSPACE/dist")
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -193,7 +204,11 @@ jobs:
           for f in dist/nself-ci-agent-*; do
             name="$(basename "$f")"
             if printf '%s\n' "$have" | grep -qxF "$name"; then
-              echo "SKIP $name (already on the release)"
+              # An asset already on the release stays the artifact of record, but it must be the very bytes this run signed.
+              mkdir -p "$RUNNER_TEMP/existing"
+              gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$RUNNER_TEMP/existing" --clobber
+              cmp "$f" "$RUNNER_TEMP/existing/$name" || { echo "ERROR: $name on the release differs from the signed file"; exit 1; }
+              echo "SKIP $name (already on the release, identical)"
             else
               gh release upload "$TAG" "$f" --repo "$GITHUB_REPOSITORY"
               echo "UPLOADED $name"

@@ -138,3 +138,21 @@ func TestVerifyReleaseRequireAllTargets(t *testing.T) {
 		t.Fatalf("a missing target must fail with --require-all-targets: code %d err %q", code, errs)
 	}
 }
+
+func TestVerifyReleaseRefusesARevokedKey(t *testing.T) {
+	dir, pub := releaseDir(t)
+	m, _ := os.ReadFile(filepath.Join(dir, "nself-ci-agent-linux-amd64.manifest.json"))
+	var man verify.Manifest
+	_ = json.Unmarshal(m, &man)
+	rev := filepath.Join(t.TempDir(), "agent-revoked.txt")
+	_ = os.WriteFile(rev, []byte("# leaked\n"+man.KeyID+"\n"), 0o644)
+	code, _, errs := runVR("--pub", pub, "--revoked", rev, dir)
+	if code != 1 || !strings.Contains(errs, verify.ReasonRevoked) {
+		t.Fatalf("revoked key: code %d err %q", code, errs)
+	}
+	bad := filepath.Join(t.TempDir(), "bad.txt")
+	_ = os.WriteFile(bad, []byte("not-a-derived-id\n"), 0o644)
+	if code, _, _ = runVR("--pub", pub, "--revoked", bad, dir); code != 1 {
+		t.Fatal("a revoked file with a malformed id must be refused")
+	}
+}

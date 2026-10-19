@@ -4,7 +4,7 @@ package main
 //          (hq NODE D11, P7-NODE-15). It verifies every nself-ci-agent-<os>-<arch> file in DIR against its
 //          .manifest.json with exactly one public key, through the same internal/agent/verify package `nodes add` uses.
 // Inputs:  --pub FILE (PEM SPKI Ed25519 public key; there is no key discovery), --version V (default: DIR/VERSION, else the
-//          version the manifests agree on), --require-all-targets (the release workflow sets it: all of linux-amd64, linux-arm64
+//          version the manifests agree on), --revoked FILE (revoked key ids; a manifest signed by one fails), --require-all-targets (the release workflow sets it: all of linux-amd64, linux-arm64
 //          and darwin-arm64 must be present), DIR from build.sh and manifest.sh.
 // Outputs: one "ok <file> <version> <key id>" line per file on stdout; failures "E665: <reason>: <detail>" on stderr.
 //          Exit 0 only when every binary and manifest pair verifies, 1 on a failure, 2 on usage.
@@ -37,6 +37,7 @@ func runVerifyRelease(_ context.Context, args []string, sio IO) int {
 	fs.SetOutput(sio.Stderr)
 	pubPath := fs.String("pub", "", "PEM SPKI Ed25519 public key to verify against")
 	version := fs.String("version", "", "expected version (default: DIR/VERSION)")
+	revokedFile := fs.String("revoked", "", "file of revoked key ids, one agent-<16 hex> per line (scripts/release/keys/agent-revoked.txt)")
 	all := fs.Bool("require-all-targets", false, "fail unless linux-amd64, linux-arm64 and darwin-arm64 are all present")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -45,7 +46,7 @@ func runVerifyRelease(_ context.Context, args []string, sio IO) int {
 		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent verify-release --pub FILE [--version V] DIR")
 		return 2
 	}
-	v, err := verifierFromPEM(*pubPath)
+	v, err := verifierFromPEM(*pubPath, *revokedFile)
 	if err != nil {
 		fmt.Fprintf(sio.Stderr, "verify-release: %v\n", err)
 		return 1
@@ -57,7 +58,7 @@ func runVerifyRelease(_ context.Context, args []string, sio IO) int {
 var releaseTargets = []string{"linux-amd64", "linux-arm64", "darwin-arm64"}
 
 // verifierFromPEM builds a Verifier trusting exactly the key in the PEM file.
-func verifierFromPEM(path string) (*verify.Verifier, error) {
+func verifierFromPEM(path, revokedPath string) (*verify.Verifier, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read the public key file")
@@ -71,7 +72,18 @@ func verifierFromPEM(path string) (*verify.Verifier, error) {
 	if err != nil || !ok {
 		return nil, fmt.Errorf("the public key is not Ed25519")
 	}
-	return verify.New([]signing.Key{{ID: signing.KeyID(signing.PurposeAgent, pub), Purpose: signing.PurposeAgent, Public: pub}}, nil)
+	var revoked []string
+	if revokedPath != "" {
+		rf, oerr := os.Open(revokedPath)
+		if oerr != nil {
+			return nil, fmt.Errorf("cannot read the revoked file")
+		}
+		defer func() { _ = rf.Close() }()
+		if revoked, err = signing.ParseRevokedFile(rf); err != nil {
+			return nil, fmt.Errorf("the revoked file is not valid: %v", err)
+		}
+	}
+	return verify.New([]signing.Key{{ID: signing.KeyID(signing.PurposeAgent, pub), Purpose: signing.PurposeAgent, Public: pub}}, revoked)
 }
 
 func verifyReleaseDir(v *verify.Verifier, dir, version string, requireAll bool, stdout, stderr io.Writer) int {

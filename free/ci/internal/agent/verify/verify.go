@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/signing"
 )
@@ -89,7 +90,8 @@ func ParseManifest(data []byte) (Manifest, error) {
 	return m, nil
 }
 
-// duplicateKey reports whether the top-level JSON object repeats a field name (encoding/json would keep the last one silently).
+// duplicateKey reports whether the top-level JSON object repeats a field name, compared case-insensitively because encoding/json
+// matches field names that way and would keep the last one silently.
 // Input that is not an object is left to the strict decode that follows.
 func duplicateKey(data []byte) bool {
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -103,10 +105,11 @@ func duplicateKey(data []byte) bool {
 		if err != nil || !ok {
 			return false
 		}
-		if seen[name] {
+		folded := strings.ToLower(name)
+		if seen[folded] {
 			return true
 		}
-		seen[name] = true
+		seen[folded] = true
 		var skip json.RawMessage
 		if err = dec.Decode(&skip); err != nil {
 			return false

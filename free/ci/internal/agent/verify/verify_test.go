@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"go/format"
 	"go/parser"
 	"go/token"
 	"os"
@@ -194,6 +195,11 @@ func TestArtifactFailureReasonsAreDistinct(t *testing.T) {
 				t.Skip("symlinks unavailable")
 			}
 			_, err := mustVerifier(t, nil, agent.key()).Artifact(link, good.json(t), pinned)
+			return err
+		}},
+		{"a field repeated in another case", ReasonMalformedManifest, func() error {
+			b := strings.Replace(string(good.json(t)), `"alg":"ed25519"`, `"alg":"ed25519","VERSION":"9.9.9"`, 1)
+			_, err := mustVerifier(t, nil, agent.key()).Artifact(good.path, []byte(b), pinned)
 			return err
 		}},
 		{"two manifests in one file", ReasonMalformedManifest, func() error {
@@ -471,5 +477,57 @@ func TestOnePackageVerifiesAgentArtifacts(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("verify.go must import cli sdk/go/signing")
+	}
+}
+
+// TestGeneratedFileIsGofmtCleanWithKeys: the Go gate runs gofmt, so a generated file that holds keys and revoked ids must already be formatted.
+func TestGeneratedFileIsGofmtCleanWithKeys(t *testing.T) {
+	needTools(t)
+	root := repoRoot(t)
+	keys, tmp := t.TempDir(), t.TempDir()
+	for i := 0; i < 2; i++ {
+		priv := filepath.Join(tmp, "k.pem")
+		if out, err := exec.Command("openssl", "genpkey", "-algorithm", "ed25519", "-out", priv).CombinedOutput(); err != nil {
+			t.Fatalf("genpkey: %v\n%s", err, out)
+		}
+		pubPEM, _ := exec.Command("openssl", "pkey", "-in", priv, "-pubout").Output()
+		block, _ := pem.Decode(pubPEM)
+		k, _ := x509.ParsePKIXPublicKey(block.Bytes)
+		id := signing.KeyID(signing.PurposeAgent, k.(ed25519.PublicKey))
+		_ = os.WriteFile(filepath.Join(keys, id+".pub"), pubPEM, 0o644)
+		_ = os.WriteFile(filepath.Join(keys, "agent-revoked.txt"), []byte(id+"\n"), 0o644)
+	}
+	out := filepath.Join(tmp, "out.go")
+	cmd := exec.Command("bash", filepath.Join(root, "scripts/release/agent/genkeys.sh"), "--keys-dir", keys, out)
+	cmd.Env = append(os.Environ(), "TMPDIR="+tmp)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("genkeys.sh: %v\n%s", err, b)
+	}
+	src, _ := os.ReadFile(out)
+	formatted, err := format.Source(src)
+	if err != nil || string(formatted) != string(src) {
+		t.Fatalf("generated file is not gofmt-clean (err %v):\n%s", err, src)
+	}
+}
+
+// TestAgentKeyCannotBeAnotherPurposesKey: the plugin-release key renamed to an agent key is refused (purpose wall, hq NODE D11).
+func TestAgentKeyCannotBeAnotherPurposesKey(t *testing.T) {
+	needTools(t)
+	root := repoRoot(t)
+	keys, tmp := t.TempDir(), t.TempDir()
+	priv := filepath.Join(tmp, "k.pem")
+	if out, err := exec.Command("openssl", "genpkey", "-algorithm", "ed25519", "-out", priv).CombinedOutput(); err != nil {
+		t.Fatalf("genpkey: %v\n%s", err, out)
+	}
+	pubPEM, _ := exec.Command("openssl", "pkey", "-in", priv, "-pubout").Output()
+	block, _ := pem.Decode(pubPEM)
+	k, _ := x509.ParsePKIXPublicKey(block.Bytes)
+	id := signing.KeyID(signing.PurposeAgent, k.(ed25519.PublicKey))
+	_ = os.WriteFile(filepath.Join(keys, "plugins-release-free-"+strings.TrimPrefix(id, "agent-")+".pub"), pubPEM, 0o644)
+	_ = os.WriteFile(filepath.Join(keys, id+".pub"), pubPEM, 0o644)
+	cmd := exec.Command("bash", filepath.Join(root, "scripts/release/agent/genkeys.sh"), "--keys-dir", keys, filepath.Join(tmp, "out.go"))
+	cmd.Env = append(os.Environ(), "TMPDIR="+tmp)
+	if b, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(b), "non-agent key") {
+		t.Fatalf("an agent key equal to a plugin key must be refused: %v\n%s", err, b)
 	}
 }

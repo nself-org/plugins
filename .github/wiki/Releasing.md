@@ -80,7 +80,7 @@ The Ticket P7-PLUG-21 verification lines are the gate for these scripts; no work
 ### Key custody and rotation
 
 - The free-tier key is an Actions secret of the `release-signing` Environment on this repository. The Environment must have a required reviewer who is not the
-  person who started the run (prevent self-review), a custom deployment policy that allows tags `v*` only, and hold no other signing key. A tag ruleset that limits
+  person who started the run (prevent self-review), a custom deployment policy that allows tags `v*` only, and hold only this repository's release signing keys: the free-tier plugin key and the agent key (see Agent artifacts below; each is read by its own workflow's `sign` job, and each run needs its own reviewer approval). The licensed key is never here. A tag ruleset that limits
   creating, updating and deleting `v*` tags to maintainers belongs with it, because the tag decides which code runs next to the key. The owner creates the
   Environment and both secrets (`NSELF_RELEASE_SIGNING_KEY_FREE`, `NSELF_RELEASE_SIGNING_KEY_FREE_ID`) in P7-PROD-59 and checks those settings; this page describes
   what must be true, not what is configured today. No other job can read the secrets.
@@ -137,8 +137,8 @@ the same bytes in `free/ci/internal/agent/verify` (`SigningInput`); a test signs
 | `manifest.sh --in DIR [--rehearsal]` | writes and signs one manifest per binary. Key from `NSELF_AGENT_SIGNING_KEY` and `NSELF_AGENT_SIGNING_KEY_ID` (environment only; the id is derived from the key and checked). `--rehearsal` uses a throwaway key and writes `DIR/rehearsal-test.pub` |
 | `genkeys.sh OUTPUT.go` | generates `free/ci/internal/agent/verify/keys_gen.go` from `scripts/release/keys/agent-<16 hex>.pub` (run it with `go generate ./internal/agent/verify/...` in `free/ci`). A drift test fails when the committed file is stale |
 
-`nself-ci-agent verify-release --pub FILE [--version V] [--require-all-targets] DIR` is the operator-side check: it verifies every binary in DIR against its manifest with exactly one public key
-(PEM SPKI). A binary without a manifest, a manifest without a binary, a symlinked file or an empty directory fails; `--require-all-targets` (set by the workflow) also fails unless all three targets are present.
+`nself-ci-agent verify-release --pub FILE [--version V] [--revoked FILE] [--require-all-targets] DIR` is the operator-side check: it verifies every binary in DIR against its manifest with exactly one public key
+(PEM SPKI). A binary without a manifest, a manifest without a binary, a symlinked file or an empty directory fails; `--require-all-targets` (set by the workflow) also fails unless all three targets are present, and `--revoked FILE` refuses a manifest signed by a revoked key id.
 
 ### Rehearsal (no key, no release, no network)
 
@@ -153,8 +153,8 @@ A one-byte change in a binary fails with `checksum_mismatch`. `release-agent.yml
 ### Workflow and key custody
 
 `release-agent.yml` runs on a `v*` tag: `build` (twice, compared), `sign` (bound to the `release-signing` Environment, the only job that reads the agent key), `publish`
-(uploads missing assets, never `--clobber`). `sign` refuses to continue unless `scripts/release/keys/<key id>.pub` is committed and `verify-release` accepts every manifest
-against it. The agent key is a different key from the plugin key (purpose `agent`), and a plugin-purpose signature never verifies an agent. The key and the Environment
+(uploads missing assets, never `--clobber`). Both workflows bind the same `release-signing` Environment (Ticket constraint P7-NODE-15), so an approver of one run can in principle trigger the other; a separate Environment for the agent key is a one-line change in `release-agent.yml` if the owner prefers the smaller blast radius. `sign` refuses to continue unless `scripts/release/keys/<key id>.pub` is committed and `verify-release` accepts every manifest
+against it. The agent key is a different key from the plugin key (purpose `agent`): a plugin-purpose signature never verifies an agent, and `genkeys.sh` (run by the `sign` job too) refuses an `agent-*.pub` that is the same key as any other committed `.pub`. `sign` also refuses a build artifact that holds files `SHA256SUMS` does not list or a `VERSION` other than the tag's, and `publish` compares an asset already on the release byte for byte with the signed file instead of skipping it blindly. A revoked agent key goes into `scripts/release/keys/agent-revoked.txt` (one `agent-<16 hex>` per line); `genkeys.sh` compiles it into the client and `sign` passes it to `verify-release`. `protocol_min` and `protocol_max` are signed and informational for now: no client decision reads them yet. The key and the Environment
 secrets are created by the owner; the production public key is committed and the first real release is run by P7-NODE-29. Until then `keys_gen.go` holds an empty key
 set and `nodes add` without `--agent-binary` fails with `E665` (reason `no_trusted_key`) naming `--agent-binary`.
 
