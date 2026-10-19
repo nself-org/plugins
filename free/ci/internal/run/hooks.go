@@ -30,6 +30,12 @@ type AttemptInfo struct {
 	IdempotencyKey                             string
 	// Home is the run's state directory as given in Options ("" = NSELF_CI_HOME or ~/.nself/ci).
 	Home string
+	// Store is the run's store; hooks read and write their own tables through it.
+	Store *store.Store
+	// Epoch is the attempt's lease epoch when it started running (0 when the
+	// caller did not set it). Hooks that write fenced rows use it, so a stale
+	// callback cannot adopt a later incarnation's epoch.
+	Epoch int64
 }
 
 // Outcome is how an attempt ended.
@@ -198,6 +204,10 @@ type Hooks struct {
 	AttemptStarts []AttemptStartHook
 	AfterRuns     []AfterRunHook
 	Outcomes      []OutcomeHook
+	// Workspaces and AttemptFinalizes are the per-attempt seams of
+	// hooks_attempt_end.go (P7-CACHE-03).
+	Workspaces       []WorkspaceHook
+	AttemptFinalizes []AttemptFinalizeHook
 }
 
 // Registered is the registry other packages write from init().
@@ -268,6 +278,8 @@ func (h Hooks) Resolved() Hooks {
 	out.AttemptStarts = append(append([]AttemptStartHook(nil), h.AttemptStarts...), r.AttemptStarts...)
 	out.AfterRuns = append(append([]AfterRunHook(nil), h.AfterRuns...), r.AfterRuns...)
 	out.Outcomes = append(append([]OutcomeHook(nil), h.Outcomes...), r.Outcomes...)
+	out.Workspaces = append(append([]WorkspaceHook(nil), h.Workspaces...), r.Workspaces...)
+	out.AttemptFinalizes = append(append([]AttemptFinalizeHook(nil), h.AttemptFinalizes...), r.AttemptFinalizes...)
 	sort.SliceStable(out.Finalizers, func(i, j int) bool { return out.Finalizers[i].Name() < out.Finalizers[j].Name() })
 	return out
 }

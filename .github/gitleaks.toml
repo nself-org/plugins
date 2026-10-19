@@ -89,4 +89,8 @@ regexes = [
   '''nself_max_abcdefghijklmnopqrstuvwxyz1234''',
   '''nself_ent_abcdefghijklmnopqrstuvwxyz1234''',
   '''nself_owner_abcdefghijklmnopqrstuvwxyz1234''',
+
+  # free/ci/cmd/agent/cred_lease_test.go (P7-NODE-23 / D-1001): a synthetic JIT credential the test
+  # feeds through the runner wrapper to prove it is delivered and never echoed. Not a real token.
+  '''^JITSECRET-synthetic-0001$''',
 ]
