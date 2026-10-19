@@ -86,3 +86,21 @@ func TestRepeatedBytesMakeProgress(t *testing.T) {
 		}
 	}
 }
+
+// TestRunOfMatchesDoesNotLeakAcrossWrites proves that when a long run of
+// overlapping matches forces a cut, the bytes kept back stay masked: a value
+// completed by the next write does not show its first half.
+func TestRunOfMatchesDoesNotLeakAcrossWrites(t *testing.T) {
+	w, out := collect("ABCDEFGHABCDEFGH")
+	w.Write([]byte(strings.Repeat("ABCDEFGH", 1125)))
+	w.Write([]byte("ABCDEFGH\n"))
+	w.Flush()
+	for _, l := range *out {
+		if strings.Contains(l, "ABCDEFGH") || strings.Contains(l, "BCDEFGH") {
+			t.Fatalf("plaintext fragment leaked: %q", l)
+		}
+	}
+	if len(*out) == 0 {
+		t.Fatal("nothing emitted")
+	}
+}

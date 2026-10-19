@@ -255,11 +255,16 @@ func (s *Session) runLease(ctx context.Context, al *activeLease, slot *slots.Slo
 	}
 
 	var setup JobSetup
+	skip := ""
 	for _, h := range s.jobHooks {
 		if h.Before == nil {
 			continue
 		}
 		got, err := h.Before(ctx, l, root)
+		if err != nil && ctx.Err() != nil {
+			skip = "cancelled" // the hook stopped because the lease was cancelled
+			break
+		}
 		if err != nil {
 			s.finish(ctx, al, root, JobResult{Outcome: Outcome{State: "failed", FailureClass: "infra"}}, fmt.Errorf("job hook %s: %w", h.Name, err))
 			return
@@ -290,8 +295,8 @@ func (s *Session) runLease(ctx context.Context, al *activeLease, slot *slots.Slo
 		}
 	}
 	stopWait()
-	skip := ""
 	switch {
+	case skip != "":
 	case ctx.Err() != nil:
 		skip = "cancelled"
 	case missingSecrets(l.Job.Secrets, setup.Secrets):

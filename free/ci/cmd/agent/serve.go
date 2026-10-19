@@ -126,17 +126,11 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 		fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
-	var rejected *session.RejectError
-	switch err := s.Run(ctx); {
-	case err == nil, errors.Is(err, context.Canceled):
-		return 0
-	case errors.As(err, &rejected):
-		fmt.Fprintln(sio.Stderr, "error:", err)
-		return 1
-	default:
+	if err := s.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
+	return 0
 }
 
 // leaseRunner runs a lease's job through the exec path.
