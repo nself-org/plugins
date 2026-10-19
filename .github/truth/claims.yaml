@@ -25,7 +25,7 @@ rules:
   # A count of plugins, commands, verbs, bundles or integrations typed by hand.
   - id: claims.counts
     kind: numeric-claim
-    pattern: '(?:^|[^0-9A-Za-z.,/_§#$@–—-])[1-9][0-9,]*\+?[*_`]{0,2}(?:[\s\p{Zs}\x{200B}\x{200D}\x{00AD}-]|&nbsp;|&#160;)+(?:(?:free|licensed|paid|official|first-party|built-in|core|top-level|public|total|additional|optional|available|cli)(?:[\s\p{Zs}\x{200B}\x{200D}\x{00AD}-]|&nbsp;|&#160;)+)*[*_`]{0,2}(?:(?:nself|ɳself)(?:[\s\p{Zs}\x{200B}\x{200D}\x{00AD}-]|&nbsp;|&#160;)+(?:plugins|commands|verbs|bundles|integrations)|(?:plugins?|commands?|verbs?|bundles?|integrations?))[*_`]{0,2}(?:[^A-Za-z0-9_-]|$)'
+    pattern: '(?:^|[^0-9A-Za-z.,/_§#$@–—-])[1-9][0-9,]*\+?[*_`]{0,2}(?:(?:[\s\p{Zs}\x{200B}\x{200D}\x{00AD}]|&nbsp;|&#160;)+|-)(?:(?:free|licensed|paid|official|first-party|built-in|core|top-level|public|total|additional|optional|available|cli)(?:(?:[\s\p{Zs}\x{200B}\x{200D}\x{00AD}]|&nbsp;|&#160;)+|-))*[*_`]{0,2}(?:(?:nself|ɳself)(?:(?:[\s\p{Zs}\x{200B}\x{200D}\x{00AD}]|&nbsp;|&#160;)+|-)(?:plugins|commands|verbs|bundles|integrations)|(?:plugins?|commands?|verbs?|bundles?|integrations?))[*_`]{0,2}(?:[^A-Za-z0-9_-]|$)'
     paths: &prose
       - "**/*.md"
       - "**/*.markdown"

@@ -42,7 +42,7 @@ type fileOverride struct {
 // code is not prose (D6).
 var defaultExemptPaths = []string{
 	"CHANGELOG*", "Changelog*", "changelog*", "RELEASE-*", "RELEASE_NOTES*", "release-notes*", "RELEASES*",
-	"**/releases/**", "**/content/blog/**", "**/blog/*.md", "**/blog/*.mdx", "**/adr/**", "**/adrs/**", "**/history/**", "**/HISTORY*",
+	"**/release-notes/**", "**/releases/v[0-9]*/**", "**/releases/v[0-9]*.md", "**/content/blog/**", "**/blog/*.md", "**/blog/*.mdx", "**/adr/**", "**/adrs/**", "**/history/**", "**/HISTORY*",
 	"**/testdata/**", "**/vendor/**", "**/node_modules/**",
 	"*.go", "go.mod", "go.sum", "go.work", "go.work.sum",
 }
