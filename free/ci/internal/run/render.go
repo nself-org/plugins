@@ -47,6 +47,17 @@ type JobOutcome struct {
 	// Findings and Excerpt come from an OutcomeHook (nested drill checks); Excerpt replaces the tail.
 	Findings int
 	Excerpt  string
+	// Diagnostics of a failed job (P7-CI-40): Exit is nil when the job never ran to an
+	// exit status; Retries lists every attempt after the first and the failure class that
+	// caused it; Flaky is set only by explicit --confirm-flaky reruns.
+	Exit        *int
+	Diagnosis   string
+	Remediation string
+	LogRef      string
+	Retries     []model.Retry
+	Flaky       *model.Flaky
+	retryable   bool // the failure is proven infrastructure (known signature) and may be retried
+	parked      bool // the failed attempt was queued for the store's retry path: the next attempt follows
 }
 
 // Event is one thing that happened during a run.

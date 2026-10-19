@@ -35,9 +35,21 @@ func registerRunsSub(name string, h handler) {
 	runsSubs[name] = h
 }
 
+// runsFlagSubs maps a `runs --<name>` view to its handler (P7-CI-40: --flaky).
+var runsFlagSubs = map[string]handler{}
+
+// registerRunsFlag adds a `nself ci runs --<name> [args]` view; the handler gets the other args.
+func registerRunsFlag(name string, h handler) {
+	if _, dup := runsFlagSubs[name]; dup || name == "" || strings.HasPrefix(name, "-") {
+		panic("nself-ci: invalid runs flag view " + name)
+	}
+	runsFlagSubs[name] = h
+}
+
 func runsFlags() *flag.FlagSet {
 	fs := flag.NewFlagSet("runs", flag.ContinueOnError)
 	fs.Bool("json", false, "print one v1 JSON envelope")
+	fs.Bool("flaky", false, "list checks that passed and failed on identical inputs")
 	return fs
 }
 
@@ -52,6 +64,11 @@ func runRuns(args []string) int {
 			return h(args[1:])
 		}
 	}
+	for i, a := range args {
+		if h, ok := runsFlagSubs[strings.TrimLeft(a, "-")]; ok && strings.HasPrefix(a, "-") {
+			return h(append(append([]string(nil), args[:i]...), args[i+1:]...))
+		}
+	}
 	var ref string
 	var asJSON bool
 	for _, a := range args {
@@ -59,7 +76,7 @@ func runRuns(args []string) int {
 		case a == "--json" || a == "-json" || a == "--json=true":
 			asJSON = true
 		case strings.HasPrefix(a, "-") || ref != "":
-			fmt.Fprintln(os.Stderr, "usage: nself ci runs [run] [--json] | nself ci runs cancel <run>")
+			fmt.Fprintln(os.Stderr, "usage: nself ci runs [run] [--json] | nself ci runs --flaky [--json] | nself ci runs cancel <run>")
 			return 1
 		default:
 			ref = a

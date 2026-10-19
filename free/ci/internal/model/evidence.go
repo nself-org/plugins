@@ -126,6 +126,19 @@ type Check struct {
 	Findings     int          `json:"findings"`
 	Excerpt      string       `json:"excerpt"`
 	LogRef       *string      `json:"log_ref"`
+	// Diagnostics of a check that did not pass (P7-CI-40; additive within v1).
+	Exit        *int   `json:"exit,omitempty"`        // the job's exit status, when it ran to one
+	Diagnosis   string `json:"diagnosis,omitempty"`   // the signature that decided failure_class (infra.oom, code, ...)
+	Remediation string `json:"remediation,omitempty"` // what to do next, in one sentence
+	Flaky       *Flaky `json:"flaky,omitempty"`       // visible debt: the check passed and failed on identical inputs
+}
+
+// Flaky marks a check whose result differed on identical inputs. It is debt
+// shown beside the result; it never turns a failure into a pass.
+type Flaky struct {
+	Source string `json:"source"` // confirmation (explicit reruns of this run) | history
+	Passes int    `json:"passes"`
+	Fails  int    `json:"fails"`
 }
 
 // Artifact is a committed output digest.
@@ -141,6 +154,9 @@ type Retry struct {
 	JobID   string       `json:"job_id"`
 	Attempt int          `json:"attempt"`
 	Class   FailureClass `json:"class"`
+	// Why the previous attempt failed (P7-CI-40; additive within v1): the signature and a short redacted excerpt.
+	Diagnosis string `json:"diagnosis,omitempty"`
+	Excerpt   string `json:"excerpt,omitempty"`
 }
 
 // Counts is the check count summary.
