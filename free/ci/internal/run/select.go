@@ -6,7 +6,10 @@ package run
 // Constraints: moved out of coordinator.go unchanged (P7-AUTO-27) so that file
 // stays under the 300-line limit.
 
-import "github.com/nself-org/plugins/free/ci/internal/plan"
+import (
+	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/plan"
+)
 
 // subset returns the jobs --job selects with their dependencies; nil means all.
 func subset(pl *plan.Plan, name string) (map[string]bool, error) {
@@ -45,4 +48,27 @@ func requireRunnable(pl *plan.Plan, keep map[string]bool) error {
 		}
 	}
 	return nil
+}
+
+// selectionNote explains an exit code that differs from the evidence result.
+const selectionNote = "--job: the selected jobs passed; the evidence result stays fail because jobs outside the selection did not run, so this run proves less than the full gate (D-1091)"
+
+// selectionExit is the exit code of a --job run (D-1091). The evidence stays
+// fail-closed (an excluded required job is a skip), but the process answers
+// for the jobs the caller selected: it is 0 when they all passed. A run that
+// was cancelled, errored or has no selection keeps the evidence's code.
+func selectionExit(ev model.Evidence, keep map[string]bool) (int, bool) {
+	if keep == nil || ev.Result != "fail" {
+		return exitFor(ev.Result), false
+	}
+	var chosen []model.Check
+	for _, c := range ev.Checks {
+		if keep[c.JobID] {
+			chosen = append(chosen, c)
+		}
+	}
+	if model.Verdict(chosen) != "pass" {
+		return exitFor(ev.Result), false
+	}
+	return exitFor("pass"), true
 }

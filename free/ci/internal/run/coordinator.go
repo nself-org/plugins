@@ -233,7 +233,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 		rev.Dirty = true // the tree moved or changed while jobs ran: the result is not bound to the start commit
 	}
 	res := c.conclude(finishIn{St: st, RunID: runID, Rev: rev, Source: source, Policy: pol, Hooks: h, Jobs: rs.outcomes(),
-		Cancelled: rs.userCancel || ctx.Err() != nil, Partial: c.Opts.Job != "" || c.Opts.Pipeline != "", Start: start, Post: post, Recovered: recovered, Skipped: c.Plan.Skipped, Begin: rs.begin})
+		Cancelled: rs.userCancel || ctx.Err() != nil, Partial: c.Opts.Job != "" || c.Opts.Pipeline != "", Subset: keep, Start: start, Post: post, Recovered: recovered, Skipped: c.Plan.Skipped, Begin: rs.begin})
 	rs.render.Done(res.Summary)
 	return res, nil
 }

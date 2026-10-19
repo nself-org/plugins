@@ -42,7 +42,8 @@ type finishIn struct {
 	Hooks     Hooks
 	Jobs      []JobOutcome
 	Cancelled bool
-	Partial   bool // --job or --pipeline: not the whole default gate
+	Partial   bool            // --job or --pipeline: not the whole default gate
+	Subset    map[string]bool // --job: the selected jobs and their dependencies; nil = all
 	Start     time.Time
 	Post      statusPost
 	Recovered RecoverReport
@@ -177,7 +178,11 @@ func (c *Coordinator) conclude(f finishIn) Result {
 	nctx, ndone := context.WithTimeout(bg, 30*time.Second) // a hung sink must not hold the run after its status went out
 	notes = append(notes, notifyRun(nctx, f.Hooks, NotifyRequest{Run: info, Status: line, Notes: append([]string(nil), notes...)})...)
 	ndone()
-	return Result{RunID: f.RunID, Exit: exitFor(ev.Result), Summary: Summary{RunID: f.RunID, Result: ev.Result, Jobs: f.Jobs, Skipped: f.Skipped,
+	exit, narrowed := selectionExit(ev, f.Subset)
+	if narrowed {
+		notes = append(notes, selectionNote)
+	}
+	return Result{RunID: f.RunID, Exit: exit, Summary: Summary{RunID: f.RunID, Result: ev.Result, Jobs: f.Jobs, Skipped: f.Skipped,
 		Status: line, Evidence: digest, Doc: ev, Notes: notes}}
 }
 
