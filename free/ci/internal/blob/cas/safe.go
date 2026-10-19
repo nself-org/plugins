@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 // storeRoot keeps all named file operations beneath the blob tree.
@@ -46,7 +45,7 @@ func (s *Store) openStoreFile(path string, flags int, mode os.FileMode) (*os.Fil
 		return nil, err
 	}
 	defer func() { _ = root.Close() }()
-	f, err := root.OpenFile(rel, flags|syscall.O_NOFOLLOW, mode)
+	f, err := root.OpenFile(rel, flags|noFollow, mode)
 	if err != nil {
 		return nil, err
 	}
