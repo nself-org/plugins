@@ -139,7 +139,7 @@ func (d *Dispatcher) Plan(w sched.World, queued []Queued) ([]Queued, sched.Resul
 
 // settle admits one job's placement, or explains why it waits, and records the decision.
 func (d *Dispatcher) settle(ctx context.Context, runs map[string]*pipelineRun, pr *pipelineRun, q Queued) {
-	dec := Decision{WorldDigest: pr.digest, Job: q.Job.Sched, Explanation: pr.explained[q.Job.Sched.Key]}
+	dec := Decision{WorldDigest: pr.digest, Job: q.Job.Sched, Explanation: pr.explained[q.Job.Sched.Key], World: &pr.world}
 	if d.pastDeadline(q, pr.world.Policy.Overrides.MaxQueueMs, d.cfg.Clock()) { // earlier admissions took time too
 		d.timeout(ctx, q, pr.digest, d.cfg.Clock())
 		return
