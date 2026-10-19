@@ -168,6 +168,7 @@ layers:
     - cmd/agent
   supporting:
     - tools/deps
+    - internal/storetest
     - tools/schemagen
     - bench/sched
     - bench/cmd/schedbench
