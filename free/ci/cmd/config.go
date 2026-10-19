@@ -16,8 +16,8 @@ import (
 
 func init() {
 	registerV15("config show", subcommandEntry{
-		V15Only: true,
-		Flags:   config.ShowFlags,
+		V15Only: true, SideEffect: SideEffectRead,
+		Flags: config.ShowFlags,
 		Handler: func(args []string) int {
 			return config.RunShow(args, os.Stdout, os.Stderr, config.DefaultDeps())
 		},
