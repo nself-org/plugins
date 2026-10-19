@@ -19,7 +19,17 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
-func pidAlive(pid int) bool { return syscall.Kill(pid, 0) == nil }
+// pidAlive reports a running process. A zombie counts as gone: on Linux the executor makes this
+// test binary a child subreaper once any earlier test ran a job in-process, so the orphan is
+// adopted here and stays a zombie (kill(pid, 0) still succeeds) until reaped.
+func pidAlive(pid int) bool {
+	if syscall.Kill(pid, 0) != nil {
+		return false
+	}
+	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	state := strings.TrimSpace(string(out))
+	return err != nil || (state != "" && !strings.HasPrefix(state, "Z"))
+}
 
 func waitFor(t *testing.T, what string, limit time.Duration, ok func() bool) {
 	t.Helper()
