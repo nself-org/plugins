@@ -116,6 +116,11 @@ jobs:
     env:
       TAG: ${{ needs.build.outputs.tag }}
     steps:
+      # The key sits in this job's memory while the signing steps run; a later step with passwordless sudo could read it. None of the
+      # steps below needs root.
+      - name: Drop passwordless sudo
+        run: sudo rm -f /etc/sudoers.d/runner || true
+
       # The workflow's own commit: the scripts that touch the key are the ones the reviewer approved.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -142,23 +147,9 @@ jobs:
           [ "$want" = "$have" ] || { echo "ERROR: dist holds files SHA256SUMS does not list (or lacks listed ones)"; exit 1; }
           [ "$(cat dist/VERSION)" = "${TAG#v}" ] || { echo "ERROR: dist/VERSION is not the tag's version"; exit 1; }
 
-      # The key reaches manifest.sh and provenance.sh through the environment of these two steps only. Each writes it to a 0600 file in a
-      # 0700 temp directory that it removes on exit; nothing prints it and no step has `set -x`.
-      - name: Sign the manifests
-        env:
-          NSELF_AGENT_SIGNING_KEY: ${{ secrets.NSELF_AGENT_SIGNING_KEY }}
-          NSELF_AGENT_SIGNING_KEY_ID: ${{ secrets.NSELF_AGENT_SIGNING_KEY_ID }}
-        run: bash scripts/release/agent/manifest.sh --in dist
-
-      # syft is the pinned version from free/ci/internal/toolchain/versions.yaml (checksum-verified download); the statement's builder is
-      # this workflow ref and run.
-      - name: Write the SBOMs and sign the provenance
-        env:
-          NSELF_AGENT_SIGNING_KEY: ${{ secrets.NSELF_AGENT_SIGNING_KEY }}
-          NSELF_AGENT_SIGNING_KEY_ID: ${{ secrets.NSELF_AGENT_SIGNING_KEY_ID }}
-        run: bash scripts/release/agent/provenance.sh --in dist
-
-      - name: Verify against the committed public key
+      # Key-free gate first: the committed public key for the key id must exist and be the only key in its file, before any step reads the
+      # key. Records the key file for verify-release and for the upload step.
+      - name: Check the committed public key
         env:
           KEY_ID: ${{ secrets.NSELF_AGENT_SIGNING_KEY_ID }}
         run: |
@@ -167,12 +158,34 @@ jobs:
           [ -f "$PUB" ] || { echo "ERROR: ${PUB} is not committed; commit the agent public key first"; exit 1; }
           # genkeys.sh refuses an agent key that is also a key committed for another purpose.
           bash scripts/release/agent/genkeys.sh "$RUNNER_TEMP/keys_check.go"
-          REVOKED=()
-          if [ -f scripts/release/keys/agent-revoked.txt ]; then REVOKED=(--revoked "$GITHUB_WORKSPACE/scripts/release/keys/agent-revoked.txt"); fi
-          (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --require-all-targets --version "${TAG#v}" "${REVOKED[@]}" --pub "$GITHUB_WORKSPACE/$PUB" "$GITHUB_WORKSPACE/dist")
-          # The upload step re-verifies a target that is already on the release with the same key file.
           echo "PUB_FILE=$GITHUB_WORKSPACE/$PUB" >> "$GITHUB_ENV"
-          if [ "${#REVOKED[@]}" -gt 0 ]; then echo "REVOKED_FILE=$GITHUB_WORKSPACE/scripts/release/keys/agent-revoked.txt" >> "$GITHUB_ENV"; fi
+          if [ -f scripts/release/keys/agent-revoked.txt ]; then echo "REVOKED_FILE=$GITHUB_WORKSPACE/scripts/release/keys/agent-revoked.txt" >> "$GITHUB_ENV"; fi
+
+      # The key reaches manifest.sh and the --sign phase of provenance.sh through the environment of these two steps only. Each writes it
+      # to a 0600 file in a 0700 temp dir that it removes on exit; nothing prints it and no step has `set -x`. Neither runs a third-party
+      # program: syft, go and provgen run in the step between them, which has no secret.
+      - name: Sign the manifests
+        env:
+          NSELF_AGENT_SIGNING_KEY: ${{ secrets.NSELF_AGENT_SIGNING_KEY }}
+          NSELF_AGENT_SIGNING_KEY_ID: ${{ secrets.NSELF_AGENT_SIGNING_KEY_ID }}
+        run: bash scripts/release/agent/manifest.sh --in dist
+
+      # syft is the pinned version from free/ci/internal/toolchain/versions.yaml (checksum-verified download); the statement's builder is
+      # this workflow ref and run. provenance.sh --prepare refuses to start if the key is in its environment.
+      - name: Write the SBOMs and the provenance statements
+        run: bash scripts/release/agent/provenance.sh --in dist --prepare
+
+      - name: Sign the provenance
+        env:
+          NSELF_AGENT_SIGNING_KEY: ${{ secrets.NSELF_AGENT_SIGNING_KEY }}
+          NSELF_AGENT_SIGNING_KEY_ID: ${{ secrets.NSELF_AGENT_SIGNING_KEY_ID }}
+        run: bash scripts/release/agent/provenance.sh --in dist --sign
+
+      - name: Verify against the committed public key
+        run: |
+          REVOKED=()
+          if [ -n "${REVOKED_FILE:-}" ]; then REVOKED=(--revoked "$REVOKED_FILE"); fi
+          (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --require-all-targets --version "${TAG#v}" "${REVOKED[@]}" --pub "$PUB_FILE" "$GITHUB_WORKSPACE/dist")
 
       # Never --clobber. A target is released as a set: binary, manifest, two SBOMs and, last, the provenance (the commit marker). The SBOMs
       # and the provenance are not reproducible (timestamp, serial number, run id), so a target whose provenance is already on the release is

@@ -74,7 +74,7 @@ func (v *Verifier) VerifyProvenance(m Manifest, files Files) error {
 	if err != nil {
 		return fail(ReasonProvenance, err, "the provenance statement is not valid")
 	}
-	return checkStatement(st, m, files)
+	return checkStatement(st, m, files, v.tagsOnly)
 }
 
 // openEnvelope parses the DSSE envelope strictly and verifies its signature under the agent purpose.
@@ -102,11 +102,11 @@ func (v *Verifier) openEnvelope(raw []byte) ([]byte, error) {
 }
 
 // checkStatement binds a verified statement to the manifest and to the SBOM bytes.
-func checkStatement(st provenance.Statement, m Manifest, files Files) error {
+func checkStatement(st provenance.Statement, m Manifest, files Files, tagsOnly bool) error {
 	if st.Predicate.BuildDefinition.BuildType != provenance.BuildTypeAgent {
 		return provFail("the provenance build type is %q, not the agent build type", clip(st.Predicate.BuildDefinition.BuildType))
 	}
-	if err := checkBuilder(st, m); err != nil {
+	if err := checkBuilder(st, m, tagsOnly); err != nil {
 		return err
 	}
 	name := BinaryName(m.Target)
@@ -133,9 +133,10 @@ func checkStatement(st provenance.Statement, m Manifest, files Files) error {
 // ReleaseRepo is the repository whose release workflow builds the agent.
 const ReleaseRepo = "nself-org/plugins"
 
-// checkBuilder pins the builder: the release workflow of ReleaseRepo, at the ref the statement names, and a tag ref must be the
-// manifest's version (a rehearsal runs from a branch, so a non-tag ref is accepted).
-func checkBuilder(st provenance.Statement, m Manifest) error {
+// checkBuilder pins the builder: the release workflow of ReleaseRepo, at the ref the statement names. A tag ref must be the manifest's
+// version; the production verifier (tagsOnly, Default) accepts no other ref, a New verifier also accepts a branch ref (a rehearsal
+// runs from a branch).
+func checkBuilder(st provenance.Statement, m Manifest, tagsOnly bool) error {
 	bd := st.Predicate.BuildDefinition
 	repo := "https://github.com/" + ReleaseRepo
 	ref := bd.ExternalParameters["ref"]
@@ -143,7 +144,7 @@ func checkBuilder(st provenance.Statement, m Manifest) error {
 		st.Predicate.RunDetails.Builder.ID != repo+"/"+provenance.AgentWorkflow+"@"+ref {
 		return provFail("the provenance builder is not the agent release workflow of %s", ReleaseRepo)
 	}
-	if strings.HasPrefix(ref, "refs/tags/") && ref != "refs/tags/v"+m.Version {
+	if (tagsOnly || strings.HasPrefix(ref, "refs/tags/")) && ref != "refs/tags/v"+m.Version {
 		return provFail("the provenance was built from %s, not the tag of version %s", clip(ref), clip(m.Version))
 	}
 	return nil

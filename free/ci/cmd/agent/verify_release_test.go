@@ -135,16 +135,32 @@ func TestVerifyReleaseFailures(t *testing.T) {
 	}
 }
 
-func TestVerifyReleaseAcceptsAKeyFileWithTwoKeys(t *testing.T) {
+func TestVerifyReleaseKeyFileMayHoldTwoKeysOnlyForARehearsal(t *testing.T) {
 	dir, pub := releaseDir(t)
 	extra, _, _ := ed25519.GenerateKey(rand.Reader)
 	first, _ := os.ReadFile(pub)
 	second, _ := os.ReadFile(writePub(t, extra))
-	if err := os.WriteFile(pub, append(first, second...), 0o644); err != nil {
+	both := append(first, second...)
+	rehearsal := filepath.Join(t.TempDir(), "rehearsal-test.pub")
+	if err := os.WriteFile(rehearsal, both, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if code, _, errs := runVR("--pub", pub, dir); code != 0 {
-		t.Fatalf("code %d err %q", code, errs)
+	if code, _, errs := runVR("--pub", rehearsal, dir); code != 0 {
+		t.Fatalf("rehearsal-test.pub with two keys: code %d err %q", code, errs)
+	}
+	// Any other file name is a release key file: a second key there would pass the gate and be refused by every client.
+	if err := os.WriteFile(pub, both, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errs := runVR("--pub", pub, dir); code != 1 || !strings.Contains(errs, "exactly one") {
+		t.Fatalf("two keys in a release key file: code %d err %q", code, errs)
+	}
+	// Bytes after the one block are refused too.
+	if err := os.WriteFile(pub, append(first, []byte("trailing\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errs := runVR("--pub", pub, dir); code != 1 || !strings.Contains(errs, "exactly one") {
+		t.Fatalf("trailing bytes: code %d err %q", code, errs)
 	}
 }
 

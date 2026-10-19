@@ -4,8 +4,8 @@ package main
 //          (hq NODE D11, P7-NODE-15). It verifies every nself-ci-agent-<os>-<arch> file in DIR against its
 //          .manifest.json, .cdx.json, .spdx.json and .intoto.dsse.json (P7-CACHE-10) with the keys of one PEM file, through the same
 //          internal/agent/verify package `nodes add` uses.
-// Inputs:  --pub FILE (PEM SPKI Ed25519 public key; a rehearsal file holds two: the manifest key and the provenance key; there is
-//          no key discovery), --version V (default: DIR/VERSION, else the
+// Inputs:  --pub FILE (PEM SPKI Ed25519 public key, exactly one block; a rehearsal-test.pub holds two: the manifest key and the
+//          provenance key; there is no key discovery), --version V (default: DIR/VERSION, else the
 //          version the manifests agree on), --revoked FILE (revoked key ids; a manifest signed by one fails), --require-all-targets (the release workflow sets it: all of linux-amd64, linux-arm64
 //          and darwin-arm64 must be present), DIR from build.sh and manifest.sh.
 // Outputs: one "ok <file> <version> <key id>" line per file on stdout; failures "E665: <reason>: <detail>" on stderr.
@@ -66,7 +66,8 @@ func verifierFromPEM(path, revokedPath string) (*verify.Verifier, error) {
 		return nil, fmt.Errorf("cannot read the public key file")
 	}
 	var keys []signing.Key
-	for rest := data; ; {
+	rest := data
+	for {
 		var block *pem.Block
 		if block, rest = pem.Decode(rest); block == nil {
 			break
@@ -81,8 +82,15 @@ func verifierFromPEM(path, revokedPath string) (*verify.Verifier, error) {
 		}
 		keys = append(keys, signing.Key{ID: signing.KeyID(signing.PurposeAgent, pub), Purpose: signing.PurposeAgent, Public: pub})
 	}
-	if len(keys) == 0 || len(keys) > 4 {
-		return nil, fmt.Errorf("the public key file is not 1 to 4 PEM PUBLIC KEY blocks")
+	// A committed agent key file holds exactly one key (genkeys.sh compiles only that one into clients, so a second key here would pass
+	// the gate and then be refused everywhere). Only a rehearsal directory's rehearsal-test.pub holds the manifest key and the provenance
+	// key.
+	max := 1
+	if filepath.Base(path) == "rehearsal-test.pub" {
+		max = 4
+	}
+	if len(keys) == 0 || len(keys) > max || strings.TrimSpace(string(rest)) != "" {
+		return nil, fmt.Errorf("the public key file must hold exactly one PEM PUBLIC KEY block (only rehearsal-test.pub may hold up to four)")
 	}
 	var revoked []string
 	if revokedPath != "" {
@@ -243,7 +251,8 @@ func readSideFiles(dir, name string) (verify.Files, error) {
 
 // readRegular reads a regular file (never a symlink) of at most limit bytes.
 func readRegular(path string, limit int64) ([]byte, error) {
-	if lst, err := os.Lstat(path); err != nil || !lst.Mode().IsRegular() {
+	lst, err := os.Lstat(path)
+	if err != nil || !lst.Mode().IsRegular() {
 		return nil, fmt.Errorf("missing or not a regular file")
 	}
 	f, err := os.Open(path)
@@ -251,6 +260,9 @@ func readRegular(path string, limit int64) ([]byte, error) {
 		return nil, fmt.Errorf("cannot be opened")
 	}
 	defer func() { _ = f.Close() }()
+	if st, serr := f.Stat(); serr != nil || !os.SameFile(lst, st) {
+		return nil, fmt.Errorf("changed while it was opened")
+	}
 	b, err := io.ReadAll(io.LimitReader(f, limit+1))
 	if err != nil || int64(len(b)) > limit {
 		return nil, fmt.Errorf("unreadable or larger than %d bytes", limit)

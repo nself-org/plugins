@@ -328,6 +328,7 @@ func fakeSyft(version string) string {
 
 const fakeSyftBody = `#!/bin/sh
 [ -z "${NSELF_AGENT_SIGNING_KEY:-}" ] || { echo "the signing key leaked into syft" >&2; exit 7; }
+[ -z "${FAKE_SYFT_MARK:-}" ] || echo ran >> "$FAKE_SYFT_MARK"
 case "$1" in
   version) echo "Version:       @VERSION@"; exit 0 ;;
   scan) shift
@@ -471,7 +472,12 @@ func TestProvenanceScriptRunsOnlyThePinnedSyft(t *testing.T) {
 		"another version":  {"1.54.0", fileSHA(t)},
 		"unparsable build": {"", fileSHA(t)},
 	} {
+		mark := filepath.Join(t.TempDir(), "syft-ran")
+		t.Setenv("FAKE_SYFT_MARK", mark)
 		dir, out, err := scriptRelease(t, c.version, c.sha)
+		if _, serr := os.Stat(mark); c.sha != nil && name == "another sha256" && serr == nil {
+			t.Fatalf("%s: a syft with another sha256 was executed", name)
+		}
 		if err == nil {
 			t.Fatalf("%s: an unpinned syft was accepted:\n%s", name, out)
 		}
@@ -503,8 +509,16 @@ func TestProvenanceScriptSignsWithTheEnvironmentKeyAndLeaksNoKey(t *testing.T) {
 	if o, merr := e.run("manifest.sh", env, "--in", e.dir); merr != nil {
 		t.Fatalf("manifest.sh: %v\n%s", merr, o)
 	}
-	if o, perr := e.run("provenance.sh", env, "--in", e.dir, "--versions", e.table); perr != nil {
-		t.Fatalf("provenance.sh: %v\n%s", perr, o)
+	// The release path is two steps: --prepare runs go and syft and must not hold the key; --sign holds the key and runs openssl only.
+	prepEnv := env[2:]
+	if o, perr := e.run("provenance.sh", prepEnv, "--in", e.dir, "--prepare", "--versions", e.table); perr != nil {
+		t.Fatalf("provenance.sh --prepare: %v\n%s", perr, o)
+	}
+	if o, perr := e.run("provenance.sh", env, "--in", e.dir, "--sign"); perr != nil {
+		t.Fatalf("provenance.sh --sign: %v\n%s", perr, o)
+	}
+	if _, serr := os.Stat(filepath.Join(e.dir, ".provenance")); serr == nil {
+		t.Fatal("--sign must remove the prepared statements")
 	}
 	v := mustVerifier(t, nil, signing.Key{ID: keyID, Purpose: signing.PurposeAgent, Public: pub})
 	name := BinaryName("linux-amd64")
@@ -525,9 +539,36 @@ func TestProvenanceScriptSignsWithTheEnvironmentKeyAndLeaksNoKey(t *testing.T) {
 	if bytes.Contains(files.Provenance, []byte("PRIVATE")) {
 		t.Fatal("key text in the provenance file")
 	}
-	// Without the GitHub variables a real (non-rehearsal) run refuses.
+	// --prepare refuses to start while the key is in its environment, and a real --prepare needs the GitHub variables.
 	e2 := scriptSetup(t, "1.54.1", fileSHA(t))
-	if o, merr := e2.run("provenance.sh", []string{"NSELF_AGENT_SIGNING_KEY=" + keyPEM, "NSELF_AGENT_SIGNING_KEY_ID=" + keyID, "GITHUB_WORKFLOW_REF="}, "--in", e2.dir, "--versions", e2.table); merr == nil {
-		t.Fatalf("a real run without GITHUB_WORKFLOW_REF must fail:\n%s", o)
+	if o, merr := e2.run("provenance.sh", append(env[:1:1], "GITHUB_WORKFLOW_REF=x"), "--in", e2.dir, "--prepare", "--versions", e2.table); merr == nil || !strings.Contains(string(o), "without NSELF_AGENT_SIGNING_KEY") {
+		t.Fatalf("--prepare with the key in its environment must refuse:\n%s", o)
+	}
+	if o, merr := e2.run("provenance.sh", []string{"GITHUB_WORKFLOW_REF="}, "--in", e2.dir, "--prepare", "--versions", e2.table); merr == nil {
+		t.Fatalf("a real --prepare without GITHUB_WORKFLOW_REF must fail:\n%s", o)
+	}
+	// One process with a real key may not start go and syft: neither the phase-less nor the combined form is accepted outside --rehearsal.
+	for _, args := range [][]string{{"--in", e2.dir}, {"--in", e2.dir, "--prepare", "--sign"}} {
+		if o, merr := e2.run("provenance.sh", env[:2], args...); merr == nil {
+			t.Fatalf("%v must be refused:\n%s", args, o)
+		}
+	}
+}
+
+// TestProvenanceTagsOnlyVerifierRefusesABranchRef: the production verifier (Default sets tagsOnly) accepts a release built from a tag
+// only; a New verifier also accepts a rehearsal built from a branch.
+func TestProvenanceTagsOnlyVerifierRefusesABranchRef(t *testing.T) {
+	agent := newSigner(t, signing.PurposeAgent)
+	r := newRelease(t, agent)
+	r.files.Provenance = envelopeBytes(t, agent, provenance.PayloadType, r.statement(t, func(f *provenance.AgentFacts) { f.Ref = "refs/heads/main" }))
+	v := mustVerifier(t, nil, agent.key())
+	if _, err := v.Artifact(r.path, r.json(t), pinned, r.files); err != nil {
+		t.Fatalf("a rehearsal from a branch must verify with New: %v", err)
+	}
+	v.tagsOnly = true
+	_, err := v.Artifact(r.path, r.json(t), pinned, r.files)
+	wantReason(t, err, ReasonProvenance)
+	if !strings.Contains(err.Error(), "not the tag of version") {
+		t.Fatalf("expected the tag rule, got %v", err)
 	}
 }

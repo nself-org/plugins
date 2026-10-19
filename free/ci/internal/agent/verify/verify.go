@@ -129,6 +129,9 @@ func SigningInput(m Manifest) ([]byte, error) {
 type Verifier struct {
 	sv    *signing.Verifier
 	nkeys int
+	// tagsOnly makes the provenance builder check demand a tag ref (the production Default verifier); New leaves it off so a rehearsal
+	// run from a branch verifies.
+	tagsOnly bool
 }
 
 // New builds a Verifier over keys and a revoked-id list. The keys should be agent-purpose keys with derived ids; a key of
@@ -152,7 +155,12 @@ func Default() (*Verifier, error) {
 		}
 		keys = append(keys, signing.Key{ID: e.ID, Purpose: signing.PurposeAgent, Public: pub})
 	}
-	return New(keys, generatedRevoked)
+	v, err := New(keys, generatedRevoked)
+	if err != nil {
+		return nil, err
+	}
+	v.tagsOnly = true
+	return v, nil
 }
 
 // HasKeys reports whether any key is trusted.
@@ -241,7 +249,8 @@ func signingFailure(err error, keyID string) *Error {
 
 func fileSHA256(path string) (string, error) {
 	// A symlink is refused: the bytes read must be the bytes at the path the caller then uses.
-	if lst, err := os.Lstat(path); err != nil || !lst.Mode().IsRegular() {
+	lst, err := os.Lstat(path)
+	if err != nil || !lst.Mode().IsRegular() {
 		return "", fail(ReasonUnreadable, err, "artifact is not a regular file (symlinks are refused)")
 	}
 	f, err := os.Open(path)
@@ -250,7 +259,7 @@ func fileSHA256(path string) (string, error) {
 	}
 	defer func() { _ = f.Close() }()
 	st, err := f.Stat()
-	if err != nil || !st.Mode().IsRegular() || st.Size() == 0 || st.Size() > MaxBinaryBytes {
+	if err != nil || !st.Mode().IsRegular() || !os.SameFile(lst, st) || st.Size() == 0 || st.Size() > MaxBinaryBytes {
 		return "", fail(ReasonUnreadable, err, "artifact is not a regular file of 1..%d bytes", MaxBinaryBytes)
 	}
 	h := sha256.New()
