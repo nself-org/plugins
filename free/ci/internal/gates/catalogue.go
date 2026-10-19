@@ -90,8 +90,9 @@ func (r *Registry) Plan(facts []detect.Fact, o Options) []PlannedCheck {
 				add("node.coverage", dir, "")
 			}
 		case f.Kind == "stack" && (f.Name == "flutter" || f.Name == "dart"):
-			add("flutter.analyze", dir, "")
-			add("flutter.test", dir, "")
+			// D-0995: no auto-planned checks. Flutter is eliminated (APC P2) and the
+			// toolchain image has no flutter binary; flutter.* stay registered for
+			// jobs a repo authors itself.
 		case f.Kind == "stack" && f.Name == "rust":
 			add("rust.clippy", dir, "")
 			add("rust.test", dir, "")

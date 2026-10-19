@@ -9,6 +9,7 @@ Local CI gate runner for nSelf repositories. Detects the repo stack and runs lin
    - **Go:** `gofmt -l .` (files under `vendor/` ignored) + `go vet ./...` + `go test ./...` (per-package `-timeout` at least 600 s)
    - **Node:** `pnpm run lint` + `pnpm run typecheck` + `pnpm run test` + `pnpm run build` (skips missing scripts; a pnpm/npm workspace recurses into member packages so a root with no scripts of its own still runs real gates instead of reporting a false PASSED — see `internal/legacy/gate_runners.go`)
    - **Flutter:** `flutter analyze` + `flutter test`
+   - The check catalogue (`nself ci` plan/run) detects Flutter but plans no `flutter.*` check for it; the pinned `--container` image has no Flutter. Author a `flutter.analyze` / `flutter.test` job in the pipeline config if a repo still needs them.
 3. Scans for secrets with `gitleaks` (uses repo `.github/gitleaks.toml` if present). Defaults to git-mode (respects `.gitignore`, scans tracked content); pass `--filesystem` to force the old `--no-git` filesystem-scan behavior for a non-checkout source tree.
 4. Posts a `nself-ci` commit status to GitHub so it appears in PR checks
 5. `nself-ci build --artifact android` produces a signed release APK locally and can attach it to a GitHub release — see "Artifact builds" below.

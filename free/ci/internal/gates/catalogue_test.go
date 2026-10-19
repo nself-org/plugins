@@ -148,3 +148,23 @@ func TestTrivyOffline(t *testing.T) {
 		t.Fatal(required)
 	}
 }
+
+// D-0995: the pinned toolchain image carries no Flutter and Flutter is eliminated
+// project-wide (APC P2), so a detected Flutter stack plans no flutter.* check, in
+// or out of --container. The checks stay registered for explicitly authored jobs.
+func TestFlutterStackPlansNoChecks(t *testing.T) {
+	r := DefaultRegistry()
+	facts := []detect.Fact{{Kind: "stack", Name: "flutter", Path: "app/pubspec.yaml", Confidence: detect.Certain}}
+	for _, o := range []Options{{}, {Container: true}} {
+		for _, p := range r.Plan(facts, o) {
+			if strings.HasPrefix(p.Def.ID, "flutter.") {
+				t.Errorf("container=%v planned %s", o.Container, p.Def.ID)
+			}
+		}
+	}
+	for _, id := range []string{"flutter.analyze", "flutter.test"} {
+		if !r.Has(id) {
+			t.Errorf("%s must stay registered for authored jobs", id)
+		}
+	}
+}
