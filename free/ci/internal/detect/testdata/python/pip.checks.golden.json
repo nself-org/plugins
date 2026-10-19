@@ -16,10 +16,9 @@
     "required": true,
     "tool": "python3",
     "argv": [
-      "sh",
+      "python3",
       "-c",
-      "set -e\n[ -d .venv ] || python3 -m venv .venv\nfor f in \"$@\"; do .venv/bin/python -m pip install --quiet -r \"$f\"; done\nexec .venv/bin/python -m pytest",
-      "sh",
+      "import os, subprocess, sys, venv\nexe = os.path.join(\".venv\", \"Scripts\" if os.name == \"nt\" else \"bin\", \"python\")\nif not os.path.isdir(\".venv\"):\n    venv.create(\".venv\", with_pip=True)\ndef run(*args):\n    code = subprocess.call([exe, *args])\n    if code:\n        sys.exit(code)\nfor f in sys.argv[1:]:\n    run(\"-m\", \"pip\", \"install\", \"--quiet\", \"-r\", f)\nsys.exit(subprocess.call([exe] + \"-m pytest\".split()))",
       "requirements-dev.txt",
       "requirements.txt"
     ]

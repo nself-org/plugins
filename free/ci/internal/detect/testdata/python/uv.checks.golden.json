@@ -16,9 +16,10 @@
     "required": true,
     "tool": "uv",
     "argv": [
-      "sh",
-      "-c",
-      "uv sync --frozen \u0026\u0026 uv run pytest"
+      "uv",
+      "run",
+      "--frozen",
+      "pytest"
     ]
   },
   {
