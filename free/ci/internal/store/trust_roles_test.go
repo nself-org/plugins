@@ -103,3 +103,29 @@ func TestGrantRevokeAlsoEndsTokens(t *testing.T) {
 		t.Fatal("nothing left to revoke")
 	}
 }
+
+func TestRevokeProceedsOnADamagedChain(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		if err := s.AuditAppend(ctx, AuditInput{Actor: "a", Action: "x", Target: "t", Detail: "d", Seal: standIn}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.writer.Exec("UPDATE audit SET head=NULL WHERE seq=2"); err != nil {
+		t.Fatal(err)
+	}
+	in := AuditInput{Actor: "a", Action: "roles.revoke", Target: "bob", Detail: "d", Seal: standIn}
+	if err := s.GrantPut(ctx, Grant{Principal: "bob", Role: "admin", Projects: []string{"*"}, Subject: "bob", GrantedBy: "a"}, in); err != nil {
+		t.Fatalf("a grant still records its row beside a damaged chain: %v", err)
+	}
+	if found, err := s.GrantRevoke(ctx, "bob", in); err != nil || !found {
+		t.Fatalf("a revocation must never be blocked by audit damage: %v %v", found, err)
+	}
+	if _, ok, _ := s.GrantGet(ctx, "bob"); ok {
+		t.Fatal("the grant is revoked")
+	}
+	if n, err := s.AuditSeal(ctx, standIn); !codeIs(err, "E609") || n != 0 {
+		t.Fatalf("an explicit seal reports the damage as E609: %d %v", n, err)
+	}
+}

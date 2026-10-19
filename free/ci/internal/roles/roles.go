@@ -122,7 +122,9 @@ type decision struct {
 	forced                  error
 }
 
-// Can is the pure check: no store access and no audit row.
+// Can is the pure check on the Actor as it was resolved: no store access, no revocation check and no
+// audit row. Authorization decisions go through Authorize, AuthorizeAction or the Service methods, which
+// re-read the actor first.
 func (a Actor) Can(role Role, project string) error {
 	if a.svc == nil || a.id == "" || a.kind == "" {
 		return fail(ReasonNoActor, "no identity")

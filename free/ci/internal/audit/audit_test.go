@@ -146,13 +146,18 @@ func TestVerifyDetectsClearedHeadAndSealRefuses(t *testing.T) {
 		t.Fatalf("a head cleared under sealed rows is named: %+v", rep)
 	}
 	var se *store.Error
-	if _, err := l.Seal(ctx); !errors.As(err, &se) || se.Code != "E607" {
-		t.Fatalf("sealing must refuse to re-chain a row below a sealed one: %v", err)
+	if _, err := l.Seal(ctx); !errors.As(err, &se) || se.Code != "E609" {
+		t.Fatalf("an explicit seal must refuse to re-chain a row below a sealed one (E609): %v", err)
 	}
-	if err := l.Append(ctx, ev(7)); err == nil {
-		t.Fatal("an Append must not seal over the damaged chain")
+	// A write is never blocked by the damage (a revocation must still work), but it is kept unsealed.
+	if err := l.Append(ctx, ev(7)); err != nil {
+		t.Fatalf("an Append still records its row: %v", err)
 	}
-	if rep, _ = l.Verify(ctx, 0); rep.BadSeq != 2 {
+	rows, _ := l.St.AuditEntries(ctx, 0, 0)
+	if last := rows[len(rows)-1]; last.Head != nil || last.Target != "t7" {
+		t.Fatalf("the new row stays unsealed beside the damage: %+v", last)
+	}
+	if rep, _ = l.Verify(ctx, 0); rep.BadSeq != 2 || rep.Unsealed != 2 {
 		t.Fatalf("the damage is still reported: %+v", rep)
 	}
 }

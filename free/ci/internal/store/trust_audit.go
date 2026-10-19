@@ -40,6 +40,15 @@ type AuditEntry struct {
 	PrevHead, Head, Signature []byte
 }
 
+// chainDamagedError is sealPending's refusal to chain onto a row whose head was cleared.
+type chainDamagedError struct{ seq int64 }
+
+func (e *chainDamagedError) Error() string {
+	return "audit row " + strconv.FormatInt(e.seq, 10) + " is unsealed below a sealed row; run `nself ci serve admin audit --verify`"
+}
+
+// auditIn writes the row and, when asked, seals. A damaged chain does not stop the write: the row is kept
+// unsealed (so a revocation or a decision is never blocked by tampering) and --verify keeps naming the damage.
 func (s *Store) auditIn(ctx context.Context, tx *sql.Tx, in AuditInput) error {
 	if err := s.appendAudit(ctx, tx, in.Actor, in.Action, in.Target, in.Detail); err != nil {
 		return err
@@ -48,6 +57,10 @@ func (s *Store) auditIn(ctx context.Context, tx *sql.Tx, in AuditInput) error {
 		return nil
 	}
 	_, err := sealPending(ctx, tx, in.Seal)
+	var damaged *chainDamagedError
+	if errors.As(err, &damaged) {
+		return nil
+	}
 	return err
 }
 
@@ -89,6 +102,10 @@ func (s *Store) AuditSeal(ctx context.Context, seal AuditSealer) (n int, err err
 		return 0, coded("E607", "no chain function")
 	}
 	err = s.writeRetry(ctx, func(tx *sql.Tx) (e error) { n, e = sealPending(ctx, tx, seal); return e })
+	var damaged *chainDamagedError
+	if errors.As(err, &damaged) {
+		return 0, coded("E609", damaged.Error())
+	}
 	return n, err
 }
 
@@ -116,7 +133,7 @@ func sealPending(ctx context.Context, tx *sql.Tx, seal AuditSealer) (int, error)
 		return 0, err
 	}
 	if top > todo[0].Seq {
-		return 0, coded("E607", "audit row "+strconv.FormatInt(todo[0].Seq, 10)+" is unsealed below a sealed row; run `nself ci serve admin audit --verify`")
+		return 0, &chainDamagedError{seq: todo[0].Seq}
 	}
 	var prev []byte
 	err = tx.QueryRowContext(ctx, "SELECT head FROM audit WHERE seq<? AND head IS NOT NULL ORDER BY seq DESC LIMIT 1", todo[0].Seq).Scan(&prev)
