@@ -19,12 +19,13 @@ import (
 
 func TestContainerEnvDropsImageOwnedNames(t *testing.T) {
 	for name, tc := range map[string]struct{ in, want []string }{
-		"path":         {[]string{"PATH=/usr/bin", "LANG=C"}, []string{"LANG=C"}},
-		"toolchain":    {[]string{"GOTOOLCHAIN=auto", "GOFLAGS=-mod=mod"}, []string{"GOFLAGS=-mod=mod"}},
-		"lowercase":    {[]string{"path=/x", "Gotoolchain=auto"}, []string{}},
-		"value-has-eq": {[]string{"FOO=PATH=/x"}, []string{"FOO=PATH=/x"}},
-		"prefixed":     {[]string{"PATHEXT=.exe", "MYPATH=/x", "GOTOOLCHAIN_X=1"}, []string{"PATHEXT=.exe", "MYPATH=/x", "GOTOOLCHAIN_X=1"}},
-		"empty":        {nil, []string{}},
+		"path":            {[]string{"PATH=/usr/bin", "LANG=C"}, []string{"LANG=C"}},
+		"toolchain":       {[]string{"GOTOOLCHAIN=auto", "GOFLAGS=-mod=mod"}, []string{"GOFLAGS=-mod=mod"}},
+		"lowercase":       {[]string{"path=/x", "Gotoolchain=auto"}, []string{}},
+		"value-has-eq":    {[]string{"FOO=PATH=/x"}, []string{"FOO=PATH=/x"}},
+		"prefixed":        {[]string{"PATHEXT=.exe", "MYPATH=/x", "GOTOOLCHAIN_X=1"}, []string{"PATHEXT=.exe", "MYPATH=/x", "GOTOOLCHAIN_X=1"}},
+		"toolchain-homes": {[]string{"GOROOT=/opt/go", "GOOS=darwin", "GOARCH=arm64", "CARGO_HOME=/h/.cargo", "RUSTUP_HOME=/h/.rustup", "PNPM_HOME=/h/p", "NVM_DIR=/h/.nvm", "GOFLAGS=-mod=mod"}, []string{"GOFLAGS=-mod=mod"}},
+		"empty":           {nil, []string{}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := containerEnv(tc.in); !slices.Equal(got, tc.want) {
