@@ -3,8 +3,9 @@ package run
 // Purpose: install the streaming redactor as the executor's Redactor, so every
 // output chunk of every attempt passes it before the tail buffer, the renderer
 // or any store sees it (P7-TRUST-19; the Redactor slot is ciexec.Executor's).
-// Inputs:  values added with RegisterSecretValue (secret resolution, argv and
-// credential registration call it later). Outputs: a fresh *redact.Filter per
+// Inputs:  values added with RegisterSecretValue (the executor registers each
+// resolved job secret; the services engine registers each generated credential
+// through services.SecretSink). Outputs: a fresh *redact.Filter per
 // attempt, built from the process-wide registry.
 // Constraints: token shapes and the workflow-command / escape neutraliser work
 // with no registered value. A value registered mid-run applies to bytes not yet
@@ -13,6 +14,7 @@ package run
 import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
+	"github.com/nself-org/plugins/free/ci/internal/services"
 )
 
 // Redactions is the registry every attempt's redactor reads.
@@ -24,4 +26,5 @@ func RegisterSecretValue(v []byte) error { return Redactions.Register(v) }
 
 func init() {
 	RegisterRedactor(func() ciexec.Redactor { return Redactions.NewFilter() })
+	services.SecretSink = func(v string) { _ = RegisterSecretValue([]byte(v)) }
 }
