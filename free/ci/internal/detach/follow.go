@@ -58,6 +58,7 @@ func Follow(ctx context.Context, w io.Writer, p FollowParams) (Outcome, error) {
 		idle = IdleGrace
 	}
 	r := &Reader{Path: p.Path}
+	defer func() { _ = r.Close() }()
 	last, gone, lastSeq := time.Now(), false, int64(0)
 	for {
 		lines, err := r.Next()
@@ -69,7 +70,7 @@ func Follow(ctx context.Context, w io.Writer, p FollowParams) (Outcome, error) {
 		}
 		for _, l := range lines {
 			rec, ok := ParseLine(l)
-			if !ok || (!rec.Err && rec.Seq < p.From) {
+			if !ok || (!rec.Final() && rec.Seq < p.From) {
 				continue
 			}
 			if _, err = w.Write(append(append([]byte(nil), l...), '\n')); err != nil {

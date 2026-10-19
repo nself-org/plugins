@@ -18,7 +18,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -34,7 +33,10 @@ import (
 // codeStoreFailed is the store's E607 (store operation failed), the default infra code.
 const codeStoreFailed = "E607"
 
-func init() { registerRunsSub("follow", runFollow) }
+func init() {
+	registerRunsSub("follow", runFollow)
+	registerV15("runs follow", subcommandEntry{V15Only: true, Flags: func() *flag.FlagSet { return newFollowFlagSet(&followFlags{}) }, Handler: runFollow})
+}
 
 type followFlags struct {
 	json        bool
@@ -77,12 +79,23 @@ func runFollow(args []string) int {
 }
 
 // followFile copies a detached run's event file; if the run ended without a
-// final line it closes the stream from the run's last state.
+// final line it waits once more (the engine writes the final line just after
+// the store marks the run finished), then closes the stream from the run's
+// last state.
 func followFile(ctx context.Context, src *runSource, path string, from int64) int {
-	out, err := detach.Follow(ctx, os.Stdout, detach.FollowParams{Path: path, From: from, Idle: followIdle, Over: func() (bool, error) {
+	over := func() (bool, error) {
 		cur, err := src.View(ctx)
 		return err == nil && detach.Terminal(cur.State), err
-	}})
+	}
+	var out detach.Outcome
+	var err error
+	for attempt, idle := 0, followIdle; attempt < 2; attempt, idle = attempt+1, idle*5 {
+		out, err = detach.Follow(ctx, os.Stdout, detach.FollowParams{Path: path, From: from, Idle: idle, Over: over})
+		if err != nil || out.End != detach.EndGone {
+			break
+		}
+		from = max(from, out.LastSeq+1)
+	}
 	switch {
 	case err != nil:
 		return followFail(err, "", 2)
@@ -98,7 +111,7 @@ func followFile(ctx context.Context, src *runSource, path string, from int64) in
 	if cur.State == "lost" {
 		return followFail(nil, "child_exit: the detached run ended without a result (state lost)", 2, detach.CodeID)
 	}
-	line, err := detach.ResultLine(cur.RunID, out.LastSeq+1, evidenceOf(ctx, src, cur))
+	line, err := detach.ResultLine(cur.RunID, max(out.LastSeq+1, from), evidenceOf(ctx, src, cur))
 	if err != nil {
 		return followFail(err, "", 2)
 	}
@@ -161,6 +174,5 @@ func followFail(err error, msg string, exit int, code ...string) int {
 	if b, e := output.StreamError("ci runs follow", output.ErrorDetail{Code: c, Message: msg, ExitCode: exit}, nil); e == nil {
 		_, _ = os.Stdout.Write(b)
 	}
-	fmt.Fprintln(os.Stderr, msg)
 	return exit
 }

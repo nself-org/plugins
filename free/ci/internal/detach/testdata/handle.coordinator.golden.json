@@ -43,6 +43,7 @@
       "nself",
       "ci",
       "logs",
+      "build",
       "--run",
       "r1"
     ]

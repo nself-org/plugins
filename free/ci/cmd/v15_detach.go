@@ -28,6 +28,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/detach"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // detachFlag is the --detach value of the current invocation; the hook reads
@@ -44,9 +45,11 @@ var (
 )
 
 func init() {
-	if prune := runsSubs["prune"]; prune != nil { // registered by runs_history.go, which initialises first
-		runsSubs["prune"] = func(args []string) int { return pruneStreams(prune, args) }
+	prune := runsSubs["prune"] // registered by runs_history.go, which initialises first
+	if prune == nil {
+		panic("nself-ci: runs prune must register before cmd/v15_detach.go")
 	}
+	runsSubs["prune"] = func(args []string) int { return pruneStreams(prune, args) }
 	bareFlags.BoolVar(&detachFlag, "detach", false, "start the run in the background and print a run handle once it is queued (see: nself ci runs wait, nself ci runs follow)")
 	RegisterOptionsHook(detachOptions)
 }
@@ -72,6 +75,11 @@ func runDetach(o *RunOptions) int {
 		return detachFail(out, o.JSON, &detach.Error{Reason: detach.ReasonSpawn, Message: err.Error(), Err: err})
 	}
 	p := detach.Params{Exe: exe, Args: detachArgs(), Home: o.Home, Env: os.Environ()}
+	if detach.CoordinatorOf(p.Args, os.Getenv) == detach.Local {
+		v := &localVerifier{}
+		defer v.close()
+		p.Verify = v.exists // stderr shares the stream file: only a run in the store is believed
+	}
 	if detachTune != nil {
 		detachTune(&p)
 	}
@@ -166,4 +174,29 @@ func knownRunIDs() map[string]bool {
 		ids[a.ID] = true
 	}
 	return ids
+}
+
+// localVerifier answers "is this a run of the local store", opening the store
+// once, after the child has created it.
+type localVerifier struct{ st *store.Store }
+
+func (v *localVerifier) exists(runID string) bool {
+	if v.st == nil {
+		if _, err := os.Stat(filepath.Join(detach.Home(""), "state.db")); err != nil {
+			return false
+		}
+		st, err := cirun.OpenStore(runsStorePath())
+		if err != nil {
+			return false
+		}
+		v.st = st
+	}
+	_, ok, err := v.st.PipelineByID(context.Background(), runID)
+	return err == nil && ok
+}
+
+func (v *localVerifier) close() {
+	if v.st != nil {
+		_ = v.st.Close()
+	}
 }

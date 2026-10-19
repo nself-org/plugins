@@ -23,7 +23,7 @@ func seedStreams(t *testing.T) string {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"keep", "gone", "young"} {
-		line := `{"schema_version":"1","command":"ci","data":{"type":"queued","seq":1,"run_id":"` + id + `"}}`
+		line := `{"schema_version":"1","command":"ci","data":{"type":"queued","schema":"ci.events/v1","seq":1,"run_id":"` + id + `"}}`
 		writeLines(t, filepath.Join(dir, id+".ndjson"), line)
 	}
 	writeLines(t, filepath.Join(dir, "0123abcd.ndjson"), "died before it queued") // a token-named file with no run

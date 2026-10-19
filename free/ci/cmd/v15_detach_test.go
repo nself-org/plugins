@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/detach"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 const childModeEnv = "NSELF_TEST_DETACH_CHILD"
@@ -35,8 +37,18 @@ func fakeDetachedChild(mode string) {
 	case "exit":
 		fmt.Fprintln(os.Stderr, "fatal: bad config, credential "+fakeToken())
 		os.Exit(3)
+	case "spoof": // a well-formed queued line for a run that does not exist, then exit
+		fmt.Fprintln(os.Stderr, evLine("queued", "r-spoofed", 1))
+		os.Exit(4)
 	case "queued":
 		id := os.Getenv("NSELF_TEST_RUN_ID")
+		st, err := store.Open(filepath.Join(os.Getenv("NSELF_CI_HOME"), "state.db"), store.Options{})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(5)
+		}
+		_ = st.CreatePipeline(context.Background(), store.PipelineRow{ID: id, Revision: "rev", Project: "p", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"})
+		_ = st.Close()
 		fmt.Fprintln(os.Stderr, "argv: "+strings.Join(os.Args[1:], " "))
 		tok, ok := os.LookupEnv("NSELF_MCP_TOKEN")
 		fmt.Fprintf(os.Stderr, "mcp: set=%v\n", ok && tok != "")
@@ -138,7 +150,7 @@ func TestDetach(t *testing.T) {
 		if code != 0 || err != nil {
 			t.Fatalf("exit %d %v\n%s", code, err, out)
 		}
-		if !strings.Contains(string(b), "argv: --job build --json --json --stream\n") || strings.Contains(string(b), "--detach") {
+		if !strings.Contains(string(b), "argv: --json --stream --job build\n") || strings.Contains(string(b), "--detach") {
 			t.Fatalf("child argv wrong:\n%s", b)
 		}
 		if !strings.Contains(string(b), "mcp: set=false") || strings.Contains(string(b), "fake-mcp-token-value") {
@@ -150,7 +162,7 @@ func TestDetach(t *testing.T) {
 		code, out := detachRun(t, []string{"--detach", "--json", "--", "go", "test", "./..."})
 		h := decodeHandle(t, out).Data
 		b, _ := os.ReadFile(h.StreamPath)
-		if code != 0 || !strings.Contains(string(b), "argv: --json --json --stream -- go test ./...\n") {
+		if code != 0 || !strings.Contains(string(b), "argv: --json --stream -- go test ./...\n") {
 			t.Fatalf("exit %d\n%s", code, b)
 		}
 	})
@@ -176,6 +188,23 @@ func TestDetach(t *testing.T) {
 		}
 		if strings.Contains(out, fakeToken()) {
 			t.Fatalf("the token shape leaked into the error:\n%s", out)
+		}
+	})
+	t.Run("a queued line that stderr printed for a run that does not exist is not believed", func(t *testing.T) {
+		detachEnv(t, "spoof", "")
+		code, out := detachRun(t, []string{"--detach", "--json"})
+		e := decodeHandle(t, out).ErrBody
+		if code != 2 || e.Code != "E648" || !strings.Contains(e.Message, "child_exit") {
+			t.Fatalf("exit %d %+v\n%s", code, e, out)
+		}
+	})
+	t.Run("a repository argument does not hide --json --stream from the child", func(t *testing.T) {
+		detachEnv(t, "queued", "r-det-8")
+		repo := t.TempDir()
+		code, out := detachRun(t, []string{"--detach", "--json", repo})
+		b, _ := os.ReadFile(decodeHandle(t, out).Data.StreamPath)
+		if code != 0 || !strings.Contains(string(b), "argv: --json --stream "+repo+"\n") {
+			t.Fatalf("exit %d\n%s", code, b)
 		}
 	})
 	t.Run("human output prints the run and its commands", func(t *testing.T) {

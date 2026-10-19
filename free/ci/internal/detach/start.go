@@ -19,6 +19,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
@@ -38,6 +39,11 @@ type Params struct {
 	// Spawn and Stop replace the process layer in tests.
 	Spawn func(argv, env []string, logPath string) (*ciexec.Detached, error)
 	Stop  func(pid int) error
+	// Verify confirms that a run id announced in the stream is a real run (the
+	// stream file also holds the child's stderr, so a `queued` line alone proves
+	// nothing). nil accepts any well-formed record; a remote run cannot be
+	// verified from the local store and passes nil.
+	Verify func(runID string) bool
 }
 
 // Start spawns the child and waits for its run to be queued.
@@ -69,7 +75,7 @@ func Start(p Params) (Handle, error) {
 	if err != nil {
 		return Handle{}, spawnError(err)
 	}
-	runID, err := awaitQueued(path, d.Exited, wait, poll)
+	runID, err := awaitQueued(path, d.Exited, wait, poll, p.Verify)
 	if err != nil {
 		var de *Error
 		if errors.As(err, &de) {
@@ -78,25 +84,27 @@ func Start(p Params) (Handle, error) {
 				_ = stop(d.PID)
 			}
 		}
+		_ = os.Remove(path) // the tail is in the error; the raw child output must not stay on disk
 		return Handle{}, err
 	}
 	if final := filepath.Join(Dir(home), runID+".ndjson"); ValidRunID(runID) && os.Rename(path, final) == nil {
 		path = final // the child keeps writing: its descriptor follows the rename
 	}
-	return NewHandle(runID, d.PID, CoordinatorOf(p.Args, envLookup(p.Env)), path), nil
+	return NewHandle(runID, d.PID, CoordinatorOf(p.Args, envLookup(p.Env)), path, JobOf(p.Args)), nil
 }
 
 func spawnError(err error) *Error {
 	var ee *ciexec.Error
-	if errors.As(err, &ee) && ee.Err != nil {
-		return fail(ReasonSpawn, err, "%v", ee.Err)
+	if errors.As(err, &ee) {
+		return fail(ReasonSpawn, err, "%s", strings.TrimPrefix(ee.Message, "spawn: "))
 	}
 	return fail(ReasonSpawn, err, "%v", err)
 }
 
 // awaitQueued polls the stream file for the first record that names a run.
-func awaitQueued(path string, exited <-chan struct{}, wait, poll time.Duration) (string, error) {
+func awaitQueued(path string, exited <-chan struct{}, wait, poll time.Duration, verify func(string) bool) (string, error) {
 	r := &Reader{Path: path}
+	defer func() { _ = r.Close() }()
 	deadline := time.NewTimer(wait)
 	defer deadline.Stop()
 	tick := time.NewTicker(poll)
@@ -108,7 +116,7 @@ func awaitQueued(path string, exited <-chan struct{}, wait, poll time.Duration) 
 			return "", fail(ReasonSpawn, err, "reading the stream file: %v", err)
 		}
 		for _, l := range lines {
-			if rec, ok := ParseLine(l); ok && rec.Type == "queued" && rec.RunID != "" {
+			if rec, ok := ParseLine(l); ok && rec.Type == "queued" && rec.Seq == 1 && ValidRunID(rec.RunID) && (verify == nil || verify(rec.RunID)) {
 				return rec.RunID, nil
 			}
 		}

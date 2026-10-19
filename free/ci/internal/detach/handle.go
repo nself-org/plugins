@@ -6,7 +6,7 @@ package detach
 // Outputs: Handle, whose commands are argv arrays (never shell strings).
 // Constraints: additive fields only within v1; the wait and follow commands
 // carry --coordinator when the run lives on a coordinator (the other three
-// resolve the run themselves); pid and stream_path always name the LOCAL
+// resolve the run themselves; logs names one job); pid and stream_path always name the LOCAL
 // detached process and its event file, also with --coordinator.
 
 // Schema is the handle's contract id.
@@ -38,8 +38,17 @@ type Handle struct {
 	Commands    Commands `json:"commands"`
 }
 
-// NewHandle builds the handle of a queued run; coordinator is "local" or a URL.
-func NewHandle(runID string, pid int, coordinator, streamPath string) Handle {
+// JobPlaceholder stands in the logs command when the job is not known at
+// handle time (a bare run's jobs are planned after `queued`); the caller
+// replaces it with a job id from `nself ci runs <run>`.
+const JobPlaceholder = "<job>"
+
+// NewHandle builds the handle of a queued run; coordinator is "local" or a URL;
+// job names the job `logs` reads ("" = JobPlaceholder).
+func NewHandle(runID string, pid int, coordinator, streamPath, job string) Handle {
+	if job == "" {
+		job = JobPlaceholder
+	}
 	if coordinator == "" {
 		coordinator = Local
 	}
@@ -52,5 +61,5 @@ func NewHandle(runID string, pid int, coordinator, streamPath string) Handle {
 	}
 	return Handle{Schema: Schema, RunID: runID, State: StateQueued, PID: pid, Coordinator: coordinator, StreamPath: streamPath,
 		Commands: Commands{Wait: wait, Follow: follow, Evidence: cmd("evidence", runID, "--json"),
-			Cancel: cmd("runs", "cancel", runID), Logs: cmd("logs", "--run", runID)}}
+			Cancel: cmd("runs", "cancel", runID), Logs: cmd("logs", job, "--run", runID)}}
 }

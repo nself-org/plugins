@@ -30,18 +30,23 @@ func isDetachFlag(a string) bool {
 	return a == "detach" || strings.HasPrefix(a, "detach=")
 }
 
-// ChildArgs is the child's argv (without the executable): the user's argv
-// without --detach, with --json --stream added before any `-- <cmd…>`.
+// ChildArgs is the child's argv (without the executable): --json --stream
+// first (Go's flag parsing stops at the first positional argument, such as a
+// repository root, so anything appended after it would be ignored), then the
+// user's argv without --detach, --json and --stream, then any `-- <cmd…>`.
 func ChildArgs(args []string) []string {
 	flags, rest, _ := splitAdhoc(args)
 	out := make([]string, 0, len(args)+2)
+	out = append(out, "--json", "--stream")
 	for _, a := range flags {
-		if strings.HasPrefix(a, "-") && isDetachFlag(a) {
-			continue
+		if strings.HasPrefix(a, "-") {
+			switch name := strings.TrimLeft(a, "-"); {
+			case isDetachFlag(a), name == "json", name == "stream":
+				continue
+			}
 		}
 		out = append(out, a)
 	}
-	out = append(out, "--json", "--stream")
 	return append(out, rest...)
 }
 
@@ -91,4 +96,26 @@ func envLookup(env []string) func(string) string {
 		}
 		return ""
 	}
+}
+
+// JobOf is the job whose logs the handle names: "adhoc" for `-- <cmd…>`, the
+// --job value when given, else "" (not known before the run is planned).
+func JobOf(args []string) string {
+	flags, _, has := splitAdhoc(args)
+	if has {
+		return "adhoc"
+	}
+	for i, a := range flags {
+		if !strings.HasPrefix(a, "-") {
+			continue
+		}
+		name := strings.TrimLeft(a, "-")
+		switch {
+		case strings.HasPrefix(name, "job="):
+			return strings.TrimPrefix(name, "job=")
+		case name == "job" && i+1 < len(flags):
+			return flags[i+1]
+		}
+	}
+	return ""
 }

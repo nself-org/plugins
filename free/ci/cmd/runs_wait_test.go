@@ -203,6 +203,16 @@ func TestRunsWait(t *testing.T) {
 			t.Fatalf("the resolver saw coordinator %q", fake.target)
 		}
 	})
+	t.Run("a stalled resolver cannot outlive the budget", func(t *testing.T) {
+		runsHome(t)
+		old := cirun.Registered.Remote
+		cirun.Registered.Remote = append(append([]cirun.RemoteResolver(nil), old...), stalledRemote{})
+		t.Cleanup(func() { cirun.Registered.Remote = old })
+		code, w, took := waitJSON(t, "remote-stall", "--timeout", "200ms", "--json")
+		if code != 10 || w.Data.Terminal || took > 3*time.Second {
+			t.Fatalf("exit %d %+v in %v", code, w, took)
+		}
+	})
 	t.Run("human output names the run and its jobs", func(t *testing.T) {
 		home := runsHome(t)
 		seedRun(t, home, "r-human", "passed", time.Now(), map[string]string{"build": "passed"})
@@ -231,4 +241,21 @@ func (f *fakeRemote) Resolve(_ context.Context, ref string) (cirun.RunView, bool
 	i := min(f.calls, len(f.views)-1)
 	f.calls++
 	return f.views[i], true, nil
+}
+
+// stalledRemote answers the first look at once, then blocks until its context ends.
+type stalledRemote struct{}
+
+var stalls int
+
+func (stalledRemote) Resolve(ctx context.Context, ref string) (cirun.RunView, bool, error) {
+	if ref != "remote-stall" {
+		return cirun.RunView{}, false, nil
+	}
+	stalls++
+	if stalls == 1 {
+		return cirun.RunView{ID: ref, Status: "running"}, true, nil
+	}
+	<-ctx.Done()
+	return cirun.RunView{}, false, ctx.Err()
 }

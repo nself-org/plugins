@@ -42,8 +42,8 @@ func golden(t *testing.T, name string, v any) {
 }
 
 func TestHandleGolden(t *testing.T) {
-	golden(t, "handle.local.golden.json", NewHandle("r1", 4242, "", "/state/detached/r1.ndjson"))
-	h := NewHandle("r1", 4242, "https://ci.example.test:8443", "/state/detached/r1.ndjson")
+	golden(t, "handle.local.golden.json", NewHandle("r1", 4242, "", "/state/detached/r1.ndjson", ""))
+	h := NewHandle("r1", 4242, "https://ci.example.test:8443", "/state/detached/r1.ndjson", "build")
 	golden(t, "handle.coordinator.golden.json", h)
 	if !reflect.DeepEqual(h.Commands.Wait[len(h.Commands.Wait)-2:], []string{"--coordinator", "https://ci.example.test:8443"}) ||
 		!reflect.DeepEqual(h.Commands.Follow[len(h.Commands.Follow)-2:], []string{"--coordinator", "https://ci.example.test:8443"}) {
@@ -59,11 +59,12 @@ func TestHandleGolden(t *testing.T) {
 func TestChildArgs(t *testing.T) {
 	for _, c := range []struct{ in, want []string }{
 		{[]string{"--detach"}, []string{"--json", "--stream"}},
-		{[]string{"--detach", "--job", "build", "--json"}, []string{"--job", "build", "--json", "--json", "--stream"}},
-		{[]string{"-detach=true", "--pipeline", "x"}, []string{"--pipeline", "x", "--json", "--stream"}},
+		{[]string{"--detach", "--job", "build", "--json"}, []string{"--json", "--stream", "--job", "build"}},
+		{[]string{"-detach=true", "--pipeline", "x", "-stream"}, []string{"--json", "--stream", "--pipeline", "x"}},
+		{[]string{"--detach", "--json", "/path/to/repo"}, []string{"--json", "--stream", "/path/to/repo"}},
 		{[]string{"--detach", "--", "go", "test", "./..."}, []string{"--json", "--stream", "--", "go", "test", "./..."}},
-		{[]string{"--", "echo", "--detach"}, []string{"--json", "--stream", "--", "echo", "--detach"}},
-		{[]string{"--detach", "--coordinator", "http://127.0.0.1:1"}, []string{"--coordinator", "http://127.0.0.1:1", "--json", "--stream"}},
+		{[]string{"--", "echo", "--detach", "--json"}, []string{"--json", "--stream", "--", "echo", "--detach", "--json"}},
+		{[]string{"--detach", "--coordinator", "http://127.0.0.1:1"}, []string{"--json", "--stream", "--coordinator", "http://127.0.0.1:1"}},
 	} {
 		if got := ChildArgs(c.in); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("ChildArgs(%v) = %v, want %v", c.in, got, c.want)
@@ -109,12 +110,16 @@ func TestParseLine(t *testing.T) {
 	if !ok || rec.Type != "queued" || rec.Seq != 1 || rec.RunID != "r20261019T000000-abcd1234" || rec.Final() {
 		t.Fatalf("queued: %+v %v", rec, ok)
 	}
-	end, _ := ParseLine([]byte(`{"schema_version":"1","command":"ci","data":{"type":"result","seq":9,"run_id":"r"}}`))
+	end, _ := ParseLine([]byte(`{"schema_version":"1","command":"ci","data":{"type":"result","schema":"ci.events/v1","seq":9,"run_id":"r"}}`))
 	errLine, _ := ParseLine([]byte(`{"schema_version":"1","command":"ci","error":{"code":"E648","message":"m","exit_code":2,"class":"infra"}}`))
 	if !end.Final() || !errLine.Final() || errLine.Exit != 2 {
 		t.Fatalf("final lines: %+v %+v", end, errLine)
 	}
-	for _, junk := range []string{"", "plain stderr text", "{not json", `{"data":{}}`, `[1]`} {
+	for _, junk := range []string{"", "plain stderr text", "{not json", `{"data":{}}`, `[1]`,
+		`{"data":{"type":"queued","run_id":"fake-run"}}`,                                                   // no envelope version, no event schema
+		`{"schema_version":"1","command":"ci","data":{"type":"queued","run_id":"fake-run","seq":1}}`,       // no event schema
+		`{"schema_version":"1","command":"ci","error":{"code":"oops","message":"x","exit_code":1}}`,        // not a registered-shape code
+		`{"schema_version":"1","command":"ci","data":{"type":"queued","schema":"ci.events/v1","seq":0}}`} { // seq starts at 1
 		if _, ok := ParseLine([]byte(junk)); ok {
 			t.Errorf("%q parsed", junk)
 		}
@@ -157,7 +162,7 @@ func TestStartQueued(t *testing.T) {
 		t.Fatalf("stream file was not renamed to the run id: %v", err)
 	}
 	joined := strings.Join(started, " ")
-	if !strings.HasPrefix(joined, "/bin/nself-ci --job b --json --stream") || strings.Contains(joined, "--detach") || strings.Contains(joined, EnvMCPToken) {
+	if !strings.HasPrefix(joined, "/bin/nself-ci --json --stream --job b") || strings.Contains(joined, "--detach") || strings.Contains(joined, EnvMCPToken) {
 		t.Fatalf("child got %q", joined)
 	}
 	if got := StreamPath(home, h.RunID); got != h.StreamPath {
@@ -216,5 +221,50 @@ func TestErrorCodeInRange(t *testing.T) {
 		if got := (&Error{Reason: r, Message: "m"}).Error(); got != "E648 "+r+": m" {
 			t.Errorf("%q", got)
 		}
+	}
+}
+
+func TestJobOf(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--detach"}, ""},
+		{[]string{"--detach", "--job", "build"}, "build"},
+		{[]string{"--detach", "-job=test"}, "test"},
+		{[]string{"--detach", "--", "go", "test"}, "adhoc"},
+	} {
+		if got := JobOf(c.args); got != c.want {
+			t.Errorf("JobOf(%v) = %q, want %q", c.args, got, c.want)
+		}
+	}
+}
+
+func TestTailRedactsAcrossTheCut(t *testing.T) {
+	const secret = "fixture-secret-value-0001"
+	// the secret ends 10 bytes before the end of the file and half of it lies inside the last
+	// TailBytes: a plain 2 KiB cut would start inside it and leave its suffix unmasked
+	path := filepath.Join(t.TempDir(), "s.ndjson")
+	if err := os.WriteFile(path, []byte(strings.Repeat("y", TailBytes-len(secret)/2-10)+secret+"0123456789\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := RedactedTail(path, []string{"FIXTURE_TOKEN=" + secret})
+	if strings.Contains(got, secret) || strings.Contains(got, secret[len(secret)/2:]) || len(got) > TailBytes {
+		t.Fatalf("secret or its suffix survived (%d bytes): %q", len(got), got[:min(len(got), 80)])
+	}
+}
+
+func TestStartVerifyRejectsAnUnknownRun(t *testing.T) {
+	home := t.TempDir()
+	var started []string
+	_, err := Start(Params{Exe: "x", Home: home, Verify: func(string) bool { return false },
+		Spawn: fakeSpawn([]string{queuedLine}, true, &started)})
+	var de *Error
+	if !errors.As(err, &de) || de.Reason != ReasonChildExit {
+		t.Fatalf("want child_exit, got %v", err)
+	}
+	entries, _ := os.ReadDir(Dir(home))
+	if len(entries) != 0 {
+		t.Fatalf("the raw child output stayed on disk: %v", entries)
 	}
 }

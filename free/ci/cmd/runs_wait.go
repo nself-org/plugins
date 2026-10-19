@@ -43,7 +43,10 @@ const (
 // waitPoll is the store poll interval (a var for tests).
 var waitPoll = 250 * time.Millisecond
 
-func init() { registerRunsSub("wait", runWait) }
+func init() {
+	registerRunsSub("wait", runWait)
+	registerV15("runs wait", subcommandEntry{V15Only: true, Flags: func() *flag.FlagSet { return newWaitFlagSet(&waitFlags{}) }, Handler: runWait})
+}
 
 type waitFlags struct {
 	json        bool
@@ -92,16 +95,22 @@ func runWait(args []string) int {
 	budget := waitBudget(f.timeout, os.Getenv("NSELF_INVOKE_DEADLINE_MS"))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	src, err := openRunSource(ctx, pos[0], f.coordinator)
+	// Every store, recovery and resolver call shares the budget (at least 1 s
+	// for the first look), so a stalled resolver cannot outlive the invoke deadline.
+	wctx, cancel := context.WithDeadline(ctx, started.Add(max(budget, time.Second)))
+	defer cancel()
+	src, err := openRunSource(wctx, pos[0], f.coordinator)
 	if err != nil {
-		return exitForError(err)
+		return waitFail(ctx, wctx, err, detach.View{RunID: pos[0]}, f.json, started)
 	}
 	defer src.Close()
+	last := detach.View{RunID: pos[0], State: "unknown"}
 	for {
-		v, err := src.View(ctx)
+		v, err := src.View(wctx)
 		if err != nil {
-			return exitForError(err)
+			return waitFail(ctx, wctx, err, last, f.json, started)
 		}
+		last = v
 		if detach.Terminal(v.State) {
 			return printWait(f.json, v, src.Detail, true, time.Since(started))
 		}
@@ -110,11 +119,19 @@ func runWait(args []string) int {
 			return printWait(f.json, v, src.Detail, false, time.Since(started))
 		}
 		select {
-		case <-ctx.Done():
-			return exitForError(ctx.Err())
+		case <-wctx.Done():
 		case <-time.After(min(waitPoll, left)):
 		}
 	}
+}
+
+// waitFail ends a wait whose lookup failed: the budget running out is "still
+// running" (exit 10, the last state seen); anything else is the error.
+func waitFail(ctx, wctx context.Context, err error, last detach.View, asJSON bool, started time.Time) int {
+	if ctx.Err() == nil && wctx.Err() != nil {
+		return printWait(asJSON, last, cirun.RunView{ID: last.RunID, Status: last.State}, false, time.Since(started))
+	}
+	return exitForError(err)
 }
 
 func printWait(asJSON bool, v detach.View, d cirun.RunView, terminal bool, waited time.Duration) int {

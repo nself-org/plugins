@@ -30,62 +30,88 @@ type Record struct {
 // Final reports whether no line follows this one: the result or an error.
 func (r Record) Final() bool { return r.Err || r.Type == "result" }
 
+// eventSchema is the schema every ci.events record carries (internal/events.Schema).
+const eventSchema = "ci.events/v1"
+
+var errorCode = regexp.MustCompile(`^E[0-9]{3}$`)
+
 type envelope struct {
-	Data *struct {
-		Type  string `json:"type"`
-		Seq   int64  `json:"seq"`
-		RunID string `json:"run_id"`
+	SchemaVersion string `json:"schema_version"`
+	Data          *struct {
+		Type   string `json:"type"`
+		Schema string `json:"schema"`
+		Seq    int64  `json:"seq"`
+		RunID  string `json:"run_id"`
 	} `json:"data"`
 	Error *struct {
-		ExitCode int `json:"exit_code"`
+		Code     string `json:"code"`
+		ExitCode int    `json:"exit_code"`
 	} `json:"error"`
 }
 
 // ParseLine parses one stream line; ok is false for anything that is not a v1
-// envelope carrying a record or an error (stderr text, blank lines).
+// envelope carrying a ci.events record (schema ci.events/v1, seq >= 1) or a
+// coded error (stderr text, other JSON, blank lines).
 func ParseLine(line []byte) (Record, bool) {
 	line = bytes.TrimRight(line, "\r\n")
 	if len(line) == 0 || line[0] != '{' {
 		return Record{}, false
 	}
 	var e envelope
-	if json.Unmarshal(line, &e) != nil {
+	if json.Unmarshal(line, &e) != nil || e.SchemaVersion != "1" {
 		return Record{}, false
 	}
 	switch {
-	case e.Error != nil:
+	case e.Error != nil && errorCode.MatchString(e.Error.Code):
 		return Record{Raw: line, Err: true, Exit: e.Error.ExitCode}, true
-	case e.Data != nil && e.Data.Type != "":
+	case e.Data != nil && e.Data.Schema == eventSchema && e.Data.Type != "" && e.Data.Seq >= 1:
 		return Record{Raw: line, Type: e.Data.Type, Seq: e.Data.Seq, RunID: e.Data.RunID}, true
 	}
 	return Record{}, false
 }
 
-// Reader returns the complete lines appended to a file since its last call.
+const (
+	maxChunk = 4 << 20 // most bytes one Next call reads
+	maxLine  = 8 << 20 // longest line kept; a longer one is dropped whole
+)
+
+// Reader returns the complete lines appended to a file since its last call. It
+// keeps the file open, so a rename of the path (Start renames the token-named
+// file to the run id) does not lose the lines written afterwards.
 type Reader struct {
 	Path string
-	off  int64
+	f    *os.File
 	buf  []byte
+	skip bool // inside a line longer than maxLine
 }
 
-// Next reads what the file gained. A missing file is not an error (nothing yet).
+// Close releases the file.
+func (r *Reader) Close() error {
+	if r.f == nil {
+		return nil
+	}
+	err := r.f.Close()
+	r.f = nil
+	return err
+}
+
+// Next reads what the file gained (at most maxChunk bytes). A missing file is
+// not an error (nothing yet).
 func (r *Reader) Next() ([][]byte, error) {
-	f, err := os.Open(r.Path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
+	if r.f == nil {
+		f, err := os.Open(r.Path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, nil
+			}
+			return nil, err
 		}
-		return nil, err
+		r.f = f
 	}
-	defer func() { _ = f.Close() }()
-	if _, err = f.Seek(r.off, io.SeekStart); err != nil {
-		return nil, err
-	}
-	data, err := io.ReadAll(f)
+	data, err := io.ReadAll(io.LimitReader(r.f, maxChunk))
 	if err != nil {
 		return nil, err
 	}
-	r.off += int64(len(data))
 	r.buf = append(r.buf, data...)
 	var lines [][]byte
 	for {
@@ -93,17 +119,24 @@ func (r *Reader) Next() ([][]byte, error) {
 		if i < 0 {
 			break
 		}
-		lines = append(lines, append([]byte(nil), r.buf[:i]...))
+		if !r.skip {
+			lines = append(lines, append([]byte(nil), r.buf[:i]...))
+		}
+		r.skip = false
 		r.buf = r.buf[i+1:]
+	}
+	if len(r.buf) > maxLine {
+		r.buf, r.skip = nil, true
 	}
 	r.buf = append([]byte(nil), r.buf...) // do not pin the read buffer
 	return lines, nil
 }
 
-// RunIDOf reads a stream file from the start and returns the run id of its
-// first record ("" when it holds none yet).
+// RunIDOf reads the start of a stream file and returns the run id of its first
+// record ("" when it holds none yet).
 func RunIDOf(path string) string {
 	r := &Reader{Path: path}
+	defer func() { _ = r.Close() }()
 	lines, err := r.Next()
 	if err != nil {
 		return ""

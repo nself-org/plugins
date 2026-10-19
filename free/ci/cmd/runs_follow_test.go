@@ -81,6 +81,17 @@ func TestRunsFollow(t *testing.T) {
 			t.Fatalf("full replay: exit %d %v", code, types)
 		}
 	})
+	t.Run("resuming past the end prints the result once, with its own seq", func(t *testing.T) {
+		home := runsHome(t)
+		seedRun(t, home, "r-end", "passed", time.Now(), map[string]string{"build": "passed"})
+		streamFile(t, home, "r-end", evLine("queued", "r-end", 1), evLine("result", "r-end", 2))
+		start := time.Now()
+		code, out, _ := capture(t, func() int { return runFollow([]string{"r-end", "--from-seq", "999"}) })
+		types, seqs := parsed(t, out)
+		if code != 0 || len(types) != 1 || types[0] != "result" || seqs[0] != 2 || time.Since(start) > time.Second {
+			t.Fatalf("exit %d %v %v in %v", code, types, seqs, time.Since(start))
+		}
+	})
 	t.Run("started mid-run it replays then tails", func(t *testing.T) {
 		home := runsHome(t)
 		seedRun(t, home, "r-tail", "running", time.Now(), map[string]string{"build": "running"})

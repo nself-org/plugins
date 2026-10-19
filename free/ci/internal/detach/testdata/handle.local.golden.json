@@ -39,6 +39,7 @@
       "nself",
       "ci",
       "logs",
+      "\u003cjob\u003e",
       "--run",
       "r1"
     ]

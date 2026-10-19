@@ -8,6 +8,7 @@ package detach
 // masked by internal/redact before the text leaves this package.
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"strings"
@@ -17,6 +18,10 @@ import (
 
 // TailBytes is how much of the child stream an error carries.
 const TailBytes = 2048
+
+// scanBytes is how much of the end of the file is redacted before the tail is
+// cut: a secret that straddles the TailBytes boundary must be masked whole.
+const scanBytes = 64 << 10
 
 // secretNames marks variables whose value is masked when it appears in the tail.
 var secretNames = []string{"TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL", "APIKEY", "API_KEY", "PRIVATE_KEY", "AUTH"}
@@ -39,7 +44,8 @@ func redactor(env []string) *redact.Redactor {
 	return r
 }
 
-// RedactedTail returns the last TailBytes of the file with secrets masked.
+// RedactedTail returns the last TailBytes of the file with secrets masked. The
+// last scanBytes are redacted first and the tail is cut from the masked text.
 func RedactedTail(path string, env []string) string {
 	f, err := os.Open(path)
 	if err != nil {
@@ -50,18 +56,23 @@ func RedactedTail(path string, env []string) string {
 	if err != nil {
 		return ""
 	}
-	start := st.Size() - TailBytes
-	if start < 0 {
-		start = 0
-	}
+	start := max(st.Size()-scanBytes, 0)
 	if _, err = f.Seek(start, io.SeekStart); err != nil {
 		return ""
 	}
-	b, err := io.ReadAll(io.LimitReader(f, TailBytes))
+	b, err := io.ReadAll(io.LimitReader(f, scanBytes))
 	if err != nil {
 		return ""
 	}
+	if start > 0 { // begin at a line start: a cut line could hide a secret's head
+		if i := bytes.IndexByte(b, '\n'); i >= 0 {
+			b = b[i+1:]
+		}
+	}
 	flt := redactor(env).NewFilter()
 	out := append(flt.Redact(b), flt.Flush()...)
-	return strings.TrimSpace(strings.ToValidUTF8(string(out), "�"))
+	if len(out) > TailBytes {
+		out = out[len(out)-TailBytes:]
+	}
+	return strings.TrimSpace(strings.ToValidUTF8(string(out), "\uFFFD"))
 }

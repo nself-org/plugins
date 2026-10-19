@@ -7,13 +7,16 @@ package detach
 // Inputs:  successive View snapshots of the run.
 // Outputs: queued, started, check_result, finished and the final evidence line,
 // written by internal/events (seq strictly increasing from 1).
-// Constraints: records carry only what a View holds (no log bytes, no
+// Constraints: a finished run always rebuilds to the same records and seqs, a
+// run followed while it runs does not (its seqs depend on which states were
+// seen); records carry only what a View holds (no log bytes, no
 // timings); the first record is always `queued`; lines below the requested seq
 // are dropped, the final line never is.
 
 import (
 	"bytes"
 	"io"
+	"sort"
 	"sync"
 	"time"
 
@@ -61,7 +64,9 @@ func (s *Synth) Observe(v View) {
 		s.open = true
 		s.em.Emit("queued", "", "", map[string]any{})
 	}
-	for _, j := range v.Jobs {
+	jobs := append([]JobState(nil), v.Jobs...)
+	sort.Slice(jobs, func(i, k int) bool { return jobs[i].Name < jobs[k].Name }) // one order for every replay of a finished run
+	for _, j := range jobs {
 		if s.sent[j.Name] == j.State {
 			continue
 		}
