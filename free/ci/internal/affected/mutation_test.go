@@ -16,7 +16,7 @@ import (
 // change to leaf must select leaf, mid and app, and nothing else.
 func leafSelectionHolds(g *Graph) error {
 	in := plan.SelectionInput{Changed: []string{"leaf/leaf.go"}, BaseKnown: true, Jobs: fixtureJobs()}
-	sel, jobs := selectWith(g, true, in)
+	sel, jobs := selectWith(g, true, true, in)
 	if want := []string{"app.test", "leaf.test", "mid.test"}; sel.Mode != "affected" || !reflect.DeepEqual(jobs, want) {
 		return &selectionError{got: jobs}
 	}

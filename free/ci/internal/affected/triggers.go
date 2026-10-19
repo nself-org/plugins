@@ -3,7 +3,9 @@ package affected
 // Purpose: the paths whose change always means a full run (Epic D15): the CI
 // config, lockfiles, go.mod/go.sum, generator inputs, build scripts and
 // workspace definitions. A change here can alter every job, so no graph
-// answer is trusted.
+// answer is trusted. Root-level tool configuration (tsconfig, linters,
+// turbo, nx, bundler configs) is not listed: a root file that no package
+// owns is unmapped, which is full too (select.go).
 // Inputs:  a repo-relative slash path.
 // Outputs: whether it forces a full run.
 // Constraints: pure; the list errs on the side of full.
@@ -17,7 +19,7 @@ var fullBases = map[string]bool{
 	"go.mod": true, "go.sum": true, "go.work": true, "go.work.sum": true,
 	"package-lock.json": true, "npm-shrinkwrap.json": true, "pnpm-lock.yaml": true, "yarn.lock": true,
 	"bun.lock": true, "bun.lockb": true, "Cargo.lock": true, "pubspec.lock": true,
-	"pnpm-workspace.yaml": true, ".npmrc": true, ".nvmrc": true, ".tool-versions": true,
+	"pnpm-workspace.yaml": true, ".npmrc": true, ".nvmrc": true, ".tool-versions": true, ".pnpmfile.cjs": true,
 	"Makefile": true, "makefile": true, "GNUmakefile": true, "Dockerfile": true,
 	"sqlc.yaml": true, "sqlc.yml": true, "sqlc.json": true, "buf.yaml": true, "buf.gen.yaml": true,
 	"gqlgen.yml": true, "codegen.yml": true, "codegen.yaml": true,

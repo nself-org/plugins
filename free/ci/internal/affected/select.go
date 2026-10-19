@@ -27,13 +27,10 @@ import (
 // Selector is the plan.Selector this package provides.
 func Selector(in plan.SelectionInput) (model.Selection, []string) {
 	g, present, certain := FromFacts(in.Facts)
-	if !present {
-		return plan.DefaultSelector(in)
-	}
-	return selectWith(g, certain, in)
+	return selectWith(g, present, certain, in)
 }
 
-func selectWith(g *Graph, graphCertain bool, in plan.SelectionInput) (model.Selection, []string) {
+func selectWith(g *Graph, present, graphCertain bool, in plan.SelectionInput) (model.Selection, []string) {
 	all := make([]string, 0, len(in.Jobs))
 	for _, r := range in.Jobs {
 		all = append(all, r.ID)
@@ -46,7 +43,7 @@ func selectWith(g *Graph, graphCertain bool, in plan.SelectionInput) (model.Sele
 	switch {
 	case !in.BaseKnown:
 		return full("selection.no_base")
-	case in.DefaultBranch || in.Release || !graphCertain || len(changed) == 0:
+	case in.DefaultBranch || in.Release || len(changed) == 0:
 		return full("selection.full_required")
 	}
 	for _, f := range in.Facts {
@@ -54,35 +51,52 @@ func selectWith(g *Graph, graphCertain bool, in plan.SelectionInput) (model.Sele
 			return full("selection.full_required")
 		}
 	}
+	for _, p := range changed {
+		if ForcesFull(p) {
+			return full("selection.full_required")
+		}
+	}
+	if !present {
+		return plan.DefaultSelector(in) // no Go or pnpm packages: the path-glob rules decide
+	}
+	if !graphCertain {
+		return full("selection.full_required")
+	}
 	workdirs := map[string][]string{}
 	for _, r := range in.Jobs {
 		w := path.Clean(strings.TrimPrefix(r.Workdir, "./"))
 		workdirs[w] = append(workdirs[w], r.ID)
 	}
-	seeds, direct := map[string]bool{}, map[string]bool{}
+	seeds, picked := map[string]bool{}, map[string]bool{}
 	for _, p := range changed {
-		if ForcesFull(p) {
+		if g.inGeneratorZone(p) {
 			return full("selection.full_required")
 		}
-		node, hasNode := g.owner(p)
-		wd, hasWd := nearest(p, func(d string) bool { return workdirs[d] != nil })
-		if !hasNode && !hasWd {
-			return full("selection.full_required") // unmapped
+		dir, kind := g.owner(p)
+		covered := false
+		for w, ids := range workdirs { // every job whose workdir holds the path
+			if within(dirOf(p), w) {
+				covered = covered || w != "."
+				for _, id := range ids {
+					picked[id] = true
+				}
+			}
 		}
-		if hasNode {
-			seeds[node] = true
-		}
-		if hasWd {
-			for _, id := range workdirs[wd] {
-				direct[id] = true
+		switch kind {
+		case ownOpaque:
+			return full("selection.full_required")
+		case ownNode:
+			seeds[dir] = true
+		default:
+			if _, root := g.eco["."]; root {
+				seeds["."] = true // a root package may embed any file under it
+			}
+			if !covered {
+				return full("selection.full_required") // unmapped: only the root job or nothing holds it
 			}
 		}
 	}
 	affected := g.Dependants(keys(seeds)...)
-	picked := map[string]bool{}
-	for id := range direct {
-		picked[id] = true
-	}
 	for _, r := range in.Jobs {
 		w := path.Clean(strings.TrimPrefix(r.Workdir, "./"))
 		for d := range affected {
@@ -99,29 +113,44 @@ func selectWith(g *Graph, graphCertain bool, in plan.SelectionInput) (model.Sele
 	return model.Selection{Mode: "affected", Reason: "selection.affected", Digest: Digest(changed, ids)}, ids
 }
 
-// owner finds the package directory a changed path belongs to: the nearest
-// package directory above it. The repository root owns only the files
-// directly in it, so a root manifest or main package does not claim every
-// unmapped path.
-func (g *Graph) owner(p string) (string, bool) {
-	d, ok := nearest(p, func(d string) bool { _, has := g.eco[d]; return has })
-	if ok && d == "." && dirOf(p) != "." {
-		return "", false
-	}
-	return d, ok
+const (
+	ownNone = iota
+	ownNode
+	ownOpaque
+)
+
+// rootSource are the extensions of files directly in the repository root
+// that a root package owns; any other root file is unowned (unmapped).
+var rootSource = map[string]bool{
+	".go": true, ".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".mjs": true, ".cjs": true,
+	".mts": true, ".cts": true, ".vue": true, ".svelte": true, ".css": true, ".scss": true,
 }
 
-// nearest walks from the directory of p up to the root and returns the first
-// directory for which has is true.
-func nearest(p string, has func(dir string) bool) (string, bool) {
+// owner finds what a changed path belongs to: the nearest directory above it
+// that is a package or an opaque manifest directory (opaque wins on a tie).
+// The repository root owns only the source files directly in it (a root
+// package) or, when opaque, everything not owned deeper.
+func (g *Graph) owner(p string) (string, int) {
 	for d := dirOf(p); ; d = path.Dir(d) {
-		if has(d) {
-			return d, true
+		if _, ok := g.opaque[d]; ok {
+			return d, ownOpaque
+		}
+		if _, ok := g.eco[d]; ok && (d != "." || (dirOf(p) == "." && rootSource[path.Ext(p)])) {
+			return d, ownNode
 		}
 		if d == "." || d == "/" {
-			return "", false
+			return "", ownNone
 		}
 	}
+}
+
+func (g *Graph) inGeneratorZone(p string) bool {
+	for d := range g.generators {
+		if within(dirOf(p), d) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalize(in []string) []string {

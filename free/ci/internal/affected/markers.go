@@ -1,0 +1,67 @@
+package affected
+
+// Purpose: the two kinds of directory the graph cannot reason about. An
+// opaque directory holds a manifest of an ecosystem this package has no graph
+// for, when the tree holds more than one manifest of that ecosystem (crates,
+// Dart packages, Python projects can depend on each other by path). A
+// generator directory holds a code generator config, whose inputs and
+// outputs are not imports.
+// Inputs:  the walked tree.
+// Outputs: Graph.opaque and Graph.generators; a change inside either makes
+// the selector return a full run.
+// Constraints: pure; testdata/ directories are ignored.
+
+import (
+	"path"
+	"strings"
+)
+
+var opaqueManifests = map[string]string{
+	"Cargo.toml": "cargo", "pubspec.yaml": "pub", "pyproject.toml": "python", "setup.py": "python",
+	"Gemfile": "ruby", "pom.xml": "maven", "build.gradle": "gradle", "build.gradle.kts": "gradle",
+	"Package.swift": "swift", "composer.json": "php", "mix.exs": "mix", "CMakeLists.txt": "cmake",
+}
+
+var generatorConfigs = map[string]bool{
+	"sqlc.yaml": true, "sqlc.yml": true, "sqlc.json": true, "buf.yaml": true, "buf.gen.yaml": true,
+	"gqlgen.yml": true, "codegen.yml": true, "codegen.yaml": true,
+}
+
+func markers(t tree, g *Graph) {
+	dirs := map[string]map[string]bool{} // ecosystem -> manifest directories
+	for _, f := range t.files {
+		d := dirOf(f)
+		if !notTestdata(d) {
+			continue
+		}
+		base := path.Base(f)
+		if eco, ok := opaqueManifests[base]; ok {
+			if dirs[eco] == nil {
+				dirs[eco] = map[string]bool{}
+			}
+			dirs[eco][d] = true
+		}
+		if generatorConfigs[base] || isAPISpec(base) {
+			g.generators[d] = true
+		}
+	}
+	for eco, ds := range dirs {
+		if len(ds) < 2 {
+			continue
+		}
+		for d := range ds {
+			g.opaque[d] = eco
+		}
+	}
+}
+
+func isAPISpec(base string) bool {
+	if !strings.HasPrefix(base, "openapi") && !strings.HasPrefix(base, "swagger") {
+		return false
+	}
+	switch path.Ext(base) {
+	case ".yaml", ".yml", ".json":
+		return true
+	}
+	return false
+}

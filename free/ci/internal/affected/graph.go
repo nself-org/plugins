@@ -24,22 +24,26 @@ import (
 const FactKind = "pkggraph"
 
 const (
-	nodePrefix = "node:"
-	edgePrefix = "edge:"
+	nodePrefix    = "node:"
+	edgePrefix    = "edge:"
+	opaquePrefix  = "opaque:"
+	generatorFact = "generator"
 )
 
 // Graph holds package directories and, per directory, the directories that
 // depend on it (reverse edges).
 type Graph struct {
-	eco       map[string]string   // package dir -> ecosystems ("go", "pnpm", "go+pnpm")
-	rdeps     map[string][]string // dependency dir -> importer dirs
-	edges     map[[2]string]bool
-	reasons   []detect.Fact // Unknown facts
-	truncated bool
+	eco        map[string]string   // package dir -> ecosystems ("go", "pnpm", "go+pnpm")
+	rdeps      map[string][]string // dependency dir -> importer dirs
+	edges      map[[2]string]bool
+	opaque     map[string]string // dir of a manifest whose ecosystem has no graph here -> ecosystem
+	generators map[string]bool   // dir holding a code generator config
+	reasons    []detect.Fact     // Unknown facts
 }
 
 func newGraph() *Graph {
-	return &Graph{eco: map[string]string{}, rdeps: map[string][]string{}, edges: map[[2]string]bool{}}
+	return &Graph{eco: map[string]string{}, rdeps: map[string][]string{}, edges: map[[2]string]bool{},
+		opaque: map[string]string{}, generators: map[string]bool{}}
 }
 
 func (g *Graph) addNode(dir, eco string) {
@@ -62,7 +66,13 @@ func (g *Graph) addEdge(from, to string) {
 }
 
 func (g *Graph) uncertain(p, reason string) {
-	g.reasons = append(g.reasons, detect.Fact{Kind: FactKind, Name: "unknown", Path: p, Confidence: detect.Unknown, Reason: reason})
+	f := detect.Fact{Kind: FactKind, Name: "unknown", Path: p, Confidence: detect.Unknown, Reason: reason}
+	for _, have := range g.reasons {
+		if have == f {
+			return
+		}
+	}
+	g.reasons = append(g.reasons, f)
 }
 
 // Build reads the graph from a repository snapshot.
@@ -73,16 +83,18 @@ func Build(fsys fs.FS) (*Graph, error) {
 	}
 	g := newGraph()
 	if t.truncated {
-		g.uncertain(".", "more than 50000 files")
+		g.uncertain(".", "file walk hit its cap")
 	}
 	goGraph(fsys, t, g)
 	pnpmGraph(fsys, t, g)
+	markers(t, g)
 	return g, nil
 }
 
 // Facts encodes the graph: one `node:<eco>` fact per package directory, one
-// `edge:<dependency dir>` fact per edge (Path is the importer), and one
-// Unknown fact per reason the graph cannot be trusted. Sorted.
+// `edge:<dependency dir>` fact per edge (Path is the importer), `opaque:<eco>`
+// and `generator` marker facts, and one Unknown fact per reason the graph
+// cannot be trusted. Sorted.
 func (g *Graph) Facts() []detect.Fact {
 	var out []detect.Fact
 	for dir, eco := range g.eco {
@@ -91,13 +103,22 @@ func (g *Graph) Facts() []detect.Fact {
 	for k := range g.edges {
 		out = append(out, detect.Fact{Kind: FactKind, Name: edgePrefix + k[1], Path: k[0], Confidence: detect.Certain})
 	}
+	for dir, eco := range g.opaque {
+		out = append(out, detect.Fact{Kind: FactKind, Name: opaquePrefix + eco, Path: dir, Confidence: detect.Certain})
+	}
+	for dir := range g.generators {
+		out = append(out, detect.Fact{Kind: FactKind, Name: generatorFact, Path: dir, Confidence: detect.Certain})
+	}
 	out = append(out, g.reasons...)
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
 		if a.Path != b.Path {
 			return a.Path < b.Path
 		}
-		return a.Name < b.Name
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return a.Reason < b.Reason
 	})
 	return out
 }
@@ -118,6 +139,10 @@ func FromFacts(facts []detect.Fact) (g *Graph, present, certain bool) {
 			g.addNode(f.Path, strings.TrimPrefix(f.Name, nodePrefix))
 		case strings.HasPrefix(f.Name, edgePrefix):
 			g.addEdge(f.Path, strings.TrimPrefix(f.Name, edgePrefix))
+		case strings.HasPrefix(f.Name, opaquePrefix):
+			g.opaque[f.Path] = strings.TrimPrefix(f.Name, opaquePrefix)
+		case f.Name == generatorFact:
+			g.generators[f.Path] = true
 		default:
 			certain = false // a shape this version does not know
 		}
@@ -146,7 +171,7 @@ func (g *Graph) Dependants(dirs ...string) map[string]bool {
 // mutation the reverse-edge test applies).
 func (g *Graph) withoutEdge(from, to string) *Graph {
 	c := newGraph()
-	c.truncated, c.reasons = g.truncated, g.reasons
+	c.reasons, c.opaque, c.generators = g.reasons, g.opaque, g.generators
 	for d, e := range g.eco {
 		c.eco[d] = e
 	}
