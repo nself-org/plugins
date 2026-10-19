@@ -3,7 +3,9 @@ package specs
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -473,13 +475,38 @@ func TestRestoreServesNothingWhenTheWriterCannotBeChecked(t *testing.T) {
 		t.Fatalf("a store error must fail closed without dropping: %s entries %d", got, e.entryCount())
 	}
 	e.eng.Backend = good
-	// the writer's history was pruned: its settled pass is trusted
+	// the writer's history was pruned: the prune retires its entry with it
 	if _, err := e.st.DeletePipelines(e.ctx, []string{"pw1"}); err != nil {
 		t.Fatal(err)
 	}
+	if n := e.entryCount(); n != 0 {
+		t.Fatalf("pruning the writer's history must retire its entry: %d left", n)
+	}
 	e.running("r2", ownerFacts)
 	e.begin(e.input("r2", ownerFacts))
-	if got := strings.Join(resultsOf(e.uses("r2")), ","); got != "go:hit" {
-		t.Fatalf("an entry whose writer attempt was pruned must still be served: %s (entries %d)", got, e.entryCount())
+	if got := strings.Join(resultsOf(e.uses("r2")), ","); got != "go:miss" {
+		t.Fatalf("an entry whose writer history is gone must not be served: %s", got)
+	}
+}
+
+// missingBackend reports the attempt as unknown, the way the store does after a
+// history prune whose entry retirement was lost (D-1038: a crash in between).
+type missingBackend struct{ Backend }
+
+func (missingBackend) AttemptStateEpoch(_ context.Context, id string) (model.JobState, int64, error) {
+	return "", 0, fmt.Errorf("store: attempt %q: %w", id, sql.ErrNoRows)
+}
+
+// A missing writer attempt is no evidence of a pass: a cancel may have won
+// finalizing -> passed afterwards and the coordinator died before the retract.
+func TestRestoreDropsAnEntryWhoseWriterAttemptIsUnknown(t *testing.T) {
+	e := newEnv(t)
+	saved(t, e, "w1", ownerFacts)
+	good := e.eng.Backend
+	e.eng.Backend = missingBackend{good}
+	e.running("r1", ownerFacts)
+	e.begin(e.input("r1", ownerFacts))
+	if got := strings.Join(resultsOf(e.uses("r1")), ","); got != "go:miss" || e.entryCount() != 0 {
+		t.Fatalf("an entry with no recorded settled pass must not be served and must be dropped: %s entries %d", got, e.entryCount())
 	}
 }

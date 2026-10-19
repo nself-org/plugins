@@ -717,3 +717,31 @@ func TestCacheEntriesPruneKeepsFactsOfRunningAttempts(t *testing.T) {
 		t.Fatalf("the live attempt can still save: %v", err)
 	}
 }
+
+// D-1038: pruning a pipeline's history retires the cache entries its attempts
+// wrote, so an entry never outlives the record that its writer settled passed.
+func TestDeletePipelinesRetiresTheCacheEntriesOfPrunedAttempts(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	keep := strings.Repeat("c", 64)
+	_, fin := cacheFinalizing(t, s, "gone", cacheTrusted, []string{cacheKey}, true)
+	if err := s.CacheCommit(ctx, cacheReq(t, "gone", fin, cacheTrusted, cacheKey, 10)); err != nil {
+		t.Fatal(err)
+	}
+	_, fin = cacheFinalizing(t, s, "stay", cacheTrusted, []string{keep}, true)
+	if err := s.CacheCommit(ctx, cacheReq(t, "stay", fin, cacheTrusted, keep, 10)); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.DeletePipelines(ctx, []string{"pgone"}); err != nil || n != 1 {
+		t.Fatalf("removed %d, err %v; want 1", n, err)
+	}
+	got, err := s.CacheEntries(ctx, "")
+	if err != nil || len(got) != 1 || got[0].Key != keep {
+		t.Fatalf("entries after the prune = %+v, err %v; want only the surviving attempt's", got, err)
+	}
+	for table, want := range map[string]int{"cache_entry": 1, "cache_entry_blob": 1, "cache_attempt": 1} {
+		if n := count(t, s, table); n != want {
+			t.Errorf("%s rows = %d, want %d", table, n, want)
+		}
+	}
+}
