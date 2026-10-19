@@ -162,7 +162,7 @@ func (h *human) Event(e Event) {
 func failText(o JobOutcome) string {
 	switch {
 	case o.Code != "":
-		return o.Code + ": " + o.Detail
+		return codeText(o.Code, o.Detail)
 	case o.FailureClass == "timeout":
 		return "timeout"
 	case o.ExitCode == 0 && o.Detail != "":
@@ -170,6 +170,19 @@ func failText(o JobOutcome) string {
 	default:
 		return fmt.Sprintf("exit %d", o.ExitCode)
 	}
+}
+
+// codeText joins a code and its detail, dropping a code the detail already
+// starts with ("E712 missing: x" or "E712: missing: x") so it prints once.
+func codeText(code, detail string) string {
+	rest := detail
+	if after, ok := strings.CutPrefix(detail, code); ok && (after == "" || after[0] == ':' || after[0] == ' ') {
+		rest = strings.TrimLeft(after, ": ")
+	}
+	if rest == "" {
+		return code
+	}
+	return code + ": " + rest
 }
 
 func reasonText(o JobOutcome) string {
