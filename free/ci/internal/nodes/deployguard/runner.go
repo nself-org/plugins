@@ -44,11 +44,7 @@ func FunnelRun(ctx context.Context, dir string, argv ...string) ([]byte, int, er
 	spec := ciexec.JobSpec{
 		AttemptID: fmt.Sprintf("dg-%d-%d", time.Now().UnixNano(), runSeq.Add(1)), CoordinatorID: "deployguard",
 		Job: model.Job{Kind: "static"}, Timeout: runTimeout, Command: argv,
-		Output: func(b []byte) {
-			if room := maxOutput - buf.Len(); room > 0 {
-				buf.Write(b[:min(room, len(b))])
-			}
-		},
+		Output: func(b []byte) { buf.Write(b[:min(max(0, maxOutput-buf.Len()), len(b))]) },
 	}
 	if dir != "" {
 		spec.BeforeJob = func(_ context.Context, ws *os.Root) error { return stage(dir, ws) }
