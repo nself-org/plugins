@@ -1,11 +1,13 @@
-# The published toolchain image. `pending` until the owner-named first publish (P7-CI-61),
-# which sets status: pinned and the digest of the pushed manifest list.
+# The published toolchain image. Pinned by the owner-named first publish (P7-CI-61):
+# dispatch run 39228884865 on main a4e09f81 pushed the manifest list below (linux/amd64, linux/arm64).
 name: toolchain-image
 kind: image
+version: docker.io/nself/ci-toolchain@sha256:98f00724dbbc1b1ea03f3b1a83c057ba715ec614689e159867f94d72950c44b9
 purpose: image that `nself ci --container` runs checks in
 owner: internal/toolchain
 image: docker.io/nself/ci-toolchain
-status: pending
+digest: sha256:98f00724dbbc1b1ea03f3b1a83c057ba715ec614689e159867f94d72950c44b9
+status: pinned
 upstream:
   type: none
   ref: ""

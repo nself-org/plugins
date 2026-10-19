@@ -15,8 +15,15 @@ func pinnedTable() string {
 	return "version: 1\nrows:\n  - name: toolchain-image\n    kind: image\n    purpose: p\n    owner: o\n    image: docker.io/nself/ci-toolchain\n    status: pinned\n    digest: " + pinnedDigest + "\n    upstream: {type: none, ref: ''}\n"
 }
 
+func pendingTable() string {
+	return "version: 1\nrows:\n  - name: toolchain-image\n    kind: image\n    purpose: p\n    owner: o\n    image: docker.io/nself/ci-toolchain\n    status: pending\n    upstream: {type: none, ref: ''}\n"
+}
+
 func TestPendingRowIsE645NamingImage(t *testing.T) {
-	r := &Resolver{Getenv: envOf(nil)}
+	r := &Resolver{
+		Getenv:   envOf(map[string]string{EnvVersions: "/fixture/versions.yaml"}),
+		ReadFile: func(string) ([]byte, error) { return []byte(pendingTable()), nil },
+	}
 	_, err := r.Resolve(context.Background())
 	if err == nil || !strings.HasPrefix(err.Error(), "E645: ") || !strings.Contains(err.Error(), "--image <ref@digest>") {
 		t.Fatalf("pending row error = %v", err)

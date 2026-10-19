@@ -122,13 +122,14 @@ func TestSyftRow(t *testing.T) {
 	}
 }
 
-func TestEmbeddedImageRowIsPending(t *testing.T) {
+// TestEmbeddedImageRowIsPinned: the owner-named first publish (P7-CI-61) pinned the row to the pushed manifest list.
+func TestEmbeddedImageRowIsPinned(t *testing.T) {
 	v, err := Embedded()
 	if err != nil {
 		t.Fatal(err)
 	}
 	row, ok := v.Row(ImageRow)
-	if !ok || row.Status != StatusPending || row.Image != "docker.io/nself/ci-toolchain" {
+	if !ok || row.Status != StatusPinned || row.Image != "docker.io/nself/ci-toolchain" || !digestRe.MatchString(row.Digest) || row.Version != row.Image+"@"+row.Digest {
 		t.Fatalf("image row %+v", row)
 	}
 }

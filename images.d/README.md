@@ -22,7 +22,7 @@ One JSON object per file (`images.d/<owner>.json`), or an array of them (the rel
 |---|---|
 | `name` | Unique across all fragments. Plugins use their slug. |
 | `kind` | `plugin`, `upstream` or `ci`. |
-| `image` | `<repository>:<tag>@sha256:<index digest>`. A tag without a digest fails. |
+| `image` | `<repository>:<tag>@sha256:<index digest>`. A tag without a digest fails. Kind `ci` may omit the tag (an image pushed by digest only, such as `ci-toolchain`). |
 | `platforms` | Platforms the index must list, for example `linux/amd64`. |
 | `owner` | Ticket id or workflow that owns the entry. |
 
