@@ -187,3 +187,51 @@ func TestListLeavesEndedUnownedPipelinesUnowned(t *testing.T) {
 		t.Fatalf("get: %+v %v", it, ok)
 	}
 }
+
+// Two projects whose dispatched rows wait on the same commit (a fork has the same SHA): neither may be
+// tied to the running pipeline, or one project's members would see and cancel the other's run.
+func TestSameCommitInTwoProjectsIsNeverCrossed(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	c, _ := coordinator.New(coordinator.Config{Store: st, PolicyDigest: "t"})
+	b := &StoreBackend{Store: st, Home: t.TempDir(), Enqueue: c.Enqueue}
+	var ids []string
+	for _, proj := range []string{"acme/app", "fork/app"} {
+		sub, err := b.Submit(ctx, SubmitRequest{Project: proj, Revision: goodRev}, "x")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, sub.ID)
+		if _, ok, _ := st.IntakeClaim(ctx, "coord-"+proj); !ok {
+			t.Fatal("nothing to claim")
+		}
+	}
+	run := store.PipelineRow{ID: "run-shared", Project: "/tmp/checkout", Revision: goodRev, Trigger: "api", SourceTrust: "owner", PrivacyZone: "local-only",
+		PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"}
+	if err = st.CreatePipeline(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	if err = st.CreateJob(ctx, store.JobRow{ID: "job-s", PipelineID: "run-shared", Name: "build", Kind: "test", InfraMax: 1, InputDigest: "i"}); err != nil {
+		t.Fatal(err)
+	}
+	for i, id := range ids {
+		it, ok, err := b.Get(ctx, id)
+		if err != nil || !ok || it.ID != id || len(it.Jobs) != 0 || it.Status != "running" {
+			t.Fatalf("row %d must stay an unattached running run, got %+v (%v %v)", i, it, ok, err)
+		}
+	}
+	it, ok, _ := b.Get(ctx, "run-shared")
+	if !ok || it.Project != "" {
+		t.Fatalf("the shared pipeline belongs to nobody until its dispatch finishes: %+v", it)
+	}
+	list, _ := b.List(ctx, 20)
+	for _, it := range list {
+		if it.ID == "run-shared" && it.Project != "" {
+			t.Fatalf("List attributed the shared pipeline to %q", it.Project)
+		}
+	}
+}

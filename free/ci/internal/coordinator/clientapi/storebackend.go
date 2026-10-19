@@ -54,7 +54,7 @@ func (b *StoreBackend) List(ctx context.Context, limit int) ([]RunItem, error) {
 	owned := map[string]bool{}
 	out := make([]RunItem, 0, len(rows))
 	for _, r := range rows {
-		it, _, e := b.fromIntake(ctx, r, false)
+		it, _, e := b.fromIntake(ctx, r, false, rows)
 		if e != nil {
 			return nil, e
 		}
@@ -88,7 +88,7 @@ func (b *StoreBackend) Get(ctx context.Context, ref string) (RunItem, bool, erro
 			}
 			return RunItem{}, false, err
 		}
-		return b.fromIntake(ctx, row, true)
+		return b.fromIntake(ctx, row, true, nil)
 	}
 	if coordinator.ValidRevision(ref) { // `ci evidence <revision>`: the newest run of that commit
 		rows, err := b.Store.PipelinesByRevision(ctx, ref)
@@ -140,19 +140,14 @@ func inflightProject(rows []store.IntakeRow, revision string) string {
 	return project
 }
 
-// fromIntake describes the run an intake row stands for; jobs adds the job list of a started run.
-func (b *StoreBackend) fromIntake(ctx context.Context, r store.IntakeRow, jobs bool) (RunItem, bool, error) {
+// fromIntake describes the run an intake row stands for; jobs adds the job list of a started run. recent
+// is the newest intake rows when the caller already has them (nil: loaded on demand).
+func (b *StoreBackend) fromIntake(ctx context.Context, r store.IntakeRow, jobs bool, recent []store.IntakeRow) (RunItem, bool, error) {
 	pid := r.PipelineID
 	if pid == "" && r.State == store.IntakeDispatched {
-		rows, err := b.Store.PipelinesByRevision(ctx, r.Revision)
-		if err != nil {
+		var err error
+		if pid, err = b.inflightPipeline(ctx, r, recent); err != nil {
 			return RunItem{}, false, err
-		}
-		for _, p := range rows {
-			if !pipelineEnded(p.Status) {
-				pid = p.ID
-				break
-			}
 		}
 	}
 	if pid != "" {
@@ -169,6 +164,32 @@ func (b *StoreBackend) fromIntake(ctx context.Context, r store.IntakeRow, jobs b
 		}
 	}
 	return RunItem{RunView: cirun.RunView{ID: r.ID, Revision: r.Revision, Status: intakeStatus(r)}, Project: r.Project}, true, nil
+}
+
+// inflightPipeline ties a dispatched intake row that names no pipeline yet to the running pipeline of its
+// revision. The tie is made only when it is unambiguous: if dispatched rows of two projects wait on the same
+// commit (a fork carries the same SHA), nobody can tell whose pipeline is whose, so none is returned and the
+// row stays a run without jobs until its dispatch finishes and names its pipeline.
+func (b *StoreBackend) inflightPipeline(ctx context.Context, r store.IntakeRow, recent []store.IntakeRow) (string, error) {
+	if recent == nil {
+		var err error
+		if recent, err = b.Store.IntakeList(ctx, 200); err != nil {
+			return "", err
+		}
+	}
+	if inflightProject(recent, r.Revision) != r.Project {
+		return "", nil
+	}
+	rows, err := b.Store.PipelinesByRevision(ctx, r.Revision)
+	if err != nil {
+		return "", err
+	}
+	for _, p := range rows {
+		if !pipelineEnded(p.Status) {
+			return p.ID, nil
+		}
+	}
+	return "", nil
 }
 
 func intakeStatus(r store.IntakeRow) string {
