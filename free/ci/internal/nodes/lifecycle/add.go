@@ -5,7 +5,7 @@ package lifecycle
 // separation, probe, and register the node authorized for the current project only.
 // Inputs:  AddOptions (destination, name, --host-key, --agent-binary, the admin's trust flags).
 // Outputs: the registered node; one audit row (node.add); a pinned key in $NSELF_CI_HOME/known_hosts.
-// Constraints: nothing is registered until the probe succeeded, so a failed add leaves no node and its
+// Constraints: the pre-add hooks run before the first contact with the host; nothing is registered until the probe succeeded, so a failed add leaves no node and its
 //          pin is rolled back; the node id is lower case; the destination carries no port (see
 //          target.go); the probe runs against a throwaway registry so the real store gets exactly one
 //          write and one audit row; trust is the admin's flags only (X5).
@@ -88,6 +88,11 @@ func (d *Deps) Add(ctx context.Context, o AddOptions) (res AddResult, err error)
 	installer, ok := ext.installer(orDefault(o.Installer, DefaultInstaller))
 	if !ok {
 		return res, usage("unknown agent installer %q", o.Installer)
+	}
+	// Nothing has touched the host yet: a pre-add hook (the deploy-host check) refuses here, with no scan,
+	// no ssh and no agent install on the host.
+	if err = RunHooks(ctx, PointPreAdd, HookEvent{NodeID: id, Project: d.Project, Flags: o.Flags, Dest: o.Dest}); err != nil {
+		return res, err
 	}
 	keys, err := d.Scan(ctx, remote.Target{Dest: spec.Dest()}, id)
 	if err != nil {

@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/nodes/deployguard"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/lifecycle"
@@ -31,7 +32,7 @@ func init() {
 	lifecycle.RegisterFlags("add", func(fs *flag.FlagSet) {
 		fs.Bool(allowDeployHostFlag, false, "allow a node whose host is a deploy host (confirmed on a terminal, audited)")
 	})
-	for _, p := range []lifecycle.Point{lifecycle.PointAdd, lifecycle.PointPair, lifecycle.PointTest} {
+	for _, p := range []lifecycle.Point{lifecycle.PointPreAdd, lifecycle.PointAdd, lifecycle.PointPair, lifecycle.PointTest} {
 		point := p
 		lifecycle.RegisterAddHook(point, func(ctx context.Context, e lifecycle.HookEvent) error { return deployHostHook(ctx, point, e) })
 	}
@@ -83,6 +84,10 @@ func flagBool(fs *flag.FlagSet, name string) bool {
 	return b
 }
 
+// preConfirmed remembers the nodes whose --allow-deploy-host override was confirmed and audited before
+// contact, so the add hook that follows the probe marks the draft without asking again.
+var preConfirmed sync.Map
+
 func deployHostHook(ctx context.Context, point lifecycle.Point, e lifecycle.HookEvent) error {
 	home := lifecycle.CIHome()
 	st, err := deployguard.OpenStore(filepath.Join(home, "state.db"))
@@ -101,12 +106,33 @@ func deployHostHook(ctx context.Context, point lifecycle.Point, e lifecycle.Hook
 	}
 	q := deployguard.AddRequest{NodeID: e.NodeID, Dest: e.Dest, Capability: e.Capability, Actor: adminActor(),
 		Allow: flagBool(e.Flags, allowDeployHostFlag), Confirm: deployguard.TerminalConfirm(os.Stdin, os.Stderr, isTerminal(os.Stdin))}
-	r, warns, err := g.CheckAdd(ctx, q)
+	check := g.CheckAdd
+	override := false
+	switch point {
+	case lifecycle.PointPreAdd:
+		preConfirmed.Delete(e.NodeID)
+		check = g.CheckPreAdd
+	case lifecycle.PointAdd:
+		// Confirmed and audited before contact: match again with the probed identity, without a second prompt.
+		if _, ok := preConfirmed.LoadAndDelete(e.NodeID); ok && q.Allow {
+			q.Allow, override = false, true
+		}
+	}
+	r, warns, err := check(ctx, q)
 	for _, w := range warns {
 		fmt.Fprintln(os.Stderr, "warning:", w)
 	}
 	if err != nil {
 		return err
+	}
+	if point == lifecycle.PointPreAdd {
+		if r.Matched {
+			preConfirmed.Store(e.NodeID, true)
+		}
+		return nil
+	}
+	if override && r.Matched && e.Capability != nil {
+		e.Capability.DeployHost.Override = true
 	}
 	if r.Matched && e.Capability == nil {
 		// No draft to mark: the stored node must carry the match, or the pairing is refused.

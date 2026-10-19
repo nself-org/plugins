@@ -6,7 +6,8 @@ package deployguard
 // Inputs:  AddRequest (node id, destination, the draft capability, the flag, a confirmer).
 // Outputs: the Result; the draft's DeployHost set (matched, source, override); one audit row for a
 //          confirmed override.
-// Constraints: a match without the flag registers the node ineligible (deploy_host.matched true); the flag
+// Constraints: a match before contact (CheckPreAdd) without the flag refuses the add; a match only found
+//          after the probe (key or machine id) without the flag registers the node ineligible (deploy_host.matched true); the flag
 //          without a match changes nothing; the flag with a match and no confirmation (no terminal, or
 //          anything but the node id typed back) fails with E663 and registers nothing; the audit row is
 //          written before the node exists and names the source and kind, never a key.
@@ -103,6 +104,23 @@ func (g *Guard) CheckAdd(ctx context.Context, q AddRequest) (Result, []string, e
 	}
 	if q.Capability != nil {
 		q.Capability.DeployHost = dh
+	}
+	return r, warn, nil
+}
+
+// CheckPreAdd is the check that runs before `nodes add` touches the host (D-1219, Epic D9: no contact with a
+// deploy host). It matches on what is known without contact (the typed destination and node id, through
+// `ssh -G` and DNS) and applies CheckAdd's rules. A match without the override refuses the add here (E663,
+// ReasonMatched): a host that was never contacted cannot be registered ineligible, because the probe
+// cannot run. A confirmed override passes, and its audit row is written here.
+func (g *Guard) CheckPreAdd(ctx context.Context, q AddRequest) (Result, []string, error) {
+	q.Capability = nil
+	r, warn, err := g.CheckAdd(ctx, q)
+	if err != nil {
+		return r, warn, err
+	}
+	if r.Matched && !q.Allow {
+		return r, warn, newErr(ReasonMatched, "%s is a deploy host (%s, %s); it was not contacted and not added. Run CI on another machine, or an admin may pass --allow-deploy-host", q.NodeID, r.Source, r.Kind)
 	}
 	return r, warn, nil
 }

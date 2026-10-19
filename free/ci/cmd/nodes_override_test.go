@@ -204,3 +204,22 @@ func TestProjectRootAndHelpers(t *testing.T) {
 		t.Fatal(adminActor())
 	}
 }
+
+// D-1219: the pre-contact check matches on the typed destination alone (no capability yet) and refuses a
+// deploy host before `nodes add` touches it; --allow-deploy-host still needs the terminal confirmation.
+func TestPreAddHookRefusesADeployHostBeforeContact(t *testing.T) {
+	stubNself(t)
+	ctx := context.Background()
+	pre := lifecycle.HookEvent{Point: lifecycle.PointPreAdd, NodeID: "box", Dest: "ci@" + deployguard.FixtureHostV4, Flags: addFlagSet(false)}
+	if err := deployHostHook(ctx, lifecycle.PointPreAdd, pre); deployguard.ReasonOf(err) != deployguard.ReasonMatched {
+		t.Fatalf("deploy host not refused before contact: %v", err)
+	}
+	pre.Flags = addFlagSet(true)
+	if err := deployHostHook(ctx, lifecycle.PointPreAdd, pre); deployguard.ReasonOf(err) != deployguard.ReasonNoTTY {
+		t.Fatalf("override without a terminal: %v", err)
+	}
+	ok := lifecycle.HookEvent{Point: lifecycle.PointPreAdd, NodeID: "fine", Dest: deployguard.FixtureOther, Flags: addFlagSet(false)}
+	if err := deployHostHook(ctx, lifecycle.PointPreAdd, ok); err != nil {
+		t.Fatalf("unlisted host refused: %v", err)
+	}
+}

@@ -21,11 +21,13 @@ import (
 // Point is where an AddHook runs.
 type Point string
 
-// Hook points: add (after the probe, before the node is registered), pair (P7-NODE-07's pairing), test.
+// Hook points: preadd (D-1219: after the destination is parsed, before any contact with the host), add (after
+// the probe, before the node is registered), pair (P7-NODE-07's pairing), test.
 const (
-	PointAdd  Point = "add"
-	PointPair Point = "pair"
-	PointTest Point = "test"
+	PointPreAdd Point = "preadd"
+	PointAdd    Point = "add"
+	PointPair   Point = "pair"
+	PointTest   Point = "test"
 )
 
 // HookEvent is what a hook sees. Flags is the parsed flag set of the command, including the flags
@@ -37,7 +39,8 @@ type HookEvent struct {
 	Flags   *flag.FlagSet
 	// Dest is the destination as typed (`nodes add`); empty at the other points.
 	Dest string
-	// Capability is the draft a node is registered with (`nodes add`, after the probe); nil elsewhere.
+	// Capability is the draft a node is registered with (`nodes add`, after the probe); nil elsewhere, including
+	// PointPreAdd, where nothing is known about the host yet.
 	// An add hook may set its DeployHost (P7-NODE-14) and nothing else.
 	Capability *model.Capability
 }
@@ -103,7 +106,7 @@ func newExtensions() *extensions {
 
 // RegisterAddHook runs fn at point.
 func RegisterAddHook(point Point, fn AddHook) {
-	if fn == nil || (point != PointAdd && point != PointPair && point != PointTest) {
+	if fn == nil || (point != PointPreAdd && point != PointAdd && point != PointPair && point != PointTest) {
 		panic("nself-ci: invalid lifecycle hook " + string(point))
 	}
 	ext.mu.Lock()
