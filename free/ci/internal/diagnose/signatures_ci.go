@@ -67,19 +67,25 @@ var installRetry = re(`(?i)\bwarn\b|will retry|retrying|retries left|\battempt \
 // installLocal marks a connection to this machine: refused or reset there is
 // the project's setup. Read with URLs removed, so a package named `localhost`
 // in a registry path does not count.
-var installLocal = re(`(?i)\b127\.\d+\.\d+\.\d+\b|\blocalhost\b|(^|[\s\[(])::1([\]\s):]|$)`)
+var installLocal = re(`(?i)\b127\.\d+\.\d+\.\d+\b|\blocalhost\b|(^|[\s\[(])::1([\]\s):]|$)|\[::1\]`)
 
 // installClientError marks an answer from a reachable registry that says the
 // request itself is wrong (no such package or version, forbidden,
 // unauthorized): configuration, never a transient. Read with URLs removed.
 var installClientError = re(`(?i)\be?40[0-4]\b|\bnot found\b|\bforbidden\b|\bunauthorized\b|no matching version|\bnotarget\b|err_pnpm_no_matching_version`)
 
+// installURLHost captures the host of a URL: a registry on this machine is the
+// project's own setup, but a package called `localhost` in a path is not.
+var installURLHost = re(`(?i)https?://(?:[^/\s@]*@)?(\[[^\]]*\]|[^/\s:?#]+)`)
+
 // installURL is stripped before the guards and causes are read: a package
 // named `etimedout`, `enospc` or `localhost` in a registry URL is not a cause.
 var installURL = re(`https?://\S+`)
 
 // installDisk is a full disk, in the words every manager and the OS share.
-var installDisk = re(`(?i)\benospc\b|no space left on device|not enough space on the disk`)
+// ENOSPC counts as a code (after whitespace, a colon or a quote), never as a path
+// or package-name part (`/repo/enospc/package.json`).
+var installDisk = re(`(?im)(^|[\s:'"(])enospc([:\s'")]|$)|no space left on device|not enough space on the disk`)
 
 // installKilled is the shell naming a killed child (memory).
 var installKilled = re(`(?m)^\S*sh: (line \d+: )? *\d+ +Killed\b`)
@@ -114,7 +120,12 @@ func lastCode(r *regexp.Regexp, text string) string {
 // code; then the structured error lines of the managers, with URLs and retry
 // warnings removed, name the cause.
 func ClassifyInstall(log string) Diagnosis {
-	log = installURL.ReplaceAllString(dropLines(log, installRetry), " ")
+	for _, m := range installURLHost.FindAllStringSubmatch(log, -1) {
+		if installLocal.MatchString(" " + m[1] + " ") {
+			return named(SigCode, "code")
+		}
+	}
+	log = dropLines(installURL.ReplaceAllString(log, " "), installRetry) // URLs first: a package called `warn` is not a warning
 	for _, guard := range []*regexp.Regexp{installSync, installTestFailure, installLifecycle, installLocal, installClientError} {
 		if guard.MatchString(log) {
 			return named(SigCode, "code")
