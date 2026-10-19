@@ -28,6 +28,7 @@ const (
 	ReasonNoIntent     = "no_intent"
 	ReasonExistingNode = "existing_node"
 	ReasonNoApprover   = "no_approver"
+	ReasonNodeGone     = "node_gone" // the node was removed while its approval was pending
 	ReasonBadRequest   = "bad_request"
 	ReasonInternal     = "internal"
 )
