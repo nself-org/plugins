@@ -63,6 +63,9 @@ func renderShow(w io.Writer, n NodeView) {
 func renderAdd(w io.Writer, n NodeView, r AddResult) {
 	_, _ = fmt.Fprintf(w, "node %s added: %s, agent %s, separation %s\n", n.ID, orDash(n.Platform), r.AgentVersion, r.Separation.Reason)
 	_, _ = fmt.Fprintf(w, "authorized for project %s; accepts %s; pinned %s\n", join(n.AuthorizedProjects), join(n.Trust.Accepts), join(r.Fingerprints))
+	for _, m := range r.Warnings {
+		_, _ = fmt.Fprintf(w, "warning: %s\n", m)
+	}
 }
 
 func renderTest(w io.Writer, r TestResult) {
