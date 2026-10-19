@@ -44,7 +44,7 @@ type Facts struct {
 	NoCoordinator            bool
 	// JobShim is true when the agent's job-shim sudo rule exists (system install).
 	JobShim bool
-	// JobUIDs are the host UIDs of nself-ci-job-0..n-1, index = slot.
+	// JobUIDs are the host UIDs of nself-ci-job-1..n, index = slot (slot s is user number s+1).
 	JobUIDs []int
 	// Userns is true when ProbeUserns passed; SubUIDStart/Count are the agent user's subordinate range.
 	Userns                   bool
@@ -67,8 +67,9 @@ type Plan struct {
 	Reason trust.Reason
 }
 
-// JobUserName is the system account of a slot (Epic D12; P7-NODE-06 creates it).
-func JobUserName(slot int) string { return fmt.Sprintf("nself-ci-job-%d", slot) }
+// JobUserName is the system account of a 0-based slot (Epic D12). P7-NODE-06 creates nself-ci-job-1..N
+// and job-shim accepts only numbers from 1, so slot s is user number s+1 (D-1231).
+func JobUserName(slot int) string { return fmt.Sprintf("nself-ci-job-%d", slot+1) }
 
 // Separation picks the separation for the attempt in slot.
 func Separation(f Facts, slot int) (Plan, error) {
