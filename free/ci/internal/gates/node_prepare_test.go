@@ -305,6 +305,7 @@ func TestNodePrepareGuardsReadTheMiddleOfALongLog(t *testing.T) {
 			body := `pad() { i=0; while [ $i -lt ` + strconv.Itoa(lines) + ` ]; do echo "npm info padding line number $i of the $1 part of this install log, 80 bytes....."; i=$((i+1)); done; }
 pad head
 echo "AssertionError [ERR_ASSERTION]: postinstall self-check"
+i=0; while [ $i -lt 40 ]; do echo "npm warn cleanup ENOSPC lockfile 404 localhost $i, a keyword-heavy warning that must not evict the assertion above"; i=$((i+1)); done
 pad tail
 echo "npm error code ECONNRESET"
 exit 1
@@ -466,28 +467,50 @@ func TestLockDirsAndQuoting(t *testing.T) {
 		}
 	}
 	// every keyword is fixed text for grep -F inside single quotes
-	for _, w := range diagnose.InstallKeywords {
+	for _, w := range append(append([]string{}, diagnose.InstallGuardWords...), diagnose.InstallCauseWords...) {
 		if strings.ContainsAny(w, "'\\\n") || w == "" {
 			t.Errorf("keyword %q cannot be quoted for sh", w)
 		}
 	}
 }
 
-func TestNodeGateKeepsTempAndCachesInTheWorkspace(t *testing.T) {
-	h := newNodeHost(t)
+func TestNodeGateKeepsTempAndCachesInTheInstallWorkspace(t *testing.T) {
 	parent := t.TempDir()
-	t.Setenv("TMPDIR", parent)
-	h.write("package.json", manifest("npm@10.2.4", ""))
-	h.write("package-lock.json", "{}")
-	h.manager("npm", "10.2.4", `case "$1" in ci) mkdir -p node_modules;; run) echo "TMP $TMPDIR"; echo "CACHE $npm_config_cache"; echo "PNPM [$npm_config_store_dir]";; esac
-`)
-	r := h.run("node.test", ".")
-	if r.exit != 0 || !strings.Contains(r.out, "/.nself-ci/tmp\n") || !strings.Contains(r.out, "/.nself-ci/npm\n") || !strings.Contains(r.out, "PNPM []") {
-		t.Fatalf("%+v", r)
+	for pm, cache := range map[string]string{"npm": "npm_config_cache", "pnpm": "pnpm_config_store_dir", "bun": "BUN_INSTALL_CACHE_DIR", "yarn": "YARN_CACHE_FOLDER"} {
+		t.Run(pm, func(t *testing.T) {
+			h := newNodeHost(t)
+			t.Setenv("TMPDIR", parent)
+			h.write("package.json", manifest(pm+"@9.0.0", ""))
+			h.write(lockfileOf[pm], "# lock\n")
+			h.manager(pm, "9.0.0", `echo "TMP $TMPDIR"; echo "CACHE $`+cache+`"; exit 1`)
+			r := h.run("node.test", ".")
+			if !strings.Contains(r.out, "/.nself-ci/tmp\n") || !strings.Contains(r.out, "/.nself-ci/") || strings.Contains(r.out, "CACHE \n") {
+				t.Fatalf("%+v", r)
+			}
+			if left, _ := os.ReadDir(parent); len(left) != 0 {
+				t.Fatalf("the operator's TMPDIR gained %d entries", len(left))
+			}
+		})
 	}
-	if left, _ := os.ReadDir(parent); len(left) != 0 {
-		t.Fatalf("the operator's TMPDIR gained %d entries", len(left))
-	}
+	t.Run("a check that installs nothing keeps its environment", func(t *testing.T) {
+		h := newNodeHost(t)
+		t.Setenv("TMPDIR", parent)
+		h.write("package.json", manifest("npm@10.2.4", ""))
+		h.write("node_modules/.keep", "")
+		h.manager("npm", "10.2.4", `echo "TMP $TMPDIR"`)
+		if r := h.run("node.test", "."); r.out != "TMP "+parent {
+			t.Fatalf("%+v", r)
+		}
+	})
+	t.Run("pnpm never switches itself to the pinned version", func(t *testing.T) {
+		h := newNodeHost(t)
+		h.write("package.json", manifest("pnpm@9.1.0", ""))
+		h.write("node_modules/.keep", "")
+		h.manager("pnpm", "9.1.0", `echo "SWITCH $pnpm_config_manage_package_manager_versions $npm_config_manage_package_manager_versions"`)
+		if r := h.run("node.test", "."); r.out != "SWITCH false false" {
+			t.Fatalf("%+v", r)
+		}
+	})
 }
 
 func TestYarnZeroInstallKeepsItsCommittedCache(t *testing.T) {

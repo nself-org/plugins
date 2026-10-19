@@ -21,6 +21,7 @@ package gates
 import (
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/detect"
@@ -105,15 +106,15 @@ func nodeScript(pm, id, run, dir string) string {
 	var b strings.Builder
 	b.WriteString("LOCK=; LF=\nfor d in " + lockDirs(dir) + "; do\n  for f in " + strings.Join(nodeLockfiles[pm], " ") + "; do\n")
 	b.WriteString("    if [ -f \"$d/$f\" ]; then LOCK=$d; LF=$f; break 2; fi\n  done\ndone\n")
-	b.WriteString(cacheEnv(pm) + "\n")
+	b.WriteString(managerEnv(pm))
 	b.WriteString("if [ -n \"$LOCK\" ] && [ ! -d node_modules ] && [ ! -d \"$LOCK/node_modules\" ]; then\n")
 	b.WriteString(pinCheck(pm))
-	b.WriteString("  mkdir -p .nself-ci; LOG=\"$PWD/.nself-ci/install.log\"\n")
-	b.WriteString("  ( cd \"$LOCK\" && " + installCmd(pm) + " ) > \"$LOG\" 2>&1 || {\n")
+	b.WriteString("  NSELF_CI_DIR=\"$PWD/.nself-ci\"; mkdir -p \"$NSELF_CI_DIR/tmp\"; LOG=\"$NSELF_CI_DIR/install.log\"\n")
+	b.WriteString("  ( cd \"$LOCK\" && " + installEnv(pm) + "; " + installCmd(pm) + " ) > \"$LOG\" 2>&1 || {\n")
 	b.WriteString(failureReport())
-	b.WriteString("    echo " + diagnose.PrepareFailed + "\n    exit 97\n  }\n  rm -f \"$LOG\"\nfi\n")
+	b.WriteString("    echo " + diagnose.PrepareFailed + "\n    exit " + strconv.Itoa(diagnose.PrepareExit) + "\n  }\n  rm -f \"$LOG\"\nfi\n")
 	if id == "node.typecheck" || id == "node.build" {
-		b.WriteString("if { [ -d node_modules ] || [ -d \"${LOCK:-.}/node_modules\" ] || [ -f \"${LOCK:-.}/.pnp.cjs\" ]; } && grep -q '\"astro\"' package.json 2>/dev/null; then\n")
+		b.WriteString("if { [ -d node_modules ] || [ -d \"${LOCK:-.}/node_modules\" ] || [ -f \"${LOCK:-.}/.pnp.cjs\" ]; } && grep -q '\"astro\"[[:space:]]*:' package.json 2>/dev/null; then\n")
 		b.WriteString("  " + astroSync(pm) + " || exit $?\nfi\n")
 	}
 	b.WriteString("exec " + run + "\n")
@@ -157,25 +158,31 @@ func astroSync(pm string) string {
 	return "bun run astro sync"
 }
 
-// cacheEnv keeps the manager's cache and the temp directory inside the
-// workspace (removed with it, so a killed install leaves nothing in the
-// operator's TMPDIR). Only the manager's own variables: npm warns about
-// another manager's.
-func cacheEnv(pm string) string {
-	return `mkdir -p .nself-ci/tmp; export TMPDIR="$PWD/.nself-ci/tmp"; ` + managerCacheEnv(pm)
+// managerEnv is set for every check of the manager: pnpm must not switch itself to
+// the pinned version (it downloads it into a global store, so the pin check below
+// and an offline host would both be defeated).
+func managerEnv(pm string) string {
+	if pm == "pnpm" {
+		return "export pnpm_config_manage_package_manager_versions=false npm_config_manage_package_manager_versions=false\n"
+	}
+	return ""
 }
 
-func managerCacheEnv(pm string) string {
+// installEnv keeps the install's cache and temp directory inside the workspace
+// (removed with it, so a killed install leaves nothing in the operator's TMPDIR),
+// only the manager's own variables: npm warns about another manager's. A
+// committed Yarn .yarn/cache (zero-install) stays the cache.
+func installEnv(pm string) string {
+	env := `export TMPDIR="$NSELF_CI_DIR/tmp"; `
 	switch pm {
 	case "npm":
-		return `export npm_config_cache="$PWD/.nself-ci/npm"`
+		return env + `export npm_config_cache="$NSELF_CI_DIR/npm"`
 	case "pnpm":
-		return `export npm_config_store_dir="$PWD/.nself-ci/pnpm" COREPACK_ENABLE_DOWNLOAD_PROMPT=0`
+		return env + `export pnpm_config_store_dir="$NSELF_CI_DIR/pnpm" npm_config_store_dir="$NSELF_CI_DIR/pnpm" COREPACK_ENABLE_DOWNLOAD_PROMPT=0`
 	case "yarn":
-		// a committed .yarn/cache (zero-install) is the cache; only otherwise keep it in the workspace
-		return `[ -d "${LOCK:-.}/.yarn/cache" ] || export YARN_CACHE_FOLDER="$PWD/.nself-ci/yarn"; export YARN_ENABLE_GLOBAL_CACHE=false COREPACK_ENABLE_DOWNLOAD_PROMPT=0`
+		return env + `[ -d .yarn/cache ] || export YARN_CACHE_FOLDER="$NSELF_CI_DIR/yarn"; export YARN_ENABLE_GLOBAL_CACHE=false COREPACK_ENABLE_DOWNLOAD_PROMPT=0`
 	}
-	return `export BUN_INSTALL_CACHE_DIR="$PWD/.nself-ci/bun"`
+	return env + `export BUN_INSTALL_CACHE_DIR="$NSELF_CI_DIR/bun"`
 }
 
 // pinCheck refuses an install when package.json pins another MAJOR version of
@@ -184,7 +191,7 @@ func managerCacheEnv(pm string) string {
 // is no pin.
 func pinCheck(pm string) string {
 	return `  PIN=; for pj in package.json "$LOCK/package.json"; do
-    PIN=$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"` + pm + `@\([0-9][0-9]*\)\..*/\1/p' "$pj" 2>/dev/null | head -n 1)
+    PIN=$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"` + pm + `@\([0-9][0-9]*\).*/\1/p' "$pj" 2>/dev/null | head -n 1)
     [ -n "$PIN" ] && break
   done
   if [ -n "$PIN" ]; then
@@ -192,27 +199,34 @@ func pinCheck(pm string) string {
     if [ -n "$HAVE" ] && [ "$HAVE" != "$PIN" ]; then
       echo "E811: package.json pins ` + pm + ` $PIN.x but ` + pm + ` $HAVE is installed; install the pinned major (corepack enable) and retry"
       echo ` + diagnose.PinMismatch + `
-      exit 98
+      exit ` + strconv.Itoa(diagnose.PinExit) + `
     fi
   fi
 `
 }
 
 // failureReport prints what the classifier needs of a failed install, within the
-// 8 KiB tail a run keeps: the whole log when short, else its head, the lines
-// that carry a guard or a cause (the last 25), and its tail.
+// 8 KiB tail a run keeps: the whole log when short, else its head, the first 12
+// lines that carry a guard, the last 12 that carry a cause (warning lines
+// excluded from both, as the classifier drops them) and its tail.
 func failureReport() string {
-	words := make([]string, len(diagnose.InstallKeywords))
-	for i, w := range diagnose.InstallKeywords {
-		words[i] = "-e '" + w + "'"
+	words := func(list []string) string {
+		out := make([]string, len(list))
+		for i, w := range list {
+			out[i] = "-e '" + w + "'"
+		}
+		return strings.Join(out, " ")
 	}
+	const noWarn = `grep -ivE '(^|[^[:alnum:]])warn([^[:alnum:]]|$)'`
 	return `    n=$(( $(wc -c < "$LOG") + 0 ))
     if [ "$n" -le 3500 ]; then cat "$LOG"; else
       head -c 1000 "$LOG"; echo
-      echo ` + diagnose.InstallLinesMark + `
-      grep -iF ` + strings.Join(words, " ") + ` "$LOG" | tail -n 25 | cut -c1-160
+      echo ` + diagnose.InstallGuardsMark + `
+      grep -iF ` + words(diagnose.InstallGuardWords) + ` "$LOG" | ` + noWarn + ` | head -n 12 | cut -c1-160
+      echo ` + diagnose.InstallCausesMark + `
+      grep -iF ` + words(diagnose.InstallCauseWords) + ` "$LOG" | ` + noWarn + ` | tail -n 12 | cut -c1-160
       echo ` + diagnose.InstallTailMark + `
-      tail -c 2000 "$LOG"
+      tail -c 1500 "$LOG"
     fi
 `
 }

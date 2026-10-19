@@ -28,33 +28,48 @@ const SigNetwork = "infra.network"
 const SigPin = "infra.package_manager_pin"
 
 // The lines a Node gate script prints around a failed prepare (P7-AUTO-16).
-// PrepareFailed ends a failed install's report, PinMismatch a refused pin; the
-// report is the install log's head, InstallLinesMark and the log lines that
-// carry a guard or a cause (InstallKeywords), InstallTailMark and its tail.
+// PrepareFailed ends a failed install's report and PinMismatch a refused pin,
+// with the exit codes PrepareExit and PinExit. A report longer than 3500 bytes is
+// the log's head, InstallGuardsMark and the first lines that carry a guard,
+// InstallCausesMark and the last lines that carry a cause, InstallTailMark and
+// the log's tail: a guard can never be evicted by a flood of cause lines.
 const (
-	PrepareFailed    = "::nself-ci-prepare-failed::"
-	PinMismatch      = "::nself-ci-pin-mismatch::"
-	InstallLinesMark = "::nself-ci-install-lines::"
-	InstallTailMark  = "::nself-ci-install-tail::"
+	PrepareFailed     = "::nself-ci-prepare-failed::"
+	PinMismatch       = "::nself-ci-pin-mismatch::"
+	InstallGuardsMark = "::nself-ci-install-guards::"
+	InstallCausesMark = "::nself-ci-install-causes::"
+	InstallTailMark   = "::nself-ci-install-tail::"
+	PrepareExit       = 97
+	PinExit           = 98
 )
 
-// InstallKeywords are the words (matched case-insensitively, as fixed strings,
-// by the gate script's grep) of the lines ClassifyInstall's guards and causes
-// read: the script keeps the last 25 of them when a log is too long to print.
-// No quote characters: the script quotes them for sh.
-var InstallKeywords = []string{
-	"elifecycle", "command failed", "built successfully", "yn0009", "assertion", "err_assertion", "--- fail", "not ok", "panic:",
-	"lockfile", "yn0028", "in sync", "127.0.0.1", "localhost", "::1", "not found", "404", "403", "401", "402", "forbidden", "unauthorized",
-	"no matching version", "notarget", "gyp err", "npm error code", "npm err! code", "err_pnpm_", "unexpected error occurred", "yn0001",
-	"enospc", "no space left", "killed", "error: connection", "error: failedtoopensocket",
-}
+// InstallGuardWords and InstallCauseWords are the words (matched case-
+// insensitively, as fixed strings, by the gate script's grep, warning lines
+// excluded) of the lines ClassifyInstall's guards and causes read. No quote
+// characters: the script quotes them for sh.
+var (
+	InstallGuardWords = []string{
+		"elifecycle", "command failed", "built successfully", "yn0009", "assertion", "err_assertion", "--- fail", "not ok", "panic:",
+		"lockfile", "yn0028", "in sync", "127.0.0.1", "localhost", "::1", "not found", "404", "403", "401", "402", "forbidden", "unauthorized",
+		"no matching version", "notarget", "gyp err",
+	}
+	InstallCauseWords = []string{
+		"npm error code", "npm err! code", "err_pnpm_", "unexpected error occurred", "yn0001", "enospc", "no space left", "not enough space",
+		"killed", "error: connection", "error: failedtoopensocket", "dns error", "failed to lookup address",
+	}
+)
 
 // providerNetwork matches a connection failure to a well-known package, source
 // or image provider. Free text like "connection reset by peer" alone is NOT a
 // signature for a job: a test that curls its own server and sees the reset is a
 // code failure, and an infra class is retried (and can turn green). Installs
 // have their own structured causes (ClassifyInstall).
-const providerHosts = `(?:proxy\.golang\.org|sum\.golang\.org|github\.com|raw\.githubusercontent\.com|registry\.npmjs\.org|registry\.yarnpkg\.com|pypi\.org|files\.pythonhosted\.org|crates\.io|static\.crates\.io|index\.docker\.io|registry-1\.docker\.io|ghcr\.io|gcr\.io|quay\.io)`
+const providerHostNames = `(?:proxy\.golang\.org|sum\.golang\.org|github\.com|raw\.githubusercontent\.com|registry\.npmjs\.org|registry\.yarnpkg\.com|pypi\.org|files\.pythonhosted\.org|crates\.io|static\.crates\.io|index\.docker\.io|registry-1\.docker\.io|ghcr\.io|gcr\.io|quay\.io)`
+
+// providerHosts is a provider as a host: the authority of a URL, or a bare
+// host name after whitespace or a quote; never a path segment, a longer host
+// name or a suffix (`http://localhost:8080/registry.npmjs.org`).
+const providerHosts = `(?:://(?:[^/\s@]*@)?|[\s'"(])` + providerHostNames + `(?:[:/\s'")]|$)`
 
 const providerFailure = `(?:i/o timeout|connection timed out|connection reset by peer|tls handshake timeout|unexpected eof|network is unreachable|failed to connect|ssl connection timeout|recv failure)`
 
@@ -130,10 +145,13 @@ var installKilled = re(`(?m)^\S*sh: (line \d+: )? *\d+ +Killed\b`)
 // ended the install, never free text. The last such line decides.
 var (
 	installNPMCode  = re(`(?im)^npm (?:error|err!) code (\w+)`)
-	installPNPMCode = re(`(?m)^\s*(ERR_PNPM_\w+)\s`)
+	installPNPMCode = re(`(?m)^\s*(?:Error:\s*)?(ERR_PNPM_\w+)\b`)
 	installYarnErr  = re(`(?im)^(?:error An unexpected error occurred:|➤ YN0001:).*\b(etimedout|esockettimedout|econnreset|econnrefused|enetunreach|ehostunreach|enotfound|eai_again)\b|^error An unexpected error occurred:.*socket hang up`)
 	installBunErr   = re(`(?im)^error: (connectionrefused|connectionclosed|connectiontimedout|connectionreset|failedtoopensocket)\b`)
 )
+
+// installDNSText is the chained cause pnpm 11+ prints for an unresolvable host.
+var installDNSText = re(`(?i)dns error|failed to lookup address|name or service not known|temporary failure in name resolution`)
 
 var installDNSCodes = map[string]bool{"ENOTFOUND": true, "EAI_AGAIN": true}
 
@@ -194,7 +212,11 @@ func ClassifyInstall(log string) Diagnosis {
 	}
 	code := lastCode(installNPMCode, log)
 	if code == "" {
-		if c := lastCode(installPNPMCode, log); c == "ERR_PNPM_META_FETCH_FAIL" || c == "ERR_PNPM_FETCH_429" || strings.HasPrefix(c, "ERR_PNPM_FETCH_5") {
+		c := lastCode(installPNPMCode, log)
+		switch {
+		case installDNSText.MatchString(log) && (strings.HasPrefix(c, "ERR_PNPM_META_FETCH") || strings.HasPrefix(c, "ERR_PNPM_TARBALL_FETCH")):
+			code = "ENOTFOUND" // pnpm 11+ names the chained cause: "dns error", "failed to lookup address"
+		case strings.HasPrefix(c, "ERR_PNPM_META_FETCH") || strings.HasPrefix(c, "ERR_PNPM_TARBALL_FETCH") || c == "ERR_PNPM_FETCH_429" || strings.HasPrefix(c, "ERR_PNPM_FETCH_5"):
 			code = "ETIMEDOUT" // an unreachable or failing registry
 		}
 	}
