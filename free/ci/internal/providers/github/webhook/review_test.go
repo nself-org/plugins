@@ -193,3 +193,40 @@ func TestRepoNameLengthBound(t *testing.T) {
 	_, err := r.deliver("push", sharedSecret, body)
 	wantE706(t, err, "10 KB repository name")
 }
+
+// TestCrossFamilyReviewFixes pins the valid findings of the cross-family review: a null-SHA dispatch
+// revision is refused, SHA comparison ignores hex case, a tag that moved is no longer current on
+// refetch, and a protected-branch lookup keeps the slash of a branch name (GitHub accepts the literal
+// slash on the branches, git/ref and compare endpoints, checked against the public API).
+func TestCrossFamilyReviewFixes(t *testing.T) {
+	ctx := context.Background()
+	r := refetchRig(t)
+	zero := replace(fixture(t, "repository_dispatch.json"), shaD, strings.Repeat("0", 40))
+	if _, err := r.deliver("repository_dispatch", repoSecret, zero); err == nil || !strings.Contains(err.Error(), "declined") {
+		t.Fatalf("null revision = %v", err)
+	}
+	r.gh.set("/repos/o/r/git/ref/heads/main", 200, `{"object":{"type":"commit","sha":"`+strings.ToUpper(shaA)+`"}}`)
+	if f, err := r.deliver("push", repoSecret, fixture(t, "push.json")); err != nil || f.HeadCurrent.Value == nil || !*f.HeadCurrent.Value {
+		t.Fatalf("upper-case sha from the api = %+v, %v", f.HeadCurrent, err)
+	}
+	tag := deliveredFacts(t, r, "push", "push_tag.json")
+	got, err := r.src.Refetch(ctx, tag)
+	if err != nil || got.HeadCurrent.Value == nil || !*got.HeadCurrent.Value {
+		t.Fatalf("current tag = %+v, %v", got.HeadCurrent, err)
+	}
+	r.gh.set("/repos/o/r/git/tags/"+strings.Repeat("e", 40), 200, `{"object":{"type":"commit","sha":"`+shaD+`"}}`)
+	got, err = r.src.Refetch(ctx, tag)
+	if err != nil || got.HeadCurrent.Value == nil || *got.HeadCurrent.Value {
+		t.Fatalf("moved tag = %+v, %v", got.HeadCurrent, err)
+	}
+	r.gh.set("/repos/o/r/branches/release/v1", 200, `{"protected":true}`)
+	body := replace(fixture(t, "pr_fork_opened.json"), `"base":{"ref":"main"`, `"base":{"ref":"release/v1"`)
+	f, err := r.deliver("pull_request", repoSecret, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = r.src.Refetch(ctx, f)
+	if err != nil || got.ProtectedRef.Value == nil || !*got.ProtectedRef.Value {
+		t.Fatalf("slashed base branch = %+v, %v", got.ProtectedRef, err)
+	}
+}

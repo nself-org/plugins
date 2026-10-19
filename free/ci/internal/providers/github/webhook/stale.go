@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/providers/rest"
 )
 
 // staleBudget is the whole time the check may take.
@@ -30,17 +31,13 @@ type refObject struct {
 }
 
 // refObjectOf reads the object a ref points at (ref is "heads/main" or "tags/v1").
-func (s *Source) refObjectOf(ctx context.Context, repo, ref string) (refObject, bool) {
+func refObjectOf(ctx context.Context, c *rest.Client, repo, ref string) (refObject, bool) {
 	var out refObject
 	seg, ok := refSegments(ref)
 	if !ok {
 		return out, false
 	}
-	c, err := s.api(ctx)
-	if err != nil {
-		return out, false
-	}
-	if _, err = get(ctx, c, "/repos/{owner}/{repo}/git/ref/"+seg, repoParams(repo), &out); err != nil {
+	if _, err := get(ctx, c, "/repos/{owner}/{repo}/git/ref/"+seg, repoParams(repo), &out); err != nil {
 		return out, false
 	}
 	return out, out.Object.SHA != ""
@@ -53,11 +50,15 @@ func (s *Source) headCurrent(ctx context.Context, f model.TriggerFacts, want str
 	defer cancel()
 	switch f.Kind {
 	case "push", "tag":
-		got, ok := s.refObjectOf(ctx, f.Repo, strings.TrimPrefix(f.Ref, "refs/"))
+		c, err := s.api(ctx)
+		if err != nil {
+			return false, false
+		}
+		got, ok := refObjectOf(ctx, c, f.Repo, strings.TrimPrefix(f.Ref, "refs/"))
 		if !ok {
 			return false, false
 		}
-		return got.Object.SHA == want, true
+		return strings.EqualFold(got.Object.SHA, want), true
 	case "pull_request":
 		c, err := s.api(ctx)
 		if err != nil {
@@ -73,29 +74,34 @@ func (s *Source) headCurrent(ctx context.Context, f model.TriggerFacts, want str
 		if _, err = get(ctx, c, "/repos/{owner}/{repo}/pulls/{number}", params, &pr); err != nil || pr.Head.SHA == "" {
 			return false, false
 		}
-		return pr.Head.SHA == want, true
+		return strings.EqualFold(pr.Head.SHA, want), true
 	}
 	return false, false
 }
 
-// resolveTag returns the commit a tag points at (an annotated tag is dereferenced once).
+// resolveTag returns the commit a tag points at, within the stale budget.
 func (s *Source) resolveTag(ctx context.Context, repo, tag string) (string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, staleBudget)
 	defer cancel()
-	got, ok := s.refObjectOf(ctx, repo, "tags/"+tag)
+	c, err := s.api(ctx)
+	if err != nil {
+		return "", false
+	}
+	return resolveTagWith(ctx, c, repo, tag)
+}
+
+// resolveTagWith reads the tag ref and dereferences an annotated tag once.
+func resolveTagWith(ctx context.Context, c *rest.Client, repo, tag string) (string, bool) {
+	got, ok := refObjectOf(ctx, c, repo, "tags/"+tag)
 	if !ok {
 		return "", false
 	}
 	sha := got.Object.SHA
 	if got.Object.Type == "tag" {
-		c, err := s.api(ctx)
-		if err != nil {
-			return "", false
-		}
 		var t refObject
 		params := repoParams(repo)
 		params["sha"] = sha
-		if _, err = get(ctx, c, "/repos/{owner}/{repo}/git/tags/{sha}", params, &t); err != nil || t.Object.Type != "commit" {
+		if _, err := get(ctx, c, "/repos/{owner}/{repo}/git/tags/{sha}", params, &t); err != nil || t.Object.Type != "commit" {
 			return "", false
 		}
 		sha = t.Object.SHA

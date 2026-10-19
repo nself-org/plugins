@@ -8,12 +8,15 @@ package webhook
 //          as a fact (SHA not reachable) once the repository itself has been read with the same token.
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
+
+var errUnresolvedTag = errors.New("tag could not be resolved")
 
 var permissions = map[string]bool{"admin": true, "maintain": true, "write": true, "triage": true, "read": true, "none": true}
 
@@ -35,6 +38,8 @@ func (r *fetch) change() {
 		association = r.pullRequest()
 	} else if f.Kind == "push" {
 		r.pushHead()
+	} else if f.Kind == "tag" {
+		r.tagHead()
 	}
 	r.firstTime(association)
 	r.permissionAndBot()
@@ -187,5 +192,21 @@ func (r *fetch) pushHead() {
 	var ref refObject
 	if _, ok = r.call("/repos/{owner}/{repo}/git/ref/heads/"+seg, r.params(), &ref); ok && ref.Object.SHA != "" {
 		r.f.HeadCurrent = fact(strings.EqualFold(ref.Object.SHA, r.f.Revision), "api", r.now)
+	}
+}
+
+// tagHead re-resolves the tag: HeadCurrent is true only while it still points at the revision (an
+// annotated tag is dereferenced to its commit, as at delivery).
+func (r *fetch) tagHead() {
+	tag, isTag := strings.CutPrefix(r.f.Ref, "refs/tags/")
+	if !isTag || tag == "" {
+		return
+	}
+	r.calls++
+	if rev, ok := resolveTagWith(r.ctx, r.c, r.f.Repo, tag); ok {
+		r.okCalls++
+		r.f.HeadCurrent = fact(rev == r.f.Revision, "api", r.now)
+	} else if r.firstErr == nil {
+		r.firstErr = errUnresolvedTag
 	}
 }

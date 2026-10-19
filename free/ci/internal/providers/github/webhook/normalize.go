@@ -149,7 +149,7 @@ func (s *Source) fromCreate(ctx context.Context, f model.TriggerFacts, p ghPaylo
 
 func fromDispatch(f model.TriggerFacts, p ghPayload) (model.TriggerFacts, error) {
 	rev := strings.ToLower(p.ClientPayload.Revision)
-	if !isHex40(rev) {
+	if !isHex40(rev) || allZero(rev) {
 		return f, unsupported("repository_dispatch needs client_payload.revision (40 hex)")
 	}
 	f.Kind, f.Revision, f.RevisionSource = "api", rev, "caller"
