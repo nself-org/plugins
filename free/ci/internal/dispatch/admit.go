@@ -98,7 +98,7 @@ func Admit(ctx context.Context, st *store.Store, r Request) (Admitted, error) {
 		req.Incarnation = max(r.Incarnation, 1)
 	}
 	if r.Node {
-		req.NodeID = r.Placement.RunnerID
+		req.NodeID, req.Project = r.Placement.RunnerID, r.Job.Project
 	}
 	ordered := seal()
 	stored := make([]store.AdmitStep, 0, len(ordered))
@@ -158,6 +158,8 @@ func nodeReason(state string) model.PlacementReason {
 		return model.NodeMaintenance
 	case "revoked":
 		return model.NodeRevoked
+	case "unauthorized", "unknown":
+		return model.NodeDiscovered // not authorized for the project
 	}
 	return model.NodeOffline
 }

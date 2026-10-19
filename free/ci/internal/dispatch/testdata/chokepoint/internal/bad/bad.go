@@ -27,3 +27,11 @@ func Leased(s *store.Store) error { return s.Transition(ctx, "a", "queued", "lea
 
 // Reflection by index.
 func ReflectIndex(s *store.Store) { reflect.ValueOf(s).Method(0).Call(nil) }
+
+// A method value of Transition, and a constant target, are the same bypass.
+func Alias(s *store.Store) any { f := s.Transition; return f }
+
+func Variable(s *store.Store) error {
+	const to = "lea" + "sed"
+	return s.Transition(ctx, "a", "queued", to, detail)
+}

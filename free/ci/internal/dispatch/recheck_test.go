@@ -5,49 +5,74 @@ package dispatch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
-// TestDispatchNodeRecheck: a node drained after the world was built gets no lease.
+// TestDispatchNodeRecheck: a node drained, or deauthorized for the project,
+// after the world was built gets no lease: admission re-reads the node row.
 func TestDispatchNodeRecheck(t *testing.T) {
-	st := openStore(t)
-	node := testRunner("node-r", "lan", 2)
-	live := liveWorld(st, nil, node)
-	drained := false
-	world := func(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
-		w, digest, err := live(ctx, p) // registers the node, online
-		if err == nil && !drained {
-			drained = true
-			n, gerr := st.NodeGet(ctx, "node-r")
-			if gerr != nil {
-				return w, digest, gerr
+	for _, c := range []struct {
+		name   string
+		change func(context.Context, *store.Store, store.NodeRecord) error
+		reason model.PlacementReason
+	}{
+		{"drained", func(ctx context.Context, st *store.Store, n store.NodeRecord) error {
+			n.State = "draining"
+			return st.NodeSetState(ctx, n, "test", "drain")
+		}, model.NodeDraining},
+		{"deauthorized", func(ctx context.Context, st *store.Store, n store.NodeRecord) error {
+			var cap model.Capability
+			if err := json.Unmarshal(n.Capability, &cap); err != nil {
+				return err
 			}
-			n.State = "draining" // the operator drains it after the snapshot
-			if serr := st.NodeSetState(ctx, n, "test", "drain"); serr != nil {
-				return w, digest, serr
+			cap.Lifecycle.AuthorizedProjects = []string{}
+			doc, err := json.Marshal(cap)
+			n.Capability = doc
+			if err != nil {
+				return err
 			}
-		}
-		return w, digest, err
-	}
-	d := newDispatcher(t, Config{Store: st, World: world, Transport: fakeTransport{}})
-	id := queueAttempt(t, st, "pipe", "proj", "a")
-	e, _ := d.enqueue(testQueued(id))
-	if err := d.Tick(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if resolved(e) {
-		t.Fatalf("a drained node got a lease: %+v", e.res)
-	}
-	if reason, _, ok, _ := st.Refusal(context.Background(), id); !ok || reason != string(model.NodeDraining) {
-		t.Fatalf("reason %q (recorded %v)", reason, ok)
-	}
-	if snap, _ := st.WorldSnapshot(context.Background()); len(snap.Active) != 0 {
-		t.Fatal("a lease exists for the drained node")
+			return st.NodeSetAuthorization(ctx, n, "test")
+		}, model.NodeDiscovered},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			st := openStore(t)
+			live := liveWorld(st, nil, testRunner("node-r", "lan", 2))
+			changed := false
+			world := func(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
+				w, digest, err := live(ctx, p) // registers the node, online and authorized
+				if err != nil || changed {
+					return w, digest, err
+				}
+				changed = true
+				n, err := st.NodeGet(ctx, "node-r")
+				if err == nil {
+					err = c.change(ctx, st, n) // the operator acts after the snapshot
+				}
+				return w, digest, err
+			}
+			d := newDispatcher(t, Config{Store: st, World: world, Transport: fakeTransport{}})
+			id := queueAttempt(t, st, "pipe", "proj", "a")
+			e, _ := d.enqueue(testQueued(id))
+			if err := d.Tick(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if resolved(e) {
+				t.Fatalf("a %s node got a lease: %+v", c.name, e.res)
+			}
+			if reason, _, ok, _ := st.Refusal(context.Background(), id); !ok || reason != string(c.reason) {
+				t.Fatalf("reason %q (recorded %v), want %s", reason, ok, c.reason)
+			}
+			if snap, _ := st.WorldSnapshot(context.Background()); len(snap.Active) != 0 {
+				t.Fatal("a lease exists for the unavailable node")
+			}
+		})
 	}
 }
 

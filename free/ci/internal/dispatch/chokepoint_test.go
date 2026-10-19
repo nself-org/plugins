@@ -35,10 +35,24 @@ var (
 		"internal/dispatch.Admit":       true,
 		"internal/lease.(Engine).Grant": true,
 	}
-	// definerDirs may call the transition machinery with "leased" (apply inside
-	// the admission transactions); nowhere else may move an attempt to leased.
+	// definerDirs own the transition machinery (apply inside the admission
+	// transactions); nowhere else may move an attempt to leased.
 	definerDirs = map[string]bool{"internal/store": true}
-	localFiles  = map[string]bool{"internal/run/attempt.go": true, "internal/run/dispatch_hook.go": true}
+	// transitionUsers are the functions outside the store that name
+	// Store.Transition today, reviewed one by one: none moves an attempt to
+	// leased. Store.Transition itself accepts queued -> leased (the P7-CI-31
+	// store tests rely on it, and this Ticket cannot edit transitions.go; debt),
+	// so a NEW user must be added here by a reviewer. A variable or constant
+	// target, a method value or a wrapper all trip the scan the same way.
+	transitionUsers = map[string]bool{
+		"internal/dispatch.(Dispatcher).lose": true, // leased/running -> lost
+		"internal/lease.(Engine).PollHosted":  true, // leased -> running (hosted liveness)
+		"internal/run.Recover":                true, // lost -> retryable | needs-operator
+		"internal/run.strandAttempts":         true, // queued -> cancelled, finalizing -> failed
+		"internal/run.CreateAttempt":          true, // queued -> cancelled (refused admission)
+		"internal/run.(runState).trans":       true, // the run loop's own steps; its callers are listed below
+	}
+	localFiles = map[string]bool{"internal/run/attempt.go": true, "internal/run/dispatch_hook.go": true}
 )
 
 // banned are the admission functions only the chokepoint may name.
@@ -57,14 +71,18 @@ func bannedUse(n ast.Node, declName *ast.Ident, usesReflect bool) string {
 	switch x := n.(type) {
 	case *ast.CallExpr:
 		// Transition(ctx, id, from, to, detail) with to == "leased" creates a leased
-		// attempt with no lease row, reservation or limit check.
-		if sel, ok := x.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Transition" && len(x.Args) > 3 {
-			if lit, ok := x.Args[3].(*ast.BasicLit); ok && lit.Kind == token.STRING && strings.Trim(lit.Value, "\"`") == "leased" {
-				return "Transition(leased)"
+		// attempt with no lease row, reservation or limit check; trans(id, from, to,
+		// class) is the run loop's wrapper of it.
+		if sel, ok := x.Fun.(*ast.SelectorExpr); ok {
+			target := map[string]int{"Transition": 3, "trans": 2}[sel.Sel.Name]
+			if target > 0 && len(x.Args) > target {
+				if lit, ok := x.Args[target].(*ast.BasicLit); ok && lit.Kind == token.STRING && strings.Trim(lit.Value, "\"`") == "leased" {
+					return "Transition(leased)"
+				}
 			}
 		}
 	case *ast.SelectorExpr:
-		if banned[x.Sel.Name] || reflective[x.Sel.Name] || usesReflect && x.Sel.Name == "Method" {
+		if banned[x.Sel.Name] || reflective[x.Sel.Name] || usesReflect && x.Sel.Name == "Method" || x.Sel.Name == "Transition" {
 			return x.Sel.Name
 		}
 	case *ast.Ident:
@@ -129,6 +147,12 @@ func scanChokepoint(t *testing.T, root string) (violations []string, files int) 
 					if star, ok := recv.(*ast.StarExpr); ok {
 						recv = star.X
 					}
+					switch g := recv.(type) { // a generic receiver T[K] names the same type
+					case *ast.IndexExpr:
+						recv = g.X
+					case *ast.IndexListExpr:
+						recv = g.X
+					}
 					if id, ok := recv.(*ast.Ident); ok {
 						owner = "(" + id.Name + ")." + fn.Name.Name
 					}
@@ -138,8 +162,9 @@ func scanChokepoint(t *testing.T, root string) (violations []string, files int) 
 				name := bannedUse(n, declName, usesReflect)
 				switch {
 				case name == "":
-				case name == "Transition(leased)" && definerDirs[dir]:
-				case reflective[name], name == "Method", name == "Transition(leased)", name == "LocalAdmit" && !localFiles[rel], name != "LocalAdmit" && !chokeFuncs[dir+"."+owner]:
+				case (name == "Transition(leased)" || name == "Transition") && definerDirs[dir]:
+				case name == "Transition" && transitionUsers[dir+"."+owner]:
+				case reflective[name], name == "Method", name == "Transition(leased)", name == "Transition", name == "LocalAdmit" && !localFiles[rel], name != "LocalAdmit" && name != "Transition" && !chokeFuncs[dir+"."+owner]:
 					if v := rel + ": " + owner + " uses " + name; !seen[v] { // a selector and its identifier are two nodes
 						seen[v] = true
 						violations = append(violations, v)
@@ -162,7 +187,10 @@ func TestAdmitChokepoint(t *testing.T) {
 	want := []string{
 		"internal/bad/bad.go: Closure uses AdmitPlacement",
 		"internal/bad/bad.go: Grantor uses Grant",
+		"internal/bad/bad.go: Alias uses Transition",
+		"internal/bad/bad.go: Leased uses Transition",
 		"internal/bad/bad.go: Leased uses Transition(leased)",
+		"internal/bad/bad.go: Variable uses Transition",
 		"internal/bad/bad.go: ReflectIndex uses Method",
 		"internal/bad/bad.go: MethodExpr uses Grant",
 		"internal/bad/bad.go: Reflect2 uses MethodByName",

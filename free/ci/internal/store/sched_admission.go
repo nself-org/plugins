@@ -20,7 +20,11 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"errors"
+	"slices"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 //go:embed migrations/sched-admission/*.sql
@@ -40,6 +44,9 @@ type AdmitRequest struct {
 	// the transaction, so a node revoked or drained since the world was built
 	// never gets a lease. Empty for a local or provider-hosted runner.
 	NodeID string
+	// Project is the project id the node must still authorize (the job's
+	// Project in the scheduler); empty skips that check.
+	Project string
 	// Incarnation > 0 issues a fenced remote lease (LeaseEpoch); 0 is a local lease.
 	Incarnation int64
 }
@@ -102,8 +109,8 @@ func (s *Store) AdmitPlacement(ctx context.Context, host string, d Demand, r Adm
 			return coded("E604", hostCapacityMessage)
 		}
 		if r.NodeID != "" {
-			var state string
-			if err := tx.QueryRowContext(ctx, "SELECT state FROM node WHERE id=?", r.NodeID).Scan(&state); err != nil {
+			var state, lifecycle string
+			if err := tx.QueryRowContext(ctx, "SELECT state,lifecycle FROM node WHERE id=?", r.NodeID).Scan(&state, &lifecycle); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					return &NodeUnavailableError{State: "unknown"}
 				}
@@ -111,6 +118,13 @@ func (s *Store) AdmitPlacement(ctx context.Context, host string, d Demand, r Adm
 			}
 			if state != "online" {
 				return &NodeUnavailableError{State: state}
+			}
+			var lc model.CapabilityLifecycle
+			if err := json.Unmarshal([]byte(lifecycle), &lc); err != nil {
+				return coded("E607", "node lifecycle is unreadable")
+			}
+			if lc.Discovered || lc.RevokedAt != nil || r.Project != "" && !slices.Contains(lc.AuthorizedProjects, r.Project) {
+				return &NodeUnavailableError{State: "unauthorized"}
 			}
 		}
 		counts, err := admitCounts(ctx, tx, v)

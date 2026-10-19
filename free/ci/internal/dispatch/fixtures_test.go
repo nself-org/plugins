@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/planview"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/trust"
@@ -85,7 +86,13 @@ func testQueued(attempt string) Job {
 // registerNode puts a remote runner in the node registry as online, the way
 // world.Build finds it; admission re-reads that row. Idempotent.
 func registerNode(st *store.Store, r sched.Runner) {
-	doc, err := json.Marshal(r.Capability)
+	// the stored document must pass the capability schema (the registry decodes it), so it is built from a valid one
+	c, err := planview.LocalCapability(planview.LocalFacts{Project: "project", Platform: "linux/amd64", CPUs: 8, MemMB: 8192, Now: time.Now()})
+	if err != nil {
+		panic(err)
+	}
+	c.Identity.ID, c.Identity.Name, c.Identity.Transport = r.ID, r.ID, "ssh" // the stored kind is a schema enum; the world runner keeps its fake kind
+	doc, err := json.Marshal(c)
 	if err != nil {
 		panic(err)
 	}
