@@ -84,7 +84,7 @@ var knownKeys = map[string]map[string]bool{
 		"required_linear_history", "allow_force_pushes", "allow_deletions", "block_creations",
 		"required_conversation_resolution", "lock_branch", "allow_fork_syncing", "required_signatures"),
 	"flag":                          keys("url", "enabled"),
-	"required_status_checks":        keys("url", "strict", "contexts", "contexts_url", "checks"),
+	"required_status_checks":        keys("url", "strict", "contexts", "contexts_url", "checks", "enforcement_level"), // enforcement_level: deprecated, derived by GitHub, not settable
 	"required_status_checks.check":  keys("context", "app_id"),
 	"required_pull_request_reviews": keys("url", "dismiss_stale_reviews", "require_code_owner_reviews", "require_last_push_approval", "required_approving_review_count", "dismissal_restrictions", "bypass_pull_request_allowances"),
 	"principals":                    keys("url", "users_url", "teams_url", "apps_url", "users", "teams", "apps"),

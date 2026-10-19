@@ -43,6 +43,7 @@ type protectFlags struct {
 	restore            string
 	audit, appID       int
 	auditSet           bool // --audit was given (so --audit 0 is an error, not "no audit")
+	restoreSet         bool // --restore was given (so an empty value is an error, not "apply")
 }
 
 func newProtectFlagSet(f *protectFlags) *flag.FlagSet {
@@ -76,14 +77,17 @@ func runPolicyProtect(args []string) int {
 	var f protectFlags
 	fs := newProtectFlagSet(&f)
 	pos, err := parseMixed(fs, args)
-	fs.Visit(func(fl *flag.Flag) { f.auditSet = f.auditSet || fl.Name == "audit" })
+	fs.Visit(func(fl *flag.Flag) {
+		f.auditSet = f.auditSet || fl.Name == "audit"
+		f.restoreSet = f.restoreSet || fl.Name == "restore"
+	})
 	modes := 0
-	for _, on := range []bool{f.hook, f.auditSet, f.restore != ""} {
+	for _, on := range []bool{f.hook, f.auditSet, f.restoreSet} {
 		if on {
 			modes++
 		}
 	}
-	if err != nil || len(pos) != 0 || modes > 1 || (f.auditSet && f.audit <= 0) || f.appID <= 0 || (f.dryRun && (f.hook || f.auditSet)) {
+	if err != nil || len(pos) != 0 || modes > 1 || (f.auditSet && f.audit <= 0) || (f.restoreSet && f.restore == "") || f.appID <= 0 || (f.dryRun && (f.hook || f.auditSet)) {
 		return usageErr(protectUsage)
 	}
 	root, err := evidenceRoot("")
@@ -104,7 +108,7 @@ func (e protectEnv) dispatch(ctx context.Context, f protectFlags) int {
 	switch {
 	case f.hook: // needs the repository only to learn its default branch, and only without --branch
 		err = e.installHook(ctx, f)
-	case f.restore != "": // the snapshot names its repository
+	case f.restoreSet: // the snapshot names its repository
 		err = e.restoreSnapshot(ctx, f)
 	default:
 		var repo string
@@ -259,6 +263,10 @@ func (e protectEnv) restoreSnapshot(ctx context.Context, f protectFlags) error {
 	}
 	before, err := (protect.Client{Run: e.run}).Restore(ctx, snap, filepath.Join(e.home, "protect"), e.now())
 	if err != nil {
+		var pe *protect.Error
+		if before != "" && !errors.As(err, &pe) {
+			err = fmt.Errorf("%w (what was there before is saved to %s; put it back with --restore %s)", err, before, before)
+		}
 		return e.noPlanHint(err)
 	}
 	fmt.Fprintf(e.out, "%s %s: protection restored from %s; what it replaced is saved to %s\n", snap.Repo, snap.Branch, f.restore, before)

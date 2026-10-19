@@ -177,3 +177,12 @@ func TestNormaliseRefusesUnknownNestedKeys(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// TestNormaliseAcceptsEnforcementLevel: GitHub still answers the deprecated
+// enforcement_level inside required_status_checks; it is derived, not settable.
+func TestNormaliseAcceptsEnforcementLevel(t *testing.T) {
+	doc := strings.Replace(string(fixture(t, "live_full.json")), `"strict": false,`, `"strict": false, "enforcement_level": "non_admins",`, 1)
+	if _, err := Normalise([]byte(doc)); err != nil {
+		t.Fatal(err)
+	}
+}

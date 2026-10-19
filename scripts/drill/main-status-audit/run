@@ -45,6 +45,10 @@ audit() {
 		echo "main-status-audit: $1: the audit did not run (exit $rc): $(head -c 300 "$tmp/audit.err") $(head -c 300 "$out")" >&2
 		return 2
 	fi
+	if [ "$(jq -r '.data.truncated' "$out")" = "true" ]; then
+		echo "main-status-audit: $1: more than the newest $(jq -r '.data.checked' "$out") commits are in the window, so the audit is incomplete; lower AUDIT_DAYS (now $days)" >&2
+		return 2
+	fi
 	echo "$1 $2: $(jq -r '.data.checked' "$out") commit(s) in the last $days day(s), $n without a green nself-ci"
 	jq -r '.data.missing[] | "  \(.sha[0:12]) \(.subject)"' "$out"
 	[ "$n" -eq 0 ]

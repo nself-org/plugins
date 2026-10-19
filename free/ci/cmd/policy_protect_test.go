@@ -183,7 +183,7 @@ func TestPolicyProtectAuditExit(t *testing.T) {
 }
 
 func TestPolicyProtectUsage(t *testing.T) {
-	for _, args := range [][]string{{"--hook", "--audit", "3"}, {"extra"}, {"--audit", "-1"}, {"--audit", "0"}, {"--hook", "--dry-run"}, {"--app-id", "0"}} {
+	for _, args := range [][]string{{"--hook", "--audit", "3"}, {"extra"}, {"--audit", "-1"}, {"--audit", "0"}, {"--restore", ""}, {"--hook", "--dry-run"}, {"--app-id", "0"}} {
 		var code int
 		captureStderr(t, func() { code = runPolicyProtect(args) })
 		if code != 1 {
@@ -254,7 +254,7 @@ func TestPolicyProtectRestoreNeedsNoRemote(t *testing.T) {
 	snapPath := filepath.Join(t.TempDir(), "s.json")
 	data, _ := json.Marshal(map[string]any{"repo": "example-org/example-repo", "branch": "main", "taken_at": "x", "protection": json.RawMessage(live)})
 	_ = os.WriteFile(snapPath, data, 0o600)
-	if code := env.dispatch(context.Background(), protectFlags{restore: snapPath, appID: 15368}); code != 0 {
+	if code := env.dispatch(context.Background(), protectFlags{restore: snapPath, restoreSet: true, appID: 15368}); code != 0 {
 		t.Fatalf("exit = %d, out = %s", code, out)
 	}
 	for _, c := range f.calls {
