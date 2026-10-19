@@ -119,7 +119,13 @@ func budgetCmd(o options, stderr io.Writer) int {
 		return 2
 	}
 	keep := func(name string) bool {
-		return !(o.onlyCore && strings.HasPrefix(name, "ci.service_")) && !informational[name]
+		// The v1.4 gate is frozen: its absolute time is the yardstick of the
+		// relative budget, not something to guard (a noisy runner would fail a
+		// budget on code nobody changes).
+		if informational[name] || strings.HasSuffix(name, ".v14") {
+			return false
+		}
+		return !(o.onlyCore && strings.HasPrefix(name, "ci.service_"))
 	}
 	b, err := bench.BudgetFromResult(res, o.note, keep)
 	if err != nil {

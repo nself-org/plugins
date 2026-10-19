@@ -72,8 +72,8 @@ func TestWriteBudget(t *testing.T) {
 	if !strings.Contains(s, `"perfbench-budget/v1"`) || !strings.Contains(s, `"ci.e2e_tiny.v15": 625`) {
 		t.Fatalf("budget:\n%s", s)
 	}
-	if strings.Contains(s, "service_start") || strings.Contains(s, "exec_baseline") {
-		t.Fatalf("service and informational metrics must get no ceiling:\n%s", s)
+	if strings.Contains(s, "service_start") || strings.Contains(s, "exec_baseline") || strings.Contains(s, ".v14") {
+		t.Fatalf("service, informational and v1.4 metrics must get no ceiling:\n%s", s)
 	}
 	if got := realMain([]string{"-write-budget", out}, &so, &se); got != 2 {
 		t.Fatalf("missing -in must be a usage error, got %d", got)
