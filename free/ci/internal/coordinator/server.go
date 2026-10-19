@@ -173,8 +173,12 @@ func AddFlags(fs *flag.FlagSet) (addrs func() map[string]string) {
 }
 
 // checkSecret keeps the v1.4 refusal text and adds the per-repo secrets of registered ingresses.
-func (c *Coordinator) checkSecret() error {
-	if c.cfg.Secret != "" || c.cfg.Insecure || anySecrets(registeredIngresses()) {
+func (c *Coordinator) checkSecret() error { return CheckSecret(c.cfg.Secret, c.cfg.Insecure) }
+
+// CheckSecret is the start refusal of v1.4, extended by the per-repo secrets of registered ingresses. The
+// serve command calls it before it opens the store, so a refused start leaves nothing behind.
+func CheckSecret(secret string, insecure bool) error {
+	if secret != "" || insecure || anySecrets(registeredIngresses()) {
 		return nil
 	}
 	return newErr("", ReasonNoSecret, "refusing to start: no webhook secret configured (--secret or GITHUB_WEBHOOK_SECRET); pass --insecure to start anyway (NOT recommended — this exposes an unauthenticated arbitrary-repo code-execution endpoint)")

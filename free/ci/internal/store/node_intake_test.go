@@ -210,3 +210,45 @@ func TestIntakeRequeueDoesNotSpendAnAttempt(t *testing.T) {
 		t.Fatalf("after clean shutdowns = %+v", got)
 	}
 }
+
+func TestIntakeFailedDeliveryCanBeRedelivered(t *testing.T) {
+	ctx := context.Background()
+	s, _ := intakeStore(t)
+	a, _ := s.IntakeEnqueue(ctx, req("d1", "k"))
+	_, _, _ = s.IntakeClaim(ctx, "me")
+	if err := s.IntakeFinish(ctx, a.ID, "me", "", "error: checkout failed", false); err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.IntakeEnqueue(ctx, req("d1", "k"))
+	if err != nil || b.Kind != IntakeEnqueued || b.ID == a.ID {
+		t.Fatalf("redelivery of a failed run = %+v, %v; want a new run", b, err)
+	}
+	if c, _ := s.IntakeEnqueue(ctx, req("d1", "k")); c.Kind != IntakeDuplicate || c.ID != b.ID {
+		t.Fatalf("a second redelivery while it is live = %+v, want duplicate of the new row", c)
+	}
+}
+
+func TestIntakeDoneWindowNeedsSameSourceAndEvent(t *testing.T) {
+	ctx := context.Background()
+	s, _ := intakeStore(t)
+	push := req("d1", "k")
+	push.Event = "push"
+	a, _ := s.IntakeEnqueue(ctx, push)
+	_, _, _ = s.IntakeClaim(ctx, "me")
+	_ = s.IntakeFinish(ctx, a.ID, "me", "run", "exit=0", true)
+	pr := req("d2", "k")
+	pr.Event = "pull_request"
+	if b, _ := s.IntakeEnqueue(ctx, pr); b.Kind != IntakeEnqueued {
+		t.Fatalf("a PR event for a SHA that only a push ran = %+v, want its own run", b)
+	}
+	mirror := req("d3", "k")
+	mirror.Event, mirror.Source = "push", "gitea"
+	if c, _ := s.IntakeEnqueue(ctx, mirror); c.Kind != IntakeEnqueued {
+		t.Fatalf("a mirror provider's push = %+v, want its own run", c)
+	}
+	again := req("d4", "k")
+	again.Event = "push"
+	if d, _ := s.IntakeEnqueue(ctx, again); d.Kind != IntakeCoalesced || d.ID != a.ID {
+		t.Fatalf("the same push redelivered under a new id = %+v, want coalesced", d)
+	}
+}

@@ -1,7 +1,7 @@
 CREATE TABLE intake (
  seq INTEGER PRIMARY KEY AUTOINCREMENT,
  id TEXT NOT NULL UNIQUE,
- source TEXT NOT NULL, delivery_id TEXT NOT NULL DEFAULT '',
+ source TEXT NOT NULL, event TEXT NOT NULL DEFAULT '', delivery_id TEXT NOT NULL DEFAULT '',
  project TEXT NOT NULL, revision TEXT NOT NULL, trigger_class TEXT NOT NULL, policy_digest TEXT NOT NULL,
  semantic_key TEXT NOT NULL, pipeline TEXT NOT NULL DEFAULT '', facts BLOB NOT NULL,
  webhook INTEGER NOT NULL DEFAULT 0 CHECK(webhook IN (0,1)),

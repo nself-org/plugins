@@ -114,6 +114,10 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 	if secret == "" && f.insecure {
 		fmt.Fprintln(os.Stderr, "warning: GITHUB_WEBHOOK_SECRET not set: webhook signature verification DISABLED (insecure)")
 	}
+	if err = coordinator.CheckSecret(secret, f.insecure); err != nil { // before anything is created on disk
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
 	unsandboxed := f.unsandboxed || strings.EqualFold(os.Getenv("NSELF_CI_ALLOW_UNSANDBOXED"), "true")
 	f.unsandboxed = unsandboxed
 	if err = os.MkdirAll(f.workdir, 0o750); err != nil {
@@ -151,8 +155,9 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 
 // pipelineFacts are the source facts the webhook and manual routes store with a trigger.
 type pipelineFacts struct {
-	Trigger  string `json:"trigger"`
-	CloneURL string `json:"clone_url"`
+	Trigger   string          `json:"trigger"`
+	CloneURL  string          `json:"clone_url"`
+	Synthetic json.RawMessage `json:"synthetic"`
 }
 
 // dispatchPipeline runs one queued trigger: clone the revision into a fresh directory, plan it and run the
@@ -161,10 +166,18 @@ func dispatchPipeline(home string, f *v15ServeFlags) coordinator.Dispatcher {
 	return func(ctx context.Context, row store.IntakeRow) (coordinator.RunResult, error) {
 		var facts pipelineFacts
 		_ = json.Unmarshal(row.Facts, &facts)
-		if facts.CloneURL == "" {
-			facts.CloneURL = "https://github.com/" + row.Project + ".git"
+		if facts.Synthetic != nil { // runner-demand pipelines are P7-HOST work: fail closed rather than run the repo default
+			return coordinator.RunResult{}, errors.New("synthetic pipelines are not dispatched by this coordinator")
 		}
-		dir, err := serve.CloneRef(facts.CloneURL, row.Revision, f.workdir)
+		// a stored row is checked again here: nothing that reaches git may start with "-" or leave the project's host
+		if !coordinator.ValidProject(row.Project) || !coordinator.ValidRevision(row.Revision) {
+			return coordinator.RunResult{}, errors.New("refused: project or revision is not valid")
+		}
+		cloneURL, err := coordinator.SafeCloneURL(row.Source, row.Project, facts.CloneURL)
+		if err != nil {
+			return coordinator.RunResult{}, err
+		}
+		dir, err := serve.CloneRef(cloneURL, row.Revision, f.workdir)
 		defer func() {
 			if dir != "" {
 				_ = os.RemoveAll(dir)
@@ -186,6 +199,9 @@ func dispatchPipeline(home string, f *v15ServeFlags) coordinator.Dispatcher {
 		res, err := (&cirun.Coordinator{Opts: o, Plan: p, ConfigDigest: digest, Substantive: subst, Out: out}).Run(ctx)
 		if err != nil {
 			return coordinator.RunResult{}, err
+		}
+		if ctx.Err() != nil && string(res.Summary.Result) == "cancelled" { // cut short by shutdown: hand the row back, never record it as done
+			return coordinator.RunResult{}, ctx.Err()
 		}
 		return coordinator.RunResult{PipelineID: res.RunID, Exit: res.Exit}, nil
 	}

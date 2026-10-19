@@ -58,10 +58,10 @@ func fakePost(r *rig, provider string, body []byte) *httptest.ResponseRecorder {
 }
 
 func TestIngressReceivesOnlyMatchingRequests(t *testing.T) {
-	f := &fakeIngress{name: "zz-fake-a", deliver: Delivery{Source: "fake", DeliveryID: "f-1", Project: "o/r", Revision: "abc1234def"}}
+	f := &fakeIngress{name: "zz-fake-a", deliver: Delivery{Source: "fake", DeliveryID: "f-1", Project: "o/r", Revision: testSHA}}
 	register(t, f)
 	r := newRig(t, nil)
-	r.post("/webhook", "push", "g1", pushBody("1111111aaa")) // a GitHub request: no match
+	r.post("/webhook", "push", "g1", pushBody(otherSHA)) // a GitHub request: no match
 	if f.accept.Load() != 0 {
 		t.Fatal("Accept saw a request it did not match")
 	}
@@ -71,7 +71,7 @@ func TestIngressReceivesOnlyMatchingRequests(t *testing.T) {
 }
 
 func TestIngressMatchedRequestSkipsSharedSecret(t *testing.T) {
-	f := &fakeIngress{name: "zz-fake-b", deliver: Delivery{Source: "fake", DeliveryID: "f-2", Project: "o/r", Revision: "abc1234def"}}
+	f := &fakeIngress{name: "zz-fake-b", deliver: Delivery{Source: "fake", DeliveryID: "f-2", Project: "o/r", Revision: testSHA}}
 	register(t, f)
 	r := newRig(t, nil) // the v1.4 secret is set, and the request carries no signature
 	if w := fakePost(r, "zz-fake-b", []byte(`{}`)); w.Code != 202 {

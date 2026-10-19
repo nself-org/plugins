@@ -17,6 +17,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -32,7 +33,12 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
-const testSecret = "test-secret-not-real"
+const (
+	testSecret = "test-secret-not-real"
+	testSHA    = "abc1234def5678901234567890abcdef12345678"
+	otherSHA   = "1111111aaa5678901234567890abcdef12345678"
+	killSHA    = "feedface005678901234567890abcdef12345678"
+)
 
 // fakeClock fires After channels only when Advance passes their deadline.
 type fakeClock struct {
@@ -153,6 +159,16 @@ func (r *rig) post(path, event, delivery string, body []byte, hdr ...string) *ht
 	return w
 }
 
+// trigger posts a signed /v1/trigger request for testSHA; fields override the body, key is the header.
+func (r *rig) trigger(key string, fields map[string]any) *httptest.ResponseRecorder {
+	m := map[string]any{"project": "o/r", "revision": testSHA, "key": key, "ts": r.clk.Now().Unix()}
+	for k, v := range fields {
+		m[k] = v
+	}
+	body, _ := json.Marshal(m)
+	return r.post("/v1/trigger", "", "", body, "Idempotency-Key", key)
+}
+
 func outcome(t *testing.T, w *httptest.ResponseRecorder) string {
 	t.Helper()
 	var m map[string]string
@@ -173,7 +189,7 @@ func queued(t *testing.T, st *store.Store) int {
 
 func TestDedupDeliveryID(t *testing.T) {
 	r := newRig(t, nil)
-	body := pushBody("abc1234def")
+	body := pushBody(testSHA)
 	if w := r.post("/webhook", "push", "dlv-1", body); w.Code != 202 || outcome(t, w) != "enqueued" {
 		t.Fatalf("first = %d %s", w.Code, w.Body)
 	}
@@ -187,20 +203,20 @@ func TestDedupDeliveryID(t *testing.T) {
 
 func TestDedupSemanticCoalesceAndForce(t *testing.T) {
 	r := newRig(t, nil)
-	sha := "abc1234def"
+	sha := testSHA
 	first := r.post("/webhook", "push", "p1", pushBody(sha))
 	pr := r.post("/", "pull_request", "p2", prBody(sha))
 	if outcome(t, pr) != "coalesced" {
 		t.Fatalf("PR synchronize for the same SHA = %s", pr.Body)
 	}
-	manual := r.post("/v1/trigger", "", "", []byte(`{"project":"o/r","revision":"`+sha+`"}`), "Idempotency-Key", "manual-key-1")
+	manual := r.trigger("manual-key-1", nil)
 	if outcome(t, manual) != "coalesced" {
 		t.Fatalf("manual trigger for the same SHA = %d %s", manual.Code, manual.Body)
 	}
 	if n := queued(t, r.st); n != 1 {
 		t.Fatalf("push, PR and manual made %d pipelines, want 1", n)
 	}
-	forced := r.post("/v1/trigger", "", "", []byte(`{"project":"o/r","revision":"`+sha+`","force":true}`), "Idempotency-Key", "manual-key-2")
+	forced := r.trigger("manual-key-2", map[string]any{"force": true})
 	if outcome(t, forced) != "enqueued" || forced.Code != 202 {
 		t.Fatalf("--force = %d %s, want a second pipeline", forced.Code, forced.Body)
 	}
@@ -221,8 +237,8 @@ func TestDedupSemanticCoalesceAndForce(t *testing.T) {
 
 func TestDedupConfigForce(t *testing.T) {
 	r := newRig(t, func(c *Config) { c.Force = true })
-	r.post("/webhook", "push", "f1", pushBody("abc1234def"))
-	if w := r.post("/webhook", "push", "f2", pushBody("abc1234def")); outcome(t, w) != "enqueued" {
+	r.post("/webhook", "push", "f1", pushBody(testSHA))
+	if w := r.post("/webhook", "push", "f2", pushBody(testSHA)); outcome(t, w) != "enqueued" {
 		t.Fatalf("with --force a second trigger = %s", w.Body)
 	}
 }
@@ -230,7 +246,7 @@ func TestDedupConfigForce(t *testing.T) {
 func TestDedupRetentionHorizon(t *testing.T) {
 	ctx := context.Background()
 	r := newRig(t, nil)
-	body := pushBody("abc1234def")
+	body := pushBody(testSHA)
 	r.post("/webhook", "push", "h1", body)
 	row, ok, err := r.st.IntakeClaim(ctx, "w")
 	if err != nil || !ok {
@@ -251,28 +267,36 @@ func TestDedupRetentionHorizon(t *testing.T) {
 
 func TestIdempotencyKeyAPI(t *testing.T) {
 	r := newRig(t, nil)
-	req := []byte(`{"project":"o/r","revision":"abc1234def"}`)
-	a := r.post("/v1/trigger", "", "", req, "Idempotency-Key", "same-key-001")
-	b := r.post("/v1/trigger", "", "", req, "Idempotency-Key", "same-key-001")
+	a := r.trigger("same-key-001", nil)
+	b := r.trigger("same-key-001", nil)
 	if a.Code != 202 || b.Code != 200 || outcome(t, b) != "replay" {
 		t.Fatalf("replay = %d/%d %s", a.Code, b.Code, b.Body)
 	}
-	other := []byte(`{"project":"o/r","revision":"abc1234def","pipeline":"deploy"}`)
-	if w := r.post("/v1/trigger", "", "", other, "Idempotency-Key", "same-key-001"); w.Code != 409 {
+	if w := r.trigger("same-key-001", map[string]any{"pipeline": "deploy"}); w.Code != 409 {
 		t.Fatalf("key reused for another request = %d, want 409", w.Code)
 	}
-	if w := r.post("/v1/trigger", "", "", req); w.Code != 400 {
-		t.Fatalf("no Idempotency-Key = %d, want 400", w.Code)
+	body, _ := json.Marshal(map[string]any{"project": "o/r", "revision": testSHA, "key": "same-key-001", "ts": r.clk.Now().Unix()})
+	if w := r.post("/v1/trigger", "", "", body); w.Code != 400 {
+		t.Fatalf("no Idempotency-Key header = %d, want 400", w.Code)
+	}
+	if w := r.trigger("same-key-001", map[string]any{"key": "another-key-9"}); w.Code != 400 {
+		t.Fatalf("a body key that differs from the header = %d, want 400", w.Code)
+	}
+	if w := r.trigger("stale-key-001", map[string]any{"ts": r.clk.Now().Add(-time.Hour).Unix()}); w.Code != 400 {
+		t.Fatalf("a stale ts = %d, want 400", w.Code)
+	}
+	if w := r.trigger("bad-rev-0001", map[string]any{"revision": "--upload-pack=touch /tmp/x"}); w.Code != 400 {
+		t.Fatalf("a revision that is not a full hex id = %d, want 400", w.Code)
 	}
 }
 
 func TestIntakeRefusalsMatchV14(t *testing.T) {
 	r := newRig(t, nil)
-	body := pushBody("abc1234def")
+	body := pushBody(testSHA)
 	if w := r.post("/webhook", "push", "u1", body, "X-Hub-Signature-256", "sha256=00"); w.Code != 403 {
 		t.Fatalf("bad signature = %d, want 403", w.Code)
 	}
-	other, _ := json.Marshal(map[string]any{"ref": "refs/heads/m", "after": "abc1234def", "repository": map[string]string{"full_name": "x/y"}})
+	other, _ := json.Marshal(map[string]any{"ref": "refs/heads/m", "after": testSHA, "repository": map[string]string{"full_name": "x/y"}})
 	if w := r.post("/webhook", "push", "u2", other); w.Code != 403 {
 		t.Fatalf("repo not allowlisted = %d, want 403", w.Code)
 	}
@@ -287,14 +311,14 @@ func TestIntakeRefusalsMatchV14(t *testing.T) {
 func TestIntakeStoreDownGives503(t *testing.T) {
 	r := newRig(t, nil)
 	_ = r.st.Close()
-	if w := r.post("/webhook", "push", "s1", pushBody("abc1234def")); w.Code != 503 {
+	if w := r.post("/webhook", "push", "s1", pushBody(testSHA)); w.Code != 503 {
 		t.Fatalf("store closed = %d, want 503", w.Code)
 	}
 }
 
 func TestHealthzBodyByBind(t *testing.T) {
 	r := newRig(t, nil)
-	r.post("/webhook", "push", "z1", pushBody("abc1234def"))
+	r.post("/webhook", "push", "z1", pushBody(testSHA))
 	get := func(loop bool, hdr ...string) map[string]any {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -325,7 +349,7 @@ func TestHealthzBodyByBind(t *testing.T) {
 
 func TestAccessLogRedactsAuthorization(t *testing.T) {
 	r := newRig(t, nil)
-	r.post("/webhook", "push", "l1", pushBody("abc1234def"), "Authorization", "Bearer super-secret-token")
+	r.post("/webhook", "push", "l1", pushBody(testSHA), "Authorization", "Bearer super-secret-token")
 	r.post("/healthz?token=abc", "", "", nil)
 	logs := r.logs.String()
 	if !strings.Contains(logs, "POST /webhook 202") {
@@ -447,7 +471,7 @@ func TestReconcilerTriggersDedupAgainstLivePipelines(t *testing.T) {
 	var mu sync.Mutex
 	rec := &fakeRec{name: "sweep"}
 	rec.run = func(ctx context.Context, enq Enqueuer) {
-		out, err := enq.Enqueue(ctx, Delivery{Source: "reconcile", Project: "o/r", Revision: "abc1234def"})
+		out, err := enq.Enqueue(ctx, Delivery{Source: "reconcile", Project: "o/r", Revision: testSHA})
 		mu.Lock()
 		defer mu.Unlock()
 		if err != nil {
@@ -457,7 +481,7 @@ func TestReconcilerTriggersDedupAgainstLivePipelines(t *testing.T) {
 		kinds = append(kinds, out.Kind)
 	}
 	r := newRig(t, func(c *Config) { c.Reconcilers = []Reconciler{rec} })
-	r.post("/webhook", "push", "live-1", pushBody("abc1234def")) // a live pipeline for the same SHA
+	r.post("/webhook", "push", "live-1", pushBody(testSHA)) // a live pipeline for the same SHA
 	defer r.start(t)()
 	waitFor(t, "the pass", func() bool { mu.Lock(); defer mu.Unlock(); return len(kinds) == 1 })
 	if kinds[0] != store.IntakeCoalesced {
@@ -467,7 +491,7 @@ func TestReconcilerTriggersDedupAgainstLivePipelines(t *testing.T) {
 
 func TestEnqueueFromScheduleSource(t *testing.T) {
 	r := newRig(t, nil)
-	out, err := r.c.Enqueue(context.Background(), Delivery{Source: "schedule", Project: "o/r", Revision: "abc1234def", TriggerClass: "schedule"})
+	out, err := r.c.Enqueue(context.Background(), Delivery{Source: "schedule", Project: "o/r", Revision: testSHA, TriggerClass: "schedule"})
 	if err != nil || out.Kind != store.IntakeEnqueued || queued(t, r.st) != 1 {
 		t.Fatalf("Enqueue = %+v, %v", out, err)
 	}
@@ -535,10 +559,10 @@ func TestDispatchRecordsResult(t *testing.T) {
 	})
 	stop := r.start(t)
 	var m map[string]string
-	_ = json.Unmarshal(r.post("/webhook", "push", "x1", pushBody("abc1234def")).Body.Bytes(), &m)
+	_ = json.Unmarshal(r.post("/webhook", "push", "x1", pushBody(testSHA)).Body.Bytes(), &m)
 	select {
 	case rev := <-ran:
-		if rev != "abc1234def" {
+		if rev != testSHA {
 			t.Fatalf("dispatched %q", rev)
 		}
 	case <-time.After(10 * time.Second):
@@ -587,7 +611,7 @@ func TestIntakeRestart(t *testing.T) {
 			go func() { done <- c.Run(ctx) }()
 			select {
 			case rev := <-ran:
-				if rev != "feedface00" {
+				if rev != killSHA {
 					t.Fatalf("restart ran %q", rev)
 				}
 			case <-time.After(15 * time.Second):
@@ -610,7 +634,7 @@ func childAndDie(mode, db string) {
 	if err != nil {
 		os.Exit(3)
 	}
-	if _, err = c.Enqueue(context.Background(), Delivery{Source: "github", DeliveryID: "kill-1", Project: "o/r", Revision: "feedface00"}); err != nil {
+	if _, err = c.Enqueue(context.Background(), Delivery{Source: "github", DeliveryID: "kill-1", Project: "o/r", Revision: killSHA}); err != nil {
 		os.Exit(3)
 	}
 	if mode == "claimed-mid-dispatch" {
@@ -627,7 +651,7 @@ func TestUnmatchedWebhookNeedsSecretUnlessInsecure(t *testing.T) {
 	// ingress secrets let the process start with no shared secret; an unmatched request must still be refused
 	register(t, &fakeIngress{name: "zz-fake-m1", secrets: true})
 	r := newRig(t, func(c *Config) { c.Secret = "" })
-	body := pushBody("abc1234def")
+	body := pushBody(testSHA)
 	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
 	w := httptest.NewRecorder()
@@ -647,9 +671,9 @@ func TestUnmatchedWebhookNeedsSecretUnlessInsecure(t *testing.T) {
 
 func TestSemanticKeyIncludesRequestedPipeline(t *testing.T) {
 	r := newRig(t, nil)
-	sha := "abc1234def"
+	sha := testSHA
 	r.post("/webhook", "push", "k1", pushBody(sha))
-	rel := r.post("/v1/trigger", "", "", []byte(`{"project":"o/r","revision":"`+sha+`","pipeline":"release"}`), "Idempotency-Key", "release-key-1")
+	rel := r.trigger("release-key-1", map[string]any{"pipeline": "release"})
 	if outcome(t, rel) != "enqueued" {
 		t.Fatalf("a manual run of another pipeline = %s, want its own run", rel.Body)
 	}
@@ -682,7 +706,7 @@ func TestIntakeBodyLimits(t *testing.T) {
 		t.Fatalf("large body with every slot taken = %d, want 429", w.Code)
 	}
 	long := strings.Repeat("d", maxDeliveryID+1)
-	if w = r.post("/webhook", "push", long, pushBody("abc1234def")); w.Code != 400 {
+	if w = r.post("/webhook", "push", long, pushBody(testSHA)); w.Code != 400 {
 		t.Fatalf("over-long delivery id = %d, want 400", w.Code)
 	}
 }
@@ -697,7 +721,7 @@ func TestDispatchResultSurvivesShutdown(t *testing.T) {
 		}
 	})
 	var m map[string]string
-	_ = json.Unmarshal(r.post("/webhook", "push", "sd1", pushBody("abc1234def")).Body.Bytes(), &m)
+	_ = json.Unmarshal(r.post("/webhook", "push", "sd1", pushBody(testSHA)).Body.Bytes(), &m)
 	ctx, cancel := context.WithCancel(context.Background())
 	r.c.cfg.Addr, r.c.cfg.Beat, r.c.cfg.Poll = "127.0.0.1:0", time.Hour, 5*time.Millisecond
 	done := make(chan error, 1)
@@ -712,5 +736,92 @@ func TestDispatchResultSurvivesShutdown(t *testing.T) {
 	row, err := r.st.IntakeGet(context.Background(), m["intake"])
 	if err != nil || row.State != store.IntakeDone || row.PipelineID != "finished" {
 		t.Fatalf("row after shutdown = %+v, %v; want done (a finished pipeline is not run twice)", row, err)
+	}
+}
+
+func TestEnqueueRefusesGitOptionLookalikes(t *testing.T) {
+	r := newRig(t, nil)
+	for name, body := range map[string][]byte{
+		"revision": pushBody("--upload-pack=touch${IFS}/tmp/x"),
+		"short":    pushBody("abc1234"),
+	} {
+		if w := r.post("/webhook", "push", "inj-"+name, body); w.Code != 400 {
+			t.Fatalf("%s: %d %s, want 400", name, w.Code, w.Body)
+		}
+	}
+	for _, project := range []string{"-x/y", "o/-r", "o/..", "../r", "o/r;ls"} {
+		if _, err := r.c.Enqueue(context.Background(), Delivery{Source: "schedule", Project: project, Revision: testSHA}); ReasonOf(err) != ReasonInvalidDelivery {
+			t.Fatalf("project %q was accepted: %v", project, err)
+		}
+	}
+	if n := queued(t, r.st); n != 0 {
+		t.Fatalf("%d refused triggers were stored", n)
+	}
+}
+
+func TestSafeCloneURL(t *testing.T) {
+	ok := map[string][3]string{
+		"github default": {"github", "o/r", ""},
+		"github own url": {"github", "O/R", "https://github.com/o/r.git"},
+		"manual own url": {"manual", "o/r", "https://github.com/o/r"},
+		"other host":     {"gitea-hook", "o/r", "https://git.example.test/o/r.git"},
+	}
+	for name, c := range ok {
+		if _, err := SafeCloneURL(c[0], c[1], c[2]); err != nil {
+			t.Errorf("%s refused: %v", name, err)
+		}
+	}
+	bad := map[string][3]string{
+		"file":            {"github", "o/r", "file:///srv/repo"},
+		"local path":      {"github", "o/r", "/srv/repo"},
+		"ssh":             {"github", "o/r", "ssh://git@github.com/o/r.git"},
+		"http":            {"github", "o/r", "http://github.com/o/r.git"},
+		"option":          {"github", "o/r", "--upload-pack=x"},
+		"user info":       {"github", "o/r", "https://tok:x@github.com/o/r.git"},
+		"other host":      {"github", "o/r", "https://evil.example.test/o/r.git"},
+		"other repo":      {"github", "o/r", "https://github.com/x/y.git"},
+		"query":           {"gitea-hook", "o/r", "https://git.example.test/o/r.git?x=1"},
+		"space":           {"gitea-hook", "o/r", "https://git.example.test/o r.git"},
+		"no url, no host": {"gitea-hook", "o/r", ""},
+	}
+	for name, c := range bad {
+		if _, err := SafeCloneURL(c[0], c[1], c[2]); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+}
+
+func TestIngressDeliveriesObeyAllowlistUnlessTheyHoldSecrets(t *testing.T) {
+	plain := &fakeIngress{name: "zz-fake-p", deliver: Delivery{Source: "fake", DeliveryID: "p-1", Project: "x/y", Revision: testSHA}}
+	keyed := &fakeIngress{name: "zz-fake-q", secrets: true, deliver: Delivery{Source: "fake", DeliveryID: "q-1", Project: "x/y", Revision: testSHA}}
+	register(t, plain)
+	register(t, keyed)
+	r := newRig(t, nil) // allowlist is o/r only
+	if w := fakePost(r, "zz-fake-p", []byte(`{}`)); w.Code != 403 || queued(t, r.st) != 0 {
+		t.Fatalf("an ingress delivery for a repo outside --allowed-repos = %d", w.Code)
+	}
+	if w := fakePost(r, "zz-fake-q", []byte(`{}`)); w.Code != 202 {
+		t.Fatalf("an ingress with per-repo secrets = %d, want 202", w.Code)
+	}
+}
+
+func TestWebhookWithoutContentLengthIs411(t *testing.T) {
+	r := newRig(t, nil)
+	req := httptest.NewRequest(http.MethodPost, "/webhook", io.NopCloser(bytes.NewReader(pushBody(testSHA))))
+	req.ContentLength = -1
+	w := httptest.NewRecorder()
+	r.c.Handler(true).ServeHTTP(w, req)
+	if w.Code != 411 {
+		t.Fatalf("unknown length = %d, want 411", w.Code)
+	}
+}
+
+func TestCheckSecretKeepsTheV14Refusal(t *testing.T) {
+	err := CheckSecret("", false)
+	if err == nil || !strings.Contains(err.Error(), "refusing to start: no webhook secret configured") {
+		t.Fatalf("CheckSecret = %v", err)
+	}
+	if CheckSecret("s", false) != nil || CheckSecret("", true) != nil {
+		t.Fatal("a secret or --insecure must start")
 	}
 }

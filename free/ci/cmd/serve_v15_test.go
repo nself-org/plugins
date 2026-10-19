@@ -163,8 +163,28 @@ func TestServeTriggerMapping(t *testing.T) {
 
 func TestDispatchPipelineReportsCheckoutFailure(t *testing.T) {
 	f := &v15ServeFlags{workdir: filepath.Join(t.TempDir(), "missing")}
-	_, err := dispatchPipeline(t.TempDir(), f)(context.Background(), store.IntakeRow{Project: "o/r", Revision: "abc1234", Facts: []byte(`{"clone_url":"file:///nonexistent/repo"}`)})
+	_, err := dispatchPipeline(t.TempDir(), f)(context.Background(), store.IntakeRow{Source: "gitea-hook", Project: "o/r", Revision: "abc1234def5678901234567890abcdef12345678", Facts: []byte(`{"clone_url":"https://127.0.0.1:1/o/r.git"}`)})
 	if err == nil {
 		t.Fatal("a failed checkout was reported as success")
+	}
+}
+
+func TestDispatchPipelineRefusesBadRows(t *testing.T) {
+	f := &v15ServeFlags{workdir: t.TempDir()}
+	good := "abc1234def5678901234567890abcdef12345678"
+	rows := map[string]store.IntakeRow{
+		"git option as revision": {Source: "github", Project: "o/r", Revision: "--upload-pack=x"},
+		"git option as project":  {Source: "github", Project: "-o/r", Revision: good},
+		"file clone url":         {Source: "github", Project: "o/r", Revision: good, Facts: []byte(`{"clone_url":"file:///srv/repo"}`)},
+		"foreign host":           {Source: "github", Project: "o/r", Revision: good, Facts: []byte(`{"clone_url":"https://evil.example.test/o/r.git"}`)},
+		"synthetic pipeline":     {Source: "github", Project: "o/r", Revision: good, Facts: []byte(`{"synthetic":{"name":"x"}}`)},
+	}
+	for name, row := range rows {
+		if _, err := dispatchPipeline(t.TempDir(), f)(context.Background(), row); err == nil {
+			t.Errorf("%s was dispatched", name)
+		}
+	}
+	if entries, _ := os.ReadDir(f.workdir); len(entries) != 0 {
+		t.Fatalf("a refused row left %d checkouts behind", len(entries))
 	}
 }

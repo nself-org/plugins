@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/serve"
@@ -52,8 +51,9 @@ func (c *Coordinator) Enqueue(ctx context.Context, d Delivery) (Outcome, error) 
 }
 
 func (c *Coordinator) enqueue(ctx context.Context, d Delivery, webhook bool, o enqueueOpts) (Outcome, error) {
-	if d.Source == "" || d.Project == "" || d.Revision == "" {
-		return Outcome{}, newErr("", ReasonInvalidDelivery, "a delivery needs a source, a project and a revision")
+	d.Revision = strings.ToLower(d.Revision)
+	if d.Source == "" || !ValidProject(d.Project) || !ValidRevision(d.Revision) || (d.Pipeline != "" && !ValidPipeline(d.Pipeline)) {
+		return Outcome{}, newErr("", ReasonInvalidDelivery, "a delivery needs a source, an owner/repo project, a full hex revision and a plain pipeline name")
 	}
 	if len(d.DeliveryID) > maxDeliveryID {
 		return Outcome{}, newErr("", ReasonInvalidDelivery, "delivery id is too long")
@@ -61,6 +61,7 @@ func (c *Coordinator) enqueue(ctx context.Context, d Delivery, webhook bool, o e
 	if d.TriggerClass == "" {
 		d.TriggerClass = "change"
 	}
+	keyPipeline := d.Pipeline
 	facts := map[string]json.RawMessage{}
 	if len(d.Facts) > 0 && json.Unmarshal(d.Facts, &facts) != nil {
 		return Outcome{}, newErr("", ReasonInvalidDelivery, "delivery facts must be a JSON object")
@@ -71,11 +72,15 @@ func (c *Coordinator) enqueue(ctx context.Context, d Delivery, webhook bool, o e
 			return Outcome{}, newErr("", ReasonInvalidDelivery, "synthetic pipeline cannot be stored")
 		}
 		facts["synthetic"] = raw
+		sum := sha256.Sum256(raw)
+		keyPipeline += "|synthetic=" + hex.EncodeToString(sum[:8])
 	}
+	var event string
+	_ = json.Unmarshal(facts["trigger"], &event)
 	blob, _ := json.Marshal(facts)
 	out, err := c.cfg.Store.IntakeEnqueue(ctx, store.IntakeRequest{
-		Source: d.Source, DeliveryID: d.DeliveryID, Project: d.Project, Revision: d.Revision, TriggerClass: d.TriggerClass,
-		PolicyDigest: c.cfg.PolicyDigest, SemanticKey: semanticKey(d.Project, d.Revision, d.TriggerClass, c.cfg.PolicyDigest, d.Pipeline),
+		Source: d.Source, Event: event, DeliveryID: d.DeliveryID, Project: d.Project, Revision: d.Revision, TriggerClass: d.TriggerClass,
+		PolicyDigest: c.cfg.PolicyDigest, SemanticKey: semanticKey(strings.ToLower(d.Project), d.Revision, d.TriggerClass, c.cfg.PolicyDigest, keyPipeline),
 		Pipeline: d.Pipeline, Facts: blob, Webhook: webhook, Force: c.cfg.Force || o.force, Actor: o.actor,
 		IdemDigest: o.idem, ReqDigest: o.reqDigest,
 	})
@@ -134,7 +139,11 @@ func (c *Coordinator) serveWebhook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "body too large (limit 25 MiB)", http.StatusRequestEntityTooLarge)
 		return
 	}
-	if r.ContentLength < 0 || r.ContentLength > bigBody { // large or unknown size: bound how many sit in memory before authentication
+	if r.ContentLength < 0 { // GitHub and every provider send a length; an unknown one is a slow-body attack
+		http.Error(w, "Content-Length required", http.StatusLengthRequired)
+		return
+	}
+	if r.ContentLength > bigBody { // large: bound how many sit in memory before authentication
 		select {
 		case bodySlots <- struct{}{}:
 			defer func() { <-bodySlots }()
@@ -159,6 +168,15 @@ func (c *Coordinator) serveWebhook(w http.ResponseWriter, r *http.Request) {
 			c.cfg.Logf("ingress %s refused a delivery", ing.Name())
 			http.Error(w, "delivery refused", http.StatusForbidden)
 			return
+		}
+		// an Ingress holding per-repo secrets authorises its own repos (it must check the secret belongs to
+		// Delivery.Project); any other Ingress is held to --allowed-repos like the v1.4 path
+		if h, ok := ing.(SecretHolder); !ok || !h.HasSecrets() {
+			if !serve.RepoAllowed(d.Project, c.cfg.AllowedRepos) {
+				c.cfg.Logf("ingress %s: repo %q is not in --allowed-repos", ing.Name(), d.Project)
+				http.Error(w, "repo is not allowlisted", http.StatusForbidden)
+				return
+			}
 		}
 		out, err := c.enqueue(r.Context(), d, true, enqueueOpts{})
 		answer(w, d, out, err)
@@ -188,52 +206,5 @@ func (c *Coordinator) serveWebhook(w http.ResponseWriter, r *http.Request) {
 	facts, _ := json.Marshal(map[string]string{"trigger": ev.EventType, "ref": ev.Ref, "clone_url": ev.CloneURL})
 	d := Delivery{Source: "github", DeliveryID: r.Header.Get("X-GitHub-Delivery"), Project: ev.RepoFullName, Revision: ev.SHA, TriggerClass: "change", Facts: facts}
 	out, err := c.enqueue(r.Context(), d, true, enqueueOpts{})
-	answer(w, d, out, err)
-}
-
-var (
-	projectRe  = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
-	revisionRe = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
-	keyRe      = regexp.MustCompile(`^[A-Za-z0-9_.:-]{8,128}$`)
-)
-
-// serveTrigger is POST /v1/trigger: a manual trigger with an Idempotency-Key header. It is signed and
-// allowlisted exactly like a webhook.
-func (c *Coordinator) serveTrigger(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20+1))
-	if err != nil || len(body) > 1<<20 {
-		http.Error(w, "bad body", http.StatusBadRequest)
-		return
-	}
-	if secret := c.cfg.Secret; secret != "" {
-		if err := serve.VerifySignature(secret, r.Header.Get("X-Hub-Signature-256"), body); err != nil {
-			http.Error(w, "signature mismatch", http.StatusForbidden)
-			return
-		}
-	} else if !c.cfg.Insecure {
-		http.Error(w, "manual triggers need the webhook secret", http.StatusForbidden)
-		return
-	}
-	var req struct {
-		Project, Revision, Pipeline string
-		Force                       bool
-	}
-	key := r.Header.Get("Idempotency-Key")
-	if json.Unmarshal(body, &req) != nil || !projectRe.MatchString(req.Project) || !revisionRe.MatchString(strings.ToLower(req.Revision)) || !keyRe.MatchString(key) {
-		http.Error(w, "need project owner/repo, a hex revision and an Idempotency-Key of 8 to 128 characters", http.StatusBadRequest)
-		return
-	}
-	if !serve.RepoAllowed(req.Project, c.cfg.AllowedRepos) {
-		http.Error(w, fmt.Sprintf("repo %q is not allowlisted", req.Project), http.StatusForbidden)
-		return
-	}
-	facts, _ := json.Marshal(map[string]string{"trigger": "api", "clone_url": "https://github.com/" + req.Project + ".git"})
-	d := Delivery{Source: "manual", Project: req.Project, Revision: strings.ToLower(req.Revision), TriggerClass: "change", Pipeline: req.Pipeline, Facts: facts}
-	kd, rd := sha256.Sum256([]byte("idem:"+key)), sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%t", d.Project, d.Revision, d.Pipeline, req.Force)))
-	out, err := c.enqueue(r.Context(), d, false, enqueueOpts{force: req.Force, actor: "api", idem: hex.EncodeToString(kd[:]), reqDigest: hex.EncodeToString(rd[:])})
 	answer(w, d, out, err)
 }
