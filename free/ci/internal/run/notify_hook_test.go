@@ -221,6 +221,12 @@ func TestNotifyHookNamesRepoAndRefFromTheRunRoot(t *testing.T) {
 	if c.Repo != "abc123" || c.Ref != "" {
 		t.Fatalf("fallbacks: %+v", c)
 	}
+	// the completed evidence's root-commit id wins over the origin URL
+	h.Capture = func(context.Context, ...string) (string, int, error) { return "https://example.org/a.git\n", 0, nil }
+	d := h.runOf(context.Background(), NotifyRequest{Root: "/clone/one", Run: RunInfo{Revision: testSHA, Evidence: model.Evidence{RepoID: "local:" + strings.Repeat("f", 64)}}})
+	if d.Repo != "local:"+strings.Repeat("f", 64) {
+		t.Fatalf("repo %q", d.Repo)
+	}
 }
 
 // A dirty tree or a run with no commit has no commit of record: nothing is sent and no key is claimed.

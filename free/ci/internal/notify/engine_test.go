@@ -286,11 +286,13 @@ func TestHangingSinkIsBounded(t *testing.T) {
 	done := make(chan []string)
 	go func() { done <- e.OnRun(context.Background(), run(sha("a"), "fail")) }()
 	<-hang.started
-	for { // the budget ends only after the good sink's delivery was counted
+	for deadline := time.Now().Add(30 * time.Second); ; runtime.Gosched() { // the budget ends only after the good sink's delivery was counted
 		if stats, _ := st.NotifySinkStats(context.Background()); len(stats) == 1 && stats[0].Sink == "good" {
 			break
 		}
-		runtime.Gosched()
+		if time.Now().After(deadline) {
+			t.Fatal("the good sink's delivery was never counted")
+		}
 	}
 	fire <- time.Time{}
 	notes := <-done

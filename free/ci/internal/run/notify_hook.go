@@ -91,8 +91,12 @@ func (h *notifyHook) runOf(ctx context.Context, req NotifyRequest) notify.Run {
 	} else {
 		ref = h.branch(ctx, req.Root)
 	}
-	if id := h.remoteID(ctx, req.Root); id != "" {
-		repo = id
+	// the completed evidence names the repository by its first root commit, the same for every
+	// clone; without it (evidence not completed) the origin URL's digest is the next best
+	if !strings.HasPrefix(repo, "local:") {
+		if id := h.remoteID(ctx, req.Root); id != "" {
+			repo = id
+		}
 	}
 	var failed []string
 	for _, j := range info.Jobs {
