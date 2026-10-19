@@ -26,6 +26,12 @@ const maxHeartbeatLeases = 256
 
 const staleReason = "E662 stale epoch: stop the job and clean its workspace"
 
+// sinkCommits says whether the sink commits a result through the lease engine itself (P7-NODE-08: the run's sink).
+func sinkCommits(sink interface{}) bool {
+	c, ok := sink.(interface{ CommitsResult() bool })
+	return ok && c.CommitsResult()
+}
+
 func isStale(err error) bool {
 	var se *store.Error
 	return errors.As(err, &se) && se.Code == "E662"
@@ -120,7 +126,10 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 	}
 	_, isResult := m.Body.(*protocol.Result)
 	if err == nil && isResult {
-		if err = s.cfg.Leases.Result(ctx, m.LeaseID, epoch); err == nil {
+		if !sinkCommits(s.cfg.Sink) { // a sink that commits the result itself (the run's) must not be committed twice
+			err = s.cfg.Leases.Result(ctx, m.LeaseID, epoch)
+		}
+		if err == nil {
 			s.mu.Lock()
 			delete(q.sess.epochs, m.LeaseID)
 			s.mu.Unlock()

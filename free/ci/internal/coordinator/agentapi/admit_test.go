@@ -213,3 +213,32 @@ func TestNoAdmitHookAdmitsEverything(t *testing.T) {
 	u.send(protocol.Message{Type: "log", LeaseID: leaseID, Epoch: &epoch, Body: protocol.Log{LeaseID: leaseID, LineSeq: 1, Stream: "stdout", Text: "x"}})
 	eventually(t, 5*time.Second, "the log reaches the sink", func() bool { r.sink.mu.Lock(); defer r.sink.mu.Unlock(); return len(r.sink.logs) == 1 })
 }
+
+type commitSink struct {
+	recSink
+	commits bool
+}
+
+func (c *commitSink) CommitsResult() bool { return c.commits }
+
+func TestResultCommittedOnlyOnceWhenTheSinkCommits(t *testing.T) {
+	for _, commits := range []bool{false, true} {
+		cs := &commitSink{commits: commits}
+		r := newRig(t, func(c *Config) { c.Sink = cs })
+		a := r.newAgent("n-1")
+		leaseID, epoch := r.seedLease("1")
+		a.connect()
+		u := a.openStreamTokens(0)
+		u.send(resultMsg(leaseID, epoch))
+		if m := u.read(); m.Type != "ack" {
+			t.Fatalf("commits=%v: answer %s, want an ack", commits, m.Type)
+		}
+		state, _, err := r.st.AttemptStateEpoch(context.Background(), "a1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := map[bool]string{false: "finalizing", true: "running"}[commits]; string(state) != want {
+			t.Fatalf("commits=%v: attempt is %s, want %s (the engine commits only for a sink that does not)", commits, state, want)
+		}
+	}
+}
