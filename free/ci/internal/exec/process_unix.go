@@ -44,3 +44,22 @@ func limitedCommandOn(s JobSpec, goos string) []string {
 	}
 	return append([]string{"sh", "-c", limits + "exec \"$@\"", "ci-job"}, s.Command...)
 }
+
+var signalNames = map[syscall.Signal]string{
+	syscall.SIGHUP: "SIGHUP", syscall.SIGINT: "SIGINT", syscall.SIGQUIT: "SIGQUIT", syscall.SIGILL: "SIGILL",
+	syscall.SIGTRAP: "SIGTRAP", syscall.SIGABRT: "SIGABRT", syscall.SIGBUS: "SIGBUS", syscall.SIGFPE: "SIGFPE",
+	syscall.SIGKILL: "SIGKILL", syscall.SIGSEGV: "SIGSEGV", syscall.SIGPIPE: "SIGPIPE", syscall.SIGALRM: "SIGALRM",
+	syscall.SIGTERM: "SIGTERM", syscall.SIGSYS: "SIGSYS",
+}
+
+// exitSignal names the signal that ended the process, or "" when it exited normally.
+func exitSignal(err *osexec.ExitError) string {
+	ws, ok := err.Sys().(syscall.WaitStatus)
+	if !ok || !ws.Signaled() {
+		return ""
+	}
+	if n, ok := signalNames[ws.Signal()]; ok {
+		return n
+	}
+	return "signal " + strconv.Itoa(int(ws.Signal()))
+}

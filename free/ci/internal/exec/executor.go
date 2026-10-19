@@ -58,6 +58,9 @@ type AttemptResult struct {
 	// Reason refines the failure class: "resource_limit" when a planned container hit its
 	// memory or process limit.
 	Reason string
+	// Signal names the signal that ended the job (SIGSEGV, SIGKILL, ...); "" when it exited
+	// on its own. ExitCode is -1 then. Diagnosis tells a crash from an external kill by it.
+	Signal string
 }
 
 // Executor runs each local job through one process or Docker funnel.
@@ -224,7 +227,7 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	} else if s.Job.Isolation == "container" {
 		result.ExitCode, result.Err = e.runContainer(ctx, s, workspace, env, secretEnv)
 	} else {
-		result.ExitCode, result.Err = e.runProcess(ctx, s, workspace, append(env, secretEnv...))
+		result.ExitCode, result.Signal, result.Err = e.runProcess(ctx, s, workspace, append(env, secretEnv...))
 	}
 	if s.AfterJob != nil && result.Err == nil && result.ExitCode == 0 && ctx.Err() == nil {
 		result.Err = s.AfterJob(ctx, pinned)

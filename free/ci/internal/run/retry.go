@@ -51,7 +51,7 @@ func (rs *runState) diagnose(o *JobOutcome, res *ciexec.AttemptResult) {
 	if res.Attempt.State != "failed" {
 		return
 	}
-	in := diagnose.Input{ExecClass: res.Attempt.FailureClass, ExitCode: res.ExitCode, Reason: res.Reason, Tail: o.Tail}
+	in := diagnose.Input{ExecClass: res.Attempt.FailureClass, ExitCode: res.ExitCode, Reason: res.Reason, Signal: res.Signal, Tail: o.Tail}
 	if res.Err != nil {
 		in.Err = res.Err.Error()
 	}
