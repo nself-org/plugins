@@ -3,6 +3,7 @@ package deployguard
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,6 +164,15 @@ func TestCopyOneRefusesToOverwrite(t *testing.T) {
 	defer func() { _ = ws.Close() }()
 	if err = copyOne(root, ws, ".env"); err != nil {
 		t.Fatal(err)
+	}
+	f, err := ws.Open(".env")
+	if err != nil {
+		t.Fatalf("nothing was staged: %v", err)
+	}
+	b, _ := io.ReadAll(f)
+	_ = f.Close()
+	if string(b) != "ENV=prod\n" {
+		t.Fatalf("staged content %q", b)
 	}
 	if err = copyOne(root, ws, ".env"); err == nil {
 		t.Fatal("a second copy overwrote the staged file")

@@ -159,24 +159,37 @@ func (l Local) marker(ctx context.Context) (string, []string, error) {
 			continue
 		}
 		seen[d] = true
-		if l.prodEnv(d) {
+		prod, err := l.prodEnv(d)
+		if err != nil {
+			return "", nil, newErr(ReasonMarker, "cannot verify the compose project in %s: %v", d, err)
+		}
+		if prod {
 			return d, nil, nil
 		}
 	}
 	return "", nil, nil
 }
 
-func (l Local) prodEnv(dir string) bool {
+// prodEnv reports a production marker in dir. A file that is absent is not a marker; one that exists and
+// cannot be read cannot be ruled out, so it is an error (a production .env is often readable by its deploy
+// user only).
+func (l Local) prodEnv(dir string) (bool, error) {
 	if l.ReadFile == nil {
-		return false
+		return false, nil
 	}
 	for _, name := range []string{".env", ".env.prod"} {
 		b, err := l.ReadFile(filepath.Join(dir, name))
-		if err == nil && envSaysProd(string(b)) {
-			return true
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if envSaysProd(string(b)) {
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 // envSaysProd reports an ENV=prod or ENV=production line (export prefix and quotes allowed).

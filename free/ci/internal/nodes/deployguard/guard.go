@@ -78,11 +78,35 @@ func (g *Guard) RefreshProject(ctx context.Context, root string) error {
 	if err != nil {
 		return g.fail(ctx, root, err)
 	}
+	if len(es) == 0 {
+		// An empty list over a non-empty cache is more likely a different environment (NSELF_DEPLOY_HOST_*
+		// comes from the shell that ran nself) than a decommissioned project: keep the cache and say so.
+		if n, cerr := g.cachedCount(ctx, root); cerr != nil || n > 0 {
+			return g.fail(ctx, root, newErr(ReasonInventory, "%s returned no deploy targets but %d are cached; keeping them (forget the project to drop them)", root, n))
+		}
+	}
 	rows := make([]store.ExclusionEntry, 0, len(es))
 	for _, e := range es {
 		rows = append(rows, store.ExclusionEntry{Root: root, Kind: e.Kind, Value: e.Value, Source: e.Source})
 	}
 	return g.Store.ExclusionReplace(ctx, root, rows)
+}
+
+func (g *Guard) cachedCount(ctx context.Context, root string) (int, error) {
+	rows, err := g.Store.ExclusionEntries(ctx)
+	n := 0
+	for _, r := range rows {
+		if r.Root == root {
+			n++
+		}
+	}
+	return n, err
+}
+
+// ForgetProject drops a project root, its cached entries and its refresh state (audited). It is how an
+// operator removes a project that no longer exists or no longer deploys.
+func (g *Guard) ForgetProject(ctx context.Context, root string) error {
+	return g.Store.ExclusionForget(ctx, root, g.actor())
 }
 
 func (g *Guard) fail(ctx context.Context, root string, cause error) error {
@@ -169,8 +193,7 @@ func IdentityOf(c model.Capability) Identity {
 		id.MachineID = *c.Identity.MachineID.Value
 	}
 	if s := c.Identity.SSH; s != nil {
-		id.Dest = s.Alias
-		id.Names = append(id.Names, s.Hostname)
+		id.Dest, id.Hostname = s.Alias, s.Hostname
 		if id.Dest == "" {
 			id.Dest = s.Hostname
 		}
@@ -211,7 +234,7 @@ func (g *Guard) EvaluateNode(ctx context.Context, nodeID string) (Result, error)
 	if r.Matched {
 		detail = fmt.Sprintf("matched %s", r.Kind)
 	}
-	return r, g.Store.NodeSetDeployHost(ctx, nodeID, want, g.actor(), detail)
+	return r, g.Store.NodeSetDeployHost(ctx, nodeID, n.Version, want, g.actor(), detail)
 }
 
 // Reevaluate evaluates every registered node.

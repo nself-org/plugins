@@ -60,6 +60,13 @@ func projectRoot() string {
 	return dir
 }
 
+// hasNself reports a project that deploys: only such roots join the node-global set, so a stray git
+// checkout never becomes a root that can fail to read.
+func hasNself(root string) bool {
+	fi, err := os.Stat(filepath.Join(root, ".nself"))
+	return err == nil && fi.IsDir()
+}
+
 func flagBool(fs *flag.FlagSet, name string) bool {
 	if fs == nil {
 		return false
@@ -84,8 +91,10 @@ func deployHostHook(ctx context.Context, point lifecycle.Point, e lifecycle.Hook
 	}
 	defer func() { _ = st.Close() }()
 	g := newGuard(st, home, adminActor())
-	if err = g.Seen(ctx, projectRoot()); err != nil {
-		return err
+	if root := projectRoot(); hasNself(root) {
+		if err = g.Seen(ctx, root); err != nil {
+			return err
+		}
 	}
 	if point == lifecycle.PointTest {
 		return reportWarnings(g.Refresh(ctx))
@@ -100,8 +109,9 @@ func deployHostHook(ctx context.Context, point lifecycle.Point, e lifecycle.Hook
 		return err
 	}
 	if r.Matched && e.Capability == nil {
-		if _, eerr := g.EvaluateNode(ctx, e.NodeID); eerr != nil {
-			return fmt.Errorf("node %s is a deploy host and cannot be paired: %w", e.NodeID, eerr)
+		// No draft to mark: the stored node must carry the match, or the pairing is refused.
+		if again, eerr := g.EvaluateNode(ctx, e.NodeID); eerr != nil || !again.Matched {
+			return fmt.Errorf("node %s is a deploy host and cannot be paired (stored node: %v, matched %v)", e.NodeID, eerr, again.Matched)
 		}
 	}
 	if r.Matched && !q.Allow {

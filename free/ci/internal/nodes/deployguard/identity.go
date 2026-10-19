@@ -22,7 +22,9 @@ import (
 type Identity struct {
 	// Dest is the destination as typed or stored: an ssh alias, host or user@host.
 	Dest string
-	// Names are further names (hostname, node id, node name).
+	// Hostname is the real host name a stored node carries (identity.ssh.hostname): looked up like Dest.
+	Hostname string
+	// Names are labels (node id, node name): matched, and looked up quietly.
 	Names        []string
 	Fingerprints []string
 	MachineID    string
@@ -57,6 +59,7 @@ func (r Resolver) Facts(ctx context.Context, id Identity) (Facts, []string) {
 		f.Names = append(f.Names, c)
 	}
 	name(id.Dest)
+	name(id.Hostname)
 	// Labels (node id, node name) are looked up too, but a label with no address is not worth a warning.
 	for _, n := range id.Names {
 		before := len(f.Names)

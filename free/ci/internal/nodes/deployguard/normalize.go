@@ -102,6 +102,8 @@ func inetAton(h string) (netip.Addr, bool) {
 	return netip.AddrFrom4([4]byte{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)}), true
 }
 
+const base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
 // NormalizeFingerprint returns the SHA256:<base64> form of a host-key fingerprint, keeping the case of
 // the digest (base64 is case sensitive); other text maps to "".
 func NormalizeFingerprint(raw string) string {
@@ -112,7 +114,7 @@ func NormalizeFingerprint(raw string) string {
 		s = rest
 	}
 	s = strings.TrimRight(s, "=")
-	if len(s) != 43 || strings.ContainsAny(s, " \t:") {
+	if len(s) != 43 || strings.Trim(s, base64Alphabet) != "" {
 		return ""
 	}
 	return "SHA256:" + s

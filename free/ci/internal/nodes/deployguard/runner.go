@@ -28,6 +28,9 @@ var runSeq atomic.Int64
 
 const maxStaged = 1 << 20
 
+// maxOutput caps what one nself call may return (a larger document is cut and then fails to parse).
+const maxOutput = 4 << 20
+
 // runTimeout bounds one nself call (30 s), as a plain duration.
 const runTimeout = time.Duration(3e10)
 
@@ -41,7 +44,11 @@ func FunnelRun(ctx context.Context, dir string, argv ...string) ([]byte, int, er
 	spec := ciexec.JobSpec{
 		AttemptID: fmt.Sprintf("dg-%d-%d", time.Now().UnixNano(), runSeq.Add(1)), CoordinatorID: "deployguard",
 		Job: model.Job{Kind: "static"}, Timeout: runTimeout, Command: argv,
-		Output: func(b []byte) { buf.Write(b) },
+		Output: func(b []byte) {
+			if room := maxOutput - buf.Len(); room > 0 {
+				buf.Write(b[:min(room, len(b))])
+			}
+		},
 	}
 	if dir != "" {
 		spec.BeforeJob = func(_ context.Context, ws *os.Root) error { return stage(dir, ws) }

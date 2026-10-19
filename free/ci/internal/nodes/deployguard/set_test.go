@@ -75,11 +75,11 @@ func TestAddDropsGarbageAndFirstSourceWins(t *testing.T) {
 	}
 	s.Add(Entry{KindHost, FixtureHostV4, SourceNeverList})
 	s.Add(Entry{KindHost, FixtureHostV4, SourceInventory})
-	s.Add(Entry{KindAddress, "10.0.0.1", ""})
+	s.Add(Entry{KindAddress, "192.0.2.77", ""})
 	if r := s.MatchHost(FixtureHostV4); r.Source != SourceNeverList {
 		t.Errorf("source = %q", r.Source)
 	}
-	if r := s.MatchHost("10.0.0.1"); r.Source != SourceInventory {
+	if r := s.MatchHost("192.0.2.77"); r.Source != SourceInventory {
 		t.Errorf("default source = %q", r.Source)
 	}
 }
@@ -98,7 +98,7 @@ func TestViewIsSortedAndComplete(t *testing.T) {
 func TestCanonTable(t *testing.T) {
 	for in, want := range map[string]string{
 		"Example.TEST.": "example.test", "ci@example.test:22": "example.test", "[2001:DB8::1]:22": "2001:db8::1", "2001:db8::1": "2001:db8::1",
-		"::ffff:1.2.3.4": "1.2.3.4", "fe80::1%eth0": "fe80::1", "1.2.3.4:22": "1.2.3.4", "16909060": "1.2.3.4", "1.2.3.4.": "1.2.3.4",
+		"::ffff:192.0.2.4": "192.0.2.4", "fe80::1%eth0": "fe80::1", "192.0.2.4:22": "192.0.2.4", "3221225988": "192.0.2.4", "192.0.2.4.": "192.0.2.4",
 		"": "", "  ": "", "host..": "host",
 	} {
 		if got := Canon(in); got != want {

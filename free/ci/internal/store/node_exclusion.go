@@ -80,6 +80,10 @@ func (s *Store) ExclusionReplace(ctx context.Context, root string, entries []Exc
 	}
 	return s.write(ctx, func(tx *sql.Tx) error {
 		now := s.now().UnixNano()
+		var before int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM excl_entry WHERE root=?`, root).Scan(&before); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM excl_entry WHERE root=?`, root); err != nil {
 			return err
 		}
@@ -88,8 +92,32 @@ func (s *Store) ExclusionReplace(ctx context.Context, root string, entries []Exc
 				return err
 			}
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO excl_state(root,refreshed_at,ok,last_ok_at,error) VALUES(?,?,1,?,'') ON CONFLICT(root) DO UPDATE SET refreshed_at=excluded.refreshed_at,ok=1,last_ok_at=excluded.last_ok_at,error=''`, root, now, now)
-		return err
+		if _, err := tx.ExecContext(ctx, `INSERT INTO excl_state(root,refreshed_at,ok,last_ok_at,error) VALUES(?,?,1,?,'') ON CONFLICT(root) DO UPDATE SET refreshed_at=excluded.refreshed_at,ok=1,last_ok_at=excluded.last_ok_at,error=''`, root, now, now); err != nil {
+			return err
+		}
+		var after int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM excl_entry WHERE root=?`, root).Scan(&after); err != nil {
+			return err
+		}
+		if after < before {
+			return s.appendAudit(ctx, tx, "deployguard", "exclusion.shrink", root, fmt.Sprintf("entries %d to %d", before, after))
+		}
+		return nil
+	})
+}
+
+// ExclusionForget removes a project root with its entries and state, with one audit row.
+func (s *Store) ExclusionForget(ctx context.Context, root, actor string) error {
+	if root == "" {
+		return coded("E607", "invalid project root")
+	}
+	return s.write(ctx, func(tx *sql.Tx) error {
+		for _, q := range []string{`DELETE FROM excl_entry WHERE root=?`, `DELETE FROM excl_state WHERE root=?`, `DELETE FROM excl_project WHERE root=?`} {
+			if _, err := tx.ExecContext(ctx, q, root); err != nil {
+				return err
+			}
+		}
+		return s.appendAudit(ctx, tx, actor, "exclusion.forget", root, "project forgotten")
 	})
 }
 
@@ -145,16 +173,21 @@ func (s *Store) ExclusionStates(ctx context.Context) ([]ExclusionState, error) {
 
 // NodeSetDeployHost sets the deploy_host fact of a node (the column and the capability document)
 // in one transaction with an audit row. An unchanged fact writes nothing.
-func (s *Store) NodeSetDeployHost(ctx context.Context, nodeID string, d model.CapabilityDeployHost, actor, detail string) error {
+// version is the node version the caller decided on (0 skips the check): a node changed since then fails
+// with E605 and the caller re-evaluates.
+func (s *Store) NodeSetDeployHost(ctx context.Context, nodeID string, version int64, d model.CapabilityDeployHost, actor, detail string) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
 		var doc, col string
-		var version int64
-		err := tx.QueryRowContext(ctx, `SELECT s.doc_json,n.deploy_host_json,n.version FROM node n JOIN capability_snapshot s ON s.node_id=n.id WHERE n.id=?`, nodeID).Scan(&doc, &col, &version)
+		var current int64
+		err := tx.QueryRowContext(ctx, `SELECT s.doc_json,n.deploy_host_json,n.version FROM node n JOIN capability_snapshot s ON s.node_id=n.id WHERE n.id=?`, nodeID).Scan(&doc, &col, &current)
 		if errors.Is(err, sql.ErrNoRows) {
 			return coded("E650", "node not found")
 		}
 		if err != nil {
 			return err
+		}
+		if version != 0 && version != current {
+			return coded("E605", "node version changed")
 		}
 		var c model.Capability
 		if err = json.Unmarshal([]byte(doc), &c); err != nil {
@@ -174,7 +207,7 @@ func (s *Store) NodeSetDeployHost(ctx context.Context, nodeID string, d model.Ca
 			return err
 		}
 		now := s.now().UnixNano()
-		res, err := tx.ExecContext(ctx, `UPDATE node SET deploy_host_json=?,version=version+1,updated_at=? WHERE id=? AND version=?`, string(next), now, nodeID, version)
+		res, err := tx.ExecContext(ctx, `UPDATE node SET deploy_host_json=?,version=version+1,updated_at=? WHERE id=? AND version=?`, string(next), now, nodeID, current)
 		if err != nil {
 			return err
 		}

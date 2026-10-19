@@ -58,7 +58,7 @@ func (g *Guard) CheckAdd(ctx context.Context, q AddRequest) (Result, []string, e
 	if q.Capability != nil {
 		c := IdentityOf(*q.Capability)
 		id.Names = append(id.Names, c.Names...)
-		id.Fingerprints, id.MachineID = c.Fingerprints, c.MachineID
+		id.Hostname, id.Fingerprints, id.MachineID = c.Hostname, c.Fingerprints, c.MachineID
 		if id.Dest == "" {
 			id.Dest = c.Dest
 		}
@@ -69,6 +69,9 @@ func (g *Guard) CheckAdd(ctx context.Context, q AddRequest) (Result, []string, e
 		return r, warn, err
 	}
 	if !r.Matched {
+		if r.Partial {
+			return r, warn, newErr(ReasonNoIdentity, "the identity of %s could not be fully resolved (%s); node was not added", q.NodeID, strings.Join(w, "; "))
+		}
 		return r, warn, g.unverified(ctx)
 	}
 	dh := DeployHostFor(r, model.CapabilityDeployHost{})

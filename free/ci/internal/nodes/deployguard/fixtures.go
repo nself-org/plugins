@@ -71,7 +71,7 @@ func (r *FixtureRunner) Run(_ context.Context, dir string, argv ...string) ([]by
 
 // FixtureSSHConfig is the ssh_config of the alias: a ProxyJump hop and a HostKeyAlias, resolving to FixtureHostV4.
 func FixtureSSHConfig() string {
-	return "Host " + FixtureAlias + "\n  FixtureHostName " + FixtureHostV4 + "\n  User ci\n  ProxyJump " + FixtureJumpHost + "\n  HostKeyAlias " + FixtureHostName + "\n"
+	return "Host " + FixtureAlias + "\n  HostName " + FixtureHostV4 + "\n  User ci\n  ProxyJump " + FixtureJumpHost + "\n  HostKeyAlias " + FixtureHostName + "\n"
 }
 
 // FixtureSpellings lists ways to write the fixture hosts: case, trailing dots, user@, port, brackets, mapped

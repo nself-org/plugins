@@ -85,7 +85,7 @@ func TestNodeSetDeployHostWritesColumnDocumentAndOneAuditRow(t *testing.T) {
 	src := "inventory"
 	want := model.CapabilityDeployHost{Matched: true, Source: &src, Override: true}
 	before, _ := s.NodeGet(ctx, id)
-	if err := s.NodeSetDeployHost(ctx, id, want, "cli:test", "matched host"); err != nil {
+	if err := s.NodeSetDeployHost(ctx, id, 0, want, "cli:test", "matched host"); err != nil {
 		t.Fatal(err)
 	}
 	n, _ := s.NodeGet(ctx, id)
@@ -102,7 +102,7 @@ func TestNodeSetDeployHostWritesColumnDocumentAndOneAuditRow(t *testing.T) {
 		t.Fatalf("audit rows = %d", audits)
 	}
 	// The same fact again writes nothing: no version bump, no second audit row.
-	if err := s.NodeSetDeployHost(ctx, id, want, "cli:test", "again"); err != nil {
+	if err := s.NodeSetDeployHost(ctx, id, 0, want, "cli:test", "again"); err != nil {
 		t.Fatal(err)
 	}
 	again, _ := s.NodeGet(ctx, id)
@@ -110,13 +110,59 @@ func TestNodeSetDeployHostWritesColumnDocumentAndOneAuditRow(t *testing.T) {
 		t.Fatal("an unchanged fact wrote")
 	}
 	// Clearing it is a change.
-	if err := s.NodeSetDeployHost(ctx, id, model.CapabilityDeployHost{}, "cli:test", "cleared"); err != nil {
+	if err := s.NodeSetDeployHost(ctx, id, 0, model.CapabilityDeployHost{}, "cli:test", "cleared"); err != nil {
 		t.Fatal(err)
 	}
 	if countAudit(t, s, "node.deploy_host") != 2 {
 		t.Fatal("clearing did not audit")
 	}
-	if err := s.NodeSetDeployHost(ctx, "ghost", want, "cli:test", "x"); !codeIs(err, "E650") {
+	if err := s.NodeSetDeployHost(ctx, "ghost", 0, want, "cli:test", "x"); !codeIs(err, "E650") {
 		t.Fatalf("missing node: %v", err)
+	}
+}
+
+func TestNodeSetDeployHostChecksTheVersionTheCallerSaw(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	id := putFixtureNode(t, s)
+	n, _ := s.NodeGet(ctx, id)
+	src := "never-list"
+	dh := model.CapabilityDeployHost{Matched: true, Source: &src}
+	if err := s.NodeSetDeployHost(ctx, id, n.Version+7, dh, "cli:test", "stale"); !codeIs(err, "E605") {
+		t.Fatalf("stale version: %v", err)
+	}
+	if err := s.NodeSetDeployHost(ctx, id, n.Version, dh, "cli:test", "fresh"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.NodeSetDeployHost(ctx, id, n.Version, model.CapabilityDeployHost{}, "cli:test", "again"); !codeIs(err, "E605") {
+		t.Fatalf("a version that moved on: %v", err)
+	}
+}
+
+func TestExclusionForgetDropsOneRootAndAuditsOnce(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	for _, root := range []string{"/p/a", "/p/b"} {
+		if err := s.ExclusionProjectSeen(ctx, root); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.ExclusionReplace(ctx, root, []ExclusionEntry{{root, "host", "h-" + root[3:] + ".example.test", "inventory"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.ExclusionFail(ctx, "/p/a", "boom"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ExclusionForget(ctx, "/p/a", "cli:test"); err != nil {
+		t.Fatal(err)
+	}
+	rows, _ := s.ExclusionEntries(ctx)
+	st, _ := s.ExclusionStates(ctx)
+	roots, _ := s.ExclusionProjects(ctx)
+	if len(rows) != 1 || rows[0].Root != "/p/b" || len(st) != 1 || len(roots) != 1 || countAudit(t, s, "exclusion.forget") != 1 {
+		t.Fatalf("rows %+v states %+v roots %v", rows, st, roots)
+	}
+	if err := s.ExclusionForget(ctx, "", "cli:test"); !codeIs(err, "E607") {
+		t.Fatalf("empty root: %v", err)
 	}
 }

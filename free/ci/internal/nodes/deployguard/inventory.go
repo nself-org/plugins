@@ -82,14 +82,18 @@ func sideEffectIsRead(out []byte) bool {
 	return found > 0 && !bad
 }
 
+type targetRow struct {
+	Host                string   `json:"host"`
+	SSHHostname         string   `json:"ssh_hostname"`
+	Addresses           []string `json:"addresses"`
+	HostKeyFingerprints []string `json:"host_key_fingerprints"`
+}
+
+// targetsDoc: a null data or a null targets list is a failure, never an empty inventory.
 type targetsDoc struct {
-	Data struct {
-		Targets []struct {
-			Host                string   `json:"host"`
-			SSHHostname         string   `json:"ssh_hostname"`
-			Addresses           []string `json:"addresses"`
-			HostKeyFingerprints []string `json:"host_key_fingerprints"`
-		} `json:"targets"`
+	Command string `json:"command"`
+	Data    *struct {
+		Targets *[]targetRow `json:"targets"`
 	} `json:"data"`
 }
 
@@ -100,14 +104,11 @@ func parseTargets(out []byte) ([]Entry, error) {
 	}
 	b, _ := json.Marshal(raw)
 	var d targetsDoc
-	if err := json.Unmarshal(b, &d); err != nil {
+	if err := json.Unmarshal(b, &d); err != nil || d.Data == nil || d.Data.Targets == nil {
 		return nil, newErr(ReasonInventory, "nself deploy targets --json document does not match contract:cli.deploy-targets")
 	}
-	if _, ok := raw["data"].(map[string]any)["targets"]; !ok {
-		return nil, newErr(ReasonInventory, "nself deploy targets --json document has no targets list")
-	}
 	var es []Entry
-	for _, t := range d.Data.Targets {
+	for _, t := range *d.Data.Targets {
 		for _, h := range append([]string{t.Host, t.SSHHostname}, t.Addresses...) {
 			if h != "" {
 				es = append(es, Entry{KindHost, h, SourceInventory})

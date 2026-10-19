@@ -41,7 +41,7 @@ func newRig(t *testing.T) *rig {
 		r.audits = append(r.audits, row)
 		return store.AuditChain{Head: []byte("h")}, nil
 	})
-	r.run = &FixtureRunner{HelpSide: "read", HostsByRoot: map[string][]string{r.rootA: {FixtureHostV4}, r.rootB: {FixtureHostName, "10.9.9.9"}}}
+	r.run = &FixtureRunner{HelpSide: "read", HostsByRoot: map[string][]string{r.rootA: {FixtureHostV4}, r.rootB: {FixtureHostName, "192.0.2.9"}}}
 	r.g = &Guard{Store: st, Reader: Reader{Run: r.run.Run}, Home: r.home, Actor: "cli:test",
 		Resolver: Resolver{
 			SSH: func(_ context.Context, a string) (remote.Resolved, error) {
@@ -308,8 +308,10 @@ func TestRunRefreshesNowAndStopsWithItsContext(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Run did not stop")
 	}
-	if len(errs) != 0 {
-		t.Fatalf("errors %v", errs)
+	for _, e := range errs { // the cancel may land inside the first refresh
+		if !errors.Is(e, context.Canceled) && !strings.Contains(e.Error(), "context canceled") {
+			t.Fatalf("errors %v", errs)
+		}
 	}
 }
 

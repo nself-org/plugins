@@ -102,7 +102,7 @@ func neverEntry(v string) (Entry, bool, error) {
 		return Entry{}, false, nil
 	case strings.HasPrefix(strings.ToLower(v), "machine-id:"):
 		return Entry{KindMachineID, v[len("machine-id:"):], SourceNeverList}, true, nil
-	case NormalizeFingerprint(v) != "":
+	case strings.HasPrefix(strings.ToUpper(v), "SHA256:") && NormalizeFingerprint(v) != "":
 		return Entry{KindFingerprint, v, SourceNeverList}, true, nil
 	}
 	if _, err := netip.ParsePrefix(v); err == nil {

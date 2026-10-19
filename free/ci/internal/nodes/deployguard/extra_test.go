@@ -35,7 +35,7 @@ func TestEvaluateNodeKeepsAMatchOnPartialEvidence(t *testing.T) {
 		t.Fatal("setup: not matched through ssh -G")
 	}
 	src := SourceInventory
-	if err := r.st.NodeSetDeployHost(ctx, "n1", model.CapabilityDeployHost{Matched: true, Source: &src, Override: true}, "cli:ali", "override"); err != nil {
+	if err := r.st.NodeSetDeployHost(ctx, "n1", 0, model.CapabilityDeployHost{Matched: true, Source: &src, Override: true}, "cli:ali", "override"); err != nil {
 		t.Fatal(err)
 	}
 	delete(r.ssh, "box-alias") // ssh -G now fails
@@ -124,7 +124,7 @@ func TestNeverListRejectsABadCIDRAndKeepsGoodOnes(t *testing.T) {
 			t.Errorf("%q: ok=%v err=%v", bad, ok, err)
 		}
 	}
-	for _, good := range []string{"203.0.113.0/24", "2001:db8::/32", " 10.0.0.0/8 "} {
+	for _, good := range []string{"203.0.113.0/24", "2001:db8::/32", " 192.0.2.0/24 "} {
 		if e, ok, err := neverEntry(good); err != nil || !ok || e.Kind != KindPrefix {
 			t.Errorf("%q: %+v %v %v", good, e, ok, err)
 		}
@@ -142,7 +142,7 @@ func TestSetNormalisesPrefixesAndZones(t *testing.T) {
 			t.Errorf("%s not matched", h)
 		}
 	}
-	if s.MatchHost("203.0.114.1").Matched || s.MatchHost("2001:db8:2::1").Matched {
+	if s.MatchHost("192.0.2.1").Matched || s.MatchHost("2001:db8:2::1").Matched {
 		t.Error("over-match")
 	}
 	// A resolved address that carries a zone matches the same entries.
@@ -154,13 +154,13 @@ func TestSetNormalisesPrefixesAndZones(t *testing.T) {
 		t.Error("zoned address missed an exact entry")
 	}
 	if got := (&Set{}); true {
-		got.addPrefix(netip.MustParsePrefix("::ffff:10.0.0.0/96"), SourceInventory) // /96 of 4in6 is 0.0.0.0/0
+		got.addPrefix(netip.MustParsePrefix("::ffff:192.0.2.0/96"), SourceInventory) // /96 of 4in6 is 0.0.0.0/0
 		if v := got.View().Prefixes; len(v) != 1 || v[0] != "0.0.0.0/0" {
 			t.Errorf("prefixes %v", v)
 		}
 	}
 	if got := (&Set{}); true {
-		got.addPrefix(netip.MustParsePrefix("::ffff:10.0.0.0/95"), SourceInventory) // wider than the mapped block: kept as is
+		got.addPrefix(netip.MustParsePrefix("::ffff:192.0.2.0/95"), SourceInventory) // wider than the mapped block: kept as is
 		if v := got.View().Prefixes; len(v) != 1 || v[0] != "::fffe:0:0/95" {
 			t.Errorf("prefixes %v", v)
 		}
@@ -172,7 +172,7 @@ func TestEmptyIsFalseWithAnySingleKind(t *testing.T) {
 		t.Fatal("zero set not empty")
 	}
 	for _, e := range []Entry{
-		{KindHost, "h.example.test", ""}, {KindAddress, "10.0.0.1", ""}, {KindPrefix, "10.0.0.0/8", ""},
+		{KindHost, "h.example.test", ""}, {KindAddress, "192.0.2.77", ""}, {KindPrefix, "192.0.2.0/24", ""},
 		{KindFingerprint, FixtureFingerprint, ""}, {KindMachineID, FixtureMachineID, ""},
 	} {
 		if NewSet([]Entry{e}).Empty() {
