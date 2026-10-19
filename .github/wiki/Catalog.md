@@ -80,7 +80,7 @@ reports the job `overdue` (exit 10) when its last passing run is older than that
 there a failed or missing nightly run is the alert.
 
 ```bash
-bash scripts/drill/catalog-freshness/run --fixtures   # offline self-test: eight recorded cases, no network
+bash scripts/drill/catalog-freshness/run --fixtures   # offline self-test: eleven recorded cases, no network
 bash scripts/drill/catalog-freshness/run              # the live drill against plugins.nself.org
 ```
 

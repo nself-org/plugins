@@ -34,8 +34,10 @@ if [ "${1:-}" = "--fixtures" ]; then
 	for case_dir in "$here"/fixtures/*/; do
 		name=$(basename "$case_dir")
 		[ -f "$case_dir/expect" ] || continue # fixtures/main holds the files "on main", not a case
-		out=$(CATALOG_FIXTURE_DIR=$case_dir CATALOG_MAIN_DIR=$here/fixtures/main NOW=1792368000 "${BASH_SOURCE[0]}" 2>/dev/null) || true
+		out=$(CATALOG_FRESHNESS_SELFTEST=1 CATALOG_FIXTURE_DIR=$case_dir CATALOG_MAIN_DIR=$here/fixtures/main NOW=1792368000 "$here/run" 2>/dev/null) || true
 		ok=1
+		# A crash or an empty answer must not read as "nothing failed": the document holds all six checks.
+		jq -e '.checks | length == 6' <<<"$out" >/dev/null 2>&1 || { echo "fixtures: $name: no evidence document with six checks" >&2; ok=0; }
 		while read -r id want; do
 			[ -n "$id" ] || continue
 			got=$(jq -r --arg id "catalog-freshness.$id" '.checks[] | select(.id == $id) | .result' <<<"$out")
@@ -54,6 +56,10 @@ fi
 for tool in curl jq; do
 	command -v "$tool" >/dev/null || { echo "catalog-freshness: $tool is required" >&2; exit 2; }
 done
+if [ -z "${CATALOG_FRESHNESS_SELFTEST:-}" ] && { [ -n "${CATALOG_FIXTURE_DIR:-}" ] || [ -n "${CATALOG_MAIN_DIR:-}" ] || [ -n "${NOW:-}" ]; }; then
+	echo "catalog-freshness: CATALOG_FIXTURE_DIR, CATALOG_MAIN_DIR and NOW are test hooks of --fixtures; unset them for a live run" >&2
+	exit 2
+fi
 main=${CATALOG_MAIN_DIR:-$root}
 for f in catalog.json registry.json; do
 	[ -r "$main/$f" ] || { echo "catalog-freshness: cannot read $main/$f" >&2; exit 2; }
@@ -76,7 +82,7 @@ fetch() {
 		if [ -r "$CATALOG_FIXTURE_DIR/$1.headers" ]; then cp "$CATALOG_FIXTURE_DIR/$1.headers" "$work/$1.headers"; else : >"$work/$1.headers"; fi
 		return 0
 	fi
-	curl --silent --show-error --fail --location --retry 2 --max-time 60 --proto '=https,http' \
+	curl --silent --show-error --fail --location --retry 1 --max-time 30 --proto '=https,http' \
 		--dump-header "$work/$1.headers" --output "$work/$1.body" "$base$2" 2>"$work/$1.err" || return 1
 }
 
@@ -89,6 +95,25 @@ emit() { # emit ID RESULT FINDINGS EXCERPT
 }
 unfetched() { # unfetched ID NAME: the check fails because the fetch did
 	emit "$1" fail 1 "fetch of $2 failed: $(tr '\n' ' ' <"$work/$2.err" 2>/dev/null | cut -c1-300)"
+}
+
+# lists_equal ID PASS_TEXT SERVED_FILE SERVED_JQ MAIN_FILE MAIN_JQ: the two sorted lists must be equal and non-empty.
+# An empty or unreadable side fails (two empty lists would otherwise compare equal).
+lists_equal() {
+	local a="$work/$1.served" b="$work/$1.main" d
+	if ! jq -r "$4" "$3" 2>/dev/null | LC_ALL=C sort -u >"$a" || [ ! -s "$a" ]; then
+		emit "$1" fail 1 "the served list is empty or unreadable"
+		return
+	fi
+	if ! jq -r "$6" "$5" 2>/dev/null | LC_ALL=C sort -u >"$b" || [ ! -s "$b" ]; then
+		emit "$1" fail 1 "the list on main is empty or unreadable"
+		return
+	fi
+	if d=$(diff "$a" "$b"); then
+		emit "$1" pass 0 "$2"
+	else
+		emit "$1" fail "$(grep -c '^[<>]' <<<"$d")" "served (<) vs main (>): $(grep '^[<>]' <<<"$d" | head -n 20 | tr '\n' ';')"
+	fi
 }
 
 if [ "${CATALOG_REGEN:-0}" = 1 ]; then
@@ -125,18 +150,12 @@ fi
 echo "catalog-freshness: registry.json" >&2
 if fetch registry /registry.json; then
 	# Served: a list of {name, version, tier}. Main: registry.json holds an object keyed by plugin name (free only).
-	if diff_out=$(diff <(jq -r '.plugins[] | select(.tier == "free") | "\(.name) \(.version)"' "$work/registry.body" | LC_ALL=C sort) \
-		<(jq -r '.plugins | to_entries[] | "\(.key) \(.value.version)"' "$main/registry.json" | LC_ALL=C sort)); then
-		emit registry.free pass 0 "served free plugins and versions equal registry.json on main"
-	else
-		emit registry.free fail "$(grep -c '^[<>]' <<<"$diff_out")" "served (<) vs main (>): $(grep '^[<>]' <<<"$diff_out" | head -n 20 | tr '\n' ';')"
-	fi
-	if diff_out=$(diff <(jq -r '.plugins[] | select(.tier != "free") | .name' "$work/registry.body" | LC_ALL=C sort -u) \
-		<(jq -r '.plugins[] | select(.tier == "licensed") | .slug' "$main/catalog.json" | LC_ALL=C sort -u)); then
-		emit registry.licensed pass 0 "served licensed plugin names equal the licensed slugs of catalog.json on main"
-	else
-		emit registry.licensed fail "$(grep -c '^[<>]' <<<"$diff_out")" "served (<) vs main (>): $(grep '^[<>]' <<<"$diff_out" | head -n 20 | tr '\n' ';')"
-	fi
+	lists_equal registry.free "served free plugins and versions equal registry.json on main" \
+		"$work/registry.body" '.plugins[] | select(.tier == "free") | "\(.name) \(.version)"' \
+		"$main/registry.json" '.plugins | to_entries[] | "\(.key) \(.value.version)"'
+	lists_equal registry.licensed "served licensed plugin names equal the licensed slugs of catalog.json on main" \
+		"$work/registry.body" '.plugins[] | select(.tier != "free") | .name' \
+		"$main/catalog.json" '.plugins[] | select(.tier == "licensed") | .slug'
 else
 	unfetched registry.free registry
 	unfetched registry.licensed registry
@@ -145,11 +164,8 @@ fi
 echo "catalog-freshness: bundles.json" >&2
 if fetch bundles /bundles.json; then
 	members='.bundles | to_entries[] | "\(.key): \(.value.plugins | sort | join(","))"'
-	if diff_out=$(diff <(jq -r "$members" "$work/bundles.body" | LC_ALL=C sort) <(jq -r "$members" "$main/catalog.json" | LC_ALL=C sort)); then
-		emit bundles.members pass 0 "served bundles and their members equal catalog.json on main"
-	else
-		emit bundles.members fail "$(grep -c '^[<>]' <<<"$diff_out")" "served (<) vs main (>): $(grep '^[<>]' <<<"$diff_out" | head -n 20 | tr '\n' ';')"
-	fi
+	lists_equal bundles.members "served bundles and their members equal catalog.json on main" \
+		"$work/bundles.body" "$members" "$main/catalog.json" "$members"
 else
 	unfetched bundles.members bundles
 fi
@@ -161,6 +177,8 @@ if fetch stats /stats; then
 	last=$(jq -r '.lastSync // "none"' "$work/stats.body" 2>/dev/null || echo unreadable)
 	if [ -z "$age" ]; then
 		emit stats.lastSync fail 1 "worker /stats has no readable lastSync (got '$last')"
+	elif [ "$age" -lt -300 ]; then
+		emit stats.lastSync fail 1 "lastSync $last is in the future (clock skew over 5 minutes or a bad stamp)"
 	elif [ "$age" -lt $((max_age_h * 3600)) ]; then
 		emit stats.lastSync pass 0 "lastSync $last is $((age / 3600)) h old (limit $max_age_h h)"
 	else
