@@ -135,7 +135,7 @@
     "autocomplete"
   ],
   "tier": "free",
-  "version": "1.2.6",
+  "version": "1.2.12",
   "webhooks": [
     "document.deleted",
     "document.indexed",
