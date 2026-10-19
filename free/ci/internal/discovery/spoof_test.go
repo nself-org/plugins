@@ -223,3 +223,20 @@ func TestOnlyMDNSNetImportsTheLibrary(t *testing.T) {
 		}
 	}
 }
+
+// TestDuplicateFlagSurvivesTheCap: the twin of a listed id is flagged even when the twin itself is cut.
+func TestDuplicateFlagSurvivesTheCap(t *testing.T) {
+	n := newMemNet()
+	for i := range MaxCandidates - 1 {
+		n.injected = append(n.injected, Entry{Name: "a" + strconv.Itoa(i) + "._nself-ci._tcp.local.", Addrs: addr("192.168.1.2"), Port: 22, TXT: []string{"1111111" + strconv.Itoa(i%10)}})
+	}
+	n.injected = append(n.injected,
+		Entry{Name: "b1._nself-ci._tcp.local.", Addrs: addr("192.168.1.8"), Port: 22, TXT: []string{"0a1b2c3d"}},
+		Entry{Name: "zz._nself-ci._tcp.local.", Addrs: addr("192.168.1.66"), Port: 22, TXT: []string{"0a1b2c3d"}})
+	res, _ := guardFor(n, nil, t.TempDir()).Browse(context.Background(), time.Second)
+	for _, c := range res.Candidates {
+		if c.Instance == "b1" && !c.DuplicateID {
+			t.Fatal("b1 shares its id with a record that was cut: it must still be flagged")
+		}
+	}
+}

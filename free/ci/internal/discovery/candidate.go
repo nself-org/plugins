@@ -141,12 +141,7 @@ func candidates(in []Entry) Result {
 		}
 		return strings.Join(out[i].Addresses, ",") < strings.Join(out[j].Addresses, ",")
 	})
-	r := Result{}
-	if len(out) > MaxCandidates {
-		r.Truncated = len(out) - MaxCandidates
-		out = out[:MaxCandidates]
-	}
-	ids := map[string]int{}
+	ids := map[string]int{} // counted before the cap, so a twin that falls off the list still flags its pair
 	for _, c := range out {
 		if c.WindowID != "" {
 			ids[c.WindowID]++
@@ -154,6 +149,11 @@ func candidates(in []Entry) Result {
 	}
 	for i := range out {
 		out[i].DuplicateID = out[i].WindowID != "" && ids[out[i].WindowID] > 1
+	}
+	r := Result{}
+	if len(out) > MaxCandidates {
+		r.Truncated = len(out) - MaxCandidates
+		out = out[:MaxCandidates]
 	}
 	r.Candidates = out
 	if r.Candidates == nil {
