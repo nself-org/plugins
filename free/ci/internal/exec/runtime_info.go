@@ -97,3 +97,10 @@ func cachedInfo(ctx context.Context, binary string) ([]byte, error) {
 		} // the claimant was cancelled and dropped its answer: ask again
 	}
 }
+
+// WarmRuntimeInfo starts the `info` question in the background, so a run that
+// asks the daemon later (the orphan sweep on its first job) finds the answer
+// already in flight instead of waiting a whole spawn on its start path.
+func WarmRuntimeInfo() {
+	go func() { _, _ = cachedInfo(context.Background(), "docker") }()
+}
