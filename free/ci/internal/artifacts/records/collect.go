@@ -14,6 +14,7 @@ package records
 import (
 	"context"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -48,18 +49,45 @@ type Collector struct {
 	Limits  authz.Limits
 }
 
-// Collect stores every file the declarations select under base.
+// planned is one admitted file with the record name it will get.
+type planned struct {
+	decl Decl
+	f    found
+	name string
+}
+
+// Collect stores every file the declarations select under base. Every entry of
+// every declaration is judged before the first byte is stored, so a refusal
+// leaves nothing behind.
 func (c Collector) Collect(ctx context.Context, project, base string, decls []Decl) ([]Staged, error) {
 	root, err := os.OpenRoot(base)
 	if err != nil {
 		return nil, failf(ReasonUnreadable, "job workdir: %v", err)
 	}
 	defer func() { _ = root.Close() }()
-	lim := c.Limits
-	lim.MaxFileBytes, lim.MaxTotalBytes = c.Policy.MaxFile, c.Policy.MaxTotal
+	plan, err := c.plan(root, decls)
+	if err != nil {
+		return nil, err
+	}
 	realm := cas.ArtifactRealm(project)
+	out := make([]Staged, 0, len(plan))
+	for _, p := range plan {
+		st, err := c.store(ctx, root, realm, p)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, st)
+	}
+	return out, nil
+}
+
+// plan expands, sanitises and caps every declaration (no bytes are read).
+func (c Collector) plan(root *os.Root, decls []Decl) ([]planned, error) {
+	lim := c.Limits
+	lim.MaxFileBytes, lim.MaxTotalBytes = math.MaxInt64/4, math.MaxInt64/4 // the caps below are E712; authz keeps the shape rules
 	names := map[string]bool{}
-	var out []Staged
+	var total int64
+	var out []planned
 	for _, d := range decls {
 		ents, err := expand(root.FS(), d.Path, authz.DefaultLimits().MaxEntries)
 		if err != nil {
@@ -74,19 +102,23 @@ func (c Collector) Collect(ctx context.Context, project, base string, decls []De
 		x := authz.NewExtractor(lim)
 		literal := !hasMeta(d.Path) && len(ents) == 1 && ents[0].rel == d.Path
 		for _, f := range ents {
-			if err := admit(x, root.FS(), f); err != nil {
+			name := recordName(d, f.rel, literal)
+			if f.info.Mode().IsRegular() {
+				if err = c.Policy.CheckFile(name, f.info.Size()); err != nil {
+					return nil, err
+				}
+				if total += f.info.Size(); total > c.Policy.MaxTotal {
+					return nil, failf(ReasonSizeCap, "the declared outputs exceed NSELF_CI_ARTIFACT_MAX_BYTES (%d B)", c.Policy.MaxTotal)
+				}
+			}
+			if err = admit(x, root.FS(), f); err != nil {
 				return nil, err
 			}
-			name := recordName(d, f.rel, literal)
 			if names[name] {
 				return nil, failf(ReasonDuplicate, "two declarations produce the artifact name %q", name)
 			}
 			names[name] = true
-			st, err := c.store(ctx, root, realm, d, f, name)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, st)
+			out = append(out, planned{d, f, name})
 		}
 	}
 	return out, nil
@@ -116,10 +148,8 @@ func literalPrefix(p string) string {
 	return strings.Join(keep, "/")
 }
 
-func (c Collector) store(ctx context.Context, root *os.Root, realm cas.Realm, d Decl, f found, name string) (Staged, error) {
-	if err := c.Policy.CheckFile(name, f.info.Size()); err != nil {
-		return Staged{}, err
-	}
+func (c Collector) store(ctx context.Context, root *os.Root, realm cas.Realm, p planned) (Staged, error) {
+	d, f, name := p.decl, p.f, p.name
 	if err := c.Policy.CheckDisk(f.info.Size()); err != nil {
 		return Staged{}, err
 	}

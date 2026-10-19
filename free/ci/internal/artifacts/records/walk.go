@@ -9,7 +9,8 @@ package records
 // number of directories; a matched directory selects every entry below it;
 // symlinks are listed, never followed; Admit (authz.Extractor) refuses
 // escapes, devices, FIFOs, collisions and bombs, and this file refuses
-// hardlinks and every symlink that survives it.
+// hardlinks and every symlink that survives it. Packed is the file size: a
+// stored file has no compression ratio, so the ratio rule never fires.
 
 import (
 	"io/fs"
@@ -131,7 +132,7 @@ func orDot(dir string) string {
 
 // admit judges one selected entry.
 func admit(x *authz.Extractor, fsys fs.FS, f found) error {
-	e := authz.Entry{Name: f.rel, Mode: f.info.Mode(), Size: f.info.Size(), Hardlink: f.info.Mode().IsRegular() && linkCount(f.info) > 1}
+	e := authz.Entry{Name: f.rel, Mode: f.info.Mode(), Size: f.info.Size(), Packed: f.info.Size(), Hardlink: f.info.Mode().IsRegular() && linkCount(f.info) > 1}
 	if f.info.Mode().Type() == fs.ModeSymlink {
 		target, err := fs.ReadLink(fsys, f.rel)
 		if err != nil {

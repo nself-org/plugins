@@ -52,7 +52,7 @@ func (h *artifactsHook) setup(a AttemptInfo) (records.Policy, *cas.Store, error)
 		return pol, nil, err
 	}
 	home := records.StoreDir(a.Home)
-	pol.StorePath, pol.Now, pol.Warn = home, h.now, h.warn
+	pol.StorePath, pol.Warn = home, h.warn
 	pol.Team = h.env("NSELF_CI_COORDINATOR_MODE") == "team"
 	blobs, err := cas.New(home)
 	return pol, blobs, err

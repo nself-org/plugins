@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Defaults of the caps.
@@ -42,7 +41,6 @@ type Policy struct {
 	Team              bool
 	StorePath         string // directory whose volume the floor is measured on
 	Statfs            func(path string) (free, total uint64, err error)
-	Now               func() time.Time
 	Warn              func(string)
 }
 
@@ -84,13 +82,6 @@ func PolicyFromEnv(get func(string) string) (Policy, error) {
 		p.ProjectShare = n
 	}
 	return p, nil
-}
-
-func (p Policy) now() time.Time {
-	if p.Now != nil {
-		return p.Now()
-	}
-	return time.Now()
 }
 
 var sizeUnits = []struct {
@@ -176,8 +167,7 @@ func (p Policy) CheckCaps(u Usage, add int64) (warning string, err error) {
 	if u.Total+add > p.MaxTotal {
 		return "", failf(ReasonSizeCap, "artifact store holds %d B of %d B (NSELF_CI_ARTIFACT_MAX_BYTES); %s", u.Total, p.MaxTotal, hint)
 	}
-	used, onePct := u.Total+add, max(p.MaxTotal/100, 1)
-	if pct := used / onePct; pct >= warnPercent {
+	if pct := int(float64(u.Total+add) * 100 / float64(p.MaxTotal)); pct >= warnPercent {
 		return fmt.Sprintf("artifact store is at %d%% of its cap; %s", pct, hint), nil
 	}
 	return "", nil
