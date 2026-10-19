@@ -165,10 +165,9 @@ func (s *Store) testTransition(ctx context.Context, id string, from, to model.Jo
 }
 
 // TestSchedAdmissionTransitionGuard: the public Transition cannot lease an
-// attempt; admission can, and every other transition still works.
+// attempt, in a test binary as in a shipped one (D-1047); admission can, and
+// every other transition still works.
 func TestSchedAdmissionTransitionGuard(t *testing.T) {
-	bareLeaseAllowed = false
-	t.Cleanup(func() { bareLeaseAllowed = true })
 	s := testStore(t)
 	ctx := context.Background()
 	admitSeed(t, s, "pipe", "proj", "a", "a1")

@@ -62,15 +62,13 @@ func (s *Store) space() (free, floor int64, ok bool, err error) {
 // even while cas holds its cross-process lock; the sweep itself stops at the
 // next realm boundary and is safe to stop at any point.
 func (s *Store) sweepBlobs(ctx context.Context, cutoff time.Time) error {
-	list, err := s.be.CacheEntries(ctx, "")
+	keep := map[string]bool{} // the distinct referenced digests only: no manifests, paths or sizes
+	err := s.be.CacheBlobRefs(ctx, func(ns []byte, sha string) error {
+		keep[string(cas.CacheRealm(string(ns)))+"/"+sha] = true
+		return nil
+	})
 	if err != nil {
 		return err
-	}
-	keep := map[string]bool{}
-	for _, m := range list {
-		for _, b := range m.Blobs {
-			keep[string(cas.CacheRealm(string(m.Namespace)))+"/"+b.SHA256] = true
-		}
 	}
 	done := make(chan error, 1)
 	go func() {

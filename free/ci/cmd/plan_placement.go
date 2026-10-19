@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/config"
+	"github.com/nself-org/plugins/free/ci/internal/drill"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
@@ -39,6 +40,10 @@ import (
 
 // placementClock is the world's clock; tests pin it.
 var placementClock = time.Now
+
+// placementProbe reads the local host's capacity; tests pin it so the plan
+// does not depend on the machine's load, memory or battery.
+var placementProbe = ciexec.Probe
 
 func init() { placePlan = planPlacement }
 
@@ -132,6 +137,9 @@ func loadPlanned(ctx context.Context, s planSpec) (planned, error) {
 	case !errors.Is(err, os.ErrNotExist) || s.cfg != "":
 		return planned{}, err
 	}
+	if cfg, err = drill.Expand(root, cfg, s.pipeline, s.trigger); err != nil { // as a real run: drills_dir subdirectories become kind drill jobs (D-1046)
+		return planned{}, err
+	}
 	facts, checks, err := planChecks(root, cfg)
 	if err != nil {
 		return planned{}, err
@@ -175,7 +183,7 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	if err != nil {
 		return model.PlacementPlan{}, err
 	}
-	capacity := ciexec.Probe()
+	capacity := placementProbe()
 	now := placementClock()
 	var local *model.Capability
 	if !hasNode(snap.Nodes, "local") { // a registered "local" node is the local runner

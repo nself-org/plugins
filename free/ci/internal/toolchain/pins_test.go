@@ -50,6 +50,8 @@ func TestLoadPinsRejects(t *testing.T) {
 		{"bad upstream", "demo.yaml", strings.Replace(good, "type: github", "type: ftp", 1), "upstream"},
 		{"tag-only base", "debian.yaml", "name: debian\nkind: base-image\nversion: trixie-slim\npurpose: p\nowner: o\nimage: docker.io/library/debian\nupstream: {type: oci, ref: x}\n", "digest"},
 		{"pending with digest", "image.yaml", "name: toolchain-image\nkind: image\npurpose: p\nowner: o\nimage: docker.io/nself/ci-toolchain\nstatus: pending\ndigest: sha256:" + hex64 + "\nupstream: {type: none, ref: ''}\n", "pending"},
+		{"pending with version", "image.yaml", "name: toolchain-image\nkind: image\npurpose: p\nowner: o\nimage: docker.io/nself/ci-toolchain\nversion: x\nstatus: pending\nupstream: {type: none, ref: ''}\n", "pending"},
+		{"pinned with a version that is not image@digest", "image.yaml", "name: toolchain-image\nkind: image\npurpose: p\nowner: o\nimage: docker.io/nself/ci-toolchain\nversion: latest\nstatus: pinned\ndigest: sha256:" + hex64 + "\nupstream: {type: none, ref: ''}\n", "image@digest"},
 		{"pinned without digest", "image.yaml", "name: toolchain-image\nkind: image\npurpose: p\nowner: o\nimage: docker.io/nself/ci-toolchain\nstatus: pinned\nupstream: {type: none, ref: ''}\n", "digest"},
 	}
 	for _, c := range cases {

@@ -3,6 +3,7 @@ package exec
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -31,10 +32,22 @@ type JobSpec struct {
 	// MemoryMB alone is a reservation, enforced by container isolation, never by RLIMIT_AS.
 	MemoryLimitMB int
 	Output        func([]byte)
+	// Stdin, when set, is the job's standard input: how a one-job credential reaches a
+	// runner without touching argv, a container -e flag or a file. Nil keeps /dev/null.
+	// A planned container refuses it (its stdin carries the environment).
+	Stdin io.Reader
+	// Masks are exact values the output must never carry, whatever the patterns say
+	// (the value Stdin delivers); they are redacted even when split across chunks.
+	Masks []string
 	// Slot is the execution slot the attempt holds; isolation profiles derive the job UID from it.
 	Slot int
 	// Plan, when an Isolator sets it, builds the container command instead of the baseline flags.
 	Plan ContainerPlanner
+	// BeforeJob, when set, runs after the source is copied into the workspace
+	// and before the command starts. It receives the workspace root opened by
+	// the executor, so a path swapped later cannot redirect it. An error ends
+	// the attempt as failed, class infra, and the command never starts.
+	BeforeJob func(ctx context.Context, workspace *os.Root) error
 	// AfterJob, when set, runs once the command exited 0 and before the
 	// workspace is removed (the only moment a job's outputs can be collected).
 	// It receives the workspace root opened by the executor before the job
@@ -58,6 +71,9 @@ type AttemptResult struct {
 	// Reason refines the failure class: "resource_limit" when a planned container hit its
 	// memory or process limit.
 	Reason string
+	// Signal names the signal that ended the job (SIGSEGV, SIGKILL, ...); "" when it exited
+	// on its own. ExitCode is -1 then. Diagnosis tells a crash from an external kill by it.
+	Signal string
 }
 
 // Executor runs each local job through one process or Docker funnel.
@@ -65,13 +81,19 @@ type Executor struct {
 	Env      EnvPolicy
 	Redactor Redactor
 	// NewRedactor returns fresh streaming state for each concurrent attempt.
-	NewRedactor  func() Redactor
-	Secrets      SecretSource
-	Isolation    Isolator
-	Stale        StaleChecker
-	Grace        time.Duration
-	redactorOnce sync.Once
-	redactorSlot chan struct{}
+	NewRedactor func() Redactor
+	Secrets     SecretSource
+	// RegisterSecret, when set, receives every non-empty resolved secret value
+	// before the job starts, so the redaction registry (and the artifact and cache
+	// scanners that read it) knows the value. An error fails the attempt: a
+	// secret that cannot be masked is never handed to a job. It must not keep
+	// the value in an error.
+	RegisterSecret func(value []byte) error
+	Isolation      Isolator
+	Stale          StaleChecker
+	Grace          time.Duration
+	redactorOnce   sync.Once
+	redactorSlot   chan struct{}
 }
 
 // Run confines a job to a fresh private workspace and removes it on every exit.
@@ -90,7 +112,7 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 			return AttemptResult{Attempt: model.Attempt{ID: s.AttemptID, State: "cancelled", FailureClass: "cancelled"}, Err: err}
 		}
 	}
-	local := Executor{Env: e.Env, Redactor: e.Redactor, NewRedactor: e.NewRedactor, Secrets: e.Secrets, Isolation: e.Isolation, Stale: e.Stale, Grace: e.Grace}
+	local := Executor{Env: e.Env, Redactor: e.Redactor, NewRedactor: e.NewRedactor, Secrets: e.Secrets, RegisterSecret: e.RegisterSecret, Isolation: e.Isolation, Stale: e.Stale, Grace: e.Grace}
 	e = &local
 	if e.NewRedactor != nil {
 		e.Redactor = e.NewRedactor()
@@ -122,6 +144,9 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	}
 	if e.Redactor == nil {
 		e.Redactor = passThroughRedactor{}
+	}
+	if len(s.Masks) > 0 {
+		e.Redactor = newValueMask(e.Redactor, s.Masks)
 	}
 	if e.Grace <= 0 {
 		e.Grace = 10 * time.Second
@@ -186,6 +211,13 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 			return
 		}
 	}
+	if s.BeforeJob != nil {
+		if err := s.BeforeJob(ctx, pinned); err != nil {
+			result.Err = err
+			result.Attempt.FailureClass = "infra"
+			return
+		}
+	}
 	policy := e.Env
 	if s.Env != nil {
 		policy = s.Env
@@ -217,6 +249,12 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 			result.Err = coded("E612", "invalid secret key")
 			return
 		}
+		if e.RegisterSecret != nil && v != "" {
+			if err := e.RegisterSecret([]byte(v)); err != nil {
+				result.Err, result.Attempt.FailureClass = coded("E612", "a job secret could not be registered for masking; the job did not start"), "infra"
+				return
+			}
+		}
 		secretEnv = append(secretEnv, k+"="+v)
 	}
 	if s.Plan != nil {
@@ -224,7 +262,7 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	} else if s.Job.Isolation == "container" {
 		result.ExitCode, result.Err = e.runContainer(ctx, s, workspace, env, secretEnv)
 	} else {
-		result.ExitCode, result.Err = e.runProcess(ctx, s, workspace, append(env, secretEnv...))
+		result.ExitCode, result.Signal, result.Err = e.runProcess(ctx, s, workspace, append(env, secretEnv...))
 	}
 	if s.AfterJob != nil && result.Err == nil && result.ExitCode == 0 && ctx.Err() == nil {
 		result.Err = s.AfterJob(ctx, pinned)

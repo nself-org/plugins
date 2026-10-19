@@ -5,23 +5,28 @@ package specs
 // Inputs:  a downstream writer and an authz.ValueScanner.
 // Outputs: scanWriter, ErrSecretMatch.
 // Constraints: bytes are released downstream only after the window holding them
-// was scanned; windows are 1 MiB with a 256 KiB overlap, so a value that spans
-// two windows is found. A value (in any encoding) longer than the overlap that
-// straddles a window edge is not (the same documented bound as artifact scans).
-// A nil scanner refuses everything. The scanned stream is the uncompressed tar,
-// so compression cannot hide a value.
+// was scanned; windows are 1 MiB with a 1 MiB overlap, so a value that spans
+// two windows is found as long as its longest encoded form fits the overlap:
+// redact.Register caps a value at redact.MaxValueLen so that always holds.
+// A nil scanner refuses everything. The scanned stream is the uncompressed tar;
+// gzip payloads among its files are scanned inflated (inflate.go).
 
 import (
 	"errors"
 	"io"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
+	"github.com/nself-org/plugins/free/ci/internal/redact"
 )
 
 const (
 	scanWindow  = 1 << 20
 	scanOverlap = 1 << 20
 )
+
+// The widest encoded form of a registered value is 6 times its length (every
+// byte as a \uXXXX escape); the overlap must hold 8 times the cap.
+const _ = uint(scanOverlap - 8*redact.MaxValueLen)
 
 // ErrSecretMatch means the stream holds a registered secret value, or no
 // scanner was available to say it does not. It carries no value or offset.

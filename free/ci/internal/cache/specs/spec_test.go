@@ -33,7 +33,11 @@ func TestForSelectsSpecsFromDetectorFacts(t *testing.T) {
 		{"npm", []detect.Fact{fact("package_manager", "npm", "package.json")}, false, "npm"},
 		{"cargo", []detect.Fact{fact("stack", "rust", "Cargo.toml")}, false, "cargo"},
 		{"uv", []detect.Fact{fact("package_manager", "uv", "pyproject.toml")}, false, "uv"},
-		{"pip", []detect.Fact{fact("stack", "python", "requirements.txt")}, false, "pip"},
+		{"pip", []detect.Fact{fact("stack", "python", "requirements.txt"), fact("package_manager", "pip", "requirements.txt")}, false, "pip"},
+		{"pip by lockfile fact", []detect.Fact{fact("lockfile", "pip", "requirements.txt")}, false, "pip"},
+		{"poetry is not matched by pip", []detect.Fact{fact("stack", "python", "pyproject.toml"), fact("package_manager", "poetry", "poetry.lock")}, false, "poetry"},
+		{"poetry by lockfile fact", []detect.Fact{fact("stack", "python", "pyproject.toml"), fact("lockfile", "poetry", "poetry.lock")}, false, "poetry"},
+		{"python stack alone names no manager", []detect.Fact{fact("stack", "python", "pyproject.toml")}, false, ""},
 		{"buildx only in a container", []detect.Fact{fact("container", "dockerfile", "Dockerfile")}, true, "buildx"},
 		{"buildx not at process level", []detect.Fact{fact("container", "dockerfile", "Dockerfile")}, false, ""},
 		{"unknown facts select nothing", []detect.Fact{{Kind: "stack", Name: "go", Path: "go.mod", Confidence: detect.Unknown}}, false, ""},
@@ -50,7 +54,7 @@ func TestForSelectsSpecsFromDetectorFacts(t *testing.T) {
 }
 
 func TestNoSpecCachesABuildOutputDir(t *testing.T) {
-	for _, id := range []string{"go", "pnpm", "npm", "cargo", "uv", "pip", "buildx"} {
+	for _, id := range []string{"go", "pnpm", "npm", "cargo", "uv", "pip", "poetry", "buildx"} {
 		s, ok := Get(id)
 		if !ok {
 			t.Fatalf("spec %s is not registered", id)
@@ -64,6 +68,19 @@ func TestNoSpecCachesABuildOutputDir(t *testing.T) {
 	cargo, _ := Get("cargo")
 	if cargo.RootEnv != "CARGO_HOME" || len(cargo.Dirs) != 2 || cargo.Dirs[0].Name != "git" || cargo.Dirs[1].Name != "registry" {
 		t.Fatalf("cargo caches the registry and git dirs only: %+v", cargo)
+	}
+}
+
+func TestPoetrySpecBindsPoetryCacheDir(t *testing.T) {
+	s, ok := Get("poetry")
+	if !ok {
+		t.Fatal("poetry spec is not registered")
+	}
+	if len(s.Dirs) != 1 || s.Dirs[0].Name != "cache" || s.Dirs[0].Env != "POETRY_CACHE_DIR" {
+		t.Fatalf("poetry binds POETRY_CACHE_DIR: %+v", s.Dirs)
+	}
+	if len(s.Lockfiles) != 1 || s.Lockfiles[0] != "poetry" {
+		t.Fatalf("poetry keys on poetry.lock: %v", s.Lockfiles)
 	}
 }
 

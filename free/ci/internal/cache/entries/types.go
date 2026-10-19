@@ -87,7 +87,7 @@ type Pruned struct {
 }
 
 // Use is one restore or save outcome. Result is hit, miss, disabled, readonly,
-// denied or refused.
+// denied, refused or saved (a committed save; Bytes is the packed size).
 type Use struct {
 	Attempt, Spec, Key, Result string
 	Bytes, MS, TS              int64
@@ -101,10 +101,17 @@ type Backend interface {
 	// CacheEntries lists the entries stored under key (one per namespace), or all
 	// entries when key is "", least recently used first, each from one snapshot.
 	CacheEntries(ctx context.Context, key string) ([]Manifest, error)
+	// CacheBlobRefs streams each distinct (namespace, sha256) the entries reference.
+	CacheBlobRefs(ctx context.Context, each func(ns []byte, sha string) error) error
+	// CacheKeys lists the distinct keys of all entries.
+	CacheKeys(ctx context.Context) ([]string, error)
 	CacheTouch(ctx context.Context, ns []byte, key string) error
 	CacheDrop(ctx context.Context, m Manifest, reason string) error
 	CachePrune(ctx context.Context, p PruneStep) (Pruned, error)
 	CacheRecordUse(ctx context.Context, u Use) error
 	CacheUses(ctx context.Context, attempt string) ([]Use, error)
 	AppendAudit(ctx context.Context, actor, action, target, detail string) error
+	// CacheAuditOnce appends the cache audit row unless the same (action, target,
+	// detail) was recorded within the usage retention window.
+	CacheAuditOnce(ctx context.Context, action, target, detail string) error
 }

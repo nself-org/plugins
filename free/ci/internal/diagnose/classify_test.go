@@ -11,6 +11,8 @@ import (
 func TestClassifyOOM(t *testing.T) {
 	for name, in := range map[string]Input{
 		"killed by a signal, no error": {ExecClass: "code", ExitCode: -1},
+		"killed by SIGKILL":            {ExecClass: "code", ExitCode: -1, Signal: "SIGKILL"},
+		"killed by SIGTERM":            {ExecClass: "code", ExitCode: -1, Signal: "SIGTERM"},
 		"shell Killed line after 137":  {ExecClass: "code", ExitCode: 137, Tail: "make\nsh: line 1:  4242 Killed   cc1\n"},
 		"container memory limit":       {ExecClass: "code", ExitCode: 1, Reason: "resource_limit"},
 		"kernel oom line in output":    {ExecClass: "code", ExitCode: 1, Tail: "build\nOut of memory: Killed process 4242 (cc1)\n"},
@@ -91,5 +93,15 @@ func TestExcerpt(t *testing.T) {
 	}
 	if got := Excerpt(strings.Repeat("é", 4000), 100); len(got) > 100 || !utf8.ValidString(got) {
 		t.Fatalf("multi-byte cut broke: len %d", len(got))
+	}
+}
+
+// A crash signal is the job's own fault: not infra.oom, not retried (D-1048).
+func TestClassifyCrashSignalIsCode(t *testing.T) {
+	for _, sig := range []string{"SIGSEGV", "SIGABRT", "SIGBUS", "SIGILL", "SIGFPE"} {
+		d := Classify(Input{ExecClass: "code", ExitCode: -1, Signal: sig})
+		if d.Class != "code" || d.Signature != SigCode || d.Retryable {
+			t.Errorf("%s: got %+v, want a non-retryable code failure", sig, d)
+		}
 	}
 }

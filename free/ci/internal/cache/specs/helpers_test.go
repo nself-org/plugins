@@ -14,6 +14,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/detect"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 const fakeSecret = "fake-registered-value-0123456789abcdef"
@@ -71,7 +72,7 @@ func (e *env) running(id string, f entries.Facts) {
 		s.CreatePipeline(ctx, store.PipelineRow{ID: "p" + id, Revision: "rev", Project: f.Project, Trigger: "local", SourceTrust: f.Trust, PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}),
 		s.CreateJob(ctx, store.JobRow{ID: "j" + id, PipelineID: "p" + id, Name: id, Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}),
 		s.CreateAttempt(ctx, store.AttemptRow{ID: id, JobID: "j" + id, N: 1}, ""),
-		s.Transition(ctx, id, "queued", "leased", store.TransitionDetail{Epoch: 0}),
+		storetest.Admit(ctx, s, id),
 		s.Transition(ctx, id, "leased", "running", store.TransitionDetail{Epoch: 1}),
 	} {
 		if err != nil {
@@ -185,10 +186,8 @@ func (e *env) beginUntrustedContainer(id string) *Session {
 }
 
 // seedSnapshot stores the owner's protected entry for the container-level key. It is a
-// SYNTHETIC writer: no real attempt produces a container-level entry yet (a container
-// job cannot populate a cache; debt), so the read-only paths are tested against it.
-// with one file f.txt per dir holding the given content. A container job
-// cannot populate a cache itself, so the entry goes in through the engine.
+// SYNTHETIC writer (the entry goes in through the engine, not a job), with one
+// file f.txt per dir holding the given content.
 func (e *env) seedSnapshot(id string, contents map[string]string) {
 	e.t.Helper()
 	e.running(id, ownerFacts)
@@ -242,4 +241,20 @@ func (e *env) settlePassed(id string) {
 	if err := e.st.Transition(e.ctx, id, "finalizing", "passed", storeDetail(3)); err != nil {
 		e.t.Fatal(err)
 	}
+}
+
+// workspace is a stand-in for the executor's attempt workspace: a directory the
+// job writes to and the session opens through a pinned os.Root.
+func (e *env) workspace(id string) (*os.Root, string) {
+	e.t.Helper()
+	dir := filepath.Join(e.home, "work", id)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		e.t.Fatal(err)
+	}
+	ws, err := os.OpenRoot(dir)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	e.t.Cleanup(func() { _ = ws.Close() })
+	return ws, dir
 }

@@ -12,13 +12,12 @@ on:
       - '.github/wiki/**'
       - '.github/ISSUE_TEMPLATE/**'
       - 'LICENSE'
+  # The job checks scripts that live outside this repository (nself/.claude/siege) and passes when they are
+  # absent, so nothing in a pull request here can change its result except the workflow file itself.
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - '.github/wiki/**'
-      - '.github/ISSUE_TEMPLATE/**'
-      - 'LICENSE'
+    paths:
+      - '.github/workflows/siege.yml'
   workflow_dispatch:
 
 concurrency:

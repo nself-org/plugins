@@ -77,14 +77,20 @@ func (s *Store) LeaseGrant(ctx context.Context, host string, d Demand, incarnati
 		if ttl <= 0 {
 			ttl = s.ttl
 		}
-		now := s.now().UnixNano()
-		if _, err := tx.ExecContext(ctx, "INSERT INTO lease(id,attempt_id,host,runner_id,expires_at,heartbeat_at,token_digest,epoch) VALUES (?,?,?,?,?,?,?,?)", d.LeaseID, d.AttemptID, host, d.RunnerID, now+int64(ttl), now, d.TokenDigest, fence); err != nil {
-			return err
-		}
-		_, err := tx.ExecContext(ctx, "INSERT INTO host_reservation(host,lease_id,cpu,mem_mb) VALUES (?,?,?,?)", host, d.LeaseID, d.CPU, d.MemMB)
-		return err
+		return insertLease(ctx, tx, host, d, fence, ttl, s.now().UnixNano())
 	})
 	return fence, err
+}
+
+// insertLease writes the lease row and its host_reservation row. It is the one
+// place either is inserted: LeaseGrant and AdmitPlacement both call it, so a
+// new column cannot reach one grant path and miss the other (D-1045).
+func insertLease(ctx context.Context, tx *sql.Tx, host string, d Demand, fence int64, ttl time.Duration, now int64) error {
+	if _, err := tx.ExecContext(ctx, "INSERT INTO lease(id,attempt_id,host,runner_id,expires_at,heartbeat_at,token_digest,epoch) VALUES (?,?,?,?,?,?,?,?)", d.LeaseID, d.AttemptID, host, d.RunnerID, now+int64(ttl), now, d.TokenDigest, fence); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, "INSERT INTO host_reservation(host,lease_id,cpu,mem_mb) VALUES (?,?,?,?)", host, d.LeaseID, d.CPU, d.MemMB)
+	return err
 }
 
 // LeaseGet reads state and the lease fence together for carrier validation.

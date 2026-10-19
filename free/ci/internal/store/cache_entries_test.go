@@ -65,7 +65,7 @@ func cacheSeed(t *testing.T, s *Store, id string, f entries.Facts) {
 
 func cacheStep(t *testing.T, s *Store, id string, from, to model.JobState, epoch int64) {
 	t.Helper()
-	if err := s.Transition(context.Background(), id, from, to, TransitionDetail{Epoch: epoch, Operator: from == "failed"}); err != nil {
+	if err := s.testTransition(context.Background(), id, from, to, TransitionDetail{Epoch: epoch, Operator: from == "failed"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -191,7 +191,7 @@ func TestCacheEntriesCommitStates(t *testing.T) {
 	// running: plan recorded but the attempt is not finalizing yet
 	cacheSeed(t, s, "run", cacheTrusted)
 	for _, st := range [][3]any{{model.JobState("queued"), model.JobState("leased"), int64(0)}, {model.JobState("leased"), model.JobState("running"), int64(1)}} {
-		if err := s.Transition(ctx, "run", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
+		if err := s.testTransition(ctx, "run", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -211,7 +211,7 @@ func TestCacheEntriesCommitStates(t *testing.T) {
 	}
 	// terminal: a finished attempt cannot write
 	_, fin := cacheFinalizing(t, s, "done", cacheTrusted, []string{cacheKey}, true)
-	if err := s.Transition(ctx, "done", "finalizing", "passed", TransitionDetail{Epoch: fin}); err != nil {
+	if err := s.testTransition(ctx, "done", "finalizing", "passed", TransitionDetail{Epoch: fin}); err != nil {
 		t.Fatal(err)
 	}
 	if got := reason(s.CacheCommit(ctx, req("done", fin+1))); got != "attempt_state" {
@@ -250,7 +250,7 @@ func TestCacheEntriesPlanAndResultRefusals(t *testing.T) {
 		t.Fatalf("plan while queued: %s", got)
 	}
 	for _, st := range [][3]any{{model.JobState("queued"), model.JobState("leased"), int64(0)}, {model.JobState("leased"), model.JobState("running"), int64(1)}} {
-		if err := s.Transition(ctx, "p", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
+		if err := s.testTransition(ctx, "p", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -272,7 +272,7 @@ func TestCacheEntriesPlanAndResultRefusals(t *testing.T) {
 	if got := reason(s.CacheRecordResult(ctx, "p", 2, true)); got != "attempt_state" {
 		t.Fatalf("result while running: %s", got)
 	}
-	if err := s.Transition(ctx, "p", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
+	if err := s.testTransition(ctx, "p", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
 		t.Fatal(err)
 	}
 	if got := reason(s.CacheRecordResult(ctx, "p", 2, true)); got != "epoch" {
@@ -280,7 +280,7 @@ func TestCacheEntriesPlanAndResultRefusals(t *testing.T) {
 	}
 	cacheSeed(t, s, "q", cacheTrusted)
 	for _, st := range [][3]any{{model.JobState("queued"), model.JobState("leased"), int64(0)}, {model.JobState("leased"), model.JobState("running"), int64(1)}, {model.JobState("running"), model.JobState("finalizing"), int64(2)}} {
-		if err := s.Transition(ctx, "q", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
+		if err := s.testTransition(ctx, "q", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -396,8 +396,8 @@ func TestCacheEntriesPlanMustMatchThePipeline(t *testing.T) {
 			t.Errorf("%s: %s", name, got)
 		}
 	}
-	if cacheAuditCount(t, s, "cache.plan.refused", "m", "reason=namespace") != 2 {
-		t.Fatal("each refused plan needs an audit row")
+	if cacheAuditCount(t, s, "cache.plan.refused", "m", "reason=namespace") != 1 {
+		t.Fatal("refused plans of one attempt and reason share one audit row")
 	}
 }
 
@@ -715,5 +715,33 @@ func TestCacheEntriesPruneKeepsFactsOfRunningAttempts(t *testing.T) {
 	}
 	if err := s.CacheCommit(ctx, cacheReq(t, "live", 3, cacheTrusted, cacheKey, 10)); err != nil {
 		t.Fatalf("the live attempt can still save: %v", err)
+	}
+}
+
+// D-1038: pruning a pipeline's history retires the cache entries its attempts
+// wrote, so an entry never outlives the record that its writer settled passed.
+func TestDeletePipelinesRetiresTheCacheEntriesOfPrunedAttempts(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	keep := strings.Repeat("c", 64)
+	_, fin := cacheFinalizing(t, s, "gone", cacheTrusted, []string{cacheKey}, true)
+	if err := s.CacheCommit(ctx, cacheReq(t, "gone", fin, cacheTrusted, cacheKey, 10)); err != nil {
+		t.Fatal(err)
+	}
+	_, fin = cacheFinalizing(t, s, "stay", cacheTrusted, []string{keep}, true)
+	if err := s.CacheCommit(ctx, cacheReq(t, "stay", fin, cacheTrusted, keep, 10)); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.DeletePipelines(ctx, []string{"pgone"}); err != nil || n != 1 {
+		t.Fatalf("removed %d, err %v; want 1", n, err)
+	}
+	got, err := s.CacheEntries(ctx, "")
+	if err != nil || len(got) != 1 || got[0].Key != keep {
+		t.Fatalf("entries after the prune = %+v, err %v; want only the surviving attempt's", got, err)
+	}
+	for table, want := range map[string]int{"cache_entry": 1, "cache_entry_blob": 1, "cache_attempt": 1} {
+		if n := count(t, s, table); n != want {
+			t.Errorf("%s rows = %d, want %d", table, n, want)
+		}
 	}
 }

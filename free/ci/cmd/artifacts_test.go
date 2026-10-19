@@ -18,6 +18,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 type artRig struct {
@@ -61,13 +62,11 @@ func (r *artRig) seed(name, content, visibility string, retention string) record
 			r.t.Fatal(err)
 		}
 	}
-	for _, s := range []struct {
-		from, to model.JobState
-		epoch    int64
-	}{{"queued", "leased", 0}, {"leased", "running", 1}} {
-		if err := r.st.Transition(ctx, id, s.from, s.to, store.TransitionDetail{Epoch: s.epoch}); err != nil {
-			r.t.Fatal(err)
-		}
+	if err := storetest.Admit(ctx, r.st, id); err != nil {
+		r.t.Fatal(err)
+	}
+	if err := r.st.Transition(ctx, id, "leased", "running", store.TransitionDetail{Epoch: 1}); err != nil {
+		r.t.Fatal(err)
 	}
 	facts, _ := r.st.ArtifactFacts(ctx, id)
 	facts.Platform, facts.Isolation, facts.Producer = "linux/amd64", "process", "nself-ci/build"

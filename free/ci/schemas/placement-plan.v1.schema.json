@@ -290,7 +290,8 @@
                     "contention",
                     "cost",
                     "scarcity",
-                    "reliability"
+                    "reliability",
+                    "tier_rank"
                   ]
                 }
               },
@@ -429,7 +430,8 @@
                       "contention",
                       "cost",
                       "scarcity",
-                      "reliability"
+                      "reliability",
+                      "tier_rank"
                     ]
                   }
                 }

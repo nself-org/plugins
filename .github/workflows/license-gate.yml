@@ -5,13 +5,18 @@ name: License Gate
 # S59-T09: license CI gate.
 
 on:
+  # A pull request can only change the Go dependency licences by touching a module file, a vendored tree or the
+  # gate itself. Push to main, release and dispatch still check everything.
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - '.github/wiki/**'
-      - '.github/ISSUE_TEMPLATE/**'
-      - 'LICENSE'
+    paths:
+      - '**/go.mod'
+      - '**/go.sum'
+      - '**/vendor/**'
+      - '**/third_party/**'
+      - '.github/scripts/go-install-retry.sh'
+      - '.github/scripts/go-licenses-check-retry.sh'
+      - '.github/workflows/license-gate.yml'
   push:
     branches: [main]
     paths-ignore:

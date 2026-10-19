@@ -102,6 +102,7 @@ type TrustClassifier interface {
 type PolicyRequest struct {
 	Root, Pipeline string
 	Config         map[string]any
+	Run            RunValues // per-run values (the flags of one invocation): only ever tighten, except the preset; nil = none
 }
 
 // PolicyResolver resolves the effective policy (P7-TRUST-27 registers it).
@@ -211,6 +212,7 @@ type Hooks struct {
 	// hooks_attempt_end.go (P7-CACHE-03).
 	Workspaces       []WorkspaceHook
 	AttemptFinalizes []AttemptFinalizeHook
+	Auto             AutoHooks // PublishGate, PublishDetail, Offload, Race, Notify (hooks_auto.go)
 }
 
 // Registered is the registry other packages write from init().
@@ -283,17 +285,7 @@ func (h Hooks) Resolved() Hooks {
 	out.Outcomes = append(append([]OutcomeHook(nil), h.Outcomes...), r.Outcomes...)
 	out.Workspaces = append(append([]WorkspaceHook(nil), h.Workspaces...), r.Workspaces...)
 	out.AttemptFinalizes = append(append([]AttemptFinalizeHook(nil), h.AttemptFinalizes...), r.AttemptFinalizes...)
+	out.Auto = h.Auto.resolved(r.Auto)
 	sort.SliceStable(out.Finalizers, func(i, j int) bool { return out.Finalizers[i].Name() < out.Finalizers[j].Name() })
 	return out
-}
-
-// guard calls a hook and turns a panic into an E627 error, so one bad hook
-// cannot kill the coordinator and orphan the other jobs.
-func guard(name string, f func() error) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fail(CodeOptions, "%s panicked: %v", name, r)
-		}
-	}()
-	return f()
 }

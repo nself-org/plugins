@@ -83,7 +83,7 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 	}
 	realm := cas.CacheRealm(string(m.Namespace))
 	if !bad {
-		err = e.unpackBlobs(base, realm, m.Blobs, dirs, opt)
+		err = e.unpackBlobs(ctx, base, realm, m.Blobs, dirs, opt)
 	} else {
 		err = errors.New("the entry's blobs are not this spec's directories")
 	}
@@ -93,6 +93,9 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 	for _, d := range dirs {
 		_ = removeIn(base, d)
 	}
+	if ctx.Err() != nil { // a cancelled restore says nothing about the entry: keep it
+		return false, 0, ctx.Err()
+	}
 	if access == authz.ModeRWOwn { // a lower-trust reader never deletes a higher-trust entry, it only audits
 		_ = e.Backend.CacheDrop(ctx, m, "unrestorable")
 	}
@@ -101,17 +104,20 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 }
 
 // writerPassed reports whether the attempt that committed m settled passed. An
-// attempt still finalizing is not served yet; one that ended any other way has
-// its entry dropped. An attempt the store no longer knows (history pruned) is
-// trusted: the commit itself required a recorded pass.
+// attempt still finalizing is not served yet; one that ended any other way, or
+// that the store does not know, has its entry dropped: a missing attempt is no
+// evidence of a pass (a cancel can win finalizing -> passed after the commit),
+// and a history prune retires the entries of the attempts it removes.
 func (e *Engine) writerPassed(ctx context.Context, m entries.Manifest) bool {
 	state, _, err := e.Backend.AttemptStateEpoch(ctx, m.Writer.AttemptID)
 	switch {
 	case err != nil:
-		// no such attempt (history pruned) is trusted, since the commit required a
-		// recorded pass; any other failure serves nothing (database/sql is not
-		// importable here, so the missing row is recognised by its message)
-		return strings.Contains(err.Error(), "no rows in result set")
+		// any failure but a missing row serves nothing and drops nothing
+		// (database/sql is not importable here, so the missing row is
+		// recognised by its message)
+		if !strings.Contains(err.Error(), "no rows in result set") {
+			return false
+		}
 	case state == "passed":
 		return true
 	case state == "queued" || state == "leased" || state == "running" || state == "finalizing":
@@ -134,7 +140,7 @@ func (e *Engine) validate(ctx context.Context, realm cas.Realm, digest string) e
 // unpackBlobs restores every blob of an entry at the same time (at most four):
 // each goes to its own directory, so a build cache and a module cache unpack
 // side by side (D-1008). The first blob's error is the one reported.
-func (e *Engine) unpackBlobs(base *os.Root, realm cas.Realm, blobs []entries.Blob, dirs Dirs, opt UnpackOptions) error {
+func (e *Engine) unpackBlobs(ctx context.Context, base *os.Root, realm cas.Realm, blobs []entries.Blob, dirs Dirs, opt UnpackOptions) error {
 	errs := make([]error, len(blobs))
 	var wg sync.WaitGroup
 	slots := make(chan struct{}, 4)
@@ -142,7 +148,7 @@ func (e *Engine) unpackBlobs(base *os.Root, realm cas.Realm, blobs []entries.Blo
 		slots <- struct{}{}
 		wg.Go(func() {
 			defer func() { <-slots }()
-			errs[i] = e.unpackBlob(base, realm, b.SHA256, dirs[b.Path], opt)
+			errs[i] = e.unpackBlob(ctx, base, realm, b.SHA256, dirs[b.Path], opt)
 		})
 	}
 	wg.Wait()
@@ -157,9 +163,9 @@ func (e *Engine) unpackBlobs(base *os.Root, realm cas.Realm, blobs []entries.Blo
 // unpackBlob restores one blob. The store verifies its digest while Unpack reads
 // it (one pass over the file, no snapshot copy: D-1008); the tree built from a
 // blob that fails the check is discarded by the caller (Restore empties the dirs).
-func (e *Engine) unpackBlob(base *os.Root, realm cas.Realm, digest, rel string, opt UnpackOptions) error {
+func (e *Engine) unpackBlob(ctx context.Context, base *os.Root, realm cas.Realm, digest, rel string, opt UnpackOptions) error {
 	return e.Blobs.ReadVerified(realm, digest, func(r io.Reader) error {
-		_, err := Unpack(r, base, rel, cacheLimits(), opt)
+		_, err := Unpack(&ctxReader{ctx, r}, base, rel, cacheLimits(), opt)
 		return err
 	})
 }
@@ -184,39 +190,85 @@ type SaveRequest struct {
 	Dirs      Dirs
 }
 
+// Staged is an entry that was packed, scanned and put but not committed yet:
+// the pack must happen while the job's directory still exists, the commit only
+// while the attempt is finalizing.
+type Staged struct {
+	req   SaveRequest
+	blobs []entries.Blob
+	total int64
+}
+
+// Stage packs and scans every dir of r into the blob store without committing.
+// A registered value in any dir refuses it with E711 secret_match and an audit
+// row; a cache with no file in it is ErrEmpty.
+func (e *Engine) Stage(ctx context.Context, r SaveRequest) (*Staged, error) {
+	realm := cas.CacheRealm(string(r.Namespace.Canonical()))
+	maxBytes, _ := e.Entries.Caps()
+	st := &Staged{req: r}
+	var files int
+	for _, name := range r.Dirs.names() {
+		digest, size, ps, err := e.putDir(ctx, r.Base, realm, r.Dirs[name], maxBytes-st.total, r.Spec.InflateScan)
+		if err != nil {
+			return nil, e.refuse(ctx, r, err)
+		}
+		if err := e.validate(ctx, realm, digest); err != nil { // a restore would refuse it: do not commit a loop of save, refuse, drop
+			return nil, e.refuse(ctx, r, restoreCheckError(name, err))
+		}
+		files += ps.Files
+		st.total += size
+		st.blobs = append(st.blobs, entries.Blob{Path: name, SHA256: digest, Size: size})
+	}
+	if files == 0 {
+		return nil, ErrEmpty
+	}
+	return st, nil
+}
+
+// Commit commits a staged entry at epoch (the attempt must be finalizing).
+func (e *Engine) Commit(ctx context.Context, st *Staged, epoch int64) (int64, error) {
+	r := st.req
+	m := entries.Manifest{Namespace: r.Namespace.Canonical(), Key: r.Key, Spec: r.Spec.ID, Blobs: st.blobs, Writer: entries.Writer{ScannedClean: true}}
+	if err := e.Entries.Commit(ctx, r.Attempt, epoch, r.Namespace, m); err != nil {
+		return 0, err
+	}
+	return st.total, nil
+}
+
 // Save packs, scans and commits the entry. A registered value in any dir
 // refuses the save with E711 secret_match and an audit row.
 func (e *Engine) Save(ctx context.Context, r SaveRequest) (int64, error) {
-	realm := cas.CacheRealm(string(r.Namespace.Canonical()))
-	maxBytes, _ := e.Entries.Caps()
-	var blobs []entries.Blob
-	var files int
-	var total int64
-	for _, name := range r.Dirs.names() {
-		digest, size, st, err := e.putDir(ctx, r.Base, realm, r.Dirs[name], maxBytes-total)
-		if err != nil {
-			return 0, e.refuse(ctx, r, err)
-		}
-		if err := e.validate(ctx, realm, digest); err != nil { // a restore would refuse it: do not commit a loop of save, refuse, drop
-			return 0, e.refuse(ctx, r, fmt.Errorf("%w: the packed %s fails the restore checks: %v", ErrTooLarge, name, err))
-		}
-		files += st.Files
-		total += size
-		blobs = append(blobs, entries.Blob{Path: name, SHA256: digest, Size: size})
-	}
-	if files == 0 {
-		return 0, ErrEmpty
-	}
-	m := entries.Manifest{Namespace: r.Namespace.Canonical(), Key: r.Key, Spec: r.Spec.ID, Blobs: blobs, Writer: entries.Writer{ScannedClean: true}}
-	if err := e.Entries.Commit(ctx, r.Attempt, r.Epoch, r.Namespace, m); err != nil {
+	st, err := e.Stage(ctx, r)
+	if err != nil {
 		return 0, err
 	}
-	return total, nil
+	return e.Commit(ctx, st, r.Epoch)
+}
+
+// restoreCheckError classifies why a restore of the freshly packed blob name would
+// fail: size and ratio errors stay ErrTooLarge (E711 size_cap), a cancelled
+// context passes through, any other path or archive error is its own reason.
+func restoreCheckError(name string, err error) error {
+	var pe *authz.PathError
+	switch {
+	case ctxDone(err):
+		return err
+	case errors.As(err, &pe) && strings.HasPrefix(string(pe.Reason), "size."):
+		return fmt.Errorf("%w: the packed %s fails the restore checks: %v", ErrTooLarge, name, err)
+	case errors.As(err, &pe):
+		return &entries.Refused{Reason: entries.ReasonPathOutside, Err: fmt.Errorf("the packed %s fails the restore checks: %w", name, err)}
+	}
+	return &entries.Refused{Reason: entries.ReasonBlobInvalid, Err: fmt.Errorf("the packed %s fails the restore checks: %w", name, err)}
+}
+
+func ctxDone(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 // refuse turns a pack or scan failure into the typed E711 refusal and writes
 // the audit row for a secret match (the store writes its own for commits).
 func (e *Engine) refuse(ctx context.Context, r SaveRequest, err error) error {
+	var refused *entries.Refused
 	switch {
 	case errors.Is(err, ErrSecretMatch):
 		_ = e.Backend.AppendAudit(ctx, "cache", "cache.save.refused", r.Attempt, "reason="+ReasonSecretMatch+" spec="+r.Spec.ID)
@@ -224,6 +276,9 @@ func (e *Engine) refuse(ctx context.Context, r SaveRequest, err error) error {
 	case errors.Is(err, errSizeCap):
 		_ = e.Backend.AppendAudit(ctx, "cache", "cache.save.refused", r.Attempt, "reason="+entries.ReasonSizeCap+" spec="+r.Spec.ID)
 		return &entries.Refused{Reason: entries.ReasonSizeCap}
+	case errors.As(err, &refused):
+		_ = e.Backend.AppendAudit(ctx, "cache", "cache.save.refused", r.Attempt, "reason="+refused.Reason+" spec="+r.Spec.ID)
+		return err
 	case errors.Is(err, ErrTooLarge):
 		_ = e.Backend.AppendAudit(ctx, "cache", "cache.save.refused", r.Attempt, "reason="+entries.ReasonSizeCap+" spec="+r.Spec.ID)
 		return &entries.Refused{Reason: entries.ReasonSizeCap, Err: err}
@@ -250,7 +305,9 @@ func (c *capWriter) Write(p []byte) (int, error) {
 // putDir streams dir through tar and scan into the blob store. The local blob
 // is a plain tar: disk is cheap and a restore is on a job's critical path, so a
 // copy beats an inflate (D-1008). Compress only when a blob leaves the host.
-func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel string, budget int64) (string, int64, PackStats, error) {
+// With inflate the scan also looks inside the gzip payloads of the files
+// (Spec.InflateScan, D-1037).
+func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel string, budget int64, inflate bool) (string, int64, PackStats, error) {
 	pr, pw := io.Pipe()
 	var st PackStats
 	done := make(chan struct{})
@@ -259,7 +316,11 @@ func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel
 		var err error
 		defer func() { _ = pw.CloseWithError(err) }()
 		sw := newScanWriter(&capWriter{w: pw, cap: budget}, e.Scanner)
-		if st, err = Pack(ctx, base, rel, sw, cacheLimits()); err == nil {
+		var inf *inflater
+		if inflate {
+			inf = newInflater(e.Scanner)
+		}
+		if st, err = pack(ctx, base, rel, sw, cacheLimits(), inf); err == nil {
 			err = sw.Close()
 		}
 	}()

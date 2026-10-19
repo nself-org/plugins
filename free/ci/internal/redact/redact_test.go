@@ -27,6 +27,18 @@ func TestRegisterMinimum(t *testing.T) {
 	}
 }
 
+func TestRegisterMaximum(t *testing.T) {
+	r := New()
+	if err := r.Register(make([]byte, 128<<10)); err != nil {
+		t.Fatalf("the maximum length is allowed: %v", err)
+	}
+	err := r.Register(make([]byte, 128<<10+1))
+	var e *Error
+	if !errors.As(err, &e) || e.Code != "E680" || strings.Contains(err.Error(), "\x00") {
+		t.Fatalf("want E680, got %v", err)
+	}
+}
+
 func TestRawValueEverySplit(t *testing.T) {
 	r := New()
 	mustRegister(t, r, secret)

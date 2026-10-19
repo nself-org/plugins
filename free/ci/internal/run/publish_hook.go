@@ -52,15 +52,30 @@ func localNames() (hosts, users []string) {
 
 type attestPublisher struct{}
 
-func (attestPublisher) Publish(_ context.Context, r PublishRequest) (report.Status, error) {
+// publication applies the publication profile of r's repository to the run
+// evidence. It returns the published evidence, the profile and the literal runner id
+// (after publication only its pseudonym is left).
+func publication(r PublishRequest) (model.Evidence, attest.Profile, string) {
 	vis := attest.Public
 	if RepoVisibility != nil {
 		vis = RepoVisibility(r.Owner, r.Repo)
 	}
 	hosts, users := localNames()
 	p := attest.ProfileFor(attest.RepoFacts{Visibility: vis, RepoID: r.Run.Evidence.RepoID, Hostnames: hosts, Usernames: users})
-	runnerID := r.Run.Evidence.Runner.ID // the literal id: after Publish only its pseudonym is left
 	published := attest.PublishWith(r.Run.Evidence, p)
+	// PublishWith keeps the free text of a retry (why the previous attempt failed); the detail
+	// slot must not see what the profile would remove from the status text, so scrub it here.
+	pr := p.WithRunner(r.Run.Evidence.Runner.ID)
+	published.Retries = append([]model.Retry(nil), published.Retries...)
+	for i := range published.Retries {
+		published.Retries[i].Diagnosis = pr.Text(published.Retries[i].Diagnosis)
+		published.Retries[i].Excerpt = pr.Text(published.Retries[i].Excerpt)
+	}
+	return published, p, r.Run.Evidence.Runner.ID
+}
+
+func (attestPublisher) Publish(_ context.Context, r PublishRequest) (report.Status, error) {
+	published, p, runnerID := publication(r)
 	r.Run.Evidence = published
 	if len(published.Checks) > 0 {
 		r.Projection = model.Projection(published)

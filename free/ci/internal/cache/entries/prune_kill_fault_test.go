@@ -54,11 +54,11 @@ func (p phaseBackend) CachePrune(ctx context.Context, s entries.PruneStep) (entr
 	return r, err
 }
 
-func (p phaseBackend) CacheEntries(ctx context.Context, key string) ([]entries.Manifest, error) {
+func (p phaseBackend) CacheBlobRefs(ctx context.Context, each func([]byte, string) error) error {
 	p.mark("before-refs")
-	m, err := p.Backend.CacheEntries(ctx, key)
+	err := p.Backend.CacheBlobRefs(ctx, each)
 	fmt.Println("phase:sweeping") // no linger: the cas sweep runs right after
-	return m, err
+	return err
 }
 
 func faultStack(dir string, env map[string]string, linger time.Duration) (*store.Store, *entries.Store, error) {

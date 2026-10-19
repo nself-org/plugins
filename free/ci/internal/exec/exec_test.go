@@ -2,6 +2,7 @@ package exec
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -194,3 +195,35 @@ func TestWorkspaceCleanupFailureIsInfra(t *testing.T) {
 		t.Fatalf("cleanup succeeded but run failed: %+v", r)
 	}
 }
+
+func TestRegisterSecretSeesEveryResolvedValueBeforeTheJobStarts(t *testing.T) {
+	var got []string
+	e := &Executor{Secrets: secretFunc(map[string]string{"A_KEY": "alpha-secret-value", "EMPTY": ""}),
+		RegisterSecret: func(v []byte) error { got = append(got, string(v)); return nil }}
+	r := e.Run(context.Background(), JobSpec{AttemptID: "rs1", CoordinatorID: "coord", Home: t.TempDir(),
+		Command: []string{"sh", "-c", "true"}})
+	if r.Err != nil || len(got) != 1 || got[0] != "alpha-secret-value" {
+		t.Fatalf("result %+v registered %q (empty values are skipped)", r, got)
+	}
+}
+
+func TestRegisterSecretFailureFailsTheAttemptWithoutRunningOrNamingTheValue(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "ran")
+	e := &Executor{Secrets: secretFunc(map[string]string{"A_KEY": "alpha-secret-value"}),
+		RegisterSecret: func([]byte) error { return errors.New("refused") }}
+	r := e.Run(context.Background(), JobSpec{AttemptID: "rs2", CoordinatorID: "coord", Home: t.TempDir(),
+		Command: []string{"sh", "-c", "touch " + marker}})
+	if r.Err == nil || r.Attempt.State != "failed" || r.Attempt.FailureClass != "infra" {
+		t.Fatalf("result %+v", r)
+	}
+	if strings.Contains(r.Err.Error(), "alpha-secret-value") {
+		t.Fatalf("error names the value: %v", r.Err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("the job ran although its secret could not be registered")
+	}
+}
+
+type secretFunc map[string]string
+
+func (s secretFunc) Resolve(context.Context, []string) (map[string]string, error) { return s, nil }

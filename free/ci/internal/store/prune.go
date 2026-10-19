@@ -7,7 +7,9 @@ package store
 // Constraints: a pipeline whose status is "running" is never deleted (the
 // check and the delete share one transaction, batches of pruneBatch); the removal covers jobs,
 // attempts, leases and reservations, cancel intents, idempotency keys,
-// declared artifacts, evidence and event-index rows of the pipeline, and one
+// declared artifacts, cache entries and cache facts written by those attempts (an
+// entry is served only while its writer attempt is on record as passed),
+// evidence and event-index rows of the pipeline, and one
 // audit row records the prune; the audit log itself is never pruned.
 
 import (
@@ -57,6 +59,8 @@ var pruneSteps = []string{
 	`DELETE FROM declared_artifact WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM evidence WHERE pipeline_id IN (SELECT value FROM json_each(?))`,
 	`DELETE FROM event_index WHERE run_id IN (SELECT value FROM json_each(?))`,
+	`DELETE FROM cache_entry WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM cache_attempt WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM attempt WHERE job_id IN (SELECT id FROM job WHERE pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM job WHERE pipeline_id IN (SELECT value FROM json_each(?))`,
 	`DELETE FROM pipeline WHERE id IN (SELECT value FROM json_each(?))`,

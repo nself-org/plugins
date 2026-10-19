@@ -10,11 +10,14 @@ package gates
 // project environment, pip a `.venv` in the working directory (HOME is the
 // job root home, so no global or ~/.local install); python-test is required,
 // python-lint and python-types advisory until configured or strict; python-types
-// exists only when mypy is configured; requirement files reach the shell as
-// positional arguments, never spliced into the script.
+// exists only when mypy is configured; requirement files reach the helper
+// script as arguments, never spliced into it; no check runs through sh, so a
+// Windows host can run them (D-1029).
 
 import (
 	"path"
+	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -25,9 +28,9 @@ const pythonFix = "Install the project's Python tools (uv, poetry or python3) an
 
 func pythonDefs() []CheckDef {
 	return []CheckDef{
-		def("python-test", "test", "uv", []string{"sh", "-c", "uv sync --frozen && uv run pytest"}, true, true, "fast", pythonFix),
+		def("python-test", "test", "uv", []string{"uv", "run", "--frozen", "pytest"}, true, true, "fast", pythonFix),
 		def("python-lint", "lint", "ruff", []string{"ruff", "check", "."}, false, true, "fast", "Install ruff"),
-		def("python-types", "lint", "uv", []string{"sh", "-c", "uv sync --frozen && uv run mypy ."}, false, true, "fast", pythonFix),
+		def("python-types", "lint", "uv", []string{"uv", "run", "--frozen", "mypy", "."}, false, true, "fast", pythonFix),
 	}
 }
 
@@ -66,7 +69,7 @@ func pythonIndex(facts []detect.Fact) pythonFacts {
 			d.pytest = true
 		case f.Kind == "type_checker" && f.Name == "mypy":
 			d.mypy = true
-		case f.Kind == "lockfile" && f.Name == "pip" && path.Dir(f.Path) == nearestProject(idx, path.Dir(f.Path)):
+		case f.Kind == "lockfile" && f.Name == "pip" && requirementsInstalled(path.Base(f.Path)) && path.Dir(f.Path) == nearestProject(idx, path.Dir(f.Path)):
 			d.requirements = append(d.requirements, path.Base(f.Path))
 		}
 	}
@@ -109,38 +112,83 @@ func (d *pythonDir) command(run, module string) func(*PlannedCheck) {
 	return func(p *PlannedCheck) {
 		switch d.manager {
 		case "uv":
-			p.Tool, p.Argv = "uv", []string{"sh", "-c", "uv sync --frozen && uv run " + run}
+			p.Tool, p.Argv = "uv", append([]string{"uv", "run", "--frozen"}, strings.Fields(run)...)
 		case "poetry":
-			p.Tool, p.Argv = "poetry", []string{"sh", "-c", "export POETRY_VIRTUALENVS_IN_PROJECT=true; poetry install --no-root --sync && poetry run " + run}
+			p.Tool, p.Argv = "poetry", append([]string{pythonTool(), "-c", poetryScript}, strings.Fields(run)...)
 		default:
-			p.Tool, p.Argv = "python3", pipCommand(module, d.requirements, d.project)
+			p.Tool, p.Argv = pythonTool(), pipCommand(module, d.requirements, d.project)
 		}
 	}
 }
 
-// pipScript creates the venv, then installs each requirements file (the
-// positional arguments), then runs the module.
-const pipScript = `set -e
-[ -d .venv ] || python3 -m venv .venv
-for f in "$@"; do .venv/bin/python -m pip install --quiet -r "$f"; done
+// pythonTool is the interpreter that runs the helper scripts below.
+func pythonTool() string {
+	if runtime.GOOS == "windows" {
+		return "python"
+	}
+	return "python3"
+}
+
+// pipHead is the Python source (run with `-c`, so no shell is involved and a
+// Windows host can run it) that creates the venv, then installs each
+// requirements file (the script arguments); pipRun ends it by running the
+// module. Python's own venv and subprocess modules replace the shell.
+const pipHead = `import os, subprocess, sys, venv
+exe = os.path.join(".venv", "Scripts" if os.name == "nt" else "bin", "python")
+if not os.path.isdir(".venv"):
+    venv.create(".venv", with_pip=True)
+def run(*args):
+    code = subprocess.call([exe, *args])
+    if code:
+        sys.exit(code)
+for f in sys.argv[1:]:
+    run("-m", "pip", "install", "--quiet", "-r", f)
 `
 
 // pipProject installs the project itself (editable) when its manifest is
 // pyproject.toml or setup.py (a setup.cfg alone cannot be installed), so a
 // src-layout package imports.
-const pipProject = `.venv/bin/python -m pip install --quiet -e .
+const pipProject = `run("-m", "pip", "install", "--quiet", "-e", ".")
 `
 
-const pipRun = `exec .venv/bin/python `
+const pipRun = `sys.exit(subprocess.call([exe] + "`
 
 func pipCommand(module string, requirements []string, project bool) []string {
-	script := pipScript
+	script := pipHead
 	if project {
 		script += pipProject
 	}
-	argv := []string{"sh", "-c", script + pipRun + module, "sh"}
+	argv := []string{pythonTool(), "-c", script + pipRun + module + `".split()))`}
 	return append(argv, requirements...)
 }
+
+// poetryScript runs `poetry install` then `poetry run <args>` (the script
+// arguments) with the venv inside the project. The project installs itself
+// (a src-layout package must import), except under package-mode = false or
+// when the root cannot be installed (an application without a package
+// directory), which fall back to --no-root.
+const poetryScript = `import os, re, subprocess, sys
+os.environ["POETRY_VIRTUALENVS_IN_PROJECT"] = "true"
+try:
+    text = open("pyproject.toml", encoding="utf-8").read()
+except OSError:
+    text = ""
+code = 1
+if not re.search(r"(?m)^\s*package-mode\s*=\s*false\b", text):
+    code = subprocess.call(["poetry", "install", "--sync"])
+if code:
+    code = subprocess.call(["poetry", "install", "--sync", "--no-root"])
+if code:
+    sys.exit(code)
+sys.exit(subprocess.call(["poetry", "run"] + sys.argv[1:]))
+`
+
+// requirementsInstalled reports whether a requirements file is one the checks
+// install: requirements.txt and its dev/test variants (requirements-dev.txt,
+// requirements_test.txt, ...). Docs, platform and other variants stay out.
+func requirementsInstalled(base string) bool { return installedRequirements.MatchString(base) }
+
+var installedRequirements = regexp.MustCompile(`^requirements([-_.](dev|test|tests|testing))?\.txt$`)
 
 // pytestMissing reports output that shows pytest itself is not installed
 // (not a failing test): the check is an unavailable tool, never a pass.

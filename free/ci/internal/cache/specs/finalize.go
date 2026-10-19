@@ -7,21 +7,28 @@ package specs
 // Engine.Save, usage rows for refusals.
 // Constraints: RecordResult runs once and is write-once per run; a save that
 // is refused (secret_match, size cap, disk floor, epoch, namespace) is a usage
-// row and a warning, never a failed attempt; the registered-value scan runs
+// row and a warning, and a committed save is a `saved` usage row, never a failed attempt; the registered-value scan runs
 // before the commit (Engine.Save).
 
 import (
 	"bytes"
 	"context"
 	"errors"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
 )
 
 // canSave reports whether the attempt may save it: its own namespace, writable
-// dirs, and no own entry restored.
+// dirs, and no own entry restored; a workspace entry also needs its staged pack.
 func (it *Item) canSave() bool {
+	return it.Access == authz.ModeRWOwn && it.Bound && !it.ReadOnly && !it.Hit && (!it.InWorkspace || it.staged != nil)
+}
+
+// canSaveFromWorkspace is canSave before the pack exists: AfterJob stages only
+// what Finalize could commit.
+func (it *Item) canSaveFromWorkspace() bool {
 	return it.Access == authz.ModeRWOwn && it.Bound && !it.ReadOnly && !it.Hit
 }
 
@@ -51,10 +58,18 @@ func (s *Session) Finalize(ctx context.Context, epoch int64) {
 		if !it.canSave() {
 			continue
 		}
-		_, err := s.in.Engine.Save(ctx, SaveRequest{Base: s.base, Attempt: s.in.Attempt, Epoch: epoch, Namespace: s.own, Key: it.Key, Spec: it.Spec, Dirs: it.Dirs})
+		start := time.Now()
+		var n int64
+		var err error
+		if it.InWorkspace { // packed in AfterJob, while the workspace existed
+			n, err = s.in.Engine.Commit(ctx, it.staged, epoch)
+		} else {
+			n, err = s.in.Engine.Save(ctx, SaveRequest{Base: s.base, Attempt: s.in.Attempt, Epoch: epoch, Namespace: s.own, Key: it.Key, Spec: it.Spec, Dirs: it.Dirs})
+		}
 		switch {
 		case err == nil:
 			s.saved = append(s.saved, it.Key)
+			s.use(ctx, it.Spec.ID, it.Key, "saved", n, time.Since(start).Milliseconds())
 		case errors.Is(err, ErrEmpty):
 		default:
 			s.use(ctx, it.Spec.ID, it.Key, resultOf(err), 0, 0)

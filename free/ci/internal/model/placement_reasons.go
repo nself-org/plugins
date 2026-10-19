@@ -50,6 +50,10 @@ const (
 	PlatformNoneAvailable       PlacementReason = "platform.none_available"
 	QueueTimeout                PlacementReason = "queue.timeout"
 	BackpressureQueueFull       PlacementReason = "backpressure.queue_full"
+	// AUTO reasons (P7-AUTO-27). pool.excluded is Static; node.not_ready and tier.waiting clear on their own.
+	PoolExcluded PlacementReason = "pool.excluded"
+	NodeNotReady PlacementReason = "node.not_ready"
+	TierWaiting  PlacementReason = "tier.waiting"
 )
 
 var placementReasons = map[PlacementReason]bool{
@@ -59,6 +63,7 @@ var placementReasons = map[PlacementReason]bool{
 	CostUnknownRate: true, CostUnbounded: true, PaidDisabled: true, BudgetUnset: true, ProviderOwnedElsewhere: true, BurstTeamOnly: true, AllowanceUnknown: true, AllowanceBelowMargin: true, BudgetExceeded: true, ApprovalPending: true,
 	ProviderDown: true, RunnerRemoteOnly: true, LimitPipeline: true, LimitJob: true, LimitRunner: true, LimitProvider: true, LimitProject: true, LimitUser: true, LimitTeam: true, LimitGlobal: true, BackgroundInteractiveQueued: true, BackgroundContention: true, EphemeralUsed: true,
 	PlatformNoneAvailable: true, QueueTimeout: true, BackpressureQueueFull: true,
+	PoolExcluded: true, NodeNotReady: true, TierWaiting: true,
 }
 
 func (r PlacementReason) Valid() bool { return placementReasons[r] }
@@ -66,7 +71,7 @@ func (r PlacementReason) Valid() bool { return placementReasons[r] }
 // Static reports whether a runner cannot become eligible without a configuration change.
 func (r PlacementReason) Static() bool {
 	switch r {
-	case NodeRevoked, NodeDiscovered, NodeDeployHost, NodeProtocol, PlatformMismatch, ToolsMissing, ResourcesInsufficient, LabelsMismatch, OverrideExcluded, OverrideMinIsolation, OverrideMaxCost, CostUnknownRate, CostUnbounded, PaidDisabled, BudgetUnset, ProviderOwnedElsewhere, BurstTeamOnly, AllowanceUnknown, RunnerRemoteOnly:
+	case NodeRevoked, NodeDiscovered, NodeDeployHost, NodeProtocol, PlatformMismatch, ToolsMissing, ResourcesInsufficient, LabelsMismatch, OverrideExcluded, OverrideMinIsolation, OverrideMaxCost, CostUnknownRate, CostUnbounded, PaidDisabled, BudgetUnset, ProviderOwnedElsewhere, BurstTeamOnly, AllowanceUnknown, RunnerRemoteOnly, PoolExcluded:
 		return true
 	}
 	return false

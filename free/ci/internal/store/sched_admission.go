@@ -171,10 +171,7 @@ func (s *Store) commitAdmission(ctx context.Context, tx *sql.Tx, v AdmitView, fe
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO lease(id,attempt_id,host,runner_id,expires_at,heartbeat_at,token_digest,epoch) VALUES (?,?,?,?,?,?,?,?)", d.LeaseID, d.AttemptID, v.Host, d.RunnerID, now+int64(ttl), now, d.TokenDigest, *fence); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO host_reservation(host,lease_id,cpu,mem_mb) VALUES (?,?,?,?)", v.Host, d.LeaseID, d.CPU, d.MemMB); err != nil {
+	if err := insertLease(ctx, tx, v.Host, d, *fence, ttl, now); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO sched_admitted(attempt_id,pipeline_id,project,user_id,team_id,provider,runner_id,world_digest,admitted_at) VALUES (?,?,?,?,?,?,?,?,?)", d.AttemptID, v.PipelineID, v.Project, v.Request.User, v.Request.Team, v.Request.Provider, d.RunnerID, v.Request.WorldDigest, now); err != nil {

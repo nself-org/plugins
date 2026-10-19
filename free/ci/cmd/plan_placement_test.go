@@ -18,6 +18,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
@@ -35,6 +36,8 @@ func placementRepo(t *testing.T) (repo, home string) {
 	t.Setenv("FIXTURE_TOKEN", fixtureSecret)
 	placementClock = func() time.Time { return time.Unix(1_700_000_000, 0) }
 	t.Cleanup(func() { placementClock = time.Now })
+	placementProbe = idleCapacity
+	t.Cleanup(func() { placementProbe = ciexec.Probe })
 	src := filepath.Join("..", "internal", "planview", "testdata", "repo")
 	if err := filepath.WalkDir(src, func(p string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -60,6 +63,12 @@ func placementRepo(t *testing.T) (repo, home string) {
 		}
 	}
 	return repo, home
+}
+
+// idleCapacity is the fixed host the placement tests run on: plugged in, ample
+// memory, no battery, so the result never depends on the machine.
+func idleCapacity() ciexec.Capacity {
+	return ciexec.Capacity{CPUs: 8, MemoryMB: 16384, FreeMemoryMB: 16384, BatteryPercent: -1, PluggedIn: true}
 }
 
 func resetPlanFlags() {
@@ -126,6 +135,21 @@ func TestPlanPlacementJSON(t *testing.T) {
 	}
 	if len(doc.Jobs[0].SecretClasses) != 1 || doc.Jobs[0].SecretClasses[0] != "project" {
 		t.Errorf("secret classes: %v", doc.Jobs[0].SecretClasses)
+	}
+}
+
+// A loaded host must not change the fixture result: the probe is the only
+// source of host state, so a busy probe is the only thing that can move it.
+func TestPlanPlacementUsesInjectedProbe(t *testing.T) {
+	repo, _ := placementRepo(t)
+	calls := 0
+	placementProbe = func() ciexec.Capacity { calls++; return idleCapacity() }
+	resetPlanFlags()
+	if code, out, errs := capture(t, func() int { return runPlan([]string{"--repo", repo}) }); code != 0 || strings.Count(out, "capacity.busy") != 0 {
+		t.Fatalf("exit %d\n%s%s", code, out, errs)
+	}
+	if calls == 0 {
+		t.Fatal("the plan did not read the injected capacity probe")
 	}
 }
 

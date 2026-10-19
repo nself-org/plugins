@@ -11,11 +11,12 @@ package run
 // coordinator awaits only local attempts (runAttempt fails a remote one), so
 // the world holds the local runner alone until a remote await exists; the
 // dispatcher itself delivers remote leases (NewTransportAdapter). The local
-// runner carries a PLACEHOLDER declaration at the top of each trust axis (debt:
-// not a measured fact; `ci explain` shows it as declared): the isolation hook
-// refuses a job it cannot sandbox at exec time, and P7-TRUST-08's probe facts
-// replace it. The local admission policy (battery, reservations, the foreground
-// floor) still runs first, as in LocalAdmit.
+// runner carries the probe-derived declaration `ci plan` uses (owner trust
+// class, process isolation), so placement refuses untrusted work there. The
+// local admission policy (battery, reservations, the foreground
+// floor) still runs first, as in LocalAdmit. The job-to-sched mapping is
+// planview.SchedJob, the one `ci plan` uses; the world counts the per-job limit
+// over the run's own job rows (world.Deps.JobIDs), not every active attempt.
 
 import (
 	"context"
@@ -28,6 +29,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/planview"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/report"
@@ -35,7 +37,6 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
-	"github.com/nself-org/plugins/free/ci/internal/trust"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
@@ -91,10 +92,8 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 		return Admitted{}, err
 	}
 	cpu, mem := demandOf(s.Job)
-	a, err := rd.d.Submit(ctx, dispatch.Job{
-		AttemptID: id, Sched: rd.schedJob(s, id, row, cpu, mem), Model: *s.Job, Revision: sess.Revision, Foreground: s.Foreground,
-		LocalCPU: max(dec.Slots*cpu, cpu), LocalMemMB: max(capacity.FreeMemoryMB-capacity.MemoryMB*dec.ReserveMemoryPercent/100, mem),
-	})
+	a, err := rd.d.Submit(ctx, queueJob(sess, s, rd.schedJob(s, id, row, cpu, mem), id,
+		max(dec.Slots*cpu, cpu), max(capacity.FreeMemoryMB-capacity.MemoryMB*dec.ReserveMemoryPercent/100, mem)))
 	if err != nil {
 		var de *dispatch.Error
 		if errors.As(err, &de) {
@@ -103,6 +102,13 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 		return Admitted{}, err
 	}
 	return Admitted{AttemptID: a.AttemptID, LeaseID: a.LeaseID, RunnerID: a.RunnerID, Local: a.Local}, nil
+}
+
+// queueJob is the dispatcher's input for one attempt. Only an interactive run
+// (a person at a terminal) keeps the implicit foreground queue cap.
+func queueJob(sess *Session, s AttemptSpec, sj sched.Job, id string, localCPU, localMemMB int) dispatch.Job {
+	return dispatch.Job{AttemptID: id, Sched: sj, Model: *s.Job, Revision: sess.Revision, Foreground: s.Foreground,
+		NoDefaultQueueCap: !sess.Interactive, LocalCPU: localCPU, LocalMemMB: localMemMB}
 }
 
 // runDispatcher returns the dispatcher of the session's run, creating it once.
@@ -139,15 +145,17 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 // platform is the local runner's platform string.
 func platform() string { return runtime.GOOS + "/" + runtime.GOARCH }
 
+// schedJob maps the attempt with the mapping `ci plan` uses (planview.SchedJob),
+// then sets what only a run knows: the attempt key and number, the source trust
+// and the local demand. The job's own labels, tools, isolation floor and
+// accelerators are dropped: the local declaration carries no measured facts for
+// them until P7-TRUST-08, and the exec-time isolation hook is the gate for them.
 func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sched.Job {
-	var timeout time.Duration
-	if d, err := time.ParseDuration(s.Job.Timeout); err == nil {
-		timeout = d
-	}
-	return sched.Job{Key: id, ID: row, Name: row, Pipeline: sched.Pipeline{ID: rd.sess.RunID, Support: []string{platform()}, Foreground: s.Foreground},
-		Requirements: model.PlacementRequirements{Platform: platform(), CPU: int64(cpu), MemMB: int64(mem)},
-		Trust:        model.TrustClass(rd.row.SourceTrust), Network: "internet", TimeoutMs: timeout.Milliseconds(), Attempt: s.N, Priority: string(s.Job.Priority),
-		RemoteOnly: s.Job.RemoteOnly, PersonalOwnRun: true, Project: rd.row.Project}
+	j := planview.SchedJob(planview.Context{PipelineID: rd.sess.RunID, Project: rd.row.Project, Support: []string{platform()},
+		DefaultPlatform: platform(), Foreground: s.Foreground}, planview.PlannedJob{ID: row, Name: row, Job: *s.Job})
+	j.Key, j.Attempt, j.Trust, j.Accelerators = id, s.N, model.TrustClass(rd.row.SourceTrust), nil
+	j.Requirements = model.PlacementRequirements{Platform: platform(), CPU: int64(cpu), MemMB: int64(mem)}
+	return j
 }
 
 // policy resolves the run's effective scheduling policy once, as PolicyHook does.
@@ -164,7 +172,7 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 		root = "."
 	}
 	res := policy.Resolver{Store: rd.sess.Store, Run: policy.Runner(report.Capture)}
-	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGitCached(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root})
+	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGitCached(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root, Run: rd.sess.PolicyRun})
 	if err != nil {
 		return sched.Policy{}, err
 	}
@@ -176,48 +184,37 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 	return p, nil
 }
 
-// world builds the local-only placement world of the run.
+// world builds the local-only placement world of the run. The local runner is
+// declared the way `ci plan` declares it (planview.LocalCapability, then
+// MarkPersonalLocal): probe facts, owner trust class, process isolation. An
+// untrusted job is therefore unplaceable here by design.
 func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
 	capacity := rd.sess.Capacity()
-	local := localCapability(rd.row.Project, capacity)
-	w, _, err := world.Build(ctx, world.Deps{Store: rd.sess.Store, Local: &local, LocalCapacity: &capacity, Policy: rd.policy}, p)
+	local, err := planview.LocalCapability(planview.LocalFacts{Project: rd.row.Project, Platform: platform(), CPUs: capacity.CPUs,
+		MemMB: int64(capacity.MemoryMB), Now: time.Now()})
+	if err != nil {
+		return sched.World{}, "", err
+	}
+	// the run loop does not probe for docker: say unknown rather than a measured "no"
+	local.Tools.Docker = model.Fact[bool]{Source: "probe", ObservedAt: time.Now(), Confidence: "unknown"}
+	w, _, err := world.Build(ctx, world.Deps{Store: rd.sess.Store, Local: &local, LocalCapacity: &capacity, Policy: rd.policy, JobIDs: rd.sess.jobRows()}, p)
 	if err != nil {
 		return sched.World{}, "", err
 	}
 	keep := w.Runners[:0]
 	for _, r := range w.Runners {
 		if r.ID == "local" {
-			r.Decl = localDeclarationPlaceholder()
 			keep = append(keep, r)
 		}
 	}
 	if len(keep) != 1 {
-		// a registered node called "local" would inherit the placeholder declaration
+		// a registered node called "local" would inherit the personal-node declaration
 		return sched.World{}, "", fail(CodeOptions, "the node registry holds a node with the reserved id %q", "local")
 	}
 	w.Runners, w.Hosted = keep, nil
+	planview.MarkPersonalLocal(&w)
 	digest, err := world.Digest(w)
 	return w, digest, err
-}
-
-func localCapability(project string, c ciexec.Capacity) model.Capability {
-	osName, arch, kind, class := runtime.GOOS, runtime.GOARCH, "local", "local"
-	cap := model.Capability{Schema: "ci.runner-capability/v1"}
-	cap.Lifecycle.Eligible = true
-	cap.Lifecycle.AuthorizedProjects = []string{project}
-	cap.Protocol.Versions, cap.Protocol.Min = []int{1}, 1
-	cap.Platform.OS.Value, cap.Platform.Arch.Value = &osName, &arch
-	cap.Location.Kind.Value = &kind
-	cap.Economics.Class.Value = &class
-	return cap
-}
-
-// localDeclarationPlaceholder is what the PERSONAL coordinator says about its own
-// machine until a probe measures it. It is permissive on purpose: placement must
-// not refuse what LocalAdmit ran, and the exec-time isolation hook is the gate.
-func localDeclarationPlaceholder() trust.Declaration {
-	return trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged",
-		UIDSeparation: true, Ownership: "operator", PersonalOwnNode: true, NoLANRoute: true}
 }
 
 // NewTransportAdapter adapts internal/transport to the dispatcher's Transport:

@@ -11,6 +11,8 @@ type Pipeline struct {
 	Band       string
 	Foreground bool
 	Release    bool
+	// Record marks a commit-CI run of record; false for dev runs (P7-AUTO-27).
+	Record bool `json:",omitempty"`
 }
 type Job struct {
 	Key            string
@@ -32,6 +34,8 @@ type Job struct {
 	Project        string
 	User           string
 	Team           string
+	// QueuedMs is how long the job has waited, in ms; dispatch fills it (P7-AUTO-27).
+	QueuedMs int64 `json:",omitempty"`
 }
 type Avail struct {
 	Slots int
@@ -147,6 +151,12 @@ type World struct {
 	Counts            Counts
 	OpenRegistry      bool
 	InteractiveQueued map[string]bool
+	// Exclusions are extra per-runner reasons appended to eligibility() output. The
+	// only contributor is internal/autoworld (P7-AUTO-27); empty means no effect.
+	Exclusions map[string][]model.PlacementReasonDetail `json:",omitempty"`
+	// Bias is a per-runner score addition in ms, shown as the tier_rank component.
+	// Its contributor is P7-AUTO-05; empty means no effect.
+	Bias map[string]int64 `json:",omitempty"`
 }
 type Placement struct {
 	JobKey     string

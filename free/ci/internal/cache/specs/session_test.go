@@ -3,7 +3,9 @@ package specs
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,7 +45,7 @@ func saved(t *testing.T, e *env, id string, f entries.Facts) *Session {
 func TestSessionSavesAfterAPassAndRestoresTheNextRun(t *testing.T) {
 	e := newEnv(t)
 	s1 := saved(t, e, "a1", ownerFacts)
-	if got := resultsOf(e.uses("a1")); strings.Join(got, ",") != "go:miss" || e.entryCount() != 1 {
+	if got := resultsOf(e.uses("a1")); strings.Join(got, ",") != "go:miss,go:saved" || e.entryCount() != 1 {
 		t.Fatalf("first run: uses %v, entries %d", got, e.entryCount())
 	}
 	env1, mounts := s1.Setup()
@@ -408,7 +410,7 @@ func TestSessionSavesAZeroFilledDirBecausePlainTarHasNoAmplification(t *testing.
 		t.Fatal(err)
 	}
 	s.Finalize(e.ctx, e.finalizing("z1"))
-	if e.entryCount() != 1 || strings.Join(resultsOf(e.uses("z1")), ",") != "go:miss" {
+	if e.entryCount() != 1 || strings.Join(resultsOf(e.uses("z1")), ",") != "go:miss,go:saved" {
 		t.Fatalf("entries %d uses %v", e.entryCount(), resultsOf(e.uses("z1")))
 	}
 	e.settlePassed("z1")
@@ -473,13 +475,38 @@ func TestRestoreServesNothingWhenTheWriterCannotBeChecked(t *testing.T) {
 		t.Fatalf("a store error must fail closed without dropping: %s entries %d", got, e.entryCount())
 	}
 	e.eng.Backend = good
-	// the writer's history was pruned: its settled pass is trusted
+	// the writer's history was pruned: the prune retires its entry with it
 	if _, err := e.st.DeletePipelines(e.ctx, []string{"pw1"}); err != nil {
 		t.Fatal(err)
 	}
+	if n := e.entryCount(); n != 0 {
+		t.Fatalf("pruning the writer's history must retire its entry: %d left", n)
+	}
 	e.running("r2", ownerFacts)
 	e.begin(e.input("r2", ownerFacts))
-	if got := strings.Join(resultsOf(e.uses("r2")), ","); got != "go:hit" {
-		t.Fatalf("an entry whose writer attempt was pruned must still be served: %s (entries %d)", got, e.entryCount())
+	if got := strings.Join(resultsOf(e.uses("r2")), ","); got != "go:miss" {
+		t.Fatalf("an entry whose writer history is gone must not be served: %s", got)
+	}
+}
+
+// missingBackend reports the attempt as unknown, the way the store does after a
+// history prune whose entry retirement was lost (D-1038: a crash in between).
+type missingBackend struct{ Backend }
+
+func (missingBackend) AttemptStateEpoch(_ context.Context, id string) (model.JobState, int64, error) {
+	return "", 0, fmt.Errorf("store: attempt %q: %w", id, sql.ErrNoRows)
+}
+
+// A missing writer attempt is no evidence of a pass: a cancel may have won
+// finalizing -> passed afterwards and the coordinator died before the retract.
+func TestRestoreDropsAnEntryWhoseWriterAttemptIsUnknown(t *testing.T) {
+	e := newEnv(t)
+	saved(t, e, "w1", ownerFacts)
+	good := e.eng.Backend
+	e.eng.Backend = missingBackend{good}
+	e.running("r1", ownerFacts)
+	e.begin(e.input("r1", ownerFacts))
+	if got := strings.Join(resultsOf(e.uses("r1")), ","); got != "go:miss" || e.entryCount() != 0 {
+		t.Fatalf("an entry with no recorded settled pass must not be served and must be dropped: %s entries %d", got, e.entryCount())
 	}
 }

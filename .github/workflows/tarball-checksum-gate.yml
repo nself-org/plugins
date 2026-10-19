@@ -53,9 +53,12 @@ name: Tarball Checksum Gate
 on:
   pull_request:
     branches: [main]
+    # The gate compares registry.json with the published release assets; it reads each plugin's manifest
+    # (binaryName) and the recorded exceptions, not the plugin sources.
     paths:
-      - 'free/**'
+      - 'free/*/plugin.json'
       - 'registry.json'
+      - 'scripts/conformance/exceptions.yaml'
       - 'scripts/deterministic-tar.sh'
       - 'scripts/build-tarballs.sh'
       - 'scripts/verify-published-checksums.sh'

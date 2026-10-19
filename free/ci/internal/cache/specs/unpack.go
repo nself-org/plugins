@@ -286,15 +286,28 @@ func RemoveIn(base *os.Root, rel string) error { return removeIn(base, rel) }
 // removeIn deletes the directory rel of base (same permission rule as RemoveTree)
 // without ever leaving base.
 func removeIn(base *os.Root, rel string) error {
-	if info, err := base.Lstat(rel); err == nil && info.Mode()&os.ModeSymlink != 0 {
+	info, err := base.Lstat(rel)
+	if err == nil && info.Mode()&os.ModeSymlink != 0 {
 		return base.Remove(rel) // unlink it; never walk or chmod what it points at
 	}
-	if sub, err := base.OpenRoot(rel); err == nil {
-		_ = chmodDirs(sub, ".")
-		_ = sub.Close()
+	if err == nil && info.IsDir() {
+		if afterLstat != nil {
+			afterLstat()
+		}
+		if sub, err := base.OpenRoot(rel); err == nil {
+			// OpenRoot follows an in-root symlink, so a directory swapped for one since the
+			// Lstat would be chmodded in its target's place: only the inode seen above is touched.
+			if got, err := sub.Stat("."); err == nil && os.SameFile(info, got) {
+				_ = chmodDirs(sub, ".")
+			}
+			_ = sub.Close()
+		}
 	}
 	return removeAll(base, rel)
 }
+
+// afterLstat is a test seam between the Lstat and the OpenRoot of removeIn.
+var afterLstat func()
 
 func chmodDirs(root *os.Root, dir string) error {
 	_ = root.Chmod(dir, 0o700)

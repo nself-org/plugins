@@ -84,45 +84,6 @@ func (c *Coordinator) capture() Capture {
 	return report.Capture
 }
 
-// subset returns the jobs --job selects with their dependencies; nil means all.
-func subset(pl *plan.Plan, name string) (map[string]bool, error) {
-	if name == "" {
-		return nil, nil
-	}
-	by := map[string]plan.PlannedJob{}
-	var start []string
-	for _, pj := range pl.Jobs {
-		by[pj.ID] = pj
-		if pj.ID == name || pj.Name == name || pj.Check == name {
-			start = append(start, pj.ID)
-		}
-	}
-	if len(start) == 0 {
-		return nil, fail(CodeOptions, "--job %q matches no planned job", name)
-	}
-	keep := map[string]bool{}
-	for len(start) > 0 {
-		id := start[len(start)-1]
-		start = start[:len(start)-1]
-		if keep[id] {
-			continue
-		}
-		keep[id] = true
-		start = append(start, by[id].Deps...)
-	}
-	return keep, nil
-}
-
-// requireRunnable fails at once for a required job no runner can run.
-func requireRunnable(pl *plan.Plan, keep map[string]bool) error {
-	for _, pj := range pl.Jobs {
-		if pj.State == plan.StateUnplaceable && (keep == nil || keep[pj.ID]) && pj.Job.Required != nil && *pj.Job.Required {
-			return fail(plan.CodeUnplaceable, "job %s cannot be placed (%s): %s", pj.ID, pj.Blocked, pj.Detail)
-		}
-	}
-	return nil
-}
-
 func (c *Coordinator) classify(ctx context.Context, h Hooks, rev Revision) (string, error) {
 	if h.Trust == nil {
 		return "owner", nil
@@ -145,7 +106,7 @@ func (c *Coordinator) policy(ctx context.Context, h Hooks) (PolicyResult, error)
 	if h.Policy != nil {
 		r = h.Policy
 	}
-	return r.Resolve(ctx, PolicyRequest{Root: c.Opts.Root, Pipeline: c.Plan.Pipeline.Name})
+	return r.Resolve(ctx, PolicyRequest{Root: c.Opts.Root, Pipeline: c.Plan.Pipeline.Name, Run: c.Opts.PolicyRun})
 }
 
 func (c *Coordinator) storePath() string {
@@ -207,6 +168,12 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	ciexec.WarmRuntimeInfo() // the first job's orphan sweep asks the daemon: let the answer arrive while git and policy run
 	rev := GitRevision(ctx, c.Opts.Root, c.capture())
 	rev.Dirty = rev.Dirty || c.ConfigOutside
+	rev, release, err := c.offload(ctx, h, rev)
+	if err != nil {
+		return Result{}, err
+	}
+	defer release()
+	rev.Dirty = rev.Dirty || c.ConfigOutside // a snapshot revision never hides a config that lives outside the tree
 	source, err := c.classify(ctx, h, rev)
 	if err != nil {
 		return Result{}, err
@@ -240,6 +207,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	sess.Store, sess.Coordinator, sess.Exec, sess.RunID, sess.Revision = st, coord, c.exec, runID, rev.SHA
 	sess.Host, sess.Home, sess.Admission = hostName(), c.Opts.Home, c.Admission
 	sess.Admission.Force = sess.Admission.Force || c.Opts.Force
+	sess.PolicyRun, sess.Interactive = c.Opts.PolicyRun, c.Opts.Interactive
 	sess.Capacity = c.Capacity
 	if sess.Capacity == nil {
 		sess.Capacity = ciexec.Probe
@@ -259,6 +227,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 		out: map[string]*JobOutcome{}, done: map[string]chan struct{}{}, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
 	rs.render.Event(Event{Type: "planned", Plan: c.Plan})
 	start := time.Now()
+	c.race(ctx, h, runID)
 	c.drive(ctx, rs, st, coord.ID)
 	if end := GitRevision(context.WithoutCancel(ctx), c.Opts.Root, c.capture()); end.SHA != rev.SHA || end.Dirty {
 		rev.Dirty = true // the tree moved or changed while jobs ran: the result is not bound to the start commit

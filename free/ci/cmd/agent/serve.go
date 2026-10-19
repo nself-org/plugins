@@ -14,15 +14,18 @@ package main
 // the SSH carrier keeps apart from the frame stream.
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"runtime"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/agekey"
 	"github.com/nself-org/plugins/free/ci/internal/agent/nodekey"
@@ -138,11 +141,6 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 type leaseRunner struct{ coordinator string }
 
 func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResult, error) {
-	if len(j.Credential) > 0 {
-		// The executor cannot yet hand a credential to a container on stdin
-		// (HOST review R3), and putting it in argv or -e is what this must not do.
-		return session.JobResult{}, errors.New("runner_credential is not deliverable yet: the executor has no stdin path")
-	}
 	l := j.Lease
 	if l.Checkout.Size > 0 && j.Setup.SourceDir == "" {
 		// Staging the checkout is a Before hook's job (internal/agent/checkout); a job
@@ -150,7 +148,43 @@ func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResu
 		return session.JobResult{}, errors.New("the lease has a checkout but no hook staged it")
 	}
 	spec := execSpec{AttemptID: l.AttemptID, CoordinatorID: r.coordinator, JobID: "job", Job: l.Job, Revision: l.Checkout.Revision, SourceDir: j.Setup.SourceDir}
-	return runSpec(ctx, spec, jobInputs{Slot: j.Slot, Env: j.Setup.Env, Secrets: j.Setup.Secrets, Mounts: j.Setup.Mounts, Output: j.Output, Tail: j.Tail, Skip: j.Skip})
+	in := jobInputs{Slot: j.Slot, Env: j.Setup.Env, Secrets: j.Setup.Secrets, Mounts: j.Setup.Mounts, Output: j.Output, Tail: j.Tail, Skip: j.Skip}
+	if len(j.Credential) > 0 {
+		if err := wrapCredential(&spec, &in, j); err != nil {
+			return session.JobResult{}, err
+		}
+	}
+	return runSpec(ctx, spec, in)
+}
+
+// containerAgentPath is where a container job sees the agent binary (a Linux agent: the
+// binary is bind-mounted read-only, so it must match the container's OS).
+const containerAgentPath = "/usr/local/bin/nself-ci-agent"
+
+// wrapCredential runs the job's command under `cred-wrapper <kind> --` and feeds the
+// credential on the job's stdin, so it reaches the runner's environment only: never
+// argv, a container -e flag or a file. The value is also registered for output masking.
+func wrapCredential(spec *execSpec, in *jobInputs, j session.JobRun) error {
+	rc := j.Lease.RunnerCredential
+	if rc == nil || credEnv[rc.Kind] == "" {
+		return errors.New("runner_credential has an unknown kind")
+	}
+	if len(spec.Job.Run) == 0 {
+		return errors.New("runner_credential needs a job command to hand it to")
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("agent binary: %w", err)
+	}
+	agent := exe
+	if spec.Job.Isolation == "container" {
+		agent = containerAgentPath
+		in.Mounts = append(append([]ciexec.Mount(nil), in.Mounts...), ciexec.Mount{Host: exe, Target: agent, ReadOnly: true})
+	}
+	spec.Job.Run = append([]string{agent, "cred-wrapper", rc.Kind, "--"}, spec.Job.Run...)
+	in.Stdin = io.MultiReader(bytes.NewReader(j.Credential), strings.NewReader("\n"))
+	in.Masks = append(in.Masks, string(j.Credential))
+	return nil
 }
 
 func hostStatus() session.Status {

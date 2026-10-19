@@ -34,6 +34,8 @@ type Session struct {
 	Poll        time.Duration
 	Capacity    func() ciexec.Capacity
 	Admission   ciexec.AdmissionPolicy
+	Interactive bool      // a person waits at a terminal: only then does the implicit foreground queue cap apply
+	PolicyRun   RunValues // the per-run policy values of the invocation; the dispatcher resolves its placement policy with them
 
 	mu    sync.Mutex
 	jobs  map[*model.Job]string // job row id by job pointer
@@ -81,6 +83,17 @@ func (s *Session) jobRow(job *model.Job) (string, bool) {
 		}
 	}
 	return found, n == 1
+}
+
+// jobRows lists the row ids of the run's jobs.
+func (s *Session) jobRows() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, 0, len(s.byID))
+	for id := range s.byID {
+		out = append(out, id)
+	}
+	return out
 }
 
 // safeID makes a store id usable where the executor wants [A-Za-z0-9_.-].

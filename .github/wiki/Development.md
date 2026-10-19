@@ -418,3 +418,7 @@ curl -X POST http://localhost/webhooks/my-service \
 ## Examples
 
 See the [Stripe plugin](../plugins/stripe/) for a complete implementation example.
+
+## CI
+
+Which checks run on a pull request is described in [CI scope](CI-Scope.md).

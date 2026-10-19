@@ -8,7 +8,7 @@ package entries
 
 import "context"
 
-var useResults = map[string]bool{"hit": true, "miss": true, "disabled": true, "readonly": true, "denied": true, "refused": true}
+var useResults = map[string]bool{"hit": true, "miss": true, "disabled": true, "readonly": true, "denied": true, "refused": true, "saved": true}
 
 // RecordUse appends one usage row; the backend stamps the time.
 func (s *Store) RecordUse(ctx context.Context, u Use) error {

@@ -173,8 +173,9 @@ func TestCommitOfAForeignManifestNamespaceIsRefusedWithAnAuditRowAndNoOracle(t *
 	if got := refusedReason(t, e.es.Commit(e.ctx, "o1", fin, e.ns(trusted), junk)); got != entries.ReasonNamespace {
 		t.Fatal(got)
 	}
-	if n := len(e.audit("cache.commit.refused")); n != 3 {
-		t.Fatalf("%d audit rows, want 3", n)
+	// the same (attempt, reason) three times: one audit row, not one per frame
+	if n := len(e.audit("cache.commit.refused")); n != 1 {
+		t.Fatalf("%d audit rows, want 1", n)
 	}
 	if e.count() != 0 {
 		t.Fatal("a refused commit is visible")
@@ -275,12 +276,12 @@ type pausingBackend struct {
 	after func()
 }
 
-func (p pausingBackend) CacheEntries(ctx context.Context, key string) ([]entries.Manifest, error) {
-	m, err := p.Backend.CacheEntries(ctx, key)
-	if key == "" && p.after != nil {
+func (p pausingBackend) CacheBlobRefs(ctx context.Context, each func([]byte, string) error) error {
+	err := p.Backend.CacheBlobRefs(ctx, each)
+	if p.after != nil {
 		p.after()
 	}
-	return m, err
+	return err
 }
 
 // TestPausedPrunerWithAStaleReferenceSnapshotKeepsAFreshCommit: the pruner scans

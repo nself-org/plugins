@@ -158,15 +158,18 @@ func TestDispatchQueueTimeout(t *testing.T) {
 	for _, c := range []struct {
 		name       string
 		foreground bool
+		scripted   bool // NoDefaultQueueCap
 		maxQueue   int64
 		wait       time.Duration
 		wantCode   string
 	}{
-		{"foreground default 10m", true, 0, 11 * time.Minute, "E693"},
-		{"foreground before default", true, 0, 9 * time.Minute, ""},
-		{"policy max_queue", true, 1000, 2 * time.Second, "E693"},
-		{"background no limit", false, 0, 48 * time.Hour, ""},
-		{"background with max_queue", false, 5000, time.Minute, "E693"},
+		{"foreground default 10m", true, false, 0, 11 * time.Minute, "E693"},
+		{"foreground before default", true, false, 0, 9 * time.Minute, ""},
+		{"scripted foreground no default cap", true, true, 0, 48 * time.Hour, ""},
+		{"scripted foreground with max_queue", true, true, 1000, 2 * time.Second, "E693"},
+		{"policy max_queue", true, false, 1000, 2 * time.Second, "E693"},
+		{"background no limit", false, false, 0, 48 * time.Hour, ""},
+		{"background with max_queue", false, false, 5000, time.Minute, "E693"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			st := openStore(t)
@@ -179,7 +182,7 @@ func TestDispatchQueueTimeout(t *testing.T) {
 				t.Fatalf("occupant: %v", err)
 			}
 			j := testQueued(queueAttempt(t, st, "pipe", "proj", "waiter"))
-			j.Foreground = c.foreground
+			j.Foreground, j.NoDefaultQueueCap = c.foreground, c.scripted
 			e, err := d.enqueue(j)
 			if err != nil {
 				t.Fatal(err)
