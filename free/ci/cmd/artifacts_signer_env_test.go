@@ -11,9 +11,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/secrets"
+	"github.com/nself-org/plugins/free/ci/internal/signing"
 )
 
 // gateResolveOnV15 puts a wrapper in front of the fake cli: `config secrets resolve` answers exit 2
@@ -67,5 +69,18 @@ func TestSignerResolverChildSeesV15(t *testing.T) {
 				t.Fatalf("resolve: %v %v", vals, err)
 			}
 		})
+	}
+}
+
+// The key store the signer writes with passes the same environment to its cli children.
+func TestSignerStoreChildSeesV15(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	st, err := signerStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs, ok := st.(*signing.CLIStore)
+	if !ok || !slices.Contains(cs.Env, "NSELF_V15=1") {
+		t.Fatalf("store %T env %v", st, cs)
 	}
 }
