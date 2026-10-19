@@ -107,6 +107,31 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 	return e, digest, err
 }
 
+// SingleJob names the facts of a run of one job that an agent node reports
+// about itself; the coordinator owns everything else about the run.
+type SingleJob struct {
+	RunID, Revision, Name string
+	Outcome               JobOutcome
+	Start, End            time.Time
+}
+
+// SingleJobEvidence is the ci.evidence/v1 document of a one-job run reported by
+// an agent. It shares buildEvidence's check and verdict logic and then claims
+// only what the agent knows: the agent runner, a self-reported producer, an
+// untrusted source and an ad-hoc pipeline (the coordinator classifies the rest).
+func SingleJobEvidence(j SingleJob) (model.Evidence, error) {
+	e, _, err := buildEvidence(evidenceInput{
+		RunID: j.RunID, Revision: j.Revision, Source: "untrusted", Trigger: "api",
+		Pipeline:  model.PipelineRef{ID: j.RunID, Name: j.Name, Kind: "adhoc"},
+		Selection: model.Selection{Mode: "full", Reason: "selection.full_required"},
+		Jobs:      []JobOutcome{j.Outcome}, Cancelled: j.Outcome.State == StateCancelled, Start: j.Start, End: j.End,
+	})
+	e.RepoID = "unknown"
+	e.Runner = model.RunnerRef{ID: "agent", Provider: "agent", Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process"}
+	e.Producer = model.Producer{Kind: "self-reported", Version: "1"}
+	return e, err
+}
+
 // evidenceDigest is the sha256 of the document as it is stored.
 func evidenceDigest(e model.Evidence) (string, error) {
 	body, err := json.Marshal(e)
