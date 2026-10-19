@@ -290,13 +290,36 @@ func TestSubmitRoleAndNamedPipeline(t *testing.T) {
 	if len(r.be.submits) != 0 {
 		t.Fatal("a refused submit reached the backend")
 	}
+	// a release holder scoped to ONE project must be able to submit under the default config
+	w = httptest.NewRecorder()
+	req = httptest.NewRequest("POST", PathRuns, strings.NewReader(submitBody("acme/app")))
+	req.TLS = &tls.ConnectionState{}
+	req.Header.Set("Authorization", "Bearer "+release)
+	strict.Handler().ServeHTTP(w, req)
+	if w.Code != 202 || len(r.be.submits) != 1 {
+		t.Fatalf("a project-scoped release token on the default config: %d %s", w.Code, w.Body.String())
+	}
 	named := `{"project":"acme/app","revision":"` + goodRev + `","pipeline":"release"}`
 	st, b := r.do(anon, "POST", PathRuns, member, named) // this rig lets members submit
 	refused(t, st, b, 403, ReasonRole)
 	if st, b = r.do(anon, "POST", PathRuns, release, named); st != 202 {
 		t.Fatalf("a release holder may name a pipeline: %d %s", st, b)
 	}
-	if len(r.be.submits) != 1 || r.be.submits[0].Pipeline != "release" {
+	if len(r.be.submits) != 2 || r.be.submits[1].Pipeline != "release" {
 		t.Fatalf("backend saw %+v", r.be.submits)
 	}
+}
+
+func TestRegisterRouteRefusesOverlapsAtRegistration(t *testing.T) {
+	h := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	if err := RegisterRoute("GET", "/v1/runs/{id}", "member", h); err == nil {
+		t.Error("a route that overlaps a built-in must be refused when registered, not panic in Handler()")
+	}
+	if err := RegisterRoute("GET", "/v1/overlap/{a}", "member", h); err != nil {
+		t.Fatal(err)
+	}
+	if err := RegisterRoute("GET", "/v1/overlap/{b}", "member", h); err == nil {
+		t.Error("two registered routes that overlap must be refused")
+	}
+	New(Config{Backend: &fakeBackend{}, Roles: nil}).Handler() // must not panic
 }

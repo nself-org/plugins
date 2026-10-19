@@ -91,28 +91,49 @@ func RegisterRoute(method, pattern, role string, h http.Handler) error {
 	return nil
 }
 
-// tryPattern reports a pattern the mux would panic on, at registration instead of at serve time.
+// builtins are the routes every Server serves. The submit route is registered with the member role so the
+// wrapper's project-less check passes for a caller scoped to one project; the handler then requires
+// Config.SubmitRole for the project in the body.
+func (s *Server) builtins() []routeSpec {
+	return []routeSpec{
+		{http.MethodGet, PathPing, roles.Member, http.HandlerFunc(s.ping)},
+		{http.MethodPost, PathRuns, roles.Member, http.HandlerFunc(s.submit)},
+		{http.MethodGet, PathRuns, roles.Member, http.HandlerFunc(s.list)},
+		{http.MethodGet, PathRunsPfx + "{id}", roles.Member, http.HandlerFunc(s.get)},
+		{http.MethodPost, PathRunsPfx + "{id}/cancel", roles.Member, http.HandlerFunc(s.cancel)},
+		{http.MethodGet, PathRunsPfx + "{id}/events", roles.Member, http.HandlerFunc(s.events)},
+		{http.MethodGet, PathLogsPfx + "{job}", roles.Member, http.HandlerFunc(s.logs)},
+		{http.MethodGet, PathEvidence + "{run}", roles.Member, http.HandlerFunc(s.evidence)},
+	}
+}
+
+// tryPattern reports a pattern the mux would panic on (malformed, or overlapping a built-in or an earlier
+// registered route), at registration instead of at serve time.
 func tryPattern(method, pattern string) (err error) {
 	defer func() {
 		if recover() != nil {
-			err = Failf(ReasonBadRequest, "route %s %s is not a valid pattern", method, pattern)
+			err = Failf(ReasonBadRequest, "route %s %s is not a valid pattern or overlaps another route", method, pattern)
 		}
 	}()
-	http.NewServeMux().Handle(method+" "+pattern, http.NotFoundHandler())
+	mux := http.NewServeMux()
+	for _, b := range (&Server{}).builtins() {
+		mux.Handle(b.method+" "+b.pattern, http.NotFoundHandler())
+	}
+	routes.Lock()
+	for _, x := range routes.list {
+		mux.Handle(x.method+" "+x.pattern, http.NotFoundHandler())
+	}
+	routes.Unlock()
+	mux.Handle(method+" "+pattern, http.NotFoundHandler())
 	return nil
 }
 
 // Handler serves the built-in routes and every registered one.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	s.add(mux, routeSpec{http.MethodGet, PathPing, roles.Member, http.HandlerFunc(s.ping)})
-	s.add(mux, routeSpec{http.MethodPost, PathRuns, s.cfg.SubmitRole, http.HandlerFunc(s.submit)})
-	s.add(mux, routeSpec{http.MethodGet, PathRuns, roles.Member, http.HandlerFunc(s.list)})
-	s.add(mux, routeSpec{http.MethodGet, PathRunsPfx + "{id}", roles.Member, http.HandlerFunc(s.get)})
-	s.add(mux, routeSpec{http.MethodPost, PathRunsPfx + "{id}/cancel", roles.Member, http.HandlerFunc(s.cancel)})
-	s.add(mux, routeSpec{http.MethodGet, PathRunsPfx + "{id}/events", roles.Member, http.HandlerFunc(s.events)})
-	s.add(mux, routeSpec{http.MethodGet, PathLogsPfx + "{job}", roles.Member, http.HandlerFunc(s.logs)})
-	s.add(mux, routeSpec{http.MethodGet, PathEvidence + "{run}", roles.Member, http.HandlerFunc(s.evidence)})
+	for _, b := range s.builtins() {
+		s.add(mux, b)
+	}
 	routes.Lock()
 	extra := append([]routeSpec(nil), routes.list...)
 	routes.Unlock()

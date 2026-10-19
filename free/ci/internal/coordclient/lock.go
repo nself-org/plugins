@@ -80,7 +80,16 @@ func RecordSocket(home, path string) error {
 			keep = append(keep, l)
 		}
 	}
-	return os.WriteFile(LockPath(home), []byte(strings.Join(append(keep, "socket="+path), "\n")+"\n"), 0o600)
+	content := []byte(strings.Join(append(keep, "socket="+path), "\n") + "\n")
+	f, err := os.OpenFile(LockPath(home), os.O_WRONLY|os.O_CREATE|syscall.O_NOFOLLOW, 0o600)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	if _, err = f.WriteAt(content, 0); err != nil { // write first, trim after: a reader never sees an empty file
+		return err
+	}
+	return f.Truncate(int64(len(content)))
 }
 
 // SocketFor is the socket of the serve that holds home: the path it recorded, else the default.

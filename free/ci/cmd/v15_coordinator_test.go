@@ -34,9 +34,10 @@ const coordRev = "0123456789abcdef0123456789abcdef01234567"
 
 // scriptedBackend is a user API backend whose single run is already finished.
 type scriptedBackend struct {
-	mu      sync.Mutex
-	submits []clientapi.SubmitRequest
-	cancels int
+	evidence json.RawMessage // when set, returned instead of the golden document
+	mu       sync.Mutex
+	submits  []clientapi.SubmitRequest
+	cancels  int
 }
 
 func (b *scriptedBackend) item() clientapi.RunItem {
@@ -71,6 +72,9 @@ func (b *scriptedBackend) Logs(_ context.Context, q clientapi.LogQuery, fn func(
 	return true, fn(logs.Line{TS: "2026-10-19T00:00:00Z", Stream: "out", Seq: 1, Text: "hello from the coordinator"})
 }
 func (b *scriptedBackend) Evidence(context.Context, string) (json.RawMessage, error) {
+	if b.evidence != nil {
+		return b.evidence, nil
+	}
 	raw, _ := os.ReadFile("../internal/attest/testdata/adversarial/good.json")
 	var f struct{ Evidence json.RawMessage }
 	_ = json.Unmarshal(raw, &f)
@@ -181,8 +185,7 @@ func TestCoordinatorHookRefusesWhatItCannotHonor(t *testing.T) {
 	for name, o := range map[string]RunOptions{
 		"--job": {Job: "build"}, "--service": {Services: []string{"db"}}, "--network": {Network: "none"}, "--container": {Container: true},
 		"--timeout": {Timeout: time.Minute}, "--trust": {Trust: "owner"}, "ad hoc": {Adhoc: []string{"true"}},
-		"--force": {Force: true}, "--no-status": {NoStatus: true}, "--confirm-flaky": {ConfirmFlaky: 2}, "--trigger": {Trigger: "push"},
-		"--where": {PolicyRun: cirun.RunValues{"sched.where": json.RawMessage(`"mm4"`)}},
+		"--sha": {SHA: "abc123"}, "--force": {Force: true}, "--no-status": {NoStatus: true}, "--confirm-flaky": {ConfirmFlaky: 2}, "--trigger": {Trigger: "push"},
 	} {
 		o.Root = t.TempDir()
 		exit, exited, _, errw := hook(t, o)
@@ -421,5 +424,45 @@ func TestDetachUnderALiveServeOpensNoStore(t *testing.T) {
 	_ = runDetach(&RunOptions{JSON: true, Home: os.Getenv("NSELF_CI_HOME")})
 	if verifier != "none" {
 		t.Fatalf("detach verifier = %s; under a live serve it must not read the local store", verifier)
+	}
+}
+
+// The evidence a coordinator returns is verified before it is printed; a document that contradicts itself
+// is refused, not shown.
+func TestCoordinatorEvidenceIsVerifiedBeforePrinting(t *testing.T) {
+	be, _ := localServe(t)
+	good, _ := be.Evidence(context.Background(), "x")
+	var m map[string]any
+	if err := json.Unmarshal(good, &m); err != nil || m["pipeline"] == nil {
+		t.Fatalf("fixture: %v", err)
+	}
+	delete(m, "pipeline") // a document that is not a valid ci.evidence/v1
+	tampered, _ := json.Marshal(m)
+	be.evidence = tampered
+	code, out, errs := capture(t, func() int { c, _ := coordEvidence(context.Background(), evidenceFlags{}, "run-77"); return c })
+	if code == 0 || !strings.Contains(errs, "does not verify") || strings.Contains(out, "run-77") {
+		t.Fatalf("a tampered document was shown: exit %d out %q err %q", code, out, errs)
+	}
+}
+
+// `runs prune` goes through pruneStreams, which used to open the store before any refusal: under a live serve
+// nothing may be opened or created.
+func TestPruneThroughTheRegisteredEntryTouchesNoStoreUnderAServe(t *testing.T) {
+	_, home := localServe(t)
+	prune := runsSubs["prune"]
+	if prune == nil {
+		t.Fatal("runs prune is not registered")
+	}
+	code, _, errs := capture(t, func() int { return prune([]string{}) })
+	if code != 1 || !strings.Contains(errs, "serve_unreachable") {
+		t.Fatalf("exit %d %q", code, errs)
+	}
+	entries, _ := os.ReadDir(home)
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if strings.Join(names, ",") != "serve.lock,serve.sock" {
+		t.Fatalf("prune left %v in the CI home; it opened the store", names)
 	}
 }

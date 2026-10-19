@@ -170,3 +170,28 @@ func TestCoordinatorClientNeverFollowsARedirect(t *testing.T) {
 		t.Fatalf("a redirect must be an error and never be followed: err %v, hits %d", err, hits)
 	}
 }
+
+// The bearer-token path: a TLS coordinator that answers with a redirect must not see the token follow it.
+func TestCoordinatorClientRemoteNeverFollowsARedirect(t *testing.T) {
+	s := newSim(t)
+	var hits int
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		if r.Header.Get("Authorization") != "" {
+			t.Error("the bearer token followed a redirect")
+		}
+	}))
+	defer elsewhere.Close()
+	inner := s.srv.Config.Handler
+	s.srv.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/runs/latest" {
+			http.Redirect(w, r, elsewhere.URL+"/steal", http.StatusFound)
+			return
+		}
+		inner.ServeHTTP(w, r)
+	})
+	cl := s.client(Creds{CA: s.rootFile(), TokenFile: s.tokenFile("mia", roles.Member, time.Hour, "acme/app")})
+	if _, _, err := cl.Get(context.Background(), "latest"); !reasonIs(err, clientapi.ReasonTransport) || hits != 0 {
+		t.Fatalf("err %v, hits %d", err, hits)
+	}
+}

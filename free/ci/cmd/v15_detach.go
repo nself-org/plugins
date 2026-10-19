@@ -121,6 +121,11 @@ func detachFail(out io.Writer, asJSON bool, err error) int {
 // pruneStreams runs `runs prune` and then removes the detached stream files of
 // the runs it deleted, plus files of runs that are gone for good.
 func pruneStreams(prune handler, args []string) int {
+	if !hasDryRun(args) { // P7-NODE-19: knownRunIDs opens the store, which a live serve owns
+		if code, ok := refuseWhileServe("`runs prune`"); ok {
+			return code
+		}
+	}
 	before := knownRunIDs()
 	code := prune(args)
 	if code != 0 || hasDryRun(args) || before == nil {

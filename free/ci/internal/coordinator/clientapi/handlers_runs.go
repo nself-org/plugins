@@ -71,6 +71,10 @@ func (s *Server) auditFirst(ctx context.Context, a roles.Actor, action, target, 
 
 func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	a, _ := ActorFrom(r.Context())
+	if !s.lim.submitAllowed(a.ID()) {
+		s.fail(w, Failf(ReasonRateLimited, "too many submits from this principal; wait a minute"))
+		return
+	}
 	var req SubmitRequest
 	if err := readJSON(r, &req); err != nil {
 		s.fail(w, err)

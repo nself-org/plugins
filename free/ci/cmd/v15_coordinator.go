@@ -127,7 +127,7 @@ func refuseUnsupported(o *RunOptions) error {
 	add(schedFlags.Runner != "", "--runner")
 	add(schedFlags.MaxQueue != "", "--max-queue")
 	add(adhocFlags.Image != "", "--image")
-	add(o.PolicyRun != nil, "--where")
+	add(o.SHA != "", "--sha")
 	add(bare.cfg != "", "--config")
 	add(bare.base != "", "--base")
 	if len(bad) == 0 {

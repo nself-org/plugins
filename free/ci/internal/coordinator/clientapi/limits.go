@@ -4,7 +4,8 @@ package clientapi
 // authentications and a per-principal cap on open streams.
 // Inputs:  the remote address of a request, the principal of an actor.
 // Outputs: E664 rate_limited (429) when a limit is hit.
-// Constraints: a source that failed authFailMax times inside authFailWindow gets 429 before any store
+// Constraints: a principal may attempt submitsPerMinute submits a minute, allowed or not (denials are audited
+//          rows, so they must not be a way to flood the log); a source that failed authFailMax times inside authFailWindow gets 429 before any store
 //          lookup until the window passes (a flood of bad tokens costs no database reads); only failed
 //          authentications count (a refused role does not); the table holds at most limiterEntries sources
 //          and drops the stalest when full; a principal holds at most streamsPerPrincipal events or log
@@ -22,6 +23,7 @@ const (
 	authFailWindow      = time.Minute
 	limiterEntries      = 4096
 	streamsPerPrincipal = 8
+	submitsPerMinute    = 30
 	ReasonRateLimited   = "rate_limited"
 )
 
@@ -34,11 +36,12 @@ type limiter struct {
 	mu      sync.Mutex
 	fails   map[string]*failCount
 	streams map[string]int
+	submits map[string]*failCount
 	now     func() time.Time
 }
 
 func newLimiter() *limiter {
-	return &limiter{fails: map[string]*failCount{}, streams: map[string]int{}, now: time.Now}
+	return &limiter{fails: map[string]*failCount{}, streams: map[string]int{}, submits: map[string]*failCount{}, now: time.Now}
 }
 
 // sourceOf is the address a request counts against: an IPv4 address, or the /64 of an IPv6 one (a host
@@ -110,4 +113,25 @@ func (l *limiter) openStream(principal string) (release func(), ok bool) {
 			}
 		})
 	}, true
+}
+
+// submitAllowed counts one submit attempt of principal (allowed or not, so denials cannot be used to flood
+// the audit log) and reports whether it is within submitsPerMinute.
+func (l *limiter) submitAllowed(principal string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := l.now()
+	c := l.submits[principal]
+	if c == nil || now.Sub(c.since) > time.Minute {
+		if c == nil && len(l.submits) >= limiterEntries {
+			for k := range l.submits { // drop one arbitrary entry: the table stays bounded
+				delete(l.submits, k)
+				break
+			}
+		}
+		c = &failCount{since: now}
+		l.submits[principal] = c
+	}
+	c.n++
+	return c.n <= submitsPerMinute
 }

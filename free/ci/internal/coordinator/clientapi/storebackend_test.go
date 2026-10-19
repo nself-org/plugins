@@ -57,6 +57,9 @@ func TestStoreBackendLifecycle(t *testing.T) {
 	if err != nil || !strings.HasPrefix(sub.ID, "in-") || sub.Outcome != "enqueued" {
 		t.Fatalf("submit: %+v %v", sub, err)
 	}
+	if row, e := st.IntakeGet(ctx, sub.ID); e != nil || !strings.Contains(string(row.Facts), `"submitter":"token:x:mia"`) || !strings.Contains(string(row.Facts), `"trigger":"api"`) {
+		t.Fatalf("the trigger facts must name the submitter: %s %v", row.Facts, e)
+	}
 	if again, _ := b.Submit(ctx, SubmitRequest{Project: "acme/app", Revision: goodRev}, "token:x:mia"); again.ID != sub.ID || again.Outcome == "enqueued" {
 		t.Fatalf("a repeated submit must coalesce into the same run: %+v", again)
 	}
@@ -297,5 +300,39 @@ func TestRevisionLookupOnlyFindsRunsTheCallerMaySee(t *testing.T) {
 	st, b := r.do(r.client(), "GET", PathRunsPfx+mine.Revision, tok, "")
 	if st != 200 || !strings.Contains(string(b), `"id":"run-a"`) {
 		t.Fatalf("a member must get their own run for that commit, not a 404: %d %s", st, b)
+	}
+}
+
+// A running pipeline some intake row already names is never tied to another row of the same commit.
+func TestInflightPipelineSkipsAPipelineARowAlreadyNames(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	c, _ := coordinator.New(coordinator.Config{Store: st, PolicyDigest: "t"})
+	b := &StoreBackend{Store: st, Home: t.TempDir(), Enqueue: c.Enqueue}
+	first, _ := b.Submit(ctx, SubmitRequest{Project: "acme/app", Revision: goodRev}, "x")
+	row1, _, _ := st.IntakeClaim(ctx, "coord-1")
+	run := store.PipelineRow{ID: "run-named", Project: "/tmp/c", Revision: goodRev, Trigger: "api", SourceTrust: "owner", PrivacyZone: "local-only",
+		PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"}
+	if err = st.CreatePipeline(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	if err = st.IntakeFinish(ctx, row1.ID, "coord-1", "run-named", "ok", true); err != nil { // the row names it; the pipeline row lags
+		t.Fatal(err)
+	}
+	_ = first
+	second, err := b.Submit(ctx, SubmitRequest{Project: "acme/app", Revision: goodRev, Pipeline: "other"}, "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := st.IntakeClaim(ctx, "coord-2"); !ok {
+		t.Fatal("nothing to claim")
+	}
+	it, ok, _ := b.Get(ctx, second.ID)
+	if !ok || it.ID != second.ID {
+		t.Fatalf("a pipeline another row names was taken: %+v", it)
 	}
 }
