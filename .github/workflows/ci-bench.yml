@@ -83,6 +83,7 @@ jobs:
         run: go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$RUNNER_TEMP/ci-bench.json"
 
       - name: Control - the gates fail an injected slowdown and pass a good result
+        if: ${{ !cancelled() }}
         run: |
           set -u
           rc=0
@@ -99,7 +100,7 @@ jobs:
           go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$OK"
 
       - name: Service start (warm and cold)
-        if: matrix.services
+        if: ${{ !cancelled() && matrix.services }}
         run: |
           set -eu
           (cd cli && go build -mod=vendor -o "$RUNNER_TEMP/nself" ./cmd/nself)
