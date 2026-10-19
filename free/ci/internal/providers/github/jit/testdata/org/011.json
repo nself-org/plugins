@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/orgs/acme/actions/runner-groups/11",
+    "query": ""
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "body": "{\"id\": 11, \"name\": \"nself-untrusted\", \"visibility\": \"selected\", \"default\": false, \"inherited\": false, \"allows_public_repositories\": false, \"restricted_to_workflows\": true, \"selected_workflows\": [\"acme/widgets/.github/workflows/ci.yml@refs/heads/main\"], \"workflow_restrictions_read_only\": false}"
+  }
+}
