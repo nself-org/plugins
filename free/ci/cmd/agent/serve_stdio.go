@@ -25,6 +25,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/checkout"
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
+	"github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/hygiene"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 )
@@ -140,6 +141,19 @@ func releaseRoot(_ context.Context, _ protocol.Lease, root session.JobRoot, _ se
 	return nil
 }
 
+// noContainers is the Runtime of the staging sweep: checkout and job roots are plain
+// directories, so there is nothing labelled to list. Asking docker would skip every orphan
+// on a host where it is installed but stopped (macOS), and slow the start-up everywhere (D-1222).
+type noContainers struct{}
+
+func (noContainers) List(context.Context, exec.ResourceKind, string) ([]exec.Labelled, error) {
+	return nil, nil
+}
+
+func (noContainers) Remove(context.Context, exec.ResourceKind, string, string) error {
+	return errors.New("staging sweep owns no containers")
+}
+
 // sweepStaging removes checkout staging and job roots of agents that died. It runs
 // before serve reads or writes anything; a failed sweep is logged, never fatal.
 func sweepStaging(ctx context.Context, command string) error {
@@ -158,8 +172,8 @@ func sweepStaging(ctx context.Context, command string) error {
 	}
 	co, jobs := filepath.Join(state, checkoutDir), filepath.Join(state, "jobs")
 	for _, h := range []*hygiene.Host{
-		{Base: co, MinAge: stagingMinAge, Logf: logf, IsAttempt: sweepable(co, "co-")},
-		{Base: jobs, MinAge: jobRootMinAge, Logf: logf, IsAttempt: sweepable(jobs, "")},
+		{Base: co, Runtime: noContainers{}, MinAge: stagingMinAge, Logf: logf, IsAttempt: sweepable(co, "co-")},
+		{Base: jobs, Runtime: noContainers{}, MinAge: jobRootMinAge, Logf: logf, IsAttempt: sweepable(jobs, "")},
 	} {
 		if _, err := h.SweepOrphans(ctx, nil); err != nil {
 			logf("sweep %s: %v", filepath.Base(h.Base), err)
