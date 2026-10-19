@@ -20,7 +20,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -253,50 +252,4 @@ func planRun(ctx context.Context, argv ...string) (string, bool) {
 		Output:  func(b []byte) { buf.Write(b) },
 	})
 	return buf.String(), res.Err == nil && res.ExitCode == 0
-}
-
-var planToolAlias = map[string]string{"xcode": "xcodebuild"}
-
-// planWorld probes the local world: platform, the tools the plan may need,
-// Docker, CPU and memory. No nodes or providers exist yet (closed world).
-func planWorld(cfg model.PipelineConfig, checks []plan.Check) plan.World {
-	w := plan.World{Platform: runtime.GOOS + "/" + runtime.GOARCH}
-	for _, t := range plan.WantedTools(cfg, checks) {
-		if t != "" && planOnPath(firstOf(planToolAlias[t], t)) && planToolRuns(firstOf(planToolAlias[t], t)) {
-			w.Tools = append(w.Tools, t)
-		}
-	}
-	w.Docker = planOnPath("docker")
-	c := ciexec.Probe()
-	w.CPU, w.MemMB = c.CPUs, c.MemoryMB
-	return w
-}
-
-// planToolRuns is true unless the executable on PATH is a stub: the Command
-// Line Tools put an xcodebuild there that exits non-zero without Xcode.
-func planToolRuns(name string) bool {
-	if name != "xcodebuild" {
-		return true
-	}
-	_, ok := planRun(context.Background(), "xcodebuild", "-version")
-	return ok
-}
-
-func planOnPath(name string) bool {
-	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
-		if dir == "" {
-			dir = "."
-		}
-		if s, err := os.Stat(filepath.Join(dir, name)); err == nil && !s.IsDir() && s.Mode()&0111 != 0 {
-			return true
-		}
-	}
-	return false
-}
-
-func firstOf(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
