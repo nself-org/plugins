@@ -213,7 +213,7 @@ vs. ad-hoc AES-256 env-var wrappers (the current nSelf P3 pattern): ad-hoc wrapp
 - `plugins-pro/.github/docs/per-row-encryption.md` — user-facing wiki page
 - `web/docs/src/content/plugins/nself-vault.mdx` — public docs
 - `plugins-pro/paid/nself-vault/README.md` — repo README (create at implementation time)
-- SPORT F04 plugin count +1, F06 add `nself-vault` as shared pro plugin (post-P98 regeneration)
+- SPORT F04 plugin count +1, F06 add `nself-vault` as shared licensed plugin (post-P98 regeneration)
 
 ---
 

@@ -65,7 +65,7 @@ nself plugin install content-safety
 
 ## License
 
-Pro plugin — `requires_license: true`. **Rationale (Security-Always-Free
+Licensed plugin — `requires_license: true`. **Rationale (Security-Always-Free
 doctrine):** Core security hardening (RLS, rate limits on the platform itself,
 MFA throttle, SSRF guard, JWT rotation, WAF basics, audit logs, TLS) ships free
 and automatic. Content Safety is a *platform moderation product* — operator-facing

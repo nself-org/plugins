@@ -37,4 +37,4 @@ Publish `cli/sdk/go` to pkg.go.dev as `github.com/nself-org/cli/sdk/go`, then up
 ## Origin
 
 Vendored from `cli/sdk/go` as part of P96 Wave 1C critical fix (2026-04-25).
-The migration that moved the SDK from `plugins/sdk/` to `cli/sdk/go/` left this directory as a README-only placeholder, breaking all 22 plugin builds.
+The migration that moved the SDK from `plugins/sdk/` to `cli/sdk/go/` left this directory as a README-only placeholder, breaking every plugin build.
