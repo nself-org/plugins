@@ -215,10 +215,7 @@ func (w *World) reservePlacement(r *Runner, p Placement) {
 	w.Counts.Team++
 	w.Counts.Global++
 
-	class := r.Class
-	if class == "" {
-		class = w.Costs[r.ID].Class
-	}
+	class := runnerClass(*w, *r)
 	if class == "included" && !labelMatches(r.Capability.Identity.Labels, "nself.visibility=public") {
 		if a, ok := w.Allowances[r.Provider]; ok {
 			a.RemainingEstimated, _ = Add(a.RemainingEstimated, -p.CostMicro)

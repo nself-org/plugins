@@ -9,6 +9,8 @@ import (
 	"math/big"
 	"math/rand"
 	"testing"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 func TestMulDivUpIsExactOrSaturates(t *testing.T) {
@@ -56,5 +58,31 @@ func TestPaidCostWithADivisor(t *testing.T) {
 	}
 	if got, of := worstCost(60_000, Cost{RateMicro: math.MaxInt64, DivMs: 1, BillingIncrementMs: 60000}); !of || got != math.MaxInt64 {
 		t.Fatalf("saturation: %d %v", got, of)
+	}
+}
+
+// TestCostClassFromTheContributorWins: a runner that says it is `owned` on a provider the
+// owner priced as metered is held to the paid checks, so the scheduler and the budget
+// step (which prices by the owner's table) agree on what it costs.
+func TestCostClassFromTheContributorWins(t *testing.T) {
+	r := fixtureRunner("claims-owned", "lan")
+	r.Class, r.Provider = "owned", "cloudco"
+	j := fixtureJob("j")
+	j.TimeoutMs = 120000
+	w := fixtureWorld(r)
+	w.Costs[r.ID] = Cost{Class: "metered", RateMicro: 2, BillingIncrementMs: 60000}
+	w.Policy.PaidEnabled = true
+	got := Place(w, []Job{j})
+	if len(got.Placements) != 0 || !containsCode(got.Explanations[0].Alternatives[0].Reasons, string(model.BudgetUnset)) {
+		t.Fatalf("a rated provider must face the paid checks whatever its runner claims: %+v", got)
+	}
+	w.Budgets.Day = Budget{Set: true, Remaining: 240000}
+	got = Place(w, []Job{j})
+	if len(got.Placements) != 1 || got.Placements[0].CostMicro != 240000 {
+		t.Fatalf("priced, not free: %+v", got)
+	}
+	w.Apply(got.Placements[0])
+	if w.Budgets.Day.Remaining != 0 {
+		t.Fatalf("a placement debits the budget by the contributor's class: %d", w.Budgets.Day.Remaining)
 	}
 }

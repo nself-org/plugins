@@ -19,7 +19,6 @@ import (
 	"embed"
 	"errors"
 	"math"
-	"time"
 )
 
 //go:embed migrations/sched-ledger/*.sql
@@ -96,10 +95,11 @@ func (t LedgerTx) PutLedger(r LedgerRow) error {
 }
 
 // PipelineHeld is the money the ledger holds for a pipeline's metered and
-// ephemeral attempts other than except: the actual once settled, else the
-// worst case. It is the pipeline's spend estimate.
+// ephemeral attempts and burst VMs other than except: the actual once settled,
+// else the worst case. It is the pipeline's spend estimate.
 func (t LedgerTx) PipelineHeld(pipeline, except string) (int64, error) {
-	rows, err := t.tx.QueryContext(t.ctx, "SELECT coalesce(act_micro,est_micro) FROM ledger WHERE pipeline_id=? AND attempt_id<>? AND class IN ('metered','ephemeral')", pipeline, except)
+	rows, err := t.tx.QueryContext(t.ctx, `SELECT coalesce(act_micro,est_micro) FROM ledger WHERE pipeline_id=? AND attempt_id<>? AND class IN ('metered','ephemeral')
+ UNION ALL SELECT coalesce(actual_micro,reserved_micro) FROM resource_ledger WHERE pipeline_id=? AND intent<>?`, pipeline, except, pipeline, except)
 	if err != nil {
 		return 0, err
 	}
@@ -133,24 +133,6 @@ func (s *Store) LedgerOpen(ctx context.Context, pipeline string) ([]LedgerRow, e
 	return out, rows.Err()
 }
 
-// Window returns the UTC day key to charge: today, or the highest day key ever
-// recorded when the clock stepped back. today must be YYYY-MM-DD. The key is recorded.
-func (t LedgerTx) Window(today string) (string, error) {
-	if _, err := time.Parse("2006-01-02", today); err != nil {
-		return "", coded("E607", "window key must be a UTC date")
-	}
-	var high string
-	err := t.tx.QueryRowContext(t.ctx, "SELECT key FROM window_high WHERE kind='day'").Scan(&high)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return "", err
-	}
-	day := max(today, high)
-	if day != high {
-		_, err = t.tx.ExecContext(t.ctx, "INSERT INTO window_high(kind,key) VALUES ('day',?) ON CONFLICT(kind) DO UPDATE SET key=excluded.key", day)
-	}
-	return day, err
-}
-
 // LedgerSettle records the actual of an admitted attempt once: its reservations take
 // the actual under the window they were made in. It reports false when the
 // attempt has no ledger row or was already settled.
@@ -166,13 +148,21 @@ func (s *Store) LedgerSettle(ctx context.Context, attempt string, actMs, actMicr
 			return err
 		}
 		changed = true
-		return settleReservations(ctx, tx, attempt, actMicro)
+		return settleReservations(ctx, tx, attempt, actMicro, true)
 	})
 	return changed, err
 }
 
-func settleReservations(ctx context.Context, tx *sql.Tx, owner string, actual int64) error {
-	_, err := tx.ExecContext(ctx, "UPDATE reservation SET settled=1, actual_micro=MIN(micro,?) WHERE owner=? AND settled=0", actual, owner)
+// settleReservations makes the owner's open reservations final. An attempt is
+// bounded by its timeout, so its actual never exceeds what was reserved (clamp);
+// an ephemeral resource can outlive its lifetime bound, and what it really
+// cost is recorded as it is.
+func settleReservations(ctx context.Context, tx *sql.Tx, owner string, actual int64, clamp bool) error {
+	q := "UPDATE reservation SET settled=1, actual_micro=? WHERE owner=? AND settled=0"
+	if clamp {
+		q = "UPDATE reservation SET settled=1, actual_micro=MIN(micro,?) WHERE owner=? AND settled=0"
+	}
+	_, err := tx.ExecContext(ctx, q, actual, owner)
 	return err
 }
 

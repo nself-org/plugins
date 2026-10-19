@@ -37,6 +37,10 @@ func RecordUsage(ctx context.Context, u Usage) error {
 	if u.Key == "" || u.Provider == "" || err != nil || u.Minutes < 0 || u.CostMicro < 0 || (u.BalanceMicro != nil && *u.BalanceMicro < 0) {
 		return refuse(model.AllowanceUnknown, "a usage line needs a key, a provider, a UTC date and non-negative amounts")
 	}
+	// A provider in UTC+N may already report tomorrow; anything later is not a usage date.
+	if u.Date > dayOf(env.Now().AddDate(0, 0, 1)) {
+		return refuse(model.AllowanceUnknown, "usage dated %s is in the future", u.Date)
+	}
 	at := u.ReportedAt
 	if at.IsZero() {
 		at = env.Now()

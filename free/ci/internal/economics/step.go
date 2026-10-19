@@ -23,6 +23,7 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -102,6 +103,8 @@ func paidGate(t store.LedgerTx, env Env, p Policy, provider string) error {
 		return refuse(model.PaidDisabled, "economics.paid_enabled is off")
 	case !schedpolicy.PaidAllowed(p, provider):
 		return refuse(model.BudgetUnset, "a paid placement needs a day or month budget, overall or for %s", provider)
+	case env.Coordinator == "":
+		return refuse(model.ProviderOwnedElsewhere, "this coordinator has no id, so it cannot own %s", provider)
 	}
 	owner := p.OwnerCoordinator[provider]
 	if owner == "" {
@@ -110,7 +113,7 @@ func paidGate(t store.LedgerTx, env Env, p Policy, provider string) error {
 			return err
 		}
 	}
-	if owner != "" && env.Coordinator != "" && owner != env.Coordinator {
+	if owner != "" && owner != env.Coordinator {
 		return refuse(model.ProviderOwnedElsewhere, "%s belongs to coordinator %s", provider, owner)
 	}
 	return nil
@@ -120,6 +123,16 @@ func paidGate(t store.LedgerTx, env Env, p Policy, provider string) error {
 func paidCheck(t store.LedgerTx, env Env, p Policy, v dispatch.View, day, month string, row *store.LedgerRow) error {
 	r := v.Request
 	provider := r.Runner.Provider
+	// An attempt on a burst VM that holds a lifetime reservation is paid for by that
+	// reservation; reserving it again would count the VM twice and refuse the job it was bought for.
+	if intent := intentOf(r.Runner.Capability.Identity.Labels); intent != "" {
+		if res, open, err := openResource(t, intent); err != nil {
+			return err
+		} else if open {
+			row.Rate, row.BudgetRefs = res.Rate, "resource:"+intent
+			return nil
+		}
+	}
 	if err := paidGate(t, env, p, provider); err != nil {
 		return err
 	}
@@ -131,25 +144,10 @@ func paidCheck(t store.LedgerTx, env Env, p Policy, v dispatch.View, day, month 
 	if v.PipelineID == "" {
 		return refuse(model.BudgetUnset, "the attempt has no pipeline, so a pipeline budget cannot be checked")
 	}
-	// The approval threshold is about the pipeline's spend estimate: what its other paid
-	// attempts hold plus this job, so twenty jobs under the threshold cannot add up past it.
-	if thr := p.ApprovalThresholdMicro; thr.Set && thr.Micro > 0 {
-		held, err := t.PipelineHeld(v.PipelineID, v.Demand.AttemptID)
-		if err != nil {
-			return err
-		}
-		total, overflow := addSat(held, cost)
-		if overflow || total > thr.Micro {
-			est, ok, err := t.ValidApproval(v.PipelineID)
-			if err != nil {
-				return err
-			}
-			if !ok || overflow || est < total {
-				return refuse(model.ApprovalPending, "%s%s over the %d micro threshold", PendingDetailPrefix, strconv.FormatInt(total, 10), thr.Micro)
-			}
-		}
+	if err := approvalGate(t, p, v.PipelineID, v.Demand.AttemptID, cost); err != nil {
+		return err
 	}
-	refs, err := reserve(t, p, spend{Owner: v.Demand.AttemptID, Pipeline: v.PipelineID, Provider: provider, Micro: cost}, day, month)
+	refs, err := reserve(t, p, spend{Owner: v.Demand.AttemptID, Pipeline: v.PipelineID, Provider: provider, Job: v.PipelineID + "/" + v.JobName, Micro: cost}, day, month)
 	if err != nil {
 		return err
 	}
@@ -188,5 +186,52 @@ func includedCheck(t store.LedgerTx, p Policy, v dispatch.View, month string, ro
 		return refuse(model.AllowanceBelowMargin, "%s: %d micro left, margin %d, job worst case %d", r.Runner.Provider, a.Remaining, p.MarginMicro, worst)
 	}
 	row.EstMs, row.EstMicro, row.Rate = q.BilledMs, worst, q.Snap
+	return nil
+}
+
+// IntentLabelPrefix starts the runner label that names the burst intent a VM runner
+// was provisioned for (P7-SCHED-08 sets it on the runner it enrols): an attempt on
+// that runner is paid for by the intent's lifetime reservation.
+const IntentLabelPrefix = "nself.burst.intent="
+
+func intentOf(labels []string) string {
+	for _, l := range labels {
+		if v, ok := strings.CutPrefix(l, IntentLabelPrefix); ok {
+			return v
+		}
+	}
+	return ""
+}
+
+// openResource reads a resource that still holds money (no confirmed teardown).
+func openResource(t store.LedgerTx, intent string) (store.ResourceRow, bool, error) {
+	res, ok, err := t.Resource(intent)
+	return res, ok && res.ConfirmedTeardownAt == nil, err
+}
+
+// approvalGate holds a paid spend whose pipeline estimate (what the pipeline's
+// other paid attempts and burst VMs hold, plus cost) is above the approval
+// threshold, unless an approval still valid for this run covers it. The refusal
+// detail carries the estimate ApproveSpend binds to.
+func approvalGate(t store.LedgerTx, p Policy, pipeline, owner string, cost int64) error {
+	thr := p.ApprovalThresholdMicro
+	if !thr.Set || thr.Micro <= 0 {
+		return nil
+	}
+	held, err := t.PipelineHeld(pipeline, owner)
+	if err != nil {
+		return err
+	}
+	total, overflow := addSat(held, cost)
+	if !overflow && total <= thr.Micro {
+		return nil
+	}
+	est, ok, err := t.ValidApproval(pipeline)
+	if err != nil {
+		return err
+	}
+	if !ok || overflow || est < total {
+		return refuse(model.ApprovalPending, "%s%s over the %d micro threshold", PendingDetailPrefix, strconv.FormatInt(total, 10), thr.Micro)
+	}
 	return nil
 }

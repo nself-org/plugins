@@ -201,10 +201,9 @@ func economics(w World, j Job, r Runner) []model.PlacementReasonDetail {
 	var out []model.PlacementReasonDetail
 	add := func(code model.PlacementReason, detail string) { out = append(out, reason(code, detail)) }
 	c := w.Costs[r.ID]
-	class := r.Class
-	if class == "" {
-		class = c.Class
-	}
+	// The class the cost contributor priced the runner at wins over the class the runner
+	// claims for itself: a rated provider cannot be made free by its own capability.
+	class := runnerClass(w, r)
 	paid := class != "owned" && class != "local" && class != "included"
 	cost, overflow := worstCost(j.TimeoutMs, c)
 	if class == "owned" || class == "local" {
@@ -263,6 +262,16 @@ func economics(w World, j Job, r Runner) []model.PlacementReasonDetail {
 		add(model.OverrideMaxCost, "maximum cost")
 	}
 	return out
+}
+
+// runnerClass is the cost class a runner is held to: the one the cost contributor priced
+// it at, else the one it claims for itself. A rated provider cannot be made free by its
+// own capability document.
+func runnerClass(w World, r Runner) string {
+	if c := w.Costs[r.ID].Class; c != "" {
+		return c
+	}
+	return r.Class
 }
 
 func worstCost(timeout int64, c Cost) (int64, bool) {

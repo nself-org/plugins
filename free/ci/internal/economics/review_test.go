@@ -212,7 +212,7 @@ func TestLedgerAllowanceCountsLocalWorkFromTheNewestImportedDay(t *testing.T) {
 	put("early", "2026-10-17", 1)
 	put("on-the-day", "2026-10-18", 10)
 	put("later", "2026-10-19", 100)
-	if err := st.PutUsage(ctx, store.UsageRow{Key: "k", Provider: "gh", Period: "2026-10", Day: "2026-10-18", CostMicro: 1000, ReportedAt: 1}); err != nil {
+	if err := st.PutUsage(ctx, store.UsageRow{Key: "k", Provider: "gh", Period: "2026-10", Day: "2026-10-18", CostMicro: 1000, ReportedAt: time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC).UnixNano()}); err != nil {
 		t.Fatal(err)
 	}
 	in, err := st.Allowance(ctx, "gh", "2026-10")

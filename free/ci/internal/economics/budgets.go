@@ -1,7 +1,7 @@
 package economics
 
 // Purpose: reserving the worst case against every budget scope (Epic D11):
-// per job, per pipeline, per UTC day, per UTC month and per provider. Used by
+// per job (all attempts of it), per pipeline, per UTC day, per UTC month and per provider. Used by
 // the admission step (an attempt) and ReserveResource (an ephemeral VM).
 // Inputs:  the spend policy, the window keys and a spend (owner, pipeline, provider, amount).
 // Outputs: reservation rows in the caller's transaction and the scope references
@@ -22,7 +22,9 @@ import (
 // spend is one reservation request.
 type spend struct {
 	Owner, Pipeline, Provider string
-	Micro                     int64
+	// Job names the job whose attempts share the job budget (pipeline/job name); empty means the owner alone.
+	Job   string
+	Micro int64
 }
 
 type scope struct {
@@ -34,7 +36,11 @@ type scope struct {
 func scopesOf(p Policy, s spend, day, month string) []scope {
 	var out []scope
 	if p.Budgets.Job.Set {
-		out = append(out, scope{store.ScopeJob, s.Owner, "", p.Budgets.Job.Micro, false})
+		key := s.Job
+		if key == "" {
+			key = s.Owner
+		}
+		out = append(out, scope{store.ScopeJob, key, "", p.Budgets.Job.Micro, true})
 	}
 	if p.Budgets.Pipeline.Set && s.Pipeline != "" {
 		out = append(out, scope{store.ScopePipeline, s.Pipeline, "", p.Budgets.Pipeline.Micro, true})

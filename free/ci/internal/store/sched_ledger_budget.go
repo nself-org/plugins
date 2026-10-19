@@ -14,6 +14,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 )
 
 // Reservation scopes.
@@ -80,8 +81,8 @@ func reserved(ctx context.Context, q ledgerQuerier, scope, scopeKey, windowKey, 
 func (s *Store) WindowHigh(ctx context.Context) (string, error) {
 	var k string
 	err := s.readers.QueryRowContext(ctx, "SELECT key FROM window_high WHERE kind='day'").Scan(&k)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && !ValidDay(k)) {
+		return "", nil // a damaged mark is no mark; the next admission replaces it
 	}
 	return k, err
 }
@@ -118,91 +119,6 @@ func (s *Store) ProviderOwners(ctx context.Context) (map[string]string, error) {
 		out[id] = owner
 	}
 	return out, rows.Err()
-}
-
-// ResourceRow is the money held for one ephemeral resource from intent to confirmed teardown.
-type ResourceRow struct {
-	Intent, Provider, Pipeline, WindowDay string
-	ReservedMicro                         int64
-	Rate                                  RateSnap
-	ProvisionedAt                         int64
-	ConfirmedTeardownAt, ActualMicro      *int64
-}
-
-// PutResource records a new resource; the intent is unique.
-func (t LedgerTx) PutResource(r ResourceRow) error {
-	_, err := t.tx.ExecContext(t.ctx, `INSERT INTO resource_ledger (intent,provider,pipeline_id,reserved_micro,window_day,rate_micro,rate_unit_ms,inc_ms,min_micro,extras_micro,provisioned_at)
- VALUES (?,?,?,?,?,?,?,?,?,?,?)`, r.Intent, r.Provider, r.Pipeline, r.ReservedMicro, r.WindowDay, r.Rate.RateMicro, r.Rate.RateUnitMs, r.Rate.IncMs, r.Rate.MinMicro, r.Rate.ExtrasMicro, r.ProvisionedAt)
-	return err
-}
-
-// Resource reads a resource row inside the transaction.
-func (t LedgerTx) Resource(intent string) (ResourceRow, bool, error) {
-	return resource(t.ctx, t.tx, intent)
-}
-
-// Resource reads a resource row.
-func (s *Store) Resource(ctx context.Context, intent string) (ResourceRow, bool, error) {
-	return resource(ctx, s.readers, intent)
-}
-
-func resource(ctx context.Context, q ledgerQuerier, intent string) (ResourceRow, bool, error) {
-	var r ResourceRow
-	var done, act sql.NullInt64
-	err := q.QueryRowContext(ctx, `SELECT intent,provider,pipeline_id,reserved_micro,window_day,rate_micro,rate_unit_ms,inc_ms,min_micro,extras_micro,provisioned_at,confirmed_teardown_at,actual_micro
- FROM resource_ledger WHERE intent=?`, intent).Scan(&r.Intent, &r.Provider, &r.Pipeline, &r.ReservedMicro, &r.WindowDay, &r.Rate.RateMicro, &r.Rate.RateUnitMs, &r.Rate.IncMs, &r.Rate.MinMicro, &r.Rate.ExtrasMicro, &r.ProvisionedAt, &done, &act)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ResourceRow{}, false, nil
-	}
-	if done.Valid {
-		r.ConfirmedTeardownAt = &done.Int64
-	}
-	if act.Valid {
-		r.ActualMicro = &act.Int64
-	}
-	return r, err == nil, err
-}
-
-// ReleaseResource marks a confirmed teardown and settles the intent's
-// reservations at actual (never above what was reserved). A second release is a no-op.
-func (t LedgerTx) ReleaseResource(intent string, at, actual int64) error {
-	res, err := t.tx.ExecContext(t.ctx, "UPDATE resource_ledger SET confirmed_teardown_at=?, actual_micro=MIN(reserved_micro,?) WHERE intent=? AND confirmed_teardown_at IS NULL", at, actual, intent)
-	if err != nil {
-		return err
-	}
-	if n, err := res.RowsAffected(); err != nil || n == 0 {
-		return err
-	}
-	return settleReservations(t.ctx, t.tx, intent, actual)
-}
-
-// ResourcesOpen counts the resources of a provider that hold money (no confirmed teardown yet).
-func (s *Store) ResourcesOpen(ctx context.Context) ([]ResourceRow, error) {
-	rows, err := s.readers.QueryContext(ctx, "SELECT intent FROM resource_ledger WHERE confirmed_teardown_at IS NULL ORDER BY intent")
-	if err != nil {
-		return nil, coded("E607", err.Error())
-	}
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			_ = rows.Close()
-			return nil, coded("E607", err.Error())
-		}
-		ids = append(ids, id)
-	}
-	_ = rows.Close()
-	var out []ResourceRow
-	for _, id := range ids {
-		r, ok, err := s.Resource(ctx, id)
-		if err != nil {
-			return nil, coded("E607", err.Error())
-		}
-		if ok {
-			out = append(out, r)
-		}
-	}
-	return out, nil
 }
 
 // UsageRow is a figure a provider reported (P7-HOST-10's importer); it is the
@@ -246,19 +162,21 @@ func (t LedgerTx) Allowance(provider, month string) (AllowanceInputs, error) {
 
 func allowance(ctx context.Context, q ledgerQuerier, provider, month string) (AllowanceInputs, error) {
 	var a AllowanceInputs
-	rows, err := q.QueryContext(ctx, "SELECT cost_micro,balance_micro,day FROM ledger_usage WHERE provider=? AND period=? ORDER BY reported_at,key", provider, month)
+	rows, err := q.QueryContext(ctx, "SELECT cost_micro,balance_micro,day,reported_at FROM ledger_usage WHERE provider=? AND period=? ORDER BY reported_at,key", provider, month)
 	if err != nil {
 		return a, err
 	}
 	var newestDay string
+	var newestReport int64
 	for rows.Next() {
-		var cost int64
+		var cost, reportedAt int64
 		var bal sql.NullInt64
 		var day string
-		if err = rows.Scan(&cost, &bal, &day); err != nil {
+		if err = rows.Scan(&cost, &bal, &day, &reportedAt); err != nil {
 			_ = rows.Close()
 			return a, err
 		}
+		newestReport = max(newestReport, reportedAt)
 		a.HasImport = true
 		a.Imported, _ = satAdd(a.Imported, cost)
 		newestDay = max(newestDay, day)
@@ -270,8 +188,13 @@ func allowance(ctx context.Context, q ledgerQuerier, provider, month string) (Al
 	if err = rows.Close(); err != nil {
 		return a, err
 	}
-	// Provider usage lags by hours, so the local ledger counts from the start of the
-	// newest day the import covers: a little overlap over-counts, a gap would not.
+	// Provider usage lags by hours, so the local ledger counts from the start of the newest
+	// day the import covers, and never from a day later than the day before the newest
+	// report was made (a row dated in the future must not make local spend disappear): a
+	// little overlap over-counts, a gap would not.
+	if newestReport > 0 {
+		newestDay = min(newestDay, time.Unix(0, newestReport).UTC().AddDate(0, 0, -1).Format("2006-01-02"))
+	}
 	a.Local, err = ledgerSinceDay(ctx, q, provider, month, newestDay)
 	return a, err
 }

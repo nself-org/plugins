@@ -11,6 +11,8 @@ package economics
 // confidence `estimated`.
 
 import (
+	"strings"
+
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 )
@@ -28,7 +30,9 @@ const (
 var anyPaid = schedpolicy.SpendPolicy{PaidEnabled: true, Budgets: schedpolicy.Budgets{Day: schedpolicy.Budget{Micro: 1, Set: true}}}
 
 // isGitHub reports whether provider names GitHub-hosted capacity (schedpolicy owns the rule).
-func isGitHub(provider string) bool { return !schedpolicy.PaidAllowed(anyPaid, provider) }
+func isGitHub(provider string) bool {
+	return !schedpolicy.PaidAllowed(anyPaid, strings.ToLower(strings.TrimSpace(provider)))
+}
 
 func isPaid(class string) bool { return class == ClassMetered || class == ClassEphemeral }
 

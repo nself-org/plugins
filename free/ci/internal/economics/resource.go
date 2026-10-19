@@ -9,8 +9,8 @@ package economics
 // Constraints: the VM is reserved at its full lifetime bound (it may outlive its
 // attempt) and stays in the budgets until teardown is confirmed; a failed
 // teardown never releases money; a second ReleaseResource is a no-op; the
-// actual is the elapsed time priced with the admitted rate and never exceeds
-// the reservation; no background goroutine moves money.
+// actual is the elapsed time priced with the admitted rate, which can exceed the
+// reservation when a teardown fails and is retried; no background goroutine moves money.
 
 import (
 	"context"
@@ -52,11 +52,16 @@ func ReserveResource(ctx context.Context, t store.LedgerTx, r Resource) error {
 	if q.Reason != "" {
 		return refuse(q.Reason, "%s: lifetime %d ms", r.Provider, r.LifetimeMs)
 	}
+	if r.Pipeline != "" { // a VM held for a pipeline counts in its estimate like any other spend
+		if err = approvalGate(t, p, r.Pipeline, r.Intent, q.Micro); err != nil {
+			return err
+		}
+	}
 	day, month, err := windows(t, env.Now())
 	if err != nil {
 		return err
 	}
-	if _, err = reserve(t, p, spend{Owner: r.Intent, Pipeline: r.Pipeline, Provider: r.Provider, Micro: q.Micro}, day, month); err != nil {
+	if _, err = reserve(t, p, spend{Owner: r.Intent, Pipeline: r.Pipeline, Provider: r.Provider, Job: r.Intent, Micro: q.Micro}, day, month); err != nil {
 		return err
 	}
 	return t.PutResource(store.ResourceRow{Intent: r.Intent, Provider: r.Provider, Pipeline: r.Pipeline, WindowDay: day, ReservedMicro: q.Micro, Rate: q.Snap, ProvisionedAt: t.Now()})
@@ -74,9 +79,11 @@ func ReleaseResource(ctx context.Context, t store.LedgerTx, intent string, at ti
 	if row.ConfirmedTeardownAt != nil {
 		return nil
 	}
+	// What it really cost: the elapsed time priced with the admitted rate. A VM whose failed
+	// teardown was retried for hours cost more than its reservation, and the budgets show it.
 	actual := row.ReservedMicro
 	if elapsed := (at.UnixNano() - row.ProvisionedAt) / int64(time.Millisecond); elapsed > 0 {
-		if micro, _, overflow := Charge(row.Rate, elapsed); !overflow && micro < actual {
+		if micro, _, overflow := Charge(row.Rate, elapsed); !overflow {
 			actual = micro
 		}
 	}

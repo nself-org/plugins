@@ -235,3 +235,69 @@ func TestLedgerSettledRowsAreFinal(t *testing.T) {
 		return nil
 	})
 }
+
+// TestLedgerWindowMarkFromAJumpedClockIsReplaced: a recorded day far past today (a clock
+// that jumped forward once) or one that is not a date is replaced by today and audited; a
+// clock stepped back by a day is the case the mark exists for and is kept.
+func TestLedgerWindowMarkFromAJumpedClockIsReplaced(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	win := func(today string) string {
+		var got string
+		if err := s.LedgerWrite(ctx, func(tx LedgerTx) (err error) { got, err = tx.Window(today); return }); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	if got := win("2026-11-02"); got != "2026-11-02" {
+		t.Fatal(got)
+	}
+	if got := win("2026-10-31"); got != "2026-11-02" { // two days back: kept
+		t.Fatalf("a short step back must keep the later window, got %s", got)
+	}
+	if got := win("2026-10-20"); got != "2026-10-20" { // 13 days back: the mark is the anomaly
+		t.Fatalf("a mark far ahead of today must be replaced, got %s", got)
+	}
+	// A damaged row is replaced too, and never panics a month slice.
+	if err := s.LedgerWrite(ctx, func(tx LedgerTx) error {
+		_, err := tx.tx.ExecContext(ctx, "UPDATE window_high SET key='x' WHERE kind='day'")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if high, _ := s.WindowHigh(ctx); high != "" {
+		t.Fatalf("a damaged mark is no mark: %q", high)
+	}
+	if got := win("2026-10-21"); got != "2026-10-21" {
+		t.Fatal(got)
+	}
+	rows, _ := s.AuditEntries(ctx, 0, 0)
+	var n int
+	for _, r := range rows {
+		if r.Action == "ledger.window.reset" {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Fatalf("each replacement is audited: %d rows", n)
+	}
+}
+
+func TestLedgerResourceReleaseKeepsTheRealCost(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	_ = s.LedgerWrite(ctx, func(tx LedgerTx) error {
+		if err := tx.PutResource(ResourceRow{Intent: "vm", Provider: "x", Pipeline: "p", WindowDay: "2026-10-19", ReservedMicro: 100, ProvisionedAt: 1}); err != nil {
+			return err
+		}
+		return tx.Reserve(Reservation{Owner: "vm", Scope: ScopeDay, WindowKey: "2026-10-19", Micro: 100})
+	})
+	_ = s.LedgerWrite(ctx, func(tx LedgerTx) error { return tx.ReleaseResource("vm", 2, 5000) })
+	if held, _ := s.Reserved(ctx, ScopeDay, "", "2026-10-19"); held != 5000 {
+		t.Fatalf("a VM that outlived its reservation cost 5000, the day holds %d", held)
+	}
+	row, _, _ := s.Resource(ctx, "vm")
+	if row.ActualMicro == nil || *row.ActualMicro != 5000 {
+		t.Fatalf("%+v", row)
+	}
+}

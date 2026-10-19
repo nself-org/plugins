@@ -27,6 +27,15 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
+type projectKey struct{}
+
+// WithProject names the project id the approver's roles are checked against. The
+// pipeline row holds the repository root, which is not the id roles grants use; the
+// command that knows the id passes it here. Without it an actor must hold the role on every project.
+func WithProject(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, projectKey{}, id)
+}
+
 // Approval is an approved spend.
 type Approval struct {
 	Run, SHA, ConfigDigest string
@@ -61,7 +70,8 @@ func ApproveSpend(ctx context.Context, run string, actor roles.Actor) (Approval,
 		}
 		return Approval{}, refuse(model.ApprovalPending, "run %s is unknown", run)
 	}
-	if err = roles.AuthorizeAction(ctx, actor, roles.ActSpendApprove, facts.Project); err != nil {
+	project, _ := ctx.Value(projectKey{}).(string)
+	if err = roles.AuthorizeAction(ctx, actor, roles.ActSpendApprove, project); err != nil {
 		return Approval{}, err
 	}
 	noted, details, err := env.Store.PendingEstimate(ctx, run)
