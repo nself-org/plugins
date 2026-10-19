@@ -53,7 +53,7 @@ func (f *runFacts) checkStatement(payload []byte) error {
 		if s.Name == "" || !ok || len(s.Digest) != 1 || !sha256Re.MatchString(d) {
 			return Failf(ReasonPayloadRejected, "statement: subject %q needs a name and one sha256 digest", echo(s.Name))
 		}
-		if d != f.evDigest && len(f.committed(d, -1)) == 0 {
+		if d != f.evDigest && len(f.committed(d)) == 0 {
 			return Failf(ReasonDigestNotCommitted, "statement: subject %q (digest %s) is not a committed record of this run", echo(s.Name), echo(d))
 		}
 	}

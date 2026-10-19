@@ -118,11 +118,6 @@ func TestSignerRefuses(t *testing.T) {
 		{"manifest names another key", signing.ReasonKeyIDMismatch, func(f *fixture) signing.Request {
 			return request(item(manifest.PayloadType, f.manifestPayload(func(m *manifest.Manifest) { m.Signing.KeyID = "ci-release-0123456789abcdef" })))
 		}, nil},
-		{"two manifests name two keys", signing.ReasonKeyIDMismatch, func(f *fixture) signing.Request {
-			a := item(manifest.PayloadType, f.manifestPayload(nil))
-			b := item(manifest.PayloadType, f.manifestPayload(func(m *manifest.Manifest) { m.Signing.KeyID = "ci-release-0123456789abcdef" }))
-			return request(a, b)
-		}, nil},
 		{"evidence did not pass", signing.ReasonPayloadRejected, func(f *fixture) signing.Request {
 			return request(item(manifest.PayloadType, f.manifestPayload(nil)))
 		}, func(f *fixture) {
@@ -229,6 +224,62 @@ func TestSignerRefuses(t *testing.T) {
 				t.Fatal("the key was resolved for a refused request")
 			}
 		})
+	}
+}
+
+func TestSignerRefusesManifestsNamingDifferentKeysInEitherOrder(t *testing.T) {
+	f := newFixture(t)
+	right := item(manifest.PayloadType, f.manifestPayload(nil))
+	wrong := item(manifest.PayloadType, f.manifestPayload(func(m *manifest.Manifest) { m.Signing.KeyID = "ci-release-0123456789abcdef" }))
+	for _, items := range [][]signing.Item{{wrong, right}, {right, wrong}} {
+		req := request(items...)
+		if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); !signing.IsReason(err, signing.ReasonKeyIDMismatch) || f.res.calls != 0 {
+			t.Fatalf("%v (%d resolves)", err, f.res.calls)
+		}
+	}
+	req := request(right, right)
+	if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); err != nil {
+		t.Fatalf("two manifests naming the same key: %v", err)
+	}
+}
+
+func TestStatementSubjectCountBoundary(t *testing.T) {
+	f := newFixture(t)
+	subjects := func(n int) func(map[string]any) {
+		return func(m map[string]any) {
+			list := make([]map[string]any, n)
+			for i := range list {
+				list[i] = map[string]any{"name": "app", "digest": map[string]string{"sha256": sum(f.files["app"])}}
+			}
+			m["subject"] = list
+		}
+	}
+	at := request(item(signing.PayloadStatement, f.statementPayload(subjects(4096))))
+	if _, err := f.handler().Handle(context.Background(), at, decodeAll(t, at)); err != nil {
+		t.Fatalf("4096 subjects: %v", err)
+	}
+	over := request(item(signing.PayloadStatement, f.statementPayload(subjects(4097))))
+	if _, err := f.handler().Handle(context.Background(), over, decodeAll(t, over)); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+		t.Fatalf("4097 subjects: %v", err)
+	}
+}
+
+func TestReleaseAttemptChoice(t *testing.T) {
+	f := newFixture(t)
+	f.src.jobs = append(f.src.jobs, store.RunJob{ID: "job-rel-b", Name: "publish-b", Kind: "release"})
+	f.src.attempts = []store.AttemptView{
+		{ID: "a-3", JobID: "job-rel", N: 3, State: "failed"},
+		{ID: "a-1", JobID: "job-rel", N: 1, State: "passed"},
+		{ID: "a-2", JobID: "job-rel-b", N: 2, State: "passed"},
+		{ID: "a-2b", JobID: "job-rel", N: 2, State: "passed"},
+		{ID: "a-c", JobID: "job-test", N: 9, State: "passed"},
+	}
+	req := request(item(signing.PayloadStatement, f.statementPayload(nil)))
+	if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); err != nil {
+		t.Fatal(err)
+	}
+	if f.res.attempts[0] != "a-2" {
+		t.Fatalf("resolved for %q: want the highest passed release attempt, first listed on a tie", f.res.attempts[0])
 	}
 }
 

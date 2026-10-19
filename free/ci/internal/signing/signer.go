@@ -14,7 +14,6 @@ package signing
 
 import (
 	"context"
-	"sort"
 
 	"github.com/nself-org/cli/sdk/go/v2/signing"
 
@@ -76,7 +75,8 @@ func (h Handler) Handle(ctx context.Context, req Request, payloads [][]byte) ([]
 	return out, nil
 }
 
-// lastReleaseAttempt is the highest-numbered passed attempt of a release job.
+// lastReleaseAttempt is the highest-numbered passed attempt of a release job
+// (the first listed when two share a number).
 func (f *runFacts) lastReleaseAttempt() string {
 	release := map[string]bool{}
 	for _, j := range f.jobs {
@@ -84,21 +84,13 @@ func (f *runFacts) lastReleaseAttempt() string {
 			release[j.ID] = true
 		}
 	}
-	type cand struct {
-		id string
-		n  int
-	}
-	var cs []cand
+	best, bestN := "", 0
 	for _, a := range f.attempts {
-		if release[a.JobID] && a.State == "passed" {
-			cs = append(cs, cand{a.ID, a.N})
+		if release[a.JobID] && a.State == "passed" && (best == "" || a.N > bestN) {
+			best, bestN = a.ID, a.N
 		}
 	}
-	if len(cs) == 0 {
-		return ""
-	}
-	sort.Slice(cs, func(i, j int) bool { return cs[i].n > cs[j].n })
-	return cs[0].id
+	return best
 }
 
 // KeyInfo is what the key commands print and the signer's key modes return.

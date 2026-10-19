@@ -32,7 +32,7 @@ import (
 // Refs of the release key and its optional stored id.
 const (
 	KeyRef   = "release/NSELF_CI_RELEASE_SIGNING_KEY"
-	KeyIDRef = KeyRef + "_ID"
+	KeyIDRef = "release/NSELF_CI_RELEASE_SIGNING_KEY_ID"
 	// KeyName is the secret name `config secrets set --env release` takes.
 	KeyName = "NSELF_CI_RELEASE_SIGNING_KEY"
 )
@@ -90,12 +90,13 @@ func newKey(priv ed25519.PrivateKey) *Key {
 // mapResolve turns a resolver error into an E717 refusal.
 func mapResolve(err error) error {
 	var se *secrets.Error
-	switch {
-	case !errors.As(err, &se):
+	if !errors.As(err, &se) {
 		return Failf(ReasonSignerFailed, "the secret resolver failed")
-	case se.Code == "E675":
+	}
+	if se.Code == "E675" {
 		return Failf(ReasonCLITooOld, "this nself cli has no `config secrets resolve`: upgrade it")
-	case se.Code == "E676" && se.Cause == notFoundCause:
+	}
+	if se.Code == "E676" && se.Cause == notFoundCause {
 		return Failf(ReasonKeyMissing, "the release key is not set: run `nself ci artifacts key init`")
 	}
 	return Failf(ReasonSignerFailed, "the release key could not be resolved (%s)", echo(se.Code))

@@ -25,7 +25,7 @@ import (
 )
 
 // DefaultTimeout bounds one signer call.
-const DefaultTimeout = 60 * time.Second
+const DefaultTimeout = time.Minute
 
 // Client starts the signer.
 type Client struct {

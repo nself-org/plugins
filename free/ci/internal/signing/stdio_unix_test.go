@@ -16,13 +16,15 @@ import (
 func runner(t *testing.T) *signing.FunnelRunner { return &signing.FunnelRunner{Home: t.TempDir()} }
 
 func TestFunnelRunnerFeedsStdinThroughAFifo(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
 	r := runner(t)
 	payload := strings.Repeat("payload-line\n", 20000) // larger than a pipe buffer
 	out, code, err := r.RunStdio(context.Background(), signing.StdioCall{Argv: []string{"cat"}, Stdin: []byte(payload), Timeout: 20 * time.Second})
 	if err != nil || code != 0 || string(out) != payload {
 		t.Fatalf("code %d err %v, %d bytes back", code, err, len(out))
 	}
-	if left, _ := filepath.Glob(filepath.Join(r.Home, "sigio-*")); len(left) != 0 {
+	if left, _ := filepath.Glob(filepath.Join(tmp, "sigio-*")); len(left) != 0 {
 		t.Fatalf("private fifo directory left behind: %v", left)
 	}
 }
@@ -84,4 +86,22 @@ func TestFunnelRunnerKeepsTheOperatorEnvironmentOut(t *testing.T) {
 		t.Fatalf("%v %q", err, out)
 	}
 	_ = os.Getenv
+}
+
+// While the child runs, its stdin FIFO sits in a private directory under TMPDIR.
+func TestFunnelRunnerFifoDirIsPrivateAndUnderTMPDIR(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	out, code, err := runner(t).RunStdio(context.Background(), signing.StdioCall{Argv: []string{"/bin/sh", "-c", `ls -ld "$NSELF_CI_STDIN"; ls -ld "$(dirname "$NSELF_CI_STDIN")"; cat`}, Stdin: []byte("x"), Timeout: 10 * time.Second})
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if err != nil || code != 0 || len(lines) != 3 || !strings.HasPrefix(lines[0], "prw-------") || !strings.HasPrefix(lines[1], "drwx------") || !strings.Contains(lines[1], filepath.Join(tmp, "sigio-")) || lines[2] != "x" {
+		t.Fatalf("%d %v %q", code, err, out)
+	}
+}
+
+func TestFunnelRunnerNoPrivateDirectory(t *testing.T) {
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+	if _, code, err := runner(t).RunStdio(context.Background(), signing.StdioCall{Argv: []string{"cat"}, Stdin: []byte("x"), Timeout: 10 * time.Second}); !signing.IsReason(err, signing.ReasonSignerFailed) || code != -1 {
+		t.Fatalf("%d %v", code, err)
+	}
 }

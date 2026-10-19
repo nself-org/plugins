@@ -88,12 +88,11 @@ func (f *runFacts) loadEvidence(ctx context.Context, src Source) error {
 	return Failf(ReasonPayloadRejected, "run %q has no stored pipeline evidence", echo(f.runID))
 }
 
-// committed returns the records of the run with this digest whose bytes
-// verify. size < 0 matches any size.
-func (f *runFacts) committed(digest string, size int64) []records.Record {
+// committed returns the records of the run with this digest whose bytes verify.
+func (f *runFacts) committed(digest string) []records.Record {
 	var out []records.Record
 	for _, r := range f.records {
-		if r.SHA256 == digest && (size < 0 || r.Size == size) && f.verify(r) == nil {
+		if r.SHA256 == digest && f.verify(r) == nil {
 			out = append(out, r)
 		}
 	}

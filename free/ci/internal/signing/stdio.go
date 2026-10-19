@@ -21,7 +21,7 @@ import (
 )
 
 // maxOutput bounds what a call may print.
-const maxOutput = MaxRequestBytes + 1<<16
+const maxOutput = 5 << 20
 
 // StdioCall is one child process.
 type StdioCall struct {
@@ -34,6 +34,9 @@ type StdioCall struct {
 	Stdin   []byte
 	Timeout time.Duration
 }
+
+// notRun is the exit code reported with an error: the program did not run (-1).
+const notRun = ^0
 
 // StdioRunner runs one call. A non-nil error means the program could not be
 // run at all; a non-zero exit code is not an error.

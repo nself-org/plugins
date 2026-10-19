@@ -168,3 +168,58 @@ func TestClientLocatesItsOwnBinary(t *testing.T) {
 		t.Fatalf("%v %v", err, s.calls)
 	}
 }
+
+// requestOf returns items and a run id whose request encodes to exactly n bytes.
+func requestOf(t *testing.T, n int) (string, []signing.Item) {
+	t.Helper()
+	for pad := 1; pad <= 4; pad++ {
+		id := strings.Repeat("r", pad)
+		it := signing.Item{PayloadType: signing.PayloadStatement}
+		base, _ := json.Marshal(signing.Request{RunID: id, Items: []signing.Item{it}})
+		if rest := n - len(base); rest >= 0 && rest%4 == 0 {
+			it.PayloadB64 = strings.Repeat("A", rest)
+			return id, []signing.Item{it}
+		}
+	}
+	t.Fatal("no padding fits")
+	return "", nil
+}
+
+func TestClientRequestSizeBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		delta  int
+		accept bool
+	}{{0, true}, {4, false}} {
+		f := newFixture(t)
+		id, items := requestOf(t, signing.MaxRequestBytes+tc.delta)
+		f.src.pipe.ID = id
+		env := signing.Response{Envelopes: []sdk.Envelope{{PayloadType: items[0].PayloadType, Payload: items[0].PayloadB64, Signatures: []sdk.EnvelopeSig{{KeyID: "k", Sig: "AAAA"}}}}}
+		raw, _ := json.Marshal(env)
+		s := &fakeSigner{ans: answer{out: string(raw)}}
+		_, err := clientFor(f, s).Sign(context.Background(), id, items)
+		if tc.accept && (err != nil || len(s.calls) != 1 || len(s.calls[0].Stdin) != signing.MaxRequestBytes) {
+			t.Fatalf("a request of exactly the cap was refused: %v", err)
+		}
+		if !tc.accept && (!signing.IsReason(err, signing.ReasonPayloadRejected) || len(s.calls) != 0) {
+			t.Fatalf("an oversize request was sent: %v", err)
+		}
+	}
+}
+
+func TestClientReadsAnAnswerWithNoLeadingNoise(t *testing.T) {
+	f := newFixture(t)
+	items := []signing.Item{item(signing.PayloadStatement, []byte("x"))}
+	env := signing.Response{Envelopes: []sdk.Envelope{{PayloadType: items[0].PayloadType, Payload: items[0].PayloadB64, Signatures: []sdk.EnvelopeSig{{KeyID: "k", Sig: "AAAA"}}}}}
+	raw, _ := json.Marshal(env)
+	if _, err := clientFor(f, &fakeSigner{ans: answer{out: string(raw)}}).Sign(context.Background(), runID, items); err != nil {
+		t.Fatal(err)
+	}
+	info := `{"key_id":"k","public_key":"p"}`
+	if _, err := clientFor(f, &fakeSigner{ans: answer{out: info}}).PublicKey(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	refusal := `{"error":{"code":"E717","reason":"key_missing","message":"m"}}`
+	if _, err := clientFor(f, &fakeSigner{ans: answer{out: refusal, code: 2}}).PublicKey(context.Background()); !signing.IsReason(err, signing.ReasonKeyMissing) {
+		t.Fatalf("%v", err)
+	}
+}

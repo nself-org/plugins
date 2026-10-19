@@ -17,5 +17,5 @@ type FunnelRunner struct {
 
 // RunStdio implements StdioRunner.
 func (r *FunnelRunner) RunStdio(context.Context, StdioCall) ([]byte, int, error) {
-	return nil, -1, Failf(ReasonSignerFailed, "the release signer needs a unix host")
+	return nil, notRun, Failf(ReasonSignerFailed, "the release signer needs a unix host")
 }

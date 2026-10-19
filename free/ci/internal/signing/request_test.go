@@ -86,6 +86,10 @@ func TestErrorShape(t *testing.T) {
 	if !strings.Contains(long, strings.Repeat("a", 64)+`..."`) || strings.Contains(long, strings.Repeat("a", 65)) {
 		t.Fatalf("an input echo was not bounded to 64 bytes: %q", long)
 	}
+	edge := decode(`{"run_id":"r","items":[{"payload_type":"a b~c\u007fd","payload_b64":"eA=="}]}`).Error()
+	if !strings.Contains(edge, `"a b~c?d"`) {
+		t.Fatalf("space and tilde are printable, DEL is not: %q", edge)
+	}
 	ctl := decode(`{"run_id":"r","items":[{"payload_type":"a\u0001\u00e9b","payload_b64":"eA=="}]}`).Error()
 	if !strings.Contains(ctl, `"a?`) {
 		t.Fatalf("control and non-ASCII bytes were echoed: %q", ctl)

@@ -49,7 +49,7 @@ func (f *runFacts) checkManifest(payload []byte) (attemptID, keyID string, err e
 			return "", "", err
 		}
 		for _, d := range []string{a.SBOM.CycloneDX.SHA256, a.SBOM.SPDX.SHA256} {
-			if len(f.committed(d, -1)) == 0 {
+			if len(f.committed(d)) == 0 {
 				return "", "", Failf(ReasonDigestNotCommitted, "the SBOM digest of artifact %q is not a committed record of this run", echo(a.Name))
 			}
 		}
@@ -59,8 +59,8 @@ func (f *runFacts) checkManifest(payload []byte) (attemptID, keyID string, err e
 
 // checkArtifact needs a committed, verified record with this name, digest and size.
 func (f *runFacts) checkArtifact(a manifest.Artifact) error {
-	for _, r := range f.committed(a.SHA256, a.Size) {
-		if r.Name == a.Name {
+	for _, r := range f.committed(a.SHA256) {
+		if r.Name == a.Name && r.Size == a.Size {
 			return nil
 		}
 	}
