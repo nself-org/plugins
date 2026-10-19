@@ -6,6 +6,7 @@ package dispatch
 // written before done is closed, so a reader that saw done may read it.
 
 import (
+	"context"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -24,24 +25,51 @@ type entry struct {
 	admitting chan struct{}
 }
 
-func (d *Dispatcher) enqueue(j Job) (*entry, error) {
+func (d *Dispatcher) enqueue(j Job) (*entry, error) { return d.enqueueCtx(context.Background(), j) }
+
+// enqueueCtx queues j, or refuses it with E694 when its project's queue is full.
+func (d *Dispatcher) enqueueCtx(ctx context.Context, j Job) (*entry, error) {
 	if j.AttemptID == "" || j.Sched.Key == "" {
 		return nil, fail(CodeUnplaceable, "a queued job needs an attempt and a key")
 	}
+	limits := d.queueLimits(ctx) // read before the lock: it may touch the policy
+	e, depth, err := d.push(j, limits.MaxDepth)
+	if err != nil {
+		return nil, err
+	}
+	if e == nil { // the project's queue is full: refused before it was queued (E694)
+		return nil, d.backpressure(ctx, j.Sched.Project, depth, limits.MaxDepth)
+	}
+	return e, nil
+}
+
+// push queues j unless its project already has max jobs queued (max <= 0 is no
+// cap); it then returns a nil entry and the depth.
+func (d *Dispatcher) push(j Job, max int64) (*entry, int64, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed {
-		return nil, errClosed
+		return nil, 0, errClosed
 	}
+	var depth int64
 	for _, e := range d.queue {
-		if !e.finished && e.queued.Job.Sched.Key == j.Sched.Key {
-			return nil, fail(CodeUnplaceable, "job key %q is already queued", j.Sched.Key)
+		if e.finished {
+			continue
 		}
+		if e.queued.Job.Sched.Key == j.Sched.Key {
+			return nil, 0, fail(CodeUnplaceable, "job key %q is already queued", j.Sched.Key)
+		}
+		if e.queued.Job.Sched.Project == j.Sched.Project {
+			depth++
+		}
+	}
+	if max > 0 && depth >= max {
+		return nil, depth, nil
 	}
 	d.seq++
 	e := &entry{queued: Queued{Job: j, EnqueuedAt: d.cfg.Clock(), Seq: d.seq}, done: make(chan struct{})}
 	d.queue = append(d.queue, e)
-	return e, nil
+	return e, depth, nil
 }
 
 // due reports whether a waiter should tick: something was enqueued since the
