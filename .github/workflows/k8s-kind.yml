@@ -13,14 +13,19 @@ name: k8s-kind
 # 1,000 rows, `nself k8s backup --json` (the envelope names the dump and every table's count),
 # delete the namespace, install again, `restore` without --yes exits 4, `restore --yes --json`
 # verifies the fingerprints, and an independent psql check agrees. A pull request runs both legs;
-# workflow_dispatch runs the leg input. source=registry belongs to P7-DEPL-99, so run.sh fails it
-# loudly (exit 3). The unit step also runs the postgres integration test (docker is on the runner).
+# workflow_dispatch runs the leg input. source=registry (P7-DEPL-31, run by workflow_dispatch only) starts
+# from an empty plugin dir, runs `nself add k8s` against the registry the cli reads, and asserts
+# the installed manifest is the served row at the checkout's version and that `nself help --json k8s`
+# lists values and backup, before it runs the same steps against the installed plugin. It fails
+# naming the served version and the missing commands while the served k8s predates the chart, and
+# never falls back to a branch build. The offline registry-test.sh (no cluster) runs on every pull
+# request. The unit step also runs the postgres integration test (docker is on the runner).
 
 on:
   workflow_dispatch:
     inputs:
       source:
-        description: "Where the k8s plugin comes from (registry runs in P7-DEPL-99)"
+        description: "Where the k8s plugin comes from (branch: built from this checkout; registry: nself add k8s from the served registry)"
         type: choice
         options: [branch, registry]
         default: branch
@@ -63,6 +68,9 @@ jobs:
         with:
           go-version-file: free/k8s/go.mod
           cache: false
+
+      - name: Registry leg selection tests (offline)
+        run: bash free/k8s/tests/kind/registry-test.sh
 
       - name: Plugin unit tests
         working-directory: free/k8s
