@@ -8,10 +8,15 @@ import (
 	"archive/tar"
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
@@ -70,5 +75,55 @@ func TestPlainTarObeysTheSanitiserLimits(t *testing.T) {
 	var pe *authz.PathError
 	if !errors.As(err, &pe) || pe.Reason != authz.SizeTotal {
 		t.Fatalf("err %v", err)
+	}
+}
+
+// Small files of a restore are written by several goroutines at once (D-1008
+// round 3); the contents, modes and times match what a sequential restore wrote.
+func TestUnpackWritesSmallFilesConcurrently(t *testing.T) {
+	var mu sync.Mutex
+	inFlight, peak := 0, 0
+	afterFileStart = func() {
+		mu.Lock()
+		inFlight++
+		peak = max(peak, inFlight)
+		mu.Unlock()
+		time.Sleep(20 * time.Millisecond)
+		mu.Lock()
+		inFlight--
+		mu.Unlock()
+	}
+	t.Cleanup(func() { afterFileStart = nil })
+	var ents []tent
+	for i := range 40 {
+		ents = append(ents, tent{name: fmt.Sprintf("d%d/f%d", i%5, i), body: strings.Repeat("x", i+1)})
+	}
+	dst := filepath.Join(t.TempDir(), "out")
+	if _, err := unpackTo(t, bytes.NewReader(tarGz(t, ents...)), dst, cacheLimits(), UnpackOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOMAXPROCS(0) > 1 && peak < 2 {
+		t.Fatalf("files were written one at a time (peak %d)", peak)
+	}
+	for i := range 40 {
+		if got := getFile(t, filepath.Join(dst, fmt.Sprintf("d%d/f%d", i%5, i))); got != strings.Repeat("x", i+1) {
+			t.Fatalf("f%d: %q", i, got)
+		}
+	}
+}
+
+// A write that fails stops the restore with that error and leaves no writer running.
+func TestUnpackStopsOnAWriteError(t *testing.T) {
+	var ents []tent
+	for i := range 30 {
+		ents = append(ents, tent{name: fmt.Sprintf("f%d", i), body: "x"})
+	}
+	dst := filepath.Join(t.TempDir(), "out")
+	if err := os.MkdirAll(dst, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	putFile(t, filepath.Join(dst, "f7"), "already here") // O_EXCL refuses it
+	if _, err := unpackTo(t, bytes.NewReader(tarGz(t, ents...)), dst, cacheLimits(), UnpackOptions{}); err == nil {
+		t.Fatal("a colliding file was overwritten")
 	}
 }

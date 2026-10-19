@@ -64,3 +64,16 @@ func TestRuntimeInfoIsProbedOncePerWindow(t *testing.T) {
 		t.Fatalf("docker calls %d, want 2 (one info, one ps)", n)
 	}
 }
+
+func TestWarmRuntimeInfoLetsTheFirstRealQueryShareTheSpawn(t *testing.T) {
+	calls := infoStubDocker(t)
+	WarmRuntimeInfo()
+	for range 3 {
+		if _, err := RuntimeQuery(context.Background(), "docker", "info"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := calls(); n != 1 {
+		t.Fatalf("docker info ran %d times, want 1", n)
+	}
+}

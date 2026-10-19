@@ -90,6 +90,11 @@ func extract(r io.Reader, root *os.Root, lim authz.Limits, opt UnpackOptions) (U
 	lim = effective(lim)
 	tr := tar.NewReader(io.LimitReader(body, lim.MaxTotalBytes+(1<<30)))
 	ext, guard, dirs := authz.NewExtractor(lim), &bombGuard{cr: cr, lim: lim}, []dirMode{}
+	var fw *fileWriter
+	if !dry {
+		fw = newFileWriter(root, opt)
+	}
+	defer fw.close() // an early return still waits for the writers
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -130,6 +135,10 @@ func extract(r io.Reader, root *os.Root, lim authz.Limits, opt UnpackOptions) (U
 				if n, err := io.Copy(io.Discard, ge); err != nil || n != h.Size {
 					return st, errors.Join(err, io.ErrUnexpectedEOF)
 				}
+			} else if fw != nil && h.Size <= smallFile {
+				if err := fw.submit(name, ge, h); err != nil {
+					return st, err
+				}
 			} else if err := writeFile(root, name, ge, h, opt); err != nil {
 				return st, err
 			}
@@ -145,6 +154,9 @@ func extract(r io.Reader, root *os.Root, lim authz.Limits, opt UnpackOptions) (U
 	}
 	if dry {
 		return st, nil
+	}
+	if err := fw.close(); err != nil {
+		return st, err
 	}
 	sort.Slice(dirs, func(i, j int) bool { return len(dirs[i].name) > len(dirs[j].name) })
 	if opt.OtherRead {
@@ -229,7 +241,12 @@ func writeFile(root *os.Root, name string, r io.Reader, h *tar.Header, opt Unpac
 	if err != nil {
 		return fmt.Errorf("specs: writing %q: %w", name, err)
 	}
-	perm := os.FileMode(h.Mode&0o777) | 0o400
+	return settleFile(root, name, os.FileMode(h.Mode&0o777), h.ModTime, opt)
+}
+
+// settleFile gives a written file its mode (readable by the owner at least) and time.
+func settleFile(root *os.Root, name string, mode os.FileMode, at time.Time, opt UnpackOptions) error {
+	perm := mode | 0o400
 	if opt.OtherRead {
 		perm |= 0o444
 		if perm&0o100 != 0 {
@@ -239,7 +256,7 @@ func writeFile(root *os.Root, name string, r io.Reader, h *tar.Header, opt Unpac
 	if err := root.Chmod(name, perm); err != nil {
 		return err
 	}
-	_ = root.Chtimes(name, h.ModTime, h.ModTime)
+	_ = root.Chtimes(name, at, at)
 	return nil
 }
 
