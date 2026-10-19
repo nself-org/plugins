@@ -224,13 +224,15 @@ func TestPipInstallsTheProjectItself(t *testing.T) {
 		}
 		return p[0].Command()[2]
 	}
-	for _, m := range []string{"pyproject.toml", "setup.cfg", "setup.py"} {
+	for _, m := range []string{"pyproject.toml", "setup.py"} {
 		if !strings.Contains(cmd(m), "pip install --quiet -e .") {
 			t.Errorf("%s project must be installed editable", m)
 		}
 	}
-	if strings.Contains(cmd("requirements.txt"), "-e .") {
-		t.Error("a requirements-only directory must not install itself")
+	for _, m := range []string{"requirements.txt", "setup.cfg"} {
+		if strings.Contains(cmd(m), "-e .") {
+			t.Errorf("a %s-only directory cannot be installed and must not try", m)
+		}
 	}
 }
 

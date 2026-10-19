@@ -137,6 +137,13 @@ func TestSwiftEdgeCases(t *testing.T) {
 				t.Fatalf("swiftpm without tests: %+v", facts)
 			}
 		}},
+		{"spaced and custom-path test target has tests", fstest.MapFS{
+			"Package.swift": file("// swift-tools-version:5.9\nlet package = Package(name: \"X\", targets: [.testTarget (name: \"UT\", path: \"UnitTests\")])\n"),
+		}, func(t *testing.T, facts []Fact) {
+			if !has(facts, "test_framework", "swift test", "Package.swift") {
+				t.Fatalf(".testTarget (...) not recognised: %+v", facts)
+			}
+		}},
 		{"package with a Tests directory has tests", fstest.MapFS{
 			"Package.swift":             file("// swift-tools-version:5.9\n"),
 			"Tests/XTests/XTests.swift": file("import XCTest\n"),
@@ -179,6 +186,21 @@ func TestSwiftEdgeCases(t *testing.T) {
 				if f.Kind == "xcode_member" && f.Name != "app/App.xcodeproj" {
 					t.Fatalf("only detected projects are members: %+v", f)
 				}
+			}
+		}},
+		{"projects inside workspace groups are members", fstest.MapFS{
+			"ws/Modules/App.xcodeproj/project.pbxproj":  file("x"),
+			"ws/Libs/Lib.xcodeproj/project.pbxproj":     file("x"),
+			"ws/Other.xcodeproj/project.pbxproj":        file("x"),
+			"ws/W.xcworkspace/contents.xcworkspacedata": file("<Workspace><Group location = \"group:Modules\"><FileRef location = \"group:App.xcodeproj\"></FileRef></Group><FileRef location = \"container:Libs/Lib.xcodeproj\"></FileRef></Workspace>"),
+		}, func(t *testing.T, facts []Fact) {
+			for _, want := range []string{"ws/Modules/App.xcodeproj", "ws/Libs/Lib.xcodeproj"} {
+				if !has(facts, "xcode_member", want, "ws/W.xcworkspace/contents.xcworkspacedata") {
+					t.Errorf("member %s missing: %+v", want, facts)
+				}
+			}
+			if has(facts, "xcode_member", "ws/Other.xcodeproj", "ws/W.xcworkspace/contents.xcworkspacedata") {
+				t.Error("an unlisted project must not be a member")
 			}
 		}},
 		{"scheme file names a scheme, nested files do not", fstest.MapFS{

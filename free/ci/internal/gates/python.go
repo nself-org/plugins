@@ -46,7 +46,7 @@ func pythonIndex(facts []detect.Fact) pythonFacts {
 	for _, f := range facts {
 		if f.Kind == "stack" && f.Name == "python" && f.Confidence == detect.Certain {
 			base := path.Base(f.Path)
-			idx[path.Dir(f.Path)] = &pythonDir{manager: "pip", project: base == "pyproject.toml" || base == "setup.cfg" || base == "setup.py"}
+			idx[path.Dir(f.Path)] = &pythonDir{manager: "pip", project: base == "pyproject.toml" || base == "setup.py"}
 		}
 	}
 	for _, f := range facts {
@@ -126,7 +126,8 @@ for f in "$@"; do .venv/bin/python -m pip install --quiet -r "$f"; done
 `
 
 // pipProject installs the project itself (editable) when its manifest is
-// pyproject.toml, setup.cfg or setup.py, so a src-layout package imports.
+// pyproject.toml or setup.py (a setup.cfg alone cannot be installed), so a
+// src-layout package imports.
 const pipProject = `.venv/bin/python -m pip install --quiet -e .
 `
 

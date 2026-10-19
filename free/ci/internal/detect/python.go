@@ -5,7 +5,7 @@ package detect
 // Inputs:  the snapshot; per directory pyproject.toml, setup.cfg, setup.py,
 // requirements*.txt, uv.lock, poetry.lock and the tool config files.
 // Outputs: stack python (Path = the primary manifest: pyproject.toml, then
-// setup.cfg, setup.py, requirements.txt, other requirements*.txt),
+// setup.py, setup.cfg, requirements.txt, other requirements*.txt),
 // package_manager uv | poetry | pip, and when configured test_framework
 // pytest, lint_tool ruff, type_checker mypy. Lockfiles (uv.lock, poetry.lock,
 // requirements*.txt) are digested by the lockfiles detector.
@@ -79,10 +79,10 @@ func detectPythonDir(s Snapshot, dir string, d *pyDir) []Fact {
 	switch {
 	case d.pyproject != "" && pyprojectIsProject(pyproject):
 		primary = d.pyproject
-	case d.setupCfg != "" && hasAnySection(setupCfg, "[metadata]", "[options]", "[tool:pytest]"):
-		primary = d.setupCfg
 	case d.setupPy != "":
 		primary = d.setupPy
+	case d.setupCfg != "" && hasAnySection(setupCfg, "[metadata]", "[options]", "[tool:pytest]"):
+		primary = d.setupCfg
 	case len(d.requirements) > 0:
 		primary = d.requirements[0]
 		for _, r := range d.requirements {

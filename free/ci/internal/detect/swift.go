@@ -15,6 +15,7 @@ package detect
 // scheme is an unknown manifest (the user must share a scheme), never a guess.
 
 import (
+	"encoding/xml"
 	"path"
 	"regexp"
 	"sort"
@@ -41,10 +42,12 @@ func detectSwift(s Snapshot) []Fact {
 	return append(out, detectXcode(s)...)
 }
 
+var testTarget = regexp.MustCompile(`\.testTarget\s*\(`)
+
 // hasSwiftTests reports whether the package declares a test target or has a
 // Tests/ directory: `swift test` fails on a package with nothing to run.
 func hasSwiftTests(s Snapshot, manifest, text string) bool {
-	if strings.Contains(text, ".testTarget(") {
+	if testTarget.MatchString(text) {
 		return true
 	}
 	prefix := path.Join(path.Dir(manifest), "Tests") + "/"
@@ -110,27 +113,55 @@ func (s Snapshot) sharedSchemes(container string) []string {
 	return out
 }
 
-var workspaceRef = regexp.MustCompile(`location\s*=\s*"(?:group|container):([^"]+\.xcodeproj)"`)
+// wsNode is one element of contents.xcworkspacedata: FileRef and Group both
+// carry a location attribute, Group nests more elements.
+type wsNode struct {
+	XMLName  xml.Name
+	Location string   `xml:"location,attr"`
+	Children []wsNode `xml:",any"`
+}
 
 // workspaceMembers names the detected projects a workspace lists
 // (CocoaPods and SwiftPM monorepos build their app through the workspace):
 // one xcode_member fact per project, Name = the project container, Path = the
-// workspace file. Only plain group: and container: references count.
+// workspace file. group: references resolve against the enclosing group,
+// container: references against the folder holding the workspace.
 func workspaceMembers(s Snapshot, ws xcodeContainer, boxes []xcodeContainer) []Fact {
 	b, err := s.read(ws.evidence)
 	if err != nil {
+		return nil
+	}
+	var root wsNode
+	if xml.Unmarshal(b, &root) != nil {
 		return nil
 	}
 	known := map[string]bool{}
 	for _, c := range boxes {
 		known[c.dir] = true
 	}
+	base := path.Dir(ws.dir)
 	var out []Fact
-	for _, m := range workspaceRef.FindAllStringSubmatch(string(b), -1) {
-		project := path.Join(path.Dir(ws.dir), m[1])
-		if known[project] {
-			out = append(out, fact("xcode_member", project, ws.evidence))
+	var walk func(n wsNode, group string)
+	walk = func(n wsNode, group string) {
+		for _, c := range n.Children {
+			kind, ref, ok := strings.Cut(c.Location, ":")
+			if !ok || (kind != "group" && kind != "container") {
+				continue
+			}
+			at := path.Join(group, ref)
+			if kind == "container" {
+				at = path.Join(base, ref)
+			}
+			switch c.XMLName.Local {
+			case "FileRef":
+				if known[at] {
+					out = append(out, fact("xcode_member", at, ws.evidence))
+				}
+			case "Group":
+				walk(c, at)
+			}
 		}
 	}
+	walk(root, base)
 	return out
 }
