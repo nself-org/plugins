@@ -86,26 +86,55 @@ func TestStartGuardStopsOnEveryLocalIdentity(t *testing.T) {
 	}
 }
 
+func pathWith(t *testing.T, docker bool) {
+	t.Helper()
+	dir := t.TempDir()
+	if docker {
+		if err := os.WriteFile(filepath.Join(dir, "docker"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notexec"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+}
+
+func TestOnPath(t *testing.T) {
+	pathWith(t, true)
+	if !onPath("docker") || onPath("notexec") || onPath("absent") {
+		t.Fatal("onPath")
+	}
+	pathWith(t, false)
+	if onPath("docker") {
+		t.Fatal("docker found in an empty PATH")
+	}
+}
+
 func TestStartGuardProdMarker(t *testing.T) {
 	dir := "/srv/stack"
 	prod := fsMap{dir + "/.env": "FOO=1\nENV=production # live\n"}
+	boom := func(context.Context, string, ...string) ([]byte, int, error) { return nil, -1, errors.New("timeout") }
 	cases := map[string]struct {
 		files  fsMap
 		docker RunFunc
+		path   bool
 		reason string
 		warn   bool
 	}{
-		"prod .env":         {prod, dockerOut(dir+"\n", 0), ReasonMarker, false},
-		"prod .env.prod":    {fsMap{dir + "/.env.prod": "export ENV='prod'"}, dockerOut("\n"+dir+"\n"+dir+"\n", 0), ReasonMarker, false},
-		"dev env":           {fsMap{dir + "/.env": "ENV=dev\n"}, dockerOut(dir, 0), "", false},
-		"no env file":       {fsMap{}, dockerOut(dir, 0), "", false},
-		"relative dir":      {prod, dockerOut("stack", 0), "", false},
-		"no compose label":  {prod, dockerOut("\n\n", 0), "", false},
-		"docker absent":     {prod, func(context.Context, string, ...string) ([]byte, int, error) { return nil, -1, errors.New("not found") }, "", false},
-		"docker unreadable": {prod, dockerOut("permission denied", 1), "", true},
-		"no runner":         {prod, nil, "", false},
+		"prod .env":          {prod, dockerOut(dir+"\n", 0), true, ReasonMarker, false},
+		"prod .env.prod":     {fsMap{dir + "/.env.prod": "export ENV='prod'"}, dockerOut("\n"+dir+"\n"+dir+"\n", 0), true, ReasonMarker, false},
+		"dev env":            {fsMap{dir + "/.env": "ENV=dev\n"}, dockerOut(dir, 0), true, "", false},
+		"no env file":        {fsMap{}, dockerOut(dir, 0), true, "", false},
+		"relative dir":       {prod, dockerOut("stack", 0), true, "", false},
+		"no compose label":   {prod, dockerOut("\n\n", 0), true, "", false},
+		"docker not on PATH": {prod, dockerOut(dir, 0), false, "", false},
+		"docker unreadable":  {prod, dockerOut("permission denied", 1), true, "", true},
+		"docker run failed":  {prod, boom, true, "", true},
+		"no runner":          {prod, nil, true, "", false},
 	}
 	for name, c := range cases {
+		pathWith(t, c.path)
 		l := localOn("h", "", c.files, c.docker)
 		w, err := l.Check(context.Background(), Set{}, "ci serve")
 		if got := ReasonOf(err); got != c.reason {
@@ -159,20 +188,23 @@ func TestStartGuardBuildsItsSetFromStateDBAndNeverList(t *testing.T) {
 	if _, err = StartGuard(ctx, home, other, "pull"); ReasonOf(err) != ReasonMatched {
 		t.Fatalf("never-list ignored: %v", err)
 	}
-	// A broken config is a warning; the cached entries still apply.
+	// A config that exists but cannot be parsed refuses the start: the guard never runs on less than the
+	// operator wrote down.
 	if err = os.WriteFile(filepath.Join(home, "config.yaml"), []byte("ci: ["), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	w, err := StartGuard(ctx, home, other, "pull")
-	if err != nil || len(w) != 1 || !strings.Contains(w[0], "never-list unreadable") {
+	if w, err := StartGuard(ctx, home, other, "pull"); ReasonOf(err) != ReasonNoIdentity || w != nil || !strings.Contains(err.Error(), "never-list") {
 		t.Fatalf("broken config: %v %v", w, err)
 	}
-	// An unreadable state.db is a warning too.
+	if err = os.Remove(filepath.Join(home, "config.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	// So does a state.db that exists but is not a database.
 	if err = os.WriteFile(filepath.Join(home, "state.db"), []byte("not a database"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if w, err = StartGuard(ctx, home, other, "pull"); err != nil || len(w) < 2 {
-		t.Fatalf("broken state: %v %v", w, err)
+	if _, err = StartGuard(ctx, home, other, "pull"); ReasonOf(err) != ReasonNoIdentity || !strings.Contains(err.Error(), "state database") {
+		t.Fatalf("broken state: %v", err)
 	}
 }
 

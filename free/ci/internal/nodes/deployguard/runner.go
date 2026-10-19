@@ -6,11 +6,12 @@ package deployguard
 // Inputs:  the project root and argv.
 // Outputs: the process output (stdout and stderr merged) and exit code.
 // Constraints: only `.nself/control-plane.yaml` and the root `.env` and `.env.*` files are staged (regular
-//          files, at most 1 MiB, no symlink followed); 30 s timeout; no stdin; the inherited environment
+//          files at most 1 MiB; a symlink is resolved, as nself would read it; anything else fails); 30 s timeout; no stdin; the inherited environment
 //          carries the operator's NSELF_DEPLOY_HOST_* variables and real HOME for ssh -G and known_hosts.
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -27,6 +28,9 @@ var runSeq atomic.Int64
 
 const maxStaged = 1 << 20
 
+// runTimeout bounds one nself call (30 s), as a plain duration.
+const runTimeout = time.Duration(3e10)
+
 // FunnelRun is the production RunFunc.
 func FunnelRun(ctx context.Context, dir string, argv ...string) ([]byte, int, error) {
 	if len(argv) == 0 {
@@ -36,7 +40,7 @@ func FunnelRun(ctx context.Context, dir string, argv ...string) ([]byte, int, er
 	var ex ciexec.Executor
 	spec := ciexec.JobSpec{
 		AttemptID: fmt.Sprintf("dg-%d-%d", time.Now().UnixNano(), runSeq.Add(1)), CoordinatorID: "deployguard",
-		Job: model.Job{Kind: "static"}, Timeout: 30 * time.Second, Command: argv,
+		Job: model.Job{Kind: "static"}, Timeout: runTimeout, Command: argv,
 		Output: func(b []byte) { buf.Write(b) },
 	}
 	if dir != "" {
@@ -46,13 +50,10 @@ func FunnelRun(ctx context.Context, dir string, argv ...string) ([]byte, int, er
 	return []byte(buf.String()), res.ExitCode, res.Err
 }
 
-// stage copies the inventory files of root into the workspace.
+// stage copies the inventory files of root into the workspace. A file that is absent is skipped; a name
+// that exists but cannot be staged (not a regular file after symlinks resolve, or over 1 MiB) fails the
+// call, so a partial project is never read.
 func stage(root string, ws *os.Root) error {
-	src, err := os.OpenRoot(root)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = src.Close() }()
 	names := []string{".nself/control-plane.yaml"}
 	if ents, err := os.ReadDir(root); err == nil {
 		for _, e := range ents {
@@ -62,21 +63,28 @@ func stage(root string, ws *os.Root) error {
 		}
 	}
 	for _, n := range names {
-		if err := copyOne(src, ws, n); err != nil {
+		if err := copyOne(root, ws, n); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func copyOne(src, dst *os.Root, name string) error {
-	fi, err := src.Lstat(name)
-	if err != nil || !fi.Mode().IsRegular() || fi.Size() > maxStaged {
-		return nil // absent, a link or too big: not staged
-	}
-	in, err := src.Open(name)
-	if err != nil {
+func copyOne(root string, dst *os.Root, name string) error {
+	real, err := filepath.EvalSymlinks(filepath.Join(root, name))
+	if os.IsNotExist(err) {
 		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("stage %s: %w", name, err)
+	}
+	fi, err := os.Stat(real)
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() > maxStaged {
+		return fmt.Errorf("stage %s: not a regular file of at most 1 MiB", name)
+	}
+	in, err := os.Open(real)
+	if err != nil {
+		return fmt.Errorf("stage %s: %w", name, err)
 	}
 	defer func() { _ = in.Close() }()
 	if d := filepath.Dir(name); d != "." {
@@ -89,8 +97,5 @@ func copyOne(src, dst *os.Root, name string) error {
 		return err
 	}
 	_, err = io.Copy(out, io.LimitReader(in, maxStaged))
-	if cerr := out.Close(); err == nil {
-		err = cerr
-	}
-	return err
+	return errors.Join(err, out.Close())
 }

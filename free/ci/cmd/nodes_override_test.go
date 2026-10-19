@@ -186,10 +186,4 @@ func TestProjectRootAndHelpers(t *testing.T) {
 	if !strings.HasPrefix(adminActor(), "cli:") {
 		t.Fatal(adminActor())
 	}
-	if f, err := os.Open(os.DevNull); err == nil {
-		if isTTY(f) {
-			t.Fatal("/dev/null counted as a terminal")
-		}
-		_ = f.Close()
-	}
 }

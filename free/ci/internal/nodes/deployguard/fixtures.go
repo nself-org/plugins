@@ -28,16 +28,13 @@ const (
 	FixtureMachineID   = "0123456789abcdef0123456789abcdef"
 )
 
-// FixtureTargets returns the `nself deploy targets --json` document for hosts (each becomes one target; the
-// fixture fingerprint is attached to the first).
+// FixtureTargets returns the `nself deploy targets --json` document for hosts (each becomes one target carrying the
+// fixture fingerprint).
 func FixtureTargets(hosts ...string) []byte {
 	rows := []map[string]any{}
 	for i, h := range hosts {
-		fps := []string{}
-		if i == 0 {
-			fps = append(fps, FixtureFingerprint)
-		}
-		rows = append(rows, map[string]any{"env": "prod", "tier": "prod", "server": fmt.Sprintf("srv%d", i), "role": "app", "primary": i == 0,
+		fps := []string{FixtureFingerprint}
+		rows = append(rows, map[string]any{"env": "prod", "tier": "prod", "server": fmt.Sprintf("srv%d", i), "role": "app", "primary": false,
 			"user": nil, "host": h, "port": 22, "ssh_hostname": h, "addresses": []string{}, "host_key_fingerprints": fps, "arch": nil, "source": "inventory"})
 	}
 	b, _ := json.Marshal(map[string]any{"schema_version": "1", "command": "deploy targets", "data": map[string]any{"targets": rows, "warnings": []string{}}})
@@ -62,7 +59,7 @@ type FixtureRunner struct {
 // Run implements the command runner shape of deployguard.RunFunc.
 func (r *FixtureRunner) Run(_ context.Context, dir string, argv ...string) ([]byte, int, error) {
 	r.Calls = append(r.Calls, dir+"|"+strings.Join(argv, " "))
-	if len(argv) >= 4 && argv[1] == "help" {
+	if strings.Contains(" "+strings.Join(argv, " ")+" ", " help ") {
 		return FixtureHelp(r.HelpSide), 0, nil
 	}
 	hosts, ok := r.HostsByRoot[dir]

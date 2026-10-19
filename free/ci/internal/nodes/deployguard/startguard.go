@@ -53,8 +53,11 @@ func readSmall(p string) ([]byte, error) {
 	return os.ReadFile(p)
 }
 
-func interfaceAddrs() ([]netip.Addr, error) {
-	as, err := net.InterfaceAddrs()
+func interfaceAddrs() ([]netip.Addr, error) { return addrsFrom(net.InterfaceAddrs) }
+
+// addrsFrom reads the interface addresses through list (net.InterfaceAddrs in production).
+func addrsFrom(list func() ([]net.Addr, error)) ([]netip.Addr, error) {
+	as, err := list()
 	if err != nil {
 		return nil, err
 	}
@@ -142,11 +145,11 @@ func (l Local) marker(ctx context.Context) (string, []string, error) {
 	if l.Run == nil {
 		return "", nil, nil
 	}
-	out, exit, err := l.Run(ctx, "", "docker", "ps", "--format", `{{.Label "`+composeDirLabel+`"}}`)
-	if err != nil {
+	if !onPath("docker") {
 		return "", nil, nil // docker is not installed: the marker check is skipped
 	}
-	if exit != 0 {
+	out, exit, err := l.Run(ctx, "", "docker", "ps", "--format", `{{.Label "`+composeDirLabel+`"}}`)
+	if err != nil || exit != 0 {
 		return "", []string{"docker is installed but not readable; the production marker check was skipped"}, nil
 	}
 	seen := map[string]bool{}
@@ -193,11 +196,23 @@ func envSaysProd(text string) bool {
 	return false
 }
 
+// onPath reports whether name is an executable file in a PATH directory.
+func onPath(name string) bool {
+	for _, d := range filepath.SplitList(os.Getenv("PATH")) {
+		if fi, err := os.Stat(filepath.Join(d, name)); err == nil && fi.Mode().IsRegular() && fi.Mode().Perm()&0o111 != 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // StartGuard is the guard the agent's PreStart hook and `ci serve` call. It builds the local exclusion
 // set (the node's own state.db when present, plus the user never-list) and checks this host against it.
-// Unreadable sources are warnings: the identity and marker checks still run on what could be read.
+// A source that exists but cannot be read refuses the start (LocalSet); a missing one is empty.
 func StartGuard(ctx context.Context, home string, l Local, command string) (warnings []string, err error) {
-	s, warnings := LocalSet(ctx, home)
-	w, err := l.Check(ctx, s, command)
-	return append(warnings, w...), err
+	s, err := LocalSet(ctx, home)
+	if err != nil {
+		return nil, err
+	}
+	return l.Check(ctx, s, command)
 }

@@ -69,7 +69,11 @@ func LoadNeverList(path string) ([]Entry, error) {
 	}
 	var es []Entry
 	for _, v := range append(c.CI.NeverHosts, c.FlatNever...) {
-		if e, ok := neverEntry(v); ok {
+		e, ok, err := neverEntry(v)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			es = append(es, e)
 		}
 	}
@@ -91,18 +95,21 @@ func LoadProjectRoots(path string) ([]string, error) {
 	return out, nil
 }
 
-func neverEntry(v string) (Entry, bool) {
+func neverEntry(v string) (Entry, bool, error) {
 	v = strings.TrimSpace(v)
 	switch {
 	case v == "":
-		return Entry{}, false
+		return Entry{}, false, nil
 	case strings.HasPrefix(strings.ToLower(v), "machine-id:"):
-		return Entry{KindMachineID, v[len("machine-id:"):], SourceNeverList}, true
+		return Entry{KindMachineID, v[len("machine-id:"):], SourceNeverList}, true, nil
 	case NormalizeFingerprint(v) != "":
-		return Entry{KindFingerprint, v, SourceNeverList}, true
+		return Entry{KindFingerprint, v, SourceNeverList}, true, nil
 	}
 	if _, err := netip.ParsePrefix(v); err == nil {
-		return Entry{KindPrefix, v, SourceNeverList}, true
+		return Entry{KindPrefix, v, SourceNeverList}, true, nil
 	}
-	return Entry{KindHost, v, SourceNeverList}, true
+	if strings.Contains(v, "/") {
+		return Entry{}, false, newErr(ReasonInventory, "never_hosts entry %q is not a valid CIDR prefix", v)
+	}
+	return Entry{KindHost, v, SourceNeverList}, true, nil
 }

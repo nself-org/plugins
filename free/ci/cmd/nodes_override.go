@@ -60,16 +60,6 @@ func projectRoot() string {
 	return dir
 }
 
-// isTTY reports a terminal: a character device that is not /dev/null (also a character device).
-func isTTY(f *os.File) bool {
-	fi, err := f.Stat()
-	if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
-		return false
-	}
-	null, err := os.Stat(os.DevNull)
-	return err != nil || !os.SameFile(fi, null)
-}
-
 func flagBool(fs *flag.FlagSet, name string) bool {
 	if fs == nil {
 		return false
@@ -101,7 +91,7 @@ func deployHostHook(ctx context.Context, point lifecycle.Point, e lifecycle.Hook
 		return reportWarnings(g.Refresh(ctx))
 	}
 	q := deployguard.AddRequest{NodeID: e.NodeID, Dest: e.Dest, Capability: e.Capability, Actor: adminActor(),
-		Allow: flagBool(e.Flags, allowDeployHostFlag), Confirm: deployguard.TerminalConfirm(os.Stdin, os.Stderr, isTTY(os.Stdin))}
+		Allow: flagBool(e.Flags, allowDeployHostFlag), Confirm: deployguard.TerminalConfirm(os.Stdin, os.Stderr, isTerminal(os.Stdin))}
 	r, warns, err := g.CheckAdd(ctx, q)
 	for _, w := range warns {
 		fmt.Fprintln(os.Stderr, "warning:", w)

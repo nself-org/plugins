@@ -58,7 +58,7 @@ func (g *Guard) Set(ctx context.Context) (Set, error) {
 	}
 	var s Set
 	for _, r := range rows {
-		s.Add(Entry{r.Kind, r.Value, r.Source})
+		s.Add(Entry{Kind: r.Kind, Value: r.Value, Source: r.Source})
 	}
 	return s, nil
 }
@@ -86,10 +86,7 @@ func (g *Guard) RefreshProject(ctx context.Context, root string) error {
 }
 
 func (g *Guard) fail(ctx context.Context, root string, cause error) error {
-	if err := g.Store.ExclusionFail(ctx, root, cause.Error()); err != nil {
-		return errors.Join(cause, err)
-	}
-	return cause
+	return errors.Join(cause, g.Store.ExclusionFail(ctx, root, cause.Error()))
 }
 
 func (g *Guard) refreshNeverList(ctx context.Context) error {
@@ -154,7 +151,8 @@ func (g *Guard) Run(ctx context.Context, onErr func(error)) {
 	}
 }
 
-// Match resolves an identity and matches it against the cached set.
+// Match resolves an identity and matches it against the cached set. An unmatched result carries
+// Partial when a lookup failed.
 func (g *Guard) Match(ctx context.Context, id Identity) (Result, []string, error) {
 	s, err := g.Set(ctx)
 	if err != nil {
@@ -203,6 +201,10 @@ func (g *Guard) EvaluateNode(ctx context.Context, nodeID string) (Result, error)
 	r, _, err := g.Match(ctx, IdentityOf(c))
 	if err != nil {
 		return Result{}, err
+	}
+	if r.Partial && c.DeployHost.Matched {
+		// A failed lookup is not proof: keep the match and the override until a full evaluation clears them.
+		return Result{Matched: true, Partial: true}, nil
 	}
 	want := DeployHostFor(r, c.DeployHost)
 	detail := "evaluated"

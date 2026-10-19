@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nself-org/cli/sdk/go/v2/remote"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
@@ -99,7 +100,7 @@ func TestTerminalConfirm(t *testing.T) {
 	if ok, err := TerminalConfirm(strings.NewReader("box\n"), &out, false)("p", "box"); ok || ReasonOf(err) != ReasonNoTTY {
 		t.Fatalf("no tty: %v %v", ok, err)
 	}
-	for in, want := range map[string]bool{"box\n": true, "  box  \r\n": true, "yes\n": false, "BOX\n": false, "": false, "boxx\n": false} {
+	for in, want := range map[string]bool{"box\n": true, "box": true, "  box  \r\n": true, "yes\n": false, "BOX\n": false, "": false, "boxx\n": false} {
 		out.Reset()
 		ok, err := TerminalConfirm(strings.NewReader(in), &out, true)("deploy host!", "box")
 		if err != nil || ok != want || !strings.Contains(out.String(), "deploy host!") || !strings.Contains(out.String(), "(box)") {
@@ -108,18 +109,42 @@ func TestTerminalConfirm(t *testing.T) {
 	}
 }
 
-func TestCheckAddWithoutADraftStillAnswersAndWarnsOnABrokenRefresh(t *testing.T) {
+func TestCheckAddRefusesAnUnmatchedNodeWhileASourceWasNeverRead(t *testing.T) {
 	r := newRig(t)
 	ctx := context.Background()
 	_ = r.g.Seen(ctx, r.rootA)
-	r.run.HelpSide = "write" // the refresh refuses; the cache is empty
+	r.run.HelpSide = "write" // the refresh refuses; nothing was ever cached
 	res, warn, err := r.g.CheckAdd(ctx, AddRequest{NodeID: "x", Dest: FixtureHostV4})
-	if err != nil || res.Matched || len(warn) == 0 {
+	if ReasonOf(err) != ReasonInventory || res.Matched || len(warn) == 0 || !strings.Contains(err.Error(), "never been read") {
 		t.Fatalf("%+v %v %v", res, warn, err)
 	}
 	r.run.HelpSide = "read"
 	res, warn, err = r.g.CheckAdd(ctx, AddRequest{NodeID: "x", Dest: FixtureHostV4})
 	if err != nil || !res.Matched || len(warn) != 0 {
 		t.Fatalf("%+v %v %v", res, warn, err)
+	}
+	// A source that worked once keeps its cache and no longer blocks an unmatched add.
+	r.run.HelpSide = "write"
+	res, warn, err = r.g.CheckAdd(ctx, AddRequest{NodeID: "y", Dest: FixtureOther})
+	if err != nil || res.Matched || len(warn) == 0 {
+		t.Fatalf("after a good read: %+v %v %v", res, warn, err)
+	}
+	// A matched node is registered ineligible even while the refresh fails.
+	if res, _, err = r.g.CheckAdd(ctx, AddRequest{NodeID: "z", Dest: FixtureHostV4}); err != nil || !res.Matched {
+		t.Fatalf("matched during a failing refresh: %+v %v", res, err)
+	}
+}
+
+func TestCheckAddTakesTheDestinationFromTheDraftWhenNoneIsGiven(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	_ = r.g.Seen(ctx, r.rootA)
+	r.ssh["jump-alias"] = remote.Resolved{Hostname: "unlisted.example.test", ProxyJump: FixtureHostV4}
+	c := r.capability("viaalias", func(c *model.Capability) {
+		c.Identity.SSH = &model.CapabilitySSH{Alias: "jump-alias", Hostname: "unlisted.example.test", Port: 22, User: "ci"}
+	})
+	res, _, err := r.g.CheckAdd(ctx, AddRequest{NodeID: "viaalias", Capability: c})
+	if err != nil || !res.Matched || !c.DeployHost.Matched {
+		t.Fatalf("%+v %v %+v", res, err, c.DeployHost)
 	}
 }

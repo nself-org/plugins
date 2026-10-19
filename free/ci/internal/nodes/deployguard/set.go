@@ -40,12 +40,17 @@ type Facts struct {
 	Addrs        []netip.Addr
 	Fingerprints []string
 	MachineIDs   []string
+	// Partial is true when a lookup that could have added identities failed (ssh -G or DNS): "no match"
+	// is then not proof that the node is not a deploy host.
+	Partial bool
 }
 
-// Result is the outcome of a match. Source is empty when nothing matched.
+// Result is the outcome of a match. Source is empty when nothing matched. Partial is copied from the
+// Facts: an unmatched Result with Partial set must not clear an earlier match.
 type Result struct {
 	Matched      bool
 	Source, Kind string
+	Partial      bool
 }
 
 type prefixEntry struct {
@@ -77,6 +82,10 @@ func (s *Set) Add(e Entry) {
 	}
 	switch e.Kind {
 	case KindHost, KindAddress:
+		if p, err := netip.ParsePrefix(strings.TrimSpace(e.Value)); err == nil {
+			s.addPrefix(p, src)
+			return
+		}
 		if a, ok := parseAddr(bareHost(e.Value)); ok {
 			if s.addrs == nil {
 				s.addrs = map[netip.Addr]string{}
@@ -92,7 +101,7 @@ func (s *Set) Add(e Entry) {
 		}
 	case KindPrefix:
 		if p, err := netip.ParsePrefix(strings.TrimSpace(e.Value)); err == nil {
-			s.prefixes = append(s.prefixes, prefixEntry{p.Masked(), src})
+			s.addPrefix(p, src)
 		}
 	case KindFingerprint:
 		if f := NormalizeFingerprint(e.Value); f != "" {
@@ -111,6 +120,15 @@ func (s *Set) Add(e Entry) {
 	}
 }
 
+// addPrefix stores a CIDR; an IPv4-in-IPv6 prefix (::ffff:a.b.c.d/n, n >= 96) becomes the IPv4 prefix,
+// because matching always unmaps the address first.
+func (s *Set) addPrefix(p netip.Prefix, src string) {
+	if p.Addr().Is4In6() && p.Bits() >= 96 {
+		p = netip.PrefixFrom(p.Addr().Unmap(), p.Bits()-96)
+	}
+	s.prefixes = append(s.prefixes, prefixEntry{p.Masked(), src})
+}
+
 func setOnce[K comparable](m map[K]string, k K, v string) {
 	if _, ok := m[k]; !ok {
 		m[k] = v
@@ -119,13 +137,13 @@ func setOnce[K comparable](m map[K]string, k K, v string) {
 
 // Empty reports whether the set holds nothing.
 func (s Set) Empty() bool {
-	return len(s.hosts)+len(s.fps)+len(s.machines)+len(s.addrs)+len(s.prefixes) == 0
+	return len(s.hosts) == 0 && len(s.fps) == 0 && len(s.machines) == 0 && len(s.addrs) == 0 && len(s.prefixes) == 0
 }
 
 // Match reports whether any identity of f is in the set.
 func (s Set) Match(f Facts) Result {
 	for _, a := range f.Addrs {
-		if r := s.matchAddr(a.Unmap()); r.Matched {
+		if r := s.matchAddr(a.WithZone("").Unmap()); r.Matched {
 			return r
 		}
 	}
@@ -136,15 +154,15 @@ func (s Set) Match(f Facts) Result {
 	}
 	for _, fp := range f.Fingerprints {
 		if src, ok := s.fps[NormalizeFingerprint(fp)]; ok && NormalizeFingerprint(fp) != "" {
-			return Result{true, src, KindFingerprint}
+			return Result{Matched: true, Source: src, Kind: KindFingerprint}
 		}
 	}
 	for _, m := range f.MachineIDs {
 		if src, ok := s.machines[NormalizeMachineID(m)]; ok && NormalizeMachineID(m) != "" {
-			return Result{true, src, KindMachineID}
+			return Result{Matched: true, Source: src, Kind: KindMachineID}
 		}
 	}
-	return Result{}
+	return Result{Partial: f.Partial}
 }
 
 // MatchHost checks one host string in any spelling.
@@ -157,18 +175,18 @@ func (s Set) MatchHost(raw string) Result {
 		return s.matchAddr(a)
 	}
 	if src, ok := s.hosts[h]; ok {
-		return Result{true, src, KindHost}
+		return Result{Matched: true, Source: src, Kind: KindHost}
 	}
 	return Result{}
 }
 
 func (s Set) matchAddr(a netip.Addr) Result {
 	if src, ok := s.addrs[a]; ok {
-		return Result{true, src, KindAddress}
+		return Result{Matched: true, Source: src, Kind: KindAddress}
 	}
 	for _, p := range s.prefixes {
 		if p.p.Contains(a) {
-			return Result{true, p.source, KindPrefix}
+			return Result{Matched: true, Source: p.source, Kind: KindPrefix}
 		}
 	}
 	return Result{}

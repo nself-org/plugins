@@ -58,7 +58,7 @@ func sideEffectIsRead(out []byte) bool {
 	if !ok {
 		return false
 	}
-	found, bad := 0, 0
+	found, bad := 0, false
 	var walk func(v any)
 	walk = func(v any) {
 		switch t := v.(type) {
@@ -66,7 +66,7 @@ func sideEffectIsRead(out []byte) bool {
 			if p, _ := t["path"].(string); strings.Join(strings.Fields(p), " ") == "deploy targets" {
 				found++
 				if se, _ := t["side_effect"].(string); se != "read" {
-					bad++
+					bad = true
 				}
 			}
 			for _, c := range t {
@@ -79,7 +79,7 @@ func sideEffectIsRead(out []byte) bool {
 		}
 	}
 	walk(doc["data"])
-	return found > 0 && bad == 0
+	return found > 0 && !bad
 }
 
 type targetsDoc struct {

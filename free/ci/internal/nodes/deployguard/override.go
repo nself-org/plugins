@@ -31,11 +31,8 @@ func TerminalConfirm(in io.Reader, out io.Writer, tty bool) Confirmer {
 			return false, newErr(ReasonNoTTY, "--allow-deploy-host needs an interactive terminal to confirm")
 		}
 		_, _ = fmt.Fprintf(out, "%s\nType the node id (%s) to continue: ", prompt, want)
-		line, err := bufio.NewReader(in).ReadString('\n')
-		if err != nil && line == "" {
-			return false, nil
-		}
-		return strings.TrimSpace(line) == want, nil
+		line, _ := bufio.NewReader(in).ReadString('\n')
+		return want != "" && strings.TrimSpace(line) == want, nil
 	}
 }
 
@@ -50,7 +47,8 @@ type AddRequest struct {
 }
 
 // CheckAdd refreshes the set, matches the node and applies the override rules. The returned warnings are
-// for the operator (a failed refresh or lookup); they never block.
+// for the operator (a failed refresh or lookup); an unmatched node is refused only when a source has never
+// been read at all (unverified).
 func (g *Guard) CheckAdd(ctx context.Context, q AddRequest) (Result, []string, error) {
 	var warn []string
 	if err := g.Refresh(ctx); err != nil {
@@ -67,8 +65,11 @@ func (g *Guard) CheckAdd(ctx context.Context, q AddRequest) (Result, []string, e
 	}
 	r, w, err := g.Match(ctx, id)
 	warn = append(warn, w...)
-	if err != nil || !r.Matched {
+	if err != nil {
 		return r, warn, err
+	}
+	if !r.Matched {
+		return r, warn, g.unverified(ctx)
 	}
 	dh := DeployHostFor(r, model.CapabilityDeployHost{})
 	if q.Allow {
@@ -96,4 +97,20 @@ func (g *Guard) CheckAdd(ctx context.Context, q AddRequest) (Result, []string, e
 		q.Capability.DeployHost = dh
 	}
 	return r, warn, nil
+}
+
+// unverified refuses an unmatched add while some source has never been read successfully: with no cached
+// entries for it, "no match" proves nothing. Fix the source (nself on PATH, the config file, the project
+// root) and retry; a source that worked once keeps its cached entries and does not block.
+func (g *Guard) unverified(ctx context.Context) error {
+	states, err := g.Store.ExclusionStates(ctx)
+	if err != nil {
+		return err
+	}
+	for _, st := range states {
+		if !st.OK && st.LastOKAt == 0 {
+			return newErr(ReasonInventory, "deploy hosts cannot be verified: %s has never been read (%s); node was not added", st.Root, st.Error)
+		}
+	}
+	return nil
 }

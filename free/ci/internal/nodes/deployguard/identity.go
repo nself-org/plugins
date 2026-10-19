@@ -68,12 +68,22 @@ func (r Resolver) Facts(ctx context.Context, id Identity) (Facts, []string) {
 	if _, literal := parseAddr(bareHost(id.Dest)); id.Dest != "" && !literal && r.SSH != nil {
 		if res, err := r.SSH(ctx, id.Dest); err != nil {
 			warn = append(warn, "ssh -G could not resolve "+Canon(id.Dest))
+			f.Partial = true
 		} else {
+			// ssh answered: the alias itself need not be a DNS name, and the HostKeyAlias and jump hops are
+			// extra names, so only the resolved hostname must have an address for the evidence to be complete.
+			if Canon(res.Hostname) != Canon(id.Dest) {
+				quiet[Canon(id.Dest)] = true
+			}
 			name(res.Hostname)
-			name(res.HostKeyAlias)
+			quietName := func(n string) {
+				name(n)
+				quiet[Canon(n)] = true
+			}
+			quietName(res.HostKeyAlias)
 			for _, hop := range strings.Split(res.ProxyJump, ",") {
 				if hop = strings.TrimSpace(hop); hop != "" && !strings.EqualFold(hop, "none") {
-					name(hop)
+					quietName(hop)
 				}
 			}
 		}
@@ -92,11 +102,12 @@ func (r Resolver) Facts(ctx context.Context, id Identity) (Facts, []string) {
 		if err != nil {
 			if !quiet[n] {
 				warn = append(warn, "no address for "+n)
+				f.Partial = true
 			}
 			continue
 		}
 		for _, a := range addrs {
-			f.Addrs = append(f.Addrs, a.Unmap())
+			f.Addrs = append(f.Addrs, a.WithZone("").Unmap())
 		}
 	}
 	f.Fingerprints = append(f.Fingerprints, id.Fingerprints...)
