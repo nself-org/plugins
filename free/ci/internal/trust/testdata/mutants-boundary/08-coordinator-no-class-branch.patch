@@ -1,0 +1,11 @@
+--- a/internal/trust/prodboundary.go
++++ b/internal/trust/prodboundary.go
+@@ -51,7 +51,7 @@
+ 	if DecodeCoordinatorMode(string(d.CoordinatorMode)) == Team {
+ 		return true
+ 	}
+-	return !ownTrust(job.Trust)
++	return false
+ }
+ 
+ // RequiresAudit is true for every placement on an overridden deploy host: the placement is admitted only

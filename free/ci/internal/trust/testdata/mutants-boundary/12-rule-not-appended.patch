@@ -1,0 +1,11 @@
+--- a/internal/trust/prodboundary.go
++++ b/internal/trust/prodboundary.go
+@@ -12,7 +12,7 @@
+ 
+ import "github.com/nself-org/plugins/free/ci/internal/model"
+ 
+-func init() { AdmissionRules = append(AdmissionRules, admitBoundary) }
++func init() {}
+ 
+ // boundaryFloor is the isolation both the overridden deploy host and the coordinator host need.
+ const boundaryFloor model.Isolation = "vm"

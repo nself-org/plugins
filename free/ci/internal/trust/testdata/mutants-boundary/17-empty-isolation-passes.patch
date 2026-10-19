@@ -1,0 +1,10 @@
+--- a/internal/trust/prodboundary.go
++++ b/internal/trust/prodboundary.go
+@@ -22,5 +22,8 @@
+ // value ranks -1, so it counts as below.
+ func belowFloor(i model.Isolation) bool {
++	if i == "" {
++		return false
++	}
+ 	return RankIsolation(i) < RankIsolation(boundaryFloor)
+ }

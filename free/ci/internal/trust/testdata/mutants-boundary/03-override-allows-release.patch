@@ -1,0 +1,11 @@
+--- a/internal/trust/prodboundary.go
++++ b/internal/trust/prodboundary.go
+@@ -34,7 +34,7 @@
+ 	if d.DeployHost.Matched {
+ 		if !d.DeployHost.Override {
+ 			out = append(out, BoundaryDeployHost)
+-		} else if !ownTrust(job.Trust) || belowFloor(d.Isolation) || releaseSecret(job.SecretClasses) {
++		} else if !ownTrust(job.Trust) || belowFloor(d.Isolation) {
+ 			out = append(out, BoundaryOverrideMinimum)
+ 		}
+ 	}

@@ -1,0 +1,11 @@
+--- a/internal/trust/prodboundary.go
++++ b/internal/trust/prodboundary.go
+@@ -48,7 +48,7 @@
+ // (collaborator or untrusted). A personal coordinator keeps its operator's owner and internal jobs at their
+ // normal minimums.
+ func coordinatorFloorApplies(job JobFacts, d Declaration) bool {
+-	if DecodeCoordinatorMode(string(d.CoordinatorMode)) == Team {
++	if d.CoordinatorMode == Team {
+ 		return true
+ 	}
+ 	return !ownTrust(job.Trust)
