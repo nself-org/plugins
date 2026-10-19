@@ -139,10 +139,17 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	spec := rs.spec(ctx, pj, setup.job, id)
 	spec.Mounts = setup.mounts
 	var t tail
+	var full *outputBuffer // everything the attempt prints, kept only for jobs an OutcomeHook asks about
+	if rs.wantsOutput(setup.job) {
+		full = &outputBuffer{}
+	}
 	lg := rs.openLog(ctx, info)
 	spec.Output = func(b []byte) {
 		t.write(b)
 		writeLog(lg, b)
+		if full != nil {
+			full.write(b)
+		}
 		if rs.c.Opts.Stream {
 			rs.render.Event(Event{Type: "log", Job: pj.ID, Text: string(b)})
 		}
@@ -155,6 +162,7 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 		return rs.c.exec.Run(ctx, spec)
 	}()
 	o.Duration, o.ExitCode, o.Tail = res.Finished.Sub(res.Started), res.ExitCode, t.String()
+	rs.judge(ctx, info, full, &res, &o)
 	oc := Outcome{State: res.Attempt.State, FailureClass: res.Attempt.FailureClass, ExitCode: res.ExitCode}
 	defer func() {
 		if rs.hooks.Cache != nil {

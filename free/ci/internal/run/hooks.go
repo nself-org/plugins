@@ -197,6 +197,7 @@ type Hooks struct {
 	Logs          LogHook // stores each attempt's redacted output (P7-CI-39)
 	AttemptStarts []AttemptStartHook
 	AfterRuns     []AfterRunHook
+	Outcomes      []OutcomeHook
 }
 
 // Registered is the registry other packages write from init().
@@ -266,6 +267,7 @@ func (h Hooks) Resolved() Hooks {
 	out.Finalizers = append(append([]Finalizer(nil), h.Finalizers...), r.Finalizers...)
 	out.AttemptStarts = append(append([]AttemptStartHook(nil), h.AttemptStarts...), r.AttemptStarts...)
 	out.AfterRuns = append(append([]AfterRunHook(nil), h.AfterRuns...), r.AfterRuns...)
+	out.Outcomes = append(append([]OutcomeHook(nil), h.Outcomes...), r.Outcomes...)
 	sort.SliceStable(out.Finalizers, func(i, j int) bool { return out.Finalizers[i].Name() < out.Finalizers[j].Name() })
 	return out
 }

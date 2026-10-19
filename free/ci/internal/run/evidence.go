@@ -71,6 +71,10 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 		if o.State == StateFailed || o.Code != "" {
 			c.Excerpt = clip(o.Tail, maxExcerpt) // the tail already passed the exec funnel's redactor (D-0948, P7-TRUST-19)
 		}
+		c.Findings = o.Findings
+		if o.Excerpt != "" {
+			c.Excerpt = clip(o.Excerpt, maxExcerpt) // built from redacted output by an OutcomeHook
+		}
 		e.Checks = append(e.Checks, c)
 		switch c.Result {
 		case "pass":

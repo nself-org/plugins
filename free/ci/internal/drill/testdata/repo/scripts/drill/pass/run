@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fixture drill: prints its evidence.json on stdout and exits 0.
+echo "drill pass starting" >&2
+cat "$(dirname "$0")/evidence.json"
