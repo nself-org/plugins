@@ -33,9 +33,6 @@ var credEnv = map[string]string{
 	"gitlab-runner-token": "CI_SERVER_TOKEN",
 }
 
-// execve replaces the process; tests swap it.
-var execve = syscall.Exec
-
 func init() {
 	must(RegisterSubcommand("cred-wrapper", "start a runner command with a credential read from stdin", runCredWrapper))
 }
@@ -62,7 +59,7 @@ func runCredWrapper(ctx context.Context, args []string, sio IO) int {
 		return 1
 	}
 	env = append(env, credEnv[args[0]]+"="+string(line))
-	err = execve(path, args[2:], env)
+	err = syscall.Exec(path, args[2:], env) // the process becomes the runner command; only returns on failure
 	fmt.Fprintln(sio.Stderr, "error: exec:", err)
 	return 1
 }
