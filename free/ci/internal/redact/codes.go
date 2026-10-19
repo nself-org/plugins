@@ -37,3 +37,4 @@ func errTooShort() error {
 func errTooLong() error {
 	return &Error{Code: "E680", Message: "value is longer than the 128 KiB maximum; it was not registered"}
 }
+// probe: CI fan-out measurement, not for merge
