@@ -27,6 +27,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
 // admitTimeout bounds one admission transaction (steps included).
@@ -106,6 +107,9 @@ func Admit(ctx context.Context, st *store.Store, r Request) (Admitted, error) {
 		stored = append(stored, func(ctx context.Context, v store.AdmitView) error {
 			return n.step(ctx, View{AdmitView: v, Request: r})
 		})
+	}
+	if trust.RequiresAudit(r.Runner.Decl) {
+		stored = append(stored, deployHostAudit(r))
 	}
 	// The transaction holds the store's one writer: a step that blocks on it would
 	// wedge every write of the process, so the whole admission is bounded.
