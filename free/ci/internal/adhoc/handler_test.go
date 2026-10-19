@@ -18,6 +18,7 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 const fakeSHA = "0123456789abcdef0123456789abcdef01234567"
@@ -288,5 +289,40 @@ func TestInvalidClassifierVerdictRunsNothing(t *testing.T) {
 	}
 	if _, serr := os.Stat(marker); serr == nil {
 		t.Fatal("the command ran")
+	}
+}
+
+// D-1135: the run row must carry the class the operator asked for, not the owner
+// class the coordinator's stand-in classifier answers with. The run stops at the
+// isolation hook; the row is written before it.
+func TestPersistedSourceTrustIsTheRequestedClass(t *testing.T) {
+	for _, tc := range []struct{ trust, want string }{
+		{"collaborator", "collaborator"},
+		{"untrusted", "untrusted"},
+		{"", "owner"},
+	} {
+		t.Run("trust="+tc.trust, func(t *testing.T) {
+			r := newHandlerRig(t, Flags{Trust: tc.trust})
+			r.h.Select = has("container", "sandboxed-container")
+			r.h.Hooks.Isolation = failIsolation{}
+			r.h.Hooks.Image = alpineStub{}
+			r.opts.Adhoc = []string{"true"}
+			_, err := r.h.Adhoc(context.Background(), r.opts, r.opts.Adhoc)
+			if !strings.Contains(r.out.String()+errString(err), "test isolation stops") {
+				t.Fatalf("the run did not reach the isolation hook: %v\n%s", err, r.out)
+			}
+			st, err := store.Open(filepath.Join(r.home, "state.db"), store.Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = st.Close() }()
+			rows, err := st.PipelinesByRevision(context.Background(), fakeSHA)
+			if err != nil || len(rows) != 1 {
+				t.Fatalf("rows %v err %v", rows, err)
+			}
+			if rows[0].SourceTrust != tc.want {
+				t.Fatalf("pipeline.source_trust = %q, want %q", rows[0].SourceTrust, tc.want)
+			}
+		})
 	}
 }

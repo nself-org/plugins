@@ -115,13 +115,14 @@ func (h *Handler) Adhoc(ctx context.Context, o cirun.Options, argv []string) (in
 	// coordinator's own check refuses any class but owner/internal (it runs jobs as
 	// the operator) and a nil hook is refilled from the registered one, so it gets a
 	// classifier that says owner: the operator typed this argv. The requested class
-	// still reaches the evidence (source_trust) through evidenceStamp.
+	// still reaches the run row and the evidence (source_trust) through
+	// Coordinator.SourceTrust and evidenceStamp.
 	hooks.Trust = operatorTyped{}
 	hooks.Isolation = &isolator{inner: base.Isolation, mode: mode, scratch: scratch, net: net}
 	hooks.Evidence = evidenceStamp{inner: base.Evidence, mode: mode, argv: Recorded(cirun.Redactions, argv), image: image}
 	co := o
 	co.Adhoc, co.Trust, co.Container, co.Network, co.Job, co.Pipeline = nil, "", false, "", JobName, ""
-	c := &cirun.Coordinator{Opts: co, Hooks: hooks, Plan: pl, ConfigDigest: "builtin-defaults", Out: or(h.Stdout, os.Stdout), Capture: h.Git}
+	c := &cirun.Coordinator{Opts: co, Hooks: hooks, Plan: pl, ConfigDigest: "builtin-defaults", SourceTrust: string(trust), Out: or(h.Stdout, os.Stdout), Capture: h.Git}
 	if h.Tune != nil {
 		h.Tune(c)
 	}

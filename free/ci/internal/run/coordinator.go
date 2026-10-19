@@ -50,6 +50,12 @@ type Coordinator struct {
 	Capacity  func() ciexec.Capacity
 	Admission ciexec.AdmissionPolicy
 	Poll      time.Duration
+	// SourceTrust, when set, replaces the classifier's verdict as the class stored
+	// on the pipeline row and on the evidence. A caller that classified the source
+	// itself (the ad-hoc handler, which runs behind a stand-in classifier that
+	// always answers owner) sets the class it enforced. The classifier's own gate
+	// (owner or internal only) still runs first.
+	SourceTrust string
 
 	exec *ciexec.Executor
 }
@@ -177,6 +183,9 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	source, err := c.classify(ctx, h, rev)
 	if err != nil {
 		return Result{}, err
+	}
+	if c.SourceTrust != "" {
+		source = c.SourceTrust
 	}
 	pol, err := c.policy(ctx, h)
 	if err != nil {
