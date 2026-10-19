@@ -1,0 +1,151 @@
+//go:build linux
+
+package hygiene
+
+import (
+	"bufio"
+	"context"
+	"os"
+	osexec "os/exec"
+	"path/filepath"
+	"strconv"
+	"syscall"
+	"testing"
+	"time"
+)
+
+// startListener starts the test binary as a session leader that listens on a TCP port and carries the
+// attempt tag, like a job child that called setsid and left its process group.
+func startListener(attempt string) (cmd *osexec.Cmd, port int, err error) {
+	cmd = osexec.Command(os.Args[0], "-test.run=NoSuchTest")
+	cmd.Env = append(os.Environ(), "HYGIENE_HELPER=listen", "NSELF_CI_EXEC_ATTEMPT="+attempt)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, 0, err
+	}
+	line, err := bufio.NewReader(out).ReadString('\n')
+	if err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, 0, err
+	}
+	port, err = strconv.Atoi(line[:len(line)-1])
+	if err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, 0, err
+	}
+	return cmd, port, nil
+}
+
+func daemonise(t *testing.T, attempt string) (pid, port int, cmd *osexec.Cmd) {
+	t.Helper()
+	cmd, port, err := startListener(attempt)
+	if err != nil {
+		t.Fatalf("helper did not start: %v", err)
+	}
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	return cmd.Process.Pid, port, cmd
+}
+
+// plantProcess lets TestInvariant_I08 leave a daemonised, listening process for the attempt.
+func plantProcess(attempt string) (reap func(), err error) {
+	cmd, _, err := startListener(attempt)
+	if err != nil {
+		return nil, err
+	}
+	return func() { _ = cmd.Wait() }, nil
+}
+
+func init() { leftoverProcess = plantProcess }
+
+func alive(cmd *osexec.Cmd) bool {
+	done := make(chan struct{})
+	go func() { _ = cmd.Wait(); close(done) }()
+	select {
+	case <-done:
+		return false
+	case <-time.After(300 * time.Millisecond):
+		return true
+	}
+}
+
+// TestCleanupKillsDaemonisedChildAndKeepsHome is the Epic acceptance for process-level jobs: a job
+// that daemonises a child, leaves a listening socket, writes files in its scratch and a symlink to
+// $HOME is fully cleaned, and $HOME is untouched.
+func TestCleanupKillsDaemonisedChildAndKeepsHome(t *testing.T) {
+	h, _ := testHost(t)
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, "profile"), []byte("mine"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := seedRoot(t, h, "daemon1")
+	if err := os.MkdirAll(filepath.Join(root, "tmp"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "tmp", "scratch"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(home, filepath.Join(root, "home")); err != nil {
+		t.Fatal(err)
+	}
+	_, port, child := daemonise(t, "daemon1")
+	_, _, bystander := daemonise(t, "someone-else")
+
+	rep, err := h.LeakCheck(context.Background(), "daemon1", 0)
+	if codeOf(err) != CodeLeak || !hasKind(rep, LeakProcess) || !hasKind(rep, LeakSocket) || !hasKind(rep, LeakRoot) {
+		t.Fatalf("before cleanup the leak must show process, socket and root: %v %+v (port %d)", err, rep, port)
+	}
+	if err := h.Cleanup(context.Background(), "daemon1"); err != nil {
+		t.Fatal(err)
+	}
+	if alive(child) {
+		t.Fatal("the daemonised child survived cleanup")
+	}
+	if rep, err := h.LeakCheck(context.Background(), "daemon1", 0); err != nil || !rep.Clean() {
+		t.Fatalf("after cleanup: %v %+v", err, rep)
+	}
+	if b, err := os.ReadFile(filepath.Join(home, "profile")); err != nil || string(b) != "mine" {
+		t.Fatalf("$HOME content was touched: %v %q", err, b)
+	}
+	if syscall.Kill(bystander.Process.Pid, 0) != nil {
+		t.Fatal("cleanup killed a process of another attempt")
+	}
+}
+
+func TestLeakCheckByJobUIDFindsOnlyThatUID(t *testing.T) {
+	h, _ := testHost(t)
+	_, _, _ = daemonise(t, "uid-attempt")
+	// the helper runs under this test's own UID: a scan for another UID must not match it
+	rep, err := h.LeakCheck(context.Background(), "uid-clean", 4242424)
+	if err != nil || !rep.Clean() {
+		t.Fatalf("a different job uid matched: %v %+v", err, rep)
+	}
+	// the caller's own UID is never a job UID: it would match the operator's whole session, so the
+	// check falls back to the attempt tag and an unrelated own-UID process is not a leak
+	rep, err = h.LeakCheck(context.Background(), "uid-clean", os.Geteuid())
+	if err != nil || !rep.Clean() {
+		t.Fatalf("own uid must not scan by uid: %v %+v", err, rep)
+	}
+}
+
+// TestCleanupJobNeverKillsTheCallersOwnProcesses is the regression for CleanupJob(attempt, euid)
+// (the owner-exception UID): it must kill by attempt tag only, never every process of the caller.
+func TestCleanupJobNeverKillsTheCallersOwnProcesses(t *testing.T) {
+	h, _ := testHost(t)
+	_, _, bystander := daemonise(t, "someone-else")
+	_, _, mine := daemonise(t, "att-own")
+	if err := h.CleanupJob(context.Background(), "att-own", os.Geteuid()); err != nil {
+		t.Fatal(err)
+	}
+	if alive(mine) {
+		t.Fatal("the attempt's own process survived")
+	}
+	if syscall.Kill(bystander.Process.Pid, 0) != nil {
+		t.Fatal("cleanup with the caller's UID killed an unrelated process of the same user")
+	}
+}

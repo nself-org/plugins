@@ -1,0 +1,11 @@
+--- a/internal/authz/access.go
++++ b/internal/authz/access.go
+@@ -122,7 +122,7 @@
+ 		return &Denied{Reason: ReasonCapability, Detail: "attempt does not hold the write capability"}
+ 	case job.Capability.Epoch != current.Epoch:
+ 		return &Denied{Reason: ReasonEpoch, Detail: "lease epoch moved on"}
+-	case job.State != StateFinalizing:
++	case false:
+ 		return &Denied{Reason: ReasonState, Detail: "attempt is not finalizing"}
+ 	case !job.Passed:
+ 		return &Denied{Reason: ReasonResult, Detail: "attempt has no recorded pass"}

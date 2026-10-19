@@ -35,3 +35,14 @@ func (defaultResolver) Resolve(context.Context, PolicyRequest) (PolicyResult, er
 	sum := sha256.Sum256(b)
 	return PolicyResult{Digest: hex.EncodeToString(sum[:])}, nil
 }
+
+// ResolvePolicy resolves the effective policy the way a run does: the
+// registered resolver, else the built-in defaults (`ci evidence verify` uses
+// it to refuse evidence recorded under another policy).
+func ResolvePolicy(ctx context.Context, root, pipeline string) (PolicyResult, error) {
+	var r PolicyResolver = defaultResolver{}
+	if p := Registered.Policy; p != nil {
+		r = p
+	}
+	return r.Resolve(ctx, PolicyRequest{Root: root, Pipeline: pipeline})
+}

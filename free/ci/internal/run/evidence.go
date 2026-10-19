@@ -10,6 +10,7 @@ package run
 // dirty or there is no commit; excerpts are bounded; no secret is read.
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -19,6 +20,8 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
+
+const maxExcerpt = 2000
 
 // evidenceInput gathers what BuildEvidence needs.
 type evidenceInput struct {
@@ -45,8 +48,6 @@ func checkResult(o JobOutcome) model.CheckResult {
 	}
 }
 
-const maxExcerpt = 2000
-
 // BuildEvidence assembles the ci.evidence/v1 document of a run.
 func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 	sort.Slice(in.Jobs, func(i, j int) bool { return in.Jobs[i].ID < in.Jobs[j].ID })
@@ -68,7 +69,7 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 		c := model.Check{ID: firstNonEmpty(o.Check, o.ID), JobID: o.ID, Kind: string(o.Kind), Tool: o.Tool, Required: o.Required,
 			Substantive: o.Substantive, AllowFailure: o.AllowFailure, Result: checkResult(o), Reason: o.Reason, FailureClass: o.FailureClass}
 		if o.State == StateFailed || o.Code != "" {
-			c.Excerpt = clip(o.Tail, maxExcerpt)
+			c.Excerpt = clip(o.Tail, maxExcerpt) // the tail already passed the exec funnel's redactor (D-0948, P7-TRUST-19)
 		}
 		e.Checks = append(e.Checks, c)
 		switch c.Result {
@@ -98,17 +99,30 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 	started, finished := in.Start.UTC().Format(time.RFC3339), in.End.UTC().Format(time.RFC3339)
 	ms := in.End.Sub(in.Start).Milliseconds()
 	e.Timings = model.Timings{QueuedAt: &started, StartedAt: &started, FinishedAt: &finished, DurationMS: &ms}
+	digest, err := evidenceDigest(e)
+	return e, digest, err
+}
+
+// evidenceDigest is the sha256 of the document as it is stored.
+func evidenceDigest(e model.Evidence) (string, error) {
 	body, err := json.Marshal(e)
 	if err != nil {
-		return e, "", err
+		return "", err
 	}
 	sum := sha256.Sum256(body)
-	return e, hex.EncodeToString(sum[:]), nil
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func shortDigest(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:8])
+}
+
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[len(s)-n:]
 }
 
 func firstNonEmpty(a, b string) string {
@@ -118,9 +132,11 @@ func firstNonEmpty(a, b string) string {
 	return b
 }
 
-func clip(s string, n int) string {
-	if len(s) <= n {
-		return s
+// beginEvidence reads the inputs and the binding before any job can change
+// them. A nil builder or a panicking one yields nil (no evidence document).
+func (c *Coordinator) beginEvidence(ctx context.Context, h Hooks, rev Revision) (begin any) {
+	if h.Evidence != nil {
+		_ = guard("evidence builder", func() error { begin = h.Evidence.Begin(ctx, c.Opts.Root, rev, c.capture()); return nil })
 	}
-	return s[len(s)-n:]
+	return begin
 }

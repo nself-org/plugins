@@ -16,6 +16,7 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/report"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // Mount is a host path made visible to a job (cache restore).
@@ -27,6 +28,8 @@ type AttemptInfo struct {
 	N                                          int
 	Job                                        model.Job
 	IdempotencyKey                             string
+	// Home is the run's state directory as given in Options ("" = NSELF_CI_HOME or ~/.nself/ci).
+	Home string
 }
 
 // Outcome is how an attempt ended.
@@ -157,6 +160,26 @@ type Publisher interface {
 	Publish(ctx context.Context, r PublishRequest) (report.Status, error)
 }
 
+// EvidenceFacts is what an EvidenceBuilder sees of a finished run.
+type EvidenceFacts struct {
+	Root, RunID string
+	Rev         Revision
+	Store       *store.Store
+	Git         Capture // runs git through the exec funnel
+	Jobs        []JobOutcome
+	Job         string // --job: only that job (and what it needs) ran
+}
+
+// EvidenceBuilder completes the run evidence (P7-CI-38). Begin runs before any
+// job starts and returns a token (the input digests and the binding as the run
+// began); Complete receives that token with the base document and returns the
+// final one. A Complete error leaves the base document, which carries no input
+// digests and so never reads as current.
+type EvidenceBuilder interface {
+	Begin(ctx context.Context, root string, rev Revision, git Capture) any
+	Complete(ctx context.Context, begin any, f EvidenceFacts, ev model.Evidence) (model.Evidence, error)
+}
+
 // Hooks is a snapshot of every hook. A nil field means "no-op default".
 type Hooks struct {
 	Remote        []RemoteResolver
@@ -170,6 +193,7 @@ type Hooks struct {
 	Publisher     Publisher
 	Isolation     ciexec.Isolator
 	NewRedactor   func() ciexec.Redactor // fresh per-attempt state; every output chunk passes it (P7-TRUST-19)
+	Evidence      EvidenceBuilder
 	AttemptStarts []AttemptStartHook
 	AfterRuns     []AfterRunHook
 }
@@ -189,6 +213,7 @@ func RegisterAdhoc(a AdhocHandler)        { Registered.Adhoc = a }
 func RegisterImage(i ContainerImageHook)  { Registered.Image = i }
 func RegisterPublisher(p Publisher)       { Registered.Publisher = p }
 func RegisterIsolation(i ciexec.Isolator) { Registered.Isolation = i }
+func RegisterEvidence(b EvidenceBuilder)  { Registered.Evidence = b }
 func RegisterAttemptStart(h AttemptStartHook) {
 	Registered.AttemptStarts = append(Registered.AttemptStarts, h)
 }
@@ -228,6 +253,9 @@ func (h Hooks) Resolved() Hooks {
 	}
 	if out.NewRedactor == nil {
 		out.NewRedactor = r.NewRedactor
+	}
+	if out.Evidence == nil {
+		out.Evidence = r.Evidence
 	}
 	out.Remote = append(append([]RemoteResolver(nil), h.Remote...), r.Remote...)
 	out.Finalizers = append(append([]Finalizer(nil), h.Finalizers...), r.Finalizers...)

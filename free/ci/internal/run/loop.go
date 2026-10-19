@@ -26,6 +26,7 @@ type runState struct {
 	pl     *plan.Plan
 	mp     *model.Pipeline
 	rev    Revision
+	begin  any               // the evidence builder's start state (read before any job runs)
 	rows   map[string]string // planned job id -> job row id
 	subst  func(plan.PlannedJob) bool
 	render Renderer
