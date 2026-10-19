@@ -27,7 +27,10 @@ type JobSpec struct {
 	Network                  model.NetworkScope
 	CPU                      float64
 	MemoryMB                 int
-	Output                   func([]byte)
+	// MemoryLimitMB caps a process job's writable memory (RLIMIT_DATA on Linux). Zero means no cap:
+	// MemoryMB alone is a reservation, enforced by container isolation, never by RLIMIT_AS.
+	MemoryLimitMB int
+	Output        func([]byte)
 	// Slot is the execution slot the attempt holds; isolation profiles derive the job UID from it.
 	Slot int
 	// Plan, when an Isolator sets it, builds the container command instead of the baseline flags.
