@@ -17,11 +17,12 @@ func TestAutoSignatures(t *testing.T) {
 		want model.FailureClass
 		sig  string
 	}{
-		{"npm registry timeout", Input{ExecClass: "code", ExitCode: 1, Tail: "npm ERR! code ETIMEDOUT\nnpm ERR! network This is a problem related to network connectivity.\n"}, "infra", SigNetwork},
-		{"connection reset by peer", Input{ExecClass: "code", ExitCode: 56, Tail: "curl: (56) Recv failure: Connection reset by peer\n"}, "infra", SigNetwork},
-		{"tls handshake timeout", Input{ExecClass: "code", ExitCode: 1, Tail: "Get \"https://registry.example/v2/\": net/http: TLS handshake timeout\n"}, "infra", SigNetwork},
-		{"executor error carries it", Input{ExecClass: "infra", ExitCode: -1, Err: "read tcp 10.0.0.2:5->10.0.0.9:443: i/o timeout"}, "infra", SigNetwork},
-		{"pnpm fetch", Input{ExecClass: "code", ExitCode: 1, Tail: " ERR_PNPM_META_FETCH_FAIL  GET https://registry.example/x: ECONNRESET\n"}, "infra", SigNetwork},
+		{"go module proxy timeout", Input{ExecClass: "code", ExitCode: 1, Tail: "go: github.com/x/y@v1.0.0: Get \"https://proxy.golang.org/github.com/x/y/@v/v1.0.0.mod\": dial tcp 142.250.1.1:443: i/o timeout\n"}, "infra", SigNetwork},
+		{"git cannot reach github", Input{ExecClass: "code", ExitCode: 128, Tail: "fatal: unable to access 'https://github.com/org/repo.git/': Connection timed out after 300001 milliseconds\n"}, "infra", SigNetwork},
+		{"tls handshake to the docker registry", Input{ExecClass: "code", ExitCode: 1, Tail: "Get \"https://registry-1.docker.io/v2/\": net/http: TLS handshake timeout\n"}, "infra", SigNetwork},
+		{"executor error carries it", Input{ExecClass: "infra", ExitCode: -1, Err: "Get \"https://proxy.golang.org/x\": read tcp 10.0.0.2:5->10.0.0.9:443: i/o timeout"}, "infra", SigNetwork},
+		{"a test that curls its own server is code", Input{ExecClass: "code", ExitCode: 56, Tail: "curl: (56) Recv failure: Connection reset by peer\n"}, "code", SigCode},
+		{"a reset with no provider is code", Input{ExecClass: "code", ExitCode: 1, Tail: "read tcp 10.0.0.2:5->10.0.0.9:443: connection reset by peer\n"}, "code", SigCode},
 		{"enospc", Input{ExecClass: "code", ExitCode: 1, Tail: "npm ERR! code ENOSPC\n"}, "infra", SigDisk},
 		{"windows disk full", Input{ExecClass: "code", ExitCode: 1, Tail: "There is not enough space on the disk.\n"}, "infra", SigDisk},
 		{"refused on localhost is the project's setup", Input{ExecClass: "code", ExitCode: 1, Tail: "dial tcp 127.0.0.1:5432: connect: connection refused\n"}, "code", SigCode},

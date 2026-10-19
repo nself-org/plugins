@@ -1,187 +1,152 @@
 package gates
 
 // Purpose: gate preparation for the Node checks (P7-AUTO-16, cap:ci.gate-prep):
-// a frozen install per declared package manager, `astro sync` before the
-// type check and build of an Astro project, and the packageManager version pin.
-// Inputs:  the planned check, the package.json of its directory and the
-// lockfile found in that directory or an ancestor (a workspace member installs
-// at the workspace root).
-// Outputs: a nodeSpec, the shell argv that prepares then runs the check, and
-// the verdict on a failed prepare.
-// Constraints: every attempt runs in its own workspace copy, so prepare and
-// check share ONE invocation (the Python gates do the same); nothing installs
-// globally and the manager caches live inside the workspace (removed with it);
-// the install log is shown only when the install fails, so a passing install
-// never pushes the check's own output out of the excerpt; a lockfile that is
-// out of sync fails with the manager's own message as a code failure, while a
-// network, disk or missing-tool failure of the install is an infrastructure
-// error (E811, never `failure`); a project without a lockfile keeps the earlier
-// behaviour (no install), and POSIX shells only (Windows is out of scope, D-1029).
+// a frozen install per declared package manager, `astro sync` before the type
+// check and build of an Astro project, and the packageManager version pin.
+// Inputs:  detector facts (the manager of a directory, its lockfiles) at plan
+// time; package.json and the lockfile are read by the script when the job runs.
+// Outputs: the argv of a planned node check (PlannedCheck.Argv and .Tool, as the
+// Python checks do): `sh -c` of one script that prepares, then execs the check.
+// Constraints: every executor attempt runs in its own workspace copy, so the
+// prepare step and the check share ONE invocation; nothing installs globally and
+// the manager caches live inside the workspace (removed with it); an install runs
+// only when neither the working directory nor the lockfile directory has a
+// node_modules (a developer's installed tree is used as it is, and a copied
+// pnpm tree must never be reinstalled over without a TTY); a project without a
+// lockfile keeps the earlier behaviour (no install); the install log is shown
+// only when the install fails, as head, keyword lines and tail, followed by a
+// sentinel that diagnose.Classify turns into code or infrastructure; POSIX
+// shells only (Windows is out of scope, D-1029).
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"errors"
-	"io/fs"
-	"os"
 	"path"
-	"path/filepath"
-	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
-	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/detect"
 	"github.com/nself-org/plugins/free/ci/internal/diagnose"
-	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
-func init() {
-	model.Register(model.Code{ID: "E811", Class: "infra", Summary: "Node gate preparation could not run as declared", Fix: "Install the package manager version that package.json pins (corepack enable), or fix the network or disk, and retry"})
-}
+// nodeDirs maps each Node project directory to its package manager.
+type nodeDirs map[string]string
 
-const (
-	// nodePreparedMarker records the lockfile digest an install matched; a
-	// workspace whose marker equals the digest skips the install.
-	nodePreparedMarker = "node_modules/.nself-ci-prepared"
-	// prepareFailed is printed after the install log when the install failed.
-	prepareFailed = "::nself-ci-prepare-failed::"
-	// logTruncated is printed between the two ends of an install log over 200 KB.
-	logTruncated = "::nself-ci-log-truncated::"
-	prepareExit  = 97
-	installLog   = ".nself-ci-install.log"
-	// nodePrepareBudget is the time one invocation gets when it installs first
-	// (the default is 10 minutes for the check alone).
-	nodePrepareBudget = 20 * time.Minute
-)
-
-// nodeSpec is what preparation needs to know about one Node directory.
-type nodeSpec struct {
-	Manager, Pin string
-	// LockDir is the slash path (from the repo root) of the directory that
-	// holds the lockfile; "" means there is none and nothing is installed.
-	LockDir string
-	// Rel is the path from the working directory to LockDir ("." when equal).
-	Rel string
-	// Digest identifies the lockfile and manager; Prepared is true when the
-	// node_modules next to the lockfile already carries that digest.
-	Digest   string
-	Prepared bool
-	// Berry marks a Yarn 2+ lockfile (`yarn install --immutable`).
-	Berry bool
-	// Astro is true when package.json depends on astro.
-	Astro bool
-	// HasModules is true when a node_modules already sits in the working
-	// directory or next to the lockfile (an install this run does not redo).
-	HasModules bool
-}
-
-func nodeSpecFor(root string, p PlannedCheck) nodeSpec {
-	m, _ := readNodeManifest(root, p.Workdir)
-	s := nodeSpec{Rel: "."}
-	s.Manager, s.Pin = nodeManager(root, p.Workdir, m)
-	_, a1 := m.Dependencies["astro"]
-	_, a2 := m.DevDependencies["astro"]
-	s.Astro = a1 || a2
-	work := path.Clean(p.Workdir)
-	s.HasModules = hasDir(root, work, "node_modules")
-	for dir := work; ; dir = path.Dir(dir) {
-		for _, lock := range nodeLockfiles[s.Manager] {
-			b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(dir), lock))
-			if err != nil {
-				continue
+// nodeIndex finds the package manager of every Node directory from the facts:
+// its own packageManager or lockfile, else the nearest ancestor's, else npm.
+func nodeIndex(facts []detect.Fact) nodeDirs {
+	declared, locked, dirs := map[string]string{}, map[string][]string{}, nodeDirs{}
+	for _, f := range facts {
+		if f.Confidence != detect.Certain {
+			continue
+		}
+		switch {
+		case f.Kind == "stack" && f.Name == "node":
+			dirs[path.Dir(f.Path)] = ""
+		case f.Kind == "package_manager" && nodeLockfiles[f.Name] != nil:
+			declared[path.Dir(f.Path)] = f.Name
+		case f.Kind == "lockfile" && nodeLockfiles[f.Name] != nil:
+			locked[path.Dir(f.Path)] = append(locked[path.Dir(f.Path)], f.Name)
+		}
+	}
+	own := func(d string) string {
+		if m := declared[d]; m != "" {
+			return m
+		}
+		for _, pm := range nodeLockOrder {
+			for _, l := range locked[d] {
+				if l == pm {
+					return pm
+				}
 			}
-			sum := sha256.Sum256(append(append([]byte(s.Manager+"\x00"), b...), manifestsOf(root, dir)...))
-			s.LockDir, s.Digest = dir, hex.EncodeToString(sum[:])
-			s.Berry = s.Manager == "yarn" && strings.Contains(string(b), "__metadata:")
-			s.Rel = relUp(work, dir)
-			s.HasModules = hasDir(root, work, "node_modules") || hasDir(root, dir, "node_modules")
-			marker, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(dir), filepath.FromSlash(nodePreparedMarker)))
-			s.Prepared = strings.TrimSpace(string(marker)) == s.Digest
-			return s
 		}
-		if dir == "." || dir == "/" || dir == "" {
-			return s
+		return ""
+	}
+	for d := range dirs {
+		for a := d; ; a = path.Dir(a) {
+			if m := own(a); m != "" {
+				dirs[d] = m
+				break
+			}
+			if a == "." || a == "/" || a == "" {
+				dirs[d] = "npm"
+				break
+			}
 		}
+	}
+	return dirs
+}
+
+// mod sets the tool and argv of one planned node check.
+func (n nodeDirs) mod(dir, id string) func(*PlannedCheck) {
+	return func(p *PlannedCheck) {
+		pm := n[dir]
+		if pm == "" {
+			pm = "npm"
+		}
+		p.Tool, p.Argv = pm, nodeArgv(pm, id, dir)
 	}
 }
 
-// manifestsOf is every package.json and pnpm-workspace.yaml under dir (not
-// inside node_modules, .git or the CI scratch): the frozen install validates
-// the lockfile against all of them, so a member's edit must change the digest.
-// More than maxManifests files, or an unreadable tree, returns a changing
-// value, so the install is never skipped on a guess.
-func manifestsOf(root, dir string) []byte {
-	const maxManifests = 500
-	base := filepath.Join(root, filepath.FromSlash(dir))
-	var out []byte
-	n := 0
-	err := filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			case "node_modules", ".git", ".nself-ci":
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if name := d.Name(); name == "package.json" || name == "pnpm-workspace.yaml" {
-			if n++; n > maxManifests {
-				return errors.New("too many manifests")
-			}
-			b, rerr := os.ReadFile(p)
-			if rerr != nil {
-				return rerr
-			}
-			rel, _ := filepath.Rel(base, p)
-			out = append(append(append(out, rel...), 0), b...)
-		}
-		return nil
-	})
-	if err != nil {
-		return []byte(time.Now().String())
+// nodeArgv is the argv of one node check for the manager: the prepare script, or
+// the plain `<pm> run <script>` where no shell script can run.
+func nodeArgv(pm, id, dir string) []string {
+	run := []string{pm, "run", strings.TrimPrefix(id, "node.")}
+	if id == "node.coverage" {
+		run = []string{pm, "run", "test", "--", "--coverage"}
 	}
-	return out
+	if runtime.GOOS == "windows" {
+		return run
+	}
+	return []string{"sh", "-c", nodeScript(pm, id, strings.Join(run, " "), dir)}
 }
 
-func hasDir(root, dir, name string) bool {
-	st, err := os.Stat(filepath.Join(root, filepath.FromSlash(dir), name))
-	return err == nil && st.IsDir()
+// nodeScript is the shell text: caches, the frozen install when needed, astro
+// sync when needed, then the check.
+func nodeScript(pm, id, run, dir string) string {
+	var b strings.Builder
+	b.WriteString("LOCK=; LF=\nfor d in " + lockDirs(dir) + "; do\n  for f in " + strings.Join(nodeLockfiles[pm], " ") + "; do\n")
+	b.WriteString("    if [ -f \"$d/$f\" ]; then LOCK=$d; LF=$f; break 2; fi\n  done\ndone\n")
+	b.WriteString(cacheEnv(pm) + "\n")
+	b.WriteString("if [ -n \"$LOCK\" ] && [ ! -d node_modules ] && [ ! -d \"$LOCK/node_modules\" ]; then\n")
+	b.WriteString(pinCheck(pm))
+	b.WriteString("  mkdir -p .nself-ci; LOG=\"$PWD/.nself-ci/install.log\"\n")
+	b.WriteString("  ( cd \"$LOCK\" && " + installCmd(pm) + " ) > \"$LOG\" 2>&1 || {\n")
+	b.WriteString(failureReport())
+	b.WriteString("    echo " + diagnose.PrepareFailed + "\n    exit 97\n  }\n  rm -f \"$LOG\"\nfi\n")
+	if id == "node.typecheck" || id == "node.build" {
+		b.WriteString("if { [ -d node_modules ] || [ -d \"${LOCK:-.}/node_modules\" ] || [ -f \"${LOCK:-.}/.pnp.cjs\" ]; } && grep -q '\"astro\"' package.json 2>/dev/null; then\n")
+		b.WriteString("  " + astroSync(pm) + " || exit $?\nfi\n")
+	}
+	b.WriteString("exec " + run + "\n")
+	return b.String()
 }
 
-// relUp is the relative path from the directory work up to its ancestor dir.
-func relUp(work, dir string) string {
-	if work == dir {
-		return "."
+// lockDirs lists the directories a lockfile may sit in: the working directory
+// and each ancestor up to the workspace root (a member installs at the root).
+func lockDirs(dir string) string {
+	out := []string{"."}
+	for d := path.Clean(dir); d != "." && d != "/" && d != ""; d = path.Dir(d) {
+		out = append(out, strings.TrimPrefix(strings.Repeat("/..", len(out)), "/"))
 	}
-	n := strings.Count(strings.TrimPrefix(work, dir), "/")
-	if dir == "." {
-		n = strings.Count(work, "/") + 1
-	}
-	return strings.TrimSuffix(strings.Repeat("../", n), "/")
+	return strings.Join(out, " ")
 }
 
-// install is the frozen install command of the manager.
-func (s nodeSpec) install() string {
-	switch s.Manager {
+// installCmd is the frozen install of the manager, run in the lockfile directory
+// ($LF is the lockfile found there).
+func installCmd(pm string) string {
+	switch pm {
 	case "npm":
 		return "npm ci --prefer-offline"
 	case "pnpm":
 		return "pnpm install --frozen-lockfile --prefer-offline"
 	case "yarn":
-		if s.Berry {
-			return "yarn install --immutable"
-		}
-		return "yarn install --frozen-lockfile --prefer-offline"
+		return `if grep -q __metadata: "$LF"; then yarn install --immutable; else yarn install --frozen-lockfile --prefer-offline; fi`
 	}
 	return "bun install --frozen-lockfile"
 }
 
 // astroSync is the manager's way to run the project-local astro binary.
-func (s nodeSpec) astroSync() string {
-	switch s.Manager {
+func astroSync(pm string) string {
+	switch pm {
 	case "npm":
 		return "npm exec --no-install -- astro sync"
 	case "pnpm":
@@ -192,128 +157,62 @@ func (s nodeSpec) astroSync() string {
 	return "bun run astro sync"
 }
 
-// cacheEnv keeps the manager's cache inside the workspace (removed with it).
-// Only the manager's own variables: npm warns about another manager's.
-func (s nodeSpec) cacheEnv() string {
-	switch s.Manager {
+// cacheEnv keeps the manager's cache and the temp directory inside the
+// workspace (removed with it, so a killed install leaves nothing in the
+// operator's TMPDIR). Only the manager's own variables: npm warns about
+// another manager's.
+func cacheEnv(pm string) string {
+	return `mkdir -p .nself-ci/tmp; export TMPDIR="$PWD/.nself-ci/tmp"; ` + managerCacheEnv(pm)
+}
+
+func managerCacheEnv(pm string) string {
+	switch pm {
 	case "npm":
 		return `export npm_config_cache="$PWD/.nself-ci/npm"`
 	case "pnpm":
 		return `export npm_config_store_dir="$PWD/.nself-ci/pnpm" COREPACK_ENABLE_DOWNLOAD_PROMPT=0`
 	case "yarn":
-		return `export YARN_CACHE_FOLDER="$PWD/.nself-ci/yarn" YARN_ENABLE_GLOBAL_CACHE=false COREPACK_ENABLE_DOWNLOAD_PROMPT=0`
+		// a committed .yarn/cache (zero-install) is the cache; only otherwise keep it in the workspace
+		return `[ -d "${LOCK:-.}/.yarn/cache" ] || export YARN_CACHE_FOLDER="$PWD/.nself-ci/yarn"; export YARN_ENABLE_GLOBAL_CACHE=false COREPACK_ENABLE_DOWNLOAD_PROMPT=0`
 	}
 	return `export BUN_INSTALL_CACHE_DIR="$PWD/.nself-ci/bun"`
 }
 
-// wrap returns the argv that prepares then runs the check: run is the plain
-// check command, returned unchanged when there is nothing to prepare.
-func (s nodeSpec) wrap(id string, run []string) []string {
-	tail := shellJoin(run)
-	if id == "node.coverage" {
-		tail = s.Manager + " run test -- --coverage && cat coverage/lcov.info"
-	}
-	if runtime.GOOS == "windows" {
-		if id == "node.coverage" {
-			return []string{"cmd", "/C", s.Manager + " run test -- --coverage && type coverage\\lcov.info"}
-		}
-		return run
-	}
-	needInstall := s.LockDir != "" && !s.Prepared
-	// astro sync needs the dependencies: this run installs them, or they are there already
-	needAstro := s.Astro && (id == "node.typecheck" || id == "node.build") && (needInstall || s.HasModules || s.LockDir != "")
-	if !needInstall && !needAstro {
-		if id == "node.coverage" {
-			return []string{"sh", "-c", tail}
-		}
-		return run
-	}
-	script := s.cacheEnv() + "; "
-	if needInstall {
-		in := s.install() + " && mkdir -p node_modules && printf %s " + s.Digest + " > " + nodePreparedMarker // Yarn PnP and a project without dependencies install no node_modules
-		if s.Rel != "." {
-			in = "cd " + s.Rel + " && " + in
-		}
-		// the log is read from the working directory, so name it absolutely
-		script += `LOG="$PWD/` + installLog + `"; ( ` + in + ` ) > "$LOG" 2>&1 || { if [ -n "$(tail -c +200001 "$LOG" | head -c 1)" ]; then head -c 100000 "$LOG"; echo; echo ` + logTruncated + `; tail -c 100000 "$LOG"; else cat "$LOG"; fi; echo; echo ` + prepareFailed + `; exit ` + strconv.Itoa(prepareExit) + `; }; `
-	}
-	if needAstro {
-		script += s.astroSync() + " && "
-	}
-	return []string{"sh", "-c", script + tail}
+// pinCheck refuses an install when package.json pins another MAJOR version of
+// the manager than the one on PATH (lockfile formats and the frozen flags differ
+// across majors). It runs only where an install would; a pin that cannot be read
+// is no pin.
+func pinCheck(pm string) string {
+	return `  PIN=; for pj in package.json "$LOCK/package.json"; do
+    PIN=$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"` + pm + `@\([0-9][0-9]*\)\..*/\1/p' "$pj" 2>/dev/null | head -n 1)
+    [ -n "$PIN" ] && break
+  done
+  if [ -n "$PIN" ]; then
+    HAVE=$(` + pm + ` --version 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9]*\)\..*/\1/p' | head -n 1)
+    if [ -n "$HAVE" ] && [ "$HAVE" != "$PIN" ]; then
+      echo "E811: package.json pins ` + pm + ` $PIN.x but ` + pm + ` $HAVE is installed; install the pinned major (corepack enable) and retry"
+      echo ` + diagnose.PinMismatch + `
+      exit 98
+    fi
+  fi
+`
 }
 
-var shellSafe = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./-]+$`)
-
-// shellJoin quotes each argument for sh.
-func shellJoin(argv []string) string {
-	out := make([]string, len(argv))
-	for i, a := range argv {
-		if shellSafe.MatchString(a) {
-			out[i] = a
-		} else {
-			out[i] = "'" + strings.ReplaceAll(a, "'", `'\''`) + "'"
-		}
+// failureReport prints what the classifier needs of a failed install, within the
+// 8 KiB tail a run keeps: the whole log when short, else its head, the lines
+// that carry a guard or a cause (the last 25), and its tail.
+func failureReport() string {
+	words := make([]string, len(diagnose.InstallKeywords))
+	for i, w := range diagnose.InstallKeywords {
+		words[i] = "-e '" + w + "'"
 	}
-	return strings.Join(out, " ")
-}
-
-// installs reports whether the wrapped command will run an install.
-func (s nodeSpec) installs() bool {
-	return runtime.GOOS != "windows" && s.LockDir != "" && !s.Prepared
-}
-
-var versionNumber = regexp.MustCompile(`\d+(\.\d+)*`)
-
-// pinMismatch returns why the installed manager contradicts the packageManager
-// pin ("" when it matches, no pin is declared, or the version is unreadable):
-// the major version must be the pinned one, because lockfile formats and the
-// frozen flags differ across majors.
-func (s nodeSpec) pinMismatch(versionOutput string) string {
-	if s.Pin == "" {
-		return ""
-	}
-	found := versionNumber.FindString(versionOutput)
-	pin := versionNumber.FindString(s.Pin)
-	if found == "" || pin == "" || major(found) == major(pin) {
-		return ""
-	}
-	return "package.json pins " + s.Manager + "@" + s.Pin + " but " + s.Manager + " " + found + " is installed"
-}
-
-func major(v string) string { return strings.SplitN(v, ".", 2)[0] }
-
-// ends keeps the first and the last half of a long log: a manager states its
-// verdict at the top (npm: "package.json and package-lock.json are not in sync")
-// and the cause or the log path at the bottom.
-func ends(log string, max int) string {
-	if len(log) <= max {
-		return log
-	}
-	head, tail := log[:max/2], log[len(log)-max/2:]
-	return strings.ToValidUTF8(head, "") + "\n...\n" + strings.ToValidUTF8(tail, "")
-}
-
-// prepareVerdict turns the result of a failed prepare (the sentinel is in the
-// output) into the check outcome. It reports whether the output was a prepare
-// failure at all.
-func prepareVerdict(c *model.Check, res invocation) bool {
-	i := strings.LastIndex(res.output, prepareFailed)
-	if i < 0 || res.exit == 0 {
-		return false
-	}
-	log := strings.TrimSpace(res.output[:i])
-	var d diagnose.Diagnosis // a log with its middle cut out is unknown, and unknown stays code
-	if !strings.Contains(log, logTruncated) {
-		d = diagnose.ClassifyInstall(log)
-	}
-	excerpt := ends(log, 1024)
-	if d.Class == "infra" {
-		c.Result, c.FailureClass = "error", "infra"
-		c.Excerpt = "E811: dependency install failed (" + d.Signature + "); " + d.Remediation + "\n" + excerpt
-		return true
-	}
-	c.Result, c.FailureClass = "fail", "code"
-	c.Excerpt = excerpt
-	return true
+	return `    n=$(( $(wc -c < "$LOG") + 0 ))
+    if [ "$n" -le 3500 ]; then cat "$LOG"; else
+      head -c 1000 "$LOG"; echo
+      echo ` + diagnose.InstallLinesMark + `
+      grep -iF ` + strings.Join(words, " ") + ` "$LOG" | tail -n 25 | cut -c1-160
+      echo ` + diagnose.InstallTailMark + `
+      tail -c 2000 "$LOG"
+    fi
+`
 }

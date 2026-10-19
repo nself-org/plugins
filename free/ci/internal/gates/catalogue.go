@@ -111,7 +111,7 @@ func (r *Registry) Plan(facts []detect.Fact, o Options) []PlannedCheck {
 		}
 		out = append(out, pc)
 	}
-	py, xc, swiftTests := pythonIndex(facts), xcodeIndex(facts), swiftTestIndex(facts)
+	py, xc, swiftTests, node := pythonIndex(facts), xcodeIndex(facts), swiftTestIndex(facts), nodeIndex(facts)
 	for _, f := range facts {
 		if f.Confidence != detect.Certain {
 			continue
@@ -127,10 +127,10 @@ func (r *Registry) Plan(facts []detect.Fact, o Options) []PlannedCheck {
 			}
 		case f.Kind == "stack" && f.Name == "node":
 			for _, id := range []string{"node.lint", "node.typecheck", "node.test", "node.build"} {
-				add(id, dir, "")
+				add(id, dir, "", node.mod(dir, id))
 			}
 			if v, ok := o.Config.Checks["node.coverage"]; ok && v.CoverageFloor != nil {
-				add("node.coverage", dir, "")
+				add("node.coverage", dir, "", node.mod(dir, "node.coverage"))
 			}
 		case f.Kind == "stack" && (f.Name == "flutter" || f.Name == "dart"):
 			add("flutter.analyze", dir, "")

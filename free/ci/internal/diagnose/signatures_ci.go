@@ -23,20 +23,56 @@ import (
 // SigNetwork is the signature of an unreachable provider, registry or remote.
 const SigNetwork = "infra.network"
 
-const networkText = `(?i)\b(etimedout|esockettimedout|econnreset|eai_again|enetunreach|ehostunreach)\b|network is unreachable|tls handshake timeout|connection timed out|connection reset by peer|i/o timeout`
+// SigPin is the signature of a package manager whose major version contradicts
+// the packageManager pin; it is not retried.
+const SigPin = "infra.package_manager_pin"
+
+// The lines a Node gate script prints around a failed prepare (P7-AUTO-16).
+// PrepareFailed ends a failed install's report, PinMismatch a refused pin; the
+// report is the install log's head, InstallLinesMark and the log lines that
+// carry a guard or a cause (InstallKeywords), InstallTailMark and its tail.
+const (
+	PrepareFailed    = "::nself-ci-prepare-failed::"
+	PinMismatch      = "::nself-ci-pin-mismatch::"
+	InstallLinesMark = "::nself-ci-install-lines::"
+	InstallTailMark  = "::nself-ci-install-tail::"
+)
+
+// InstallKeywords are the words (matched case-insensitively, as fixed strings,
+// by the gate script's grep) of the lines ClassifyInstall's guards and causes
+// read: the script keeps the last 25 of them when a log is too long to print.
+// No quote characters: the script quotes them for sh.
+var InstallKeywords = []string{
+	"elifecycle", "command failed", "built successfully", "yn0009", "assertion", "err_assertion", "--- fail", "not ok", "panic:",
+	"lockfile", "yn0028", "in sync", "127.0.0.1", "localhost", "::1", "not found", "404", "403", "401", "402", "forbidden", "unauthorized",
+	"no matching version", "notarget", "gyp err", "npm error code", "npm err! code", "err_pnpm_", "unexpected error occurred", "yn0001",
+	"enospc", "no space left", "killed", "error: connection", "error: failedtoopensocket",
+}
+
+// providerNetwork matches a connection failure to a well-known package, source
+// or image provider. Free text like "connection reset by peer" alone is NOT a
+// signature for a job: a test that curls its own server and sees the reset is a
+// code failure, and an infra class is retried (and can turn green). Installs
+// have their own structured causes (ClassifyInstall).
+const providerHosts = `(?:proxy\.golang\.org|sum\.golang\.org|github\.com|raw\.githubusercontent\.com|registry\.npmjs\.org|registry\.yarnpkg\.com|pypi\.org|files\.pythonhosted\.org|crates\.io|static\.crates\.io|index\.docker\.io|registry-1\.docker\.io|ghcr\.io|gcr\.io|quay\.io)`
+
+const providerFailure = `(?:i/o timeout|connection timed out|connection reset by peer|tls handshake timeout|unexpected eof|network is unreachable|failed to connect|ssl connection timeout|recv failure)`
+
+// providerNetwork: a provider host and a connection failure on one line, in either order.
+var providerNetwork = `(?i)` + providerHosts + `[^\n]*` + providerFailure + `|` + providerFailure + `[^\n]*` + providerHosts
 
 func init() {
 	signatures = append(signatures,
 		signature{
 			id:          SigNetwork,
-			errText:     re(networkText),
-			output:      re(networkText + `|socket hang up|err_pnpm_meta_fetch_fail|err_pnpm_fetch_5\d\d|npm err! network`),
-			remediation: "A registry, provider or remote host could not be reached (timeout or reset). Check the runner's network and any proxy, then run it again.",
+			errText:     re(providerNetwork),
+			output:      re(providerNetwork),
+			remediation: "A package, source or image provider could not be reached (timeout or reset). Check the runner's network and any proxy, then run it again.",
 		},
 		signature{
 			id:          SigDisk,
-			errText:     re(`(?i)\benospc\b|not enough space on the disk`),
-			output:      re(`(?i)\benospc\b|not enough space on the disk|write error: no space`),
+			errText:     re(`(?im)(^|[\s:'"(])enospc([:\s'")]|$)|not enough space on the disk`),
+			output:      re(`(?im)(^|[\s:'"(])enospc([:\s'")]|$)|not enough space on the disk|write error: no space`),
 			remediation: remediationOf(SigDisk),
 		},
 	)
@@ -100,7 +136,11 @@ var (
 )
 
 var installDNSCodes = map[string]bool{"ENOTFOUND": true, "EAI_AGAIN": true}
-var installNetCodes = map[string]bool{"ETIMEDOUT": true, "ESOCKETTIMEDOUT": true, "ECONNRESET": true, "ECONNREFUSED": true, "ENETUNREACH": true, "EHOSTUNREACH": true}
+
+// installNetCodes are the codes of an unreachable or overloaded registry; E429 and
+// E5xx are npm's codes for rate limits and gateway errors (retried, not the project's).
+var installNetCodes = map[string]bool{"ETIMEDOUT": true, "ESOCKETTIMEDOUT": true, "ECONNRESET": true, "ECONNREFUSED": true, "ENETUNREACH": true, "EHOSTUNREACH": true,
+	"E429": true, "E500": true, "E502": true, "E503": true, "E504": true}
 
 // lastCode is the first capture group of the last match of r.
 func lastCode(r *regexp.Regexp, text string) string {
@@ -109,6 +149,21 @@ func lastCode(r *regexp.Regexp, text string) string {
 		return ""
 	}
 	return strings.ToUpper(m[len(m)-1][1])
+}
+
+// classifyPrepare is the verdict on a Node gate whose prepare step failed: the
+// script's report (see InstallKeywords) is classified as an install log.
+func classifyPrepare(report string) Diagnosis {
+	d := ClassifyInstall(report)
+	if d.Class == "infra" {
+		d.Remediation = "E811: dependency install failed (" + d.Signature + "). " + d.Remediation
+	}
+	return d
+}
+
+// pinDiagnosis is the verdict on a refused package manager pin (E811).
+func pinDiagnosis() Diagnosis {
+	return Diagnosis{Class: "infra", Signature: SigPin, Remediation: "E811: package.json pins another major version of the package manager than the one installed. Install the pinned major (`corepack enable`), then run it again."}
 }
 
 // ClassifyInstall classifies a failed dependency install from its log: infra
@@ -139,7 +194,7 @@ func ClassifyInstall(log string) Diagnosis {
 	}
 	code := lastCode(installNPMCode, log)
 	if code == "" {
-		if c := lastCode(installPNPMCode, log); c == "ERR_PNPM_META_FETCH_FAIL" || strings.HasPrefix(c, "ERR_PNPM_FETCH_5") {
+		if c := lastCode(installPNPMCode, log); c == "ERR_PNPM_META_FETCH_FAIL" || c == "ERR_PNPM_FETCH_429" || strings.HasPrefix(c, "ERR_PNPM_FETCH_5") {
 			code = "ETIMEDOUT" // an unreachable or failing registry
 		}
 	}

@@ -56,7 +56,7 @@ func checkResult(o JobOutcome) model.CheckResult {
 // that is red only because a required check ended `error` (a full disk, an
 // unreachable registry, a lost runner, a timeout) is `error`, so the posted
 // status is not `failure`; any required check that really failed, or a
-// required check that was skipped, keeps it `fail`.
+// required check that was skipped on its own, keeps it `fail`.
 func runResult(checks []model.Check) model.Result {
 	v := model.Verdict(checks)
 	if v != "fail" {
@@ -66,6 +66,8 @@ func runResult(checks []model.Check) model.Result {
 	for _, c := range checks {
 		switch {
 		case !c.Required:
+		case c.Result == "skip" && (c.Reason == "dep.failed" || c.Reason == "fail_fast.cancelled"):
+			// a consequence of another check (it needed one that did not pass, or fail-fast stopped it): the other check decides
 		case c.Result == "fail" && !c.AllowFailure, c.Result == "skip":
 			return v
 		case c.Result == "error":

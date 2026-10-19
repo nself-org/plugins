@@ -75,8 +75,8 @@ func TestTimeoutLostDiskNetworkEndError(t *testing.T) {
 	for name, job := range map[string]model.Job{
 		"timeout":  timeout,
 		"disk":     noRetry(sh(`echo "ENOSPC: no space left on device, write"; exit 1`)),
-		"network":  noRetry(sh(`echo "npm ERR! code ETIMEDOUT"; exit 1`)),
-		"provider": noRetry(sh(`echo "curl: (56) Recv failure: Connection reset by peer"; exit 1`)),
+		"network":  noRetry(sh(`echo "fatal: unable to access 'https://github.com/org/repo.git/': Connection timed out after 300001 milliseconds"; exit 128`)),
+		"provider": noRetry(sh(`echo "go: Get https://proxy.golang.org/x/@v/list: dial tcp 142.250.1.1:443: i/o timeout"; exit 1`)),
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := newRig(t, map[string]model.Job{"unit": job}, gitFake{})
@@ -135,5 +135,43 @@ func TestRunResultFromChecks(t *testing.T) {
 		if ev.Result != tc.want {
 			t.Errorf("%s: %s, want %s", name, ev.Result, tc.want)
 		}
+	}
+}
+
+// A job that crashes while talking to its own server is a code failure, even
+// when it prints a connection reset: an infra class is retried and could go green.
+func TestResetFromOwnServerStaysFailure(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, map[string]model.Job{"smoke": sh(`echo "curl: (56) Recv failure: Connection reset by peer"; exit 56`)}, gitFake{})
+	res := r.run(t)
+	if o := outcome(res, "smoke"); o.FailureClass != "code" || o.N != 1 || res.Summary.Result != "fail" {
+		t.Fatalf("outcome %+v result %s", o, res.Summary.Result)
+	}
+}
+
+// A failed prepare of a Node gate reports through the sentinel: an unreachable
+// registry is infrastructure (error, retried once), a lockfile out of sync is code.
+func TestPrepareFailureReportsThroughTheSentinel(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		log, class string
+		result     model.Result
+	}{
+		"registry unreachable": {"npm error code ETIMEDOUT\nnpm error network request to https://registry.npmjs.org/x failed, reason: connect ETIMEDOUT 1.2.3.4:443", "infra", "error"},
+		"lockfile out of sync": {"npm error `npm ci` can only install packages when your package.json and package-lock.json are in sync.", "code", "fail"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			job := noRetry(sh("cat <<'EOF'\n" + tc.log + "\nEOF\necho ::nself-ci-prepare-failed::; exit 97"))
+			r := newRig(t, map[string]model.Job{"node": job}, gitFake{})
+			res := r.run(t)
+			if o := outcome(res, "node"); string(o.FailureClass) != tc.class || res.Summary.Result != tc.result {
+				t.Fatalf("outcome %+v result %s", o, res.Summary.Result)
+			}
+			if tc.class == "infra" {
+				if c := checkOf(t, res, "node"); c.Result != "error" || !strings.HasPrefix(c.Remediation, "E811:") {
+					t.Fatalf("check %+v", c)
+				}
+			}
+		})
 	}
 }
