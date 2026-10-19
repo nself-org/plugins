@@ -42,7 +42,8 @@ func goodScan(t *testing.T) func(sbom.Cmd) (sbom.Result, error) {
 	return func(c sbom.Cmd) (sbom.Result, error) {
 		name := c.Argv[3+1] // scan <src> --source-name <name>
 		doc := strings.Replace(string(cdx), `"name": "fx"`, `"name": "`+name+`"`, 1)
-		return sbom.Result{Files: map[string][]byte{c.Collect[0]: []byte(doc), c.Collect[1]: spdx}}, nil
+		sp := strings.ReplaceAll(string(spdx), `"name": "fx"`, `"name": "`+name+`"`)
+		return sbom.Result{Files: map[string][]byte{c.Collect[0]: []byte(doc), c.Collect[1]: []byte(sp)}}, nil
 	}
 }
 
@@ -136,5 +137,31 @@ func TestRunProcessJobUsesTheInstalledSyft(t *testing.T) {
 	c := gsbom.Run(context.Background(), in).Check
 	if c.Result != "error" || !strings.Contains(c.Excerpt, sbom.InstallCommand) {
 		t.Fatalf("uninstalled: %+v", c)
+	}
+}
+
+// isoRunner is a scripted runner that also reports its isolation.
+type isoRunner struct {
+	scripted
+	iso string
+}
+
+func (r isoRunner) IsolationName() string { return r.iso }
+
+func TestRunRefusesAJobAndRunnerThatDisagreeOnIsolation(t *testing.T) {
+	for _, c := range []struct {
+		job    model.Isolation
+		runner string
+	}{{"container", "process"}, {"process", "container"}, {"", "container"}, {"sandboxed-container", "process"}} {
+		in := input(t, "release", c.job, isoRunner{scripted{version: pinV, scan: goodScan(t)}, c.runner})
+		got := gsbom.Run(context.Background(), in).Check
+		if got.Result != "error" || !strings.Contains(got.Excerpt, "isolation") {
+			t.Errorf("job %q runner %q: %+v", c.job, c.runner, got)
+		}
+	}
+	// agreement passes, and any non-process isolation counts as the image's syft
+	in := input(t, "release", "sandboxed-container", isoRunner{scripted{version: pinV, scan: goodScan(t)}, "container"})
+	if got := gsbom.Run(context.Background(), in).Check; got.Result != "pass" {
+		t.Fatalf("sandboxed-container job with a container runner: %+v", got)
 	}
 }

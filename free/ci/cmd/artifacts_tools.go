@@ -9,7 +9,7 @@ package main
 // Constraints: explicit only (no job ever downloads a tool); the sha256 comes
 // from the `syft` row of versions.yaml and a mismatch installs nothing
 // (E718 tool_checksum); the downloaded binary is never run here; installing
-// twice is a no-op.
+// again re-downloads, re-checks and replaces the file.
 
 import (
 	"context"
@@ -56,11 +56,7 @@ func artifactsTools(args []string) int {
 	if asJSON {
 		return writeArtifactsJSON(command, res)
 	}
-	state := "installed"
-	if res.Already {
-		state = "already installed"
-	}
-	fmt.Printf("%s %s %s\npath %s\nsha256 %s\n", sbom.ToolName, res.Version, state, res.Path, res.SHA256)
+	fmt.Printf("%s %s installed\npath %s\nsha256 %s\n", sbom.ToolName, res.Version, res.Path, res.SHA256)
 	return 0
 }
 

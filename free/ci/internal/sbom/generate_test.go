@@ -2,6 +2,7 @@ package sbom_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -73,5 +74,48 @@ func TestGenerateRefusesBadInputBeforeRunning(t *testing.T) {
 	}
 	if len(r.cmds) != 0 {
 		t.Fatalf("syft ran for refused input: %v", r.cmds)
+	}
+}
+
+func TestGenerateRefusesAnEmptyInventoryUnlessAllowed(t *testing.T) {
+	strip := scanReturning(t, func(d string) string {
+		var m map[string]any
+		if err := json.Unmarshal([]byte(d), &m); err != nil {
+			t.Fatal(err)
+		}
+		delete(m, "components")
+		b, _ := json.Marshal(m)
+		return string(b)
+	})
+	one := []sbom.Target{{Name: "cli", Path: "dist/cli", Kind: sbom.SourceFile}}
+	_, err := sbom.Generate(context.Background(), &fakeRunner{onScan: strip}, "syft", testPin(), one)
+	if !sbom.IsReason(err, sbom.ReasonInvalid) || !strings.Contains(err.Error(), "no components") {
+		t.Fatalf("empty SBOM: %v", err)
+	}
+	one[0].AllowEmpty = true
+	if _, err := sbom.Generate(context.Background(), &fakeRunner{onScan: strip}, "syft", testPin(), one); err != nil {
+		t.Fatalf("AllowEmpty: %v", err)
+	}
+}
+
+func TestGenerateRefusesNamesThatCollideOnACaseFoldingFileSystem(t *testing.T) {
+	r := &fakeRunner{onScan: scanReturning(t, nil)}
+	_, err := sbom.Generate(context.Background(), r, "syft", testPin(), []sbom.Target{
+		{Name: "App", Path: "a", Kind: sbom.SourceFile}, {Name: "app", Path: "b", Kind: sbom.SourceFile}})
+	if !sbom.IsReason(err, sbom.ReasonInvalid) || len(r.cmds) != 0 {
+		t.Fatalf("got %v, cmds %d", err, len(r.cmds))
+	}
+}
+
+func TestGenerateRefusesSPDXOfAnotherArtifact(t *testing.T) {
+	good := scanReturning(t, nil)
+	run := func(c sbom.Cmd) (sbom.Result, error) {
+		res, _ := good(c)
+		res.Files[c.Collect[1]] = []byte(strings.Replace(string(res.Files[c.Collect[1]]), `"name": "cli"`, `"name": "elsewhere"`, 1))
+		return res, nil
+	}
+	_, err := sbom.Generate(context.Background(), &fakeRunner{onScan: run}, "syft", testPin(), []sbom.Target{{Name: "cli", Path: "x", Kind: sbom.SourceFile}})
+	if !sbom.IsReason(err, sbom.ReasonInvalid) || !strings.Contains(err.Error(), "SPDX name") {
+		t.Fatalf("got %v", err)
 	}
 }

@@ -6,8 +6,9 @@ package sbom
 // Constraints: a process-level job uses ONLY $NSELF_CI_HOME/tools/syft-<version>/syft
 // (placed by the explicit install command, never at run time); a container job
 // uses the syft the toolchain image carries, on PATH; either way the probed
-// version must equal the pin; a PATH syft of another version fails tool_version
-// and the message names the install command.
+// version must equal the pin. A process-level job never executes a PATH syft:
+// when the pinned install is absent and a PATH syft exists, the job fails
+// tool_version naming the install command; with none it fails tool_missing.
 
 import (
 	"context"
@@ -87,6 +88,9 @@ func ParseVersion(out string) (string, bool) {
 
 // Probe runs `<syft> version` and returns the version it prints.
 func Probe(ctx context.Context, r Runner, syft string) (string, error) {
+	if r == nil {
+		return "", Failf(ReasonToolMissing, "no runner to probe %s with", ToolName)
+	}
 	res, err := r.Run(ctx, Cmd{Argv: []string{syft, "version"}, Env: map[string]string{"SYFT_CHECK_FOR_APP_UPDATE": "false"}})
 	if err != nil {
 		return "", Failf(ReasonToolMissing, "%s did not run: %v", ToolName, err)
@@ -110,12 +114,10 @@ func Resolve(ctx context.Context, r Runner, home string, mode Mode, pin Pin) (st
 	if isExecutable(want) {
 		return checked(ctx, r, want, pin, "the installed")
 	}
+	// A syft on PATH is never run here (it is not the pinned install, and running it
+	// would execute a binary nothing authenticated); its presence is reported only.
 	if onPath, ok := lookPath(ToolName); ok {
-		v, err := Probe(ctx, r, onPath)
-		if err == nil && v != pin.Version {
-			return "", Failf(ReasonToolVersion, "%s %s is on PATH but the pin is %s; run `%s` to place the pinned %s", ToolName, v, pin.Version, InstallCommand, ToolName)
-		}
-		return "", Failf(ReasonToolMissing, "process-level jobs use only %s; run `%s` (a %s on PATH is not used)", want, InstallCommand, ToolName)
+		return "", Failf(ReasonToolVersion, "%s on PATH (%s) is not the pinned %s %s; process-level jobs use only %s, which is not installed; run `%s`", ToolName, onPath, ToolName, pin.Version, want, InstallCommand)
 	}
 	return "", Failf(ReasonToolMissing, "%s %s is not installed at %s; run `%s`", ToolName, pin.Version, want, InstallCommand)
 }

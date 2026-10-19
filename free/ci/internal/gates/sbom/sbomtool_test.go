@@ -5,6 +5,7 @@ package sbom_test
 import (
 	"context"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -33,11 +34,29 @@ func TestReleaseSBOMRequired(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(src, "dist", "go.mod"), []byte("module example.com/fx\n\ngo 1.22\n\nrequire github.com/google/uuid v1.6.0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// a process-level job: syft comes only from $NSELF_CI_HOME/tools, so place a
+	// copy of the pinned PATH syft there (what `artifacts tools install` does)
+	onPath, err := osexec.LookPath("syft")
+	if err != nil {
+		t.Fatalf("syft %s must be on PATH for the sbomtool tests: %v", pin.Version, err)
+	}
+	home := t.TempDir()
+	installed := sbom.ToolPath(home, pin.Version)
+	bin, err := os.ReadFile(onPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(installed), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(installed, bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	runner := sbom.ExecRunner{Executor: &exec.Executor{}, Home: t.TempDir(), SourceDir: src}
 	targets := []sbom.Target{{Name: "dist", Path: "dist", Kind: sbom.SourceDir}}
-	in := gsbom.Input{Runner: runner, Home: t.TempDir(), Pin: pin, Targets: targets}
+	in := gsbom.Input{Runner: runner, Home: home, Pin: pin, Targets: targets}
 
-	in.Job = model.Job{Kind: "release", Isolation: "container", Run: []string{"make dist"}}
+	in.Job = model.Job{Kind: "release", Run: []string{"make dist"}}
 	refused := gsbom.Run(ctx, in).Check
 	if refused.Result != "error" || !refused.Required || !strings.HasPrefix(refused.Excerpt, "E718 invalid:") {
 		t.Fatalf("a release run without the sbom check: %+v", refused)
@@ -52,7 +71,14 @@ func TestReleaseSBOMRequired(t *testing.T) {
 		t.Fatalf("components %v", names)
 	}
 
+	// a pin that differs from the installed syft: the probe reports the drift
 	in.Pin = sbom.Pin{Version: "0.0.1"}
+	if err := os.MkdirAll(filepath.Dir(sbom.ToolPath(home, "0.0.1")), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sbom.ToolPath(home, "0.0.1"), bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	drift := gsbom.Run(ctx, in).Check
 	if drift.Result != "error" || !strings.HasPrefix(drift.Excerpt, "E718 tool_version:") || !strings.Contains(drift.Excerpt, sbom.InstallCommand) {
 		t.Fatalf("version drift in a release job: %+v", drift)

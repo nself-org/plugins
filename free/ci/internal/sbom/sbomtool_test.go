@@ -59,7 +59,7 @@ func TestSyftFixtures(t *testing.T) {
 	want := map[string]string{"gobin": "gopkg.in/yaml.v3", "fixture-pkg": "left-pad", "fixture-img": "busybox"}
 	for _, d := range docs {
 		assertCycloneDXSchema(t, rs, d.CDX)
-		if err := sbom.ValidateSPDX(d.SPDX); err != nil {
+		if err := sbom.ValidateSPDX(d.SPDX, d.Name, pin.Version); err != nil {
 			t.Errorf("%s: %v", d.Name, err)
 		}
 		if names := componentNames(t, d.CDX); !names[want[d.Name]] {

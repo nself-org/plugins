@@ -49,14 +49,14 @@ func goldenDoc(t *testing.T, name string) []byte {
 
 // scanReturning answers a scan with the golden documents, rewritten for the target name.
 func scanReturning(t *testing.T, mutate func(cdx string) string) func(sbom.Cmd) (sbom.Result, error) {
-	cdx, spdx := string(goldenDoc(t, "dir.cdx.json")), goldenDoc(t, "dir.spdx.json")
+	cdx, spdx := string(goldenDoc(t, "dir.cdx.json")), string(goldenDoc(t, "dir.spdx.json"))
 	return func(c sbom.Cmd) (sbom.Result, error) {
 		name := c.Argv[indexOf(c.Argv, "--source-name")+1]
 		doc := strings.Replace(cdx, `"name": "fx"`, `"name": "`+name+`"`, 1)
 		if mutate != nil {
 			doc = mutate(doc)
 		}
-		return sbom.Result{Files: map[string][]byte{c.Collect[0]: []byte(doc), c.Collect[1]: spdx}}, nil
+		return sbom.Result{Files: map[string][]byte{c.Collect[0]: []byte(doc), c.Collect[1]: []byte(strings.ReplaceAll(spdx, `"name": "fx"`, `"name": "`+name+`"`))}}, nil
 	}
 }
 

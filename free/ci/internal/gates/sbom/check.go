@@ -31,7 +31,10 @@ func init() {
 }
 
 // Def is the catalogue row. Whether the check is required is decided per job
-// by Required (a release job is always required); the row is advisory.
+// by Required (a release job is always required); the row is advisory. The row
+// is never planned from detector facts (gates.Plan emits fixed ids) and its
+// argv is a placeholder: the check runs only through Run, which resolves the
+// pinned syft first.
 func Def() gates.CheckDef {
 	return gates.CheckDef{
 		ID: CheckID, Kind: Kind, Tool: sbom.ToolName,
@@ -63,7 +66,10 @@ func Required(kind model.JobKind, cfg model.PipelineConfig) bool {
 	return false
 }
 
-// RunsCheck reports whether any step of the job names the sbom check.
+// RunsCheck reports whether the job lists the sbom check as a step. A step is
+// the check only when the whole entry is its id (the shape gates.ImpliedJobs
+// writes); an entry that merely mentions the id, such as `echo release.sbom`,
+// is a command and does not count.
 func RunsCheck(job model.Job) bool {
 	for _, step := range job.Run {
 		if stepRuns(step) {
@@ -73,14 +79,7 @@ func RunsCheck(job model.Job) bool {
 	return false
 }
 
-func stepRuns(step string) bool {
-	for _, tok := range strings.Fields(step) {
-		if tok == CheckID {
-			return true
-		}
-	}
-	return false
-}
+func stepRuns(step string) bool { return strings.TrimSpace(step) == CheckID }
 
 // RequireForRelease refuses a release job that does not end with the sbom check.
 func RequireForRelease(job model.Job) error {

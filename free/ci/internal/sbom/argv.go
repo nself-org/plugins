@@ -39,6 +39,9 @@ type Target struct {
 	Name string     // artifact name; also the output file stem
 	Path string     // workdir-relative path of the artifact
 	Kind SourceKind // file, dir or oci-archive
+	// AllowEmpty accepts an SBOM with no components; without it syft cataloguing
+	// nothing (an artifact it cannot read) is a failure, not an empty inventory.
+	AllowEmpty bool
 }
 
 // Cmd is one command the Runner executes in the job workdir.

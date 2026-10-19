@@ -95,18 +95,15 @@ func TestResolveProcessUsesOnlyTheInstalledSyft(t *testing.T) {
 		t.Setenv("PATH", dir)
 		return p
 	}
-	t.Run("only a PATH syft of another version", func(t *testing.T) {
+	t.Run("only a PATH syft: reported, never run", func(t *testing.T) {
 		p := onPath(t)
-		_, err := sbom.Resolve(ctx, &fakeRunner{versions: map[string]string{p: "1.0.0"}}, t.TempDir(), sbom.ModeProcess, testPin())
+		fr := &fakeRunner{versions: map[string]string{p: pinVersion}}
+		_, err := sbom.Resolve(ctx, fr, t.TempDir(), sbom.ModeProcess, testPin())
 		if !sbom.IsReason(err, sbom.ReasonToolVersion) || !strings.Contains(err.Error(), sbom.InstallCommand) {
 			t.Fatalf("got %v", err)
 		}
-	})
-	t.Run("a PATH syft at the pin is still not used", func(t *testing.T) {
-		p := onPath(t)
-		_, err := sbom.Resolve(ctx, &fakeRunner{versions: map[string]string{p: pinVersion}}, t.TempDir(), sbom.ModeProcess, testPin())
-		if !sbom.IsReason(err, sbom.ReasonToolMissing) || !strings.Contains(err.Error(), sbom.InstallCommand) {
-			t.Fatalf("got %v", err)
+		if len(fr.cmds) != 0 {
+			t.Fatalf("a PATH syft was executed: %v", fr.cmds)
 		}
 	})
 	t.Run("a directory or non-executable at the install path is not an install", func(t *testing.T) {
@@ -135,5 +132,23 @@ func TestResolveContainerUsesPathSyftAtThePin(t *testing.T) {
 	_, err = sbom.Resolve(ctx, &fakeRunner{versions: map[string]string{}}, t.TempDir(), sbom.ModeContainer, testPin())
 	if !sbom.IsReason(err, sbom.ReasonToolMissing) {
 		t.Fatalf("absent: %v", err)
+	}
+}
+
+// TestResolveNeverExecutesAPlantedPathSyft uses a real runner: the planted
+// syft would create a marker file if anything ran it.
+func TestResolveNeverExecutesAPlantedPathSyft(t *testing.T) {
+	dir, marker := t.TempDir(), filepath.Join(t.TempDir(), "ran")
+	script := "#!/bin/sh\ntouch " + marker + "\necho 'Version: 1.54.1'\n"
+	if err := os.WriteFile(filepath.Join(dir, "syft"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	_, err := sbom.Resolve(context.Background(), execRunner(t, t.TempDir()), t.TempDir(), sbom.ModeProcess, testPin())
+	if !sbom.IsReason(err, sbom.ReasonToolVersion) {
+		t.Fatalf("got %v", err)
+	}
+	if _, statErr := os.Stat(marker); !os.IsNotExist(statErr) {
+		t.Fatal("the planted PATH syft was executed")
 	}
 }

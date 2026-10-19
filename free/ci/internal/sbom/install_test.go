@@ -98,7 +98,7 @@ func TestInstallPlacesTheBinaryAfterTheChecksum(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := sbom.ToolPath(o.Home, pinVersion)
-	if res.Path != want || res.Already || res.SHA256 != sha(archive) {
+	if res.Path != want || res.SHA256 != sha(archive) {
 		t.Fatalf("res = %+v", res)
 	}
 	st, err := os.Stat(want)
@@ -111,10 +111,51 @@ func TestInstallPlacesTheBinaryAfterTheChecksum(t *testing.T) {
 	if got := toolsDirEntries(t, o.Home); len(got) != 1 {
 		t.Fatalf("temp files left behind: %v", got)
 	}
-	// a second install is a no-op and does not download
-	res2, err := sbom.Install(context.Background(), o)
-	if err != nil || !res2.Already || hits.Load() != 1 {
-		t.Fatalf("second install: %+v %v hits=%d", res2, err, hits.Load())
+	// a second install downloads and checks again, and repairs a damaged file
+	if err := os.WriteFile(want, []byte("tampered"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sbom.Install(context.Background(), o); err != nil || hits.Load() != 2 {
+		t.Fatalf("second install: %v hits=%d", err, hits.Load())
+	}
+	if b, _ := os.ReadFile(want); string(b) != "#!/bin/sh\necho pinned\n" {
+		t.Fatalf("the reinstall did not replace the file: %q", b)
+	}
+}
+
+func TestInstallRefusesASymlinkDestination(t *testing.T) {
+	archive := makeTarGz(t, tarEntry{name: "syft", body: "good"})
+	o, _ := installRig(t, archive, sha(archive), 0)
+	victim := filepath.Join(t.TempDir(), "victim")
+	if err := os.WriteFile(victim, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dest := sbom.ToolPath(o.Home, pinVersion)
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, dest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sbom.Install(context.Background(), o); !sbom.IsReason(err, sbom.ReasonToolMissing) || !strings.Contains(err.Error(), "not a plain file") {
+		t.Fatalf("symlink destination: %v", err)
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "keep" {
+		t.Fatalf("the symlink target was overwritten: %q", b)
+	}
+}
+
+func TestInstallRefusesAnHTTPSDowngradeRedirect(t *testing.T) {
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("never served")) }))
+	defer plain.Close()
+	redirect := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, plain.URL+"/syft.tar.gz", http.StatusFound)
+	}))
+	defer redirect.Close()
+	pin := sbom.Pin{Version: pinVersion, Sources: []toolchain.Source{{OS: runtime.GOOS, Arch: runtime.GOARCH, URL: redirect.URL + "/syft.tar.gz", SHA256: strings.Repeat("a", 64)}}}
+	_, err := sbom.Install(context.Background(), sbom.InstallOptions{Home: t.TempDir(), Pin: pin, Client: redirect.Client()})
+	if !sbom.IsReason(err, sbom.ReasonToolMissing) || !strings.Contains(err.Error(), "not https") {
+		t.Fatalf("downgrade redirect: %v", err)
 	}
 }
 

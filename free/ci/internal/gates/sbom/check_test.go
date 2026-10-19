@@ -11,6 +11,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
+	"github.com/nself-org/plugins/free/ci/internal/detect"
 	"github.com/nself-org/plugins/free/ci/internal/gates"
 	gsbom "github.com/nself-org/plugins/free/ci/internal/gates/sbom"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -64,6 +65,7 @@ func TestRequireForReleaseWantsTheCheckAsTheLastStep(t *testing.T) {
 		"no sbom step":  {Kind: "release", Run: []string{"make dist"}},
 		"sbom not last": {Kind: "release", Run: []string{gsbom.CheckID, "make publish"}},
 		"substring":     {Kind: "release", Run: []string{"echo " + gsbom.CheckID + "x"}},
+		"sh -c echo":    {Kind: "release", Run: []string{"sh", "-c", "echo " + gsbom.CheckID}},
 	} {
 		if err := gsbom.RequireForRelease(job); !sbom.IsReason(err, sbom.ReasonInvalid) || !strings.HasPrefix(err.Error(), "E718") {
 			t.Errorf("%s: got %v", name, err)
@@ -137,6 +139,21 @@ func TestSBOMFilesAreCommittedAsSBOMArtifactsWithVerifiedDigests(t *testing.T) {
 		sum := sha256.Sum256(want)
 		if s.Size != int64(len(want)) || s.SHA256 != hex.EncodeToString(sum[:]) {
 			t.Errorf("%s size %d digest %s do not match the generated document", s.Rel, s.Size, s.SHA256)
+		}
+	}
+}
+
+func TestPlanNeverEmitsTheSBOMCheck(t *testing.T) {
+	r := gates.DefaultRegistry()
+	if err := gsbom.Register(r); err != nil {
+		t.Fatal(err)
+	}
+	facts := []detect.Fact{{Kind: "stack", Name: "go", Path: "go.mod", Confidence: detect.Certain}, {Kind: "container", Name: "dockerfile", Path: "Dockerfile", Confidence: detect.Certain}}
+	for _, kind := range []model.JobKind{"release", "build"} {
+		for _, pc := range r.Plan(facts, gates.Options{Kind: kind, Container: true}) {
+			if pc.Def.ID == gsbom.CheckID {
+				t.Fatalf("%s: Plan emitted %s, which would run an unresolved PATH syft", kind, pc.Def.ID)
+			}
 		}
 	}
 }

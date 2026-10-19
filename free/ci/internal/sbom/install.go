@@ -6,11 +6,14 @@ package sbom
 // Outputs: the installed path; E718 tool_checksum when the bytes differ from the
 // row's sha256, tool_missing when the pin has no source for this os/arch or the
 // download fails.
-// Constraints: explicit only, never at run time; https only; the download is
-// size-capped and hashed while it is written to a temp file in the target
-// directory, and nothing is extracted or made executable before the sha256
-// matches; only the archive's regular `syft` entry is extracted; the final
-// file appears by rename; the installer never runs the downloaded binary.
+// Constraints: explicit only, never at run time; https only (every redirect
+// hop too); the download is size-capped and hashed while it is written to a
+// temp file in the target directory, and nothing is extracted or made
+// executable before the sha256 matches; only the archive's regular `syft`
+// entry is extracted; the final file appears by rename; the installer never
+// runs the downloaded binary. It always re-downloads and replaces, so running
+// it again repairs a stale or damaged install; a destination that is a symlink
+// or not a regular file is refused, never followed.
 
 import (
 	"archive/tar"
@@ -27,6 +30,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -49,7 +53,6 @@ type Installed struct {
 	Path     string `json:"path"`
 	Version  string `json:"version"`
 	SHA256   string `json:"sha256"`
-	Already  bool   `json:"already_installed"`
 	Archive  string `json:"archive_url"`
 	Platform string `json:"platform"`
 }
@@ -71,18 +74,21 @@ func Install(ctx context.Context, o InstallOptions) (Installed, error) {
 	if o.Home == "" || !filepath.IsAbs(o.Home) {
 		return res, Failf(ReasonToolMissing, "NSELF_CI_HOME must be an absolute path to install tools")
 	}
-	if isExecutable(res.Path) {
-		res.Already = true
-		return res, nil
-	}
 	u, err := url.Parse(src.URL)
 	if err != nil || u.Scheme != "https" || u.Host == "" {
 		return res, Failf(ReasonToolMissing, "the %s source %q is not an https URL", ToolName, src.URL)
 	}
 	dir := filepath.Dir(res.Path)
+	if err := refuseNonRegular(dir, true); err != nil {
+		return res, err
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return res, Failf(ReasonToolMissing, "cannot create %s: %v", dir, err)
 	}
+	if err := refuseNonRegular(res.Path, false); err != nil {
+		return res, err
+	}
+	sweepStale(dir)
 	tmp, err := os.CreateTemp(dir, ".download-*")
 	if err != nil {
 		return res, Failf(ReasonToolMissing, "cannot write in %s: %v", dir, err)
@@ -102,10 +108,45 @@ func Install(ctx context.Context, o InstallOptions) (Installed, error) {
 	return res, nil
 }
 
-func download(ctx context.Context, c *http.Client, rawURL string, w io.Writer) (string, error) {
+// refuseNonRegular refuses an existing path that is a symlink or the wrong type.
+func refuseNonRegular(p string, wantDir bool) error {
+	st, err := os.Lstat(p)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return Failf(ReasonToolMissing, "cannot inspect %s: %v", p, err)
+	}
+	if st.IsDir() != wantDir || st.Mode()&os.ModeSymlink != 0 || (!wantDir && !st.Mode().IsRegular()) {
+		return Failf(ReasonToolMissing, "%s exists and is not a plain %s; remove it and run `%s` again", p, map[bool]string{true: "directory", false: "file"}[wantDir], InstallCommand)
+	}
+	return nil
+}
+
+// httpsOnly returns a copy of c that refuses a redirect to anything but https.
+func httpsOnly(c *http.Client) *http.Client {
 	if c == nil {
 		c = &http.Client{Timeout: 5 * time.Minute}
 	}
+	cc := *c
+	prev := cc.CheckRedirect
+	cc.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if req.URL.Scheme != "https" {
+			return fmt.Errorf("refusing a redirect to %s (not https)", req.URL.Redacted())
+		}
+		if prev != nil {
+			return prev(req, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		return nil
+	}
+	return &cc
+}
+
+func download(ctx context.Context, c *http.Client, rawURL string, w io.Writer) (string, error) {
+	c = httpsOnly(c)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", Failf(ReasonToolMissing, "bad download URL: %v", err)
@@ -140,7 +181,7 @@ func extractBinary(archive, dst string) error {
 	if err != nil {
 		return Failf(ReasonToolChecksum, "the download is not a gzip archive: %v", err)
 	}
-	tr := tar.NewReader(gz)
+	tr := tar.NewReader(io.LimitReader(gz, 2*maxBinary)) // a verified archive may still hold a decompression bomb
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -188,4 +229,21 @@ func place(r io.Reader, size int64, dst string) error {
 		return Failf(ReasonToolMissing, "cannot place %s: %v", dst, err)
 	}
 	return nil
+}
+
+// sweepStale removes temp files an interrupted install left behind (older than an hour).
+func sweepStale(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		info, err := e.Info()
+		if err != nil || !info.Mode().IsRegular() || time.Since(info.ModTime()) < time.Hour {
+			continue
+		}
+		if n := e.Name(); strings.HasPrefix(n, ".download-") || strings.HasPrefix(n, ".syft-") {
+			_ = os.Remove(filepath.Join(dir, n))
+		}
+	}
 }

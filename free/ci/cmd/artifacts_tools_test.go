@@ -65,16 +65,22 @@ func TestArtifactsToolsInstallPlacesThePinnedSyft(t *testing.T) {
 	if st, err := os.Stat(want); err != nil || st.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("installed file: %v %v", st, err)
 	}
+	if err := os.WriteFile(want, []byte("tampered"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	code, out, _ = runArt(t, "tools", "install", "--json")
 	var env struct {
 		OK   bool `json:"ok"`
 		Data struct {
-			Path    string `json:"path"`
-			Already bool   `json:"already_installed"`
+			Path   string `json:"path"`
+			SHA256 string `json:"sha256"`
 		} `json:"data"`
 	}
-	if code != 0 || json.Unmarshal([]byte(out), &env) != nil || env.Data.Path != want || !env.Data.Already {
+	if code != 0 || json.Unmarshal([]byte(out), &env) != nil || env.Data.Path != want || len(env.Data.SHA256) != 64 {
 		t.Fatalf("second install --json: code %d out %q", code, out)
+	}
+	if b, _ := os.ReadFile(want); !strings.Contains(string(b), "echo syft") {
+		t.Fatalf("the reinstall did not repair the file: %q", b)
 	}
 }
 

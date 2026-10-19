@@ -52,6 +52,10 @@ func TestValidateCycloneDX(t *testing.T) {
 		{"wrong subject name", func(m map[string]any) { meta(m)["component"] = map[string]any{"name": "other"} }, "metadata.component.name"},
 		{"components object", func(m map[string]any) { m["components"] = map[string]any{} }, "components"},
 		{"components null", func(m map[string]any) { m["components"] = nil }, "components"},
+		{"component elements are not objects", func(m map[string]any) { m["components"] = []any{nil, 42, map[string]any{}} }, "components[0]"},
+		{"component without a name", func(m map[string]any) { m["components"] = []any{map[string]any{"type": "library"}} }, "components[0]"},
+		{"component without a type", func(m map[string]any) { m["components"] = []any{map[string]any{"name": "x"}} }, "components[0]"},
+		{"subject without a type", func(m map[string]any) { meta(m)["component"] = map[string]any{"name": "fx"} }, "metadata.component.type"},
 	}
 	for _, c := range cases {
 		err := sbom.ValidateCycloneDX(mutateCDX(t, c.fn), "fx", pinVersion)
@@ -72,9 +76,24 @@ func TestValidateCycloneDXRefusesNonJSON(t *testing.T) {
 	}
 }
 
+func TestValidatorsRefuseTrailingDelimiters(t *testing.T) {
+	cdx, spdx := goldenDoc(t, "dir.cdx.json"), goldenDoc(t, "dir.spdx.json")
+	for _, tail := range []string{"}", "]", "}}", "\n}\n", " garbage", "{}"} {
+		if err := sbom.ValidateCycloneDX(append(append([]byte(nil), cdx...), tail...), "fx", pinVersion); !sbom.IsReason(err, sbom.ReasonInvalid) {
+			t.Errorf("CycloneDX + %q: %v", tail, err)
+		}
+		if err := sbom.ValidateSPDX(append(append([]byte(nil), spdx...), tail...), "fx", pinVersion); !sbom.IsReason(err, sbom.ReasonInvalid) {
+			t.Errorf("SPDX + %q: %v", tail, err)
+		}
+	}
+	if err := sbom.ValidateCycloneDX(append(append([]byte(nil), cdx...), "\n\n"...), "fx", pinVersion); err != nil {
+		t.Errorf("trailing whitespace is fine: %v", err)
+	}
+}
+
 func TestValidateSPDX(t *testing.T) {
 	good := goldenDoc(t, "dir.spdx.json")
-	if err := sbom.ValidateSPDX(good); err != nil {
+	if err := sbom.ValidateSPDX(good, "fx", pinVersion); err != nil {
 		t.Fatal(err)
 	}
 	for field, val := range map[string]any{"spdxVersion": "SPDX-2.2", "dataLicense": "MIT", "SPDXID": "x", "name": "", "documentNamespace": "", "creationInfo": nil} {
@@ -84,11 +103,17 @@ func TestValidateSPDX(t *testing.T) {
 		}
 		m[field] = val
 		b, _ := json.Marshal(m)
-		if err := sbom.ValidateSPDX(b); !sbom.IsReason(err, sbom.ReasonInvalid) {
+		if err := sbom.ValidateSPDX(b, "fx", pinVersion); !sbom.IsReason(err, sbom.ReasonInvalid) {
 			t.Errorf("%s=%v: got %v", field, val, err)
 		}
 	}
-	if err := sbom.ValidateSPDX([]byte("{")); !sbom.IsReason(err, sbom.ReasonInvalid) {
+	if err := sbom.ValidateSPDX([]byte("{"), "fx", pinVersion); !sbom.IsReason(err, sbom.ReasonInvalid) {
 		t.Fatalf("truncated: %v", err)
+	}
+	if err := sbom.ValidateSPDX(good, "other", pinVersion); !sbom.IsReason(err, sbom.ReasonInvalid) {
+		t.Fatalf("SPDX of another artifact: %v", err)
+	}
+	if err := sbom.ValidateSPDX(good, "fx", "9.9.9"); !sbom.IsReason(err, sbom.ReasonInvalid) {
+		t.Fatalf("SPDX from another syft: %v", err)
 	}
 }

@@ -36,10 +36,10 @@ func Generate(ctx context.Context, r Runner, syft string, pin Pin, targets []Tar
 		if err := t.Check(); err != nil {
 			return nil, err
 		}
-		if seen[t.Name] {
+		if seen[strings.ToLower(t.Name)] { // outputs share a directory; file systems may fold case
 			return nil, Failf(ReasonInvalid, "artifact name %q is used twice", t.Name)
 		}
-		seen[t.Name] = true
+		seen[strings.ToLower(t.Name)] = true
 	}
 	docs := make([]Doc, 0, len(targets))
 	for _, t := range targets {
@@ -69,10 +69,14 @@ func one(ctx context.Context, r Runner, syft string, pin Pin, t Target) (Doc, er
 	if len(cdx) == 0 || len(spdx) == 0 {
 		return Doc{}, Failf(ReasonInvalid, "%s: syft wrote no %s or %s", t.Name, cdxPath, spdxPath)
 	}
-	if err := ValidateCycloneDX(cdx, t.Name, pin.Version); err != nil {
+	n, err := checkCycloneDX(cdx, t.Name, pin.Version)
+	if err != nil {
 		return Doc{}, prefixed(t.Name, err)
 	}
-	if err := ValidateSPDX(spdx); err != nil {
+	if n == 0 && !t.AllowEmpty {
+		return Doc{}, Failf(ReasonInvalid, "%s: syft found no components in the artifact (an empty SBOM inventories nothing)", t.Name)
+	}
+	if err := ValidateSPDX(spdx, t.Name, pin.Version); err != nil {
 		return Doc{}, prefixed(t.Name, err)
 	}
 	return Doc{Name: t.Name, CDXPath: cdxPath, SPDXPath: spdxPath, CDX: cdx, SPDX: spdx, CDXSHA256: digest(cdx), SPDXSHA256: digest(spdx)}, nil
@@ -93,7 +97,7 @@ func digest(b []byte) string {
 func excerpt(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) > 300 {
-		s = s[:300] + "..."
+		s = strings.ToValidUTF8(s[:300], "") + "..."
 	}
 	return s
 }

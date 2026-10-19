@@ -10,6 +10,7 @@ package sbom
 
 import (
 	"context"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sbom"
@@ -39,9 +40,9 @@ func Run(ctx context.Context, in Input) Outcome {
 	if err := RequireForRelease(in.Job); err != nil {
 		return Outcome{Check: failed(c, err)}
 	}
-	mode := sbom.ModeProcess
-	if in.Job.Isolation == "container" {
-		mode = sbom.ModeContainer
+	mode := modeOf(in.Job.Isolation)
+	if r, ok := in.Runner.(interface{ IsolationName() string }); ok && (r.IsolationName() == "process") != (mode == sbom.ModeProcess) {
+		return Outcome{Check: failed(c, sbom.Failf(sbom.ReasonInvalid, "the job runs under %q isolation but the runner executes under %q", isolationName(in.Job.Isolation), r.IsolationName()))}
 	}
 	syft, err := sbom.Resolve(ctx, in.Runner, in.Home, mode, in.Pin)
 	if err != nil {
@@ -57,10 +58,26 @@ func Run(ctx context.Context, in Input) Outcome {
 	return Outcome{Check: c, Docs: docs}
 }
 
+// modeOf: only a plain process job uses the installed syft; every other
+// isolation (container, sandboxed container, vm) uses the image's.
+func modeOf(iso model.Isolation) sbom.Mode {
+	if iso == "" || iso == "process" {
+		return sbom.ModeProcess
+	}
+	return sbom.ModeContainer
+}
+
+func isolationName(iso model.Isolation) string {
+	if iso == "" {
+		return "process"
+	}
+	return string(iso)
+}
+
 func failed(c model.Check, err error) model.Check {
 	c.Excerpt = err.Error()
 	if len(c.Excerpt) > 1024 {
-		c.Excerpt = c.Excerpt[:1024]
+		c.Excerpt = strings.ToValidUTF8(c.Excerpt[:1024], "")
 	}
 	toolProblem := sbom.IsReason(err, sbom.ReasonToolMissing) || sbom.IsReason(err, sbom.ReasonToolVersion) || sbom.IsReason(err, sbom.ReasonToolChecksum)
 	switch {

@@ -24,6 +24,9 @@ import (
 // MaxDocBytes bounds one collected SBOM file.
 const MaxDocBytes = 256 << 20
 
+// maxOutput bounds the command output kept for diagnostics.
+const maxOutput = 1 << 20
+
 // Result is the outcome of one Cmd.
 type Result struct {
 	Output string
@@ -41,10 +44,19 @@ var runSeq atomic.Uint64
 // ExecRunner runs commands through an exec.Executor.
 type ExecRunner struct {
 	Executor  *exec.Executor
-	Home      string        // NSELF_CI_HOME ("" = the executor's default)
-	SourceDir string        // copied into the workspace before the command
-	Isolation string        // "process" (default) or "container"
-	Timeout   time.Duration // 0 = 10 minutes
+	Home      string                 // NSELF_CI_HOME ("" = the executor's default)
+	SourceDir string                 // copied into the workspace before the command
+	Isolation string                 // "process" (default) or "container"
+	Container *model.ContainerConfig // required when Isolation is "container" (the toolchain image)
+	Timeout   time.Duration          // 0 = 10 minutes
+}
+
+// IsolationName is the isolation commands run under ("process" or "container").
+func (r ExecRunner) IsolationName() string {
+	if r.Isolation == "" {
+		return "process"
+	}
+	return r.Isolation
 }
 
 // Run implements Runner.
@@ -56,22 +68,23 @@ func (r ExecRunner) Run(ctx context.Context, c Cmd) (Result, error) {
 	if timeout <= 0 {
 		timeout = 10 * time.Minute
 	}
-	iso := r.Isolation
-	if iso == "" {
-		iso = "process"
-	}
+	iso := r.IsolationName()
 	var out strings.Builder
 	res := Result{Files: map[string][]byte{}}
 	var collectErr error
 	spec := exec.JobSpec{
 		AttemptID:     fmt.Sprintf("sbom-%d-%d", os.Getpid(), runSeq.Add(1)),
 		CoordinatorID: "sbom",
-		Job:           model.Job{Kind: "release", Workdir: ".", Isolation: model.Isolation(iso), Env: c.Env},
+		Job:           model.Job{Kind: "release", Workdir: ".", Isolation: model.Isolation(iso), Container: r.Container, Env: c.Env},
 		Command:       c.Argv,
 		SourceDir:     r.SourceDir,
 		Home:          r.Home,
 		Timeout:       timeout,
-		Output:        func(p []byte) { out.Write(p) },
+		Output: func(p []byte) {
+			if room := maxOutput - out.Len(); room > 0 {
+				out.Write(p[:min(len(p), room)])
+			}
+		},
 		AfterJob: func(_ context.Context, ws *os.Root) error {
 			for _, name := range c.Collect {
 				b, err := readCapped(ws, name)
