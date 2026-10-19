@@ -47,6 +47,9 @@ func putField(buf []byte, b []byte) ([]byte, error) {
 	if len(b) > maxFieldBytes {
 		return nil, fmt.Errorf("entries: key field of %d bytes exceeds %d", len(b), maxFieldBytes)
 	}
+	if len(buf)+4+len(b) > maxKeyBytes { // checked before every append, so inputs are never expanded past the limit
+		return nil, fmt.Errorf("entries: key inputs exceed %d bytes", maxKeyBytes)
+	}
 	buf = binary.BigEndian.AppendUint32(buf, uint32(len(b)))
 	return append(buf, b...), nil
 }
@@ -98,9 +101,6 @@ func Key(k KeyInputs) (string, error) {
 	b, err := k.encode()
 	if err != nil {
 		return "", err
-	}
-	if len(b) > maxKeyBytes {
-		return "", fmt.Errorf("entries: key inputs of %d bytes exceed %d", len(b), maxKeyBytes)
 	}
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:]), nil

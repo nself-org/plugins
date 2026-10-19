@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -480,5 +482,152 @@ func TestCacheEntriesResultIsWriteOncePerRun(t *testing.T) {
 	_, fin = cacheFinalizing(t, s, "w2", cacheTrusted, []string{cacheKey}, true)
 	if got := reasonOf(t, s.CacheRecordResult(ctx, "w2", fin, false)); got != "attempt_state" {
 		t.Fatalf("a pass flipped to a failure: %s", got)
+	}
+}
+
+// TestCacheEntriesFreshResultNeedsAFreshPlan: a plan recorded in an earlier run
+// does not let a later run's result authorise its keys.
+func TestCacheEntriesFreshResultNeedsAFreshPlan(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	cacheFinalizing(t, s, "p", cacheTrusted, []string{cacheKey}, true)
+	cacheStep(t, s, "p", "finalizing", "failed", 3)
+	cacheStep(t, s, "p", "failed", "queued", 4)
+	cacheStep(t, s, "p", "queued", "leased", 5)
+	cacheStep(t, s, "p", "leased", "running", 6)
+	cacheStep(t, s, "p", "running", "finalizing", 7)
+	if got := reasonOf(t, s.CacheRecordResult(ctx, "p", 8, true)); got != "not_planned" {
+		t.Fatalf("a result without a plan in this run: %s", got)
+	}
+	if got := reasonOf(t, s.CacheCommit(ctx, cacheReq(t, "p", 8, cacheTrusted, cacheKey, 10))); got != "attempt_state" {
+		t.Fatalf("commit on the old plan: %s", got)
+	}
+}
+
+// TestCacheEntriesOldFenceDoesNotSurviveLocalReadmission: after a remote run
+// ends, the attempt's historical lease_epoch must not stay the capability.
+func TestCacheEntriesOldFenceDoesNotSurviveLocalReadmission(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	cacheSeed(t, s, "x", cacheTrusted)
+	fence, err := s.LeaseGrant(ctx, "host", Demand{AttemptID: "x", LeaseID: "lease-x", RunnerID: "node", CPU: 1, MemMB: 1, CapacityCPU: 10, CapacityMemMB: 10, TTL: time.Minute}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cacheStep(t, s, "x", "leased", "running", 1)
+	for _, err := range []error{s.CacheRecordPlan(ctx, "x", fence, cacheTrusted, []string{cacheKey}), s.LeaseResult(ctx, "lease-x", fence), s.CacheRecordResult(ctx, "x", fence, true)} {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	cacheStep(t, s, "x", "finalizing", "failed", 3) // deletes the lease row
+	cacheStep(t, s, "x", "failed", "queued", 4)
+	cacheStep(t, s, "x", "queued", "leased", 5) // local re-admission: no lease row, attempt.lease_epoch still holds the old fence
+	cacheStep(t, s, "x", "leased", "running", 6)
+	cacheStep(t, s, "x", "running", "finalizing", 7)
+	if got := reasonOf(t, s.CacheCommit(ctx, cacheReq(t, "x", fence, cacheTrusted, cacheKey, 10))); got != "epoch" {
+		t.Fatalf("zombie commit with the old fence: %s", got)
+	}
+	if got := reasonOf(t, s.CacheRecordResult(ctx, "x", fence, true)); got != "epoch" {
+		t.Fatalf("result with the old fence: %s", got)
+	}
+	if got := reasonOf(t, s.CacheCommit(ctx, cacheReq(t, "x", 8, cacheTrusted, cacheKey, 10))); got != "attempt_state" {
+		t.Fatalf("the current epoch still needs its own plan and result: %s", got)
+	}
+}
+
+// TestCacheEntriesDropOnlyRemovesTheRowThatWasRead: a delayed integrity check of
+// a superseded row must not delete its healthy replacement, even when both rows
+// carry the same creation time (fixed clock).
+func TestCacheEntriesDropOnlyRemovesTheRowThatWasRead(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	s.now = func() time.Time { return time.Unix(1000, 0) }
+	ns, _ := entries.NamespaceOf(cacheTrusted)
+	save := func(id string) {
+		_, fin := cacheFinalizing(t, s, id, cacheTrusted, []string{cacheKey}, true)
+		if err := s.CacheCommit(ctx, entries.CommitRequest{Attempt: id, Epoch: fin, Claimed: ns, Manifest: cacheManifest(t, cacheTrusted, cacheKey, 10)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	save("one")
+	first, err := s.CacheEntries(ctx, cacheKey)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("%v %v", first, err)
+	}
+	save("two")
+	if err = s.CacheDrop(ctx, first[0], "corrupt"); err != nil {
+		t.Fatal(err)
+	}
+	now, err := s.CacheEntries(ctx, cacheKey)
+	if err != nil || len(now) != 1 || now[0].Writer.AttemptID != "two" {
+		t.Fatalf("the replacement was dropped: %+v %v", now, err)
+	}
+	if err = s.CacheDrop(ctx, now[0], "corrupt"); err != nil {
+		t.Fatal(err)
+	}
+	if gone, _ := s.CacheEntries(ctx, cacheKey); len(gone) != 0 {
+		t.Fatal("the row that was read must be dropped")
+	}
+}
+
+// TestCacheEntriesReadAnEntryFromOneSnapshot hammers one key while a writer
+// replaces it, alternating an eligible writer (blobs e-*) and an ineligible one
+// (blobs i-*); a reader must never see one writer's facts with the other's blobs.
+func TestCacheEntriesReadAnEntryFromOneSnapshot(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	ns, _ := entries.NamespaceOf(cacheTrusted)
+	put := func(i int) error {
+		secrets, prefix := i%2 == 1, "e"
+		if secrets {
+			prefix = "i"
+		}
+		return s.write(ctx, func(tx *sql.Tx) error {
+			stmts := [][]any{{"DELETE FROM cache_entry WHERE cache_key=?", cacheKey},
+				{"INSERT INTO cache_entry(cache_key,namespace,spec,attempt_id,epoch,source_trust,secrets_received,private_deps,scanned_clean,bytes,created_at,last_used_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", cacheKey, ns.Canonical(), "go", prefix, int64(i), "owner", secrets, false, true, 2, int64(i), int64(i)}}
+			for j := 0; j < 2; j++ {
+				stmts = append(stmts, []any{"INSERT INTO cache_entry_blob(cache_key,path,sha256,size) VALUES (?,?,?,1)", cacheKey, fmt.Sprintf("%s-%d", prefix, j), strings.Repeat("a", 63) + fmt.Sprint(j)})
+			}
+			return execAll(ctx, tx, stmts...)
+		})
+	}
+	if err := put(0); err != nil {
+		t.Fatal(err)
+	}
+	stop, errc := make(chan struct{}), make(chan error, 1)
+	go func() {
+		defer close(errc)
+		for i := 1; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if err := put(i); err != nil {
+				errc <- err
+				return
+			}
+		}
+	}()
+	for i := 0; i < 3000; i++ {
+		list, err := s.CacheEntries(ctx, cacheKey)
+		if err != nil || len(list) > 1 {
+			t.Fatalf("read: %v (%d entries)", err, len(list))
+		}
+		for _, m := range list {
+			if len(m.Blobs) != 2 {
+				t.Fatalf("a torn read: %d blobs", len(m.Blobs))
+			}
+			for _, b := range m.Blobs {
+				if !strings.HasPrefix(b.Path, m.Writer.AttemptID+"-") || m.Writer.SecretsReceived != (m.Writer.AttemptID == "i") {
+					t.Fatalf("writer %+v with blob %q: facts and bytes from different snapshots", m.Writer, b.Path)
+				}
+			}
+		}
+	}
+	close(stop)
+	if err := <-errc; err != nil {
+		t.Fatal(err)
 	}
 }

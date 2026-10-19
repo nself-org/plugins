@@ -44,10 +44,16 @@ func (s *Store) space() (free, floor int64, ok bool, err error) {
 	return free, floor, true, nil
 }
 
-// sweepBlobs removes unreferenced cache blobs older than cas's grace. A commit
-// in any process that races this scan only references blobs younger than
-// BlobMaxAge, which the sweep never removes.
+// sweepBlobs removes unreferenced cache blobs older than cas's one hour grace,
+// measured from a clock reading taken BEFORE the reference scan: a blob that a
+// commit in any process references after the scan is younger than BlobMaxAge at
+// that commit, hence younger than the grace relative to this earlier reading, so
+// no pause between the scan and the sweep can make a committed blob look old.
+// The sweep runs in its own goroutine so the caller's deadline bounds the wait
+// even while cas holds its cross-process lock; the sweep itself stops at the
+// next realm boundary and is safe to stop at any point.
 func (s *Store) sweepBlobs(ctx context.Context) error {
+	cutoff := s.now()
 	list, err := s.be.CacheEntries(ctx, "")
 	if err != nil {
 		return err
@@ -58,7 +64,16 @@ func (s *Store) sweepBlobs(ctx context.Context) error {
 			keep[string(cas.CacheRealm(string(m.Namespace)))+"/"+b.SHA256] = true
 		}
 	}
-	return s.blobs.Sweep(ctx, "cache", func(r cas.Realm, digest string) bool { return keep[string(r)+"/"+digest] }, s.now())
+	done := make(chan error, 1)
+	go func() {
+		done <- s.blobs.Sweep(ctx, "cache", func(r cas.Realm, digest string) bool { return keep[string(r)+"/"+digest] }, cutoff)
+	}()
+	select {
+	case err = <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // refuse writes the audit row for a refusal decided outside the backend.

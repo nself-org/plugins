@@ -48,6 +48,9 @@ func (s *Store) RecordPlan(ctx context.Context, attempt string, epoch int64, f F
 
 // RecordResult records the attempt's result while it is finalizing at epoch.
 func (s *Store) RecordResult(ctx context.Context, attempt string, epoch int64, passed bool) error {
+	if !attemptID.MatchString(attempt) {
+		return bad("attempt id %q", attempt)
+	}
 	return s.be.CacheRecordResult(ctx, attempt, epoch, passed)
 }
 

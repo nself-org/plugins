@@ -22,7 +22,7 @@ import (
 
 const (
 	maxManifestBytes = 8 << 20
-	maxBlobs         = 1 << 16
+	maxBlobs         = 4096 // one tar per spec path; Commit stats each inside the writer transaction
 	maxBlobBytes     = 1 << 50
 	maxPathBytes     = 1024
 )

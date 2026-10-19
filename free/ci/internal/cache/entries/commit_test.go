@@ -1,6 +1,7 @@
 package entries_test
 
 import (
+	"context"
 	"errors"
 	"os"
 	"strings"
@@ -245,5 +246,68 @@ func TestPruneKeepsABlobCommittedJustInsideTheAgeLimit(t *testing.T) {
 	}
 	if a.blobFiles() != 1 {
 		t.Fatalf("%d blob files", a.blobFiles())
+	}
+}
+
+// TestRePutRefreshesABlobSoItCanBeCommitted pins the cas behaviour BlobMaxAge
+// relies on: Put of bytes that already exist replaces the file, so its age restarts.
+func TestRePutRefreshesABlobSoItCanBeCommitted(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	key := e.key(trusted, "reput")
+	fin := e.attempt("rp1", trusted, []string{key}, true)
+	m := e.manifest(trusted, key, "same bytes")
+	old := time.Unix(0, e.clock.Load()).Add(-3 * time.Hour)
+	if err := os.Chtimes(e.blobPath(m, 0), old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.es.Commit(e.ctx, "rp1", fin, e.ns(trusted), m); !errors.Is(err, entries.ErrBlobStale) {
+		t.Fatalf("setup: %v", err)
+	}
+	e.put(e.ns(trusted), "part00.tar.gz", "same bytes")
+	if err := e.es.Commit(e.ctx, "rp1", fin, e.ns(trusted), m); err != nil {
+		t.Fatalf("a re-Put blob must commit: %v", err)
+	}
+}
+
+// pausingBackend lets a test run code right after the pruner's reference scan.
+type pausingBackend struct {
+	entries.Backend
+	after func()
+}
+
+func (p pausingBackend) CacheEntries(ctx context.Context, key string) ([]entries.Manifest, error) {
+	m, err := p.Backend.CacheEntries(ctx, key)
+	if key == "" && p.after != nil {
+		p.after()
+	}
+	return m, err
+}
+
+// TestPausedPrunerWithAStaleReferenceSnapshotKeepsAFreshCommit: the pruner scans
+// references (none), a writer commits a fresh blob, the pruner is paused until
+// that blob is hours old, then sweeps with its stale reference set. The sweep's
+// age cutoff is the clock reading from BEFORE the scan, so the blob survives.
+func TestPausedPrunerWithAStaleReferenceSnapshotKeepsAFreshCommit(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	key := e.key(trusted, "paused")
+	fin := e.attempt("pz1", trusted, []string{key}, true)
+	m := e.manifest(trusted, key, "fresh bytes")
+	now := func() time.Time { return time.Unix(0, e.clock.Load()) }
+	fired := false
+	pruner := entries.New(pausingBackend{Backend: e.st, after: func() {
+		fired = true
+		if err := e.es.Commit(e.ctx, "pz1", fin, e.ns(trusted), m); err != nil {
+			t.Error(err)
+		}
+		e.advance(3 * time.Hour) // the pruner is suspended; its next clock reading is far later
+	}}, e.blobs, entries.Options{Clock: now, Getenv: func(string) string { return "" }})
+	if _, err := pruner.Prune(e.ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	if !fired {
+		t.Fatal("setup: the reference scan never ran")
+	}
+	if _, ok := e.lookup(trusted, key); !ok {
+		t.Fatal("a stale reference snapshot let the sweep delete a freshly committed blob")
 	}
 }

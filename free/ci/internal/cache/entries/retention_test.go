@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
 )
@@ -273,5 +274,29 @@ func TestPruneBudgetBoundsTheWholeOperation(t *testing.T) {
 	}
 	if res, err = e.es.Prune(e.ctx, time.Minute); err != nil || res.More {
 		t.Fatalf("a roomy budget completes: %+v %v", res, err)
+	}
+}
+
+func TestPruneReportsTheCallersOwnDeadlineAsAnError(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	ctx, cancel := context.WithDeadline(e.ctx, time.Now().Add(-time.Second))
+	defer cancel()
+	if _, err := e.es.Prune(ctx, time.Hour); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("the caller's own expired deadline is an error, not More: %v", err)
+	}
+}
+
+func TestKeyRefusesToExpandOversizedInputs(t *testing.T) {
+	big := strings.Repeat("x", 1<<20)
+	refs := make([]string, 1<<16) // 65 536 references to one 1 MiB string: 64 GiB if expanded
+	for i := range refs {
+		refs[i] = big
+	}
+	ns, err := authz.CacheNamespace("proj", "owner", authz.Protected, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = entries.Key(entries.KeyInputs{Namespace: ns, Paths: refs}); err == nil {
+		t.Fatal("inputs far over the limit were accepted")
 	}
 }

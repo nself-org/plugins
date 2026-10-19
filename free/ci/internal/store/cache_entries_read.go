@@ -37,8 +37,12 @@ func cacheScan(ctx context.Context, db cacheQuerier, q string, args []any, each 
 // all, least recently used first.
 func (s *Store) CacheEntries(ctx context.Context, key string) ([]entries.Manifest, error) {
 	var out []entries.Manifest
-	err := cacheScan(ctx, s.readers, `SELECT e.cache_key,e.namespace,e.spec,e.attempt_id,e.epoch,e.source_trust,e.secrets_received,e.private_deps,e.scanned_clean,e.created_at,e.last_used_at,b.path,b.sha256,b.size
- FROM cache_entry e LEFT JOIN cache_entry_blob b ON b.cache_key=e.cache_key WHERE ?='' OR e.cache_key=? ORDER BY e.last_used_at,e.cache_key,b.path`, []any{key, key}, func(r *sql.Rows) error {
+	q, args := `SELECT e.cache_key,e.namespace,e.spec,e.attempt_id,e.epoch,e.source_trust,e.secrets_received,e.private_deps,e.scanned_clean,e.created_at,e.last_used_at,b.path,b.sha256,b.size
+ FROM cache_entry e LEFT JOIN cache_entry_blob b ON b.cache_key=e.cache_key`, []any(nil)
+	if key != "" {
+		q, args = q+" WHERE e.cache_key=?", []any{key}
+	}
+	err := cacheScan(ctx, s.readers, q+" ORDER BY e.last_used_at,e.cache_key,b.path", args, func(r *sql.Rows) error {
 		var e entries.Manifest
 		var path, sha sql.NullString
 		var size sql.NullInt64
@@ -65,11 +69,12 @@ func (s *Store) CacheTouch(ctx context.Context, key string) error {
 	})
 }
 
-// CacheDrop deletes the entry m (only if it is still the row that was read) and
-// appends the audit row in one transaction.
+// CacheDrop deletes the entry m (only if it is still the row that was read: same
+// writer attempt, epoch and creation time) and appends the audit row in one
+// transaction.
 func (s *Store) CacheDrop(ctx context.Context, m entries.Manifest, reason string) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		if err := execAll(ctx, tx, []any{"DELETE FROM cache_entry WHERE cache_key=? AND created_at=?", m.Key, m.CreatedAt}); err != nil {
+		if err := execAll(ctx, tx, []any{"DELETE FROM cache_entry WHERE cache_key=? AND attempt_id=? AND epoch=? AND created_at=?", m.Key, m.Writer.AttemptID, m.Writer.Epoch, m.CreatedAt}); err != nil {
 			return err
 		}
 		return s.appendAudit(ctx, tx, "cache", "cache.entry.dropped", m.Key, "reason="+reason)
