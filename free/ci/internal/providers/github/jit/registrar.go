@@ -53,7 +53,7 @@ type Config struct {
 	Facts    FactSink         // optional: without it FetchApprovalPolicy still returns the policy
 	Clock    func() time.Time // default time.Now
 	Entropy  io.Reader        // default crypto/rand; tests pin it
-	PageSize int              // runners per list page; default 100
+	PageSize int              // runners per list page, 1 to 100; default 100
 }
 
 // Registrar registers and tears down GitHub JIT runners.
@@ -83,11 +83,17 @@ func New(cfg Config) (*Registrar, error) {
 	if set.Scope != ScopeRepo && set.Scope != ScopeOrg || !labelPattern.MatchString(set.Label) || reservedLabel(set.Label) {
 		return nil, providers.NewError(providers.Config, "E700", "jit.settings", 0, time.Time{})
 	}
+	for _, id := range set.Groups {
+		if id <= 0 {
+			return nil, providers.NewError(providers.Config, "E700", "jit.settings", 0, time.Time{})
+		}
+	}
 	r := &Registrar{c: cfg.Client, set: set, facts: cfg.Facts, now: cfg.Clock, entropy: cfg.Entropy, pageSize: cfg.PageSize}
 	if r.now == nil {
 		r.now = time.Now
 	}
-	if r.pageSize <= 0 {
+	if r.pageSize <= 0 || r.pageSize > defaultPage {
+		// GitHub caps a page at 100; asking for more would make a full page look short and end the walk.
 		r.pageSize = defaultPage
 	}
 	return r, nil

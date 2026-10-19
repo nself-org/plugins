@@ -47,6 +47,11 @@ func (r *Registrar) RestrictionVerdict(ctx context.Context, scope providers.Runn
 	if groupID <= 0 {
 		return notProven("no_group", false, nil), nil
 	}
+	if r.set.Scope == ScopeRepo && groupID != DefaultGroup {
+		// A repo-level registration always lands in the default group; a verdict about any other group
+		// would say nothing about where the runner sits.
+		return notProven("repo_scope_group_mismatch", false, nil), nil
+	}
 	var g groupReply
 	_, err = r.c.Do(ctx, "GET", "/orgs/{org}/actions/runner-groups/{group}",
 		map[string]string{"org": t.owner, "group": strconv.FormatInt(groupID, 10)}, nil, &g)
@@ -69,6 +74,10 @@ func (r *Registrar) RestrictionVerdict(ctx context.Context, scope providers.Runn
 		owner, repo, branch, ok := pinnedBranch(entry)
 		if !ok {
 			return notProven("workflow_not_branch_pinned", true, g.WorkflowsList), nil
+		}
+		if !strings.EqualFold(owner, t.owner) {
+			// Protection on another owner's repository is theirs to set and say nothing about ours.
+			return notProven("workflow_foreign_owner", true, g.WorkflowsList), nil
 		}
 		key := owner + "/" + repo + "@" + branch
 		if checked[key] {
@@ -107,8 +116,9 @@ func pinnedBranch(entry string) (owner, repo, branch string, ok bool) {
 	return parts[0], parts[1], branch, true
 }
 
-// branchProtected is true when the branch protection API answers 200; 404 (no rule, or no right to
-// see it) is "not protected" and any other failure is an error.
+// branchProtected is true when the branch protection API answers 200; 404 (no rule, no right to see
+// it, a rules-set-only rule, or a branch name with a slash that GitHub does not accept escaped) is
+// "not protected", which errs on the safe side, and any other failure is an error.
 func (r *Registrar) branchProtected(ctx context.Context, owner, repo, branch string) (bool, error) {
 	_, err := r.c.Do(ctx, "GET", "/repos/{owner}/{repo}/branches/{branch}/protection",
 		map[string]string{"owner": owner, "repo": repo, "branch": branch}, nil, nil)

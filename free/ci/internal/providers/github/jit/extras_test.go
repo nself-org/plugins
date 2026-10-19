@@ -119,7 +119,11 @@ func TestApprovalPolicy(t *testing.T) {
 func TestSecretsNeverLeak(t *testing.T) {
 	f := newFakeGH(t)
 	r := f.registrar(jit.Settings{}, nil)
+	var funnel bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&funnel, nil)))
 	m, err := r.MintRunner(context.Background(), providers.RunnerRequest{Scope: repoOnly})
+	slog.SetDefault(old)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +135,7 @@ func TestSecretsNeverLeak(t *testing.T) {
 	slog.New(slog.NewTextHandler(&logs, nil)).Info("minted", "runner", m)
 	js, _ := json.Marshal(m)
 	var shown []string
-	shown = append(shown, fmt.Sprint(m), fmt.Sprintf("%v %+v %#v %s", m, m, m, m), string(js), logs.String())
+	shown = append(shown, funnel.String(), fmt.Sprint(m), fmt.Sprintf("%v %+v %#v %s", m, m, m, m), string(js), logs.String())
 	f.keepDel = true
 	derr := r.Deregister(context.Background(), m.Ref())
 	var pe *providers.Error

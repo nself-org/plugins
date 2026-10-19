@@ -1,8 +1,9 @@
 package jit
 
 // Purpose: Mint, the generate-jitconfig call (Epic D6, review F5).
-// Inputs:  a providers.RunnerRequest; at repo scope the runner group is always 1, at org scope the
-//          group is the request's GroupID or the one the operator mapped to the attempt's trust tier.
+// Inputs:  a providers.RunnerRequest (its Scope.Repo is required, "owner/name"); at repo scope the
+//          runner group is always 1, at org scope it is the one the operator mapped to the attempt's
+//          trust tier (a GroupID that disagrees with the tier is refused).
 // Outputs: the encoded JIT config as a providers.RunnerCredential (Kind github-jit-config, expiry
 //          now+60 min). MintRunner also returns the runner id and name Deregister needs.
 // Constraints: the name and the unique label are one fresh ULID per call, never reused; the labels
@@ -67,24 +68,21 @@ func archLabel(asked []string) string {
 	return "X64"
 }
 
-// groupFor chooses the runner group. Repo scope: the default group. Org scope: an explicit GroupID
-// must be one the operator mapped (a caller cannot pick a trusted group); otherwise the tier's group.
+// groupFor chooses the runner group. Repo scope: the default group. Org scope: the group the operator
+// mapped to the attempt's trust tier. An explicit GroupID is only a cross-check: it must equal that
+// tier's group, so a caller cannot move an untrusted attempt into a more trusted tier's group.
 func (r *Registrar) groupFor(req providers.RunnerRequest) (int64, error) {
 	if r.set.Scope == ScopeRepo {
 		return DefaultGroup, nil
 	}
-	if req.GroupID > 0 {
-		for _, id := range r.set.Groups {
-			if id == req.GroupID {
-				return id, nil
-			}
-		}
-		return 0, providers.NewError(providers.Config, "E700", "jit.group.not_mapped", 0, time.Time{})
+	id, ok := r.set.Groups[req.Attempt.Trust]
+	if !ok {
+		return 0, providers.NewError(providers.Config, "E700", "jit.groups.tier", 0, time.Time{})
 	}
-	if id, ok := r.set.Groups[req.Attempt.Trust]; ok {
-		return id, nil
+	if req.GroupID > 0 && req.GroupID != id {
+		return 0, providers.NewError(providers.Config, "E700", "jit.group.not_tier", 0, time.Time{})
 	}
-	return 0, providers.NewError(providers.Config, "E700", "jit.groups.tier", 0, time.Time{})
+	return id, nil
 }
 
 type mintBody struct {

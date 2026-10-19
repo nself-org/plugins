@@ -52,6 +52,9 @@ type fakeGH struct {
 	group    map[string]any   // runner group reply
 	protect  map[string]bool  // "owner/repo@branch" -> protected
 	approval string
+
+	groupStatus, protectStatus int // when non-zero, the group read / branch protection read answers this status
+	protectCalls               int
 }
 
 func newFakeGH(t *testing.T) *fakeGH {
@@ -103,6 +106,7 @@ func (f *fakeGH) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "GET" && strings.HasSuffix(p, "/actions/runners"):
 		size, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		size = min(size, 100) // GitHub never returns more than 100 per page
 		lo, hi := (page-1)*size, page*size
 		if lo > len(f.runners) {
 			lo = len(f.runners)
@@ -128,6 +132,10 @@ func (f *fakeGH) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		f.reply(w, 404, map[string]string{"message": "Not Found"})
 	case r.Method == "GET" && strings.Contains(p, "/actions/runner-groups/"):
+		if f.groupStatus != 0 {
+			f.reply(w, f.groupStatus, map[string]string{"message": "injected"})
+			return
+		}
 		if f.group == nil {
 			f.reply(w, 404, map[string]string{"message": "Not Found"})
 			return
@@ -135,6 +143,11 @@ func (f *fakeGH) serve(w http.ResponseWriter, r *http.Request) {
 		f.reply(w, 200, f.group)
 	case r.Method == "GET" && strings.Contains(p, "/branches/") && strings.HasSuffix(p, "/protection"):
 		rest := strings.TrimSuffix(strings.TrimPrefix(p, "/repos/"), "/protection")
+		f.protectCalls++
+		if f.protectStatus != 0 {
+			f.reply(w, f.protectStatus, map[string]string{"message": "injected"})
+			return
+		}
 		owner, rest, _ := strings.Cut(rest, "/")
 		repo, branch, _ := strings.Cut(rest, "/branches/")
 		if f.protect[owner+"/"+repo+"@"+branch] {

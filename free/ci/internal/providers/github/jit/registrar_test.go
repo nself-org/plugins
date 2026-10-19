@@ -35,8 +35,8 @@ func (s scoped) fill(sc providers.RunnerScope) providers.RunnerScope {
 }
 func (s scoped) Mint(ctx context.Context, r providers.RunnerRequest) (providers.RunnerCredential, error) {
 	r.Scope = s.fill(r.Scope)
-	if r.GroupID == 0 {
-		r.GroupID = s.group
+	if s.group != 0 {
+		r.Attempt.Trust = "untrusted"
 	}
 	return s.Registrar.Mint(ctx, r)
 }
@@ -141,6 +141,8 @@ func TestRestriction(t *testing.T) {
 		{"wildcard", group(false, true, "acme/widgets/.github/workflows/ci.yml@refs/heads/*"), "workflow_not_branch_pinned"},
 		{"one-bad-of-two", group(false, true, ok, sha), "workflow_not_branch_pinned"},
 		{"no-workflows", group(false, true), "no_selected_workflows"},
+		{"foreign-owner-pin", group(false, true, "evil/widgets/.github/workflows/ci.yml@refs/heads/main"), "workflow_foreign_owner"},
+		{"two-workflows-one-branch", group(false, true, ok, "acme/widgets/.github/workflows/other.yml@refs/heads/main"), ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -158,8 +160,35 @@ func TestRestriction(t *testing.T) {
 			if err != nil || got.ProtectedOnly != (tc.reason == "") {
 				t.Fatalf("Restriction %+v %v", got, err)
 			}
+			if tc.name == "two-workflows-one-branch" && f.protectCalls != 2 {
+				t.Fatalf("one branch must be read once per verdict: %d protection reads for 2 verdicts", f.protectCalls)
+			}
 		})
 	}
+	t.Run("api-errors-are-never-protected", func(t *testing.T) {
+		for _, tc := range []struct {
+			name           string
+			group, protect int
+		}{{"group-500", 500, 0}, {"group-403", 403, 0}, {"protection-500", 0, 500}, {"protection-403", 0, 403}} {
+			f := newFakeGH(t)
+			f.group, f.protect["acme/widgets@main"] = group(false, true, ok), true
+			f.groupStatus, f.protectStatus = tc.group, tc.protect
+			r := f.registrar(jit.Settings{Scope: jit.ScopeOrg}, nil)
+			v, err := r.RestrictionVerdict(context.Background(), repoOnly, 11)
+			got, rerr := r.Restriction(context.Background(), repoOnly, 11)
+			if err == nil || rerr == nil || v.ProtectedOnly || got.ProtectedOnly {
+				t.Fatalf("%s: verdict %+v err %v", tc.name, v, err)
+			}
+		}
+	})
+	t.Run("repo-scope-names-only-the-default-group", func(t *testing.T) {
+		f := newFakeGH(t)
+		f.group, f.protect["acme/widgets@main"] = group(false, true, ok), true
+		v, err := f.registrar(jit.Settings{}, nil).RestrictionVerdict(context.Background(), repoOnly, 11)
+		if err != nil || v.Verified || v.ProtectedOnly || v.Reason != "repo_scope_group_mismatch" || f.called("GET") != 0 {
+			t.Fatalf("%+v %v calls=%v", v, err, f.calls)
+		}
+	})
 	t.Run("unreadable-group", func(t *testing.T) {
 		f := newFakeGH(t)
 		v, err := f.registrar(jit.Settings{Scope: jit.ScopeOrg}, nil).RestrictionVerdict(context.Background(), repoOnly, 11)
@@ -212,34 +241,60 @@ func TestDeregisterVerified(t *testing.T) {
 }
 
 // TestOrphans proves acceptance 5 (second half): only nself-jit-* runners older than 70 minutes and
-// not busy come back, across pages; a persistent runner, a young one and a busy one never do.
+// not busy come back, across pages and at both scopes; a persistent runner, a young one, a busy one,
+// one 69 minutes old and one with a foreign prefix never do, and one 71 minutes old does.
 func TestOrphans(t *testing.T) {
-	f := newFakeGH(t)
 	old, young, older := "nself-jit-01KDV6SJR0ABCDEFGHJKMNPQRS", "nself-jit-01KDVBYC600000000000000000", "nself-jit-01KDTZXVG00000000000000000"
-	f.runners = []runnerRow{{1, "persistent-box", false}, {2, old, false}, {3, young, false}, {4, "nself-jit-01KDV3BQ400000000000000000", true},
-		{5, older, false}, {6, "nself-jit-not-a-ulid-0000000000000", false}, {7, "other-" + old, false}}
-	r := f.registrar(jit.Settings{}, nil)
-	got, err := r.Orphans(context.Background(), repoOnly, time.Time{})
+	min71, min69 := "nself-jit-01KDV9K9V00000000000000000", "nself-jit-01KDV9PZ100000000000000000"
+	for _, set := range []jit.Settings{{Scope: jit.ScopeRepo}, {Scope: jit.ScopeOrg}} {
+		t.Run("scope-"+set.Scope, func(t *testing.T) {
+			f := newFakeGH(t)
+			f.runners = []runnerRow{{1, "persistent-box", false}, {2, old, false}, {3, young, false}, {4, "nself-jit-01KDV3BQ400000000000000000", true},
+				{5, older, false}, {6, "nself-jit-not-a-ulid-0000000000000", false}, {7, "other-" + old, false}, {8, min71, false}, {9, min69, false}}
+			r := f.registrar(set, nil)
+			got, err := r.Orphans(context.Background(), repoOnly, time.Time{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var ids []string
+			for _, x := range got {
+				ids = append(ids, x.ID)
+				if x.Scope != repoOnly {
+					t.Fatalf("scope lost: %+v", x)
+				}
+			}
+			if strings.Join(ids, ",") != "2,5,8" {
+				t.Fatalf("orphans %v, want [2 5 8]", ids)
+			}
+			if n := f.called("GET /"); n != 5 {
+				t.Fatalf("paging: %d list calls for 9 runners at 2 per page", n)
+			}
+			if set.Scope == jit.ScopeOrg && f.called("GET /orgs/acme/actions/runners") != 5 {
+				t.Fatalf("org scope must list the org: %v", f.calls)
+			}
+			// An explicit cutoff replaces the 70-minute default.
+			early, _ := r.Orphans(context.Background(), repoOnly, epoch.Add(-24*time.Hour))
+			if len(early) != 0 {
+				t.Fatalf("cutoff ignored: %v", early)
+			}
+		})
+	}
+}
+
+// TestPageSizeClamp proves a page size above GitHub's maximum of 100 is clamped, so a full page of 100
+// is not mistaken for the last page (which would hide runners from the absence check and the sweep).
+func TestPageSizeClamp(t *testing.T) {
+	f := newFakeGH(t)
+	for i := int64(1); i <= 150; i++ {
+		f.runners = append(f.runners, runnerRow{ID: i, Name: "nself-jit-01KDTZXVG00000000000000000"})
+	}
+	r, err := jit.New(jit.Config{Client: testClient(f.srv.URL, f.srv), Clock: func() time.Time { return epoch }, PageSize: 500})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var ids []string
-	for _, x := range got {
-		ids = append(ids, x.ID)
-		if x.Scope != repoOnly {
-			t.Fatalf("scope lost: %+v", x)
-		}
-	}
-	if strings.Join(ids, ",") != "2,5" {
-		t.Fatalf("orphans %v, want [2 5]", ids)
-	}
-	if n := f.called("GET /repos/acme/widgets/actions/runners"); n != 4 {
-		t.Fatalf("paging: %d list calls for 7 runners at 2 per page", n)
-	}
-	// An explicit cutoff replaces the 70-minute default.
-	early, _ := r.Orphans(context.Background(), repoOnly, epoch.Add(-24*time.Hour))
-	if len(early) != 0 {
-		t.Fatalf("cutoff ignored: %v", early)
+	got, err := r.Orphans(context.Background(), repoOnly, time.Time{})
+	if err != nil || len(got) != 150 {
+		t.Fatalf("saw %d of 150 orphans (%v)", len(got), err)
 	}
 }
 
@@ -271,15 +326,23 @@ func TestFixedLabels(t *testing.T) {
 	if d.Labels[3] != "X64" || len(d.Labels) != 5 {
 		t.Fatalf("default labels %v", d.Labels)
 	}
-	o := f.registrar(jit.Settings{Scope: jit.ScopeOrg, Groups: map[string]int64{"untrusted": 11}}, nil)
-	for _, req := range []providers.RunnerRequest{{Scope: repoOnly, GroupID: 99}, {Scope: repoOnly, Attempt: providers.Attempt{Trust: "trusted"}}} {
+	o := f.registrar(jit.Settings{Scope: jit.ScopeOrg, Groups: map[string]int64{"untrusted": 11, "trusted": 12}}, nil)
+	for _, req := range []providers.RunnerRequest{
+		{Scope: repoOnly, Attempt: providers.Attempt{Trust: "untrusted"}, GroupID: 12}, // asks for a more trusted tier's group
+		{Scope: repoOnly, Attempt: providers.Attempt{Trust: "untrusted"}, GroupID: 99},
+		{Scope: repoOnly, Attempt: providers.Attempt{Trust: "unknown-tier"}},
+		{Scope: repoOnly, GroupID: 12}, // no tier at all
+	} {
 		_, err = o.Mint(context.Background(), req)
 		var pe *providers.Error
 		if !errors.As(err, &pe) || pe.Code != "E700" {
-			t.Fatalf("an unmapped group must be E700, got %v", err)
+			t.Fatalf("%+v: a group that is not the tier's must be E700, got %v", req, err)
 		}
 	}
-	if _, err := o.MintRunner(context.Background(), providers.RunnerRequest{Scope: repoOnly, GroupID: 11}); err != nil {
+	if len(f.minted) != 2 {
+		t.Fatalf("a refused request reached the API: %d mints", len(f.minted))
+	}
+	if _, err := o.MintRunner(context.Background(), providers.RunnerRequest{Scope: repoOnly, Attempt: providers.Attempt{Trust: "untrusted"}, GroupID: 11}); err != nil {
 		t.Fatal(err)
 	}
 	if f.minted[len(f.minted)-1]["runner_group_id"] != float64(11) {
