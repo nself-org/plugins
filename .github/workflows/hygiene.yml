@@ -9,7 +9,7 @@ name: Hygiene
 
 on:
   push:
-    branches-ignore: ['stash-archive/**']
+    branches: [main]
     tags: ['*']
   pull_request:
   workflow_dispatch:
