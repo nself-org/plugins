@@ -3,7 +3,8 @@ package run
 // Purpose: the real PolicyResolver (P7-TRUST-27): it resolves the effective
 // policy through internal/policy and hands the digest to the pipeline row and
 // the evidence. It replaces the built-in defaults of policy.go.
-// Inputs: a PolicyRequest (the repository root). Outputs: a PolicyResult.
+// Inputs: a PolicyRequest (the repository root). Outputs: a PolicyResult (digest,
+// secrets allowlist, and the Ignored and Fetch diagnostics the run reports).
 // Constraints: the digest is the policy in force without the per-run values (they
 // steer placement only; evidence verification re-resolves without them); registered from init(); git runs through the exec funnel
 // (report.Capture); the operator rows come from the default state.db, because
@@ -54,10 +55,12 @@ func (h PolicyHook) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult,
 	if err != nil {
 		return PolicyResult{}, err
 	}
-	out := PolicyResult{Digest: string(got.BaseDigest)}
+	out := PolicyResult{Digest: string(got.BaseDigest), Fetch: string(got.Fetch)}
 	for _, ig := range got.Ignored {
 		if ig.Scope == policy.SourceRun {
 			out.IgnoredRun = append(out.IgnoredRun, ig.Key+": "+ig.Reason)
+		} else {
+			out.Ignored = append(out.Ignored, ig.Key+": "+ig.Reason)
 		}
 	}
 	if v, ok := got.Values["trust.secrets"]; ok {

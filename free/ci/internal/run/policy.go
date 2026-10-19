@@ -21,6 +21,11 @@ type PolicyResult struct {
 	// IgnoredRun lists the per-run values the policy did not take, one line each
 	// ("key: reason"); a run reports them, it never drops them silently (P7-AUTO-29).
 	IgnoredRun []string
+	// Ignored lists what the resolver did not apply outside the per-run values
+	// ("key: reason"), such as a protected branch it could not fetch (D-1125).
+	Ignored []string
+	// Fetch is how fresh the protected-branch tip was: fresh, stale or none; empty when unresolved.
+	Fetch string
 	SecretsInfo
 }
 
@@ -54,6 +59,19 @@ func ResolvePolicy(ctx context.Context, root, pipeline string) (PolicyResult, er
 		r = p
 	}
 	return r.Resolve(ctx, PolicyRequest{Root: root, Pipeline: pipeline})
+}
+
+// policyNotes turns what the resolver did not apply (an unreachable protected
+// branch, a stale tip) into run notes (D-1125).
+func policyNotes(p PolicyResult) []string {
+	var out []string
+	for _, line := range p.Ignored {
+		out = append(out, "policy not fully applied: "+line)
+	}
+	if p.Fetch == "stale" {
+		out = append(out, "protected-branch policy read from a stale tip (the fetch failed; the cached tip was used)")
+	}
+	return out
 }
 
 // ignoredRunNotes turns the per-run policy values the policy refused into run
