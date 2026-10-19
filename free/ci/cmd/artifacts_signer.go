@@ -106,8 +106,10 @@ func countTrue(b ...bool) (n int) {
 }
 
 // signerResolver resolves release secrets through the exec funnel and the cli.
+// The funnel strips the environment, so NSELF_V15=1 is passed explicitly: released
+// cli 1.4.x has `config secrets resolve` only with it (D-1236).
 func signerResolver(root string) secrets.ValueResolver {
-	return &secrets.Resolver{Runner: &secrets.ExecRunner{Home: os.Getenv("NSELF_CI_HOME"), CoordinatorID: "signer", Attempt: "key"}, Project: root}
+	return &secrets.Resolver{Runner: &secrets.ExecRunner{Home: os.Getenv("NSELF_CI_HOME"), CoordinatorID: "signer", Attempt: "key"}, Project: root, Env: []string{"NSELF_V15=1"}}
 }
 
 // signerStore writes the key with `nself config secrets set` over stdin.

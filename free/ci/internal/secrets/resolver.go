@@ -65,6 +65,9 @@ type Resolver struct {
 	Project string
 	// AgeKeyPath, when set, is exported as SECRETS_AGE_KEY_PATH: the node's own age identity.
 	AgeKeyPath string
+	// Env is added to every cli call. The signer sets NSELF_V15=1 here: the funnel strips the
+	// caller's environment, and released cli 1.4.x has `config secrets resolve` only with it (D-1236).
+	Env []string
 	// Shared, when set, is shared by every Resolver of the process, so availability is asked once per
 	// process (P7-CI D26); nil keeps the result inside this Resolver.
 	Shared *ProbeState
@@ -86,10 +89,11 @@ func (r *Resolver) binary() string {
 }
 
 func (r *Resolver) env() []string {
-	if r.AgeKeyPath == "" {
-		return nil
+	out := append([]string(nil), r.Env...)
+	if r.AgeKeyPath != "" {
+		out = append(out, "SECRETS_AGE_KEY_PATH="+r.AgeKeyPath)
 	}
-	return []string{"SECRETS_AGE_KEY_PATH=" + r.AgeKeyPath}
+	return out
 }
 
 // Probe checks once that the cli has the resolve command. Absence is E675.

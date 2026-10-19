@@ -31,7 +31,9 @@ import (
 )
 
 // fakeNself writes the fake cli into a bin directory on PATH and returns the
-// directory its secrets live in.
+// directory its secrets live in. Its `config secrets resolve` is gated on
+// NSELF_V15=1 like a released 1.4.x cli, so every signer test also proves the
+// signer hands the flag to its cli child (D-1236).
 func fakeNself(t *testing.T) string {
 	t.Helper()
 	bin, secretsDir := t.TempDir(), t.TempDir()
@@ -46,6 +48,8 @@ if [ "$1 $2 $3" = "config secrets set" ] || [ "$1 $2" = "secrets set" ]; then
   exit 0
 fi
 if [ "$1 $2 $3" = "config secrets resolve" ]; then
+  # like cli 1.4.x: the command exists only with NSELF_V15=1 (D-1236)
+  if [ "$NSELF_V15" != 1 ]; then echo "E676 unknown command" >&2; exit 2; fi
   case "$4" in --help) exit 0;; esac
   # $4 --project $5 P $6 --for-attempt $7 A $8 --json $9 REF
   ref="$9"; att="$7"; name="${ref#release/}"
