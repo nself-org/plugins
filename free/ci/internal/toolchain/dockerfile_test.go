@@ -56,6 +56,9 @@ func checkDockerfile(d string, pins []Pin) []string {
 	for _, p := range pins {
 		switch p.Kind {
 		case KindBaseImage:
+			if strings.HasPrefix(p.Owner, ".github/") { // a workflow helper image; TestWorkflowHelperImagesHavePinRows owns it
+				continue
+			}
 			ref := p.Image + ":" + p.Version + "@" + p.Digest
 			if n := strings.Count(d, ref); n < 2 {
 				out = append(out, fmt.Sprintf("base image %s is used by %d stages, want every stage", ref, n))
