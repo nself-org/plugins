@@ -27,6 +27,10 @@ const (
 // refRe is a docker reference pinned by digest: [host[:port]/]repo[:tag]@sha256:hex.
 var refRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64}$`)
 
+// Pinned reports whether ref is a docker reference pinned by digest
+// (ref@sha256:<64 hex>).
+func Pinned(ref string) bool { return refRe.MatchString(ref) }
+
 // Capture runs argv and returns its combined output and exit code; err is set
 // only when the process could not run (the doctor and report funnel).
 type Capture func(ctx context.Context, argv ...string) (string, int, error)

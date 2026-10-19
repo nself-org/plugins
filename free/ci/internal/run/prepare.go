@@ -14,6 +14,7 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
+	"github.com/nself-org/plugins/free/ci/internal/toolchain"
 )
 
 type prepared struct {
@@ -71,7 +72,9 @@ func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, e
 	p.job.Env = env
 	if rs.c.Opts.Container {
 		img := ""
-		if p.job.Container != nil {
+		// A job's own image counts only when pinned by digest; any other
+		// image gives way to the registered toolchain image (D-0998).
+		if p.job.Container != nil && toolchain.Pinned(p.job.Container.Image) {
 			img = p.job.Container.Image
 		}
 		if img == "" && rs.hooks.Image != nil {
