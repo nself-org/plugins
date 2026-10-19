@@ -45,27 +45,34 @@ for n in %[7]s; do install -d -o %[1]s-job-$n -g %[1]s-job-$n -m 0700 %[6]s/$n; 
 }
 
 // sudoersScript writes one rule file per slot user. Each rule lets the agent user run the job shim as
-// that one job user and nothing else.
+// that one job user and nothing else. Every rule is staged and checked with `visudo -cf` before
+// /etc/sudoers or /etc/sudoers.d is touched, and a failure at any later point restores /etc/sudoers.
 func sudoersScript(slots int) string {
 	return fmt.Sprintf(`set -eu
 umask 077
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
 cp /etc/sudoers "$tmp/sudoers.orig"
+ok=0
+cleanup() {
+  if [ "$ok" != 1 ]; then cp "$tmp/sudoers.orig" /etc/sudoers 2>/dev/null || true; fi
+  rm -rf "$tmp"
+}
+trap cleanup EXIT
+for n in %[2]s; do
+  echo "%[3]s ALL=(%[3]s-job-$n) NOPASSWD: %[4]s job-shim" > "$tmp/%[3]s-job-$n"
+  visudo -cf "$tmp/%[3]s-job-$n" >/dev/null
+done
 grep -Eq '^[#@]includedir[[:space:]]+%[1]s' /etc/sudoers || echo '#includedir %[1]s' >> /etc/sudoers
 mkdir -p %[1]s
 for n in %[2]s; do
-  f="$tmp/%[3]s-job-$n"
-  echo "%[3]s ALL=(%[3]s-job-$n) NOPASSWD: %[4]s job-shim" > "$f"
-  visudo -cf "$f" >/dev/null
-  install -o root -g root -m 0440 "$f" %[1]s/%[3]s-job-$n
+  install -o root -g root -m 0440 "$tmp/%[3]s-job-$n" %[1]s/%[3]s-job-$n
 done
 if ! visudo -c >/dev/null 2>&1; then
   for n in %[2]s; do rm -f %[1]s/%[3]s-job-$n; done
-  cp "$tmp/sudoers.orig" /etc/sudoers
   echo 'sudoers did not validate; nothing left in place' >&2
   exit 1
 fi
+ok=1
 `, SudoersDir, slotList(slots), AgentUser, AgentPath)
 }
 
@@ -80,6 +87,7 @@ func removeSlotScript(n int) string {
 	return fmt.Sprintf(`set -eu
 u=%[1]s
 rm -f %[2]s
+pkill -KILL -u "$u" >/dev/null 2>&1 || true
 rmdir %[3]s 2>/dev/null || true
 if [ -n "$(find / -xdev -user "$u" 2>/dev/null | head -n 1)" ]; then echo kept; exit 0; fi
 userdel "$u" >/dev/null 2>&1 || true
@@ -96,14 +104,23 @@ rm -f ./%[2]s
 `, AgentUser, uploaded, AgentPath)
 }
 
-// verifyScript checks the layout after an install: every user exists, the state directory is the
-// agent's alone and each rule file is in place.
+// verifyScript checks the layout after an install: every user exists and none is in the docker group,
+// the state directory is the agent's alone, each rule file is in place and sudo itself lists exactly
+// one job-shim rule per slot for the agent user (so a rule sudo ignores, or a surplus rule, fails here).
 func verifyScript(slots int) string {
 	return fmt.Sprintf(`set -eu
 id -u %[1]s >/dev/null
 [ "$(stat -c %%a %[2]s)" = 700 ]
-for n in %[3]s; do id -u %[1]s-job-$n >/dev/null; [ -f %[4]s/%[1]s-job-$n ]; done
-`, AgentUser, StateDir, slotList(slots), SudoersDir)
+for n in %[3]s; do
+  id -u %[1]s-job-$n >/dev/null
+  [ -f %[4]s/%[1]s-job-$n ]
+done
+for u in $(getent passwd | cut -d: -f1 | grep -E '^%[1]s(-job-[0-9]+)?$'); do
+  if id -nG "$u" | grep -qw docker; then echo "$u is in the docker group" >&2; exit 1; fi
+done
+rules=$(sudo -n -l -U %[1]s 2>/dev/null | grep -c '%[5]s job-shim' || true)
+[ "$rules" = %[6]d ] || { echo "sudo lists $rules job-shim rules, want %[6]d" >&2; exit 1; }
+`, AgentUser, StateDir, slotList(slots), SudoersDir, AgentPath, slots)
 }
 
 // uninstallScript removes the whole system layout.

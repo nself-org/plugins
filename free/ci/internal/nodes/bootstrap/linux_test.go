@@ -84,7 +84,7 @@ func TestScriptsParseAndAreSafeToSend(t *testing.T) {
 		if !strings.HasPrefix(s, "set -eu\n") {
 			t.Errorf("%s: does not start with set -eu", name)
 		}
-		if strings.Contains(s, "docker") {
+		if strings.Contains(s, "docker") && name != "verify" { // verify greps for the group to prove it is absent
 			t.Errorf("%s: mentions docker (no docker group, ever)", name)
 		}
 	}
