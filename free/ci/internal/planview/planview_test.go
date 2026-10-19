@@ -32,7 +32,9 @@ func fixture(t *testing.T) (sched.World, []sched.Job, sched.Result) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	local := sched.Runner{ID: "local", Capability: lc, Decl: sched.DeclarationFromCapability(lc, false, ""), Class: "local", Location: "local", Provider: "local",
+	localDecl := sched.DeclarationFromCapability(lc, false, "personal") // what world.Build declares for the injected local runner
+	localDecl.PersonalOwnNode = true
+	local := sched.Runner{ID: "local", Capability: lc, Decl: localDecl, CoordinatorMode: "personal", Class: "local", Location: "local", Provider: "local",
 		Avail: sched.Avail{Slots: 1, CPU: 4, MemMB: 8192}}
 	raw, err := os.ReadFile("../model/testdata/capability/valid/lan-mac.valid.json")
 	if err != nil {
@@ -47,7 +49,6 @@ func fixture(t *testing.T) (sched.World, []sched.Job, sched.Result) {
 		Avail: sched.Avail{Slots: 1, CPU: 8, MemMB: 16384}}
 	w := sched.World{NowMs: fixedNow.UnixMilli(), Runners: []sched.Runner{local, lan}, Policy: sched.Policy{Preset: "balanced"},
 		Costs: map[string]sched.Cost{}, Previous: map[string]string{}}
-	MarkPersonalLocal(&w)
 	jobs, _ := SchedJobs(Context{PipelineID: "default", Project: "proj", Support: []string{"linux/amd64"}, DefaultPlatform: "linux/amd64", Foreground: true}, []PlannedJob{
 		{ID: "test", Name: "test", Layer: 1, Deps: []string{"build"}, Job: model.Job{Kind: "test", Run: []string{"go", "test"}}},
 		{ID: "build", Name: "build", Layer: 0, Job: model.Job{Kind: "build", Run: []string{"go", "build"}, Secrets: []string{"project/token", "project/other"}, Timeout: "10m"}},
@@ -298,22 +299,6 @@ func TestPlanviewCostConfidence(t *testing.T) {
 	pl, cf := placement(w, sched.Runner{ID: "m", Class: "metered"}, sched.Placement{RunnerID: "m", CostMicro: 99}, x)
 	if pl.Estimate.CostMicro != nil || cf.micro != nil || pl.Estimate.CostConfidence != "unknown" {
 		t.Fatalf("an unknown cost is null, not 99: %+v", pl.Estimate)
-	}
-}
-
-func TestPlanviewMarkPersonalLocal(t *testing.T) {
-	w := sched.World{Runners: []sched.Runner{{ID: "local"}, {ID: "other"}, {ID: "local", CoordinatorHost: true, CoordinatorMode: "team"}}}
-	MarkPersonalLocal(&w)
-	if !w.Runners[0].Decl.PersonalOwnNode || w.Runners[0].CoordinatorMode != "personal" {
-		t.Fatalf("local runner: %+v", w.Runners[0])
-	}
-	if w.Runners[1].Decl.PersonalOwnNode || w.Runners[2].Decl.PersonalOwnNode || w.Runners[2].CoordinatorMode != "team" {
-		t.Fatal("only a runner called local that does not host a TEAM coordinator is marked")
-	}
-	w = sched.World{Runners: []sched.Runner{{ID: "local", CoordinatorHost: true, CoordinatorMode: "personal"}}}
-	MarkPersonalLocal(&w)
-	if !w.Runners[0].Decl.PersonalOwnNode {
-		t.Fatal("the node of a PERSONAL coordinator is the operator's own node")
 	}
 }
 

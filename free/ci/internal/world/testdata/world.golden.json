@@ -1490,11 +1490,11 @@
           "Override": false
         },
         "CoordinatorHost": false,
-        "CoordinatorMode": "",
+        "CoordinatorMode": "personal",
         "Source": "",
         "Projects": 0,
         "Shared": false,
-        "PersonalOwnNode": false,
+        "PersonalOwnNode": true,
         "PersonalOwnRun": false,
         "ReleaseJob": false
       },
@@ -1509,7 +1509,7 @@
         "MemMB": 16382
       },
       "CoordinatorHost": false,
-      "CoordinatorMode": "",
+      "CoordinatorMode": "personal",
       "ProviderDown": false,
       "QueuedAhead": 0,
       "Active": true

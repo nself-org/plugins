@@ -119,10 +119,10 @@ func TestWorldBuild(t *testing.T) {
 	if local.ID != "local" || local.Avail.Slots != 0 {
 		t.Fatalf("local capacity: %s %+v", local.ID, local.Avail)
 	}
-	if local.CoordinatorHost || local.CoordinatorMode != "" {
-		t.Fatal("coordinator host inferred without provider")
+	if local.CoordinatorHost || local.CoordinatorMode != "personal" || !local.Decl.PersonalOwnNode {
+		t.Fatal("coordinator host inferred without provider, or local not declared the personal own node")
 	}
-	const goldenDigest = "82bf42516c68a10acbe4a5f596f4a1d03fa8f074c06edf828e7630ed28470dbe"
+	const goldenDigest = "e2d715de349154f1cca0c9f2107373dd659f107fe827cd0a98a869a8e1772993"
 	if digest != goldenDigest {
 		t.Fatalf("golden world digest: got %s want %s", digest, goldenDigest)
 	}
@@ -219,7 +219,7 @@ func TestWorldBuildFractionalCapability(t *testing.T) {
 	if err != nil || string(canonical) != `{"economics":{"marginal_cost_per_min":0.25},"resources":{"cpu":0.5}}` {
 		t.Fatalf("fractional canonical bytes = %s: %v", canonical, err)
 	}
-	const goldenFractionalDigest = "a903efba736cc51c83ce965e636925355695b9a77fa0d434aa31cc0c5adfadf1"
+	const goldenFractionalDigest = "9d2054e19526227d0c3dcb883ac4dcc8cde76644d1818300d5cb58ec063bd9ff"
 	var previous string
 	for i := 0; i < 3; i++ {
 		w, digest, err := Build(context.Background(), d, p)
@@ -371,5 +371,43 @@ func TestWorldContributors(t *testing.T) {
 	partial, _, err := Build(context.Background(), d, p)
 	if err == nil || !strings.Contains(err.Error(), "outside") || len(partial.Runners) != 0 {
 		t.Fatalf("field ownership: %+v %v", partial, err)
+	}
+}
+
+// D-0989: the injected local runner is the operator's own node unless a TEAM coordinator is served.
+func TestWorldBuildLocalPersonalOwnNode(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		facts *CoordinatorFacts
+		own   bool
+		mode  string
+	}{
+		{"no coordinator", nil, true, "personal"},
+		{"personal coordinator", &CoordinatorFacts{Serving: true, Mode: "personal"}, true, "personal"},
+		{"team coordinator", &CoordinatorFacts{Serving: true, Mode: "team"}, false, "team"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d, p := worldFixture(t)
+			if tc.facts != nil {
+				facts := *tc.facts
+				hooks.Lock()
+				hooks.facts = func(context.Context) (CoordinatorFacts, error) { return facts, nil }
+				hooks.Unlock()
+				t.Cleanup(func() { hooks.Lock(); hooks.facts = nil; hooks.Unlock() })
+			}
+			w, _, err := Build(context.Background(), d, p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			local := w.Runners[len(w.Runners)-1]
+			if local.ID != "local" || local.Decl.PersonalOwnNode != tc.own || string(local.CoordinatorMode) != tc.mode || string(local.Decl.CoordinatorMode) != tc.mode {
+				t.Fatalf("local runner: own=%v mode=%q decl mode=%q", local.Decl.PersonalOwnNode, local.CoordinatorMode, local.Decl.CoordinatorMode)
+			}
+			for _, r := range w.Runners[:len(w.Runners)-1] {
+				if r.Decl.PersonalOwnNode {
+					t.Fatalf("registered node %s must never get the owner exception", r.ID)
+				}
+			}
+		})
 	}
 }

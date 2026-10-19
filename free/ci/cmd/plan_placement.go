@@ -195,9 +195,6 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	if err != nil {
 		return model.PlacementPlan{}, err
 	}
-	if local != nil {
-		planview.MarkPersonalLocal(&w)
-	}
 	digest, err := world.Digest(w)
 	if err != nil {
 		return model.PlacementPlan{}, err
