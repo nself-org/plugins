@@ -26,8 +26,10 @@ type Mount = ciexec.Mount
 type AttemptInfo struct {
 	RunID, JobID, JobName, AttemptID, Revision string
 	N                                          int
-	Job                                        model.Job
-	IdempotencyKey                             string
+	// Check is the catalogue check the job was planned from ("" for a configured job).
+	Check          string
+	Job            model.Job
+	IdempotencyKey string
 	// Home is the run's state directory as given in Options ("" = NSELF_CI_HOME or ~/.nself/ci).
 	Home string
 	// Store is the run's store; hooks read and write their own tables through it.

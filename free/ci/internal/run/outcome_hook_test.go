@@ -68,7 +68,7 @@ func TestJudgeLeavesOthersAlone(t *testing.T) {
 	if res.Attempt.State != "failed" || o.Findings != 1 {
 		t.Errorf("failed attempt: %+v %+v", res.Attempt, o)
 	}
-	if rs.wantsOutput(model.Job{Kind: "test"}) || !rs.wantsOutput(model.Job{Kind: "drill"}) {
+	if rs.wantsOutput(AttemptInfo{Job: model.Job{Kind: "test"}}) || !rs.wantsOutput(AttemptInfo{Job: model.Job{Kind: "drill"}}) {
 		t.Error("wantsOutput must follow the hook's Wants")
 	}
 }
@@ -102,5 +102,50 @@ func TestJudgeFailsAnAttemptWhenTheHookPanics(t *testing.T) {
 	rs.judge(context.Background(), AttemptInfo{Job: model.Job{Kind: "drill"}}, &outputBuffer{}, &res, &o)
 	if res.Attempt.State != "failed" || res.Attempt.FailureClass != "infra" || res.Err == nil {
 		t.Fatalf("a hook that cannot judge must not let the attempt pass: %+v %v", res.Attempt, res.Err)
+	}
+}
+
+type checkOutcome struct {
+	fakeOutcome
+	check string
+}
+
+func (c checkOutcome) WantsCheck(check string) bool { return check == c.check }
+
+// D-1026: a hook may reclassify a code failure (a tool the environment lacks)
+// but never a timeout, and a check-aware hook selects by the planned check.
+func TestJudgeReclassifiesACodeFailure(t *testing.T) {
+	h := checkOutcome{fakeOutcome{kind: "none", change: OutcomeChange{Fail: true, FailureClass: "infra", Detail: "E614: pytest unavailable", Excerpt: "E614: pytest unavailable"}}, "python-test"}
+	rs := &runState{hooks: Hooks{Outcomes: []OutcomeHook{h}}}
+	info := AttemptInfo{Check: "python-test", Job: model.Job{Kind: "test"}}
+	if !rs.wantsOutput(info) || rs.wantsOutput(AttemptInfo{Check: "go-test", Job: model.Job{Kind: "none"}}) {
+		t.Fatal("wantsOutput must follow WantsCheck")
+	}
+	out := &outputBuffer{}
+	res, o := result("failed"), JobOutcome{}
+	res.Attempt.FailureClass = "code"
+	rs.judge(context.Background(), info, out, &res, &o)
+	if res.Attempt.FailureClass != "infra" || o.Excerpt != "E614: pytest unavailable" || o.Detail != "E614: pytest unavailable" {
+		t.Fatalf("code failure not reclassified: %+v %+v", res.Attempt, o)
+	}
+	res, o = result("failed"), JobOutcome{}
+	res.Attempt.FailureClass = "timeout"
+	rs.judge(context.Background(), info, out, &res, &o)
+	if res.Attempt.FailureClass != "timeout" {
+		t.Fatalf("timeout was overwritten: %+v", res.Attempt)
+	}
+}
+
+// D-1026: through the run loop, a planned catalogue job whose output shows a
+// missing tool ends as an infra error with the hook's excerpt.
+func TestRunLoopAppliesTheCheckClassifier(t *testing.T) {
+	r := newRig(t, map[string]model.Job{"a": sh("echo 'No module named pytest'; exit 1")}, gitFake{})
+	for i := range r.C.Plan.Jobs {
+		r.C.Plan.Jobs[i].Check = "python-test"
+	}
+	r.C.Hooks.Outcomes = []OutcomeHook{checkOutcome{fakeOutcome{kind: "none", change: OutcomeChange{Fail: true, FailureClass: "infra", Detail: "E614: pytest unavailable", Excerpt: "E614: pytest unavailable"}}, "python-test"}}
+	o := outcome(r.run(t), "a")
+	if o.State != StateFailed || o.FailureClass != "infra" || o.Excerpt != "E614: pytest unavailable" || checkResult(o) != "error" {
+		t.Fatalf("a: %+v", o)
 	}
 }

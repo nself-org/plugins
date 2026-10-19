@@ -26,6 +26,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/config"
 	"github.com/nself-org/plugins/free/ci/internal/drill"
+	_ "github.com/nself-org/plugins/free/ci/internal/gates/toolhook" // registers the E614 outcome hook (D-1026)
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"

@@ -144,8 +144,13 @@ func pipCommand(module string, requirements []string, project bool) []string {
 
 // pytestMissing reports output that shows pytest itself is not installed
 // (not a failing test): the check is an unavailable tool, never a pass.
-func pytestMissing(output string) bool {
-	for _, marker := range []string{"No module named pytest", "Failed to spawn: `pytest`", "pytest: command not found", "Command not found: pytest"} {
+func pytestMissing(output string) bool { return pythonToolMissing("pytest", output) }
+
+// pythonToolMissing reports output that shows a Python tool run through the
+// project's manager (python -m, uv run, poetry run, a bare command) is not
+// installed.
+func pythonToolMissing(tool, output string) bool {
+	for _, marker := range []string{"No module named " + tool, "Failed to spawn: `" + tool + "`", tool + ": command not found", "Command not found: " + tool} {
 		if strings.Contains(output, marker) {
 			return true
 		}

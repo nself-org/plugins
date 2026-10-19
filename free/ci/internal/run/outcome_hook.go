@@ -32,6 +32,9 @@ type OutcomeFacts struct {
 
 // OutcomeChange is a hook's verdict. Fail ends a passed attempt failed with
 // FailureClass (default code) and Err; Findings and Excerpt always apply.
+// Fail with a FailureClass on an attempt that already failed as a code
+// failure reclassifies it (a tool the environment lacks is infra, not a
+// failing test); a timeout or other class is never overwritten.
 type OutcomeChange struct {
 	Fail         bool
 	FailureClass model.FailureClass
@@ -46,6 +49,21 @@ type OutcomeHook interface {
 	// Wants reports whether the hook needs the output of a job's attempts.
 	Wants(job model.Job) bool
 	Outcome(ctx context.Context, f OutcomeFacts) (OutcomeChange, bool)
+}
+
+// CheckOutcomeHook is an OutcomeHook that selects attempts by the catalogue
+// check behind the job (AttemptInfo.Check) instead of by job shape.
+type CheckOutcomeHook interface {
+	OutcomeHook
+	WantsCheck(check string) bool
+}
+
+// hookWants reports whether h asks for the output of this attempt's job.
+func hookWants(h OutcomeHook, info AttemptInfo) bool {
+	if c, ok := h.(CheckOutcomeHook); ok {
+		return c.WantsCheck(info.Check)
+	}
+	return h.Wants(info.Job)
 }
 
 // RegisterOutcome adds an OutcomeHook.
@@ -76,9 +94,9 @@ func (o *outputBuffer) text() string {
 	return string(o.buf)
 }
 
-func (rs *runState) wantsOutput(job model.Job) bool {
+func (rs *runState) wantsOutput(info AttemptInfo) bool {
 	for _, h := range rs.hooks.Outcomes {
-		if h.Wants(job) {
+		if hookWants(h, info) {
 			return true
 		}
 	}
@@ -94,7 +112,7 @@ func (rs *runState) judge(ctx context.Context, info AttemptInfo, out *outputBuff
 	}
 	f := OutcomeFacts{Info: info, Passed: state == "passed", ExitCode: res.ExitCode, Output: out.text(), Truncated: out.truncated || len(out.buf) > OutcomeOutputCap}
 	for _, h := range rs.hooks.Outcomes {
-		if !h.Wants(info.Job) {
+		if !hookWants(h, info) {
 			continue
 		}
 		var ch OutcomeChange
@@ -106,6 +124,12 @@ func (rs *runState) judge(ctx context.Context, info AttemptInfo, out *outputBuff
 			continue
 		}
 		o.Findings, o.Excerpt = ch.Findings, ch.Excerpt
+		if ch.Fail && !f.Passed && ch.FailureClass != "" && (res.Attempt.FailureClass == "" || res.Attempt.FailureClass == "code") {
+			res.Attempt.FailureClass = ch.FailureClass
+			if res.Err == nil {
+				o.Detail = ch.Detail
+			}
+		}
 		if ch.Fail && f.Passed {
 			res.Attempt.State, res.Attempt.FailureClass = "failed", ch.FailureClass
 			if res.Attempt.FailureClass == "" {

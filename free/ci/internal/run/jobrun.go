@@ -69,7 +69,7 @@ func (rs *runState) settle(id string, from, to model.JobState, class model.Failu
 }
 
 func (rs *runState) info(pj plan.PlannedJob, job model.Job, attemptID string) AttemptInfo {
-	return AttemptInfo{RunID: rs.sess.RunID, JobID: rs.rows[pj.ID], JobName: pj.ID, AttemptID: attemptID, Revision: rs.rev.SHA, N: 1,
+	return AttemptInfo{RunID: rs.sess.RunID, JobID: rs.rows[pj.ID], JobName: pj.ID, Check: pj.Check, AttemptID: attemptID, Revision: rs.rev.SHA, N: 1,
 		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home, Store: rs.sess.Store, Container: rs.c.Opts.Container}
 }
 
@@ -148,7 +148,7 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	spec.AfterJob = rs.afterJob(effective)
 	var t tail
 	var full *outputBuffer // everything the attempt prints, kept only for jobs an OutcomeHook asks about
-	if rs.wantsOutput(setup.job) {
+	if rs.wantsOutput(effective) {
 		full = &outputBuffer{}
 	}
 	lg := rs.openLog(ctx, info)
