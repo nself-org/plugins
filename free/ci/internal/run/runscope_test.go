@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -116,5 +117,31 @@ func TestIgnoredRunNotes(t *testing.T) {
 	got := ignoredRunNotes([]string{"sched.overrides.max_queue: E819 run scope widening", "sched.overrides.runner: E819 run scope widening"}, []string{"sched.overrides.max_queue"})
 	if len(got) != 1 || got[0] != "per-run policy value ignored: sched.overrides.runner: E819 run scope widening" {
 		t.Errorf("notes = %q", got)
+	}
+}
+
+type ignoredPolicy struct{ lines []string }
+
+func (p ignoredPolicy) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult, error) {
+	got, err := defaultResolver{}.Resolve(ctx, r)
+	got.IgnoredRun = p.lines
+	return got, err
+}
+
+// TestIgnoredRunValuesReachSummary: what the policy refused of the run's flags is
+// a note of the finished run (never a silent drop); a defaulted key stays quiet.
+func TestIgnoredRunValuesReachSummary(t *testing.T) {
+	r := passRig(t)
+	r.C.Hooks.Policy = ignoredPolicy{[]string{"sched.overrides.runner: E819 run scope widening", "sched.overrides.max_queue: E819 run scope widening"}}
+	r.C.Opts.PolicyRunDefaulted = []string{"sched.overrides.max_queue"}
+	res := r.run(t)
+	var got []string
+	for _, n := range res.Summary.Notes {
+		if strings.Contains(n, "per-run policy value ignored") {
+			got = append(got, n)
+		}
+	}
+	if len(got) != 1 || !strings.Contains(got[0], "sched.overrides.runner") {
+		t.Fatalf("notes = %q", res.Summary.Notes)
 	}
 }
