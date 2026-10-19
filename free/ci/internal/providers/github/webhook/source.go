@@ -141,7 +141,7 @@ func (s *Source) Verify(ctx context.Context, r *http.Request, body []byte) (mode
 	case name == "" && r.Header.Get(hdrEvent) == "ping": // an organization hook's ping names no repository
 		return model.TriggerFacts{}, unsupported("event \"ping\": skip")
 	case auth == "none":
-		if !coordinator.ValidProject(name) { // nothing authenticated the sender: still never pass junk on
+		if !validName(name) { // nothing authenticated the sender: still never pass junk on
 			return model.TriggerFacts{}, unsupported("repository.full_name is not owner/repo")
 		}
 	case !s.identityHolds(name, probe.Repository.ID, secret):
@@ -178,7 +178,7 @@ func (s *Source) authenticate(ctx context.Context, r *http.Request, body []byte,
 // identityHolds binds the repository name to its numeric id: the configured id when there is one, else
 // the first verified id seen for the name. A name that is not owner/repo, or no id, never holds.
 func (s *Source) identityHolds(name string, id int64, rs RepoSecret) bool {
-	if !coordinator.ValidProject(name) || id <= 0 {
+	if !validName(name) || id <= 0 {
 		return false
 	}
 	if rs.ID != 0 && rs.ID != id {
@@ -198,3 +198,9 @@ var (
 	_ providers.TriggerSource = (*Source)(nil)
 	_ providers.TrustFacts    = (*Source)(nil)
 )
+
+// maxRepoName is GitHub's longest owner/repo (39 + 1 + 100).
+const maxRepoName = 140
+
+// validName is coordinator.ValidProject plus GitHub's length bound, which ValidProject does not have.
+func validName(name string) bool { return len(name) <= maxRepoName && coordinator.ValidProject(name) }

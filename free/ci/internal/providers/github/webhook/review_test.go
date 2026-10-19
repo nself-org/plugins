@@ -182,3 +182,14 @@ func TestInsecureNeverReplacesAnOwnSecret(t *testing.T) {
 	_, err = r.deliver("push", "synthetic-wrong-secret", push)
 	wantE706(t, err, "wrongly signed delivery under --insecure")
 }
+
+// TestRepoNameLengthBound pins the QA finding: ValidProject has no length cap, so an authenticated
+// delivery naming a 10 KB repository is refused here.
+func TestRepoNameLengthBound(t *testing.T) {
+	r := newRig(t, nil)
+	r.env[SharedSecretEnv] = sharedSecret
+	long := strings.Repeat("a", 10<<10)
+	body := replace(fixture(t, "push.json"), `"full_name":"o/r"`, `"full_name":"o/`+long+`"`)
+	_, err := r.deliver("push", sharedSecret, body)
+	wantE706(t, err, "10 KB repository name")
+}
