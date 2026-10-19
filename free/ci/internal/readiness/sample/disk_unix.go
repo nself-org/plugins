@@ -1,5 +1,9 @@
 //go:build unix
 
+// Purpose: free disk space through statfs(2) on unix hosts.
+// Inputs: a directory path. Outputs: bytes a non-root user may still write there.
+// Constraints: Bavail (not Bfree), so reserved blocks do not count as free.
+
 package sample
 
 import "syscall"

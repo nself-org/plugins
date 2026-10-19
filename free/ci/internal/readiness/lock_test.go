@@ -1,12 +1,16 @@
 package readiness
 
 import (
+	"bufio"
 	"errors"
+	"flag"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRunLockExclusive(t *testing.T) {
@@ -54,5 +58,71 @@ func TestRunLockStaleFileIsTakenOver(t *testing.T) {
 	var nilLock *Lock
 	if err := nilLock.Release(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestLockHolderProcess is the child of TestRunLockDiesWithItsHolder: it takes the lock,
+// says so and waits to be killed.
+func TestLockHolderProcess(t *testing.T) {
+	args := flag.Args()
+	if len(args) != 2 || args[0] != "hold" {
+		return
+	}
+	if _, err := AcquireLock(args[1]); err != nil {
+		println("lock failed:", err.Error())
+		os.Exit(1)
+	}
+	println("locked")
+	time.Sleep(time.Minute)
+}
+
+// The kernel drops a flock when its holder dies, so a SIGKILLed watcher never strands the lock.
+func TestRunLockDiesWithItsHolder(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "readiness.lock")
+	child := exec.Command(os.Args[0], "-test.run=^TestLockHolderProcess$", "--", "hold", path)
+	out, err := child.StderrPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := child.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = child.Process.Kill(); _ = child.Wait() }()
+	sc := bufio.NewScanner(out)
+	for sc.Scan() && sc.Text() != "locked" {
+	}
+	if _, err := AcquireLock(path); err == nil || !strings.Contains(err.Error(), "E799") || !strings.Contains(err.Error(), "(pid "+strconv.Itoa(child.Process.Pid)+")") {
+		t.Fatalf("a live holder in another process must block us and be named: %v", err)
+	}
+	if err := child.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	_ = child.Wait()
+	l, err := AcquireLock(path)
+	if err != nil {
+		t.Fatalf("the lock must be free once its holder was killed: %v", err)
+	}
+	_ = l.Release()
+}
+
+// A lock on an unlinked inode excludes nobody: after the file is removed the next holder
+// must lock the file that is now at the path, and a second one must still be refused.
+func TestRunLockSurvivesAnUnlinkedFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "readiness.lock")
+	first, err := AcquireLock(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = first.Release() }()
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	second, err := AcquireLock(path) // new inode at the path: this is a different, valid lock
+	if err != nil {
+		t.Fatalf("a fresh file at the path is lockable: %v", err)
+	}
+	defer func() { _ = second.Release() }()
+	if third, err := AcquireLock(path); third != nil || err == nil {
+		t.Fatalf("the lock on the file now at the path must exclude a third holder: %v", err)
 	}
 }

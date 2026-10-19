@@ -6,7 +6,7 @@ import "github.com/nself-org/plugins/free/ci/internal/model"
 func init() {
 	for _, code := range []model.Code{
 		{ID: "E799", Class: "infra", Summary: "another watcher holds this host's run lock", Fix: "Wait for the other watcher or stop it, then retry"},
-		{ID: "E800", Class: "infra", Summary: "readiness.cmd gave no usable answer", Fix: "Make the hook exit 0 (ready) or 3 (not ready, reason on stdout) within 5 seconds"},
+		{ID: "E800", Class: "infra", Summary: "readiness.cmd gave no usable answer", Fix: "Make the hook exit 0 (ready) or 3 (not ready, reason on its first output line) within 5 seconds; it runs with PATH and LANG only, so use absolute paths"},
 	} {
 		model.Register(code)
 	}

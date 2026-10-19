@@ -4,7 +4,11 @@ package readiness
 // the reason node.not_ready, so `ci plan` shows it and sched.Place skips it. The reason
 // is not Static: it clears the next time the host answers ready, and the bounded wait of
 // the auto preset (AUTO D11) may wait for it.
-// Inputs: a Source (the Evaluator) and an optional foreground test.
+// Inputs: a Source (the Evaluator) and an optional foreground test. The composition root
+// (P7-AUTO-11 for the watcher, P7-AUTO-19 for `ci` itself) calls Register once with an
+// Evaluator whose Config is ConfigFrom(resolved policy); foreground is true exactly while
+// the operator's own interactive `nself ci` run is being planned. Passing a predicate that
+// is always true switches readiness off, so only that run path may supply it.
 // Outputs: autoworld.ExclusionFn; Register adds it under ProviderName.
 // Constraints: only the runner carrying world.LocalLabel is judged (remote nodes keep
 // NODE-13's agent-side facts). Foreground floor (X17): the operator's own foreground run
@@ -53,7 +57,7 @@ func ExclusionProvider(src Source, foreground func() bool) autoworld.ExclusionFn
 		if rep.Ready {
 			return nil, nil
 		}
-		detail := model.PlacementReasonDetail{Code: string(model.NodeNotReady), Detail: ClipLine(strings.Join(rep.Why, "; "))}
+		detail := model.PlacementReasonDetail{Code: string(model.NodeNotReady), Detail: joinWhy(rep.Why)}
 		out := make(map[string][]model.PlacementReasonDetail, len(local))
 		for _, id := range local {
 			out[id] = []model.PlacementReasonDetail{detail}
@@ -66,4 +70,16 @@ func ExclusionProvider(src Source, foreground func() bool) autoworld.ExclusionFn
 // root that owns the Evaluator.
 func Register(src Source, foreground func() bool) error {
 	return autoworld.RegisterExclusion(ProviderName, ExclusionProvider(src, foreground))
+}
+
+// maxDetailLen caps the joined reason list of one runner. Every entry is already one line
+// (the hook's own line is clipped to MaxWhyLen), so the cap only stops a pathological list.
+const maxDetailLen = 480
+
+func joinWhy(why []string) string {
+	parts := make([]string, 0, len(why))
+	for _, w := range why {
+		parts = append(parts, ClipLine(w))
+	}
+	return clip(strings.Join(parts, "; "), maxDetailLen)
 }

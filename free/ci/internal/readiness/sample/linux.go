@@ -3,7 +3,9 @@ package sample
 // Purpose: the Linux readers. Memory comes from MemAvailable, load from /proc/loadavg
 // and CPU idle from two /proc/stat reads a short pause apart (one read only gives the
 // average since boot, which says nothing about now).
-// Constraints: only /proc, through the injected readers.
+// Constraints: only /proc, through the injected readers. /proc/stat and /proc/loadavg are
+// host-wide even inside a cgroup-limited container, so idle and load describe the host, not
+// the job quota; that is the right question for a watch host (AUTO A6).
 
 import (
 	"bytes"

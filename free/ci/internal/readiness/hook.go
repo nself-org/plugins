@@ -5,8 +5,12 @@ package readiness
 // one-line reason on stdout, anything else (other exit code, start failure, timeout)
 // = unknown, which is treated as not ready (E800): an operator-owned node never
 // guesses "ready" from silence.
-// Constraints: argv through the exec funnel, never a shell, minimal environment, 5 s
-// timeout, stdout clipped to one redacted line of at most MaxWhyLen characters.
+// Constraints: argv through the exec funnel, never a shell, minimal environment (PATH
+// and LANG, no HOME or USER: use absolute paths), 5 s timeout, output clipped to one
+// redacted line of at most MaxWhyLen characters. The funnel merges stderr into stdout
+// (it has one output stream), so the first line the hook prints on either stream is the
+// reason; a hook should keep stderr quiet. TestHookReasonTakesTheFirstLineOfBothStreams
+// pins this so a later funnel change is noticed.
 
 import (
 	"context"
@@ -67,7 +71,10 @@ func unknownWhy(msg string) string { return "E800 " + msg }
 
 // ClipLine returns the first non-empty line of s with secrets masked, control
 // characters dropped and length bounded.
-func ClipLine(s string) string {
+func ClipLine(s string) string { return clip(s, MaxWhyLen) }
+
+// clip is ClipLine with a caller-chosen cap.
+func clip(s string, max int) string {
 	line := ""
 	for _, l := range strings.Split(s, "\n") {
 		if l = strings.TrimSpace(l); l != "" {
@@ -83,8 +90,8 @@ func ClipLine(s string) string {
 		}
 		return r
 	}, line)
-	if r := []rune(line); len(r) > MaxWhyLen {
-		line = string(r[:MaxWhyLen-1]) + "…"
+	if r := []rune(line); len(r) > max {
+		line = string(r[:max-1]) + "…"
 	}
 	return line
 }

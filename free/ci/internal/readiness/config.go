@@ -54,7 +54,10 @@ type Inputs struct {
 	YieldErr string
 }
 
-// Decide applies the floors. Memory, disk and idle refuse on their own. Load is
+// Decide applies the floors. Note for operators: with the idle floor on and readable, the
+// load ceiling can only refuse when idle is already below its floor, so the two then refuse
+// together; the ceiling is the deciding check when min_idle_pct is 0 or idle is unreadable.
+// Memory, disk and idle refuse on their own. Load is
 // idle-based: a high load average only refuses when the CPU is not demonstrably idle
 // (many threads blocked on I/O push the average up without using the machine), so
 // load 46 on 8 cores at 93% idle is ready, load 9 at 5% idle is not.

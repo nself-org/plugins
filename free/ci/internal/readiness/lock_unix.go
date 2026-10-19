@@ -1,5 +1,9 @@
 //go:build unix
 
+// Purpose: the unix run-lock primitive, a non-blocking advisory flock(2) on an open file.
+// Inputs: an open file. Outputs: nil when locked; isBusy tells "someone else holds it".
+// Constraints: the kernel drops the lock when the holder exits or dies.
+
 package readiness
 
 import (

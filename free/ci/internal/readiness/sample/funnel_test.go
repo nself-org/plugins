@@ -24,6 +24,10 @@ func TestHelperProcess(t *testing.T) {
 		os.Exit(3)
 	case "env":
 		fmt.Println(len(os.Environ()), os.Getenv("SECRET_FOR_TEST") == "")
+	case "streams":
+		fmt.Fprintln(os.Stderr, "warning from stderr")
+		fmt.Println("reason from stdout")
+		os.Exit(3)
 	case "flood":
 		fmt.Print(strings.Repeat("x", 4*MaxOutput))
 	case "hang":
@@ -84,5 +88,17 @@ func TestFunnelCapsOutput(t *testing.T) {
 	res, err := Funnel{Home: t.TempDir()}.Run(context.Background(), helper("flood"), 20*time.Second)
 	if err != nil || len(res.Stdout) != MaxOutput {
 		t.Fatalf("a chatty command is cut at MaxOutput: %d bytes, %v", len(res.Stdout), err)
+	}
+}
+
+// The funnel has one output stream: stderr text arrives in Result.Stdout, ahead of or between
+// stdout lines. readiness.hook documents it; this pins it so a funnel change is noticed.
+func TestHookReasonTakesTheFirstLineOfBothStreams(t *testing.T) {
+	res, err := Funnel{Home: t.TempDir()}.Run(context.Background(), helper("streams"), 20*time.Second)
+	if err != nil || res.ExitCode != 3 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(res.Stdout, "warning from stderr") || !strings.Contains(res.Stdout, "reason from stdout") {
+		t.Fatalf("both streams are expected in the one output: %q", res.Stdout)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -96,7 +97,10 @@ func wholeNumber(key string, max int64) func(json.RawMessage) (any, error) {
 	}
 }
 
-// decimal accepts a number or a numeric string > 0 and stores the decimal string.
+var plainDecimal = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?$`)
+
+// decimal accepts a plain number or numeric string from 0 to 1000 (0 switches the ceiling
+// off; no exponent, sign or hex form) and stores the decimal string.
 func decimal(key string) func(json.RawMessage) (any, error) {
 	return func(raw json.RawMessage) (any, error) {
 		v, err := decodeValue(key, raw)
@@ -113,8 +117,8 @@ func decimal(key string) func(json.RawMessage) (any, error) {
 			return nil, fail(key, "expected a number such as 1.5")
 		}
 		f, err := strconv.ParseFloat(text, 64)
-		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f < 0 || f > 1000 {
-			return nil, fail(key, "expected a number from 0 to 1000 (0 switches the ceiling off), got %q", text)
+		if !plainDecimal.MatchString(text) || err != nil || f > 1000 {
+			return nil, fail(key, "expected a plain number from 0 to 1000 such as 1.5 (0 switches the ceiling off), got %q", text)
 		}
 		return formatDecimal(f), nil
 	}

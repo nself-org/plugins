@@ -11,6 +11,7 @@ package readiness
 
 import (
 	"context"
+	"sync"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/readiness/sample"
@@ -26,6 +27,9 @@ type Evaluator struct {
 	Hook sample.Runner
 	// Cores returns the core count from the capacity probe; nil uses ciexec.Probe.
 	Cores func() int
+
+	coresOnce sync.Once
+	cores     int
 }
 
 // Evaluate samples the host and decides.
@@ -39,11 +43,14 @@ func (e *Evaluator) Evaluate(ctx context.Context) (Report, error) {
 	}
 	s := e.Sampler
 	if s.Cores < 1 {
-		cores := e.Cores
-		if cores == nil {
-			cores = func() int { return ciexec.Probe().CPUs }
-		}
-		s.Cores = cores()
+		e.coresOnce.Do(func() { // the core count does not change; the probe forks several tools on macOS
+			probe := e.Cores
+			if probe == nil {
+				probe = func() int { return ciexec.Probe().CPUs }
+			}
+			e.cores = probe()
+		})
+		s.Cores = e.cores
 	}
 	in := Inputs{Live: s.Sample(ctx)}
 	if len(cfg.YieldTo) > 0 {

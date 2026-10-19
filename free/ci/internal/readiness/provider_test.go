@@ -157,3 +157,16 @@ func TestRegisterAddsTheProvider(t *testing.T) {
 		t.Fatal("a second registration under the same name must fail")
 	}
 }
+
+func TestProviderKeepsEveryReasonOfALongList(t *testing.T) {
+	why := []string{"free memory 100 MB below the 1024 MB floor", "free disk 10 MB below the 2048 MB floor", "CPU idle 3% below the 20% floor",
+		"yielding to obs, zoom.us", strings.Repeat("the operator's own words ", 20)}
+	ex, err := ExclusionProvider(&source{report: notReady(why...)}, nil)(context.Background(), worldOf(runner("local")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := ex["local"][0].Detail
+	if !strings.Contains(d, "yielding to obs, zoom.us") || !strings.Contains(d, "CPU idle 3%") || len([]rune(d)) > maxDetailLen || strings.Contains(d, "\n") {
+		t.Fatalf("detail %q", d)
+	}
+}
