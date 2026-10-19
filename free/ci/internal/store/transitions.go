@@ -29,6 +29,10 @@ type TransitionDetail struct {
 	FailureClass  model.FailureClass
 	Actor, Reason string
 	Operator      bool
+	// ForwardCancelTo names an attempt that takes over an operator cancel intent this
+	// transition consumes: a cancel accepted for a parked predecessor must not vanish when
+	// the retry that superseded it moves the predecessor to cancelled (D-1191).
+	ForwardCancelTo string
 }
 
 // Transition changes one attempt and dependent rows in a single write transaction.
@@ -88,10 +92,12 @@ func (s *Store) apply(ctx context.Context, tx *sql.Tx, id string, from, to model
 		}
 	}
 	var cancelEpoch int64
-	err = tx.QueryRowContext(ctx, "SELECT epoch FROM cancel_intent WHERE attempt_id=?", id).Scan(&cancelEpoch)
+	var cancelReason string
+	err = tx.QueryRowContext(ctx, "SELECT epoch,reason FROM cancel_intent WHERE attempt_id=?", id).Scan(&cancelEpoch, &cancelReason)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
+	hadIntent := err == nil
 	if err == nil && to != "cancelled" {
 		return coded("E605", "cancel intent won")
 	}
@@ -112,6 +118,11 @@ func (s *Store) apply(ctx context.Context, tx *sql.Tx, id string, from, to model
 	if to == "cancelled" {
 		if _, err = tx.ExecContext(ctx, "DELETE FROM cancel_intent WHERE attempt_id=?", id); err != nil {
 			return err
+		}
+		if hadIntent && d.ForwardCancelTo != "" {
+			if err = s.forwardCancel(ctx, tx, id, d.ForwardCancelTo, cancelReason); err != nil {
+				return err
+			}
 		}
 	}
 	if to == "lost" || to == "cancelled" || to == "passed" || to == "failed" {
@@ -147,6 +158,24 @@ func (s *Store) apply(ctx context.Context, tx *sql.Tx, id string, from, to model
 	}
 	_ = jobID
 	return nil
+}
+
+// forwardCancel gives a live attempt the cancel intent its predecessor just consumed.
+// A missing or finished target has nothing left to cancel.
+func (s *Store) forwardCancel(ctx context.Context, tx *sql.Tx, from, to, reason string) error {
+	var state string
+	var epoch int64
+	err := tx.QueryRowContext(ctx, "SELECT state,epoch FROM attempt WHERE id=?", to).Scan(&state, &epoch)
+	if errors.Is(err, sql.ErrNoRows) || err == nil && (state == "passed" || state == "failed" || state == "cancelled") {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT OR IGNORE INTO cancel_intent(attempt_id,epoch,requested_at,reason) VALUES (?,?,?,?)", to, epoch, s.now().UnixNano(), reason); err != nil {
+		return err
+	}
+	return s.appendAudit(ctx, tx, "operator", "cancel", to, "forwarded from "+from+": "+reason)
 }
 
 // RequestCancel stores a CAS intent. A competing result commit yields E605.
