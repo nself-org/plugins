@@ -11,10 +11,9 @@ package run
 // coordinator awaits only local attempts (runAttempt fails a remote one), so
 // the world holds the local runner alone until a remote await exists; the
 // dispatcher itself delivers remote leases (NewTransportAdapter). The local
-// runner carries a PLACEHOLDER declaration at the top of each trust axis (debt:
-// not a measured fact; `ci explain` shows it as declared): the isolation hook
-// refuses a job it cannot sandbox at exec time, and P7-TRUST-08's probe facts
-// replace it. The local admission policy (battery, reservations, the foreground
+// runner carries the probe-derived declaration `ci plan` uses (owner trust
+// class, process isolation), so placement refuses untrusted work there. The
+// local admission policy (battery, reservations, the foreground
 // floor) still runs first, as in LocalAdmit.
 
 import (
@@ -28,6 +27,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/planview"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/report"
@@ -35,7 +35,6 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
-	"github.com/nself-org/plugins/free/ci/internal/trust"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
@@ -176,10 +175,19 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 	return p, nil
 }
 
-// world builds the local-only placement world of the run.
+// world builds the local-only placement world of the run. The local runner is
+// declared the way `ci plan` declares it (planview.LocalCapability, then
+// MarkPersonalLocal): probe facts, owner trust class, process isolation. An
+// untrusted job is therefore unplaceable here by design.
 func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
 	capacity := rd.sess.Capacity()
-	local := localCapability(rd.row.Project, capacity)
+	local, err := planview.LocalCapability(planview.LocalFacts{Project: rd.row.Project, Platform: platform(), CPUs: capacity.CPUs,
+		MemMB: int64(capacity.MemoryMB), Now: time.Now()})
+	if err != nil {
+		return sched.World{}, "", err
+	}
+	// the run loop does not probe for docker: say unknown rather than a measured "no"
+	local.Tools.Docker = model.Fact[bool]{Source: "probe", ObservedAt: time.Now(), Confidence: "unknown"}
 	w, _, err := world.Build(ctx, world.Deps{Store: rd.sess.Store, Local: &local, LocalCapacity: &capacity, Policy: rd.policy}, p)
 	if err != nil {
 		return sched.World{}, "", err
@@ -187,37 +195,17 @@ func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World
 	keep := w.Runners[:0]
 	for _, r := range w.Runners {
 		if r.ID == "local" {
-			r.Decl = localDeclarationPlaceholder()
 			keep = append(keep, r)
 		}
 	}
 	if len(keep) != 1 {
-		// a registered node called "local" would inherit the placeholder declaration
+		// a registered node called "local" would inherit the personal-node declaration
 		return sched.World{}, "", fail(CodeOptions, "the node registry holds a node with the reserved id %q", "local")
 	}
 	w.Runners, w.Hosted = keep, nil
+	planview.MarkPersonalLocal(&w)
 	digest, err := world.Digest(w)
 	return w, digest, err
-}
-
-func localCapability(project string, c ciexec.Capacity) model.Capability {
-	osName, arch, kind, class := runtime.GOOS, runtime.GOARCH, "local", "local"
-	cap := model.Capability{Schema: "ci.runner-capability/v1"}
-	cap.Lifecycle.Eligible = true
-	cap.Lifecycle.AuthorizedProjects = []string{project}
-	cap.Protocol.Versions, cap.Protocol.Min = []int{1}, 1
-	cap.Platform.OS.Value, cap.Platform.Arch.Value = &osName, &arch
-	cap.Location.Kind.Value = &kind
-	cap.Economics.Class.Value = &class
-	return cap
-}
-
-// localDeclarationPlaceholder is what the PERSONAL coordinator says about its own
-// machine until a probe measures it. It is permissive on purpose: placement must
-// not refuse what LocalAdmit ran, and the exec-time isolation hook is the gate.
-func localDeclarationPlaceholder() trust.Declaration {
-	return trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged",
-		UIDSeparation: true, Ownership: "operator", PersonalOwnNode: true, NoLANRoute: true}
 }
 
 // NewTransportAdapter adapts internal/transport to the dispatcher's Transport:
