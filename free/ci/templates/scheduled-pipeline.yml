@@ -1,0 +1,93 @@
+# Scheduled nself-ci pipeline (drills and other timed pipelines).
+#
+# Purpose: run one named pipeline of this repository's .nself/ci.yaml on a
+#   schedule and on demand, with the version-pinned, checksum-verified nself-ci
+#   release, and keep the evidence document as a workflow artifact. Drills are
+#   pipelines of `kind: drill` jobs (one per directory of the pipeline's
+#   drills_dir), so a new drill needs no change to this file.
+# Use: copy this file to .github/workflows/<name>.yml, then set the four values
+#   in `env` below. The release URL and sha256 come from the ci release record
+#   (the tarball of the platform the runner has). Nothing is downloaded until
+#   all four are set; a missing value fails the first step.
+# Constraints: actions are pinned by commit sha; the job has read-only access to
+#   the repository; no secret is read unless you add one to the drill step; the
+#   binary is taken from the pinned release only, never built from the checkout.
+
+name: scheduled-pipeline
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-pipeline-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PIPELINE: drills        # the pipeline name in .nself/ci.yaml
+  CI_VERSION: ""          # the pinned release, for example 1.2.7 (shown in the summary)
+  CI_RELEASE_URL: ""      # https URL of the release tarball for this runner's platform
+  CI_RELEASE_SHA256: ""   # sha256 of that tarball, 64 hex digits
+  NSELF_V15: "1"          # the plugin binary does not follow the cli flip; kept until v1.6
+
+jobs:
+  pipeline:
+    name: ${{ github.workflow }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check the pin
+        run: |
+          for v in PIPELINE CI_VERSION CI_RELEASE_URL CI_RELEASE_SHA256; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is not set in this workflow's env block"
+              exit 1
+            fi
+          done
+          case "$CI_RELEASE_URL" in https://*) ;; *) echo "::error::CI_RELEASE_URL must be an https URL"; exit 1 ;; esac
+
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Install the pinned nself-ci
+        run: |
+          set -euo pipefail
+          tarball="$RUNNER_TEMP/nself-ci.tar.gz"
+          curl --fail --silent --show-error --location --proto '=https' --output "$tarball" "$CI_RELEASE_URL"
+          echo "$CI_RELEASE_SHA256  $tarball" | sha256sum --check --strict -
+          mkdir -p "$RUNNER_TEMP/nself-ci"
+          tar -xzf "$tarball" -C "$RUNNER_TEMP/nself-ci"
+          bin="$(find "$RUNNER_TEMP/nself-ci" -type f -name nself-ci | head -n 1)"
+          if [ -z "$bin" ]; then
+            echo "::error::the release tarball holds no nself-ci binary"
+            exit 1
+          fi
+          chmod +x "$bin"
+          echo "NSELF_CI_BIN=$bin" >> "$GITHUB_ENV"
+
+      - name: Run the pipeline
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/evidence"
+          status=0
+          "$NSELF_CI_BIN" --no-status --pipeline "$PIPELINE" --json > "$RUNNER_TEMP/evidence/$PIPELINE.json" || status=$?
+          {
+            echo "### $PIPELINE (nself-ci $CI_VERSION)"
+            echo "exit code: $status"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/evidence/
+          if-no-files-found: warn
+          retention-days: 30

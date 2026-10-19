@@ -25,6 +25,7 @@ import (
 	"syscall"
 
 	"github.com/nself-org/plugins/free/ci/internal/config"
+	"github.com/nself-org/plugins/free/ci/internal/drill"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
@@ -108,7 +109,8 @@ func exitForError(err error) int {
 	}
 	var ce *config.Error
 	var pe *plan.Error
-	if errors.As(err, &ce) || (errors.As(err, &pe) && pe.Code != plan.CodeUnplaceable) {
+	var de *drill.Error
+	if errors.As(err, &ce) || errors.As(err, &de) || (errors.As(err, &pe) && pe.Code != plan.CodeUnplaceable) {
 		return 1
 	}
 	return 2
@@ -192,6 +194,9 @@ func preparePlan(ctx context.Context, o RunOptions) (*plan.Plan, string, func(pl
 			digest = hex.EncodeToString(sum[:])
 		}
 	case !errors.Is(err, os.ErrNotExist) || bare.cfg != "":
+		return nil, "", nil, err
+	}
+	if cfg, err = drill.Expand(o.Root, cfg, o.Pipeline, o.Trigger); err != nil { // drills_dir subdirectories become kind drill jobs (P7-CI-02)
 		return nil, "", nil, err
 	}
 	facts, checks, err := planChecks(o.Root, cfg)
