@@ -130,6 +130,12 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 		return 1
 	}
 	defer func() { _ = st.Close() }()
+	end, err := serveModeStart(ctx, fs, st, os.Stderr) // mode check (E664) and coordinator facts, before anything is bound
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	defer end()
 	cfg := coordinator.Config{
 		Store: st, Addr: f.addr, Secret: secret, Insecure: f.insecure, Force: f.force,
 		AllowedRepos: append(append([]string(nil), f.allowed.vals...), splitAllowedReposEnv(os.Getenv("NSELF_CI_ALLOWED_REPOS"))...),
@@ -137,6 +143,7 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 		Dispatch: serveDispatch(home, f),
 		Logf:     func(format string, a ...any) { fmt.Fprintf(os.Stderr, "nself-ci-serve: "+format+"\n", a...) },
 	}
+	defer serveWire(ctx, st, home, "", &cfg)() // listeners' store, pairing service and the SIGTERM drain
 	if hook != nil {
 		hook(&cfg)
 	}

@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -64,12 +65,16 @@ type Config struct {
 	StaleAfter   time.Duration
 	ID           string
 	Logf         func(format string, a ...any)
+	// Drain, when set, runs once after the context ends and before the dispatches are cancelled, with new
+	// claims already stopped (PauseIntake); P7-NODE-20 wires the graceful drain through it.
+	Drain func(ctx context.Context) error
 }
 
 // Coordinator is the TEAM coordinator.
 type Coordinator struct {
-	cfg  Config
-	wake chan struct{}
+	cfg    Config
+	wake   chan struct{}
+	paused atomic.Bool
 }
 
 // New fills the defaults of cfg.
@@ -221,6 +226,12 @@ func (c *Coordinator) Run(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 	case runErr = <-errc:
+	}
+	c.PauseIntake()
+	if c.cfg.Drain != nil && runErr == nil {
+		if err := c.cfg.Drain(context.WithoutCancel(ctx)); err != nil {
+			c.cfg.Logf("drain: %v", err)
+		}
 	}
 	cancel()
 	sctx, scancel := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
