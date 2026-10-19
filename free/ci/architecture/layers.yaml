@@ -74,6 +74,7 @@ layers:
     - internal/agent/session
     - internal/agent/slots
     - internal/agent/nodekey
+    - internal/agent/agekey
     - internal/agent/checkout
     - internal/agent/contention
     - internal/agent/verify

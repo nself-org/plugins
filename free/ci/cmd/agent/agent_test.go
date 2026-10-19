@@ -1,0 +1,317 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/agent/session"
+	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/protocol"
+)
+
+const rev40 = "0123456789abcdef0123456789abcdef01234567"
+
+// TestMain lets the test binary stand in for the agent binary in a child
+// process (cred-wrapper replaces its process, so it cannot run in-process).
+func TestMain(m *testing.M) {
+	if os.Getenv("NSELF_AGENT_TEST_CHILD") == "1" {
+		os.Exit(run(context.Background(), os.Args[1:], IO{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr}))
+	}
+	os.Exit(m.Run())
+}
+
+func skipUnixOnly(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("shell jobs")
+	}
+}
+
+func useState(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "agent-state")
+	t.Setenv("NSELF_CI_AGENT_HOME", dir)
+	return dir
+}
+
+func runCmd(t *testing.T, args ...string) (code int, stdout, stderr string) {
+	t.Helper()
+	var out, errb bytes.Buffer
+	code = run(context.Background(), args, IO{Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errb})
+	return code, out.String(), errb.String()
+}
+
+func writeSpec(t *testing.T, runArgs ...string) string {
+	t.Helper()
+	spec := execSpec{AttemptID: "attempt-1", CoordinatorID: "local", JobID: "fixture", Revision: rev40, Job: model.Job{Kind: "static", Run: runArgs}}
+	b, _ := json.Marshal(spec)
+	p := filepath.Join(t.TempDir(), "job.json")
+	if err := os.WriteFile(p, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func validEvidence(t *testing.T, doc []byte) map[string]any {
+	t.Helper()
+	schemas, err := model.Schemas()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := model.ValidateJSON(schemas["ci-evidence.v1.schema.json"], doc); err != nil {
+		t.Fatalf("not ci.evidence/v1: %v\n%s", err, doc)
+	}
+	var m map[string]any
+	_ = json.Unmarshal(doc, &m)
+	return m
+}
+
+// TestExecWritesValidEvidence proves the acceptance line: `exec --spec
+// --evidence` runs the fixture job and writes evidence that validates against
+// schemas/ci-evidence.v1.schema.json; a failing job exits 1 with a failing,
+// still valid, document.
+func TestExecWritesValidEvidence(t *testing.T) {
+	skipUnixOnly(t)
+	useState(t)
+	ev := filepath.Join(t.TempDir(), "e.json")
+	code, out, errs := runCmd(t, "exec", "--spec", writeSpec(t, "sh", "-c", "echo fixture-ran"), "--evidence", ev)
+	if code != 0 || !strings.Contains(out, "fixture-ran") {
+		t.Fatalf("code %d out %q err %q", code, out, errs)
+	}
+	doc, err := os.ReadFile(ev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := validEvidence(t, doc)
+	if m["result"] != "pass" || m["revision"] != rev40 {
+		t.Fatalf("evidence %v", m)
+	}
+	if info, _ := os.Stat(ev); runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
+		t.Fatalf("evidence mode %v", info.Mode())
+	}
+	ev2 := filepath.Join(t.TempDir(), "f.json")
+	code, _, _ = runCmd(t, "exec", "--spec", writeSpec(t, "sh", "-c", "echo broke; exit 3"), "--evidence", ev2)
+	doc, _ = os.ReadFile(ev2)
+	if m := validEvidence(t, doc); code != 1 || m["result"] != "fail" {
+		t.Fatalf("code %d evidence %v", code, m["result"])
+	}
+}
+
+func TestExecUsage(t *testing.T) {
+	useState(t)
+	for _, args := range [][]string{{"exec"}, {"exec", "--spec", "x"}, {"exec", "--spec", "/nonexistent", "--evidence", "e"}, {"exec", "--bogus"}} {
+		if code, _, _ := runCmd(t, args...); code != 2 {
+			t.Errorf("%v exit %d, want 2", args, code)
+		}
+	}
+	bad := filepath.Join(t.TempDir(), "bad.json")
+	_ = os.WriteFile(bad, []byte(`{"unknown_field":1}`), 0o600)
+	if code, _, _ := runCmd(t, "exec", "--spec", bad, "--evidence", "e"); code != 2 {
+		t.Errorf("unknown spec field exit %d, want 2", code)
+	}
+	noRev := filepath.Join(t.TempDir(), "norev.json")
+	_ = os.WriteFile(noRev, []byte(`{"attempt_id":"a","coordinator_id":"c","job":{"kind":"static","run":["true"]}}`), 0o600)
+	if code, _, _ := runCmd(t, "exec", "--spec", noRev, "--evidence", filepath.Join(t.TempDir(), "e")); code != 1 {
+		t.Errorf("missing revision exit %d, want 1", code)
+	}
+}
+
+func TestVersionAndUnknownCommand(t *testing.T) {
+	code, out, _ := runCmd(t, "version")
+	if code != 0 || !strings.HasPrefix(out, "nself-ci-agent "+Version+" ") {
+		t.Fatalf("%d %q", code, out)
+	}
+	if code, _, _ := runCmd(t, "frobnicate"); code != 2 {
+		t.Fatalf("unknown exit %d", code)
+	}
+	if code, _, errs := runCmd(t); code != 2 || !strings.Contains(errs, "serve") {
+		t.Fatalf("no-arg exit %d %q", code, errs)
+	}
+}
+
+// resetRegistry restores the registry after a test registers extras.
+func resetRegistry(t *testing.T) {
+	t.Helper()
+	regMu.Lock()
+	savedCmds, savedPre := map[string]command{}, append([]preStart(nil), prestart...)
+	for k, v := range commands {
+		savedCmds[k] = v
+	}
+	regMu.Unlock()
+	t.Cleanup(func() { regMu.Lock(); commands, prestart = savedCmds, savedPre; regMu.Unlock() })
+}
+
+type tripReader struct {
+	t    *testing.T
+	read bool
+}
+
+func (r *tripReader) Read([]byte) (int, error) { r.read = true; return 0, io.EOF }
+
+// TestRegistryRunsSubcommandAndFailingPreStartStopsServe proves the acceptance
+// line: a test subcommand and a failing PreStart hook registered from another
+// file run through the registry, and the failing hook stops serve before any
+// read from stdin (and before any write to stdout).
+func TestRegistryRunsSubcommandAndFailingPreStartStopsServe(t *testing.T) {
+	useState(t)
+	resetRegistry(t)
+	must(RegisterSubcommand("pingtest", "test only", func(_ context.Context, args []string, sio IO) int {
+		_, _ = io.WriteString(sio.Stdout, "pong "+strings.Join(args, ","))
+		return 0
+	}))
+	if code, out, _ := runCmd(t, "pingtest", "a", "b"); code != 0 || out != "pong a,b" {
+		t.Fatalf("%d %q", code, out)
+	}
+	if err := RegisterSubcommand("pingtest", "dup", func(context.Context, []string, IO) int { return 0 }); err == nil {
+		t.Fatal("accepted a duplicate subcommand")
+	}
+	var seen []string
+	var mu sync.Mutex
+	must(RegisterPreStart("ok-hook", func(_ context.Context, c string) error { mu.Lock(); seen = append(seen, c); mu.Unlock(); return nil }))
+	must(RegisterPreStart("refuse", func(context.Context, string) error { return io.ErrUnexpectedEOF }))
+	in, out := &tripReader{t: t}, &bytes.Buffer{}
+	code := run(context.Background(), []string{"serve", "--stdio"}, IO{Stdin: in, Stdout: out, Stderr: io.Discard})
+	if code != 1 || in.read || out.Len() != 0 {
+		t.Fatalf("code %d read %v wrote %q", code, in.read, out.String())
+	}
+	if len(seen) != 1 || seen[0] != "serve" {
+		t.Fatalf("hooks saw %v", seen)
+	}
+}
+
+type stdioPeer struct {
+	t    *testing.T
+	toIn *io.PipeWriter
+	enc  *protocol.Encoder
+	dec  *protocol.Decoder
+	done chan int
+	seq  uint64
+}
+
+// startServe runs `serve --stdio` in-process against pipes and returns the
+// scripted coordinator's end, with the preamble already consumed.
+func startServe(t *testing.T, extra ...string) *stdioPeer {
+	t.Helper()
+	inR, inW := io.Pipe()
+	outR, outW := io.Pipe()
+	p := &stdioPeer{t: t, toIn: inW, enc: protocol.NewEncoder(inW), done: make(chan int, 1)}
+	go func() {
+		code := run(context.Background(), append([]string{"serve", "--stdio", "--slots", "2"}, extra...), IO{Stdin: inR, Stdout: outW, Stderr: io.Discard})
+		_ = outW.Close()
+		p.done <- code
+	}()
+	rd, err := protocol.SkipPreamble(outR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.dec = protocol.NewDecoder(rd, protocol.CarrierPolicy{})
+	t.Cleanup(func() { _ = inW.Close() })
+	return p
+}
+
+func (p *stdioPeer) send(kind string, body any, epoch uint64, lease string) {
+	p.t.Helper()
+	p.seq++
+	m := protocol.Message{V: 1, Type: kind, Seq: p.seq, Body: body, LeaseID: lease}
+	if epoch != 0 {
+		m.Epoch = &epoch
+	}
+	if err := p.enc.Encode(m); err != nil {
+		p.t.Fatal(err)
+	}
+}
+
+func (p *stdioPeer) next(want string) protocol.Message {
+	p.t.Helper()
+	for {
+		m, err := p.dec.Decode()
+		if err != nil {
+			p.t.Fatalf("waiting for %s: %v", want, err)
+		}
+		if m.Type == want {
+			return m
+		}
+	}
+}
+
+// TestServeStdioRunsALeaseAndKeepsSecretsOut proves serve --stdio speaks v1
+// end to end: hello carries the node key id (stable across a restart), a
+// lease runs through the executor, the result carries valid evidence, and
+// neither the node key file's contents nor the job token reach the job's
+// environment or output.
+func TestServeStdioRunsALeaseAndKeepsSecretsOut(t *testing.T) {
+	skipUnixOnly(t)
+	state := useState(t)
+	var ids []string
+	for round := range 2 {
+		p := startServe(t, "--coordinator", "peer-1")
+		h := p.next("hello").Body.(*protocol.Hello)
+		ids = append(ids, h.NodeKey.KeyID)
+		if len(h.NodeKey.KeyID) != 16 || h.NodeKey.Alg != "ed25519" || h.Slots.Total != 2 || h.AgentVersion != Version {
+			t.Fatalf("hello %+v", h)
+		}
+		p.send("welcome", protocol.Welcome{Version: 1, MinAgentVersion: "1.4.0", SessionID: "s", HeartbeatMS: 60000, AgentTTLMS: 120000}, 0, "")
+		if round == 0 {
+			lease := protocol.Lease{LeaseID: "l1", AttemptID: "attempt-l1", Epoch: 1, Token: "JOBTOKEN-7f3a9c", CompatMode: protocol.Compat15,
+				Job: model.Job{Kind: "static", Run: []string{"sh", "-c", "env; echo job-done"}}, Checkout: protocol.Checkout{Revision: rev40},
+				Secrets: []protocol.SecretRef{}, ExpiresAt: "2030-01-01T00:00:00Z"}
+			p.send("lease", lease, 1, "l1")
+			var logs []string
+			var res *protocol.Result
+			for res == nil {
+				m, err := p.dec.Decode()
+				if err != nil {
+					t.Fatal(err)
+				}
+				switch b := m.Body.(type) {
+				case *protocol.Log:
+					logs = append(logs, b.Text)
+				case *protocol.Result:
+					res = b
+				}
+			}
+			all := strings.Join(logs, "\n")
+			keyPEM, _ := os.ReadFile(filepath.Join(state, "node.key"))
+			body := strings.Split(strings.TrimSpace(string(keyPEM)), "\n")[1]
+			if !strings.Contains(all, "job-done") || strings.Contains(all, "JOBTOKEN") || strings.Contains(all, body) || strings.Contains(all, "NSELF_CI_AGENT_HOME") {
+				t.Fatalf("job output leaked or missing:\n%s", all)
+			}
+			if m := validEvidence(t, res.Evidence); m["result"] != "pass" {
+				t.Fatalf("evidence %v", m)
+			}
+			if res.Signature != (protocol.Signature{}) {
+				t.Fatalf("unsigned result has a signature: %+v", res.Signature)
+			}
+		}
+		p.send("drain", protocol.Drain{Deadline: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}, 0, "")
+		p.next("ack")
+		if code := <-p.done; code != 0 {
+			t.Fatalf("serve exit %d", code)
+		}
+	}
+	if ids[0] != ids[1] {
+		t.Fatalf("key id changed across restart: %v", ids)
+	}
+	recs, err := session.ReadCoordinators(state)
+	if err != nil || len(recs) != 1 || recs[0].ID != "peer-1" {
+		t.Fatalf("coordinators %v %v", recs, err)
+	}
+}
+
+func TestServeUsage(t *testing.T) {
+	useState(t)
+	for _, args := range [][]string{{"serve"}, {"serve", "--stdio", "extra"}, {"serve", "--stdio", "--coordinator", "bad id"}} {
+		if code, _, _ := runCmd(t, args...); code != 2 {
+			t.Errorf("%v exit %d, want 2", args, code)
+		}
+	}
+}
