@@ -7,6 +7,7 @@ package agent
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -107,3 +108,12 @@ func (r *rig) mint(jti, runner, attemptID string, epoch uint64) string {
 }
 
 func (r *rig) gate() *Gate { return &Gate{Tokens: r.tokens, Bindings: r.st, Leases: r.st} }
+
+func readLog(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}

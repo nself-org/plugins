@@ -74,7 +74,8 @@ type Carrier struct {
 	written   uint64 // last transport seq written on the live stream
 	lastBeat  *protocol.Message
 	tokens    map[string]string
-	gen       int // bumped when the token set grows: the upstream stream restarts to carry it
+	epochs    map[string]uint64 // epoch of each lease that has a token
+	gen       int               // bumped when the token set grows: the upstream stream restarts to carry it
 	liveGen   int
 	up        chan struct{} // closed and replaced when liveGen changes
 	err       error         // why the carrier ended, for Recv
@@ -90,7 +91,7 @@ func NewCarrier(cfg CarrierConfig) *Carrier {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Carrier{cfg: cfg, cl: newClient(cfg.Client), cancel: cancel, inbox: make(chan protocol.Message, 64), done: make(chan struct{}),
-		wake: make(chan struct{}, 1), space: make(chan struct{}, 1), tokens: map[string]string{}, up: make(chan struct{})}
+		wake: make(chan struct{}, 1), space: make(chan struct{}, 1), tokens: map[string]string{}, epochs: map[string]uint64{}, up: make(chan struct{})}
 	go c.loop(ctx)
 	return c
 }
@@ -262,6 +263,7 @@ func (c *Carrier) trim(seq uint64) {
 		if f.tseq != 0 && f.tseq <= seq {
 			if f.m.Type == "result" { // the job is over and the coordinator has the result: its token is no longer needed
 				delete(c.tokens, f.m.LeaseID)
+				delete(c.epochs, f.m.LeaseID)
 			}
 			c.outBytes -= f.size
 			continue

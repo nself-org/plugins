@@ -178,11 +178,41 @@ func (c *Carrier) resetTransport() {
 		c.outBytes += f.size
 	}
 	c.out = keep
-	if c.lastBeat != nil {
-		b, _ := encode(*c.lastBeat, 1)
-		c.out = append([]*outFrame{{m: *c.lastBeat, size: len(b)}}, c.out...)
+	if beat := c.reconcileBeat(); beat != nil {
+		b, _ := encode(*beat, 1)
+		c.out = append([]*outFrame{{m: *beat, size: len(b)}}, c.out...)
 		c.outBytes += len(b)
 	}
+}
+
+// reconcileBeat is the first frame of a new transport session: the latest heartbeat the session sent plus an
+// entry for every lease this carrier delivered that the heartbeat does not name (it started after it), or just
+// the delivered leases when the session sent none yet. Every lease the agent kept is named, so the coordinator
+// rebinds each token to the new session. The caller holds c.mu.
+func (c *Carrier) reconcileBeat() *protocol.Message {
+	var hb protocol.Heartbeat
+	if c.lastBeat != nil {
+		if b, ok := c.lastBeat.Body.(protocol.Heartbeat); ok {
+			hb = b
+			hb.Leases = append([]protocol.LeaseState(nil), b.Leases...)
+		}
+	}
+	named := map[string]bool{}
+	for _, l := range hb.Leases {
+		named[l.LeaseID] = true
+	}
+	for id := range c.tokens {
+		if !named[id] {
+			hb.Leases = append(hb.Leases, protocol.LeaseState{LeaseID: id, Epoch: c.epochs[id], State: "running"})
+		}
+	}
+	if hb.Leases == nil {
+		if c.lastBeat == nil {
+			return nil
+		}
+		hb.Leases = []protocol.LeaseState{}
+	}
+	return &protocol.Message{Type: "heartbeat", Body: hb}
 }
 
 // pollLeases long-polls for leases and hands each to the session after its token reached the stream.
@@ -199,7 +229,7 @@ func (c *Carrier) pollLeases(ctx context.Context) error {
 		if !ok {
 			return &protocol.Error{Code: protocol.CodeInvalid, Reason: "frame_type"}
 		}
-		if err = c.registerToken(ctx, l.LeaseID, l.Token); err != nil {
+		if err = c.registerToken(ctx, *l); err != nil {
 			return err
 		}
 		if err = c.deliver(ctx, *m); err != nil {
@@ -209,13 +239,14 @@ func (c *Carrier) pollLeases(ctx context.Context) error {
 }
 
 // registerToken records the token of a lease and waits until the upstream stream carries it.
-func (c *Carrier) registerToken(ctx context.Context, leaseID, token string) error {
-	if token == "" {
+func (c *Carrier) registerToken(ctx context.Context, l protocol.Lease) error {
+	if l.Token == "" {
 		return nil
 	}
 	c.mu.Lock()
-	if c.tokens[leaseID] != token {
-		c.tokens[leaseID] = token
+	c.epochs[l.LeaseID] = l.Epoch
+	if c.tokens[l.LeaseID] != l.Token {
+		c.tokens[l.LeaseID] = l.Token
 		c.gen++
 	}
 	want := c.gen

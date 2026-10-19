@@ -61,12 +61,52 @@ type Driver struct {
 	// Logf receives operational notes (never a token or a value).
 	Logf func(format string, a ...any)
 
-	mu       sync.Mutex
-	queues   map[string][]protocol.Lease // by node id, oldest first
-	routes   map[string]*route           // by lease id
-	finished map[string]bool             // lease ids whose Run returned, bounded
-	order    []string
-	pending  map[string]map[string]string // node -> lease id -> reason: cancels that found no control stream
+	mu        sync.Mutex
+	queues    map[string][]protocol.Lease // by node id, oldest first
+	routes    map[string]*route           // by lease id
+	finished  map[string]bool             // lease ids whose Run returned, bounded
+	order     []string
+	lastPrune time.Time
+	pending   map[string]map[string]string // node -> lease id -> reason: cancels that found no control stream
+}
+
+// Wiring is what the coordinator's composition root sets once its store and CA exist.
+type Wiring struct {
+	Gate   *Gate
+	Minter Minter
+	Leases LeaseView
+	LogDir string
+	Logf   func(format string, a ...any)
+}
+
+// Wire installs the wiring; it is safe while runs are in flight.
+func (d *Driver) Wire(w Wiring) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.Gate, d.Minter, d.Leases, d.LogDir, d.Logf = w.Gate, w.Minter, w.Leases, w.LogDir, w.Logf
+}
+
+// SetCancel installs the function that asks an agent to stop a lease (agentapi.Server.Cancel).
+func (d *Driver) SetCancel(fn func(node, leaseID, reason string) error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.Cancel = fn
+}
+
+// cfg is a consistent snapshot of the settings.
+type cfg struct {
+	gate   *Gate
+	minter Minter
+	leases LeaseView
+	logDir string
+	logf   func(string, ...any)
+	cancel func(node, leaseID, reason string) error
+}
+
+func (d *Driver) cfg() cfg {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return cfg{gate: d.Gate, minter: d.Minter, leases: d.Leases, logDir: d.LogDir, logf: d.Logf, cancel: d.Cancel}
 }
 
 // Default is the driver registered for kind "agent"; the composition root sets its fields.
@@ -92,8 +132,8 @@ type route struct {
 func (r *route) finish() { r.once.Do(func() { close(r.done) }) }
 
 func (d *Driver) logf(format string, a ...any) {
-	if d.Logf != nil {
-		d.Logf(format, a...)
+	if f := d.cfg().logf; f != nil {
+		f(format, a...)
 	}
 }
 
@@ -125,18 +165,42 @@ func newJTI() string {
 	return hex.EncodeToString(b[:])
 }
 
+// pruneEvery is how often Run clears expired token bindings.
+const pruneEvery = 10 * time.Minute
+
+// prune removes expired token bindings, at most once per pruneEvery.
+func (d *Driver) prune(ctx context.Context, g *Gate) {
+	if g == nil {
+		return
+	}
+	now := time.Now()
+	d.mu.Lock()
+	due := now.Sub(d.lastPrune) >= pruneEvery
+	if due {
+		d.lastPrune = now
+	}
+	d.mu.Unlock()
+	if due {
+		if _, err := g.Prune(ctx, now); err != nil {
+			d.logf("agent transport: pruning token bindings: %v", err)
+		}
+	}
+}
+
 // Run delivers lease to the node's agent and returns when the job is over.
 func (d *Driver) Run(ctx context.Context, node model.Capability, lease protocol.Lease, sink transport.Sink) error {
-	if d.Minter == nil || d.Leases == nil {
+	c := d.cfg()
+	if c.minter == nil || c.leases == nil {
 		return fail(ReasonNotConfigure, "the agent transport has no token minter or lease view wired")
 	}
 	nodeID := node.Identity.ID
 	jti := newJTI()
-	tok, err := d.Minter.Mint(pki.TokenClaims{JTI: jti, JobID: lease.AttemptID, AttemptID: lease.AttemptID, Revision: lease.Checkout.Revision, RunnerID: nodeID, Epoch: int64(lease.Epoch)}, jobTimeout(lease.Job))
+	tok, err := c.minter.Mint(pki.TokenClaims{JTI: jti, JobID: lease.AttemptID, AttemptID: lease.AttemptID, Revision: lease.Checkout.Revision, RunnerID: nodeID, Epoch: int64(lease.Epoch)}, jobTimeout(lease.Job))
 	if err != nil {
 		return fail(ReasonNotConfigure, "cannot sign the job token: %v", err)
 	}
 	lease.Token = tok
+	d.prune(ctx, c.gate)
 	rt := &route{node: nodeID, leaseID: lease.LeaseID, jti: jti, sink: sink, done: make(chan struct{})}
 	if err = d.enqueue(rt, lease); err != nil {
 		return err

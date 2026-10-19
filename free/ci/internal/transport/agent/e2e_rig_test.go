@@ -133,7 +133,7 @@ func (e *e2e) start(addr string) {
 		e.t.Fatal(err)
 	}
 	e.srv, e.ln, e.base = srv, ln, "https://"+ln.Addr().String()
-	e.drv.Cancel = srv.Cancel
+	e.drv.SetCancel(srv.Cancel)
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ln) }()
 	e.t.Cleanup(func() { e.stop(done) })

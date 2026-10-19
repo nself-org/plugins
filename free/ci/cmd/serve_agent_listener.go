@@ -55,12 +55,23 @@ var (
 	// agentSink and agentLeases are installed by the units that own the transport and the scheduler.
 	agentSink   = func(*store.Store) transport.Sink { return refusingSink{} }
 	agentLeases func(*store.Store) agentapi.LeaseSource
+	// agentWire, when set, adjusts the agentapi config before the server is built and returns a function that
+	// receives the built server (P7-NODE-08: the pull transport installs its sink, lease source, token gate
+	// and cancel path; it replaces agentSink and agentLeases).
+	agentWire func(cfg *agentapi.Config, d agentDeps) (func(*agentapi.Server), error)
 	// agentOnAck, when set, hears every agent ack that names a lease (nodeID, leaseID); the drain sets it.
 	agentOnAck func(nodeID, leaseID string)
 	agentLogf  = func(format string, a ...any) { fmt.Fprintf(os.Stderr, "nself-ci-serve: "+format+"\n", a...) }
 	// activeAgent is the running server, for the session closer.
 	activeAgent atomic.Pointer[agentapi.Server]
 )
+
+// agentDeps is what the pull transport needs to wire itself to the running listener.
+type agentDeps struct {
+	CA      *pki.CA
+	Store   *store.Store
+	DataDir string
+}
 
 // agentStore is what the listener needs from the running coordinator.
 type agentStore struct {
@@ -172,9 +183,18 @@ func startAgentListener(ctx context.Context, addr string, _ *coordinator.Coordin
 	if agentLeases != nil {
 		cfg.Source = agentLeases(src.Store)
 	}
+	var attach func(*agentapi.Server)
+	if agentWire != nil {
+		if attach, err = agentWire(&cfg, agentDeps{CA: ca, Store: src.Store, DataDir: src.DataDir}); err != nil {
+			return fail(fmt.Errorf("agent listener: transport: %w", err))
+		}
+	}
 	srv, err := agentapi.New(cfg)
 	if err != nil {
 		return fail(err)
+	}
+	if attach != nil {
+		attach(srv)
 	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {

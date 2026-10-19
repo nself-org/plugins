@@ -49,8 +49,8 @@ func (s *hubSink) Log(ctx context.Context, l protocol.Log) error {
 		return err
 	}
 	d := s.d()
-	if d.LogDir != "" {
-		lw, err := d.logWriter(rt)
+	if dir := d.cfg().logDir; dir != "" {
+		lw, err := d.logWriter(rt, dir)
 		if err != nil {
 			return fmt.Errorf("lease log: %w", err)
 		}
@@ -66,14 +66,14 @@ func (s *hubSink) Log(ctx context.Context, l protocol.Log) error {
 }
 
 // logWriter opens the lease's log file once.
-func (d *Driver) logWriter(rt *route) (*LogWriter, error) {
+func (d *Driver) logWriter(rt *route, dir string) (*LogWriter, error) {
 	d.mu.Lock()
 	lw := rt.lw
 	d.mu.Unlock()
 	if lw != nil {
 		return lw, nil
 	}
-	opened, err := OpenLog(LogFile(d.LogDir, rt.leaseID))
+	opened, err := OpenLog(LogFile(dir, rt.leaseID))
 	if err != nil {
 		return nil, err
 	}
@@ -115,8 +115,8 @@ func (s *hubSink) Result(ctx context.Context, r protocol.Result) error {
 	if err = rt.sink.Result(ctx, r); err != nil {
 		return err
 	}
-	if d := s.d(); d.Gate != nil {
-		if err = d.Gate.Spend(ctx, rt.jti); err != nil {
+	if d := s.d(); d.cfg().gate != nil {
+		if err = d.cfg().gate.Spend(ctx, rt.jti); err != nil {
 			d.logf("agent transport: cannot spend the token of lease %s: %v", rt.leaseID, err)
 		}
 	}

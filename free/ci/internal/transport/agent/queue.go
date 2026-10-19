@@ -81,7 +81,7 @@ func (d *Driver) Next(_ context.Context, nodeID string) (*protocol.Lease, error)
 
 // leaseGone says whether the lease can no longer produce a result: it expired, or its attempt ended.
 func (d *Driver) leaseGone(ctx context.Context, rt *route) (bool, string) {
-	l, err := d.Leases.LeaseGet(ctx, rt.leaseID)
+	l, err := d.cfg().leases.LeaseGet(ctx, rt.leaseID)
 	switch {
 	case isStale(err):
 		return true, "unknown to the store"
@@ -97,7 +97,7 @@ func (d *Driver) leaseGone(ctx context.Context, rt *route) (bool, string) {
 // cancelRun stops the job: it asks the agent to cancel and waits for its result for the grace period.
 func (d *Driver) cancelRun(rt *route) error {
 	const reason = "cancelled"
-	if d.Cancel == nil || d.Cancel(rt.node, rt.leaseID, reason) != nil {
+	if cancel := d.cfg().cancel; cancel == nil || cancel(rt.node, rt.leaseID, reason) != nil {
 		d.mu.Lock()
 		if d.pending[rt.node] == nil {
 			d.pending[rt.node] = map[string]string{}
@@ -117,7 +117,8 @@ func (d *Driver) cancelRun(rt *route) error {
 
 // retryCancels re-sends the cancels that found no control stream; the node is polling, so it is connected.
 func (d *Driver) retryCancels(nodeID string) {
-	if d.Cancel == nil {
+	cancel := d.cfg().cancel
+	if cancel == nil {
 		return
 	}
 	d.mu.Lock()
@@ -127,7 +128,7 @@ func (d *Driver) retryCancels(nodeID string) {
 	}
 	d.mu.Unlock()
 	for id, why := range todo {
-		if d.Cancel(nodeID, id, why) != nil { // no control stream yet: try again on the next poll
+		if cancel(nodeID, id, why) != nil { // no control stream yet: try again on the next poll
 			continue
 		}
 		d.mu.Lock()

@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/agentapi"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -35,6 +36,7 @@ type Bindings interface {
 	TokenRebind(ctx context.Context, jti, serial, from, to string) (bool, error)
 	TokenSpend(ctx context.Context, jti string) error
 	TokenCheck(ctx context.Context, jti string) (store.TokenBinding, bool, error)
+	TokenPrune(ctx context.Context, nowUnix int64) (int64, error)
 }
 
 // LeaseView reads the lease a call names (store.Store).
@@ -176,4 +178,9 @@ func (g *Gate) Spend(ctx context.Context, jti string) error {
 	}
 	g.mu.Unlock()
 	return g.Bindings.TokenSpend(ctx, jti)
+}
+
+// Prune removes the bindings of tokens that expired more than an hour ago.
+func (g *Gate) Prune(ctx context.Context, now time.Time) (int64, error) {
+	return g.Bindings.TokenPrune(ctx, now.Unix())
 }
