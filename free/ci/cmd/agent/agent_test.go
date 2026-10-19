@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -265,7 +266,7 @@ func TestServeStdioRunsALeaseAndKeepsSecretsOut(t *testing.T) {
 		p := startServe(t, "--coordinator", "peer-1")
 		h := p.next("hello").Body.(*protocol.Hello)
 		ids = append(ids, h.NodeKey.KeyID)
-		if len(h.NodeKey.KeyID) != 16 || h.NodeKey.Alg != "ed25519" || h.Slots.Total != 2 || h.AgentVersion != Version {
+		if len(h.NodeKey.KeyID) != 16 || h.NodeKey.Alg != "ed25519" || h.Slots.Total != min(2, max(1, runtime.NumCPU()/2)) || h.AgentVersion != Version {
 			t.Fatalf("hello %+v", h)
 		}
 		p.send("welcome", protocol.Welcome{Version: 1, MinAgentVersion: "1.4.0", SessionID: "s", HeartbeatMS: 60000, AgentTTLMS: 120000}, 0, "")
@@ -405,3 +406,83 @@ func mustLook(t *testing.T, name string) string {
 }
 
 func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }
+
+func git(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"}, args...)...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// TestExecEvidenceBindsOnlyToTheCheckedRevision proves evidence for a revision
+// the source tree is not at is unbound (sha_mismatch, freshness unknown), and
+// that the matching revision of a clean tree stays bound.
+func TestExecEvidenceBindsOnlyToTheCheckedRevision(t *testing.T) {
+	skipUnixOnly(t)
+	useState(t)
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	repo := t.TempDir()
+	git(t, repo, "init", "-q")
+	if err := os.WriteFile(filepath.Join(repo, "f.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, repo, "add", "f.txt")
+	git(t, repo, "commit", "-q", "-m", "a")
+	head := git(t, repo, "rev-parse", "HEAD")
+	for _, c := range []struct{ rev, binding string }{{head, "bound"}, {strings.Repeat("1", 40), "unbound"}} {
+		spec := execSpec{AttemptID: "a-" + c.binding, CoordinatorID: "local", JobID: "j", Revision: c.rev, SourceDir: repo, Job: model.Job{Kind: "static", Run: []string{"true"}}}
+		b, _ := json.Marshal(spec)
+		sp := filepath.Join(t.TempDir(), "s.json")
+		_ = os.WriteFile(sp, b, 0o600)
+		ev := filepath.Join(t.TempDir(), "e.json")
+		if code, _, errs := runCmd(t, "exec", "--spec", sp, "--evidence", ev); code != 0 {
+			t.Fatalf("exec %d %s", code, errs)
+		}
+		doc, _ := os.ReadFile(ev)
+		m := validEvidence(t, doc)
+		bind, _ := m["binding"].(map[string]any)
+		if bind["state"] != c.binding {
+			t.Fatalf("revision %.8s: binding %v, want %s", c.rev, bind, c.binding)
+		}
+		if c.binding == "unbound" && (bind["reason"] != "sha_mismatch" || m["freshness"].(map[string]any)["state"] != "unknown") {
+			t.Fatalf("unbound evidence: %v", m)
+		}
+	}
+}
+
+// TestExecWorkAreaIsOutsideTheStateDir proves executor work directories are
+// not created under the agent state dir (which holds the keys).
+func TestExecWorkAreaIsOutsideTheStateDir(t *testing.T) {
+	skipUnixOnly(t)
+	state := useState(t)
+	t.Setenv("NSELF_CI_AGENT_WORK", filepath.Join(t.TempDir(), "work"))
+	ev := filepath.Join(t.TempDir(), "e.json")
+	if code, _, errs := runCmd(t, "exec", "--spec", writeSpec(t, "true"), "--evidence", ev); code != 0 {
+		t.Fatalf("exec %d %s", code, errs)
+	}
+	if _, err := os.Stat(filepath.Join(state, "work")); err == nil {
+		t.Fatal("work area created under the state dir")
+	}
+}
+
+// TestSlotsCommandAndServeCannotRaiseTheCap proves `slots --set` is the
+// operator's lever and that a larger --slots on the serve command line is ignored.
+func TestSlotsCommandAndServeCannotRaiseTheCap(t *testing.T) {
+	useState(t)
+	if code, out, _ := runCmd(t, "slots", "--set", "1"); code != 0 || out != "cap 1 used 0\n" {
+		t.Fatalf("%d %q", code, out)
+	}
+	p := startServe(t, "--slots", "64")
+	h := p.next("hello").Body.(*protocol.Hello)
+	if h.Slots.Total != 1 {
+		t.Fatalf("hello slots %+v, want the operator's cap 1", h.Slots)
+	}
+	if code, _, _ := runCmd(t, "slots", "--set", "-1"); code != 2 {
+		t.Fatalf("negative set exit %d", code)
+	}
+}

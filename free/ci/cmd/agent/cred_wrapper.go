@@ -8,11 +8,13 @@ package main
 // Outputs: none; the process becomes <command> (execve), so the credential
 // lives only in that process's environment.
 // Constraints: the agent's own environment is not passed on (only a fixed
-// allowlist plus the credential variable); the line is read with a bound and
-// zeroed once the environment is built; there is no output on success.
+// allowlist plus the credential variable); the line is read with a bound, a
+// byte at a time (nothing past the newline is consumed); the copies Go makes of
+// the value (the environment string) are not zeroed, so this limits where the
+// credential goes, not how long it sits in this process's memory before execve;
+// there is no output on success.
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -65,23 +67,26 @@ func runCredWrapper(ctx context.Context, args []string, sio IO) int {
 	return 1
 }
 
-// readCredential reads one line (at most 64 KiB) from r.
+// readCredential reads one line (at most 64 KiB) from r a byte at a time, so no
+// byte past the newline is consumed: the runner started next may need them.
 func readCredential(r io.Reader) ([]byte, error) {
-	br := bufio.NewReaderSize(r, 4096)
 	var line []byte
+	var b [1]byte
 	for len(line) <= 64<<10 {
-		frag, err := br.ReadSlice('\n')
-		line = append(line, frag...)
-		if err == nil {
-			line = []byte(strings.TrimRight(string(line), "\r\n"))
-			if len(line) == 0 {
-				return nil, errors.New("empty credential on stdin")
+		n, err := r.Read(b[:])
+		if n == 1 {
+			if b[0] == '\n' {
+				line = []byte(strings.TrimRight(string(line), "\r"))
+				if len(line) == 0 {
+					return nil, errors.New("empty credential on stdin")
+				}
+				return line, nil
 			}
-			return line, nil
+			line = append(line, b[0])
 		}
-		if err != nil && !errors.Is(err, bufio.ErrBufferFull) {
+		if err != nil {
 			if errors.Is(err, io.EOF) && len(line) > 0 {
-				return []byte(strings.TrimRight(string(line), "\r\n")), nil
+				return []byte(strings.TrimRight(string(line), "\r")), nil
 			}
 			return nil, errors.New("no credential on stdin")
 		}

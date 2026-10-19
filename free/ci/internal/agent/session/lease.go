@@ -1,7 +1,6 @@
 package session
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,8 +25,9 @@ var unsafeName = regexp.MustCompile(`[^A-Za-z0-9_.-]`)
 type activeLease struct {
 	lease     protocol.Lease
 	cancelCtx context.CancelFunc
-	cancelled atomic.Bool // safe
-	done      atomic.Bool // safe: set when the job goroutine is finished
+	cancelled atomic.Bool   // safe
+	done      atomic.Bool   // safe: set when the job goroutine is finished
+	startWait time.Duration // how long the secrets wait may last (until the lease's expiry)
 	maskMu    sync.Mutex
 	mask      [][]byte
 	secMu     sync.Mutex
@@ -91,15 +91,16 @@ func (s *Session) onLease(m protocol.Message, l protocol.Lease) {
 		return
 	}
 	s.noteEpoch(l)
-	// The lease ends at its expiry: the coordinator has fenced it by then.
-	ctx, cancel := context.WithDeadline(s.runCtx, time.Now().Add(exp.Sub(now)))
-	al := &activeLease{lease: l, cancelCtx: cancel, secWake: make(chan struct{}, 1), secVals: map[string]string{}}
+	// expires_at gates admission only. The coordinator renews a running lease by
+	// heartbeat (Epic D6) and protocol v1 carries no new expiry, so the lease
+	// frame's value is not a job deadline; a job ends by its own timeout, a
+	// cancel, a drain deadline or the agent fence (P7-NODE-09).
+	ctx, cancel := context.WithCancel(s.runCtx)
+	al := &activeLease{lease: l, cancelCtx: cancel, secWake: make(chan struct{}, 1), secVals: map[string]string{}, startWait: exp.Sub(now)}
 	if l.RunnerCredential != nil {
-		al.mask = append(al.mask, []byte(l.RunnerCredential.Value))
+		al.addMask(l.RunnerCredential.Value)
 	}
-	if l.Token != "" {
-		al.mask = append(al.mask, []byte(l.Token))
-	}
+	al.addMask(l.Token)
 	s.active[l.LeaseID] = al
 	s.wg.Add(1)
 	go s.runLease(ctx, al, slot)
@@ -115,7 +116,7 @@ func (s *Session) noteEpoch(l protocol.Lease) {
 		s.seenOrder = append(s.seenOrder, l.LeaseID)
 	}
 	s.seenEpoch[l.LeaseID] = l.Epoch
-	for len(s.seenOrder) > maxSeen {
+	for tries := len(s.seenOrder); len(s.seenOrder) > maxSeen && tries > 0; tries-- {
 		old := s.seenOrder[0]
 		s.seenOrder = s.seenOrder[1:]
 		if _, running := s.active[old]; !running {
@@ -166,26 +167,26 @@ func (s *Session) onSecrets(m protocol.Message, sec protocol.Secrets) {
 		accepted = append(accepted, v.Value)
 	}
 	l.secMu.Unlock()
-	l.maskMu.Lock()
 	for _, v := range accepted {
-		l.mask = append(l.mask, []byte(v))
+		l.addMask(v)
 	}
-	l.maskMu.Unlock()
 	select {
 	case l.secWake <- struct{}{}:
 	default:
 	}
 }
 
+func (l *activeLease) addMask(v string) {
+	l.maskMu.Lock()
+	defer l.maskMu.Unlock()
+	for _, m := range secretMasks(v) {
+		l.mask = append(l.mask, []byte(m))
+	}
+}
+
 // redact hides every literal secret the lease carries from a string.
 func (l *activeLease) redact(s string) string {
-	b := []byte(s)
-	for _, m := range l.masks() {
-		if len(m) > 0 {
-			b = bytes.ReplaceAll(b, m, []byte(maskText))
-		}
-	}
-	return string(b)
+	return string(maskAll([]byte(s), l.masks()))
 }
 
 func (l *activeLease) masks() [][]byte {
@@ -233,25 +234,37 @@ func (s *Session) runLease(ctx context.Context, al *activeLease, slot *slots.Slo
 		}
 		mergeSetup(&setup, got)
 	}
-	for ctx.Err() == nil {
+	waitCtx, stopWait := context.WithTimeout(ctx, al.startWait)
+	for waitCtx.Err() == nil {
 		al.secMu.Lock()
 		for k, v := range al.secVals {
 			if setup.Secrets == nil {
 				setup.Secrets = map[string]string{}
 			}
 			setup.Secrets[k] = v
-			if _, name, ok := strings.Cut(k, "/"); ok {
-				setup.Secrets[name] = v
+		}
+		for name, n := range shortNames(al.secVals) {
+			if n == 1 {
+				setup.Secrets[name] = shortValue(al.secVals, name)
 			}
 		}
 		al.secMu.Unlock()
 		if !missingSecrets(l.Job.Secrets, setup.Secrets) {
 			break
 		}
-		select { // bounded by the lease expiry, which cancels ctx
+		select { // bounded by the lease's expiry
 		case <-al.secWake:
-		case <-ctx.Done():
+		case <-waitCtx.Done():
 		}
+	}
+	stopWait()
+	switch {
+	case ctx.Err() != nil:
+		s.finish(ctx, al, root, JobResult{Outcome: Outcome{State: "cancelled", FailureClass: "cancelled"}, Evidence: json.RawMessage(`{"schema":"ci.evidence/v1","result":"cancelled","reason":"cancelled_before_start"}`)}, nil)
+		return
+	case missingSecrets(l.Job.Secrets, setup.Secrets):
+		s.finish(ctx, al, root, JobResult{Outcome: Outcome{State: "failed", FailureClass: "infra"}}, errors.New("declared secrets were not delivered before the lease expired"))
+		return
 	}
 	res, err := s.cfg.Runner.Run(ctx, JobRun{Lease: l, Slot: slot.Index, Root: root, Setup: setup, Credential: cred, Output: al.lw.Write, Mask: al.redactBytes})
 	al.lw.Flush()
@@ -271,6 +284,27 @@ func newJobRoot(state string, l protocol.Lease) (JobRoot, error) {
 	return JobRoot{Dir: dir}, err
 }
 
+// shortNames counts how many delivered refs share each short name ("TOKEN" in
+// "project/TOKEN"); a name two refs share is not aliased.
+func shortNames(vals map[string]string) map[string]int {
+	n := map[string]int{}
+	for ref := range vals {
+		if _, name, ok := strings.Cut(ref, "/"); ok {
+			n[name]++
+		}
+	}
+	return n
+}
+
+func shortValue(vals map[string]string, name string) string {
+	for ref, v := range vals {
+		if _, short, ok := strings.Cut(ref, "/"); ok && short == name {
+			return v
+		}
+	}
+	return ""
+}
+
 func missingSecrets(need []string, have map[string]string) bool {
 	for _, n := range need {
 		if _, ok := have[n]; !ok {
@@ -285,7 +319,7 @@ func (s *Session) finish(ctx context.Context, al *activeLease, root JobRoot, res
 	l := al.lease
 	if runErr != nil {
 		al.lw.Flush()
-		_ = s.send("log", protocol.Log{LeaseID: l.LeaseID, LineSeq: al.lines.Add(1), Stream: "stderr", Text: al.redact("agent: " + oneLine(runErr.Error()))}, al)
+		_ = s.send("log", protocol.Log{LeaseID: l.LeaseID, LineSeq: al.lines.Add(1), Stream: "stderr", Text: oneLine(al.redact("agent: " + runErr.Error()))}, al)
 	}
 	hookCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
 	defer cancel()
@@ -295,7 +329,7 @@ func (s *Session) finish(ctx context.Context, al *activeLease, root JobRoot, res
 			continue
 		}
 		if err := h.After(hookCtx, l, root, res.Outcome, up); err != nil {
-			_ = s.send("log", protocol.Log{LeaseID: l.LeaseID, LineSeq: al.lines.Add(1), Stream: "stderr", Text: al.redact("agent: job hook " + h.Name + ": " + oneLine(err.Error()))}, al)
+			_ = s.send("log", protocol.Log{LeaseID: l.LeaseID, LineSeq: al.lines.Add(1), Stream: "stderr", Text: oneLine(al.redact("agent: job hook " + h.Name + ": " + err.Error()))}, al)
 		}
 	}
 	ev, cerr := canonicalJSON(res.Evidence)
@@ -306,10 +340,16 @@ func (s *Session) finish(ctx context.Context, al *activeLease, root JobRoot, res
 	}
 	sig, err := signEvidence(currentSigner(s.cfg.Signer), ev)
 	if err != nil {
-		_ = s.send("log", protocol.Log{LeaseID: l.LeaseID, LineSeq: al.lines.Add(1), Stream: "stderr", Text: al.redact("agent: result not signed: " + oneLine(err.Error()))}, al)
+		_ = s.send("log", protocol.Log{LeaseID: l.LeaseID, LineSeq: al.lines.Add(1), Stream: "stderr", Text: oneLine(al.redact("agent: result not signed: " + err.Error()))}, al)
 		sig = protocol.Signature{}
 	}
-	_ = s.send("result", protocol.Result{LeaseID: l.LeaseID, Epoch: l.Epoch, Evidence: ev, Signature: sig}, al)
+	err = s.send("result", protocol.Result{LeaseID: l.LeaseID, Epoch: l.Epoch, Evidence: ev, Signature: sig}, al)
+	var pe *protocol.Error
+	if errors.As(err, &pe) && pe.Reason == "frame_too_large" {
+		// A document the frame cannot hold must not vanish: say so, unsigned.
+		small := json.RawMessage(`{"schema":"ci.evidence/v1","result":"error","reason":"evidence_too_large"}`)
+		_ = s.send("result", protocol.Result{LeaseID: l.LeaseID, Epoch: l.Epoch, Evidence: small}, al)
+	}
 }
 
 func oneLine(s string) string {

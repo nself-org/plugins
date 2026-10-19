@@ -50,9 +50,9 @@ type entry struct {
 }
 
 // tableFile is slots.json. Cap is the host's slot count, fixed by whoever first
-// opened the table (or by SetCap): later Opens can lower their own count but
-// never raise it, so a coordinator that picks the agent's command line cannot
-// widen the cap the operator's agent started with.
+// opened the table (or by SetCap, the operator's lever: `nself-ci-agent slots
+// --set N`): later Opens can lower their own count but never raise it, so a
+// coordinator that picks the agent's command line cannot widen the cap.
 type tableFile struct {
 	Cap   int     `json:"cap"`
 	Slots []entry `json:"slots"`
@@ -108,6 +108,17 @@ func SetCap(stateDir string, total int) error {
 	}
 	t := &Table{dir: stateDir, total: total}
 	return t.locked(func(tf *tableFile) (bool, error) { tf.Cap = total; return true, nil })
+}
+
+// Status reports the host's recorded cap (0 when none was set yet) and the
+// slots held by live owners.
+func Status(stateDir string) (capacity, used int, err error) {
+	if err := nodekey.EnsureDir(stateDir); err != nil {
+		return 0, 0, err
+	}
+	t := &Table{dir: stateDir, total: 1}
+	err = t.locked(func(tf *tableFile) (bool, error) { capacity, used = tf.Cap, len(tf.Slots); return false, nil })
+	return capacity, used, err
 }
 
 // Total is the slot count.
@@ -270,8 +281,26 @@ func (t *Table) write(tf *tableFile) error {
 		return err
 	}
 	tmp := filepath.Join(t.dir, tableName+"."+strconv.Itoa(os.Getpid())+".tmp")
-	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, filepath.Join(t.dir, tableName))
+	if _, err = f.Write(raw); err == nil {
+		err = f.Sync() // a power loss must not leave an empty table under the final name
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, filepath.Join(t.dir, tableName)); err != nil {
+		return err
+	}
+	if d, err := os.Open(t.dir); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	return nil
 }

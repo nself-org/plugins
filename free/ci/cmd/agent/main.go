@@ -20,6 +20,7 @@ import (
 )
 
 func main() {
+	signal.Ignore(syscall.SIGPIPE) // a peer that closed our stdout is a send error, not a kill
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	code := run(ctx, os.Args[1:], IO{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr})
 	stop()

@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
@@ -83,12 +84,7 @@ func runExecCmd(ctx context.Context, args []string, sio IO) int {
 		fmt.Fprintln(sio.Stderr, "error: spec:", err)
 		return 2
 	}
-	state, err := stateDir()
-	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
-		return 1
-	}
-	res, err := runSpec(ctx, state, spec, jobInputs{Output: func(b []byte) { _, _ = sio.Stdout.Write(b) }})
+	res, err := runSpec(ctx, spec, jobInputs{Output: func(b []byte) { _, _ = sio.Stdout.Write(b) }})
 	if err != nil {
 		fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
@@ -132,7 +128,7 @@ func writeEvidence(path string, doc []byte) error {
 }
 
 // runSpec runs the job once and returns its outcome and evidence document.
-func runSpec(ctx context.Context, home string, spec execSpec, in jobInputs) (session.JobResult, error) {
+func runSpec(ctx context.Context, spec execSpec, in jobInputs) (session.JobResult, error) {
 	if !revisionRE.MatchString(spec.Revision) {
 		return session.JobResult{}, errors.New("revision must be a full 40 or 64 hex commit id")
 	}
@@ -147,6 +143,11 @@ func runSpec(ctx context.Context, home string, spec execSpec, in jobInputs) (ses
 	for k, v := range in.Env {
 		job.Env[k] = v
 	}
+	home, err := os.MkdirTemp(workBase(), "run-")
+	if err != nil {
+		return session.JobResult{}, err
+	}
+	defer func() { _ = os.RemoveAll(home) }()
 	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}, NewRedactor: ciexec.NewOutputRedactor}
 	if len(in.Secrets) > 0 {
 		ex.Secrets = mapSecrets(in.Secrets)
@@ -154,7 +155,7 @@ func runSpec(ctx context.Context, home string, spec execSpec, in jobInputs) (ses
 	rev := cirun.Revision{SHA: spec.Revision}
 	builder := evidence.Builder{}
 	begin := builder.Begin(ctx, spec.SourceDir, rev, report.Capture)
-	tail := &tailBuffer{max: 2000}
+	tail := &tailBuffer{max: tailKeep}
 	started := time.Now()
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: spec.AttemptID, CoordinatorID: spec.CoordinatorID, Job: job, Command: job.Run,
 		SourceDir: spec.SourceDir, Mounts: in.Mounts, Home: home, Slot: in.Slot,
@@ -165,9 +166,10 @@ func runSpec(ctx context.Context, home string, spec execSpec, in jobInputs) (ses
 			}
 		}})
 	excerpt := tail.String()
-	if in.Mask != nil {
+	if in.Mask != nil { // mask the whole kept tail first, then clip it
 		excerpt = string(in.Mask([]byte(excerpt)))
 	}
+	excerpt = clipTail(excerpt)
 	outcome := jobOutcome(spec, res, excerpt)
 	base := baseEvidence(spec, outcome, started, res.Finished)
 	facts := cirun.EvidenceFacts{Root: spec.SourceDir, RunID: base.RunID, Rev: rev, Git: report.Capture, Jobs: []cirun.JobOutcome{outcome}, Job: spec.JobID}
@@ -178,6 +180,9 @@ func runSpec(ctx context.Context, home string, spec execSpec, in jobInputs) (ses
 		reason := model.BindingReason("dirty")
 		done.Binding, done.WorktreeState = model.Binding{State: "unbound", Reason: &reason}, "dirty"
 		done.Freshness = model.Freshness{State: "unknown", Reason: &why}
+	}
+	if err == nil {
+		unbindIfOtherRevision(ctx, spec, &done)
 	}
 	doc, err := json.Marshal(evidence.AttemptDocument(done, outcome))
 	return session.JobResult{Outcome: session.Outcome{State: string(res.Attempt.State), ExitCode: res.ExitCode, FailureClass: string(res.Attempt.FailureClass)}, Evidence: doc}, err
@@ -250,6 +255,34 @@ func baseEvidence(spec execSpec, o cirun.JobOutcome, start, end time.Time) model
 	return e
 }
 
+// unbindIfOtherRevision unbinds evidence whose named revision is not the commit
+// the source tree is at: bound, current evidence must describe what ran.
+func unbindIfOtherRevision(ctx context.Context, spec execSpec, ev *model.Evidence) {
+	if spec.SourceDir == "" {
+		return
+	}
+	out, exit, err := report.Capture(ctx, "git", "-c", "core.fsmonitor=false", "-C", spec.SourceDir, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+	head := strings.ToLower(strings.TrimSpace(out))
+	if err == nil && exit == 0 && head == strings.ToLower(spec.Revision) {
+		return
+	}
+	reason, why := model.BindingReason("sha_mismatch"), "the source tree is not at the named revision"
+	ev.Binding = model.Binding{State: "unbound", Reason: &reason}
+	ev.Freshness = model.Freshness{State: "unknown", Reason: &why}
+}
+
+// workBase is where per-run executor work areas go: outside the agent state dir
+// (which holds the keys, and which a job UID may not enter), one 0700 dir per user.
+func workBase() string {
+	if v := os.Getenv("NSELF_CI_AGENT_WORK"); v != "" {
+		_ = os.MkdirAll(v, 0o700)
+		return v
+	}
+	d := filepath.Join(os.TempDir(), fmt.Sprintf("nself-ci-agent-%d", os.Getuid()))
+	_ = os.MkdirAll(d, 0o700)
+	return d
+}
+
 func mapSecrets(m map[string]string) ciexec.SecretSource { return secretMap(m) }
 
 type secretMap map[string]string
@@ -279,3 +312,19 @@ func (t *tailBuffer) Write(p []byte) {
 	}
 }
 func (t *tailBuffer) String() string { return string(t.buf) }
+
+const (
+	// tailKeep is the raw output kept for the failure excerpt: enough that a
+	// secret value up to the frame cap is whole when it is masked.
+	tailKeep = 80 << 10
+	// excerptMax is the excerpt that goes into the evidence.
+	excerptMax = 2000
+)
+
+func clipTail(s string) string {
+	if len(s) <= excerptMax {
+		return s
+	}
+	s = s[len(s)-excerptMax:]
+	return strings.ToValidUTF8(s, "")
+}

@@ -33,6 +33,36 @@ import (
 
 func init() {
 	must(RegisterSubcommand("serve", "serve protocol v1 on stdin/stdout (--stdio)", runServe))
+	must(RegisterSubcommand("slots", "show or set (--set N) this host's slot cap", runSlots))
+}
+
+// runSlots is the operator's lever on the host slot cap.
+func runSlots(_ context.Context, args []string, sio IO) int {
+	fs := flag.NewFlagSet("slots", flag.ContinueOnError)
+	fs.SetOutput(sio.Stderr)
+	set := fs.Int("set", 0, "set the host slot cap to N")
+	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || *set < 0 {
+		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent slots [--set N]")
+		return 2
+	}
+	state, err := stateDir()
+	if err != nil {
+		fmt.Fprintln(sio.Stderr, "error:", err)
+		return 1
+	}
+	if *set > 0 {
+		if err := slots.SetCap(state, *set); err != nil {
+			fmt.Fprintln(sio.Stderr, "error:", err)
+			return 1
+		}
+	}
+	capacity, used, err := slots.Status(state)
+	if err != nil {
+		fmt.Fprintln(sio.Stderr, "error:", err)
+		return 1
+	}
+	fmt.Fprintf(sio.Stdout, "cap %d used %d\n", capacity, used)
+	return 0
 }
 
 var idRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
@@ -41,7 +71,7 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(sio.Stderr)
 	stdio := fs.Bool("stdio", false, "serve over stdin and stdout (carrier A)")
-	nslots := fs.Int("slots", 0, "concurrent leases this host allows (default: half the CPUs)")
+	nslots := fs.Int("slots", 0, "lower the concurrent leases this host allows (default and ceiling: half the CPUs; raise with `slots --set`)")
 	coordinator := fs.String("coordinator", "stdio", "id of the coordinator on the other end")
 	fingerprint := fs.String("root-fingerprint", "", "fingerprint of that coordinator's root")
 	secretValues := fs.Bool("accept-secret-values", false, "accept value-bearing secrets frames (PERSONAL coordinator)")
@@ -69,9 +99,11 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 		return 1
 	}
 	capacity := ciexec.Probe()
-	total := *nslots
-	if total <= 0 {
-		total = max(1, capacity.CPUs/2)
+	// --slots can lower the count, never raise it above the host default: the
+	// coordinator picks this command line. `slots --set N` is the operator's lever.
+	total := max(1, capacity.CPUs/2)
+	if *nslots > 0 && *nslots < total {
+		total = *nslots
 	}
 	table, err := slots.Open(state, total)
 	if err != nil {
@@ -87,7 +119,7 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 	s, err := session.New(session.Config{
 		Carrier: car, Key: key, Slots: table, StateDir: state,
 		Facts:       session.Facts{AgentVersion: Version, MachineID: machineID(), CapabilityDigest: capabilityDigest(), AgeRecipient: age.Recipient},
-		Runner:      leaseRunner{home: state, coordinator: *coordinator},
+		Runner:      leaseRunner{coordinator: *coordinator},
 		Coordinator: session.Coordinator{ID: *coordinator, RootFingerprint: *fingerprint},
 		Status:      hostStatus,
 	})
@@ -109,7 +141,7 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 }
 
 // leaseRunner runs a lease's job through the exec path.
-type leaseRunner struct{ home, coordinator string }
+type leaseRunner struct{ coordinator string }
 
 func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResult, error) {
 	if len(j.Credential) > 0 {
@@ -124,7 +156,7 @@ func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResu
 		return session.JobResult{}, errors.New("the lease has a checkout but no hook staged it")
 	}
 	spec := execSpec{AttemptID: l.AttemptID, CoordinatorID: r.coordinator, JobID: "job", Job: l.Job, Revision: l.Checkout.Revision, SourceDir: j.Setup.SourceDir}
-	return runSpec(ctx, r.home, spec, jobInputs{Slot: j.Slot, Env: j.Setup.Env, Secrets: j.Setup.Secrets, Mounts: j.Setup.Mounts, Output: j.Output, Mask: j.Mask})
+	return runSpec(ctx, spec, jobInputs{Slot: j.Slot, Env: j.Setup.Env, Secrets: j.Setup.Secrets, Mounts: j.Setup.Mounts, Output: j.Output, Mask: j.Mask})
 }
 
 func hostStatus() session.Status {

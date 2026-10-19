@@ -95,19 +95,20 @@ type Session struct {
 	sendSeq uint64
 
 	// Owned by the Run goroutine.
-	active    map[string]*activeLease
-	seenEpoch map[string]uint64
-	seenOrder []string
-	draining  bool
-	drainBy   time.Time
-	heartbeat time.Duration
-	welcome   protocol.Welcome
-	wg        sync.WaitGroup
-	finished  chan *activeLease
-	jobHooks  []JobHook
-	runCtx    context.Context
-	ticker    Ticker
-	closing   chan struct{}
+	active     map[string]*activeLease
+	seenEpoch  map[string]uint64
+	seenOrder  []string
+	draining   bool
+	drainBy    time.Time
+	heartbeat  time.Duration
+	welcome    protocol.Welcome
+	wg         sync.WaitGroup
+	finished   chan *activeLease
+	jobHooks   []JobHook
+	runCtx     context.Context
+	ticker     Ticker
+	closing    chan struct{}
+	sendFailed chan error
 }
 
 // New checks cfg and returns a Session.
@@ -122,7 +123,7 @@ func New(cfg Config) (*Session, error) {
 	if len(cfg.Facts.CompatModes) == 0 {
 		cfg.Facts.CompatModes = []protocol.CompatMode{protocol.Compat14, protocol.Compat15}
 	}
-	s := &Session{cfg: cfg, active: map[string]*activeLease{}, seenEpoch: map[string]uint64{}, finished: make(chan *activeLease, 64), closing: make(chan struct{})}
+	s := &Session{cfg: cfg, active: map[string]*activeLease{}, seenEpoch: map[string]uint64{}, finished: make(chan *activeLease, 64), closing: make(chan struct{}), sendFailed: make(chan error, 1)}
 	s.jobHooks = cfg.Hooks
 	if s.jobHooks == nil {
 		s.jobHooks = registeredHooks()
@@ -161,6 +162,9 @@ func (s *Session) Run(ctx context.Context) error {
 	defer s.shutdown()
 
 	if s.cfg.Resume != nil {
+		if s.cfg.Resume.Welcome.Version != 1 {
+			return &protocol.Error{Code: protocol.CodeVersion, Reason: "welcome_version"}
+		}
 		s.sendSeq, s.welcome = s.cfg.Resume.SendSeq, s.cfg.Resume.Welcome
 	} else {
 		if err := s.sendHello(); err != nil {
@@ -191,6 +195,8 @@ func (s *Session) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case err := <-s.sendFailed:
+			return fmt.Errorf("carrier send: %w", err)
 		case <-s.ticker.C():
 			s.beat(nil)
 		case al := <-s.finished:
@@ -231,6 +237,10 @@ func (s *Session) send(kind string, body any, l *activeLease) error {
 		m.Epoch, m.LeaseID = &e, l.lease.LeaseID
 	}
 	if err := s.cfg.Carrier.Send(m); err != nil {
+		select { // the Run loop ends the session: a deaf agent must not keep running jobs
+		case s.sendFailed <- err:
+		default:
+		}
 		return err
 	}
 	s.sendSeq++
