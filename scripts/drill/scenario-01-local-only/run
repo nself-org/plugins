@@ -86,7 +86,7 @@ why() {
 	local id skip=db-reachable
 	[ "${2:-}" != all ] || skip=-
 	for id in $(jq -r '.data.checks[] | select(.result != "pass" and .id != "'"$skip"'") | .id' "$work/why.json" 2>/dev/null); do
-		printf '[%s: %s ' "$id" "$(jq -r --arg id "$id" '.data.checks[] | select(.id == $id) | .diagnosis // ""' "$work/why.json" 2>/dev/null)"
+		printf '[%s: %s ' "$id" "$(jq -c --arg id "$id" '.data.checks[] | select(.id == $id) | del(.id, .job_id, .kind, .tool, .tool_version, .required, .substantive, .log_ref, .remediation)' "$work/why.json" 2>/dev/null | cut -c1-200)"
 		nrun ci logs "$id" --run "$1" 2>&1 | grep -v 'moved to' | tail -n 2 | tr '\n' ' ' | cut -c1-170
 		printf '] '
 	done

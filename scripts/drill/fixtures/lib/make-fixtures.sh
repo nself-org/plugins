@@ -97,7 +97,7 @@ jobs:
     timeout: 300s
   web-check:
     kind: static
-    run: [jq, -e, .name, package.json]
+    run: [sh, -c, 'grep -q "\"name\"" package.json']
     workdir: web
   db-reachable:
     kind: test

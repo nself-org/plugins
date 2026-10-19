@@ -114,8 +114,12 @@ NFT
 		# The docker daemon makes its own connections (outside the drill's group); count and drop those too where nft can.
 		if sudo -n nft -f - >/dev/null 2>&1 <<NFT; then CUT_DOCKERD=1; fi
 add chain inet $CUT_TABLE docker_daemon { type filter hook output priority 0; policy accept; }
-add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/docker.service" oifname != "lo" counter drop
-add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/containerd.service" oifname != "lo" counter drop
+add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/docker.service" oifname { "lo", "docker0" } accept
+add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/docker.service" oifname "br-*" accept
+add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/docker.service" counter drop
+add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/containerd.service" oifname { "lo", "docker0" } accept
+add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/containerd.service" oifname "br-*" accept
+add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/containerd.service" counter drop
 NFT
 		# shellcheck disable=SC2034 # read by the drills
 		CUT_NOTE="counts non-loopback output and DNS (port 53) of the drill's group, forwarding out of docker bridges, and docker.service/containerd.service output: $([ $CUT_DOCKERD -eq 1 ] && echo measured || echo 'not measured here (nft lacks socket cgroupv2)')"
