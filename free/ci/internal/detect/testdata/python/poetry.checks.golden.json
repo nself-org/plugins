@@ -18,7 +18,7 @@
     "argv": [
       "sh",
       "-c",
-      "poetry install --no-root --sync \u0026\u0026 poetry run pytest"
+      "export POETRY_VIRTUALENVS_IN_PROJECT=true; poetry install --no-root --sync \u0026\u0026 poetry run pytest"
     ]
   },
   {
@@ -29,7 +29,7 @@
     "argv": [
       "sh",
       "-c",
-      "poetry install --no-root --sync \u0026\u0026 poetry run mypy ."
+      "export POETRY_VIRTUALENVS_IN_PROJECT=true; poetry install --no-root --sync \u0026\u0026 poetry run mypy ."
     ]
   },
   {

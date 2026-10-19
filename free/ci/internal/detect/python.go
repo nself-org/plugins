@@ -164,12 +164,26 @@ func fileHasSection(s Snapshot, p, section string) bool {
 	return err == nil && hasAnySection(string(b), section)
 }
 
+// tableHeader returns the TOML table header on a line, without comment or
+// blanks (`[project] # note` is `[project]`), or "" when the line is no header.
+func tableHeader(line string) string {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "[") {
+		return ""
+	}
+	end := strings.Index(line, "]")
+	if end < 0 {
+		return ""
+	}
+	return strings.ReplaceAll(line[:end+1], " ", "")
+}
+
 // hasAnySection reports whether a line of text is exactly one of the section headers.
 func hasAnySection(text string, headers ...string) bool {
 	for _, line := range strings.Split(text, "\n") {
-		line = strings.TrimSpace(line)
-		for _, h := range headers {
-			if line == h {
+		h := tableHeader(line)
+		for _, want := range headers {
+			if h != "" && h == want {
 				return true
 			}
 		}
@@ -180,7 +194,7 @@ func hasAnySection(text string, headers ...string) bool {
 // hasSectionPrefix reports whether a line of text opens a section that starts with prefix.
 func hasSectionPrefix(text, prefix string) bool {
 	for _, line := range strings.Split(text, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), prefix) {
+		if h := tableHeader(line); h != "" && strings.HasPrefix(h, prefix) {
 			return true
 		}
 	}

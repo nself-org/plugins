@@ -85,6 +85,7 @@ func TestPythonToolEvidence(t *testing.T) {
 		{"ruff.toml and mypy.ini", fstest.MapFS{"setup.py": file(""), "ruff.toml": file(""), "mypy.ini": file("[mypy]\n")}, []string{"lint_tool:ruff@ruff.toml", "type_checker:mypy@mypy.ini"}, nil},
 		{"mypy in setup.cfg", fstest.MapFS{"setup.cfg": file("[metadata]\nname = x\n[mypy]\nstrict = True\n")}, []string{"type_checker:mypy@setup.cfg", "stack:python@setup.cfg"}, nil},
 		{"unconfigured has no ruff or mypy", fstest.MapFS{"pyproject.toml": file(proj)}, nil, []string{"lint_tool:ruff@pyproject.toml", "type_checker:mypy@pyproject.toml"}},
+		{"commented and spaced table headers", fstest.MapFS{"pyproject.toml": file("[ project ]  # metadata\nname = 'x'\n[tool.pytest.ini_options] # config\n")}, []string{"stack:python@pyproject.toml", "test_framework:pytest@pyproject.toml"}, nil},
 		{"project below a directory", fstest.MapFS{"svc/pyproject.toml": file(proj), "svc/tests/test_a.py": file("")}, []string{"stack:python@svc/pyproject.toml", "test_framework:pytest@svc/tests/test_a.py"}, nil},
 	}
 	for _, c := range cases {

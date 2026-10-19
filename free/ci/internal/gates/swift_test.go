@@ -115,24 +115,32 @@ func TestSwiftCheckShapes(t *testing.T) {
 }
 
 // TestXcodeMonorepoNamesItsContainer: with a project and a workspace in one
-// directory the workspace plans the shared scheme, and the argv names it.
+// directory every check names its container, and the two stay separate checks
+// even though they share a scheme name.
 func TestXcodeMonorepoNamesItsContainer(t *testing.T) {
 	x := find(fixtureChecks(t, "swift", "monorepo", Options{}), "xcode-test")
-	if len(x) != 1 {
-		t.Fatalf("want one xcode-test (the workspace plans the shared scheme), got %d", len(x))
+	if len(x) != 2 {
+		t.Fatalf("want an xcode-test per container, got %d: %+v", len(x), x)
 	}
-	want := []string{"xcodebuild", "test", "-workspace", "App.xcworkspace", "-scheme", "App", "-destination", "platform=macOS"}
-	if x[0].Workdir != "app" || !reflect.DeepEqual(x[0].Command(), want) {
-		t.Fatalf("workdir %q argv %v, want %v", x[0].Workdir, x[0].Command(), want)
+	want := map[string][]string{
+		"App.xcodeproj/App":   {"xcodebuild", "test", "-project", "App.xcodeproj", "-scheme", "App", "-destination", "platform=macOS"},
+		"App.xcworkspace/App": {"xcodebuild", "test", "-workspace", "App.xcworkspace", "-scheme", "App", "-destination", "platform=macOS"},
 	}
+	for _, p := range x {
+		if p.Workdir != "app" || !reflect.DeepEqual(p.Command(), want[p.Target]) {
+			t.Errorf("workdir %q target %q argv %v, want %v", p.Workdir, p.Target, p.Command(), want[p.Target])
+		}
+	}
+	// Two projects in one directory that share a scheme name both stay.
 	facts := []detect.Fact{
-		{Kind: "xcode_scheme", Name: "Solo", Path: "app/App.xcodeproj/xcshareddata/xcschemes/Solo.xcscheme", Confidence: detect.Certain},
-		{Kind: "xcode_scheme", Name: "Pods", Path: "app/Other.xcodeproj/xcshareddata/xcschemes/Pods.xcscheme", Confidence: detect.Certain},
+		{Kind: "stack", Name: "xcode", Path: "A.xcodeproj/project.pbxproj", Confidence: detect.Certain},
+		{Kind: "stack", Name: "xcode", Path: "B.xcodeproj/project.pbxproj", Confidence: detect.Certain},
+		{Kind: "xcode_scheme", Name: "Tests", Path: "A.xcodeproj/xcshareddata/xcschemes/Tests.xcscheme", Confidence: detect.Certain},
+		{Kind: "xcode_scheme", Name: "Tests", Path: "B.xcodeproj/xcshareddata/xcschemes/Tests.xcscheme", Confidence: detect.Certain},
 	}
-	got := DefaultRegistry().Plan(facts, Options{})
-	solo := find(got, "xcode-test")
-	if len(solo) != 2 || solo[0].Command()[2] != "-project" {
-		t.Fatalf("two projects in one directory must each be named: %+v", solo)
+	got := find(DefaultRegistry().Plan(facts, Options{}), "xcode-test")
+	if len(got) != 2 || got[0].Command()[3] != "A.xcodeproj" || got[1].Command()[3] != "B.xcodeproj" {
+		t.Fatalf("two projects sharing a scheme must both be checked: %+v", got)
 	}
 }
 

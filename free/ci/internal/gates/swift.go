@@ -8,8 +8,8 @@ package gates
 // Constraints: all three are required by default; xcode-test is bound to
 // darwin/arm64 and requires.tools [xcode], so placement picks a Mac with
 // Xcode and a host without it gets unplaceable.tool, never a pass; when a
-// directory holds several Xcode containers each scheme names its own
-// (-workspace over -project), otherwise xcodebuild finds the one container.
+// directory holds several Xcode containers each check names its own
+// (-workspace or -project), otherwise xcodebuild finds the one container.
 
 import (
 	"path"
@@ -46,12 +46,11 @@ func swiftTestIndex(facts []detect.Fact) map[string]bool {
 
 // xcodeSchemes answers, per scheme, which container xcodebuild must name.
 type xcodeSchemes struct {
-	containers  map[string]map[string]bool // workdir -> container dirs
-	inWorkspace map[string]bool            // workdir + NUL + scheme: a workspace shares it
+	containers map[string]map[string]bool // workdir -> container dirs
 }
 
 func xcodeIndex(facts []detect.Fact) xcodeSchemes {
-	x := xcodeSchemes{containers: map[string]map[string]bool{}, inWorkspace: map[string]bool{}}
+	x := xcodeSchemes{containers: map[string]map[string]bool{}}
 	known := func(container string) {
 		work := path.Dir(container)
 		if x.containers[work] == nil {
@@ -67,11 +66,7 @@ func xcodeIndex(facts []detect.Fact) xcodeSchemes {
 		case f.Kind == "stack" && f.Name == "xcode":
 			known(path.Dir(f.Path)) // every container counts, shared schemes or not
 		case f.Kind == "xcode_scheme":
-			container := xcodeContainerOf(f.Path)
-			known(container)
-			if strings.HasSuffix(container, ".xcworkspace") {
-				x.inWorkspace[path.Dir(container)+"\x00"+f.Name] = true
-			}
+			known(xcodeContainerOf(f.Path))
 		}
 	}
 	return x
@@ -82,20 +77,20 @@ func xcodeContainerOf(scheme string) string {
 	return path.Dir(path.Dir(path.Dir(scheme)))
 }
 
-// plan adds xcode-test for one scheme fact.
+// plan adds xcode-test for one scheme fact. A directory with several
+// containers names each one explicitly, and the container joins the target so
+// two projects sharing a scheme name both stay in the plan.
 func (x xcodeSchemes) plan(f detect.Fact, add addFn) {
 	container := xcodeContainerOf(f.Path)
 	work := path.Dir(container)
-	if !strings.HasSuffix(container, ".xcworkspace") && x.inWorkspace[work+"\x00"+f.Name] {
-		return // the workspace shares this scheme too: it plans the check
-	}
-	var argv []string
+	target, argv := f.Name, []string(nil)
 	if len(x.containers[work]) > 1 {
+		flag := "-project"
 		if strings.HasSuffix(container, ".xcworkspace") {
-			argv = []string{"xcodebuild", "test", "-workspace", path.Base(container), "-scheme", "{target}", "-destination", "platform=macOS"}
-		} else {
-			argv = []string{"xcodebuild", "test", "-project", path.Base(container), "-scheme", "{target}", "-destination", "platform=macOS"}
+			flag = "-workspace"
 		}
+		target = path.Base(container) + "/" + f.Name
+		argv = []string{"xcodebuild", "test", flag, path.Base(container), "-scheme", f.Name, "-destination", "platform=macOS"}
 	}
-	add("xcode-test", work, f.Name, func(p *PlannedCheck) { p.Argv = argv })
+	add("xcode-test", work, target, func(p *PlannedCheck) { p.Argv = argv })
 }

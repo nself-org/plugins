@@ -111,7 +111,7 @@ func (d *pythonDir) command(run, module string) func(*PlannedCheck) {
 		case "uv":
 			p.Tool, p.Argv = "uv", []string{"sh", "-c", "uv sync --frozen && uv run " + run}
 		case "poetry":
-			p.Tool, p.Argv = "poetry", []string{"sh", "-c", "poetry install --no-root --sync && poetry run " + run}
+			p.Tool, p.Argv = "poetry", []string{"sh", "-c", "export POETRY_VIRTUALENVS_IN_PROJECT=true; poetry install --no-root --sync && poetry run " + run}
 		default:
 			p.Tool, p.Argv = "python3", pipCommand(module, d.requirements, d.project)
 		}

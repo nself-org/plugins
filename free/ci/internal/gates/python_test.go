@@ -51,7 +51,7 @@ func TestPythonCommandsPerManager(t *testing.T) {
 		argv          []string
 	}{
 		{"uv", "uv", []string{"sh", "-c", "uv sync --frozen && uv run pytest"}},
-		{"poetry", "poetry", []string{"sh", "-c", "poetry install --no-root --sync && poetry run pytest"}},
+		{"poetry", "poetry", []string{"sh", "-c", "export POETRY_VIRTUALENVS_IN_PROJECT=true; poetry install --no-root --sync && poetry run pytest"}},
 		{"pip", "python3", []string{"sh", "-c", pipScript + pipRun + "-m pytest", "sh", "requirements-dev.txt", "requirements.txt"}},
 	}
 	for _, c := range cases {
