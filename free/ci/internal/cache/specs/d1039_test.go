@@ -10,6 +10,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 // D-1039: a directory swapped for an in-root symlink between the Lstat and the
@@ -67,5 +68,38 @@ func TestSaveAuditsTheRealRestoreCheckReason(t *testing.T) {
 	}
 	if got := restoreCheckError("build", context.Canceled); !errors.Is(got, context.Canceled) {
 		t.Fatalf("a cancel must pass through, got %v", got)
+	}
+}
+
+// cancelAfterCheck cancels the run's context once the writer check is done, so the
+// unpack starts on a cancelled context.
+type cancelAfterCheck struct {
+	Backend
+	cancel context.CancelFunc
+}
+
+func (b cancelAfterCheck) AttemptStateEpoch(ctx context.Context, id string) (model.JobState, int64, error) {
+	st, ep, err := b.Backend.AttemptStateEpoch(ctx, id)
+	b.cancel()
+	return st, ep, err
+}
+
+// CacheDrop runs on a live context, so a drop that the restore wrongly attempts
+// after the cancel is not hidden by the cancelled context failing it.
+func (b cancelAfterCheck) CacheDrop(_ context.Context, m entries.Manifest, reason string) error {
+	return b.Backend.CacheDrop(context.Background(), m, reason)
+}
+
+// D-1039: a restore cut short by a cancel says nothing about the entry; it stays.
+func TestCancelledRestoreKeepsTheEntry(t *testing.T) {
+	e := newEnv(t)
+	saved(t, e, "w1", ownerFacts)
+	e.running("r1", ownerFacts)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	e.eng.Backend = cancelAfterCheck{e.eng.Backend, cancel}
+	_, _ = Begin(ctx, e.input("r1", ownerFacts))
+	if n := e.entryCount(); n != 1 {
+		t.Fatalf("a cancelled restore must not drop the entry: %d left", n)
 	}
 }
