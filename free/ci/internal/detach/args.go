@@ -40,8 +40,8 @@ func ChildArgs(args []string) []string {
 	out = append(out, "--json", "--stream")
 	for _, a := range flags {
 		if strings.HasPrefix(a, "-") {
-			switch name := strings.TrimLeft(a, "-"); {
-			case isDetachFlag(a), name == "json", name == "stream":
+			name, _, _ := strings.Cut(strings.TrimLeft(a, "-"), "=")
+			if isDetachFlag(a) || name == "json" || name == "stream" { // the child always gets --json --stream, whatever the user wrote
 				continue
 			}
 		}

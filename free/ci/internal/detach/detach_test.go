@@ -61,6 +61,7 @@ func TestChildArgs(t *testing.T) {
 		{[]string{"--detach"}, []string{"--json", "--stream"}},
 		{[]string{"--detach", "--job", "build", "--json"}, []string{"--json", "--stream", "--job", "build"}},
 		{[]string{"-detach=true", "--pipeline", "x", "-stream"}, []string{"--json", "--stream", "--pipeline", "x"}},
+		{[]string{"--detach", "--json=false", "--stream=false", "-job=x"}, []string{"--json", "--stream", "-job=x"}},
 		{[]string{"--detach", "--json", "/path/to/repo"}, []string{"--json", "--stream", "/path/to/repo"}},
 		{[]string{"--detach", "--", "go", "test", "./..."}, []string{"--json", "--stream", "--", "go", "test", "./..."}},
 		{[]string{"--", "echo", "--detach", "--json"}, []string{"--json", "--stream", "--", "echo", "--detach", "--json"}},
@@ -160,6 +161,9 @@ func TestStartQueued(t *testing.T) {
 	}
 	if _, err = os.Stat(h.StreamPath); err != nil {
 		t.Fatalf("stream file was not renamed to the run id: %v", err)
+	}
+	if ReadPID(h.StreamPath) != 4242 {
+		t.Fatalf("pid sidecar %d", ReadPID(h.StreamPath))
 	}
 	joined := strings.Join(started, " ")
 	if !strings.HasPrefix(joined, "/bin/nself-ci --json --stream --job b") || strings.Contains(joined, "--detach") || strings.Contains(joined, EnvMCPToken) {

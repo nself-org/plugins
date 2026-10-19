@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -148,7 +149,11 @@ func sweepOrphanStreams() {
 
 func hasDryRun(args []string) bool {
 	for _, a := range args {
-		if a == "--dry-run" || a == "-dry-run" || a == "--dry-run=true" || a == "-dry-run=true" {
+		name, val, hasVal := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		if !strings.HasPrefix(a, "-") || name != "dry-run" {
+			continue
+		}
+		if b, err := strconv.ParseBool(val); !hasVal || (err == nil && b) {
 			return true
 		}
 	}

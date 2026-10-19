@@ -50,6 +50,7 @@ func Sweep(home string, known func(runID string) bool, now time.Time, dryRun boo
 			if err = os.Remove(path); err != nil && !os.IsNotExist(err) {
 				return removed, err
 			}
+			_ = os.Remove(pidPath(path))
 		}
 		removed = append(removed, e.Name())
 	}
@@ -67,6 +68,7 @@ func Remove(home string, runIDs []string) ([]string, error) {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			return removed, err
 		}
+		_ = os.Remove(pidPath(path))
 		removed = append(removed, filepath.Base(path))
 	}
 	return removed, nil

@@ -132,16 +132,20 @@ func (r *Reader) Next() ([][]byte, error) {
 	return lines, nil
 }
 
+// runIDScan is how much of a stream file RunIDOf reads: the first record is a
+// short line, and a sweep must not load whole retained streams.
+const runIDScan = 64 << 10
+
 // RunIDOf reads the start of a stream file and returns the run id of its first
 // record ("" when it holds none yet).
 func RunIDOf(path string) string {
-	r := &Reader{Path: path}
-	defer func() { _ = r.Close() }()
-	lines, err := r.Next()
+	f, err := os.Open(path)
 	if err != nil {
 		return ""
 	}
-	for _, l := range lines {
+	defer func() { _ = f.Close() }()
+	head, _ := io.ReadAll(io.LimitReader(f, runIDScan))
+	for _, l := range bytes.Split(head, []byte{'\n'}) {
 		if rec, ok := ParseLine(l); ok && rec.RunID != "" {
 			return rec.RunID
 		}

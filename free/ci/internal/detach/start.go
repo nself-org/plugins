@@ -87,9 +87,10 @@ func Start(p Params) (Handle, error) {
 		_ = os.Remove(path) // the tail is in the error; the raw child output must not stay on disk
 		return Handle{}, err
 	}
-	if final := filepath.Join(Dir(home), runID+".ndjson"); ValidRunID(runID) && os.Rename(path, final) == nil {
+	if final := filepath.Join(Dir(home), runID+".ndjson"); ValidRunID(runID) && !exists(final) && os.Rename(path, final) == nil {
 		path = final // the child keeps writing: its descriptor follows the rename
 	}
+	_ = WritePID(path, d.PID)
 	return NewHandle(runID, d.PID, CoordinatorOf(p.Args, envLookup(p.Env)), path, JobOf(p.Args)), nil
 }
 
@@ -132,4 +133,9 @@ func awaitQueued(path string, exited <-chan struct{}, wait, poll time.Duration, 
 		case <-tick.C:
 		}
 	}
+}
+
+func exists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
 }

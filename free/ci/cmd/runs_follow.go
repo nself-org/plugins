@@ -83,9 +83,9 @@ func runFollow(args []string) int {
 // the store marks the run finished), then closes the stream from the run's
 // last state.
 func followFile(ctx context.Context, src *runSource, path string, from int64) int {
-	over := func() (bool, error) {
+	over := func() (bool, error) { // finished in the store AND its writer gone: the store marks a run finished before the last events are written
 		cur, err := src.View(ctx)
-		return err == nil && detach.Terminal(cur.State), err
+		return err == nil && detach.Terminal(cur.State) && !detach.WriterAlive(path), err
 	}
 	var out detach.Outcome
 	var err error

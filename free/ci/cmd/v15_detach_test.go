@@ -280,3 +280,11 @@ func TestDetachPrune(t *testing.T) {
 		t.Fatalf("prune output is no longer one document:\n%s", out)
 	}
 }
+
+func TestDetachDryRunFlagForms(t *testing.T) {
+	for args, want := range map[string]bool{"--dry-run": true, "-dry-run=true": true, "--dry-run=1": true, "--dry-run=t": true, "--dry-run=false": false, "--keep": false, "x": false} {
+		if got := hasDryRun([]string{args}); got != want {
+			t.Errorf("hasDryRun(%q) = %v, want %v", args, got, want)
+		}
+	}
+}
