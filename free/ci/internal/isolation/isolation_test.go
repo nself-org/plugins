@@ -136,3 +136,30 @@ func TestCodesRegistered(t *testing.T) {
 		t.Fatal(p)
 	}
 }
+
+type markerPlanner struct{}
+
+func (markerPlanner) Plan(model.NetworkScope) (NetworkPlan, error) {
+	return NetworkPlan{Network: "marker"}, nil
+}
+
+// InstallNetworkPlanner replaces the process-wide planner, also for planners built before the install.
+func TestInstallNetworkPlanner(t *testing.T) {
+	early := DefaultNetworkPlanner()
+	InstallNetworkPlanner(markerPlanner{})
+	t.Cleanup(func() { InstallNetworkPlanner(nil) })
+	if got, err := early.Plan("restricted"); err != nil || got.Network != "marker" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	ap, ok := early.(AttemptPlanner)
+	if !ok {
+		t.Fatal("the default planner is not an AttemptPlanner")
+	}
+	if got, err := ap.PlanAttempt(context.Background(), "docker", Attempt{ID: "a1"}, "restricted"); err != nil || got.Network != "marker" {
+		t.Fatalf("stateless fallback: %+v %v", got, err)
+	}
+	InstallNetworkPlanner(nil)
+	if _, err := early.Plan("restricted"); code(err) != "E679/"+ReasonScope {
+		t.Errorf("after restoring the default: %v", err)
+	}
+}

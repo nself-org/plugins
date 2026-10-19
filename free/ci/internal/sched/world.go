@@ -157,6 +157,14 @@ type World struct {
 	// Bias is a per-runner score addition in ms, shown as the tier_rank component.
 	// Its contributor is P7-AUTO-05; empty means no effect.
 	Bias map[string]int64 `json:",omitempty"`
+	// Network holds, per runner id, the scopes a probe proved the runner enforces (network.enforced_scopes).
+	// Its contributor is P7-TRUST-08; a runner without an entry has no proof, so its NoLANRoute stays false.
+	Network map[string]NetworkFact `json:",omitempty"`
+}
+
+// NetworkFact is what a runner proved about its network scopes.
+type NetworkFact struct {
+	Enforced []model.NetworkScope `json:",omitempty"`
 }
 type Placement struct {
 	JobKey     string
