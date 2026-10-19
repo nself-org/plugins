@@ -218,7 +218,7 @@ func (h *cacheHook) After(ctx context.Context, a AttemptInfo, _ Outcome) error {
 // attempt's cache directories. After and eviction both end a session this way.
 func closeSession(ctx context.Context, st *store.Store, e cacheEntry) {
 	if e.s.Saved() && st != nil {
-		if state, _, err := st.AttemptStateEpoch(ctx, e.id); err != nil || state != "passed" {
+		if state, _, err := st.AttemptStateEpoch(ctx, e.id); err == nil && state != "passed" { // only a confirmed non-pass retracts
 			e.s.Retract(ctx)
 		}
 	}

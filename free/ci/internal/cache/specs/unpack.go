@@ -225,6 +225,9 @@ func writeFile(root *os.Root, name string, r io.Reader, h *tar.Header, opt Unpac
 // RemoveTree deletes dir and everything in it, first making every directory
 // owner-writable (a Go module cache holds read-only directories).
 func RemoveTree(dir string) error {
+	if info, err := os.Lstat(dir); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return os.Remove(dir) // a link is unlinked, its target never walked
+	}
 	root, err := os.OpenRoot(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -245,6 +248,9 @@ func RemoveIn(base *os.Root, rel string) error { return removeIn(base, rel) }
 // removeIn deletes the directory rel of base (same permission rule as RemoveTree)
 // without ever leaving base.
 func removeIn(base *os.Root, rel string) error {
+	if info, err := base.Lstat(rel); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return base.Remove(rel) // unlink it; never walk or chmod what it points at
+	}
 	if sub, err := base.OpenRoot(rel); err == nil {
 		_ = chmodDirs(sub, ".")
 		_ = sub.Close()

@@ -427,3 +427,12 @@ func TestSweepStaleNeverFollowsASymlink(t *testing.T) {
 		t.Fatal("a live attempt's dir was swept")
 	}
 }
+
+func TestCloseSessionRetractsOnlyAConfirmedNonPass(t *testing.T) {
+	r := cacheRig(t, map[string]model.Job{"build": sh("true")})
+	f := &fakeSession{saved: true}
+	closeSession(context.Background(), r.store(t), cacheEntry{s: f, id: "no-such-attempt"}) // history pruned: unknown, so not a confirmed non-pass
+	if f.retracted || !f.cleaned {
+		t.Fatalf("an attempt the store no longer knows must keep its entry: %+v", f)
+	}
+}

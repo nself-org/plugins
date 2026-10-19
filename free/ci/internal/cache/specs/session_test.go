@@ -3,6 +3,7 @@ package specs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
 	"github.com/nself-org/plugins/free/ci/internal/detect"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 // fill writes the files a Go job leaves in its two cache dirs.
@@ -462,5 +464,34 @@ func TestLowerTrustProcessJobLeavesTheSnapshotAlone(t *testing.T) {
 	s := e.begin(e.input("p1", internal))
 	if got := strings.Join(resultsOf(e.uses("p1")), ","); got != "go:miss" || e.entryCount() != 1 || len(tree(t, s.dir("mod"))) != 0 {
 		t.Fatalf("uses %s entries %d", got, e.entryCount())
+	}
+}
+
+// errBackend fails the attempt lookup the way a broken store would.
+type errBackend struct{ Backend }
+
+func (errBackend) AttemptStateEpoch(context.Context, string) (model.JobState, int64, error) {
+	return "", 0, errors.New("database is locked")
+}
+
+func TestRestoreServesNothingWhenTheWriterCannotBeChecked(t *testing.T) {
+	e := newEnv(t)
+	saved(t, e, "w1", ownerFacts)
+	good := e.eng.Backend
+	e.eng.Backend = errBackend{good}
+	e.running("r1", ownerFacts)
+	e.begin(e.input("r1", ownerFacts))
+	if got := strings.Join(resultsOf(e.uses("r1")), ","); got != "go:miss" || e.entryCount() != 1 {
+		t.Fatalf("a store error must fail closed without dropping: %s entries %d", got, e.entryCount())
+	}
+	e.eng.Backend = good
+	// the writer's history was pruned: its settled pass is trusted
+	if _, err := e.st.DeletePipelines(e.ctx, []string{"pw1"}); err != nil {
+		t.Fatal(err)
+	}
+	e.running("r2", ownerFacts)
+	e.begin(e.input("r2", ownerFacts))
+	if got := strings.Join(resultsOf(e.uses("r2")), ","); got != "go:hit" {
+		t.Fatalf("an entry whose writer attempt was pruned must still be served: %s (entries %d)", got, e.entryCount())
 	}
 }

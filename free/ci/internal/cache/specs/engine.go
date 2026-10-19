@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
@@ -110,7 +111,12 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 func (e *Engine) writerPassed(ctx context.Context, m entries.Manifest) bool {
 	state, _, err := e.Backend.AttemptStateEpoch(ctx, m.Writer.AttemptID)
 	switch {
-	case err != nil || state == "passed":
+	case err != nil:
+		// no such attempt (history pruned) is trusted, since the commit required a
+		// recorded pass; any other failure serves nothing (database/sql is not
+		// importable here, so the missing row is recognised by its message)
+		return strings.Contains(err.Error(), "no rows in result set")
+	case state == "passed":
 		return true
 	case state == "queued" || state == "leased" || state == "running" || state == "finalizing":
 		return false
@@ -120,13 +126,16 @@ func (e *Engine) writerPassed(ctx context.Context, m entries.Manifest) bool {
 }
 
 // validate runs the restore checks over a freshly Put blob without writing it anywhere.
-func (e *Engine) validate(realm cas.Realm, digest string) error {
+func (e *Engine) validate(ctx context.Context, realm cas.Realm, digest string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	rc, err := e.Blobs.Open(realm, digest)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = rc.Close() }()
-	return Validate(rc, cacheLimits())
+	return Validate(&ctxReader{ctx, rc}, cacheLimits())
 }
 
 func (e *Engine) unpackBlob(base *os.Root, realm cas.Realm, digest, rel string, opt UnpackOptions) error {
@@ -172,7 +181,7 @@ func (e *Engine) Save(ctx context.Context, r SaveRequest) (int64, error) {
 		if err != nil {
 			return 0, e.refuse(ctx, r, err)
 		}
-		if err := e.validate(realm, digest); err != nil { // a restore would refuse it: do not commit a loop of save, refuse, drop
+		if err := e.validate(ctx, realm, digest); err != nil { // a restore would refuse it: do not commit a loop of save, refuse, drop
 			return 0, e.refuse(ctx, r, fmt.Errorf("%w: the packed %s fails the restore checks: %v", ErrTooLarge, name, err))
 		}
 		files += st.Files

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
 	"github.com/nself-org/plugins/free/ci/internal/detect"
@@ -139,5 +141,43 @@ func TestCargoConfigWithARegistryBlocksTheRebind(t *testing.T) {
 	in.Probe = func(context.Context, []string) (string, error) { return "tool 1.0", nil }
 	if s := e.begin(in); len(s.items) != 0 || strings.Join(resultsOf(e.uses("g1")), ",") != "cargo:disabled" {
 		t.Fatalf("a cargo config that names a registry must not be rebound: %v", resultsOf(e.uses("g1")))
+	}
+}
+
+func TestPrivateDepsNeverReadsADeviceOrAFifo(t *testing.T) {
+	dir, home := t.TempDir(), t.TempDir()
+	fifo := filepath.Join(t.TempDir(), "rc")
+	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/dev/zero", fifo} {
+		done := make(chan bool, 1)
+		go func() {
+			yes, _ := PrivateDeps(PrivInput{Dirs: []string{dir}, Home: home, Environ: []string{"NPM_CONFIG_USERCONFIG=" + path}})
+			done <- yes
+		}()
+		select {
+		case yes := <-done:
+			if !yes {
+				t.Errorf("%s: a file the scan cannot read counts as private", path)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s: PrivateDeps blocked reading it", path)
+		}
+	}
+}
+
+func TestPrivateDepsResolvesGoEnvLikeGo(t *testing.T) {
+	dir, home, xdg := t.TempDir(), t.TempDir(), t.TempDir()
+	putFile(t, xdg+"/go/env", "GOPRIVATE=corp.example.invalid\n")
+	if yes, _ := PrivateDeps(PrivInput{Dirs: []string{dir}, Home: home, Environ: []string{"XDG_CONFIG_HOME=" + xdg}}); !yes {
+		t.Fatal("XDG_CONFIG_HOME/go/env")
+	}
+	putFile(t, home+"/.config/go/env", "GOPRIVATE=corp.example.invalid\n")
+	if yes, _ := PrivateDeps(PrivInput{Dirs: []string{dir}, Home: home, Environ: []string{"GOENV=off"}}); yes {
+		t.Fatal("GOENV=off reads no file")
+	}
+	if yes, _ := PrivateDeps(PrivInput{Dirs: []string{dir}, Home: t.TempDir(), Environ: []string{"GOENV=relative/env"}}); !yes {
+		t.Fatal("a relative GOENV cannot be followed, so it counts as private")
 	}
 }

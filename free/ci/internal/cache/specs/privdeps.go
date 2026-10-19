@@ -70,13 +70,22 @@ func PrivateDeps(in PrivInput) (bool, []string) {
 			scanFile(filepath.Dir(p), filepath.Base(p), f.re, add)
 		}
 	}
-	// `go env -w` keeps its settings in the user's go/env file, which the job's go reads
+	// `go env -w` keeps its settings in a go/env file the job's go reads: GOENV, else
+	// $XDG_CONFIG_HOME/go/env, else the user's config directory
 	var goenvs []string
-	if g := toolHomes["GOENV"]; g != "" {
+	switch g := toolHomes["GOENV"]; {
+	case g == "off":
+	case g != "" && !filepath.IsAbs(g):
+		add("env:GOENV") // a relative path is resolved against the job's directory: not followed, so private
+	case g != "":
 		goenvs = append(goenvs, g)
-	}
-	if in.Home != "" {
-		goenvs = append(goenvs, filepath.Join(in.Home, ".config", "go", "env"), filepath.Join(in.Home, "Library", "Application Support", "go", "env"))
+	default:
+		if x := toolHomes["XDG_CONFIG_HOME"]; x != "" {
+			goenvs = append(goenvs, filepath.Join(x, "go", "env"))
+		}
+		if in.Home != "" {
+			goenvs = append(goenvs, filepath.Join(in.Home, ".config", "go", "env"), filepath.Join(in.Home, "Library", "Application Support", "go", "env"))
+		}
 	}
 	for _, g := range goenvs {
 		scanFile(filepath.Dir(g), filepath.Base(g), goEnvRe, add)
@@ -120,15 +129,25 @@ func PrivateDeps(in PrivInput) (bool, []string) {
 	return len(why) > 0, why
 }
 
-// scanFile adds a signal when the file matches re or cannot be read (but exists).
+// maxConfigBytes bounds what the scan reads of one configuration file.
+const maxConfigBytes = 1 << 20
+
+// scanFile adds a signal when the file matches re. A file that exists but is not
+// a regular file within maxConfigBytes (a device, a FIFO, a huge or unreadable
+// file) counts as a signal: it is never read.
 func scanFile(dir, name string, re *regexp.Regexp, add func(string)) {
 	p := filepath.Join(dir, name)
-	b, err := os.ReadFile(p)
+	info, err := os.Stat(p)
 	switch {
 	case os.IsNotExist(err):
-	case err != nil:
+		return
+	case err != nil || !info.Mode().IsRegular() || info.Size() > maxConfigBytes:
 		add("unreadable:" + name)
-	case re.Match(b):
+		return
+	}
+	if b, err := os.ReadFile(p); err != nil {
+		add("unreadable:" + name)
+	} else if re.Match(b) {
 		add("file:" + name)
 	}
 }

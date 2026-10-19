@@ -124,3 +124,36 @@ func TestScanWriterFindsAValueUpToTheOverlapAcrossAWindowEdge(t *testing.T) {
 }
 
 var _ = authz.ModeNone
+
+func TestRemoveNeverWalksThroughASymlink(t *testing.T) {
+	parent := t.TempDir()
+	live := filepath.Join(parent, "live-attempt")
+	putFile(t, live+"/sub/f.txt", "x")
+	if err := os.Chmod(live+"/sub", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(live, filepath.Join(parent, "old-link")); err != nil { // a link inside the root to a live sibling
+		t.Fatal(err)
+	}
+	base, err := os.OpenRoot(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = base.Close() }()
+	if err := RemoveIn(base, "old-link"); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(live + "/sub"); err != nil || info.Mode().Perm() != 0o755 {
+		t.Fatalf("the link target was chmodded: %v %v", info, err)
+	}
+	if _, err := os.Lstat(filepath.Join(parent, "old-link")); !os.IsNotExist(err) {
+		t.Fatal("the link was not removed")
+	}
+	link := filepath.Join(t.TempDir(), "l")
+	if err := os.Symlink(live, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveTree(link); err != nil || getFile(t, live+"/sub/f.txt") != "x" {
+		t.Fatalf("RemoveTree followed a top-level symlink: %v", err)
+	}
+}
