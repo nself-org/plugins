@@ -55,7 +55,7 @@ func TestRefetch(t *testing.T) {
 			"first time": got.FirstTime.Value != nil && *got.FirstTime.Value && got.FirstTime.Source == "api",
 			"assoc":      got.AuthorAssociation.Value != nil && *got.AuthorAssociation.Value == "FIRST_TIME_CONTRIBUTOR" && got.AuthorAssociation.Source == "api",
 			"protected":  got.ProtectedRef.Value != nil && !*got.ProtectedRef.Value && got.ProtectedRef.Source == "api",
-			"reachable":  got.SHAReachable.Value != nil && *got.SHAReachable.Value && got.SHAReachable.Source == "api",
+			"unmerged":   got.SHAReachable.Value != nil && !*got.SHAReachable.Value && got.SHAReachable.Source == "api", // the fork head is "ahead" of main: not reachable from it
 			"current":    got.HeadCurrent.Value != nil && *got.HeadCurrent.Value && got.HeadCurrent.Source == "api",
 			"bot":        got.Bot.Value != nil && !*got.Bot.Value && got.Bot.Source == "api",
 			"visibility": got.Visibility.Value != nil && *got.Visibility.Value == "public" && got.Visibility.Source == "api",
@@ -74,20 +74,22 @@ func TestRefetch(t *testing.T) {
 		r := refetchRig(t)
 		got, err := r.src.Refetch(ctx, deliveredFacts(t, r, "push", "push.json"))
 		if err != nil || got.ActorPermission.Value == nil || *got.ActorPermission.Value != "admin" || got.Fork.Value == nil || *got.Fork.Value || *got.HeadRepo.Value != "o/r" ||
-			got.ChangedFiles.Value == nil || len(*got.ChangedFiles.Value) != 1 || got.ProtectedRef.Value == nil || got.ProtectedRef.Source != "api" {
+			got.ChangedFiles.Value == nil || len(*got.ChangedFiles.Value) != 1 || got.SHAReachable.Value == nil || !*got.SHAReachable.Value || got.ProtectedRef.Value == nil || got.ProtectedRef.Source != "api" {
 			t.Fatalf("push refetch = %+v, %v", got, err)
 		}
 	})
 	t.Run("runner demand reads the workflow run", func(t *testing.T) {
 		r := refetchRig(t)
-		got, err := r.src.Refetch(ctx, deliveredFacts(t, r, "workflow_job", "workflow_job_queued.json"))
+		in := deliveredFacts(t, r, "workflow_job", "workflow_job_queued.json")
+		verifyCalls := r.gh.calls() // Verify's own job-status call is not Refetch's
+		got, err := r.src.Refetch(ctx, in)
 		if err != nil || got.RunEvent.Value == nil || *got.RunEvent.Value != "pull_request_target" || got.RunEvent.Source != "api" ||
 			got.HeadRepo.Value == nil || *got.HeadRepo.Value != "newbie/r" || got.Fork.Value == nil || !*got.Fork.Value ||
 			got.Actor.Value == nil || got.Actor.Source != "api" {
 			t.Fatalf("demand refetch = %+v, %v", got, err)
 		}
-		if r.gh.calls() != 1 {
-			t.Fatalf("a runner demand reads only the run, got %d calls", r.gh.calls())
+		if n := r.gh.calls() - verifyCalls; n != 1 {
+			t.Fatalf("a runner demand reads only the run, got %d calls", n)
 		}
 	})
 	t.Run("a failing api never invents a fact", func(t *testing.T) {
@@ -125,7 +127,7 @@ func TestRefetch(t *testing.T) {
 		}
 		r.gh.set("/repos/o/r/compare/"+shaB+"..."+shaC, 200, `{"files":[`+strings.Join(files, ",")+`]}`)
 		got, err := r.src.Refetch(ctx, deliveredFacts(t, r, "pull_request", "pr_fork_opened.json"))
-		if err != nil || got.ChangedFiles.Value != nil || got.SHAReachable.Value == nil || !*got.SHAReachable.Value {
+		if err != nil || got.ChangedFiles.Value != nil {
 			t.Fatalf("300 files = %+v, %v", got.ChangedFiles, err)
 		}
 	})

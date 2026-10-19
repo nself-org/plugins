@@ -28,7 +28,9 @@ func (r *fetch) change() {
 		if v, known := visibilityOf(repo); known {
 			f.Visibility = fact(v, "api", r.now)
 		}
-		if f.Kind != "pull_request" && repo.FullName != "" { // code that is pushed lives in the repository itself
+		// code that is pushed lives in the repository itself; a dispatch revision is the caller's choice and
+		// may be a commit of the fork network, so it says nothing about the head repository
+		if (f.Kind == "push" || f.Kind == "tag") && repo.FullName != "" {
 			f.HeadRepo = fact(repo.FullName, "api", r.now)
 			f.Fork = fact(false, "api", r.now)
 		}
@@ -132,34 +134,40 @@ type comparison struct {
 	} `json:"files"`
 }
 
-// compare answers SHA reachability and the changed files. The recorded base revision gives both; it
-// can be missing from the repository (a force-push drops `before`), and compare answers 404 for a
-// missing base as well as a missing head, so a 404 there proves nothing: reachability is then asked
-// against the default branch. Against the default branch only, a 404 means the head is not there.
+// compare answers SHA reachability and the changed files with two independent reads.
+//
+// Changed files come from base...revision (the recorded base revision; absent for a new branch, and
+// possibly gone after a force-push, in which case the files stay unknown).
+//
+// Reachability means "the revision is reachable from the default branch": compare answers 200 for
+// any commit of the repository network, so a 200 alone proves nothing. Only the status says where the
+// revision sits: "behind" (the revision is an ancestor of the default branch) or "identical" is
+// reachable; "ahead" or "diverged" is an unmerged commit (a fork head, an unprotected branch) and is
+// not. A 404 on the default branch compare is "not in this repository" once the repository itself was
+// read with the same token.
 func (r *fetch) compare(defaultBranch string, repoOK bool) {
 	if !isHex40(r.f.Revision) {
 		return
 	}
-	var cmp comparison
-	if base := r.f.BaseRevision; base != "" {
-		status, ok := r.call("/repos/{owner}/{repo}/compare/"+base+"..."+r.f.Revision, r.params(), &cmp)
-		if ok {
-			r.f.SHAReachable = fact(true, "api", r.now)
+	if base := r.f.BaseRevision; isHex40(base) {
+		var cmp comparison
+		if _, ok := r.call("/repos/{owner}/{repo}/compare/"+base+"..."+r.f.Revision, r.params(), &cmp); ok {
 			r.setChangedFiles(cmp)
-			return
-		}
-		if status != http.StatusNotFound {
-			return
 		}
 	}
 	seg, ok := refSegments(defaultBranch)
 	if !ok || !repoOK {
 		return
 	}
-	status, ok := r.call("/repos/{owner}/{repo}/compare/"+seg+"..."+r.f.Revision, r.params(), &comparison{})
+	var onDefault struct {
+		Status string `json:"status"`
+	}
+	status, ok := r.call("/repos/{owner}/{repo}/compare/"+seg+"..."+r.f.Revision, r.params(), &onDefault)
 	switch {
-	case ok:
+	case ok && (onDefault.Status == "behind" || onDefault.Status == "identical"):
 		r.f.SHAReachable = fact(true, "api", r.now)
+	case ok && (onDefault.Status == "ahead" || onDefault.Status == "diverged"):
+		r.f.SHAReachable = fact(false, "api", r.now)
 	case status == http.StatusNotFound:
 		r.f.SHAReachable = fact(false, "api", r.now)
 	}

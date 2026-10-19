@@ -63,7 +63,7 @@ func TestRefetchReviewFixes(t *testing.T) {
 	t.Run("a missing base does not prove the head unreachable", func(t *testing.T) {
 		r := refetchRig(t)
 		r.gh.drop("/repos/o/r/compare/" + shaB + "..." + shaC)
-		r.gh.set("/repos/o/r/compare/main..."+shaC, 200, `{"files":[]}`)
+		r.gh.set("/repos/o/r/compare/main..."+shaC, 200, `{"status":"behind","files":[]}`)
 		got, err := r.src.Refetch(ctx, deliveredFacts(t, r, "pull_request", "pr_fork_opened.json"))
 		if err != nil || got.SHAReachable.Value == nil || !*got.SHAReachable.Value || got.ChangedFiles.Value != nil {
 			t.Fatalf("garbage-collected base = %+v %+v, %v", got.SHAReachable, got.ChangedFiles, err)
@@ -192,6 +192,68 @@ func TestRepoNameLengthBound(t *testing.T) {
 	body := replace(fixture(t, "push.json"), `"full_name":"o/r"`, `"full_name":"o/`+long+`"`)
 	_, err := r.deliver("push", sharedSecret, body)
 	wantE706(t, err, "10 KB repository name")
+}
+
+// TestOpusReviewFixes pins the adversarial review: reachability reads the compare status (a 200 for an
+// unmerged commit is not reachable), a replayed workflow_job queued event is stale once the job ran,
+// a dispatch says nothing about the head repository, a configured id beats a stale pin, a shared
+// delivery never pins, and a per-repo project keeps one spelling.
+func TestOpusReviewFixes(t *testing.T) {
+	ctx := context.Background()
+	t.Run("an unmerged commit is not reachable, a merged one is", func(t *testing.T) {
+		r := refetchRig(t)
+		for status, want := range map[string]bool{"ahead": false, "diverged": false, "behind": true, "identical": true} {
+			r.gh.set("/repos/o/r/compare/main..."+shaA, 200, `{"status":"`+status+`","files":[]}`)
+			got, err := r.src.Refetch(ctx, deliveredFacts(t, r, "push", "push.json"))
+			if err != nil || got.SHAReachable.Value == nil || *got.SHAReachable.Value != want {
+				t.Fatalf("status %s: reachable = %+v, %v (want %v)", status, got.SHAReachable, err, want)
+			}
+		}
+	})
+	t.Run("a dispatch revision from the fork network reads as unreachable with unknown head repo", func(t *testing.T) {
+		r := refetchRig(t)
+		r.gh.set("/repos/o/r/compare/main..."+shaD, 200, `{"status":"diverged","files":[]}`)
+		got, err := r.src.Refetch(ctx, deliveredFacts(t, r, "repository_dispatch", "repository_dispatch.json"))
+		if err != nil || got.SHAReachable.Value == nil || *got.SHAReachable.Value || got.HeadRepo.Value != nil || got.Fork.Value != nil {
+			t.Fatalf("dispatch = reach %+v head %+v fork %+v, %v", got.SHAReachable, got.HeadRepo, got.Fork, err)
+		}
+	})
+	t.Run("a replayed queued job is stale", func(t *testing.T) {
+		for _, status := range []string{"in_progress", "completed"} {
+			r := refetchRig(t)
+			r.gh.set("/repos/o/r/actions/jobs/4001", 200, `{"status":"`+status+`"}`)
+			_, err := r.deliver("workflow_job", repoSecret, fixture(t, "workflow_job_queued.json"))
+			if err == nil || !strings.Contains(err.Error(), "trigger.stale") {
+				t.Fatalf("job %s = %v", status, err)
+			}
+		}
+		r := refetchRig(t)
+		r.gh.set("/repos/o/r/actions/jobs/4001", 500, `{}`)
+		if f, err := r.deliver("workflow_job", repoSecret, fixture(t, "workflow_job_queued.json")); err != nil || f.Kind != "runner_demand" {
+			t.Fatalf("api failure must continue: %+v, %v", f, err)
+		}
+	})
+	t.Run("a configured id replaces a stale pin and shared deliveries never pin", func(t *testing.T) {
+		r := newRig(t, nil)
+		r.env[SharedSecretEnv] = sharedSecret
+		poison := replace(fixture(t, "push.json"), `"repository":{"id":1001`, `"repository":{"id":1`)
+		if _, err := r.deliver("push", sharedSecret, poison); err != nil {
+			t.Fatal(err)
+		}
+		cfg := map[string]RepoSecret{"o/r": {Env: "SYNTH_REPO_SECRET", ID: 1001}}
+		r.src.Secrets = func(context.Context) (map[string]RepoSecret, error) { return cfg, nil }
+		r.env["SYNTH_REPO_SECRET"] = repoSecret
+		if f, err := r.deliver("push", repoSecret, fixture(t, "push.json")); err != nil || f.Auth != "per-repo" {
+			t.Fatalf("real delivery after a shared-secret poison attempt = %+v, %v", f, err)
+		}
+	})
+	t.Run("a per-repo project has one spelling", func(t *testing.T) {
+		r := refetchRig(t)
+		f, err := r.deliver("push", repoSecret, replace(fixture(t, "push.json"), `"full_name":"o/r"`, `"full_name":"O/R"`))
+		if err != nil || f.Repo != "o/r" {
+			t.Fatalf("repo = %q, %v", f.Repo, err)
+		}
+	})
 }
 
 // TestCrossFamilyReviewFixes pins the valid findings of the cross-family review: a null-SHA dispatch

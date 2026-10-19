@@ -144,10 +144,14 @@ func (s *Source) Verify(ctx context.Context, r *http.Request, body []byte) (mode
 		if !validName(name) { // nothing authenticated the sender: still never pass junk on
 			return model.TriggerFacts{}, unsupported("repository.full_name is not owner/repo")
 		}
-	case !s.identityHolds(name, probe.Repository.ID, secret):
+	case !s.identityHolds(name, probe.Repository.ID, auth, secret):
 		return model.TriggerFacts{}, errSignature()
 	}
-	return s.normalize(ctx, auth, r.Header.Get(hdrEvent), r.Header.Get(hdrDelivery), body)
+	f, err := s.normalize(ctx, auth, r.Header.Get(hdrEvent), r.Header.Get(hdrDelivery), body)
+	if auth == "per-repo" {
+		f.Repo = strings.ToLower(f.Repo) // the secret was found by the lower-case name; the project must not differ by case
+	}
+	return f, err
 }
 
 // authenticate returns the auth class and the per-repo secret entry (zero for shared and none).
@@ -175,16 +179,22 @@ func (s *Source) authenticate(ctx context.Context, r *http.Request, body []byte,
 	return "", RepoSecret{}, errSignature()
 }
 
-// identityHolds binds the repository name to its numeric id: the configured id when there is one, else
-// the first verified id seen for the name. A name that is not owner/repo, or no id, never holds.
-func (s *Source) identityHolds(name string, id int64, rs RepoSecret) bool {
+// identityHolds binds the repository name to its numeric id. A configured id is the whole rule (it
+// never consults the pin, so changing it in policy takes effect at once). With a per-repo secret and no
+// configured id, the first verified id seen for the name is pinned. A shared-secret delivery is never
+// pinned: its signer holds a secret for every repository without its own, and a pin written from it
+// would lock out the repository's real owner. A name that is not owner/repo, or no id, never holds.
+func (s *Source) identityHolds(name string, id int64, auth model.TriggerAuth, rs RepoSecret) bool {
 	if !validName(name) || id <= 0 {
 		return false
 	}
-	if rs.ID != 0 && rs.ID != id {
-		return false
+	switch {
+	case rs.ID != 0:
+		return rs.ID == id
+	case auth == "per-repo":
+		return s.pins.holds(strings.ToLower(name), id)
 	}
-	return s.pins.holds(strings.ToLower(name), id)
+	return true
 }
 
 // Request header names.

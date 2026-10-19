@@ -109,3 +109,24 @@ func resolveTagWith(ctx context.Context, c *rest.Client, repo, tag string) (stri
 	sha = strings.ToLower(sha)
 	return sha, isHex40(sha)
 }
+
+// jobQueued asks whether a workflow job is still waiting for a runner (one call, the stale budget). The
+// HMAC does not cover the delivery id, so a captured queued event can be replayed after NODE-10's dedup
+// window; a demand for a job that already ran must not start a runner. known is false on any failure.
+func (s *Source) jobQueued(ctx context.Context, repo string, job int64) (queued, known bool) {
+	ctx, cancel := context.WithTimeout(ctx, staleBudget)
+	defer cancel()
+	c, err := s.api(ctx)
+	if err != nil {
+		return false, false
+	}
+	var j struct {
+		Status string `json:"status"`
+	}
+	params := repoParams(repo)
+	params["job"] = itoa(job)
+	if _, err = get(ctx, c, "/repos/{owner}/{repo}/actions/jobs/{job}", params, &j); err != nil || j.Status == "" {
+		return false, false
+	}
+	return j.Status == "queued", true
+}

@@ -43,7 +43,7 @@ func (s *Source) normalize(ctx context.Context, auth model.TriggerAuth, event, d
 	case "repository_dispatch":
 		return fromDispatch(f, p)
 	}
-	return fromJob(f, p)
+	return s.fromJob(ctx, f, p)
 }
 
 func (s *Source) baseFacts(p ghPayload, auth model.TriggerAuth, delivery string) model.TriggerFacts {
@@ -156,7 +156,7 @@ func fromDispatch(f model.TriggerFacts, p ghPayload) (model.TriggerFacts, error)
 	return f, nil
 }
 
-func fromJob(f model.TriggerFacts, p ghPayload) (model.TriggerFacts, error) {
+func (s *Source) fromJob(ctx context.Context, f model.TriggerFacts, p ghPayload) (model.TriggerFacts, error) {
 	if p.Action != "queued" {
 		return f, unsupported("workflow_job action \"" + clip(p.Action) + "\": skip")
 	}
@@ -174,6 +174,9 @@ func fromJob(f model.TriggerFacts, p ghPayload) (model.TriggerFacts, error) {
 	f.RunnerLabels = payloadFact(append([]string{}, j.Labels...), now)
 	f.ProviderJobID = payloadFact(itoa(j.ID), now)
 	f.ProviderRunID = payloadFact(itoa(j.RunID), now)
+	if queued, known := s.jobQueued(ctx, f.Repo, j.ID); known && !queued { // a replayed demand for a job that is long over
+		return f, decline(reasonStale, "trigger.stale")
+	}
 	return f, nil
 }
 
