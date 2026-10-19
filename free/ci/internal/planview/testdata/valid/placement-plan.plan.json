@@ -1,0 +1,296 @@
+{
+  "schema": "ci.placement-plan/v1",
+  "pipeline": {
+    "id": null,
+    "name": "default",
+    "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "trigger": "local",
+    "policy_digest": "p000000000000000000000000000000000000000000000000000000000000000",
+    "preset": "balanced",
+    "world_digest": "w000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "fast_path": {
+    "taken": true,
+    "reason": "no_remote"
+  },
+  "jobs": [
+    {
+      "id": "build",
+      "name": "build",
+      "matrix_key": "",
+      "deps": [],
+      "band": "interactive",
+      "requirements": {
+        "platform": "linux/amd64",
+        "isolation_min": "",
+        "network": "internet",
+        "labels": [],
+        "cpu": 0,
+        "mem_mb": 0,
+        "tools": []
+      },
+      "secret_classes": [
+        "project"
+      ],
+      "status": "placed",
+      "reasons": [],
+      "placement": {
+        "runner_id": "local",
+        "provider": "local",
+        "location": "local",
+        "cost_class": "local",
+        "score": 315000,
+        "components": {
+          "cache": {
+            "value_ms": 0,
+            "weight_permille": 1000,
+            "confidence": "unknown"
+          },
+          "cold_start": {
+            "value_ms": 0,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "contention": {
+            "value_ms": 0,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "cost": {
+            "value_ms": 0,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "reliability": {
+            "value_ms": 15000,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "runtime": {
+            "value_ms": 300000,
+            "weight_permille": 1000,
+            "confidence": "unknown"
+          },
+          "scarcity": {
+            "value_ms": 0,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "transfer": {
+            "value_ms": 0,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          },
+          "wait": {
+            "value_ms": 0,
+            "weight_permille": 1000,
+            "confidence": "estimated"
+          }
+        },
+        "estimate": {
+          "wait_ms": 0,
+          "runtime_ms": null,
+          "cost_micro": 0,
+          "cost_confidence": "known"
+        }
+      },
+      "alternatives": [
+        {
+          "runner_id": "lan-mac",
+          "provider": "agent",
+          "eligible": false,
+          "reasons": [
+            {
+              "code": "node.discovered",
+              "detail": "not authorized"
+            },
+            {
+              "code": "trust.not_accepted",
+              "detail": "trust.not_accepted"
+            },
+            {
+              "code": "isolation.below_minimum",
+              "detail": "isolation.below_minimum"
+            },
+            {
+              "code": "network.scope_not_offered",
+              "detail": "network.scope_not_offered"
+            },
+            {
+              "code": "secrets.class_not_declared",
+              "detail": "secrets.class_not_declared"
+            },
+            {
+              "code": "platform.mismatch",
+              "detail": "linux/amd64"
+            }
+          ],
+          "score": null,
+          "components": null
+        },
+        {
+          "runner_id": "local",
+          "provider": "local",
+          "eligible": true,
+          "reasons": [],
+          "score": 315000,
+          "components": {
+            "cache": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "cold_start": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "contention": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "cost": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "reliability": {
+              "value_ms": 15000,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "runtime": {
+              "value_ms": 300000,
+              "weight_permille": 1000,
+              "confidence": "unknown"
+            },
+            "scarcity": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "transfer": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            },
+            "wait": {
+              "value_ms": 0,
+              "weight_permille": 1000,
+              "confidence": "estimated"
+            }
+          }
+        }
+      ],
+      "expected_wait_ms": 0
+    },
+    {
+      "id": "ios",
+      "name": "ios",
+      "matrix_key": "darwin/arm64",
+      "deps": [],
+      "band": "interactive",
+      "requirements": {
+        "platform": "darwin/arm64",
+        "isolation_min": "",
+        "network": "internet",
+        "labels": [],
+        "cpu": 0,
+        "mem_mb": 0,
+        "tools": []
+      },
+      "secret_classes": [],
+      "status": "unplaceable",
+      "reasons": [
+        {
+          "code": "platform.mismatch",
+          "detail": "E690: outside pipeline support"
+        }
+      ],
+      "placement": null,
+      "alternatives": [],
+      "expected_wait_ms": null
+    },
+    {
+      "id": "test",
+      "name": "test",
+      "matrix_key": "",
+      "deps": [
+        "build"
+      ],
+      "band": "interactive",
+      "requirements": {
+        "platform": "linux/amd64",
+        "isolation_min": "",
+        "network": "internet",
+        "labels": [],
+        "cpu": 0,
+        "mem_mb": 0,
+        "tools": []
+      },
+      "secret_classes": [],
+      "status": "waiting",
+      "reasons": [
+        {
+          "code": "capacity.busy",
+          "detail": "currently unavailable"
+        }
+      ],
+      "placement": null,
+      "alternatives": [
+        {
+          "runner_id": "lan-mac",
+          "provider": "agent",
+          "eligible": false,
+          "reasons": [
+            {
+              "code": "node.discovered",
+              "detail": "not authorized"
+            },
+            {
+              "code": "trust.not_accepted",
+              "detail": "trust.not_accepted"
+            },
+            {
+              "code": "isolation.below_minimum",
+              "detail": "isolation.below_minimum"
+            },
+            {
+              "code": "network.scope_not_offered",
+              "detail": "network.scope_not_offered"
+            },
+            {
+              "code": "platform.mismatch",
+              "detail": "linux/amd64"
+            }
+          ],
+          "score": null,
+          "components": null
+        },
+        {
+          "runner_id": "local",
+          "provider": "local",
+          "eligible": false,
+          "reasons": [
+            {
+              "code": "capacity.busy",
+              "detail": "availability"
+            }
+          ],
+          "score": null,
+          "components": null
+        }
+      ],
+      "expected_wait_ms": null
+    }
+  ],
+  "totals": {
+    "estimated_cost_micro": 0,
+    "cost_confidence": "known",
+    "placed": 1,
+    "waiting": 1,
+    "awaiting_approval": 0,
+    "unplaceable": 1
+  }
+}

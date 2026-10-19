@@ -25,6 +25,11 @@ func main() {
 		log.Fatal(err)
 	}
 	schemas["runner-protocol.v1.schema.json"] = runner
+	placement, err := placementSchema()
+	if err != nil {
+		log.Fatal(err)
+	}
+	schemas["placement-plan.v1.schema.json"] = placement
 	for name, data := range schemas {
 		if err := os.WriteFile(filepath.Join("..", "..", "schemas", name), data, 0644); err != nil {
 			log.Fatal(err)

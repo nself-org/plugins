@@ -1,0 +1,10 @@
+version: 1
+jobs:
+  build:
+    kind: build
+    run: [go, build, ./...]
+    secrets: [project/fixture_token]
+  test:
+    kind: test
+    run: [go, test, ./...]
+    deps: [build]
