@@ -67,11 +67,12 @@ func selectWith(g *Graph, graphCertain bool, in plan.SelectionInput) (model.Sele
 		workdirs[w] = append(workdirs[w], r.ID)
 	}
 	seeds, picked := map[string]bool{}, map[string]bool{}
+	holders := g.nodeAncestors()
 	for _, p := range changed {
 		if g.inGeneratorZone(p) {
 			return full("selection.full_required")
 		}
-		if g.holdsNodes(p) {
+		if holders[p] {
 			return full("selection.full_required") // a directory-level change (submodule, symlink swap)
 		}
 		dir, kind := g.owner(p)
@@ -147,20 +148,22 @@ func (g *Graph) owner(p string) (string, int) {
 	}
 }
 
-// holdsNodes reports whether known package or opaque directories lie
-// strictly below p, which is then a directory, not a file.
-func (g *Graph) holdsNodes(p string) bool {
-	for d := range g.eco {
-		if strings.HasPrefix(d, p+"/") {
-			return true
+// nodeAncestors returns every directory that has a known package or opaque
+// directory strictly below it. Such a directory, when it is a changed path,
+// is a directory-level change (submodule, symlink swap), not a file. One pass
+// over the nodes replaces a scan of every node per changed path.
+func (g *Graph) nodeAncestors() map[string]bool {
+	out := map[string]bool{}
+	add := func(dirs map[string]string) {
+		for d := range dirs {
+			for a := path.Dir(d); a != "." && a != "/" && !out[a]; a = path.Dir(a) {
+				out[a] = true // the root (".") never counts: nothing is "below" it by prefix
+			}
 		}
 	}
-	for d := range g.opaque {
-		if strings.HasPrefix(d, p+"/") {
-			return true
-		}
-	}
-	return false
+	add(g.eco)
+	add(g.opaque)
+	return out
 }
 
 func (g *Graph) inGeneratorZone(p string) bool {
