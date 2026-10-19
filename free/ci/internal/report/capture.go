@@ -29,7 +29,7 @@ func Capture(ctx context.Context, argv ...string) (out string, exit int, err err
 	}
 	defer func() { _ = os.RemoveAll(home) }()
 	var buf strings.Builder
-	var ex ciexec.Executor
+	ex := ciexec.Executor{Env: ciexec.ScrubRepoEnv{}} // a hook's GIT_DIR must not redirect `git -C`
 	res := ex.Run(ctx, ciexec.JobSpec{
 		AttemptID: fmt.Sprintf("cap-%d-%d", time.Now().UnixNano(), captureSeq.Add(1)), CoordinatorID: "capture",
 		Job: model.Job{Kind: "static"}, Home: home, Timeout: 30 * time.Second, Command: argv,

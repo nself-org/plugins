@@ -48,7 +48,7 @@ func slowCapture(ctx context.Context, argv ...string) (string, int, error) {
 	}
 	defer func() { _ = os.RemoveAll(home) }()
 	var buf strings.Builder
-	var ex ciexec.Executor
+	ex := ciexec.Executor{Env: ciexec.ScrubRepoEnv{}}
 	res := ex.Run(ctx, ciexec.JobSpec{
 		AttemptID: fmt.Sprintf("wt-%d-%d", time.Now().UnixNano(), worktreeSeq()), CoordinatorID: "capture",
 		Job: model.Job{Kind: "static"}, Home: home, Timeout: 10 * time.Minute, Command: argv,
@@ -64,12 +64,47 @@ func slowCapture(ctx context.Context, argv ...string) (string, int, error) {
 var safeGit = []string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false",
 	"-c", "filter.lfs.smudge=", "-c", "filter.lfs.process=", "-c", "filter.lfs.required=false"}
 
+const (
+	verifyDirPrefix = "nself-ci-verify-"
+	// staleVerifyAge is how long a verify directory may sit untouched before
+	// it counts as abandoned by a killed process; no verify runs that long.
+	staleVerifyAge = 24 * time.Hour
+)
+
+// sweepStaleVerifyDirs removes verify directories a SIGKILLed run left in the
+// temp dir (nothing else sweeps them) and prunes the repository's worktree
+// records that pointed at them.
+func sweepStaleVerifyDirs(ctx context.Context, c Capture, repo string) {
+	tmp := os.TempDir()
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		return
+	}
+	swept := false
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), verifyDirPrefix) || !e.IsDir() { // IsDir is false for a symlink
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || time.Since(info.ModTime()) < staleVerifyAge {
+			continue
+		}
+		if os.RemoveAll(filepath.Join(tmp, e.Name())) == nil {
+			swept = true
+		}
+	}
+	if swept {
+		_, _, _ = c(ctx, "git", "-C", repo, "worktree", "prune", "--expire=now")
+	}
+}
+
 // AddWorktree checks rev out into a new temporary directory.
 func AddWorktree(ctx context.Context, c Capture, repo, rev string) (*TempWorktree, error) {
 	if c == nil {
 		c = slowCapture
 	}
-	dir, err := os.MkdirTemp("", "nself-ci-verify-")
+	sweepStaleVerifyDirs(ctx, c, repo)
+	dir, err := os.MkdirTemp("", verifyDirPrefix)
 	if err != nil {
 		return nil, fail(CodeWorktree, ExitInternal, "cannot create a temporary directory: %v", err)
 	}
