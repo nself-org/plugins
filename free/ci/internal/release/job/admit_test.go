@@ -142,14 +142,16 @@ func TestSelfReportedAndSignedEvidenceAreRefused(t *testing.T) {
 func TestStepRefusesOnlyReleaseAttemptsItHasFactsFor(t *testing.T) {
 	st := job.NewStash()
 	step := job.Step(st)
-	view := func(id string) dispatch.View { return dispatch.View{Request: dispatch.Request{AttemptID: id}} }
+	view := func(id string) dispatch.View {
+		return dispatch.View{Request: dispatch.Request{AttemptID: id, Local: true}}
+	}
 	if err := step(context.Background(), view("other")); err != nil {
 		t.Fatalf("an attempt with no facts is not a release attempt: %v", err)
 	}
-	st.Put("good", job.Static(job.BuildFacts(goodState())))
+	st.Put("good", job.BuildFacts(goodState()))
 	bad := goodState()
 	bad.Outcomes[0].Status = "failed"
-	st.Put("bad", job.Static(job.BuildFacts(bad)))
+	st.Put("bad", job.BuildFacts(bad))
 	if err := step(context.Background(), view("good")); err != nil {
 		t.Fatalf("good facts refused: %v", err)
 	}
@@ -162,17 +164,21 @@ func TestStepRefusesOnlyReleaseAttemptsItHasFactsFor(t *testing.T) {
 	if err = step(context.Background(), view("bad")); err != nil {
 		t.Fatalf("forgotten facts still refuse: %v", err)
 	}
-	if _, ok := st.ReleaseFacts("good"); !ok {
+	if _, _, ok := st.ReleaseFacts("good"); !ok {
 		t.Fatal("Forget removed another attempt")
+	}
+	remote := dispatch.View{Request: dispatch.Request{AttemptID: "good", Local: false}}
+	ref, ok = step(context.Background(), remote).(*dispatch.Refusal)
+	if !ok || ref.Reason != "release."+job.RemotePlacement {
+		t.Fatalf("a remote placement of a release job: %#v", ref)
 	}
 }
 
-func TestRegisterAddsTheStepOnce(t *testing.T) {
-	if err := job.Register(job.NewStash()); err != nil {
-		t.Fatal(err)
-	}
-	if err := job.Register(job.NewStash()); err == nil {
-		t.Fatal("a second registration of the release step was accepted")
+// TestRegisterRefusesASecondReleaseStep: internal/run registers the step from
+// init() (wiring_test.go links it), so any further registration is refused.
+func TestRegisterRefusesASecondReleaseStep(t *testing.T) {
+	if err := job.Register(job.NewStash()); err == nil || !strings.Contains(err.Error(), "already registered") {
+		t.Fatalf("a second registration of the release step: %v", err)
 	}
 }
 

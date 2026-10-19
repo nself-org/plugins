@@ -187,7 +187,11 @@ func checkShape(b []byte) error {
 				if len(stack) >= maxDepth {
 					return invalid("nesting deeper than %d", maxDepth)
 				}
-				stack = append(stack, frame{object: t == '{', expectKey: t == '{', keys: map[string]bool{}, folded: map[string]bool{}})
+				f := frame{object: t == '{', expectKey: t == '{'}
+				if f.object { // arrays need no key sets: a 4 MiB array of empty objects stays cheap
+					f.keys, f.folded = map[string]bool{}, map[string]bool{}
+				}
+				stack = append(stack, f)
 			default:
 				stack = stack[:len(stack)-1]
 				valueDone()

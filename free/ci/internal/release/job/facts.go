@@ -64,10 +64,14 @@ func BuildFacts(s RunState) Facts {
 		checks = append(checks, model.Check{ID: name, JobID: name, Kind: "job", Tool: "nself-ci", Required: true,
 			Substantive: true, Result: result})
 	}
-	inputs := model.InputDigests{Config: s.ConfigDigest, Lockfiles: []model.DigestRef{}, Generated: []model.DigestRef{}}
+	inputs := model.InputDigests{Lockfiles: []model.DigestRef{}, Generated: []model.DigestRef{}}
 	if s.Bound != nil {
 		inputs = *s.Bound
 	}
+	// The config the run really used is the one stored on its pipeline row: a
+	// run started with --config on a file outside the tree is stale against the
+	// tree's own config, whatever the digester read at the revision.
+	inputs.Config = s.ConfigDigest
 	ev := model.Evidence{Schema: "ci.evidence/v1", Revision: s.Revision, RepoID: s.RepoID, RunID: s.RunID, Pipeline: s.Pipeline,
 		Trigger: s.Trigger, SourceTrust: s.SourceTrust, PolicyDigest: s.PolicyDigest, InputDigests: inputs,
 		Runner:   model.RunnerRef{ID: "local", Provider: "local", Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process"},

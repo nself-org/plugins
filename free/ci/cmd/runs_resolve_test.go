@@ -83,6 +83,20 @@ func TestRunsResolveKeyMismatch(t *testing.T) {
 	if got := attemptState(t, home); got != "needs-operator" {
 		t.Fatalf("state = %s", got)
 	}
+	// --json: one error envelope on stdout, nothing on stderr
+	code, out, errs := capture(t, func() int {
+		return runResolve([]string{resolveAttempt, "--idempotency-key", "nope", "--abandon", "--yes", "--json"})
+	})
+	var env struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out), &env); err != nil || code != 1 || errs != "" || env.OK || env.Error.Code != "E716" || !strings.Contains(env.Error.Message, job.KeyMismatch) {
+		t.Fatalf("json refusal: code %d stdout %q stderr %q (%v)", code, out, errs, err)
+	}
 }
 
 func TestRunsResolveAbandonAndRerun(t *testing.T) {

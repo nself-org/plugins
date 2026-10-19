@@ -58,12 +58,6 @@ func init() {
 // releaseFailure carries a release refusal as a run error with its code.
 func releaseFailure(e *job.Error) error { return fail(e.Code, "%s: %s", e.Reason, e.Message) }
 
-// worktreeProbe reads HEAD and the dirty state of the checkout under root.
-func worktreeProbe(ctx context.Context, root string) (string, bool) {
-	rev := GitRevision(ctx, root, Capture(report.Capture))
-	return rev.SHA, rev.Dirty
-}
-
 // releaseDispatch submits a release attempt through the guard; any other
 // attempt goes straight to the previous hook.
 func releaseDispatch(ctx context.Context, s AttemptSpec, prev DispatchHook) (Admitted, error) {
@@ -81,7 +75,7 @@ func releaseDispatch(ctx context.Context, s AttemptSpec, prev DispatchHook) (Adm
 	if sess == nil {
 		return Admitted{}, releaseFailure(&job.Error{Code: job.CodeNotAdmitted, Reason: job.NoEvidence, Message: "the run has no session"})
 	}
-	g := job.Gatherer{Store: sess.Store, Worktree: worktreeProbe, Inputs: ReleaseInputs, RepoID: shortDigest}
+	g := job.Gatherer{Store: sess.Store, Worktree: job.GitWorktree(job.Capture(report.Capture)), Inputs: ReleaseInputs, RepoID: shortDigest}
 	attempt := job.Attempt{RunID: sess.RunID, Revision: sess.Revision, Deps: s.Job.Deps}
 	if s.Pipeline != nil {
 		attempt.Pipeline = model.PipelineRef{ID: sess.RunID, Name: s.Pipeline.Name, Kind: s.Pipeline.Kind}

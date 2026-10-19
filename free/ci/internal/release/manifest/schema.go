@@ -94,7 +94,7 @@ func decorate(s *jsonschema.Schema) {
 	art["size"].Minimum = &zero
 	if im := art["image"]; im != nil {
 		im.Types, im.Type = []string{"null", "object"}, ""
-		textRule(im.Properties["ref"])
+		im.Properties["ref"] = pattern(`^[!-~]{1,512}$`)
 		im.Properties["index_digest"] = pattern(`^sha256:[0-9a-f]{64}$`)
 		textRule(im.Properties["manifests"].Items.Properties["platform"])
 		im.Properties["manifests"].MinItems = &one
@@ -110,7 +110,7 @@ func decorate(s *jsonschema.Schema) {
 	p["checksums"].Properties["path"] = constant(ChecksumsPath)
 	p["checksums"].Properties["sha256"] = pattern(`^[0-9a-f]{64}$`)
 	p["signing"].Properties["purpose"] = constant(SigningPurpose)
-	textRule(p["signing"].Properties["key_id"])
+	p["signing"].Properties["key_id"] = pattern(`^ci-release-[0-9a-f]{16}$`)
 	textRule(p["producer"].Properties["nself_ci_version"])
 	textRule(p["producer"].Properties["coordinator"])
 }

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -15,6 +17,7 @@ import (
 
 // runFixture is a stored run whose build and lint jobs passed.
 type runFixture struct {
+	mu      sync.Mutex
 	st      *store.Store
 	sha     string
 	dirty   bool
@@ -25,6 +28,10 @@ type runFixture struct {
 	gather  job.Gatherer
 	attempt job.Attempt
 }
+
+func (f *runFixture) setDirty(v bool)      { f.mu.Lock(); f.dirty = v; f.mu.Unlock() }
+func (f *runFixture) setInputsErr(e error) { f.mu.Lock(); f.inErr = e; f.mu.Unlock() }
+func (f *runFixture) askedNow() int        { f.mu.Lock(); defer f.mu.Unlock(); return f.asked }
 
 func newRun(t *testing.T, statuses map[string]string) *runFixture {
 	t.Helper()
@@ -48,8 +55,10 @@ func newRun(t *testing.T, statuses map[string]string) *runFixture {
 		must(st.SetJobStatus(ctx, "run-1."+name, status))
 	}
 	f.gather = job.Gatherer{Store: st, RepoID: func(string) string { return "repo-1" },
-		Worktree: func(context.Context, string) (string, bool) { return f.sha, f.dirty },
+		Worktree: func(context.Context, string) (string, bool) { f.mu.Lock(); defer f.mu.Unlock(); return f.sha, f.dirty },
 		Inputs: func(context.Context, string, string) (model.InputDigests, model.InputDigests, error) {
+			f.mu.Lock()
+			defer f.mu.Unlock()
 			f.asked++
 			return f.bound, f.now, f.inErr
 		}}
@@ -163,64 +172,136 @@ func TestProviderNeedsAReadableRun(t *testing.T) {
 	}
 }
 
-// TestStepAsksTheProviderOnEveryTry: a job that waits for capacity is judged on
-// the state of each try, not on the state at submission.
-func TestStepAsksTheProviderOnEveryTry(t *testing.T) {
+// await polls until cond holds (the refresher runs on its own clock).
+func await(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	for i := 0; i < 400; i++ {
+		if cond() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", what)
+}
+
+func stepFor(st *job.Stash, id string) error {
+	return job.Step(st)(context.Background(), dispatch.View{Request: dispatch.Request{AttemptID: id, Local: true}})
+}
+
+// TestGuardKeepsTheFactsFreshWhileTheAttemptWaits: a change made after the
+// attempt was submitted (an edit, a moved HEAD) is seen by a later admission
+// try, and the probes run outside the step, not in it.
+func TestGuardKeepsTheFactsFreshWhileTheAttemptWaits(t *testing.T) {
+	defer job.SetTiming(5*time.Millisecond, time.Minute)()
 	f := newRun(t, passed())
 	st := job.NewStash()
-	st.Put("a1", f.provide(t))
-	step := job.Step(st)
-	view := dispatch.View{Request: dispatch.Request{AttemptID: "a1"}}
-	if err := step(context.Background(), view); err != nil {
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := st.Guard(context.Background(), "a1", f.provide(t), func() error { <-release; return nil })
+		if err != nil {
+			t.Error(err)
+		}
+	}()
+	await(t, "the attempt to queue", func() bool { _, _, ok := st.ReleaseFacts("a1"); return ok })
+	if err := stepFor(st, "a1"); err != nil {
 		t.Fatalf("first try: %v", err)
 	}
-	f.dirty = true
-	err := step(context.Background(), view)
-	ref, ok := err.(*dispatch.Refusal)
-	if !ok || ref.Reason != "release."+job.DepsUnbound {
-		t.Fatalf("second try: %#v", err)
+	asked := f.askedNow()
+	if err := stepFor(st, "a1"); err != nil || f.askedNow() != asked {
+		t.Fatalf("the step must not run the digester itself (asked %d -> %d): %v", asked, f.askedNow(), err)
 	}
-	st.Put("a2", func(context.Context) (job.Facts, *job.Error) {
-		return job.Facts{}, &job.Error{Code: job.CodeNotAdmitted, Reason: job.NoEvidence, Message: "gone"}
+	f.setDirty(true)
+	await(t, "the refresh to see the edit", func() bool {
+		ref, ok := stepFor(st, "a1").(*dispatch.Refusal)
+		return ok && ref.Reason == "release."+job.DepsUnbound
 	})
-	err = step(context.Background(), dispatch.View{Request: dispatch.Request{AttemptID: "a2"}})
-	if ref, ok = err.(*dispatch.Refusal); !ok || ref.Reason != "release."+job.NoEvidence {
-		t.Fatalf("a provider failure must refuse: %#v", err)
+	f.setDirty(false)
+	await(t, "the refresh to see the tree clean again", func() bool { return stepFor(st, "a1") == nil })
+	close(release)
+	wg.Wait()
+	if _, _, ok := st.ReleaseFacts("a1"); ok {
+		t.Fatal("the facts outlived the submission")
 	}
 }
 
-func TestGuardJudgesFirstKeepsTheProviderWhileSubmittingThenForgets(t *testing.T) {
+// TestFactsExpireWhenTheRefresherStops: facts older than maxAge refuse.
+func TestFactsExpireWhenTheRefresherStops(t *testing.T) {
+	defer job.SetTiming(time.Hour, 20*time.Millisecond)()
+	f := newRun(t, passed())
+	st := job.NewStash()
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = st.Guard(context.Background(), "a1", f.provide(t), func() error { <-release; return nil })
+	}()
+	await(t, "the attempt to queue", func() bool { _, _, ok := st.ReleaseFacts("a1"); return ok })
+	await(t, "the facts to expire", func() bool {
+		ref, ok := stepFor(st, "a1").(*dispatch.Refusal)
+		return ok && ref.Reason == "release."+job.FactsExpired
+	})
+	close(release)
+	wg.Wait()
+}
+
+func TestStepRefusesWhatTheLastRefreshFailed(t *testing.T) {
+	defer job.SetTiming(5*time.Millisecond, time.Minute)()
+	f := newRun(t, passed())
+	st := job.NewStash()
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = st.Guard(context.Background(), "a1", f.provide(t), func() error { <-release; return nil })
+	}()
+	await(t, "the attempt to queue", func() bool { _, _, ok := st.ReleaseFacts("a1"); return ok })
+	f.setInputsErr(errors.New("lockfile unreadable"))
+	await(t, "the refresh to fail", func() bool {
+		ref, ok := stepFor(st, "a1").(*dispatch.Refusal)
+		return ok && ref.Reason == "release."+job.DepsStale
+	})
+	close(release)
+	wg.Wait()
+}
+
+func TestGuardJudgesFirstSubmitsThenForgets(t *testing.T) {
 	f := newRun(t, passed())
 	st := job.NewStash()
 	ran, sawDuring := false, false
 	err := st.Guard(context.Background(), "a1", f.provide(t), func() error {
 		ran = true
-		_, sawDuring = st.ReleaseFacts("a1")
+		_, _, sawDuring = st.ReleaseFacts("a1")
 		return nil
 	})
 	if err != nil || !ran || !sawDuring {
 		t.Fatalf("err %v ran %v during %v", err, ran, sawDuring)
 	}
-	if _, ok := st.ReleaseFacts("a1"); ok {
-		t.Fatal("the provider outlived the submission")
+	if _, _, ok := st.ReleaseFacts("a1"); ok {
+		t.Fatal("the facts outlived the submission")
 	}
 	boom := errors.New("queue full")
 	if err = st.Guard(context.Background(), "a1", f.provide(t), func() error { return boom }); err != boom {
 		t.Fatalf("next's error was rewritten: %v", err)
 	}
-	f.dirty = true
+	f.setDirty(true)
 	ran = false
 	err = st.Guard(context.Background(), "a1", f.provide(t), func() error { ran = true; return nil })
 	var je *job.Error
 	if !errors.As(err, &je) || je.Reason != job.DepsUnbound || ran {
 		t.Fatalf("an unacceptable attempt must fail fast without submitting: %v (ran %v)", err, ran)
 	}
-	if _, ok := st.ReleaseFacts("a1"); ok {
-		t.Fatal("a refused attempt left a provider behind")
+	if _, _, ok := st.ReleaseFacts("a1"); ok {
+		t.Fatal("a refused attempt left facts behind")
 	}
-	if err = st.Guard(context.Background(), "a1", func(context.Context) (job.Facts, *job.Error) {
+	failing := func(context.Context) (job.Facts, *job.Error) {
 		return job.Facts{}, &job.Error{Code: job.CodeNotAdmitted, Reason: job.NoEvidence, Message: "gone"}
-	}, func() error { ran = true; return nil }); err == nil || ran {
+	}
+	if err = st.Guard(context.Background(), "a1", failing, func() error { ran = true; return nil }); err == nil || ran {
 		t.Fatal("a provider failure must fail fast")
 	}
 }

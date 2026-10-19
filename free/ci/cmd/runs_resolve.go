@@ -133,6 +133,10 @@ func runResolve(args []string) int {
 	res, err := job.Resolve(ctx, st, job.Request{Attempt: a.attempt, Key: a.key, Action: a.action, Actor: actor, Reason: a.reason})
 	var je *job.Error
 	if errors.As(err, &je) {
+		if a.asJSON {
+			_ = output.WriteError(os.Stdout, "ci runs resolve", output.ErrorDetail{Code: je.Code, Message: je.Error(), ExitCode: 1}, nil)
+			return 1
+		}
 		fmt.Fprintln(os.Stderr, je)
 		return 1
 	}

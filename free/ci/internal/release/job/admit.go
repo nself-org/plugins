@@ -20,7 +20,6 @@ import (
 	"context"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
@@ -78,36 +77,38 @@ func Evaluate(f Facts) *Error {
 	return refuse(CodeNotAdmitted, first, "the evidence of the release job's deps is not acceptable (%s)", strings.Join(all, ", "))
 }
 
-// Provider builds the Facts of one release attempt at the moment it is asked:
-// the admission step asks again on every try, so a change made while the
-// attempt waits for capacity is seen (freshness and binding are never cached).
+// Provider builds the Facts of one release attempt at the moment it is asked.
+// It may read the worktree and run a digester, so it never runs inside the
+// admission transaction: Stash.Guard asks it outside and the step reads the
+// cached answer.
 type Provider func(ctx context.Context) (Facts, *Error)
 
 // Static is a Provider that always answers f.
 func Static(f Facts) Provider { return func(context.Context) (Facts, *Error) { return f, nil } }
 
-// Source finds the Provider of a release attempt; ok is false for any other attempt.
+// Source finds the cached Facts of a release attempt; ok is false for any other attempt.
 type Source interface {
-	ReleaseFacts(attemptID string) (p Provider, ok bool)
+	ReleaseFacts(attemptID string) (f Facts, perr *Error, ok bool)
 }
 
-// judge asks p and evaluates its answer.
-func judge(ctx context.Context, p Provider) *Error {
-	f, perr := p(ctx)
-	if perr != nil {
-		return perr
-	}
-	return Evaluate(f)
-}
-
-// Step is the admission step over src.
+// Step is the admission step over src. A release attempt is admitted only on
+// this machine (the deploy-credential and key checks run in the local
+// executor; the node side enforces nothing yet) and only on facts that were
+// refreshed recently and judge acceptable.
 func Step(src Source) dispatch.Step {
-	return func(ctx context.Context, v dispatch.View) error {
-		p, ok := src.ReleaseFacts(v.Request.AttemptID)
+	return func(_ context.Context, v dispatch.View) error {
+		f, perr, ok := src.ReleaseFacts(v.Request.AttemptID)
 		if !ok {
 			return nil
 		}
-		if e := judge(ctx, p); e != nil {
+		e := perr
+		switch {
+		case !v.Request.Local:
+			e = refuse(CodeNotAdmitted, RemotePlacement, "a release job runs only on the machine that runs the pipeline")
+		case e == nil:
+			e = Evaluate(f)
+		}
+		if e != nil {
 			return &dispatch.Refusal{Reason: model.PlacementReason("release." + e.Reason), Detail: e.Error()}
 		}
 		return nil
@@ -116,48 +117,3 @@ func Step(src Source) dispatch.Step {
 
 // Register adds the step to the dispatcher; call it from init().
 func Register(src Source) error { return dispatch.RegisterStep(StepName, Step(src)) }
-
-// Stash holds the Providers of release attempts between the coordinator's
-// preparation and the admission transaction. Safe for concurrent use.
-type Stash struct {
-	mu sync.Mutex
-	m  map[string]Provider
-}
-
-// NewStash returns an empty stash.
-func NewStash() *Stash { return &Stash{m: map[string]Provider{}} }
-
-// Put records the provider of one attempt.
-func (s *Stash) Put(attemptID string, p Provider) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.m[attemptID] = p
-}
-
-// Forget drops the provider of one attempt.
-func (s *Stash) Forget(attemptID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.m, attemptID)
-}
-
-// ReleaseFacts implements Source.
-func (s *Stash) ReleaseFacts(attemptID string) (Provider, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	p, ok := s.m[attemptID]
-	return p, ok
-}
-
-// Guard submits one release attempt: it judges p first (an unacceptable
-// attempt fails fast with the E715 *Error and never queues), keeps p in the
-// stash while next runs (next blocks until the attempt is admitted, and the
-// admission step judges p again), then forgets it.
-func (s *Stash) Guard(ctx context.Context, attemptID string, p Provider, next func() error) error {
-	if e := judge(ctx, p); e != nil {
-		return e
-	}
-	s.Put(attemptID, p)
-	defer s.Forget(attemptID)
-	return next()
-}

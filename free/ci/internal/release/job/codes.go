@@ -32,6 +32,8 @@ const (
 	NoEvidence       = "no_evidence"        // the coordinator supplied no evidence for the deps
 	DeployEnv        = "deploy_env"         // the job declares a deploy credential
 	NoKey            = "no_idempotency_key" // the attempt would run without NSELF_CI_IDEMPOTENCY_KEY
+	RemotePlacement  = "remote_placement"   // a release job is placed away from the machine that runs the pipeline
+	FactsExpired     = "facts_expired"      // the facts were not refreshed recently enough to judge
 )
 
 // E716 reasons.
@@ -45,7 +47,7 @@ func init() {
 	model.Register(model.Code{ID: CodeNotAdmitted, Class: "usage", Summary: "release job not admitted",
 		Fix: "Run the release job's dependencies again on a clean, committed tree, then retry the release"})
 	model.Register(model.Code{ID: CodeResolveRefused, Class: "usage", Summary: "operator resolution refused",
-		Fix: "Check the attempt id and the idempotency key from `nself ci runs`, then run `nself ci runs resolve` again"})
+		Fix: "Use the attempt id from `nself ci runs <run>` and the NSELF_CI_IDEMPOTENCY_KEY the release job received (its publish step logs it), then run `nself ci runs resolve` again"})
 }
 
 // Error is a refusal with its code and stable reason.

@@ -196,8 +196,17 @@ func TestValidationRules(t *testing.T) {
 		"checksums path":     func(m *manifest.Manifest) { m.Checksums.Path = "SUMS" },
 		"signing purpose":    func(m *manifest.Manifest) { m.Signing.Purpose = "plugins" },
 		"empty key id":       func(m *manifest.Manifest) { m.Signing.KeyID = "" },
-		"empty coordinator":  func(m *manifest.Manifest) { m.Producer.Coordinator = "" },
-		"wrong schema":       func(m *manifest.Manifest) { m.Schema = "ci.release-manifest/v2" },
+		"key id shape":       func(m *manifest.Manifest) { m.Signing.KeyID = "ci-release-0123" },
+		"key id bidi":        func(m *manifest.Manifest) { m.Signing.KeyID = "ci-release-0123456789abcde\u202e" },
+		"image ref spoof":    func(m *manifest.Manifest) { m.Artifacts[1].Image.Ref = "ghcr.io/e\u0430xample/nself:1" },
+		"image ref space":    func(m *manifest.Manifest) { m.Artifacts[1].Image.Ref = "ghcr.io/example/nself 1" },
+		"file and directory": func(m *manifest.Manifest) {
+			m.Artifacts[0].Name = "image" // image/nself is the other artifact
+			m.Artifacts[0].Path = "artifacts/image"
+			m.Artifacts[0].SBOM = sbomFor("image", "3")
+		},
+		"empty coordinator": func(m *manifest.Manifest) { m.Producer.Coordinator = "" },
+		"wrong schema":      func(m *manifest.Manifest) { m.Schema = "ci.release-manifest/v2" },
 	}
 	for name, f := range bend {
 		m := valid()
@@ -288,10 +297,21 @@ func FuzzDecode(f *testing.F) {
 	}
 	f.Add([]byte(`{"schema":"ci.release-manifest/v2"}`))
 	f.Add([]byte(`{"schema":"ci.release-manifest/v1","schema":"x"}`))
+	f.Add([]byte("{\"schema\":\"ci.release-manifest/v2\",\"\u017fchema\":\"ci.release-manifest/v1\"}"))
 	f.Fuzz(func(t *testing.T, in []byte) {
 		m, err := manifest.Decode(in)
 		if err != nil {
 			return
+		}
+		var other map[string]any // a case-sensitive reader (jq, Python, TypeScript) must see the same values
+		if err = json.Unmarshal(in, &other); err != nil {
+			t.Fatalf("Decode accepted what a generic reader cannot parse: %v", err)
+		}
+		if other["schema"] != m.Schema || other["revision"] != m.Revision || other["repo_id"] != m.RepoID {
+			t.Fatalf("Decode and a generic reader disagree: %v %v %v", other["schema"], other["revision"], other["repo_id"])
+		}
+		if sg, _ := other["signing"].(map[string]any); sg["key_id"] != m.Signing.KeyID {
+			t.Fatalf("key_id: Decode %q, generic reader %v", m.Signing.KeyID, sg["key_id"])
 		}
 		b1, err := manifest.Build(m)
 		if err != nil {

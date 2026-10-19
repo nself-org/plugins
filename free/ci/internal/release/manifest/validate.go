@@ -36,6 +36,8 @@ var (
 	digestRe   = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	nameRe     = regexp.MustCompile(`^[A-Za-z0-9._-][A-Za-z0-9._/-]{0,199}$`)
 	platformRe = regexp.MustCompile(`^[a-z0-9]+/[a-z0-9]+$`)
+	keyIDRe    = regexp.MustCompile(`^ci-release-[0-9a-f]{16}$`) // signing.KeyID(purpose, pub)
+	refRe      = regexp.MustCompile(`^[!-~]{1,512}$`)            // printable ASCII: an image ref must not be spoofable
 )
 
 func invalid(format string, a ...any) error {
@@ -96,8 +98,8 @@ func validate(m Manifest) error {
 	if m.Signing.Purpose != SigningPurpose {
 		return invalid("signing.purpose is %q, want %q", m.Signing.Purpose, SigningPurpose)
 	}
-	if err := text("signing.key_id", m.Signing.KeyID); err != nil {
-		return err
+	if !keyIDRe.MatchString(m.Signing.KeyID) {
+		return invalid("signing.key_id is not ci-release-<16 hex digits>")
 	}
 	if err := text("producer.nself_ci_version", m.Producer.NselfCIVersion); err != nil {
 		return err
@@ -139,6 +141,14 @@ func validateArtifacts(list []Artifact) error {
 			return invalid("artifact name %q repeats (names compare without letter case)", a.Name)
 		}
 		seen[folded] = true
+	}
+	// a name that is a directory of another (a and a/b) cannot both exist in the release directory
+	for name := range seen {
+		for i := 0; i < len(name); i++ {
+			if name[i] == '/' && seen[name[:i]] {
+				return invalid("artifact %q is both a file and a directory of %q", name[:i], name)
+			}
+		}
 	}
 	return nil
 }
@@ -188,8 +198,8 @@ func validateArtifact(a Artifact) error {
 }
 
 func validateImage(name string, im Image) error {
-	if err := text("image.ref of "+name, im.Ref); err != nil {
-		return err
+	if !refRe.MatchString(im.Ref) {
+		return invalid("image.ref of %q is not 1 to %d printable ASCII characters", name, maxField)
 	}
 	if !digestRe.MatchString(im.IndexDigest) || len(im.Manifests) == 0 {
 		return invalid("image of %q needs an index digest and at least one platform manifest", name)

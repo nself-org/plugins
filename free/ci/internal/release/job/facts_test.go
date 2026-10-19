@@ -59,3 +59,22 @@ func TestBuildFactsCountsAndBindsWhatItSaw(t *testing.T) {
 		t.Fatalf("every reason must be listed, got %q", e.Message)
 	}
 }
+
+// TestBuildFactsKeepsTheConfigTheRunUsed: the digest of the config on the run's
+// row is the evidence's, so a run that used another config than the tree's is stale.
+func TestBuildFactsKeepsTheConfigTheRunUsed(t *testing.T) {
+	s := goodState()
+	s.ConfigDigest = strings.Repeat("e", 64) // --config pointed outside the tree
+	f := job.BuildFacts(s)
+	if f.Evidence.InputDigests.Config != s.ConfigDigest {
+		t.Fatalf("the run's config digest was replaced: %s", f.Evidence.InputDigests.Config)
+	}
+	if got := reasonOf(t, job.Evaluate(f)); got != job.DepsStale {
+		t.Fatalf("reason %q, want %q", got, job.DepsStale)
+	}
+	s.Bound = nil
+	s.ConfigDigest = ""
+	if f = job.BuildFacts(s); f.Evidence.InputDigests.Config != "" || f.Evidence.InputDigests.Lockfiles == nil {
+		t.Fatalf("no digests at all: %+v", f.Evidence.InputDigests)
+	}
+}
