@@ -74,8 +74,13 @@ func (s *Store) TelQueued(ctx context.Context) ([]TelAttempt, error) {
 	return s.telAttempts(ctx, "a.state=?", "queued")
 }
 
-func (s *Store) telAttempts(ctx context.Context, where string, arg any) ([]TelAttempt, error) {
-	rows, err := s.readers.QueryContext(ctx, `SELECT a.id,p.id,j.id,j.name,p.project,p.revision,p.trigger,p.policy_digest,a.state,a.n FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id WHERE `+where+` ORDER BY a.id`, arg)
+// TelQueuedIn lists the queued attempts of one pipeline (run).
+func (s *Store) TelQueuedIn(ctx context.Context, run string) ([]TelAttempt, error) {
+	return s.telAttempts(ctx, "a.state=? AND p.id=?", "queued", run)
+}
+
+func (s *Store) telAttempts(ctx context.Context, where string, args ...any) ([]TelAttempt, error) {
+	rows, err := s.readers.QueryContext(ctx, `SELECT a.id,p.id,j.id,j.name,p.project,p.revision,p.trigger,p.policy_digest,a.state,a.n FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id WHERE `+where+` ORDER BY a.id`, args...)
 	if err != nil {
 		return nil, coded("E607", err.Error())
 	}

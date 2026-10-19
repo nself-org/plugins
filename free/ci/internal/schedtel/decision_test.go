@@ -13,6 +13,7 @@ import (
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
 func (e *env) source() Source {
@@ -177,5 +178,38 @@ func TestPlacementRefFollowsTheAdmittedDecision(t *testing.T) {
 	}
 	if _, ok = cirun.PlacementRef(ctx, "never-placed"); ok {
 		t.Fatal("no decision, no ref")
+	}
+}
+
+// D-1069: the sample covers the pipeline being built, so an unrelated
+// pipeline queuing a job leaves the contributor's output (and the digest) alone.
+func TestTelemetryEstimatesCoverOnlyThePipelineBeingBuilt(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		o := store.TelOutcome{AttemptID: "old" + string(rune('a'+i)), Project: "proj", JobKey: "build", Runner: "local", RunnerClass: "local", Result: "passed", RuntimeMs: 4000, TS: int64(i)}
+		if err := e.st.TelRecordOutcome(ctx, o, fold(4000, -1, int64(i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mine, other := e.attempt("mine", "build"), e.attempt("other", "build")
+	build := func(run string) sched.World {
+		t.Helper()
+		w := sched.World{Runners: []sched.Runner{{ID: "local", Class: "local", Avail: sched.Avail{Slots: 1}}}}
+		if err := contribute(world.WithPipeline(WithStore(ctx, e.st), run), &w); err != nil {
+			t.Fatal(err)
+		}
+		return w
+	}
+	before := build("mine")
+	if _, ok := before.Estimates["local"][mine]; !ok {
+		t.Fatalf("own attempt has no sample: %+v", before.Estimates)
+	}
+	if _, ok := before.Estimates["local"][other]; ok {
+		t.Fatalf("an unrelated pipeline's attempt was sampled: %+v", before.Estimates)
+	}
+	e.attempt("third", "build") // an unrelated pipeline queues another job
+	if after := build("mine"); mustJSON(t, after.Estimates) != mustJSON(t, before.Estimates) {
+		t.Fatalf("estimates changed when an unrelated pipeline queued: %s vs %s", mustJSON(t, after.Estimates), mustJSON(t, before.Estimates))
 	}
 }

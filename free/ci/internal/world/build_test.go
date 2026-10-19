@@ -373,3 +373,29 @@ func TestWorldContributors(t *testing.T) {
 		t.Fatalf("field ownership: %+v %v", partial, err)
 	}
 }
+
+// A contributor learns which pipeline the world is built for.
+func TestWorldContributorSeesThePipeline(t *testing.T) {
+	contributions.Lock()
+	contributions.byField = map[string]Contributor{}
+	contributions.Unlock()
+	t.Cleanup(func() {
+		contributions.Lock()
+		contributions.byField = map[string]Contributor{}
+		contributions.Unlock()
+	})
+	var got string
+	if err := Register(Contributor{Name: "pipeline", Field: "Cache", Fn: func(ctx context.Context, _ *sched.World) error {
+		got = PipelineID(ctx)
+		return nil
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	d, p := worldFixture(t)
+	if _, _, err := Build(context.Background(), d, p); err != nil {
+		t.Fatal(err)
+	}
+	if got == "" || got != p.ID {
+		t.Fatalf("contributor saw pipeline %q, want %q", got, p.ID)
+	}
+}
