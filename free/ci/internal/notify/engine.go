@@ -239,20 +239,31 @@ func (e *Engine) deliver(ctx context.Context, ev Event) (int, []string, bool) {
 			notes = append(notes, fmt.Sprintf("notify: sink %s did not take the %s message (E813)", e.Sinks[i].Name(), ev.Kind))
 		}
 	}
+	handle := func(o outcome) {
+		done[o.i] = true
+		pending--
+		if o.ok {
+			took++
+		}
+		record(o.i, o.ok)
+	}
 wait:
 	for pending > 0 {
 		select {
 		case o := <-results:
-			done[o.i] = true
-			pending--
-			if o.ok {
-				took++
-			}
-			record(o.i, o.ok)
+			handle(o)
 		case <-timer:
 			cancel()
 			timedOut = true
-			break wait
+			for { // a sink that already answered is not a failure, whatever select picked
+				select {
+				case o := <-results:
+					handle(o)
+					continue
+				default:
+				}
+				break wait
+			}
 		}
 	}
 	for i := range e.Sinks {

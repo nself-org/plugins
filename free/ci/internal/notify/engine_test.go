@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -285,10 +286,16 @@ func TestHangingSinkIsBounded(t *testing.T) {
 	done := make(chan []string)
 	go func() { done <- e.OnRun(context.Background(), run(sha("a"), "fail")) }()
 	<-hang.started
+	for { // the budget ends only after the good sink's delivery was counted
+		if stats, _ := st.NotifySinkStats(context.Background()); len(stats) == 1 && stats[0].Sink == "good" {
+			break
+		}
+		runtime.Gosched()
+	}
 	fire <- time.Time{}
 	notes := <-done
-	if len(good.got) != 1 || len(notes) != 1 || !strings.Contains(notes[0], "sink hang") {
-		t.Fatalf("good %d notes %v", len(good.got), notes)
+	if len(good.kinds()) != 1 || len(notes) != 1 || !strings.Contains(notes[0], "sink hang") {
+		t.Fatalf("good %d notes %v", len(good.kinds()), notes)
 	}
 	stats, _ := st.NotifySinkStats(context.Background())
 	if len(stats) != 2 || stats[0].Sink != "good" || stats[0].Delivered != 1 || stats[1].Sink != "hang" || stats[1].Failed != 1 {
