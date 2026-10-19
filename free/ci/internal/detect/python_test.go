@@ -134,13 +134,14 @@ func TestPythonLockfilesEnterDigests(t *testing.T) {
 	got := pyFacts(t, fstest.MapFS{
 		"uv.lock": file("a"), "poetry.lock": file("b"), "Package.resolved": file("c"),
 		"requirements.txt": file("d"), "requirements-dev.txt": file("e"), "sub/requirements/base.txt": file("f"),
+		"constraints.txt": file("g"), "constraints-dev.txt": file("h"), "notes.txt": file("i"),
 	})
-	for _, want := range []string{"lockfile:uv@uv.lock", "lockfile:poetry@poetry.lock", "lockfile:swiftpm@Package.resolved", "lockfile:pip@requirements.txt", "lockfile:pip@requirements-dev.txt"} {
+	for _, want := range []string{"lockfile:uv@uv.lock", "lockfile:poetry@poetry.lock", "lockfile:swiftpm@Package.resolved", "lockfile:pip@requirements.txt", "lockfile:pip@requirements-dev.txt", "lockfile:pip@sub/requirements/base.txt", "lockfile:pip@constraints.txt", "lockfile:pip@constraints-dev.txt"} {
 		if !got[want] {
 			t.Errorf("missing %s in %v", want, got)
 		}
 	}
-	if got["lockfile:pip@sub/requirements/base.txt"] {
-		t.Error("requirements/base.txt is not a requirements*.txt lockfile")
+	if got["lockfile:pip@notes.txt"] {
+		t.Error("an unrelated .txt file is not a lockfile")
 	}
 }

@@ -3,6 +3,7 @@ package gates
 import (
 	"context"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -50,9 +51,9 @@ func TestPythonCommandsPerManager(t *testing.T) {
 		fixture, tool string
 		argv          []string
 	}{
-		{"uv", "uv", []string{"sh", "-c", "uv sync --frozen && uv run pytest"}},
-		{"poetry", "poetry", []string{"sh", "-c", "export POETRY_VIRTUALENVS_IN_PROJECT=true; poetry install --no-root --sync && poetry run pytest"}},
-		{"pip", "python3", []string{"sh", "-c", pipScript + pipRun + "-m pytest", "sh", "requirements-dev.txt", "requirements.txt"}},
+		{"uv", "uv", []string{"uv", "run", "--frozen", "pytest"}},
+		{"poetry", "poetry", []string{pythonTool(), "-c", poetryScript, "pytest"}},
+		{"pip", pythonTool(), []string{pythonTool(), "-c", pipHead + pipRun + "-m pytest\".split()))", "requirements-dev.txt", "requirements.txt"}},
 	}
 	for _, c := range cases {
 		t.Run(c.fixture, func(t *testing.T) {
@@ -225,12 +226,12 @@ func TestPipInstallsTheProjectItself(t *testing.T) {
 		return p[0].Command()[2]
 	}
 	for _, m := range []string{"pyproject.toml", "setup.py"} {
-		if !strings.Contains(cmd(m), "pip install --quiet -e .") {
+		if !strings.Contains(cmd(m), `"-e", "."`) {
 			t.Errorf("%s project must be installed editable", m)
 		}
 	}
 	for _, m := range []string{"requirements.txt", "setup.cfg"} {
-		if strings.Contains(cmd(m), "-e .") {
+		if strings.Contains(cmd(m), `"-e", "."`) {
 			t.Errorf("a %s-only directory cannot be installed and must not try", m)
 		}
 	}
@@ -257,5 +258,98 @@ func TestXcodeSchemeLessContainerStillDisambiguates(t *testing.T) {
 	), "xcode-test")
 	if len(got) != 1 || got[0].Command()[2] != "-project" {
 		t.Fatalf("want xcodebuild test -project App.xcodeproj ...: %+v", got)
+	}
+}
+
+// TestPythonCommandsAvoidTheShell (D-1029): no Python check runs through sh,
+// so a Windows host can run them.
+func TestPythonCommandsAvoidTheShell(t *testing.T) {
+	for _, d := range pythonDefs() {
+		if d.Argv[0] == "sh" {
+			t.Errorf("%s default argv uses sh: %q", d.ID, d.Argv)
+		}
+	}
+	for _, fixture := range []string{"uv", "poetry", "pip"} {
+		for _, p := range fixtureChecks(t, "python", fixture, Options{}) {
+			if strings.HasPrefix(p.Def.ID, "python-") && (p.Command()[0] == "sh" || p.ToolName() == "sh") {
+				t.Errorf("%s/%s argv uses sh: %q", fixture, p.Def.ID, p.Command())
+			}
+		}
+	}
+}
+
+// TestPipInstallsOnlyTestRequirements (D-1029): docs and platform requirement
+// files are not installed; requirements.txt and the dev/test variants are.
+func TestPipInstallsOnlyTestRequirements(t *testing.T) {
+	facts := [][3]string{
+		{"stack", "python", "requirements.txt"}, {"package_manager", "pip", "requirements.txt"},
+		{"test_framework", "pytest", "tests/test_a.py"},
+	}
+	var want []string
+	for _, name := range []string{"requirements.txt", "requirements-dev.txt", "requirements_test.txt", "requirements-tests.txt", "requirements-docs.txt", "requirements-windows.txt", "requirements-ci.txt"} {
+		facts = append(facts, [3]string{"lockfile", "pip", name})
+	}
+	want = []string{"requirements-dev.txt", "requirements-tests.txt", "requirements.txt", "requirements_test.txt"}
+	got := find(pyPlan(facts...), "python-test")
+	if len(got) != 1 {
+		t.Fatalf("want one python-test, got %d", len(got))
+	}
+	argv := got[0].Command()
+	if !reflect.DeepEqual(argv[3:], want) {
+		t.Fatalf("installed requirement files %q, want %q", argv[3:], want)
+	}
+}
+
+// fakePoetry puts a poetry stub on PATH that logs its arguments and the
+// in-project venv variable, and fails a root install when failRoot is set.
+func fakePoetry(t *testing.T, failRoot bool) (log string) {
+	t.Helper()
+	bin := t.TempDir()
+	log = filepath.Join(t.TempDir(), "calls")
+	script := "#!/bin/sh\necho \"$POETRY_VIRTUALENVS_IN_PROJECT $*\" >> " + log + "\n"
+	if failRoot {
+		script += "if [ \"$1\" = install ]; then case \"$*\" in *--no-root*) ;; *) exit 1;; esac; fi\n"
+	}
+	if err := os.WriteFile(filepath.Join(bin, "poetry"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return log
+}
+
+// TestPoetryInstallsTheRootProject (D-1029): a package-mode project installs
+// itself (a src-layout package must import); package-mode = false and a root
+// that cannot install fall back to --no-root.
+func TestPoetryInstallsTheRootProject(t *testing.T) {
+	if _, err := osexec.LookPath("python3"); err != nil {
+		t.Skip("python3 not on PATH")
+	}
+	for name, c := range map[string]struct {
+		pyproject string
+		failRoot  bool
+		want      []string
+	}{
+		"package":      {"[tool.poetry]\nname = \"a\"\n", false, []string{"true install --sync", "true run pytest"}},
+		"non-package":  {"[tool.poetry]\npackage-mode = false\n", false, []string{"true install --sync --no-root", "true run pytest"}},
+		"root-unbuilt": {"[tool.poetry]\nname = \"a\"\n", true, []string{"true install --sync", "true install --sync --no-root", "true run pytest"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log := fakePoetry(t, c.failRoot)
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, "pyproject.toml"), []byte(c.pyproject), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			p := find(fixtureChecks(t, "python", "poetry", Options{}), "python-test")[0]
+			argv := p.Command()
+			cmd := osexec.Command(argv[0], argv[1:]...)
+			cmd.Dir = root
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("%q: %v\n%s", argv, err, out)
+			}
+			raw, _ := os.ReadFile(log)
+			if got := strings.Split(strings.TrimSpace(string(raw)), "\n"); !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("poetry calls %q, want %q", got, c.want)
+			}
+		})
 	}
 }

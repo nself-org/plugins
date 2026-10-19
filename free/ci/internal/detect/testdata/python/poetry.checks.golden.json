@@ -16,9 +16,10 @@
     "required": true,
     "tool": "poetry",
     "argv": [
-      "sh",
+      "python3",
       "-c",
-      "export POETRY_VIRTUALENVS_IN_PROJECT=true; poetry install --no-root --sync \u0026\u0026 poetry run pytest"
+      "import os, re, subprocess, sys\nos.environ[\"POETRY_VIRTUALENVS_IN_PROJECT\"] = \"true\"\ntry:\n    text = open(\"pyproject.toml\", encoding=\"utf-8\").read()\nexcept OSError:\n    text = \"\"\ncode = 1\nif not re.search(r\"(?m)^\\s*package-mode\\s*=\\s*false\\b\", text):\n    code = subprocess.call([\"poetry\", \"install\", \"--sync\"])\nif code:\n    code = subprocess.call([\"poetry\", \"install\", \"--sync\", \"--no-root\"])\nif code:\n    sys.exit(code)\nsys.exit(subprocess.call([\"poetry\", \"run\"] + sys.argv[1:]))\n",
+      "pytest"
     ]
   },
   {
@@ -27,9 +28,11 @@
     "required": false,
     "tool": "poetry",
     "argv": [
-      "sh",
+      "python3",
       "-c",
-      "export POETRY_VIRTUALENVS_IN_PROJECT=true; poetry install --no-root --sync \u0026\u0026 poetry run mypy ."
+      "import os, re, subprocess, sys\nos.environ[\"POETRY_VIRTUALENVS_IN_PROJECT\"] = \"true\"\ntry:\n    text = open(\"pyproject.toml\", encoding=\"utf-8\").read()\nexcept OSError:\n    text = \"\"\ncode = 1\nif not re.search(r\"(?m)^\\s*package-mode\\s*=\\s*false\\b\", text):\n    code = subprocess.call([\"poetry\", \"install\", \"--sync\"])\nif code:\n    code = subprocess.call([\"poetry\", \"install\", \"--sync\", \"--no-root\"])\nif code:\n    sys.exit(code)\nsys.exit(subprocess.call([\"poetry\", \"run\"] + sys.argv[1:]))\n",
+      "mypy",
+      "."
     ]
   },
   {

@@ -12,13 +12,18 @@ var lockNames = map[string]string{
 	"Package.resolved": "swiftpm", "uv.lock": "uv", "poetry.lock": "poetry",
 }
 
-// lockManager names the package manager of a lockfile base name. Every
-// requirements*.txt counts: pip projects pin their inputs there (P7-CI-64).
-func lockManager(base string) (string, bool) {
+// lockManager names the package manager of the lockfile at p. Every
+// requirements*.txt and constraints*.txt, and every .txt under a requirements/
+// directory, counts: pip projects pin their inputs there (P7-CI-64, D-1029).
+func lockManager(p string) (string, bool) {
+	base := path.Base(p)
 	if m, ok := lockNames[base]; ok {
 		return m, true
 	}
-	if strings.HasPrefix(base, "requirements") && strings.HasSuffix(base, ".txt") {
+	if !strings.HasSuffix(base, ".txt") {
+		return "", false
+	}
+	if strings.HasPrefix(base, "requirements") || strings.HasPrefix(base, "constraints") || path.Base(path.Dir(p)) == "requirements" {
 		return "pip", true
 	}
 	return "", false
@@ -27,7 +32,7 @@ func lockManager(base string) (string, bool) {
 func detectLockfiles(s Snapshot) []Fact {
 	var out []Fact
 	for p := range s.files {
-		manager, ok := lockManager(path.Base(p))
+		manager, ok := lockManager(p)
 		if !ok {
 			continue
 		}
