@@ -77,6 +77,7 @@ func (h Handler) check(ctx context.Context, req Request, payloads [][]byte) (che
 	}
 	var c checked
 	for i, it := range req.Items {
+		var attempt string
 		switch it.PayloadType {
 		case manifest.PayloadType:
 			a, k, err := facts.checkManifest(ctx, payloads[i])
@@ -86,37 +87,18 @@ func (h Handler) check(ctx context.Context, req Request, payloads [][]byte) (che
 			if c.keyID != "" && c.keyID != k {
 				return checked{}, Failf(ReasonKeyIDMismatch, "the manifests of one request name different keys")
 			}
-			c.attempt, c.keyID = a, k
+			c.keyID, attempt = k, a
 		case PayloadStatement:
-			if err := facts.checkStatement(ctx, payloads[i]); err != nil {
+			if attempt, err = facts.checkStatement(ctx, payloads[i]); err != nil {
 				return checked{}, err
 			}
 		}
-	}
-	if c.attempt == "" {
-		if c.attempt = facts.lastReleaseAttempt(); c.attempt == "" {
-			return checked{}, Failf(ReasonPayloadRejected, "run %q has no passed release attempt", echo(req.RunID))
+		if c.attempt != "" && c.attempt != attempt {
+			return checked{}, Failf(ReasonPayloadRejected, "the items of one request name different release attempts")
 		}
+		c.attempt = attempt
 	}
 	return c, nil
-}
-
-// lastReleaseAttempt is the highest-numbered passed attempt of a release job
-// (the first listed when two share a number).
-func (f *runFacts) lastReleaseAttempt() string {
-	release := map[string]bool{}
-	for _, j := range f.jobs {
-		if j.Kind == "release" {
-			release[j.ID] = true
-		}
-	}
-	best, bestN := "", 0
-	for _, a := range f.attempts {
-		if release[a.JobID] && a.State == "passed" && (best == "" || a.N > bestN) {
-			best, bestN = a.ID, a.N
-		}
-	}
-	return best
 }
 
 // KeyInfo is what the key commands print and the signer's key modes return.

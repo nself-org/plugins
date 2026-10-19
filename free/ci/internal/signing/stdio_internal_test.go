@@ -169,3 +169,17 @@ func TestLockNameIsPerProject(t *testing.T) {
 		t.Fatalf("%s %s %s", a.lockName(), b.lockName(), c.lockName())
 	}
 }
+
+func TestLockNameFollowsSymlinks(t *testing.T) {
+	real := t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if (&CLIStore{Project: real}).lockName() != (&CLIStore{Project: link}).lockName() {
+		t.Fatal("two spellings of one project root got two locks")
+	}
+	if (&CLIStore{Project: real}).lockName() != (&CLIStore{Project: filepath.Join(real, "sub", "..")}).lockName() {
+		t.Fatal("a root with a .. part got another lock")
+	}
+}

@@ -9,7 +9,7 @@ package signing
 // the run is final (read once, so the check and the facts agree); a record
 // counts only when it is committed, belongs to this run and revision, is not
 // marked missing, and its stored bytes still hash to the recorded digest at
-// the recorded size; a listing that hits the store's 1000-row cap is refused
+// the recorded size and was produced by a passed release attempt; a listing that hits the store's 1000-row cap is refused
 // (it may hide records); byte verification happens once per digest and size.
 
 import (
@@ -24,8 +24,21 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/release/manifest"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
+
+// canon resolves symlinks and relative parts so two spellings of one project
+// root compare equal; a path that cannot be resolved stays cleaned.
+func canon(p string) string {
+	if abs, err := filepath.Abs(p); err == nil {
+		p = abs
+	}
+	if real, err := filepath.EvalSymlinks(p); err == nil {
+		return real
+	}
+	return filepath.Clean(p)
+}
 
 // listCap is the most records the store returns for one query.
 const listCap = 1000
@@ -53,7 +66,7 @@ func loadFacts(ctx context.Context, src Source, blobs Blobs, runID, project stri
 	if project == "" {
 		return nil, Failf(ReasonSignerFailed, "the signer has no project root to serve")
 	}
-	if filepath.Clean(pipe.Project) != filepath.Clean(project) {
+	if canon(pipe.Project) != canon(project) {
 		return nil, Failf(ReasonPayloadRejected, "run %q belongs to another project than the one this signer serves", echo(runID))
 	}
 	f := &runFacts{src: src, blobs: blobs, runID: runID, pipe: pipe, attempts: attempts, lists: map[string][]records.Record{}, verified: map[string]error{}}
@@ -63,7 +76,26 @@ func loadFacts(ctx context.Context, src Source, blobs Blobs, runID, project stri
 	if err = f.loadEvidence(ctx); err != nil {
 		return nil, err
 	}
+	if string(f.evidence.Result) != manifest.EvidenceResult || f.evidence.RunID != runID || f.evidence.Revision != pipe.Revision {
+		return nil, Failf(ReasonPayloadRejected, "the stored evidence of run %q is not a passing record of this run and revision", echo(runID))
+	}
 	return f, nil
+}
+
+// passedRelease reports whether attempt is a passed attempt of a release-kind
+// job of the run (a failed or cancelled attempt may have committed records
+// before it ended: they are never signed).
+func (f *runFacts) passedRelease(attempt string) bool {
+	for _, a := range f.attempts {
+		if a.ID == attempt && a.State == "passed" {
+			for _, j := range f.jobs {
+				if j.ID == a.JobID && j.Kind == "release" {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // loadEvidence picks the newest run-level evidence row of this run: the one
@@ -142,8 +174,9 @@ func (f *runFacts) hashBlob(r records.Record) error {
 }
 
 // match reports whether a record of the run, filtered by name and kind, has
-// this digest, passes ok and verifies; a refusal error is for a store failure.
-func (f *runFacts) match(ctx context.Context, name string, kind records.Kind, digest string, ok func(records.Record) bool) (bool, error) {
+// this digest, was produced by attempt (a passed release attempt), passes ok
+// and verifies; a refusal error is for a store failure.
+func (f *runFacts) match(ctx context.Context, name string, kind records.Kind, digest, attempt string, ok func(records.Record) bool) (bool, error) {
 	if name == "" && kind == "" { // an empty filter would list every record of the run
 		return false, nil
 	}
@@ -152,7 +185,7 @@ func (f *runFacts) match(ctx context.Context, name string, kind records.Kind, di
 		return false, err
 	}
 	for _, r := range recs {
-		if r.SHA256 == digest && ok(r) && f.verify(r) == nil {
+		if r.SHA256 == digest && r.Attempt == attempt && f.passedRelease(attempt) && ok(r) && f.verify(r) == nil {
 			return true, nil
 		}
 	}

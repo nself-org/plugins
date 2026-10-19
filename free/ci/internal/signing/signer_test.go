@@ -49,18 +49,14 @@ func TestSignsManifestAndStatement(t *testing.T) {
 	}
 }
 
-func TestStatementAloneUsesLastPassedReleaseAttempt(t *testing.T) {
+func TestStatementAloneResolvesTheKeyForItsInvocationAttempt(t *testing.T) {
 	f := newFixture(t)
 	req := request(item(signing.PayloadStatement, f.statementPayload(nil)))
 	if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); err != nil {
 		t.Fatal(err)
 	}
 	if f.res.attempts[0] != "att-rel-2" {
-		t.Fatalf("resolved for %v, want the highest passed release attempt", f.res.attempts)
-	}
-	f.src.attempts = []store.AttemptView{{ID: "att-x", JobID: "job-test", N: 1, State: "passed"}}
-	if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); signing.IsReason(err, signing.ReasonPayloadRejected) == false {
-		t.Fatalf("a run without a passed release attempt signed: %v", err)
+		t.Fatalf("resolved for %v, want the invocation attempt", f.res.attempts)
 	}
 }
 
@@ -261,25 +257,6 @@ func TestStatementSubjectCountBoundary(t *testing.T) {
 	over := request(item(signing.PayloadStatement, f.statementPayload(subjects(4097))))
 	if _, err := f.handler().Handle(context.Background(), over, decodeAll(t, over)); !signing.IsReason(err, signing.ReasonPayloadRejected) {
 		t.Fatalf("4097 subjects: %v", err)
-	}
-}
-
-func TestReleaseAttemptChoice(t *testing.T) {
-	f := newFixture(t)
-	f.src.jobs = append(f.src.jobs, store.RunJob{ID: "job-rel-b", Name: "publish-b", Kind: "release"})
-	f.src.attempts = []store.AttemptView{
-		{ID: "a-3", JobID: "job-rel", N: 3, State: "failed"},
-		{ID: "a-1", JobID: "job-rel", N: 1, State: "passed"},
-		{ID: "a-2", JobID: "job-rel-b", N: 2, State: "passed"},
-		{ID: "a-2b", JobID: "job-rel", N: 2, State: "passed"},
-		{ID: "a-c", JobID: "job-test", N: 9, State: "passed"},
-	}
-	req := request(item(signing.PayloadStatement, f.statementPayload(nil)))
-	if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); err != nil {
-		t.Fatal(err)
-	}
-	if f.res.attempts[0] != "a-2" {
-		t.Fatalf("resolved for %q: want the highest passed release attempt, first listed on a tie", f.res.attempts[0])
 	}
 }
 

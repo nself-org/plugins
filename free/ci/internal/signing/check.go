@@ -7,7 +7,9 @@ package signing
 // Outputs: the release attempt id (the secret resolution is for that
 // attempt) and the key id the manifest names.
 // Constraints: schema v1 through manifest.Decode; revision equals the run's
-// revision, the evidence's revision and every record's; every artifact (name,
+// revision, the evidence's revision and every record's; the stored evidence
+// passed (loadFacts); records come from the manifest's own passed release attempt
+// and match in kind, platform and image digests; every artifact (name,
 // digest, size) and every SBOM digest (a record of kind sbom) is a committed,
 // byte-verified record of this run; the evidence digest is the digest of the stored pipeline evidence
 // and that evidence passed; the release attempt is a passed attempt of a
@@ -41,18 +43,15 @@ func (f *runFacts) checkManifest(ctx context.Context, payload []byte) (attemptID
 	if m.Evidence.SHA256 != f.evDigest {
 		return reject("evidence.sha256 is not the digest of the stored pipeline evidence")
 	}
-	if string(f.evidence.Result) != manifest.EvidenceResult {
-		return reject("the stored evidence of the run is not a pass")
-	}
 	if !f.releaseAttempt(m.Release.JobID, m.Release.AttemptID) {
 		return reject("release.attempt_id is not a passed attempt of a release job of this run")
 	}
 	for _, a := range m.Artifacts {
-		if err := f.checkArtifact(ctx, a); err != nil {
+		if err := f.checkArtifact(ctx, a, m.Release.AttemptID); err != nil {
 			return "", "", err
 		}
 		for _, d := range []string{a.SBOM.CycloneDX.SHA256, a.SBOM.SPDX.SHA256} {
-			ok, err := f.match(ctx, "", records.KindSBOM, d, func(records.Record) bool { return true })
+			ok, err := f.match(ctx, "", records.KindSBOM, d, m.Release.AttemptID, func(records.Record) bool { return true })
 			if err != nil {
 				return "", "", err
 			}
@@ -64,16 +63,46 @@ func (f *runFacts) checkManifest(ctx context.Context, payload []byte) (attemptID
 	return m.Release.AttemptID, m.Signing.KeyID, nil
 }
 
-// checkArtifact needs a committed, verified record with this name, digest and size.
-func (f *runFacts) checkArtifact(ctx context.Context, a manifest.Artifact) error {
-	ok, err := f.match(ctx, a.Name, "", a.SHA256, func(r records.Record) bool { return r.Size == a.Size })
+// checkArtifact needs a committed, verified record of the release attempt with
+// this name, digest, size and kind, the platform and, for an image, the image
+// reference, index digest and per-platform digests the manifest lists.
+func (f *runFacts) checkArtifact(ctx context.Context, a manifest.Artifact, attempt string) error {
+	ok, err := f.match(ctx, a.Name, "", a.SHA256, attempt, func(r records.Record) bool { return recordMatches(a, r) })
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return Failf(ReasonDigestNotCommitted, "artifact %q (digest %s) is not a committed record of this run", echo(a.Name), echo(a.SHA256))
+		return Failf(ReasonDigestNotCommitted, "artifact %q (digest %s) is not a committed record of the release attempt", echo(a.Name), echo(a.SHA256))
 	}
 	return nil
+}
+
+// recordMatches compares everything a manifest claims about an artifact.
+func recordMatches(a manifest.Artifact, r records.Record) bool {
+	if string(r.Kind) != a.Kind || r.Size != a.Size || (a.Platform != nil && *a.Platform != r.Platform) {
+		return false
+	}
+	return imageMatches(a.Image, r.Image)
+}
+
+// imageMatches reports whether the manifest's image details are the record's.
+func imageMatches(m *manifest.Image, r *records.ImageInfo) bool {
+	if m == nil || r == nil {
+		return m == nil && r == nil
+	}
+	if m.Ref != r.Ref || m.IndexDigest != r.IndexDigest || len(m.Manifests) != len(r.Manifests) {
+		return false
+	}
+	want := map[string]string{}
+	for _, x := range r.Manifests {
+		want[x.Platform] = x.Digest
+	}
+	for _, x := range m.Manifests {
+		if d, ok := want[x.Platform]; !ok || d != x.Digest {
+			return false
+		}
+	}
+	return true
 }
 
 // releaseAttempt reports whether attempt is a passed attempt of job, and job

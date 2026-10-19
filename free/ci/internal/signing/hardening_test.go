@@ -28,7 +28,10 @@ func TestStrictJSONRefusals(t *testing.T) {
 		_, err := f.handler().Handle(context.Background(), req, decodeAll(t, req))
 		return err
 	}
-	good := newFixture(t).statementPayload(nil)
+	pf := newFixture(t)
+	pb, _ := json.Marshal(pf.predicate(nil))
+	pred := string(pb)
+	good := pf.statementPayload(nil)
 	// sanity: the unmodified statement passes
 	if err := st(string(good)); err != nil {
 		t.Fatal(err)
@@ -36,7 +39,7 @@ func TestStrictJSONRefusals(t *testing.T) {
 	app := sum([]byte("app-bytes"))
 	subj := `[{"name":"app","digest":{"sha256":"` + app + `"}}]`
 	base := func(extra string) string {
-		return `{"_type":"https://in-toto.io/Statement/v1","predicateType":"` + manifest.ProvenancePredicate + `","predicate":{}` + extra + `}`
+		return `{"_type":"https://in-toto.io/Statement/v1","predicateType":"` + manifest.ProvenancePredicate + `","predicate":` + pred + extra + `}`
 	}
 	bad := map[string]string{
 		"duplicate subject":       base(`,"subject":` + subj + `,"subject":` + subj),
@@ -44,7 +47,7 @@ func TestStrictJSONRefusals(t *testing.T) {
 		"unicode-folded key":      base(`,"subject":` + subj + `,"ſubject":[]`),
 		"escaped duplicate key":   base(`,"subject":` + subj + `,"subject":[]`),
 		"duplicate nested digest": base(`,"subject":[{"name":"app","digest":{"sha256":"` + app + `","sha256":"` + app + `"}}]`),
-		"duplicate predicate key": `{"_type":"https://in-toto.io/Statement/v1","predicateType":"` + manifest.ProvenancePredicate + `","predicate":{"a":1,"A":2},"subject":` + subj + `}`,
+		"duplicate predicate key": `{"_type":"https://in-toto.io/Statement/v1","predicateType":"` + manifest.ProvenancePredicate + `","predicate":` + pred + `,"predicate":{},"subject":` + subj + `}`,
 		"trailing document":       base(`,"subject":`+subj) + ` {}`,
 		"trailing bracket":        base(`,"subject":`+subj) + ` ]`,
 		"trailing brace":          base(`,"subject":`+subj) + `}`,
@@ -148,17 +151,11 @@ func TestRunChangesWhileTheKeyIsResolved(t *testing.T) {
 		},
 		"a record marked missing": func(f *fixture) { f.mutateRecord("app", func(r *records.Record) { r.Missing = true }) },
 		"blob bytes replaced":     func(f *fixture) { f.blobs.data[sum(f.files["app"])] = []byte("evil-bytes") },
-		"the release attempt choice changes": func(f *fixture) {
-			f.src.attempts = append(f.src.attempts, store.AttemptView{ID: "att-rel-9", JobID: "job-rel", N: 9, State: "passed"})
-		},
 	}
 	for name, mutate := range mutations {
 		f := newFixture(t)
 		f.res.onResolve = func() { mutate(f) }
 		req := request(item(signing.PayloadStatement, f.statementPayload(nil)), item(manifest.PayloadType, f.manifestPayload(nil)))
-		if strings.HasSuffix(name, "choice changes") {
-			req = request(item(signing.PayloadStatement, f.statementPayload(nil))) // no manifest names the attempt
-		}
 		envs, err := f.handler().Handle(context.Background(), req, decodeAll(t, req))
 		if err == nil || envs != nil {
 			t.Errorf("%s: signed over a run that changed during key resolution: %v", name, err)
@@ -190,8 +187,9 @@ func TestRecordListingAtTheStoreCapIsRefused(t *testing.T) {
 
 func TestStrictJSONDepthBoundary(t *testing.T) {
 	f := newFixture(t)
+	pb, _ := json.Marshal(f.predicate(nil))
 	nested := func(n int) string {
-		return `{"_type":"https://in-toto.io/Statement/v1","predicateType":"` + manifest.ProvenancePredicate + `","predicate":{},"subject":[{"name":"app","digest":{"sha256":"` + sum(f.files["app"]) + `"}}],"x":` + strings.Repeat("[", n) + strings.Repeat("]", n) + `}`
+		return `{"_type":"https://in-toto.io/Statement/v1","predicateType":"` + manifest.ProvenancePredicate + `","predicate":` + string(pb) + `,"subject":[{"name":"app","digest":{"sha256":"` + sum(f.files["app"]) + `"}}],"x":` + strings.Repeat("[", n) + strings.Repeat("]", n) + `}`
 	}
 	handle := func(s string) error {
 		req := request(item(signing.PayloadStatement, []byte(s)))

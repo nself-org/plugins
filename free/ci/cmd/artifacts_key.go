@@ -33,7 +33,7 @@ var keyClient = func() (*signing.Client, error) {
 	if h := os.Getenv("NSELF_CI_HOME"); h != "" {
 		env = append(env, "NSELF_CI_HOME="+h)
 	}
-	return &signing.Client{Runner: &signing.FunnelRunner{Home: os.Getenv("NSELF_CI_HOME")}, Env: env}, nil
+	return &signing.Client{Runner: &signing.FunnelRunner{Home: os.Getenv("NSELF_CI_HOME")}, Env: env, Team: teamCoordinator()}, nil
 }
 
 // keyConfirmIn is where rotate reads the confirmation from.

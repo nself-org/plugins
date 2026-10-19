@@ -45,7 +45,7 @@ func (s *CLIStore) Lock(ctx context.Context) (func(), error) {
 // lockName names the lock after the project root, so every process that
 // replaces this project's key shares one lock whatever its CI home is.
 func (s *CLIStore) lockName() string {
-	sum := sha256.Sum256([]byte(filepath.Clean(s.Project)))
+	sum := sha256.Sum256([]byte(canon(s.Project)))
 	return "release-key-" + hex.EncodeToString(sum[:8]) + ".lock"
 }
 

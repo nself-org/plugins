@@ -319,7 +319,11 @@ func signedRun(t *testing.T, r *artRig) signing.Request {
 		}
 	}
 	sum := sha256.Sum256(body)
-	st, _ := json.Marshal(map[string]any{"_type": "https://in-toto.io/Statement/v1", "predicateType": "https://slsa.dev/provenance/v1", "predicate": map[string]any{},
+	predicate := map[string]any{
+		"buildDefinition": map[string]any{"buildType": signing.ReleaseBuildType, "externalParameters": map[string]any{"repository": "repo", "revision": p.Revision},
+			"resolvedDependencies": []map[string]any{{"uri": "git+repo@" + p.Revision, "digest": map[string]string{"gitCommit": p.Revision}}}},
+		"runDetails": map[string]any{"metadata": map[string]any{"invocationId": p.ID + "/att-rel"}}}
+	st, _ := json.Marshal(map[string]any{"_type": "https://in-toto.io/Statement/v1", "predicateType": "https://slsa.dev/provenance/v1", "predicate": predicate,
 		"subject": []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": hex.EncodeToString(sum[:])}}}})
 	return signing.Request{RunID: p.ID, Items: []signing.Item{{PayloadType: signing.PayloadStatement, PayloadB64: b64(st)}}}
 }
@@ -378,6 +382,21 @@ func TestArtifactsSignerRefusals(t *testing.T) {
 	t.Setenv("NSELF_CI_REPO", t.TempDir())
 	signerRefuses("a run of another project", raw, signing.ReasonPayloadRejected)
 	t.Setenv("NSELF_CI_REPO", r.project)
+	// a TEAM coordinator never resolves the release key, in any signer mode
+	t.Setenv("NSELF_CI_COORDINATOR_MODE", "team")
+	signerRefuses("a TEAM coordinator", raw, signing.ReasonSignerFailed)
+	for _, mode := range []string{"--public", "--init", "--rotate"} {
+		signerIn = bytes.NewReader(nil)
+		code, out, _ := runArt(t, "signer", mode)
+		signerIn = nil
+		if code != 2 || !strings.Contains(out, "TEAM") {
+			t.Fatalf("%s on a TEAM coordinator: %d %q", mode, code, out)
+		}
+	}
+	if code, out, errs := runKey(t, "", "--json"); code != 2 || !strings.Contains(out+errs, "TEAM") {
+		t.Fatalf("key on a TEAM coordinator: %d %q %q", code, out, errs)
+	}
+	t.Setenv("NSELF_CI_COORDINATOR_MODE", "")
 	// usage
 	if code, _, errs := runArt(t, "signer"); code != 1 || !strings.Contains(errs, "started by the coordinator") {
 		t.Fatalf("signer without a mode: %d %q", code, errs)

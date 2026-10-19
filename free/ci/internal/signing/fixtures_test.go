@@ -198,8 +198,11 @@ func newFixture(t *testing.T) *fixture {
 	for name, b := range f.files {
 		f.blobs.data[sum(b)] = b
 		kind := records.KindBinary
-		if strings.Contains(name, ".") {
+		switch {
+		case strings.Contains(name, "."):
 			kind = records.KindSBOM
+		case name == "image":
+			kind = records.KindArchive
 		}
 		f.src.recs = append(f.src.recs, records.Record{ID: "r-" + name, Project: project, Run: runID, Attempt: "att-rel-2", Revision: revision, Name: name, Kind: kind,
 			SHA256: sum(b), Size: int64(len(b)), State: records.StateCommitted, CreatedAt: time.Unix(1, 0)})
@@ -240,7 +243,7 @@ func (f *fixture) manifestPayload(tweak func(*manifest.Manifest)) []byte {
 // statementPayload is an in-toto statement over the two artifacts.
 func (f *fixture) statementPayload(tweak func(map[string]any)) []byte {
 	f.t.Helper()
-	st := map[string]any{"_type": "https://in-toto.io/Statement/v1", "predicateType": manifest.ProvenancePredicate, "predicate": map[string]any{"buildDefinition": map[string]any{}},
+	st := map[string]any{"_type": "https://in-toto.io/Statement/v1", "predicateType": manifest.ProvenancePredicate, "predicate": f.predicate(nil),
 		"subject": []map[string]any{{"name": "app", "digest": map[string]string{"sha256": sum(f.files["app"])}}, {"name": "image", "digest": map[string]string{"sha256": sum(f.files["image"])}}}}
 	if tweak != nil {
 		tweak(st)
@@ -274,4 +277,20 @@ func reasonOf(t *testing.T, err error) string {
 		t.Fatalf("not an E717 error: %v", err)
 	}
 	return e.Reason
+}
+
+// predicate is the SLSA provenance v1 predicate of the Epic's contract for the fixture run.
+func (f *fixture) predicate(tweak func(map[string]any)) map[string]any {
+	p := map[string]any{
+		"buildDefinition": map[string]any{
+			"buildType":            signing.ReleaseBuildType,
+			"externalParameters":   map[string]any{"repository": "repo-1", "revision": revision, "pipeline": "release", "job": "publish"},
+			"resolvedDependencies": []map[string]any{{"uri": "git+repo-1@" + revision, "digest": map[string]string{"gitCommit": revision}}},
+		},
+		"runDetails": map[string]any{"metadata": map[string]any{"invocationId": runID + "/att-rel-2"}},
+	}
+	if tweak != nil {
+		tweak(p)
+	}
+	return p
 }

@@ -40,6 +40,9 @@ type Client struct {
 	// Env is added to the signer's environment (NSELF_CI_HOME, NSELF_CI_REPO).
 	Env     []string
 	Timeout time.Duration
+	// Team is set on a TEAM coordinator, which holds secret references only
+	// (Epic X8): it never starts the signer and never resolves the release key.
+	Team bool
 }
 
 func (c *Client) exe() (string, error) {
@@ -56,6 +59,9 @@ func (c *Client) exe() (string, error) {
 func (c *Client) call(ctx context.Context, mode string, stdin []byte) ([]byte, error) {
 	if c.Runner == nil {
 		return nil, Failf(ReasonSignerFailed, "the signer client has no runner")
+	}
+	if c.Team {
+		return nil, errTeam()
 	}
 	exe, err := c.exe()
 	if err != nil {
@@ -76,10 +82,24 @@ func (c *Client) call(ctx context.Context, mode string, stdin []byte) ([]byte, e
 	return out, nil
 }
 
+// errTeam is the refusal on a TEAM coordinator.
+func errTeam() error {
+	return Failf(ReasonSignerFailed, "a TEAM coordinator never holds the release key: sign on the operator's machine (nself ci artifacts sign <run> --coordinator <url>)")
+}
+
+// knownReason reports whether a relayed reason is one of E717's.
+func knownReason(r string) bool {
+	switch r {
+	case ReasonKeyMissing, ReasonKeyInvalid, ReasonKeyIDMismatch, ReasonPayloadRejected, ReasonDigestNotCommitted, ReasonSignerFailed, ReasonCLITooOld, ReasonSecretExists:
+		return true
+	}
+	return false
+}
+
 // signerRefusal turns the signer's error object into the same E717 reason.
 func signerRefusal(out []byte, code int) error {
 	var resp Response
-	if i := bytes.IndexByte(out, '{'); i >= 0 && json.Unmarshal(out[i:], &resp) == nil && resp.Error != nil && resp.Error.Reason != "" {
+	if i := bytes.IndexByte(out, '{'); i >= 0 && json.Unmarshal(out[i:], &resp) == nil && resp.Error != nil && knownReason(resp.Error.Reason) {
 		return Failf(resp.Error.Reason, "%s", clip(resp.Error.Message, 509))
 	}
 	return Failf(ReasonSignerFailed, "the signer failed (exit %d)", code)
@@ -89,6 +109,9 @@ func signerRefusal(out []byte, code int) error {
 func (c *Client) Sign(ctx context.Context, runID string, items []Item) ([]signing.Envelope, error) {
 	if c.Src == nil || c.Runner == nil {
 		return nil, Failf(ReasonSignerFailed, "the signer client has no run store or runner")
+	}
+	if c.Team {
+		return nil, errTeam()
 	}
 	if err := CheckTerminal(ctx, c.Src, runID); err != nil {
 		return nil, err

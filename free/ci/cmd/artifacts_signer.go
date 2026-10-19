@@ -8,7 +8,7 @@ package main
 // --rotate; env NSELF_CI_HOME, NSELF_CI_REPO (the project) and NSELF_V15=1.
 // Outputs: one JSON document on stdout (the response, or {"error":{...}});
 // exit 0, 1 (usage) or 2 (refused or failed).
-// Constraints: V15 only and hidden (not in the usage text); a request is
+// Constraints: refuses on a TEAM coordinator (NSELF_CI_COORDINATOR_MODE=team); V15 only and hidden (not in the usage text); a request is
 // re-checked against the run store before anything is signed; the key is
 // resolved by reference, used in memory and zeroed; nothing but envelopes or
 // the public trust line is printed; a key never reaches argv, stdout, a file
@@ -66,6 +66,9 @@ func artifactsSigner(args []string) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), signerTimeout)
 	defer cancel()
+	if teamCoordinator() {
+		return signerFail(signing.Failf(signing.ReasonSignerFailed, "a TEAM coordinator never holds the release key: sign on the operator's machine"))
+	}
 	root, err := evidenceRoot("")
 	if err != nil || root == "" {
 		return signerFail(signing.Failf(signing.ReasonSignerFailed, "the project root is unknown"))
@@ -88,6 +91,10 @@ func artifactsSigner(args []string) int {
 
 // signerTimeout bounds one signer call (the key lock wait included).
 const signerTimeout = 50 * time.Second
+
+// teamCoordinator reports whether this process runs as a TEAM coordinator,
+// which holds secret references only (Epic X8) and so never resolves the key.
+func teamCoordinator() bool { return os.Getenv("NSELF_CI_COORDINATOR_MODE") == "team" }
 
 func countTrue(b ...bool) (n int) {
 	for _, v := range b {
