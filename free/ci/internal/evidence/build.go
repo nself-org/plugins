@@ -77,6 +77,7 @@ func (Builder) Complete(ctx context.Context, begin any, f cirun.EvidenceFacts, e
 	}
 	ev.PlacementRef = commonPlacement(ctx, f.Jobs)
 	if f.Store != nil {
+		cirun.MarkHistoryFlaky(ctx, f.Store, &ev)       // before the attempt documents: they narrow ev, so they carry the marker too (D-1050)
 		row, _, _ := f.Store.PipelineByID(ctx, f.RunID) // attempts are filed under the digest the run row carries
 		for _, o := range f.Jobs {
 			if o.AttemptID == "" || o.State == cirun.StateSkipped {

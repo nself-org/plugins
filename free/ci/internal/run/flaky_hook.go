@@ -21,8 +21,11 @@ type FlakyHistoryHook func(ctx context.Context, st *store.Store, ev model.Eviden
 // FlakyHistory is nil until the flaky detector registers.
 var FlakyHistory FlakyHistoryHook
 
-// markHistoryFlaky attaches the history notes to the checks that carry none.
-func markHistoryFlaky(ctx context.Context, st *store.Store, ev *model.Evidence) {
+// MarkHistoryFlaky attaches the history notes to the checks that carry none.
+// It is idempotent. An EvidenceBuilder calls it once the input digests are set
+// and before it writes per-attempt documents (D-1050); the coordinator calls it
+// again on the final run document.
+func MarkHistoryFlaky(ctx context.Context, st *store.Store, ev *model.Evidence) {
 	if FlakyHistory == nil {
 		return
 	}

@@ -41,7 +41,7 @@ func newLogsFlagSet(f *logsFlags) *flag.FlagSet {
 	fs.BoolVar(&f.follow, "f", false, "follow the log while the attempt runs")
 	fs.BoolVar(&f.json, "json", false, "print ci logs NDJSON records")
 	fs.StringVar(&f.run, "run", "", "the run a job name belongs to (default: the latest run)")
-	fs.IntVar(&f.attempt, "attempt", 0, "which attempt of the job (default: the newest)")
+	fs.IntVar(&f.attempt, "attempt", 0, "which attempt of the job (default: the attempt the check's log_ref names, else the newest)")
 	return fs
 }
 
@@ -155,8 +155,16 @@ func jobTarget(ctx context.Context, st *store.Store, runID, arg string, n int) (
 		if err != nil {
 			return logTarget{}, false, err
 		}
+		named := ""
+		if n == 0 {
+			named = evidenceAttempt(ctx, st, runID, j.Name, j.ID)
+		}
 		var pick *store.AttemptView
 		for i := range atts {
+			if named != "" && atts[i].ID == named {
+				pick = &atts[i]
+				break
+			}
 			if (n == 0 && (pick == nil || atts[i].N > pick.N)) || atts[i].N == n {
 				pick = &atts[i]
 			}
