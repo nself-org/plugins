@@ -485,8 +485,13 @@ func TestRemoteAwaitNodeFaultOnlyCountsAgainstTheNode(t *testing.T) {
 	for _, c := range []struct {
 		err  string
 		node bool
-	}{{"E656 transport.ssh_session_lost: x", true}, {"E656 transport.ssh_connect_failed: x", true}, {"E656 transport.ssh_checkout: no repo", false},
-		{"E656 transport.ssh_not_configured: x", false}, {"E656 transport.ssh_secrets_refused: x", false}} {
+	}{{"E656 transport.ssh_session_lost: x", true}, {"E656 transport.ssh_connect_failed: x", true}, {"E656 transport.ssh_connect_timeout: x", true},
+		{"E655 transport.ssh_host_key_changed: x", true}, {"E656 transport.ssh_checkout: no repo", false},
+		{"E656 transport.ssh_not_configured: x", false}, {"E656 transport.ssh_secrets_refused: x", false},
+		{"E656 transport.ssh_connect_failed: cannot reach node: transport.ssh_checkout", true}, // text after the reason is irrelevant
+		{"E626 database is locked (SQLITE_BUSY)", false}, {"log for unknown lease lease-x", false},
+		{"E656 transport.ssh_checkout: transport.ssh_session_lost", false}, // a node cannot talk its way onto the list
+	} {
 		if got := nodeFault(errors.New(c.err)); got != c.node {
 			t.Errorf("%s: nodeFault = %v", c.err, got)
 		}
@@ -533,8 +538,8 @@ func TestHookWorldKeepsALocalOnlyJobOffNodes(t *testing.T) {
 	rd.sess.LocalOnly = func(model.Job) bool { return true }
 	job := model.Job{Kind: "test", Run: []string{"true"}}
 	sj := rd.schedJob(AttemptSpec{Job: &job, N: 1, Foreground: true}, "r1.a.a1", "r1.a", 1, 256)
-	if !strings.HasSuffix(sj.Pipeline.ID, localOnlySuffix) {
-		t.Fatalf("pipeline id %q does not mark the job local-only", sj.Pipeline.ID)
+	if sj.Pipeline.ID != "r1" {
+		t.Fatalf("pipeline id %q: a placement constraint must not ride on the pipeline id (telemetry and approvals key on it)", sj.Pipeline.ID)
 	}
 	w, _, err := rd.world(context.Background(), sj.Pipeline)
 	if err != nil {
@@ -546,53 +551,16 @@ func TestHookWorldKeepsALocalOnlyJobOffNodes(t *testing.T) {
 	}
 	rd.sess.LocalOnly = nil
 	free := rd.schedJob(AttemptSpec{Job: &model.Job{Kind: "test", Run: []string{"true"}, RemoteOnly: true}, N: 1, Foreground: true}, "r1.b.a1", "r1.b", 1, 256)
-	if strings.HasSuffix(free.Pipeline.ID, localOnlySuffix) {
-		t.Fatal("a job nothing holds back was marked local-only")
+	for _, l := range free.Requirements.Labels {
+		if l == world.LocalLabel {
+			t.Fatal("a job nothing holds back was kept off the nodes")
+		}
+	}
+	// the same two jobs against a world: the ordinary one may win a node when it is the better place, the local-only one never does
+	if got := sched.Place(w, []sched.Job{free}); len(got.Placements) != 1 || got.Placements[0].RunnerID == "local" {
+		t.Fatalf("a remote-only job must go to a node: %+v", got.Placements)
 	}
 }
-
-// remoteLost must end in the state the local path uses whichever of the loss, the cancel and a cancel
-// intent got there first (Codex round 1, CR S1).
-func lostEnv(t *testing.T) (*remoteEnv, *runState, *runDispatch) {
-	e := newRemoteEnv(t)
-	e.sink.expect(e.id, testRev)
-	sess := &Session{Store: e.st, RunID: "run1"}
-	rs := &runState{c: &Coordinator{}, sess: sess, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
-	return e, rs, &runDispatch{sess: sess, sink: e.sink}
-}
-
-func TestRemoteAwaitLossRacingTheRunCancelEndsCancelled(t *testing.T) {
-	e, rs, rd := lostEnv(t)
-	_, epoch, _ := e.st.AttemptStateEpoch(context.Background(), e.id)
-	if err := e.st.Transition(context.Background(), e.id, "leased", "lost", store.TransitionDetail{Epoch: epoch, FailureClass: "infra"}); err != nil { // the dispatcher marked it lost
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // and Ctrl-C reached the run too
-	o := rs.remoteLost(ctx, planJob("unit"), model.Job{}, rd, e.id, errors.New("E656 transport.ssh_session_lost"), JobOutcome{ID: "unit"}, 1, &tail{})
-	if o.State != StateCancelled || e.state(t) != "cancelled" {
-		t.Fatalf("outcome %q, durable %s; a cancelled run must end its attempt cancelled", o.State, e.state(t))
-	}
-}
-
-func TestRemoteAwaitCancelIntentBeatsTheLossSettlement(t *testing.T) {
-	e, rs, rd := lostEnv(t)
-	_, _, _ = e.st.AttemptStateEpoch(context.Background(), e.id)
-	_, epoch, _ := e.st.AttemptStateEpoch(context.Background(), e.id)
-	if err := e.st.Transition(context.Background(), e.id, "leased", "running", store.TransitionDetail{Epoch: epoch}); err != nil {
-		t.Fatal(err)
-	}
-	_, epoch, _ = e.st.AttemptStateEpoch(context.Background(), e.id)
-	if err := e.st.RequestCancel(context.Background(), e.id, "operator", epoch); err != nil { // another process cancelled; the dispatcher's move to lost lost the race (E605)
-		t.Fatal(err)
-	}
-	o := rs.remoteLost(context.Background(), planJob("unit"), model.Job{}, rd, e.id, errors.New("E656 transport.ssh_session_lost"), JobOutcome{ID: "unit"}, 1, &tail{})
-	if o.State != StateCancelled || e.state(t) != "cancelled" {
-		t.Fatalf("outcome %q, durable %s; the operator's cancel must win and no attempt may stay running", o.State, e.state(t))
-	}
-}
-
-func planJob(id string) plan.PlannedJob { return plan.PlannedJob{ID: id, Name: id} }
 
 type wantsAll struct{}
 
@@ -638,5 +606,71 @@ func TestRemoteAwaitCancelNeedsNoRetryAuthorization(t *testing.T) {
 			t.Errorf("%s: a cancelled run left its lost attempt %s", name, got)
 		}
 		_ = st.Close()
+	}
+}
+
+// remoteLost must end in the state the local path uses whichever of the loss, the cancel and a cancel
+// intent got there first.
+func lostEnv(t *testing.T) (*remoteEnv, *runState, *runDispatch) {
+	e := newRemoteEnv(t)
+	e.sink.expect(e.id, testRev)
+	sess := &Session{Store: e.st, RunID: "run1"}
+	rs := &runState{c: &Coordinator{}, sess: sess, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
+	return e, rs, &runDispatch{sess: sess, sink: e.sink}
+}
+
+func planJob(id string) plan.PlannedJob { return plan.PlannedJob{ID: id, Name: id} }
+
+func TestRemoteAwaitLossRacingTheRunCancelEndsCancelled(t *testing.T) {
+	e, rs, rd := lostEnv(t)
+	_, epoch, _ := e.st.AttemptStateEpoch(context.Background(), e.id)
+	if err := e.st.Transition(context.Background(), e.id, "leased", "lost", store.TransitionDetail{Epoch: epoch, FailureClass: "infra"}); err != nil { // the dispatcher marked it lost
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // and Ctrl-C reached the run too
+	o := rs.remoteLost(ctx, planJob("unit"), model.Job{}, rd, e.id, errors.New("E656 transport.ssh_session_lost"), JobOutcome{ID: "unit"}, 1, &tail{})
+	if o.State != StateCancelled || e.state(t) != "cancelled" {
+		t.Fatalf("outcome %q, durable %s; a cancelled run must end its attempt cancelled", o.State, e.state(t))
+	}
+}
+
+func TestRemoteAwaitCancelIntentBeatsTheLossSettlement(t *testing.T) {
+	e, rs, rd := lostEnv(t)
+	_, epoch, _ := e.st.AttemptStateEpoch(context.Background(), e.id)
+	if err := e.st.Transition(context.Background(), e.id, "leased", "running", store.TransitionDetail{Epoch: epoch}); err != nil {
+		t.Fatal(err)
+	}
+	_, epoch, _ = e.st.AttemptStateEpoch(context.Background(), e.id)
+	if err := e.st.RequestCancel(context.Background(), e.id, "operator", epoch); err != nil { // another process cancelled; the dispatcher's move to lost lost the race (E605)
+		t.Fatal(err)
+	}
+	o := rs.remoteLost(context.Background(), planJob("unit"), model.Job{}, rd, e.id, errors.New("E656 transport.ssh_session_lost"), JobOutcome{ID: "unit"}, 1, &tail{})
+	if o.State != StateCancelled || e.state(t) != "cancelled" {
+		t.Fatalf("outcome %q, durable %s; the operator's cancel must win and no attempt may stay running", o.State, e.state(t))
+	}
+}
+
+func TestRemoteAwaitLostThenCancelIntentEndsCancelled(t *testing.T) {
+	for name, live := range map[string]bool{"run cancelled": false, "run live": true} {
+		e, rs, rd := lostEnv(t)
+		_, epoch, _ := e.st.AttemptStateEpoch(context.Background(), e.id)
+		if err := e.st.Transition(context.Background(), e.id, "leased", "lost", store.TransitionDetail{Epoch: epoch, FailureClass: "infra"}); err != nil {
+			t.Fatal(err)
+		}
+		_, epoch, _ = e.st.AttemptStateEpoch(context.Background(), e.id)
+		if err := e.st.RequestCancel(context.Background(), e.id, "operator", epoch); err != nil { // `ci runs cancel` after the dispatcher marked it lost
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		if !live {
+			cancel()
+		}
+		job := model.Job{Retry: &model.RetryConfig{InfraMax: 1}} // a retry is on offer: the intent must still win
+		o := rs.remoteLost(ctx, planJob("unit"), job, rd, e.id, errors.New("E656 transport.ssh_session_lost"), JobOutcome{ID: "unit"}, 1, &tail{})
+		cancel()
+		if e.state(t) != "cancelled" {
+			t.Errorf("%s: durable %s (outcome %q), want cancelled: a lost attempt with a cancel intent must not be stuck", name, e.state(t), o.State)
+		}
 	}
 }

@@ -14,16 +14,18 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
-// nodeFault says whether a carrier error is the node's doing (it counts against the node's breaker).
-// A bundle that cannot be made, a driver nobody configured and a refused secret are ours.
+// nodeFaults are the transport reasons that are the node's doing (they count against its breaker). A
+// bundle that cannot be made, a driver nobody configured, a refused secret and any store or run error
+// of ours are not on the list.
+var nodeFaults = map[string]bool{"transport.ssh_session_lost": true, "transport.ssh_connect_failed": true, "transport.ssh_connect_timeout": true,
+	"transport.ssh_host_key_unknown": true, "transport.ssh_host_key_changed": true, "transport.ssh_handshake": true, "transport.ssh_preamble": true,
+	"transport.ssh_lease_refused": true}
+
+// nodeFault says whether a carrier error is the node's doing. The reason is the second word of an ssh
+// transport error ("E656 transport.ssh_session_lost: ..."), a position the message text cannot reach.
 func nodeFault(err error) bool {
-	t := err.Error()
-	for _, ours := range []string{"transport.ssh_checkout", "transport.ssh_not_configured", "transport.ssh_secrets_refused", "transport.ssh_no_destination", "transport.ssh_blob"} {
-		if strings.Contains(t, ours) {
-			return false
-		}
-	}
-	return true
+	f := strings.Fields(err.Error())
+	return len(f) >= 2 && strings.HasPrefix(f[0], "E65") && nodeFaults[strings.TrimSuffix(f[1], ":")]
 }
 
 // finalizePassed ends a finalizing attempt whose job passed: the finalize hooks run

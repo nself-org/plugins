@@ -20,6 +20,11 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 )
 
+// LocalLabel is the label of the runner that is this machine. A job that must stay here requires it
+// (the run's dispatch hook), so no pipeline id or scheduler field is overloaded for the purpose. It is
+// reserved: no other runner should carry it.
+const LocalLabel = "nself.local"
+
 // LocalInput is what the caller observed about this machine.
 type LocalInput struct {
 	Project  string
@@ -44,18 +49,35 @@ func BuildForLocal(ctx context.Context, d Deps, in LocalInput, p sched.Pipeline)
 	if in.DockerUnknown {
 		local.Tools.Docker = model.Fact[bool]{Source: "probe", ObservedAt: in.Now, Confidence: "unknown"}
 	}
+	local.Identity.Labels = append(local.Identity.Labels, LocalLabel)
 	capacity := in.Capacity
 	d.Local, d.LocalCapacity = &local, &capacity
 	w, digest, err := Build(ctx, d, p)
 	if err != nil {
 		return sched.World{}, "", err
 	}
+	n := 0
 	for _, r := range w.Runners {
-		if r.ID == "local" && r.Capability.Identity.Transport != "local" {
-			// a registered node called "local" is the local runner (it was probed by nobody and must not
-			// get the owner exception): build again without the injected one
-			d.Local = nil
-			return Build(ctx, d, p)
+		if r.ID == "local" {
+			n++
+		}
+	}
+	if n > 1 {
+		// a registered node called "local" is the local runner (it was probed by nobody and must not get the
+		// owner exception): build again without the injected one, and label it as this machine
+		d.Local = nil
+		w, _, err = Build(ctx, d, p)
+		if err != nil {
+			return sched.World{}, "", err
+		}
+		for i := range w.Runners {
+			if w.Runners[i].ID == "local" {
+				w.Runners[i].Capability.Identity.Labels = append(w.Runners[i].Capability.Identity.Labels, LocalLabel)
+			}
+		}
+		digest, err = Digest(w)
+		if err != nil {
+			return sched.World{}, "", err
 		}
 	}
 	return w, digest, nil

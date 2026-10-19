@@ -95,7 +95,7 @@ func (rs *runState) runRemote(ctx context.Context, pj plan.PlannedJob, job model
 	})
 	ra.attach(emit)
 	var once sync.Once
-	finish := func() { once.Do(func() { flush(); ra.detach() }) } // before the tail is read: a redactor may hold the last bytes back
+	finish := func() { once.Do(func() { ra.detach(); flush() }) } // before the tail is read: a redactor may hold the last bytes back
 	defer finish()
 	rs.render.Event(Event{Type: "started", Job: pj.ID})
 	if lg != nil {
@@ -241,8 +241,8 @@ func (rd *runDispatch) runnerOf(ctx context.Context, attemptID string) string {
 // remoteResult settles a finalizing attempt from the node's evidence.
 func (rs *runState) remoteResult(ctx context.Context, pj plan.PlannedJob, id string, ev model.Evidence, o JobOutcome, n int, info AttemptInfo, t *tail, took time.Duration) JobOutcome {
 	o.Duration, o.Tail = took, t.String()
-	if ev.Timings.DurationMS != nil {
-		o.Duration = time.Duration(*ev.Timings.DurationMS) * time.Millisecond
+	if ms := ev.Timings.DurationMS; ms != nil && *ms >= 0 && time.Duration(*ms) <= took/time.Millisecond { // a node's claim is never longer than the wait for it
+		o.Duration = time.Duration(*ms) * time.Millisecond
 	}
 	switch ev.Result {
 	case "pass":

@@ -14,7 +14,6 @@ package run
 import (
 	"context"
 	"runtime"
-	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/planview"
@@ -27,10 +26,6 @@ import (
 
 // platform is the local runner's platform string.
 func platform() string { return runtime.GOOS + "/" + runtime.GOARCH }
-
-// localOnlySuffix marks the pipeline id of a job that must stay on this machine: the dispatcher builds one
-// world per pipeline id, and world() adds the local-only override to the marked one.
-const localOnlySuffix = "#local-only"
 
 // schedJob maps the attempt with the mapping `ci plan` uses (planview.SchedJob), then sets what
 // only a run knows: the attempt key and number, the source trust, the record flag and the local
@@ -54,8 +49,8 @@ func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sch
 		}
 	}
 	j.Requirements = req
-	if rd.sess.LocalOnly != nil && rd.sess.LocalOnly(*s.Job) {
-		j.Pipeline.ID += localOnlySuffix
+	if rd.sess.LocalOnly != nil && rd.sess.LocalOnly(*s.Job) { // only the runner that is this machine carries the label
+		j.Requirements.Labels = append(j.Requirements.Labels, world.LocalLabel)
 	}
 	return j
 }
@@ -90,16 +85,11 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 // facts, the PERSONAL own node declaration, docker unknown because the run loop
 // does not probe for it) and every registered node.
 func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
-	localOnly := strings.HasSuffix(p.ID, localOnlySuffix)
-	p.ID = strings.TrimSuffix(p.ID, localOnlySuffix)
 	capacity := rd.sess.Capacity()
 	w, digest, err := world.BuildForLocal(ctx, world.Deps{Store: rd.sess.Store, JobIDs: rd.sess.jobRows(), Policy: rd.policy, Clock: rd.sess.now},
 		world.LocalInput{Project: rd.row.Project, Platform: platform(), Capacity: capacity, DockerUnknown: true, Now: rd.sess.now()}, p)
 	if err != nil {
 		return sched.World{}, "", err
-	}
-	if localOnly {
-		w.Policy.Overrides.LocalOnly = true
 	}
 	keep := w.Runners[:0]
 	for _, r := range w.Runners {
@@ -107,7 +97,7 @@ func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World
 			keep = append(keep, r)
 		}
 	}
-	if !localOnly && len(keep) == len(w.Runners) && len(w.Hosted) == 0 {
+	if len(keep) == len(w.Runners) && len(w.Hosted) == 0 {
 		return w, digest, nil
 	}
 	w.Runners, w.Hosted = keep, nil

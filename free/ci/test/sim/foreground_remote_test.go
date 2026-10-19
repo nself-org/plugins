@@ -12,6 +12,7 @@ package sim
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,6 +37,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/run"
+	_ "github.com/nself-org/plugins/free/ci/internal/schedtel" // the binary registers the telemetry sink and finalizer; the run records outcomes through them
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/transport/ssh"
 )
@@ -366,6 +368,16 @@ func TestForegroundRemoteHappy(t *testing.T) {
 		if s != "passed" {
 			t.Errorf("attempt %s is %s", id, s)
 		}
+	}
+	// the scheduler's telemetry records the outcome of a remote attempt as it does a local one
+	db, err := sql.Open("sqlite", filepath.Join(f.home, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	var n int
+	if err = db.QueryRow("SELECT count(*) FROM schedtel_outcome").Scan(&n); err != nil || n != 1 {
+		t.Errorf("schedtel outcomes recorded = %d (%v), want 1", n, err)
 	}
 }
 

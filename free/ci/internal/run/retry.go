@@ -100,6 +100,11 @@ func (rs *runState) park(ctx context.Context, pj plan.PlannedJob, job model.Job,
 	for _, to := range []model.JobState{"retryable", "queued"} {
 		from := map[model.JobState]model.JobState{"retryable": "lost", "queued": "retryable"}[to]
 		if err := rs.trans(id, from, to, "infra"); err != nil {
+			if CodeOf(err) == codeStoreRef { // a cancel intent won the race: the operator's cancel ends the attempt
+				_ = rs.driveToCancelled(id)
+				*o = cancelled(*o, "", "cancelled by the operator")
+				return true
+			}
 			*o = failed(*o, err) // left lost: the next recovery sweep decides
 			return true
 		}
