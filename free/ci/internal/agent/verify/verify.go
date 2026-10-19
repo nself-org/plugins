@@ -132,6 +132,8 @@ type Verifier struct {
 	// tagsOnly makes the provenance builder check demand a tag ref (the production Default verifier); New leaves it off so a rehearsal
 	// run from a branch verifies.
 	tagsOnly bool
+	// rehearsal lets the provenance be signed by another trusted key than the manifest: a rehearsal run signs the two with two throwaway keys.
+	rehearsal bool
 }
 
 // New builds a Verifier over keys and a revoked-id list. The keys should be agent-purpose keys with derived ids; a key of
@@ -166,6 +168,13 @@ func Default() (*Verifier, error) {
 // release workflow's own gate sets it too. A verifier without it also accepts a branch ref, which a rehearsal needs.
 func (v *Verifier) RequireTagBuilds() *Verifier {
 	v.tagsOnly = true
+	return v
+}
+
+// AllowRehearsalKeys lets the provenance be signed by any trusted agent key, not only the key of the manifest. Only a rehearsal needs
+// it (rehearsal-test.pub holds the manifest key and the provenance key); a real release is signed by one key.
+func (v *Verifier) AllowRehearsalKeys() *Verifier {
+	v.rehearsal = true
 	return v
 }
 

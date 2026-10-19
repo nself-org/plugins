@@ -68,7 +68,8 @@ func envelopeBytes(t *testing.T, s signer, payloadType string, payload []byte) [
 
 func newRelease(t *testing.T, s signer) release {
 	t.Helper()
-	r := release{artifact: newArtifact(t, s), files: Files{CycloneDX: []byte(`{"bomFormat":"CycloneDX","specVersion":"1.6"}`), SPDX: []byte(`{"spdxVersion":"SPDX-2.3"}`)}}
+	r := release{artifact: newArtifact(t, s)}
+	r.files = Files{CycloneDX: []byte(cdxDoc(BinaryName(r.m.Target))), SPDX: []byte(spdxDoc(BinaryName(r.m.Target)))}
 	r.files.Provenance = envelopeBytes(t, s, provenance.PayloadType, r.statement(t, nil))
 	return r
 }
@@ -225,12 +226,12 @@ func TestProvenanceRefusesARevokedProvenanceKeyAndAForeignExtraSignature(t *test
 	provKey := newSigner(t, signing.PurposeAgent)
 	r := newRelease(t, manifestKey)
 	r.files.Provenance = envelopeBytes(t, provKey, provenance.PayloadType, r.statement(t, nil))
-	ok, err := mustVerifier(t, nil, manifestKey.key(), provKey.key()).Artifact(r.path, r.json(t), pinned, r.files)
+	ok, err := mustVerifier(t, nil, manifestKey.key(), provKey.key()).AllowRehearsalKeys().Artifact(r.path, r.json(t), pinned, r.files)
 	if err != nil || ok.SHA256 != r.m.SHA256 {
-		t.Fatalf("two trusted agent keys must verify: %v", err)
+		t.Fatalf("two trusted agent keys must verify in a rehearsal: %v", err)
 	}
 	// Only the provenance key is revoked: the manifest still verifies, so the refusal is the provenance check's.
-	_, err = mustVerifier(t, []string{provKey.KeyID()}, manifestKey.key(), provKey.key()).Artifact(r.path, r.json(t), pinned, r.files)
+	_, err = mustVerifier(t, []string{provKey.KeyID()}, manifestKey.key(), provKey.key()).AllowRehearsalKeys().Artifact(r.path, r.json(t), pinned, r.files)
 	wantReason(t, err, ReasonProvenance)
 	if !strings.Contains(err.Error(), ReasonRevoked) {
 		t.Fatalf("the message should name the revoked key: %v", err)
@@ -245,7 +246,7 @@ func TestProvenanceRefusesARevokedProvenanceKeyAndAForeignExtraSignature(t *test
 	extra, _ := plugin.Sign(signing.PAE(env.PayloadType, payload))
 	env.Signatures = append(env.Signatures, signing.EnvelopeSig{KeyID: plugin.KeyID(), Sig: signing.EncodeSig(extra)})
 	r.files.Provenance, _ = json.Marshal(env)
-	_, err = mustVerifier(t, nil, manifestKey.key(), provKey.key(), plugin.key()).Artifact(r.path, r.json(t), pinned, r.files)
+	_, err = mustVerifier(t, nil, manifestKey.key(), provKey.key(), plugin.key()).AllowRehearsalKeys().Artifact(r.path, r.json(t), pinned, r.files)
 	wantReason(t, err, ReasonProvenance)
 }
 
@@ -331,9 +332,16 @@ const fakeSyftBody = `#!/bin/sh
 [ -z "${FAKE_SYFT_MARK:-}" ] || echo ran >> "$FAKE_SYFT_MARK"
 case "$1" in
   version) echo "Version:       @VERSION@"; exit 0 ;;
-  scan) shift
+  scan) shift; src=
     while [ $# -gt 0 ]; do
-      case "$1" in -o) echo "{\"format\":\"${2%%=*}\"}" > "${2#*=}"; shift 2 ;; *) shift ;; esac
+      case "$1" in
+        --source-name) src="$2"; shift 2 ;;
+        -o) case "${2%%=*}" in
+              cyclonedx-json*) echo "{\"bomFormat\":\"CycloneDX\",\"specVersion\":\"1.6\",\"metadata\":{\"component\":{\"type\":\"file\",\"name\":\"$src\"}}}" > "${2#*=}" ;;
+              *) echo "{\"spdxVersion\":\"SPDX-2.3\",\"name\":\"$src\"}" > "${2#*=}" ;;
+            esac; shift 2 ;;
+        *) shift ;;
+      esac
     done ;;
 esac
 `
@@ -438,7 +446,7 @@ func rehearsalVerifier(t *testing.T, dir string) *Verifier {
 	if len(keys) != 2 {
 		t.Fatalf("rehearsal-test.pub should hold the manifest key and the provenance key, got %d", len(keys))
 	}
-	return mustVerifier(t, nil, keys...)
+	return mustVerifier(t, nil, keys...).AllowRehearsalKeys()
 }
 
 // TestProvenanceScriptOutputVerifies runs the release scripts (rehearsal key, fake pinned syft, no network) and feeds what they wrote

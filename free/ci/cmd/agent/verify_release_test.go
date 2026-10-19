@@ -71,7 +71,7 @@ func releaseDirRef(t *testing.T, ref string) (dir, pubFile string) {
 func writeSideFiles(t *testing.T, dir string, s signing.Signer, m verify.Manifest, ref string) {
 	t.Helper()
 	name := verify.BinaryName(m.Target)
-	cdx, spdx := []byte(`{"bomFormat":"CycloneDX"}`), []byte(`{"spdxVersion":"SPDX-2.3"}`)
+	cdx, spdx := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.6","metadata":{"component":{"name":"`+name+`"}}}`), []byte(`{"spdxVersion":"SPDX-2.3","name":"`+name+`"}`)
 	digest := func(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 	st, err := provenance.BuildAgent(provenance.AgentFacts{Repo: "nself-org/plugins", Ref: ref, Revision: strings.Repeat("a", 40), RunID: "1",
 		Subjects: []provenance.FileDigest{{Name: name, SHA256: m.SHA256}},
