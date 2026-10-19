@@ -5,12 +5,15 @@ jobs:
   fmt:
     kind: static
     run: [gofmt, -l, .]
+    requires: {mem_mb: 4096}
   vet:
     kind: static
     run: [go, vet, ./...]
+    requires: {mem_mb: 4096}
   test:
     kind: test
     run: [go, test, -count=1, ./...]
+    requires: {mem_mb: 4096}
 pipelines:
   gate:
     triggers: [manual]

@@ -1,0 +1,99 @@
+{
+  "schema": "perfbench/v1",
+  "scenario": "ci-local-overhead",
+  "sha": "fixture",
+  "goos": "linux",
+  "goarch": "amd64",
+  "runs": 20,
+  "injected": false,
+  "metrics": [
+    {
+      "name": "ci.startup",
+      "unit": "ms",
+      "p50": 74.49,
+      "p95": 102.81,
+      "max": 136.33,
+      "n": 20
+    },
+    {
+      "name": "ci.detect",
+      "unit": "ms",
+      "p50": 1.18,
+      "p95": 4.37,
+      "max": 11.53,
+      "n": 20
+    },
+    {
+      "name": "ci.plan",
+      "unit": "ms",
+      "p50": 0.43,
+      "p95": 0.71,
+      "max": 0.89,
+      "n": 20
+    },
+    {
+      "name": "ci.store_open",
+      "unit": "ms",
+      "p50": 244.77,
+      "p95": 278.67,
+      "max": 292.67,
+      "n": 20
+    },
+    {
+      "name": "ci.exec_overhead",
+      "unit": "ms",
+      "p50": 311.04,
+      "p95": 422.24,
+      "max": 458.88,
+      "n": 20
+    },
+    {
+      "name": "ci.exec_baseline",
+      "unit": "ms",
+      "p50": 10.45,
+      "p95": 11.93,
+      "max": 15.07,
+      "n": 20
+    },
+    {
+      "name": "ci.capacity_probe",
+      "unit": "ms",
+      "p50": 1.31,
+      "p95": 2.2,
+      "max": 2.36,
+      "n": 20
+    },
+    {
+      "name": "ci.e2e_tiny.v14",
+      "unit": "ms",
+      "p50": 2940.71,
+      "p95": 3198.02,
+      "max": 3314.28,
+      "n": 20
+    },
+    {
+      "name": "ci.e2e_tiny.v15",
+      "unit": "ms",
+      "p50": 13369.37,
+      "p95": 14392.83,
+      "max": 14969.77,
+      "n": 20
+    },
+    {
+      "name": "ci.e2e_medium.v14",
+      "unit": "ms",
+      "p50": 6941.13,
+      "p95": 7431.85,
+      "max": 8205.47,
+      "n": 20
+    },
+    {
+      "name": "ci.e2e_medium.v15",
+      "unit": "ms",
+      "p50": 14638.06,
+      "p95": 15836.16,
+      "max": 17017.5,
+      "n": 20
+    }
+  ]
+}
