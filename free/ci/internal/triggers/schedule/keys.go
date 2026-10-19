@@ -15,8 +15,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"sync"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
@@ -28,6 +31,8 @@ const KeySchedules = "triggers.schedules"
 const (
 	keyOwner   = "P7-HOST-20"
 	maxEntries = 256
+	// maxDeliveryID is the intake's cap on a delivery id (coordinator/intake.go).
+	maxDeliveryID = 256
 )
 
 // Entry is one scheduled pipeline.
@@ -83,8 +88,11 @@ func Decode(raw json.RawMessage) (any, error) {
 	if err := d.Decode(&list); err != nil {
 		return nil, fail("expected a list of {repo, pipeline, cron} objects with no other field")
 	}
-	if d.More() || list == nil {
-		return nil, fail("expected exactly one list")
+	if list == nil {
+		return nil, fail("expected a list")
+	}
+	if _, err := d.Token(); !errors.Is(err, io.EOF) {
+		return nil, fail("expected exactly one list and nothing after it")
 	}
 	if len(list) > maxEntries {
 		return nil, fail("at most %d entries", maxEntries)
@@ -97,6 +105,9 @@ func Decode(raw json.RawMessage) (any, error) {
 		}
 		if e.Pipeline != "" && !coordinator.ValidPipeline(e.Pipeline) {
 			return nil, fail("entry %d: pipeline must be a plain name or empty", i)
+		}
+		if len(DeliveryID(e.Repo, e.Pipeline, time.Time{})) > maxDeliveryID {
+			return nil, fail("entry %d: repo and pipeline are too long for a delivery id", i)
 		}
 		spec, err := Parse(e.Cron)
 		if err != nil {

@@ -255,3 +255,48 @@ func TestOperatorScopeOnly(t *testing.T) {
 		t.Fatalf("dormant without V15: %v %v", rec.got, err)
 	}
 }
+
+type failEnq struct {
+	fail bool
+	got  []string
+}
+
+func (f *failEnq) Enqueue(_ context.Context, d coordinator.Delivery) (coordinator.Outcome, error) {
+	if f.fail {
+		return coordinator.Outcome{}, errors.New("intake down")
+	}
+	f.got = append(f.got, d.DeliveryID)
+	return coordinator.Outcome{Kind: store.IntakeEnqueued}, nil
+}
+
+// TestFailureKeepsMark: an enqueue error keeps the mark, so the time is retried on the next tick; and
+// one failing entry never stops the others in the same pass.
+func TestFailureKeepsMark(t *testing.T) {
+	r, clk, _, _ := rig(t, "0 * * * *", "2026-10-19 10:02")
+	r.Entries = func(context.Context) ([]Entry, error) {
+		v, err := Decode([]byte(`[{"repo":"acme/app","pipeline":"nightly","cron":"0 * * * *"},{"repo":"acme/other","cron":"0 * * * *"}]`))
+		return v.([]Entry), err
+	}
+	enq := &failEnq{}
+	if err := r.Reconcile(context.Background(), enq); err != nil { // first sight of both
+		t.Fatal(err)
+	}
+	clk.now = at("2026-10-19 11:05")
+	enq.fail = true
+	if err := r.Reconcile(context.Background(), enq); err == nil || strings.Count(err.Error(), "intake down") != 2 {
+		t.Fatalf("both entries must be tried and both errors returned: %v", err)
+	}
+	enq.fail = false
+	clk.now = at("2026-10-19 11:10")
+	if err := r.Reconcile(context.Background(), enq); err != nil || len(enq.got) != 2 || !strings.HasSuffix(enq.got[0], "2026-10-19T11:00:00Z") {
+		t.Fatalf("retry fired %v (%v), want both entries for 11:00", enq.got, err)
+	}
+	clk.now = at("2026-10-19 11:15")
+	if err := r.Reconcile(context.Background(), enq); err != nil || len(enq.got) != 2 {
+		t.Fatalf("refired after success: %v %v", enq.got, err)
+	}
+	clk.now = at("2026-10-19 09:00") // a clock that goes backwards fires nothing
+	if err := r.Reconcile(context.Background(), enq); err != nil || len(enq.got) != 2 {
+		t.Fatalf("backwards clock fired: %v %v", enq.got, err)
+	}
+}

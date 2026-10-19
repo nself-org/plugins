@@ -61,6 +61,8 @@ type Reconciler struct {
 	Marks   Marks
 	Heads   Heads
 	Clock   func() time.Time // default time.Now
+
+	mu sync.RWMutex // guards Marks and Heads against Use after the coordinator started
 }
 
 var _ coordinator.Reconciler = (*Reconciler)(nil)
@@ -105,7 +107,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, enq coordinator.Enqueuer) er
 	if err != nil || len(list) == 0 {
 		return err
 	}
-	if r.Marks == nil || r.Heads == nil {
+	r.mu.RLock()
+	marks, heads := r.Marks, r.Heads
+	r.mu.RUnlock()
+	if marks == nil || heads == nil {
 		return errors.New("schedule: no marks store or head resolver installed")
 	}
 	clock := r.Clock
@@ -115,31 +120,31 @@ func (r *Reconciler) Reconcile(ctx context.Context, enq coordinator.Enqueuer) er
 	now := clock().UTC()
 	var errs []error
 	for _, e := range list {
-		if err := r.fire(ctx, enq, e, now); err != nil {
+		if err := r.fire(ctx, enq, marks, heads, e, now); err != nil {
 			errs = append(errs, fmt.Errorf("%s %s: %w", e.Repo, e.Pipeline, err))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func (r *Reconciler) fire(ctx context.Context, enq coordinator.Enqueuer, e Entry, now time.Time) error {
+func (*Reconciler) fire(ctx context.Context, enq coordinator.Enqueuer, marks Marks, heads Heads, e Entry, now time.Time) error {
 	spec, err := e.Spec()
 	if err != nil {
 		return err
 	}
 	key := markKey(e)
-	mark, ok, err := r.Marks.ProviderMarkGet(ctx, Name, key)
+	mark, ok, err := marks.ProviderMarkGet(ctx, Name, key)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return r.Marks.ProviderMarkPut(ctx, Name, key, now)
+		return marks.ProviderMarkPut(ctx, Name, key, now)
 	}
 	at := Due(spec, mark, now)
 	if at.IsZero() {
 		return nil
 	}
-	rev, err := r.Heads.Head(ctx, e.Repo, e.Pipeline)
+	rev, err := heads.Head(ctx, e.Repo, e.Pipeline)
 	if err != nil {
 		return fmt.Errorf("resolve head: %w", err)
 	}
@@ -150,7 +155,7 @@ func (r *Reconciler) fire(ctx context.Context, enq coordinator.Enqueuer, e Entry
 	if _, err := enq.Enqueue(ctx, d); err != nil {
 		return err
 	}
-	return r.Marks.ProviderMarkPut(ctx, Name, key, at)
+	return marks.ProviderMarkPut(ctx, Name, key, at)
 }
 
 func delivery(e Entry, revision string, at, now time.Time) (coordinator.Delivery, error) {
@@ -184,8 +189,8 @@ func Default() *Reconciler {
 // this once, with its *store.Store).
 func Use(m Marks, h Heads) {
 	r := Default()
-	runtime.Lock()
-	defer runtime.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.Marks, r.Heads = m, h
 }
 

@@ -82,7 +82,7 @@ func TestCronTable(t *testing.T) {
 	}
 	for _, bad := range []string{`[{"repo":"o/r","pipeline":"ci","cron":"61 * * * *"}]`, `[{"repo":"o/r","pipeline":"ci","cron":"* * *"}]`,
 		`[{"repo":"o/r","pipeline":"ci","cron":"@daily"}]`, `[{"repo":"o/r","pipeline":"ci","cron":"0 0 * * *","tz":"UTC"}]`, `[{"repo":"nope","cron":"0 0 * * *"}]`,
-		`[{"repo":"o/r","pipeline":"a b","cron":"0 0 * * *"}]`, `{"repo":"o/r","cron":"0 0 * * *"}`, `null`, `[]  []`, `"0 0 * * *"`,
+		`[{"repo":"o/r","pipeline":"a b","cron":"0 0 * * *"}]`, `{"repo":"o/r","cron":"0 0 * * *"}`, `null`, `[]  []`, `[] ]`, `[]}`, `"0 0 * * *"`, `[{"repo":"` + strings.Repeat("a", 250) + `/r","cron":"0 0 * * *"}]`,
 		`[{"repo":"o/r","cron":"0 0 * * *"},{"repo":"o/r","cron":"0   0 * * *"}]`} {
 		if _, err := Decode([]byte(bad)); err == nil || !strings.HasPrefix(err.Error(), "E672 ") {
 			t.Errorf("%s: err = %v, want E672", bad, err)
