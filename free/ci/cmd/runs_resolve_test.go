@@ -164,7 +164,7 @@ func TestRunsResolveNeedsConfirmationAndValidArguments(t *testing.T) {
 		"no action":       {resolveAttempt, "--idempotency-key", key},
 		"both actions":    {resolveAttempt, "--idempotency-key", key, "--abandon", "--rerun"},
 		"two attempts":    {resolveAttempt, "other", "--idempotency-key", key, "--abandon"},
-		"unknown flag":    {resolveAttempt, "--idempotency-key", key, "--abandon", "--force"},
+		"unknown flag":    {resolveAttempt, "--idempotency-key", key, "--abandon", "--bogus"},
 		"key no value":    {resolveAttempt, "--abandon", "--idempotency-key"},
 		"reason no value": {resolveAttempt, "--idempotency-key", key, "--abandon", "--reason"},
 	} {
@@ -175,6 +175,11 @@ func TestRunsResolveNeedsConfirmationAndValidArguments(t *testing.T) {
 	}
 	if attemptState(t, home) != "needs-operator" {
 		t.Fatal("a refused invocation changed the attempt")
+	}
+	// --force is a real flag (D-1078): it abandons a finalizing attempt of a live coordinator
+	parsed, err := parseResolve([]string{resolveAttempt, "--idempotency-key", key, "--abandon", "--force"})
+	if err != nil || !parsed.force {
+		t.Fatalf("--force: %+v, %v", parsed, err)
 	}
 }
 
