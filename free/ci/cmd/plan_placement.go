@@ -65,10 +65,15 @@ func planPlacement(ctx context.Context, p *model.Pipeline) (any, []string, error
 		fmt.Fprintln(os.Stderr, "ci plan: note: --prefer, --runner and --max-queue are not applied to placement yet (debt D-0984); the plan shows the policy a run uses")
 	}
 	doc, err := placementDoc(ctx, pd)
-	if err != nil {
+	var down *storeDown
+	if errors.As(err, &down) {
 		// The plan itself is still good: say why placement is missing, loudly, and leave data.placement out.
-		fmt.Fprintln(os.Stderr, "ci plan: placement unavailable: "+err.Error())
+		// Any other failure (an invalid policy, a world that cannot be built) is a real error and fails the plan.
+		fmt.Fprintln(os.Stderr, "ci plan: placement unavailable: "+down.Error())
 		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
 	}
 	return doc, cellsInPlanOrder(pd.pl, doc), nil
 }
@@ -140,11 +145,18 @@ func loadPlanned(ctx context.Context, s planSpec) (planned, error) {
 	return planned{root: root, pl: pl, world: w, checks: checks}, nil
 }
 
+// storeDown marks a run store that could not be opened: the one failure
+// `ci plan` survives without placement.
+type storeDown struct{ err error }
+
+func (e *storeDown) Error() string { return "the run store cannot be opened: " + e.err.Error() }
+func (e *storeDown) Unwrap() error { return e.err }
+
 // placementDoc places the plan's jobs and returns the v1 document.
 func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) {
 	st, err := cirun.OpenStore(runsStorePath())
 	if err != nil {
-		return model.PlacementPlan{}, err
+		return model.PlacementPlan{}, &storeDown{err}
 	}
 	defer func() { _ = st.Close() }()
 	res := policy.Resolver{Store: st, Run: policy.Runner(report.Capture)}

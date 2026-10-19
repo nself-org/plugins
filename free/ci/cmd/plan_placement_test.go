@@ -308,3 +308,20 @@ func TestPlanPlacementStoreUnavailable(t *testing.T) {
 		t.Fatalf("the plan must survive without placement: exit %d\nstdout %s\nstderr %s", code, out, errs)
 	}
 }
+
+func TestPlanPlacementInvalidPolicyFails(t *testing.T) {
+	repo, _ := placementRepo(t)
+	writeConfig(t, repo, `version: 1
+policy:
+  sched.preset: warp
+jobs:
+  build:
+    kind: build
+    run: [go, build, ./...]
+`)
+	resetPlanFlags()
+	code, out, _ := capture(t, func() int { return runPlan([]string{"--json", "--repo", repo}) })
+	if code == 0 || strings.Contains(out, `"placement"`) {
+		t.Fatalf("an invalid policy is an error, not a plan without placement: exit %d\n%s", code, out)
+	}
+}

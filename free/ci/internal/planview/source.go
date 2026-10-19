@@ -52,7 +52,13 @@ func Lookup(ctx context.Context, run, job string) (model.PlacementPlan, error) {
 	if doc.Schema != SchemaID || doc.Jobs == nil {
 		return model.PlacementPlan{}, &Error{CodeExplainTarget, fmt.Sprintf("the decision record of run %q is not a %s document", run, SchemaID)}
 	}
-	one := Select(doc, func(j model.JobPlacement) bool { return j.ID == job || j.Name == job })
+	one := Select(doc, func(j model.JobPlacement) bool { return j.ID == job })
+	if len(one.Jobs) == 0 { // not an id: a bare name may stand for one job only
+		one = Select(doc, func(j model.JobPlacement) bool { return j.Name == job })
+		if len(one.Jobs) > 1 {
+			return model.PlacementPlan{}, &Error{CodeExplainTarget, fmt.Sprintf("job %q of run %q is a matrix; name one entry, for example %q", job, run, one.Jobs[0].ID)}
+		}
+	}
 	if len(one.Jobs) == 0 {
 		return model.PlacementPlan{}, &Error{CodeExplainTarget, fmt.Sprintf("run %q has no recorded decision for job %q; list recorded decisions with `nself ci runs decisions`", run, job)}
 	}

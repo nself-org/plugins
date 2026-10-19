@@ -382,3 +382,17 @@ func TestPlanviewLookupValidates(t *testing.T) {
 		t.Fatalf("the asked job alone, with its own totals: %+v %v", d.Totals, err)
 	}
 }
+
+func TestPlanviewLookupMatrixName(t *testing.T) {
+	defer Register(nil)
+	doc := model.PlacementPlan{Schema: SchemaID, Jobs: []model.JobPlacement{{ID: "build@linux/amd64", Name: "build", Status: "waiting"}, {ID: "build@darwin/arm64", Name: "build", Status: "waiting"}}}
+	Register(fixedSource{doc})
+	var pe *Error
+	if _, err := Lookup(context.Background(), "run", "build"); !asError(err, &pe) || pe.Code != "E692" || !strings.Contains(pe.Message, "matrix") {
+		t.Fatalf("a bare name for two matrix entries is ambiguous: %v", err)
+	}
+	d, err := Lookup(context.Background(), "run", "build@darwin/arm64")
+	if err != nil || len(d.Jobs) != 1 || d.Jobs[0].ID != "build@darwin/arm64" {
+		t.Fatalf("an exact id: %+v %v", d.Jobs, err)
+	}
+}
