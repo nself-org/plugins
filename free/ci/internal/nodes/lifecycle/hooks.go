@@ -60,7 +60,10 @@ type FlagsFunc func(fs *flag.FlagSet)
 // RotateRequest is one `nodes rotate` run in a mode.
 type RotateRequest struct {
 	NodeID string
+	// Target is the pinned ssh target of the node (zero for the host-key mode when the pin is lost).
 	Target remote.Target
+	// ScanDest is the bare destination the host-key scan connects to.
+	ScanDest string
 	// HostKey is the --host-key value ("" when none); Flags may be nil.
 	HostKey string
 	Flags   *flag.FlagSet

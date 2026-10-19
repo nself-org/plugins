@@ -102,7 +102,7 @@ func (d *Deps) Add(ctx context.Context, o AddOptions) (res AddResult, err error)
 	}
 	defer func() {
 		if err != nil {
-			_ = d.pins().Remove(pinAlias(id))
+			_ = d.withPins(func(p remote.PinnedHostKeys) error { return p.Remove(pinAlias(id)) })
 		}
 	}()
 	return d.addPinned(ctx, o, spec, id, name, chosen, installer)

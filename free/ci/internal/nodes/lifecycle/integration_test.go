@@ -20,7 +20,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
 )
 
-// separated stands in for the agent's userns probe (the agent has no such subcommand yet; see D-1066).
+// separated stands in for the agent's userns probe (the agent has no such subcommand yet; see D-1084).
 var separated = fixedSeparation{SeparationFacts{UIDSeparation: true, UserNS: true, Reason: "userns.ok"}}
 
 func (r *itRig) add(dest, key string, sep SeparationProber, trust TrustFlags) (AddResult, error) {

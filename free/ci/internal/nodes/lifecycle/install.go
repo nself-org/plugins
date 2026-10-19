@@ -93,25 +93,27 @@ func fingerprints(keys []remote.HostKey) string {
 // pin writes the chosen keys. A pin that already exists under the id of a node that is not registered
 // is refused (a stale line, never silently replaced); a partial write is rolled back.
 func (d *Deps) pin(id string, keys []remote.HostKey) error {
-	have, err := d.pins().Lookup(pinAlias(id))
-	if err != nil {
-		return newErr(CodeHostKey, ReasonKeyMismatch, "cannot read the pinned host keys of %s", id)
-	}
-	if len(have) > 0 {
-		return newErr(CodeHostKey, ReasonKeyMismatch, "a host key is already pinned for %s but the node is not registered; delete the %s line of the pin file first", id, pinAlias(id))
-	}
-	for _, k := range keys {
-		kl := keyLine(k)
-		if kl == "" {
-			_ = d.pins().Remove(pinAlias(id))
-			return newErr(CodeHostKey, ReasonKeyMismatch, "the captured host key of %s is malformed; nothing pinned", id)
+	return d.withPins(func(p remote.PinnedHostKeys) error {
+		have, err := p.Lookup(pinAlias(id))
+		if err != nil {
+			return newErr(CodeHostKey, ReasonKeyMismatch, "cannot read the pinned host keys of %s", id)
 		}
-		if err := d.pins().Add(pinAlias(id), kl); err != nil {
-			_ = d.pins().Remove(pinAlias(id))
-			return newErr(CodeHostKey, ReasonKeyMismatch, "cannot pin the host key of %s", id)
+		if len(have) > 0 {
+			return newErr(CodeHostKey, ReasonKeyMismatch, "a host key is already pinned for %s but the node is not registered; run `nself ci nodes remove %s` to drop the stale pin", id, id)
 		}
-	}
-	return nil
+		for _, k := range keys {
+			kl := keyLine(k)
+			if kl == "" {
+				_ = p.Remove(pinAlias(id))
+				return newErr(CodeHostKey, ReasonKeyMismatch, "the captured host key of %s is malformed; nothing pinned", id)
+			}
+			if err := p.Add(pinAlias(id), kl); err != nil {
+				_ = p.Remove(pinAlias(id))
+				return newErr(CodeHostKey, ReasonKeyMismatch, "cannot pin the host key of %s", id)
+			}
+		}
+		return nil
+	})
 }
 
 // platform runs `uname -sm` on the node.

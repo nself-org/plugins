@@ -14,6 +14,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/nself-org/cli/sdk/go/v2/remote"
 )
 
 // RevokeReport says what a revoke or remove did and what is left.
@@ -41,11 +43,9 @@ func (d *Deps) Remove(ctx context.Context, id string) (RevokeReport, error) {
 
 func (d *Deps) revoke(ctx context.Context, id string, remove bool) (RevokeReport, error) {
 	rep := RevokeReport{NodeID: id, Remaining: []string{}, Note: authorizedKeysNote}
-	unlock, lerr := d.lockNode(id)
-	if lerr != nil {
-		return rep, newErr(CodeNoRoute, "lock", "cannot lock node %s: %s", id, oneLine(lerr))
-	}
-	defer unlock()
+	// No node lock here: an emergency revoke must never wait behind a stuck command. The store aggregate
+	// is one CAS transaction; the pin is removed under the pin lock; a rotate re-checks revocation under
+	// the same pin lock before it writes.
 	hooks := ext.revokerList()
 	var err error
 	if remove {
@@ -56,9 +56,12 @@ func (d *Deps) revoke(ctx context.Context, id string, remove bool) (RevokeReport
 		rep.LeasesExpired, err = r.LeasesExpired, e
 	}
 	if err != nil {
+		if remove && CodeOf(err) == CodeNotFound {
+			return d.dropOrphanPin(rep, id, err)
+		}
 		return rep, err
 	}
-	if perr := d.pins().Remove(pinAlias(id)); perr != nil {
+	if perr := d.withPins(func(p remote.PinnedHostKeys) error { return p.Remove(pinAlias(id)) }); perr != nil {
 		rep.Remaining = append(rep.Remaining, "pinned host key not removed")
 	} else {
 		rep.PinRemoved = true
@@ -73,5 +76,25 @@ func (d *Deps) revoke(ctx context.Context, id string, remove bool) (RevokeReport
 	if len(rep.Remaining) > 0 {
 		return rep, newErr(CodeRevoked, ReasonPartial, "node %s is revoked but cleanup is incomplete: %s", id, strings.Join(rep.Remaining, "; "))
 	}
+	return rep, nil
+}
+
+// dropOrphanPin lets `nodes remove <id>` clear a pin left by an interrupted `nodes add` (the node was
+// never registered, so there is no record to revoke). Without a pin it is the original E650.
+func (d *Deps) dropOrphanPin(rep RevokeReport, id string, notFound error) (RevokeReport, error) {
+	dropped := false
+	err := d.withPins(func(p remote.PinnedHostKeys) error {
+		have, lerr := p.Lookup(pinAlias(id))
+		if lerr != nil || len(have) == 0 {
+			return notFound
+		}
+		dropped = true
+		return p.Remove(pinAlias(id))
+	})
+	if err != nil || !dropped {
+		return rep, notFound
+	}
+	rep.PinRemoved = true
+	rep.Note = "no node " + id + " is registered; the stale pinned host key was removed"
 	return rep, nil
 }

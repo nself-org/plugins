@@ -2,5 +2,6 @@
 
 package lifecycle
 
-// lockNode is a no-op on Windows: the CI agent and the node commands run on Linux and macOS only.
+// The node commands run on Linux and macOS only; the locks are no-ops on Windows.
 func (d *Deps) lockNode(string) (func(), error) { return func() {}, nil }
+func (d *Deps) lockPins() (func(), error)       { return func() {}, nil }

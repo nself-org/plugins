@@ -48,7 +48,14 @@ func (d *Deps) Rotate(ctx context.Context, o RotateOptions) error {
 	if err != nil {
 		return err
 	}
-	return fn(ctx, d, RotateRequest{NodeID: o.NodeID, Target: remote.Target{Dest: spec.Dest()}, HostKey: o.HostKey, Flags: o.Flags})
+	// Modes that talk to the node (P7-NODE-07 credential rotation) get the pinned target, never a bare
+	// destination, so a new credential cannot travel over an unverified ssh. Host-key rotation is the
+	// recovery path for a lost pin, so it does not need one.
+	t, terr := d.targetFor(ctx, n.Capability)
+	if terr != nil && mode != HostKeyMode {
+		return terr
+	}
+	return fn(ctx, d, RotateRequest{NodeID: o.NodeID, Target: t, ScanDest: spec.Dest(), HostKey: o.HostKey, Flags: o.Flags})
 }
 
 func rotateHostKey(ctx context.Context, d *Deps, r RotateRequest) error {
@@ -59,9 +66,9 @@ func rotateHostKey(ctx context.Context, d *Deps, r RotateRequest) error {
 	if want == "" {
 		return usage("rotate needs --host-key SHA256:<fingerprint>")
 	}
-	keys, err := d.Scan(ctx, r.Target, r.NodeID)
+	keys, err := d.Scan(ctx, remote.Target{Dest: r.ScanDest}, r.NodeID)
 	if err != nil {
-		return transportErr("scan", "cannot capture the host key of "+r.Target.Dest, err)
+		return transportErr("scan", "cannot capture the host key of "+r.ScanDest, err)
 	}
 	var match *remote.HostKey
 	for i := range keys {
@@ -70,9 +77,19 @@ func rotateHostKey(ctx context.Context, d *Deps, r RotateRequest) error {
 		}
 	}
 	if match == nil {
-		return newErr(CodeHostKey, ReasonKeyMismatch, "none of the host keys of %s matches --host-key; the old pin is kept; found: %s", r.Target.Dest, fingerprints(keys))
+		return newErr(CodeHostKey, ReasonKeyMismatch, "none of the host keys of %s matches --host-key; the old pin is kept; found: %s", r.ScanDest, fingerprints(keys))
 	}
-	if err = d.pins().Replace(pinAlias(r.NodeID), keyLine(*match)); err != nil {
+	err = d.withPins(func(p remote.PinnedHostKeys) error {
+		// Under the pin lock: a revoke that committed during the scan must win, never get its pin back.
+		if _, lerr := d.live(ctx, r.NodeID); lerr != nil {
+			return lerr
+		}
+		return p.Replace(pinAlias(r.NodeID), keyLine(*match))
+	})
+	if CodeOf(err) == CodeRevoked || CodeOf(err) == CodeNotFound {
+		return err
+	}
+	if err != nil {
 		return newErr(CodeHostKey, ReasonKeyMismatch, "cannot write the pinned host key of %s", r.NodeID)
 	}
 	n, err := d.Registry.Get(ctx, r.NodeID)

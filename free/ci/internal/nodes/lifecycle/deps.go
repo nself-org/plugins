@@ -77,3 +77,13 @@ func (d *Deps) pins() remote.PinnedHostKeys { return remote.PinnedHostKeys{Path:
 
 // pinAlias is the HostKeyAlias of a node (the D4 option set uses the same string).
 func pinAlias(nodeID string) string { return "nself-ci-" + nodeID }
+
+// withPins runs one read-modify-write of the pin file under the home-wide pin lock.
+func (d *Deps) withPins(fn func(p remote.PinnedHostKeys) error) error {
+	unlock, err := d.lockPins()
+	if err != nil {
+		return newErr(CodeNoRoute, "lock", "the pin file is busy: %s", oneLine(err))
+	}
+	defer unlock()
+	return fn(d.pins())
+}

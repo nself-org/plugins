@@ -19,6 +19,10 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
 )
 
+// quarantineReason is the maintenance reason registry.CheckAgeRecipient sets when a node presents a
+// different identity (E660).
+const quarantineReason = "age_recipient_changed"
+
 // TestResult is what `nodes test` reports.
 type TestResult struct {
 	NodeID       string        `json:"node"`
@@ -43,6 +47,11 @@ func (d *Deps) live(ctx context.Context, id string) (registry.Node, error) {
 // Test connects to the node, asks its agent for the version and probes it again.
 func (d *Deps) Test(ctx context.Context, id string, fs *flag.FlagSet) (TestResult, error) {
 	res := TestResult{NodeID: id, Drift: []string{}}
+	unlock, lerr := d.lockNode(id)
+	if lerr != nil {
+		return res, newErr(CodeNoRoute, "lock", "node %s is busy: %s", id, oneLine(lerr))
+	}
+	defer unlock()
 	n, err := d.live(ctx, id)
 	if err != nil {
 		return res, err
@@ -61,6 +70,11 @@ func (d *Deps) Test(ctx context.Context, id string, fs *flag.FlagSet) (TestResul
 	fresh, err := d.probeDraft(ctx, draft)
 	if err != nil {
 		return res, err
+	}
+	if cur, gerr := d.live(ctx, id); gerr != nil {
+		return res, gerr
+	} else if cur.Record.Version != n.Record.Version {
+		return res, usage("node %s changed while it was tested; run `nodes test` again", id)
 	}
 	after, _, err := d.Registry.UpdateCapability(ctx, id, fresh, "probe")
 	if err != nil {
@@ -110,8 +124,12 @@ func (d *Deps) Drain(ctx context.Context, id string) (registry.Node, error) {
 
 // Enable makes the node leasable again and clears drain and maintenance.
 func (d *Deps) Enable(ctx context.Context, id string) (registry.Node, error) {
-	if _, err := d.live(ctx, id); err != nil {
+	n, err := d.live(ctx, id)
+	if err != nil {
 		return registry.Node{}, err
+	}
+	if n.Record.Reason == quarantineReason {
+		return registry.Node{}, usage("node %s is quarantined (%s): it presented a different identity and needs re-verification, not `enable`", id, quarantineReason)
 	}
 	return d.Registry.SetState(ctx, id, "online", "enabled by admin", d.Actor)
 }

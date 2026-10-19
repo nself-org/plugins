@@ -6,11 +6,14 @@ import (
 	"context"
 	"debug/elf"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/nself-org/cli/sdk/go/v2/remote"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -151,5 +154,98 @@ func TestNonSeparatedNodeHoldsNoSecretClass(t *testing.T) {
 func TestOneLineCutsOnRuneBoundary(t *testing.T) {
 	if got := oneLine(errString(strings.Repeat("é", 200))); len([]rune(got)) != 160 || strings.ContainsRune(got, '\uFFFD') {
 		t.Fatalf("len=%d", len([]rune(got)))
+	}
+}
+
+func TestPinFileChangesAreSerializedAcrossProcesses(t *testing.T) {
+	k := newKit(t)
+	unlock, err := k.d.lockPins() // another process holds the pin lock
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- k.d.pin("pl1", []remote.HostKey{keyA}) }()
+	select {
+	case <-done:
+		t.Fatal("pin wrote the pin file while another process held the pin lock")
+	case <-time.After(300 * time.Millisecond):
+	}
+	unlock()
+	if err = <-done; err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := k.d.pins().Lookup(pinAlias("pl1")); len(p) != 1 {
+		t.Fatalf("pins = %v", p)
+	}
+}
+
+func TestNodeIDIsValidatedBeforeAnyLockFile(t *testing.T) {
+	k := newKit(t)
+	outside := filepath.Join(filepath.Dir(k.d.Home), "pwn")
+	for _, id := range []string{"../pwn", "a/b", "bad id"} {
+		code, _, errs := k.run1("revoke", id)
+		if code != 1 || !strings.Contains(errs, "E651") {
+			t.Errorf("%q: code=%d err=%q", id, code, errs)
+		}
+	}
+	if _, err := os.Stat(outside + ".lock"); err == nil {
+		t.Fatal("a lock file was created outside the CI home")
+	}
+	k.addNode("mixedcase")
+	if code, _, _ := k.run1("show", "MixedCase"); code != 0 {
+		t.Fatalf("upper-case id is lower-cased: code=%d", code)
+	}
+}
+
+func TestEnableRefusesAQuarantinedNode(t *testing.T) {
+	k := newKit(t)
+	ctx := context.Background()
+	k.addNode("qn1")
+	if _, err := k.d.Registry.SetState(ctx, "qn1", "maintenance", quarantineReason, "cli:test"); err != nil {
+		t.Fatal(err)
+	}
+	errCode(t, func() error { _, e := k.d.Enable(ctx, "qn1"); return e }(), CodeInvalid)
+}
+
+func TestRemoveDropsAnOrphanPin(t *testing.T) {
+	k := newKit(t)
+	if err := k.d.pin("orph1", []remote.HostKey{keyA}); err != nil {
+		t.Fatal(err)
+	}
+	errCode(t, k.d.pin("orph1", []remote.HostKey{keyA}), CodeHostKey) // an add would refuse
+	rep, err := k.d.Remove(context.Background(), "orph1")
+	if err != nil || !rep.PinRemoved {
+		t.Fatalf("rep=%+v err=%v", rep, err)
+	}
+	if p, _ := k.d.pins().Lookup(pinAlias("orph1")); len(p) != 0 {
+		t.Fatal("orphan pin survived")
+	}
+	if _, err = k.d.Remove(context.Background(), "orph1"); CodeOf(err) != CodeNotFound {
+		t.Fatalf("second remove: %v", err)
+	}
+}
+
+func TestPartialRevokeJSONCarriesTheReport(t *testing.T) {
+	t.Cleanup(resetExtensions)
+	k := newKit(t)
+	k.addNode("pj1")
+	RegisterSessionCloser(func(context.Context, string) error { return errBoom })
+	code, out, _ := k.run1("revoke", "pj1", "--json")
+	e := decode(t, out)
+	if code != 3 || e.Error == nil || e.Error.Code != CodeRevoked {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	if !strings.Contains(out, "sessions_closed") || !strings.Contains(out, "remaining") {
+		t.Fatalf("report missing from the envelope: %s", out)
+	}
+}
+
+func TestRevokeAndRemoveNeedAnAdminActor(t *testing.T) {
+	k := newKit(t)
+	k.addNode("ac1")
+	for _, actor := range []string{"agent", "probe", ""} {
+		if _, err := k.st.NodeRemove(context.Background(), "ac1", actor, nil); err == nil {
+			t.Errorf("actor %q removed a node", actor)
+		}
 	}
 }

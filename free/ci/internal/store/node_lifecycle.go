@@ -97,7 +97,7 @@ func (s *Store) NodeRemove(ctx context.Context, nodeID, actor string, hooks []Re
 
 func (s *Store) revokeWrite(ctx context.Context, nodeID, actor, action string, remove bool, hooks []RevokeHook) (RevokeResult, error) {
 	var out RevokeResult
-	if nodeID == "" || actor == "" {
+	if _, aerr := NewAdminAuthority(actor); nodeID == "" || aerr != nil {
 		return out, coded("E651", "revoke needs a node and an actor")
 	}
 	err := s.write(ctx, func(tx *sql.Tx) error {

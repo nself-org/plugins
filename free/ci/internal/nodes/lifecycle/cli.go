@@ -12,13 +12,16 @@ package lifecycle
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"io"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
+	"github.com/nself-org/cli/sdk/go/v2/remote"
 )
 
 // Env opens the store for one command; override is the --project flag.
@@ -118,13 +121,21 @@ func Run(sub string, args []string, env Env) int {
 		f.json = f.json || slices.Contains(args, "--json") || slices.Contains(args, "-json")
 		return fail(env, f, "ci nodes "+sub, usage("%s", oneLine(err)))
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
 	wantPos := 1
 	if sub == "list" {
 		wantPos = 0
 	}
 	if len(pos) != wantPos {
 		return fail(env, f, "ci nodes "+sub, usage("usage: nself ci nodes %s", usageLine(sub)))
+	}
+	if wantPos == 1 && sub != "add" {
+		// A node id is a lower-case name; anything else (a path, a dot-dot) never reaches a lock file.
+		pos[0] = strings.ToLower(pos[0])
+		if verr := remote.ValidateNodeID(pos[0]); verr != nil {
+			return fail(env, f, "ci nodes "+sub, usage("the node id is not valid (letters, digits, dot, dash, underscore)"))
+		}
 	}
 	d, closeFn, err := env.Open(ctx, f.project)
 	if err != nil {
@@ -141,7 +152,7 @@ func Run(sub string, args []string, env Env) int {
 		if res.human != nil && !f.json {
 			res.human(env.Out)
 		}
-		return fail(env, f, "ci nodes "+sub, err)
+		return failWith(env, f, "ci nodes "+sub, err, partialReport(res, err))
 	}
 	if f.json {
 		if werr := output.WriteData(env.Out, "ci nodes "+sub, res.data, nil); werr != nil {
@@ -166,14 +177,27 @@ func usageLine(sub string) string {
 }
 
 // fail prints the error and returns its exit code.
-func fail(env Env, f flags, command string, err error) int {
+func fail(env Env, f flags, command string, err error) int { return failWith(env, f, command, err, "") }
+
+// partialReport is the revoke report as one JSON string for the error envelope's cause, only for a
+// partial revoke (committed, cleanup incomplete): machine callers must see what is left.
+func partialReport(res result, err error) string {
+	var le *Error
+	if res.data == nil || !errors.As(err, &le) || le.Reason != ReasonPartial {
+		return ""
+	}
+	b, _ := json.Marshal(res.data)
+	return string(b)
+}
+
+func failWith(env Env, f flags, command string, err error, cause string) int {
 	code := CodeOf(err)
 	exit := exitFor(code)
 	if f.json {
 		if code == "" {
 			code = "E607"
 		}
-		_ = output.WriteError(env.Out, command, output.ErrorDetail{Code: code, Message: err.Error(), ExitCode: exit}, nil)
+		_ = output.WriteError(env.Out, command, output.ErrorDetail{Code: code, Message: err.Error(), Cause: cause, ExitCode: exit}, nil)
 		return exit
 	}
 	_, _ = io.WriteString(env.Err, err.Error()+"\n")
