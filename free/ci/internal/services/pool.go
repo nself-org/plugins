@@ -8,7 +8,8 @@ package services
 // Inputs:  a Provisioner, a key, the specs. Outputs: the job environment.
 // Constraints: the safety net keeps the entry until the owning attempt's Down;
 // teardown runs once, whoever asks first, and Down returns only after it
-// finished. A second Up for a key that is still live is refused.
+// finished. A second Up for a key that is still live is refused. Down belongs after Up has returned: a Down that
+// arrives while Up is still running finds nothing to tear down.
 
 import (
 	"context"
@@ -57,18 +58,19 @@ func (pl *Pool) Up(ctx context.Context, prov *Provisioner, key string, specs []S
 	}
 	pl.busy[key] = true
 	pl.mu.Unlock()
-	h, err := prov.Up(ctx, specs)
-	if err != nil {
+	defer func() { // also on a panic in the provisioner
 		pl.mu.Lock()
 		delete(pl.busy, key)
 		pl.mu.Unlock()
+	}()
+	h, err := prov.Up(ctx, specs)
+	if err != nil {
 		return nil, err
 	}
 	l := &liveProvision{prov: prov, handle: h, done: make(chan struct{})}
 	l.stop = context.AfterFunc(ctx, func() { pl.safetyNet(l) })
 	pl.mu.Lock()
 	pl.live[key] = l
-	delete(pl.busy, key)
 	pl.mu.Unlock()
 	return h.Env, nil
 }
