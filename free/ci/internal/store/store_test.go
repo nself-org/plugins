@@ -60,7 +60,7 @@ func TestFinalizingAutomatic(t *testing.T) {
 			from, to model.JobState
 			epoch    int64
 		}{{"queued", "leased", 0}, {"leased", "running", 1}, {"running", "finalizing", 2}} {
-			if err := s.Transition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
+			if err := s.testTransition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -69,7 +69,7 @@ func TestFinalizingAutomatic(t *testing.T) {
 		s := testStore(t)
 		seed(t, s, "a")
 		advance(t, s)
-		if err := s.Transition(ctx, "a", "finalizing", "passed", TransitionDetail{Epoch: 3}); err != nil {
+		if err := s.testTransition(ctx, "a", "finalizing", "passed", TransitionDetail{Epoch: 3}); err != nil {
 			t.Fatal(err)
 		}
 		state, _, err := s.AttemptStateEpoch(ctx, "a")
@@ -84,7 +84,7 @@ func TestFinalizingAutomatic(t *testing.T) {
 			t.Fatal(err)
 		}
 		advance(t, s)
-		if err := s.Transition(ctx, "a", "finalizing", "passed", TransitionDetail{Epoch: 3}); err != nil {
+		if err := s.testTransition(ctx, "a", "finalizing", "passed", TransitionDetail{Epoch: 3}); err != nil {
 			t.Fatal(err)
 		}
 		var state, class string
@@ -95,23 +95,23 @@ func TestFinalizingAutomatic(t *testing.T) {
 	t.Run("needs operator requires authority and audit", func(t *testing.T) {
 		s := testStore(t)
 		seed(t, s, "a")
-		if err := s.Transition(ctx, "a", "queued", "leased", TransitionDetail{Epoch: 0}); err != nil {
+		if err := s.testTransition(ctx, "a", "queued", "leased", TransitionDetail{Epoch: 0}); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.Transition(ctx, "a", "leased", "lost", TransitionDetail{Epoch: 1}); err != nil {
+		if err := s.testTransition(ctx, "a", "leased", "lost", TransitionDetail{Epoch: 1}); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.Transition(ctx, "a", "lost", "needs-operator", TransitionDetail{Epoch: 2}); err != nil {
+		if err := s.testTransition(ctx, "a", "lost", "needs-operator", TransitionDetail{Epoch: 2}); err != nil {
 			t.Fatal(err)
 		}
 		var before, after int
 		if err := s.readers.QueryRowContext(ctx, "SELECT count(*) FROM audit").Scan(&before); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.Transition(ctx, "a", "needs-operator", "failed", TransitionDetail{Epoch: 3}); !codeIs(err, "E609") {
+		if err := s.testTransition(ctx, "a", "needs-operator", "failed", TransitionDetail{Epoch: 3}); !codeIs(err, "E609") {
 			t.Fatalf("without operator = %v", err)
 		}
-		if err := s.Transition(ctx, "a", "needs-operator", "failed", TransitionDetail{Epoch: 3, Operator: true, Actor: "operator"}); err != nil {
+		if err := s.testTransition(ctx, "a", "needs-operator", "failed", TransitionDetail{Epoch: 3, Operator: true, Actor: "operator"}); err != nil {
 			t.Fatal(err)
 		}
 		if err := s.readers.QueryRowContext(ctx, "SELECT count(*) FROM audit").Scan(&after); err != nil || after != before+1 {
@@ -124,19 +124,19 @@ func TestTransitionCASAndCancel(t *testing.T) {
 	s := testStore(t)
 	seed(t, s, "a")
 	ctx := context.Background()
-	if err := s.Transition(ctx, "a", "queued", "leased", TransitionDetail{Epoch: 0}); err != nil {
+	if err := s.testTransition(ctx, "a", "queued", "leased", TransitionDetail{Epoch: 0}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, "a", "leased", "running", TransitionDetail{Epoch: 0}); !codeIs(err, "E605") {
+	if err := s.testTransition(ctx, "a", "leased", "running", TransitionDetail{Epoch: 0}); !codeIs(err, "E605") {
 		t.Fatalf("stale CAS: %v", err)
 	}
 	if err := s.RequestCancel(ctx, "a", "stop", 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, "a", "leased", "running", TransitionDetail{Epoch: 1}); !codeIs(err, "E605") {
+	if err := s.testTransition(ctx, "a", "leased", "running", TransitionDetail{Epoch: 1}); !codeIs(err, "E605") {
 		t.Fatalf("cancel lost: %v", err)
 	}
-	if err := s.Transition(ctx, "a", "leased", "cancelled", TransitionDetail{Epoch: 1}); err != nil {
+	if err := s.testTransition(ctx, "a", "leased", "cancelled", TransitionDetail{Epoch: 1}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -154,7 +154,7 @@ func TestArtifactsAndAuditRollback(t *testing.T) {
 		from, to model.JobState
 		epoch    int64
 	}{{"queued", "leased", 0}, {"leased", "running", 1}, {"running", "finalizing", 2}} {
-		if err := s.Transition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
+		if err := s.testTransition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -173,7 +173,7 @@ func TestArtifactsAndAuditRollback(t *testing.T) {
 		t.Fatalf("audit rollback: %d %v", n, err)
 	}
 	s.SetAuditSealer(nil)
-	if err := s.Transition(ctx, "a", "finalizing", "passed", TransitionDetail{Epoch: 3, Operator: true, Actor: "operator"}); err != nil {
+	if err := s.testTransition(ctx, "a", "finalizing", "passed", TransitionDetail{Epoch: 3, Operator: true, Actor: "operator"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -190,7 +190,7 @@ func TestUncommittedArtifactFails(t *testing.T) {
 		from, to model.JobState
 		epoch    int64
 	}{{"queued", "leased", 0}, {"leased", "running", 1}, {"running", "finalizing", 2}, {"finalizing", "passed", 3}} {
-		if err := s.Transition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch, Operator: step.from == "finalizing", Actor: "operator"}); err != nil {
+		if err := s.testTransition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch, Operator: step.from == "finalizing", Actor: "operator"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -266,7 +266,7 @@ func TestBoundedRetry(t *testing.T) {
 		from, to model.JobState
 		epoch    int64
 	}{{"queued", "leased", 0}, {"leased", "running", 1}, {"running", "lost", 2}, {"lost", "retryable", 3}, {"retryable", "queued", 4}} {
-		if err := s.Transition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
+		if err := s.testTransition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -298,14 +298,14 @@ func TestAtMostOnceNeedsOperator(t *testing.T) {
 		from, to model.JobState
 		epoch    int64
 	}{{"queued", "leased", 0}, {"leased", "lost", 1}} {
-		if err := s.Transition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
+		if err := s.testTransition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := s.Transition(ctx, "a", "lost", "retryable", TransitionDetail{Epoch: 2}); !codeIs(err, "E604") {
+	if err := s.testTransition(ctx, "a", "lost", "retryable", TransitionDetail{Epoch: 2}); !codeIs(err, "E604") {
 		t.Fatalf("release auto retry: %v", err)
 	}
-	if err := s.Transition(ctx, "a", "lost", "needs-operator", TransitionDetail{Epoch: 2}); err != nil {
+	if err := s.testTransition(ctx, "a", "lost", "needs-operator", TransitionDetail{Epoch: 2}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.CreateAttempt(ctx, AttemptRow{ID: "b", JobID: "j", N: 2}, "new-digest"); !codeIs(err, "E609") {
@@ -321,7 +321,7 @@ func TestAtMostOnceNeedsOperator(t *testing.T) {
 		from, to model.JobState
 		epoch    int64
 	}{{"queued", "leased", 0}, {"leased", "lost", 1}, {"lost", "needs-operator", 2}} {
-		if err := s.Transition(ctx, "b", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
+		if err := s.testTransition(ctx, "b", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
 			t.Fatal(err)
 		}
 	}
