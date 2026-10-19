@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/config"
+	"github.com/nself-org/plugins/free/ci/internal/drill"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
@@ -130,6 +131,9 @@ func loadPlanned(ctx context.Context, s planSpec) (planned, error) {
 	case err == nil:
 		cfg = loaded.Config
 	case !errors.Is(err, os.ErrNotExist) || s.cfg != "":
+		return planned{}, err
+	}
+	if cfg, err = drill.Expand(root, cfg, s.pipeline, s.trigger); err != nil { // as a real run: drills_dir subdirectories become kind drill jobs (D-1046)
 		return planned{}, err
 	}
 	facts, checks, err := planChecks(root, cfg)
