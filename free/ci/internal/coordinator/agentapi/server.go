@@ -55,6 +55,9 @@ type Config struct {
 	// OnAck, when set, is called with the authenticated node id and the lease id of every agent ack that
 	// names a lease (the drain learns a cancel was acknowledged). It must not block.
 	OnAck func(nodeID, leaseID string)
+	// Admit, when set, vets every lease-scoped call (a frame or a heartbeat entry) before the lease engine sees it
+	// (P7-NODE-08: the job token gate). A refusal drops the call and cancels that lease on the agent.
+	Admit func(ctx context.Context, c Call) error
 	// PinnedAge returns the age recipient pinned for a node; nil trusts what hello presents.
 	PinnedAge func(ctx context.Context, nodeID string) (*string, error)
 

@@ -111,6 +111,9 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 	case unknownLease:
 		return s.sendStale(f, m.LeaseID, *m.Epoch)
 	}
+	if ok, bad := s.admit(q, f, m.LeaseID, *m.Epoch, m.Type, false); !ok {
+		return bad
+	}
 	err := s.cfg.Leases.Fence(ctx, m.LeaseID, epoch)
 	if err == nil {
 		err = act()
@@ -176,6 +179,15 @@ func (s *Server) heartbeat(q *request, f *flow, seq uint64, hb *protocol.Heartbe
 				return bad
 			}
 			continue
+		}
+		if ls.State == "running" || ls.State == "self_fenced" {
+			if ok, bad := s.admit(q, f, ls.LeaseID, ls.Epoch, "heartbeat", first); !ok {
+				if bad != nil {
+					return bad
+				}
+				unacked = true // a lease the gate refused is not renewed, so the agent must fence it on its own clock
+				continue
+			}
 		}
 		var err error
 		switch {
