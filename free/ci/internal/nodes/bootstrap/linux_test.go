@@ -190,7 +190,7 @@ func TestInstallRetiresSurplusSlots(t *testing.T) {
 	for _, s := range n.scripts() {
 		if strings.Contains(s, "u=nself-ci-job-3\n") {
 			retired++
-			if !strings.Contains(s, "rm -f /etc/sudoers.d/nself-ci-job-3") || !strings.Contains(s, "find "$d" -xdev -user") {
+			if !strings.Contains(s, "rm -f /etc/sudoers.d/nself-ci-job-3") || !strings.Contains(s, `find "$d" -xdev -user`) {
 				t.Errorf("retire script:\n%s", s)
 			}
 		}
