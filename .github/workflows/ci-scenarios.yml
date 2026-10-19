@@ -39,9 +39,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-14]
     steps:
-      - name: Check out the repository
+      - name: Check out the repository (the pull request head, not the merge commit)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Check out nself-org/cli (main)

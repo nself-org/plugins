@@ -56,7 +56,7 @@ ev_finish() {
 	dirty=false
 	[ -n "$(git -C "$EV_ROOT" status --porcelain --untracked-files=no 2>/dev/null || true)" ] && dirty=true
 	case "${GITHUB_EVENT_NAME:-}" in schedule | push | pull_request) trigger=$GITHUB_EVENT_NAME ;; workflow_dispatch) trigger=manual ;; *) trigger=local ;; esac
-	platform=$(uname -s | tr A-Z a-z)/$(uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
+	platform=$(uname -s | tr '[:upper:]' '[:lower:]')/$(uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
 	cfg=$(ev_sha "$EV_SCRIPT" | cut -d' ' -f1)
 	jq -sc --arg revision "$revision" --arg repo "$repo_id" --arg run "${GITHUB_RUN_ID:-$EV_JOB-$EV_T0}" --arg trigger "$trigger" \
 		--arg cfg "$cfg" --argjson dirty "$dirty" --arg platform "$platform" --arg host "$(hostname)" --arg job "$EV_JOB" \

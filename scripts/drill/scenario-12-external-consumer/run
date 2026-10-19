@@ -34,6 +34,7 @@ tools_build_plugin "$ci"
 glpath=$(tools_gitleaks_dir "$work") || exit 2
 mkdir -p "$work/home" "$work/tmp"
 gocache=$(go env GOCACHE) gopath=$(go env GOPATH)
+# shellcheck disable=SC2034 # read by ev_finish
 EV_TOOLS=$(jq -nc --arg go "$(go env GOVERSION)" --arg git "$(git --version | awk '{print $3}')" '{go: $go, git: $git}')
 note=$(tools_pin_drift) && [ -n "$note" ] && say "$note"
 
@@ -118,6 +119,10 @@ fi
 
 # 5. Documents that were edited are rejected with exit 11 (the producer's store holds the original).
 jq '.data.evidence' "$work/v2.json" >"$work/doc2.json"
+# Control: the same document, untouched, is accepted from the producer's store, so the rejections below are about the edits.
+nci producer evidence verify --file "$work/doc2.json" --at-revision "$c2" >/dev/null 2>&1
+rc=$?
+if [ $rc -eq 0 ]; then ev_pass file-control "the untouched document is accepted by its producer's store (exit 0)"; else ev_fail file-control "the untouched document was refused: exit $rc"; fi
 forge() { # forge NAME JQ-EDIT AT-REVISION
 	jq -c "$2" "$work/doc2.json" >"$work/forged-$1.json"
 	nci producer evidence verify --file "$work/forged-$1.json" --at-revision "$3" --json >"$work/f-$1.json" 2>"$work/f-$1.err"

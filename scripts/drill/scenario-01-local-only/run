@@ -23,14 +23,16 @@ for f in evidence tools make-fixtures cut; do
 done
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/drill-s01.XXXXXX")
-export CUT_WORK=$work # read by cut.sh
+svc_before=$(docker ps -aq --filter name=nselfci- 2>/dev/null | tr '\n' ' ')
+nets_before=$(docker network ls -q --filter name=nselfci- 2>/dev/null | tr '\n' ' ')
 # shellcheck disable=SC2329 # runs from the EXIT trap
 cleanup() {
 	cut_remove
+	# Only containers this run made: the ones that were there before it started belong to somebody else.
 	if command -v docker >/dev/null 2>&1; then
-		ids=$(docker ps -aq --filter name=nselfci- 2>/dev/null || true)
-		# shellcheck disable=SC2086 # one id per word is what docker rm wants
-		[ -z "$ids" ] || docker rm -f $ids >/dev/null 2>&1 || true
+		for id in $(docker ps -aq --filter name=nselfci- 2>/dev/null || true); do
+			case " $svc_before " in *" $id "*) ;; *) docker rm -f "$id" >/dev/null 2>&1 || true ;; esac
+		done
 	fi
 	rm -rf "$work" 2>/dev/null || sudo -n rm -rf "$work" 2>/dev/null || true
 }
@@ -179,8 +181,9 @@ if [ "$docker_ok" -eq 1 ]; then
 	rc=$?
 	run_y=$(runid_of "$work/y.out")
 	nrun ci evidence "$run_y" --json >"$work/y.json" 2>"$work/y.err"
-	left=$(docker ps -aq --filter name=nselfci- 2>/dev/null | wc -l | tr -d ' ')
-	nets=$(docker network ls -q --filter name=nselfci- 2>/dev/null | wc -l | tr -d ' ')
+	left=0 nets=0
+	for id in $(docker ps -aq --filter name=nselfci- 2>/dev/null); do case " $svc_before " in *" $id "*) ;; *) left=$((left + 1)) ;; esac; done
+	for id in $(docker network ls -q --filter name=nselfci- 2>/dev/null); do case " $nets_before " in *" $id "*) ;; *) nets=$((nets + 1)) ;; esac; done
 	if [ $rc -eq 0 ] && vjson "$work/y.json" ".data.result == \"pass\" and ($others) and ([.data.checks[] | select(.id == \"db-reachable\") | .result] == [\"pass\"])" && [ "$left" = 0 ] && [ "$nets" = 0 ]; then
 		ev_pass polyglot-service "all four jobs passed with the postgres service and nothing was left running (run $run_y)"
 	else

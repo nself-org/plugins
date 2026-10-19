@@ -46,7 +46,7 @@ tools_build_plugin() {
 tools_gitleaks_dir() {
 	local bin os arch key tmp
 	if bin=$(command -v gitleaks 2>/dev/null); then dirname "$bin"; return; fi
-	os=$(uname -s | tr A-Z a-z)
+	os=$(uname -s | tr '[:upper:]' '[:lower:]')
 	case "$(uname -m)" in x86_64 | amd64) arch=x64 ;; arm64 | aarch64) arch=arm64 ;; *) tools_die "no gitleaks pin for $(uname -m)" ;; esac
 	key=${os}_${arch}
 	[ -n "$(gitleaks_sha "$key")" ] || tools_die "no gitleaks pin for $key"
