@@ -44,8 +44,7 @@ const (
 	// this are forgotten by DedupPrune.
 	IntakeRetention = 72 * time.Hour
 
-	// IntakeMaxAttempts is how often a row may be claimed before recovery fails it instead of queueing it
-	// again: a pipeline that kills the coordinator must not do so forever.
+	// IntakeMaxAttempts is how often a row may be claimed before recovery fails it instead of requeueing.
 	IntakeMaxAttempts = 3
 )
 
@@ -71,8 +70,7 @@ type IntakeRequest struct {
 	IdemDigest, ReqDigest                                                                    string
 }
 
-// IntakeOutcome says what IntakeEnqueue did. ID is the row the trigger now stands for (the existing one
-// for duplicate, coalesced and replay).
+// IntakeOutcome says what IntakeEnqueue did; ID is the row the trigger now stands for.
 type IntakeOutcome struct{ Kind, ID string }
 
 // IntakeStats are the counts /healthz shows.
