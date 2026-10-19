@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,12 +24,14 @@ import (
 
 const (
 	parentGroup = "nself-ci-jobs"
+	selfGroup   = "nself-ci-agent"
 	cpuPeriod   = 100000
 )
 
 var groupName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 
-// ownCgroup is the absolute directory of this process's cgroup (v2 only).
+// ownCgroup is the absolute directory of the cgroup the agent runs in (v2 only); after delegate moved
+// the process into its own child group, that group's parent is returned.
 func (p Platform) ownCgroup() (string, error) {
 	f, err := os.Open(p.SelfCgroup)
 	if err != nil {
@@ -41,6 +44,9 @@ func (p Platform) ownCgroup() (string, error) {
 			dir := filepath.Join(p.CgroupRoot, filepath.Clean("/"+rest))
 			if !p.has(filepath.Join(p.CgroupRoot, "cgroup.controllers")) {
 				return "", errors.New("cgroup v2 is not mounted")
+			}
+			if filepath.Base(dir) == selfGroup { // we stepped into our own child group earlier (delegate)
+				dir = filepath.Dir(dir)
 			}
 			return dir, nil
 		}
@@ -56,8 +62,7 @@ func (p Platform) jobParent(sh reservation.Share) (dir string, cpuErr, memErr, e
 	if err != nil {
 		return "", nil, nil, err
 	}
-	// Best effort: a delegated cgroup lets us enable controllers for children; failure shows below.
-	_ = os.WriteFile(filepath.Join(own, "cgroup.subtree_control"), []byte("+cpu +memory"), 0o644)
+	p.delegate(own)
 	dir = filepath.Join(own, parentGroup)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", nil, nil, fmt.Errorf("cgroup not writable: %w", err)
@@ -76,6 +81,27 @@ func (p Platform) jobParent(sh reservation.Share) (dir string, cpuErr, memErr, e
 		memErr = fmt.Errorf("memory.max not writable: %w", e)
 	}
 	return dir, cpuErr, memErr, nil
+}
+
+// delegate enables the cpu and memory controllers for the children of own. cgroup v2 forbids that
+// while own holds processes (enabling it anyway can leave the hierarchy in an invalid state), so this
+// process first steps into a child group of its own, the way container runtimes do, and enables the
+// controllers only when nothing else is left in own. Failures are not errors here: the limit files
+// that stay missing are reported per resource by the caller.
+func (p Platform) delegate(own string) {
+	self := filepath.Join(own, selfGroup)
+	if os.MkdirAll(self, 0o755) != nil {
+		return
+	}
+	if os.WriteFile(filepath.Join(self, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0o644) != nil {
+		return
+	}
+	if b, err := os.ReadFile(filepath.Join(own, "cgroup.procs")); err == nil && len(strings.TrimSpace(string(b))) > 0 {
+		return // another process shares the group: leave the hierarchy as the operator set it up
+	}
+	for _, c := range []string{"+cpu", "+memory"} {
+		_ = os.WriteFile(filepath.Join(own, "cgroup.subtree_control"), []byte(c), 0o644)
+	}
 }
 
 // leaf creates the attempt's group under parent and returns its directory.

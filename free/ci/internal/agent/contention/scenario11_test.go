@@ -13,6 +13,7 @@ import (
 	osexec "os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -147,10 +148,11 @@ func scenarioReservedCPU(t *testing.T) {
 	var prio Priority
 	iso := &Isolator{Inner: passIsolator{}, Share: func() reservation.Share { return d.Share }, Platform: &pl, Report: func(_ string, p Priority) { prio = p }}
 	before, hadBefore := pl.CgroupUsageUsec()
-	script := `i=0; while [ $i -lt ` + itoa(cpus) + ` ]; do (while :; do :; done) & i=$((i+1)); done; sleep 3; kill $(jobs -p) 2>/dev/null; wait`
-	r := (&exec.Executor{Isolation: iso}).Run(context.Background(), exec.JobSpec{AttemptID: "hog-1", CoordinatorID: "c1", Home: t.TempDir(), Command: []string{"sh", "-c", script}})
-	if r.Err != nil {
-		t.Fatalf("hog: %v", r.Err)
+	script := `p=""; i=0; while [ $i -lt ` + itoa(cpus) + ` ]; do (while :; do :; done) & p="$p $!"; i=$((i+1)); done; sleep 3; kill $p; wait`
+	var log strings.Builder
+	r := (&exec.Executor{Isolation: iso}).Run(context.Background(), exec.JobSpec{AttemptID: "hog-1", CoordinatorID: "c1", Home: t.TempDir(), Command: []string{"sh", "-c", script}, Output: func(b []byte) { log.Write(b) }})
+	if r.Err != nil || r.ExitCode != 0 && r.ExitCode != 143 && r.ExitCode != -1 {
+		t.Fatalf("hog: err=%v exit=%d output=%q", r.Err, r.ExitCode, log.String())
 	}
 	defer pl.ReleaseGroup("hog-1")
 	if prio.Nice != Applied && runtime.GOOS != "windows" {

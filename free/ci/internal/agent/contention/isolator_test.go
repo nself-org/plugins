@@ -203,3 +203,14 @@ func TestSweepSparesYoungGroups(t *testing.T) {
 		t.Fatalf("a group younger than the bar was swept: %v", err)
 	}
 }
+
+func TestOwnCgroupIgnoresTheAgentsOwnChildGroup(t *testing.T) {
+	pl := fakeLinux(t, true)
+	if err := os.WriteFile(pl.SelfCgroup, []byte("0::/agent/"+selfGroup+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := pl.ownCgroup()
+	if err != nil || got != filepath.Join(pl.CgroupRoot, "agent") {
+		t.Fatalf("ownCgroup = %q %v", got, err)
+	}
+}
