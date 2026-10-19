@@ -29,7 +29,8 @@ func (f *fakeBackend) CachePrune(_ context.Context, p PruneStep) (Pruned, error)
 	f.script = f.script[1:]
 	return r, nil
 }
-func (f *fakeBackend) CacheEntries(context.Context, string) ([]Manifest, error) { return nil, nil }
+func (f *fakeBackend) CacheEntries(context.Context, string) ([]Manifest, error)        { return nil, nil }
+func (f *fakeBackend) CacheBlobRefs(context.Context, func([]byte, string) error) error { return nil }
 
 func newFake(t *testing.T, script ...Pruned) (*Store, *fakeBackend, *time.Time) {
 	t.Helper()

@@ -6,7 +6,8 @@ package store
 // and usage rows are in cache_entries_read.go.
 // Inputs: attempt id + capability epoch, entries.Facts, entries.CommitRequest.
 // Outputs: *entries.Refused (E711) or authz's *Denied (E684); one audit row per
-// refusal, committed with no entry.
+// (attempt, reason) refusal within the usage retention window (a replay adds
+// none), committed with no entry.
 // Constraints: migration set cache-entries has no foreign key into another set.
 // The capability epoch is the fence of the attempt's CURRENT lease row
 // (LeaseGrant) when it has one, else the attempt's transition counter
@@ -40,7 +41,27 @@ func init() {
 // cacheRefuse records the refusal's audit row inside tx and remembers the error.
 func (s *Store) cacheRefuse(ctx context.Context, tx *sql.Tx, out *error, op, attempt, reason string) error {
 	*out = &entries.Refused{Reason: reason}
-	return s.appendAudit(ctx, tx, "cache", "cache."+op+".refused", attempt, "reason="+reason)
+	return s.auditOnce(ctx, tx, "cache."+op+".refused", attempt, "reason="+reason)
+}
+
+// auditOnce appends the cache audit row unless the same (action, target, detail)
+// was recorded within the usage retention window (CachePrune forgets older
+// marks), so a caller replaying one refused frame adds one row per attempt and
+// reason, not one per frame. The mark and the row share tx.
+func (s *Store) auditOnce(ctx context.Context, tx *sql.Tx, action, target, detail string) error {
+	res, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO cache_audit_seen(action,target,detail,ts) VALUES (?,?,?,?)", action, target, detail, s.now().UnixNano())
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return err
+	}
+	return s.appendAudit(ctx, tx, "cache", action, target, detail)
+}
+
+// CacheAuditOnce is auditOnce in its own transaction.
+func (s *Store) CacheAuditOnce(ctx context.Context, action, target, detail string) error {
+	return s.write(ctx, func(tx *sql.Tx) error { return s.auditOnce(ctx, tx, action, target, detail) })
 }
 
 // cacheGate re-reads the attempt and reports whether it is in state want at the
@@ -192,7 +213,7 @@ func (s *Store) CacheCommit(ctx context.Context, c entries.CommitRequest) error 
 			var d *authz.Denied
 			errors.As(denied, &d)
 			refusal = denied
-			return s.appendAudit(ctx, tx, "cache", "cache.commit.denied", c.Attempt, "reason="+string(d.Reason))
+			return s.auditOnce(ctx, tx, "cache.commit.denied", c.Attempt, "reason="+string(d.Reason))
 		}
 		var planned int
 		if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM cache_planned WHERE attempt_id=? AND cache_key=?", c.Attempt, c.Manifest.Key).Scan(&planned); err != nil {

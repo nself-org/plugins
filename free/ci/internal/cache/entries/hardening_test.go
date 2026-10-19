@@ -144,7 +144,7 @@ func TestBlobProblemsAtCommitAreRefusedWithAnAuditRow(t *testing.T) {
 	if got := refusedReason(t, e.es.Commit(e.ctx, "bi1", fin, e.ns(trusted), lie)); got != entries.ReasonBlobInvalid {
 		t.Fatal(got)
 	}
-	if n := len(e.audit("cache.commit.refused")); n != 2 {
-		t.Fatalf("%d audit rows, want 2", n)
+	if n := len(e.audit("cache.commit.refused")); n != 1 { // same attempt and reason: coalesced
+		t.Fatalf("%d audit rows, want 1", n)
 	}
 }
