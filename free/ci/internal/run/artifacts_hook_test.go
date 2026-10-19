@@ -116,8 +116,8 @@ func TestArtifactsHookUncommittedBlocksPass(t *testing.T) {
 		t.Fatalf("attempt state %s", got)
 	}
 	staged, err := r.store(t).ArtifactStaged(context.Background(), o.AttemptID)
-	if err != nil || len(staged) != 1 || staged[0].State != records.StateStaged {
-		t.Fatalf("staged: %+v %v", staged, err)
+	if err != nil || len(staged) != 0 {
+		t.Fatalf("a failed attempt keeps no records: %+v %v", staged, err)
 	}
 	if len(committedRecords(t, r)) != 0 {
 		t.Fatal("an uncommitted record is visible")

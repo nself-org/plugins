@@ -19,6 +19,9 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
+// MaxDecls bounds the declarations of one job.
+const MaxDecls = 256
+
 // DefaultRetention is the retention of a job that sets none.
 const DefaultRetention = "30d"
 
@@ -69,6 +72,9 @@ func RetentionDuration(s string) (d time.Duration, keep bool, err error) {
 // Normalize validates job.Artifacts plus extra and fills the defaults.
 func Normalize(job model.Job, release bool, extra []model.ArtifactDecl) ([]Decl, error) {
 	all := append(append([]model.ArtifactDecl(nil), job.Artifacts...), extra...)
+	if len(all) > MaxDecls {
+		return nil, failf(ReasonDeclaration, "a job declares %d artifacts, more than the allowed %d", len(all), MaxDecls)
+	}
 	out := make([]Decl, 0, len(all))
 	for i, d := range all {
 		path, err := cleanName(strings.TrimRight(d.Path, "/"))
@@ -96,11 +102,11 @@ func Normalize(job model.Job, release bool, extra []model.ArtifactDecl) ([]Decl,
 			return nil, failf(ReasonDeclaration, "artifact %q: unknown visibility %q", d.Path, d.Visibility)
 		}
 		ret := d.Retention
-		switch {
-		case ret == "" && release:
-			ret = KeepRetention
-		case ret == "":
+		if ret == "" {
 			ret = DefaultRetention
+			if release {
+				ret = KeepRetention
+			}
 		}
 		if _, _, err = RetentionDuration(ret); err != nil {
 			return nil, err

@@ -2,7 +2,9 @@ package records
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"io"
 	"io/fs"
 	"os"
@@ -190,7 +192,7 @@ func TestExpandPatterns(t *testing.T) {
 	defer func() { _ = root.Close() }()
 	list := func(pattern string) string {
 		t.Helper()
-		got, err := expand(root.FS(), pattern, 100)
+		got, err := expand(context.Background(), root.FS(), pattern, 100)
 		if err != nil {
 			t.Fatalf("%s: %v", pattern, err)
 		}
@@ -219,20 +221,20 @@ func TestExpandPatterns(t *testing.T) {
 			t.Errorf("expand(%q) = %q, want %q", pattern, got, want)
 		}
 	}
-	if _, err := expand(root.FS(), "[", 100); !IsReason(err, ReasonDeclaration) {
+	if _, err := expand(context.Background(), root.FS(), "[", 100); !IsReason(err, ReasonDeclaration) {
 		t.Fatalf("bad pattern: %v", err)
 	}
-	if _, err := expand(root.FS(), "d1", 2); err == nil {
+	if _, err := expand(context.Background(), root.FS(), "d1", 2); err == nil {
 		t.Fatal("entry limit")
 	}
 	// a hostile pattern is bounded, not exponential
 	hostile := strings.Repeat("**/", 40) + "y.txt"
 	start := time.Now()
-	got, err := expand(root.FS(), hostile, 100)
+	got, err := expand(context.Background(), root.FS(), hostile, 100)
 	if err != nil || len(got) != 1 || got[0].rel != "d1/d2/y.txt" || time.Since(start) > 5*time.Second {
 		t.Fatalf("repeated **: %v %v after %v", got, err, time.Since(start))
 	}
-	if _, err = expand(root.FS(), strings.Repeat("a/", maxPatternParts)+"x", 100); !IsReason(err, ReasonDeclaration) {
+	if _, err = expand(context.Background(), root.FS(), strings.Repeat("a/", maxPatternParts)+"x", 100); !IsReason(err, ReasonDeclaration) {
 		t.Fatalf("too many components: %v", err)
 	}
 }
@@ -289,5 +291,163 @@ func TestWorkdirOnlyFile(t *testing.T) {
 	}
 	if linkCount(fakeInfo{}) != 1 {
 		t.Fatal("unknown")
+	}
+}
+
+func TestStreamBudget(t *testing.T) {
+	p := Policy{MaxFile: 100, MaxTotal: 1000}
+	for _, c := range []struct {
+		used, streamed int64
+		want           int64
+		reason         string
+	}{
+		{0, 0, 100, ReasonFileCap},
+		{899, 0, 100, ReasonFileCap}, // room 101 > file cap 100
+		{900, 0, 100, ReasonFileCap}, // room 100 == file cap: the file cap speaks
+		{901, 0, 99, ReasonSizeCap},
+		{500, 450, 50, ReasonSizeCap},
+		{1000, 0, 0, ReasonSizeCap},
+		{900, 200, 0, ReasonSizeCap}, // never negative
+	} {
+		got, reason := streamBudget(p, Usage{Total: c.used}, c.streamed)
+		if got != c.want || reason != c.reason {
+			t.Errorf("used %d streamed %d: %d %s, want %d %s", c.used, c.streamed, got, reason, c.want, c.reason)
+		}
+	}
+}
+
+type fakeLedger struct {
+	Ledger
+	got     PruneSpec
+	pruneFn func(ctx context.Context) ([]Record, error)
+	refs    int
+}
+
+func (f *fakeLedger) ArtifactPrune(ctx context.Context, s PruneSpec) ([]Record, error) {
+	f.got = s
+	if f.pruneFn != nil {
+		return f.pruneFn(ctx)
+	}
+	return nil, nil
+}
+func (f *fakeLedger) ArtifactBlobRefs(context.Context) ([]BlobRef, error) { f.refs++; return nil, nil }
+
+type fakeBlobs struct {
+	Blobs
+	swept int
+}
+
+func (f *fakeBlobs) Sweep(context.Context, string, func(cas.Realm, string) bool, time.Time) error {
+	f.swept++
+	return nil
+}
+
+func TestPruneDefaultsAndAutoPruneBudget(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now()
+	for _, c := range []struct {
+		in, want PruneSpec
+	}{
+		{PruneSpec{Now: now, Release: true}, PruneSpec{Now: now, Release: true, OlderThan: DefaultReleaseAge}},
+		{PruneSpec{Now: now, Release: true, OlderThan: time.Hour}, PruneSpec{Now: now, Release: true, OlderThan: time.Hour}},
+		{PruneSpec{Now: now, Release: true, OlderThan: -time.Hour}, PruneSpec{Now: now, Release: true, OlderThan: DefaultReleaseAge}},
+		{PruneSpec{Now: now}, PruneSpec{Now: now}},
+		{PruneSpec{Now: now, OlderThan: time.Hour}, PruneSpec{Now: now, OlderThan: time.Hour}},
+	} {
+		l, b := &fakeLedger{}, &fakeBlobs{}
+		if _, err := Prune(ctx, l, b, c.in); err != nil || l.got != c.want || b.swept != 1 {
+			t.Fatalf("%+v: got %+v swept %d err %v", c.in, l.got, b.swept, err)
+		}
+	}
+	l, b := &fakeLedger{}, &fakeBlobs{}
+	if _, err := Prune(ctx, l, b, PruneSpec{DryRun: true}); err != nil || b.swept != 0 || l.got.Now.IsZero() {
+		t.Fatalf("dry run sweeps nothing and stamps the clock: %+v swept %d %v", l.got, b.swept, err)
+	}
+	if AutoPruneBudget != 2*time.Second || DefaultReleaseAge != 365*24*time.Hour {
+		t.Fatal("budget constants")
+	}
+	// a context that ended is not an error; a real error is
+	dead, cancel := context.WithCancel(ctx)
+	cancel()
+	timeout := &fakeLedger{pruneFn: func(c context.Context) ([]Record, error) { return nil, c.Err() }}
+	if err := AutoPrune(dead, timeout, &fakeBlobs{}, now); err != nil {
+		t.Fatalf("expired budget: %v", err)
+	}
+	boom := &fakeLedger{pruneFn: func(context.Context) ([]Record, error) { return nil, errors.New("disk on fire") }}
+	if err := AutoPrune(ctx, boom, &fakeBlobs{}, now); err == nil {
+		t.Fatal("a real error must surface")
+	}
+	if err := AutoPrune(ctx, &fakeLedger{}, &fakeBlobs{}, now); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExpandBoundaries(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"d1/x.txt", "d1/d2/y.txt", "e1/y.txt", "e1/e2/e3/y.txt"} {
+		p := filepath.Join(dir, filepath.FromSlash(f))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = root.Close() }()
+	ctx := context.Background()
+	// every sibling is searched: ** does not stop at the first branch that matches
+	got, err := expand(ctx, root.FS(), "**/y.txt", 100)
+	if err != nil || len(got) != 3 {
+		t.Fatalf("siblings: %v %v", got, err)
+	}
+	// exactly maxEntries files pass, one fewer allowed fails
+	if _, err := expand(ctx, root.FS(), "e1", 2); err != nil {
+		t.Fatalf("2 files in 2: %v", err)
+	}
+	if _, err := expand(ctx, root.FS(), "e1", 1); !IsReason(err, ReasonSizeCap) {
+		t.Fatalf("2 files in 1: %v", err)
+	}
+	// 64 components are allowed, 65 are not
+	if _, err := expand(ctx, root.FS(), strings.Repeat("a/", maxPatternParts-1)+"a", 100); err != nil {
+		t.Fatalf("64 components: %v", err)
+	}
+	if _, err := expand(ctx, root.FS(), strings.Repeat("a/", maxPatternParts)+"a", 100); !IsReason(err, ReasonDeclaration) {
+		t.Fatalf("65 components: %v", err)
+	}
+	// the visit budget: find what "**/y.txt" needs on this tree, then pin the boundary
+	saved := maxVisits
+	defer func() { maxVisits = saved }()
+	need := 0
+	for limit := 1; limit < 200; limit++ {
+		maxVisits = limit
+		if _, err := expand(ctx, root.FS(), "**/y.txt", 100); err == nil {
+			need = limit
+			break
+		}
+	}
+	if need == 0 {
+		t.Fatal("never fits")
+	}
+	maxVisits = need
+	if _, err := expand(ctx, root.FS(), "**/y.txt", 100); err != nil {
+		t.Fatalf("limit %d: %v", need, err)
+	}
+	maxVisits = need - 1
+	if _, err := expand(ctx, root.FS(), "**/y.txt", 100); !IsReason(err, ReasonDeclaration) {
+		t.Fatalf("limit %d: %v", need-1, err)
+	}
+	if need != 15 {
+		t.Fatalf("the tree needs %d visits; update the pinned boundary only if the walk changed on purpose", need)
+	}
+	// a cancelled context stops the walk
+	maxVisits = saved
+	dead, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := expand(dead, root.FS(), "**/y.txt", 100); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled: %v", err)
 	}
 }

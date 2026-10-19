@@ -151,6 +151,9 @@ func (s *Store) ArtifactStage(ctx context.Context, attempt string, epoch int64, 
 		if err != nil {
 			return err
 		}
+		if _, err = tx.ExecContext(ctx, "DELETE FROM cache_artifact_reserve WHERE attempt_id=?", attempt); err != nil { // the staged rows now carry the claim
+			return err
+		}
 		for _, r := range recs {
 			var n int
 			if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM cache_artifact_decl WHERE attempt_id=? AND ord=?", attempt, r.Decl).Scan(&n); err != nil {

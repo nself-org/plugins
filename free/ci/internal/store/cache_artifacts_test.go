@@ -243,7 +243,7 @@ func TestCacheArtifactsRetention(t *testing.T) {
 	if orph, _ := s.ArtifactPrune(ctx, records.PruneSpec{Now: now, DryRun: true}); len(orph) != 0 {
 		t.Fatalf("a live attempt's staged record is not an orphan: %+v", orph)
 	}
-	if err := s.Transition(ctx, "o", "running", "failed", TransitionDetail{Epoch: 2, FailureClass: "code"}); err != nil {
+	if err := s.Transition(ctx, "o", "running", "lost", TransitionDetail{Epoch: 2}); err != nil { // lost keeps its rows until the attempt runs again or a prune finds them
 		t.Fatal(err)
 	}
 	if orph, _ := s.ArtifactPrune(ctx, records.PruneSpec{Now: now}); len(orph) != 1 || orph[0].State != records.StateStaged {
@@ -404,3 +404,77 @@ func TestCacheArtifactsPruneIsProjectScopedAndUsageCountsLiveStaged(t *testing.T
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }
+
+func TestCacheArtifactsRecordsOfAnAttemptThatDidNotPassAreDropped(t *testing.T) {
+	for _, end := range []struct {
+		name string
+		to   model.JobState
+	}{{"failed", "failed"}, {"cancelled", "cancelled"}} {
+		t.Run(end.name, func(t *testing.T) {
+			s := testStore(t)
+			ctx := context.Background()
+			seed(t, s, "a")
+			artRunning(t, s, "a", 1)
+			if err := s.ArtifactStage(ctx, "a", 2, []records.Record{artRec("a", "n", 0, artHex("1"), 5, time.Now())}); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Transition(ctx, "a", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
+				t.Fatal(err)
+			}
+			staged, _ := s.ArtifactStaged(ctx, "a")
+			if _, err := s.ArtifactCommit(ctx, "a", 3, staged, artPolicy()); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Transition(ctx, "a", "finalizing", end.to, TransitionDetail{Epoch: 3, FailureClass: "infra"}); err != nil {
+				t.Fatal(err)
+			}
+			if all, _ := s.ArtifactList(ctx, records.Filter{}); len(all) != 0 {
+				t.Fatalf("committed records of a %s attempt stay listed: %+v", end.name, all)
+			}
+			if _, ok, _ := s.ArtifactGet(ctx, staged[0].ID); ok {
+				t.Fatal("record still readable")
+			}
+		})
+	}
+}
+
+func TestCacheArtifactsReservationsStopConcurrentOverrun(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	seed(t, s, "a")
+	seed(t, s, "b")
+	artRunning(t, s, "a", 1)
+	artRunning(t, s, "b", 1)
+	pol := artPolicy() // 1 MiB
+	if err := s.ArtifactReserve(ctx, "a", 2, 700<<10, pol); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ArtifactReserve(ctx, "b", 2, 400<<10, pol); !records.IsReason(err, records.ReasonSizeCap) {
+		t.Fatalf("a second claim over the cap: %v", err)
+	}
+	if err := s.ArtifactReserve(ctx, "b", 2, 300<<10, pol); err != nil {
+		t.Fatalf("a claim that fits: %v", err)
+	}
+	if err := s.ArtifactReserve(ctx, "a", 2, 100<<10, pol); err != nil { // the same attempt replaces its claim
+		t.Fatalf("re-reserve: %v", err)
+	}
+	if u, _ := s.ArtifactUsage(ctx, "proj"); u.Total != 400<<10 {
+		t.Fatalf("usage counts live claims: %+v", u)
+	}
+	if err := s.ArtifactReserve(ctx, "a", 1, 1, pol); !records.IsReason(err, records.ReasonEpoch) {
+		t.Fatalf("stale epoch: %v", err)
+	}
+	// staging replaces the claim with the rows; ending the attempt drops it
+	if err := s.ArtifactStage(ctx, "a", 2, []records.Record{artRec("a", "n", 0, artHex("1"), 50<<10, time.Now())}); err != nil {
+		t.Fatal(err)
+	}
+	if u, _ := s.ArtifactUsage(ctx, "proj"); u.Total != (300+50)<<10 {
+		t.Fatalf("after stage: %+v", u)
+	}
+	if err := s.Transition(ctx, "b", "running", "failed", TransitionDetail{Epoch: 2, FailureClass: "code"}); err != nil {
+		t.Fatal(err)
+	}
+	if u, _ := s.ArtifactUsage(ctx, "proj"); u.Total != 50<<10 {
+		t.Fatalf("after b ended: %+v", u)
+	}
+}

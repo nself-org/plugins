@@ -16,6 +16,7 @@ package run
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -56,18 +57,38 @@ func (h *artifactsHook) setup(a AttemptInfo) (records.Policy, *cas.Store, error)
 	return pol, blobs, err
 }
 
-// epochOf is the capability the attempt launched with (a.Epoch), or, for a
-// caller that did not set it, the current one.
-func epochOf(ctx context.Context, a AttemptInfo) (int64, error) {
-	if a.Epoch != 0 {
-		return a.Epoch, nil
+// epochOf is the capability the attempt launched with. A caller that did not
+// set it gets a refusal: reading "the current epoch" here would let a stale
+// callback adopt a later incarnation's authority.
+func epochOf(a AttemptInfo) (int64, error) {
+	if a.Epoch == 0 {
+		return 0, records.Failf(records.ReasonEpoch, "the attempt carries no launch epoch")
 	}
-	_, epoch, err := a.Store.AttemptStateEpoch(ctx, a.AttemptID)
-	return epoch, err
+	return a.Epoch, nil
+}
+
+// scrub keeps a registered secret out of an error that reaches run output:
+// workspace paths appear in messages, and the output redactor does not see them.
+func (h *artifactsHook) scrub(err error) error {
+	if err == nil {
+		return nil
+	}
+	if sc := h.scanner(); sc != nil && len(sc.Scan([]byte(err.Error()))) == 0 {
+		return err
+	}
+	var re *records.Error
+	if errors.As(err, &re) {
+		return &records.Error{ID: re.ID, Reason: re.Reason, Msg: "the message named a registered secret value and was withheld"}
+	}
+	return records.Failf(records.ReasonSecretMatch, "an error named a registered secret value and was withheld")
 }
 
 // AttemptStart records the declarations of the attempt.
 func (h *artifactsHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
+	return h.scrub(h.attemptStart(ctx, a))
+}
+
+func (h *artifactsHook) attemptStart(ctx context.Context, a AttemptInfo) error {
 	if a.Store == nil {
 		return nil
 	}
@@ -84,7 +105,7 @@ func (h *artifactsHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
 			return records.Failf(records.ReasonSecretMatch, "an artifact declaration holds a registered secret value (or no scanner is registered); nothing is declared")
 		}
 	}
-	epoch, err := epochOf(ctx, a)
+	epoch, err := epochOf(a)
 	if err != nil {
 		return err
 	}
@@ -101,6 +122,10 @@ func (h *artifactsHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
 
 // AfterJob collects the declared outputs from the workspace the executor pinned.
 func (h *artifactsHook) AfterJob(ctx context.Context, a AttemptInfo, workspace *os.Root) error {
+	return h.scrub(h.afterJob(ctx, a, workspace))
+}
+
+func (h *artifactsHook) afterJob(ctx context.Context, a AttemptInfo, workspace *os.Root) error {
 	if a.Store == nil {
 		return nil
 	}
@@ -117,7 +142,7 @@ func (h *artifactsHook) AfterJob(ctx context.Context, a AttemptInfo, workspace *
 	if err != nil {
 		return err
 	}
-	epoch, err := epochOf(ctx, a)
+	epoch, err := epochOf(a)
 	if err != nil {
 		return err
 	}
@@ -136,7 +161,8 @@ func (h *artifactsHook) AfterJob(ctx context.Context, a AttemptInfo, workspace *
 		facts.Isolation = "process"
 	}
 	facts.Producer = "nself-ci/" + a.JobName
-	staged, err := records.Collector{Blobs: blobs, Scanner: h.scanner(), Policy: pol, Usage: usage}.CollectRoot(ctx, facts.Project, root, decls)
+	reserve := func(total int64) error { return a.Store.ArtifactReserve(ctx, a.AttemptID, epoch, total, pol) }
+	staged, err := records.Collector{Blobs: blobs, Scanner: h.scanner(), Policy: pol, Usage: usage, Reserve: reserve}.CollectRoot(ctx, facts.Project, root, decls)
 	if err != nil {
 		return err
 	}

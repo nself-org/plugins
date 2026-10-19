@@ -14,13 +14,14 @@ package records
 import (
 	"archive/tar"
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -70,7 +71,7 @@ func ReadImageLayout(r io.Reader) (*ImageInfo, error) {
 		}
 		name := strings.TrimPrefix(strings.TrimPrefix(h.Name, "./"), "/")
 		blobName, isBlob := strings.CutPrefix(name, "blobs/sha256/")
-		if isBlob && h.Typeflag == tar.TypeReg {
+		if isBlob && h.Typeflag == tar.TypeReg && hexDigest.MatchString(blobName) {
 			present[blobName] = true
 		}
 		if h.Typeflag != tar.TypeReg || h.Size > imageMaxSmall {
@@ -105,9 +106,8 @@ func ReadImageLayout(r io.Reader) (*ImageInfo, error) {
 	if len(info.Manifests) == 0 {
 		return nil, failf(ReasonImage, "index.json lists no manifest")
 	}
-	sort.Slice(info.Manifests, func(i, j int) bool {
-		a, b := info.Manifests[i], info.Manifests[j]
-		return a.Platform < b.Platform || a.Platform == b.Platform && a.Digest < b.Digest
+	slices.SortFunc(info.Manifests, func(a, b ImageManifest) int {
+		return cmp.Or(strings.Compare(a.Platform, b.Platform), strings.Compare(a.Digest, b.Digest))
 	})
 	return info, nil
 }
@@ -146,12 +146,9 @@ func (w *manifestWalk) collect(index []byte, depth int) error {
 				return failf(ReasonImage, "manifest %s does not match its digest", d.Digest)
 			}
 		}
-		platform := "unknown"
-		if p := d.Platform; p != nil && p.OS != "" && p.Architecture != "" {
-			platform = p.OS + "/" + p.Architecture
-			if p.Variant != "" {
-				platform += "/" + p.Variant
-			}
+		platform, err := platformOf(d)
+		if err != nil {
+			return err
 		}
 		if len(w.out.Manifests) >= imageMaxDescs {
 			return failf(ReasonImage, "the layout lists more than %d manifests", imageMaxDescs)
@@ -177,4 +174,25 @@ func (w *manifestWalk) nested(want, full string, depth int) error {
 	}
 	w.seen[want] = true
 	return w.collect(b, depth+1)
+}
+
+var platformPart = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+
+// platformOf renders os/arch[/variant]; each part must be a plain token, so
+// decoded JSON text (escapes, long strings) never reaches a record or its output.
+func platformOf(d ociDescriptor) (string, error) {
+	p := d.Platform
+	if p == nil || p.OS == "" || p.Architecture == "" {
+		return "unknown", nil
+	}
+	parts := []string{p.OS, p.Architecture}
+	if p.Variant != "" {
+		parts = append(parts, p.Variant)
+	}
+	for _, s := range parts {
+		if !platformPart.MatchString(s) {
+			return "", failf(ReasonImage, "a platform field is not a plain token (letters, digits, . _ -; at most 64)")
+		}
+	}
+	return strings.Join(parts, "/"), nil
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
+	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"os"
 	"path/filepath"
 	"strings"
@@ -336,5 +338,76 @@ func TestCollectHonoursTheStoreBudget(t *testing.T) {
 	c.Usage = records.Usage{Total: 1}
 	if _, err := c.Collect(context.Background(), "proj", e.ws, two); !records.IsReason(err, records.ReasonSizeCap) {
 		t.Fatalf("one over: %v", err)
+	}
+}
+
+func TestCollectNeverEchoesASecretNamedFile(t *testing.T) {
+	e := newEnv(t)
+	const secret = "registered-opus-secret-987654"
+	if err := e.red.Register([]byte(secret)); err != nil {
+		t.Fatal(err)
+	}
+	e.pol.MaxFile = 10
+	e.write("out/"+secret, strings.Repeat("x", 100)) // over the file cap
+	if err := os.Symlink("real", filepath.Join(e.ws, "out", "ln-"+secret)); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"out/*", "out/" + secret, "out/ln-" + secret} {
+		_, err := collect(e, p)
+		if !records.IsReason(err, records.ReasonSecretMatch) || strings.Contains(err.Error(), secret) {
+			t.Fatalf("%s: %v", p, err)
+		}
+	}
+}
+
+func TestCollectBoundsRecordsAndReservesBeforeWriting(t *testing.T) {
+	e := newEnv(t)
+	for i := 0; i < 5; i++ {
+		e.write(fmt.Sprintf("d/f%d", i), "x")
+	}
+	c := e.collector()
+	c.MaxRecords = 4
+	ds, _ := records.Normalize(model.Job{Artifacts: []model.ArtifactDecl{decl("d")}}, false, nil)
+	if _, err := c.Collect(context.Background(), "proj", e.ws, ds); !records.IsReason(err, records.ReasonSizeCap) {
+		t.Fatalf("5 files over a 4-record budget: %v", err)
+	}
+	c.MaxRecords = 5
+	var reserved int64 = -1
+	c.Reserve = func(total int64) error { reserved = total; return nil }
+	if got, err := c.Collect(context.Background(), "proj", e.ws, ds); err != nil || len(got) != 5 || reserved != 5 {
+		t.Fatalf("exactly the budget: %d %v reserved %d", len(got), err, reserved)
+	}
+	// the budget spans declarations
+	two, _ := records.Normalize(model.Job{Artifacts: []model.ArtifactDecl{{Path: "d", Name: "a"}, {Path: "d", Name: "b"}}}, false, nil)
+	if _, err := c.Collect(context.Background(), "proj", e.ws, two); !records.IsReason(err, records.ReasonSizeCap) {
+		t.Fatalf("two declarations of 5 files: %v", err)
+	}
+	// a refused reservation writes nothing
+	c2 := e.collector()
+	home2 := t.TempDir()
+	blobs2, _ := cas.New(home2)
+	c2.Blobs = blobs2
+	c2.Reserve = func(int64) error { return records.Failf(records.ReasonSizeCap, "claimed by another attempt") }
+	if _, err := c2.Collect(context.Background(), "proj", e.ws, ds); !records.IsReason(err, records.ReasonSizeCap) {
+		t.Fatalf("%v", err)
+	}
+	if f, _ := filepath.Glob(filepath.Join(home2, "blobs", "artifacts-*", "sha256", "*", "*")); len(f) != 0 {
+		t.Fatalf("bytes were written after a refused reservation: %v", f)
+	}
+	// a cancelled context stops the expansion
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := e.collector().Collect(ctx, "proj", e.ws, ds); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled: %v", err)
+	}
+	many := make([]model.ArtifactDecl, records.MaxDecls+1)
+	for i := range many {
+		many[i] = decl("d")
+	}
+	if _, err := records.Normalize(model.Job{Artifacts: many[:records.MaxDecls]}, false, nil); err != nil {
+		t.Fatalf("exactly MaxDecls: %v", err)
+	}
+	if _, err := records.Normalize(model.Job{Artifacts: many}, false, nil); !records.IsReason(err, records.ReasonDeclaration) {
+		t.Fatalf("one over MaxDecls: %v", err)
 	}
 }

@@ -348,3 +348,45 @@ func TestImageHostileLayouts(t *testing.T) {
 		t.Fatalf("1025 manifests overall: %v", err)
 	}
 }
+
+func TestImagePlatformFieldsMustBePlainTokens(t *testing.T) {
+	body := manifestBody
+	for name, plat := range map[string]string{
+		"space":       `{"os":"linux","architecture":"am d64"}`,
+		"too long":    `{"os":"linux","architecture":"` + strings.Repeat("a", 65) + `"}`,
+		"bad variant": `{"os":"linux","architecture":"arm64","variant":"v8;x"}`,
+	} {
+		idx := []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:` + dig(body) + `","platform":` + plat + `}]}`)
+		hs, bs := withManifest([]tar.Header{{Name: "index.json"}}, [][]byte{idx})
+		if _, err := records.ReadImageLayout(bytes.NewReader(rawTar(hs, bs))); !records.IsReason(err, records.ReasonImage) {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	// exactly 64 characters is fine; a missing os/arch is "unknown"
+	okPlat := `{"os":"linux","architecture":"` + strings.Repeat("a", 64) + `"}`
+	for plat, want := range map[string]string{okPlat: "linux/" + strings.Repeat("a", 64), `{"os":"linux"}`: "unknown", `{"architecture":"arm"}`: "unknown"} {
+		idx := []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:` + dig(body) + `","platform":` + plat + `}]}`)
+		hs, bs := withManifest([]tar.Header{{Name: "index.json"}}, [][]byte{idx})
+		info, err := records.ReadImageLayout(bytes.NewReader(rawTar(hs, bs)))
+		if err != nil || info.Manifests[0].Platform != want {
+			t.Fatalf("%s: %+v %v", plat, info, err)
+		}
+	}
+}
+
+// A platform field with a JSON-escaped rune decodes to a value the raw-byte scan
+// never saw; the decoded text is scanned before anything is staged.
+func TestCollectScansDecodedImageFields(t *testing.T) {
+	e := newEnv(t)
+	const secret = "registered-opus-secret-987654"
+	if err := e.red.Register([]byte(secret)); err != nil {
+		t.Fatal(err)
+	}
+	idx := []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:` + dig(manifestBody) + `","platform":{"os":"\u0072egistered-opus-secret-987654","architecture":"amd64"}}]}`)
+	hs, bs := withManifest([]tar.Header{{Name: "index.json"}}, [][]byte{idx})
+	e.write("image.tar", string(rawTar(hs, bs)))
+	_, err := collect2(e, model.ArtifactDecl{Path: "image.tar", Kind: "image"})
+	if !records.IsReason(err, records.ReasonSecretMatch) || strings.Contains(err.Error(), secret) {
+		t.Fatalf("%v", err)
+	}
+}

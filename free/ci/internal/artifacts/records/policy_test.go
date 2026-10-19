@@ -167,3 +167,34 @@ func TestStoreDir(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestPolicyParsingBoundaries(t *testing.T) {
+	ok := func(k, v string) {
+		t.Helper()
+		if _, err := records.PolicyFromEnv(envOf(map[string]string{k: v})); err != nil {
+			t.Fatalf("%s=%s: %v", k, v, err)
+		}
+	}
+	bad := func(k, v string) {
+		t.Helper()
+		if _, err := records.PolicyFromEnv(envOf(map[string]string{k: v})); !records.IsReason(err, records.ReasonConfig) {
+			t.Fatalf("%s=%s: %v", k, v, err)
+		}
+	}
+	ok("NSELF_CI_STORE_MIN_FREE", "0")
+	ok("NSELF_CI_STORE_MIN_FREE", "0%")
+	ok("NSELF_CI_STORE_MIN_FREE", "100%")
+	bad("NSELF_CI_STORE_MIN_FREE", "101%")
+	bad("NSELF_CI_STORE_MIN_FREE", "-1%")
+	ok("NSELF_CI_PROJECT_SHARE", "1")
+	ok("NSELF_CI_PROJECT_SHARE", "100%")
+	bad("NSELF_CI_PROJECT_SHARE", "0")
+	bad("NSELF_CI_PROJECT_SHARE", "101")
+	ok("NSELF_CI_ARTIFACT_MAX_FILE", "4611686018427387904") // 1<<62 bytes
+	bad("NSELF_CI_ARTIFACT_MAX_FILE", "4611686018427387905")
+	bad("NSELF_CI_ARTIFACT_MAX_FILE", "-5")
+	ok("NSELF_CI_ARTIFACT_MAX_FILE", "1")
+	ok("NSELF_CI_ARTIFACT_MAX_FILE", "2147483648B")
+	bad("NSELF_CI_ARTIFACT_MAX_FILE", "4294967297GiB")
+	ok("NSELF_CI_ARTIFACT_MAX_FILE", "4294967296GiB")
+}

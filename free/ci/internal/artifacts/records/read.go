@@ -138,9 +138,7 @@ func (r Reader) write(dir, rel string, rec Record) (string, Record, error) {
 	}
 	h := sha256.New()
 	n, err := io.Copy(io.MultiWriter(out, h), src)
-	if cerr := out.Close(); err == nil {
-		err = cerr
-	}
+	err = errors.Join(err, out.Close())
 	if err != nil || n != rec.Size || !strings.EqualFold(hex.EncodeToString(h.Sum(nil)), rec.SHA256) {
 		_ = root.Remove(rel)
 		return "", rec, failf(ReasonDigest, "%s: written bytes do not match the recorded digest (%v)", rec.Name, err)

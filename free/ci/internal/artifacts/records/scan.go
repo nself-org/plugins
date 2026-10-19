@@ -57,13 +57,12 @@ func (r *scanReader) fill() {
 	chunk := make([]byte, scanWindow)
 	n, err := io.ReadFull(r.src, chunk)
 	chunk = chunk[:n]
-	switch {
-	case err == nil:
-	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+	if err != nil {
+		if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+			r.err = failf(ReasonUnreadable, "%s: %v", r.name, err)
+			return
+		}
 		r.err = io.EOF
-	default:
-		r.err = failf(ReasonUnreadable, "%s: %v", r.name, err)
-		return
 	}
 	if r.read += int64(n); r.read > r.max {
 		r.err = failf(r.reason, "%s grew past its byte budget %d B while it was read", r.name, r.max)

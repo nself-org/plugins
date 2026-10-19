@@ -80,3 +80,44 @@ func (s *Store) ArtifactCommit(ctx context.Context, attempt string, epoch int64,
 	})
 	return warning, errors.Join(err, refusal)
 }
+
+// ArtifactReserve claims bytes of the store for a running attempt before any is
+// written: it re-reads the live usage (committed, staged and other attempts'
+// claims) inside the writer transaction, applies the caps, and keeps the claim
+// until the attempt stages its records or ends. A later reserve of the same
+// attempt replaces the earlier one.
+func (s *Store) ArtifactReserve(ctx context.Context, attempt string, epoch int64, bytes int64, pol records.Policy) error {
+	var refusal error
+	err := s.write(ctx, func(tx *sql.Tx) error {
+		if ok, err := s.artGate(ctx, tx, &refusal, "reserve", attempt, "running", epoch); !ok || err != nil {
+			return err
+		}
+		f, err := artFacts(ctx, tx, attempt)
+		if err != nil {
+			return err
+		}
+		u, err := artUsage(ctx, tx, f.Project)
+		if err != nil {
+			return err
+		}
+		var held, heldProject int64
+		if err = tx.QueryRowContext(ctx, `SELECT coalesce(sum(bytes),0),coalesce(sum(CASE WHEN project=? THEN bytes END),0) FROM cache_artifact_reserve
+WHERE attempt_id<>? AND attempt_id IN (SELECT id FROM attempt WHERE state IN ('running','finalizing'))`, f.Project, attempt).Scan(&held, &heldProject); err != nil {
+			return err
+		}
+		var staged, stagedProject int64
+		if err = tx.QueryRowContext(ctx, `SELECT coalesce(sum(size),0),coalesce(sum(CASE WHEN project=? THEN size END),0) FROM cache_artifact
+WHERE state='staged' AND attempt_id<>? AND attempt_id IN (SELECT id FROM attempt WHERE state IN ('running','finalizing'))`, f.Project, attempt).Scan(&staged, &stagedProject); err != nil {
+			return err
+		}
+		u.Total, u.Project = u.Total+held+staged, u.Project+heldProject+stagedProject
+		if _, err = pol.CheckCaps(u, bytes); err != nil {
+			refusal = err
+			return s.appendAudit(ctx, tx, "artifacts", "artifact.reserve.refused", attempt, "reason="+records.ReasonSizeCap)
+		}
+		_, err = tx.ExecContext(ctx, "INSERT INTO cache_artifact_reserve(attempt_id,project,bytes,epoch,reserved_at) VALUES (?,?,?,?,?) ON CONFLICT(attempt_id) DO UPDATE SET bytes=excluded.bytes, epoch=excluded.epoch, reserved_at=excluded.reserved_at",
+			attempt, f.Project, bytes, epoch, s.now().UnixNano())
+		return err
+	})
+	return errors.Join(err, refusal)
+}

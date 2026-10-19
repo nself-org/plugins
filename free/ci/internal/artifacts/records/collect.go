@@ -50,7 +50,15 @@ type Collector struct {
 	// Usage is what the store holds now (Ledger.ArtifactUsage); the declared
 	// and streamed bytes are checked against the caps on top of it.
 	Usage Usage
+	// Reserve, when set, records the declared total in the store before the
+	// first byte is written, so concurrent attempts see each other's claims.
+	Reserve func(total int64) error
+	// MaxRecords bounds the files one attempt may collect (0 = DefaultMaxRecords).
+	MaxRecords int
 }
+
+// DefaultMaxRecords is the most files one attempt may collect across all its declarations.
+const DefaultMaxRecords = 10000
 
 // planned is one admitted file with the record name it will get.
 type planned struct {
@@ -79,7 +87,7 @@ func (c Collector) Collect(ctx context.Context, project, base string, decls []De
 // refusal leaves nothing behind; the bytes actually streamed are held to the
 // same budget.
 func (c Collector) CollectRoot(ctx context.Context, project string, root *os.Root, decls []Decl) ([]Staged, error) {
-	plan, err := c.plan(root, decls)
+	plan, err := c.plan(ctx, root, decls)
 	if err != nil {
 		return nil, err
 	}
@@ -98,14 +106,18 @@ func (c Collector) CollectRoot(ctx context.Context, project string, root *os.Roo
 }
 
 // plan expands, sanitises and caps every declaration (no bytes are read).
-func (c Collector) plan(root *os.Root, decls []Decl) ([]planned, error) {
+func (c Collector) plan(ctx context.Context, root *os.Root, decls []Decl) ([]planned, error) {
 	lim := c.Limits
 	lim.MaxFileBytes, lim.MaxTotalBytes = math.MaxInt64/4, math.MaxInt64/4 // the caps below are E712; authz keeps the shape rules
 	names := map[string]bool{}
 	var total int64
 	var out []planned
+	budget := c.MaxRecords
+	if budget <= 0 {
+		budget = DefaultMaxRecords
+	}
 	for _, d := range decls {
-		ents, err := expand(root.FS(), d.Path, authz.DefaultLimits().MaxEntries)
+		ents, err := expand(ctx, root.FS(), d.Path, budget-len(out))
 		if err != nil {
 			return nil, err
 		}
@@ -119,6 +131,9 @@ func (c Collector) plan(root *os.Root, decls []Decl) ([]planned, error) {
 		literal := !hasMeta(d.Path) && len(ents) == 1 && ents[0].rel == d.Path
 		for _, f := range ents {
 			name := recordName(d, f.rel, literal)
+			if c.Scanner != nil && (len(c.Scanner.Scan([]byte(name))) != 0 || len(c.Scanner.Scan([]byte(f.rel))) != 0) {
+				return nil, failf(ReasonSecretMatch, "an artifact name or path holds a registered secret value; nothing is stored") // judged first: every later message names the path
+			}
 			if f.info.Mode().IsRegular() {
 				if err = c.Policy.CheckFile(name, f.info.Size()); err != nil {
 					return nil, err
@@ -130,9 +145,6 @@ func (c Collector) plan(root *os.Root, decls []Decl) ([]planned, error) {
 			if err = admit(x, root.FS(), f); err != nil {
 				return nil, err
 			}
-			if c.Scanner != nil && (len(c.Scanner.Scan([]byte(name))) != 0 || len(c.Scanner.Scan([]byte(f.rel))) != 0) {
-				return nil, failf(ReasonSecretMatch, "an artifact name or path holds a registered secret value; nothing is stored") // names reach list output
-			}
 			if names[name] {
 				return nil, failf(ReasonDuplicate, "two declarations produce the artifact name %q", name)
 			}
@@ -142,6 +154,11 @@ func (c Collector) plan(root *os.Root, decls []Decl) ([]planned, error) {
 	}
 	if _, err := c.Policy.CheckCaps(c.Usage, total); err != nil {
 		return nil, err
+	}
+	if c.Reserve != nil { // hold the declared bytes in the store before any is written
+		if err := c.Reserve(total); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }
@@ -183,10 +200,9 @@ func (c Collector) store(ctx context.Context, root *os.Root, realm cas.Realm, p 
 	if now, err := file.Stat(); err != nil || !os.SameFile(now, f.info) || !now.Mode().IsRegular() {
 		return Staged{}, failf(ReasonUnreadable, "%s changed while it was collected", f.rel)
 	}
-	sr := newScanReader(file, c.Scanner, f.rel, c.Policy.MaxFile)
-	if room := c.Policy.MaxTotal - c.Usage.Total - streamed; room < sr.max {
-		sr.max, sr.reason = max(room, 0), ReasonSizeCap
-	}
+	limit, reason := streamBudget(c.Policy, c.Usage, streamed)
+	sr := newScanReader(file, c.Scanner, f.rel, limit)
+	sr.reason = reason
 	digest, size, err := c.Blobs.Put(ctx, realm, sr)
 	if err != nil {
 		return Staged{}, err
@@ -202,6 +218,22 @@ func (c Collector) store(ctx context.Context, root *os.Root, realm cas.Realm, p 
 			return Staged{}, err
 		}
 		st.Image.Ref = d.ImageRef
+		if c.Scanner != nil { // decoded JSON text can hide a value from the raw-byte scan
+			for _, m := range st.Image.Manifests {
+				if len(c.Scanner.Scan([]byte(m.Platform))) != 0 || len(c.Scanner.Scan([]byte(m.Digest))) != 0 {
+					return Staged{}, failf(ReasonSecretMatch, "an image field holds a registered secret value; nothing is staged")
+				}
+			}
+		}
 	}
 	return st, nil
+}
+
+// streamBudget is how many bytes one file may stream: the per-file cap, or the
+// room left in the store when that is smaller (then the refusal is size_cap).
+func streamBudget(p Policy, u Usage, streamed int64) (int64, string) {
+	if room := p.MaxTotal - u.Total - streamed; room < p.MaxFile {
+		return max(room, 0), ReasonSizeCap
+	}
+	return p.MaxFile, ReasonFileCap
 }

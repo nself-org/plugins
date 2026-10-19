@@ -117,6 +117,13 @@ func (s *Store) ArtifactUsage(ctx context.Context, project string) (records.Usag
 coalesce(sum(CASE WHEN project=? THEN size END),0),coalesce(sum(CASE WHEN project=? AND release=1 THEN size END),0) FROM cache_artifact
 WHERE state='committed' OR attempt_id IN (SELECT id FROM attempt WHERE state IN ('running','finalizing'))`, project, project).
 		Scan(&u.Total, &u.Release, &u.Project, &u.ProjectRelease)
+	if err != nil {
+		return u, err
+	}
+	var held, heldProject int64
+	err = s.readers.QueryRowContext(ctx, `SELECT coalesce(sum(bytes),0),coalesce(sum(CASE WHEN project=? THEN bytes END),0) FROM cache_artifact_reserve
+WHERE attempt_id IN (SELECT id FROM attempt WHERE state IN ('running','finalizing'))`, project).Scan(&held, &heldProject)
+	u.Total, u.Project = u.Total+held, u.Project+heldProject
 	return u, err
 }
 

@@ -13,9 +13,10 @@ package records
 // stored file has no compression ratio, so the ratio rule never fires.
 
 import (
+	"context"
 	"io/fs"
 	"path"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
@@ -31,10 +32,10 @@ func hasMeta(s string) bool { return strings.ContainsAny(s, "*?[") }
 // maxPatternParts bounds the components of one declared pattern, and
 // maxVisits the (directory, component) pairs one expansion may try, so a
 // hostile pattern such as `**/**/**/…/x` cannot stall the coordinator.
-const (
-	maxPatternParts = 64
-	maxVisits       = 1 << 20
-)
+const maxPatternParts = 64
+
+// maxVisits is a var so a test can pin its boundary.
+var maxVisits = 1 << 20
 
 type visit struct {
 	dir string
@@ -42,7 +43,7 @@ type visit struct {
 }
 
 // expand lists the entries a declaration selects, sorted by path.
-func expand(fsys fs.FS, pattern string, maxEntries int) ([]found, error) {
+func expand(ctx context.Context, fsys fs.FS, pattern string, maxEntries int) ([]found, error) {
 	comps := strings.Split(pattern, "/")
 	if len(comps) > maxPatternParts {
 		return nil, failf(ReasonDeclaration, "artifact pattern %q has more than %d components", pattern, maxPatternParts)
@@ -59,6 +60,9 @@ func expand(fsys fs.FS, pattern string, maxEntries int) ([]found, error) {
 			return nil
 		}
 		return fs.WalkDir(fsys, rel, func(p string, d fs.DirEntry, err error) error {
+			if cerr := ctx.Err(); cerr != nil {
+				return cerr
+			}
 			if err != nil {
 				return failf(ReasonUnreadable, "%s: %v", p, err)
 			}
@@ -70,13 +74,16 @@ func expand(fsys fs.FS, pattern string, maxEntries int) ([]found, error) {
 				return failf(ReasonUnreadable, "%s: %v", p, err)
 			}
 			if seen[p] = (found{p, fi}); len(seen) > maxEntries {
-				return authzTooMany(p)
+				return failf(ReasonSizeCap, "the declarations select more than the allowed %d files", maxEntries)
 			}
 			return nil
 		})
 	}
 	var walk func(dir string, i int) error
 	walk = func(dir string, i int) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if visited[visit{dir, i}] {
 			return nil
 		}
@@ -132,12 +139,8 @@ func expand(fsys fs.FS, pattern string, maxEntries int) ([]found, error) {
 	for _, f := range seen {
 		out = append(out, f)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].rel < out[j].rel })
+	slices.SortFunc(out, func(a, b found) int { return strings.Compare(a.rel, b.rel) })
 	return out, nil
-}
-
-func authzTooMany(p string) error {
-	return &authz.PathError{Reason: authz.SizeEntries, Name: p}
 }
 
 func join(dir, name string) string {

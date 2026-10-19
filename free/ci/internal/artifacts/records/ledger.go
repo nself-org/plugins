@@ -42,6 +42,8 @@ type Ledger interface {
 	ArtifactDeclare(ctx context.Context, attempt string, epoch int64, decls []Decl) error
 	// ArtifactDecls returns the declarations of the attempt in order.
 	ArtifactDecls(ctx context.Context, attempt string) ([]Decl, error)
+	// ArtifactReserve claims bytes of the store for the attempt before any is written.
+	ArtifactReserve(ctx context.Context, attempt string, epoch int64, bytes int64, pol Policy) error
 	// ArtifactStage stores staged records (state running, epoch as declared).
 	ArtifactStage(ctx context.Context, attempt string, epoch int64, recs []Record) error
 	// ArtifactStaged returns the attempt's records that are not committed yet.
