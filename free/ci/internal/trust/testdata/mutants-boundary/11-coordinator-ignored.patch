@@ -1,0 +1,11 @@
+--- a/internal/trust/prodboundary.go
++++ b/internal/trust/prodboundary.go
+@@ -38,7 +38,7 @@
+ 			out = append(out, BoundaryOverrideMinimum)
+ 		}
+ 	}
+-	if d.CoordinatorHost && coordinatorFloorApplies(job, d) && belowFloor(d.Isolation) {
++	if false && coordinatorFloorApplies(job, d) && belowFloor(d.Isolation) {
+ 		out = append(out, BoundaryCoordinatorHost)
+ 	}
+ 	return out

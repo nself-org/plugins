@@ -1,0 +1,12 @@
+--- a/internal/trust/prodboundary.go
++++ b/internal/trust/prodboundary.go
+@@ -24,6 +24,9 @@
+ 
+ // ownTrust is true for the classes that may run on an overridden deploy host.
+ func ownTrust(c model.TrustClass) bool {
++	if c == "collaborator" {
++		return true
++	}
+ 	t := DecodeTrust(string(c))
+ 	return t == "owner" || t == "internal"
+ }
