@@ -183,6 +183,7 @@ func TestStalledConsumerNeverBlocksTheCallers(t *testing.T) {
 	all := lines(t, out)
 	var prev int64
 	logs, started := 0, false
+	var order []string
 	for i, l := range all {
 		var d struct {
 			Type string `json:"type"`
@@ -194,6 +195,12 @@ func TestStalledConsumerNeverBlocksTheCallers(t *testing.T) {
 		prev = d.Seq
 		logs += map[bool]int{true: 1}[d.Type == "log"]
 		started = started || d.Type == "started"
+		if len(order) == 0 || order[len(order)-1] != d.Type {
+			order = append(order, d.Type)
+		}
+	}
+	if strings.Join(order, ",") != "queued,log,started,result" {
+		t.Fatalf("record order %v: queue order must survive the drops", order)
 	}
 	if !started || logs == 0 || logs >= 5*maxLogBacklog {
 		t.Fatalf("started=%v, %d of %d log records kept: want the started record and a bounded number of logs", started, logs, 5*maxLogBacklog)
@@ -210,5 +217,20 @@ func TestEndGivesUpOnAStalledConsumer(t *testing.T) {
 	e := New(w, "ci", "r", "r", nil)
 	if seq := e.End(map[string]any{"result": "pass"}, nil); seq != 0 || e.Err() == nil {
 		t.Fatalf("End returned %d with err %v for a consumer that never reads", seq, e.Err())
+	}
+}
+
+// After End gave up, Flush must not wait out a second timeout.
+func TestFlushAfterAStalledEndReturnsAtOnce(t *testing.T) {
+	old := FlushTimeout
+	FlushTimeout = 200 * time.Millisecond
+	defer func() { FlushTimeout = old }()
+	w := blockedWriter{release: make(chan struct{}), mu: &sync.Mutex{}, buf: &bytes.Buffer{}}
+	defer close(w.release)
+	e := New(w, "ci", "r", "r", nil)
+	e.End(map[string]any{"result": "pass"}, nil)
+	start := time.Now()
+	if e.Flush() || time.Since(start) > 100*time.Millisecond {
+		t.Fatalf("Flush after a stalled End waited %v", time.Since(start))
 	}
 }

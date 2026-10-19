@@ -528,3 +528,37 @@ func TestVerifyRunsTheFullPipelineInACloneWithAnOrigin(t *testing.T) {
 		t.Fatalf("verify ran a %q selection, want full", mode)
 	}
 }
+
+// The terminal error line of a stream is the last line: everything queued
+// before it reaches the consumer first.
+func TestStreamErrorLineComesLast(t *testing.T) {
+	rd, wr, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stdout
+	os.Stdout = wr
+	got := make(chan string)
+	go func() { b, _ := io.ReadAll(rd); got <- string(b) }()
+	sess := &streamSession{w: wr, command: "ci evidence verify"}
+	activeMu.Lock()
+	activeSession = sess
+	activeMu.Unlock()
+	em := sess.emitter("run-1")
+	for i := 0; i < 200; i++ {
+		em.Emit("started", "job", "", nil)
+	}
+	code := evidenceFail("ci evidence verify", evidenceFlags{json: true, stream: true}, errors.New("the run did not finish"))
+	activeMu.Lock()
+	activeSession = nil
+	activeMu.Unlock()
+	_ = wr.Close()
+	os.Stdout = old
+	lines := strings.Split(strings.TrimRight(<-got, "\n"), "\n")
+	if code == 0 || len(lines) != 201 {
+		t.Fatalf("exit %d, %d lines, want 201", code, len(lines))
+	}
+	if !strings.Contains(lines[200], `"error"`) || strings.Contains(lines[199], `"error"`) {
+		t.Fatalf("the error line is not the last one:\n%s\n%s", lines[199], lines[200])
+	}
+}

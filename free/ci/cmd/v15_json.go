@@ -61,6 +61,26 @@ func ignoreBrokenPipe() {
 	})
 }
 
+// flush waits for the records queued so far to reach the consumer.
+func (s *streamSession) flush() {
+	s.mu.Lock()
+	em := s.em
+	s.mu.Unlock()
+	if em != nil {
+		em.Flush()
+	}
+}
+
+// flushActiveStream flushes the verify command's stream, if it has one.
+func flushActiveStream() {
+	activeMu.Lock()
+	s := activeSession
+	activeMu.Unlock()
+	if s != nil {
+		s.flush()
+	}
+}
+
 // activeSession, when set, is the stream the "ci-events" renderer writes to.
 var (
 	activeMu      sync.Mutex
@@ -158,6 +178,7 @@ func (r *jsonRenderer) Done(s cirun.Summary) {
 	}
 	if missing {
 		if line, err := output.StreamError("ci", noEvidence(), meta); err == nil {
+			em.Flush() // the error line comes after the records queued before it
 			_, _ = r.w.Write(line)
 		}
 		return

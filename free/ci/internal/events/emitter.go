@@ -164,9 +164,10 @@ func (e *Emitter) write() {
 // passed) and reports whether it was.
 func (e *Emitter) Flush() bool {
 	e.mu.Lock()
-	if e.closed {
+	if e.closed || e.err == errConsumerStalled { // finished, or already given up on the consumer
+		ok := e.closed
 		e.mu.Unlock()
-		return true
+		return ok
 	}
 	done := make(chan struct{})
 	e.push(item{flush: done})

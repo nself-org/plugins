@@ -111,6 +111,7 @@ func evidenceFail(command string, f evidenceFlags, err error) int {
 	ee.Exit = max(ee.Exit, 1)
 	detail := output.ErrorDetail{Code: ee.Code, Message: ee.Message, ExitCode: ee.Exit}
 	if line, e := output.StreamError(command, detail, nil); f.json && f.stream && e == nil {
+		flushActiveStream() // queued records first, so the error line is the last one
 		_, _ = os.Stdout.Write(line)
 	} else if f.json {
 		_ = output.WriteError(os.Stdout, command, detail, nil)
@@ -232,19 +233,6 @@ func runVerify(args []string) int {
 		return evidenceFail(cmd, f, err)
 	}
 	return printVerdict(cmd, f, sess, v)
-}
-
-func verifyFile(ctx context.Context, env evidence.Env, f evidenceFlags) (evidence.Verdict, error) {
-	fh, err := os.Open(f.file)
-	if err != nil {
-		return evidence.Verdict{}, &evidence.Error{Code: evidence.CodeRejected, Message: "cannot read the evidence file: " + err.Error(), Exit: evidence.ExitInvalid}
-	}
-	defer func() { _ = fh.Close() }()
-	doc, err := evidence.ReadDocument(fh)
-	if err != nil {
-		return evidence.Verdict{}, err
-	}
-	return evidence.VerifyFile(ctx, env, doc, f.atRev)
 }
 
 func printVerdict(command string, f evidenceFlags, sess *streamSession, v evidence.Verdict) int {

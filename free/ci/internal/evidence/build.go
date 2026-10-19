@@ -57,7 +57,7 @@ func (Builder) Complete(ctx context.Context, begin any, f cirun.EvidenceFacts, e
 		ev.InputDigests = s.inputs
 	}
 	tree := s.tree
-	if end := ReadWorktree(ctx, f.Git, f.Root); end.Dirty && !tree.Dirty { // edits made while the jobs ran, hidden or not
+	if end := ReadWorktree(context.WithoutCancel(ctx), f.Git, f.Root); end.Dirty { // edits made while the jobs ran, hidden or not
 		tree = end
 	}
 	if f.Job != "" { // one job is a check, not the required pipeline: it can never gate a revision
