@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Vendored for P7-CACHE-09 (2026-10-19). Source: in-toto/attestation spec/v1/statement.md, spec/v1/resource_descriptor.md and spec/v1/digest_set.md at commit fd2609c16bcb0ac53443e2b4612977f997e8f9a5 (the spec publishes no JSON Schema file; this transcribes its required fields and types). Additional properties stay allowed, as the spec's parsing rules require.",
+  "title": "in-toto Statement v1",
+  "type": "object",
+  "required": ["_type", "subject", "predicateType", "predicate"],
+  "properties": {
+    "_type": {"const": "https://in-toto.io/Statement/v1"},
+    "subject": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["digest"],
+        "properties": {
+          "name": {"type": "string"},
+          "uri": {"type": "string"},
+          "digest": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]+$"}
+          }
+        }
+      }
+    },
+    "predicateType": {"type": "string", "minLength": 1},
+    "predicate": {"type": "object"}
+  }
+}
