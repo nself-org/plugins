@@ -247,7 +247,10 @@ func logsFail(f logsFlags, command string, err error) int {
 			exit = 1
 		}
 	}
-	if f.json && code != "" {
+	if f.json {
+		if code == "" {
+			code = logs.CodeStore // an untyped storage or store error
+		}
 		if b, e := output.StreamError(command, output.ErrorDetail{Code: code, Message: msg, ExitCode: exit}, nil); e == nil {
 			_, _ = os.Stdout.Write(b)
 			return exit

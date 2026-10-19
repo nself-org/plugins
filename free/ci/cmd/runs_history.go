@@ -20,7 +20,6 @@ import (
 	"github.com/nself-org/cli/sdk/go/v2/output"
 
 	"github.com/nself-org/plugins/free/ci/internal/history"
-	"github.com/nself-org/plugins/free/ci/internal/logs"
 )
 
 func init() {
@@ -123,17 +122,17 @@ func runRunsPrune(args []string) int {
 		return exitForError(err)
 	}
 	if st == nil {
+		if f.json {
+			_ = output.WriteData(os.Stdout, "ci runs prune", history.PruneResult{Runs: []string{}, Orphans: []string{}, DryRun: f.dryRun}, nil)
+			return 0
+		}
 		fmt.Println("no run history on this machine; nothing to prune")
 		return 0
 	}
 	defer func() { _ = st.Close() }()
 	res, err := history.Prune(context.Background(), st, history.PruneParams{Home: home, Policy: pol, DryRun: f.dryRun})
 	if err != nil {
-		if le, ok := logs.AsError(err); ok {
-			fmt.Fprintln(os.Stderr, le)
-			return 2
-		}
-		return exitForError(err)
+		return logsFail(logsFlags{json: f.json}, "ci runs prune", err)
 	}
 	if f.json {
 		if err = output.WriteData(os.Stdout, "ci runs prune", res, nil); err != nil {

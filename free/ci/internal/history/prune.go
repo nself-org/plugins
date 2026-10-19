@@ -10,7 +10,8 @@ package history
 // rows go first and only the log directories of runs whose rows are really
 // gone are deleted, so a crash between the two leaves an orphan log directory
 // (no run row), never a run row without its logs recorded as present; orphan
-// log directories older than OrphanGrace are swept on every prune.
+// log directories older than OrphanGrace are swept on every prune; the
+// run-start prune removes at most runStartPruneMax runs.
 
 import (
 	"context"
@@ -25,6 +26,9 @@ import (
 // is swept (a run being created writes its row first, so this is a margin).
 const OrphanGrace = time.Hour
 
+// runStartPruneMax bounds one run-start prune; the rest go at the next runs.
+const runStartPruneMax = 100
+
 // PruneParams selects what Prune does.
 type PruneParams struct {
 	Home   string
@@ -32,6 +36,9 @@ type PruneParams struct {
 	Keep   []string // run ids never removed (the running pipeline)
 	DryRun bool
 	Now    time.Time // zero: time.Now()
+	// MaxRuns bounds how many runs one call removes, oldest first (0: no bound); the
+	// run-start prune uses it so the first prune of a long history spreads over runs.
+	MaxRuns int
 }
 
 // PruneResult reports a prune.
@@ -48,7 +55,7 @@ func Prune(ctx context.Context, st *store.Store, p PruneParams) (PruneResult, er
 	if now.IsZero() {
 		now = time.Now()
 	}
-	res := PruneResult{DryRun: p.DryRun}
+	res := PruneResult{DryRun: p.DryRun, Runs: []string{}, Orphans: []string{}}
 	ages, err := st.PipelineAges(ctx) // newest first
 	if err != nil {
 		return res, err
@@ -72,7 +79,7 @@ func Prune(ctx context.Context, st *store.Store, p PruneParams) (PruneResult, er
 	for _, a := range ages {
 		known[a.ID] = true
 	}
-	var orphans []string
+	orphans := []string{}
 	for _, i := range infos {
 		if !known[i.Run] && !keep[i.Run] && now.Sub(modified[i.Run]) > OrphanGrace {
 			orphans = append(orphans, i.Run)
@@ -82,7 +89,7 @@ func Prune(ctx context.Context, st *store.Store, p PruneParams) (PruneResult, er
 		total -= size[id] // swept anyway: they must not push real runs out
 	}
 	victim := map[string]bool{}
-	var oldestFirst []string
+	oldestFirst := []string{}
 	for i, a := range ages {
 		if a.Status == "running" || keep[a.ID] {
 			continue
@@ -109,6 +116,9 @@ func Prune(ctx context.Context, st *store.Store, p PruneParams) (PruneResult, er
 			oldestFirst = append(oldestFirst, ages[i].ID)
 		}
 	}
+	if p.MaxRuns > 0 && len(oldestFirst) > p.MaxRuns {
+		oldestFirst = oldestFirst[:p.MaxRuns]
+	}
 	res.Runs, res.Orphans = oldestFirst, orphans
 	for _, id := range append(append([]string(nil), oldestFirst...), orphans...) {
 		res.FreedBytes += size[id]
@@ -127,7 +137,7 @@ func Prune(ctx context.Context, st *store.Store, p PruneParams) (PruneResult, er
 	for _, a := range left {
 		still[a.ID] = true
 	}
-	res.Runs, res.FreedBytes = nil, 0
+	res.Runs, res.FreedBytes = []string{}, 0
 	for _, id := range oldestFirst {
 		if still[id] {
 			continue // the store refused it (it started running meanwhile)
@@ -150,6 +160,6 @@ func init() {
 		}
 		home := s.StateDir()
 		pol, _ := LoadPolicy(home)
-		_, _ = Prune(ctx, s.Store, PruneParams{Home: home, Policy: pol, Keep: []string{s.RunID}})
+		_, _ = Prune(ctx, s.Store, PruneParams{Home: home, Policy: pol, Keep: []string{s.RunID}, MaxRuns: runStartPruneMax})
 	}
 }

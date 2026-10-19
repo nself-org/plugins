@@ -2,6 +2,7 @@ package history
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -284,4 +285,24 @@ func TestOrphanBytesDoNotCountAgainstTheSizeCap(t *testing.T) {
 	same(t, "removed runs", res.Runs, nil)
 	same(t, "orphans", res.Orphans, []string{"orphan"})
 	same(t, "rows", f.ids(), []string{"real"})
+}
+
+func TestPruneResultListsAreNeverNullAndRunStartPruneIsBounded(t *testing.T) {
+	f := newFixture(t)
+	f.add("keep", "passed", day, 10)
+	res := f.prune(Default())
+	if res.Runs == nil || res.Orphans == nil {
+		t.Fatalf("nil lists would print JSON null: %+v", res)
+	}
+	for i := 0; i < 8; i++ {
+		f.add(fmt.Sprintf("old%d", i), "passed", time.Duration(60+i)*day, 10)
+	}
+	res, err := Prune(context.Background(), f.st, PruneParams{Home: f.home, Policy: Default(), Now: epoch, MaxRuns: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	same(t, "removed (oldest first, bounded)", res.Runs, []string{"old7", "old6", "old5"})
+	if len(f.ids()) != 6 {
+		t.Fatalf("rows left: %v", f.ids())
+	}
 }

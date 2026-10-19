@@ -5,7 +5,7 @@ package store
 // Inputs:  pipeline ids chosen by internal/history.
 // Outputs: PipelineAge rows; the number of pipelines actually removed.
 // Constraints: a pipeline whose status is "running" is never deleted (the
-// check and the delete share one transaction); the removal covers jobs,
+// check and the delete share one transaction, batches of pruneBatch); the removal covers jobs,
 // attempts, leases and reservations, cancel intents, idempotency keys,
 // declared artifacts, evidence and event-index rows of the pipeline, and one
 // audit row records the prune; the audit log itself is never pruned.
@@ -13,6 +13,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"strconv"
 )
 
@@ -42,53 +43,76 @@ func (s *Store) PipelineAges(ctx context.Context) ([]PipelineAge, error) {
 	return out, rows.Err()
 }
 
-// attemptsOf selects the attempts of a pipeline; the argument is its id.
-const attemptsOf = `(SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id=?)`
+// pruneBatch bounds one transaction: the single writer connection is held for
+// one batch at a time, so a first prune of a long history never starves a run.
+const pruneBatch = 100
 
-// pruneSteps deletes dependents before the rows they reference.
+// pruneSteps delete dependents before the rows they reference. Each takes one
+// argument, a JSON array of pipeline ids, and walks every table once per batch.
 var pruneSteps = []string{
-	`DELETE FROM host_reservation WHERE lease_id IN (SELECT id FROM lease WHERE attempt_id IN ` + attemptsOf + `)`,
-	`DELETE FROM lease WHERE attempt_id IN ` + attemptsOf,
-	`DELETE FROM cancel_intent WHERE attempt_id IN ` + attemptsOf,
-	`DELETE FROM idempotency_key WHERE attempt_id IN ` + attemptsOf,
-	`DELETE FROM declared_artifact WHERE attempt_id IN ` + attemptsOf,
-	`DELETE FROM evidence WHERE pipeline_id=?`,
-	`DELETE FROM event_index WHERE run_id=?`,
-	`DELETE FROM attempt WHERE job_id IN (SELECT id FROM job WHERE pipeline_id=?)`,
-	`DELETE FROM job WHERE pipeline_id=?`,
-	`DELETE FROM pipeline WHERE id=?`,
+	`DELETE FROM host_reservation WHERE lease_id IN (SELECT l.id FROM lease l JOIN attempt a ON l.attempt_id=a.id JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM lease WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM cancel_intent WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM idempotency_key WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM declared_artifact WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM evidence WHERE pipeline_id IN (SELECT value FROM json_each(?))`,
+	`DELETE FROM event_index WHERE run_id IN (SELECT value FROM json_each(?))`,
+	`DELETE FROM attempt WHERE job_id IN (SELECT id FROM job WHERE pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM job WHERE pipeline_id IN (SELECT value FROM json_each(?))`,
+	`DELETE FROM pipeline WHERE id IN (SELECT value FROM json_each(?))`,
 }
 
-// DeletePipelines removes the finished pipelines among ids in one
-// transaction and returns how many went. Unknown ids and running pipelines
-// are skipped, not errors.
+// DeletePipelines removes the finished pipelines among ids, pruneBatch per
+// transaction, and returns how many went. Unknown ids and running pipelines
+// are skipped, not errors; each batch re-checks the status inside its own
+// transaction, and one audit row per batch records the prune.
 func (s *Store) DeletePipelines(ctx context.Context, ids []string) (int, error) {
-	if len(ids) == 0 {
-		return 0, nil
+	removed := 0
+	for len(ids) > 0 {
+		n := min(pruneBatch, len(ids))
+		got, err := s.deleteBatch(ctx, ids[:n])
+		removed += got
+		if err != nil {
+			return removed, err
+		}
+		ids = ids[n:]
 	}
+	return removed, nil
+}
+
+func (s *Store) deleteBatch(ctx context.Context, ids []string) (int, error) {
+	in, _ := json.Marshal(ids)
 	removed := 0
 	err := s.write(ctx, func(tx *sql.Tx) error {
-		removed = 0
-		for _, id := range ids {
-			var status string
-			err := tx.QueryRowContext(ctx, `SELECT status FROM pipeline WHERE id=?`, id).Scan(&status)
-			if err == sql.ErrNoRows || status == "running" {
-				continue
-			}
-			if err != nil {
+		rows, err := tx.QueryContext(ctx, `SELECT id FROM pipeline WHERE status<>'running' AND id IN (SELECT value FROM json_each(?))`, string(in))
+		if err != nil {
+			return err
+		}
+		var finished []string
+		for rows.Next() {
+			var id string
+			if err = rows.Scan(&id); err != nil {
+				_ = rows.Close()
 				return err
 			}
-			for _, q := range pruneSteps {
-				if _, err = tx.ExecContext(ctx, q, id); err != nil {
-					return err
-				}
-			}
-			removed++
+			finished = append(finished, id)
 		}
-		if removed == 0 {
+		if err = rows.Close(); err != nil {
+			return err
+		}
+		if removed = len(finished); removed == 0 {
 			return nil
+		}
+		arg, _ := json.Marshal(finished)
+		for _, q := range pruneSteps {
+			if _, err = tx.ExecContext(ctx, q, string(arg)); err != nil {
+				return err
+			}
 		}
 		return s.appendAudit(ctx, tx, "ci", "runs.prune", strconv.Itoa(removed)+" run(s)", "retention prune")
 	})
+	if err != nil {
+		removed = 0
+	}
 	return removed, err
 }

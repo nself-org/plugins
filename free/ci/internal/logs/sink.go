@@ -46,6 +46,7 @@ type Sink struct {
 	kick         chan struct{}
 	stop         chan struct{}
 	finished     chan struct{}
+	abandoned    bool // Close gave up; the flusher closes the writer when it ends
 }
 
 // NewSink writes to w; stream labels the lines ("out" for job output).
@@ -137,7 +138,15 @@ func (s *Sink) addText(b []byte, at time.Time) {
 
 // run is the flusher: it stores batches until stopped, then once more.
 func (s *Sink) run() {
-	defer close(s.finished)
+	defer func() {
+		s.mu.Lock()
+		abandoned := s.abandoned
+		s.mu.Unlock()
+		if abandoned {
+			_ = s.w.Close() // Close timed out and left the writer to this goroutine
+		}
+		close(s.finished)
+	}()
 	tick := time.NewTicker(FlushEvery)
 	defer tick.Stop()
 	for final := false; !final; {
@@ -163,9 +172,9 @@ func (s *Sink) take(final bool) []Line {
 		s.partial = s.partial[:0]
 	}
 	batch := s.pending
-	if s.dropped > 0 && len(batch) > 0 {
-		note := Line{TS: Stamp(s.w.opt.Now()), Stream: "sys", Text: fmt.Sprintf("[%d output lines dropped: log storage was too slow]", s.dropped)}
-		batch, s.dropped = append([]Line{note}, batch...), 0
+	if s.dropped > 0 && len(batch) > 0 { // lines drop only once the queue is full, so the gap follows the queued ones
+		batch = append(batch, Line{TS: Stamp(s.w.opt.Now()), Stream: "sys", Text: fmt.Sprintf("[%d output lines dropped: log storage was too slow]", s.dropped)})
+		s.dropped = 0
 	}
 	s.pending, s.pendingBytes = nil, 0
 	if s.err != nil {
@@ -212,7 +221,14 @@ func (s *Sink) Close() error {
 	select {
 	case <-s.finished:
 	case <-time.After(CloseTimeout):
-		return fail(CodeStore, "storing the log did not finish within %v", CloseTimeout)
+		err := fail(CodeStore, "storing the log did not finish within %v; later lines may be missing", CloseTimeout)
+		s.mu.Lock()
+		s.abandoned = true
+		if s.err == nil {
+			s.err = err
+		}
+		s.mu.Unlock()
+		return err
 	}
 	err := s.Err()
 	if cerr := s.w.Close(); err == nil {

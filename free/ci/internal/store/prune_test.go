@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 )
 
@@ -54,5 +55,38 @@ func TestDeletePipelinesRemovesTreeAndSkipsRunning(t *testing.T) {
 	}
 	if n, err = s.DeletePipelines(ctx, []string{"p3"}); err != nil || n != 0 {
 		t.Errorf("a running pipeline was removed: n=%d err=%v", n, err)
+	}
+}
+
+// A history longer than one batch goes in several transactions, and a running
+// pipeline in the middle of a batch survives.
+func TestDeletePipelinesInBatches(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	var ids []string
+	for i := 0; i < pruneBatch+50; i++ {
+		id := fmt.Sprintf("%03d", i)
+		seed(t, s, id)
+		ids = append(ids, "p"+id)
+		if i != 7 {
+			if err := s.FinishPipeline(ctx, "p"+id, "passed"); err != nil {
+				t.Fatal(err)
+			}
+		} else if err := s.write(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, `UPDATE pipeline SET status='running' WHERE id='p007'`)
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	n, err := s.DeletePipelines(ctx, ids)
+	if err != nil || n != len(ids)-1 {
+		t.Fatalf("removed %d of %d, err %v", n, len(ids), err)
+	}
+	if ages, _ := s.PipelineAges(ctx); len(ages) != 1 || ages[0].ID != "p007" {
+		t.Fatalf("left %+v", ages)
+	}
+	if got := count(t, s, "attempt"); got != 1 {
+		t.Fatalf("attempt rows left: %d", got)
 	}
 }

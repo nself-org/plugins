@@ -3,6 +3,7 @@ package logs
 import (
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -132,7 +133,36 @@ func TestSinkWriteNeverWaitsForTheDisk(t *testing.T) {
 	if err := s.Close(); err == nil || !strings.Contains(err.Error(), CodeStore) {
 		t.Fatalf("Close with a stalled disk must time out with E632, got %v", err)
 	}
+	if err := s.Close(); err == nil {
+		t.Fatal("a second Close must not turn the timeout into success")
+	}
+	s.w.mu.Unlock() // the disk comes back: the abandoned flusher finishes and closes the writer
+	select {
+	case <-s.finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the flusher never finished")
+	}
+	if _, err := s.w.Append(mk(1<<30, "x")); err == nil || !strings.Contains(err.Error(), "closed") {
+		t.Fatalf("the abandoned writer must be closed by the flusher, got %v", err)
+	}
+}
+
+// The note that lines were dropped follows the queued lines (the gap is after them).
+func TestSinkDropNoteFollowsTheQueuedLines(t *testing.T) {
+	old := MaxPending
+	MaxPending = 200
+	defer func() { MaxPending = old }()
+	s, dir := newTestSink(t, Options{})
+	s.w.mu.Lock() // stall the flusher so the queue fills
+	for i := 1; i <= 6; i++ {
+		_, _ = s.Write([]byte(fmt.Sprintf("line-%d\n", i)))
+	}
 	s.w.mu.Unlock()
+	_ = s.Close()
+	got := texts(readAll(t, dir))
+	if len(got) < 3 || !strings.Contains(got[len(got)-1], "dropped") || got[0] != "line-1" {
+		t.Fatalf("stored %q: the drop note must come last, after the queued lines", got)
+	}
 }
 
 // A burst past FlushBytes followed by a trailing prompt without a newline: the
