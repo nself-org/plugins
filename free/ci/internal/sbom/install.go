@@ -4,14 +4,17 @@ package sbom
 // release at $NSELF_CI_HOME/tools/syft-<version>/syft (Epic CACHE D13).
 // Inputs:  the syft Pin (URL and sha256 per os/arch), NSELF_CI_HOME, an HTTP client.
 // Outputs: the installed path; E718 tool_checksum when the bytes differ from the
-// row's sha256, tool_missing when the pin has no source for this os/arch or the
+// row's sha256 or the extracted binary differs from its binary_sha256,
+// tool_missing when the pin has no source for this os/arch or the
 // download fails.
 // Constraints: explicit only, never at run time; https only (every redirect
 // hop too); the download is size-capped and hashed while it is written to a
 // temp file in the target directory, and nothing is extracted or made
 // executable before the sha256 matches; only the archive's regular `syft`
 // entry is extracted; the final file appears by rename; the installer never
-// runs the downloaded binary. It always re-downloads and replaces, so running
+// runs the downloaded binary; a pin without binary_sha256 for the platform is
+// refused before any download (D-1024), and the extracted file is hashed
+// before the rename. It always re-downloads and replaces, so running
 // it again repairs a stale or damaged install; a destination that is a symlink
 // or not a regular file is refused, never followed.
 
@@ -73,6 +76,9 @@ func Install(ctx context.Context, o InstallOptions) (Installed, error) {
 	if err := o.Pin.Check(); err != nil {
 		return Installed{}, err
 	}
+	if _, err := o.Pin.wantBinaryDigest(goos, goarch); err != nil {
+		return Installed{}, err
+	}
 	home, err := ResolveHome(o.Home)
 	if err != nil {
 		return Installed{}, err
@@ -114,7 +120,7 @@ func Install(ctx context.Context, o InstallOptions) (Installed, error) {
 	if sum != src.SHA256 {
 		return res, Failf(ReasonToolChecksum, "the %s download from %s has sha256 %s, the pin says %s; refusing to install it", ToolName, src.URL, sum, src.SHA256)
 	}
-	if err := extractBinary(tmp.Name(), res.Path); err != nil {
+	if err := extractBinary(tmp.Name(), res.Path, src.BinarySHA256); err != nil {
 		return res, err
 	}
 	return res, nil
@@ -197,8 +203,9 @@ func download(ctx context.Context, c *http.Client, rawURL string, w io.Writer) (
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// extractBinary writes the archive's regular `syft` entry to dst (mode 0755).
-func extractBinary(archive, dst string) error {
+// extractBinary writes the archive's regular `syft` entry to dst (mode 0755)
+// when its sha256 is wantSum.
+func extractBinary(archive, dst, wantSum string) error {
 	f, err := os.Open(archive)
 	if err != nil {
 		return Failf(ReasonToolMissing, "cannot read the download: %v", err)
@@ -223,11 +230,11 @@ func extractBinary(archive, dst string) error {
 		if h.Size <= 0 || h.Size > maxBinary {
 			return Failf(ReasonToolChecksum, "the archive's %s file has size %d", ToolName, h.Size)
 		}
-		return place(tr, h.Size, dst)
+		return place(tr, h.Size, dst, wantSum)
 	}
 }
 
-func place(r io.Reader, size int64, dst string) error {
+func place(r io.Reader, size int64, dst, wantSum string) error {
 	out, err := os.CreateTemp(filepath.Dir(dst), ".syft-*")
 	if err != nil {
 		return Failf(ReasonToolMissing, "cannot write %s: %v", dst, err)
@@ -238,12 +245,18 @@ func place(r io.Reader, size int64, dst string) error {
 		_ = os.Remove(name)
 		return Failf(ReasonToolMissing, "cannot write %s: %v", dst, err)
 	}
-	n, err := io.Copy(out, io.LimitReader(r, size))
+	h := sha256.New()
+	n, err := io.Copy(io.MultiWriter(out, h), io.LimitReader(r, size))
 	if err != nil {
 		return fail(err)
 	}
 	if n != size {
 		return fail(fmt.Errorf("short file: %d of %d bytes", n, size))
+	}
+	if got := hex.EncodeToString(h.Sum(nil)); got != wantSum {
+		_ = out.Close()
+		_ = os.Remove(name)
+		return Failf(ReasonToolChecksum, "the extracted %s binary has sha256 %s, the pin says %s; refusing to install it", ToolName, got, wantSum)
 	}
 	if err := out.Chmod(0o755); err != nil {
 		return fail(err)

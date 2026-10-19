@@ -9,10 +9,18 @@ package sbom
 // version must equal the pin. A process-level job never executes a PATH syft:
 // when the pinned install is absent and a PATH syft exists, the job fails
 // tool_version naming the install command; with none it fails tool_missing.
+// The installed file must also hash to the pin's binary_sha256 for this os/arch
+// (D-1024), else tool_checksum before anything runs. The hash is taken from the
+// file as read here; the runner then executes it by path, so a same-user swap
+// between the check and the exec is narrowed (the directories are 0755 and
+// user-owned) but not closed.
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -161,6 +169,9 @@ func Resolve(ctx context.Context, r Runner, home string, mode Mode, pin Pin) (st
 	want := ToolPath(h, pin.Version)
 	switch err := trusted(want); {
 	case err == nil:
+		if err := verifyBinary(want, pin, runtime.GOOS, runtime.GOARCH); err != nil {
+			return "", err
+		}
 		return checked(ctx, r, want, pin, "the installed")
 	case !errors.Is(err, fs.ErrNotExist):
 		return "", Failf(ReasonToolMissing, "%s is not a trustworthy install (%v); run `%s`", want, err, InstallCommand)
@@ -202,6 +213,46 @@ func trusted(p string) error {
 		if err := plain(ds, dir); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// wantBinaryDigest is the pin's sha256 of the extracted executable for an os/arch.
+func (p Pin) wantBinaryDigest(goos, goarch string) (string, error) {
+	src, ok := p.Source(goos, goarch)
+	if !ok || src.BinarySHA256 == "" {
+		return "", Failf(ReasonToolChecksum, "the %s pin has no binary_sha256 for %s/%s, so an installed binary cannot be authenticated", ToolName, goos, goarch)
+	}
+	return src.BinarySHA256, nil
+}
+
+// verifyBinary hashes the file at p and compares it with the pin's binary_sha256.
+// It hashes the descriptor it opened and refuses a path that changed under it.
+func verifyBinary(p string, pin Pin, goos, goarch string) error {
+	want, err := pin.wantBinaryDigest(goos, goarch)
+	if err != nil {
+		return err
+	}
+	pre, err := os.Lstat(p)
+	if err != nil {
+		return Failf(ReasonToolMissing, "cannot inspect %s: %v", p, err)
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		return Failf(ReasonToolMissing, "cannot read %s: %v", p, err)
+	}
+	defer func() { _ = f.Close() }()
+	st, err := f.Stat()
+	if err != nil || !os.SameFile(pre, st) {
+		return Failf(ReasonToolChecksum, "%s changed while it was being checked; run `%s`", p, InstallCommand)
+	}
+	h := sha256.New()
+	n, err := io.Copy(h, io.LimitReader(f, maxBinary+1))
+	if err != nil || n > maxBinary {
+		return Failf(ReasonToolChecksum, "cannot hash %s (%d bytes read, error %v); run `%s`", p, n, err, InstallCommand)
+	}
+	if got := hex.EncodeToString(h.Sum(nil)); got != want {
+		return Failf(ReasonToolChecksum, "%s has sha256 %s, the pin says %s; it is not the pinned %s %s; run `%s` to replace it", p, got, want, ToolName, pin.Version, InstallCommand)
 	}
 	return nil
 }

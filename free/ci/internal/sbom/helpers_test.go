@@ -5,15 +5,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/sbom"
+	"github.com/nself-org/plugins/free/ci/internal/toolchain"
 )
 
 const pinVersion = "1.54.1"
 
-func testPin() sbom.Pin { return sbom.Pin{Version: pinVersion} }
+// placeholderBody is what installedSyft writes; testPin pins its digest for the host.
+const placeholderBody = "#!/bin/sh\n"
+
+func testPin() sbom.Pin {
+	return sbom.Pin{Version: pinVersion, Sources: []toolchain.Source{{OS: runtime.GOOS, Arch: runtime.GOARCH, URL: "https://example.invalid/syft.tgz", SHA256: strings.Repeat("a", 64), BinarySHA256: sha([]byte(placeholderBody))}}}
+}
 
 // fakeRunner answers `<syft> version` from versions[syft path] and any other
 // command from onScan; it records every Cmd.
@@ -84,7 +91,7 @@ func installedSyft(t *testing.T, home string) string {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755); err != nil {
+	if err := os.WriteFile(p, []byte(placeholderBody), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return p

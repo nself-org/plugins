@@ -4,9 +4,12 @@ package sbom_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	osexec "os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -14,6 +17,7 @@ import (
 	gsbom "github.com/nself-org/plugins/free/ci/internal/gates/sbom"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sbom"
+	"github.com/nself-org/plugins/free/ci/internal/toolchain"
 )
 
 // TestReleaseSBOMRequired runs the check against the pinned syft on PATH (a
@@ -52,6 +56,20 @@ func TestReleaseSBOMRequired(t *testing.T) {
 	if err := os.WriteFile(installed, bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// the PATH syft is a copy of the pinned release, possibly built for another platform, so
+	// the test pins the digest of the copy it placed (the digest check has its own tests)
+	sum := sha256.Sum256(bin)
+	withDigest := func(p sbom.Pin) sbom.Pin {
+		var srcs []toolchain.Source
+		for _, x := range p.Sources {
+			if x.OS != runtime.GOOS || x.Arch != runtime.GOARCH { // the placed copy replaces the pinned host row
+				srcs = append(srcs, x)
+			}
+		}
+		p.Sources = append(srcs, toolchain.Source{OS: runtime.GOOS, Arch: runtime.GOARCH, URL: "https://example.invalid/syft.tgz", SHA256: strings.Repeat("a", 64), BinarySHA256: hex.EncodeToString(sum[:])})
+		return p
+	}
+	pin = withDigest(pin)
 	runner := sbom.ExecRunner{Executor: &exec.Executor{}, Home: t.TempDir(), SourceDir: src}
 	targets := []sbom.Target{{Name: "dist", Path: "dist", Kind: sbom.SourceDir}}
 	in := gsbom.Input{Runner: runner, Home: home, Pin: pin, Targets: targets}
@@ -72,7 +90,7 @@ func TestReleaseSBOMRequired(t *testing.T) {
 	}
 
 	// a pin that differs from the installed syft: the probe reports the drift
-	in.Pin = sbom.Pin{Version: "0.0.1"}
+	in.Pin = withDigest(sbom.Pin{Version: "0.0.1"})
 	if err := os.MkdirAll(filepath.Dir(sbom.ToolPath(home, "0.0.1")), 0o755); err != nil {
 		t.Fatal(err)
 	}
