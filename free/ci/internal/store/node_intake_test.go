@@ -238,9 +238,12 @@ func TestIntakeDoneWindowNeedsSameSourceAndEvent(t *testing.T) {
 	_ = s.IntakeFinish(ctx, a.ID, "me", "run", "exit=0", true)
 	pr := req("d2", "k")
 	pr.Event = "pull_request"
-	if b, _ := s.IntakeEnqueue(ctx, pr); b.Kind != IntakeEnqueued {
+	b, _ := s.IntakeEnqueue(ctx, pr)
+	if b.Kind != IntakeEnqueued {
 		t.Fatalf("a PR event for a SHA that only a push ran = %+v, want its own run", b)
 	}
+	_, _, _ = s.IntakeClaim(ctx, "me")
+	_ = s.IntakeFinish(ctx, b.ID, "me", "run2", "exit=0", true)
 	mirror := req("d3", "k")
 	mirror.Event, mirror.Source = "push", "gitea"
 	if c, _ := s.IntakeEnqueue(ctx, mirror); c.Kind != IntakeEnqueued {

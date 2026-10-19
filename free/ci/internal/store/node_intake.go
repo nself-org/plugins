@@ -116,7 +116,7 @@ func (s *Store) IntakeEnqueue(ctx context.Context, r IntakeRequest) (IntakeOutco
 			case e == nil && st.String != IntakeFailed: // a failed run may be redelivered
 				out = IntakeOutcome{IntakeDuplicate, id}
 				return nil
-			case !errors.Is(e, sql.ErrNoRows):
+			case e != nil && !errors.Is(e, sql.ErrNoRows):
 				return e
 			}
 		}
