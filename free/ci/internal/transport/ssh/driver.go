@@ -53,8 +53,12 @@ type Driver struct {
 	IdentityFile string
 	// RepoDir is the repository whose revision is bundled for the node; empty means the
 	// working directory, which suits a PERSONAL run and not a TEAM coordinator serving several
-	// projects (the per-lease repository is a P7-SCHED wiring concern).
+	// projects. RepoFor, when set, takes precedence.
 	RepoDir string
+	// RepoFor resolves the repository of one lease (a TEAM coordinator serving several
+	// projects maps the lease to its project's checkout). An error fails the delivery with
+	// the checkout code; it never falls back to RepoDir or the working directory.
+	RepoFor func(ctx context.Context, l protocol.Lease) (string, error)
 	// Personal marks a PERSONAL coordinator (the only one that may send secret values).
 	Personal bool
 	// Secrets resolves secret values for a lease; nil sends none.
@@ -68,6 +72,10 @@ type Driver struct {
 	MinAgentVersion string
 	// Heartbeat and AgentTTL are what welcome tells the agent (defaults 10 s and 25 s, Epic D6).
 	Heartbeat, AgentTTL time.Duration
+	// LeaseTTL is the coordinator's lease TTL (the lease engine's heartbeat TTL). When AgentTTL
+	// is zero, agent_ttl is LeaseTTL minus two heartbeats (Epic NODE D6), so the agent fences
+	// itself before the coordinator expires the lease. Zero keeps the 25 s default.
+	LeaseTTL time.Duration
 	// CancelGrace bounds the wait for a result after cancel (default 3 s).
 	CancelGrace time.Duration
 	// HelloTimeout bounds connect, login and the wait for hello (default 12 s; ssh's own
@@ -90,8 +98,9 @@ type Driver struct {
 	verSet bool
 }
 
-// Default is the driver registered for kind "ssh". The composition root sets its fields
-// (Renew, Secrets, Personal, MinAgentVersion) before the first delivery.
+// Default is the driver registered for kind "ssh". The composition root calls
+// Default.Configure (Renew, Secrets, Personal, MinAgentVersion, LeaseTTL, RepoFor) before the
+// first delivery; an unconfigured Default refuses to run (transport.ssh_not_configured).
 var Default = &Driver{}
 
 func init() {
@@ -108,7 +117,12 @@ func (d *Driver) Kind() string { return Kind }
 func (d *Driver) heartbeat() time.Duration {
 	return max(orDefault(d.Heartbeat, 10*time.Second), time.Second)
 }
-func (d *Driver) agentTTL() time.Duration { return orDefault(d.AgentTTL, 25*time.Second) }
+func (d *Driver) agentTTL() time.Duration {
+	if d.AgentTTL <= 0 && d.LeaseTTL > 0 {
+		return max(d.LeaseTTL-2*d.heartbeat(), d.heartbeat())
+	}
+	return orDefault(d.AgentTTL, 25*time.Second)
+}
 
 // coordinatorTTL is how long an agent may stay silent: agent_ttl plus two heartbeats (Epic D6).
 func (d *Driver) coordinatorTTL() time.Duration {

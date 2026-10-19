@@ -103,7 +103,13 @@ func (d *Driver) makeBundle(ctx context.Context, l *protocol.Lease) (string, fun
 	}
 	cleanup := func() { _ = os.RemoveAll(dir) }
 	repo := d.RepoDir
-	if repo == "" {
+	if d.RepoFor != nil {
+		var rerr error
+		if repo, rerr = d.RepoFor(ctx, *l); rerr != nil || repo == "" {
+			cleanup()
+			return "", nil, newErr(CodeTransport, ReasonCheckout, "no repository for lease %s: %v", l.LeaseID, rerr)
+		}
+	} else if repo == "" {
 		if repo, err = os.Getwd(); err != nil {
 			cleanup()
 			return "", nil, newErr(CodeTransport, ReasonCheckout, "no repository directory")
