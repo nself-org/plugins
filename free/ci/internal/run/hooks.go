@@ -36,6 +36,10 @@ type AttemptInfo struct {
 	// caller did not set it). Hooks that write fenced rows use it, so a stale
 	// callback cannot adopt a later incarnation's epoch.
 	Epoch int64
+	// Container is the run's --container option: every job runs in the toolchain
+	// container although Job still names no container (prepare applies it after
+	// the cache hook). The cache hook plans container-level mounts for it.
+	Container bool
 }
 
 // Outcome is how an attempt ended.
