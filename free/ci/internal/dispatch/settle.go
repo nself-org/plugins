@@ -40,7 +40,7 @@ func (d *Dispatcher) admit(ctx context.Context, runs map[string]*pipelineRun, pr
 	if !local {
 		host = r.ID
 	}
-	req := Request{AttemptID: q.Job.AttemptID, Placement: p, Runner: r, Job: q.Job.Sched, Local: local, Node: !local && !sched.RunnerHosted(r), Host: host, CapacityCPU: cpu, CapacityMemMB: mem,
+	req := Request{AttemptID: q.Job.AttemptID, Placement: p, Runner: r, Job: q.Job.Sched, Kind: q.Job.Model.Kind, Local: local, Node: !local && !sched.RunnerHosted(r), Host: host, CapacityCPU: cpu, CapacityMemMB: mem,
 		Limits: pr.world.Policy.Limits, RunnerSlots: slots, SlotsKnown: known, WorldDigest: dec.WorldDigest, Incarnation: d.incarnation(), LeaseTTL: d.cfg.LeaseTTL}
 	if d.cfg.ProviderLimit != nil {
 		req.ProviderLimit = d.cfg.ProviderLimit(r.Provider)
