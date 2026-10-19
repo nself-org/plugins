@@ -268,3 +268,25 @@ func TestAdhocEvidenceThroughTheRealBuilder(t *testing.T) {
 		t.Fatal("the secret reached the evidence")
 	}
 }
+
+type oddClassifier struct{ verdict model.TrustClass }
+
+func (o oddClassifier) Classify(context.Context, cirun.TrustRequest) (model.TrustClass, error) {
+	return o.verdict, nil
+}
+
+// A classifier that returns nothing usable must not be read as owner.
+func TestInvalidClassifierVerdictRunsNothing(t *testing.T) {
+	r := newHandlerRig(t, Flags{Isolation: "process"})
+	r.h.Hooks.Trust = oddClassifier{verdict: "wat"}
+	marker := filepath.Join(t.TempDir(), "ran")
+	argv := []string{"sh", "-c", "touch " + marker}
+	r.opts.Adhoc = argv
+	exit, err := r.h.Adhoc(context.Background(), r.opts, argv)
+	if exit == 0 || err == nil {
+		t.Fatalf("exit %d err %v", exit, err)
+	}
+	if _, serr := os.Stat(marker); serr == nil {
+		t.Fatal("the command ran")
+	}
+}

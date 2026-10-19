@@ -163,6 +163,9 @@ func (h *Handler) trustClass(ctx context.Context, o cirun.Options, fl Flags, bas
 	if err != nil {
 		return "", err
 	}
+	if !got.Valid() {
+		return "", usage("the trust classifier returned %q, which is not a trust class; nothing was run", got)
+	}
 	if rank(got) > rank(t) {
 		t = got
 	}

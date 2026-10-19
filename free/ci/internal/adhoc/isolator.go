@@ -31,30 +31,34 @@ type isolator struct {
 
 func (i *isolator) Prepare(ctx context.Context, spec *ciexec.JobSpec) error {
 	process := i.mode.Level == "process"
-	spec.Env = envPolicy{container: !process, scratch: i.scratch}
-	spec.Network = "none" // the profiles know this scope; the wrapper planner swaps the flag
+	policy := envPolicy{container: !process, scratch: i.scratch}
+	spec.Env = policy
+	spec.Network = "none" // the profiles know none; restricted is swapped in by the planner below
 	if process {
 		return nil // the executor baseline: no profile, host networking
 	}
 	if i.inner == nil {
 		return noIsolation("no isolation hook is registered; refusing to run a container job without one")
 	}
+	if i.mode.Network == "internet" {
+		// The profile's own network planner decides: the default one refuses internet
+		// (P7-TRUST-08 installs the scope planner), and it is never widened to bridge here.
+		spec.Network = "internet"
+	}
 	if err := i.inner.Prepare(ctx, spec); err != nil {
 		return err
 	}
+	spec.Env = policy // a profile that rebuilt the JobSpec must not drop the minimal env
 	if spec.Plan == nil {
 		return noIsolation("the %s profile installed no container planner; nothing was run", i.mode.Level)
 	}
-	network := "none"
-	switch i.mode.Network {
-	case "restricted":
+	network := ""
+	if i.mode.Network == "restricted" {
 		name, err := i.net.Ensure(ctx, spec.AttemptID, spec.Job.Env["NSELF_CI_SERVICE_NETWORK"])
 		if err != nil {
 			return err
 		}
 		network = name
-	case "internet":
-		network = "bridge"
 	}
 	spec.Plan = &planner{inner: spec.Plan, network: network}
 	return nil
@@ -80,11 +84,14 @@ func (p *planner) Plan(r ciexec.ContainerRun) (ciexec.ContainerCommand, error) {
 			break
 		}
 		switch {
-		case a == "--network=none":
+		case a == "--network=none" && p.network != "":
 			args[k], gotNet = "--network="+p.network, true
 		case a == mount:
 			args[k], gotMount = mount+",readonly=true", true
 		}
+	}
+	if p.network == "" {
+		gotNet = true // none and internet are the profile's own flags: only the mount is rewritten
 	}
 	if !gotNet || !gotMount {
 		return cmd, noIsolation("the container profile built a command without the %s; refusing to start it", missing(gotNet, gotMount))

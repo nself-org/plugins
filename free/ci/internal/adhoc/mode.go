@@ -102,6 +102,10 @@ func chooseNetwork(o cirun.Options, level model.Isolation, trust model.TrustClas
 		}
 		return "", usage("--network %s needs a container", o.Network)
 	}
+	if services && trust == "untrusted" {
+		// the service containers run under the plain runtime on a network with a gateway, not in the sandbox
+		return "", trustIsolation("--trust untrusted never gets --service: the service containers are not sandboxed; nothing was run")
+	}
 	switch o.Network {
 	case "":
 		if services {

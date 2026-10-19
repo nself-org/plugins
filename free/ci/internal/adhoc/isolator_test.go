@@ -26,9 +26,10 @@ func (fakePlanner) Cleanup(ciexec.ContainerRun) (*ciexec.ContainerCommand, error
 
 // fakeProfile mimics the registry isolator: it installs a planner.
 type fakeProfile struct {
-	plan ciexec.ContainerPlanner
-	err  error
-	seen model.NetworkScope
+	plan     ciexec.ContainerPlanner
+	err      error
+	seen     model.NetworkScope
+	clearEnv bool // behave like a profile whose Wrap rebuilt the JobSpec
 }
 
 func (f *fakeProfile) Prepare(_ context.Context, s *ciexec.JobSpec) error {
@@ -37,6 +38,9 @@ func (f *fakeProfile) Prepare(_ context.Context, s *ciexec.JobSpec) error {
 		return f.err
 	}
 	s.Plan = f.plan
+	if f.clearEnv {
+		s.Env = nil
+	}
 	return nil
 }
 
@@ -78,15 +82,41 @@ func TestIsolatorLevels(t *testing.T) {
 			t.Fatalf("process: plan %v env %v", spec.Plan, spec.Env)
 		}
 	})
-	t.Run("container asks the profile for none and swaps the flag", func(t *testing.T) {
+	t.Run("none stays the profile's own flag", func(t *testing.T) {
 		prof := &fakeProfile{plan: fakePlanner{}}
-		spec := &ciexec.JobSpec{AttemptID: "a1", Network: "internet"}
+		spec := &ciexec.JobSpec{AttemptID: "a1"}
+		if err := (&isolator{inner: prof, mode: Mode{Level: "container", Network: "none"}}).Prepare(ctx, spec); err != nil {
+			t.Fatal(err)
+		}
+		cmd, err := spec.Plan.Plan(ciexec.ContainerRun{Workspace: "/w"})
+		if err != nil || prof.seen != "none" || !slices.Contains(cmd.Args, "--network=none") || !slices.Contains(cmd.Args, "type=bind,src=/w,dst=/repo,readonly=true") {
+			t.Fatalf("seen %q args %v err %v", prof.seen, cmd.Args, err)
+		}
+	})
+	t.Run("internet goes to the profile, which decides; it is never widened to bridge here", func(t *testing.T) {
+		prof := &fakeProfile{plan: fakePlanner{}}
+		spec := &ciexec.JobSpec{AttemptID: "a1"}
 		if err := (&isolator{inner: prof, mode: Mode{Level: "container", Network: "internet"}}).Prepare(ctx, spec); err != nil {
 			t.Fatal(err)
 		}
 		cmd, err := spec.Plan.Plan(ciexec.ContainerRun{Workspace: "/w"})
-		if err != nil || prof.seen != "none" || !slices.Contains(cmd.Args, "--network=bridge") {
+		if err != nil || prof.seen != "internet" || slices.Contains(cmd.Args, "--network=bridge") {
 			t.Fatalf("seen %q args %v err %v", prof.seen, cmd.Args, err)
+		}
+		refuse := errors.New("E679: network scope internet cannot be enforced")
+		prof = &fakeProfile{err: refuse}
+		if err := (&isolator{inner: prof, mode: Mode{Level: "container", Network: "internet"}}).Prepare(ctx, &ciexec.JobSpec{}); !errors.Is(err, refuse) {
+			t.Fatalf("the profile's refusal was swallowed: %v", err)
+		}
+	})
+	t.Run("a profile that drops the env cannot make the job inherit the default one", func(t *testing.T) {
+		prof := &fakeProfile{plan: fakePlanner{}, clearEnv: true}
+		spec := &ciexec.JobSpec{AttemptID: "a1"}
+		if err := (&isolator{inner: prof, mode: Mode{Level: "container", Network: "none"}}).Prepare(ctx, spec); err != nil {
+			t.Fatal(err)
+		}
+		if spec.Env == nil {
+			t.Fatal("the minimal env policy was lost")
 		}
 	})
 	t.Run("a profile error passes through, no profile fails closed", func(t *testing.T) {
@@ -119,16 +149,17 @@ func (d *dockerLog) Run(_ context.Context, c services.Call) (services.Result, er
 	if d.failOn != "" && strings.Contains(j, d.failOn) {
 		return services.Result{ExitCode: 1, Output: "boom"}, nil
 	}
-	for k, v := range d.outputs {
-		if strings.Contains(j, k) {
-			return services.Result{Output: v}, nil
+	best := ""
+	for k := range d.outputs { // the longest matching key wins, so the answer never depends on map order
+		if strings.Contains(j, k) && len(k) > len(best) {
+			best = k
 		}
 	}
-	return services.Result{}, nil
+	return services.Result{Output: d.outputs[best]}, nil
 }
 
 func TestServiceNetIsInternalAndAliased(t *testing.T) {
-	d := &dockerLog{outputs: map[string]string{"network inspect": "proj-postgres-1\nproj-redis-1\n", "inspect --format": "svc"}}
+	d := &dockerLog{outputs: map[string]string{"network inspect": "proj-postgres-1\nproj-redis-1\n", "docker inspect --format": "svc"}}
 	n := &serviceNet{docker: d}
 	name, err := n.Ensure(context.Background(), "att1", "proj_default")
 	if err != nil || name != "nself-ci-att1" {

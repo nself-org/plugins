@@ -45,7 +45,11 @@ func (e evidenceStamp) Complete(ctx context.Context, begin any, f cirun.Evidence
 	if e.inner == nil {
 		return ev, nil
 	}
-	return e.inner.Complete(ctx, begin, f, ev)
+	out, err := e.inner.Complete(ctx, begin, f, ev)
+	if err != nil {
+		return ev, err // the stamped document, so a failing builder never leaves the unstamped one
+	}
+	return out, nil
 }
 
 func (e evidenceStamp) stamp(ev model.Evidence) model.Evidence {

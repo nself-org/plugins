@@ -47,6 +47,7 @@ func TestResolveLevelAndNetwork(t *testing.T) {
 		{name: "services refuse network none", o: cirun.Options{Services: svc, Network: "none"}, have: []model.Isolation{"container"}, code: cirun.CodeOptions},
 		{name: "restricted needs a service", o: cirun.Options{Network: "restricted"}, have: []model.Isolation{"container"}, code: cirun.CodeOptions},
 		{name: "unknown isolation", fl: Flags{Isolation: "vm"}, have: []model.Isolation{"container"}, code: cirun.CodeOptions},
+		{name: "untrusted never gets a service", o: cirun.Options{Services: svc}, trust: "untrusted", have: []model.Isolation{"container", "sandboxed-container"}, code: CodeTrustIsolation},
 		{name: "untrusted without the sandbox fails closed", trust: "untrusted", have: []model.Isolation{"container"}, code: CodeTrustIsolation},
 		{name: "untrusted never downgrades to process", trust: "untrusted", fl: Flags{Isolation: "process"}, have: []model.Isolation{"sandboxed-container"}, code: CodeTrustIsolation},
 		{name: "untrusted never downgrades to container", trust: "untrusted", fl: Flags{Isolation: "container"}, have: []model.Isolation{"container", "sandboxed-container"}, code: CodeTrustIsolation},
