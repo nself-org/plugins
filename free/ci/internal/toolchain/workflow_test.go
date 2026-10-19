@@ -167,3 +167,32 @@ func TestWorkflowHelperImagesPinnedByDigest(t *testing.T) {
 		t.Errorf("expected both jobs to set up qemu and buildx, saw %v", seen)
 	}
 }
+
+// helperImageRe matches the digest-pinned helper images the workflow hands to
+// docker/setup-qemu-action (`image:`) and docker/setup-buildx-action
+// (`driver-opts: image=`).
+var helperImageRe = regexp.MustCompile(`(?m)\bimage[:=] ?([a-z0-9][a-z0-9._/-]*):([A-Za-z0-9._-]+)@(sha256:[0-9a-f]{64})`)
+
+// TestWorkflowHelperImagesHavePinRows: every helper image of the workflow has a
+// base-image row in the pins (same repo, tag and digest), so the weekly
+// toolchain-pins drill reports a newer digest for it (D-0997).
+func TestWorkflowHelperImagesHavePinRows(t *testing.T) {
+	_, raw := loadWorkflow(t)
+	found := helperImageRe.FindAllStringSubmatch(raw, -1)
+	if len(found) < 2 {
+		t.Fatalf("expected the binfmt and buildkit helper images in the workflow, found %d", len(found))
+	}
+	pins := loadPinsFromRepo(t)
+	for _, m := range found {
+		repo, tag, digest := m[1], m[2], m[3]
+		ok := false
+		for _, p := range pins {
+			if p.Kind == KindBaseImage && strings.TrimPrefix(p.Image, "docker.io/") == repo && p.Version == tag && p.Digest == digest {
+				ok = true
+			}
+		}
+		if !ok {
+			t.Errorf("workflow helper image %s:%s@%s has no matching base-image pin row", repo, tag, digest)
+		}
+	}
+}
