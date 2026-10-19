@@ -55,6 +55,9 @@ func measureServices(ctx context.Context, cfg Config, home string, col *Collecto
 	if err != nil {
 		return err
 	}
+	if r, e := must(ctx, []string{"docker", "image", "ls", "--no-trunc", "--format", "{{.Repository}}:{{.Tag}} {{.ID}}"}, cfg.Dir, baseEnv()); e == nil {
+		cfg.logf("images after the first start (project images: %s):\n%s", images, r.Tail)
+	}
 	coldWant := 0
 	if sc.Cold {
 		if coldWant = sc.ColdRuns; coldWant < 1 {
