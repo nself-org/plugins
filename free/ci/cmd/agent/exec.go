@@ -75,6 +75,10 @@ func runExecCmd(ctx context.Context, args []string, sio IO) int {
 		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent exec --spec <file> --evidence <path>")
 		return 2
 	}
+	if err := RunPreStart(ctx, "exec"); err != nil {
+		fmt.Fprintln(sio.Stderr, "error:", err)
+		return 1
+	}
 	raw, err := os.ReadFile(*specPath)
 	if err != nil {
 		fmt.Fprintln(sio.Stderr, "error:", err)
