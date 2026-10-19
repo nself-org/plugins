@@ -6,6 +6,7 @@
 # Usage:   go-closure-changed.sh <module-dir> <changed-files-list> <package-pattern>...
 #   Patterns are relative to the module (./internal/gates/...); ones whose directory is missing are skipped.
 #   CLOSURE_EXTRA="dir1 dir2"  extra repo-relative directories that also count (fixtures).
+#   CLOSURE_TAGS  build tags to include (default integration,security,darwin_integration).
 # Output:  true or false on stdout. Changes to the module's go.mod, go.sum or vendor/ always count.
 # Constraints: fail open. A `go list` failure, no usable package or an unreadable list prints true.
 set -uo pipefail
@@ -21,7 +22,12 @@ done
 
 modflag=; [ -d "$mod/vendor" ] && modflag=-mod=vendor
 root=$(cd "$mod" && git rev-parse --show-toplevel)
-dirs=$(cd "$mod" && go list $modflag -test -deps -f '{{if not .Standard}}{{.Dir}}{{end}}' "${pats[@]}" 2>/dev/null) || { echo true; exit 0; }
+# Union over the platforms CI builds on and the tags its tests use, so darwin-only or integration-only files count.
+dirs=
+for goos in linux darwin; do
+  d=$(cd "$mod" && GOOS=$goos CGO_ENABLED=0 go list $modflag -tags "${CLOSURE_TAGS:-integration,security,darwin_integration}" -test -deps -f '{{if not .Standard}}{{.Dir}}{{end}}' "${pats[@]}" 2>/dev/null) || { echo true; exit 0; }
+  dirs+="$d"$'\n'
+done
 [ -n "$dirs" ] || { echo true; exit 0; }
 
 top=$(cd "$root" && pwd -P)

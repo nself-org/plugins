@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 2
       - name: Scope (which plugins this run covers)
         id: scope
-        run: bash .github/scripts/changed-scope.sh --global '^\.github/workflows/build-test\.yml$'
+        run: bash .github/scripts/changed-scope.sh --outside-free-global --global '^\.github/workflows/build-test\.yml$'
       - uses: actions/setup-go@v7
         if: steps.scope.outputs.all == 'true' || steps.scope.outputs.plugin_count != '0'
         with:

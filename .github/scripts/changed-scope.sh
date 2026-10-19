@@ -6,6 +6,9 @@
 # Usage:   changed-scope.sh [--global REGEX]... [--flag NAME=REGEX]...
 #   --global REGEX   a changed file matching it means "run everything" (all=true).
 #   --flag NAME=REGEX  output NAME=true when all=true or any changed file matches REGEX.
+#   --outside-free-global  a changed file outside free/ that is not documentation or a registry projection
+#                    means "run everything": Go tests under free/ read repo-root files (scripts/ci, .github/workflows,
+#                    images.json, schemas/), so only the files listed in SAFE_OUTSIDE below may be ignored.
 # Inputs:  checkout with fetch-depth >= 2 (a pull_request run checks out the merge commit; its first parent
 #   is the base tip, so `HEAD^1..HEAD` is exactly what the PR adds). GITHUB_EVENT_NAME, GITHUB_OUTPUT.
 #   SCOPE_FILES=<file> replaces the diff with a list of paths (tests). SCOPE_LIST_OUT=<file> keeps the changed-file
@@ -19,11 +22,15 @@
 # Constraints: fail open. Any doubt sets all=true; this script never lowers coverage on push, schedule or dispatch.
 set -euo pipefail
 
-globals=(); flags=()
+# Files outside free/ that no Go test under free/ reads (checked: no *.go reads the registry JSON projections).
+SAFE_OUTSIDE='^(.*\.md|\.github/wiki/.*|\.github/ISSUE_TEMPLATE/.*|LICENSE|registry\.json|releases\.json|catalog\.json|counts\.json)$'
+
+globals=(); flags=(); outside=false
 while [ $# -gt 0 ]; do
   case $1 in
     --global) globals+=("$2"); shift 2;;
     --flag) flags+=("$2"); shift 2;;
+    --outside-free-global) outside=true; shift;;
     *) echo "changed-scope: unknown argument $1" >&2; exit 2;;
   esac
 done
@@ -37,8 +44,8 @@ if [ "$event" != pull_request ]; then
   all=true; reason="event is $event"
 elif [ -n "${SCOPE_FILES:-}" ]; then
   cat "$SCOPE_FILES" >"$list"
-elif git rev-parse -q --verify 'HEAD^2' >/dev/null 2>&1 && git diff --name-only 'HEAD^1' HEAD >"$list" 2>/dev/null; then
-  :
+elif git rev-parse -q --verify 'HEAD^2' >/dev/null 2>&1 && git diff --name-only --no-renames -z 'HEAD^1' HEAD 2>/dev/null | tr '\0' '\n' >"$list" && [ -s "$list" ]; then
+  : # --no-renames lists the old path of a move too; -z avoids git's quoting of unusual names
 else
   all=true; reason="no merge commit to diff (use fetch-depth: 2)"
 fi
@@ -46,10 +53,11 @@ fi
 if [ "$all" = false ]; then
   n=$(grep -c . "$list" || true)
   if [ "$n" -ge 2500 ]; then all=true; reason="$n changed files"; fi
-  if grep -qE '^\.github/scripts/changed-scope\.sh$' "$list"; then all=true; reason="changed-scope.sh changed"; fi
+  if grep -qE '^\.github/scripts/(changed-scope\.sh|changed-scope_test\.sh|go-closure-changed\.sh)$' "$list"; then all=true; reason="a scope script changed"; fi
   if grep -qE '^free/[^/]+$' "$list"; then all=true; reason="a file sits directly under free/"; fi
   # Names end up in command lines downstream; a directory name outside the plain set is never trusted.
   if sed -nE 's#^free/([^/]+)/.*#\1#p' "$list" | grep -qvE '^[A-Za-z0-9][A-Za-z0-9._-]*$'; then all=true; reason="unusual plugin directory name"; fi
+  if [ "$outside" = true ] && grep -vE '^free/' "$list" | grep -qvE "$SAFE_OUTSIDE"; then all=true; reason="a file outside free/ changed"; fi
   for g in "${globals[@]+"${globals[@]}"}"; do
     if grep -qE "$g" "$list"; then all=true; reason="global match: $g"; break; fi
   done

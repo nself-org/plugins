@@ -63,7 +63,7 @@ jobs:
           SCOPE_LIST_OUT: ${{ runner.temp }}/changed.txt
         run: |
           set -euo pipefail
-          bash .github/scripts/changed-scope.sh --global '^\.github/workflows/ci-isolation-linux\.yml$'
+          bash .github/scripts/changed-scope.sh --outside-free-global --global '^\.github/workflows/ci-isolation-linux\.yml$'
           all=$(sed -n 's/^all=//p' "$GITHUB_OUTPUT" | tail -1)
           run=true
           if [ "$all" != true ] && [ ! -d free/ci/test ] && [ ! -e scripts/drill/isolation-levels/run ] && [ ! -e free/ci/scripts/drill/isolation-levels/run ]; then

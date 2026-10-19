@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'free/*/plugin.json'
+      - 'free/**/plugin.json'
       - 'free/*/*.yml'
       - 'free/*/*.yaml'
       - 'free/*/Cargo.toml'
@@ -23,6 +23,7 @@ on:
       - 'scripts/plugin-counts.sh'
       - 'scripts/bundles.ref'
       - 'scripts/cli-tools.version'
+      - 'scripts/conformance/**'
       - 'scripts/catalog/**'
       - '.github/workflows/registry-check.yml'
   workflow_dispatch:

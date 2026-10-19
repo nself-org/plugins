@@ -30,7 +30,6 @@ jobs:
     timeout-minutes: 5
     outputs:
       meta: ${{ steps.scope.outputs.meta }}
-      conf: ${{ steps.scope.outputs.conf }}
       build_matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7.0.1
@@ -40,7 +39,8 @@ jobs:
       - name: Scope tests
         run: bash .github/scripts/changed-scope_test.sh
 
-      # meta: manifests, READMEs and the registry. conf: anything the conformance machinery reads.
+      # meta: manifests, READMEs and the registry. Conformance reads too many repo-root inputs (scripts, tests,
+      # schemas, images.d, the plugin trees) to scope by path, so it runs on every pull request.
       # build: the inputs every plugin's docker build shares (a change there rebuilds all plugins).
       - name: Scope
         id: scope
@@ -48,7 +48,6 @@ jobs:
           bash .github/scripts/changed-scope.sh \
             --global '^\.github/workflows/validate\.yml$' \
             --flag 'meta=^(free/[^/]+/(plugin\.json|README\.md)|registry\.json|releases\.json|shared/validate-registry\.sh)$' \
-            --flag 'conf=^(free/|scripts/|tests/|shared/|images\.d/|registry\.json$|releases\.json$)' \
             --flag 'build=^(scripts/(conformance|deterministic-tar\.sh|cli-tools\.version)|images\.d/)'
 
       - name: Build matrix
@@ -324,8 +323,6 @@ jobs:
   # the codemods and the released-CLI oracle themselves still work. Actions are pinned by SHA.
   conformance:
     name: Plugin Conformance
-    needs: scope
-    if: needs.scope.outputs.conf == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

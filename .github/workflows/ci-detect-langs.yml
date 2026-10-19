@@ -49,11 +49,11 @@ jobs:
           SCOPE_LIST_OUT: ${{ runner.temp }}/changed.txt
         run: |
           set -euo pipefail
-          bash .github/scripts/changed-scope.sh --global '^\.github/workflows/ci-detect-langs\.yml$'
+          bash .github/scripts/changed-scope.sh --outside-free-global --global '^\.github/workflows/ci-detect-langs\.yml$'
           all=$(sed -n 's/^all=//p' "$GITHUB_OUTPUT" | tail -1)
           relevant=true
           if [ "$all" != true ]; then
-            relevant=$(CLOSURE_EXTRA="free/ci/cmd free/ci/testdata" bash .github/scripts/go-closure-changed.sh free/ci "$SCOPE_LIST_OUT" ./internal/detect/... ./internal/gates/... ./internal/plan/...)
+            relevant=$(CLOSURE_EXTRA="free/ci/testdata" bash .github/scripts/go-closure-changed.sh free/ci "$SCOPE_LIST_OUT" ./cmd/... ./internal/detect/... ./internal/gates/... ./internal/plan/...)
           fi
           if [ "$relevant" = true ]; then os='["ubuntu-latest","macos-15"]'; else os='[]'; fi
           echo "relevant=$relevant os=$os"
