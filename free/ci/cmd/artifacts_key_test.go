@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	sdk "github.com/nself-org/cli/sdk/go/v2/signing"
 
@@ -76,6 +77,7 @@ func (p *inProc) RunStdio(_ context.Context, c signing.StdioCall) ([]byte, int, 
 
 func useInProcSigner(t *testing.T) *inProc {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir()) // the key lock lives under the user's home
 	p := &inProc{}
 	old := keyClient
 	keyClient = func() (*signing.Client, error) { return &signing.Client{Runner: p, Exe: "nself-ci"}, nil }
@@ -244,6 +246,43 @@ func runKeyLine(t *testing.T) (string, string, string) {
 		t.Fatalf("key: %d %q %q", code, out, errs)
 	}
 	return strings.TrimSpace(out), out, errs
+}
+
+// Two processes with different CI homes but one project serialize on one lock in the user's home.
+func TestSignerStoreLocksPerProject(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	root := t.TempDir()
+	s, err := signerStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, ok := s.(*signing.CLIStore)
+	if !ok || st.LockDir != filepath.Join(home, ".nself", "locks") || st.Project != root {
+		t.Fatalf("%+v", st)
+	}
+	t.Setenv("NSELF_CI_HOME", t.TempDir())
+	a, err := st.Lock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a()
+	t.Setenv("NSELF_CI_HOME", t.TempDir()) // another CI home, the same project
+	s2, _ := signerStore(root)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if _, err := s2.Lock(ctx); err == nil {
+		t.Fatal("a second CI home took the project's key lock")
+	}
+	other, _ := signerStore(t.TempDir()) // another project locks independently
+	u, err := other.Lock(context.Background())
+	if err != nil {
+		t.Fatalf("another project: %v", err)
+	}
+	u()
+	if left, _ := filepath.Glob(filepath.Join(root, ".secrets", "*")); len(left) != 0 {
+		t.Fatalf("the lock file is in the project: %v", left)
+	}
 }
 
 func TestArtifactsKeyUsage(t *testing.T) {

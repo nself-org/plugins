@@ -54,6 +54,9 @@ func (c *Client) exe() (string, error) {
 }
 
 func (c *Client) call(ctx context.Context, mode string, stdin []byte) ([]byte, error) {
+	if c.Runner == nil {
+		return nil, Failf(ReasonSignerFailed, "the signer client has no runner")
+	}
 	exe, err := c.exe()
 	if err != nil {
 		return nil, err
@@ -77,7 +80,7 @@ func (c *Client) call(ctx context.Context, mode string, stdin []byte) ([]byte, e
 func signerRefusal(out []byte, code int) error {
 	var resp Response
 	if i := bytes.IndexByte(out, '{'); i >= 0 && json.Unmarshal(out[i:], &resp) == nil && resp.Error != nil && resp.Error.Reason != "" {
-		return Failf(resp.Error.Reason, "%s", clip(resp.Error.Message, 512))
+		return Failf(resp.Error.Reason, "%s", clip(resp.Error.Message, 509))
 	}
 	return Failf(ReasonSignerFailed, "the signer failed (exit %d)", code)
 }

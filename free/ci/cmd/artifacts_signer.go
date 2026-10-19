@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
@@ -69,19 +70,20 @@ func artifactsSigner(args []string) int {
 	if err != nil || root == "" {
 		return signerFail(signing.Failf(signing.ReasonSignerFailed, "the project root is unknown"))
 	}
-	home, err := toolsHome() // the CI home: where the key-management lock lives
-	if err != nil {
-		return signerFail(signing.Failf(signing.ReasonSignerFailed, "the CI home is unknown"))
-	}
 	switch {
 	case *stdio:
 		return signerRequest(ctx, root)
 	case *public:
 		return signerKey(signing.Public(ctx, signerResolver(root), signing.KeyAttempt))
-	case *initKey:
-		return signerKey(signing.Init(ctx, signerResolver(root), signerStore(root, home)))
 	}
-	return signerKey(signing.Rotate(ctx, signerResolver(root), signerStore(root, home)))
+	st, err := signerStore(root)
+	if err != nil {
+		return signerFail(signing.Failf(signing.ReasonSignerFailed, "the user home is unknown"))
+	}
+	if *initKey {
+		return signerKey(signing.Init(ctx, signerResolver(root), st))
+	}
+	return signerKey(signing.Rotate(ctx, signerResolver(root), st))
 }
 
 // signerTimeout bounds one signer call (the key lock wait included).
@@ -102,8 +104,15 @@ func signerResolver(root string) secrets.ValueResolver {
 }
 
 // signerStore writes the key with `nself config secrets set` over stdin.
-func signerStore(root, home string) signing.SecretStore {
-	return &signing.CLIStore{Runner: &signing.FunnelRunner{Home: os.Getenv("NSELF_CI_HOME")}, Project: root, LockDir: home}
+// The key-management lock is per project and lives in the user's home (not in
+// the project, and not in the CI home), so two processes with different CI
+// homes still serialize and the repository gains no file.
+func signerStore(root string) (signing.SecretStore, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	return &signing.CLIStore{Runner: &signing.FunnelRunner{Home: os.Getenv("NSELF_CI_HOME")}, Project: root, LockDir: filepath.Join(home, ".nself", "locks")}, nil
 }
 
 func signerRequest(ctx context.Context, root string) int {

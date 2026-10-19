@@ -143,7 +143,7 @@ func TestCLIStoreLockSerializes(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the second holder never got the lock after release")
 	}
-	if fi, err := os.Stat(filepath.Join(dir, "release-key.lock")); err != nil || fi.Mode().Perm() != 0o600 {
+	if fi, err := os.Stat(filepath.Join(dir, a.lockName())); err != nil || fi.Mode().Perm() != 0o600 {
 		t.Fatalf("lock file: %v %v", fi, err)
 	}
 	// no LockDir: no lock, nothing created
@@ -159,5 +159,13 @@ func TestCLIStoreLockSerializes(t *testing.T) {
 	_ = os.WriteFile(file, nil, 0o600)
 	if _, err := (&CLIStore{LockDir: filepath.Join(file, "sub")}).Lock(context.Background()); !IsReason(err, ReasonSignerFailed) {
 		t.Fatalf("an impossible lock directory: %v", err)
+	}
+}
+
+func TestLockNameIsPerProject(t *testing.T) {
+	a, b := &CLIStore{Project: "/p/one"}, &CLIStore{Project: "/p/one/"}
+	c := &CLIStore{Project: "/p/two"}
+	if a.lockName() != b.lockName() || a.lockName() == c.lockName() || !strings.HasPrefix(a.lockName(), "release-key-") || !strings.HasSuffix(a.lockName(), ".lock") {
+		t.Fatalf("%s %s %s", a.lockName(), b.lockName(), c.lockName())
 	}
 }

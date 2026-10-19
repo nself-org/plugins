@@ -111,7 +111,8 @@ type CLIStore struct {
 	// Project is the project root the cli runs in (the store is found from it).
 	Project string
 	Env     []string
-	// LockDir holds the lock file that serializes key management ("" = no lock).
+	// LockDir holds the per-project lock file that serializes key management
+	// ("" = no lock).
 	LockDir string
 
 	spelling []string

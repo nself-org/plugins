@@ -317,6 +317,15 @@ func TestClientShapeChecks(t *testing.T) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
+	for _, call := range []func(c *signing.Client) error{
+		func(c *signing.Client) error { _, err := c.PublicKey(context.Background()); return err },
+		func(c *signing.Client) error { _, err := c.Init(context.Background()); return err },
+		func(c *signing.Client) error { _, err := c.Rotate(context.Background()); return err },
+	} {
+		if err := call(&signing.Client{Src: f.src}); !signing.IsReason(err, signing.ReasonSignerFailed) {
+			t.Fatalf("a key call without a runner: %v", err)
+		}
+	}
 	if _, err := (&signing.Client{Runner: &fakeSigner{}}).Sign(context.Background(), runID, items); !signing.IsReason(err, signing.ReasonSignerFailed) {
 		t.Fatalf("a client without a run store: %v", err)
 	}
@@ -335,8 +344,8 @@ func TestClientRelaysALongRefusalWhole(t *testing.T) {
 	}
 	long := `{"error":{"code":"E717","reason":"key_id_mismatch","message":"` + strings.Repeat("m", 600) + `"}}`
 	_, err = clientFor(f, &fakeSigner{ans: answer{out: long, code: 2}}).PublicKey(context.Background())
-	if err == nil || strings.Count(err.Error(), "m") > 520 {
-		t.Fatalf("a relayed message was not bounded: %d", len(err.Error()))
+	if err == nil || !strings.HasSuffix(err.Error(), strings.Repeat("m", 509)+"...") {
+		t.Fatalf("a relayed message was not bounded to 509 bytes plus an ellipsis: %d", len(err.Error()))
 	}
 }
 

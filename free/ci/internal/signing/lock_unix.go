@@ -2,8 +2,9 @@
 
 package signing
 
-// Purpose: the unix key-management lock: an exclusive flock on a file in the
-// CI home, so two `key init` or `key rotate` processes never overlap.
+// Purpose: the unix key-management lock: an exclusive flock on a per-project
+// file in LockDir (the user's home, never the project, so no untracked file
+// appears in the repository), so two `key init` or `key rotate` processes never overlap.
 // Inputs:  CLIStore.LockDir. Outputs: an unlock func.
 // Constraints: the lock file is 0600 in a 0700 directory; the lock is released
 // when the func is called or the process ends; no LockDir means no lock (tests
@@ -11,6 +12,8 @@ package signing
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -25,7 +28,7 @@ func (s *CLIStore) Lock(ctx context.Context) (func(), error) {
 	if err := os.MkdirAll(s.LockDir, 0o700); err != nil {
 		return nil, Failf(ReasonSignerFailed, "the key lock directory could not be created")
 	}
-	f, err := os.OpenFile(filepath.Join(s.LockDir, "release-key.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := os.OpenFile(filepath.Join(s.LockDir, s.lockName()), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, Failf(ReasonSignerFailed, "the key lock could not be opened")
 	}
@@ -37,6 +40,13 @@ func (s *CLIStore) Lock(ctx context.Context) (func(), error) {
 		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		_ = f.Close()
 	}, nil
+}
+
+// lockName names the lock after the project root, so every process that
+// replaces this project's key shares one lock whatever its CI home is.
+func (s *CLIStore) lockName() string {
+	sum := sha256.Sum256([]byte(filepath.Clean(s.Project)))
+	return "release-key-" + hex.EncodeToString(sum[:8]) + ".lock"
 }
 
 // lockPoll is how often a waiting process retries the lock.
