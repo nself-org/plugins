@@ -82,19 +82,22 @@ func enrollWrongTranscript(t *testing.T) {
 	now := r.clock.Now().Unix()
 	id := pki.NodeKeyID(m.pub)
 	sign := func(msg []byte) []byte { return ed25519.Sign(m.priv, msg) }
-	good := enroll.Transcript("local", now, m.csrFP, id)
+	root := r.ca.RootFingerprint()
+	good := enroll.Transcript("local", root, "node-t", now, m.csrFP, id)
 	flipped := append([]byte(nil), sign(good)...)
 	flipped[10] ^= 1
 	for name, sig := range map[string][]byte{
-		"another coordinator id": sign(enroll.Transcript("elsewhere", now, m.csrFP, id)),
-		"another CSR fingerprint": sign(enroll.Transcript("local", now, other.csrFP, id)),
-		"another client time":    sign(enroll.Transcript("local", now+1, m.csrFP, id)),
-		"another node key id":    sign(enroll.Transcript("local", now, m.csrFP, pki.NodeKeyID(other.pub))),
-		"another domain":         sign([]byte(strings.Replace(string(good), enroll.Domain, "nself-ci-enroll-v2", 1))),
-		"the empty message":      sign(nil),
-		"a flipped bit":          flipped,
-		"a truncated signature":  sign(good)[:63],
-		"an empty signature":     nil,
+		"another coordinator id":  sign(enroll.Transcript("elsewhere", root, "node-t", now, m.csrFP, id)),
+		"another root":            sign(enroll.Transcript("local", "SHA256:other", "node-t", now, m.csrFP, id)),
+		"another node name":       sign(enroll.Transcript("local", root, "node-u", now, m.csrFP, id)),
+		"another CSR fingerprint": sign(enroll.Transcript("local", root, "node-t", now, other.csrFP, id)),
+		"another client time":     sign(enroll.Transcript("local", root, "node-t", now+1, m.csrFP, id)),
+		"another node key id":     sign(enroll.Transcript("local", root, "node-t", now, m.csrFP, pki.NodeKeyID(other.pub))),
+		"another domain":          sign([]byte(strings.Replace(string(good), enroll.Domain, "nself-ci-enroll-v2", 1))),
+		"the empty message":       sign(nil),
+		"a flipped bit":           flipped,
+		"a truncated signature":   sign(good)[:63],
+		"an empty signature":      nil,
 		"another key's signature": ed25519.Sign(other.priv, good),
 	} {
 		q := r.request(off.Code, "node-t", m)
@@ -169,7 +172,9 @@ func enrollRefusalsAreAuditedAndAlerted(t *testing.T) {
 			if _, err := r.st.NodeRevoke(context.Background(), "n1", "cli:test", nil); err != nil {
 				t.Fatal(err)
 			}
-		}, func(r *rig, code string, m nodeMat) enroll.Request { return r.request(code, "n1", newNodeMat(t).withNodeKeyOf(m)) }, true},
+		}, func(r *rig, code string, m nodeMat) enroll.Request {
+			return r.request(code, "n1", newNodeMat(t).withNodeKeyOf(m))
+		}, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			r := newRig(t, nil)

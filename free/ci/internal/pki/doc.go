@@ -27,9 +27,11 @@
 // code revokes the certificate issued for the first and raises an alert.
 //
 // Node takeover. The Ed25519 node key is public by design (every hello carries it), so naming it proves
-// nothing. A joining node signs a domain-separated transcript (coordinator id, request time, CSR key
-// fingerprint, node key id) with the private half; the coordinator verifies it before the code is
-// consumed, for new and existing names. A registered node can re-pair only with its pinned key, and the
+// nothing. A joining node signs a length-prefixed, domain-separated transcript (coordinator id, root
+// fingerprint, node name, request time, CSR key fingerprint, node key id) with the private half (wire
+// field node_key_sig); the coordinator verifies it before the code is consumed, for new and existing
+// names (E660 node_key_proof). A registered node's pin is checked again after approval, so a rotation
+// made meanwhile wins (E659 existing_node refuses registered names on the burst listener). A registered node can re-pair only with its pinned key, and the
 // burst listener refuses registered names.
 //
 // Clock skew. Certificates are backdated by the same 120 s; join and the enrollment route refuse when the
@@ -39,7 +41,8 @@
 // Resumed TLS and live sessions. Every server config disables session tickets and checks kind, the
 // exact intermediate, the deny list and node state in VerifyConnection (every handshake). RequestGuard
 // re-checks each request against an in-memory deny list that follows the store within one refresh
-// interval and cancels the requests of a certificate the moment it is denied.
+// interval, refuses a certificate outside its validity period, and cancels the requests of a certificate
+// the moment it is denied or expires.
 //
 // Not in scope: PAKE (no maintained, reviewed Go CPace library; TOFU with SAS confirmation is the ADR
 // 0024 §3 fallback), intermediate renewal (5-year lifetime), CRL/OCSP (the deny list is the revocation

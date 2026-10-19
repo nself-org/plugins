@@ -194,7 +194,7 @@ func Join(ctx context.Context, o JoinOptions) (JoinResult, error) {
 	}
 	o.Sleep(Interval + 100*time.Millisecond)
 	now := o.Now().Unix()
-	sig, err := o.NodeSign(Transcript(hello.CoordinatorID, now, csrFP, o.NodeKeyID))
+	sig, err := o.NodeSign(Transcript(hello.CoordinatorID, fp, o.Name, now, csrFP, o.NodeKeyID))
 	if err != nil {
 		return JoinResult{}, err
 	}

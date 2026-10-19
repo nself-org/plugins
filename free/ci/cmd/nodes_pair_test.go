@@ -219,6 +219,9 @@ func TestNodesPairEndToEnd(t *testing.T) {
 // The URL printed without --public-url: ":port" names every interface, so the host is "localhost"; a
 // "host:port" address names itself.
 func TestNodesPairDefaultPublicURL(t *testing.T) {
+	old := interfaceIPs
+	interfaceIPs = func() []net.IP { return nil } // a machine with no usable address
+	t.Cleanup(func() { interfaceIPs = old })
 	for _, tc := range []struct{ addr, prefix string }{
 		{":0", "https://localhost:"},
 		{"127.0.0.1:0", "https://127.0.0.1:"},
@@ -239,6 +242,39 @@ func TestNodesPairDefaultPublicURL(t *testing.T) {
 			t.Errorf("--enroll-addr %s: exit %d, stderr %q", tc.addr, code, errb.String())
 		}
 		_ = pw.Close()
+	}
+}
+
+func TestDefaultPublicURL(t *testing.T) {
+	ips := func(ss ...string) (out []net.IP) {
+		for _, s := range ss {
+			out = append(out, net.ParseIP(s))
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name, addr string
+		ips        []net.IP
+		want       string
+		wantErr    bool
+	}{
+		{"wildcard, LAN address", ":3866", ips("127.0.0.1", "192.168.0.9"), "https://192.168.0.9:3866", false},
+		{"0.0.0.0 wildcard", "0.0.0.0:3866", ips("10.1.2.3"), "https://10.1.2.3:3866", false},
+		{"[::] wildcard", "[::]:3866", ips("10.1.2.3"), "https://10.1.2.3:3866", false},
+		{"private beats CGNAT (Tailscale) and public", ":1", ips("100.100.1.1", "8.8.8.8", "172.20.0.5"), "https://172.20.0.5:1", false},
+		{"public beats CGNAT", ":1", ips("100.100.1.1", "8.8.8.8"), "https://8.8.8.8:1", false},
+		{"CGNAT when nothing else", ":1", ips("127.0.0.1", "100.100.1.1"), "https://100.100.1.1:1", false},
+		{"loopback and link-local skipped", ":1", ips("127.0.0.1", "169.254.1.1", "::1", "fe80::1"), "https://localhost:1", false},
+		{"no interface", ":1", nil, "https://localhost:1", false},
+		{"named host", "ci.example.org:3866", ips("10.1.2.3"), "https://ci.example.org:3866", false},
+		{"IPv4 literal", "10.9.9.9:3866", ips("10.1.2.3"), "https://10.9.9.9:3866", false},
+		{"IPv6 literal", "[2001:db8::1]:3866", nil, "https://[2001:db8::1]:3866", false},
+		{"no port", "ci.example.org", nil, "", true},
+	} {
+		got, err := defaultPublicURL(tc.addr, tc.ips)
+		if (err != nil) != tc.wantErr || got != tc.want {
+			t.Errorf("%s: defaultPublicURL(%q) = %q, %v; want %q (error %v)", tc.name, tc.addr, got, err, tc.want, tc.wantErr)
+		}
 	}
 }
 
@@ -402,7 +438,7 @@ func (r *pullRig) signedRequest(code string, csr []byte) enroll.Request {
 		r.t.Fatal(err)
 	}
 	now := time.Now().Unix()
-	sig := ed25519.Sign(r.nodePriv, enroll.Transcript("local", now, fp, pki.NodeKeyID(r.nodeKey)))
+	sig := ed25519.Sign(r.nodePriv, enroll.Transcript("local", r.ca.RootFingerprint(), r.nodeID, now, fp, pki.NodeKeyID(r.nodeKey)))
 	return enroll.Request{Phase: enroll.PhaseEnroll, Version: 1, ClientTime: now, Code: code, CSR: csr, NodeKey: r.nodeKey, NodeKeySig: sig, Name: r.nodeID, OS: "linux", Arch: "amd64"}
 }
 

@@ -155,6 +155,8 @@ func (g *Guard) Middleware(kind Kind) func(http.Handler) http.Handler {
 			}
 			ctx, cancel := context.WithCancel(r.Context())
 			defer cancel()
+			expiry := time.AfterFunc(leaf.NotAfter.Sub(g.now()), cancel) // a request in flight ends with its certificate
+			defer expiry.Stop()
 			defer g.watch(serialHex(leaf), cancel)()
 			if g.Denied(serialHex(leaf)) {
 				http.Error(w, "E660: certificate revoked", http.StatusForbidden)

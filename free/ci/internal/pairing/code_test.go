@@ -137,7 +137,7 @@ func FuzzPairingInput(f *testing.F) {
 		mu.Lock()
 		defer mu.Unlock()
 		structured, _ := json.Marshal(enroll.Request{Phase: enroll.PhaseEnroll, Version: enroll.Version, ClientTime: r.clock.Now().Unix(),
-			Code: code, CSR: good.csr, NodeKey: good.pub, NodeKeySig: good.sign("local", r.clock.Now().Unix()), Name: name})
+			Code: code, CSR: good.csr, NodeKey: good.pub, NodeKeySig: good.sign("local", r.ca.RootFingerprint(), name, r.clock.Now().Unix()), Name: name})
 		secret := ""
 		if ValidShape(code) && code != off.Code {
 			secret = norm // a wrong, well-formed code must not come back in any reply

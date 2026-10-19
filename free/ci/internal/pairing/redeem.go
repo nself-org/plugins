@@ -59,7 +59,7 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 		return enroll.Response{}, err
 	}
 	keyID := pki.NodeKeyID(req.NodeKey)
-	if !ed25519.Verify(req.NodeKey, enroll.Transcript(s.cfg.CoordinatorID, req.ClientTime, csrFP, keyID), req.NodeKeySig) {
+	if !ed25519.Verify(req.NodeKey, enroll.Transcript(s.cfg.CoordinatorID, s.cfg.CA.RootFingerprint(), name, req.ClientTime, csrFP, keyID), req.NodeKeySig) {
 		return enroll.Response{}, &pki.Error{Reason: pki.ReasonNodeKeyProof, Msg: "the request is not signed by the node key it names"}
 	}
 	hash := HashCode(req.Code)
@@ -210,6 +210,11 @@ func (s *Service) vetExisting(ctx context.Context, name string, key []byte) (boo
 // enrollNode registers a new node (trust from the approver, key pinned) or keeps an existing one as it
 // is, then issues the certificate and binds it to the offer.
 func (s *Service) enrollNode(ctx context.Context, offer store.PKIOffer, name string, req enroll.Request, t TrustFields, existing bool) (*pki.Issued, error) {
+	if existing { // approval can take minutes: a rotation or revocation made meanwhile still wins
+		if _, err := s.vetExisting(ctx, name, req.NodeKey); err != nil {
+			return nil, err
+		}
+	}
 	if !existing {
 		if _, err := s.register(ctx, name, req, t); err != nil {
 			return nil, err
@@ -231,6 +236,7 @@ func (s *Service) enrollNode(ctx context.Context, offer store.PKIOffer, name str
 	}
 	if existing {
 		if err = s.cfg.CA.PinNodeKey(ctx, name, req.NodeKey); err != nil { // finalizes a pending pin, only now that the offer is bound
+			_, _ = s.cfg.Store.PKIDeny(ctx, s.cfg.Actor, name, "pin_failed", issued.Serial)
 			return nil, err
 		}
 	}

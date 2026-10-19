@@ -161,6 +161,35 @@ func enrollWithdrawDuringApproval(t *testing.T) {
 	}
 }
 
+// A key rotation made while an approval is pending wins: the old key is not pinned again and no
+// certificate is issued for it.
+func enrollRotationDuringApproval(t *testing.T) {
+	r := newRig(t, nil)
+	m1 := newNodeMat(t)
+	if _, err := r.redeem(r.offer(OfferOptions{Approver: approving("policy:first", DefaultTrust())}).Code, "node-rot", m1); err != nil {
+		t.Fatal(err)
+	}
+	ap := &blockingApprover{entered: make(chan struct{}), release: make(chan struct{}), dec: Decision{Approve: true, Trust: DefaultTrust()}}
+	off := r.offer(OfferOptions{Approver: ap})
+	done := make(chan error, 1)
+	go func() { _, err := r.redeem(off.Code, "node-rot", newNodeMat(t).withNodeKeyOf(m1)); done <- err }()
+	waitEntered(t, ap)
+	other := newNodeMat(t)
+	if err := r.ca.RotateNodeKey(context.Background(), "admin", "node-rot", pki.NodeKeyID(other.pub)); err != nil {
+		t.Fatal(err)
+	}
+	close(ap.release)
+	if err := waitErr(t, done); pki.ReasonOf(err) != pki.ReasonNodeKeyChanged {
+		t.Fatalf("want node_key_changed, got %v", err)
+	}
+	if certs, _ := r.st.PKICertsOfNode(context.Background(), "node-rot"); len(certs) != 1 {
+		t.Fatalf("a certificate was issued for the rotated-away key: %+v", certs)
+	}
+	if err := r.ca.CheckPinnedNodeKey(context.Background(), "node-rot", other.pub); err != nil {
+		t.Fatalf("the rotation was undone: %v", err)
+	}
+}
+
 func waitEntered(t *testing.T, ap *blockingApprover) {
 	t.Helper()
 	select {

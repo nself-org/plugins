@@ -568,7 +568,8 @@ func TestGuardMiddlewareValidityPeriod(t *testing.T) {
 	if rec := do(user); rec.Code != 403 || rec.Body.String() != "E660: wrong certificate kind\n" {
 		t.Errorf("wrong kind and expired: %d %q", rec.Code, rec.Body.String())
 	}
-	// a request already running is not cut off by the clock passing NotAfter: only the deny list cancels it
+	// a request already running is not cut off by the (fake) clock jumping past NotAfter: its context ends
+	// by a timer of the remaining validity (TestGuardCancelsRequestAtCertificateExpiry) or by the deny list
 	r.clk.set(nb.Add(time.Minute))
 	_ = g.Refresh(ctx)
 	started, release, done := make(chan context.Context), make(chan struct{}), make(chan struct{})
@@ -590,4 +591,32 @@ func TestGuardMiddlewareValidityPeriod(t *testing.T) {
 	}
 	close(release)
 	<-done
+}
+
+// TestGuardCancelsRequestAtCertificateExpiry: a request running when its certificate expires ends with it.
+func TestGuardCancelsRequestAtCertificateExpiry(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	r.addNode("n1")
+	n := r.issueNode("n1", time.Hour)
+	g := newGuardAt(r)
+	r.clk.set(n.Cert.NotAfter.Add(-150 * time.Millisecond))
+	if err := g.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	ended := make(chan error, 1)
+	h := g.Middleware(KindNode)(http.HandlerFunc(func(_ http.ResponseWriter, rq *http.Request) {
+		select {
+		case <-rq.Context().Done():
+			ended <- rq.Context().Err()
+		case <-time.After(10 * time.Second):
+			ended <- nil
+		}
+	}))
+	rq := httptest.NewRequest("GET", "/long", nil)
+	rq.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{n.Cert}}
+	go h.ServeHTTP(httptest.NewRecorder(), rq)
+	if err := <-ended; err == nil {
+		t.Fatal("the request outlived its certificate")
+	}
 }

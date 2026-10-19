@@ -105,7 +105,11 @@ func runNodesPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	}
 	public := f.publicURL
 	if public == "" {
-		public = defaultPublicURL(f.addr, interfaceIPs())
+		var uerr error
+		if public, uerr = defaultPublicURL(f.addr, interfaceIPs()); uerr != nil {
+			fmt.Fprintf(stderr, "E660: %v\n", uerr)
+			return 2
+		}
 	}
 	svc := pairing.New(pairing.Config{
 		CA: ca, Store: d.Store, Registry: d.Registry, CoordinatorID: f.coordinatorID, AgentURL: f.agentURL, Actor: d.Actor,
@@ -114,7 +118,11 @@ func runNodesPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 			return lifecycle.RunHooks(ctx, lifecycle.PointPair, lifecycle.HookEvent{Point: lifecycle.PointPair, NodeID: nodeID, Project: d.Project, Flags: fs})
 		},
 		Alert: func(a pairing.Alert) {
-			fmt.Fprintf(stderr, "ALERT %s: offer %s node %s: a used code was presented again; its certificate was revoked\n", a.Kind, a.OfferID, a.NodeID)
+			what := "a used code was presented again; its certificate was revoked"
+			if a.Kind == "pairing.takeover_attempt" {
+				what = "a code was used to claim a registered node's name; nothing was issued"
+			}
+			fmt.Fprintf(stderr, "ALERT %s: offer %s node %s: %s\n", a.Kind, a.OfferID, a.NodeID, what)
 		},
 	})
 	pairing.Use(svc)
@@ -138,10 +146,13 @@ func runNodesPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	return 0
 }
 
-// interfaceIPs lists the addresses of this machine's interfaces.
-func interfaceIPs() []net.IP {
+// interfaceIPs lists the addresses of this machine's interfaces (a variable so tests can fix the machine).
+var interfaceIPs = func() []net.IP {
 	var out []net.IP
-	addrs, _ := net.InterfaceAddrs()
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
 	for _, a := range addrs {
 		if n, ok := a.(*net.IPNet); ok {
 			out = append(out, n.IP)
@@ -151,23 +162,40 @@ func interfaceIPs() []net.IP {
 }
 
 // defaultPublicURL is what nodes are told to reach when --public-url is absent. A bind address that names
-// a host is that host; a wildcard bind (":3866", "0.0.0.0:3866") becomes this machine's first
-// non-loopback IPv4 address, so the server certificate carries an IP SAN a LAN node can verify, and
-// "localhost" only when the machine has none.
-func defaultPublicURL(addr string, ips []net.IP) string {
+// a host is that host; a wildcard bind (":3866", "0.0.0.0:3866") becomes one of this machine's IPv4
+// addresses so the server certificate carries an IP SAN a LAN node can verify: a private (RFC 1918)
+// address first, then a public one, then a carrier-grade NAT one (Tailscale and the like); loopback and
+// link-local never. "localhost" only when the machine has none. An address without a port is an error.
+func defaultPublicURL(addr string, ips []net.IP) (string, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return "https://localhost"
+		return "", fmt.Errorf("--enroll-addr %q is not host:port: %w", addr, err)
 	}
 	if ip := net.ParseIP(host); host != "" && (ip == nil || !ip.IsUnspecified()) {
-		return "https://" + addr
+		return "https://" + addr, nil
 	}
+	_, cgnat, _ := net.ParseCIDR("100.64.0.0/10")
+	best, rank := "", 4
 	for _, ip := range ips {
-		if v4 := ip.To4(); v4 != nil && !v4.IsLoopback() && !v4.IsLinkLocalUnicast() {
-			return "https://" + net.JoinHostPort(v4.String(), port)
+		v4 := ip.To4()
+		if v4 == nil || v4.IsLoopback() || v4.IsLinkLocalUnicast() || v4.IsUnspecified() {
+			continue
+		}
+		r := 2
+		switch {
+		case v4.IsPrivate():
+			r = 1
+		case cgnat.Contains(v4):
+			r = 3
+		}
+		if r < rank {
+			best, rank = v4.String(), r
 		}
 	}
-	return "https://" + net.JoinHostPort("localhost", port)
+	if best == "" {
+		best = "localhost"
+	}
+	return "https://" + net.JoinHostPort(best, port), nil
 }
 
 func pkiOf(ctx context.Context, d *lifecycle.Deps) (*pki.CA, error) {

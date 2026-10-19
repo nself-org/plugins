@@ -32,6 +32,7 @@ func TestEnroll(t *testing.T) {
 	t.Run("an existing node with another key is refused before the approver", enrollExistingOtherKey)
 	t.Run("a revoked node cannot re-pair", enrollExistingRevoked)
 	t.Run("a withdraw during an in-flight approval ends E659 withdrawn with no usable certificate", enrollWithdrawDuringApproval)
+	t.Run("a key rotation during an in-flight approval is not undone", enrollRotationDuringApproval)
 	t.Run("an approval that cannot be audited fails closed and revokes the certificate", enrollApproveAuditFailsClosed)
 	t.Run("a reuse whose revoke fails is an internal error, not the revoked message", enrollReuseRevokeFailureIsInternal)
 	t.Run("takeover of a registered node with only its public node key is refused node_key_proof and the code is not consumed", enrollTakeoverWithPublicKeyOnly)

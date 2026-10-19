@@ -238,8 +238,8 @@ func (m nodeMat) withNodeKeyOf(o nodeMat) nodeMat {
 }
 
 // sign signs the enrollment transcript with the node key of m.
-func (m nodeMat) sign(coordinatorID string, clientTime int64) []byte {
-	return ed25519.Sign(m.priv, enroll.Transcript(coordinatorID, clientTime, m.csrFP, pki.NodeKeyID(m.pub)))
+func (m nodeMat) sign(coordinatorID, rootFP, name string, clientTime int64) []byte {
+	return ed25519.Sign(m.priv, enroll.Transcript(coordinatorID, rootFP, name, clientTime, m.csrFP, pki.NodeKeyID(m.pub)))
 }
 
 // request is the phase-enroll request of m under the rig clock, signed with the node key.
@@ -249,7 +249,7 @@ func (r *rig) request(code, name string, m nodeMat) enroll.Request {
 
 func (r *rig) requestAt(code, name string, m nodeMat, clientTime int64) enroll.Request {
 	return enroll.Request{Phase: enroll.PhaseEnroll, Version: enroll.Version, ClientTime: clientTime, Code: code,
-		CSR: m.csr, NodeKey: m.pub, NodeKeySig: m.sign("local", clientTime), Name: name, OS: "linux", Arch: "amd64", MachineID: "machine-1", AgentVersion: "1.5.0"}
+		CSR: m.csr, NodeKey: m.pub, NodeKeySig: m.sign("local", r.ca.RootFingerprint(), name, clientTime), Name: name, OS: "linux", Arch: "amd64", MachineID: "machine-1", AgentVersion: "1.5.0"}
 }
 
 func (r *rig) redeem(code, name string, m nodeMat) (enroll.Response, error) {
