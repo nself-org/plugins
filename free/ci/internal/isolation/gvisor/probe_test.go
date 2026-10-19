@@ -24,6 +24,7 @@ const (
 
 // fakeRunner answers `info` (whole and the runtime table) from canned JSON.
 type fakeRunner struct {
+	ctxAware   bool // fail a query whose context ended, as exec.RuntimeQuery does
 	mu         sync.Mutex
 	info       map[string]string
 	runtimes   string
@@ -32,7 +33,10 @@ type fakeRunner struct {
 
 func (f *fakeRunner) setRuntimes(table string) { f.mu.Lock(); f.runtimes = table; f.mu.Unlock() }
 
-func (f *fakeRunner) Query(_ context.Context, binary string, args ...string) ([]byte, error) {
+func (f *fakeRunner) Query(ctx context.Context, binary string, args ...string) ([]byte, error) {
+	if f.ctxAware && ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if strings.Contains(strings.Join(args, " "), ".Runtimes") {

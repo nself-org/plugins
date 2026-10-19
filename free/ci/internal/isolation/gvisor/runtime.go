@@ -35,7 +35,7 @@ const DefaultPlatform = "systrap"
 // rootless were added by the lead ruling of 2026-10-19; TESTONLY-* flags and `file-access=shared`
 // are matched in checkArgs.
 var denied = map[string]bool{"host-uds": true, "fsgofer-host-uds": true, "host-fifo": true, "net-raw": true, "allow-flag-override": true,
-	"ignore-cgroups": true, "rootless": true, "nvproxy": true, "nvproxy-docker": true, "tpuproxy": true}
+	"ignore-cgroups": true, "rootless": true, "nvproxy": true, "nvproxy-docker": true, "tpuproxy": true, "profile": true}
 
 type runtimeEntry struct {
 	Path string

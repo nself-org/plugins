@@ -91,3 +91,16 @@ func TestTeardownGoesThroughTheContainerProfile(t *testing.T) {
 }
 
 func modelScope(s string) model.NetworkScope { return model.NetworkScope(s) }
+
+// A teardown with an already-cancelled context must not leave a cached failure behind for the next probe.
+func TestCancelledTeardownDoesNotPoisonTheNextProbe(t *testing.T) {
+	r := okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`)
+	r.ctxAware = true
+	p := newProfile(r, okStarter(), nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_ = p.Teardown(ctx, isolation.Attempt{ID: "a1"})
+	if av := p.Probe(context.Background()); !av.Available() {
+		t.Fatalf("a cancelled teardown poisoned the probe: %+v", av)
+	}
+}

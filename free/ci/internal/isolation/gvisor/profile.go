@@ -150,6 +150,10 @@ func (p *Profile) Wrap(s exec.JobSpec) (exec.JobSpec, error) {
 
 // Teardown removes the attempt's container; the name and labels are the container profile's.
 func (p *Profile) Teardown(ctx context.Context, a isolation.Attempt) error {
+	// removal must still happen after the caller's context ended, and a cancelled probe must not
+	// leave a cached failure in the container profile
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), wrapTimeout)
+	defer cancel()
 	return p.base.Teardown(ctx, a)
 }
 
