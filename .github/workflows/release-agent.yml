@@ -94,7 +94,7 @@ jobs:
           diff -r "$RUNNER_TEMP/agent-a" "$RUNNER_TEMP/agent-b"
           mkdir -p dist
           cp -p "$RUNNER_TEMP"/agent-a/* dist/
-          # The digest of SHA256SUMS travels as a job output, a different channel from the artifact, so `sign` can refuse a swapped artifact.
+          # The digest of SHA256SUMS travels as a job output, a different channel from the rebuilt files, so `sign-publish` can refuse a rebuild that differs.
           echo "sums=$(sha256sum dist/SHA256SUMS | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Rehearsal signing, SBOMs, provenance and verification

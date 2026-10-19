@@ -123,6 +123,11 @@ func TestArtifactRefusesWhatProvenanceCannotVouchFor(t *testing.T) {
 		}), nil},
 		{"built by another repository", signedBy(agent, func(f *provenance.AgentFacts) { f.Repo = "evil/plugins" }), nil},
 		{"built from another tag", signedBy(agent, func(f *provenance.AgentFacts) { f.Ref = "refs/tags/v9.9.9" }), nil},
+		{"signed by a ci-release key the set holds", func() release {
+			r := good
+			r.files.Provenance = envelopeBytes(t, ciRelease, provenance.PayloadType, good.statement(t, nil))
+			return r
+		}(), []signing.Key{agent.key(), ciRelease.key()}},
 		{"signed by a ci-release key", func() release {
 			r := good
 			r.files.Provenance = envelopeBytes(t, ciRelease, provenance.PayloadType, good.statement(t, nil))
@@ -161,6 +166,19 @@ func TestArtifactRefusesWhatProvenanceCannotVouchFor(t *testing.T) {
 			return r
 		}(), nil},
 	}
+	// Every row must fail for the reason it names, not on an earlier check: the message says which rule refused.
+	why := map[string]string{
+		"provenance missing": "no provenance file", "CycloneDX SBOM missing": "no CycloneDX SBOM file", "SPDX SBOM missing": "no SPDX SBOM file",
+		"oversized provenance": "larger than", "provenance is not an envelope": "not a DSSE envelope",
+		"provenance for another digest": "provenance subject", "provenance for another binary name": "provenance subject", "provenance with two subjects": "provenance subject",
+		"CycloneDX byproduct digest differs from the SBOM": "not the SBOM the provenance names", "SPDX byproduct digest differs from the SBOM": "not the SBOM the provenance names",
+		"SBOM edited after signing": "not the SBOM the provenance names", "one SBOM byproduct only": "byproducts", "extra byproduct": "byproducts",
+		"built by another repository": "not the agent release workflow of", "built from another tag": "not the tag of version",
+		"signed by a ci-release key the set holds": "wrong_purpose", "signed by a ci-release key": "unknown_key",
+		"signed by a plugins key the set holds": "wrong_purpose", "signed by an agent key nobody trusts": "unknown_key",
+		"wrong payload type": "payload type", "release build type": "build type", "builder is another workflow": "not the agent release workflow",
+		"statement is not valid JSON": "statement is not valid",
+	}
 	for _, c := range cases {
 		keys := c.keys
 		if keys == nil {
@@ -174,6 +192,8 @@ func TestArtifactRefusesWhatProvenanceCannotVouchFor(t *testing.T) {
 		var ve *Error
 		if !asError(err, &ve) || ve.Reason != ReasonProvenance || ve.Code() != "E665" {
 			t.Errorf("%s: want E665 %s, got %v", c.name, ReasonProvenance, err)
+		} else if w := why[c.name]; w == "" || !strings.Contains(err.Error(), w) {
+			t.Errorf("%s: refused for another reason than %q: %v", c.name, w, err)
 		}
 	}
 }
