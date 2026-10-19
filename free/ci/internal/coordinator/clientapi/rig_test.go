@@ -41,6 +41,7 @@ type fakeBackend struct {
 	cancels  []string
 	evidence json.RawMessage
 	lines    []logs.Line
+	getFail  bool // Get reports the run gone
 }
 
 func (f *fakeBackend) Submit(_ context.Context, r SubmitRequest, _ string) (SubmitResult, error) {
@@ -69,6 +70,9 @@ func cp(r RunItem) RunItem {
 func (f *fakeBackend) Get(_ context.Context, ref string) (RunItem, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.getFail {
+		return RunItem{}, false, nil
+	}
 	for _, r := range f.runs {
 		if r.ID == ref {
 			return cp(r), true, nil
@@ -126,7 +130,11 @@ func (f *fakeBackend) Evidence(context.Context, string) (json.RawMessage, error)
 }
 
 func item(id, project, status string) RunItem {
-	return RunItem{Project: project, RunView: cirun.RunView{ID: id, Revision: strings.Repeat("a", 40), Status: status,
+	return itemAt(id, project, status, strings.Repeat("a", 40))
+}
+
+func itemAt(id, project, status, rev string) RunItem {
+	return RunItem{Project: project, RunView: cirun.RunView{ID: id, Revision: rev, Status: status,
 		Jobs: []cirun.JobView{{Name: "build", State: status}}}}
 }
 

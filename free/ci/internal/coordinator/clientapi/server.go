@@ -77,16 +77,19 @@ func RegisterRoute(method, pattern, role string, h http.Handler) error {
 	if !ok || h == nil || method == "" || pattern == "" || pattern[0] != '/' {
 		return Failf(ReasonBadRequest, "route %s %s needs a role (member, release, admin), a handler and an absolute pattern", method, pattern)
 	}
+	routes.Lock()
+	for _, x := range routes.list {
+		if x.method == method && x.pattern == pattern {
+			routes.Unlock()
+			return Failf(ReasonConflict, "route %s %s is already registered", method, pattern)
+		}
+	}
+	routes.Unlock()
 	if err := tryPattern(method, pattern); err != nil {
 		return err
 	}
 	routes.Lock()
 	defer routes.Unlock()
-	for _, x := range routes.list {
-		if x.method == method && x.pattern == pattern {
-			return Failf(ReasonConflict, "route %s %s is already registered", method, pattern)
-		}
-	}
 	routes.list = append(routes.list, routeSpec{method, pattern, r, h})
 	return nil
 }

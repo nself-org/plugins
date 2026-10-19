@@ -121,6 +121,9 @@ func TestRegisteredRouteRoles(t *testing.T) {
 			t.Errorf("pattern %q would panic the mux at serve time and must be refused at registration", bad)
 		}
 	}
+	if err := RegisterRoute("GET", "/v1/test-member", "member", serve); ReasonOf(err) != ReasonConflict {
+		t.Errorf("a repeated route must be a conflict: %v", err)
+	}
 	if RegisterRoute("GET", "/v1/test-member", "member", serve) == nil || RegisterRoute("GET", "/v1/x", "boss", serve) == nil || RegisterRoute("GET", "/v1/y", "member", nil) == nil {
 		t.Fatal("a duplicate, an unknown role and a nil handler must be refused")
 	}

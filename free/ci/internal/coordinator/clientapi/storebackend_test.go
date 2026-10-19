@@ -70,8 +70,8 @@ func TestStoreBackendLifecycle(t *testing.T) {
 	if _, err = b.Cancel(ctx, sub.ID, "x"); ReasonOf(err) != ReasonConflict {
 		t.Fatalf("a run that has not started cannot be cancelled: %v", err)
 	}
-	if _, ok, _ = b.Get(ctx, "in-missing"); ok {
-		t.Fatal("an unknown intake id must not be found")
+	if _, ok, err = b.Get(ctx, "in-missing"); ok || err != nil {
+		t.Fatalf("an unknown intake id is not found, and not an error: %v %v", ok, err)
 	}
 	row, claimed, err := st.IntakeClaim(ctx, "coord-1")
 	if err != nil || !claimed || row.ID != sub.ID {
