@@ -96,3 +96,49 @@ func eol(b []byte) []byte {
 	}
 	return nil
 }
+
+// valueMask masks exact values (a one-job credential) in what the wrapped Redactor
+// emits. It holds back the last len(longest)-1 bytes between calls, so a value split
+// across chunks is still whole when it is matched; Flush releases the rest.
+type valueMask struct {
+	inner   Redactor
+	values  [][]byte
+	hold    int
+	pending []byte
+}
+
+func newValueMask(inner Redactor, values []string) Redactor {
+	m := &valueMask{inner: inner}
+	for _, v := range values {
+		if v == "" {
+			continue
+		}
+		m.values = append(m.values, []byte(v))
+		m.hold = max(m.hold, len(v)-1)
+	}
+	return m
+}
+
+func (m *valueMask) mask(b []byte) []byte {
+	for _, v := range m.values {
+		b = bytes.ReplaceAll(b, v, []byte(maskText))
+	}
+	return b
+}
+
+func (m *valueMask) Redact(p []byte) []byte {
+	m.pending = m.mask(append(m.pending, m.inner.Redact(p)...))
+	if len(m.pending) <= m.hold {
+		return nil
+	}
+	cut := len(m.pending) - m.hold
+	out := append([]byte(nil), m.pending[:cut]...)
+	m.pending = append([]byte(nil), m.pending[cut:]...)
+	return out
+}
+
+func (m *valueMask) Flush() []byte {
+	out := m.mask(append(m.pending, m.inner.Flush()...))
+	m.pending = nil
+	return out
+}
