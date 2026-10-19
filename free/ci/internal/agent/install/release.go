@@ -45,6 +45,10 @@ type Release struct {
 }
 
 var _ lifecycle.AgentSource = Release{}
+var _ lifecycle.PinnedSource = Release{}
+
+// PinnedVersion implements lifecycle.PinnedSource.
+func (r Release) PinnedVersion() string { return r.Version }
 
 // Fetch implements lifecycle.AgentSource.
 func (r Release) Fetch(ctx context.Context, p lifecycle.Platform) (string, func(), error) {
