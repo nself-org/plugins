@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -37,7 +38,7 @@ func newFlags(f *discoverFlags, errOut io.Writer) *flag.FlagSet {
 	fs := flag.NewFlagSet("nodes discover", flag.ContinueOnError)
 	fs.SetOutput(errOut)
 	fs.BoolVar(&f.json, "json", false, "print one v1 JSON envelope")
-	fs.DurationVar(&f.timeout, "timeout", 5*time.Second, "how long to listen for answers (0.5s to 60s)")
+	fs.DurationVar(&f.timeout, "timeout", 5*time.Second, "how long to listen for answers (0.5s to 15s)")
 	return fs
 }
 
@@ -59,6 +60,9 @@ func RunDiscover(args []string, env Env) int {
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
+		}
+		if slices.Contains(args, "--json") || slices.Contains(args, "-json") {
+			return failCmd(env, true, "E607", output.ExitUser, errors.New("usage: nself ci nodes discover [--timeout 5s] [--json]"))
 		}
 		return 1
 	}

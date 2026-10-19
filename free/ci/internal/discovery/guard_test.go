@@ -202,12 +202,37 @@ func TestAdvertiseRejectsBadInput(t *testing.T) {
 func TestBrowseTimeoutBounds(t *testing.T) {
 	n := newMemNet()
 	g := guardFor(n, nil, t.TempDir())
-	for _, d := range []time.Duration{0, time.Millisecond, 2 * time.Minute} {
+	for _, d := range []time.Duration{0, time.Millisecond, 2 * time.Minute, 30 * time.Second} {
 		if _, err := g.Browse(context.Background(), d); err == nil {
 			t.Fatalf("timeout %s must be refused", d)
 		}
 	}
 	if n.callCount() != 0 {
 		t.Fatal("a refused timeout must not open a socket")
+	}
+}
+
+// TestUnknownConfigLocationFailsClosed: with no home at all the switch cannot be read, so discovery stays off.
+func TestUnknownConfigLocationFailsClosed(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("NSELF_CI_HOME", "")
+	n := newMemNet()
+	g := &Guard{Net: n, Getenv: func(string) string { return "" }}
+	if _, err := g.Browse(context.Background(), time.Second); ReasonOf(err) != ReasonConfigInvalid || n.callCount() != 0 {
+		t.Fatalf("want E667 config_invalid and no network call, got %v / %d", err, n.callCount())
+	}
+}
+
+func TestConfigThatIsNotARegularFileFailsClosed(t *testing.T) {
+	home := t.TempDir()
+	if err := os.Symlink("/dev/zero", filepath.Join(home, "config.yaml")); err != nil {
+		t.Skip(err)
+	}
+	if err := guardFor(newMemNet(), nil, home).Allowed(); ReasonOf(err) != ReasonConfigInvalid {
+		t.Fatalf("a device as config must be refused, got %v", err)
+	}
+	big := writeConfig(t, "ci:\n  discovery: on\n"+strings.Repeat("# pad\n", 200000))
+	if err := guardFor(newMemNet(), nil, big).Allowed(); ReasonOf(err) != ReasonConfigInvalid {
+		t.Fatalf("an oversized config must be refused, got %v", err)
 	}
 }

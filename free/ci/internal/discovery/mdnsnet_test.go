@@ -50,7 +50,7 @@ func TestPickLocalKeepsOnlyUsableAddresses(t *testing.T) {
 		return n
 	}
 	// IPv6 is never published (a SLAAC address can embed the MAC); loopback and link-local are not either.
-	got := pickLocal([]net.Addr{mk("127.0.0.1/8"), mk("::1/128"), mk("fe80::1/64"), mk("169.254.1.1/16"), mk("192.168.1.5/24"), mk("fd00::5/64"), mk("2001:db8::211:22ff:fe33:4455/64")})
+	got := pickLocal([]net.Addr{mk("127.0.0.1/8"), mk("::1/128"), mk("fe80::1/64"), mk("169.254.1.1/16"), mk("192.168.1.5/24"), mk("fd00::5/64"), mk("2001:db8::211:22ff:fe33:4455/64"), mk("8.8.4.4/24")})
 	if len(got) != 1 || got[0] != netip.MustParseAddr("192.168.1.5") {
 		t.Fatalf("got %v", got)
 	}
@@ -58,7 +58,7 @@ func TestPickLocalKeepsOnlyUsableAddresses(t *testing.T) {
 
 func TestPublishableSkipsVirtualInterfaces(t *testing.T) {
 	up := net.FlagUp | net.FlagMulticast
-	for name, want := range map[string]bool{"en0": true, "eth0": true, "wlan0": true, "docker0": false, "br-1a2b": false, "veth12": false, "utun3": false, "tailscale0": false, "awdl0": false} {
+	for name, want := range map[string]bool{"en0": true, "eth0": true, "wlan0": true, "docker0": false, "br-1a2b": false, "veth12": false, "utun3": false, "tailscale0": false, "awdl0": false, "cni0": false, "podman0": false, "lxdbr0": false} {
 		if publishable(name, up) != want {
 			t.Errorf("%s: want %v", name, want)
 		}

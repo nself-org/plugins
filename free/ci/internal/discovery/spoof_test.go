@@ -217,7 +217,7 @@ func TestOnlyMDNSNetImportsTheLibrary(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, call := range []string{".Browse(", ".Advertise(", ".LocalAddrs("} {
-			if strings.Contains(string(src), call) && p != "mdnsnet.go" && p != "cli.go" {
+			if strings.Contains(string(src), call) && p != "mdnsnet.go" && !(p == "cli.go" && strings.Contains(string(src), "env.Guard.Browse(") && strings.Count(string(src), ".Browse(") == 1 && !strings.Contains(string(src), ".Advertise(") && !strings.Contains(string(src), ".LocalAddrs(")) {
 				t.Errorf("%s calls %s: only guard.go may reach the network layer", p, call)
 			}
 		}

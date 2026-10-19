@@ -122,3 +122,10 @@ func TestDiscoverTableWarnsOnDuplicatesAndCuts(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscoverJSONFlagErrorStillEmitsAnEnvelope(t *testing.T) {
+	code, out, _ := runCmd(t, newMemNet(), nil, "--json", "--timeout", "abc")
+	if code != 1 || !strings.Contains(out, `"E607"`) {
+		t.Fatalf("exit %d: %q", code, out)
+	}
+}

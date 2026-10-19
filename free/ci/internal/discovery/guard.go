@@ -32,7 +32,7 @@ const (
 	MinTimeout = 500 * time.Millisecond
 	// RawCap is the most raw records one browse keeps; reaching it marks the result flooded.
 	RawCap     = 4 * MaxCandidates
-	MaxTimeout = 60 * time.Second
+	MaxTimeout = 15 * time.Second
 )
 
 // Entry is one raw record from the network: untrusted input.

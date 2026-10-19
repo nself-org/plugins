@@ -11,6 +11,7 @@ package discovery
 //          authorize a node (TestImportsCannotAuthorize).
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,18 +83,23 @@ func (g *Guard) Allowed() error {
 	}
 	path := ConfigPath(g.Home)
 	if path == "" {
-		return nil
+		return disabled(ReasonConfigInvalid, "the user config location is unknown, so LAN discovery stays off")
 	}
-	fi, err := os.Stat(path)
+	f, err := os.Open(path)
 	if os.IsNotExist(err) {
 		return nil
 	}
-	if err != nil || fi.Size() > maxConfig {
-		return disabled(ReasonConfigInvalid, "the user config cannot be read, so LAN discovery stays off")
-	}
-	b, err := os.ReadFile(path)
+	unreadable := disabled(ReasonConfigInvalid, "the user config cannot be read, so LAN discovery stays off")
 	if err != nil {
-		return disabled(ReasonConfigInvalid, "the user config cannot be read, so LAN discovery stays off")
+		return unreadable
+	}
+	defer f.Close()
+	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() { // a FIFO or device would hang or never end
+		return unreadable
+	}
+	b, err := io.ReadAll(io.LimitReader(f, maxConfig+1))
+	if err != nil || len(b) > maxConfig {
+		return unreadable
 	}
 	var c userConfig
 	if err = yaml.Unmarshal(b, &c); err != nil {

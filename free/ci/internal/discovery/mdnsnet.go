@@ -37,9 +37,7 @@ func (systemNet) Browse(ctx context.Context, serviceType string, timeout time.Du
 		// packet for the same name), so no field may be read until QueryContext has returned.
 		var got []*mdns.ServiceEntry
 		for e := range ch {
-			if len(got) < RawCap {
-				got = append(got, e)
-			}
+			got = append(got, e) // the library holds every entry in its own map anyway
 		}
 		done <- got
 	}()
@@ -49,9 +47,15 @@ func (systemNet) Browse(ctx context.Context, serviceType string, timeout time.Du
 	if err != nil && len(raw) == 0 && ctx.Err() == nil {
 		return nil, err
 	}
+	// Other services' records are dropped before the cap, so a flood of them cannot fill it.
 	got := make([]Entry, 0, len(raw))
 	for _, e := range raw {
-		got = append(got, fromLibrary(e))
+		if en := fromLibrary(e); ofService(en.Name) {
+			got = append(got, en)
+		}
+	}
+	if len(got) > RawCap {
+		got = got[:RawCap]
 	}
 	return got, nil
 }
@@ -87,16 +91,16 @@ func (systemNet) Advertise(svc Service) (func(), error) {
 	return func() { _ = srv.Shutdown() }, nil
 }
 
-// LocalAddrs lists up to four private or global IPv4 addresses of this host's multicast-capable
-// interfaces. IPv6 is left out on purpose: a SLAAC address can embed the MAC address and stays the same
-// across windows, which would make the record stable and identifying. Virtual interfaces (containers,
-// VPN tunnels, bridges) are skipped.
+// LocalAddrs returns the one private IPv4 address to publish: the first on a multicast-capable real
+// interface. One, because the library keeps only the last A record of a name, so more would be sent to
+// the LAN for nothing. Private only, because the server socket is not limited to the local link and a
+// public address must not be handed to whoever queries it. IPv6 is left out on purpose: a SLAAC
+// address can embed the MAC address and stays the same across windows. Virtual interfaces are skipped.
 func (systemNet) LocalAddrs() []netip.Addr {
 	ifs, err := net.Interfaces()
 	if err != nil {
 		return nil
 	}
-	var out []netip.Addr
 	for _, ifc := range ifs {
 		if !publishable(ifc.Name, ifc.Flags) {
 			continue
@@ -105,15 +109,14 @@ func (systemNet) LocalAddrs() []netip.Addr {
 		if err != nil {
 			continue
 		}
-		out = append(out, pickLocal(as)...)
+		if got := pickLocal(as); len(got) > 0 {
+			return got[:1]
+		}
 	}
-	if len(out) > 4 {
-		out = out[:4]
-	}
-	return out
+	return nil
 }
 
-var virtualPrefixes = []string{"docker", "br-", "veth", "utun", "tun", "tap", "vmnet", "vboxnet", "virbr", "bridge", "awdl", "llw", "ap", "gif", "stf", "wg", "tailscale", "zt"}
+var virtualPrefixes = []string{"docker", "br-", "veth", "utun", "tun", "tap", "vmnet", "vboxnet", "virbr", "bridge", "awdl", "llw", "ap", "gif", "stf", "wg", "tailscale", "zt", "cni", "podman", "flannel", "cali", "lxc", "lxd", "incus", "nordlynx", "wt"}
 
 // publishable keeps up, multicast-capable, real interfaces.
 func publishable(name string, flags net.Flags) bool {
@@ -129,7 +132,7 @@ func publishable(name string, flags net.Flags) bool {
 	return true
 }
 
-// pickLocal keeps the private or global IPv4 addresses of as.
+// pickLocal keeps the private IPv4 addresses of as.
 func pickLocal(as []net.Addr) []netip.Addr {
 	var out []netip.Addr
 	for _, a := range as {
@@ -141,7 +144,7 @@ func pickLocal(as []net.Addr) []netip.Addr {
 		if !ok {
 			continue
 		}
-		if ip = ip.Unmap(); ip.Is4() && ip.IsGlobalUnicast() && !ip.IsLinkLocalUnicast() {
+		if ip = ip.Unmap(); ip.Is4() && ip.IsPrivate() {
 			out = append(out, ip)
 		}
 	}
