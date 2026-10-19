@@ -14,9 +14,8 @@ package run
 // Constraints: a release job runs only under the V15 engine (the v1.4 gate has
 // no release class): anywhere else it is refused. The facts come from the run's
 // own store rows and git worktree, never from a file the job could write.
-// A caller that supplies its own Hooks.Isolation replaces the registered one and
-// with it the deploy credential check on the final environment (the in-process
-// API of tests and embedders; the shipped binary uses the registered chain).
+// The deploy credential check of the final environment runs in prepare.go, after
+// the cache and services hooks, so a caller's own Hooks.Isolation cannot skip it.
 // ReleaseInputs is the digester seam: until a package registers it, freshness is
 // unknown and every release job is refused with deps_stale (fail closed).
 
@@ -92,8 +91,8 @@ func releaseDispatch(ctx context.Context, s AttemptSpec, prev DispatchHook) (Adm
 	return adm, err
 }
 
-// releaseIsolator refuses a release job whose final environment (declared env
-// plus what the hooks added) or secrets carry a deploy credential.
+// releaseIsolator refuses a release job that declares a deploy credential in its
+// env or secrets (prepare.go checks the environment the hooks added).
 type releaseIsolator struct{ next ciexec.Isolator }
 
 func (r releaseIsolator) Prepare(ctx context.Context, s *ciexec.JobSpec) error {

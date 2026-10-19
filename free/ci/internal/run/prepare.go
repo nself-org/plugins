@@ -14,6 +14,7 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
+	"github.com/nself-org/plugins/free/ci/internal/release/job"
 )
 
 type prepared struct {
@@ -69,6 +70,11 @@ func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, e
 	}
 	env["NSELF_CI_RUN_ID"] = info.RunID
 	p.job.Env = env
+	if p.job.Kind == "release" { // the final environment, after the cache and services hooks: no isolator can skip it
+		if e := job.CheckDeclared(p.job); e != nil {
+			return p, releaseFailure(e)
+		}
+	}
 	if rs.c.Opts.Container {
 		img := ""
 		if p.job.Container != nil {

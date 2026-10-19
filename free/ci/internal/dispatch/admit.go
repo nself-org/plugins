@@ -59,6 +59,9 @@ type Request struct {
 	Node bool
 	// Incarnation is the coordinator incarnation of a fenced remote lease.
 	Incarnation int64
+	// Kind is the job's kind: a step that gates one class of job (release) needs
+	// it to refuse such an attempt that arrives with nothing to judge it by.
+	Kind model.JobKind
 }
 
 // Admitted is an attempt that holds a lease.
