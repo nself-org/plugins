@@ -168,7 +168,7 @@ func toolProbes(src Source) []toolProbe {
 func toolDrift(ctx context.Context, env Env, src Source) []Drift {
 	probe := env.Probe
 	if probe == nil {
-		probe = defaultProbe
+		probe = defaultProbe(env.Root)
 	}
 	var out []Drift
 	for _, p := range toolProbes(src) {

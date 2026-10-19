@@ -101,6 +101,9 @@ func (rs *runState) spec(ctx context.Context, pj plan.PlannedJob, job model.Job,
 		SourceDir: rs.c.Opts.Root, Home: rs.sess.Home, Network: model.NetworkScope(rs.c.Opts.Network)}
 	cpu, mem := demandOf(&job)
 	s.CPU, s.MemoryMB = float64(cpu), mem // a container gets exactly its reservation, not the engine default
+	if job.Requirements != nil && job.Requirements.MemMB > 0 {
+		s.MemoryLimitMB = job.Requirements.MemMB // only a declared demand caps a process job; the default is admission-only
+	}
 	if rs.c.Opts.Timeout > 0 {
 		s.Timeout = rs.c.Opts.Timeout
 	}

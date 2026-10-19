@@ -27,7 +27,7 @@ func (s *Store) locked(fn func() error) error {
 		if s.afterLockStat != nil {
 			s.afterLockStat()
 		}
-		f, err = root.OpenFile(".lock", os.O_RDWR|oNoFollow, 0)
+		f, err = root.OpenFile(".lock", os.O_RDWR|noFollow, 0)
 	}
 	if err != nil {
 		return err
@@ -41,10 +41,9 @@ func (s *Store) locked(fn func() error) error {
 	if err != nil || !current.Mode().IsRegular() || !os.SameFile(current, opened) {
 		return ErrInvalid
 	}
-	unlock, err := flock(f)
-	if err != nil {
+	if err := lockFile(f); err != nil {
 		return err
 	}
-	defer unlock()
+	defer unlockFile(f)
 	return fn()
 }

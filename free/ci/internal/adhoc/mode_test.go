@@ -11,14 +11,20 @@ import (
 )
 
 func has(levels ...model.Isolation) Selector {
-	return func(_ context.Context, l model.Isolation) error {
+	return func(_ context.Context, l model.Isolation) (model.Isolation, error) {
 		for _, have := range levels {
 			if have == l {
-				return nil
+				return l, nil
 			}
 		}
-		return errors.New("level " + string(l) + " is not available")
+		return "", errors.New("level " + string(l) + " is not available")
 	}
+}
+
+// serves is a registry that answers every request with the one profile it has,
+// as isolation.Select does when only a higher profile is available.
+func serves(served model.Isolation) Selector {
+	return func(context.Context, model.Isolation) (model.Isolation, error) { return served, nil }
 }
 
 func codeOf(err error) string { return cirun.CodeOf(err) }
@@ -68,6 +74,33 @@ func TestResolveLevelAndNetwork(t *testing.T) {
 				t.Fatalf("got %+v %v, want %s/%s", m, err, tc.level, tc.net)
 			}
 		})
+	}
+}
+
+// D-1021: the mode keeps the level asked for and also records the profile the registry served.
+func TestResolveRecordsServedLevel(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fl      Flags
+		trust   model.TrustClass
+		level   model.Isolation
+		served  model.Isolation
+		profile model.Isolation
+	}{
+		"container served by the sandbox": {level: "container", served: "sandboxed-container", profile: "sandboxed-container"},
+		"container served as asked":       {level: "container", served: "container", profile: "container"},
+		"untrusted served by the sandbox": {trust: "untrusted", level: "sandboxed-container", served: "sandboxed-container", profile: "sandboxed-container"},
+		"explicit sandbox":                {fl: Flags{Isolation: "sandboxed-container"}, level: "sandboxed-container", served: "sandboxed-container", profile: "sandboxed-container"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, err := Resolve(context.Background(), cirun.Options{}, tc.fl, tc.trust, serves(tc.served))
+			if err != nil || m.Level != tc.level || m.Served != tc.profile {
+				t.Fatalf("got %+v %v, want level %s served %s", m, err, tc.level, tc.profile)
+			}
+		})
+	}
+	m, err := Resolve(context.Background(), cirun.Options{}, Flags{Isolation: "process"}, "", has())
+	if err != nil || m.Served != "process" {
+		t.Fatalf("process must record itself as served: %+v %v", m, err)
 	}
 }
 

@@ -160,7 +160,7 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	}
 	defer func() { _ = st.Close() }()
 	res := policy.Resolver{Store: st, Run: policy.Runner(report.Capture)}
-	project := policy.ProjectIDGit(ctx, res.Run, pd.root)
+	project := policy.ProjectIDGitCached(ctx, res.Run, pd.root)
 	got, err := res.Resolve(ctx, policy.Repo{Root: pd.root, Project: project, Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: pd.root})
 	if err != nil {
 		return model.PlacementPlan{}, err

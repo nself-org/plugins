@@ -28,19 +28,21 @@ type Flags struct {
 
 // Mode is how one ad-hoc job runs.
 type Mode struct {
-	Level   model.Isolation    // process, container or sandboxed-container: the level actually used
+	Level   model.Isolation    // process, container or sandboxed-container: the level asked for
+	Served  model.Isolation    // the level the registry served (>= Level); the evidence records this
 	Network model.NetworkScope // none, restricted, internet (container) or lan (process)
 	Trust   model.TrustClass   // the requested trust class ("" = the operator's own command)
 }
 
-// Selector reports whether an isolation level can be delivered on this host
-// (nil error); production uses the isolation registry.
-type Selector func(ctx context.Context, level model.Isolation) error
+// Selector reports the level this host serves for the one asked (nil error, level
+// at least the one asked); production uses the isolation registry.
+type Selector func(ctx context.Context, level model.Isolation) (model.Isolation, error)
 
-// RegistrySelector asks the default isolation registry.
-func RegistrySelector(ctx context.Context, level model.Isolation) error {
-	_, _, err := isolation.Select(ctx, level)
-	return err
+// RegistrySelector asks the default isolation registry and returns the effective
+// level of the profile it picked.
+func RegistrySelector(ctx context.Context, level model.Isolation) (model.Isolation, error) {
+	_, av, err := isolation.Select(ctx, level)
+	return av.Level, err
 }
 
 // Resolve picks the Mode. trust is the class the operator asked for with
@@ -52,43 +54,45 @@ func Resolve(ctx context.Context, o cirun.Options, fl Flags, trust model.TrustCl
 	default:
 		return m, usage("unknown --isolation %q (container, process, sandboxed-container)", fl.Isolation)
 	}
-	level, err := chooseLevel(ctx, fl.Isolation, trust, sel)
+	level, served, err := chooseLevel(ctx, fl.Isolation, trust, sel)
 	if err != nil {
 		return m, err
 	}
-	m.Level = level
+	m.Level, m.Served = level, served
 	if m.Network, err = chooseNetwork(o, level, trust); err != nil {
 		return m, err
 	}
 	return m, nil
 }
 
-func chooseLevel(ctx context.Context, asked string, trust model.TrustClass, sel Selector) (model.Isolation, error) {
+// chooseLevel returns the level asked for and the level the registry served for it
+// (process serves itself).
+func chooseLevel(ctx context.Context, asked string, trust model.TrustClass, sel Selector) (level, served model.Isolation, err error) {
 	switch {
 	case trust == "untrusted":
 		if asked != "" && asked != "sandboxed-container" {
-			return "", trustIsolation("--trust untrusted needs the sandboxed-container level, not --isolation %s; nothing was run", asked)
+			return "", "", trustIsolation("--trust untrusted needs the sandboxed-container level, not --isolation %s; nothing was run", asked)
 		}
-		if err := sel(ctx, "sandboxed-container"); err != nil {
-			return "", trustIsolation("--trust untrusted needs the sandboxed-container level and this host cannot provide it (%v); nothing was run", err)
+		if served, err = sel(ctx, "sandboxed-container"); err != nil {
+			return "", "", trustIsolation("--trust untrusted needs the sandboxed-container level and this host cannot provide it (%v); nothing was run", err)
 		}
-		return "sandboxed-container", nil
+		return "sandboxed-container", served, nil
 	case trust == "collaborator" && asked == "process":
-		return "", trustIsolation("--trust collaborator needs at least container isolation, not --isolation process; nothing was run")
+		return "", "", trustIsolation("--trust collaborator needs at least container isolation, not --isolation process; nothing was run")
 	}
 	switch asked {
 	case "process":
-		return "process", nil
+		return "process", "process", nil
 	case "sandboxed-container":
-		if err := sel(ctx, "sandboxed-container"); err != nil {
-			return "", trustIsolation("--isolation sandboxed-container is unavailable on this host (%v); nothing was run", err)
+		if served, err = sel(ctx, "sandboxed-container"); err != nil {
+			return "", "", trustIsolation("--isolation sandboxed-container is unavailable on this host (%v); nothing was run", err)
 		}
-		return "sandboxed-container", nil
+		return "sandboxed-container", served, nil
 	}
-	if err := sel(ctx, "container"); err != nil {
-		return "", noIsolation("no container runtime is available (%v); start Docker or pass --isolation process", err)
+	if served, err = sel(ctx, "container"); err != nil {
+		return "", "", noIsolation("no container runtime is available (%v); start Docker or pass --isolation process", err)
 	}
-	return "container", nil
+	return "container", served, nil
 }
 
 func chooseNetwork(o cirun.Options, level model.Isolation, trust model.TrustClass) (model.NetworkScope, error) {

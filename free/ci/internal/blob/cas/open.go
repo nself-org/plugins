@@ -37,55 +37,67 @@ func (s *Store) Stat(realm Realm, digest string) (os.FileInfo, error) {
 	return info, nil
 }
 
-// Open copies and hashes into an unlinked snapshot before serving any bytes.
-// Later mutations of the named blob cannot change this reader's content.
-func (s *Store) Open(realm Realm, digest string) (io.ReadCloser, error) {
+// openBlob opens the named blob for reading after the store's path checks: the
+// directory chain is ours, the entry is a regular file, and the open descriptor
+// is the entry the checks saw. The caller closes the file and decides how far to
+// trust its bytes.
+func (s *Store) openBlob(realm Realm, digest string) (*os.File, os.FileInfo, string, error) {
 	path, err := s.blobPath(realm, digest)
 	if err != nil {
-		return nil, err
+		return nil, nil, "", err
 	}
 	if err = s.checkDir(filepath.Dir(path)); err != nil {
-		return nil, err
+		return nil, nil, "", err
 	}
 	dirBefore, err := os.Lstat(filepath.Dir(path))
 	if err != nil {
-		return nil, err
+		return nil, nil, "", err
 	}
 	root, err := s.storeRoot()
 	if err != nil {
-		return nil, err
+		return nil, nil, "", err
 	}
 	defer func() { _ = root.Close() }()
 	rel, err := filepath.Rel(s.blobs(), path)
 	if err != nil {
-		return nil, err
+		return nil, nil, "", err
 	}
 	entry, err := root.Lstat(rel)
 	if err != nil {
-		return nil, err
+		return nil, nil, "", err
 	}
 	if !entry.Mode().IsRegular() {
-		return nil, ErrInvalid
+		return nil, nil, "", ErrInvalid
 	}
-	f, err := root.OpenFile(rel, os.O_RDONLY|oNoFollow, 0)
+	f, err := root.OpenFile(rel, os.O_RDONLY|noFollow, 0)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	info, err := f.Stat()
+	if err == nil && (!info.Mode().IsRegular() || !os.SameFile(entry, info)) {
+		err = ErrInvalid
+	}
+	if err == nil {
+		var dirAfter os.FileInfo
+		if dirAfter, err = os.Lstat(filepath.Dir(path)); err == nil && !os.SameFile(dirBefore, dirAfter) {
+			err = ErrInvalid
+		}
+	}
+	if err != nil {
+		_ = f.Close()
+		return nil, nil, "", err
+	}
+	return f, info, path, nil
+}
+
+// Open copies and hashes into an unlinked snapshot before serving any bytes.
+// Later mutations of the named blob cannot change this reader's content.
+func (s *Store) Open(realm Realm, digest string) (io.ReadCloser, error) {
+	f, info, path, err := s.openBlob(realm, digest)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
-	info, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, ErrInvalid
-	}
-	if !os.SameFile(entry, info) {
-		return nil, ErrInvalid
-	}
-	dirAfter, err := os.Lstat(filepath.Dir(path))
-	if err != nil || !os.SameFile(dirBefore, dirAfter) {
-		return nil, ErrInvalid
-	}
 	snap, err := s.snapshot()
 	if err != nil {
 		return nil, err
@@ -151,7 +163,7 @@ func (s *Store) snapshot() (*os.File, error) {
 }
 
 func verifyPath(root *os.Root, rel, digest string) error {
-	f, err := root.OpenFile(rel, os.O_RDONLY|oNoFollow, 0)
+	f, err := root.OpenFile(rel, os.O_RDONLY|noFollow, 0)
 	if err != nil {
 		return err
 	}

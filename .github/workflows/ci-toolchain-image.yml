@@ -1,6 +1,6 @@
 # Pinned multi-arch toolchain image of `nself ci --container` (P7-CI-43, ADR 0030).
 # image-build: every pull request that touches the image builds both platforms and pushes nothing.
-# publish: workflow_dispatch only, by digest, with the org secret DOCKERHUB_TOKEN. It fails (never
+# publish: workflow_dispatch only, by digest, with the org secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN. It fails (never
 # skips) when the secret is empty. The first publish and the digest pin are P7-CI-61 (owner-named).
 name: ci-toolchain-image
 
@@ -69,7 +69,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build and push by digest
         id: build

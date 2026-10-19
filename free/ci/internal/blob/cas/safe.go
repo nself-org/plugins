@@ -45,7 +45,7 @@ func (s *Store) openStoreFile(path string, flags int, mode os.FileMode) (*os.Fil
 		return nil, err
 	}
 	defer func() { _ = root.Close() }()
-	f, err := root.OpenFile(rel, flags|oNoFollow, mode)
+	f, err := root.OpenFile(rel, flags|noFollow, mode)
 	if err != nil {
 		return nil, err
 	}

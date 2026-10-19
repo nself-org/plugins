@@ -24,6 +24,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/nself-org/plugins/free/ci/internal/adhoc"
 	"github.com/nself-org/plugins/free/ci/internal/config"
 	"github.com/nself-org/plugins/free/ci/internal/drill"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -138,10 +139,11 @@ func v15Help() string {
 
 // parseBare splits argv at `--`, parses flags and applies the option hooks.
 func parseBare(args []string) (RunOptions, error) {
-	var adhoc []string
+	var argv []string
+	dashes := false
 	for i, a := range args {
 		if a == "--" {
-			args, adhoc = args[:i], args[i+1:]
+			args, argv, dashes = args[:i], args[i+1:], true
 			break
 		}
 	}
@@ -154,8 +156,11 @@ func parseBare(args []string) (RunOptions, error) {
 		}
 		return RunOptions{}, errFlagParse
 	}
+	if dashes && len(argv) == 0 {
+		return RunOptions{}, adhoc.UsageError("`nself ci --` needs a command after the dashes")
+	}
 	o := bare.opts
-	o.Services, o.Adhoc = append([]string(nil), bare.services...), adhoc
+	o.Services, o.Adhoc = append([]string(nil), bare.services...), argv
 	if rest := bareFlags.Args(); len(rest) > 0 {
 		bare.repo = rest[0]
 	}
