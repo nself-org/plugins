@@ -196,3 +196,12 @@ func TestDetectSkipsDirtyAndSeparatesPolicyAndTrust(t *testing.T) {
 		}
 	}
 }
+
+func TestDirtyRunKeepsItsConfirmationEntry(t *testing.T) {
+	d := evidenceOf("r1", "", "a", "fail")
+	d.Evidence.WorktreeState = "dirty"
+	d.Evidence.Checks[0].Flaky = &model.Flaky{Source: "confirmation", Passes: 1, Fails: 1}
+	if got := Detect([]Doc{d}); len(got) != 1 || got[0].Source != SourceConfirmation {
+		t.Fatalf("got %+v", got)
+	}
+}

@@ -49,6 +49,8 @@ func TestClassifyClasses(t *testing.T) {
 		{"pytest summary naming a DNS error is code", Input{ExecClass: "code", ExitCode: 1, Tail: "FAILED tests/test_client.py::test_bad_host - socket.gaierror: Name or service not known\n=== 1 failed in 0.3s ===\n"}, "code", SigCode, false},
 		{"pytest summary naming enospc is code", Input{ExecClass: "code", ExitCode: 1, Tail: "FAILED tests/test_io.py::test_write_handles_enospc - AssertionError\n"}, "code", SigCode, false},
 		{"mutation gate output is code", Input{ExecClass: "code", ExitCode: 1, Tail: "mutants: 42 killed, 17 survived\n"}, "code", SigCode, false},
+		{"assertion marker above the last lines is code", Input{ExecClass: "code", ExitCode: 1, Tail: "assertion failed\nexpected no space left on device\ngot nil\ncleanup complete\n"}, "code", SigCode, false},
+		{"TAP not ok line is code", Input{ExecClass: "code", ExitCode: 1, Tail: "not ok 1 - handles no space left on device\n"}, "code", SigCode, false},
 		{"unmatched executor error stays infra", Input{ExecClass: "infra", Err: "workspace cleanup failed"}, "infra", SigExecutor, false},
 		{"program output naming a signature after a zero exit is not a failure", Input{ExecClass: "code", ExitCode: 0, Tail: "no space left on device"}, "code", SigCode, false},
 		{"a word in a code failure does not match", Input{ExecClass: "code", ExitCode: 1, Tail: "Killed 3 stale workers\nFAIL\n"}, "code", SigCode, false},

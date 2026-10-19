@@ -77,14 +77,15 @@ func Detect(docs []Doc) []Flake {
 	var out []Flake
 	for _, d := range docs {
 		ev := d.Evidence
-		if ev.Pipeline.Kind == "adhoc" || !comparable(ev) {
+		if ev.Pipeline.Kind == "adhoc" {
 			continue
 		}
+		whole := comparable(ev) // a dirty or unbound run is never grouped by history; its own confirmation note still lists
 		for _, c := range ev.Checks {
 			if c.Flaky != nil && c.Flaky.Source == SourceConfirmation {
 				out = append(out, confirmed(d, c))
 			}
-			if c.Result != "pass" && c.Result != "fail" {
+			if !whole || (c.Result != "pass" && c.Result != "fail") {
 				continue
 			}
 			k := groupKey(ev, c)

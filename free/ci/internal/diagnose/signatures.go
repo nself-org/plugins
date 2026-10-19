@@ -47,7 +47,7 @@ type signature struct {
 // testFailure marks output that reports a failing test or assertion: a message
 // in the same lines (an expected DNS error, a disk-full path under test) is the
 // program's own, so no output row may match there.
-var testFailure = re(`(?i)(^|\s)(FAILED|FAIL|--- FAIL)\b|✕|✗|assertion ?error|assertion failed|panic:`)
+var testFailure = re(`(?i)(^|\s)(FAILED|FAIL|--- FAIL)\b|(?m)^not ok\b|✕|✗|assertion ?error|assertion failed|panic:`)
 
 func re(s string) *regexp.Regexp { return regexp.MustCompile(s) }
 

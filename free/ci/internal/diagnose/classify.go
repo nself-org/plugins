@@ -59,6 +59,9 @@ func Classify(in Input) Diagnosis {
 	if len(tail) > TailWindow {
 		tail = tail[len(tail)-TailWindow:]
 	}
+	if testFailure.MatchString(tail) {
+		tail = "" // a failing test in the window: any infra-looking message is the program's own
+	}
 	tail = lastLines(tail, OutputLines)
 	for _, s := range signatures {
 		if s.matches(in, tail) {
@@ -92,7 +95,7 @@ func (s signature) matches(in Input, tail string) bool {
 	if in.Err != "" && s.errText != nil && s.errText.MatchString(in.Err) {
 		return true
 	}
-	return in.ExitCode != 0 && s.output != nil && !testFailure.MatchString(tail) && s.output.MatchString(tail)
+	return in.ExitCode != 0 && s.output != nil && s.output.MatchString(tail)
 }
 
 func infra(s signature) Diagnosis {
