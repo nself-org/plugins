@@ -2,8 +2,8 @@
 # Shared by the acceptance scenario drills (P7-CI-47); sourced, never run.
 #
 # Purpose: cut outbound network access for the processes of a drill and read back how many packets the cut dropped, so
-#   "no network after the cut" is measured, not assumed (review F7). Linux: an `nft` table that drops non-loopback OUTPUT
-#   of the drill's group, DNS (port 53, even to the local stub resolver), forwarding out of docker bridges and, where
+#   "no network after the cut" is measured, not assumed (review F7). Linux: an `nft` table that drops non-loopback, non-bridge OUTPUT
+#   of the drill's group (a published container port is reached over the docker bridge), DNS (port 53, even to the local stub resolver), forwarding out of docker bridges and, where
 #   the kernel supports `socket cgroupv2`, non-loopback output of docker.service and containerd.service. macOS: a `pf`
 #   anchor (under com.apple/, which the system ruleset evaluates) that blocks non-lo0 TCP and UDP of the drill's group;
 #   DNS through mDNSResponder and ICMP are not measured there. Every privileged call is `sudo -n`, so a missing sudo
@@ -53,32 +53,27 @@ cut_preflight() {
 	esac
 }
 
-# The macOS code that sets the group and drops root. Arguments: uid gid "other groups" command...; it checks the result in
-# full (uid, egid and the whole group list) before it runs the command, and dies otherwise.
+# The macOS code that sets the effective group and drops root. Arguments: uid gid command...; it checks uid and egid before it
+# runs the command and dies otherwise. The user's other groups stay as sudo left them (setgroups does not take effect here).
 read -r -d '' CUT_PERL <<'PERL' || true
-my ($u, $g, $gs) = (shift, shift, shift);
-my %want = map { $_ => 1 } ($g, split " ", $gs);
+my ($u, $g) = (shift, shift);
 $( = $g;
-$) = "$g " . join(" ", split(" ", $gs));
+$) = "$g $g";
 $< = $u;
 $> = $u;
-my ($egid, @sup) = split " ", $);
-my %got = map { $_ => 1 } ($egid, @sup);
-my $same = (join(" ", sort { $a <=> $b } keys %want) eq join(" ", sort { $a <=> $b } keys %got));
-die "drop failed: uid $< $> egid $egid groups $) (wanted uid $u gid $g groups $gs)\n" if $> != $u || $< != $u || $egid != $g || !$same;
+my $egid = (split " ", $))[0];
+die "drop failed: uid $< $> egid $egid (wanted uid $u egid $g)\n" if $> != $u || $< != $u || $egid != $g;
 exec { $ARGV[0] } @ARGV or die "exec $ARGV[0]: $!\n";
 PERL
 
-# cut_exec CMD...: run CMD as the calling user with group CUT_GID (and up to 12 of the user's other groups: macOS allows 16
-# in all, and counts the first entry of the list as the egid). With no cut active it just runs CMD. Root is only used to set the group; the command never runs as root.
+# cut_exec CMD...: run CMD as the calling user with group CUT_GID (Linux: and the user's other groups, so docker still works).
+# With no cut active it just runs CMD. Root is only used to set the group; the command never runs as root.
 cut_exec() {
 	if [ "$CUT_ACTIVE" -ne 1 ]; then "$@"; return; fi
-	local groups
-	groups=$(id -G | tr ' ' '\n' | head -n 12 | tr '\n' ' ')
 	if [ "$CUT_OS" = Linux ]; then
-		sudo -n setpriv --reuid "$(id -u)" --regid "$CUT_GID" --groups "$(printf '%s' "$groups" | tr -s ' ' ',' | sed 's/,$//')" --no-new-privs -- "$@"
+		sudo -n setpriv --reuid "$(id -u)" --regid "$CUT_GID" --groups "$(id -G | tr -s ' ' ',')" --no-new-privs -- "$@"
 	else
-		sudo -n /usr/bin/perl -e "$CUT_PERL" "$(id -u)" "$CUT_GID" "$groups" "$@"
+		sudo -n /usr/bin/perl -e "$CUT_PERL" "$(id -u)" "$CUT_GID" "$@"
 	fi
 }
 
@@ -105,6 +100,8 @@ table inet $CUT_TABLE {
 		type filter hook output priority 0; policy accept;
 		meta skgid $CUT_GID udp dport 53 counter drop
 		meta skgid $CUT_GID tcp dport 53 counter drop
+		meta skgid $CUT_GID oifname "docker0" accept
+		meta skgid $CUT_GID oifname "br-*" accept
 		meta skgid $CUT_GID oifname != "lo" counter drop
 	}
 	chain bridge_out {
@@ -171,7 +168,7 @@ cut_packets() {
 # cut_info: the counter text kept in the evidence (nft table with counters; pfctl -s info and the rule's statistics).
 cut_info() {
 	case "$CUT_OS" in
-	Linux) sudo -n nft list table inet "$CUT_TABLE" 2>&1 | tr '\n\t' '  ' | tr -s ' ' ;;
+	Linux) sudo -n nft list table inet "$CUT_TABLE" 2>&1 | grep counter | sed -E 's/^[[:space:]]+//; s/ counter packets ([0-9]+) bytes [0-9]+ drop/ => \1/; s/meta skgid [0-9]+ //' | tr '\n' ';' ;;
 	Darwin) { sudo -n pfctl -s info 2>&1 | grep -E 'Status|block|match' | tr '\n' ' '; sudo -n pfctl -a "$CUT_PF_ANCHOR" -s rules -v 2>&1 | grep -E 'Packets' | tr '\n' ' '; } | tr -s ' ' ;;
 	esac
 }

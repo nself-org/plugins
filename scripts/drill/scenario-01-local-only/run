@@ -80,14 +80,18 @@ nrun() {
 vjson() { jq -e "$2" "$1" >/dev/null 2>&1; }
 runid_of() { sed -n 's/.* run \(r[0-9T]*-[0-9a-f]*\).*/\1/p' "$1" | tail -n 1; }
 tail1() { ev_snip "$1"; }
-# why RUN: the result of every check of RUN, and the end of the log of each one that did not pass (db-reachable aside).
+# why RUN [all]: the result of every check of RUN, and the end of the log of each one that did not pass (db-reachable
+# aside unless "all" is given: its failure is the expected one when Docker is down).
 why() {
-	local id
+	local id skip=db-reachable
+	[ "${2:-}" != all ] || skip=-
 	jq -r '[.data.checks[] | "\(.id)=\(.result)"] | join(" ")' "$work/why.json" 2>/dev/null | tr -d '\n'
-	for id in $(jq -r '.data.checks[] | select(.result != "pass" and .id != "db-reachable") | .id' "$work/why.json" 2>/dev/null); do
+	for id in $(jq -r '.data.checks[] | select(.result != "pass" and .id != "'"$skip"'") | .id' "$work/why.json" 2>/dev/null); do
 		nrun ci logs "$id" --run "$1" 2>&1 | tail -n 3 | tr '\n' ' ' | cut -c1-240 | sed "s/^/ [$id: /; s/\$/]/"
 	done
 }
+# pk: where the cut's packet counter stands now, for the step messages (empty when there is no cut).
+pk() { [ -n "$nocut" ] || printf ' [cut packets %s]' "$(cut_packets)"; }
 finish() { cd "$root" || true; ev_finish; exit $?; }
 
 docker_ok=0
@@ -130,14 +134,14 @@ nrun ci >"$work/a.out" 2>&1
 rc=$?
 run_a=$(runid_of "$work/a.out")
 if [ $rc -eq 0 ] && [ -n "$run_a" ] && grep -q 'status not posted: no GitHub remote' "$work/a.out"; then
-	ev_pass bare-no-remote "bare nself ci passed (run $run_a) and said in one line why no status was posted"
+	ev_pass bare-no-remote "bare nself ci passed (run $run_a) and said in one line why no status was posted$(pk)"
 else
 	[ -z "$run_a" ] || nrun ci evidence "$run_a" --json >"$work/why.json" 2>/dev/null
 	ev_fail bare-no-remote "exit $rc, run '$run_a': $(tail1 "$work/a.out") $(why "$run_a")"
 fi
 nrun ci evidence "$run_a" --json >"$work/a.json" 2>"$work/a.err"
 if vjson "$work/a.json" '.data.result == "pass" and ([.data.checks[] | select(.id | IN("go.fmt", "go.vet", "go.test", "secrets.gitleaks"))] | (length == 4 and all(.result == "pass")))'; then
-	ev_pass go-evidence "ci evidence --json: the Go repo passed fmt, vet, test and the gitleaks scan"
+	ev_pass go-evidence "ci evidence --json: the Go repo passed fmt, vet, test and the gitleaks scan$(pk)"
 else
 	ev_fail go-evidence "evidence for $run_a: $(jq -c '{result: .data.result, checks: [.data.checks[] | {id, result}]}' "$work/a.json" 2>/dev/null | head -c 300)"
 fi
@@ -145,13 +149,13 @@ fi
 # 3. History works offline: runs, logs, evidence, reproduce.
 nrun ci runs --json >"$work/r.json" 2>"$work/r.err"
 if jq -e --arg id "$run_a" '.data | any(.id == $id and .status == "passed")' "$work/r.json" >/dev/null 2>&1; then
-	ev_pass runs-history "ci runs lists $run_a as passed"
+	ev_pass runs-history "ci runs lists $run_a as passed$(pk)"
 else
 	ev_fail runs-history "ci runs does not list $run_a as passed: $(head -c 200 "$work/r.json")"
 fi
 nrun ci logs go.test --run "$run_a" >"$work/l.out" 2>&1
 rc=$?
-if [ $rc -eq 0 ] && [ -s "$work/l.out" ]; then ev_pass logs-offline "ci logs go.test printed the stored log"; else ev_fail logs-offline "exit $rc: $(tail1 "$work/l.out")"; fi
+if [ $rc -eq 0 ] && [ -s "$work/l.out" ]; then ev_pass logs-offline "ci logs go.test printed the stored log$(pk)"; else ev_fail logs-offline "exit $rc: $(tail1 "$work/l.out")"; fi
 nrun ci runs reproduce go.fmt --run "$run_a" --check >"$work/c.out" 2>&1
 rc=$?
 # The re-run's own exit code is not asserted: a single-job reproduce counts the jobs it left out as not passed and exits 1
@@ -175,7 +179,7 @@ pathv=$path_full
 # The planner refuses a required check whose tool is missing (E618, unplaceable.tool) before the runner can classify it
 # (E614); both fail closed and name gitleaks.
 if [ $rc -ne 0 ] && grep -Eq 'E614|E618' "$work/g.out" && grep -qi gitleaks "$work/g.out" && ! grep -q 'nself-ci: pass' "$work/g.out"; then
-	ev_pass no-gitleaks-fails "without gitleaks the run fails closed (exit $rc): $(tail1 "$work/g.out")"
+	ev_pass no-gitleaks-fails "without gitleaks the run fails closed (exit $rc): $(tail1 "$work/g.out")$(pk)"
 else
 	ev_fail no-gitleaks-fails "expected a non-zero exit with E614/E618 naming gitleaks, got exit $rc: $(tail1 "$work/g.out")"
 fi
@@ -197,13 +201,13 @@ if [ "$docker_ok" -eq 1 ]; then
 	for id in $(docker ps -aq --filter name=nselfci- 2>/dev/null); do case " $svc_before " in *" $id "*) ;; *) left=$((left + 1)) ;; esac; done
 	for id in $(docker network ls -q --filter name=nselfci- 2>/dev/null); do case " $nets_before " in *" $id "*) ;; *) nets=$((nets + 1)) ;; esac; done
 	if [ $rc -eq 0 ] && vjson "$work/y.json" ".data.result == \"pass\" and ($others) and ([.data.checks[] | select(.id == \"db-reachable\") | .result] == [\"pass\"])" && [ "$left" = 0 ] && [ "$nets" = 0 ]; then
-		ev_pass polyglot-service "all four jobs passed with the postgres service and nothing was left running (run $run_y)"
+		ev_pass polyglot-service "all four jobs passed with the postgres service and nothing was left running (run $run_y)$(pk)"
 		# The docker daemon makes its own connections (outside the cut's group), so any new image means it pulled one.
 		images_after=$(docker images -q | sort -u | tr '\n' ' ')
 		if [ "$images_before" = "$images_after" ]; then ev_pass no-image-pulled "the service run pulled no image"; else ev_fail no-image-pulled "images changed during the cut: before [$images_before] after [$images_after]"; fi
 	else
 		cp "$work/y.json" "$work/why.json"
-		ev_fail polyglot-service "exit $rc, containers left $left, networks left $nets: $(why "$run_y")"
+		ev_fail polyglot-service "exit $rc, containers left $left, networks left $nets: $(why "$run_y" all)$(pk)"
 	fi
 else
 	if [ ! -e "$work/bin/docker" ]; then
