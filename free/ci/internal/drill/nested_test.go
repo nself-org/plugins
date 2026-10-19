@@ -1,6 +1,10 @@
 package drill
 
 import (
+	"runtime"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,6 +41,7 @@ func TestJudge(t *testing.T) {
 		{"the last document wins", failing + "later noise\n" + pass, false, true, false, "", "", 0},
 		{"output after the document is fine", pass + "bye\n", false, true, false, "", "", 0},
 		{"a cut first line is ignored", "cut off {\"schema\":\"ci.evidence/v1\"\n" + pass, true, true, false, "", "", 0},
+		{"a pretty-printed document is refused", "{\n  \"schema\": \"ci.evidence/v1\",\n  \"result\": \"pass\"\n}\n", false, true, true, "code", CodeInvalid, 0},
 		{"a cut document is not trusted", "{\"schema\":\"ci.evidence/v1\",\"revi", true, false, false, "", "", 0},
 	} {
 		ch, known := Judge(tc.out, tc.truncated)
@@ -102,5 +107,20 @@ func TestDrillExitCodeIsTheResult(t *testing.T) {
 		if got := checks[id].Result; string(got) != want {
 			t.Errorf("%s = %s, want %s", id, got, want)
 		}
+	}
+}
+
+// A job that is not a drill keeps its exit code even when it prints a failing
+// document: the hook is inert for it.
+func TestNonDrillJobIsUntouched(t *testing.T) {
+	repo := fixtureRepo(t)
+	script := "cat scripts/drill/fail-nested/evidence.json"
+	cfg := model.PipelineConfig{Version: 1, Jobs: map[string]model.Job{"unit": {Kind: "test", Run: []string{"sh", "-c", script}}}}
+	p, err := plan.Build(plan.Input{Config: cfg, World: plan.World{Platform: runtime.GOOS + "/" + runtime.GOARCH, CPU: 8, MemMB: 16384}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := checksByID(runDrills(t, repo, p).Summary.Doc)["unit"]; c.Result != "pass" || c.Findings != 0 {
+		t.Fatalf("a test job that prints a failing document must still pass: %+v", c)
 	}
 }

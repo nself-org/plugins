@@ -77,7 +77,30 @@ func TestOutputBufferKeepsTheTail(t *testing.T) {
 	var b outputBuffer
 	b.write([]byte(strings.Repeat("a", OutcomeOutputCap)))
 	b.write([]byte("tail"))
-	if !b.truncated || len(b.text()) != OutcomeOutputCap || !strings.HasSuffix(b.text(), "tail") {
-		t.Fatalf("truncated=%v len=%d", b.truncated, len(b.text()))
+	if len(b.text()) != OutcomeOutputCap || !strings.HasSuffix(b.text(), "tail") {
+		t.Fatalf("len=%d", len(b.text()))
+	}
+	for i := 0; i < 3*OutcomeOutputCap/4096; i++ { // many small writes stay bounded
+		b.write([]byte(strings.Repeat("b", 4096)))
+	}
+	b.write([]byte("end"))
+	if !b.truncated || len(b.buf) > 2*OutcomeOutputCap || len(b.text()) != OutcomeOutputCap || !strings.HasSuffix(b.text(), "end") {
+		t.Fatalf("truncated=%v buf=%d text=%d", b.truncated, len(b.buf), len(b.text()))
+	}
+}
+
+type panicOutcome struct{}
+
+func (panicOutcome) Wants(j model.Job) bool { return j.Kind == "drill" }
+func (panicOutcome) Outcome(context.Context, OutcomeFacts) (OutcomeChange, bool) {
+	panic("boom")
+}
+
+func TestJudgeFailsAnAttemptWhenTheHookPanics(t *testing.T) {
+	rs := &runState{hooks: Hooks{Outcomes: []OutcomeHook{panicOutcome{}}}}
+	res, o := result("passed"), JobOutcome{}
+	rs.judge(context.Background(), AttemptInfo{Job: model.Job{Kind: "drill"}}, &outputBuffer{}, &res, &o)
+	if res.Attempt.State != "failed" || res.Attempt.FailureClass != "infra" || res.Err == nil {
+		t.Fatalf("a hook that cannot judge must not let the attempt pass: %+v %v", res.Attempt, res.Err)
 	}
 }

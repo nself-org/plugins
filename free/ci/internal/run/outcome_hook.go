@@ -8,7 +8,7 @@ package run
 // findings and an excerpt to the job's check.
 // Constraints: a hook sees only attempts it asked for (Wants); output is the
 // last OutcomeOutputCap bytes after the redactor; a hook never turns a
-// cancelled attempt into anything else; a panicking hook is ignored.
+// cancelled attempt into anything else; a hook that panics on a job it wants ends that attempt failed (infra).
 
 import (
 	"context"
@@ -62,7 +62,7 @@ func (o *outputBuffer) write(b []byte) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.buf = append(o.buf, b...)
-	if len(o.buf) > OutcomeOutputCap {
+	if len(o.buf) > 2*OutcomeOutputCap { // trim once per cap bytes, not on every write
 		o.buf, o.truncated = append([]byte(nil), o.buf[len(o.buf)-OutcomeOutputCap:]...), true
 	}
 }
@@ -70,6 +70,9 @@ func (o *outputBuffer) write(b []byte) {
 func (o *outputBuffer) text() string {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	if len(o.buf) > OutcomeOutputCap {
+		return string(o.buf[len(o.buf)-OutcomeOutputCap:])
+	}
 	return string(o.buf)
 }
 
@@ -89,14 +92,17 @@ func (rs *runState) judge(ctx context.Context, info AttemptInfo, out *outputBuff
 	if out == nil || (state != "passed" && state != "failed") {
 		return
 	}
-	f := OutcomeFacts{Info: info, Passed: state == "passed", ExitCode: res.ExitCode, Output: out.text(), Truncated: out.truncated}
+	f := OutcomeFacts{Info: info, Passed: state == "passed", ExitCode: res.ExitCode, Output: out.text(), Truncated: out.truncated || len(out.buf) > OutcomeOutputCap}
 	for _, h := range rs.hooks.Outcomes {
 		if !h.Wants(info.Job) {
 			continue
 		}
 		var ch OutcomeChange
 		var ok bool
-		if guard("outcome hook", func() error { ch, ok = h.Outcome(ctx, f); return nil }) != nil || !ok {
+		if err := guard("outcome hook", func() error { ch, ok = h.Outcome(ctx, f); return nil }); err != nil {
+			ch, ok = OutcomeChange{Fail: true, FailureClass: "infra", Err: err}, true // a hook that cannot judge never lets the attempt pass
+		}
+		if !ok {
 			continue
 		}
 		o.Findings, o.Excerpt = ch.Findings, ch.Excerpt

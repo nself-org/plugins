@@ -14,6 +14,7 @@ package drill
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/attest"
@@ -39,10 +40,18 @@ func Document(output string, truncated bool) (line string, ok bool) {
 	return "", false
 }
 
+// prettyDocument matches a pretty-printed document: the schema key on a line of
+// its own, which Document cannot read.
+var prettyDocument = regexp.MustCompile(`(?m)^\s*"schema"\s*:\s*"ci\.evidence/v1"`)
+
 // Judge decides the end of one drill attempt from its output.
 func Judge(output string, truncated bool) (cirun.OutcomeChange, bool) {
 	line, ok := Document(output, truncated)
 	if !ok {
+		if prettyDocument.MatchString(output) {
+			e := fail(CodeInvalid, "the drill printed a ci.evidence document over several lines; print it as one line of compact JSON")
+			return cirun.OutcomeChange{Fail: true, FailureClass: "code", Err: e, Excerpt: e.Error()}, true
+		}
 		return cirun.OutcomeChange{}, false
 	}
 	ev, err := attest.Verify([]byte(line))

@@ -127,3 +127,25 @@ func TestReporterIsRegistered(t *testing.T) {
 		t.Fatal("the drill reporter must be registered at init for `ci evidence --pipeline`")
 	}
 }
+
+func TestNotePassesCountsOnlyBoundPassesOfThePipeline(t *testing.T) {
+	mk := func(name, binding string, result model.CheckResult) evidence.Stored {
+		var ev model.Evidence
+		ev.Pipeline.Name, ev.Binding.State = name, model.BindingState(binding)
+		ev.Checks = []model.Check{{ID: "j", JobID: "j", Result: result}}
+		at := epoch.Format(time.RFC3339)
+		ev.Timings.FinishedAt = &at
+		return evidence.Stored{Evidence: ev}
+	}
+	out, want := map[string]time.Time{}, map[string]bool{"j": true}
+	for _, doc := range []evidence.Stored{mk("other", "bound", "pass"), mk("drills", "unbound", "pass"), mk("drills", "bound", "fail")} {
+		notePasses(out, want, "drills", doc)
+	}
+	if len(out) != 0 {
+		t.Fatalf("recorded %v", out)
+	}
+	notePasses(out, want, "drills", mk("drills", "bound", "pass"))
+	if !out["j"].Equal(epoch) {
+		t.Fatalf("bound pass not recorded: %v", out)
+	}
+}

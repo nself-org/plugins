@@ -9,6 +9,9 @@
 #   in `env` below. The release URL and sha256 come from the ci release record
 #   (the tarball of the platform the runner has). Nothing is downloaded until
 #   all four are set; a missing value fails the first step.
+# Staleness: a runner is thrown away after each run, so `nself-ci evidence
+#   --pipeline` (the overdue report) has no history here. Watch the workflow's
+#   own runs instead: a schedule that stops firing is visible as a missing run.
 # Constraints: actions are pinned by commit sha; the job has read-only access to
 #   the repository; no secret is read unless you add one to the drill step; the
 #   binary is taken from the pinned release only, never built from the checkout.

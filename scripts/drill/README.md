@@ -30,6 +30,7 @@ pipeline with E640 rather than being skipped without a word.
     **fail**. A result of `error` ends **error**.
   - A document that is present but invalid ends **error** (E640), whatever the
     exit code.
+  - A document spread over several lines is refused the same way (E640): print compact JSON on one line.
   - Print the document last; the last matching line wins, and log noise on
     stderr or earlier lines is fine.
 - The working directory is the repository root. Do not print secrets: output
@@ -44,12 +45,17 @@ nself ci evidence --pipeline drills # overdue report (exit 10 when overdue)
 ```
 
 A drill job is overdue when it has no passing, commit-bound run on this
-machine newer than the pipeline's `max_age` (36 hours here). The scheduled
+machine newer than the pipeline's `max_age` (36 hours here). The report reads
+the 1000 most recent runs of the machine's shared store, so on a very busy
+machine an old pass can fall out of view and read as overdue (it fails closed).
+The report needs a machine that keeps its run store; a throwaway CI runner has
+none, so for the GitHub schedule a failed or missing workflow run is the alert. The scheduled
 GitHub workflow is the template at `free/ci/templates/scheduled-pipeline.yml`.
 
 ## Change a drill's limits
 
-A discovered job has the defaults of any job (10 minutes). To give one drill a
+A nested `error` result counts as an infrastructure failure, so the job's default
+infra retry (one) may run the drill a second time. A discovered job has the defaults of any job (10 minutes). To give one drill a
 longer timeout or an environment variable, define a job named `drill-<name>`
 with `kind: drill` in `.nself/ci.yaml`. A job defined there replaces the
 discovered one; the directory still decides that the job exists.
