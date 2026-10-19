@@ -167,8 +167,14 @@ func TestRemoteAwaitUnreadableEvidenceIsAnErrorNeverAPass(t *testing.T) {
 		if err := e.sink.Result(context.Background(), protocol.Result{LeaseID: e.lease, Epoch: uint64(e.epoch), Evidence: raw}); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if ev := <-ra.result; ev.Result != "error" {
-			t.Errorf("%s: result %q, want error", name, ev.Result)
+		// an unreadable document is an error result, which is an infra failure: the attempt is lost (D-1103) and never a pass
+		select {
+		case ev := <-ra.result:
+			t.Errorf("%s: result %q delivered, want the attempt lost", name, ev.Result)
+		default:
+			if got := e.state(t); got != "lost" {
+				t.Errorf("%s: state %s, want lost", name, got)
+			}
 		}
 	}
 }
