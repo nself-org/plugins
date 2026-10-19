@@ -2,6 +2,8 @@ package logs
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -116,5 +118,39 @@ func TestFollowLosesNothingUnderConstantRotation(t *testing.T) {
 	}
 	if want != total+1 {
 		t.Fatalf("the follower saw %d of %d lines", want-1, total)
+	}
+}
+
+// The replacement active file can reuse the inode of the one it replaced and be
+// longer than the follower's offset into the old one (seen on Linux): the
+// follower must restart at the top of the new file, not seek into the middle of a line.
+func TestFollowSurvivesAReplacedActiveFileWithTheSameInodeAndLargerSize(t *testing.T) {
+	dir := t.TempDir()
+	active := filepath.Join(dir, activeName)
+	write := func(first, last int64) {
+		var b []byte
+		for i := first; i <= last; i++ {
+			b = append(b, encodeLine(mk(i, "line"))...)
+		}
+		if err := os.WriteFile(active, b, 0o600); err != nil { // truncates in place: same inode
+			t.Fatal(err)
+		}
+	}
+	write(1, 3)
+	var got []int64
+	fl := follower{dir: dir, fn: func(l Line) error { got = append(got, l.Seq); return nil }}
+	if err := fl.poll(); err != nil {
+		t.Fatal(err)
+	}
+	// rotation: lines 1-3 become a segment, the active file now holds 4-12 (larger than the old offset)
+	if err := gzipFile(active, filepath.Join(dir, segmentName(1, 3, mustSize(t, active)))); err != nil {
+		t.Fatal(err)
+	}
+	write(4, 12)
+	if err := fl.poll(); err != nil {
+		t.Fatalf("poll after the replacement: %v", err)
+	}
+	if len(got) != 12 || got[11] != 12 {
+		t.Fatalf("saw %v", got)
 	}
 }

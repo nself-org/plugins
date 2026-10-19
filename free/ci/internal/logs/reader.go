@@ -141,8 +141,8 @@ type follower struct {
 	dir    string
 	cur    int64
 	fn     func(Line) error
-	active os.FileInfo // identity of the active file read so far
-	offset int64
+	first  int64 // sequence of the first line of the active file read so far (0: none yet)
+	offset int64 // bytes of that file already consumed
 }
 
 // poll reads whatever was stored since the last call.
@@ -163,7 +163,6 @@ func (fl *follower) poll() error {
 		if fl.cur, err = readSegment(s.Path, fl.cur, fl.fn); err != nil {
 			return err
 		}
-		fl.active, fl.offset = nil, 0 // a rotation moved the active file's lines into this segment
 	}
 	if os.IsNotExist(ferr) {
 		return nil
@@ -175,8 +174,15 @@ func (fl *follower) poll() error {
 	if err != nil {
 		return fail(CodeStore, "cannot stat the log file: %v", err)
 	}
-	if fl.active == nil || !os.SameFile(fl.active, st) || st.Size() < fl.offset {
-		fl.active, fl.offset = st, 0
+	// A rotation replaces the active file; the new one can even reuse the old inode and
+	// outgrow the old offset, so the file is recognised by the sequence of its first line
+	// (a rotated file never starts at the same number), not by identity or size alone.
+	first, ok := firstSeq(f)
+	if !ok {
+		return nil // nothing complete stored yet
+	}
+	if first != fl.first || st.Size() < fl.offset {
+		fl.first, fl.offset = first, 0
 	}
 	if _, err = f.Seek(fl.offset, io.SeekStart); err != nil {
 		return fail(CodeStore, "cannot seek the log file: %v", err)
@@ -184,4 +190,17 @@ func (fl *follower) poll() error {
 	cur, used, err := readLines(f, fl.cur, fl.fn)
 	fl.cur, fl.offset = cur, fl.offset+used
 	return err
+}
+
+// firstSeq returns the sequence of the first complete line of f.
+func firstSeq(f *os.File) (int64, bool) {
+	raw, err := bufio.NewReaderSize(io.NewSectionReader(f, 0, 1<<20), 4<<10).ReadBytes('\n')
+	if err != nil {
+		return 0, false
+	}
+	var l Line
+	if json.Unmarshal(bytes.TrimSpace(raw), &l) != nil || l.Seq < 1 {
+		return 0, false
+	}
+	return l.Seq, true
 }
