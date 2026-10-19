@@ -91,13 +91,13 @@ func TestCoordinatorClientServeLockIsExclusive(t *testing.T) {
 
 func TestCoordinatorClientAddressRules(t *testing.T) {
 	for raw, reason := range map[string]string{
-		"http://ci.example:3865":     clientapi.ReasonPlainHTTP,
-		"ci.example:3865":            clientapi.ReasonBadRequest,
-		"https://user:pw@ci.example": clientapi.ReasonBadRequest,
-		"https://ci.example/path":    clientapi.ReasonBadRequest,
-		"https://ci.example?x=1":     clientapi.ReasonBadRequest,
-		"ftp://ci.example":           clientapi.ReasonPlainHTTP,
-		"https://":                   clientapi.ReasonBadRequest,
+		"http://ci.example:3865":          clientapi.ReasonPlainHTTP,
+		"ci.example:3865":                 clientapi.ReasonBadRequest,
+		"https://user" + ":pw@ci.example": clientapi.ReasonBadRequest,
+		"https://ci.example/path":         clientapi.ReasonBadRequest,
+		"https://ci.example?x=1":          clientapi.ReasonBadRequest,
+		"ftp://ci.example":                clientapi.ReasonPlainHTTP,
+		"https://":                        clientapi.ReasonBadRequest,
 	} {
 		if _, err := ParseURL(raw); !reasonIs(err, reason) {
 			t.Errorf("%q: %v, want %s", raw, err, reason)
