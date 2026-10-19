@@ -46,10 +46,11 @@ rules:
     paths: *prose
     message: do not type the count in the translation; render it from the generated facts
 
-  # A bare count in a Markdown heading: "Family (12)" is a hand-typed count with no noun to match.
+  # A bare count in a Markdown heading: "Family (12)" is a hand-typed count with no noun to match. Only a one-word
+  #   heading (or "Name — word") qualifies: a longer title such as "Health Checks (4)" counts endpoints, not products.
   - id: claims.counts-heading
     kind: numeric-claim
-    pattern: '^[ \t]{0,3}#{1,6}[ \t]+[^\n]*\([ \t]*[1-9][0-9,]*[ \t]*\)[ \t#]*$'
+    pattern: '^[ \t]{0,3}#{1,6}[ \t]+[^\s()]+(?:[ \t]+[—–-][ \t]+[^\s()]+)?[ \t]*\([ \t]*[1-9][0-9,]*[ \t]*\)[ \t#]*$'
     paths: *prose
     message: do not type the count in a heading; render it from the generated facts or drop it
 
@@ -91,19 +92,18 @@ rules:
         reason: a URL path, anchor or query value is a link target, not prose
     message: say "licensed plugin(s)"; licensed plugins are sold only through Bundles or nSelf+
 
+  # A case-sensitive pattern (the loader prefixes (?i); (?-i:) undoes it): the lower-case spelling is the
+  #   name of the folder and the repository slug, which prose may still mention.
   - id: vocab.plugins-pro-hyphen
-    kind: retired-term
-    term: Plugins-Pro
+    kind: numeric-claim
+    pattern: '(?-i:\bPlugins-Pro\b)'
     paths: *prose
-    exempt_regions: true
     exempt_paths: *history
     exempt_matches:
       - regex: '[\w.-]*/plugins-pro\b'
         reason: a repository slug or file path (vocab.bundles-repo-slug owns the slug)
       - regex: 'plugins-pro/'
         reason: a directory path
-      - regex: '`plugins-pro`'
-        reason: the name of the directory or package, in code formatting
     message: say "Bundles"; licensed plugins are sold only through Bundles or nSelf+
 
   - id: vocab.ntv-ascii

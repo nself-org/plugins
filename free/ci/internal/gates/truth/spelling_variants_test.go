@@ -46,7 +46,7 @@ func TestProPluginSpellingVariants(t *testing.T) {
 }
 
 func TestPluginsProSpellingVariants(t *testing.T) {
-	body := "Buy Plugins-Pro today.\nBuy Plugins  Pro today.\nSee github.com/nself-org/plugins-pro/ here.\nThe `plugins-pro` folder.\nOpen plugins-pro/paid/x.\n"
+	body := "Buy Plugins-Pro today.\nBuy Plugins  Pro today.\nSee github.com/nself-org/plugins-pro/ here.\nThe `plugins-pro` folder, the plugins-pro repo.\nOpen plugins-pro/paid/x or ../Plugins-Pro/x.\n"
 	got := claimFindings(t, map[string]string{"a.md": body})
 	// Plugins Pro with a space or two is an org.yaml term (all files); the claims rule owns the hyphen.
 	wantFindings(t, got, "vocab.plugins-pro-hyphen a.md:1", "vocab.bundles-repo-slug a.md:3")
@@ -60,8 +60,8 @@ func TestPluginsProSpacedVariantsInOrgRules(t *testing.T) {
 }
 
 func TestLanguageQualifiedAndHeadingCounts(t *testing.T) {
-	body := "We ship 58 Go plugins.\nThere are 12 TypeScript plugins.\n### Family (12)\n## Install (1)\nFamily (12) in a sentence.\nWe ship 58 plugins.\nGo plugins are small.\n"
+	body := "We ship 58 Go plugins.\nThere are 12 TypeScript plugins.\n### Family (12)\n## Install (1)\n### Brand — baseline (7)\n### Health Checks (4)\nFamily (12) in a sentence.\nWe ship 58 plugins.\nGo plugins are small.\n"
 	got := claimFindings(t, map[string]string{"a.md": body})
-	wantFindings(t, got, "claims.counts a.md:1", "claims.counts a.md:2", "claims.counts a.md:6",
-		"claims.counts-heading a.md:3", "claims.counts-heading a.md:4")
+	wantFindings(t, got, "claims.counts a.md:1", "claims.counts a.md:2", "claims.counts a.md:8",
+		"claims.counts-heading a.md:3", "claims.counts-heading a.md:4", "claims.counts-heading a.md:5")
 }
