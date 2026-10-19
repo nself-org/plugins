@@ -123,8 +123,8 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 			return bad("job user equals the agent user")
 		}
 	case "--env":
-		if value != "HOME=/tmp" && value != "TMPDIR=/tmp" {
-			return bad("env value on argv: only HOME and TMPDIR may be set there")
+		if value != "HOME=/tmp" && value != "TMPDIR=/tmp" && !passedEnvName(value, run) {
+			return bad("env value on argv: only HOME and TMPDIR may be set there, and declared secrets by name")
 		}
 	case "--runtime":
 		if value != "runsc" {
@@ -163,6 +163,17 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 		}
 	}
 	return nil
+}
+
+// passedEnvName reports whether value is exactly the name of a secret exec hands to the
+// runtime CLI through its environment (a bare name, never NAME=value).
+func passedEnvName(value string, run ContainerRun) bool {
+	for _, n := range run.PassEnv {
+		if value == n {
+			return true
+		}
+	}
+	return false
 }
 
 // checkMount allows exactly one bind of the attempt workspace onto /repo: the keys are

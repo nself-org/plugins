@@ -217,7 +217,7 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		secretEnv = append(secretEnv, k+"="+v)
 	}
 	if s.Plan != nil {
-		result.ExitCode, result.Reason, result.Err = e.runPlanned(ctx, s, workspace, append(env, secretEnv...))
+		result.ExitCode, result.Reason, result.Err = e.runPlanned(ctx, s, workspace, env, secretEnv)
 	} else if s.Job.Isolation == "container" {
 		result.ExitCode, result.Err = e.runContainer(ctx, s, workspace, env, secretEnv)
 	} else {

@@ -28,6 +28,9 @@ type ContainerRun struct {
 	CPU                                      float64
 	MemoryMB                                 int
 	Network                                  model.NetworkScope
+	// PassEnv names the secrets handed to the runtime CLI through its own environment as
+	// `--env NAME` because their value spans lines and cannot ride an env file.
+	PassEnv []string
 }
 
 // ContainerCommand is one runtime CLI invocation: Binary is docker or podman and
@@ -46,7 +49,33 @@ type ContainerPlanner interface {
 	Cleanup(ContainerRun) (*ContainerCommand, error)
 }
 
-func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, env []string) (int, string, error) {
+// splitMultiline moves the secrets whose value spans lines out of the env-file lines: it
+// returns the rest and the NAME=value pairs that go by name through the runtime CLI's environment.
+func splitMultiline(secretEnv []string) (fileLines, passed []string, err error) {
+	for _, kv := range secretEnv {
+		switch {
+		case strings.ContainsRune(kv, 0):
+			return nil, nil, coded("E612", "secret value contains a NUL byte")
+		case strings.ContainsAny(kv, "\r\n"):
+			passed = append(passed, kv)
+		default:
+			fileLines = append(fileLines, kv)
+		}
+	}
+	return fileLines, passed, nil
+}
+
+// passEnvArgs inserts `--env NAME` for each passed secret right after the `run` word.
+func passEnvArgs(args []string, passed []string) []string {
+	out := append([]string{}, args[:1]...)
+	for _, kv := range passed {
+		name, _, _ := strings.Cut(kv, "=")
+		out = append(out, "--env", name)
+	}
+	return append(out, args[1:]...)
+}
+
+func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, env, secretEnv []string) (int, string, error) {
 	if s.Job.Container == nil || !imageRef.MatchString(s.Job.Container.Image) || strings.Contains(s.Job.Container.Image, "..") {
 		return -1, "", coded("E613", "invalid container image")
 	}
@@ -66,7 +95,11 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 			return -1, "", coded("E611", "a read-write mount is not available under the hardened container profile")
 		}
 	}
-	envData, err := envLines(env)
+	fileSecrets, passed, err := splitMultiline(secretEnv)
+	if err != nil {
+		return -1, "", err
+	}
+	envData, err := envLines(append(append([]string{}, env...), fileSecrets...))
 	if err != nil {
 		return -1, "", err
 	}
@@ -78,9 +111,16 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	if run.MemoryMB <= 0 {
 		run.MemoryMB = 1024
 	}
+	for _, kv := range passed {
+		name, _, _ := strings.Cut(kv, "=")
+		run.PassEnv = append(run.PassEnv, name)
+	}
 	cmd, err := s.Plan.Plan(run)
 	if err != nil {
 		return -1, "", err
+	}
+	if len(passed) > 0 && len(cmd.Args) > 0 {
+		cmd.Args = passEnvArgs(cmd.Args, passed)
 	}
 	if err := checkContainerCommand(cmd, run); err != nil {
 		return -1, "", err
@@ -96,7 +136,7 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 			s.Output(b)
 		}
 	}
-	code, err := e.runCommandIn(ctx, bytes.NewReader(envData), append([]string{cmd.Binary}, cmd.Args...), workspace, dockerHostEnv(), sink, stop, nil, "")
+	code, err := e.runCommandIn(ctx, bytes.NewReader(envData), append([]string{cmd.Binary}, cmd.Args...), workspace, append(dockerHostEnv(), passed...), sink, stop, nil, "")
 	if err != nil {
 		stop()
 		err = coded("E613", "container run: "+err.Error())
