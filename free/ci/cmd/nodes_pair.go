@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
@@ -103,11 +104,8 @@ func runNodesPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		return 2
 	}
 	public := f.publicURL
-	if public == "" { // ":3866" means every interface: name this host "localhost"; "host:port" names itself
-		public = "https://" + f.addr
-		if strings.HasPrefix(f.addr, ":") {
-			public = "https://localhost" + f.addr
-		}
+	if public == "" {
+		public = defaultPublicURL(f.addr, interfaceIPs())
 	}
 	svc := pairing.New(pairing.Config{
 		CA: ca, Store: d.Store, Registry: d.Registry, CoordinatorID: f.coordinatorID, AgentURL: f.agentURL, Actor: d.Actor,
@@ -138,6 +136,38 @@ func runNodesPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	}
 	fmt.Fprintln(stdout, "A node joined. The pairing window is closed.")
 	return 0
+}
+
+// interfaceIPs lists the addresses of this machine's interfaces.
+func interfaceIPs() []net.IP {
+	var out []net.IP
+	addrs, _ := net.InterfaceAddrs()
+	for _, a := range addrs {
+		if n, ok := a.(*net.IPNet); ok {
+			out = append(out, n.IP)
+		}
+	}
+	return out
+}
+
+// defaultPublicURL is what nodes are told to reach when --public-url is absent. A bind address that names
+// a host is that host; a wildcard bind (":3866", "0.0.0.0:3866") becomes this machine's first
+// non-loopback IPv4 address, so the server certificate carries an IP SAN a LAN node can verify, and
+// "localhost" only when the machine has none.
+func defaultPublicURL(addr string, ips []net.IP) string {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "https://localhost"
+	}
+	if ip := net.ParseIP(host); host != "" && (ip == nil || !ip.IsUnspecified()) {
+		return "https://" + addr
+	}
+	for _, ip := range ips {
+		if v4 := ip.To4(); v4 != nil && !v4.IsLoopback() && !v4.IsLinkLocalUnicast() {
+			return "https://" + net.JoinHostPort(v4.String(), port)
+		}
+	}
+	return "https://" + net.JoinHostPort("localhost", port)
 }
 
 func pkiOf(ctx context.Context, d *lifecycle.Deps) (*pki.CA, error) {

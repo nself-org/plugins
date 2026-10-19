@@ -89,7 +89,7 @@ func runJoin(ctx context.Context, args []string, sio IO) int {
 	}
 	opts := enroll.JoinOptions{
 		URL: fs.Arg(0), ExpectFingerprint: *expect, Name: *name, OS: runtime.GOOS, Arch: runtime.GOARCH, AgentVersion: Version,
-		NodeKey: key.Public(), NodeKeyID: key.KeyID(), Out: sio.Stderr,
+		NodeKey: key.Public(), NodeKeyID: key.KeyID(), NodeSign: key.Sign, Out: sio.Stderr,
 		Code: func() (string, error) { return line("Pairing code: ") },
 	}
 	if tty {

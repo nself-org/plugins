@@ -148,6 +148,11 @@ func (g *Guard) Middleware(kind Kind) func(http.Handler) http.Handler {
 				http.Error(w, "E660: wrong certificate kind", http.StatusForbidden)
 				return
 			}
+			if now := g.now(); now.Before(leaf.NotBefore) || !now.Before(leaf.NotAfter) {
+				// TLS 1.3 never re-handshakes: a connection opened before NotAfter must stop at it.
+				http.Error(w, "E660: certificate outside its validity period", http.StatusForbidden)
+				return
+			}
 			ctx, cancel := context.WithCancel(r.Context())
 			defer cancel()
 			defer g.watch(serialHex(leaf), cancel)()

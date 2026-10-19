@@ -53,16 +53,21 @@ func (c *CA) CheckNodeKey(ctx context.Context, nodeID string, pub ed25519.Public
 	return fail(ReasonNodeKeyChanged, "node %s presented a node key other than the pinned one", nodeID)
 }
 
-// CheckPinnedNodeKey is CheckNodeKey without the first-hello pin: a node with no pin is refused (a
-// re-pairing node must already own its name).
+// CheckPinnedNodeKey is the read-only check a re-pairing node must pass: a pin must exist and match (a
+// pending pin after rotate matches the named key id) and nothing is written; a node with no pin is
+// refused. Pin with PinNodeKey once the enrollment is approved.
 func (c *CA) CheckPinnedNodeKey(ctx context.Context, nodeID string, pub ed25519.PublicKey) error {
-	if _, _, ok, err := c.st.PKINodeKeyGet(ctx, nodeID); err != nil || !ok {
-		if err == nil {
-			err = fail(ReasonNodeKeyChanged, "node %s has no pinned node key; set one with `nodes rotate --node-key --key-id`", nodeID)
-		}
+	keyID, pinned, ok, err := c.st.PKINodeKeyGet(ctx, nodeID)
+	if err != nil {
 		return err
 	}
-	return c.CheckNodeKey(ctx, nodeID, pub)
+	if !ok {
+		return fail(ReasonNodeKeyChanged, "node %s has no pinned node key; set one with `nodes rotate --node-key --key-id`", nodeID)
+	}
+	if len(pub) != ed25519.PublicKeySize || (pinned == "" && NodeKeyID(pub) != keyID) || (pinned != "" && subtle.ConstantTimeCompare([]byte(pinned), []byte(base64.StdEncoding.EncodeToString(pub))) != 1) {
+		return fail(ReasonNodeKeyChanged, "node %s presented a node key other than the pinned one", nodeID)
+	}
+	return nil
 }
 
 // RotateNodeKey makes keyID the only key the next hello of the node may present

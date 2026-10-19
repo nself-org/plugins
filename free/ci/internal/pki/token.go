@@ -40,7 +40,7 @@ type Tokens struct {
 	pubs   map[string]ed25519.PublicKey
 }
 
-var b64 = base64.RawURLEncoding
+var b64 = base64.RawURLEncoding.Strict() // strict: one string per token, no non-canonical tail bits
 
 // Tokens loads the token keys, creating the first one when none exists.
 func (c *CA) Tokens(ctx context.Context) (*Tokens, error) {

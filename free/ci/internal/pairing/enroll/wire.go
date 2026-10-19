@@ -32,8 +32,10 @@ type Request struct {
 	ClientTime int64  `json:"client_time"` // unix seconds on the node
 	Code       string `json:"code,omitempty"`
 	// CSR is the DER certificate request; NodeKey the raw 32-byte Ed25519 public key.
-	CSR          []byte `json:"csr,omitempty"`
-	NodeKey      []byte `json:"node_key,omitempty"`
+	CSR     []byte `json:"csr,omitempty"`
+	NodeKey []byte `json:"node_key,omitempty"`
+	// NodeKeySig is the node key's signature over Transcript (proof that the joiner holds the private key).
+	NodeKeySig   []byte `json:"node_key_sig,omitempty"`
 	Name         string `json:"name,omitempty"`
 	OS           string `json:"os,omitempty"`
 	Arch         string `json:"arch,omitempty"`

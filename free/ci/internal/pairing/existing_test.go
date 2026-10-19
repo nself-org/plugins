@@ -76,8 +76,7 @@ func enrollExistingSameKey(t *testing.T) {
 	kept := trustOfNode(t, r, "node-re")
 	second := approving("policy:second", TrustFields{Accepts: []string{"internal"}, SecretClasses: []string{"none"}, PrivacyZone: "hosted-allowed", Projects: []string{"proj-2"}})
 	off := r.offer(OfferOptions{Approver: second})
-	m2 := newNodeMat(t) // a new TLS key and CSR, the same node key
-	m2.pub = m1.pub
+	m2 := newNodeMat(t).withNodeKeyOf(m1) // a new TLS key and CSR, the same node key
 	if _, err := r.redeem(off.Code, "node-re", m2); err != nil {
 		t.Fatalf("re-pair with the pinned key: %v", err)
 	}

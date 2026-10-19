@@ -12,10 +12,17 @@ import (
 	"time"
 )
 
+// newGuardAt is a guard whose clock is the rig clock (certificates are issued at the rig epoch).
+func newGuardAt(r *rig) *Guard {
+	g := NewGuard(r.st)
+	g.now = r.clk.now
+	return g
+}
+
 func TestGuardRefreshFollowsTheStore(t *testing.T) {
 	ctx := context.Background()
 	r := newRig(t)
-	g := NewGuard(r.st)
+	g := newGuardAt(r)
 	var cancelledA, cancelledB, cancelledOther atomic.Int32
 	stopA := g.watch("aa", func() { cancelledA.Add(1) })
 	g.watch("aa", func() { cancelledB.Add(1) })
@@ -70,7 +77,7 @@ func TestGuardRunRefreshesUntilCancelled(t *testing.T) {
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
 	r := newRig(t)
-	g := NewGuard(r.st)
+	g := newGuardAt(r)
 	if _, err := r.st.PKIDeny(ctx, "cli:admin", "n1", "x", "pre"); err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +150,7 @@ func TestGuardCheck(t *testing.T) {
 	t.Run("user and coordinator certificates skip the node lookup", func(t *testing.T) {
 		r := newRig(t)
 		_, u, _ := r.issueUser("alice", 0)
-		g := NewGuard(r.st)
+		g := newGuardAt(r)
 		if err := g.Check(ctx, u); err != nil {
 			t.Fatal(err)
 		}
@@ -163,7 +170,7 @@ func TestGuardCheck(t *testing.T) {
 		r := newRig(t)
 		r.addNode("n1")
 		n := r.issueNode("n1", 0)
-		g := NewGuard(r.st)
+		g := newGuardAt(r)
 		_ = g.Refresh(ctx)
 		_, _ = r.st.PKIDeny(ctx, "cli:admin", "n1", "x", n.Serial)
 		if g.Denied(n.Serial) {
@@ -177,7 +184,7 @@ func TestGuardMiddlewareUnits(t *testing.T) {
 	r := newRig(t)
 	n := r.issueNode("n1", 0)
 	_, u, _ := r.issueUser("alice", 0)
-	g := NewGuard(r.st)
+	g := newGuardAt(r)
 	if err := g.Refresh(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +259,7 @@ func TestRequestGuardCancelsLiveRequestWithinOneSecond(t *testing.T) {
 	r := newRig(t)
 	r.addNode("n1")
 	n := r.issueNode("n1", 0)
-	g := NewGuard(r.st)
+	g := newGuardAt(r)
 	if err := g.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +341,7 @@ func TestRequestGuardRefusesNextRequestOnExistingConnection(t *testing.T) {
 	r := newRig(t)
 	r.addNode("n1")
 	n := r.issueNode("n1", 0)
-	g := NewGuard(r.st)
+	g := newGuardAt(r)
 	if err := g.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -388,7 +395,7 @@ func TestGuardMiddlewareFailsClosedWhenStale(t *testing.T) {
 	r := newRig(t)
 	r.addNode("n1")
 	n := r.issueNode("n1", 0)
-	g := NewGuard(r.st)
+	g := newGuardAt(r)
 	var served atomic.Int32
 	h := g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { served.Add(1) }))
 	do := func(state *tls.ConnectionState) *httptest.ResponseRecorder {
@@ -420,23 +427,22 @@ func TestGuardMiddlewareFailsClosedWhenStale(t *testing.T) {
 		t.Fatalf("failed refresh: err=%v fresh=%v", err, cg.fresh())
 	}
 	// a successful refresh makes it fresh
-	before := time.Now()
 	if err := g.Refresh(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if g.okAt.Before(before) || time.Since(g.okAt) > time.Second {
+	if !g.okAt.Equal(r.clk.now()) {
 		t.Fatalf("okAt not recorded: %v", g.okAt)
 	}
 	if rec := do(good); rec.Code != 200 || served.Load() != 1 {
 		t.Fatalf("fresh: %d", rec.Code)
 	}
 	// aged just inside the window: still served
-	g.okAt = time.Now().Add(-StaleAfter + 2*time.Second)
+	g.okAt = g.now().Add(-StaleAfter + 2*time.Second)
 	if rec := do(good); rec.Code != 200 {
 		t.Fatalf("9 s old: %d", rec.Code)
 	}
 	// aged past the window: 503 (white-box: the injected clock is not the guard's clock)
-	g.okAt = time.Now().Add(-StaleAfter - time.Second)
+	g.okAt = g.now().Add(-StaleAfter - time.Second)
 	expect503("stale", good)
 	if served.Load() != 2 {
 		t.Fatalf("a stale guard served a request: %d", served.Load())
@@ -479,7 +485,7 @@ func TestGuardStaleBoundary(t *testing.T) {
 	r := newRig(t)
 	r.addNode("n1")
 	n := r.issueNode("n1", 0)
-	g := NewGuard(r.st)
+	g := newGuardAt(r)
 	if g.now == nil {
 		t.Fatal("NewGuard left the clock unset")
 	}
@@ -508,4 +514,80 @@ func TestGuardStaleBoundary(t *testing.T) {
 			t.Errorf("age %v: status %d, want %d", c.age, got, c.want)
 		}
 	}
+}
+
+// TestGuardMiddlewareValidityPeriod: TLS 1.3 never re-handshakes, so the per-request check refuses a
+// certificate outside [NotBefore, NotAfter) by the guard clock.
+func TestGuardMiddlewareValidityPeriod(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	r.addNode("n1")
+	n := r.issueNode("n1", time.Hour)
+	_, user, _ := r.issueUser("alice", 0)
+	g := newGuardAt(r)
+	h := g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") }))
+	do := func(leaf *x509.Certificate) *httptest.ResponseRecorder {
+		rq := httptest.NewRequest("GET", "/x", nil)
+		rq.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, rq)
+		return rec
+	}
+	const outside = "E660: certificate outside its validity period\n"
+	nb, na := n.Cert.NotBefore, n.Cert.NotAfter
+	tests := []struct {
+		name string
+		at   time.Time
+		code int
+		body string
+	}{
+		{"inside", nb.Add(time.Minute), 200, "ok"},
+		{"exactly NotBefore", nb, 200, "ok"},
+		{"1ns before NotBefore", nb.Add(-time.Nanosecond), 403, outside},
+		{"long before NotBefore", nb.Add(-24 * time.Hour), 403, outside},
+		{"1ns before NotAfter", na.Add(-time.Nanosecond), 200, "ok"},
+		{"exactly NotAfter", na, 403, outside},
+		{"1ns after NotAfter", na.Add(time.Nanosecond), 403, outside},
+		{"long after NotAfter", na.Add(30 * day), 403, outside},
+	}
+	for _, c := range tests {
+		r.clk.set(c.at)
+		if err := g.Refresh(ctx); err != nil { // keep the deny list fresh at the new time
+			t.Fatal(err)
+		}
+		if rec := do(n.Cert); rec.Code != c.code || rec.Body.String() != c.body {
+			t.Errorf("%s: %d %q", c.name, rec.Code, rec.Body.String())
+		}
+	}
+	// the stale check comes first, the kind check before the validity check
+	r.clk.set(na.Add(31 * day))
+	if rec := do(n.Cert); rec.Code != 503 {
+		t.Errorf("stale and expired: %d", rec.Code)
+	}
+	_ = g.Refresh(ctx)
+	if rec := do(user); rec.Code != 403 || rec.Body.String() != "E660: wrong certificate kind\n" {
+		t.Errorf("wrong kind and expired: %d %q", rec.Code, rec.Body.String())
+	}
+	// a request already running is not cut off by the clock passing NotAfter: only the deny list cancels it
+	r.clk.set(nb.Add(time.Minute))
+	_ = g.Refresh(ctx)
+	started, release, done := make(chan context.Context), make(chan struct{}), make(chan struct{})
+	long := g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, rq *http.Request) {
+		started <- rq.Context()
+		<-release
+	}))
+	go func() {
+		rq := httptest.NewRequest("GET", "/long", nil)
+		rq.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{n.Cert}}
+		long.ServeHTTP(httptest.NewRecorder(), rq)
+		close(done)
+	}()
+	rctx := <-started
+	r.clk.set(na.Add(time.Hour))
+	_ = g.Refresh(ctx)
+	if rctx.Err() != nil {
+		t.Fatal("the request context was cancelled by the clock")
+	}
+	close(release)
+	<-done
 }

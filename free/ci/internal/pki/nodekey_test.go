@@ -177,25 +177,41 @@ func TestCheckPinnedNodeKeyIsStrict(t *testing.T) {
 	if _, _, ok, _ := r.st.PKINodeKeyGet(ctx, "n1"); ok {
 		t.Fatal("CheckPinnedNodeKey pinned a key")
 	}
-	// pinned: same behaviour as CheckNodeKey
+	// full pin: the pinned key passes, anything else is refused, nothing is written
 	if err = r.ca.PinNodeKey(ctx, "n1", pub); err != nil {
 		t.Fatal(err)
 	}
 	if err = r.ca.CheckPinnedNodeKey(ctx, "n1", pub); err != nil {
 		t.Fatal(err)
 	}
-	wantReason(t, r.ca.CheckPinnedNodeKey(ctx, "n1", other), ReasonNodeKeyChanged)
-	// pending pin after rotate: the named key completes it, others are refused
+	for _, bad := range []ed25519.PublicKey{other, nil, pub[:31], append(append(ed25519.PublicKey{}, pub...), 0)} {
+		wantReason(t, r.ca.CheckPinnedNodeKey(ctx, "n1", bad), ReasonNodeKeyChanged)
+	}
+	if id, p, _, _ := r.st.PKINodeKeyGet(ctx, "n1"); id != NodeKeyID(pub) || p != base64.StdEncoding.EncodeToString(pub) {
+		t.Fatal("the pin changed")
+	}
+	// pending pin after rotate: the named key id matches, but the check is read-only and never completes the pin
 	if err = r.ca.RotateNodeKey(ctx, "cli:admin", "n2", NodeKeyID(other)); err != nil {
 		t.Fatal(err)
 	}
 	wantReason(t, r.ca.CheckPinnedNodeKey(ctx, "n2", pub), ReasonNodeKeyChanged)
-	if err = r.ca.CheckPinnedNodeKey(ctx, "n2", other); err != nil {
+	for i := 0; i < 2; i++ {
+		if err = r.ca.CheckPinnedNodeKey(ctx, "n2", other); err != nil {
+			t.Fatal(err)
+		}
+		if id, p, ok, _ := r.st.PKINodeKeyGet(ctx, "n2"); !ok || id != NodeKeyID(other) || p != "" {
+			t.Fatalf("a read-only check completed the pending pin: %q %q", id, p)
+		}
+	}
+	if len(r.audit("pki.node_key.rotate")) != 1 {
+		t.Fatal("the check wrote audit rows")
+	}
+	// a pending pin never matches a key of the wrong length, even when the id is the hash of that key
+	short := make(ed25519.PublicKey, 31)
+	if err = r.ca.RotateNodeKey(ctx, "cli:admin", "n3", NodeKeyID(short)); err != nil {
 		t.Fatal(err)
 	}
-	if _, p, _, _ := r.st.PKINodeKeyGet(ctx, "n2"); p != base64.StdEncoding.EncodeToString(other) {
-		t.Fatal("pending pin not completed")
-	}
+	wantReason(t, r.ca.CheckPinnedNodeKey(ctx, "n3", short), ReasonNodeKeyChanged)
 	// a store error is returned as is, not as node_key_changed
 	_ = r.st.Close()
 	if err = r.ca.CheckPinnedNodeKey(ctx, "n1", pub); err == nil || ReasonOf(err) != "" {

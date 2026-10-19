@@ -28,6 +28,7 @@ const (
 	ReasonRenewCap               = "renew_cap"
 	ReasonBadCSR                 = "bad_csr"
 	ReasonNodeKeyChanged         = "node_key_changed"
+	ReasonNodeKeyProof           = "node_key_proof"
 	ReasonFingerprintMismatch    = "fingerprint_mismatch"
 	ReasonFingerprintUnconfirmed = "fingerprint_unconfirmed"
 	ReasonTokenSignature         = "token_signature"

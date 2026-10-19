@@ -162,10 +162,10 @@ func TestNodesPairEndToEnd(t *testing.T) {
 			}
 		}
 	}()
-	pub, _, _ := ed25519.GenerateKey(rand.Reader)
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	res, err := enroll.Join(ctx, enroll.JoinOptions{URL: b.url, ExpectFingerprint: b.fp, Name: "node-pair", OS: "linux", Arch: "amd64", NodeKey: pub, NodeKeyID: pki.NodeKeyID(pub),
+	res, err := enroll.Join(ctx, enroll.JoinOptions{URL: b.url, ExpectFingerprint: b.fp, Name: "node-pair", OS: "linux", Arch: "amd64", NodeKey: pub, NodeKeyID: pki.NodeKeyID(pub), NodeSign: func(m []byte) ([]byte, error) { return ed25519.Sign(priv, m), nil },
 		Out: &joinOut, Code: func() (string, error) { return b.code, nil }})
 	if err != nil {
 		t.Fatalf("join: %v\nadmin screen:\n%s", err, out.String())
@@ -332,18 +332,19 @@ func TestNodesPairIsRegisteredWithItsLifecycleHooks(t *testing.T) {
 
 // pullRig is a coordinator store with a CA and one paired pull node that has no ssh destination.
 type pullRig struct {
-	t       *testing.T
-	home    string
-	st      *store.Store
-	ca      *pki.CA
-	reg     *registry.Registry
-	svc     *pairing.Service
-	out     *pairBuf
-	errb    *pairBuf
-	env     lifecycle.Env
-	certs   []*pairedCert
-	nodeID  string
-	nodeKey ed25519.PublicKey
+	t        *testing.T
+	home     string
+	st       *store.Store
+	ca       *pki.CA
+	reg      *registry.Registry
+	svc      *pairing.Service
+	out      *pairBuf
+	errb     *pairBuf
+	env      lifecycle.Env
+	certs    []*pairedCert
+	nodeID   string
+	nodeKey  ed25519.PublicKey
+	nodePriv ed25519.PrivateKey
 }
 
 type pairedCert struct {
@@ -364,7 +365,8 @@ func newPullRig(t *testing.T) *pullRig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := &pullRig{t: t, home: home, st: st, ca: ca, reg: registry.New(st), out: &pairBuf{}, errb: &pairBuf{}, nodeID: "node-pull", nodeKey: ed25519Pub(t)}
+	r := &pullRig{t: t, home: home, st: st, ca: ca, reg: registry.New(st), out: &pairBuf{}, errb: &pairBuf{}, nodeID: "node-pull"}
+	r.nodeKey, r.nodePriv = ed25519Keys(t)
 	r.svc = pairing.New(pairing.Config{CA: ca, Store: st, Registry: r.reg, CoordinatorID: "local", Actor: "cli:test", Approver: autoYes{}})
 	r.env = lifecycle.Env{Out: r.out, Err: r.errb, Open: func(context.Context, string) (*lifecycle.Deps, func(), error) {
 		return lifecycle.NewDeps(st, home, "proj-1", "cli:test"), func() {}, nil
@@ -381,11 +383,27 @@ func (autoYes) Approve(context.Context, pairing.ApprovalRequest) (pairing.Decisi
 }
 
 func ed25519Pub(t *testing.T) ed25519.PublicKey {
-	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	pub, _ := ed25519Keys(t)
+	return pub
+}
+
+func ed25519Keys(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return pub
+	return pub, priv
+}
+
+// signedRequest is the phase-enroll request of the rig's node, signed with its node key.
+func (r *pullRig) signedRequest(code string, csr []byte) enroll.Request {
+	fp, err := pki.CSRKeyFingerprint(csr)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	sig := ed25519.Sign(r.nodePriv, enroll.Transcript("local", now, fp, pki.NodeKeyID(r.nodeKey)))
+	return enroll.Request{Phase: enroll.PhaseEnroll, Version: 1, ClientTime: now, Code: code, CSR: csr, NodeKey: r.nodeKey, NodeKeySig: sig, Name: r.nodeID, OS: "linux", Arch: "amd64"}
 }
 
 // pair redeems a fresh offer for the rig's node with its pinned node key (the pairing flow without the socket).
@@ -403,8 +421,7 @@ func (r *pullRig) pair() *pairedCert {
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	resp, err := r.svc.Redeem(context.Background(), enroll.Request{Phase: enroll.PhaseEnroll, Version: 1, ClientTime: time.Now().Unix(), Code: off.Code, CSR: csr,
-		NodeKey: r.nodeKey, Name: r.nodeID, OS: "linux", Arch: "amd64"}, "127.0.0.1:1")
+	resp, err := r.svc.Redeem(context.Background(), r.signedRequest(off.Code, csr), "127.0.0.1:1")
 	if err != nil {
 		r.t.Fatalf("pair: %v", err)
 	}
@@ -589,7 +606,8 @@ func TestNodesRevokeDeniesTheCertificatesInsideTheRevokeTransaction(t *testing.T
 	r := newPullRig(t)
 	r.pair()
 	other := *r
-	other.nodeID, other.nodeKey, other.certs = "node-bystander", ed25519Pub(t), nil
+	other.nodeID, other.certs = "node-bystander", nil
+	other.nodeKey, other.nodePriv = ed25519Keys(t)
 	other.pair()
 	for _, c := range append(append([]*pairedCert(nil), r.certs...), other.certs...) {
 		if err := r.handshake(c); err != nil {
@@ -668,7 +686,6 @@ func TestNodesRemoveDeniesTheCertificatesToo(t *testing.T) {
 func (r *pullRig) pair2(code string) error {
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	csr, _ := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{Subject: pkix.Name{CommonName: "x"}}, key)
-	_, err := r.svc.Redeem(context.Background(), enroll.Request{Phase: enroll.PhaseEnroll, Version: 1, ClientTime: time.Now().Unix(), Code: code, CSR: csr,
-		NodeKey: r.nodeKey, Name: r.nodeID}, "127.0.0.1:1")
+	_, err := r.svc.Redeem(context.Background(), r.signedRequest(code, csr), "127.0.0.1:1")
 	return err
 }

@@ -38,9 +38,9 @@ func TestReasonKeysAreDistinctAndStable(t *testing.T) {
 		ReasonRenewCap: "renew_cap", ReasonBadCSR: "bad_csr", ReasonNodeKeyChanged: "node_key_changed",
 		ReasonFingerprintMismatch: "fingerprint_mismatch", ReasonFingerprintUnconfirmed: "fingerprint_unconfirmed",
 		ReasonTokenSignature: "token_signature", ReasonTokenExpired: "token_expired", ReasonTokenUnknownKey: "token_unknown_key",
-		ReasonTokenMalformed: "token_malformed",
+		ReasonTokenMalformed: "token_malformed", ReasonNodeKeyProof: "node_key_proof",
 	}
-	if len(want) != 17 {
+	if len(want) != 18 {
 		t.Fatalf("reason keys collide: %d distinct", len(want))
 	}
 	for got, w := range want {

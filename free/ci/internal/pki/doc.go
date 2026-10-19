@@ -26,6 +26,12 @@
 // approver decision on the exact CSR key fingerprint, which the node printed. A second redemption of a
 // code revokes the certificate issued for the first and raises an alert.
 //
+// Node takeover. The Ed25519 node key is public by design (every hello carries it), so naming it proves
+// nothing. A joining node signs a domain-separated transcript (coordinator id, request time, CSR key
+// fingerprint, node key id) with the private half; the coordinator verifies it before the code is
+// consumed, for new and existing names. A registered node can re-pair only with its pinned key, and the
+// burst listener refuses registered names.
+//
 // Clock skew. Certificates are backdated by the same 120 s; join and the enrollment route refuse when the
 // clocks differ by more than 120 s (E660 clock_skew). Short-lived node certificates (7 days) renew at
 // 2/3 of life; an expired one cannot renew.

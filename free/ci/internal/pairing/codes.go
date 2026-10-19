@@ -19,16 +19,17 @@ const CodeInvalid = "E659"
 
 // Reason keys carried by Error.Reason.
 const (
-	ReasonInvalid    = "invalid" // no such code
-	ReasonExpired    = "expired" // past its 10 minutes
-	ReasonLocked     = "locked"  // five wrong codes were presented
-	ReasonReused     = "reused"  // redeemed before; the first certificate was revoked
-	ReasonWithdrawn  = "withdrawn"
-	ReasonDenied     = "denied" // the approver said no
-	ReasonNoIntent   = "no_intent"
-	ReasonNoApprover = "no_approver"
-	ReasonBadRequest = "bad_request"
-	ReasonInternal   = "internal"
+	ReasonInvalid      = "invalid" // no such code
+	ReasonExpired      = "expired" // past its 10 minutes
+	ReasonLocked       = "locked"  // five wrong codes were presented
+	ReasonReused       = "reused"  // redeemed before; the first certificate was revoked
+	ReasonWithdrawn    = "withdrawn"
+	ReasonDenied       = "denied" // the approver said no
+	ReasonNoIntent     = "no_intent"
+	ReasonExistingNode = "existing_node"
+	ReasonNoApprover   = "no_approver"
+	ReasonBadRequest   = "bad_request"
+	ReasonInternal     = "internal"
 )
 
 func init() {

@@ -15,12 +15,14 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -204,6 +206,7 @@ type nodeMat struct {
 	key   *ecdsa.PrivateKey
 	csr   []byte
 	pub   ed25519.PublicKey
+	priv  ed25519.PrivateKey
 	csrFP string
 }
 
@@ -217,7 +220,7 @@ func newNodeMat(tb testing.TB) nodeMat {
 	if err != nil {
 		tb.Fatal(err)
 	}
-	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -225,13 +228,28 @@ func newNodeMat(tb testing.TB) nodeMat {
 	if err != nil {
 		tb.Fatal(err)
 	}
-	return nodeMat{key: key, csr: csr, pub: pub, csrFP: fp}
+	return nodeMat{key: key, csr: csr, pub: pub, priv: priv, csrFP: fp}
 }
 
-// request is the phase-enroll request of m under the rig clock.
+// withNodeKeyOf returns m with the node key (both halves) of o: the same node, a new TLS key and CSR.
+func (m nodeMat) withNodeKeyOf(o nodeMat) nodeMat {
+	m.pub, m.priv = o.pub, o.priv
+	return m
+}
+
+// sign signs the enrollment transcript with the node key of m.
+func (m nodeMat) sign(coordinatorID string, clientTime int64) []byte {
+	return ed25519.Sign(m.priv, enroll.Transcript(coordinatorID, clientTime, m.csrFP, pki.NodeKeyID(m.pub)))
+}
+
+// request is the phase-enroll request of m under the rig clock, signed with the node key.
 func (r *rig) request(code, name string, m nodeMat) enroll.Request {
-	return enroll.Request{Phase: enroll.PhaseEnroll, Version: enroll.Version, ClientTime: r.clock.Now().Unix(), Code: code,
-		CSR: m.csr, NodeKey: m.pub, Name: name, OS: "linux", Arch: "amd64", MachineID: "machine-1", AgentVersion: "1.5.0"}
+	return r.requestAt(code, name, m, r.clock.Now().Unix())
+}
+
+func (r *rig) requestAt(code, name string, m nodeMat, clientTime int64) enroll.Request {
+	return enroll.Request{Phase: enroll.PhaseEnroll, Version: enroll.Version, ClientTime: clientTime, Code: code,
+		CSR: m.csr, NodeKey: m.pub, NodeKeySig: m.sign("local", clientTime), Name: name, OS: "linux", Arch: "amd64", MachineID: "machine-1", AgentVersion: "1.5.0"}
 }
 
 func (r *rig) redeem(code, name string, m nodeMat) (enroll.Response, error) {
@@ -243,7 +261,8 @@ func (r *rig) joinOpts(url, code, fp, name string, out *syncBuf) (enroll.JoinOpt
 	m := newNodeMat(r.tb)
 	return enroll.JoinOptions{
 		URL: url, ExpectFingerprint: fp, Name: name, OS: "linux", Arch: "amd64", MachineID: "machine-1", AgentVersion: "1.5.0",
-		NodeKey: m.pub, NodeKeyID: pki.NodeKeyID(m.pub), Out: out, Now: r.clock.Now,
+		NodeKey: m.pub, NodeKeyID: pki.NodeKeyID(m.pub), NodeSign: func(msg []byte) ([]byte, error) { return ed25519.Sign(m.priv, msg), nil },
+		Out: out, Now: r.clock.Now,
 		Code:  func() (string, error) { return code, nil },
 		Sleep: r.clock.Advance,
 	}, m
@@ -405,3 +424,7 @@ func (r *rig) exec(q string) {
 		r.tb.Fatal(err)
 	}
 }
+
+func jsonDecode(r io.Reader, v any) error { return json.NewDecoder(r).Decode(v) }
+
+func itoa(n int64) string { return strconv.FormatInt(n, 10) }

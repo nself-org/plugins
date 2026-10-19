@@ -330,3 +330,62 @@ func TestMintWithoutAnActiveKey(t *testing.T) {
 	_, err = tk.Mint(claims(1), time.Hour)
 	wantReason(t, err, ReasonTokenUnknownKey)
 }
+
+// TestTokenHasOneCanonicalString: the base64 decoder is strict, so a segment whose unused tail bits
+// are altered (same decoded bytes) is refused and exactly one string verifies per mint.
+func TestTokenHasOneCanonicalString(t *testing.T) {
+	r := newRig(t)
+	tk := newTokens(t, r)
+	alphabet := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	// noncanonical changes the last character's unused low bits; "" when the segment has none
+	noncanonical := func(seg string) string {
+		spare := (6 * len(seg)) % 8
+		if spare == 0 {
+			return ""
+		}
+		last := strings.IndexByte(alphabet, seg[len(seg)-1])
+		alt := last ^ 1 // flips the lowest bit, which is a spare bit
+		if alt == last {
+			t.Fatal("no change")
+		}
+		return seg[:len(seg)-1] + string(alphabet[alt])
+	}
+	relaxed := base64.RawURLEncoding
+	segments := map[string]bool{}
+	for i := 0; i < 8; i++ { // vary the claims so body lengths differ mod 3
+		cl := claims(0)
+		cl.JTI = strings.Repeat("x", i)
+		tok, err := tk.Mint(cl, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parts := strings.Split(tok, ".")
+		for idx, name := range []string{"kid", "body", "signature"} {
+			alt := noncanonical(parts[idx])
+			if alt == "" {
+				continue
+			}
+			segments[name] = true
+			a, _ := relaxed.DecodeString(parts[idx])
+			b, err := relaxed.DecodeString(alt)
+			if err != nil || string(a) != string(b) {
+				t.Fatalf("%s variant is not the same bytes under a lax decoder", name)
+			}
+			bad := append([]string{}, parts...)
+			bad[idx] = alt
+			cl2, err := tk.Verify(strings.Join(bad, "."))
+			wantReason(t, err, ReasonTokenMalformed)
+			if cl2 != (TokenClaims{}) {
+				t.Fatalf("%s: claims returned", name)
+			}
+		}
+		if _, err = tk.Verify(tok); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"kid", "body", "signature"} {
+		if !segments[name] {
+			t.Fatalf("no %s segment with spare bits was exercised", name)
+		}
+	}
+}

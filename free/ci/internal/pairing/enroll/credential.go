@@ -6,7 +6,8 @@ package enroll
 // Outputs: files root.pem, node.crt, client.key.sealed, kek (all 0600, dir 0700) and enrollment.json;
 //          LoadCredential returns a tls.Certificate ready for pki.TLSClientConfig.
 // Constraints: the TLS client key is written only sealed (AES-256-GCM under <state>/pki/kek, a separate
-//          0600 file), never as PEM; every file is replaced atomically (temp file, rename); the state dir
+//          0600 file), never as PEM; this keeps it out of copies and backups of the key file alone, not
+//          from a reader running as the same user (the KEK sits in the same directory); every file is replaced atomically (temp file, rename); the state dir
 //          must be a real directory owned by the caller.
 
 import (
@@ -65,6 +66,9 @@ func writeAtomic(path string, data []byte) error {
 // SaveCredential writes the enrollment of r into state.
 func SaveCredential(state string, r JoinResult, now time.Time) error {
 	if err := os.MkdirAll(dir(state), 0o700); err != nil {
+		return err
+	}
+	if err := os.Chmod(dir(state), 0o700); err != nil { // MkdirAll leaves an existing directory's mode alone
 		return err
 	}
 	kek, err := pki.LoadKEK(state, true)

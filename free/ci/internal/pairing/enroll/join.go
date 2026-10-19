@@ -44,9 +44,10 @@ type JoinOptions struct {
 	// Code returns the pairing code (called only after the fingerprint is confirmed).
 	Code                                    func() (string, error)
 	Name, OS, Arch, MachineID, AgentVersion string
-	// NodeKey is the raw Ed25519 public key; NodeKeyID its id.
+	// NodeKey is the raw Ed25519 public key; NodeKeyID its id; NodeSign signs with the private half.
 	NodeKey   []byte
 	NodeKeyID string
+	NodeSign  func(msg []byte) ([]byte, error)
 	// Out receives the fingerprints the admin compares.
 	Out io.Writer
 	Now func() time.Time
@@ -160,7 +161,9 @@ func Join(ctx context.Context, o JoinOptions) (JoinResult, error) {
 	if err != nil {
 		return JoinResult{}, err
 	}
-	hc := &http.Client{Timeout: 12 * time.Minute, Transport: &http.Transport{Proxy: nil, TLSClientConfig: cfg, DisableKeepAlives: true}}
+	hc := &http.Client{Timeout: 12 * time.Minute, Transport: &http.Transport{Proxy: nil, TLSClientConfig: cfg, DisableKeepAlives: true},
+		// A redirect would re-send the code and CSR to wherever it points (even http://): refuse to follow.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	var hello Hello
 	if err = post(ctx, hc, u.String(), Request{Phase: PhaseHello, Version: Version, ClientTime: o.Now().Unix()}, &hello); err != nil {
 		var invalid x509.CertificateInvalidError
@@ -190,8 +193,13 @@ func Join(ctx context.Context, o JoinOptions) (JoinResult, error) {
 		return JoinResult{}, err
 	}
 	o.Sleep(Interval + 100*time.Millisecond)
+	now := o.Now().Unix()
+	sig, err := o.NodeSign(Transcript(hello.CoordinatorID, now, csrFP, o.NodeKeyID))
+	if err != nil {
+		return JoinResult{}, err
+	}
 	var resp Response
-	req := Request{Phase: PhaseEnroll, Version: Version, ClientTime: o.Now().Unix(), Code: code, CSR: csr, NodeKey: o.NodeKey, Name: o.Name, OS: o.OS, Arch: o.Arch, MachineID: o.MachineID, AgentVersion: o.AgentVersion}
+	req := Request{Phase: PhaseEnroll, Version: Version, ClientTime: now, Code: code, CSR: csr, NodeKey: o.NodeKey, NodeKeySig: sig, Name: o.Name, OS: o.OS, Arch: o.Arch, MachineID: o.MachineID, AgentVersion: o.AgentVersion}
 	if err = post(ctx, hc, u.String(), req, &resp); err != nil {
 		return JoinResult{}, err
 	}

@@ -165,8 +165,7 @@ func enrollSkewServer(t *testing.T) {
 	ap := approving("policy:s", DefaultTrust())
 	off := r.offer(OfferOptions{Approver: ap})
 	for _, skew := range []time.Duration{pki.ClockSkew + time.Second, -pki.ClockSkew - time.Second} {
-		req := r.request(off.Code, "node-s", newNodeMat(t))
-		req.ClientTime = r.clock.Now().Add(skew).Unix()
+		req := r.requestAt(off.Code, "node-s", newNodeMat(t), r.clock.Now().Add(skew).Unix())
 		_, err := r.svc.Redeem(context.Background(), req, "127.0.0.1:1")
 		if pki.ReasonOf(err) != pki.ReasonClockSkew || !strings.Contains(err.Error(), "E660") {
 			t.Fatalf("skew %s: %v", skew, err)
@@ -176,8 +175,7 @@ func enrollSkewServer(t *testing.T) {
 		t.Fatal("a skewed request touched the offer")
 	}
 	// Exactly 120 s is inside the window, and the code still works.
-	req := r.request(off.Code, "node-s", newNodeMat(t))
-	req.ClientTime = r.clock.Now().Add(pki.ClockSkew).Unix()
+	req := r.requestAt(off.Code, "node-s", newNodeMat(t), r.clock.Now().Add(pki.ClockSkew).Unix())
 	if _, err := r.svc.Redeem(context.Background(), req, "127.0.0.1:1"); err != nil {
 		t.Fatalf("skew of exactly 120 s: %v", err)
 	}

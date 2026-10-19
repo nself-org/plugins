@@ -11,6 +11,7 @@ package pairing
 //          fingerprint, approver kind, trust fields and serial, never a code or key.
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"errors"
@@ -57,7 +58,15 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 	if err != nil {
 		return enroll.Response{}, err
 	}
-	offer, res, err := s.cfg.Store.PKIOfferClaim(ctx, HashCode(req.Code), intentOnly)
+	keyID := pki.NodeKeyID(req.NodeKey)
+	if !ed25519.Verify(req.NodeKey, enroll.Transcript(s.cfg.CoordinatorID, req.ClientTime, csrFP, keyID), req.NodeKeySig) {
+		return enroll.Response{}, &pki.Error{Reason: pki.ReasonNodeKeyProof, Msg: "the request is not signed by the node key it names"}
+	}
+	hash := HashCode(req.Code)
+	if err = s.ownsLiveOffer(ctx, hash); err != nil { // an offer another process owns must not be burned here
+		return enroll.Response{}, err
+	}
+	offer, res, err := s.cfg.Store.PKIOfferClaim(ctx, hash, intentOnly)
 	if err != nil {
 		return enroll.Response{}, err
 	}
@@ -66,13 +75,24 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 	}
 	ap := s.approverFor(offer.ID)
 	if ap == nil {
+		_ = s.audit(ctx, "pairing.refuse", offer.ID, "reason="+ReasonNoApprover)
 		return enroll.Response{}, fail(ReasonNoApprover, "offer %s has no approver in this process", offer.ID)
 	}
 	existing, err := s.vetExisting(ctx, name, req.NodeKey)
+	if err == nil && existing && intentOnly {
+		err = fail(ReasonExistingNode, "burst enrollment is for new nodes: %s is already registered", name)
+	}
 	if err != nil {
+		reason := pki.ReasonOf(err)
+		if reason == "" {
+			reason = ReasonOf(err)
+		}
+		_ = s.audit(ctx, "pairing.refuse", offer.ID, fmt.Sprintf("node=%s csr=%s reason=%s", name, csrFP, reason))
+		if reason == pki.ReasonNodeKeyChanged || reason == pki.ReasonRevoked || reason == ReasonExistingNode {
+			s.alert(Alert{Kind: "pairing.takeover_attempt", OfferID: offer.ID, NodeID: name})
+		}
 		return enroll.Response{}, err
 	}
-	keyID := pki.NodeKeyID(req.NodeKey)
 	dctx, cancel := context.WithDeadline(ctx, time.Unix(0, offer.ExpiresAt).Add(time.Minute))
 	defer cancel()
 	dec, err := ap.Approve(dctx, ApprovalRequest{
@@ -134,9 +154,7 @@ func (s *Service) refuse(ctx context.Context, o store.PKIOffer, res store.CodeCl
 			}
 		}
 		_ = s.audit(ctx, "pairing.reuse", o.ID, "revoked="+boolStr(o.Serial != ""))
-		if s.cfg.Alert != nil {
-			s.cfg.Alert(Alert{Kind: "pairing.code_reuse", OfferID: o.ID, NodeID: o.NodeID, Serial: o.Serial})
-		}
+		s.alert(Alert{Kind: "pairing.code_reuse", OfferID: o.ID, NodeID: o.NodeID, Serial: o.Serial})
 		return fail(ReasonReused, "this code was already used; the certificate issued for it was revoked")
 	case store.CodeExpired:
 		return fail(ReasonExpired, "the code expired")
@@ -148,6 +166,27 @@ func (s *Service) refuse(ctx context.Context, o store.PKIOffer, res store.CodeCl
 		return fail(ReasonNoIntent, "this listener accepts codes bound to a live burst intent only")
 	}
 	return fail(ReasonInvalid, "the code is not valid")
+}
+
+func (s *Service) alert(a Alert) {
+	if s.cfg.Alert != nil {
+		s.cfg.Alert(a)
+	}
+}
+
+// ownsLiveOffer refuses (without consuming anything) a code whose live offer has no approver in this
+// process: it belongs to another process, which must be the one to redeem it.
+func (s *Service) ownsLiveOffer(ctx context.Context, hash []byte) error {
+	live, err := s.cfg.Store.PKIOffersLive(ctx, false)
+	if err != nil {
+		return err
+	}
+	for _, o := range live {
+		if bytes.Equal(o.CodeHash, hash) && s.approverFor(o.ID) == nil {
+			return fail(ReasonNoApprover, "this code belongs to a pairing window in another process")
+		}
+	}
+	return nil
 }
 
 // vetExisting says whether the name is already registered. A registered node may re-pair only when it is
@@ -189,6 +228,11 @@ func (s *Service) enrollNode(ctx context.Context, offer store.PKIOffer, name str
 			return nil, fail(ReasonWithdrawn, "the offer was withdrawn while it was being approved; the certificate was revoked")
 		}
 		return nil, fail(ReasonReused, "this code was presented twice; the certificate was revoked")
+	}
+	if existing {
+		if err = s.cfg.CA.PinNodeKey(ctx, name, req.NodeKey); err != nil { // finalizes a pending pin, only now that the offer is bound
+			return nil, err
+		}
 	}
 	if s.cfg.AfterIssue != nil {
 		if err = s.cfg.AfterIssue(ctx, name); err != nil {
