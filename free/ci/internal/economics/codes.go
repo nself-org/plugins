@@ -26,6 +26,10 @@ func init() {
 type SpendError struct {
 	Reason model.PlacementReason
 	Detail string
+	// Estimate is the pipeline spend estimate of an approval.pending refusal. A refusal from
+	// ReserveResource rolls its transaction back with the caller's, so nothing is recorded for
+	// the run: the caller notes it afterwards with NotePending(ctx, pipeline, Estimate).
+	Estimate int64
 }
 
 func (e *SpendError) Error() string {

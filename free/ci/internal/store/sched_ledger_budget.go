@@ -77,12 +77,13 @@ func reserved(ctx context.Context, q ledgerQuerier, scope, scopeKey, windowKey, 
 	return sum, rows.Err()
 }
 
-// WindowHigh is the highest day key recorded ("" when none).
-func (s *Store) WindowHigh(ctx context.Context) (string, error) {
+// WindowHigh is the highest day key recorded ("" when none), judged the way Window judges it
+// on the date today: a mark that is not a date, or lies far ahead of today, is no mark.
+func (s *Store) WindowHigh(ctx context.Context, today string) (string, error) {
 	var k string
 	err := s.readers.QueryRowContext(ctx, "SELECT key FROM window_high WHERE kind='day'").Scan(&k)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && !ValidDay(k)) {
-		return "", nil // a damaged mark is no mark; the next admission replaces it
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && (!ValidDay(k) || (ValidDay(today) && k > addDays(today, windowSkewDays)))) {
+		return "", nil // a damaged or runaway mark is no mark; the next admission replaces it
 	}
 	return k, err
 }

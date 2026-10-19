@@ -85,7 +85,7 @@ func contributeAllowances(ctx context.Context, w *sched.World) error {
 	if !ok {
 		return nil
 	}
-	high, err := env.Store.WindowHigh(ctx)
+	high, err := env.Store.WindowHigh(ctx, dayOf(time.UnixMilli(w.NowMs)))
 	if err != nil {
 		return nil
 	}
@@ -112,7 +112,7 @@ func contributeBudgets(ctx context.Context, w *sched.World) error {
 	if !ok {
 		return nil
 	}
-	high, err := env.Store.WindowHigh(ctx)
+	high, err := env.Store.WindowHigh(ctx, dayOf(time.UnixMilli(w.NowMs)))
 	if err != nil {
 		return nil
 	}

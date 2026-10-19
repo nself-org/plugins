@@ -83,9 +83,7 @@ func ReleaseResource(ctx context.Context, t store.LedgerTx, intent string, at ti
 	// teardown was retried for hours cost more than its reservation, and the budgets show it.
 	actual := row.ReservedMicro
 	if elapsed := (at.UnixNano() - row.ProvisionedAt) / int64(time.Millisecond); elapsed > 0 {
-		if micro, _, overflow := Charge(row.Rate, elapsed); !overflow {
-			actual = micro
-		}
+		actual, _, _ = Charge(row.Rate, elapsed) // a saturated figure stays saturated: it blows the budget, it does not shrink
 	}
 	return t.ReleaseResource(intent, at.UnixNano(), actual)
 }

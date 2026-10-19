@@ -42,7 +42,7 @@ func RecordUsage(ctx context.Context, u Usage) error {
 		return refuse(model.AllowanceUnknown, "usage dated %s is in the future", u.Date)
 	}
 	at := u.ReportedAt
-	if at.IsZero() {
+	if at.IsZero() || at.After(env.Now()) { // a report is never made in the future
 		at = env.Now()
 	}
 	return env.Store.PutUsage(ctx, store.UsageRow{Key: u.Key, Provider: u.Provider, Period: day.Format("2006-01"), Day: u.Date, Minutes: u.Minutes,

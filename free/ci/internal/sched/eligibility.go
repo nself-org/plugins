@@ -264,16 +264,6 @@ func economics(w World, j Job, r Runner) []model.PlacementReasonDetail {
 	return out
 }
 
-// runnerClass is the cost class a runner is held to: the one the cost contributor priced
-// it at, else the one it claims for itself. A rated provider cannot be made free by its
-// own capability document.
-func runnerClass(w World, r Runner) string {
-	if c := w.Costs[r.ID].Class; c != "" {
-		return c
-	}
-	return r.Class
-}
-
 func worstCost(timeout int64, c Cost) (int64, bool) {
 	if c.RateMicro <= 0 {
 		return int64(^uint64(0) >> 1), true

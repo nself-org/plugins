@@ -22,7 +22,7 @@ func TestLedgerWindowKeepsTheHighWaterMark(t *testing.T) {
 			t.Fatalf("Window(%s) = %q, %v; want %q", tc.today, got, err, tc.want)
 		}
 	}
-	if high, _ := s.WindowHigh(ctx); high != "2026-11-02" {
+	if high, _ := s.WindowHigh(ctx, "2026-11-02"); high != "2026-11-02" {
 		t.Fatalf("high %s", high)
 	}
 	for _, bad := range []string{"", "2026-13-01", "11/01/2026", "2026-11-1x"} {
@@ -265,7 +265,7 @@ func TestLedgerWindowMarkFromAJumpedClockIsReplaced(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if high, _ := s.WindowHigh(ctx); high != "" {
+	if high, _ := s.WindowHigh(ctx, "2026-10-20"); high != "" {
 		t.Fatalf("a damaged mark is no mark: %q", high)
 	}
 	if got := win("2026-10-21"); got != "2026-10-21" {

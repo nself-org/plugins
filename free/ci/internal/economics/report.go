@@ -38,7 +38,7 @@ func remainingFigure(limit, held int64) *Figure {
 
 // BuildReport reads the ledger.
 func BuildReport(ctx context.Context, st *store.Store, p Policy, now time.Time) (Report, error) {
-	high, err := st.WindowHigh(ctx)
+	high, err := st.WindowHigh(ctx, dayOf(now))
 	if err != nil {
 		return Report{}, err
 	}

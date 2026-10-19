@@ -32,6 +32,8 @@ type projectKey struct{}
 // WithProject names the project id the approver's roles are checked against. The
 // pipeline row holds the repository root, which is not the id roles grants use; the
 // command that knows the id passes it here. Without it an actor must hold the role on every project.
+// The value is trusted: the caller (P7-TRUST-24's command) must derive it from the run, never from
+// user input, or a scoped admin could name a project they hold.
 func WithProject(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, projectKey{}, id)
 }

@@ -125,12 +125,19 @@ func paidCheck(t store.LedgerTx, env Env, p Policy, v dispatch.View, day, month 
 	provider := r.Runner.Provider
 	// An attempt on a burst VM that holds a lifetime reservation is paid for by that
 	// reservation; reserving it again would count the VM twice and refuse the job it was bought for.
-	if intent := intentOf(r.Runner.Capability.Identity.Labels); intent != "" {
-		if res, open, err := openResource(t, intent); err != nil {
+	// The runner declares its own labels, so the shortcut is narrow: an ephemeral runner, the
+	// reservation's pipeline (or none), and a job whose worst case fits inside what was reserved.
+	// Binding the runner to the intent by attested identity belongs to the burst code (P7-SCHED-08).
+	if intent := intentOf(r.Runner.Capability.Identity.Labels); intent != "" && row.Class == ClassEphemeral {
+		res, open, err := openResource(t, intent)
+		if err != nil {
 			return err
-		} else if open {
-			row.Rate, row.BudgetRefs = res.Rate, "resource:"+intent
-			return nil
+		}
+		if open && (res.Pipeline == "" || res.Pipeline == v.PipelineID) && r.Job.TimeoutMs > 0 && r.Job.TimeoutMs <= schedpolicy.MaxPaidTimeoutCap {
+			if worst, _, overflow := Charge(res.Rate, r.Job.TimeoutMs); !overflow && worst <= res.ReservedMicro {
+				row.Rate, row.BudgetRefs = res.Rate, "resource:"+intent
+				return nil
+			}
 		}
 	}
 	if err := paidGate(t, env, p, provider); err != nil {
@@ -231,7 +238,9 @@ func approvalGate(t store.LedgerTx, p Policy, pipeline, owner string, cost int64
 		return err
 	}
 	if !ok || overflow || est < total {
-		return refuse(model.ApprovalPending, "%s%s over the %d micro threshold", PendingDetailPrefix, strconv.FormatInt(total, 10), thr.Micro)
+		e := refuse(model.ApprovalPending, "%s%s over the %d micro threshold", PendingDetailPrefix, strconv.FormatInt(total, 10), thr.Micro)
+		e.Estimate = total
+		return e
 	}
 	return nil
 }
