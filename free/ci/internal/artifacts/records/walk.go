@@ -28,10 +28,27 @@ type found struct {
 
 func hasMeta(s string) bool { return strings.ContainsAny(s, "*?[") }
 
+// maxPatternParts bounds the components of one declared pattern, and
+// maxVisits the (directory, component) pairs one expansion may try, so a
+// hostile pattern such as `**/**/**/…/x` cannot stall the coordinator.
+const (
+	maxPatternParts = 64
+	maxVisits       = 1 << 20
+)
+
+type visit struct {
+	dir string
+	i   int
+}
+
 // expand lists the entries a declaration selects, sorted by path.
 func expand(fsys fs.FS, pattern string, maxEntries int) ([]found, error) {
+	comps := strings.Split(pattern, "/")
+	if len(comps) > maxPatternParts {
+		return nil, failf(ReasonDeclaration, "artifact pattern %q has more than %d components", pattern, maxPatternParts)
+	}
 	seen := map[string]found{}
-	var walk func(dir string, comps []string) error
+	visited := map[visit]bool{}
 	add := func(rel string) error {
 		info, err := fs.Lstat(fsys, rel)
 		if err != nil {
@@ -58,13 +75,20 @@ func expand(fsys fs.FS, pattern string, maxEntries int) ([]found, error) {
 			return nil
 		})
 	}
-	walk = func(dir string, comps []string) error {
-		if len(comps) == 0 {
+	var walk func(dir string, i int) error
+	walk = func(dir string, i int) error {
+		if visited[visit{dir, i}] {
+			return nil
+		}
+		if visited[visit{dir, i}] = true; len(visited) > maxVisits {
+			return failf(ReasonDeclaration, "artifact pattern %q visits too many directories", pattern)
+		}
+		if i == len(comps) {
 			return add(dir)
 		}
-		comp, rest := comps[0], comps[1:]
+		comp := comps[i]
 		if comp == "**" {
-			if err := walk(dir, rest); err != nil {
+			if err := walk(dir, i+1); err != nil {
 				return err
 			}
 			ents, err := fs.ReadDir(fsys, orDot(dir))
@@ -73,7 +97,7 @@ func expand(fsys fs.FS, pattern string, maxEntries int) ([]found, error) {
 			}
 			for _, e := range ents {
 				if e.IsDir() {
-					if err := walk(join(dir, e.Name()), comps); err != nil {
+					if err := walk(join(dir, e.Name()), i); err != nil {
 						return err
 					}
 				}
@@ -84,7 +108,7 @@ func expand(fsys fs.FS, pattern string, maxEntries int) ([]found, error) {
 			if _, err := fs.Lstat(fsys, join(dir, comp)); err != nil {
 				return nil
 			}
-			return walk(join(dir, comp), rest)
+			return walk(join(dir, comp), i+1)
 		}
 		ents, err := fs.ReadDir(fsys, orDot(dir))
 		if err != nil {
@@ -94,14 +118,14 @@ func expand(fsys fs.FS, pattern string, maxEntries int) ([]found, error) {
 			if ok, merr := path.Match(comp, e.Name()); merr != nil {
 				return failf(ReasonDeclaration, "artifact pattern %q: %v", pattern, merr)
 			} else if ok {
-				if err := walk(join(dir, e.Name()), rest); err != nil {
+				if err := walk(join(dir, e.Name()), i+1); err != nil {
 					return err
 				}
 			}
 		}
 		return nil
 	}
-	if err := walk("", strings.Split(pattern, "/")); err != nil {
+	if err := walk("", 0); err != nil {
 		return nil, err
 	}
 	out := make([]found, 0, len(seen))

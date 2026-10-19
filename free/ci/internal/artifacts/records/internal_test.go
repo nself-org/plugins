@@ -225,6 +225,16 @@ func TestExpandPatterns(t *testing.T) {
 	if _, err := expand(root.FS(), "d1", 2); err == nil {
 		t.Fatal("entry limit")
 	}
+	// a hostile pattern is bounded, not exponential
+	hostile := strings.Repeat("**/", 40) + "y.txt"
+	start := time.Now()
+	got, err := expand(root.FS(), hostile, 100)
+	if err != nil || len(got) != 1 || got[0].rel != "d1/d2/y.txt" || time.Since(start) > 5*time.Second {
+		t.Fatalf("repeated **: %v %v after %v", got, err, time.Since(start))
+	}
+	if _, err = expand(root.FS(), strings.Repeat("a/", maxPatternParts)+"x", 100); !IsReason(err, ReasonDeclaration) {
+		t.Fatalf("too many components: %v", err)
+	}
 }
 
 func TestErrorsAndIDs(t *testing.T) {
@@ -244,7 +254,8 @@ func TestErrorsAndIDs(t *testing.T) {
 	if Failf("config", "c").Error() != "E712 config: c" {
 		t.Fatal("Failf")
 	}
-	if RecordID("a1", "n") == RecordID("a2", "n") || RecordID("a1", "n") != RecordID("a1", "n") || RecordID("a", "bn") == RecordID("ab", "n") || !strings.HasPrefix(RecordID("a", "n"), "art_") {
+	first, again := RecordID("a1", "n"), RecordID("a1", "n")
+	if first == RecordID("a2", "n") || first != again || RecordID("a", "bn") == RecordID("ab", "n") || !strings.HasPrefix(first, "art_") {
 		t.Fatal("RecordID")
 	}
 	if k, ok := ParseKind(""); !ok || k != KindOther {

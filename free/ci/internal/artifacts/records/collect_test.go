@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
@@ -47,7 +46,7 @@ func TestCollectRefusesAndWritesNothing(t *testing.T) {
 	if err := os.Link(outside, filepath.Join(e.ws, "hard")); err != nil {
 		t.Fatal(err)
 	}
-	if err := syscall.Mkfifo(filepath.Join(e.ws, "pipe"), 0o644); err != nil {
+	if err := mkfifo(filepath.Join(e.ws, "pipe")); err != nil {
 		t.Fatal(err)
 	}
 	e.write("dir/a.txt", "a")
@@ -67,8 +66,13 @@ func TestCollectRefusesAndWritesNothing(t *testing.T) {
 		{"escape", authz.LinkEscape},
 		{"inlink", authz.EntryIrregular},
 		{"hard", authz.EntryHardlink},
-		{"pipe", authz.EntryFIFO},
 		{"dir", authz.LinkAbsolute},
+	}
+	if fifoSupported {
+		cases = append(cases, struct {
+			path   string
+			reason authz.PathReason
+		}{"pipe", authz.EntryFIFO})
 	}
 	for _, c := range cases {
 		_, err := collect(e, c.path)

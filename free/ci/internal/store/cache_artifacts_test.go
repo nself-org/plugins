@@ -128,6 +128,47 @@ func TestCacheArtifactsMigrate(t *testing.T) {
 	}
 }
 
+func TestCacheArtifactsRedeclareSupersedesOlderEpoch(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	seed(t, s, "a")
+	artRunning(t, s, "a", 1)
+	if err := s.ArtifactStage(ctx, "a", 2, []records.Record{artRec("a", "n", 0, artHex("1"), 5, now)}); err != nil {
+		t.Fatal(err)
+	}
+	decls := []records.Decl{{Ord: 0, Path: "out/a", Kind: records.KindOther, Retention: "30d", Visibility: authz.VisibilityProject}}
+	if err := s.ArtifactDeclare(ctx, "a", 2, decls); !records.IsReason(err, records.ReasonDeclaration) {
+		t.Fatalf("a second declare in the same epoch: %v", err)
+	}
+	// the attempt row runs again (lost -> retryable -> queued -> leased -> running): a later epoch
+	for _, st := range []struct {
+		from, to model.JobState
+		epoch    int64
+	}{{"running", "lost", 2}, {"lost", "retryable", 3}, {"retryable", "queued", 4}, {"queued", "leased", 5}, {"leased", "running", 6}} {
+		if err := s.Transition(ctx, "a", st.from, st.to, TransitionDetail{Epoch: st.epoch, Operator: st.from == "lost" || st.from == "retryable"}); err != nil {
+			t.Fatalf("%s>%s: %v", st.from, st.to, err)
+		}
+	}
+	if err := s.ArtifactDeclare(ctx, "a", 7, decls); err != nil {
+		t.Fatalf("redeclare in a later epoch: %v", err)
+	}
+	if staged, _ := s.ArtifactStaged(ctx, "a"); len(staged) != 0 {
+		t.Fatalf("the earlier epoch's staged records must be gone: %+v", staged)
+	}
+	if err := s.ArtifactStage(ctx, "a", 7, []records.Record{artRec("a", "n", 0, artHex("2"), 5, now)}); err != nil {
+		t.Fatal(err)
+	}
+	// once committed, the attempt cannot be declared again
+	if err := s.Transition(ctx, "a", "running", "finalizing", TransitionDetail{Epoch: 7}); err != nil {
+		t.Fatal(err)
+	}
+	staged, _ := s.ArtifactStaged(ctx, "a")
+	if _, err := s.ArtifactCommit(ctx, "a", 8, staged, artPolicy()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCacheArtifactsRetention(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
@@ -256,6 +297,28 @@ func TestCacheArtifactsCaps(t *testing.T) {
 	team.MaxTotal, team.Team, team.ProjectShare = 4<<20, true, 25
 	if _, err := s.ArtifactCommit(ctx, "b", 3, stagedB, team); !records.IsReason(err, records.ReasonSizeCap) || !strings.Contains(err.Error(), "NSELF_CI_PROJECT_SHARE") {
 		t.Fatalf("project share: %v", err)
+	}
+	// while another project still commits under the same share
+	if err := s.CreatePipeline(ctx, PipelineRow{ID: "pz", Revision: "rev", Project: "other", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateJob(ctx, JobRow{ID: "jz", PipelineID: "pz", Name: "z", Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateAttempt(ctx, AttemptRow{ID: "z", JobID: "jz", N: 1}, ""); err != nil {
+		t.Fatal(err)
+	}
+	artRunning(t, s, "z", 1)
+	if err := s.ArtifactStage(ctx, "z", 2, []records.Record{artRec("z", "n", 0, artHex("c"), 100<<10, now)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Transition(ctx, "z", "running", "finalizing", TransitionDetail{Epoch: 2}); err != nil {
+		t.Fatal(err)
+	}
+	stagedZ, _ := s.ArtifactStaged(ctx, "z")
+	team.ProjectShare = 50
+	if _, err := s.ArtifactCommit(ctx, "z", 3, stagedZ, team); err != nil {
+		t.Fatalf("a project under its share must still commit: %v", err)
 	}
 	team.ProjectShare = 100
 	if _, err := s.ArtifactCommit(ctx, "b", 3, stagedB, team); err != nil {

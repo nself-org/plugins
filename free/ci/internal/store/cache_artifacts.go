@@ -87,12 +87,25 @@ func (s *Store) ArtifactDeclare(ctx context.Context, attempt string, epoch int64
 		if ok, err := s.artGate(ctx, tx, &refusal, "declare", attempt, "running", epoch); !ok || err != nil {
 			return err
 		}
-		var have int
-		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM cache_artifact_decl WHERE attempt_id=?", attempt).Scan(&have); err != nil {
+		// a re-run of the same attempt row (retryable -> queued) supersedes the
+		// uncommitted records of the earlier epoch; a second declare in the same
+		// epoch, or an attempt that already committed records, is refused
+		var have, current, committed int
+		if err := tx.QueryRowContext(ctx, "SELECT count(*),coalesce(sum(epoch=?),0) FROM cache_artifact_decl WHERE attempt_id=?", epoch, attempt).Scan(&have, &current); err != nil {
 			return err
 		}
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM cache_artifact WHERE attempt_id=? AND state='committed'", attempt).Scan(&committed); err != nil {
+			return err
+		}
+		if current > 0 || committed > 0 {
+			return records.Failf(records.ReasonDeclaration, "attempt %s already declared or committed its artifacts", attempt)
+		}
 		if have > 0 {
-			return records.Failf(records.ReasonDeclaration, "attempt %s already declared its artifacts", attempt)
+			for _, q := range []string{"DELETE FROM cache_artifact WHERE attempt_id=? AND state='staged'", "DELETE FROM cache_artifact_decl WHERE attempt_id=?"} {
+				if _, err := tx.ExecContext(ctx, q, attempt); err != nil {
+					return err
+				}
+			}
 		}
 		for _, d := range decls {
 			if _, err := tx.ExecContext(ctx, "INSERT INTO cache_artifact_decl(attempt_id,ord,path,name,kind,retention,visibility,image_ref,epoch,declared_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
