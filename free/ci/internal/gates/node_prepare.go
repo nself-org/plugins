@@ -149,8 +149,19 @@ func (s nodeSpec) astroSync() string {
 	return "bun run astro sync"
 }
 
-// cacheEnv keeps every manager cache inside the workspace (removed with it).
-const cacheEnv = `export npm_config_cache="$PWD/.nself-ci/npm" npm_config_store_dir="$PWD/.nself-ci/pnpm" YARN_CACHE_FOLDER="$PWD/.nself-ci/yarn" YARN_ENABLE_GLOBAL_CACHE=false BUN_INSTALL_CACHE_DIR="$PWD/.nself-ci/bun" COREPACK_ENABLE_DOWNLOAD_PROMPT=0`
+// cacheEnv keeps the manager's cache inside the workspace (removed with it).
+// Only the manager's own variables: npm warns about another manager's.
+func (s nodeSpec) cacheEnv() string {
+	switch s.Manager {
+	case "npm":
+		return `export npm_config_cache="$PWD/.nself-ci/npm"`
+	case "pnpm":
+		return `export npm_config_store_dir="$PWD/.nself-ci/pnpm" COREPACK_ENABLE_DOWNLOAD_PROMPT=0`
+	case "yarn":
+		return `export YARN_CACHE_FOLDER="$PWD/.nself-ci/yarn" YARN_ENABLE_GLOBAL_CACHE=false COREPACK_ENABLE_DOWNLOAD_PROMPT=0`
+	}
+	return `export BUN_INSTALL_CACHE_DIR="$PWD/.nself-ci/bun"`
+}
 
 // wrap returns the argv that prepares then runs the check: run is the plain
 // check command, returned unchanged when there is nothing to prepare.
@@ -174,7 +185,7 @@ func (s nodeSpec) wrap(id string, run []string) []string {
 		}
 		return run
 	}
-	script := cacheEnv + "; "
+	script := s.cacheEnv() + "; "
 	if needInstall {
 		in := s.install() + " && mkdir -p node_modules && printf %s " + s.Digest + " > " + nodePreparedMarker // Yarn PnP and a project without dependencies install no node_modules
 		if s.Rel != "." {
