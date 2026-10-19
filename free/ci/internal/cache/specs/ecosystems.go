@@ -1,12 +1,12 @@
 package specs
 
-// Purpose: the five ecosystem registrations (Epic CACHE D5): Go, pnpm and npm,
-// cargo, uv and pip, and the buildx local cache for container jobs.
+// Purpose: the ecosystem registrations (Epic CACHE D5): Go, pnpm and npm,
+// cargo, uv, pip and poetry, and the buildx local cache for container jobs.
 // Inputs:  detect facts. Outputs: registered Specs.
 // Constraints: one Dir per package-manager directory; cargo caches only the
 // registry and git dirs, never target/; python specs switch on a `stack`
-// python fact or a uv/pip/poetry package_manager or lockfile fact (the
-// detector has no python rule yet, so they stay dormant until it does).
+// uv, pip or poetry package_manager or lockfile fact; a bare python stack
+// fact selects no spec, because each manager keeps its own cache dir.
 
 import "github.com/nself-org/plugins/free/ci/internal/detect"
 
@@ -43,16 +43,17 @@ func init() {
 		EnvAllow:  []string{"PIP_INDEX_URL", "UV_INDEX_URL"},
 		Lockfiles: []string{"pip"}, Probes: []Probe{{"python", []string{"python3", "--version"}}, {"pip", []string{"pip", "--version"}}},
 		applies: func(f []detect.Fact) bool { return pythonWith(f, "pip") }})
+	mustRegister(Spec{ID: "poetry", Version: "1", Ecosystem: "python",
+		Dirs:      []Dir{{"cache", "POETRY_CACHE_DIR"}},
+		EnvAllow:  []string{"PIP_INDEX_URL"},
+		Lockfiles: []string{"poetry"}, Probes: []Probe{{"python", []string{"python3", "--version"}}, {"poetry", []string{"poetry", "--version"}}},
+		applies: func(f []detect.Fact) bool { return pythonWith(f, "poetry") }})
 	mustRegister(Spec{ID: "buildx", Version: "1", Ecosystem: "container", ContainerOnly: true,
 		Dirs:    []Dir{{"layers", "NSELF_CI_BUILDX_CACHE_DIR"}},
 		applies: func(f []detect.Fact) bool { return has(f, "container", "dockerfile") }})
 }
 
-// pythonWith reports a python project that uses manager (uv, pip) or, for pip,
-// one that names no manager at all.
+// pythonWith reports a python project that uses manager (uv, pip, poetry).
 func pythonWith(facts []detect.Fact, manager string) bool {
-	if has(facts, "package_manager", manager) || has(facts, "lockfile", manager) {
-		return true
-	}
-	return manager == "pip" && has(facts, "stack", "python") && !has(facts, "package_manager", "uv") && !has(facts, "lockfile", "uv")
+	return has(facts, "package_manager", manager) || has(facts, "lockfile", manager)
 }
