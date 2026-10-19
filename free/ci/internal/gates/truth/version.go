@@ -22,7 +22,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var semverRe = regexp.MustCompile(`v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.]+)?(?:\+[0-9A-Za-z.]+)?`)
+var (
+	semverRe  = regexp.MustCompile(`v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.]+)?(?:\+[0-9A-Za-z.]+)?`)
+	semverAll = regexp.MustCompile(`^` + semverRe.String() + `$`)
+)
 
 // loadFacts reads the version of every facts file the version-claim rules name.
 func loadFacts(root string, rs RuleSet) (map[string]string, error) {
@@ -46,6 +49,12 @@ func loadFacts(root string, rs RuleSet) (map[string]string, error) {
 
 func readFactsVersion(root, rel string) (string, error) {
 	full := filepath.Join(root, filepath.FromSlash(rel))
+	// A symlinked parent directory could lead out of the scanned tree (a clone chooses its own "current version").
+	realRoot, rerr := filepath.EvalSymlinks(root)
+	realFull, ferr := filepath.EvalSymlinks(full)
+	if rerr != nil || ferr != nil || !strings.HasPrefix(realFull, realRoot+string(filepath.Separator)) {
+		return "", errors.New("the facts file cannot be read inside the repository")
+	}
 	info, err := os.Lstat(full)
 	if err != nil {
 		return "", errors.New("the facts file cannot be read")
@@ -62,7 +71,7 @@ func readFactsVersion(root, rel string) (string, error) {
 		return "", errors.New("the facts file is not a JSON or YAML mapping")
 	}
 	v, ok := doc["version"].(string)
-	if !ok || !semverRe.MatchString(v) {
+	if !ok || !semverAll.MatchString(v) {
 		return "", fmt.Errorf("the facts file has no top-level semver `version` string")
 	}
 	return strings.TrimPrefix(v, "v"), nil

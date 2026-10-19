@@ -35,11 +35,13 @@ func (c compiled) lineHits(line string) []hit {
 		low := strings.ToLower(line)
 		for i, t := range c.termsLow {
 			for _, sp := range termSpans(low, t) {
-				text := low[sp[0]:sp[1]]
-				if len(low) == len(line) {
-					text = line[sp[0]:sp[1]]
+				// Lower-casing can change the byte length (U+212A): then the offsets do not fit the line,
+				// and the hit is taken to span the whole line, so an exemption must cover all of it.
+				if len(low) != len(line) {
+					out = append(out, hit{Rule: c.terms[i], Start: 0, End: len(line), Text: low[sp[0]:sp[1]]})
+					continue
 				}
-				out = append(out, hit{Rule: c.terms[i], Start: sp[0], End: sp[1], Text: text})
+				out = append(out, hit{Rule: c.terms[i], Start: sp[0], End: sp[1], Text: line[sp[0]:sp[1]]})
 			}
 		}
 	}

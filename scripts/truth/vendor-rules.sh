@@ -66,6 +66,7 @@ mkdir -p "$target/.github/truth"
 for f in "${files[@]}"; do
 	dest="$target/.github/truth/$f"
 	tmp=$(mktemp "$dest.XXXXXX")
+	trap 'rm -f "$tmp"' EXIT
 	{
 		printf '%s%s — DO NOT HAND EDIT\n' "$header_prefix" "$sha"
 		cat "$root/.github/truth/$f"

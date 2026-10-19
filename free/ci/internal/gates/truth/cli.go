@@ -78,11 +78,21 @@ func cmdCheck(args []string, out, errw io.Writer) int {
 				only = append(only, c)
 			}
 		}
+		if len(only) == 0 && isClaimKind(*kind) && len(checks) > 0 && checks[0].Result == "error" {
+			only = checks // the rule files did not load: show that error, not "unknown --kind"
+		}
 		if len(only) == 0 {
 			fmt.Fprintf(errw, "truth: unknown --kind %q (rules, %s)\n", *kind, strings.Join(append(append([]string(nil), Kinds...), ClaimKinds...), ", "))
 			return 2
 		}
 		checks = only
+		var keep []Finding
+		for _, f := range found {
+			if CheckIDOf(f.Kind) == CheckIDOf(*kind) {
+				keep = append(keep, f)
+			}
+		}
+		found = keep
 	}
 	if *asJSON {
 		return reportJSON(checks, found, out)

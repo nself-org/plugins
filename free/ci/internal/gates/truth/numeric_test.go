@@ -7,7 +7,7 @@ import "testing"
 func TestNumericClaimFixtures(t *testing.T) {
 	got := claimFindings(t, map[string]string{
 		"README.md":       "We ship 129 free plugins.\nOver 50+ plugins and 20 commands, 12 verbs, 3 bundles, 7 integrations.\n",
-		"docs/known.md":   "Install one plugin with `nself add`.\nThe 20-verb canon.\nSee §5 Plugin and HTTP 404 plugin-not-found.\nADR 0016 verbs.\nRelease 1.2.3 plugins ship.\nPlan 3.2 commands later.\n",
+		"docs/known.md":   "Install one plugin with `nself add`.\nSee §5 Plugin and HTTP 404 plugin-not-found.\nADR 0016 verbs.\nRelease 1.2.3 plugins ship.\nPlan 3.2 commands later.\n",
 		"docs/rest.txt":   "129 plugins\n",
 		"src/main.go":     "// 129 plugins\n",
 		"go.mod":          "module x // 129 plugins\n",
@@ -17,6 +17,14 @@ func TestNumericClaimFixtures(t *testing.T) {
 	})
 	wantFindings(t, got,
 		"claims.counts README.md:1", "claims.counts README.md:2", "claims.counts docs/rest.txt:1")
+}
+
+// TestNumericClaimVariants: hyphen, non-breaking space and markdown emphasis do not hide a count.
+func TestNumericClaimVariants(t *testing.T) {
+	got := claimFindings(t, map[string]string{
+		"a.md": "a 62-plugin catalog\n62\u00a0plugins\nWe ship 62 **plugins**\nWe ship 62 `commands`\nThe 20-verb canon\nNo count here\n",
+	})
+	wantFindings(t, got, "claims.counts a.md:1", "claims.counts a.md:2", "claims.counts a.md:3", "claims.counts a.md:4", "claims.counts a.md:5")
 }
 
 // TestNumericClaimArabic: Western and Arabic-Indic digits before the noun fail

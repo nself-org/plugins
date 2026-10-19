@@ -1,6 +1,10 @@
 package truth
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 const factsRules = `version: 1
 include: [.github/truth/claims.yaml]
@@ -69,4 +73,33 @@ func TestVersionFactsErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestFactsOutsideTheRepoAreRefused: a symlinked parent directory cannot lead to a facts file outside the tree.
+func TestFactsOutsideTheRepoAreRefused(t *testing.T) {
+	outside := writeTree(t, map[string]string{"f.json": "{\"version\": \"9.9.9\"}\n"})
+	dir := writeTree(t, map[string]string{".github/truth/claims.yaml": realClaims(t), ".github/truth.yaml": factsRules, "a.md": "x\n"})
+	if err := os.Symlink(outside, filepath.Join(dir, "link")); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	rules := "version: 1\ninclude: [.github/truth/claims.yaml]\noverrides:\n  claims.current-version:\n    facts: link/f.json\n"
+	if err := os.WriteFile(filepath.Join(dir, ".github", "truth.yaml"), []byte(rules), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rs, err := Load(dir, []string{".github/truth.yaml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = Scan(dir, rs, rs.Files)
+	mustErr(t, err, ".github/truth/claims.yaml", "rules.claims.current-version.facts")
+	if e := loadFactsText(t, "see 1.2.3"); e == nil {
+		t.Error("a facts version with extra text must be refused")
+	}
+}
+
+func loadFactsText(t *testing.T, v string) error {
+	t.Helper()
+	dir := writeTree(t, map[string]string{"f.json": "{\"version\": \"" + v + "\"}\n"})
+	_, err := readFactsVersion(dir, "f.json")
+	return err
 }

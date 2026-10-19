@@ -25,7 +25,7 @@ rules:
   # A count of plugins, commands, verbs, bundles or integrations typed by hand.
   - id: claims.counts
     kind: numeric-claim
-    pattern: '(?:^|[^0-9A-Za-z.,/_§#$@–—-])[1-9][0-9,]*\+?\s+(?:(?:free|licensed|paid|official|first-party|built-in|core|top-level|public|total|additional|optional|available|cli)\s+)*(?:plugins?|commands?|verbs?|bundles?|integrations?)(?:[^A-Za-z0-9_-]|$)'
+    pattern: '(?:^|[^0-9A-Za-z.,/_§#$@–—-])[1-9][0-9,]*\+?[\s\x{00A0}-]+(?:(?:free|licensed|paid|official|first-party|built-in|core|top-level|public|total|additional|optional|available|cli)[\s\x{00A0}-]+)*[*_`]{0,2}(?:plugins?|commands?|verbs?|bundles?|integrations?)[*_`]{0,2}(?:[^A-Za-z0-9_-]|$)'
     paths: &prose
       - "**/*.md"
       - "**/*.mdx"
@@ -48,7 +48,7 @@ rules:
   # The current version of nSelf.
   - id: claims.current-version
     kind: version-claim
-    pattern: '(?:(?:nself|ɳself)(?:\s+cli)?|(?:current|latest|stable)\s+(?:release|version))\s*(?:is|at|[:=@])?\s*\*{0,2}`?v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9a-z]+(?:\.[0-9a-z]+)*)?(?:[^0-9.]|\.(?:[^0-9]|$)|$)'
+    pattern: '(?:(?:nself|ɳself)(?:[\s-]cli)?(?:\s+version)?|(?:current|latest|stable)\s+(?:release|version))\s*(?:is|at|[:=@])?\s*\*{0,2}`?v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9a-z]+(?:\.[0-9a-z]+)*)?(?:[^0-9.]|\.(?:[^0-9]|$)|$)'
     paths: *prose
     message: do not type the current version; render it from the facts file or write "the latest release"
 

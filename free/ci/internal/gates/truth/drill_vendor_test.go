@@ -31,7 +31,7 @@ func TestDrillFailsOnDriftedVendoredRules(t *testing.T) {
 	base, list := fixtureOrg(t, map[string]string{"alpha": "fine\n", "beta": "fine\n"})
 	vendorInto(t, filepath.Join(base, "alpha"))
 	vendorInto(t, filepath.Join(base, "beta"))
-	if code, out, errw := runDrill(t, base, list); code != 0 || strings.Contains(errw, "vendored-rules") || !strings.Contains(out, `"result":"pass"`) {
+	if code, out, errw := runDrill(t, base, list); code != 0 || strings.Contains(errw, "vendored-rules") || !strings.Contains(out, `"result":"pass"`) || strings.Count(strings.TrimSpace(out), "\n") != 0 {
 		t.Fatalf("equal copies must pass: exit %d\n%s\n%s", code, errw, out)
 	}
 

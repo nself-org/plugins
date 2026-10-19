@@ -69,3 +69,16 @@ func TestBaseKindsUnchanged(t *testing.T) {
 		t.Errorf("checks = %d", n)
 	}
 }
+
+// TestKindFiltersFindings: --kind with --json lists only that kind's findings; a rule-file error is shown for a claim kind.
+func TestKindFiltersFindings(t *testing.T) {
+	dir := writeTree(t, map[string]string{".github/truth/claims.yaml": realClaims(t), "README.md": "We ship 129 free plugins.\nBuy " + proPlugins() + "\n"})
+	code, out, _ := runMain("", "check", "--root", dir, "--kind", "version-claim", "--json", ".github/truth/claims.yaml")
+	if code != 0 || !strings.Contains(out, `"findings":[]`) {
+		t.Errorf("version-claim only: %d %s", code, out)
+	}
+	bad := writeTree(t, map[string]string{"r.yaml": "version: 1\nrules:\n  - {id: a, kind: nope, message: m}\n"})
+	if code, out, _ := runMain("", "check", "--root", bad, "--kind", "numeric-claim", "r.yaml"); code != 2 || !strings.Contains(out, "E644 r.yaml: rules[0].kind") {
+		t.Errorf("load error under a claim kind: %d %s", code, out)
+	}
+}

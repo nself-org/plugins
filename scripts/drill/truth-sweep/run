@@ -71,7 +71,7 @@ while read -r name; do
 	if git clone --depth 1 --quiet --no-tags "$url" "$dest" 2>"$tmp/clone.err"; then
 		args+=("$name=$dest")
 		# A repo that vendors the rules (P7-TRUTH-04) must carry byte copies of ours; plugins is the source.
-		if [ "$name" != plugins ] && [ -d "$dest/.github/truth" ] && ! bash "$here/../../truth/vendor-rules.sh" --check "$dest" 2>"$tmp/vendor.err"; then
+		if [ "$name" != plugins ] && [ -d "$dest/.github/truth" ] && ! bash "$here/../../truth/vendor-rules.sh" --check "$dest" >/dev/null 2>"$tmp/vendor.err"; then
 			args+=("$name.vendored-rules=!vendored .github/truth/ differs from nself-org/plugins: $(head -c 300 "$tmp/vendor.err" | tr '\n' ' ')")
 		fi
 	else
