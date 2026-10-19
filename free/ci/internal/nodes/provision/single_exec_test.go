@@ -45,6 +45,9 @@ var dynamicProgram = map[string]bool{
 	"internal/serve/serve_job.go:runGateDirect": true,
 	"internal/exec/process.go:runCommand":       true,
 	"internal/exec/process.go:runCommandIn":     true,
+	// `nself ci --detach` re-executes the plugin binary (os.Executable) in a new
+	// session; the program is the caller's own binary, never ssh (P7-CI-63).
+	"internal/exec/detach.go:StartDetached": true,
 	// nself-ci-agent cred-wrapper replaces itself (syscall.Exec) with the runner
 	// command the lease names, so the credential lives only in that process's
 	// environment (P7-NODE-23); never ssh.

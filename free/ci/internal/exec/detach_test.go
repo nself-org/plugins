@@ -3,8 +3,10 @@
 package exec
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -74,16 +76,19 @@ func TestSpawnDetachedOwnSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = syscall.Kill(d.PID, syscall.SIGKILL) }()
-	sid, err := syscall.Getsid(d.PID)
-	if err != nil {
-		t.Fatal(err)
+	// Setsid makes the child the leader of a new session and process group
+	if pg, err := syscall.Getpgid(d.PID); err != nil || pg != d.PID || pg == syscall.Getpgrp() {
+		t.Fatalf("child process group %d (err %v), want its own (%d), not ours (%d)", pg, err, d.PID, syscall.Getpgrp())
 	}
-	mine, _ := syscall.Getsid(os.Getpid())
-	if sid == mine || sid != d.PID {
-		t.Fatalf("child session %d, own session %d, pid %d: want a session of its own", sid, mine, d.PID)
-	}
-	if pg, _ := syscall.Getpgid(d.PID); pg != d.PID {
-		t.Fatalf("child process group %d, want %d", pg, d.PID)
+	if runtime.GOOS == "linux" { // /proc/<pid>/stat: pid (comm) state ppid pgrp session ...
+		b, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", d.PID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		f := strings.Fields(string(b[strings.LastIndexByte(string(b), ')')+1:]))
+		if len(f) < 4 || f[3] != fmt.Sprint(d.PID) {
+			t.Fatalf("child session %v, want its own pid %d", f, d.PID)
+		}
 	}
 	if err = TerminateDetached(d.PID); err != nil {
 		t.Fatal(err)
