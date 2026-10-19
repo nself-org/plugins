@@ -116,19 +116,21 @@ func imageMatches(m *manifest.Image, r *records.ImageInfo) bool {
 }
 
 // releaseAttempt reports whether attempt is a passed attempt of job, and job
-// is a release-kind job of the run.
+// is a release-kind job of the run. The manifest names the job the way the
+// evidence does, by its plan id (the job row's name); the row id is accepted
+// too. Exactly one job may match, so a name can never select two jobs.
 func (f *runFacts) releaseAttempt(job, attempt string) bool {
-	isRelease := false
+	rowID, n := "", 0
 	for _, j := range f.jobs {
-		if j.ID == job && j.Kind == "release" {
-			isRelease = true
+		if j.Kind == "release" && (j.ID == job || j.Name == job) {
+			rowID, n = j.ID, n+1
 		}
 	}
-	if !isRelease {
+	if n != 1 {
 		return false
 	}
 	for _, a := range f.attempts {
-		if a.ID == attempt && a.JobID == job {
+		if a.ID == attempt && a.JobID == rowID {
 			return a.State == "passed"
 		}
 	}

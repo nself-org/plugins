@@ -12,6 +12,7 @@ package run
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -48,6 +49,8 @@ type finishIn struct {
 	Recovered RecoverReport
 	Skipped   []plan.Skipped
 	Begin     any // what EvidenceBuilder.Begin returned
+	// Veto is the status text of a StatusGate failure: the status is posted as a failure with it.
+	Veto string
 }
 
 // prepareStatus decides whether this run can post, drains entries earlier
@@ -89,6 +92,37 @@ func firstLineOf(s string) string {
 		s = s[:i]
 	}
 	return s
+}
+
+// StatusGate marks an AfterRun hook that finishes before the commit status is
+// posted. An error it returns with ExitCode() > 0 raises the exit status and
+// turns a success status into a failure, so a run whose release could not be
+// published never reads as green (P7-CACHE-18). Other hooks run after the status.
+type StatusGate interface{ BeforeStatus() }
+
+// runAfter runs the AfterRun hooks that are (gate) or are not StatusGates, notes
+// their errors and returns the highest exit status they ask for.
+func runAfter(ctx context.Context, hooks []AfterRunHook, gate bool, info RunInfo, notes *[]string) (exit int) {
+	for _, h := range hooks {
+		if _, isGate := h.(StatusGate); isGate != gate {
+			continue
+		}
+		if err := guard("after-run hook", func() error { return h.AfterRun(ctx, info) }); err != nil {
+			*notes = append(*notes, "after-run hook: "+firstLineOf(err.Error()))
+			exit = max(exit, afterRunExit(err))
+		}
+	}
+	return exit
+}
+
+// afterRunExit is the exit status an AfterRun error asks for: its ExitCode(),
+// or 0 for an error that is only a note.
+func afterRunExit(err error) int {
+	var x interface{ ExitCode() int }
+	if errors.As(err, &x) {
+		return x.ExitCode()
+	}
+	return 0
 }
 
 // exitFor maps a result to the process exit code (model.ExitCodes, "ci").
@@ -159,16 +193,17 @@ func (c *Coordinator) conclude(f finishIn) Result {
 		notes = append(notes, "run row not finished: "+firstLineOf(err.Error()))
 	}
 	info := RunInfo{RunID: f.RunID, Revision: f.Rev.SHA, EvidenceDigest: digest, Result: ev.Result, Evidence: ev, Jobs: f.Jobs, Dirty: f.Rev.Dirty}
-	// the status goes first and has its own budget: slow hooks must not eat it
+	exit := exitFor(ev.Result)
+	if x := runAfter(bg, f.Hooks.AfterRuns, true, info, &notes); x > 0 { // a gate's failure is the status's too
+		exit = max(exit, x)
+		f.Veto = "release not published (nself ci artifacts sign " + f.RunID + ")"
+	}
+	// the status has its own budget: slow hooks must not eat it
 	pctx, pdone := context.WithTimeout(context.WithoutCancel(context.Background()), 60*time.Second)
 	line, pnotes := c.postStatus(pctx, f, info, ev)
 	pdone()
 	notes = append(notes, pnotes...)
-	for _, h := range f.Hooks.AfterRuns {
-		if err = guard("after-run hook", func() error { return h.AfterRun(bg, info) }); err != nil {
-			notes = append(notes, "after-run hook: "+firstLineOf(err.Error()))
-		}
-	}
+	exit = max(exit, runAfter(bg, f.Hooks.AfterRuns, false, info, &notes))
 	for _, fin := range f.Hooks.Finalizers {
 		if err = guard("finalizer", func() error { return fin.Finalize(bg, info) }); err != nil {
 			notes = append(notes, "finalizer "+fin.Name()+": "+firstLineOf(err.Error()))
@@ -177,7 +212,7 @@ func (c *Coordinator) conclude(f finishIn) Result {
 	nctx, ndone := context.WithTimeout(bg, 30*time.Second) // a hung sink must not hold the run after its status went out
 	notes = append(notes, notifyRun(nctx, f.Hooks, NotifyRequest{Run: info, Status: line, Notes: append([]string(nil), notes...)})...)
 	ndone()
-	return Result{RunID: f.RunID, Exit: exitFor(ev.Result), Summary: Summary{RunID: f.RunID, Result: ev.Result, Jobs: f.Jobs, Skipped: f.Skipped,
+	return Result{RunID: f.RunID, Exit: exit, Summary: Summary{RunID: f.RunID, Result: ev.Result, Jobs: f.Jobs, Skipped: f.Skipped,
 		Status: line, Evidence: digest, Doc: ev, Notes: notes}}
 }
 
@@ -237,6 +272,9 @@ func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, 
 		if ev.Result != "fail" {
 			s.State = report.Error
 		}
+	}
+	if f.Veto != "" && s.State == report.Success { // a gate reported a failure the evidence does not show
+		s.State, s.Description = report.Failure, report.Truncate(f.Veto)
 	}
 	if err := publishGates(ctx, f.Hooks, req, s); err != nil { // composes with the Publisher's veto above; either one stops the post
 		return notPosted("publish gate refused, nothing posted: " + firstLineOf(err.Error())), []string{"publish gate: " + firstLineOf(err.Error())}
