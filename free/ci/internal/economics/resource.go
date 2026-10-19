@@ -38,6 +38,9 @@ func ReserveResource(ctx context.Context, t store.LedgerTx, r Resource) error {
 	if !ok {
 		return refuse(model.PaidDisabled, "economics is not bound, so nothing can be reserved")
 	}
+	if _, held, err := t.Resource(r.Intent); err != nil || held {
+		return err // a retried provision reserves once
+	}
 	p, err := env.policy(ctx)
 	if err != nil {
 		return err

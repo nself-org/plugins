@@ -45,6 +45,10 @@ func init() {
 func step(ctx context.Context, v dispatch.View) error {
 	env, ok := envOf(ctx)
 	if !ok {
+		// Unbound: nothing is priced, so nothing paid may be placed. Free work is untouched.
+		if c := v.Request.Runner.Class; isPaid(c) {
+			return &dispatch.Refusal{Reason: model.PaidDisabled, Detail: "economics is not bound, so a " + c + " placement cannot be priced"}
+		}
 		return nil
 	}
 	err := admit(ctx, env, v)
@@ -58,35 +62,27 @@ func step(ctx context.Context, v dispatch.View) error {
 func admit(ctx context.Context, env Env, v dispatch.View) error {
 	r := v.Request
 	t := v.Ledger(ctx)
-	row := store.LedgerRow{Attempt: v.Demand.AttemptID, Pipeline: v.PipelineID, Project: v.Project, Provider: r.Runner.Provider, Class: r.Runner.Class,
-		Remote: !r.Local, Confidence: ConfEstimated, AdmittedAt: t.Now()}
-	var p Policy
-	if (r.Runner.Class == ClassLocal || r.Runner.Class == ClassOwned) && !isGitHub(r.Runner.Provider) {
-		row.Confidence = ConfComputed
-	} else {
-		var err error
-		if p, err = env.policy(ctx); err != nil {
-			return err
-		}
-		row.Class = classOf(p, r.Runner.Class, r.Runner.Provider)
+	p, err := env.policy(ctx) // from memory; a failure fails the admission closed
+	if err != nil {
+		return err
 	}
+	row := store.LedgerRow{Attempt: v.Demand.AttemptID, Pipeline: v.PipelineID, Project: v.Project, Provider: r.Runner.Provider, Class: classOf(p, r.Runner.Class, r.Runner.Provider),
+		Remote: !r.Local, Confidence: ConfEstimated, AdmittedAt: t.Now()}
 	day, month, err := windows(t, env.Now())
 	if err != nil {
 		return err
 	}
 	row.WindowDay = day
 	switch {
-	case row.Confidence == ConfComputed:
 	case row.Class == ClassIncluded:
-		if err = includedCheck(t, p, v, month, &row); err != nil {
-			return err
-		}
+		err = includedCheck(t, p, v, month, &row)
 	case isPaid(row.Class):
-		if err = paidCheck(t, env, p, v, day, month, &row); err != nil {
-			return err
-		}
-	default: // local or owned by policy: no money moves
+		err = paidCheck(t, env, p, v, day, month, &row)
+	default: // local or owned: no money moves
 		row.Confidence = ConfComputed
+	}
+	if err != nil {
+		return err
 	}
 	return t.PutLedger(row)
 }
@@ -127,13 +123,25 @@ func paidCheck(t store.LedgerTx, env Env, p Policy, v dispatch.View, day, month 
 		return refuse(q.Reason, "%s: timeout %d ms, cap %d ms", provider, r.Job.TimeoutMs, p.MaxPaidTimeoutMs)
 	}
 	cost := max(q.Micro, r.Placement.CostMicro)
-	if thr := p.ApprovalThresholdMicro; thr.Set && thr.Micro > 0 && cost > thr.Micro {
-		est, ok, err := t.ValidApproval(v.PipelineID)
+	if v.PipelineID == "" {
+		return refuse(model.BudgetUnset, "the attempt has no pipeline, so a pipeline budget cannot be checked")
+	}
+	// The approval threshold is about the pipeline's spend estimate: what its other paid
+	// attempts hold plus this job, so twenty jobs under the threshold cannot add up past it.
+	if thr := p.ApprovalThresholdMicro; thr.Set && thr.Micro > 0 {
+		held, err := t.PipelineHeld(v.PipelineID, v.Demand.AttemptID)
 		if err != nil {
 			return err
 		}
-		if !ok || est < cost {
-			return refuse(model.ApprovalPending, "%s%s over the %d micro threshold", PendingDetailPrefix, strconv.FormatInt(cost, 10), thr.Micro)
+		total, overflow := addSat(held, cost)
+		if overflow || total > thr.Micro {
+			est, ok, err := t.ValidApproval(v.PipelineID)
+			if err != nil {
+				return err
+			}
+			if !ok || overflow || est < total {
+				return refuse(model.ApprovalPending, "%s%s over the %d micro threshold", PendingDetailPrefix, strconv.FormatInt(total, 10), thr.Micro)
+			}
 		}
 	}
 	refs, err := reserve(t, p, spend{Owner: v.Demand.AttemptID, Pipeline: v.PipelineID, Provider: provider, Micro: cost}, day, month)
@@ -159,11 +167,21 @@ func includedCheck(t store.LedgerTx, p Policy, v dispatch.View, month string, ro
 	if !a.Known || !a.CeilingKnown {
 		return refuse(model.AllowanceUnknown, "%s: consumption or ceiling unknown", r.Runner.Provider)
 	}
-	q := QuoteJob(p.Rates[r.Runner.Provider], r.Job.TimeoutMs, p.MaxPaidTimeoutMs)
-	left, of := addSat(a.Remaining, -p.MarginMicro)
-	if q.Reason != "" || p.MarginMicro < 0 || of || left <= max(q.Micro, r.Placement.CostMicro) {
-		return refuse(model.AllowanceBelowMargin, "%s: %d micro left, margin %d, job worst case %d", r.Runner.Provider, a.Remaining, p.MarginMicro, max(q.Micro, r.Placement.CostMicro))
+	// Included capacity is not paid, so max_paid_timeout does not apply: a job with no timeout is
+	// priced at the longest run the policy allows anywhere.
+	timeout := r.Job.TimeoutMs
+	if timeout <= 0 {
+		timeout = schedpolicy.MaxPaidTimeoutCap
 	}
-	row.EstMs, row.EstMicro, row.Rate = q.BilledMs, max(q.Micro, r.Placement.CostMicro), q.Snap
+	q := QuoteJob(p.Rates[r.Runner.Provider], timeout, schedpolicy.MaxPaidTimeoutCap)
+	if q.Reason == model.CostUnknownRate || q.Reason == model.CostUnbounded {
+		return refuse(q.Reason, "%s: no usable rate or bound for a %d ms job", r.Runner.Provider, r.Job.TimeoutMs)
+	}
+	worst := max(q.Micro, r.Placement.CostMicro)
+	left, of := addSat(a.Remaining, -p.MarginMicro)
+	if q.Reason != "" || p.MarginMicro < 0 || of || left <= worst {
+		return refuse(model.AllowanceBelowMargin, "%s: %d micro left, margin %d, job worst case %d", r.Runner.Provider, a.Remaining, p.MarginMicro, worst)
+	}
+	row.EstMs, row.EstMicro, row.Rate = q.BilledMs, worst, q.Snap
 	return nil
 }

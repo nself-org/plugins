@@ -56,6 +56,9 @@ func ApproveSpend(ctx context.Context, run string, actor roles.Actor) (Approval,
 		return Approval{}, err
 	}
 	if !found {
+		if err = roles.AuthorizeAction(ctx, actor, roles.ActSpendApprove, ""); err != nil {
+			return Approval{}, err // a member learns nothing about which runs exist
+		}
 		return Approval{}, refuse(model.ApprovalPending, "run %s is unknown", run)
 	}
 	if err = roles.AuthorizeAction(ctx, actor, roles.ActSpendApprove, facts.Project); err != nil {

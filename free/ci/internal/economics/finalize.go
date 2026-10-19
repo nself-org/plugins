@@ -36,24 +36,36 @@ func (finalizer) Finalize(ctx context.Context, info cirun.RunInfo) error {
 	}
 	var errs []error
 	for _, j := range info.Jobs {
-		if j.AttemptID != "" {
-			errs = append(errs, settle(ctx, env.Store, j.AttemptID, j.Duration))
+		if j.AttemptID == "" {
+			continue
 		}
+		row, ok, err := env.Store.LedgerAttempt(ctx, j.AttemptID)
+		if err == nil && ok {
+			err = settle(ctx, env.Store, row, j.Duration)
+		}
+		errs = append(errs, err)
+	}
+	// The run is closed: an attempt that is still open (an earlier try of a retried job, a
+	// cancelled job) holds its worst case for nothing. It settles on the span the coordinator
+	// recorded, or at its estimate (unknown) when there is none.
+	open, err := env.Store.LedgerOpen(ctx, info.RunID)
+	errs = append(errs, err)
+	for _, row := range open {
+		errs = append(errs, settle(ctx, env.Store, row, 0))
 	}
 	return errors.Join(errs...)
 }
 
-func settle(ctx context.Context, st *store.Store, attempt string, observed time.Duration) error {
-	row, ok, err := st.LedgerAttempt(ctx, attempt)
-	if err != nil || !ok || row.ActMicro != nil {
-		return err
+func settle(ctx context.Context, st *store.Store, row store.LedgerRow, observed time.Duration) error {
+	if row.ActMicro != nil {
+		return nil
 	}
-	start, end, err := st.AttemptSpan(ctx, attempt)
+	start, end, err := st.AttemptSpan(ctx, row.Attempt)
 	if err != nil {
 		return err
 	}
 	ms, micro, conf := Actual(row, observed, start, end)
-	_, err = st.LedgerSettle(ctx, attempt, ms, micro, conf)
+	_, err = st.LedgerSettle(ctx, row.Attempt, ms, micro, conf)
 	return err
 }
 

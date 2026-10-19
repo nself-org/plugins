@@ -21,6 +21,12 @@ import (
 
 const recentAttempts = 20
 
+func declared(micro int64, source string) Figure {
+	return Figure{Micro: micro, Confidence: ConfDeclared, Source: source}
+}
+
+func declaredPtr(micro int64, source string) *Figure { f := declared(micro, source); return &f }
+
 func reservedFigure(micro int64) *Figure {
 	return &Figure{Micro: micro, Confidence: ConfEstimated, Source: "worst case reserved at admission, actual once settled"}
 }
@@ -47,14 +53,14 @@ func BuildReport(ctx context.Context, st *store.Store, p Policy, now time.Time) 
 		if name == store.ScopeProvider {
 			scope = "provider:" + key
 		}
-		rep.Budgets = append(rep.Budgets, BudgetLine{Scope: scope, Window: window, LimitMicro: limit, Reserved: reservedFigure(held), Remaining: remainingFigure(limit, held)})
+		rep.Budgets = append(rep.Budgets, BudgetLine{Scope: scope, Window: window, Limit: declared(limit, "operator policy economics.budgets.*"), Reserved: reservedFigure(held), Remaining: remainingFigure(limit, held)})
 		return nil
 	}
 	if p.Budgets.Job.Set {
-		rep.Budgets = append(rep.Budgets, BudgetLine{Scope: store.ScopeJob, LimitMicro: p.Budgets.Job.Micro})
+		rep.Budgets = append(rep.Budgets, BudgetLine{Scope: store.ScopeJob, Limit: declared(p.Budgets.Job.Micro, "operator policy economics.budgets.job")})
 	}
 	if p.Budgets.Pipeline.Set {
-		rep.Budgets = append(rep.Budgets, BudgetLine{Scope: store.ScopePipeline, LimitMicro: p.Budgets.Pipeline.Micro})
+		rep.Budgets = append(rep.Budgets, BudgetLine{Scope: store.ScopePipeline, Limit: declared(p.Budgets.Pipeline.Micro, "operator policy economics.budgets.pipeline")})
 	}
 	if p.Budgets.Day.Set {
 		if err = line(store.ScopeDay, "", day, p.Budgets.Day.Micro); err != nil {
@@ -111,6 +117,9 @@ func BuildReport(ctx context.Context, st *store.Store, p Policy, now time.Time) 
 	}
 	for _, r := range rows {
 		al := AttemptLine{Attempt: r.Attempt, Provider: r.Provider, Class: r.Class, Estimate: Figure{Micro: r.EstMicro, Confidence: ConfEstimated, Source: "worst case at admission"}}
+		if r.Class == ClassLocal || r.Class == ClassOwned {
+			al.Estimate = Figure{Micro: 0, Confidence: ConfComputed, Source: "local and owned work moves no money"}
+		}
 		if r.ActMicro != nil {
 			al.Actual = &Figure{Micro: *r.ActMicro, Confidence: r.Confidence, Source: "settled when the run closed"}
 		}
@@ -130,10 +139,16 @@ func BuildReport(ctx context.Context, st *store.Store, p Policy, now time.Time) 
 func providerLine(ctx context.Context, st *store.Store, p Policy, id, month string, t store.MonthTotals) (ProviderLine, error) {
 	pl := ProviderLine{Provider: id, Class: classOf(p, "", id)}
 	if r, ok := p.Rates[id]; ok {
-		pl.RatePerHourMicro, pl.RatePerMinMicro = r.PerHourMicro, r.PerMinuteMicro
+		src := "operator policy economics.rates." + id
+		if r.PerHourMicro > 0 {
+			pl.RatePerHour = declaredPtr(r.PerHourMicro, src)
+		}
+		if r.PerMinuteMicro > 0 {
+			pl.RatePerMinute = declaredPtr(r.PerMinuteMicro, src)
+		}
 	}
 	if c, ok := p.CeilingsMicro[id]; ok {
-		pl.CeilingMicro = &c
+		pl.Ceiling = declaredPtr(c, "operator policy economics.ceilings."+id)
 	}
 	local := Figure{Confidence: ConfEstimated, Source: "local ledger: settled actuals plus estimates of attempts not settled"}
 	local.Micro, _ = sched.Add(t.ActualMicro, t.PendingMicro)
@@ -166,7 +181,7 @@ func EmptyReport(p Policy, now time.Time) Report {
 		budget       schedpolicy.Budget
 	}{{store.ScopeJob, "", p.Budgets.Job}, {store.ScopePipeline, "", p.Budgets.Pipeline}, {store.ScopeDay, day, p.Budgets.Day}, {store.ScopeMonth, month, p.Budgets.Month}} {
 		if b.budget.Set {
-			bl := BudgetLine{Scope: b.name, Window: b.window, LimitMicro: b.budget.Micro}
+			bl := BudgetLine{Scope: b.name, Window: b.window, Limit: declared(b.budget.Micro, "operator policy economics.budgets.*")}
 			if b.window != "" {
 				bl.Reserved, bl.Remaining = reservedFigure(0), remainingFigure(b.budget.Micro, 0)
 			}

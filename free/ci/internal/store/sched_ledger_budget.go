@@ -208,17 +208,17 @@ func (s *Store) ResourcesOpen(ctx context.Context) ([]ResourceRow, error) {
 // UsageRow is a figure a provider reported (P7-HOST-10's importer); it is the
 // only `known` figure. Key makes the write idempotent (account, date, sku, repo).
 type UsageRow struct {
-	Key, Provider, Period string
-	Minutes, CostMicro    int64
-	BalanceMicro          *int64
-	ReportedAt            int64
+	Key, Provider, Period, Day string
+	Minutes, CostMicro         int64
+	BalanceMicro               *int64
+	ReportedAt                 int64
 }
 
 // PutUsage stores or replaces a provider usage row.
 func (s *Store) PutUsage(ctx context.Context, u UsageRow) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO ledger_usage(key,provider,period,minutes,cost_micro,balance_micro,reported_at) VALUES (?,?,?,?,?,?,?)",
-			u.Key, u.Provider, u.Period, u.Minutes, u.CostMicro, u.BalanceMicro, u.ReportedAt)
+		_, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO ledger_usage(key,provider,period,day,minutes,cost_micro,balance_micro,reported_at) VALUES (?,?,?,?,?,?,?,?)",
+			u.Key, u.Provider, u.Period, u.Day, u.Minutes, u.CostMicro, u.BalanceMicro, u.ReportedAt)
 		return err
 	})
 }
@@ -246,21 +246,22 @@ func (t LedgerTx) Allowance(provider, month string) (AllowanceInputs, error) {
 
 func allowance(ctx context.Context, q ledgerQuerier, provider, month string) (AllowanceInputs, error) {
 	var a AllowanceInputs
-	rows, err := q.QueryContext(ctx, "SELECT cost_micro,balance_micro,reported_at FROM ledger_usage WHERE provider=? AND period=? ORDER BY reported_at,key", provider, month)
+	rows, err := q.QueryContext(ctx, "SELECT cost_micro,balance_micro,day FROM ledger_usage WHERE provider=? AND period=? ORDER BY reported_at,key", provider, month)
 	if err != nil {
 		return a, err
 	}
-	var newest int64
+	var newestDay string
 	for rows.Next() {
-		var cost, at int64
+		var cost int64
 		var bal sql.NullInt64
-		if err = rows.Scan(&cost, &bal, &at); err != nil {
+		var day string
+		if err = rows.Scan(&cost, &bal, &day); err != nil {
 			_ = rows.Close()
 			return a, err
 		}
 		a.HasImport = true
 		a.Imported, _ = satAdd(a.Imported, cost)
-		newest = max(newest, at)
+		newestDay = max(newestDay, day)
 		if bal.Valid {
 			v := bal.Int64
 			a.Balance = &v
@@ -269,7 +270,9 @@ func allowance(ctx context.Context, q ledgerQuerier, provider, month string) (Al
 	if err = rows.Close(); err != nil {
 		return a, err
 	}
-	a.Local, err = ledgerSince(ctx, q, provider, month, newest)
+	// Provider usage lags by hours, so the local ledger counts from the start of the
+	// newest day the import covers: a little overlap over-counts, a gap would not.
+	a.Local, err = ledgerSinceDay(ctx, q, provider, month, newestDay)
 	return a, err
 }
 

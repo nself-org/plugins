@@ -41,30 +41,30 @@ func RecordUsage(ctx context.Context, u Usage) error {
 	if at.IsZero() {
 		at = env.Now()
 	}
-	return env.Store.PutUsage(ctx, store.UsageRow{Key: u.Key, Provider: u.Provider, Period: day.Format("2006-01"), Minutes: u.Minutes,
+	return env.Store.PutUsage(ctx, store.UsageRow{Key: u.Key, Provider: u.Provider, Period: day.Format("2006-01"), Day: u.Date, Minutes: u.Minutes,
 		CostMicro: u.CostMicro, BalanceMicro: u.BalanceMicro, ReportedAt: at.UnixNano()})
 }
 
 // BudgetLine is one budget scope. Reserved is the worst case held (a bound, so estimated).
 type BudgetLine struct {
-	Scope      string  `json:"scope"`
-	Window     string  `json:"window,omitempty"`
-	LimitMicro int64   `json:"limit_micro"`
-	Reserved   *Figure `json:"reserved,omitempty"`
-	Remaining  *Figure `json:"remaining,omitempty"`
+	Scope     string  `json:"scope"`
+	Window    string  `json:"window,omitempty"`
+	Limit     Figure  `json:"limit"`
+	Reserved  *Figure `json:"reserved,omitempty"`
+	Remaining *Figure `json:"remaining,omitempty"`
 }
 
 // ProviderLine is one provider's rate, ceiling, consumption and allowance.
 type ProviderLine struct {
-	Provider         string  `json:"provider"`
-	Class            string  `json:"class"`
-	RatePerHourMicro int64   `json:"rate_per_hour_micro,omitempty"`
-	RatePerMinMicro  int64   `json:"rate_per_minute_micro,omitempty"`
-	CeilingMicro     *int64  `json:"ceiling_micro,omitempty"`
-	Imported         *Figure `json:"imported,omitempty"`
-	Local            Figure  `json:"local"`
-	Allowance        *Figure `json:"allowance,omitempty"`
-	AllowanceKnown   bool    `json:"allowance_known"`
+	Provider       string  `json:"provider"`
+	Class          string  `json:"class"`
+	RatePerHour    *Figure `json:"rate_per_hour,omitempty"`
+	RatePerMinute  *Figure `json:"rate_per_minute,omitempty"`
+	Ceiling        *Figure `json:"ceiling,omitempty"`
+	Imported       *Figure `json:"imported,omitempty"`
+	Local          Figure  `json:"local"`
+	Allowance      *Figure `json:"allowance,omitempty"`
+	AllowanceKnown bool    `json:"allowance_known"`
 }
 
 // AttemptLine is one recent ledger row.

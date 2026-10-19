@@ -84,7 +84,7 @@ func envOf(ctx context.Context) (Env, bool) {
 
 func (e Env) policy(ctx context.Context) (Policy, error) {
 	if e.Spend == nil {
-		return Policy{}, refuse("cost.unknown_rate", "no spend policy is bound")
+		return Policy{}, nil // no spend policy bound: the defaults, which place nothing paid
 	}
 	return e.Spend(ctx)
 }

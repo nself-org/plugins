@@ -115,7 +115,7 @@ func fig(f economics.Figure) string {
 func printUsage(r economics.Report) {
 	fmt.Printf("window %s / %s UTC, currency %s, paid spend %s\n", r.Day, r.Month, r.Currency, map[bool]string{true: "enabled", false: "disabled"}[r.PaidEnabled])
 	for _, b := range r.Budgets {
-		line := fmt.Sprintf("budget %-16s limit %d micro (declared)", b.Scope, b.LimitMicro)
+		line := fmt.Sprintf("budget %-16s limit %s", b.Scope, fig(b.Limit))
 		if b.Reserved != nil {
 			line += "; reserved " + fig(*b.Reserved)
 		}

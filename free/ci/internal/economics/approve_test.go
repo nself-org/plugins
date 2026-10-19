@@ -63,7 +63,7 @@ func TestBudgetApprovalHoldsAboveTheThreshold(t *testing.T) {
 		t.Fatalf("under the threshold needs no approval: %v", err)
 	}
 	ref := refusalOf(t, place(r.env, r.st, request(a, "", "cloudco", 300_000, 0)))
-	if ref.Reason != model.ApprovalPending || !strings.HasPrefix(ref.Detail, PendingDetailPrefix+"300000") {
+	if ref.Reason != model.ApprovalPending || !strings.HasPrefix(ref.Detail, PendingDetailPrefix+"360000") {
 		t.Fatalf("above the threshold: %+v", ref)
 	}
 	if _, err := ApproveSpend(r.env, "pipe", r.member); err == nil || roles.ReasonOf(err) != roles.ReasonRole {
@@ -76,13 +76,13 @@ func TestBudgetApprovalHoldsAboveTheThreshold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.EstimateMicro != 300_000 || got.SHA != "sha-1" || got.ConfigDigest != "cfg1" || got.Run != "pipe" || !strings.Contains(got.Actor, "adm") {
+	if got.EstimateMicro != 360_000 || got.SHA != "sha-1" || got.ConfigDigest != "cfg1" || got.Run != "pipe" || !strings.Contains(got.Actor, "adm") {
 		t.Fatalf("approval: %+v", got)
 	}
 	var found bool
 	entries, _ := r.st.AuditEntries(r.ctx, 0, 0)
 	for _, e := range entries {
-		if e.Action == "spend.approved" && e.Target == "pipe" && strings.Contains(e.Detail, "amount_micro=300000") && strings.Contains(e.Detail, "sha=sha-1") && strings.Contains(e.Detail, "config=cfg1") && strings.Contains(e.Actor, "adm") {
+		if e.Action == "spend.approved" && e.Target == "pipe" && strings.Contains(e.Detail, "amount_micro=360000") && strings.Contains(e.Detail, "sha=sha-1") && strings.Contains(e.Detail, "config=cfg1") && strings.Contains(e.Actor, "adm") {
 			found = true
 		}
 	}
@@ -92,10 +92,10 @@ func TestBudgetApprovalHoldsAboveTheThreshold(t *testing.T) {
 	if err = place(r.env, r.st, request(a, "", "cloudco", 300_000, 0)); err != nil {
 		t.Fatalf("after approval: %v", err)
 	}
-	// A job that costs more than the approved estimate is held again.
+	// A job that takes the pipeline past the approved estimate is held again.
 	b := queueAttempt(t, r.st, "pipe", "sha-1", "project")
-	if ref = refusalOf(t, place(r.env, r.st, request(b, "", "cloudco", 360_000, 0))); ref.Reason != model.ApprovalPending {
-		t.Fatalf("a bigger job than approved: %+v", ref)
+	if ref = refusalOf(t, place(r.env, r.st, request(b, "", "cloudco", 60_000, 0))); ref.Reason != model.ApprovalPending || !strings.HasPrefix(ref.Detail, PendingDetailPrefix+"420000") {
+		t.Fatalf("a pipeline past what was approved: %+v", ref)
 	}
 }
 

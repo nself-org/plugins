@@ -81,13 +81,56 @@ func satAdd(a, b int64) (int64, bool) {
 	return a + b, false
 }
 
-// PutLedger writes the admission estimate of an attempt.
+// PutLedger writes the admission estimate of an attempt. A repeat admission of an
+// attempt that is not settled replaces the row; a settled row is final.
 func (t LedgerTx) PutLedger(r LedgerRow) error {
-	_, err := t.tx.ExecContext(t.ctx, `INSERT OR REPLACE INTO ledger (attempt_id,pipeline_id,project,provider,class,remote,est_ms,est_micro,act_ms,act_micro,confidence,budget_refs,window_day,
- rate_micro,rate_unit_ms,inc_ms,min_micro,extras_micro,admitted_at,finalized_at) VALUES (?,?,?,?,?,?,?,?,NULL,NULL,?,?,?,?,?,?,?,?,?,NULL)`,
+	_, err := t.tx.ExecContext(t.ctx, `INSERT INTO ledger (attempt_id,pipeline_id,project,provider,class,remote,est_ms,est_micro,act_ms,act_micro,confidence,budget_refs,window_day,
+ rate_micro,rate_unit_ms,inc_ms,min_micro,extras_micro,admitted_at,finalized_at) VALUES (?,?,?,?,?,?,?,?,NULL,NULL,?,?,?,?,?,?,?,?,?,NULL)
+ ON CONFLICT(attempt_id) DO UPDATE SET pipeline_id=excluded.pipeline_id,project=excluded.project,provider=excluded.provider,class=excluded.class,remote=excluded.remote,
+ est_ms=excluded.est_ms,est_micro=excluded.est_micro,confidence=excluded.confidence,budget_refs=excluded.budget_refs,window_day=excluded.window_day,
+ rate_micro=excluded.rate_micro,rate_unit_ms=excluded.rate_unit_ms,inc_ms=excluded.inc_ms,min_micro=excluded.min_micro,extras_micro=excluded.extras_micro,admitted_at=excluded.admitted_at
+ WHERE ledger.finalized_at IS NULL`,
 		r.Attempt, r.Pipeline, r.Project, r.Provider, r.Class, r.Remote, r.EstMs, r.EstMicro, r.Confidence, r.BudgetRefs, r.WindowDay,
 		r.Rate.RateMicro, r.Rate.RateUnitMs, r.Rate.IncMs, r.Rate.MinMicro, r.Rate.ExtrasMicro, r.AdmittedAt)
 	return err
+}
+
+// PipelineHeld is the money the ledger holds for a pipeline's metered and
+// ephemeral attempts other than except: the actual once settled, else the
+// worst case. It is the pipeline's spend estimate.
+func (t LedgerTx) PipelineHeld(pipeline, except string) (int64, error) {
+	rows, err := t.tx.QueryContext(t.ctx, "SELECT coalesce(act_micro,est_micro) FROM ledger WHERE pipeline_id=? AND attempt_id<>? AND class IN ('metered','ephemeral')", pipeline, except)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = rows.Close() }()
+	var sum int64
+	for rows.Next() {
+		var v int64
+		if err = rows.Scan(&v); err != nil {
+			return 0, err
+		}
+		sum, _ = satAdd(sum, v)
+	}
+	return sum, rows.Err()
+}
+
+// LedgerOpen lists the attempts of a pipeline whose ledger row is not settled.
+func (s *Store) LedgerOpen(ctx context.Context, pipeline string) ([]LedgerRow, error) {
+	rows, err := s.readers.QueryContext(ctx, "SELECT "+ledgerCols+" FROM ledger WHERE pipeline_id=? AND finalized_at IS NULL ORDER BY attempt_id", pipeline)
+	if err != nil {
+		return nil, coded("E607", err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+	var out []LedgerRow
+	for rows.Next() {
+		l, err := scanLedger(rows)
+		if err != nil {
+			return nil, coded("E607", err.Error())
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
 }
 
 // Window returns the UTC day key to charge: today, or the highest day key ever
@@ -176,8 +219,11 @@ func (s *Store) LedgerRecent(ctx context.Context, limit int) ([]LedgerRow, error
 	return out, rows.Err()
 }
 
-func ledgerSince(ctx context.Context, q ledgerQuerier, provider, month string, sinceNs int64) (int64, error) {
-	rows, err := q.QueryContext(ctx, "SELECT coalesce(act_micro,est_micro) FROM ledger WHERE provider=? AND substr(window_day,1,7)=? AND admitted_at>?", provider, month, sinceNs)
+// ledgerSinceDay sums what local attempts of provider cost in a UTC month, admitted
+// in a window day at or after sinceDay (the actual once settled, else the estimate).
+// An empty sinceDay is the whole month.
+func ledgerSinceDay(ctx context.Context, q ledgerQuerier, provider, month, sinceDay string) (int64, error) {
+	rows, err := q.QueryContext(ctx, "SELECT coalesce(act_micro,est_micro) FROM ledger WHERE provider=? AND substr(window_day,1,7)=? AND window_day>=?", provider, month, sinceDay)
 	if err != nil {
 		return 0, err
 	}

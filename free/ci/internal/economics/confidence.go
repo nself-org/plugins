@@ -15,6 +15,9 @@ const (
 	ConfComputed  = "computed"
 	ConfEstimated = "estimated"
 	ConfUnknown   = "unknown"
+	// ConfDeclared labels a value the operator declared in policy (a rate, a ceiling, a budget
+	// limit): it is an input, not a measurement of spend.
+	ConfDeclared = "declared"
 )
 
 // Figure is an amount that carries its confidence and where it came from.
