@@ -93,6 +93,9 @@ func Build(fsys fs.FS) (*Graph, error) {
 	if t.truncated {
 		g.uncertain(".", "file walk hit its cap")
 	}
+	for _, l := range t.links {
+		g.uncertain(l, "symlinked source or manifest is not followed")
+	}
 	goGraph(fsys, t, g)
 	pnpmGraph(fsys, t, g)
 	markers(t, g)

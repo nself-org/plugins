@@ -33,7 +33,13 @@ var softIgnored = map[string]bool{"dist": true, "build": true, "target": true}
 type tree struct {
 	files     []string
 	set       map[string]bool
+	links     []string // symlinks named like source or manifests: not followed
 	truncated bool
+}
+
+// isSourceName is true for the file names the graph reads.
+func isSourceName(base string) bool {
+	return strings.HasSuffix(base, ".go") || base == "go.mod" || base == "go.work" || base == "package.json" || base == "pnpm-workspace.yaml"
 }
 
 func walk(fsys fs.FS) (tree, error) {
@@ -69,6 +75,9 @@ func walk(fsys fs.FS) (tree, error) {
 			return nil
 		}
 		if !d.Type().IsRegular() { // symlinks, FIFOs and devices are never read
+			if d.Type()&fs.ModeSymlink != 0 && isSourceName(path.Base(p)) {
+				t.links = append(t.links, p)
+			}
 			return nil
 		}
 		if len(t.files) >= maxFiles {
@@ -159,14 +168,12 @@ func expandBraces(p string) (out []string, ok bool) {
 				continue
 			}
 			parts = append(parts, p[last:i])
-			if len(parts) == 1 {
+			if len(parts) == 1 && strings.Contains(parts[0], "..") {
 				r, isRange, wide := braceRange(parts[0])
-				if wide {
-					return []string{p}, false // too many alternatives to model
+				if wide || !isRange {
+					return []string{p}, false // a range form this matcher does not model
 				}
-				if isRange {
-					parts = r
-				}
+				parts = r
 			}
 			for _, part := range parts {
 				sub, subOK := expandBraces(p[:open] + part + p[i+1:])
@@ -194,8 +201,8 @@ func braceRange(s string) (out []string, isRange, tooWide bool) {
 	}
 	if a, err1 := strconv.Atoi(lo); err1 == nil {
 		b, err2 := strconv.Atoi(hi)
-		if err2 != nil {
-			return nil, false, false
+		if err2 != nil || (len(lo) > 1 && lo[0] == '0') || (len(hi) > 1 && hi[0] == '0') {
+			return nil, false, false // padded or step forms: not modelled
 		}
 		if a < -(1<<30) || a > 1<<30 || b < -(1<<30) || b > 1<<30 || abs(b-a) >= maxBraceAlts {
 			return nil, true, true

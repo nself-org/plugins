@@ -573,3 +573,23 @@ func TestSurvivingMutantsPinned(t *testing.T) {
 		}
 	})
 }
+
+func TestFifthRoundCases(t *testing.T) {
+	for _, g := range []string{"{1..5..2}", "{01..03}", "{1..99999999999999999999}", "{a..zz}"} {
+		if _, ok := expandBraces("packages/" + g); ok {
+			t.Errorf("%s must not expand as modelled", g)
+		}
+	}
+	t.Run("a directory path above nested packages is full", func(t *testing.T) {
+		m := fstest.MapFS{"go.mod": mf("module m\n"), "a/b/c/c.go": mf("package c\n")}
+		if sel, _ := selectFor(t, m, []plan.JobRef{{ID: "a", Workdir: "a"}}, "a/b"); sel.Mode != "full" {
+			t.Fatalf("got %v", sel)
+		}
+	})
+	t.Run("a symlinked Go source is uncertain", func(t *testing.T) {
+		m := fstest.MapFS{"go.mod": mf("module m\n"), "a/a.go": mf("package a\n"), "a/s.go": &fstest.MapFile{Mode: fs.ModeSymlink, Data: []byte("b/b.go")}}
+		if g := buildFS(t, m); len(g.reasons) == 0 {
+			t.Fatal("a symlinked source file must be uncertain")
+		}
+	})
+}
