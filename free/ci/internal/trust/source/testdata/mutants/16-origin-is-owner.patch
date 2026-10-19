@@ -1,6 +1,6 @@
 --- a/internal/trust/source/local.go
 +++ b/internal/trust/source/local.go
-@@ -44,7 +44,7 @@
+@@ -47,7 +47,7 @@
  		r.Reasons = append(r.Reasons, ReasonLocalIncomplete)
  	}
  	if g.OnOriginRef && !g.missing(MissingRemoteRefs) {

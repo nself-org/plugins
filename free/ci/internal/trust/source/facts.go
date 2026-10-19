@@ -18,30 +18,32 @@ import (
 
 // Reason keys of a Result, in the order the classifiers add them.
 const (
-	ReasonAuthNotPerRepo    = "source.auth_not_per_repo"
-	ReasonActor             = "source.actor_permission"
-	ReasonActorUnknown      = "source.actor_unknown"
-	ReasonFork              = "source.fork"
-	ReasonForkUnknown       = "source.head_repo_unknown"
-	ReasonProvenance        = "source.revision_provenance"
-	ReasonUnreachable       = "source.sha_unreachable"
-	ReasonBot               = "source.bot"
-	ReasonLockfileOnly      = "source.lockfile_only"
-	ReasonHeadChanged       = "source.head_changed"
-	ReasonRunnerDemand      = "source.runner_demand"
-	ReasonRefetchFailed     = "source.refetch_failed"
-	ReasonMachineCap        = "source.machine_invoked_cap"
-	ReasonLocalReachable    = "local.reachable_from_default"
-	ReasonLocalCreated      = "local.created_here"
-	ReasonLocalOnOrigin     = "local.on_origin_ref"
-	ReasonLocalForeign      = "local.not_created_here"
-	ReasonLocalNoHead       = "local.no_head"
-	ReasonLocalNoRevision   = "local.no_revision"
-	ReasonLocalNoRemote     = "local.no_remote"
-	ReasonLocalNoGit        = "local.no_git"
-	ReasonLocalIncomplete   = "local.facts_incomplete"
-	ReasonLocalOverride     = "local.trust_owner_override"
-	reasonVisibilityUnknown = "source.visibility_not_public"
+	ReasonAuthNotPerRepo   = "source.auth_not_per_repo"
+	ReasonActor            = "source.actor_permission"
+	ReasonActorUnknown     = "source.actor_unknown"
+	ReasonFork             = "source.fork"
+	ReasonForkUnknown      = "source.head_repo_unknown"
+	ReasonProvenance       = "source.revision_provenance"
+	ReasonUnreachable      = "source.sha_unreachable"
+	ReasonBot              = "source.bot"
+	ReasonLockfileOnly     = "source.lockfile_only"
+	ReasonHeadChanged      = "source.head_changed"
+	ReasonRunnerDemand     = "source.runner_demand"
+	ReasonRefetchFailed    = "source.refetch_failed"
+	ReasonMachineCap       = "source.machine_invoked_cap"
+	ReasonLocalReachable   = "local.reachable_from_default"
+	ReasonLocalCreated     = "local.created_here"
+	ReasonLocalOnOrigin    = "local.on_origin_ref"
+	ReasonLocalForeign     = "local.not_created_here"
+	ReasonLocalNoHead      = "local.no_head"
+	ReasonLocalNoRevision  = "local.no_revision"
+	ReasonLocalNoRemote    = "local.no_remote"
+	ReasonLocalNoGit       = "local.no_git"
+	ReasonLocalGitBroken   = "local.git_unavailable"
+	ReasonLocalBadRevision = "local.bad_revision"
+	ReasonLocalInProgress  = "local.operation_in_progress"
+	ReasonLocalIncomplete  = "local.facts_incomplete"
+	ReasonLocalOverride    = "local.trust_owner_override"
 )
 
 // Result is a classification: the class, why, and the side facts the callers need.
@@ -77,18 +79,49 @@ type GitFacts struct {
 	OnOriginRef bool
 	// OnAnyRemoteRef: Head is contained in any ref of any remote, refs/pull/* or FETCH_HEAD.
 	OnAnyRemoteRef bool
-	// NoRemotes: the repository has no remote-tracking ref, no refs/pull/* and no FETCH_HEAD.
+	// NoRemotes: no remote is configured and nothing was ever fetched (no remote-tracking ref, no
+	// refs/pull/*, no FETCH_HEAD).
 	NoRemotes bool
+	// NeverFetched: a remote is configured but nothing was ever fetched from it. Every commit of Head
+	// is then in OffDefault and Unpushed.
+	NeverFetched bool
+	// InProgress: a merge, squash, cherry-pick, revert or rebase is unfinished, so the tree holds
+	// content that no commit of Head accounts for.
+	InProgress bool
 	// OffDefault are the commits of Head that DefaultRemoteRef does not contain.
 	OffDefault []Commit
 	// Unpushed are the commits of Head that sit on no ref of any remote and not on FETCH_HEAD.
 	Unpushed []Commit
-	// ReflogCreated maps a commit to a reflog subject that says how it reached this repository: a
-	// creation entry (see MadeHere) when any reflog has one, else any other entry, for example
-	// "commit: fix" or "checkout: moving from a to b".
+	// ReflogCreated maps a commit to the subject of its OLDEST reflog entry in any log (OldestEntries),
+	// the way it first reached this repository, for example "commit: fix" or "branch: Created from FETCH_HEAD".
 	ReflogCreated map[string]string
 	// Missing lists the facts that could not be gathered (the Missing* keys).
 	Missing []string
+}
+
+// ReflogEntry is one line of a reflog: a commit, when the entry was written and why.
+type ReflogEntry struct {
+	SHA     string
+	Unix    int64
+	Subject string
+}
+
+// OldestEntries maps each commit to the subject of its oldest entry. Entries are timed to the second
+// and the logs cannot be ordered within one, so among the earliest a creation (MadeHere) wins: a commit
+// that only arrived (fetch, checkout) has no creation entry to win with, and a fast-forward is never one.
+func OldestEntries(es []ReflogEntry) map[string]string {
+	best := make(map[string]ReflogEntry, len(es))
+	for _, e := range es {
+		b, seen := best[e.SHA]
+		if !seen || e.Unix < b.Unix || (e.Unix == b.Unix && !MadeHere(b.Subject) && MadeHere(e.Subject)) {
+			best[e.SHA] = e
+		}
+	}
+	out := make(map[string]string, len(best))
+	for sha, e := range best {
+		out[sha] = e.Subject
+	}
+	return out
 }
 
 func (g GitFacts) missing(key string) bool {
@@ -125,6 +158,7 @@ var lockfiles = map[string]bool{
 	"bun.lockb": true, "bun.lock": true, "go.sum": true, "cargo.lock": true, "gemfile.lock": true,
 	"poetry.lock": true, "pipfile.lock": true, "uv.lock": true, "composer.lock": true, "pubspec.lock": true,
 	"mix.lock": true, "podfile.lock": true, "packages.lock.json": true, "gradle.lockfile": true,
+	"flake.lock": true, "pdm.lock": true, "deno.lock": true, "package.resolved": true,
 }
 
 // LockfileOnly reports whether files is non-empty and every file is a dependency lockfile.

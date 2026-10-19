@@ -1,0 +1,11 @@
+--- a/internal/run/trust_git.go
++++ b/internal/run/trust_git.go
+@@ -173,7 +173,7 @@
+ // defaultRef names the remote's default branch: origin/HEAD, else origin/main or origin/master. Only
+ // the remote named origin counts: origin/HEAD may be pointed anywhere.
+ func defaultRef(symref string, refs []string) string {
+-	if strings.HasPrefix(symref, "refs/remotes/origin/") && !strings.HasSuffix(symref, "/HEAD") && slices.Contains(refs, symref) {
++	if strings.HasPrefix(symref, "refs/remotes/") && !strings.HasSuffix(symref, "/HEAD") && slices.Contains(refs, symref) {
+ 		return symref
+ 	}
+ 	for _, want := range []string{"refs/remotes/origin/main", "refs/remotes/origin/master"} {

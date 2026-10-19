@@ -15,9 +15,7 @@ import (
 	"cmp"
 	"context"
 	"os"
-	"slices"
 	"strings"
-	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/audit"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -31,9 +29,6 @@ import (
 )
 
 func init() { RegisterTrust(SourceTrust{}) }
-
-// maxCommits bounds the commits the hook lists; more than this leaves the fact missing.
-const maxCommits = 500
 
 // SourceTrust is the registered classifier. The zero value uses report.Capture, the default state
 // store, the environment and providers.RefetchFacts.
@@ -52,8 +47,13 @@ func (h SourceTrust) Classify(ctx context.Context, r TrustRequest) (model.TrustC
 
 // Decide is Classify with the reasons: the class a run gets and why.
 func (h SourceTrust) Decide(ctx context.Context, r TrustRequest) (source.Result, error) {
-	res := source.Result{Class: "owner", Reasons: []string{source.ReasonLocalNoRevision}}
-	if r.Revision != "" {
+	var res source.Result
+	switch {
+	case r.Revision == "":
+		res = h.noRevision(ctx, r.Root)
+	case !fullSHA.MatchString(r.Revision):
+		res = source.Result{Class: "untrusted", Reasons: []string{source.ReasonLocalBadRevision}}
+	default:
 		res = source.ClassifyLocal(h.gather(ctx, r.Root, r.Revision))
 	}
 	capClass, machine, err := h.machineCap(ctx, r.Root)
@@ -84,26 +84,29 @@ func (h SourceTrust) Decide(ctx context.Context, r TrustRequest) (source.Result,
 }
 
 // ClassifyForge classifies a forge trigger: the facts are re-fetched from the API first, so a
-// payload claim never stands in for a fact the operator's token can read.
+// payload claim never stands in for a fact the operator's token can read. Facts that cannot be
+// re-fetched (the fetch failed, or no registered provider can) leave the run untrusted.
 func (h SourceTrust) ClassifyForge(ctx context.Context, root string, f model.TriggerFacts) (source.Result, error) {
-	refetch := h.Refetch
+	refetch, verifiable := h.Refetch, true
 	if refetch == nil {
-		refetch = providers.RefetchFacts
+		p, ok := providers.Lookup(f.Source)
+		_, can := p.(providers.TrustFacts)
+		refetch, verifiable = providers.RefetchFacts, ok && can
 	}
 	fresh, ferr := refetch(ctx, f)
 	if ferr == nil {
 		f = fresh
 	}
 	res := source.Classify(f)
-	if ferr != nil {
-		res.Reasons = append(res.Reasons, source.ReasonRefetchFailed)
+	if ferr != nil || !verifiable {
+		res = source.Unverified(res)
 	}
-	capClass, machine, err := h.machineCap(ctx, root)
+	limit, machine, err := h.machineCap(ctx, root)
 	if err != nil {
 		return res, err
 	}
 	if machine {
-		res = source.ApplyCap(res, capClass)
+		res = source.ApplyCap(res, limit)
 	}
 	return res, nil
 }
@@ -162,139 +165,4 @@ func (h SourceTrust) auditOverride(ctx context.Context, r TrustRequest, res sour
 		return fail(CodeTrust, "--trust owner needs an audit row and it could not be written: %v", err)
 	}
 	return nil
-}
-
-// gather reads the git facts of root at rev, the independent questions side by side. An answer git
-// did not give goes to Missing, never a guess.
-func (h SourceTrust) gather(ctx context.Context, root, rev string) source.GitFacts {
-	g := source.GitFacts{Head: rev, ReflogCreated: map[string]string{}}
-	git := func(args ...string) (string, int) {
-		out, exit, err := h.capture()(ctx, append([]string{"git", "-c", "core.fsmonitor=false", "-C", root}, args...)...)
-		if err != nil {
-			return "", -1
-		}
-		return strings.TrimSpace(out), exit
-	}
-	var refs []string
-	var symref, fetchHead string
-	var remotesOK, reflogOK bool
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	miss := func(key string) { mu.Lock(); g.Missing = append(g.Missing, key); mu.Unlock() }
-	run := func(f func()) { wg.Add(1); go func() { defer wg.Done(); f() }() }
-	run(func() {
-		out, exit := git("for-each-ref", "--format=%(refname)", "refs/remotes", "refs/pull")
-		refs, remotesOK = lines(out), exit == 0
-	})
-	run(func() { symref, _ = git("symbolic-ref", "-q", "refs/remotes/origin/HEAD") })
-	run(func() {
-		out, exit := git("rev-parse", "--is-inside-work-tree")
-		g.NotARepo = exit != 0 && strings.Contains(out, "not a git repository")
-	})
-	run(func() { fetchHead, _ = git("rev-parse", "-q", "--verify", "FETCH_HEAD") })
-	run(func() {
-		// Every reflog, not HEAD's alone: a temporary worktree (`evidence verify`) has a HEAD log of its
-		// own, while the branch logs that recorded the commit are shared.
-		out, exit := git("reflog", "show", "--all", "--format=%H%x09%gs", "-n", "5000")
-		reflogOK = exit == 0
-		for _, l := range lines(out) {
-			if sha, subject, ok := strings.Cut(l, "\t"); ok && !source.MadeHere(g.ReflogCreated[sha]) {
-				g.ReflogCreated[sha] = subject
-			}
-		}
-	})
-	wg.Wait()
-	if g.NotARepo {
-		return g
-	}
-	g.NoRemotes = remotesOK && len(refs) == 0 && fetchHead == ""
-	if !remotesOK {
-		miss(source.MissingRemoteRefs)
-	}
-	if !reflogOK {
-		miss(source.MissingReflog)
-	}
-	g.DefaultRemoteRef = defaultRef(symref, refs)
-	if g.DefaultRemoteRef == "" && !g.NoRemotes {
-		miss(source.MissingDefaultRef)
-	}
-	if g.NoRemotes || !remotesOK {
-		return g
-	}
-	remote := "origin"
-	if parts := strings.Split(g.DefaultRemoteRef, "/"); len(parts) > 3 {
-		remote = parts[2]
-	}
-	notRemote := []string{"--not", "--remotes", "--glob=refs/pull/*"}
-	if fetchHead != "" {
-		notRemote = append(notRemote, "FETCH_HEAD")
-	}
-	run(func() {
-		out, _ := git("for-each-ref", "--contains", rev, "--format=%(refname)", "refs/remotes/"+remote+"/")
-		g.OnOriginRef = len(lines(out)) > 0
-	})
-	run(func() {
-		out, exit := git("for-each-ref", "--contains", rev, "--format=%(refname)", "refs/remotes", "refs/pull")
-		g.OnAnyRemoteRef = exit == 0 && len(lines(out)) > 0
-		if !g.OnAnyRemoteRef && fetchHead != "" {
-			_, exit = git("merge-base", "--is-ancestor", rev, "FETCH_HEAD")
-			g.OnAnyRemoteRef = exit == 0
-		}
-	})
-	run(func() {
-		out, exit := git(append([]string{"rev-list", "-n", "501", rev}, notRemote...)...)
-		g.Unpushed = commits(out)
-		if exit != 0 || len(g.Unpushed) > maxCommits {
-			miss(source.MissingUnpushed)
-		}
-	})
-	if g.DefaultRemoteRef != "" {
-		run(func() {
-			_, exit := git("merge-base", "--is-ancestor", rev, g.DefaultRemoteRef)
-			g.ReachableFromDefault = exit == 0
-			if exit != 0 && exit != 1 {
-				miss(source.MissingReachable)
-			}
-		})
-		run(func() {
-			out, exit := git("rev-list", "-n", "501", rev, "--not", g.DefaultRemoteRef)
-			g.OffDefault = commits(out)
-			if exit != 0 || len(g.OffDefault) > maxCommits {
-				miss(source.MissingUnpushed)
-			}
-		})
-	}
-	wg.Wait()
-	return g
-}
-
-// defaultRef names the remote's default branch: origin/HEAD, else origin/main or origin/master.
-func defaultRef(symref string, refs []string) string {
-	if strings.HasPrefix(symref, "refs/remotes/") && strings.Count(symref, "/") >= 3 {
-		return symref
-	}
-	for _, want := range []string{"refs/remotes/origin/main", "refs/remotes/origin/master"} {
-		if slices.Contains(refs, want) {
-			return want
-		}
-	}
-	return ""
-}
-
-func lines(out string) (ls []string) {
-	for _, l := range strings.Split(out, "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			ls = append(ls, l)
-		}
-	}
-	return ls
-}
-
-func commits(out string) (cs []source.Commit) {
-	for _, l := range lines(out) {
-		if fullSHA.MatchString(l) {
-			cs = append(cs, source.Commit{SHA: l})
-		}
-	}
-	return cs
 }

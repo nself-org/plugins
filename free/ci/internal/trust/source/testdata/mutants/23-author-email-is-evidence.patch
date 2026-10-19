@@ -1,9 +1,9 @@
---- a/internal/run/trust_hook.go
-+++ b/internal/run/trust_hook.go
-@@ -204,6 +204,14 @@
- 		}
- 	})
- 	wg.Wait()
+--- a/internal/run/trust_git.go
++++ b/internal/run/trust_git.go
+@@ -91,6 +91,14 @@
+ 		return g
+ 	}
+ 	g.ReflogCreated = source.OldestEntries(entries)
 +	if me, _ := git("config", "user.email"); me != "" { // MUTANT: trust the author email
 +		out, _ := git("log", "-n", "500", "--format=%H %ae", rev)
 +		for _, l := range lines(out) {
@@ -12,6 +12,6 @@
 +			}
 +		}
 +	}
- 	if g.NotARepo {
- 		return g
- 	}
+ 	var fetched []string
+ 	if pathsOK {
+ 		var ok bool

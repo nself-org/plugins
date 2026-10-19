@@ -1,7 +1,7 @@
 --- a/internal/trust/source/local.go
 +++ b/internal/trust/source/local.go
-@@ -55,11 +55,7 @@
- 	if g.DefaultRemoteRef == "" || len(g.OffDefault) == 0 || g.OnAnyRemoteRef {
+@@ -58,11 +58,7 @@
+ 	if (g.DefaultRemoteRef == "" && !g.NeverFetched) || len(g.OffDefault) == 0 || g.OnAnyRemoteRef {
  		return false
  	}
 -	for _, m := range []string{MissingDefaultRef, MissingRemoteRefs, MissingUnpushed, MissingReflog} {

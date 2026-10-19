@@ -1,11 +1,11 @@
 --- a/internal/trust/source/local.go
 +++ b/internal/trust/source/local.go
-@@ -86,7 +86,7 @@
- 	case strings.HasPrefix(kind, "cherry-pick"):
- 		return true
- 	case kind == "merge" || strings.HasPrefix(kind, "merge "):
--		return !strings.Contains(subject, "Fast-forward")
-+		return true
+@@ -80,7 +80,7 @@
+ // moves a branch to a commit someone else made is not creation: a fast-forward (of a merge, a pull, a
+ // cherry-pick or a rebase), `rebase (finish)` and `rebase (start)`, checkout, fetch, pull, reset.
+ func MadeHere(subject string) bool {
+-	if strings.Contains(strings.ToLower(subject), "fast-forward") {
++	if false {
+ 		return false
  	}
- 	return false
- }
+ 	kind, _, _ := strings.Cut(subject, ":")

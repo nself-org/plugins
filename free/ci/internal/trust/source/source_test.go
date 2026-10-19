@@ -73,6 +73,10 @@ func TestClassifyFactsTable(t *testing.T) {
 		{"api trigger on a reachable sha", facts("api", admin, reachable), "owner"},
 		{"manual run, write access, reachable", facts("manual", reachable), "collaborator"},
 		{"schedule on the protected default branch", facts("schedule", func(f *model.TriggerFacts) { f.ActorPermission = model.Fact[string]{} }, protected), "owner"},
+		{"schedule with no provenance fact", facts("schedule", func(f *model.TriggerFacts) { f.ActorPermission = model.Fact[string]{} }), "untrusted"},
+		{"schedule claimed by a payload-only delivery", facts("schedule", func(f *model.TriggerFacts) {
+			f.ActorPermission, f.ProtectedRef = model.Fact[string]{}, fact(true, "payload")
+		}), "untrusted"},
 		{"unknown kind", facts("weird", admin, protected), "untrusted"},
 		{"dependabot login", facts("push", admin, protected, func(f *model.TriggerFacts) { f.Actor = fact("dependabot[bot]", "api") }), "untrusted"},
 		{"renovate login", facts("push", admin, protected, func(f *model.TriggerFacts) { f.Actor = fact("renovate", "api") }), "untrusted"},
@@ -157,6 +161,8 @@ func TestClassifyRunnerDemand(t *testing.T) {
 		{"workflow_run", demand(&yes, "workflow_run", "acme/widgets"), "untrusted"},
 		{"fork head repo", demand(&yes, "push", "evil/widgets"), "untrusted"},
 		{"event unknown", demand(&yes, "", "acme/widgets"), "untrusted"},
+		{"issue_comment runs the default branch on a stranger's input", demand(&yes, "issue_comment", "acme/widgets"), "untrusted"},
+		{"workflow_dispatch", demand(&yes, "workflow_dispatch", "acme/widgets"), "owner"},
 	}
 	for _, c := range cases {
 		if got := source.Classify(c.f); got.Class != c.want {
@@ -226,6 +232,42 @@ func TestClassifyApplyCap(t *testing.T) {
 	}
 }
 
+func TestClassifyMadeHere(t *testing.T) {
+	for subject, want := range map[string]bool{
+		"commit: w": true, "commit (initial): w": true, "commit (amend): w": true, "commit (merge): w": true,
+		"rebase (pick): w": true, "rebase -i (pick): w": true, "rebase (reword): w": true, "rebase (squash): w": true, "rebase (continue): w": true,
+		"cherry-pick: w": true, "cherry-pick (continue): w": true, "merge feat: Merge made by the 'ort' strategy.": true,
+		"rebase (finish): refs/heads/x onto 0123": false, "rebase (start): checkout main": false, "rebase (abort): returning to refs/heads/x": false,
+		"cherry-pick: fast-forward": false, "merge feat: Fast-forward": false, "rebase (pick): fast-forward": false, "pull: Fast-forward": false,
+		"checkout: moving from a to b": false, "branch: Created from FETCH_HEAD": false, "fetch origin: fast-forward": false,
+		"reset: moving to HEAD~1": false, "clone: from https://x": false, "": false,
+	} {
+		if got := source.MadeHere(subject); got != want {
+			t.Errorf("MadeHere(%q) = %v", subject, got)
+		}
+	}
+}
+
+func TestClassifyOldestEntries(t *testing.T) {
+	got := source.OldestEntries([]source.ReflogEntry{
+		{SHA: "foreign", Unix: 9, Subject: "cherry-pick: w"}, {SHA: "foreign", Unix: 1, Subject: "branch: Created from FETCH_HEAD"},
+		{SHA: "own", Unix: 9, Subject: "checkout: moving from main to feat"}, {SHA: "own", Unix: 1, Subject: "commit: w"},
+		{SHA: "tie", Unix: 5, Subject: "commit: w"}, {SHA: "tie", Unix: 5, Subject: "checkout: moving from a to b"},
+		{SHA: "tie2", Unix: 5, Subject: "checkout: moving from a to b"}, {SHA: "tie2", Unix: 5, Subject: "commit: w"},
+	})
+	want := map[string]string{"foreign": "branch: Created from FETCH_HEAD", "own": "commit: w", "tie": "commit: w", "tie2": "commit: w"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("OldestEntries = %v", got)
+	}
+}
+
+func TestClassifyUnverified(t *testing.T) {
+	r := source.Unverified(source.Result{Class: "owner", Reasons: []string{source.ReasonVerified}})
+	if r.Class != "untrusted" || !reflect.DeepEqual(r.Reasons, []string{source.ReasonRefetchFailed}) {
+		t.Fatalf("%+v", r)
+	}
+}
+
 func TestClassifyBotsAndLockfiles(t *testing.T) {
 	for login, want := range map[string]bool{"dependabot[bot]": true, "renovate[bot]": true, "Dependabot": true, "renovate": true, "ci-bot": true, "alice": false, "robot-fan": false, "dependabotlike": false} {
 		if got := source.IsBot(login); got != want {
@@ -277,6 +319,10 @@ func TestClassifyLocalFacts(t *testing.T) {
 		{"no remote at all", source.GitFacts{Head: "a", NoRemotes: true}, "owner"},
 		{"no remote but a fact is missing", source.GitFacts{Head: "a", NoRemotes: true, Missing: []string{source.MissingReflog}}, "untrusted"},
 		{"not a repository", source.GitFacts{Head: "a", NotARepo: true}, "owner"},
+		{"a merge, squash or rebase is unfinished", source.GitFacts{Head: "a", DefaultRemoteRef: def, ReachableFromDefault: true, InProgress: true}, "untrusted"},
+		{"unfinished operation in a repository with no remote", source.GitFacts{Head: "a", NoRemotes: true, InProgress: true}, "untrusted"},
+		{"remote configured, never fetched, all commits made here", source.GitFacts{Head: "b", NeverFetched: true, OffDefault: c("a", "b"), Unpushed: c("a", "b"), ReflogCreated: map[string]string{"a": "commit (initial): w", "b": "commit: w"}}, "owner"},
+		{"remote configured, never fetched, no reflog (an extracted archive)", source.GitFacts{Head: "b", NeverFetched: true, OffDefault: c("a", "b"), Unpushed: c("a", "b")}, "untrusted"},
 	}
 	for _, tc := range cases {
 		got := source.ClassifyLocal(tc.g)
@@ -397,6 +443,71 @@ func TestClassifyGitFixtures(t *testing.T) {
 		git(x.t, x.op, "fetch", "-q", "origin")
 		git(x.t, x.op, "checkout", "-q", "-b", "pr", "origin/pr")
 	}, "collaborator", source.ReasonLocalOnOrigin)
+	check("fast-forward rebase onto the stranger's commit", func(x *fx) {
+		git(x.t, x.op, "fetch", "-q", x.stranger, "pr")
+		sha := git(x.t, x.op, "rev-parse", "FETCH_HEAD")
+		git(x.t, x.op, "checkout", "-q", "-b", "x", "origin/main")
+		git(x.t, x.op, "rebase", "-q", sha)
+		git(x.t, x.op, "fetch", "-q", "origin")
+	}, "untrusted", source.ReasonLocalForeign)
+	check("fast-forward cherry-pick of the stranger's series", func(x *fx) {
+		x.commit(x.stranger, "evil2.txt")
+		git(x.t, x.op, "fetch", "-q", x.stranger, "pr")
+		git(x.t, x.op, "checkout", "-q", "-b", "y", "origin/main")
+		git(x.t, x.op, "cherry-pick", "--ff", "origin/main..FETCH_HEAD")
+		git(x.t, x.op, "fetch", "-q", "origin")
+	}, "untrusted", source.ReasonLocalForeign)
+	check("own commit that also sits on the second FETCH_HEAD line", func(x *fx) {
+		git(x.t, x.op, "branch", "basebr", "origin/main")
+		git(x.t, x.op, "checkout", "-q", "-b", "feat")
+		x.commit(x.op, "one.txt")
+		peer := filepath.Join(x.tmp, "peer")
+		git(x.t, x.tmp, "clone", "-q", x.op, peer)
+		git(x.t, x.op, "fetch", "-q", peer, "refs/remotes/origin/main", "feat")
+	}, "untrusted", source.ReasonLocalForeign)
+	check("merge --squash of the stranger's branch left uncommitted", func(x *fx) {
+		git(x.t, x.op, "fetch", "-q", x.stranger, "pr")
+		git(x.t, x.op, "merge", "-q", "--squash", "FETCH_HEAD")
+	}, "untrusted", source.ReasonLocalInProgress)
+	check("fork PR mapped into refs/remotes/origin/pr/*", func(x *fx) {
+		git(x.t, x.stranger, "push", "-q", "origin", "pr:refs/pull/1/head")
+		git(x.t, x.op, "config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*")
+		git(x.t, x.op, "fetch", "-q", "origin")
+		git(x.t, x.op, "checkout", "-q", "-b", "prx", "origin/pr/1")
+	}, "untrusted", source.ReasonLocalForeign)
+	check("fork PR mapped into a name no list knows", func(x *fx) {
+		git(x.t, x.stranger, "push", "-q", "origin", "pr:refs/pull/1/head")
+		git(x.t, x.op, "config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/fork-prs/*")
+		git(x.t, x.op, "fetch", "-q", "origin")
+		git(x.t, x.op, "checkout", "-q", "-b", "prx", "origin/fork-prs/1")
+	}, "untrusted", source.ReasonLocalForeign)
+	check("a git replace graft puts the stranger's commit under origin/main", func(x *fx) {
+		x.commit(x.op, "n.txt")
+		git(x.t, x.op, "push", "-q", "origin", "main")
+		tip := git(x.t, x.op, "rev-parse", "origin/main")
+		git(x.t, x.op, "checkout", "-q", "main")
+		x.checkoutStranger()
+		git(x.t, x.op, "replace", "--graft", tip, git(x.t, x.op, "rev-parse", "HEAD"))
+	}, "untrusted", source.ReasonLocalForeign)
+	check("origin/HEAD pointed at another remote's branch", func(x *fx) {
+		x.checkoutStranger()
+		git(x.t, x.op, "update-ref", "refs/remotes/attacker/main", "HEAD")
+		git(x.t, x.op, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/attacker/main")
+	}, "untrusted", source.ReasonLocalForeign)
+	check("remote configured but never fetched, own commits", func(x *fx) {
+		git(x.t, x.op, "remote", "remove", "origin")
+		git(x.t, x.op, "remote", "add", "origin", "https://example.test/x.git")
+		git(x.t, x.op, "checkout", "-q", "-b", "feat")
+		x.commit(x.op, "one.txt")
+	}, "owner", source.ReasonLocalCreated)
+	check("remote configured but never fetched, history from an archive", func(x *fx) {
+		git(x.t, x.op, "remote", "remove", "origin")
+		git(x.t, x.op, "remote", "add", "origin", "https://example.test/x.git")
+		x.commit(x.op, "one.txt")
+		if err := os.RemoveAll(filepath.Join(x.op, ".git", "logs")); err != nil {
+			x.t.Fatal(err)
+		}
+	}, "untrusted", source.ReasonLocalForeign)
 	check("repository with no remote", func(x *fx) {
 		git(x.t, x.op, "remote", "remove", "origin")
 		git(x.t, x.op, "checkout", "-q", "-b", "feat")
@@ -429,8 +540,31 @@ func TestClassifyGitNoRepoNoRevision(t *testing.T) {
 		t.Fatalf("a root git cannot enter says nothing about the history, so it is not the operator's: %+v %v", res, err)
 	}
 	res, err = h.Decide(context.Background(), run.TrustRequest{Root: dir})
+	if err != nil || res.Class != "owner" || !contains(res.Reasons, source.ReasonLocalNoGit) {
+		t.Fatalf("no revision, no repository: %+v %v", res, err)
+	}
+	git(t, dir, "init", "-q")
+	res, err = h.Decide(context.Background(), run.TrustRequest{Root: dir})
 	if err != nil || res.Class != "owner" || !contains(res.Reasons, source.ReasonLocalNoRevision) {
-		t.Fatalf("no revision: %+v %v", res, err)
+		t.Fatalf("no revision, a repository without a commit: %+v %v", res, err)
+	}
+	// git that cannot run in the directory (another user's repository: "dubious ownership") says nothing.
+	broken := run.SourceTrust{Capture: func(context.Context, ...string) (string, int, error) {
+		return "fatal: detected dubious ownership in repository", 128, nil
+	}}
+	res, err = broken.Decide(context.Background(), run.TrustRequest{Root: dir})
+	if err != nil || res.Class != "untrusted" || !contains(res.Reasons, source.ReasonLocalGitBroken) {
+		t.Fatalf("git unavailable: %+v %v", res, err)
+	}
+	res, err = broken.Decide(context.Background(), run.TrustRequest{Root: dir, Revision: strings.Repeat("a", 40)})
+	if err != nil || res.Class != "untrusted" {
+		t.Fatalf("every git question failed: %+v %v", res, err)
+	}
+	for _, rev := range []string{"--all", "HEAD", "abc", strings.Repeat("g", 40)} {
+		res, err = h.Decide(context.Background(), run.TrustRequest{Root: dir, Revision: rev})
+		if err != nil || res.Class != "untrusted" || !contains(res.Reasons, source.ReasonLocalBadRevision) {
+			t.Fatalf("revision %q: %+v %v", rev, res, err)
+		}
 	}
 }
 
@@ -573,12 +707,18 @@ func TestClassifyForgeRefetchesBeforeClassifying(t *testing.T) {
 	if err != nil || res.Class != "untrusted" || !contains(res.Reasons, source.ReasonRefetchFailed) {
 		t.Fatalf("a failed re-fetch leaves payload facts that cannot raise: %+v %v", res, err)
 	}
-	if res, err = (run.SourceTrust{}).ClassifyForge(context.Background(), t.TempDir(), facts("push", admin, protected)); err != nil || res.Class != "owner" {
-		t.Fatalf("an unknown provider keeps the facts as given: %+v %v", res, err)
+	// No registered provider can re-fetch, so API-labelled facts that arrived with the delivery cannot be checked.
+	res, err = (run.SourceTrust{}).ClassifyForge(context.Background(), t.TempDir(), facts("push", admin, protected))
+	if err != nil || res.Class != "untrusted" || !contains(res.Reasons, source.ReasonRefetchFailed) || contains(res.Reasons, source.ReasonVerified) {
+		t.Fatalf("an unknown provider must leave the run untrusted: %+v %v", res, err)
+	}
+	h.Refetch = func(_ context.Context, f model.TriggerFacts) (model.TriggerFacts, error) { return f, nil }
+	if res, err = h.ClassifyForge(context.Background(), t.TempDir(), facts("push", admin, protected)); err != nil || res.Class != "owner" {
+		t.Fatalf("verified API facts: %+v %v", res, err)
 	}
 	d := newDB(t)
 	d.setCap("untrusted")
-	m := run.SourceTrust{OpenStore: d.open, Getenv: func(string) string { return "mcp" }}
+	m := run.SourceTrust{OpenStore: d.open, Getenv: func(string) string { return "mcp" }, Refetch: h.Refetch}
 	if res, err = m.ClassifyForge(context.Background(), t.TempDir(), facts("push", admin, protected)); err != nil || res.Class != "untrusted" || !contains(res.Reasons, source.ReasonMachineCap) {
 		t.Fatalf("the cap applies to forge triggers too: %+v %v", res, err)
 	}

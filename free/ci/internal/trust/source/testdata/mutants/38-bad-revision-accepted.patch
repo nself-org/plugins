@@ -1,0 +1,11 @@
+--- a/internal/run/trust_hook.go
++++ b/internal/run/trust_hook.go
+@@ -51,8 +51,6 @@
+ 	switch {
+ 	case r.Revision == "":
+ 		res = h.noRevision(ctx, r.Root)
+-	case !fullSHA.MatchString(r.Revision):
+-		res = source.Result{Class: "untrusted", Reasons: []string{source.ReasonLocalBadRevision}}
+ 	default:
+ 		res = source.ClassifyLocal(h.gather(ctx, r.Root, r.Revision))
+ 	}

@@ -31,6 +31,9 @@ func ClassifyLocal(g GitFacts) Result {
 	if g.NotARepo {
 		return done(owner, ReasonLocalNoGit)
 	}
+	if g.InProgress {
+		return done(untrusted, ReasonLocalInProgress)
+	}
 	if g.NoRemotes && len(g.Missing) == 0 {
 		return done(owner, ReasonLocalNoRemote)
 	}
@@ -52,7 +55,7 @@ func ClassifyLocal(g GitFacts) Result {
 // createdHere: there are commits beyond the default branch, none of them is on any remote ref, and
 // the reflog first recorded each as made on this machine.
 func createdHere(g GitFacts) bool {
-	if g.DefaultRemoteRef == "" || len(g.OffDefault) == 0 || g.OnAnyRemoteRef {
+	if (g.DefaultRemoteRef == "" && !g.NeverFetched) || len(g.OffDefault) == 0 || g.OnAnyRemoteRef {
 		return false
 	}
 	for _, m := range []string{MissingDefaultRef, MissingRemoteRefs, MissingUnpushed, MissingReflog} {
@@ -72,21 +75,30 @@ func createdHere(g GitFacts) bool {
 	return true
 }
 
-// MadeHere reports whether a reflog subject records a commit created on this machine. A fast-forward
-// merge or pull moves the branch to a commit someone else made, and `rebase (start)` only checks out
-// the upstream, so neither counts.
+// MadeHere reports whether a reflog subject records a commit created on this machine: `commit`,
+// `commit (amend)`, a rebase step that rewrites a commit, `cherry-pick` and a merge. Anything that
+// moves a branch to a commit someone else made is not creation: a fast-forward (of a merge, a pull, a
+// cherry-pick or a rebase), `rebase (finish)` and `rebase (start)`, checkout, fetch, pull, reset.
 func MadeHere(subject string) bool {
+	if strings.Contains(strings.ToLower(subject), "fast-forward") {
+		return false
+	}
 	kind, _, _ := strings.Cut(subject, ":")
 	kind = strings.TrimSpace(kind)
 	switch {
 	case kind == "commit", strings.HasPrefix(kind, "commit ("):
 		return true
-	case strings.HasPrefix(kind, "rebase ("):
-		return kind != "rebase (start)" && kind != "rebase (abort)"
+	case strings.HasPrefix(kind, "rebase"):
+		for _, step := range []string{"(pick)", "(reword)", "(squash)", "(fixup)", "(edit)", "(continue)"} {
+			if strings.HasSuffix(kind, step) {
+				return true
+			}
+		}
+		return false
 	case strings.HasPrefix(kind, "cherry-pick"):
 		return true
 	case kind == "merge" || strings.HasPrefix(kind, "merge "):
-		return !strings.Contains(subject, "Fast-forward")
+		return true
 	}
 	return false
 }

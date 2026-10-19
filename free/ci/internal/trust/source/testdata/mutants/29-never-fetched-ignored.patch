@@ -1,0 +1,11 @@
+--- a/internal/trust/source/local.go
++++ b/internal/trust/source/local.go
+@@ -55,7 +55,7 @@
+ // createdHere: there are commits beyond the default branch, none of them is on any remote ref, and
+ // the reflog first recorded each as made on this machine.
+ func createdHere(g GitFacts) bool {
+-	if (g.DefaultRemoteRef == "" && !g.NeverFetched) || len(g.OffDefault) == 0 || g.OnAnyRemoteRef {
++	if g.DefaultRemoteRef == "" || len(g.OffDefault) == 0 || g.OnAnyRemoteRef {
+ 		return false
+ 	}
+ 	for _, m := range []string{MissingDefaultRef, MissingRemoteRefs, MissingUnpushed, MissingReflog} {

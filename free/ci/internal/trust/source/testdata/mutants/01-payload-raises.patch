@@ -1,6 +1,6 @@
 --- a/internal/trust/source/facts.go
 +++ b/internal/trust/source/facts.go
-@@ -102,7 +102,7 @@
+@@ -135,7 +135,7 @@
  
  // Authoritative reports whether a fact may RAISE trust: only a value the forge API (or this
  // machine) gave. A payload value, or one a caller supplied, can only lower trust.

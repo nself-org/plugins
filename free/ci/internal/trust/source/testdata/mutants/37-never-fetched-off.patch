@@ -1,0 +1,11 @@
+--- a/internal/run/trust_git.go
++++ b/internal/run/trust_git.go
+@@ -109,7 +109,7 @@
+ 		return g
+ 	}
+ 	g.NoRemotes = len(refs) == 0 && len(fetched) == 0 && len(remotes) == 0
+-	g.NeverFetched = len(refs) == 0 && len(fetched) == 0 && len(remotes) > 0
++	g.NeverFetched = false
+ 	g.DefaultRemoteRef = defaultRef(symref, refs)
+ 	if g.NoRemotes {
+ 		return g

@@ -8,7 +8,7 @@ package source
 // Constraints: pure and deterministic. A fact RAISES trust only when its source is the forge API or
 //          this machine (Authoritative); a payload or caller claim can only lower it, so a forged
 //          payload never gets above what the API facts give. A missing fact takes its untrusted
-//          value. Reasons come in rule order and name only rules that bound the class.
+//          value. Reasons come in rule order and name every rule whose ceiling is below owner.
 
 import (
 	"strings"
@@ -110,9 +110,13 @@ func provenance(f model.TriggerFacts, bind func(model.TrustClass, string)) {
 	protected, pok := trusted(f.ProtectedRef)
 	protected = pok && protected
 	switch f.Kind {
-	case "push", "schedule":
+	case "push":
 		if !protected && !reachable {
 			bind(collaborator, ReasonProvenance)
+		}
+	case "schedule":
+		if !protected && !reachable {
+			bind(untrusted, ReasonProvenance)
 		}
 	case "pull_request":
 		if !reachable {
@@ -133,8 +137,8 @@ func provenance(f model.TriggerFacts, bind func(model.TrustClass, string)) {
 }
 
 // runnerDemand: a job a forge asks a runner for is classified by the other facts only when the
-// group takes protected refs only, the event is one that runs the repository's own workflow
-// definition, and the head is the repository itself (HOST delta 10, review R5).
+// group takes protected refs only, the event is push, schedule or workflow_dispatch, and the head is
+// the repository itself (HOST delta 10, review R5).
 func runnerDemand(f model.TriggerFacts, bind func(model.TrustClass, string)) {
 	only, ok := trusted(f.GroupProtectedOnly)
 	event, eok := trusted(f.RunEvent)
@@ -142,8 +146,8 @@ func runnerDemand(f model.TriggerFacts, bind func(model.TrustClass, string)) {
 	switch {
 	case !ok || !only, !eok, !hok, !strings.EqualFold(head, f.Repo):
 		bind(untrusted, ReasonRunnerDemand)
-	case event == "pull_request_target" || event == "workflow_run":
-		bind(untrusted, ReasonRunnerDemand)
+	case event != "push" && event != "schedule" && event != "workflow_dispatch":
+		bind(untrusted, ReasonRunnerDemand) // issue_comment, pull_request_target, workflow_run and the like run the default branch on a stranger's input
 	}
 }
 
@@ -174,10 +178,24 @@ func needsApproval(f model.TriggerFacts, class model.TrustClass) bool {
 	return class != owner
 }
 
-// ApplyCap lowers r to cap (the `trust.machine_invoked_cap` of a machine-invoked run, Epic D27)
-// and records ReasonMachineCap when it did. An unknown cap value decodes to untrusted.
-func ApplyCap(r Result, cap model.TrustClass) Result {
-	c := trust.DecodeTrust(string(cap))
+// Unverified is r for facts that could not be re-fetched from the forge: nothing the delivery said
+// can be checked, so the class is untrusted.
+func Unverified(r Result) Result {
+	r.Class = untrusted
+	kept := make([]string, 0, len(r.Reasons)+1)
+	for _, reason := range r.Reasons {
+		if reason != ReasonVerified {
+			kept = append(kept, reason)
+		}
+	}
+	r.Reasons = append(kept, ReasonRefetchFailed)
+	return r
+}
+
+// ApplyCap lowers r to limit (the `trust.machine_invoked_cap` of a machine-invoked run, Epic D27)
+// and records ReasonMachineCap when it did. An unknown value decodes to untrusted.
+func ApplyCap(r Result, limit model.TrustClass) Result {
+	c := trust.DecodeTrust(string(limit))
 	if trust.RankTrust(c) >= trust.RankTrust(r.Class) {
 		return r
 	}

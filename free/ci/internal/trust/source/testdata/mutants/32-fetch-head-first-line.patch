@@ -1,0 +1,11 @@
+--- a/internal/run/trust_git.go
++++ b/internal/run/trust_git.go
+@@ -219,7 +219,7 @@
+ 	var shas []string
+ 	for _, l := range lines(string(b)) {
+ 		sha, _, _ := strings.Cut(l, "\t")
+-		if fullSHA.MatchString(sha) && !slices.Contains(shas, sha) && len(shas) < 64 {
++		if fullSHA.MatchString(sha) && !slices.Contains(shas, sha) && len(shas) < 1 {
+ 			shas = append(shas, sha)
+ 		}
+ 	}

@@ -1,0 +1,11 @@
+--- a/internal/trust/source/facts.go
++++ b/internal/trust/source/facts.go
+@@ -113,7 +113,7 @@
+ 	best := make(map[string]ReflogEntry, len(es))
+ 	for _, e := range es {
+ 		b, seen := best[e.SHA]
+-		if !seen || e.Unix < b.Unix || (e.Unix == b.Unix && !MadeHere(b.Subject) && MadeHere(e.Subject)) {
++		if !seen || e.Unix > b.Unix || (e.Unix == b.Unix && !MadeHere(b.Subject) && MadeHere(e.Subject)) {
+ 			best[e.SHA] = e
+ 		}
+ 	}

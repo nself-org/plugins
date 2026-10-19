@@ -1,0 +1,11 @@
+--- a/internal/run/trust_git.go
++++ b/internal/run/trust_git.go
+@@ -134,7 +134,7 @@
+ 			miss(source.MissingRemoteRefs)
+ 		}
+ 		for _, r := range lines(out) {
+-			if r != "refs/remotes/origin/HEAD" && !slices.ContainsFunc(skip, func(p string) bool { return strings.HasPrefix(r, p) }) {
++			if !slices.ContainsFunc(skip, func(p string) bool { return strings.HasPrefix(r, p) }) {
+ 				g.OnOriginRef = true
+ 			}
+ 		}
