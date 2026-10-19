@@ -1,0 +1,12 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -132,7 +132,8 @@
+ 			}
+ 		}
+ 		nodes = found
+-		return signing.Key{ID: id, Purpose: purpose, Public: found[0].Public}, true, nil
++		_ = purpose
++		return signing.Key{ID: id, Purpose: signing.PurposeCINode, Public: found[0].Public}, true, nil
+ 	}
+ 	revoked := func(id string) bool {
+ 		r, err := led.Revoked(ctx, id)

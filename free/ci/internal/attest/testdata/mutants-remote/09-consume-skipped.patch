@@ -1,0 +1,11 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -165,7 +165,7 @@
+ 	if ev.Job != nil {
+ 		use.Job = *ev.Job
+ 	}
+-	if err := led.Consume(ctx, use); errors.Is(err, ErrReplay) {
++	if err := error(nil); errors.Is(err, ErrReplay) {
+ 		return remoteFail(RemoteReplay, "the signature was consumed for another attempt", nil)
+ 	} else if err != nil {
+ 		return remoteFail(RemoteLedgerUnavailable, "consume", err)

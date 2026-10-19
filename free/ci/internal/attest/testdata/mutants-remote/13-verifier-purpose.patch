@@ -1,0 +1,11 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -142,7 +142,7 @@
+ 		}
+ 		return r
+ 	}
+-	sv, err := signing.NewLookupVerifier(signing.PurposeCINode, lookup, signing.WithRevoked(revoked))
++	sv, err := signing.NewLookupVerifier(signing.PurposeCIAudit, lookup, signing.WithRevoked(revoked))
+ 	if err == nil {
+ 		err = sv.VerifyContext(ctx, payload, signing.Signature{KeyID: keyID, Sig: raw})
+ 	}

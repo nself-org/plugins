@@ -1,0 +1,11 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -156,7 +156,7 @@
+ 		}
+ 	}
+ 	switch {
+-	case holder.NodeID == "":
++	case false:
+ 		return remoteFail(RemoteLeaseHolderMismatch, "the key is not the pinned key of the node that held the lease", nil)
+ 	case !holder.SigningEligible:
+ 		return remoteFail(RemoteNodeNotEligible, "the node is not signing eligible", nil)

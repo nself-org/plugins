@@ -1,0 +1,13 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -151,9 +151,7 @@
+ 	}
+ 	holder := KeyNode{}
+ 	for _, n := range nodes {
+-		if n.NodeID == facts.RunnerID {
+-			holder = n
+-		}
++		holder = n
+ 	}
+ 	switch {
+ 	case holder.NodeID == "":

@@ -1,0 +1,12 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -140,7 +140,8 @@
+ 			ledgerErr = err
+ 			return true
+ 		}
+-		return r
++		_ = r
++		return false
+ 	}
+ 	sv, err := signing.NewLookupVerifier(signing.PurposeCINode, lookup, signing.WithRevoked(revoked))
+ 	if err == nil {

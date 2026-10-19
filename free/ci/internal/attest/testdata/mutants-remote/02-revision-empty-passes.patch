@@ -1,0 +1,11 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -103,7 +103,7 @@
+ 	if !ok {
+ 		return remoteFail(RemoteAttemptUnknown, "no lease holder is recorded for the attempt", nil)
+ 	}
+-	if ev.Revision != facts.Revision {
++	if ev.Revision != facts.Revision && ev.Revision != "" {
+ 		return remoteFail(RemoteRevisionMismatch, "the evidence revision is not the attempt's revision", nil)
+ 	}
+ 	if replayed, rerr := led.Replayed(ctx, attempt, keyID, digest); rerr != nil {
