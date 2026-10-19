@@ -293,7 +293,7 @@ func removeIn(base *os.Root, rel string) error {
 		_ = chmodDirs(sub, ".")
 		_ = sub.Close()
 	}
-	return base.RemoveAll(rel)
+	return removeAll(base, rel)
 }
 
 func chmodDirs(root *os.Root, dir string) error {
