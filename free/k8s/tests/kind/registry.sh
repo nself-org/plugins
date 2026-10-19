@@ -44,9 +44,9 @@ registry_row() {
   local row
   row="$(jq -c --arg n "$2" '
     (if type == "array" then . else (.plugins // .) end) as $p
-    | if ($p | type) == "array" then ($p[] | select(.name == $n))
+    | first(if ($p | type) == "array" then ($p[] | select(.name == $n))
       elif ($p | type) == "object" then ($p[$n] // empty)
-      else empty end' "$1" | head -n 1)" || { reg_fail "$1 is not a readable registry"; return 1; }
+      else empty end)' "$1")" || { reg_fail "$1 is not a readable registry"; return 1; }
   [ -n "$row" ] || { reg_fail "the registry has no row for $2"; return 1; }
   printf '%s\n' "$row"
 }
@@ -101,7 +101,7 @@ assert_installed_version() {
 # but pre-chart bytes, so the version check alone would pass.
 assert_chart_era() {
   local paths c missing=""
-  paths="$(jq -r '.data.commands[]?.path | sub("^nself "; "")' "$1" 2>/dev/null)" ||
+  paths="$(jq -er '.data.commands | if type == "array" then .[].path | sub("^nself "; "") else error("no commands") end' "$1" 2>/dev/null)" ||
     { reg_fail "help --json k8s of the served k8s $2 is not a command listing"; return 1; }
   for c in $CHART_ERA_COMMANDS; do
     printf '%s\n' "$paths" | grep -qxF "k8s $c" || missing="$missing $c"

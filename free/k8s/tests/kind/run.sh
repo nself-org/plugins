@@ -110,12 +110,12 @@ nself() { HOME="$fixhome" DOCKER_CONFIG="${DOCKER_CONFIG:-$real_home/.docker}" "
 if [ "$SOURCE" = "registry" ]; then
   # Only the checkout's plugin.json version is read from free/k8s; nothing is built from it.
   checkout_version="$(jq -r '.version' "$k8s/plugin.json")"
-  # Both the fetch below and the cli read this registry; the cli falls back to another host
-  # only when this one fails.
-  NSELF_PLUGIN_REGISTRY="$(registry_url "$CLI_DIR")"
-  export NSELF_PLUGIN_REGISTRY
-  step "registry leg: the served k8s row at $NSELF_PLUGIN_REGISTRY (checkout $checkout_version)"
-  registry_fetch "$NSELF_PLUGIN_REGISTRY" "$KIND_WORK/registry.json"
+  # The fetch reads the document the cli reads. NSELF_PLUGIN_REGISTRY is not exported when the
+  # caller left it unset: the cli takes it as a full registry.json URL for the catalogue but as a
+  # base URL for the tarball, so only the cli's own defaults serve both.
+  registry_doc_url="$(registry_url "$CLI_DIR")"
+  step "registry leg: the served k8s row at $registry_doc_url (checkout $checkout_version)"
+  registry_fetch "$registry_doc_url" "$KIND_WORK/registry.json"
   served_version="$(registry_served_version "$KIND_WORK/registry.json" k8s)"
   case "$(uname -m)" in x86_64 | amd64) plat_arch=amd64 ;; *) plat_arch=arm64 ;; esac
   plat="$(uname -s | tr '[:upper:]' '[:lower:]')-$plat_arch"
@@ -128,7 +128,8 @@ if [ "$SOURCE" = "registry" ]; then
   (cd "$project" && nself add k8s </dev/null)
   test -f "$plug/k8s/plugin.json" || { echo "FAIL: registry leg: nself add k8s did not install $plug/k8s/plugin.json" >&2; exit 1; }
   assert_installed_version "$plug/k8s/plugin.json" "$served_version" "$checkout_version"
-  nself help --json k8s >"$KIND_WORK/help-k8s.json"
+  nself help --json k8s >"$KIND_WORK/help-k8s.json" ||
+    { echo "FAIL: registry leg: nself help --json k8s failed for the served k8s $served_version" >&2; exit 1; }
   assert_chart_era "$KIND_WORK/help-k8s.json" "$served_version"
   echo "registry leg: cli $(git -C "$CLI_DIR" rev-parse HEAD) proved served k8s $served_version"
 else

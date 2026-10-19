@@ -78,6 +78,8 @@ bad "installed and served older than checkout" "older than the checkout's 1.2.6"
 # Chart-era commands: the same version with OLD bytes must fail and name what is missing.
 bad "same version, old bytes" "served k8s 1.2.6 predates the chart" "lacks: values backup" -- assert_chart_era "$fx/help-old.json" 1.2.6
 ok "same version, chart-era bytes" assert_chart_era "$fx/help-new.json" 1.2.6
+bad "lookalike commands do not count" "lacks: values backup" -- assert_chart_era "$fx/help-lookalike.json" 1.2.6
+bad "error envelope is not a listing" "not a command listing" -- assert_chart_era "$fx/help-error.json" 1.2.6
 bad "help is not a listing" "not a command listing" -- assert_chart_era "$fx/served-missing.json.nope" 1.2.6
 eq "full leg, old bytes fail at the chart check" "1" \
   "$(assert_served_matches_checkout 1.2.6 1.2.6 2>/dev/null && assert_chart_era "$fx/help-old.json" 1.2.6 2>/dev/null; echo $?)"
