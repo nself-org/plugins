@@ -239,6 +239,9 @@ func (s *Sink) Close() error {
 		}
 		return err
 	case <-deadline.C:
+		if err != nil {
+			return err // a storage error that came first outranks the timeout
+		}
 		return s.giveUp()
 	}
 }
