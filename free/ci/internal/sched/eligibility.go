@@ -113,7 +113,7 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 	d.Hosted = hosted
 	jf := trust.JobFacts{Trust: j.Trust, SecretClasses: j.SecretClasses, Network: j.Network, PersonalOwnRun: j.PersonalOwnRun, Release: j.Pipeline.Release}
 	for _, tr := range trust.Admissible(jf, d, w.Policy.Trust) {
-		out = append(out, model.PlacementReasonDetail{Code: string(tr), Detail: string(tr)})
+		out = append(out, model.PlacementReasonDetail{Code: string(tr), Detail: trust.DetailOf(tr)})
 	}
 	if j.Requirements.IsolationMin != "" && trust.RankIsolation(d.Isolation) < trust.RankIsolation(trust.DecodeIsolation(string(j.Requirements.IsolationMin))) {
 		out = append(out, model.PlacementReasonDetail{Code: string(trust.IsolationBelowMinimum), Detail: "job isolation minimum"})

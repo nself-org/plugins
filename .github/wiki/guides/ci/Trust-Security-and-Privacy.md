@@ -107,6 +107,16 @@ To enable `userns` on user-mode Linux, install `uidmap` (for `newuidmap`), give 
 - The agent cannot kill or remove files that a job user owns. A separated node passes hygiene a `JobRunner`, which its job shim implements, and the kill and the removal then run as the job user. Without one, cleanup reports `E681` and the node drains rather than claiming success.
 - Between a check and the action it guards (the process group kill, a volume removal, the mount snapshot) there is a few-millisecond window. Closing it needs a PID namespace or cgroup per job.
 
+## The production boundary
+
+CI work stays off production hosts. Three rules apply at placement, and a refusal names `E689`:
+
+- **Deploy host** (`boundary.deploy_host`): a node matched as a deploy host takes no CI work.
+- **Overridden deploy host** (`boundary.override_minimum`): the operator may override a deploy host. It then takes only `owner` or `internal` jobs, at isolation `vm` or stronger, with no release or deploy secrets. Every placement there needs an audit row.
+- **Coordinator host** (`boundary.coordinator_host`): a node that is also the coordinator needs isolation `vm` or stronger in team mode, and for any `collaborator` or `untrusted` job. A personal coordinator keeps its operator's own `owner` and `internal` jobs at their normal minimums.
+
+`ci explain` and the plan document show the `E689` prefix in the reason detail. Fix: run the job on a node that is not a deploy host, or meet the override minimum above.
+
 ## Secrets
 
 A job asks for secrets by reference, never by value: `secrets: [project/NPM_TOKEN, release/ANDROID_KEYSTORE_PASSWORD, environment/staging/API_KEY, deploy/prod/DEPLOY_KEY, team/SHARED_TOKEN]`. The part after the last slash is the environment variable the job sees, and two refs may not use the same variable (`E674`). Names that would change how a process or the docker client runs (`PATH`, `HOME`, `DOCKER_*`, `LD_*`, `DYLD_*`, `GIT_*`, `NSELF_CI_*` and similar) are refused too.
