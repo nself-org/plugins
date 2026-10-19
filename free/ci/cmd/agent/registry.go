@@ -4,7 +4,7 @@ package main
 // subcommands (join, pull, advertise, upgrade, verify-release, job-shim) and
 // PreStart hooks from their own files, so main.go never needs editing.
 // Inputs:  RegisterSubcommand and RegisterPreStart calls, normally from init.
-// Outputs: lookup for main, and RunPreStart for serve, join and pull.
+// Outputs: lookup for main, and RunPreStart for serve, exec, join and pull.
 // Constraints: a name registers once; PreStart hooks run in registration order
 // and the first error stops the command before it reads or writes anything.
 

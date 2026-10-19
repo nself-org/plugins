@@ -104,3 +104,51 @@ func TestRegisterDefaultSourceTwicePanics(t *testing.T) {
 	}()
 	RegisterDefaultSource(func() AgentSource { return nil })
 }
+
+type pinnedSource struct {
+	countingSource
+	pin string
+}
+
+func (p *pinnedSource) PinnedVersion() string { return p.pin }
+
+// D-1223: an agent already on the node that is not the pinned release is reported, not silently accepted.
+func TestInstalledAgentThatDiffersFromThePinIsWarnedAbout(t *testing.T) {
+	cases := []struct {
+		name, pin string
+		warn      bool
+	}{{"older than pin", "1.6.0", true}, {"same as pin", "1.5.0", false}, {"no pin", "", false}}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			resetExtensions()
+			t.Cleanup(resetExtensions)
+			k := newKit(t)
+			src := &pinnedSource{countingSource{path: elfFixture(t, elf.EM_X86_64)}, c.pin}
+			RegisterDefaultSource(func() AgentSource { return src })
+			r, err := k.d.Add(context.Background(), AddOptions{Dest: "ci@have", HostKey: fpA, Trust: DefaultTrust()})
+			if err != nil {
+				t.Fatalf("add: %v", err)
+			}
+			if src.calls.Load() != 0 || len(k.copies) != 0 {
+				t.Fatalf("the installed agent must still be used as it is: calls %d copies %v", src.calls.Load(), k.copies)
+			}
+			if got := len(r.Warnings) > 0; got != c.warn {
+				t.Fatalf("warnings %v, want warning=%v", r.Warnings, c.warn)
+			}
+			if c.warn && (!strings.Contains(r.Warnings[0], "1.5.0") || !strings.Contains(r.Warnings[0], c.pin)) {
+				t.Fatalf("the warning must name both versions: %q", r.Warnings[0])
+			}
+		})
+	}
+}
+
+func TestAgentBinaryFlagSkipsThePinWarning(t *testing.T) {
+	resetExtensions()
+	t.Cleanup(resetExtensions)
+	k := newKit(t)
+	RegisterDefaultSource(func() AgentSource { return &pinnedSource{pin: "9.9.9"} })
+	r, err := k.d.Add(context.Background(), AddOptions{Dest: "ci@flag", HostKey: fpA, Source: LocalFile{Path: elfFixture(t, elf.EM_X86_64)}, Trust: DefaultTrust()})
+	if err != nil || len(r.Warnings) != 0 {
+		t.Fatalf("err %v warnings %v", err, r.Warnings)
+	}
+}
