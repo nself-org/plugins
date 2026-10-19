@@ -177,7 +177,7 @@ func (e *Engine) Save(ctx context.Context, r SaveRequest) (int64, error) {
 	var files int
 	var total int64
 	for _, name := range r.Dirs.names() {
-		digest, size, st, err := e.putDir(ctx, r.Base, realm, r.Dirs[name], maxBytes-total)
+		digest, size, st, err := e.putDir(ctx, r.Base, realm, r.Dirs[name], maxBytes-total, r.Spec.InflateScan)
 		if err != nil {
 			return 0, e.refuse(ctx, r, err)
 		}
@@ -231,8 +231,9 @@ func (c *capWriter) Write(p []byte) (int, error) {
 	return c.w.Write(p)
 }
 
-// putDir streams dir through tar, scan and gzip into the blob store.
-func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel string, budget int64) (string, int64, PackStats, error) {
+// putDir streams dir through tar, scan and gzip into the blob store; inflate
+// also scans inside the gzip payloads of the files (Spec.InflateScan).
+func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel string, budget int64, inflate bool) (string, int64, PackStats, error) {
 	pr, pw := io.Pipe()
 	var st PackStats
 	done := make(chan struct{})
@@ -242,7 +243,11 @@ func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel
 		defer func() { _ = pw.CloseWithError(err) }()
 		gz, _ := gzip.NewWriterLevel(&capWriter{w: pw, cap: budget}, gzip.BestSpeed)
 		sw := newScanWriter(gz, e.Scanner)
-		if st, err = Pack(ctx, base, rel, sw, cacheLimits()); err == nil {
+		var inf *inflater
+		if inflate {
+			inf = newInflater(e.Scanner)
+		}
+		if st, err = pack(ctx, base, rel, sw, cacheLimits(), inf); err == nil {
 			err = sw.Close()
 		}
 		if err == nil {

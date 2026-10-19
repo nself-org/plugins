@@ -21,7 +21,7 @@ func init() {
 		EnvAllow:  []string{"npm_config_registry", "pnpm_config_registry"},
 		Lockfiles: []string{"pnpm"}, Probes: []Probe{{"node", []string{"node", "--version"}}, {"pnpm", []string{"pnpm", "--version"}}},
 		applies: func(f []detect.Fact) bool { return has(f, "package_manager", "pnpm") }})
-	mustRegister(Spec{ID: "npm", Version: "1", Ecosystem: "node",
+	mustRegister(Spec{ID: "npm", Version: "2", Ecosystem: "node", InflateScan: true,
 		Dirs:      []Dir{{"cache", "npm_config_cache"}},
 		EnvAllow:  []string{"npm_config_registry"},
 		Lockfiles: []string{"npm"}, Probes: []Probe{{"node", []string{"node", "--version"}}, {"npm", []string{"npm", "--version"}}},
