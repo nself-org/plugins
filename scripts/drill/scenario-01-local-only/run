@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+# scenario-01-local-only drill (P7-CI-47, directive Acceptance functional 1, validation profiles 1 and 10).
+#
+# Purpose: prove that a machine with no cloud account and no network can run `nself ci` end to end: bare `nself ci` in a
+#   fresh `git init` with no remote, a Go repo, the same repo without gitleaks (fails closed), a polyglot repo with a
+#   declared postgres service, then `ci runs`, `ci logs`, `ci evidence`, `ci runs reproduce`. The ci plugin is built from
+#   THIS checkout and runs under an `nself` built from nself-org/cli origin/main (readiness R7); the served-bytes install
+#   leg is P7-CI-99's. Steps are separate checks in the one ci.evidence document printed on the last stdout line.
+# Inputs:  this checkout, git, jq, go, node, curl, perl, a passwordless sudo, a gitleaks (the pinned download when missing),
+#          Linux: nft and Docker; macOS: pfctl and (hosted) no Docker. By hand only: DRILL_NO_CUT=1 skips the cut and then
+#          the drill FAILS on purpose (it proves nothing about the network); NSELF_DRILL_CLI_BIN, NSELF_DRILL_CI_BIN.
+# Outputs: ONE ci.evidence/v1 document on the last stdout line; progress on stderr. Exit 0 when every step held, 1 when a
+#          step failed, 2 when a tool or the sudo credential is missing (checked first, so the drill never hangs).
+# Constraints: the cut is scoped to the drill's own group id (scripts/drill/fixtures/lib/cut.sh) so the runner agent keeps
+#          working; images are pulled before the cut; the cut is removed on every exit path; no --no-status anywhere.
+set -uo pipefail
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+lib=$root/scripts/drill/fixtures/lib
+for f in evidence tools make-fixtures cut; do
+	# shellcheck source=/dev/null
+	. "$lib/$f.sh"
+done
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/drill-s01.XXXXXX") || exit 2
+# Physical path: the executor refuses a workdir whose resolved path differs, and macOS TMPDIR sits behind /var -> /private/var.
+work=$(cd "$work" && pwd -P) || exit 2
+# shellcheck disable=SC2034 # read by cut.sh (the watchdog's stop file)
+CUT_WORK=$work
+svc_before=$(docker ps -aq --filter name=nselfci- 2>/dev/null | tr '\n' ' ')
+nets_before=$(docker network ls -q --filter name=nselfci- 2>/dev/null | tr '\n' ' ')
+# shellcheck disable=SC2329 # runs from the EXIT trap
+cleanup() {
+	cut_remove
+	# Only containers this run made: the ones that were there before it started belong to somebody else.
+	if command -v docker >/dev/null 2>&1; then
+		for id in $(docker ps -aq --filter name=nselfci- 2>/dev/null || true); do
+			case " $svc_before " in *" $id "*) ;; *) docker rm -f "$id" >/dev/null 2>&1 || true ;; esac
+		done
+	fi
+	case "$work" in */drill-s01.??????) rm -rf "$work" 2>/dev/null || sudo -n rm -rf "$work" 2>/dev/null || true ;; esac
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+trap 'exit 129' HUP
+ev_begin scenario-01-local-only "${BASH_SOURCE[0]}" "$root" "$work"
+for tool in git jq go node curl perl; do command -v "$tool" >/dev/null || tools_die "$tool is required"; done
+nocut=${DRILL_NO_CUT:-}
+[ -n "$nocut" ] || cut_preflight
+
+ci=$work/nself-ci
+tools_build_plugin "$ci"
+cli=$(tools_cli "$work") && [ -x "$cli" ] || exit 2
+glpath=$(tools_gitleaks_dir "$work") || exit 2
+gocache=$(go env GOCACHE) gopath=$(go env GOPATH)
+# shellcheck disable=SC2034 # read by ev_finish
+EV_TOOLS=$(jq -nc --arg go "$(go env GOVERSION)" --arg git "$(git --version | awk '{print $3}')" --arg os "$(uname -sr)" '{go: $go, git: $git, os: $os}')
+
+# The plugin is mounted the way the cli reads it: manifest in the plugin directory, binary in plugins/bin.
+mkdir -p "$work/home/.nself/plugins/ci" "$work/home/.nself/plugins/bin" "$work/bin" "$work/bin-gl" "$work/tmp" "$work/cihome"
+cp "$root/free/ci/plugin.json" "$work/home/.nself/plugins/ci/plugin.json"
+cp "$ci" "$work/home/.nself/plugins/bin/nself-ci"
+ln -s "$cli" "$work/bin/nself"
+ln -s "$glpath/gitleaks" "$work/bin-gl/gitleaks"
+# Docker is only used on Linux: the cut cannot see into the VM Docker Desktop runs on macOS, so a Mac is always the
+# no-Docker case here, whatever it has installed.
+for t in git go gofmt node jq; do
+	p=$(command -v "$t" 2>/dev/null) && ln -s "$p" "$work/bin/$t"
+done
+if [ "$(uname -s)" = Linux ] && p=$(command -v docker 2>/dev/null); then ln -s "$p" "$work/bin/docker"; fi
+gobin=$(dirname "$(command -v go)")
+[ -e "$work/bin/gofmt" ] || { [ ! -x "$gobin/gofmt" ] || ln -s "$gobin/gofmt" "$work/bin/gofmt"; }
+path_full="$work/bin:$work/bin-gl:/usr/bin:/bin"
+path_nogl="$work/bin:/usr/bin:/bin"
+pathv=$path_full
+
+# nrun ARGS...: nself with a scrubbed environment, a private HOME and run store, inside the cut when it is active.
+nrun() {
+	cut_exec /usr/bin/env -i PATH="$pathv" HOME="$work/home" TMPDIR="$work/tmp" LANG=C GOCACHE="$gocache" GOPATH="$gopath" \
+		GOTOOLCHAIN=local GOPROXY=off CI=1 NSELF_V15=1 NSELF_CI_HOME="$work/cihome" ${DOCKER_HOST:+DOCKER_HOST="$DOCKER_HOST"} "$work/bin/nself" "$@"
+}
+vjson() { jq -e "$2" "$1" >/dev/null 2>&1; }
+runid_of() { sed -n 's/.* run \(r[0-9T]*-[0-9a-f]*\).*/\1/p' "$1" | tail -n 1; }
+tail1() { ev_snip "$1"; }
+# why RUN [all]: why the checks of RUN that did not pass failed (their diagnosis and the end of their log; db-reachable aside
+# unless "all" is given: its failure is the expected one when Docker is down), then every check's result.
+why() {
+	local id skip=db-reachable
+	[ "${2:-}" != all ] || skip=-
+	for id in $(jq -r '.data.checks[] | select(.result != "pass" and .id != "'"$skip"'") | .id' "$work/why.json" 2>/dev/null); do
+		printf '[%s: %s ' "$id" "$(jq -c --arg id "$id" '.data.checks[] | select(.id == $id) | del(.id, .job_id, .kind, .tool, .tool_version, .required, .substantive, .log_ref, .remediation)' "$work/why.json" 2>/dev/null | cut -c1-200)"
+		nrun ci logs "$id" --run "$1" 2>&1 | grep -v 'moved to' | tail -n 2 | tr '\n' ' ' | cut -c1-170
+		printf '] '
+	done
+	jq -r '[.data.checks[] | "\(.id)=\(.result)"] | join(" ")' "$work/why.json" 2>/dev/null | tr -d '\n'
+}
+# pk: where the cut's packet counter stands now, for the step messages (empty when there is no cut).
+pk() { [ -n "$nocut" ] || printf ' [cut packets %s]' "$(cut_packets)"; }
+finish() { cd "$root" || true; ev_finish; exit $?; }
+
+docker_ok=0
+if [ -x "$work/bin/docker" ] && "$work/bin/docker" info >/dev/null 2>&1; then docker_ok=1; fi
+case "$(uname -s)" in
+Linux)
+	if [ $docker_ok -eq 1 ]; then ev_pass docker-present "Docker answers (the service leg runs)"; else ev_fail docker-present "Docker does not answer on Linux"; finish; fi
+	# Everything the postgres service needs is pulled while the network is still there.
+	if docker pull --quiet postgres:16-alpine >/dev/null 2>"$work/pull.err"; then ev_pass images-pulled "postgres:16-alpine is local before the cut"; else ev_fail images-pulled "docker pull failed: $(tail1 "$work/pull.err")"; finish; fi
+	# One run of the service repo before the cut pulls whatever else the nself stack asks docker for; the run under the cut
+	# must then need nothing from the network.
+	fx_polyglot "$work/warm"
+	(cd "$work/warm" && nrun ci >"$work/warm.out" 2>&1)
+	rc=$?
+	if [ $rc -eq 0 ]; then ev_pass service-warmup "the service repo ran once with the network (images and caches are local)"; else ev_fail service-warmup "the warm-up run exited $rc: $(tail1 "$work/warm.out")"; finish; fi
+	images_before=$(docker images -q | sort -u | tr '\n' ' ')
+	;;
+*) ev_pass docker-absent "docker answers: $docker_ok (hosted macOS has none; the service job must end E637)" ;;
+esac
+
+# 1. The cut, with a control: a connection from inside it must fail and be counted, then nothing more may be counted.
+if [ -n "$nocut" ]; then
+	ev_fail egress-cut "NOT CUT: DRILL_NO_CUT is a debugging switch; this run proves nothing about the network"
+else
+	if ! cut_apply; then ev_fail egress-cut "the platform refused the cut rule: $CUT_ERR"; finish; fi
+	if ! st=$(cut_selftest); then ev_fail egress-cut "the commands under the cut do not run as intended: $st"; finish; fi
+	p0=$(cut_packets)
+	if ! cut_probe_ip; then ev_fail egress-cut "a connection to 1.1.1.1 succeeded after the cut: $(cut_info)"; finish; fi
+	p1=$(cut_packets)
+	if ! cut_probe_dns; then ev_fail egress-cut "a name lookup succeeded after the cut: $(cut_info)"; finish; fi
+	p1b=$(cut_packets)
+	if [ "${p1:-0}" -gt "${p0:-0}" ] && { [ "$CUT_OS" != Linux ] || [ "${p1b:-0}" -gt "${p1:-0}" ]; }; then
+		ev_pass egress-cut "probes (an address and, on Linux, a name) failed and were counted ($p0 -> $p1 -> $p1b packets); $CUT_NOTE; $(cut_info)"
+		p1=$p1b
+	else
+		ev_fail egress-cut "a probe failed but the rules counted nothing ($p0 -> $p1 -> $p1b): $(cut_info)"
+		finish
+	fi
+fi
+
+# 2. Bare `nself ci` (no --no-status) in a fresh git init with no remote: a Go repo with git, go and gitleaks.
+repo=$work/go
+fx_go "$repo"
+cd "$repo" || exit 2
+nrun ci >"$work/a.out" 2>&1
+rc=$?
+run_a=$(runid_of "$work/a.out")
+if [ $rc -eq 0 ] && [ -n "$run_a" ] && grep -q 'status not posted: no GitHub remote' "$work/a.out"; then
+	ev_pass bare-no-remote "bare nself ci passed (run $run_a) and said in one line why no status was posted$(pk)"
+else
+	[ -z "$run_a" ] || nrun ci evidence "$run_a" --json >"$work/why.json" 2>/dev/null
+	ev_fail bare-no-remote "exit $rc, run '$run_a': $(tail1 "$work/a.out") $(why "$run_a")"
+fi
+nrun ci evidence "$run_a" --json >"$work/a.json" 2>"$work/a.err"
+if vjson "$work/a.json" '.data.result == "pass" and ([.data.checks[] | select(.id | IN("go.fmt", "go.vet", "go.test", "secrets.gitleaks"))] | (length == 4 and all(.result == "pass")))'; then
+	ev_pass go-evidence "ci evidence --json: the Go repo passed fmt, vet, test and the gitleaks scan$(pk)"
+else
+	ev_fail go-evidence "evidence for $run_a: $(jq -c '{result: .data.result, checks: [.data.checks[] | {id, result}]}' "$work/a.json" 2>/dev/null | head -c 300)"
+fi
+
+# 3. History works offline: runs, logs, evidence, reproduce.
+nrun ci runs --json >"$work/r.json" 2>"$work/r.err"
+if jq -e --arg id "$run_a" '.data | any(.id == $id and .status == "passed")' "$work/r.json" >/dev/null 2>&1; then
+	ev_pass runs-history "ci runs lists $run_a as passed$(pk)"
+else
+	ev_fail runs-history "ci runs does not list $run_a as passed: $(head -c 200 "$work/r.json")"
+fi
+nrun ci logs go.test --run "$run_a" >"$work/l.out" 2>&1
+rc=$?
+if [ $rc -eq 0 ] && [ -s "$work/l.out" ]; then ev_pass logs-offline "ci logs go.test printed the stored log$(pk)"; else ev_fail logs-offline "exit $rc: $(tail1 "$work/l.out")"; fi
+nrun ci runs reproduce go.fmt --run "$run_a" --check >"$work/c.out" 2>&1
+rc=$?
+# The re-run's own exit code is not asserted: a single-job reproduce counts the jobs it left out as not passed and exits 1
+# (debt row filed with this Ticket); the document says whether it reproduced.
+nrun ci runs reproduce go.fmt --run "$run_a" --json >"$work/p.json" 2>"$work/p.err"
+if [ $rc -eq 0 ] && grep -q "reproduce go.fmt at $(git rev-parse --short=12 HEAD)" "$work/c.out" &&
+	vjson "$work/p.json" '.data.link.reproduced == true and .data.link.original.result == "pass" and .data.link.reproduction.result == "pass"'; then
+	ev_pass reproduce "ci runs reproduce go.fmt reports its recorded inputs (--check) and re-ran to the same result from the recorded commit"
+else
+	ev_fail reproduce "check exit $rc: $(tail1 "$work/c.out") / $(jq -c '.data.link | {reproduced, original: .original.result, reproduction: .reproduction.result}' "$work/p.json" 2>/dev/null | head -c 200)"
+fi
+
+# 4. The same repo without gitleaks fails closed: never a pass.
+repo=$work/nogl
+fx_go "$repo"
+cd "$repo" || exit 2
+pathv=$path_nogl
+nrun ci >"$work/g.out" 2>&1
+rc=$?
+pathv=$path_full
+# The planner refuses a required check whose tool is missing (E618, unplaceable.tool) before the runner can classify it
+# (E614); both fail closed and name gitleaks.
+if [ $rc -ne 0 ] && grep -Eq 'E614|E618' "$work/g.out" && grep -qi gitleaks "$work/g.out" && ! grep -q 'nself-ci: pass' "$work/g.out"; then
+	ev_pass no-gitleaks-fails "without gitleaks the run fails closed (exit $rc): $(tail1 "$work/g.out")$(pk)"
+else
+	ev_fail no-gitleaks-fails "expected a non-zero exit with E614/E618 naming gitleaks, got exit $rc: $(tail1 "$work/g.out")"
+fi
+
+# 5. A polyglot repo with a declared postgres service. Linux starts and tears it down. Without a working Docker the
+#    service job cannot run: with no Docker at all (hosted macOS) the planner refuses the run before it starts (E618,
+#    unplaceable.docker, exit 2; the Epic text says E637, debt row filed); with a Docker CLI whose daemon is down the
+#    service job ends E637 with its remediation and every other job passes. Both are exercised.
+repo=$work/poly
+fx_polyglot "$repo"
+cd "$repo" || exit 2
+others='[.data.checks[] | select(.id != "db-reachable") | .result] | (length == 3 and all(. == "pass"))'
+if [ "$docker_ok" -eq 1 ]; then
+	nrun ci >"$work/y.out" 2>&1
+	rc=$?
+	run_y=$(runid_of "$work/y.out")
+	nrun ci evidence "$run_y" --json >"$work/y.json" 2>"$work/y.err"
+	left=0 nets=0
+	for id in $(docker ps -aq --filter name=nselfci- 2>/dev/null); do case " $svc_before " in *" $id "*) ;; *) left=$((left + 1)) ;; esac; done
+	for id in $(docker network ls -q --filter name=nselfci- 2>/dev/null); do case " $nets_before " in *" $id "*) ;; *) nets=$((nets + 1)) ;; esac; done
+	if [ $rc -eq 0 ] && vjson "$work/y.json" ".data.result == \"pass\" and ($others) and ([.data.checks[] | select(.id == \"db-reachable\") | .result] == [\"pass\"])" && [ "$left" = 0 ] && [ "$nets" = 0 ]; then
+		ev_pass polyglot-service "all four jobs passed with the postgres service and nothing was left running (run $run_y)$(pk)"
+		# The docker daemon makes its own connections (outside the cut's group), so any new image means it pulled one.
+		images_after=$(docker images -q | sort -u | tr '\n' ' ')
+		if [ "$images_before" = "$images_after" ]; then ev_pass no-image-pulled "the service run pulled no image"; else ev_fail no-image-pulled "images changed during the cut: before [$images_before] after [$images_after]"; fi
+	else
+		cp "$work/y.json" "$work/why.json"
+		ev_fail polyglot-service "exit $rc, containers left $left, networks left $nets: $(why "$run_y" all)$(pk)"
+	fi
+else
+	if [ ! -e "$work/bin/docker" ]; then
+		nrun ci >"$work/y.out" 2>&1
+		rc=$?
+		if [ $rc -ne 0 ] && grep -Eq 'E618|E637' "$work/y.out" && grep -qi docker "$work/y.out" && ! grep -q 'nself-ci: pass' "$work/y.out"; then
+			ev_pass polyglot-no-docker "with no Docker the service run fails closed before starting (exit $rc): $(tail1 "$work/y.out")"
+		else
+			ev_fail polyglot-no-docker "expected a non-zero exit naming Docker (E618/E637), got $rc: $(tail1 "$work/y.out")"
+		fi
+		# A docker CLI whose daemon is down: what a laptop with Docker Desktop closed looks like.
+		printf '#!/bin/sh\necho "Cannot connect to the Docker daemon (drill stand-in: the daemon is down)" >&2\nexit 1\n' >"$work/bin/docker"
+		chmod +x "$work/bin/docker"
+	fi
+	nrun ci >"$work/z.out" 2>&1
+	rc=$?
+	run_z=$(runid_of "$work/z.out")
+	nrun ci evidence "$run_z" --json >"$work/z.json" 2>"$work/z.err"
+	if [ $rc -ne 0 ] && grep -q 'E637' "$work/z.out" && grep -q 'start Docker or Colima' "$work/z.out" && vjson "$work/z.json" "($others) and ([.data.checks[] | select(.id == \"db-reachable\") | .result] == [\"error\"])"; then
+		ev_pass polyglot-docker-down "db-reachable ended E637 with its remediation and the other three jobs passed (run $run_z)"
+	else
+		cp "$work/z.json" "$work/why.json"
+		ev_fail polyglot-docker-down "exit $rc: $(why "$run_z")"
+	fi
+fi
+
+# 6. The Node/pnpm and Rust fixtures are detected and planned (the plan needs no toolchain, so this holds on any host).
+for eco in node:node.test rust:rust.test; do
+	repo=$work/${eco%%:*}
+	"fx_${eco%%:*}" "$repo"
+	cd "$repo" || exit 2
+	nrun ci plan >"$work/pl-${eco%%:*}.out" 2>&1
+	rc=$?
+	if [ $rc -eq 0 ] && grep -q "${eco##*:}" "$work/pl-${eco%%:*}.out"; then
+		ev_pass "plan-${eco%%:*}" "the ${eco%%:*} fixture is detected and ${eco##*:} is planned"
+	else
+		ev_fail "plan-${eco%%:*}" "exit $rc: $(tail1 "$work/pl-${eco%%:*}.out")"
+	fi
+done
+
+# 7. Nothing tried to leave the machine after the probe.
+if [ -z "$nocut" ]; then
+	p2=$(cut_packets)
+	if [ "${p2:-x}" = "${p1:-y}" ]; then
+		ev_pass no-egress-after-cut "0 packets counted after the probes ($p1 -> $p2); $CUT_NOTE; $(cut_info)"
+	else
+		ev_fail no-egress-after-cut "the rule counted ${p2:-?} packets, $p1 at the probe: $(cut_info)"
+	fi
+	cut_remove
+fi
+finish

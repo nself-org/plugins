@@ -59,3 +59,11 @@ infra retry (one) may run the drill a second time. A discovered job has the defa
 longer timeout or an environment variable, define a job named `drill-<name>`
 with `kind: drill` in `.nself/ci.yaml`. A job defined there replaces the
 discovered one; the directory still decides that the job exists.
+
+## Acceptance scenario drills (scenario-01, scenario-12)
+
+`scenario-12-external-consumer` needs only `jq`, `git` and Go. `scenario-01-local-only` cuts the network for its own
+processes (a dedicated group id) and so needs a passwordless `sudo`, `nft` (Linux) or `pfctl` (macOS), and on Linux Docker.
+On Linux the cut also drops forwarding out of every docker bridge and the docker daemon's own egress, so it refuses to start
+while other containers run (set `DRILL_CUT_ALLOW_SHARED_HOST=1` on a host that is only for this drill). Run it on a hosted
+runner or a throwaway VM, not on a shared developer or CI box. See `fixtures/lib/cut.sh` for what is and is not measured.
