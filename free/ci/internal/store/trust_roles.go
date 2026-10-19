@@ -44,6 +44,12 @@ type Token struct {
 	IssuedAt, ExpiresAt, RevokedAt                 int64
 }
 
+// subjectOK: a subject is "self" or the principal's own name, and the name "self" is never a principal
+// (it would hide a remote identity from NonSelfPrincipals).
+func subjectOK(principal, subject string) bool {
+	return subject == SubjectSelf || (subject == principal && principal != SubjectSelf)
+}
+
 func encodeProjects(p []string) (string, error) {
 	if p == nil {
 		p = []string{}
@@ -60,7 +66,7 @@ func decodeProjects(s string) []string {
 
 // GrantPut replaces the principal's live grant (the old row is revoked, not edited).
 func (s *Store) GrantPut(ctx context.Context, g Grant, in AuditInput) error {
-	if g.Principal == "" || g.Role == "" || g.Subject == "" || g.GrantedBy == "" {
+	if g.Principal == "" || g.Role == "" || g.GrantedBy == "" || !subjectOK(g.Principal, g.Subject) {
 		return coded("E607", "invalid grant")
 	}
 	projects, err := encodeProjects(g.Projects)
@@ -80,16 +86,23 @@ func (s *Store) GrantPut(ctx context.Context, g Grant, in AuditInput) error {
 	})
 }
 
-// GrantRevoke ends the principal's live grant; false means there was none (nothing is audited).
+// GrantRevoke ends the principal's live grant and every live token issued to the principal, in one
+// transaction with one audit row; false means there was neither (nothing is audited).
 func (s *Store) GrantRevoke(ctx context.Context, principal string, in AuditInput) (found bool, err error) {
 	err = s.write(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, "UPDATE trust_grant SET revoked_at=? WHERE principal=? AND revoked_at IS NULL", s.now().UnixNano(), principal)
+		now := s.now().UnixNano()
+		g, err := tx.ExecContext(ctx, "UPDATE trust_grant SET revoked_at=? WHERE principal=? AND revoked_at IS NULL", now, principal)
 		if err != nil {
 			return err
 		}
-		n, err := res.RowsAffected()
-		if err != nil || n == 0 {
+		t, err := tx.ExecContext(ctx, "UPDATE trust_token SET revoked_at=? WHERE principal=? AND revoked_at IS NULL", now, principal)
+		if err != nil {
 			return err
+		}
+		gn, _ := g.RowsAffected()
+		tn, _ := t.RowsAffected()
+		if gn+tn == 0 {
+			return nil
 		}
 		found = true
 		return s.auditIn(ctx, tx, in)
@@ -123,7 +136,7 @@ func (s *Store) GrantList(ctx context.Context) ([]Grant, error) {
 
 // TokenPut stores a token's digest row.
 func (s *Store) TokenPut(ctx context.Context, t Token, in AuditInput) error {
-	if t.ID == "" || t.Digest == "" || t.Principal == "" || t.Role == "" || t.Subject == "" || t.IssuedBy == "" || t.ExpiresAt <= 0 {
+	if t.ID == "" || t.Digest == "" || t.Principal == "" || t.Role == "" || t.IssuedBy == "" || t.ExpiresAt <= 0 || !subjectOK(t.Principal, t.Subject) {
 		return coded("E607", "invalid token")
 	}
 	projects, err := encodeProjects(t.Projects)
@@ -174,6 +187,15 @@ func (s *Store) TokenByDigest(ctx context.Context, digest string) (Token, bool, 
 	return t, err == nil, err
 }
 
+// TokenByID finds a token by its id.
+func (s *Store) TokenByID(ctx context.Context, id string) (Token, bool, error) {
+	t, err := scanToken(s.readers.QueryRowContext(ctx, "SELECT "+tokenCols+" FROM trust_token WHERE id=?", id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Token{}, false, nil
+	}
+	return t, err == nil, err
+}
+
 // TokenList returns every token, newest first (revoked and expired ones carry their state).
 func (s *Store) TokenList(ctx context.Context) ([]Token, error) {
 	rows, err := s.readers.QueryContext(ctx, "SELECT "+tokenCols+" FROM trust_token ORDER BY issued_at DESC, id")
@@ -183,7 +205,7 @@ func (s *Store) TokenList(ctx context.Context) ([]Token, error) {
 // CertSubjectPut records whether a user certificate was issued to the operator itself (subject "self")
 // or to a named principal.
 func (s *Store) CertSubjectPut(ctx context.Context, serial, principal, subject string) error {
-	if serial == "" || principal == "" || subject == "" {
+	if serial == "" || principal == "" || !subjectOK(principal, subject) {
 		return coded("E607", "invalid certificate subject")
 	}
 	return s.write(ctx, func(tx *sql.Tx) error {

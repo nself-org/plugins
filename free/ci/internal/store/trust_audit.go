@@ -14,6 +14,7 @@ import (
 	"database/sql"
 	"embed"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -108,6 +109,15 @@ func sealPending(ctx context.Context, tx *sql.Tx, seal AuditSealer) (int, error)
 	if err = errors.Join(rows.Err(), rows.Close()); err != nil || len(todo) == 0 {
 		return 0, err
 	}
+	// Rows are sealed in seq order under one write lock, so an unsealed row below a sealed one means a head
+	// was cleared. Sealing it would spread the damage; refuse and let --verify name the row.
+	var top int64
+	if err = tx.QueryRowContext(ctx, "SELECT COALESCE(MAX(seq),0) FROM audit WHERE head IS NOT NULL").Scan(&top); err != nil {
+		return 0, err
+	}
+	if top > todo[0].Seq {
+		return 0, coded("E607", "audit row "+strconv.FormatInt(todo[0].Seq, 10)+" is unsealed below a sealed row; run `nself ci serve admin audit --verify`")
+	}
 	var prev []byte
 	err = tx.QueryRowContext(ctx, "SELECT head FROM audit WHERE seq<? AND head IS NOT NULL ORDER BY seq DESC LIMIT 1", todo[0].Seq).Scan(&prev)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -118,20 +128,61 @@ func sealPending(ctx context.Context, tx *sql.Tx, seal AuditSealer) (int, error)
 		if err != nil {
 			return 0, err
 		}
-		if _, err = tx.ExecContext(ctx, "UPDATE audit SET prev_head=?,head=?,signature=? WHERE seq=? AND head IS NULL", prev, c.Head, c.Signature, r.Seq); err != nil {
+		res, err := tx.ExecContext(ctx, "UPDATE audit SET prev_head=?,head=?,signature=? WHERE seq=? AND head IS NULL", prev, c.Head, c.Signature, r.Seq)
+		if err != nil {
 			return 0, err
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			return 0, coded("E607", "audit row changed while sealing")
 		}
 		prev = c.Head
 	}
 	return len(todo), nil
 }
 
+type querier interface {
+	QueryContext(ctx context.Context, q string, args ...any) (*sql.Rows, error)
+}
+
 // AuditEntries returns up to limit rows with seq > after, in seq order.
 func (s *Store) AuditEntries(ctx context.Context, after int64, limit int) ([]AuditEntry, error) {
+	return auditEntries(ctx, s.readers, after, limit)
+}
+
+// AuditSnapshot is one read transaction over the audit table: every page it returns comes from the same
+// moment, so a sealer committing between pages cannot make a verification see a half-sealed chain.
+type AuditSnapshot struct{ tx *sql.Tx }
+
+// AuditSnapshot opens a snapshot; Close it.
+func (s *Store) AuditSnapshot(ctx context.Context) (*AuditSnapshot, error) {
+	tx, err := s.readers.BeginTx(ctx, nil)
+	return &AuditSnapshot{tx: tx}, err
+}
+
+// Entries is AuditEntries inside the snapshot.
+func (a *AuditSnapshot) Entries(ctx context.Context, after int64, limit int) ([]AuditEntry, error) {
+	return auditEntries(ctx, a.tx, after, limit)
+}
+
+// HighSeq is the highest seq the table ever issued (its AUTOINCREMENT counter), 0 for an empty log. Rows
+// are never deleted, so a counter above the last row means the newest rows were removed.
+func (a *AuditSnapshot) HighSeq(ctx context.Context) (int64, error) {
+	var n int64
+	err := a.tx.QueryRowContext(ctx, "SELECT seq FROM sqlite_sequence WHERE name='audit'").Scan(&n)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return n, err
+}
+
+// Close ends the snapshot.
+func (a *AuditSnapshot) Close() error { return a.tx.Rollback() }
+
+func auditEntries(ctx context.Context, q querier, after int64, limit int) ([]AuditEntry, error) {
 	if limit <= 0 || limit > 5000 {
 		limit = 5000
 	}
-	rows, err := s.readers.QueryContext(ctx, "SELECT seq,ts,actor,action,target,detail,prev_head,head,signature FROM audit WHERE seq>? ORDER BY seq LIMIT ?", after, limit)
+	rows, err := q.QueryContext(ctx, "SELECT seq,ts,actor,action,target,detail,prev_head,head,signature FROM audit WHERE seq>? ORDER BY seq LIMIT ?", after, limit)
 	if err != nil {
 		return nil, err
 	}

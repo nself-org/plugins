@@ -100,8 +100,80 @@ func TestVerifyDetectsDeletedRow(t *testing.T) {
 	}
 	exec1(t, path, "DELETE FROM audit WHERE seq=2")
 	rep, _ := l.Verify(ctx, 0)
-	if rep.OK() || rep.BadSeq != 3 {
-		t.Fatalf("a deleted middle row must break the link at the next row: %+v", rep)
+	if rep.OK() || rep.BadSeq != 2 {
+		t.Fatalf("a deleted middle row is named by its seq: %+v", rep)
+	}
+}
+
+func TestVerifyDetectsRemovedNewestRows(t *testing.T) {
+	l, _, path := newLog(t)
+	ctx := context.Background()
+	for i := 0; i < 5; i++ {
+		_ = l.Append(ctx, ev(i))
+	}
+	exec1(t, path, "DELETE FROM audit WHERE seq>=4")
+	rep, _ := l.Verify(ctx, 0)
+	if rep.OK() || rep.BadSeq != 4 {
+		t.Fatalf("removed newest rows are named by the first missing seq: %+v", rep)
+	}
+	// A later Append chains onto the surviving head, and the gap stays visible.
+	if err := l.Append(ctx, ev(9)); err != nil {
+		t.Fatal(err)
+	}
+	if rep, _ = l.Verify(ctx, 0); rep.OK() || rep.BadSeq != 4 {
+		t.Fatalf("the next Append must not heal the gap: %+v", rep)
+	}
+	// Removing the first row is a gap too.
+	l2, _, path2 := newLog(t)
+	for i := 0; i < 3; i++ {
+		_ = l2.Append(ctx, ev(i))
+	}
+	exec1(t, path2, "DELETE FROM audit WHERE seq=1")
+	if rep, _ = l2.Verify(ctx, 0); rep.OK() || rep.BadSeq != 1 {
+		t.Fatalf("a removed first row is named: %+v", rep)
+	}
+}
+
+func TestVerifyDetectsClearedHeadAndSealRefuses(t *testing.T) {
+	l, _, path := newLog(t)
+	ctx := context.Background()
+	for i := 0; i < 4; i++ {
+		_ = l.Append(ctx, ev(i))
+	}
+	exec1(t, path, "UPDATE audit SET detail='forged', head=NULL, signature=NULL WHERE seq=2")
+	rep, _ := l.Verify(ctx, 0)
+	if rep.OK() || rep.BadSeq != 2 || rep.Unsealed != 1 {
+		t.Fatalf("a head cleared under sealed rows is named: %+v", rep)
+	}
+	var se *store.Error
+	if _, err := l.Seal(ctx); !errors.As(err, &se) || se.Code != "E607" {
+		t.Fatalf("sealing must refuse to re-chain a row below a sealed one: %v", err)
+	}
+	if err := l.Append(ctx, ev(7)); err == nil {
+		t.Fatal("an Append must not seal over the damaged chain")
+	}
+	if rep, _ = l.Verify(ctx, 0); rep.BadSeq != 2 {
+		t.Fatalf("the damage is still reported: %+v", rep)
+	}
+}
+
+func TestScrubberSeesAValueSplitAcrossFields(t *testing.T) {
+	r := redact.New()
+	if err := r.Register([]byte("splitsecretvalue-12345")); err != nil {
+		t.Fatal(err)
+	}
+	err := Scrub(r, Event{Actor: "operator:x", Action: "a", Target: "splitsecret", Detail: "value-12345"})
+	var ae *Error
+	if !errors.As(err, &ae) || ae.Field != "event" {
+		t.Fatalf("a value split across target and detail is refused: %v", err)
+	}
+	if Scrub(nil, ev(1)) != nil {
+		t.Fatal("no scanner installed means nothing is registered")
+	}
+	SetScanner(r)
+	defer SetScanner(nil)
+	if Scrub(nil, Event{Actor: "a", Action: "b", Target: "c", Detail: "splitsecretvalue-12345"}) == nil {
+		t.Fatal("the process-wide scanner applies when a Log has none")
 	}
 }
 

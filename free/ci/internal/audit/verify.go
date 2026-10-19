@@ -29,44 +29,70 @@ type Report struct {
 // OK reports a verified chain with nothing overdue.
 func (r Report) OK() bool { return r.BadSeq == 0 && r.Overdue == 0 }
 
-// Verify walks the whole table in seq order.
+// Verify walks the whole table in seq order inside one read snapshot. Besides each row's hash and link it
+// checks that the seq numbers are continuous from 1 (rows are never deleted, so a gap, or an AUTOINCREMENT
+// counter above the last row, means rows were removed) and that no unsealed row sits below a sealed one
+// (sealing runs in seq order, so that means a head was cleared).
 func (l *Log) Verify(ctx context.Context, interval time.Duration) (Report, error) {
 	if interval <= 0 {
 		interval = SealInterval
 	}
+	snap, err := l.St.AuditSnapshot(ctx)
+	if err != nil {
+		return Report{}, err
+	}
+	defer func() { _ = snap.Close() }()
 	var rep Report
 	var prev []byte
-	var after int64
+	var last, firstUnsealed int64
+	bad := func(seq int64, reason string) {
+		if rep.BadSeq == 0 {
+			rep.BadSeq, rep.Reason = seq, reason
+		}
+	}
 	cutoff := l.St.Now() - interval.Nanoseconds()
 	for {
-		page, err := l.St.AuditEntries(ctx, after, 1000)
+		page, err := snap.Entries(ctx, last, 1000)
 		if err != nil {
 			return rep, err
 		}
 		if len(page) == 0 {
-			return rep, nil
+			break
 		}
 		for _, e := range page {
-			after = e.Seq
 			rep.Rows++
+			if e.Seq != last+1 {
+				bad(last+1, fmt.Sprintf("row %d is missing (the next row is %d): rows were removed", last+1, e.Seq))
+			}
+			last = e.Seq
 			if e.Head == nil {
 				rep.Unsealed++
 				if e.TS <= cutoff {
 					rep.Overdue++
 				}
+				if firstUnsealed == 0 {
+					firstUnsealed = e.Seq
+				}
 				continue
 			}
 			rep.Sealed++
-			if rep.BadSeq != 0 {
-				prev = e.Head
-				continue
+			if firstUnsealed != 0 {
+				bad(firstUnsealed, "row is unsealed below a sealed row: its head was cleared")
 			}
 			if reason := checkEntry(prev, e); reason != "" {
-				rep.BadSeq, rep.Reason = e.Seq, reason
+				bad(e.Seq, reason)
 			}
 			prev = e.Head
 		}
 	}
+	high, err := snap.HighSeq(ctx)
+	if err != nil {
+		return rep, err
+	}
+	if high > last {
+		bad(last+1, fmt.Sprintf("row %d was issued but is missing: the newest rows were removed", last+1))
+	}
+	return rep, nil
 }
 
 func checkEntry(prev []byte, e store.AuditEntry) string {

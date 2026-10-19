@@ -26,6 +26,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/audit"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/lifecycle"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -59,7 +60,8 @@ func productionAdminEnv() adminEnv {
 		if err != nil {
 			return nil, roles.Actor{}, nil, err
 		}
-		svc := roles.New(st, &audit.Log{St: st})
+		audit.SetScanner(cirun.Redactions)
+		svc := roles.New(st, &audit.Log{St: st, Scrub: cirun.Redactions})
 		svc.Self = operatorPrincipal()
 		roles.Use(svc)
 		return svc, svc.Operator(adminActor()), func() { _ = st.Close() }, nil
@@ -98,6 +100,17 @@ func adminFail(env adminEnv, command string, asJSON bool, err error) int {
 		_, _ = io.WriteString(env.Err, msg+"\n")
 	}
 	return exit
+}
+
+// plainText replaces control characters, so a row written by another package cannot forge lines or
+// terminal escapes in the text output.
+func plainText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return '?'
+		}
+		return r
+	}, s)
 }
 
 func adminHasJSON(args []string) bool {

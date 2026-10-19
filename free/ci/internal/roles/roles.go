@@ -31,26 +31,41 @@ const (
 // AllProjects in a grant or token means every project.
 const AllProjects = "*"
 
-// Actor is a resolved identity. Only a Service builds a usable one; the zero Actor is refused.
+// Actor is a resolved identity. Only a Service builds a usable one (every field is unexported, so a
+// caller cannot raise its own role); the zero Actor is refused. A decision re-reads the grant, token and
+// certificate state, so a revocation takes effect on an Actor that was resolved earlier.
 type Actor struct {
-	ID       string
-	Kind     Kind
-	Role     Role
-	Projects []string
-	TokenID  string
+	id       string
+	kind     Kind
+	role     Role
+	projects []string
+	tokenID  string
+	serial   string // hex certificate serial of a user-certificate actor
 	svc      *Service
 }
 
+// ID is the principal id (the operator's id carries a "cli:" prefix).
+func (a Actor) ID() string { return a.id }
+
+// Kind says how the actor was identified.
+func (a Actor) Kind() Kind { return a.kind }
+
+// Role is the role the actor held when it was last resolved.
+func (a Actor) Role() Role { return a.role }
+
+// Projects is a copy of the actor's project list ("*" for all).
+func (a Actor) Projects() []string { return append([]string(nil), a.projects...) }
+
 // Label is the actor as it appears in the audit log.
 func (a Actor) Label() string {
-	if a.Kind == KindToken && a.TokenID != "" {
-		return "token:" + a.TokenID + ":" + a.ID
+	if a.kind == KindToken && a.tokenID != "" {
+		return "token:" + a.tokenID + ":" + a.id
 	}
-	return string(a.Kind) + ":" + a.ID
+	return string(a.kind) + ":" + a.id
 }
 
 func (a Actor) allProjects() bool {
-	for _, p := range a.Projects {
+	for _, p := range a.projects {
 		if p == AllProjects {
 			return true
 		}
@@ -62,7 +77,7 @@ func (a Actor) allows(project string) bool {
 	if a.allProjects() {
 		return true
 	}
-	for _, p := range a.Projects {
+	for _, p := range a.projects {
 		if project != "" && p == project {
 			return true
 		}
@@ -88,7 +103,7 @@ func Use(s *Service) { current.Store(s) }
 
 // Operator is the local host's own actor (CLI access to the data dir). It holds every role on every project.
 func (s *Service) Operator(id string) Actor {
-	return Actor{ID: id, Kind: KindOperator, Role: Admin, Projects: []string{AllProjects}, svc: s}
+	return Actor{id: id, kind: KindOperator, role: Admin, projects: []string{AllProjects}, svc: s}
 }
 
 type authKey struct{}
@@ -108,16 +123,16 @@ type decision struct {
 
 // Can is the pure check: no store access and no audit row.
 func (a Actor) Can(role Role, project string) error {
-	if a.svc == nil || a.ID == "" || a.Kind == "" {
+	if a.svc == nil || a.id == "" || a.kind == "" {
 		return fail(ReasonNoActor, "no identity")
 	}
 	if role.Rank() == 0 {
 		return fail(ReasonUnknownRole, "unknown role %q", string(role))
 	}
-	if a.Role.Rank() < role.Rank() {
+	if a.role.Rank() < role.Rank() {
 		return fail(ReasonRole, "%s needs role %s", a.Label(), role)
 	}
-	if a.Kind != KindOperator && project == "" && role.Rank() > Member.Rank() && !a.allProjects() {
+	if a.kind != KindOperator && project == "" && role.Rank() > Member.Rank() && !a.allProjects() {
 		return fail(ReasonProject, "%s is scoped to projects and cannot do a project-wide action", a.Label())
 	}
 	if project != "" && !a.allows(project) {
@@ -128,7 +143,7 @@ func (a Actor) Can(role Role, project string) error {
 
 // Authorize requires the actor to hold at least role on project ("" for a coordinator-wide operation).
 func Authorize(ctx context.Context, a Actor, role Role, project string) error {
-	return a.decide(ctx, decision{action: "authorize", target: string(role), project: project, min: role, audited: role.Rank() > Member.Rank()})
+	return a.decide(ctx, decision{action: "authorize", target: string(role), project: project, min: role, audited: role != Member})
 }
 
 // AuthorizeAction maps action to its minimum role and extra rules (project scope, non-author approval).

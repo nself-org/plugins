@@ -104,7 +104,7 @@ func runAdminAudit(args []string, env adminEnv) int {
 		return adminWriteData(env, command, map[string]any{"rows": rows})
 	}
 	for _, r := range rows {
-		_, _ = fmt.Fprintf(env.Out, "%d\t%s\t%s\t%s\t%s\t%s\n", r["seq"], r["ts"], r["actor"], r["action"], r["target"], r["detail"])
+		_, _ = fmt.Fprintf(env.Out, "%d\t%s\t%s\t%s\t%s\t%s\n", r["seq"], r["ts"], plainText(r["actor"].(string)), plainText(r["action"].(string)), plainText(r["target"].(string)), plainText(r["detail"].(string)))
 	}
 	return 0
 }

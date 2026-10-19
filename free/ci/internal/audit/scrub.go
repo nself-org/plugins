@@ -57,7 +57,8 @@ func Scrub(sc Scanner, ev Event) error {
 		}
 		sc = *p
 	}
-	for _, f := range []struct{ name, v string }{{"actor", ev.Actor}, {"action", ev.Action}, {"target", ev.Target}, {"detail", ev.Detail}} {
+	for _, f := range []struct{ name, v string }{{"actor", ev.Actor}, {"action", ev.Action}, {"target", ev.Target}, {"detail", ev.Detail},
+		{"event", ev.Actor + ev.Action + ev.Target + ev.Detail}} { // the last catches a value split across adjacent fields
 		if len(sc.Scan([]byte(f.v))) > 0 {
 			return &Error{Reason: ReasonSecret, Field: f.name}
 		}

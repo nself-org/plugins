@@ -45,22 +45,25 @@ func (s *Service) check(by Actor, r Request) (subject string, err error) {
 		return "", err
 	}
 	if !pki.ValidID(r.Principal) {
-		return "", fail(ReasonNoActor, "principal %q is not a valid identifier", r.Principal)
+		return "", fail(ReasonBadRequest, "principal %q is not a valid identifier", r.Principal)
+	}
+	if r.Principal == store.SubjectSelf && !r.Self {
+		return "", fail(ReasonBadRequest, "%q is reserved for the operator's own identity (--self)", r.Principal)
 	}
 	if r.Role.Rank() == 0 {
 		return "", fail(ReasonUnknownRole, "role must be member, release or admin")
 	}
 	if len(r.Projects) == 0 {
-		return "", fail(ReasonProject, "name at least one project, or %s for all", AllProjects)
+		return "", fail(ReasonBadRequest, "name at least one project, or %s for all", AllProjects)
 	}
 	for _, p := range r.Projects {
 		if p == "" || strings.ContainsAny(p, " \t\r\n,") {
-			return "", fail(ReasonProject, "invalid project id %q", p)
+			return "", fail(ReasonBadRequest, "invalid project id %q", p)
 		}
 	}
 	if r.Self {
 		if s.Self == "" || r.Principal != s.Self {
-			return "", fail(ReasonRole, "--self applies only to the operator's own identity")
+			return "", fail(ReasonBadRequest, "--self applies only to the operator's own identity")
 		}
 		return store.SubjectSelf, nil
 	}
@@ -84,7 +87,8 @@ func (s *Service) Grant(ctx context.Context, by Actor, r Request) error {
 	return s.St.GrantPut(ctx, store.Grant{Principal: r.Principal, Role: string(r.Role), Projects: r.Projects, Subject: subject, GrantedBy: by.Label()}, in)
 }
 
-// Revoke ends a principal's grant; false means there was none.
+// Revoke ends a principal's grant and every live token issued to the principal; false means there was
+// neither.
 func (s *Service) Revoke(ctx context.Context, by Actor, principal string) (bool, error) {
 	if err := by.Can(Admin, ""); err != nil {
 		return false, err
@@ -115,7 +119,7 @@ func (s *Service) IssueToken(ctx context.Context, by Actor, r Request) (string, 
 		ttl = DefaultTokenTTL
 	}
 	if ttl < MinTokenTTL || ttl > MaxTokenTTL {
-		return "", store.Token{}, fail(ReasonTokenExpired, "token lifetime must be between %s and %s", MinTokenTTL, MaxTokenTTL)
+		return "", store.Token{}, fail(ReasonBadRequest, "token lifetime must be between %s and %s", MinTokenTTL, MaxTokenTTL)
 	}
 	raw := make([]byte, 32)
 	if _, err = rand.Read(raw); err != nil {

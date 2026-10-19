@@ -68,6 +68,13 @@ func (r *rig) grant(principal string, role Role, projects ...string) {
 	}
 }
 
+// user grants role to principal on every project and returns the actor a certificate login would give.
+func (r *rig) user(principal string, role Role) Actor {
+	r.t.Helper()
+	r.grant(principal, role, AllProjects)
+	return Actor{id: principal, kind: KindUser, role: role, projects: []string{AllProjects}, svc: r.svc}
+}
+
 func (r *rig) tokenActor(principal string, role Role, projects ...string) Actor {
 	r.t.Helper()
 	tok, _, err := r.svc.IssueToken(context.Background(), r.op(), Request{Principal: principal, Role: role, Projects: projects})
@@ -93,8 +100,8 @@ func TestAuthorizeRoleOrder(t *testing.T) {
 		{Admin, Member, true}, {Admin, Release, true}, {Admin, Admin, true},
 		{Role("root"), Member, false}, {Member, Role("root"), false},
 	} {
-		a := Actor{ID: "u", Kind: KindUser, Role: tc.have, Projects: []string{AllProjects}, svc: r.svc}
-		err := Authorize(ctx, a, tc.need, "p1")
+		a := Actor{id: "u", kind: KindUser, role: tc.have, projects: []string{AllProjects}, svc: r.svc}
+		err := a.Can(tc.need, "p1")
 		if (err == nil) != tc.ok {
 			t.Errorf("%s needs %s: err=%v want ok=%v", tc.have, tc.need, err, tc.ok)
 		}
@@ -104,6 +111,12 @@ func TestAuthorizeRoleOrder(t *testing.T) {
 	}
 	if err := Authorize(ctx, Actor{}, Member, ""); ReasonOf(err) != ReasonNoActor {
 		t.Fatalf("the zero actor is refused: %v", err)
+	}
+	if err := Authorize(ctx, r.user("ursula", Admin), Role("root"), ""); ReasonOf(err) != ReasonUnknownRole {
+		t.Fatalf("an unknown role is refused: %v", err)
+	}
+	if rows := r.auditRows(); len(rows) == 0 || !strings.Contains(rows[len(rows)-1].Detail, "result=deny") {
+		t.Fatalf("an unknown-role decision is audited: %+v", rows)
 	}
 }
 
@@ -141,12 +154,13 @@ func TestActionsMatrix(t *testing.T) {
 	if got := Actions(); len(got) != len(want) {
 		t.Fatalf("the catalogue has %d actions, the table %d: %v", len(got), len(want), got)
 	}
+	users := map[Role]Actor{Member: r.user("u-member", Member), Release: r.user("u-release", Release), Admin: r.user("u-admin", Admin)}
 	for action, min := range want {
 		if got, ok := Needs(action); !ok || got != min {
 			t.Errorf("%s needs %s, catalogue says %s", action, min, got)
 		}
 		for _, have := range []Role{Member, Release, Admin} {
-			a := Actor{ID: "u-" + string(have), Kind: KindUser, Role: have, Projects: []string{AllProjects}, svc: r.svc}
+			a := users[have]
 			err := AuthorizeAction(ctx, a, action, "p1")
 			if ok := have.Rank() >= min.Rank(); (err == nil) != ok {
 				t.Errorf("%s by %s: err=%v want allowed=%v", action, have, err, ok)
@@ -156,13 +170,13 @@ func TestActionsMatrix(t *testing.T) {
 			t.Errorf("the operator may do %s: %v", action, err)
 		}
 	}
-	member := Actor{ID: "m", Kind: KindUser, Role: Member, Projects: []string{AllProjects}, svc: r.svc}
+	member := users[Member]
 	for _, a := range []string{ActRunnerRegister, ActRunnerRevoke, ActPolicySet, ActRunApprove, ActSpendApprove, ActReleaseStart} {
 		if ReasonOf(AuthorizeAction(ctx, member, a, "p1")) != ReasonRole {
 			t.Errorf("a member must not do %s", a)
 		}
 	}
-	rel := Actor{ID: "r", Kind: KindUser, Role: Release, Projects: []string{AllProjects}, svc: r.svc}
+	rel := users[Release]
 	for _, a := range []string{ActNodeTrustSet, ActSpendApprove} {
 		if AuthorizeAction(ctx, rel, a, "p1") == nil {
 			t.Errorf("only admin does %s", a)
@@ -244,7 +258,7 @@ func TestIdentityTokenStates(t *testing.T) {
 		t.Fatal(err)
 	}
 	a, err := r.svc.ActorFromToken(ctx, tok)
-	if err != nil || a.ID != "bob" || a.Role != Release || len(a.Projects) != 1 || a.Kind != KindToken {
+	if err != nil || a.ID() != "bob" || a.Role() != Release || len(a.Projects()) != 1 || a.Kind() != KindToken {
 		t.Fatalf("a valid token maps to its role and projects: %+v, %v", a, err)
 	}
 	if _, err = r.svc.ActorFromToken(ctx, tok+"x"); ReasonOf(err) != ReasonTokenUnknown {
@@ -332,7 +346,7 @@ func TestIdentityPeerCertificates(t *testing.T) {
 	}
 	r.grant("dave", Release, "p1")
 	a, err := r.svc.ActorFromPeer(ctx, cert)
-	if err != nil || a.ID != "dave" || a.Kind != KindUser || a.Role != Release || AuthorizeAction(WithAuthor(ctx, "x"), a, ActRunApprove, "p1") != nil {
+	if err != nil || a.ID() != "dave" || a.Kind() != KindUser || a.Role() != Release || AuthorizeAction(WithAuthor(ctx, "x"), a, ActRunApprove, "p1") != nil {
 		t.Fatalf("a user certificate maps to its actor: %+v, %v", a, err)
 	}
 	if found, err := r.svc.Revoke(ctx, r.op(), "dave"); err != nil || !found {
@@ -473,5 +487,161 @@ func TestNonSelfPrincipals(t *testing.T) {
 	Use(nil)
 	if _, err := NonSelfPrincipals(ctx); err == nil {
 		t.Fatal("no installed service is an error, not a silent zero")
+	}
+}
+
+func TestAuthorizeRefreshesRevocation(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	// A token actor resolved earlier loses access the moment its token is revoked.
+	tok, row, _ := r.svc.IssueToken(ctx, r.op(), Request{Principal: "tina", Role: Admin, Projects: []string{AllProjects}})
+	a, err := r.svc.ActorFromToken(ctx, tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Authorize(ctx, a, Admin, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.svc.RevokeToken(ctx, r.op(), row.ID); err != nil {
+		t.Fatal(err)
+	}
+	if ReasonOf(Authorize(ctx, a, Admin, "")) != ReasonTokenRevoked {
+		t.Fatal("a revoked token must stop working on an actor resolved before the revocation")
+	}
+	// Expiry applies to a resolved actor too.
+	tok2, _, _ := r.svc.IssueToken(ctx, r.op(), Request{Principal: "tina", Role: Admin, Projects: []string{AllProjects}, TTL: time.Hour})
+	a2, _ := r.svc.ActorFromToken(ctx, tok2)
+	r.now = r.now.Add(2 * time.Hour)
+	if ReasonOf(Authorize(ctx, a2, Admin, "")) != ReasonTokenExpired {
+		t.Fatal("an expired token must stop working on a resolved actor")
+	}
+	r.now = epoch
+	// A user actor follows its grant: lowered role applies at once, a revoked grant ends access, a denied serial too.
+	cert, _ := userCert(t, r, "uma")
+	r.grant("uma", Admin, AllProjects)
+	u, err := r.svc.ActorFromPeer(ctx, cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.grant("uma", Member, AllProjects)
+	if ReasonOf(Authorize(ctx, u, Admin, "")) != ReasonRole {
+		t.Fatal("a lowered role applies to a resolved actor")
+	}
+	if err = Authorize(ctx, u, Member, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.st.PKIDeny(ctx, "admin", "uma", "test", hexSerial(cert)); err != nil {
+		t.Fatal(err)
+	}
+	if ReasonOf(Authorize(ctx, u, Member, "")) != ReasonBadCert {
+		t.Fatal("a denied serial ends a resolved actor")
+	}
+	cert2, _ := userCert(t, r, "uri")
+	r.grant("uri", Admin, AllProjects)
+	u2, _ := r.svc.ActorFromPeer(ctx, cert2)
+	if _, err = r.svc.Revoke(ctx, r.op(), "uri"); err != nil {
+		t.Fatal(err)
+	}
+	if ReasonOf(Authorize(ctx, u2, Member, "")) != ReasonNoGrant {
+		t.Fatal("a revoked grant ends a resolved actor")
+	}
+}
+
+func TestAuthorizeRevokeEndsTokensOfThePrincipal(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	r.grant("bob", Admin, AllProjects)
+	tok, _, _ := r.svc.IssueToken(ctx, r.op(), Request{Principal: "bob", Role: Admin, Projects: []string{AllProjects}})
+	other, _, _ := r.svc.IssueToken(ctx, r.op(), Request{Principal: "carol", Role: Admin, Projects: []string{AllProjects}})
+	before := len(r.auditRows())
+	if found, err := r.svc.Revoke(ctx, r.op(), "bob"); err != nil || !found {
+		t.Fatal(found, err)
+	}
+	if len(r.auditRows()) != before+1 {
+		t.Fatal("revoking a principal is one audit row")
+	}
+	if _, err := r.svc.ActorFromToken(ctx, tok); ReasonOf(err) != ReasonTokenRevoked {
+		t.Fatalf("the revoked principal's token is dead: %v", err)
+	}
+	if _, err := r.svc.ActorFromToken(ctx, other); err != nil {
+		t.Fatalf("another principal's token is untouched: %v", err)
+	}
+	// A principal with only a token (no grant) is also found by revoke.
+	if found, err := r.svc.Revoke(ctx, r.op(), "carol"); err != nil || !found {
+		t.Fatalf("a token-only principal is revoked: %v %v", found, err)
+	}
+}
+
+func TestAuthorizeReservesSelfAsAName(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	Use(r.svc)
+	for _, req := range []Request{
+		{Principal: "self", Role: Admin, Projects: []string{AllProjects}},
+		{Principal: "self", Role: Admin, Projects: []string{AllProjects}, Self: true}, // Service.Self is alice, not "self"
+	} {
+		if ReasonOf(r.svc.Grant(ctx, r.op(), req)) != ReasonBadRequest {
+			t.Errorf("%+v must be refused", req)
+		}
+		if _, _, err := r.svc.IssueToken(ctx, r.op(), req); ReasonOf(err) != ReasonBadRequest {
+			t.Errorf("token %+v must be refused", req)
+		}
+	}
+	if err := r.st.CertSubjectPut(ctx, "01", "self", "self-lookalike"); err == nil {
+		t.Fatal("the store refuses a subject that is neither self nor the principal")
+	}
+	if err := r.st.GrantPut(ctx, store.Grant{Principal: "self", Role: "admin", Subject: "self", GrantedBy: "x"}, store.AuditInput{Actor: "x", Action: "a", Target: "t"}); err != nil {
+		t.Fatalf("subject self is how the operator's own grant is stored: %v", err)
+	}
+	if err := r.st.GrantPut(ctx, store.Grant{Principal: "self", Role: "admin", Subject: "bob", GrantedBy: "x"}, store.AuditInput{Actor: "x", Action: "a", Target: "t"}); err == nil {
+		t.Fatal("a subject other than the principal's own name is refused")
+	}
+}
+
+func TestActionsNonAuthorIsNormalised(t *testing.T) {
+	r := newRig(t)
+	rel := r.tokenActor("bob", Release, AllProjects)
+	for _, author := range []string{"bob", "BOB", "user:bob", "cli:bob", "operator:cli:bob", "token:tok-abc:bob", " bob "} {
+		ctx := WithAuthor(context.Background(), author)
+		if ReasonOf(AuthorizeAction(ctx, rel, ActRunApprove, "p1")) != ReasonSelfApproval {
+			t.Errorf("author %q is bob: self approval must be refused", author)
+		}
+	}
+	for _, author := range []string{"bobby", "alice", "token:tok-abc:alice", "xbob"} {
+		if err := AuthorizeAction(WithAuthor(context.Background(), author), rel, ActRunApprove, "p1"); err != nil {
+			t.Errorf("author %q is someone else: %v", author, err)
+		}
+	}
+	// The local operator is the only person of a PERSONAL coordinator: no author is needed and its own runs pass.
+	for _, ctx := range []context.Context{context.Background(), WithAuthor(context.Background(), "alice"), WithAuthor(context.Background(), "cli:alice")} {
+		if err := AuthorizeAction(ctx, r.op(), ActRunApprove, "p1"); err != nil {
+			t.Errorf("the operator may approve: %v", err)
+		}
+	}
+}
+
+func TestAuthorizeNeedsAnAuditLog(t *testing.T) {
+	r := newRig(t)
+	svc := New(r.st, nil)
+	op := svc.Operator("cli:alice")
+	if err := Authorize(context.Background(), op, Admin, ""); err == nil {
+		t.Fatal("an audited decision with no audit log fails closed")
+	}
+	if err := Authorize(context.Background(), op, Member, ""); err != nil {
+		t.Fatalf("an unaudited decision needs no log: %v", err)
+	}
+	if got := op.Projects(); len(got) != 1 {
+		t.Fatal(got)
+	}
+}
+
+func TestAuthorizeProjectIsQuotedInTheRow(t *testing.T) {
+	r := newRig(t)
+	if err := Authorize(context.Background(), r.op(), Admin, "p result=deny"); err != nil {
+		t.Fatal(err)
+	}
+	rows := r.auditRows()
+	if d := rows[len(rows)-1].Detail; !strings.Contains(d, `project="p result=deny"`) {
+		t.Fatalf("the project is quoted so it cannot forge a field: %s", d)
 	}
 }

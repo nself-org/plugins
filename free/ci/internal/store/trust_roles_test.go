@@ -71,3 +71,35 @@ func TestTokenDigestUniqueAndNonSelf(t *testing.T) {
 		t.Fatalf("an expired token is not live: %d", n)
 	}
 }
+
+func TestSubjectRules(t *testing.T) {
+	for _, tc := range []struct {
+		principal, subject string
+		ok                 bool
+	}{{"bob", "bob", true}, {"bob", SubjectSelf, true}, {"bob", "alice", false}, {SubjectSelf, SubjectSelf, true}, {SubjectSelf, "bob", false}, {"bob", "", false}} {
+		if got := subjectOK(tc.principal, tc.subject); got != tc.ok {
+			t.Errorf("subjectOK(%q,%q) = %v", tc.principal, tc.subject, got)
+		}
+	}
+}
+
+func TestGrantRevokeAlsoEndsTokens(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	exp := time.Now().Add(time.Hour).UnixNano()
+	in := AuditInput{Actor: "a", Action: "x", Target: "bob"}
+	_ = s.TokenPut(ctx, Token{ID: "t1", Digest: "d1", Principal: "bob", Role: "member", Projects: []string{"p"}, Subject: "bob", IssuedBy: "a", ExpiresAt: exp}, in)
+	_ = s.TokenPut(ctx, Token{ID: "t2", Digest: "d2", Principal: "carol", Role: "member", Projects: []string{"p"}, Subject: "carol", IssuedBy: "a", ExpiresAt: exp}, in)
+	if found, err := s.GrantRevoke(ctx, "bob", in); err != nil || !found {
+		t.Fatalf("a token-only principal counts as found: %v %v", found, err)
+	}
+	if tk, _, _ := s.TokenByID(ctx, "t1"); tk.RevokedAt == 0 {
+		t.Fatal("bob's token is revoked")
+	}
+	if tk, _, _ := s.TokenByID(ctx, "t2"); tk.RevokedAt != 0 {
+		t.Fatal("carol's token is untouched")
+	}
+	if found, _ := s.GrantRevoke(ctx, "bob", in); found {
+		t.Fatal("nothing left to revoke")
+	}
+}

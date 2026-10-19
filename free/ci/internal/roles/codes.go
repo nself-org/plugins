@@ -31,6 +31,7 @@ const (
 	ReasonUnknownRole  = "unknown_role"
 	ReasonNoActor      = "no_actor"
 	ReasonUnknownAct   = "unknown_action"
+	ReasonBadRequest   = "bad_request"
 )
 
 func init() {

@@ -20,6 +20,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/audit"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	_ "modernc.org/sqlite"
 )
@@ -225,5 +226,58 @@ func TestServeAdminGroupRegistered(t *testing.T) {
 	}
 	if len(tableProblems(v15Subcommands)) != 0 {
 		t.Fatal(tableProblems(v15Subcommands))
+	}
+}
+
+func TestServeAdminProductionEnvScrubsRegisteredValues(t *testing.T) {
+	t.Setenv("NSELF_CI_HOME", t.TempDir())
+	secret := "s3cr3t-project-value-0123456789"
+	if err := cirun.RegisterSecretValue([]byte(secret)); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { audit.SetScanner(nil) })
+	var out, errb bytes.Buffer
+	env := productionAdminEnv()
+	env.Out, env.Err = &out, &errb
+	if code := runAdminRoles([]string{"grant", "bob", "--role", "member", "--project", secret, "--json"}, env); code != 1 || !strings.Contains(out.String(), "E687") {
+		t.Fatalf("a registered value in a mutation's audit row is refused: %d %s", code, out.String())
+	}
+	if strings.Contains(out.String()+errb.String(), secret) {
+		t.Fatal("the refusal must not echo the value")
+	}
+	out.Reset()
+	if code := runAdminRoles([]string{"list", "--json"}, env); code != 0 || strings.Contains(out.String(), "bob") {
+		t.Fatalf("nothing was granted: %d %s", code, out.String())
+	}
+}
+
+func TestServeAdminAuditTextIsPlain(t *testing.T) {
+	r := newAdminRig(t)
+	st, err := store.Open(r.path, store.Options{Clock: r.now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = st.AppendAudit(context.Background(), "operator:x", "node.add", "n1", "line one\nforged\tline \x1b[31mred"); err != nil {
+		t.Fatal(err)
+	}
+	_ = st.Close()
+	if code := runAdminAudit(nil, r.env()); code != 0 {
+		t.Fatal(code)
+	}
+	if strings.Count(r.out.String(), "\n") != 1 || strings.ContainsAny(r.out.String(), "\x1b") || strings.Count(r.out.String(), "\t") != 5 {
+		t.Fatalf("one plain line per row expected: %q", r.out.String())
+	}
+}
+
+func TestServeAdminRevokeEndsTokensToo(t *testing.T) {
+	r := newAdminRig(t)
+	if code := runAdminToken([]string{"issue", "bob", "--role", "member", "--project", "p", "--json"}, r.env()); code != 0 {
+		t.Fatal(code)
+	}
+	if code := runAdminRoles([]string{"revoke", "bob"}, r.env()); code != 0 {
+		t.Fatalf("a principal that holds only a token can be revoked: %d %s", code, r.errb.String())
+	}
+	if code := runAdminToken([]string{"list", "--json"}, r.env()); code != 0 || !strings.Contains(r.out.String(), `"revoked"`) {
+		t.Fatalf("the token is revoked: %s", r.out.String())
 	}
 }

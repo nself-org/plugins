@@ -16,6 +16,7 @@ import (
 	"encoding/hex"
 
 	"github.com/nself-org/plugins/free/ci/internal/pki"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // ActorFromPeer maps a user certificate to its actor.
@@ -34,7 +35,8 @@ func (s *Service) ActorFromPeer(ctx context.Context, cert *x509.Certificate) (Ac
 	if now := s.Now(); now.Before(cert.NotBefore) || now.After(cert.NotAfter) {
 		return Actor{}, fail(ReasonBadCert, "the certificate is outside its validity window")
 	}
-	denied, err := s.St.PKIIsDenied(ctx, hex.EncodeToString(cert.SerialNumber.Bytes()))
+	serial := hex.EncodeToString(cert.SerialNumber.Bytes())
+	denied, err := s.St.PKIIsDenied(ctx, serial)
 	if err != nil {
 		return Actor{}, err
 	}
@@ -48,7 +50,7 @@ func (s *Service) ActorFromPeer(ctx context.Context, cert *x509.Certificate) (Ac
 	if !ok {
 		return Actor{}, fail(ReasonNoGrant, "user %s holds no role", id)
 	}
-	return Actor{ID: id, Kind: KindUser, Role: Role(g.Role), Projects: g.Projects, svc: s}, nil
+	return Actor{id: id, kind: KindUser, role: Role(g.Role), projects: g.Projects, serial: serial, svc: s}, nil
 }
 
 // ActorFromToken maps a scoped token to its actor.
@@ -57,15 +59,23 @@ func (s *Service) ActorFromToken(ctx context.Context, token string) (Actor, erro
 	if err != nil {
 		return Actor{}, err
 	}
-	switch {
-	case !ok:
-		return Actor{}, fail(ReasonTokenUnknown, "unknown token")
-	case t.RevokedAt != 0:
-		return Actor{}, fail(ReasonTokenRevoked, "token %s was revoked", t.ID)
-	case s.Now().UnixNano() >= t.ExpiresAt:
-		return Actor{}, fail(ReasonTokenExpired, "token %s expired", t.ID)
+	if err = s.tokenState(t, ok); err != nil {
+		return Actor{}, err
 	}
-	return Actor{ID: t.Principal, Kind: KindToken, Role: Role(t.Role), Projects: t.Projects, TokenID: t.ID, svc: s}, nil
+	return Actor{id: t.Principal, kind: KindToken, role: Role(t.Role), projects: t.Projects, tokenID: t.ID, svc: s}, nil
+}
+
+// tokenState is nil for a found, unrevoked, unexpired token.
+func (s *Service) tokenState(t store.Token, found bool) error {
+	switch {
+	case !found:
+		return fail(ReasonTokenUnknown, "unknown token")
+	case t.RevokedAt != 0:
+		return fail(ReasonTokenRevoked, "token %s was revoked", t.ID)
+	case s.Now().UnixNano() >= t.ExpiresAt:
+		return fail(ReasonTokenExpired, "token %s expired", t.ID)
+	}
+	return nil
 }
 
 func digestOf(token string) string {
