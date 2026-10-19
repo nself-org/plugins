@@ -135,8 +135,9 @@ func TestRunMustBelongToTheServedProject(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	h.Project = ""
-	if _, err := h.Handle(context.Background(), req, decodeAll(t, req)); err != nil {
-		t.Fatalf("no project bound: %v", err)
+	f.res.calls = 0
+	if _, err := h.Handle(context.Background(), req, decodeAll(t, req)); !signing.IsReason(err, signing.ReasonSignerFailed) || f.res.calls != 0 {
+		t.Fatalf("a signer with no project root signed: %v", err)
 	}
 }
 
@@ -167,14 +168,54 @@ func TestRunChangesWhileTheKeyIsResolved(t *testing.T) {
 
 func TestRecordListingAtTheStoreCapIsRefused(t *testing.T) {
 	f := newFixture(t)
-	f.src.extra = 1000
-	req := request(item(manifest.PayloadType, f.manifestPayload(nil)))
+	req := request(item(signing.PayloadStatement, f.statementPayload(nil)))
+	f.src.extra = 999 // one real record named app plus 999: exactly the cap
 	if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); !signing.IsReason(err, signing.ReasonSignerFailed) {
 		t.Fatalf("a capped listing: %v", err)
 	}
-	f.src.extra = 995
+	f.src.extra = 998
 	if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); err != nil {
 		t.Fatalf("a listing just under the cap: %v", err)
+	}
+	m := request(item(manifest.PayloadType, f.manifestPayload(nil)))
+	f.src.extra = 995 // the sbom listing holds four real records
+	if _, err := f.handler().Handle(context.Background(), m, decodeAll(t, m)); err != nil {
+		t.Fatalf("a manifest just under the cap: %v", err)
+	}
+	f.src.extra = 996
+	if _, err := f.handler().Handle(context.Background(), m, decodeAll(t, m)); !signing.IsReason(err, signing.ReasonSignerFailed) {
+		t.Fatalf("a capped sbom listing: %v", err)
+	}
+}
+
+func TestStrictJSONDepthBoundary(t *testing.T) {
+	f := newFixture(t)
+	nested := func(n int) string {
+		return `{"_type":"https://in-toto.io/Statement/v1","predicateType":"` + manifest.ProvenancePredicate + `","predicate":{},"subject":[{"name":"app","digest":{"sha256":"` + sum(f.files["app"]) + `"}}],"x":` + strings.Repeat("[", n) + strings.Repeat("]", n) + `}`
+	}
+	handle := func(s string) error {
+		req := request(item(signing.PayloadStatement, []byte(s)))
+		_, err := f.handler().Handle(context.Background(), req, decodeAll(t, req))
+		return err
+	}
+	// the top-level object is depth 1: 31 nested arrays make 32, the limit
+	if err := handle(nested(31)); err != nil {
+		t.Fatalf("depth 32: %v", err)
+	}
+	if err := handle(nested(32)); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+		t.Fatalf("depth 33: %v", err)
+	}
+}
+
+func TestSubjectNamedArtifactsSlashIsNotAWildcard(t *testing.T) {
+	f := newFixture(t)
+	for _, name := range []string{"artifacts/", "artifacts//", "", "/"} {
+		req := request(item(signing.PayloadStatement, f.statementPayload(func(m map[string]any) {
+			m["subject"] = []map[string]any{{"name": name, "digest": map[string]string{"sha256": sum(f.files["app"])}}}
+		})))
+		if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); err == nil {
+			t.Errorf("subject name %q was signed", name)
+		}
 	}
 }
 

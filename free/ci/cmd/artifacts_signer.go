@@ -65,19 +65,27 @@ func artifactsSigner(args []string) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), signerTimeout)
 	defer cancel()
+	root, err := evidenceRoot("")
+	if err != nil || root == "" {
+		return signerFail(signing.Failf(signing.ReasonSignerFailed, "the project root is unknown"))
+	}
+	home, err := toolsHome() // the CI home: where the key-management lock lives
+	if err != nil {
+		return signerFail(signing.Failf(signing.ReasonSignerFailed, "the CI home is unknown"))
+	}
 	switch {
 	case *stdio:
-		return signerRequest(ctx)
+		return signerRequest(ctx, root)
 	case *public:
-		return signerKey(signing.Public(ctx, signerResolver(), signing.KeyAttempt))
+		return signerKey(signing.Public(ctx, signerResolver(root), signing.KeyAttempt))
 	case *initKey:
-		return signerKey(signing.Init(ctx, signerResolver(), signerStore()))
+		return signerKey(signing.Init(ctx, signerResolver(root), signerStore(root, home)))
 	}
-	return signerKey(signing.Rotate(ctx, signerResolver(), signerStore()))
+	return signerKey(signing.Rotate(ctx, signerResolver(root), signerStore(root, home)))
 }
 
 // signerTimeout bounds one signer call (the key lock wait included).
-const signerTimeout = 2 * time.Minute
+const signerTimeout = 50 * time.Second
 
 func countTrue(b ...bool) (n int) {
 	for _, v := range b {
@@ -89,19 +97,16 @@ func countTrue(b ...bool) (n int) {
 }
 
 // signerResolver resolves release secrets through the exec funnel and the cli.
-func signerResolver() secrets.ValueResolver {
-	root, _ := evidenceRoot("")
+func signerResolver(root string) secrets.ValueResolver {
 	return &secrets.Resolver{Runner: &secrets.ExecRunner{Home: os.Getenv("NSELF_CI_HOME"), CoordinatorID: "signer", Attempt: "key"}, Project: root}
 }
 
 // signerStore writes the key with `nself config secrets set` over stdin.
-func signerStore() signing.SecretStore {
-	root, _ := evidenceRoot("")
-	home, _ := toolsHome() // the CI home: also where the key-management lock lives
+func signerStore(root, home string) signing.SecretStore {
 	return &signing.CLIStore{Runner: &signing.FunnelRunner{Home: os.Getenv("NSELF_CI_HOME")}, Project: root, LockDir: home}
 }
 
-func signerRequest(ctx context.Context) int {
+func signerRequest(ctx context.Context, root string) int {
 	req, payloads, err := signing.DecodeRequest(signerStdin())
 	if err != nil {
 		return signerFail(err)
@@ -115,8 +120,7 @@ func signerRequest(ctx context.Context) int {
 	if err != nil {
 		return signerFail(signing.Failf(signing.ReasonSignerFailed, "the blob store could not be opened"))
 	}
-	root, _ := evidenceRoot("")
-	envs, err := signing.Handler{Src: st, Blobs: blobs, Project: root, Resolver: signerResolver()}.Handle(ctx, req, payloads)
+	envs, err := signing.Handler{Src: st, Blobs: blobs, Project: root, Resolver: signerResolver(root)}.Handle(ctx, req, payloads)
 	if err != nil {
 		return signerFail(err)
 	}

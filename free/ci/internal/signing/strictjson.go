@@ -24,9 +24,7 @@ const maxDepth = 32
 func fold(r rune) rune {
 	m := r
 	for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
-		if f < m {
-			m = f
-		}
+		m = min(m, f)
 	}
 	return m
 }

@@ -39,6 +39,9 @@ func (s *CLIStore) Lock(ctx context.Context) (func(), error) {
 	}, nil
 }
 
+// lockPoll is how often a waiting process retries the lock.
+const lockPoll = time.Duration(5e7)
+
 // flock takes the lock without blocking forever: it polls so ctx can end the wait.
 func flock(ctx context.Context, f *os.File) error {
 	for {
@@ -52,7 +55,7 @@ func flock(ctx context.Context, f *os.File) error {
 		select {
 		case <-ctx.Done():
 			return Failf(ReasonSignerFailed, "another key operation holds the lock")
-		case <-time.After(50 * time.Millisecond):
+		case <-time.After(lockPoll):
 		}
 	}
 }

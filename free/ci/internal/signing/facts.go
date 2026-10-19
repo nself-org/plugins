@@ -3,7 +3,7 @@ package signing
 // Purpose: load, for one run, everything a payload is checked against: the
 // pipeline row, its attempts, the stored pipeline evidence and, on demand,
 // the committed records whose bytes verify (Epic CACHE D12).
-// Inputs:  a Source, Blobs, a run id and the project root the signer serves.
+// Inputs:  a Source, Blobs, a run id and the project root the signer serves (required).
 // Outputs: *runFacts with record lookups by name or kind.
 // Constraints: the run must belong to the signer's project; every attempt of
 // the run is final (read once, so the check and the facts agree); a record
@@ -50,7 +50,10 @@ func loadFacts(ctx context.Context, src Source, blobs Blobs, runID, project stri
 	if err != nil {
 		return nil, err
 	}
-	if project != "" && filepath.Clean(pipe.Project) != filepath.Clean(project) {
+	if project == "" {
+		return nil, Failf(ReasonSignerFailed, "the signer has no project root to serve")
+	}
+	if filepath.Clean(pipe.Project) != filepath.Clean(project) {
 		return nil, Failf(ReasonPayloadRejected, "run %q belongs to another project than the one this signer serves", echo(runID))
 	}
 	f := &runFacts{src: src, blobs: blobs, runID: runID, pipe: pipe, attempts: attempts, lists: map[string][]records.Record{}, verified: map[string]error{}}
@@ -141,6 +144,9 @@ func (f *runFacts) hashBlob(r records.Record) error {
 // match reports whether a record of the run, filtered by name and kind, has
 // this digest, passes ok and verifies; a refusal error is for a store failure.
 func (f *runFacts) match(ctx context.Context, name string, kind records.Kind, digest string, ok func(records.Record) bool) (bool, error) {
+	if name == "" && kind == "" { // an empty filter would list every record of the run
+		return false, nil
+	}
 	recs, err := f.list(ctx, name, kind)
 	if err != nil {
 		return false, err

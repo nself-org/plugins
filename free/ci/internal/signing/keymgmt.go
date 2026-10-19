@@ -20,7 +20,7 @@ import (
 )
 
 // KeyIDName is the secret that may hold the key id beside the key.
-const KeyIDName = KeyName + "_ID"
+const KeyIDName = "NSELF_CI_RELEASE_SIGNING_KEY_ID"
 
 // KeyAttempt labels key-management calls to the resolver (no run is involved).
 const KeyAttempt = "ci-artifacts-key"

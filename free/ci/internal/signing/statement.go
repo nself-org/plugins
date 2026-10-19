@@ -80,7 +80,7 @@ func (f *runFacts) subjectBacked(ctx context.Context, name, digest string) (bool
 		return true, nil
 	}
 	names := []string{name}
-	if rest, ok := strings.CutPrefix(name, "artifacts/"); ok {
+	if rest, ok := strings.CutPrefix(name, "artifacts/"); ok && rest != "" {
 		names = append(names, rest)
 	}
 	for _, n := range names {

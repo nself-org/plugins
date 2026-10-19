@@ -44,6 +44,9 @@ func (c *capture) write(b []byte) {
 // mkfifo is replaced by tests.
 var mkfifo = syscall.Mkfifo
 
+// releasePoll is how often freeWriter opens the read end.
+const releasePoll = time.Duration(1e7)
+
 // freeWriter waits for the writer goroutine. A child that never opened the
 // FIFO leaves the writer blocked in open, so the read end is opened and
 // closed again and again until the writer is through (the writer may not have
@@ -53,7 +56,7 @@ func freeWriter(fifo string, done <-chan struct{}) {
 		select {
 		case <-done:
 			return
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(releasePoll):
 			release(fifo)
 		}
 	}
@@ -77,8 +80,10 @@ func (r *FunnelRunner) RunStdio(ctx context.Context, c StdioCall) ([]byte, int, 
 	}
 	env := append([]string(nil), c.Env...)
 	var fifo string
-	var writerDone chan struct{}
-	if c.Stdin != nil {
+	writerDone := make(chan struct{})
+	if c.Stdin == nil {
+		close(writerDone) // no writer: freeWriter returns at once
+	} else {
 		dir, err := os.MkdirTemp("", "sigio-")
 		if err != nil {
 			return nil, notRun, Failf(ReasonSignerFailed, "no private directory for the request")
@@ -89,7 +94,6 @@ func (r *FunnelRunner) RunStdio(ctx context.Context, c StdioCall) ([]byte, int, 
 			return nil, notRun, Failf(ReasonSignerFailed, "no pipe for the request")
 		}
 		env = append(env, "NSELF_CI_STDIN="+fifo)
-		writerDone = make(chan struct{})
 		go func() {
 			defer close(writerDone)
 			if w, err := os.OpenFile(fifo, os.O_WRONLY, 0); err == nil {
@@ -106,9 +110,7 @@ func (r *FunnelRunner) RunStdio(ctx context.Context, c StdioCall) ([]byte, int, 
 	var cap capture
 	ex := &ciexec.Executor{Env: extraEnv(env), NewRedactor: func() ciexec.Redactor { return passRedactor{} }}
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: r.id(), CoordinatorID: "signer", Command: argv, Home: r.Home, Timeout: c.Timeout, Output: cap.write})
-	if writerDone != nil {
-		freeWriter(fifo, writerDone)
-	}
+	freeWriter(fifo, writerDone)
 	if res.Err != nil {
 		clear(cap.buf)
 		return nil, notRun, Failf(ReasonSignerFailed, "the program could not be run or timed out")

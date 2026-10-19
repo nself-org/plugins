@@ -63,7 +63,7 @@ func echo(s string) string { return clip(s, 64) }
 
 // clip is echo with a chosen bound.
 func clip(s string, n int) string {
-	b := make([]byte, 0, n+3)
+	var b []byte
 	for i := 0; i < len(s); i++ {
 		if len(b) >= n {
 			return string(append(b, "..."...))
