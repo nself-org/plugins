@@ -9,7 +9,8 @@ package main
 // written to stdout; the node key and age identity are created on first start
 // in the 0700 state dir; value-bearing secrets frames are refused unless the
 // coordinator started the agent with --accept-secret-values (PERSONAL
-// coordinator, operator-owned secrets); logs and errors go to stderr, which
+// coordinator, operator-owned secrets); carrier A should start it through a
+// forced command (`serve --stdio ...`) so the coordinator cannot run `slots --set`; logs and errors go to stderr, which
 // the SSH carrier keeps apart from the frame stream.
 
 import (
@@ -71,7 +72,7 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(sio.Stderr)
 	stdio := fs.Bool("stdio", false, "serve over stdin and stdout (carrier A)")
-	nslots := fs.Int("slots", 0, "lower the concurrent leases this host allows (default and ceiling: half the CPUs; raise with `slots --set`)")
+	nslots := fs.Int("slots", 0, "lower the concurrent leases this process takes (the host cap is half the CPUs until `slots --set`)")
 	coordinator := fs.String("coordinator", "stdio", "id of the coordinator on the other end")
 	fingerprint := fs.String("root-fingerprint", "", "fingerprint of that coordinator's root")
 	secretValues := fs.Bool("accept-secret-values", false, "accept value-bearing secrets frames (PERSONAL coordinator)")
@@ -99,17 +100,15 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 		return 1
 	}
 	capacity := ciexec.Probe()
-	// --slots can lower the count, never raise it above the host default: the
-	// coordinator picks this command line. `slots --set N` is the operator's lever.
-	total := max(1, capacity.CPUs/2)
-	if *nslots > 0 && *nslots < total {
-		total = *nslots
-	}
-	table, err := slots.Open(state, total)
+	// The host cap is recorded by the first start (default: half the CPUs) and
+	// changed only by `slots --set`; --slots, which the coordinator chooses, can
+	// only lower this process's share.
+	table, err := slots.Open(state, max(1, capacity.CPUs/2))
 	if err != nil {
 		fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
+	table.Lower(*nslots)
 	policy := protocol.CarrierPolicy{Carrier: "A", Personal: *secretValues, OperatorOwned: *secretValues}
 	car, err := session.NewStreamCarrier(sio.Stdin, sio.Stdout, policy, true)
 	if err != nil {
@@ -156,7 +155,7 @@ func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResu
 		return session.JobResult{}, errors.New("the lease has a checkout but no hook staged it")
 	}
 	spec := execSpec{AttemptID: l.AttemptID, CoordinatorID: r.coordinator, JobID: "job", Job: l.Job, Revision: l.Checkout.Revision, SourceDir: j.Setup.SourceDir}
-	return runSpec(ctx, spec, jobInputs{Slot: j.Slot, Env: j.Setup.Env, Secrets: j.Setup.Secrets, Mounts: j.Setup.Mounts, Output: j.Output, Mask: j.Mask})
+	return runSpec(ctx, spec, jobInputs{Slot: j.Slot, Env: j.Setup.Env, Secrets: j.Setup.Secrets, Mounts: j.Setup.Mounts, Output: j.Output, Tail: j.Tail, Skip: j.Skip})
 }
 
 func hostStatus() session.Status {

@@ -237,9 +237,12 @@ func (s *Session) send(kind string, body any, l *activeLease) error {
 		m.Epoch, m.LeaseID = &e, l.lease.LeaseID
 	}
 	if err := s.cfg.Carrier.Send(m); err != nil {
-		select { // the Run loop ends the session: a deaf agent must not keep running jobs
-		case s.sendFailed <- err:
-		default:
+		var pe *protocol.Error
+		if !errors.As(err, &pe) { // a frame the codec refuses (too large) wrote nothing: not a dead carrier
+			select { // the Run loop ends the session: a deaf agent must not keep running jobs
+			case s.sendFailed <- err:
+			default:
+			}
 		}
 		return err
 	}

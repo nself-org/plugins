@@ -47,3 +47,42 @@ func TestSecretSplitAcrossChunksAndCutIsMasked(t *testing.T) {
 		}
 	}
 }
+
+// TestOverlappingSecretsAreMaskedAsOneSpan proves values that overlap (one a
+// prefix of another, or sharing bytes) are hidden whole, whatever their order.
+func TestOverlappingSecretsAreMaskedAsOneSpan(t *testing.T) {
+	cases := []struct {
+		masks []string
+		in    string
+		want  string
+	}{
+		{[]string{"prefix", "prefix-long-secret-value"}, "x prefix-long-secret-value y", "x [redacted] y"},
+		{[]string{"prefix-long-secret-value", "prefix"}, "x prefix-long-secret-value y", "x [redacted] y"},
+		{[]string{"abcd", "cdef"}, "x abcdef y", "x [redacted] y"},
+	}
+	for _, c := range cases {
+		w, out := collect(c.masks...)
+		w.Write([]byte(c.in + "\n"))
+		if (*out)[0] != c.want {
+			t.Fatalf("%v: got %q, want %q", c.masks, (*out)[0], c.want)
+		}
+	}
+}
+
+// TestRepeatedBytesMakeProgress proves a stream that matches a short value at
+// every offset is emitted in bounded work and never withheld.
+func TestRepeatedBytesMakeProgress(t *testing.T) {
+	w, out := collect("aaaa")
+	for range 200 {
+		w.Write([]byte(strings.Repeat("a", 1000)))
+	}
+	w.Flush()
+	if len(*out) == 0 {
+		t.Fatal("nothing emitted")
+	}
+	for _, l := range *out {
+		if strings.Contains(l, "aaaa") {
+			t.Fatalf("leaked %d bytes", len(l))
+		}
+	}
+}

@@ -12,11 +12,23 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"syscall"
+	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/agent/nodekey"
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
+	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/report"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
 func main() {
@@ -57,4 +69,154 @@ func stateDir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, ".nself", "ci-agent"), nil
+}
+
+// Job and evidence helpers shared by `exec` and `serve` (exec.go, serve.go).
+
+func unbind(ev *model.Evidence, reason, why string) {
+	r := model.BindingReason(reason)
+	ev.WorktreeState, ev.Binding = "dirty", model.Binding{State: "unbound", Reason: &r}
+	ev.Freshness = model.Freshness{State: "unknown", Reason: &why}
+}
+
+// jobOutcome is the run package's record of the job, built from the executor's result.
+func jobOutcome(spec execSpec, res ciexec.AttemptResult, tail string) cirun.JobOutcome {
+	o := cirun.JobOutcome{ID: spec.JobID, Name: spec.JobID, Check: spec.JobID, Tool: "nself-ci-agent", Kind: spec.Job.Kind,
+		Required: true, Substantive: true, FailureClass: res.Attempt.FailureClass, ExitCode: res.ExitCode, AttemptID: spec.AttemptID, N: 1,
+		Duration: res.Finished.Sub(res.Started), Tail: tail, Reason: model.Reason(res.Reason)}
+	switch res.Attempt.State {
+	case "passed":
+		o.State = cirun.StatePassed
+	case "cancelled":
+		o.State = cirun.StateCancelled
+	default:
+		o.State = cirun.StateFailed
+	}
+	var ce *ciexec.Error
+	if errors.As(res.Err, &ce) {
+		o.Code = ce.Code
+	}
+	return o
+}
+
+// baseEvidence is the run document before the P7-CI-38 builder completes it:
+// one check for the one job. It mirrors run's coordinator-recorded document
+// for a single-job run (run.buildEvidence is unexported; exporting it is
+// recorded as debt), with the producer marked self-reported until the result
+// signer (P7-TRUST-20) signs it.
+func baseEvidence(spec execSpec, o cirun.JobOutcome, start, end time.Time) model.Evidence {
+	id := sha256.Sum256([]byte(spec.CoordinatorID + "/" + spec.AttemptID))
+	runID := hex.EncodeToString(id[:8])
+	e := model.Evidence{
+		Schema: "ci.evidence/v1", Revision: spec.Revision, RepoID: "unknown", RunID: runID,
+		Pipeline: model.PipelineRef{ID: runID, Name: spec.JobID, Kind: "adhoc"}, Trigger: "api", SourceTrust: "untrusted", // the coordinator classifies the source; the agent claims nothing
+
+		InputDigests: model.InputDigests{Lockfiles: []model.DigestRef{}, Generated: []model.DigestRef{}},
+		Runner:       model.RunnerRef{ID: "agent", Provider: "agent", Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process"},
+		Producer:     model.Producer{Kind: "self-reported", Version: "1"}, ToolVersions: map[string]string{}, Artifacts: []model.Artifact{}, Retries: []model.Retry{},
+		Selection: model.Selection{Mode: "full", Reason: "selection.full_required"}, Freshness: model.Freshness{State: "current"}, Signature: model.Signature{Kind: "coordinator-recorded"},
+		WorktreeState: "clean", Binding: model.Binding{State: "bound"},
+	}
+	c := model.Check{ID: o.Check, JobID: o.ID, Kind: string(o.Kind), Tool: o.Tool, Required: true, Substantive: true, FailureClass: o.FailureClass, Reason: o.Reason}
+	switch o.State {
+	case cirun.StatePassed:
+		c.Result = "pass"
+		e.Counts.Pass = 1
+	case cirun.StateFailed:
+		c.Result, c.Excerpt = "fail", o.Tail
+		e.Counts.Fail = 1
+		if o.Code != "" || o.FailureClass == "infra" {
+			c.Result = "error"
+			e.Counts.Fail, e.Counts.Error = 0, 1
+		}
+	default:
+		c.Result = "skip"
+		e.Counts.Skip = 1
+	}
+	e.Checks, e.Counts.Total = []model.Check{c}, 1
+	e.Result = model.Verdict(e.Checks)
+	if o.State == cirun.StateCancelled {
+		e.Result = "cancelled"
+	}
+	if c.Result == "error" && e.Result == "pass" {
+		e.Result = "error"
+	}
+	s, f, ms := start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339), end.Sub(start).Milliseconds()
+	e.Timings = model.Timings{QueuedAt: &s, StartedAt: &s, FinishedAt: &f, DurationMS: &ms}
+	return e
+}
+
+// unbindIfOtherRevision unbinds evidence whose named revision is not the commit
+// the source tree is at: bound, current evidence must describe what ran.
+func unbindIfOtherRevision(ctx context.Context, spec execSpec, ev *model.Evidence) {
+	if spec.SourceDir == "" {
+		return
+	}
+	out, exit, err := report.Capture(ctx, "git", "-c", "core.fsmonitor=false", "-C", spec.SourceDir, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+	head := strings.ToLower(strings.TrimSpace(out))
+	if err == nil && exit == 0 && head == strings.ToLower(spec.Revision) {
+		return
+	}
+	unbind(ev, "sha_mismatch", "the source tree is not at the named revision")
+}
+
+// workBase is where per-run executor work areas go: outside the agent state dir
+// (which holds the keys), in a 0700 directory of the user's own. It is never a
+// shared directory such as /tmp, where another user could pre-create it.
+func workBase() (string, error) {
+	dir := os.Getenv("NSELF_CI_AGENT_WORK")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		dir = filepath.Join(home, ".nself", "ci-agent-work")
+	}
+	if err := nodekey.EnsureDir(dir); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+func mapSecrets(m map[string]string) ciexec.SecretSource { return secretMap(m) }
+
+type secretMap map[string]string
+
+func (s secretMap) Resolve(_ context.Context, refs []string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, r := range refs {
+		v, ok := s[r]
+		if !ok {
+			return nil, fmt.Errorf("E612: secret %q was not delivered", r)
+		}
+		out[r] = v
+	}
+	return out, nil
+}
+
+// tailBuffer keeps the last max bytes of output for the failure excerpt.
+type tailBuffer struct {
+	max int
+	buf []byte
+}
+
+func (t *tailBuffer) Write(p []byte) {
+	t.buf = append(t.buf, p...)
+	if len(t.buf) > t.max {
+		t.buf = t.buf[len(t.buf)-t.max:]
+	}
+}
+func (t *tailBuffer) String() string { return string(t.buf) }
+
+const (
+	// excerptMax is the excerpt that goes into the evidence.
+	excerptMax = 2000
+)
+
+func clipTail(s string) string {
+	if len(s) <= excerptMax {
+		return s
+	}
+	s = s[len(s)-excerptMax:]
+	return strings.ToValidUTF8(s, "")
 }

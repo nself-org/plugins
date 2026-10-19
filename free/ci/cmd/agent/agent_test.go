@@ -41,6 +41,7 @@ func useState(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "agent-state")
 	t.Setenv("NSELF_CI_AGENT_HOME", dir)
+	t.Setenv("NSELF_CI_AGENT_WORK", filepath.Join(t.TempDir(), "work"))
 	return dir
 }
 
@@ -484,5 +485,63 @@ func TestSlotsCommandAndServeCannotRaiseTheCap(t *testing.T) {
 	}
 	if code, _, _ := runCmd(t, "slots", "--set", "-1"); code != 2 {
 		t.Fatalf("negative set exit %d", code)
+	}
+}
+
+// TestSkippedJobsHaveSchemaValidEvidence proves a job that was cancelled before
+// it started, or whose secrets never came, still yields ci.evidence/v1
+// (cancelled / a failed infra check), not an ad-hoc document the coordinator would reject.
+func TestSkippedJobsHaveSchemaValidEvidence(t *testing.T) {
+	useState(t)
+	for skip, want := range map[string]string{"cancelled": "cancelled", "secrets_missing": "fail"} {
+		spec := execSpec{AttemptID: "a-" + skip, CoordinatorID: "c", JobID: "j", Revision: rev40, Job: model.Job{Kind: "static", Run: []string{"true"}}}
+		res, err := runSpec(context.Background(), spec, jobInputs{Skip: skip})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := validEvidence(t, res.Evidence); m["result"] != want {
+			t.Fatalf("%s: result %v, want %s", skip, m["result"], want)
+		}
+	}
+}
+
+// TestNoSourceTreeIsUnbound proves a job run without a source directory never
+// produces bound or current evidence (and git never reads the agent's cwd).
+func TestNoSourceTreeIsUnbound(t *testing.T) {
+	skipUnixOnly(t)
+	useState(t)
+	spec := execSpec{AttemptID: "a1", CoordinatorID: "c", JobID: "j", Revision: rev40, Job: model.Job{Kind: "static", Run: []string{"true"}}}
+	res, err := runSpec(context.Background(), spec, jobInputs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := validEvidence(t, res.Evidence)
+	if m["binding"].(map[string]any)["state"] != "unbound" || m["freshness"].(map[string]any)["state"] != "unknown" {
+		t.Fatalf("evidence %v", m)
+	}
+}
+
+// TestWorkBaseRefusesASymlink proves the executor work area is a real private
+// directory: a symlink there is an error, a loose directory is tightened to 0700.
+func TestWorkBaseRefusesASymlink(t *testing.T) {
+	skipUnixOnly(t)
+	root := t.TempDir()
+	loose := filepath.Join(root, "loose")
+	_ = os.Mkdir(loose, 0o777)
+	_ = os.Chmod(loose, 0o777)
+	t.Setenv("NSELF_CI_AGENT_WORK", loose)
+	if dir, err := workBase(); err != nil || dir != loose {
+		t.Fatalf("%q %v", dir, err)
+	}
+	if info, _ := os.Stat(loose); info.Mode().Perm() != 0o700 {
+		t.Fatalf("mode %v", info.Mode().Perm())
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(loose, link); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NSELF_CI_AGENT_WORK", link)
+	if _, err := workBase(); err == nil {
+		t.Fatal("followed a symlink")
 	}
 }

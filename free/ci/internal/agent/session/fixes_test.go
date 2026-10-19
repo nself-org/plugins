@@ -83,7 +83,7 @@ func TestSecretsFramesAreFenced(t *testing.T) {
 	got := make(chan map[string]string, 1)
 	runner := RunnerFunc(func(ctx context.Context, j JobRun) (JobResult, error) {
 		got <- j.Setup.Secrets
-		return JobResult{}, errors.New("runner blew up with " + string(j.Mask([]byte("DECLARED-VALUE"))) + " and JOBTOKEN-xyz")
+		return JobResult{}, errors.New("runner blew up with DECLARED-VALUE and JOBTOKEN-xyz")
 	})
 	r := startRig(t, runner)
 	r.handshake()

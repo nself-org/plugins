@@ -2,6 +2,7 @@ package session
 
 import (
 	"bytes"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -51,25 +52,18 @@ func (w *lineWriter) Write(p []byte) {
 		longest = max(longest, len(m))
 	}
 	for len(w.buf) > maxLogLine+longest {
+		// Emit all but the last (longest-1) bytes, which may begin a secret value
+		// that finishes in a later chunk; never cut inside a complete value, and
+		// always make progress (a value that starts at 0 is emitted whole).
 		cut := len(w.buf) - max(longest-1, 0)
-		for moved := true; moved; { // never cut through a complete secret value
-			moved = false
-			for _, m := range masks {
-				for from := 0; ; {
-					at := bytes.Index(w.buf[from:], m)
-					if at < 0 {
-						break
-					}
-					at += from
-					if at < cut && cut < at+len(m) {
-						cut, moved = at, true
-					}
-					from = at + 1
+		for _, sp := range spans(w.buf, masks) {
+			if sp[0] < cut && cut < sp[1] {
+				cut = sp[0]
+				if cut == 0 {
+					cut = sp[1]
 				}
+				break
 			}
-		}
-		if cut <= 0 {
-			break
 		}
 		w.line(w.buf[:cut])
 		w.buf = w.buf[cut:]
@@ -104,12 +98,48 @@ func (w *lineWriter) line(b []byte) {
 	w.emit(strings.ToValidUTF8(string(maskAll(b, w.maskList())), "�"))
 }
 
-// maskAll replaces every occurrence of every mask value, longest first.
-func maskAll(b []byte, masks [][]byte) []byte {
+// spans returns the merged [start,end) byte ranges of b covered by any mask
+// value, found in the original bytes so overlapping values (one a prefix of
+// another, or sharing a suffix) are hidden as a whole.
+func spans(b []byte, masks [][]byte) [][2]int {
+	var found [][2]int
 	for _, m := range masks {
-		b = bytes.ReplaceAll(b, m, []byte(maskText))
+		for from := 0; from < len(b); {
+			at := bytes.Index(b[from:], m)
+			if at < 0 {
+				break
+			}
+			at += from
+			found = append(found, [2]int{at, at + len(m)})
+			from = at + 1
+		}
 	}
-	return b
+	sort.Slice(found, func(i, j int) bool { return found[i][0] < found[j][0] })
+	var merged [][2]int
+	for _, f := range found {
+		if n := len(merged); n > 0 && f[0] <= merged[n-1][1] {
+			merged[n-1][1] = max(merged[n-1][1], f[1])
+			continue
+		}
+		merged = append(merged, f)
+	}
+	return merged
+}
+
+// maskAll replaces every byte range covered by a mask value with maskText.
+func maskAll(b []byte, masks [][]byte) []byte {
+	sp := spans(b, masks)
+	if len(sp) == 0 {
+		return b
+	}
+	var out []byte
+	last := 0
+	for _, r := range sp {
+		out = append(out, b[last:r[0]]...)
+		out = append(out, maskText...)
+		last = r[1]
+	}
+	return append(out, b[last:]...)
 }
 
 // secretMasks returns the strings to hide for one secret value: the value and,

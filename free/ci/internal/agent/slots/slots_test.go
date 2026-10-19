@@ -157,6 +157,9 @@ func TestSlotsCapCannotBeRaisedByAnotherOpen(t *testing.T) {
 	dir := t.TempDir()
 	small := open(t, dir, 2)
 	big := open(t, dir, 64)
+	if got := open(t, dir, 1); got.Total() != 2 {
+		t.Fatalf("a smaller ask must not shrink the host cap: %d", got.Total())
+	}
 	if big.Total() != 2 {
 		t.Fatalf("second open got %d slots, want the host cap 2", big.Total())
 	}
@@ -213,4 +216,21 @@ func TestSlotsStaleReleaseDoesNotFreeNewerSlot(t *testing.T) {
 		t.Fatalf("stale release freed the newer slot (used %d)", n)
 	}
 	_ = tb.Release(b)
+}
+
+// TestSlotsLowerOnlyLowers proves a handle can lower itself in memory and never raise.
+func TestSlotsLowerOnlyLowers(t *testing.T) {
+	skipWindows(t)
+	tb := open(t, t.TempDir(), 3)
+	tb.Lower(5)
+	if tb.Total() != 3 {
+		t.Fatalf("raised to %d", tb.Total())
+	}
+	tb.Lower(1)
+	if tb.Total() != 1 {
+		t.Fatalf("lowered to %d", tb.Total())
+	}
+	if cap, _, _ := Status(tb.dir); cap != 3 {
+		t.Fatalf("on-disk cap changed to %d", cap)
+	}
 }

@@ -51,8 +51,9 @@ type entry struct {
 
 // tableFile is slots.json. Cap is the host's slot count, fixed by whoever first
 // opened the table (or by SetCap, the operator's lever: `nself-ci-agent slots
-// --set N`): later Opens can lower their own count but never raise it, so a
-// coordinator that picks the agent's command line cannot widen the cap.
+// --set N`): a later Open takes this cap whatever count it asks for (a handle may then
+// Lower itself), so a coordinator that picks the agent's command line cannot
+// widen or shrink the host's cap.
 type tableFile struct {
 	Cap   int     `json:"cap"`
 	Slots []entry `json:"slots"`
@@ -71,7 +72,8 @@ type Slot struct {
 	token string
 }
 
-// Open returns the table of stateDir with total slots (at least 1).
+// Open returns the table of stateDir. total is the host default, recorded as the
+// host cap when none exists yet; an existing cap wins (see tableFile.Cap).
 func Open(stateDir string, total int) (*Table, error) {
 	if total < 1 {
 		return nil, fmt.Errorf("slot count %d: want at least 1", total)
@@ -81,19 +83,25 @@ func Open(stateDir string, total int) (*Table, error) {
 	}
 	t := &Table{dir: stateDir, total: total}
 	err := t.locked(func(tf *tableFile) (bool, error) {
-		switch {
-		case tf.Cap <= 0:
+		if tf.Cap <= 0 { // first opener: total is the host default, recorded as the cap
 			tf.Cap = total
 			return true, nil
-		case tf.Cap < t.total:
-			t.total = tf.Cap
 		}
+		t.total = tf.Cap // the recorded cap is the ceiling, whatever this opener asked for
 		return false, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	return t, nil
+}
+
+// Lower makes this handle use at most n slots (in memory only; the host cap on
+// disk is unchanged). It never raises.
+func (t *Table) Lower(n int) {
+	if n >= 1 && n < t.total {
+		t.total = n
+	}
 }
 
 // SetCap sets the host's slot count in stateDir, raising or lowering it (the

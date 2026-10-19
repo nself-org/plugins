@@ -20,10 +20,15 @@ type JobRun struct {
 	Credential []byte
 	// Output receives the job's (already redacted) output chunks.
 	Output func([]byte)
-	// Mask hides the lease's literal secret values (runner credential, job
-	// token, delivered secrets) from text that leaves the node by another road
-	// than Output, such as the failure excerpt in the evidence.
-	Mask func([]byte) []byte
+	// Tail returns the last part of the job's output as it left the node, with
+	// the lease's secret values already masked: the source for the failure
+	// excerpt in the evidence. It flushes an unterminated final line first.
+	Tail func() string
+	// Skip, when set, says the job must not run: "cancelled" (the lease was
+	// cancelled or drained before it started) or "secrets_missing" (declared
+	// secrets did not arrive before the lease expired). The Runner still returns
+	// the result document for that outcome.
+	Skip string
 }
 
 // JobResult is a finished job: its outcome and the ci.evidence/v1 document.

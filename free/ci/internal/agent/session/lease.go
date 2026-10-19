@@ -25,9 +25,12 @@ var unsafeName = regexp.MustCompile(`[^A-Za-z0-9_.-]`)
 type activeLease struct {
 	lease     protocol.Lease
 	cancelCtx context.CancelFunc
-	cancelled atomic.Bool   // safe
-	done      atomic.Bool   // safe: set when the job goroutine is finished
-	startWait time.Duration // how long the secrets wait may last (until the lease's expiry)
+	cancelled atomic.Bool // safe
+	done      atomic.Bool // safe: set when the job goroutine is finished
+	expires   time.Time   // the lease's expiry on the session clock; the secrets wait ends here
+	tailMu    sync.Mutex
+	tail      []byte // the last bytes of masked output lines
+	secSeen   map[string]bool
 	maskMu    sync.Mutex
 	mask      [][]byte
 	secMu     sync.Mutex
@@ -96,7 +99,7 @@ func (s *Session) onLease(m protocol.Message, l protocol.Lease) {
 	// frame's value is not a job deadline; a job ends by its own timeout, a
 	// cancel, a drain deadline or the agent fence (P7-NODE-09).
 	ctx, cancel := context.WithCancel(s.runCtx)
-	al := &activeLease{lease: l, cancelCtx: cancel, secWake: make(chan struct{}, 1), secVals: map[string]string{}, startWait: exp.Sub(now)}
+	al := &activeLease{lease: l, cancelCtx: cancel, secWake: make(chan struct{}, 1), secVals: map[string]string{}, expires: exp, secSeen: map[string]bool{}}
 	if l.RunnerCredential != nil {
 		al.addMask(l.RunnerCredential.Value)
 	}
@@ -156,24 +159,52 @@ func (s *Session) onSecrets(m protocol.Message, sec protocol.Secrets) {
 	for _, r := range l.lease.Secrets {
 		declared[r.Ref] = true
 	}
+	// Decide what is taken, install the masks, and only then publish the values:
+	// the job must never be able to print a value its masks do not yet cover.
 	l.secMu.Lock()
-	var accepted []string
+	var refs, vals []string
 	for _, v := range sec.Values {
-		if _, dup := l.secVals[v.Ref]; dup || !declared[v.Ref] || len(v.Value) > maxSecretValue || l.secBytes+len(v.Value) > maxSecretBytes {
+		if l.secSeen[v.Ref] || !declared[v.Ref] || len(v.Value) > maxSecretValue || l.secBytes+len(v.Value) > maxSecretBytes {
 			continue
 		}
-		l.secVals[v.Ref] = v.Value
+		l.secSeen[v.Ref] = true
 		l.secBytes += len(v.Value)
-		accepted = append(accepted, v.Value)
+		refs, vals = append(refs, v.Ref), append(vals, v.Value)
 	}
 	l.secMu.Unlock()
-	for _, v := range accepted {
+	for _, v := range vals {
 		l.addMask(v)
 	}
+	l.secMu.Lock()
+	for i, r := range refs {
+		l.secVals[r] = vals[i]
+	}
+	l.secMu.Unlock()
 	select {
 	case l.secWake <- struct{}{}:
 	default:
 	}
+}
+
+const tailKeep = 4 << 10
+
+// noteTail keeps the last tailKeep bytes of masked output.
+func (l *activeLease) noteTail(text string) {
+	l.tailMu.Lock()
+	defer l.tailMu.Unlock()
+	l.tail = append(l.tail, text...)
+	l.tail = append(l.tail, '\n')
+	if len(l.tail) > tailKeep {
+		l.tail = l.tail[len(l.tail)-tailKeep:]
+	}
+}
+
+// maskedTail is JobRun.Tail: flush the unterminated line, return the masked tail.
+func (l *activeLease) maskedTail() string {
+	l.lw.Flush()
+	l.tailMu.Lock()
+	defer l.tailMu.Unlock()
+	return strings.ToValidUTF8(string(l.tail), "")
 }
 
 func (l *activeLease) addMask(v string) {
@@ -208,6 +239,7 @@ func (s *Session) runLease(ctx context.Context, al *activeLease, slot *slots.Slo
 	defer al.cancelCtx()
 	l := al.lease
 	al.lw = newLineWriter(func(text string) {
+		al.noteTail(text)
 		_ = s.send("log", protocol.Log{LeaseID: l.LeaseID, LineSeq: al.lines.Add(1), Stream: "stdout", Text: text}, al)
 	}, al.masks)
 	root, err := newJobRoot(s.cfg.StateDir, l)
@@ -234,7 +266,7 @@ func (s *Session) runLease(ctx context.Context, al *activeLease, slot *slots.Slo
 		}
 		mergeSetup(&setup, got)
 	}
-	waitCtx, stopWait := context.WithTimeout(ctx, al.startWait)
+	waitCtx, stopWait := context.WithTimeout(ctx, max(al.expires.Sub(s.cfg.Clock.Now()), 0))
 	for waitCtx.Err() == nil {
 		al.secMu.Lock()
 		for k, v := range al.secVals {
@@ -258,20 +290,17 @@ func (s *Session) runLease(ctx context.Context, al *activeLease, slot *slots.Slo
 		}
 	}
 	stopWait()
+	skip := ""
 	switch {
 	case ctx.Err() != nil:
-		s.finish(ctx, al, root, JobResult{Outcome: Outcome{State: "cancelled", FailureClass: "cancelled"}, Evidence: json.RawMessage(`{"schema":"ci.evidence/v1","result":"cancelled","reason":"cancelled_before_start"}`)}, nil)
-		return
+		skip = "cancelled"
 	case missingSecrets(l.Job.Secrets, setup.Secrets):
-		s.finish(ctx, al, root, JobResult{Outcome: Outcome{State: "failed", FailureClass: "infra"}}, errors.New("declared secrets were not delivered before the lease expired"))
-		return
+		skip = "secrets_missing"
 	}
-	res, err := s.cfg.Runner.Run(ctx, JobRun{Lease: l, Slot: slot.Index, Root: root, Setup: setup, Credential: cred, Output: al.lw.Write, Mask: al.redactBytes})
+	res, err := s.cfg.Runner.Run(ctx, JobRun{Lease: l, Slot: slot.Index, Root: root, Setup: setup, Credential: cred, Output: al.lw.Write, Tail: al.maskedTail, Skip: skip})
 	al.lw.Flush()
 	s.finish(ctx, al, root, res, err)
 }
-
-func (l *activeLease) redactBytes(b []byte) []byte { return []byte(l.redact(string(b))) }
 
 // newJobRoot makes a private, uniquely named directory for one lease run: two
 // coordinators may use the same lease id, and ids are not file-name safe.
