@@ -15,8 +15,8 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
-// TestDispatchNodeRecheck: a node drained, or deauthorized for the project,
-// after the world was built gets no lease: admission re-reads the node row.
+// TestDispatchNodeRecheck: a node drained, revoked or deauthorized for the project
+// after the world was built gets no lease: admission re-reads the node row (D-1086).
 func TestDispatchNodeRecheck(t *testing.T) {
 	for _, c := range []struct {
 		name   string
@@ -27,6 +27,10 @@ func TestDispatchNodeRecheck(t *testing.T) {
 			n.State = "draining"
 			return st.NodeSetState(ctx, n, "test", "drain")
 		}, model.NodeDraining},
+		{"revoked", func(ctx context.Context, st *store.Store, n store.NodeRecord) error {
+			_, err := st.NodeRevoke(ctx, n.ID, "cli:test", nil)
+			return err
+		}, model.NodeRevoked},
 		{"deauthorized", func(ctx context.Context, st *store.Store, n store.NodeRecord) error {
 			var cap model.Capability
 			if err := json.Unmarshal(n.Capability, &cap); err != nil {
