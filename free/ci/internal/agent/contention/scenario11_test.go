@@ -143,7 +143,7 @@ func scenarioReservedCPU(t *testing.T) {
 
 	// A CPU hog runs under the isolator; its measured CPU must stay inside the remaining share.
 	pl := HostPlatform()
-	pl.Sweep()
+	pl.Sweep(0)
 	var prio Priority
 	iso := &Isolator{Inner: passIsolator{}, Share: func() reservation.Share { return d.Share }, Platform: &pl, Report: func(_ string, p Priority) { prio = p }}
 	before, hadBefore := pl.CgroupUsageUsec()
