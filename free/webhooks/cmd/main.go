@@ -49,3 +49,4 @@ func main() {
 		log.Fatalf("[nself-webhooks] server error: %v", err)
 	}
 }
+// probe: CI fan-out measurement, not for merge
