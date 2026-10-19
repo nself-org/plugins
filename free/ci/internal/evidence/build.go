@@ -124,7 +124,7 @@ func AttemptDocument(run model.Evidence, o cirun.JobOutcome) model.Evidence {
 		ev.Checks = append(ev.Checks, c)
 		ev.Counts = tally(ev.Checks)
 	}
-	ev.Result = model.Verdict(ev.Checks)
+	ev.Result = model.RunVerdict(ev.Checks)
 	if run.Result == "cancelled" {
 		ev.Result = "cancelled"
 	}

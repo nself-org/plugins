@@ -123,23 +123,20 @@ func baseEvidence(spec execSpec, o cirun.JobOutcome, start, end time.Time) model
 		c.Result = "pass"
 		e.Counts.Pass = 1
 	case cirun.StateFailed:
-		c.Result, c.Excerpt = "fail", o.Tail
-		e.Counts.Fail = 1
-		if o.Code != "" || o.FailureClass == "infra" {
-			c.Result = "error"
-			e.Counts.Fail, e.Counts.Error = 0, 1
+		c.Result, c.Excerpt = model.FailedResult(o.Code, o.FailureClass), o.Tail
+		if c.Result == "error" {
+			e.Counts.Error = 1
+		} else {
+			e.Counts.Fail = 1
 		}
 	default:
 		c.Result = "skip"
 		e.Counts.Skip = 1
 	}
 	e.Checks, e.Counts.Total = []model.Check{c}, 1
-	e.Result = model.Verdict(e.Checks)
+	e.Result = model.RunVerdict(e.Checks)
 	if o.State == cirun.StateCancelled {
 		e.Result = "cancelled"
-	}
-	if c.Result == "error" && e.Result == "pass" {
-		e.Result = "error"
 	}
 	s, f, ms := start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339), end.Sub(start).Milliseconds()
 	e.Timings = model.Timings{QueuedAt: &s, StartedAt: &s, FinishedAt: &f, DurationMS: &ms}

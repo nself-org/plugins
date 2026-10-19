@@ -133,3 +133,38 @@ func TestCodeProblems(t *testing.T) {
 		t.Fatal(last)
 	}
 }
+
+// D-1098: one rule for the result of a run, shared by the local run, the agent,
+// attempt documents and Projection.
+func TestRunVerdictTellsInfrastructureApart(t *testing.T) {
+	req := func(result CheckResult) Check { return Check{Required: true, Substantive: true, Result: result} }
+	for _, tc := range []struct {
+		name   string
+		checks []Check
+		want   Result
+	}{
+		{"all pass", []Check{req("pass")}, "pass"},
+		{"only an infrastructure error", []Check{req("pass"), req("error")}, "error"},
+		{"error and a real failure", []Check{req("error"), req("fail")}, "fail"},
+		{"error and an own skip", []Check{req("error"), req("skip")}, "fail"},
+		{"error and a dependent skip", []Check{req("error"), {Required: true, Result: "skip", Reason: "dep.failed"}}, "error"},
+		{"a real failure", []Check{req("fail")}, "fail"},
+	} {
+		if got := RunVerdict(tc.checks); got != tc.want {
+			t.Errorf("%s: RunVerdict = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+	if got := Projection(Evidence{Checks: []Check{req("pass"), req("error")}}); got.Result != "error" {
+		t.Errorf("Projection of an error-only run = %q, want error (%s)", got.Result, got.Summary)
+	}
+}
+
+func TestFailedResult(t *testing.T) {
+	for _, tc := range []struct{ code, class, want string }{
+		{"", "", "fail"}, {"", "test", "fail"}, {"", "timeout", "error"}, {"", "lost", "error"}, {"", "infra", "error"}, {"E811", "", "error"},
+	} {
+		if got := FailedResult(tc.code, FailureClass(tc.class)); string(got) != tc.want {
+			t.Errorf("FailedResult(%q, %q) = %q, want %q", tc.code, tc.class, got, tc.want)
+		}
+	}
+}

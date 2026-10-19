@@ -22,6 +22,46 @@ func Verdict(checks []Check) Result {
 	return "pass"
 }
 
+// FailedResult is the check result of a job that ended failed. Only the code
+// under test can `fail`: an executor error code, a broken runner, a timeout and
+// a lost lease say nothing about it, so they are `error` (AUTO D6, D-0285).
+func FailedResult(code string, failureClass FailureClass) CheckResult {
+	switch {
+	case code != "", failureClass == "infra", failureClass == "timeout", failureClass == "lost":
+		return "error"
+	}
+	return "fail"
+}
+
+// RunVerdict is Verdict with infrastructure told apart: a run that is red only
+// because a required check ended `error` (a full disk, an unreachable registry,
+// a lost runner, a timeout) is `error`, so the posted status is not `failure`;
+// any required check that really failed, or a required check that was skipped
+// on its own, keeps it `fail`. Every producer of a result (the local run, the
+// remote agent, attempt documents, Projection) uses this one rule.
+func RunVerdict(checks []Check) Result {
+	v := Verdict(checks)
+	if v != "fail" {
+		return v
+	}
+	broken := false
+	for _, c := range checks {
+		switch {
+		case !c.Required:
+		case c.Result == "skip" && (c.Reason == "dep.failed" || c.Reason == "fail_fast.cancelled"):
+			// a consequence of another check (it needed one that did not pass, or fail-fast stopped it): the other check decides
+		case c.Result == "fail" && !c.AllowFailure, c.Result == "skip":
+			return v
+		case c.Result == "error":
+			broken = true
+		}
+	}
+	if broken {
+		return "error"
+	}
+	return v
+}
+
 // Projection is the compact result shown to users and legacy consumers.
 type ProjectionResult struct {
 	Result  Result `json:"result"`
@@ -32,7 +72,7 @@ type ProjectionResult struct {
 
 // Projection derives a verdict and bounded summary from evidence checks.
 func Projection(e Evidence) ProjectionResult {
-	p := ProjectionResult{Result: Verdict(e.Checks), Total: len(e.Checks)}
+	p := ProjectionResult{Result: RunVerdict(e.Checks), Total: len(e.Checks)}
 	for _, check := range e.Checks {
 		if check.Result == "pass" {
 			p.Passed++

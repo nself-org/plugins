@@ -206,3 +206,16 @@ func TestHiddenEditDuringTheRunUnbinds(t *testing.T) {
 		t.Fatalf("a hidden edit made during the run left the evidence %s/%s", ev.Binding.State, ev.WorktreeState)
 	}
 }
+
+// D-1098: an attempt document of an infrastructure-only failure reads `error`,
+// the same as its run, not `fail`.
+func TestAttemptDocumentOfATimeoutIsError(t *testing.T) {
+	run := model.Evidence{
+		Result: "error",
+		Checks: []model.Check{{ID: "unit", JobID: "unit", Required: true, Substantive: true, Result: "error", FailureClass: "timeout"}},
+	}
+	doc := AttemptDocument(run, cirun.JobOutcome{ID: "unit", AttemptID: "a1", N: 1})
+	if doc.Result != "error" {
+		t.Fatalf("attempt document result %q, want error", doc.Result)
+	}
+}

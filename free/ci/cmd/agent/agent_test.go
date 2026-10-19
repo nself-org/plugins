@@ -490,10 +490,10 @@ func TestSlotsCommandAndServeCannotRaiseTheCap(t *testing.T) {
 
 // TestSkippedJobsHaveSchemaValidEvidence proves a job that was cancelled before
 // it started, or whose secrets never came, still yields ci.evidence/v1
-// (cancelled / a failed infra check), not an ad-hoc document the coordinator would reject.
+// (cancelled / an infra check that ended error, so the run is error as in the local run, D-1098), not an ad-hoc document the coordinator would reject.
 func TestSkippedJobsHaveSchemaValidEvidence(t *testing.T) {
 	useState(t)
-	for skip, want := range map[string]string{"cancelled": "cancelled", "secrets_missing": "fail"} {
+	for skip, want := range map[string]string{"cancelled": "cancelled", "secrets_missing": "error"} {
 		spec := execSpec{AttemptID: "a-" + skip, CoordinatorID: "c", JobID: "j", Revision: rev40, Job: model.Job{Kind: "static", Run: []string{"true"}}}
 		res, err := runSpec(context.Background(), spec, jobInputs{Skip: skip})
 		if err != nil {
