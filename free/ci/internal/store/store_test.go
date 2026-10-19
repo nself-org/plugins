@@ -41,7 +41,7 @@ func codeIs(err error, code string) bool { var e *Error; return errors.As(err, &
 
 func TestTransitionTableExhaustive(t *testing.T) {
 	states := model.EnumValues("JobState")
-	allowed := map[string]bool{"queued>leased": true, "queued>cancelled": true, "leased>running": true, "leased>lost": true, "leased>cancelled": true, "running>finalizing": true, "running>failed": true, "running>lost": true, "running>cancelled": true, "finalizing>passed": true, "finalizing>failed": true, "finalizing>cancelled": true, "lost>retryable": true, "lost>needs-operator": true, "retryable>queued": true, "needs-operator>queued": true, "needs-operator>failed": true, "needs-operator>cancelled": true, "failed>queued": true}
+	allowed := map[string]bool{"queued>leased": true, "queued>cancelled": true, "leased>running": true, "leased>lost": true, "leased>cancelled": true, "running>finalizing": true, "running>failed": true, "running>lost": true, "running>cancelled": true, "finalizing>passed": true, "finalizing>failed": true, "finalizing>cancelled": true, "lost>retryable": true, "lost>needs-operator": true, "lost>cancelled": true, "retryable>queued": true, "retryable>cancelled": true, "needs-operator>queued": true, "needs-operator>failed": true, "needs-operator>cancelled": true, "failed>queued": true}
 	for _, from := range states {
 		for _, to := range states {
 			key := from + ">" + to
@@ -138,6 +138,40 @@ func TestTransitionCASAndCancel(t *testing.T) {
 	}
 	if err := s.testTransition(ctx, "a", "leased", "cancelled", TransitionDetail{Epoch: 1}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// D-1049: an operator cancel that lands after running -> lost (or lost ->
+// retryable) settles the attempt cancelled, whatever the job kind.
+func TestCancelIntentSettlesLostAndRetryableAttempts(t *testing.T) {
+	for _, tc := range []struct{ name, kind string }{{"test", "test"}, {"release", "release"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := testStore(t)
+			seed(t, s, "a")
+			if _, err := s.writer.Exec("UPDATE job SET kind=? WHERE id='ja'", tc.kind); err != nil {
+				t.Fatal(err)
+			}
+			ctx := context.Background()
+			step := func(from, to model.JobState, epoch int64) {
+				t.Helper()
+				if err := s.testTransition(ctx, "a", from, to, TransitionDetail{Epoch: epoch}); err != nil {
+					t.Fatalf("%s -> %s: %v", from, to, err)
+				}
+			}
+			step("queued", "leased", 0)
+			step("leased", "running", 1)
+			step("running", "lost", 2)
+			if err := s.RequestCancel(ctx, "a", "stop", 3); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.testTransition(ctx, "a", "lost", "retryable", TransitionDetail{Epoch: 3}); err == nil {
+				t.Fatal("lost -> retryable went through with a cancel intent")
+			}
+			step("lost", "cancelled", 3)
+			if got, _, _ := s.AttemptStateEpoch(ctx, "a"); got != "cancelled" {
+				t.Fatalf("attempt is %s, want cancelled", got)
+			}
+		})
 	}
 }
 

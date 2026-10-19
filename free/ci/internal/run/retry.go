@@ -29,6 +29,10 @@ import (
 // confirmingKey marks the context of a --confirm-flaky rerun: park refuses it.
 type confirmingKey struct{}
 
+// parkStepFunc is the type of runState.parkStep, a test seam that runs before
+// each store step of park so a cancel can land between two steps.
+type parkStepFunc func(from, to model.JobState)
+
 // MaxConfirmFlaky bounds --confirm-flaky.
 const MaxConfirmFlaky = 10
 
@@ -94,18 +98,31 @@ func (rs *runState) park(ctx context.Context, pj plan.PlannedJob, job model.Job,
 	if ctx.Value(confirmingKey{}) != nil || !o.retryable || o.FailureClass != "infra" || n > infraBudget(job) || !rs.stillRunning(ctx, pj) {
 		return false
 	}
+	rs.beforeParkStep("running", "lost")
 	if rs.trans(id, "running", "lost", "infra") != nil { // a cancel intent or an unexpected state: settle normally
 		return false
 	}
 	for _, to := range []model.JobState{"retryable", "queued"} {
 		from := map[model.JobState]model.JobState{"retryable": "lost", "queued": "retryable"}[to]
-		if err := rs.trans(id, from, to, "infra"); err != nil {
+		rs.beforeParkStep(from, to)
+		got, err := rs.settle(id, from, to, "infra") // a cancel intent that won settles the attempt cancelled (D-1049)
+		if got == "cancelled" && err == nil {
+			*o = cancelled(*o, "", "cancelled by the operator")
+			return true
+		}
+		if err != nil {
 			*o = failed(*o, err) // left lost: the next recovery sweep decides
 			return true
 		}
 	}
 	o.State, o.parked = StateFailed, true
 	return true
+}
+
+func (rs *runState) beforeParkStep(from, to model.JobState) {
+	if rs.parkStep != nil {
+		rs.parkStep(from, to)
+	}
 }
 
 // retire cancels the parked attempt before s.N once its successor exists (or failed to).

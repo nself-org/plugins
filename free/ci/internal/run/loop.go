@@ -40,6 +40,7 @@ type runState struct {
 	attempts   map[string]string // attempt id -> planned job id
 	userCancel bool
 	cancelRun  context.CancelFunc // ends the whole run (a cancel intent from another process)
+	parkStep   parkStepFunc       // test seam, see retry.go
 }
 
 func (rs *runState) outcome(id string) JobOutcome {

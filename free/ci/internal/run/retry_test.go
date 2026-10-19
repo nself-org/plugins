@@ -12,6 +12,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // counting is a script that appends a line to marker before running body, so a
@@ -283,3 +284,55 @@ func TestRetryRecordKeepsTheEarlierFailureDiagnosis(t *testing.T) {
 }
 
 func planned(id string) plan.PlannedJob { return plan.PlannedJob{ID: id} }
+
+// D-1049: a cancel that lands between running -> lost and lost -> retryable (or
+// retryable -> queued) settles the attempt cancelled; it is not left lost for
+// the recovery sweep.
+func TestParkSettlesCancelledWhenACancelLandsMidway(t *testing.T) {
+	for _, after := range []model.JobState{"lost", "retryable"} {
+		t.Run(string(after), func(t *testing.T) {
+			ctx := context.Background()
+			st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = st.Close() }()
+			if err = st.CreatePipeline(ctx, store.PipelineRow{ID: "p", Project: "x", Status: "running"}); err != nil {
+				t.Fatal(err)
+			}
+			if err = st.CreateJob(ctx, store.JobRow{ID: "p.j", PipelineID: "p", Name: "j", Kind: "test", Idempotent: true, InfraMax: 1}); err != nil {
+				t.Fatal(err)
+			}
+			if err = st.CreateAttempt(ctx, store.AttemptRow{ID: "a1", JobID: "p.j", N: 1}, ""); err != nil {
+				t.Fatal(err)
+			}
+			rs := &runState{sess: &Session{Store: st}, marks: map[string]model.Reason{}}
+			for _, to := range []model.JobState{"leased", "running"} {
+				from := map[model.JobState]model.JobState{"leased": "queued", "running": "leased"}[to]
+				if err = rs.trans("a1", from, to, ""); err != nil {
+					t.Fatal(err)
+				}
+			}
+			rs.parkStep = func(from, to model.JobState) {
+				if from != after || to == "lost" {
+					return
+				}
+				_, epoch, _ := st.AttemptStateEpoch(ctx, "a1")
+				if err := st.RequestCancel(ctx, "a1", "stop", epoch); err != nil {
+					t.Fatal(err)
+				}
+			}
+			o := JobOutcome{FailureClass: "infra", retryable: true}
+			job := model.Job{Retry: &model.RetryConfig{InfraMax: 1}}
+			if !rs.park(ctx, planned("j"), job, "a1", &o, 1) {
+				t.Fatal("park did not take the attempt")
+			}
+			if state, _, _ := st.AttemptStateEpoch(ctx, "a1"); state != "cancelled" {
+				t.Fatalf("attempt is %s, want cancelled", state)
+			}
+			if o.State != StateCancelled || o.parked {
+				t.Fatalf("outcome %+v, want a settled cancelled outcome", o)
+			}
+		})
+	}
+}
