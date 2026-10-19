@@ -141,9 +141,13 @@ func TestInteractiveFirstDispatcher(t *testing.T) {
 	interactiveQueued.Store(true)
 	fgDone := submit(fg)
 
-	for depth := range orderer.depth { // every job is in the queue once a tick sees them all
-		if depth == flood+1 {
-			break
+	timeout := time.After(30 * time.Second)
+	for seen := false; !seen; { // every job is in the queue once a tick sees them all
+		select {
+		case depth := <-orderer.depth:
+			seen = depth == flood+1
+		case <-timeout:
+			t.Fatal("no tick saw the whole queue")
 		}
 	}
 	sink.mu.Lock()

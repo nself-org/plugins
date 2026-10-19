@@ -17,7 +17,9 @@ type signals struct {
 	BatteryPct  *int
 	Interactive *string
 	Operator    bool
-	Active      bool
+	// OwnerUnknown leaves both ownership sources empty (a paired node today).
+	OwnerUnknown bool
+	Active       bool
 }
 
 // runner builds a runner every fixture job is otherwise eligible for.
@@ -41,6 +43,9 @@ func runner(id string, s signals) sched.Runner {
 		owner = "provider"
 	}
 	c.Identity.Ownership.Value = &owner
+	if s.OwnerUnknown {
+		owner, c.Identity.Ownership.Value = "", nil
+	}
 	return sched.Runner{ID: id, Location: loc, Class: "owned", Provider: "operator", Active: s.Active,
 		Avail:      sched.Avail{Slots: slots, CPU: 8, MemMB: 8192},
 		Capability: c,

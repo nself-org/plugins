@@ -45,7 +45,7 @@ func (v Verdict) Busy() bool { return len(v.Causes) > 0 }
 // hosted or ephemeral, and either named "operator" by its trust declaration or
 // capability ownership fact, or named by neither (unknown fails closed).
 func OperatorOwned(r sched.Runner) bool {
-	if r.Location == "hosted" || r.Ephemeral || r.Decl.Hosted {
+	if kind := r.Capability.Location.Kind.Value; r.Location == "hosted" || r.Ephemeral || r.Decl.Hosted || kind != nil && *kind == "hosted" {
 		return false
 	}
 	sources := []string{r.Decl.Ownership}

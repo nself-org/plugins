@@ -93,6 +93,7 @@ func TestBackgroundAdmission(t *testing.T) {
 			"hosted location": func(r *sched.Runner) { r.Location = "hosted" },
 			"ephemeral":       func(r *sched.Runner) { r.Ephemeral = true },
 			"hosted decl":     func(r *sched.Runner) { r.Decl.Hosted = true },
+			"hosted fact":     func(r *sched.Runner) { r.Capability.Location.Kind.Value = ptr("hosted") },
 		} {
 			r := runner("r", signals{Interactive: ptr("idle")}) // power unknown, ownership unknown
 			r.Decl.Ownership, r.Capability.Identity.Ownership.Value = "", nil
@@ -151,6 +152,7 @@ func randomSignals(rng *rand.Rand) (signals, bool) {
 		s.Interactive = ptr([]string{"idle", "active", "unknown"}[rng.Intn(3)])
 	}
 	s.Operator = rng.Intn(2) == 0
+	s.OwnerUnknown = rng.Intn(5) == 0
 	return s, rng.Intn(3) == 0
 }
 
@@ -160,11 +162,11 @@ func oracle(s signals, queued bool) model.PlacementReason {
 		return model.BackgroundInteractiveQueued
 	}
 	switch {
-	case s.Plugged != nil && !*s.Plugged, s.Plugged == nil && s.Operator:
+	case s.Plugged != nil && !*s.Plugged, s.Plugged == nil && (s.Operator || s.OwnerUnknown):
 		return model.BackgroundContention
 	case s.Interactive != nil && *s.Interactive == "active":
 		return model.BackgroundContention
-	case s.Operator && (s.Interactive == nil || *s.Interactive != "idle"):
+	case (s.Operator || s.OwnerUnknown) && (s.Interactive == nil || *s.Interactive != "idle"):
 		return model.BackgroundContention
 	}
 	return ""
@@ -208,6 +210,7 @@ func TestBackgroundAdmissionMatchesPlacement(t *testing.T) {
 	placedN, blockedN := 0, 0
 	for i := 0; i < 2000; i++ {
 		s, _ := randomSignals(rng)
+		s.OwnerUnknown = false // the one deliberate difference: sched counts unknown ownership as not owned, the step fails closed
 		r := runner("r", s)
 		res := sched.Place(sched.World{Policy: sched.Policy{Preset: "balanced"}, Runners: []sched.Runner{r}}, []sched.Job{job("bg", BandName)})
 		placed := len(res.Placements) == 1
