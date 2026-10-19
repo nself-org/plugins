@@ -27,6 +27,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
+	"github.com/nself-org/plugins/free/ci/internal/coordinator/backup"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/deployguard"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
@@ -110,6 +111,10 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1
 	}
+	if backup.Pending(home) { // a restore began here and did not finish: the dir may hold a half-restored state
+		fmt.Fprintf(os.Stderr, "Error: E668: an earlier `nself ci serve restore` did not finish on %s; run `nself ci serve restore` again, or undo the restore by hand (the printed rollback line also removes %s) and delete that file, before starting the coordinator (incomplete_restore)\n", home, filepath.Join(home, "restore.pending"))
+		return 1
+	}
 	secret := firstOf(f.secret, os.Getenv("GITHUB_WEBHOOK_SECRET"))
 	if secret == "" && f.insecure {
 		fmt.Fprintln(os.Stderr, "warning: GITHUB_WEBHOOK_SECRET not set: webhook signature verification DISABLED (insecure)")
@@ -130,6 +135,12 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 		return 1
 	}
 	defer func() { _ = st.Close() }()
+	end, err := serveModeStart(ctx, fs, st, os.Stderr) // mode check (E664) and coordinator facts, before anything is bound
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	defer end()
 	cfg := coordinator.Config{
 		Store: st, Addr: f.addr, Secret: secret, Insecure: f.insecure, Force: f.force,
 		AllowedRepos: append(append([]string(nil), f.allowed.vals...), splitAllowedReposEnv(os.Getenv("NSELF_CI_ALLOWED_REPOS"))...),
@@ -137,6 +148,12 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 		Dispatch: serveDispatch(home, f),
 		Logf:     func(format string, a ...any) { fmt.Fprintf(os.Stderr, "nself-ci-serve: "+format+"\n", a...) },
 	}
+	undoWire, err := serveWire(ctx, st, home, "", &cfg) // listeners' store, pairing service and the SIGTERM drain
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	defer undoWire()
 	if hook != nil {
 		hook(&cfg)
 	}

@@ -108,6 +108,9 @@ func (g *Guard) Check(ctx context.Context, leaf *x509.Certificate) error {
 	if rec.State == "revoked" {
 		return fail(ReasonRevoked, "node %s is revoked", id)
 	}
+	if rec.State == store.NodeStateNeedsReconfirm { // restored onto an empty data dir: refused until `nodes enable` (D21, F15)
+		return fail(ReasonRevoked, "node %s needs reconfirmation (nodes enable)", id)
+	}
 	return nil
 }
 
