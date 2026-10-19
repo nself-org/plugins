@@ -153,6 +153,11 @@ func (c *Coordinator) serveWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if ing == nil && c.cfg.Secret == "" && !c.cfg.Insecure { // the v1.4 path cannot authenticate: refuse before reading the body
+		c.cfg.Logf("refused an unmatched webhook: no shared secret and not --insecure")
+		http.Error(w, "signature required", http.StatusForbidden)
+		return
+	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, MaxBody+1))
 	switch {
 	case err != nil:
@@ -188,10 +193,6 @@ func (c *Coordinator) serveWebhook(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "signature mismatch", http.StatusForbidden)
 			return
 		}
-	} else if !c.cfg.Insecure { // the process may run on ingress secrets alone: the v1.4 path then has no way to authenticate
-		c.cfg.Logf("refused an unmatched webhook: no shared secret and not --insecure")
-		http.Error(w, "signature required", http.StatusForbidden)
-		return
 	}
 	ev, err := serve.ParseWebhook(r.Header.Get("X-GitHub-Event"), body)
 	if err != nil {

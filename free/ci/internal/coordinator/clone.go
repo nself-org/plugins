@@ -11,6 +11,7 @@ package coordinator
 //          registered) may name their own https host.
 
 import (
+	"net/netip"
 	"net/url"
 	"regexp"
 	"strings"
@@ -25,7 +26,9 @@ var (
 
 // ValidProject reports whether p is an owner/repo name that cannot be read as a git option.
 func ValidProject(p string) bool {
-	return projectRe.MatchString(p) && !strings.HasPrefix(p, "-") && !strings.Contains(p, "/-") && !strings.Contains(p, "..")
+	owner, repo, ok := strings.Cut(p, "/")
+	return ok && projectRe.MatchString(p) && !strings.HasPrefix(owner, "-") && !strings.HasPrefix(repo, "-") &&
+		owner != "." && repo != "." && !strings.Contains(p, "..")
 }
 
 // ValidRevision reports whether r is a full lower-case hex commit id (40 or 64 characters).
@@ -56,6 +59,20 @@ func SafeCloneURL(source, project, raw string) (string, error) {
 		if !strings.EqualFold(u.Host, "github.com") || path != "/"+strings.ToLower(project) {
 			return "", newErr("", ReasonInvalidDelivery, "clone URL does not belong to the project")
 		}
+		return "https://github.com/" + project + ".git", nil // rebuilt, so no encoding trick in the reported path survives
+	}
+	if internalHost(u.Hostname()) {
+		return "", newErr("", ReasonInvalidDelivery, "clone URL names a local or private address")
 	}
 	return u.String(), nil
+}
+
+// internalHost reports a host that is localhost or a loopback, private, link-local or unspecified address
+// literal; a name that merely resolves to one is outside what a string check can see.
+func internalHost(h string) bool {
+	if strings.EqualFold(h, "localhost") || strings.HasSuffix(strings.ToLower(h), ".localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(strings.Trim(h, "[]"))
+	return err == nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast())
 }

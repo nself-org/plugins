@@ -749,7 +749,7 @@ func TestEnqueueRefusesGitOptionLookalikes(t *testing.T) {
 			t.Fatalf("%s: %d %s, want 400", name, w.Code, w.Body)
 		}
 	}
-	for _, project := range []string{"-x/y", "o/-r", "o/..", "../r", "o/r;ls"} {
+	for _, project := range []string{"-x/y", "o/-r", "o/..", "../r", "o/r;ls", "./.", "o/."} {
 		if _, err := r.c.Enqueue(context.Background(), Delivery{Source: "schedule", Project: project, Revision: testSHA}); ReasonOf(err) != ReasonInvalidDelivery {
 			t.Fatalf("project %q was accepted: %v", project, err)
 		}
@@ -783,6 +783,11 @@ func TestSafeCloneURL(t *testing.T) {
 		"query":           {"gitea-hook", "o/r", "https://git.example.test/o/r.git?x=1"},
 		"space":           {"gitea-hook", "o/r", "https://git.example.test/o r.git"},
 		"no url, no host": {"gitea-hook", "o/r", ""},
+		"loopback":        {"gitea-hook", "o/r", "https://127.0.0.1/o/r.git"},
+		"localhost":       {"gitea-hook", "o/r", "https://localhost/o/r.git"},
+		"private":         {"gitea-hook", "o/r", "https://10.1.2.3/o/r.git"},
+		"link local":      {"gitea-hook", "o/r", "https://169.254.169.254/o/r.git"},
+		"ipv6 loopback":   {"gitea-hook", "o/r", "https://[::1]/o/r.git"},
 	}
 	for name, c := range bad {
 		if _, err := SafeCloneURL(c[0], c[1], c[2]); err == nil {
