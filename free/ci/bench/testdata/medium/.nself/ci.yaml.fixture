@@ -1,23 +1,30 @@
 # The checks the v1.4 gate runs on a Go plus Node repo (gofmt, go vet, go test,
 # and the package's lint and test scripts), so the V15 and v1.4 wall times
 # compare equal work. Run with --pipeline gate.
+# requires.mem_mb: on Linux the engine runs every job under `ulimit -v` set from its
+# memory demand (default 256 MB), which kills the Go and Node toolchains at start-up.
 version: 1
 jobs:
   fmt:
     kind: static
     run: [gofmt, -l, .]
+    requires: {mem_mb: 4096}
   vet:
     kind: static
     run: [go, vet, ./...]
+    requires: {mem_mb: 4096}
   test:
     kind: test
     run: [go, test, -count=1, ./...]
+    requires: {mem_mb: 4096}
   web-lint:
     kind: static
     run: [npm, run, lint]
+    requires: {mem_mb: 4096}
   web-test:
     kind: test
     run: [npm, run, test]
+    requires: {mem_mb: 4096}
 pipelines:
   gate:
     triggers: [manual]
