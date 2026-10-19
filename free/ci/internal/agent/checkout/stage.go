@@ -5,9 +5,10 @@ package checkout
 // Inputs:  the lease and the job root directory.
 // Outputs: the source directory (<root>/src).
 // Constraints: Stage waits for the digest-verified bundle and refuses before
-// any git process runs when verification failed; git fetches only the private
+// any git process runs when verification failed or the pack holds too many objects; git fetches only the private
 // refs/nself-ci/ namespace and the resulting HEAD must equal the lease's
-// revision; the bundle is deleted from staging once it is unpacked.
+// revision; the unpack runs under a byte quota and RLIMIT_FSIZE (quota.go);
+// the bundle is deleted from staging once it is unpacked.
 
 import (
 	"context"
@@ -45,6 +46,14 @@ func (r *Receiver) Stage(ctx context.Context, l protocol.Lease, jobRoot string) 
 	if err != nil {
 		return "", err
 	}
+	maxBytes, maxObjects := r.limits()
+	n, err := packObjects(t.path)
+	if err != nil {
+		return "", err
+	}
+	if n > maxObjects {
+		return "", fmt.Errorf("%w: %d objects, limit %d", ErrQuota, n, maxObjects)
+	}
 	src := filepath.Join(jobRoot, "src")
 	if err := os.Mkdir(src, 0o700); err != nil {
 		return "", err
@@ -55,12 +64,23 @@ func (r *Receiver) Stage(ctx context.Context, l protocol.Lease, jobRoot string) 
 		{"-C", src, "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", t.path, "+" + RefPrefix + "*:" + RefPrefix + "*"},
 		{"-C", src, "checkout", "--quiet", "--detach", "--force", l.Checkout.Revision},
 	}
+	parent := ctx
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	over := watchQuota(src, maxBytes, cancel)
+	run := withFileLimit(r.run, maxBytes)
 	for _, args := range steps {
-		if _, err := git(ctx, r.run, args...); err != nil {
+		if _, err := git(ctx, run, args...); err != nil {
+			if over() || killedBySignal(err, parent) {
+				return "", fmt.Errorf("%w: unpacked tree passed %d bytes", ErrQuota, maxBytes)
+			}
 			return "", fmt.Errorf("checkout: unpack bundle: %w", err)
 		}
 	}
-	head, err := git(ctx, r.run, "-C", src, "rev-parse", "HEAD")
+	if over() {
+		return "", fmt.Errorf("%w: unpacked tree passed %d bytes", ErrQuota, maxBytes)
+	}
+	head, err := git(ctx, run, "-C", src, "rev-parse", "HEAD")
 	if err != nil {
 		return "", err
 	}

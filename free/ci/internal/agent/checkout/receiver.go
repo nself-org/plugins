@@ -99,8 +99,10 @@ func (t *transfer) fail(err error) {
 type Receiver struct {
 	host *hygiene.Host
 	run  Runner
-	mu   sync.Mutex
-	open map[key]*transfer
+	// MaxStageBytes and MaxObjects bound what Stage unpacks (zero: the Default values).
+	MaxStageBytes, MaxObjects int64
+	mu                        sync.Mutex
+	open                      map[key]*transfer
 }
 
 // NewReceiver stages under base (created 0700 on first use). run nil means DefaultRunner.
