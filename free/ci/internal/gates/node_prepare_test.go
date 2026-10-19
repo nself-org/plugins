@@ -38,7 +38,7 @@ func newNodeHost(t *testing.T) *nodeHost {
 		t.Skip("POSIX shells only")
 	}
 	h := &nodeHost{t: t, root: t.TempDir(), bin: t.TempDir()}
-	for _, tool := range []string{"sh", "ps", "tail", "head", "cat", "mkdir", "sed", "grep", "cut", "wc", "rm", "basename", "awk"} {
+	for _, tool := range []string{"sh", "ps", "tail", "head", "cat", "mkdir", "sed", "grep", "cut", "wc", "rm", "basename", "awk", "touch"} {
 		p, err := exec.LookPath(tool)
 		if err != nil {
 			t.Fatal(err)
@@ -561,5 +561,20 @@ exit 1
 				t.Fatalf("want %s: %+v", tc.class, r)
 			}
 		})
+	}
+}
+
+func TestYarnPnPCacheOutlivesTheInstall(t *testing.T) {
+	h := newNodeHost(t)
+	h.write("package.json", manifest("yarn@4.1.0", ""))
+	h.write("yarn.lock", "__metadata:\n  version: 8\n")
+	// Plug'n'Play: the installed tree is .pnp.cjs, which points at the archives in the cache
+	h.manager("yarn", "4.1.0", `case "$1" in
+install) mkdir -p "$YARN_CACHE_FOLDER"; touch "$YARN_CACHE_FOLDER/x.zip"; echo "$YARN_CACHE_FOLDER/x.zip" > .pnp.cjs;;
+run) if [ -f "$(cat .pnp.cjs)" ]; then echo "CACHE-OK"; else echo "CACHE-GONE"; fi; echo "COREPACK ${COREPACK_HOME##*/}";;
+esac
+`)
+	if r := h.run("node.test", "."); r.exit != 0 || r.out != "CACHE-OK\nCOREPACK corepack" {
+		t.Fatalf("the yarn cache and the corepack home must survive for the check: %+v", r)
 	}
 }
