@@ -25,14 +25,50 @@ env:
   UV_VERSION: '0.13.1'
 
 jobs:
+  # The legs run the detect, gates and plan packages and the macOS and Linux fixtures. A pull request that
+  # changes nothing those packages are built from (go list -deps, so it follows new imports) starts no runner, macOS included.
+  scope:
+    name: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      os: ${{ steps.os.outputs.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+          cache-dependency-path: free/ci/go.sum
+
+      - name: Scope
+        id: os
+        env:
+          SCOPE_LIST_OUT: ${{ runner.temp }}/changed.txt
+        run: |
+          set -euo pipefail
+          bash .github/scripts/changed-scope.sh --outside-free-global --global '^\.github/workflows/ci-detect-langs\.yml$'
+          all=$(sed -n 's/^all=//p' "$GITHUB_OUTPUT" | tail -1)
+          relevant=true
+          if [ "$all" != true ]; then
+            relevant=$(CLOSURE_EXTRA="free/ci/testdata" bash .github/scripts/go-closure-changed.sh free/ci "$SCOPE_LIST_OUT" ./cmd/... ./internal/detect/... ./internal/gates/... ./internal/plan/...)
+          fi
+          if [ "$relevant" = true ]; then os='["ubuntu-latest","macos-15"]'; else os='[]'; fi
+          echo "relevant=$relevant os=$os"
+          echo "os=$os" >> "$GITHUB_OUTPUT"
+
   detect-langs:
     name: detect-langs (${{ matrix.os }})
+    needs: scope
+    if: needs.scope.outputs.os != '[]'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-15]
+        os: ${{ fromJSON(needs.scope.outputs.os) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 

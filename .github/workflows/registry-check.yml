@@ -3,8 +3,29 @@ name: Registry Consistency Check
 on:
   push:
     branches: [main]
+  # A pull request can only break this gate through the registry projections, a plugin manifest, a plugin's
+  # top-level config or module file, or the gate's own scripts. Push to main and dispatch run it unconditionally.
   pull_request:
     branches: [main]
+    paths:
+      - 'free/**/plugin.json'
+      - 'free/*/*.yml'
+      - 'free/*/*.yaml'
+      - 'free/*/Cargo.toml'
+      - 'free/*/go.mod'
+      - 'free/*/*/go.mod'
+      - 'free/*/*/*/go.mod'
+      - 'registry.json'
+      - 'releases.json'
+      - 'catalog.json'
+      - 'counts.json'
+      - 'shared/**'
+      - 'scripts/plugin-counts.sh'
+      - 'scripts/bundles.ref'
+      - 'scripts/cli-tools.version'
+      - 'scripts/conformance/**'
+      - 'scripts/catalog/**'
+      - '.github/workflows/registry-check.yml'
   workflow_dispatch:
 
 

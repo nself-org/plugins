@@ -22,8 +22,53 @@ concurrency:
   # A push to main must finish its full gate (the build shards take a while); only superseded PR runs are cancelled.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  # What a pull request can break decides which legs below run (table: .github/wiki/CI-Scope.md). Push to main,
+  # dispatch and a change to this workflow or to the conformance machinery run every leg. A skipped job needs no runner.
+  scope:
+    name: Scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      meta: ${{ steps.scope.outputs.meta }}
+      build_matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 2
+
+      - name: Scope tests
+        run: bash .github/scripts/changed-scope_test.sh
+
+      # meta: manifests, READMEs and the registry. Conformance reads too many repo-root inputs (scripts, tests,
+      # schemas, images.d, the plugin trees) to scope by path, so it runs on every pull request.
+      # build: the inputs every plugin's docker build shares (a change there rebuilds all plugins).
+      - name: Scope
+        id: scope
+        run: |
+          bash .github/scripts/changed-scope.sh \
+            --global '^\.github/workflows/validate\.yml$' \
+            --flag 'meta=^(free/[^/]+/(plugin\.json|README\.md)|registry\.json|releases\.json|shared/validate-registry\.sh)$' \
+            --flag 'build=^(scripts/(conformance|deterministic-tar\.sh|cli-tools\.version)|images\.d/)'
+
+      - name: Build matrix
+        id: matrix
+        env:
+          ALL: ${{ steps.scope.outputs.all }}
+          BUILD: ${{ steps.scope.outputs.build }}
+          PLUGINS: ${{ steps.scope.outputs.plugins }}
+          COUNT: ${{ steps.scope.outputs.plugin_count }}
+        run: |
+          full='[{"label":"shard 1/4","args":"--all --shard 1/4"},{"label":"shard 2/4","args":"--all --shard 2/4"},{"label":"shard 3/4","args":"--all --shard 3/4"},{"label":"shard 4/4","args":"--all --shard 4/4"}]'
+          if [ "$ALL" = true ] || [ "$BUILD" = true ] || [ "$COUNT" -gt 12 ]; then m=$full
+          elif [ "$COUNT" -gt 0 ]; then m=$(jq -nc --arg p "$PLUGINS" '[{label: "changed plugins", args: ("--plugins " + $p)}]')
+          else m='[]'; fi
+          echo "matrix=$m" >> "$GITHUB_OUTPUT"
+          echo "build matrix: $m"
+
   schema-validation:
     name: Plugin Schema Validation
+    needs: scope
+    if: needs.scope.outputs.meta == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -220,6 +265,8 @@ jobs:
 
   validate-registry-script:
     name: Registry Validator (shared/validate-registry.sh)
+    needs: scope
+    if: needs.scope.outputs.meta == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -350,14 +397,18 @@ jobs:
 
   # P7-PLUG-38: the `build` rule (docker build from the release tarball, network off) of check.sh --all, split over four
   # runners. Together the shards are exactly --all (fixtures.sh proves it); the other rules run in `conformance` above.
+  # A pull request builds only the plugins it touched in one job; a change to the shared build inputs, push to
+  # main and dispatch run the four shards over every plugin.
   conformance-build:
-    name: Plugin build gate (shard ${{ matrix.shard }}/4)
+    name: Plugin build gate (${{ matrix.label }})
+    needs: scope
+    if: needs.scope.outputs.build_matrix != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        include: ${{ fromJSON(needs.scope.outputs.build_matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -370,5 +421,7 @@ jobs:
           go-version: '1.26.9'   # >= the go directive of the cli commit in scripts/cli-tools.version
 
       - name: Build rule on this shard of the free plugins
-        run: bash scripts/conformance/check.sh --all --shard ${{ matrix.shard }}/4 --rules build
+        env:
+          CHECK_ARGS: ${{ matrix.args }}
+        run: bash scripts/conformance/check.sh $CHECK_ARGS --rules build
 
