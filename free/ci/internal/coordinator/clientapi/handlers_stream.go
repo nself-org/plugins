@@ -63,6 +63,12 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	release, ok := s.lim.openStream(a.ID())
+	if !ok {
+		s.fail(w, Failf(ReasonRateLimited, "too many open streams for this principal"))
+		return
+	}
+	defer release()
 	from, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
 	ctx, stop := s.streamContext(r)
 	defer stop()
@@ -122,6 +128,12 @@ func (s *Server) logs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	release, slot := s.lim.openStream(a.ID())
+	if !slot {
+		s.fail(w, Failf(ReasonRateLimited, "too many open streams for this principal"))
+		return
+	}
+	defer release()
 	lq := LogQuery{Run: it.ID, Job: r.PathValue("job"), Follow: q.Get("follow") == "1"}
 	lq.Attempt, _ = strconv.Atoi(q.Get("attempt"))
 	lq.After, _ = strconv.ParseInt(q.Get("after"), 10, 64)

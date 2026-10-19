@@ -34,7 +34,10 @@ type Config struct {
 }
 
 // Server is the user API.
-type Server struct{ cfg Config }
+type Server struct {
+	cfg Config
+	lim *limiter
+}
 
 // New fills the defaults of cfg.
 func New(cfg Config) *Server {
@@ -47,7 +50,7 @@ func New(cfg Config) *Server {
 	if cfg.Logf == nil {
 		cfg.Logf = func(string, ...any) {}
 	}
-	return &Server{cfg: cfg}
+	return &Server{cfg: cfg, lim: newLimiter()}
 }
 
 type routeSpec struct {
@@ -116,8 +119,15 @@ func ActorFrom(ctx context.Context) (roles.Actor, bool) {
 // add wraps one route: authenticate, then roles.Authorize for the route's role.
 func (s *Server) add(mux *http.ServeMux, r routeSpec) {
 	mux.Handle(r.method+" "+r.pattern, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		src := sourceOf(req)
+		if !s.cfg.Local && !s.lim.allowed(src) {
+			s.fail(w, Failf(ReasonRateLimited, "too many failed authentications from this address; wait a minute"))
+			return
+		}
 		actor, err := s.authenticate(req)
-		if err == nil {
+		if err != nil {
+			s.lim.failed(src)
+		} else {
 			err = roles.Authorize(req.Context(), actor, r.role, "")
 		}
 		if err != nil {
@@ -139,7 +149,7 @@ var statusOf = map[string]int{
 	ReasonNoCredential: http.StatusUnauthorized, ReasonBadCertificate: http.StatusUnauthorized, ReasonTokenUnknown: http.StatusUnauthorized,
 	ReasonTokenExpired: http.StatusUnauthorized, ReasonTokenRevoked: http.StatusUnauthorized, ReasonPlainHTTP: http.StatusUnauthorized,
 	ReasonBadRequest: http.StatusBadRequest, ReasonNotFound: http.StatusNotFound, ReasonConflict: http.StatusConflict,
-	ReasonInternal: http.StatusInternalServerError,
+	ReasonInternal: http.StatusInternalServerError, ReasonRateLimited: http.StatusTooManyRequests,
 }
 
 // fail writes the E664 body of err. A role error keeps its reason key; any other error is an internal

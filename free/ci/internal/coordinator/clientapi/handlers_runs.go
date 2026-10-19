@@ -129,6 +129,9 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 // find resolves ref for the caller; "latest" and "" mean the newest run the caller may see. A run the
 // caller may not see is not found.
 func (s *Server) find(r *http.Request, a roles.Actor, ref string) (RunItem, error) {
+	if len(ref) > 128 {
+		return RunItem{}, Failf(ReasonNotFound, "no such run")
+	}
 	if ref == "" || ref == "latest" {
 		all, err := s.cfg.Backend.List(r.Context(), 500)
 		if err != nil {

@@ -54,8 +54,8 @@ type RemoteEvidenceReader interface {
 	ReadEvidence(ctx context.Context, ref string) (doc json.RawMessage, handled bool, err error)
 }
 
-// fatal reports whether a failure of r must stop the command.
-func fatal(r RemoteResolver) bool {
+// RemoteFatal reports whether a failure of r must stop the command (r is an active coordinator target).
+func RemoteFatal(r RemoteResolver) bool {
 	a, ok := r.(RemoteActive)
 	return ok && a.Active()
 }
@@ -65,7 +65,7 @@ func ResolveRemote(ctx context.Context, ref string) (RunView, bool, error) {
 	for _, r := range Registered.Remote {
 		v, ok, err := r.Resolve(ctx, ref)
 		switch {
-		case err != nil && fatal(r):
+		case err != nil && RemoteFatal(r):
 			return RunView{}, false, err
 		case err == nil && ok:
 			return v, true, nil
@@ -78,7 +78,7 @@ func ResolveRemote(ctx context.Context, ref string) (RunView, bool, error) {
 func ListRemote(ctx context.Context) ([]RunView, bool, error) {
 	for _, r := range Registered.Remote {
 		if l, ok := r.(RemoteLister); ok {
-			if v, handled, err := l.ListRuns(ctx); handled || err != nil && fatal(r) {
+			if v, handled, err := l.ListRuns(ctx); handled || err != nil && RemoteFatal(r) {
 				return v, handled, err
 			}
 		}
@@ -90,7 +90,7 @@ func ListRemote(ctx context.Context) ([]RunView, bool, error) {
 func CancelRemote(ctx context.Context, ref string) (int, bool, error) {
 	for _, r := range Registered.Remote {
 		if c, ok := r.(RemoteCanceller); ok {
-			if n, handled, err := c.CancelRun(ctx, ref); handled || err != nil && fatal(r) {
+			if n, handled, err := c.CancelRun(ctx, ref); handled || err != nil && RemoteFatal(r) {
 				return n, handled, err
 			}
 		}
@@ -102,7 +102,7 @@ func CancelRemote(ctx context.Context, ref string) (int, bool, error) {
 func LogsRemote(ctx context.Context, q RemoteLogQuery, fn func(RemoteLogLine) error) (bool, error) {
 	for _, r := range Registered.Remote {
 		if l, ok := r.(RemoteLogReader); ok {
-			if handled, err := l.ReadLogs(ctx, q, fn); handled || err != nil && fatal(r) {
+			if handled, err := l.ReadLogs(ctx, q, fn); handled || err != nil && RemoteFatal(r) {
 				return handled, err
 			}
 		}
@@ -114,7 +114,7 @@ func LogsRemote(ctx context.Context, q RemoteLogQuery, fn func(RemoteLogLine) er
 func EvidenceRemote(ctx context.Context, ref string) (json.RawMessage, bool, error) {
 	for _, r := range Registered.Remote {
 		if e, ok := r.(RemoteEvidenceReader); ok {
-			if d, handled, err := e.ReadEvidence(ctx, ref); handled || err != nil && fatal(r) {
+			if d, handled, err := e.ReadEvidence(ctx, ref); handled || err != nil && RemoteFatal(r) {
 				return d, handled, err
 			}
 		}

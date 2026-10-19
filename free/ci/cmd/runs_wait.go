@@ -182,7 +182,11 @@ func openRunSource(ctx context.Context, ref, coordinator string) (*runSource, er
 	}
 	s := &runSource{ref: ref}
 	for _, r := range cirun.Registered.Remote {
-		if v, ok, err := r.Resolve(ctx, ref); err == nil && ok {
+		v, ok, err := r.Resolve(ctx, ref)
+		if err != nil && cirun.RemoteFatal(r) { // an active coordinator target never falls back to the local store (P7-NODE-19)
+			return nil, err
+		}
+		if err == nil && ok {
 			s.remote, s.Detail = true, v
 			return s, nil
 		}
