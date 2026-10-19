@@ -73,7 +73,7 @@ func TestBackupRestoreCommandsRoundTrip(t *testing.T) {
 	var env1 struct {
 		Data map[string]any `json:"data"`
 	}
-	if err := json.Unmarshal(stdout.Bytes(), &env1); err != nil || env1.Data["kek_included"] != false || env1.Data["out"] != out {
+	if err := json.Unmarshal(stdout.Bytes(), &env1); err != nil || env1.Data["kek_included"] != false || env1.Data["out"] != out || env1.Data["sha256"] == "" || env1.Data["sha256"] == nil {
 		t.Fatalf("backup envelope: %s (%v)", stdout, err)
 	}
 	if st, err := os.Stat(out); err != nil || st.Mode().Perm() != 0o600 {

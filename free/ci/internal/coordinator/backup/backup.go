@@ -99,10 +99,12 @@ func Create(ctx context.Context, o Options, w io.Writer) (Manifest, error) {
 		return m, err
 	}
 	m.CreatedAt = o.now().UTC().Format(time.RFC3339)
-	if err = Write(w, kek, m, append(append(es, sealed...), extra...)); err != nil {
+	all := append(append(es, sealed...), extra...)
+	m.Schema = Schema
+	m.SHA256 = payloadDigest(all) // Write computes the same value for the archive; the caller reports it
+	if err = Write(w, kek, m, all); err != nil {
 		return m, err
 	}
-	m.Schema = Schema
 	return m, nil
 }
 
