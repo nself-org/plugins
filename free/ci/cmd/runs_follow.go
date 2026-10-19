@@ -77,7 +77,7 @@ func runFollow(args []string) int {
 		return followFail(err, "", exitForError(err))
 	}
 	if path := detach.StreamPath(detach.Home(""), v.RunID); path != "" {
-		return followFile(ctx, src, path, f.from)
+		return followFile(ctx, src, v.RunID, path, f.from)
 	}
 	return followSynth(ctx, src, v, f.from)
 }
@@ -86,17 +86,23 @@ func runFollow(args []string) int {
 // final line it waits once more (the engine writes the final line just after
 // the store marks the run finished), then closes the stream from the run's
 // last state.
-func followFile(ctx context.Context, src *runSource, path string, from int64) int {
+func followFile(ctx context.Context, src *runSource, runID, path string, from int64) int {
+	rd := &detach.Reader{Path: path} // one reader for both passes: it keeps the file open across a rename
+	defer func() { _ = rd.Close() }()
 	// finished in the store AND its writer gone (or silent for writerGrace, in case the pid
 	// was reused): the store marks a run finished before the last events are written
 	over := func(quiet time.Duration) (bool, error) {
 		cur, err := src.View(ctx)
-		return err == nil && detach.Terminal(cur.State) && (!detach.WriterAlive(path) || quiet >= writerGrace), err
+		if err != nil || !detach.Terminal(cur.State) {
+			return false, err
+		}
+		cur2 := detach.StreamPath(detach.Home(""), runID) // the file may have been renamed to its run id
+		return !detach.WriterAlive(cur2) || quiet >= writerGrace, nil
 	}
 	var out detach.Outcome
 	var err error
 	for attempt, idle := 0, followIdle; attempt < 2; attempt, idle = attempt+1, idle*5 {
-		out, err = detach.Follow(ctx, os.Stdout, detach.FollowParams{Path: path, From: from, Idle: idle, Over: over})
+		out, err = detach.Follow(ctx, os.Stdout, detach.FollowParams{Path: path, Reader: rd, From: from, Idle: idle, Over: over})
 		if err != nil || out.End != detach.EndGone {
 			break
 		}

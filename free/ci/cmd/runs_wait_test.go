@@ -209,7 +209,7 @@ func TestRunsWait(t *testing.T) {
 		cirun.Registered.Remote = append(append([]cirun.RemoteResolver(nil), old...), stalledRemote{})
 		t.Cleanup(func() { cirun.Registered.Remote = old })
 		code, w, took := waitJSON(t, "remote-stall", "--timeout", "200ms", "--json")
-		if code != 10 || w.Data.Terminal || took > 3*time.Second {
+		if code != 10 || w.Data.Terminal || took > 700*time.Millisecond {
 			t.Fatalf("exit %d %+v in %v", code, w, took)
 		}
 	})

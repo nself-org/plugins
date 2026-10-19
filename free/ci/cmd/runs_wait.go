@@ -15,6 +15,7 @@ package main
 // RemoteResolvers, which read --coordinator as NSELF_CI_COORDINATOR.
 
 import (
+	"cmp"
 	"context"
 	"flag"
 	"fmt"
@@ -95,9 +96,9 @@ func runWait(args []string) int {
 	budget := waitBudget(f.timeout, os.Getenv("NSELF_INVOKE_DEADLINE_MS"))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	// Every store, recovery and resolver call shares the budget (at least 1 s
-	// for the first look), so a stalled resolver cannot outlive the invoke deadline.
-	wctx, cancel := context.WithDeadline(ctx, started.Add(max(budget, time.Second)))
+	// Every store, recovery and resolver call shares the budget (a zero budget
+	// still gets a short first look), so a stalled call cannot outlive the invoke deadline.
+	wctx, cancel := context.WithDeadline(ctx, started.Add(cmp.Or(budget, 500*time.Millisecond)))
 	defer cancel()
 	src, err := openRunSource(wctx, pos[0], f.coordinator)
 	if err != nil {
@@ -186,14 +187,10 @@ func openRunSource(ctx context.Context, ref, coordinator string) (*runSource, er
 			return s, nil
 		}
 	}
-	st, err := openHistory(false)
+	// recovery after dead coordinators runs in View, under the caller's deadline
+	st, err := cirun.OpenStore(runsStorePath())
 	if err != nil {
 		return nil, err
-	}
-	if st == nil { // no history yet: the same answer as an unknown run
-		if st, err = cirun.OpenStore(runsStorePath()); err != nil {
-			return nil, err
-		}
 	}
 	s.st = st
 	return s, nil

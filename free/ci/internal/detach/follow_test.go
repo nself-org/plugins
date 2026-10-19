@@ -113,3 +113,24 @@ func TestFollowStopsOnContext(t *testing.T) {
 		t.Fatal("a follow of a silent file must end with the context")
 	}
 }
+
+// Start renames the token-named file to the run id once the run is queued: a
+// follow that opened the old name keeps reading it, through both of its passes.
+func TestFollowSurvivesARename(t *testing.T) {
+	dir := t.TempDir()
+	token, final := filepath.Join(dir, "token.ndjson"), filepath.Join(dir, "r1.ndjson")
+	writeLines(t, token, rec("queued", 1))
+	rd := &Reader{Path: token}
+	defer func() { _ = rd.Close() }()
+	go func() {
+		time.Sleep(40 * time.Millisecond)
+		_ = os.Rename(token, final)
+		time.Sleep(40 * time.Millisecond)
+		writeLines(t, final, rec("started", 2), rec("result", 3))
+	}()
+	var out bytes.Buffer
+	res, err := Follow(context.Background(), &out, FollowParams{Path: token, Reader: rd, Poll: 2 * time.Millisecond})
+	if err != nil || res.End != EndResult || res.LastSeq != 3 || strings.Count(out.String(), "\n") != 3 {
+		t.Fatalf("res %+v err %v\n%s", res, err, out.String())
+	}
+}

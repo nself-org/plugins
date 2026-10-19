@@ -77,7 +77,7 @@ func runDetach(o *RunOptions) int {
 	}
 	p := detach.Params{Exe: exe, Args: detachArgs(), Home: o.Home, Env: os.Environ()}
 	if detach.CoordinatorOf(p.Args, os.Getenv) == detach.Local {
-		v := &localVerifier{}
+		v := &localVerifier{since: time.Now().Add(-time.Second)}
 		defer v.close()
 		p.Verify = v.exists // stderr shares the stream file: only a run in the store is believed
 	}
@@ -181,9 +181,13 @@ func knownRunIDs() map[string]bool {
 	return ids
 }
 
-// localVerifier answers "is this a run of the local store", opening the store
-// once, after the child has created it.
-type localVerifier struct{ st *store.Store }
+// localVerifier answers "is this a run this detach started": a run of the local
+// store created after the child was spawned (a stderr line naming an older run
+// is not believed). It opens the store once, after the child has created it.
+type localVerifier struct {
+	st    *store.Store
+	since time.Time
+}
 
 func (v *localVerifier) exists(runID string) bool {
 	if v.st == nil {
@@ -196,8 +200,16 @@ func (v *localVerifier) exists(runID string) bool {
 		}
 		v.st = st
 	}
-	_, ok, err := v.st.PipelineByID(context.Background(), runID)
-	return err == nil && ok
+	ages, err := v.st.PipelineAges(context.Background())
+	if err != nil {
+		return false
+	}
+	for _, a := range ages {
+		if a.ID == runID {
+			return a.CreatedAt >= v.since.UnixNano()
+		}
+	}
+	return false
 }
 
 func (v *localVerifier) close() {

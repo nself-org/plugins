@@ -37,8 +37,8 @@ func fakeDetachedChild(mode string) {
 	case "exit":
 		fmt.Fprintln(os.Stderr, "fatal: bad config, credential "+fakeToken())
 		os.Exit(3)
-	case "spoof": // a well-formed queued line for a run that does not exist, then exit
-		fmt.Fprintln(os.Stderr, evLine("queued", "r-spoofed", 1))
+	case "spoof": // a well-formed queued line for a run that does not exist, or an old one, then exit
+		fmt.Fprintln(os.Stderr, evLine("queued", firstOf(os.Getenv("NSELF_TEST_SPOOF_ID"), "r-spoofed"), 1))
 		os.Exit(4)
 	case "queued":
 		id := os.Getenv("NSELF_TEST_RUN_ID")
@@ -195,6 +195,15 @@ func TestDetach(t *testing.T) {
 		code, out := detachRun(t, []string{"--detach", "--json"})
 		e := decodeHandle(t, out).ErrBody
 		if code != 2 || e.Code != "E648" || !strings.Contains(e.Message, "child_exit") {
+			t.Fatalf("exit %d %+v\n%s", code, e, out)
+		}
+	})
+	t.Run("a queued line naming an older run is not believed either", func(t *testing.T) {
+		home := detachEnv(t, "spoof", "")
+		seedRun(t, home, "r-old-run", "passed", time.Now().Add(-time.Hour), nil)
+		t.Setenv("NSELF_TEST_SPOOF_ID", "r-old-run")
+		code, out := detachRun(t, []string{"--detach", "--json"})
+		if e := decodeHandle(t, out).ErrBody; code != 2 || e.Code != "E648" {
 			t.Fatalf("exit %d %+v\n%s", code, e, out)
 		}
 	})
