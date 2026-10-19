@@ -227,3 +227,35 @@ func TestRegisterSecretFailureFailsTheAttemptWithoutRunningOrNamingTheValue(t *t
 type secretFunc map[string]string
 
 func (s secretFunc) Resolve(context.Context, []string) (map[string]string, error) { return s, nil }
+
+func TestWorkdirBehindSymlinkedHome(t *testing.T) {
+	real := t.TempDir()
+	link := filepath.Join(t.TempDir(), "home-link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip("symlinks unavailable:", err)
+	}
+	src := t.TempDir()
+	if err := os.Mkdir(filepath.Join(src, "web"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	var output []byte
+	result := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "symlinked-home", CoordinatorID: "coord", Home: link, SourceDir: src, Job: model.Job{Workdir: "web"}, Command: []string{"sh", "-c", "pwd"}, Output: func(p []byte) { output = append(output, p...) }})
+	if result.Err != nil || !strings.Contains(string(output), "/work/symlinked-home/web") {
+		t.Fatalf("run=%+v output=%q", result, output)
+	}
+}
+
+func TestWorkdirSymlinkInsideWorkspaceStillRejected(t *testing.T) {
+	var ran bool
+	result := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "inner-link", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Workdir: "link"}, Command: []string{"sh", "-c", "true"},
+		BeforeJob: func(_ context.Context, root *os.Root) error {
+			if err := root.Mkdir("real", 0700); err != nil {
+				return err
+			}
+			ran = true
+			return root.Symlink("real", "link")
+		}})
+	if !ran || result.Err == nil || !strings.Contains(result.Err.Error(), "workdir symlink is forbidden") {
+		t.Fatalf("ran=%v run=%+v", ran, result)
+	}
+}

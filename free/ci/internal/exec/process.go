@@ -20,11 +20,17 @@ func (e *Executor) runProcess(ctx context.Context, s JobSpec, workspace string, 
 		if err != nil || rel == ".." || len(rel) > 3 && rel[:3] == "../" {
 			return -1, "", coded("E612", "workdir escapes workspace")
 		}
+		// The CI home may itself cross a symlink (macOS TMPDIR under /var), so
+		// resolve the workspace root once and compare against the resolved root.
+		root, err := filepath.EvalSymlinks(workspace)
+		if err != nil {
+			return -1, "", err
+		}
 		resolved, err := filepath.EvalSymlinks(workdir)
 		if err != nil {
 			return -1, "", err
 		}
-		if resolved != workdir {
+		if resolved != filepath.Join(root, rel) {
 			return -1, "", coded("E612", "workdir symlink is forbidden")
 		}
 	}
