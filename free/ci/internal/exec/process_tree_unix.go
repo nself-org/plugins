@@ -17,12 +17,20 @@ type processTree struct {
 	attempt string
 	mu      sync.Mutex
 	seen    map[int]struct{}
+	notify  func(fresh []int) // called from the poll goroutine with the pids seen since its last call
+	told    map[int]struct{}
 	done    chan struct{}
 	stopped chan struct{}
 }
 
 func trackDescendants(root int, attempt string) *processTree {
-	t := &processTree{root: root, attempt: attempt, seen: make(map[int]struct{}), done: make(chan struct{}), stopped: make(chan struct{})}
+	return trackDescendantsNotify(root, attempt, nil)
+}
+
+// trackDescendantsNotify is trackDescendants that also reports newly seen pids to notify, so the
+// caller can persist them while the job runs (the process marker, D-1057).
+func trackDescendantsNotify(root int, attempt string, notify func(fresh []int)) *processTree {
+	t := &processTree{root: root, attempt: attempt, seen: make(map[int]struct{}), told: make(map[int]struct{}), notify: notify, done: make(chan struct{}), stopped: make(chan struct{})}
 	t.snapshot()
 	go func() {
 		defer close(t.stopped)
@@ -32,12 +40,32 @@ func trackDescendants(root int, attempt string) *processTree {
 			select {
 			case <-tick.C:
 				t.snapshot()
+				t.report()
 			case <-t.done:
 				return
 			}
 		}
 	}()
 	return t
+}
+
+// report hands the pids not yet reported to notify.
+func (t *processTree) report() {
+	if t.notify == nil {
+		return
+	}
+	t.mu.Lock()
+	var fresh []int
+	for pid := range t.seen {
+		if _, ok := t.told[pid]; !ok {
+			t.told[pid] = struct{}{}
+			fresh = append(fresh, pid)
+		}
+	}
+	t.mu.Unlock()
+	if len(fresh) > 0 {
+		t.notify(fresh)
+	}
 }
 
 func (t *processTree) stop() {

@@ -15,7 +15,20 @@ type processMarker struct {
 	PID         int    `json:"pid"`
 	Coordinator string `json:"coordinator"`
 	Identity    string `json:"identity"`
+	// Descendants are the processes the tracker saw under the leader, each with its start
+	// identity. They are how a later agent finds a job process that left the leader's group
+	// (setsid, double fork) when the agent that ran the job was killed.
+	Descendants []markerProc `json:"descendants,omitempty"`
 }
+
+// markerProc names one tracked descendant; Identity is what sameProcess compares.
+type markerProc struct {
+	PID      int    `json:"pid"`
+	Identity string `json:"identity"`
+}
+
+// maxMarkedDescendants bounds the marker: a job that forks without end must not grow it forever.
+const maxMarkedDescendants = 512
 
 func markerPath(home, attempt string) string {
 	return filepath.Join(home, "processes", attempt+".json")
@@ -73,11 +86,55 @@ func writeProcessMarker(home, attempt, coordinator string, pid int) error {
 	if err := os.MkdirAll(root, 0700); err != nil {
 		return err
 	}
-	data, err := json.Marshal(processMarker{pid, coordinator, identity})
+	data, err := json.Marshal(processMarker{PID: pid, Coordinator: coordinator, Identity: identity})
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(markerPath(home, attempt), data, 0600)
+}
+
+// recordDescendants adds the start identity of the newly seen pids to the attempt's marker and
+// drops entries whose process has gone (or whose pid now belongs to another process). It only
+// edits a marker that exists, so a marker removed by cleanup is not brought back. Only the job's
+// tracker writes after the marker's first write, so there is no concurrent writer.
+func recordDescendants(home, attempt string, pids []int) error {
+	if !safeID.MatchString(attempt) {
+		return nil
+	}
+	data, err := os.ReadFile(markerPath(home, attempt))
+	if err != nil {
+		return err
+	}
+	var marker processMarker
+	if err := json.Unmarshal(data, &marker); err != nil {
+		return err
+	}
+	kept := make([]markerProc, 0, len(marker.Descendants)+len(pids))
+	have := map[int]bool{}
+	for _, d := range marker.Descendants {
+		if same, known := sameProcess(d.PID, d.Identity); known && same {
+			kept = append(kept, d)
+			have[d.PID] = true
+		}
+	}
+	for _, pid := range pids {
+		if pid <= 1 || have[pid] || len(kept) >= maxMarkedDescendants {
+			continue
+		}
+		if id, err := processIdentity(pid); err == nil && id != "" {
+			kept = append(kept, markerProc{PID: pid, Identity: id})
+		}
+	}
+	marker.Descendants = kept
+	out, err := json.Marshal(marker)
+	if err != nil {
+		return err
+	}
+	tmp := markerPath(home, attempt) + ".tmp"
+	if err := os.WriteFile(tmp, out, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, markerPath(home, attempt))
 }
 
 func removeProcessMarker(home, attempt string) {
@@ -131,6 +188,7 @@ func (e *Executor) sweepProcessMarker(ctx context.Context, home, current, attemp
 	if !stale {
 		return nil
 	}
+	killMarkedDescendants(marker.Descendants)
 	if groupAlive(marker.PID) {
 		if same, known := sameProcess(marker.PID, marker.Identity); known && !same {
 			// A different process has reused the leader PID. Do not kill its group.

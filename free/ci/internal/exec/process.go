@@ -28,17 +28,18 @@ func (e *Executor) runProcess(ctx context.Context, s JobSpec, workspace string, 
 		}
 	}
 	env = append(env, "NSELF_CI_EXEC_ATTEMPT="+s.AttemptID)
-	return e.runCommand(ctx, limitedCommand(s), workdir, env, s.Output, nil, func(pid int) error {
+	return e.runCommandIn(ctx, nil, limitedCommand(s), workdir, env, s.Output, nil, func(pid int) error {
 		return writeProcessMarker(s.Home, s.AttemptID, s.CoordinatorID, pid)
-	}, s.AttemptID)
+	}, s.AttemptID, func(fresh []int) { _ = recordDescendants(s.Home, s.AttemptID, fresh) })
 }
 
 func (e *Executor) runCommand(ctx context.Context, argv []string, dir string, env []string, sink func([]byte), onCancel func(), onStart func(int) error, attempt string) (int, error) {
-	return e.runCommandIn(ctx, nil, argv, dir, env, sink, onCancel, onStart, attempt)
+	return e.runCommandIn(ctx, nil, argv, dir, env, sink, onCancel, onStart, attempt, nil)
 }
 
-// runCommandIn is runCommand with stdin fed from a reader (nil keeps /dev/null).
-func (e *Executor) runCommandIn(ctx context.Context, stdin io.Reader, argv []string, dir string, env []string, sink func([]byte), onCancel func(), onStart func(int) error, attempt string) (int, error) {
+// runCommandIn is runCommand with stdin fed from a reader (nil keeps /dev/null) and an onTrack
+// hook that receives each batch of newly seen descendant pids while the command runs.
+func (e *Executor) runCommandIn(ctx context.Context, stdin io.Reader, argv []string, dir string, env []string, sink func([]byte), onCancel func(), onStart func(int) error, attempt string, onTrack func([]int)) (int, error) {
 	cmd := osexec.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = env
@@ -68,7 +69,7 @@ func (e *Executor) runCommandIn(ctx context.Context, stdin io.Reader, argv []str
 			return -1, err
 		}
 	}
-	tracker := trackDescendants(cmd.Process.Pid, attempt)
+	tracker := trackDescendantsNotify(cmd.Process.Pid, attempt, onTrack)
 	defer tracker.stop()
 	var wg sync.WaitGroup
 	wg.Add(1)

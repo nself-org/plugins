@@ -46,6 +46,7 @@ func KillAttemptGroup(home, attempt string) error {
 		removeProcessMarker(home, attempt)
 		return nil
 	}
+	killMarkedDescendants(marker.Descendants)
 	if groupAlive(marker.PID) {
 		same, known := sameProcess(marker.PID, marker.Identity)
 		leaderGone := errors.Is(syscall.Kill(marker.PID, 0), syscall.ESRCH)

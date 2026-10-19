@@ -93,7 +93,7 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 			s.Output(b)
 		}
 	}
-	code, err := e.runCommandIn(ctx, bytes.NewReader(envData), append([]string{cmd.Binary}, cmd.Args...), workspace, dockerHostEnv(), sink, stop, nil, "")
+	code, err := e.runCommandIn(ctx, bytes.NewReader(envData), append([]string{cmd.Binary}, cmd.Args...), workspace, dockerHostEnv(), sink, stop, nil, "", nil)
 	if err != nil {
 		stop()
 		err = coded("E613", "container run: "+err.Error())
