@@ -4,7 +4,7 @@ package gvisor
 // Inputs:  the JSON of `docker info --format '{{json .Runtimes}}'`.
 // Outputs: the entry, its platform (systrap, ptrace or kvm) or a refusal reason.
 // Constraints: a runtime argument that widens the sandbox is refused, never stripped (the daemon
-// would still start runsc with it); the deny list is Epic D9's, matched on the flag name in
+// would still start runsc with it); arguments are judged by an allow list (D-1066), matched on the flag name in
 // every form the Go flag package accepts (-f, --f, f=v, f v).
 
 import (
@@ -29,13 +29,39 @@ const InstallHint = "install gVisor (https://gvisor.dev/docs/user_guide/install/
 // DefaultPlatform is what runsc uses when no --platform argument is set.
 const DefaultPlatform = "systrap"
 
-// denied are the flags that open the sandbox to the host or drop a limit; presence alone is a
-// refusal (so `--net-raw=false` is refused too, which is safe and simple). The first four are
-// Epic D9's list; ignore-cgroups (the pids, memory and cpu limits would not be enforced) and
-// rootless were added by the lead ruling of 2026-10-19; TESTONLY-* flags and `file-access=shared`
-// are matched in checkArgs.
-var denied = map[string]bool{"host-uds": true, "fsgofer-host-uds": true, "host-fifo": true, "net-raw": true, "allow-flag-override": true,
-	"ignore-cgroups": true, "rootless": true, "nvproxy": true, "nvproxy-docker": true, "tpuproxy": true, "profile": true}
+// flagKind says how a runsc flag takes its value.
+type flagKind int
+
+const (
+	boolFlag  flagKind = iota // --f, --f=true or --f=false; a following word is not its value
+	valueFlag                 // --f=v or --f v; v is any word that is not itself a flag
+)
+
+// flagSpec is one allowed runtime argument. values, when set, are the only accepted values.
+type flagSpec struct {
+	kind   flagKind
+	values []string
+}
+
+// allowedFlags is the allow list of runsc arguments (D-1066). Anything else is refused, so a flag
+// nobody reviewed (a new runsc release, nvproxy, ignore-cgroups, host-uds, net-raw, rootless,
+// TESTONLY-*, profile, allow-flag-override) cannot widen the sandbox. These only choose the
+// platform, add logging and tracing, or restate the safe default of an access setting. Epic D9's
+// and the 2026-10-19 lead ruling's widening flags are a tripwire test, not this code's source.
+var allowedFlags = map[string]*flagSpec{
+	"platform":        {kind: valueFlag}, // judged by platformReason
+	"debug":           {kind: boolFlag},
+	"debug-log":       {kind: valueFlag},
+	"log":             {kind: valueFlag},
+	"log-format":      {kind: valueFlag},
+	"log-packets":     {kind: boolFlag},
+	"panic-log":       {kind: valueFlag},
+	"strace":          {kind: boolFlag},
+	"strace-syscalls": {kind: valueFlag},
+	"strace-log-size": {kind: valueFlag},
+	"file-access":     {kind: valueFlag, values: []string{"exclusive"}},
+	"network":         {kind: valueFlag, values: []string{"sandbox", "none"}},
+}
 
 type runtimeEntry struct {
 	Path string
@@ -82,45 +108,61 @@ func parseEntry(out []byte) (entry runtimeEntry, found bool, foreign string, err
 	return entry, true, foreign, nil
 }
 
-// splitFlag normalises one runtime argument to (name, value, hasValue).
+// splitFlag normalises one runtime argument to (name, value, hasValue). A word that is not a flag
+// (no dash, or only dashes) has an empty name.
 func splitFlag(arg string) (string, string, bool) {
 	trimmed := strings.TrimLeft(arg, "-")
 	if trimmed == arg || trimmed == "" {
-		return "", "", false // not a flag
+		return "", "", false
 	}
 	name, value, has := strings.Cut(trimmed, "=")
 	return name, value, has
 }
 
-// flagValue returns the value of flag i: its `=value`, else the next argument.
-func flagValue(args []string, i int, value string, has bool) string {
-	if has {
-		return value
-	}
-	if i+1 < len(args) {
-		return args[i+1]
-	}
-	return ""
-}
-
-// checkArgs refuses a deny-listed argument and returns the platform the arguments select.
+// checkArgs refuses every argument that is not on the allow list and returns the platform the
+// arguments select. denial names the offending argument.
 func checkArgs(args []string) (platform, denial string) {
 	platform = DefaultPlatform
-	for i, arg := range args {
-		name, value, has := splitFlag(arg)
-		switch {
-		case name == "":
-		case denied[name], strings.HasPrefix(strings.ToLower(name), "testonly"):
+	for i := 0; i < len(args); i++ {
+		name, value, has := splitFlag(args[i])
+		if name == "" {
+			return "", args[i] // a stray word, or a lone "--"
+		}
+		spec := allowedFlags[name]
+		if spec == nil {
 			return "", "--" + name
-		case name == "file-access" && flagValue(args, i, value, has) == "shared":
-			return "", "--file-access=shared"
-		case name == "network" && flagValue(args, i, value, has) == "host":
-			return "", "--network=host"
-		case name == "platform":
-			platform = flagValue(args, i, value, has) // the last one wins, as in runsc
+		}
+		if spec.kind == boolFlag {
+			if has && value != "true" && value != "false" {
+				return "", "--" + name + "=" + value
+			}
+			continue
+		}
+		if !has { // the value is the next word, which must not itself be a flag
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				i++
+				value = args[i]
+			} else if i+1 < len(args) {
+				return "", args[i+1]
+			}
+		}
+		if spec.values != nil && !contains(spec.values, value) {
+			return "", "--" + name + "=" + value
+		}
+		if name == "platform" {
+			platform = value // the last one wins, as in runsc
 		}
 	}
 	return platform, ""
+}
+
+func contains(list []string, v string) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 // platformReason refuses a platform this host cannot run: kvm needs /dev/kvm, and an unknown name is not ours to guess at.
