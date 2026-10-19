@@ -75,11 +75,7 @@ func BuildForLocal(ctx context.Context, d Deps, in LocalInput, p sched.Pipeline)
 	// whatever a registered node, a pool or a contributor assigned (a registered node called local is an
 	// ssh endpoint and, in that rare setup, local-only jobs have no runner)
 	stripped := false
-	for i := range w.Runners {
-		r := &w.Runners[i]
-		if r.ID == "local" && n == 1 { // the injected runner: no registered node has this id
-			continue
-		}
+	strip := func(r *sched.Runner) {
 		var keep []string
 		had := false
 		for _, l := range r.Capability.Identity.Labels {
@@ -92,6 +88,15 @@ func BuildForLocal(ctx context.Context, d Deps, in LocalInput, p sched.Pipeline)
 		if had {
 			r.Capability.Identity.Labels, stripped = keep, true
 		}
+	}
+	for i := range w.Runners {
+		if w.Runners[i].ID == "local" && n == 1 { // the injected runner: no registered node has this id
+			continue
+		}
+		strip(&w.Runners[i])
+	}
+	for i := range w.Hosted { // a contributor's hosted candidates are not this machine either
+		strip(&w.Hosted[i])
 	}
 	if stripped || n > 1 {
 		digest, err = Digest(w)

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -431,6 +432,35 @@ func TestWorldRegisteredLocalNodeIsNotPersonal(t *testing.T) {
 	for _, r := range w.Runners {
 		if r.Decl.PersonalOwnNode {
 			t.Fatalf("runner %s was declared a personal own node without an injected local runner", r.ID)
+		}
+	}
+}
+
+// Only the injected local runner may carry the reserved label: not a registered node, not a hosted candidate.
+func TestWorldBuildForLocalStripsTheReservedLabel(t *testing.T) {
+	d, p := worldFixture(t)
+	d.Local = nil
+	hooks.Lock() // a label source labels one of the fixture nodes as this machine
+	was := hooks.labels
+	hooks.labels = func(_ context.Context, id string) ([]string, error) {
+		if id == "01J00000000000000000000002" {
+			return []string{LocalLabel}, nil
+		}
+		return nil, nil
+	}
+	hooks.Unlock()
+	defer func() { hooks.Lock(); hooks.labels = was; hooks.Unlock() }()
+	w, _, err := BuildForLocal(context.Background(), d, LocalInput{Project: "project", Platform: "linux/amd64", Capacity: ciexec.Capacity{CPUs: 4, MemoryMB: 4096}, DockerUnknown: true, Now: time.Unix(100, 0)}, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range w.Runners {
+		has := false
+		for _, l := range r.Capability.Identity.Labels {
+			has = has || l == LocalLabel
+		}
+		if has != (r.ID == "local") {
+			t.Errorf("runner %s: carries the local label = %v", r.ID, has)
 		}
 	}
 }
