@@ -106,3 +106,63 @@ The Ticket P7-PLUG-21 verification lines are the gate for these scripts; no work
    write a row over a newer version, so a late run for an older tag cannot roll `releases.json` back.
 3. The web `sources-lock` PR is a separate step (P7-PLUG-69).
 4. The repository setting "Allow GitHub Actions to create and approve pull requests" (Settings, Actions, General) must stay on; the `release-data` job opens its PR with `GITHUB_TOKEN`.
+
+## Agent artifacts (`nself-ci-agent`)
+
+The CI node agent ships as signed, reproducible binaries on the same GitHub Release as the plugin tarballs (hq NODE D11). `nself ci nodes add`
+downloads the pinned version, verifies it and only then installs it; `--agent-binary <path>` stays the way to install a binary you built yourself.
+
+### Files on the Release
+
+| File | Content |
+|---|---|
+| `nself-ci-agent-<os>-<arch>` | static binary for `linux-amd64`, `linux-arm64` or `darwin-arm64` |
+| `nself-ci-agent-<os>-<arch>.manifest.json` | one `agent-release/v1` manifest per binary |
+
+A manifest is one line of JSON: `schema`, `version`, `target`, `sha256`, `protocol_min`, `protocol_max`, `key_id` (`agent-<16 hex>`), `alg` (`ed25519`) and `sig`
+(standard padded base64 of the raw 64-byte signature, the text `sdk/go/signing` `EncodeSig` produces). The signed message is plain text, not JSON:
+
+```
+nself-agent-v1\n<target>\n<version>\n<sha256 hex of the binary>\n<protocol_min>-<protocol_max>\n
+```
+
+Every field is followed by a newline, the last one too. `manifest.sh` signs it with the same `openssl pkeyutl -sign -rawin` primitive as `sign.sh`. The Go side builds
+the same bytes in `free/ci/internal/agent/verify` (`SigningInput`); a test signs with the script and verifies in Go, so the two cannot drift.
+
+### Scripts (`scripts/release/agent/`)
+
+| Script | Use |
+|---|---|
+| `build.sh --version V --out DIR` | reproducible build for the three targets (`CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, empty build id, vendored modules). Writes `SHA256SUMS` and `VERSION`. Two builds of one tree and version are byte-identical |
+| `manifest.sh --in DIR [--rehearsal]` | writes and signs one manifest per binary. Key from `NSELF_AGENT_SIGNING_KEY` and `NSELF_AGENT_SIGNING_KEY_ID` (environment only; the id is derived from the key and checked). `--rehearsal` uses a throwaway key and writes `DIR/rehearsal-test.pub` |
+| `genkeys.sh OUTPUT.go` | generates `free/ci/internal/agent/verify/keys_gen.go` from `scripts/release/keys/agent-<16 hex>.pub` (run it with `go generate ./internal/agent/verify/...` in `free/ci`). A drift test fails when the committed file is stale |
+
+`nself-ci-agent verify-release --pub FILE [--version V] DIR` is the operator-side check: it verifies every binary in DIR against its manifest with exactly one public key
+(PEM SPKI). A binary without a manifest, a manifest without a binary or an empty directory fails.
+
+### Rehearsal (no key, no release, no network)
+
+```bash
+bash scripts/release/agent/build.sh --version v0.0.0-rehearsal --out "$TMPDIR/agent-a"
+bash scripts/release/agent/manifest.sh --in "$TMPDIR/agent-a" --rehearsal
+(cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --pub "$TMPDIR/agent-a/rehearsal-test.pub" "$TMPDIR/agent-a")
+```
+
+A one-byte change in a binary fails with `checksum_mismatch`. `release-agent.yml` run by hand with `rehearsal` true does the same in Actions and uploads nothing.
+
+### Workflow and key custody
+
+`release-agent.yml` runs on a `v*` tag: `build` (twice, compared), `sign` (bound to the `release-signing` Environment, the only job that reads the agent key), `publish`
+(uploads missing assets, never `--clobber`). `sign` refuses to continue unless `scripts/release/keys/<key id>.pub` is committed and `verify-release` accepts every manifest
+against it. The agent key is a different key from the plugin key (purpose `agent`), and a plugin-purpose signature never verifies an agent. The key and the Environment
+secrets are created by the owner; the production public key is committed and the first real release is run by P7-NODE-29. Until then `keys_gen.go` holds an empty key
+set and `nodes add` without `--agent-binary` fails with `E665` (reason `no_trusted_key`) naming `--agent-binary`.
+
+### What the client checks (code `E665`)
+
+Before any file is placed, `verify.Artifact` checks in this order: a trusted key exists; the manifest is canonical; the signature is canonical base64; the key id is known,
+not revoked, of the agent purpose and valid; the signature verifies over the signing input; the signed version is the pinned version; the signed target is the node's;
+the file's sha256 is the signed sha256. Each failure carries its own reason key: `no_trusted_key`, `malformed_manifest`, `missing_signature`, `malformed_signature`,
+`unknown_key`, `wrong_purpose`, `revoked`, `key_not_valid`, `bad_signature`, `version_mismatch`, `target_mismatch`, `checksum_mismatch`, `unreadable_artifact`. Downloads
+use https (plain http only for a loopback host) and are size-bounded; the verified binary is moved into place with one rename, so an unverified file never sits at the
+final path. `NSELF_CI_AGENT_RELEASE_URL` points the download at a mirror or a local fixture directory.
