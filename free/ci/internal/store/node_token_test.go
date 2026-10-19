@@ -142,6 +142,30 @@ func TestTokenRebindRaceHasOneWinner(t *testing.T) {
 	}
 }
 
+func TestTokenSpend(t *testing.T) {
+	s, _ := pkiTestStore(t)
+	ctx := context.Background()
+	if err := s.TokenSpend(ctx, "ghost"); err != nil {
+		t.Fatal(err)
+	}
+	if _, found, _ := s.TokenCheck(ctx, "ghost"); found {
+		t.Fatal("spending an unbound token created a row")
+	}
+	b, _, _ := s.TokenBind(ctx, tokRow("j1", "s1", "sess1", 5))
+	if b.Spent {
+		t.Fatal("a fresh binding is spent")
+	}
+	if err := s.TokenSpend(ctx, "j1"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _, _ = s.TokenCheck(ctx, "j1"); !b.Spent {
+		t.Fatal("binding not spent")
+	}
+	if b, created, _ := s.TokenBind(ctx, tokRow("j1", "s1", "sess1", 5)); created || !b.Spent {
+		t.Fatalf("a re-bind must report the spent row: %+v created=%v", b, created)
+	}
+}
+
 func TestTokenPrune(t *testing.T) {
 	s, _ := pkiTestStore(t)
 	ctx := context.Background()

@@ -5,7 +5,7 @@ package store
 //          certificate or session is refused even after a coordinator restart.
 // Inputs:  jti, certificate serial, session id, node id, token exp (unix seconds).
 // Outputs: TokenBind (first writer wins, the stored row comes back), TokenCheck, TokenRebind (compare and swap
-//          of the session), TokenPrune.
+//          of the session), TokenSpend (the job's result was accepted: the token is used up), TokenPrune.
 // Constraints: the table holds ids and times only, never a token; one jti has one row; a bind never replaces a
 //          row; a rebind changes the session only when the row still holds the session and serial the caller
 //          saw; rows are pruned one hour after the token's exp.
@@ -26,13 +26,26 @@ func init() {
 	}
 }
 
-// TokenPruneGrace is how long a bound row outlives its token.
+// TokenPruneGrace is how long a bound row outlives its token, in seconds.
 const TokenPruneGrace = 3600
 
 // TokenBinding is one jti bound to the certificate and session that first used it.
 type TokenBinding struct {
 	JTI, Serial, Session, NodeID string
 	BoundAt, Exp                 int64
+	Spent                        bool // the job's result was accepted; the token is used up
+}
+
+const jobTokenCols = `jti,serial,session,node_id,bound_at,exp,spent`
+
+type rowScanner interface{ Scan(...any) error }
+
+func scanBinding(r rowScanner) (b TokenBinding, err error) {
+	var spent int
+	if err = r.Scan(&b.JTI, &b.Serial, &b.Session, &b.NodeID, &b.BoundAt, &b.Exp, &spent); err == nil {
+		b.Spent = spent != 0
+	}
+	return b, err
 }
 
 // TokenBind binds jti unless it is bound already. It returns the stored row and whether this call wrote it.
@@ -47,14 +60,15 @@ func (s *Store) TokenBind(ctx context.Context, b TokenBinding) (stored TokenBind
 		}
 		n, _ := res.RowsAffected()
 		created = n == 1
-		return tx.QueryRowContext(ctx, `SELECT jti,serial,session,node_id,bound_at,exp FROM node_token WHERE jti=?`, b.JTI).Scan(&stored.JTI, &stored.Serial, &stored.Session, &stored.NodeID, &stored.BoundAt, &stored.Exp)
+		stored, e = scanBinding(tx.QueryRowContext(ctx, `SELECT `+jobTokenCols+` FROM node_token WHERE jti=?`, b.JTI))
+		return e
 	})
 	return stored, created && err == nil, err
 }
 
 // TokenCheck returns the binding of jti; found is false when the token was never used.
 func (s *Store) TokenCheck(ctx context.Context, jti string) (b TokenBinding, found bool, err error) {
-	err = s.readers.QueryRowContext(ctx, `SELECT jti,serial,session,node_id,bound_at,exp FROM node_token WHERE jti=?`, jti).Scan(&b.JTI, &b.Serial, &b.Session, &b.NodeID, &b.BoundAt, &b.Exp)
+	b, err = scanBinding(s.readers.QueryRowContext(ctx, `SELECT `+jobTokenCols+` FROM node_token WHERE jti=?`, jti))
 	if errors.Is(err, sql.ErrNoRows) {
 		return TokenBinding{}, false, nil
 	}
@@ -77,6 +91,14 @@ func (s *Store) TokenRebind(ctx context.Context, jti, serial, from, to string) (
 		return nil
 	})
 	return moved && err == nil, err
+}
+
+// TokenSpend marks jti used up: the result of its job was accepted. A token that was never bound stays unknown.
+func (s *Store) TokenSpend(ctx context.Context, jti string) error {
+	return s.write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `UPDATE node_token SET spent=1 WHERE jti=?`, jti)
+		return err
+	})
 }
 
 // TokenPrune removes the rows whose token expired more than TokenPruneGrace seconds before nowUnix.
