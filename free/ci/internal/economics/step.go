@@ -62,9 +62,14 @@ func step(ctx context.Context, v dispatch.View) error {
 func admit(ctx context.Context, env Env, v dispatch.View) error {
 	r := v.Request
 	t := v.Ledger(ctx)
-	p, err := env.policy(ctx) // from memory; a failure fails the admission closed
+	p, err := env.policy(ctx) // from memory; a failure fails the admission closed, except for work on this machine
 	if err != nil {
-		return err
+		if !r.Local || (r.Runner.Class != ClassLocal && r.Runner.Class != ClassOwned) || isGitHub(r.Runner.Provider) {
+			return err
+		}
+		// A placement on this machine that calls itself free cannot be a paid provider's runner:
+		// the foreground floor (X17) holds while the policy cannot be read.
+		p = Policy{}
 	}
 	row := store.LedgerRow{Attempt: v.Demand.AttemptID, Pipeline: v.PipelineID, Project: v.Project, Provider: r.Runner.Provider, Class: classOf(p, r.Runner.Class, r.Runner.Provider),
 		Remote: !r.Local, Confidence: ConfEstimated, AdmittedAt: t.Now()}

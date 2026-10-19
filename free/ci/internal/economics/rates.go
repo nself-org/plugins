@@ -33,28 +33,21 @@ func isGitHub(provider string) bool { return !schedpolicy.PaidAllowed(anyPaid, p
 func isPaid(class string) bool { return class == ClassMetered || class == ClassEphemeral }
 
 // classOf is the class a runner is priced as. The owner's rate table beats the
-// runner's own claim: a provider with a declared paid rate is paid whatever class
-// its capability says, so a runner cannot call itself free.
+// runner's own claim: a provider with a declared rate has the declared class
+// whatever class its capability says, so a runner cannot call itself free.
 func classOf(p Policy, runnerClass, provider string) string {
 	if isGitHub(provider) {
 		return ClassIncluded
 	}
-	declared := ""
 	if r, ok := p.Rates[provider]; ok {
-		declared = r.Class
-		if declared == "" {
-			declared = ClassMetered
+		if r.Class == "" {
+			return ClassMetered
 		}
-		if isPaid(declared) {
-			return declared
-		}
+		return r.Class
 	}
 	switch runnerClass {
 	case ClassLocal, ClassOwned, ClassIncluded, ClassMetered, ClassEphemeral:
 		return runnerClass
-	}
-	if declared != "" {
-		return declared
 	}
 	return ClassOwned
 }

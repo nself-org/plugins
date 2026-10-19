@@ -185,3 +185,53 @@ func TestLedgerAllowanceInputsAndPending(t *testing.T) {
 		t.Fatal("accepted a bad pending estimate")
 	}
 }
+
+// TestLedgerSettledRowsAreFinal: re-admission of an attempt replaces its open
+// estimate and reservation, never a settled one; and PipelineHeld leaves out
+// the attempt being admitted.
+func TestLedgerSettledRowsAreFinal(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	put := func(est int64) error {
+		return s.LedgerWrite(ctx, func(tx LedgerTx) error {
+			if err := tx.PutLedger(LedgerRow{Attempt: "a1", Pipeline: "p", Provider: "x", Class: "metered", EstMicro: est, Confidence: "estimated", WindowDay: "2026-10-19"}); err != nil {
+				return err
+			}
+			return tx.Reserve(Reservation{Owner: "a1", Scope: ScopeDay, WindowKey: "2026-10-19", Micro: est})
+		})
+	}
+	if err := put(900); err != nil {
+		t.Fatal(err)
+	}
+	if err := put(500); err != nil { // an open one is replaced
+		t.Fatal(err)
+	}
+	if row, _, _ := s.LedgerAttempt(ctx, "a1"); row.EstMicro != 500 {
+		t.Fatalf("open row not replaced: %+v", row)
+	}
+	if held, _ := s.Reserved(ctx, ScopeDay, "", "2026-10-19"); held != 500 {
+		t.Fatalf("open reservation not replaced: %d", held)
+	}
+	if ok, err := s.LedgerSettle(ctx, "a1", 1, 40, "computed"); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	if err := put(999); err != nil { // a settled one is final
+		t.Fatal(err)
+	}
+	row, _, _ := s.LedgerAttempt(ctx, "a1")
+	if row.EstMicro != 500 || row.ActMicro == nil || *row.ActMicro != 40 || row.FinalizedAt == 0 {
+		t.Fatalf("a settled ledger row was overwritten: %+v", row)
+	}
+	if held, _ := s.Reserved(ctx, ScopeDay, "", "2026-10-19"); held != 40 {
+		t.Fatalf("a settled reservation was overwritten: %d", held)
+	}
+	_ = s.LedgerWrite(ctx, func(tx LedgerTx) error {
+		if got, _ := tx.PipelineHeld("p", "a1"); got != 0 {
+			t.Errorf("an attempt counted against itself: %d", got)
+		}
+		if got, _ := tx.PipelineHeld("p", "other"); got != 40 {
+			t.Errorf("a settled attempt counts at its actual: %d", got)
+		}
+		return nil
+	})
+}
