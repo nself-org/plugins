@@ -340,12 +340,26 @@ func TestImageHostileLayouts(t *testing.T) {
 	if err := read([]byte(`{"manifests":[`+strings.Join(ok, ",")+`]}`), okExtra); err != nil {
 		t.Fatalf("1024 manifests: %v", err)
 	}
-	extraB := []byte("one more")
-	okExtra[dig(extraB)] = extraB
-	nest2 := []byte(`{"manifests":[` + desc(manifestT, dig(extraB)) + `]}`)
-	okExtra[dig(nest2)] = nest2
-	if err := read([]byte(`{"manifests":[`+strings.Join(ok[:1023], ",")+`,`+desc(indexT, dig(nest2))+`,`+desc(manifestT, dig([]byte("x0")))+`]}`), okExtra); !records.IsReason(err, records.ReasonImage) {
+	// 1000 direct manifests plus two nested indexes of 24 and 1: 1025 overall, each index within its own limit
+	mk := func(prefix string, n int) (descs []string) {
+		for i := 0; i < n; i++ {
+			b := []byte(fmt.Sprintf("%s%d", prefix, i))
+			okExtra[dig(b)] = b
+			descs = append(descs, desc(manifestT, dig(b)))
+		}
+		return
+	}
+	direct := mk("direct", 1000)
+	nestA := []byte(`{"manifests":[` + strings.Join(mk("na", 24), ",") + `]}`)
+	nestB := []byte(`{"manifests":[` + strings.Join(mk("nb", 1), ",") + `]}`)
+	okExtra[dig(nestA)], okExtra[dig(nestB)] = nestA, nestB
+	over := `{"manifests":[` + strings.Join(direct, ",") + `,` + desc(indexT, dig(nestA)) + `,` + desc(indexT, dig(nestB)) + `]}`
+	if err := read([]byte(over), okExtra); !records.IsReason(err, records.ReasonImage) {
 		t.Fatalf("1025 manifests overall: %v", err)
+	}
+	under := `{"manifests":[` + strings.Join(direct, ",") + `,` + desc(indexT, dig(nestA)) + `]}` // 1024 overall
+	if err := read([]byte(under), okExtra); err != nil {
+		t.Fatalf("1024 manifests overall: %v", err)
 	}
 }
 

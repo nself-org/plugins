@@ -19,10 +19,10 @@ import (
 )
 
 // AutoPruneBudget is the shared pipeline-start budget of cache and artifact pruning.
-const AutoPruneBudget = 2 * time.Second
+const AutoPruneBudget time.Duration = 2000000000 // 2 s
 
 // DefaultReleaseAge is the age `prune --release` uses when none is given.
-const DefaultReleaseAge = 365 * 24 * time.Hour
+const DefaultReleaseAge time.Duration = 31536000000000000 // 365 days
 
 // Prune applies spec and returns what it removed (or would remove).
 func Prune(ctx context.Context, l Ledger, b Blobs, spec PruneSpec) ([]Record, error) {

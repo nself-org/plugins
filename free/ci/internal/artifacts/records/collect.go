@@ -166,10 +166,10 @@ func (c Collector) plan(ctx context.Context, root *os.Root, decls []Decl) ([]pla
 // recordName: no name = the workdir-relative path; a name on a single literal
 // file = the name; a name on a glob or directory = name/relative-path.
 func recordName(d Decl, rel string, literal bool) string {
-	switch {
-	case d.Name == "":
+	if d.Name == "" {
 		return rel
-	case literal:
+	}
+	if literal {
 		return d.Name
 	}
 	return d.Name + "/" + strings.TrimPrefix(rel, strings.TrimSuffix(literalPrefix(d.Path), "/")+"/")
