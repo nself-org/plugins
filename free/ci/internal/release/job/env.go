@@ -3,11 +3,13 @@ package job
 // Purpose: the environment rules of a release job (Epic D9): it receives
 // NSELF_CI_IDEMPOTENCY_KEY, and CI never receives deploy credentials.
 // Inputs:  the attempt id, a job definition, an environment list.
-// Outputs: the key, a refusal of a job that declares a deploy variable, a
-// scrubbed environment.
+// Outputs: the key and a refusal of a job that declares a deploy variable.
 // Constraints: the key is the one run.CreateAttempt derives for at-most-once
 // jobs (internal/run/release_hook.go checks the two stay equal); a name is a
-// deploy variable when it starts with DEPLOY_ or NSELF_DEPLOY_, any case.
+// deploy variable when it starts with DEPLOY_ or NSELF_DEPLOY_, any case. The
+// operator's own environment reaches a job only through exec.AllowlistEnv,
+// which carries no such name; CheckDeclared runs on the final, merged job
+// environment (release_hook.go wraps the isolator for that).
 
 import (
 	"crypto/sha256"
@@ -53,17 +55,4 @@ func CheckDeclared(j model.Job) *Error {
 	}
 	sort.Strings(bad)
 	return refuse(CodeNotAdmitted, DeployEnv, "a release job must not receive deploy credentials (%s)", strings.Join(bad, ", "))
-}
-
-// ReleaseEnv returns env without deploy variables, plus the idempotency key.
-func ReleaseEnv(env []string, key string) []string {
-	out := make([]string, 0, len(env)+1)
-	for _, item := range env {
-		name, _, _ := strings.Cut(item, "=")
-		if IsDeployVar(name) || name == KeyEnv {
-			continue
-		}
-		out = append(out, item)
-	}
-	return append(out, KeyEnv+"="+key)
 }

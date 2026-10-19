@@ -146,10 +146,10 @@ func TestStepRefusesOnlyReleaseAttemptsItHasFactsFor(t *testing.T) {
 	if err := step(context.Background(), view("other")); err != nil {
 		t.Fatalf("an attempt with no facts is not a release attempt: %v", err)
 	}
-	st.Put("good", job.BuildFacts(goodState()))
+	st.Put("good", job.Static(job.BuildFacts(goodState())))
 	bad := goodState()
 	bad.Outcomes[0].Status = "failed"
-	st.Put("bad", job.BuildFacts(bad))
+	st.Put("bad", job.Static(job.BuildFacts(bad)))
 	if err := step(context.Background(), view("good")); err != nil {
 		t.Fatalf("good facts refused: %v", err)
 	}

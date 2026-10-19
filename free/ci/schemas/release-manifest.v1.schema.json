@@ -7,7 +7,9 @@
     },
     "repo_id": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[^\\x00-\\x1f]+$"
     },
     "revision": {
       "type": "string",
@@ -18,23 +20,33 @@
       "properties": {
         "run_id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\x00-\\x1f]+$"
         },
         "pipeline": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\x00-\\x1f]+$"
         },
         "job_id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\x00-\\x1f]+$"
         },
         "attempt_id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\x00-\\x1f]+$"
         },
         "idempotency_key": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\x00-\\x1f]+$"
         },
         "finished_at": {
           "type": "string",
@@ -81,10 +93,14 @@
         "properties": {
           "name": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9._-][A-Za-z0-9._/-]{0,199}$"
+            "pattern": "^[A-Za-z0-9._-][A-Za-z0-9._/-]{0,199}$",
+            "not": {
+              "pattern": "(^|/)\\.{0,2}(/|$)"
+            }
           },
           "path": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^artifacts/.+$"
           },
           "kind": {
             "type": "string",
@@ -119,7 +135,10 @@
             ],
             "properties": {
               "ref": {
-                "type": "string"
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^[^\\x00-\\x1f]+$"
               },
               "index_digest": {
                 "type": "string",
@@ -131,7 +150,10 @@
                   "type": "object",
                   "properties": {
                     "platform": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^[^\\x00-\\x1f]+$"
                     },
                     "digest": {
                       "type": "string",
@@ -159,7 +181,8 @@
                 "type": "object",
                 "properties": {
                   "path": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^sbom/.+\\.cdx\\.json$"
                   },
                   "sha256": {
                     "type": "string",
@@ -175,7 +198,8 @@
                 "type": "object",
                 "properties": {
                   "path": {
-                    "type": "string"
+                    "type": "string",
+                    "pattern": "^sbom/.+\\.spdx\\.json$"
                   },
                   "sha256": {
                     "type": "string",
@@ -203,9 +227,34 @@
           "platform",
           "image",
           "sbom"
-        ]
+        ],
+        "if": {
+          "properties": {
+            "kind": {
+              "const": "image"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        "then": {
+          "properties": {
+            "image": {
+              "type": "object"
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "image": {
+              "type": "null"
+            }
+          }
+        }
       },
-      "minItems": 1
+      "minItems": 1,
+      "maxItems": 4096
     },
     "provenance": {
       "type": "object",
@@ -255,7 +304,9 @@
         },
         "key_id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\x00-\\x1f]+$"
         }
       },
       "required": [
@@ -267,10 +318,16 @@
       "type": "object",
       "properties": {
         "nself_ci_version": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\x00-\\x1f]+$"
         },
         "coordinator": {
-          "type": "string"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[^\\x00-\\x1f]+$"
         }
       },
       "required": [

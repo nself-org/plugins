@@ -241,3 +241,23 @@ func TestResolveFindsTheAttemptAmongManyRuns(t *testing.T) {
 		t.Fatalf("the attempt of an older run was not found: %v", err)
 	}
 }
+
+// TestResolveMapsALostCompareAndSetToAlreadyResolved: a concurrent resolution
+// (E605 epoch moved, E604 state moved) is E716 already_resolved, anything else
+// passes through untouched.
+func TestResolveMapsALostCompareAndSetToAlreadyResolved(t *testing.T) {
+	for _, code := range []string{"E605", "E604"} {
+		wantE716(t, job.MapConflict(&store.Error{Code: code, Message: "moved"}), job.AlreadyResolved)
+	}
+	other := &store.Error{Code: "E609", Message: "operator action required"}
+	if got := job.MapConflict(other); got != error(other) {
+		t.Fatalf("E609 was rewritten: %v", got)
+	}
+	plain := errors.New("disk full")
+	if got := job.MapConflict(plain); got != plain {
+		t.Fatalf("a plain error was rewritten: %v", got)
+	}
+	if job.MapConflict(nil) != nil {
+		t.Fatal("nil became an error")
+	}
+}

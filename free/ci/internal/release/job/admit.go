@@ -5,11 +5,12 @@ package job
 // deps under the release-admission gate built here. authz.Promotable is not
 // used: it refuses non-release evidence by design (D16 uses it on the
 // published release's evidence), and this package does not import authz.
-// Inputs:  Facts the coordinator gathered before admission (evidence of the
-// deps, the run's protected identity and the digests of the inputs now).
+// Inputs:  a Provider of Facts per release attempt (evidence of the deps, the
+// run's protected identity and the digests of the inputs now).
 // Outputs: nil (admit) or a *dispatch.Refusal naming the E715 reason.
 // Constraints: the step runs inside the admission transaction and calls no
-// Store method; it reads Facts from a Source keyed by attempt id. The gate is
+// Store method (a Provider may read the worktree, never the store); it asks the
+// Source's Provider for the attempt id on every try. The gate is
 // built from Facts.Repo/Revision/PolicyDigest/Deps, never from the evidence
 // being judged. The only submission path (run's Dispatch wrapper) refuses to
 // submit a release attempt whose facts it cannot build, so no release attempt
@@ -77,19 +78,36 @@ func Evaluate(f Facts) *Error {
 	return refuse(CodeNotAdmitted, first, "the evidence of the release job's deps is not acceptable (%s)", strings.Join(all, ", "))
 }
 
-// Source finds the Facts of a release attempt; ok is false for any other attempt.
+// Provider builds the Facts of one release attempt at the moment it is asked:
+// the admission step asks again on every try, so a change made while the
+// attempt waits for capacity is seen (freshness and binding are never cached).
+type Provider func(ctx context.Context) (Facts, *Error)
+
+// Static is a Provider that always answers f.
+func Static(f Facts) Provider { return func(context.Context) (Facts, *Error) { return f, nil } }
+
+// Source finds the Provider of a release attempt; ok is false for any other attempt.
 type Source interface {
-	ReleaseFacts(attemptID string) (f Facts, ok bool)
+	ReleaseFacts(attemptID string) (p Provider, ok bool)
+}
+
+// judge asks p and evaluates its answer.
+func judge(ctx context.Context, p Provider) *Error {
+	f, perr := p(ctx)
+	if perr != nil {
+		return perr
+	}
+	return Evaluate(f)
 }
 
 // Step is the admission step over src.
 func Step(src Source) dispatch.Step {
-	return func(_ context.Context, v dispatch.View) error {
-		f, ok := src.ReleaseFacts(v.Request.AttemptID)
+	return func(ctx context.Context, v dispatch.View) error {
+		p, ok := src.ReleaseFacts(v.Request.AttemptID)
 		if !ok {
 			return nil
 		}
-		if e := Evaluate(f); e != nil {
+		if e := judge(ctx, p); e != nil {
 			return &dispatch.Refusal{Reason: model.PlacementReason("release." + e.Reason), Detail: e.Error()}
 		}
 		return nil
@@ -99,24 +117,24 @@ func Step(src Source) dispatch.Step {
 // Register adds the step to the dispatcher; call it from init().
 func Register(src Source) error { return dispatch.RegisterStep(StepName, Step(src)) }
 
-// Stash holds the Facts of release attempts between the coordinator's
+// Stash holds the Providers of release attempts between the coordinator's
 // preparation and the admission transaction. Safe for concurrent use.
 type Stash struct {
 	mu sync.Mutex
-	m  map[string]Facts
+	m  map[string]Provider
 }
 
 // NewStash returns an empty stash.
-func NewStash() *Stash { return &Stash{m: map[string]Facts{}} }
+func NewStash() *Stash { return &Stash{m: map[string]Provider{}} }
 
-// Put records the facts of one attempt.
-func (s *Stash) Put(attemptID string, f Facts) {
+// Put records the provider of one attempt.
+func (s *Stash) Put(attemptID string, p Provider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.m[attemptID] = f
+	s.m[attemptID] = p
 }
 
-// Forget drops the facts of one attempt.
+// Forget drops the provider of one attempt.
 func (s *Stash) Forget(attemptID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -124,9 +142,22 @@ func (s *Stash) Forget(attemptID string) {
 }
 
 // ReleaseFacts implements Source.
-func (s *Stash) ReleaseFacts(attemptID string) (Facts, bool) {
+func (s *Stash) ReleaseFacts(attemptID string) (Provider, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	f, ok := s.m[attemptID]
-	return f, ok
+	p, ok := s.m[attemptID]
+	return p, ok
+}
+
+// Guard submits one release attempt: it judges p first (an unacceptable
+// attempt fails fast with the E715 *Error and never queues), keeps p in the
+// stash while next runs (next blocks until the attempt is admitted, and the
+// admission step judges p again), then forgets it.
+func (s *Stash) Guard(ctx context.Context, attemptID string, p Provider, next func() error) error {
+	if e := judge(ctx, p); e != nil {
+		return e
+	}
+	s.Put(attemptID, p)
+	defer s.Forget(attemptID)
+	return next()
 }

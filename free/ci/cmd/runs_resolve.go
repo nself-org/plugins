@@ -6,10 +6,13 @@ package main
 // attempt. The key is the NSELF_CI_IDEMPOTENCY_KEY the job received.
 // Inputs:  argv after `runs resolve`; env NSELF_CI_HOME.
 // Outputs: a line or one v1 JSON envelope; exit 0 resolved, 1 refused (E716)
-// or usage, 2 infrastructure.
+// or usage, 2 infrastructure (a store that cannot be opened or read).
 // Constraints: V15 only; asks for confirmation unless --yes (and refuses to
 // run unconfirmed without a terminal); one audit row per action; the key never
-// reaches the log or the audit trail.
+// reaches the log or the audit trail. The key guards against resolving the wrong
+// attempt (it derives from the public attempt id) and is not a secret, hence
+// argv. Recover runs first, like every `runs` read, so an attempt of a dead
+// coordinator is already needs-operator.
 
 import (
 	"bufio"
@@ -99,6 +102,7 @@ func confirm(a resolveArgs, in io.Reader, interactive bool) bool {
 	return strings.TrimSpace(line) == "yes"
 }
 
+// stdinIsTerminal reports whether stdin is a character device (a terminal).
 func stdinIsTerminal() bool {
 	fi, err := os.Stdin.Stat()
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0

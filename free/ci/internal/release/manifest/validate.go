@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -50,6 +51,8 @@ func text(field, v string) error {
 		return invalid("%s is longer than %d bytes", field, maxField)
 	case !utf8.ValidString(v):
 		return invalid("%s is not valid UTF-8", field)
+	case strings.ContainsFunc(v, unicode.IsControl):
+		return invalid("%s holds a control character", field)
 	}
 	return nil
 }
@@ -131,10 +134,11 @@ func validateArtifacts(list []Artifact) error {
 		if err := validateArtifact(a); err != nil {
 			return fmt.Errorf("%w (artifacts[%d])", err, i)
 		}
-		if seen[a.Name] {
-			return invalid("artifact name %q repeats", a.Name)
+		folded := strings.ToLower(a.Name) // a case-insensitive checkout would merge two spellings
+		if seen[folded] {
+			return invalid("artifact name %q repeats (names compare without letter case)", a.Name)
 		}
-		seen[a.Name] = true
+		seen[folded] = true
 	}
 	return nil
 }
@@ -192,7 +196,7 @@ func validateImage(name string, im Image) error {
 	}
 	seen := map[string]bool{}
 	for _, mf := range im.Manifests {
-		if mf.Platform == "" || len(mf.Platform) > maxField || !utf8.ValidString(mf.Platform) || !digestRe.MatchString(mf.Digest) || seen[mf.Platform] {
+		if text("image platform", mf.Platform) != nil || !digestRe.MatchString(mf.Digest) || seen[mf.Platform] {
 			return invalid("image of %q has a bad or repeated platform manifest", name)
 		}
 		seen[mf.Platform] = true

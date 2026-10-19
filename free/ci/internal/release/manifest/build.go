@@ -20,7 +20,14 @@ func Build(m Manifest) ([]byte, error) {
 	if err := validate(m); err != nil {
 		return nil, err
 	}
-	return canonical(m)
+	b, err := canonical(m)
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > maxPayload {
+		return nil, invalid("payload is %d bytes, more than the %d a verifier reads", len(b), maxPayload)
+	}
+	return b, nil
 }
 
 // normalize copies m with its lists sorted and non-nil.

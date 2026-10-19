@@ -165,17 +165,22 @@ func TestDecodeRefusesMalformedPayloads(t *testing.T) {
 
 func TestValidationRules(t *testing.T) {
 	bend := map[string]func(*manifest.Manifest){
-		"empty repo":         func(m *manifest.Manifest) { m.RepoID = "" },
-		"bad finished_at":    func(m *manifest.Manifest) { m.Release.FinishedAt = "yesterday" },
-		"evidence path":      func(m *manifest.Manifest) { m.Evidence.Path = "../evidence.json" },
-		"evidence not pass":  func(m *manifest.Manifest) { m.Evidence.Result = "fail" },
-		"evidence class":     func(m *manifest.Manifest) { m.Evidence.Class = "default" },
-		"no artifacts":       func(m *manifest.Manifest) { m.Artifacts = nil },
-		"dotdot name":        func(m *manifest.Manifest) { m.Artifacts[0].Name = "a/../b"; m.Artifacts[0].Path = "artifacts/a/../b" },
-		"absolute name":      func(m *manifest.Manifest) { m.Artifacts[0].Name = "/etc/passwd" },
-		"empty component":    func(m *manifest.Manifest) { m.Artifacts[0].Name = "a//b" },
-		"path mismatch":      func(m *manifest.Manifest) { m.Artifacts[0].Path = "artifacts/other" },
-		"duplicate name":     func(m *manifest.Manifest) { m.Artifacts[1] = m.Artifacts[0] },
+		"empty repo":        func(m *manifest.Manifest) { m.RepoID = "" },
+		"bad finished_at":   func(m *manifest.Manifest) { m.Release.FinishedAt = "yesterday" },
+		"evidence path":     func(m *manifest.Manifest) { m.Evidence.Path = "../evidence.json" },
+		"evidence not pass": func(m *manifest.Manifest) { m.Evidence.Result = "fail" },
+		"evidence class":    func(m *manifest.Manifest) { m.Evidence.Class = "default" },
+		"no artifacts":      func(m *manifest.Manifest) { m.Artifacts = nil },
+		"dotdot name":       func(m *manifest.Manifest) { m.Artifacts[0].Name = "a/../b"; m.Artifacts[0].Path = "artifacts/a/../b" },
+		"absolute name":     func(m *manifest.Manifest) { m.Artifacts[0].Name = "/etc/passwd" },
+		"empty component":   func(m *manifest.Manifest) { m.Artifacts[0].Name = "a//b" },
+		"path mismatch":     func(m *manifest.Manifest) { m.Artifacts[0].Path = "artifacts/other" },
+		"duplicate name":    func(m *manifest.Manifest) { m.Artifacts[1] = m.Artifacts[0] },
+		"case-folded name": func(m *manifest.Manifest) {
+			m.Artifacts[1].Name = "NSELF-linux-amd64"
+			m.Artifacts[1].Path = "artifacts/NSELF-linux-amd64"
+			m.Artifacts[1].SBOM = sbomFor("NSELF-linux-amd64", "8")
+		},
 		"unknown kind":       func(m *manifest.Manifest) { m.Artifacts[0].Kind = "rpm" },
 		"short digest":       func(m *manifest.Manifest) { m.Artifacts[0].SHA256 = "abc" },
 		"bad platform":       func(m *manifest.Manifest) { m.Artifacts[0].Platform = strp("linux") },
@@ -300,4 +305,108 @@ func FuzzDecode(f *testing.F) {
 			t.Fatalf("Build is not stable: %v", err)
 		}
 	})
+}
+
+func TestDecodeRefusesCaseVariantsAndMissingFields(t *testing.T) {
+	good := string(mustBuild(t, valid()))
+	rev := strings.Repeat("a", 40)
+	cases := map[string]string{
+		"case duplicate":        strings.Replace(good, `"revision":"`+rev+`"`, `"revision":"`+rev+`","Revision":"`+strings.Repeat("b", 40)+`"`, 1),
+		"schema case duplicate": strings.Replace(good, `"schema":"ci.release-manifest/v1"`, `"schema":"ci.release-manifest/v2","SCHEMA":"ci.release-manifest/v1"`, 1),
+		"lone case variant":     strings.Replace(good, `"repo_id"`, `"REPO_ID"`, 1),
+		"missing size":          strings.Replace(good, `,"size":99`, ``, 1),
+		"null size":             strings.Replace(good, `"size":99`, `"size":null`, 1),
+		"missing platform":      strings.Replace(good, `"platform":null,`, ``, 1),
+		"missing sbom":          strings.Replace(good, `"sbom":`, `"sbomx":`, 1),
+		"null provenance":       strings.Replace(good, `"provenance":{`, `"provenance":null,"x":{`, 1),
+		"string artifact":       strings.Replace(good, `"artifacts":[{`, `"artifacts":["x",{`, 1),
+		"object for string":     strings.Replace(good, `"repo_id":"repo-1"`, `"repo_id":{}`, 1),
+		"control character":     strings.Replace(good, `"repo-1"`, `"repo\u0000-1"`, 1),
+		"newline in key id":     strings.Replace(good, `ci-release-0123456789abcdef`, `ci-release\n0123456789abcdef`, 1),
+		"invalid utf-8":         strings.Replace(good, `"repo-1"`, "\"repo\xff-1\"", 1),
+	}
+	for name, doc := range cases {
+		if doc == good {
+			t.Errorf("%s: the case did not change the document", name)
+		}
+		if _, err := manifest.Decode([]byte(doc)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	// a case variant of an UNKNOWN additive field is fine
+	extra := strings.Replace(good, `"repo_id"`, `"Labels":1,"labels":2,"repo_id"`, 1)
+	if _, err := manifest.Decode([]byte(extra)); err == nil {
+		t.Error("two spellings of one additive field must still be refused")
+	}
+	if _, err := manifest.Decode([]byte(strings.Replace(good, `"repo_id"`, `"Labels":1,"repo_id"`, 1))); err != nil {
+		t.Errorf("an additive field with capitals: %v", err)
+	}
+}
+
+func TestBuildRefusesWhatDecodeCouldNotRead(t *testing.T) {
+	m := valid()
+	m.Artifacts = m.Artifacts[:1]
+	m.Artifacts[0].Name = "a"
+	m.Artifacts[0].Path = "artifacts/a"
+	m.Artifacts[0].SBOM = sbomFor("a", "3")
+	var arts []manifest.Artifact
+	for i := 0; i < 4096; i++ {
+		a := m.Artifacts[0]
+		a.Name = strings.Repeat("n", 190) + string(rune('a'+i%26)) + string(rune('a'+i/26%26)) + string(rune('a'+i/676))
+		a.Path = "artifacts/" + a.Name
+		a.SBOM = sbomFor(a.Name, "3")
+		arts = append(arts, a)
+	}
+	m.Artifacts = arts
+	if _, err := manifest.Build(m); !errors.Is(err, manifest.ErrInvalid) || !strings.Contains(err.Error(), "more than") {
+		t.Fatalf("an oversized payload was built: %v", err)
+	}
+	m.Artifacts = arts[:10]
+	if b, err := manifest.Build(m); err != nil || len(b) > 1<<20 {
+		t.Fatalf("a normal payload: %v", err)
+	}
+}
+
+// TestSchemaRejectsWhatGoRejects: the rules the schema can express agree with
+// Build and Decode (parity, review of 2026-10-19).
+func TestSchemaRejectsWhatGoRejects(t *testing.T) {
+	rs := resolvedSchema(t)
+	base := func() map[string]any {
+		var doc map[string]any
+		if err := json.Unmarshal(mustBuild(t, valid()), &doc); err != nil {
+			t.Fatal(err)
+		}
+		return doc
+	}
+	art := func(d map[string]any, i int) map[string]any { return d["artifacts"].([]any)[i].(map[string]any) }
+	bend := map[string]func(map[string]any){
+		"dot component":       func(d map[string]any) { art(d, 0)["name"] = "a/../b" },
+		"empty component":     func(d map[string]any) { art(d, 0)["name"] = "a//b" },
+		"dot name":            func(d map[string]any) { art(d, 0)["name"] = ".." },
+		"trailing slash":      func(d map[string]any) { art(d, 0)["name"] = "a/" },
+		"path outside":        func(d map[string]any) { art(d, 0)["path"] = "evil/x" },
+		"sbom path":           func(d map[string]any) { art(d, 0)["sbom"].(map[string]any)["spdx"].(map[string]any)["path"] = "x.json" },
+		"image kind no image": func(d map[string]any) { art(d, 0)["image"] = nil },
+		"binary with image":   func(d map[string]any) { art(d, 1)["image"] = art(d, 0)["image"] },
+		"control character":   func(d map[string]any) { d["repo_id"] = "a\u0000b" },
+		"long text":           func(d map[string]any) { d["repo_id"] = strings.Repeat("a", 513) },
+		"no manifests":        func(d map[string]any) { art(d, 0)["image"].(map[string]any)["manifests"] = []any{} },
+		"bad evidence class":  func(d map[string]any) { d["evidence"].(map[string]any)["class"] = "default" },
+	}
+	for name, f := range bend {
+		d := base()
+		f(d)
+		if err := rs.Validate(d); err == nil {
+			t.Errorf("%s: the schema accepted it", name)
+		}
+	}
+	if err := rs.Validate(base()); err != nil {
+		t.Fatalf("the valid document: %v", err)
+	}
+	d := base()
+	art(d, 0)["name"] = "dir/.hidden/x..y"
+	art(d, 0)["path"] = "artifacts/dir/.hidden/x..y"
+	if err := rs.Validate(d); err != nil {
+		t.Fatalf("a legal dotted name: %v", err)
+	}
 }

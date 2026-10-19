@@ -6,8 +6,12 @@ package manifest
 // refused whole), ErrInvalid for anything else wrong.
 // Constraints: bounded (size, depth); a repeated object key is refused so two
 // readers cannot disagree on which value counts; unknown additive fields are
-// accepted and dropped (X19); the decoded Manifest is not re-signed, so the
-// bytes a verifier checks stay the bytes the signature covers.
+// accepted and dropped (X19); a key that differs from a field of the contract
+// only in letter case is refused (encoding/json would fold it onto the field,
+// and a payload could carry two spellings); every field of the contract must be
+// present (a nullable one may be null), so a missing size is not a zero size;
+// the decoded Manifest is not re-signed, so the bytes a verifier checks stay the
+// bytes the signature covers.
 
 import (
 	"bytes"
@@ -15,6 +19,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
+	"strings"
+	"unicode/utf8"
 )
 
 const maxDepth = 16
@@ -24,6 +31,9 @@ func Decode(payload []byte) (Manifest, error) {
 	var m Manifest
 	if len(payload) > maxPayload {
 		return m, invalid("payload is larger than %d bytes", maxPayload)
+	}
+	if !utf8.Valid(payload) {
+		return m, invalid("payload is not valid UTF-8")
 	}
 	if err := checkShape(payload); err != nil {
 		return m, err
@@ -37,6 +47,13 @@ func Decode(payload []byte) (Manifest, error) {
 	if *head.Schema != Schema {
 		return m, fmt.Errorf("%w: %q", ErrSchema, *head.Schema)
 	}
+	var tree any
+	if err := json.Unmarshal(payload, &tree); err != nil {
+		return Manifest{}, invalid("%s", err)
+	}
+	if err := checkPresence(reflect.TypeOf(m), tree, "payload"); err != nil {
+		return Manifest{}, err
+	}
 	if err := json.Unmarshal(payload, &m); err != nil {
 		return Manifest{}, invalid("%s", err)
 	}
@@ -46,10 +63,76 @@ func Decode(payload []byte) (Manifest, error) {
 	return m, nil
 }
 
+// frame is one open JSON object or array of the shape walk.
 type frame struct {
 	object    bool
 	expectKey bool
-	keys      map[string]bool
+	keys      map[string]bool // exact spellings
+	folded    map[string]bool // lower-case spellings
+}
+
+// contractKeys holds every JSON field name of the contract, by lower case.
+var contractKeys = func() map[string]string {
+	out := map[string]string{}
+	var walk func(t reflect.Type)
+	walk = func(t reflect.Type) {
+		for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice {
+			t = t.Elem()
+		}
+		if t.Kind() != reflect.Struct {
+			return
+		}
+		for i := 0; i < t.NumField(); i++ {
+			name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+			out[strings.ToLower(name)] = name
+			walk(t.Field(i).Type)
+		}
+	}
+	walk(reflect.TypeOf(Manifest{}))
+	return out
+}()
+
+// checkPresence requires every field of the Go type in the decoded JSON value,
+// and a non-null value for a field that is not a pointer.
+func checkPresence(t reflect.Type, v any, path string) error {
+	nullable := t.Kind() == reflect.Pointer
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if v == nil {
+		if nullable {
+			return nil
+		}
+		return invalid("%s is null", path)
+	}
+	switch t.Kind() {
+	case reflect.Struct:
+		obj, ok := v.(map[string]any)
+		if !ok {
+			return invalid("%s is not an object", path)
+		}
+		for i := 0; i < t.NumField(); i++ {
+			name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+			child, present := obj[name]
+			if !present {
+				return invalid("%s.%s is missing", path, name)
+			}
+			if err := checkPresence(t.Field(i).Type, child, path+"."+name); err != nil {
+				return err
+			}
+		}
+	case reflect.Slice:
+		list, ok := v.([]any)
+		if !ok {
+			return invalid("%s is not an array", path)
+		}
+		for i, item := range list {
+			if err := checkPresence(t.Elem(), item, fmt.Sprintf("%s[%d]", path, i)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // checkShape walks the tokens once: one top-level object, no repeated key,
@@ -88,7 +171,7 @@ func checkShape(b []byte) error {
 				if len(stack) >= maxDepth {
 					return invalid("nesting deeper than %d", maxDepth)
 				}
-				stack = append(stack, frame{object: t == '{', expectKey: t == '{', keys: map[string]bool{}})
+				stack = append(stack, frame{object: t == '{', expectKey: t == '{', keys: map[string]bool{}, folded: map[string]bool{}})
 			default:
 				stack = stack[:len(stack)-1]
 				valueDone()
@@ -98,7 +181,14 @@ func checkShape(b []byte) error {
 				if stack[n-1].keys[t] {
 					return invalid("key %q repeats", t)
 				}
-				stack[n-1].keys[t], stack[n-1].expectKey = true, false
+				lower := strings.ToLower(t)
+				if stack[n-1].folded[lower] {
+					return invalid("key %q repeats in another letter case", t)
+				}
+				if want, ok := contractKeys[lower]; ok && want != t {
+					return invalid("key %q is a case variant of %q", t, want)
+				}
+				stack[n-1].keys[t], stack[n-1].folded[lower], stack[n-1].expectKey = true, true, false
 				continue
 			}
 			valueDone()

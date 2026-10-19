@@ -13,7 +13,10 @@ package job
 // TestCreateAttemptOnly); abandon moves the attempt to failed through the
 // operator transition (its own audit row). Only needs-operator is rerunnable. A
 // finalizing release attempt can only be abandoned (the store never retries
-// after finalizing, P7-CI-31). Nothing retries automatically.
+// after finalizing, P7-CI-31). Nothing retries automatically. Known limit: the
+// store's OperatorRetry has no "already approved" check and no audit read
+// exists outside the store, so a second rerun before attempt n+1 exists writes a
+// second approval row (each call is an audited decision; debt row filed).
 
 import (
 	"context"
@@ -49,8 +52,6 @@ type Result struct {
 	Next    string `json:"next,omitempty"` // the attempt id a rerun authorizes (n+1)
 }
 
-const maxScan = 1000 // pipelines searched for the attempt, newest first
-
 // Resolve applies req.
 func Resolve(ctx context.Context, st *store.Store, req Request) (Result, error) {
 	if req.Action != Rerun && req.Action != Abandon {
@@ -63,8 +64,9 @@ func Resolve(ctx context.Context, st *store.Store, req Request) (Result, error) 
 	if subtle.ConstantTimeCompare([]byte(IdempotencyKey(req.Attempt)), []byte(req.Key)) != 1 {
 		return Result{}, refuse(CodeResolveRefused, KeyMismatch, "the idempotency key does not belong to attempt %s", req.Attempt)
 	}
+	next := fmt.Sprintf("%s.a%d", at.JobID, at.N+1)
 	for _, o := range siblings {
-		if o.N > at.N {
+		if o.ID == next {
 			return Result{}, refuse(CodeResolveRefused, AlreadyResolved, "attempt %s already has a successor (%s)", req.Attempt, o.ID)
 		}
 	}
@@ -77,17 +79,20 @@ func Resolve(ctx context.Context, st *store.Store, req Request) (Result, error) 
 	if reason == "" {
 		reason = "resolved by `nself ci runs resolve`"
 	}
-	switch {
-	case at.State == "needs-operator" && req.Action == Rerun:
+	stuck := at.State == "needs-operator"
+	finalReleaseAttempt := at.State == "finalizing" && job.Kind == "release"
+	if !stuck && !finalReleaseAttempt {
+		return Result{}, refuse(CodeResolveRefused, NotResolvable, "attempt %s is %s: only needs-operator (or a finalizing release attempt, to abandon) can be resolved", req.Attempt, at.State)
+	}
+	if req.Action == Rerun {
+		if !stuck {
+			return Result{}, refuse(CodeResolveRefused, NotResolvable, "attempt %s is finalizing: a release attempt is never retried after finalizing; abandon it", req.Attempt)
+		}
 		err = st.OperatorRetry(ctx, actor, at.ID, reason)
-		res.Next = fmt.Sprintf("%s.a%d", at.JobID, at.N+1)
-	case (at.State == "needs-operator" || at.State == "finalizing" && job.Kind == "release") && req.Action == Abandon:
+		res.Next = next
+	} else {
 		err = st.Transition(ctx, at.ID, model.JobState(at.State), "failed",
 			store.TransitionDetail{Epoch: at.Epoch, FailureClass: "cancelled", Actor: actor, Reason: "abandoned: " + reason, Operator: true})
-	case at.State == "finalizing" && req.Action == Rerun:
-		return Result{}, refuse(CodeResolveRefused, NotResolvable, "attempt %s is finalizing: a release attempt is never retried after finalizing; abandon it", req.Attempt)
-	default:
-		return Result{}, refuse(CodeResolveRefused, NotResolvable, "attempt %s is %s: only needs-operator (or a finalizing release attempt, to abandon) can be resolved", req.Attempt, at.State)
 	}
 	return res, mapConflict(err)
 }
@@ -101,16 +106,18 @@ func mapConflict(err error) error {
 	return err
 }
 
+// historyPage is the page size of the run history scan (the store's maximum).
+const historyPage = 100
+
 // locate finds the attempt, its job and the other attempts of that job.
 func locate(ctx context.Context, st *store.Store, id string) (store.AttemptView, store.RunJob, []store.AttemptView, error) {
 	var before int64
-	for scanned := 0; scanned < maxScan; {
-		page, err := st.History(ctx, before, 100)
+	for {
+		page, err := st.History(ctx, before, historyPage)
 		if err != nil {
 			return store.AttemptView{}, store.RunJob{}, nil, err
 		}
 		for _, p := range page.Pipelines {
-			scanned++
 			if !strings.HasPrefix(id, p.ID+".") {
 				continue
 			}
@@ -141,10 +148,10 @@ func locate(ctx context.Context, st *store.Store, id string) (store.AttemptView,
 				return a, job, siblings, nil
 			}
 		}
-		if len(page.Pipelines) == 0 || page.NextCreatedAt == 0 {
-			break
+		if len(page.Pipelines) < historyPage {
+			break // the last page
 		}
 		before = page.NextCreatedAt
 	}
-	return store.AttemptView{}, store.RunJob{}, nil, refuse(CodeResolveRefused, NotResolvable, "no attempt %q in the recent runs", id)
+	return store.AttemptView{}, store.RunJob{}, nil, refuse(CodeResolveRefused, NotResolvable, "no attempt %q in the run history", id)
 }

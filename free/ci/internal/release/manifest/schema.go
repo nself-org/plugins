@@ -53,6 +53,12 @@ func open(s *jsonschema.Schema) {
 	open(s.Items)
 }
 
+// textRule is a free-text field: 1 to maxField bytes, no control characters.
+func textRule(s *jsonschema.Schema) {
+	one, most := 1, maxField
+	s.MinLength, s.MaxLength, s.Pattern = &one, &most, `^[^\x00-\x1f]+$`
+}
+
 func decorate(s *jsonschema.Schema) {
 	s.Schema = "https://json-schema.org/draft/2020-12/schema"
 	s.ID = "https://nself.org/schemas/" + SchemaFile
@@ -60,19 +66,27 @@ func decorate(s *jsonschema.Schema) {
 	one := 1
 	p := s.Properties
 	p["schema"].Const = anyPtr(Schema)
-	p["repo_id"].MinLength = &one
+	textRule(p["repo_id"])
 	p["revision"] = pattern(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
 	rel := p["release"].Properties
 	for _, k := range []string{"run_id", "pipeline", "job_id", "attempt_id", "idempotency_key"} {
-		rel[k].MinLength = &one
+		textRule(rel[k])
 	}
 	rel["finished_at"].Format = "date-time"
 	ev := p["evidence"].Properties
 	ev["path"], ev["result"], ev["class"] = constant(EvidencePath), constant(EvidenceResult), constant(EvidenceClass)
 	ev["sha256"] = pattern(`^[0-9a-f]{64}$`)
-	p["artifacts"].MinItems = &one
-	art := p["artifacts"].Items.Properties
-	art["name"] = pattern(`^[A-Za-z0-9._-][A-Za-z0-9._/-]{0,199}$`)
+	maxArt := maxArtifacts
+	p["artifacts"].MinItems, p["artifacts"].MaxItems = &one, &maxArt
+	item := p["artifacts"].Items
+	art := item.Properties
+	// the name pattern plus: no empty, "." or ".." component
+	art["name"] = &jsonschema.Schema{Type: "string", Pattern: `^[A-Za-z0-9._-][A-Za-z0-9._/-]{0,199}$`, Not: &jsonschema.Schema{Pattern: `(^|/)\.{0,2}(/|$)`}}
+	art["path"] = pattern(`^artifacts/.+$`)
+	// kind image carries image details, every other kind carries null
+	item.If = &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"kind": constant(KindImage)}, Required: []string{"kind"}}
+	item.Then = &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"image": {Type: "object"}}}
+	item.Else = &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"image": {Type: "null"}}}
 	art["kind"].Enum = []any{KindPackage, KindBinary, KindArchive, KindImage, KindReport, KindOther}
 	art["sha256"] = pattern(`^[0-9a-f]{64}$`)
 	art["platform"] = &jsonschema.Schema{Types: []string{"null", "string"}, Pattern: `^[a-z0-9]+/[a-z0-9]+$`}
@@ -80,12 +94,15 @@ func decorate(s *jsonschema.Schema) {
 	art["size"].Minimum = &zero
 	if im := art["image"]; im != nil {
 		im.Types, im.Type = []string{"null", "object"}, ""
+		textRule(im.Properties["ref"])
 		im.Properties["index_digest"] = pattern(`^sha256:[0-9a-f]{64}$`)
+		textRule(im.Properties["manifests"].Items.Properties["platform"])
 		im.Properties["manifests"].MinItems = &one
 		im.Properties["manifests"].Items.Properties["digest"] = pattern(`^sha256:[0-9a-f]{64}$`)
 	}
-	for _, k := range []string{"cyclonedx", "spdx"} {
+	for k, suffix := range map[string]string{"cyclonedx": `\.cdx\.json`, "spdx": `\.spdx\.json`} {
 		art["sbom"].Properties[k].Properties["sha256"] = pattern(`^[0-9a-f]{64}$`)
+		art["sbom"].Properties[k].Properties["path"] = pattern(`^sbom/.+` + suffix + `$`)
 	}
 	prov := p["provenance"].Properties
 	prov["path"], prov["predicate_type"], prov["slsa_build_level"] = constant(ProvenancePath), constant(ProvenancePredicate), constant(SLSALevel)
@@ -93,7 +110,9 @@ func decorate(s *jsonschema.Schema) {
 	p["checksums"].Properties["path"] = constant(ChecksumsPath)
 	p["checksums"].Properties["sha256"] = pattern(`^[0-9a-f]{64}$`)
 	p["signing"].Properties["purpose"] = constant(SigningPurpose)
-	p["signing"].Properties["key_id"].MinLength = &one
+	textRule(p["signing"].Properties["key_id"])
+	textRule(p["producer"].Properties["nself_ci_version"])
+	textRule(p["producer"].Properties["coordinator"])
 }
 
 func anyPtr(v any) *any { return &v }

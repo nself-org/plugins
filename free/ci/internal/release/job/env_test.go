@@ -44,19 +44,10 @@ func TestCheckDeclaredRefusesDeployCredentials(t *testing.T) {
 	}
 }
 
-func envMap(env []string) map[string]string {
-	m := map[string]string{}
-	for _, item := range env {
-		k, v, _ := strings.Cut(item, "=")
-		m[k] = v
-	}
-	return m
-}
-
-// TestReleaseEnvCarriesTheKeyAndNoDeployVariable: the environment the executor
-// builds from the operator's own (allowlist) plus the release rules has the key
-// and no DEPLOY_* or NSELF_DEPLOY_* variable the operator had set.
-func TestReleaseEnvCarriesTheKeyAndNoDeployVariable(t *testing.T) {
+// TestOperatorDeployVariablesNeverReachAReleaseJob: the environment the executor
+// builds from the operator's own (allowlist) holds no DEPLOY_* or
+// NSELF_DEPLOY_* variable, and a job that declares one is refused.
+func TestOperatorDeployVariablesNeverReachAReleaseJob(t *testing.T) {
 	t.Setenv("DEPLOY_TOKEN", "operator-secret")
 	t.Setenv("NSELF_DEPLOY_KEY_PATH", "/operator/key")
 	t.Setenv("PATH", "/usr/bin")
@@ -64,20 +55,18 @@ func TestReleaseEnvCarriesTheKeyAndNoDeployVariable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	key := job.IdempotencyKey("run-1.publish-1.a1")
-	env := envMap(job.ReleaseEnv(append(base, "NSELF_DEPLOY_X=1", "deploy_y=1", job.KeyEnv+"=stale"), key))
-	if env[job.KeyEnv] != key {
-		t.Fatalf("%s = %q", job.KeyEnv, env[job.KeyEnv])
+	sawPath := false
+	for _, item := range base {
+		name, _, _ := strings.Cut(item, "=")
+		if job.IsDeployVar(name) {
+			t.Errorf("deploy variable %s passed the allowlist", name)
+		}
+		sawPath = sawPath || name == "PATH"
 	}
-	if env["PATH"] != "/usr/bin" {
+	if !sawPath {
 		t.Fatal("the allowlisted environment was dropped")
 	}
-	for k := range env {
-		if job.IsDeployVar(k) {
-			t.Errorf("deploy variable %s reached the release job", k)
-		}
-	}
-	if n := strings.Count(strings.Join(job.ReleaseEnv([]string{job.KeyEnv + "=old"}, key), "\n"), job.KeyEnv); n != 1 {
-		t.Fatalf("the key variable appears %d times", n)
+	if e := job.CheckDeclared(model.Job{Kind: "release", Env: map[string]string{"NSELF_DEPLOY_KEY_PATH": "/x"}}); e == nil {
+		t.Fatal("a declared deploy variable was accepted")
 	}
 }
