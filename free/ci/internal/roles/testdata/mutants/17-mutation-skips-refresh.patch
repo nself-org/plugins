@@ -1,0 +1,13 @@
+diff --git a/internal/roles/grants.go b/internal/roles/grants.go
+index 867580a2..d2dbc0dc 100644
+--- a/internal/roles/grants.go
++++ b/internal/roles/grants.go
+@@ -46,7 +46,7 @@ func (s *Service) admin(ctx context.Context, by Actor) error {
+ 	if by.svc == nil || by.id == "" || by.kind == "" {
+ 		return fail(ReasonNoActor, "no identity")
+ 	}
+-	by, err := by.refresh(ctx)
++	by, err := by, error(nil)
+ 	if err != nil {
+ 		return err
+ 	}

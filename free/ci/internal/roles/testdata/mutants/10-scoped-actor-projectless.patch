@@ -1,8 +1,8 @@
 diff --git a/internal/roles/roles.go b/internal/roles/roles.go
-index e404c4c4..0b73f064 100644
+index 2eaff3ff..1f614bc2 100644
 --- a/internal/roles/roles.go
 +++ b/internal/roles/roles.go
-@@ -132,7 +132,7 @@ func (a Actor) Can(role Role, project string) error {
+@@ -133,7 +133,7 @@ func (a Actor) Can(role Role, project string) error {
  	if a.role.Rank() < role.Rank() {
  		return fail(ReasonRole, "%s needs role %s", a.Label(), role)
  	}

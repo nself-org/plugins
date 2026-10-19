@@ -1,8 +1,8 @@
 diff --git a/internal/roles/roles.go b/internal/roles/roles.go
-index e404c4c4..9c8fbd88 100644
+index 2eaff3ff..f9b91883 100644
 --- a/internal/roles/roles.go
 +++ b/internal/roles/roles.go
-@@ -135,7 +135,7 @@ func (a Actor) Can(role Role, project string) error {
+@@ -136,7 +136,7 @@ func (a Actor) Can(role Role, project string) error {
  	if a.kind != KindOperator && project == "" && role.Rank() > Member.Rank() && !a.allProjects() {
  		return fail(ReasonProject, "%s is scoped to projects and cannot do a project-wide action", a.Label())
  	}

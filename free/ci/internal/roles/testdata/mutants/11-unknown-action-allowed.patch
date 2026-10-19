@@ -1,8 +1,8 @@
 diff --git a/internal/roles/roles.go b/internal/roles/roles.go
-index e404c4c4..e8e3cd5d 100644
+index 2eaff3ff..e75e2732 100644
 --- a/internal/roles/roles.go
 +++ b/internal/roles/roles.go
-@@ -150,7 +150,7 @@ func Authorize(ctx context.Context, a Actor, role Role, project string) error {
+@@ -151,7 +151,7 @@ func Authorize(ctx context.Context, a Actor, role Role, project string) error {
  func AuthorizeAction(ctx context.Context, a Actor, action, project string) error {
  	r, ok := catalogue[action]
  	if !ok {
