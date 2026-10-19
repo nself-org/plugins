@@ -28,9 +28,9 @@ name: nself-ci
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main]   # your default branch
   push:
-    branches: [main]
+    branches: [main]   # your default branch
   workflow_dispatch:
 
 permissions:

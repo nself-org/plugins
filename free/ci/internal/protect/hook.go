@@ -7,7 +7,9 @@ package protect
 // Inputs:  the path of the hook file and the default branch name.
 // Outputs: the hook file (mode 0755), or E642 with the chaining line when a
 // hook already exists.
-// Constraints: nothing is ever overwritten; an identical managed hook is a
+// Constraints: the check runs with NSELF_V15=1 (a pre-v1.6 cli passes a user-set value
+// through; without it a v1.4 plugin has no `evidence verify` and every push would be
+// refused); nothing is ever overwritten; an identical managed hook is a
 // no-op (re-running the installer is safe); the hook fails closed (no
 // binary on PATH refuses the push; `git push --no-verify` is the owner's
 // override). Git hooks are shell, so the hook is sh, not Go.
@@ -37,7 +39,7 @@ func HookScript(branch string) (string, error) {
 // ChainLine is what an existing hook adds to call the check itself.
 func ChainLine(branch string) string {
 	return fmt.Sprintf(`# in your pre-push hook, for each "<local ref> <local sha> <remote ref> <remote sha>" line read from stdin where <remote ref> is refs/heads/%s:
-nself ci evidence verify "<local sha>" --json >/dev/null || exit 1`, branch)
+NSELF_V15=1 nself ci evidence verify "<local sha>" --json >/dev/null || exit 1`, branch)
 }
 
 // InstallHook writes the hook at path unless one is there. changed is false
@@ -88,7 +90,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$remote_ref" = "refs/heads/$branch" ] || continue
   case "$local_sha" in *[!0]*) ;; *) continue ;; esac # deleting the branch: nothing to verify
   if command -v nself >/dev/null 2>&1; then
-    out=$(nself ci evidence verify "$local_sha" --json 2>&1 </dev/null)
+    out=$(NSELF_V15=1 nself ci evidence verify "$local_sha" --json 2>&1 </dev/null)
   elif command -v nself-ci >/dev/null 2>&1; then
     out=$(NSELF_V15=1 nself-ci evidence verify "$local_sha" --json 2>&1 </dev/null)
   else

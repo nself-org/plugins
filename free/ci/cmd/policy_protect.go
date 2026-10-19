@@ -197,6 +197,10 @@ func (e protectEnv) protection(ctx context.Context, f protectFlags, repo string)
 	}
 	if !f.dryRun {
 		if res.Snapshot, err = c.Apply(ctx, plan, live, filepath.Join(e.home, "protect"), e.now()); err != nil {
+			var pe *protect.Error
+			if res.Snapshot != "" && !errors.As(err, &pe) {
+				err = fmt.Errorf("%w (the previous protection is saved to %s; put it back with --restore %s)", err, res.Snapshot, res.Snapshot)
+			}
 			return e.noPlanHint(err)
 		}
 	}
@@ -241,6 +245,9 @@ func (e protectEnv) restoreSnapshot(ctx context.Context, f protectFlags) error {
 	}
 	if f.repo != "" && f.repo != snap.Repo {
 		return fmt.Errorf("policy protect: the snapshot is of %s, not %s", snap.Repo, f.repo)
+	}
+	if f.branch != "" && f.branch != snap.Branch {
+		return fmt.Errorf("policy protect: the snapshot is of branch %s, not %s", snap.Branch, f.branch)
 	}
 	if f.dryRun {
 		body, err := protect.Normalise(snap.Protection)

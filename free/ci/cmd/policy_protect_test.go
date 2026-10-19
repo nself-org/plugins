@@ -266,3 +266,19 @@ func TestPolicyProtectRestoreNeedsNoRemote(t *testing.T) {
 		t.Fatalf("out = %s", out)
 	}
 }
+
+// TestPolicyProtectFailedApplyPointsAtTheSnapshot: when the PUT does not verify,
+// the error says where the previous protection is and how to put it back.
+func TestPolicyProtectFailedApplyPointsAtTheSnapshot(t *testing.T) {
+	live := protectFixture(t, "live_full.json")
+	f := &fakeRun{replies: [][3]string{{"--method PUT", "{}", "0"}, {protPath, live, "0"}}} // the read-back still shows the old protection
+	env, _ := newProtectEnv(t, f)
+	stderr := captureStderr(t, func() {
+		if code := env.dispatch(context.Background(), protectFlags{repo: "example-org/example-repo", branch: "main", appID: 15368}); code == 0 {
+			t.Fatal("a PUT that did not land must not exit 0")
+		}
+	})
+	if !strings.Contains(stderr, "--restore") || !strings.Contains(stderr, env.home) {
+		t.Fatalf("stderr = %s", stderr)
+	}
+}

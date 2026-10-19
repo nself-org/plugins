@@ -67,7 +67,7 @@ func TestHookRefuses(t *testing.T) {
 			if !strings.Contains(stderr, "refusing the push") || !strings.Contains(stderr, sha1) || !strings.Contains(stderr, fmt.Sprintf("exit %d", rc)) {
 				t.Fatalf("stderr = %q", stderr)
 			}
-			if rec, _ := os.ReadFile(record); !strings.Contains(string(rec), "ci evidence verify "+sha1+" --json") {
+			if rec, _ := os.ReadFile(record); !strings.Contains(string(rec), "1 ci evidence verify "+sha1+" --json") {
 				t.Fatalf("the hook must call `nself ci evidence verify <sha> --json`, called %q", rec)
 			}
 		})
