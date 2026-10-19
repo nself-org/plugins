@@ -143,8 +143,8 @@ func platform() string { return runtime.GOOS + "/" + runtime.GOARCH }
 // schedJob maps the attempt with the mapping `ci plan` uses (planview.SchedJob),
 // then sets what only a run knows: the attempt key and number, the source trust
 // and the local demand. The job's own labels, tools, isolation floor and
-// accelerators are dropped: the local runner's declaration is a placeholder
-// (see the file header) and the exec-time isolation hook is the gate for them.
+// accelerators are dropped: the local declaration carries no measured facts for
+// them until P7-TRUST-08, and the exec-time isolation hook is the gate for them.
 func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sched.Job {
 	j := planview.SchedJob(planview.Context{PipelineID: rd.sess.RunID, Project: rd.row.Project, Support: []string{platform()},
 		DefaultPlatform: platform(), Foreground: s.Foreground}, planview.PlannedJob{ID: row, Name: row, Job: *s.Job})
