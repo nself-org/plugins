@@ -1,0 +1,24 @@
+# The checks the v1.4 gate runs on a Go plus Node repo (gofmt, go vet, go test,
+# and the package's lint and test scripts), so the V15 and v1.4 wall times
+# compare equal work. Run with --pipeline gate.
+version: 1
+jobs:
+  fmt:
+    kind: static
+    run: [gofmt, -l, .]
+  vet:
+    kind: static
+    run: [go, vet, ./...]
+  test:
+    kind: test
+    run: [go, test, -count=1, ./...]
+  web-lint:
+    kind: static
+    run: [npm, run, lint]
+  web-test:
+    kind: test
+    run: [npm, run, test]
+pipelines:
+  gate:
+    triggers: [manual]
+    jobs: [fmt, vet, test, web-lint, web-test]
