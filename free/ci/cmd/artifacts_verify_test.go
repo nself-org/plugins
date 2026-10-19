@@ -177,7 +177,7 @@ func (r *verifyRig) publish() {
 		Runner:   model.RunnerRef{ID: "runner-7", Provider: "local", Platform: "linux/amd64", Isolation: "container"},
 		Producer: model.Producer{Kind: "coordinator-recorded", Version: "1"}, Timings: model.Timings{FinishedAt: &fin},
 		ToolVersions: map[string]string{"go": "1.27.2"}, Retries: []model.Retry{},
-		Checks:    []model.Check{{ID: "publish", JobID: "release", Kind: "release", Tool: "nself", Required: true, Substantive: true, Result: "pass"}},
+		Checks:    []model.Check{{ID: "publish", JobID: "publish", Kind: "release", Tool: "nself", Required: true, Substantive: true, Result: "pass"}},
 		Selection: model.Selection{Mode: mode, Reason: "selection.full_required", Digest: "d"}, Result: "pass",
 		Counts: model.Counts{Pass: 1, Total: 1}, Freshness: model.Freshness{State: "current"}, Signature: model.Signature{Kind: "coordinator-recorded"},
 		Artifacts: []model.Artifact{{Path: "nself-linux-amd64", SHA256: vsum(r.artifact), Size: int64(len(r.artifact)), Committed: true}},
@@ -261,7 +261,7 @@ func TestArtifactsVerifyExitCodes(t *testing.T) {
 	r := newVerifyRig(t, buildVerifyTemplate(t))
 	r.publish()
 	code, out, errs := r.run(r.dir)
-	if code != 0 || errs != "" || !strings.Contains(out, "release verified (SLSA Build L1)") || !strings.Contains(out, r.rev[:12]) {
+	if code != 0 || strings.TrimSpace(errs) != "note: quarantine state was not checked: no quarantine source is configured" || !strings.Contains(out, "release verified (SLSA Build L1)") || !strings.Contains(out, r.rev[:12]) {
 		t.Fatalf("good release: %d\n%s\n%s", code, out, errs)
 	}
 	code, out, _ = r.run(r.dir, "--json")
@@ -340,7 +340,7 @@ func TestArtifactsVerifyKeysFlagAndPin(t *testing.T) {
 	if code, _, _ := r.run(r.dir, "--keys", keys); code != 11 {
 		t.Fatalf("--keys with another key: %d", code)
 	}
-	// A pin that cannot be resolved is a note, and the operator keys still decide.
+	// A pin that cannot be resolved fails the verification: the branch may hold a revocation.
 	vput(t, r.home, "trust/ci-release.keys", r.signer.KeyID()+" "+base64.StdEncoding.EncodeToString(r.pub)+"\n")
 	t.Setenv("NSELF_V15", "1")
 	t.Setenv("NSELF_CI_HOME", r.home)
@@ -349,8 +349,8 @@ func TestArtifactsVerifyKeysFlagAndPin(t *testing.T) {
 	releasePin = func(context.Context, string) (string, error) { return "", errors.New("origin unreachable") }
 	t.Cleanup(func() { releasePin = old })
 	code, out, _ := runArt(t, "verify", r.dir, "--json")
-	if code != 0 || !strings.Contains(out, "origin unreachable") {
-		t.Fatalf("unresolved pin: %d %s", code, out)
+	if data := dataOf(t, out); code != 11 || data["reason"] != verify.ReasonSignature || !strings.Contains(fmt.Sprint(data["message"]), "origin unreachable") {
+		t.Fatalf("unresolved pin must fail closed: %d %s", code, out)
 	}
 	// A key only the pinned default branch lists is trusted.
 	vput(t, r.repo, ".nself/trust/ci-release.keys", r.signer.KeyID()+" "+base64.StdEncoding.EncodeToString(r.pub)+"\n")

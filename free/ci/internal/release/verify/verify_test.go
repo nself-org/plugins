@@ -245,6 +245,11 @@ func TestTamperMatrix(t *testing.T) {
 			r.resignSums(func(s string) string { return strings.Repeat("f", 64) + s[64:] })
 		}, reason: verify.ReasonChecksum},
 		{name: "listed artifact is missing", after: func(r *rig) { _ = os.Remove(filepath.Join(r.dir, "artifacts", "nself-linux-amd64")) }, reason: verify.ReasonChecksum},
+		{name: "evidence lacks the release job", bend: func(r *rig) {
+			r.tweakEvidence = func(e *model.Evidence) { e.Checks[1].JobID = "other"; e.Checks[1].Required = false }
+		}, reason: verify.ReasonEvidenceInvalid},
+		{name: "pin could not be resolved", after: func(r *rig) { r.opt.PinError = "origin unreachable" }, reason: verify.ReasonSignature},
+		{name: "pinned commit is not in the repository", mode: pinnedKeys, after: func(r *rig) { r.opt.Pin = strings.Repeat("a", 40) }, reason: verify.ReasonSignature},
 		{name: "failing and quarantined", bend: func(r *rig) {
 			r.tweakEvidence = func(e *model.Evidence) { e.Selection.Mode = "affected" }
 		}, after: func(r *rig) {
@@ -363,4 +368,13 @@ func (r *rig) resignSums(mod func(string) string) {
 	body := mod(string(r.read(manifest.ChecksumsPath)))
 	r.write(manifest.ChecksumsPath, []byte(body))
 	r.resignWith(func(m *manifest.Manifest) { m.Checksums.SHA256 = hexOf([]byte(body)) }, false)
+}
+
+func TestNoQuarantineSourceIsSaidInTheWarnings(t *testing.T) {
+	r := newRig(t, operatorKeys)
+	r.opt.Quarantined = nil
+	res := r.verify()
+	if !res.Verified || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "quarantine state was not checked") {
+		t.Fatalf("%+v", res)
+	}
 }

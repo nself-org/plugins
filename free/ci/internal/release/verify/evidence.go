@@ -101,7 +101,10 @@ func (r *run) evidenceVerdict() *Failure {
 	}
 	v.MarkMissing(evidence.MissingInputs(v.Report.Evidence, tree))
 	all := append([]attest.Reason{}, v.Reasons...)
-	gate := attest.Gate{RepoID: r.ev.RepoID, Revision: m.Revision, PolicyDigest: r.ev.PolicyDigest, MinTrust: r.ev.SourceTrust, Current: &current}
+	// The signed manifest vouches for these bytes, so the gate is built from the
+	// document; but it must hold the release job the manifest names, passing.
+	gate := attest.Gate{RepoID: r.ev.RepoID, Revision: m.Revision, PolicyDigest: r.ev.PolicyDigest, MinTrust: r.ev.SourceTrust, Current: &current,
+		RequiredJobs: []string{m.Release.JobID}}
 	for _, c := range r.ev.Checks {
 		if c.Required {
 			gate.RequiredJobs = append(gate.RequiredJobs, c.JobID)
@@ -119,7 +122,9 @@ func (r *run) evidenceVerdict() *Failure {
 	if worst < rankFailing {
 		return fail(rankKeys[worst], "the evidence is not usable at revision %.12s (%s)", m.Revision, rankKeys[worst])
 	}
-	if r.opt.Quarantined != nil {
+	if r.opt.Quarantined == nil {
+		r.res.Warnings = append(r.res.Warnings, "quarantine state was not checked: no quarantine source is configured")
+	} else {
 		q, qerr := r.opt.Quarantined(ctx, r.ev)
 		if qerr != nil {
 			return fail(ReasonQuarantined, "the quarantine state of the evidence could not be read: %v", qerr)

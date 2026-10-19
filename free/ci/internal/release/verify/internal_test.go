@@ -51,7 +51,7 @@ func TestSafePath(t *testing.T) {
 			t.Errorf("%q: err = %v", rel, err)
 		}
 	}
-	if _, _, err := open(dir, "real"); err == nil {
+	if _, err := open(dir, "real"); err == nil {
 		t.Error("a directory opened as a file")
 	}
 	if _, err := digest(dir, "link"); err == nil {
@@ -163,18 +163,24 @@ func TestErrIs(t *testing.T) {
 }
 
 type fakeGit struct {
-	calls [][]string
-	size  string
-	sizeX int
-	show  string
-	showX int
-	err   error
+	commitX int
+	calls   [][]string
+	size    string
+	sizeX   int
+	show    string
+	showX   int
+	err     error
 }
 
 func (f *fakeGit) run(_ context.Context, argv ...string) (string, int, error) {
 	f.calls = append(f.calls, argv)
 	if f.err != nil {
 		return "", 0, f.err
+	}
+	for _, a := range argv {
+		if a == "-e" {
+			return "", f.commitX, nil
+		}
 	}
 	for i, a := range argv {
 		if a == "cat-file" {
@@ -196,11 +202,15 @@ func TestPinnedReadsTheTrustFileAtTheCommit(t *testing.T) {
 	if err != nil || !ok || string(b) != "the file" {
 		t.Fatalf("%q %v %v", b, ok, err)
 	}
-	want := []string{"git", "-c", "core.fsmonitor=false", "-C", "/repo", "cat-file", "-s", pin + ":" + keysPath}
-	if strings.Join(g.calls[0], " ") != strings.Join(want, " ") {
-		t.Fatalf("argv %v", g.calls[0])
+	wantE := []string{"git", "-c", "core.fsmonitor=false", "-C", "/repo", "cat-file", "-e", pin + "^{commit}"}
+	if strings.Join(g.calls[0], " ") != strings.Join(wantE, " ") {
+		t.Fatalf("commit check argv %v", g.calls[0])
 	}
-	if got := g.calls[1]; got[len(got)-2] != "show" || got[len(got)-1] != pin+":"+keysPath {
+	want := []string{"git", "-c", "core.fsmonitor=false", "-C", "/repo", "cat-file", "-s", pin + ":" + keysPath}
+	if strings.Join(g.calls[1], " ") != strings.Join(want, " ") {
+		t.Fatalf("argv %v", g.calls[1])
+	}
+	if got := g.calls[2]; got[len(got)-2] != "show" || got[len(got)-1] != pin+":"+keysPath {
 		t.Fatalf("show argv %v", got)
 	}
 	if _, ok, err = (Options{}).pinned(ctx, keysPath); ok || err != nil {
@@ -220,12 +230,15 @@ func TestPinnedReadsTheTrustFileAtTheCommit(t *testing.T) {
 	if _, ok, err := (Options{Root: "/r", Pin: strings.Repeat("a", 64), Capture: g.run}).pinned(ctx, keysPath); err != nil || !ok {
 		t.Errorf("a 64-digit commit id is allowed: %v %v", ok, err)
 	}
+	if _, ok, err := (Options{Root: "/r", Pin: pin, Capture: (&fakeGit{size: "", sizeX: 128}).run}).pinned(ctx, keysPath); ok || err != nil {
+		t.Errorf("file absent at an existing pin: want no file and no error, got %v %v", ok, err)
+	}
 	for name, f := range map[string]*fakeGit{
-		"file absent": {size: "", sizeX: 128},
-		"git broke":   {err: errors.New("no git")},
+		"git broke":     {err: errors.New("no git")},
+		"pin not found": {commitX: 128, size: "3", show: "x"},
 	} {
-		if _, ok, err := (Options{Root: "/r", Pin: pin, Capture: f.run}).pinned(ctx, keysPath); ok || err != nil {
-			t.Errorf("%s: want no file and no error, got %v %v", name, ok, err)
+		if _, ok, err := (Options{Root: "/r", Pin: pin, Capture: f.run}).pinned(ctx, keysPath); ok || err == nil {
+			t.Errorf("%s: an unreadable pin must be an error, got %v %v", name, ok, err)
 		}
 	}
 	for name, f := range map[string]*fakeGit{

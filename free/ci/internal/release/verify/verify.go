@@ -45,6 +45,10 @@ type Options struct {
 	// Pin is the protected default branch's pinned tip (P7-TRUST-27); the trust
 	// files are read from that commit. Empty reads none.
 	Pin string
+	// PinError, when set, says the pin could not be resolved; the verification
+	// fails closed (signature) rather than trust the operator files alone, since
+	// the branch may hold a revocation.
+	PinError string
 	// Revoked is an extra revocation check (P7-TRUST-20); nil revokes nothing.
 	Revoked func(keyID string) bool
 	// Quarantined tells whether the evidence was quarantined; nil quarantines

@@ -65,30 +65,22 @@ func safePath(dir, rel string) (string, error) {
 	return cur, nil
 }
 
-// open opens the regular file rel under dir.
-func open(dir, rel string) (*os.File, os.FileInfo, error) {
+// open opens the regular file rel under dir. The mode is checked before the
+// open, because opening a FIFO would block the verifier for ever.
+func open(dir, rel string) (*os.File, error) {
 	p, err := safePath(dir, rel)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	f, err := os.Open(p)
-	if err != nil {
-		return nil, nil, err
+	if st, lerr := os.Lstat(p); lerr != nil || !st.Mode().IsRegular() {
+		return nil, fmt.Errorf("%q is not a regular file", rel)
 	}
-	fi, err := f.Stat()
-	if err == nil && !fi.Mode().IsRegular() {
-		err = fmt.Errorf("%q is not a regular file", rel)
-	}
-	if err != nil {
-		_ = f.Close()
-		return nil, nil, err
-	}
-	return f, fi, nil
+	return os.Open(p)
 }
 
 // readFile reads rel under dir, refusing more than max bytes.
 func readFile(dir, rel string, max int64) ([]byte, error) {
-	f, _, err := open(dir, rel)
+	f, err := open(dir, rel)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +94,7 @@ func readFile(dir, rel string, max int64) ([]byte, error) {
 
 // digest hashes rel under dir.
 func digest(dir, rel string) (fileInfo, error) {
-	f, _, err := open(dir, rel)
+	f, err := open(dir, rel)
 	if err != nil {
 		return fileInfo{}, err
 	}

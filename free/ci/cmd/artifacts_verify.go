@@ -12,10 +12,13 @@ package main
 // Outputs: a summary or one v1 envelope (--json) whose data always carries
 // `slsa_build_level: "L1"`; exit 0 verified, 11 invalid (the reason key names
 // the check), 1 evidence failing or quarantined.
-// Constraints: V15 only; side-effect class read: it writes nothing. The trust
+// Constraints: V15 only; side-effect class read: it writes nothing (resolving
+// the pin fetches the default branch into the repository's remote-tracking ref,
+// as the policy resolver does for every run). The trust
 // roots are the operator files and the protected default branch at the pinned
-// tip (one `git fetch` of the default branch, as the policy resolver does);
-// never the working tree or the released revision.
+// tip; a pin that cannot be resolved fails the verification (signature), it
+// never silently drops the branch's keys and revocations; the working tree and
+// the released revision are never trusted.
 
 import (
 	"context"
@@ -75,16 +78,14 @@ func artifactsVerify(args []string) int {
 	if *keys != "" {
 		opt.OperatorKeys = *keys
 	}
-	var notes []string
 	if opt.Pin, err = releasePin(ctx, root); err != nil {
-		notes = append(notes, "the protected default branch could not be read, so only operator keys are trusted: "+err.Error())
+		opt.PinError = err.Error()
 	}
 	dir, err := releaseDir(ctx, pos[0])
 	if err != nil {
 		return artifactsExit(err, command, asJSON)
 	}
 	res := verify.Release(ctx, dir, opt)
-	res.Warnings = append(res.Warnings, notes...)
 	return printVerify(command, asJSON, res)
 }
 

@@ -116,7 +116,7 @@ func newRig(t *testing.T, mode trustMode) *rig {
 	r.pub, r.otherPub = priv.Public().(ed25519.PublicKey), other.Public().(ed25519.PublicKey)
 	r.signer, r.other = signing.NewEd25519Signer(signing.PurposeCIRelease, priv), signing.NewEd25519Signer(signing.PurposeCIRelease, other)
 	line := keysLine(signing.KeyID(signing.PurposeCIRelease, r.pub), r.pub)
-	r.opt = verify.Options{Root: r.repo}
+	r.opt = verify.Options{Root: r.repo, Quarantined: func(context.Context, model.Evidence) (bool, error) { return false, nil }}
 	if mode == operatorKeys {
 		r.keysFile = filepath.Join(t.TempDir(), "ci-release.keys")
 		writeFile(t, filepath.Dir(r.keysFile), "ci-release.keys", line)
@@ -188,7 +188,7 @@ func (r *rig) publish() {
 	repoID := "local:" + strings.Repeat("e", 64)
 	checks := []model.Check{
 		{ID: "test", JobID: "build", Kind: "test", Tool: "go", Required: true, Substantive: true, Result: "pass"},
-		{ID: "publish", JobID: "release", Kind: "release", Tool: "nself", Required: true, Substantive: true, Result: "pass"},
+		{ID: "publish", JobID: "publish", Kind: "release", Tool: "nself", Required: true, Substantive: true, Result: "pass"},
 	}
 	ev := model.Evidence{
 		Schema: "ci.evidence/v1", Revision: r.rev, RepoID: repoID, RunID: "run-1",

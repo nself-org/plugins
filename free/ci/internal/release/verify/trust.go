@@ -56,9 +56,12 @@ func (o Options) pinned(ctx context.Context, path string) ([]byte, bool, error) 
 	}
 	run := o.capture()
 	spec := o.Pin + ":" + path
+	if _, exit, err := run(ctx, "git", "-c", "core.fsmonitor=false", "-C", o.Root, "cat-file", "-e", o.Pin+"^{commit}"); err != nil || exit != 0 {
+		return nil, false, fmt.Errorf("the pinned default-branch commit %.12s is not in the repository", o.Pin)
+	}
 	out, exit, err := run(ctx, "git", "-c", "core.fsmonitor=false", "-C", o.Root, "cat-file", "-s", spec)
 	if err != nil || exit != 0 {
-		return nil, false, nil // no such file at the pin (or no such pin): no keys from there
+		return nil, false, nil // the commit exists, so the file is absent there: no keys from it
 	}
 	if n, perr := strconv.Atoi(strings.TrimSpace(out)); perr != nil || n > maxTrust {
 		return nil, false, fmt.Errorf("%s at the pinned tip is not a trust file of at most %d bytes", path, maxTrust)
@@ -88,6 +91,9 @@ func operatorFile(path string) ([]byte, error) {
 // trustVerifier builds the ci-release verifier and records warnings.
 func (r *run) trustVerifier() (*signing.Verifier, error) {
 	o := r.opt
+	if o.PinError != "" {
+		return nil, fmt.Errorf("the protected default branch could not be read: %s", o.PinError)
+	}
 	var keys []signing.Key
 	var revoked []string
 	seen := map[string]bool{}
@@ -142,8 +148,8 @@ func (r *run) warnWorkingTree(path string) {
 	if r.opt.Root == "" {
 		return
 	}
-	local, err := os.ReadFile(filepath.Join(r.opt.Root, filepath.FromSlash(path)))
-	if err != nil {
+	local, err := operatorFile(filepath.Join(r.opt.Root, filepath.FromSlash(path)))
+	if err != nil || local == nil {
 		return
 	}
 	pinned, _, _ := r.opt.pinned(r.ctx, path)

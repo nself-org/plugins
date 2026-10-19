@@ -11,7 +11,11 @@ package provenance
 // no code path here can name another one. Unknown additive fields of a parsed
 // document are accepted and dropped, as the in-toto and SLSA specs allow.
 
-import "github.com/nself-org/plugins/free/ci/internal/release/manifest"
+import (
+	"strings"
+
+	"github.com/nself-org/plugins/free/ci/internal/release/manifest"
+)
 
 // Fixed strings of the statement (in-toto Statement v1, SLSA provenance v1).
 const (
@@ -116,7 +120,7 @@ func (s Statement) Dependency(name string) (string, bool) {
 // GitCommit returns the gitCommit digest of the source dependency.
 func (s Statement) GitCommit() string {
 	for _, d := range s.Predicate.BuildDefinition.ResolvedDependencies {
-		if c, ok := d.Digest["gitCommit"]; ok {
+		if c, ok := d.Digest["gitCommit"]; ok && strings.HasPrefix(d.URI, "git+") {
 			return c
 		}
 	}
