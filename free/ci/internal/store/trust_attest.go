@@ -44,20 +44,28 @@ var (
 )
 
 // AttemptFacts reads the lease holder (the live lease, else the admission record that survives the lease)
-// and the pipeline revision; ok is false for an unknown attempt or one with no recorded holder.
+// and the pipeline and job the attempt belongs to; ok is false for an unknown attempt or one with no
+// recorded holder. RepoID is derived the way the run's evidence derives it (run.shortDigest of the
+// project: the first 8 bytes of its sha256 in hex); TestAttestRepoIDMatchesTheRunDerivation pins it.
 func (l AttestLedger) AttemptFacts(ctx context.Context, attemptID string) (a attest.AttemptFacts, ok bool, err error) {
-	err = l.S.readers.QueryRowContext(ctx, `SELECT coalesce((SELECT runner_id FROM lease WHERE attempt_id=a.id),(SELECT runner_id FROM sched_admitted WHERE attempt_id=a.id),''),p.revision
- FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id WHERE a.id=?`, attemptID).Scan(&a.RunnerID, &a.Revision)
+	var project string
+	err = l.S.readers.QueryRowContext(ctx, `SELECT coalesce((SELECT runner_id FROM lease WHERE attempt_id=a.id),(SELECT runner_id FROM sched_admitted WHERE attempt_id=a.id),''),
+ p.id,p.project,p.revision,p.source_trust,p.policy_digest,p.selection_mode,j.name
+ FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id WHERE a.id=?`, attemptID).
+		Scan(&a.RunnerID, &a.RunID, &project, &a.Revision, &a.SourceTrust, &a.PolicyDigest, &a.SelectionMode, &a.Job)
 	if errors.Is(err, sql.ErrNoRows) {
 		return attest.AttemptFacts{}, false, nil
 	}
+	sum := sha256.Sum256([]byte(project))
+	a.RepoID = hex.EncodeToString(sum[:8])
 	return a, err == nil && a.RunnerID != "", err
 }
 
 // NodesByKey lists the nodes that pin the 16-hex key id (a pending pin has no key and is skipped; a row
-// whose key does not hash to the id is skipped), each with the signing_eligible fact of its registry record.
+// whose key does not hash to the id is skipped; a node revoked in the registry or by RevokeNode is skipped), each with the signing_eligible fact of its registry record.
 func (l AttestLedger) NodesByKey(ctx context.Context, nodeKeyID string) ([]attest.KeyNode, error) {
-	rows, err := l.S.readers.QueryContext(ctx, `SELECT k.node_id,k.public,coalesce(c.doc_json,'') FROM pki_node_key k LEFT JOIN capability_snapshot c ON c.node_id=k.node_id WHERE k.key_id=? AND k.public<>'' ORDER BY k.node_id`, nodeKeyID)
+	rows, err := l.S.readers.QueryContext(ctx, `SELECT k.node_id,k.public,coalesce(c.doc_json,'') FROM pki_node_key k LEFT JOIN capability_snapshot c ON c.node_id=k.node_id LEFT JOIN node n ON n.id=k.node_id
+ WHERE k.key_id=? AND k.public<>'' AND coalesce(n.state,'')<>'revoked' AND NOT EXISTS (SELECT 1 FROM attest_revoked_node r WHERE r.node_id=k.node_id) ORDER BY k.node_id`, nodeKeyID)
 	all, err := pkiCollect(rows, err, func(r *sql.Rows) (n attest.KeyNode, e error) {
 		var public string
 		var capability []byte
@@ -112,6 +120,15 @@ func (l AttestLedger) Consume(ctx context.Context, u attest.Use) error {
 	}
 	s := l.S
 	return s.write(ctx, func(tx *sql.Tx) error {
+		// A revocation that committed after the verifier's check wins: the use is refused here, so every
+		// use row that exists was written before the key was revoked and is quarantined with it.
+		var revoked int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM attest_revoked WHERE key_id=?`, u.KeyID).Scan(&revoked); err != nil {
+			return err
+		}
+		if revoked > 0 {
+			return attest.ErrRevoked
+		}
 		var other int
 		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM attest_use WHERE key_id=? AND sig_digest=? AND attempt_id<>?`, u.KeyID, u.SigDigest, u.AttemptID).Scan(&other); err != nil {
 			return err
@@ -139,24 +156,26 @@ func (l AttestLedger) Quarantined(ctx context.Context, runID string) (bool, erro
 	return n > 0, err
 }
 
-// NodeKeyIDs lists the evidence key ids (ci-node-<16 hex>) the node pins or ever used.
-func (l AttestLedger) NodeKeyIDs(ctx context.Context, nodeID string) ([]string, error) {
-	rows, err := l.S.readers.QueryContext(ctx, `SELECT 'ci-node-'||key_id FROM pki_node_key WHERE node_id=? AND public<>'' UNION SELECT key_id FROM attest_use WHERE node_id=? ORDER BY 1`, nodeID, nodeID)
-	return pkiCollect(rows, err, func(r *sql.Rows) (k string, e error) { return k, r.Scan(&k) })
-}
-
-// RevokeNode revokes the key ids in one transaction, quarantines the runs their evidence belongs to and
-// returns the re-evaluation set.
-func (l AttestLedger) RevokeNode(ctx context.Context, nodeID, reason string, keyIDs []string) (attest.Affected, error) {
+// RevokeNode marks the node revoked and revokes, in one transaction, every evidence key it pins (a
+// pending pin included) or ever used; it quarantines the runs those keys signed and returns the
+// re-evaluation set. A node with no key yet is still marked, so a key pinned for it later is refused.
+func (l AttestLedger) RevokeNode(ctx context.Context, nodeID, reason string) (attest.Affected, error) {
 	var out attest.Affected
-	if nodeID == "" || len(keyIDs) == 0 {
-		return out, coded("E607", "a revocation needs a node and at least one key")
+	if nodeID == "" {
+		return out, coded("E607", "a revocation needs a node")
 	}
 	s := l.S
 	err := s.write(ctx, func(tx *sql.Tx) error {
 		out = attest.Affected{}
 		now := s.now().UnixNano()
-		for _, k := range keyIDs {
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO attest_revoked_node(node_id,reason,revoked_at) VALUES(?,?,?)`, nodeID, reason, now); err != nil {
+			return err
+		}
+		rows, err := tx.QueryContext(ctx, `SELECT 'ci-node-'||key_id FROM pki_node_key WHERE node_id=? UNION SELECT key_id FROM attest_use WHERE node_id=? UNION SELECT key_id FROM attest_revoked WHERE node_id=? ORDER BY 1`, nodeID, nodeID, nodeID)
+		if out.Keys, err = pkiCollect(rows, err, func(r *sql.Rows) (k string, e error) { return k, r.Scan(&k) }); err != nil {
+			return err
+		}
+		for _, k := range out.Keys {
 			if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO attest_revoked(key_id,node_id,reason,revoked_at) VALUES(?,?,?,?)`, k, nodeID, reason, now); err != nil {
 				return err
 			}
@@ -164,7 +183,10 @@ func (l AttestLedger) RevokeNode(ctx context.Context, nodeID, reason string, key
 				return err
 			}
 		}
-		return affected(ctx, tx, keyIDs, &out)
+		if len(out.Keys) == 0 {
+			return nil
+		}
+		return affected(ctx, tx, out.Keys, &out)
 	})
 	return out, err
 }

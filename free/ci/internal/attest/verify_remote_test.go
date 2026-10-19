@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/nodekey"
@@ -47,6 +48,8 @@ type memLedger struct {
 	revoked  map[string]bool
 	uses     map[[3]string]attest.Use
 	failOn   string
+	// revokeOnConsume models a revocation that commits between the verifier's check and the write.
+	revokeOnConsume bool
 }
 
 var errLedger = errors.New("ledger down")
@@ -82,6 +85,9 @@ func (l *memLedger) Consume(_ context.Context, u attest.Use) error {
 	if l.failOn == "consume" {
 		return errLedger
 	}
+	if l.revokeOnConsume || l.revoked[u.KeyID] {
+		return attest.ErrRevoked
+	}
 	if ok, _ := l.Replayed(nil, u.AttemptID, u.KeyID, u.SigDigest); ok {
 		return attest.ErrReplay
 	}
@@ -97,13 +103,18 @@ var keyA, keyB = newSeedSigner(1), newSeedSigner(2)
 // keys and are signing eligible.
 func newLedger() *memLedger {
 	return &memLedger{
-		attempts: map[string]attest.AttemptFacts{"att-1": {RunnerID: holderNode, Revision: goodRevision}, "att-2": {RunnerID: holderNode, Revision: goodRevision}},
+		attempts: map[string]attest.AttemptFacts{"att-1": goodFacts(), "att-2": goodFacts()},
 		nodes: map[string][]attest.KeyNode{
 			keyA.KeyID(): {{NodeID: holderNode, Public: keyA.pub(), SigningEligible: true}},
 			keyB.KeyID(): {{NodeID: otherNode, Public: keyB.pub(), SigningEligible: true}},
 		},
 		revoked: map[string]bool{}, uses: map[[3]string]attest.Use{},
 	}
+}
+
+// goodFacts are the coordinator's records of the attempt goodEvidence describes.
+func goodFacts() attest.AttemptFacts {
+	return attest.AttemptFacts{RunnerID: holderNode, Revision: goodRevision, RunID: "run-1", RepoID: "repo-1", SourceTrust: "owner", PolicyDigest: "policy-1", SelectionMode: "full", Job: "build"}
 }
 
 func verifierOf(l attest.Ledger) *attest.RunnerVerifier {
@@ -156,6 +167,11 @@ func remoteCases(t testing.TB) []remoteCase {
 	emptyRev := attemptEvidence("att-1")
 	emptyRev.Revision = ""
 	noRevision := mustSign(t, emptyRev, keyA)
+	forged := func(edit func(*model.Evidence)) model.Evidence {
+		e := attemptEvidence("att-1")
+		edit(&e)
+		return mustSign(t, e, keyA)
+	}
 	return []remoteCase{
 		{name: "valid", ev: good},
 		{name: "edited-result", ev: edited, reason: attest.RemoteSignatureInvalid},
@@ -177,6 +193,13 @@ func remoteCases(t testing.TB) []remoteCase {
 		{name: "malformed-key-id", ev: withKeyID("ci node"), reason: attest.RemoteKeyMalformed},
 		{name: "no-attempt", ev: noAttempt, reason: attest.RemoteAttemptUnknown},
 		{name: "unknown-attempt", ev: unknownAttempt, reason: attest.RemoteAttemptUnknown},
+		{name: "forged-repo", ev: forged(func(e *model.Evidence) { e.RepoID = "victim-protected" }), reason: attest.RemoteContextMismatch},
+		{name: "forged-source-trust", ev: forged(func(e *model.Evidence) { e.SourceTrust = "untrusted" }), reason: attest.RemoteContextMismatch},
+		{name: "forged-policy-digest", ev: forged(func(e *model.Evidence) { e.PolicyDigest = "policy-loose" }), reason: attest.RemoteContextMismatch},
+		{name: "forged-selection-mode", ev: forged(func(e *model.Evidence) { e.Selection.Mode = "affected" }), reason: attest.RemoteContextMismatch},
+		{name: "forged-run-id", ev: forged(func(e *model.Evidence) { e.RunID = "" }), reason: attest.RemoteContextMismatch},
+		{name: "forged-job", ev: forged(func(e *model.Evidence) { e.Job = strp("deploy") }), reason: attest.RemoteContextMismatch},
+		{name: "revoked-during-verification", ev: good, ledger: func(l *memLedger) { l.revokeOnConsume = true }, reason: attest.RemoteKeyRevoked},
 		{name: "empty-revision", ev: noRevision, reason: attest.RemoteRevisionMismatch},
 		{name: "two-keys-under-one-id", ev: good, ledger: func(l *memLedger) {
 			l.nodes[keyA.KeyID()] = append(l.nodes[keyA.KeyID()], attest.KeyNode{NodeID: otherNode, Public: keyB.pub(), SigningEligible: true})
@@ -206,7 +229,7 @@ func TestVerifyRemoteAdversarialFixtures(t *testing.T) {
 	for _, c := range remoteCases(t) {
 		t.Run(c.name, func(t *testing.T) { runCase(t, c, marshal(t, c.ev)) })
 		if c.reason != "" {
-			if prev, dup := seen[c.reason]; dup && c.name != "no-attempt" && c.name != "unknown-attempt" && c.name != "empty-revision" && c.name != "two-keys-under-one-id" {
+			if prev, dup := seen[c.reason]; dup && c.name != "no-attempt" && c.name != "unknown-attempt" && c.name != "empty-revision" && !strings.HasPrefix(c.name, "forged-") && c.name != "revoked-during-verification" && c.name != "two-keys-under-one-id" {
 				t.Errorf("%s and %s are refused with the same reason %s", prev, c.name, c.reason)
 			}
 			seen[c.reason] = c.name
@@ -252,6 +275,21 @@ func TestVerifyRemoteFixtureFiles(t *testing.T) {
 	sort.Strings(have)
 	if len(have) != len(names) {
 		t.Fatalf("testdata/remote holds %d files for %d cases: %v", len(have), len(names), have)
+	}
+}
+
+func TestVerifyRemoteRefusesADocumentThatIsNotTheEvidence(t *testing.T) {
+	good := mustSign(t, attemptEvidence("att-1"), keyA)
+	other := mustSign(t, attemptEvidence("att-2"), keyA)
+	swapped := good
+	swapped.Revision = "dddddddddddddddddddddddddddddddddddddddd"
+	for name, c := range map[string]struct {
+		doc []byte
+		ev  model.Evidence
+	}{"other attempt": {marshal(t, other), good}, "other revision": {marshal(t, swapped), good}} {
+		if err := verifierOf(newLedger()).VerifyEvidence(c.doc, c.ev); attest.RemoteReasonOf(err) != attest.RemoteSignatureInvalid {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 }
 
@@ -368,14 +406,17 @@ func TestInvariant_I13_SignedRemote(t *testing.T) {
 		ev := sc.ev
 		ev.Attempt = &model.AttemptRef{ID: "att-1", N: 1}
 		l := newLedger()
-		l.attempts["att-1"] = attest.AttemptFacts{RunnerID: holderNode, Revision: ev.Revision}
-		signer, mutation := nodekey.Signer(keyA), n%9
+		facts := attest.AttemptFacts{RunnerID: holderNode, Revision: ev.Revision, RunID: ev.RunID, RepoID: ev.RepoID, SourceTrust: string(ev.SourceTrust),
+			PolicyDigest: ev.PolicyDigest, SelectionMode: string(ev.Selection.Mode), Job: "build"}
+		l.attempts["att-1"] = facts
+		signer, mutation := nodekey.Signer(keyA), n%10
 		ev = mustSign(t, ev, signer)
 		switch mutation {
 		case 1:
 			ev.Result = "error"
 		case 2:
-			l.attempts["att-1"] = attest.AttemptFacts{RunnerID: holderNode, Revision: "cccccccccccccccccccccccccccccccccccccccc"}
+			facts.Revision = "cccccccccccccccccccccccccccccccccccccccc"
+			l.attempts["att-1"] = facts
 		case 3:
 			l.revoked["ci-node-"+keyA.KeyID()] = true
 		case 4:
@@ -385,11 +426,15 @@ func TestInvariant_I13_SignedRemote(t *testing.T) {
 		case 6:
 			l.nodes[keyA.KeyID()][0].SigningEligible = false
 		case 7:
-			l.attempts["att-1"] = attest.AttemptFacts{RunnerID: otherNode, Revision: ev.Revision}
+			facts.RunnerID = otherNode
+			l.attempts["att-1"] = facts
+		case 8:
+			facts.RepoID = "some-other-repo"
+			l.attempts["att-1"] = facts
 		}
 		attest.RegisterRemoteVerifier(verifierOf(l))
 		got := attest.GateAccept(ev, sc.gate)
-		if mutation != 0 && mutation != 8 {
+		if mutation != 0 && mutation != 9 {
 			rejected++
 			if !hasReason(got, attest.ReasonSignatureUnverifiable) || len(got) == 0 {
 				return errors.New("an unverifiable signature satisfied the gate")

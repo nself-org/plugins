@@ -70,7 +70,14 @@ func (v *RunnerVerifier) VerifyEvidence(doc []byte, ev model.Evidence) error {
 	if ev.Attempt == nil || ev.Attempt.ID == "" {
 		return remoteFail(RemoteAttemptUnknown, "the evidence names no attempt", nil)
 	}
-	payload, err := SigningPayload(doc)
+	obj, err := decodeObject(doc)
+	if err != nil {
+		return remoteFail(RemoteSignatureInvalid, "no signing payload: "+err.Error(), nil)
+	}
+	if !documentMatches(obj, ev) {
+		return remoteFail(RemoteSignatureInvalid, "the document and the decoded evidence disagree", nil)
+	}
+	payload, err := payloadOf(obj)
 	if err != nil {
 		return remoteFail(RemoteSignatureInvalid, "no signing payload: "+err.Error(), nil)
 	}
@@ -94,6 +101,36 @@ func (v *RunnerVerifier) VerifyEvidence(doc []byte, ev model.Evidence) error {
 	return verifyAgainst(ctx, led, ev, payload, raw)
 }
 
+// contextMismatch names the first evidence field that differs from what the coordinator recorded for the
+// attempt ("" when they agree). The revision is checked before this by its own reason.
+func contextMismatch(f AttemptFacts, ev model.Evidence) string {
+	switch {
+	case ev.RunID != f.RunID:
+		return "run_id"
+	case ev.RepoID != f.RepoID:
+		return "repo_id"
+	case string(ev.SourceTrust) != f.SourceTrust:
+		return "source_trust"
+	case ev.PolicyDigest != f.PolicyDigest:
+		return "policy_digest"
+	case string(ev.Selection.Mode) != f.SelectionMode:
+		return "selection.mode"
+	case ev.Job != nil && *ev.Job != f.Job:
+		return "job"
+	}
+	return ""
+}
+
+// documentMatches reports whether the bytes that are signed and the decoded evidence the checks read
+// name the same revision, run, repository and attempt, so a caller that pairs the two cannot have the
+// signature cover one document while the lease and revision checks judge another.
+func documentMatches(obj map[string]any, ev model.Evidence) bool {
+	str := func(m map[string]any, k string) string { v, _ := m[k].(string); return v }
+	att, _ := obj["attempt"].(map[string]any)
+	return str(obj, "revision") == ev.Revision && str(obj, "run_id") == ev.RunID && str(obj, "repo_id") == ev.RepoID &&
+		att != nil && str(att, "id") == ev.Attempt.ID
+}
+
 func verifyAgainst(ctx context.Context, led Ledger, ev model.Evidence, payload, raw []byte) error {
 	keyID, attempt, digest := *ev.Signature.KeyID, ev.Attempt.ID, SignatureDigest(raw)
 	facts, ok, err := led.AttemptFacts(ctx, attempt)
@@ -105,6 +142,9 @@ func verifyAgainst(ctx context.Context, led Ledger, ev model.Evidence, payload, 
 	}
 	if ev.Revision != facts.Revision {
 		return remoteFail(RemoteRevisionMismatch, "the evidence revision is not the attempt's revision", nil)
+	}
+	if field := contextMismatch(facts, ev); field != "" {
+		return remoteFail(RemoteContextMismatch, "the evidence "+field+" is not the attempt's", nil)
 	}
 	if replayed, rerr := led.Replayed(ctx, attempt, keyID, digest); rerr != nil {
 		return remoteFail(RemoteLedgerUnavailable, "replay lookup", rerr)
@@ -161,12 +201,13 @@ func verifyAgainst(ctx context.Context, led Ledger, ev model.Evidence, payload, 
 	case !holder.SigningEligible:
 		return remoteFail(RemoteNodeNotEligible, "the node is not signing eligible", nil)
 	}
-	use := Use{AttemptID: attempt, KeyID: keyID, SigDigest: digest, NodeID: holder.NodeID, RunID: ev.RunID, RepoID: ev.RepoID, Revision: ev.Revision}
-	if ev.Job != nil {
-		use.Job = *ev.Job
-	}
+	// The use is recorded under the coordinator's own context (equal to the evidence's, checked above), so
+	// a revocation finds the runs, repositories and jobs the key vouched for.
+	use := Use{AttemptID: attempt, KeyID: keyID, SigDigest: digest, NodeID: holder.NodeID, RunID: facts.RunID, RepoID: facts.RepoID, Revision: facts.Revision, Job: facts.Job}
 	if err := led.Consume(ctx, use); errors.Is(err, ErrReplay) {
 		return remoteFail(RemoteReplay, "the signature was consumed for another attempt", nil)
+	} else if errors.Is(err, ErrRevoked) {
+		return remoteFail(RemoteKeyRevoked, "the key was revoked", err)
 	} else if err != nil {
 		return remoteFail(RemoteLedgerUnavailable, "consume", err)
 	}

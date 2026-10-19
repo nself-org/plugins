@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -142,7 +142,7 @@
+@@ -182,7 +182,7 @@
  		}
  		return r
  	}

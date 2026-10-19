@@ -17,16 +17,14 @@ import (
 )
 
 type fakeRevokeLedger struct {
-	ids     []string
-	out     attest.Affected
-	err     error
-	revoked []string
-	reason  string
+	out    attest.Affected
+	err    error
+	node   string
+	reason string
 }
 
-func (f *fakeRevokeLedger) NodeKeyIDs(context.Context, string) ([]string, error) { return f.ids, nil }
-func (f *fakeRevokeLedger) RevokeNode(_ context.Context, _, reason string, keys []string) (attest.Affected, error) {
-	f.revoked, f.reason = keys, reason
+func (f *fakeRevokeLedger) RevokeNode(_ context.Context, node, reason string) (attest.Affected, error) {
+	f.node, f.reason = node, reason
 	return f.out, f.err
 }
 
@@ -47,6 +45,7 @@ type auditRow struct{ actor, action, target, detail string }
 
 func fixtureAffected() attest.Affected {
 	return attest.Affected{
+		Keys:     []string{"ci-node-0123456789abcdef"},
 		Gates:    []attest.GateRef{{RepoID: "repo-1", Revision: goodRevision, Job: "build"}},
 		Statuses: []attest.StatusKey{{Revision: goodRevision, Context: "nself-ci@acme/widget"}},
 		Releases: []attest.ReleaseRef{{RunID: "run-1", Project: "widget", Revision: goodRevision, ManifestSHA256: "ab"}, {RunID: "run-2", Project: "widget", Revision: goodRevision, ManifestSHA256: "cd"}},
@@ -54,7 +53,7 @@ func fixtureAffected() attest.Affected {
 }
 
 func TestRevokeReturnsSetAuditsReleasesAndReposts(t *testing.T) {
-	led := &fakeRevokeLedger{ids: []string{"ci-node-0123456789abcdef"}, out: fixtureAffected()}
+	led := &fakeRevokeLedger{out: fixtureAffected()}
 	rep := &fakeReposter{}
 	var rows []auditRow
 	r := attest.Revoker{Ledger: led, Reposter: rep, Audit: func(_ context.Context, actor, action, target, detail string) error {
@@ -68,8 +67,8 @@ func TestRevokeReturnsSetAuditsReleasesAndReposts(t *testing.T) {
 	if len(got.Gates) == 0 || len(got.Statuses) == 0 || len(got.Releases) == 0 {
 		t.Fatalf("the re-evaluation set is empty: %+v", got)
 	}
-	if !reflect.DeepEqual(led.revoked, led.ids) || led.reason != "node.revoked" {
-		t.Fatalf("revoked %v for %q", led.revoked, led.reason)
+	if led.node != "node-1" || led.reason != "node.revoked" {
+		t.Fatalf("revoked %q for %q", led.node, led.reason)
 	}
 	quarantine := 0
 	for _, a := range rows {
@@ -89,7 +88,7 @@ func TestRevokeReturnsSetAuditsReleasesAndReposts(t *testing.T) {
 }
 
 func TestRevokeFailureOfTheLedgerStopsEverything(t *testing.T) {
-	led := &fakeRevokeLedger{ids: []string{"ci-node-0123456789abcdef"}, err: errors.New("disk full")}
+	led := &fakeRevokeLedger{err: errors.New("disk full")}
 	rep := &fakeReposter{}
 	audited := 0
 	r := attest.Revoker{Ledger: led, Reposter: rep, Audit: func(context.Context, string, string, string, string) error { audited++; return nil }}
@@ -102,7 +101,7 @@ func TestRevokeFailureOfTheLedgerStopsEverything(t *testing.T) {
 }
 
 func TestRevokeKeepsGoingAfterAuditOrRepostFailures(t *testing.T) {
-	led := &fakeRevokeLedger{ids: []string{"ci-node-0123456789abcdef"}, out: fixtureAffected()}
+	led := &fakeRevokeLedger{out: fixtureAffected()}
 	rep := &fakeReposter{err: errors.New("github down")}
 	audited := 0
 	r := attest.Revoker{Ledger: led, Reposter: rep, Audit: func(context.Context, string, string, string, string) error {
@@ -118,11 +117,11 @@ func TestRevokeKeepsGoingAfterAuditOrRepostFailures(t *testing.T) {
 	}
 }
 
-func TestRevokeNodeWithoutKeysIsANoop(t *testing.T) {
+func TestRevokeNodeWithoutKeysStillMarksTheNode(t *testing.T) {
 	led := &fakeRevokeLedger{}
 	rep := &fakeReposter{}
 	got, err := attest.Revoker{Ledger: led, Reposter: rep}.Revoke(context.Background(), "node-1", "a")
-	if err != nil || len(got.Gates)+len(got.Statuses)+len(got.Releases) != 0 || rep.calls != 0 || led.revoked != nil {
+	if err != nil || len(got.Gates)+len(got.Statuses)+len(got.Releases) != 0 || rep.calls != 0 || led.node != "node-1" {
 		t.Fatalf("%v %+v %+v", err, got, rep)
 	}
 	if _, err := (attest.Revoker{}).Revoke(context.Background(), "node-1", "a"); err == nil {

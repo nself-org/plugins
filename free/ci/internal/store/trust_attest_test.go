@@ -104,7 +104,7 @@ func TestAttestAttemptFactsReadLeaseThenAdmissionRecord(t *testing.T) {
 	r.exec(`INSERT INTO sched_admitted(attempt_id,pipeline_id,project,user_id,team_id,provider,runner_id,world_digest,admitted_at) VALUES('att-done','p-att-done','widget','u','t','agent','node-done','w',1)`)
 	for id, want := range map[string]string{"att-live": "node-live", "att-done": "node-done"} {
 		f, ok, err := r.led.AttemptFacts(r.ctx, id)
-		if err != nil || !ok || f.RunnerID != want || f.Revision != rev {
+		if err != nil || !ok || f.RunnerID != want || f.Revision != rev || f.RunID != "p-"+id || f.Job != "build" || f.SourceTrust != "owner" || f.PolicyDigest != "pd" || f.SelectionMode != "full" {
 			t.Fatalf("%s: %+v ok=%v err=%v", id, f, ok, err)
 		}
 	}
@@ -112,6 +112,19 @@ func TestAttestAttemptFactsReadLeaseThenAdmissionRecord(t *testing.T) {
 		if _, ok, err := r.led.AttemptFacts(r.ctx, id); ok || err != nil {
 			t.Fatalf("%s: ok=%v err=%v", id, ok, err)
 		}
+	}
+}
+
+// TestAttestRepoIDMatchesTheRunDerivation pins the repo id the ledger derives to run.shortDigest's
+// output: the first 8 bytes of the sha256 of the project, in hex (store cannot import run).
+func TestAttestRepoIDMatchesTheRunDerivation(t *testing.T) {
+	r := newAttestRig(t)
+	r.attempt("att-1", strings.Repeat("a", 40)) // project "widget"
+	r.exec(`INSERT INTO sched_admitted(attempt_id,pipeline_id,project,user_id,team_id,provider,runner_id,world_digest,admitted_at) VALUES('att-1','p-att-1','widget','u','t','agent','node-1','w',1)`)
+	f, ok, err := r.led.AttemptFacts(r.ctx, "att-1")
+	sum := sha256.Sum256([]byte("widget"))
+	if err != nil || !ok || f.RepoID != hex.EncodeToString(sum[:8]) || len(f.RepoID) != 16 {
+		t.Fatalf("%+v %v %v", f, ok, err)
 	}
 }
 
@@ -182,13 +195,12 @@ func TestAttestRevokeNodeQuarantinesAndReturnsTheReevaluationSet(t *testing.T) {
 	if err := r.s.RecordRelease(r.ctx, ReleaseRow{RunID: "run-att-1", Project: "widget", Revision: rev, State: ReleasePublished, ManifestSHA256: strings.Repeat("ab", 32), KeyID: "ci-release-0123456789abcdef"}); err != nil {
 		t.Fatal(err)
 	}
-	ids, err := r.led.NodeKeyIDs(r.ctx, "node-1")
-	if err != nil || !reflect.DeepEqual(ids, []string{keyID}) {
-		t.Fatalf("key ids %v %v", ids, err)
-	}
-	got, err := r.led.RevokeNode(r.ctx, "node-1", "node.revoked", ids)
+	got, err := r.led.RevokeNode(r.ctx, "node-1", "node.revoked")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Keys, []string{keyID}) {
+		t.Fatalf("keys %v", got.Keys)
 	}
 	wantGates := []attest.GateRef{{RepoID: "repo-1", Revision: rev, Job: "build"}}
 	if !reflect.DeepEqual(got.Gates, wantGates) {
@@ -214,16 +226,62 @@ func TestAttestRevokeNodeQuarantinesAndReturnsTheReevaluationSet(t *testing.T) {
 	if rv, _ := r.led.Revoked(r.ctx, "ci-node-ffffffffffffffff"); rv {
 		t.Fatal("another node's key revoked")
 	}
-	again, err := r.led.RevokeNode(r.ctx, "node-1", "node.revoked", ids)
+	again, err := r.led.RevokeNode(r.ctx, "node-1", "node.revoked")
 	if err != nil || !reflect.DeepEqual(again, got) {
 		t.Fatalf("a second revocation: %+v %v", again, err)
 	}
-	if _, err = r.led.RevokeNode(r.ctx, "node-1", "x", nil); err == nil {
-		t.Fatal("revoked no keys")
+	if _, err = r.led.RevokeNode(r.ctx, "", "x"); err == nil {
+		t.Fatal("revoked no node")
 	}
-	// the evidence key stays revoked after a re-pin, and a rotated-away key is still listed through its uses
-	ids2, _ := r.led.NodeKeyIDs(r.ctx, "node-1")
-	if !reflect.DeepEqual(ids2, ids) {
-		t.Fatalf("key ids after revoke %v", ids2)
+	// a key the node used and then rotated away is still revoked, through its uses
+	r.exec(`UPDATE pki_node_key SET key_id='1111111111111111' WHERE node_id='node-1'`)
+	rotated, err := r.led.RevokeNode(r.ctx, "node-1", "node.revoked")
+	if err != nil || !reflect.DeepEqual(rotated.Keys, []string{"ci-node-1111111111111111", keyID}) {
+		t.Fatalf("after a rotation: %+v %v", rotated.Keys, err)
 	}
+}
+
+func TestAttestRevokedNodeAndKeyAreRefused(t *testing.T) {
+	r := newAttestRig(t)
+	keyHex := r.pinKey("node-1", 1, ptr(true))
+	keyID := "ci-node-" + keyHex
+	if got, _ := r.led.NodesByKey(r.ctx, keyHex); len(got) != 1 {
+		t.Fatalf("control: %+v", got)
+	}
+	// a node revoked through the registry (nodes revoke) is not a signing node any more
+	r.exec(`UPDATE node SET state='revoked' WHERE id='node-1'`)
+	if got, _ := r.led.NodesByKey(r.ctx, keyHex); len(got) != 0 {
+		t.Fatalf("a registry-revoked node still pins a key: %+v", got)
+	}
+	r.exec(`UPDATE node SET state='online' WHERE id='node-1'`)
+	// a revocation that commits after the verifier's check refuses the use at the write
+	u := attest.Use{AttemptID: "att-1", KeyID: keyID, SigDigest: "d1", NodeID: "node-1", RunID: "run-1"}
+	if _, err := r.led.RevokeNode(r.ctx, "node-1", "node.revoked"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.led.Consume(r.ctx, u); !errors.Is(err, attest.ErrRevoked) {
+		t.Fatalf("consume after revoke: %v", err)
+	}
+	if got, _ := r.led.NodesByKey(r.ctx, keyHex); len(got) != 0 {
+		t.Fatalf("a revoked node still pins a key: %+v", got)
+	}
+	// a node with no key yet is marked too: a key pinned for it later is refused
+	late := r.pinKeyLater("node-late")
+	if _, err := r.led.RevokeNode(r.ctx, "node-late", "node.revoked"); err != nil {
+		t.Fatal(err)
+	}
+	r.exec(`UPDATE pki_node_key SET public=?,key_id=? WHERE node_id='node-late'`, late.public, late.keyHex)
+	if got, _ := r.led.NodesByKey(r.ctx, late.keyHex); len(got) != 0 {
+		t.Fatalf("a key pinned after the revocation verifies: %+v", got)
+	}
+}
+
+type lateKey struct{ keyHex, public string }
+
+// pinKeyLater leaves a pending pin (no key) for the node and returns the key it will pin later.
+func (r *attestRig) pinKeyLater(node string) lateKey {
+	pub := ed25519.NewKeyFromSeed([]byte(strings.Repeat("\x07", ed25519.SeedSize))).Public().(ed25519.PublicKey)
+	sum := sha256.Sum256(pub)
+	r.exec(`INSERT INTO pki_node_key(node_id,key_id,public,pinned_at) VALUES(?,?,'',1)`, node, "0000000000000000")
+	return lateKey{hex.EncodeToString(sum[:])[:16], base64.StdEncoding.EncodeToString(pub)}
 }

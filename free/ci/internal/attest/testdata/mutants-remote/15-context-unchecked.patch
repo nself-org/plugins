@@ -1,0 +1,11 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -143,7 +143,7 @@
+ 	if ev.Revision != facts.Revision {
+ 		return remoteFail(RemoteRevisionMismatch, "the evidence revision is not the attempt's revision", nil)
+ 	}
+-	if field := contextMismatch(facts, ev); field != "" {
++	if field := contextMismatch(facts, ev); field != "" && false {
+ 		return remoteFail(RemoteContextMismatch, "the evidence "+field+" is not the attempt's", nil)
+ 	}
+ 	if replayed, rerr := led.Replayed(ctx, attempt, keyID, digest); rerr != nil {

@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -158,7 +158,7 @@
+@@ -198,7 +198,7 @@
  	switch {
  	case holder.NodeID == "":
  		return remoteFail(RemoteLeaseHolderMismatch, "the key is not the pinned key of the node that held the lease", nil)
@@ -8,4 +8,4 @@
 +	case false:
  		return remoteFail(RemoteNodeNotEligible, "the node is not signing eligible", nil)
  	}
- 	use := Use{AttemptID: attempt, KeyID: keyID, SigDigest: digest, NodeID: holder.NodeID, RunID: ev.RunID, RepoID: ev.RepoID, Revision: ev.Revision}
+ 	// The use is recorded under the coordinator's own context (equal to the evidence's, checked above), so

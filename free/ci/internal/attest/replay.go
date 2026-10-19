@@ -21,12 +21,19 @@ import (
 // ErrReplay is returned by Ledger.Consume for a signature consumed under another attempt.
 var ErrReplay = errors.New("attest: signature already consumed for another attempt")
 
-// AttemptFacts is what the coordinator recorded of an attempt.
+// ErrRevoked is returned by Ledger.Consume for a key revoked since the verifier checked it (a revocation
+// that lands between the check and the consume must not let the use through).
+var ErrRevoked = errors.New("attest: key revoked")
+
+// AttemptFacts is what the coordinator recorded of an attempt. A node chooses every field of its
+// evidence, so each one the coordinator also knows must equal it (a forged repository, trust class or
+// policy digest would otherwise ride on a valid signature).
 type AttemptFacts struct {
 	// RunnerID is the node that held the lease of the attempt.
 	RunnerID string
-	// Revision is the revision of the attempt's pipeline.
-	Revision string
+	// Revision, RunID, RepoID, SourceTrust, PolicyDigest and SelectionMode are those of the attempt's
+	// pipeline; Job is the name of the attempt's job.
+	Revision, RunID, RepoID, SourceTrust, PolicyDigest, SelectionMode, Job string
 }
 
 // KeyNode is a node whose pinned node key has a given key id.
@@ -53,7 +60,8 @@ type Ledger interface {
 	Revoked(ctx context.Context, keyID string) (bool, error)
 	// Replayed reports whether (keyID, sigDigest) was consumed under an attempt other than attemptID.
 	Replayed(ctx context.Context, attemptID, keyID, sigDigest string) (bool, error)
-	// Consume records u; the same triple again is a no-op.
+	// Consume records u; the same triple again is a no-op. It returns ErrReplay for a signature consumed
+	// under another attempt and ErrRevoked when the key is revoked at the time of the write.
 	Consume(ctx context.Context, u Use) error
 }
 

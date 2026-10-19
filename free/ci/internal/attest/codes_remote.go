@@ -30,6 +30,7 @@ const (
 	RemoteSignatureMissing    RemoteReason = "signature_missing"
 	RemoteAttemptUnknown      RemoteReason = "attempt_unknown"
 	RemoteRevisionMismatch    RemoteReason = "revision_mismatch"
+	RemoteContextMismatch     RemoteReason = "context_mismatch"
 	RemoteReplay              RemoteReason = "replay"
 	RemoteKeyRevoked          RemoteReason = "key_revoked"
 	RemoteKeyUnknown          RemoteReason = "key_unknown"

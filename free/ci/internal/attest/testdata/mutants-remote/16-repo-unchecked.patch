@@ -1,0 +1,11 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -107,8 +107,6 @@
+ 	switch {
+ 	case ev.RunID != f.RunID:
+ 		return "run_id"
+-	case ev.RepoID != f.RepoID:
+-		return "repo_id"
+ 	case string(ev.SourceTrust) != f.SourceTrust:
+ 		return "source_trust"
+ 	case ev.PolicyDigest != f.PolicyDigest:

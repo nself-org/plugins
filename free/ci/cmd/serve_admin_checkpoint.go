@@ -127,8 +127,13 @@ func chainHead(ctx context.Context, log *audit.Log) (store.AuditEntry, error) {
 		if len(page) == 0 {
 			return last, nil
 		}
-		last = page[len(page)-1]
-		after = last.Seq
+		for _, e := range page {
+			if e.Seq > int64(rep.Rows) {
+				return last, nil // a row appended since Verify is neither verified nor sealed: never the head
+			}
+			last = e
+		}
+		after = page[len(page)-1].Seq
 	}
 }
 

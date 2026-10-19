@@ -1,0 +1,11 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -206,7 +206,7 @@
+ 	use := Use{AttemptID: attempt, KeyID: keyID, SigDigest: digest, NodeID: holder.NodeID, RunID: facts.RunID, RepoID: facts.RepoID, Revision: facts.Revision, Job: facts.Job}
+ 	if err := led.Consume(ctx, use); errors.Is(err, ErrReplay) {
+ 		return remoteFail(RemoteReplay, "the signature was consumed for another attempt", nil)
+-	} else if errors.Is(err, ErrRevoked) {
++	} else if errors.Is(err, ErrRevoked) && false {
+ 		return remoteFail(RemoteKeyRevoked, "the key was revoked", err)
+ 	} else if err != nil {
+ 		return remoteFail(RemoteLedgerUnavailable, "consume", err)

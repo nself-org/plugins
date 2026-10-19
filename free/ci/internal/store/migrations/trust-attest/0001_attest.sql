@@ -24,3 +24,8 @@ CREATE TABLE attest_quarantine (
  quarantined_at INTEGER NOT NULL,
  PRIMARY KEY(run_id, key_id)
 );
+CREATE TABLE attest_revoked_node (
+ node_id TEXT PRIMARY KEY,
+ reason TEXT NOT NULL,
+ revoked_at INTEGER NOT NULL
+);
