@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 // isolator implements exec.Isolator.
@@ -60,15 +61,19 @@ func (i *isolator) Prepare(ctx context.Context, spec *ciexec.JobSpec) error {
 		}
 		network = name
 	}
-	spec.Plan = &planner{inner: spec.Plan, network: network}
+	spec.Plan = &planner{inner: spec.Plan, scope: i.mode.Network, network: network}
 	return nil
 }
 
 // planner narrows the profile's container command: read-only workspace and the
-// recorded network.
+// recorded network. scope is the mode's network scope: for restricted the
+// profile's --network=none is swapped for the per-attempt service network; for
+// none the profile must have planned --network=none itself; for internet the
+// profile decides, but it must plan some --network flag of its own.
 type planner struct {
 	inner   ciexec.ContainerPlanner
-	network string
+	scope   model.NetworkScope
+	network string // restricted: the service network name
 }
 
 func (p *planner) Plan(r ciexec.ContainerRun) (ciexec.ContainerCommand, error) {
@@ -84,17 +89,18 @@ func (p *planner) Plan(r ciexec.ContainerRun) (ciexec.ContainerCommand, error) {
 			break
 		}
 		switch {
-		case a == "--network=none" && p.network != "":
+		case a == "--network=none" && p.scope == "restricted":
 			args[k], gotNet = "--network="+p.network, true
+		case a == "--network=none" && p.scope == "none":
+			gotNet = true
+		case strings.HasPrefix(a, "--network=") && p.scope == "internet":
+			gotNet = true
 		case a == mount:
 			args[k], gotMount = mount+",readonly=true", true
 		}
 	}
-	if p.network == "" {
-		gotNet = true // none and internet are the profile's own flags: only the mount is rewritten
-	}
 	if !gotNet || !gotMount {
-		return cmd, noIsolation("the container profile built a command without the %s; refusing to start it", missing(gotNet, gotMount))
+		return cmd, noIsolation("the container profile built a command without the %s the %s scope needs; refusing to start it", missing(gotNet, gotMount), p.scope)
 	}
 	cmd.Args = args
 	return cmd, nil

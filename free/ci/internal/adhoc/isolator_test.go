@@ -46,7 +46,7 @@ func (f *fakeProfile) Prepare(_ context.Context, s *ciexec.JobSpec) error {
 
 func TestPlannerNarrowsWorkspaceAndNetwork(t *testing.T) {
 	run := ciexec.ContainerRun{Workspace: "/w/ws"}
-	cmd, err := (&planner{inner: fakePlanner{}, network: "nself-ci-a1"}).Plan(run)
+	cmd, err := (&planner{inner: fakePlanner{}, scope: "restricted", network: "nself-ci-a1"}).Plan(run)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestPlannerFailsClosedWhenAFlagIsMissing(t *testing.T) {
 		"no mount":        {"run", "--network=none", "img", "true"},
 		"other mount":     {"run", "--network=none", "--mount", "type=bind,src=/other,dst=/repo", "img"},
 	} {
-		_, err := (&planner{inner: fakePlanner{args: args}, network: "none"}).Plan(ciexec.ContainerRun{Workspace: "/w/ws"})
+		_, err := (&planner{inner: fakePlanner{args: args}, scope: "none"}).Plan(ciexec.ContainerRun{Workspace: "/w/ws"})
 		if err == nil || codeOf(err) != CodeNoIsolation {
 			t.Errorf("%s: %v", name, err)
 		}
@@ -202,7 +202,7 @@ func TestServiceNetFailsClosed(t *testing.T) {
 // The user's own argv after the image is never rewritten, even when it looks like a runtime flag.
 func TestPlannerLeavesTheUserArgvAlone(t *testing.T) {
 	in := fakePlanner{args: []string{"run", "--network=none", "--mount", "type=bind,src=/w,dst=/repo", "img", "printf", "--network=none", "type=bind,src=/w,dst=/repo"}}
-	p := &planner{inner: in, network: "bridge"}
+	p := &planner{inner: in, scope: "restricted", network: "nself-ci-a1"}
 	got, err := p.Plan(ciexec.ContainerRun{Workspace: "/w", Image: "img"})
 	if err != nil {
 		t.Fatal(err)
@@ -210,5 +210,27 @@ func TestPlannerLeavesTheUserArgvAlone(t *testing.T) {
 	tail := strings.Join(got.Args[4:], " ")
 	if tail != "img printf --network=none type=bind,src=/w,dst=/repo" {
 		t.Fatalf("user argv rewritten: %q", tail)
+	}
+}
+
+// The profile's own network flag must match the scope: none needs --network=none, a bridge is refused,
+// and internet needs the profile to have planned a --network of its own.
+func TestPlannerChecksTheProfilesNetworkFlag(t *testing.T) {
+	mount := "type=bind,src=/w,dst=/repo"
+	for name, tc := range map[string]struct {
+		scope model.NetworkScope
+		args  []string
+		ok    bool
+	}{
+		"none with none":         {"none", []string{"run", "--network=none", "--mount", mount, "img", "true"}, true},
+		"none but bridge":        {"none", []string{"run", "--network=bridge", "--mount", mount, "img", "true"}, false},
+		"none but no flag":       {"none", []string{"run", "--mount", mount, "img", "true"}, false},
+		"internet with its flag": {"internet", []string{"run", "--network=nself-net", "--mount", mount, "img", "true"}, true},
+		"internet no flag":       {"internet", []string{"run", "--mount", mount, "img", "true"}, false},
+	} {
+		_, err := (&planner{inner: fakePlanner{args: tc.args}, scope: tc.scope}).Plan(ciexec.ContainerRun{Workspace: "/w", Image: "img"})
+		if (err == nil) != tc.ok {
+			t.Errorf("%s: err %v, want ok=%v", name, err, tc.ok)
+		}
 	}
 }

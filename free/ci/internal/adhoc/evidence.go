@@ -47,7 +47,7 @@ func (e evidenceStamp) Complete(ctx context.Context, begin any, f cirun.Evidence
 	}
 	out, err := e.inner.Complete(ctx, begin, f, ev)
 	if err != nil {
-		return ev, err // the stamped document, so a failing builder never leaves the unstamped one
+		return ev, err // the run keeps its own (unstamped) document on a builder error: D-1021
 	}
 	return out, nil
 }
