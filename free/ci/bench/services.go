@@ -71,8 +71,13 @@ func measureServices(ctx context.Context, cfg Config, home string, col *Collecto
 	}
 	for i := 0; i < n; i++ {
 		for _, img := range strings.Fields(images) {
-			if _, err := must(ctx, []string{"docker", "image", "rm", img}, cfg.Dir, baseEnv()); err != nil {
+			r, err := spawn(ctx, []string{"docker", "image", "rm", img}, cfg.Dir, baseEnv())
+			if err != nil {
 				return fmt.Errorf("cold start needs the image removed: %w", err)
+			}
+			// An image that is already gone is the cold state this scenario wants.
+			if r.ExitCode != 0 && !strings.Contains(r.Tail, "No such image") {
+				return fmt.Errorf("cold start needs the image removed: docker image rm %s: exit %d: %s", img, r.ExitCode, r.Tail)
 			}
 		}
 		ms, _, err := up()
