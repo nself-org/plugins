@@ -46,9 +46,9 @@ func (s *Session) credentialsHidden(sp Spec) bool {
 	return false
 }
 
-// seed copies the user's tool-home config files into it.Root (cargo's
-// config.toml) because the bound variable hides the user's own directory.
-func (s *Session) seed(it *Item) {
+// seed copies the user's tool-home config files into it.Root below base
+// (cargo's config.toml) because the bound variable hides the user's own directory.
+func (s *Session) seed(base *os.Root, it *Item) {
 	sd := it.Spec.Seed
 	home := s.toolHome(sd)
 	if sd.HomeEnv == "" || home == "" {
@@ -60,11 +60,11 @@ func (s *Session) seed(it *Item) {
 			continue
 		}
 		if f, err := os.Open(src); err == nil {
-			if out, err := s.base.OpenFile(path.Join(it.Spec.ID, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600); err == nil {
+			if out, err := base.OpenFile(path.Join(it.Spec.ID, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600); err == nil {
 				_, _ = io.Copy(out, f)
 				_ = out.Close()
 				if s.in.Container { // the job UID differs from the agent's
-					_ = s.base.Chmod(path.Join(it.Spec.ID, name), 0o644)
+					_ = base.Chmod(path.Join(it.Spec.ID, name), 0o644)
 				}
 			}
 			_ = f.Close()

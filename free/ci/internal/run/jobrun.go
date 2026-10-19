@@ -150,6 +150,7 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	spec.Mounts = setup.mounts
 	effective := info
 	effective.Job = setup.job // hooks see the isolation the job really runs under
+	spec.BeforeJob = rs.beforeJob(effective)
 	spec.AfterJob = rs.afterJob(effective)
 	var t tail
 	var full *outputBuffer // everything the attempt prints, kept only for jobs an OutcomeHook asks about

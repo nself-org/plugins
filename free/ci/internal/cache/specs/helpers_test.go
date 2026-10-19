@@ -185,10 +185,8 @@ func (e *env) beginUntrustedContainer(id string) *Session {
 }
 
 // seedSnapshot stores the owner's protected entry for the container-level key. It is a
-// SYNTHETIC writer: no real attempt produces a container-level entry yet (a container
-// job cannot populate a cache; debt), so the read-only paths are tested against it.
-// with one file f.txt per dir holding the given content. A container job
-// cannot populate a cache itself, so the entry goes in through the engine.
+// SYNTHETIC writer (the entry goes in through the engine, not a job), with one
+// file f.txt per dir holding the given content.
 func (e *env) seedSnapshot(id string, contents map[string]string) {
 	e.t.Helper()
 	e.running(id, ownerFacts)
@@ -242,4 +240,20 @@ func (e *env) settlePassed(id string) {
 	if err := e.st.Transition(e.ctx, id, "finalizing", "passed", storeDetail(3)); err != nil {
 		e.t.Fatal(err)
 	}
+}
+
+// workspace is a stand-in for the executor's attempt workspace: a directory the
+// job writes to and the session opens through a pinned os.Root.
+func (e *env) workspace(id string) (*os.Root, string) {
+	e.t.Helper()
+	dir := filepath.Join(e.home, "work", id)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		e.t.Fatal(err)
+	}
+	ws, err := os.OpenRoot(dir)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	e.t.Cleanup(func() { _ = ws.Close() })
+	return ws, dir
 }

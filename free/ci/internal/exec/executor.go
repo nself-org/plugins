@@ -35,6 +35,11 @@ type JobSpec struct {
 	Slot int
 	// Plan, when an Isolator sets it, builds the container command instead of the baseline flags.
 	Plan ContainerPlanner
+	// BeforeJob, when set, runs after the source is copied into the workspace
+	// and before the command starts. It receives the workspace root opened by
+	// the executor, so a path swapped later cannot redirect it. An error ends
+	// the attempt as failed, class infra, and the command never starts.
+	BeforeJob func(ctx context.Context, workspace *os.Root) error
 	// AfterJob, when set, runs once the command exited 0 and before the
 	// workspace is removed (the only moment a job's outputs can be collected).
 	// It receives the workspace root opened by the executor before the job
@@ -192,6 +197,13 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	if e.Stale != nil {
 		if err := e.sweepOnStart(ctx, s.CoordinatorID, s.Home); err != nil {
 			result.Err = err
+			return
+		}
+	}
+	if s.BeforeJob != nil {
+		if err := s.BeforeJob(ctx, pinned); err != nil {
+			result.Err = err
+			result.Attempt.FailureClass = "infra"
 			return
 		}
 	}

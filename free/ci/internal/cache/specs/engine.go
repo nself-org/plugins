@@ -190,34 +190,59 @@ type SaveRequest struct {
 	Dirs      Dirs
 }
 
+// Staged is an entry that was packed, scanned and put but not committed yet:
+// the pack must happen while the job's directory still exists, the commit only
+// while the attempt is finalizing.
+type Staged struct {
+	req   SaveRequest
+	blobs []entries.Blob
+	total int64
+}
+
+// Stage packs and scans every dir of r into the blob store without committing.
+// A registered value in any dir refuses it with E711 secret_match and an audit
+// row; a cache with no file in it is ErrEmpty.
+func (e *Engine) Stage(ctx context.Context, r SaveRequest) (*Staged, error) {
+	realm := cas.CacheRealm(string(r.Namespace.Canonical()))
+	maxBytes, _ := e.Entries.Caps()
+	st := &Staged{req: r}
+	var files int
+	for _, name := range r.Dirs.names() {
+		digest, size, ps, err := e.putDir(ctx, r.Base, realm, r.Dirs[name], maxBytes-st.total, r.Spec.InflateScan)
+		if err != nil {
+			return nil, e.refuse(ctx, r, err)
+		}
+		if err := e.validate(ctx, realm, digest); err != nil { // a restore would refuse it: do not commit a loop of save, refuse, drop
+			return nil, e.refuse(ctx, r, restoreCheckError(name, err))
+		}
+		files += ps.Files
+		st.total += size
+		st.blobs = append(st.blobs, entries.Blob{Path: name, SHA256: digest, Size: size})
+	}
+	if files == 0 {
+		return nil, ErrEmpty
+	}
+	return st, nil
+}
+
+// Commit commits a staged entry at epoch (the attempt must be finalizing).
+func (e *Engine) Commit(ctx context.Context, st *Staged, epoch int64) (int64, error) {
+	r := st.req
+	m := entries.Manifest{Namespace: r.Namespace.Canonical(), Key: r.Key, Spec: r.Spec.ID, Blobs: st.blobs, Writer: entries.Writer{ScannedClean: true}}
+	if err := e.Entries.Commit(ctx, r.Attempt, epoch, r.Namespace, m); err != nil {
+		return 0, err
+	}
+	return st.total, nil
+}
+
 // Save packs, scans and commits the entry. A registered value in any dir
 // refuses the save with E711 secret_match and an audit row.
 func (e *Engine) Save(ctx context.Context, r SaveRequest) (int64, error) {
-	realm := cas.CacheRealm(string(r.Namespace.Canonical()))
-	maxBytes, _ := e.Entries.Caps()
-	var blobs []entries.Blob
-	var files int
-	var total int64
-	for _, name := range r.Dirs.names() {
-		digest, size, st, err := e.putDir(ctx, r.Base, realm, r.Dirs[name], maxBytes-total, r.Spec.InflateScan)
-		if err != nil {
-			return 0, e.refuse(ctx, r, err)
-		}
-		if err := e.validate(ctx, realm, digest); err != nil { // a restore would refuse it: do not commit a loop of save, refuse, drop
-			return 0, e.refuse(ctx, r, restoreCheckError(name, err))
-		}
-		files += st.Files
-		total += size
-		blobs = append(blobs, entries.Blob{Path: name, SHA256: digest, Size: size})
-	}
-	if files == 0 {
-		return 0, ErrEmpty
-	}
-	m := entries.Manifest{Namespace: r.Namespace.Canonical(), Key: r.Key, Spec: r.Spec.ID, Blobs: blobs, Writer: entries.Writer{ScannedClean: true}}
-	if err := e.Entries.Commit(ctx, r.Attempt, r.Epoch, r.Namespace, m); err != nil {
+	st, err := e.Stage(ctx, r)
+	if err != nil {
 		return 0, err
 	}
-	return total, nil
+	return e.Commit(ctx, st, r.Epoch)
 }
 
 // restoreCheckError classifies why a restore of the freshly packed blob name would
