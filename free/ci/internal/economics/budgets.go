@@ -69,7 +69,7 @@ func reserve(t store.LedgerTx, p Policy, s spend, day, month string) ([]string, 
 		var held int64
 		if sc.held {
 			var err error
-			if held, err = t.Reserved(sc.name, sc.key, sc.window); err != nil {
+			if held, err = t.ReservedExcept(sc.name, sc.key, sc.window, s.Owner); err != nil {
 				return nil, err
 			}
 		}

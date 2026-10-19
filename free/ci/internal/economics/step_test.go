@@ -10,6 +10,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 func TestBudgetPaidNeedsEnableAndABudget(t *testing.T) {
@@ -298,4 +299,47 @@ func TestBudgetPlantedSpendKeyIsIgnored(t *testing.T) {
 	if ref := refusalOf(t, place(WithEnv(ctx, envFor(st, p, clk, "me")), st, request(a, "", "cloudco", 60_000, 0))); ref.Reason != model.PaidDisabled {
 		t.Fatalf("%+v", ref)
 	}
+}
+
+// TestBudgetReadmissionReplacesItsOwnReservation: an attempt whose lease expired
+// is admitted again; its first reservation is replaced (new amount, new window),
+// not counted a second time against the budgets.
+func TestBudgetReadmissionReplacesItsOwnReservation(t *testing.T) {
+	ctx := context.Background()
+	clk := &clock{t: at("2026-10-19T10:00:00Z")}
+	st := openStore(t, clk)
+	p := spendPolicy(t, paidKV(map[string]string{schedpolicy.KeyBudgetDay: `150000`}))
+	again := func(day, month string, cost int64) error {
+		return st.LedgerWrite(ctx, func(tx store.LedgerTx) error {
+			_, err := reserve(tx, p, spend{Owner: "att-1", Pipeline: "pipe", Provider: "cloudco", Micro: cost}, day, month)
+			return err
+		})
+	}
+	for i := 0; i < 3; i++ {
+		if err := again("2026-10-19", "2026-10", 120_000); err != nil {
+			t.Fatalf("admission %d of the same attempt: %v", i+1, err)
+		}
+	}
+	if held, _ := st.Reserved(ctx, "day", "", "2026-10-19"); held != 120_000 {
+		t.Fatalf("held %d, want one reservation", held)
+	}
+	if err := again("2026-10-20", "2026-10", 100_000); err != nil { // re-admitted the next day at another cost
+		t.Fatal(err)
+	}
+	if a, b := heldOn(ctx, st, "2026-10-19"), heldOn(ctx, st, "2026-10-20"); a != 0 || b != 100_000 {
+		t.Fatalf("the reservation moves with the new admission: old day %d, new day %d", a, b)
+	}
+	// Another owner still sees the money.
+	other := st.LedgerWrite(ctx, func(tx store.LedgerTx) error {
+		_, err := reserve(tx, p, spend{Owner: "att-2", Pipeline: "pipe", Provider: "cloudco", Micro: 60_000}, "2026-10-20", "2026-10")
+		return err
+	})
+	if other == nil {
+		t.Fatal("100 000 + 60 000 exceeds the 150 000 day budget for a different owner")
+	}
+}
+
+func heldOn(ctx context.Context, st *store.Store, day string) int64 {
+	n, _ := st.Reserved(ctx, "day", "", day)
+	return n
 }

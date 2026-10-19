@@ -33,25 +33,34 @@ type Reservation struct {
 	Micro                             int64
 }
 
-// Reserve writes a reservation; an owner reserves each scope once, so a repeat
-// of the same admission is a no-op and never double-counts.
+// Reserve writes a reservation. An owner holds each scope once: a repeat of the
+// same admission, or the re-admission of an attempt whose lease expired, replaces
+// the owner's unsettled reservation (new amount, new window) and never adds a
+// second one; a settled reservation is final.
 func (t LedgerTx) Reserve(r Reservation) error {
-	_, err := t.tx.ExecContext(t.ctx, "INSERT OR IGNORE INTO reservation(owner,scope,scope_key,window_key,micro,settled) VALUES (?,?,?,?,?,0)", r.Owner, r.Scope, r.ScopeKey, r.WindowKey, r.Micro)
+	_, err := t.tx.ExecContext(t.ctx, `INSERT INTO reservation(owner,scope,scope_key,window_key,micro,settled) VALUES (?,?,?,?,?,0)
+ ON CONFLICT(owner,scope) DO UPDATE SET scope_key=excluded.scope_key, window_key=excluded.window_key, micro=excluded.micro WHERE settled=0`, r.Owner, r.Scope, r.ScopeKey, r.WindowKey, r.Micro)
 	return err
 }
 
 // Reserved sums the money held in one scope and window (saturating).
 func (t LedgerTx) Reserved(scope, scopeKey, windowKey string) (int64, error) {
-	return reserved(t.ctx, t.tx, scope, scopeKey, windowKey)
+	return reserved(t.ctx, t.tx, scope, scopeKey, windowKey, "")
+}
+
+// ReservedExcept is Reserved without the money held by owner, for a check that
+// is about to replace that owner's own reservation.
+func (t LedgerTx) ReservedExcept(scope, scopeKey, windowKey, owner string) (int64, error) {
+	return reserved(t.ctx, t.tx, scope, scopeKey, windowKey, owner)
 }
 
 // Reserved is the same sum outside a transaction.
 func (s *Store) Reserved(ctx context.Context, scope, scopeKey, windowKey string) (int64, error) {
-	return reserved(ctx, s.readers, scope, scopeKey, windowKey)
+	return reserved(ctx, s.readers, scope, scopeKey, windowKey, "")
 }
 
-func reserved(ctx context.Context, q ledgerQuerier, scope, scopeKey, windowKey string) (int64, error) {
-	rows, err := q.QueryContext(ctx, "SELECT CASE WHEN settled=1 THEN actual_micro ELSE micro END FROM reservation WHERE scope=? AND scope_key=? AND window_key=?", scope, scopeKey, windowKey)
+func reserved(ctx context.Context, q ledgerQuerier, scope, scopeKey, windowKey, except string) (int64, error) {
+	rows, err := q.QueryContext(ctx, "SELECT CASE WHEN settled=1 THEN actual_micro ELSE micro END FROM reservation WHERE scope=? AND scope_key=? AND window_key=? AND owner<>?", scope, scopeKey, windowKey, except)
 	if err != nil {
 		return 0, err
 	}
