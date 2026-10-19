@@ -42,6 +42,9 @@ type followFlags struct {
 	coordinator string
 }
 
+// followIdle is how long a quiet event file waits before the run state is asked (a var for tests).
+var followIdle = detach.IdleGrace
+
 func newFollowFlagSet(f *followFlags) *flag.FlagSet {
 	fs := flag.NewFlagSet("runs follow", flag.ContinueOnError)
 	fs.BoolVar(&f.json, "json", false, "accepted; the output is always json-stream v1")
@@ -76,7 +79,7 @@ func runFollow(args []string) int {
 // followFile copies a detached run's event file; if the run ended without a
 // final line it closes the stream from the run's last state.
 func followFile(ctx context.Context, src *runSource, path string, from int64) int {
-	out, err := detach.Follow(ctx, os.Stdout, detach.FollowParams{Path: path, From: from, Over: func() (bool, error) {
+	out, err := detach.Follow(ctx, os.Stdout, detach.FollowParams{Path: path, From: from, Idle: followIdle, Over: func() (bool, error) {
 		cur, err := src.View(ctx)
 		return err == nil && detach.Terminal(cur.State), err
 	}})
