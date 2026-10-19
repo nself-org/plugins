@@ -5,10 +5,9 @@ package store
 // caller is told it was accepted, so a crash between accept and dispatch loses nothing.
 // Inputs:  IntakeRequest (the trigger with its semantic key), or a claim owner for the dispatch loop.
 // Outputs: IntakeOutcome (enqueued, duplicate, coalesced or replay), claimed rows, queue statistics.
-// Constraints: a delivery id (source + id) runs once; a semantic key coalesces into a live row, and for a
-//          webhook-sourced trigger also into a row completed within the horizon (72 h, the provider
-//          redelivery window) unless Force, which writes an audit row; the idempotency key is stored as a
-//          digest only; claims carry a heartbeat time so a dead owner's rows return to the queue.
+// Constraints: a delivery id runs once; a semantic key coalesces into a live row (a webhook trigger also into
+//          a row completed within the 72 h redelivery horizon) unless Force, which writes an audit row; the
+//          idempotency key is stored as a digest; claims carry a heartbeat so a dead owner's rows requeue.
 
 import (
 	"context"
@@ -262,8 +261,7 @@ func (s *Store) IntakeFinish(ctx context.Context, id, owner, pipelineID, result 
 	})
 }
 
-// IntakeRequeue gives a claimed row back to the queue (a coordinator that is shutting down). The claim
-// does not count as an attempt: a clean shutdown must never use up the retries.
+// IntakeRequeue returns a claimed row to the queue on shutdown; the claim does not count as an attempt.
 func (s *Store) IntakeRequeue(ctx context.Context, id, owner string) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `UPDATE intake SET state='queued',claimed_by='',attempts=max(attempts-1,0) WHERE id=? AND state='dispatched' AND claimed_by=?`, id, owner)
