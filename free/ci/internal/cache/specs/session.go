@@ -14,9 +14,10 @@ package specs
 // rw-own for the attempt's own namespace, ro-snapshot for a protected namespace
 // of a strictly higher class, none otherwise. A container job only ever gets
 // read-only mounts (the hardened container profile refuses a writable host
-// mount, E611), so a container job restores but cannot populate a cache; a
-// process job cannot hold a mount read-only, so a snapshot restore is denied
-// for it. A restored own entry is never saved again. Failures of the cache
+// mount, E611), so a container hit is mounted read-only and a container miss
+// has its dirs in the job workspace instead (workspace.go: BeforeJob creates
+// them, AfterJob packs them); a process job cannot hold a mount read-only, so a
+// snapshot restore is denied for it. A restored own entry is never saved again. Failures of the cache
 // itself never fail the job: they become usage rows and warnings.
 
 import (
@@ -75,6 +76,11 @@ type Item struct {
 	// Bound is true when the job gets this spec's dirs (environment and mounts);
 	// ReadOnly says the mounts are read-only.
 	Bound, ReadOnly bool
+	// InWorkspace is true for a container miss: its dirs live in the job
+	// workspace (WorkspaceCacheDir), where the job can fill them; AfterJob packs
+	// them into staged for Finalize to commit.
+	InWorkspace bool
+	staged      *Staged
 }
 
 // Session is one attempt's cache state.
@@ -84,6 +90,7 @@ type Session struct {
 	name   string   // the attempt's directory name below parent
 	base   *os.Root
 	own    authz.Namespace
+	work   *os.Root // the workspace cache dir of a container job, pinned by BeforeJob until AfterJob
 	items  []*Item
 	saved  []string // keys this session committed (Retract)
 }
@@ -190,7 +197,7 @@ func (s *Session) restore(ctx context.Context, it *Item) {
 			return
 		}
 	}
-	s.seed(it)
+	s.seed(s.base, it)
 	job := authz.Job{Namespace: s.own, State: authz.StateRunning, Capability: authz.Capability{Attempt: s.in.Attempt, Epoch: s.in.Epoch}}
 	it.Access = authz.CacheAccess(job, s.own)
 	sources := []authz.Namespace{s.own}
@@ -230,7 +237,7 @@ func (s *Session) restore(ctx context.Context, it *Item) {
 		s.use(ctx, it.Spec.ID, key, result, n, ms)
 		return
 	}
-	it.Bound = !s.in.Container // a container miss has no writable mount to fill
+	it.Bound, it.InWorkspace = true, s.in.Container // a container miss has no writable mount: its dirs live in the workspace
 	s.use(ctx, it.Spec.ID, it.Key, "miss", 0, time.Since(start).Milliseconds())
 }
 
@@ -242,6 +249,17 @@ func (s *Session) Setup() (map[string]string, []Mount) {
 			continue
 		}
 		ro := it.ReadOnly
+		if it.InWorkspace { // the container sees the workspace at /repo and needs no mount
+			if it.Spec.RootEnv != "" {
+				env[it.Spec.RootEnv] = path.Join(WorkspaceCacheDir, it.Spec.ID)
+			}
+			for _, d := range it.Spec.Dirs {
+				if d.Env != "" {
+					env[d.Env] = path.Join(WorkspaceCacheDir, it.Dirs[d.Name])
+				}
+			}
+			continue
+		}
 		if it.Spec.RootEnv != "" {
 			env[it.Spec.RootEnv] = it.Root
 			mounts = append(mounts, Mount{Host: it.Root, Target: it.Root, ReadOnly: ro})

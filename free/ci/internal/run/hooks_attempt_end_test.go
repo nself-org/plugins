@@ -140,3 +140,32 @@ func TestFinalizeHooksThatDoNotWantTheAttemptAreSkipped(t *testing.T) {
 		t.Fatalf("exit %d skipped %d wanted %d", res.Exit, skipped, wanted)
 	}
 }
+
+type prepFn struct {
+	wsFn
+	before func(AttemptInfo, *os.Root) error
+}
+
+func (p prepFn) BeforeJob(_ context.Context, a AttemptInfo, ws *os.Root) error {
+	return p.before(a, ws)
+}
+
+func TestWorkspacePrepareHookRunsBeforeTheCommand(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, map[string]model.Job{"ok": sh(`test "$(cat prepared.txt)" = ready`)}, gitFake{})
+	r.C.Hooks.Workspaces = []WorkspaceHook{prepFn{wsFn: func(AttemptInfo, *os.Root) error { return nil },
+		before: func(_ AttemptInfo, ws *os.Root) error { return ws.WriteFile("prepared.txt", []byte("ready"), 0o644) }}}
+	if o := outcome(r.run(t), "ok"); o.State != StatePassed {
+		t.Fatalf("ok: %+v", o)
+	}
+}
+
+func TestWorkspacePrepareHookErrorFailsTheAttemptInfra(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
+	r.C.Hooks.Workspaces = []WorkspaceHook{prepFn{wsFn: func(AttemptInfo, *os.Root) error { return nil },
+		before: func(AttemptInfo, *os.Root) error { return errors.New("prepare failed") }}}
+	if o := outcome(r.run(t), "a"); o.State != StateFailed || o.FailureClass != "infra" {
+		t.Fatalf("a: %+v", o)
+	}
+}

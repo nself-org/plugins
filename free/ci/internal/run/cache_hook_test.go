@@ -355,11 +355,13 @@ func TestRunTellsTheCacheHookAboutTheContainerOption(t *testing.T) {
 // fakeSession records how a session is closed.
 type fakeSession struct{ saved, retracted, cleaned bool }
 
-func (f *fakeSession) Finalize(context.Context, int64) {}
-func (f *fakeSession) Wants() bool                     { return false }
-func (f *fakeSession) Saved() bool                     { return f.saved }
-func (f *fakeSession) Retract(context.Context)         { f.retracted = true }
-func (f *fakeSession) Cleanup()                        { f.cleaned = true }
+func (f *fakeSession) Finalize(context.Context, int64)           {}
+func (f *fakeSession) Wants() bool                               { return false }
+func (f *fakeSession) Saved() bool                               { return f.saved }
+func (f *fakeSession) Retract(context.Context)                   { f.retracted = true }
+func (f *fakeSession) Cleanup()                                  { f.cleaned = true }
+func (f *fakeSession) BeforeJob(context.Context, *os.Root) error { return nil }
+func (f *fakeSession) AfterJob(context.Context, *os.Root) error  { return nil }
 
 // TestCacheHookEvictionRetractsACancelledAttemptsEntry: an attempt that committed
 // an entry and settled cancelled, whose session eviction closes before After

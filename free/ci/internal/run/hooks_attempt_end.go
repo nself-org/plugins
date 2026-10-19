@@ -22,6 +22,14 @@ type WorkspaceHook interface {
 	AfterJob(ctx context.Context, a AttemptInfo, workspace *os.Root) error
 }
 
+// WorkspacePrepareHook is an optional interface of a WorkspaceHook: BeforeJob
+// runs after the source is copied into the workspace and before the command
+// starts, with the root the executor opened. An error fails the attempt (class
+// infra) and the command never starts.
+type WorkspacePrepareHook interface {
+	BeforeJob(ctx context.Context, a AttemptInfo, workspace *os.Root) error
+}
+
 // AttemptFinalizeHook runs between running -> finalizing and finalizing -> passed.
 type AttemptFinalizeHook interface {
 	AttemptFinalize(ctx context.Context, a AttemptInfo, epoch int64) error
@@ -48,6 +56,28 @@ func (rs *runState) afterJob(info AttemptInfo) func(context.Context, *os.Root) e
 	return func(ctx context.Context, workspace *os.Root) error {
 		for _, h := range rs.hooks.Workspaces {
 			if err := guard("workspace hook", func() error { return h.AfterJob(ctx, info, workspace) }); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+// beforeJob is the executor callback that prepares info's attempt (nil when no
+// workspace hook prepares anything).
+func (rs *runState) beforeJob(info AttemptInfo) func(context.Context, *os.Root) error {
+	var todo []WorkspacePrepareHook
+	for _, h := range rs.hooks.Workspaces {
+		if p, ok := h.(WorkspacePrepareHook); ok {
+			todo = append(todo, p)
+		}
+	}
+	if len(todo) == 0 {
+		return nil
+	}
+	return func(ctx context.Context, workspace *os.Root) error {
+		for _, h := range todo {
+			if err := guard("workspace prepare hook", func() error { return h.BeforeJob(ctx, info, workspace) }); err != nil {
 				return err
 			}
 		}

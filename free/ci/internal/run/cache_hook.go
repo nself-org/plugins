@@ -6,6 +6,9 @@ package run
 // entries.Commit needs the attempt `finalizing` with a recorded pass and the
 // CacheHook.After call comes after the attempt left that state (lead ruling in
 // the CACHE Epic Invalidations); After only removes the attempt's directories.
+// A container job's miss cannot use a writable host mount (the hardened profile
+// refuses it), so its dirs live in the workspace: BeforeJob creates them and
+// AfterJob packs them before the workspace is removed (debt D-1032).
 // Inputs:  AttemptInfo (job, store, home, launch epoch), the pipeline row
 // (project root, source trust), detector facts of the workspace, the process
 // environment, NSELF_CI_CACHE_DISABLE (operator scope).
@@ -57,6 +60,8 @@ type cacheSession interface {
 	Saved() bool
 	Retract(ctx context.Context)
 	Cleanup()
+	BeforeJob(ctx context.Context, workspace *os.Root) error
+	AfterJob(ctx context.Context, workspace *os.Root) error
 }
 
 // cacheEntry is a live session; one whose attempt never reached After (the job
@@ -93,6 +98,7 @@ var cacheOn = &cacheHook{
 
 func init() {
 	RegisterCache(cacheOn)
+	RegisterWorkspace(cacheOn)
 	RegisterAttemptFinalize(cacheOn)
 }
 
@@ -192,6 +198,24 @@ func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRo
 func cacheFacts(a AttemptInfo, p store.PipelineRow, att CacheAttestation, privateDeps bool) entries.Facts {
 	return entries.Facts{Project: p.Project, Trust: p.SourceTrust, Protection: att.Protection, HeadRepo: att.HeadRepo, PR: att.PR,
 		SecretsDeclared: len(a.Job.Secrets) > 0, PrivateDeps: privateDeps}
+}
+
+// BeforeJob creates the workspace cache dirs of a container job that missed
+// (a hit is mounted read-only; a process job uses host mounts).
+func (h *cacheHook) BeforeJob(ctx context.Context, a AttemptInfo, workspace *os.Root) error {
+	if e, ok := h.sessions.Load(a.AttemptID); ok {
+		return e.(cacheEntry).s.BeforeJob(ctx, workspace)
+	}
+	return nil
+}
+
+// AfterJob packs the workspace cache dirs while the workspace still exists;
+// the commit waits for AttemptFinalize. A cache failure never fails the job.
+func (h *cacheHook) AfterJob(ctx context.Context, a AttemptInfo, workspace *os.Root) error {
+	if e, ok := h.sessions.Load(a.AttemptID); ok {
+		return e.(cacheEntry).s.AfterJob(ctx, workspace)
+	}
+	return nil
 }
 
 // AttemptFinalize saves while the attempt is finalizing at epoch.

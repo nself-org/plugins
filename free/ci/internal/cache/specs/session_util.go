@@ -34,6 +34,10 @@ func (s *Session) pin() (err error) {
 
 // Cleanup removes the attempt's cache directories.
 func (s *Session) Cleanup() {
+	if s.work != nil {
+		_ = s.work.Close()
+		s.work = nil
+	}
 	if s.base != nil {
 		_ = chmodDirs(s.base, ".")
 		_ = s.base.Close()

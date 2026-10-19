@@ -21,8 +21,14 @@ import (
 )
 
 // canSave reports whether the attempt may save it: its own namespace, writable
-// dirs, and no own entry restored.
+// dirs, and no own entry restored; a workspace entry also needs its staged pack.
 func (it *Item) canSave() bool {
+	return it.Access == authz.ModeRWOwn && it.Bound && !it.ReadOnly && !it.Hit && (!it.InWorkspace || it.staged != nil)
+}
+
+// canSaveFromWorkspace is canSave before the pack exists: AfterJob stages only
+// what Finalize could commit.
+func (it *Item) canSaveFromWorkspace() bool {
 	return it.Access == authz.ModeRWOwn && it.Bound && !it.ReadOnly && !it.Hit
 }
 
@@ -53,7 +59,13 @@ func (s *Session) Finalize(ctx context.Context, epoch int64) {
 			continue
 		}
 		start := time.Now()
-		n, err := s.in.Engine.Save(ctx, SaveRequest{Base: s.base, Attempt: s.in.Attempt, Epoch: epoch, Namespace: s.own, Key: it.Key, Spec: it.Spec, Dirs: it.Dirs})
+		var n int64
+		var err error
+		if it.InWorkspace { // packed in AfterJob, while the workspace existed
+			n, err = s.in.Engine.Commit(ctx, it.staged, epoch)
+		} else {
+			n, err = s.in.Engine.Save(ctx, SaveRequest{Base: s.base, Attempt: s.in.Attempt, Epoch: epoch, Namespace: s.own, Key: it.Key, Spec: it.Spec, Dirs: it.Dirs})
+		}
 		switch {
 		case err == nil:
 			s.saved = append(s.saved, it.Key)
