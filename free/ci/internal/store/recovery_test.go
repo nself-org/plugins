@@ -79,7 +79,7 @@ func TestCloseDeadRuns(t *testing.T) {
 	walk := func(id string, to ...model.JobState) {
 		from, epoch := model.JobState("queued"), int64(0)
 		for _, next := range to {
-			if err := s.Transition(ctx, id, from, next, TransitionDetail{Epoch: epoch, FailureClass: "lost"}); err != nil {
+			if err := s.testTransition(ctx, id, from, next, TransitionDetail{Epoch: epoch, FailureClass: "lost"}); err != nil {
 				t.Fatal(err)
 			}
 			from, epoch = next, epoch+1
