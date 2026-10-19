@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/orgs/acme/actions/runners",
+    "query": "page=1&per_page=2"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "body": "{\"total_count\": 5, \"runners\": [{\"id\": 30, \"name\": \"persistent-old\", \"os\": \"linux\", \"status\": \"online\", \"busy\": false, \"labels\": [{\"id\": 1, \"name\": \"self-hosted\", \"type\": \"read-only\"}]}, {\"id\": 31, \"name\": \"nself-jit-01KDV6SJR0ABCDEFGHJKMNPQRS\", \"os\": \"linux\", \"status\": \"online\", \"busy\": false, \"labels\": [{\"id\": 1, \"name\": \"self-hosted\", \"type\": \"read-only\"}]}]}"
+  }
+}

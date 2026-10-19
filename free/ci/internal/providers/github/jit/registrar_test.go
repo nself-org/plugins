@@ -1,0 +1,288 @@
+package jit_test
+
+// Purpose: the P7-HOST-04 acceptance tests. Each test's doc comment cites the acceptance line it
+// proves (numbers follow the Ticket's acceptance list, 1 = conformance ... 8 = fixed labels).
+// Inputs:  the fixtures under testdata/ (GitHub REST docs shapes, API 2022-11-28) and fakeGH.
+// Outputs: pass or fail.
+// Constraints: no live network; every credential value is synthetic.
+
+import (
+	"context"
+	"errors"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/providers"
+	"github.com/nself-org/plugins/free/ci/internal/providers/conformance"
+	"github.com/nself-org/plugins/free/ci/internal/providers/github/jit"
+)
+
+// scoped fills the empty scope and group the conformance kit sends, so the kit reaches fixtures.
+type scoped struct {
+	*jit.Registrar
+	group int64
+}
+
+func (s scoped) fill(sc providers.RunnerScope) providers.RunnerScope {
+	if sc.Repo == "" {
+		sc.Repo = testScope
+	}
+	return sc
+}
+func (s scoped) Mint(ctx context.Context, r providers.RunnerRequest) (providers.RunnerCredential, error) {
+	r.Scope = s.fill(r.Scope)
+	if r.GroupID == 0 {
+		r.GroupID = s.group
+	}
+	return s.Registrar.Mint(ctx, r)
+}
+func (s scoped) Deregister(ctx context.Context, r providers.RunnerRef) error {
+	r.Scope = s.fill(r.Scope)
+	return s.Registrar.Deregister(ctx, r)
+}
+func (s scoped) Orphans(ctx context.Context, sc providers.RunnerScope, t time.Time) ([]providers.RunnerRef, error) {
+	return s.Registrar.Orphans(ctx, s.fill(sc), t)
+}
+func (s scoped) Restriction(ctx context.Context, sc providers.RunnerScope, g int64) (providers.Restriction, error) {
+	if g == 0 {
+		g = s.group
+	}
+	return s.Registrar.Restriction(ctx, s.fill(sc), g)
+}
+
+// TestConformance proves acceptance 1: the registrar passes conformance.Run on recorded-shape
+// fixtures for repo and org scope (mint, list with pagination, delete including 404, group read).
+// The kit's replay server speaks plain HTTP and the funnel refuses it, so a TLS front relays to it.
+func TestConformance(t *testing.T) {
+	for _, tc := range []struct {
+		dir, scope, jitConfig string
+		groups                map[string]int64
+		group                 int64
+	}{
+		{"repo", jit.ScopeRepo, "synthetic-jit-config-repo-value", nil, 0},
+		{"org", jit.ScopeOrg, "synthetic-jit-config-org-value", map[string]int64{"untrusted": 11}, 11},
+	} {
+		t.Run(tc.dir, func(t *testing.T) {
+			conformance.Run(t, conformance.Subject{
+				Name: "github-jit-" + tc.dir, Fixtures: "testdata/" + tc.dir,
+				Secrets: [][]byte{[]byte(testToken), []byte(tc.jitConfig)},
+				New: func(base string, clk conformance.Clock) providers.Provider {
+					u, err := url.Parse(base)
+					if err != nil {
+						t.Fatal(err)
+					}
+					front := httptest.NewTLSServer(httputil.NewSingleHostReverseProxy(u))
+					t.Cleanup(front.Close)
+					reg, err := jit.New(jit.Config{Client: testClient(front.URL, front), Clock: clk.Now, PageSize: 2,
+						Settings: jit.Settings{Scope: tc.scope, Groups: tc.groups}})
+					if err != nil {
+						t.Fatal(err)
+					}
+					return scoped{reg, tc.group}
+				},
+			})
+		})
+	}
+}
+
+// TestUniqueNames proves acceptance 2: two Mint calls (same attempt, same instant) produce distinct
+// runner names and distinct nself-jit-<ulid> labels, and the label is the name.
+func TestUniqueNames(t *testing.T) {
+	f := newFakeGH(t)
+	r := f.registrar(jit.Settings{}, nil)
+	req := providers.RunnerRequest{Attempt: providers.Attempt{ID: "attempt-1"}, Scope: repoOnly}
+	a, err := r.MintRunner(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := r.MintRunner(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := func(m jit.Minted) string { return m.Labels[len(m.Labels)-1] }
+	if a.Name == b.Name || last(a) == last(b) || last(a) != a.Name || !strings.HasPrefix(a.Name, jit.RunnerPrefix) {
+		t.Fatalf("names %q %q labels %q %q", a.Name, b.Name, last(a), last(b))
+	}
+	if a.RunnerID == b.RunnerID || a.Credential.Value == b.Credential.Value {
+		t.Fatal("runner ids or credentials repeat")
+	}
+	if got := a.Credential.ExpiresAt; !got.Equal(epoch.Add(60 * time.Minute)) {
+		t.Fatalf("expiry %v", got)
+	}
+}
+
+func group(public, restricted bool, workflows ...string) map[string]any {
+	return map[string]any{"id": 11, "name": "g", "allows_public_repositories": public, "restricted_to_workflows": restricted, "selected_workflows": workflows}
+}
+
+// TestRestriction proves acceptance 3: Verified+ProtectedOnly only for the fixture group with public
+// repositories off, restricted_to_workflows on and every workflow pinned to a protected branch; each
+// negation (public allowed, unrestricted, unprotected branch, SHA or tag pin) is ProtectedOnly false
+// with a reason.
+func TestRestriction(t *testing.T) {
+	const ok = "acme/widgets/.github/workflows/ci.yml@refs/heads/main"
+	sha := "acme/widgets/.github/workflows/ci.yml@" + strings.Repeat("a", 40)
+	cases := []struct {
+		name   string
+		g      map[string]any
+		reason string
+	}{
+		{"all-conditions", group(false, true, ok), ""},
+		{"public-allowed", group(true, true, ok), "public_repositories_allowed"},
+		{"unrestricted", group(false, false, ok), "not_restricted_to_workflows"},
+		{"unprotected-branch", group(false, true, "acme/widgets/.github/workflows/ci.yml@refs/heads/dev"), "workflow_branch_unprotected"},
+		{"sha-pin", group(false, true, sha), "workflow_not_branch_pinned"},
+		{"tag-pin", group(false, true, "acme/widgets/.github/workflows/ci.yml@refs/tags/v1"), "workflow_not_branch_pinned"},
+		{"bare-ref", group(false, true, "acme/widgets/.github/workflows/ci.yml@main"), "workflow_not_branch_pinned"},
+		{"wildcard", group(false, true, "acme/widgets/.github/workflows/ci.yml@refs/heads/*"), "workflow_not_branch_pinned"},
+		{"one-bad-of-two", group(false, true, ok, sha), "workflow_not_branch_pinned"},
+		{"no-workflows", group(false, true), "no_selected_workflows"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeGH(t)
+			f.group, f.protect["acme/widgets@main"] = tc.g, true
+			r := f.registrar(jit.Settings{Scope: jit.ScopeOrg}, nil)
+			v, err := r.RestrictionVerdict(context.Background(), repoOnly, 11)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := tc.reason == ""; v.ProtectedOnly != want || v.Verified != true || v.Reason != tc.reason {
+				t.Fatalf("got %+v want reason %q", v, tc.reason)
+			}
+			got, err := r.Restriction(context.Background(), repoOnly, 11)
+			if err != nil || got.ProtectedOnly != (tc.reason == "") {
+				t.Fatalf("Restriction %+v %v", got, err)
+			}
+		})
+	}
+	t.Run("unreadable-group", func(t *testing.T) {
+		f := newFakeGH(t)
+		v, err := f.registrar(jit.Settings{Scope: jit.ScopeOrg}, nil).RestrictionVerdict(context.Background(), repoOnly, 11)
+		if err != nil || v.Verified || v.ProtectedOnly || v.Reason != "group_unreadable" {
+			t.Fatalf("%+v %v", v, err)
+		}
+		v, _ = f.registrar(jit.Settings{}, nil).RestrictionVerdict(context.Background(), repoOnly, 0)
+		if v.ProtectedOnly || v.Reason != "no_group" || f.called("GET") != 1 {
+			t.Fatalf("%+v calls=%v", v, f.calls)
+		}
+	})
+}
+
+// TestOrgScopeNeedsAdminOrg proves acceptance 4: an org-scope mint answered 403 with
+// X-Accepted-OAuth-Scopes: admin:org is E701 naming admin:org.
+func TestOrgScopeNeedsAdminOrg(t *testing.T) {
+	f := newFakeGH(t)
+	f.deny403 = true
+	r := f.registrar(jit.Settings{Scope: jit.ScopeOrg, Groups: map[string]int64{"untrusted": 11}}, nil)
+	_, err := r.Mint(context.Background(), providers.RunnerRequest{Scope: repoOnly, Attempt: providers.Attempt{Trust: "untrusted"}})
+	var pe *providers.Error
+	if !errors.As(err, &pe) || pe.Code != "E701" || !strings.Contains(pe.Reason, "admin:org") {
+		t.Fatalf("want E701 admin:org, got %v", err)
+	}
+}
+
+// TestDeregisterVerified proves acceptance 5 (first half): a runner still listed after DELETE is
+// E707 deregister_unverified; a 404 is done without a list read; a clean delete is verified absent.
+func TestDeregisterVerified(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeGH(t)
+	r := f.registrar(jit.Settings{}, nil)
+	m, err := r.MintRunner(ctx, providers.RunnerRequest{Scope: repoOnly})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Deregister(ctx, m.Ref()); err != nil || f.called("GET") != 1 {
+		t.Fatalf("clean delete: %v calls=%v", err, f.calls)
+	}
+	if err := r.Deregister(ctx, m.Ref()); err != nil || f.called("GET") != 1 {
+		t.Fatalf("404 must be done with no list read: %v calls=%v", err, f.calls)
+	}
+	f.keepDel = true
+	m, _ = r.MintRunner(ctx, providers.RunnerRequest{Scope: repoOnly})
+	err = r.Deregister(ctx, m.Ref())
+	var pe *providers.Error
+	if !errors.As(err, &pe) || pe.Code != "E707" || pe.Reason != "deregister_unverified" {
+		t.Fatalf("want E707 deregister_unverified, got %v", err)
+	}
+}
+
+// TestOrphans proves acceptance 5 (second half): only nself-jit-* runners older than 70 minutes and
+// not busy come back, across pages; a persistent runner, a young one and a busy one never do.
+func TestOrphans(t *testing.T) {
+	f := newFakeGH(t)
+	old, young, older := "nself-jit-01KDV6SJR0ABCDEFGHJKMNPQRS", "nself-jit-01KDVBYC600000000000000000", "nself-jit-01KDTZXVG00000000000000000"
+	f.runners = []runnerRow{{1, "persistent-box", false}, {2, old, false}, {3, young, false}, {4, "nself-jit-01KDV3BQ400000000000000000", true},
+		{5, older, false}, {6, "nself-jit-not-a-ulid-0000000000000", false}, {7, "other-" + old, false}}
+	r := f.registrar(jit.Settings{}, nil)
+	got, err := r.Orphans(context.Background(), repoOnly, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, x := range got {
+		ids = append(ids, x.ID)
+		if x.Scope != repoOnly {
+			t.Fatalf("scope lost: %+v", x)
+		}
+	}
+	if strings.Join(ids, ",") != "2,5" {
+		t.Fatalf("orphans %v, want [2 5]", ids)
+	}
+	if n := f.called("GET /repos/acme/widgets/actions/runners"); n != 4 {
+		t.Fatalf("paging: %d list calls for 7 runners at 2 per page", n)
+	}
+	// An explicit cutoff replaces the 70-minute default.
+	early, _ := r.Orphans(context.Background(), repoOnly, epoch.Add(-24*time.Hour))
+	if len(early) != 0 {
+		t.Fatalf("cutoff ignored: %v", early)
+	}
+}
+
+// TestFixedLabels proves acceptance 6: a request carrying ubuntu-latest (and other labels) registers
+// only the fixed set; only an arch label of the caller's survives; the body names group 1 at repo
+// scope and the operator's label is used.
+func TestFixedLabels(t *testing.T) {
+	f := newFakeGH(t)
+	r := f.registrar(jit.Settings{Label: "buildbox"}, nil)
+	m, err := r.MintRunner(context.Background(), providers.RunnerRequest{Scope: repoOnly, Labels: []string{"ubuntu-latest", "windows-2022", "nself", "ARM64", "self-hosted"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"self-hosted", "buildbox", "linux", "ARM64", m.Name}
+	body := f.minted[0]
+	got, _ := body["labels"].([]any)
+	if len(got) != len(want) {
+		t.Fatalf("labels %v", got)
+	}
+	for i, w := range want {
+		if got[i] != w {
+			t.Fatalf("labels %v, want %v", got, want)
+		}
+	}
+	if body["runner_group_id"] != float64(1) || body["name"] != m.Name {
+		t.Fatalf("body %v", body)
+	}
+	d, _ := r.MintRunner(context.Background(), providers.RunnerRequest{Scope: repoOnly, Labels: []string{"ubuntu-latest"}})
+	if d.Labels[3] != "X64" || len(d.Labels) != 5 {
+		t.Fatalf("default labels %v", d.Labels)
+	}
+	o := f.registrar(jit.Settings{Scope: jit.ScopeOrg, Groups: map[string]int64{"untrusted": 11}}, nil)
+	for _, req := range []providers.RunnerRequest{{Scope: repoOnly, GroupID: 99}, {Scope: repoOnly, Attempt: providers.Attempt{Trust: "trusted"}}} {
+		_, err = o.Mint(context.Background(), req)
+		var pe *providers.Error
+		if !errors.As(err, &pe) || pe.Code != "E700" {
+			t.Fatalf("an unmapped group must be E700, got %v", err)
+		}
+	}
+	if _, err := o.MintRunner(context.Background(), providers.RunnerRequest{Scope: repoOnly, GroupID: 11}); err != nil {
+		t.Fatal(err)
+	}
+	if f.minted[len(f.minted)-1]["runner_group_id"] != float64(11) {
+		t.Fatalf("org group not sent: %v", f.minted[len(f.minted)-1])
+	}
+}

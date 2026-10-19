@@ -69,6 +69,12 @@ func (c *Client) httpClient(timeout time.Duration) *http.Client {
 
 // Do sends one JSON API request. pathTemplate is logged without expanded parameters.
 func (c *Client) Do(ctx context.Context, method, pathTemplate string, params map[string]string, body, out any) (Response, error) {
+	return c.DoQuery(ctx, method, pathTemplate, params, nil, body, out)
+}
+
+// DoQuery is Do with a URL query (paging, filters). The query is encoded here and never reaches the
+// log, and a pathTemplate that carries its own "?" is still refused, so a value cannot smuggle one in.
+func (c *Client) DoQuery(ctx context.Context, method, pathTemplate string, params map[string]string, query url.Values, body, out any) (Response, error) {
 	start := time.Now()
 	var response Response
 	var finalErr error
@@ -97,6 +103,7 @@ func (c *Client) Do(ctx context.Context, method, pathTemplate string, params map
 		finalErr = config("request.path")
 		return response, finalErr
 	}
+	u.RawQuery = query.Encode()
 	var payload io.Reader
 	if body != nil {
 		encoded, encodeErr := json.Marshal(body)

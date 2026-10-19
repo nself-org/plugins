@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/orgs/acme/actions/runners",
+    "query": "page=2&per_page=2"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "body": "{\"total_count\": 3, \"runners\": [{\"id\": 7, \"name\": \"other-box\", \"os\": \"linux\", \"status\": \"online\", \"busy\": false, \"labels\": [{\"id\": 1, \"name\": \"self-hosted\", \"type\": \"read-only\"}]}]}"
+  }
+}
