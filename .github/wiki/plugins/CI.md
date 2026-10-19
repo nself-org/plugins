@@ -7,7 +7,7 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.7 |
+| **Version** | 1.2.11 |
 | **Install** | `nself plugin install ci` |
 | **Commands** | `nself ci`: `build`, `forgejo`, `nodes provision`, `nodes verify`, `run`, `serve` |
 | **Requirements** | nSelf >=1.4.12 |

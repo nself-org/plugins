@@ -1,0 +1,21 @@
+# Pin source of the GitHub Actions runner that `nself ci nodes provision` installs in V15 mode (P7-NODE-06).
+# `go generate ./internal/toolchain/...` turns every pins/*.yaml into toolchain/versions.yaml. The runner is not
+# part of the toolchain image (no Dockerfile ARG); the sha256 values are the ones published on the release page.
+name: github-actions-runner
+kind: tool
+version: "2.338.0"
+purpose: GitHub Actions runner tarball installed by nodes provision (V15 pin, replaces releases/latest)
+owner: internal/nodes/provision
+probe: [Runner.Listener, --version]
+upstream:
+  type: github
+  ref: actions/runner
+sources:
+  - os: linux
+    arch: amd64
+    url: https://github.com/actions/runner/releases/download/v2.338.0/actions-runner-linux-x64-2.338.0.tar.gz
+    sha256: af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32
+  - os: linux
+    arch: arm64
+    url: https://github.com/actions/runner/releases/download/v2.338.0/actions-runner-linux-arm64-2.338.0.tar.gz
+    sha256: 628b4a7258487b80c1d3c221095a7ded349f5ae0175fd3dfab708d07428f041b

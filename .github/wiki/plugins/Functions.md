@@ -7,7 +7,7 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.7 |
+| **Version** | 1.2.11 |
 | **Install** | `nself plugin install functions` |
 | **Commands** | `nself functions`: `delete`, `deploy`, `invoke`, `list`, `logs` |
 | **Requirements** | nSelf >=1.4.12 |

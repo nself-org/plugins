@@ -760,27 +760,36 @@
         "service_kind": "cli"
       },
       "category": "development",
-      "checksum": "28dc4561c1275c6eaf53c472fc1ccbc85db5ad11cdfac057c6f0bb08fb5425e9",
+      "checksum": "e3a5bddecee70cc5a370fe4e18ced25178122c578c66a2a76650bae3dd0ee3b6",
       "checksums": {
-        "sha256": "28dc4561c1275c6eaf53c472fc1ccbc85db5ad11cdfac057c6f0bb08fb5425e9"
+        "platforms": {
+          "darwin-amd64": "70320f464e96ceaa3dddd52f261d42fb9c2ca667611ea1252c19fd39114c0236",
+          "darwin-arm64": "25a98f4c088015d9a20dcdfa05625fac0e1e7316250b465c282705bc64581510",
+          "linux-amd64": "0ca65f839b007764f70ba9e8e719aee88f336efb74b932297b2b9097cbdd0016",
+          "linux-arm64": "28c4d5f543736af00c7871987cf8a7b756e76f5f21042e8107b6caabe18340f5",
+          "windows-amd64": "f1feb6608cde80bec4018a8ae03c26716e19deed01e73d3dccaadf6b8cdd2af3"
+        },
+        "sha256": "e3a5bddecee70cc5a370fe4e18ced25178122c578c66a2a76650bae3dd0ee3b6"
       },
       "dependencies": [],
       "description": "Local CI gate runner: detects repo stack (Go/Node/Flutter/Dart), runs lint+test+build, scans secrets with gitleaks, then posts a GitHub commit status (nself-ci) via gh OAuth. Replaces billing-blocked GitHub Actions as the merge gate.",
       "download_url": "https://plugins.nself.org/plugins/ci/tarball",
       "implementation": {
+        "binaryName": "nself-ci",
         "entryPoint": "cmd/",
-        "language": "go"
+        "language": "go",
+        "pluginType": "cli"
       },
       "language": "go",
       "license": "MIT",
       "minNselfVersion": "1.4.12",
       "min_nself_version": "1.4.12",
       "name": "ci",
-      "releaseTag": "v1.2.7",
+      "releaseTag": "v1.2.11",
       "release_signature": {
         "alg": "ed25519",
         "key_id": "plugins-2ebca8dfad98e19e",
-        "sig": "1AAx7LRTuzN1msPwkKImnq+YNGbYb/i1ly5DpqYu8cnNrMvBTP6nBNtXS8AQEyXGLMFZxrk5hY8ZNJMS143IBw=="
+        "sig": "Xd7TSDvOZXhbv+uh6tReCR3n9ud2BbBBvRfYBw/6yKCy5c/8Jbmp/DJTfD2umyQ3sZmyGXZNJMoqizqSfDgrCg=="
       },
       "requires_license": false,
       "tables": [],
@@ -794,10 +803,10 @@
         "gitleaks",
         "devops"
       ],
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/ci-1.2.7.tar.gz",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/ci-1.2.7.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.11/ci-1.2.11.tar.gz",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.11/ci-1.2.11.tar.gz",
       "tier": "free",
-      "version": "1.2.7"
+      "version": "1.2.11"
     },
     "claw-cli": {
       "author": "nself",
@@ -2324,35 +2333,44 @@
         "service_kind": "cli"
       },
       "category": "infrastructure",
-      "checksum": "a90ff9d7744dfc04e9540608d500dfe9e6d8b61bfa3d6fd4934f3445e42b4eb1",
+      "checksum": "6b8193a30ed0162237fd1038a011a6a053b3685de7515dec76f9cd32eaa83385",
       "checksums": {
-        "sha256": "a90ff9d7744dfc04e9540608d500dfe9e6d8b61bfa3d6fd4934f3445e42b4eb1"
+        "platforms": {
+          "darwin-amd64": "288299555503452f8a69c70e6ccc8e7749c0b87601a7b19ab2e0482be4927c62",
+          "darwin-arm64": "bee02eca2646c1a1aabf636b3f78784fa712478631875f812f84fc504b65e942",
+          "linux-amd64": "561ee7b376a31e8709cf2cda8fd6cc4ae02fd70e268d736ce660d35aee04c6fc",
+          "linux-arm64": "cecb034dc5ca274a4ed43d9ab697933222f4da0fd965106c091f2863b5628220",
+          "windows-amd64": "77c16fd8aac4d5e27701c4595830d34ed844f594619fd25e1abdef7f016e8bd6"
+        },
+        "sha256": "6b8193a30ed0162237fd1038a011a6a053b3685de7515dec76f9cd32eaa83385"
       },
       "dependencies": [],
       "description": "Deploy and manage nself serverless functions",
       "download_url": "https://plugins.nself.org/plugins/functions/tarball",
       "implementation": {
+        "binaryName": "nself-functions",
         "entryPoint": "cmd/",
-        "language": "go"
+        "language": "go",
+        "pluginType": "cli"
       },
       "language": "go",
       "license": "free",
       "minNselfVersion": "1.4.12",
       "min_nself_version": "1.4.12",
       "name": "functions",
-      "releaseTag": "v1.2.7",
+      "releaseTag": "v1.2.11",
       "release_signature": {
         "alg": "ed25519",
         "key_id": "plugins-2ebca8dfad98e19e",
-        "sig": "wmE4ZYQvOAAsXX9Kd01veLgy7O4YrtGqaEZ6QuKYZHE3LJMii+dZCv/qq7qvozBBt8w344K1Gq2Ua2bYH8YPBg=="
+        "sig": "4DfY/GFgG/A2+fUFIn7hnPdHRTeZtuZ0ekQhnT4NoS1eVK/NYs/gn+3BvsZW1M/d2hi+ThbafoSZs5y9Ot5/BA=="
       },
       "requires_license": false,
       "tables": [],
       "tags": [],
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/functions-1.2.7.tar.gz",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/functions-1.2.7.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.11/functions-1.2.11.tar.gz",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.11/functions-1.2.11.tar.gz",
       "tier": "free",
-      "version": "1.2.7"
+      "version": "1.2.11"
     },
     "functions-v8": {
       "author": "nself",
@@ -3135,7 +3153,7 @@
             "values"
           ]
         },
-        "maturity": "planned",
+        "maturity": "implemented",
         "requires": {
           "nself": ">=1.2.8"
         },
@@ -6027,7 +6045,7 @@
     "traefik": {
       "author": "nself",
       "catalog": {
-        "maturity": "experimental",
+        "maturity": "implemented",
         "requires": {
           "nself": ">=1.4.12"
         },

@@ -74,7 +74,7 @@ tokfix() { perl -i -p "$WORK/tokfix.pl" "$1/ssh.n" "$1/stub.n"; }
 capture() {
   local dir=$1 rc=0 n; shift; mkdir -p "$dir"
   reset_nodes; : > "$WORK/ssh.log"; rm -f "$WORK/home/.ssh/known_hosts"
-  ( cd "$WORK/cwd" && env -u GITHUB_RUNNER_TOKEN -u NSELF_DEPLOY_KEY_PATH -u NSELF_DEPLOY_SSH_KEY HOME="$WORK/home" \
+  ( cd "$WORK/cwd" && env -u GITHUB_RUNNER_TOKEN -u NSELF_DEPLOY_KEY_PATH -u NSELF_DEPLOY_SSH_KEY -u NSELF_V15 HOME="$WORK/home" \
       PATH="$WORK/shim:$WORK/blocklocal:$PATH" NO_COLOR=1 $ENVV "$@" >"$dir/out" 2>"$dir/err" ) || rc=$?
   echo "$rc" > "$dir/rc"; norm < "$dir/out" > "$dir/out.n"; norm < "$dir/err" > "$dir/err.n"
   { grep -vx -e '--' "$WORK/ssh.log" || true; } | norm > "$dir/ssh.n"
@@ -102,6 +102,21 @@ verdict() {
     bad=1; echo "TOKEN $label: the head put a registration token on an argv, in a remote script or in its output (D-0263)"; fi
   if [ -n "$WANT_RC" ] && [ "$(cat "$o/a/rc")" != "$WANT_RC" ]; then
     bad=1; echo "RC $label: exit code $(cat "$o/a/rc"), expected $WANT_RC (the case did not exercise what it claims)"; fi
+  if [ $bad -eq 0 ]; then echo "ok $label"; else FAILS=$((FAILS + 1)); fi
+}
+# head_refuses <label> <exit code> <stderr text> args...: `nodes provision ARGS` on the head build alone (v1.4 mode: NSELF_V15 is
+# unset by capture). For a flag core answers differently (provision --json prints core's E402): the head must refuse it as
+# origin/main does, with empty stdout and no host contacted (empty ssh argv and stub logs).
+head_refuses() {
+  local label=$1 rc=$2 want=$3 id o bad=0; shift 3
+  if [ -n "${PARITY_ONLY:-}" ] && ! [[ $label =~ $PARITY_ONLY ]]; then return 0; fi
+  id=$(printf '%s' "$label" | tr -c 'A-Za-z0-9\n' '_'); CASES=$((CASES + 1)); o=$WORK/o/$id/b
+  capture "$o" "$HEADBIN" nodes provision "$@"
+  [ "$(cat "$o/rc")" = "$rc" ] || { bad=1; echo "RC $label: exit code $(cat "$o/rc"), expected $rc"; }
+  [ ! -s "$o/out.n" ] || { bad=1; echo "OUT $label: stdout is not empty"; }
+  grep -qF -e "$want" "$o/err.n" || { bad=1; echo "ERR $label: stderr lacks '$want'"; }
+  [ ! -s "$o/ssh.n" ] || { bad=1; echo "SSH $label: a host was contacted"; }
+  if grep -qF -e "$TOK" "$o/out.n" "$o/err.n" "$o/ssh.n"; then bad=1; echo "TOKEN $label: the token is in the output"; fi
   if [ $bad -eq 0 ]; then echo "ok $label"; else FAILS=$((FAILS + 1)); fi
 }
 if [ "$MODE" = self ]; then # the comparator needs no containers
@@ -217,6 +232,7 @@ STATE=workdir WANT_RC=1 pair "verify reachable plus unreachable" 1 --host "$A" -
 STATE=drift WANT_RC=1 pair "verify drift between two hosts" 1 --host "$A" --host "$B" "${KO[@]}"
 STATE=drift WANT_RC=1 pair "verify drift --json" 1 --host "$A,$B" "${KO[@]}" --json
 STATE=workdir WANT_RC=0 pair "verify two identical hosts, no drift" 1 --host "$A" --host "$B" "${KO[@]}"
+STATE=workdir WANT_RC=0 pair "verify two identical hosts --json, no drift" 1 --host "$A" --host "$B" "${KO[@]}" --json
 STATE=deps WANT_RC=0 ENVV="NSELF_DEPLOY_KEY_PATH=$KEY" pair "verify key from NSELF_DEPLOY_KEY_PATH" 1 --host "$A"
 STATE=deps WANT_RC=0 ENVV="NSELF_DEPLOY_SSH_KEY=$KEY" pair "verify key from NSELF_DEPLOY_SSH_KEY" 1 --host "$A"
 # destination checks that run before ssh; --json shows the message the text matrix hides
@@ -255,6 +271,8 @@ pair "provision with two hosts" 0 --github-url "$URL" --token "$TOK" --host a --
 pair "provision with two hosts as CSV" 0 --github-url "$URL" --token "$TOK" --host a,b
 pair "provision with local plus a host" 0 --github-url "$URL" --token "$TOK" --host local --host "$A"
 pair "provision bad --instances" 0 --instances x --github-url "$URL" --token "$TOK" --host "$A"
+# provision --json is an unknown capability in v1.4 mode: refused exactly as origin/main does, no host contacted
+STATE=bare head_refuses "provision --json is refused in v1.4 mode" 1 "does not support --json" --json --host "$A" "${KO[@]}" --github-url "$URL" --token "$TOK"
 # flag errors, help, positional arguments
 for c in provision verify; do
   WANT_RC=1; for a in --bogus --bogus=1 -x --host ---x; do pair "$c flag error $a" 0 "$a"; done

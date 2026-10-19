@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Vendored for P7-CACHE-09 (2026-10-19). Source: slsa-framework/slsa spec/schema/provenance.cue and provenance.proto at commit 048a3c411b3a892fc41092b6688bbee345b7b386 (predicate type https://slsa.dev/provenance/v1), with the required fields of in-toto/attestation spec/predicates/provenance.md. The upstream schema publishes no JSON Schema file; this transcribes its required fields and types. Additional properties stay allowed.",
+  "title": "SLSA Provenance v1 predicate",
+  "type": "object",
+  "required": ["buildDefinition", "runDetails"],
+  "$defs": {
+    "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$"},
+    "resourceDescriptor": {
+      "type": "object",
+      "anyOf": [{"required": ["uri"]}, {"required": ["digest"]}, {"required": ["content"]}],
+      "properties": {
+        "uri": {"type": "string"},
+        "digest": {"type": "object", "additionalProperties": {"type": "string"}},
+        "name": {"type": "string"},
+        "downloadLocation": {"type": "string"},
+        "mediaType": {"type": "string"},
+        "content": {"type": "string"},
+        "annotations": {"type": "object"}
+      }
+    }
+  },
+  "properties": {
+    "buildDefinition": {
+      "type": "object",
+      "required": ["buildType", "externalParameters"],
+      "properties": {
+        "buildType": {"type": "string", "minLength": 1},
+        "externalParameters": {"type": "object"},
+        "internalParameters": {"type": "object"},
+        "resolvedDependencies": {"type": "array", "items": {"$ref": "#/$defs/resourceDescriptor"}}
+      }
+    },
+    "runDetails": {
+      "type": "object",
+      "required": ["builder"],
+      "properties": {
+        "builder": {
+          "type": "object",
+          "required": ["id"],
+          "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "builderDependencies": {"type": "array", "items": {"$ref": "#/$defs/resourceDescriptor"}},
+            "version": {"type": "object", "additionalProperties": {"type": "string"}}
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "invocationId": {"type": "string"},
+            "startedOn": {"$ref": "#/$defs/timestamp"},
+            "finishedOn": {"$ref": "#/$defs/timestamp"}
+          }
+        },
+        "byproducts": {"type": "array", "items": {"$ref": "#/$defs/resourceDescriptor"}}
+      }
+    }
+  }
+}

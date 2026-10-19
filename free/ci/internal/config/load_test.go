@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 const goodJob = "  a:\n    kind: test\n    run: [go, test]\n"
@@ -122,7 +124,9 @@ func TestEnvPresentWarning(t *testing.T) {
 }
 
 // TestRepoConfig loads this repository's own `.nself/ci.yaml` and proves the
-// hand-converted plugin-gauth jobs equal what `config migrate` produces.
+// hand-converted plugin-gauth jobs (the gauth-* ones) equal what `config
+// migrate` produces. The file also declares the repository's gate jobs
+// (P7-CI-07), which the migration knows nothing about.
 func TestRepoConfig(t *testing.T) {
 	l, err := Load(filepath.Join("..", "..", "..", "..", FileName))
 	if err != nil {
@@ -135,7 +139,13 @@ func TestRepoConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, _ := json.Marshal(l.Config.Jobs)
+	gauth := map[string]model.Job{}
+	for id, j := range l.Config.Jobs {
+		if strings.HasPrefix(id, "gauth-") {
+			gauth[id] = j
+		}
+	}
+	got, _ := json.Marshal(gauth)
 	want, _ := json.Marshal(m.Config.Jobs)
 	if string(got) != string(want) {
 		t.Errorf("hand conversion differs from migration\n got %s\nwant %s", got, want)

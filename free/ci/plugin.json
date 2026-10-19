@@ -221,6 +221,12 @@
             "usage": "Number of runner instances to install on this host"
           },
           {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "V15 only (NSELF_V15=1): print one v1 JSON envelope; in v1.4 the flag is refused as today"
+          },
+          {
             "default": "[]",
             "name": "labels",
             "type": "stringSlice",
@@ -238,7 +244,7 @@
             "usage": "GitHub Actions runner registration token (overrides GITHUB_RUNNER_TOKEN env). Never logged."
           }
         ],
-        "json": "none",
+        "json": "legacy",
         "name": "nodes provision",
         "output": "document",
         "side_effect": "remote",
@@ -257,7 +263,7 @@
             "default": "false",
             "name": "json",
             "type": "bool",
-            "usage": "Print raw JSON ([]runner.HostReport) instead of the text parity matrix"
+            "usage": "Print JSON instead of the text parity matrix: raw []HostReport in v1.4, one v1 envelope in V15 (NSELF_V15=1)"
           },
           {
             "name": "ssh-key",
@@ -265,7 +271,7 @@
             "usage": "SSH private key path (default: NSELF_DEPLOY_KEY_PATH or ~/.ssh/id_ed25519)"
           }
         ],
-        "json": "none",
+        "json": "legacy",
         "name": "nodes verify",
         "output": "document",
         "side_effect": "read",

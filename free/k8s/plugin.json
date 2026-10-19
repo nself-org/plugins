@@ -342,7 +342,7 @@
   "licenseType": "free",
   "license_spdx": "MIT",
   "manifest_version": 2,
-  "maturity": "planned",
+  "maturity": "implemented",
   "minNselfVersion": "1.2.8",
   "name": "k8s",
   "pluginType": "cli",
@@ -353,7 +353,7 @@
   "service": {
     "kind": "cli"
   },
-  "status": "planned",
+  "status": "stable",
   "tags": [
     "kubernetes",
     "k8s",
