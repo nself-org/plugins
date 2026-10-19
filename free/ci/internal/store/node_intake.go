@@ -224,7 +224,8 @@ func (s *Store) IntakeClaim(ctx context.Context, owner string) (IntakeRow, bool,
 		if _, err = tx.ExecContext(ctx, `UPDATE intake SET state='dispatched',claimed_by=?,claim_at=?,attempts=attempts+1 WHERE id=? AND state='queued'`, owner, now, row.ID); err != nil {
 			return err
 		}
-		row.State, row.ClaimedBy, row.Attempts, r, ok = IntakeDispatched, owner, row.Attempts+1, row, true
+		row.State, row.ClaimedBy, row.Attempts = IntakeDispatched, owner, row.Attempts+1
+		r, ok = row, true
 		return nil
 	})
 	return r, ok, err
