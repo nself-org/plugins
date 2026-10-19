@@ -43,8 +43,9 @@ var dynamicProgram = map[string]bool{
 	"internal/legacy/gate_runners.go:runStep":   true,
 	"internal/serve/serve_job_report.go:runCmd": true,
 	"internal/serve/serve_job.go:runGateDirect": true,
-	"internal/exec/process.go:runCommand":       true,
-	"internal/exec/process.go:runCommandIn":     true,
+	// runCommand and runCommandIn delegate to runCommandSig, the one function in
+	// process.go that starts the job command (D-1082).
+	"internal/exec/process.go:runCommandSig": true,
 	// `nself ci --detach` re-executes the plugin binary (os.Executable) in a new
 	// session; the program is the caller's own binary, never ssh (P7-CI-63).
 	"internal/exec/detach.go:StartDetached": true,
@@ -56,6 +57,7 @@ var dynamicProgram = map[string]bool{
 	// podman by name or path) before any of these runs it (P7-TRUST-04).
 	"internal/exec/container.go:containerStopper": true,
 	"internal/exec/runtime.go:RuntimeQuery":       true,
+	"internal/exec/runtime.go:runtimeQuery":       true, // spawns what RuntimeQuery vetted (D-1082)
 	"internal/exec/runtime.go:RuntimeRemove":      true,
 	// The sandboxed-container probe (P7-TRUST-05): the runtime binary is checked against
 	// runtimeBinary, the runtime name and image against fixed patterns; runsc is run only by its
