@@ -35,7 +35,7 @@ const codeStoreFailed = "E607"
 
 func init() {
 	registerRunsSub("follow", runFollow)
-	registerV15("runs follow", subcommandEntry{V15Only: true, Flags: func() *flag.FlagSet { return newFollowFlagSet(&followFlags{}) }, Handler: runFollow})
+	registerV15("runs follow", subcommandEntry{V15Only: true, SideEffect: SideEffectRead, Flags: func() *flag.FlagSet { return newFollowFlagSet(&followFlags{}) }, Handler: runFollow})
 }
 
 type followFlags struct {

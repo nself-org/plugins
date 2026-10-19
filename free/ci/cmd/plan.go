@@ -57,7 +57,7 @@ func init() {
 	planFlags.StringVar(&planOpts.cfg, "config", "", "config file (default: <repo>/.nself/ci.yaml)")
 	planFlags.StringVar(&planOpts.base, "base", "", "base commit for affected selection (env NSELF_CI_BASE_SHA; default: merge-base with origin's default branch)")
 	registerV15("plan", subcommandEntry{
-		V15Only: true,
+		V15Only: true, SideEffect: SideEffectRead,
 		Flags:   func() *flag.FlagSet { return planFlags },
 		Handler: runPlan,
 	})

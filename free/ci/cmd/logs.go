@@ -46,7 +46,7 @@ func newLogsFlagSet(f *logsFlags) *flag.FlagSet {
 }
 
 func init() {
-	registerV15("logs", subcommandEntry{V15Only: true, Handler: runLogs, Flags: func() *flag.FlagSet { return newLogsFlagSet(&logsFlags{}) }})
+	registerV15("logs", subcommandEntry{V15Only: true, SideEffect: SideEffectRead, Handler: runLogs, Flags: func() *flag.FlagSet { return newLogsFlagSet(&logsFlags{}) }})
 }
 
 // logTarget is the attempt whose log is read.

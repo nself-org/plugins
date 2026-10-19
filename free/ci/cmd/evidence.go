@@ -54,7 +54,7 @@ func newEvidenceFlagSet(f *evidenceFlags, verify bool) *flag.FlagSet {
 func init() {
 	registerV15("evidence", subcommandEntry{V15Only: true, Handler: runEvidence,
 		Flags: func() *flag.FlagSet { return newEvidenceFlagSet(&evidenceFlags{}, false) }})
-	registerV15("evidence verify", subcommandEntry{V15Only: true, Handler: runVerify,
+	registerV15("evidence verify", subcommandEntry{V15Only: true, SideEffect: SideEffectRead, Handler: runVerify,
 		Flags: func() *flag.FlagSet { return newEvidenceFlagSet(&evidenceFlags{}, true) }})
 }
 

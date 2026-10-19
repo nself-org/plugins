@@ -16,8 +16,8 @@ import (
 
 func init() {
 	registerV15("doctor", subcommandEntry{
-		V15Only: true,
-		Flags:   doctor.Flags,
+		V15Only: true, SideEffect: SideEffectRead,
+		Flags: doctor.Flags,
 		Handler: func(args []string) int {
 			return doctor.Run(args, os.Stdout, os.Stderr, doctor.DefaultDeps())
 		},
