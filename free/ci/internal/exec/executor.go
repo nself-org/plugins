@@ -62,13 +62,19 @@ type Executor struct {
 	Env      EnvPolicy
 	Redactor Redactor
 	// NewRedactor returns fresh streaming state for each concurrent attempt.
-	NewRedactor  func() Redactor
-	Secrets      SecretSource
-	Isolation    Isolator
-	Stale        StaleChecker
-	Grace        time.Duration
-	redactorOnce sync.Once
-	redactorSlot chan struct{}
+	NewRedactor func() Redactor
+	Secrets     SecretSource
+	// RegisterSecret, when set, receives every non-empty resolved secret value
+	// before the job starts, so the redaction registry (and the artifact and cache
+	// scanners that read it) knows the value. An error fails the attempt: a
+	// secret that cannot be masked is never handed to a job. It must not keep
+	// the value in an error.
+	RegisterSecret func(value []byte) error
+	Isolation      Isolator
+	Stale          StaleChecker
+	Grace          time.Duration
+	redactorOnce   sync.Once
+	redactorSlot   chan struct{}
 }
 
 // Run confines a job to a fresh private workspace and removes it on every exit.
@@ -87,7 +93,7 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 			return AttemptResult{Attempt: model.Attempt{ID: s.AttemptID, State: "cancelled", FailureClass: "cancelled"}, Err: err}
 		}
 	}
-	local := Executor{Env: e.Env, Redactor: e.Redactor, NewRedactor: e.NewRedactor, Secrets: e.Secrets, Isolation: e.Isolation, Stale: e.Stale, Grace: e.Grace}
+	local := Executor{Env: e.Env, Redactor: e.Redactor, NewRedactor: e.NewRedactor, Secrets: e.Secrets, RegisterSecret: e.RegisterSecret, Isolation: e.Isolation, Stale: e.Stale, Grace: e.Grace}
 	e = &local
 	if e.NewRedactor != nil {
 		e.Redactor = e.NewRedactor()
@@ -213,6 +219,12 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		if !safeID.MatchString(k) || strings.Contains(k, ".") {
 			result.Err = coded("E612", "invalid secret key")
 			return
+		}
+		if e.RegisterSecret != nil && v != "" {
+			if err := e.RegisterSecret([]byte(v)); err != nil {
+				result.Err, result.Attempt.FailureClass = coded("E612", "a job secret could not be registered for masking; the job did not start"), "infra"
+				return
+			}
 		}
 		secretEnv = append(secretEnv, k+"="+v)
 	}
