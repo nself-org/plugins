@@ -1,15 +1,19 @@
 name: Release nself-ci-agent
 
 # One tag push (v*) builds, signs and uploads the signed nself-ci-agent for linux/amd64, linux/arm64 and darwin/arm64 (hq NODE D11,
-# P7-NODE-15). Three jobs, each with only the permissions and secrets it needs:
-#   build    reproducible builds (scripts/release/agent/build.sh: CGO_ENABLED=0, -trimpath, -buildvcs=false); a second build must give the
-#            same bytes or the job fails. No secrets, read-only token.
-#   sign     bound to the protected Environment `release-signing` (required reviewer): the only job that can read the agent-purpose key
-#            (NSELF_AGENT_SIGNING_KEY + _ID). Writes one agent-release/v1 manifest per target (scripts/release/agent/manifest.sh), then
-#            refuses to go on unless the key id is committed under scripts/release/keys/ and `nself-ci-agent verify-release` accepts every
-#            manifest against that committed key.
-#   publish  uploads the binaries and manifests to the GitHub Release of the tag (never --clobber). Holds contents:write, never the key.
-# Rehearsal (workflow_dispatch, rehearsal true, the default): build twice, sign with a throwaway key, verify, upload nothing, read no secret.
+# P7-NODE-15; CACHE D17, P7-CACHE-10). Two jobs, each with only the permissions and secrets it needs:
+#   build         reproducible builds (scripts/release/agent/build.sh: CGO_ENABLED=0, -trimpath, -buildvcs=false); a second build must give
+#                 the same bytes or the job fails, and the digest of SHA256SUMS leaves as a job output. No secrets, read-only token.
+#   sign-publish  bound to the protected Environment `release-signing` (required reviewer). It rebuilds from the same tag (the build is
+#                 reproducible) and refuses to go on unless the digest equals the build job's. Then, one step each: the agent-purpose key
+#                 reaches manifest.sh (one agent-release/v1 manifest per target) and provenance.sh (syft SBOMs, CycloneDX 1.6 + SPDX, and
+#                 a DSSE-signed in-toto provenance statement per target, via tools/provgen); `nself-ci-agent verify-release` must accept
+#                 every file against the committed public key; only then the release token reaches the upload step, which adds the
+#                 binaries, manifests, SBOMs and provenance to the GitHub Release of the tag (never --clobber; the provenance goes last as the commit marker).
+# No Actions artifact and no Actions cache is used (hq CACHE D19: we never pay GitHub for storage), so nothing travels between jobs but
+# a digest; that is why signing and uploading share one job. Each secret is passed to the one step that needs it.
+# Rehearsal (workflow_dispatch, rehearsal true, the default): build twice, sign with throwaway keys, write SBOMs and provenance, verify,
+# upload nothing, read no secret.
 # The real run needs the committed agent public key and the Environment secrets, which P7-NODE-29 creates; until then only rehearsal runs.
 # Clients install the pinned version and verify it (internal/agent/verify); see .github/wiki/Releasing.md.
 
@@ -90,34 +94,33 @@ jobs:
           diff -r "$RUNNER_TEMP/agent-a" "$RUNNER_TEMP/agent-b"
           mkdir -p dist
           cp -p "$RUNNER_TEMP"/agent-a/* dist/
-          # The digest of SHA256SUMS travels as a job output, a different channel from the artifact, so `sign` can refuse a swapped artifact.
+          # The digest of SHA256SUMS travels as a job output, a different channel from the rebuilt files, so `sign-publish` can refuse a rebuild that differs.
           echo "sums=$(sha256sum dist/SHA256SUMS | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
-      - name: Rehearsal signing and verification
+      - name: Rehearsal signing, SBOMs, provenance and verification
         if: steps.tag.outputs.rehearsal == 'true'
         run: |
           bash scripts/release/agent/manifest.sh --in dist --rehearsal
+          bash scripts/release/agent/provenance.sh --in dist --rehearsal
           (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --require-all-targets --pub "$GITHUB_WORKSPACE/dist/rehearsal-test.pub" "$GITHUB_WORKSPACE/dist")
           cat dist/SHA256SUMS
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: steps.tag.outputs.rehearsal != 'true'
-        with:
-          name: agent-dist
-          path: dist/
-          if-no-files-found: error
-          retention-days: 3
-
-  sign:
-    name: Sign (release-signing)
+  sign-publish:
+    name: Sign and upload (release-signing)
     needs: build
     if: needs.build.outputs.rehearsal != 'true'
     runs-on: ubuntu-latest
     environment: release-signing
     permissions:
-      contents: read
+      contents: write
+    env:
+      TAG: ${{ needs.build.outputs.tag }}
     steps:
-      # The workflow's own commit: the manifest.sh that touches the key is the one the reviewer approved.
+      # Hygiene only (every step runs as the same user, which can read its own processes anyway): none of the steps below needs root.
+      - name: Drop passwordless sudo
+        run: sudo rm -f /etc/sudoers.d/runner || true
+
+      # The workflow's own commit: the scripts that touch the key are the ones the reviewer approved.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -127,18 +130,15 @@ jobs:
           go-version: '1.26.9'
           cache: false
 
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: agent-dist
-          path: dist
-
-      - name: Refuse an artifact that is not what build produced
+      - name: Rebuild and refuse anything that is not what build produced
         env:
           EXPECTED_SUMS: ${{ needs.build.outputs.sums }}
-          TAG: ${{ needs.build.outputs.tag }}
         run: |
           [[ "$EXPECTED_SUMS" =~ ^[0-9a-f]{64}$ ]] || { echo "ERROR: build did not record the SHA256SUMS digest"; exit 1; }
-          [ "$(sha256sum dist/SHA256SUMS | cut -d' ' -f1)" = "$EXPECTED_SUMS" ] || { echo "ERROR: SHA256SUMS differs from what build recorded"; exit 1; }
+          bash scripts/release/agent/build.sh --version "$TAG" --out "$RUNNER_TEMP/agent"
+          mkdir -p dist
+          cp -p "$RUNNER_TEMP"/agent/* dist/
+          [ "$(sha256sum dist/SHA256SUMS | cut -d' ' -f1)" = "$EXPECTED_SUMS" ] || { echo "ERROR: the rebuild differs from what the build job recorded"; exit 1; }
           (cd dist && sha256sum -c SHA256SUMS)
           # The directory holds exactly the listed binaries plus SHA256SUMS and VERSION: nothing unlisted gets signed.
           want="$( { cut -d' ' -f3 dist/SHA256SUMS; printf 'SHA256SUMS\nVERSION\n'; } | LC_ALL=C sort)"
@@ -146,53 +146,65 @@ jobs:
           [ "$want" = "$have" ] || { echo "ERROR: dist holds files SHA256SUMS does not list (or lacks listed ones)"; exit 1; }
           [ "$(cat dist/VERSION)" = "${TAG#v}" ] || { echo "ERROR: dist/VERSION is not the tag's version"; exit 1; }
 
-      # The key reaches manifest.sh through the environment of this one step only. manifest.sh writes it to a 0600 file in a 0700
-      # temp directory that it removes on exit; nothing prints it and no step has `set -x`.
-      - name: Sign the manifests
-        env:
-          NSELF_AGENT_SIGNING_KEY: ${{ secrets.NSELF_AGENT_SIGNING_KEY }}
-          NSELF_AGENT_SIGNING_KEY_ID: ${{ secrets.NSELF_AGENT_SIGNING_KEY_ID }}
-        run: bash scripts/release/agent/manifest.sh --in dist
-
-      - name: Verify against the committed public key
+      # Key-free gate first: the committed public key for the key id must exist and be the only key in its file, before any step reads the
+      # key. Records the key file for verify-release and for the upload step.
+      - name: Check the committed public key
         env:
           KEY_ID: ${{ secrets.NSELF_AGENT_SIGNING_KEY_ID }}
-          TAG: ${{ needs.build.outputs.tag }}
         run: |
           [[ "$KEY_ID" =~ ^agent-[0-9a-f]{16}$ ]] || { echo "ERROR: the key id secret is not agent-<16 hex>"; exit 1; }
           PUB="scripts/release/keys/${KEY_ID}.pub"
           [ -f "$PUB" ] || { echo "ERROR: ${PUB} is not committed; commit the agent public key first"; exit 1; }
           # genkeys.sh refuses an agent key that is also a key committed for another purpose.
           bash scripts/release/agent/genkeys.sh "$RUNNER_TEMP/keys_check.go"
+          echo "PUB_FILE=$GITHUB_WORKSPACE/$PUB" >> "$GITHUB_ENV"
+          if [ -f scripts/release/keys/agent-revoked.txt ]; then echo "REVOKED_FILE=$GITHUB_WORKSPACE/scripts/release/keys/agent-revoked.txt" >> "$GITHUB_ENV"; fi
+
+      # The key reaches manifest.sh and the --sign phase of provenance.sh through the environment of these two steps only. Each writes it
+      # to a 0600 file in a 0700 temp dir that it removes on exit; nothing prints it and no step has `set -x`. Neither runs a third-party
+      # program: syft, go and provgen run in the step between them, which has no secret.
+      - name: Sign the manifests
+        env:
+          NSELF_AGENT_SIGNING_KEY: ${{ secrets.NSELF_AGENT_SIGNING_KEY }}
+          NSELF_AGENT_SIGNING_KEY_ID: ${{ secrets.NSELF_AGENT_SIGNING_KEY_ID }}
+        run: |
+          # Nothing earlier in this job may have changed the code that is about to see the key: the scripts are the checkout's, and no
+          # step has put a shell or loader hook into the environment.
+          git diff --quiet HEAD -- scripts .github free/ci/cmd free/ci/tools free/ci/internal || { echo "ERROR: tracked files changed since the checkout"; exit 1; }
+          for v in BASH_ENV ENV LD_PRELOAD LD_LIBRARY_PATH DYLD_INSERT_LIBRARIES; do [ -z "${!v:-}" ] || { echo "ERROR: $v is set"; exit 1; }; done
+          bash scripts/release/agent/manifest.sh --in dist
+
+      # syft is the pinned version from free/ci/internal/toolchain/versions.yaml (checksum-verified download); the statement's builder is
+      # this workflow ref and run. provenance.sh --prepare refuses to start if the key is in its environment.
+      - name: Write the SBOMs and the provenance statements
+        run: bash scripts/release/agent/provenance.sh --in dist --prepare
+
+      - name: Sign the provenance
+        env:
+          NSELF_AGENT_SIGNING_KEY: ${{ secrets.NSELF_AGENT_SIGNING_KEY }}
+          NSELF_AGENT_SIGNING_KEY_ID: ${{ secrets.NSELF_AGENT_SIGNING_KEY_ID }}
+        run: |
+          # Nothing earlier in this job may have changed the code that is about to see the key: the scripts are the checkout's, and no
+          # step has put a shell or loader hook into the environment.
+          git diff --quiet HEAD -- scripts .github free/ci/cmd free/ci/tools free/ci/internal || { echo "ERROR: tracked files changed since the checkout"; exit 1; }
+          for v in BASH_ENV ENV LD_PRELOAD LD_LIBRARY_PATH DYLD_INSERT_LIBRARIES; do [ -z "${!v:-}" ] || { echo "ERROR: $v is set"; exit 1; }; done
+          bash scripts/release/agent/provenance.sh --in dist --sign
+
+      - name: Verify against the committed public key
+        run: |
           REVOKED=()
-          if [ -f scripts/release/keys/agent-revoked.txt ]; then REVOKED=(--revoked "$GITHUB_WORKSPACE/scripts/release/keys/agent-revoked.txt"); fi
-          (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --require-all-targets --version "${TAG#v}" "${REVOKED[@]}" --pub "$GITHUB_WORKSPACE/$PUB" "$GITHUB_WORKSPACE/dist")
+          if [ -n "${REVOKED_FILE:-}" ]; then REVOKED=(--revoked "$REVOKED_FILE"); fi
+          (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --require-all-targets --tags-only --version "${TAG#v}" "${REVOKED[@]}" --pub "$PUB_FILE" "$GITHUB_WORKSPACE/dist")
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: agent-signed
-          path: dist/
-          if-no-files-found: error
-          retention-days: 3
-
-  publish:
-    name: Upload to the release
-    needs: [build, sign]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      TAG: ${{ needs.build.outputs.tag }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: agent-signed
-          path: dist
-
-      # Never --clobber: an asset already on the release stays the artifact of record. The release itself is created by
-      # release-tarballs.yml for the same tag; this job waits for it and fails if it never appears.
+      # Never --clobber. A target is released as a set: binary, manifest, two SBOMs and, last, the provenance (the commit marker). The SBOMs
+      # and the provenance are not reproducible (timestamp, serial number, run id), so a target whose provenance is already on the release is
+      # not compared byte for byte: its set is downloaded and must pass verify-release against the committed key, and its binary must be the
+      # very bytes this run built. A target with some assets but no provenance is a half-finished upload: it stops here, because replacing
+      # assets by hand is the one thing this workflow never does. The release itself is created by release-tarballs.yml for the same tag;
+      # this step waits for it. The release token exists only here.
       - name: Upload missing assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # release-tarballs.yml creates the release from the same tag push; wait for it (10 minutes at most) instead of racing it.
           for attempt in $(seq 1 20); do
@@ -201,16 +213,32 @@ jobs:
             sleep 30
           done
           have="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
-          for f in dist/nself-ci-agent-*; do
-            name="$(basename "$f")"
-            if printf '%s\n' "$have" | grep -qxF "$name"; then
-              # An asset already on the release stays the artifact of record, but it must be the very bytes this run signed.
-              mkdir -p "$RUNNER_TEMP/existing"
-              gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$RUNNER_TEMP/existing" --clobber
-              cmp "$f" "$RUNNER_TEMP/existing/$name" || { echo "ERROR: $name on the release differs from the signed file"; exit 1; }
-              echo "SKIP $name (already on the release, identical)"
-            else
-              gh release upload "$TAG" "$f" --repo "$GITHUB_REPOSITORY"
-              echo "UPLOADED $name"
+          REVOKED=()
+          if [ -n "${REVOKED_FILE:-}" ]; then REVOKED=(--revoked "$REVOKED_FILE"); fi
+          for bin in dist/nself-ci-agent-*-*; do
+            name="$(basename "$bin")"
+            [[ "$name" =~ ^nself-ci-agent-(linux|darwin)-(amd64|arm64)$ ]] || continue
+            files=("$name" "$name.manifest.json" "$name.cdx.json" "$name.spdx.json" "$name.intoto.dsse.json")
+            if printf '%s\n' "$have" | grep -qxF "$name.intoto.dsse.json"; then
+              existing="$RUNNER_TEMP/existing/$name"
+              mkdir -p "$existing"
+              cp dist/VERSION "$existing/VERSION"
+              for f in "${files[@]}"; do gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$f" --dir "$existing"; done
+              cmp "dist/$name" "$existing/$name" || { echo "ERROR: $name on the release differs from the binary this run built"; exit 1; }
+              (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --tags-only --version "${TAG#v}" "${REVOKED[@]}" --pub "$PUB_FILE" "$existing")
+              echo "SKIP $name (already released and verified)"
+              continue
             fi
+            partial=""
+            for f in "${files[@]}"; do
+              if printf '%s\n' "$have" | grep -qxF "$f"; then partial="$partial $f"; fi
+            done
+            if [ -n "$partial" ]; then
+              echo "ERROR: $name has a half-finished upload (${partial# }) and no provenance; delete those assets from the release by hand and re-run"
+              exit 1
+            fi
+            for f in "${files[@]}"; do
+              gh release upload "$TAG" "dist/$f" --repo "$GITHUB_REPOSITORY"
+              echo "UPLOADED $f"
+            done
           done

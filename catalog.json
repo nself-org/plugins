@@ -401,23 +401,27 @@
         "task"
       ],
       "category": "compliance",
-      "checksum": "2a46356680149c316d0847536f28b003344dee49897d939b1c52c717884361fc",
+      "checksum": "ff26e6bbd3cd599372f337c8616c108fad3edc8e7a1579474fec6224c0326b54",
       "commands": null,
       "description": "Append-only audit log for security-relevant events: auth, privilege change, secret access, plugin install/uninstall. Queryable from Admin with filters by event type, actor, severity, and time range.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "erheUcBn3sIwWYyaDo6m57W8e2rHkNqkUYybI3NQKWKPM887ria08junQCIVZQuZFXJpiomdXA9nDcOXy+56AQ=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
       "schema": "np_audit_log",
       "service_kind": "compose",
       "slug": "audit-log",
-      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/audit-log-1.2.6.tar.gz",
+      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.12/audit-log-1.2.12.tar.gz",
       "tier": "free",
       "tier_pair": false,
-      "version": "1.2.6"
+      "version": "1.2.12"
     },
     {
       "bundles": [
@@ -1433,23 +1437,27 @@
         "task"
       ],
       "category": "infrastructure",
-      "checksum": "68e9bb37b6467d1c7e7dca07fc5bdb809841d6a470e138d555b4a7f73d58dbd5",
+      "checksum": "9c70bee5f1336a9916a429d904e79509d84a20ba7a5dc2ebd3830054b63f541d",
       "commands": null,
       "description": "Feature flags service with targeting rules, segments, and evaluation engine",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "wzfD39iWCPmUg/PL08MEVBxw17x1E4gm6QMrIO7qp0Z/UaVWe2pi6Y92SJb7vtgZKMfwT7+f+2UzQWEHqvQ5Ag=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
       "schema": "np_feature_flags",
       "service_kind": "compose",
       "slug": "feature-flags",
-      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/feature-flags-1.2.6.tar.gz",
+      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.12/feature-flags-1.2.12.tar.gz",
       "tier": "free",
       "tier_pair": false,
-      "version": "1.2.6"
+      "version": "1.2.12"
     },
     {
       "bundles": [],
@@ -1941,23 +1949,27 @@
         "task"
       ],
       "category": "infrastructure",
-      "checksum": "48a23aff40758f61c674db87b1b36d7e8e48cf527e029d9f72bd2b85a13774f8",
+      "checksum": "62de6142f7ef516c72d209be7681eb8c1c629eeab9f910b7a614b32660a3ecc2",
       "commands": null,
       "description": "PostgreSQL-backed background job queue with priorities, scheduling, retries, and REST API. Simplified Go implementation using database polling instead of Redis/BullMQ.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "c77PWsuGokk9AJ0YxQhjnyXo8ma9/gsXIPv97RmrLmpRwsFenTAPJVK5yipYmJKekrb+q5tbn40SZqTk2jEdAg=="
+      },
       "requires": {
         "nself": ">=0.9.9"
       },
       "schema": "np_jobs",
       "service_kind": "compose",
       "slug": "jobs",
-      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/jobs-1.2.6.tar.gz",
+      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.12/jobs-1.2.12.tar.gz",
       "tier": "free",
       "tier_pair": false,
-      "version": "1.2.6"
+      "version": "1.2.12"
     },
     {
       "bundles": [],
@@ -2379,23 +2391,27 @@
         "task"
       ],
       "category": "communication",
-      "checksum": "b66f544d8bbc8e980cb651e1ef25be76e6dc6e343bb6bff8c57ca6361e738a0e",
+      "checksum": "883495fd41099768a89d660dee9837e344d2503b43d117809d5b56f30ebf1992",
       "commands": null,
       "description": "Email notification service (SMTP). Push and SMS channels are always-error placeholders — they accept requests but return 501 Not Implemented. Use the 'notify' plugin for real push notifications. Deprecated since v1.1.0; replacement: notify.",
       "docs_url": null,
       "installable": true,
       "maturity": "deferred",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "TzRxSB9C9Ncnf3D9/mt5Tj1ScEU6iYyModZ+xHozwn5xOLxq2V6W9Du2z69DIl/IWjujABkZ/TRLvGlXpUQwCA=="
+      },
       "requires": {
         "nself": ">=0.9.9"
       },
       "schema": "np_notifications",
       "service_kind": "compose",
       "slug": "notifications",
-      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/notifications-1.2.6.tar.gz",
+      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.12/notifications-1.2.12.tar.gz",
       "tier": "free",
       "tier_pair": false,
-      "version": "1.2.6"
+      "version": "1.2.12"
     },
     {
       "bundles": [],
@@ -3527,23 +3543,27 @@
         "task"
       ],
       "category": "infrastructure",
-      "checksum": "dcaccbc59393a4970deaec123a43999f6ad2b089c6b02146803490a10c4b402b",
+      "checksum": "0016f4df0450685f58007cfe3bfcb1265f293f4a441469cded45c76efad6ae40",
       "commands": null,
       "description": "Full-text search engine with PostgreSQL FTS and MeiliSearch support",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "FkCwVkE7rlw3YuGGd6TCxEOMNVtoH43cLJ81xU2BTRh/pqE4cZ4Z0jaTSGmWT3LTjv1jThs3GDApreS0iREOAQ=="
+      },
       "requires": {
         "nself": ">=0.9.9"
       },
       "schema": "np_search",
       "service_kind": "compose",
       "slug": "search",
-      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/search-1.2.6.tar.gz",
+      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.12/search-1.2.12.tar.gz",
       "tier": "free",
       "tier_pair": false,
-      "version": "1.2.6"
+      "version": "1.2.12"
     },
     {
       "bundles": [],
@@ -3762,23 +3782,27 @@
         "task"
       ],
       "category": "infrastructure",
-      "checksum": "f2ef45269304450d70245b4f04b8d495b0dfbac82a732782232118f55d00d20d",
+      "checksum": "8a40136e4fbcc42d7e4e42feb1fe180620662c143ea4fd79422489e4dfb42cc1",
       "commands": null,
       "description": "S3-compatible file storage: bucket management, object PUT/GET/DELETE/LIST, presigned URLs, per-tenant isolation.",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "JNHVqG6G3qU512gspIvQ5rPDLlCjNTF7Kt1WWg8oMBk0Uxfa9nVClzOVvpBh+bP0zr3MD85IQmBPVQO+8djWAA=="
+      },
       "requires": {
         "nself": ">=1.1.0"
       },
       "schema": "np_storage",
       "service_kind": "compose",
       "slug": "storage",
-      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/storage-1.2.6.tar.gz",
+      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.12/storage-1.2.12.tar.gz",
       "tier": "free",
       "tier_pair": false,
-      "version": "1.2.6"
+      "version": "1.2.12"
     },
     {
       "bundles": [],
@@ -4123,7 +4147,7 @@
         "task"
       ],
       "category": "communication",
-      "checksum": "3a0a3440f8d978cd6dcf96711e2197f43d48a89cbe33f7d535f2ef80a778d2e2",
+      "checksum": "465d8f3b88618806989b6944988d36686714f44c60e688cd3bfdf7cbdb1c143e",
       "commands": {
         "command": "webhooks",
         "subcommands": []
@@ -4132,17 +4156,21 @@
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "W70pfNyM1QrmnYV0hITd012hdkXQQ6KCt3fmn95lzQx94WbzZP/zx7qfprdYkHiwGz1/IQC3pCXVxZr+8PK1Bg=="
+      },
       "requires": {
         "nself": ">=0.9.9"
       },
       "schema": "np_webhooks",
       "service_kind": "compose",
       "slug": "webhooks",
-      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/webhooks-1.2.6.tar.gz",
+      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.12/webhooks-1.2.12.tar.gz",
       "tier": "free",
       "tier_pair": false,
-      "version": "1.2.6"
+      "version": "1.2.12"
     },
     {
       "bundles": [],

@@ -27,10 +27,18 @@ const (
 	KindBannedLiteral = "banned-literal"
 	KindRetiredTerm   = "retired-term"
 	KindDeadHost      = "dead-host"
+
+	// Claim kinds (P7-TRUTH-04, Epic TRUTH D5/D6): a regex pattern over prose.
+	KindNumericClaim = "numeric-claim"
+	KindVersionClaim = "version-claim"
 )
 
-// Kinds lists the rule kinds in report order.
+// Kinds lists the base rule kinds in report order; ClaimKinds follow them in a
+// report only when the loaded rules hold a rule of that kind.
 var Kinds = []string{KindBannedLiteral, KindRetiredTerm, KindDeadHost}
+
+// ClaimKinds are the rule kinds claims.yaml adds.
+var ClaimKinds = []string{KindNumericClaim, KindVersionClaim}
 
 const maxIncludeDepth = 8
 
@@ -44,7 +52,17 @@ type Rule struct {
 	SHA256  []string `yaml:"sha256,omitempty"`  // dead-host: sha256 of the lower-cased IPv4 or host name
 	Paths   []string `yaml:"paths,omitempty"`   // limits the rule to these globs (default: every file)
 
-	File string `yaml:"-"` // the rule file that declared it
+	Pattern       string        `yaml:"pattern,omitempty"`        // claim kinds: case-insensitive RE2
+	Facts         string        `yaml:"facts,omitempty"`          // version-claim: repo-relative JSON/YAML file whose `version` is current
+	ExemptPaths   []ExemptPath  `yaml:"exempt_paths,omitempty"`   // globs the rule skips, each with a reason
+	ExemptMatches []ExemptMatch `yaml:"exempt_matches,omitempty"` // a hit inside a match of one of these regexes is exempt
+	ExemptRegions *bool         `yaml:"exempt_regions,omitempty"` // honour GENERATED regions, JSX expressions and truth: exempt comments (default: claim kinds)
+
+	File string         `yaml:"-"` // the rule file that declared it
+	re   *regexp.Regexp // compiled Pattern (claim kinds)
+	skip []*regexp.Regexp
+
+	factsFile string // the rule file whose override set Facts (errors name it)
 }
 
 // Allow exempts findings of one rule on matching paths, with a stated reason.
@@ -60,6 +78,8 @@ type ruleFile struct {
 	Skip    []string `yaml:"skip,omitempty"`
 	Rules   []Rule   `yaml:"rules"`
 	Allow   []Allow  `yaml:"allow,omitempty"`
+
+	Overrides map[string]Override `yaml:"overrides,omitempty"` // per-rule extra exemptions for rules this file includes
 }
 
 // RuleSet is every rule file merged.
@@ -68,6 +88,9 @@ type RuleSet struct {
 	Allow []Allow
 	Skip  []string
 	Files []string // repo-relative rule files read, in order
+
+	overrides []fileOverride
+	reach     map[string]map[string]bool // rule file -> itself and every file it includes, transitively
 }
 
 var (
@@ -90,6 +113,9 @@ func Load(root string, files []string) (RuleSet, error) {
 		if !anyRuleMatches(a.Rule, ids) {
 			return RuleSet{}, failf(rs.Files[0], fmt.Sprintf("allow[%d].rule", i), "no rule has the id %q", a.Rule)
 		}
+	}
+	if err := rs.applyOverrides(ids); err != nil {
+		return RuleSet{}, err
 	}
 	return rs, nil
 }
@@ -136,7 +162,7 @@ func (rs *RuleSet) load(root, rel string, depth int, stack []string, seen map[st
 	for i := range f.Rules {
 		r := f.Rules[i]
 		r.File = clean
-		if err := checkRule(clean, i, r); err != nil {
+		if err := checkRule(clean, i, &r); err != nil {
 			return err
 		}
 		if first, dup := ids[r.ID]; dup {
@@ -151,12 +177,19 @@ func (rs *RuleSet) load(root, rel string, depth int, stack []string, seen map[st
 		}
 		rs.Allow = append(rs.Allow, a)
 	}
+	if err := rs.addOverrides(clean, f.Overrides); err != nil {
+		return err
+	}
 	for i, g := range f.Skip {
 		if !validGlob(g) {
 			return failf(clean, fmt.Sprintf("skip[%d]", i), "not a valid glob: %q", g)
 		}
 		rs.Skip = append(rs.Skip, g)
 	}
+	if rs.reach == nil {
+		rs.reach = map[string]map[string]bool{}
+	}
+	rs.reach[clean] = map[string]bool{clean: true}
 	for i, inc := range f.Include {
 		next := append(append([]string(nil), stack...), clean)
 		if err := rs.load(root, inc, depth+1, next, seen, ids); err != nil {
@@ -165,6 +198,9 @@ func (rs *RuleSet) load(root, rel string, depth int, stack []string, seen map[st
 				return failf(clean, fmt.Sprintf("include[%d]", i), "%s: %s", te.File, te.Msg)
 			}
 			return err
+		}
+		for file := range rs.reach[path.Clean(filepath.ToSlash(inc))] {
+			rs.reach[clean][file] = true
 		}
 	}
 	return nil
@@ -197,87 +233,4 @@ func yamlError(file string, err error) error {
 		return failf(file, "", "%s", strings.Join(te.Errors, "; "))
 	}
 	return failf(file, "", "not valid YAML: %v", err)
-}
-
-func checkRule(file string, i int, r Rule) error {
-	key := func(k string) string { return fmt.Sprintf("rules[%d].%s", i, k) }
-	if !idRe.MatchString(r.ID) {
-		return failf(file, key("id"), "must be lower-case letters, digits, '.', '_' or '-': %q", r.ID)
-	}
-	if strings.TrimSpace(r.Message) == "" {
-		return failf(file, key("message"), "a rule needs a message that says what to write instead")
-	}
-	only := func(set, other string, ok bool) error {
-		if !ok {
-			return failf(file, key(other), "%s rules do not take this key (use %s)", r.Kind, set)
-		}
-		return nil
-	}
-	switch r.Kind {
-	case KindBannedLiteral:
-		if r.Literal == "" {
-			return failf(file, key("literal"), "a banned-literal rule needs a literal")
-		}
-		if err := only("literal", "term", r.Term == ""); err != nil {
-			return err
-		}
-		if err := only("literal", "sha256", len(r.SHA256) == 0); err != nil {
-			return err
-		}
-	case KindRetiredTerm:
-		if strings.TrimSpace(r.Term) == "" {
-			return failf(file, key("term"), "a retired-term rule needs a term")
-		}
-		if err := only("term", "literal", r.Literal == ""); err != nil {
-			return err
-		}
-		if err := only("term", "sha256", len(r.SHA256) == 0); err != nil {
-			return err
-		}
-	case KindDeadHost:
-		if len(r.SHA256) == 0 {
-			return failf(file, key("sha256"), "a dead-host rule lists the sha256 of each lower-cased host or IPv4 (the rule file never holds the literal)")
-		}
-		for j, h := range r.SHA256 {
-			if !hashRe.MatchString(h) {
-				return failf(file, fmt.Sprintf("rules[%d].sha256[%d]", i, j), "must be 64 lower-case hex digits")
-			}
-		}
-		if err := only("sha256", "literal", r.Literal == ""); err != nil {
-			return err
-		}
-		if err := only("sha256", "term", r.Term == ""); err != nil {
-			return err
-		}
-	default:
-		return failf(file, key("kind"), "must be one of %s, not %q", strings.Join(Kinds, ", "), r.Kind)
-	}
-	for j, g := range r.Paths {
-		if !validGlob(g) {
-			return failf(file, fmt.Sprintf("rules[%d].paths[%d]", i, j), "not a valid glob: %q", g)
-		}
-	}
-	return nil
-}
-
-func checkAllow(file string, i int, a Allow) error {
-	key := func(k string) string { return fmt.Sprintf("allow[%d].%s", i, k) }
-	if a.Rule == "" {
-		return failf(file, key("rule"), "an allowlist entry names the rule it exempts")
-	}
-	if _, err := path.Match(a.Rule, "x"); err != nil {
-		return failf(file, key("rule"), "not a valid rule id or glob: %q", a.Rule)
-	}
-	if len(strings.TrimSpace(a.Reason)) < 8 {
-		return failf(file, key("reason"), "an allowlist entry needs a reason of at least 8 characters")
-	}
-	if len(a.Paths) == 0 {
-		return failf(file, key("paths"), "an allowlist entry names the paths it exempts")
-	}
-	for j, g := range a.Paths {
-		if !validGlob(g) {
-			return failf(file, fmt.Sprintf("allow[%d].paths[%d]", i, j), "not a valid glob: %q", g)
-		}
-	}
-	return nil
 }

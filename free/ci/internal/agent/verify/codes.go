@@ -31,6 +31,7 @@ const (
 	ReasonTargetMismatch    = "target_mismatch"     // the signed target is not the node's target
 	ReasonChecksumMismatch  = "checksum_mismatch"   // the file's sha256 is not the signed sha256 (tampered or truncated)
 	ReasonUnreadable        = "unreadable_artifact" // the file cannot be read as a bounded regular file
+	ReasonProvenance        = "provenance"          // the SBOMs or the signed provenance are missing, malformed, signed wrongly or for another digest
 )
 
 // Error is a verification failure.
@@ -62,6 +63,6 @@ func ReasonOf(err error) string {
 }
 
 func init() {
-	model.Register(model.Code{ID: CodeVerify, Class: "auth", Summary: "agent artifact verification failed (reason keys no_trusted_key, missing_signature, unknown_key, wrong_purpose, revoked, bad_signature, version_mismatch, target_mismatch, checksum_mismatch)",
+	model.Register(model.Code{ID: CodeVerify, Class: "auth", Summary: "agent artifact verification failed (reason keys no_trusted_key, missing_signature, unknown_key, wrong_purpose, revoked, bad_signature, version_mismatch, target_mismatch, checksum_mismatch, provenance)",
 		Fix: "Install the agent from a signed release of the pinned version, or pass --agent-binary <path> with a binary you trust"})
 }
