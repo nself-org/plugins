@@ -27,7 +27,7 @@ func (s *Store) Sweep(ctx context.Context, kind string, keep func(Realm, string)
 	if !validKind(kind) || keep == nil {
 		return ErrInvalid
 	}
-	return s.locked(func() error { return s.sweepLocked(ctx, kind, keep, now) })
+	return s.lockedCtx(ctx, func() error { return s.sweepLocked(ctx, kind, keep, now) })
 }
 
 func (s *Store) sweepLocked(ctx context.Context, kind string, keep func(Realm, string) bool, now time.Time) error {
@@ -57,6 +57,9 @@ func (s *Store) sweepLocked(ctx context.Context, kind string, keep func(Realm, s
 		}
 		base := filepath.Join(root, e.Name(), "sha256")
 		walkErr := s.walkFiles(base, func(path string, info os.FileInfo, remove func() error) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			digest := filepath.Base(path)
 			if err := validateDigest(digest); err != nil {
 				return err
