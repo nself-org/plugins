@@ -5,7 +5,7 @@ package plan
 // certain.
 // Inputs:  SelectionInput.
 // Outputs: selection.no_base (full) without a base; selection.full_required
-// (full) when the diff is empty, a config or lockfile changed, a path maps to no job, or a
+// (full) for a release pipeline, when the diff is empty, a config or lockfile changed, a path maps to no job, or a
 // detector fact is uncertain; otherwise selection.affected with the jobs
 // whose workdir owns a changed path (longest workdir prefix wins).
 // Constraints: pure; never selects fewer jobs than the evidence proves.
@@ -37,6 +37,9 @@ func DefaultSelector(in SelectionInput) (model.Selection, []string) {
 	}
 	if !in.BaseKnown {
 		return full("selection.no_base")
+	}
+	if in.ReleasePipeline {
+		return full("selection.full_required")
 	}
 	if len(in.Changed) == 0 {
 		return full("selection.full_required") // an empty diff proves nothing: run all
