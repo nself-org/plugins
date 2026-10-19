@@ -139,15 +139,15 @@ func (s *Session) plan(ctx context.Context, sp Spec) (*Item, bool) {
 		bound = append(bound, d.Env)
 		it.Dirs[d.Name] = path.Join(sp.ID, d.Name)
 	}
-	if s.credentialsHidden(sp) { // rebinding the tool home would hide the user's own credentials
-		s.use(ctx, sp.ID, "", "disabled", 0, 0)
-		return nil, false
-	}
 	for _, name := range bound {
 		if _, set := in.JobEnv[name]; set && name != "" { // the job pinned its own location: not ours to override
 			s.use(ctx, sp.ID, "", "disabled", 0, 0)
 			return nil, false
 		}
+	}
+	if s.credentialsHidden(sp) { // rebinding the tool home would hide the user's own credentials; the pinned variables above are checked first so a pinned job reads nothing
+		s.use(ctx, sp.ID, "", "disabled", 0, 0)
+		return nil, false
 	}
 	if strings.ContainsAny(root, ",\r\n\x00") || !filepath.IsAbs(root) {
 		s.use(ctx, sp.ID, "", "disabled", 0, 0)
