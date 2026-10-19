@@ -1,12 +1,16 @@
 package cas
 
 import (
+	"context"
 	"errors"
 	"os"
 )
 
 // locked serializes tree mutations across Store values and processes.
-func (s *Store) locked(fn func() error) error {
+func (s *Store) locked(fn func() error) error { return s.lockedCtx(context.Background(), fn) }
+
+// lockedCtx is locked, but gives up with ctx.Err() while waiting for the lock.
+func (s *Store) lockedCtx(ctx context.Context, fn func() error) error {
 	if err := s.secureDir(s.blobs()); err != nil {
 		return err
 	}
@@ -41,7 +45,7 @@ func (s *Store) locked(fn func() error) error {
 	if err != nil || !current.Mode().IsRegular() || !os.SameFile(current, opened) {
 		return ErrInvalid
 	}
-	if err := lockFile(f); err != nil {
+	if err := lockFileCtx(ctx, f); err != nil {
 		return err
 	}
 	defer unlockFile(f)
