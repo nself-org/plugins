@@ -54,8 +54,8 @@ type fixture struct {
 // signedFiles returns the two SBOMs and the agent-purpose provenance of manifest m (P7-CACHE-10).
 func signedFiles(t *testing.T, s signing.Signer, m verify.Manifest) map[string][]byte {
 	t.Helper()
-	cdx, spdx := []byte(`{"bomFormat":"CycloneDX"}`), []byte(`{"spdxVersion":"SPDX-2.3"}`)
 	name := verify.BinaryName(m.Target)
+	cdx, spdx := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.6","metadata":{"component":{"name":"`+name+`"}}}`), []byte(`{"spdxVersion":"SPDX-2.3","name":"`+name+`"}`)
 	digest := func(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 	st, err := provenance.BuildAgent(provenance.AgentFacts{Repo: "nself-org/plugins", Ref: "refs/tags/v1.5.0", Revision: strings.Repeat("a", 40), RunID: "1",
 		Subjects: []provenance.FileDigest{{Name: name, SHA256: m.SHA256}},
