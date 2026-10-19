@@ -16,7 +16,9 @@ package cas
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"hash"
 	"io"
+	"sync"
 )
 
 // ReadVerified calls fn with the bytes of the named blob and verifies them.
@@ -26,16 +28,18 @@ func (s *Store) ReadVerified(realm Realm, digest string, fn func(io.Reader) erro
 		return err
 	}
 	defer func() { _ = f.Close() }()
-	h, count := sha256.New(), &countingReader{r: f}
-	tee := io.TeeReader(count, h)
+	h := newAsyncHash()
+	count := &countingReader{r: f, h: h}
 	if s.beforeHash != nil {
 		s.beforeHash()
 	}
-	fnErr := fn(tee)
-	if _, err := io.Copy(io.Discard, tee); err != nil { // the rest of the blob, so the digest covers all of it
-		return err
+	fnErr := fn(count)
+	_, drainErr := io.Copy(io.Discard, count) // the rest of the blob, so the digest covers all of it
+	sum := h.sum()                            // always: the hashing goroutine ends here
+	if drainErr != nil {
+		return drainErr
 	}
-	if count.n != info.Size() || hex.EncodeToString(h.Sum(nil)) != digest {
+	if count.n != info.Size() || hex.EncodeToString(sum) != digest {
 		mismatch := ErrDigestMismatch
 		if count.n != info.Size() {
 			mismatch = ErrSizeMismatch
@@ -48,13 +52,53 @@ func (s *Store) ReadVerified(realm Realm, digest string, fn func(io.Reader) erro
 	return fnErr
 }
 
+// countingReader counts what the consumer reads and hands each chunk to the hasher.
 type countingReader struct {
 	r io.Reader
 	n int64
+	h *asyncHash
 }
 
 func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	c.n += int64(n)
+	c.h.write(p[:n])
 	return n, err
+}
+
+// asyncHash is a SHA-256 computed on its own goroutine, so hashing a 100 MB
+// build cache overlaps with the consumer unpacking it instead of adding to it
+// (D-1008). Chunks are copied (the consumer reuses its buffer) and queued.
+type asyncHash struct {
+	h    hash.Hash
+	ch   chan []byte
+	done chan struct{}
+	pool sync.Pool
+}
+
+func newAsyncHash() *asyncHash {
+	a := &asyncHash{h: sha256.New(), ch: make(chan []byte, 16), done: make(chan struct{})}
+	go func() {
+		defer close(a.done)
+		for b := range a.ch {
+			a.h.Write(b)
+			a.pool.Put(b[:0])
+		}
+	}()
+	return a
+}
+
+func (a *asyncHash) write(p []byte) {
+	if len(p) == 0 {
+		return
+	}
+	b, _ := a.pool.Get().([]byte)
+	a.ch <- append(b[:0], p...)
+}
+
+// sum waits for the queued chunks and returns the digest; call it once.
+func (a *asyncHash) sum() []byte {
+	close(a.ch)
+	<-a.done
+	return a.h.Sum(nil)
 }
