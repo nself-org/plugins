@@ -317,7 +317,7 @@ func TestNodePrepareInstallFailureClasses(t *testing.T) {
 		"socket hang up":      "npm warn deprecated a\nnpm error network socket hang up\nnpm error network This is a problem related to network connectivity.\nnpm error network In most cases you are behind a proxy or have bad network settings.\nnpm error log",
 		"pnpm meta fetch":     " ERR_PNPM_META_FETCH_FAIL  GET https://registry.npmjs.org/x: Client network socket disconnected\nThis error happened while installing the dependencies of x",
 		"yarn network":        "info There appears to be trouble with your network connection. Retrying...\nerror An unexpected error occurred: \"https://registry.yarnpkg.com/x: getaddrinfo ENOTFOUND registry.yarnpkg.com\".",
-		"registry refuses":    "npm error code ECONNREFUSED\nnpm error syscall connect\nnpm error errno ECONNREFUSED\nnpm error log",
+		"registry refuses":    "npm error code ECONNREFUSED\nnpm error syscall connect\nnpm error FetchError: request to https://registry.npmjs.org/x failed, reason: connect ECONNREFUSED 10.1.2.3:443\nnpm error log",
 		"pnpm 503":            " ERR_PNPM_FETCH_503  GET https://registry.npmjs.org/x: Service Unavailable - 503",
 		"disk":                "npm error code ENOSPC\nnpm error nospc",
 		"transient then real": "npm warn ECONNRESET retrying\nnpm warn ECONNRESET retrying\nnpm error code ENOSPC\nnpm error log",
@@ -332,6 +332,8 @@ func TestNodePrepareInstallFailureClasses(t *testing.T) {
 		"npm 404":              "npm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/nope - Not found",
 		"postinstall test":     "> app@1.0.0 postinstall\n--- FAIL: TestRetry (ETIMEDOUT expected)\nFAIL\nnpm error code 1",
 		"postinstall tool":     "sh: 1: tsc: not found\nnpm error code 127",
+		"postinstall db":       "> app@1.0.0 postinstall\n> node scripts/migrate.js\nError: connect ECONNREFUSED 127.0.0.1:5432\nnpm error command failed",
+		"node assertion":       "AssertionError [ERR_ASSERTION]: expected ECONNREFUSED to be handled\nnpm error code 1",
 	}
 	for want, set := range map[string]map[string]string{"infra": infra, "code": code} {
 		for name, msg := range set {
@@ -412,5 +414,22 @@ func TestNodeDigestFollowsTheManifest(t *testing.T) {
 func TestShellJoinQuotes(t *testing.T) {
 	if got := shellJoin([]string{"npm", "run", "a b", "it's", "--", "--coverage"}); got != `npm run 'a b' 'it'\''s' -- --coverage` {
 		t.Fatal(got)
+	}
+}
+
+func TestNodeDigestFollowsWorkspaceMembers(t *testing.T) {
+	h := newNodeHost(t)
+	h.write("package.json", `{"private":true,"workspaces":["packages/*"]}`)
+	h.write("package-lock.json", "{}")
+	h.write("packages/a/package.json", manifest("", ""))
+	h.write("node_modules/dep/package.json", `{"name":"dep"}`)
+	a := nodeSpecFor(h.root, PlannedCheck{Workdir: "."}).Digest
+	h.write("node_modules/dep/package.json", `{"name":"dep2"}`)
+	if b := nodeSpecFor(h.root, PlannedCheck{Workdir: "."}).Digest; a != b {
+		t.Fatal("node_modules is not part of the digest")
+	}
+	h.write("packages/a/package.json", manifest("", `"dependencies":{"left-pad":"1.0.0"},`))
+	if b := nodeSpecFor(h.root, PlannedCheck{Workdir: "."}).Digest; a == b {
+		t.Fatal("a member's manifest edit with an unchanged lockfile must install again")
 	}
 }

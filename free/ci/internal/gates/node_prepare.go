@@ -21,6 +21,8 @@ package gates
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -87,8 +89,7 @@ func nodeSpecFor(root string, p PlannedCheck) nodeSpec {
 			if err != nil {
 				continue
 			}
-			manifest, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(dir), "package.json")) // a changed manifest with the same lockfile installs again
-			sum := sha256.Sum256(append(append([]byte(s.Manager+"\x00"), b...), manifest...))
+			sum := sha256.Sum256(append(append([]byte(s.Manager+"\x00"), b...), manifestsOf(root, dir)...))
 			s.LockDir, s.Digest = dir, hex.EncodeToString(sum[:])
 			s.Berry = s.Manager == "yarn" && strings.Contains(string(b), "__metadata:")
 			s.Rel = relUp(work, dir)
@@ -101,6 +102,46 @@ func nodeSpecFor(root string, p PlannedCheck) nodeSpec {
 			return s
 		}
 	}
+}
+
+// manifestsOf is every package.json and pnpm-workspace.yaml under dir (not
+// inside node_modules, .git or the CI scratch): the frozen install validates
+// the lockfile against all of them, so a member's edit must change the digest.
+// More than maxManifests files, or an unreadable tree, returns a changing
+// value, so the install is never skipped on a guess.
+func manifestsOf(root, dir string) []byte {
+	const maxManifests = 500
+	base := filepath.Join(root, filepath.FromSlash(dir))
+	var out []byte
+	n := 0
+	err := filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case "node_modules", ".git", ".nself-ci":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if name := d.Name(); name == "package.json" || name == "pnpm-workspace.yaml" {
+			if n++; n > maxManifests {
+				return errors.New("too many manifests")
+			}
+			b, rerr := os.ReadFile(p)
+			if rerr != nil {
+				return rerr
+			}
+			rel, _ := filepath.Rel(base, p)
+			out = append(append(append(out, rel...), 0), b...)
+		}
+		return nil
+	})
+	if err != nil {
+		return []byte(time.Now().String())
+	}
+	return out
 }
 
 func hasDir(root, dir, name string) bool {
