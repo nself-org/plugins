@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -38,6 +39,7 @@ func runRegistry(t *testing.T) trust.Registry {
 		trust.KeySpec{Key: "x.sub", Owner: "x", Kind: trust.TightenSubset},
 		trust.KeySpec{Key: "x.subdef", Owner: "x", Kind: trust.TightenSubset, Default: []string{"a", "b", "c"}},
 		trust.KeySpec{Key: "x.sup", Owner: "x", Kind: trust.TightenSuperset},
+		trust.KeySpec{Key: "x.fam.*", Owner: "x", Kind: trust.TightenLower, Default: int64(100), Decode: numDecode},
 		trust.KeySpec{Key: "x.spend", Owner: "x", Kind: trust.TightenLower, Default: int64(5), Spend: true, Decode: numDecode},
 	)
 	if err != nil {
@@ -53,7 +55,7 @@ var runDomain = map[string][]string{
 	"x.ordlow": {`"a"`, `"b"`, `"c"`}, "x.ordhigh": {`"a"`, `"b"`, `"c"`},
 	"x.fixed": {`"p"`, `"q"`}, "x.fixeddef": {`"p"`, `"q"`}, "x.on": {`true`, `false`}, "x.onnone": {`true`, `false`},
 	"x.sub": {`[]`, `["a"]`, `["a","b"]`, `["b","c"]`, `["a","b","c"]`}, "x.subdef": {`[]`, `["a"]`, `["a","b"]`, `["b","c"]`, `["a","b","c","d"]`},
-	"x.sup": {`[]`, `["a"]`, `["a","b"]`, `["a","b","c"]`}, "x.spend": {`1`, `5`, `9`},
+	"x.sup": {`[]`, `["a"]`, `["a","b"]`, `["a","b","c"]`}, "x.fam.a": {`1`, `50`, `100`, `200`}, "x.spend": {`1`, `5`, `9`},
 }
 
 func randomValues(r *rand.Rand, keys []string) map[string]json.RawMessage {
@@ -122,7 +124,7 @@ func looser(key string, spec trust.KeySpec, before any, present bool, after any)
 			return false
 		}
 		if len(spec.Order) > 0 {
-			x, y := strings.Index(strings.Join(spec.Order, ""), before.(string)), strings.Index(strings.Join(spec.Order, ""), after.(string))
+			x, y := slices.Index(spec.Order, before.(string)), slices.Index(spec.Order, after.(string))
 			return spec.Kind == trust.TightenLower && y > x || spec.Kind == trust.TightenHigher && y < x
 		}
 		x, _ := trust.IntValue(before)
@@ -169,8 +171,12 @@ func TestRunScopeNeverLoosens(t *testing.T) {
 		for _, k := range keys {
 			spec, _ := reg.Find(k)
 			before, _, present := base.Value(k)
+			inBase := present
+			if !present && spec.Default != nil && strings.HasSuffix(spec.Key, ".*") {
+				before, present = spec.Default, true // a family key has no seeded default: the default is what holds
+			}
 			after, src, ok := got.Value(k)
-			if present && !ok {
+			if inBase && !ok {
 				t.Fatalf("seed %d: %s vanished", seed, k)
 			}
 			if !ok {
@@ -179,7 +185,7 @@ func TestRunScopeNeverLoosens(t *testing.T) {
 			if spec.Spend && src == trust.SourceRun {
 				t.Fatalf("seed %d: spend key %s set by the run scope", seed, k)
 			}
-			if !present && src != trust.SourceRun {
+			if !inBase && src != trust.SourceRun {
 				t.Fatalf("seed %d: %s appeared from %s", seed, k, src)
 			}
 			if looser(k, spec, before, present, after) {

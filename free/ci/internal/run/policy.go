@@ -11,6 +11,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
@@ -54,4 +55,20 @@ func ResolvePolicy(ctx context.Context, root, pipeline string) (PolicyResult, er
 		r = p
 	}
 	return r.Resolve(ctx, PolicyRequest{Root: root, Pipeline: pipeline})
+}
+
+// ignoredRunNotes turns the per-run policy values the policy refused into run
+// notes ("key: reason" lines), leaving out the keys the caller defaulted.
+func ignoredRunNotes(lines, defaulted []string) []string {
+	var out []string
+next:
+	for _, line := range lines {
+		for _, key := range defaulted {
+			if strings.HasPrefix(line, key+":") {
+				continue next
+			}
+		}
+		out = append(out, "per-run policy value ignored: "+line)
+	}
+	return out
 }

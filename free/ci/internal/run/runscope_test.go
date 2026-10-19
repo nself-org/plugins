@@ -12,8 +12,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/report"
+	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -88,7 +90,31 @@ func TestPolicyHookReportsIgnoredRunValues(t *testing.T) {
 		t.Errorf("an ignored value changed the digest or went unreported: %v", same.IgnoredRun)
 	}
 	lower, err := hook.Resolve(ctx, PolicyRequest{Root: root, Run: RunValues{schedpolicy.KeyMaxQueue: json.RawMessage(`"5m"`)}})
-	if err != nil || lower.Digest == none.Digest || len(lower.IgnoredRun) != 0 {
+	if err != nil || len(lower.IgnoredRun) != 0 {
 		t.Errorf("a lower max queue must apply: %v %v", lower.IgnoredRun, err)
+	}
+	// placement values do not enter the digest: `ci evidence verify` re-resolves without them
+	if lower.Digest != none.Digest {
+		t.Error("a per-run value changed the policy digest of the run (its evidence would not verify)")
+	}
+}
+
+// TestQueueJobDefaultCap: only an interactive run keeps the implicit foreground
+// queue cap; the cron or scripted run's attempt asks the dispatcher to withhold it.
+func TestQueueJobDefaultCap(t *testing.T) {
+	job := model.Job{}
+	for _, interactive := range []bool{true, false} {
+		sess := &Session{Interactive: interactive, Revision: "abc"}
+		got := queueJob(sess, AttemptSpec{Job: &job, Foreground: true}, sched.Job{}, "a1", 2, 512)
+		if got.NoDefaultQueueCap == interactive || !got.Foreground || got.Revision != "abc" || got.LocalCPU != 2 || got.LocalMemMB != 512 {
+			t.Errorf("interactive %v: %+v", interactive, got)
+		}
+	}
+}
+
+func TestIgnoredRunNotes(t *testing.T) {
+	got := ignoredRunNotes([]string{"sched.overrides.max_queue: E671 run scope widening", "sched.overrides.runner: E671 run scope widening"}, []string{"sched.overrides.max_queue"})
+	if len(got) != 1 || got[0] != "per-run policy value ignored: sched.overrides.runner: E671 run scope widening" {
+		t.Errorf("notes = %q", got)
 	}
 }

@@ -153,21 +153,67 @@ func TestSchedFlagsReachPolicy(t *testing.T) {
 		}
 		return res
 	}
+	// the values themselves, through the same resolver the policy hook builds
+	values := func(interactive bool, args ...string) map[string]any {
+		t.Helper()
+		resetSchedFlags(t)
+		if err := parseOn(bareFlags, args...); err != nil {
+			t.Fatal(err)
+		}
+		o := RunOptions{Root: root, Interactive: interactive}
+		if err := schedOptions(&o); err != nil {
+			t.Fatal(err)
+		}
+		st, err := store.Open(db, store.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = st.Close() }()
+		res := policy.Resolver{Store: st, Run: policy.Runner(report.Capture)}
+		got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: project, Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root, Run: o.PolicyRun})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got.Values
+	}
+	if v := values(false, "--prefer", "local", "--runner", "ms5", "--max-queue", "5m"); v[schedpolicy.KeyPreset] != "prefer-local" || v[schedpolicy.KeyRunner] != "ms6" || v[schedpolicy.KeyMaxQueue] != int64(300000) {
+		t.Errorf("per-run values: preset %v runner %v (the project's ms6 must stand) max queue %v", v[schedpolicy.KeyPreset], v[schedpolicy.KeyRunner], v[schedpolicy.KeyMaxQueue])
+	}
+	if v := values(true); v[schedpolicy.KeyMaxQueue] != int64(600000) {
+		t.Errorf("an interactive run's max queue = %v, want 10 minutes", v[schedpolicy.KeyMaxQueue])
+	}
+	if v := values(false); v[schedpolicy.KeyMaxQueue] == int64(600000) {
+		t.Error("a scripted run got the foreground cap")
+	}
 	bare := resolve(false)
 	if got := resolve(false, "--runner", "ms5"); got.Digest != bare.Digest || len(got.IgnoredRun) != 1 {
 		t.Errorf("--runner against a pinned runner: digest same %v, ignored %v", got.Digest == bare.Digest, got.IgnoredRun)
 	}
-	if got := resolve(false, "--prefer", "local"); got.Digest == bare.Digest || len(got.IgnoredRun) != 0 {
-		t.Errorf("--prefer local did not reach the policy: %v", got.IgnoredRun)
+	if got := resolve(false, "--prefer", "local"); len(got.IgnoredRun) != 0 {
+		t.Errorf("--prefer local was refused: %v", got.IgnoredRun)
 	}
-	if got := resolve(false, "--max-queue", "5m"); got.Digest == bare.Digest {
-		t.Error("--max-queue 5m did not reach the policy")
+	// placement values never enter the digest: evidence verification re-resolves without them
+	for _, args := range [][]string{{"--prefer", "local"}, {"--max-queue", "5m"}} {
+		if got := resolve(false, args...); got.Digest != bare.Digest {
+			t.Errorf("%v changed the digest evidence is verified against", args)
+		}
 	}
-	if got := resolve(true); got.Digest == bare.Digest {
-		t.Error("an interactive run did not get the foreground queue cap")
+	if got := resolve(true); got.Digest != bare.Digest {
+		t.Error("an interactive run's digest differs from the policy in force")
 	}
-	if got := resolve(false); got.Digest != bare.Digest {
-		t.Error("a scripted run's digest changed")
+	// the foreground cap is the caller's default: its refusal is not reported to the person
+	resetSchedFlags(t)
+	o := RunOptions{Root: root, Interactive: true}
+	if err := schedOptions(&o); err != nil || len(o.PolicyRunDefaulted) != 1 || o.PolicyRunDefaulted[0] != schedpolicy.KeyMaxQueue {
+		t.Errorf("defaulted keys = %v (%v)", o.PolicyRunDefaulted, err)
+	}
+	resetSchedFlags(t)
+	if err := parseOn(bareFlags, "--max-queue", "3m"); err != nil {
+		t.Fatal(err)
+	}
+	o = RunOptions{Root: root, Interactive: true}
+	if err := schedOptions(&o); err != nil || len(o.PolicyRunDefaulted) != 0 {
+		t.Errorf("an explicit --max-queue was called a default: %v (%v)", o.PolicyRunDefaulted, err)
 	}
 }
 

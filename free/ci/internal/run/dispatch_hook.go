@@ -90,10 +90,8 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 		return Admitted{}, err
 	}
 	cpu, mem := demandOf(s.Job)
-	a, err := rd.d.Submit(ctx, dispatch.Job{
-		AttemptID: id, Sched: rd.schedJob(s, id, row, cpu, mem), Model: *s.Job, Revision: sess.Revision, Foreground: s.Foreground,
-		LocalCPU: max(dec.Slots*cpu, cpu), LocalMemMB: max(capacity.FreeMemoryMB-capacity.MemoryMB*dec.ReserveMemoryPercent/100, mem),
-	})
+	a, err := rd.d.Submit(ctx, queueJob(sess, s, rd.schedJob(s, id, row, cpu, mem), id,
+		max(dec.Slots*cpu, cpu), max(capacity.FreeMemoryMB-capacity.MemoryMB*dec.ReserveMemoryPercent/100, mem)))
 	if err != nil {
 		var de *dispatch.Error
 		if errors.As(err, &de) {
@@ -102,6 +100,13 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 		return Admitted{}, err
 	}
 	return Admitted{AttemptID: a.AttemptID, LeaseID: a.LeaseID, RunnerID: a.RunnerID, Local: a.Local}, nil
+}
+
+// queueJob is the dispatcher's input for one attempt. Only an interactive run
+// (a person at a terminal) keeps the implicit foreground queue cap.
+func queueJob(sess *Session, s AttemptSpec, sj sched.Job, id string, localCPU, localMemMB int) dispatch.Job {
+	return dispatch.Job{AttemptID: id, Sched: sj, Model: *s.Job, Revision: sess.Revision, Foreground: s.Foreground,
+		NoDefaultQueueCap: !sess.Interactive, LocalCPU: localCPU, LocalMemMB: localMemMB}
 }
 
 // runDispatcher returns the dispatcher of the session's run, creating it once.

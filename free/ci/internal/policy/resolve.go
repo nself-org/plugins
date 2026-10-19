@@ -66,7 +66,10 @@ type Resolved struct {
 	PinnedCommit string
 	Fetch        FetchState
 	Digest       Digest
-	Ignored      []Ignored
+	// BaseDigest is the digest of the policy in force without the per-run values:
+	// what a later verifier resolves to. It equals Digest when the run gave none.
+	BaseDigest Digest
+	Ignored    []Ignored
 }
 
 // Resolve merges every scope for repo and rev.
@@ -125,14 +128,20 @@ func (r *Resolver) Resolve(ctx context.Context, repo Repo, rev Revision) (Resolv
 			scopes = append(scopes, trust.Scope{Kind: SourceRevision, Values: revPolicy})
 		}
 	}
+	base := scopes
 	if run := runScope(rev.Run); run != nil {
-		scopes = append(scopes, *run)
+		scopes = append(append([]trust.Scope(nil), scopes...), *run)
 	}
 	eff, digest, err := reg.Merge(res.PinnedCommit, scopes...)
 	if err != nil {
 		return Resolved{}, err
 	}
-	res.Effective, res.Digest = eff, digest
+	res.Effective, res.Digest, res.BaseDigest = eff, digest, digest
+	if len(scopes) != len(base) {
+		if _, res.BaseDigest, err = reg.Merge(res.PinnedCommit, base...); err != nil {
+			return Resolved{}, err
+		}
+	}
 	res.Ignored = append(ignored, eff.Ignored()...)
 	res.Values, res.Sources = collect(eff, keys.Keys(), scopes)
 	return res, nil

@@ -4,7 +4,8 @@ package run
 // policy through internal/policy and hands the digest to the pipeline row and
 // the evidence. It replaces the built-in defaults of policy.go.
 // Inputs: a PolicyRequest (the repository root). Outputs: a PolicyResult.
-// Constraints: registered from init(); git runs through the exec funnel
+// Constraints: the digest is the policy in force without the per-run values (they
+// steer placement only; evidence verification re-resolves without them); registered from init(); git runs through the exec funnel
 // (report.Capture); the operator rows come from the default state.db, because
 // PolicyRequest carries no store path (handoff: Coordinator.policy should pass
 // Opts.Home); the local run is classed owner and the repository visibility
@@ -53,7 +54,7 @@ func (h PolicyHook) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult,
 	if err != nil {
 		return PolicyResult{}, err
 	}
-	out := PolicyResult{Digest: string(got.Digest)}
+	out := PolicyResult{Digest: string(got.BaseDigest)}
 	for _, ig := range got.Ignored {
 		if ig.Scope == policy.SourceRun {
 			out.IgnoredRun = append(out.IgnoredRun, ig.Key+": "+ig.Reason)

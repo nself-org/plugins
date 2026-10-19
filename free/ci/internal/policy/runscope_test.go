@@ -67,6 +67,9 @@ func TestRunScopeReachesPolicy(t *testing.T) {
 	if got.Digest == base.Digest || len(got.Ignored) != len(base.Ignored) {
 		t.Errorf("digest unchanged or values ignored: %v", got.Ignored)
 	}
+	if got.BaseDigest != base.Digest || base.BaseDigest != base.Digest {
+		t.Errorf("BaseDigest must be the digest without the run values: %s vs %s", got.BaseDigest, base.Digest)
+	}
 	p, err := schedpolicy.Placement(&got.Effective)
 	if err != nil || p.Preset != "prefer-local" || p.Overrides.Runner != "ms5" || p.Overrides.MaxQueueMs != 300000 {
 		t.Errorf("placement view: %+v %v", p, err)

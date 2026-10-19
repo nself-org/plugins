@@ -26,21 +26,21 @@ var schedFlags schedpolicy.Flags
 func init() {
 	RegisterOptionsHook(schedOptions)
 	for _, fs := range []*flag.FlagSet{bareFlags, planFlags} {
-		fs.Func("prefer", "scheduling preset for this run: "+presetList()+" (local = prefer-local)", func(v string) error {
+		fs.Func("prefer", "scheduling preset for this run: "+presetList()+" (local = prefer-local); bare runs only", func(v string) error {
 			if _, err := schedpolicy.PresetFromFlag(v); err != nil {
 				return err
 			}
 			schedFlags.Prefer = v
 			return nil
 		})
-		fs.Func("runner", "place every job on this runner id (an exceptional override)", func(v string) error {
+		fs.Func("runner", "place every job on this runner id (an exceptional override); bare runs only", func(v string) error {
 			if v == "" {
 				return schedpolicy.CheckRunner(v)
 			}
 			schedFlags.Runner = v
 			return nil
 		})
-		fs.Func("max-queue", "longest a job may wait for a runner, a duration such as 10m (a foreground run defaults to 10m)", func(v string) error {
+		fs.Func("max-queue", "longest a job may wait for a runner, a duration such as 10m (an interactive run defaults to 10m); bare runs only", func(v string) error {
 			if _, err := schedpolicy.ParseDurationMs(schedpolicy.KeyMaxQueue, v); err != nil {
 				return err
 			}
@@ -86,6 +86,15 @@ func interactiveRun(trigger string, getenv func(string) string) bool {
 func schedOptions(o *RunOptions) error {
 	vals, err := schedRevisionValues(o.Interactive)
 	o.PolicyRun = vals
+	if err != nil || !o.Interactive {
+		return err
+	}
+	given, err := schedRevisionValues(false)
+	for key := range vals {
+		if _, ok := given[key]; !ok {
+			o.PolicyRunDefaulted = append(o.PolicyRunDefaulted, key)
+		}
+	}
 	return err
 }
 
