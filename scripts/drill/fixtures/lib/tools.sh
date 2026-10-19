@@ -35,7 +35,7 @@ tools_pin_drift() {
 # into .drill-bin/nself-ci from the same checkout, which saves a cold compile inside the job's time limit).
 tools_build_plugin() {
 	if [ -n "${NSELF_DRILL_CI_BIN:-}" ]; then cp "$NSELF_DRILL_CI_BIN" "$1"
-	elif [ -x "$EV_ROOT/.drill-bin/nself-ci" ]; then cp "$EV_ROOT/.drill-bin/nself-ci" "$1"; else
+	elif [ -n "${CI:-}" ] && [ -x "$EV_ROOT/.drill-bin/nself-ci" ]; then cp "$EV_ROOT/.drill-bin/nself-ci" "$1"; else
 		command -v go >/dev/null || tools_die "go is required to build the ci plugin"
 		(cd "$EV_ROOT/free/ci" && CGO_ENABLED=0 go build -mod=vendor -o "$1" ./cmd) >&2 || tools_die "building free/ci failed"
 	fi
@@ -65,7 +65,7 @@ tools_gitleaks_dir() {
 tools_cli() {
 	local src out=$1/nself-cli
 	if [ -n "${NSELF_DRILL_CLI_BIN:-}" ]; then echo "$NSELF_DRILL_CLI_BIN"; return; fi
-	if [ -x "$EV_ROOT/.drill-bin/nself" ]; then echo "$EV_ROOT/.drill-bin/nself"; return; fi
+	if [ -n "${CI:-}" ] && [ -x "$EV_ROOT/.drill-bin/nself" ]; then echo "$EV_ROOT/.drill-bin/nself"; return; fi
 	command -v go >/dev/null || tools_die "go is required to build the cli"
 	src=${NSELF_DRILL_CLI_SRC:-}
 	if [ -z "$src" ]; then

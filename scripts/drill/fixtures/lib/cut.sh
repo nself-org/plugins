@@ -11,7 +11,10 @@
 # Constraints: the rule matches the drill's own group id (CUT_GID), not the machine: a hosted runner's agent keeps
 #   reporting the job's log while the drill cannot reach the network. On Linux a second chain also blocks and counts
 #   traffic that containers forward from a docker bridge to anywhere else. Only the drill's own table (Linux) or anchor
-#   (macOS) is ever touched; the system's firewall rules are left as they were. cut_exec drops privileges to the calling user with
+#   (macOS) is ever touched; the system's firewall rules are left as they were. While the cut is on, containers on a docker
+#   bridge cannot reach beyond the host (every bridge, not only this run's): cut_preflight warns when other containers run.
+#   If a run is killed with SIGKILL the cut stays: remove it with `sudo nft delete table inet drillcut` (Linux) or
+#   `sudo pfctl -a com.apple/250.drillcut -F all` (macOS). cut_exec drops privileges to the calling user with
 #   that group, so the drill's processes keep their files and their docker access. cut_remove is idempotent and runs
 #   on every exit path (the drill traps EXIT, INT and TERM). Nothing here touches the network.
 
@@ -29,18 +32,38 @@ cut_preflight() {
 	sudo -n true 2>/dev/null || cut_die "sudo -n failed: this drill cuts the network with nft (Linux) or pf (macOS) and needs a passwordless sudo"
 	command -v perl >/dev/null || cut_die "perl is required to run the drill's commands under the cut group"
 	case "$CUT_OS" in
-	Linux) command -v nft >/dev/null || cut_die "nft is required (apt-get install nftables)" ;;
+	Linux)
+		command -v nft >/dev/null || cut_die "nft is required (apt-get install nftables)"
+		if [ -n "$(docker ps -q 2>/dev/null)" ]; then echo "${EV_JOB:-drill}: warning: running containers lose outbound access (forwarding from docker bridges) while the cut is on" >&2; fi
+		;;
 	Darwin) command -v pfctl >/dev/null || cut_die "pfctl is required" ;;
 	*) cut_die "no network cut for $CUT_OS" ;;
 	esac
 }
 
-# cut_exec CMD...: run CMD as the calling user with group CUT_GID (and the user's other groups). With no cut active it
-# just runs CMD. Root is only used to set the group; the command never runs as root.
+# The code that sets the group and drops root. Arguments: uid gid "other groups" command...; it checks the result in full
+# (uid, egid and the whole group list) before it runs the command, and dies otherwise.
+read -r -d '' CUT_PERL <<'PERL' || true
+my ($u, $g, $gs) = (shift, shift, shift);
+my %want = map { $_ => 1 } ($g, split " ", $gs);
+$( = $g;
+$) = "$g " . join(" ", $g, split(" ", $gs));
+$< = $u;
+$> = $u;
+my ($egid, @sup) = split " ", $);
+my %got = map { $_ => 1 } ($egid, @sup);
+my $same = (join(" ", sort { $a <=> $b } keys %want) eq join(" ", sort { $a <=> $b } keys %got));
+die "drop failed: uid $< $> egid $egid groups $) (wanted uid $u gid $g groups $gs)\n" if $> != $u || $< != $u || $egid != $g || !$same;
+exec @ARGV or die "exec $ARGV[0]: $!\n";
+PERL
+
+# cut_exec CMD...: run CMD as the calling user with group CUT_GID (and up to 15 of the user's other groups: macOS allows 16
+# in all). With no cut active it just runs CMD. Root is only used to set the group; the command never runs as root.
 cut_exec() {
 	if [ "$CUT_ACTIVE" -ne 1 ]; then "$@"; return; fi
-	sudo -n perl -e 'my ($u, $g, $gs) = (shift, shift, shift); $( = $g; $) = "$g $gs"; $< = $u; $> = $u; die "drop failed: $!\n" if $> != $u || $< != $u || (split " ", $))[0] != $g; exec @ARGV or die "exec $ARGV[0]: $!\n"' \
-		"$(id -u)" "$CUT_GID" "$(id -G)" "$@"
+	local groups
+	groups=$(id -G | tr ' ' '\n' | head -n 15 | tr '\n' ' ')
+	sudo -n perl -e "$CUT_PERL" "$(id -u)" "$CUT_GID" "$groups" "$@"
 }
 
 # cut_apply: load the rule. CUT_ACTIVE is set before anything is changed, so a signal in the middle still runs cut_remove.

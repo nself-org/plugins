@@ -22,7 +22,7 @@ for f in evidence tools make-fixtures cut; do
 	. "$lib/$f.sh"
 done
 
-work=$(mktemp -d "${TMPDIR:-/tmp}/drill-s01.XXXXXX")
+work=$(mktemp -d "${TMPDIR:-/tmp}/drill-s01.XXXXXX") || exit 2
 svc_before=$(docker ps -aq --filter name=nselfci- 2>/dev/null | tr '\n' ' ')
 nets_before=$(docker network ls -q --filter name=nselfci- 2>/dev/null | tr '\n' ' ')
 # shellcheck disable=SC2329 # runs from the EXIT trap
@@ -38,6 +38,7 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
+trap 'exit 129' HUP
 ev_begin scenario-01-local-only "${BASH_SOURCE[0]}" "$root" "$work"
 for tool in git jq go node curl perl; do command -v "$tool" >/dev/null || tools_die "$tool is required"; done
 nocut=${DRILL_NO_CUT:-}
@@ -57,9 +58,12 @@ cp "$root/free/ci/plugin.json" "$work/home/.nself/plugins/ci/plugin.json"
 cp "$ci" "$work/home/.nself/plugins/bin/nself-ci"
 ln -s "$cli" "$work/bin/nself"
 ln -s "$glpath/gitleaks" "$work/bin-gl/gitleaks"
-for t in git go gofmt node docker; do
+# Docker is only used on Linux: the cut cannot see into the VM Docker Desktop runs on macOS, so a Mac is always the
+# no-Docker case here, whatever it has installed.
+for t in git go gofmt node; do
 	p=$(command -v "$t" 2>/dev/null) && ln -s "$p" "$work/bin/$t"
 done
+if [ "$(uname -s)" = Linux ] && p=$(command -v docker 2>/dev/null); then ln -s "$p" "$work/bin/docker"; fi
 gobin=$(dirname "$(command -v go)")
 [ -e "$work/bin/gofmt" ] || { [ ! -x "$gobin/gofmt" ] || ln -s "$gobin/gofmt" "$work/bin/gofmt"; }
 path_full="$work/bin:$work/bin-gl:/usr/bin:/bin"
@@ -85,12 +89,13 @@ why() {
 finish() { cd "$root" || true; ev_finish; exit $?; }
 
 docker_ok=0
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then docker_ok=1; fi
+if [ -x "$work/bin/docker" ] && "$work/bin/docker" info >/dev/null 2>&1; then docker_ok=1; fi
 case "$(uname -s)" in
 Linux)
 	if [ $docker_ok -eq 1 ]; then ev_pass docker-present "Docker answers (the service leg runs)"; else ev_fail docker-present "Docker does not answer on Linux"; finish; fi
 	# Everything the postgres service needs is pulled while the network is still there.
 	if docker pull --quiet postgres:16-alpine >/dev/null 2>"$work/pull.err"; then ev_pass images-pulled "postgres:16-alpine is local before the cut"; else ev_fail images-pulled "docker pull failed: $(tail1 "$work/pull.err")"; finish; fi
+	images_before=$(docker images -q | sort -u | tr '\n' ' ')
 	;;
 *) ev_pass docker-absent "docker answers: $docker_ok (hosted macOS has none; the service job must end E637)" ;;
 esac
@@ -186,6 +191,9 @@ if [ "$docker_ok" -eq 1 ]; then
 	for id in $(docker network ls -q --filter name=nselfci- 2>/dev/null); do case " $nets_before " in *" $id "*) ;; *) nets=$((nets + 1)) ;; esac; done
 	if [ $rc -eq 0 ] && vjson "$work/y.json" ".data.result == \"pass\" and ($others) and ([.data.checks[] | select(.id == \"db-reachable\") | .result] == [\"pass\"])" && [ "$left" = 0 ] && [ "$nets" = 0 ]; then
 		ev_pass polyglot-service "all four jobs passed with the postgres service and nothing was left running (run $run_y)"
+		# The docker daemon makes its own connections (outside the cut's group), so any new image means it pulled one.
+		images_after=$(docker images -q | sort -u | tr '\n' ' ')
+		if [ "$images_before" = "$images_after" ]; then ev_pass no-image-pulled "the service run pulled no image"; else ev_fail no-image-pulled "images changed during the cut: before [$images_before] after [$images_after]"; fi
 	else
 		cp "$work/y.json" "$work/why.json"
 		ev_fail polyglot-service "exit $rc, containers left $left, networks left $nets: $(why "$run_y")"

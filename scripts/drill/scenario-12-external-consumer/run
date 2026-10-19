@@ -22,7 +22,7 @@ lib=$root/scripts/drill/fixtures/lib
 # shellcheck source=/dev/null
 . "$lib/make-fixtures.sh"
 
-work=$(mktemp -d "${TMPDIR:-/tmp}/drill-s12.XXXXXX")
+work=$(mktemp -d "${TMPDIR:-/tmp}/drill-s12.XXXXXX") || exit 2
 trap 'rm -rf "$work"' EXIT
 ev_begin scenario-12-external-consumer "${BASH_SOURCE[0]}" "$root" "$work"
 for tool in git jq go; do command -v "$tool" >/dev/null || tools_die "$tool is required"; done
@@ -74,7 +74,7 @@ else
 	ev_fail verify-bound "verify $c1 exited $rc: $(jq -c '.data | {result, binding, freshness}' "$work/v1.json" 2>/dev/null | head -c 300)"
 fi
 
-# 3. The document obeys the schema: no key outside `properties`, every `required` key present, the const holds.
+# 3. The document obeys the schema at its top level: no key outside `properties`, every `required` key present, the const holds.
 jq '.data.evidence' "$work/v1.json" >"$work/doc1.json" 2>/dev/null
 if jq -e --slurpfile s "$schema" '
 	($s[0]) as $sc | keys as $k
@@ -82,9 +82,9 @@ if jq -e --slurpfile s "$schema" '
 	and (($sc.required - $k) == [])
 	and (($k - ($sc.properties | keys)) == [])
 	and (.result | IN("pass", "fail", "error", "cancelled"))' "$work/doc1.json" >/dev/null 2>&1; then
-	ev_pass schema "the document matches the schema's const, required keys and property names"
+	ev_pass schema-top-level "the document matches the schema's const, required top-level keys and top-level property names"
 else
-	ev_fail schema "the document does not match the schema: $(jq -c 'keys' "$work/doc1.json" 2>/dev/null | head -c 300)"
+	ev_fail schema-top-level "the document does not match the schema: $(jq -c 'keys' "$work/doc1.json" 2>/dev/null | head -c 300)"
 fi
 
 # 4. A lockfile change makes the prior evidence stale, naming the file; verifying the new commit runs the pipeline in
@@ -107,6 +107,14 @@ if [ $rc -eq 10 ] && vjson "$work/st.json" '.data.freshness.state == "stale"'; t
 	ev_pass stale-exit-10 "evidence made before the lockfile change reports stale with exit 10 for the new commit"
 else
 	ev_fail stale-exit-10 "expected exit 10 and stale, got exit $rc: $(jq -c '.data.freshness' "$work/st.json" 2>/dev/null | head -c 200)"
+fi
+# The same, with the genuine (unedited) document from the producer's own store: stale, not forged.
+nci producer evidence verify --file "$work/doc1.json" --at-revision "$c2" --json >"$work/sg.json" 2>"$work/sg.err"
+rc=$?
+if [ $rc -eq 10 ] && vjson "$work/sg.json" '.data.freshness.state == "stale"'; then
+	ev_pass stale-genuine "the genuine document verified at the new commit is stale (exit 10), not forged"
+else
+	ev_fail stale-genuine "expected exit 10 and stale, got exit $rc: $(jq -c '.data.freshness' "$work/sg.json" 2>/dev/null | head -c 200)"
 fi
 nci producer evidence verify "$c2" --json >"$work/v2.json" 2>"$work/v2.err"
 rc=$?
