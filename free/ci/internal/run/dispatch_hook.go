@@ -15,7 +15,9 @@ package run
 // not a measured fact; `ci explain` shows it as declared): the isolation hook
 // refuses a job it cannot sandbox at exec time, and P7-TRUST-08's probe facts
 // replace it. The local admission policy (battery, reservations, the foreground
-// floor) still runs first, as in LocalAdmit.
+// floor) still runs first, as in LocalAdmit. The job-to-sched mapping is
+// planview.SchedJob, the one `ci plan` uses; the world counts the per-job limit
+// over the run's own job rows (world.Deps.JobIDs), not every active attempt.
 
 import (
 	"context"
@@ -28,6 +30,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/planview"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/report"
@@ -139,15 +142,17 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 // platform is the local runner's platform string.
 func platform() string { return runtime.GOOS + "/" + runtime.GOARCH }
 
+// schedJob maps the attempt with the mapping `ci plan` uses (planview.SchedJob),
+// then sets what only a run knows: the attempt key and number, the source trust
+// and the local demand. The job's own labels, tools, isolation floor and
+// accelerators are dropped: the local runner's declaration is a placeholder
+// (see the file header) and the exec-time isolation hook is the gate for them.
 func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sched.Job {
-	var timeout time.Duration
-	if d, err := time.ParseDuration(s.Job.Timeout); err == nil {
-		timeout = d
-	}
-	return sched.Job{Key: id, ID: row, Name: row, Pipeline: sched.Pipeline{ID: rd.sess.RunID, Support: []string{platform()}, Foreground: s.Foreground},
-		Requirements: model.PlacementRequirements{Platform: platform(), CPU: int64(cpu), MemMB: int64(mem)},
-		Trust:        model.TrustClass(rd.row.SourceTrust), Network: "internet", TimeoutMs: timeout.Milliseconds(), Attempt: s.N, Priority: string(s.Job.Priority),
-		RemoteOnly: s.Job.RemoteOnly, PersonalOwnRun: true, Project: rd.row.Project}
+	j := planview.SchedJob(planview.Context{PipelineID: rd.sess.RunID, Project: rd.row.Project, Support: []string{platform()},
+		DefaultPlatform: platform(), Foreground: s.Foreground}, planview.PlannedJob{ID: row, Name: row, Job: *s.Job})
+	j.Key, j.Attempt, j.Trust, j.Accelerators = id, s.N, model.TrustClass(rd.row.SourceTrust), nil
+	j.Requirements = model.PlacementRequirements{Platform: platform(), CPU: int64(cpu), MemMB: int64(mem)}
+	return j
 }
 
 // policy resolves the run's effective scheduling policy once, as PolicyHook does.
@@ -180,7 +185,7 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
 	capacity := rd.sess.Capacity()
 	local := localCapability(rd.row.Project, capacity)
-	w, _, err := world.Build(ctx, world.Deps{Store: rd.sess.Store, Local: &local, LocalCapacity: &capacity, Policy: rd.policy}, p)
+	w, _, err := world.Build(ctx, world.Deps{Store: rd.sess.Store, Local: &local, LocalCapacity: &capacity, Policy: rd.policy, JobIDs: rd.sess.jobRows()}, p)
 	if err != nil {
 		return sched.World{}, "", err
 	}

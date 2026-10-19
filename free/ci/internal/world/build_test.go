@@ -207,6 +207,29 @@ func TestWorldBuild(t *testing.T) {
 	}
 }
 
+func TestWorldBuildJobIDsBoundTheJobCount(t *testing.T) {
+	d, p := worldFixture(t)
+	ctx := context.Background()
+	all, _, err := Build(ctx, d, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if all.Counts.Job != all.Counts.Global {
+		t.Fatalf("no job ids: Counts.Job = %d, want the global %d", all.Counts.Job, all.Counts.Global)
+	}
+	d.JobIDs = []string{"joba", "jobb", "no-such-job"}
+	w, _, err := Build(ctx, d, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Counts.Job != 1 || w.Counts.Global != 5 {
+		t.Fatalf("job ids: Counts.Job = %d (want 1), Global = %d (want 5)", w.Counts.Job, w.Counts.Global)
+	}
+	if !reflect.DeepEqual(w.Previous, all.Previous) {
+		t.Fatalf("JobIDs changed Previous: %v vs %v", w.Previous, all.Previous)
+	}
+}
+
 func TestWorldBuildFractionalCapability(t *testing.T) {
 	d, p := worldFixture(t)
 	cpu, cost := 0.5, 0.25
