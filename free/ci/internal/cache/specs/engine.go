@@ -1,12 +1,12 @@
 package specs
 
-// Purpose: restore and save one spec entry (Epic CACHE D5): one tar + gzip
-// level 1 blob per spec dir, put into the cache realm of the entry's
+// Purpose: restore and save one spec entry (Epic CACHE D5): one plain tar
+// blob (a gzip blob still restores) per spec dir, put into the cache realm of the entry's
 // namespace, committed through entries.Commit.
 // Inputs:  entries.Store, cas.Store, an authz.ValueScanner, a Backend for the
 // audit rows this package writes itself.
 // Outputs: Engine.Restore, Engine.Save, ErrEmpty, ReasonSecretMatch.
-// Constraints: a save streams tar -> scan -> gzip -> cas.Put, so a registered
+// Constraints: a save streams tar -> scan -> cas.Put, so a registered
 // value aborts the stream before any blob is visible, and Commit is called
 // only after every blob was Put; nothing is committed for a cache with no
 // files in it (a hit on an empty entry would keep the next run from filling
@@ -14,7 +14,6 @@ package specs
 // spec's dirs or whose archive the path sanitiser rejects.
 
 import (
-	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -217,7 +216,7 @@ func (e *Engine) refuse(ctx context.Context, r SaveRequest, err error) error {
 
 var errSizeCap = errors.New("specs: the packed cache exceeds the entry byte cap")
 
-// capWriter counts compressed bytes and fails past the cap.
+// capWriter counts stored bytes and fails past the cap.
 type capWriter struct {
 	w   io.Writer
 	n   int64
@@ -231,7 +230,9 @@ func (c *capWriter) Write(p []byte) (int, error) {
 	return c.w.Write(p)
 }
 
-// putDir streams dir through tar, scan and gzip into the blob store.
+// putDir streams dir through tar and scan into the blob store. The local blob
+// is a plain tar: disk is cheap and a restore is on a job's critical path, so a
+// copy beats an inflate (D-1008). Compress only when a blob leaves the host.
 func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel string, budget int64) (string, int64, PackStats, error) {
 	pr, pw := io.Pipe()
 	var st PackStats
@@ -240,13 +241,9 @@ func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel
 		defer close(done)
 		var err error
 		defer func() { _ = pw.CloseWithError(err) }()
-		gz, _ := gzip.NewWriterLevel(&capWriter{w: pw, cap: budget}, gzip.BestSpeed)
-		sw := newScanWriter(gz, e.Scanner)
+		sw := newScanWriter(&capWriter{w: pw, cap: budget}, e.Scanner)
 		if st, err = Pack(ctx, base, rel, sw, cacheLimits()); err == nil {
 			err = sw.Close()
-		}
-		if err == nil {
-			err = gz.Close()
 		}
 	}()
 	digest, size, err := e.Blobs.Put(ctx, realm, pr)

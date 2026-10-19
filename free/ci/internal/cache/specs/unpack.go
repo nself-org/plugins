@@ -20,6 +20,7 @@ package specs
 
 import (
 	"archive/tar"
+	"bufio"
 	"compress/gzip"
 	"errors"
 	"fmt"
@@ -81,13 +82,13 @@ func extract(r io.Reader, root *os.Root, lim authz.Limits, opt UnpackOptions) (U
 	var st UnpackStats
 	dry := root == nil
 	cr := &countReader{r: r}
-	gz, err := gzip.NewReader(cr)
+	body, closeBody, err := openBody(cr)
 	if err != nil {
-		return st, fmt.Errorf("specs: not a gzip stream: %w", err)
+		return st, err
 	}
-	defer func() { _ = gz.Close() }()
+	defer closeBody()
 	lim = effective(lim)
-	tr := tar.NewReader(io.LimitReader(gz, lim.MaxTotalBytes+(1<<30)))
+	tr := tar.NewReader(io.LimitReader(body, lim.MaxTotalBytes+(1<<30)))
 	ext, guard, dirs := authz.NewExtractor(lim), &bombGuard{cr: cr, lim: lim}, []dirMode{}
 	for {
 		h, err := tr.Next()
@@ -158,6 +159,26 @@ func extract(r io.Reader, root *os.Root, lim authz.Limits, opt UnpackOptions) (U
 		_ = root.Chtimes(d.name, d.at, d.at)
 	}
 	return st, nil
+}
+
+// openBody returns the tar stream inside r: a local blob is a plain tar (a
+// restore is a copy), a gzip blob (an older save, or one a remote store hands
+// back) is inflated. The first two bytes tell them apart: a tar header starts
+// with a file name, which never begins 0x1f 0x8b.
+func openBody(r io.Reader) (io.Reader, func(), error) {
+	br := bufio.NewReaderSize(r, 128<<10)
+	magic, err := br.Peek(2)
+	if err != nil {
+		return nil, nil, fmt.Errorf("specs: not an archive: %w", err)
+	}
+	if magic[0] != 0x1f || magic[1] != 0x8b {
+		return br, func() {}, nil
+	}
+	gz, err := gzip.NewReader(br)
+	if err != nil {
+		return nil, nil, fmt.Errorf("specs: not a gzip stream: %w", err)
+	}
+	return gz, func() { _ = gz.Close() }, nil
 }
 
 // openDirs makes every directory of the tree (the root and the implicit

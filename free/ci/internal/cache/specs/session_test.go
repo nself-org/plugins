@@ -395,43 +395,31 @@ func TestSessionCleanupNeverLeavesItsPinnedParent(t *testing.T) {
 	}
 }
 
-func TestSessionDoesNotSaveWhatARestoreWouldRefuse(t *testing.T) {
+// A local blob is a plain tar, so a run of zeros cannot amplify on restore: the
+// ratio guard (a gzip bomb defence, still covered in archive_test.go) has
+// nothing to refuse, and the entry saves and restores byte for byte.
+func TestSessionSavesAZeroFilledDirBecausePlainTarHasNoAmplification(t *testing.T) {
 	e := newEnv(t)
 	e.running("z1", ownerFacts)
 	s := e.begin(e.input("z1", ownerFacts))
 	fill(t, s)
-	if err := os.WriteFile(filepath.Join(s.dir("build"), "sparse.bin"), make([]byte, 8<<20), 0o644); err != nil { // 8 MiB of zeros
+	zeros := make([]byte, 8<<20)
+	if err := os.WriteFile(filepath.Join(s.dir("build"), "sparse.bin"), zeros, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	s.Finalize(e.ctx, e.finalizing("z1"))
-	if e.entryCount() != 0 || strings.Join(resultsOf(e.uses("z1")), ",") != "go:miss,go:refused" {
+	if e.entryCount() != 1 || strings.Join(resultsOf(e.uses("z1")), ",") != "go:miss" {
 		t.Fatalf("entries %d uses %v", e.entryCount(), resultsOf(e.uses("z1")))
 	}
-}
-
-func TestSessionValidatesEveryDirLikeARestore(t *testing.T) {
-	e := newEnv(t)
-	e.running("v1", ownerFacts)
-	s := e.begin(e.input("v1", ownerFacts))
-	fill(t, s)
-	// 6 MiB of zeros next to 6 MiB of random bytes: the directory's total ratio is fine, the zero file's is not
-	if err := os.WriteFile(filepath.Join(s.dir("build"), "a-zeros.bin"), make([]byte, 6<<20), 0o644); err != nil {
-		t.Fatal(err)
+	e.settlePassed("z1")
+	s.Cleanup()
+	e.running("z2", ownerFacts)
+	s2 := e.begin(e.input("z2", ownerFacts))
+	if got := strings.Join(resultsOf(e.uses("z2")), ","); got != "go:hit" {
+		t.Fatalf("restore: %v", got)
 	}
-	rnd := make([]byte, 6<<20)
-	x := uint32(88172645)
-	for i := range rnd {
-		x ^= x << 13
-		x ^= x >> 17
-		x ^= x << 5
-		rnd[i] = byte(x)
-	}
-	if err := os.WriteFile(filepath.Join(s.dir("build"), "b-random.bin"), rnd, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	s.Finalize(e.ctx, e.finalizing("v1"))
-	if e.entryCount() != 0 || strings.Join(resultsOf(e.uses("v1")), ",") != "go:miss,go:refused" {
-		t.Fatalf("entries %d uses %v", e.entryCount(), resultsOf(e.uses("v1")))
+	if fi, err := os.Stat(filepath.Join(s2.dir("build"), "sparse.bin")); err != nil || fi.Size() != int64(len(zeros)) {
+		t.Fatalf("restored sparse.bin: %v %v", fi, err)
 	}
 }
 
