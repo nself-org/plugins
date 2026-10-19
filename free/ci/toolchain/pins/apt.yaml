@@ -1,0 +1,12 @@
+# Pin source of the toolchain image (D-0994). The OS packages (ca-certificates, curl, unzip, xz-utils,
+# git, gcc, libc6-dev and their dependencies) are installed from this dated snapshot.debian.org archive,
+# never the live one. Same instant as the base image's debuerreotype build (2026-10-05), so no package
+# is upgraded or downgraded against the base. Bump it together with the debian base digest.
+name: apt
+kind: apt-snapshot
+version: "20261005T000000Z"
+purpose: dated Debian archive every apt-get of the image installs from (debian, trixie-updates, trixie-security)
+owner: free/ci/toolchain
+upstream:
+  type: none
+  ref: ""

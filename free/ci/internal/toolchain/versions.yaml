@@ -2,6 +2,14 @@
 # Source: free/ci/toolchain/pins/*.yaml. Change a pin there, then regenerate.
 version: 1
 rows:
+  - name: apt
+    kind: apt-snapshot
+    version: 20261005T000000Z
+    purpose: dated Debian archive every apt-get of the image installs from (debian, trixie-updates, trixie-security)
+    owner: free/ci/toolchain
+    upstream:
+      type: none
+      ref: ""
   - name: debian
     kind: base-image
     version: trixie-slim

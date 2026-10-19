@@ -42,6 +42,7 @@ rows:
     upstream: {type: github, ref: acme/gone}
     sources:
       - {os: linux, arch: amd64, url: "` + goneURL + `", sha256: "` + h + `"}
+  - {name: apt, kind: apt-snapshot, version: "20261005T000000Z", purpose: p, owner: o, upstream: {type: none, ref: ""}}
   - {name: toolchain-image, kind: image, purpose: p, owner: o, image: docker.io/nself/ci-toolchain, status: pending, upstream: {type: none, ref: ""}}
 `
 }
@@ -55,6 +56,9 @@ func mirror(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/api.github.com/repos/acme/gone/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"tag_name":"v2.0.0"}`))
 	})
+	for _, rel := range []string{"debian/dists/trixie", "debian/dists/trixie-updates", "debian-security/dists/trixie-security"} {
+		mux.HandleFunc("/snapshot.debian.org/archive/"+strings.Replace(rel, "/", "/20261005T000000Z/", 1)+"/InRelease", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("x")) })
+	}
 	mux.HandleFunc("/example.org/acme/demo-1.2.3.tgz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("x")) })
 	mux.HandleFunc("/auth.docker.io/token", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"token":"t"}`)) })
 	mux.HandleFunc("/registry-1.docker.io/v2/library/alpine/manifests/", func(w http.ResponseWriter, r *http.Request) {
@@ -125,11 +129,14 @@ func TestDrillAdvisoryNewerReleaseAndPendingImage(t *testing.T) {
 		t.Fatalf("exit %d result %v\n%s", exit, doc["result"], raw)
 	}
 	checks := resultsByTool(doc)
-	if len(checks) != 4 {
-		t.Fatalf("want one check per row (4), got %d: %v", len(checks), checks)
+	if len(checks) != 5 {
+		t.Fatalf("want one check per row (5), got %d: %v", len(checks), checks)
 	}
 	if c := checks["demo"]; c["result"] != "pass" || c["findings"].(float64) != 1 || !strings.Contains(c["excerpt"].(string), "1.3.0") {
 		t.Errorf("a newer release must be an advisory finding, got %v", c)
+	}
+	if c := checks["apt"]; c["result"] != "pass" || c["required"] != true || c["findings"].(float64) != 0 {
+		t.Errorf("a served apt snapshot must pass clean, got %v", c)
 	}
 	if c := checks["gone"]; c["result"] != "pass" || c["findings"].(float64) != 0 {
 		t.Errorf("current pin must pass clean, got %v", c)
@@ -151,6 +158,17 @@ func TestDrillFailsWhenAnArtifactIsGone(t *testing.T) {
 	}
 	if c := resultsByTool(doc)["gone"]; c["result"] != "fail" || !strings.Contains(c["excerpt"].(string), "no longer downloadable") {
 		t.Errorf("gone artifact check = %v", c)
+	}
+}
+
+// TestDrillFailsWhenTheAptSnapshotIsGone: a snapshot stamp the archive no longer serves fails the check.
+func TestDrillFailsWhenTheAptSnapshotIsGone(t *testing.T) {
+	srv := mirror(t)
+	table := strings.Replace(fixtureTable("https://example.org/acme/demo-1.2.3.tgz"), "20261005T000000Z", "20200101T000000Z", 1)
+	doc, exit, raw := runDrill(t, table, srv)
+	validEvidence(t, raw)
+	if c := resultsByTool(doc)["apt"]; exit != 1 || c["result"] != "fail" || !strings.Contains(c["excerpt"].(string), "no longer served") {
+		t.Fatalf("vanished apt snapshot: exit %d %v", exit, c)
 	}
 }
 

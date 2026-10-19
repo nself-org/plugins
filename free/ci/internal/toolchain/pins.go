@@ -8,7 +8,8 @@ package toolchain
 // Outputs: validated Pin values sorted by name.
 // Constraints: strict decoding (unknown keys fail); a tool source needs an
 // https URL and a lower-case 64-hex sha256; a base image is pinned by digest;
-// the image row is `pending` (no digest) or `pinned` (digest).
+// an apt snapshot is a snapshot.debian.org timestamp; the image row is
+// `pending` (no digest) or `pinned` (digest).
 
 import (
 	"bytes"
@@ -24,9 +25,10 @@ import (
 
 // Pin kinds.
 const (
-	KindTool      = "tool"
-	KindBaseImage = "base-image"
-	KindImage     = "image"
+	KindTool        = "tool"
+	KindBaseImage   = "base-image"
+	KindAptSnapshot = "apt-snapshot"
+	KindImage       = "image"
 )
 
 // Image row states.
@@ -68,6 +70,8 @@ var (
 	nameRe   = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 	sha256Re = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	digestRe = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	// snapshotRe is a snapshot.debian.org archive timestamp.
+	snapshotRe = regexp.MustCompile(`^[0-9]{8}T[0-9]{6}Z$`)
 
 	upstreamTypes = map[string]bool{"github": true, "go": true, "node": true, "rust": true, "gomodule": true, "oci": true, "none": true}
 	osNames       = map[string]bool{"linux": true, "darwin": true, "any": true}
@@ -132,6 +136,10 @@ func (p Pin) Validate() error {
 	case KindBaseImage:
 		if p.Image == "" || p.Version == "" || !digestRe.MatchString(p.Digest) {
 			return fmt.Errorf("%s: a base image needs image, version (tag) and a sha256 digest", p.Name)
+		}
+	case KindAptSnapshot:
+		if !snapshotRe.MatchString(p.Version) {
+			return fmt.Errorf("%s: an apt snapshot needs a snapshot.debian.org timestamp (YYYYMMDDTHHMMSSZ) as version, got %q", p.Name, p.Version)
 		}
 	case KindImage:
 		return p.validateImage()

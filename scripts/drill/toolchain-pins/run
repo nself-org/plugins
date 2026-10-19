@@ -118,6 +118,18 @@ while IFS= read -r row; do
 			emit "$name" "$name" "$version" true fail 1 "pinned digest $(jq -r .digest <<<"$row") no longer resolves"
 		fi
 		continue ;;
+	apt-snapshot)
+		# The dated archive must still serve its signed Release files (all three suites the image reads).
+		gone=()
+		for rel in debian/dists/trixie debian/dists/trixie-updates debian-security/dists/trixie-security; do
+			head_ok "https://snapshot.debian.org/archive/${rel%%/*}/$version/${rel#*/}/InRelease" || gone+=("${rel##*/}")
+		done
+		if [ "${#gone[@]}" -gt 0 ]; then
+			emit "$name" "$name" "$version" true fail "${#gone[@]}" "apt snapshot $version no longer served for: ${gone[*]}"
+		else
+			emit "$name" "$name" "$version" true pass 0 "apt snapshot $version still serves its Release files"
+		fi
+		continue ;;
 	esac
 	gone=()
 	while IFS= read -r src; do

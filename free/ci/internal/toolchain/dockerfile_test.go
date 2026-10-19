@@ -60,6 +60,8 @@ func checkDockerfile(d string, pins []Pin) []string {
 			if n := strings.Count(d, ref); n < 2 {
 				out = append(out, fmt.Sprintf("base image %s is used by %d stages, want every stage", ref, n))
 			}
+		case KindAptSnapshot:
+			want["APT_SNAPSHOT"] = p.Version
 		case KindTool:
 			name := strings.ToUpper(strings.ReplaceAll(p.Name, "-", "_"))
 			want[name+"_VERSION"] = p.Version
@@ -75,6 +77,7 @@ func checkDockerfile(d string, pins []Pin) []string {
 			}
 		}
 	}
+	out = append(out, checkAptSnapshot(d)...)
 	for k, v := range want {
 		if got, ok := args[k]; !ok || got != v {
 			out = append(out, fmt.Sprintf("ARG %s is %q, the pins say %q", k, got, v))
@@ -83,6 +86,21 @@ func checkDockerfile(d string, pins []Pin) []string {
 	for k := range args {
 		if _, ok := want[k]; !ok && k != "BUILDARCH" && k != "TARGETARCH" {
 			out = append(out, "ARG "+k+" has no pin source")
+		}
+	}
+	return out
+}
+
+// checkAptSnapshot: every RUN that runs apt-get update first points apt at the pinned snapshot.
+func checkAptSnapshot(d string) []string {
+	var out []string
+	for _, run := range strings.Split(strings.ReplaceAll(d, " \\\n", " "), "\n") {
+		if !strings.HasPrefix(run, "RUN ") || !strings.Contains(run, "apt-get update") {
+			continue
+		}
+		snap := strings.Index(run, `apt-snapshot.sh "$APT_SNAPSHOT"`)
+		if snap < 0 || snap > strings.Index(run, "apt-get update") {
+			out = append(out, "apt-get update runs against the live Debian archive, not the pinned snapshot: "+run)
 		}
 	}
 	return out

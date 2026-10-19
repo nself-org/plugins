@@ -4,7 +4,11 @@
 # Every FROM is pinned by digest and every download is verified by fetch-verified.sh.
 # Build (no push): docker buildx build --platform linux/amd64,linux/arm64 free/ci/toolchain
 
+# OS packages come from this dated snapshot.debian.org archive (D-0994), never the live one.
+ARG APT_SNAPSHOT=20261005T000000Z
+
 FROM --platform=$BUILDPLATFORM docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS fetch
+ARG APT_SNAPSHOT
 ARG BUILDARCH
 ARG TARGETARCH
 ARG GO_VERSION=1.27.2
@@ -52,7 +56,8 @@ ARG GOVULNCHECK_URL_ANY=https://proxy.golang.org/golang.org/x/vuln/@v/v1.9.0.zip
 ARG GOVULNCHECK_SHA256_ANY=e4bcdca4303ab3e57e913d0b086bbf7916b97ed4d0b069c8e0eede39e8782c2c
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # hadolint ignore=DL3008
-RUN apt-get update \
+RUN --mount=type=bind,source=apt-snapshot.sh,target=/usr/local/bin/apt-snapshot.sh \
+    apt-snapshot.sh "$APT_SNAPSHOT" && apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl unzip xz-utils \
  && rm -rf /var/lib/apt/lists/*
 COPY fetch-verified.sh /usr/local/bin/fetch-verified.sh
@@ -96,8 +101,10 @@ FROM docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2
 LABEL org.opencontainers.image.source="https://github.com/nself-org/plugins" \
       org.opencontainers.image.description="Pinned toolchain of nself ci --container" \
       org.opencontainers.image.licenses="MIT"
+ARG APT_SNAPSHOT
 # hadolint ignore=DL3008
-RUN apt-get update \
+RUN --mount=type=bind,source=apt-snapshot.sh,target=/usr/local/bin/apt-snapshot.sh \
+    apt-snapshot.sh "$APT_SNAPSHOT" && apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates git gcc libc6-dev \
  && rm -rf /var/lib/apt/lists/*
 # One COPY per stack, so a single pin bump re-pulls one layer, not the whole toolchain.
