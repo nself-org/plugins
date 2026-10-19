@@ -4,7 +4,7 @@
 #   ci.evidence) on hosted ubuntu and macos-arm64 runners. Both are drill jobs of the `drills` pipeline
 #   (scripts/drill/scenario-*/run); this workflow builds the ci plugin from the commit under review and an `nself` from
 #   nself-org/cli origin/main (the served-bytes install leg is P7-CI-99's), then runs each job with `nself-ci --pipeline
-#   drills --job <name>`. The outer --no-status is this workflow's: scenario 1's own inner runs never use it.
+#   drills --job drill-<name>`. The outer --no-status is this workflow's: scenario 1's own inner runs never use it.
 # Inputs:  this checkout and nself-org/cli main. No secrets.
 # Outputs: one ci.evidence document per scenario, uploaded as an artifact and summarised in the job summary.
 # Constraints: actions pinned by SHA; scenario 1 cuts the network for its own processes with `sudo -n` (nft on Linux, pf on
@@ -75,19 +75,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
-          .drill-bin/nself-ci --no-status --pipeline drills --job drill-scenario-12-external-consumer --json > "$RUNNER_TEMP/evidence/scenario-12.json" || status=$?
-          jq -r '"scenario-12: " + (.data.result // "no result")' "$RUNNER_TEMP/evidence/scenario-12.json" | tee -a "$GITHUB_STEP_SUMMARY"
-          jq -e '.data.result == "pass"' "$RUNNER_TEMP/evidence/scenario-12.json" >/dev/null
-          exit "${status:-0}"
+          .drill-bin/nself-ci --no-status --pipeline drills --job drill-scenario-12-external-consumer --json > "$RUNNER_TEMP/evidence/scenario-12.json" || true # exit 1 is the partial selection; the job check below decides
+          # A single-job run is a partial selection, so its overall result is never pass: read the job's own check.
+          jq -r '"scenario-12: " + ([.data.checks[] | select(.id == "drill-scenario-12-external-consumer") | .result][0] // "no result")' "$RUNNER_TEMP/evidence/scenario-12.json" | tee -a "$GITHUB_STEP_SUMMARY"
+          jq -e '[.data.checks[] | select(.id == "drill-scenario-12-external-consumer") | .result] == ["pass"]' "$RUNNER_TEMP/evidence/scenario-12.json" >/dev/null
 
       - name: Scenario 1, local only (network cut)
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
-          .drill-bin/nself-ci --no-status --pipeline drills --job drill-scenario-01-local-only --json > "$RUNNER_TEMP/evidence/scenario-01.json" || status=$?
-          jq -r '"scenario-01: " + (.data.result // "no result")' "$RUNNER_TEMP/evidence/scenario-01.json" | tee -a "$GITHUB_STEP_SUMMARY"
-          jq -e '.data.result == "pass"' "$RUNNER_TEMP/evidence/scenario-01.json" >/dev/null
-          exit "${status:-0}"
+          .drill-bin/nself-ci --no-status --pipeline drills --job drill-scenario-01-local-only --json > "$RUNNER_TEMP/evidence/scenario-01.json" || true # exit 1 is the partial selection; the job check below decides
+          # A single-job run is a partial selection, so its overall result is never pass: read the job's own check.
+          jq -r '"scenario-01: " + ([.data.checks[] | select(.id == "drill-scenario-01-local-only") | .result][0] // "no result")' "$RUNNER_TEMP/evidence/scenario-01.json" | tee -a "$GITHUB_STEP_SUMMARY"
+          jq -e '[.data.checks[] | select(.id == "drill-scenario-01-local-only") | .result] == ["pass"]' "$RUNNER_TEMP/evidence/scenario-01.json" >/dev/null
 
       - name: Upload the evidence
         if: always()

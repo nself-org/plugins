@@ -14,6 +14,14 @@ EV_TOOLS=${EV_TOOLS:-"{}"}
 ev_sha() { sha256sum "$@" 2>/dev/null || shasum -a 256 "$@"; }
 say() { printf '%s: %s\n' "${EV_JOB:-drill}" "$*" >&2; }
 
+# ev_snip FILE: the line that says why a command died (a Go crash or panic first), then the last two lines; one line, short.
+ev_snip() {
+	{
+		grep -m1 -E 'fatal error|^panic|SIG[A-Z]+|^runtime:|^E[0-9]{3}' "$1" 2>/dev/null | cut -c1-160
+		tail -n 2 "$1" 2>/dev/null | cut -c1-100
+	} | tr '\n' ' '
+}
+
 ev_begin() { # ev_begin JOB SCRIPT ROOT WORK
 	EV_JOB=$1 EV_SCRIPT=$2 EV_ROOT=$3 EV_WORK=$4
 	EV_CHECKS=$EV_WORK/checks.ndjson
