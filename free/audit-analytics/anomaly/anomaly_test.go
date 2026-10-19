@@ -4,7 +4,11 @@
 // Constraints: No DB connection required; all tested functions are pure.
 package anomaly
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+)
 
 // TestBuild verifies the anomaly package compiles and exports the expected constants.
 func TestBuild(t *testing.T) {
@@ -55,5 +59,33 @@ func TestPrivilegedActions(t *testing.T) {
 	}
 	if PrivilegedActions["login"] {
 		t.Error("PrivilegedActions[\"login\"] should be false")
+	}
+}
+
+// Events whose actor is not a uuid (system events: np_audit_log.user_id is NULL for them) have no per-user
+// behaviour to score: every detector's query must leave them out, or each would read as a new-IP or
+// bulk-delete anomaly of a user that does not exist.
+func TestDetectorQueriesSkipEventsWithoutAnActor(t *testing.T) {
+	var sqls []string
+	q := func(_ context.Context, sql string, _ ...interface{}) ([]map[string]interface{}, error) {
+		sqls = append(sqls, sql)
+		return nil, nil
+	}
+	e := func(context.Context, string, ...interface{}) (int64, error) { return 0, nil }
+	for _, hours := range [][2]int{{9, 17}, {20, 6}} { // both branches of the after-hours query
+		sqls = nil
+		s := NewScorer(q, e, ScorerConfig{ZScoreThreshold: 3, AfterHoursStart: hours[0], AfterHoursEnd: hours[1]})
+		if _, err := s.ScoreRecent(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if len(sqls) != 4 {
+			t.Fatalf("hours %v: %d queries, want 4", hours, len(sqls))
+		}
+		for _, sql := range sqls {
+			// every SELECT over the log filters the actor, in each of its CTEs
+			if n, m := strings.Count(sql, "FROM np_audit_log"), strings.Count(sql, "user_id IS NOT NULL"); m < n {
+				t.Errorf("hours %v: %d reads of np_audit_log but %d actor filters in:\n%s", hours, n, m, sql)
+			}
+		}
 	}
 }
