@@ -1,0 +1,11 @@
+go test fuzz v1
+string("0")
+string("0")
+uint32(2147484141)
+bool(false)
+int64(0)
+int64(0)
+string("0:")
+string("")
+uint32(2147484088)
+int64(0)

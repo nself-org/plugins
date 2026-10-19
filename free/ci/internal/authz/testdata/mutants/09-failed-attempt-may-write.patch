@@ -1,0 +1,11 @@
+--- a/internal/authz/access.go
++++ b/internal/authz/access.go
+@@ -124,7 +124,7 @@
+ 		return &Denied{Reason: ReasonEpoch, Detail: "lease epoch moved on"}
+ 	case job.State != StateFinalizing:
+ 		return &Denied{Reason: ReasonState, Detail: "attempt is not finalizing"}
+-	case !job.Passed:
++	case false:
+ 		return &Denied{Reason: ReasonResult, Detail: "attempt has no recorded pass"}
+ 	case !claimed.Equal(job.Namespace):
+ 		return &Denied{Reason: ReasonNamespace, Detail: "claimed namespace is not the job's own"}

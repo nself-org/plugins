@@ -1,0 +1,11 @@
+--- a/internal/authz/access.go
++++ b/internal/authz/access.go
+@@ -74,7 +74,7 @@
+ func CacheAccess(job Job, target Namespace) Mode {
+ 	own := job.Namespace
+ 	switch {
+-	case !job.live() || !own.Valid() || !target.Valid():
++	case !own.Valid() || !target.Valid():
+ 		return ModeNone
+ 	case own.Equal(target):
+ 		return ModeRWOwn

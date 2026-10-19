@@ -1,0 +1,11 @@
+--- a/internal/authz/access.go
++++ b/internal/authz/access.go
+@@ -120,7 +120,7 @@
+ 	switch {
+ 	case job.Capability.Attempt == "" || job.Capability.Attempt != current.Attempt:
+ 		return &Denied{Reason: ReasonCapability, Detail: "attempt does not hold the write capability"}
+-	case job.Capability.Epoch != current.Epoch:
++	case false:
+ 		return &Denied{Reason: ReasonEpoch, Detail: "lease epoch moved on"}
+ 	case job.State != StateFinalizing:
+ 		return &Denied{Reason: ReasonState, Detail: "attempt is not finalizing"}

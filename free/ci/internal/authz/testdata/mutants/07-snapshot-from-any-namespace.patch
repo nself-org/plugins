@@ -1,0 +1,11 @@
+--- a/internal/authz/access.go
++++ b/internal/authz/access.go
+@@ -78,7 +78,7 @@
+ 		return ModeNone
+ 	case own.Equal(target):
+ 		return ModeRWOwn
+-	case own.Project == target.Project && IsSnapshotSource(target) && trust.RankTrust(own.Trust) < trust.RankTrust(target.Trust):
++	case own.Project == target.Project && target.Valid() && trust.RankTrust(own.Trust) < trust.RankTrust(target.Trust):
+ 		return ModeROSnapshot
+ 	}
+ 	return ModeNone
