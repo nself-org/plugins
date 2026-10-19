@@ -213,6 +213,21 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	return
 }
 
+// copySymlink recreates a symlink whose relative target stays inside the job
+// source. An absolute target, or one that climbs out of the source, is refused:
+// the job must not reach files outside its workspace through a link.
+func copySymlink(path, rel, target string) error {
+	link, err := os.Readlink(path)
+	if err != nil {
+		return err
+	}
+	resolved := filepath.Clean(filepath.Join(filepath.Dir(rel), link))
+	if filepath.IsAbs(link) || resolved == ".." || strings.HasPrefix(resolved, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("symlink in job source: %s", rel)
+	}
+	return os.Symlink(link, target)
+}
+
 func copyTree(source, dest string) error {
 	root, err := filepath.Abs(source)
 	if err != nil {
@@ -229,10 +244,10 @@ func copyTree(source, dest string) error {
 		if rel == "." {
 			return nil
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("symlink in job source: %s", rel)
-		}
 		target := filepath.Join(dest, rel)
+		if info.Mode()&os.ModeSymlink != 0 {
+			return copySymlink(path, rel, target)
+		}
 		if info.IsDir() {
 			return os.Mkdir(target, 0700)
 		}
