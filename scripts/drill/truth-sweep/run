@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# truth-sweep drill (P7-CI-08, Epic CI D21): runs the nself-org truth rules (.github/truth/org.yaml) against a shallow
+# clone of every public, non-archived, non-empty nself-org repository (hq excepted: planning truth that names the
+# dead hosts as never-touch) and prints one ci.evidence/v1 document with one check per repository.
+# Why: the check reads files and never the network (D21). This drill is the one place that fetches: it clones over
+#   https, then hands the clones to the same engine the plugins default pipeline runs, so a dead host, retired term or
+#   banned literal that reaches any public repository fails the nightly drill.
+# Inputs:  GH_TOKEN / GITHUB_TOKEN (optional; stored in a private temporary gh config, the exec funnel drops tokens),
+#          TRUTH_ORG (default nself-org), TRUTH_RULES (rule file relative to the repository root, default
+#          .github/truth/org.yaml), TRUTH_RUNNER (a prebuilt runner binary; default `go run` of
+#          free/ci/internal/gates/truth/run.go), and two test hooks: TRUTH_REPOS_FILE (repository names, one per
+#          line, replaces `gh repo list`) and TRUTH_CLONE_BASE (a directory holding <name>/ repositories cloned
+#          instead of https://github.com/<org>/<name>.git).
+# Usage:   run
+# Outputs: one line per repository on stderr, then the evidence document as one compact JSON line on stdout.
+#          Exit 0 when every repository is clean, 1 when a rule is broken, 2 when a clone or the engine failed
+#          (a failed fetch or clone fails the sweep: a repository that was not read is not a clean one).
+set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root=$(cd "$here/../../.." && pwd)
+org=${TRUTH_ORG:-nself-org}
+rules=${TRUTH_RULES:-.github/truth/org.yaml}
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/truth-sweep.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+
+for tool in git jq; do
+	command -v "$tool" >/dev/null || { echo "truth-sweep: $tool is required" >&2; exit 2; }
+done
+if [ -z "${TRUTH_RUNNER:-}" ]; then
+	command -v go >/dev/null || { echo "truth-sweep: go is required (or set TRUTH_RUNNER)" >&2; exit 2; }
+fi
+
+if [ -n "${TRUTH_REPOS_FILE:-}" ]; then
+	repos=$(grep -v '^[[:space:]]*\(#\|$\)' "$TRUTH_REPOS_FILE" || true)
+else
+	command -v gh >/dev/null || { echo "truth-sweep: gh is required" >&2; exit 2; }
+	if [ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ]; then
+		token=${GH_TOKEN:-$GITHUB_TOKEN}
+		mkdir -p "$tmp/gh-config/gh"
+		chmod 700 "$tmp/gh-config" "$tmp/gh-config/gh"
+		printf 'github.com:\n    oauth_token: %s\n    git_protocol: https\n' "$token" >"$tmp/gh-config/gh/hosts.yml"
+		chmod 600 "$tmp/gh-config/gh/hosts.yml"
+		export XDG_CONFIG_HOME="$tmp/gh-config"
+	fi
+	limit=200
+	listed=$(gh repo list "$org" --visibility public --no-archived --limit "$limit" --json name,diskUsage \
+		-q '.[] | select(.diskUsage > 0) | .name')
+	if [ "$(printf '%s\n' "$listed" | grep -c .)" -ge "$limit" ]; then
+		echo "truth-sweep: $limit repositories listed: the list may be cut off; raise the limit" >&2
+		exit 2
+	fi
+	repos=$(printf '%s\n' "$listed" | grep -vx hq || true)
+fi
+if [ -z "$repos" ]; then
+	echo "truth-sweep: the repository list is empty; a sweep over nothing proves nothing" >&2
+	exit 2
+fi
+
+args=()
+while read -r name; do
+	dest="$tmp/clones/$name"
+	if [ -n "${TRUTH_CLONE_BASE:-}" ]; then
+		url="$TRUTH_CLONE_BASE/$name"
+	else
+		url="https://github.com/$org/$name.git"
+	fi
+	if git clone --depth 1 --quiet --no-tags "$url" "$dest" 2>"$tmp/clone.err"; then
+		args+=("$name=$dest")
+	else
+		args+=("$name=!clone failed: $(head -c 200 "$tmp/clone.err" | tr '\n' ' ')")
+	fi
+done <<<"$repos"
+
+revision=$(git -C "$root" rev-parse HEAD)
+if [ -n "${TRUTH_RUNNER:-}" ]; then
+	"$TRUTH_RUNNER" sweep --rules-root "$root" --revision "$revision" "$rules" -- "${args[@]}"
+else
+	cd "$root/free/ci"
+	CGO_ENABLED=0 go run -mod=vendor ./internal/gates/truth/run.go sweep --rules-root "$root" --revision "$revision" "$rules" -- "${args[@]}"
+fi
