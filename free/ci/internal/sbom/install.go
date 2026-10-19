@@ -83,15 +83,18 @@ func Install(ctx context.Context, o InstallOptions) (Installed, error) {
 		return res, Failf(ReasonToolMissing, "the %s source %q is not an https URL", ToolName, src.URL)
 	}
 	dir := filepath.Dir(res.Path)
-	if err := refuseNonRegular(dir, true); err != nil {
-		return res, err
+	toolsDir := filepath.Dir(dir)
+	for _, d := range []string{toolsDir, dir} { // never follow or re-mode a symlinked or foreign directory
+		if err := refuseNonRegular(d, true); err != nil {
+			return res, err
+		}
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return res, Failf(ReasonToolMissing, "cannot create %s: %v", dir, err)
 	}
-	for _, d := range []string{dir, filepath.Dir(dir)} { // a loose umask must not leave them group-writable
-		if err := os.Chmod(d, 0o755); err != nil {
-			return res, Failf(ReasonToolMissing, "cannot secure %s: %v", d, err)
+	for _, d := range []string{toolsDir, dir} { // a loose umask must not leave them group-writable
+		if err := secureDir(d); err != nil {
+			return res, err
 		}
 	}
 	if err := refuseNonRegular(res.Path, false); err != nil {
@@ -128,6 +131,21 @@ func refuseNonRegular(p string, wantDir bool) error {
 	}
 	if st.IsDir() != wantDir || st.Mode()&os.ModeSymlink != 0 || (!wantDir && !st.Mode().IsRegular()) {
 		return Failf(ReasonToolMissing, "%s exists and is not a plain %s; remove it and run `%s` again", p, map[bool]string{true: "directory", false: "file"}[wantDir], InstallCommand)
+	}
+	return nil
+}
+
+// secureDir sets mode 0755 on a plain directory the current user owns.
+func secureDir(d string) error {
+	st, err := os.Lstat(d)
+	if err != nil {
+		return Failf(ReasonToolMissing, "cannot inspect %s: %v", d, err)
+	}
+	if !st.IsDir() || st.Mode()&os.ModeSymlink != 0 || !ownedByUs(st) {
+		return Failf(ReasonToolMissing, "%s is not a plain directory owned by the current user; remove it and run `%s` again", d, InstallCommand)
+	}
+	if err := os.Chmod(d, 0o755); err != nil {
+		return Failf(ReasonToolMissing, "cannot secure %s: %v", d, err)
 	}
 	return nil
 }

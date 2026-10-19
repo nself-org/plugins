@@ -217,3 +217,29 @@ func TestInstallRefusesUnusableOptions(t *testing.T) {
 		t.Fatalf("path-like version: %v", err)
 	}
 }
+
+func TestInstallNeverReModesASymlinkedToolsDirectory(t *testing.T) {
+	archive := makeTarGz(t, tarEntry{name: "syft", body: "good"})
+	o, hits := installRig(t, archive, sha(archive), 0)
+	private := t.TempDir()
+	if err := os.Chmod(private, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(private, filepath.Join(o.Home, "tools")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := sbom.Install(context.Background(), o)
+	if !sbom.IsReason(err, sbom.ReasonToolMissing) || !strings.Contains(err.Error(), "not a plain directory") {
+		t.Fatalf("symlinked tools/: %v", err)
+	}
+	if st, statErr := os.Stat(private); statErr != nil || st.Mode().Perm() != 0o700 {
+		t.Fatalf("the symlink target was re-moded: %v %v", st, statErr)
+	}
+	if hits.Load() != 0 {
+		t.Fatal("a download started before the directory was checked")
+	}
+	entries, _ := os.ReadDir(private)
+	if len(entries) != 0 {
+		t.Fatalf("files were written through the symlink: %v", entries)
+	}
+}
