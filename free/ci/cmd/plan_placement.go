@@ -136,7 +136,7 @@ func loadPlanned(ctx context.Context, s planSpec) (planned, error) {
 	if err != nil {
 		return planned{}, err
 	}
-	w := planWorld(cfg, checks)
+	w := planWorld(cfg, checks, false)
 	pl, err := plan.Build(plan.Input{Config: cfg, Facts: facts, Checks: checks, Revision: planRevision(ctx, root, s.base),
 		World: w, Pipeline: s.pipeline, Trigger: model.Trigger(s.trigger)})
 	if err != nil {

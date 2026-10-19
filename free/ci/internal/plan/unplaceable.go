@@ -45,7 +45,9 @@ func unplaceable(c *cand, platform string, w World, noMatch bool) (model.Reason,
 			}
 		}
 	}
-	if miss := missing(requiredTools(c), w.Tools); len(miss) > 0 {
+	// A job with its own container.image brings its own tools: the host (or the
+	// pinned image) list says nothing about it (D-1027).
+	if miss := missing(requiredTools(c), w.Tools); len(miss) > 0 && !ownImage(c) {
 		return "unplaceable.tool", "tool " + strings.Join(miss, ", ") + " is not on PATH"
 	}
 	r := c.job.Requirements
@@ -67,10 +69,13 @@ func unplaceable(c *cand, platform string, w World, noMatch bool) (model.Reason,
 	return "", ""
 }
 
+// ownImage is true when the job names its own container image.
+func ownImage(c *cand) bool { return c.job.Container != nil && c.job.Container.Image != "" }
+
 // advisoryToolMissing is true for an optional catalogue check whose tool is
 // absent from a closed world: it is skipped, not unplaceable.
 func advisoryToolMissing(c *cand, w World) bool {
-	return c.derived && !c.required && !w.Remote && len(missing(requiredTools(c), w.Tools)) > 0
+	return c.derived && !c.required && !w.Remote && len(missing(requiredTools(c), w.Tools)) > 0 && !ownImage(c)
 }
 
 func requiredTools(c *cand) []string {

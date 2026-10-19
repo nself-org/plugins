@@ -1,7 +1,10 @@
 package plan
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 func polyglotInput(t *testing.T) Input {
@@ -81,5 +84,15 @@ func TestRequiredToolMissing(t *testing.T) {
 	in.World.CPU, in.World.Remote = 1, true
 	if j := find(mustBuild(t, in), "ios"); j.State != StatePlanned {
 		t.Errorf("remote world leaves requirements to the scheduler, got %s", j.State)
+	}
+}
+
+func TestOwnContainerImageSkipsToolProbe(t *testing.T) {
+	in := matrixInput(t)
+	j := in.Config.Jobs["ios"]
+	j.Container = &model.ContainerConfig{Image: "registry.example/xcode@sha256:" + strings.Repeat("a", 64)}
+	in.Config.Jobs["ios"] = j
+	if got := find(mustBuild(t, in), "ios"); got.State != StatePlanned {
+		t.Errorf("a job with its own image needs no tool on the host, got %s %s", got.State, got.Blocked)
 	}
 }

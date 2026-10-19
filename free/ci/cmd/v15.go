@@ -208,7 +208,7 @@ func preparePlan(ctx context.Context, o RunOptions) (*plan.Plan, string, func(pl
 		rev.BaseKnown, rev.Changed = false, nil
 	}
 	p, err := plan.Build(plan.Input{Config: cfg, Facts: facts, Checks: checks, Revision: rev,
-		World: planWorld(cfg, checks), Pipeline: o.Pipeline, Trigger: model.Trigger(o.Trigger)})
+		World: planWorld(cfg, checks, o.Container), Pipeline: o.Pipeline, Trigger: model.Trigger(o.Trigger)})
 	if err != nil {
 		return nil, "", nil, err
 	}

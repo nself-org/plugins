@@ -119,7 +119,7 @@ func runPlan(args []string) int {
 		return planFail(o.json, err)
 	}
 	in := plan.Input{Config: cfg, Facts: facts, Checks: checks, Revision: planRevision(ctx, root, o.base),
-		World: planWorld(cfg, checks), Pipeline: o.pipeline, Trigger: model.Trigger(o.trigger)}
+		World: planWorld(cfg, checks, false), Pipeline: o.pipeline, Trigger: model.Trigger(o.trigger)}
 	p, err := plan.Build(in)
 	if err != nil {
 		return planFail(o.json, err)

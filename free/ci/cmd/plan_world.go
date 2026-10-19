@@ -14,16 +14,35 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
+	"github.com/nself-org/plugins/free/ci/internal/toolchain"
 )
 
 var planToolAlias = map[string]string{"xcode": "xcodebuild"}
 
 // planWorld probes the local world: platform, the tools the plan may need,
-// Docker, CPU and memory. No nodes or providers exist yet (closed world).
-func planWorld(cfg model.PipelineConfig, checks []plan.Check) plan.World {
+// Docker, CPU and memory. No nodes or providers exist yet (closed world). With
+// container (--container) the tools are those of the pinned toolchain image,
+// not the host PATH: the jobs run in the image.
+func planWorld(cfg model.PipelineConfig, checks []plan.Check, container bool) plan.World {
 	w := plan.World{Platform: runtime.GOOS + "/" + runtime.GOARCH}
+	inImage := map[string]bool{}
+	if container {
+		tools, err := toolchain.ImageTools()
+		if err != nil {
+			container = false // an unreadable table falls back to the host probe; the run itself reports it
+		}
+		for _, t := range tools {
+			inImage[t] = true
+		}
+	}
 	for _, t := range plan.WantedTools(cfg, checks) {
-		if t != "" && planOnPath(firstOf(planToolAlias[t], t)) && planToolRuns(firstOf(planToolAlias[t], t)) {
+		switch {
+		case t == "":
+		case container:
+			if inImage[t] {
+				w.Tools = append(w.Tools, t)
+			}
+		case planOnPath(firstOf(planToolAlias[t], t)) && planToolRuns(firstOf(planToolAlias[t], t)):
 			w.Tools = append(w.Tools, t)
 		}
 	}
