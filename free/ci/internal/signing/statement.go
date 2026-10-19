@@ -60,7 +60,12 @@ func (f *runFacts) checkStatement(ctx context.Context, payload []byte) (string, 
 	if err != nil {
 		return "", err
 	}
+	names := map[string]bool{}
 	for _, s := range st.Subject {
+		if names[s.Name] {
+			return "", Failf(ReasonPayloadRejected, "statement: two subjects are named %q", echo(s.Name))
+		}
+		names[s.Name] = true
 		d, ok := s.Digest["sha256"]
 		if s.Name == "" || !ok || len(s.Digest) != 1 || !sha256Re.MatchString(d) {
 			return "", Failf(ReasonPayloadRejected, "statement: subject %q needs a name and one sha256 digest", echo(s.Name))
@@ -80,14 +85,14 @@ func (f *runFacts) checkStatement(ctx context.Context, payload []byte) (string, 
 // manifest name, or a committed, verified record of the run with this digest
 // and this name (or this name under artifacts/, the release layout).
 func (f *runFacts) subjectBacked(ctx context.Context, name, digest, attempt string) (bool, error) {
-	if digest == f.evDigest && name == manifest.EvidencePath {
-		return true, nil
+	if name == manifest.EvidencePath { // reserved: only the stored evidence is called that
+		return digest == f.evDigest, nil
 	}
-	names := []string{name}
-	if rest, ok := strings.CutPrefix(name, "artifacts/"); ok && rest != "" {
-		names = append(names, rest)
+	candidates := []string{name}
+	if rest, ok := strings.CutPrefix(name, "artifacts/"); ok && rest != "" && rest != manifest.EvidencePath {
+		candidates = append(candidates, rest)
 	}
-	for _, n := range names {
+	for _, n := range candidates {
 		ok, err := f.match(ctx, n, "", digest, attempt, func(r records.Record) bool { return releaseKind(r.Kind) })
 		if err != nil || ok {
 			return ok, err

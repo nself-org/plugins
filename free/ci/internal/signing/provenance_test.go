@@ -315,7 +315,7 @@ func TestSBOMDigestsMustBeThatArtifactsSBOMs(t *testing.T) {
 	if err := handle(t, f, item(manifest.PayloadType, f.manifestPayload(swap))); !signing.IsReason(err, signing.ReasonDigestNotCommitted) {
 		t.Fatalf("artifact A carrying artifact B's SBOM: %v", err)
 	}
-	for _, name := range []string{"myapp.cdx.json", "app.cdx.json.bak", "xapp.cdx.json", "sbom/myapp.cdx.json"} {
+	for _, name := range []string{"myapp.cdx.json", "app.cdx.json.bak", "xapp.cdx.json", "sbom/myapp.cdx.json", ".nself-ci/sbom/nested/app.cdx.json", "sbom/nested/app.cdx.json", "nested/app.cdx.json", "other/sbom/app.cdx.json", "/app.cdx.json"} {
 		g := newFixture(t)
 		g.mutateRecord("app.cdx.json", func(r *records.Record) { r.Name = name })
 		if err := handle(t, g, item(manifest.PayloadType, g.manifestPayload(nil))); !signing.IsReason(err, signing.ReasonDigestNotCommitted) {
@@ -461,6 +461,36 @@ func TestStatementPredicateFieldsHaveTheirTypes(t *testing.T) {
 	} {
 		if err := handle(t, f, item(signing.PayloadStatement, f.statementPayload(func(m map[string]any) { m["predicate"] = f.predicate(tweak) }))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
 			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+func TestEvidenceNameIsReservedAndSubjectNamesAreUnique(t *testing.T) {
+	f := newFixture(t)
+	// a job committed an artifact that is called evidence.json
+	bytes := []byte("not-the-evidence")
+	f.blobs.data[sum(bytes)] = bytes
+	f.src.recs = append(f.src.recs, records.Record{ID: "r-ev", Project: project, Run: runID, Attempt: "att-rel-2", Revision: revision, Name: "evidence.json", Kind: records.KindOther,
+		SHA256: sum(bytes), Size: int64(len(bytes)), State: records.StateCommitted})
+	subjects := func(list ...map[string]any) []byte {
+		return f.statementPayload(func(m map[string]any) { m["subject"] = list })
+	}
+	subj := func(name string, digest string) map[string]any {
+		return map[string]any{"name": name, "digest": map[string]string{"sha256": digest}}
+	}
+	ev := sum(f.evRaw)
+	if err := handle(t, f, item(signing.PayloadStatement, subjects(subj("evidence.json", ev), subj("app", sum(f.files["app"]))))); err != nil {
+		t.Fatalf("the stored evidence under its own name: %v", err)
+	}
+	for name, p := range map[string][]byte{
+		"a committed record called evidence.json":               subjects(subj("evidence.json", sum(bytes))),
+		"the evidence subject and the record under one name":    subjects(subj("evidence.json", ev), subj("evidence.json", sum(bytes))),
+		"the same subject twice":                                subjects(subj("app", sum(f.files["app"])), subj("app", sum(f.files["app"]))),
+		"one name with two digests":                             subjects(subj("app", sum(f.files["app"])), subj("app", sum(f.files["image"]))),
+		"the record called evidence.json under artifacts/ only": subjects(subj("artifacts/evidence.json", sum(bytes))),
+	} {
+		if err := handle(t, f, item(signing.PayloadStatement, p)); err == nil {
+			t.Errorf("%s was signed", name)
 		}
 	}
 }

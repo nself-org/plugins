@@ -18,7 +18,6 @@ package signing
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
@@ -58,7 +57,7 @@ func (f *runFacts) checkManifest(ctx context.Context, payload []byte) (attemptID
 		}
 		for _, sb := range []struct{ digest, suffix string }{{a.SBOM.CycloneDX.SHA256, ".cdx.json"}, {a.SBOM.SPDX.SHA256, ".spdx.json"}} {
 			want := a.Name + sb.suffix
-			named := func(r records.Record) bool { return r.Name == want || strings.HasSuffix(r.Name, "/"+want) }
+			named := func(r records.Record) bool { return sbomRecordName(r.Name, want) }
 			ok, err := f.match(ctx, "", records.KindSBOM, sb.digest, m.Release.AttemptID, named)
 			if err != nil {
 				return "", "", err
@@ -141,4 +140,19 @@ func (f *runFacts) finishedAt(s string) bool {
 	want, err1 := time.Parse(time.RFC3339Nano, *f.evidence.Timings.FinishedAt)
 	got, err2 := time.Parse(time.RFC3339Nano, s)
 	return err1 == nil && err2 == nil && want.Equal(got)
+}
+
+// sbomDirs are the places an SBOM record may sit: bare, under sbom/ (the
+// manifest layout) or under the job's implicit .nself-ci/sbom/ output.
+var sbomDirs = []string{"", "sbom/", ".nself-ci/sbom/"}
+
+// sbomRecordName reports whether a record name is exactly want in one of the
+// SBOM directories (a longer path, even one ending in want, is another file).
+func sbomRecordName(name, want string) bool {
+	for _, d := range sbomDirs {
+		if name == d+want {
+			return true
+		}
+	}
+	return false
 }

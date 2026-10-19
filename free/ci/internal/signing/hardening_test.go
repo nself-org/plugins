@@ -63,7 +63,7 @@ func TestStrictJSONRefusals(t *testing.T) {
 		}
 	}
 	// the same key in sibling objects and arrays is fine
-	ok := base(`,"subject":[{"name":"app","digest":{"sha256":"` + app + `"}},{"name":"app","digest":{"sha256":"` + app + `"}}],"extra":[{"a":1},{"a":2}]`)
+	ok := base(`,"subject":[{"name":"app","digest":{"sha256":"` + app + `"}},{"name":"image","digest":{"sha256":"` + sum(pf.files["image"]) + `"}}],"extra":[{"a":1},{"a":2}]`)
 	if err := st(ok); err != nil {
 		t.Fatalf("sibling objects with equal keys: %v", err)
 	}

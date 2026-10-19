@@ -2,6 +2,7 @@ package signing_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -241,11 +242,16 @@ func TestSignerRefusesManifestsNamingDifferentKeysInEitherOrder(t *testing.T) {
 
 func TestStatementSubjectCountBoundary(t *testing.T) {
 	f := newFixture(t)
+	// 4097 distinct committed names over one blob
+	for i := 0; i < 4097; i++ {
+		f.src.recs = append(f.src.recs, records.Record{ID: fmt.Sprintf("r-f%d", i), Project: project, Run: runID, Attempt: "att-rel-2", Revision: revision, Name: fmt.Sprintf("f%04d", i), Kind: records.KindOther,
+			SHA256: sum(f.files["app"]), Size: int64(len(f.files["app"])), State: records.StateCommitted})
+	}
 	subjects := func(n int) func(map[string]any) {
 		return func(m map[string]any) {
 			list := make([]map[string]any, n)
 			for i := range list {
-				list[i] = map[string]any{"name": "app", "digest": map[string]string{"sha256": sum(f.files["app"])}}
+				list[i] = map[string]any{"name": fmt.Sprintf("f%04d", i), "digest": map[string]string{"sha256": sum(f.files["app"])}}
 			}
 			m["subject"] = list
 		}
