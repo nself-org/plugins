@@ -115,6 +115,7 @@ func runServe(ctx context.Context, args []string, sio IO) int {
 		fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
+	car = withCheckout(car, state)
 	s, err := session.New(session.Config{
 		Carrier: car, Key: key, Slots: table, StateDir: state,
 		Facts:       session.Facts{AgentVersion: Version, MachineID: machineID(), CapabilityDigest: capabilityDigest(), AgeRecipient: age.Recipient},
