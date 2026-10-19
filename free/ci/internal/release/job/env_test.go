@@ -70,3 +70,31 @@ func TestOperatorDeployVariablesNeverReachAReleaseJob(t *testing.T) {
 		t.Fatal("a declared deploy variable was accepted")
 	}
 }
+
+// TestCheckDeclaredRefusesScopedDeploySecretRefs: a scoped ref is delivered under
+// its last segment, so project/DEPLOY_TOKEN is the deploy variable DEPLOY_TOKEN.
+func TestCheckDeclaredRefusesScopedDeploySecretRefs(t *testing.T) {
+	for _, tc := range []struct {
+		ref     string
+		refused bool
+	}{
+		{"project/DEPLOY_TOKEN", true},
+		{"team/NSELF_DEPLOY_KEY_PATH", true},
+		{"environment/staging/DEPLOY_KEY", true},
+		{"deploy/prod/DEPLOY_SSH", true},
+		{"release/nself_deploy_x", true},
+		{"project/NPM_TOKEN", false},
+		{"environment/deploy-eu/NPM_TOKEN", false},
+		{"deploy/prod/NPM_TOKEN", false},
+		{"project/MY_DEPLOY_TOKEN", false},
+		{"project/", false},
+	} {
+		e := job.CheckDeclared(model.Job{Kind: "release", Secrets: []string{tc.ref}})
+		if (e != nil) != tc.refused {
+			t.Errorf("CheckDeclared(secret %q) = %v, want refused=%v", tc.ref, e, tc.refused)
+		}
+		if e != nil && !strings.Contains(e.Message, tc.ref) {
+			t.Errorf("refusal %q does not name %q", e.Message, tc.ref)
+		}
+	}
+}
