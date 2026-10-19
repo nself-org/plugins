@@ -191,6 +191,6 @@ func withRuntime(cmd exec.ContainerCommand) (exec.ContainerCommand, error) {
 	if len(cmd.Args) == 0 || cmd.Args[0] != "run" {
 		return cmd, isolation.Unavailable(isolation.ReasonProbeFailed, "container profile planned a command that is not a run")
 	}
-	args := append([]string{"run", "--runtime=" + RuntimeName}, cmd.Args[1:]...)
-	return exec.ContainerCommand{Binary: cmd.Binary, Args: args}, nil
+	cmd.Args = append([]string{"run", "--runtime=" + RuntimeName}, cmd.Args[1:]...)
+	return cmd, nil
 }

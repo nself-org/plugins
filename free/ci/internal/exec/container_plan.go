@@ -12,6 +12,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,10 +32,12 @@ type ContainerRun struct {
 }
 
 // ContainerCommand is one runtime CLI invocation: Binary is docker or podman and
-// Args follow it.
+// Args follow it. Image is the image the command runs; empty means ContainerRun.Image
+// (the cleanup helper runs a pinned helper image, never the job's).
 type ContainerCommand struct {
 	Binary string
 	Args   []string
+	Image  string
 }
 
 // ContainerPlanner builds the container command lines; it never starts anything.
@@ -104,7 +107,10 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 		stop()
 		err = coded("E613", "container run: "+err.Error())
 	}
-	e.cleanupPlanned(s, run)
+	if cleanErr := e.cleanupPlanned(s, run); cleanErr != nil && s.Output != nil {
+		// not a failure by itself: the host removes what it owns, and a workspace it cannot empty fails a clean run (E610)
+		s.Output([]byte("nself-ci: workspace cleanup helper did not finish: " + cleanErr.Error() + "\n"))
+	}
 	if err == nil && code == 125 { // the runtime itself failed (daemon, image pull, option), not the job
 		err = coded("E613", "container runtime failed to start the container (exit 125)")
 	}
@@ -113,18 +119,40 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 
 // cleanupPlanned runs the profile's cleanup command, best effort and time boxed; the
 // helper container is stopped and removed when the time box ends, so it never outlives the attempt.
-func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) {
+// It returns why the cleanup did not run or did not finish (nil when none is needed or it ran clean).
+func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) error {
 	cmd, err := s.Plan.Cleanup(run)
-	if err != nil || cmd == nil || checkContainerCommand(*cmd, run) != nil || checkSandboxRuntime(s.Job.Isolation, *cmd, run.Image) != nil {
-		return
+	if err != nil {
+		return err
+	}
+	if cmd == nil {
+		return nil
+	}
+	if cmd.Image != "" { // the helper runs its own pinned image; the backstop checks that one
+		run.Image = cmd.Image
+	}
+	if err := checkContainerCommand(*cmd, run); err != nil {
+		return err
+	}
+	if err := checkSandboxRuntime(s.Job.Isolation, *cmd, run.Image); err != nil {
+		return err
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), 30*time.Second)
 	defer cancel()
 	stop := containerStopper(cmd.Binary, flagValueOf(cmd.Args, "--name"), e.Grace)
 	local := Executor{Redactor: passThroughRedactor{}, Grace: e.Grace}
-	if _, err := local.runCommand(ctx, append([]string{cmd.Binary}, cmd.Args...), run.Workspace, dockerHostEnv(), nil, stop, nil, ""); err != nil || ctx.Err() != nil {
+	code, err := local.runCommand(ctx, append([]string{cmd.Binary}, cmd.Args...), run.Workspace, dockerHostEnv(), nil, stop, nil, "")
+	if err != nil || ctx.Err() != nil {
 		stop()
+		if err == nil {
+			err = ctx.Err()
+		}
+		return err
 	}
+	if code != 0 {
+		return coded("E613", "cleanup helper exited "+strconv.Itoa(code))
+	}
+	return nil
 }
 
 // flagValueOf returns the value of `--name <v>` or `--name=<v>` in args, or "".

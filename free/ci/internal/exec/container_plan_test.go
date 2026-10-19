@@ -194,11 +194,11 @@ func TestCheckContainerCommand(t *testing.T) {
 	run := ContainerRun{Image: "alpine:3.19", Workspace: "/w/ws", Name: "nself-ci-a1", AttemptID: "a1"}
 	good := append(append([]string{"run"}, limitFlags(run)...), "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--mount", "type=bind,src=/w/ws,dst=/repo", "--user", fixtureUID(), "--network=none", "--runtime", "runsc", "--userns=auto", "alpine:3.19", "go", "test", "-v", "--privileged")
 
-	if err := checkContainerCommand(ContainerCommand{"docker", good}, run); err != nil {
+	if err := checkContainerCommand(ContainerCommand{Binary: "docker", Args: good}, run); err != nil {
 		t.Fatalf("job words after the image must not matter: %v", err)
 	}
 	withFlag := func(extra ...string) ContainerCommand {
-		return ContainerCommand{"docker", append(append([]string{}, good[:1]...), append(extra, good[1:]...)...)}
+		return ContainerCommand{Binary: "docker", Args: append(append([]string{}, good[:1]...), append(extra, good[1:]...)...)}
 	}
 	for name, c := range map[string]ContainerCommand{
 		"privileged":  withFlag("--privileged"),
@@ -214,16 +214,16 @@ func TestCheckContainerCommand(t *testing.T) {
 		"socketmount": withFlag("--mount", "type=bind,src=/var/run/docker.sock,dst=/s"),
 		"hostpath":    withFlag("--mount", "type=bind,src=/etc,dst=/e"),
 		"usernshost":  withFlag("--userns=host"),
-		"nocapdrop":   {"docker", []string{"run", "--security-opt", "no-new-privileges", "--read-only", "alpine:3.19", "x"}},
-		"notrun":      {"docker", []string{"exec", "alpine:3.19"}},
-		"binary":      {"sh", good},
-		"noimage":     {"docker", good[:13]},
-		"nouser":      {"docker", []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--network=none", "alpine:3.19", "x"}},
-		"nonetwork":   {"docker", []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--user", fixtureUID(), "alpine:3.19", "x"}},
+		"nocapdrop":   {Binary: "docker", Args: []string{"run", "--security-opt", "no-new-privileges", "--read-only", "alpine:3.19", "x"}},
+		"notrun":      {Binary: "docker", Args: []string{"exec", "alpine:3.19"}},
+		"binary":      {Binary: "sh", Args: good},
+		"noimage":     {Binary: "docker", Args: good[:13]},
+		"nouser":      {Binary: "docker", Args: []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--network=none", "alpine:3.19", "x"}},
+		"nonetwork":   {Binary: "docker", Args: []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--user", fixtureUID(), "alpine:3.19", "x"}},
 		"envfiledisk": withFlag("--env-file", "/tmp/secrets"),
 		"seccomp":     withFlag("--security-opt", "seccomp=unconfined"),
 		"apparmor":    withFlag("--security-opt=apparmor=unconfined"),
-		"capdrop-net": {"docker", []string{"run", "--cap-drop=NET_ADMIN", "--security-opt", "no-new-privileges", "--read-only", "alpine:3.19", "x"}},
+		"capdrop-net": {Binary: "docker", Args: []string{"run", "--cap-drop=NET_ADMIN", "--security-opt", "no-new-privileges", "--read-only", "alpine:3.19", "x"}},
 		"userroot":    withFlag("--user", "0:0"),
 		"userword":    withFlag("--user", "root"),
 		"useragent":   withFlag("--user", itoa(os.Getuid())+":"+itoa(os.Getuid())),
@@ -273,7 +273,7 @@ func without(args []string, flag string, width int) ContainerCommand {
 		}
 		out = append(out, args[i])
 	}
-	return ContainerCommand{"docker", out}
+	return ContainerCommand{Binary: "docker", Args: out}
 }
 
 func TestRuntimeQueryAndRemoveRefuseOtherVerbs(t *testing.T) {
@@ -311,11 +311,11 @@ func TestPlannedContainerMounts(t *testing.T) {
 	run := ContainerRun{Image: "alpine:3.19", Workspace: "/w/ws", Name: "nself-ci-a1", AttemptID: "a1", Mounts: []Mount{ro}}
 	args := append(append([]string{"run"}, limitFlags(run)...), "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only",
 		"--mount", ro.Spec(), "--mount", "type=bind,src=/w/ws,dst=/repo", "--user", fixtureUID(), "--network=none", "alpine:3.19", "x")
-	if err := checkContainerCommand(ContainerCommand{"docker", args}, run); err != nil {
+	if err := checkContainerCommand(ContainerCommand{Binary: "docker", Args: args}, run); err != nil {
 		t.Fatalf("a declared read-only mount must pass: %v", err)
 	}
 	run.Mounts = nil
-	if err := checkContainerCommand(ContainerCommand{"docker", args}, run); err == nil {
+	if err := checkContainerCommand(ContainerCommand{Binary: "docker", Args: args}, run); err == nil {
 		t.Fatal("an undeclared mount passed")
 	}
 	spec := plannedSpec(t, "plan-rw", hardPlanner{})
@@ -324,5 +324,50 @@ func TestPlannedContainerMounts(t *testing.T) {
 	var e *Error
 	if !errors.As(res.Err, &e) || e.Code != "E611" {
 		t.Fatalf("a read-write mount must be refused under the hardened profile: %+v", res)
+	}
+}
+
+// helperPlanner runs its cleanup in its own image, as the container profile does (D-0963).
+type helperPlanner struct {
+	hardPlanner
+	declared bool // the command carries Image; false hides it so the backstop cannot find the helper image
+}
+
+func (p helperPlanner) Cleanup(r ContainerRun) (*ContainerCommand, error) {
+	r.Image = "docker.io/library/busybox@sha256:helper"
+	cmd, err := p.hardPlanner.Cleanup(r)
+	if err == nil && p.declared {
+		cmd.Image = r.Image
+	}
+	return cmd, err
+}
+
+func TestPlannedCleanupRunsItsOwnImage(t *testing.T) {
+	for name, tc := range map[string]struct {
+		declared  bool
+		wantNote  bool
+		wantClean bool
+	}{
+		"helper image declared":     {declared: true, wantClean: true},
+		"helper image not declared": {declared: false, wantNote: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := fakeRuntime(t, "ok\n", "0")
+			var out strings.Builder
+			spec := plannedSpec(t, "plan-helper", helperPlanner{declared: tc.declared})
+			spec.Output = func(b []byte) { out.Write(b) }
+			res := (&Executor{}).Run(context.Background(), spec)
+			if res.Err != nil || res.Attempt.State != "passed" {
+				t.Fatalf("result %+v", res)
+			}
+			got := calls()
+			cleaned := len(got) == 2 && strings.Contains(got[1], "docker.io/library/busybox@sha256:helper -c true") && !strings.Contains(got[1], "alpine:3.19")
+			if cleaned != tc.wantClean {
+				t.Errorf("cleanup ran in the helper image = %v, want %v (calls %q)", cleaned, tc.wantClean, got)
+			}
+			if note := strings.Contains(out.String(), "workspace cleanup helper did not finish"); note != tc.wantNote {
+				t.Errorf("failure note = %v, want %v (output %q)", note, tc.wantNote, out.String())
+			}
+		})
 	}
 }
