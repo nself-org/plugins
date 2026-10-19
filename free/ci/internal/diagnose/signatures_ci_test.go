@@ -80,6 +80,8 @@ func TestClassifyInstall(t *testing.T) {
 		"pnpm 12 supply-chain line":                  {"✗ Lockfile failed supply-chain policy check\nError: ERR_PNPM_META_FETCH_FAIL  GET https://registry.invalid.example/x: dns error: failed to lookup address information\n", "infra", SigDNS},
 		"yarn classic lifecycle with a network code": {"error /app/node_modules/x: Command failed.\nExit code: 1\nCommand: node install.js\nOutput:\nnpm error code ECONNRESET\n", "code", SigCode},
 		"ansi colours":                               {"\x1b[31mnpm error code ENOSPC\x1b[0m\n", "infra", SigDisk},
+		"pnpm progress counts are no status codes":   {"Progress: resolved 403, reused 0, downloaded 0, added 0\nProgress: resolved 404, reused 0, downloaded 0, added 0\n ERR_PNPM_META_FETCH_FAIL  GET https://registry.npmjs.org/x: request timed out\n", "infra", SigNetwork},
+		"http 404 in words":                          {"error An unexpected error occurred: \"https://registry.yarnpkg.com/x: Request failed \\\"404 Not Found\\\"\".\n", "code", SigCode},
 		"shell kill":                                 {"sh: line 1:  4242 Killed                  npm ci\n", "infra", SigOOM},
 		// code: everything else
 		"nothing recognised":                        {"something broke\n", "code", SigCode},

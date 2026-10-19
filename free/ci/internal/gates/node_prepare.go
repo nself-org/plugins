@@ -174,7 +174,7 @@ func managerEnv(pm string) string {
 // only the manager's own variables: npm warns about another manager's. A
 // committed Yarn .yarn/cache (zero-install) stays the cache.
 func installEnv(pm string) string {
-	env := `export TMPDIR="$NSELF_CI_DIR/tmp"; `
+	env := `export TMPDIR="$NSELF_CI_DIR/tmp" COREPACK_HOME="$NSELF_CI_DIR/corepack"; `
 	switch pm {
 	case "npm":
 		return env + `export npm_config_cache="$NSELF_CI_DIR/npm"`
@@ -196,7 +196,7 @@ func pinCheck(pm string) string {
     [ -n "$PIN" ] && break
   done
   if [ -n "$PIN" ]; then
-    HAVE=$(` + pm + ` --version 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9]*\)\..*/\1/p' | head -n 1)
+    HAVE=$(COREPACK_ENABLE_PROJECT_SPEC=0 COREPACK_ENABLE_NETWORK=0 COREPACK_ENABLE_DOWNLOAD_PROMPT=0 ` + pm + ` --version 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9]*\)\..*/\1/p' | head -n 1)
     if [ -n "$HAVE" ] && [ "$HAVE" != "$PIN" ]; then
       echo "E811: package.json pins ` + pm + ` $PIN.x but ` + pm + ` $HAVE is installed; install the pinned major (corepack enable) and retry"
       echo ` + diagnose.PinMismatch + `

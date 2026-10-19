@@ -342,6 +342,16 @@ func TestPackageManagerPin(t *testing.T) {
 			t.Fatalf("%+v", r)
 		}
 	})
+	t.Run("the version probe never lets corepack bootstrap the pinned manager", func(t *testing.T) {
+		h := newNodeHost(t)
+		h.write("package.json", manifest("pnpm@9.1.0", ""))
+		h.write("pnpm-lock.yaml", "lockfileVersion: 9\n")
+		// a corepack shim would download the pinned manager; with the project spec and the network off it answers the host's own version
+		h.manager("pnpm", `$(if [ "$COREPACK_ENABLE_PROJECT_SPEC" = 0 ] && [ "$COREPACK_ENABLE_NETWORK" = 0 ]; then echo 9.1.0; else echo 0.0.1; fi)`, passing)
+		if r := h.run("node.test", "."); r.exit != 0 {
+			t.Fatalf("%+v", r)
+		}
+	})
 	t.Run("an unreadable version is no mismatch", func(t *testing.T) {
 		h := newNodeHost(t)
 		h.write("package.json", manifest("pnpm@9.1.0", ""))

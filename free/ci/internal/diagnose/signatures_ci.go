@@ -51,7 +51,7 @@ const (
 var (
 	InstallGuardWords = []string{
 		"elifecycle", "command failed", "built successfully", "yn0009", "assertion", "err_assertion", "--- fail", "not ok", "panic:",
-		"lockfile", "yn0028", "in sync", "127.0.0.1", "localhost", "::1", "not found", "404", "403", "401", "402", "forbidden", "unauthorized",
+		"lockfile", "yn0028", "in sync", "127.0.0.1", "localhost", "::1", "not found", "e401", "e402", "e403", "e404", "err_pnpm_fetch_40", "status 40", "http 40", "code 40", "error 40", "forbidden", "unauthorized",
 		"no matching version", "notarget", "gyp err",
 	}
 	InstallCauseWords = []string{
@@ -124,7 +124,7 @@ var installLocal = re(`(?i)\b127\.\d+\.\d+\.\d+\b|\blocalhost\b|(^|[\s\[(])::1([
 // installClientError marks an answer from a reachable registry that says the
 // request itself is wrong (no such package or version, forbidden,
 // unauthorized): configuration, never a transient. Read with URLs removed.
-var installClientError = re(`(?i)\be?40[0-4]\b|\bnot found\b|\bforbidden\b|\bunauthorized\b|no matching version|\bnotarget\b|err_pnpm_no_matching_version`)
+var installClientError = re(`(?i)\be40[0-4]\b|\b(?:http|status|code|error)[ :=]+40[0-4]\b|\b40[0-4]\s+(?:not found|forbidden|unauthorized|bad request|payment required)|err_pnpm_fetch_40\d|\bnot found\b|\bforbidden\b|\bunauthorized\b|no matching version|\bnotarget\b|err_pnpm_no_matching_version`)
 
 // installURLHost captures the host of a URL: a registry on this machine is the
 // project's own setup, but a package called `localhost` in a path is not.
