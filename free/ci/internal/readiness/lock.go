@@ -20,6 +20,7 @@ import (
 
 // Lock is a held run lock.
 type Lock struct {
+	mu   sync.Mutex // guards f: a watcher calls Held while a shutdown path calls Release
 	f    *os.File
 	path string
 }
@@ -81,7 +82,12 @@ func stillAtPath(f *os.File, path string) bool {
 
 // Release drops the lock. Calling it twice is safe.
 func (l *Lock) Release() error {
-	if l == nil || l.f == nil {
+	if l == nil {
+		return nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.f == nil {
 		return nil
 	}
 	pinned.Lock()
@@ -96,7 +102,12 @@ func (l *Lock) Release() error {
 // false after Release and after the file was deleted or replaced (a second watcher could then
 // lock the new file), so a watcher checks it before each claim and stops when it turns false.
 func (l *Lock) Held() bool {
-	return l != nil && l.f != nil && stillAtPath(l.f, l.path)
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.f != nil && stillAtPath(l.f, l.path)
 }
 
 func readHolder(f *os.File) string {

@@ -16,6 +16,7 @@ package readiness
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/autoworld"
@@ -50,7 +51,9 @@ func ExclusionProvider(src Source, foreground func() bool) autoworld.ExclusionFn
 			}
 			for _, l := range r.Capability.Identity.Labels {
 				if l == world.LocalLabel {
-					local = append(local, r.ID)
+					if !slices.Contains(local, r.ID) {
+						local = append(local, r.ID)
+					}
 					break
 				}
 			}

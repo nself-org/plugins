@@ -9,6 +9,31 @@ package readiness
 // SchemaID is the value of Report.Schema.
 const SchemaID = "ci.readiness/v1"
 
+// clone returns a Report that shares no slice or pointer with r, so a caller that edits its
+// copy cannot change a cached answer.
+func (r Report) clone() Report {
+	c := r
+	c.Why = append([]string{}, r.Why...)
+	c.YieldedTo = append([]string{}, r.YieldedTo...)
+	if r.MemFreeMB != nil {
+		v := *r.MemFreeMB
+		c.MemFreeMB = &v
+	}
+	if r.LoadPerCore != nil {
+		v := *r.LoadPerCore
+		c.LoadPerCore = &v
+	}
+	if r.CPUIdlePct != nil {
+		v := *r.CPUIdlePct
+		c.CPUIdlePct = &v
+	}
+	if r.DiskFreeMB != nil {
+		v := *r.DiskFreeMB
+		c.DiskFreeMB = &v
+	}
+	return c
+}
+
 // Report is one readiness decision with the facts behind it.
 type Report struct {
 	Schema      string   `json:"schema"`

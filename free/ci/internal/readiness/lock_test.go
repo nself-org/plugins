@@ -165,3 +165,20 @@ func TestRunLockSurvivesGarbageCollection(t *testing.T) {
 		t.Fatal("a dropped *Lock must keep holding the flock: the os.File finalizer released it")
 	}
 }
+
+// A watcher polls Held while a shutdown path releases; -race must stay quiet.
+func TestRunLockHeldAndReleaseDoNotRace(t *testing.T) {
+	l, err := AcquireLock(filepath.Join(t.TempDir(), "readiness.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 500; i++ {
+			l.Held()
+		}
+	}()
+	_ = l.Release()
+	<-done
+}

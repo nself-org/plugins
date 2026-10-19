@@ -3,7 +3,8 @@ package sample
 // Purpose: the macOS readers, each one a fixed argv run through the exec funnel:
 // `vm_stat` (free + inactive + speculative pages, the same set the CI-32 probe counts),
 // `sysctl -n vm.loadavg`, `top -l 1 -n 0` for the CPU idle percentage and `ps -axco comm=`.
-// Constraints: absolute binary paths, so a hijacked PATH cannot substitute them.
+// Constraints: absolute binary paths for the probes themselves (the funnel launcher resolves
+// its own `sh` through PATH, which is exec's concern).
 
 import (
 	"context"
@@ -100,7 +101,7 @@ func (s Sampler) darwinProcesses(ctx context.Context) ([]string, error) {
 	var names []string
 	for _, line := range strings.Split(res.Stdout, "\n") {
 		if line = strings.TrimSpace(line); line != "" {
-			names = append(names, filepath.Base(line))
+			names = append(names, line) // -c prints the bare executable name, which can contain "/"
 		}
 	}
 	return names, nil

@@ -9,7 +9,8 @@ package readiness
 // Cores, never re-probed here; every reader is injectable; the evaluator never pauses or
 // kills a running job (readiness gates admission only). A world is built on every dispatch
 // tick, so an answer is reused for CacheTTL while the configuration is unchanged: a probe
-// costs 250 ms on Linux and several process starts on macOS. Config is required: a missing
+// costs 250 ms on Linux and several process starts on macOS. An answer may therefore be up
+// to CacheTTL old; a caller waiting behind a running probe leaves when its context ends. Config is required: a missing
 // source would silently drop the operator's hook and yield_to.
 
 import (
@@ -45,7 +46,8 @@ type Evaluator struct {
 	coresOnce sync.Once
 	cores     int
 
-	mu       sync.Mutex
+	semOnce  sync.Once
+	sem      chan struct{} // one probe at a time; a channel so a waiting caller can give up
 	cachedAt time.Time
 	cachedBy Config
 	cached   *Report
@@ -71,14 +73,20 @@ func (e *Evaluator) Evaluate(ctx context.Context) (Report, error) {
 	if ttl == 0 {
 		ttl = DefaultCacheTTL
 	}
-	e.mu.Lock() // one probe at a time: concurrent callers share its answer
-	defer e.mu.Unlock()
+	e.semOnce.Do(func() { e.sem = make(chan struct{}, 1) })
+	select { // concurrent callers queue here and share the first one's answer
+	case e.sem <- struct{}{}:
+		defer func() { <-e.sem }()
+	case <-ctx.Done():
+		return Report{}, ctx.Err()
+	}
 	if ttl > 0 && e.cached != nil && e.now().Sub(e.cachedAt) < ttl && reflect.DeepEqual(e.cachedBy, cfg) {
-		return *e.cached, nil
+		return e.cached.clone(), nil
 	}
 	r := e.probe(ctx, cfg)
 	if ttl > 0 && ctx.Err() == nil {
-		e.cached, e.cachedAt, e.cachedBy = &r, e.now(), cfg
+		cached := r.clone()
+		e.cached, e.cachedAt, e.cachedBy = &cached, e.now(), cfg
 	}
 	return r, nil
 }

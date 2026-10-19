@@ -115,3 +115,26 @@ func TestEvaluatorCachesForTheTTLAndWhenConfigChanges(t *testing.T) {
 		t.Fatalf("a config change and an expired TTL must each probe again, probed %d times", probes)
 	}
 }
+
+func TestEvaluatorHandsOutCopiesAndHonoursContext(t *testing.T) {
+	cfg := DefaultConfig()
+	ev := &Evaluator{Config: func(context.Context) (Config, error) { return cfg, nil }, Sampler: linuxHost(t, "100", "0.1"), Cores: func() int { return 8 }}
+	first, err := ev.Evaluate(context.Background())
+	if err != nil || first.Ready {
+		t.Fatalf("%+v %v", first, err)
+	}
+	first.Why[0], first.Why = "tampered", append(first.Why, "extra")
+	*first.MemFreeMB = 999999
+	second, _ := ev.Evaluate(context.Background())
+	if second.Why[0] == "tampered" || len(second.Why) != 1 || *second.MemFreeMB == 999999 {
+		t.Fatalf("a caller edited the cached answer: %+v", second)
+	}
+	// A caller queued behind a running probe leaves when its own context ends.
+	ev.sem <- struct{}{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := ev.Evaluate(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err %v", err)
+	}
+	<-ev.sem
+}
