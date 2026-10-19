@@ -114,10 +114,14 @@ func ParseMemMB(v string) (int64, error) {
 	v = strings.ToLower(strings.TrimSpace(v))
 	mult := int64(1)
 	switch {
-	case strings.HasSuffix(v, "gb"), strings.HasSuffix(v, "g"):
-		mult, v = 1024, strings.TrimRight(v, "gb")
-	case strings.HasSuffix(v, "mb"), strings.HasSuffix(v, "m"):
-		v = strings.TrimRight(v, "mb")
+	case strings.HasSuffix(v, "gb"):
+		mult, v = 1024, strings.TrimSuffix(v, "gb")
+	case strings.HasSuffix(v, "g"):
+		mult, v = 1024, strings.TrimSuffix(v, "g")
+	case strings.HasSuffix(v, "mb"):
+		v = strings.TrimSuffix(v, "mb")
+	case strings.HasSuffix(v, "m"):
+		v = strings.TrimSuffix(v, "m")
 	}
 	n, err := strconv.ParseInt(v, 10, 64)
 	if err != nil || n < 0 {

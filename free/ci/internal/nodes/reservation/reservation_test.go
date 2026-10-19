@@ -76,7 +76,7 @@ func TestParse(t *testing.T) {
 			t.Errorf("ParseMemMB(%q) = %v %v", in, v, err)
 		}
 	}
-	for _, bad := range []string{"", "-1", "abc", "1.5g"} {
+	for _, bad := range []string{"", "-1", "abc", "1.5g", "2gg", "gb"} {
 		if _, err := ParseMemMB(bad); err == nil {
 			t.Errorf("ParseMemMB(%q) accepted", bad)
 		}
