@@ -72,7 +72,7 @@ func seedOwned(t *testing.T, kind, state string, register func(*store.Store) sto
 	if register != nil {
 		owner = register(st).ID
 	}
-	must(st.CreateAttempt(ctx, store.AttemptRow{ID: attempt, JobID: jobRow, N: 1}, owner))
+	must(st.CreateAttempt(ctx, store.AttemptRow{ID: attempt, JobID: jobRow, N: 1, CoordinatorID: owner}, ""))
 	path := map[string][]model.JobState{
 		"queued":         {},
 		"running":        {"leased", "running"},
