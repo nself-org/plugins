@@ -38,11 +38,20 @@ func IsRuntimeMissing(err error) bool {
 }
 
 // RuntimeQuery runs `<binary> <verb> ...` for info, version, ps or inspect and
-// returns stdout (at most 1 MiB).
+// returns stdout (at most 1 MiB). `info` is answered from one shared probe per
+// window (runtime_info.go).
 func RuntimeQuery(ctx context.Context, binary string, args ...string) ([]byte, error) {
 	if !runtimeBinary.MatchString(binary) || len(args) == 0 || !queryVerbs[args[0]] {
 		return nil, coded("E613", "container runtime query refused")
 	}
+	if isInfoQuery(args) {
+		return cachedInfo(ctx, binary)
+	}
+	return runtimeQuery(ctx, binary, args...)
+}
+
+// runtimeQuery spawns the query.
+func runtimeQuery(ctx context.Context, binary string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 	cmd := osexec.CommandContext(ctx, binary, args...)

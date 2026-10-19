@@ -72,3 +72,7 @@ func holderLive(o Owner) bool {
 	now := startTime(o.PID)
 	return o.Start == "" || now == "" || now == o.Start
 }
+
+// HolderLive reports whether the process named by o is still the one that
+// took the slot: alive, and with the recorded start time when both are known.
+func HolderLive(o Owner) bool { return holderLive(o) }

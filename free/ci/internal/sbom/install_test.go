@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -74,8 +75,22 @@ func installRig(t *testing.T, body []byte, wantSum string, status int) (sbom.Ins
 		_, _ = w.Write(body)
 	}))
 	t.Cleanup(srv.Close)
-	pin := sbom.Pin{Version: pinVersion, Sources: []toolchain.Source{{OS: runtime.GOOS, Arch: runtime.GOARCH, URL: srv.URL + "/syft.tar.gz", SHA256: wantSum}}}
+	pin := sbom.Pin{Version: pinVersion, Sources: []toolchain.Source{{OS: runtime.GOOS, Arch: runtime.GOARCH, URL: srv.URL + "/syft.tar.gz", SHA256: wantSum, BinarySHA256: binaryDigestOf(body)}}}
 	return sbom.InstallOptions{Home: t.TempDir(), Pin: pin, Client: srv.Client()}, &hits
+}
+
+// binaryDigestOf is the sha256 of the regular `syft` entry of a tar.gz body (64 zeros when there is none).
+func binaryDigestOf(body []byte) string {
+	if gz, err := gzip.NewReader(bytes.NewReader(body)); err == nil {
+		tr := tar.NewReader(gz)
+		for h, err := tr.Next(); err == nil; h, err = tr.Next() {
+			if h.Typeflag == tar.TypeReg && h.Name == "syft" {
+				b, _ := io.ReadAll(tr)
+				return sha(b)
+			}
+		}
+	}
+	return strings.Repeat("0", 64)
 }
 
 func toolsDirEntries(t *testing.T, home string) []string {
@@ -152,7 +167,7 @@ func TestInstallRefusesAnHTTPSDowngradeRedirect(t *testing.T) {
 		http.Redirect(w, r, plain.URL+"/syft.tar.gz", http.StatusFound)
 	}))
 	defer redirect.Close()
-	pin := sbom.Pin{Version: pinVersion, Sources: []toolchain.Source{{OS: runtime.GOOS, Arch: runtime.GOARCH, URL: redirect.URL + "/syft.tar.gz", SHA256: strings.Repeat("a", 64)}}}
+	pin := sbom.Pin{Version: pinVersion, Sources: []toolchain.Source{{OS: runtime.GOOS, Arch: runtime.GOARCH, URL: redirect.URL + "/syft.tar.gz", SHA256: strings.Repeat("a", 64), BinarySHA256: strings.Repeat("b", 64)}}}
 	_, err := sbom.Install(context.Background(), sbom.InstallOptions{Home: t.TempDir(), Pin: pin, Client: redirect.Client()})
 	if !sbom.IsReason(err, sbom.ReasonToolMissing) || !strings.Contains(err.Error(), "not https") {
 		t.Fatalf("downgrade redirect: %v", err)
@@ -201,8 +216,8 @@ func TestInstallRefusesBadArchivesAndServers(t *testing.T) {
 
 func TestInstallRefusesUnusableOptions(t *testing.T) {
 	ctx := context.Background()
-	pin := sbom.Pin{Version: pinVersion, Sources: []toolchain.Source{{OS: "linux", Arch: "amd64", URL: "http://example.invalid/syft.tgz", SHA256: strings.Repeat("a", 64)}}}
-	httpsPin := sbom.Pin{Version: pinVersion, Sources: []toolchain.Source{{OS: "linux", Arch: "amd64", URL: "https://example.invalid/syft.tgz", SHA256: strings.Repeat("a", 64)}}}
+	pin := sbom.Pin{Version: pinVersion, Sources: []toolchain.Source{{OS: "linux", Arch: "amd64", URL: "http://example.invalid/syft.tgz", SHA256: strings.Repeat("a", 64), BinarySHA256: strings.Repeat("b", 64)}}}
+	httpsPin := sbom.Pin{Version: pinVersion, Sources: []toolchain.Source{{OS: "linux", Arch: "amd64", URL: "https://example.invalid/syft.tgz", SHA256: strings.Repeat("a", 64), BinarySHA256: strings.Repeat("b", 64)}}}
 	if _, err := sbom.Install(ctx, sbom.InstallOptions{Home: t.TempDir(), Pin: pin, OS: "plan9", Arch: "mips"}); !sbom.IsReason(err, sbom.ReasonToolMissing) {
 		t.Fatalf("no source for the platform: %v", err)
 	}
@@ -241,5 +256,31 @@ func TestInstallNeverReModesASymlinkedToolsDirectory(t *testing.T) {
 	entries, _ := os.ReadDir(private)
 	if len(entries) != 0 {
 		t.Fatalf("files were written through the symlink: %v", entries)
+	}
+}
+
+// D-1024: the archive hash alone does not authenticate the extracted binary.
+func TestInstallRefusesABinaryThatIsNotTheDigestPinned(t *testing.T) {
+	archive := makeTarGz(t, tarEntry{name: "syft", body: "other binary"})
+	o, _ := installRig(t, archive, sha(archive), 0)
+	o.Pin.Sources[0].BinarySHA256 = sha([]byte("the pinned binary"))
+	_, err := sbom.Install(context.Background(), o)
+	if !sbom.IsReason(err, sbom.ReasonToolChecksum) || !strings.Contains(err.Error(), "binary") {
+		t.Fatalf("got %v, want E718 tool_checksum naming the binary", err)
+	}
+	if got := toolsDirEntries(t, o.Home); len(got) != 0 {
+		t.Fatalf("a binary with the wrong digest was left behind: %v", got)
+	}
+}
+
+func TestInstallRefusesAPinWithoutABinaryDigest(t *testing.T) {
+	archive := makeTarGz(t, tarEntry{name: "syft", body: "good"})
+	o, hits := installRig(t, archive, sha(archive), 0)
+	o.Pin.Sources[0].BinarySHA256 = ""
+	if _, err := sbom.Install(context.Background(), o); !sbom.IsReason(err, sbom.ReasonToolChecksum) || !strings.Contains(err.Error(), "binary_sha256") {
+		t.Fatalf("got %v", err)
+	}
+	if hits.Load() != 0 {
+		t.Fatal("downloaded before refusing a pin that cannot authenticate the binary")
 	}
 }

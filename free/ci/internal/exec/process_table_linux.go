@@ -7,7 +7,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
+
+// tableWorkers bounds the goroutines of one table read.
+const tableWorkers = 8
 
 // procStat is the part of /proc/<pid>/stat the executor needs.
 type procStat struct {
@@ -61,16 +65,36 @@ func procPIDs() ([]int, error) {
 }
 
 // processTable returns pid -> parent pid for every process, read from /proc
-// without forking.
+// without forking. The stat files are read on several goroutines: the tracker
+// takes a snapshot when a job starts and every 50 ms after, and a host with a
+// few hundred processes made each one a serial walk (D-1008).
 func processTable() (map[int]int, error) {
 	pids, err := procPIDs()
 	if err != nil {
 		return nil, err
 	}
+	ppids := make([]int, len(pids))
+	readOK := make([]bool, len(pids)) // false: the process exited while the table was read
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range min(tableWorkers, len(pids)) {
+		wg.Go(func() {
+			for {
+				i := int(next.Add(1)) - 1
+				if i >= len(pids) {
+					return
+				}
+				if st, ok := readProcStat(pids[i]); ok {
+					ppids[i], readOK[i] = st.ppid, true
+				}
+			}
+		})
+	}
+	wg.Wait()
 	parents := make(map[int]int, len(pids))
-	for _, pid := range pids {
-		if st, ok := readProcStat(pid); ok {
-			parents[pid] = st.ppid
+	for i, pid := range pids {
+		if readOK[i] {
+			parents[pid] = ppids[i]
 		}
 	}
 	return parents, nil

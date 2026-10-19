@@ -204,6 +204,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	if err = requireRunnable(c.Plan, keep); err != nil {
 		return Result{}, err
 	}
+	ciexec.WarmRuntimeInfo() // the first job's orphan sweep asks the daemon: let the answer arrive while git and policy run
 	rev := GitRevision(ctx, c.Opts.Root, c.capture())
 	rev.Dirty = rev.Dirty || c.ConfigOutside
 	source, err := c.classify(ctx, h, rev)

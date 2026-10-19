@@ -155,7 +155,10 @@ func Build(in Input) (*Plan, error) {
 			skip(s.Job, s.Reason, s.Detail)
 		}
 	}
-	sel.Digest = selectionDigest(sel, keep) // the digest covers the final job set, forced jobs included
+	if sel.Digest == "" {
+		// The digest covers the final job set, forced jobs included.
+		sel.Digest = selectionDigest(in.Revision.Changed, keep)
+	}
 	reasons := map[string]model.Reason{}
 	for _, id := range ids {
 		switch {
@@ -193,6 +196,9 @@ func Build(in Input) (*Plan, error) {
 	return p, nil
 }
 
+// releasePipeline is the pipeline name that selectors must always run in full.
+const releasePipeline = "release"
+
 // selectJobs runs the selector over the live jobs. Without a base the answer
 // is always full / selection.no_base, whatever selector is installed.
 func selectJobs(in Input, cs map[string]*cand, ids []string, live map[string]bool) (model.Selection, map[string]bool) {
@@ -208,12 +214,10 @@ func selectJobs(in Input, cs map[string]*cand, ids []string, live map[string]boo
 		for _, r := range refs {
 			picked[r.ID] = true
 		}
-		sel := model.Selection{Mode: "full", Reason: "selection.no_base"}
-		sel.Digest = selectionDigest(sel, picked)
-		return sel, picked
+		return model.Selection{Mode: "full", Reason: "selection.no_base"}, picked
 	}
 	return runSelector(SelectionInput{Changed: append([]string(nil), rev.Changed...), BaseKnown: true,
-		DefaultBranch: rev.DefaultBranch, Release: rev.Release, Jobs: refs, Facts: append([]detect.Fact(nil), in.Facts...)})
+		DefaultBranch: rev.DefaultBranch, Release: rev.Release, ReleasePipeline: in.Pipeline == releasePipeline, Jobs: refs, Facts: append([]detect.Fact(nil), in.Facts...)})
 }
 
 // selectPipeline resolves --pipeline / --trigger to the member jobs (with

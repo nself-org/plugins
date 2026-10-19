@@ -179,11 +179,10 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	if err != nil {
 		return ciexec.AttemptResult{}, "", err
 	}
-	home, err := os.MkdirTemp(base, "run-")
+	home, err := execHome(base)
 	if err != nil {
 		return ciexec.AttemptResult{}, "", err
 	}
-	defer func() { _ = os.RemoveAll(home) }()
 	job := spec.Job
 	job.Env = map[string]string{}
 	for k, v := range spec.Job.Env {
@@ -192,12 +191,12 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	for k, v := range in.Env {
 		job.Env[k] = v
 	}
-	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}, NewRedactor: ciexec.NewOutputRedactor}
+	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}, NewRedactor: ciexec.NewOutputRedactor, Stale: agentStale{}}
 	if len(in.Secrets) > 0 {
 		ex.Secrets = mapSecrets(in.Secrets)
 	}
 	raw := &tailBuffer{max: excerptMax}
-	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: spec.AttemptID, CoordinatorID: spec.CoordinatorID, Job: job, Command: job.Run,
+	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: spec.AttemptID, CoordinatorID: agentIncarnation(spec.CoordinatorID), Job: job, Command: job.Run,
 		SourceDir: spec.SourceDir, Mounts: in.Mounts, Home: home, Slot: in.Slot,
 		Output: func(b []byte) {
 			raw.Write(b)

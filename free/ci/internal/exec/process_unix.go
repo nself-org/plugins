@@ -25,14 +25,19 @@ func isTerminal() bool {
 }
 
 // limitedCommand installs child-only rlimits before replacing the shell with the job.
-func limitedCommand(s JobSpec) []string {
+func limitedCommand(s JobSpec) []string { return limitedCommandOn(s, runtime.GOOS) }
+
+// limitedCommandOn is limitedCommand for a named OS. The memory cap is RLIMIT_DATA (ulimit -d),
+// which counts writable private memory; RLIMIT_AS (ulimit -v) counts reserved address space and
+// kills the Go and V8 runtimes at start, so it is never used.
+func limitedCommandOn(s JobSpec, goos string) []string {
 	var limits string
 	if s.Timeout > 0 {
 		seconds := int((s.Timeout + time.Second - 1) / time.Second)
 		limits += "ulimit -t " + strconv.Itoa(seconds) + " || exit 125; "
 	}
-	if s.MemoryMB > 0 && runtime.GOOS == "linux" {
-		limits += "ulimit -v " + strconv.Itoa(s.MemoryMB*1024) + " || exit 125; "
+	if s.MemoryLimitMB > 0 && goos == "linux" {
+		limits += "ulimit -d " + strconv.Itoa(s.MemoryLimitMB*1024) + " || exit 125; "
 	}
 	if limits == "" {
 		return s.Command

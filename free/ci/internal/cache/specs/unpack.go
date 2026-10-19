@@ -1,6 +1,6 @@
 package specs
 
-// Purpose: restore one spec blob (tar + gzip) into its directory (Epic CACHE
+// Purpose: restore one spec blob (plain tar, or tar + gzip) into its directory (Epic CACHE
 // D5, R-SEC-29). Every header goes through authz.Extractor before anything is
 // written, and every write goes through an os.Root pinned on the directory.
 // Inputs:  the blob reader, the destination directory, the sanitiser limits.
@@ -20,6 +20,7 @@ package specs
 
 import (
 	"archive/tar"
+	"bufio"
 	"compress/gzip"
 	"errors"
 	"fmt"
@@ -53,7 +54,7 @@ type UnpackOptions struct {
 	OtherRead bool
 }
 
-// Unpack extracts the tar+gzip stream r into the directory rel of base
+// Unpack extracts the tar stream (plain or gzip) r into the directory rel of base
 // (created 0700 if missing).
 func Unpack(r io.Reader, base *os.Root, rel string, lim authz.Limits, opt UnpackOptions) (UnpackStats, error) {
 	var st UnpackStats
@@ -81,14 +82,19 @@ func extract(r io.Reader, root *os.Root, lim authz.Limits, opt UnpackOptions) (U
 	var st UnpackStats
 	dry := root == nil
 	cr := &countReader{r: r}
-	gz, err := gzip.NewReader(cr)
+	body, closeBody, err := openBody(cr)
 	if err != nil {
-		return st, fmt.Errorf("specs: not a gzip stream: %w", err)
+		return st, err
 	}
-	defer func() { _ = gz.Close() }()
+	defer closeBody()
 	lim = effective(lim)
-	tr := tar.NewReader(io.LimitReader(gz, lim.MaxTotalBytes+(1<<30)))
+	tr := tar.NewReader(io.LimitReader(body, lim.MaxTotalBytes+(1<<30)))
 	ext, guard, dirs := authz.NewExtractor(lim), &bombGuard{cr: cr, lim: lim}, []dirMode{}
+	var fw *fileWriter
+	if !dry {
+		fw = newFileWriter(root, opt)
+	}
+	defer fw.close() // an early return still waits for the writers
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -129,6 +135,10 @@ func extract(r io.Reader, root *os.Root, lim authz.Limits, opt UnpackOptions) (U
 				if n, err := io.Copy(io.Discard, ge); err != nil || n != h.Size {
 					return st, errors.Join(err, io.ErrUnexpectedEOF)
 				}
+			} else if fw != nil && h.Size <= smallFile {
+				if err := fw.submit(name, ge, h); err != nil {
+					return st, err
+				}
 			} else if err := writeFile(root, name, ge, h, opt); err != nil {
 				return st, err
 			}
@@ -145,6 +155,9 @@ func extract(r io.Reader, root *os.Root, lim authz.Limits, opt UnpackOptions) (U
 	if dry {
 		return st, nil
 	}
+	if err := fw.close(); err != nil {
+		return st, err
+	}
 	sort.Slice(dirs, func(i, j int) bool { return len(dirs[i].name) > len(dirs[j].name) })
 	if opt.OtherRead {
 		if err := openDirs(root); err != nil {
@@ -158,6 +171,26 @@ func extract(r io.Reader, root *os.Root, lim authz.Limits, opt UnpackOptions) (U
 		_ = root.Chtimes(d.name, d.at, d.at)
 	}
 	return st, nil
+}
+
+// openBody returns the tar stream inside r: a local blob is a plain tar (a
+// restore is a copy), a gzip blob (an older save, or one a remote store hands
+// back) is inflated. The first two bytes tell them apart: a tar header starts
+// with a file name, which never begins 0x1f 0x8b.
+func openBody(r io.Reader) (io.Reader, func(), error) {
+	br := bufio.NewReaderSize(r, 128<<10)
+	magic, err := br.Peek(2)
+	if err != nil {
+		return nil, nil, fmt.Errorf("specs: not an archive: %w", err)
+	}
+	if magic[0] != 0x1f || magic[1] != 0x8b {
+		return br, func() {}, nil
+	}
+	gz, err := gzip.NewReader(br)
+	if err != nil {
+		return nil, nil, fmt.Errorf("specs: not a gzip stream: %w", err)
+	}
+	return gz, func() { _ = gz.Close() }, nil
 }
 
 // openDirs makes every directory of the tree (the root and the implicit
@@ -208,7 +241,12 @@ func writeFile(root *os.Root, name string, r io.Reader, h *tar.Header, opt Unpac
 	if err != nil {
 		return fmt.Errorf("specs: writing %q: %w", name, err)
 	}
-	perm := os.FileMode(h.Mode&0o777) | 0o400
+	return settleFile(root, name, os.FileMode(h.Mode&0o777), h.ModTime, opt)
+}
+
+// settleFile gives a written file its mode (readable by the owner at least) and time.
+func settleFile(root *os.Root, name string, mode os.FileMode, at time.Time, opt UnpackOptions) error {
+	perm := mode | 0o400
 	if opt.OtherRead {
 		perm |= 0o444
 		if perm&0o100 != 0 {
@@ -218,7 +256,7 @@ func writeFile(root *os.Root, name string, r io.Reader, h *tar.Header, opt Unpac
 	if err := root.Chmod(name, perm); err != nil {
 		return err
 	}
-	_ = root.Chtimes(name, h.ModTime, h.ModTime)
+	_ = root.Chtimes(name, at, at)
 	return nil
 }
 
@@ -255,7 +293,7 @@ func removeIn(base *os.Root, rel string) error {
 		_ = chmodDirs(sub, ".")
 		_ = sub.Close()
 	}
-	return base.RemoveAll(rel)
+	return removeAll(base, rel)
 }
 
 func chmodDirs(root *os.Root, dir string) error {

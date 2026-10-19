@@ -7,7 +7,7 @@ package toolchain
 // Inputs:  an fs.FS holding the pins directory.
 // Outputs: validated Pin values sorted by name.
 // Constraints: strict decoding (unknown keys fail); a tool source needs an
-// https URL and a lower-case 64-hex sha256; a base image is pinned by digest;
+// https URL and a lower-case 64-hex sha256 (plus an optional binary_sha256 of the extracted executable); a base image is pinned by digest;
 // the image row is `pending` (no digest) or `pinned` (digest).
 
 import (
@@ -41,6 +41,9 @@ type Source struct {
 	Arch   string `yaml:"arch"`
 	URL    string `yaml:"url"`
 	SHA256 string `yaml:"sha256"`
+	// BinarySHA256 is the optional sha256 of the extracted executable (D-1024),
+	// so an installed tool can be authenticated by its bytes, not only by the archive.
+	BinarySHA256 string `yaml:"binary_sha256,omitempty"`
 }
 
 // Upstream says where the drill finds the newest release of a pin.
@@ -157,6 +160,8 @@ func (p Pin) validateTool() error {
 			return fmt.Errorf("%s: source %s is not an https URL", p.Name, key)
 		case !sha256Re.MatchString(s.SHA256):
 			return fmt.Errorf("%s: source %s has no valid sha256", p.Name, key)
+		case s.BinarySHA256 != "" && !sha256Re.MatchString(s.BinarySHA256):
+			return fmt.Errorf("%s: source %s has an invalid binary_sha256", p.Name, key)
 		}
 		seen[key] = true
 	}

@@ -15,6 +15,7 @@ package evidence
 import (
 	"context"
 	"sort"
+	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
@@ -36,14 +37,28 @@ func init() { cirun.RegisterEvidence(Builder{}) }
 
 // Begin reads the inputs and the binding of the checkout.
 func (Builder) Begin(ctx context.Context, root string, rev cirun.Revision, c cirun.Capture) any {
-	s := &snapshot{tree: ReadWorktree(ctx, c, root), git: GitVersion(ctx, c, root)}
-	if rev.SHA == "" {
-		return s
+	// Four independent reads, each a funnel spawn: side by side they cost the
+	// slowest one, not their sum (D-1008).
+	s := &snapshot{}
+	var wg sync.WaitGroup
+	read := func(f func()) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			f()
+		}()
 	}
-	s.inputs, s.inputsErr = InputsAt(ctx, c, root, rev.SHA)
-	if id, ok := RepoID(ctx, c, root); ok {
-		s.repoID = id
+	read(func() { s.tree = ReadWorktree(ctx, c, root) })
+	read(func() { s.git = GitVersion(ctx, c, root) })
+	if rev.SHA != "" {
+		read(func() { s.inputs, s.inputsErr = InputsAt(ctx, c, root, rev.SHA) })
+		read(func() {
+			if id, ok := RepoID(ctx, c, root); ok {
+				s.repoID = id
+			}
+		})
 	}
+	wg.Wait()
 	return s
 }
 

@@ -8,7 +8,7 @@ package affected
 // workdir, detector facts including the pkggraph facts).
 // Outputs: model.Selection{Mode, Reason, Digest} and the sorted job ids.
 // Constraints: pure; release pipelines and default-branch runs are always
-// full; full also on no base, an empty diff, a non-certain fact (outside
+// full (as is a release pipeline); full also on no base, an empty diff, a non-certain fact (outside
 // testdata/), a forcing path (ForcesFull), a path in a generator or opaque
 // directory, an unmapped path (no package owns it and no job below the
 // repository root covers it), an uncertain graph, or no job left. Without
@@ -45,7 +45,7 @@ func selectWith(g *Graph, graphCertain bool, in plan.SelectionInput) (model.Sele
 	switch {
 	case !in.BaseKnown:
 		return full("selection.no_base")
-	case in.DefaultBranch || in.Release || len(changed) == 0:
+	case in.DefaultBranch || in.Release || in.ReleasePipeline || len(changed) == 0:
 		return full("selection.full_required")
 	}
 	for _, f := range in.Facts {

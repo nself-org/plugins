@@ -289,8 +289,8 @@ func TestSelectionDigestCoversForcedJobs(t *testing.T) {
 	cfg := cfgOf(map[string]model.Job{"lint": lint, "test": job()})
 	rev := Revision{Branch: "main", DefaultBranch: true, BaseKnown: true, Changed: []string{"x.go"}}
 	p := mustBuild(t, Input{World: linuxWorld(), Config: cfg, Revision: rev})
-	want := selectionDigest(p.Selection, map[string]bool{"test": true})
-	if p.Selection.Digest != want || p.Selection.Digest == selectionDigest(p.Selection, map[string]bool{}) {
+	want := selectionDigest(rev.Changed, map[string]bool{"test": true})
+	if p.Selection.Digest != want || p.Selection.Digest == selectionDigest(rev.Changed, map[string]bool{}) {
 		t.Errorf("digest %s does not cover the forced job set", p.Selection.Digest)
 	}
 }

@@ -27,14 +27,17 @@ import (
 // means a re-Put of the same bytes raced the check (cas.Open's guards report
 // ErrInvalid then), so the caller reports a miss without dropping; err is an I/O
 // failure.
-func (s *Store) intact(m Manifest) (reason string, err error) {
+func (s *Store) intact(m Manifest) (reason string, err error) { return s.intactBy(m, true) }
+
+// intactBy is intact; rehash false stops at existence and size.
+func (s *Store) intactBy(m Manifest, rehash bool) (reason string, err error) {
 	realm := cas.CacheRealm(string(m.Namespace))
 	for _, b := range m.Blobs {
 		info, e := s.stat(realm, b.SHA256)
 		if e == nil && info.Size() != b.Size {
 			return "size_mismatch", nil
 		}
-		for try := 0; e == nil; try++ { // an atomic re-Put replaces the file under Open: retry
+		for try := 0; e == nil && rehash; try++ { // an atomic re-Put replaces the file under Open: retry
 			var rc io.ReadCloser
 			if rc, e = s.open(realm, b.SHA256); e == nil {
 				e = rc.Close()
@@ -64,6 +67,19 @@ func (s *Store) intact(m Manifest) (reason string, err error) {
 // every blob is intact. The caller must derive access from authz.CacheAccess for
 // the attempt's own namespace and ns; Lookup does not know the attempt.
 func (s *Store) Lookup(ctx context.Context, ns authz.Namespace, key string, access authz.Mode) (Manifest, bool, error) {
+	return s.lookup(ctx, ns, key, access, true)
+}
+
+// LookupForRestore is Lookup for a caller that reads every blob through
+// cas.Store.ReadVerified straight afterwards (D-1008): it checks that each blob
+// exists with the recorded size and leaves the digest to that read, so a restore
+// hashes a 100 MB build cache once, not three times. A blob that fails the
+// digest is quarantined by that read, and the caller drops the entry.
+func (s *Store) LookupForRestore(ctx context.Context, ns authz.Namespace, key string, access authz.Mode) (Manifest, bool, error) {
+	return s.lookup(ctx, ns, key, access, false)
+}
+
+func (s *Store) lookup(ctx context.Context, ns authz.Namespace, key string, access authz.Mode, rehash bool) (Manifest, bool, error) {
 	if (access != authz.ModeRWOwn && access != authz.ModeROSnapshot) || !ns.Valid() || !hexKey.MatchString(key) {
 		return Manifest{}, false, nil
 	}
@@ -79,7 +95,7 @@ func (s *Store) Lookup(ctx context.Context, ns authz.Namespace, key string, acce
 	if access == authz.ModeROSnapshot && !s.snapshotOK(m) {
 		return Manifest{}, false, nil
 	}
-	reason, err := s.intact(m)
+	reason, err := s.intactBy(m, rehash)
 	if err != nil || reason == "unstable" {
 		return Manifest{}, false, err
 	}
