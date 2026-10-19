@@ -6,14 +6,14 @@
 | Field | Value |
 |---|---|
 | **Licence** | Free (MIT) |
-| **Maturity** | experimental ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
 | **Version** | 1.2.7 |
 | **Install** | `nself plugin install traefik` |
 | **Requirements** | nSelf >=1.4.12 |
 
 <!-- END GENERATED:catalog -->
 
-> Swaps the nSelf reverse proxy from nginx to Traefik with route, TLS and upstream parity. **Free, experimental.**
+> Swaps the nSelf reverse proxy from nginx to Traefik with route, TLS and upstream parity. **Free.**
 
 ## Install
 
