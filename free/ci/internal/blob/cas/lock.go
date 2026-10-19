@@ -3,7 +3,6 @@ package cas
 import (
 	"errors"
 	"os"
-	"syscall"
 )
 
 // locked serializes tree mutations across Store values and processes.
@@ -28,7 +27,7 @@ func (s *Store) locked(fn func() error) error {
 		if s.afterLockStat != nil {
 			s.afterLockStat()
 		}
-		f, err = root.OpenFile(".lock", os.O_RDWR|syscall.O_NOFOLLOW, 0)
+		f, err = root.OpenFile(".lock", os.O_RDWR|oNoFollow, 0)
 	}
 	if err != nil {
 		return err
@@ -42,9 +41,10 @@ func (s *Store) locked(fn func() error) error {
 	if err != nil || !current.Mode().IsRegular() || !os.SameFile(current, opened) {
 		return ErrInvalid
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+	unlock, err := flock(f)
+	if err != nil {
 		return err
 	}
-	defer func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) }()
+	defer unlock()
 	return fn()
 }

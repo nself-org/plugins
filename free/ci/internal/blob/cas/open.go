@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
 // Stat reports a blob without reading it; Open is required before trusting bytes.
@@ -68,7 +67,7 @@ func (s *Store) Open(realm Realm, digest string) (io.ReadCloser, error) {
 	if !entry.Mode().IsRegular() {
 		return nil, ErrInvalid
 	}
-	f, err := root.OpenFile(rel, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	f, err := root.OpenFile(rel, os.O_RDONLY|oNoFollow, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +151,7 @@ func (s *Store) snapshot() (*os.File, error) {
 }
 
 func verifyPath(root *os.Root, rel, digest string) error {
-	f, err := root.OpenFile(rel, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	f, err := root.OpenFile(rel, os.O_RDONLY|oNoFollow, 0)
 	if err != nil {
 		return err
 	}
