@@ -224,9 +224,6 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 		return Result{}, err
 	}
 	recovered := Recover(ctx, st, coord.ID, c.Opts.Home)
-	// status preparation can wait on another poster for minutes; it runs before the run
-	// is persisted so a persisted run is never left without attempts or heartbeats
-	post := c.prepareStatus(ctx, st, rev)
 	_ = st.Heartbeat(ctx, coord.ID)
 	runID := newRunID()
 	sess := newSession()
@@ -256,9 +253,16 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	}
 	rs := &runState{c: c, sess: sess, hooks: h, pol: pol, pl: c.Plan, mp: mp, rev: rev, rows: rows, subst: subst, render: stampRun(NewRenderer(out, c.Opts), runID), subset: keep, begin: c.beginEvidence(ctx, h, rev),
 		out: map[string]*JobOutcome{}, done: map[string]chan struct{}{}, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
+	// status preparation can wait on another poster for minutes (D-1059): it must not
+	// delay `queued`, and only the conclusion needs it, so it runs beside the jobs
+	// while the heartbeat is alive. The goroutine gets rev by value; the run may
+	// still mark its own copy dirty.
+	postCh := make(chan statusPost, 1)
+	go func(rev Revision) { postCh <- c.prepareStatus(ctx, st, rev) }(rev)
 	rs.render.Event(Event{Type: "planned", Plan: c.Plan})
 	start := time.Now()
 	c.drive(ctx, rs, st, coord.ID)
+	post := <-postCh
 	if end := GitRevision(context.WithoutCancel(ctx), c.Opts.Root, c.capture()); end.SHA != rev.SHA || end.Dirty {
 		rev.Dirty = true // the tree moved or changed while jobs ran: the result is not bound to the start commit
 	}
