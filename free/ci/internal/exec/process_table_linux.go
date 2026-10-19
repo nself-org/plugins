@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // procStat is the part of /proc/<pid>/stat the executor needs.
@@ -81,7 +82,23 @@ func nativeStartID(pid int) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return "st:" + st.startTicks, true
+	return "st:" + st.startTicks + bootSuffix(), true
+}
+
+var (
+	bootOnce sync.Once
+	bootID   string
+)
+
+// bootSuffix ties start ticks (counted from boot) to one boot, so a marker kept
+// across a reboot cannot match a new process that has the same pid and ticks.
+func bootSuffix() string {
+	bootOnce.Do(func() {
+		if b, err := os.ReadFile("/proc/sys/kernel/random/boot_id"); err == nil {
+			bootID = "@" + strings.TrimSpace(string(b))
+		}
+	})
+	return bootID
 }
 
 // groupAlive reports whether any non-zombie process is in group pgid.

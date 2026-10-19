@@ -47,25 +47,41 @@ func (t *processTree) stop() {
 	reapDescendants(t.pids())
 }
 
-// snapshot reads the process table once and adds every descendant of the root
-// (and every adopted orphan) to the seen set. The table comes from /proc or
-// sysctl; ps is only the fallback when those fail.
+// snapshot reads the process table and adds every descendant of the root (and
+// every adopted orphan) to the seen set. A pass that found new processes is
+// repeated (at most three passes) so forks made while the table was being read
+// are caught. The table comes from /proc or sysctl, which cost no fork; ps is
+// only the fallback when those fail.
 func (t *processTree) snapshot() {
-	parents, err := processTable()
-	if err != nil {
-		if parents, err = psProcessTable(); err != nil {
+	for i := 0; i < 3; i++ {
+		parents, err := processTable()
+		if err != nil {
+			if parents, err = psProcessTable(); err != nil {
+				return
+			}
+		}
+		if !t.absorb(parents) {
 			return
 		}
 	}
+}
+
+// absorb adds the descendants found in parents to the seen set and reports
+// whether it added any.
+func (t *processTree) absorb(parents map[int]int) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	known := map[int]struct{}{t.root: {}}
 	for pid := range t.seen {
 		known[pid] = struct{}{}
 	}
+	changed := false
 	for _, pid := range adoptedDescendants(parents, t.attempt) {
 		known[pid] = struct{}{}
-		t.seen[pid] = struct{}{}
+		if _, ok := t.seen[pid]; !ok {
+			t.seen[pid] = struct{}{}
+			changed = true
+		}
 	}
 	for {
 		added := false
@@ -79,9 +95,10 @@ func (t *processTree) snapshot() {
 			known[pid] = struct{}{}
 			t.seen[pid] = struct{}{}
 			added = true
+			changed = true
 		}
 		if !added {
-			return
+			return changed
 		}
 	}
 }

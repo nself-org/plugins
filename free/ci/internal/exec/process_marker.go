@@ -31,6 +31,28 @@ func processIdentity(pid int) (string, error) {
 	return psIdentity(pid)
 }
 
+// sameProcess compares the live start instant of pid with a marker's recorded
+// identity, in the form the marker was written in: "st:" markers use the native
+// reader, older markers hold ps lstart text. known is false when the live
+// identity cannot be read in that form, which is not the same as "different".
+func sameProcess(pid int, recorded string) (same, known bool) {
+	var now string
+	if strings.HasPrefix(recorded, "st:") {
+		id, ok := nativeStartID(pid)
+		if !ok {
+			return false, false
+		}
+		now = id
+	} else {
+		id, err := psIdentity(pid)
+		if err != nil || id == "" {
+			return false, false
+		}
+		now = id
+	}
+	return now == recorded, true
+}
+
 func psIdentity(pid int) (string, error) {
 	out, err := osexec.Command("ps", "-o", "lstart=", "-p", strconv.Itoa(pid)).Output()
 	if err != nil {
@@ -109,12 +131,8 @@ func (e *Executor) sweepProcessMarker(ctx context.Context, home, current, attemp
 	if !stale {
 		return nil
 	}
-	identity, err := processIdentity(marker.PID)
-	if err == nil && !strings.HasPrefix(marker.Identity, "st:") && strings.HasPrefix(identity, "st:") {
-		identity, err = psIdentity(marker.PID) // marker from an older build
-	}
 	if groupAlive(marker.PID) {
-		if err == nil && identity != "" && identity != marker.Identity {
+		if same, known := sameProcess(marker.PID, marker.Identity); known && !same {
 			// A different process has reused the leader PID. Do not kill its group.
 			return coded("E610", "stale group identity changed")
 		}
