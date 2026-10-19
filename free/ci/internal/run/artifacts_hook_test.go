@@ -367,3 +367,56 @@ func TestArtifactsHookStaleCallbackIsFenced(t *testing.T) {
 		t.Fatalf("the current incarnation stages: %v", err)
 	}
 }
+
+// A job that declares nothing never reads the store from these hooks, so a
+// store error cannot fail it.
+func TestArtifactsHookJobWithoutDeclarationsNeverTouchesTheStore(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = st.Close() // every read now fails
+	a := AttemptInfo{AttemptID: "none", JobName: "none", Job: model.Job{}, Store: st, Epoch: 2}
+	ctx := context.Background()
+	if err := artifactsOn.AttemptStart(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	if err := artifactsOn.AfterJob(ctx, a, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := artifactsOn.AttemptFinalize(ctx, a, 3); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestArtifactsHookAutoPruneRunsAgainAfterTheInterval(t *testing.T) {
+	clock := time.Now()
+	h := &artifactsHook{scanner: artifactsOn.scanner, env: func(string) string { return "1" }, now: func() time.Time { return clock }, warn: func(string) {}}
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	home := t.TempDir()
+	a := AttemptInfo{Store: st, Home: home}
+	h.autoPrune(context.Background(), a)
+	first, _ := h.pruned.Load(home)
+	clock = clock.Add(pruneEvery - time.Minute)
+	h.autoPrune(context.Background(), a)
+	if again, _ := h.pruned.Load(home); again != first {
+		t.Fatal("pruned again inside the interval")
+	}
+	clock = clock.Add(2 * time.Minute)
+	h.autoPrune(context.Background(), a)
+	if later, _ := h.pruned.Load(home); later == first {
+		t.Fatal("not pruned again after the interval")
+	}
+	var warned []string
+	h.warn = func(s string) { warned = append(warned, s) }
+	_ = st.Close()
+	clock = clock.Add(2 * pruneEvery)
+	h.autoPrune(context.Background(), a)
+	if len(warned) != 1 || !strings.Contains(warned[0], "auto prune") {
+		t.Fatalf("a failing auto prune must warn: %v", warned)
+	}
+}

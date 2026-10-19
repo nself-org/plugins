@@ -26,6 +26,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 type artifactsHook struct {
@@ -33,7 +34,7 @@ type artifactsHook struct {
 	env     func(string) string
 	now     func() time.Time
 	warn    func(string)
-	pruned  sync.Map // home -> struct{}: the auto prune ran in this process
+	pruned  sync.Map // store dir -> time.Time of the last automatic prune
 }
 
 var artifactsOn = &artifactsHook{scanner: func() authz.ValueScanner { return Redactions }, env: os.Getenv, now: time.Now,
@@ -55,6 +56,12 @@ func (h *artifactsHook) setup(a AttemptInfo) (records.Policy, *cas.Store, error)
 	pol.Team = h.env("NSELF_CI_COORDINATOR_MODE") == "team"
 	blobs, err := cas.New(home)
 	return pol, blobs, err
+}
+
+// declares reports whether the job declares any output, without touching the
+// store: a job that does not pays nothing and cannot be failed by this hook.
+func declares(job model.Job) bool {
+	return len(job.Artifacts) > 0 || len(records.ImplicitDecls(job)) > 0
 }
 
 // epochOf is the capability the attempt launched with. A caller that did not
@@ -89,7 +96,7 @@ func (h *artifactsHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
 }
 
 func (h *artifactsHook) attemptStart(ctx context.Context, a AttemptInfo) error {
-	if a.Store == nil {
+	if a.Store == nil || !declares(a.Job) {
 		return nil
 	}
 	facts, err := a.Store.ArtifactFacts(ctx, a.AttemptID)
@@ -112,12 +119,28 @@ func (h *artifactsHook) attemptStart(ctx context.Context, a AttemptInfo) error {
 	if err = a.Store.ArtifactDeclare(ctx, a.AttemptID, epoch, decls); err != nil {
 		return err
 	}
-	if _, seen := h.pruned.LoadOrStore(records.StoreDir(a.Home), struct{}{}); !seen {
-		if _, blobs, e := h.setup(a); e == nil {
-			_ = records.AutoPrune(ctx, a.Store, blobs, h.now())
-		}
-	}
+	h.autoPrune(ctx, a)
 	return nil
+}
+
+// pruneEvery is how often a long-lived process runs the automatic prune per store.
+const pruneEvery = 6 * time.Hour
+
+// autoPrune removes expired records and unreferenced blobs, at most once per
+// pruneEvery per store directory; a failure is a warning, never a job failure.
+func (h *artifactsHook) autoPrune(ctx context.Context, a AttemptInfo) {
+	dir, now := records.StoreDir(a.Home), h.now()
+	if last, ok := h.pruned.Load(dir); ok && now.Sub(last.(time.Time)) < pruneEvery {
+		return
+	}
+	h.pruned.Store(dir, now)
+	_, blobs, err := h.setup(a)
+	if err == nil {
+		err = records.AutoPrune(ctx, a.Store, blobs, now)
+	}
+	if err != nil {
+		h.warn("artifact auto prune: " + firstLineOf(err.Error()))
+	}
 }
 
 // AfterJob collects the declared outputs from the workspace the executor pinned.
@@ -126,7 +149,7 @@ func (h *artifactsHook) AfterJob(ctx context.Context, a AttemptInfo, workspace *
 }
 
 func (h *artifactsHook) afterJob(ctx context.Context, a AttemptInfo, workspace *os.Root) error {
-	if a.Store == nil {
+	if a.Store == nil || !declares(a.Job) {
 		return nil
 	}
 	decls, err := a.Store.ArtifactDecls(ctx, a.AttemptID)
@@ -171,7 +194,7 @@ func (h *artifactsHook) afterJob(ctx context.Context, a AttemptInfo, workspace *
 
 // AttemptFinalize verifies and commits the staged records.
 func (h *artifactsHook) AttemptFinalize(ctx context.Context, a AttemptInfo, epoch int64) error {
-	if a.Store == nil {
+	if a.Store == nil || !declares(a.Job) {
 		return nil
 	}
 	decls, err := a.Store.ArtifactDecls(ctx, a.AttemptID)
