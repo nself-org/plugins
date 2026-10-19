@@ -7,12 +7,19 @@ package agent
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/hex"
 	"fmt"
+	"io"
+	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/pki"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // session drives one lease through a carrier the way the agent session would.
@@ -162,5 +169,228 @@ func scenarioRestart(t *testing.T) {
 	b := readLog(t, LogFile(e.drv.LogDir, run.l.LeaseID))
 	if strings.Count(b, "\n") != 16 {
 		t.Fatalf("the durable log has %d lines, want 16:\n%s", strings.Count(b, "\n"), b)
+	}
+}
+
+// scenarioWireRefusals: the same token is accepted for every call of its session; a forged, missing, other
+// lease's or other node's token is refused with E661 and the agent is told to stop that lease.
+func scenarioWireRefusals(t *testing.T) {
+	e := newE2E(t, "")
+	c := e.connect("n-1")
+	run := e.startLease(t, c, "n-1", "1")
+	run.log("line-1")
+	run.beat()
+	recvType(t, c, "heartbeat", 5*time.Second)
+	wantLines(t, e.sink, 1)
+	// a second lease of the same node: its token must not work for the first lease
+	run2 := e.startLease(t, c, "n-1", "2")
+	if err := e.drv.Gate.Spend(context.Background(), mustJTI(t, e, run2.token)); err != nil {
+		t.Fatal(err)
+	}
+	for _, tok := range []string{"", "forged.token.value", run2.token} {
+		run.c.cfgSetToken(run.l.LeaseID, tok)
+		run.log("must-not-arrive")
+		cn := recvType(t, c, "cancel", 5*time.Second)
+		reason := cn.Body.(*protocol.Cancel).Reason
+		if !strings.HasPrefix(reason, "E661 ") || strings.Contains(reason, tok) && tok != "" {
+			t.Fatalf("token %q: cancel reason %q", tok, reason)
+		}
+	}
+	time.Sleep(100 * time.Millisecond)
+	if got := e.sink.lines(); len(got) != 1 {
+		t.Fatalf("refused lines reached the run: %v", got)
+	}
+}
+
+func mustJTI(t *testing.T, e *e2e, token string) string {
+	t.Helper()
+	cl, err := e.tokens.Verify(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cl.JTI
+}
+
+// cfgSetToken replaces the token the carrier presents for a lease (test seam for forged tokens).
+func (c *Carrier) cfgSetToken(leaseID, tok string) {
+	c.mu.Lock()
+	if tok == "" {
+		delete(c.tokens, leaseID)
+	} else {
+		c.tokens[leaseID] = tok
+	}
+	c.gen++
+	want := c.gen
+	c.mu.Unlock()
+	c.signal(c.wake)
+	for i := 0; i < 500; i++ {
+		c.mu.Lock()
+		ok := c.liveGen >= want
+		c.mu.Unlock()
+		if ok {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// partitioned starts the rig with the agent behind a proxy and one running lease.
+func partitioned(t *testing.T) (*e2e, *netProxy, *Carrier, *leaseRun) {
+	e := newE2E(t, "")
+	e.addNode("n-1")
+	px := newNetProxy(t, e.ln.Addr().String())
+	e.base = "https://" + px.addr()
+	c := e.carrier(e.nodeCert("n-1"), nil)
+	if err := c.Send(e.hello()); err != nil {
+		t.Fatal(err)
+	}
+	recvType(t, c, "welcome", 5*time.Second)
+	return e, px, c, nil
+}
+
+// scenarioCancelDuringPartition: a cancel issued while the agent is disconnected reaches it as soon as it is
+// back, while the run still waits (control stream) and after the run gave up (the lease is no longer valid, so
+// the first heartbeat is answered with a stale-epoch cancel).
+func scenarioCancelDuringPartition(t *testing.T, runGivesUp bool) {
+	e, px, c, _ := partitioned(t)
+	leaseID, att, ep := e.seedLease("1", "n-1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := e.runLease(ctx, "n-1", leaseID, att, ep)
+	l := *recvType(t, c, "lease", 5*time.Second).Body.(*protocol.Lease)
+	run := &leaseRun{t: t, e: e, c: c, l: l, done: done, token: l.Token}
+	run.log("line-1")
+	run.beat()
+	recvType(t, c, "heartbeat", 5*time.Second)
+	px.partition()
+	time.Sleep(100 * time.Millisecond)
+	cancel() // the run is cancelled while the agent cannot be told
+	if runGivesUp {
+		select {
+		case err := <-done:
+			if ReasonOf(err) != ReasonCancelLate {
+				t.Fatalf("Run = %v, want the cancel timeout", err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("Run never gave up")
+		}
+		// what the dispatcher does when the carrier ends without a result
+		if err := e.st.Transition(context.Background(), att, "running", "cancelled", store.TransitionDetail{Epoch: attemptEpoch(t, e, att)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	started := time.Now()
+	px.heal()
+	if runGivesUp {
+		run.beat() // the reconnecting agent reports the lease it kept
+	}
+	cn := recvType(t, c, "cancel", 5*time.Second)
+	if got := cn.Body.(*protocol.Cancel); got.LeaseID != leaseID {
+		t.Fatalf("cancel for %q, want %q", got.LeaseID, leaseID)
+	}
+	if took := time.Since(started); took > 5*time.Second {
+		t.Fatalf("the cancel took %v after the agent was back", took)
+	}
+	if !runGivesUp {
+		run.finish() // the killed job reports; Run returns
+	}
+}
+
+func attemptEpoch(t *testing.T, e *e2e, attemptID string) int64 {
+	t.Helper()
+	_, ep, err := e.st.AttemptStateEpoch(context.Background(), attemptID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ep
+}
+
+// scenarioRevokeWhilePolling: a revoke ends the agent's live requests within a second and the agent cannot
+// connect again.
+func scenarioRevokeWhilePolling(t *testing.T) {
+	e := newE2E(t, "")
+	e.addNode("n-1")
+	cert := e.nodeCert("n-1")
+	var mu sync.Mutex
+	var notes []string
+	c := e.carrier(cert, func(cfg *CarrierConfig) {
+		cfg.Logf = func(f string, a ...any) { mu.Lock(); notes = append(notes, fmt.Sprintf(f, a...)); mu.Unlock() }
+	})
+	if err := c.Send(e.hello()); err != nil {
+		t.Fatal(err)
+	}
+	recvType(t, c, "welcome", 5*time.Second)
+	time.Sleep(200 * time.Millisecond) // the long-poll and the control stream are open
+	serial := hex.EncodeToString(cert.Leaf.SerialNumber.Bytes())
+	started := time.Now()
+	if _, err := e.st.PKIDeny(context.Background(), "test", "n-1", "revoked", serial); err != nil {
+		t.Fatal(err)
+	}
+	e.srv.CloseNode("n-1")
+	eventually(t, 3*time.Second, "the agent to notice the closed connections", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(notes) > 0
+	})
+	if took := time.Since(started); took > time.Second+500*time.Millisecond {
+		t.Fatalf("the live requests ended after %v, want within 1 s", took)
+	}
+	time.Sleep(600 * time.Millisecond) // several reconnect attempts
+	mu.Lock()
+	defer mu.Unlock()
+	for _, n := range notes {
+		if strings.Contains(n, "welcome") {
+			t.Fatalf("a revoked node was welcomed again: %s", n)
+		}
+	}
+	if len(e.srv.NodesConnected()) != 0 {
+		t.Fatalf("revoked node still connected: %v", e.srv.NodesConnected())
+	}
+}
+
+// scenarioServerLeafKinds: the agent connects only to a coordinator-kind server leaf; a node or user leaf that
+// chains to the pinned root is refused at the handshake.
+func scenarioServerLeafKinds(t *testing.T) {
+	r := newRig(t)
+	e := &e2e{rig: r}
+	node := e.nodeCertOf("n-1")
+	user, err := r.ca.IssueUser(context.Background(), "alice", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	userPair, err := tls.X509KeyPair(append(append([]byte{}, user.CertPEM...), user.RootPEM...), user.KeyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	coord, err := r.ca.IssueServer("coord", nil, []net.IP{net.ParseIP("127.0.0.1")}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, leaf := range map[string]tls.Certificate{"node": node, "user": userPair, "coordinator": coord} {
+		ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{leaf}, MinVersion: tls.VersionTLS13})
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			for {
+				c, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				go func() { _, _ = io.Copy(io.Discard, c); _ = c.Close() }()
+			}
+		}()
+		cfg, _ := pki.TLSClientConfig(pki.ClientOptions{RootDER: r.ca.RootDER(), ServerName: "127.0.0.1"})
+		conn, err := tls.Dial("tcp", ln.Addr().String(), cfg)
+		if conn != nil {
+			_ = conn.Close()
+		}
+		_ = ln.Close()
+		if name == "coordinator" && err != nil {
+			t.Fatalf("a coordinator leaf was refused: %v", err)
+		}
+		if name != "coordinator" && err == nil {
+			t.Fatalf("the agent accepted a %s-kind server leaf that chains to the pinned root", name)
+		}
 	}
 }

@@ -111,7 +111,7 @@ func newE2E(t *testing.T, addr string) *e2e {
 }
 
 func (e *e2e) start(addr string) {
-	e.t.Helper()
+	e.rt().Helper()
 	if addr == "" {
 		addr = "127.0.0.1:0"
 	}
@@ -120,7 +120,7 @@ func (e *e2e) start(addr string) {
 		Admit: e.drv.Gate.Check, PollTimeout: 2 * time.Second, SourcePoll: 20 * time.Millisecond, GuardEvery: 50 * time.Millisecond}
 	srv, err := agentapi.New(cfg)
 	if err != nil {
-		e.t.Fatal(err)
+		e.rt().Fatal(err)
 	}
 	var ln net.Listener
 	for i := 0; i < 50; i++ { // the port of a killed listener may take a moment to free
@@ -130,7 +130,7 @@ func (e *e2e) start(addr string) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	if err != nil {
-		e.t.Fatal(err)
+		e.rt().Fatal(err)
 	}
 	e.srv, e.ln, e.base = srv, ln, "https://"+ln.Addr().String()
 	e.drv.SetCancel(srv.Cancel)
@@ -149,41 +149,43 @@ func (e *e2e) stop(done chan error) {
 
 // kill closes the listener and every connection without a graceful drain and forgets all sessions: kill -9.
 func (e *e2e) kill() {
-	e.t.Helper()
+	e.rt().Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = e.srv.Shutdown(ctx)
 }
 
 func (e *e2e) addNode(id string) {
-	e.t.Helper()
+	e.rt().Helper()
 	b, err := os.ReadFile("../../model/testdata/capability/valid/laptop.valid.json")
 	if err != nil {
-		e.t.Fatal(err)
+		e.rt().Fatal(err)
 	}
 	var c model.Capability
 	if err = json.Unmarshal(b, &c); err != nil {
-		e.t.Fatal(err)
+		e.rt().Fatal(err)
 	}
 	c.Identity.ID, c.Identity.Name, c.Identity.Transport = id, id, Kind
 	c.Lifecycle = model.CapabilityLifecycle{AuthorizedProjects: []string{"proj-1"}}
 	doc, _ := json.Marshal(c)
 	admin, _ := store.NewAdminAuthority("cli:test")
 	if err = e.st.NodeAdd(context.Background(), store.NodeRecord{ID: id, Name: id, State: "online", Reason: "added", Capability: doc}, admin); err != nil {
-		e.t.Fatal(err)
+		e.rt().Fatal(err)
 	}
 }
 
-func (e *e2e) nodeCert(id string) tls.Certificate {
-	e.t.Helper()
+func (e *e2e) nodeCert(id string) tls.Certificate { return e.nodeCertOf(id) }
+
+func (e *e2e) nodeCertOf(id string) tls.Certificate {
+	e.rt().Helper()
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{Subject: pkix.Name{CommonName: "x"}}, key)
 	if err != nil {
-		e.t.Fatal(err)
+		e.rt().Fatal(err)
 	}
 	is, err := e.ca.IssueNode(context.Background(), pki.NodeRequest{CSR: csr, NodeID: id, OfferID: "offer-" + id})
 	if err != nil {
-		e.t.Fatal(err)
+		e.rt().Fatal(err)
 	}
 	leaf, _ := x509.ParseCertificate(is.CertDER)
 	chain := append(append([][]byte{}, is.Chain...), is.RootDER)
@@ -192,10 +194,10 @@ func (e *e2e) nodeCert(id string) tls.Certificate {
 
 // carrier builds the agent-side carrier of node id with cert.
 func (e *e2e) carrier(cert tls.Certificate, tune func(*CarrierConfig)) *Carrier {
-	e.t.Helper()
+	e.rt().Helper()
 	tlsc, err := pki.TLSClientConfig(pki.ClientOptions{RootDER: e.ca.RootDER(), Cert: &cert, ServerName: "127.0.0.1"})
 	if err != nil {
-		e.t.Fatal(err)
+		e.rt().Fatal(err)
 	}
 	cfg := CarrierConfig{Client: Options{BaseURL: e.base, TLS: tlsc, Wait: time.Second}, Backoff: Backoff{Min: 10 * time.Millisecond, Max: 50 * time.Millisecond}}
 	if tune != nil {
@@ -214,14 +216,14 @@ func (e *e2e) hello() protocol.Message {
 
 // capability returns the registry document of the node as the dispatcher would hand it to Deliver.
 func (e *e2e) capability(id string) model.Capability {
-	e.t.Helper()
+	e.rt().Helper()
 	n, err := e.st.NodeGet(context.Background(), id)
 	if err != nil {
-		e.t.Fatal(err)
+		e.rt().Fatal(err)
 	}
 	var c model.Capability
 	if err = json.Unmarshal(n.Capability, &c); err != nil {
-		e.t.Fatal(err)
+		e.rt().Fatal(err)
 	}
 	return c
 }
@@ -278,3 +280,5 @@ func protoLease(leaseID, attemptID string, epoch uint64) protocol.Lease {
 	return protocol.Lease{LeaseID: leaseID, AttemptID: attemptID, Epoch: epoch, CompatMode: protocol.Compat15, Job: model.Job{Kind: "test", Run: []string{"true"}, Timeout: "1m"},
 		Checkout: protocol.Checkout{Revision: "rev1"}, Secrets: []protocol.SecretRef{}, ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}
 }
+
+func (e *e2e) rt() *testing.T { return e.rig.t }
