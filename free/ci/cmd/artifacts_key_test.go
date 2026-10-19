@@ -27,6 +27,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/signing"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 // fakeNself writes the fake cli into a bin directory on PATH and returns the
@@ -304,11 +305,11 @@ func signedRun(t *testing.T, r *artRig) signing.Request {
 	ctx := context.Background()
 	p := store.PipelineRow{ID: "run-rel", Revision: strings.Repeat("a", 40), Project: r.project, Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
 	steps := []error{r.st.CreatePipeline(ctx, p), r.st.CreateJob(ctx, store.JobRow{ID: "job-rel", PipelineID: p.ID, Name: "publish", Kind: "release", Idempotent: false, InfraMax: 1, InputDigest: "i"}),
-		r.st.CreateAttempt(ctx, store.AttemptRow{ID: "att-rel", JobID: "job-rel", N: 1}, "")}
+		r.st.CreateAttempt(ctx, store.AttemptRow{ID: "att-rel", JobID: "job-rel", N: 1}, ""), storetest.Admit(ctx, r.st, "att-rel")}
 	for _, s := range []struct {
 		from, to model.JobState
 		epoch    int64
-	}{{"queued", "leased", 0}, {"leased", "running", 1}, {"running", "finalizing", 2}, {"finalizing", "passed", 3}} {
+	}{{"leased", "running", 1}, {"running", "finalizing", 2}, {"finalizing", "passed", 3}} {
 		steps = append(steps, r.st.Transition(ctx, "att-rel", s.from, s.to, store.TransitionDetail{Epoch: s.epoch}))
 	}
 	body, _ := json.Marshal(model.Evidence{Schema: "ci.evidence/v1", Revision: p.Revision, RepoID: "repo", RunID: p.ID, Result: "pass"})

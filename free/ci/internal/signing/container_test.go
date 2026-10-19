@@ -30,6 +30,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/signing"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 func dockerImage(t *testing.T) string {
@@ -111,7 +112,7 @@ func newWorld(t *testing.T) *world {
 	ctx := context.Background()
 	p := store.PipelineRow{ID: "run-c", Revision: strings.Repeat("a", 40), Project: w.project, Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
 	for _, e := range []error{w.st.CreatePipeline(ctx, p), w.st.CreateJob(ctx, store.JobRow{ID: "job-c", PipelineID: p.ID, Name: "publish", Kind: "release", InfraMax: 1, InputDigest: "i"}),
-		w.st.CreateAttempt(ctx, store.AttemptRow{ID: "att-c", JobID: "job-c", N: 1}, "")} {
+		w.st.CreateAttempt(ctx, store.AttemptRow{ID: "att-c", JobID: "job-c", N: 1}, ""), storetest.Admit(ctx, w.st, "att-c")} {
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -119,7 +120,7 @@ func newWorld(t *testing.T) *world {
 	for _, s := range []struct {
 		from, to model.JobState
 		epoch    int64
-	}{{"queued", "leased", 0}, {"leased", "running", 1}} {
+	}{{"leased", "running", 1}} {
 		if err := w.st.Transition(ctx, "att-c", s.from, s.to, store.TransitionDetail{Epoch: s.epoch}); err != nil {
 			t.Fatal(err)
 		}
