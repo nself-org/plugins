@@ -1,0 +1,94 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "fx",
+  "documentNamespace": "https://anchore.com/syft/dir/fx-ac2f12c1-415f-404a-8306-4de0a9c50ef9",
+  "creationInfo": {
+    "licenseListVersion": "3.29",
+    "creators": [
+      "Organization: Anchore, Inc",
+      "Tool: syft-1.54.1"
+    ],
+    "created": "2026-10-19T04:00:52Z"
+  },
+  "packages": [
+    {
+      "name": "github.com/google/uuid",
+      "SPDXID": "SPDXRef-Package-go-module-github.com-google-uuid-b171ea515830f72d",
+      "versionInfo": "v1.6.0",
+      "supplier": "NOASSERTION",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "sourceInfo": "acquired package info from go module information: /go.mod",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "SECURITY",
+          "referenceType": "cpe23Type",
+          "referenceLocator": "cpe:2.3:a:google:uuid:v1.6.0:*:*:*:*:*:*:*"
+        },
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:golang/github.com/google/uuid@v1.6.0"
+        }
+      ]
+    },
+    {
+      "name": "fx",
+      "SPDXID": "SPDXRef-DocumentRoot-Directory-fx",
+      "supplier": "NOASSERTION",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION",
+      "primaryPackagePurpose": "FILE"
+    }
+  ],
+  "files": [
+    {
+      "fileName": "go.mod",
+      "SPDXID": "SPDXRef-File-go.mod-3fc5a8d3d86e9790",
+      "fileTypes": [
+        "TEXT"
+      ],
+      "checksums": [
+        {
+          "algorithm": "SHA1",
+          "checksumValue": "c9ab0ca5f973664d6a1fc00a32e2f6a3c7123252"
+        },
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "22c4826ab21f34d74371203a274b5e9bb9200ef4e4d2e0bebb9075e64bd37e9f"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseInfoInFiles": [
+        "NOASSERTION"
+      ],
+      "copyrightText": "NOASSERTION"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-Package-go-module-github.com-google-uuid-b171ea515830f72d",
+      "relatedSpdxElement": "SPDXRef-File-go.mod-3fc5a8d3d86e9790",
+      "relationshipType": "OTHER",
+      "comment": "evident-by: indicates the package's existence is evident by the given file"
+    },
+    {
+      "spdxElementId": "SPDXRef-DocumentRoot-Directory-fx",
+      "relatedSpdxElement": "SPDXRef-Package-go-module-github.com-google-uuid-b171ea515830f72d",
+      "relationshipType": "CONTAINS"
+    },
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relatedSpdxElement": "SPDXRef-DocumentRoot-Directory-fx",
+      "relationshipType": "DESCRIBES"
+    }
+  ]
+}

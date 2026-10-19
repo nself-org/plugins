@@ -1,0 +1,345 @@
+package specs
+
+import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"syscall"
+	"testing"
+
+	"github.com/nself-org/plugins/free/ci/internal/authz"
+)
+
+type tent struct {
+	name, link, body string
+	typ              byte
+	mode             int64
+	size             int64 // overrides len(body) when > 0
+}
+
+// tarGz builds a gzip level 1 tar of ents (the shape Pack writes).
+func tarGz(t testing.TB, ents ...tent) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz, _ := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+	tw := tar.NewWriter(gz)
+	for _, e := range ents {
+		h := &tar.Header{Name: e.name, Linkname: e.link, Typeflag: e.typ, Mode: e.mode}
+		if e.typ == tar.TypeXGlobalHeader {
+			if err := tw.WriteHeader(&tar.Header{Typeflag: e.typ, PAXRecords: map[string]string{"comment": "x"}}); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		if h.Typeflag == 0 {
+			h.Typeflag = tar.TypeReg
+		}
+		if h.Mode == 0 {
+			h.Mode = 0o644
+		}
+		if h.Typeflag == tar.TypeReg {
+			h.Size = int64(len(e.body))
+			if e.size > 0 {
+				h.Size = e.size
+			}
+		}
+		if err := tw.WriteHeader(h); err != nil {
+			t.Fatal(err)
+		}
+		if h.Typeflag == tar.TypeReg {
+			body := []byte(e.body)
+			if int64(len(body)) < h.Size {
+				body = append(body, make([]byte, h.Size-int64(len(body)))...)
+			}
+			if _, err := tw.Write(body); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// unpackTo extracts into the directory dir through a root pinned on its parent.
+func unpackTo(t testing.TB, r io.Reader, dir string, lim authz.Limits, opt UnpackOptions) (UnpackStats, error) {
+	t.Helper()
+	base, err := os.OpenRoot(filepath.Dir(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = base.Close() }()
+	return Unpack(r, base, filepath.Base(dir), lim, opt)
+}
+
+// packFrom packs the directory dir through a root pinned on its parent.
+func packFrom(t testing.TB, dir string, w io.Writer, lim authz.Limits) (PackStats, error) {
+	t.Helper()
+	base, err := os.OpenRoot(filepath.Dir(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = base.Close() }()
+	return Pack(context.Background(), base, filepath.Base(dir), w, lim)
+}
+
+// tree lists every path under dir with its type, mode and content or target.
+func tree(t testing.TB, dir string) []string {
+	t.Helper()
+	var out []string
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || p == dir {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, p)
+		info, _ := d.Info()
+		switch {
+		case d.Type()&fs.ModeSymlink != 0:
+			l, _ := os.Readlink(p)
+			out = append(out, rel+" -> "+l)
+		case d.IsDir():
+			out = append(out, rel+"/")
+		default:
+			b, _ := os.ReadFile(p)
+			out = append(out, rel+" "+info.Mode().Perm().String()+" "+string(b))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func TestPackUnpackRoundTrip(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "src")
+	putFile(t, src+"/a/b/c.txt", "deep")
+	putFile(t, src+"/top.bin", strings.Repeat("0123456789", 5000))
+	putFile(t, src+"/ro/frozen.txt", "readonly")
+	if err := os.Mkdir(src+"/empty", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(src+"/ro/frozen.txt", 0o444); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(src+"/ro", 0o555); err != nil { // a Go module cache holds read-only directories
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = RemoveTree(src) })
+	for _, l := range [][2]string{{"a/b/c.txt", "link-in"}, {"../a/b/c.txt", "a/up"}, {"/etc/passwd", "abs"}, {"../../outside", "escape"}} {
+		if err := os.Symlink(l[0], filepath.Join(src, l[1])); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := syscall.Mkfifo(src+"/fifo", 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	gz, _ := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+	st, err := packFrom(t, src, gz, cacheLimits())
+	if err != nil || gz.Close() != nil {
+		t.Fatalf("Pack: %v", err)
+	}
+	if st.Files != 3 || st.Links != 2 || st.Skipped != 3 {
+		t.Fatalf("stats %+v: want 3 files, 2 in-tree links, and the fifo and both escaping links skipped", st)
+	}
+	dst := filepath.Join(t.TempDir(), "dst")
+	if _, err := unpackTo(t, &buf, dst, cacheLimits(), UnpackOptions{}); err != nil {
+		t.Fatalf("Unpack: %v", err)
+	}
+	t.Cleanup(func() { _ = RemoveTree(dst) })
+	got := tree(t, dst)
+	want := []string{"a/", "a/b/", "a/b/c.txt -rw-r--r-- deep", "a/up -> ../a/b/c.txt", "empty/", "link-in -> a/b/c.txt", "ro/", "ro/frozen.txt -r--r--r-- readonly", "top.bin -rw-r--r-- " + strings.Repeat("0123456789", 5000)}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("restored tree:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if err := RemoveTree(dst); err != nil {
+		t.Fatalf("RemoveTree: %v", err)
+	}
+	if _, err := os.Stat(dst); !os.IsNotExist(err) {
+		t.Fatal("tree survived RemoveTree")
+	}
+}
+
+func TestUnpackRefusesCraftedArchives(t *testing.T) {
+	bomb := tent{name: "zeros.bin", size: 8 << 20}
+	cases := []struct {
+		name   string
+		ents   []tent
+		reason authz.PathReason
+	}{
+		{"parent traversal", []tent{{name: "../x", body: "evil"}}, authz.PathTraversal},
+		{"nested traversal", []tent{{name: "a/../../x", body: "evil"}}, authz.PathTraversal},
+		{"absolute path", []tent{{name: "/tmp/x", body: "evil"}}, authz.PathAbsolute},
+		{"absolute symlink", []tent{{name: "l", typ: tar.TypeSymlink, link: "/etc"}}, authz.LinkAbsolute},
+		{"symlink out", []tent{{name: "l", typ: tar.TypeSymlink, link: "../../out"}}, authz.LinkEscape},
+		{"write through a symlink", []tent{{name: "d", typ: tar.TypeSymlink, link: "."}, {name: "d/x", body: "evil"}}, authz.PathThroughSymlink},
+		{"hardlink out", []tent{{name: "h", typ: tar.TypeLink, link: "../secret"}}, authz.EntryHardlink},
+		{"hardlink in", []tent{{name: "f", body: "x"}, {name: "h", typ: tar.TypeLink, link: "f"}}, authz.EntryHardlink},
+		{"device", []tent{{name: "dev", typ: tar.TypeChar}}, authz.EntryDevice},
+		{"fifo", []tent{{name: "p", typ: tar.TypeFifo}}, authz.EntryFIFO},
+		{"setuid", []tent{{name: "s", body: "x", mode: 0o4755}}, authz.EntrySetID},
+		{"pax global header", []tent{{name: "g", typ: tar.TypeXGlobalHeader}}, authz.EntryIrregular},
+		{"duplicate file", []tent{{name: "f", body: "1"}, {name: "f", body: "2"}}, authz.CollisionDuplicate},
+		{"case collision", []tent{{name: "README", body: "1"}, {name: "readme", body: "2"}}, authz.CollisionFold},
+		{"ratio bomb", []tent{bomb}, authz.SizeRatio},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			parent := t.TempDir()
+			dir := filepath.Join(parent, "dir")
+			before := tree(t, parent)
+			_, err := unpackTo(t, bytes.NewReader(tarGz(t, c.ents...)), dir, cacheLimits(), UnpackOptions{})
+			var pe *authz.PathError
+			if !errors.As(err, &pe) || pe.Reason != c.reason {
+				t.Fatalf("err %v, want reason %s", err, c.reason)
+			}
+			for _, p := range tree(t, parent) {
+				if !strings.HasPrefix(p, "dir") && !contains(before, p) {
+					t.Fatalf("a path outside the attempt dir was written: %s", p)
+				}
+			}
+			if _, err := os.Lstat(filepath.Join(parent, "x")); err == nil {
+				t.Fatal("x escaped")
+			}
+		})
+	}
+}
+
+func TestUnpackBoundsTheDecompressedStream(t *testing.T) {
+	lim := cacheLimits()
+	lim.MaxTotalBytes = 1 << 20
+	body := bytes.Repeat([]byte("ab"), 200<<10) // 400 KiB per file, compresses far below the ratio floor concerns
+	data := tarGz(t, tent{name: "a", body: string(body)}, tent{name: "b", body: string(body)}, tent{name: "c", body: string(body)})
+	_, err := unpackTo(t, bytes.NewReader(data), t.TempDir()+"/d", lim, UnpackOptions{})
+	var pe *authz.PathError
+	if !errors.As(err, &pe) || pe.Reason != authz.SizeTotal {
+		t.Fatalf("err %v", err)
+	}
+	if _, err := unpackTo(t, strings.NewReader("not gzip at all"), t.TempDir()+"/d", cacheLimits(), UnpackOptions{}); err == nil {
+		t.Fatal("a non-gzip stream was accepted")
+	}
+	if _, err := unpackTo(t, bytes.NewReader(tarGz(t, tent{name: "a", body: "x"})[:30]), t.TempDir()+"/d", cacheLimits(), UnpackOptions{}); err == nil {
+		t.Fatal("a truncated archive was accepted")
+	}
+}
+
+func TestUnpackRefusesAnExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	putFile(t, dir+"/f", "mine")
+	if _, err := unpackTo(t, bytes.NewReader(tarGz(t, tent{name: "f", body: "theirs"})), dir, cacheLimits(), UnpackOptions{}); err == nil || getFile(t, dir+"/f") != "mine" {
+		t.Fatalf("an existing file was replaced (err %v)", err)
+	}
+}
+
+func TestPackStopsAtTheLimits(t *testing.T) {
+	src := t.TempDir()
+	putFile(t, src+"/a", "1")
+	putFile(t, src+"/b", "2")
+	lim := cacheLimits()
+	lim.MaxEntries = 1
+	if _, err := packFrom(t, src, io.Discard, lim); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("err %v", err)
+	}
+}
+
+// TestUnpackJudgesTheRatioWhileWriting: a legitimate large file passes wherever it
+// sits in the archive, and a bomb is stopped wherever it sits, per entry and in total.
+func TestUnpackJudgesTheRatioWhileWriting(t *testing.T) {
+	random := func(n int) string {
+		b := make([]byte, n)
+		x := uint32(2463534242)
+		for i := range b {
+			x ^= x << 13
+			x ^= x >> 17
+			x ^= x << 5
+			b[i] = byte(x)
+		}
+		return string(b)
+	}
+	var sb strings.Builder
+	for i := 0; sb.Len() < 3<<20; i++ { // source-like text: unique lines, compresses a few times over
+		fmt.Fprintf(&sb, "func f%d(x int) int { return x*%d + %d } // line %d\n", i, i%97, i%13, i)
+	}
+	text := sb.String()
+	ok := tarGz(t, tent{name: "a.txt", body: "first"}, tent{name: "big.a", body: random(5 << 20)}, tent{name: "src.go", body: text}, tent{name: "z.txt", body: "last"})
+	dir := t.TempDir() + "/d"
+	if st, err := unpackTo(t, bytes.NewReader(ok), dir, cacheLimits(), UnpackOptions{}); err != nil || st.Files != 4 || st.Bytes < 8<<20 {
+		t.Fatalf("a legitimate archive with large files: %+v %v", st, err)
+	}
+	var many []tent
+	for i := 0; i < 30; i++ {
+		many = append(many, tent{name: "z" + string(rune('a'+i%26)) + string(rune('a'+i/26)), size: 1 << 20}) // each at the ratio floor, 30 MiB in all
+	}
+	// a file that starts with a long run of zeros is judged on its whole, not on its prefix
+	mixed := tarGz(t, tent{name: "zeros-then-data.bin", body: strings.Repeat("\x00", 16<<20) + random(16<<20)})
+	if st, err := unpackTo(t, bytes.NewReader(mixed), t.TempDir()+"/d", cacheLimits(), UnpackOptions{}); err != nil || st.Bytes != 32<<20 {
+		t.Fatalf("a legitimate file with a compressible prefix: %+v %v", st, err)
+	}
+	for name, ents := range map[string][]tent{
+		"bomb after normal files": {{name: "a", body: "x"}, {name: "n.bin", body: random(1 << 20)}, {name: "bomb", size: 16 << 20}},
+		"six MiB of zeros":        {{name: "z.bin", size: 6 << 20}},
+		"many floor-sized zeros":  many,
+	} {
+		_, err := unpackTo(t, bytes.NewReader(tarGz(t, ents...)), t.TempDir()+"/d", cacheLimits(), UnpackOptions{})
+		var pe *authz.PathError
+		if !errors.As(err, &pe) || pe.Reason != authz.SizeRatio {
+			t.Errorf("%s: err %v", name, err)
+		}
+	}
+}
+
+func TestBombGuardStopsAStreamingBombEarly(t *testing.T) {
+	cr := &countReader{n: 1000}
+	g := &bombGuard{cr: cr, lim: effective(cacheLimits())}
+	e := g.entry(zeroReader{}, "huge")
+	buf := make([]byte, 1<<20)
+	var got int64
+	for {
+		n, err := e.Read(buf)
+		got += int64(n)
+		if err != nil {
+			var pe *authz.PathError
+			if !errors.As(err, &pe) || pe.Reason != authz.SizeRatio {
+				t.Fatalf("err %v", err)
+			}
+			break
+		}
+		if got > 4*streamFloor {
+			t.Fatal("the streaming guard never stopped the bomb")
+		}
+	}
+	if got > streamFloor+(2<<20) {
+		t.Fatalf("wrote %d bytes before stopping, want about streamFloor", got)
+	}
+}
+
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) { clear(p); return len(p), nil }
+
+func TestUnpackOtherReadOpensImplicitParents(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "m")
+	if _, err := unpackTo(t, bytes.NewReader(tarGz(t, tent{name: "d/e/f.txt", body: "x"})), dir, cacheLimits(), UnpackOptions{OtherRead: true}); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{dir, dir + "/d", dir + "/d/e"} {
+		if info, err := os.Stat(p); err != nil || info.Mode().Perm() != 0o755 {
+			t.Errorf("%s: %v %v", p, info, err)
+		}
+	}
+}

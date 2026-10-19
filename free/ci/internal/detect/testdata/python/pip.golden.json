@@ -1,0 +1,40 @@
+[
+  {
+    "kind": "lint_tool",
+    "name": "ruff",
+    "path": "ruff.toml",
+    "confidence": "certain"
+  },
+  {
+    "kind": "lockfile",
+    "name": "pip",
+    "path": "requirements-dev.txt",
+    "confidence": "certain",
+    "sha256": "69075054c6d3bf5e0104bbc5d72895f380f050216a76ee8978dc4fbfd62f95e8"
+  },
+  {
+    "kind": "lockfile",
+    "name": "pip",
+    "path": "requirements.txt",
+    "confidence": "certain",
+    "sha256": "e5d9943702bb51c0b13a5891bf396d41a5b0d269f583ad57534e5021a32af50d"
+  },
+  {
+    "kind": "package_manager",
+    "name": "pip",
+    "path": "requirements.txt",
+    "confidence": "certain"
+  },
+  {
+    "kind": "stack",
+    "name": "python",
+    "path": "requirements.txt",
+    "confidence": "certain"
+  },
+  {
+    "kind": "test_framework",
+    "name": "pytest",
+    "path": "tests/test_app.py",
+    "confidence": "certain"
+  }
+]

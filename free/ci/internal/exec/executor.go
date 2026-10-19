@@ -3,7 +3,6 @@ package exec
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,6 +38,9 @@ type JobSpec struct {
 	// started, so a path swapped by the job cannot redirect it. An error ends
 	// the attempt as failed, class infra, with that error.
 	AfterJob func(ctx context.Context, workspace *os.Root) error
+	// Env, when an Isolator sets it, replaces the executor's EnvPolicy for this job (ad-hoc jobs
+	// get a minimal environment, P7-CI-52); job-declared env and secrets are still added after it.
+	Env EnvPolicy
 }
 
 // AttemptResult is the local outcome before durable store finalization.
@@ -178,7 +180,11 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 			return
 		}
 	}
-	env, err := e.Env.Environment(ctx, s.Job)
+	policy := e.Env
+	if s.Env != nil {
+		policy = s.Env
+	}
+	env, err := policy.Environment(ctx, s.Job)
 	if err != nil {
 		result.Err = err
 		return
@@ -226,52 +232,4 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		result.Attempt.State = "passed"
 	}
 	return
-}
-
-func copyTree(source, dest string) error {
-	root, err := filepath.Abs(source)
-	if err != nil {
-		return err
-	}
-	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return nil
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("symlink in job source: %s", rel)
-		}
-		target := filepath.Join(dest, rel)
-		if info.IsDir() {
-			return os.Mkdir(target, 0700)
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("special file in job source: %s", rel)
-		}
-		in, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, info.Mode().Perm()&0700)
-		if err != nil {
-			_ = in.Close()
-			return err
-		}
-		_, err = out.ReadFrom(in)
-		inputCloseErr := in.Close()
-		closeErr := out.Close()
-		if err != nil {
-			return err
-		}
-		if inputCloseErr != nil {
-			return inputCloseErr
-		}
-		return closeErr
-	})
 }

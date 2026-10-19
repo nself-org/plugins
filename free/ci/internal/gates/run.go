@@ -25,11 +25,8 @@ type Runner struct {
 // Run records a check result. Required missing tools fail closed with E614.
 func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.PipelineConfig) model.Check {
 	d := p.Def
-	c := model.Check{ID: d.ID, JobID: d.ID, Kind: d.Kind, Tool: d.Tool, Required: p.Required, Substantive: d.Substantive}
-	argv := append([]string(nil), d.Argv...)
-	for i, a := range argv {
-		argv[i] = strings.ReplaceAll(a, "{target}", p.Target)
-	}
+	c := model.Check{ID: d.ID, JobID: d.ID, Kind: d.Kind, Tool: p.ToolName(), Required: p.Required, Substantive: d.Substantive}
+	argv := p.Command()
 	if strings.HasPrefix(d.ID, "node.") {
 		var reason string
 		argv, reason = nodeCommand(root, p, cfg)
@@ -49,7 +46,7 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 		if !available(argv[0]) {
 			return unavailable(c, d.Remediation)
 		}
-	} else if !available(d.Tool) {
+	} else if !available(p.ToolName()) {
 		return unavailable(c, d.Remediation)
 	}
 	probeTool := c.Tool
@@ -71,10 +68,14 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 		}
 	}
 	probe := d.VersionProbe
-	if strings.HasPrefix(d.ID, "node.") {
+	if strings.HasPrefix(d.ID, "node.") || p.Tool != "" {
 		probe = []string{probeTool, "--version"}
 	}
 	version := r.invoke(ctx, root, probe, ".", 30*time.Second)
+	if d.ID == "xcode-test" && (version.err != nil || version.exit != 0) {
+		// The Command Line Tools ship an xcodebuild stub that exits non-zero without Xcode.
+		return unavailable(c, d.Remediation)
+	}
 	if version.err == nil && version.exit == 0 {
 		v := strings.TrimSpace(version.output)
 		if len(v) > 120 {
@@ -98,6 +99,10 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 		c.FailureClass = "infra"
 		c.Excerpt = res.err.Error()
 		return c
+	}
+	if d.ID == "python-test" && res.exit != 0 && pytestMissing(res.output) {
+		c.Tool = "pytest"
+		return unavailable(c, "Add pytest to the project's dependencies")
 	}
 	if advisoryOffline(d.ID, res.output, res.exit) {
 		if !p.Required {

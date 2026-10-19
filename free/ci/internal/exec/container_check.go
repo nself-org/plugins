@@ -166,7 +166,8 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 }
 
 // checkMount allows exactly one bind of the attempt workspace onto /repo: the keys are
-// type, src and dst (no alias such as source or target, no duplicate, nothing else).
+// type, src and dst, plus an optional readonly=true that only narrows the job's access (no
+// alias such as source or target, no duplicate, nothing else).
 func checkMount(spec, workspace string) error {
 	bad := func(why string) error { return coded("E613", "planned container refused: "+why) }
 	fields := map[string]string{}
@@ -180,7 +181,15 @@ func checkMount(spec, workspace string) error {
 		}
 		fields[k] = v
 	}
-	if len(fields) != 3 || fields["type"] != "bind" || fields["src"] != workspace || fields["dst"] != "/repo" {
+	ro, hasRO := fields["readonly"]
+	if hasRO && ro != "true" {
+		return bad("mount readonly must be true")
+	}
+	want := 3
+	if hasRO {
+		want = 4
+	}
+	if len(fields) != want || fields["type"] != "bind" || fields["src"] != workspace || fields["dst"] != "/repo" {
 		return bad("mount is not the job root bound at /repo")
 	}
 	return nil
