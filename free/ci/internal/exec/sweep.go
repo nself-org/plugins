@@ -97,10 +97,10 @@ func (e *Executor) sweepContainers(ctx context.Context, current string) error {
 	if _, err := osexec.LookPath("docker"); err != nil {
 		return nil
 	}
-	if osexec.CommandContext(ctx, "docker", "info").Run() != nil {
+	if _, err := RuntimeQuery(ctx, "docker", "info"); err != nil { // the shared probe: hygiene and the isolation facts ask the same question
 		return nil
 	}
-	out, err := osexec.CommandContext(ctx, "docker", "ps", "-a", "--filter", "label=nself.ci.coordinator", "--filter", "label=nself.ci.attempt", "--format", "{{.ID}} {{.Label \"nself.ci.coordinator\"}}").Output()
+	out, err := RuntimeQuery(ctx, "docker", "ps", "-a", "--filter", "label=nself.ci.coordinator", "--filter", "label=nself.ci.attempt", "--format", "{{.ID}} {{.Label \"nself.ci.coordinator\"}}")
 	if err != nil {
 		return coded("E613", "docker orphan listing failed")
 	}

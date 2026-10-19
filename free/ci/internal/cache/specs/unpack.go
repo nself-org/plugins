@@ -1,6 +1,6 @@
 package specs
 
-// Purpose: restore one spec blob (tar + gzip) into its directory (Epic CACHE
+// Purpose: restore one spec blob (plain tar, or tar + gzip) into its directory (Epic CACHE
 // D5, R-SEC-29). Every header goes through authz.Extractor before anything is
 // written, and every write goes through an os.Root pinned on the directory.
 // Inputs:  the blob reader, the destination directory, the sanitiser limits.
@@ -54,7 +54,7 @@ type UnpackOptions struct {
 	OtherRead bool
 }
 
-// Unpack extracts the tar+gzip stream r into the directory rel of base
+// Unpack extracts the tar stream (plain or gzip) r into the directory rel of base
 // (created 0700 if missing).
 func Unpack(r io.Reader, base *os.Root, rel string, lim authz.Limits, opt UnpackOptions) (UnpackStats, error) {
 	var st UnpackStats
