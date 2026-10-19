@@ -34,12 +34,17 @@ func isGitHub(provider string) bool {
 	return !schedpolicy.PaidAllowed(anyPaid, strings.ToLower(strings.TrimSpace(provider)))
 }
 
+// normProvider is the form a provider id is looked up in: policy ids are lower case with no
+// spaces, and a runner that spells its provider otherwise must not slip past the rate table.
+func normProvider(provider string) string { return strings.ToLower(strings.TrimSpace(provider)) }
+
 func isPaid(class string) bool { return class == ClassMetered || class == ClassEphemeral }
 
 // classOf is the class a runner is priced as. The owner's rate table beats the
 // runner's own claim: a provider with a declared rate has the declared class
 // whatever class its capability says, so a runner cannot call itself free.
 func classOf(p Policy, runnerClass, provider string) string {
+	provider = normProvider(provider)
 	if isGitHub(provider) {
 		return ClassIncluded
 	}
@@ -59,6 +64,7 @@ func classOf(p Policy, runnerClass, provider string) string {
 // CostFor is the sched.Cost of a runner. The scheduler prices with the rate per
 // DivMs milliseconds, so an hourly or per-minute rate keeps its precision.
 func CostFor(p Policy, runnerClass, provider string) sched.Cost {
+	provider = normProvider(provider)
 	class := classOf(p, runnerClass, provider)
 	c := sched.Cost{Class: class, Confidence: "computed", OwnerCoordinator: p.OwnerCoordinator[provider]}
 	if class == ClassLocal || class == ClassOwned {

@@ -31,6 +31,7 @@ type Resource struct {
 
 // ReserveResource holds the lifetime bound of r against every budget in t's transaction.
 func ReserveResource(ctx context.Context, t store.LedgerTx, r Resource) error {
+	r.Provider = normProvider(r.Provider)
 	if r.Intent == "" || r.Provider == "" {
 		return refuse(model.CostUnbounded, "a resource needs an intent and a provider")
 	}

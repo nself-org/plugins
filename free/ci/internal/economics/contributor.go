@@ -70,7 +70,7 @@ func contributeCosts(ctx context.Context, w *sched.World) error {
 	for _, r := range allRunners(w) {
 		c := CostFor(p, r.Class, r.Provider)
 		if isPaid(c.Class) && c.OwnerCoordinator == "" {
-			c.OwnerCoordinator = owners[r.Provider]
+			c.OwnerCoordinator = owners[normProvider(r.Provider)]
 		}
 		costs[r.ID] = c
 	}
@@ -95,11 +95,11 @@ func contributeAllowances(ctx context.Context, w *sched.World) error {
 		if _, done := out[r.Provider]; done || classOf(p, r.Class, r.Provider) != ClassIncluded {
 			continue
 		}
-		in, err := env.Store.Allowance(ctx, r.Provider, month)
+		in, err := env.Store.Allowance(ctx, normProvider(r.Provider), month)
 		if err != nil {
 			return nil
 		}
-		out[r.Provider] = AllowanceOf(p, r.Provider, in).ToSched(p.MarginMicro)
+		out[r.Provider] = AllowanceOf(p, normProvider(r.Provider), in).ToSched(p.MarginMicro)
 	}
 	if len(out) > 0 {
 		w.Allowances = out

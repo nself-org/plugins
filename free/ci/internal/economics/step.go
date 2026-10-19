@@ -61,11 +61,12 @@ func step(ctx context.Context, v dispatch.View) error {
 }
 
 func admit(ctx context.Context, env Env, v dispatch.View) error {
+	v.Request.Runner.Provider = normProvider(v.Request.Runner.Provider)
 	r := v.Request
 	t := v.Ledger(ctx)
 	p, err := env.policy(ctx) // from memory; a failure fails the admission closed, except for work on this machine
 	if err != nil {
-		if !r.Local || (r.Runner.Class != ClassLocal && r.Runner.Class != ClassOwned) || isGitHub(r.Runner.Provider) {
+		if !r.Local || (r.Runner.Class != ClassLocal && r.Runner.Class != ClassOwned) || !isThisMachine(r.Runner.Provider) {
 			return err
 		}
 		// A placement on this machine that calls itself free cannot be a paid provider's runner:
@@ -194,6 +195,17 @@ func includedCheck(t store.LedgerTx, p Policy, v dispatch.View, month string, ro
 	}
 	row.EstMs, row.EstMicro, row.Rate = q.BilledMs, worst, q.Snap
 	return nil
+}
+
+// isThisMachine reports whether provider names the local runner ("local" is the capability
+// enum value; "operator" and "" are how the local runner has been declared). Any other
+// provider id may be a paid account, whatever class its runner claims.
+func isThisMachine(provider string) bool {
+	switch provider {
+	case "", "local", "operator":
+		return true
+	}
+	return false
 }
 
 // IntentLabelPrefix starts the runner label that names the burst intent a VM runner

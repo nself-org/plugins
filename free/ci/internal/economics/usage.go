@@ -22,9 +22,11 @@ import (
 // (YYYY-MM-DD); Key makes the write idempotent (account, date, sku, repo).
 type Usage struct {
 	Key, Provider, Date string
-	Minutes, CostMicro  int64
-	BalanceMicro        *int64
-	ReportedAt          time.Time
+	// Series names the stream (a sku) the line belongs to; empty when the provider has one.
+	Series             string
+	Minutes, CostMicro int64
+	BalanceMicro       *int64
+	ReportedAt         time.Time
 }
 
 // RecordUsage stores a provider-reported line with confidence `known`.
@@ -45,7 +47,7 @@ func RecordUsage(ctx context.Context, u Usage) error {
 	if at.IsZero() || at.After(env.Now()) { // a report is never made in the future
 		at = env.Now()
 	}
-	return env.Store.PutUsage(ctx, store.UsageRow{Key: u.Key, Provider: u.Provider, Period: day.Format("2006-01"), Day: u.Date, Minutes: u.Minutes,
+	return env.Store.PutUsage(ctx, store.UsageRow{Key: u.Key, Provider: u.Provider, Period: day.Format("2006-01"), Day: u.Date, Series: u.Series, Minutes: u.Minutes,
 		CostMicro: u.CostMicro, BalanceMicro: u.BalanceMicro, ReportedAt: at.UnixNano()})
 }
 

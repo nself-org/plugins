@@ -277,5 +277,34 @@ func (s *Store) LedgerMonth(ctx context.Context, month string) (map[string]Month
 		}
 		out[provider] = m
 	}
-	return out, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	// A burst VM is money too, held in resource_ledger rather than as an attempt's estimate.
+	vms, err := s.readers.QueryContext(ctx, "SELECT provider,reserved_micro,actual_micro,confirmed_teardown_at FROM resource_ledger WHERE substr(window_day,1,7)=? ORDER BY provider,intent", month)
+	if err != nil {
+		return nil, coded("E607", err.Error())
+	}
+	defer func() { _ = vms.Close() }()
+	for vms.Next() {
+		var provider string
+		var reservedMicro int64
+		var act, done sql.NullInt64
+		if err = vms.Scan(&provider, &reservedMicro, &act, &done); err != nil {
+			return nil, coded("E607", err.Error())
+		}
+		m, seen := out[provider]
+		if !seen {
+			m.AllComputed = true
+		}
+		m.Attempts++
+		if done.Valid {
+			m.Settled++
+			m.ActualMicro, _ = satAdd(m.ActualMicro, act.Int64)
+		} else {
+			m.PendingMicro, _ = satAdd(m.PendingMicro, reservedMicro)
+		}
+		out[provider] = m
+	}
+	return out, vms.Err()
 }

@@ -125,17 +125,19 @@ func (s *Store) ProviderOwners(ctx context.Context) (map[string]string, error) {
 // UsageRow is a figure a provider reported (P7-HOST-10's importer); it is the
 // only `known` figure. Key makes the write idempotent (account, date, sku, repo).
 type UsageRow struct {
-	Key, Provider, Period, Day string
-	Minutes, CostMicro         int64
-	BalanceMicro               *int64
-	ReportedAt                 int64
+	// Series names the stream a line belongs to (a sku): streams lag by different amounts, so
+	// the local ledger is counted from the oldest stream's newest day.
+	Key, Provider, Period, Day, Series string
+	Minutes, CostMicro                 int64
+	BalanceMicro                       *int64
+	ReportedAt                         int64
 }
 
 // PutUsage stores or replaces a provider usage row.
 func (s *Store) PutUsage(ctx context.Context, u UsageRow) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO ledger_usage(key,provider,period,day,minutes,cost_micro,balance_micro,reported_at) VALUES (?,?,?,?,?,?,?,?)",
-			u.Key, u.Provider, u.Period, u.Day, u.Minutes, u.CostMicro, u.BalanceMicro, u.ReportedAt)
+		_, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO ledger_usage(key,provider,period,day,series,minutes,cost_micro,balance_micro,reported_at) VALUES (?,?,?,?,?,?,?,?,?)",
+			u.Key, u.Provider, u.Period, u.Day, u.Series, u.Minutes, u.CostMicro, u.BalanceMicro, u.ReportedAt)
 		return err
 	})
 }
@@ -163,24 +165,24 @@ func (t LedgerTx) Allowance(provider, month string) (AllowanceInputs, error) {
 
 func allowance(ctx context.Context, q ledgerQuerier, provider, month string) (AllowanceInputs, error) {
 	var a AllowanceInputs
-	rows, err := q.QueryContext(ctx, "SELECT cost_micro,balance_micro,day,reported_at FROM ledger_usage WHERE provider=? AND period=? ORDER BY reported_at,key", provider, month)
+	rows, err := q.QueryContext(ctx, "SELECT cost_micro,balance_micro,day,series,reported_at FROM ledger_usage WHERE provider=? AND period=? ORDER BY reported_at,key", provider, month)
 	if err != nil {
 		return a, err
 	}
-	var newestDay string
+	newestBySeries := map[string]string{}
 	var newestReport int64
 	for rows.Next() {
 		var cost, reportedAt int64
 		var bal sql.NullInt64
-		var day string
-		if err = rows.Scan(&cost, &bal, &day, &reportedAt); err != nil {
+		var day, series string
+		if err = rows.Scan(&cost, &bal, &day, &series, &reportedAt); err != nil {
 			_ = rows.Close()
 			return a, err
 		}
 		newestReport = max(newestReport, reportedAt)
 		a.HasImport = true
 		a.Imported, _ = satAdd(a.Imported, cost)
-		newestDay = max(newestDay, day)
+		newestBySeries[series] = max(newestBySeries[series], day)
 		if bal.Valid {
 			v := bal.Int64
 			a.Balance = &v
@@ -193,6 +195,12 @@ func allowance(ctx context.Context, q ledgerQuerier, provider, month string) (Al
 	// day the import covers, and never from a day later than the day before the newest
 	// report was made (a row dated in the future must not make local spend disappear): a
 	// little overlap over-counts, a gap would not.
+	newestDay := ""
+	for _, d := range newestBySeries {
+		if newestDay == "" || d < newestDay {
+			newestDay = d // the stream that lags most decides
+		}
+	}
 	if newestReport > 0 {
 		newestDay = min(newestDay, time.Unix(0, newestReport).UTC().AddDate(0, 0, -1).Format("2006-01-02"))
 	}

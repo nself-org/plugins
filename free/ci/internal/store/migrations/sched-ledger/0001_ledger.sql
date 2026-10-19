@@ -13,7 +13,7 @@ CREATE TABLE resource_ledger (intent TEXT PRIMARY KEY, provider TEXT NOT NULL, p
 CREATE TABLE reservation (owner TEXT NOT NULL, scope TEXT NOT NULL, scope_key TEXT NOT NULL, window_key TEXT NOT NULL, micro INTEGER NOT NULL, actual_micro INTEGER, settled INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (owner, scope));
 CREATE INDEX reservation_scope ON reservation(scope, scope_key, window_key);
 CREATE TABLE window_high (kind TEXT PRIMARY KEY, key TEXT NOT NULL);
-CREATE TABLE ledger_usage (key TEXT PRIMARY KEY, provider TEXT NOT NULL, period TEXT NOT NULL, day TEXT NOT NULL, minutes INTEGER NOT NULL, cost_micro INTEGER NOT NULL, balance_micro INTEGER, reported_at INTEGER NOT NULL);
+CREATE TABLE ledger_usage (key TEXT PRIMARY KEY, provider TEXT NOT NULL, period TEXT NOT NULL, day TEXT NOT NULL, series TEXT NOT NULL, minutes INTEGER NOT NULL, cost_micro INTEGER NOT NULL, balance_micro INTEGER, reported_at INTEGER NOT NULL);
 CREATE INDEX ledger_usage_provider ON ledger_usage(provider, period);
 CREATE TABLE approval (run TEXT PRIMARY KEY, sha TEXT NOT NULL, config_digest TEXT NOT NULL, estimate_micro INTEGER NOT NULL, actor TEXT NOT NULL, ts INTEGER NOT NULL);
 CREATE TABLE approval_pending (run TEXT PRIMARY KEY, estimate_micro INTEGER NOT NULL, ts INTEGER NOT NULL);
