@@ -129,7 +129,10 @@ func Reproduce(ctx context.Context, env Env, req Request) (res Result, err error
 	if r, class, ok := OutcomeOf(out.Evidence, src.JobID); ok {
 		again.Result, again.FailureClass = r, class
 	}
-	again.EvidenceID = env.evidenceID(ctx, out.RunID)
+	again.AttemptID, again.EvidenceID = env.evidenceOf(ctx, out.RunID, src.JobID)
+	if again.EvidenceID == "" {
+		res.Report.Warnings = append(res.Report.Warnings, "the evidence of the re-run could not be read; the link has no id for it")
+	}
 	link := Link{Schema: LinkSchema, At: env.now().UTC().Format(time.RFC3339), Job: src.JobID, Revision: src.Doc.Revision,
 		Original: src.Original, Reproduction: again, Drift: res.Report.Drift, Warnings: res.Report.Warnings,
 		Reproduced: again.Result == src.Original.Result && again.FailureClass == src.Original.FailureClass}
@@ -157,18 +160,23 @@ func (e Env) now() time.Time {
 	return time.Now()
 }
 
-// evidenceID is the id of the newest run-level document of runID, "" when unknown.
-func (e Env) evidenceID(ctx context.Context, runID string) string {
+// evidenceOf returns the attempt id and evidence id of the re-run, the same
+// kind of record Locate links as the original: the newest attempt document of
+// the job when one exists, else the run-level document. "" when unknown.
+func (e Env) evidenceOf(ctx context.Context, runID, jobID string) (attemptID, evidenceID string) {
 	if e.Store == nil || runID == "" {
-		return ""
+		return "", ""
 	}
 	row, ok, err := e.Store.PipelineByID(ctx, runID)
 	if err != nil || !ok {
-		return ""
+		return "", ""
+	}
+	if att, found, err := newestAttempt(ctx, e.Store, row, jobID); err == nil && found {
+		return att.Evidence.Attempt.ID, att.ID
 	}
 	docs, err := evidence.ForRun(ctx, e.Store, row)
 	if err != nil || len(docs) == 0 {
-		return ""
+		return "", ""
 	}
-	return docs[0].ID
+	return "", docs[0].ID
 }

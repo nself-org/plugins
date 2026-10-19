@@ -60,11 +60,14 @@ func outcomeOfChecks(checks []model.Check) (string, model.FailureClass, bool) {
 	for _, c := range checks {
 		switch c.Result {
 		case "fail", "error":
-			if result != "fail" { // a failed check outranks an errored one
-				result = string(c.Result)
-			}
-			if class == "" {
+			// A failed check outranks an errored one, and the class comes from
+			// the check that decided the result (the first of its kind).
+			switch {
+			case result == "fail" && c.Result == "fail" && class == "",
+				result == "error" && c.Result == "error" && class == "":
 				class = c.FailureClass
+			case result != "fail" && (result != "error" || c.Result == "fail"):
+				result, class = string(c.Result), c.FailureClass
 			}
 		case "pass":
 			if result == "skip" {

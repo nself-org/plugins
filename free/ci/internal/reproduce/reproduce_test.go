@@ -180,8 +180,15 @@ func TestOutcomeOf(t *testing.T) {
 		{JobID: "b", Result: "error", FailureClass: "infra"},
 		{JobID: "b", Result: "fail", FailureClass: "code"},
 	}}
-	if r, c, ok := OutcomeOf(ev, "b"); !ok || r != "fail" || c != "infra" {
+	if r, c, ok := OutcomeOf(ev, "b"); !ok || r != "fail" || c != "code" {
 		t.Errorf("b = %q %q %v", r, c, ok)
+	}
+	rev := model.Evidence{Checks: []model.Check{
+		{JobID: "d", Result: "fail", FailureClass: "code"},
+		{JobID: "d", Result: "error", FailureClass: "infra"},
+	}}
+	if r, c, _ := OutcomeOf(rev, "d"); r != "fail" || c != "code" {
+		t.Errorf("a later errored check must not change the failed one: %q %q", r, c)
 	}
 	if r, _, ok := OutcomeOf(ev, "a"); !ok || r != "pass" {
 		t.Errorf("a = %q %v", r, ok)
