@@ -13,6 +13,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/detect"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 // These tests change process-wide hook state, so none of them runs in parallel.
@@ -305,7 +306,7 @@ func TestCacheHookNeverEvictsALiveAttempt(t *testing.T) {
 	p := store.PipelineRow{ID: "pl1", Revision: "rev", Project: r.C.Opts.Root, Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
 	for i, e := range []error{st.CreatePipeline(ctx, p), st.CreateJob(ctx, store.JobRow{ID: "jl1", PipelineID: "pl1", Name: "b", Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}),
 		st.CreateAttempt(ctx, store.AttemptRow{ID: "live1", JobID: "jl1", N: 1}, ""),
-		st.Transition(ctx, "live1", "queued", "leased", store.TransitionDetail{Epoch: 0}), st.Transition(ctx, "live1", "leased", "running", store.TransitionDetail{Epoch: 1})} {
+		storetest.Admit(ctx, st, "live1"), st.Transition(ctx, "live1", "leased", "running", store.TransitionDetail{Epoch: 1})} {
 		if e != nil {
 			t.Fatalf("step %d: %v", i, e)
 		}
@@ -373,7 +374,7 @@ func TestCacheHookEvictionRetractsACancelledAttemptsEntry(t *testing.T) {
 	for _, id := range []string{"canc1", "pass1"} {
 		steps = append(steps, st.CreateJob(ctx, store.JobRow{ID: "j" + id, PipelineID: "plc", Name: id, Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}),
 			st.CreateAttempt(ctx, store.AttemptRow{ID: id, JobID: "j" + id, N: 1}, ""),
-			st.Transition(ctx, id, "queued", "leased", store.TransitionDetail{Epoch: 0}), st.Transition(ctx, id, "leased", "running", store.TransitionDetail{Epoch: 1}),
+			storetest.Admit(ctx, st, id), st.Transition(ctx, id, "leased", "running", store.TransitionDetail{Epoch: 1}),
 			st.Transition(ctx, id, "running", "finalizing", store.TransitionDetail{Epoch: 2}))
 	}
 	steps = append(steps, st.Transition(ctx, "canc1", "finalizing", "cancelled", store.TransitionDetail{Epoch: 3, FailureClass: "cancelled"}),

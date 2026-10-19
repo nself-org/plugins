@@ -13,6 +13,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 // artRig is newRig with a floor the test volume always clears. These tests
@@ -318,13 +319,11 @@ func TestArtifactsHookStaleCallbackIsFenced(t *testing.T) {
 	if err := st.CreateAttempt(ctx, store.AttemptRow{ID: "stale", JobID: "jstale", N: 1}, ""); err != nil {
 		t.Fatal(err)
 	}
-	for _, s := range []struct {
-		from, to model.JobState
-		epoch    int64
-	}{{"queued", "leased", 0}, {"leased", "running", 1}} {
-		if err := st.Transition(ctx, "stale", s.from, s.to, store.TransitionDetail{Epoch: s.epoch}); err != nil {
-			t.Fatal(err)
-		}
+	if err := storetest.Admit(ctx, st, "stale"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Transition(ctx, "stale", "leased", "running", store.TransitionDetail{Epoch: 1}); err != nil {
+		t.Fatal(err)
 	}
 	job := model.Job{Artifacts: []model.ArtifactDecl{{Path: "out.txt"}}}
 	old := AttemptInfo{AttemptID: "stale", JobName: "stale", Job: job, Store: st, Home: r.Home, Epoch: 2}
@@ -338,7 +337,13 @@ func TestArtifactsHookStaleCallbackIsFenced(t *testing.T) {
 	}{{"running", "lost", 2}, {"lost", "retryable", 3}, {"retryable", "queued", 4}, {"queued", "leased", 5}, {"leased", "running", 6}} {
 		d := store.TransitionDetail{Epoch: s.epoch}
 		d.Operator = s.from == "lost" || s.from == "retryable"
-		if err := st.Transition(ctx, "stale", s.from, s.to, d); err != nil {
+		var err error
+		if s.to == "leased" {
+			err = storetest.Admit(ctx, st, "stale") // a bare queued -> leased is refused
+		} else {
+			err = st.Transition(ctx, "stale", s.from, s.to, d)
+		}
+		if err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/detect"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 const fakeSecret = "fake-registered-value-0123456789abcdef"
@@ -71,7 +72,7 @@ func (e *env) running(id string, f entries.Facts) {
 		s.CreatePipeline(ctx, store.PipelineRow{ID: "p" + id, Revision: "rev", Project: f.Project, Trigger: "local", SourceTrust: f.Trust, PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}),
 		s.CreateJob(ctx, store.JobRow{ID: "j" + id, PipelineID: "p" + id, Name: id, Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}),
 		s.CreateAttempt(ctx, store.AttemptRow{ID: id, JobID: "j" + id, N: 1}, ""),
-		s.Transition(ctx, id, "queued", "leased", store.TransitionDetail{Epoch: 0}),
+		storetest.Admit(ctx, s, id),
 		s.Transition(ctx, id, "leased", "running", store.TransitionDetail{Epoch: 1}),
 	} {
 		if err != nil {
