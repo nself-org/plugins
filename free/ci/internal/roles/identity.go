@@ -50,7 +50,7 @@ func (s *Service) ActorFromPeer(ctx context.Context, cert *x509.Certificate) (Ac
 	if !ok {
 		return Actor{}, fail(ReasonNoGrant, "user %s holds no role", id)
 	}
-	return Actor{id: id, kind: KindUser, role: Role(g.Role), projects: g.Projects, serial: serial, svc: s}, nil
+	return Actor{id: id, kind: KindUser, role: Role(g.Role), projects: g.Projects, serial: serial, notAfter: cert.NotAfter, svc: s}, nil
 }
 
 // ActorFromToken maps a scoped token to its actor.

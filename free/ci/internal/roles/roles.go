@@ -40,7 +40,8 @@ type Actor struct {
 	role     Role
 	projects []string
 	tokenID  string
-	serial   string // hex certificate serial of a user-certificate actor
+	serial   string    // hex certificate serial of a user-certificate actor
+	notAfter time.Time // end of that certificate's validity
 	svc      *Service
 }
 

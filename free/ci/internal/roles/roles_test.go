@@ -645,3 +645,49 @@ func TestAuthorizeProjectIsQuotedInTheRow(t *testing.T) {
 		t.Fatalf("the project is quoted so it cannot forge a field: %s", d)
 	}
 }
+
+func TestAuthorizeMutationsRefreshTheActor(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	tok, row, _ := r.svc.IssueToken(ctx, r.op(), Request{Principal: "tina", Role: Admin, Projects: []string{AllProjects}})
+	a, err := r.svc.ActorFromToken(ctx, tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = r.svc.Grant(ctx, a, Request{Principal: "x1", Role: Member, Projects: []string{"p"}}); err != nil {
+		t.Fatalf("an admin token may grant: %v", err)
+	}
+	if _, err = r.svc.RevokeToken(ctx, r.op(), row.ID); err != nil {
+		t.Fatal(err)
+	}
+	if ReasonOf(r.svc.Grant(ctx, a, Request{Principal: "x2", Role: Member, Projects: []string{"p"}})) != ReasonTokenRevoked {
+		t.Fatal("a revoked token must not administer through a resolved actor")
+	}
+	if _, _, err = r.svc.IssueToken(ctx, a, Request{Principal: "x2", Role: Member, Projects: []string{"p"}}); ReasonOf(err) != ReasonTokenRevoked {
+		t.Fatal("nor issue tokens")
+	}
+	if _, err = r.svc.List(ctx, a); ReasonOf(err) != ReasonTokenRevoked {
+		t.Fatal("nor list")
+	}
+	if _, err = r.svc.Tokens(ctx, Actor{}); ReasonOf(err) != ReasonNoActor {
+		t.Fatal("the zero actor lists nothing")
+	}
+}
+
+func TestAuthorizeEndsWithTheCertificate(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	cert, _ := userCert(t, r, "cora")
+	r.grant("cora", Admin, AllProjects)
+	a, err := r.svc.ActorFromPeer(ctx, cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Authorize(ctx, a, Admin, ""); err != nil {
+		t.Fatal(err)
+	}
+	r.now = cert.NotAfter.Add(time.Second)
+	if ReasonOf(Authorize(ctx, a, Member, "")) != ReasonBadCert {
+		t.Fatal("a resolved user actor must not outlive its certificate")
+	}
+}

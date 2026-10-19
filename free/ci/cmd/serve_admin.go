@@ -106,7 +106,8 @@ func adminFail(env adminEnv, command string, asJSON bool, err error) int {
 // terminal escapes in the text output.
 func plainText(s string) string {
 	return strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f {
+		// C0 and C1 controls, and the bidirectional overrides that reorder a terminal line.
+		if r < 0x20 || (r >= 0x7f && r < 0xa0) || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) {
 			return '?'
 		}
 		return r

@@ -78,6 +78,9 @@ func (a Actor) decide(ctx context.Context, d decision) error {
 func (a Actor) refresh(ctx context.Context) (Actor, error) {
 	switch a.kind {
 	case KindUser:
+		if !a.notAfter.IsZero() && !a.svc.Now().Before(a.notAfter) {
+			return a, fail(ReasonBadCert, "the certificate expired")
+		}
 		if a.serial != "" {
 			denied, err := a.svc.St.PKIIsDenied(ctx, a.serial)
 			if err != nil {

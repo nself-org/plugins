@@ -40,8 +40,21 @@ type Request struct {
 	TTL       time.Duration // tokens only
 }
 
-func (s *Service) check(by Actor, r Request) (subject string, err error) {
-	if err = by.Can(Admin, ""); err != nil {
+// admin re-reads the acting identity and requires the admin role, so a mutation honours a revocation
+// that happened after the actor was resolved.
+func (s *Service) admin(ctx context.Context, by Actor) error {
+	if by.svc == nil || by.id == "" || by.kind == "" {
+		return fail(ReasonNoActor, "no identity")
+	}
+	by, err := by.refresh(ctx)
+	if err != nil {
+		return err
+	}
+	return by.Can(Admin, "")
+}
+
+func (s *Service) check(ctx context.Context, by Actor, r Request) (subject string, err error) {
+	if err = s.admin(ctx, by); err != nil {
 		return "", err
 	}
 	if !pki.ValidID(r.Principal) {
@@ -76,7 +89,7 @@ func (s *Service) mutation(by Actor, action, target, detail string) (store.Audit
 
 // Grant gives (or replaces) a principal's role.
 func (s *Service) Grant(ctx context.Context, by Actor, r Request) error {
-	subject, err := s.check(by, r)
+	subject, err := s.check(ctx, by, r)
 	if err != nil {
 		return err
 	}
@@ -90,19 +103,31 @@ func (s *Service) Grant(ctx context.Context, by Actor, r Request) error {
 // Revoke ends a principal's grant and every live token issued to the principal; false means there was
 // neither.
 func (s *Service) Revoke(ctx context.Context, by Actor, principal string) (bool, error) {
-	if err := by.Can(Admin, ""); err != nil {
+	if err := s.admin(ctx, by); err != nil {
 		return false, err
 	}
-	in, err := s.mutation(by, "roles.revoke", principal, "grant revoked")
+	in, err := s.mutation(by, "roles.revoke", principal, "grant and live tokens revoked")
 	if err != nil {
 		return false, err
 	}
 	return s.St.GrantRevoke(ctx, principal, in)
 }
 
+// reader re-reads the acting identity and requires at least the member role.
+func (s *Service) reader(ctx context.Context, by Actor) error {
+	if by.svc == nil || by.id == "" || by.kind == "" {
+		return fail(ReasonNoActor, "no identity")
+	}
+	by, err := by.refresh(ctx)
+	if err != nil {
+		return err
+	}
+	return by.Can(Member, "")
+}
+
 // List returns the live grants (member role and above may read them).
 func (s *Service) List(ctx context.Context, by Actor) ([]store.Grant, error) {
-	if err := by.Can(Member, ""); err != nil {
+	if err := s.reader(ctx, by); err != nil {
 		return nil, err
 	}
 	return s.St.GrantList(ctx)
@@ -110,7 +135,7 @@ func (s *Service) List(ctx context.Context, by Actor) ([]store.Grant, error) {
 
 // IssueToken creates a scoped token and returns its clear text. The text exists only in the return value.
 func (s *Service) IssueToken(ctx context.Context, by Actor, r Request) (string, store.Token, error) {
-	subject, err := s.check(by, r)
+	subject, err := s.check(ctx, by, r)
 	if err != nil {
 		return "", store.Token{}, err
 	}
@@ -142,7 +167,7 @@ func (s *Service) IssueToken(ctx context.Context, by Actor, r Request) (string, 
 
 // RevokeToken ends a live token by id; false means no such live token.
 func (s *Service) RevokeToken(ctx context.Context, by Actor, id string) (bool, error) {
-	if err := by.Can(Admin, ""); err != nil {
+	if err := s.admin(ctx, by); err != nil {
 		return false, err
 	}
 	in, err := s.mutation(by, "token.revoke", id, "token revoked")
@@ -154,7 +179,7 @@ func (s *Service) RevokeToken(ctx context.Context, by Actor, id string) (bool, e
 
 // Tokens lists every token (the digest is not returned to callers that print it; they use ID).
 func (s *Service) Tokens(ctx context.Context, by Actor) ([]store.Token, error) {
-	if err := by.Can(Member, ""); err != nil {
+	if err := s.reader(ctx, by); err != nil {
 		return nil, err
 	}
 	return s.St.TokenList(ctx)

@@ -86,7 +86,7 @@ func runAdminRoles(args []string, env adminEnv) int {
 		if f.json {
 			return adminWriteData(env, command, map[string]any{"principal": pos[1], "revoked": true})
 		}
-		_, _ = fmt.Fprintf(env.Out, "revoked the grant of %s\n", pos[1])
+		_, _ = fmt.Fprintf(env.Out, "revoked the grant and the live tokens of %s\n", pos[1])
 	case "list":
 		gs, err := svc.List(ctx, op)
 		if err != nil {
