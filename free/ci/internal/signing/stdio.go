@@ -5,15 +5,20 @@ package signing
 // reads the key from stdin so it never sits on argv.
 // Inputs:  a StdioCall (argv, extra environment, working directory, stdin).
 // Outputs: the child's combined output (capped) and exit code.
-// Constraints: the funnel (internal/exec) has no stdin field, so the bytes go
-// through a FIFO in a private 0700 directory that a `sh -c` wrapper redirects
-// from; a FIFO holds no data once both ends close, so a key never reaches
-// disk; the environment is the funnel allowlist plus the call's additions;
-// the output buffer is returned to the caller, who zeroes it when it can
-// carry a secret.
+// Constraints: the bytes travel on the funnel's JobSpec.Stdin, so nothing
+// reaches disk; a working directory other than the funnel's workspace needs
+// a small `sh -c cd` wrapper (unix only, see chdir_unix.go); the environment
+// is the funnel allowlist plus the call's additions; the output buffer is
+// returned to the caller, who zeroes it when it can carry a secret.
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"os"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
@@ -58,8 +63,51 @@ type passRedactor struct{}
 func (passRedactor) Redact(p []byte) []byte { return p }
 func (passRedactor) Flush() []byte          { return nil }
 
-// wrapper is the sh program that applies Dir and Stdin, then execs the call.
-const wrapper = `d=$1; shift
-if [ "$d" != . ]; then cd "$d" || exit 126; fi
-if [ -n "$NSELF_CI_STDIN" ]; then exec "$@" <"$NSELF_CI_STDIN"; fi
-exec "$@" </dev/null`
+// FunnelRunner is the production StdioRunner.
+type FunnelRunner struct {
+	// Home is the CI state directory the funnel works under ("" = its default).
+	Home string
+	seq  atomic.Uint64
+}
+
+type capture struct {
+	mu  sync.Mutex
+	buf []byte
+}
+
+// write keeps at most maxOutput bytes in total.
+func (c *capture) write(b []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.buf = append(c.buf, b[:min(len(b), max(maxOutput-len(c.buf), 0))]...)
+}
+
+// RunStdio implements StdioRunner.
+func (r *FunnelRunner) RunStdio(ctx context.Context, c StdioCall) ([]byte, int, error) {
+	if len(c.Argv) == 0 {
+		return nil, notRun, Failf(ReasonSignerFailed, "no program to run")
+	}
+	argv := c.Argv
+	if c.Dir != "" && c.Dir != "." {
+		var err error
+		if argv, err = inDir(c.Dir, argv); err != nil {
+			return nil, notRun, err
+		}
+	}
+	var stdin io.Reader
+	if c.Stdin != nil {
+		stdin = bytes.NewReader(c.Stdin)
+	}
+	var cap capture
+	ex := &ciexec.Executor{Env: extraEnv(c.Env), NewRedactor: func() ciexec.Redactor { return passRedactor{} }}
+	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: r.id(), CoordinatorID: "signer", Command: argv, Home: r.Home, Timeout: c.Timeout, Output: cap.write, Stdin: stdin})
+	if res.Err != nil {
+		clear(cap.buf)
+		return nil, notRun, Failf(ReasonSignerFailed, "the program could not be run or timed out")
+	}
+	return cap.buf, res.ExitCode, nil
+}
+
+func (r *FunnelRunner) id() string {
+	return "sig-" + strconv.Itoa(os.Getpid()) + "-" + strconv.FormatUint(r.seq.Add(1), 10)
+}

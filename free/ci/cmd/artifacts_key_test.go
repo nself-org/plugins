@@ -5,9 +5,9 @@ package main
 // in for the cli: it keeps secrets in a directory, answers `config secrets
 // resolve` with the v1 envelope and `config secrets set` from stdin.
 // Inputs:  none. Outputs: pass or fail.
-// Constraints: unix only (the signer's stdin FIFO and sh wrapper); the signer
-// runs in process through an in-process StdioRunner, but the cli calls go
-// through the real exec funnel and a real FIFO.
+// Constraints: unix only (the fake cli is a shell script); the signer runs in
+// process through an in-process StdioRunner, but the cli calls go through the
+// real exec funnel with the bytes on its stdin.
 
 import (
 	"bytes"
