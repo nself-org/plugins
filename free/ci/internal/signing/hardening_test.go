@@ -1,0 +1,432 @@
+package signing_test
+
+// Purpose: tests for the review round of P7-CACHE-07: strict JSON, subject
+// names, project binding, re-checks after key resolution, the record row cap,
+// key management locking and recovery, and the coordinator's shape checks.
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	sdk "github.com/nself-org/cli/sdk/go/v2/signing"
+
+	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
+	"github.com/nself-org/plugins/free/ci/internal/release/manifest"
+	"github.com/nself-org/plugins/free/ci/internal/signing"
+	"github.com/nself-org/plugins/free/ci/internal/store"
+)
+
+func TestStrictJSONRefusals(t *testing.T) {
+	st := func(s string) error {
+		f := newFixture(t)
+		req := request(item(signing.PayloadStatement, []byte(s)))
+		_, err := f.handler().Handle(context.Background(), req, decodeAll(t, req))
+		return err
+	}
+	pf := newFixture(t)
+	pb, _ := json.Marshal(pf.predicate(nil))
+	pred := string(pb)
+	good := pf.statementPayload(nil)
+	// sanity: the unmodified statement passes
+	if err := st(string(good)); err != nil {
+		t.Fatal(err)
+	}
+	app := sum([]byte("app-bytes"))
+	subj := `[{"name":"app","digest":{"sha256":"` + app + `"}}]`
+	base := func(extra string) string {
+		return `{"_type":"https://in-toto.io/Statement/v1","predicateType":"` + manifest.ProvenancePredicate + `","predicate":` + pred + extra + `}`
+	}
+	bad := map[string]string{
+		"duplicate subject":       base(`,"subject":` + subj + `,"subject":` + subj),
+		"case-variant subject":    base(`,"subject":` + subj + `,"Subject":[{"name":"x","digest":{"sha256":"` + strings.Repeat("f", 64) + `"}}]`),
+		"unicode-folded key":      base(`,"subject":` + subj + `,"ſubject":[]`),
+		"escaped duplicate key":   base(`,"subject":` + subj + `,"` + esc("0073") + `ubject":[]`),
+		"duplicate nested digest": base(`,"subject":[{"name":"app","digest":{"sha256":"` + app + `","sha256":"` + app + `"}}]`),
+		"duplicate predicate key": `{"_type":"https://in-toto.io/Statement/v1","predicateType":"` + manifest.ProvenancePredicate + `","predicate":` + pred + `,"predicate":{},"subject":` + subj + `}`,
+		"trailing document":       base(`,"subject":`+subj) + ` {}`,
+		"trailing bracket":        base(`,"subject":`+subj) + ` ]`,
+		"trailing brace":          base(`,"subject":`+subj) + `}`,
+		"invalid utf-8":           base(`,"subject":`+subj) + "\xff",
+		"too deep":                base(`,"subject":` + subj + `,"x":` + strings.Repeat("[", 40) + strings.Repeat("]", 40)),
+		"array at top":            `[1]`,
+		"scalar at top":           `7`,
+		"truncated":               base(`,"subject":` + subj)[:60],
+	}
+	for name, s := range bad {
+		if err := st(s); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// the same key in sibling objects and arrays is fine
+	ok := base(`,"subject":[{"name":"app","digest":{"sha256":"` + app + `"}},{"name":"image","digest":{"sha256":"` + sum(pf.files["image"]) + `"}}],"extra":[{"a":1},{"a":2}]`)
+	if err := st(ok); err != nil {
+		t.Fatalf("sibling objects with equal keys: %v", err)
+	}
+}
+
+func TestContractKeysAreSpelledExactly(t *testing.T) {
+	f := newFixture(t)
+	good := string(f.statementPayload(nil))
+	for old, variant := range map[string]string{
+		`"subject"`: `"Subject"`, `"_type"`: `"_TYPE"`, `"predicateType"`: `"PredicateType"`, `"predicate"`: `"Predicate"`, `"name"`: `"Name"`, `"digest"`: `"Digest"`,
+		`"sha256"`: `"SHA256"`, `"buildDefinition"`: `"builddefinition"`, `"buildType"`: `"BUILDTYPE"`, `"externalParameters"`: `"ExternalParameters"`, `"repository"`: `"Repository"`,
+		`"revision"`: `"Revision"`, `"job"`: `"Job"`, `"resolvedDependencies"`: `"ResolvedDependencies"`, `"uri"`: `"URI"`, `"gitCommit"`: `"GitCommit"`,
+		`"runDetails"`: `"RunDetails"`, `"builder"`: `"Builder"`, `"id"`: `"ID"`, `"metadata"`: `"Metadata"`, `"invocationId"`: `"InvocationID"`, `"byproducts"`: `"Byproducts"`,
+	} {
+		if !strings.Contains(good, old) {
+			t.Fatalf("the fixture statement has no key %s", old)
+		}
+		bad := strings.Replace(good, old, variant, 1)
+		if err := handle(t, f, item(signing.PayloadStatement, []byte(bad))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+			t.Errorf("%s spelled %s: %v", old, variant, err)
+		}
+	}
+	if err := handle(t, f, item(signing.PayloadStatement, []byte(good))); err != nil {
+		t.Fatal(err)
+	}
+	// request keys too
+	typ := signing.PayloadStatement
+	for name, in := range map[string]string{
+		"Run_ID":       `{"Run_ID":"a","items":[{"payload_type":"` + typ + `","payload_b64":"eA=="}]}`,
+		"Items":        `{"run_id":"a","Items":[{"payload_type":"` + typ + `","payload_b64":"eA=="}]}`,
+		"Payload_Type": `{"run_id":"a","items":[{"Payload_Type":"` + typ + `","payload_b64":"eA=="}]}`,
+		"PAYLOAD_B64":  `{"run_id":"a","items":[{"payload_type":"` + typ + `","PAYLOAD_B64":"eA=="}]}`,
+	} {
+		if err := decode(in); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+			t.Errorf("request key %s: %v", name, err)
+		}
+	}
+}
+
+func TestDecodeRequestStrictness(t *testing.T) {
+	typ := signing.PayloadStatement
+	for name, in := range map[string]string{
+		"duplicate run_id":    `{"run_id":"a","run_id":"b","items":[{"payload_type":"` + typ + `","payload_b64":"eA=="}]}`,
+		"case-variant key":    `{"run_id":"a","Run_ID":"b","items":[{"payload_type":"` + typ + `","payload_b64":"eA=="}]}`,
+		"trailing bracket":    `{"run_id":"a","items":[{"payload_type":"` + typ + `","payload_b64":"eA=="}]}]`,
+		"trailing brace":      `{"run_id":"a","items":[{"payload_type":"` + typ + `","payload_b64":"eA=="}]}}`,
+		"duplicate item keys": `{"run_id":"a","items":[{"payload_type":"` + typ + `","payload_b64":"eA==","payload_b64":"eA=="}]}`,
+	} {
+		if err := decode(in); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+func TestStatementSubjectNames(t *testing.T) {
+	f := newFixture(t)
+	handle := func(name, digest string) error {
+		req := request(item(signing.PayloadStatement, f.statementPayload(func(m map[string]any) {
+			m["subject"] = []map[string]any{{"name": name, "digest": map[string]string{"sha256": digest}}}
+		})))
+		_, err := f.handler().Handle(context.Background(), req, decodeAll(t, req))
+		return err
+	}
+	app, ev := sum(f.files["app"]), sum(f.evRaw)
+	for _, c := range []struct {
+		name, digest string
+		ok           bool
+	}{
+		{"app", app, true},
+		{"artifacts/app", app, true},
+		{"never-built", app, false},
+		{"image", app, false},
+		{"artifacts/never-built", app, false},
+		{"artifacts/artifacts/app", app, false},
+		{"evidence.json", ev, true},
+		{"evidence", ev, false},
+		{"app", ev, false},
+		{"evidence.json", app, false},
+	} {
+		err := handle(c.name, c.digest)
+		if c.ok && err != nil || !c.ok && !signing.IsReason(err, signing.ReasonDigestNotCommitted) {
+			t.Errorf("%s %s...: %v", c.name, c.digest[:6], err)
+		}
+	}
+}
+
+func TestSBOMDigestMustBeAnSBOMRecord(t *testing.T) {
+	f := newFixture(t)
+	f.mutateRecord("app.cdx.json", func(r *records.Record) { r.Kind = records.KindBinary })
+	req := request(item(manifest.PayloadType, f.manifestPayload(nil)))
+	if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); !signing.IsReason(err, signing.ReasonDigestNotCommitted) {
+		t.Fatalf("an sbom digest backed by a binary record: %v", err)
+	}
+}
+
+func TestRunMustBelongToTheServedProject(t *testing.T) {
+	f := newFixture(t)
+	req := request(item(signing.PayloadStatement, f.statementPayload(nil)))
+	h := f.handler()
+	h.Project = "/another/project"
+	if _, err := h.Handle(context.Background(), req, decodeAll(t, req)); !signing.IsReason(err, signing.ReasonPayloadRejected) || f.res.calls != 0 {
+		t.Fatalf("a run of another project: %v (%d resolves)", err, f.res.calls)
+	}
+	h.Project = project + "/" // an equal path with a trailing slash is the same project
+	if _, err := h.Handle(context.Background(), req, decodeAll(t, req)); err != nil {
+		t.Fatalf("%v", err)
+	}
+	h.Project = ""
+	f.res.calls = 0
+	if _, err := h.Handle(context.Background(), req, decodeAll(t, req)); !signing.IsReason(err, signing.ReasonSignerFailed) || f.res.calls != 0 {
+		t.Fatalf("a signer with no project root signed: %v", err)
+	}
+}
+
+func TestRunChangesWhileTheKeyIsResolved(t *testing.T) {
+	mutations := map[string]func(f *fixture){
+		"a new running attempt": func(f *fixture) {
+			f.src.attempts = append(f.src.attempts, store.AttemptView{ID: "att-new", JobID: "job-rel", N: 3, State: "running"})
+		},
+		"a record marked missing": func(f *fixture) { f.mutateRecord("app", func(r *records.Record) { r.Missing = true }) },
+		"blob bytes replaced":     func(f *fixture) { f.blobs.data[sum(f.files["app"])] = []byte("evil-bytes") },
+	}
+	for name, mutate := range mutations {
+		f := newFixture(t)
+		f.res.onResolve = func() { mutate(f) }
+		req := request(item(signing.PayloadStatement, f.statementPayload(nil)), item(manifest.PayloadType, f.manifestPayload(nil)))
+		envs, err := f.handler().Handle(context.Background(), req, decodeAll(t, req))
+		if err == nil || envs != nil {
+			t.Errorf("%s: signed over a run that changed during key resolution: %v", name, err)
+		}
+	}
+}
+
+func TestRecordListingAtTheStoreCapIsRefused(t *testing.T) {
+	f := newFixture(t)
+	req := request(item(signing.PayloadStatement, f.statementPayload(nil)))
+	f.src.extra = 999 // one real record named app plus 999: exactly the cap
+	if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); !signing.IsReason(err, signing.ReasonSignerFailed) {
+		t.Fatalf("a capped listing: %v", err)
+	}
+	f.src.extra = 998
+	if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); err != nil {
+		t.Fatalf("a listing just under the cap: %v", err)
+	}
+	m := request(item(manifest.PayloadType, f.manifestPayload(nil)))
+	f.src.extra = 995 // the sbom listing holds four real records
+	if _, err := f.handler().Handle(context.Background(), m, decodeAll(t, m)); err != nil {
+		t.Fatalf("a manifest just under the cap: %v", err)
+	}
+	f.src.extra = 996
+	if _, err := f.handler().Handle(context.Background(), m, decodeAll(t, m)); !signing.IsReason(err, signing.ReasonSignerFailed) {
+		t.Fatalf("a capped sbom listing: %v", err)
+	}
+}
+
+func TestStrictJSONDepthBoundary(t *testing.T) {
+	f := newFixture(t)
+	pb, _ := json.Marshal(f.predicate(nil))
+	nested := func(n int) string {
+		return `{"_type":"https://in-toto.io/Statement/v1","predicateType":"` + manifest.ProvenancePredicate + `","predicate":` + string(pb) + `,"subject":[{"name":"app","digest":{"sha256":"` + sum(f.files["app"]) + `"}}],"x":` + strings.Repeat("[", n) + strings.Repeat("]", n) + `}`
+	}
+	handle := func(s string) error {
+		req := request(item(signing.PayloadStatement, []byte(s)))
+		_, err := f.handler().Handle(context.Background(), req, decodeAll(t, req))
+		return err
+	}
+	// the top-level object is depth 1: 31 nested arrays make 32, the limit
+	if err := handle(nested(31)); err != nil {
+		t.Fatalf("depth 32: %v", err)
+	}
+	if err := handle(nested(32)); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+		t.Fatalf("depth 33: %v", err)
+	}
+}
+
+func TestSubjectNamedArtifactsSlashIsNotAWildcard(t *testing.T) {
+	f := newFixture(t)
+	for _, name := range []string{"artifacts/", "artifacts//", "", "/"} {
+		req := request(item(signing.PayloadStatement, f.statementPayload(func(m map[string]any) {
+			m["subject"] = []map[string]any{{"name": name, "digest": map[string]string{"sha256": sum(f.files["app"])}}}
+		})))
+		if _, err := f.handler().Handle(context.Background(), req, decodeAll(t, req)); err == nil {
+			t.Errorf("subject name %q was signed", name)
+		}
+	}
+}
+
+func TestInitRepairsAStaleStoredID(t *testing.T) {
+	res := &fakeRes{vals: map[string][]byte{signing.KeyIDRef: []byte("ci-release-0123456789abcdef")}}
+	st := &fakeStore{res: res}
+	info, err := signing.Init(context.Background(), res, st)
+	if err != nil || len(st.sets) != 2 || st.sets[1] != signing.KeyIDName || string(res.vals[signing.KeyIDRef]) != info.KeyID {
+		t.Fatalf("%+v %v %v", info, st.sets, err)
+	}
+	if _, err := signing.Public(context.Background(), res, "x"); err != nil {
+		t.Fatalf("the key does not load after init: %v", err)
+	}
+}
+
+func TestRotateRecoversFromAPartialFailure(t *testing.T) {
+	old, value, _ := signing.Generate()
+	res := &fakeRes{vals: map[string][]byte{signing.KeyRef: value, signing.KeyIDRef: []byte(old.ID)}}
+	st := &fakeStore{res: res, setErrOn: signing.KeyIDName}
+	_, err := signing.Rotate(context.Background(), res, st)
+	if !signing.IsReason(err, signing.ReasonKeyIDMismatch) {
+		t.Fatalf("%v", err)
+	}
+	// the new id comes first in the message, whole
+	newKey, _ := signing.LoadKeyIgnoringStoredID(context.Background(), res)
+	if !strings.Contains(err.Error(), "new key "+newKey) {
+		t.Fatalf("the new key id is not in the message: %v", err)
+	}
+	// the key now fails to load: stored id is stale
+	if _, err := signing.Public(context.Background(), res, "x"); !signing.IsReason(err, signing.ReasonKeyIDMismatch) {
+		t.Fatalf("%v", err)
+	}
+	// rotating again repairs it
+	st.setErrOn = ""
+	if _, err := signing.Rotate(context.Background(), res, st); err != nil {
+		t.Fatalf("rotate does not repair a stale stored id: %v", err)
+	}
+	if _, err := signing.Public(context.Background(), res, "x"); err != nil {
+		t.Fatalf("still broken after the repairing rotation: %v", err)
+	}
+}
+
+func TestConcurrentInitsDoNotBothSucceed(t *testing.T) {
+	res := &fakeRes{vals: map[string][]byte{}}
+	st := &fakeStore{res: res}
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i := range errs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, errs[i] = signing.Init(context.Background(), res, st)
+		}()
+	}
+	wg.Wait()
+	ok := 0
+	for _, e := range errs {
+		if e == nil {
+			ok++
+		} else if !signing.IsReason(e, signing.ReasonSecretExists) {
+			t.Fatalf("%v", e)
+		}
+	}
+	if ok != 1 || len(st.sets) != 1 || st.locks != 2 {
+		t.Fatalf("%d initializers succeeded, %d sets, %d locks", ok, len(st.sets), st.locks)
+	}
+}
+
+func TestKeyManagementNeedsItsLock(t *testing.T) {
+	res := &fakeRes{vals: map[string][]byte{}}
+	st := &fakeStore{res: res, lockErr: errors.New("busy")}
+	if _, err := signing.Init(context.Background(), res, st); err == nil || len(st.sets) != 0 {
+		t.Fatalf("init without the lock: %v", err)
+	}
+	if _, err := signing.Rotate(context.Background(), res, st); err == nil || len(st.sets) != 0 {
+		t.Fatalf("rotate without the lock: %v", err)
+	}
+}
+
+func TestClientShapeChecks(t *testing.T) {
+	f := newFixture(t)
+	items := []signing.Item{item(signing.PayloadStatement, []byte("x"))}
+	answer := func(sig sdk.EnvelopeSig) *fakeSigner {
+		raw, _ := json.Marshal(signing.Response{Envelopes: []sdk.Envelope{{PayloadType: items[0].PayloadType, Payload: items[0].PayloadB64, Signatures: []sdk.EnvelopeSig{sig}}}})
+		return &fakeSigner{ans: ansOf(string(raw))}
+	}
+	if _, err := clientFor(f, answer(fakeSig)).Sign(context.Background(), runID, items); err != nil {
+		t.Fatal(err)
+	}
+	for name, sig := range map[string]sdk.EnvelopeSig{
+		"empty key id and signature": {KeyID: "", Sig: ""},
+		"empty signature":            {KeyID: fakeSig.KeyID, Sig: ""},
+		"short signature":            {KeyID: fakeSig.KeyID, Sig: "AAAA"},
+		"another purpose":            {KeyID: "plugins-0123456789abcdef", Sig: fakeSig.Sig},
+		"short key id":               {KeyID: "ci-release-0123", Sig: fakeSig.Sig},
+		"uppercase key id":           {KeyID: "ci-release-0123456789ABCDEF", Sig: fakeSig.Sig},
+	} {
+		if _, err := clientFor(f, answer(sig)).Sign(context.Background(), runID, items); !signing.IsReason(err, signing.ReasonSignerFailed) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	for _, call := range []func(c *signing.Client) error{
+		func(c *signing.Client) error { _, err := c.PublicKey(context.Background()); return err },
+		func(c *signing.Client) error { _, err := c.Init(context.Background()); return err },
+		func(c *signing.Client) error { _, err := c.Rotate(context.Background()); return err },
+	} {
+		if err := call(&signing.Client{Src: f.src}); !signing.IsReason(err, signing.ReasonSignerFailed) {
+			t.Fatalf("a key call without a runner: %v", err)
+		}
+	}
+	if _, err := (&signing.Client{Runner: &fakeSigner{}}).Sign(context.Background(), runID, items); !signing.IsReason(err, signing.ReasonSignerFailed) {
+		t.Fatalf("a client without a run store: %v", err)
+	}
+	if _, err := (&signing.Client{Src: f.src}).Sign(context.Background(), runID, items); !signing.IsReason(err, signing.ReasonSignerFailed) {
+		t.Fatalf("a client without a runner: %v", err)
+	}
+}
+
+func TestClientRelaysALongRefusalWhole(t *testing.T) {
+	f := newFixture(t)
+	msg := strings.Repeat("m", 200) + "END"
+	out := `{"error":{"code":"E717","reason":"key_id_mismatch","message":"` + msg + `"}}`
+	_, err := clientFor(f, &fakeSigner{ans: answer{out: out, code: 2}}).PublicKey(context.Background())
+	if !signing.IsReason(err, signing.ReasonKeyIDMismatch) || !strings.Contains(err.Error(), "mmmEND") {
+		t.Fatalf("%v", err)
+	}
+	long := `{"error":{"code":"E717","reason":"key_id_mismatch","message":"` + strings.Repeat("m", 600) + `"}}`
+	_, err = clientFor(f, &fakeSigner{ans: answer{out: long, code: 2}}).PublicKey(context.Background())
+	if err == nil || !strings.HasSuffix(err.Error(), strings.Repeat("m", 509)+"...") {
+		t.Fatalf("a relayed message was not bounded to 509 bytes plus an ellipsis: %d", len(err.Error()))
+	}
+}
+
+func ansOf(s string) answer { return answer{out: s} }
+
+var _ = time.Second
+
+func TestAmbiguousEscapesAreRefused(t *testing.T) {
+	f := newFixture(t)
+	good := string(f.statementPayload(nil))
+	withExtra := func(extra string) []byte {
+		return []byte(strings.Replace(good, `"predicate":`, extra+`"predicate":`, 1))
+	}
+	refused := map[string]string{
+		"lone high in a value":       `"note":"a-\ud800-b",`,
+		"lone high at the end":       `"note":"a-\ud800",`,
+		"lone low":                   `"note":"a-\udc00",`,
+		"high then a non-surrogate":  `"note":"a-\ud800\u0041",`,
+		"high then a high":           `"note":"a-\ud800\ud800",`,
+		"high then a raw character":  `"note":"a-\ud800z",`,
+		"a lone surrogate in a key":  `"n\ud800":1,`,
+		"upper case hex":             `"note":"a-\uD800",`,
+		"after an escaped backslash": `"note":"\\\ud800",`,
+		"truncated pair":             `"note":"\ud83d\ude0",`,
+		"a NUL escape":               `"note":"a\u0000b",`,
+		"a NUL escape in a key":      `"a\u0000":1,`,
+	}
+	for name, extra := range refused {
+		if err := handle(t, f, item(signing.PayloadStatement, withExtra(extra))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	bsl := string(rune(92))
+	for name, extra := range map[string]string{
+		"a valid pair":                `"note":"` + esc("d83d", "de00") + `",`,
+		"a pair in upper case":        `"note":"` + esc("D83D", "DE00") + `",`,
+		"an escaped backslash then u": `"note":"` + bsl + bsl + `ud800",`,
+		"a BMP escape":                `"note":"` + esc("00e9", "20ac") + `",`,
+		"a plain string":              `"note":"x",`,
+		"a control escape":            `"note":"` + esc("0001") + `",`,
+	} {
+		if err := handle(t, f, item(signing.PayloadStatement, withExtra(extra))); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// the manifest path: a repo_id with a lone surrogate matches nothing, the escape is refused outright
+	m := string(f.manifestPayload(nil))
+	bad := strings.Replace(m, `"repo_id":"repo-1"`, `"repo_id":"repo-\ud800"`, 1)
+	if err := handle(t, f, item(manifest.PayloadType, []byte(bad))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+		t.Fatalf("manifest with a lone surrogate: %v", err)
+	}
+}
