@@ -96,6 +96,9 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 	if in.Dirty || in.Revision == "" {
 		reason := model.BindingReason("dirty")
 		e.WorktreeState, e.Binding = "dirty", model.Binding{State: "unbound", Reason: &reason}
+		// An unbound document is never current (schema.go): nothing ties it to a commit.
+		why := "binding unbound: the document is not tied to a commit"
+		e.Freshness = model.Freshness{State: "unknown", Reason: &why}
 	}
 	for _, o := range in.Jobs {
 		c := model.Check{ID: firstNonEmpty(o.Check, o.ID), JobID: o.ID, Kind: string(o.Kind), Tool: o.Tool, Required: o.Required,
