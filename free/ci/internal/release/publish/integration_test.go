@@ -45,6 +45,8 @@ type pipeRig struct {
 	res       *fakeRes
 	keyValue  []byte
 	team      bool
+	// signerFor replaces the in-process signer with a client over the run store (nil: inProcSigner).
+	signerFor func(signing.Source) publish.Signer
 	signs     int
 }
 
@@ -115,7 +117,10 @@ func (p *pipeRig) deps(st *store.Store) publish.Deps {
 	if err != nil {
 		p.t.Fatal(err)
 	}
-	signer := &inProcSigner{h: signing.Handler{Src: st, Blobs: blobs, Project: p.repo, Resolver: p.res}, res: p.res}
+	var signer publish.Signer = &inProcSigner{h: signing.Handler{Src: st, Blobs: blobs, Project: p.repo, Resolver: p.res}, res: p.res}
+	if p.signerFor != nil {
+		signer = p.signerFor(st)
+	}
 	return publish.Deps{Src: st, Blobs: blobs, Ledger: st, Signer: signer, Home: p.home, Root: p.repo, Capture: report.Capture, Team: p.team}
 }
 
