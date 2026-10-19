@@ -10,9 +10,12 @@ import (
 	"time"
 
 	"github.com/nself-org/cli/sdk/go/v2/remote"
+	"github.com/nself-org/plugins/free/ci/internal/agent/checkout"
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
 
@@ -188,4 +191,91 @@ func TestSSHTransportPreambleNoiseIsSkipped(t *testing.T) {
 	if len(sink.results) != 1 {
 		t.Fatal("no result after a login banner")
 	}
+}
+
+// TestSSHTransportRefusesACorruptedCheckoutBeforeAnyStep proves the agent verifies the
+// bundle digest and no job step runs when the bytes do not match.
+func TestSSHTransportRefusesACorruptedCheckoutBeforeAnyStep(t *testing.T) {
+	node, home := testNode(t)
+	ran := make(chan struct{}, 1)
+	a := newAgentRig(t, session.RunnerFunc(func(ctx context.Context, j session.JobRun) (session.JobResult, error) {
+		ran <- struct{}{}
+		return session.JobResult{Outcome: session.Outcome{State: "passed"}, Evidence: evidence()}, nil
+	}))
+	recv := checkout.NewReceiver(t.TempDir(), nil)
+	a.hooks = []session.JobHook{{Name: "co", Before: func(ctx context.Context, l protocol.Lease, root session.JobRoot) (session.JobSetup, error) {
+		src, err := recv.Stage(ctx, l, root.Dir)
+		return session.JobSetup{SourceDir: src}, err
+	}}}
+	a.tap = func(c session.Carrier) session.Carrier { return &feedCarrier{Carrier: c, r: recv} }
+	repo, rev := makeRepo(t)
+	d := newDriver(t, home, a, nil)
+	d.RepoDir = repo
+	d.afterBundle = func(p string) {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b[len(b)/2] ^= 0xff
+		if err := os.WriteFile(p, b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	l := testLease()
+	l.Checkout.Revision = rev
+	sink := &recSink{}
+	start := time.Now()
+	err := d.Run(context.Background(), node, l, sink)
+	t.Logf("run took %v: %v; results=%d", time.Since(start), err, len(sink.results))
+	select {
+	case <-ran:
+		t.Fatal("a job step ran on a checkout whose digest did not match")
+	default:
+	}
+}
+
+// feedCarrier routes the lease and checkout chunks to a receiver, as serve --stdio does.
+type feedCarrier struct {
+	session.Carrier
+	r *checkout.Receiver
+}
+
+func (c *feedCarrier) Recv() (protocol.Message, error) {
+	for {
+		m, err := c.Carrier.Recv()
+		if err != nil {
+			return m, err
+		}
+		switch b := m.Body.(type) {
+		case *protocol.Lease:
+			_ = c.r.Expect(*b)
+		case *protocol.Chunk:
+			var e uint64
+			if m.Epoch != nil {
+				e = *m.Epoch
+			}
+			_ = c.r.Feed(m.LeaseID, e, *b)
+			continue
+		}
+		return m, nil
+	}
+}
+
+func makeRepo(t *testing.T) (dir, rev string) {
+	t.Helper()
+	dir = t.TempDir()
+	g := func(args ...string) string {
+		out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	g("init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	g("add", "f.txt")
+	g("commit", "-q", "-m", "one")
+	return dir, g("rev-parse", "HEAD")
 }

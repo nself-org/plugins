@@ -65,6 +65,10 @@ func (d *Driver) target(ctx context.Context, n model.Capability) (remote.Target,
 		return remote.Target{}, newErr(CodeTransport, ReasonConnect, "cannot determine the local OpenSSH version: %v", err)
 	}
 	opts := append(remote.CISSHFlags(), remote.CIOptions(id, pin.Path, ver)...)
+	if d.IdentityFile != "" {
+		// After the D4 block, which always wins; only this one key is offered to the node.
+		opts = append(opts, "-i", d.IdentityFile, "-o", "IdentitiesOnly=yes")
+	}
 	t, err := spec.Target(opts)
 	if err != nil {
 		return remote.Target{}, newErr(CodeTransport, ReasonNoDestination, "node %s: %v", id, err)

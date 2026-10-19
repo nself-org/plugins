@@ -63,6 +63,9 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, lease protocol.
 			return err
 		}
 		defer cleanup()
+		if d.afterBundle != nil {
+			d.afterBundle(bundle)
+		}
 	}
 	conn, err := d.start()(ctx, tgt, d.command(lease))
 	if err != nil {

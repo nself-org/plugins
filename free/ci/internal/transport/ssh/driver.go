@@ -47,6 +47,9 @@ type SecretSource func(ctx context.Context, l protocol.Lease) ([]protocol.Secret
 type Driver struct {
 	// Home is the CI home ($NSELF_CI_HOME); the pin file is Home/known_hosts.
 	Home string
+	// IdentityFile is an optional private key path offered to every node (the operator's ssh
+	// config and agent supply the key when empty).
+	IdentityFile string
 	// RepoDir is the repository whose revision is bundled for the node.
 	RepoDir string
 	// Personal marks a PERSONAL coordinator (the only one that may send secret values).
@@ -70,6 +73,9 @@ type Driver struct {
 	Start Starter
 	// SSHVersion reports the local OpenSSH version; nil runs `ssh -V` once.
 	SSHVersion func(ctx context.Context) (remote.Version, error)
+
+	// afterBundle is a test seam: it sees the bundle file after its digest was recorded.
+	afterBundle func(path string)
 
 	verOnce sync.Once
 	ver     remote.Version
