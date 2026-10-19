@@ -5,7 +5,7 @@ package main
 // which kills every job's process group, and records the leases as self_fenced.
 // Inputs:  the carrier's frames: welcome (heartbeat_ms, agent_ttl_ms), lease, heartbeat acks.
 // Outputs: a closed carrier; <state>/self_fenced/<lease> marker files; a line on stderr.
-// Constraints: the fence is armed by welcome and checked on a timer, not only when a frame
+// Constraints: a checkout chunk counts as an acknowledgement (see Recv); the fence is armed by welcome and checked on a timer, not only when a frame
 // arrives, because a frozen coordinator sends nothing; closing the carrier is the same path
 // as session loss, which the session already turns into a process-group kill.
 
@@ -55,6 +55,15 @@ func (c *fenceCarrier) Recv() (protocol.Message, error) {
 		c.mu.Lock()
 		c.leases[b.LeaseID] = true
 		c.mu.Unlock()
+	case *protocol.Chunk:
+		// A checkout chunk proves the coordinator is alive and sending. Its heartbeat acks queue
+		// behind the chunks on the same stream and would arrive late on a slow link.
+		c.mu.Lock()
+		f := c.fence
+		c.mu.Unlock()
+		if f != nil {
+			f.Ack()
+		}
 	case *protocol.Heartbeat:
 		c.mu.Lock()
 		f := c.fence

@@ -44,8 +44,9 @@ const Stream = "checkout"
 // it is admitted; the bound and Deadline keep those from piling up.
 const MaxOpen = 16
 
-// Deadline is how long a transfer may stay unclaimed: receipt of the whole bundle plus the
-// start of Stage. A variable so tests can shorten it.
+// Deadline is how long a transfer may sit idle: with no chunk arriving, or with the whole
+// bundle received and nobody claiming it. Each accepted chunk restarts it, so a slow but
+// moving transfer is never cut off. A variable so tests can shorten it.
 var Deadline = 15 * time.Minute
 
 // Errors callers can match with errors.Is.
@@ -174,6 +175,7 @@ func (r *Receiver) Expect(l protocol.Lease) error {
 // expire drops a transfer nobody completed or claimed in time: the lease it was announced
 // for was refused, or the coordinator stopped sending. A whole bundle that Stage is already
 // unpacking is left to Stage; an unfinished one fails, which wakes Stage if it is waiting.
+// The unclaimed transfer is detached under the lock, so Stage cannot claim it half-deleted.
 func (r *Receiver) expire(k key, t *transfer) {
 	r.mu.Lock()
 	if r.open[k] != t {
@@ -183,10 +185,13 @@ func (r *Receiver) expire(k key, t *transfer) {
 	if !t.finished {
 		t.fail(ErrDeadline)
 	}
-	claimed := t.staging
+	unclaimed := !t.staging
+	if unclaimed {
+		delete(r.open, k)
+	}
 	r.mu.Unlock()
-	if !claimed {
-		r.Forget(k.lease, k.epoch)
+	if unclaimed {
+		r.dispose(t)
 	}
 }
 
@@ -235,6 +240,7 @@ func (r *Receiver) Feed(leaseID string, epoch uint64, c protocol.Chunk) error {
 	}
 	t.hash.Write(data)
 	t.got += int64(len(data))
+	t.timer.Reset(Deadline)
 	if !c.Final {
 		return nil
 	}
@@ -265,11 +271,16 @@ func (r *Receiver) Forget(leaseID string, epoch uint64) {
 	delete(r.open, key{leaseID, epoch})
 	if t != nil {
 		t.fail(context.Canceled)
-		t.timer.Stop()
 	}
 	r.mu.Unlock()
 	if t != nil {
-		_ = hygiene.RemoveConfined(r.host.Base, t.name, nil)
-		t.release()
+		r.dispose(t)
 	}
+}
+
+// dispose ends a transfer already removed from the open set: timer, staging root, owner lock.
+func (r *Receiver) dispose(t *transfer) {
+	t.timer.Stop()
+	_ = hygiene.RemoveConfined(r.host.Base, t.name, nil)
+	t.release()
 }

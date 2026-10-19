@@ -17,7 +17,10 @@ package ssh
 // never committed by Close); one that starts past offset 0 must also implement
 // Verifier, because the transport has not seen the bytes before the offset and
 // cannot hash the whole blob itself. A digest must be 64 lower-case hex, the size
-// at least 1 byte and at most maxBlob.
+// at least 1 byte and at most maxBlob; a lease may open maxLeaseBlobs blobs of
+// maxLeaseBytes in total. A writer that is not an Aborter is refused but was already
+// allocated by the Sink; closing it could commit, so it is left alone (debt: the
+// interface belongs in internal/transport).
 
 import (
 	"context"
@@ -35,6 +38,10 @@ import (
 const (
 	maxResync = 3
 	maxBlob   = 4 << 30
+	// One lease may commit this many blobs and bytes in total, so a node cannot fill the sink
+	// with distinct, individually valid blobs.
+	maxLeaseBlobs = 1024
+	maxLeaseBytes = 16 << 30
 )
 
 var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -66,6 +73,11 @@ func (s *sess) onDigest(ctx context.Context, d protocol.Digest) error {
 	if !sha256Hex.MatchString(head.SHA256) || head.Size < 1 || head.Size > maxBlob {
 		return newErr(CodeTransport, ReasonBlob, "the %s blob announcement is not a sha256 with a size from 1 to %d bytes", d.Stream, int64(maxBlob))
 	}
+	if s.blobCount+1 > maxLeaseBlobs || s.blobBytes+head.Size > maxLeaseBytes {
+		return newErr(CodeTransport, ReasonBlob, "the lease reached its blob budget (%d blobs, %d bytes); the %s blob was refused", maxLeaseBlobs, int64(maxLeaseBytes), d.Stream)
+	}
+	s.blobCount++
+	s.blobBytes += head.Size
 	w, err := s.sink.Blob(ctx, head)
 	if err != nil {
 		return newErr(CodeTransport, ReasonBlob, "the %s blob %s was refused", d.Stream, short(head.SHA256))

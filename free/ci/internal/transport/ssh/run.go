@@ -49,6 +49,8 @@ type sess struct {
 	readerDone chan struct{}
 	errDone    <-chan struct{}
 	blobs      map[string]*blobState
+	blobCount  int   // blobs opened in this session
+	blobBytes  int64 // bytes announced in this session
 
 	helloTimedOut atomic.Bool // the hello timer killed ssh
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/checkout"
 	"github.com/nself-org/plugins/free/ci/internal/lease"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 )
 
@@ -135,5 +137,54 @@ func TestSweepSkipsWhatALiveProcessHolds(t *testing.T) {
 		if _, err := os.Stat(d); err != nil {
 			t.Errorf("%s was removed while held", d)
 		}
+	}
+}
+
+// TestServeStdioFencesItselfWhenTheCoordinatorGoesSilent proves the real serve path ends and the
+// job's process group dies when no heartbeat is ever acknowledged (real clocks, short TTL).
+func TestServeStdioFencesItselfWhenTheCoordinatorGoesSilent(t *testing.T) {
+	skipUnixOnly(t)
+	useState(t)
+	p := startServe(t, "--coordinator", "peer-1")
+	p.next("hello")
+	p.send("welcome", protocol.Welcome{Version: 1, MinAgentVersion: "1.4.0", SessionID: "s", HeartbeatMS: 50, AgentTTLMS: 400}, 0, "")
+	l := protocol.Lease{LeaseID: "fence1", AttemptID: "a-fence1", Epoch: 1, Token: "opaque-token-7f3a", CompatMode: protocol.Compat15,
+		Job: model.Job{Kind: "static", Run: []string{"sh", "-c", "echo started; sleep 307"}}, Checkout: protocol.Checkout{Revision: rev40},
+		Secrets: []protocol.SecretRef{}, ExpiresAt: "2030-01-01T00:00:00Z"}
+	p.send("lease", l, l.Epoch, l.LeaseID)
+	select { // never acknowledge a heartbeat
+	case <-p.ended:
+	case <-time.After(20 * time.Second):
+		t.Fatal("serve kept running after the coordinator stopped acknowledging")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for exec.Command("pgrep", "-f", "[s]leep 307").Run() == nil {
+		if time.Now().After(deadline) {
+			t.Fatal("the job's process group survived the fence")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// TestFenceCountsCheckoutChunksAsLiveness proves a slow checkout upload does not fence the agent
+// when the heartbeat acks are stuck behind the chunks.
+func TestFenceCountsCheckoutChunksAsLiveness(t *testing.T) {
+	f, inner, mono, _ := fenceRig(t)
+	inner.in <- welcome()
+	if _, err := f.Recv(); err != nil {
+		t.Fatal(err)
+	}
+	for range 10 {
+		mono.Add(int64(150 * time.Millisecond)) // under the 400 ms agent_ttl between chunks
+		inner.in <- protocol.Message{V: 1, Type: "chunk", Body: &protocol.Chunk{Stream: "checkout", Data: "AAAA"}}
+		if _, err := f.Recv(); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	select {
+	case <-inner.closed:
+		t.Fatal("an agent receiving its checkout was fenced")
+	default:
 	}
 }

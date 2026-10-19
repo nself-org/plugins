@@ -50,7 +50,9 @@ type Driver struct {
 	// IdentityFile is an optional private key path offered to every node (the operator's ssh
 	// config and agent supply the key when empty).
 	IdentityFile string
-	// RepoDir is the repository whose revision is bundled for the node.
+	// RepoDir is the repository whose revision is bundled for the node; empty means the
+	// working directory, which suits a PERSONAL run and not a TEAM coordinator serving several
+	// projects (the per-lease repository is a P7-SCHED wiring concern).
 	RepoDir string
 	// Personal marks a PERSONAL coordinator (the only one that may send secret values).
 	Personal bool

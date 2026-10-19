@@ -2,6 +2,7 @@ package checkout
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/protocol"
 )
 
 func TestHoldMarksADirectoryInUseUntilReleased(t *testing.T) {
@@ -103,5 +105,29 @@ func TestGitRunsWithAMinimalEnvironment(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Errorf("git environment lacks %s", want)
 		}
+	}
+}
+
+func TestAMovingTransferIsNotCutOffByTheDeadline(t *testing.T) {
+	repo, rev := makeRepo(t)
+	data, digest := bundleFor(t, repo, rev)
+	old := Deadline
+	Deadline = 300 * time.Millisecond
+	defer func() { Deadline = old }()
+	r := NewReceiver(filepath.Join(t.TempDir(), "stage"), nil)
+	l := leaseFor(rev, digest, len(data))
+	if err := r.Expect(l); err != nil {
+		t.Fatal(err)
+	}
+	step := len(data)/8 + 1
+	for off := 0; off < len(data); off += step {
+		end := min(off+step, len(data))
+		if err := r.Feed(l.LeaseID, l.Epoch, protocol.Chunk{Stream: Stream, Offset: int64(off), Data: base64.StdEncoding.EncodeToString(data[off:end]), Final: end == len(data)}); err != nil {
+			t.Fatalf("chunk at %d: %v", off, err)
+		}
+		time.Sleep(120 * time.Millisecond) // eight chunks take longer than one Deadline
+	}
+	if _, err := r.Stage(context.Background(), l, t.TempDir()); err != nil {
+		t.Fatalf("Stage after a slow but steady transfer: %v", err)
 	}
 }

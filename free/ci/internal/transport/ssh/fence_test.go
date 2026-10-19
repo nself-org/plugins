@@ -3,6 +3,7 @@ package ssh
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -250,4 +251,21 @@ func (c *typeTap) Recv() (protocol.Message, error) {
 		*c.seen = append(*c.seen, m.Type)
 	}
 	return m, err
+}
+
+// TestSSHTransportBoundsTheBlobsOneLeaseMayOpen proves a node cannot fill the sink with many
+// individually valid blobs.
+func TestSSHTransportBoundsTheBlobsOneLeaseMayOpen(t *testing.T) {
+	sink := &recSink{}
+	err := runScripted(t, &Driver{}, func(a *scriptedAgent) {
+		for i := range 5 { // four blobs of maxBlob fit the budget, the fifth does not
+			d := protocol.Digest{Stream: "cache", SHA256: strings.Repeat(string(rune('a'+i)), 64), Size: maxBlob}
+			a.send("digest", d, "lease-1", 4)
+			if _, ok := a.next("offset"); !ok {
+				return
+			}
+		}
+		a.next("cancel")
+	}, sink)
+	reasonOf(t, err, ReasonBlob)
 }
