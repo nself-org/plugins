@@ -54,7 +54,7 @@ tmp=$(mktemp -d)
 cp /etc/sudoers "$tmp/sudoers.orig"
 ok=0
 cleanup() {
-  if [ "$ok" != 1 ]; then cp "$tmp/sudoers.orig" /etc/sudoers 2>/dev/null || true; fi
+  if [ "$ok" != 1 ] && ! cmp -s "$tmp/sudoers.orig" /etc/sudoers; then cp "$tmp/sudoers.orig" /etc/sudoers 2>/dev/null || true; fi
   rm -rf "$tmp"
 }
 trap cleanup EXIT
@@ -123,6 +123,8 @@ for u in $(getent passwd | cut -d: -f1 | grep -E '^%[1]s(-job-[0-9]+)?$'); do
 done
 rules=$(sudo -n -l -U %[1]s 2>/dev/null | grep -c '%[5]s job-shim' || true)
 [ "$rules" = %[6]d ] || { echo "sudo lists $rules job-shim rules, want %[6]d" >&2; exit 1; }
+all=$(sudo -n -l -U %[1]s 2>/dev/null | grep -cE '^[[:space:]]*[(]' || true)
+[ "$all" = %[6]d ] || { echo "sudo lists $all rules for %[1]s, want only the %[6]d job-shim rules" >&2; exit 1; }
 `, AgentUser, StateDir, slotList(slots), SudoersDir, AgentPath, slots)
 }
 

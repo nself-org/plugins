@@ -57,7 +57,7 @@ func (r *rig) layout(slots int) {
 		r.t.Errorf("sudo -l -U %s lists %d rules, want %d", AgentUser, rules, slots)
 	}
 	r.root("visudo -c >/dev/null")
-	for path, want := range map[string]string{AgentPath: "755 root", StateDir: "700 nself-ci", WorkDir: "711 nself-ci", JobsDir: "711 root"} {
+	for path, want := range map[string]string{AgentDir: "755 root", AgentDir + "/bin": "755 root", AgentPath: "755 root", StateDir: "700 nself-ci", WorkDir: "711 nself-ci", JobsDir: "711 root"} {
 		if got := r.root("stat -c '%a %U' " + path); got != want {
 			r.t.Errorf("%s is %q, want %q", path, got, want)
 		}
