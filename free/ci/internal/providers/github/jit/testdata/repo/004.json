@@ -1,16 +1,16 @@
 {
   "request": {
     "method": "GET",
-    "path": "/repos/acme/widgets/actions/runners",
-    "query": "page=2&per_page=2"
+    "path": "/repos/acme/widgets/actions/runners/runner-1",
+    "query": ""
   },
   "response": {
-    "status": 200,
+    "status": 404,
     "headers": {
       "Content-Type": [
         "application/json"
       ]
     },
-    "body": "{\"total_count\": 3, \"runners\": [{\"id\": 7, \"name\": \"other-box\", \"os\": \"linux\", \"status\": \"online\", \"busy\": false, \"labels\": [{\"id\": 1, \"name\": \"self-hosted\", \"type\": \"read-only\"}]}]}"
+    "body": "{\"message\": \"Not Found\"}"
   }
 }

@@ -1,8 +1,8 @@
 {
   "request": {
     "method": "GET",
-    "path": "/orgs/acme/actions/runner-groups/11",
-    "query": ""
+    "path": "/orgs/acme/actions/runners",
+    "query": "page=2&per_page=2"
   },
   "response": {
     "status": 200,
@@ -11,6 +11,6 @@
         "application/json"
       ]
     },
-    "body": "{\"id\": 11, \"name\": \"nself-untrusted\", \"visibility\": \"selected\", \"default\": false, \"inherited\": false, \"allows_public_repositories\": false, \"restricted_to_workflows\": true, \"selected_workflows\": [\"acme/widgets/.github/workflows/ci.yml@refs/heads/main\"], \"workflow_restrictions_read_only\": false}"
+    "body": "{\"total_count\": 5, \"runners\": [{\"id\": 32, \"name\": \"nself-jit-01KDVBYC600000000000000000\", \"os\": \"linux\", \"status\": \"online\", \"busy\": false, \"labels\": [{\"id\": 1, \"name\": \"self-hosted\", \"type\": \"read-only\"}]}, {\"id\": 33, \"name\": \"nself-jit-01KDV3BQ400000000000000000\", \"os\": \"linux\", \"status\": \"online\", \"busy\": true, \"labels\": [{\"id\": 1, \"name\": \"self-hosted\", \"type\": \"read-only\"}]}]}"
   }
 }

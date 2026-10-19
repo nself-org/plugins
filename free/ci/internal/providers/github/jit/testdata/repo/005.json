@@ -1,6 +1,6 @@
 {
   "request": {
-    "method": "DELETE",
+    "method": "GET",
     "path": "/repos/acme/widgets/actions/runners/runner-1",
     "query": ""
   },
@@ -11,6 +11,6 @@
         "application/json"
       ]
     },
-    "body": "{\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest\"}"
+    "body": "{\"message\": \"Not Found\"}"
   }
 }

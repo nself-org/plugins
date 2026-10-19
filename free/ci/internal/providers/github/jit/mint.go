@@ -33,10 +33,13 @@ type Minted struct {
 	GroupID    int64
 	Scope      providers.RunnerScope
 	Credential providers.RunnerCredential
+	refScope   string // the scope kind it was registered at, carried in Ref().ID
 }
 
 // Ref is the handle to pass to Deregister.
-func (m Minted) Ref() providers.RunnerRef { return providers.RunnerRef{ID: m.RunnerID, Scope: m.Scope} }
+func (m Minted) Ref() providers.RunnerRef {
+	return providers.RunnerRef{ID: m.refScope + ":" + m.RunnerID, Scope: m.Scope}
+}
 
 // String, GoString, LogValue and MarshalJSON leave the credential out wherever a Minted is printed.
 func (m Minted) String() string {
@@ -126,7 +129,7 @@ func (r *Registrar) MintRunner(ctx context.Context, req providers.RunnerRequest)
 		return Minted{}, providers.NewError(providers.Config, "E707", "mint.incomplete", 0, time.Time{})
 	}
 	return Minted{
-		RunnerID: strconv.FormatInt(out.Runner.ID, 10), Name: name, Labels: labels, GroupID: group, Scope: req.Scope,
+		RunnerID: strconv.FormatInt(out.Runner.ID, 10), Name: name, Labels: labels, GroupID: group, Scope: req.Scope, refScope: r.set.Scope,
 		Credential: providers.RunnerCredential{Kind: idCredential, Value: out.Config, ExpiresAt: now.Add(ConfigLifetime)},
 	}, nil
 }

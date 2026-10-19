@@ -104,8 +104,11 @@ func TestApprovalPolicy(t *testing.T) {
 		string(p.Value) != `{"approval_policy":"first_time_contributors"}` {
 		t.Fatalf("fact %+v", p)
 	}
+	if _, err = r.FetchApprovalPolicy(context.Background(), providers.RunnerScope{Repo: "ACME/Widgets"}); err != nil || s.puts[1].Scope != testScope {
+		t.Fatalf("the fact must key on the lower-cased repository: %v %+v", err, s.puts)
+	}
 	f.approval = "../../etc"
-	if _, err = r.FetchApprovalPolicy(context.Background(), repoOnly); err == nil || len(s.puts) != 1 {
+	if _, err = r.FetchApprovalPolicy(context.Background(), repoOnly); err == nil || len(s.puts) != 2 {
 		t.Fatalf("an invalid policy name must be refused and not stored: %v", err)
 	}
 	if _, err = r.FetchApprovalPolicy(context.Background(), providers.RunnerScope{Repo: "acme"}); err == nil {

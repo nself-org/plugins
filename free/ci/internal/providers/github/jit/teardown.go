@@ -1,54 +1,94 @@
 package jit
 
 // Purpose: Deregister and Orphans, the teardown half (Epic D6).
-// Inputs:  a RunnerRef from MintRunner; an orphan cutoff.
+// Inputs:  a RunnerRef from Minted.Ref or Orphans (its ID is "<scope>:<runner id>"; a bare id is
+//          accepted); an orphan cutoff.
 // Outputs: nil when the runner is gone and proven gone; the orphan list of the configured scope.
-// Constraints: DELETE answering 404 means done and needs no second look. Any other success is
-//          followed by a read of the runner list, and a runner still in it is E707
-//          deregister_unverified, never a silent pass. Orphans are runners this package named
-//          (nself-jit-<ulid>), not busy, born before the cutoff; a name that is not ours or whose
-//          ULID does not parse is never returned, because deleting a persistent runner is worse than
-//          leaving an orphan.
+// Constraints: Deregister reads the runner first. Absent (404) is done; a runner whose name is not
+//          nself-jit-<ulid> is never deleted (E707 deregister.not_ours), so a wrong handle cannot
+//          remove a persistent runner. After the DELETE (a 404 there is also done) the runner is read
+//          once more by id, and one still answering is E707 deregister_unverified. Reading by id and
+//          not walking the list is deliberate: ephemeral runners leave a busy list while it is paged,
+//          and a shifted page would hide a runner that is still registered. A ref minted at the other
+//          scope than the configured one is refused (E707 deregister.scope_changed) instead of
+//          being "deleted" from the wrong collection. Orphans are runners this package named, not
+//          busy, born before the cutoff; a name that is not ours or whose ULID does not parse is never
+//          returned, because deleting a persistent runner is worse than leaving an orphan.
 
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 )
 
-// Deregister deletes the runner and verifies it is absent from the runner list.
+var runnerID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,40}$`)
+
+// refID is the handle a ref carries: the scope the runner was registered at, then its id.
+func (r *Registrar) refID(id string) string { return r.set.Scope + ":" + id }
+
+// splitRefID reads "<scope>:<id>"; a bare id has no scope.
+func splitRefID(s string) (kind, id string) {
+	if i := strings.IndexByte(s, ':'); i >= 0 {
+		return s[:i], s[i+1:]
+	}
+	return "", s
+}
+
+// runnerRead is GET of one runner: found is false on 404.
+func (r *Registrar) runnerRead(ctx context.Context, t target, id string) (name string, found bool, err error) {
+	tmpl, params := r.runnersPath(t)
+	params["id"] = id
+	var out struct {
+		Name string `json:"name"`
+	}
+	resp, err := r.c.Do(ctx, "GET", tmpl+"/{id}", params, nil, &out)
+	if resp.Status == 404 {
+		return "", false, nil
+	}
+	return out.Name, err == nil, err
+}
+
+// Deregister deletes the runner and verifies it is gone.
 func (r *Registrar) Deregister(ctx context.Context, ref providers.RunnerRef) error {
 	t, err := r.resolve(ref.Scope)
 	if err != nil {
 		return err
 	}
-	if ref.ID == "" {
+	kind, id := splitRefID(ref.ID)
+	if !runnerID.MatchString(id) || kind != "" && kind != ScopeRepo && kind != ScopeOrg {
 		return providers.NewError(providers.Config, "E702", "runner.id", 0, time.Time{})
 	}
-	tmpl, params := r.runnersPath(t)
-	params["id"] = ref.ID
-	resp, err := r.c.Do(ctx, "DELETE", tmpl+"/{id}", params, nil, nil)
-	if resp.Status == 404 {
-		return nil
+	if kind != "" && kind != r.set.Scope {
+		return providers.NewError(providers.Config, "E707", "deregister.scope_changed", 0, time.Time{})
 	}
+	name, found, err := r.runnerRead(ctx, t, id)
 	if err != nil {
 		return runnerErr(err, "deregister")
 	}
-	all, err := r.listRunners(ctx, t)
-	if err != nil {
-		var pe *providers.Error
-		if errors.As(err, &pe) && pe.Class != providers.Config {
-			return err
-		}
-		return providers.NewError(providers.Config, "E707", "deregister_unverified", 0, time.Time{})
+	if !found {
+		return nil
 	}
-	for _, x := range all {
-		if strconv.FormatInt(x.ID, 10) == ref.ID {
-			return providers.NewError(providers.Config, "E707", "deregister_unverified", 0, time.Time{})
-		}
+	if _, ok := runnerBirth(name); !ok {
+		return providers.NewError(providers.Config, "E707", "deregister.not_ours", 0, time.Time{})
+	}
+	tmpl, params := r.runnersPath(t)
+	params["id"] = id
+	resp, err := r.c.Do(ctx, "DELETE", tmpl+"/{id}", params, nil, nil)
+	if err != nil && resp.Status != 404 {
+		return runnerErr(err, "deregister")
+	}
+	_, still, err := r.runnerRead(ctx, t, id)
+	var pe *providers.Error
+	if err != nil && errors.As(err, &pe) && pe.Class != providers.Config {
+		return err
+	}
+	if err != nil || still {
+		return providers.NewError(providers.Config, "E707", "deregister_unverified", 0, time.Time{})
 	}
 	return nil
 }
@@ -71,7 +111,7 @@ func (r *Registrar) Orphans(ctx context.Context, scope providers.RunnerScope, be
 	for _, x := range all {
 		born, ok := runnerBirth(x.Name)
 		if ok && !x.Busy && born.Before(before) {
-			out = append(out, providers.RunnerRef{ID: strconv.FormatInt(x.ID, 10), Scope: scope})
+			out = append(out, providers.RunnerRef{ID: r.refID(strconv.FormatInt(x.ID, 10)), Scope: scope})
 		}
 	}
 	return out, nil

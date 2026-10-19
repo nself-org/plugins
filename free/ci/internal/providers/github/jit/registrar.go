@@ -164,9 +164,11 @@ func runnerErr(err error, op string) error {
 }
 
 // runnerList is the part of GitHub's runner list this package reads.
+// Both fields are pointers so that a body without them (null, {}, a changed shape) is told apart
+// from an empty list: a missing list is never read as "no runners".
 type runnerList struct {
-	Total   int `json:"total_count"`
-	Runners []struct {
+	Total   *int `json:"total_count"`
+	Runners *[]struct {
 		ID   int64  `json:"id"`
 		Name string `json:"name"`
 		Busy bool   `json:"busy"`
@@ -189,10 +191,13 @@ func (r *Registrar) listRunners(ctx context.Context, t target) ([]runnerInfo, er
 		if _, err := r.c.DoQuery(ctx, "GET", tmpl, params, q, nil, &out); err != nil {
 			return nil, runnerErr(err, "list")
 		}
-		for _, x := range out.Runners {
+		if out.Runners == nil || out.Total == nil {
+			return nil, providers.NewError(providers.Config, "E707", "list.malformed", 0, time.Time{})
+		}
+		for _, x := range *out.Runners {
 			all = append(all, runnerInfo{ID: x.ID, Name: x.Name, Busy: x.Busy})
 		}
-		if len(out.Runners) < r.pageSize || out.Total > 0 && len(all) >= out.Total {
+		if len(*out.Runners) < r.pageSize || *out.Total > 0 && len(all) >= *out.Total {
 			return all, nil
 		}
 	}

@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/providers"
@@ -28,6 +29,7 @@ var policyName = regexp.MustCompile(`^[a-z_]{1,64}$`)
 
 // FetchApprovalPolicy reads the policy and records it when a fact sink is configured.
 func (r *Registrar) FetchApprovalPolicy(ctx context.Context, scope providers.RunnerScope) (string, error) {
+	scope.Repo = strings.ToLower(scope.Repo) // one fact per repository, however the caller cased it
 	owner, repo, found := splitRepo(scope.Repo)
 	if !found {
 		return "", providers.NewError(providers.Config, "E702", "scope.repo", 0, time.Time{})

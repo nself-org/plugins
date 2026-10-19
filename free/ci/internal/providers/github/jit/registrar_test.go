@@ -140,6 +140,11 @@ func TestRestriction(t *testing.T) {
 		{"bare-ref", group(false, true, "acme/widgets/.github/workflows/ci.yml@main"), "workflow_not_branch_pinned"},
 		{"wildcard", group(false, true, "acme/widgets/.github/workflows/ci.yml@refs/heads/*"), "workflow_not_branch_pinned"},
 		{"one-bad-of-two", group(false, true, ok, sha), "workflow_not_branch_pinned"},
+		{"tag-pin-after-branch-text", group(false, true, "acme/widgets/.github/workflows/a@refs/heads/main.yml@refs/tags/v1"), "workflow_not_branch_pinned"},
+		{"empty-workflow-path", group(false, true, "acme/widgets/@refs/heads/main"), "workflow_not_branch_pinned"},
+		{"not-under-github-workflows", group(false, true, "acme/widgets/ci.yml@refs/heads/main"), "workflow_not_branch_pinned"},
+		{"dotdot-branch", group(false, true, "acme/widgets/.github/workflows/ci.yml@refs/heads/dev/../../main"), "workflow_not_branch_pinned"},
+		{"encoded-branch", group(false, true, "acme/widgets/.github/workflows/ci.yml@refs/heads/ma%69n"), "workflow_not_branch_pinned"},
 		{"no-workflows", group(false, true), "no_selected_workflows"},
 		{"foreign-owner-pin", group(false, true, "evil/widgets/.github/workflows/ci.yml@refs/heads/main"), "workflow_foreign_owner"},
 		{"two-workflows-one-branch", group(false, true, ok, "acme/widgets/.github/workflows/other.yml@refs/heads/main"), ""},
@@ -181,12 +186,28 @@ func TestRestriction(t *testing.T) {
 			}
 		}
 	})
-	t.Run("repo-scope-names-only-the-default-group", func(t *testing.T) {
+	t.Run("repo-scope-is-never-proven", func(t *testing.T) {
 		f := newFakeGH(t)
 		f.group, f.protect["acme/widgets@main"] = group(false, true, ok), true
-		v, err := f.registrar(jit.Settings{}, nil).RestrictionVerdict(context.Background(), repoOnly, 11)
-		if err != nil || v.Verified || v.ProtectedOnly || v.Reason != "repo_scope_group_mismatch" || f.called("GET") != 0 {
-			t.Fatalf("%+v %v calls=%v", v, err, f.calls)
+		for _, gid := range []int64{1, 11} {
+			v, err := f.registrar(jit.Settings{}, nil).RestrictionVerdict(context.Background(), repoOnly, gid)
+			if err != nil || v.Verified || v.ProtectedOnly || v.Reason != "repo_scope_unrestricted" || f.called("GET") != 0 {
+				t.Fatalf("group %d: %+v %v calls=%v", gid, v, err, f.calls)
+			}
+		}
+	})
+	t.Run("missing-fields-are-not-proof", func(t *testing.T) {
+		for _, g := range []map[string]any{
+			{"id": 11, "restricted_to_workflows": true, "selected_workflows": []string{ok}},     // no allows_public_repositories
+			{"id": 11, "allows_public_repositories": false, "selected_workflows": []string{ok}}, // no restricted_to_workflows
+			{"id": 11},
+		} {
+			f := newFakeGH(t)
+			f.group, f.protect["acme/widgets@main"] = g, true
+			v, err := f.registrar(jit.Settings{Scope: jit.ScopeOrg}, nil).RestrictionVerdict(context.Background(), repoOnly, 11)
+			if err != nil || v.Verified || v.ProtectedOnly || v.Reason != "group_fields_missing" {
+				t.Fatalf("%v: %+v %v", g, v, err)
+			}
 		}
 	})
 	t.Run("unreadable-group", func(t *testing.T) {
@@ -215,28 +236,77 @@ func TestOrgScopeNeedsAdminOrg(t *testing.T) {
 	}
 }
 
-// TestDeregisterVerified proves acceptance 5 (first half): a runner still listed after DELETE is
-// E707 deregister_unverified; a 404 is done without a list read; a clean delete is verified absent.
+// TestDeregisterVerified proves acceptance 5 (first half): a runner still answering after DELETE is
+// E707 deregister_unverified; one already gone (or gone during the delete: 404) is done; a clean delete
+// is read back as absent; a runner that is not an nself-jit one is never deleted; a ref from the other
+// scope or with a malformed id is refused before any request.
 func TestDeregisterVerified(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeGH(t)
 	r := f.registrar(jit.Settings{}, nil)
-	m, err := r.MintRunner(ctx, providers.RunnerRequest{Scope: repoOnly})
-	if err != nil {
-		t.Fatal(err)
+	mint := func() jit.Minted {
+		m, err := r.MintRunner(ctx, providers.RunnerRequest{Scope: repoOnly})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
 	}
-	if err := r.Deregister(ctx, m.Ref()); err != nil || f.called("GET") != 1 {
-		t.Fatalf("clean delete: %v calls=%v", err, f.calls)
+	m := mint()
+	if !strings.HasPrefix(m.Ref().ID, "repo:") {
+		t.Fatalf("ref %q", m.Ref().ID)
 	}
-	if err := r.Deregister(ctx, m.Ref()); err != nil || f.called("GET") != 1 {
-		t.Fatalf("404 must be done with no list read: %v calls=%v", err, f.calls)
+	if err := r.Deregister(ctx, m.Ref()); err != nil || f.called("GET")+f.called("DELETE") != 3 {
+		t.Fatalf("clean delete is read, delete, read: %v calls=%v", err, f.calls)
 	}
-	f.keepDel = true
-	m, _ = r.MintRunner(ctx, providers.RunnerRequest{Scope: repoOnly})
-	err = r.Deregister(ctx, m.Ref())
+	n := len(f.calls)
+	if err := r.Deregister(ctx, m.Ref()); err != nil || len(f.calls) != n+1 {
+		t.Fatalf("already gone must be done after one read: %v calls=%v", err, f.calls[n:])
+	}
+	f.raceDelete = true
+	if err := r.Deregister(ctx, mint().Ref()); err != nil {
+		t.Fatalf("a 404 on DELETE is done: %v", err)
+	}
+	f.raceDelete, f.keepDel = false, true
+	err := r.Deregister(ctx, mint().Ref())
 	var pe *providers.Error
 	if !errors.As(err, &pe) || pe.Code != "E707" || pe.Reason != "deregister_unverified" {
 		t.Fatalf("want E707 deregister_unverified, got %v", err)
+	}
+	f.keepDel = false
+	f.runners = append(f.runners, runnerRow{ID: 900, Name: "persistent-box"})
+	n = f.called("DELETE")
+	err = r.Deregister(ctx, providers.RunnerRef{ID: "repo:900", Scope: repoOnly})
+	if !errors.As(err, &pe) || pe.Reason != "deregister.not_ours" || f.called("DELETE") != n {
+		t.Fatalf("a persistent runner must never be deleted: %v", err)
+	}
+	n = len(f.calls)
+	for id, reason := range map[string]string{"org:900": "deregister.scope_changed", "1/../../other": "runner.id", "repo:": "runner.id", "x:5": "runner.id", "5?x=1": "runner.id"} {
+		err = r.Deregister(ctx, providers.RunnerRef{ID: id, Scope: repoOnly})
+		if !errors.As(err, &pe) || pe.Reason != reason {
+			t.Errorf("%q: want %s, got %v", id, reason, err)
+		}
+	}
+	if len(f.calls) != n {
+		t.Fatalf("a refused ref reached the API: %v", f.calls[n:])
+	}
+}
+
+// TestListMustBeProof proves a runner list that lacks its fields (null, {}, no total) is E707
+// list.malformed and never an empty list that could pass for a sweep result.
+func TestListMustBeProof(t *testing.T) {
+	for _, body := range []string{`null`, `{}`, `{"total_count":0}`, `{"runners":[]}`} {
+		f := newFakeGH(t)
+		f.listBody = body
+		_, err := f.registrar(jit.Settings{}, nil).Orphans(context.Background(), repoOnly, time.Time{})
+		var pe *providers.Error
+		if !errors.As(err, &pe) || pe.Reason != "list.malformed" {
+			t.Errorf("%s: want list.malformed, got %v", body, err)
+		}
+	}
+	f := newFakeGH(t)
+	f.listBody = `{"total_count":0,"runners":[]}`
+	if got, err := f.registrar(jit.Settings{}, nil).Orphans(context.Background(), repoOnly, time.Time{}); err != nil || len(got) != 0 {
+		t.Fatalf("an empty but well-formed list is fine: %v %v", got, err)
 	}
 }
 
@@ -263,8 +333,8 @@ func TestOrphans(t *testing.T) {
 					t.Fatalf("scope lost: %+v", x)
 				}
 			}
-			if strings.Join(ids, ",") != "2,5,8" {
-				t.Fatalf("orphans %v, want [2 5 8]", ids)
+			if want := set.Scope + ":2," + set.Scope + ":5," + set.Scope + ":8"; strings.Join(ids, ",") != want {
+				t.Fatalf("orphans %v, want %s", ids, want)
 			}
 			if n := f.called("GET /"); n != 5 {
 				t.Fatalf("paging: %d list calls for 9 runners at 2 per page", n)

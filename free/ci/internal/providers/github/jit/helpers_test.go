@@ -55,6 +55,8 @@ type fakeGH struct {
 
 	groupStatus, protectStatus int // when non-zero, the group read / branch protection read answers this status
 	protectCalls               int
+	raceDelete                 bool   // DELETE removes the runner but answers 404 (it went away on its own)
+	listBody                   string // when set, the runner list answers this raw 200 body
 }
 
 func newFakeGH(t *testing.T) *fakeGH {
@@ -103,6 +105,18 @@ func (f *fakeGH) serve(w http.ResponseWriter, r *http.Request) {
 		f.nextID++
 		f.runners = append(f.runners, runnerRow{ID: f.nextID, Name: body["name"].(string)})
 		f.reply(w, 201, map[string]any{"runner": map[string]any{"id": f.nextID, "name": body["name"]}, "encoded_jit_config": "synthetic-jit-config-" + strconv.FormatInt(f.nextID, 10)})
+	case r.Method == "GET" && strings.HasSuffix(p, "/actions/runners") && f.listBody != "":
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(f.listBody))
+	case r.Method == "GET" && strings.Contains(p, "/actions/runners/"):
+		id, _ := strconv.ParseInt(p[strings.LastIndex(p, "/")+1:], 10, 64)
+		for _, x := range f.runners {
+			if x.ID == id {
+				f.reply(w, 200, map[string]any{"id": x.ID, "name": x.Name, "busy": x.Busy})
+				return
+			}
+		}
+		f.reply(w, 404, map[string]string{"message": "Not Found"})
 	case r.Method == "GET" && strings.HasSuffix(p, "/actions/runners"):
 		size, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
@@ -125,6 +139,10 @@ func (f *fakeGH) serve(w http.ResponseWriter, r *http.Request) {
 			if x.ID == id {
 				if !f.keepDel {
 					f.runners = append(f.runners[:i], f.runners[i+1:]...)
+				}
+				if f.raceDelete {
+					f.reply(w, 404, map[string]string{"message": "Not Found"})
+					return
 				}
 				w.WriteHeader(204)
 				return

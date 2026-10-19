@@ -7,13 +7,20 @@ package jit
 //          allows no public repositories; it is restricted_to_workflows; it lists at least one
 //          workflow; every listed workflow is pinned to @refs/heads/<branch> (a concrete branch, not
 //          a tag, a bare name, a wildcard or a SHA) and the branch protection API says that branch of
-//          that repository is protected. Anything unreadable is "not verified", never "verified".
+//          that repository (the group's own organization) is protected. Anything unreadable, or a
+//          reply missing a field, is "not verified", never "verified". Only organization runner
+//          groups can be proven: at repo scope the answer is always "not proven" (a repo-level
+//          runner is not governed by a group).
+//          ProtectedOnly describes the GROUP, not one job: GitHub hands a queued job to any runner
+//          whose labels match, so every job the group can admit (visibility, reusable workflows) must
+//          pass TRUST-13's fact rule, not only the demand that minted the runner (Epic note, HOST-04).
 //          This says nothing about the code a protected workflow checks out: a pull_request_target or
 //          workflow_run workflow, or one that checks out a fork head, still runs fork code on the
 //          runner. TRUST-13 decides that from RunEvent, HeadRepo and Fork.
 
 import (
 	"context"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -28,9 +35,10 @@ type Verdict struct {
 	Workflows     []string
 }
 
+// AllowsPublic and Restricted are pointers: a reply that omits either field is not proof of anything.
 type groupReply struct {
-	AllowsPublic  bool     `json:"allows_public_repositories"`
-	Restricted    bool     `json:"restricted_to_workflows"`
+	AllowsPublic  *bool    `json:"allows_public_repositories"`
+	Restricted    *bool    `json:"restricted_to_workflows"`
 	WorkflowsList []string `json:"selected_workflows"`
 }
 
@@ -47,10 +55,10 @@ func (r *Registrar) RestrictionVerdict(ctx context.Context, scope providers.Runn
 	if groupID <= 0 {
 		return notProven("no_group", false, nil), nil
 	}
-	if r.set.Scope == ScopeRepo && groupID != DefaultGroup {
-		// A repo-level registration always lands in the default group; a verdict about any other group
-		// would say nothing about where the runner sits.
-		return notProven("repo_scope_group_mismatch", false, nil), nil
+	if r.set.Scope == ScopeRepo {
+		// Runner groups govern organization runners. A repo-level runner serves every workflow of its
+		// repository, fork pull requests included, whatever the org's default group says.
+		return notProven("repo_scope_unrestricted", false, nil), nil
 	}
 	var g groupReply
 	_, err = r.c.Do(ctx, "GET", "/orgs/{org}/actions/runner-groups/{group}",
@@ -62,9 +70,11 @@ func (r *Registrar) RestrictionVerdict(ctx context.Context, scope providers.Runn
 		return Verdict{}, err
 	}
 	switch {
-	case g.AllowsPublic:
+	case g.AllowsPublic == nil || g.Restricted == nil:
+		return notProven("group_fields_missing", false, nil), nil
+	case *g.AllowsPublic:
 		return notProven("public_repositories_allowed", true, g.WorkflowsList), nil
-	case !g.Restricted:
+	case !*g.Restricted:
 		return notProven("not_restricted_to_workflows", true, g.WorkflowsList), nil
 	case len(g.WorkflowsList) == 0:
 		return notProven("no_selected_workflows", true, g.WorkflowsList), nil
@@ -102,15 +112,27 @@ func (r *Registrar) Restriction(ctx context.Context, scope providers.RunnerScope
 	return providers.Restriction{ProtectedOnly: v.ProtectedOnly, Workflows: v.Workflows}, err
 }
 
-// pinnedBranch splits "owner/repo/path/to/workflow.yml@refs/heads/branch".
+var (
+	branchName   = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
+	workflowPath = regexp.MustCompile(`^\.github/workflows/[A-Za-z0-9._-]+\.ya?ml$`)
+)
+
+// pinnedBranch splits "owner/repo/.github/workflows/<file>.yml@refs/heads/<branch>". The ref is cut at
+// the LAST "@", the path may hold none, the file must sit in .github/workflows, and the branch must be
+// a plain branch name (no "..", "//", leading or trailing "/", "@" or "%").
 func pinnedBranch(entry string) (owner, repo, branch string, ok bool) {
-	path, ref, found := strings.Cut(entry, "@")
-	if !found {
+	i := strings.LastIndexByte(entry, '@')
+	if i < 0 {
 		return "", "", "", false
 	}
+	path, ref := entry[:i], entry[i+1:]
 	branch, isHead := strings.CutPrefix(ref, "refs/heads/")
 	parts := strings.SplitN(path, "/", 3)
-	if !isHead || branch == "" || strings.ContainsAny(branch, "*?[ ") || len(parts) < 3 || parts[0] == "" || parts[1] == "" {
+	if !isHead || len(parts) < 3 || parts[0] == "" || parts[1] == "" || !workflowPath.MatchString(parts[2]) {
+		return "", "", "", false
+	}
+	if !branchName.MatchString(branch) || strings.Contains(branch, "..") || strings.Contains(branch, "//") ||
+		strings.HasPrefix(branch, "/") || strings.HasSuffix(branch, "/") || strings.HasSuffix(branch, ".lock") {
 		return "", "", "", false
 	}
 	return parts[0], parts[1], branch, true
