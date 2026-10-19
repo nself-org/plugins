@@ -207,3 +207,26 @@ func TestProfileLevelAndRegistry(t *testing.T) {
 		t.Fatalf("%v %v", names, err)
 	}
 }
+
+// ctxRunner fails every query the way a cancelled caller context does, and answers normally otherwise.
+type ctxRunner struct{ inner *fakeRunner }
+
+func (c ctxRunner) Query(ctx context.Context, binary string, args ...string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return c.inner.Query(ctx, binary, args...)
+}
+
+func TestProbeDoesNotCacheFailureOfCancelledContext(t *testing.T) {
+	r := &fakeRunner{info: map[string]string{"docker": dockerRootful}}
+	p := New(Options{Runner: ctxRunner{r}, TTL: time.Minute})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if av := p.Probe(ctx); av.Available() {
+		t.Fatalf("cancelled probe reported available: %+v", av)
+	}
+	if av := p.Probe(context.Background()); !av.Available() {
+		t.Fatalf("a live caller inherited the cancelled caller's failure: %+v", av)
+	}
+}
