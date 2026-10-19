@@ -1,0 +1,4 @@
+# Repositories the main-status-audit drill checks: "owner/name [branch]" per line (default branch: main).
+# A repository belongs here once its default branch is meant to carry a green `nself-ci` on every commit
+# (plugins runs the workflow today; add cli and packages when P7-CI-56/57 and P7-CI-55 adopt it).
+nself-org/plugins
