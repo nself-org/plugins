@@ -160,10 +160,11 @@ func astroSync(pm string) string {
 
 // managerEnv is set for every check of the manager: pnpm must not switch itself to
 // the pinned version (it downloads it into a global store, so the pin check below
-// and an offline host would both be defeated).
+// and an offline host would both be defeated), nor reinstall stale dependencies
+// before every `pnpm run` (pnpm 11+; the gate installs, or uses the tree as it is).
 func managerEnv(pm string) string {
 	if pm == "pnpm" {
-		return "export pnpm_config_manage_package_manager_versions=false npm_config_manage_package_manager_versions=false\n"
+		return "export pnpm_config_manage_package_manager_versions=false npm_config_manage_package_manager_versions=false pnpm_config_verify_deps_before_run=false npm_config_verify_deps_before_run=false\n"
 	}
 	return ""
 }

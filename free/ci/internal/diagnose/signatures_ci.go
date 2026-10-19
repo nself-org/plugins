@@ -18,6 +18,7 @@ package diagnose
 import (
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // SigNetwork is the signature of an unreachable provider, registry or remote.
@@ -103,13 +104,13 @@ var installSync = re(`(?i)err_pnpm_outdated_lockfile|err_pnpm_lockfile_config_mi
 // installTestFailure marks a lifecycle script (postinstall, prepare) that runs
 // a test runner or an assertion and reports it. Narrower than testFailure:
 // package managers say "failed" about the network too.
-var installTestFailure = re(`(?im)^\s*(--- FAIL\b|FAIL\s|not ok\b)|✕|✗|assertion ?error|assertion failed|err_assertion|panic:`)
+var installTestFailure = re(`(?im)^\s*(--- FAIL\b|FAIL\s|not ok\b)|assertion ?error|assertion failed|err_assertion|panic:`)
 
 // installLifecycle marks a failing lifecycle script (preinstall, install,
 // postinstall, prepare, a native build) in the shapes of npm, pnpm and both
 // Yarns: the project's own command failed, and whatever it printed about
 // connections is about the project's setup.
-var installLifecycle = re(`(?i)\belifecycle\b|npm error command failed|command failed with exit code|(^|\n)command failed\.?\s*\n\s*exit code:|couldn't be built successfully|yn0009|(^|\n)> \S+@\S+ (pre|post)?(install|prepare)\b|script from .* failed|gyp err`)
+var installLifecycle = re(`(?i)\belifecycle\b|npm error command failed|\bcommand failed\b|couldn't be built successfully|yn0009|(^|\n)> \S+@\S+ (pre|post)?(install|prepare)\b|script from .* failed|gyp err`)
 
 // installRetry marks a transient the manager recovered from (or is about to
 // retry): never the reason the install ended.
@@ -193,6 +194,7 @@ func pinDiagnosis() Diagnosis {
 // code; then the structured error lines of the managers, with URLs and retry
 // warnings removed, name the cause.
 func ClassifyInstall(log string) Diagnosis {
+	log = normalizeInstall(log)
 	for _, m := range installURLHost.FindAllStringSubmatch(log, -1) {
 		if installLocal.MatchString(" " + m[1] + " ") {
 			return named(SigCode, "code")
@@ -238,6 +240,20 @@ func ClassifyInstall(log string) Diagnosis {
 		return infra(signatureByID(SigNetwork))
 	}
 	return named(SigCode, "code")
+}
+
+var installANSI = re(`\x1b\[[0-9;?]*[A-Za-z]`)
+
+// normalizeInstall turns every Unicode space (pnpm pads codes with U+2009) into a
+// plain space and removes terminal colour codes, so the patterns above see ASCII.
+func normalizeInstall(log string) string {
+	log = installANSI.ReplaceAllString(log, "")
+	return strings.Map(func(r rune) rune {
+		if r != '\n' && r != '\r' && unicode.IsSpace(r) {
+			return ' '
+		}
+		return r
+	}, log)
 }
 
 // dropLines removes the lines that match r.

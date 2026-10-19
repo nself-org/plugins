@@ -506,8 +506,8 @@ func TestNodeGateKeepsTempAndCachesInTheInstallWorkspace(t *testing.T) {
 		h := newNodeHost(t)
 		h.write("package.json", manifest("pnpm@9.1.0", ""))
 		h.write("node_modules/.keep", "")
-		h.manager("pnpm", "9.1.0", `echo "SWITCH $pnpm_config_manage_package_manager_versions $npm_config_manage_package_manager_versions"`)
-		if r := h.run("node.test", "."); r.out != "SWITCH false false" {
+		h.manager("pnpm", "9.1.0", `echo "SWITCH $pnpm_config_manage_package_manager_versions $npm_config_manage_package_manager_versions $pnpm_config_verify_deps_before_run"`)
+		if r := h.run("node.test", "."); r.out != "SWITCH false false false" {
 			t.Fatalf("%+v", r)
 		}
 	})
