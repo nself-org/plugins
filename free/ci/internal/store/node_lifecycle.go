@@ -109,7 +109,7 @@ func (s *Store) revokeWrite(ctx context.Context, nodeID, actor, action string, r
 		rt := &RevokeTx{s: s, ctx: ctx, tx: tx}
 		for i, h := range hooks {
 			if err = h(ctx, rt, nodeID); err != nil {
-				return fmt.Errorf("revoker %d failed: %w", i+1, err)
+				return &hookError{n: i + 1, cause: err}
 			}
 		}
 		if remove {
@@ -122,8 +122,23 @@ func (s *Store) revokeWrite(ctx context.Context, nodeID, actor, action string, r
 		}
 		return s.appendAudit(ctx, tx, actor, action, nodeID, fmt.Sprintf("leases_expired=%d hooks=%d", out.LeasesExpired, len(hooks)))
 	})
+	if err != nil {
+		out = RevokeResult{} // nothing was committed: no attempted counts
+	}
 	return out, err
 }
+
+// hookError names the failed revoker without its text (a hook may echo a value); the cause stays
+// reachable through errors.Is and errors.As for the caller's logs.
+type hookError struct {
+	n     int
+	cause error
+}
+
+func (e *hookError) Error() string {
+	return fmt.Sprintf("E607: revoker %d failed; the revoke was rolled back", e.n)
+}
+func (e *hookError) Unwrap() error { return e.cause }
 
 // revokeRows writes the revoked state into the node row and snapshot and expires the leases.
 func (s *Store) revokeRows(ctx context.Context, tx *sql.Tx, nodeID string) (int64, error) {

@@ -118,7 +118,9 @@ func Run(sub string, args []string, env Env) int {
 	}
 	if err != nil {
 		// A bad flag still honours --json: one error envelope, never an empty stdout.
-		f.json = f.json || slices.Contains(args, "--json") || slices.Contains(args, "-json")
+		f.json = f.json || slices.ContainsFunc(args, func(a string) bool {
+			return a == "--json" || a == "-json" || a == "--json=true" || a == "-json=true"
+		})
 		return fail(env, f, "ci nodes "+sub, usage("%s", oneLine(err)))
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)

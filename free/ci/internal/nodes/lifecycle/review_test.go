@@ -249,3 +249,43 @@ func TestRevokeAndRemoveNeedAnAdminActor(t *testing.T) {
 		}
 	}
 }
+
+func TestDrainRefusesAQuarantinedNode(t *testing.T) {
+	k := newKit(t)
+	ctx := context.Background()
+	k.addNode("qn2")
+	if _, err := k.d.Registry.SetState(ctx, "qn2", "maintenance", quarantineReason, "cli:test"); err != nil {
+		t.Fatal(err)
+	}
+	errCode(t, func() error { _, e := k.d.Drain(ctx, "qn2"); return e }(), CodeInvalid)
+	n, _ := k.d.Registry.Get(ctx, "qn2")
+	if n.Record.Reason != quarantineReason {
+		t.Fatalf("quarantine reason lost: %q", n.Record.Reason)
+	}
+}
+
+func TestRevokerErrorTextNeverReachesOutputAndRollbackClearsCounts(t *testing.T) {
+	t.Cleanup(resetExtensions)
+	k := newKit(t)
+	k.addNode("hk9")
+	RegisterRevoker(func(context.Context, *store.RevokeTx, string) error { return errString("echo " + secretFixtures[0]) })
+	rep, err := k.d.Revoke(context.Background(), "hk9")
+	if err == nil || strings.Contains(err.Error(), "FAKE-SECRET") || CodeOf(err) != "E607" {
+		t.Fatalf("err = %v", err)
+	}
+	if rep.LeasesExpired != 0 || rep.Removed {
+		t.Fatalf("rollback reported counts: %+v", rep)
+	}
+	code, out, errs := k.run1("revoke", "hk9", "--json")
+	if code == 0 || strings.Contains(out+errs, "FAKE-SECRET") {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+}
+
+func TestBadFlagWithJSONEqualsTrueStillEmitsEnvelope(t *testing.T) {
+	k := newKit(t)
+	_, out, _ := k.run1("list", "--bogus", "--json=true")
+	if e := decode(t, out); e.Error == nil {
+		t.Fatalf("out = %s", out)
+	}
+}

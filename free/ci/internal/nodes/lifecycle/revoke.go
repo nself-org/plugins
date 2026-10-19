@@ -57,7 +57,7 @@ func (d *Deps) revoke(ctx context.Context, id string, remove bool) (RevokeReport
 	}
 	if err != nil {
 		if remove && CodeOf(err) == CodeNotFound {
-			return d.dropOrphanPin(rep, id, err)
+			return d.dropOrphanPin(ctx, rep, id, err)
 		}
 		return rep, err
 	}
@@ -81,11 +81,23 @@ func (d *Deps) revoke(ctx context.Context, id string, remove bool) (RevokeReport
 
 // dropOrphanPin lets `nodes remove <id>` clear a pin left by an interrupted `nodes add` (the node was
 // never registered, so there is no record to revoke). Without a pin it is the original E650.
-func (d *Deps) dropOrphanPin(rep RevokeReport, id string, notFound error) (RevokeReport, error) {
+func (d *Deps) dropOrphanPin(ctx context.Context, rep RevokeReport, id string, notFound error) (RevokeReport, error) {
+	// Under the node lock an in-flight `nodes add` of this id is finished, so a pin without a record is
+	// really orphaned; if the record appeared meanwhile, the pin is live and the remove runs normally.
+	unlock, lerr := d.lockNode(id)
+	if lerr != nil {
+		return rep, newErr(CodeNoRoute, "lock", "node %s is busy: %s", id, oneLine(lerr))
+	}
+	defer unlock()
+	if _, gerr := d.Registry.Get(ctx, id); gerr == nil {
+		unlock()
+		unlock = func() {}
+		return d.revoke(ctx, id, true)
+	}
 	dropped := false
 	err := d.withPins(func(p remote.PinnedHostKeys) error {
-		have, lerr := p.Lookup(pinAlias(id))
-		if lerr != nil || len(have) == 0 {
+		have, perr := p.Lookup(pinAlias(id))
+		if perr != nil || len(have) == 0 {
 			return notFound
 		}
 		dropped = true

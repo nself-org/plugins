@@ -64,21 +64,21 @@ func (d *Deps) Test(ctx context.Context, id string, fs *flag.FlagSet) (TestResul
 		return res, err
 	}
 	res.Connected = true
-	// A fresh probe, not the prober's 60 s cache: `nodes test` exists to see drift.
-	draft := n.Capability
-	draft.Verified = model.CapabilityVerified{By: "self", At: time.Now().UTC()}
-	fresh, err := d.probeDraft(ctx, draft)
-	if err != nil {
+	// A fresh probe, not the prober's 60 s cache: `nodes test` exists to see drift. The stored snapshot is
+	// marked old so the node's own prober (NODE-22, with its isolation-only-lowers rule against the stored
+	// baseline) runs on the real registry. The node lock keeps rotate, remove and add out meanwhile.
+	old := n.Capability
+	old.Verified = model.CapabilityVerified{By: "probe", At: time.Now().UTC().Add(-time.Hour)}
+	if _, _, err = d.Registry.UpdateCapability(ctx, id, old, "probe"); err != nil {
 		return res, err
 	}
-	if cur, gerr := d.live(ctx, id); gerr != nil {
-		return res, gerr
-	} else if cur.Record.Version != n.Record.Version {
-		return res, usage("node %s changed while it was tested; run `nodes test` again", id)
-	}
-	after, _, err := d.Registry.UpdateCapability(ctx, id, fresh, "probe")
+	ver, err := d.SSHVersion(ctx)
 	if err != nil {
-		return res, err
+		return res, newErr(CodeNoRoute, "ssh_version", "cannot determine the local OpenSSH version")
+	}
+	after, err := d.NewProber(d.Registry, d.pinFile(), ver).Probe(ctx, id)
+	if err != nil {
+		return res, transportErr("probe", "the capability probe failed", err)
 	}
 	res.Node, res.Drift = after, diffCapability(n.Capability, after.Capability)
 	return res, RunHooks(ctx, PointTest, HookEvent{NodeID: id, Project: d.Project, Flags: fs})
@@ -116,8 +116,13 @@ func factValues(m map[string]model.Fact[string]) map[string]string {
 
 // Drain stops new leases to the node; running jobs finish.
 func (d *Deps) Drain(ctx context.Context, id string) (registry.Node, error) {
-	if _, err := d.live(ctx, id); err != nil {
+	n, err := d.live(ctx, id)
+	if err != nil {
 		return registry.Node{}, err
+	}
+	if n.Record.Reason == quarantineReason {
+		// Draining would overwrite the reason and let a later `enable` clear the quarantine.
+		return registry.Node{}, usage("node %s is quarantined (%s): it needs re-verification, not `drain`", id, quarantineReason)
 	}
 	return d.Registry.SetState(ctx, id, "draining", "drained by admin", d.Actor)
 }
