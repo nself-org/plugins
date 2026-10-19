@@ -3,7 +3,7 @@ package toolchain
 // Purpose: name the toolchain image `nself ci --container` runs checks in.
 // Inputs:  NSELF_CI_IMAGE (the value of --image: ref@digest), the
 // toolchain-image row of versions.yaml (embedded; NSELF_CI_TOOLCHAIN_VERSIONS
-// names another table, for fixtures and air-gapped mirrors), a docker runner.
+// names another table, for fixtures and air-gapped mirrors), a docker or podman runner.
 // Outputs: the pinned image reference ref@sha256:digest, present on this host.
 // Constraints: no silent fallback (Epic D24): a pending row, a malformed
 // override or a digest that cannot be pulled is E645; a reference by tag is
@@ -37,9 +37,13 @@ type Resolver struct {
 	ReadFile func(string) ([]byte, error)
 	Capture  Capture // nil: do not check or pull the image
 
-	mu   sync.Mutex
-	have map[string]bool
+	mu      sync.Mutex
+	have    map[string]bool
+	runtime string // the first runtime that answered `info`, found once
 }
+
+// runtimes is the order the container probe uses: docker, then podman.
+var runtimes = []string{"docker", "podman"}
 
 // NewResolver reads the real process environment and uses capture for docker.
 func NewResolver(capture Capture) *Resolver {
@@ -95,7 +99,7 @@ func (r *Resolver) table() (Versions, error) {
 	return ParseVersions(b)
 }
 
-// ensure makes ref present on the host. docker verifies the manifest digest
+// ensure makes ref present on the host. The runtime verifies the manifest digest
 // while pulling, so content that does not match the pin never lands.
 func (r *Resolver) ensure(ctx context.Context, ref string) error {
 	if r.Capture == nil {
@@ -106,14 +110,34 @@ func (r *Resolver) ensure(ctx context.Context, ref string) error {
 	if r.have[ref] {
 		return nil
 	}
-	if _, rc, err := r.Capture(ctx, "docker", "image", "inspect", "--format", "{{.Id}}", ref); err == nil && rc == 0 {
+	bin, err := r.pickRuntime(ctx)
+	if err != nil {
+		return err
+	}
+	if _, rc, err := r.Capture(ctx, bin, "image", "inspect", "--format", "{{.Id}}", ref); err == nil && rc == 0 {
 		return r.remember(ref)
 	}
-	out, rc, err := r.Capture(ctx, "docker", "pull", "--quiet", ref)
+	out, rc, err := r.Capture(ctx, bin, "pull", "--quiet", ref)
 	if err != nil || rc != 0 {
 		return fail("cannot pull %s (digest mismatch, unknown digest or registry unreachable): %s", ref, tail(out, err))
 	}
 	return r.remember(ref)
+}
+
+// pickRuntime returns the first of docker and podman whose `info` answers, the
+// same order the container probe uses, so the image lands where the job runs.
+// The caller holds r.mu.
+func (r *Resolver) pickRuntime(ctx context.Context) (string, error) {
+	if r.runtime != "" {
+		return r.runtime, nil
+	}
+	for _, bin := range runtimes {
+		if _, rc, err := r.Capture(ctx, bin, "info"); err == nil && rc == 0 {
+			r.runtime = bin
+			return bin, nil
+		}
+	}
+	return "", fail("cannot check or pull the toolchain image: no container runtime answered (tried %s)", strings.Join(runtimes, ", "))
 }
 
 func (r *Resolver) remember(ref string) error {

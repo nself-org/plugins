@@ -63,9 +63,17 @@ func TestFixtureTableRowResolves(t *testing.T) {
 type fakeDocker struct {
 	inspectRC, pullRC int
 	calls             []string
+	// installed names the runtimes that answer `info`; nil means docker only.
+	installed map[string]bool
 }
 
 func (f *fakeDocker) capture(_ context.Context, argv ...string) (string, int, error) {
+	if !f.installed[argv[0]] && !(f.installed == nil && argv[0] == "docker") {
+		return "executable file not found", 127, nil
+	}
+	if argv[1] == "info" {
+		return "", 0, nil
+	}
 	f.calls = append(f.calls, strings.Join(argv[:3], " "))
 	switch argv[1] {
 	case "image":
@@ -103,5 +111,30 @@ func TestEnsurePullsOnceAndMapsFailureToE645(t *testing.T) {
 	_, err := (&Resolver{Getenv: env, Capture: bad.capture}).Resolve(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "E645") || !strings.Contains(err.Error(), "digest") {
 		t.Fatalf("failed pull error = %v", err)
+	}
+}
+
+// A host with Podman only (no docker binary) must inspect and pull through
+// podman, the runtime the container probe picked (D-1185).
+func TestEnsureUsesPodmanWhenDockerIsAbsent(t *testing.T) {
+	ref := "docker.io/library/alpine:3.22@" + pinnedDigest
+	f := &fakeDocker{inspectRC: 1, installed: map[string]bool{"podman": true}}
+	r := &Resolver{Getenv: envOf(map[string]string{EnvImage: ref}), Capture: f.capture}
+	if got, err := r.Resolve(context.Background()); err != nil || got != ref {
+		t.Fatalf("podman-only host: %q %v", got, err)
+	}
+	want := []string{"podman image inspect", "podman pull --quiet"}
+	if strings.Join(f.calls, "|") != strings.Join(want, "|") {
+		t.Fatalf("calls %v, want %v", f.calls, want)
+	}
+}
+
+func TestEnsureFailsE645WhenNoRuntimeAnswers(t *testing.T) {
+	ref := "docker.io/library/alpine:3.22@" + pinnedDigest
+	f := &fakeDocker{installed: map[string]bool{}}
+	r := &Resolver{Getenv: envOf(map[string]string{EnvImage: ref}), Capture: f.capture}
+	_, err := r.Resolve(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "E645") || !strings.Contains(err.Error(), "docker") || !strings.Contains(err.Error(), "podman") {
+		t.Fatalf("no runtime error = %v", err)
 	}
 }
