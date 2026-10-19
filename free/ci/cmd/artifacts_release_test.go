@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"os"
 	"path/filepath"
@@ -156,5 +157,27 @@ func TestReleasePublisherSeamAndLookup(t *testing.T) {
 	}
 	if releaseDirOf == nil {
 		t.Fatal("artifacts verify <run> has no lookup")
+	}
+}
+
+// A published release re-posts the run's status (D-1246); a failure to do so is
+// a line on stderr, never a different outcome.
+func TestRepostAfterSignReportsOnStderr(t *testing.T) {
+	var got cirun.RepostRequest
+	old := repostStatus
+	t.Cleanup(func() { repostStatus = old })
+	repostStatus = func(_ context.Context, r cirun.RepostRequest) (string, error) {
+		got = r
+		return "nself-ci: status posted (success) for aaaaaaa", nil
+	}
+	_, out, errs := capture(t, func() int { repostAfterSign(context.Background(), nil, "run-1", "/r"); return 0 })
+	if got.RunID != "run-1" || got.Root != "/r" || out != "" || !strings.Contains(errs, "status posted (success)") {
+		t.Fatalf("request %+v stdout %q stderr %q", got, out, errs)
+	}
+	repostStatus = func(context.Context, cirun.RepostRequest) (string, error) {
+		return "", errors.New("run run-1 is unknown")
+	}
+	if _, _, errs = capture(t, func() int { repostAfterSign(context.Background(), nil, "run-1", "/r"); return 0 }); !strings.Contains(errs, "status not corrected: run run-1 is unknown") {
+		t.Fatalf("stderr %q", errs)
 	}
 }

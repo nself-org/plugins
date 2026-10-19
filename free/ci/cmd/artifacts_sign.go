@@ -13,7 +13,9 @@ package main
 // 1 (usage, nothing to publish) or 2 (E717 / E719).
 // Constraints: V15 only; side-effect class write (the release directory and
 // the release ledger row, never the evidence); on a TEAM coordinator the local
-// source records awaiting-signature and resolves no secret.
+// source records awaiting-signature and resolves no secret; a local signing
+// that ends published re-posts the run's commit status (D-1246), so a status
+// left red by the failed publication turns green.
 
 import (
 	"context"
@@ -25,7 +27,9 @@ import (
 	"github.com/nself-org/cli/sdk/go/v2/output"
 
 	"github.com/nself-org/plugins/free/ci/internal/release/publish"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/signing"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 func init() { registerArtifactsSub("sign", artifactsSign) }
@@ -97,5 +101,23 @@ func signLocal(ctx context.Context, fs *flag.FlagSet, run string) (publish.Relea
 		return publish.Release{}, nil, err
 	}
 	rel, err := publish.Run(ctx, d, run)
+	if err == nil && rel.State == publish.Published {
+		repostAfterSign(ctx, st, rel.RunID, d.Root)
+	}
 	return rel, func() { _ = st.Close() }, err
+}
+
+// repostStatus is run.RepostStatus; tests replace it.
+var repostStatus = cirun.RepostStatus
+
+// repostAfterSign corrects the commit status of a run whose release is now
+// published: a run that failed to publish posted `failure` (D-1246). The line
+// goes to stderr, so a --json envelope on stdout stays one document; a failure
+// is a warning, the release is published either way.
+func repostAfterSign(ctx context.Context, st *store.Store, runID, root string) {
+	line, err := repostStatus(ctx, cirun.RepostRequest{Store: st, RunID: runID, Root: root})
+	if err != nil {
+		line = "nself-ci: status not corrected: " + err.Error()
+	}
+	fmt.Fprintln(os.Stderr, line)
 }

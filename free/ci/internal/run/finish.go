@@ -245,7 +245,6 @@ func defaultStatus(r PublishRequest) report.Status {
 
 func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, ev model.Evidence) (string, []string) {
 	p := f.Post
-	var notes []string
 	switch {
 	case p.Reporter == nil || p.Outbox == nil:
 		return notPosted(firstNonEmpty(p.Reason, report.ReasonNoRemote)), nil
@@ -256,27 +255,34 @@ func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, 
 	case f.Cancelled:
 		return notPosted(report.ReasonCancelled), nil
 	}
+	return postFinal(ctx, f.Hooks, p, f.Rev.SHA, f.Veto, info, ev)
+}
+
+// postFinal builds the one final status of a run and delivers it through the
+// outbox; recovery (RepostStatus) reaches it too, so both post the same way.
+func postFinal(ctx context.Context, hooks Hooks, p statusPost, sha, veto string, info RunInfo, ev model.Evidence) (string, []string) {
+	var notes []string
 	req := PublishRequest{Owner: p.Owner, Repo: p.Repo, Run: info, Projection: model.Projection(ev)}
 	s := defaultStatus(req)
-	if f.Hooks.Publisher != nil {
+	if hooks.Publisher != nil {
 		var custom report.Status
-		err := guard("publisher", func() (e error) { custom, e = f.Hooks.Publisher.Publish(ctx, req); return })
+		err := guard("publisher", func() (e error) { custom, e = hooks.Publisher.Publish(ctx, req); return })
 		if err != nil { // the default projection may hold text the publication profile would filter
 			return notPosted("publisher failed, nothing posted: " + firstLineOf(err.Error())), []string{"publisher failed: " + firstLineOf(err.Error())}
 		}
 		s = custom
 	}
-	s.Owner, s.Repo, s.Revision = p.Owner, p.Repo, f.Rev.SHA
+	s.Owner, s.Repo, s.Revision = p.Owner, p.Repo, sha
 	if s.State == report.Success && ev.Result != "pass" { // a publisher never turns a failed run into success
 		s.State = report.Failure
 		if ev.Result != "fail" {
 			s.State = report.Error
 		}
 	}
-	if f.Veto != "" && s.State == report.Success { // a gate reported a failure the evidence does not show
-		s.State, s.Description = report.Failure, report.Truncate(f.Veto)
+	if veto != "" && s.State == report.Success { // a gate reported a failure the evidence does not show
+		s.State, s.Description = report.Failure, report.Truncate(veto)
 	}
-	if err := publishGates(ctx, f.Hooks, req, s); err != nil { // composes with the Publisher's veto above; either one stops the post
+	if err := publishGates(ctx, hooks, req, s); err != nil { // composes with the Publisher's veto above; either one stops the post
 		return notPosted("publish gate refused, nothing posted: " + firstLineOf(err.Error())), []string{"publish gate: " + firstLineOf(err.Error())}
 	}
 	delivered, err := p.Outbox.Complete(ctx, p.Seq, s)
@@ -286,6 +292,6 @@ func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, 
 	case !delivered:
 		return notPosted("a newer run already posted for this commit"), notes
 	}
-	notes = append(notes, publishDetails(ctx, f.Hooks, req, s)...)
-	return fmt.Sprintf("nself-ci: status posted (%s) for %s", s.State, f.Rev.SHA[:7]), notes
+	notes = append(notes, publishDetails(ctx, hooks, req, s)...)
+	return fmt.Sprintf("nself-ci: status posted (%s) for %s", s.State, sha[:7]), notes
 }
