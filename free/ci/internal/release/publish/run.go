@@ -18,6 +18,8 @@ package publish
 import (
 	"context"
 	"errors"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,20 +175,50 @@ func (d Deps) fail(ctx context.Context, runID string, f *facts, err error) error
 func (d Deps) trustFile(dir string, info signing.KeyInfo) (keys, revoked string, err error) {
 	keys = filepath.Join(dir, "ci-release.keys")
 	body := info.TrustLine() + "\n"
-	if b, rerr := os.ReadFile(filepath.Join(d.Home, "trust", "ci-release.keys")); rerr == nil {
-		for _, line := range strings.Split(string(b), "\n") {
-			if t := strings.TrimSpace(line); t != "" && !strings.HasPrefix(t, info.KeyID+" ") { // the signer's own line is already there
-				body += t + "\n"
-			}
+	b, rerr := readOperatorKeys(filepath.Join(d.Home, "trust", "ci-release.keys"))
+	if rerr != nil {
+		return "", "", rerr // an unreadable trust file is never read as an empty one
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		t := strings.TrimSpace(line)
+		if f := strings.Fields(t); len(f) > 0 && f[0] != info.KeyID { // the signer's own line (any whitespace) is already there
+			body += t + "\n"
 		}
 	}
 	if err = os.WriteFile(keys, []byte(body), 0o600); err != nil {
 		return "", "", err
 	}
-	if _, serr := os.Stat(filepath.Join(d.Home, "trust", "ci-release.revoked")); serr == nil {
-		revoked = filepath.Join(d.Home, "trust", "ci-release.revoked")
+	// The verifier tells an absent file from an unreadable one; this path is
+	// always passed so an error is never read as "nothing revoked".
+	return keys, filepath.Join(d.Home, "trust", "ci-release.revoked"), nil
+}
+
+// maxOperatorKeys bounds the operator trust file read here (verify bounds its own).
+const maxOperatorKeys = 1 << 20
+
+// readOperatorKeys returns the operator's trust lines: nothing when the file is
+// absent, an error when it is anything but a readable regular file.
+func readOperatorKeys(path string) ([]byte, error) {
+	st, err := os.Stat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
 	}
-	return keys, revoked, nil
+	if err == nil && !st.Mode().IsRegular() {
+		err = os.ErrInvalid
+	}
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	b, err := io.ReadAll(io.LimitReader(f, maxOperatorKeys+1))
+	if err == nil && len(b) > maxOperatorKeys {
+		err = os.ErrInvalid
+	}
+	return b, err
 }
 
 // selfVerify checks dir with internal/release/verify against the signer's key

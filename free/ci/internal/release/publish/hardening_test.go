@@ -275,3 +275,45 @@ func TestExportLeavesNothingUnverified(t *testing.T) {
 		t.Fatal("the unverified export stayed behind")
 	}
 }
+
+// An unreadable revocation file is a refusal, never "nothing revoked".
+func TestExportFailsClosedWhenTheRevocationFileIsUnreadable(t *testing.T) {
+	f := newFixture(t)
+	mustRun(t, f)
+	if err := os.MkdirAll(filepath.Join(f.home, "trust"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	loop := filepath.Join(f.home, "trust", "ci-release.revoked")
+	if err := os.Symlink(loop, loop); err != nil { // a self-referential link: stat gives ELOOP
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "o")
+	if _, err := publish.Export(context.Background(), f.deps(), runID, out, t.TempDir()); err == nil {
+		t.Fatal("an unreadable revocation file was read as empty")
+	}
+	if _, serr := os.Stat(out); serr == nil {
+		t.Fatal("a refused export left its destination")
+	}
+}
+
+// The operator's trust line for the signer's own key is recognised whatever
+// whitespace separates its fields.
+func TestExportAcceptsATabSeparatedOperatorTrustLine(t *testing.T) {
+	f := newFixture(t)
+	rel := mustRun(t, f)
+	info, err := f.deps().Signer.PublicKey(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.MkdirAll(filepath.Join(f.home, "trust"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	line := strings.Replace(info.TrustLine(), " ", "\t", -1)
+	if err = os.WriteFile(filepath.Join(f.home, "trust", "ci-release.keys"), []byte("# own key\n"+line+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	exp, err := publish.Export(context.Background(), f.deps(), runID, filepath.Join(t.TempDir(), "o"), t.TempDir())
+	if err != nil || exp.ManifestSHA256 != rel.ManifestSHA256 {
+		t.Fatalf("export with a tab-separated own line: %+v %v", exp, err)
+	}
+}

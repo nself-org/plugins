@@ -49,10 +49,11 @@ func Export(ctx context.Context, d Deps, runID, out, cwd string) (Release, error
 	if err = d.checkDir(ctx, src, row); err != nil {
 		return Release{}, withRecovery(err, runID)
 	}
-	undo, err := copyTree(src, dest)
+	undo, done, err := copyTree(src, dest)
 	if err != nil {
 		return Release{}, refuse(signing.ReasonSignerFailed, "the release could not be exported")
 	}
+	defer done()
 	if err = d.checkDir(ctx, dest, row); err != nil {
 		undo() // nothing unverified stays behind
 		return Release{}, err
@@ -88,40 +89,42 @@ func withRecovery(err error, runID string) error {
 // exclusive mkdir, or must already be an empty real directory (never a
 // symlink); every write goes through an os.Root on dst, so a name planted in
 // dst while the copy runs cannot redirect a write outside it. A failed copy
-// removes what it created.
-func copyTree(src, dst string) (undo func(), err error) {
+// removes what it created. undo removes through the handle opened here, never
+// the pathname again, so a dst swapped for a symlink afterwards cannot make it
+// delete files elsewhere; the caller must call done when it no longer needs undo.
+func copyTree(src, dst string) (undo, done func(), err error) {
 	madeDst := false
 	if info, lerr := os.Lstat(dst); lerr == nil {
 		if !info.IsDir() {
-			return nil, os.ErrInvalid // a symlink or a file
+			return nil, nil, os.ErrInvalid // a symlink or a file
 		}
 	} else if err = os.Mkdir(dst, 0o700); err != nil {
-		return nil, err
+		return nil, nil, err
 	} else {
 		madeDst = true
 	}
 	root, err := os.OpenRoot(dst)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	defer func() { _ = root.Close() }()
+	var ident os.FileInfo
 	if before, lerr := os.Lstat(dst); lerr != nil || !before.IsDir() {
-		return nil, os.ErrInvalid
+		_ = root.Close()
+		return nil, nil, os.ErrInvalid
 	} else if at, serr := root.Stat("."); serr != nil || !os.SameFile(before, at) {
-		return nil, os.ErrInvalid
+		_ = root.Close()
+		return nil, nil, os.ErrInvalid
+	} else {
+		ident = at
 	}
 	var made []string // root-relative names, in creation order
+	done = func() { _ = root.Close() }
 	undo = func() {
-		r, rerr := os.OpenRoot(dst)
-		if rerr != nil {
-			return
-		}
-		defer func() { _ = r.Close() }()
 		for i := len(made) - 1; i >= 0; i-- {
-			_ = r.Remove(made[i])
+			_ = root.Remove(made[i])
 		}
-		if madeDst {
-			_ = os.Remove(dst)
+		if now, lerr := os.Lstat(dst); madeDst && lerr == nil && os.SameFile(ident, now) {
+			_ = os.Remove(dst) // only the directory made here, and only while empty
 		}
 	}
 	err = filepath.WalkDir(src, func(p string, de os.DirEntry, werr error) error {
@@ -146,9 +149,10 @@ func copyTree(src, dst string) (undo func(), err error) {
 	})
 	if err != nil {
 		undo()
-		return nil, err
+		done()
+		return nil, nil, err
 	}
-	return undo, nil
+	return undo, done, nil
 }
 
 func copyFile(root *os.Root, srcPath, rel string, made *[]string) error {
