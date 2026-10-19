@@ -170,9 +170,12 @@ func auditFn(rt SecretsRuntime, a AttemptInfo) func(secrets.Event) error {
 	}
 }
 
+// coordinatorOf is the coordinator id the resolver's executor call carries. The live id is
+// "<boot>:<pid>:<start>"; the executor accepts only safe ids, so it is mapped the way jobs map it
+// (safeID): without that every resolver call under a real coordinator failed with E612.
 func coordinatorOf(a AttemptInfo) string {
 	if a.CoordinatorID != "" {
-		return a.CoordinatorID
+		return safeID(a.CoordinatorID)
 	}
 	return "secrets"
 }

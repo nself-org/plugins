@@ -1,0 +1,124 @@
+package android
+
+import (
+	"encoding/base64"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestJobShape(t *testing.T) {
+	j := Job("app-dir", []string{"b", "a"}, 90*time.Second, nil)
+	if j.Kind != "release" || j.Isolation != "process" || j.Workdir != "app-dir" || j.Timeout != "90s" || *j.Required != true || *j.Idempotent != false {
+		t.Fatalf("job %+v", j)
+	}
+	if strings.Join(j.Secrets, " ") != "release/ANDROID_KEYSTORE_BASE64 release/ANDROID_KEYSTORE_PASSWORD release/ANDROID_KEY_ALIAS release/ANDROID_KEY_PASSWORD" {
+		t.Fatalf("secrets %v", j.Secrets)
+	}
+	if len(j.Artifacts) != 2 || j.Artifacts[0].Path != "app/build/outputs/apk/release/*.apk" || j.Artifacts[0].Kind != "package" || j.Artifacts[0].Name != "android" {
+		t.Fatalf("artifacts %+v", j.Artifacts)
+	}
+	if j.Artifacts[1].Kind != "sbom" || !strings.HasPrefix(j.Artifacts[1].Path, SBOMDir) {
+		t.Fatalf("sbom decl %+v", j.Artifacts[1])
+	}
+	if j.Run[0] != "sh" || j.Run[1] != "-c" || len(j.Env) != 0 {
+		t.Fatalf("run %v env %v", j.Run, j.Env)
+	}
+	if got := Job(".", nil, 0, nil).Timeout; got != "1s" {
+		t.Fatalf("a zero timeout became %q", got)
+	}
+}
+
+// runScript runs the job script in dir with env, the way the executor does.
+func runScript(t *testing.T, dir string, env ...string) error {
+	t.Helper()
+	cmd := exec.Command("sh", "-c", script)
+	cmd.Dir = dir
+	cmd.Env = append([]string{"PATH=" + os.Getenv("PATH")}, env...)
+	return cmd.Run()
+}
+
+func fakeGradlew(t *testing.T, dir string, exit string) {
+	t.Helper()
+	body := "#!/bin/sh\ntest \"$1\" = assembleRelease || exit 9\ncp app/release.keystore seen.bin\nexit " + exit + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "gradlew"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The script decodes the keystore (wrapped base64 too), runs gradle on it and removes it, pass or fail.
+func TestScriptDecodesAndRemovesKeystore(t *testing.T) {
+	keystore := []byte("fake-keystore-bytes\x00\x01\x02")
+	b64 := base64.StdEncoding.EncodeToString(keystore)
+	wrapped := b64[:8] + "\n" + b64[8:] + "\n"
+	for _, tc := range []struct {
+		name, value, exit string
+		fail              bool
+	}{{"plain", b64, "0", false}, {"wrapped", wrapped, "0", false}, {"gradle fails", b64, "3", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			fakeGradlew(t, dir, tc.exit)
+			err := runScript(t, dir, "ANDROID_KEYSTORE_BASE64="+tc.value)
+			if (err != nil) != tc.fail {
+				t.Fatalf("err %v, want failure %v", err, tc.fail)
+			}
+			seen, rerr := os.ReadFile(filepath.Join(dir, "seen.bin"))
+			if rerr != nil || string(seen) != string(keystore) {
+				t.Fatalf("gradle saw %q (%v)", seen, rerr)
+			}
+			if _, serr := os.Stat(filepath.Join(dir, KeystorePath)); serr == nil {
+				t.Fatal("the keystore was left behind")
+			}
+		})
+	}
+	dir := t.TempDir()
+	fakeGradlew(t, dir, "0")
+	if err := runScript(t, dir, "ANDROID_KEYSTORE_BASE64="); err == nil {
+		t.Fatal("an empty keystore variable built anyway")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "seen.bin")); err == nil {
+		t.Fatal("gradle ran without a keystore")
+	}
+}
+
+func TestEnvFromPassesOnlyToolchainPaths(t *testing.T) {
+	set := map[string]string{"ANDROID_HOME": "/sdk", "JAVA_HOME": "/jdk", "ANDROID_KEYSTORE_PASSWORD": "must-not-pass", "PATH": "/bin"}
+	env := EnvFrom(func(k string) string { return set[k] })
+	if len(env) != 2 || env["ANDROID_HOME"] != "/sdk" || env["JAVA_HOME"] != "/jdk" {
+		t.Fatalf("env %v", env)
+	}
+	if EnvFrom(func(string) string { return "" }) != nil {
+		t.Fatal("an empty environment produced an env map")
+	}
+	if j := Job(".", nil, time.Minute, env); j.Env["JAVA_HOME"] != "/jdk" {
+		t.Fatalf("job env %v", j.Env)
+	}
+}
+
+// Stale outputs of an earlier build (the workspace is a copy of the checkout) are gone before gradle runs.
+func TestScriptClearsStaleOutputs(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{APKDir + "/app-1.0-release.apk", SBOMDir + "/android/app-1.0-release.apk.cdx.json"} {
+		p := filepath.Join(dir, f)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("stale"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	body := "#!/bin/sh\nls " + APKDir + " " + SBOMDir + " > seen.txt 2>&1 || true\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "gradlew"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := runScript(t, dir, "ANDROID_KEYSTORE_BASE64="+base64.StdEncoding.EncodeToString([]byte("k"))); err != nil {
+		t.Fatal(err)
+	}
+	seen, _ := os.ReadFile(filepath.Join(dir, "seen.txt"))
+	if strings.Contains(string(seen), "1.0") || !strings.Contains(string(seen), "No such file") {
+		t.Fatalf("gradle saw stale outputs: %q", seen)
+	}
+}
