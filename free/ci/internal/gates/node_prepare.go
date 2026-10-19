@@ -46,8 +46,10 @@ const (
 	nodePreparedMarker = "node_modules/.nself-ci-prepared"
 	// prepareFailed is printed after the install log when the install failed.
 	prepareFailed = "::nself-ci-prepare-failed::"
-	prepareExit   = 97
-	installLog    = ".nself-ci-install.log"
+	// logTruncated is printed between the two ends of an install log over 200 KB.
+	logTruncated = "::nself-ci-log-truncated::"
+	prepareExit  = 97
+	installLog   = ".nself-ci-install.log"
 	// nodePrepareBudget is the time one invocation gets when it installs first
 	// (the default is 10 minutes for the check alone).
 	nodePrepareBudget = 20 * time.Minute
@@ -233,7 +235,7 @@ func (s nodeSpec) wrap(id string, run []string) []string {
 			in = "cd " + s.Rel + " && " + in
 		}
 		// the log is read from the working directory, so name it absolutely
-		script += `LOG="$PWD/` + installLog + `"; ( ` + in + ` ) > "$LOG" 2>&1 || { head -c 100000 "$LOG"; echo; tail -c +100001 "$LOG" | tail -c 100000; echo; echo ` + prepareFailed + `; exit ` + strconv.Itoa(prepareExit) + `; }; `
+		script += `LOG="$PWD/` + installLog + `"; ( ` + in + ` ) > "$LOG" 2>&1 || { if [ -n "$(tail -c +200001 "$LOG" | head -c 1)" ]; then head -c 100000 "$LOG"; echo; echo ` + logTruncated + `; tail -c 100000 "$LOG"; else cat "$LOG"; fi; echo; echo ` + prepareFailed + `; exit ` + strconv.Itoa(prepareExit) + `; }; `
 	}
 	if needAstro {
 		script += s.astroSync() + " && "
@@ -301,7 +303,10 @@ func prepareVerdict(c *model.Check, res invocation) bool {
 		return false
 	}
 	log := strings.TrimSpace(res.output[:i])
-	d := diagnose.ClassifyInstall(log)
+	var d diagnose.Diagnosis // a log with its middle cut out is unknown, and unknown stays code
+	if !strings.Contains(log, logTruncated) {
+		d = diagnose.ClassifyInstall(log)
+	}
 	excerpt := ends(log, 1024)
 	if d.Class == "infra" {
 		c.Result, c.FailureClass = "error", "infra"

@@ -67,34 +67,41 @@ var installLifecycle = re(`(?i)\belifecycle\b|npm error command failed|command f
 // retry): never the reason the install ended.
 var installRetry = re(`(?i)\bwarn\b|will retry|retrying|retries left|\battempt \d`)
 
-// installLoopback marks a line about this machine: a refused or reset connection
-// there is the project's setup, not an unreachable registry.
+// installLoopback marks a connection to this machine: a refused or reset
+// connection there is the project's setup, not an unreachable registry.
 var installLoopback = re(`(?i)\b127\.\d+\.\d+\.\d+\b|\blocalhost\b|\[?::1\]?`)
+
+// installClientError marks an answer from a reachable registry that says the
+// request itself is wrong (no such package or version, forbidden, unauthorized):
+// the project's or the operator's configuration, never a transient.
+var installClientError = re(`(?i)\be?40[0-4]\b|not found - get|\bforbidden\b|\bunauthorized\b|no matching version|\bnotarget\b|err_pnpm_(fetch_40\d|no_matching_version|unauthorized)`)
 
 // installRegistry is the context that lets a bare ENOTFOUND or ECONNREFUSED
 // mean "the registry": the manager names a URL or a registry.
 var installRegistry = re(`(?i)registry|https?://|npm error network|err_pnpm_(meta_)?fetch`)
 
-// installOnly are causes that mean infrastructure only inside an install.
-// Matched in the error-code position only (`code ENOTFOUND`, `connect ECONNREFUSED`),
-// never inside a URL or a package name.
+// installOnly are causes that mean infrastructure only inside an install,
+// matched in the error-code position (`code ENOTFOUND`, `connect ECONNREFUSED`).
 var installOnly = re(`(?i)\b(code|errno|connect|error|syscall|getaddrinfo)\s+(econnrefused|enotfound)\b|connection refused`)
 
-// installNotFound marks a registry that answered "no such package or version":
-// reachable, so never an unreachable-registry cause.
-var installNotFound = re(`(?i)\b404\b|\be404\b|not found - get|no matching version|\bnotarget\b|err_pnpm_no_matching_version`)
+// installURL is stripped before causes are matched: a package named
+// `etimedout` or `enospc` in a registry URL is not a timeout or a full disk.
+var installURL = re(`https?://\S+`)
 
 // ClassifyInstall classifies a failed dependency install from its log: infra
 // (retryable, with the signature) for a full disk, DNS, an unreachable
 // registry or a kill by memory; code for everything else. The code guards read
 // the whole log first (a lockfile out of sync, a failing lifecycle script or
-// test assertion), then only the last InstallLines lines, minus retry warnings,
-// loopback lines and registry "not found" answers, are matched for a cause.
+// test assertion, a connection to this machine, a client error from the
+// registry), then only the last InstallLines lines, minus retry warnings and
+// URLs, are matched for a cause.
 func ClassifyInstall(log string) Diagnosis {
-	if installSync.MatchString(log) || installTestFailure.MatchString(log) || installLifecycle.MatchString(log) {
-		return named(SigCode, "code")
+	for _, guard := range []*regexp.Regexp{installSync, installTestFailure, installLifecycle, installLoopback, installClientError} {
+		if guard.MatchString(log) {
+			return named(SigCode, "code")
+		}
 	}
-	window := lastLines(dropLines(dropLines(dropLines(log, installRetry), installLoopback), installNotFound), InstallLines)
+	window := lastLines(installURL.ReplaceAllString(dropLines(log, installRetry), " "), InstallLines)
 	for _, s := range signatures {
 		switch s.id {
 		case SigDisk, SigDNS, SigNetwork, SigOOM:
@@ -103,7 +110,7 @@ func ClassifyInstall(log string) Diagnosis {
 			}
 		}
 	}
-	if installOnly.MatchString(window) && installRegistry.MatchString(window) {
+	if installOnly.MatchString(window) && installRegistry.MatchString(log) {
 		return infra(signatureByID(SigNetwork))
 	}
 	return named(SigCode, "code")

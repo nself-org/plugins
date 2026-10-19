@@ -462,3 +462,20 @@ func TestNodeDigestPrefersTheShrinkwrap(t *testing.T) {
 		t.Fatal("npm installs from the shrinkwrap: editing it must change the digest")
 	}
 }
+
+func TestNodePrepareHugeLogIsCodeNotInfra(t *testing.T) {
+	h := newNodeHost(t)
+	h.write("package.json", manifest("npm@10.2.4", ""))
+	h.write("package-lock.json", "{}")
+	// 350 KB; the assertion is outside both retained ends; the log ends with a reset
+	h.manager("npm", "10.2.4", `i=0; while [ $i -lt 2200 ]; do echo "npm info padding line number $i of the head part of this very long install log, 80 bytes."; i=$((i+1)); done
+echo "AssertionError [ERR_ASSERTION]: postinstall self-check"
+i=0; while [ $i -lt 2200 ]; do echo "npm info padding line number $i of the tail part of this very long install log, 80 bytes."; i=$((i+1)); done
+echo "npm error code ECONNRESET"
+exit 1
+`)
+	c := h.run("node.test", ".")
+	if c.Result != "fail" || c.FailureClass != "code" || strings.Contains(c.Excerpt, "E811") {
+		t.Fatalf("%+v", c)
+	}
+}
