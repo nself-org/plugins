@@ -19,7 +19,7 @@ type nodeManifest struct {
 
 // nodeLockfiles lists, per package manager, the lockfiles it freezes against.
 var nodeLockfiles = map[string][]string{
-	"npm":  {"package-lock.json", "npm-shrinkwrap.json"},
+	"npm":  {"npm-shrinkwrap.json", "package-lock.json"}, // npm prefers the shrinkwrap
 	"pnpm": {"pnpm-lock.yaml"},
 	"yarn": {"yarn.lock"},
 	"bun":  {"bun.lock", "bun.lockb"},

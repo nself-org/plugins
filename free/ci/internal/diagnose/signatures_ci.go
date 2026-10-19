@@ -76,19 +76,25 @@ var installLoopback = re(`(?i)\b127\.\d+\.\d+\.\d+\b|\blocalhost\b|\[?::1\]?`)
 var installRegistry = re(`(?i)registry|https?://|npm error network|err_pnpm_(meta_)?fetch`)
 
 // installOnly are causes that mean infrastructure only inside an install.
-var installOnly = re(`(?i)\beconnrefused\b|connection refused|\benotfound\b`)
+// Matched in the error-code position only (`code ENOTFOUND`, `connect ECONNREFUSED`),
+// never inside a URL or a package name.
+var installOnly = re(`(?i)\b(code|errno|connect|error|syscall|getaddrinfo)\s+(econnrefused|enotfound)\b|connection refused`)
+
+// installNotFound marks a registry that answered "no such package or version":
+// reachable, so never an unreachable-registry cause.
+var installNotFound = re(`(?i)\b404\b|\be404\b|not found - get|no matching version|\bnotarget\b|err_pnpm_no_matching_version`)
 
 // ClassifyInstall classifies a failed dependency install from its log: infra
 // (retryable, with the signature) for a full disk, DNS, an unreachable
 // registry or a kill by memory; code for everything else. The code guards read
 // the whole log first (a lockfile out of sync, a failing lifecycle script or
-// test assertion), then only the last InstallLines lines, minus retry warnings
-// and loopback lines, are matched for a cause.
+// test assertion), then only the last InstallLines lines, minus retry warnings,
+// loopback lines and registry "not found" answers, are matched for a cause.
 func ClassifyInstall(log string) Diagnosis {
 	if installSync.MatchString(log) || installTestFailure.MatchString(log) || installLifecycle.MatchString(log) {
 		return named(SigCode, "code")
 	}
-	window := lastLines(dropLines(dropLines(log, installRetry), installLoopback), InstallLines)
+	window := lastLines(dropLines(dropLines(dropLines(log, installRetry), installLoopback), installNotFound), InstallLines)
 	for _, s := range signatures {
 		switch s.id {
 		case SigDisk, SigDNS, SigNetwork, SigOOM:

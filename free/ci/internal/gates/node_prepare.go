@@ -233,7 +233,7 @@ func (s nodeSpec) wrap(id string, run []string) []string {
 			in = "cd " + s.Rel + " && " + in
 		}
 		// the log is read from the working directory, so name it absolutely
-		script += `LOG="$PWD/` + installLog + `"; ( ` + in + ` ) > "$LOG" 2>&1 || { head -c 1500 "$LOG"; echo; tail -c +1501 "$LOG" | tail -c 1500; echo; echo ` + prepareFailed + `; exit ` + strconv.Itoa(prepareExit) + `; }; `
+		script += `LOG="$PWD/` + installLog + `"; ( ` + in + ` ) > "$LOG" 2>&1 || { head -c 100000 "$LOG"; echo; tail -c +100001 "$LOG" | tail -c 100000; echo; echo ` + prepareFailed + `; exit ` + strconv.Itoa(prepareExit) + `; }; `
 	}
 	if needAstro {
 		script += s.astroSync() + " && "

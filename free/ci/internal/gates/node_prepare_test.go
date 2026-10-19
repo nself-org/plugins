@@ -433,3 +433,32 @@ func TestNodeDigestFollowsWorkspaceMembers(t *testing.T) {
 		t.Fatal("a member's manifest edit with an unchanged lockfile must install again")
 	}
 }
+
+func TestNodePrepareGuardsReadTheMiddleOfALongLog(t *testing.T) {
+	h := newNodeHost(t)
+	h.write("package.json", manifest("npm@10.2.4", ""))
+	h.write("package-lock.json", "{}")
+	// the assertion sits far from both ends of a 6 KB log, then a transient reset ends it
+	h.manager("npm", "10.2.4", `i=0; while [ $i -lt 40 ]; do echo "npm info padding line number $i of the head part of this install log"; i=$((i+1)); done
+echo "AssertionError [ERR_ASSERTION]: postinstall self-check"
+i=0; while [ $i -lt 60 ]; do echo "npm info padding line number $i of the tail part of this install log"; i=$((i+1)); done
+echo "npm error code ECONNRESET"
+exit 1
+`)
+	c := h.run("node.test", ".")
+	if c.Result != "fail" || c.FailureClass != "code" || strings.Contains(c.Excerpt, "E811") {
+		t.Fatalf("%+v", c)
+	}
+}
+
+func TestNodeDigestPrefersTheShrinkwrap(t *testing.T) {
+	h := newNodeHost(t)
+	h.write("package.json", manifest("npm@10.2.4", ""))
+	h.write("package-lock.json", "{}")
+	h.write("npm-shrinkwrap.json", "{}")
+	a := nodeSpecFor(h.root, PlannedCheck{Workdir: "."}).Digest
+	h.write("npm-shrinkwrap.json", `{"changed":1}`)
+	if b := nodeSpecFor(h.root, PlannedCheck{Workdir: "."}).Digest; a == b {
+		t.Fatal("npm installs from the shrinkwrap: editing it must change the digest")
+	}
+}
