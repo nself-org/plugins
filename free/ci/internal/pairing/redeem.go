@@ -35,6 +35,15 @@ func (s *Service) RedeemIntent(ctx context.Context, req enroll.Request, src stri
 }
 
 func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, intentOnly bool) (enroll.Response, error) {
+	s.mu.Lock()
+	s.inflight++
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.inflight--
+		s.mu.Unlock()
+		s.signal()
+	}()
 	now := s.cfg.CA.Now()
 	if d := now.Sub(time.Unix(req.ClientTime, 0)); d > pki.ClockSkew || -d > pki.ClockSkew {
 		return enroll.Response{}, &pki.Error{Reason: pki.ReasonClockSkew, Msg: "node and coordinator clocks differ by more than 120 s"}

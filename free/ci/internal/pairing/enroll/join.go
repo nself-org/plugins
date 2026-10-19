@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -159,9 +160,13 @@ func Join(ctx context.Context, o JoinOptions) (JoinResult, error) {
 	if err != nil {
 		return JoinResult{}, err
 	}
-	hc := &http.Client{Timeout: 5 * time.Minute, Transport: &http.Transport{Proxy: nil, TLSClientConfig: cfg, DisableKeepAlives: true}}
+	hc := &http.Client{Timeout: 12 * time.Minute, Transport: &http.Transport{Proxy: nil, TLSClientConfig: cfg, DisableKeepAlives: true}}
 	var hello Hello
 	if err = post(ctx, hc, u.String(), Request{Phase: PhaseHello, Version: Version, ClientTime: o.Now().Unix()}, &hello); err != nil {
+		var invalid x509.CertificateInvalidError
+		if errors.As(err, &invalid) && invalid.Reason == x509.Expired { // a fresh server leaf is never expired: this clock is far off
+			return JoinResult{}, refuse(pki.ReasonClockSkew, "the coordinator's certificate is not valid at this node's time; the clocks differ by more than %s", pki.ClockSkew)
+		}
 		return JoinResult{}, err
 	}
 	if d := o.Now().Sub(time.Unix(hello.ServerTime, 0)); d > pki.ClockSkew || -d > pki.ClockSkew {

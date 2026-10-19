@@ -3,8 +3,9 @@ package enroll
 // Purpose: the per-source rate limit of the enrollment listener: one request per second per address.
 // Inputs:  the source host and the current time.
 // Outputs: Allow reports whether the request may proceed.
-// Constraints: the table is bounded (entries older than a minute are dropped when it passes 4096), so a
-//          spray of source addresses cannot grow memory without limit; the clock is injected.
+// Constraints: the table is bounded: at 4096 sources entries older than a minute are dropped and a new
+//          source is refused while it stays full, so a spray of addresses cannot grow memory; the clock
+//          is injected.
 
 import (
 	"sync"
@@ -38,6 +39,9 @@ func (l *Limiter) Allow(src string, now time.Time) bool {
 				delete(l.last, k)
 			}
 		}
+	}
+	if _, known := l.last[src]; !known && len(l.last) >= maxSources {
+		return false // a spray of fresh sources within a minute is refused, not remembered
 	}
 	l.last[src] = now
 	return true

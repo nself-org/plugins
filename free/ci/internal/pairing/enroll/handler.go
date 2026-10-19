@@ -72,7 +72,11 @@ func Handler(r Redeemer, o HandlerOptions) http.Handler {
 			resp, err := r.Redeem(req.Context(), body, host)
 			if err != nil {
 				code, reason, status := classify(err)
-				writeErr(w, status, code, reason, err.Error())
+				msg := err.Error()
+				if reason == "internal" { // a plain error may carry store or file details: never send them to a stranger
+					msg = "the coordinator could not process the request"
+				}
+				writeErr(w, status, code, reason, msg)
 				return
 			}
 			writeJSON(w, http.StatusOK, resp)
@@ -119,7 +123,7 @@ func Listen(addr string, cfg *tls.Config, h http.Handler) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{ln: ln, http: &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, MaxHeaderBytes: 8 << 10}, done: make(chan struct{})}
+	s := &Server{ln: ln, http: &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 11 * time.Minute, MaxHeaderBytes: 8 << 10}, done: make(chan struct{})}
 	go func() {
 		defer close(s.done)
 		_ = s.http.Serve(ln)

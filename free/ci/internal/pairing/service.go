@@ -55,6 +55,7 @@ type Service struct {
 	mu        sync.Mutex
 	approvers map[string]Approver
 	redeemed  map[string]bool
+	inflight  int
 	wake      chan struct{}
 }
 

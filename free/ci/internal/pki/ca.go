@@ -39,7 +39,7 @@ const (
 	rootName  = "root"
 	rootLife  = 10 * 365 * 24 * time.Hour
 	interLife = 5 * 365 * 24 * time.Hour
-	backdate  = time.Minute
+	backdate  = ClockSkew // NotBefore is backdated by the tolerated skew, so a node up to 120 s slow still sees the certificate as valid
 	rootCN    = "nself-ci root"
 )
 

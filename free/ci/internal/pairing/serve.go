@@ -41,12 +41,20 @@ func (r intentRedeemer) Redeem(ctx context.Context, q enroll.Request, src string
 	return r.RedeemIntent(ctx, q, src)
 }
 
+// liveIntents counts the offers that keep the burst listener open: live ones bound to an intent, plus
+// every redemption still in flight (an approval may take a while and must still get its answer).
 func (s *Service) liveIntents(ctx context.Context) int {
 	offers, err := s.cfg.Store.PKIOffersLive(ctx, true)
 	if err != nil {
 		return 0
 	}
-	return len(offers)
+	return len(offers) + s.busy()
+}
+
+func (s *Service) busy() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.inflight
 }
 
 // ServeWhileOffers runs inside `ci serve`: it binds addr only while at least one live offer with an
@@ -114,7 +122,7 @@ func (w *Window) Wait(ctx context.Context, s *Service) (redeemed bool, err error
 		if lerr != nil {
 			return false, lerr
 		}
-		if !hasOffer(live, w.Offer.ID) {
+		if !hasOffer(live, w.Offer.ID) && s.busy() == 0 {
 			return s.redeemedOffer(ctx, w.Offer.ID), nil
 		}
 		select {

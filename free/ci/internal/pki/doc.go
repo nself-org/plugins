@@ -26,7 +26,7 @@
 // approver decision on the exact CSR key fingerprint, which the node printed. A second redemption of a
 // code revokes the certificate issued for the first and raises an alert.
 //
-// Clock skew. Certificates are backdated one minute; join and the enrollment route refuse when the
+// Clock skew. Certificates are backdated by the same 120 s; join and the enrollment route refuse when the
 // clocks differ by more than 120 s (E660 clock_skew). Short-lived node certificates (7 days) renew at
 // 2/3 of life; an expired one cannot renew.
 //
