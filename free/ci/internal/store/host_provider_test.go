@@ -68,22 +68,49 @@ func TestHostProviderMarksAndIntents(t *testing.T) {
 	if at, ok, err := s.ProviderMarkGet(ctx, "reconcile", "org/repo"); err != nil || !ok || !at.Equal(t0.Add(time.Minute)) {
 		t.Fatalf("a mark never moves back: %v %v %v", at, ok, err)
 	}
-	first := DispatchIntent{AttemptID: "a1", Provider: "github", Nonce: "n1", RunID: "r1", Ref: "abc", CreatedAt: t0}
-	if err := s.DispatchIntentPut(ctx, first); err != nil {
-		t.Fatal(err)
+	first := DispatchIntent{AttemptID: "a1", Provider: "github", Nonce: "n1", RunID: "r1", Ref: "abc", Epoch: 5, CreatedAt: t0}
+	if got, err := s.DispatchIntentPut(ctx, first); err != nil || got.RunID != "r1" {
+		t.Fatalf("first put: %+v %v", got, err)
 	}
-	if err := s.DispatchIntentPut(ctx, DispatchIntent{AttemptID: "a1", Provider: "github", Nonce: "n2", RunID: "r2"}); err != nil {
-		t.Fatal(err)
+	// Same epoch (a second carrier of the lease) and a lower epoch (a stale carrier) lose and learn the winner.
+	for _, epoch := range []int64{5, 4} {
+		got, err := s.DispatchIntentPut(ctx, DispatchIntent{AttemptID: "a1", Provider: "github", Nonce: "n2", RunID: "r2", Epoch: epoch})
+		if err != nil || got.RunID != "r1" || got.Nonce != "n1" || got.Epoch != 5 {
+			t.Fatalf("epoch %d must not repoint the attempt: %+v %v", epoch, got, err)
+		}
 	}
 	got, ok, err := s.DispatchIntentGet(ctx, "a1")
-	if err != nil || !ok || got.RunID != "r1" || got.Nonce != "n1" || got.Ref != "abc" {
-		t.Fatalf("the first dispatch intent wins: %+v %v %v", got, ok, err)
+	if err != nil || !ok || got.RunID != "r1" || got.Nonce != "n1" || got.Ref != "abc" || got.Epoch != 5 {
+		t.Fatalf("the stored intent: %+v %v %v", got, ok, err)
+	}
+	// A retry (higher epoch) replaces it.
+	if got, err = s.DispatchIntentPut(ctx, DispatchIntent{AttemptID: "a1", Provider: "github", Nonce: "n3", RunID: "r3", Epoch: 6}); err != nil || got.RunID != "r3" || got.Epoch != 6 {
+		t.Fatalf("a retry must replace the intent: %+v %v", got, err)
+	}
+	// A cleanup of the old run cannot remove the retry's intent; a cleanup of the current one does.
+	if err = s.DispatchIntentDelete(ctx, "a1", "r1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ = s.DispatchIntentGet(ctx, "a1"); !ok {
+		t.Fatal("deleting the old run removed the retry's intent")
+	}
+	if err = s.DispatchIntentDelete(ctx, "a1", "r3"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ = s.DispatchIntentGet(ctx, "a1"); ok {
+		t.Fatal("the intent of the current run was not deleted")
 	}
 	if _, ok, _ = s.DispatchIntentGet(ctx, "a2"); ok {
 		t.Fatal("an undispatched attempt has no intent")
 	}
-	if err = s.DispatchIntentPut(ctx, DispatchIntent{AttemptID: "a3"}); err == nil {
+	if _, err = s.DispatchIntentPut(ctx, DispatchIntent{AttemptID: "a3"}); err == nil {
 		t.Fatal("an intent without a provider and a run must be refused")
+	}
+	if err = s.ProviderMarkPut(ctx, "m", "k", time.Time{}); err == nil {
+		t.Fatal("a mark without a time must be refused")
+	}
+	if _, err = s.ProviderFactPut(ctx, ProviderFact{Provider: "github", Key: "k", Value: json.RawMessage(`1`)}); err == nil {
+		t.Fatal("a fact without an observation time must be refused")
 	}
 }
 

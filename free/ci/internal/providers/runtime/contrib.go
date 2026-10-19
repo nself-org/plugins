@@ -14,6 +14,9 @@ package runtime
 //          Location.Kind ("hosted") are set here, never taken from the provider. A provider that
 //          reports down keeps its runners in the world, offline and ProviderDown, so the placement
 //          explanation says provider.down instead of hiding the runner. Dormant unless compat.V15().
+//          Skipped() is the explanation source for a provider that is absent from the world: a runner
+//          that does not exist has no placement reason to carry the code, so `providers doctor`
+//          (P7-HOST-12) and `plan --explain` read the E700 line from here.
 
 import (
 	"context"
@@ -39,7 +42,17 @@ type Contributor struct {
 	targets func(context.Context) ([]providers.Query, error)
 	store   *store.Store
 	skipped []Skip
+	creds   map[string]credCheck
 }
+
+// credCheck remembers whether a provider's credential resolved, for credCheckTTL: a world is built
+// every dispatcher tick, and an unresolved GitHub login would otherwise run `gh auth token` each time.
+type credCheck struct {
+	err error
+	at  time.Time
+}
+
+const credCheckTTL = 30 * time.Second
 
 var defaultContributor = &Contributor{}
 
@@ -58,6 +71,13 @@ func (c *Contributor) SetTargets(fn func(context.Context) ([]providers.Query, er
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.targets = fn
+}
+
+// ForgetCredentials drops the cached credential checks (after a policy change).
+func (c *Contributor) ForgetCredentials() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.creds = nil
 }
 
 // SetStore lets Fill take the slots and capacity already reserved on a hosted runner from the store.
@@ -105,7 +125,7 @@ func (c *Contributor) Fill(ctx context.Context, w *sched.World) error {
 		if _, ok := p.(providers.Dispatcher); !ok {
 			continue
 		}
-		if _, err := Credential(ctx, p.ID())(ctx); err != nil {
+		if err := c.credential(ctx, p.ID()); err != nil {
 			skipped = append(skipped, skip(p.ID(), "E700", err))
 			continue
 		}
@@ -131,6 +151,23 @@ func (c *Contributor) Fill(ctx context.Context, w *sched.World) error {
 	c.skipped = skipped
 	c.mu.Unlock()
 	return nil
+}
+
+func (c *Contributor) credential(ctx context.Context, provider string) error {
+	c.mu.Lock()
+	hit, ok := c.creds[provider]
+	c.mu.Unlock()
+	if ok && time.Since(hit.at) < credCheckTTL {
+		return hit.err
+	}
+	_, err := Credential(ctx, provider)(ctx)
+	c.mu.Lock()
+	if c.creds == nil {
+		c.creds = map[string]credCheck{}
+	}
+	c.creds[provider] = credCheck{err: err, at: time.Now()}
+	c.mu.Unlock()
+	return err
 }
 
 func skip(provider, fallback string, err error) Skip {

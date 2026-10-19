@@ -68,18 +68,21 @@ func sourceFor(r *http.Request) providers.TriggerSource {
 	return nil
 }
 
-// HasSecrets is true when a registered source holds per-repo secrets of its own (and says so with its
-// own HasSecrets). A source that does not say so is held to --secret and --allowed-repos.
+// HasSecrets is true only when there is a registered source and every one of them holds per-repo
+// secrets of its own and says so with its own HasSecrets. The coordinator applies the answer to every
+// request this one ingress handles (it skips --secret and --allowed-repos), so a single source that
+// does not say so keeps all of them under both.
 func (IngressAdapter) HasSecrets() bool {
 	if !compat.V15() {
 		return false
 	}
-	for _, s := range providers.Sources() {
-		if h, ok := s.(interface{ HasSecrets() bool }); ok && h.HasSecrets() {
-			return true
+	sources := providers.Sources()
+	for _, s := range sources {
+		if h, ok := s.(interface{ HasSecrets() bool }); !ok || !h.HasSecrets() {
+			return false
 		}
 	}
-	return false
+	return len(sources) > 0
 }
 
 // Accept verifies the request with the matching source and builds the Delivery.

@@ -12,22 +12,32 @@ package runtime
 //          this file creates no lease and no attempt (admission is dispatch.Admit's); errors are
 //          providers.Error values with safe text; a vanished run returns E704 and records no result,
 //          the lease engine expires the lease one profile TTL later. Transient liveness errors are
-//          retried (maxLivenessFailures in a row), anything else ends the run.
+//          retried (maxLivenessFailures in a row), anything else ends the run. The handle is written
+//          before anything else can fail and on a context that survives a lease cancel, so a dispatched
+//          run is never unreachable; a run whose handle cannot be kept is cancelled. Every failed Run
+//          forgets its handle (cancelling the run when its state is unknown), so the retry of a lost
+//          attempt dispatches a fresh run; a handle of an older epoch is cancelled and replaced, one of
+//          a newer epoch fences the carrier out (E708). Dormant unless compat.V15().
 
 import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/nself-org/cli/sdk/go/v2/compat"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
+
+// errVanished is what Run returns for a run the provider no longer knows.
+var errVanished = providers.NewError(providers.Transient, "E704", "hosted run vanished", 0, time.Time{})
 
 const (
 	// Kind is the transport kind of every hosted runner.
@@ -38,7 +48,7 @@ const (
 )
 
 // AttemptFacts are the parts of a providers.Attempt a lease does not carry. P7-HOST-03 (GitHub hosted
-// dispatch) installs the source that reads them from the run; the default knows only the timeout.
+// dispatch) installs the source that reads them from the run; with none installed Run is refused.
 type AttemptFacts struct {
 	N                                     int
 	Project, Repo, FetchRef, Trust, Label string
@@ -119,14 +129,10 @@ func sleepCtx(ctx context.Context, wait time.Duration) error {
 	}
 }
 
-func defaultFacts(_ context.Context, _ model.Capability, l protocol.Lease) (AttemptFacts, error) {
-	f := AttemptFacts{N: 1}
-	if l.Job.Timeout != "" {
-		if t, err := time.ParseDuration(l.Job.Timeout); err == nil && t > 0 {
-			f.TimeoutMs = t.Milliseconds()
-		}
-	}
-	return f, nil
+// defaultFacts fails closed: a dispatcher cannot start a run without the project and repository, and
+// guessing them would dispatch to the wrong repository. P7-HOST-03 installs the real source.
+func defaultFacts(context.Context, model.Capability, protocol.Lease) (AttemptFacts, error) {
+	return AttemptFacts{}, refused("E708", "no attempt facts source is installed")
 }
 
 func refused(code, reason string) error {
@@ -134,7 +140,11 @@ func refused(code, reason string) error {
 }
 
 // Run drives one hosted attempt to its result. See the file comment.
-func (d *Driver) Run(ctx context.Context, node model.Capability, l protocol.Lease, sink transport.Sink) error {
+func (d *Driver) Run(ctx context.Context, node model.Capability, l protocol.Lease, sink transport.Sink) (err error) {
+	// compat.V15(P7-HOST-16): no hosted dispatch -> hosted dispatch through the registered provider
+	if !compat.V15() {
+		return refused("E708", "hosted dispatch needs v1.5")
+	}
 	d.mu.RLock()
 	book, facts, sleep, now := d.book, d.facts, d.sleep, d.now
 	d.mu.RUnlock()
@@ -144,28 +154,21 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, l protocol.Leas
 	if !ok {
 		return refused("E700", "provider "+id+" is not registered for hosted dispatch")
 	}
-	h, found, err := book.Get(ctx, l.AttemptID)
+	h, err := attach(ctx, book, disp, id, node, l, facts)
 	if err != nil {
 		return err
 	}
-	if found && h.Provider != id {
-		return refused("E708", "attempt was dispatched to another provider")
-	}
-	if !found {
-		attempt, err := buildAttempt(ctx, node, l, facts)
+	unknown := true // the state of the run at the provider is unknown until a poll says otherwise
+	defer func() {
 		if err != nil {
-			return err
+			forget(ctx, book, disp, l.AttemptID, h, unknown && ctx.Err() == nil)
 		}
-		if h, err = disp.Dispatch(ctx, attempt); err != nil {
-			return err
-		}
-		if err = book.Put(ctx, l.AttemptID, h); err != nil {
-			return err
-		}
-	}
+	}()
 	if err = d.await(ctx, disp, h, sleep); err != nil {
+		unknown = !errors.Is(err, errVanished)
 		return err
 	}
+	unknown = false
 	collected, err := disp.Collect(ctx, h)
 	if err != nil {
 		return err
@@ -209,7 +212,8 @@ func (d *Driver) await(ctx context.Context, disp providers.Dispatcher, h provide
 		state, err := disp.Liveness(ctx, h)
 		switch {
 		case ctx.Err() != nil:
-			return d.cancel(ctx, disp, h)
+			cancelRun(ctx, disp, h)
+			return ctx.Err()
 		case err != nil:
 			if failures++; failures > maxLivenessFailures || !retryable(err) {
 				return err
@@ -217,14 +221,15 @@ func (d *Driver) await(ctx context.Context, disp providers.Dispatcher, h provide
 		case state == providers.Finished:
 			return nil
 		case state == providers.Vanished:
-			return providers.NewError(providers.Transient, "E704", "hosted run vanished", 0, time.Time{})
+			return errVanished
 		case state == providers.Queued || state == providers.Running:
 			failures = 0
 		default:
 			return refused("E704", "provider reported an unknown run state")
 		}
 		if sleep(ctx, poll) != nil {
-			return d.cancel(ctx, disp, h)
+			cancelRun(ctx, disp, h)
+			return ctx.Err()
 		}
 	}
 }
@@ -235,14 +240,6 @@ func retryable(err error) bool {
 		return true
 	}
 	return false
-}
-
-// cancel asks the provider to stop the run; the lease context is already done, so it gets its own.
-func (*Driver) cancel(ctx context.Context, disp providers.Dispatcher, h providers.Handle) error {
-	c, stop := context.WithTimeout(context.WithoutCancel(ctx), cancelTimeout)
-	defer stop()
-	_ = disp.Cancel(c, h)
-	return ctx.Err()
 }
 
 var _ transport.Driver = (*Driver)(nil)

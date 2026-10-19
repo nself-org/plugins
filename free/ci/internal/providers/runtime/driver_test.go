@@ -230,7 +230,7 @@ func TestDriverErrorPaths(t *testing.T) {
 	})
 	t.Run("a handle from another provider is refused", func(t *testing.T) {
 		useProvider(t)
-		if err := defaultDriver.Book().Put(context.Background(), "e10", providers.Handle{Provider: "github", RunID: "1"}); err != nil {
+		if _, err := defaultDriver.Book().Put(context.Background(), "e10", Entry{Handle: providers.Handle{Provider: "github", RunID: "1"}, Epoch: 1<<32 | 1}); err != nil {
 			t.Fatal(err)
 		}
 		if _, _, err := runDriver(context.Background(), t, "e10"); codeOf(err) != "E708" {

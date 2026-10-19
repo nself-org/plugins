@@ -211,7 +211,7 @@ func TestHostedLiveness(t *testing.T) {
 		p, clk, e, book := fixture(t)
 		ctx := context.Background()
 		grantLease(t, e, "v1", 30*time.Minute)
-		if err := book.Put(ctx, "v1", providers.Handle{Provider: "fake", RunID: "v1", Nonce: "nonce-v1"}); err != nil {
+		if _, err := book.Put(ctx, "v1", Entry{Handle: providers.Handle{Provider: "fake", RunID: "v1", Nonce: "nonce-v1"}, Epoch: 1<<32 | 1}); err != nil {
 			t.Fatal(err)
 		}
 		p.live = providers.Vanished

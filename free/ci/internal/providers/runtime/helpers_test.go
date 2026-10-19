@@ -119,10 +119,11 @@ func useProvider(t *testing.T) *hostedProv {
 	prov.mu.Unlock()
 	t.Setenv("NSELF_V15", "1")
 	defaultDriver.SetBook(NewMemBook())
-	defaultDriver.SetFacts(nil)
+	defaultDriver.SetFacts(testFacts)
 	defaultDriver.SetClock(nil, nil)
 	defaultContributor.SetStore(nil)
 	defaultContributor.SetTargets(nil)
+	defaultContributor.ForgetCredentials()
 	UsePolicy(nil)
 	t.Cleanup(func() {
 		defaultDriver.SetBook(NewMemBook())
@@ -132,6 +133,11 @@ func useProvider(t *testing.T) *hostedProv {
 		UsePolicy(nil)
 	})
 	return prov
+}
+
+// testFacts stands in for the P7-HOST-03 facts source.
+func testFacts(context.Context, model.Capability, protocol.Lease) (AttemptFacts, error) {
+	return AttemptFacts{N: 1, Project: "o", Repo: "o/r", TimeoutMs: 300000}, nil
 }
 
 func ptr[T any](v T) *T { return &v }

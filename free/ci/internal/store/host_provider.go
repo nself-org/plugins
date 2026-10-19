@@ -35,16 +35,18 @@ type ProviderFact struct {
 	ObservedAt           time.Time
 }
 
-// DispatchIntent is the handle of a hosted dispatch, kept per attempt.
+// DispatchIntent is the handle of a hosted dispatch, kept per attempt. Epoch is the fencing epoch of
+// the lease the run was dispatched for: a retried attempt has a higher one.
 type DispatchIntent struct {
 	AttemptID, Provider, Nonce, RunID, Ref string
+	Epoch                                  int64
 	CreatedAt                              time.Time
 }
 
 // ProviderFactPut stores a fact. An observation older than the stored one is dropped (false).
 func (s *Store) ProviderFactPut(ctx context.Context, f ProviderFact) (bool, error) {
-	if f.Provider == "" || f.Key == "" || !json.Valid(f.Value) {
-		return false, coded("E607", "provider fact needs a provider, a key and a JSON value")
+	if f.Provider == "" || f.Key == "" || f.ObservedAt.IsZero() || !json.Valid(f.Value) {
+		return false, coded("E607", "provider fact needs a provider, a key, an observation time and a JSON value")
 	}
 	var kept bool
 	err := s.write(ctx, func(tx *sql.Tx) error {
@@ -111,8 +113,8 @@ func (s *Store) ProviderFactCount(ctx context.Context, provider, scope, prefix s
 
 // ProviderMarkPut records that name did something for key at the given time. A mark never moves back.
 func (s *Store) ProviderMarkPut(ctx context.Context, name, key string, at time.Time) error {
-	if name == "" {
-		return coded("E607", "provider mark needs a name")
+	if name == "" || at.IsZero() {
+		return coded("E607", "provider mark needs a name and a time")
 	}
 	return s.write(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `INSERT INTO provider_mark(name,key,at) VALUES (?,?,?)
@@ -134,18 +136,38 @@ func (s *Store) ProviderMarkGet(ctx context.Context, name, key string) (time.Tim
 	return time.Unix(0, at).UTC(), true, nil
 }
 
-// DispatchIntentPut records the handle of an attempt's dispatch. The first record wins: a second
-// put for the same attempt changes nothing, so a retry cannot repoint an attempt at another run.
-func (s *Store) DispatchIntentPut(ctx context.Context, d DispatchIntent) error {
+// DispatchIntentPut records the handle of an attempt's dispatch and returns the intent that stands.
+// A higher Epoch (the retry of a lost attempt) replaces the stored intent; an equal or lower one
+// changes nothing, so two carriers of one lease cannot repoint the attempt, and the loser sees the
+// winner's run id in the result.
+func (s *Store) DispatchIntentPut(ctx context.Context, d DispatchIntent) (DispatchIntent, error) {
 	if d.AttemptID == "" || d.Provider == "" || d.RunID == "" {
-		return coded("E607", "dispatch intent needs an attempt, a provider and a run")
+		return DispatchIntent{}, coded("E607", "dispatch intent needs an attempt, a provider and a run")
 	}
 	if d.CreatedAt.IsZero() {
 		d.CreatedAt = s.now()
 	}
+	var out DispatchIntent
+	err := s.write(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO dispatch_intent(attempt_id,provider,nonce,run_id,ref,epoch,created_at) VALUES (?,?,?,?,?,?,?)
+ON CONFLICT(attempt_id) DO UPDATE SET provider=excluded.provider, nonce=excluded.nonce, run_id=excluded.run_id, ref=excluded.ref, epoch=excluded.epoch, created_at=excluded.created_at
+WHERE excluded.epoch > dispatch_intent.epoch`, d.AttemptID, d.Provider, d.Nonce, d.RunID, d.Ref, d.Epoch, d.CreatedAt.UnixNano()); err != nil {
+			return err
+		}
+		var at int64
+		err := tx.QueryRowContext(ctx, `SELECT attempt_id,provider,nonce,run_id,ref,epoch,created_at FROM dispatch_intent WHERE attempt_id=?`, d.AttemptID).
+			Scan(&out.AttemptID, &out.Provider, &out.Nonce, &out.RunID, &out.Ref, &out.Epoch, &at)
+		out.CreatedAt = time.Unix(0, at).UTC()
+		return err
+	})
+	return out, err
+}
+
+// DispatchIntentDelete forgets the intent of an attempt when it still names runID, so a late
+// cleanup of an old run cannot remove the intent of its retry.
+func (s *Store) DispatchIntentDelete(ctx context.Context, attemptID, runID string) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO dispatch_intent(attempt_id,provider,nonce,run_id,ref,created_at) VALUES (?,?,?,?,?,?)`,
-			d.AttemptID, d.Provider, d.Nonce, d.RunID, d.Ref, d.CreatedAt.UnixNano())
+		_, err := tx.ExecContext(ctx, `DELETE FROM dispatch_intent WHERE attempt_id=? AND run_id=?`, attemptID, runID)
 		return err
 	})
 }
@@ -154,8 +176,8 @@ func (s *Store) DispatchIntentPut(ctx context.Context, d DispatchIntent) error {
 func (s *Store) DispatchIntentGet(ctx context.Context, attemptID string) (DispatchIntent, bool, error) {
 	var d DispatchIntent
 	var at int64
-	err := s.readers.QueryRowContext(ctx, `SELECT attempt_id,provider,nonce,run_id,ref,created_at FROM dispatch_intent WHERE attempt_id=?`, attemptID).
-		Scan(&d.AttemptID, &d.Provider, &d.Nonce, &d.RunID, &d.Ref, &at)
+	err := s.readers.QueryRowContext(ctx, `SELECT attempt_id,provider,nonce,run_id,ref,epoch,created_at FROM dispatch_intent WHERE attempt_id=?`, attemptID).
+		Scan(&d.AttemptID, &d.Provider, &d.Nonce, &d.RunID, &d.Ref, &d.Epoch, &at)
 	if errors.Is(err, sql.ErrNoRows) {
 		return DispatchIntent{}, false, nil
 	}

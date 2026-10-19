@@ -40,14 +40,14 @@ func RegisterProfiles(e *lease.Engine, book Book) error {
 
 func liveness(provider string, disp providers.Dispatcher, book Book) func(context.Context, string) (lease.LiveState, error) {
 	return func(ctx context.Context, attemptID string) (lease.LiveState, error) {
-		h, ok, err := book.Get(ctx, attemptID)
+		e, ok, err := book.Get(ctx, attemptID)
 		if err != nil {
 			return "", err
 		}
-		if !ok || h.Provider != provider {
+		if !ok || e.Handle.Provider != provider {
 			return lease.LiveVanished, nil
 		}
-		state, err := disp.Liveness(ctx, h)
+		state, err := disp.Liveness(ctx, e.Handle)
 		if err != nil {
 			return "", err
 		}
