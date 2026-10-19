@@ -165,21 +165,35 @@ func TestSSHTransportRefusesBadBlobAnnouncements(t *testing.T) {
 	}
 }
 
-// noAbortSink hands out writers that cannot discard what they hold.
-type noAbortSink struct{ *recSink }
+// noVerifySink hands out resuming writers that cannot verify what they hold.
+type noVerifySink struct{ *recSink }
 
-type plainWriter struct{ *memBlob }
+// noVerifyWriter hides memBlob's Verify, so it is a BlobWriter but not a transport.Verifier.
+type noVerifyWriter struct{ b *memBlob }
 
-func (noAbortSink) Blob(context.Context, transport.BlobHeader) (transport.BlobWriter, error) {
-	return plainWriter{&memBlob{}}, nil
+func (w noVerifyWriter) Write(p []byte) (int, error) { return w.b.Write(p) }
+func (w noVerifyWriter) Close() error                { return w.b.Close() }
+func (w noVerifyWriter) Offset() int64               { return w.b.Offset() }
+func (w noVerifyWriter) Abort() error                { return w.b.Abort() }
+
+func (s noVerifySink) Blob(ctx context.Context, h transport.BlobHeader) (transport.BlobWriter, error) {
+	w, err := s.recSink.Blob(ctx, h)
+	if err != nil {
+		return nil, err
+	}
+	return noVerifyWriter{w.(*memBlob)}, nil
 }
 
-func (plainWriter) Abort() {} // wrong signature on purpose: not an Aborter
-
-// TestSSHTransportRefusesASinkThatCannotDiscard proves a failed blob can never be committed by Close.
-func TestSSHTransportRefusesASinkThatCannotDiscard(t *testing.T) {
-	err := runScripted(t, &Driver{}, func(a *scriptedAgent) { sendBlob(a, "cache", []byte("payload"), false) }, noAbortSink{&recSink{}})
+// TestSSHTransportRefusesAndDiscardsAResumeItCannotVerify proves a writer that resumes past
+// offset 0 without Verify is aborted (never committed) and the blob is refused.
+func TestSSHTransportRefusesAndDiscardsAResumeItCannotVerify(t *testing.T) {
+	payload := []byte("0123456789abcdef")
+	rec := &recSink{startAt: 10, prefix: payload[:10]}
+	err := runScripted(t, &Driver{}, func(a *scriptedAgent) { sendBlob(a, "artifact", payload, true) }, noVerifySink{rec})
 	reasonOf(t, err, ReasonBlob)
+	if b := rec.blobs["artifact"]; b == nil || !b.abort || b.closed {
+		t.Fatalf("the unverifiable resumed blob was not discarded: %+v", b)
+	}
 }
 
 // TestSSHTransportFlippedByteInAResumedBlobIsRejected proves a resumed blob is verified whole.

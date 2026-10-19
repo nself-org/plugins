@@ -13,14 +13,12 @@ package ssh
 // a resumed blob must be verified by the Sink on Close, whose BlobHeader holds
 // the expected sha256.
 // ArtifactRef and CacheRef frames name blobs the Sink already committed.
-// Sink contract: a BlobWriter must implement Aborter (a failed blob is discarded,
-// never committed by Close); one that starts past offset 0 must also implement
-// Verifier, because the transport has not seen the bytes before the offset and
-// cannot hash the whole blob itself. A digest must be 64 lower-case hex, the size
-// at least 1 byte and at most maxBlob; a lease may open maxLeaseBlobs blobs of
-// maxLeaseBytes in total. A writer that is not an Aborter is refused but was already
-// allocated by the Sink; closing it could commit, so it is left alone (debt: the
-// interface belongs in internal/transport).
+// Sink contract (transport.BlobWriter): every writer can Abort, so a failed blob is
+// discarded, never committed by Close; one that starts past offset 0 must also
+// implement transport.Verifier, because the transport has not seen the bytes before
+// the offset and cannot hash the whole blob itself. A digest must be 64 lower-case
+// hex, the size at least 1 byte and at most maxBlob; a lease may open maxLeaseBlobs
+// blobs of maxLeaseBytes in total.
 
 import (
 	"context"
@@ -45,13 +43,6 @@ const (
 )
 
 var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
-
-// Aborter is implemented by a BlobWriter that can discard what it holds.
-type Aborter interface{ Abort() error }
-
-// Verifier is implemented by a BlobWriter that can check the sha256 of everything it holds
-// (hex, lower case) before the blob is committed; Close commits.
-type Verifier interface{ Verify(wantSHA256 string) error }
 
 type blobState struct {
 	head    transport.BlobHeader
@@ -83,12 +74,9 @@ func (s *sess) onDigest(ctx context.Context, d protocol.Digest) error {
 		return newErr(CodeTransport, ReasonBlob, "the %s blob %s was refused", d.Stream, short(head.SHA256))
 	}
 	st := &blobState{head: head, w: w, next: w.Offset()}
-	if _, ok := w.(Aborter); !ok {
-		return newErr(CodeTransport, ReasonBlob, "the sink cannot discard a %s blob; refusing to stream into it", d.Stream)
-	}
 	if st.next == 0 {
 		st.h = sha256.New()
-	} else if _, ok := w.(Verifier); !ok {
+	} else if _, ok := w.(transport.Verifier); !ok {
 		s.discard(st)
 		return newErr(CodeTransport, ReasonBlob, "the sink holds %d bytes of the %s blob but cannot verify it; refusing to resume", st.next, d.Stream)
 	}
@@ -104,7 +92,7 @@ func (s *sess) onDigest(ctx context.Context, d protocol.Digest) error {
 
 // commit verifies a blob the sink holds in full, closes the writer and remembers the digest.
 func (s *sess) commit(st *blobState) error {
-	if v, ok := st.w.(Verifier); ok {
+	if v, ok := st.w.(transport.Verifier); ok {
 		if err := v.Verify(st.head.SHA256); err != nil {
 			return s.failBlob(st, "the blob the sink already holds does not match its digest")
 		}
@@ -160,7 +148,7 @@ func (s *sess) onChunk(c protocol.Chunk) error {
 		return s.failBlob(st, "blob digest mismatch")
 	}
 	if st.h == nil {
-		if err := st.w.(Verifier).Verify(st.head.SHA256); err != nil {
+		if err := st.w.(transport.Verifier).Verify(st.head.SHA256); err != nil {
 			return s.failBlob(st, "the resumed blob does not match its digest")
 		}
 	}
@@ -178,12 +166,8 @@ func (s *sess) failBlob(st *blobState, why string) error {
 	return newErr(CodeTransport, ReasonBlob, "%s blob %s rejected: %s", st.head.Stream, short(st.head.SHA256), why)
 }
 
-// discard aborts a blob writer (onDigest guarantees it can abort).
-func (s *sess) discard(st *blobState) {
-	if a, ok := st.w.(Aborter); ok {
-		_ = a.Abort()
-	}
-}
+// discard aborts a blob writer; Close would commit it.
+func (s *sess) discard(st *blobState) { _ = st.w.Abort() }
 
 func short(d string) string {
 	if len(d) > 12 {

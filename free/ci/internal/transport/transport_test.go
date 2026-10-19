@@ -41,6 +41,10 @@ func (w writer) Write(p []byte) (int, error) {
 }
 func (w writer) Close() error  { *w.calls = append(*w.calls, "close"); return nil }
 func (w writer) Offset() int64 { return 0 }
+func (w writer) Abort() error  { *w.calls = append(*w.calls, "abort"); return nil }
+func (w writer) Verify(string) error {
+	return nil
+}
 
 var _ io.WriteCloser = writer{}
 
@@ -99,5 +103,29 @@ func TestRegistryAndDelivery(t *testing.T) {
 	}
 	if !reflect.DeepEqual(calls, []string{"first", "second"}) {
 		t.Fatal(calls)
+	}
+}
+
+// TestBlobWriterContractDiscardsWithoutAssertion proves Abort is part of the BlobWriter contract
+// itself (D-1053): a carrier can discard any writer a Sink hands out, with no interface assertion,
+// and a resuming writer states its Verify capability through the exported Verifier type.
+func TestBlobWriterContractDiscardsWithoutAssertion(t *testing.T) {
+	var calls []string
+	w, err := sink{&calls}.Blob(context.Background(), BlobHeader{Stream: "cache", SHA256: "sha", Size: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Abort(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(calls, []string{"blob", "abort"}) {
+		t.Fatal(calls)
+	}
+	v, ok := w.(Verifier)
+	if !ok {
+		t.Fatal("the test writer should satisfy Verifier")
+	}
+	if err := v.Verify("sha"); err != nil {
+		t.Fatal(err)
 	}
 }
