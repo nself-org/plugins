@@ -60,7 +60,10 @@ var (
 	// themselves forward a variable.
 	runnerWrappers = map[string]bool{"trans": true, "settle": true}
 	wrapperOwners  = map[string]bool{"internal/run.(runState).trans": true, "internal/run.(runState).settle": true}
-	localFiles     = map[string]bool{"internal/run/attempt.go": true, "internal/run/dispatch_hook.go": true}
+	// nonLiteralTransition may pass a computed target to Store.Transition: the
+	// run loop's forwarder, and crash recovery (cancelled or failed, by state).
+	nonLiteralTransition = map[string]bool{"internal/run.(runState).trans": true, "internal/run.strandAttempts": true}
+	localFiles           = map[string]bool{"internal/run/attempt.go": true, "internal/run/dispatch_hook.go": true}
 )
 
 // banned are the admission functions only the chokepoint may name.
@@ -140,10 +143,15 @@ func scanFile(f *ast.File, rel string, add func(string)) {
 				if !ok || definerDirs[dir] {
 					return true
 				}
+				_, methodExpr := sel.X.(*ast.ParenExpr) // (*T).m(recv, args...) shifts every argument by one
 				switch {
+				case (sel.Sel.Name == "Transition" || runnerWrappers[sel.Sel.Name] && dir == "internal/run") && methodExpr:
+					report(sel.Sel.Name + "(method expression)")
 				case sel.Sel.Name == "Transition" && len(x.Args) > 3:
-					if _, leased := isLiteral(x.Args[3], "leased"); leased {
+					if isLit, leased := isLiteral(x.Args[3], "leased"); leased {
 						report("Transition(leased)")
+					} else if !isLit && !nonLiteralTransition[key] {
+						report("Transition(non-literal)") // a constant or computed target is not reviewable here
 					}
 				case runnerWrappers[sel.Sel.Name] && dir == "internal/run" && len(x.Args) > 2:
 					if isLit, leased := isLiteral(x.Args[2], "leased"); leased || !isLit && !wrapperOwners[key] {
@@ -241,6 +249,12 @@ func TestAdmitChokepoint(t *testing.T) {
 		"internal/bad/bad.go: ValueAlias uses AdmitPlacement",
 		"internal/run/other.go: (T).CreateAttempt uses AdmitAndLease",
 		"internal/run/other.go: Back uses LocalAdmit",
+		"internal/run/other.go: ExprTrans uses trans(method expression)",
+		"internal/run/other.go: ExprTransition uses Transition(method expression)",
+		"internal/bad/bad.go: Const uses Transition(non-literal)",
+		"internal/bad/bad.go: Const uses Transition",
+		"internal/bad/bad.go: Variable uses Transition(non-literal)",
+		"internal/run/other.go: ExprTransition uses Transition",
 		"internal/run/other.go: Forward uses trans(non-literal)",
 		"internal/run/other.go: Settle uses settle(leased)",
 		"internal/run/other.go: ValueTrans uses trans(method value)",

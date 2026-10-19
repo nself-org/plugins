@@ -35,3 +35,9 @@ func Variable(s *store.Store) error {
 	const to = "lea" + "sed"
 	return s.Transition(ctx, "a", "queued", to, detail)
 }
+
+// A reviewed target replaced by a constant.
+func Const(s *store.Store) error {
+	const to = "leased"
+	return s.Transition(ctx, "a", "queued", to, detail)
+}
