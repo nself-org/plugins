@@ -357,3 +357,51 @@ func TestRegisterJobHook(t *testing.T) {
 		t.Fatal("accepted a duplicate")
 	}
 }
+
+// TestNewerEpochForRunningLeaseStopsTheOldRun proves a re-lease with a higher
+// epoch cancels the stale run and is refused until the slot is free, and that
+// a second lease with the same epoch is ignored as a duplicate.
+func TestNewerEpochForRunningLeaseStopsTheOldRun(t *testing.T) {
+	var starts atomic.Int32
+	runner := RunnerFunc(func(ctx context.Context, j JobRun) (JobResult, error) {
+		starts.Add(1)
+		<-ctx.Done()
+		return JobResult{Outcome: Outcome{State: "cancelled"}, Evidence: json.RawMessage(`{"old":true}`)}, nil
+	})
+	r := startRig(t, runner)
+	r.handshake()
+	r.lease(testLease("l1", 1))
+	waitUsed(t, r.table, 1)
+	r.lease(testLease("l1", 1)) // duplicate: ignored
+	r.lease(testLease("l1", 2)) // newer epoch: old run stopped, new lease refused for now
+	res := r.car.next(t, "result").Body.(protocol.Result)
+	if res.Epoch != 1 || string(res.Evidence) != `{"old":true}` {
+		t.Fatalf("result %+v", res)
+	}
+	if starts.Load() != 1 {
+		t.Fatalf("job started %d times", starts.Load())
+	}
+}
+
+// TestWelcomeVersionChecked proves a welcome that names another protocol
+// version ends the session instead of being run as v1.
+func TestWelcomeVersionChecked(t *testing.T) {
+	r := startRig(t, okRunner(`{}`))
+	r.car.next(t, "hello")
+	r.car.push("welcome", protocol.Welcome{Version: 2, MinAgentVersion: "1.4.0", SessionID: "s", HeartbeatMS: 1000, AgentTTLMS: 3000})
+	var pe *protocol.Error
+	if err := r.wait(); !errors.As(err, &pe) || pe.Code != "E652" {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// TestEpochMemoryIsBounded proves a long-lived session forgets finished lease ids.
+func TestEpochMemoryIsBounded(t *testing.T) {
+	s := &Session{seenEpoch: map[string]uint64{}, active: map[string]*activeLease{}}
+	for i := range 3 * maxSeen {
+		s.noteEpoch(protocol.Lease{LeaseID: fmt.Sprintf("l%d", i), Epoch: 1})
+	}
+	if len(s.seenEpoch) != maxSeen {
+		t.Fatalf("kept %d ids, want %d", len(s.seenEpoch), maxSeen)
+	}
+}

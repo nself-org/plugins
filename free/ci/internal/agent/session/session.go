@@ -94,6 +94,7 @@ type Session struct {
 	// Owned by the Run goroutine.
 	active    map[string]*activeLease
 	seenEpoch map[string]uint64
+	seenOrder []string
 	draining  bool
 	drainBy   time.Time
 	heartbeat time.Duration
@@ -251,6 +252,9 @@ func (s *Session) sendHello() error {
 func (s *Session) onHandshake(m protocol.Message) error {
 	switch b := m.Body.(type) {
 	case *protocol.Welcome:
+		if b.Version != 1 {
+			return &protocol.Error{Code: protocol.CodeVersion, Reason: "welcome_version"}
+		}
 		s.welcome = *b
 		return RecordWelcome(s.cfg.StateDir, s.cfg.Coordinator, *b, s.cfg.Clock.Now())
 	case *protocol.Reject:

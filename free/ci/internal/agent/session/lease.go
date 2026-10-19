@@ -43,8 +43,17 @@ func (l *activeLease) state() string {
 }
 
 func (s *Session) onLease(m protocol.Message, l protocol.Lease) {
-	if cur, ok := s.active[l.LeaseID]; ok && l.Epoch == cur.lease.Epoch {
-		return // a duplicate delivery of a lease already running
+	if cur, ok := s.active[l.LeaseID]; ok {
+		switch {
+		case l.Epoch < cur.lease.Epoch:
+			s.refuse(l, "stale_epoch", "")
+		case l.Epoch > cur.lease.Epoch:
+			// A newer epoch for a running lease id: the old run is stale. Stop it
+			// and ask for the new lease again once the slot is free.
+			cur.cancel()
+			s.refuse(l, "lease_active", "")
+		}
+		return // equal epoch: a duplicate delivery of a lease already running
 	}
 	if prev, ok := s.seenEpoch[l.LeaseID]; ok && l.Epoch <= prev {
 		s.refuse(l, "stale_epoch", "")
@@ -64,7 +73,7 @@ func (s *Session) onLease(m protocol.Message, l protocol.Lease) {
 		}
 		return
 	}
-	s.seenEpoch[l.LeaseID] = l.Epoch
+	s.noteEpoch(l)
 	ctx, cancel := context.WithCancel(s.runCtx)
 	al := &activeLease{lease: l, cancelCtx: cancel, secrets: make(chan protocol.Secrets, 1)}
 	if l.RunnerCredential != nil {
@@ -73,6 +82,27 @@ func (s *Session) onLease(m protocol.Message, l protocol.Lease) {
 	s.active[l.LeaseID] = al
 	s.wg.Add(1)
 	go s.runLease(ctx, al, slot)
+}
+
+// maxSeen bounds the epoch memory of a long-lived session.
+const maxSeen = 2048
+
+// noteEpoch remembers the highest epoch per lease id for stale-epoch refusal,
+// forgetting the oldest finished ids beyond maxSeen.
+func (s *Session) noteEpoch(l protocol.Lease) {
+	if _, ok := s.seenEpoch[l.LeaseID]; !ok {
+		s.seenOrder = append(s.seenOrder, l.LeaseID)
+	}
+	s.seenEpoch[l.LeaseID] = l.Epoch
+	for len(s.seenOrder) > maxSeen {
+		old := s.seenOrder[0]
+		s.seenOrder = s.seenOrder[1:]
+		if _, running := s.active[old]; !running {
+			delete(s.seenEpoch, old)
+		} else {
+			s.seenOrder = append(s.seenOrder, old)
+		}
+	}
 }
 
 // refuse tells the coordinator a lease was not started: one stderr log line and
