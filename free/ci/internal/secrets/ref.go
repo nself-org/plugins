@@ -72,8 +72,17 @@ func echo(s string) string {
 	return b.String()
 }
 
-// Parse reads one ref.
-func Parse(s string) (Ref, error) {
+// Parse reads one ref a job may receive.
+func Parse(s string) (Ref, error) { return parse(s, false) }
+
+// ParseSigner reads the ref of a release-class secret that only the release signer
+// resolves, such as release/NSELF_CI_RELEASE_SIGNING_KEY. It is Parse without the
+// NSELF_CI_ prefix rule: a job may not receive such a variable, the signer never
+// delivers one. It accepts only release/NAME refs and still refuses every other reserved
+// name. NOT for job delivery: never pass its result to an injector.
+func ParseSigner(s string) (Ref, error) { return parse(s, true) }
+
+func parse(s string, signer bool) (Ref, error) {
 	parts := strings.Split(s, "/")
 	shown := "<not echoed>" // a literal secret pasted into `secrets:` must not reach an error or a log
 	switch parts[0] {
@@ -85,6 +94,9 @@ func Parse(s string) (Ref, error) {
 	}
 	bad := func(why string) (Ref, error) { return Ref{}, errRef("invalid secret ref %q: %s", shown, why) }
 	r := Ref{Raw: s}
+	if signer && parts[0] != "release" {
+		return bad("a signer ref is release/NAME")
+	}
 	switch parts[0] {
 	case "project", "team", "release":
 		if len(parts) != 2 {
@@ -105,7 +117,7 @@ func Parse(s string) (Ref, error) {
 	if !namePattern.MatchString(r.Name) {
 		return bad("NAME must match ^[A-Z][A-Z0-9_]{0,127}$")
 	}
-	if reservedName(r.Name) {
+	if reservedName(r.Name) && !(signer && strings.HasPrefix(r.Name, signerPrefix)) {
 		return bad("NAME is reserved: it would change how the process or the docker client runs")
 	}
 	return r, nil
@@ -168,6 +180,9 @@ func ParseClass(spec string) (model.SecretClass, string, error) {
 
 // StoreFileOf is the `--file` argument of `config secrets recipients` for a class and environment.
 func StoreFileOf(class model.SecretClass, env string) string { return storeFile(class, env) }
+
+// signerPrefix is the reserved prefix ParseSigner lets through.
+const signerPrefix = "NSELF_CI_"
 
 // reservedName lists variables a secret may not be delivered as: container secrets travel in the docker
 // CLI's own environment, and any process would honour these, so a ref must not be able to redirect them.

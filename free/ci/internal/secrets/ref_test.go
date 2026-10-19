@@ -107,3 +107,25 @@ func TestReservedNamesAreRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestParseSigner(t *testing.T) {
+	const ref = "release/NSELF_CI_RELEASE_SIGNING_KEY"
+	if _, err := Parse(ref); CodeOf(err) != "E674" {
+		t.Fatalf("Parse must still refuse the NSELF_CI_ prefix for a job, got %v", err)
+	}
+	r, err := ParseSigner(ref)
+	if err != nil || r.Raw != ref || string(r.Class) != "release" || r.Env != "" || r.Name != "NSELF_CI_RELEASE_SIGNING_KEY" || r.StoreFile() != "release" {
+		t.Fatalf("ParseSigner(%q) = %+v, %v", ref, r, err)
+	}
+}
+
+func TestParseSignerRejects(t *testing.T) {
+	for _, in := range []string{
+		"", "NSELF_CI_X", "project/NSELF_CI_X", "team/NSELF_CI_X", "environment/dev/NSELF_CI_X", "deploy/prod/NSELF_CI_X",
+		"release/nself_ci_x", "release/NSELF_CI_X/Y", "release/PATH", "release/DOCKER_HOST", "release/LD_PRELOAD", "release/GIT_DIR",
+	} {
+		if _, err := ParseSigner(in); CodeOf(err) != "E674" {
+			t.Errorf("%q: want E674, got %v", in, err)
+		}
+	}
+}

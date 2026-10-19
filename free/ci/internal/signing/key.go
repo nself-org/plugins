@@ -21,11 +21,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"regexp"
-	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/signing"
 
-	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/secrets"
 )
 
@@ -102,17 +100,24 @@ func mapResolve(err error) error {
 	return Failf(ReasonSignerFailed, "the release key could not be resolved (%s)", echo(se.Code))
 }
 
-// releaseRef builds the Ref of a release-class name directly: secrets.Parse
+// releaseRef parses a release-class ref with secrets.ParseSigner: secrets.Parse
 // refuses the reserved NSELF_CI_ prefix because a JOB may not receive such a
 // variable, and the signer is not a job: it never delivers the value, it only
 // reads it into its own memory.
-func releaseRef(raw string) secrets.Ref {
-	return secrets.Ref{Raw: raw, Class: model.SecretClass("release"), Name: strings.TrimPrefix(raw, "release/")}
+func releaseRef(raw string) (secrets.Ref, error) {
+	ref, err := secrets.ParseSigner(raw)
+	if err != nil {
+		return secrets.Ref{}, Failf(ReasonSignerFailed, "the release key ref is invalid")
+	}
+	return ref, nil
 }
 
 // resolveOne resolves one ref and returns its value bytes (caller zeroes them).
 func resolveOne(ctx context.Context, res secrets.ValueResolver, attempt, raw string) ([]byte, error) {
-	ref := releaseRef(raw)
+	ref, err := releaseRef(raw)
+	if err != nil {
+		return nil, err
+	}
 	if err := res.Probe(ctx); err != nil {
 		return nil, mapResolve(err)
 	}
