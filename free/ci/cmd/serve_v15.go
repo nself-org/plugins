@@ -94,7 +94,7 @@ func runServeV15(args []string) int {
 func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)) int {
 	fs, f, _ := newServeV15Flags()
 	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	if _, err := parseInterspersed(fs, args); err != nil { // flags after a positional argument still count, as in v1.4
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}

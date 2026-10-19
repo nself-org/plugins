@@ -39,7 +39,7 @@ func isLoopback(addr string) bool {
 
 func (c *Coordinator) healthz(w http.ResponseWriter, r *http.Request, loopback bool) {
 	body := map[string]any{"status": "ok", "service": "nself-ci-serve", "port": "3845"}
-	if loopback {
+	if loopback && localCaller(r) {
 		if st, err := c.cfg.Store.IntakeStats(r.Context()); err == nil {
 			body["queue_depth"], body["dispatched"], body["leases"] = st.Queued, st.Dispatched, st.Leases
 		}
@@ -69,6 +69,30 @@ func accessLog(next http.Handler, logf func(string, ...any)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start, sw := time.Now(), &statusWriter{ResponseWriter: w, code: http.StatusOK}
 		next.ServeHTTP(sw, r)
-		logf("%s %s %d %s", r.Method, strings.ReplaceAll(r.URL.Path, "\n", ""), sw.code, time.Since(start).Round(time.Millisecond))
+		logf("%s %s %d %s", r.Method, cleanPath(r.URL.Path), sw.code, time.Since(start).Round(time.Millisecond))
 	})
+}
+
+// cleanPath makes a request path safe for one log line: control characters become '?'.
+func cleanPath(p string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return '?'
+		}
+		return r
+	}, p)
+}
+
+// localCaller says the request came straight from this host and was not relayed by a proxy or tunnel
+// (which would add a forwarding header): a relayed caller may be anyone, so it gets the v1.4 body only.
+func localCaller(r *http.Request) bool {
+	if r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("Forwarded") != "" || r.Header.Get("X-Real-Ip") != "" {
+		return false
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

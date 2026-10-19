@@ -44,6 +44,10 @@ const (
 	// IntakeRetention is the provider redelivery horizon: deliveries, completed rows and keys older than
 	// this are forgotten by DedupPrune.
 	IntakeRetention = 72 * time.Hour
+
+	// IntakeMaxAttempts is how often a row may be claimed before recovery fails it instead of queueing it
+	// again: a pipeline that kills the coordinator must not do so forever.
+	IntakeMaxAttempts = 3
 )
 
 // IntakeRow is one accepted trigger.
@@ -258,10 +262,11 @@ func (s *Store) IntakeFinish(ctx context.Context, id, owner, pipelineID, result 
 	})
 }
 
-// IntakeRequeue gives a claimed row back to the queue (a coordinator that is shutting down).
+// IntakeRequeue gives a claimed row back to the queue (a coordinator that is shutting down). The claim
+// does not count as an attempt: a clean shutdown must never use up the retries.
 func (s *Store) IntakeRequeue(ctx context.Context, id, owner string) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `UPDATE intake SET state='queued',claimed_by='' WHERE id=? AND state='dispatched' AND claimed_by=?`, id, owner)
+		_, err := tx.ExecContext(ctx, `UPDATE intake SET state='queued',claimed_by='',attempts=max(attempts-1,0) WHERE id=? AND state='dispatched' AND claimed_by=?`, id, owner)
 		return err
 	})
 }
@@ -270,7 +275,13 @@ func (s *Store) IntakeRequeue(ctx context.Context, id, owner string) error {
 func (s *Store) IntakeRecover(ctx context.Context, owner string, stale time.Duration) (int, error) {
 	n := 0
 	err := s.write(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `UPDATE intake SET state='queued',claimed_by='' WHERE state='dispatched' AND claimed_by<>? AND claim_at<=?`, owner, s.now().UnixNano()-int64(stale))
+		now := s.now().UnixNano()
+		// a row claimed too often is failed, not queued again
+		if _, err := tx.ExecContext(ctx, `UPDATE intake SET state='failed',finished_at=?,result='attempts exhausted' WHERE state='dispatched' AND claimed_by<>? AND claim_at<=? AND attempts>=?`,
+			now, owner, now-int64(stale), IntakeMaxAttempts); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `UPDATE intake SET state='queued',claimed_by='' WHERE state='dispatched' AND claimed_by<>? AND claim_at<=?`, owner, now-int64(stale))
 		if err != nil {
 			return err
 		}

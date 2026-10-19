@@ -29,6 +29,15 @@ import (
 // MaxBody is the one body cap, checked before any Accept or signature work.
 const MaxBody = 25 << 20
 
+// bigBody is the size above which a request body takes one of the bodySlots while it is read.
+const bigBody = 1 << 20
+
+// bodySlots bounds the large bodies buffered at once (at most 16 x 25 MiB) before authentication.
+var bodySlots = make(chan struct{}, 16)
+
+// maxDeliveryID is the longest delivery id the intake stores.
+const maxDeliveryID = 256
+
 // Outcome says what an enqueue did: enqueued, duplicate, coalesced or replay, and the row it stands for.
 type Outcome = store.IntakeOutcome
 
@@ -45,6 +54,9 @@ func (c *Coordinator) Enqueue(ctx context.Context, d Delivery) (Outcome, error) 
 func (c *Coordinator) enqueue(ctx context.Context, d Delivery, webhook bool, o enqueueOpts) (Outcome, error) {
 	if d.Source == "" || d.Project == "" || d.Revision == "" {
 		return Outcome{}, newErr("", ReasonInvalidDelivery, "a delivery needs a source, a project and a revision")
+	}
+	if len(d.DeliveryID) > maxDeliveryID {
+		return Outcome{}, newErr("", ReasonInvalidDelivery, "delivery id is too long")
 	}
 	if d.TriggerClass == "" {
 		d.TriggerClass = "change"
@@ -63,7 +75,7 @@ func (c *Coordinator) enqueue(ctx context.Context, d Delivery, webhook bool, o e
 	blob, _ := json.Marshal(facts)
 	out, err := c.cfg.Store.IntakeEnqueue(ctx, store.IntakeRequest{
 		Source: d.Source, DeliveryID: d.DeliveryID, Project: d.Project, Revision: d.Revision, TriggerClass: d.TriggerClass,
-		PolicyDigest: c.cfg.PolicyDigest, SemanticKey: semanticKey(d.Project, d.Revision, d.TriggerClass, c.cfg.PolicyDigest),
+		PolicyDigest: c.cfg.PolicyDigest, SemanticKey: semanticKey(d.Project, d.Revision, d.TriggerClass, c.cfg.PolicyDigest, d.Pipeline),
 		Pipeline: d.Pipeline, Facts: blob, Webhook: webhook, Force: c.cfg.Force || o.force, Actor: o.actor,
 		IdemDigest: o.idem, ReqDigest: o.reqDigest,
 	})
@@ -118,6 +130,20 @@ func (c *Coordinator) serveWebhook(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
+	if r.ContentLength > MaxBody {
+		http.Error(w, "body too large (limit 25 MiB)", http.StatusRequestEntityTooLarge)
+		return
+	}
+	if r.ContentLength < 0 || r.ContentLength > bigBody { // large or unknown size: bound how many sit in memory before authentication
+		select {
+		case bodySlots <- struct{}{}:
+			defer func() { <-bodySlots }()
+		default:
+			w.Header().Set("Retry-After", "5")
+			http.Error(w, "too many large requests in flight; retry later", http.StatusTooManyRequests)
+			return
+		}
+	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, MaxBody+1))
 	switch {
 	case err != nil:
@@ -144,6 +170,10 @@ func (c *Coordinator) serveWebhook(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "signature mismatch", http.StatusForbidden)
 			return
 		}
+	} else if !c.cfg.Insecure { // the process may run on ingress secrets alone: the v1.4 path then has no way to authenticate
+		c.cfg.Logf("refused an unmatched webhook: no shared secret and not --insecure")
+		http.Error(w, "signature required", http.StatusForbidden)
+		return
 	}
 	ev, err := serve.ParseWebhook(r.Header.Get("X-GitHub-Event"), body)
 	if err != nil {

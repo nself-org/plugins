@@ -135,6 +135,14 @@ func TestV15ServeFlags(t *testing.T) {
 	}
 }
 
+func TestV15ServeFlagsAfterPositionalCount(t *testing.T) {
+	fs, f, _ := newServeV15Flags()
+	pos, err := parseInterspersed(fs, []string{"extra", "--addr", "0.0.0.0:9", "more", "--insecure"})
+	if err != nil || len(pos) != 2 || f.addr != "0.0.0.0:9" || !f.insecure {
+		t.Fatalf("pos=%v addr=%q insecure=%v err=%v: flags after a positional argument were dropped", pos, f.addr, f.insecure, err)
+	}
+}
+
 func TestV15ServeRegisteredV15Only(t *testing.T) {
 	e, ok := v15Subcommands["serve"]
 	if !ok || !e.V15Only || e.Handler == nil || e.Flags == nil {

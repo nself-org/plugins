@@ -295,9 +295,14 @@ func TestIntakeStoreDownGives503(t *testing.T) {
 func TestHealthzBodyByBind(t *testing.T) {
 	r := newRig(t, nil)
 	r.post("/webhook", "push", "z1", pushBody("abc1234def"))
-	get := func(loop bool) map[string]any {
+	get := func(loop bool, hdr ...string) map[string]any {
 		w := httptest.NewRecorder()
-		r.c.Handler(loop).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		req.RemoteAddr = "127.0.0.1:50000"
+		for i := 0; i+1 < len(hdr); i += 2 {
+			req.Header.Set(hdr[i], hdr[i+1])
+		}
+		r.c.Handler(loop).ServeHTTP(w, req)
 		var m map[string]any
 		_ = json.Unmarshal(w.Body.Bytes(), &m)
 		return m
@@ -307,6 +312,9 @@ func TestHealthzBodyByBind(t *testing.T) {
 	}
 	if m := get(false); m["queue_depth"] != nil || m["leases"] != nil || m["status"] != "ok" || m["service"] != "nself-ci-serve" {
 		t.Fatalf("non-loopback body = %v, want only the v1.4 fields", m)
+	}
+	if m := get(true, "X-Forwarded-For", "203.0.113.9"); m["queue_depth"] != nil || m["status"] != "ok" {
+		t.Fatalf("a request relayed by a proxy got the loopback body: %v", m)
 	}
 	for addr, want := range map[string]bool{"127.0.0.1:3845": true, "[::1]:80": true, "0.0.0.0:3845": false, ":3845": false, "10.0.0.5:1": false} {
 		if isLoopback(addr) != want {
@@ -613,4 +621,96 @@ func childAndDie(mode, db string) {
 	p, _ := os.FindProcess(os.Getpid())
 	_ = p.Kill() // SIGKILL: no defer, no Close, no checkpoint
 	select {}
+}
+
+func TestUnmatchedWebhookNeedsSecretUnlessInsecure(t *testing.T) {
+	// ingress secrets let the process start with no shared secret; an unmatched request must still be refused
+	register(t, &fakeIngress{name: "zz-fake-m1", secrets: true})
+	r := newRig(t, func(c *Config) { c.Secret = "" })
+	body := pushBody("abc1234def")
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "push")
+	w := httptest.NewRecorder()
+	r.c.Handler(true).ServeHTTP(w, req)
+	if w.Code != 403 || queued(t, r.st) != 0 {
+		t.Fatalf("unsigned webhook with no shared secret = %d, queued=%d; want 403 and no row", w.Code, queued(t, r.st))
+	}
+	r = newRig(t, func(c *Config) { c.Secret, c.Insecure = "", true })
+	req = httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "push")
+	w = httptest.NewRecorder()
+	r.c.Handler(true).ServeHTTP(w, req)
+	if w.Code != 202 {
+		t.Fatalf("--insecure webhook = %d, want 202", w.Code)
+	}
+}
+
+func TestSemanticKeyIncludesRequestedPipeline(t *testing.T) {
+	r := newRig(t, nil)
+	sha := "abc1234def"
+	r.post("/webhook", "push", "k1", pushBody(sha))
+	rel := r.post("/v1/trigger", "", "", []byte(`{"project":"o/r","revision":"`+sha+`","pipeline":"release"}`), "Idempotency-Key", "release-key-1")
+	if outcome(t, rel) != "enqueued" {
+		t.Fatalf("a manual run of another pipeline = %s, want its own run", rel.Body)
+	}
+	if semanticKey("o/r", sha, "change", "pd", "") == semanticKey("o/r", sha, "change", "pd", "release") {
+		t.Fatal("the pipeline is not part of the key")
+	}
+}
+
+func TestIntakeBodyLimits(t *testing.T) {
+	r := newRig(t, nil)
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(nil))
+	req.ContentLength = MaxBody + 1
+	w := httptest.NewRecorder()
+	r.c.Handler(true).ServeHTTP(w, req)
+	if w.Code != 413 {
+		t.Fatalf("declared 26 MiB = %d, want 413 before the body is read", w.Code)
+	}
+	for i := 0; i < cap(bodySlots); i++ {
+		bodySlots <- struct{}{}
+	}
+	defer func() {
+		for i := 0; i < cap(bodySlots); i++ {
+			<-bodySlots
+		}
+	}()
+	req = httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(make([]byte, 2<<20)))
+	w = httptest.NewRecorder()
+	r.c.Handler(true).ServeHTTP(w, req)
+	if w.Code != 429 || w.Header().Get("Retry-After") == "" {
+		t.Fatalf("large body with every slot taken = %d, want 429", w.Code)
+	}
+	long := strings.Repeat("d", maxDeliveryID+1)
+	if w = r.post("/webhook", "push", long, pushBody("abc1234def")); w.Code != 400 {
+		t.Fatalf("over-long delivery id = %d, want 400", w.Code)
+	}
+}
+
+func TestDispatchResultSurvivesShutdown(t *testing.T) {
+	started, release := make(chan struct{}), make(chan struct{})
+	r := newRig(t, func(c *Config) {
+		c.Dispatch = func(context.Context, store.IntakeRow) (RunResult, error) {
+			close(started)
+			<-release
+			return RunResult{PipelineID: "finished", Exit: 0}, nil // returns a result even though ctx ended meanwhile
+		}
+	})
+	var m map[string]string
+	_ = json.Unmarshal(r.post("/webhook", "push", "sd1", pushBody("abc1234def")).Body.Bytes(), &m)
+	ctx, cancel := context.WithCancel(context.Background())
+	r.c.cfg.Addr, r.c.cfg.Beat, r.c.cfg.Poll = "127.0.0.1:0", time.Hour, 5*time.Millisecond
+	done := make(chan error, 1)
+	go func() { done <- r.c.Run(ctx) }()
+	<-started
+	cancel()
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	row, err := r.st.IntakeGet(context.Background(), m["intake"])
+	if err != nil || row.State != store.IntakeDone || row.PipelineID != "finished" {
+		t.Fatalf("row after shutdown = %+v, %v; want done (a finished pipeline is not run twice)", row, err)
+	}
 }

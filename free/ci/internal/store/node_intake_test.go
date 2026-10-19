@@ -170,3 +170,43 @@ func TestDedupPruneForgetsOldRows(t *testing.T) {
 		t.Fatalf("a forgotten delivery id = %+v, want a fresh run", b)
 	}
 }
+
+func TestIntakeRecoverGivesUpAfterMaxAttempts(t *testing.T) {
+	ctx := context.Background()
+	s, clk := intakeStore(t)
+	a, _ := s.IntakeEnqueue(ctx, req("d1", "k"))
+	for i := 1; i <= IntakeMaxAttempts; i++ {
+		row, ok, _ := s.IntakeClaim(ctx, "crashy")
+		if !ok || row.Attempts != i {
+			t.Fatalf("claim %d = %+v %v", i, row, ok)
+		}
+		clk.add(2 * time.Minute)
+		if n, err := s.IntakeRecover(ctx, "me", time.Minute); err != nil || (i < IntakeMaxAttempts && n != 1) {
+			t.Fatalf("recover %d = %d, %v", i, n, err)
+		}
+	}
+	got, err := s.IntakeGet(ctx, a.ID)
+	if err != nil || got.State != IntakeFailed || got.Result != "attempts exhausted" {
+		t.Fatalf("after %d crashes = %+v, %v; want failed", IntakeMaxAttempts, got, err)
+	}
+	if _, ok, _ := s.IntakeClaim(ctx, "me"); ok {
+		t.Fatal("an exhausted row was claimed again")
+	}
+}
+
+func TestIntakeRequeueDoesNotSpendAnAttempt(t *testing.T) {
+	ctx := context.Background()
+	s, _ := intakeStore(t)
+	a, _ := s.IntakeEnqueue(ctx, req("d1", "k"))
+	for i := 0; i < 2*IntakeMaxAttempts; i++ {
+		if _, ok, _ := s.IntakeClaim(ctx, "me"); !ok {
+			t.Fatal("no row")
+		}
+		if err := s.IntakeRequeue(ctx, a.ID, "me"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, _ := s.IntakeGet(ctx, a.ID); got.Attempts != 0 || got.State != IntakeQueued {
+		t.Fatalf("after clean shutdowns = %+v", got)
+	}
+}

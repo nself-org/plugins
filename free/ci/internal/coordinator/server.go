@@ -70,8 +70,6 @@ type Config struct {
 type Coordinator struct {
 	cfg  Config
 	wake chan struct{}
-	mu   sync.Mutex
-	last map[string]time.Time
 }
 
 // New fills the defaults of cfg.
@@ -103,7 +101,7 @@ func New(cfg Config) (*Coordinator, error) {
 	if cfg.ID == "" {
 		cfg.ID = "coord-" + newToken()
 	}
-	return &Coordinator{cfg: cfg, wake: make(chan struct{}, 1), last: map[string]time.Time{}}, nil
+	return &Coordinator{cfg: cfg, wake: make(chan struct{}, 1)}, nil
 }
 
 func (c *Coordinator) nudge() {

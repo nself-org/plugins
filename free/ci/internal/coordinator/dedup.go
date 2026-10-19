@@ -18,10 +18,16 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
-// semanticKey is the key that coalesces triggers for the same code under the same policy.
-func semanticKey(project, revision, class, policy string) string {
+// semanticKey is the key that coalesces triggers for the same code under the same policy. A trigger that
+// names a pipeline keys on it too, so a manual "release" run never folds into a live default run; the key
+// of a trigger with no pipeline is the plain four-field one.
+func semanticKey(project, revision, class, policy, pipeline string) string {
 	h := sha256.New()
-	for _, f := range []string{project, revision, class, policy} {
+	fields := []string{project, revision, class, policy}
+	if pipeline != "" {
+		fields = append(fields, "pipeline="+pipeline)
+	}
+	for _, f := range fields {
 		h.Write([]byte(strconv.Itoa(len(f)) + ":" + f))
 	}
 	return hex.EncodeToString(h.Sum(nil))
@@ -98,12 +104,12 @@ func (c *Coordinator) runRow(ctx context.Context, row store.IntakeRow) {
 	res, err := c.cfg.Dispatch(ctx, row)
 	end := context.WithoutCancel(ctx)
 	switch {
+	case err == nil: // a finished pipeline is recorded even when shutdown began meanwhile: it must not run twice
+		err = c.cfg.Store.IntakeFinish(end, row.ID, c.cfg.ID, res.PipelineID, "exit="+strconv.Itoa(res.Exit), true)
 	case ctx.Err() != nil:
 		err = c.cfg.Store.IntakeRequeue(end, row.ID, c.cfg.ID)
-	case err != nil:
-		err = c.cfg.Store.IntakeFinish(end, row.ID, c.cfg.ID, res.PipelineID, "error: "+truncate(err.Error(), 200), false)
 	default:
-		err = c.cfg.Store.IntakeFinish(end, row.ID, c.cfg.ID, res.PipelineID, "exit="+strconv.Itoa(res.Exit), true)
+		err = c.cfg.Store.IntakeFinish(end, row.ID, c.cfg.ID, res.PipelineID, "error: "+truncate(err.Error(), 200), false)
 	}
 	if err != nil {
 		c.cfg.Logf("intake row %s not recorded: %v", row.ID, err)

@@ -26,8 +26,6 @@ const (
 const (
 	ReasonStoreUnavailable = "store_unavailable"
 	ReasonNoSecret         = "no_secret"
-	ReasonBodyTooLarge     = "body_too_large"
-	ReasonIngressRefused   = "ingress_refused"
 	ReasonInvalidDelivery  = "invalid_delivery"
 	ReasonInvalidConfig    = "invalid_config"
 	ReasonDuplicateName    = "duplicate_name"
