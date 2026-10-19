@@ -1,7 +1,7 @@
 package verify
 
 // Purpose: the one place nself-ci-agent release artifacts are verified (hq NODE D11, P7-NODE-15; P7-CACHE-10 extends it
-//          with provenance). A downloaded binary is trusted only after its agent-release/v1 manifest verifies under an
+//          with SBOM and provenance checks, see provenance.go). A downloaded binary is trusted only after its agent-release/v1 manifest verifies under an
 //          agent-purpose key, names the pinned version and the node's target, and its sha256 equals the signed sha256.
 // Inputs:  a file path, the manifest bytes and the pinned Expect (version, target); a trusted key set.
 // Outputs: the verified Manifest, or an *Error with code E665 and a reason key (see codes.go).
@@ -25,9 +25,9 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/signing"
+	"github.com/nself-org/plugins/free/ci/internal/provenance"
 )
 
 // Schema is the manifest schema this package reads.
@@ -70,8 +70,9 @@ func ParseManifest(data []byte) (Manifest, error) {
 	if len(data) == 0 || len(data) > MaxManifestBytes {
 		return m, fail(ReasonMalformedManifest, nil, "manifest size %d is outside 1..%d", len(data), MaxManifestBytes)
 	}
-	if dup := duplicateKey(data); dup {
-		return m, fail(ReasonMalformedManifest, nil, "manifest repeats a field")
+	// One value, valid UTF-8, no repeated field under Unicode simple case folding (encoding/json folds names the same way).
+	if err := provenance.CheckStrict(data); err != nil {
+		return m, fail(ReasonMalformedManifest, err, "manifest is not one JSON object with distinct fields")
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
@@ -88,34 +89,6 @@ func ParseManifest(data []byte) (Manifest, error) {
 		return Manifest{}, err
 	}
 	return m, nil
-}
-
-// duplicateKey reports whether the top-level JSON object repeats a field name, compared case-insensitively because encoding/json
-// matches field names that way and would keep the last one silently.
-// Input that is not an object is left to the strict decode that follows.
-func duplicateKey(data []byte) bool {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
-		return false
-	}
-	seen := map[string]bool{}
-	for dec.More() {
-		k, err := dec.Token()
-		name, ok := k.(string)
-		if err != nil || !ok {
-			return false
-		}
-		folded := strings.ToLower(name)
-		if seen[folded] {
-			return true
-		}
-		seen[folded] = true
-		var skip json.RawMessage
-		if err = dec.Decode(&skip); err != nil {
-			return false
-		}
-	}
-	return false
 }
 
 func (m Manifest) validate() error {
@@ -156,6 +129,9 @@ func SigningInput(m Manifest) ([]byte, error) {
 type Verifier struct {
 	sv    *signing.Verifier
 	nkeys int
+	// tagsOnly makes the provenance builder check demand a tag ref (the production Default verifier); New leaves it off so a rehearsal
+	// run from a branch verifies.
+	tagsOnly bool
 }
 
 // New builds a Verifier over keys and a revoked-id list. The keys should be agent-purpose keys with derived ids; a key of
@@ -179,7 +155,18 @@ func Default() (*Verifier, error) {
 		}
 		keys = append(keys, signing.Key{ID: e.ID, Purpose: signing.PurposeAgent, Public: pub})
 	}
-	return New(keys, generatedRevoked)
+	v, err := New(keys, generatedRevoked)
+	if err != nil {
+		return nil, err
+	}
+	return v.RequireTagBuilds(), nil
+}
+
+// RequireTagBuilds makes the provenance check accept only a build from the tag refs/tags/v<manifest version> (what Default does); the
+// release workflow's own gate sets it too. A verifier without it also accepts a branch ref, which a rehearsal needs.
+func (v *Verifier) RequireTagBuilds() *Verifier {
+	v.tagsOnly = true
+	return v
 }
 
 // HasKeys reports whether any key is trusted.
@@ -197,9 +184,23 @@ func (v *Verifier) Ready() error {
 // ValidVersion reports whether s is a plain release version (1.5.0 or 1.5.0-rc.1).
 func ValidVersion(s string) bool { return versionRe.MatchString(s) }
 
-// Artifact verifies the file at path against the manifest bytes and the pinned Expect. It returns the manifest only when the
-// signature verifies, the signed version and target are the pinned ones, and the file's sha256 is the signed sha256.
-func (v *Verifier) Artifact(path string, manifest []byte, want Expect) (Manifest, error) {
+// Artifact verifies the file at path against the manifest bytes, the pinned Expect and the release files that sit next to the
+// binary (two SBOMs and the signed provenance, P7-CACHE-10). It returns the manifest only when checkManifest and
+// VerifyProvenance both pass.
+func (v *Verifier) Artifact(path string, manifest []byte, want Expect, files Files) (Manifest, error) {
+	m, err := v.checkManifest(path, manifest, want)
+	if err != nil {
+		return Manifest{}, err
+	}
+	if err = v.VerifyProvenance(m, files); err != nil {
+		return Manifest{}, err
+	}
+	return m, nil
+}
+
+// checkManifest verifies the file at path against the manifest bytes and the pinned Expect: the signature verifies, the signed
+// version and target are the pinned ones, and the file's sha256 is the signed sha256.
+func (v *Verifier) checkManifest(path string, manifest []byte, want Expect) (Manifest, error) {
 	if err := v.Ready(); err != nil {
 		return Manifest{}, err
 	}
@@ -254,7 +255,8 @@ func signingFailure(err error, keyID string) *Error {
 
 func fileSHA256(path string) (string, error) {
 	// A symlink is refused: the bytes read must be the bytes at the path the caller then uses.
-	if lst, err := os.Lstat(path); err != nil || !lst.Mode().IsRegular() {
+	lst, err := os.Lstat(path)
+	if err != nil || !lst.Mode().IsRegular() {
 		return "", fail(ReasonUnreadable, err, "artifact is not a regular file (symlinks are refused)")
 	}
 	f, err := os.Open(path)
@@ -263,7 +265,7 @@ func fileSHA256(path string) (string, error) {
 	}
 	defer func() { _ = f.Close() }()
 	st, err := f.Stat()
-	if err != nil || !st.Mode().IsRegular() || st.Size() == 0 || st.Size() > MaxBinaryBytes {
+	if err != nil || !st.Mode().IsRegular() || !os.SameFile(lst, st) || st.Size() == 0 || st.Size() > MaxBinaryBytes {
 		return "", fail(ReasonUnreadable, err, "artifact is not a regular file of 1..%d bytes", MaxBinaryBytes)
 	}
 	h := sha256.New()

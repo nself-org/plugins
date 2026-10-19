@@ -25,6 +25,7 @@ import (
 	"github.com/nself-org/cli/sdk/go/v2/signing"
 	"github.com/nself-org/plugins/free/ci/internal/agent/verify"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/lifecycle"
+	"github.com/nself-org/plugins/free/ci/internal/provenance"
 )
 
 var linuxAMD64 = lifecycle.Platform{OS: "linux", Arch: "amd64"}
@@ -47,6 +48,27 @@ type fixture struct {
 	srv      *httptest.Server
 	binary   []byte
 	manifest verify.Manifest
+	files    map[string][]byte // release file suffix -> body; a missing key answers 404
+}
+
+// signedFiles returns the two SBOMs and the agent-purpose provenance of manifest m (P7-CACHE-10).
+func signedFiles(t *testing.T, s signing.Signer, m verify.Manifest) map[string][]byte {
+	t.Helper()
+	cdx, spdx := []byte(`{"bomFormat":"CycloneDX"}`), []byte(`{"spdxVersion":"SPDX-2.3"}`)
+	name := verify.BinaryName(m.Target)
+	digest := func(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
+	st, err := provenance.BuildAgent(provenance.AgentFacts{Repo: "nself-org/plugins", Ref: "refs/tags/v1.5.0", Revision: strings.Repeat("a", 40), RunID: "1",
+		Subjects: []provenance.FileDigest{{Name: name, SHA256: m.SHA256}},
+		SBOMs:    []provenance.FileDigest{{Name: name + verify.SuffixCycloneDX, SHA256: digest(cdx)}, {Name: name + verify.SuffixSPDX, SHA256: digest(spdx)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := signing.SignEnvelope(s, provenance.PayloadType, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prov, _ := json.Marshal(env)
+	return map[string][]byte{verify.SuffixCycloneDX: cdx, verify.SuffixSPDX: spdx, verify.SuffixProvenance: prov}
 }
 
 // newFixture serves a release whose manifest is signed for version 1.5.0 and the bytes in body.
@@ -67,7 +89,19 @@ func newFixture(t *testing.T, body []byte) *fixture {
 	in, _ := verify.SigningInput(f.manifest)
 	raw, _ := f.signer.Sign(in)
 	f.manifest.Sig = signing.EncodeSig(raw)
+	f.files = signedFiles(t, f.signer, f.manifest)
 	mux := http.NewServeMux()
+	for _, suffix := range []string{verify.SuffixCycloneDX, verify.SuffixSPDX, verify.SuffixProvenance} {
+		mux.HandleFunc("/nself-ci-agent-linux-amd64"+suffix, func(w http.ResponseWriter, _ *http.Request) {
+			f.hits.Add(1)
+			body, ok := f.files[suffix]
+			if !ok {
+				http.NotFound(w, nil)
+				return
+			}
+			_, _ = w.Write(body)
+		})
+	}
 	mux.HandleFunc("/nself-ci-agent-linux-amd64", func(w http.ResponseWriter, _ *http.Request) {
 		f.hits.Add(1)
 		_, _ = w.Write(f.binary)
@@ -136,6 +170,14 @@ func TestReleaseRefusesWhatFailsVerificationAndPlacesNothing(t *testing.T) {
 		{"tampered binary", func(f *fixture) { f.binary = append([]byte(nil), f.binary...); f.binary[8] ^= 1 }, verify.ReasonChecksumMismatch},
 		{"signature of another version", func(f *fixture) { f.manifest.Version = "1.4.0" }, verify.ReasonBadSignature},
 		{"signature removed", func(f *fixture) { f.manifest.Sig = "" }, verify.ReasonMissingSignature},
+		{"provenance missing from the release", func(f *fixture) { delete(f.files, verify.SuffixProvenance) }, verify.ReasonProvenance},
+		{"SBOM missing from the release", func(f *fixture) { delete(f.files, verify.SuffixSPDX) }, verify.ReasonProvenance},
+		{"SBOM that is not the one the provenance names", func(f *fixture) { f.files[verify.SuffixCycloneDX] = []byte(`{"bomFormat":"CycloneDX","x":1}`) }, verify.ReasonProvenance},
+		{"provenance of another binary", func(f *fixture) {
+			other := f.manifest
+			other.SHA256 = strings.Repeat("b", 64)
+			f.files[verify.SuffixProvenance] = signedFiles(t, f.signer, other)[verify.SuffixProvenance]
+		}, verify.ReasonProvenance},
 	}
 	for _, c := range cases {
 		f := newFixture(t, elfBytes(elf.EM_X86_64))

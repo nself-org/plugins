@@ -6,13 +6,15 @@ package install
 // Outputs: the path of a verified binary (lifecycle.AgentSource.Fetch) and a cleanup that removes its private directory.
 // Constraints: nothing is placed at its final path before verify.Artifact returns nil; every install gets a fresh 0700 directory
 //          (os.MkdirTemp, never an existing or shared path, no persistent cache), the download lands there as <name>.part and is
-//          moved with one rename, so a failed verify leaves no file a later run could mistake for a verified one and no other
+//          moved with one rename (the SBOMs and the signed provenance are fetched first, bounded, and checked by the same
+//          verify.Artifact call), so a failed verify leaves no file a later run could mistake for a verified one and no other
 //          process can swap the verified file before the installer copies it. https only; plain http is accepted for a loopback host
 //          (a local fixture server) and never after a redirect from https. Bodies are size-bounded. The binary is never
 //          executed here. With no trusted key the source fails with E665 (reason no_trusted_key) naming --agent-binary.
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -26,6 +28,9 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/agent/verify"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/lifecycle"
 )
+
+// errNotFound marks a release file the server does not have (HTTP 404).
+var errNotFound = errors.New("not found")
 
 // BinaryName is the release file prefix: nself-ci-agent-<os>-<arch>.
 const BinaryName = "nself-ci-agent"
@@ -85,11 +90,24 @@ func (r Release) Fetch(ctx context.Context, p lifecycle.Platform) (string, func(
 	if err != nil {
 		return "", nil, err
 	}
+	// The SBOMs and the signed provenance (P7-CACHE-10) travel with every release; verify.Artifact refuses the install without them.
+	var files verify.Files
+	for _, f := range []struct {
+		suffix string
+		into   *[]byte
+		limit  int64
+	}{{verify.SuffixProvenance, &files.Provenance, verify.MaxProvenanceBytes}, {verify.SuffixCycloneDX, &files.CycloneDX, verify.MaxSBOMBytes}, {verify.SuffixSPDX, &files.SPDX, verify.MaxSBOMBytes}} {
+		// A file the release does not have is left empty: verify.Artifact then refuses with E665 reason provenance. Any other
+		// download failure is a transport error (E656).
+		if *f.into, err = r.get(ctx, base+"/"+name+f.suffix, f.limit); err != nil && !errors.Is(err, errNotFound) {
+			return "", nil, err
+		}
+	}
 	staged := filepath.Join(dir, BinaryName+".part")
 	if err = r.download(ctx, base+"/"+name, staged); err != nil {
 		return "", nil, err
 	}
-	if _, err = v.Artifact(staged, manifest, verify.Expect{Version: r.Version, Target: target}); err != nil {
+	if _, err = v.Artifact(staged, manifest, verify.Expect{Version: r.Version, Target: target}, files); err != nil {
 		return "", nil, err
 	}
 	if err = lifecycle.CheckBinary(staged, p); err != nil {
@@ -164,6 +182,9 @@ func (r Release) open(ctx context.Context, u string) (*http.Response, error) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		_ = resp.Body.Close()
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, errf(lifecycle.CodeNoRoute, "download of %s answered 404: %w", path(u), errNotFound)
+		}
 		return nil, errf(lifecycle.CodeNoRoute, "download of %s answered %d", path(u), resp.StatusCode)
 	}
 	return resp, nil

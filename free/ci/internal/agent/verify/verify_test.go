@@ -111,7 +111,7 @@ func wantReason(t *testing.T, err error, reason string) {
 func TestArtifactAcceptsAValidRelease(t *testing.T) {
 	s := newSigner(t, signing.PurposeAgent)
 	a := newArtifact(t, s)
-	m, err := mustVerifier(t, nil, s.key()).Artifact(a.path, a.json(t), pinned)
+	m, err := mustVerifier(t, nil, s.key()).checkManifest(a.path, a.json(t), pinned)
 	if err != nil || m.KeyID != s.KeyID() {
 		t.Fatalf("valid artifact refused: %v", err)
 	}
@@ -130,63 +130,63 @@ func TestArtifactFailureReasonsAreDistinct(t *testing.T) {
 		{"tampered binary", ReasonChecksumMismatch, func() error {
 			a := newArtifact(t, agent)
 			_ = os.WriteFile(a.path, []byte("tampered bytes!"), 0o700)
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(a.path, a.json(t), pinned)
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(a.path, a.json(t), pinned)
 			return err
 		}},
 		{"manifest signed with the plugin-purpose key", ReasonWrongPurpose, func() error {
 			a := newArtifact(t, plugin)
-			_, err := mustVerifier(t, nil, agent.key(), plugin.key()).Artifact(a.path, a.json(t), pinned)
+			_, err := mustVerifier(t, nil, agent.key(), plugin.key()).checkManifest(a.path, a.json(t), pinned)
 			return err
 		}},
 		{"signed by a key that is not trusted", ReasonUnknownKey, func() error {
 			a := newArtifact(t, other)
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(a.path, a.json(t), pinned)
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(a.path, a.json(t), pinned)
 			return err
 		}},
 		{"missing signature", ReasonMissingSignature, func() error {
 			a := good
 			a.m.Sig = ""
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(a.path, a.json(t), pinned)
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(a.path, a.json(t), pinned)
 			return err
 		}},
 		{"signature over other fields", ReasonBadSignature, func() error {
 			a := good
 			a.m.Version = "1.5.1"
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(a.path, a.json(t), Expect{Version: "1.5.1", Target: "linux-amd64"})
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(a.path, a.json(t), Expect{Version: "1.5.1", Target: "linux-amd64"})
 			return err
 		}},
 		{"version differs from the pin", ReasonVersionMismatch, func() error {
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(good.path, good.json(t), Expect{Version: "1.4.0", Target: "linux-amd64"})
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(good.path, good.json(t), Expect{Version: "1.4.0", Target: "linux-amd64"})
 			return err
 		}},
 		{"target differs from the node", ReasonTargetMismatch, func() error {
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(good.path, good.json(t), Expect{Version: "1.5.0", Target: "darwin-arm64"})
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(good.path, good.json(t), Expect{Version: "1.5.0", Target: "darwin-arm64"})
 			return err
 		}},
 		{"revoked key", ReasonRevoked, func() error {
-			_, err := mustVerifier(t, []string{agent.KeyID()}, agent.key()).Artifact(good.path, good.json(t), pinned)
+			_, err := mustVerifier(t, []string{agent.KeyID()}, agent.key()).checkManifest(good.path, good.json(t), pinned)
 			return err
 		}},
 		{"non-canonical signature", ReasonMalformedSig, func() error {
 			a := good
 			a.m.Sig = a.m.Sig[:len(a.m.Sig)-1]
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(a.path, a.json(t), pinned)
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(a.path, a.json(t), pinned)
 			return err
 		}},
 		{"key id that is not a key id", ReasonMalformedManifest, func() error {
 			a := good
 			a.m.KeyID = "bad id!"
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(a.path, a.json(t), pinned)
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(a.path, a.json(t), pinned)
 			return err
 		}},
 		{"unknown manifest field", ReasonMalformedManifest, func() error {
 			b := strings.Replace(string(good.json(t)), `"alg"`, `"extra":1,"alg"`, 1)
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(good.path, []byte(b), pinned)
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(good.path, []byte(b), pinned)
 			return err
 		}},
 		{"a repeated field", ReasonMalformedManifest, func() error {
 			b := strings.Replace(string(good.json(t)), `"alg":"ed25519"`, `"alg":"ed25519","version":"9.9.9"`, 1)
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(good.path, []byte(b), pinned)
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(good.path, []byte(b), pinned)
 			return err
 		}},
 		{"a symlinked binary", ReasonUnreadable, func() error {
@@ -194,25 +194,25 @@ func TestArtifactFailureReasonsAreDistinct(t *testing.T) {
 			if err := os.Symlink(good.path, link); err != nil {
 				t.Skip("symlinks unavailable")
 			}
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(link, good.json(t), pinned)
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(link, good.json(t), pinned)
 			return err
 		}},
 		{"a field repeated in another case", ReasonMalformedManifest, func() error {
 			b := strings.Replace(string(good.json(t)), `"alg":"ed25519"`, `"alg":"ed25519","VERSION":"9.9.9"`, 1)
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(good.path, []byte(b), pinned)
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(good.path, []byte(b), pinned)
 			return err
 		}},
 		{"two manifests in one file", ReasonMalformedManifest, func() error {
 			b := append(good.json(t), good.json(t)...)
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(good.path, b, pinned)
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(good.path, b, pinned)
 			return err
 		}},
 		{"no key compiled in", ReasonNoTrustedKey, func() error {
-			_, err := mustVerifier(t, nil).Artifact(good.path, good.json(t), pinned)
+			_, err := mustVerifier(t, nil).checkManifest(good.path, good.json(t), pinned)
 			return err
 		}},
 		{"missing file", ReasonUnreadable, func() error {
-			_, err := mustVerifier(t, nil, agent.key()).Artifact(filepath.Join(t.TempDir(), "absent"), good.json(t), pinned)
+			_, err := mustVerifier(t, nil, agent.key()).checkManifest(filepath.Join(t.TempDir(), "absent"), good.json(t), pinned)
 			return err
 		}},
 	}
@@ -238,7 +238,7 @@ func TestSignatureErrorsWrapSigningSentinels(t *testing.T) {
 	agent := newSigner(t, signing.PurposeAgent)
 	other := newSigner(t, signing.PurposeAgent)
 	a := newArtifact(t, other)
-	_, err := mustVerifier(t, nil, agent.key()).Artifact(a.path, a.json(t), pinned)
+	_, err := mustVerifier(t, nil, agent.key()).checkManifest(a.path, a.json(t), pinned)
 	if !errors.Is(err, signing.ErrUnknownKey) {
 		t.Fatalf("the signing sentinel must stay reachable: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestManifestScriptAndGoAgree(t *testing.T) {
 		t.Fatalf("manifest.sh key id %s is not the derived id", m.KeyID)
 	}
 	v := mustVerifier(t, nil, signing.Key{ID: m.KeyID, Purpose: signing.PurposeAgent, Public: pub})
-	if _, err = v.Artifact(filepath.Join(dir, "nself-ci-agent-linux-amd64"), raw, Expect{Version: "1.5.0", Target: "linux-amd64"}); err != nil {
+	if _, err = v.checkManifest(filepath.Join(dir, "nself-ci-agent-linux-amd64"), raw, Expect{Version: "1.5.0", Target: "linux-amd64"}); err != nil {
 		t.Fatalf("Go refused what manifest.sh signed: %v", err)
 	}
 }
@@ -415,7 +415,7 @@ func TestDefaultUsesTheCompiledKeySet(t *testing.T) {
 		t.Fatalf("Default over a generated key set: %v", err)
 	}
 	a := newArtifact(t, s)
-	if _, err = v.Artifact(a.path, a.json(t), pinned); err != nil {
+	if _, err = v.checkManifest(a.path, a.json(t), pinned); err != nil {
 		t.Fatalf("artifact signed by the compiled-in key refused: %v", err)
 	}
 	oldRev := generatedRevoked
@@ -425,7 +425,7 @@ func TestDefaultUsesTheCompiledKeySet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = rv.Artifact(a.path, a.json(t), pinned)
+	_, err = rv.checkManifest(a.path, a.json(t), pinned)
 	wantReason(t, err, ReasonRevoked)
 	generatedRevoked = nil
 	generatedKeys = []keyEntry{{ID: s.KeyID(), Public: "AAAA"}}
