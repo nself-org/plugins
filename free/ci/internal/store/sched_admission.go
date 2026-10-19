@@ -64,6 +64,7 @@ type AdmitView struct {
 	Project            string
 	UsedCPU, UsedMemMB int
 	Counts             AdmitCounts
+	s                  *Store
 	tx                 *sql.Tx
 }
 
@@ -95,7 +96,7 @@ func (s *Store) AdmitPlacement(ctx context.Context, host string, d Demand, r Adm
 	}
 	var fence int64
 	err := s.write(ctx, func(tx *sql.Tx) error {
-		v := AdmitView{Host: host, Demand: d, Request: r, tx: tx}
+		v := AdmitView{Host: host, Demand: d, Request: r, s: s, tx: tx}
 		if err := tx.QueryRowContext(ctx, `SELECT j.pipeline_id,j.name,p.project FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id WHERE a.id=?`, d.AttemptID).Scan(&v.PipelineID, &v.JobName, &v.Project); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return coded("E604", "unknown attempt")
@@ -242,4 +243,10 @@ func (s *Store) SetPreviousRunner(ctx context.Context, attemptID, runnerID strin
 		_, err := tx.ExecContext(ctx, "UPDATE attempt SET previous_runner_id=? WHERE id=? AND state='queued'", runnerID, attemptID)
 		return err
 	})
+}
+
+// AppendAudit adds an audit row to the admission transaction: the row commits
+// with the lease or not at all (D-1249).
+func (v AdmitView) AppendAudit(ctx context.Context, actor, action, target, detail string) error {
+	return v.s.appendAudit(ctx, v.tx, actor, action, target, detail)
 }
