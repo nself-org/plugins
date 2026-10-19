@@ -1,0 +1,118 @@
+{
+  "schema": "ci.trigger-facts/v1",
+  "source": "github",
+  "kind": "pull_request",
+  "delivery_id": "d-1",
+  "received_at": "2026-10-19T12:00:00Z",
+  "auth": "per-repo",
+  "repo": "o/r",
+  "repo_id": "1001",
+  "ref": "refs/heads/fix",
+  "revision": "cccccccccccccccccccccccccccccccccccccccc",
+  "revision_source": "payload",
+  "base_ref": "refs/heads/main",
+  "base_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "pr_number": 7,
+  "actor": {
+    "value": "newbie",
+    "source": "payload",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "actor_permission": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "author_association": {
+    "value": "FIRST_TIME_CONTRIBUTOR",
+    "source": "payload",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "head_repo": {
+    "value": "newbie/r",
+    "source": "payload",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "fork": {
+    "value": true,
+    "source": "payload",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "first_time": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "bot": {
+    "value": false,
+    "source": "payload",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "protected_ref": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "visibility": {
+    "value": "public",
+    "source": "payload",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "sha_reachable": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "head_current": {
+    "value": true,
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "changed_files": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "group_protected_only": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "run_event": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "runner_labels": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "provider_job_id": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "provider_run_id": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "/repos/o/r": {"status": 200, "body": {"id": 1001, "full_name": "o/r", "private": false, "visibility": "public", "fork": false, "default_branch": "main"}},
+  "/repos/o/r/pulls/7": {"status": 200, "body": {"number": 7, "author_association": "FIRST_TIME_CONTRIBUTOR", "user": {"login": "newbie", "type": "User"}, "head": {"ref": "fix", "sha": "cccccccccccccccccccccccccccccccccccccccc", "repo": {"id": 2002, "full_name": "newbie/r", "fork": true}}, "base": {"ref": "main", "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "repo": {"id": 1001, "full_name": "o/r", "fork": false}}}},
+  "/repos/o/r/collaborators/newbie/permission": {"status": 200, "body": {"permission": "read", "role_name": "read"}},
+  "/repos/o/r/collaborators/maint/permission": {"status": 200, "body": {"permission": "admin", "role_name": "admin"}},
+  "/users/newbie": {"status": 200, "body": {"login": "newbie", "type": "User"}},
+  "/users/maint": {"status": 200, "body": {"login": "maint", "type": "User"}},
+  "/repos/o/r/branches/main": {"status": 200, "body": {"name": "main", "protected": false}},
+  "/repos/o/r/compare/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb...cccccccccccccccccccccccccccccccccccccccc": {"status": 200, "body": {"status": "ahead", "files": [{"filename": "a.go"}, {"filename": "docs/b.md"}]}},
+  "/repos/o/r/compare/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb...aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {"status": 200, "body": {"status": "ahead", "files": [{"filename": "main.go"}]}},
+  "/repos/o/r/git/ref/heads/main": {"status": 200, "body": {"ref": "refs/heads/main", "object": {"type": "commit", "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}},
+  "/repos/o/r/git/ref/tags/v1.0.0": {"status": 200, "body": {"ref": "refs/tags/v1.0.0", "object": {"type": "tag", "sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}}},
+  "/repos/o/r/git/tags/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": {"status": 200, "body": {"tag": "v1.0.0", "object": {"type": "commit", "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}},
+  "/repos/o/r/actions/runs/3001": {"status": 200, "body": {"id": 3001, "event": "pull_request_target", "actor": {"login": "newbie"}, "repository": {"id": 1001, "full_name": "o/r"}, "head_repository": {"id": 2002, "full_name": "newbie/r", "fork": true}}}
+}
