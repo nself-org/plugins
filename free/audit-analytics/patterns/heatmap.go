@@ -3,12 +3,18 @@ package patterns
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/nself-org/nself-audit-analytics/anomaly"
 )
+
+// ensureHeatmapViewSQL creates np_audit_heatmap when it is missing and its source exists (heatmap_view.sql).
+//
+//go:embed heatmap_view.sql
+var ensureHeatmapViewSQL string
 
 // RefreshFn executes a statement (no result needed).
 type RefreshFn func(ctx context.Context, sql string, args ...interface{}) error
@@ -54,7 +60,13 @@ func (h *HeatmapRefresher) Run(ctx context.Context) {
 
 // Refresh triggers REFRESH MATERIALIZED VIEW CONCURRENTLY for np_audit_heatmap.
 // CONCURRENTLY avoids locking reads during refresh (requires a UNIQUE index).
+//
+// The view is created first when missing: migration 002 runs once and skips when audit-log has not created
+// its source yet, and the migration ledger never retries a skipped file.
 func (h *HeatmapRefresher) Refresh(ctx context.Context) {
+	if err := h.exec(ctx, ensureHeatmapViewSQL); err != nil {
+		slog.Warn("audit-analytics: heatmap view ensure failed", "err", err)
+	}
 	if err := h.exec(ctx, "REFRESH MATERIALIZED VIEW CONCURRENTLY np_audit_heatmap"); err != nil {
 		slog.Warn("audit-analytics: heatmap refresh failed", "err", err)
 	} else {
