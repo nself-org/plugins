@@ -53,6 +53,12 @@ func Classify(in Input) Diagnosis {
 	case in.TimedOut || in.ExecClass == "timeout":
 		return named(SigTimeout, "timeout") // a timeout kill is SIGKILL too: judged before any signature
 	}
+	if i := strings.LastIndex(in.Tail, PrepareFailed); i >= 0 && in.ExitCode == PrepareExit {
+		return classifyPrepare(in.Tail[:i]) // a Node gate's frozen install failed (P7-AUTO-16)
+	}
+	if in.ExitCode == PinExit && strings.Contains(in.Tail, PinMismatch) {
+		return pinDiagnosis()
+	}
 	if in.Reason == "resource_limit" {
 		return infra(signatures[0])
 	}
