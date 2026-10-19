@@ -33,6 +33,7 @@ import (
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
+	"github.com/nself-org/plugins/free/ci/internal/schedtel"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
@@ -190,6 +191,8 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	if len(jobs) > 0 {
 		pipe = jobs[0].Pipeline
 	}
+	ctx = schedtel.WithStore(ctx, st) // the plan has no dispatcher: name the store the history is read from
+	ctx = schedtel.WithPlanned(ctx, plannedKeys(jobs))
 	w, _, err := world.Build(ctx, world.Deps{Store: st, Local: local, LocalCapacity: &capacity, Jobs: jobs, Clock: func() time.Time { return now },
 		Policy: func(context.Context, string) (sched.Policy, error) { return sp, nil }}, pipe)
 	if err != nil {
@@ -208,6 +211,15 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	}
 	return planview.Build(planview.Input{Name: pd.pl.Pipeline.Name, Revision: rev, Trigger: string(pd.pl.Trigger),
 		PolicyDigest: string(got.Digest), WorldDigest: digest, World: w, Jobs: jobs, Blocked: blocked, Result: sched.Place(w, jobs)}), nil
+}
+
+// plannedKeys lists the plan's jobs for the telemetry contributor.
+func plannedKeys(jobs []sched.Job) []schedtel.Planned {
+	out := make([]schedtel.Planned, len(jobs))
+	for i, j := range jobs {
+		out[i] = schedtel.Planned{Key: j.Key, Project: j.Project, Name: j.Name}
+	}
+	return out
 }
 
 func plannedJobs(pd planned) []planview.PlannedJob {

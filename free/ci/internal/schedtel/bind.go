@@ -77,6 +77,24 @@ func WithStore(ctx context.Context, st *store.Store) context.Context {
 	return context.WithValue(ctx, ctxKey{}, st)
 }
 
+// Planned is a job a plan places before it exists as a queued attempt: Key is
+// the scheduler's job key, Name the estimator key (the job name).
+type Planned struct{ Key, Project, Name string }
+
+type plannedKey struct{}
+
+// WithPlanned names the jobs of a plan, so the world contributor also offers
+// estimates for their keys (`ci plan` and `ci explain <plan>` have no queued
+// attempts to key a sample by).
+func WithPlanned(ctx context.Context, jobs []Planned) context.Context {
+	return context.WithValue(ctx, plannedKey{}, jobs)
+}
+
+func plannedIn(ctx context.Context) []Planned {
+	jobs, _ := ctx.Value(plannedKey{}).([]Planned)
+	return jobs
+}
+
 // storeIn is the store the contributor reads: the context's, else the one the
 // most recent run is writing to, else nil (no estimates).
 func storeIn(ctx context.Context) *store.Store {

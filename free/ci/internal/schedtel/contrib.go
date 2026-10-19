@@ -4,9 +4,10 @@ package schedtel
 // fills it, for every runner and every attempt now queued, from the stored
 // outcomes: runtime and cold start from the EWMA estimators, reliability from
 // the runner's last 20 attempts, wait from queue position x mean runtime / slots.
-// Inputs:  the world with its runners built; the store of the current run.
-// Outputs: Estimates[runner id][attempt id] (sched keys a sample by job key,
-// which the run hook sets to the attempt id).
+// Inputs:  the world with its runners built; the store of the current run (or
+// the one named by WithStore) and, for a plan, its jobs (WithPlanned).
+// Outputs: Estimates[runner id][job key]: the attempt id for a queued attempt
+// (the run hook sets the job key to it), the plan job id for a planned job.
 // Constraints: a figure resting on fewer than MinSamples samples is left out,
 // so the scheduler uses its own stand-in and marks it unknown; no store, no
 // estimates; a store failure leaves Estimates empty (the scheduler then uses
@@ -44,6 +45,11 @@ func estimate(ctx context.Context, w *sched.World, st *store.Store) error {
 	if err != nil {
 		return err
 	}
+	targets := make([]Planned, 0, len(queued))
+	for _, q := range queued {
+		targets = append(targets, Planned{Key: q.ID, Project: q.Project, Name: q.JobName})
+	}
+	targets = append(targets, plannedIn(ctx)...)
 	byKey := map[[3]string]store.TelEstimator{}
 	sum, count := map[string]int64{}, map[string]int64{} // per runner class: runtime sum and count of settled estimators
 	for _, e := range ests {
@@ -61,9 +67,9 @@ func estimate(ctx context.Context, w *sched.World, st *store.Store) error {
 			return err
 		}
 		wait := waitMs(r, sum[class], count[class])
-		for _, q := range queued {
+		for _, q := range targets {
 			var s sched.Sample
-			if e, ok := byKey[[3]string{q.Project, q.JobName, class}]; ok {
+			if e, ok := byKey[[3]string{q.Project, q.Name, class}]; ok {
 				if e.N >= MinSamples {
 					v := e.RuntimeMs
 					s.RuntimeMs = &v
@@ -81,7 +87,7 @@ func estimate(ctx context.Context, w *sched.World, st *store.Store) error {
 			if out[r.ID] == nil {
 				out[r.ID] = map[string]sched.Sample{}
 			}
-			out[r.ID][q.ID] = s
+			out[r.ID][q.Key] = s
 		}
 	}
 	w.Estimates = out
