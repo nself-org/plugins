@@ -36,41 +36,47 @@ func (r *run) evidenceBinding() *Failure {
 	if err != nil {
 		return fail(ReasonEvidenceInvalid, "%s is not valid evidence: %v", m.Evidence.Path, err)
 	}
-	switch {
-	case ev.Revision != m.Revision:
+	if ev.Revision != m.Revision {
 		return fail(ReasonRevision, "the evidence is for revision %.12s, the release for %.12s", ev.Revision, m.Revision)
-	case ev.RepoID != m.RepoID || ev.RunID != m.Release.RunID:
+	}
+	if ev.RepoID != m.RepoID || ev.RunID != m.Release.RunID {
 		return fail(ReasonEvidenceMismatch, "the evidence is for another repository or run than the manifest")
-	case ev.Timings.FinishedAt == nil || *ev.Timings.FinishedAt != m.Release.FinishedAt:
+	}
+	if ev.Timings.FinishedAt == nil || *ev.Timings.FinishedAt != m.Release.FinishedAt {
 		return fail(ReasonEvidenceMismatch, "the evidence finished at another time than the release says")
-	case evidence.ClassOf(ev) != evidence.ClassRelease:
+	}
+	if evidence.ClassOf(ev) != evidence.ClassRelease {
 		return fail(ReasonEvidenceMismatch, "the evidence is not release-class evidence")
 	}
 	r.ev, r.evDoc = ev, doc
 	return nil
 }
 
-// Severity of an evidence reason: lower is more fundamental.
+// Severity of an evidence reason: lower is more fundamental. rankKeys names
+// the reason key of each rank.
 const (
 	rankMismatch = iota
 	rankInvalid
 	rankUnbound
 	rankStale
 	rankFailing
+	rankNone
 )
 
-func classify(reason attest.Reason) (string, int) {
+var rankKeys = [rankNone]string{ReasonEvidenceMismatch, ReasonEvidenceInvalid, ReasonEvidenceUnbound, ReasonEvidenceStale, ReasonEvidenceFailing}
+
+func rankOf(reason attest.Reason) int {
 	switch reason {
 	case attest.ReasonRevisionMismatch, attest.ReasonRepoMismatch, authz.ReasonArtifactUnbound:
-		return ReasonEvidenceMismatch, rankMismatch
+		return rankMismatch
 	case attest.ReasonUnbound:
-		return ReasonEvidenceUnbound, rankUnbound
+		return rankUnbound
 	case attest.ReasonStale:
-		return ReasonEvidenceStale, rankStale
+		return rankStale
 	case attest.ReasonAdhoc, attest.ReasonSelectionPartial, attest.ReasonNotPassing:
-		return ReasonEvidenceFailing, rankFailing
+		return rankFailing
 	}
-	return ReasonEvidenceInvalid, rankInvalid // inconsistent, other policy, trust below the floor, unverifiable signature
+	return rankInvalid // inconsistent, other policy, trust below the floor, unverifiable signature
 }
 
 // evidenceVerdict judges the evidence at the released revision.
@@ -106,14 +112,12 @@ func (r *run) evidenceVerdict() *Failure {
 		all = append(all, rs...)
 	}
 	r.res.Evidence = reasons(all)
-	best, bestRank := "", rankFailing+1
+	worst := rankNone
 	for _, reason := range all {
-		if key, rank := classify(reason); rank < bestRank {
-			best, bestRank = key, rank
-		}
+		worst = min(worst, rankOf(reason))
 	}
-	if bestRank < rankFailing {
-		return fail(best, "the evidence is not usable at revision %.12s (%s)", m.Revision, best)
+	if worst < rankFailing {
+		return fail(rankKeys[worst], "the evidence is not usable at revision %.12s (%s)", m.Revision, rankKeys[worst])
 	}
 	if r.opt.Quarantined != nil {
 		q, qerr := r.opt.Quarantined(ctx, r.ev)
@@ -124,7 +128,7 @@ func (r *run) evidenceVerdict() *Failure {
 			return fail(ReasonQuarantined, "the evidence of run %s is quarantined", r.ev.RunID)
 		}
 	}
-	if bestRank == rankFailing {
+	if worst == rankFailing {
 		return fail(ReasonEvidenceFailing, "the evidence does not pass")
 	}
 	r.res.Warnings = append(r.res.Warnings, v.Warnings...)

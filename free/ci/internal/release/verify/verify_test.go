@@ -225,6 +225,7 @@ func TestTamperMatrix(t *testing.T) {
 			r.tweakEvidence = func(e *model.Evidence) {
 				e.Binding = model.Binding{State: "unbound", Reason: &why}
 				e.WorktreeState = "dirty"
+				e.Freshness = model.Freshness{State: "unknown", Reason: &stale}
 			}
 		}, reason: verify.ReasonEvidenceUnbound},
 		{name: "evidence selection partial", bend: func(r *rig) {
@@ -240,6 +241,15 @@ func TestTamperMatrix(t *testing.T) {
 		{name: "revoked file is malformed", after: func(r *rig) { writeFile(t, filepath.Dir(r.revokedFile), "ci-release.revoked", "not a key id\n") }, reason: verify.ReasonSignature},
 		{name: "no trust roots", after: func(r *rig) { r.opt.OperatorKeys = "" }, reason: verify.ReasonSignature},
 		{name: "revocation hook", after: func(r *rig) { r.opt.Revoked = func(id string) bool { return id == r.keyID() } }, reason: verify.ReasonRevoked},
+		{name: "sums line differs from the file", after: func(r *rig) {
+			r.resignSums(func(s string) string { return strings.Repeat("f", 64) + s[64:] })
+		}, reason: verify.ReasonChecksum},
+		{name: "listed artifact is missing", after: func(r *rig) { _ = os.Remove(filepath.Join(r.dir, "artifacts", "nself-linux-amd64")) }, reason: verify.ReasonChecksum},
+		{name: "failing and quarantined", bend: func(r *rig) {
+			r.tweakEvidence = func(e *model.Evidence) { e.Selection.Mode = "affected" }
+		}, after: func(r *rig) {
+			r.opt.Quarantined = func(context.Context, model.Evidence) (bool, error) { return true, nil }
+		}, reason: verify.ReasonQuarantined, exit: 1},
 		{name: "quarantined", after: func(r *rig) {
 			r.opt.Quarantined = func(context.Context, model.Evidence) (bool, error) { return true, nil }
 		}, reason: verify.ReasonQuarantined, exit: 1},
@@ -345,4 +355,12 @@ func TestFailureExitCodes(t *testing.T) {
 			t.Errorf("%s: exit %d, error %q", reason, f.ExitCode(), f.Error())
 		}
 	}
+}
+
+// resignSums rewrites SHA256SUMS with mod and signs a manifest that names it.
+func (r *rig) resignSums(mod func(string) string) {
+	r.t.Helper()
+	body := mod(string(r.read(manifest.ChecksumsPath)))
+	r.write(manifest.ChecksumsPath, []byte(body))
+	r.resignWith(func(m *manifest.Manifest) { m.Checksums.SHA256 = hexOf([]byte(body)) }, false)
 }

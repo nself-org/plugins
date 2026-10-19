@@ -88,14 +88,11 @@ func open(dir, rel string) (*os.File, os.FileInfo, error) {
 
 // readFile reads rel under dir, refusing more than max bytes.
 func readFile(dir, rel string, max int64) ([]byte, error) {
-	f, fi, err := open(dir, rel)
+	f, _, err := open(dir, rel)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
-	if fi.Size() > max {
-		return nil, fmt.Errorf("%q is larger than %d bytes", rel, max)
-	}
 	b, err := io.ReadAll(io.LimitReader(f, max+1))
 	if err == nil && int64(len(b)) > max {
 		err = fmt.Errorf("%q is larger than %d bytes", rel, max)
@@ -191,13 +188,14 @@ func (r *run) checksums() *Failure {
 	r.files = &fileSet{byPath: make(map[string]fileInfo, len(lines))}
 	for _, l := range lines {
 		info, err := digest(r.dir, l.path)
-		switch {
-		case errors.Is(err, fs.ErrNotExist) && strings.HasPrefix(l.path, "sbom/"):
+		if errors.Is(err, fs.ErrNotExist) && strings.HasPrefix(l.path, "sbom/") {
 			r.files.missingSBOM = append(r.files.missingSBOM, l.path)
 			continue
-		case err != nil:
+		}
+		if err != nil {
 			return fail(ReasonChecksum, "cannot read %q: %v", l.path, err)
-		case info.sha != l.sha:
+		}
+		if info.sha != l.sha {
 			return fail(ReasonChecksum, "%q does not match its line in %s", l.path, r.man.Checksums.Path)
 		}
 		if exp := want[l.path]; exp != "" && info.sha != exp {
@@ -229,10 +227,9 @@ func (r *run) unlisted(listed map[string]bool) *Failure {
 			return rerr
 		}
 		rel = filepath.ToSlash(rel)
-		switch {
-		case !d.Type().IsRegular():
+		if !d.Type().IsRegular() {
 			bad = fail(ReasonChecksum, "%q is not a regular file", rel)
-		case rel != ManifestFile && rel != r.man.Checksums.Path && !listed[rel]:
+		} else if rel != ManifestFile && rel != r.man.Checksums.Path && !listed[rel] {
 			bad = fail(ReasonChecksum, "%q is not listed in %s", rel, r.man.Checksums.Path)
 		}
 		if bad != nil {

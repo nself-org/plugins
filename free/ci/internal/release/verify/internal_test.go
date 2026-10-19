@@ -86,6 +86,12 @@ func TestParseSums(t *testing.T) {
 			t.Errorf("%s accepted", name)
 		}
 	}
+	if _, err := parseSums([]byte(a + "  a\n" + b + " b\n")); err == nil || !strings.Contains(err.Error(), "line 2 ") {
+		t.Errorf("a bad second line must name line 2: %v", err)
+	}
+	if _, err := parseSums([]byte(a + "  b\n" + a + "  a\n")); err == nil || !strings.Contains(err.Error(), "line 2 ") {
+		t.Errorf("a misordered second line must name line 2: %v", err)
+	}
 	if _, err := parseSums([]byte(a + "  a\n" + a + "  b\n")); err != nil {
 		t.Errorf("ascending paths with equal digests refused: %v", err)
 	}
@@ -115,24 +121,27 @@ func TestForeignPurposeAndClip(t *testing.T) {
 	}
 }
 
-func TestClassifyEveryEvidenceReason(t *testing.T) {
-	for reason, want := range map[attest.Reason]struct {
-		key  string
-		rank int
-	}{
-		attest.ReasonRevisionMismatch: {ReasonEvidenceMismatch, rankMismatch}, attest.ReasonRepoMismatch: {ReasonEvidenceMismatch, rankMismatch},
-		authz.ReasonArtifactUnbound: {ReasonEvidenceMismatch, rankMismatch},
-		attest.ReasonUnbound:        {ReasonEvidenceUnbound, rankUnbound}, attest.ReasonStale: {ReasonEvidenceStale, rankStale},
-		attest.ReasonAdhoc: {ReasonEvidenceFailing, rankFailing}, attest.ReasonSelectionPartial: {ReasonEvidenceFailing, rankFailing},
-		attest.ReasonNotPassing: {ReasonEvidenceFailing, rankFailing},
-		attest.ReasonInvalid:    {ReasonEvidenceInvalid, rankInvalid}, attest.ReasonPolicyMismatch: {ReasonEvidenceInvalid, rankInvalid},
-		attest.ReasonJobsMismatch: {ReasonEvidenceInvalid, rankInvalid}, attest.ReasonTrustBelowMin: {ReasonEvidenceInvalid, rankInvalid},
-		attest.ReasonSelfReportedNotAdmitted: {ReasonEvidenceInvalid, rankInvalid}, attest.ReasonSignatureUnverifiable: {ReasonEvidenceInvalid, rankInvalid},
-		"made.up": {ReasonEvidenceInvalid, rankInvalid},
+func TestRankOfEveryEvidenceReason(t *testing.T) {
+	for reason, want := range map[attest.Reason]int{
+		attest.ReasonRevisionMismatch: rankMismatch, attest.ReasonRepoMismatch: rankMismatch, authz.ReasonArtifactUnbound: rankMismatch,
+		attest.ReasonUnbound: rankUnbound, attest.ReasonStale: rankStale,
+		attest.ReasonAdhoc: rankFailing, attest.ReasonSelectionPartial: rankFailing, attest.ReasonNotPassing: rankFailing,
+		attest.ReasonInvalid: rankInvalid, attest.ReasonPolicyMismatch: rankInvalid, attest.ReasonJobsMismatch: rankInvalid,
+		attest.ReasonTrustBelowMin: rankInvalid, attest.ReasonSelfReportedNotAdmitted: rankInvalid, attest.ReasonSignatureUnverifiable: rankInvalid,
+		"made.up": rankInvalid,
 	} {
-		if key, rank := classify(reason); key != want.key || rank != want.rank {
-			t.Errorf("%s: %s %d", reason, key, rank)
+		if got := rankOf(reason); got != want {
+			t.Errorf("%s: rank %d, want %d", reason, got, want)
 		}
+	}
+	keys := map[int]string{rankMismatch: ReasonEvidenceMismatch, rankInvalid: ReasonEvidenceInvalid, rankUnbound: ReasonEvidenceUnbound, rankStale: ReasonEvidenceStale, rankFailing: ReasonEvidenceFailing}
+	for rank, key := range keys {
+		if rankKeys[rank] != key {
+			t.Errorf("rank %d names %q, want %q", rank, rankKeys[rank], key)
+		}
+	}
+	if len(rankKeys) != rankNone || rankNone != 5 {
+		t.Error("rankKeys must cover every rank")
 	}
 	if !(rankMismatch < rankInvalid && rankInvalid < rankUnbound && rankUnbound < rankStale && rankStale < rankFailing) {
 		t.Error("severity order")

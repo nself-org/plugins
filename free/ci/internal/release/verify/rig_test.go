@@ -316,6 +316,7 @@ func (r *rig) verify() verify.Result {
 // wantFail checks the result failed with reason and exit.
 func wantFail(t *testing.T, res verify.Result, reason string, exit int) {
 	t.Helper()
+	t.Logf("%s: %s", res.Reason, res.Message)
 	if res.Verified || res.Reason != reason || res.Exit != exit || res.Code != "E719" || res.SLSABuildLevel != "L1" {
 		t.Fatalf("want %s exit %d, got verified=%v reason=%q exit=%d code=%q: %s", reason, exit, res.Verified, res.Reason, res.Exit, res.Code, res.Message)
 	}

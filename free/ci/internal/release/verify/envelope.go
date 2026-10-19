@@ -52,24 +52,33 @@ func verifyEnvelope(v *signing.Verifier, env signing.Envelope, reason string) ([
 		return nil, "", fail(reason, "the envelope holds %d signatures, v1 has exactly one", len(env.Signatures))
 	}
 	_, payload, ids, err := signing.VerifyEnvelope(v, env)
-	switch {
-	case err == nil:
-	case reason == ReasonSignature && errIs(err, signing.ErrRevoked):
-		return nil, "", fail(ReasonRevoked, "%v", err)
-	case reason == ReasonSignature && errIs(err, signing.ErrWrongPurpose):
-		return nil, "", fail(ReasonKeyPurpose, "%v", err)
-	case reason == ReasonSignature && errIs(err, signing.ErrUnknownKey):
-		if p, ok := foreignPurpose(env.Signatures[0].KeyID); ok {
-			return nil, "", fail(ReasonKeyPurpose, "the manifest is signed by a %s key, not a ci-release key", p)
-		}
-		return nil, "", fail(ReasonSignature, "%v", err)
-	default:
-		return nil, "", fail(reason, "%v", err)
+	if err != nil {
+		return nil, "", mapSigningError(err, env, reason)
 	}
 	if len(ids) != 1 {
 		return nil, "", fail(reason, "the envelope has %d verified signatures, v1 has exactly one", len(ids))
 	}
 	return payload, ids[0], nil
+}
+
+// mapSigningError turns a signing failure into a reason; only the manifest
+// signature distinguishes a revoked key and a key of another purpose.
+func mapSigningError(err error, env signing.Envelope, reason string) *Failure {
+	if reason != ReasonSignature {
+		return fail(reason, "%v", err)
+	}
+	if errIs(err, signing.ErrRevoked) {
+		return fail(ReasonRevoked, "%v", err)
+	}
+	if errIs(err, signing.ErrWrongPurpose) {
+		return fail(ReasonKeyPurpose, "%v", err)
+	}
+	if errIs(err, signing.ErrUnknownKey) {
+		if p, ok := foreignPurpose(env.Signatures[0].KeyID); ok {
+			return fail(ReasonKeyPurpose, "the manifest is signed by a %s key, not a ci-release key", p)
+		}
+	}
+	return fail(ReasonSignature, "%v", err)
 }
 
 // signature reads the manifest envelope and verifies it under the trust roots.
@@ -99,10 +108,10 @@ func (r *run) signature() *Failure {
 // decode decodes the verified payload and binds it to the signer.
 func (r *run) decode() *Failure {
 	m, err := manifest.Decode(r.payload)
-	switch {
-	case errIs(err, manifest.ErrSchema):
+	if errIs(err, manifest.ErrSchema) {
 		return fail(ReasonManifestSchema, "%v", err)
-	case err != nil:
+	}
+	if err != nil {
 		return fail(ReasonManifestInvalid, "%v", err)
 	}
 	if m.Signing.KeyID != r.res.KeyID {

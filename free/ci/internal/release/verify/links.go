@@ -63,16 +63,19 @@ func (r *run) checkStatement(st provenance.Statement) *Failure {
 	}
 	bd, rd := st.Predicate.BuildDefinition, st.Predicate.RunDetails
 	ext := bd.ExternalParameters
-	switch {
-	case bd.BuildType != provenance.BuildTypeRelease:
+	if bd.BuildType != provenance.BuildTypeRelease {
 		return fail(ReasonProvenanceSubject, "buildType is %q, want %q", clip(bd.BuildType), provenance.BuildTypeRelease)
-	case ext["repository"] != m.RepoID || ext["revision"] != m.Revision || st.GitCommit() != m.Revision:
+	}
+	if ext["repository"] != m.RepoID || ext["revision"] != m.Revision || st.GitCommit() != m.Revision {
 		return fail(ReasonProvenanceSubject, "the provenance is for another repository or revision")
-	case ext["pipeline"] != m.Release.Pipeline || ext["job"] != m.Release.JobID:
+	}
+	if ext["pipeline"] != m.Release.Pipeline || ext["job"] != m.Release.JobID {
 		return fail(ReasonProvenanceSubject, "the provenance is for another pipeline or job")
-	case rd.Metadata.InvocationID != m.Release.RunID+"/"+m.Release.AttemptID:
+	}
+	if rd.Metadata.InvocationID != m.Release.RunID+"/"+m.Release.AttemptID {
 		return fail(ReasonProvenanceSubject, "the provenance is for another invocation")
-	case !strings.HasPrefix(rd.Builder.ID, "https://nself.org/ci/builder/v1#"):
+	}
+	if !strings.HasPrefix(rd.Builder.ID, "https://nself.org/ci/builder/v1#") {
 		return fail(ReasonProvenanceSubject, "the builder id is not a nself-ci builder")
 	}
 	if fin, err := time.Parse(time.RFC3339Nano, m.Release.FinishedAt); err != nil ||
