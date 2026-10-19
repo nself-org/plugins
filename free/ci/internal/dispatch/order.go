@@ -90,6 +90,20 @@ func NewFair(limits func() QueueLimits, clock func() time.Time) *Fair {
 	return &Fair{limits: limits, clock: clock}
 }
 
+// bandOf is the band a queued job is ordered in: the band it declares, else
+// interactive for a foreground job, else normal. The run derives the trigger's
+// band when it builds the job (attemptBand), so an undeclared band here means
+// the caller did not say: never interactive on that alone.
+func bandOf(declared string, foreground bool) fairq.Band {
+	if b, ok := fairq.Parse(declared); ok {
+		return b
+	}
+	if foreground {
+		return fairq.Interactive
+	}
+	return fairq.Normal
+}
+
 // Order implements Orderer; the input is not modified.
 func (f *Fair) Order(q []Queued) []Queued {
 	items := make([]fairq.Item, len(q))
@@ -99,7 +113,7 @@ func (f *Fair) Order(q []Queued) []Queued {
 		s := e.Job.Sched
 		items[i] = fairq.Item{
 			Key: key, Pipeline: s.Pipeline.ID, Job: s.ID, MatrixKey: s.MatrixKey, Project: s.Project,
-			Band: fairq.For(s.Pipeline.Band, "", e.Job.Foreground || s.Pipeline.Foreground), Priority: s.Priority,
+			Band: bandOf(s.Pipeline.Band, e.Job.Foreground || s.Pipeline.Foreground), Priority: s.Priority,
 			EnqueuedMs: e.EnqueuedAt.UnixMilli(), Seq: e.Seq, Cost: 1,
 		}
 		bySeq[key] = e
