@@ -17,8 +17,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/bench"
@@ -140,7 +142,7 @@ var informational = map[string]bool{bench.MetricExecBaseline: true, bench.Metric
 
 // runCmd measures and prints the result.
 func runCmd(o options, stdout, stderr io.Writer) int {
-	ctx, stop := context.WithCancel(context.Background())
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	dir, err := os.MkdirTemp(os.Getenv("TMPDIR"), "cibench-")
 	if err != nil {

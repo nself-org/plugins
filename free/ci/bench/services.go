@@ -41,7 +41,11 @@ func measureServices(ctx context.Context, cfg Config, home string, col *Collecto
 		if err != nil {
 			return 0, "", fmt.Errorf("service %s: %w", comp, err)
 		}
-		images := imagesOf(ctx, h.Project)
+		images, err := imagesOf(ctx, h.Project)
+		if err != nil {
+			_ = prov.Down(ctx, h)
+			return 0, "", err
+		}
 		if err := prov.Down(ctx, h); err != nil {
 			return 0, "", fmt.Errorf("service %s teardown: %w", comp, err)
 		}
@@ -80,12 +84,14 @@ func measureServices(ctx context.Context, cfg Config, home string, col *Collecto
 	return nil
 }
 
-// imagesOf lists the images of the containers of compose project name.
-func imagesOf(ctx context.Context, project string) string {
+// imagesOf lists the images of the containers of compose project name. A
+// project with no container is an error: the cold scenario would otherwise
+// remove nothing and record a warm start as a cold one.
+func imagesOf(ctx context.Context, project string) (string, error) {
 	r, err := must(ctx, []string{"docker", "ps", "-a", "--filter", "label=com.docker.compose.project=" + project,
 		"--format", "{{.Image}}"}, "", baseEnv())
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("list the images of project %s: %w", project, err)
 	}
 	seen := map[string]bool{}
 	var out []string
@@ -95,5 +101,8 @@ func imagesOf(ctx context.Context, project string) string {
 			out = append(out, img)
 		}
 	}
-	return strings.Join(out, " ")
+	if len(out) == 0 {
+		return "", fmt.Errorf("project %s has no container, so its image is unknown", project)
+	}
+	return strings.Join(out, " "), nil
 }
