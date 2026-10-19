@@ -44,9 +44,6 @@ type Options struct {
 	// PolicyRun carries per-run policy values into PolicyRequest.Run (filled by P7-AUTO-29 from
 	// `--where`, `--prefer` and `--runner`); nil means none.
 	PolicyRun RunValues
-	// PolicyRunDefaulted lists the PolicyRun keys the caller filled by default (the foreground
-	// queue cap), not the person: a refusal of one is not reported.
-	PolicyRunDefaulted []string
 }
 
 // RunOptions is the name the cmd layer and its option hooks use.

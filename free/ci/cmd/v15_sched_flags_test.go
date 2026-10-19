@@ -45,7 +45,7 @@ func TestSchedFlagsParse(t *testing.T) {
 		if err := parseOn(fs, "--prefer", "local", "--runner", "ms5", "--max-queue", "2m"); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		vals, err := schedRevisionValues(false)
+		vals, err := schedRevisionValues()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -72,24 +72,19 @@ func TestSchedFlagsRefusals(t *testing.T) {
 	}
 }
 
-// TestSchedFlagsForegroundDefault: a person at a terminal waits 10 minutes at
-// most unless told otherwise; a scripted or queued run is not capped.
-func TestSchedFlagsForegroundDefault(t *testing.T) {
+// TestSchedFlagsNoImplicitCap: with no flag a run has no per-run values: the
+// foreground queue cap is the dispatcher's default (interactive runs only), not a
+// run-scope value that would shorten a longer project limit.
+func TestSchedFlagsNoImplicitCap(t *testing.T) {
 	resetSchedFlags(t)
-	for foreground, want := range map[bool]string{true: `"10m0s"`, false: ""} {
-		vals, err := schedRevisionValues(foreground)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := string(vals[schedpolicy.KeyMaxQueue]); got != want {
-			t.Errorf("foreground %v: max_queue %q want %q", foreground, got, want)
-		}
+	if vals, err := schedRevisionValues(); err != nil || vals != nil {
+		t.Fatalf("flagless run values = %v (%v)", vals, err)
 	}
 	if err := parseOn(bareFlags, "--max-queue", "30s"); err != nil {
 		t.Fatal(err)
 	}
-	if vals, _ := schedRevisionValues(true); string(vals[schedpolicy.KeyMaxQueue]) != `"30s"` {
-		t.Errorf("--max-queue lost to the default: %v", vals)
+	if vals, _ := schedRevisionValues(); string(vals[schedpolicy.KeyMaxQueue]) != `"30s"` {
+		t.Errorf("--max-queue lost: %v", vals)
 	}
 }
 
@@ -179,11 +174,12 @@ func TestSchedFlagsReachPolicy(t *testing.T) {
 	if v := values(false, "--prefer", "local", "--runner", "ms5", "--max-queue", "5m"); v[schedpolicy.KeyPreset] != "prefer-local" || v[schedpolicy.KeyRunner] != "ms6" || v[schedpolicy.KeyMaxQueue] != int64(300000) {
 		t.Errorf("per-run values: preset %v runner %v (the project's ms6 must stand) max queue %v", v[schedpolicy.KeyPreset], v[schedpolicy.KeyRunner], v[schedpolicy.KeyMaxQueue])
 	}
-	if v := values(true); v[schedpolicy.KeyMaxQueue] != int64(600000) {
-		t.Errorf("an interactive run's max queue = %v, want 10 minutes", v[schedpolicy.KeyMaxQueue])
+	// the project's longer limit stands for an interactive run with no flag: no cap is injected
+	if err := st2(t, db, project, schedpolicy.KeyMaxQueue, `"1h"`); err != nil {
+		t.Fatal(err)
 	}
-	if v := values(false); v[schedpolicy.KeyMaxQueue] == int64(600000) {
-		t.Error("a scripted run got the foreground cap")
+	if v := values(true); v[schedpolicy.KeyMaxQueue] != int64(3600000) {
+		t.Errorf("an interactive run shortened the project's 1h limit to %v", v[schedpolicy.KeyMaxQueue])
 	}
 	bare := resolve(false)
 	if got := resolve(false, "--runner", "ms5"); got.Digest != bare.Digest || len(got.IgnoredRun) != 1 {
@@ -198,22 +194,8 @@ func TestSchedFlagsReachPolicy(t *testing.T) {
 			t.Errorf("%v changed the digest evidence is verified against", args)
 		}
 	}
-	if got := resolve(true); got.Digest != bare.Digest {
-		t.Error("an interactive run's digest differs from the policy in force")
-	}
-	// the foreground cap is the caller's default: its refusal is not reported to the person
-	resetSchedFlags(t)
-	o := RunOptions{Root: root, Interactive: true}
-	if err := schedOptions(&o); err != nil || len(o.PolicyRunDefaulted) != 1 || o.PolicyRunDefaulted[0] != schedpolicy.KeyMaxQueue {
-		t.Errorf("defaulted keys = %v (%v)", o.PolicyRunDefaulted, err)
-	}
-	resetSchedFlags(t)
-	if err := parseOn(bareFlags, "--max-queue", "3m"); err != nil {
-		t.Fatal(err)
-	}
-	o = RunOptions{Root: root, Interactive: true}
-	if err := schedOptions(&o); err != nil || len(o.PolicyRunDefaulted) != 0 {
-		t.Errorf("an explicit --max-queue was called a default: %v (%v)", o.PolicyRunDefaulted, err)
+	if got := resolve(true); got.Digest != bare.Digest || len(got.IgnoredRun) != 0 {
+		t.Errorf("an interactive flagless run differs from the policy in force: ignored %v", got.IgnoredRun)
 	}
 }
 
@@ -224,4 +206,15 @@ func TestSchedFlagsInHelp(t *testing.T) {
 			t.Errorf("v15 help does not list %s", f)
 		}
 	}
+}
+
+// st2 writes one project policy row into the store at db.
+func st2(t *testing.T, db, project, key, value string) error {
+	t.Helper()
+	st, err := store.Open(db, store.Options{})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = st.Close() }()
+	return st.ApplyWrite(context.Background(), store.PolicyWrite{Op: store.PolicySet, Scope: "project", Subject: project, Key: key, Value: []byte(value), Actor: "test"}, nil)
 }

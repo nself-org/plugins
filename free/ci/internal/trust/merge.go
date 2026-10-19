@@ -223,9 +223,15 @@ const SourceRun Source = "run"
 // set: a preference ranks the choices, it never widens what a scope allows.
 var runPreferenceKeys = map[string]bool{"sched.preset": true}
 
+// runOpenOwners are the key owners whose unset keys are unconstrained: a placement
+// filter (runner, os, arch, provider allow-list) that any value only narrows. An
+// unset key of another owner may mean deny-all (trust.providers), so a run never
+// fills it; it may only tighten a value some scope already set.
+var runOpenOwners = map[string]bool{"sched": true}
+
 // runRefusal says why a run-scope value may not apply ("" when it may). A key
-// nothing set yet and without a default is open: any value restricts it, except
-// an off switch or a free-form value, which restrict nothing.
+// of an open owner that nothing set yet and without a default is open: any value
+// restricts it, except an off switch or a free-form value, which restrict nothing.
 func runRefusal(spec KeySpec, key string, old any, exists bool, next any) string {
 	const widening = "E819 run scope widening"
 	switch {
@@ -247,6 +253,8 @@ func runRefusal(spec KeySpec, key string, old any, exists bool, next any) string
 		if stricter(spec, spec.Default, next) {
 			return ""
 		}
+		return widening
+	case !runOpenOwners[spec.Owner]:
 		return widening
 	case spec.Kind == TightenOnlyOn && next != true:
 		return widening

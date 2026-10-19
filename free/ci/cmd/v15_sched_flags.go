@@ -66,27 +66,21 @@ func presetList() string {
 var stdinTerminal = func() bool { return isTerminal(os.Stdin) }
 
 // interactiveRun reports whether a person waits at a terminal: stdin is a
-// terminal, no --trigger names who started the run and NSELF_INVOKED_BY (set
-// by a wrapper such as cam or a scheduler) is empty. It replaces the
+// terminal, no --trigger names who started the run and NSELF_INVOKED_BY (a wrapper
+// or scheduler may set it to say a script, not a person, started the run) is empty. It replaces the
 // trigger-string guess of foregroundTrigger for real runs (P7-AUTO-29).
 func interactiveRun(trigger string, getenv func(string) string) bool {
 	return trigger == "" && getenv("NSELF_INVOKED_BY") == "" && stdinTerminal()
 }
 
 // schedOptions turns the parsed flags into the per-run policy values of the
-// run. o.Interactive is set by parseBare before the hooks run.
+// run. The 10 minute foreground queue cap is not one of them: the dispatcher
+// applies it when the policy sets no max_queue and the run is interactive
+// (o.Interactive, set by parseBare before the hooks run), so it never shortens
+// a longer limit an operator or project set.
 func schedOptions(o *RunOptions) error {
-	vals, err := schedRevisionValues(o.Interactive)
+	vals, err := schedRevisionValues()
 	o.PolicyRun = vals
-	if err != nil || !o.Interactive {
-		return err
-	}
-	given, err := schedRevisionValues(false)
-	for key := range vals {
-		if _, ok := given[key]; !ok {
-			o.PolicyRunDefaulted = append(o.PolicyRunDefaulted, key)
-		}
-	}
 	return err
 }
 
@@ -99,10 +93,7 @@ func foregroundTrigger(trigger string) bool {
 }
 
 // schedRevisionValues returns the per-run policy values of the parsed flags
-// (the run scope, internal/policy/runscope.go), plus the 10 minute queue cap of
-// a foreground run without --max-queue.
-func schedRevisionValues(foreground bool) (map[string]json.RawMessage, error) {
-	f := schedFlags
-	f.Foreground = foreground
-	return f.Values()
+// (the run scope, internal/policy/runscope.go); nil when no flag was given.
+func schedRevisionValues() (map[string]json.RawMessage, error) {
+	return schedFlags.Values()
 }

@@ -36,32 +36,51 @@ func runScopeRepo(t *testing.T) (root string, st *store.Store, db string) {
 	return root, st, db
 }
 
-// TestForegroundQueueCap: the 10 minute foreground cap (a per-run value) lowers
-// the dispatcher's max queue; a run without per-run values keeps no limit (0).
+// TestForegroundQueueCap: the 10 minute foreground queue cap is the dispatcher's
+// default for an interactive run whose policy sets no max_queue; it never
+// shortens a longer limit the project set, and a scripted run asks the
+// dispatcher to withhold it. --max-queue lowers the policy value.
 func TestForegroundQueueCap(t *testing.T) {
-	root, st, _ := runScopeRepo(t)
-	flags := schedpolicy.Flags{Foreground: true, Runner: "ms5"}
-	vals, err := flags.Values()
-	if err != nil {
-		t.Fatal(err)
-	}
+	ctx := context.Background()
 	for _, tc := range []struct {
-		name   string
-		run    RunValues
-		queue  int64
-		runner string
+		name        string
+		project     string // the project's max_queue ("" = none)
+		interactive bool
+		flags       schedpolicy.Flags
+		queue       int64
+		runner      string
 	}{
-		{"interactive", vals, 600000, "ms5"},
-		{"scripted", nil, 0, ""},
+		{"interactive, nothing set: the dispatcher default applies", "", true, schedpolicy.Flags{}, 0, ""},
+		{"scripted, nothing set", "", false, schedpolicy.Flags{}, 0, ""},
+		{"interactive keeps a longer project limit", `"1h"`, true, schedpolicy.Flags{}, 3600000, ""},
+		{"--max-queue 5m and --runner ms5", "", true, schedpolicy.Flags{MaxQueue: "5m", Runner: "ms5"}, 300000, "ms5"},
 	} {
-		rd := &runDispatch{sess: &Session{Store: st, PolicyRun: tc.run}, row: store.PipelineRow{Project: root}}
-		p, err := rd.policy(context.Background(), "")
-		if err != nil {
-			t.Fatalf("%s: %v", tc.name, err)
-		}
-		if p.Overrides.MaxQueueMs != tc.queue || p.Overrides.Runner != tc.runner {
-			t.Errorf("%s: max queue %d runner %q, want %d %q", tc.name, p.Overrides.MaxQueueMs, p.Overrides.Runner, tc.queue, tc.runner)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			root, st, _ := runScopeRepo(t)
+			if tc.project != "" {
+				project := policy.ProjectIDGitCached(ctx, policy.Runner(report.Capture), root)
+				err := st.ApplyWrite(ctx, store.PolicyWrite{Op: store.PolicySet, Scope: "project", Subject: project, Key: schedpolicy.KeyMaxQueue, Value: []byte(tc.project), Actor: "test"}, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			vals, err := tc.flags.Values()
+			if err != nil {
+				t.Fatal(err)
+			}
+			sess := &Session{Store: st, PolicyRun: vals, Interactive: tc.interactive}
+			rd := &runDispatch{sess: sess, row: store.PipelineRow{Project: root}}
+			p, err := rd.policy(ctx, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if p.Overrides.MaxQueueMs != tc.queue || p.Overrides.Runner != tc.runner {
+				t.Errorf("max queue %d runner %q, want %d %q", p.Overrides.MaxQueueMs, p.Overrides.Runner, tc.queue, tc.runner)
+			}
+			if j := queueJob(sess, AttemptSpec{Job: &model.Job{}, Foreground: true}, sched.Job{}, "a", 1, 1); j.NoDefaultQueueCap == tc.interactive {
+				t.Errorf("interactive %v but NoDefaultQueueCap %v", tc.interactive, j.NoDefaultQueueCap)
+			}
+		})
 	}
 }
 
@@ -114,7 +133,7 @@ func TestQueueJobDefaultCap(t *testing.T) {
 }
 
 func TestIgnoredRunNotes(t *testing.T) {
-	got := ignoredRunNotes([]string{"sched.overrides.max_queue: E819 run scope widening", "sched.overrides.runner: E819 run scope widening"}, []string{"sched.overrides.max_queue"})
+	got := ignoredRunNotes([]string{"sched.overrides.runner: E819 run scope widening"})
 	if len(got) != 1 || got[0] != "per-run policy value ignored: sched.overrides.runner: E819 run scope widening" {
 		t.Errorf("notes = %q", got)
 	}
@@ -129,11 +148,10 @@ func (p ignoredPolicy) Resolve(ctx context.Context, r PolicyRequest) (PolicyResu
 }
 
 // TestIgnoredRunValuesReachSummary: what the policy refused of the run's flags is
-// a note of the finished run (never a silent drop); a defaulted key stays quiet.
+// a note of the finished run (never a silent drop).
 func TestIgnoredRunValuesReachSummary(t *testing.T) {
 	r := passRig(t)
-	r.C.Hooks.Policy = ignoredPolicy{[]string{"sched.overrides.runner: E819 run scope widening", "sched.overrides.max_queue: E819 run scope widening"}}
-	r.C.Opts.PolicyRunDefaulted = []string{"sched.overrides.max_queue"}
+	r.C.Hooks.Policy = ignoredPolicy{[]string{"sched.overrides.runner: E819 run scope widening"}}
 	res := r.run(t)
 	var got []string
 	for _, n := range res.Summary.Notes {

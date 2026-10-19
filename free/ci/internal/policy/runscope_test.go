@@ -136,3 +136,28 @@ func TestRunScopeSpendRefused(t *testing.T) {
 	}
 	t.Errorf("the refusal is not reported: %v", got.Ignored)
 }
+
+// TestRunScopeCannotFillUnsetTrustAllowList: trust.providers unset means no hosted
+// provider is admitted; a per-run list must not authorize one (it would loosen),
+// while the unset placement filter sched.overrides.providers.allow may be narrowed.
+func TestRunScopeCannotFillUnsetTrustAllowList(t *testing.T) {
+	res, repo, rev := runScopeFixture(t, "version: 1\n")
+	rev.Run = map[string]json.RawMessage{"trust.providers": json.RawMessage(`["x"]`), schedpolicy.KeyProvidersAllow: json.RawMessage(`["y"]`)}
+	got, err := res.Resolve(context.Background(), repo, rev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := got.Values["trust.providers"]; ok {
+		t.Errorf("the run scope filled the unset trust.providers: %v", v)
+	}
+	if got.Sources[schedpolicy.KeyProvidersAllow] != policy.SourceRun {
+		t.Errorf("the placement allow-list was not narrowed: %v", got.Values[schedpolicy.KeyProvidersAllow])
+	}
+	refused := false
+	for _, ig := range got.Ignored {
+		refused = refused || ig.Key == "trust.providers" && ig.Scope == policy.SourceRun && strings.Contains(ig.Reason, "E819")
+	}
+	if !refused {
+		t.Errorf("the refusal is not reported: %v", got.Ignored)
+	}
+}

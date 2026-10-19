@@ -28,18 +28,23 @@ func runRegistry(t *testing.T) trust.Registry {
 		trust.KeySpec{Key: "x.any", Owner: "x", Kind: trust.TightenAny, Default: "a"},
 		trust.KeySpec{Key: "x.anynone", Owner: "x", Kind: trust.TightenAny},
 		trust.KeySpec{Key: "x.low", Owner: "x", Kind: trust.TightenLower, Default: int64(math.MaxInt64), Decode: numDecode},
-		trust.KeySpec{Key: "x.lownone", Owner: "x", Kind: trust.TightenLower, Decode: numDecode},
+		trust.KeySpec{Key: "x.lownone", Owner: "sched", Kind: trust.TightenLower, Decode: numDecode},
 		trust.KeySpec{Key: "x.high", Owner: "x", Kind: trust.TightenHigher, Default: int64(1), Decode: numDecode},
 		trust.KeySpec{Key: "x.ordlow", Owner: "x", Kind: trust.TightenLower, Order: ord, Default: "c"},
 		trust.KeySpec{Key: "x.ordhigh", Owner: "x", Kind: trust.TightenHigher, Order: ord, Default: "a"},
-		trust.KeySpec{Key: "x.fixed", Owner: "x", Kind: trust.TightenFixed},
+		trust.KeySpec{Key: "x.fixed", Owner: "sched", Kind: trust.TightenFixed},
 		trust.KeySpec{Key: "x.fixeddef", Owner: "x", Kind: trust.TightenFixed, Default: "p"},
 		trust.KeySpec{Key: "x.on", Owner: "x", Kind: trust.TightenOnlyOn, Default: false},
-		trust.KeySpec{Key: "x.onnone", Owner: "x", Kind: trust.TightenOnlyOn},
-		trust.KeySpec{Key: "x.sub", Owner: "x", Kind: trust.TightenSubset},
+		trust.KeySpec{Key: "x.onnone", Owner: "sched", Kind: trust.TightenOnlyOn},
+		trust.KeySpec{Key: "x.sub", Owner: "sched", Kind: trust.TightenSubset},
 		trust.KeySpec{Key: "x.subdef", Owner: "x", Kind: trust.TightenSubset, Default: []string{"a", "b", "c"}},
-		trust.KeySpec{Key: "x.sup", Owner: "x", Kind: trust.TightenSuperset},
+		trust.KeySpec{Key: "x.sup", Owner: "sched", Kind: trust.TightenSuperset},
 		trust.KeySpec{Key: "x.fam.*", Owner: "x", Kind: trust.TightenLower, Default: int64(100), Decode: numDecode},
+		// an unset key of a non-placement owner can mean deny-all (trust.providers): a run never fills it
+		trust.KeySpec{Key: "x.subclosed", Owner: "trust", Kind: trust.TightenSubset},
+		trust.KeySpec{Key: "x.fixedclosed", Owner: "trust", Kind: trust.TightenFixed},
+		trust.KeySpec{Key: "x.lowclosed", Owner: "trust", Kind: trust.TightenLower, Decode: numDecode},
+		trust.KeySpec{Key: "x.onclosed", Owner: "trust", Kind: trust.TightenOnlyOn},
 		trust.KeySpec{Key: "x.secret", Owner: "x", Kind: trust.TightenFixed, Secret: true},
 		trust.KeySpec{Key: "x.spend", Owner: "x", Kind: trust.TightenLower, Default: int64(5), Spend: true, Decode: numDecode},
 	)
@@ -57,6 +62,7 @@ var runDomain = map[string][]string{
 	"x.fixed": {`"p"`, `"q"`}, "x.fixeddef": {`"p"`, `"q"`}, "x.on": {`true`, `false`}, "x.onnone": {`true`, `false`},
 	"x.sub": {`[]`, `["a"]`, `["a","b"]`, `["b","c"]`, `["a","b","c"]`}, "x.subdef": {`[]`, `["a"]`, `["a","b"]`, `["b","c"]`, `["a","b","c","d"]`},
 	"x.sup": {`[]`, `["a"]`, `["a","b"]`, `["a","b","c"]`}, "x.fam.a": {`1`, `50`, `100`, `200`}, "x.spend": {`1`, `5`, `9`}, "x.secret": {`"s1"`, `"s2"`},
+	"x.subclosed": {`[]`, `["a"]`, `["a","b"]`}, "x.fixedclosed": {`"p"`}, "x.lowclosed": {`1`, `3`}, "x.onclosed": {`true`},
 }
 
 func randomValues(r *rand.Rand, keys []string) map[string]json.RawMessage {
@@ -185,6 +191,9 @@ func TestRunScopeNeverLoosens(t *testing.T) {
 			}
 			if (spec.Spend || spec.Secret) && src == trust.SourceRun {
 				t.Fatalf("seed %d: spend or secret key %s set by the run scope", seed, k)
+			}
+			if spec.Default == nil && spec.Owner != "sched" && !inBase && src == trust.SourceRun && k != runPreset {
+				t.Fatalf("seed %d: the run scope filled the unset %s key %s", seed, spec.Owner, k)
 			}
 			if !inBase && src != trust.SourceRun {
 				t.Fatalf("seed %d: %s appeared from %s", seed, k, src)
