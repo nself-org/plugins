@@ -384,3 +384,47 @@ func TestClientRelaysALongRefusalWhole(t *testing.T) {
 func ansOf(s string) answer { return answer{out: s} }
 
 var _ = time.Second
+
+func TestAmbiguousEscapesAreRefused(t *testing.T) {
+	f := newFixture(t)
+	good := string(f.statementPayload(nil))
+	withExtra := func(extra string) []byte {
+		return []byte(strings.Replace(good, `"predicate":`, extra+`"predicate":`, 1))
+	}
+	refused := map[string]string{
+		"lone high in a value":       `"note":"a-\ud800-b",`,
+		"lone high at the end":       `"note":"a-\ud800",`,
+		"lone low":                   `"note":"a-\udc00",`,
+		"high then a non-surrogate":  `"note":"a-\ud800\u0041",`,
+		"high then a high":           `"note":"a-\ud800\ud800",`,
+		"high then a raw character":  `"note":"a-\ud800z",`,
+		"a lone surrogate in a key":  `"n\ud800":1,`,
+		"upper case hex":             `"note":"a-\uD800",`,
+		"after an escaped backslash": `"note":"\\\ud800",`,
+		"truncated pair":             `"note":"\ud83d\ude0",`,
+		"a NUL escape":               `"note":"a\u0000b",`,
+		"a NUL escape in a key":      `"a\u0000":1,`,
+	}
+	for name, extra := range refused {
+		if err := handle(t, f, item(signing.PayloadStatement, withExtra(extra))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	for name, extra := range map[string]string{
+		"a valid pair":                     `"note":"\ud83d\ude00",`,
+		"a pair in upper case":             `"note":"\uD83D\uDE00",`,
+		"an escaped backslash then u":      `"note":"\\ud800",`,
+		"a BMP escape":                     `"note":"\u00e9\u20ac",`,
+		"the escape text outside a string": `"note":"x",`,
+	} {
+		if err := handle(t, f, item(signing.PayloadStatement, withExtra(extra))); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// the manifest path: a repo_id with a lone surrogate matches nothing, the escape is refused outright
+	m := string(f.manifestPayload(nil))
+	bad := strings.Replace(m, `"repo_id":"repo-1"`, `"repo_id":"repo-\ud800"`, 1)
+	if err := handle(t, f, item(manifest.PayloadType, []byte(bad))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
+		t.Fatalf("manifest with a lone surrogate: %v", err)
+	}
+}

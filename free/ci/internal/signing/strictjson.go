@@ -57,6 +57,9 @@ func strictJSON(raw []byte, what string, known ...string) error {
 	if !utf8.Valid(raw) {
 		return bad("not valid UTF-8")
 	}
+	if err := rejectAmbiguousEscapes(raw, what); err != nil {
+		return err
+	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	var stack []frame
 	valueDone := func() {
@@ -106,4 +109,65 @@ func strictJSON(raw []byte, what string, known ...string) error {
 		return bad("data after the document")
 	}
 	return nil
+}
+
+// rejectAmbiguousEscapes refuses the escapes two parsers read differently: a
+// \uD800-\uDFFF escape that is not half of a valid pair (encoding/json turns it
+// into U+FFFD, other parsers keep the lone surrogate) and \u0000 (a C-string
+// parser stops at it), so one payload would name two different strings.
+func rejectAmbiguousEscapes(raw []byte, what string) error {
+	bad := Failf(ReasonPayloadRejected, "%s: an unpaired UTF-16 surrogate escape or a \\u0000 escape", what)
+	inString := false
+	for i := 0; i < len(raw); i++ {
+		c := raw[i]
+		switch {
+		case !inString:
+			inString = c == '"'
+		case c == '"':
+			inString = false
+		case c == '\\' && i+1 < len(raw) && raw[i+1] == 'u':
+			r, ok := hex4(raw, i+2)
+			switch {
+			case ok && r == 0:
+				return bad
+			case ok && r >= 0xDC00 && r <= 0xDFFF:
+				return bad
+			case ok && r >= 0xD800 && r <= 0xDBFF:
+				low, pair := uint16(0), i+7 < len(raw) && raw[i+6] == '\\' && raw[i+7] == 'u'
+				if pair {
+					low, pair = hex4(raw, i+8)
+				}
+				if !pair || low < 0xDC00 || low > 0xDFFF {
+					return bad
+				}
+				i += 11
+			default:
+				i += 5
+			}
+		case c == '\\':
+			i++ // the escaped byte is never a quote that ends the string
+		}
+	}
+	return nil
+}
+
+// hex4 reads four hex digits at raw[at:].
+func hex4(raw []byte, at int) (uint16, bool) {
+	if at+4 > len(raw) {
+		return 0, false
+	}
+	var v uint16
+	for _, c := range raw[at : at+4] {
+		switch {
+		case c >= '0' && c <= '9':
+			v = v<<4 | uint16(c-'0')
+		case c >= 'a' && c <= 'f':
+			v = v<<4 | uint16(c-'a'+10)
+		case c >= 'A' && c <= 'F':
+			v = v<<4 | uint16(c-'A'+10)
+		default:
+			return 0, false
+		}
+	}
+	return v, true
 }

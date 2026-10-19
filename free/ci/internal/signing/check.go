@@ -26,6 +26,9 @@ import (
 
 // checkManifest validates one manifest payload.
 func (f *runFacts) checkManifest(ctx context.Context, payload []byte) (attemptID, keyID string, err error) {
+	if err := rejectAmbiguousEscapes(payload, "manifest"); err != nil {
+		return "", "", err
+	}
 	m, err := manifest.Decode(payload)
 	if err != nil {
 		return "", "", Failf(ReasonPayloadRejected, "manifest: %v", err)
