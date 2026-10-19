@@ -29,6 +29,8 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 )
 
+const maxTracked = 2048 // leases remembered per session for logging and fencing
+
 const (
 	checkoutDir     = "checkout"
 	stagingMinAge   = 2 * time.Minute // covers the moment between creating a root and holding it
@@ -49,11 +51,16 @@ func init() {
 }
 
 // withCheckout wraps the stdio carrier so lease and chunk frames reach the checkout
-// receiver, and so a coordinator that stops acknowledging heartbeats fences the agent.
+// receiver, and so a coordinator that stops acknowledging heartbeats fences the agent. The
+// fence sits closest to the stream, so it sees the checkout chunks the receiver then consumes.
 func withCheckout(car session.Carrier, state string) session.Carrier {
+	return wrapStdio(car, state, newFenceCarrier)
+}
+
+func wrapStdio(car session.Carrier, state string, mkFence func(session.Carrier, string) *fenceCarrier) session.Carrier {
 	r := checkout.NewReceiver(filepath.Join(state, checkoutDir), nil)
 	stdioReceiver.Store(r)
-	return newFenceCarrier(&checkoutCarrier{Carrier: car, r: r, logged: map[string]bool{}}, state)
+	return &checkoutCarrier{Carrier: mkFence(car, state), r: r, logged: map[string]bool{}}
 }
 
 type checkoutCarrier struct {
@@ -65,6 +72,9 @@ type checkoutCarrier struct {
 func (c *checkoutCarrier) report(lease string, err error) {
 	if c.logged[lease] {
 		return
+	}
+	if len(c.logged) >= maxTracked {
+		clear(c.logged)
 	}
 	c.logged[lease] = true
 	fmt.Fprintf(os.Stderr, "checkout: lease %s: %v\n", lease, err)
@@ -103,9 +113,11 @@ func (c *checkoutCarrier) Recv() (protocol.Message, error) {
 // stageCheckout is the Before hook: it marks the job root as in use, then waits for the
 // verified bundle and unpacks it.
 func stageCheckout(ctx context.Context, l protocol.Lease, root session.JobRoot) (session.JobSetup, error) {
-	if release, err := checkout.Hold(root.Dir); err == nil {
-		heldRoots.Store(root.Dir, release)
+	release, err := checkout.Hold(root.Dir)
+	if err != nil { // an unmarked root could be swept from under a live job
+		return session.JobSetup{}, fmt.Errorf("checkout: cannot mark the job root in use: %w", err)
 	}
+	heldRoots.Store(root.Dir, release)
 	if l.Checkout.Size <= 0 {
 		return session.JobSetup{}, nil
 	}

@@ -25,6 +25,7 @@ import (
 
 	"github.com/nself-org/cli/sdk/go/v2/remote"
 	"github.com/nself-org/plugins/free/ci/internal/agent/checkout"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
@@ -102,6 +103,9 @@ func (d *Driver) Kind() string { return Kind }
 
 func (d *Driver) heartbeat() time.Duration { return orDefault(d.Heartbeat, 10*time.Second) }
 func (d *Driver) agentTTL() time.Duration  { return orDefault(d.AgentTTL, 25*time.Second) }
+
+// coordinatorTTL is how long an agent may stay silent: agent_ttl plus two heartbeats (Epic D6).
+func (d *Driver) coordinatorTTL() time.Duration { return d.agentTTL() + 2*d.heartbeat() }
 func (d *Driver) cancelGrace() time.Duration {
 	return orDefault(d.CancelGrace, 3*time.Second)
 }
@@ -150,9 +154,22 @@ func (d *Driver) version(ctx context.Context) (remote.Version, error) {
 	return v, nil
 }
 
+// sendsSecrets reports whether this lease's secret values may go to this node: the coordinator
+// is PERSONAL, it has a source for them, the lease declares some, and the node is the operator's
+// own and uid-separated (secrets_eligible). Anything else never gets a value (ADR 0025 §6).
+func (d *Driver) sendsSecrets(n model.Capability, l protocol.Lease) bool {
+	return d.Personal && d.Secrets != nil && len(l.Secrets) > 0 && secretsEligible(n)
+}
+
+// secretsEligible is the node-side half of the rule: operator-owned and uid-separated.
+func secretsEligible(n model.Capability) bool {
+	o := n.Identity.Ownership.Value
+	return n.SecretsEligible && o != nil && *o == "operator"
+}
+
 // command picks the constant remote command for a lease.
-func (d *Driver) command(l protocol.Lease) string {
-	if d.Personal && len(l.Secrets) > 0 && d.Secrets != nil {
+func (d *Driver) command(n model.Capability, l protocol.Lease) string {
+	if d.sendsSecrets(n, l) {
 		return agentCommandSecret
 	}
 	return agentCommand

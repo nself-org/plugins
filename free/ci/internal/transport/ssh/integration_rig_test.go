@@ -104,6 +104,9 @@ func (r *itRig) node(name string) model.Capability {
 	var c model.Capability
 	c.Identity.ID = name
 	c.Identity.Transport = Kind
+	op := "operator"
+	c.Identity.Ownership.Value = &op
+	c.SecretsEligible = true
 	c.Identity.SSH = &model.CapabilitySSH{Hostname: n.Host, Port: n.Port, User: n.User}
 	return c
 }

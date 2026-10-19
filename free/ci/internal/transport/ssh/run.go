@@ -49,8 +49,10 @@ type sess struct {
 	readerDone chan struct{}
 	errDone    <-chan struct{}
 	blobs      map[string]*blobState
-	blobCount  int   // blobs opened in this session
-	blobBytes  int64 // bytes announced in this session
+	blobCount  int             // blobs opened in this session
+	committed  map[string]bool // sha256 of blobs received whole and verified
+	lastAlive  time.Time       // last frame that proves the agent is working on this lease
+	blobBytes  int64           // bytes announced in this session
 
 	helloTimedOut atomic.Bool // the hello timer killed ssh
 }
@@ -59,6 +61,9 @@ type sess struct {
 func (d *Driver) Run(ctx context.Context, node model.Capability, lease protocol.Lease, sink transport.Sink) error {
 	if d.Renew == nil && !d.NoRenew {
 		return newErr(CodeTransport, ReasonNotConfigured, "the ssh transport has no lease renewal wired (Driver.Renew): a lease would expire under a running job")
+	}
+	if d.Personal && d.Secrets != nil && len(lease.Secrets) > 0 && !secretsEligible(node) {
+		return newErr(CodeTransport, ReasonSecretsRefused, "node %s is not an operator-owned, uid-separated node (secrets_eligible); it will not be sent secret values", node.Identity.ID)
 	}
 	tgt, err := d.target(ctx, node)
 	if err != nil {
@@ -75,12 +80,12 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, lease protocol.
 			d.afterBundle(bundle)
 		}
 	}
-	conn, err := d.start()(ctx, tgt, d.command(lease))
+	conn, err := d.start()(ctx, tgt, d.command(node, lease))
 	if err != nil {
 		return newErr(CodeTransport, ReasonConnect, "cannot start ssh for node %s: %v", node.Identity.ID, err)
 	}
 	s := &sess{d: d, node: node, lease: lease, sink: sink, conn: conn, frames: make(chan frame, 64),
-		stop: make(chan struct{}), readerDone: make(chan struct{}), blobs: map[string]*blobState{}}
+		stop: make(chan struct{}), readerDone: make(chan struct{}), blobs: map[string]*blobState{}, committed: map[string]bool{}}
 	s.stderr, s.errDone = drain(conn.Stderr)
 	defer s.close()
 	if err := s.handshake(ctx); err != nil {
@@ -142,7 +147,7 @@ func (s *sess) handshake(ctx context.Context) error {
 	if err != nil {
 		return fail(err)
 	}
-	personal := s.d.Personal && len(s.lease.Secrets) > 0 && s.d.Secrets != nil
+	personal := s.d.sendsSecrets(s.node, s.lease)
 	policy := protocol.CarrierPolicy{Carrier: "A", Personal: personal, OperatorOwned: personal}
 	if s.car, err = session.NewStreamCarrier(r, s.conn.Stdin, policy, false); err != nil {
 		return fail(err)

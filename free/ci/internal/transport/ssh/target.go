@@ -12,6 +12,7 @@ import (
 	"context"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/remote"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -32,6 +33,9 @@ func destination(n model.Capability) (string, bool) {
 	if host == "" {
 		return "", false
 	}
+	if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") { // a bare IPv6 address
+		host = "[" + host + "]"
+	}
 	out := host
 	if s.User != "" {
 		out = s.User + "@" + out
@@ -44,7 +48,9 @@ func destination(n model.Capability) (string, bool) {
 
 func (d *Driver) target(ctx context.Context, n model.Capability) (remote.Target, error) {
 	id := n.Identity.ID
-	if err := remote.ValidateNodeID(id); err != nil {
+	// ssh matches HostKeyAlias case-insensitively; an exact-case pin lookup would let "mac1"'s
+	// key pass for "Mac1". Ids are therefore lower case on this carrier.
+	if err := remote.ValidateNodeID(id); err != nil || id != strings.ToLower(id) {
 		return remote.Target{}, newErr(CodeTransport, ReasonNoDestination, "node id %q is not valid", id)
 	}
 	dest, ok := destination(n)
@@ -66,7 +72,8 @@ func (d *Driver) target(ctx context.Context, n model.Capability) (remote.Target,
 	}
 	opts := append(remote.CISSHFlags(), remote.CIOptions(id, pin.Path, ver)...)
 	if d.IdentityFile != "" {
-		// After the D4 block, which always wins; only this one key is offered to the node.
+		// After the D4 block, which always wins; IdentitiesOnly keeps the agent's keys out (keys named in
+		// the operator's ssh config still apply).
 		opts = append(opts, "-i", d.IdentityFile, "-o", "IdentitiesOnly=yes")
 	}
 	t, err := spec.Target(opts)

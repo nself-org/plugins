@@ -159,6 +159,9 @@ func testNode(t *testing.T) (model.Capability, string) {
 	var n model.Capability
 	n.Identity.ID = "node1"
 	n.Identity.Transport = Kind
+	op := "operator"
+	n.Identity.Ownership.Value = &op
+	n.SecretsEligible = true
 	n.Identity.SSH = &model.CapabilitySSH{Hostname: "10.0.0.5", Port: 2222, User: "ci"}
 	return n, home
 }

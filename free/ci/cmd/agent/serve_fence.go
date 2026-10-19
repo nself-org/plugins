@@ -53,6 +53,9 @@ func (c *fenceCarrier) Recv() (protocol.Message, error) {
 		c.arm(*b)
 	case *protocol.Lease:
 		c.mu.Lock()
+		if len(c.leases) >= maxTracked {
+			clear(c.leases)
+		}
 		c.leases[b.LeaseID] = true
 		c.mu.Unlock()
 	case *protocol.Chunk:

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/checkout"
+	"github.com/nself-org/plugins/free/ci/internal/agent/session"
 	"github.com/nself-org/plugins/free/ci/internal/lease"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
@@ -166,21 +167,33 @@ func TestServeStdioFencesItselfWhenTheCoordinatorGoesSilent(t *testing.T) {
 	}
 }
 
-// TestFenceCountsCheckoutChunksAsLiveness proves a slow checkout upload does not fence the agent
-// when the heartbeat acks are stuck behind the chunks.
+// TestFenceCountsCheckoutChunksAsLiveness proves, through the real wrapper chain, that a slow
+// checkout upload does not fence the agent when the heartbeat acks are stuck behind the chunks.
 func TestFenceCountsCheckoutChunksAsLiveness(t *testing.T) {
-	f, inner, mono, _ := fenceRig(t)
+	inner := newScriptCarrier()
+	var mono atomic.Int64
+	car := wrapStdio(inner, t.TempDir(), func(in session.Carrier, st string) *fenceCarrier {
+		f := newFenceCarrier(in, st)
+		f.newFence = func(ttl, hb time.Duration) *lease.AgentFence {
+			return lease.NewAgentFence(func() time.Time { return time.Unix(0, 0).Add(time.Duration(mono.Load())) },
+				func() time.Duration { return time.Duration(mono.Load()) }, ttl, hb)
+		}
+		return f
+	})
+	t.Cleanup(func() { _ = car.Close() })
+	go func() { // the session's read loop: checkout chunks are consumed below it
+		for {
+			if _, err := car.Recv(); err != nil {
+				return
+			}
+		}
+	}()
 	inner.in <- welcome()
-	if _, err := f.Recv(); err != nil {
-		t.Fatal(err)
-	}
+	time.Sleep(50 * time.Millisecond)
 	for range 10 {
 		mono.Add(int64(150 * time.Millisecond)) // under the 400 ms agent_ttl between chunks
 		inner.in <- protocol.Message{V: 1, Type: "chunk", Body: &protocol.Chunk{Stream: "checkout", Data: "AAAA"}}
-		if _, err := f.Recv(); err != nil {
-			t.Fatal(err)
-		}
-		time.Sleep(30 * time.Millisecond)
+		time.Sleep(40 * time.Millisecond) // let the timer check run between chunks
 	}
 	select {
 	case <-inner.closed:

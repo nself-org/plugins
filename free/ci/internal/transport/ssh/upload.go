@@ -53,7 +53,7 @@ func (s *sess) upload(ctx context.Context, path string) error {
 
 // sendSecrets sends the lease's secret values once, in memory only.
 func (s *sess) sendSecrets(ctx context.Context) error {
-	if !s.d.Personal || s.d.Secrets == nil || len(s.lease.Secrets) == 0 {
+	if !s.d.sendsSecrets(s.node, s.lease) {
 		return nil
 	}
 	vals, err := s.d.Secrets(ctx, s.lease)

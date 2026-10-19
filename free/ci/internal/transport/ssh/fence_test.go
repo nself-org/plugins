@@ -2,12 +2,17 @@ package ssh
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nself-org/cli/sdk/go/v2/remote"
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
@@ -268,4 +273,153 @@ func TestSSHTransportBoundsTheBlobsOneLeaseMayOpen(t *testing.T) {
 		a.next("cancel")
 	}, sink)
 	reasonOf(t, err, ReasonBlob)
+}
+
+// TestSSHTransportNeverSendsSecretsToAnUnverifiedNode proves a PERSONAL coordinator refuses,
+// before ssh starts, to hand secret values to a node that is not operator-owned and uid-separated.
+func TestSSHTransportNeverSendsSecretsToAnUnverifiedNode(t *testing.T) {
+	for name, mut := range map[string]func(*model.Capability){
+		"ownership unknown": func(n *model.Capability) { n.Identity.Ownership.Value = nil },
+		"hosted":            func(n *model.Capability) { h := "hosted"; n.Identity.Ownership.Value = &h },
+		"not eligible":      func(n *model.Capability) { n.SecretsEligible = false },
+	} {
+		t.Run(name, func(t *testing.T) {
+			node, home := testNode(t)
+			mut(&node)
+			started := false
+			d := &Driver{Home: home, NoRenew: true, Personal: true, Start: func(context.Context, remote.Target, string) (*Conn, error) {
+				started = true
+				return nil, errors.New("must not start")
+			}, Secrets: func(context.Context, protocol.Lease) ([]protocol.SecretValue, error) {
+				t.Error("the secret source was consulted for an unverified node")
+				return nil, nil
+			}}
+			l := testLease()
+			l.Secrets = []protocol.SecretRef{{Ref: "project/T", Class: "project"}}
+			reasonOf(t, d.Run(context.Background(), node, l, &recSink{}), ReasonSecretsRefused)
+			if started {
+				t.Fatal("ssh started for a node that may not get secrets")
+			}
+		})
+	}
+}
+
+// TestSSHTransportLosesASilentAgent proves an agent that goes quiet after welcome cannot hold
+// the session and the lease open: the attempt is lost and the agent is told to cancel.
+func TestSSHTransportLosesASilentAgent(t *testing.T) {
+	reason := make(chan string, 1)
+	d := &Driver{AgentTTL: 100 * time.Millisecond, Heartbeat: 10 * time.Millisecond}
+	start := time.Now()
+	err := runScripted(t, d, func(a *scriptedAgent) {
+		if m, ok := a.next("cancel"); ok {
+			reason <- m.Body.(*protocol.Cancel).Reason
+		}
+	}, &recSink{})
+	if !IsLost(err) {
+		t.Fatalf("err = %v, want session lost", err)
+	}
+	if took := time.Since(start); took < 100*time.Millisecond || took > 5*time.Second {
+		t.Fatalf("lost after %v, want about the 120 ms coordinator TTL", took)
+	}
+	select {
+	case r := <-reason:
+		if r != "agent_silent" {
+			t.Fatalf("cancel reason %q", r)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the silent agent was not told to cancel")
+	}
+}
+
+// TestSSHTransportOnlyAHeartbeatNamingTheLeaseRenewsIt proves an empty heartbeat is answered
+// (the agent fence needs the ack) but renews nothing.
+func TestSSHTransportOnlyAHeartbeatNamingTheLeaseRenewsIt(t *testing.T) {
+	var renewals int
+	var acked bool
+	d := &Driver{Renew: func(context.Context, string, uint64) error { renewals++; return nil }}
+	err := runScripted(t, d, func(a *scriptedAgent) {
+		a.send("heartbeat", protocol.Heartbeat{Leases: []protocol.LeaseState{}}, "", 0)
+		m, ok := a.next("heartbeat")
+		acked = ok && m.Ack != nil
+		a.send("result", protocol.Result{LeaseID: "lease-1", Epoch: 4, Evidence: evidence()}, "lease-1", 4)
+		a.next("ack")
+	}, &recSink{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !acked || renewals != 0 {
+		t.Fatalf("acked=%v renewals=%d, want an ack and no renewal", acked, renewals)
+	}
+}
+
+// TestSSHTransportRefusesNodeIDsThatDifferOnlyByCase proves the pin lookup cannot be fooled by
+// ssh's case-insensitive HostKeyAlias matching.
+func TestSSHTransportRefusesNodeIDsThatDifferOnlyByCase(t *testing.T) {
+	node, home := testNode(t)
+	node.Identity.ID = "Node1"
+	d := &Driver{Home: home, NoRenew: true}
+	reasonOf(t, d.Run(context.Background(), node, testLease(), &recSink{}), ReasonNoDestination)
+}
+
+// TestSSHTransportDestinationBracketsIPv6 proves an IPv6 node reaches ParseHostSpec in the form it accepts.
+func TestSSHTransportDestinationBracketsIPv6(t *testing.T) {
+	var n model.Capability
+	n.Identity.SSH = &model.CapabilitySSH{Hostname: "2001:db8::5", Port: 2222, User: "ci"}
+	dest, ok := destination(n)
+	if !ok {
+		t.Fatal("no destination")
+	}
+	if _, err := remote.ParseHostSpec(dest); err != nil {
+		t.Fatalf("%q: %v", dest, err)
+	}
+}
+
+func blobScript(payload []byte, withUpload bool, refSHA string) func(a *scriptedAgent) {
+	return func(a *scriptedAgent) {
+		sum := sha256.Sum256(payload)
+		digest := hex.EncodeToString(sum[:])
+		a.send("digest", protocol.Digest{Stream: "artifact", SHA256: digest, Size: int64(len(payload))}, "lease-1", 4)
+		if withUpload {
+			if _, ok := a.next("offset"); !ok {
+				return
+			}
+			a.send("chunk", protocol.Chunk{Stream: "artifact", Offset: 0, Data: base64.StdEncoding.EncodeToString(payload), Digest: digest, Final: true}, "lease-1", 4)
+		}
+		if refSHA == "" {
+			refSHA = digest
+		}
+		a.send("artifact-ref", protocol.ArtifactRef{LeaseID: "lease-1", Path: "out.bin", SHA256: refSHA, Size: int64(len(payload))}, "lease-1", 4)
+		a.send("result", protocol.Result{LeaseID: "lease-1", Epoch: 4, Evidence: evidence()}, "lease-1", 4)
+		a.next("ack")
+	}
+}
+
+// TestSSHTransportArtifactRefsNeedAReceivedBlob proves an agent cannot reference a blob it never sent.
+func TestSSHTransportArtifactRefsNeedAReceivedBlob(t *testing.T) {
+	payload := []byte("artifact bytes")
+	sink := &recSink{}
+	if err := runScripted(t, &Driver{}, blobScript(payload, true, ""), sink); err != nil {
+		t.Fatalf("a ref to a received blob: %v", err)
+	}
+	if len(sink.artifacts) != 1 {
+		t.Fatalf("artifact refs = %d", len(sink.artifacts))
+	}
+	sink = &recSink{}
+	other := strings.Repeat("ab", 32)
+	reasonOf(t, runScripted(t, &Driver{}, blobScript(payload, true, other), sink), ReasonBlob)
+	if len(sink.artifacts) != 0 {
+		t.Fatal("a ref to a blob that was never received reached the sink")
+	}
+}
+
+// TestSSHTransportABlobTheSinkAlreadyHoldsIsVerifiedNotResent proves a dedup hit counts as received.
+func TestSSHTransportABlobTheSinkAlreadyHoldsIsVerifiedNotResent(t *testing.T) {
+	payload := []byte("already stored")
+	sink := &recSink{startAt: int64(len(payload)), prefix: payload}
+	if err := runScripted(t, &Driver{}, blobScript(payload, false, ""), sink); err != nil {
+		t.Fatal(err)
+	}
+	if b := sink.blobs["artifact"]; b == nil || !b.closed || len(sink.artifacts) != 1 {
+		t.Fatalf("dedup hit not committed: %+v, refs %d", b, len(sink.artifacts))
+	}
 }

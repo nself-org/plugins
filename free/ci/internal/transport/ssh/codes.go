@@ -23,6 +23,7 @@ const (
 	ReasonFenced         = "transport.ssh_lease_fenced"
 	ReasonRefused        = "transport.ssh_lease_refused"
 	ReasonNotConfigured  = "transport.ssh_not_configured"
+	ReasonSecretsRefused = "transport.ssh_secrets_refused"
 )
 
 func init() {

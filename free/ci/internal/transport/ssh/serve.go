@@ -6,8 +6,9 @@ package ssh
 // Outputs: Sink calls (log, artifact-ref, cache-ref, blobs, result); nil after
 // the result, else a *Error.
 // Constraints: frames for another lease or epoch are dropped, never forwarded;
-// every agent heartbeat renews the lease and is answered with a heartbeat (the
-// ack the agent fence waits for, P7-NODE-09); an EOF or read error before the
+// every agent heartbeat is answered with a heartbeat (the ack the agent fence waits
+// for, P7-NODE-09) and one that reports this lease also renews it; an agent that sends
+// nothing for the coordinator TTL is lost, a frozen one cannot hold ssh open; an EOF or read error before the
 // result is a lost attempt (transport.ssh_session_lost) and is never resumed.
 
 import (
@@ -33,10 +34,19 @@ func (s *sess) serve(ctx context.Context, bundle string) error {
 		uploaded <- nil
 	}
 	pending := uploaded
+	s.lastAlive = time.Now()
+	ttl := s.d.coordinatorTTL()
+	watch := time.NewTicker(max(ttl/4, 20*time.Millisecond))
+	defer watch.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return s.cancelAndDrain(ctx)
+		case <-watch.C:
+			if time.Since(s.lastAlive) > ttl {
+				_ = s.send("cancel", protocol.Cancel{LeaseID: s.lease.LeaseID, Reason: "agent_silent"}, true)
+				return s.lostErr(nil)
+			}
 		case err := <-pending:
 			pending = nil
 			if err != nil && ctx.Err() == nil {
@@ -109,14 +119,23 @@ func (s *sess) handle(ctx context.Context, m protocol.Message) (done bool, err e
 	switch b := m.Body.(type) {
 	case *protocol.Log:
 		if s.ours(m, b.LeaseID, epochOr(epoch, s.lease.Epoch)) {
+			s.lastAlive = time.Now()
 			return false, s.sink.Log(ctx, *b)
 		}
 	case *protocol.ArtifactRef:
 		if s.ours(m, b.LeaseID, epochOr(epoch, s.lease.Epoch)) {
+			if !s.committedBlob(b.SHA256) {
+				return false, newErr(CodeTransport, ReasonBlob, "artifact-ref names a blob (%s) that was not received in this session", short(b.SHA256))
+			}
 			return false, s.sink.ArtifactRef(ctx, *b)
 		}
 	case *protocol.CacheRef:
 		if s.ours(m, b.LeaseID, epochOr(epoch, s.lease.Epoch)) {
+			for _, cb := range b.Blobs {
+				if !s.committedBlob(cb.SHA256) {
+					return false, newErr(CodeTransport, ReasonBlob, "cache-ref names a blob (%s) that was not received in this session", short(cb.SHA256))
+				}
+			}
 			return false, s.sink.CacheRef(ctx, *b)
 		}
 	case *protocol.Result:
@@ -134,11 +153,13 @@ func (s *sess) handle(ctx context.Context, m protocol.Message) (done bool, err e
 		if !s.scoped(m) {
 			return false, nil
 		}
+		s.lastAlive = time.Now()
 		return false, s.onDigest(ctx, *b)
 	case *protocol.Chunk:
 		if !s.scoped(m) {
 			return false, nil
 		}
+		s.lastAlive = time.Now()
 		return false, s.onChunk(*b)
 	}
 	return false, nil
@@ -158,6 +179,7 @@ func epochOr(e, def uint64) uint64 {
 }
 
 func (s *sess) onHeartbeat(ctx context.Context, m protocol.Message, h protocol.Heartbeat) error {
+	named := false
 	for _, ls := range h.Leases {
 		if ls.LeaseID != s.lease.LeaseID || ls.Epoch != s.lease.Epoch {
 			continue
@@ -168,12 +190,16 @@ func (s *sess) onHeartbeat(ctx context.Context, m protocol.Message, h protocol.H
 		case "self_fenced":
 			return newErr("E662", ReasonFenced, "agent on node %s fenced lease %s", s.node.Identity.ID, ls.LeaseID)
 		}
+		named = true
 	}
-	if s.d.Renew != nil {
-		if err := s.d.Renew(ctx, s.lease.LeaseID, s.lease.Epoch); err != nil {
-			e := newErr("E662", ReasonFenced, "lease %s could not be renewed", s.lease.LeaseID)
-			e.Err = err
-			return e
+	if named { // only a heartbeat that reports this lease keeps it alive and renewed
+		s.lastAlive = time.Now()
+		if s.d.Renew != nil {
+			if err := s.d.Renew(ctx, s.lease.LeaseID, s.lease.Epoch); err != nil {
+				e := newErr("E662", ReasonFenced, "lease %s could not be renewed", s.lease.LeaseID)
+				e.Err = err
+				return e
+			}
 		}
 	}
 	ack := m.Seq

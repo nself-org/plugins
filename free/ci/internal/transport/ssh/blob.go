@@ -92,8 +92,30 @@ func (s *sess) onDigest(ctx context.Context, d protocol.Digest) error {
 		s.discard(st)
 		return newErr(CodeTransport, ReasonBlob, "the sink holds %d bytes of the %s blob but cannot verify it; refusing to resume", st.next, d.Stream)
 	}
+	if st.next == head.Size { // the sink already holds every byte: verify it, nothing to receive
+		return s.commit(st)
+	}
 	s.blobs[d.Stream] = st
 	return s.sendOffset(st)
+}
+
+// commit verifies a blob the sink holds in full, closes the writer and remembers the digest.
+func (s *sess) commit(st *blobState) error {
+	if v, ok := st.w.(Verifier); ok {
+		if err := v.Verify(st.head.SHA256); err != nil {
+			return s.failBlob(st, "the blob the sink already holds does not match its digest")
+		}
+	}
+	if err := st.w.Close(); err != nil {
+		return newErr(CodeTransport, ReasonBlob, "the %s blob %s failed verification in the sink", st.head.Stream, short(st.head.SHA256))
+	}
+	s.committed[st.head.SHA256] = true
+	return nil
+}
+
+// committedBlob reports whether a blob with this sha256 was received whole in this session.
+func (s *sess) committedBlob(sha string) bool {
+	return s.committed[strings.ToLower(strings.TrimPrefix(sha, "sha256:"))]
 }
 
 func (s *sess) sendOffset(st *blobState) error {
@@ -143,6 +165,7 @@ func (s *sess) onChunk(c protocol.Chunk) error {
 	if err := st.w.Close(); err != nil {
 		return newErr(CodeTransport, ReasonBlob, "the %s blob %s failed verification in the sink", c.Stream, short(st.head.SHA256))
 	}
+	s.committed[st.head.SHA256] = true
 	return nil
 }
 
