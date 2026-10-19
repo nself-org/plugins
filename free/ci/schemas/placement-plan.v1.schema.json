@@ -1,0 +1,561 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "ci.placement-plan/v1"
+    },
+    "pipeline": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "push",
+            "pull_request",
+            "tag",
+            "manual",
+            "schedule",
+            "api",
+            "local",
+            ""
+          ]
+        },
+        "policy_digest": {
+          "type": "string",
+          "minLength": 1
+        },
+        "preset": {
+          "type": "string",
+          "enum": [
+            "balanced",
+            "cheapest",
+            "fastest",
+            "prefer-included",
+            "prefer-local",
+            "preserve-hosted-quota"
+          ]
+        },
+        "world_digest": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "revision",
+        "trigger",
+        "policy_digest",
+        "preset",
+        "world_digest"
+      ],
+      "additionalProperties": false
+    },
+    "fast_path": {
+      "type": "object",
+      "properties": {
+        "taken": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "none",
+            "no_remote",
+            "unknown_estimates",
+            "overhead_exceeds_gain"
+          ]
+        }
+      },
+      "required": [
+        "taken",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "jobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "matrix_key": {
+            "type": "string"
+          },
+          "deps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "band": {
+            "type": "string",
+            "enum": [
+              "interactive",
+              "normal",
+              "background"
+            ]
+          },
+          "requirements": {
+            "type": "object",
+            "properties": {
+              "platform": {
+                "type": "string"
+              },
+              "isolation_min": {
+                "type": "string",
+                "enum": [
+                  "process",
+                  "container",
+                  "sandboxed-container",
+                  "vm",
+                  "ephemeral-vm",
+                  "hosted-disposable",
+                  ""
+                ]
+              },
+              "network": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "internet",
+                  "restricted",
+                  "lan",
+                  "privileged",
+                  ""
+                ]
+              },
+              "labels": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "cpu": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "mem_mb": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "platform",
+              "isolation_min",
+              "network",
+              "labels",
+              "cpu",
+              "mem_mb",
+              "tools"
+            ],
+            "additionalProperties": false
+          },
+          "secret_classes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "none",
+                "project",
+                "environment",
+                "team",
+                "release",
+                "deploy"
+              ]
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "placed",
+              "waiting",
+              "awaiting-approval",
+              "unplaceable"
+            ]
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "detail"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "placement": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "runner_id": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string",
+                "enum": [
+                  "local",
+                  "lan",
+                  "remote",
+                  "hosted"
+                ]
+              },
+              "cost_class": {
+                "type": "string",
+                "enum": [
+                  "local",
+                  "owned",
+                  "included",
+                  "metered",
+                  "ephemeral"
+                ]
+              },
+              "score": {
+                "type": "integer"
+              },
+              "components": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "value_ms": {
+                      "type": "integer"
+                    },
+                    "weight_permille": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "confidence": {
+                      "type": "string",
+                      "enum": [
+                        "known",
+                        "estimated",
+                        "unknown"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "value_ms",
+                    "weight_permille",
+                    "confidence"
+                  ],
+                  "additionalProperties": false
+                },
+                "propertyNames": {
+                  "enum": [
+                    "wait",
+                    "runtime",
+                    "cold_start",
+                    "transfer",
+                    "cache",
+                    "contention",
+                    "cost",
+                    "scarcity",
+                    "reliability"
+                  ]
+                }
+              },
+              "estimate": {
+                "type": "object",
+                "properties": {
+                  "wait_ms": {
+                    "type": [
+                      "null",
+                      "integer"
+                    ],
+                    "minimum": 0
+                  },
+                  "runtime_ms": {
+                    "type": [
+                      "null",
+                      "integer"
+                    ],
+                    "minimum": 0
+                  },
+                  "cost_micro": {
+                    "type": [
+                      "null",
+                      "integer"
+                    ],
+                    "minimum": 0
+                  },
+                  "cost_confidence": {
+                    "type": "string",
+                    "enum": [
+                      "known",
+                      "computed",
+                      "estimated",
+                      "unknown"
+                    ]
+                  }
+                },
+                "required": [
+                  "wait_ms",
+                  "runtime_ms",
+                  "cost_micro",
+                  "cost_confidence"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "runner_id",
+              "provider",
+              "location",
+              "cost_class",
+              "score",
+              "components",
+              "estimate"
+            ],
+            "additionalProperties": false
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "runner_id": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "eligible": {
+                  "type": "boolean"
+                },
+                "reasons": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "detail": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "detail"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "score": {
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                },
+                "components": {
+                  "type": [
+                    "null",
+                    "object"
+                  ],
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "value_ms": {
+                        "type": "integer"
+                      },
+                      "weight_permille": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "confidence": {
+                        "type": "string",
+                        "enum": [
+                          "known",
+                          "estimated",
+                          "unknown"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "value_ms",
+                      "weight_permille",
+                      "confidence"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "propertyNames": {
+                    "enum": [
+                      "wait",
+                      "runtime",
+                      "cold_start",
+                      "transfer",
+                      "cache",
+                      "contention",
+                      "cost",
+                      "scarcity",
+                      "reliability"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "runner_id",
+                "provider",
+                "eligible",
+                "reasons",
+                "score",
+                "components"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "expected_wait_ms": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "matrix_key",
+          "deps",
+          "band",
+          "requirements",
+          "secret_classes",
+          "status",
+          "reasons",
+          "placement",
+          "alternatives",
+          "expected_wait_ms"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "placed"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "placement": {
+                  "type": "object"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "placement": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "totals": {
+      "type": "object",
+      "properties": {
+        "estimated_cost_micro": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cost_confidence": {
+          "type": "string",
+          "enum": [
+            "known",
+            "computed",
+            "estimated",
+            "unknown"
+          ]
+        },
+        "placed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "waiting": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "awaiting_approval": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unplaceable": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "estimated_cost_micro",
+        "cost_confidence",
+        "placed",
+        "waiting",
+        "awaiting_approval",
+        "unplaceable"
+      ],
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "plan",
+        "decision-record"
+      ]
+    }
+  },
+  "$id": "https://nself.org/schemas/placement-plan.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "schema",
+    "pipeline",
+    "fast_path",
+    "jobs",
+    "totals"
+  ],
+  "additionalProperties": false
+}

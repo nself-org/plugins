@@ -1,0 +1,11 @@
+# The published toolchain image. `pending` until the owner-named first publish (P7-CI-61),
+# which sets status: pinned and the digest of the pushed manifest list.
+name: toolchain-image
+kind: image
+purpose: image that `nself ci --container` runs checks in
+owner: internal/toolchain
+image: docker.io/nself/ci-toolchain
+status: pending
+upstream:
+  type: none
+  ref: ""

@@ -1,0 +1,20 @@
+# Pin source of the toolchain image (P7-CI-43). `go generate ./internal/toolchain/...`
+# turns every pins/*.yaml into toolchain/versions.yaml; Dockerfile carries the same values.
+name: node
+kind: tool
+version: "24.22.0"
+purpose: node.* checks (lint, typecheck, test, build, coverage); ships npm
+owner: internal/gates
+probe: [node, --version]
+upstream:
+  type: node
+  ref: nodejs.org/dist
+sources:
+  - os: linux
+    arch: amd64
+    url: https://nodejs.org/dist/v24.22.0/node-v24.22.0-linux-x64.tar.xz
+    sha256: cc2f601cee82d9a5a233302fe307abc600727035fd7d2c3a3571755989e95008
+  - os: linux
+    arch: arm64
+    url: https://nodejs.org/dist/v24.22.0/node-v24.22.0-linux-arm64.tar.xz
+    sha256: fef00bb4d36e1c50104a9775a10359beee98f162b4104dd12472c75065c6a143

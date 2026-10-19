@@ -1,0 +1,16 @@
+# Pin source of the toolchain image (P7-CI-43). `go generate ./internal/toolchain/...`
+# turns every pins/*.yaml into toolchain/versions.yaml; Dockerfile carries the same values.
+name: govulncheck
+kind: tool
+version: "1.9.0"
+purpose: go.govulncheck check; built from the module zip below, verified by the Go checksum database
+owner: internal/gates
+probe: [govulncheck, -version]
+upstream:
+  type: gomodule
+  ref: golang.org/x/vuln
+sources:
+  - os: any
+    arch: any
+    url: https://proxy.golang.org/golang.org/x/vuln/@v/v1.9.0.zip
+    sha256: e4bcdca4303ab3e57e913d0b086bbf7916b97ed4d0b069c8e0eede39e8782c2c

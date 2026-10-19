@@ -1,0 +1,20 @@
+# Pin source of the toolchain image (P7-CI-43). `go generate ./internal/toolchain/...`
+# turns every pins/*.yaml into toolchain/versions.yaml; Dockerfile carries the same values.
+name: trivy
+kind: tool
+version: "0.76.0"
+purpose: security.trivy.fs and container.trivy.config checks
+owner: internal/gates
+probe: [trivy, --version]
+upstream:
+  type: github
+  ref: aquasecurity/trivy
+sources:
+  - os: linux
+    arch: amd64
+    url: https://github.com/aquasecurity/trivy/releases/download/v0.76.0/trivy_0.76.0_Linux-64bit.tar.gz
+    sha256: e24b1c51293c1b15e4ba8d45bbc7891ba053f90278ec2698f3562c993e145fe7
+  - os: linux
+    arch: arm64
+    url: https://github.com/aquasecurity/trivy/releases/download/v0.76.0/trivy_0.76.0_Linux-ARM64.tar.gz
+    sha256: aab21e677a7b7071fc79f1711480840754c18a1b9d9cefa7ccd06af63a0e8f4c
