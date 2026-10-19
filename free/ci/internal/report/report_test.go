@@ -16,12 +16,13 @@ import (
 const sha = "0123456789abcdef0123456789abcdef01234567"
 
 type fake struct {
-	posted []Status
-	fail   bool
+	posted   []Status
+	fail     bool
+	failRepo string // posts for this repository fail
 }
 
 func (f *fake) Post(_ context.Context, s Status) error {
-	if f.fail {
+	if f.fail || (f.failRepo != "" && s.Repo == f.failRepo) {
 		return errors.New("offline")
 	}
 	f.posted = append(f.posted, s)
@@ -71,6 +72,49 @@ func TestOutboxDrainAfterFailure(t *testing.T) {
 	}
 	if n, _ := o.Drain(ctx); n != 0 || len(f.posted) != 1 {
 		t.Fatalf("a posted entry must not post twice: %d %+v", n, f.posted)
+	}
+}
+
+func TestOutboxDrainSkipsFailingRepository(t *testing.T) {
+	ctx, f := context.Background(), &fake{failRepo: "locked"}
+	st := openStore(t)
+	locked := &Outbox{Store: st, Reporter: f, Owner: "o", Repo: "locked"}
+	open := &Outbox{Store: st, Reporter: f, Owner: "o", Repo: "open"}
+	// the oldest pending entry belongs to the repository that rejects posts
+	lseq, _ := locked.Reserve(ctx, sha)
+	if ok, err := locked.Complete(ctx, lseq, Status{Owner: "o", Repo: "locked", Revision: sha, State: Success, Description: "a"}); ok || err == nil {
+		t.Fatalf("setup: %v %v", ok, err)
+	}
+	f.fail = true
+	oseq, _ := open.Reserve(ctx, sha)
+	if ok, err := open.Complete(ctx, oseq, Status{Owner: "o", Repo: "open", Revision: sha, State: Success, Description: "b"}); ok || err == nil {
+		t.Fatalf("setup: %v %v", ok, err)
+	}
+	f.fail = false
+	n, err := open.Drain(ctx)
+	if n != 1 || err == nil {
+		t.Fatalf("drain must deliver the unrelated repository and still report the failure: %d %v", n, err)
+	}
+	if len(f.posted) != 1 || f.posted[0].Repo != "open" {
+		t.Fatalf("the unrelated repository's status was not delivered: %+v", f.posted)
+	}
+	left, _ := st.OutboxUnposted(ctx)
+	if len(left) != 1 {
+		t.Fatalf("the failing repository's entry must stay pending: %d", len(left))
+	}
+}
+
+func TestOutboxDrainStopsOnCancelledContext(t *testing.T) {
+	f := &fake{}
+	o := &Outbox{Store: openStore(t), Reporter: f, Owner: "o", Repo: "r"}
+	seq, _ := o.Reserve(context.Background(), sha)
+	f.fail = true
+	_, _ = o.Complete(context.Background(), seq, status(Success, "x"))
+	f.fail = false
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if n, err := o.Drain(ctx); n != 0 || err == nil {
+		t.Fatalf("a cancelled drain must stop with the error: %d %v", n, err)
 	}
 }
 

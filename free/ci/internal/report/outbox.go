@@ -100,24 +100,33 @@ func (o *Outbox) pause() time.Duration {
 const healRounds = 5
 
 // Drain delivers every pending entry, oldest first, and returns how many
-// were delivered. The first delivery error stops the drain. An entry whose
-// claim was lost while it was delivered makes the drain read the outbox again,
+// were delivered. A delivery error does not stop the drain: the failed entry
+// stays pending, entries of the same repository behind it are skipped (they
+// must not overtake it) and entries of other repositories are still
+// delivered. The first error is returned. A cancelled context stops the drain.
+// An entry whose claim was lost while it was delivered makes the drain read the outbox again,
 // because the store queued the newest status for another delivery.
 func (o *Outbox) Drain(ctx context.Context) (int, error) {
 	if o.Reporter == nil {
 		return 0, nil
 	}
 	n := 0
+	var first error
 	for round := 0; round < healRounds; round++ {
 		list, err := o.Store.OutboxUnposted(ctx)
 		if err != nil {
 			return n, err
 		}
 		again := false
+		failed := map[string]bool{} // repositories whose oldest entry failed this round
 		for _, e := range list {
 			var s Status
 			if err = json.Unmarshal(e.Payload, &s); err != nil || s.Validate() != nil {
 				continue // a corrupt entry is left for the operator; it must not block the rest
+			}
+			k := key(s.Owner, s.Repo)
+			if failed[k] {
+				continue
 			}
 			done, err := o.deliver(ctx, e.Seq, s, false)
 			if done {
@@ -128,12 +137,18 @@ func (o *Outbox) Drain(ctx context.Context) (int, error) {
 				continue
 			}
 			if err != nil {
-				return n, err
+				if first == nil {
+					first = err
+				}
+				if ctx.Err() != nil {
+					return n, first
+				}
+				failed[k] = true
 			}
 		}
 		if !again {
 			break
 		}
 	}
-	return n, nil
+	return n, first
 }
