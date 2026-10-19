@@ -105,7 +105,7 @@ jobs:
           set -eu
           (cd cli && go build -mod=vendor -o "$RUNNER_TEMP/nself" ./cmd/nself)
           cd free/ci
-          go run -mod=vendor ./bench/cmd/cibench -runs 10 -warmup 0 -skip-medium -services -cold \
+          go run -mod=vendor ./bench/cmd/cibench -runs 5 -warmup 0 -skip-medium -services -cold -cold-runs 3 \
             -nself "$RUNNER_TEMP/nself" -out "$RUNNER_TEMP/ci-bench-services.json"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
