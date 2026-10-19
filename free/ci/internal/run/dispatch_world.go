@@ -14,6 +14,7 @@ package run
 import (
 	"context"
 	"runtime"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/planview"
@@ -27,6 +28,10 @@ import (
 // platform is the local runner's platform string.
 func platform() string { return runtime.GOOS + "/" + runtime.GOARCH }
 
+// localOnlySuffix marks the pipeline id of a job that must stay on this machine: the dispatcher builds one
+// world per pipeline id, and world() adds the local-only override to the marked one.
+const localOnlySuffix = "#local-only"
+
 // schedJob maps the attempt with the mapping `ci plan` uses (planview.SchedJob), then sets what
 // only a run knows: the attempt key and number, the source trust, the record flag and the local
 // demand. The job's own labels, tools, isolation floor and accelerators are dropped: the local
@@ -38,9 +43,20 @@ func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sch
 		c.Support = p.Support
 	}
 	j := planview.SchedJob(c, planview.PlannedJob{ID: row, Name: row, Job: *s.Job})
-	j.Key, j.Attempt, j.Trust, j.Accelerators = id, s.N, model.TrustClass(rd.row.SourceTrust), nil
+	j.Key, j.Attempt, j.Trust = id, s.N, model.TrustClass(rd.row.SourceTrust)
+	j.Accelerators = nil
 	j.Pipeline.Record = rd.sess.Record
-	j.Requirements = model.PlacementRequirements{Platform: platform(), CPU: int64(cpu), MemMB: int64(mem)}
+	req := model.PlacementRequirements{Platform: platform(), CPU: int64(cpu), MemMB: int64(mem)}
+	if s.Job.RemoteOnly { // the only jobs that go to a node with requirements: the world can check them against the node's facts
+		req.Labels, req.Tools, req.IsolationMin, req.Network = j.Requirements.Labels, j.Requirements.Tools, j.Requirements.IsolationMin, j.Requirements.Network
+		if s.Job.Requirements != nil {
+			j.Accelerators = s.Job.Requirements.Accelerators
+		}
+	}
+	j.Requirements = req
+	if rd.sess.LocalOnly != nil && rd.sess.LocalOnly(*s.Job) {
+		j.Pipeline.ID += localOnlySuffix
+	}
 	return j
 }
 
@@ -74,11 +90,16 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 // facts, the PERSONAL own node declaration, docker unknown because the run loop
 // does not probe for it) and every registered node.
 func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
+	localOnly := strings.HasSuffix(p.ID, localOnlySuffix)
+	p.ID = strings.TrimSuffix(p.ID, localOnlySuffix)
 	capacity := rd.sess.Capacity()
 	w, digest, err := world.BuildForLocal(ctx, world.Deps{Store: rd.sess.Store, JobIDs: rd.sess.jobRows(), Policy: rd.policy, Clock: rd.sess.now},
 		world.LocalInput{Project: rd.row.Project, Platform: platform(), Capacity: capacity, DockerUnknown: true, Now: rd.sess.now()}, p)
 	if err != nil {
 		return sched.World{}, "", err
+	}
+	if localOnly {
+		w.Policy.Overrides.LocalOnly = true
 	}
 	keep := w.Runners[:0]
 	for _, r := range w.Runners {
@@ -86,7 +107,7 @@ func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World
 			keep = append(keep, r)
 		}
 	}
-	if len(keep) == len(w.Runners) && len(w.Hosted) == 0 {
+	if !localOnly && len(keep) == len(w.Runners) && len(w.Hosted) == 0 {
 		return w, digest, nil
 	}
 	w.Runners, w.Hosted = keep, nil

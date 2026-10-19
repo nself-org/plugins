@@ -34,7 +34,6 @@ import (
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
-	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
@@ -179,10 +178,6 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	}
 	jobs, blocked := planview.SchedJobs(planview.Context{PipelineID: pd.pl.Pipeline.ID, Project: project, Support: pd.pl.Support,
 		DefaultPlatform: pd.world.Platform, Foreground: foregroundTrigger(string(pd.pl.Trigger))}, plannedJobs(pd))
-	snap, err := st.WorldSnapshot(ctx)
-	if err != nil {
-		return model.PlacementPlan{}, err
-	}
 	capacity := placementProbe()
 	now := placementClock()
 	pipe := sched.Pipeline{ID: pd.pl.Pipeline.ID}
@@ -191,14 +186,8 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	}
 	deps := world.Deps{Store: st, Jobs: jobs, LocalCapacity: &capacity, Clock: func() time.Time { return now },
 		Policy: func(context.Context, string) (sched.Policy, error) { return sp, nil }}
-	var w sched.World
-	var digest string
-	if hasNode(snap.Nodes, "local") { // a registered "local" node is the local runner
-		w, digest, err = world.Build(ctx, deps, pipe)
-	} else { // the same builder a run uses (P7-AUTO-28): one world for one set of inputs
-		w, digest, err = world.BuildForLocal(ctx, deps, world.LocalInput{Project: project, Platform: pd.world.Platform, Capacity: capacity,
-			Docker: pd.world.Docker, Tools: pd.world.Tools, Now: now}, pipe)
-	}
+	w, digest, err := world.BuildForLocal(ctx, deps, world.LocalInput{Project: project, Platform: pd.world.Platform, Capacity: capacity,
+		Docker: pd.world.Docker, Tools: pd.world.Tools, Now: now}, pipe) // the same builder a run uses (P7-AUTO-28)
 	if err != nil {
 		return model.PlacementPlan{}, err
 	}
@@ -222,13 +211,4 @@ func plannedJobs(pd planned) []planview.PlannedJob {
 			Tool: tools[j.Check], State: j.State, Blocked: string(j.Blocked), Detail: j.Detail}
 	}
 	return out
-}
-
-func hasNode(nodes []store.SchedNode, id string) bool {
-	for _, n := range nodes {
-		if n.ID == id {
-			return true
-		}
-	}
-	return false
 }

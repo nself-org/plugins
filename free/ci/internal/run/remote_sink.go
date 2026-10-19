@@ -18,6 +18,7 @@ package run
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,26 +54,48 @@ func RenewLease(ctx context.Context, leaseID string, epoch uint64) error {
 // remoteAttempt is the rendezvous of one remote attempt.
 type remoteAttempt struct {
 	attemptID, leaseID string
+	revision           string              // the commit the node was given: its evidence must name it
 	result             chan model.Evidence // buffered 1: the accepted result
 	lost               chan error          // buffered 1: the carrier ended without one
 	ended              chan struct{}       // closed when the carrier has returned
 
-	mu      sync.Mutex
-	out     func([]byte)
-	pending [][]byte
-	running bool
-	cancel  context.CancelFunc
+	mu        sync.Mutex
+	out       func([]byte)
+	pending   [][]byte
+	pendingN  int // bytes held in pending
+	truncated bool
+	running   bool
+	cancelled bool // the run cancelled before the carrier started
+	cancel    context.CancelFunc
 }
+
+// maxPendingLog bounds the output held before the run attaches (a node is not trusted to be polite).
+const maxPendingLog = 1 << 20
 
 // write passes job output to the run, or holds it until the run attaches.
 func (ra *remoteAttempt) write(b []byte) {
 	ra.mu.Lock()
 	defer ra.mu.Unlock()
 	if ra.out == nil {
+		if ra.pendingN+len(b) > maxPendingLog {
+			if !ra.truncated {
+				ra.truncated = true
+				ra.pending = append(ra.pending, []byte("[output truncated: the node sent more than 1 MiB before the run attached]\n"))
+			}
+			return
+		}
+		ra.pendingN += len(b)
 		ra.pending = append(ra.pending, b)
 		return
 	}
 	ra.out(b)
+}
+
+// detach drops later output: the run no longer wants it.
+func (ra *remoteAttempt) detach() {
+	ra.mu.Lock()
+	defer ra.mu.Unlock()
+	ra.pending, ra.out = nil, func([]byte) {}
 }
 
 // attach sets the output function and flushes what arrived before it.
@@ -82,7 +105,7 @@ func (ra *remoteAttempt) attach(out func([]byte)) {
 	for _, b := range ra.pending {
 		out(b)
 	}
-	ra.pending, ra.out = nil, out
+	ra.pending, ra.pendingN, ra.out = nil, 0, out
 }
 
 // remoteSink is the transport.Sink of a run's remote leases.
@@ -99,8 +122,8 @@ func newRemoteSink(st *store.Store) *remoteSink {
 }
 
 // expect registers the rendezvous of an attempt before it is submitted.
-func (s *remoteSink) expect(attemptID string) *remoteAttempt {
-	ra := &remoteAttempt{attemptID: attemptID, leaseID: "lease-" + attemptID, result: make(chan model.Evidence, 1), lost: make(chan error, 1), ended: make(chan struct{})}
+func (s *remoteSink) expect(attemptID, revision string) *remoteAttempt {
+	ra := &remoteAttempt{attemptID: attemptID, revision: revision, leaseID: "lease-" + attemptID, result: make(chan model.Evidence, 1), lost: make(chan error, 1), ended: make(chan struct{})}
 	s.mu.Lock()
 	s.by[attemptID] = ra
 	s.mu.Unlock()
@@ -147,7 +170,11 @@ func (s *remoteSink) carrierStart(ctx context.Context, attemptID, leaseID string
 	if ra != nil {
 		ra.mu.Lock()
 		ra.cancel = cancel
+		early := ra.cancelled
 		ra.mu.Unlock()
+		if early {
+			cancel() // the run was cancelled before this carrier started
+		}
 	}
 	return cctx, func() {
 		leaseEngines.Delete(leaseID)
@@ -163,6 +190,7 @@ func (s *remoteSink) carrierStart(ctx context.Context, attemptID, leaseID string
 func (s *remoteSink) cancelCarrier(attemptID string) {
 	if ra := s.attempt(attemptID); ra != nil {
 		ra.mu.Lock()
+		ra.cancelled = true
 		cancel := ra.cancel
 		ra.mu.Unlock()
 		if cancel != nil {
@@ -231,10 +259,7 @@ func (s *remoteSink) Result(ctx context.Context, r protocol.Result) error {
 	if err := s.eng.Result(ctx, r.LeaseID, int64(r.Epoch)); err != nil {
 		return err
 	}
-	var ev model.Evidence
-	if err := json.Unmarshal(r.Evidence, &ev); err != nil || ev.Result == "" {
-		ev = model.Evidence{Result: "error"} // a document nobody can read is an error result, never a pass
-	}
+	ev := ra.checkEvidence(r.Evidence)
 	select {
 	case ra.result <- ev:
 	default:
@@ -259,3 +284,25 @@ func (b *discardBlob) Offset() int64               { return b.n }
 func (b *discardBlob) Abort() error                { return nil }
 
 var _ transport.Sink = (*remoteSink)(nil)
+
+// checkEvidence decodes the node's evidence and holds it to the delivery: a document that does not
+// parse, is not ci.evidence/v1, names another attempt or revision, or passes with a failing check is an
+// error result and never a pass. The envelope (lease and epoch) was already fenced by the driver.
+func (ra *remoteAttempt) checkEvidence(raw json.RawMessage) model.Evidence {
+	bad := model.Evidence{Result: "error"}
+	var ev model.Evidence
+	if err := json.Unmarshal(raw, &ev); err != nil || ev.Result == "" || ev.Schema != "ci.evidence/v1" {
+		return bad
+	}
+	if ev.Attempt == nil || ev.Attempt.ID != ra.attemptID || ra.revision != "" && !strings.EqualFold(ev.Revision, ra.revision) {
+		return bad
+	}
+	if ev.Result == "pass" {
+		for _, c := range ev.Checks {
+			if c.Result == "fail" || c.Result == "error" {
+				return bad
+			}
+		}
+	}
+	return ev
+}

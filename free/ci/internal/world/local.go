@@ -7,8 +7,8 @@ package world
 // machine (LocalInput) and the pipeline.
 // Outputs: the world and its digest, exactly as Build returns them.
 // Constraints: the local runner is declared once, by Build (the PERSONAL own
-// node); a registered node that already uses the reserved id "local" is refused
-// here, never silently shadowed.
+// node); a registered node that uses the id "local" is the local runner, as
+// `ci plan` has always treated it, and gets no injected twin.
 
 import (
 	"context"
@@ -50,14 +50,13 @@ func BuildForLocal(ctx context.Context, d Deps, in LocalInput, p sched.Pipeline)
 	if err != nil {
 		return sched.World{}, "", err
 	}
-	n := 0
 	for _, r := range w.Runners {
-		if r.ID == "local" {
-			n++
+		if r.ID == "local" && r.Capability.Identity.Transport != "local" {
+			// a registered node called "local" is the local runner (it was probed by nobody and must not
+			// get the owner exception): build again without the injected one
+			d.Local = nil
+			return Build(ctx, d, p)
 		}
-	}
-	if n != 1 { // a registered node called "local" would inherit the personal-node declaration
-		return sched.World{}, "", failed("the node registry holds a node with the reserved id \"local\"", nil)
 	}
 	return w, digest, nil
 }

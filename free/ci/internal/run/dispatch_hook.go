@@ -97,7 +97,7 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 			_ = sess.Store.SetPreviousRunner(ctx, id, prev)
 		}
 	}
-	rd.sink.expect(id) // a remote carrier may report before this call returns
+	rd.sink.expect(id, sess.Revision) // a remote carrier may report before this call returns
 	a, err := rd.d.Submit(ctx, dispatch.Job{
 		AttemptID: id, Sched: sj, Model: *s.Job, Revision: sess.Revision, Foreground: s.Foreground,
 		LocalCPU: max(dec.Slots*cpu, cpu), LocalMemMB: max(capacity.FreeMemoryMB-capacity.MemoryMB*dec.ReserveMemoryPercent/100, mem),

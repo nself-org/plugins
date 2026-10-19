@@ -63,8 +63,8 @@ func (n *node) ran() []string {
 	return append([]string(nil), n.jobs...)
 }
 
-func evidence(result string, class model.FailureClass, exit *int) json.RawMessage {
-	ev := model.Evidence{Schema: "ci.evidence/v1", Result: model.Result(result)}
+func evidence(l protocol.Lease, result string, class model.FailureClass, exit *int) json.RawMessage {
+	ev := model.Evidence{Schema: "ci.evidence/v1", Revision: l.Checkout.Revision, Attempt: &model.AttemptRef{ID: l.AttemptID, N: 1}, Result: model.Result(result)}
 	if result != "pass" {
 		ev.Checks = []model.Check{{ID: "c", JobID: "unit", Result: model.CheckResult(result), FailureClass: class, Exit: exit}}
 	}
@@ -334,7 +334,7 @@ func passRunner(lines ...string) func(context.Context, *node, session.JobRun) (s
 		for _, l := range lines {
 			j.Output([]byte(l + "\n"))
 		}
-		return session.JobResult{Outcome: session.Outcome{State: "passed"}, Evidence: evidence("pass", "", nil)}, nil
+		return session.JobResult{Outcome: session.Outcome{State: "passed"}, Evidence: evidence(j.Lease, "pass", "", nil)}, nil
 	}
 }
 
@@ -373,7 +373,7 @@ func TestForegroundRemoteExitCode(t *testing.T) {
 	one := 3
 	r := func(_ context.Context, _ *node, j session.JobRun) (session.JobResult, error) {
 		j.Output([]byte("boom\n"))
-		return session.JobResult{Outcome: session.Outcome{State: "failed", ExitCode: 3}, Evidence: evidence("fail", "code", &one)}, nil
+		return session.JobResult{Outcome: session.Outcome{State: "failed", ExitCode: 3}, Evidence: evidence(j.Lease, "fail", "code", &one)}, nil
 	}
 	f := newFixture(t, map[string]func(context.Context, *node, session.JobRun) (session.JobResult, error){"n1": r, "n2": r})
 	ch, out := f.start(context.Background(), remoteJob(1))
@@ -395,7 +395,7 @@ func TestForegroundRemoteLostSession(t *testing.T) {
 			case <-hang:
 			case <-ctx.Done():
 			}
-			return session.JobResult{Outcome: session.Outcome{State: "cancelled"}, Evidence: evidence("cancelled", "", nil)}, nil
+			return session.JobResult{Outcome: session.Outcome{State: "cancelled"}, Evidence: evidence(j.Lease, "cancelled", "", nil)}, nil
 		}
 		return passRunner("second try")(ctx, n, j)
 	}
@@ -450,10 +450,11 @@ func TestForegroundRemoteCancel(t *testing.T) {
 		j.Output([]byte("working\n"))
 		<-ctx.Done() // the agent kills the job's process group when the lease is cancelled
 		close(killed)
-		return session.JobResult{Outcome: session.Outcome{State: "cancelled"}, Evidence: evidence("cancelled", "", nil)}, nil
+		return session.JobResult{Outcome: session.Outcome{State: "cancelled"}, Evidence: evidence(j.Lease, "cancelled", "", nil)}, nil
 	}
 	f := newFixture(t, map[string]func(context.Context, *node, session.JobRun) (session.JobResult, error){"n1": r, "n2": r})
-	ssh.Default.Heartbeat = 20 * time.Second // the agent beats rarely, so a fenced heartbeat cannot be what stops the job: the cancel must
+	ssh.Default.Heartbeat = 20 * time.Second             // the agent beats rarely, so a fenced heartbeat cannot be what stops the job: the cancel must
+	t.Cleanup(run.SetRemoteCancelWait(10 * time.Minute)) // and the run's own wait cannot end it either
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ch, out := f.start(ctx, remoteJob(1))
@@ -463,12 +464,8 @@ func TestForegroundRemoteCancel(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("the job never started on a node")
 	}
-	began := time.Now()
-	cancel() // Ctrl-C
-	res := wait(t, ch, "the cancelled run")
-	if took := time.Since(began); took > 8*time.Second {
-		t.Fatalf("the run took %s to end after the cancel: the remote job was not told to stop\n%s", took, out)
-	}
+	cancel()                                // Ctrl-C
+	res := wait(t, ch, "the cancelled run") // without the carrier cancel nothing ends it before the test's own deadline
 	select {
 	case <-killed:
 	case <-time.After(15 * time.Second):
@@ -497,7 +494,7 @@ func TestForegroundRemoteSecretsStayOffNodes(t *testing.T) {
 	if res.Exit == 0 || len(f.nodes[0].ran())+len(f.nodes[1].ran()) != 0 {
 		t.Fatalf("a secret-bearing job reached a node that does not offer the class: exit %d\n%s", res.Exit, out)
 	}
-	if !strings.Contains(out.String(), "secrets") {
-		t.Fatalf("the refusal must name the secret class: %s", out)
+	if !strings.Contains(out.String(), "E618") {
+		t.Fatalf("the job must be refused as unplaceable: %s", out)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
+	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/planview"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
@@ -78,14 +80,16 @@ func (e *remoteEnv) state(t *testing.T) string {
 	return string(s)
 }
 
+const testRev = "0123456789abcdef0123456789abcdef01234567"
+
 func evJSON(result string) json.RawMessage {
-	raw, _ := json.Marshal(model.Evidence{Schema: "ci.evidence/v1", Result: model.Result(result)})
+	raw, _ := json.Marshal(model.Evidence{Schema: "ci.evidence/v1", Revision: testRev, Attempt: &model.AttemptRef{ID: "run1.jobA.a1", N: 1}, Result: model.Result(result)})
 	return raw
 }
 
 func TestRemoteAwaitLogsAreBufferedUntilTheRunAttaches(t *testing.T) {
 	e := newRemoteEnv(t)
-	ra := e.sink.expect(e.id)
+	ra := e.sink.expect(e.id, testRev)
 	ctx := context.Background()
 	for _, l := range []string{"one", "two\n"} {
 		if err := e.sink.Log(ctx, protocol.Log{LeaseID: e.lease, Text: l}); err != nil {
@@ -110,7 +114,7 @@ func TestRemoteAwaitLogsAreBufferedUntilTheRunAttaches(t *testing.T) {
 
 func TestRemoteAwaitResultIsFencedAndMovesToFinalizing(t *testing.T) {
 	e := newRemoteEnv(t)
-	ra := e.sink.expect(e.id)
+	ra := e.sink.expect(e.id, testRev)
 	ctx := context.Background()
 	stale := protocol.Result{LeaseID: e.lease, Epoch: uint64(e.epoch) + 1, Evidence: evJSON("pass")}
 	if err := e.sink.Result(ctx, stale); err == nil {
@@ -139,9 +143,25 @@ func TestRemoteAwaitResultIsFencedAndMovesToFinalizing(t *testing.T) {
 }
 
 func TestRemoteAwaitUnreadableEvidenceIsAnErrorNeverAPass(t *testing.T) {
-	for name, raw := range map[string]json.RawMessage{"not json": json.RawMessage(`"x"`), "no result": json.RawMessage(`{"schema":"ci.evidence/v1"}`)} {
+	other := func(mut func(*model.Evidence)) json.RawMessage {
+		var ev model.Evidence
+		_ = json.Unmarshal(evJSON("pass"), &ev)
+		mut(&ev)
+		raw, _ := json.Marshal(ev)
+		return raw
+	}
+	for name, raw := range map[string]json.RawMessage{
+		"not json": json.RawMessage(`"x"`), "no result": json.RawMessage(`{"schema":"ci.evidence/v1"}`),
+		"wrong schema":   other(func(e *model.Evidence) { e.Schema = "bogus" }),
+		"other attempt":  other(func(e *model.Evidence) { e.Attempt = &model.AttemptRef{ID: "another", N: 1} }),
+		"no attempt":     other(func(e *model.Evidence) { e.Attempt = nil }),
+		"other revision": other(func(e *model.Evidence) { e.Revision = "ffffffffffffffffffffffffffffffffffffffff" }),
+		"pass with a failing check": other(func(e *model.Evidence) {
+			e.Checks = []model.Check{{ID: "c", JobID: "j", Result: "fail"}}
+		}),
+	} {
 		e := newRemoteEnv(t)
-		ra := e.sink.expect(e.id)
+		ra := e.sink.expect(e.id, testRev)
 		if err := e.sink.Result(context.Background(), protocol.Result{LeaseID: e.lease, Epoch: uint64(e.epoch), Evidence: raw}); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -153,7 +173,7 @@ func TestRemoteAwaitUnreadableEvidenceIsAnErrorNeverAPass(t *testing.T) {
 
 func TestRemoteAwaitCarrierEndWithoutResultIsLost(t *testing.T) {
 	e := newRemoteEnv(t)
-	ra := e.sink.expect(e.id)
+	ra := e.sink.expect(e.id, testRev)
 	cause := errors.New("transport.ssh_session_lost")
 	e.sink.ended(e.id, cause)
 	e.sink.ended(e.id, errors.New("second report must not block"))
@@ -164,7 +184,7 @@ func TestRemoteAwaitCarrierEndWithoutResultIsLost(t *testing.T) {
 
 func TestRemoteAwaitCancelCarrierStopsTheDriverAndSignalsEnd(t *testing.T) {
 	e := newRemoteEnv(t)
-	ra := e.sink.expect(e.id)
+	ra := e.sink.expect(e.id, testRev)
 	ctx, end := e.sink.carrierStart(context.Background(), e.id, e.lease)
 	if err := RenewLease(context.Background(), e.lease, uint64(e.epoch)); err != nil {
 		t.Fatalf("a live lease must renew: %v", err)
@@ -193,7 +213,7 @@ func TestRemoteAwaitCancelCarrierStopsTheDriverAndSignalsEnd(t *testing.T) {
 
 func TestRemoteAwaitRenewRefusesAStaleEpoch(t *testing.T) {
 	e := newRemoteEnv(t)
-	e.sink.expect(e.id)
+	e.sink.expect(e.id, testRev)
 	_, end := e.sink.carrierStart(context.Background(), e.id, e.lease)
 	defer end()
 	if err := RenewLease(context.Background(), e.lease, uint64(e.epoch)+7); err == nil {
@@ -288,11 +308,24 @@ func TestHookWorldHasRegistryNodes(t *testing.T) {
 	}
 }
 
-func TestHookWorldRefusesARegisteredNodeCalledLocal(t *testing.T) {
+func TestHookWorldTreatsARegisteredNodeCalledLocalAsTheLocalRunner(t *testing.T) {
 	rd, st := registryRun(t, nil)
 	registerNode(t, st, "local", "/proj")
-	if _, _, err := rd.world(context.Background(), sched.Pipeline{ID: "r1"}); err == nil {
-		t.Fatal("a registered node called local would inherit the personal-node declaration")
+	w, _, err := rd.world(context.Background(), sched.Pipeline{ID: "r1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, r := range w.Runners {
+		if r.ID == "local" {
+			n++
+			if r.Decl.PersonalOwnNode {
+				t.Fatal("a registered node called local must not inherit the personal-node declaration")
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("%d runners called local; a registered local node is the local runner, as in `ci plan`", n)
 	}
 }
 
@@ -326,11 +359,12 @@ func deliveryFor(n model.Capability, job model.Job) dispatch.Delivery {
 
 // probeDriver records the lease it is given.
 type probeDriver struct {
+	kind  string
 	mu    sync.Mutex
 	lease protocol.Lease
 }
 
-func (*probeDriver) Kind() string { return "secretsprobe" }
+func (p *probeDriver) Kind() string { return p.kind }
 func (p *probeDriver) Run(_ context.Context, _ model.Capability, l protocol.Lease, _ transport.Sink) error {
 	p.mu.Lock()
 	p.lease = l
@@ -339,14 +373,14 @@ func (p *probeDriver) Run(_ context.Context, _ model.Capability, l protocol.Leas
 }
 
 func TestSecretsNeverToForeignNode(t *testing.T) {
-	probe := &probeDriver{}
+	probe := &probeDriver{kind: fmt.Sprintf("secretsprobe%d", time.Now().UnixNano())}
 	if err := transport.Register(probe); err != nil {
 		t.Fatal(err)
 	}
 	job := model.Job{Kind: "release", Run: []string{"true"}, Secrets: []string{"release/TOKEN", "project/KEY"}}
 	for name, ownership := range map[string]string{"foreign node": "third-party", "operator node": "operator"} {
 		var n model.Capability
-		n.Identity.ID, n.Identity.Transport = "x1", "secretsprobe"
+		n.Identity.ID, n.Identity.Transport = "x1", probe.kind
 		n.Identity.Ownership.Value = &ownership
 		n.SecretsEligible = ownership == "operator"
 		a := newTransportAdapter(nil, nil, "")
@@ -362,3 +396,197 @@ func TestSecretsNeverToForeignNode(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoteAwaitPendingLogIsBounded(t *testing.T) {
+	e := newRemoteEnv(t)
+	ra := e.sink.expect(e.id, testRev)
+	chunk := make([]byte, 64<<10)
+	for i := 0; i < 64; i++ { // 4 MiB offered before the run attaches
+		if err := e.sink.Log(context.Background(), protocol.Log{LeaseID: e.lease, Text: string(chunk)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	total := 0
+	truncated := false
+	ra.attach(func(b []byte) {
+		total += len(b)
+		truncated = truncated || strings.Contains(string(b), "output truncated")
+	})
+	if total > maxPendingLog+4096 || !truncated {
+		t.Fatalf("held %d bytes, truncated=%v; want at most %d and an explicit marker", total, truncated, maxPendingLog)
+	}
+}
+
+func TestRemoteAwaitDetachDropsLaterOutput(t *testing.T) {
+	e := newRemoteEnv(t)
+	ra := e.sink.expect(e.id, testRev)
+	got := 0
+	ra.attach(func(b []byte) { got += len(b) })
+	ra.detach()
+	_ = e.sink.Log(context.Background(), protocol.Log{LeaseID: e.lease, Text: "late"})
+	if got != 0 {
+		t.Fatal("output reached a run that had finished")
+	}
+}
+
+type fakeRedactor struct{ held []byte }
+
+func (f *fakeRedactor) Redact(b []byte) []byte {
+	out := strings.ReplaceAll(string(append(f.held, b...)), "hunter2", "[masked]")
+	f.held = nil
+	if i := strings.LastIndex(out, "hunt"); i >= 0 && i > len(out)-7 { // hold a possible split secret
+		f.held = []byte(out[i:])
+		out = out[:i]
+	}
+	return []byte(out)
+}
+func (f *fakeRedactor) Flush() []byte { b := f.held; f.held = nil; return b }
+
+func TestRemoteAwaitNodeOutputIsRedactedBeforeItIsStored(t *testing.T) {
+	var got strings.Builder
+	emit, flush := newEmitter(&fakeRedactor{}, func(b []byte) { got.Write(b) })
+	emit([]byte("token=hunt"))
+	emit([]byte("er2 done\n"))
+	flush()
+	if strings.Contains(got.String(), "hunter2") || !strings.Contains(got.String(), "[masked]") {
+		t.Fatalf("a secret split across two node frames reached the log: %q", got.String())
+	}
+	var plain strings.Builder
+	emit, flush = newEmitter(nil, func(b []byte) { plain.Write(b) })
+	emit([]byte("x"))
+	flush()
+	if plain.String() != "x" {
+		t.Fatalf("no redactor must pass output through, got %q", plain.String())
+	}
+}
+
+func TestRemoteAwaitDriveToCancelledFromEveryLiveState(t *testing.T) {
+	for _, path := range [][]string{{}, {"running"}, {"running", "finalizing"}, {"running", "lost"}, {"running", "lost", "retryable"}} {
+		e := newRemoteEnv(t)
+		for _, to := range path {
+			_, epoch, _ := e.st.AttemptStateEpoch(context.Background(), e.id)
+			from, _, _ := e.st.AttemptStateEpoch(context.Background(), e.id)
+			if err := e.st.Transition(context.Background(), e.id, from, model.JobState(to), store.TransitionDetail{Epoch: epoch, FailureClass: "infra"}); err != nil {
+				t.Fatalf("%v: %v", path, err)
+			}
+		}
+		rs := &runState{sess: &Session{Store: e.st}}
+		if err := rs.driveToCancelled(e.id); err != nil {
+			t.Fatalf("%v: %v", path, err)
+		}
+		if got := e.state(t); got != "cancelled" {
+			t.Errorf("from %v the attempt ended %s, want cancelled", path, got)
+		}
+	}
+}
+
+func TestRemoteAwaitNodeFaultOnlyCountsAgainstTheNode(t *testing.T) {
+	for _, c := range []struct {
+		err  string
+		node bool
+	}{{"E656 transport.ssh_session_lost: x", true}, {"E656 transport.ssh_connect_failed: x", true}, {"E656 transport.ssh_checkout: no repo", false},
+		{"E656 transport.ssh_not_configured: x", false}, {"E656 transport.ssh_secrets_refused: x", false}} {
+		if got := nodeFault(errors.New(c.err)); got != c.node {
+			t.Errorf("%s: nodeFault = %v", c.err, got)
+		}
+	}
+}
+
+func TestRemoteAwaitLocalOnlyJobs(t *testing.T) {
+	yes := true
+	rs := &runState{c: &Coordinator{}, hooks: Hooks{}}
+	for name, c := range map[string]struct {
+		job  model.Job
+		opts func(*Options)
+		want bool
+	}{
+		"plain":              {model.Job{Kind: "test", Run: []string{"true"}}, nil, false},
+		"remote only":        {model.Job{Kind: "test", Run: []string{"true"}, RemoteOnly: true}, nil, false},
+		"artifacts":          {model.Job{Kind: "build", Run: []string{"true"}, Artifacts: []model.ArtifactDecl{{Path: "out"}}}, nil, true},
+		"cache":              {model.Job{Kind: "build", Run: []string{"true"}, Cache: &model.JobCacheConfig{}}, nil, true},
+		"secrets":            {model.Job{Kind: "test", Run: []string{"true"}, Secrets: []string{"project/K"}}, nil, true},
+		"secrets remote":     {model.Job{Kind: "test", Run: []string{"true"}, Secrets: []string{"project/K"}, RemoteOnly: true}, nil, true},
+		"services":           {model.Job{Kind: "test", Run: []string{"true"}, NeedsServices: []string{"db"}}, nil, true},
+		"labels":             {model.Job{Kind: "test", Run: []string{"true"}, Requirements: &model.Requirements{Labels: []string{"gpu"}}}, nil, true},
+		"labels remote only": {model.Job{Kind: "test", Run: []string{"true"}, Requirements: &model.Requirements{Labels: []string{"gpu"}}, RemoteOnly: true}, nil, false},
+		"isolation":          {model.Job{Kind: "test", Run: []string{"true"}, Isolation: "container"}, nil, true},
+		"--container":        {model.Job{Kind: "test", Run: []string{"true"}}, func(o *Options) { o.Container = true }, true},
+		"--network":          {model.Job{Kind: "test", Run: []string{"true"}}, func(o *Options) { o.Network = "none" }, true},
+		"--timeout":          {model.Job{Kind: "test", Run: []string{"true"}}, func(o *Options) { o.Timeout = time.Minute }, true},
+	} {
+		_ = yes
+		rs.c.Opts = Options{}
+		if c.opts != nil {
+			c.opts(&rs.c.Opts)
+		}
+		if got := rs.localOnly(c.job); got != c.want {
+			t.Errorf("%s: localOnly = %v, want %v", name, got, c.want)
+		}
+	}
+}
+
+func TestHookWorldKeepsALocalOnlyJobOffNodes(t *testing.T) {
+	rd, _ := registryRun(t, nil)
+	rd.sess.LocalOnly = func(model.Job) bool { return true }
+	job := model.Job{Kind: "test", Run: []string{"true"}}
+	sj := rd.schedJob(AttemptSpec{Job: &job, N: 1, Foreground: true}, "r1.a.a1", "r1.a", 1, 256)
+	if !strings.HasSuffix(sj.Pipeline.ID, localOnlySuffix) {
+		t.Fatalf("pipeline id %q does not mark the job local-only", sj.Pipeline.ID)
+	}
+	w, _, err := rd.world(context.Background(), sj.Pipeline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := sched.Place(w, []sched.Job{sj})
+	if len(got.Placements) != 1 || got.Placements[0].RunnerID != "local" {
+		t.Fatalf("a local-only job must be placed on this machine: %+v %+v", got.Placements, got.Explanations)
+	}
+	rd.sess.LocalOnly = nil
+	free := rd.schedJob(AttemptSpec{Job: &model.Job{Kind: "test", Run: []string{"true"}, RemoteOnly: true}, N: 1, Foreground: true}, "r1.b.a1", "r1.b", 1, 256)
+	if strings.HasSuffix(free.Pipeline.ID, localOnlySuffix) {
+		t.Fatal("a job nothing holds back was marked local-only")
+	}
+}
+
+// remoteLost must end in the state the local path uses whichever of the loss, the cancel and a cancel
+// intent got there first (Codex round 1, CR S1).
+func lostEnv(t *testing.T) (*remoteEnv, *runState, *runDispatch) {
+	e := newRemoteEnv(t)
+	e.sink.expect(e.id, testRev)
+	sess := &Session{Store: e.st, RunID: "run1"}
+	rs := &runState{c: &Coordinator{}, sess: sess, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
+	return e, rs, &runDispatch{sess: sess, sink: e.sink}
+}
+
+func TestRemoteAwaitLossRacingTheRunCancelEndsCancelled(t *testing.T) {
+	e, rs, rd := lostEnv(t)
+	_, epoch, _ := e.st.AttemptStateEpoch(context.Background(), e.id)
+	if err := e.st.Transition(context.Background(), e.id, "leased", "lost", store.TransitionDetail{Epoch: epoch, FailureClass: "infra"}); err != nil { // the dispatcher marked it lost
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // and Ctrl-C reached the run too
+	o := rs.remoteLost(ctx, planJob("unit"), model.Job{}, rd, e.id, errors.New("E656 transport.ssh_session_lost"), JobOutcome{ID: "unit"}, 1, &tail{})
+	if o.State != StateCancelled || e.state(t) != "cancelled" {
+		t.Fatalf("outcome %q, durable %s; a cancelled run must end its attempt cancelled", o.State, e.state(t))
+	}
+}
+
+func TestRemoteAwaitCancelIntentBeatsTheLossSettlement(t *testing.T) {
+	e, rs, rd := lostEnv(t)
+	_, _, _ = e.st.AttemptStateEpoch(context.Background(), e.id)
+	_, epoch, _ := e.st.AttemptStateEpoch(context.Background(), e.id)
+	if err := e.st.Transition(context.Background(), e.id, "leased", "running", store.TransitionDetail{Epoch: epoch}); err != nil {
+		t.Fatal(err)
+	}
+	_, epoch, _ = e.st.AttemptStateEpoch(context.Background(), e.id)
+	if err := e.st.RequestCancel(context.Background(), e.id, "operator", epoch); err != nil { // another process cancelled; the dispatcher's move to lost lost the race (E605)
+		t.Fatal(err)
+	}
+	o := rs.remoteLost(context.Background(), planJob("unit"), model.Job{}, rd, e.id, errors.New("E656 transport.ssh_session_lost"), JobOutcome{ID: "unit"}, 1, &tail{})
+	if o.State != StateCancelled || e.state(t) != "cancelled" {
+		t.Fatalf("outcome %q, durable %s; the operator's cancel must win and no attempt may stay running", o.State, e.state(t))
+	}
+}
+
+func planJob(id string) plan.PlannedJob { return plan.PlannedJob{ID: id, Name: id} }
