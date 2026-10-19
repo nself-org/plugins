@@ -64,3 +64,16 @@ func TestCleanupImageMatchesTheImageLock(t *testing.T) {
 		t.Errorf("platforms %v", entry.Platforms)
 	}
 }
+
+// When the pinned helper cannot start, the executor asks for the job's own image.
+func TestCleanupCanRunInTheJobImage(t *testing.T) {
+	spec, err := newProfile(&fakeRunner{info: map[string]string{"docker": dockerRootful}}, false).Wrap(exec.JobSpec{Network: "none", Slot: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := exec.ContainerRun{Name: "nself-ci-x", Image: "alpine:3.19", Workspace: "/work/x", Workdir: "/repo", AttemptID: "x", CoordinatorID: "c", Slot: 1, CPU: 1, MemoryMB: 256, JobImageCleanup: true}
+	cmd, err := spec.Plan.Cleanup(run)
+	if err != nil || cmd == nil || cmd.Image != "alpine:3.19" || !strings.Contains(strings.Join(cmd.Args, " "), " alpine:3.19 ") {
+		t.Fatalf("%+v %v", cmd, err)
+	}
+}

@@ -29,6 +29,9 @@ type ContainerRun struct {
 	CPU                                      float64
 	MemoryMB                                 int
 	Network                                  model.NetworkScope
+	// JobImageCleanup asks a planner to run the cleanup helper in the job's own image. The executor sets it for the
+	// second try when the planner's pinned helper image could not start (not pulled and no registry reachable).
+	JobImageCleanup bool
 }
 
 // ContainerCommand is one runtime CLI invocation: Binary is docker or podman and
@@ -119,40 +122,54 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 
 // cleanupPlanned runs the profile's cleanup command, best effort and time boxed; the
 // helper container is stopped and removed when the time box ends, so it never outlives the attempt.
+// The profile's helper image is tried first. If it does not start (an air-gapped node that never pulled it), the
+// cleanup is tried once in the job's own image, as it ran before the helper image existed.
 // It returns why the cleanup did not run or did not finish (nil when none is needed or it ran clean).
 func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) error {
-	cmd, err := s.Plan.Cleanup(run)
-	if err != nil {
+	helper, err := e.cleanupOnce(s, run)
+	if err == nil || !helper {
 		return err
 	}
-	if cmd == nil {
-		return nil
+	run.JobImageCleanup = true
+	_, err2 := e.cleanupOnce(s, run)
+	if err2 != nil {
+		return coded("E613", "helper image: "+err.Error()+"; job image: "+err2.Error())
 	}
-	if cmd.Image != "" { // the helper runs its own pinned image; the backstop checks that one
-		run.Image = cmd.Image
+	return nil
+}
+
+// cleanupOnce runs one cleanup command. helper reports that the command ran an image other than the job's.
+func (e *Executor) cleanupOnce(s JobSpec, run ContainerRun) (helper bool, err error) {
+	cmd, err := s.Plan.Cleanup(run)
+	if err != nil || cmd == nil {
+		return false, err
+	}
+	if cmd.Image != "" && cmd.Image != run.Image { // the helper runs its own pinned image; the backstop checks that one
+		helper, run.Image = true, cmd.Image
 	}
 	if err := checkContainerCommand(*cmd, run); err != nil {
-		return err
+		return helper, err
 	}
 	if err := checkSandboxRuntime(s.Job.Isolation, *cmd, run.Image); err != nil {
-		return err
+		return helper, err
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), 30*time.Second)
 	defer cancel()
 	stop := containerStopper(cmd.Binary, flagValueOf(cmd.Args, "--name"), e.Grace)
 	local := Executor{Redactor: passThroughRedactor{}, Grace: e.Grace}
-	code, err := local.runCommand(ctx, append([]string{cmd.Binary}, cmd.Args...), run.Workspace, dockerHostEnv(), nil, stop, nil, "")
+	tail := &outputTail{max: 512}
+	code, err := local.runCommand(ctx, append([]string{cmd.Binary}, cmd.Args...), run.Workspace, dockerHostEnv(), tail.write, stop, nil, "")
 	if err != nil || ctx.Err() != nil {
 		stop()
 		if err == nil {
 			err = ctx.Err()
 		}
-		return err
+		return helper, err
 	}
 	if code != 0 {
-		return coded("E613", "cleanup helper exited "+strconv.Itoa(code))
+		return helper, coded("E613", "cleanup helper exited "+strconv.Itoa(code)+": "+strings.TrimSpace(tail.String()))
 	}
-	return nil
+	return helper, nil
 }
 
 // flagValueOf returns the value of `--name <v>` or `--name=<v>` in args, or "".
