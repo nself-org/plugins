@@ -77,7 +77,8 @@ func newSecretsEnv(t *testing.T, uidSeparation, pinRecipient bool) (*secretsEnv,
 	e.deps = nodesSecretsDeps{
 		OpenStore: func() (*store.Store, error) { return store.Open(path, store.Options{}) },
 		Runner:    e.run, Actor: "tester", Getwd: func() (string, error) { return "/work/proj", nil },
-		Stdout: e.out, Stderr: e.errs,
+		ProjectID: func(_ context.Context, root string) string { return root },
+		Stdout:    e.out, Stderr: e.errs,
 	}
 	return e, c.Identity.ID
 }

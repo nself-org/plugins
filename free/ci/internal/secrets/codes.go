@@ -13,10 +13,11 @@ import (
 
 // Reasons carried by an E677 error (the trust package's own reasons are used for policy refusals).
 const (
-	ReasonNodeNotEligible = "secrets.node_not_eligible"
-	ReasonNodeNoRecipient = "secrets.node_no_recipient"
-	ReasonRefsOnly        = "secrets.coordinator_refs_only"
-	ReasonLegacyScope     = "secrets.legacy_scope"
+	ReasonNodeNotEligible  = "secrets.node_not_eligible"
+	ReasonNodeNoRecipient  = "secrets.node_no_recipient"
+	ReasonNodeOtherProject = "secrets.node_other_project"
+	ReasonRefsOnly         = "secrets.coordinator_refs_only"
+	ReasonLegacyScope      = "secrets.legacy_scope"
 )
 
 // Error carries a registered machine-readable code and, for E677, the refusal reasons.

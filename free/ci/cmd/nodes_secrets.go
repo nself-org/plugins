@@ -7,7 +7,7 @@ package main
 // Outputs: one line on success; "Error: E677 ..." on a refusal. Exit 0, or 1 for any failure.
 // Constraints: grant refuses a node whose registry entry has `secrets_eligible: false` (E677,
 // secrets.node_not_eligible, naming the node) BEFORE any cli call and before any audit row; release and
-// deploy files only go to a dedicated-trusted node; one audit row per change, written after the cli call
+// deploy files only go to a dedicated-trusted node authorized for that file's project (D-1071); one audit row per change, written after the cli call
 // succeeded; revoke is never refused for eligibility (taking access away must always work). The call
 // runs as the operator through the exec funnel and never on the node.
 
@@ -21,6 +21,8 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
+	"github.com/nself-org/plugins/free/ci/internal/policy"
+	"github.com/nself-org/plugins/free/ci/internal/report"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/secrets"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -34,6 +36,7 @@ type nodesSecretsDeps struct {
 	Binary    string
 	Actor     string
 	Getwd     func() (string, error)
+	ProjectID func(ctx context.Context, root string) string
 	Stdout    io.Writer
 	Stderr    io.Writer
 }
@@ -47,6 +50,9 @@ func defaultNodesSecretsDeps() nodesSecretsDeps {
 		OpenStore: func() (*store.Store, error) { return cirun.OpenStore(runsStorePath()) },
 		Runner:    &secrets.ExecRunner{CoordinatorID: "secrets-grant"},
 		Actor:     actor, Getwd: os.Getwd, Stdout: os.Stdout, Stderr: os.Stderr,
+		ProjectID: func(ctx context.Context, root string) string {
+			return policy.ProjectIDGit(ctx, policy.Runner(report.Capture), root)
+		},
 	}
 }
 
@@ -77,6 +83,24 @@ func dedicatedNode(c model.Capability) bool {
 		d.Accepts = append([]model.TrustClass(nil), (*v)...)
 	}
 	return trust.IsDedicatedTrusted(d)
+}
+
+// dedicatedGrantRefusal is the E677 refusal for a release or deploy grant, or nil. The file goes only to
+// a dedicated node whose single authorized project is the project the file belongs to (projectID is
+// policy.ProjectIDGit of --project, the form the authorization is written in); other classes are not bound.
+func dedicatedGrantRefusal(nodeID string, class model.SecretClass, c model.Capability, projectID string) *secrets.Error {
+	if class != "release" && class != "deploy" {
+		return nil
+	}
+	if !dedicatedNode(c) {
+		return &secrets.Error{Code: "E677", Reasons: []string{string(trust.TrustReleaseNeedsDedicated)},
+			Message: fmt.Sprintf("node %s is not dedicated-trusted: %s files go only to a dedicated node (%s)", nodeID, class, trust.TrustReleaseNeedsDedicated)}
+	}
+	if p := c.Lifecycle.AuthorizedProjects; len(p) != 1 || p[0] != projectID {
+		return &secrets.Error{Code: "E677", Reasons: []string{secrets.ReasonNodeOtherProject},
+			Message: fmt.Sprintf("node %s is dedicated to another project (%s): %s files go only to the node dedicated to %s", nodeID, secrets.ReasonNodeOtherProject, class, projectID)}
+	}
+	return nil
 }
 
 func runNodesSecrets(verb string, args []string, d nodesSecretsDeps) int {
@@ -120,9 +144,8 @@ func runNodesSecrets(verb string, args []string, d nodesSecretsDeps) int {
 			return fail(&secrets.Error{Code: "E677", Reasons: []string{secrets.ReasonNodeNotEligible},
 				Message: fmt.Sprintf("node %s is not secrets-eligible (%s): its jobs could read the node's age key, so it gets no recipient", nodeID, secrets.ReasonNodeNotEligible)})
 		}
-		if (class == "release" || class == "deploy") && !dedicatedNode(c) {
-			return fail(&secrets.Error{Code: "E677", Reasons: []string{string(trust.TrustReleaseNeedsDedicated)},
-				Message: fmt.Sprintf("node %s is not dedicated-trusted: %s files go only to a dedicated node (%s)", nodeID, class, trust.TrustReleaseNeedsDedicated)})
+		if refusal := dedicatedGrantRefusal(nodeID, class, c, d.ProjectID(ctx, project)); refusal != nil {
+			return fail(refusal)
 		}
 	}
 	recipient := ""
