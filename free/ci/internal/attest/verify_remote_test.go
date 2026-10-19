@@ -285,13 +285,16 @@ func TestVerifyRemoteFixtureFiles(t *testing.T) {
 
 func TestVerifyRemoteRefusesADocumentThatIsNotTheEvidence(t *testing.T) {
 	good := mustSign(t, attemptEvidence("att-1"), keyA)
-	other := mustSign(t, attemptEvidence("att-2"), keyA)
+	// the signature is valid for the bytes; the decoded evidence the checks read says att-2 (also leased to
+	// the node, same facts), so only the binding between the two catches it
+	pairedWithOther := good
+	pairedWithOther.Attempt = &model.AttemptRef{ID: "att-2", N: 1}
 	swapped := good
 	swapped.Revision = "dddddddddddddddddddddddddddddddddddddddd"
 	for name, c := range map[string]struct {
 		doc []byte
 		ev  model.Evidence
-	}{"other attempt": {marshal(t, other), good}, "other revision": {marshal(t, swapped), good}} {
+	}{"other attempt": {marshal(t, good), pairedWithOther}, "other revision": {marshal(t, swapped), good}} {
 		if err := verifierOf(newLedger()).VerifyEvidence(c.doc, c.ev); attest.RemoteReasonOf(err) != attest.RemoteSignatureInvalid {
 			t.Errorf("%s: %v", name, err)
 		}

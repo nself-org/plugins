@@ -1,10 +1,11 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -204,7 +204,7 @@
+@@ -206,7 +206,8 @@
  	// The use is recorded under the coordinator's own context (equal to the evidence's, checked above), so
  	// a revocation finds the runs, repositories and jobs the key vouched for.
  	use := Use{AttemptID: attempt, KeyID: keyID, SigDigest: digest, NodeID: holder.NodeID, RunID: facts.RunID, RepoID: facts.RepoID, Revision: facts.Revision, Job: facts.Job}
 -	if err := led.Consume(ctx, use); errors.Is(err, ErrReplay) {
++	_ = use
 +	if err := error(nil); errors.Is(err, ErrReplay) {
  		return remoteFail(RemoteReplay, "the signature was consumed for another attempt", nil)
  	} else if errors.Is(err, ErrRevoked) {
