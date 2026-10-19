@@ -12,8 +12,6 @@
 package slots
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -107,28 +105,8 @@ func (t *Table) Lower(n int) {
 // SetCap sets the host's slot count in stateDir, raising or lowering it (the
 // operator's lever; Open only ever lowers). Slots held beyond a lowered cap
 // finish normally and are not reissued.
-func SetCap(stateDir string, total int) error {
-	if total < 1 {
-		return fmt.Errorf("slot count %d: want at least 1", total)
-	}
-	if err := nodekey.EnsureDir(stateDir); err != nil {
-		return err
-	}
-	t := &Table{dir: stateDir, total: total}
-	return t.locked(func(tf *tableFile) (bool, error) { tf.Cap = total; return true, nil })
-}
-
 // Status reports the host's recorded cap (0 when none was set yet) and the
 // slots held by live owners.
-func Status(stateDir string) (capacity, used int, err error) {
-	if err := nodekey.EnsureDir(stateDir); err != nil {
-		return 0, 0, err
-	}
-	t := &Table{dir: stateDir, total: 1}
-	err = t.locked(func(tf *tableFile) (bool, error) { capacity, used = tf.Cap, len(tf.Slots); return false, nil })
-	return capacity, used, err
-}
-
 // Total is the slot count.
 func (t *Table) Total() int { return t.total }
 
@@ -190,28 +168,9 @@ func (t *Table) Used() (int, error) {
 	return n, err
 }
 
-func newToken() string {
-	var b [8]byte
-	_, _ = rand.Read(b[:])
-	return hex.EncodeToString(b[:])
-}
-
 // WithLock runs fn holding an exclusive lock on <dir>/<name>, for state files
 // other than the table (coordinators.json) that several agent processes
 // rewrite. It is here because the OS lock call lives in this package only.
-func WithLock(dir, name string, fn func() error) error {
-	lock, err := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = lock.Close() }()
-	if err := lockFile(lock); err != nil {
-		return err
-	}
-	defer unlockFile(lock)
-	return fn()
-}
-
 // locked runs fn on the live table under the file lock; fn reports whether the
 // table must be written back. Dead owners are dropped (and persisted) first.
 func (t *Table) locked(fn func(*tableFile) (bool, error)) error {
@@ -246,27 +205,7 @@ func (t *Table) locked(fn func(*tableFile) (bool, error)) error {
 	return nil
 }
 
-func dropDead(tf *tableFile) bool {
-	live := tf.Slots[:0]
-	for _, e := range tf.Slots {
-		if holderLive(e.Owner) {
-			live = append(live, e)
-		}
-	}
-	dirty := len(live) != len(tf.Slots)
-	tf.Slots = live
-	return dirty
-}
-
 // holderLive is false when the pid is gone or now belongs to a younger process.
-func holderLive(o Owner) bool {
-	if !alive(o.PID) {
-		return false
-	}
-	now := startTime(o.PID)
-	return o.Start == "" || now == "" || now == o.Start
-}
-
 func (t *Table) read() (*tableFile, error) {
 	raw, err := os.ReadFile(filepath.Join(t.dir, tableName))
 	if errors.Is(err, fs.ErrNotExist) {
