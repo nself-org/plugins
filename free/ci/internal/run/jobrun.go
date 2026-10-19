@@ -70,7 +70,7 @@ func (rs *runState) settle(id string, from, to model.JobState, class model.Failu
 
 func (rs *runState) info(pj plan.PlannedJob, job model.Job, attemptID string) AttemptInfo {
 	return AttemptInfo{RunID: rs.sess.RunID, JobID: rs.rows[pj.ID], JobName: pj.ID, AttemptID: attemptID, Revision: rs.rev.SHA, N: 1,
-		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home}
+		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home, Store: rs.sess.Store}
 }
 
 // failed fills a failure outcome from an error.
@@ -131,6 +131,11 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 		return rs.endEarly(ctx, pj, id, o, err)
 	}
 	info := rs.info(pj, job, id)
+	_, epoch, err := rs.sess.Store.AttemptStateEpoch(context.WithoutCancel(ctx), id)
+	if err != nil && declares(job) { // only a job with fenced writes needs its launch epoch
+		return rs.failPrepared(ctx, pj, id, o, err)
+	}
+	info.Epoch = epoch // the capability this incarnation of the attempt launched with
 	setup, err := rs.prepare(ctx, &info)
 	defer rs.unprepare(info, setup)
 	if err != nil {
@@ -138,6 +143,9 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	}
 	spec := rs.spec(ctx, pj, setup.job, id)
 	spec.Mounts = setup.mounts
+	effective := info
+	effective.Job = setup.job // hooks see the isolation the job really runs under
+	spec.AfterJob = rs.afterJob(effective)
 	var t tail
 	var full *outputBuffer // everything the attempt prints, kept only for jobs an OutcomeHook asks about
 	if rs.wantsOutput(setup.job) {
@@ -178,7 +186,7 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 		}
 		return rs.stopped(o, pj.ID)
 	case res.Attempt.State == "passed":
-		return rs.pass(id, o)
+		return rs.pass(id, o, info)
 	}
 	o.FailureClass = res.Attempt.FailureClass
 	if res.Err != nil {
@@ -190,13 +198,16 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	return rs.settleFailed(id, o)
 }
 
-func (rs *runState) pass(id string, o JobOutcome) JobOutcome {
+func (rs *runState) pass(id string, o JobOutcome, info AttemptInfo) JobOutcome {
 	mid, err := rs.settle(id, "running", "finalizing", "")
 	if err != nil {
 		return failed(o, err)
 	}
 	if mid == "cancelled" { // a cancel intent won the move to finalizing
 		return cancelled(o, "", "cancelled by the operator")
+	}
+	if ferr := rs.attemptFinalize(info); ferr != nil { // a hook refused: the attempt cannot pass (results before artifacts)
+		return rs.settleFinalizeFailed(id, o, ferr)
 	}
 	to, err := rs.settle(id, "finalizing", "passed", "")
 	if err != nil {

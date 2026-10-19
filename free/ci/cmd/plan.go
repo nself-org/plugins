@@ -145,7 +145,7 @@ func runPlan(args []string) int {
 // (only when the config declares no jobs; detect.disable drops ecosystems).
 func planChecks(root string, cfg model.PipelineConfig) ([]detect.Fact, []plan.Check, error) {
 	reg := gates.DefaultRegistry()
-	facts, err := detect.DefaultRegistry().Detect(os.DirFS(root), reg.Has)
+	facts, err := planDetectors().Detect(os.DirFS(root), reg.Has)
 	if err != nil {
 		return nil, nil, err
 	}
