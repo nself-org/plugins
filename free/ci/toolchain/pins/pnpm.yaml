@@ -1,0 +1,20 @@
+# Pin source of the toolchain image (P7-CI-43). `go generate ./internal/toolchain/...`
+# turns every pins/*.yaml into toolchain/versions.yaml; Dockerfile carries the same values.
+name: pnpm
+kind: tool
+version: "12.14.0"
+purpose: package manager of the nSelf TypeScript repos (pnpm only, APC P2)
+owner: internal/gates
+probe: [pnpm, --version]
+upstream:
+  type: github
+  ref: pnpm/pnpm
+sources:
+  - os: linux
+    arch: amd64
+    url: https://github.com/pnpm/pnpm/releases/download/v12.14.0/pnpm-linux-x64.tar.gz
+    sha256: 3910c3852136bed5bc1511b9137a45fd4357ed6b3970d9d08893641e9005867e
+  - os: linux
+    arch: arm64
+    url: https://github.com/pnpm/pnpm/releases/download/v12.14.0/pnpm-linux-arm64.tar.gz
+    sha256: cfc780b9e690549e6633e1045fb1fb6ef84e390711e2099e6ccbae91c32456ea

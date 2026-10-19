@@ -1,0 +1,20 @@
+# Pin source of the toolchain image (P7-CI-43). `go generate ./internal/toolchain/...`
+# turns every pins/*.yaml into toolchain/versions.yaml; Dockerfile carries the same values.
+name: go
+kind: tool
+version: "1.27.2"
+purpose: go.* checks (fmt, vet, test, coverage) and building govulncheck
+owner: internal/gates
+probe: [go, version]
+upstream:
+  type: go
+  ref: go.dev/dl
+sources:
+  - os: linux
+    arch: amd64
+    url: https://go.dev/dl/go1.27.2.linux-amd64.tar.gz
+    sha256: ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5
+  - os: linux
+    arch: arm64
+    url: https://go.dev/dl/go1.27.2.linux-arm64.tar.gz
+    sha256: 94f3e30b8e374bc285e7dadc11e0865726b9bc6e85b841ccceaabc0214c6b7c8

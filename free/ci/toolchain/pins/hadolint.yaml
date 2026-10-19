@@ -1,0 +1,20 @@
+# Pin source of the toolchain image (P7-CI-43). `go generate ./internal/toolchain/...`
+# turns every pins/*.yaml into toolchain/versions.yaml; Dockerfile carries the same values.
+name: hadolint
+kind: tool
+version: "2.15.1"
+purpose: container.hadolint check
+owner: internal/gates
+probe: [hadolint, --version]
+upstream:
+  type: github
+  ref: hadolint/hadolint
+sources:
+  - os: linux
+    arch: amd64
+    url: https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64
+    sha256: c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507
+  - os: linux
+    arch: arm64
+    url: https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-arm64
+    sha256: f6198ef8090f404dbb771abfee086eb8c48ac177f30da7fd3510aca35b344b5d
