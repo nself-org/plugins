@@ -20,6 +20,10 @@ type JobRun struct {
 	Credential []byte
 	// Output receives the job's (already redacted) output chunks.
 	Output func([]byte)
+	// Mask hides the lease's literal secret values (runner credential, job
+	// token, delivered secrets) from text that leaves the node by another road
+	// than Output, such as the failure excerpt in the evidence.
+	Mask func([]byte) []byte
 }
 
 // JobResult is a finished job: its outcome and the ci.evidence/v1 document.

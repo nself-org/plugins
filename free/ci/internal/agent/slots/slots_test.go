@@ -144,7 +144,73 @@ func TestSlotsCorruptTableIsAnError(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, tableName), []byte("{"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := open(t, dir, 1).Acquire(Self("c", "l")); err == nil || isFull(err) {
+	if tb, err := Open(dir, 1); err == nil || isFull(err) || tb != nil {
 		t.Fatalf("got %v", err)
 	}
+}
+
+// TestSlotsCapCannotBeRaisedByAnotherOpen proves the host cap is the one the
+// table was created with: a second serve process started with a larger --slots
+// (a coordinator picks its own command line) does not widen it; only SetCap does.
+func TestSlotsCapCannotBeRaisedByAnotherOpen(t *testing.T) {
+	skipWindows(t)
+	dir := t.TempDir()
+	small := open(t, dir, 2)
+	big := open(t, dir, 64)
+	if big.Total() != 2 {
+		t.Fatalf("second open got %d slots, want the host cap 2", big.Total())
+	}
+	for i := range 2 {
+		if _, err := big.Acquire(Self("b", "l"+strconv.Itoa(i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := small.Acquire(Self("a", "x")); !isFull(err) {
+		t.Fatalf("got %v", err)
+	}
+	if err := SetCap(dir, 3); err != nil {
+		t.Fatal(err)
+	}
+	if got := open(t, dir, 64); got.Total() != 3 {
+		t.Fatalf("after SetCap: %d", got.Total())
+	}
+	if err := SetCap(dir, 0); err == nil {
+		t.Fatal("accepted a zero cap")
+	}
+}
+
+// TestSlotsLoweredCapIsHonouredByOpenHandles proves lowering the cap applies to
+// handles that were already open.
+func TestSlotsLoweredCapIsHonouredByOpenHandles(t *testing.T) {
+	skipWindows(t)
+	dir := t.TempDir()
+	tb := open(t, dir, 3)
+	if _, err := tb.Acquire(Self("a", "1")); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetCap(dir, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tb.Acquire(Self("a", "2")); !isFull(err) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// TestSlotsStaleReleaseDoesNotFreeNewerSlot proves releasing a slot twice
+// cannot free the same index when it was reacquired by the same owner.
+func TestSlotsStaleReleaseDoesNotFreeNewerSlot(t *testing.T) {
+	skipWindows(t)
+	tb := open(t, t.TempDir(), 1)
+	owner := Self("c", "l")
+	a, _ := tb.Acquire(owner)
+	_ = tb.Release(a)
+	b, err := tb.Acquire(owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = tb.Release(a) // stale handle
+	if n, _ := tb.Used(); n != 1 {
+		t.Fatalf("stale release freed the newer slot (used %d)", n)
+	}
+	_ = tb.Release(b)
 }

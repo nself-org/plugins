@@ -12,6 +12,8 @@
 package slots
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,10 +43,18 @@ type Owner struct {
 type entry struct {
 	Index int       `json:"index"`
 	Since time.Time `json:"since"`
+	// Token tells two acquisitions of the same index by the same owner apart, so
+	// a stale Release cannot free a newer slot.
+	Token string `json:"token"`
 	Owner
 }
 
+// tableFile is slots.json. Cap is the host's slot count, fixed by whoever first
+// opened the table (or by SetCap): later Opens can lower their own count but
+// never raise it, so a coordinator that picks the agent's command line cannot
+// widen the cap the operator's agent started with.
 type tableFile struct {
+	Cap   int     `json:"cap"`
 	Slots []entry `json:"slots"`
 }
 
@@ -58,6 +68,7 @@ type Table struct {
 type Slot struct {
 	Index int
 	owner Owner
+	token string
 }
 
 // Open returns the table of stateDir with total slots (at least 1).
@@ -68,7 +79,35 @@ func Open(stateDir string, total int) (*Table, error) {
 	if err := nodekey.EnsureDir(stateDir); err != nil {
 		return nil, err
 	}
-	return &Table{dir: stateDir, total: total}, nil
+	t := &Table{dir: stateDir, total: total}
+	err := t.locked(func(tf *tableFile) (bool, error) {
+		switch {
+		case tf.Cap <= 0:
+			tf.Cap = total
+			return true, nil
+		case tf.Cap < t.total:
+			t.total = tf.Cap
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+// SetCap sets the host's slot count in stateDir, raising or lowering it (the
+// operator's lever; Open only ever lowers). Slots held beyond a lowered cap
+// finish normally and are not reissued.
+func SetCap(stateDir string, total int) error {
+	if total < 1 {
+		return fmt.Errorf("slot count %d: want at least 1", total)
+	}
+	if err := nodekey.EnsureDir(stateDir); err != nil {
+		return err
+	}
+	t := &Table{dir: stateDir, total: total}
+	return t.locked(func(tf *tableFile) (bool, error) { tf.Cap = total; return true, nil })
 }
 
 // Total is the slot count.
@@ -88,10 +127,18 @@ func (t *Table) Acquire(owner Owner) (*Slot, error) {
 		for _, e := range tf.Slots {
 			used[e.Index] = true
 		}
-		for i := 0; i < t.total; i++ {
+		limit := t.total
+		if tf.Cap > 0 && tf.Cap < limit {
+			limit = tf.Cap // the operator lowered the cap after this handle opened
+		}
+		if len(tf.Slots) >= limit {
+			return false, &Error{Reason: "slots_full"}
+		}
+		for i := 0; i < limit+len(tf.Slots); i++ {
 			if !used[i] {
-				tf.Slots = append(tf.Slots, entry{Index: i, Since: time.Now().UTC(), Owner: owner})
-				got = &Slot{Index: i, owner: owner}
+				tok := newToken()
+				tf.Slots = append(tf.Slots, entry{Index: i, Since: time.Now().UTC(), Token: tok, Owner: owner})
+				got = &Slot{Index: i, owner: owner, token: tok}
 				return true, nil
 			}
 		}
@@ -108,7 +155,7 @@ func (t *Table) Release(s *Slot) error {
 	}
 	return t.locked(func(tf *tableFile) (bool, error) {
 		for i, e := range tf.Slots {
-			if e.Index == s.Index && e.Owner == s.owner {
+			if e.Index == s.Index && e.Owner == s.owner && e.Token == s.token {
 				tf.Slots = append(tf.Slots[:i], tf.Slots[i+1:]...)
 				return true, nil
 			}
@@ -122,6 +169,12 @@ func (t *Table) Used() (int, error) {
 	n := 0
 	err := t.locked(func(tf *tableFile) (bool, error) { n = len(tf.Slots); return false, nil })
 	return n, err
+}
+
+func newToken() string {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }
 
 // WithLock runs fn holding an exclusive lock on <dir>/<name>, for state files

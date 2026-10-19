@@ -189,12 +189,13 @@ func TestRegistryRunsSubcommandAndFailingPreStartStopsServe(t *testing.T) {
 }
 
 type stdioPeer struct {
-	t    *testing.T
-	toIn *io.PipeWriter
-	enc  *protocol.Encoder
-	dec  *protocol.Decoder
-	done chan int
-	seq  uint64
+	t     *testing.T
+	toIn  *io.PipeWriter
+	enc   *protocol.Encoder
+	dec   *protocol.Decoder
+	done  chan int
+	ended chan struct{}
+	seq   uint64
 }
 
 // startServe runs `serve --stdio` in-process against pipes and returns the
@@ -203,18 +204,26 @@ func startServe(t *testing.T, extra ...string) *stdioPeer {
 	t.Helper()
 	inR, inW := io.Pipe()
 	outR, outW := io.Pipe()
-	p := &stdioPeer{t: t, toIn: inW, enc: protocol.NewEncoder(inW), done: make(chan int, 1)}
+	p := &stdioPeer{t: t, toIn: inW, enc: protocol.NewEncoder(inW), done: make(chan int, 1), ended: make(chan struct{})}
 	go func() {
 		code := run(context.Background(), append([]string{"serve", "--stdio", "--slots", "2"}, extra...), IO{Stdin: inR, Stdout: outW, Stderr: io.Discard})
 		_ = outW.Close()
 		p.done <- code
+		close(p.ended)
 	}()
 	rd, err := protocol.SkipPreamble(outR)
 	if err != nil {
 		t.Fatal(err)
 	}
 	p.dec = protocol.NewDecoder(rd, protocol.CarrierPolicy{})
-	t.Cleanup(func() { _ = inW.Close() })
+	t.Cleanup(func() { // stop serve before the state dir is removed
+		_ = inW.Close()
+		select {
+		case <-p.ended:
+		case <-time.After(15 * time.Second):
+			t.Error("serve did not stop")
+		}
+	})
 	return p
 }
 
@@ -315,3 +324,84 @@ func TestServeUsage(t *testing.T) {
 		}
 	}
 }
+
+const stubRecipient = "age1stubrecipient0000000000000000000000000000000000000000000"
+
+// TestServeSendsAgeRecipientAndKeepsIdentityOutOfJobs proves, through serve,
+// that hello carries the recipient from <state>/age.key (a stub age-keygen is
+// on PATH) and that the identity file is in neither the job's environment nor
+// its workspace.
+func TestServeSendsAgeRecipientAndKeepsIdentityOutOfJobs(t *testing.T) {
+	skipUnixOnly(t)
+	state := useState(t)
+	bin := t.TempDir()
+	script := "#!/bin/sh\n[ \"$1\" = \"-o\" ] || exit 2\nprintf '# public key: " + stubRecipient + "\\nAGE-SECRET-KEY-STUBSTUB\\n' > \"$2\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "age-keygen"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	p := startServe(t)
+	h := p.next("hello").Body.(*protocol.Hello)
+	if h.AgeRecipient == nil || *h.AgeRecipient != stubRecipient {
+		t.Fatalf("age_recipient %v", h.AgeRecipient)
+	}
+	if info, err := os.Stat(filepath.Join(state, "age.key")); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("age.key: %v %v", info, err)
+	}
+	p.send("welcome", protocol.Welcome{Version: 1, MinAgentVersion: "1.4.0", SessionID: "s", HeartbeatMS: 60000, AgentTTLMS: 120000}, 0, "")
+	lease := protocol.Lease{LeaseID: "l1", AttemptID: "attempt-l1", Epoch: 1, Token: "T", CompatMode: protocol.Compat15,
+		Job: model.Job{Kind: "static", Run: []string{"sh", "-c", "env; ls -a; echo done"}}, Checkout: protocol.Checkout{Revision: rev40},
+		Secrets: []protocol.SecretRef{}, ExpiresAt: "2030-01-01T00:00:00Z"}
+	p.send("lease", lease, 1, "l1")
+	var logs []string
+	for {
+		m, err := p.dec.Decode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if lg, ok := m.Body.(*protocol.Log); ok {
+			logs = append(logs, lg.Text)
+		}
+		if m.Type == "result" {
+			break
+		}
+	}
+	all := strings.Join(logs, "\n")
+	if !strings.Contains(all, "done") || strings.Contains(all, "age.key") || strings.Contains(all, "AGE-SECRET") || strings.Contains(all, "node.key") {
+		t.Fatalf("identity file visible to the job:\n%s", all)
+	}
+}
+
+// TestServeMasksSecretsInTheEvidenceExcerpt proves a delivered secret that a
+// failing job prints is masked in the evidence excerpt as well as in the log.
+func TestServeMasksSecretsInTheEvidenceExcerpt(t *testing.T) {
+	skipUnixOnly(t)
+	useState(t)
+	t.Setenv("PATH", filepath.Dir(mustLook(t, "sh")))
+	p := startServe(t, "--accept-secret-values")
+	p.next("hello")
+	p.send("welcome", protocol.Welcome{Version: 1, MinAgentVersion: "1.4.0", SessionID: "s", HeartbeatMS: 60000, AgentTTLMS: 120000}, 0, "")
+	lease := protocol.Lease{LeaseID: "l1", AttemptID: "attempt-l1", Epoch: 1, Token: "T", CompatMode: protocol.Compat15,
+		Job:      model.Job{Kind: "static", Run: []string{"sh", "-c", `echo "got $TOKEN"; exit 3`}, Secrets: []string{"TOKEN"}},
+		Checkout: protocol.Checkout{Revision: rev40}, Secrets: []protocol.SecretRef{{Ref: "project/TOKEN", Class: "project"}}, ExpiresAt: "2030-01-01T00:00:00Z"}
+	p.send("lease", lease, 1, "l1")
+	p.send("secrets", protocol.Secrets{LeaseID: "l1", Values: []protocol.SecretValue{{Ref: "project/TOKEN", Value: "opaqueValue123"}}}, 1, "l1")
+	res := p.next("result").Body.(*protocol.Result)
+	m := validEvidence(t, res.Evidence)
+	if strings.Contains(string(res.Evidence), "opaqueValue123") || m["result"] != "fail" {
+		t.Fatalf("evidence leaks the secret or did not fail: %s", res.Evidence)
+	}
+}
+
+func mustLook(t *testing.T, name string) string {
+	t.Helper()
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if p := filepath.Join(dir, name); fileExists(p) {
+			return p
+		}
+	}
+	t.Fatalf("%s not on PATH", name)
+	return ""
+}
+
+func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }

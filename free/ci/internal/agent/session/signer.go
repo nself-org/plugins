@@ -1,7 +1,11 @@
 package session
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"io"
 	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
@@ -36,8 +40,27 @@ func currentSigner(override Signer) Signer {
 	return signer
 }
 
+// canonicalJSON re-encodes a JSON document the way protocol.Encoder does when it
+// writes the frame (keys sorted, compact, HTML-escaped, numbers kept as
+// written), so the bytes the agent signs are the bytes the coordinator receives.
+func canonicalJSON(raw []byte) (json.RawMessage, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, errors.New("trailing data after the evidence document")
+	}
+	if v == nil {
+		return nil, errors.New("evidence is null")
+	}
+	return json.Marshal(v)
+}
+
 // signEvidence signs the evidence bytes exactly as they travel in the result
-// frame. The value is unpadded standard base64 of the raw signature.
+// frame (the caller passes canonicalJSON output). The value is unpadded standard base64 of the raw signature.
 func signEvidence(s Signer, evidence []byte) (protocol.Signature, error) {
 	if s == nil {
 		return protocol.Signature{}, nil

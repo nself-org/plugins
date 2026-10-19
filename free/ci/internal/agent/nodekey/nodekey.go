@@ -6,7 +6,11 @@
 // Constraints: the state dir is 0700 and the key file 0600; the key file is
 // created atomically and never replaced, so two starting agents agree on one
 // key; a key file with group or other access is refused, not repaired. The
-// private half never leaves this package: callers get a Signer.
+// package never hands out the private half (callers get a Signer). It does not
+// hide the file from a job running as the same UID: in user mode that
+// separation comes from the slot-derived job UID (P7-TRUST-09) or container
+// isolation, and in system mode from the agent user owning a 0700 state dir
+// (P7-NODE-06).
 package nodekey
 
 import (
@@ -81,9 +85,11 @@ func CheckPrivateFile(path string) error {
 }
 
 // WriteExclusive writes data to path with mode 0600 only if path does not
-// exist: the content goes to a temporary file and is hard-linked into place,
-// so the final name is never seen half written and a concurrent creator wins
-// cleanly (fs.ErrExist for the loser).
+// exist: the content is written and synced to a temporary file and hard-linked
+// into place, so the final name is never seen half written (a power loss
+// cannot leave an empty key) and a concurrent creator wins cleanly (fs.ErrExist
+// for the loser). Where hard links are unavailable it falls back to an
+// exclusive create.
 func WriteExclusive(path string, data []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-"+filepath.Base(path)+"-")
 	if err != nil {
@@ -98,10 +104,46 @@ func WriteExclusive(path string, data []byte) error {
 		_ = tmp.Close()
 		return err
 	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Link(tmp.Name(), path)
+	err = os.Link(tmp.Name(), path)
+	if err != nil && !errors.Is(err, fs.ErrExist) {
+		err = createExclusive(path, data) // no hard links here (some network homes)
+	}
+	if err == nil {
+		syncDir(filepath.Dir(path))
+	}
+	return err
+}
+
+func createExclusive(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err = f.Write(data); err == nil {
+		err = f.Sync()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(path) // never leave a partial key behind
+	}
+	return err
+}
+
+// syncDir flushes a directory entry; best effort (not every platform allows it).
+func syncDir(dir string) {
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
 }
 
 // LoadOrCreate returns the node key of stateDir, creating it on first use.

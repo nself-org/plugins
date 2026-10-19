@@ -26,6 +26,9 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 )
 
+// minHeartbeat is the shortest heartbeat interval the agent will keep.
+const minHeartbeat = time.Second
+
 // NodeKey is the public half of the node signing key (nodekey.Key).
 type NodeKey interface {
 	KeyID() string
@@ -100,7 +103,7 @@ type Session struct {
 	heartbeat time.Duration
 	welcome   protocol.Welcome
 	wg        sync.WaitGroup
-	finished  chan string
+	finished  chan *activeLease
 	jobHooks  []JobHook
 	runCtx    context.Context
 	ticker    Ticker
@@ -119,7 +122,7 @@ func New(cfg Config) (*Session, error) {
 	if len(cfg.Facts.CompatModes) == 0 {
 		cfg.Facts.CompatModes = []protocol.CompatMode{protocol.Compat14, protocol.Compat15}
 	}
-	s := &Session{cfg: cfg, active: map[string]*activeLease{}, seenEpoch: map[string]uint64{}, finished: make(chan string, 64), closing: make(chan struct{})}
+	s := &Session{cfg: cfg, active: map[string]*activeLease{}, seenEpoch: map[string]uint64{}, finished: make(chan *activeLease, 64), closing: make(chan struct{})}
 	s.jobHooks = cfg.Hooks
 	if s.jobHooks == nil {
 		s.jobHooks = registeredHooks()
@@ -179,6 +182,9 @@ func (s *Session) Run(ctx context.Context) error {
 	if s.heartbeat <= 0 {
 		s.heartbeat = 10 * time.Second
 	}
+	if s.heartbeat < minHeartbeat {
+		s.heartbeat = minHeartbeat // a welcome cannot make the agent spin
+	}
 	s.ticker = s.cfg.Clock.NewTicker(s.heartbeat)
 	defer s.ticker.Stop()
 	for {
@@ -187,8 +193,10 @@ func (s *Session) Run(ctx context.Context) error {
 			return ctx.Err()
 		case <-s.ticker.C():
 			s.beat(nil)
-		case id := <-s.finished:
-			delete(s.active, id)
+		case al := <-s.finished:
+			if s.active[al.lease.LeaseID] == al {
+				delete(s.active, al.lease.LeaseID)
+			}
 			if s.draining && len(s.active) == 0 {
 				return nil
 			}

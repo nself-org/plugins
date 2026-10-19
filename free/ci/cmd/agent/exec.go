@@ -56,6 +56,8 @@ type jobInputs struct {
 	Secrets map[string]string
 	Mounts  []ciexec.Mount
 	Output  func([]byte)
+	// Mask hides literal secret values from the failure excerpt (nil: none).
+	Mask func([]byte) []byte
 }
 
 var revisionRE = regexp.MustCompile(`^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$`)
@@ -162,12 +164,20 @@ func runSpec(ctx context.Context, home string, spec execSpec, in jobInputs) (ses
 				in.Output(b)
 			}
 		}})
-	outcome := jobOutcome(spec, res, tail.String())
+	excerpt := tail.String()
+	if in.Mask != nil {
+		excerpt = string(in.Mask([]byte(excerpt)))
+	}
+	outcome := jobOutcome(spec, res, excerpt)
 	base := baseEvidence(spec, outcome, started, res.Finished)
 	facts := cirun.EvidenceFacts{Root: spec.SourceDir, RunID: base.RunID, Rev: rev, Git: report.Capture, Jobs: []cirun.JobOutcome{outcome}, Job: spec.JobID}
 	done, err := builder.Complete(ctx, begin, facts, base)
-	if err != nil {
-		done = base // unbound and without input digests: it can never read as current
+	if err != nil { // unbound and unknown: it can never read as current
+		done = base
+		why := "evidence assembly failed"
+		reason := model.BindingReason("dirty")
+		done.Binding, done.WorktreeState = model.Binding{State: "unbound", Reason: &reason}, "dirty"
+		done.Freshness = model.Freshness{State: "unknown", Reason: &why}
 	}
 	doc, err := json.Marshal(evidence.AttemptDocument(done, outcome))
 	return session.JobResult{Outcome: session.Outcome{State: string(res.Attempt.State), ExitCode: res.ExitCode, FailureClass: string(res.Attempt.FailureClass)}, Evidence: doc}, err
@@ -203,7 +213,8 @@ func baseEvidence(spec execSpec, o cirun.JobOutcome, start, end time.Time) model
 	runID := hex.EncodeToString(id[:8])
 	e := model.Evidence{
 		Schema: "ci.evidence/v1", Revision: spec.Revision, RepoID: "unknown", RunID: runID,
-		Pipeline: model.PipelineRef{ID: runID, Name: spec.JobID, Kind: "adhoc"}, Trigger: "api", SourceTrust: "owner",
+		Pipeline: model.PipelineRef{ID: runID, Name: spec.JobID, Kind: "adhoc"}, Trigger: "api", SourceTrust: "untrusted", // the coordinator classifies the source; the agent claims nothing
+
 		InputDigests: model.InputDigests{Lockfiles: []model.DigestRef{}, Generated: []model.DigestRef{}},
 		Runner:       model.RunnerRef{ID: "agent", Provider: "agent", Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process"},
 		Producer:     model.Producer{Kind: "self-reported", Version: "1"}, ToolVersions: map[string]string{}, Artifacts: []model.Artifact{}, Retries: []model.Retry{},

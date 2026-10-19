@@ -118,8 +118,13 @@ func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResu
 		return session.JobResult{}, errors.New("runner_credential is not deliverable yet: the executor has no stdin path")
 	}
 	l := j.Lease
+	if l.Checkout.Size > 0 && j.Setup.SourceDir == "" {
+		// Staging the checkout is a Before hook's job (internal/agent/checkout); a job
+		// run on an empty tree would report a pass for code it never saw.
+		return session.JobResult{}, errors.New("the lease has a checkout but no hook staged it")
+	}
 	spec := execSpec{AttemptID: l.AttemptID, CoordinatorID: r.coordinator, JobID: "job", Job: l.Job, Revision: l.Checkout.Revision, SourceDir: j.Setup.SourceDir}
-	return runSpec(ctx, r.home, spec, jobInputs{Slot: j.Slot, Env: j.Setup.Env, Secrets: j.Setup.Secrets, Mounts: j.Setup.Mounts, Output: j.Output})
+	return runSpec(ctx, r.home, spec, jobInputs{Slot: j.Slot, Env: j.Setup.Env, Secrets: j.Setup.Secrets, Mounts: j.Setup.Mounts, Output: j.Output, Mask: j.Mask})
 }
 
 func hostStatus() session.Status {

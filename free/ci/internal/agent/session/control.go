@@ -28,8 +28,8 @@ func (s *Session) onMessage(m protocol.Message) (done bool, err error) {
 
 func (s *Session) onCancel(m protocol.Message, c protocol.Cancel) error {
 	if l, ok := s.active[c.LeaseID]; ok {
-		if m.Epoch == nil || *m.Epoch < l.lease.Epoch {
-			return nil // stale epoch: a newer lease owns this id
+		if m.Epoch == nil || *m.Epoch != l.lease.Epoch {
+			return nil // not this run's epoch: a stale or future fence is ignored
 		}
 		l.cancel()
 	}
@@ -73,11 +73,24 @@ func (s *Session) beat(extra []protocol.LeaseState) {
 	}, nil)
 }
 
-// shutdown cancels every job and waits for its result to go out.
+// shutdownGrace bounds how long shutdown waits for results to be written to a
+// peer that has stopped reading.
+var shutdownGrace = 20 * time.Second
+
+// shutdown cancels every job and waits for its result to go out. When the
+// peer is not reading (a blocked write), the carrier is closed after the grace
+// period so no job goroutine outlives Run.
 func (s *Session) shutdown() {
 	close(s.closing)
 	for _, l := range s.active {
 		l.cancel()
 	}
-	s.wg.Wait()
+	done := make(chan struct{})
+	go func() { s.wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(shutdownGrace):
+		_ = s.cfg.Carrier.Close()
+		<-done
+	}
 }

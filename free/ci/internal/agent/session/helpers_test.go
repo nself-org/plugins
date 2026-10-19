@@ -172,8 +172,31 @@ func startRig(t *testing.T, runner Runner, opts ...rigOpt) *rig {
 
 func startRigOn(t *testing.T, state string, table *slots.Table, coord string, runner Runner, opts ...rigOpt) *rig {
 	t.Helper()
-	r := &rig{t: t, car: newFakeCarrier(), clock: newManualClock(), state: state, table: table, done: make(chan error, 1), ended: make(chan struct{})}
-	cfg := Config{Carrier: r.car, Key: fakeKey{}, Slots: table, Runner: runner, Coordinator: Coordinator{ID: coord, RootFingerprint: "fp-" + coord},
+	return startRigCar(t, state, table, coord, runner, newFakeCarrier(), opts...)
+}
+
+// startRigWith runs a session on a caller-supplied carrier (r.car stays a
+// fakeCarrier view of it for pushing).
+func startRigWith(t *testing.T, state string, car interface {
+	Carrier
+	fake() *fakeCarrier
+}, runner Runner, opts ...rigOpt) *rig {
+	t.Helper()
+	table, err := slots.Open(state, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return startRigCar(t, state, table, "coord-a", runner, car, opts...)
+}
+
+func startRigCar(t *testing.T, state string, table *slots.Table, coord string, runner Runner, carrier Carrier, opts ...rigOpt) *rig {
+	t.Helper()
+	fc, _ := carrier.(*fakeCarrier)
+	if w, ok := carrier.(interface{ fake() *fakeCarrier }); ok {
+		fc = w.fake()
+	}
+	r := &rig{t: t, car: fc, clock: newManualClock(), state: state, table: table, done: make(chan error, 1), ended: make(chan struct{})}
+	cfg := Config{Carrier: carrier, Key: fakeKey{}, Slots: table, Runner: runner, Coordinator: Coordinator{ID: coord, RootFingerprint: "fp-" + coord},
 		StateDir: state, Clock: r.clock, Hooks: []JobHook{}, Facts: Facts{AgentVersion: "1.5.0", MachineID: "m1"}}
 	for _, o := range opts {
 		o(&cfg)
