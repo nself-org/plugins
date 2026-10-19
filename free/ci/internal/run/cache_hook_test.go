@@ -436,3 +436,32 @@ func TestCloseSessionRetractsOnlyAConfirmedNonPass(t *testing.T) {
 		t.Fatalf("an attempt the store no longer knows must keep its entry: %+v", f)
 	}
 }
+
+// Two jobs of one run that use the same toolchain cache must not share one key:
+// the entry a hit restores is never saved again, so with a shared key the job
+// whose save lost the race would restore the other job's partial cache on every
+// later run (D-1008: go vet restoring the cache of go test and rebuilding).
+func TestCacheHookKeysAreScopedToTheJob(t *testing.T) {
+	vet := `echo vet > "$GOCACHE/vet.txt"`
+	test := `echo test > "$GOCACHE/test.txt"`
+	r1 := cacheRig(t, map[string]model.Job{"vet": sh(vet), "test": sh(test)})
+	res := r1.run(t)
+	if o := outcome(res, "vet"); o.State != StatePassed {
+		t.Fatalf("vet: %+v\n%s", o, r1.Out)
+	}
+	if o := outcome(res, "test"); o.State != StatePassed {
+		t.Fatalf("test: %+v\n%s", o, r1.Out)
+	}
+	if n := r1.entryCount(t); n != 2 {
+		t.Fatalf("entries after the first run = %d, want one per job (2)", n)
+	}
+	r2 := r1.again(t, map[string]model.Job{
+		"vet":  sh(`test "$(cat "$GOCACHE/vet.txt")" = vet && test ! -e "$GOCACHE/test.txt"`),
+		"test": sh(`test "$(cat "$GOCACHE/test.txt")" = test && test ! -e "$GOCACHE/vet.txt"`)})
+	res = r2.run(t)
+	for _, name := range []string{"vet", "test"} {
+		if o := outcome(res, name); o.State != StatePassed || r2.uses(t, o) != "go:hit" {
+			t.Fatalf("%s on the second run: %+v uses %q\n%s", name, o, r2.uses(t, o), r2.Out)
+		}
+	}
+}

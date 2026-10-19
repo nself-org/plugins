@@ -175,7 +175,7 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		}
 	}
 	if e.Stale != nil {
-		if err := e.sweep(ctx, s.CoordinatorID, s.Home); err != nil {
+		if err := e.sweepOnStart(ctx, s.CoordinatorID, s.Home); err != nil {
 			result.Err = err
 			return
 		}

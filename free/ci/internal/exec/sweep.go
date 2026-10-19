@@ -6,6 +6,8 @@ import (
 	osexec "os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 // StaleChecker reports whether a coordinator incarnation is no longer live.
@@ -33,6 +35,65 @@ func (e *Executor) sweep(ctx context.Context, current, home string) error {
 	if err := e.sweepProcesses(ctx, home, current); err != nil {
 		return err
 	}
+	return e.sweepContainers(ctx, current)
+}
+
+// sweepOnStart is the sweep a job start runs: the process sweep every time, the
+// container sweep once per coordinator and TTL window.
+func (e *Executor) sweepOnStart(ctx context.Context, current, home string) error {
+	if e.Stale == nil {
+		return nil
+	}
+	if err := e.sweepProcesses(ctx, home, current); err != nil {
+		return err
+	}
+	now := time.Now()
+	if !sweepDue(current, now) {
+		return nil
+	}
+	if err := e.sweepContainers(ctx, current); err != nil {
+		// a sweep that failed or was cancelled did not clean up: the next job
+		// start must try again instead of trusting the window
+		sweepRelease(current, now)
+		return err
+	}
+	return nil
+}
+
+// containerSweepTTL is how long one coordinator's container sweep stands for
+// every job it starts after: a run's jobs start within a second of each other,
+// and each sweep costs two docker spawns (info, ps) on the job's start path.
+const containerSweepTTL = 30 * time.Second
+
+var (
+	containerSweepMu sync.Mutex
+	containerSweeps  = map[string]time.Time{} // coordinator id -> start of its last container sweep
+)
+
+// sweepDue claims the container sweep of current: true for the first caller in
+// each TTL window, false for the rest (they do not wait for the claimant).
+func sweepDue(current string, now time.Time) bool {
+	containerSweepMu.Lock()
+	defer containerSweepMu.Unlock()
+	if last, ok := containerSweeps[current]; ok && now.Sub(last) < containerSweepTTL {
+		return false
+	}
+	containerSweeps[current] = now
+	return true
+}
+
+// sweepRelease gives back the claim taken at claimed, unless a later window has
+// been claimed since.
+func sweepRelease(current string, claimed time.Time) {
+	containerSweepMu.Lock()
+	defer containerSweepMu.Unlock()
+	if last, ok := containerSweeps[current]; ok && last.Equal(claimed) {
+		delete(containerSweeps, current)
+	}
+}
+
+// sweepContainers removes the labelled containers of stale coordinators.
+func (e *Executor) sweepContainers(ctx context.Context, current string) error {
 	if _, err := osexec.LookPath("docker"); err != nil {
 		return nil
 	}
