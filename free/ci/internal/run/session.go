@@ -34,6 +34,8 @@ type Session struct {
 	Poll        time.Duration
 	Capacity    func() ciexec.Capacity
 	Admission   ciexec.AdmissionPolicy
+	Interactive bool      // a person waits at a terminal: only then does the implicit foreground queue cap apply
+	PolicyRun   RunValues // the per-run policy values of the invocation; the dispatcher resolves its placement policy with them
 
 	mu    sync.Mutex
 	jobs  map[*model.Job]string // job row id by job pointer

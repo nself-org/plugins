@@ -18,6 +18,9 @@ import (
 // PolicyResult carries the digest stored on the pipeline row and in evidence, and the secrets allowlist.
 type PolicyResult struct {
 	Digest string
+	// IgnoredRun lists the per-run values the policy did not take, one line each
+	// ("key: reason"); a run reports them, it never drops them silently (P7-AUTO-29).
+	IgnoredRun []string
 	SecretsInfo
 }
 
@@ -51,4 +54,14 @@ func ResolvePolicy(ctx context.Context, root, pipeline string) (PolicyResult, er
 		r = p
 	}
 	return r.Resolve(ctx, PolicyRequest{Root: root, Pipeline: pipeline})
+}
+
+// ignoredRunNotes turns the per-run policy values the policy refused into run
+// notes ("key: reason" lines).
+func ignoredRunNotes(lines []string) []string {
+	var out []string
+	for _, line := range lines {
+		out = append(out, "per-run policy value ignored: "+line)
+	}
+	return out
 }

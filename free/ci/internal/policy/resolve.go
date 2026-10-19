@@ -3,7 +3,8 @@ package policy
 // Purpose: resolve the effective policy for one run (contract:ci.policy v1).
 // Scopes, loosest first: defaults by visibility and source class, operator
 // store rows (user, team, project), the protected default branch's `policy:`
-// at the pinned tip, and the revision's own `policy:` (tighten-only).
+// at the pinned tip, the revision's own `policy:` (tighten-only), and the
+// per-run values (tighten-only, except the preset preference).
 // Inputs: a Repo, a Revision, a key set, a store reader and a Runner.
 // Outputs: Resolved: Effective, Values, Sources, PinnedCommit, Fetch, Digest
 // and Ignored.
@@ -37,8 +38,12 @@ type Repo struct {
 }
 
 // Revision is the checkout under test: Dir's `.nself/ci.yaml` `policy:` is the
-// tighten-only revision scope. An empty Dir means no revision scope.
-type Revision struct{ Dir string }
+// tighten-only revision scope. An empty Dir means no revision scope. Run holds
+// the per-run values (the flags of one invocation); see runscope.go.
+type Revision struct {
+	Dir string
+	Run map[string]json.RawMessage
+}
 
 // Reader is the store surface the resolver reads.
 type Reader interface {
@@ -61,7 +66,10 @@ type Resolved struct {
 	PinnedCommit string
 	Fetch        FetchState
 	Digest       Digest
-	Ignored      []Ignored
+	// BaseDigest is the digest of the policy in force without the per-run values:
+	// what a later verifier resolves to. It equals Digest when the run gave none.
+	BaseDigest Digest
+	Ignored    []Ignored
 }
 
 // Resolve merges every scope for repo and rev.
@@ -120,11 +128,20 @@ func (r *Resolver) Resolve(ctx context.Context, repo Repo, rev Revision) (Resolv
 			scopes = append(scopes, trust.Scope{Kind: SourceRevision, Values: revPolicy})
 		}
 	}
+	base := scopes
+	if run := runScope(rev.Run); run != nil {
+		scopes = append(append([]trust.Scope(nil), scopes...), *run)
+	}
 	eff, digest, err := reg.Merge(res.PinnedCommit, scopes...)
 	if err != nil {
 		return Resolved{}, err
 	}
-	res.Effective, res.Digest = eff, digest
+	res.Effective, res.Digest, res.BaseDigest = eff, digest, digest
+	if len(scopes) != len(base) {
+		if _, res.BaseDigest, err = reg.Merge(res.PinnedCommit, base...); err != nil {
+			return Resolved{}, err
+		}
+	}
 	res.Ignored = append(ignored, eff.Ignored()...)
 	res.Values, res.Sources = collect(eff, keys.Keys(), scopes)
 	return res, nil
