@@ -45,24 +45,28 @@ func ConfigPath(home string) string {
 	return filepath.Join(home, "config.yaml")
 }
 
-// isOff reports whether a YAML scalar switches discovery off.
-func isOff(n yaml.Node) bool {
-	if n.Kind != yaml.ScalarNode {
-		return false
-	}
-	switch strings.ToLower(strings.TrimSpace(n.Value)) {
+// parseSwitch reads an on/off word: off, or invalid for anything unknown (a mapping, a list, a typo). An
+// unknown value is not "on": the switch protects privacy, so it fails closed. The same words serve the
+// environment variable and the config key.
+func parseSwitch(v string) (off, invalid bool) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "off", "false", "no", "0", "disabled":
-		return true
+		return true, false
+	case "on", "true", "yes", "1", "enabled", "", "~", "null":
+		return false, false
 	}
-	return false
+	return false, true
 }
 
-func envOff(v string) bool {
-	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "0", "off", "false", "no":
-		return true
+// switchState reads the value of ci.discovery from its YAML node.
+func switchState(n yaml.Node) (off, invalid bool) {
+	if n.Kind == 0 {
+		return false, false // the key is absent
 	}
-	return false
+	if n.Kind != yaml.ScalarNode {
+		return false, true
+	}
+	return parseSwitch(n.Value)
 }
 
 // Allowed returns nil when discovery may run on this host, else the E667 error naming the switch.
@@ -71,8 +75,10 @@ func (g *Guard) Allowed() error {
 	if getenv == nil {
 		getenv = os.Getenv
 	}
-	if envOff(getenv("NSELF_CI_DISCOVERY")) {
+	if off, invalid := parseSwitch(getenv("NSELF_CI_DISCOVERY")); off {
 		return disabled(ReasonEnvOff, "LAN discovery is off (NSELF_CI_DISCOVERY=0)")
+	} else if invalid {
+		return disabled(ReasonEnvOff, "NSELF_CI_DISCOVERY is not on or off, so LAN discovery stays off")
 	}
 	path := ConfigPath(g.Home)
 	if path == "" {
@@ -93,8 +99,14 @@ func (g *Guard) Allowed() error {
 	if err = yaml.Unmarshal(b, &c); err != nil {
 		return disabled(ReasonConfigInvalid, "the user config is not valid YAML, so LAN discovery stays off")
 	}
-	if isOff(c.CI.Discovery) || isOff(c.Flat) {
-		return disabled(ReasonConfigOff, "LAN discovery is off (ci.discovery: off in config.yaml)")
+	for _, n := range []yaml.Node{c.CI.Discovery, c.Flat} {
+		off, invalid := switchState(n)
+		if invalid {
+			return disabled(ReasonConfigInvalid, "ci.discovery in the user config is not on or off, so LAN discovery stays off")
+		}
+		if off {
+			return disabled(ReasonConfigOff, "LAN discovery is off (ci.discovery: off in config.yaml)")
+		}
 	}
 	return nil
 }

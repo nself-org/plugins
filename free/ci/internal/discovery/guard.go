@@ -30,6 +30,8 @@ const (
 	SSHPort = 22
 	// MinTimeout and MaxTimeout bound one browse.
 	MinTimeout = 500 * time.Millisecond
+	// RawCap is the most raw records one browse keeps; reaching it marks the result flooded.
+	RawCap     = 4 * MaxCandidates
 	MaxTimeout = 60 * time.Second
 )
 
@@ -86,18 +88,20 @@ func (g *Guard) now() time.Time {
 
 // Browse lists the candidates that answer within timeout. It returns an E667 error, before any socket
 // is opened, when discovery is off.
-func (g *Guard) Browse(ctx context.Context, timeout time.Duration) ([]Candidate, error) {
+func (g *Guard) Browse(ctx context.Context, timeout time.Duration) (Result, error) {
 	if err := g.Allowed(); err != nil {
-		return nil, err
+		return Result{}, err
 	}
 	if timeout < MinTimeout || timeout > MaxTimeout {
-		return nil, fmt.Errorf("discovery: --timeout must be between %s and %s", MinTimeout, MaxTimeout)
+		return Result{}, fmt.Errorf("discovery: --timeout must be between %s and %s", MinTimeout, MaxTimeout)
 	}
 	entries, err := g.net().Browse(ctx, ServiceType, timeout)
 	if err != nil {
-		return nil, fmt.Errorf("discovery: browse failed: %w", err)
+		return Result{}, fmt.Errorf("discovery: browse failed: %w", err)
 	}
-	return candidates(entries), nil
+	r := candidates(entries)
+	r.Flooded = len(entries) >= RawCap
+	return r, nil
 }
 
 // Advertisement is a running advertisement bound to one pairing window.

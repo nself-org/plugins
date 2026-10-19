@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -34,7 +35,7 @@ func TestDiscoverTableAndJSON(t *testing.T) {
 		Command       string `json:"command"`
 		Data          DiscoverData
 	}
-	if code != 0 || json.Unmarshal([]byte(out), &env) != nil || env.Command != "ci nodes discover" || len(env.Data.Candidates) != 1 || env.Data.Candidates[0].State != "discovered" || env.Data.Candidates[0].Authorized {
+	if code != 0 || json.Unmarshal([]byte(out), &env) != nil || env.Command != "ci nodes discover" || len(env.Data.Candidates) != 1 || env.Data.Truncated != 0 || env.Data.Candidates[0].State != "discovered" || env.Data.Candidates[0].Authorized {
 		t.Fatalf("bad envelope (exit %d): %s", code, out)
 	}
 }
@@ -92,12 +93,32 @@ func TestStripAdvertiseFlag(t *testing.T) {
 		{[]string{"--advertise", "--advertise=false", "u"}, []string{"u"}, false},
 		{[]string{"--expect-fingerprint", "SHA256:x", "u"}, []string{"--expect-fingerprint", "SHA256:x", "u"}, false},
 		{[]string{"u", "--", "--advertise"}, []string{"u", "--", "--advertise"}, false},
+		{[]string{"--advertise=0", "u"}, []string{"u"}, false},
+		{[]string{"-advertise=1", "u"}, []string{"u"}, true},
+		{[]string{"--advertise=maybe", "u"}, []string{"--advertise=maybe", "u"}, false},
 		{[]string{"--advertiser", "u"}, []string{"--advertiser", "u"}, false},
 	}
 	for _, c := range cases {
 		rest, on := StripAdvertiseFlag(c.in)
 		if on != c.on || !slices.Equal(rest, c.rest) {
 			t.Errorf("%v: got %v %v, want %v %v", c.in, rest, on, c.rest, c.on)
+		}
+	}
+}
+
+func TestDiscoverTableWarnsOnDuplicatesAndCuts(t *testing.T) {
+	n := newMemNet()
+	n.injected = []Entry{
+		{Name: "a._nself-ci._tcp.local.", Addrs: addr("192.168.1.9"), Port: 22, TXT: []string{"0a1b2c3d"}},
+		{Name: "b._nself-ci._tcp.local.", Addrs: addr("192.168.1.66"), Port: 22, TXT: []string{"0a1b2c3d"}},
+	}
+	for i := range MaxCandidates {
+		n.injected = append(n.injected, Entry{Name: "j" + strconv.Itoa(i) + "._nself-ci._tcp.local.", Addrs: addr("192.168.1.2"), Port: 22})
+	}
+	_, out, _ := runCmd(t, n, nil)
+	for _, want := range []string{"(duplicate id)", "Do not pair until", "more candidate(s) not shown"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("table lacks %q:\n%s", want, out)
 		}
 	}
 }

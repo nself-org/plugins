@@ -5,11 +5,14 @@ package discovery
 //          argv before join parses it and starts the advertisement from a PreStart hook.
 // Inputs:  argv after the word join.
 // Outputs: argv without the flag, and whether it asked for an advertisement.
-// Constraints: only the exact spellings --advertise, -advertise and their =true/=false forms count; the
+// Constraints: only --advertise, -advertise and their =<bool> forms (strconv.ParseBool) count; the
 //          flag stops at a literal "--". Debt: when join.go can declare the flag itself, delete this file's
 //          caller and use the flag value directly.
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // StripAdvertiseFlag removes every advertise flag from args and reports whether the last one asked for
 // advertising. Any other argument is returned untouched and in order.
@@ -19,14 +22,21 @@ func StripAdvertiseFlag(args []string) (rest []string, advertise bool) {
 		if a == "--" {
 			return append(rest, args[i:]...), advertise
 		}
-		switch strings.ToLower(a) {
-		case "--advertise", "-advertise", "--advertise=true", "-advertise=true":
+		if a == "--advertise" || a == "-advertise" { // exact, like the flag package
 			advertise = true
-		case "--advertise=false", "-advertise=false":
-			advertise = false
-		default:
-			rest = append(rest, a)
+			continue
 		}
+		v, ok := strings.CutPrefix(a, "--advertise=")
+		if !ok {
+			v, ok = strings.CutPrefix(a, "-advertise=")
+		}
+		if ok {
+			if b, err := strconv.ParseBool(v); err == nil { // an unparsable value stays, so join refuses it
+				advertise = b
+				continue
+			}
+		}
+		rest = append(rest, a)
 	}
 	return rest, advertise
 }

@@ -7,10 +7,12 @@ package main
 //          8-character id) and a line on stderr naming that id; the advertisement stops when join
 //          finishes enrolling, when the window (the pairing code lifetime) ends, or when the process ends.
 // Constraints: join.go does not declare the flag and is outside this Ticket's scope, so init removes it
-//          from os.Args before join parses them (internal/discovery.StripAdvertiseFlag) and the PreStart
-//          hook starts the advertisement. The hook runs the production guard first (this file sorts before
-//          prodguard.go, so its own hook would otherwise run later), and an E667 refusal stops join.
-//          Without the flag nothing here opens a socket.
+//          from os.Args before join parses them (internal/discovery.StripAdvertiseFlag) and, only when the
+//          flag was given, registers a PreStart hook that starts the advertisement and a join hook that
+//          stops it. Without the flag nothing is registered (TestGuardIsRegisteredFirst keeps holding).
+//          This file sorts before prodguard.go, so with the flag the hook runs the production guard itself
+//          first (the guard then runs a second time as its own hook and may repeat a warning); an E667
+//          refusal stops join before anything is published.
 
 import (
 	"context"
@@ -38,12 +40,15 @@ func init() {
 		os.Args = append([]string{os.Args[0], "join"}, rest...)
 		advertiser.requested = on
 	}
+	if !advertiser.requested {
+		return // without the flag nothing is registered, so the PreStart order stays prodguard first
+	}
 	must(RegisterPreStart(advertiseName, advertisePreStart))
 	must(pairing.RegisterJoinHook(advertiseName, advertiseStop))
 }
 
 func advertisePreStart(ctx context.Context, command string) error {
-	if command != "join" || !advertiser.requested {
+	if command != "join" {
 		return nil
 	}
 	if err := prodGuard(ctx, command); err != nil {

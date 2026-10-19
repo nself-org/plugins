@@ -30,10 +30,11 @@ func TestSpoofedRecordsAreOnlyCandidates(t *testing.T) {
 		{Name: "evil\x1b[2J\r\n._nself-ci._tcp.local.", Host: "h\x07ost.local.", Addrs: addr("10.0.0.9"), Port: 70000, TXT: []string{"ADMIN", "not-an-id", "0123abcd"}},
 		{Name: "mcast._nself-ci._tcp.local.", Host: "m.local.", Addrs: append(addr("224.0.0.1"), netip.MustParseAddr("127.0.0.1"), netip.IPv4Unspecified()), Port: 22},
 	}
-	cs, err := guardFor(n, nil, t.TempDir()).Browse(context.Background(), time.Second)
+	res, err := guardFor(n, nil, t.TempDir()).Browse(context.Background(), time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
+	cs := res.Candidates
 	if len(cs) != 4 {
 		t.Fatalf("want 4 candidates (two twins, evil, mcast), got %d: %+v", len(cs), cs)
 	}
@@ -75,9 +76,61 @@ func TestCandidateListIsCapped(t *testing.T) {
 	for i := range 3 * MaxCandidates {
 		n.injected = append(n.injected, Entry{Name: "n" + strconv.Itoa(i) + "._nself-ci._tcp.local.", Addrs: addr("192.168.1.2"), Port: 22})
 	}
-	cs, err := guardFor(n, nil, t.TempDir()).Browse(context.Background(), time.Second)
-	if err != nil || len(cs) != MaxCandidates {
-		t.Fatalf("want %d candidates, got %d (%v)", MaxCandidates, len(cs), err)
+	res, err := guardFor(n, nil, t.TempDir()).Browse(context.Background(), time.Second)
+	if err != nil || len(res.Candidates) != MaxCandidates || res.Truncated != 2*MaxCandidates {
+		t.Fatalf("want %d candidates and %d cut, got %d and %d (%v)", MaxCandidates, 2*MaxCandidates, len(res.Candidates), res.Truncated, err)
+	}
+}
+
+// TestRealNodesOutrankJunk: a flood of id-less records cannot push a record with a window id out.
+func TestRealNodesOutrankJunk(t *testing.T) {
+	n := newMemNet()
+	for i := range 3 * MaxCandidates {
+		n.injected = append(n.injected, Entry{Name: "0000" + strconv.Itoa(i) + "._nself-ci._tcp.local.", Addrs: addr("192.168.1.2"), Port: 22})
+	}
+	n.injected = append(n.injected, Entry{Name: "zzreal._nself-ci._tcp.local.", Addrs: addr("192.168.1.7"), Port: 22, TXT: []string{"0a1b2c3d"}})
+	res, _ := guardFor(n, nil, t.TempDir()).Browse(context.Background(), time.Second)
+	if res.Candidates[0].WindowID != "0a1b2c3d" {
+		t.Fatalf("the record with a window id must rank first: %+v", res.Candidates[0])
+	}
+}
+
+func TestOtherServicesAndBadAddressesAreDropped(t *testing.T) {
+	n := newMemNet()
+	n.injected = []Entry{
+		{Name: "Living Room._googlecast._tcp.local.", Addrs: addr("192.168.1.50"), Port: 8009},
+		{Name: "printer._ipp._tcp.local.", Addrs: addr("192.168.1.51"), Port: 631},
+		{Name: "ok._nself-ci._tcp.local.", Addrs: append(addr("192.168.1.9"), netip.MustParseAddr("192.168.1.9"), netip.MustParseAddr("fe80::1")), Port: 22, TXT: []string{"0a1b2c3d"}},
+	}
+	res, _ := guardFor(n, nil, t.TempDir()).Browse(context.Background(), time.Second)
+	if len(res.Candidates) != 1 || res.Candidates[0].Instance != "ok" || len(res.Candidates[0].Addresses) != 1 {
+		t.Fatalf("only our service, one copy of each usable address: %+v", res.Candidates)
+	}
+}
+
+func TestDuplicateWindowIDIsFlagged(t *testing.T) {
+	n := newMemNet()
+	n.injected = []Entry{
+		{Name: "real._nself-ci._tcp.local.", Addrs: addr("192.168.1.9"), Port: 22, TXT: []string{"0a1b2c3d"}},
+		{Name: "copy._nself-ci._tcp.local.", Addrs: addr("192.168.1.66"), Port: 22, TXT: []string{"0a1b2c3d"}},
+		{Name: "other._nself-ci._tcp.local.", Addrs: addr("192.168.1.10"), Port: 22, TXT: []string{"11112222"}},
+	}
+	res, _ := guardFor(n, nil, t.TempDir()).Browse(context.Background(), time.Second)
+	for _, c := range res.Candidates {
+		if want := c.WindowID == "0a1b2c3d"; c.DuplicateID != want {
+			t.Fatalf("%s: duplicate_id %v, want %v", c.Instance, c.DuplicateID, want)
+		}
+	}
+}
+
+func TestFloodIsReported(t *testing.T) {
+	n := newMemNet()
+	for i := range RawCap {
+		n.injected = append(n.injected, Entry{Name: "n" + strconv.Itoa(i) + "._nself-ci._tcp.local.", Addrs: addr("192.168.1.2"), Port: 22})
+	}
+	res, _ := guardFor(n, nil, t.TempDir()).Browse(context.Background(), time.Second)
+	if !res.Flooded {
+		t.Fatal("reaching the raw record cap must be reported")
 	}
 }
 

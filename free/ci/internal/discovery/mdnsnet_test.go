@@ -49,9 +49,24 @@ func TestPickLocalKeepsOnlyUsableAddresses(t *testing.T) {
 		n.IP = ip
 		return n
 	}
-	got := pickLocal([]net.Addr{mk("127.0.0.1/8"), mk("::1/128"), mk("fe80::1/64"), mk("169.254.1.1/16"), mk("192.168.1.5/24"), mk("fd00::5/64")})
-	if len(got) != 2 || got[0] != netip.MustParseAddr("192.168.1.5") || got[1] != netip.MustParseAddr("fd00::5") {
+	// IPv6 is never published (a SLAAC address can embed the MAC); loopback and link-local are not either.
+	got := pickLocal([]net.Addr{mk("127.0.0.1/8"), mk("::1/128"), mk("fe80::1/64"), mk("169.254.1.1/16"), mk("192.168.1.5/24"), mk("fd00::5/64"), mk("2001:db8::211:22ff:fe33:4455/64")})
+	if len(got) != 1 || got[0] != netip.MustParseAddr("192.168.1.5") {
 		t.Fatalf("got %v", got)
+	}
+}
+
+func TestPublishableSkipsVirtualInterfaces(t *testing.T) {
+	up := net.FlagUp | net.FlagMulticast
+	for name, want := range map[string]bool{"en0": true, "eth0": true, "wlan0": true, "docker0": false, "br-1a2b": false, "veth12": false, "utun3": false, "tailscale0": false, "awdl0": false} {
+		if publishable(name, up) != want {
+			t.Errorf("%s: want %v", name, want)
+		}
+	}
+	for _, f := range []net.Flags{0, net.FlagUp, up | net.FlagLoopback, up | net.FlagPointToPoint} {
+		if publishable("en0", f) {
+			t.Errorf("flags %v must not be published", f)
+		}
 	}
 }
 
@@ -67,13 +82,16 @@ func TestRealLoopbackRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer a.Stop()
-	cs, err := g.Browse(context.Background(), 3*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range cs {
-		if c.WindowID == a.WindowID && c.Instance == a.Instance && c.State == StateDiscovered && !c.Authorized {
-			return
+	var cs Result
+	for range 3 { // a multicast query can be lost; the answer is what is under test
+		var err error
+		if cs, err = g.Browse(context.Background(), 3*time.Second); err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range cs.Candidates {
+			if c.WindowID == a.WindowID && c.Instance == a.Instance && c.State == StateDiscovered && !c.Authorized {
+				return
+			}
 		}
 	}
 	t.Fatalf("our own advertisement %s was not listed: %+v", a.WindowID, cs)

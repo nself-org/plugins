@@ -46,6 +46,9 @@ func TestNoSocketUnlessAsked(t *testing.T) {
 		{"flat off", ReasonConfigOff, nil, "ci.discovery: off\n"},
 		{"quoted no", ReasonConfigOff, nil, "ci:\n  discovery: \"no\"\n"},
 		{"not yaml", ReasonConfigInvalid, nil, "ci: [unclosed\n"},
+		{"mapping value", ReasonConfigInvalid, nil, "ci:\n  discovery: {enabled: false}\n"},
+		{"typo value", ReasonConfigInvalid, nil, "ci:\n  discovery: of\n"},
+		{"list value", ReasonConfigInvalid, nil, "ci.discovery: [a]\n"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

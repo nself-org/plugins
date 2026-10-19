@@ -48,8 +48,8 @@ const command = "ci nodes discover"
 
 // DiscoverData is the --json payload.
 type DiscoverData struct {
-	Candidates []Candidate `json:"candidates"`
-	Timeout    string      `json:"timeout"`
+	Result
+	Timeout string `json:"timeout"`
 }
 
 // RunDiscover runs the command and returns the process exit code.
@@ -70,7 +70,7 @@ func RunDiscover(args []string, env Env) int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout+10*time.Second)
 	defer cancel()
-	cs, err := env.Guard.Browse(ctx, f.timeout)
+	res, err := env.Guard.Browse(ctx, f.timeout)
 	if err != nil {
 		var de *Error
 		if errors.As(err, &de) {
@@ -78,16 +78,13 @@ func RunDiscover(args []string, env Env) int {
 		}
 		return failCmd(env, f.json, "E607", output.ExitInfra, err)
 	}
-	if cs == nil {
-		cs = []Candidate{}
-	}
 	if f.json {
-		if output.WriteData(env.Out, command, DiscoverData{Candidates: cs, Timeout: f.timeout.String()}, nil) != nil {
+		if output.WriteData(env.Out, command, DiscoverData{Result: res, Timeout: f.timeout.String()}, nil) != nil {
 			return output.ExitInfra
 		}
 		return 0
 	}
-	render(env.Out, cs, f.timeout)
+	render(env.Out, res, f.timeout)
 	return 0
 }
 
@@ -102,17 +99,29 @@ func failCmd(env Env, asJSON bool, code string, exit int, err error) int {
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-func render(w io.Writer, cs []Candidate, timeout time.Duration) {
-	if len(cs) == 0 {
+func render(w io.Writer, res Result, timeout time.Duration) {
+	if len(res.Candidates) == 0 {
 		_, _ = fmt.Fprintf(w, "no candidates answered within %s\n", timeout)
 		return
 	}
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
 	_, _ = fmt.Fprintln(tw, "ID\tADDRESS\tPORT\tINSTANCE\tSTATE")
-	for _, c := range cs {
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", dash(c.WindowID), dash(strings.Join(c.Addresses, ",")), dash(portText(c.Port)), c.Instance, c.State)
+	dup := false
+	for _, c := range res.Candidates {
+		state := c.State
+		if c.DuplicateID {
+			state += " (duplicate id)"
+			dup = true
+		}
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", dash(c.WindowID), dash(strings.Join(c.Addresses, ",")), dash(portText(c.Port)), c.Instance, state)
 	}
 	_ = tw.Flush()
+	if dup {
+		_, _ = fmt.Fprintln(w, "More than one host answers with the same ID: only one can be the node you started. Do not pair until you know which.")
+	}
+	if res.Truncated > 0 || res.Flooded {
+		_, _ = fmt.Fprintf(w, "The list is cut: %d more candidate(s) not shown%s. Records beyond the limit were dropped; look for a flood on the LAN.\n", res.Truncated, map[bool]string{true: ", and the raw record limit was reached", false: ""}[res.Flooded])
+	}
 	_, _ = fmt.Fprintln(w, "Candidates are hints from the LAN, not trusted and not authorized. Match the ID with the one `nself-ci-agent join --advertise` printed, then pair with `nself ci nodes pair`.")
 }
 

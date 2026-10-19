@@ -4,7 +4,10 @@ package discovery
 //          that imports the library; TestOnlyMDNSNetImportsTheLibrary fails the build if another does.
 // Inputs:  calls from the Guard, after Allowed() passed.
 // Outputs: raw Entries from a browse; a running mDNS server for an advertisement.
-// Constraints: the library logs through a discarding logger; the service is built with an explicit host
+// Constraints: the library keys records by instance name, so two responders that claim one name merge
+//          inside it (debt: the Guard and candidates() keep them apart, the library cannot); it also does
+//          not check that an answer matches the queried type (candidates() filters). The library logs
+//          through a discarding logger; the service is built with an explicit host
 //          name and explicit addresses, because the library otherwise calls os.Hostname() and resolves it
 //          (leaking the real host name into SRV and A records); the browse channel is drained while the
 //          query runs because the library drops sends to a full channel.
@@ -15,7 +18,7 @@ import (
 	"log"
 	"net"
 	"net/netip"
-
+	"strings"
 	"time"
 
 	"github.com/hashicorp/mdns"
@@ -32,7 +35,7 @@ func (systemNet) Browse(ctx context.Context, serviceType string, timeout time.Du
 		var got []Entry
 		for e := range ch {
 			got = append(got, fromLibrary(e))
-			if len(got) >= 4*MaxCandidates {
+			if len(got) >= RawCap {
 				break // a flood: stop collecting, keep draining below
 			}
 		}
@@ -80,15 +83,49 @@ func (systemNet) Advertise(svc Service) (func(), error) {
 	return func() { _ = srv.Shutdown() }, nil
 }
 
-// LocalAddrs lists up to four global-unicast (including private) addresses of this host.
+// LocalAddrs lists up to four private or global IPv4 addresses of this host's multicast-capable
+// interfaces. IPv6 is left out on purpose: a SLAAC address can embed the MAC address and stays the same
+// across windows, which would make the record stable and identifying. Virtual interfaces (containers,
+// VPN tunnels, bridges) are skipped.
 func (systemNet) LocalAddrs() []netip.Addr {
-	as, err := net.InterfaceAddrs()
+	ifs, err := net.Interfaces()
 	if err != nil {
 		return nil
 	}
-	return pickLocal(as)
+	var out []netip.Addr
+	for _, ifc := range ifs {
+		if !publishable(ifc.Name, ifc.Flags) {
+			continue
+		}
+		as, err := ifc.Addrs()
+		if err != nil {
+			continue
+		}
+		out = append(out, pickLocal(as)...)
+	}
+	if len(out) > 4 {
+		out = out[:4]
+	}
+	return out
 }
 
+var virtualPrefixes = []string{"docker", "br-", "veth", "utun", "tun", "tap", "vmnet", "vboxnet", "virbr", "bridge", "awdl", "llw", "ap", "gif", "stf", "wg", "tailscale", "zt"}
+
+// publishable keeps up, multicast-capable, real interfaces.
+func publishable(name string, flags net.Flags) bool {
+	if flags&net.FlagUp == 0 || flags&net.FlagMulticast == 0 || flags&(net.FlagLoopback|net.FlagPointToPoint) != 0 {
+		return false
+	}
+	n := strings.ToLower(name)
+	for _, p := range virtualPrefixes {
+		if strings.HasPrefix(n, p) {
+			return false
+		}
+	}
+	return true
+}
+
+// pickLocal keeps the private or global IPv4 addresses of as.
 func pickLocal(as []net.Addr) []netip.Addr {
 	var out []netip.Addr
 	for _, a := range as {
@@ -100,11 +137,8 @@ func pickLocal(as []net.Addr) []netip.Addr {
 		if !ok {
 			continue
 		}
-		if ip = ip.Unmap(); ip.IsGlobalUnicast() && !ip.IsLoopback() {
+		if ip = ip.Unmap(); ip.Is4() && ip.IsGlobalUnicast() && !ip.IsLinkLocalUnicast() {
 			out = append(out, ip)
-		}
-		if len(out) == 4 {
-			break
 		}
 	}
 	return out
