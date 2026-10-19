@@ -110,7 +110,7 @@ func New(cfg Config) (*Dispatcher, error) {
 		cfg.Orderer = FIFO{}
 	}
 	if cfg.Sink == nil {
-		cfg.Sink = noSink{}
+		cfg.Sink = defaultSink(cfg)
 	}
 	if cfg.Clock == nil {
 		cfg.Clock = time.Now

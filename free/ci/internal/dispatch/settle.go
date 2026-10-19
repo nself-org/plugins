@@ -52,6 +52,10 @@ func (d *Dispatcher) admit(ctx context.Context, runs map[string]*pipelineRun, pr
 			o.world.Apply(p)
 		}
 		dec.Outcome = OutcomeAdmitted
+		// tell the sink before the caller is released: the job may finish, and its
+		// run close, before the end of the tick
+		d.cfg.Sink.Record(ctx, *dec)
+		dec.recorded = true
 		if !local {
 			d.wg.Add(1)
 		}
