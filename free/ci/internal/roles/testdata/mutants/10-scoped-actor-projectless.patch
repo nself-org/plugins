@@ -1,13 +1,13 @@
 diff --git a/internal/roles/roles.go b/internal/roles/roles.go
-index 5b33cc7a..1b398557 100644
+index e404c4c4..0b73f064 100644
 --- a/internal/roles/roles.go
 +++ b/internal/roles/roles.go
-@@ -117,7 +117,7 @@ func (a Actor) Can(role Role, project string) error {
- 	if a.Role.Rank() < role.Rank() {
+@@ -132,7 +132,7 @@ func (a Actor) Can(role Role, project string) error {
+ 	if a.role.Rank() < role.Rank() {
  		return fail(ReasonRole, "%s needs role %s", a.Label(), role)
  	}
--	if a.Kind != KindOperator && project == "" && role.Rank() > Member.Rank() && !a.allProjects() {
-+	if a.Kind != KindOperator && project == "" && role.Rank() > Admin.Rank() && !a.allProjects() {
+-	if a.kind != KindOperator && project == "" && role.Rank() > Member.Rank() && !a.allProjects() {
++	if a.kind != KindOperator && project == "" && role.Rank() > Admin.Rank() && !a.allProjects() {
  		return fail(ReasonProject, "%s is scoped to projects and cannot do a project-wide action", a.Label())
  	}
  	if project != "" && !a.allows(project) {

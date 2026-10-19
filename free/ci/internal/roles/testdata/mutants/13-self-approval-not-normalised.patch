@@ -1,0 +1,13 @@
+diff --git a/internal/roles/decide.go b/internal/roles/decide.go
+index 93c3dc91..8e3df8f2 100644
+--- a/internal/roles/decide.go
++++ b/internal/roles/decide.go
+@@ -27,7 +27,7 @@ func principalOf(label string) string {
+ 	if strings.HasPrefix(s, "token:") {
+ 		s = s[strings.LastIndex(s, ":")+1:]
+ 	}
+-	return strings.TrimPrefix(s, "cli:")
++	return s
+ }
+ 
+ func (a Actor) decide(ctx context.Context, d decision) error {
