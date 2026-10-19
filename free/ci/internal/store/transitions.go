@@ -172,8 +172,12 @@ func (s *Store) forwardCancel(ctx context.Context, tx *sql.Tx, from, to, reason 
 	if err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT OR IGNORE INTO cancel_intent(attempt_id,epoch,requested_at,reason) VALUES (?,?,?,?)", to, epoch, s.now().UnixNano(), reason); err != nil {
+	res, err := tx.ExecContext(ctx, "INSERT OR IGNORE INTO cancel_intent(attempt_id,epoch,requested_at,reason) VALUES (?,?,?,?)", to, epoch, s.now().UnixNano(), reason)
+	if err != nil {
 		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil // the successor already carries an intent: nothing was forwarded
 	}
 	return s.appendAudit(ctx, tx, "operator", "cancel", to, "forwarded from "+from+": "+reason)
 }
