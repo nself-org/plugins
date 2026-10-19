@@ -24,13 +24,15 @@ nself start
 ## Traefik instead of nginx
 
 `nself add traefik` makes Traefik the proxy. The nginx service is omitted from the generated compose file and three Traefik
-services take its place. Routes, TLS and upstreams come from the same route model, so a request returns the same status,
-headers and body through either proxy (the parity test compares both in Linux containers).
+services take its place. Routes, TLS and upstreams come from the same route model, and a parity test compares both proxies in
+Linux containers. The differences that remain are listed on the plugin home.
+
+The swap was tested in this form, non-interactive and with `NSELF_V15=1` set:
 
 ```bash
-nself add traefik
+nself add traefik --force --yes
 nself build --remove-orphans --yes
-nself start
+nself start --timeout 180
 ```
 
 Go back to nginx:
@@ -38,7 +40,7 @@ Go back to nginx:
 ```bash
 nself remove traefik --yes
 nself build --remove-orphans --yes
-nself start
+nself start --timeout 180
 ```
 
 What the tests cover:
@@ -53,7 +55,7 @@ What the tests cover:
 
 Limits, as recorded:
 
-- Swapping the proxy restarts the stack. The measured swap downtime was 35 seconds on a hosted Linux runner.
+- The proxy is down while it swaps. The measured downtime was 35 seconds on a hosted Linux runner.
 - While a running Traefik is being removed, it serves no routes between the file cleanup and the container removal.
 - `nself add traefik` refuses (before any write) when a project is fronted by another proxy or uses routes the Traefik
   renderer cannot express. Read the refusal; the plugin home lists the cases.
