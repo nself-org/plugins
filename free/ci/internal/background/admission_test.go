@@ -137,6 +137,15 @@ func TestInteractiveFirst(t *testing.T) {
 	if len(res.Placements) != 1 || res.Placements[0].JobKey != "fg" {
 		t.Fatalf("the freed slot must go to the interactive job: %+v", res.Placements)
 	}
+	// the strict band order alone, with no InteractiveQueued hint in the world (a
+	// world built before the interactive job arrived): the Orderer still serves
+	// the interactive job first, and it takes the one slot
+	stale := world(1)
+	stale.InteractiveQueued = map[string]bool{}
+	ordered, res := d.Plan(stale, queued)
+	if ordered[0].Job.AttemptID != "fg" || len(res.Placements) != 1 || res.Placements[0].JobKey != "fg" {
+		t.Fatalf("band order: first = %q, placements %+v", ordered[0].Job.AttemptID, res.Placements)
+	}
 
 	// admission re-check: a stale plan that offers the slot to a background job
 	runningID := queueAttempt(t, st, "running-bg")
@@ -187,7 +196,37 @@ func TestForegroundFloor(t *testing.T) {
 		t.Fatalf("normal job on battery: %v", err)
 	}
 	bgID := queueAttempt(t, st, "bg")
-	if _, err = admit(st, bgID, battery, job(bgID, BandName)); err == nil {
-		t.Fatal("a background job must not start on a battery laptop")
+	var ref *dispatch.Refusal
+	if _, err = admit(st, bgID, battery, job(bgID, BandName)); !asRefusal(err, &ref) || ref.Reason != model.BackgroundInteractiveQueued {
+		t.Fatalf("a background job must not start on a battery laptop: %v", err)
 	}
+	SetQueueProbe(nil)
+	if _, err = admit(st, bgID, battery, job(bgID, BandName)); !asRefusal(err, &ref) || ref.Reason != model.BackgroundContention {
+		t.Fatalf("with nothing queued the battery still refuses background work: %v", err)
+	}
+}
+
+// TestQueueProbe: no probe admits the queue half (the placement stage guards
+// it), SetQueueProbe returns the previous probe, and nil removes it.
+func TestQueueProbe(t *testing.T) {
+	if prev := SetQueueProbe(nil); prev != nil {
+		t.Fatalf("a clean process has no probe, got one")
+	}
+	if err := step(runner("r", idleDesk), job("bg", BandName)); err != nil {
+		t.Fatalf("no probe: %v", err)
+	}
+	first := QueueProbe(func(string) bool { return true })
+	if prev := SetQueueProbe(first); prev != nil {
+		t.Fatal("previous probe should be nil")
+	}
+	if got := reasonOf(t, step(runner("r", idleDesk), job("bg", BandName))); got != model.BackgroundInteractiveQueued {
+		t.Fatalf("probe says queued: %q", got)
+	}
+	if prev := SetQueueProbe(func(string) bool { return false }); prev == nil || !prev("x") {
+		t.Fatal("SetQueueProbe must return the previous probe")
+	}
+	if err := step(runner("r", idleDesk), job("bg", BandName)); err != nil {
+		t.Fatalf("probe says idle: %v", err)
+	}
+	SetQueueProbe(nil)
 }

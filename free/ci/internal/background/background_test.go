@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
+	"github.com/nself-org/plugins/free/ci/internal/fairq"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 )
@@ -45,6 +46,8 @@ func TestBackgroundAdmission(t *testing.T) {
 		{"interactive unknown, hosted", signals{Plugged: ptr(true)}, ""},
 		{"interactive active, hosted", signals{Plugged: ptr(true), Interactive: ptr("active")}, model.BackgroundContention},
 		{"unplugged, hosted", signals{Plugged: ptr(false), Interactive: ptr("idle")}, model.BackgroundContention},
+		{"interactive unrecognised, operator", signals{Plugged: ptr(true), Interactive: ptr("away"), Operator: true}, model.BackgroundContention},
+		{"interactive unrecognised, hosted", signals{Plugged: ptr(true), Interactive: ptr("away")}, ""},
 		{"runner active", signals{Plugged: ptr(true), Interactive: ptr("idle"), Operator: true, Active: true}, model.BackgroundContention},
 	}
 	for _, c := range cases {
@@ -61,6 +64,33 @@ func TestBackgroundAdmission(t *testing.T) {
 			if !contains(ref.Detail, want) {
 				t.Fatalf("detail %q lacks %q", ref.Detail, want)
 			}
+		}
+	})
+	// either ownership source marks an operator machine (the declaration, the capability fact)
+	t.Run("ownership sources", func(t *testing.T) {
+		for _, c := range []struct {
+			name       string
+			decl, fact string
+			want       model.PlacementReason
+		}{
+			{"declaration only", "operator", "", model.BackgroundContention},
+			{"fact only", "", "operator", model.BackgroundContention},
+			{"neither", "", "", ""},
+			{"neither operator", "provider", "provider", ""},
+		} {
+			r := runner("r", signals{Interactive: ptr("idle")}) // power unknown
+			r.Decl.Ownership, r.Capability.Identity.Ownership.Value = c.decl, nil
+			if c.fact != "" {
+				r.Capability.Identity.Ownership.Value = ptr(c.fact)
+			}
+			if got := reasonOf(t, step(r, job("bg", BandName))); got != c.want {
+				t.Fatalf("%s: reason = %q, want %q", c.name, got, c.want)
+			}
+		}
+	})
+	t.Run("band name matches fairq", func(t *testing.T) {
+		if BandName != fairq.Background.String() {
+			t.Fatalf("BandName %q != fairq %q", BandName, fairq.Background)
 		}
 	})
 	t.Run("kinds", func(t *testing.T) {
