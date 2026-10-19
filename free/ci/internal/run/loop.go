@@ -23,6 +23,7 @@ type runState struct {
 	c      *Coordinator
 	sess   *Session
 	hooks  Hooks
+	pol    PolicyResult // the resolved policy of this run
 	pl     *plan.Plan
 	mp     *model.Pipeline
 	rev    Revision

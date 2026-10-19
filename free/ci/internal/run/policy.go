@@ -15,6 +15,12 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
+// PolicyResult carries the digest stored on the pipeline row and in evidence, and the secrets allowlist.
+type PolicyResult struct {
+	Digest string
+	SecretsInfo
+}
+
 // defaultPolicy are the built-in local-run defaults.
 func defaultPolicy() map[string]any {
 	return map[string]any{

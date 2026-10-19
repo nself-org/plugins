@@ -15,6 +15,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/report"
+	"github.com/nself-org/plugins/free/ci/internal/secrets"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -52,5 +53,9 @@ func (h PolicyHook) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult,
 	if err != nil {
 		return PolicyResult{}, err
 	}
-	return PolicyResult{Digest: string(got.Digest)}, nil
+	out := PolicyResult{Digest: string(got.Digest)}
+	if v, ok := got.Values["trust.secrets"]; ok {
+		out.SecretClasses, out.HasSecretClasses = secrets.AllowlistOfValue(v)
+	}
+	return out, nil
 }

@@ -70,7 +70,8 @@ func (rs *runState) settle(id string, from, to model.JobState, class model.Failu
 
 func (rs *runState) info(pj plan.PlannedJob, job model.Job, attemptID string, n int) AttemptInfo {
 	return AttemptInfo{RunID: rs.sess.RunID, JobID: rs.rows[pj.ID], JobName: pj.ID, AttemptID: attemptID, Revision: rs.rev.SHA, N: n,
-		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home, Store: rs.sess.Store, Container: rs.c.Opts.Container}
+		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home, Store: rs.sess.Store, Container: rs.c.Opts.Container,
+		SecretsInfo: SecretsInfo{Root: rs.c.Opts.Root, CoordinatorID: rs.sess.Coordinator.ID, SecretClasses: rs.pol.SecretClasses, HasSecretClasses: rs.pol.HasSecretClasses}}
 }
 
 // failed fills a failure outcome from an error.
@@ -168,6 +169,12 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	}
 	rs.render.Event(Event{Type: "started", Job: pj.ID})
 	spec.Slot = rs.sess.slots.take(slotDir(rs.sess.Home))
+	if newSecrets := rs.hooks.secretsFactory(); newSecrets != nil && len(spec.Job.Secrets) > 0 {
+		spec.Secrets = newSecrets(info, rs.hooks.NewRedactor)
+		if z, ok := spec.Secrets.(interface{ Zero() }); ok {
+			defer z.Zero() // values are zeroed on every exit: pass, fail, cancel and a lost attempt
+		}
+	}
 	res := func() ciexec.AttemptResult {
 		defer rs.sess.slots.put(spec.Slot)
 		defer closeLog(lg) // before the attempt settles: a finished attempt always has its whole log stored
