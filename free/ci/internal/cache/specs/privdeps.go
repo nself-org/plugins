@@ -10,10 +10,12 @@ package specs
 // signal, and no value of a file or variable is returned or logged.
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 )
 
 // PrivInput is what PrivateDeps inspects.
@@ -134,20 +136,29 @@ const maxConfigBytes = 1 << 20
 
 // scanFile adds a signal when the file matches re. A file that exists but is not
 // a regular file within maxConfigBytes (a device, a FIFO, a huge or unreadable
-// file) counts as a signal: it is never read.
+// file, or one swapped for such between the check and the read) counts as a
+// signal: it is opened non-blocking, checked on the open descriptor and read
+// through a size limit.
 func scanFile(dir, name string, re *regexp.Regexp, add func(string)) {
-	p := filepath.Join(dir, name)
-	info, err := os.Stat(p)
-	switch {
-	case os.IsNotExist(err):
+	f, err := os.OpenFile(filepath.Join(dir, name), os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if os.IsNotExist(err) {
 		return
-	case err != nil || !info.Mode().IsRegular() || info.Size() > maxConfigBytes:
+	}
+	if err != nil {
 		add("unreadable:" + name)
 		return
 	}
-	if b, err := os.ReadFile(p); err != nil {
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxConfigBytes {
 		add("unreadable:" + name)
-	} else if re.Match(b) {
+		return
+	}
+	b, err := io.ReadAll(io.LimitReader(f, maxConfigBytes+1))
+	switch {
+	case err != nil || len(b) > maxConfigBytes:
+		add("unreadable:" + name)
+	case re.Match(b):
 		add("file:" + name)
 	}
 }

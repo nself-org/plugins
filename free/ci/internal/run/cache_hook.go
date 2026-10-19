@@ -65,6 +65,7 @@ type cacheEntry struct {
 	s  cacheSession
 	at time.Time
 	id string
+	st *store.Store // the store the attempt runs in: its state is read from there first
 }
 
 type cacheHook struct {
@@ -172,7 +173,7 @@ func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRo
 		return CacheSetup{}
 	}
 	h.evict(ctx, a.Store, time.Now())
-	h.sessions.Store(a.AttemptID, cacheEntry{s: s, at: time.Now(), id: a.AttemptID})
+	h.sessions.Store(a.AttemptID, cacheEntry{s: s, at: time.Now(), id: a.AttemptID, st: a.Store})
 	envOut, mounts := s.Setup()
 	out := CacheSetup{Env: envOut}
 	for _, m := range mounts {
@@ -217,12 +218,26 @@ func (h *cacheHook) After(ctx context.Context, a AttemptInfo, _ Outcome) error {
 // (a cancel won the finalizing -> passed move after the commit) and removes the
 // attempt's cache directories. After and eviction both end a session this way.
 func closeSession(ctx context.Context, st *store.Store, e cacheEntry) {
-	if e.s.Saved() && st != nil {
-		if state, _, err := st.AttemptStateEpoch(ctx, e.id); err == nil && state != "passed" { // only a confirmed non-pass retracts
+	if e.s.Saved() {
+		if state, ok := settledState(ctx, e, st); ok && state != "passed" { // only a confirmed non-pass retracts
 			e.s.Retract(ctx)
 		}
 	}
 	e.s.Cleanup()
+}
+
+// settledState reads the attempt's state from the store it ran in, falling back
+// to the caller's store (the run's handle may be closed by then).
+func settledState(ctx context.Context, e cacheEntry, fallback *store.Store) (model.JobState, bool) {
+	for _, st := range []*store.Store{e.st, fallback} {
+		if st == nil {
+			continue
+		}
+		if state, _, err := st.AttemptStateEpoch(ctx, e.id); err == nil {
+			return state, true
+		}
+	}
+	return "", false
 }
 
 func liveState(state model.JobState) bool {
@@ -247,10 +262,8 @@ func (h *cacheHook) evict(ctx context.Context, st *store.Store, now time.Time) {
 	h.sessions.Range(func(k, v any) bool {
 		e := v.(cacheEntry)
 		dead := now.Sub(e.at) > staleAfter
-		if st != nil {
-			if state, _, err := st.AttemptStateEpoch(ctx, e.id); err == nil {
-				dead = !liveState(state)
-			}
+		if state, ok := settledState(ctx, e, st); ok {
+			dead = !liveState(state)
 		}
 		if dead && h.sessions.CompareAndDelete(k, v) { // After may have claimed it
 			closeSession(ctx, st, e)
