@@ -151,7 +151,9 @@ func unitScript() string {
 }
 
 // Unit is the text of the pull-mode service unit. NoNewPrivileges is deliberately absent: the agent
-// starts every job through sudo (the job shim), which needs the setuid bit.
+// starts every job through sudo (the job shim), which needs the setuid bit. Delegate=yes gives the agent
+// its own cgroup subtree: the contention isolator moves it into a child cgroup and enables cpu and memory
+// for its children, which systemd allows only for a delegated unit (D-1229).
 func Unit() string {
 	return fmt.Sprintf(`[Unit]
 Description=nSelf CI agent (pull mode)
@@ -167,6 +169,7 @@ Environment=NSELF_CI_AGENT_WORK=%[3]s
 ExecStart=%[4]s pull
 Restart=on-failure
 RestartSec=5
+Delegate=yes
 
 [Install]
 WantedBy=multi-user.target

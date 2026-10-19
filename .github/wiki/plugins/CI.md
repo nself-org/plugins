@@ -78,6 +78,12 @@ Ported from core `nself runner provision|verify` (P7-CANON-10) with the same fla
 - Exit status follows core: 1 for a refusal or a failed step, or the status of the failed ssh or remote command (255 for a connection error).
 - `scripts/parity-nodes.sh` compares stdout, stderr, exit code, the ssh argv and the commands a stubbed host recorded against a core build, using disposable local sshd containers only.
 
+## Node reservations: `nodes set`
+
+`nself ci nodes set <node> [--reserve-cpu N|P%] [--reserve-mem MB|Ng] [--interactive protect|ignore] [--on-battery pause|drain|allow] [--persistence persistent|intermittent] [--project P] [--json]` changes the reservation settings of a registered node. Give at least one flag; a flag you leave out keeps its stored value. The node id may come before or after the flags. It writes the local registry only and makes no remote call. A usage error exits 1 (error code `E651`), an unopenable store exits 2; with `--json` both print one error envelope on stdout.
+
+The caps are enforced by moving the agent into its own child cgroup (`nself-ci-agent`) and enabling `cpu` and `memory` for its children. systemd allows that only when the unit owns a delegated cgroup, so the pull-mode unit that `nodes add --system` installs sets `Delegate=yes`. A hand-written unit for the agent needs the same line, otherwise the caps are reported as unknown.
+
 ## Source
 
 [`plugins/ci/`](https://github.com/nself-org/plugins/tree/main/ci)

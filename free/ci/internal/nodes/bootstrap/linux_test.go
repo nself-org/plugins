@@ -119,6 +119,16 @@ func TestUnitKeepsSudoWorking(t *testing.T) {
 	}
 }
 
+// The contention isolator moves the agent into its own child cgroup and enables cpu and memory for its
+// children; systemd only allows that when the unit owns a delegated cgroup (D-1229).
+func TestUnitDelegatesItsCgroup(t *testing.T) {
+	u := Unit()
+	service := u[strings.Index(u, "[Service]"):strings.Index(u, "[Install]")]
+	if !strings.Contains(service, "\nDelegate=yes\n") {
+		t.Errorf("the [Service] section lacks Delegate=yes, so the reservation caps report unknown:\n%s", service)
+	}
+}
+
 func TestInstallSequenceAsRootAndAsSudoUser(t *testing.T) {
 	for _, uid := range []string{"0", "1000"} {
 		n := &fakeNode{uid: uid}
