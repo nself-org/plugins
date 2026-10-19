@@ -1,0 +1,98 @@
+# Acceptance scenario drills (P7-CI-47), directive Acceptance functional 1 and 12.
+#
+# Purpose: run scenario 1 (local only: no cloud account, network cut after setup) and scenario 12 (an external consumer of
+#   ci.evidence) on hosted ubuntu and macos-arm64 runners. Both are drill jobs of the `drills` pipeline
+#   (scripts/drill/scenario-*/run); this workflow builds the ci plugin from the commit under review and an `nself` from
+#   nself-org/cli origin/main (the served-bytes install leg is P7-CI-99's), then runs each job with `nself-ci --pipeline
+#   drills --job <name>`. The outer --no-status is this workflow's: scenario 1's own inner runs never use it.
+# Inputs:  this checkout and nself-org/cli main. No secrets.
+# Outputs: one ci.evidence document per scenario, uploaded as an artifact and summarised in the job summary.
+# Constraints: actions pinned by SHA; scenario 1 cuts the network for its own processes with `sudo -n` (nft on Linux, pf on
+#   macOS) and removes the cut on every exit path. Runs on pull requests that touch these paths and on demand.
+
+name: ci-scenarios
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ci-scenarios.yml"
+      - "scripts/drill/**"
+      - "free/ci/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-scenarios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NSELF_V15: "1" # the plugin binary does not follow the cli flip; kept until v1.6
+
+jobs:
+  scenarios:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Check out nself-org/cli (main)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: nself-org/cli
+          ref: main
+          path: .drill-src/cli
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+          cache: false
+
+      - name: Build the ci plugin from this commit and the cli from main
+        run: |
+          set -euo pipefail
+          mkdir -p .drill-bin
+          # The scenarios build from the checkout; the build products must not make it look modified.
+          printf '%s\n' .drill-bin .drill-src >> .git/info/exclude
+          (cd free/ci && CGO_ENABLED=0 go build -mod=vendor -o "$GITHUB_WORKSPACE/.drill-bin/nself-ci" ./cmd)
+          (cd .drill-src/cli && GOTOOLCHAIN=auto go build -o "$GITHUB_WORKSPACE/.drill-bin/nself" ./cmd/nself)
+          .drill-bin/nself --version || true
+
+      - name: Install nft (Linux)
+        if: runner.os == 'Linux'
+        run: command -v nft >/dev/null || (sudo -n apt-get update -qq && sudo -n apt-get install -y -qq nftables)
+
+      - name: Scenario 12, external evidence consumer
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/evidence"
+          .drill-bin/nself-ci --no-status --pipeline drills --job scenario-12-external-consumer --json > "$RUNNER_TEMP/evidence/scenario-12.json" || status=$?
+          jq -r '"scenario-12: " + (.data.result // "no result")' "$RUNNER_TEMP/evidence/scenario-12.json" | tee -a "$GITHUB_STEP_SUMMARY"
+          jq -e '.data.result == "pass"' "$RUNNER_TEMP/evidence/scenario-12.json" >/dev/null
+          exit "${status:-0}"
+
+      - name: Scenario 1, local only (network cut)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/evidence"
+          .drill-bin/nself-ci --no-status --pipeline drills --job scenario-01-local-only --json > "$RUNNER_TEMP/evidence/scenario-01.json" || status=$?
+          jq -r '"scenario-01: " + (.data.result // "no result")' "$RUNNER_TEMP/evidence/scenario-01.json" | tee -a "$GITHUB_STEP_SUMMARY"
+          jq -e '.data.result == "pass"' "$RUNNER_TEMP/evidence/scenario-01.json" >/dev/null
+          exit "${status:-0}"
+
+      - name: Upload the evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scenario-evidence-${{ matrix.os }}
+          path: ${{ runner.temp }}/evidence/
+          if-no-files-found: ignore

@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# scenario-12-external-consumer drill (P7-CI-47, directive Acceptance functional 12).
+#
+# Purpose: prove that a consumer who knows only `nself ci evidence verify` and the ci.evidence/v1 schema can tell good
+#   evidence from bad. The consumer side below uses the command, jq and free/ci/schemas/ci-evidence.v1.schema.json and
+#   imports no nSelf code. Steps, each its own check in the printed document:
+#   produce, verify-bound, schema, stale-after-lockfile, stale-exit-10, rerun-in-worktree, forged-*, unbound.
+# Inputs:  this checkout (the ci plugin is built from it), git, jq, go, and a gitleaks (installed from the pinned
+#          download when missing). Optional by hand: NSELF_DRILL_CI_BIN.
+# Outputs: ONE ci.evidence/v1 document on the last stdout line; progress on stderr. Exit 0 when every step held, 1 when a
+#          step failed, 2 when a tool is missing.
+# Constraints: bash + jq only on the consumer side; every nself-ci call gets a scrubbed environment and a private
+#          NSELF_CI_HOME; no network after the gitleaks download; the scratch directory is removed on every exit.
+set -uo pipefail
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+lib=$root/scripts/drill/fixtures/lib
+# shellcheck source=/dev/null
+. "$lib/evidence.sh"
+# shellcheck source=/dev/null
+. "$lib/tools.sh"
+# shellcheck source=/dev/null
+. "$lib/make-fixtures.sh"
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/drill-s12.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+ev_begin scenario-12-external-consumer "${BASH_SOURCE[0]}" "$root" "$work"
+for tool in git jq go; do command -v "$tool" >/dev/null || tools_die "$tool is required"; done
+schema=$root/free/ci/schemas/ci-evidence.v1.schema.json
+[ -r "$schema" ] || tools_die "cannot read $schema"
+
+ci=$work/nself-ci
+tools_build_plugin "$ci"
+glpath=$(tools_gitleaks_dir "$work") || exit 2
+mkdir -p "$work/home" "$work/tmp"
+gocache=$(go env GOCACHE) gopath=$(go env GOPATH)
+EV_TOOLS=$(jq -nc --arg go "$(go env GOVERSION)" --arg git "$(git --version | awk '{print $3}')" '{go: $go, git: $git}')
+note=$(tools_pin_drift) && [ -n "$note" ] && say "$note"
+
+# nci HOME_DIR ARGS...: the plugin binary in the current directory with a scrubbed environment; the run store is
+# $work/<HOME_DIR>. Exit code in the caller's $?; stdout/stderr are the caller's.
+nci() {
+	local store=$1
+	shift
+	env -i PATH="$glpath:$PATH" HOME="$work/home" TMPDIR="$work/tmp" LANG=C GOCACHE="$gocache" GOPATH="$gopath" \
+		GOTOOLCHAIN=local GOPROXY=off CI=1 NSELF_V15=1 NSELF_CI_HOME="$work/$store" "$ci" "$@"
+}
+# vjson FILE JQ-EXPR: true when the expression holds for the JSON in FILE.
+vjson() { jq -e "$2" "$1" >/dev/null 2>&1; }
+
+repo=$work/repo
+fx_go "$repo"
+c1=$(git -C "$repo" rev-parse HEAD)
+cd "$repo" || exit 2
+
+# 1. A producer run records evidence for exactly this commit.
+nci producer --no-status --json >"$work/p1.json" 2>"$work/p1.err"
+rc=$?
+if [ $rc -eq 0 ] && vjson "$work/p1.json" '.data.result == "pass"'; then
+	ev_pass produce "nself-ci on the fixture passed (exit 0)"
+else
+	ev_fail produce "nself-ci exited $rc: $(tail -n 3 "$work/p1.err" | tr '\n' ' ')"
+fi
+run1=$(jq -r '.data.run_id // empty' "$work/p1.json" 2>/dev/null)
+
+# 2. verify <rev> gives bound, current, passing evidence for exactly that revision.
+nci producer evidence verify "$c1" --json >"$work/v1.json" 2>"$work/v1.err"
+rc=$?
+if [ $rc -eq 0 ] &&
+	jq -e --arg r "$c1" '.data.result == "pass" and .data.evidence.revision == $r and .data.evidence.binding.state == "bound" and .data.freshness.state == "current" and .data.evidence.run_id != ""' "$work/v1.json" >/dev/null 2>&1; then
+	ev_pass verify-bound "verify $c1 exited 0: bound, current, pass, revision equals the commit"
+else
+	ev_fail verify-bound "verify $c1 exited $rc: $(jq -c '.data | {result, binding, freshness}' "$work/v1.json" 2>/dev/null | head -c 300)"
+fi
+
+# 3. The document obeys the schema: no key outside `properties`, every `required` key present, the const holds.
+jq '.data.evidence' "$work/v1.json" >"$work/doc1.json" 2>/dev/null
+if jq -e --slurpfile s "$schema" '
+	($s[0]) as $sc | keys as $k
+	| .schema == $sc.properties.schema.const
+	and (($sc.required - $k) == [])
+	and (($k - ($sc.properties | keys)) == [])
+	and (.result | IN("pass", "fail", "error", "cancelled"))' "$work/doc1.json" >/dev/null 2>&1; then
+	ev_pass schema "the document matches the schema's const, required keys and property names"
+else
+	ev_fail schema "the document does not match the schema: $(jq -c 'keys' "$work/doc1.json" 2>/dev/null | head -c 300)"
+fi
+
+# 4. A lockfile change makes the prior evidence stale, naming the file; verifying the new commit runs the pipeline in
+#    a temporary worktree and the consumer's checkout stays clean.
+fx_lockfile "$repo"
+git add go.sum
+git -c user.email=drill@example.test -c user.name=drill -c commit.gpgsign=false commit -q -m "lockfile change"
+c2=$(git rev-parse HEAD)
+nci producer evidence "$run1" --json >"$work/s1.json" 2>"$work/s1.err"
+if vjson "$work/s1.json" '.data.freshness.state == "stale" and (.data.freshness.reason | tostring | test("go.sum"))'; then
+	ev_pass stale-after-lockfile "the prior run reads stale: $(jq -r '.data.freshness.reason' "$work/s1.json")"
+else
+	ev_fail stale-after-lockfile "the prior run did not read stale: $(jq -c '.data.freshness' "$work/s1.json" 2>/dev/null | head -c 300)"
+fi
+# exit 10: a store that never saw the run (a consumer's own) holds the old digests under the new revision.
+jq -c --arg r "$c2" '.revision = $r' "$work/doc1.json" >"$work/relabel.json"
+nci consumer evidence verify --file "$work/relabel.json" --at-revision "$c2" --json >"$work/st.json" 2>"$work/st.err"
+rc=$?
+if [ $rc -eq 10 ] && vjson "$work/st.json" '.data.freshness.state == "stale"'; then
+	ev_pass stale-exit-10 "evidence made before the lockfile change reports stale with exit 10 for the new commit"
+else
+	ev_fail stale-exit-10 "expected exit 10 and stale, got exit $rc: $(jq -c '.data.freshness' "$work/st.json" 2>/dev/null | head -c 200)"
+fi
+nci producer evidence verify "$c2" --json >"$work/v2.json" 2>"$work/v2.err"
+rc=$?
+if [ $rc -eq 0 ] && jq -e --arg r "$c2" --arg old "$run1" '.data.evidence.revision == $r and .data.evidence.run_id != $old and .data.evidence.binding.state == "bound"' "$work/v2.json" >/dev/null 2>&1 &&
+	[ "$(git worktree list --porcelain | grep -c '^worktree ')" -eq 1 ] && [ -z "$(git status --porcelain)" ]; then
+	ev_pass rerun-in-worktree "verify $c2 re-ran the pipeline (new run id, bound) and left no worktree or change behind"
+else
+	ev_fail rerun-in-worktree "verify $c2 exited $rc; worktrees: $(git worktree list | wc -l | tr -d ' '); status: $(git status --porcelain | head -c 100)"
+fi
+
+# 5. Documents that were edited are rejected with exit 11 (the producer's store holds the original).
+jq '.data.evidence' "$work/v2.json" >"$work/doc2.json"
+forge() { # forge NAME JQ-EDIT AT-REVISION
+	jq -c "$2" "$work/doc2.json" >"$work/forged-$1.json"
+	nci producer evidence verify --file "$work/forged-$1.json" --at-revision "$3" --json >"$work/f-$1.json" 2>"$work/f-$1.err"
+	local rc=$?
+	if [ $rc -eq 11 ]; then ev_pass "forged-$1" "the edited document is rejected with exit 11"; else ev_fail "forged-$1" "expected exit 11, got $rc"; fi
+}
+forge revision '.revision = "0123456789abcdef0123456789abcdef01234567"' "$c2"
+forge digest '.input_digests.config = "0000000000000000000000000000000000000000000000000000000000000000"' "$c2"
+forge counts '.counts.fail = 3 | .counts.pass = 0' "$c2"
+# An untouched document is still refused where nobody holds a record of its run (origin cannot be authenticated).
+nci consumer evidence verify --file "$work/doc2.json" --at-revision "$c2" >/dev/null 2>&1
+rc=$?
+if [ $rc -eq 11 ]; then ev_pass forged-unknown-origin "a genuine pass with no record on this machine is refused (exit 11)"; else ev_fail forged-unknown-origin "expected exit 11, got $rc"; fi
+
+# 6. A pass from a dirty tree is unbound: exit 12.
+printf '\n// uncommitted\n' >>main.go
+nci producer --no-status --json >"$work/d.json" 2>"$work/d.err"
+jq '.data' "$work/d.json" >"$work/dirty.json" 2>/dev/null
+git checkout -q -- main.go
+nci producer evidence verify --file "$work/dirty.json" --at-revision "$c2" --json >"$work/u.json" 2>"$work/u.err"
+rc=$?
+if [ $rc -eq 12 ] && vjson "$work/dirty.json" '.result == "pass" and .binding.state == "unbound" and .worktree_state == "dirty"'; then
+	ev_pass unbound "a passing dirty-tree document is unbound: exit 12"
+else
+	ev_fail unbound "expected exit 12 for a dirty-tree pass, got $rc: $(jq -c '{result, binding, worktree_state}' "$work/dirty.json" 2>/dev/null | head -c 200)"
+fi
+
+cd "$root" || exit 2
+ev_finish
