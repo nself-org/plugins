@@ -143,8 +143,10 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	if rs.wantsOutput(setup.job) {
 		full = &outputBuffer{}
 	}
+	lg := rs.openLog(ctx, info)
 	spec.Output = func(b []byte) {
 		t.write(b)
+		writeLog(lg, b)
 		if full != nil {
 			full.write(b)
 		}
@@ -156,6 +158,7 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	spec.Slot = rs.sess.slots.take(slotDir(rs.sess.Home))
 	res := func() ciexec.AttemptResult {
 		defer rs.sess.slots.put(spec.Slot)
+		defer closeLog(lg) // before the attempt settles: a finished attempt always has its whole log stored
 		return rs.c.exec.Run(ctx, spec)
 	}()
 	o.Duration, o.ExitCode, o.Tail = res.Finished.Sub(res.Started), res.ExitCode, t.String()
