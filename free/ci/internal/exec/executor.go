@@ -33,6 +33,10 @@ type JobSpec struct {
 	Slot int
 	// Plan, when an Isolator sets it, builds the container command instead of the baseline flags.
 	Plan ContainerPlanner
+	// AfterJob, when set, runs once the command exited 0 and before the
+	// workspace is removed (the only moment a job's outputs can be collected).
+	// An error ends the attempt as failed, class infra, with that error.
+	AfterJob func(ctx context.Context, workspace string) error
 }
 
 // AttemptResult is the local outcome before durable store finalization.
@@ -196,6 +200,9 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		result.ExitCode, result.Err = e.runContainer(ctx, s, workspace, env)
 	} else {
 		result.ExitCode, result.Err = e.runProcess(ctx, s, workspace, env)
+	}
+	if s.AfterJob != nil && result.Err == nil && result.ExitCode == 0 && ctx.Err() == nil {
+		result.Err = s.AfterJob(ctx, workspace)
 	}
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
