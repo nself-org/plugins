@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
@@ -48,24 +49,37 @@ func TestCacheEntriesMigrate(t *testing.T) {
 	}
 }
 
+// cacheSeed creates a queued attempt whose pipeline carries the facts' project and trust.
+func cacheSeed(t *testing.T, s *Store, id string, f entries.Facts) {
+	t.Helper()
+	ctx := context.Background()
+	p := PipelineRow{ID: "p" + id, Revision: "rev", Project: f.Project, Trigger: "local", SourceTrust: f.Trust, PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
+	for _, err := range []error{s.CreatePipeline(ctx, p), s.CreateJob(ctx, JobRow{ID: "j" + id, PipelineID: p.ID, Name: id, Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}), s.CreateAttempt(ctx, AttemptRow{ID: id, JobID: "j" + id, N: 1}, "")} {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func cacheStep(t *testing.T, s *Store, id string, from, to model.JobState, epoch int64) {
+	t.Helper()
+	if err := s.Transition(context.Background(), id, from, to, TransitionDetail{Epoch: epoch, Operator: from == "failed"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // cacheFinalizing creates attempt id, records the plan while running and moves
 // it to finalizing with the given result; it returns the running and finalizing epochs.
 func cacheFinalizing(t *testing.T, s *Store, id string, f entries.Facts, keys []string, passed bool) (running, finalizing int64) {
 	t.Helper()
 	ctx := context.Background()
-	seed(t, s, id)
-	step := func(from, to model.JobState, epoch int64) {
-		t.Helper()
-		if err := s.Transition(ctx, id, from, to, TransitionDetail{Epoch: epoch}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	step("queued", "leased", 0)
-	step("leased", "running", 1)
+	cacheSeed(t, s, id, f)
+	cacheStep(t, s, id, "queued", "leased", 0)
+	cacheStep(t, s, id, "leased", "running", 1)
 	if err := s.CacheRecordPlan(ctx, id, 2, f, keys); err != nil {
 		t.Fatal(err)
 	}
-	step("running", "finalizing", 2)
+	cacheStep(t, s, id, "running", "finalizing", 2)
 	if err := s.CacheRecordResult(ctx, id, 3, passed); err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +187,7 @@ func TestCacheEntriesCommitStates(t *testing.T) {
 		return r.Reason
 	}
 	// running: plan recorded but the attempt is not finalizing yet
-	seed(t, s, "run")
+	cacheSeed(t, s, "run", cacheTrusted)
 	for _, st := range [][3]any{{model.JobState("queued"), model.JobState("leased"), int64(0)}, {model.JobState("leased"), model.JobState("running"), int64(1)}} {
 		if err := s.Transition(ctx, "run", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
 			t.Fatal(err)
@@ -189,7 +203,7 @@ func TestCacheEntriesCommitStates(t *testing.T) {
 	if got := reason(s.CacheCommit(ctx, req("ghost", 0))); got != "attempt_state" {
 		t.Fatalf("unknown: %s", got)
 	}
-	seed(t, s, "bare")
+	cacheSeed(t, s, "bare", cacheTrusted)
 	if got := reason(s.CacheCommit(ctx, req("bare", 0))); got != "attempt_state" {
 		t.Fatalf("bare: %s", got)
 	}
@@ -229,7 +243,7 @@ func TestCacheEntriesPlanAndResultRefusals(t *testing.T) {
 		}
 		return r.Reason
 	}
-	seed(t, s, "p")
+	cacheSeed(t, s, "p", cacheTrusted)
 	if got := reason(s.CacheRecordPlan(ctx, "p", 0, cacheTrusted, nil)); got != "attempt_state" {
 		t.Fatalf("plan while queued: %s", got)
 	}
@@ -262,7 +276,7 @@ func TestCacheEntriesPlanAndResultRefusals(t *testing.T) {
 	if got := reason(s.CacheRecordResult(ctx, "p", 2, true)); got != "epoch" {
 		t.Fatalf("stale result epoch: %s", got)
 	}
-	seed(t, s, "q")
+	cacheSeed(t, s, "q", cacheTrusted)
 	for _, st := range [][3]any{{model.JobState("queued"), model.JobState("leased"), int64(0)}, {model.JobState("leased"), model.JobState("running"), int64(1)}, {model.JobState("running"), model.JobState("finalizing"), int64(2)}} {
 		if err := s.Transition(ctx, "q", st[0].(model.JobState), st[1].(model.JobState), TransitionDetail{Epoch: st[2].(int64)}); err != nil {
 			t.Fatal(err)
@@ -274,3 +288,181 @@ func TestCacheEntriesPlanAndResultRefusals(t *testing.T) {
 }
 
 var _ entries.Backend = (*Store)(nil)
+
+// TestCacheEntriesCommitNeverReplacesAnotherNamespace: the same key string in a
+// second namespace must not delete or overwrite the first namespace's entry.
+func TestCacheEntriesCommitNeverReplacesAnotherNamespace(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	other := entries.Facts{Project: "other", Trust: "owner", Protection: "protected"}
+	_, fin := cacheFinalizing(t, s, "first", cacheTrusted, []string{cacheKey}, true)
+	ns, _ := entries.NamespaceOf(cacheTrusted)
+	if err := s.CacheCommit(ctx, entries.CommitRequest{Attempt: "first", Epoch: fin, Claimed: ns, Manifest: cacheManifest(t, cacheTrusted, cacheKey, 10)}); err != nil {
+		t.Fatal(err)
+	}
+	_, fin = cacheFinalizing(t, s, "second", other, []string{cacheKey}, true)
+	ons, _ := entries.NamespaceOf(other)
+	err := s.CacheCommit(ctx, entries.CommitRequest{Attempt: "second", Epoch: fin, Claimed: ons, Manifest: cacheManifest(t, other, cacheKey, 20)})
+	if err == nil {
+		t.Fatal("a foreign namespace replaced an entry")
+	}
+	list, lerr := s.CacheEntries(ctx, cacheKey)
+	if lerr != nil || len(list) != 1 || list[0].Writer.AttemptID != "first" || list[0].Bytes() != 10 {
+		t.Fatalf("the original entry was disturbed: %+v %v", list, lerr)
+	}
+}
+
+func reasonOf(t *testing.T, err error) string {
+	t.Helper()
+	var r *entries.Refused
+	if !errors.As(err, &r) {
+		t.Fatalf("not E711: %v", err)
+	}
+	return r.Reason
+}
+
+func cacheReq(t *testing.T, id string, epoch int64, f entries.Facts, key string, size int64) entries.CommitRequest {
+	t.Helper()
+	ns, _ := entries.NamespaceOf(f)
+	return entries.CommitRequest{Attempt: id, Epoch: epoch, Claimed: ns, Manifest: cacheManifest(t, f, key, size)}
+}
+
+func TestCacheEntriesPlanMustMatchThePipeline(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	cacheSeed(t, s, "m", cacheTrusted)
+	cacheStep(t, s, "m", "queued", "leased", 0)
+	cacheStep(t, s, "m", "leased", "running", 1)
+	for name, f := range map[string]entries.Facts{
+		"other project": {Project: "other", Trust: "owner", Protection: "protected"},
+		"higher trust":  {Project: "proj", Trust: "internal", Protection: "protected"},
+	} {
+		if got := reasonOf(t, s.CacheRecordPlan(ctx, "m", 2, f, nil)); got != "namespace" {
+			t.Errorf("%s: %s", name, got)
+		}
+	}
+	if cacheAuditCount(t, s, "cache.plan.refused", "m", "reason=namespace") != 2 {
+		t.Fatal("each refused plan needs an audit row")
+	}
+}
+
+// TestCacheEntriesResultAndPlanDoNotSurviveARerun: a pass recorded in one run
+// never authorises a save in the next run of the same attempt id.
+func TestCacheEntriesResultAndPlanDoNotSurviveARerun(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	const oldKey, newKey = cacheKey, "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+	cacheFinalizing(t, s, "r", cacheTrusted, []string{oldKey}, true)
+	cacheStep(t, s, "r", "finalizing", "failed", 3)
+	cacheStep(t, s, "r", "failed", "queued", 4)
+	cacheStep(t, s, "r", "queued", "leased", 5)
+	cacheStep(t, s, "r", "leased", "running", 6)
+	cacheStep(t, s, "r", "running", "finalizing", 7)
+	// the coordinator forgot RecordPlan and RecordResult for the new run
+	if got := reasonOf(t, s.CacheCommit(ctx, cacheReq(t, "r", 8, cacheTrusted, oldKey, 10))); got != "attempt_state" {
+		t.Fatalf("stale pass accepted: %s", got)
+	}
+	if got := reasonOf(t, s.CacheRecordResult(ctx, "r", 7, true)); got != "epoch" {
+		t.Fatalf("result at a stale epoch: %s", got)
+	}
+	// a second run that plans afresh replaces the old key set
+	cacheSeed(t, s, "r2", cacheTrusted)
+	cacheStep(t, s, "r2", "queued", "leased", 0)
+	cacheStep(t, s, "r2", "leased", "running", 1)
+	if err := s.CacheRecordPlan(ctx, "r2", 2, cacheTrusted, []string{oldKey}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CacheRecordPlan(ctx, "r2", 2, cacheTrusted, []string{newKey}); err != nil {
+		t.Fatal(err)
+	}
+	cacheStep(t, s, "r2", "running", "finalizing", 2)
+	if err := s.CacheRecordResult(ctx, "r2", 3, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := reasonOf(t, s.CacheCommit(ctx, cacheReq(t, "r2", 3, cacheTrusted, oldKey, 10))); got != "not_planned" {
+		t.Fatalf("replaced plan still authorises the old key: %s", got)
+	}
+	if err := s.CacheCommit(ctx, cacheReq(t, "r2", 3, cacheTrusted, newKey, 10)); err != nil {
+		t.Fatal(err)
+	}
+	// a failing result drops the planned set
+	cacheFinalizing(t, s, "bad", cacheTrusted, []string{oldKey}, true)
+	if err := s.CacheRecordResult(ctx, "bad", 3, false); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := s.readers.QueryRow("SELECT count(*) FROM cache_planned WHERE attempt_id='bad'").Scan(&n); err != nil || n != 0 {
+		t.Fatalf("planned keys after a failing result: %d %v", n, err)
+	}
+}
+
+// TestCacheEntriesUseTheLeaseFence: an attempt with a durable lease fence (the
+// remote path) is gated on that fence, not on the transition counter.
+func TestCacheEntriesUseTheLeaseFence(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	cacheSeed(t, s, "f", cacheTrusted)
+	fence, err := s.LeaseGrant(ctx, "host", Demand{AttemptID: "f", LeaseID: "lease-f", RunnerID: "node", CPU: 1, MemMB: 1, CapacityCPU: 10, CapacityMemMB: 10, TTL: time.Minute}, 1)
+	if err != nil || fence <= 1<<32 {
+		t.Fatalf("fence %d %v", fence, err)
+	}
+	cacheStep(t, s, "f", "leased", "running", 1)
+	if got := reasonOf(t, s.CacheRecordPlan(ctx, "f", 2, cacheTrusted, []string{cacheKey})); got != "epoch" {
+		t.Fatalf("the transition counter must not pass for a fenced attempt: %s", got)
+	}
+	if err = s.CacheRecordPlan(ctx, "f", fence, cacheTrusted, []string{cacheKey}); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.LeaseResult(ctx, "lease-f", fence); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.CacheRecordResult(ctx, "f", fence, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := reasonOf(t, s.CacheCommit(ctx, cacheReq(t, "f", 3, cacheTrusted, cacheKey, 10))); got != "epoch" {
+		t.Fatalf("commit with the transition counter: %s", got)
+	}
+	if got := reasonOf(t, s.CacheCommit(ctx, cacheReq(t, "f", fence-1, cacheTrusted, cacheKey, 10))); got != "epoch" {
+		t.Fatalf("commit with an older fence: %s", got)
+	}
+	if err = s.CacheCommit(ctx, cacheReq(t, "f", fence, cacheTrusted, cacheKey, 10)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCacheEntriesCheckRunsOnlyAfterAuthorization(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	_, fin := cacheFinalizing(t, s, "c", cacheTrusted, []string{cacheKey}, true)
+	calls := 0
+	req := cacheReq(t, "c", fin, cacheTrusted, cacheKey, 10)
+	req.Check = func() error { calls++; return &entries.Refused{Reason: "disk_floor"} }
+	stale := req
+	stale.Epoch = fin - 1
+	if reasonOf(t, s.CacheCommit(ctx, stale)) != "epoch" || calls != 0 {
+		t.Fatalf("Check ran before the epoch gate (%d calls)", calls)
+	}
+	foreign := req
+	foreign.Manifest.Key = strings.Repeat("c", 64)
+	if reasonOf(t, s.CacheCommit(ctx, foreign)) != "not_planned" || calls != 0 {
+		t.Fatalf("Check ran before the planned-key check (%d calls)", calls)
+	}
+	if got := reasonOf(t, s.CacheCommit(ctx, req)); got != "disk_floor" || calls != 1 {
+		t.Fatalf("Check refusal: %s (%d calls)", got, calls)
+	}
+	if cacheAuditCount(t, s, "cache.commit.refused", "c", "reason=disk_floor") != 1 {
+		t.Fatal("a Check refusal needs an audit row")
+	}
+	boom := errors.New("boom")
+	req.Check = func() error { return boom }
+	if err := s.CacheCommit(ctx, req); !errors.Is(err, boom) {
+		t.Fatalf("a plain Check error must abort the commit: %v", err)
+	}
+	if list, _ := s.CacheEntries(ctx, ""); len(list) != 0 {
+		t.Fatal("an aborted commit left an entry")
+	}
+	req.Check = nil
+	if err := s.CacheCommit(ctx, req); err != nil {
+		t.Fatalf("the attempt must still be able to save: %v", err)
+	}
+}

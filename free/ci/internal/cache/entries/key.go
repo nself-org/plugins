@@ -23,6 +23,7 @@ import (
 const (
 	maxFieldBytes = 1 << 20
 	maxListItems  = 1 << 16
+	maxKeyBytes   = 16 << 20 // all fields together
 )
 
 // KeyInputs are the key fields in encoding order. Toolchain is the image digest
@@ -97,6 +98,9 @@ func Key(k KeyInputs) (string, error) {
 	b, err := k.encode()
 	if err != nil {
 		return "", err
+	}
+	if len(b) > maxKeyBytes {
+		return "", fmt.Errorf("entries: key inputs of %d bytes exceed %d", len(b), maxKeyBytes)
 	}
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:]), nil

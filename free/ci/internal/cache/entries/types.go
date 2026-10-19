@@ -58,13 +58,17 @@ type Facts struct {
 }
 
 // CommitRequest is one cache save. Claimed is only compared with the namespace
-// the backend recomputes from the stored facts.
+// the backend recomputes from the stored facts. Check, when set, runs inside the
+// commit transaction after every authorization check and before the insert, so
+// nothing it reveals (blob presence, free space) reaches an unauthorised caller;
+// a *Refused it returns is recorded as a refusal, any other error aborts.
 type CommitRequest struct {
 	Attempt       string
 	Epoch         int64
 	Claimed       authz.Namespace
 	Manifest      Manifest
 	MaxEntryBytes int64
+	Check         func() error
 }
 
 // PruneStep bounds one backend prune transaction (see Backend.CachePrune).
@@ -96,7 +100,7 @@ type Backend interface {
 	CacheCommit(ctx context.Context, c CommitRequest) error
 	CacheEntries(ctx context.Context, key string) ([]Manifest, error)
 	CacheTouch(ctx context.Context, key string) error
-	CacheDrop(ctx context.Context, key, reason string) error
+	CacheDrop(ctx context.Context, m Manifest, reason string) error
 	CachePrune(ctx context.Context, p PruneStep) (Pruned, error)
 	CacheRecordUse(ctx context.Context, u Use) error
 	CacheUses(ctx context.Context, attempt string) ([]Use, error)

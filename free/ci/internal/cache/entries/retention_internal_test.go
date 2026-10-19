@@ -96,3 +96,15 @@ func TestPruneFloorStageReleasesTheShortfall(t *testing.T) {
 		t.Fatalf("floor step %+v", st)
 	}
 }
+
+func TestSpaceTreatsAMissingStatfsAsNoCheck(t *testing.T) {
+	s, _, _ := newFake(t)
+	s.opt.Free = func() (int64, int64, error) { return 0, 0, errNoStatfs }
+	if _, _, ok, err := s.space(); ok || err != nil {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+	s.opt.Free = func() (int64, int64, error) { return 0, 0, errors.New("disk on fire") }
+	if _, _, _, err := s.space(); err == nil {
+		t.Fatal("a real probe failure must surface")
+	}
+}

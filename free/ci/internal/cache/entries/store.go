@@ -14,7 +14,6 @@ import (
 	"io"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
@@ -25,6 +24,11 @@ const (
 	defaultMaxBytes = int64(10) << 30
 	defaultMaxAge   = 336 * time.Hour
 	defaultMinFree  = int64(5) << 30
+	// BlobMaxAge is how old a blob may be when its entry commits. It is half of
+	// cas's one hour sweep grace, so a blob that Commit accepts cannot be swept by a
+	// concurrent prune in this or any other process, whatever reference set that
+	// prune scanned. cas.Put replaces an existing blob, so re-Putting refreshes it.
+	BlobMaxAge = 30 * time.Minute
 	// UsageRetention is how long usage rows and finished-attempt facts live.
 	UsageRetention = 30 * 24 * time.Hour
 )
@@ -50,7 +54,6 @@ type Store struct {
 	maxAge   time.Duration
 	minFree  int64 // <0: derive from the volume
 	now      func() time.Time
-	sweep    sync.RWMutex // commits hold R; a prune's reference scan + sweep hold W
 }
 
 // New builds a Store and reads the environment caps once.

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
@@ -119,12 +120,13 @@ func TestCommitSizeCapAndDiskFloor(t *testing.T) {
 	f := newEnv(t, envOpts{env: map[string]string{"NSELF_CI_STORE_MIN_FREE": "1000"}})
 	key = f.key(trusted, "f")
 	fin = f.attempt("f1", trusted, []string{key}, true)
-	f.free.Store(1000 + 10)
-	if got := refusedReason(t, f.es.Commit(f.ctx, "f1", fin, f.ns(trusted), f.manifest(trusted, key, strings.Repeat("y", 11)))); got != entries.ReasonDiskFloor {
+	f.free.Store(999)
+	if got := refusedReason(t, f.es.Commit(f.ctx, "f1", fin, f.ns(trusted), f.manifest(trusted, key, "y"))); got != entries.ReasonDiskFloor {
 		t.Fatal(got)
 	}
-	if err := f.es.Commit(f.ctx, "f1", fin, f.ns(trusted), f.manifest(trusted, key, strings.Repeat("y", 10))); err != nil {
-		t.Fatalf("writing down to exactly the floor must work: %v", err)
+	f.free.Store(1000)
+	if err := f.es.Commit(f.ctx, "f1", fin, f.ns(trusted), f.manifest(trusted, key, "y")); err != nil {
+		t.Fatalf("free space exactly at the floor must work: %v", err)
 	}
 	f.free.Store(0)
 	if _, ok := f.lookup(trusted, key); !ok {
@@ -142,5 +144,106 @@ func TestRecordPlanRejectsBadInput(t *testing.T) {
 	}
 	if err := e.es.RecordPlan(e.ctx, "ok", 0, trusted, make([]string, 1025)); !errors.Is(err, entries.ErrManifest) {
 		t.Fatalf("planned key count: %v", err)
+	}
+}
+
+func TestCommitOfAForeignManifestNamespaceIsRefusedWithAnAuditRowAndNoOracle(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	key := e.key(trusted, "o")
+	fin := e.attempt("o1", trusted, []string{key}, true)
+	pr2 := untrust1
+	pr2.PR = "2"
+	// the blobs sit in the caller's own realm, the manifest names PR 2's namespace
+	own := e.manifest(trusted, key, "own bytes")
+	foreign := own
+	foreign.Namespace = e.ns(pr2).Canonical()
+	if got := refusedReason(t, e.es.Commit(e.ctx, "o1", fin, e.ns(trusted), foreign)); got != entries.ReasonNamespace {
+		t.Fatal(got)
+	}
+	// and the blobs exist in neither realm: still E711 namespace, never "file does not exist"
+	absent := foreign
+	absent.Blobs = []entries.Blob{{Path: "x", SHA256: strings.Repeat("0", 64), Size: 1}}
+	if got := refusedReason(t, e.es.Commit(e.ctx, "o1", fin, e.ns(trusted), absent)); got != entries.ReasonNamespace {
+		t.Fatal(got)
+	}
+	// a manifest namespace that is not even canonical is the same refusal
+	junk := own
+	junk.Namespace = []byte("junk")
+	if got := refusedReason(t, e.es.Commit(e.ctx, "o1", fin, e.ns(trusted), junk)); got != entries.ReasonNamespace {
+		t.Fatal(got)
+	}
+	if n := len(e.audit("cache.commit.refused")); n != 3 {
+		t.Fatalf("%d audit rows, want 3", n)
+	}
+	if e.count() != 0 {
+		t.Fatal("a refused commit is visible")
+	}
+}
+
+func TestCommitRefusalOrderGatesBeforeBlobAndPathChecks(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	key := e.key(trusted, "g")
+	fin := e.attempt("g1", trusted, []string{key}, true)
+	m := e.manifest(trusted, key, "data")
+	m.Blobs[0].Path = "../escape"
+	// a stale epoch wins over the bad path: the zombie attempt learns nothing else
+	if got := refusedReason(t, e.es.Commit(e.ctx, "g1", fin-1, e.ns(trusted), m)); got != entries.ReasonEpoch {
+		t.Fatal(got)
+	}
+	if got := refusedReason(t, e.es.Commit(e.ctx, "nobody", fin, e.ns(trusted), m)); got != entries.ReasonAttemptState {
+		t.Fatal(got)
+	}
+	if n := len(e.audit("cache.commit.refused")); n != 2 {
+		t.Fatalf("%d audit rows", n)
+	}
+}
+
+func TestCommitRefusesBlobsThatAreNotFreshlyPut(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	key := e.key(trusted, "age")
+	fin := e.attempt("age1", trusted, []string{key}, true)
+	m := e.manifest(trusted, key, "old bytes")
+	setAge := func(d time.Duration) {
+		t.Helper()
+		when := time.Unix(0, e.clock.Load()).Add(-d)
+		if err := os.Chtimes(e.blobPath(m, 0), when, when); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setAge(entries.BlobMaxAge + time.Second)
+	if err := e.es.Commit(e.ctx, "age1", fin, e.ns(trusted), m); !errors.Is(err, entries.ErrBlobStale) {
+		t.Fatalf("stale blob: %v", err)
+	}
+	setAge(entries.BlobMaxAge)
+	if err := e.es.Commit(e.ctx, "age1", fin, e.ns(trusted), m); err != nil {
+		t.Fatalf("a blob exactly at the limit is fine: %v", err)
+	}
+}
+
+// TestPruneKeepsABlobCommittedJustInsideTheAgeLimit: a second, independently
+// built Store over the same database and blob tree prunes after the grace is over;
+// the entry committed at the age limit keeps its blob. (Commit refuses older
+// blobs, see the test above, so no prune can have swept a blob it accepts.)
+func TestPruneKeepsABlobCommittedJustInsideTheAgeLimit(t *testing.T) {
+	a := newEnv(t, envOpts{})
+	pruner := entries.New(a.st, a.blobs, entries.Options{Clock: func() time.Time { return time.Unix(0, a.clock.Load()) }, Getenv: func(string) string { return "" }})
+	key := a.key(trusted, "race")
+	fin := a.attempt("race1", trusted, []string{key}, true)
+	m := a.manifest(trusted, key, "racing bytes")
+	// the pruner scanned its references (none) and now runs 59 minutes later in the
+	// grace window; the commit in the other Store lands inside Commit's age limit
+	a.advance(entries.BlobMaxAge - time.Minute)
+	if err := a.es.Commit(a.ctx, "race1", fin, a.ns(trusted), m); err != nil {
+		t.Fatal(err)
+	}
+	a.advance(40 * time.Minute) // grace is over for any blob that is still unreferenced
+	if _, err := pruner.Prune(a.ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := a.lookup(trusted, key); !ok {
+		t.Fatal("the committed entry lost its blob to a concurrent prune")
+	}
+	if a.blobFiles() != 1 {
+		t.Fatalf("%d blob files", a.blobFiles())
 	}
 }

@@ -241,3 +241,31 @@ func TestKeyNoCollisionsProperty(t *testing.T) {
 		t.Fatalf("generator too narrow: %d distinct tuples", len(seen))
 	}
 }
+
+// TestKeyTotalSizeLimitIsInclusive fills the key inputs to exactly maxKeyBytes.
+func TestKeyTotalSizeLimitIsInclusive(t *testing.T) {
+	base := KeyInputs{Namespace: trustedNS}
+	enc, err := base.encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	room := maxKeyBytes - len(enc) // bytes left for list items (each costs 4 + its length)
+	var items []string
+	for room >= 4+maxFieldBytes+4 {
+		items = append(items, strings.Repeat("x", maxFieldBytes))
+		room -= 4 + maxFieldBytes
+	}
+	items = append(items, strings.Repeat("y", room-4))
+	in := base
+	in.Extras = items
+	if got, err := in.encode(); err != nil || len(got) != maxKeyBytes {
+		t.Fatalf("setup: %d bytes (%v)", len(got), err)
+	}
+	if _, err := Key(in); err != nil {
+		t.Fatalf("inputs of exactly the limit must work: %v", err)
+	}
+	in.Extras = append(append([]string(nil), items[:len(items)-1]...), items[len(items)-1]+"z")
+	if _, err := Key(in); err == nil {
+		t.Fatal("inputs one byte over the limit were accepted")
+	}
+}

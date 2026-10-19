@@ -1,6 +1,7 @@
 package entries_test
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -208,7 +209,7 @@ func TestEnvCaps(t *testing.T) {
 	}
 }
 
-// commitWithFree reports whether a 10 byte save is accepted when free bytes are free.
+// commitWithFree reports whether a save is accepted when free bytes are free.
 func commitWithFree(t *testing.T, e *env, id string, free int64) bool {
 	t.Helper()
 	key := e.key(trusted, id)
@@ -225,19 +226,19 @@ func TestDefaultFloorIsTheLargerOfFiveGiBAndATenthOfTheVolume(t *testing.T) {
 	const gib = int64(1) << 30
 	e := newEnv(t, envOpts{})
 	e.total.Store(100 * gib) // a tenth is 10 GiB
-	if commitWithFree(t, e, "d1", 10*gib+9) || !commitWithFree(t, e, "d2", 10*gib+10) {
+	if commitWithFree(t, e, "d1", 10*gib-1) || !commitWithFree(t, e, "d2", 10*gib) {
 		t.Fatal("on a 100 GiB volume the floor is 10 GiB")
 	}
 	e.total.Store(10 * gib) // a tenth is 1 GiB, so 5 GiB wins
-	if commitWithFree(t, e, "d3", 5*gib+9) || !commitWithFree(t, e, "d4", 5*gib+10) {
+	if commitWithFree(t, e, "d3", 5*gib-1) || !commitWithFree(t, e, "d4", 5*gib) {
 		t.Fatal("on a small volume the floor is 5 GiB")
 	}
 }
 
 func TestExplicitZeroFloorIsAccepted(t *testing.T) {
 	e := newEnv(t, envOpts{env: map[string]string{"NSELF_CI_STORE_MIN_FREE": "0"}})
-	if commitWithFree(t, e, "z1", 9) || !commitWithFree(t, e, "z2", 10) {
-		t.Fatal("a zero floor means: refuse only when the save would not fit")
+	if !commitWithFree(t, e, "z1", 0) {
+		t.Fatal("a zero floor never refuses")
 	}
 	if e.warn.Len() != 0 {
 		t.Fatalf("0 is a valid floor but warned: %q", e.warn.String())
@@ -252,5 +253,25 @@ func TestCommitAcceptsExactlyTheMaximumPlannedKeys(t *testing.T) {
 	}
 	if err := e.es.RecordPlan(e.ctx, "nope", 0, trusted, keys); refusedReason(t, err) != entries.ReasonAttemptState {
 		t.Fatalf("1024 keys must pass validation and reach the backend: %v", err)
+	}
+}
+
+func TestPruneBudgetBoundsTheWholeOperation(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	for i := 0; i < 3; i++ {
+		e.save("b"+string(rune('a'+i)), trusted, string(rune('a'+i)), "data")
+	}
+	e.advance(2 * time.Hour)
+	res, err := e.es.Prune(e.ctx, time.Nanosecond) // already over budget when the first stage starts
+	if err != nil || !res.More {
+		t.Fatalf("an exhausted budget is not an error: %+v %v", res, err)
+	}
+	ctx, cancel := context.WithCancel(e.ctx)
+	cancel()
+	if _, err = e.es.Prune(ctx, time.Hour); !errors.Is(err, context.Canceled) {
+		t.Fatalf("a cancelled caller context is an error: %v", err)
+	}
+	if res, err = e.es.Prune(e.ctx, time.Minute); err != nil || res.More {
+		t.Fatalf("a roomy budget completes: %+v %v", res, err)
 	}
 }

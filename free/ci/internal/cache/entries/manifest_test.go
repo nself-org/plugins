@@ -71,6 +71,12 @@ func TestManifestRejects(t *testing.T) {
 	if err := ok.Validate(); err != nil {
 		t.Errorf("limits must be inclusive: %v", err)
 	}
+	total := mutate(func(m *Manifest) {
+		m.Blobs = []Blob{{Path: "a", SHA256: strings.Repeat("b", 64), Size: maxBlobBytes}, {Path: "b", SHA256: strings.Repeat("c", 64), Size: 1}}
+	})
+	if err := total.Validate(); !errors.Is(err, ErrManifest) {
+		t.Errorf("an entry over the total limit: %v", err)
+	}
 	many := mutate(func(m *Manifest) { m.Blobs = make([]Blob, maxBlobs+1) })
 	if err := many.Validate(); !errors.Is(err, ErrManifest) {
 		t.Errorf("too many blobs: %v", err)

@@ -10,12 +10,15 @@ package entries
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 )
 
 const pruneBatch = 64
+
+var errNoStatfs = errors.New("entries: free-space check unsupported on this platform")
 
 // space reports free bytes and the floor; ok is false when no check is
 // configured (no Free hook and no Home).
@@ -28,6 +31,9 @@ func (s *Store) space() (free, floor int64, ok bool, err error) {
 		return 0, 0, false, nil
 	}
 	free, total, err := probe()
+	if errors.Is(err, errNoStatfs) {
+		return 0, 0, false, nil
+	}
 	if err != nil {
 		return 0, 0, false, err
 	}
@@ -38,11 +44,10 @@ func (s *Store) space() (free, floor int64, ok bool, err error) {
 	return free, floor, true, nil
 }
 
-// sweepBlobs removes unreferenced cache blobs. Commits hold the read lock, so
-// no reference can appear between the scan and the sweep in this process.
+// sweepBlobs removes unreferenced cache blobs older than cas's grace. A commit
+// in any process that races this scan only references blobs younger than
+// BlobMaxAge, which the sweep never removes.
 func (s *Store) sweepBlobs(ctx context.Context) error {
-	s.sweep.Lock()
-	defer s.sweep.Unlock()
 	list, err := s.be.CacheEntries(ctx, "")
 	if err != nil {
 		return err
@@ -56,9 +61,34 @@ func (s *Store) sweepBlobs(ctx context.Context) error {
 	return s.blobs.Sweep(ctx, "cache", func(r cas.Realm, digest string) bool { return keep[string(r)+"/"+digest] }, s.now())
 }
 
-// Prune enforces the caps and the floor within budget (0 = no limit). When the
-// budget ends first, More is set and the next call continues.
-func (s *Store) Prune(ctx context.Context, budget time.Duration) (Pruned, error) {
+// refuse writes the audit row for a refusal decided outside the backend.
+func (s *Store) refuse(ctx context.Context, op, target, reason string) error {
+	if err := s.be.AppendAudit(ctx, "cache", "cache."+op+".refused", target, "reason="+reason); err != nil {
+		return err
+	}
+	return &Refused{Reason: reason}
+}
+
+// Prune enforces the caps and the floor within budget (0 = no limit). The
+// budget bounds every stage (a deadline on the context reaches the database
+// steps, the reference scan and the cas sweep); when it ends first, More is set
+// and the next call continues. Cancelling ctx itself is an error.
+func (s *Store) Prune(ctx context.Context, budget time.Duration) (out Pruned, err error) {
+	if budget > 0 {
+		parent := ctx
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, budget)
+		defer cancel()
+		defer func() {
+			if errors.Is(err, context.DeadlineExceeded) && parent.Err() == nil {
+				out.More, err = true, nil
+			}
+		}()
+	}
+	return s.prune(ctx, budget)
+}
+
+func (s *Store) prune(ctx context.Context, budget time.Duration) (Pruned, error) {
 	start, out := s.now(), Pruned{}
 	step := PruneStep{MaxAge: s.maxAge, Retention: UsageRetention, MaxBytes: s.maxBytes, Limit: pruneBatch}
 	for {

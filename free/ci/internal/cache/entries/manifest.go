@@ -48,10 +48,15 @@ func cleanRel(p string) bool {
 
 // Validate checks every field. A bad blob path is reported through
 // ErrPathOutside so Commit can refuse with path_outside.
-func (m Manifest) Validate() error {
+func (m Manifest) Validate() error { return m.validate(true) }
+
+// validate checks every field; Commit passes checkNS false so a foreign or
+// malformed namespace reaches the backend, which refuses it (E711 namespace,
+// with an audit row) after the attempt's own checks.
+func (m Manifest) validate(checkNS bool) error {
 	ns, err := authz.DecodeNamespace(m.Namespace)
 	switch {
-	case err != nil || !bytes.Equal(ns.Canonical(), m.Namespace):
+	case checkNS && (err != nil || !bytes.Equal(ns.Canonical(), m.Namespace)):
 		return bad("namespace is not canonical")
 	case !hexKey.MatchString(m.Key):
 		return bad("key is not 64 hex digits")
@@ -66,9 +71,12 @@ func (m Manifest) Validate() error {
 	case m.Writer.SourceTrust != "" && !model.TrustClass(m.Writer.SourceTrust).Valid():
 		return bad("writer source trust")
 	}
-	prev := ""
+	prev, total := "", int64(0)
 	for i, b := range m.Blobs {
+		total += b.Size
 		switch {
+		case total > maxBlobBytes:
+			return bad("entry larger than %d bytes", int64(maxBlobBytes))
 		case !cleanRel(b.Path):
 			return fmt.Errorf("%w: %w", ErrPathOutside, bad("blob path %q", b.Path))
 		case i > 0 && b.Path <= prev:
