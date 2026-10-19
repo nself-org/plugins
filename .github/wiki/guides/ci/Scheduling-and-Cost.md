@@ -20,7 +20,7 @@ GitHub-hosted capacity is `included` and nothing else. Its overage is never a pl
 
 Rates are never fetched. You declare them at operator scope with `economics.rates.<provider>` (a rate per hour or per minute, a billing increment, a minimum charge and extras). A rate in a pull request, a branch or a pipeline file is ignored and recorded.
 
-The worst case of a job is its timeout rounded up to the next billing increment, priced at the rate, plus the minimum charge and extras. A one-minute job on a provider that bills by the hour is estimated at one hour plus the minimum charge and extras. A timeout above `economics.max_paid_timeout` has no bound (`cost.unbounded`) and cannot run on a paid class. If a figure would overflow, it is reported as over budget (`budget.exceeded`), never as a smaller number.
+The worst case of a job is its timeout rounded up to the next billing increment, priced at the rate, plus the minimum charge and extras. With `billing_increment: 1h`, a one-minute job is estimated at one hour plus the minimum charge and extras (with the default one-minute increment it is one minute). A timeout above `economics.max_paid_timeout` has no bound (`cost.unbounded`) and cannot run on a paid class. If a figure would overflow, it is reported as over budget (`budget.exceeded`), never as a smaller number.
 
 ## Paid placement is off by default
 
@@ -38,7 +38,7 @@ A burst VM is reserved at its full lifetime when its intent is created and relea
 
 ## Spend approval
 
-When a job's worst case is above `economics.approval_threshold_micro`, its pipeline waits in `approval.pending`. An admin approves it with `nself ci runs approve <run> --spend` (a TEAM member or release user is refused; the local operator of a PERSONAL coordinator holds admin). The approval is bound to the run, its head SHA, its config digest and the estimate the approver saw, and it is audited with the actor and amount. A new push is a new run and needs its own approval. A job that costs more than the approved estimate waits again.
+When a job's worst case is above `economics.approval_threshold_micro`, its pipeline waits in `approval.pending`. An admin approves it through `economics.ApproveSpend` (P7-TRUST-24 adds the `nself ci runs approve <run> --spend` command that calls it; a TEAM member or release user is refused, and the local operator of a PERSONAL coordinator holds admin). The approval is bound to the run, its head SHA, its config digest and the estimate the approver saw, and it is audited with the actor and amount. A new push is a new run and needs its own approval. A job that costs more than the approved estimate waits again.
 
 ## The ledger and its confidence
 
@@ -53,10 +53,10 @@ When a job's worst case is above `economics.approval_threshold_micro`, its pipel
 
 A remote attempt that reports an end before its start is clamped to the estimate and shown as `estimated`.
 
-An allowance is the declared ceiling (`economics.ceilings.<provider>`) minus the consumption the provider reported minus what the local ledger spent since. Without a declared ceiling, or without any reported consumption, the allowance is unknown and private jobs do not run on that hosted provider (`allowance.unknown`). A job also needs the remaining allowance, minus `economics.margin_micro`, to be above its worst case (`allowance.below_margin`).
+An allowance is the declared ceiling (`economics.ceilings.<provider>`) minus the consumption the provider reported minus what the local ledger spent since. Without a declared ceiling, or without any reported consumption, the allowance is unknown and private jobs do not run on that hosted provider (`allowance.unknown`). A balance the provider reports replaces the ceiling and the imported consumption, and is shown as `known`. Jobs of public repositories on GitHub-hosted runners (label `nself.visibility=public`) do not draw on the allowance. A job also needs the remaining allowance, minus `economics.margin_micro`, to be above its worst case (`allowance.below_margin`).
 
 ## Handoff
 
-- The dispatcher wiring binds the economics environment with `economics.Bind` (store, spend policy, clock, coordinator id) and copies the spend keys into the scheduler's policy with `economics.ApplyPolicy`. Until a coordinator does that, the hooks are inert and nothing is priced.
+- Not wired yet (debt D-1280): the dispatcher must bind the economics environment with `economics.Bind` (store, spend policy, clock, coordinator id) and copy the spend keys into the scheduler's policy with `economics.ApplyPolicy`. Until then the hooks are inert and nothing paid is placed.
 - A job the scheduler holds with `approval.pending` never reaches the admission step; the dispatcher records its estimate with `economics.NotePending` so `ApproveSpend` has a figure to bind to.
 - Burst (P7-SCHED-08) calls `economics.ReserveResource` and `economics.ReleaseResource` inside its own transactions. The GitHub billing importer (P7-HOST-10) writes through `economics.RecordUsage`.

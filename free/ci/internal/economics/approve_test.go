@@ -136,6 +136,11 @@ func TestBudgetNewPushVoidsTheApproval(t *testing.T) {
 		if valid, _ := r.st.ValidApprovals(r.ctx); len(valid) != 0 {
 			t.Fatalf("a changed %s must void the approval: %v", col, valid)
 		}
+		// The admission step must see the void too, not only the world's view.
+		retry := queueAttempt(t, r.st, "pipe", "sha-1", "project")
+		if ref := refusalOf(t, place(r.env, r.st, request(retry, "", "cloudco", 300_000, 0))); ref.Reason != model.ApprovalPending {
+			t.Fatalf("a changed %s must hold the job again at admission: %+v", col, ref)
+		}
 		restore, _ := sql.Open("sqlite", "file:"+dbPathOf(r.st)+"?_pragma=busy_timeout(5000)")
 		if col == "revision" {
 			_, _ = restore.Exec("UPDATE pipeline SET revision='sha-1' WHERE id='pipe'")
