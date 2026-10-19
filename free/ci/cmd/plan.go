@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
@@ -258,6 +259,9 @@ func planGit(ctx context.Context, root string, args ...string) (string, bool) {
 	return planRun(ctx, append([]string{"git", "-c", "core.fsmonitor=false", "-C", root}, args...)...)
 }
 
+// planSeq keeps attempt ids unique when planRevision runs its queries at once.
+var planSeq atomic.Uint64
+
 // planRun runs a command in a funnel workspace and returns its raw output;
 // ok is false on a non-zero exit or any failure.
 func planRun(ctx context.Context, argv ...string) (string, bool) {
@@ -269,7 +273,7 @@ func planRun(ctx context.Context, argv ...string) (string, bool) {
 	var buf strings.Builder
 	var ex ciexec.Executor
 	res := ex.Run(ctx, ciexec.JobSpec{
-		AttemptID: fmt.Sprintf("plan-git-%d", time.Now().UnixNano()), CoordinatorID: "plan",
+		AttemptID: fmt.Sprintf("plan-git-%d-%d", time.Now().UnixNano(), planSeq.Add(1)), CoordinatorID: "plan",
 		Job: model.Job{Kind: "static"}, Home: home, Timeout: 30 * time.Second,
 		Command: argv,
 		Output:  func(b []byte) { buf.Write(b) },

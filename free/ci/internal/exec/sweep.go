@@ -47,10 +47,17 @@ func (e *Executor) sweepOnStart(ctx context.Context, current, home string) error
 	if err := e.sweepProcesses(ctx, home, current); err != nil {
 		return err
 	}
-	if !sweepDue(current, time.Now()) {
+	now := time.Now()
+	if !sweepDue(current, now) {
 		return nil
 	}
-	return e.sweepContainers(ctx, current)
+	if err := e.sweepContainers(ctx, current); err != nil {
+		// a sweep that failed or was cancelled did not clean up: the next job
+		// start must try again instead of trusting the window
+		sweepRelease(current, now)
+		return err
+	}
+	return nil
 }
 
 // containerSweepTTL is how long one coordinator's container sweep stands for
@@ -73,6 +80,16 @@ func sweepDue(current string, now time.Time) bool {
 	}
 	containerSweeps[current] = now
 	return true
+}
+
+// sweepRelease gives back the claim taken at claimed, unless a later window has
+// been claimed since.
+func sweepRelease(current string, claimed time.Time) {
+	containerSweepMu.Lock()
+	defer containerSweepMu.Unlock()
+	if last, ok := containerSweeps[current]; ok && last.Equal(claimed) {
+		delete(containerSweeps, current)
+	}
 }
 
 // sweepContainers removes the labelled containers of stale coordinators.
