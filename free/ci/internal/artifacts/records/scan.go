@@ -6,9 +6,9 @@ package records
 // Outputs: a reader that hands out bytes only once they were scanned.
 // Constraints: windows of 16 MiB with a 4 MiB overlap, so a value that spans
 // two windows is found; a value (in any encoding) longer than the overlap that
-// straddles a window edge is not. internal/redact has no bound on a registered
-// value's length, so 4 MiB is the supported bound (debt row for a Register cap). The blob store
-// publishes at EOF, so a match or an over-cap file aborts before any blob is
+// straddles a window edge is not. redact.Register refuses a value over
+// redact.MaxValueLen, whose longest form (MaxFormExpansion times the value) fits
+// the overlap; a test pins that. The blob store publishes at EOF, so a match or an over-cap file aborts before any blob is
 // visible. A nil scanner refuses everything.
 
 import (

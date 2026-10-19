@@ -19,7 +19,7 @@ import (
 var Redactions = redact.New()
 
 // RegisterSecretValue adds a value to mask in every encoding. It returns the
-// package's E673 error for a value under redact.MinValueLen bytes.
+// package's E673 error for a value under redact.MinValueLen or over redact.MaxValueLen bytes.
 func RegisterSecretValue(v []byte) error { return Redactions.Register(v) }
 
 func init() {

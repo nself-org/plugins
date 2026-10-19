@@ -4,11 +4,26 @@ package redact
 // Inputs:  none. Outputs: Error, MinValueLen, model.Register of E673.
 // Constraints: an error string never contains a registered value or any part of one.
 
-import "github.com/nself-org/plugins/free/ci/internal/model"
+import (
+	"fmt"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
+)
 
 // MinValueLen is the shortest value Register accepts. Shorter values cannot be
 // masked without destroying ordinary output, and they are refused, never skipped.
 const MinValueLen = 6
+
+// MaxValueLen is the longest value Register accepts. The artifact scan
+// (artifacts/records/scan.go) keeps a 4 MiB overlap between its windows, so it
+// finds a value only if its longest encoded form fits in that overlap; the
+// longest form is MaxFormExpansion times the value (a CRLF line end written as
+// JSON \uXXXX escapes). A longer value is refused, never skipped.
+const MaxValueLen = 256 << 10
+
+// MaxFormExpansion is the most one registered byte can grow to in any form of
+// encodings.go. A test over adversarial values keeps it true.
+const MaxFormExpansion = 12
 
 // Error carries a registered machine-readable code.
 type Error struct{ Code, Message string }
@@ -16,8 +31,13 @@ type Error struct{ Code, Message string }
 func (e *Error) Error() string { return e.Code + ": " + e.Message }
 
 func init() {
-	model.Register(model.Code{ID: "E673", Class: "usage", Summary: "value below the redaction minimum length",
-		Fix: "Register values of at least 6 bytes; shorter values cannot be masked"})
+	model.Register(model.Code{ID: "E673", Class: "usage", Summary: "value outside the redaction length bounds",
+		Fix: "Register values of 6 bytes up to the documented maximum; shorter values cannot be masked, longer ones cannot be scanned for in stored artifacts"})
+}
+
+// errTooLong never includes the value, only the rule.
+func errTooLong() error {
+	return &Error{Code: "E673", Message: fmt.Sprintf("value is longer than the %d-byte maximum; it was not registered", MaxValueLen)}
 }
 
 // errTooShort never includes the value, only the rule.
