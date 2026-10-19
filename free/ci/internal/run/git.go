@@ -10,6 +10,7 @@ import (
 	"context"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // Capture runs a process and returns merged output and its exit code.
@@ -23,19 +24,30 @@ type Revision struct {
 
 var fullSHA = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 
-// GitRevision reads HEAD and the worktree state of root.
+// GitRevision reads HEAD and the worktree state of root. The two questions are
+// independent, so they run side by side: each is a funnel spawn on the start
+// path of every run (D-1008). The state of a repository with no commit is not
+// used.
 func GitRevision(ctx context.Context, root string, capture Capture) Revision {
 	git := func(args ...string) (string, bool) {
 		out, exit, err := capture(ctx, append([]string{"git", "-c", "core.fsmonitor=false", "-C", root}, args...)...)
 		return strings.TrimSpace(out), err == nil && exit == 0
 	}
 	var rev Revision
+	var status string
+	var statusOK bool
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		status, statusOK = git("status", "--porcelain", "--untracked-files=normal")
+	}()
 	sha, ok := git("rev-parse", "HEAD")
+	wg.Wait()
 	if !ok || !fullSHA.MatchString(sha) {
 		return rev
 	}
 	rev.SHA = sha
-	status, ok := git("status", "--porcelain", "--untracked-files=normal")
-	rev.Dirty = !ok || status != ""
+	rev.Dirty = !statusOK || status != ""
 	return rev
 }
