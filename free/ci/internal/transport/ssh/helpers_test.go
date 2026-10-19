@@ -31,11 +31,13 @@ type recSink struct {
 	artifacts []protocol.ArtifactRef
 	refs      []protocol.CacheRef
 	blobs     map[string]*memBlob
-	startAt   int64 // offset a Blob writer already holds
+	startAt   int64  // offset a Blob writer already holds
+	prefix    []byte // the bytes before startAt, for Verify
 }
 
 type memBlob struct {
 	head   transport.BlobHeader
+	prefix []byte
 	data   []byte
 	start  int64
 	closed bool
@@ -76,7 +78,7 @@ func (s *recSink) Blob(_ context.Context, h transport.BlobHeader) (transport.Blo
 	if s.blobs == nil {
 		s.blobs = map[string]*memBlob{}
 	}
-	b := &memBlob{head: h, start: s.startAt}
+	b := &memBlob{head: h, start: s.startAt, prefix: s.prefix}
 	s.blobs[h.Stream] = b
 	return b, nil
 }
@@ -180,7 +182,7 @@ func okRunner(lines ...string) session.Runner {
 func newDriver(t *testing.T, home string, a *agentRig, got *startArgs) *Driver {
 	t.Helper()
 	return &Driver{Home: home, Start: a.starter(t, got), SSHVersion: func(context.Context) (remote.Version, error) { return remote.Version{Major: 9, Minor: 6}, nil },
-		Heartbeat: time.Second, AgentTTL: 25 * time.Second, CancelGrace: 3 * time.Second, HelloTimeout: 10 * time.Second}
+		NoRenew: true, Heartbeat: time.Second, AgentTTL: 25 * time.Second, CancelGrace: 3 * time.Second, HelloTimeout: 10 * time.Second}
 }
 
 func mustExist(t *testing.T, p string) {

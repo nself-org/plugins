@@ -55,6 +55,9 @@ type sess struct {
 
 // Run implements transport.Driver.
 func (d *Driver) Run(ctx context.Context, node model.Capability, lease protocol.Lease, sink transport.Sink) error {
+	if d.Renew == nil && !d.NoRenew {
+		return newErr(CodeTransport, ReasonNotConfigured, "the ssh transport has no lease renewal wired (Driver.Renew): a lease would expire under a running job")
+	}
 	tgt, err := d.target(ctx, node)
 	if err != nil {
 		return err
@@ -105,6 +108,10 @@ func (d *Driver) makeBundle(ctx context.Context, l *protocol.Lease) (string, fun
 		e := newErr(CodeTransport, ReasonCheckout, "%v", err)
 		e.Err = err
 		return "", nil, e
+	}
+	if size > checkout.MaxBundle {
+		cleanup()
+		return "", nil, newErr(CodeTransport, ReasonCheckout, "the checkout bundle is %d bytes; a node accepts at most %d", size, checkout.MaxBundle)
 	}
 	l.Checkout.BundleDigest, l.Checkout.Size = digest, size
 	return path, cleanup, nil
@@ -170,9 +177,20 @@ func (d *Driver) minAgent() string {
 	return "0.0.0"
 }
 
-// connectFailure classifies an ssh process that ended before hello.
+// connectFailure classifies an ssh process that ended before hello. The stderr drain is
+// finished before Wait, because Wait closes the pipe and would cut off the tail that names
+// the host key refusal.
 func (s *sess) connectFailure(cause error) error {
 	_ = s.conn.Stdin.Close()
+	select {
+	case <-s.errDone:
+	case <-time.After(2 * time.Second):
+		_ = s.conn.Kill()
+		select {
+		case <-s.errDone:
+		case <-time.After(time.Second):
+		}
+	}
 	waited := make(chan error, 1)
 	go func() { waited <- s.conn.Wait() }()
 	var werr error
@@ -181,10 +199,6 @@ func (s *sess) connectFailure(cause error) error {
 	case <-time.After(2 * time.Second):
 		_ = s.conn.Kill()
 		werr = <-waited
-	}
-	select {
-	case <-s.errDone:
-	case <-time.After(time.Second):
 	}
 	e := classify(s.node.Identity.ID, s.stderr.String(), werr)
 	if s.helloTimedOut.Load() && e.Reason == ReasonConnect {
@@ -227,7 +241,7 @@ func (s *sess) readLoop() {
 }
 
 // close ends the session: flush, close stdin (the agent then kills the job's
-// process group), reap ssh, and stop the reader.
+// process group), reap ssh, stop the reader and discard any blob left half written.
 func (s *sess) close() {
 	close(s.stop)
 	if s.car != nil {
@@ -235,25 +249,27 @@ func (s *sess) close() {
 	}
 	_ = s.conn.Stdin.Close()
 	if s.car != nil {
-		select {
-		case <-s.readerDone:
-		case <-time.After(3 * time.Second):
-			_ = s.conn.Kill()
-			<-s.readerDone
-		}
+		waitOr(s.readerDone, 3*time.Second, s.conn.Kill)
 	}
-	select {
-	case <-s.errDone:
-	case <-time.After(2 * time.Second):
-		_ = s.conn.Kill()
-		<-s.errDone
-	}
+	waitOr(s.errDone, 2*time.Second, s.conn.Kill)
 	waited := make(chan struct{})
 	go func() { _ = s.conn.Wait(); close(waited) }()
+	waitOr(waited, 3*time.Second, s.conn.Kill)
+	for stream, st := range s.blobs {
+		s.discard(st)
+		delete(s.blobs, stream)
+	}
+}
+
+// waitOr waits for done; after d it runs kill and waits once more, for as long again.
+func waitOr(done <-chan struct{}, d time.Duration, kill func() error) {
 	select {
-	case <-waited:
-	case <-time.After(3 * time.Second):
-		_ = s.conn.Kill()
-		<-waited
+	case <-done:
+	case <-time.After(d):
+		_ = kill()
+		select {
+		case <-done:
+		case <-time.After(d):
+		}
 	}
 }

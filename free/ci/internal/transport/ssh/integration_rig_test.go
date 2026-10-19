@@ -79,7 +79,7 @@ func newITRig(t *testing.T) *itRig {
 
 // driver returns a fresh driver for the rig (a Driver holds a sync.Once, so it is never copied).
 func (r *itRig) driver() *Driver {
-	return &Driver{Home: r.home, RepoDir: r.repo, IdentityFile: r.fleet.KeyPath(), Heartbeat: time.Second, CancelGrace: 3 * time.Second}
+	return &Driver{Home: r.home, RepoDir: r.repo, IdentityFile: r.fleet.KeyPath(), NoRenew: true, Heartbeat: time.Second, CancelGrace: 3 * time.Second}
 }
 
 // sh runs script as root on the node and returns its stdout.

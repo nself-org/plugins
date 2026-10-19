@@ -22,6 +22,7 @@ const (
 	ReasonBlob           = "transport.ssh_blob"
 	ReasonFenced         = "transport.ssh_lease_fenced"
 	ReasonRefused        = "transport.ssh_lease_refused"
+	ReasonNotConfigured  = "transport.ssh_not_configured"
 )
 
 func init() {

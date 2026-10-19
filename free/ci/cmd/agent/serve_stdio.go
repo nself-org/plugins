@@ -7,9 +7,10 @@ package main
 // Inputs:  the lease and chunk frames of the stdio carrier; the agent state dir.
 // Outputs: JobSetup.SourceDir for the lease; swept orphan roots.
 // Constraints: chunk frames of the checkout stream never reach the session
-// (it ignores them); a transfer problem fails the lease, never the process;
-// the sweep touches only this agent's own state dir, and only roots older than
-// the age that rules out a sibling `serve --stdio` still working.
+// (it ignores them); a transfer problem fails the lease, never the process, and
+// is logged once per lease; the sweep touches only this agent's own state dir
+// and never a directory another live process holds (checkout.InUse), so a
+// sibling `serve --stdio` keeps its files.
 
 import (
 	"context"
@@ -18,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -29,8 +31,8 @@ import (
 
 const (
 	checkoutDir     = "checkout"
-	stagingMinAge   = 15 * time.Minute // a transfer older than this has no live owner
-	jobRootMinAge   = 24 * time.Hour   // longer than any lease's expiry
+	stagingMinAge   = 2 * time.Minute // covers the moment between creating a root and holding it
+	jobRootMinAge   = time.Hour       // same, for roots the session made before the hook held them
 	stdioHookName   = "checkout-stdio"
 	stdioSweepLabel = "checkout-sweep"
 )
@@ -38,21 +40,34 @@ const (
 // stdioReceiver is the receiver of this process's stdio session (one per process).
 var stdioReceiver atomic.Pointer[checkout.Receiver]
 
+// heldRoots maps a job root to the release of its owner lock.
+var heldRoots sync.Map
+
 func init() {
-	must(session.RegisterJobHook(session.JobHook{Name: stdioHookName, Before: stageCheckout}))
+	must(session.RegisterJobHook(session.JobHook{Name: stdioHookName, Before: stageCheckout, After: releaseRoot}))
 	must(RegisterPreStart(stdioSweepLabel, sweepStaging))
 }
 
-// withCheckout wraps the stdio carrier so lease and chunk frames reach the checkout receiver.
+// withCheckout wraps the stdio carrier so lease and chunk frames reach the checkout
+// receiver, and so a coordinator that stops acknowledging heartbeats fences the agent.
 func withCheckout(car session.Carrier, state string) session.Carrier {
 	r := checkout.NewReceiver(filepath.Join(state, checkoutDir), nil)
 	stdioReceiver.Store(r)
-	return &checkoutCarrier{Carrier: car, r: r}
+	return newFenceCarrier(&checkoutCarrier{Carrier: car, r: r, logged: map[string]bool{}}, state)
 }
 
 type checkoutCarrier struct {
 	session.Carrier
-	r *checkout.Receiver
+	r      *checkout.Receiver
+	logged map[string]bool // leases whose transfer problem was already reported
+}
+
+func (c *checkoutCarrier) report(lease string, err error) {
+	if c.logged[lease] {
+		return
+	}
+	c.logged[lease] = true
+	fmt.Fprintf(os.Stderr, "checkout: lease %s: %v\n", lease, err)
 }
 
 // Recv announces each lease that has a checkout and consumes its chunk frames.
@@ -65,7 +80,9 @@ func (c *checkoutCarrier) Recv() (protocol.Message, error) {
 		switch b := m.Body.(type) {
 		case *protocol.Lease:
 			// A refused announcement is reported by the Before hook, which fails the lease.
-			_ = c.r.Expect(*b)
+			if err := c.r.Expect(*b); err != nil {
+				c.report(b.LeaseID, err)
+			}
 		case *protocol.Chunk:
 			if b.Stream != checkout.Stream {
 				return m, nil
@@ -75,7 +92,7 @@ func (c *checkoutCarrier) Recv() (protocol.Message, error) {
 				epoch = *m.Epoch
 			}
 			if err := c.r.Feed(m.LeaseID, epoch, *b); err != nil && !errors.Is(err, checkout.ErrUnexpected) {
-				fmt.Fprintln(os.Stderr, "checkout:", err)
+				c.report(m.LeaseID, err)
 			}
 			continue
 		}
@@ -83,8 +100,12 @@ func (c *checkoutCarrier) Recv() (protocol.Message, error) {
 	}
 }
 
-// stageCheckout is the Before hook: it waits for the verified bundle and unpacks it.
+// stageCheckout is the Before hook: it marks the job root as in use, then waits for the
+// verified bundle and unpacks it.
 func stageCheckout(ctx context.Context, l protocol.Lease, root session.JobRoot) (session.JobSetup, error) {
+	if release, err := checkout.Hold(root.Dir); err == nil {
+		heldRoots.Store(root.Dir, release)
+	}
 	if l.Checkout.Size <= 0 {
 		return session.JobSetup{}, nil
 	}
@@ -99,6 +120,14 @@ func stageCheckout(ctx context.Context, l protocol.Lease, root session.JobRoot) 
 	return session.JobSetup{SourceDir: src}, nil
 }
 
+// releaseRoot is the After hook: the job is over, the root no longer needs its mark.
+func releaseRoot(_ context.Context, _ protocol.Lease, root session.JobRoot, _ session.Outcome, _ session.Uploader) error {
+	if v, ok := heldRoots.LoadAndDelete(root.Dir); ok {
+		v.(func())()
+	}
+	return nil
+}
+
 // sweepStaging removes checkout staging and job roots of agents that died. It runs
 // before serve reads or writes anything; a failed sweep is logged, never fatal.
 func sweepStaging(ctx context.Context, command string) error {
@@ -110,11 +139,15 @@ func sweepStaging(ctx context.Context, command string) error {
 		return nil
 	}
 	logf := func(format string, a ...any) { fmt.Fprintf(os.Stderr, "hygiene: "+format+"\n", a...) }
+	sweepable := func(base string, prefix string) func(string) bool {
+		return func(name string) bool {
+			return strings.HasPrefix(name, prefix) && !checkout.InUse(filepath.Join(base, name))
+		}
+	}
+	co, jobs := filepath.Join(state, checkoutDir), filepath.Join(state, "jobs")
 	for _, h := range []*hygiene.Host{
-		{Base: filepath.Join(state, checkoutDir), MinAge: stagingMinAge, Logf: logf,
-			IsAttempt: func(n string) bool { return strings.HasPrefix(n, "co-") }},
-		{Base: filepath.Join(state, "jobs"), MinAge: jobRootMinAge, Logf: logf,
-			IsAttempt: func(string) bool { return true }},
+		{Base: co, MinAge: stagingMinAge, Logf: logf, IsAttempt: sweepable(co, "co-")},
+		{Base: jobs, MinAge: jobRootMinAge, Logf: logf, IsAttempt: sweepable(jobs, "")},
 	} {
 		if _, err := h.SweepOrphans(ctx, nil); err != nil {
 			logf("sweep %s: %v", filepath.Base(h.Base), err)

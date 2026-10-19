@@ -10,7 +10,7 @@
 // Outputs: a bundle file and its digest; a staged source directory.
 // Constraints: every process runs through internal/exec (DefaultRunner); the
 // bundle is never trusted by name or size alone; git runs with hooks off,
-// fsck on and no system or global config; nothing here writes outside the
+// fsck on and a minimal environment (gitEnv: no system or global config); nothing here writes outside the
 // directories it is given.
 package checkout
 
@@ -43,7 +43,7 @@ func DefaultRunner(ctx context.Context, argv ...string) (string, int, error) {
 	}
 	defer func() { _ = os.RemoveAll(home) }()
 	var buf strings.Builder
-	var ex ciexec.Executor
+	ex := ciexec.Executor{Env: gitEnv{home: home}}
 	res := ex.Run(ctx, ciexec.JobSpec{
 		AttemptID: "git-" + strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + strconv.FormatUint(runSeq.Add(1), 10), CoordinatorID: "checkout",
 		Job: model.Job{Kind: "static"}, Home: home, Timeout: gitTimeout, Command: argv,
@@ -54,6 +54,19 @@ func DefaultRunner(ctx context.Context, argv ...string) (string, int, error) {
 		},
 	})
 	return buf.String(), res.ExitCode, res.Err
+}
+
+// gitEnv is the whole environment of a git process here: no operator variable, no global or
+// system config, no templates, no prompt. A bundle's .gitattributes can name a filter, and
+// this keeps every filter, hook and alias an operator configured out of reach of the bundle.
+type gitEnv struct{ home string }
+
+func (g gitEnv) Environment(context.Context, model.Job) ([]string, error) {
+	return []string{
+		"PATH=" + os.Getenv("PATH"), "HOME=" + g.home, "XDG_CONFIG_HOME=" + g.home + "/xdg",
+		"GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_ATTR_NOSYSTEM=1",
+		"GIT_TEMPLATE_DIR=" + g.home + "/no-templates", "GIT_TERMINAL_PROMPT=0", "LANG=C", "LC_ALL=C",
+	}, nil
 }
 
 // git runs `git <args>` with the hardening every checkout call shares.

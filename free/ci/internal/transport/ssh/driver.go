@@ -57,8 +57,10 @@ type Driver struct {
 	// Secrets resolves secret values for a lease; nil sends none.
 	Secrets SecretSource
 	// Renew extends the lease on each agent heartbeat (internal/lease Engine.Renew); an error
-	// fences the lease. Nil renews nothing.
+	// fences the lease. Run refuses to start without it unless NoRenew is set.
 	Renew func(ctx context.Context, leaseID string, epoch uint64) error
+	// NoRenew states that nothing renews leases (tests, a coordinator whose leases do not expire).
+	NoRenew bool
 	// MinAgentVersion is the oldest agent the coordinator accepts.
 	MinAgentVersion string
 	// Heartbeat and AgentTTL are what welcome tells the agent (defaults 10 s and 25 s, Epic D6).
@@ -78,9 +80,9 @@ type Driver struct {
 	// afterBundle is a test seam: it sees the bundle file after its digest was recorded.
 	afterBundle func(path string)
 
-	verOnce sync.Once
-	ver     remote.Version
-	verErr  error
+	verMu  sync.Mutex
+	ver    remote.Version
+	verSet bool
 }
 
 // Default is the driver registered for kind "ssh". The composition root sets its fields
@@ -128,12 +130,22 @@ func (d *Driver) start() Starter {
 	return startRemote
 }
 
+// version asks ssh once; a failure is not remembered, so a transient one does not stick.
 func (d *Driver) version(ctx context.Context) (remote.Version, error) {
 	if d.SSHVersion != nil {
 		return d.SSHVersion(ctx)
 	}
-	d.verOnce.Do(func() { d.ver, d.verErr = remote.SSHVersion(ctx) })
-	return d.ver, d.verErr
+	d.verMu.Lock()
+	defer d.verMu.Unlock()
+	if d.verSet {
+		return d.ver, nil
+	}
+	v, err := remote.SSHVersion(ctx)
+	if err != nil {
+		return v, err
+	}
+	d.ver, d.verSet = v, true
+	return v, nil
 }
 
 // command picks the constant remote command for a lease.

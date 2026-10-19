@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"io"
 	"testing"
 
@@ -14,6 +15,15 @@ import (
 )
 
 func (b *memBlob) Abort() error { b.abort = true; return nil }
+
+// Verify hashes the held prefix plus the bytes written since, as a resuming sink must.
+func (b *memBlob) Verify(want string) error {
+	sum := sha256.Sum256(append(append([]byte(nil), b.prefix...), b.data...))
+	if hex.EncodeToString(sum[:]) != want {
+		return errors.New("digest mismatch")
+	}
+	return nil
+}
 
 // scriptedAgent is a node whose agent end is a test script on the real stream carrier.
 type scriptedAgent struct {
@@ -124,7 +134,7 @@ func TestSSHTransportInterruptedBlobResumesFromTheReportedOffset(t *testing.T) {
 	d := newDriver(t, home, newAgentRig(t, okRunner()), nil)
 	payload := []byte("0123456789abcdef")
 	d.Start = scriptedStarter(t, func(a *scriptedAgent) { sendBlob(a, "artifact", payload, false) })
-	sink := &recSink{startAt: 10}
+	sink := &recSink{startAt: 10, prefix: payload[:10]}
 	if err := d.Run(context.Background(), node, testLease(), sink); err != nil {
 		t.Fatal(err)
 	}

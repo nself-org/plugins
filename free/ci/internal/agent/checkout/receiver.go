@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/hygiene"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
@@ -38,6 +39,15 @@ const MaxBundle int64 = 2 << 30
 // Stream is the chunk stream name of the checkout.
 const Stream = "checkout"
 
+// MaxOpen bounds the transfers one agent process holds at once. A lease the session later
+// refuses (no free slot, stale epoch) never reaches Stage, so its transfer is announced before
+// it is admitted; the bound and Deadline keep those from piling up.
+const MaxOpen = 16
+
+// Deadline is how long a transfer may stay unclaimed: receipt of the whole bundle plus the
+// start of Stage. A variable so tests can shorten it.
+var Deadline = 15 * time.Minute
+
 // Errors callers can match with errors.Is.
 var (
 	ErrDigest     = errors.New("checkout: bundle digest does not match the lease")
@@ -45,6 +55,8 @@ var (
 	ErrOrder      = errors.New("checkout: chunk out of order")
 	ErrTooLarge   = errors.New("checkout: bundle larger than announced")
 	ErrIncomplete = errors.New("checkout: bundle ended short of the announced size")
+	ErrDeadline   = errors.New("checkout: the bundle was not received and claimed in time")
+	ErrBusy       = errors.New("checkout: too many transfers are open")
 )
 
 type key struct {
@@ -60,8 +72,11 @@ type transfer struct {
 	hash     hash.Hash
 	got      int64
 	finished bool
+	staging  bool // Stage took the transfer; its own cleanup owns it from here
 	err      error
 	done     chan struct{}
+	release  func() // drops the directory's owner lock
+	timer    *time.Timer
 }
 
 func (t *transfer) fail(err error) {
@@ -120,13 +135,25 @@ func (r *Receiver) Expect(l protocol.Lease) error {
 	if _, err := digestHex(l.Checkout.BundleDigest); err != nil {
 		return err
 	}
+	r.mu.Lock()
+	busy := len(r.open) >= MaxOpen
+	r.mu.Unlock()
+	if busy {
+		return ErrBusy
+	}
 	name := stageName(l)
 	dir, err := r.host.JobRoot(name)
 	if err != nil {
 		return fmt.Errorf("checkout: staging root: %w", err)
 	}
+	release, err := Hold(dir)
+	if err != nil {
+		_ = hygiene.RemoveConfined(r.host.Base, name, nil)
+		return fmt.Errorf("checkout: staging root: %w", err)
+	}
 	f, err := os.OpenFile(filepath.Join(dir, "checkout.bundle"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
+		release()
 		_ = hygiene.RemoveConfined(r.host.Base, name, nil)
 		return err
 	}
@@ -135,10 +162,32 @@ func (r *Receiver) Expect(l protocol.Lease) error {
 	k := key{l.LeaseID, l.Epoch}
 	if _, ok := r.open[k]; ok {
 		_ = f.Close()
+		release()
 		return fmt.Errorf("checkout: lease %s epoch %d announced twice", l.LeaseID, l.Epoch)
 	}
-	r.open[k] = &transfer{lease: l, name: name, file: f, path: f.Name(), hash: sha256.New(), done: make(chan struct{})}
+	t := &transfer{lease: l, name: name, file: f, path: f.Name(), hash: sha256.New(), done: make(chan struct{}), release: release}
+	t.timer = time.AfterFunc(Deadline, func() { r.expire(k, t) })
+	r.open[k] = t
 	return nil
+}
+
+// expire drops a transfer nobody completed or claimed in time: the lease it was announced
+// for was refused, or the coordinator stopped sending. A whole bundle that Stage is already
+// unpacking is left to Stage; an unfinished one fails, which wakes Stage if it is waiting.
+func (r *Receiver) expire(k key, t *transfer) {
+	r.mu.Lock()
+	if r.open[k] != t {
+		r.mu.Unlock()
+		return
+	}
+	if !t.finished {
+		t.fail(ErrDeadline)
+	}
+	claimed := t.staging
+	r.mu.Unlock()
+	if !claimed {
+		r.Forget(k.lease, k.epoch)
+	}
 }
 
 // digestHex returns the lower-case hex of "sha256:<hex>" or bare hex.
@@ -216,9 +265,11 @@ func (r *Receiver) Forget(leaseID string, epoch uint64) {
 	delete(r.open, key{leaseID, epoch})
 	if t != nil {
 		t.fail(context.Canceled)
+		t.timer.Stop()
 	}
 	r.mu.Unlock()
 	if t != nil {
 		_ = hygiene.RemoveConfined(r.host.Base, t.name, nil)
+		t.release()
 	}
 }

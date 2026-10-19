@@ -131,11 +131,23 @@ func (s *sess) handle(ctx context.Context, m protocol.Message) (done bool, err e
 	case *protocol.Heartbeat:
 		return false, s.onHeartbeat(ctx, m, *b)
 	case *protocol.Digest:
+		if !s.scoped(m) {
+			return false, nil
+		}
 		return false, s.onDigest(ctx, *b)
 	case *protocol.Chunk:
+		if !s.scoped(m) {
+			return false, nil
+		}
 		return false, s.onChunk(*b)
 	}
 	return false, nil
+}
+
+// scoped reports whether a frame's envelope names this session's lease and epoch; digest and
+// chunk frames of any other attempt are dropped before they can touch a blob.
+func (s *sess) scoped(m protocol.Message) bool {
+	return m.Epoch != nil && *m.Epoch == s.lease.Epoch && m.LeaseID == s.lease.LeaseID
 }
 
 func epochOr(e, def uint64) uint64 {

@@ -26,6 +26,9 @@ func (r *Receiver) Stage(ctx context.Context, l protocol.Lease, jobRoot string) 
 	}
 	r.mu.Lock()
 	t := r.open[key{l.LeaseID, l.Epoch}]
+	if t != nil {
+		t.staging = true
+	}
 	r.mu.Unlock()
 	if t == nil {
 		return "", fmt.Errorf("checkout: no transfer announced for lease %s", l.LeaseID)

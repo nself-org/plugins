@@ -8,7 +8,7 @@ package ssh
 // Constraints: a chunk is at most 192 KiB raw (about 256 KiB framed, far under
 // the 1 MiB frame limit); secret values are sent only when the coordinator is
 // PERSONAL and the carrier policy allows them, are never logged or put in an
-// error, and are dropped from memory when the call returns.
+// error, and are cleared from the slice when the call returns (a copy the Go runtime made cannot be reached).
 
 import (
 	"context"
