@@ -18,6 +18,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -52,7 +53,11 @@ type jobInputs struct {
 	Env     map[string]string
 	Secrets map[string]string
 	Mounts  []ciexec.Mount
-	Output  func([]byte)
+	// Stdin is the job's standard input and Masks the exact values its output must not carry
+	// (the runner credential: see leaseRunner).
+	Stdin  io.Reader
+	Masks  []string
+	Output func([]byte)
 	// Tail returns the masked output tail for the failure excerpt (nil: use the raw tail).
 	Tail func() string
 	// Skip names why the job must not run ("cancelled", "secrets_missing").
@@ -197,7 +202,7 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	}
 	raw := &tailBuffer{max: excerptMax}
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: spec.AttemptID, CoordinatorID: agentIncarnation(spec.CoordinatorID), Job: job, Command: job.Run,
-		SourceDir: spec.SourceDir, Mounts: in.Mounts, Home: home, Slot: in.Slot,
+		SourceDir: spec.SourceDir, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks,
 		Output: func(b []byte) {
 			raw.Write(b)
 			if in.Output != nil {

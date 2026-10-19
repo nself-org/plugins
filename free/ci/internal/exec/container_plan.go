@@ -50,6 +50,9 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	if s.Job.Container == nil || !imageRef.MatchString(s.Job.Container.Image) || strings.Contains(s.Job.Container.Image, "..") {
 		return -1, "", coded("E613", "invalid container image")
 	}
+	if s.Stdin != nil { // the CLI's stdin is the env file; a second stream cannot share it
+		return -1, "", coded("E613", "a planned container cannot take a job stdin")
+	}
 	workdir, err := containerWorkdir(s)
 	if err != nil {
 		return -1, "", err

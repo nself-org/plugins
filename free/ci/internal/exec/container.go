@@ -65,6 +65,9 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 	if s.MemoryMB <= 0 {
 		s.MemoryMB = 1024
 	}
+	if s.Stdin != nil { // docker forwards stdin only to an interactive run
+		args = append(args, "--interactive")
+	}
 	args = append(args, "--read-only", "--tmpfs=/tmp:size=256m", "--cpus="+strconv.FormatFloat(s.CPU, 'f', -1, 64), "--memory="+strconv.Itoa(s.MemoryMB)+"m", "--memory-swap="+strconv.Itoa(s.MemoryMB)+"m")
 	args = append(args, mountArgs(s.Mounts)...)
 	args = append(args, "--mount", "type=bind,src="+workspace+",dst=/repo", "--workdir="+workdir, "--env-file", envFile)
@@ -77,7 +80,7 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 	args = append(args, s.Job.Container.Image)
 	args = append(args, s.Command...)
 	stop := containerStopper("docker", name, e.Grace)
-	code, err := e.runCommand(ctx, append([]string{"docker"}, args...), workspace, cliEnv, s.Output, stop, nil, "")
+	code, err := e.runCommandIn(ctx, s.Stdin, append([]string{"docker"}, args...), workspace, cliEnv, s.Output, stop, nil, "")
 	if err != nil {
 		stop()
 		return code, fmt.Errorf("%w: %v", coded("E613", "docker run"), err)
