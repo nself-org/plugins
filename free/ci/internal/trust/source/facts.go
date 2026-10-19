@@ -62,7 +62,7 @@ const (
 	MissingDefaultRef = "default_ref"
 	MissingReachable  = "reachable"
 	MissingRemoteRefs = "remote_refs"
-	MissingUnpushed   = "unpushed"
+	MissingCommits    = "commits"
 	MissingReflog     = "reflog"
 )
 
@@ -77,21 +77,18 @@ type GitFacts struct {
 	ReachableFromDefault bool
 	// OnOriginRef: Head is contained in a branch of the remote that owns DefaultRemoteRef.
 	OnOriginRef bool
-	// OnAnyRemoteRef: Head is contained in any ref of any remote, refs/pull/* or FETCH_HEAD.
-	OnAnyRemoteRef bool
 	// NoRemotes: no remote is configured and nothing was ever fetched (no remote-tracking ref, no
 	// refs/pull/*, no FETCH_HEAD).
 	NoRemotes bool
 	// NeverFetched: a remote is configured but nothing was ever fetched from it. Every commit of Head
-	// is then in OffDefault and Unpushed.
+	// is then in OffDefault.
 	NeverFetched bool
 	// InProgress: a merge, squash, cherry-pick, revert or rebase is unfinished, so the tree holds
 	// content that no commit of Head accounts for.
 	InProgress bool
-	// OffDefault are the commits of Head that DefaultRemoteRef does not contain.
+	// OffDefault are the commits of Head that DefaultRemoteRef does not contain (all of them when
+	// NeverFetched).
 	OffDefault []Commit
-	// Unpushed are the commits of Head that sit on no ref of any remote and not on FETCH_HEAD.
-	Unpushed []Commit
 	// ReflogCreated maps a commit to the subject of its OLDEST reflog entry in any log (OldestEntries),
 	// the way it first reached this repository, for example "commit: fix" or "branch: Created from FETCH_HEAD".
 	ReflogCreated map[string]string

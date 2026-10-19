@@ -189,6 +189,7 @@ func Unverified(r Result) Result {
 		}
 	}
 	r.Reasons = append(kept, ReasonRefetchFailed)
+	r.RequiresApproval = true // a first_time fact the delivery labelled "api" is as unchecked as the rest
 	return r
 }
 

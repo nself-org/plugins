@@ -7,5 +7,5 @@
 -	case kind == "commit", strings.HasPrefix(kind, "commit ("):
 +	case kind == "commit", strings.HasPrefix(kind, "commit ("), kind == "checkout":
  		return true
- 	case strings.HasPrefix(kind, "rebase"):
+ 	case strings.HasPrefix(kind, "rebase"), strings.HasPrefix(kind, "pull"):
  		for _, step := range []string{"(pick)", "(reword)", "(squash)", "(fixup)", "(edit)", "(continue)"} {

@@ -1,6 +1,6 @@
 --- a/internal/run/trust_git.go
 +++ b/internal/run/trust_git.go
-@@ -173,7 +173,7 @@
+@@ -160,7 +160,7 @@
  // defaultRef names the remote's default branch: origin/HEAD, else origin/main or origin/master. Only
  // the remote named origin counts: origin/HEAD may be pointed anywhere.
  func defaultRef(symref string, refs []string) string {

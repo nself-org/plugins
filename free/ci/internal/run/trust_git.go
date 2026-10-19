@@ -45,6 +45,9 @@ func (h SourceTrust) noRevision(ctx context.Context, root string) source.Result 
 	out, exit := h.git(ctx, root)("rev-parse", "--git-dir")
 	switch {
 	case exit == 0:
+		if _, head := h.git(ctx, root)("rev-parse", "-q", "--verify", "HEAD"); head != 1 {
+			break // HEAD resolves, so the earlier failure was not "no commit yet"
+		}
 		return source.Result{Class: "owner", Reasons: []string{source.ReasonLocalNoRevision}}
 	case strings.Contains(out, "not a git repository"):
 		return source.Result{Class: "owner", Reasons: []string{source.ReasonLocalNoGit}}
@@ -117,12 +120,11 @@ func (h SourceTrust) gather(ctx context.Context, root, rev string) source.GitFac
 	if g.DefaultRemoteRef == "" && !g.NeverFetched {
 		miss(source.MissingDefaultRef)
 	}
-	not := append([]string{"--not", "--remotes", "--glob=refs/pull/*"}, fetched...)
 	listed := func(args ...string) []source.Commit {
 		out, exit := git(args...)
 		cs := commits(out)
 		if exit != 0 || len(cs) > maxCommits {
-			miss(source.MissingUnpushed)
+			miss(source.MissingCommits)
 		}
 		return cs
 	}
@@ -130,7 +132,7 @@ func (h SourceTrust) gather(ctx context.Context, root, rev string) source.GitFac
 		out, exit := git("config", "--get-all", "remote.origin.fetch")
 		skip := excludedRemoteDirs(lines(out))
 		out, exit2 := git("for-each-ref", "--contains", rev, "--format=%(refname)", "refs/remotes/origin/")
-		if exit2 != 0 || exit > 1 {
+		if exit2 != 0 || exit < 0 || exit > 1 {
 			miss(source.MissingRemoteRefs)
 		}
 		for _, r := range lines(out) {
@@ -139,21 +141,6 @@ func (h SourceTrust) gather(ctx context.Context, root, rev string) source.GitFac
 			}
 		}
 	})
-	run(func() {
-		out, exit := git("for-each-ref", "--contains", rev, "--format=%(refname)", "refs/remotes", "refs/pull")
-		g.OnAnyRemoteRef = exit == 0 && len(lines(out)) > 0
-		if exit != 0 {
-			miss(source.MissingRemoteRefs)
-		}
-		if !g.OnAnyRemoteRef && len(fetched) > 0 {
-			out, exit = git(append([]string{"rev-list", "-n", "1", rev, "--not"}, fetched...)...)
-			g.OnAnyRemoteRef = exit == 0 && out == ""
-			if exit != 0 {
-				miss(source.MissingRemoteRefs)
-			}
-		}
-	})
-	run(func() { g.Unpushed = listed(append([]string{"rev-list", "-n", "501", rev}, not...)...) })
 	if g.DefaultRemoteRef != "" {
 		run(func() {
 			_, exit := git("merge-base", "--is-ancestor", rev, g.DefaultRemoteRef)
@@ -193,7 +180,7 @@ func excludedRemoteDirs(refspecs []string) []string {
 	}
 	for _, spec := range refspecs {
 		src, dst, ok := strings.Cut(strings.TrimPrefix(spec, "+"), ":")
-		if ok && !strings.HasPrefix(src, "refs/heads/") && strings.HasSuffix(dst, "*") {
+		if ok && !strings.HasPrefix(src, "refs/heads/") {
 			skip = append(skip, strings.TrimSuffix(dst, "*"))
 		}
 	}

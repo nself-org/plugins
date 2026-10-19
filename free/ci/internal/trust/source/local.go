@@ -4,9 +4,11 @@ package source
 // Inputs:  GitFacts gathered by the hook through the exec command runner.
 // Outputs: a Result; owner only on provenance, never on who the author says they are.
 // Constraints: pure. owner when HEAD is reachable from the default branch of the remote, or when
-//          every commit the default branch does not contain sits on no ref of any remote (refs/pull/*,
-//          fork remotes and FETCH_HEAD included) AND the local reflog first recorded it as created
-//          here (commit, commit (amend), rebase, merge, cherry-pick; never checkout, fetch, pull).
+//          the local reflogs first recorded every commit the default branch does not contain as created
+//          here (commit, commit (amend), rebase, merge, cherry-pick; never checkout, fetch, pull, a
+//          fast-forward). A pushed commit of yours still counts: D17 asks for "on no ref of any remote",
+//          but an arrival entry is the proof of a stranger's commit and the push test made `nself ci`
+//          refuse your own pushed branch (lead ruling, TRUST EPIC Invalidations 2026-10-19).
 //          Otherwise collaborator when HEAD is on a branch of the origin remote, else untrusted. A fact
 //          that could not be gathered closes the path that needs it. A repository with no remote at
 //          all has nothing foreign to classify, so it is the operator's own (local.no_remote).
@@ -52,23 +54,20 @@ func ClassifyLocal(g GitFacts) Result {
 	return done(untrusted, ReasonLocalForeign)
 }
 
-// createdHere: there are commits beyond the default branch, none of them is on any remote ref, and
-// the reflog first recorded each as made on this machine.
+// createdHere: there are commits beyond the default branch and the reflogs first recorded every one as
+// made on this machine. Being pushed does not change that: a pushed commit of yours still has its
+// `commit` entry, while a stranger's commit you fetched, pulled or checked out has an arrival entry.
 func createdHere(g GitFacts) bool {
-	if (g.DefaultRemoteRef == "" && !g.NeverFetched) || len(g.OffDefault) == 0 || g.OnAnyRemoteRef {
+	if (g.DefaultRemoteRef == "" && !g.NeverFetched) || len(g.OffDefault) == 0 {
 		return false
 	}
-	for _, m := range []string{MissingDefaultRef, MissingRemoteRefs, MissingUnpushed, MissingReflog} {
+	for _, m := range []string{MissingDefaultRef, MissingRemoteRefs, MissingCommits, MissingReflog} {
 		if g.missing(m) {
 			return false
 		}
 	}
-	unpushed := make(map[string]bool, len(g.Unpushed))
-	for _, c := range g.Unpushed {
-		unpushed[c.SHA] = true
-	}
 	for _, c := range g.OffDefault {
-		if !unpushed[c.SHA] || !MadeHere(g.ReflogCreated[c.SHA]) {
+		if !MadeHere(g.ReflogCreated[c.SHA]) {
 			return false
 		}
 	}
@@ -76,9 +75,10 @@ func createdHere(g GitFacts) bool {
 }
 
 // MadeHere reports whether a reflog subject records a commit created on this machine: `commit`,
-// `commit (amend)`, a rebase step that rewrites a commit, `cherry-pick` and a merge. Anything that
-// moves a branch to a commit someone else made is not creation: a fast-forward (of a merge, a pull, a
-// cherry-pick or a rebase), `rebase (finish)` and `rebase (start)`, checkout, fetch, pull, reset.
+// `commit (amend)`, a rebase step that rewrites a commit (also under `pull --rebase`), `cherry-pick`,
+// `revert` and a merge commit (also under `pull`). Anything that moves a branch to a commit someone
+// else made is not creation: a fast-forward (of a merge, a pull, a cherry-pick or a rebase),
+// `rebase (finish)` and `rebase (start)`, checkout, fetch, reset.
 func MadeHere(subject string) bool {
 	if strings.Contains(strings.ToLower(subject), "fast-forward") {
 		return false
@@ -88,14 +88,14 @@ func MadeHere(subject string) bool {
 	switch {
 	case kind == "commit", strings.HasPrefix(kind, "commit ("):
 		return true
-	case strings.HasPrefix(kind, "rebase"):
+	case strings.HasPrefix(kind, "rebase"), strings.HasPrefix(kind, "pull"):
 		for _, step := range []string{"(pick)", "(reword)", "(squash)", "(fixup)", "(edit)", "(continue)"} {
 			if strings.HasSuffix(kind, step) {
 				return true
 			}
 		}
-		return false
-	case strings.HasPrefix(kind, "cherry-pick"):
+		return strings.Contains(subject, "Merge made by")
+	case strings.HasPrefix(kind, "cherry-pick"), kind == "revert":
 		return true
 	case kind == "merge" || strings.HasPrefix(kind, "merge "):
 		return true

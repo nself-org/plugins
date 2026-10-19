@@ -1,0 +1,11 @@
+--- a/internal/run/trust_git.go
++++ b/internal/run/trust_git.go
+@@ -132,7 +132,7 @@
+ 		out, exit := git("config", "--get-all", "remote.origin.fetch")
+ 		skip := excludedRemoteDirs(lines(out))
+ 		out, exit2 := git("for-each-ref", "--contains", rev, "--format=%(refname)", "refs/remotes/origin/")
+-		if exit2 != 0 || exit < 0 || exit > 1 {
++		if exit2 != 0 || exit > 1 {
+ 			miss(source.MissingRemoteRefs)
+ 		}
+ 		for _, r := range lines(out) {

@@ -1,6 +1,6 @@
 --- a/internal/run/trust_git.go
 +++ b/internal/run/trust_git.go
-@@ -100,7 +100,7 @@
+@@ -103,7 +103,7 @@
  		}
  		for _, m := range paths[1:] {
  			if _, err := os.Stat(rootPath(root, m)); err == nil {

@@ -1,6 +1,6 @@
 --- a/internal/trust/source/local.go
 +++ b/internal/trust/source/local.go
-@@ -31,7 +31,7 @@
+@@ -33,7 +33,7 @@
  	if g.NotARepo {
  		return done(owner, ReasonLocalNoGit)
  	}

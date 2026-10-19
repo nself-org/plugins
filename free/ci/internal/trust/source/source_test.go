@@ -19,6 +19,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
+	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
 	"github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -236,7 +237,9 @@ func TestClassifyMadeHere(t *testing.T) {
 	for subject, want := range map[string]bool{
 		"commit: w": true, "commit (initial): w": true, "commit (amend): w": true, "commit (merge): w": true,
 		"rebase (pick): w": true, "rebase -i (pick): w": true, "rebase (reword): w": true, "rebase (squash): w": true, "rebase (continue): w": true,
-		"cherry-pick: w": true, "cherry-pick (continue): w": true, "merge feat: Merge made by the 'ort' strategy.": true,
+		"pull -q --rebase origin main (pick): w": true, "pull origin main: Merge made by the 'ort' strategy.": true, "revert: Revert \"w\"": true,
+		"pull origin main: checkout": false,
+		"cherry-pick: w":             true, "cherry-pick (continue): w": true, "merge feat: Merge made by the 'ort' strategy.": true,
 		"rebase (finish): refs/heads/x onto 0123": false, "rebase (start): checkout main": false, "rebase (abort): returning to refs/heads/x": false,
 		"cherry-pick: fast-forward": false, "merge feat: Fast-forward": false, "rebase (pick): fast-forward": false, "pull: Fast-forward": false,
 		"checkout: moving from a to b": false, "branch: Created from FETCH_HEAD": false, "fetch origin: fast-forward": false,
@@ -263,7 +266,7 @@ func TestClassifyOldestEntries(t *testing.T) {
 
 func TestClassifyUnverified(t *testing.T) {
 	r := source.Unverified(source.Result{Class: "owner", Reasons: []string{source.ReasonVerified}})
-	if r.Class != "untrusted" || !reflect.DeepEqual(r.Reasons, []string{source.ReasonRefetchFailed}) {
+	if r.Class != "untrusted" || !reflect.DeepEqual(r.Reasons, []string{source.ReasonRefetchFailed}) || !r.RequiresApproval {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -294,35 +297,35 @@ func TestClassifyLocalFacts(t *testing.T) {
 		want model.TrustClass
 	}{
 		{"no head", source.GitFacts{}, "untrusted"},
-		{"head on the default branch", source.GitFacts{Head: "a", DefaultRemoteRef: def, ReachableFromDefault: true, OnAnyRemoteRef: true}, "owner"},
-		{"own unpushed commit made here", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), Unpushed: c("a"), ReflogCreated: map[string]string{"a": "commit: work"}}, "owner"},
-		{"amend, rebase, cherry-pick and merge count", source.GitFacts{Head: "d", DefaultRemoteRef: def, OffDefault: c("a", "b", "c", "d"), Unpushed: c("a", "b", "c", "d"),
+		{"head on the default branch", source.GitFacts{Head: "a", DefaultRemoteRef: def, ReachableFromDefault: true}, "owner"},
+		{"own unpushed commit made here", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "commit: work"}}, "owner"},
+		{"amend, rebase, cherry-pick and merge count", source.GitFacts{Head: "d", DefaultRemoteRef: def, OffDefault: c("a", "b", "c", "d"),
 			ReflogCreated: map[string]string{"a": "commit (amend): w", "b": "rebase (pick): w", "c": "cherry-pick: w", "d": "merge feat: Merge made by the 'ort' strategy."}}, "owner"},
-		{"stranger commit, reflog says checkout", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), Unpushed: c("a"), ReflogCreated: map[string]string{"a": "checkout: moving from main to pr"}}, "untrusted"},
-		{"stranger commit, no reflog entry", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), Unpushed: c("a")}, "untrusted"},
-		{"fast-forward merge is not creation", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), Unpushed: c("a"), ReflogCreated: map[string]string{"a": "merge FETCH_HEAD: Fast-forward"}}, "untrusted"},
-		{"pull is not creation", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), Unpushed: c("a"), ReflogCreated: map[string]string{"a": "pull: Fast-forward"}}, "untrusted"},
-		{"rebase start only checks out the upstream", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), Unpushed: c("a"), ReflogCreated: map[string]string{"a": "rebase (start): checkout main"}}, "untrusted"},
-		{"fetch is not creation", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), Unpushed: c("a"), ReflogCreated: map[string]string{"a": "fetch origin: fast-forward"}}, "untrusted"},
-		{"one made here, one foreign", source.GitFacts{Head: "b", DefaultRemoteRef: def, OffDefault: c("a", "b"), Unpushed: c("a", "b"), ReflogCreated: map[string]string{"a": "checkout: x", "b": "commit: mine"}}, "untrusted"},
-		{"a commit beyond the default sits on a remote ref", source.GitFacts{Head: "b", DefaultRemoteRef: def, OffDefault: c("a", "b"), Unpushed: c("b"), ReflogCreated: map[string]string{"a": "commit: theirs?", "b": "commit: mine"}}, "untrusted"},
-		{"made here but already on a remote ref", source.GitFacts{Head: "a", DefaultRemoteRef: def, OnAnyRemoteRef: true, OnOriginRef: true, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "commit: mine"}}, "collaborator"},
-		{"only on another origin branch", source.GitFacts{Head: "a", DefaultRemoteRef: def, OnAnyRemoteRef: true, OnOriginRef: true, OffDefault: c("a")}, "collaborator"},
-		{"only on a pull ref", source.GitFacts{Head: "a", DefaultRemoteRef: def, OnAnyRemoteRef: true, OffDefault: c("a")}, "untrusted"},
-		{"unpushed unknown closes the owner path", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), Unpushed: c("a"), ReflogCreated: map[string]string{"a": "commit: w"}, Missing: []string{source.MissingUnpushed}}, "untrusted"},
-		{"reflog unknown closes the owner path", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), Unpushed: c("a"), ReflogCreated: map[string]string{"a": "commit: w"}, Missing: []string{source.MissingReflog}}, "untrusted"},
-		{"remote refs unknown closes the owner path", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), Unpushed: c("a"), ReflogCreated: map[string]string{"a": "commit: w"}, Missing: []string{source.MissingRemoteRefs}}, "untrusted"},
-		{"default ref unknown closes the owner path", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), Unpushed: c("a"), ReflogCreated: map[string]string{"a": "commit: w"}, Missing: []string{source.MissingDefaultRef}}, "untrusted"},
-		{"listed unpushed but on a remote ref", source.GitFacts{Head: "a", DefaultRemoteRef: def, OnAnyRemoteRef: true, OffDefault: c("a"), Unpushed: c("a"), ReflogCreated: map[string]string{"a": "commit: w"}}, "untrusted"},
+		{"stranger commit, reflog says checkout", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "checkout: moving from main to pr"}}, "untrusted"},
+		{"stranger commit, no reflog entry", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a")}, "untrusted"},
+		{"fast-forward merge is not creation", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "merge FETCH_HEAD: Fast-forward"}}, "untrusted"},
+		{"pull is not creation", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "pull: Fast-forward"}}, "untrusted"},
+		{"rebase start only checks out the upstream", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "rebase (start): checkout main"}}, "untrusted"},
+		{"fetch is not creation", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "fetch origin: fast-forward"}}, "untrusted"},
+		{"one made here, one foreign", source.GitFacts{Head: "b", DefaultRemoteRef: def, OffDefault: c("a", "b"), ReflogCreated: map[string]string{"a": "checkout: x", "b": "commit: mine"}}, "untrusted"},
+		{"a commit beyond the default arrived, one was made here", source.GitFacts{Head: "b", DefaultRemoteRef: def, OffDefault: c("a", "b"), ReflogCreated: map[string]string{"a": "branch: Created from FETCH_HEAD", "b": "commit: mine"}}, "untrusted"},
+		{"made here and pushed to origin", source.GitFacts{Head: "a", DefaultRemoteRef: def, OnOriginRef: true, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "commit: mine"}}, "owner"},
+		{"only on another origin branch", source.GitFacts{Head: "a", DefaultRemoteRef: def, OnOriginRef: true, OffDefault: c("a")}, "collaborator"},
+		{"only on a pull ref", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a")}, "untrusted"},
+		{"truncated commit list closes the owner path", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "commit: w"}, Missing: []string{source.MissingCommits}}, "untrusted"},
+		{"unpushed unknown closes the owner path", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "commit: w"}, Missing: []string{source.MissingCommits}}, "untrusted"},
+		{"reflog unknown closes the owner path", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "commit: w"}, Missing: []string{source.MissingReflog}}, "untrusted"},
+		{"remote refs unknown closes the owner path", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "commit: w"}, Missing: []string{source.MissingRemoteRefs}}, "untrusted"},
+		{"default ref unknown closes the owner path", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "commit: w"}, Missing: []string{source.MissingDefaultRef}}, "untrusted"},
 		{"remote refs unknown closes collaborator", source.GitFacts{Head: "a", DefaultRemoteRef: def, OnOriginRef: true, Missing: []string{source.MissingRemoteRefs}}, "untrusted"},
-		{"no default ref", source.GitFacts{Head: "a", OffDefault: c("a"), Unpushed: c("a"), ReflogCreated: map[string]string{"a": "commit: w"}, Missing: []string{source.MissingDefaultRef}}, "untrusted"},
+		{"no default ref", source.GitFacts{Head: "a", OffDefault: c("a"), ReflogCreated: map[string]string{"a": "commit: w"}, Missing: []string{source.MissingDefaultRef}}, "untrusted"},
 		{"no remote at all", source.GitFacts{Head: "a", NoRemotes: true}, "owner"},
 		{"no remote but a fact is missing", source.GitFacts{Head: "a", NoRemotes: true, Missing: []string{source.MissingReflog}}, "untrusted"},
 		{"not a repository", source.GitFacts{Head: "a", NotARepo: true}, "owner"},
 		{"a merge, squash or rebase is unfinished", source.GitFacts{Head: "a", DefaultRemoteRef: def, ReachableFromDefault: true, InProgress: true}, "untrusted"},
 		{"unfinished operation in a repository with no remote", source.GitFacts{Head: "a", NoRemotes: true, InProgress: true}, "untrusted"},
-		{"remote configured, never fetched, all commits made here", source.GitFacts{Head: "b", NeverFetched: true, OffDefault: c("a", "b"), Unpushed: c("a", "b"), ReflogCreated: map[string]string{"a": "commit (initial): w", "b": "commit: w"}}, "owner"},
-		{"remote configured, never fetched, no reflog (an extracted archive)", source.GitFacts{Head: "b", NeverFetched: true, OffDefault: c("a", "b"), Unpushed: c("a", "b")}, "untrusted"},
+		{"remote configured, never fetched, all commits made here", source.GitFacts{Head: "b", NeverFetched: true, OffDefault: c("a", "b"), ReflogCreated: map[string]string{"a": "commit (initial): w", "b": "commit: w"}}, "owner"},
+		{"remote configured, never fetched, no reflog (an extracted archive)", source.GitFacts{Head: "b", NeverFetched: true, OffDefault: c("a", "b")}, "untrusted"},
 	}
 	for _, tc := range cases {
 		got := source.ClassifyLocal(tc.g)
@@ -404,6 +407,7 @@ func (x *fx) decideIn(root, requested string, h run.SourceTrust) source.Result {
 func TestClassifyGitFixtures(t *testing.T) {
 	check := func(name string, setup func(*fx), want model.TrustClass, reason string) {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			x := newFx(t)
 			setup(x)
 			got := x.decide("", run.SourceTrust{})
@@ -457,14 +461,44 @@ func TestClassifyGitFixtures(t *testing.T) {
 		git(x.t, x.op, "cherry-pick", "--ff", "origin/main..FETCH_HEAD")
 		git(x.t, x.op, "fetch", "-q", "origin")
 	}, "untrusted", source.ReasonLocalForeign)
-	check("own commit that also sits on the second FETCH_HEAD line", func(x *fx) {
+	check("own pushed feature branch", func(x *fx) {
+		git(x.t, x.op, "checkout", "-q", "-b", "feat")
+		x.commit(x.op, "one.txt")
+		git(x.t, x.op, "push", "-q", "-u", "origin", "feat")
+	}, "owner", source.ReasonLocalCreated)
+	check("own commit fetched back from a peer stays the operator's", func(x *fx) {
 		git(x.t, x.op, "branch", "basebr", "origin/main")
 		git(x.t, x.op, "checkout", "-q", "-b", "feat")
 		x.commit(x.op, "one.txt")
 		peer := filepath.Join(x.tmp, "peer")
 		git(x.t, x.tmp, "clone", "-q", x.op, peer)
 		git(x.t, x.op, "fetch", "-q", peer, "refs/remotes/origin/main", "feat")
-	}, "untrusted", source.ReasonLocalForeign)
+	}, "owner", source.ReasonLocalCreated)
+	check("own commit rebased by git pull --rebase", func(x *fx) {
+		x.commit(x.op, "mine.txt")
+		other := filepath.Join(x.tmp, "other")
+		git(x.t, x.tmp, "clone", "-q", x.origin, other)
+		git(x.t, other, "config", "user.name", "Other")
+		git(x.t, other, "config", "user.email", "other@example.test")
+		x.commit(other, "theirs.txt")
+		git(x.t, other, "push", "-q", "origin", "main")
+		git(x.t, x.op, "pull", "-q", "--rebase", "origin", "main")
+	}, "owner", source.ReasonLocalCreated)
+	check("own commit merged by git pull", func(x *fx) {
+		x.commit(x.op, "mine.txt")
+		other := filepath.Join(x.tmp, "other")
+		git(x.t, x.tmp, "clone", "-q", x.origin, other)
+		git(x.t, other, "config", "user.name", "Other")
+		git(x.t, other, "config", "user.email", "other@example.test")
+		x.commit(other, "theirs.txt")
+		git(x.t, other, "push", "-q", "origin", "main")
+		git(x.t, x.op, "pull", "-q", "--no-rebase", "--no-edit", "origin", "main")
+	}, "owner", source.ReasonLocalCreated)
+	check("a collaborator's commit pulled from origin", func(x *fx) {
+		git(x.t, x.stranger, "push", "-q", "origin", "pr")
+		git(x.t, x.op, "checkout", "-q", "-b", "pr")
+		git(x.t, x.op, "pull", "-q", "origin", "pr")
+	}, "collaborator", source.ReasonLocalOnOrigin)
 	check("merge --squash of the stranger's branch left uncommitted", func(x *fx) {
 		git(x.t, x.op, "fetch", "-q", x.stranger, "pr")
 		git(x.t, x.op, "merge", "-q", "--squash", "FETCH_HEAD")
@@ -518,6 +552,7 @@ func TestClassifyGitFixtures(t *testing.T) {
 // `evidence verify` classifies inside a temporary worktree: its HEAD log has no entry for the commit,
 // the branch logs shared with the main checkout do.
 func TestClassifyGitLinkedWorktree(t *testing.T) {
+	t.Parallel()
 	x := newFx(t)
 	git(t, x.op, "checkout", "-q", "-b", "feat")
 	sha := x.commit(x.op, "one.txt")
@@ -525,6 +560,27 @@ func TestClassifyGitLinkedWorktree(t *testing.T) {
 	git(t, x.op, "worktree", "add", "-q", "--detach", wt, sha)
 	if res := x.decideIn(wt, "", run.SourceTrust{}); res.Class != "owner" || !contains(res.Reasons, source.ReasonLocalCreated) {
 		t.Fatalf("own commit seen from a linked worktree: %+v", res)
+	}
+}
+
+// A git that cannot run its refspec question must not pass the pull-request namespaces as branches.
+func TestClassifyGitConfigErrorClosesCollaborator(t *testing.T) {
+	t.Parallel()
+	x := newFx(t)
+	git(t, x.stranger, "push", "-q", "origin", "pr:refs/pull/1/head")
+	git(t, x.op, "config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/fork-prs/*")
+	git(t, x.op, "fetch", "-q", "origin")
+	git(t, x.op, "checkout", "-q", "-b", "prx", "origin/fork-prs/1")
+	flaky := run.SourceTrust{Capture: func(ctx context.Context, argv ...string) (string, int, error) {
+		for _, a := range argv {
+			if a == "config" {
+				return "", 0, errors.New("runner failure")
+			}
+		}
+		return report.Capture(ctx, argv...)
+	}}
+	if res := x.decide("", flaky); res.Class != "untrusted" {
+		t.Fatalf("a failed refspec question left the pull-request namespace as a branch: %+v", res)
 	}
 }
 
@@ -611,6 +667,7 @@ func (d *db) setCap(v string) {
 }
 
 func TestClassifyTrustOwnerOverrideIsAudited(t *testing.T) {
+	t.Parallel()
 	x, d := newFx(t), newDB(t)
 	x.checkoutStranger()
 	h := run.SourceTrust{OpenStore: d.open}
@@ -633,6 +690,7 @@ func TestClassifyTrustOwnerOverrideIsAudited(t *testing.T) {
 }
 
 func TestClassifyTrustOwnerNeedsTheAuditRow(t *testing.T) {
+	t.Parallel()
 	x := newFx(t)
 	x.checkoutStranger()
 	h := run.SourceTrust{OpenStore: func() (*store.Store, error) { return nil, errors.New("no store") }}
@@ -643,6 +701,7 @@ func TestClassifyTrustOwnerNeedsTheAuditRow(t *testing.T) {
 }
 
 func TestClassifyRequestAboveTheVerdictIsNotGranted(t *testing.T) {
+	t.Parallel()
 	x := newFx(t)
 	x.checkoutStranger()
 	if res := x.decide("collaborator", run.SourceTrust{}); res.Class != "untrusted" {
@@ -651,6 +710,7 @@ func TestClassifyRequestAboveTheVerdictIsNotGranted(t *testing.T) {
 }
 
 func TestClassifyMachineInvokedCap(t *testing.T) {
+	t.Parallel()
 	x, d := newFx(t), newDB(t)
 	env := func(v string) func(string) string {
 		return func(k string) string {

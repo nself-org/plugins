@@ -1,6 +1,6 @@
 --- a/internal/run/trust_git.go
 +++ b/internal/run/trust_git.go
-@@ -80,7 +80,7 @@
+@@ -83,7 +83,7 @@
  		paths, pathsOK = lines(out), exit == 0 && len(lines(out)) == 7
  	})
  	run(func() {

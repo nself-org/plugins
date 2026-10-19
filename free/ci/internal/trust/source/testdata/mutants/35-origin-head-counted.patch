@@ -1,6 +1,6 @@
 --- a/internal/run/trust_git.go
 +++ b/internal/run/trust_git.go
-@@ -134,7 +134,7 @@
+@@ -136,7 +136,7 @@
  			miss(source.MissingRemoteRefs)
  		}
  		for _, r := range lines(out) {

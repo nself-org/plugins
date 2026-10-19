@@ -1,8 +1,8 @@
 --- a/internal/run/trust_git.go
 +++ b/internal/run/trust_git.go
-@@ -46,7 +46,7 @@
- 	switch {
- 	case exit == 0:
+@@ -49,7 +49,7 @@
+ 			break // HEAD resolves, so the earlier failure was not "no commit yet"
+ 		}
  		return source.Result{Class: "owner", Reasons: []string{source.ReasonLocalNoRevision}}
 -	case strings.Contains(out, "not a git repository"):
 +	case len(out) >= 0:

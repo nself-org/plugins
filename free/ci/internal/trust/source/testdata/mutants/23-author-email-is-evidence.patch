@@ -1,6 +1,6 @@
 --- a/internal/run/trust_git.go
 +++ b/internal/run/trust_git.go
-@@ -91,6 +91,14 @@
+@@ -94,6 +94,14 @@
  		return g
  	}
  	g.ReflogCreated = source.OldestEntries(entries)

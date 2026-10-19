@@ -1,6 +1,6 @@
 --- a/internal/trust/source/facts.go
 +++ b/internal/trust/source/facts.go
-@@ -113,7 +113,7 @@
+@@ -110,7 +110,7 @@
  	best := make(map[string]ReflogEntry, len(es))
  	for _, e := range es {
  		b, seen := best[e.SHA]

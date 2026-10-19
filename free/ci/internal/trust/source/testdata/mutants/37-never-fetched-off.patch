@@ -1,6 +1,6 @@
 --- a/internal/run/trust_git.go
 +++ b/internal/run/trust_git.go
-@@ -109,7 +109,7 @@
+@@ -112,7 +112,7 @@
  		return g
  	}
  	g.NoRemotes = len(refs) == 0 && len(fetched) == 0 && len(remotes) == 0
