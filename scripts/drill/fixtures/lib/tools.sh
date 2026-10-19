@@ -31,11 +31,20 @@ tools_pin_drift() {
 	[ -z "$row" ] || [ "$row" = "$GITLEAKS_VERSION" ] || echo "gitleaks pin $GITLEAKS_VERSION differs from free/ci/toolchain/versions.yaml ($row)"
 }
 
+# tools_workflow_bin NAME: the path of .drill-bin/NAME when the workflow built it for exactly this commit (CI is set and
+# .drill-bin/HEAD names HEAD); a leftover from another commit is never trusted.
+tools_workflow_bin() {
+	[ -n "${CI:-}" ] && [ -x "$EV_ROOT/.drill-bin/$1" ] && [ -r "$EV_ROOT/.drill-bin/HEAD" ] || return 1
+	[ "$(cat "$EV_ROOT/.drill-bin/HEAD")" = "$(git -C "$EV_ROOT" rev-parse HEAD 2>/dev/null)" ] || return 1
+	echo "$EV_ROOT/.drill-bin/$1"
+}
+
 # tools_build_plugin DEST: build free/ci from this checkout (or take NSELF_DRILL_CI_BIN, or the binary the workflow built
-# into .drill-bin/nself-ci from the same checkout, which saves a cold compile inside the job's time limit).
+# into .drill-bin/nself-ci for this very commit, which saves a cold compile inside the job's time limit).
 tools_build_plugin() {
+	local wb
 	if [ -n "${NSELF_DRILL_CI_BIN:-}" ]; then cp "$NSELF_DRILL_CI_BIN" "$1"
-	elif [ -n "${CI:-}" ] && [ -x "$EV_ROOT/.drill-bin/nself-ci" ]; then cp "$EV_ROOT/.drill-bin/nself-ci" "$1"; else
+	elif wb=$(tools_workflow_bin nself-ci); then cp "$wb" "$1"; else
 		command -v go >/dev/null || tools_die "go is required to build the ci plugin"
 		(cd "$EV_ROOT/free/ci" && CGO_ENABLED=0 go build -mod=vendor -o "$1" ./cmd) >&2 || tools_die "building free/ci failed"
 	fi
@@ -63,9 +72,9 @@ tools_gitleaks_dir() {
 # tools_cli WORK: an `nself` built from nself-org/cli origin/main (or NSELF_DRILL_CLI_BIN / a checkout in NSELF_DRILL_CLI_SRC,
 # or a checkout the workflow left at .drill-bin/nself).
 tools_cli() {
-	local src out=$1/nself-cli
+	local src wb out=$1/nself-cli
 	if [ -n "${NSELF_DRILL_CLI_BIN:-}" ]; then echo "$NSELF_DRILL_CLI_BIN"; return; fi
-	if [ -n "${CI:-}" ] && [ -x "$EV_ROOT/.drill-bin/nself" ]; then echo "$EV_ROOT/.drill-bin/nself"; return; fi
+	if wb=$(tools_workflow_bin nself); then echo "$wb"; return; fi
 	command -v go >/dev/null || tools_die "go is required to build the cli"
 	src=${NSELF_DRILL_CLI_SRC:-}
 	if [ -z "$src" ]; then

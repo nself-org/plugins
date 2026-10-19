@@ -60,7 +60,7 @@ rc=$?
 if [ $rc -eq 0 ] && vjson "$work/p1.json" '.data.result == "pass"'; then
 	ev_pass produce "nself-ci on the fixture passed (exit 0)"
 else
-	ev_fail produce "nself-ci exited $rc: $(ev_snip "$work/p1.err") [limits: $(ulimit -v) $(grep -E 'address space' /proc/self/limits 2>/dev/null | tr -s ' ')]"
+	ev_fail produce "nself-ci exited $rc: $(ev_snip "$work/p1.err")"
 fi
 run1=$(jq -r '.data.run_id // empty' "$work/p1.json" 2>/dev/null)
 
@@ -74,17 +74,28 @@ else
 	ev_fail verify-bound "verify $c1 exited $rc: $(jq -c '.data | {result, binding, freshness}' "$work/v1.json" 2>/dev/null | head -c 300)"
 fi
 
-# 3. The document obeys the schema at its top level: no key outside `properties`, every `required` key present, the const holds.
+# 3. The document obeys the schema, checked here with jq alone: types, enums, const, required keys and unknown keys at every
+#    level (the schema's `allOf` conditionals are not evaluated).
+read -r -d '' valid_jq <<'JQ' || true
+def ty($v): if $v == null then "null" elif ($v|type) == "number" then (if $v == ($v|floor) then "integer" else "number" end) else ($v|type) end;
+def errs($s; $v):
+    ( (if ($s.type|type) == "array" then $s.type elif $s.type then [$s.type] else null end) as $t
+      | if $t != null and (($t|index(ty($v))) == null) and (ty($v) != "integer" or ($t|index("number")) == null) then ["type \(ty($v))"] else [] end )
+  + ( if $s.enum and (($s.enum|index($v)) == null) then ["value \($v) not in enum"] else [] end )
+  + ( if ($s|has("const")) and $v != $s.const then ["const"] else [] end )
+  + ( if ($v|type) == "object" then
+        ( [($s.required // [])[] as $k | select(($v|has($k))|not) | "missing \($k)"] )
+      + ( if $s.additionalProperties == false then [($v|keys[]) as $k | select((($s.properties // {})|has($k))|not) | "unexpected \($k)"] else [] end )
+      + ( [($s.properties // {}) | to_entries[] | . as $e | select($v|has($e.key)) | errs($e.value; $v[$e.key])[] | "\($e.key): \(.)"] )
+    else [] end )
+  + ( if ($v|type) == "array" and $s.items then [range(0; $v|length) as $i | errs($s.items; $v[$i])[] | "[\($i)] \(.)"] else [] end );
+JQ
 jq '.data.evidence' "$work/v1.json" >"$work/doc1.json" 2>/dev/null
-if jq -e --slurpfile s "$schema" '
-	($s[0]) as $sc | keys as $k
-	| .schema == $sc.properties.schema.const
-	and (($sc.required - $k) == [])
-	and (($k - ($sc.properties | keys)) == [])
-	and (.result | IN("pass", "fail", "error", "cancelled"))' "$work/doc1.json" >/dev/null 2>&1; then
-	ev_pass schema-top-level "the document matches the schema's const, required top-level keys and top-level property names"
+schema_errs=$(jq -c --slurpfile s "$schema" "$valid_jq errs(\$s[0]; .)" "$work/doc1.json" 2>&1)
+if [ "$schema_errs" = "[]" ]; then
+	ev_pass schema "the document matches the schema at every level (types, enums, const, required and unknown keys)"
 else
-	ev_fail schema-top-level "the document does not match the schema: $(jq -c 'keys' "$work/doc1.json" 2>/dev/null | head -c 300)"
+	ev_fail schema "the document does not match the schema: $(printf '%s' "$schema_errs" | head -c 300)"
 fi
 
 # 4. A lockfile change makes the prior evidence stale, naming the file; verifying the new commit runs the pipeline in
@@ -104,7 +115,7 @@ jq -c --arg r "$c2" '.revision = $r' "$work/doc1.json" >"$work/relabel.json"
 nci consumer evidence verify --file "$work/relabel.json" --at-revision "$c2" --json >"$work/st.json" 2>"$work/st.err"
 rc=$?
 if [ $rc -eq 10 ] && vjson "$work/st.json" '.data.freshness.state == "stale"'; then
-	ev_pass stale-exit-10 "evidence made before the lockfile change reports stale with exit 10 for the new commit"
+	ev_pass stale-exit-10 "a relabelled document of unknown origin whose inputs predate the lockfile change reads stale: exit 10"
 else
 	ev_fail stale-exit-10 "expected exit 10 and stale, got exit $rc: $(jq -c '.data.freshness' "$work/st.json" 2>/dev/null | head -c 200)"
 fi
@@ -139,7 +150,8 @@ forge() { # forge NAME JQ-EDIT AT-REVISION
 }
 forge revision '.revision = "0123456789abcdef0123456789abcdef01234567"' "$c2"
 forge digest '.input_digests.config = "0000000000000000000000000000000000000000000000000000000000000000"' "$c2"
-forge counts '.counts.fail = 3 | .counts.pass = 0' "$c2"
+forge runner '.runner.id = "another-host"' "$c2"
+forge timing '.timings.duration_ms = 1' "$c2"
 # An untouched document is still refused where nobody holds a record of its run (origin cannot be authenticated).
 nci consumer evidence verify --file "$work/doc2.json" --at-revision "$c2" >/dev/null 2>&1
 rc=$?

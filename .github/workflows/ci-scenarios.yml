@@ -17,6 +17,7 @@ on:
     paths:
       - ".github/workflows/ci-scenarios.yml"
       - "scripts/drill/**"
+      - ".nself/ci.yaml"
       - "free/ci/**"
   workflow_dispatch:
 
@@ -68,6 +69,7 @@ jobs:
           printf '%s\n' .drill-bin .drill-src >> .git/info/exclude
           (cd free/ci && CGO_ENABLED=0 go build -mod=vendor -o "$GITHUB_WORKSPACE/.drill-bin/nself-ci" ./cmd)
           (cd .drill-src/cli && GOTOOLCHAIN=auto go build -o "$GITHUB_WORKSPACE/.drill-bin/nself" ./cmd/nself)
+          git rev-parse HEAD > .drill-bin/HEAD # the drills trust these binaries only for this commit
           .drill-bin/nself --version || true
 
       - name: Install nft (Linux)

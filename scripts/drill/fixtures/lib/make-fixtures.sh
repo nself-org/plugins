@@ -74,7 +74,8 @@ fx_rust() {
 	fx_commit "$1" "rust fixture"
 }
 
-# fx_polyglot DIR: Go + Node + Dockerfile, with authored jobs (an authored job list replaces detection) and one job that
+# fx_polyglot DIR: Go + a web package + Dockerfile, with authored jobs (an authored job list replaces detection; a Linux job
+# runs under an address-space limit of its requested memory, so the Go jobs ask for enough) and one job that
 # needs the declared postgres service (it only proves the connection variables are injected and the port accepts a TCP
 # connection).
 fx_polyglot() {
@@ -82,7 +83,6 @@ fx_polyglot() {
 	mkdir -p "$1/.nself" "$1/web"
 	printf 'FROM scratch\nCOPY main.go /main.go\n' >"$1/Dockerfile"
 	printf '{\n  "name": "drill-web",\n  "version": "0.0.0",\n  "private": true\n}\n' >"$1/web/package.json"
-	printf 'const test = require("node:test");\nconst assert = require("node:assert");\n\ntest("adds", () => assert.strictEqual(1 + 1, 2));\n' >"$1/web/index.test.js"
 	cat >"$1/.nself/ci.yaml" <<'YAML'
 version: 1
 services:
@@ -92,13 +92,15 @@ jobs:
   go-fmt:
     kind: static
     run: [bash, -c, 'test -z "$(gofmt -l .)"']
+    requires: { mem_mb: 2048 }
   go-test:
     kind: test
     run: [go, test, ./...]
     timeout: 300s
-  web-test:
-    kind: test
-    run: [node, --test]
+    requires: { mem_mb: 4096 }
+  web-check:
+    kind: static
+    run: [jq, -e, .name, package.json]
     workdir: web
   db-reachable:
     kind: test

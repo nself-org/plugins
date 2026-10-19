@@ -2,38 +2,48 @@
 # Shared by the acceptance scenario drills (P7-CI-47); sourced, never run.
 #
 # Purpose: cut outbound network access for the processes of a drill and read back how many packets the cut dropped, so
-#   "no network after the cut" is measured, not assumed (review F7). Linux: an `nft` table that drops non-loopback OUTPUT.
-#   macOS: a `pf` anchor (under com.apple/, which the system ruleset evaluates) that blocks non-lo0 TCP and UDP egress
-#   (pf matches a group only for those two protocols). Every privileged call is `sudo -n`, so a missing sudo credential
-#   fails at once with a message instead of waiting for a password.
-# Inputs:  the commands to run inside the cut are given to cut_exec.
-# Outputs: cut_apply / cut_remove / cut_exec / cut_packets / cut_info.
-# Constraints: the rule matches the drill's own group id (CUT_GID), not the machine: a hosted runner's agent keeps
-#   reporting the job's log while the drill cannot reach the network. On Linux a second chain also blocks and counts
-#   traffic that containers forward from a docker bridge to anywhere else. Only the drill's own table (Linux) or anchor
-#   (macOS) is ever touched; the system's firewall rules are left as they were. While the cut is on, containers on a docker
-#   bridge cannot reach beyond the host (every bridge, not only this run's): cut_preflight warns when other containers run.
-#   If a run is killed with SIGKILL the cut stays: remove it with `sudo nft delete table inet drillcut` (Linux) or
-#   `sudo pfctl -a com.apple/250.drillcut -F all` (macOS). cut_exec drops privileges to the calling user with
-#   that group, so the drill's processes keep their files and their docker access. cut_remove is idempotent and runs
-#   on every exit path (the drill traps EXIT, INT and TERM). Nothing here touches the network.
+#   "no network after the cut" is measured, not assumed (review F7). Linux: an `nft` table that drops non-loopback OUTPUT
+#   of the drill's group, DNS (port 53, even to the local stub resolver), forwarding out of docker bridges and, where
+#   the kernel supports `socket cgroupv2`, non-loopback output of docker.service and containerd.service. macOS: a `pf`
+#   anchor (under com.apple/, which the system ruleset evaluates) that blocks non-lo0 TCP and UDP of the drill's group;
+#   DNS through mDNSResponder and ICMP are not measured there. Every privileged call is `sudo -n`, so a missing sudo
+#   credential fails at once with a message instead of waiting for a password.
+# Inputs:  CUT_WORK (a scratch directory for the watchdog's stop file); commands to run inside the cut go to cut_exec.
+# Outputs: cut_preflight / cut_apply / cut_remove / cut_exec / cut_selftest / cut_probe_ip / cut_probe_dns / cut_packets /
+#          cut_info / CUT_NOTE (what the counters do and do not cover).
+# Constraints: the rule matches the drill's own group id (CUT_GID, unique per run), not the machine: a hosted runner's agent
+#   keeps reporting the job's log while the drill cannot reach the network. The table (Linux) and anchor (macOS) names carry
+#   the run's pid, so two runs never touch each other's rules; the system's firewall is left as it was. cut_exec drops
+#   privileges to the calling user with that group (Linux: setpriv with no_new_privs, so sudo and setuid binaries inside
+#   the cut fail; macOS: perl, which cannot offer that). While the cut is on, containers on any docker bridge cannot reach
+#   beyond the host: cut_preflight warns when other containers run. cut_remove is idempotent and runs on every exit path
+#   the shell can see (the drill traps EXIT, INT, TERM and HUP); for SIGKILL a detached root watchdog removes the cut when
+#   the drill's pid is gone. By hand: `sudo nft list tables | grep drillcut` / `sudo pfctl -s Anchors`. Nothing here
+#   touches the network.
 
-CUT_GID=${CUT_GID:-48731}
+CUT_ID=$$
+CUT_GID=${CUT_GID:-$((40000 + CUT_ID % 20000))}
 CUT_ACTIVE=0
 CUT_OS=$(uname -s)
 CUT_PF_TOKEN=""
-CUT_PF_ANCHOR=com.apple/250.drillcut
+CUT_TABLE=drillcut_$CUT_ID
+CUT_PF_ANCHOR=com.apple/250.drillcut.$CUT_ID
+CUT_DOCKERD=0
+CUT_NOTE=""
+case "$CUT_GID" in '' | *[!0-9]*) echo "CUT_GID must be a number" >&2; exit 2 ;; esac
 
 cut_die() { echo "${EV_JOB:-drill}: $*" >&2; exit 2; }
 
-# cut_preflight: sudo must work without a password; the platform tool must exist.
+# cut_preflight: sudo must work without a password; the platform tools must exist; refuse a group id the host already uses.
 cut_preflight() {
 	[ "$(id -u)" -ne 0 ] || cut_die "run this drill as your normal user, not as root: the commands under the cut must not stay root"
 	sudo -n true 2>/dev/null || cut_die "sudo -n failed: this drill cuts the network with nft (Linux) or pf (macOS) and needs a passwordless sudo"
-	command -v perl >/dev/null || cut_die "perl is required to run the drill's commands under the cut group"
+	[ -x /usr/bin/perl ] || cut_die "/usr/bin/perl is required"
 	case "$CUT_OS" in
 	Linux)
 		command -v nft >/dev/null || cut_die "nft is required (apt-get install nftables)"
+		command -v setpriv >/dev/null || cut_die "setpriv (util-linux) is required"
+		! getent group "$CUT_GID" >/dev/null 2>&1 || cut_die "group id $CUT_GID is already in use; set CUT_GID to a free number"
 		if [ -n "$(docker ps -q 2>/dev/null)" ]; then echo "${EV_JOB:-drill}: warning: running containers lose outbound access (forwarding from docker bridges) while the cut is on" >&2; fi
 		;;
 	Darwin) command -v pfctl >/dev/null || cut_die "pfctl is required" ;;
@@ -41,8 +51,8 @@ cut_preflight() {
 	esac
 }
 
-# The code that sets the group and drops root. Arguments: uid gid "other groups" command...; it checks the result in full
-# (uid, egid and the whole group list) before it runs the command, and dies otherwise.
+# The macOS code that sets the group and drops root. Arguments: uid gid "other groups" command...; it checks the result in
+# full (uid, egid and the whole group list) before it runs the command, and dies otherwise.
 read -r -d '' CUT_PERL <<'PERL' || true
 my ($u, $g, $gs) = (shift, shift, shift);
 my %want = map { $_ => 1 } ($g, split " ", $gs);
@@ -54,7 +64,7 @@ my ($egid, @sup) = split " ", $);
 my %got = map { $_ => 1 } ($egid, @sup);
 my $same = (join(" ", sort { $a <=> $b } keys %want) eq join(" ", sort { $a <=> $b } keys %got));
 die "drop failed: uid $< $> egid $egid groups $) (wanted uid $u gid $g groups $gs)\n" if $> != $u || $< != $u || $egid != $g || !$same;
-exec @ARGV or die "exec $ARGV[0]: $!\n";
+exec { $ARGV[0] } @ARGV or die "exec $ARGV[0]: $!\n";
 PERL
 
 # cut_exec CMD...: run CMD as the calling user with group CUT_GID (and up to 15 of the user's other groups: macOS allows 16
@@ -63,20 +73,32 @@ cut_exec() {
 	if [ "$CUT_ACTIVE" -ne 1 ]; then "$@"; return; fi
 	local groups
 	groups=$(id -G | tr ' ' '\n' | head -n 15 | tr '\n' ' ')
-	sudo -n perl -e "$CUT_PERL" "$(id -u)" "$CUT_GID" "$groups" "$@"
+	if [ "$CUT_OS" = Linux ]; then
+		sudo -n setpriv --reuid "$(id -u)" --regid "$CUT_GID" --groups "$(printf '%s' "$groups" | tr -s ' ' ',' | sed 's/,$//')" --no-new-privs -- "$@"
+	else
+		sudo -n /usr/bin/perl -e "$CUT_PERL" "$(id -u)" "$CUT_GID" "$groups" "$@"
+	fi
 }
 
-# cut_apply: load the rule. CUT_ACTIVE is set before anything is changed, so a signal in the middle still runs cut_remove.
+# cut_selftest: the commands under the cut run as this user with group CUT_GID (and, on Linux, cannot become root again).
+cut_selftest() {
+	[ "$(cut_exec /usr/bin/id -u)" = "$(id -u)" ] || { echo "uid under the cut is not $(id -u)"; return 1; }
+	[ "$(cut_exec /usr/bin/id -g)" = "$CUT_GID" ] || { echo "gid under the cut is not $CUT_GID"; return 1; }
+	if [ "$CUT_OS" = Linux ] && cut_exec /usr/bin/sudo -n true >/dev/null 2>&1; then echo "sudo still works under the cut"; return 1; fi
+	return 0
+}
+
+# cut_apply: load the rules. CUT_ACTIVE is set before anything is changed, so a signal in the middle still runs cut_remove.
 # Returns 1 when the platform refuses (everything done so far is rolled back).
 cut_apply() {
 	CUT_ACTIVE=1
 	case "$CUT_OS" in
 	Linux)
-		sudo -n nft delete table inet drillcut 2>/dev/null || true
 		sudo -n nft -f - <<NFT || { cut_remove; return 1; }
-table inet drillcut {
+table inet $CUT_TABLE {
 	chain out {
 		type filter hook output priority 0; policy accept;
+		meta skgid $CUT_GID meta l4proto { tcp, udp } th dport 53 counter drop
 		meta skgid $CUT_GID oifname != "lo" counter drop
 	}
 	chain fwd {
@@ -86,31 +108,56 @@ table inet drillcut {
 	}
 }
 NFT
+		# The docker daemon makes its own connections (outside the drill's group); count and drop those too where nft can.
+		if sudo -n nft -f - >/dev/null 2>&1 <<NFT; then CUT_DOCKERD=1; fi
+add chain inet $CUT_TABLE dockerd { type filter hook output priority 0; policy accept; }
+add rule inet $CUT_TABLE dockerd socket cgroupv2 level 2 "system.slice/docker.service" oifname != "lo" counter drop
+add rule inet $CUT_TABLE dockerd socket cgroupv2 level 2 "system.slice/containerd.service" oifname != "lo" counter drop
+NFT
+		# shellcheck disable=SC2034 # read by the drills
+		CUT_NOTE="counts non-loopback output and DNS (port 53) of the drill's group, forwarding out of docker bridges, and docker.service/containerd.service output: $([ $CUT_DOCKERD -eq 1 ] && echo measured || echo 'not measured here (nft lacks socket cgroupv2)')"
 		;;
 	Darwin)
 		CUT_PF_TOKEN=$(sudo -n pfctl -E 2>&1 | awk '/Token/ {print $NF}')
 		printf 'block drop out quick on ! lo0 proto { tcp udp } from any to any group %s\n' "$CUT_GID" | sudo -n pfctl -a "$CUT_PF_ANCHOR" -f - >/dev/null 2>&1 || { cut_remove; return 1; }
+		# shellcheck disable=SC2034 # read by the drills
+		CUT_NOTE="counts TCP and UDP of the drill's group; DNS through mDNSResponder and ICMP are not measured"
 		;;
+	esac
+	cut_watch
+}
+
+# cut_cleanup_cmd: the command (as root) that removes the cut; the watchdog and cut_remove both run it.
+cut_cleanup_cmd() {
+	case "$CUT_OS" in
+	Linux) echo "nft delete table inet $CUT_TABLE" ;;
+	Darwin) echo "pfctl -a $CUT_PF_ANCHOR -F all; [ -z '$CUT_PF_TOKEN' ] || pfctl -X '$CUT_PF_TOKEN'" ;;
 	esac
 }
 
-# cut_remove: take the drill's own rule out again (idempotent). macOS: empty our anchor and release our pf enable token.
+# cut_watch: a detached root process that removes the cut when this shell's pid is gone, however it died (SIGKILL included).
+cut_watch() {
+	CUT_STOP=${CUT_WORK:?CUT_WORK is not set}/cut.stop
+	rm -f "$CUT_STOP"
+	sudo -n /usr/bin/perl -e 'use POSIX qw(setsid); my ($pid, $stop) = (shift, shift);
+		defined(my $k = fork) or exit 1; exit 0 if $k; setsid();
+		open STDIN, "</dev/null"; open STDOUT, ">/dev/null"; open STDERR, ">&STDOUT";
+		sleep 1 while kill(0, $pid) && !-e $stop;
+		system("/bin/sh", "-c", $ARGV[0]);' "$CUT_ID" "$CUT_STOP" "$(cut_cleanup_cmd)" >/dev/null 2>&1 || true
+}
+
+# cut_remove: take the drill's own rules out again (idempotent) and release the watchdog.
 cut_remove() {
 	[ "$CUT_ACTIVE" -eq 1 ] || return 0
 	CUT_ACTIVE=0
-	case "$CUT_OS" in
-	Linux) sudo -n nft delete table inet drillcut 2>/dev/null || true ;;
-	Darwin)
-		sudo -n pfctl -a "$CUT_PF_ANCHOR" -F all >/dev/null 2>&1 || true
-		if [ -n "$CUT_PF_TOKEN" ]; then sudo -n pfctl -X "$CUT_PF_TOKEN" >/dev/null 2>&1 || true; fi
-		;;
-	esac
+	sudo -n /bin/sh -c "$(cut_cleanup_cmd)" >/dev/null 2>&1 || true
+	[ -z "${CUT_STOP:-}" ] || : >"$CUT_STOP" 2>/dev/null || true
 }
 
 # cut_packets: the number of packets the rules have dropped so far, all counters summed (0 when unreadable).
 cut_packets() {
 	case "$CUT_OS" in
-	Linux) sudo -n nft list table inet drillcut 2>/dev/null | sed -n 's/.*counter packets \([0-9][0-9]*\).*/\1/p' | awk '{n += $1} END {print n + 0}' ;;
+	Linux) sudo -n nft list table inet "$CUT_TABLE" 2>/dev/null | sed -n 's/.*counter packets \([0-9][0-9]*\).*/\1/p' | awk '{n += $1} END {print n + 0}' ;;
 	Darwin) sudo -n pfctl -a "$CUT_PF_ANCHOR" -s rules -v 2>/dev/null | sed -n 's/.*Packets: \([0-9][0-9]*\).*/\1/p' | awk '{n += $1} END {print n + 0}' ;;
 	esac
 }
@@ -118,13 +165,19 @@ cut_packets() {
 # cut_info: the counter text kept in the evidence (nft table with counters; pfctl -s info and the rule's statistics).
 cut_info() {
 	case "$CUT_OS" in
-	Linux) sudo -n nft list table inet drillcut 2>&1 | tr '\n\t' '  ' | tr -s ' ' ;;
+	Linux) sudo -n nft list table inet "$CUT_TABLE" 2>&1 | tr '\n\t' '  ' | tr -s ' ' ;;
 	Darwin) { sudo -n pfctl -s info 2>&1 | grep -E 'Status|block|match' | tr '\n' ' '; sudo -n pfctl -a "$CUT_PF_ANCHOR" -s rules -v 2>&1 | grep -E 'Packets' | tr '\n' ' '; } | tr -s ' ' ;;
 	esac
 }
 
-# cut_probe: try to reach a public address from inside the cut. Succeeds (0) when the connection FAILED, as it must.
-cut_probe() {
+# cut_probe_ip / cut_probe_dns: try to reach a public address / resolve a public name from inside the cut. Succeed (0) when it
+# FAILED, as it must. The DNS probe needs getent (Linux only).
+cut_probe_ip() {
 	if cut_exec /usr/bin/env "PATH=$PATH" curl --silent --output /dev/null --connect-timeout 4 --max-time 6 https://1.1.1.1/ 2>/dev/null; then return 1; fi
+	return 0
+}
+cut_probe_dns() {
+	command -v getent >/dev/null 2>&1 || return 0
+	if cut_exec /usr/bin/env "PATH=$PATH" getent hosts example.org >/dev/null 2>&1; then return 1; fi
 	return 0
 }

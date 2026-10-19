@@ -39,6 +39,20 @@ jobs:
       paths: [free/plugin-gauth/**]
       env_present: [NSELF_DB_URL, GAUTH_ENCRYPTION_KEY]
 
+# Drill jobs that start Go binaries or run for minutes (P7-CI-47). A job defined here replaces the discovered one of the same
+# name. On Linux a process job runs under `ulimit -v` of its requested memory (256 MB when it asks for nothing), which a Go
+# binary cannot start under; the drills below build and run nself-ci themselves and take longer than the 10 minute default.
+  drill-scenario-01-local-only:
+    kind: drill
+    run: [./scripts/drill/scenario-01-local-only/run]
+    timeout: 30m
+    requires: { mem_mb: 4096 }
+  drill-scenario-12-external-consumer:
+    kind: drill
+    run: [./scripts/drill/scenario-12-external-consumer/run]
+    timeout: 30m
+    requires: { mem_mb: 4096 }
+
 # Pipelines. `drills` is a scheduled pipeline of `kind: drill` jobs (P7-CI-02):
 # every directory of scripts/drill that holds an executable `run` is one job,
 # so adding a drill needs no edit here (scripts/drill/README.md). The drills
