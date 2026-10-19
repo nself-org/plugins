@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/release/publish"
+	"github.com/nself-org/plugins/free/ci/internal/release/verify"
 	"github.com/nself-org/plugins/free/ci/internal/signing"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -191,5 +192,86 @@ func TestStaleStagingIsSwept(t *testing.T) {
 	}
 	if _, err := os.Stat(fresh); err != nil {
 		t.Fatal("a fresh staging directory (maybe another process's) was removed")
+	}
+}
+
+func TestExportAfterAKeyRotationNeedsTheOldTrustLine(t *testing.T) {
+	f := newFixture(t)
+	oldKey := f.res.vals[signing.KeyRef]
+	old, err := f.signer.PublicKey(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel := mustRun(t, f)
+	_, newValue, err := signing.Generate() // the key is rotated
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.res.vals[signing.KeyRef] = newValue
+	out := filepath.Join(t.TempDir(), "o")
+	_, err = publish.Export(context.Background(), f.deps(), runID, out, t.TempDir())
+	if err == nil || strings.Contains(err.Error(), "artifacts sign") || !strings.Contains(err.Error(), "rotated or revoked") {
+		t.Fatalf("export after rotation: %v", err)
+	}
+	if _, serr := os.Stat(out); serr == nil {
+		t.Fatal("a refused export left its destination")
+	}
+	// the operator's trust file carries the old line: the release exports again
+	if err = os.MkdirAll(filepath.Join(f.home, "trust"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(f.home, "trust", "ci-release.keys"), []byte("# old key\n"+old.TrustLine()+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	exp, err := publish.Export(context.Background(), f.deps(), runID, out, t.TempDir())
+	if err != nil || exp.ManifestSHA256 != rel.ManifestSHA256 {
+		t.Fatalf("export with the old trust line: %+v %v", exp, err)
+	}
+	// a revoked old key fails again
+	if err = os.WriteFile(filepath.Join(f.home, "trust", "ci-release.revoked"), []byte(old.KeyID+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = publish.Export(context.Background(), f.deps(), runID, filepath.Join(t.TempDir(), "o2"), t.TempDir()); err == nil {
+		t.Fatal("a release signed by a revoked key was exported")
+	}
+	// and the published row is still the original
+	f.res.vals[signing.KeyRef] = oldKey
+	if row, _, _ := f.ledger.ReleaseFor(context.Background(), runID); row.KeyID != old.KeyID {
+		t.Fatalf("row %+v", row)
+	}
+}
+
+func TestFailureIsRecordedEvenWhenTheCallersContextIsSpent(t *testing.T) {
+	f := newFixture(t)
+	delete(f.res.vals, signing.KeyRef)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := publish.Run(ctx, f.deps(), runID)
+	if err == nil || !strings.Contains(err.Error(), "nself ci artifacts sign "+runID) {
+		t.Fatalf("error %v", err)
+	}
+	if row, ok, _ := f.ledger.ReleaseFor(context.Background(), runID); !ok || row.State != store.ReleaseFailed {
+		t.Fatalf("ledger %+v %v", row, ok)
+	}
+}
+
+func TestExportLeavesNothingUnverified(t *testing.T) {
+	f := newFixture(t)
+	mustRun(t, f)
+	calls := 0
+	d := f.deps()
+	d.Verify = func(ctx context.Context, dir string, opt verify.Options) verify.Result {
+		calls++
+		if calls == 2 { // the copy
+			return verify.Result{Reason: verify.ReasonChecksum, Message: "forced"}
+		}
+		return acceptEvidenceGap(ctx, dir, opt)
+	}
+	out := filepath.Join(t.TempDir(), "o")
+	if _, err := publish.Export(context.Background(), d, runID, out, t.TempDir()); err == nil {
+		t.Fatal("a failing copy was accepted")
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Fatal("the unverified export stayed behind")
 	}
 }

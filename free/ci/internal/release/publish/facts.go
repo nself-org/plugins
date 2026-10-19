@@ -54,7 +54,7 @@ func sha(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[:
 // gather reads the facts of runID.
 func gather(ctx context.Context, d Deps, runID string) (*facts, error) {
 	if err := signing.CheckTerminal(ctx, d.Src, runID); err != nil {
-		return nil, refuse(reasonOf(err), "%v", err)
+		return nil, refuse(reasonOf(err), "%s", msgOf(err))
 	}
 	pipe, _, err := d.Src.PipelineByID(ctx, runID)
 	if err != nil {
@@ -71,6 +71,15 @@ func gather(ctx context.Context, d Deps, runID string) (*facts, error) {
 		return nil, err
 	}
 	return f, nil
+}
+
+// msgOf is the text of a signing refusal without its code prefix, or a fixed sentence.
+func msgOf(err error) string {
+	var se *signing.Error
+	if errors.As(err, &se) {
+		return se.Msg
+	}
+	return "the run could not be checked"
 }
 
 // reasonOf maps a signing refusal to its reason, any other error to signer_failed.

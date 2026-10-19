@@ -5,21 +5,27 @@ package run
 // class `release` and result `pass`, the AfterRun hook calls the registered
 // ReleasePublisher (internal/release/publish, installed by cmd; run cannot
 // import it because the verifier imports internal/evidence, which imports run).
-// Inputs:  AttemptInfo of a release attempt (store, home, project root) and the
+// Inputs:  every release attempt passing the Dispatch hook, local or placed on a
+// node (the session's store and home, the project from the run row) and the
 // RunInfo handed to AfterRun.
 // Outputs: nothing on success except a note; on a failed publication an error
 // that carries exit status 1, so finish.go turns it into the exit code of
-// `nself ci` and prints its text (the recovery command) as a note.
+// `nself ci`, prints its text (the recovery command) as a note and posts the
+// commit status as a failure (the hook is a StatusGate: it runs before the status).
 // Constraints: the evidence is already recorded and is never touched; a run
 // without a release job, or whose release did not pass, publishes nothing; a
 // missing publisher is a no-op (an embedder that wires none publishes none);
-// the per-run context is dropped when AfterRun reads it. The publisher alone
+// the per-run context is dropped when AfterRun reads it; a passing release the
+// hook never saw dispatched, and a publisher that panics, fail the run (exit 1)
+// like any other failed publication; the publisher gets its own 10 minute
+// context, not the run's spent cleanup deadline. The publisher alone
 // decides TEAM behaviour: it records awaiting-signature and resolves nothing.
 
 import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -47,21 +53,35 @@ var ReleasePublisher func(ctx context.Context, r ReleasePublishRequest) (Release
 // ErrNothingToPublish is what a publisher returns for a run without a passing release job.
 var ErrNothingToPublish = errors.New("run: nothing to publish")
 
+// publishBudget bounds one publication; the run's own 15 second cleanup
+// context (already partly spent on the evidence and the status) is not used.
+const publishBudget = 10 * time.Minute
+
 // releasePublish is the hook; runs maps a run id to its request.
 type releasePublish struct{ runs sync.Map }
 
 func init() {
 	h := &releasePublish{}
-	RegisterAttemptStart(h)
+	prev := Dispatch
+	// Dispatch sees every release attempt, local or placed on a node (AttemptStart
+	// fires only for local ones), so the request is captured for all of them.
+	Dispatch = func(ctx context.Context, s AttemptSpec) (Admitted, error) { return h.dispatch(ctx, s, prev) }
 	RegisterAfterRun(h)
 }
 
-func (h *releasePublish) AttemptStart(_ context.Context, a AttemptInfo) error {
-	if a.Job.Kind == "release" && a.Store != nil {
-		h.runs.Store(a.RunID, ReleasePublishRequest{RunID: a.RunID, Revision: a.Revision, Store: a.Store, Home: a.Home, Root: a.Root})
+func (h *releasePublish) dispatch(ctx context.Context, s AttemptSpec, prev DispatchHook) (Admitted, error) {
+	if sess := SessionFrom(ctx); sess != nil && s.Job != nil && s.Job.Kind == "release" && sess.Store != nil {
+		root := ""
+		if row, ok, err := sess.Store.PipelineByID(ctx, sess.RunID); err == nil && ok {
+			root = row.Project
+		}
+		h.runs.Store(sess.RunID, ReleasePublishRequest{RunID: sess.RunID, Revision: sess.Revision, Store: sess.Store, Home: sess.Home, Root: root})
 	}
-	return nil
+	return prev(ctx, s)
 }
+
+// BeforeStatus makes the hook a StatusGate: the commit status waits for the publication.
+func (*releasePublish) BeforeStatus() {}
 
 // hasPassingRelease reports the evidence class `release`: a passing release check.
 func hasPassingRelease(ev model.Evidence) bool {
@@ -73,17 +93,27 @@ func hasPassingRelease(ev model.Evidence) bool {
 	return false
 }
 
-func (h *releasePublish) AfterRun(ctx context.Context, r RunInfo) error {
-	v, ok := h.runs.LoadAndDelete(r.RunID)
-	if !ok || r.Result != "pass" || !hasPassingRelease(r.Evidence) || ReleasePublisher == nil {
+func (h *releasePublish) AfterRun(ctx context.Context, r RunInfo) (err error) {
+	v, tracked := h.runs.LoadAndDelete(r.RunID)
+	if r.Result != "pass" || !hasPassingRelease(r.Evidence) || ReleasePublisher == nil {
 		return nil
 	}
-	out, err := ReleasePublisher(ctx, v.(ReleasePublishRequest))
+	if !tracked { // a passing release the hook never saw dispatched must not read as published
+		return &publishFailure{err: errors.New("E717 signer_failed: the release of run " + r.RunID + " was not tracked: release NOT published; run `nself ci artifacts sign " + r.RunID + "` to publish it")}
+	}
+	defer func() {
+		if p := recover(); p != nil { // guard() would turn a panic into a note with no exit status
+			err = &publishFailure{err: errors.New("E717 signer_failed: the publication stopped unexpectedly: release NOT published; run `nself ci artifacts sign " + r.RunID + "` to publish it")}
+		}
+	}()
+	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), publishBudget)
+	defer cancel()
+	out, perr := ReleasePublisher(pctx, v.(ReleasePublishRequest))
 	switch {
-	case errors.Is(err, ErrNothingToPublish):
+	case errors.Is(perr, ErrNothingToPublish):
 		return nil
-	case err != nil:
-		return &publishFailure{err: err}
+	case perr != nil:
+		return &publishFailure{err: perr}
 	case out.Message != "":
 		return releaseNote(out.Message)
 	}

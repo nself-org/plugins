@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/release/job"
 	"github.com/nself-org/plugins/free/ci/internal/release/verify"
@@ -84,7 +85,7 @@ func (d Deps) install(ctx context.Context, runID string, f *facts, b *bundle) (R
 	if err = writeBundle(ctx, d, f.pipe.Project, b, staged); err != nil {
 		return Release{}, err
 	}
-	if err = d.selfVerify(ctx, staged, b.keyID); err != nil {
+	if err = d.selfVerify(ctx, staged, b.keyID, true); err != nil {
 		return Release{}, err
 	}
 	target := Dir(d.Home, runID)
@@ -110,7 +111,7 @@ func (d Deps) existing(ctx context.Context, runID string, f *facts) (Release, bo
 	}
 	dir := Dir(d.Home, runID)
 	b, err := os.ReadFile(filepath.Join(dir, verifyManifestFile))
-	if err != nil || sha(b) != row.ManifestSHA256 || d.selfVerify(ctx, dir, row.KeyID) != nil {
+	if err != nil || sha(b) != row.ManifestSHA256 || d.selfVerify(ctx, dir, row.KeyID, false) != nil {
 		return Release{}, false
 	}
 	return Release{RunID: runID, State: Published, Dir: dir, ManifestSHA256: row.ManifestSHA256, KeyID: row.KeyID}, true
@@ -130,62 +131,95 @@ func (d Deps) await(ctx context.Context, runID string, f *facts) (Release, error
 	return Release{RunID: runID, State: Awaiting, Message: msg}, nil
 }
 
+// failBudget bounds the failure record: the caller's context may be spent.
+const failBudget = 30 * time.Second
+
 // fail records `failed` (when the run is known and not already published) and
 // returns the error with the recovery command. Text from outside this package
-// never reaches the record or the message: only a fixed sentence does.
+// never reaches the record or the message: only a fixed sentence does. It uses
+// a fresh context, so a spent deadline cannot hide the record or the recovery.
 func (d Deps) fail(ctx context.Context, runID string, f *facts, err error) error {
 	var e *Error
 	if !errors.As(err, &e) {
 		e = refuse(signing.ReasonSignerFailed, "the publication failed").(*Error)
 	}
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), failBudget)
+	defer cancel()
+	out := *e
+	out.Msg = strings.ReplaceAll(out.Msg, d.Home, "<home>")
 	if f == nil {
-		if pipe, ok, perr := d.Src.PipelineByID(ctx, runID); perr == nil && ok {
+		pipe, ok, perr := d.Src.PipelineByID(rctx, runID)
+		switch {
+		case perr == nil && !ok: // an unknown run: nothing to record, nothing to recover
+			return &out
+		case perr == nil:
 			f = &facts{pipe: pipe}
 		}
 	}
-	out := *e
-	out.Msg = strings.ReplaceAll(out.Msg, d.Home, "<home>")
-	if f == nil { // unknown run: nothing to record, nothing to recover
-		return &out
+	if f != nil {
+		if row, ok, rerr := d.Ledger.ReleaseFor(rctx, runID); rerr == nil && ok && row.State == store.ReleasePublished {
+			out.Msg += ": release " + runID + " is recorded as published (manifest " + row.ManifestSHA256[:12] + ") but could not be confirmed now"
+			return &out
+		}
+		_ = d.Ledger.RecordRelease(rctx, store.ReleaseRow{RunID: runID, Project: f.pipe.Project, Revision: f.pipe.Revision, State: store.ReleaseFailed, Reason: failedRecord(&out)})
 	}
-	if row, ok, rerr := d.Ledger.ReleaseFor(ctx, runID); rerr == nil && ok && row.State == store.ReleasePublished {
-		out.Msg += ": release " + runID + " is recorded as published (manifest " + row.ManifestSHA256[:12] + ") but could not be confirmed now; `" + RecoveryCommand(runID) + "` repeats the check"
-		return &out
-	}
-	_ = d.Ledger.RecordRelease(ctx, store.ReleaseRow{RunID: runID, Project: f.pipe.Project, Revision: f.pipe.Revision, State: store.ReleaseFailed, Reason: failedRecord(&out)})
 	out.Msg += ": release NOT published; the run's evidence is unchanged; run `" + RecoveryCommand(runID) + "` to publish it"
 	return &out
 }
 
-// selfVerify checks dir with internal/release/verify against the signer's key.
-func (d Deps) selfVerify(ctx context.Context, dir, keyID string) error {
+// trustFile writes the keys the verification trusts: the signer's current key
+// and the operator's own trust file (a rotated key's old line lives there), and
+// returns the revoked file when there is one.
+func (d Deps) trustFile(dir string, info signing.KeyInfo) (keys, revoked string, err error) {
+	keys = filepath.Join(dir, "ci-release.keys")
+	body := info.TrustLine() + "\n"
+	if b, rerr := os.ReadFile(filepath.Join(d.Home, "trust", "ci-release.keys")); rerr == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			if t := strings.TrimSpace(line); t != "" && !strings.HasPrefix(t, info.KeyID+" ") { // the signer's own line is already there
+				body += t + "\n"
+			}
+		}
+	}
+	if err = os.WriteFile(keys, []byte(body), 0o600); err != nil {
+		return "", "", err
+	}
+	if _, serr := os.Stat(filepath.Join(d.Home, "trust", "ci-release.revoked")); serr == nil {
+		revoked = filepath.Join(d.Home, "trust", "ci-release.revoked")
+	}
+	return keys, revoked, nil
+}
+
+// selfVerify checks dir with internal/release/verify against the signer's key
+// (and the operator's trust file). With exact set the signer's key must be keyID:
+// the release was just signed with it.
+func (d Deps) selfVerify(ctx context.Context, dir, keyID string, exact bool) error {
 	info, err := d.Signer.PublicKey(ctx)
 	if err != nil {
 		return wrapSigner(err)
 	}
-	if info.KeyID != keyID {
-		return refuse(signing.ReasonKeyIDMismatch, "the release key changed since the release was signed")
+	if exact && info.KeyID != keyID {
+		return refuse(signing.ReasonKeyIDMismatch, "the release key changed while the release was being signed")
 	}
 	tmp, err := os.MkdirTemp(releasesDir(d.Home), ".keys-")
 	if err != nil {
 		return refuse(signing.ReasonSignerFailed, "a trust file could not be written")
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
-	keys := filepath.Join(tmp, "ci-release.keys")
-	if err = os.WriteFile(keys, []byte(info.TrustLine()+"\n"), 0o600); err != nil {
+	keys, revoked, err := d.trustFile(tmp, info)
+	if err != nil {
 		return refuse(signing.ReasonSignerFailed, "a trust file could not be written")
 	}
 	vf := d.Verify
 	if vf == nil {
 		vf = verify.Release
 	}
-	res := vf(ctx, dir, verify.Options{Root: d.Root, Capture: d.Capture, OperatorKeys: keys})
+	res := vf(ctx, dir, verify.Options{Root: d.Root, Capture: d.Capture, OperatorKeys: keys, OperatorRevoked: revoked})
 	if !res.Verified {
 		msg := "the release does not verify: " + res.Message
 		if len(res.Evidence) > 0 {
 			msg += " [" + strings.Join(res.Evidence, ",") + "]"
 		}
-		return &Error{ErrCode: verify.Code, Reason: res.Reason, Msg: msg}
+		return &Error{ErrCode: verify.Code, Reason: res.Reason, Msg: strings.ReplaceAll(msg, d.Home, "<home>")}
 	}
 	return nil
 }

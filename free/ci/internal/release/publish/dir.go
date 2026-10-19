@@ -17,6 +17,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -138,6 +139,10 @@ func installDir(staged, target string) (commit, undo func(), err error) {
 		if err = os.Rename(target, old); err != nil {
 			return nil, nil, err
 		}
+		// a rename keeps the old modification time: without this a backup of an old
+		// release would look abandoned to another run's sweep while it is live
+		now := time.Now()
+		_ = os.Chtimes(old, now, now)
 	}
 	if err = os.Rename(staged, target); err != nil {
 		if old != "" {
@@ -159,6 +164,9 @@ func installDir(staged, target string) (commit, undo func(), err error) {
 	return commit, undo, nil
 }
 
+// backupRe names the rollback backup of a replaced release: <run>.old-<staging name>.
+var backupRe = regexp.MustCompile(`^[^.][^/]*\.old-\.stage-[^/]+$`)
+
 // staleAfter is how long an abandoned staging entry is kept.
 const staleAfter = time.Hour
 
@@ -170,7 +178,7 @@ func sweep(home string) {
 	}
 	for _, e := range ents {
 		n := e.Name()
-		if !strings.HasPrefix(n, ".stage-") && !strings.HasPrefix(n, ".keys-") && !strings.Contains(n, ".old-") {
+		if !strings.HasPrefix(n, ".stage-") && !strings.HasPrefix(n, ".keys-") && !backupRe.MatchString(n) {
 			continue
 		}
 		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > staleAfter {

@@ -49,10 +49,12 @@ func Export(ctx context.Context, d Deps, runID, out, cwd string) (Release, error
 	if err = d.checkDir(ctx, src, row); err != nil {
 		return Release{}, withRecovery(err, runID)
 	}
-	if err = copyTree(src, dest); err != nil {
+	undo, err := copyTree(src, dest)
+	if err != nil {
 		return Release{}, refuse(signing.ReasonSignerFailed, "the release could not be exported")
 	}
 	if err = d.checkDir(ctx, dest, row); err != nil {
+		undo() // nothing unverified stays behind
 		return Release{}, err
 	}
 	return Release{RunID: runID, State: Published, Dir: dest, ManifestSHA256: row.ManifestSHA256, KeyID: row.KeyID, Message: PrivateNotice}, nil
@@ -64,7 +66,7 @@ func (d Deps) checkDir(ctx context.Context, dir string, row store.ReleaseRow) er
 	if err != nil || sha(b) != row.ManifestSHA256 {
 		return refuse(signing.ReasonDigestNotCommitted, "the release directory is not the release the ledger recorded")
 	}
-	return d.selfVerify(ctx, dir, row.KeyID)
+	return d.selfVerify(ctx, dir, row.KeyID, false)
 }
 
 func withRecovery(err error, runID string) error {
@@ -73,7 +75,12 @@ func withRecovery(err error, runID string) error {
 		return err
 	}
 	out := *e
-	out.Msg += ": run `" + RecoveryCommand(runID) + "` to rebuild it"
+	switch e.Reason {
+	case "signature", "revoked", "key_purpose": // a rebuild signs with today's key, and a published record never changes: trust is the question
+		out.Msg += ": the release key may have been rotated or revoked; trust lines are read from <home>/trust/ci-release.keys and .revoked"
+	default:
+		out.Msg += ": run `" + RecoveryCommand(runID) + "` to rebuild it"
+	}
 	return &out
 }
 
@@ -82,40 +89,42 @@ func withRecovery(err error, runID string) error {
 // symlink); every write goes through an os.Root on dst, so a name planted in
 // dst while the copy runs cannot redirect a write outside it. A failed copy
 // removes what it created.
-func copyTree(src, dst string) (err error) {
+func copyTree(src, dst string) (undo func(), err error) {
 	madeDst := false
 	if info, lerr := os.Lstat(dst); lerr == nil {
 		if !info.IsDir() {
-			return os.ErrInvalid // a symlink or a file
+			return nil, os.ErrInvalid // a symlink or a file
 		}
 	} else if err = os.Mkdir(dst, 0o700); err != nil {
-		return err
+		return nil, err
 	} else {
 		madeDst = true
 	}
 	root, err := os.OpenRoot(dst)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { _ = root.Close() }()
 	if before, lerr := os.Lstat(dst); lerr != nil || !before.IsDir() {
-		return os.ErrInvalid
+		return nil, os.ErrInvalid
 	} else if at, serr := root.Stat("."); serr != nil || !os.SameFile(before, at) {
-		return os.ErrInvalid
+		return nil, os.ErrInvalid
 	}
 	var made []string // root-relative names, in creation order
-	defer func() {
-		if err == nil {
+	undo = func() {
+		r, rerr := os.OpenRoot(dst)
+		if rerr != nil {
 			return
 		}
+		defer func() { _ = r.Close() }()
 		for i := len(made) - 1; i >= 0; i-- {
-			_ = root.Remove(made[i])
+			_ = r.Remove(made[i])
 		}
 		if madeDst {
 			_ = os.Remove(dst)
 		}
-	}()
-	return filepath.WalkDir(src, func(p string, de os.DirEntry, werr error) error {
+	}
+	err = filepath.WalkDir(src, func(p string, de os.DirEntry, werr error) error {
 		if werr != nil {
 			return werr
 		}
@@ -135,6 +144,11 @@ func copyTree(src, dst string) (err error) {
 		}
 		return copyFile(root, p, rel, &made)
 	})
+	if err != nil {
+		undo()
+		return nil, err
+	}
+	return undo, nil
 }
 
 func copyFile(root *os.Root, srcPath, rel string, made *[]string) error {

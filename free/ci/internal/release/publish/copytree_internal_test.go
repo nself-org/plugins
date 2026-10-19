@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func writeTree(t *testing.T, root string) {
@@ -26,7 +27,7 @@ func TestCopyTreeNeverFollowsADestinationSymlink(t *testing.T) {
 	if err := os.Symlink(elsewhere, link); err != nil {
 		t.Fatal(err)
 	}
-	if err := copyTree(src, link); err == nil {
+	if _, err := copyTree(src, link); err == nil {
 		t.Fatal("a symlink destination was accepted")
 	}
 	if ents, _ := os.ReadDir(elsewhere); len(ents) != 0 {
@@ -40,7 +41,7 @@ func TestCopyTreeNeverFollowsADestinationSymlink(t *testing.T) {
 	if err := os.Symlink(elsewhere, filepath.Join(dst, "sub")); err != nil {
 		t.Fatal(err)
 	}
-	if err := copyTree(src, dst); err == nil {
+	if _, err := copyTree(src, dst); err == nil {
 		t.Fatal("a planted directory symlink was followed")
 	}
 	if ents, _ := os.ReadDir(elsewhere); len(ents) != 0 {
@@ -55,7 +56,7 @@ func TestCopyTreeCreatesAndCleansUp(t *testing.T) {
 	src, base := t.TempDir(), t.TempDir()
 	writeTree(t, src)
 	dst := filepath.Join(base, "out")
-	if err := copyTree(src, dst); err != nil {
+	if _, err := copyTree(src, dst); err != nil {
 		t.Fatal(err)
 	}
 	if b, err := os.ReadFile(filepath.Join(dst, "sub", "b.txt")); err != nil || string(b) != "b" {
@@ -69,7 +70,7 @@ func TestCopyTreeCreatesAndCleansUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	dst2 := filepath.Join(base, "out2")
-	if err := copyTree(src, dst2); err == nil {
+	if _, err := copyTree(src, dst2); err == nil {
 		t.Fatal("a symlink in the source was copied")
 	}
 	if _, err := os.Lstat(dst2); err == nil {
@@ -80,10 +81,48 @@ func TestCopyTreeCreatesAndCleansUp(t *testing.T) {
 	if err := os.Mkdir(dst3, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := copyTree(src, dst3); err == nil {
+	if _, err := copyTree(src, dst3); err == nil {
 		t.Fatal("expected the same failure")
 	}
 	if ents, _ := os.ReadDir(dst3); len(ents) != 0 {
 		t.Fatalf("leftovers in a pre-existing destination: %v", ents)
 	}
+}
+
+// The rollback backup of a release older than the sweep age is live while the
+// ledger write is pending: another run's sweep must not delete it, and undo
+// must put the original back.
+func TestSweepNeverTakesALiveRollbackBackup(t *testing.T) {
+	home := t.TempDir()
+	releases := releasesDir(home)
+	target := filepath.Join(releases, "run-1")
+	if err := os.MkdirAll(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "SHA256SUMS"), []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	aged := time.Now().Add(-5 * time.Hour)
+	if err := os.Chtimes(target, aged, aged); err != nil {
+		t.Fatal(err)
+	}
+	staged, err := stage(home) // creates the staging directory for run-1's rebuild
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(staged, "SHA256SUMS"), []byte("rebuilt"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	commit, undo, err := installDir(staged, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = stage(home); err != nil { // another run starts and sweeps
+		t.Fatal(err)
+	}
+	undo() // the ledger write failed
+	if b, err := os.ReadFile(filepath.Join(target, "SHA256SUMS")); err != nil || string(b) != "original" {
+		t.Fatalf("the original release was not restored: %q %v", b, err)
+	}
+	_ = commit
 }
