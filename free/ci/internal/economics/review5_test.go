@@ -91,6 +91,15 @@ func TestBudgetOddlySpelledProviderStillMeetsTheRateTable(t *testing.T) {
 	}
 }
 
+func TestEconomicsClassOfNormalisesTheProviderItself(t *testing.T) {
+	p := spendPolicy(t, paidKV(nil))
+	for _, spelled := range []string{"Cloudco", " cloudco", "CLOUDCO\t"} {
+		if got := classOf(p, ClassOwned, spelled); got != ClassMetered {
+			t.Errorf("classOf(%q) = %s, want metered", spelled, got)
+		}
+	}
+}
+
 func TestBudgetPolicyOutageFallbackStaysOnThisMachine(t *testing.T) {
 	ctx := context.Background()
 	clk := &clock{t: at("2026-10-19T10:00:00Z")}

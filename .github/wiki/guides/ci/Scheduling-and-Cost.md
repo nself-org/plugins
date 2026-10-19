@@ -26,7 +26,7 @@ The worst case of a job is its timeout rounded up to the next billing increment,
 
 A metered or ephemeral placement needs both `economics.paid_enabled` and a day or month budget above zero (overall, or for that provider). A per-job or per-pipeline budget alone is not enough (`budget.unset`). A day or month budget of zero does not enable paid spend (`budget.unset`). Once a budget is set, a job that does not fit is refused (`budget.exceeded`). With paid spend off, nothing paid is ever placed (`paid.disabled`).
 
-A provider with a declared paid rate is paid, whatever class a runner says it is. Provider ownership is recorded in each coordinator's own store, so two coordinators with separate data directories can both claim an account that has no declared owner; declare `economics.providers.<id>.owner_coordinator` for any paid account more than one coordinator can reach. Each paid provider account has an owner coordinator: the one named in `economics.providers.<id>.owner_coordinator`, else the first coordinator that asked to place work on it (recorded even if that placement is then refused). Any other coordinator sees `provider.owned_elsewhere`.
+A provider with a declared paid rate is paid, whatever class a runner says it is. Provider ownership is recorded in each coordinator's own store, so two coordinators with separate data directories can both claim an account that has no declared owner; declare `economics.providers.<id>.owner_coordinator` for any paid account more than one coordinator can reach. Each paid provider account has an owner coordinator: the one named in `economics.providers.<id>.owner_coordinator`, else the first coordinator that asked (a coordinator with no id cannot place paid work at all: `provider.owned_elsewhere`) to place work on it (recorded even if that placement is then refused). Any other coordinator sees `provider.owned_elsewhere`.
 
 ## Budgets and windows
 
@@ -42,13 +42,13 @@ When a pipeline's spend estimate would go above `economics.approval_threshold_mi
 
 ## The ledger and its confidence
 
-`nself ci policy usage [--json]` prints the ledger. Every figure carries a confidence and its source.
+`nself ci policy usage [--repo dir] [--json]` prints the ledger. Every figure carries a confidence and its source.
 
 | Confidence | Where it comes from |
 |---|---|
 | `known` | A provider reported it (the GitHub billing importer, when you turn it on) |
 | `computed` | A local actual from the coordinator's own timestamps |
-| `estimated` | The worst case at admission, a remote actual that was clamped, any allowance without a provider balance |
+| `estimated` | The worst case at admission, a remote actual that was clamped, any allowance that has a declared ceiling but no provider balance |
 | `declared` | A value you set in policy (a rate, a ceiling, a budget limit); an input, not a measurement |
 | `unknown` | No basis (for example, a duration nobody recorded; a priced attempt settles at its estimate, a local or owned one at zero) |
 
