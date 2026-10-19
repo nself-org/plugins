@@ -122,6 +122,18 @@ func answer(w http.ResponseWriter, d Delivery, out Outcome, err error) {
 	}
 }
 
+// perRepoOrUnstated reports whether delivery facts leave the auth method out or say "per-repo". Facts
+// that fail to parse as an object count as stated otherwise, so they never skip the allowlist.
+func perRepoOrUnstated(facts json.RawMessage) bool {
+	if len(facts) == 0 {
+		return true
+	}
+	var f struct {
+		Auth string `json:"auth"`
+	}
+	return json.Unmarshal(facts, &f) == nil && (f.Auth == "" || f.Auth == "per-repo")
+}
+
 // serveWebhook handles /webhook and POST /.
 func (c *Coordinator) serveWebhook(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -169,14 +181,22 @@ func (c *Coordinator) serveWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	if ing != nil {
 		d, err := ing.Accept(r.Context(), r, body)
+		var declined interface{ DeclineReason() string }
+		if errors.As(err, &declined) { // verified but not for the intake (a runner demand nobody serves): 200, nothing enqueued
+			c.cfg.Logf("ingress %s declined a delivery", ing.Name())
+			writeJSON(w, http.StatusOK, map[string]any{"accepted": false, "reason": declined.DeclineReason()})
+			return
+		}
 		if err != nil {
 			c.cfg.Logf("ingress %s refused a delivery", ing.Name())
 			http.Error(w, "delivery refused", http.StatusForbidden)
 			return
 		}
-		// an Ingress holding per-repo secrets authorises its own repos (it must check the secret belongs to
-		// Delivery.Project); any other Ingress is held to --allowed-repos like the v1.4 path
-		if h, ok := ing.(SecretHolder); !ok || !h.HasSecrets() {
+		// an Ingress holding per-repo secrets authorises its own repos (it must check the secret belongs
+		// to Delivery.Project), unless the delivery itself says it was verified some other way
+		// (facts.auth shared, bearer or none): that one, and any delivery of an Ingress that holds no
+		// secrets, is held to --allowed-repos like the v1.4 path
+		if h, ok := ing.(SecretHolder); !ok || !h.HasSecrets() || !perRepoOrUnstated(d.Facts) {
 			if !serve.RepoAllowed(d.Project, c.cfg.AllowedRepos) {
 				c.cfg.Logf("ingress %s: repo %q is not in --allowed-repos", ing.Name(), d.Project)
 				http.Error(w, "repo is not allowlisted", http.StatusForbidden)
