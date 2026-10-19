@@ -44,6 +44,19 @@ jobs:
     when:
       paths: [free/ci/**]
 
+  # The cmd package holds the tests of `policy protect` and the error-code registry. The whole package is not
+  # run here: TestArtifactsUsageListsEverySub is red on main (debt row for artifactsUsage), so only these
+  # tests are named. Remove the -run filter when that debt row closes.
+  ci-test-cmd:
+    kind: test
+    run: [go, test, -mod=vendor, -count=1, -run, "TestPolicyProtect|TestCodeRegistry", ./cmd/]
+    workdir: free/ci
+    env:
+      CGO_ENABLED: "0"
+    timeout: 900s
+    when:
+      paths: [free/ci/**]
+
   # plugin-gauth (converted by hand from free/plugin-gauth/.ci.yaml, P7-CI-36).
   # Registers the crate so merges are blocked until clippy and the unit tests
   # pass. Google OAuth credentials are not needed for the unit tests.

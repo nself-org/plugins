@@ -42,6 +42,7 @@ type protectFlags struct {
 	repo, branch       string
 	restore            string
 	audit, appID       int
+	auditSet           bool // --audit was given (so --audit 0 is an error, not "no audit")
 }
 
 func newProtectFlagSet(f *protectFlags) *flag.FlagSet {
@@ -73,14 +74,16 @@ type protectEnv struct {
 
 func runPolicyProtect(args []string) int {
 	var f protectFlags
-	pos, err := parseMixed(newProtectFlagSet(&f), args)
+	fs := newProtectFlagSet(&f)
+	pos, err := parseMixed(fs, args)
+	fs.Visit(func(fl *flag.Flag) { f.auditSet = f.auditSet || fl.Name == "audit" })
 	modes := 0
-	for _, on := range []bool{f.hook, f.audit != 0, f.restore != ""} {
+	for _, on := range []bool{f.hook, f.auditSet, f.restore != ""} {
 		if on {
 			modes++
 		}
 	}
-	if err != nil || len(pos) != 0 || modes > 1 || f.audit < 0 || f.appID <= 0 || (f.dryRun && (f.hook || f.audit != 0)) {
+	if err != nil || len(pos) != 0 || modes > 1 || (f.auditSet && f.audit <= 0) || f.appID <= 0 || (f.dryRun && (f.hook || f.auditSet)) {
 		return usageErr(protectUsage)
 	}
 	root, err := evidenceRoot("")
@@ -97,18 +100,21 @@ func runPolicyProtect(args []string) int {
 }
 
 func (e protectEnv) dispatch(ctx context.Context, f protectFlags) int {
-	repo, err := e.slug(ctx, f.repo)
-	if err == nil {
-		switch {
-		case f.hook:
-			err = e.installHook(ctx, f)
-		case f.audit != 0:
-			return e.audit(ctx, f, repo)
-		case f.restore != "":
-			err = e.restoreSnapshot(ctx, f)
-		default:
-			err = e.protection(ctx, f, repo)
+	var err error
+	switch {
+	case f.hook: // needs the repository only to learn its default branch, and only without --branch
+		err = e.installHook(ctx, f)
+	case f.restore != "": // the snapshot names its repository
+		err = e.restoreSnapshot(ctx, f)
+	default:
+		var repo string
+		if repo, err = e.slug(ctx, f.repo); err != nil {
+			break
 		}
+		if f.auditSet {
+			return e.audit(ctx, f, repo)
+		}
+		err = e.protection(ctx, f, repo)
 	}
 	return protectExit(err, f.json)
 }
@@ -221,6 +227,9 @@ func (e protectEnv) print(asJSON bool, res protectResult, plan protect.Plan) err
 		fmt.Fprintf(e.out, "\nPUT body:\n%s", plan.JSON())
 	default:
 		fmt.Fprintf(e.out, "%s %s: nself-ci is now required (app %d); previous protection saved to %s\n", res.Repo, res.Branch, res.Added[0].AppID, res.Snapshot)
+		if res.Unprotected {
+			fmt.Fprintln(e.out, "the branch had no protection; --restore cannot put that back (removing protection is a manual step)")
+		}
 	}
 	return nil
 }
@@ -241,9 +250,10 @@ func (e protectEnv) restoreSnapshot(ctx context.Context, f protectFlags) error {
 		_, err = e.out.Write(append([]byte(fmt.Sprintf("%s %s: would restore the snapshot of %s\n", snap.Repo, snap.Branch, snap.TakenAt)), protect.Plan{Body: body}.JSON()...))
 		return err
 	}
-	if err := (protect.Client{Run: e.run}).Restore(ctx, snap, filepath.Join(e.home, "protect")); err != nil {
+	before, err := (protect.Client{Run: e.run}).Restore(ctx, snap, filepath.Join(e.home, "protect"), e.now())
+	if err != nil {
 		return e.noPlanHint(err)
 	}
-	fmt.Fprintf(e.out, "%s %s: protection restored from %s\n", snap.Repo, snap.Branch, f.restore)
+	fmt.Fprintf(e.out, "%s %s: protection restored from %s; what it replaced is saved to %s\n", snap.Repo, snap.Branch, f.restore, before)
 	return nil
 }

@@ -82,7 +82,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: evidence-${{ github.run_id }}
+          name: evidence-source-${{ github.run_id }}
           path: ${{ runner.temp }}/evidence/
           if-no-files-found: warn
           retention-days: 30
@@ -160,16 +160,19 @@ jobs:
             echo "::error::the pinned gate PASSED a checkout whose result rule returns pass for a failing check"
             exit 1
           fi
-          # Failing for the right reason: the model tests that guard the result rule are red.
-          jq -e '.data.checks[] | select(.id == "ci-test" and .result == "fail")' "$RUNNER_TEMP/evidence/mutation.json" > /dev/null \
-            || { echo "::error::the gate failed (exit $status) but not on ci-test"; exit 1; }
-          echo "mutation caught: the pinned gate failed on ci-test (exit $status)" >> "$GITHUB_STEP_SUMMARY"
+          # Failing for the right reason: ci-test is red AND its output names the model package that holds
+          # the result rule (ci.yaml lists internal/model first, so its failure leads the excerpt). A gate that
+          # failed on something else, such as a broken unrelated test, does not prove the mutation was caught.
+          jq -e '.data.checks[] | select(.id == "ci-test" and .result == "fail" and ((.excerpt // "") | test("--- FAIL: TestResultRule")))' \
+            "$RUNNER_TEMP/evidence/mutation.json" > /dev/null \
+            || { echo "::error::the gate failed (exit $status) but not on the result-rule tests (TestResultRule in internal/model)"; exit 1; }
+          echo "mutation caught: the pinned gate failed ci-test on TestResultRule (exit $status)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep the evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: evidence-${{ github.run_id }}
+          name: evidence-mutation-${{ github.run_id }}
           path: ${{ runner.temp }}/evidence/
           if-no-files-found: warn
           retention-days: 30

@@ -39,8 +39,10 @@ export NSELF_V15=1 # the plugin binary does not follow the cli flip; kept until 
 audit() {
 	local out="$tmp/audit.json" rc=0 n
 	"${bin[@]}" policy protect --repo "$1" --branch "$2" --audit "$days" --json >"$out" 2>"$tmp/audit.err" || rc=$?
-	if ! n=$(jq -e '.data.missing | length' "$out" 2>/dev/null); then
-		echo "main-status-audit: $1: the audit did not run (exit $rc): $(head -c 300 "$tmp/audit.err")" >&2
+	# Exit 0 (all green) and 1 (some missing) are the auditor's answers; anything else is a failed audit. An error
+	# envelope has no .data.missing list: `null | length` is 0, so the list must be checked to be an array first.
+	if [ "$rc" -gt 1 ] || ! n=$(jq -e '.data.missing | if type == "array" then length else error("no missing list") end' "$out" 2>/dev/null); then
+		echo "main-status-audit: $1: the audit did not run (exit $rc): $(head -c 300 "$tmp/audit.err") $(head -c 300 "$out")" >&2
 		return 2
 	fi
 	echo "$1 $2: $(jq -r '.data.checked' "$out") commit(s) in the last $days day(s), $n without a green nself-ci"

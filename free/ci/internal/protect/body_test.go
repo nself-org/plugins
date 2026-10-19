@@ -147,3 +147,33 @@ func TestNormaliseRejectsNonObject(t *testing.T) {
 		t.Fatal("an array is not a protection document")
 	}
 }
+
+// TestNormaliseRefusesUnknownNestedKeys: a key the PUT cannot replay, inside a
+// block, refuses the plan (it would otherwise be reset and read back as equal).
+func TestNormaliseRefusesUnknownNestedKeys(t *testing.T) {
+	base := string(fixture(t, "live_restricted.json"))
+	cases := map[string]string{
+		"required_pull_request_reviews.surprise":                        `"required_pull_request_reviews": {`,
+		"required_status_checks.surprise":                               `"required_status_checks": {`,
+		"enforce_admins.surprise":                                       `"enforce_admins": {`,
+		"restrictions.surprise":                                         `"restrictions": {`,
+		"required_pull_request_reviews.dismissal_restrictions.surprise": `"dismissal_restrictions": {`,
+	}
+	for want, anchor := range cases {
+		t.Run(want, func(t *testing.T) {
+			doc := strings.Replace(base, anchor, anchor+` "surprise": true,`, 1)
+			if doc == base {
+				t.Fatalf("anchor %q not found in the fixture", anchor)
+			}
+			_, err := Normalise([]byte(doc))
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Fatalf("err = %v, want it to name %s", err, want)
+			}
+		})
+	}
+	// A check item with an extra key.
+	doc := strings.Replace(base, `"context": "lint",`, `"context": "lint", "surprise": 1,`, 1)
+	if _, err := Normalise([]byte(doc)); err == nil || !strings.Contains(err.Error(), "checks[].surprise") {
+		t.Fatalf("err = %v", err)
+	}
+}

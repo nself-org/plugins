@@ -174,7 +174,7 @@ func TestPolicyProtectAuditExit(t *testing.T) {
 		{"commits/bbbb/check-runs", `{"check_runs":[]}`, "0"},
 	}}
 	env, out := newProtectEnv(t, f)
-	if code := env.dispatch(context.Background(), protectFlags{repo: "example-org/example-repo", branch: "main", audit: 7, appID: 15368}); code != 1 {
+	if code := env.dispatch(context.Background(), protectFlags{repo: "example-org/example-repo", branch: "main", audit: 7, auditSet: true, appID: 15368}); code != 1 {
 		t.Fatalf("exit = %d, want 1 (a commit has no green nself-ci)", code)
 	}
 	if !strings.Contains(out.String(), "bbbb") || strings.Contains(out.String(), "  aaaa") || !strings.Contains(out.String(), "1 without a green nself-ci") {
@@ -183,7 +183,7 @@ func TestPolicyProtectAuditExit(t *testing.T) {
 }
 
 func TestPolicyProtectUsage(t *testing.T) {
-	for _, args := range [][]string{{"--hook", "--audit", "3"}, {"extra"}, {"--audit", "-1"}, {"--hook", "--dry-run"}, {"--app-id", "0"}} {
+	for _, args := range [][]string{{"--hook", "--audit", "3"}, {"extra"}, {"--audit", "-1"}, {"--audit", "0"}, {"--hook", "--dry-run"}, {"--app-id", "0"}} {
 		var code int
 		captureStderr(t, func() { code = runPolicyProtect(args) })
 		if code != 1 {
@@ -216,4 +216,53 @@ func captureStderr(t *testing.T, fn func()) string {
 	var b bytes.Buffer
 	_, _ = b.ReadFrom(r)
 	return b.String()
+}
+
+// TestPolicyProtectHookNeverGuessesTheBranch: no --branch, no origin/HEAD and no
+// answer from GitHub is an error, not a hook for "main".
+func TestPolicyProtectHookNeverGuessesTheBranch(t *testing.T) {
+	root := t.TempDir()
+	f := &fakeRun{replies: [][3]string{{"rev-parse --git-path hooks/pre-push", ".git/hooks/pre-push\n", "0"}}}
+	env, _ := newProtectEnv(t, f)
+	env.root = root
+	stderr := captureStderr(t, func() {
+		if code := env.dispatch(context.Background(), protectFlags{hook: true, appID: 15368}); code == 0 {
+			t.Fatal("exit 0 for a hook whose branch is unknown")
+		}
+	})
+	if !strings.Contains(stderr, "--branch") {
+		t.Fatalf("stderr = %s", stderr)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".git", "hooks", "pre-push")); err == nil {
+		t.Fatal("a hook was written for a guessed branch")
+	}
+	// With --branch the hook needs neither a remote nor GitHub.
+	if code := env.dispatch(context.Background(), protectFlags{hook: true, branch: "master", appID: 15368}); code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	body, _ := os.ReadFile(filepath.Join(root, ".git", "hooks", "pre-push"))
+	if !strings.Contains(string(body), `branch="master"`) {
+		t.Fatalf("hook = %s", body)
+	}
+}
+
+// TestPolicyProtectRestoreNeedsNoRemote: the snapshot names its repository.
+func TestPolicyProtectRestoreNeedsNoRemote(t *testing.T) {
+	live := protectFixture(t, "live_full.json")
+	f := &fakeRun{replies: [][3]string{{"--method PUT", "{}", "0"}, {protPath, live, "0"}}}
+	env, out := newProtectEnv(t, f)
+	snapPath := filepath.Join(t.TempDir(), "s.json")
+	data, _ := json.Marshal(map[string]any{"repo": "example-org/example-repo", "branch": "main", "taken_at": "x", "protection": json.RawMessage(live)})
+	_ = os.WriteFile(snapPath, data, 0o600)
+	if code := env.dispatch(context.Background(), protectFlags{restore: snapPath, appID: 15368}); code != 0 {
+		t.Fatalf("exit = %d, out = %s", code, out)
+	}
+	for _, c := range f.calls {
+		if strings.Contains(c, "remote get-url") {
+			t.Fatalf("restore must not read the remote: %s", c)
+		}
+	}
+	if !strings.Contains(out.String(), "what it replaced is saved to") {
+		t.Fatalf("out = %s", out)
+	}
 }

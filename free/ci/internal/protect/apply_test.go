@@ -131,8 +131,12 @@ func TestRestoreFromSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := &fakeGH{replies: []reply{{match: "--method PUT", out: "{}"}, {match: prot, out: string(live)}}}
-	if err := f.client().Restore(context.Background(), snap, dir); err != nil {
+	before, err := f.client().Restore(context.Background(), snap, dir, t0.Add(time.Hour))
+	if err != nil {
 		t.Fatal(err)
+	}
+	if b, err := LoadSnapshot(before); err != nil || b.Unprotected {
+		t.Fatalf("a restore must save what it replaces: %q %v", before, err)
 	}
 	pre, _ := Normalise(live)
 	if len(f.bodies) != 1 || f.bodies[0] != string(mustIndent(pre)) {
@@ -140,8 +144,57 @@ func TestRestoreFromSnapshot(t *testing.T) {
 	}
 	un, _ := SaveSnapshot(dir, "example-org/example-repo", "dev", nil, t0)
 	s2, _ := LoadSnapshot(un)
-	if err := f.client().Restore(context.Background(), s2, dir); err == nil {
+	if _, err := f.client().Restore(context.Background(), s2, dir, t0); err == nil {
 		t.Fatal("an unprotected snapshot has nothing to PUT back")
+	}
+}
+
+// TestRestoreCreatesTheSnapshotDir: a snapshot copied to a machine whose
+// $NSELF_CI_HOME/protect does not exist yet restores there.
+func TestRestoreCreatesTheSnapshotDir(t *testing.T) {
+	live := fixture(t, "live_full.json")
+	src, _ := SaveSnapshot(t.TempDir(), "example-org/example-repo", "main", live, t0)
+	snap, _ := LoadSnapshot(src)
+	f := &fakeGH{replies: []reply{{match: "--method PUT", out: "{}"}, {match: prot, out: string(live)}}}
+	dest := filepath.Join(t.TempDir(), "new", "protect")
+	if _, err := f.client().Restore(context.Background(), snap, dest, t0); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestSnapshotsInTheSameSecondDoNotOverwrite: the first recovery point survives.
+func TestSnapshotsInTheSameSecondDoNotOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	a, err1 := SaveSnapshot(dir, "example-org/example-repo", "main", fixture(t, "live_full.json"), t0)
+	b, err2 := SaveSnapshot(dir, "example-org/example-repo", "main", fixture(t, "live_already.json"), t0)
+	if err1 != nil || err2 != nil || a == b {
+		t.Fatalf("%q %q %v %v", a, b, err1, err2)
+	}
+	sa, _ := LoadSnapshot(a)
+	if strings.Contains(string(sa.Protection), `"nself-ci"`) {
+		t.Fatal("the first snapshot was overwritten by the second")
+	}
+}
+
+// TestOnly403ForThePlanIsE643: a rate limit or a token without admin rights is
+// an ordinary error, not the "no protection on this plan" answer.
+func TestOnly403ForThePlanIsE643(t *testing.T) {
+	f := &fakeGH{replies: []reply{{match: prot, exit: 1, out: "gh: API rate limit exceeded for user ID 1. (HTTP 403)"}}}
+	_, err := f.client().Protection(context.Background(), "example-org/example-repo", "main")
+	var pe *Error
+	if err == nil || errors.As(err, &pe) {
+		t.Fatalf("err = %v, want a plain error", err)
+	}
+}
+
+// TestReadBackOrderIsNotADifference: GitHub may list the checks in another order.
+func TestReadBackOrderIsNotADifference(t *testing.T) {
+	live := fixture(t, "live_full.json")
+	plan, _ := Build("example-org/example-repo", "main", live, AppID)
+	got, _ := Normalise(live)
+	got.RequiredStatusChecks.Checks = []Check{{"nself-ci", 15368}, {"build (ubuntu-latest)", 15368}, {"lint", 15368}}
+	if d := Diff(plan.Body, got); len(d) != 0 {
+		t.Fatalf("reordered checks reported as a difference: %v", d)
 	}
 }
 

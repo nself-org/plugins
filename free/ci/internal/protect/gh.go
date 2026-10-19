@@ -63,6 +63,14 @@ func firstLine(s string) string {
 	return s
 }
 
+// planLimited is true for the 403 GitHub answers when the plan has no branch
+// protection (a private repository on a free plan). Other 403s (a rate limit,
+// a token without admin rights) are ordinary errors: retrying or fixing the
+// token helps, the hook and auditor equivalent does not.
+func planLimited(out string) bool {
+	return strings.Contains(out, "Upgrade to GitHub") || strings.Contains(out, "make this repository public")
+}
+
 func protectionPath(repo, branch string) string {
 	return "repos/" + repo + "/branches/" + branch + "/protection"
 }
@@ -73,7 +81,7 @@ func (c Client) Protection(ctx context.Context, repo, branch string) ([]byte, er
 	out, err := c.call(ctx, protectionPath(repo, branch))
 	if he, ok := err.(*httpError); ok {
 		switch {
-		case he.status == 403:
+		case he.status == 403 && planLimited(out):
 			return nil, fail(CodeNoPlan, "%s: %s", repo, he.text)
 		case he.status == 404 && strings.Contains(out, "Branch not protected"):
 			return nil, nil
@@ -88,8 +96,8 @@ func (c Client) Protection(ctx context.Context, repo, branch string) ([]byte, er
 // Put writes the body saved at bodyFile (gh reads it with --input, so the
 // document never travels on argv).
 func (c Client) Put(ctx context.Context, repo, branch, bodyFile string) error {
-	_, err := c.call(ctx, "--method", "PUT", "-H", "Accept: application/vnd.github+json", "--input", bodyFile, protectionPath(repo, branch))
-	if he, ok := err.(*httpError); ok && he.status == 403 {
+	out, err := c.call(ctx, "--method", "PUT", "-H", "Accept: application/vnd.github+json", "--input", bodyFile, protectionPath(repo, branch))
+	if he, ok := err.(*httpError); ok && he.status == 403 && planLimited(out) {
 		return fail(CodeNoPlan, "%s: %s", repo, he.text)
 	}
 	return err

@@ -30,9 +30,9 @@ func (e protectEnv) installHook(ctx context.Context, f protectFlags) error {
 	if err != nil {
 		return err
 	}
-	branch := f.branch
-	if branch == "" {
-		branch = e.localDefaultBranch(ctx)
+	branch, err := e.hookBranch(ctx, f)
+	if err != nil {
+		return err
 	}
 	changed, err := protect.InstallHook(path, branch)
 	if err != nil {
@@ -43,6 +43,9 @@ func (e protectEnv) installHook(ctx context.Context, f protectFlags) error {
 	}
 	if changed {
 		fmt.Fprintf(e.out, "pre-push hook installed at %s: pushes to %s need current, bound, passing evidence (bypass once with `git push --no-verify`)\n", path, branch)
+		if !strings.HasPrefix(path, e.root+string(filepath.Separator)) {
+			fmt.Fprintln(e.out, "note: this path is outside the repository (core.hooksPath); the hook applies to every repository that uses that directory")
+		}
 	} else {
 		fmt.Fprintf(e.out, "pre-push hook at %s is already installed\n", path)
 	}
@@ -62,13 +65,23 @@ func (e protectEnv) hookPath(ctx context.Context) (string, error) {
 	return p, nil
 }
 
-// localDefaultBranch reads origin/HEAD; main when it is not set.
-func (e protectEnv) localDefaultBranch(ctx context.Context) string {
+// hookBranch is the branch the hook guards: --branch, else origin/HEAD, else
+// the repository's default branch from GitHub. It never guesses: a hook that
+// guards the wrong branch would report success and gate nothing.
+func (e protectEnv) hookBranch(ctx context.Context, f protectFlags) (string, error) {
+	if f.branch != "" {
+		return f.branch, nil
+	}
 	out, exit, err := e.run(ctx, "git", "-C", e.root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
 	if b := strings.TrimPrefix(strings.TrimSpace(out), "origin/"); err == nil && exit == 0 && b != "" {
-		return b
+		return b, nil
 	}
-	return "main"
+	if repo, serr := e.slug(ctx, f.repo); serr == nil {
+		if b, derr := (protect.Client{Run: e.run}).DefaultBranch(ctx, repo); derr == nil {
+			return b, nil
+		}
+	}
+	return "", errors.New("policy protect: cannot tell the default branch (origin/HEAD is not set and GitHub did not answer); pass --branch <name>")
 }
 
 func (e protectEnv) audit(ctx context.Context, f protectFlags, repo string) int {
@@ -76,7 +89,7 @@ func (e protectEnv) audit(ctx context.Context, f protectFlags, repo string) int 
 	branch, err := e.branchOf(ctx, c, f, repo)
 	var rep protect.AuditReport
 	if err == nil {
-		rep, err = c.Audit(ctx, repo, branch, f.audit, e.now())
+		rep, err = c.Audit(ctx, repo, branch, f.audit, e.now(), f.appID)
 	}
 	if err != nil {
 		return protectExit(e.noPlanHint(err), f.json)

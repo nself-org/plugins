@@ -39,8 +39,13 @@ type AuditReport struct {
 	Missing   []Commit `json:"missing"`
 }
 
-// Audit checks the commits of branch from the last days days.
-func (c Client) Audit(ctx context.Context, repo, branch string, days int, now time.Time) (AuditReport, error) {
+// Audit checks the commits of branch from the last days days. A check run
+// counts only when the app that created it is appID (0: the default, AppID),
+// the same pin the required check carries; a status has no app to compare.
+func (c Client) Audit(ctx context.Context, repo, branch string, days int, now time.Time, appID int) (AuditReport, error) {
+	if appID == 0 {
+		appID = AppID
+	}
 	rep := AuditReport{Repo: repo, Branch: branch, Days: days, Missing: []Commit{}}
 	since := now.UTC().Add(-time.Duration(days) * 24 * time.Hour).Format(time.RFC3339)
 	out, err := c.call(ctx, "--method", "GET", "-f", "sha="+branch, "-f", "since="+since, "-f", "per_page=100", "--paginate",
@@ -60,7 +65,7 @@ func (c Client) Audit(ctx context.Context, repo, branch string, days int, now ti
 		commits, rep.Truncated = commits[:MaxCommits], true
 	}
 	for _, cm := range commits {
-		green, err := c.green(ctx, repo, cm.SHA)
+		green, err := c.green(ctx, repo, cm.SHA, appID)
 		if err != nil {
 			return rep, err
 		}
@@ -84,11 +89,14 @@ type checkRunsDoc struct {
 		Name       string `json:"name"`
 		Status     string `json:"status"`
 		Conclusion string `json:"conclusion"`
+		App        struct {
+			ID int `json:"id"`
+		} `json:"app"`
 	} `json:"check_runs"`
 }
 
 // green reports whether sha carries a green nself-ci status or check run.
-func (c Client) green(ctx context.Context, repo, sha string) (bool, error) {
+func (c Client) green(ctx context.Context, repo, sha string, appID int) (bool, error) {
 	out, err := c.call(ctx, "repos/"+repo+"/commits/"+sha+"/status")
 	if err != nil {
 		return false, err
@@ -111,7 +119,7 @@ func (c Client) green(ctx context.Context, repo, sha string) (bool, error) {
 		return false, fmt.Errorf("protect: the check-runs answer for %.12s is not JSON: %w", sha, err)
 	}
 	for _, r := range cr.CheckRuns {
-		if r.Name == Context && r.Status == "completed" && r.Conclusion == "success" {
+		if r.Name == Context && r.App.ID == appID && r.Status == "completed" && r.Conclusion == "success" {
 			return true, nil
 		}
 	}

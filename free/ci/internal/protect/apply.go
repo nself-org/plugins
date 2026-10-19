@@ -13,6 +13,7 @@ package protect
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -49,11 +50,32 @@ func SaveSnapshot(dir, repo, branch string, live []byte, at time.Time) (string, 
 	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, snapshotName(repo, branch, at))
-	if err := os.WriteFile(path, append(data, '\n'), 0o600); err != nil {
-		return "", fmt.Errorf("protect: cannot write the snapshot: %w", err)
+	// O_EXCL: two snapshots of one branch in the same second get different names;
+	// an earlier recovery point is never overwritten.
+	base := strings.TrimSuffix(snapshotName(repo, branch, at), ".json")
+	for n := 0; n < 100; n++ {
+		name := base + ".json"
+		if n > 0 {
+			name = fmt.Sprintf("%s-%d.json", base, n)
+		}
+		path := filepath.Join(dir, name)
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("protect: cannot write the snapshot: %w", err)
+		}
+		_, werr := f.Write(append(data, '\n'))
+		if cerr := f.Close(); werr == nil {
+			werr = cerr
+		}
+		if werr != nil {
+			return "", fmt.Errorf("protect: cannot write the snapshot: %w", werr)
+		}
+		return path, nil
 	}
-	return path, nil
+	return "", fmt.Errorf("protect: too many snapshots of %s %s in one second", repo, branch)
 }
 
 // LoadSnapshot reads a snapshot file.
@@ -117,17 +139,27 @@ func (c Client) Apply(ctx context.Context, p Plan, live []byte, snapDir string, 
 	return path, c.putAndVerify(ctx, p.Repo, p.Branch, p.Body, snapDir)
 }
 
-// Restore puts a snapshot back. A snapshot of an unprotected branch cannot
-// be restored by PUT: that needs DELETE, which this tool never does.
-func (c Client) Restore(ctx context.Context, snap Snapshot, snapDir string) error {
+// Restore puts a snapshot back and returns the path of a new snapshot of what
+// was there before (so a restore can itself be undone). A snapshot of an
+// unprotected branch cannot be restored by PUT: that needs DELETE, which this
+// tool never does.
+func (c Client) Restore(ctx context.Context, snap Snapshot, snapDir string, now time.Time) (string, error) {
 	if snap.Unprotected || len(snap.Protection) == 0 {
-		return fmt.Errorf("protect: the snapshot is of an unprotected branch; removing protection is not something this command does")
+		return "", fmt.Errorf("protect: the snapshot is of an unprotected branch; removing protection is not something this command does")
 	}
 	body, err := Normalise(snap.Protection)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return c.putAndVerify(ctx, snap.Repo, snap.Branch, body, snapDir)
+	live, err := c.Protection(ctx, snap.Repo, snap.Branch)
+	if err != nil {
+		return "", err
+	}
+	path, err := SaveSnapshot(snapDir, snap.Repo, snap.Branch, live, now)
+	if err != nil {
+		return "", err
+	}
+	return path, c.putAndVerify(ctx, snap.Repo, snap.Branch, body, snapDir)
 }
 
 // Diff names the top-level fields on which a and b differ.
@@ -142,7 +174,20 @@ func Diff(a, b Body) []string {
 	return out
 }
 
+// toMap marshals b with its checks sorted: GitHub may list them in another
+// order than the PUT sent, which is not a difference.
 func toMap(b Body) map[string]json.RawMessage {
+	if b.RequiredStatusChecks != nil {
+		sc := *b.RequiredStatusChecks
+		sc.Checks = append([]Check(nil), sc.Checks...)
+		sort.Slice(sc.Checks, func(i, j int) bool {
+			if sc.Checks[i].Context != sc.Checks[j].Context {
+				return sc.Checks[i].Context < sc.Checks[j].Context
+			}
+			return sc.Checks[i].AppID < sc.Checks[j].AppID
+		})
+		b.RequiredStatusChecks = &sc
+	}
 	data, _ := json.Marshal(b)
 	m := map[string]json.RawMessage{}
 	_ = json.Unmarshal(data, &m)

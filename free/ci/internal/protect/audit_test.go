@@ -14,8 +14,10 @@ func greenStatus(ctx string) string {
 const noStatuses = `{"state":"pending","statuses":[]}`
 const noRuns = `{"total_count":0,"check_runs":[]}`
 
-func runs(name, status, conclusion string) string {
-	return fmt.Sprintf(`{"total_count":1,"check_runs":[{"name":%q,"status":%q,"conclusion":%q}]}`, name, status, conclusion)
+func runs(name, status, conclusion string) string { return runsApp(name, status, conclusion, AppID) }
+
+func runsApp(name, status, conclusion string, app int) string {
+	return fmt.Sprintf(`{"total_count":1,"check_runs":[{"name":%q,"status":%q,"conclusion":%q,"app":{"id":%d}}]}`, name, status, conclusion, app)
 }
 
 // TestAuditListsCommitsWithoutGreen: green status, green check run, red status,
@@ -40,7 +42,7 @@ func TestAuditListsCommitsWithoutGreen(t *testing.T) {
 		{match: "commits/eeee/status", out: greenStatus("lint")},
 		{match: "commits/eeee/check-runs", out: runs("lint", "completed", "success")},
 	}}
-	rep, err := f.client().Audit(context.Background(), "example-org/example-repo", "main", 7, t0)
+	rep, err := f.client().Audit(context.Background(), "example-org/example-repo", "main", 7, t0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +66,7 @@ func TestAuditAllGreenIsEmpty(t *testing.T) {
 		{match: "--paginate", out: "aaaa\tone\n"},
 		{match: "commits/aaaa/status", out: greenStatus("nself-ci")},
 	}}
-	rep, err := f.client().Audit(context.Background(), "example-org/example-repo", "main", 3, t0)
+	rep, err := f.client().Audit(context.Background(), "example-org/example-repo", "main", 3, t0, 0)
 	if err != nil || len(rep.Missing) != 0 || rep.Checked != 1 {
 		t.Fatalf("%+v %v", rep, err)
 	}
@@ -82,16 +84,39 @@ func TestAuditTruncatesAndErrors(t *testing.T) {
 		{match: "--paginate", out: strings.Join(lines, "\n")},
 		{match: "/status", out: greenStatus("nself-ci")},
 	}}
-	rep, err := f.client().Audit(context.Background(), "example-org/example-repo", "main", 30, t0)
+	rep, err := f.client().Audit(context.Background(), "example-org/example-repo", "main", 30, t0, 0)
 	if err != nil || !rep.Truncated || rep.Checked != MaxCommits {
 		t.Fatalf("%+v %v", rep, err)
 	}
 	bad := &fakeGH{replies: []reply{{match: "--paginate", exit: 1, out: "gh: Not Found (HTTP 404)"}}}
-	if _, err := bad.client().Audit(context.Background(), "example-org/example-repo", "main", 1, t0); err == nil {
+	if _, err := bad.client().Audit(context.Background(), "example-org/example-repo", "main", 1, t0, 0); err == nil {
 		t.Fatal("a failed commit listing must fail the audit, not report green")
 	}
 	junk := &fakeGH{replies: []reply{{match: "--paginate", out: "aaaa\tone"}, {match: "/status", out: "<html>"}}}
-	if _, err := junk.client().Audit(context.Background(), "example-org/example-repo", "main", 1, t0); err == nil {
+	if _, err := junk.client().Audit(context.Background(), "example-org/example-repo", "main", 1, t0, 0); err == nil {
 		t.Fatal("an unreadable status answer must fail the audit")
+	}
+}
+
+// TestAuditCheckRunMustComeFromThePinnedApp: a success check run named nself-ci
+// from another app does not make the commit green.
+func TestAuditCheckRunMustComeFromThePinnedApp(t *testing.T) {
+	f := &fakeGH{replies: []reply{
+		{match: "--paginate", out: "aaaa\tone"},
+		{match: "commits/aaaa/status", out: noStatuses},
+		{match: "commits/aaaa/check-runs", out: runsApp("nself-ci", "completed", "success", 4242)},
+	}}
+	rep, err := f.client().Audit(context.Background(), "example-org/example-repo", "main", 1, t0, 0)
+	if err != nil || len(rep.Missing) != 1 {
+		t.Fatalf("%+v %v", rep, err)
+	}
+	f2 := &fakeGH{replies: []reply{
+		{match: "--paginate", out: "aaaa\tone"},
+		{match: "commits/aaaa/status", out: noStatuses},
+		{match: "commits/aaaa/check-runs", out: runsApp("nself-ci", "completed", "success", 4242)},
+	}}
+	rep, err = f2.client().Audit(context.Background(), "example-org/example-repo", "main", 1, t0, 4242)
+	if err != nil || len(rep.Missing) != 0 {
+		t.Fatalf("an overridden app id must be honoured: %+v %v", rep, err)
 	}
 }
