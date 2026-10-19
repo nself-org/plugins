@@ -73,7 +73,7 @@ func rollbackLine(dataDir string, saved map[string]string) string {
 	}
 	sort.Strings(cmds)
 	db := filepath.Join(dataDir, nameState)
-	cmds = append(cmds, "rm -f "+shQuote(db+"-wal")+" "+shQuote(db+"-shm"))
+	cmds = append(cmds, "rm -f "+shQuote(db+"-wal")+" "+shQuote(db+"-shm")+" "+shQuote(pendingPath(dataDir))) // the marker goes with a rollback
 	return strings.Join(cmds, " && ")
 }
 

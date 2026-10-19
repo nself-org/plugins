@@ -176,10 +176,9 @@ func TestDrainEngineLeases(t *testing.T) {
 		}
 	})
 
-	t.Run("a local in-process lease is never drained or handed back", func(t *testing.T) {
+	t.Run("a local in-process lease is waited for, then left alone: never cancelled or handed back", func(t *testing.T) {
 		noLeak(t)
-		r := newEngineRig(t, 10*time.Minute+30*time.Second)
-		r.job(t, "ok", "test", true)
+		r := newEngineRig(t, 12*time.Minute)
 		r.jobAt(t, "loc", "test", true, 0) // no agent to cancel, never renewed: its job runs in this process
 		kinds["aloc"] = struct {
 			kind string
@@ -193,17 +192,17 @@ func TestDrainEngineLeases(t *testing.T) {
 		done := make(chan struct{})
 		var rep Report
 		go func() { defer close(done); rep, err = d.Run(context.Background()) }()
-		r.c.settleOn(t, 1, done)
-		r.c.Advance(10 * time.Minute)
-		r.c.run(t, 1, time.Second, done, nil)
-		<-done
-		if err != nil || outcome(t, rep, "lok") != OutcomeExpired {
-			t.Fatalf("err %v results %+v", err, rep.Results)
+		r.c.settleOn(t, 1, done) // the drain waits for the local job (it is not skipped)
+		r.c.Advance(5 * time.Minute)
+		select {
+		case <-done:
+			t.Fatal("the drain returned before its deadline although a local job was running")
+		default:
 		}
-		for _, x := range rep.Results {
-			if x.LeaseID == "lloc" {
-				t.Fatalf("the local lease was drained: %+v", x)
-			}
+		r.c.Advance(5 * time.Minute) // the deadline
+		<-done
+		if err != nil || outcome(t, rep, "lloc") != OutcomeLeftToGrace || rep.ExitCode() != 0 {
+			t.Fatalf("err %v exit %d results %+v", err, rep.ExitCode(), rep.Results)
 		}
 		world.never(t, "cancel lloc node=rloc")
 		if got := r.state(t, "aloc"); got != "running" {

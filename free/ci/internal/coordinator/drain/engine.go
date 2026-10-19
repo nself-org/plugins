@@ -1,8 +1,8 @@
 package drain
 
 // Purpose: EngineLeases adapts P7-NODE-09's lease engine (internal/lease) to the drain's Leases interface:
-//          listing running leases, re-reading one, handing back after an ack (Engine.Reconnect with a
-//          self-fenced report) or after expiry (Engine.Sweep) and moving a release job to needs-operator.
+//          listing running leases, re-reading one, handing back after an expiry (LeaseFail on that lease only)
+//          and moving a release job to needs-operator.
 // Inputs:  the lease Engine, this coordinator's id and JobInfo, which says the kind and idempotence of an attempt.
 // Outputs: Lease values and the store transitions the engine owns.
 // Constraints: fail closed: without JobInfo Running is an error, and a lease whose JobInfo fails has kind
@@ -35,7 +35,7 @@ type EngineLeases struct {
 const KindUnknown = "unknown"
 
 func (e *EngineLeases) lease(ctx context.Context, rl store.RemoteLease) Lease {
-	l := Lease{ID: rl.ID, AttemptID: rl.AttemptID, NodeID: rl.RunnerID, Epoch: rl.Epoch, ExpiresAt: time.Unix(0, rl.ExpiresAt),
+	l := Lease{ID: rl.ID, AttemptID: rl.AttemptID, NodeID: rl.RunnerID, Epoch: rl.Epoch, Local: rl.Epoch <= 0, ExpiresAt: time.Unix(0, rl.ExpiresAt),
 		Kind: KindUnknown, Idempotent: false}
 	if kind, idem, err := e.JobInfo(ctx, rl.AttemptID); err == nil {
 		l.Kind, l.Idempotent = kind, idem
@@ -43,7 +43,8 @@ func (e *EngineLeases) lease(ctx context.Context, rl store.RemoteLease) Lease {
 	return l
 }
 
-// Running lists the leased and running leases of this coordinator.
+// Running lists the leased and running leases of this process's coordinators. A local in-process lease
+// (epoch 0) is listed so the drain waits for its job, but it is only waited for (Lease.Local).
 func (e *EngineLeases) Running(ctx context.Context) ([]Lease, error) {
 	if e.JobInfo == nil {
 		return nil, errors.New("drain: EngineLeases needs JobInfo")
@@ -54,9 +55,6 @@ func (e *EngineLeases) Running(ctx context.Context) ([]Lease, error) {
 	}
 	var out []Lease
 	for _, rl := range all {
-		if rl.Epoch <= 0 { // a local in-process lease (epoch 0) has no agent to cancel and is never renewed: not ours to hand back
-			continue
-		}
 		if (e.CoordinatorID == "" || rl.CoordinatorID == e.CoordinatorID) && (e.Owned == nil || e.Owned(ctx, rl.CoordinatorID)) {
 			out = append(out, e.lease(ctx, rl))
 		}
@@ -90,11 +88,13 @@ func (e *EngineLeases) HandBack(ctx context.Context, l Lease, expired bool, _ st
 	if expired { // this lease only: Sweep would also fail every other expired lease of the store
 		rl, err := e.Engine.Store.LeaseGet(ctx, l.ID)
 		if err != nil {
+			if hasStoreCode(err, "E662") {
+				return nil // the lease is gone: its job ended meanwhile
+			}
 			return err
 		}
 		if err = e.Engine.Store.LeaseFail(ctx, rl, e.Engine.Config.Clock(), "lease.expired", true); err != nil {
-			var coded *store.Error
-			if errors.As(err, &coded) && coded.Code == "E605" {
+			if hasStoreCode(err, "E605") {
 				return nil // renewed or ended meanwhile
 			}
 			return err
@@ -118,4 +118,9 @@ func (e *EngineLeases) NeedsOperator(ctx context.Context, l Lease, reason string
 		return err
 	}
 	return e.Engine.Store.LeaseFail(ctx, rl, e.Engine.Config.Clock(), reason, false)
+}
+
+func hasStoreCode(err error, code string) bool {
+	var coded *store.Error
+	return errors.As(err, &coded) && coded.Code == code
 }

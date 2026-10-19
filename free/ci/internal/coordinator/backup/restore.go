@@ -68,11 +68,18 @@ func Restore(ctx context.Context, o Options, in io.Reader, kek []byte) (res Resu
 	}
 	ts := o.now().UTC().Format("20060102T150405Z")
 	// the marker goes down first: a coordinator that starts from now on refuses to, and a re-run after a
-	// failure knows whether the dir it replaces was empty
+	// failure knows what the dir it replaces held (the snapshot is kept in the marker)
 	first, rerun := readPending(o.DataDir)
-	if err = writePending(o.DataDir, first.Empty, ts); err != nil {
+	mark := pendingMark{Empty: first.Empty, At: ts, Prior: first.Prior}
+	if err = writePending(o.DataDir, mark); err != nil {
 		return res, fail(ReasonIO, "the restore marker cannot be written: %v", err)
 	}
+	swapped := false // set once the database may have been replaced; until then a failure changed nothing
+	defer func() {
+		if !swapped && !rerun {
+			_ = clearPending(o.DataDir)
+		}
+	}()
 	_, statErr := os.Stat(o.statePath())
 	old, err := store.Open(o.statePath(), o.storeOpts())
 	if err != nil {
@@ -83,17 +90,17 @@ func Restore(ctx context.Context, o Options, in io.Reader, kek []byte) (res Resu
 		if rerr != nil {
 			return res, rerr
 		}
-		if !rerun {
-			_ = clearPending(o.DataDir)
-		}
 		return res, fail(ReasonRunningCoordinator, "coordinator %s is running on %s; stop it before `serve restore`", id, o.DataDir)
 	}
-	p, err := snapshot(ctx, old, statErr == nil)
-	if err != nil {
+	var p prior
+	if rerun && first.Prior != nil { // the dir is half restored: merge what the first run found, not what it left
+		p = first.Prior.prior()
+	} else if p, err = snapshot(ctx, old, statErr == nil); err != nil {
 		return res, err
 	}
 	p.empty = p.empty || first.Empty // a re-run of a restore that began on an empty dir stays empty
-	if err = writePending(o.DataDir, p.empty, ts); err != nil {
+	mark.Empty, mark.Prior = p.empty, p.state()
+	if err = writePending(o.DataDir, mark); err != nil {
 		return res, fail(ReasonIO, "the restore marker cannot be written: %v", err)
 	}
 	res.Empty = p.empty
@@ -101,16 +108,11 @@ func Restore(ctx context.Context, o Options, in io.Reader, kek []byte) (res Resu
 	res.Saved = savedNames(saved)
 	res.Rollback = rollbackLine(o.DataDir, saved)
 	if err != nil {
-		if !rerun {
-			_ = clearPending(o.DataDir) // nothing was replaced yet
-		}
 		return res, err
 	}
+	swapped = true
 	st, err := old.Restore(ctx, bytes.NewReader(image))
-	if err != nil {
-		if !rerun {
-			_ = clearPending(o.DataDir) // the swap did not happen
-		}
+	if err != nil { // the marker stays: the rename may have happened before the failure
 		return res, fail(ReasonIO, "the database image was refused: %v%s", err, rollbackHint(res.Rollback))
 	}
 	defer func() { _ = st.Close() }()

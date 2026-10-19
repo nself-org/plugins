@@ -112,7 +112,7 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 		return 1
 	}
 	if backup.Pending(home) { // a restore began here and did not finish: the dir may hold a half-restored state
-		fmt.Fprintf(os.Stderr, "Error: E668: an earlier `nself ci serve restore` did not finish on %s; run it again before starting the coordinator (incomplete_restore)\n", home)
+		fmt.Fprintf(os.Stderr, "Error: E668: an earlier `nself ci serve restore` did not finish on %s; run it again, or roll it back with the command it printed (that removes %s), before starting the coordinator (incomplete_restore)\n", home, filepath.Join(home, "restore.pending"))
 		return 1
 	}
 	secret := firstOf(f.secret, os.Getenv("GITHUB_WEBHOOK_SECRET"))

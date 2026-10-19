@@ -51,3 +51,22 @@ func (s *Store) NodesNeedReconfirm(ctx context.Context, actor, reason string) (m
 	}
 	return marked, err
 }
+
+// GrantPrincipalsRevokedOnly lists the principals that have at least one revoked grant and no live grant:
+// the positive evidence a restore needs to revoke them again after it brought an older image back.
+func (s *Store) GrantPrincipalsRevokedOnly(ctx context.Context) ([]string, error) {
+	rows, err := s.readers.QueryContext(ctx, `SELECT DISTINCT principal FROM trust_grant WHERE revoked_at IS NOT NULL AND principal NOT IN (SELECT principal FROM trust_grant WHERE revoked_at IS NULL) ORDER BY principal`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var who string
+		if err = rows.Scan(&who); err != nil {
+			return nil, err
+		}
+		out = append(out, who)
+	}
+	return out, rows.Err()
+}

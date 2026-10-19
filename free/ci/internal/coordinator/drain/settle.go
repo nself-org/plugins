@@ -1,12 +1,13 @@
 package drain
 
-// Purpose: settle one lease at the drain deadline: needs-operator for a job that must not run twice, else
-//          cancel, wait for the ack or the lease deadline, then hand back.
+// Purpose: settle one lease at the drain deadline: a local lease is left alone; needs-operator for a job
+//          that must not run twice; else cancel and wait for the lease to end or expire, then hand back.
 // Inputs:  a Lease and the Drainer's Config.
 // Outputs: a Result.
-// Constraints: HandBack is called only after Ack (cancel acknowledged) or after the lease deadline; if the
-//          agent neither acks nor lets the lease expire within AckTimeout the lease is left to restart
-//          grace, never handed back early; a cancelled ctx ends the wait.
+// Constraints: HandBack is called only after the lease deadline: an Ack means "cancel received", so after
+//          it the drain waits (StopTimeout) for the lease to leave running; if the agent neither stops nor
+//          lets the lease expire in time the lease is left to restart grace, never handed back early;
+//          a cancelled ctx ends the wait.
 
 import (
 	"context"
@@ -17,6 +18,10 @@ const drainReason = "coordinator draining"
 
 func (d *Drainer) settle(ctx context.Context, l Lease) Result {
 	res := Result{LeaseID: l.ID}
+	if l.Local { // it runs in this process: the shutdown that follows the drain ends it and requeues its pipeline
+		res.Outcome = OutcomeLeftToGrace
+		return res
+	}
 	if !l.HandBackable() {
 		if _, running, err := d.cfg.Leases.Get(ctx, l.ID); err == nil && !running { // it ended on its own meanwhile
 			res.Outcome = OutcomeFinished

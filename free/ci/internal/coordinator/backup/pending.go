@@ -17,9 +17,35 @@ import (
 
 const pendingName = "restore.pending"
 
+// priorState is the replaced dir's snapshot as the marker keeps it: a re-run after a failure must merge the
+// revocations of the dir the FIRST run replaced, not of the half-restored one it finds.
+type priorState struct {
+	Existed       bool                `json:"existed"`
+	Empty         bool                `json:"empty"`
+	Team          bool                `json:"team"`
+	MaxInc        int64               `json:"max_incarnation"`
+	Denied        map[string][]string `json:"denied"`
+	Revoked       []string            `json:"revoked_nodes"`
+	Tokens        []string            `json:"revoked_tokens"`
+	RevokedGrants []string            `json:"revoked_grants"`
+}
+
 type pendingMark struct {
-	Empty bool   `json:"empty"`
-	At    string `json:"at"`
+	Empty bool        `json:"empty"`
+	At    string      `json:"at"`
+	Prior *priorState `json:"prior,omitempty"`
+}
+
+func (p prior) state() *priorState {
+	return &priorState{Existed: p.existed, Empty: p.empty, Team: p.team, MaxInc: p.maxInc, Denied: p.denied, Revoked: p.revoked, Tokens: p.tokens, RevokedGrants: p.revokedGrants}
+}
+
+func (s priorState) prior() prior {
+	d := s.Denied
+	if d == nil {
+		d = map[string][]string{}
+	}
+	return prior{existed: s.Existed, empty: s.Empty, team: s.Team, maxInc: s.MaxInc, denied: d, revoked: s.Revoked, tokens: s.Tokens, revokedGrants: s.RevokedGrants}
 }
 
 func pendingPath(dir string) string { return filepath.Join(dir, pendingName) }
@@ -42,8 +68,8 @@ func readPending(dir string) (pendingMark, bool) {
 	return m, true
 }
 
-func writePending(dir string, empty bool, at string) error {
-	raw, err := json.Marshal(pendingMark{Empty: empty, At: at})
+func writePending(dir string, m pendingMark) error {
+	raw, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}

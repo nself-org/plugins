@@ -42,6 +42,7 @@ type Lease struct {
 	Kind                  string // job kind: "release" is never handed back
 	Idempotent            bool   // false: the job runs at most once
 	Epoch                 int64
+	Local                 bool // an in-process lease (epoch 0): the drain waits for its job and never cancels or hands it back
 	ExpiresAt             time.Time
 }
 
@@ -80,8 +81,8 @@ type Outcome string
 const (
 	// OutcomeFinished: the job ended on its own before or during the drain.
 	OutcomeFinished Outcome = "finished"
-	// OutcomeAcked: cancel acknowledged, then handed back.
-	OutcomeAcked Outcome = "handed_back_after_ack"
+	// OutcomeAcked: cancel acknowledged, then the job ended (nothing is handed back on an ack).
+	OutcomeAcked Outcome = "stopped_after_ack"
 	// OutcomeExpired: the lease expired after the cancel, then handed back.
 	OutcomeExpired Outcome = "handed_back_after_expiry"
 	// OutcomeNeedsOperator: a release or idempotent:false job; never handed back.

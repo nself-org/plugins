@@ -10,6 +10,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,5 +106,96 @@ func TestRestoreKeepsTokenAndGrantRevocations(t *testing.T) {
 	}
 	if _, live, _ := st2.GrantGet(ctx, "bob"); !live {
 		t.Fatal("bob's grant, still live in the replaced dir, was wrongly revoked")
+	}
+}
+
+// TestRerunAfterAPostSwapFailureKeepsTheFirstRunsRevocations: the second run finds a half-restored dir; the
+// revocations it merges are the ones the FIRST run found in the dir it replaced (kept in restore.pending).
+func TestRerunAfterAPostSwapFailureKeepsTheFirstRunsRevocations(t *testing.T) {
+	ctx := context.Background()
+	r, _ := seeded(t)
+	tok := store.Token{ID: "t-bob", Digest: "d-bob", Principal: "bob", Role: "admin", Subject: "bob", IssuedBy: "cli:test", ExpiresAt: r.clk.now().Add(time.Hour).UnixNano()}
+	if err := r.st.TokenPut(ctx, tok, store.AuditInput{Actor: "cli:test", Action: "t", Target: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	arch := r.archive() // bob's token is live in the backup
+	if found, err := r.st.TokenRevoke(ctx, "t-bob", store.AuditInput{Actor: "cli:test", Action: "revoke", Target: "x"}); err != nil || !found {
+		t.Fatalf("revoke: %v %v", found, err)
+	}
+	_ = r.st.Close()
+	pkiDir := filepath.Join(r.dir, "pki")
+	if err := os.Chmod(pkiDir, 0o500); err != nil { // the KEK install after the swap must fail
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(pkiDir, 0o700) }()
+	o := r.opts()
+	if _, err := Restore(ctx, o, bytes.NewReader(arch), r.kek); err == nil {
+		t.Skip("the platform let the restore write into a read-only directory")
+	}
+	if !Pending(r.dir) {
+		t.Fatal("no marker after a post-swap failure")
+	}
+	if err := os.Chmod(pkiDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r.clk.t = r.clk.t.Add(time.Minute)
+	res, err := Restore(ctx, o, bytes.NewReader(arch), r.kek)
+	if err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	if res.TokensRevoked < 1 {
+		t.Fatalf("retry result %+v: the first run's token revocation was lost", res)
+	}
+	st2, _ := r.reopen(r.dir)
+	if tk, ok, _ := st2.TokenByID(ctx, "t-bob"); !ok || tk.RevokedAt == 0 {
+		t.Fatalf("bob's token is live again after the retry: %+v", tk)
+	}
+}
+
+func TestRollbackLineRemovesTheMarker(t *testing.T) {
+	line := rollbackLine("/data", map[string]string{"/data/state.db": "/data/state.db.pre-restore-x"})
+	if !strings.Contains(line, "restore.pending") {
+		t.Fatalf("rollback line %q must remove the restore marker", line)
+	}
+}
+
+func TestRestoreDoesNotRevokeGrantsOfAFreshDir(t *testing.T) {
+	ctx := context.Background()
+	r, _ := seeded(t)
+	if err := r.st.GrantPut(ctx, store.Grant{Principal: "alice", Role: "admin", Subject: "alice", GrantedBy: "cli:test"}, store.AuditInput{Actor: "cli:test", Action: "t", Target: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	arch := r.archive()
+	// a second machine that already has a CA and nodes (serve ran once) but never held alice
+	other := newRig(t)
+	other.addNode("node-z")
+	_ = other.st.Close()
+	o := r.opts()
+	o.DataDir = other.dir
+	res, err := Restore(ctx, o, bytes.NewReader(arch), r.kek)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.GrantsRevoked != 0 {
+		t.Fatalf("result %+v: a grant the replaced dir never held is not evidence of a revocation", res)
+	}
+	st2, _ := other.reopen(other.dir)
+	if _, live, _ := st2.GrantGet(ctx, "alice"); !live {
+		t.Fatal("alice's grant was revoked by a restore onto a dir that never held it")
+	}
+}
+
+func TestMarkerClearedWhenNothingChanged(t *testing.T) {
+	ctx := context.Background()
+	r, arch := seeded(t)
+	_ = r.st.Close()
+	if err := os.WriteFile(filepath.Join(r.dir, "state.db"), []byte("not a database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Restore(ctx, r.opts(), bytes.NewReader(arch), r.kek); err == nil {
+		t.Fatal("a restore over an unreadable state.db was meant to fail")
+	}
+	if Pending(r.dir) {
+		t.Fatal("a restore that failed before the swap must leave no marker")
 	}
 }

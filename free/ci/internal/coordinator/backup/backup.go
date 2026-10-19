@@ -67,7 +67,7 @@ func Create(ctx context.Context, o Options, w io.Writer) (Manifest, error) {
 		return m, fail(ReasonNoState, "no data dir")
 	}
 	if Pending(o.DataDir) {
-		return m, fail(ReasonIncomplete, "an earlier `serve restore` did not finish on %s; run it again before taking a backup", o.DataDir)
+		return m, fail(ReasonIncomplete, "an earlier `serve restore` did not finish on %s; run it again, or roll it back with the printed command, before taking a backup (the marker is %s)", o.DataDir, pendingPath(o.DataDir))
 	}
 	kek, err := loadKEK(o.DataDir)
 	if err != nil {
