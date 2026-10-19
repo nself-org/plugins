@@ -71,6 +71,9 @@ func selectWith(g *Graph, graphCertain bool, in plan.SelectionInput) (model.Sele
 		if g.inGeneratorZone(p) {
 			return full("selection.full_required")
 		}
+		if g.holdsNodes(p) {
+			return full("selection.full_required") // a directory-level change (submodule, symlink swap)
+		}
 		dir, kind := g.owner(p)
 		covered := false
 		for w, ids := range workdirs {
@@ -93,8 +96,13 @@ func selectWith(g *Graph, graphCertain bool, in plan.SelectionInput) (model.Sele
 				return full("selection.full_required") // unmapped: only the root job or nothing holds it
 			}
 		}
-		if strings.Contains(g.eco["."], "go") {
-			seeds["."] = true // a root Go package may embed any file under the repository
+		for d := dirOf(p); ; d = path.Dir(d) {
+			if strings.Contains(g.eco[d], "go") {
+				seeds[d] = true // a Go package may embed any file under its directory
+			}
+			if d == "." || d == "/" {
+				break
+			}
 		}
 	}
 	affected := g.Dependants(keys(seeds)...)
@@ -126,7 +134,7 @@ const (
 // package; root JS or TS files are nearly always shared tool config) or, when
 // opaque, everything not owned deeper.
 func (g *Graph) owner(p string) (string, int) {
-	for d := dirOf(p); ; d = path.Dir(d) {
+	for d := p; ; d = path.Dir(d) { // p itself first: a submodule bump names the directory
 		if _, ok := g.opaque[d]; ok {
 			return d, ownOpaque
 		}
@@ -137,6 +145,22 @@ func (g *Graph) owner(p string) (string, int) {
 			return "", ownNone
 		}
 	}
+}
+
+// holdsNodes reports whether known package or opaque directories lie
+// strictly below p, which is then a directory, not a file.
+func (g *Graph) holdsNodes(p string) bool {
+	for d := range g.eco {
+		if strings.HasPrefix(d, p+"/") {
+			return true
+		}
+	}
+	for d := range g.opaque {
+		if strings.HasPrefix(d, p+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *Graph) inGeneratorZone(p string) bool {

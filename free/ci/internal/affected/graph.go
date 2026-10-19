@@ -39,6 +39,7 @@ type Graph struct {
 	opaque     map[string]string // dir of a manifest whose ecosystem has no graph here -> ecosystem
 	generators map[string]bool   // dir holding a code generator config
 	reasons    []detect.Fact     // Unknown facts
+	seen       map[detect.Fact]bool
 }
 
 func newGraph() *Graph {
@@ -66,14 +67,21 @@ func (g *Graph) addEdge(from, to string) {
 }
 
 func (g *Graph) uncertain(p, reason string) {
-	f := detect.Fact{Kind: FactKind, Name: "unknown", Path: p, Confidence: detect.Unknown, Reason: reason}
-	for _, have := range g.reasons {
-		if have == f {
-			return
-		}
+	if len(g.reasons) >= maxReasons { // one reason is enough for a full run
+		return
 	}
-	g.reasons = append(g.reasons, f)
+	f := detect.Fact{Kind: FactKind, Name: "unknown", Path: p, Confidence: detect.Unknown, Reason: reason}
+	if g.seen == nil {
+		g.seen = map[detect.Fact]bool{}
+	}
+	if !g.seen[f] {
+		g.seen[f] = true
+		g.reasons = append(g.reasons, f)
+	}
 }
+
+// maxReasons bounds the Unknown facts one graph keeps.
+const maxReasons = 100
 
 // Build reads the graph from a repository snapshot.
 func Build(fsys fs.FS) (*Graph, error) {

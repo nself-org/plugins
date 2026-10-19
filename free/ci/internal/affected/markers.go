@@ -21,11 +21,17 @@ var opaqueManifests = map[string]string{
 	"Cargo.toml": "cargo", "pubspec.yaml": "pub", "pyproject.toml": "python", "setup.py": "python",
 	"Gemfile": "ruby", "pom.xml": "maven", "build.gradle": "gradle", "build.gradle.kts": "gradle",
 	"Package.swift": "swift", "composer.json": "php", "mix.exs": "mix", "CMakeLists.txt": "cmake",
+	"BUILD": "bazel", "BUILD.bazel": "bazel", "WORKSPACE": "bazel", "MODULE.bazel": "bazel",
+	"build.sbt": "sbt", "deno.json": "deno", "deno.jsonc": "deno",
 }
+
+// opaqueExts are manifest extensions of ecosystems with project references.
+var opaqueExts = map[string]string{".csproj": "dotnet", ".fsproj": "dotnet", ".vbproj": "dotnet", ".cabal": "cabal"}
 
 var generatorConfigs = map[string]bool{
 	"sqlc.yaml": true, "sqlc.yml": true, "sqlc.json": true, "buf.yaml": true, "buf.gen.yaml": true,
-	"gqlgen.yml": true, "codegen.yml": true, "codegen.yaml": true,
+	"gqlgen.yml": true, "gqlgen.yaml": true, ".gqlgen.yml": true, "codegen.yml": true, "codegen.yaml": true,
+	"codegen.ts": true, "codegen.json": true, "buf.work.yaml": true,
 }
 
 func markers(t tree, g *Graph) {
@@ -36,7 +42,11 @@ func markers(t tree, g *Graph) {
 			continue
 		}
 		base := path.Base(f)
-		if eco, ok := opaqueManifests[base]; ok {
+		eco, ok := opaqueManifests[base]
+		if !ok {
+			eco, ok = opaqueExts[path.Ext(base)]
+		}
+		if ok {
 			if dirs[eco] == nil {
 				dirs[eco] = map[string]bool{}
 			}

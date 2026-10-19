@@ -4,9 +4,13 @@ package affected
 // concrete input that once selected fewer jobs than a correct run needs).
 
 import (
+	"io/fs"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/detect"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -391,4 +395,181 @@ func TestHiddenDirManifestsAndOpaqueOrder(t *testing.T) {
 			t.Fatalf("opaque map changed between builds: %v vs %v", got, first)
 		}
 	}
+}
+
+func TestThirdRoundCases(t *testing.T) {
+	t.Run("brace range past the cap is uncertain", func(t *testing.T) {
+		m := fstest.MapFS{"pnpm-workspace.yaml": mf("packages: ['apps/*', 'packages/{1..1025}']\n"), "apps/app/package.json": mf(`{"name":"app"}`)}
+		if g := buildFS(t, m); len(g.reasons) == 0 {
+			t.Fatal("a too-wide range must be uncertain")
+		}
+	})
+	t.Run("huge integer range does not overflow or allocate", func(t *testing.T) {
+		if _, ok := expandBraces("x/{9223372036854775807..9223372036854775807}"); ok {
+			t.Fatal("a range outside the bounds must not expand")
+		}
+		if got, ok := expandBraces("x/{3..1}"); !ok || !reflect.DeepEqual(got, []string{"x/3", "x/2", "x/1"}) {
+			t.Fatalf("descending range = %v %v", got, ok)
+		}
+	})
+	t.Run("nested npm workspaces are uncertain", func(t *testing.T) {
+		m := fstest.MapFS{"frontend/package.json": mf(`{"name":"f","workspaces":["packages/*"]}`), "frontend/packages/lib/package.json": mf(`{"name":"lib"}`)}
+		if g := buildFS(t, m); len(g.reasons) == 0 {
+			t.Fatal("nested workspaces without pnpm-workspace.yaml must be uncertain")
+		}
+	})
+	t.Run("escaped module path", func(t *testing.T) {
+		m := fstest.MapFS{
+			"go.work":    mf("use (\n\t./app\n\t./lib\n)\n"),
+			"lib/go.mod": mf("module \"example.com/\\u006cib\"\n"), "lib/l.go": mf("package lib\n"),
+			"app/go.mod": mf("module example.com/app\n"), "app/a.go": mf("package app\nimport _ \"example.com/lib\"\n"),
+		}
+		if got, want := edgesOf(buildFS(t, m)), []string{"app->lib"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("edges = %v, want %v", got, want)
+		}
+		if g := buildFS(t, fstest.MapFS{"go.mod": mf("module \"m\n"), "a.go": mf("package m\n")}); len(g.reasons) == 0 {
+			t.Fatal("an unterminated quote must be uncertain")
+		}
+	})
+	t.Run("a Go package embeds files under nested manifests", func(t *testing.T) {
+		m := fstest.MapFS{
+			"go.work":    mf("use (\n\t./lib\n\t./app\n)\n"),
+			"lib/go.mod": mf("module example.com/lib\n"), "lib/lib.go": mf("package lib\n"),
+			"lib/assets/package.json": mf(`{"name":"assets"}`), "lib/assets/a.txt": mf("x"),
+			"app/go.mod": mf("module example.com/app\n"), "app/a.go": mf("package app\nimport _ \"example.com/lib\"\n"),
+		}
+		jobs := []plan.JobRef{{ID: "lib", Workdir: "lib"}, {ID: "app", Workdir: "app"}}
+		if sel, got := selectFor(t, m, jobs, "lib/assets/a.txt"); sel.Mode != "affected" || !reflect.DeepEqual(got, []string{"app", "lib"}) {
+			t.Fatalf("got %v %v", sel, got)
+		}
+	})
+	t.Run("vendored code forces full", func(t *testing.T) {
+		m := fstest.MapFS{"app/cmd/main.go": mf("package main\n"), "app/vendor/example.com/dep/d.go": mf("package dep\n")}
+		jobs := []plan.JobRef{{ID: "app", Workdir: "app"}, {ID: "cmd", Workdir: "app/cmd"}}
+		if sel, _ := selectFor(t, m, jobs, "app/vendor/example.com/dep/d.go"); sel.Mode != "full" {
+			t.Fatalf("got %v", sel)
+		}
+	})
+}
+
+func TestFourthRoundCases(t *testing.T) {
+	t.Run("replace( and use( without a space", func(t *testing.T) {
+		m := fstest.MapFS{
+			"a/go.mod": mf("module example.com/a\nreplace(\n\texample.com/b => ../b\n)\n"), "a/main.go": mf("package main\nimport _ \"example.com/b\"\n"),
+			"b/go.mod": mf("module example.com/b\n"), "b/b.go": mf("package b\n"),
+		}
+		if got, want := edgesOf(buildFS(t, m)), []string{"a->b"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("replace(: edges = %v, want %v", got, want)
+		}
+		w := fstest.MapFS{
+			"go.work": mf("use(\n\t./a\n\t./b\n)\n"), "a/go.mod": mf("module example.com/a\n"), "a/main.go": mf("package main\nimport _ \"example.com/b\"\n"),
+			"b/go.mod": mf("module example.com/b\n"), "b/b.go": mf("package b\n"),
+		}
+		if got, want := edgesOf(buildFS(t, w)), []string{"a->b"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("use(: edges = %v, want %v", got, want)
+		}
+	})
+	t.Run("workspace spec outside every pnpm workspace", func(t *testing.T) {
+		m := fstest.MapFS{"apps/web/package.json": mf(`{"name":"web","dependencies":{"ui":"workspace:*"}}`), "packages/ui/package.json": mf(`{"name":"ui"}`)}
+		if g := buildFS(t, m); len(g.reasons) == 0 {
+			t.Fatal("a workspace: dependency with no workspace must be uncertain")
+		}
+	})
+	t.Run("a submodule bump names the package directory", func(t *testing.T) {
+		m := fstest.MapFS{
+			"app/go.mod": mf("module example.com/app\n\nreplace example.com/sub => ../third_party/sub\n"), "app/main.go": mf("package main\nimport _ \"example.com/sub\"\n"),
+			"third_party/sub/go.mod": mf("module example.com/sub\n"), "third_party/sub/s.go": mf("package sub\n"),
+		}
+		jobs := []plan.JobRef{{ID: "app", Workdir: "app"}, {ID: "sub", Workdir: "third_party/sub"}}
+		if sel, got := selectFor(t, m, jobs, "third_party/sub"); sel.Mode != "affected" || !reflect.DeepEqual(got, []string{"app", "sub"}) {
+			t.Fatalf("gitlink bump: %v %v", sel, got)
+		}
+		if sel, _ := selectFor(t, m, jobs, "third_party"); sel.Mode != "full" {
+			t.Fatalf("a directory above known packages must be full, got %v", sel)
+		}
+	})
+	t.Run("a Go package embeds a child frontend", func(t *testing.T) {
+		m := fstest.MapFS{
+			"go.mod": mf("module example.com/m\n"), "ui/ui.go": mf("package ui\n"), "ui/frontend/package.json": mf(`{"name":"fe"}`), "ui/frontend/dist/index.html": mf("x"),
+			"cmd/server/main.go": mf("package main\nimport _ \"example.com/m/ui\"\n"),
+		}
+		jobs := []plan.JobRef{{ID: "server", Workdir: "cmd/server"}, {ID: "fe", Workdir: "ui/frontend"}}
+		if sel, got := selectFor(t, m, jobs, "ui/frontend/dist/index.html"); sel.Mode != "affected" || !reflect.DeepEqual(got, []string{"fe", "server"}) {
+			t.Fatalf("got %v %v", sel, got)
+		}
+	})
+	t.Run("project files of other ecosystems are opaque", func(t *testing.T) {
+		m := fstest.MapFS{"src/Lib/Lib.csproj": mf("<Project/>"), "src/App/App.csproj": mf("<Project/>"), "src/Lib/Lib.cs": mf("x")}
+		jobs := []plan.JobRef{{ID: "lib", Workdir: "src/Lib"}, {ID: "app", Workdir: "src/App"}}
+		if sel, _ := selectFor(t, m, jobs, "src/Lib/Lib.cs"); sel.Mode != "full" {
+			t.Fatalf("got %v", sel)
+		}
+	})
+	t.Run("many ** do not blow up", func(t *testing.T) {
+		done := make(chan bool, 1)
+		go func() {
+			done <- !matchGlob(strings.Repeat("**/*/", 9)+"zz", strings.Repeat("a/", 40)+"b")
+		}()
+		select {
+		case ok := <-done:
+			if !ok {
+				t.Fatal("pattern must not match")
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("matchGlob did not finish in 5s")
+		}
+	})
+	t.Run("non-regular files are never read", func(t *testing.T) {
+		m := fstest.MapFS{"go.mod": mf("module m\n"), "fifo.go": &fstest.MapFile{Mode: fs.ModeNamedPipe}, "a.go": mf("package m\n")}
+		tr, err := walk(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tr.set["fifo.go"] || !tr.set["a.go"] {
+			t.Fatalf("files = %v", tr.files)
+		}
+	})
+	t.Run("reasons are capped", func(t *testing.T) {
+		m := fstest.MapFS{"go.mod": mf("module m\n")}
+		for i := 0; i < 500; i++ {
+			m["p"+strconv.Itoa(i)+"/x.go"] = mf("package x\nimport (\n")
+		}
+		if g := buildFS(t, m); len(g.reasons) != maxReasons {
+			t.Fatalf("reasons = %d, want %d", len(g.reasons), maxReasons)
+		}
+	})
+}
+
+func TestSurvivingMutantsPinned(t *testing.T) {
+	t.Run("go.work replace is read", func(t *testing.T) {
+		m := fstest.MapFS{
+			"go.work":  mf("use ./a\n\nreplace example.com/lib => ./lib\n"),
+			"a/go.mod": mf("module example.com/a\n"), "a/a.go": mf("package a\nimport _ \"example.com/lib\"\n"),
+			"lib/go.mod": mf("module example.com/lib\n"), "lib/l.go": mf("package lib\n"),
+		}
+		if got, want := edgesOf(buildFS(t, m)), []string{"a->lib"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("edges = %v, want %v", got, want)
+		}
+	})
+	t.Run("a nested build script forces full", func(t *testing.T) {
+		m := fstest.MapFS{"go.mod": mf("module m\n"), "app/a.go": mf("package app\n"), "app/scripts/build.sh": mf("#!/bin/sh\n")}
+		jobs := []plan.JobRef{{ID: "app", Workdir: "app"}, {ID: "other", Workdir: "other"}}
+		if sel, _ := selectFor(t, m, jobs, "app/scripts/build.sh"); sel.Mode != "full" {
+			t.Fatalf("got %v", sel)
+		}
+	})
+	t.Run("no job left means full", func(t *testing.T) {
+		m := fstest.MapFS{"go.mod": mf("module m\n"), "g/g.go": mf("package g\n")}
+		if sel, _ := selectFor(t, m, []plan.JobRef{{ID: "other", Workdir: "other"}}, "g/g.go"); sel.Mode != "full" {
+			t.Fatalf("got %v", sel)
+		}
+	})
+	t.Run("a pkggraph fact of an unknown shape is uncertain", func(t *testing.T) {
+		g := buildFS(t, fstest.MapFS{"go.mod": mf("module m\n"), "a/a.go": mf("package a\n")})
+		facts := append(g.Facts(), detect.Fact{Kind: FactKind, Name: "mystery", Path: "a", Confidence: detect.Certain})
+		in := plan.SelectionInput{Changed: []string{"a/a.go"}, BaseKnown: true, Jobs: []plan.JobRef{{ID: "j", Workdir: "a"}}, Facts: facts}
+		if sel, _ := Selector(in); sel.Mode != "full" {
+			t.Fatalf("got %v", sel)
+		}
+	})
 }

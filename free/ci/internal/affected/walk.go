@@ -68,7 +68,7 @@ func walk(fsys fs.FS) (tree, error) {
 			}
 			return nil
 		}
-		if d.Type()&fs.ModeSymlink != 0 {
+		if !d.Type().IsRegular() { // symlinks, FIFOs and devices are never read
 			return nil
 		}
 		if len(t.files) >= maxFiles {
@@ -160,7 +160,11 @@ func expandBraces(p string) (out []string, ok bool) {
 			}
 			parts = append(parts, p[last:i])
 			if len(parts) == 1 {
-				if r := braceRange(parts[0]); r != nil {
+				r, isRange, wide := braceRange(parts[0])
+				if wide {
+					return []string{p}, false // too many alternatives to model
+				}
+				if isRange {
 					parts = r
 				}
 			}
@@ -180,56 +184,77 @@ func expandBraces(p string) (out []string, ok bool) {
 	return []string{p}, true // unbalanced: literal
 }
 
-// braceRange expands `1..3` (integers) or `a..c` (single letters); nil when s
-// is not a range.
-func braceRange(s string) []string {
+// braceRange expands `1..3` (integers, either direction) or `a..c` (single
+// letters). isRange is false when s is not a range; tooWide when it would
+// pass maxBraceAlts.
+func braceRange(s string) (out []string, isRange, tooWide bool) {
 	lo, hi, found := strings.Cut(s, "..")
 	if !found {
-		return nil
+		return nil, false, false
 	}
 	if a, err1 := strconv.Atoi(lo); err1 == nil {
-		if b, err2 := strconv.Atoi(hi); err2 == nil && b-a >= 0 && b-a < maxBraceAlts {
-			var out []string
-			for n := a; n <= b; n++ {
-				out = append(out, strconv.Itoa(n))
+		b, err2 := strconv.Atoi(hi)
+		if err2 != nil {
+			return nil, false, false
+		}
+		if a < -(1<<30) || a > 1<<30 || b < -(1<<30) || b > 1<<30 || abs(b-a) >= maxBraceAlts {
+			return nil, true, true
+		}
+		step := 1
+		if b < a {
+			step = -1
+		}
+		for n := a; ; n += step {
+			out = append(out, strconv.Itoa(n))
+			if n == b {
+				return out, true, false
 			}
-			return out
 		}
-		return nil
 	}
-	if len(lo) == 1 && len(hi) == 1 && lo[0] <= hi[0] {
-		var out []string
-		for c := lo[0]; c <= hi[0]; c++ {
+	if len(lo) == 1 && len(hi) == 1 {
+		step := 1
+		if hi[0] < lo[0] {
+			step = -1
+		}
+		for c := int(lo[0]); ; c += step {
 			out = append(out, string(rune(c)))
+			if c == int(hi[0]) {
+				return out, true, false
+			}
 		}
-		return out
 	}
-	return nil
+	return nil, false, false
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 func matchSegs(pat, segs []string) bool {
-	for len(pat) > 0 {
-		if pat[0] == "**" {
-			for len(pat) > 1 && pat[1] == "**" {
-				pat = pat[1:]
-			}
-			if len(pat) == 1 {
-				return true
-			}
-			for i := 0; i <= len(segs); i++ {
-				if matchSegs(pat[1:], segs[i:]) {
-					return true
-				}
-			}
-			return false
+	memo := map[[2]int]bool{}
+	var rec func(i, j int) bool
+	rec = func(i, j int) bool {
+		key := [2]int{i, j}
+		if v, ok := memo[key]; ok {
+			return v
 		}
-		if len(segs) == 0 {
-			return false
+		v := false
+		switch {
+		case i == len(pat):
+			v = j == len(segs)
+		case pat[i] == "**":
+			for k := j; k <= len(segs) && !v; k++ {
+				v = rec(i+1, k)
+			}
+		case j < len(segs):
+			ok, err := path.Match(pat[i], segs[j])
+			v = err == nil && ok && rec(i+1, j+1)
 		}
-		if ok, err := path.Match(pat[0], segs[0]); err != nil || !ok {
-			return false
-		}
-		pat, segs = pat[1:], segs[1:]
+		memo[key] = v
+		return v
 	}
-	return len(segs) == 0
+	return rec(0, 0)
 }

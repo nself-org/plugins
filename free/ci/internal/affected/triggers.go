@@ -22,7 +22,8 @@ var fullBases = map[string]bool{
 	"pnpm-workspace.yaml": true, ".npmrc": true, ".nvmrc": true, ".tool-versions": true, ".pnpmfile.cjs": true,
 	"Makefile": true, "makefile": true, "GNUmakefile": true, "Dockerfile": true,
 	"sqlc.yaml": true, "sqlc.yml": true, "sqlc.json": true, "buf.yaml": true, "buf.gen.yaml": true,
-	"gqlgen.yml": true, "codegen.yml": true, "codegen.yaml": true,
+	"gqlgen.yml": true, "gqlgen.yaml": true, ".gqlgen.yml": true, "codegen.yml": true, "codegen.yaml": true,
+	"codegen.ts": true, "codegen.json": true, "buf.work.yaml": true,
 }
 
 var fullExts = map[string]bool{
@@ -42,6 +43,8 @@ func ForcesFull(p string) bool {
 		return true
 	case base == "package.json" && path.Dir(p) == ".":
 		return true // the workspace root manifest defines the workspace
+	case hasSegment(p, "vendor"), hasSegment(p, "node_modules"):
+		return true // vendored code is not in the graph and any importer may use it
 	case strings.HasSuffix(base, ".sh") && hasSegment(p, "scripts"):
 		return true
 	case strings.HasPrefix(base, "openapi") || strings.HasPrefix(base, "swagger"):

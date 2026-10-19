@@ -13,6 +13,7 @@ package affected
 import (
 	"io/fs"
 	"path"
+	"strconv"
 	"strings"
 )
 
@@ -67,7 +68,8 @@ func parseModFile(dir, src string) modFile {
 	mf := modFile{dir: dir}
 	block := ""
 	for _, line := range strings.Split(src, "\n") {
-		f := tokenize(line)
+		f, bad := tokenize(line)
+		mf.badPath = mf.badPath || bad
 		if len(f) == 0 {
 			continue
 		}
@@ -88,13 +90,13 @@ func parseModFile(dir, src string) modFile {
 	return mf
 }
 
-// tokenize splits a go.mod line into fields: whitespace separates, double
-// quotes and backquotes group (the quotes are dropped), `//` outside quotes
-// starts a comment.
-func tokenize(line string) []string {
-	var out []string
+// tokenize splits a go.mod line into fields: whitespace separates, a
+// double-quoted string (Go escapes decoded) or a backquoted string groups,
+// `//` outside quotes starts a comment. bad is true for an unterminated or
+// invalid quoted string.
+func tokenize(line string) (out []string, bad bool) {
 	var cur strings.Builder
-	in, quote := false, byte(0)
+	in := false
 	flush := func() {
 		if in {
 			out = append(out, cur.String())
@@ -105,17 +107,29 @@ func tokenize(line string) []string {
 	for i := 0; i < len(line); i++ {
 		c := line[i]
 		switch {
-		case quote != 0:
-			if c == quote {
-				quote = 0
-			} else {
-				cur.WriteByte(c)
-			}
 		case c == '"' || c == '`':
-			quote, in = c, true
+			j := i + 1
+			for j < len(line) && line[j] != c {
+				if c == '"' && line[j] == '\\' {
+					j++
+				}
+				j++
+			}
+			if j >= len(line) {
+				return out, true
+			}
+			s, err := strconv.Unquote(line[i : j+1])
+			if err != nil {
+				return out, true
+			}
+			cur.WriteString(s)
+			in, i = true, j
+		case c == '(' || c == ')': // `replace(` and `use(` are valid: the paren is its own token
+			flush()
+			out = append(out, string(c))
 		case c == '/' && i+1 < len(line) && line[i+1] == '/':
 			flush()
-			return out
+			return out, false
 		case c == ' ' || c == '\t' || c == '\r':
 			flush()
 		default:
@@ -124,7 +138,7 @@ func tokenize(line string) []string {
 		}
 	}
 	flush()
-	return out
+	return out, false
 }
 
 func (mf *modFile) directive(kind string, f []string) {

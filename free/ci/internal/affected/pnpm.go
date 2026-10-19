@@ -81,14 +81,17 @@ func pnpmGraph(fsys fs.FS, t tree, g *Graph) {
 			roots[dirOf(f)] = true
 		}
 	}
-	if pj, ok := pkgs["."]; ok && !roots["."] && len(pj.Workspaces) > 0 && string(pj.Workspaces) != "null" {
-		g.uncertain("package.json", "npm or yarn workspaces are not supported without pnpm-workspace.yaml")
+	for dir, pj := range pkgs {
+		if !roots[dir] && len(pj.Workspaces) > 0 && string(pj.Workspaces) != "null" {
+			g.uncertain(path.Join(dir, "package.json"), "npm or yarn workspaces are not supported without pnpm-workspace.yaml")
+		}
 	}
 	dirsSorted := make([]string, 0, len(pkgs))
 	for d := range pkgs {
 		dirsSorted = append(dirsSorted, d)
 	}
 	sort.Strings(dirsSorted)
+	inAnyWorkspace := map[string]bool{}
 	for root := range roots {
 		globs, ok := workspaceGlobs(fsys, path.Join(root, "pnpm-workspace.yaml"))
 		if !ok {
@@ -106,11 +109,21 @@ func pnpmGraph(fsys fs.FS, t tree, g *Graph) {
 			}
 		}
 		for _, dir := range member {
+			inAnyWorkspace[dir] = true
 			linkDeps(g, pkgs, members, dir, pkgs[dir])
 		}
 	}
 	for _, dir := range dirsSorted { // links work without a workspace file too
 		linkDeps(g, pkgs, nil, dir, pkgs[dir])
+		if !inAnyWorkspace[dir] {
+			for name, specs := range pkgs[dir].Deps {
+				for _, spec := range specs {
+					if strings.HasPrefix(spec, "workspace:") {
+						g.uncertain(path.Join(dir, "package.json"), "workspace dependency "+name+" in a package outside every pnpm workspace")
+					}
+				}
+			}
+		}
 	}
 }
 
