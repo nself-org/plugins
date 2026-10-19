@@ -59,7 +59,7 @@ rc=$?
 if [ $rc -eq 0 ] && vjson "$work/p1.json" '.data.result == "pass"'; then
 	ev_pass produce "nself-ci on the fixture passed (exit 0)"
 else
-	ev_fail produce "nself-ci exited $rc: $(ev_snip "$work/p1.err")"
+	ev_fail produce "nself-ci exited $rc: $(ev_snip "$work/p1.err") [limits: $(ulimit -v) $(grep -E 'address space' /proc/self/limits 2>/dev/null | tr -s ' ')]"
 fi
 run1=$(jq -r '.data.run_id // empty' "$work/p1.json" 2>/dev/null)
 

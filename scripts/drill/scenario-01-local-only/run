@@ -158,17 +158,19 @@ else
 	ev_fail no-gitleaks-fails "expected a non-zero exit with E614/E618 naming gitleaks, got exit $rc: $(tail1 "$work/g.out")"
 fi
 
-# 5. A polyglot repo with a declared postgres service: Linux starts and tears it down; hosted macOS has no Docker, so the
-#    service job ends E637 with its remediation and every other job passes.
+# 5. A polyglot repo with a declared postgres service. Linux starts and tears it down. Without a working Docker the
+#    service job cannot run: with no Docker at all (hosted macOS) the planner refuses the run before it starts (E618,
+#    unplaceable.docker, exit 2; the Epic text says E637, debt row filed); with a Docker CLI whose daemon is down the
+#    service job ends E637 with its remediation and every other job passes. Both are exercised.
 repo=$work/poly
 fx_polyglot "$repo"
 cd "$repo" || exit 2
-nrun ci >"$work/y.out" 2>&1
-rc=$?
-run_y=$(runid_of "$work/y.out")
-nrun ci evidence "$run_y" --json >"$work/y.json" 2>"$work/y.err"
 others='[.data.checks[] | select(.id != "db-reachable") | .result] | (length == 3 and all(. == "pass"))'
 if [ "$docker_ok" -eq 1 ]; then
+	nrun ci >"$work/y.out" 2>&1
+	rc=$?
+	run_y=$(runid_of "$work/y.out")
+	nrun ci evidence "$run_y" --json >"$work/y.json" 2>"$work/y.err"
 	left=$(docker ps -aq --filter name=nselfci- 2>/dev/null | wc -l | tr -d ' ')
 	nets=$(docker network ls -q --filter name=nselfci- 2>/dev/null | wc -l | tr -d ' ')
 	if [ $rc -eq 0 ] && vjson "$work/y.json" ".data.result == \"pass\" and ($others) and ([.data.checks[] | select(.id == \"db-reachable\") | .result] == [\"pass\"])" && [ "$left" = 0 ] && [ "$nets" = 0 ]; then
@@ -177,10 +179,26 @@ if [ "$docker_ok" -eq 1 ]; then
 		ev_fail polyglot-service "exit $rc, containers left $left, networks left $nets: $(tail1 "$work/y.out")"
 	fi
 else
-	if [ $rc -ne 0 ] && grep -q 'E637' "$work/y.out" && grep -q 'start Docker or Colima' "$work/y.out" && vjson "$work/y.json" "($others) and ([.data.checks[] | select(.id == \"db-reachable\") | .result] == [\"error\"])"; then
-		ev_pass polyglot-no-docker "db-reachable ended E637 with its remediation and the other three jobs passed (run $run_y)"
+	if [ ! -e "$work/bin/docker" ]; then
+		nrun ci >"$work/y.out" 2>&1
+		rc=$?
+		if [ $rc -ne 0 ] && grep -Eq 'E618|E637' "$work/y.out" && grep -qi docker "$work/y.out" && ! grep -q 'nself-ci: pass' "$work/y.out"; then
+			ev_pass polyglot-no-docker "with no Docker the service run fails closed before starting (exit $rc): $(tail1 "$work/y.out")"
+		else
+			ev_fail polyglot-no-docker "expected a non-zero exit naming Docker (E618/E637), got $rc: $(tail1 "$work/y.out")"
+		fi
+		# A docker CLI whose daemon is down: what a laptop with Docker Desktop closed looks like.
+		printf '#!/bin/sh\necho "Cannot connect to the Docker daemon (drill stand-in: the daemon is down)" >&2\nexit 1\n' >"$work/bin/docker"
+		chmod +x "$work/bin/docker"
+	fi
+	nrun ci >"$work/z.out" 2>&1
+	rc=$?
+	run_z=$(runid_of "$work/z.out")
+	nrun ci evidence "$run_z" --json >"$work/z.json" 2>"$work/z.err"
+	if [ $rc -ne 0 ] && grep -q 'E637' "$work/z.out" && grep -q 'start Docker or Colima' "$work/z.out" && vjson "$work/z.json" "($others) and ([.data.checks[] | select(.id == \"db-reachable\") | .result] == [\"error\"])"; then
+		ev_pass polyglot-docker-down "db-reachable ended E637 with its remediation and the other three jobs passed (run $run_z)"
 	else
-		ev_fail polyglot-no-docker "exit $rc: $(tail1 "$work/y.out") $(jq -c '[.data.checks[] | {id, result}]' "$work/y.json" 2>/dev/null | head -c 300)"
+		ev_fail polyglot-docker-down "exit $rc: $(tail1 "$work/z.out") $(jq -c '[.data.checks[] | {id, result}]' "$work/z.json" 2>/dev/null | head -c 300)"
 	fi
 fi
 
