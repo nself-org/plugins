@@ -22,6 +22,7 @@ import (
 
 	"github.com/nself-org/cli/sdk/go/v2/signing"
 	"github.com/nself-org/plugins/free/ci/internal/agent/verify"
+	"github.com/nself-org/plugins/free/ci/internal/provenance"
 )
 
 func writePub(t *testing.T, pub ed25519.PublicKey) string {
@@ -54,9 +55,34 @@ func releaseDir(t *testing.T) (dir, pubFile string) {
 		m.Sig = signing.EncodeSig(raw)
 		b, _ := json.Marshal(m)
 		_ = os.WriteFile(filepath.Join(dir, name+".manifest.json"), append(b, '\n'), 0o644)
+		writeSideFiles(t, dir, s, m)
 	}
 	_ = os.WriteFile(filepath.Join(dir, "VERSION"), []byte("1.5.0\n"), 0o644)
 	return dir, writePub(t, pub)
+}
+
+// writeSideFiles writes the two SBOMs and the signed provenance of manifest m next to its binary (P7-CACHE-10).
+func writeSideFiles(t *testing.T, dir string, s signing.Signer, m verify.Manifest) {
+	t.Helper()
+	name := verify.BinaryName(m.Target)
+	cdx, spdx := []byte(`{"bomFormat":"CycloneDX"}`), []byte(`{"spdxVersion":"SPDX-2.3"}`)
+	digest := func(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
+	st, err := provenance.BuildAgent(provenance.AgentFacts{Repo: "nself-org/plugins", Ref: "refs/tags/v1.5.0", Revision: strings.Repeat("a", 40), RunID: "1",
+		Subjects: []provenance.FileDigest{{Name: name, SHA256: m.SHA256}},
+		SBOMs:    []provenance.FileDigest{{Name: name + verify.SuffixCycloneDX, SHA256: digest(cdx)}, {Name: name + verify.SuffixSPDX, SHA256: digest(spdx)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := signing.SignEnvelope(s, provenance.PayloadType, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prov, _ := json.Marshal(env)
+	for suffix, body := range map[string][]byte{verify.SuffixCycloneDX: cdx, verify.SuffixSPDX: spdx, verify.SuffixProvenance: prov} {
+		if err = os.WriteFile(filepath.Join(dir, name+suffix), body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func runVR(args ...string) (code int, out, errs string) {
@@ -88,6 +114,11 @@ func TestVerifyReleaseFailures(t *testing.T) {
 		{"missing manifest", func(d string) { _ = os.Remove(filepath.Join(d, "nself-ci-agent-linux-amd64.manifest.json")) }, verify.ReasonMissingSignature},
 		{"manifest without binary", func(d string) { _ = os.Remove(filepath.Join(d, "nself-ci-agent-darwin-arm64")) }, "manifest without a binary"},
 		{"wrong version in VERSION", func(d string) { _ = os.WriteFile(filepath.Join(d, "VERSION"), []byte("1.4.0\n"), 0o644) }, verify.ReasonVersionMismatch},
+		{"missing provenance", func(d string) { _ = os.Remove(filepath.Join(d, "nself-ci-agent-linux-amd64"+verify.SuffixProvenance)) }, verify.ReasonProvenance},
+		{"missing SBOM", func(d string) { _ = os.Remove(filepath.Join(d, "nself-ci-agent-darwin-arm64"+verify.SuffixSPDX)) }, verify.ReasonProvenance},
+		{"edited SBOM", func(d string) {
+			_ = os.WriteFile(filepath.Join(d, "nself-ci-agent-linux-amd64"+verify.SuffixCycloneDX), []byte(`{"bomFormat":"CycloneDX","x":1}`), 0o644)
+		}, verify.ReasonProvenance},
 		{"symlinked manifest", func(d string) {
 			m := filepath.Join(d, "nself-ci-agent-linux-amd64.manifest.json")
 			_ = os.Rename(m, filepath.Join(d, "real.json"))
@@ -101,6 +132,19 @@ func TestVerifyReleaseFailures(t *testing.T) {
 		if code != 1 || !strings.Contains(errs, c.reason) || !strings.Contains(errs, "E665") {
 			t.Errorf("%s: code %d err %q", c.name, code, errs)
 		}
+	}
+}
+
+func TestVerifyReleaseAcceptsAKeyFileWithTwoKeys(t *testing.T) {
+	dir, pub := releaseDir(t)
+	extra, _, _ := ed25519.GenerateKey(rand.Reader)
+	first, _ := os.ReadFile(pub)
+	second, _ := os.ReadFile(writePub(t, extra))
+	if err := os.WriteFile(pub, append(first, second...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errs := runVR("--pub", pub, dir); code != 0 {
+		t.Fatalf("code %d err %q", code, errs)
 	}
 }
 

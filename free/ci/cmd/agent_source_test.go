@@ -32,6 +32,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/nodes/lifecycle"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/probe"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
+	"github.com/nself-org/plugins/free/ci/internal/provenance"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	_ "modernc.org/sqlite"
 )
@@ -139,6 +140,22 @@ func releaseServer(t *testing.T, body []byte, tamper bool) (*httptest.Server, *v
 	}
 	hits := &atomic.Int32{}
 	mux := http.NewServeMux()
+	cdx, spdx := []byte(`{"bomFormat":"CycloneDX"}`), []byte(`{"spdxVersion":"SPDX-2.3"}`)
+	digest := func(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
+	st, err := provenance.BuildAgent(provenance.AgentFacts{Repo: "nself-org/plugins", Ref: "refs/tags/v1.5.0", Revision: strings.Repeat("a", 40), RunID: "1",
+		Subjects: []provenance.FileDigest{{Name: "nself-ci-agent-linux-amd64", SHA256: m.SHA256}},
+		SBOMs:    []provenance.FileDigest{{Name: "nself-ci-agent-linux-amd64" + verify.SuffixCycloneDX, SHA256: digest(cdx)}, {Name: "nself-ci-agent-linux-amd64" + verify.SuffixSPDX, SHA256: digest(spdx)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := signing.SignEnvelope(s, provenance.PayloadType, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prov, _ := json.Marshal(env)
+	for suffix, body := range map[string][]byte{verify.SuffixCycloneDX: cdx, verify.SuffixSPDX: spdx, verify.SuffixProvenance: prov} {
+		mux.HandleFunc("/nself-ci-agent-linux-amd64"+suffix, func(w http.ResponseWriter, _ *http.Request) { hits.Add(1); _, _ = w.Write(body) })
+	}
 	mux.HandleFunc("/nself-ci-agent-linux-amd64", func(w http.ResponseWriter, _ *http.Request) { hits.Add(1); _, _ = w.Write(served) })
 	mux.HandleFunc("/nself-ci-agent-linux-amd64.manifest.json", func(w http.ResponseWriter, _ *http.Request) { hits.Add(1); _ = json.NewEncoder(w).Encode(m) })
 	srv := httptest.NewServer(mux)
@@ -176,8 +193,8 @@ func TestNodesAddWithoutAgentBinaryInstallsTheVerifiedRelease(t *testing.T) {
 	if !bytes.Equal(got, body) {
 		t.Fatalf("the node got %d bytes, want the verified release (%d)", len(got), len(body))
 	}
-	if hits.Load() != 2 {
-		t.Fatalf("expected one manifest and one binary request, got %d", hits.Load())
+	if hits.Load() != 5 {
+		t.Fatalf("expected one manifest, three SBOM and provenance requests and one binary request, got %d", hits.Load())
 	}
 }
 

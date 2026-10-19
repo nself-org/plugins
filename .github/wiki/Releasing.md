@@ -118,6 +118,13 @@ downloads the pinned version, verifies it and only then installs it; `--agent-bi
 |---|---|
 | `nself-ci-agent-<os>-<arch>` | static binary for `linux-amd64`, `linux-arm64` or `darwin-arm64` |
 | `nself-ci-agent-<os>-<arch>.manifest.json` | one `agent-release/v1` manifest per binary |
+| `nself-ci-agent-<os>-<arch>.cdx.json` | CycloneDX 1.6 SBOM of the binary (pinned syft) |
+| `nself-ci-agent-<os>-<arch>.spdx.json` | SPDX 2.3 SBOM of the binary |
+| `nself-ci-agent-<os>-<arch>.intoto.dsse.json` | DSSE envelope over the signed in-toto provenance statement |
+
+**Version floor.** Every agent version from P7-CACHE-10 on carries the two SBOMs and the provenance, and the client refuses a release without them (`E665`,
+reason `provenance`). Agent versions released between P7-NODE-15 and P7-CACHE-10 carry none and are refused by a newer coordinator. V15 is unreleased until
+P7-SHIP-09, so no user depends on those versions.
 
 A manifest is one line of JSON: `schema`, `version`, `target`, `sha256`, `protocol_min`, `protocol_max`, `key_id` (`agent-<16 hex>`), `alg` (`ed25519`) and `sig`
 (standard padded base64 of the raw 64-byte signature, the text `sdk/go/signing` `EncodeSig` produces). The signed message is plain text, not JSON:
@@ -135,26 +142,29 @@ the same bytes in `free/ci/internal/agent/verify` (`SigningInput`); a test signs
 |---|---|
 | `build.sh --version V --out DIR` | reproducible build for the three targets (`CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, empty build id, vendored modules). Writes `SHA256SUMS` and `VERSION`. Two builds of one tree, version and Go toolchain are byte-identical (the log prints `go version`; the workflow pins the toolchain) |
 | `manifest.sh --in DIR [--rehearsal]` | writes and signs one manifest per binary. Key from `NSELF_AGENT_SIGNING_KEY` and `NSELF_AGENT_SIGNING_KEY_ID` (environment only; the id is derived from the key and checked). `--rehearsal` uses a throwaway key and writes `DIR/rehearsal-test.pub` |
+| `provenance.sh --in DIR [--rehearsal] [--versions FILE]` | after `manifest.sh`: per binary, runs the pinned syft (version and checksums from the `syft` row of `free/ci/internal/toolchain/versions.yaml`; a candidate that is not exactly that binary never runs, and with none the pinned archive is downloaded over https and checked), writes `<binary>.cdx.json` and `.spdx.json`, runs `go run ./tools/provgen` (the statement: buildType `https://nself.org/ci/buildtypes/agent/v1`, subject = binary name and the signed manifest's sha256, byproducts = the SBOM digests, builder = the workflow ref, invocation = the run id), signs the DSSE pre-authentication encoding with the same agent key and the same `openssl pkeyutl -sign -rawin` primitive, and writes `<binary>.intoto.dsse.json`. Key and key id from the same environment variables as `manifest.sh`; builder, run and commit from `GITHUB_WORKFLOW_REF`, `GITHUB_RUN_ID`, `GITHUB_SHA`. `--rehearsal` signs with a second throwaway key and appends its public half to `DIR/rehearsal-test.pub` |
 | `genkeys.sh OUTPUT.go` | generates `free/ci/internal/agent/verify/keys_gen.go` from `scripts/release/keys/agent-<16 hex>.pub` (run it with `go generate ./internal/agent/verify/...` in `free/ci`). A drift test fails when the committed file is stale |
 
-`nself-ci-agent verify-release --pub FILE [--version V] [--revoked FILE] [--require-all-targets] DIR` is the operator-side check: it verifies every binary in DIR against its manifest with exactly one public key
-(PEM SPKI). A binary without a manifest, a manifest without a binary, a symlinked file or an empty directory fails; `--require-all-targets` (set by the workflow) also fails unless all three targets are present, and `--revoked FILE` refuses a manifest signed by a revoked key id.
+`nself-ci-agent verify-release --pub FILE [--version V] [--revoked FILE] [--require-all-targets] DIR` is the operator-side check: it verifies every binary in DIR against its manifest, its SBOMs and its provenance with
+the key file (PEM SPKI; one key, or in a rehearsal the manifest key and the provenance key). A binary without a manifest, a manifest without a binary, a missing SBOM or provenance, a symlinked file or an empty directory fails; `--require-all-targets` (set by the workflow) also fails unless all three targets are present, and `--revoked FILE` refuses a manifest signed by a revoked key id.
 
 ### Rehearsal (no key, no release, no network)
 
 ```bash
 bash scripts/release/agent/build.sh --version v0.0.0-rehearsal --out "$TMPDIR/agent-a"
 bash scripts/release/agent/manifest.sh --in "$TMPDIR/agent-a" --rehearsal
+bash scripts/release/agent/provenance.sh --in "$TMPDIR/agent-a" --rehearsal
 (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --pub "$TMPDIR/agent-a/rehearsal-test.pub" "$TMPDIR/agent-a")
 ```
 
-A one-byte change in a binary fails with `checksum_mismatch`. `release-agent.yml` run by hand with `rehearsal` true does the same in Actions and uploads nothing.
+A one-byte change in a binary fails with `checksum_mismatch`; a changed SBOM or a provenance for other bytes fails with `provenance`. `release-agent.yml` run by hand with `rehearsal` true does the same in Actions and uploads nothing.
 
 ### Workflow and key custody
 
-`release-agent.yml` runs on a `v*` tag: `build` (twice, compared), `sign` (bound to the `release-signing` Environment, the only job that reads the agent key), `publish`
-(uploads missing assets, never `--clobber`). Both workflows bind the same `release-signing` Environment (Ticket constraint P7-NODE-15), so an approver of one run can in principle trigger the other; a separate Environment for the agent key is a one-line change in `release-agent.yml` if the owner prefers the smaller blast radius. `sign` refuses to continue unless `scripts/release/keys/<key id>.pub` is committed and `verify-release` accepts every manifest
-against it. The agent key is a different key from the plugin key (purpose `agent`): a plugin-purpose signature never verifies an agent, and `genkeys.sh` (run by the `sign` job too) refuses an `agent-*.pub` that is the same key as any other committed `.pub`. `sign` also refuses a build artifact that holds files `SHA256SUMS` does not list or a `VERSION` other than the tag's, and `publish` compares an asset already on the release byte for byte with the signed file instead of skipping it blindly. A revoked agent key goes into `scripts/release/keys/agent-revoked.txt` (one `agent-<16 hex>` per line); `genkeys.sh` compiles it into the client and `sign` passes it to `verify-release`. `protocol_min` and `protocol_max` are signed and informational for now: no client decision reads them yet. The key and the Environment
+`release-agent.yml` runs on a `v*` tag: `build` (twice, compared; its job output carries the digest of `SHA256SUMS`) and `sign-publish` (bound to the `release-signing` Environment, the only job that reads the agent key). The
+workflow uses no Actions artifact and no Actions cache (we never pay GitHub for storage), so nothing travels between jobs but that digest: `sign-publish` rebuilds from the same tag, refuses to go on unless the rebuild has the same digest, and then runs
+`manifest.sh`, `provenance.sh` and `verify-release`. The agent key reaches the two signing steps only, and the release token reaches the upload step only; the upload adds the missing assets, never `--clobber`. Both workflows bind the same `release-signing` Environment (Ticket constraint P7-NODE-15), so an approver of one run can in principle trigger the other; a separate Environment for the agent key is a one-line change in `release-agent.yml` if the owner prefers the smaller blast radius. `sign-publish` refuses to continue unless `scripts/release/keys/<key id>.pub` is committed and `verify-release` accepts every manifest
+against it. The agent key is a different key from the plugin key (purpose `agent`): a plugin-purpose signature never verifies an agent, and `genkeys.sh` (run by the `sign-publish` job too) refuses an `agent-*.pub` that is the same key as any other committed `.pub`. `sign-publish` also refuses a rebuild that holds files `SHA256SUMS` does not list or a `VERSION` other than the tag's, and the upload step compares an asset already on the release byte for byte with the signed file instead of skipping it blindly. A revoked agent key goes into `scripts/release/keys/agent-revoked.txt` (one `agent-<16 hex>` per line); `genkeys.sh` compiles it into the client and `sign-publish` passes it to `verify-release`. `protocol_min` and `protocol_max` are signed and informational for now: no client decision reads them yet. The key and the Environment
 secrets are created by the owner; the production public key is committed and the first real release is run by P7-NODE-29. Until then `keys_gen.go` holds an empty key
 set and `nodes add` without `--agent-binary` fails with `E665` (reason `no_trusted_key`) naming `--agent-binary`.
 
@@ -162,7 +172,7 @@ set and `nodes add` without `--agent-binary` fails with `E665` (reason `no_trust
 
 Before any file is placed, `verify.Artifact` checks in this order: a trusted key exists; the manifest is canonical; the signature is canonical base64; the key id is known,
 not revoked, of the agent purpose and valid; the signature verifies over the signing input; the signed version is the pinned version; the signed target is the node's;
-the file's sha256 is the signed sha256. Each failure carries its own reason key: `no_trusted_key`, `malformed_manifest`, `missing_signature`, `malformed_signature`,
-`unknown_key`, `wrong_purpose`, `revoked`, `key_not_valid`, `bad_signature`, `version_mismatch`, `target_mismatch`, `checksum_mismatch`, `unreadable_artifact`. Downloads
-use https (plain http only for a loopback host) and are size-bounded; the verified binary is moved into place with one rename, so an unverified file never sits at the
+the file's sha256 is the signed sha256; then the supply-chain files (`VerifyProvenance`): the three files exist, the DSSE envelope is canonical and verifies under an agent-purpose key (a `ci-release`, `plugins` or unknown key is refused), its payload type is the in-toto one, the statement parses and has the agent build type and the release-agent workflow as builder, its single subject is `nself-ci-agent-<target>` with the signed manifest's sha256, and its two byproducts are the SBOMs with the sha256 of the SBOM bytes that were downloaded. Each failure carries its own reason key: `no_trusted_key`, `malformed_manifest`, `missing_signature`, `malformed_signature`,
+`unknown_key`, `wrong_purpose`, `revoked`, `key_not_valid`, `bad_signature`, `version_mismatch`, `target_mismatch`, `checksum_mismatch`, `unreadable_artifact`, `provenance`. `nodes add` and the upgrade path both reach this one call (`verify.Artifact`); no second verify package exists. Downloads
+use https (plain http only for a loopback host), are size-bounded and include the three supply-chain files (a 404 on one of them is `provenance`, any other download failure is `E656`); the verified binary is moved into place with one rename, so an unverified file never sits at the
 final path, in a fresh private directory per install (no persistent cache). An agent already installed on the node is used as it is when `--agent-binary` is not given (no download and no verification of the existing file); `nodes add` only installs when the node has none. `NSELF_CI_AGENT_RELEASE_URL` points the download at a mirror or a local fixture directory.

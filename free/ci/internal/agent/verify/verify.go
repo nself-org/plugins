@@ -1,7 +1,7 @@
 package verify
 
 // Purpose: the one place nself-ci-agent release artifacts are verified (hq NODE D11, P7-NODE-15; P7-CACHE-10 extends it
-//          with provenance). A downloaded binary is trusted only after its agent-release/v1 manifest verifies under an
+//          with SBOM and provenance checks, see provenance.go). A downloaded binary is trusted only after its agent-release/v1 manifest verifies under an
 //          agent-purpose key, names the pinned version and the node's target, and its sha256 equals the signed sha256.
 // Inputs:  a file path, the manifest bytes and the pinned Expect (version, target); a trusted key set.
 // Outputs: the verified Manifest, or an *Error with code E665 and a reason key (see codes.go).
@@ -197,9 +197,23 @@ func (v *Verifier) Ready() error {
 // ValidVersion reports whether s is a plain release version (1.5.0 or 1.5.0-rc.1).
 func ValidVersion(s string) bool { return versionRe.MatchString(s) }
 
-// Artifact verifies the file at path against the manifest bytes and the pinned Expect. It returns the manifest only when the
-// signature verifies, the signed version and target are the pinned ones, and the file's sha256 is the signed sha256.
-func (v *Verifier) Artifact(path string, manifest []byte, want Expect) (Manifest, error) {
+// Artifact verifies the file at path against the manifest bytes, the pinned Expect and the release files that sit next to the
+// binary (two SBOMs and the signed provenance, P7-CACHE-10). It returns the manifest only when checkManifest and
+// VerifyProvenance both pass.
+func (v *Verifier) Artifact(path string, manifest []byte, want Expect, files Files) (Manifest, error) {
+	m, err := v.checkManifest(path, manifest, want)
+	if err != nil {
+		return Manifest{}, err
+	}
+	if err = v.VerifyProvenance(m, files); err != nil {
+		return Manifest{}, err
+	}
+	return m, nil
+}
+
+// checkManifest verifies the file at path against the manifest bytes and the pinned Expect: the signature verifies, the signed
+// version and target are the pinned ones, and the file's sha256 is the signed sha256.
+func (v *Verifier) checkManifest(path string, manifest []byte, want Expect) (Manifest, error) {
 	if err := v.Ready(); err != nil {
 		return Manifest{}, err
 	}
