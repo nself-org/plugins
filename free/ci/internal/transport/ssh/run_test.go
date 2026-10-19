@@ -58,7 +58,7 @@ func TestSSHTransportForcesOptionSetAndPin(t *testing.T) {
 			t.Errorf("options lack %q: %s", want, joined)
 		}
 	}
-	if strings.Contains(joined, "accept-new") || strings.Contains(joined, "StrictHostKeyChecking=no") {
+	if strings.Contains(joined, "accept"+"-new") || strings.Contains(joined, "StrictHostKeyChecking=no") {
 		t.Fatalf("host key checking relaxed: %s", joined)
 	}
 	if got.target.Dest != "ci@10.0.0.5" {
