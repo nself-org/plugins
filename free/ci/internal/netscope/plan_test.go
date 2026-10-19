@@ -179,8 +179,9 @@ func TestPlanFailureCleansUpAndIsE679(t *testing.T) {
 		if plan.Release != nil {
 			t.Errorf("%s: a failed plan still holds a Release", step)
 		}
-		if rt.steps[len(rt.steps)-1] != "remove" {
-			t.Errorf("%s: steps %v, want a final remove", step, rt.steps)
+		// a failed create removes nothing by label (the id may belong to another attempt); a later step does
+		if removed := rt.steps[len(rt.steps)-1] == "remove"; removed != (step != "network") {
+			t.Errorf("%s: steps %v", step, rt.steps)
 		}
 	}
 }
