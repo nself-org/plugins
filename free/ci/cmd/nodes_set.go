@@ -77,6 +77,10 @@ func runNodesSet(args []string, env lifecycle.Env, out, errOut io.Writer) int {
 	if !given["reserve-cpu"] && !given["reserve-mem"] && !given["interactive"] && !given["on-battery"] && !given["persistence"] {
 		return nodesSetFail(out, errOut, f.json, nodesSetUsage("nodes set needs at least one of --reserve-cpu, --reserve-mem, --interactive, --on-battery, --persistence"))
 	}
+	flagVals := reservation.Flags{CPU: f.cpu, Mem: f.mem, Interactive: f.interactive, OnBattery: f.onBattery, Persistence: f.persistence, Given: given}
+	if err := flagVals.Check(); err != nil {
+		return nodesSetFail(out, errOut, f.json, nodesSetUsage(err.Error()))
+	}
 	id := strings.ToLower(pos[0])
 	if err := remote.ValidateNodeID(id); err != nil {
 		return nodesSetFail(out, errOut, f.json, nodesSetUsage("the node id is not valid (letters, digits, dot, dash, underscore)"))
@@ -100,7 +104,7 @@ func runNodesSet(args []string, env lifecycle.Env, out, errOut io.Writer) int {
 		own := n.Capability.Identity.Ownership.Value
 		cur = reservation.Defaults(id, own != nil && *own == "operator", n.Capability.Availability.BatteryPct.Value != nil)
 	}
-	next, err := reservation.Merge(cur, reservation.Flags{CPU: f.cpu, Mem: f.mem, Interactive: f.interactive, OnBattery: f.onBattery, Persistence: f.persistence, Given: given}, n.Capability.Resources.CPU.Value)
+	next, err := reservation.Merge(cur, flagVals, n.Capability.Resources.CPU.Value)
 	if err != nil {
 		return nodesSetFail(out, errOut, f.json, nodesSetUsage(err.Error()))
 	}

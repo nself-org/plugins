@@ -56,3 +56,23 @@ func Merge(cur Settings, f Flags, cpus *float64) (Settings, error) {
 	}
 	return cur, nil
 }
+
+// Check rejects a bad flag value before any node is looked up: unknown enum words, a memory figure
+// that does not parse and a CPU figure that does not parse (a percentage is checked later, against the
+// node's core count).
+func (f Flags) Check() error {
+	probe := Settings{NodeID: "x", Interactive: "protect", OnBattery: "pause", Persistence: "persistent"}
+	if f.Given["reserve-cpu"] && !strings.HasSuffix(strings.TrimSpace(f.CPU), "%") {
+		if _, err := ParseCPU(f.CPU, 0); err != nil {
+			return err
+		}
+	}
+	g := f
+	g.CPU = ""
+	g.Given = map[string]bool{}
+	for k, v := range f.Given {
+		g.Given[k] = v && k != "reserve-cpu"
+	}
+	_, err := Merge(probe, g, nil)
+	return err
+}

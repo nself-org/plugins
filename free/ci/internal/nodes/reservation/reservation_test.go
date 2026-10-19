@@ -111,3 +111,20 @@ func TestMerge(t *testing.T) {
 		}
 	}
 }
+
+func TestFlagsCheckNeedsNoNode(t *testing.T) {
+	ok := Flags{CPU: "50%", Mem: "2g", Interactive: "ignore", OnBattery: "drain", Persistence: "persistent",
+		Given: map[string]bool{"reserve-cpu": true, "reserve-mem": true, "interactive": true, "on-battery": true, "persistence": true}}
+	if err := ok.Check(); err != nil {
+		t.Fatalf("good flags refused: %v", err)
+	}
+	for name, f := range map[string]Flags{
+		"battery": {OnBattery: "nope", Given: map[string]bool{"on-battery": true}},
+		"cpu":     {CPU: "lots", Given: map[string]bool{"reserve-cpu": true}},
+		"mem":     {Mem: "-3", Given: map[string]bool{"reserve-mem": true}},
+	} {
+		if f.Check() == nil {
+			t.Errorf("%s: bad value passed Check", name)
+		}
+	}
+}
