@@ -32,9 +32,9 @@ func waitRun(t *testing.T, iso ciexec.Isolator) (*runState, ciexec.JobSpec) {
 
 func fastWaits(t *testing.T, slot, runtime time.Duration) {
 	t.Helper()
-	s, r, a, b := slotWaitMax, runtimeWaitMax, waitStepFirst, waitStepMax
+	s, r, a, b, n := slotWaitMax, runtimeWaitMax, waitStepFirst, waitStepMax, waitNoteEvery
 	slotWaitMax, runtimeWaitMax, waitStepFirst, waitStepMax = slot, runtime, 5*time.Millisecond, 20*time.Millisecond
-	t.Cleanup(func() { slotWaitMax, runtimeWaitMax, waitStepFirst, waitStepMax = s, r, a, b })
+	t.Cleanup(func() { slotWaitMax, runtimeWaitMax, waitStepFirst, waitStepMax, waitNoteEvery = s, r, a, b, n })
 }
 
 // A refusal before anything ran is waited out while its budget lasts; other errors and reasons that waiting cannot
@@ -114,11 +114,51 @@ func TestRunWaitingStopsOnCancel(t *testing.T) {
 	fastWaits(t, time.Minute, time.Minute)
 	iso := &refusing{refuse: func(_, _ int) error { return isolation.Unavailable(isolation.ReasonSlotUID, "no slot") }}
 	rs, spec := waitRun(t, iso)
+	rs.sess.slots.take(slotDir(rs.sess.Home)) // slot 0 is held elsewhere, so the attempt waits on slot 1
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(50*time.Millisecond, cancel)
 	start := time.Now()
 	res := rs.runWaiting(ctx, spec)
 	if string(res.Attempt.State) != "cancelled" || time.Since(start) > 5*time.Second {
 		t.Fatalf("state %q after %s", res.Attempt.State, time.Since(start))
+	}
+}
+
+// A refusal for the lowest slot cannot be cured by another attempt ending, so it is not waited for.
+func TestRunWaitingSlotZeroFailsAtOnce(t *testing.T) {
+	fastWaits(t, time.Minute, time.Minute)
+	iso := &refusing{refuse: func(_, _ int) error { return isolation.Unavailable(isolation.ReasonSlotUID, "runtime maps no job UID") }}
+	rs, spec := waitRun(t, iso)
+	res := rs.runWaiting(context.Background(), spec)
+	if string(res.Attempt.State) != "failed" || iso.calls.Load() != 1 {
+		t.Fatalf("state %q after %d calls", res.Attempt.State, iso.calls.Load())
+	}
+}
+
+// planRefusing is an Isolator that accepts and sets a planner whose Plan raises E678.
+type planRefusing struct{ calls atomic.Int32 }
+
+type e678Planner struct{ calls *atomic.Int32 }
+
+func (p e678Planner) Plan(ciexec.ContainerRun) (ciexec.ContainerCommand, error) {
+	p.calls.Add(1)
+	return ciexec.ContainerCommand{}, isolation.Unavailable(isolation.ReasonRuntimeMissing, "runtime gone")
+}
+func (e678Planner) Cleanup(ciexec.ContainerRun) (*ciexec.ContainerCommand, error) { return nil, nil }
+
+func (p *planRefusing) Prepare(_ context.Context, s *ciexec.JobSpec) error {
+	s.Plan = e678Planner{calls: &p.calls}
+	return nil
+}
+
+// An E678 that arrives after the attempt started (a planner's) is not waited for: its hooks and secrets already ran.
+func TestRunWaitingDoesNotRepeatAnAttemptThatStarted(t *testing.T) {
+	fastWaits(t, time.Minute, time.Minute)
+	iso := &planRefusing{}
+	rs, spec := waitRun(t, iso)
+	spec.Job = model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}}
+	res := rs.runWaiting(context.Background(), spec)
+	if string(res.Attempt.State) != "failed" || iso.calls.Load() != 1 {
+		t.Fatalf("state %q (err %v) after %d plans: the attempt was run again", res.Attempt.State, res.Err, iso.calls.Load())
 	}
 }
