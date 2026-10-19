@@ -127,3 +127,18 @@ func TestResolverCallCarriesTheLiveCoordinator(t *testing.T) {
 		t.Fatal("the nested resolver call must carry the live coordinator id")
 	}
 }
+
+// The live coordinator id is "<boot>:<pid>:<start>"; the executor refuses ids with ':' (E612), so the resolver
+// call carries the same safe form jobs carry. Before this, every resolver call under a real coordinator failed.
+func TestResolverCoordinatorIDIsAnExecutorSafeID(t *testing.T) {
+	live := "8a1f3c52-9d0e-4e4b-b7d1-0c2f6a5e1b77:48213:1760892291"
+	got := coordinatorOf(AttemptInfo{SecretsInfo: SecretsInfo{CoordinatorID: live}})
+	if got != safeID(live) || strings.Contains(got, ":") {
+		t.Fatalf("coordinator id %q", got)
+	}
+	var ex ciexec.Executor
+	res := ex.Run(context.Background(), ciexec.JobSpec{AttemptID: "sec-x-1", CoordinatorID: got, Command: []string{"true"}, Home: t.TempDir()})
+	if res.Err != nil {
+		t.Fatalf("the executor refused the coordinator id %q: %v", got, res.Err)
+	}
+}

@@ -115,7 +115,7 @@ func planBuildLane(ctx context.Context, root, workdir string, timeout time.Durat
 	if err != nil {
 		return nil, err
 	}
-	lane, err := android.Resolve(android.Input{Config: cfg, Workdir: workdir, Timeout: timeout, Required: android.RequiredJobs(base)})
+	lane, err := android.Resolve(android.Input{Config: cfg, Workdir: workdir, Timeout: timeout, Required: android.RequiredJobs(base), Env: android.EnvFrom(os.Getenv)})
 	if err != nil {
 		return nil, err
 	}

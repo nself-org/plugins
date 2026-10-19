@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -67,8 +68,10 @@ type rig struct {
 	repo, rev string
 	home      string
 	marker    string
-	res       *fakeRes
-	keystore  []byte
+	// sbomStep, when set, replaces the fake syft step (the laptop leg runs the pinned syft).
+	sbomStep *SBOMStep
+	res      *fakeRes
+	keystore []byte
 }
 
 func gitIn(t *testing.T, dir string, args ...string) string {
@@ -82,24 +85,28 @@ func gitIn(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// newRig builds the repository, the planted environment and the signing key.
+// newRig is the fake-gradle rig: a committed fake wrapper and the planted keystore environment.
 func newRig(t *testing.T) *rig {
 	t.Helper()
-	t.Setenv("NSELF_V15", "1")
-	t.Setenv("NSELF_CI_COORDINATOR_MODE", "")
-	if !compat.V15() {
-		t.Fatal("the V15 engine is not enabled")
-	}
-	p := &rig{t: t, repo: t.TempDir(), home: t.TempDir()}
-	p.marker = filepath.Join(t.TempDir(), "gradle-ran")
+	p := &rig{t: t, marker: filepath.Join(t.TempDir(), "gradle-ran")}
 	p.keystore = append([]byte(plantedKSMark), bytes.Repeat([]byte{0, 1, 2, 3, 250}, 40)...)
-	files := map[string]string{
-		".nself/ci.yaml":  "version: 1\njobs:\n  unit:\n    kind: test\n    run: [sh, -c, \"true\"]\n",
-		"android/gradlew": gradlewScript(p.marker),
-		".gitignore":      "app/build/\napp/release.keystore\n",
-	}
+	p.setup(func(repo string) {
+		writeFiles(t, repo, map[string]string{
+			"android/gradlew": gradlewScript(p.marker),
+			".gitignore":      "app/build/\napp/release.keystore\n",
+		})
+	})
+	t.Setenv("ANDROID_KEYSTORE_BASE64", base64.StdEncoding.EncodeToString(p.keystore))
+	t.Setenv("ANDROID_KEYSTORE_PASSWORD", plantedPwOne)
+	t.Setenv("ANDROID_KEY_ALIAS", plantedAlias)
+	t.Setenv("ANDROID_KEY_PASSWORD", plantedPwTwo)
+	return p
+}
+
+func writeFiles(t *testing.T, root string, files map[string]string) {
+	t.Helper()
 	for name, body := range files {
-		path := filepath.Join(p.repo, name)
+		path := filepath.Join(root, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -107,20 +114,29 @@ func newRig(t *testing.T) *rig {
 			t.Fatal(err)
 		}
 	}
+}
+
+// setup makes the repository (the required job's config plus what prepare writes), its CI home
+// and the release signing key.
+func (p *rig) setup(prepare func(repo string)) {
+	t := p.t
+	t.Setenv("NSELF_V15", "1")
+	t.Setenv("NSELF_CI_COORDINATOR_MODE", "")
+	if !compat.V15() {
+		t.Fatal("the V15 engine is not enabled")
+	}
+	p.repo, p.home = t.TempDir(), t.TempDir()
+	writeFiles(t, p.repo, map[string]string{".nself/ci.yaml": "version: 1\njobs:\n  unit:\n    kind: test\n    run: [sh, -c, \"true\"]\n"})
+	prepare(p.repo)
 	gitIn(t, p.repo, "init", "-q", "-b", "main")
 	gitIn(t, p.repo, "add", ".")
 	gitIn(t, p.repo, "commit", "-q", "-m", "fixture")
 	p.rev = gitIn(t, p.repo, "rev-parse", "HEAD")
-	t.Setenv("ANDROID_KEYSTORE_BASE64", base64.StdEncoding.EncodeToString(p.keystore))
-	t.Setenv("ANDROID_KEYSTORE_PASSWORD", plantedPwOne)
-	t.Setenv("ANDROID_KEY_ALIAS", plantedAlias)
-	t.Setenv("ANDROID_KEY_PASSWORD", plantedPwTwo)
 	_, value, err := signing.Generate()
 	if err != nil {
 		t.Fatal(err)
 	}
 	p.res = &fakeRes{vals: map[string][]byte{signing.KeyRef: value}}
-	return p
 }
 
 // nselfStub is the cli behind the job's secret Source: the command exists and no secret is stored (E541).
@@ -186,7 +202,7 @@ func (p *rig) deps(st *store.Store) publish.Deps {
 // lane resolves and plans the Android lane for the project in android/.
 func (p *rig) lane() (*plan.Plan, string) {
 	cfg := model.PipelineConfig{Version: 1, Jobs: map[string]model.Job{"unit": {Kind: "test", Run: []string{"sh", "-c", "true"}}}}
-	l, err := Resolve(Input{Config: cfg, Workdir: "android", Timeout: 5 * time.Minute, Required: []string{"unit"}})
+	l, err := Resolve(Input{Config: cfg, Workdir: "android", Timeout: 5 * time.Minute, Required: []string{"unit"}, Env: EnvFrom(os.Getenv)})
 	if err != nil || !l.Synthesized {
 		p.t.Fatalf("lane %+v %v", l, err)
 	}
@@ -230,8 +246,13 @@ func (p *rig) run(rt run.SecretsRuntime) (run.Result, *store.Store, string) {
 		}
 		return run.ReleaseOutcome{State: rel.State, Dir: rel.Dir, Message: rel.Message}, err
 	}
-	installSyft(t, p.home)
-	t.Cleanup(Install(SBOMStep{Home: p.home, Pin: testPin(), NewRunner: func(string) sbom.Runner { return &fakeSyft{t: t} }}))
+	step := SBOMStep{Home: p.home, Pin: testPin(), NewRunner: func(string) sbom.Runner { return &fakeSyft{t: t} }}
+	if p.sbomStep != nil {
+		step = *p.sbomStep
+	} else {
+		installSyft(t, p.home)
+	}
+	t.Cleanup(Install(step))
 	run.ConfigureSecrets(rt)
 	pl, pipeline := p.lane()
 	var out bytes.Buffer
@@ -256,4 +277,105 @@ func (p *rig) verifyDir(dir string, info signing.KeyInfo) verify.Result {
 		p.t.Fatal(err)
 	}
 	return verify.Release(context.Background(), dir, verify.Options{Root: p.repo, Capture: report.Capture, OperatorKeys: keys})
+}
+
+func needIntegration(t *testing.T) {
+	t.Helper()
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Fatal("INTEGRATION=1 is required for the Android lane tests")
+	}
+}
+
+// sinkHits lists every planted value found in the files under roots and in the extra texts.
+func sinkHits(t *testing.T, planted []string, texts map[string]string, roots ...string) []string {
+	t.Helper()
+	var hits []string
+	scan := func(where string, b []byte) {
+		for _, v := range planted {
+			if bytes.Contains(b, []byte(v)) {
+				hits = append(hits, where+": "+v[:min(len(v), 12)])
+			}
+		}
+	}
+	files := 0
+	for _, root := range roots {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !d.Type().IsRegular() {
+				return err
+			}
+			b, rerr := os.ReadFile(path)
+			if rerr != nil {
+				return rerr
+			}
+			files++
+			scan(path, b)
+			if filepath.Base(path) == "release.keystore" {
+				hits = append(hits, path+": a keystore file was left behind")
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, text := range texts {
+		scan(name, []byte(text))
+	}
+	if files < 5 { // a positive control: the walk really read the state, the blobs and the release
+		t.Fatalf("the sink walk read only %d files", files)
+	}
+	return hits
+}
+
+// logLine returns the first line containing want in any file under dir ("" when none).
+func logLine(t *testing.T, dir, want string) string {
+	t.Helper()
+	found := ""
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || found != "" || !d.Type().IsRegular() {
+			return nil
+		}
+		b, _ := os.ReadFile(path)
+		if i := bytes.Index(b, []byte(want)); i >= 0 {
+			j := bytes.IndexByte(b[i:], '\n')
+			if j < 0 {
+				j = len(b) - i
+			}
+			found = string(b[i : i+j])
+		}
+		return nil
+	})
+	return found
+}
+
+// cliVerify runs the shipped binary's `artifacts verify` on the exported release: it returns 0.
+func (p *rig) cliVerify(dir string, info signing.KeyInfo) {
+	t := p.t
+	bin := filepath.Join(t.TempDir(), "nself-ci")
+	build := exec.Command("go", "build", "-mod=vendor", "-o", bin, "../../../cmd")
+	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	keys := filepath.Join(t.TempDir(), "ci-release.keys")
+	if err := os.WriteFile(keys, []byte(info.TrustLine()+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, "artifacts", "verify", dir, "--keys", keys, "--repo", p.repo, "--json")
+	cmd.Dir = p.repo
+	cmd.Env = append(os.Environ(), "NSELF_V15=1", "NSELF_CI_HOME="+t.TempDir(), "NSELF_CI_REPO="+p.repo)
+	out, err := cmd.CombinedOutput()
+	var env struct {
+		Data struct {
+			Verified bool `json:"verified"`
+		} `json:"data"`
+	}
+	if jerr := json.Unmarshal(out, &env); err != nil || jerr != nil || !env.Data.Verified {
+		t.Fatalf("artifacts verify: %v (%v)\n%s", err, jerr, out)
+	}
+}
+
+// planted lists the fake rig's planted values and the keystore forms.
+func (p *rig) planted() []string {
+	return []string{plantedPwOne, plantedAlias, plantedPwTwo, plantedKSMark, base64.StdEncoding.EncodeToString(p.keystore), string(p.keystore)}
 }

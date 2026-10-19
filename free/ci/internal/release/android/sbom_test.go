@@ -97,7 +97,7 @@ func TestSBOMStepWritesDocumentsForEveryAPK(t *testing.T) {
 		}
 		return fs
 	}}
-	if err := step.Run(context.Background(), Job("mobile", nil, 0), ws); err != nil {
+	if err := step.Run(context.Background(), Job("mobile", nil, 0, nil), ws); err != nil {
 		t.Fatal(err)
 	}
 	if len(fs.scans) != 2 {
@@ -116,7 +116,7 @@ func TestSBOMStepWritesDocumentsForEveryAPK(t *testing.T) {
 
 func TestSBOMStepFailures(t *testing.T) {
 	home := t.TempDir()
-	job := Job(".", nil, 0)
+	job := Job(".", nil, 0, nil)
 	step := SBOMStep{Home: home, Pin: testPin(), NewRunner: func(string) sbom.Runner { return &fakeSyft{t: t} }}
 	if err := step.Run(context.Background(), job, workspace(t, ".")); err == nil {
 		t.Error("no APK directory was accepted")
@@ -135,7 +135,7 @@ func TestSBOMStepFailures(t *testing.T) {
 }
 
 func TestApplies(t *testing.T) {
-	rel, test := Job(".", nil, 0), Job(".", nil, 0)
+	rel, test := Job(".", nil, 0, nil), Job(".", nil, 0, nil)
 	test.Kind = "test"
 	if !Applies(JobName, rel) || Applies("other", rel) || Applies(JobName, test) {
 		t.Fatal("Applies is wrong")

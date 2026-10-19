@@ -58,9 +58,29 @@ printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | { base64 -d 2>/dev/
 test -s ` + KeystorePath + `
 ./gradlew assembleRelease`
 
+// PassthroughEnv are the toolchain locations a job needs and the executor's
+// environment allowlist drops: they are copied into the job's declared env when
+// the operator's environment sets them (paths only, never a credential).
+var PassthroughEnv = []string{"ANDROID_HOME", "ANDROID_SDK_ROOT", "JAVA_HOME"}
+
+// EnvFrom returns the PassthroughEnv entries get reports as set.
+func EnvFrom(get func(string) string) map[string]string {
+	var env map[string]string
+	for _, name := range PassthroughEnv {
+		if v := get(name); v != "" {
+			if env == nil {
+				env = map[string]string{}
+			}
+			env[name] = v
+		}
+	}
+	return env
+}
+
 // Job is the synthesized release job: workdir is the Android project relative
-// to the repository root, deps the project's required jobs.
-func Job(workdir string, deps []string, timeout time.Duration) model.Job {
+// to the repository root, deps the project's required jobs, env the toolchain
+// locations (EnvFrom).
+func Job(workdir string, deps []string, timeout time.Duration, env map[string]string) model.Job {
 	required, idempotent := true, false
 	secs := int(timeout / time.Second)
 	if secs < 1 {
@@ -71,6 +91,7 @@ func Job(workdir string, deps []string, timeout time.Duration) model.Job {
 		Run:        []string{"sh", "-c", script},
 		Workdir:    workdir,
 		Deps:       append([]string(nil), deps...),
+		Env:        env,
 		Required:   &required,
 		Idempotent: &idempotent,
 		Timeout:    strconv.Itoa(secs) + "s",

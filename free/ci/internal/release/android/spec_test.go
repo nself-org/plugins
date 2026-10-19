@@ -11,7 +11,7 @@ import (
 )
 
 func TestJobShape(t *testing.T) {
-	j := Job("app-dir", []string{"b", "a"}, 90*time.Second)
+	j := Job("app-dir", []string{"b", "a"}, 90*time.Second, nil)
 	if j.Kind != "release" || j.Isolation != "process" || j.Workdir != "app-dir" || j.Timeout != "90s" || *j.Required != true || *j.Idempotent != false {
 		t.Fatalf("job %+v", j)
 	}
@@ -27,7 +27,7 @@ func TestJobShape(t *testing.T) {
 	if j.Run[0] != "sh" || j.Run[1] != "-c" || len(j.Env) != 0 {
 		t.Fatalf("run %v env %v", j.Run, j.Env)
 	}
-	if got := Job(".", nil, 0).Timeout; got != "1s" {
+	if got := Job(".", nil, 0, nil).Timeout; got != "1s" {
 		t.Fatalf("a zero timeout became %q", got)
 	}
 }
@@ -81,5 +81,19 @@ func TestScriptDecodesAndRemovesKeystore(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "seen.bin")); err == nil {
 		t.Fatal("gradle ran without a keystore")
+	}
+}
+
+func TestEnvFromPassesOnlyToolchainPaths(t *testing.T) {
+	set := map[string]string{"ANDROID_HOME": "/sdk", "JAVA_HOME": "/jdk", "ANDROID_KEYSTORE_PASSWORD": "must-not-pass", "PATH": "/bin"}
+	env := EnvFrom(func(k string) string { return set[k] })
+	if len(env) != 2 || env["ANDROID_HOME"] != "/sdk" || env["JAVA_HOME"] != "/jdk" {
+		t.Fatalf("env %v", env)
+	}
+	if EnvFrom(func(string) string { return "" }) != nil {
+		t.Fatal("an empty environment produced an env map")
+	}
+	if j := Job(".", nil, time.Minute, env); j.Env["JAVA_HOME"] != "/jdk" {
+		t.Fatalf("job env %v", j.Env)
 	}
 }

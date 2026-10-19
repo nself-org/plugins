@@ -34,6 +34,8 @@ type Input struct {
 	Timeout time.Duration
 	// Required are the names of the project's required jobs (its default plan).
 	Required []string
+	// Env is the toolchain locations the synthesized job declares (EnvFrom).
+	Env map[string]string
 }
 
 // Lane is the resolved pipeline.
@@ -63,7 +65,7 @@ func Resolve(in Input) (Lane, error) {
 		return Lane{}, fmt.Errorf("%w: pipeline %q exists but the config has no %q job", ErrConflict, PipelineName, JobName)
 	}
 	deps := uniqueSorted(in.Required)
-	cfg.Jobs[JobName] = Job(in.Workdir, deps, in.Timeout)
+	cfg.Jobs[JobName] = Job(in.Workdir, deps, in.Timeout, in.Env)
 	cfg.Pipelines[PipelineName] = model.PipelineDef{Triggers: []model.Trigger{"local"}, Jobs: append(append([]string(nil), deps...), JobName)}
 	return Lane{Config: cfg, Pipeline: PipelineName, Synthesized: true}, nil
 }

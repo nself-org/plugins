@@ -50,6 +50,8 @@ const requiredUnit = "version: 1\njobs:\n  unit:\n    kind: test\n    run: [sh, 
 // android-release is the required jobs plus a release job named android.
 func TestBuildV15Synthesized(t *testing.T) {
 	repo := androidRepo(t, requiredUnit)
+	t.Setenv("ANDROID_HOME", "/opt/sdk-fixture")
+	t.Setenv("JAVA_HOME", "")
 	lane, err := planBuildLane(context.Background(), repo, "android", 15*time.Minute)
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +67,7 @@ func TestBuildV15Synthesized(t *testing.T) {
 		}
 		jb := j.Job
 		if jb.Kind != "release" || jb.Workdir != "android" || jb.Isolation != "process" || jb.Timeout != "900s" || strings.Join(jb.Deps, ",") != "unit" ||
-			strings.Join(jb.Secrets, ",") != strings.Join(android.SecretRefs, ",") || *jb.Idempotent {
+			strings.Join(jb.Secrets, ",") != strings.Join(android.SecretRefs, ",") || *jb.Idempotent || len(jb.Env) != 1 || jb.Env["ANDROID_HOME"] != "/opt/sdk-fixture" {
 			t.Fatalf("android job %+v", jb)
 		}
 		if len(jb.Artifacts) != 2 || jb.Artifacts[0].Path != android.APKGlob || jb.Artifacts[0].Kind != "package" {
