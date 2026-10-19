@@ -67,6 +67,7 @@ func TestSelectorCases(t *testing.T) {
 		{"no base", func(in *plan.SelectionInput) { in.BaseKnown = false }, []string{"leaf/leaf.go"}, "full", "selection.no_base", all},
 		{"default branch", func(in *plan.SelectionInput) { in.DefaultBranch = true }, []string{"leaf/leaf.go"}, "full", "selection.full_required", all},
 		{"release", func(in *plan.SelectionInput) { in.Release = true }, []string{"leaf/leaf.go"}, "full", "selection.full_required", all},
+		{"release pipeline", func(in *plan.SelectionInput) { in.ReleasePipeline = true }, []string{"leaf/leaf.go"}, "full", "selection.full_required", all},
 		{"uncertain fact elsewhere", func(in *plan.SelectionInput) {
 			in.Facts = append(in.Facts, detect.Fact{Kind: "manifest", Name: "unknown", Path: "x", Confidence: detect.Unknown})
 		}, []string{"leaf/leaf.go"}, "full", "selection.full_required", all},
