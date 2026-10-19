@@ -11,6 +11,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/release/job"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 const (
@@ -73,7 +74,11 @@ func seed(t *testing.T, kind, state string) (*store.Store, *auditLog) {
 	for _, to := range path {
 		_, epoch, err := st.AttemptStateEpoch(ctx, attempt)
 		must(err)
-		must(st.Transition(ctx, attempt, from, to, store.TransitionDetail{Epoch: epoch, FailureClass: "lost", Operator: false}))
+		if to == "leased" { // an attempt is leased only by admission (D-1047)
+			must(storetest.Admit(ctx, st, attempt))
+		} else {
+			must(st.Transition(ctx, attempt, from, to, store.TransitionDetail{Epoch: epoch, FailureClass: "lost", Operator: false}))
+		}
 		from = to
 	}
 	log := &auditLog{}

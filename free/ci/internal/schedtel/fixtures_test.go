@@ -14,6 +14,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 // env is one test store whose clock the test moves.
@@ -70,7 +71,11 @@ func (e *env) finish(id string, to model.JobState) {
 		steps = []model.JobState{"leased", "running"}
 	}
 	for epoch, next := range append(steps, to) { // every transition bumps the attempt epoch
-		if err := e.st.Transition(ctx, id, from, next, store.TransitionDetail{Epoch: int64(epoch)}); err != nil {
+		if next == "leased" { // an attempt is leased only by admission (D-1047)
+			if err := storetest.Admit(ctx, e.st, id); err != nil {
+				e.t.Fatal(err)
+			}
+		} else if err := e.st.Transition(ctx, id, from, next, store.TransitionDetail{Epoch: int64(epoch)}); err != nil {
 			e.t.Fatal(err)
 		}
 		from = next
