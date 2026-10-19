@@ -165,3 +165,39 @@ func TestRemoveInFansOutAndRemovesEverything(t *testing.T) {
 		t.Fatalf("subtrees were removed one at a time (peak %d)", peak)
 	}
 }
+
+// The store verifies a blob while Unpack reads it, so a blob whose bytes changed
+// but still parses as a tar is refused at the end of the stream and nothing it
+// held is left in the job's cache directories.
+func TestRestoreRefusesABlobWhoseBytesChangedAndLeavesNothing(t *testing.T) {
+	e := newEnv(t)
+	saved(t, e, "t1", ownerFacts).Cleanup()
+	var flipped int
+	_ = filepath.WalkDir(filepath.Join(e.home, "blobs"), func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, _ := os.ReadFile(p)
+		if i := bytes.Index(b, []byte("compiled")); i >= 0 { // a file body inside a tar: the archive still parses
+			b[i] = 'X'
+			if err := os.WriteFile(p, b, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			flipped++
+		}
+		return nil
+	})
+	if flipped != 1 {
+		t.Fatalf("flipped %d blobs, want 1", flipped)
+	}
+	e.running("t2", ownerFacts)
+	s := e.begin(e.input("t2", ownerFacts))
+	if got := strings.Join(resultsOf(e.uses("t2")), ","); got != "go:refused,go:miss" {
+		t.Fatalf("restore of a changed blob: %v", got)
+	}
+	for _, d := range []string{"build", "mod"} {
+		if ents, _ := os.ReadDir(s.dir(d)); len(ents) != 0 {
+			t.Fatalf("%s holds %d entries after a refused restore", d, len(ents))
+		}
+	}
+}

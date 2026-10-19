@@ -188,3 +188,34 @@ func TestCasReportsACorruptBlobAsE710(t *testing.T) {
 		t.Fatalf("want E710 digest_mismatch, got %v", err)
 	}
 }
+
+// LookupForRestore leaves the digest to the read that follows (D-1008): a blob of
+// the right size with other bytes is still served here, while a missing or
+// truncated one is dropped like Lookup drops it.
+func TestLookupForRestoreChecksExistenceAndSizeOnly(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	same := e.save("r1", trusted, "same", "0123456789")
+	gone := e.save("r2", trusted, "gone", "abcdefghij")
+	short := e.save("r3", trusted, "short", "klmnopqrst")
+	if err := os.WriteFile(e.blobPath(same, 0), []byte("9876543210"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(e.blobPath(gone, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(e.blobPath(short, 0), 3); err != nil {
+		t.Fatal(err)
+	}
+	ns := e.ns(trusted)
+	if _, ok, err := e.es.LookupForRestore(e.ctx, ns, same.Key, authz.ModeRWOwn); !ok || err != nil {
+		t.Fatalf("same-size blob: ok=%v err=%v", ok, err)
+	}
+	for name, m := range map[string]entries.Manifest{"missing": gone, "truncated": short} {
+		if _, ok, err := e.es.LookupForRestore(e.ctx, ns, m.Key, authz.ModeRWOwn); ok || err != nil {
+			t.Fatalf("%s: ok=%v err=%v", name, ok, err)
+		}
+	}
+	if e.count() != 1 {
+		t.Fatalf("%d entries left, want the same-size one", e.count())
+	}
+}
