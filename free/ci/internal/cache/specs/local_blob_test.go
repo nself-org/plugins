@@ -32,7 +32,7 @@ func TestLocalBlobIsAPlainTarAndRestores(t *testing.T) {
 	}
 	defer func() { _ = base.Close() }()
 	realm := cas.CacheRealm("ns")
-	digest, _, _, err := e.eng.putDir(e.ctx, base, realm, "d", 1<<20)
+	digest, _, _, err := e.eng.putDir(e.ctx, base, realm, "d", 1<<20, false)
 	if err != nil {
 		t.Fatal(err)
 	}
