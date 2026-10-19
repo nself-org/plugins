@@ -215,6 +215,9 @@ func (c *Coordinator) Run(ctx context.Context) error {
 	stops, err := c.startListeners(ctx)
 	if err != nil {
 		_ = srv.Close()
+		if ctx.Err() != nil { // shutdown began while the listeners were starting: a clean stop, not a failure
+			return nil
+		}
 		return err
 	}
 	var wg sync.WaitGroup
