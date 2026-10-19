@@ -187,7 +187,7 @@ func Join(ctx context.Context, o JoinOptions) (JoinResult, error) {
 	if err != nil {
 		return JoinResult{}, err
 	}
-	fmt.Fprintf(o.Out, "CSR key fingerprint: %s\nnode key id:         %s\nThe admin compares the CSR key fingerprint before approving.\n", csrFP, o.NodeKeyID)
+	fmt.Fprintf(o.Out, "CSR key fingerprint: %s\nnode key id:         %s\nnode key sha256:     %s\nThe admin compares the CSR key fingerprint before approving; `nodes rotate --node-key --key-id` takes the sha256.\n", csrFP, o.NodeKeyID, pki.NodeKeyDigest(o.NodeKey))
 	code, err := o.Code()
 	if err != nil {
 		return JoinResult{}, err

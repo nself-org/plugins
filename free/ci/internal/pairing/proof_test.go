@@ -223,7 +223,7 @@ func enrollPendingPinSurvivesDenial(t *testing.T) {
 		t.Fatal(err)
 	}
 	next := newNodeMat(t)
-	if err := r.ca.RotateNodeKey(context.Background(), "cli:test", "n1", pki.NodeKeyID(next.pub)); err != nil {
+	if err := r.ca.RotateNodeKey(context.Background(), "cli:test", "n1", pki.NodeKeyDigest(next.pub)); err != nil {
 		t.Fatal(err)
 	}
 	pin := func() string { _, pub, _, _ := r.st.PKINodeKeyGet(context.Background(), "n1"); return pub }

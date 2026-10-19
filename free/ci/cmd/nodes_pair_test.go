@@ -602,7 +602,7 @@ func TestNodesRotateCertForAPullNodeWithoutSSHDestination(t *testing.T) {
 func TestNodesRotateNodeKeyForAPullNodeWithoutSSHDestination(t *testing.T) {
 	r := newPullRig(t)
 	next := ed25519Pub(t)
-	id := pki.NodeKeyID(next)
+	id := pki.NodeKeyDigest(next)
 	if code := r.lifecycle("rotate", r.nodeID, "--node-key"); code == 0 || r.audit("pki.node_key.rotate") != 0 {
 		t.Fatalf("--node-key without --key-id: exit %d, audit %d", code, r.audit("pki.node_key.rotate"))
 	}

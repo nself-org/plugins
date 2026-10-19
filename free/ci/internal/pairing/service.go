@@ -56,7 +56,10 @@ type Service struct {
 	approvers map[string]Approver
 	redeemed  map[string]bool
 	inflight  int
-	wake      chan struct{}
+	// proofFails counts node_key_proof failures since the last audit row written at proofLast.
+	proofFails int
+	proofLast  time.Time
+	wake       chan struct{}
 }
 
 // New returns a Service.

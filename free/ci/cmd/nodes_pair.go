@@ -70,7 +70,7 @@ func init() {
 	lifecycle.RegisterFlags("rotate", func(fs *flag.FlagSet) {
 		fs.BoolFunc("cert", "rotate the node's certificates: revoke them so the node must pair again", func(string) error { return fs.Set("mode", rotateCert) })
 		fs.BoolFunc("node-key", "rotate the pinned node signing key (needs --key-id)", func(string) error { return fs.Set("mode", rotateNodeKey) })
-		fs.String("key-id", "", "node-key id the node printed when it generated its new key (with --node-key)")
+		fs.String("key-id", "", "node key sha256 (64 hex) the node printed when it generated its new key (with --node-key)")
 	})
 }
 

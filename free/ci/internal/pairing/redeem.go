@@ -60,6 +60,7 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 	}
 	keyID := pki.NodeKeyID(req.NodeKey)
 	if !ed25519.Verify(req.NodeKey, enroll.Transcript(s.cfg.CoordinatorID, s.cfg.CA.RootFingerprint(), name, req.ClientTime, csrFP, keyID), req.NodeKeySig) {
+		s.proofFailed(ctx, name, src, now)
 		return enroll.Response{}, &pki.Error{Reason: pki.ReasonNodeKeyProof, Msg: "the request is not signed by the node key it names"}
 	}
 	hash := HashCode(req.Code)
@@ -125,6 +126,27 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 	s.mu.Unlock()
 	s.signal()
 	return enroll.Response{NodeID: name, Cert: issued.CertDER, Chain: issued.Chain, Root: issued.RootDER, AgentURL: s.cfg.AgentURL, NotAfter: issued.NotAfter.Unix(), ServerTime: s.cfg.CA.Now().Unix()}, nil
+}
+
+// ProofAuditEvery bounds the pairing.proof_failed audit rows: a flood of bad proofs writes one row per
+// interval carrying the count since the last row.
+const ProofAuditEvery = time.Minute
+
+// proofFailed records a request that failed node_key_proof. It returns before the code is claimed, so
+// nothing else sees it. Unauthenticated callers can send these at will, so the audit row (and the alert)
+// is rate limited; the count in the row keeps the volume visible.
+func (s *Service) proofFailed(ctx context.Context, name, src string, now time.Time) {
+	s.mu.Lock()
+	s.proofFails++
+	if !s.proofLast.IsZero() && now.Sub(s.proofLast) < ProofAuditEvery {
+		s.mu.Unlock()
+		return
+	}
+	n := s.proofFails
+	s.proofFails, s.proofLast = 0, now
+	s.mu.Unlock()
+	_ = s.audit(ctx, "pairing.proof_failed", name, fmt.Sprintf("count=%d src=%s", n, cut(src, 64)))
+	s.alert(Alert{Kind: "pairing.proof_failed", NodeID: name})
 }
 
 func cut(s string, n int) string {

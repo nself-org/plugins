@@ -241,3 +241,15 @@ func TestEnrollListenCloseIsIdempotent(t *testing.T) {
 		t.Fatal("a bad address was accepted")
 	}
 }
+
+// D-1258: a TLS listener with no idle limit keeps a silent keep-alive connection open for ever.
+func TestEnrollListenerBoundsHeaderReadAndIdle(t *testing.T) {
+	srv, err := Listen("127.0.0.1:0", testServerTLS(t), http.NotFoundHandler())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	if srv.http.ReadHeaderTimeout <= 0 || srv.http.IdleTimeout <= 0 {
+		t.Fatalf("ReadHeaderTimeout %v, IdleTimeout %v: both must be set", srv.http.ReadHeaderTimeout, srv.http.IdleTimeout)
+	}
+}

@@ -123,7 +123,7 @@ func TestNoUnsealedPrivateKeyOnDisk(t *testing.T) {
 	if err := r.ca.PinNodeKey(ctx, "n1", pub); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.ca.RotateNodeKey(ctx, "cli:admin", "n1", NodeKeyID(edPub(t))); err != nil {
+	if err := r.ca.RotateNodeKey(ctx, "cli:admin", "n1", NodeKeyDigest(edPub(t))); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.ca.Revoke(ctx, "cli:admin", "n1", "done"); err != nil {

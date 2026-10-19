@@ -175,7 +175,7 @@ func enrollRotationDuringApproval(t *testing.T) {
 	go func() { _, err := r.redeem(off.Code, "node-rot", newNodeMat(t).withNodeKeyOf(m1)); done <- err }()
 	waitEntered(t, ap)
 	other := newNodeMat(t)
-	if err := r.ca.RotateNodeKey(context.Background(), "admin", "node-rot", pki.NodeKeyID(other.pub)); err != nil {
+	if err := r.ca.RotateNodeKey(context.Background(), "admin", "node-rot", pki.NodeKeyDigest(other.pub)); err != nil {
 		t.Fatal(err)
 	}
 	close(ap.release)

@@ -97,13 +97,13 @@ func TestCheckNodeKey(t *testing.T) {
 		if err := r.ca.PinNodeKey(ctx, "n9", pub); err != nil {
 			t.Fatal(err)
 		}
-		if err := r.ca.RotateNodeKey(ctx, "cli:admin", "n9", NodeKeyID(other)); err != nil {
+		if err := r.ca.RotateNodeKey(ctx, "cli:admin", "n9", NodeKeyDigest(other)); err != nil {
 			t.Fatal(err)
 		}
 		// the old key no longer works and a stranger does not either
 		wantReason(t, r.ca.CheckNodeKey(ctx, "n9", pub), ReasonNodeKeyChanged)
 		wantReason(t, r.ca.CheckNodeKey(ctx, "n9", edPub(t)), ReasonNodeKeyChanged)
-		if id, p, _, _ := r.st.PKINodeKeyGet(ctx, "n9"); id != NodeKeyID(other) || p != "" {
+		if id, p, _, _ := r.st.PKINodeKeyGet(ctx, "n9"); id != NodeKeyDigest(other) || p != "" {
 			t.Fatalf("a refused hello changed the pending pin: %q %q", id, p)
 		}
 		// the named key completes the pin
@@ -120,13 +120,13 @@ func TestCheckNodeKey(t *testing.T) {
 	})
 	t.Run("pending pin never matches a key of the wrong length", func(t *testing.T) {
 		short := make(ed25519.PublicKey, 31)
-		if err := r.ca.RotateNodeKey(ctx, "cli:admin", "n10", NodeKeyID(short)); err != nil {
+		if err := r.ca.RotateNodeKey(ctx, "cli:admin", "n10", NodeKeyDigest(short)); err != nil {
 			t.Fatal(err)
 		}
 		wantReason(t, r.ca.CheckNodeKey(ctx, "n10", short), ReasonNodeKeyChanged)
 	})
 	t.Run("pending pin on a node with no earlier pin", func(t *testing.T) {
-		if err := r.ca.RotateNodeKey(ctx, "cli:admin", "n11", NodeKeyID(pub)); err != nil {
+		if err := r.ca.RotateNodeKey(ctx, "cli:admin", "n11", NodeKeyDigest(pub)); err != nil {
 			t.Fatal(err)
 		}
 		if err := r.ca.CheckNodeKey(ctx, "n11", pub); err != nil {
@@ -145,14 +145,14 @@ func TestCheckNodeKey(t *testing.T) {
 func TestRotateNodeKey(t *testing.T) {
 	ctx := context.Background()
 	r := newRig(t)
-	for _, id := range []string{"", "abc", strings.Repeat("a", 15), strings.Repeat("a", 17), strings.Repeat("a", 64),
+	for _, id := range []string{"", "abc", strings.Repeat("a", 15), strings.Repeat("a", 17), strings.Repeat("a", 63), strings.Repeat("a", 65), strings.Repeat("A", 64), NodeKeyID(edPub(t)),
 		"0123456789ABCDEF", "0123456789abcdeF", "gggggggggggggggg", "0123456789abcde ", "0123456789abcdef\n", "\n0123456789abcdef", "0123456789abcdé"} {
 		wantReason(t, r.ca.RotateNodeKey(ctx, "cli:admin", "n1", id), ReasonNodeKeyChanged)
 	}
 	if len(r.audit("pki.node_key.rotate")) != 0 {
 		t.Fatal("a refused rotate was audited")
 	}
-	id := NodeKeyID(edPub(t))
+	id := NodeKeyDigest(edPub(t))
 	if err := r.ca.RotateNodeKey(ctx, "cli:admin", "n1", id); err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestCheckPinnedNodeKeyIsStrict(t *testing.T) {
 		t.Fatal("the pin changed")
 	}
 	// pending pin after rotate: the named key id matches, but the check is read-only and never completes the pin
-	if err = r.ca.RotateNodeKey(ctx, "cli:admin", "n2", NodeKeyID(other)); err != nil {
+	if err = r.ca.RotateNodeKey(ctx, "cli:admin", "n2", NodeKeyDigest(other)); err != nil {
 		t.Fatal(err)
 	}
 	wantReason(t, r.ca.CheckPinnedNodeKey(ctx, "n2", pub), ReasonNodeKeyChanged)
@@ -199,7 +199,7 @@ func TestCheckPinnedNodeKeyIsStrict(t *testing.T) {
 		if err = r.ca.CheckPinnedNodeKey(ctx, "n2", other); err != nil {
 			t.Fatal(err)
 		}
-		if id, p, ok, _ := r.st.PKINodeKeyGet(ctx, "n2"); !ok || id != NodeKeyID(other) || p != "" {
+		if id, p, ok, _ := r.st.PKINodeKeyGet(ctx, "n2"); !ok || id != NodeKeyDigest(other) || p != "" {
 			t.Fatalf("a read-only check completed the pending pin: %q %q", id, p)
 		}
 	}
@@ -208,7 +208,7 @@ func TestCheckPinnedNodeKeyIsStrict(t *testing.T) {
 	}
 	// a pending pin never matches a key of the wrong length, even when the id is the hash of that key
 	short := make(ed25519.PublicKey, 31)
-	if err = r.ca.RotateNodeKey(ctx, "cli:admin", "n3", NodeKeyID(short)); err != nil {
+	if err = r.ca.RotateNodeKey(ctx, "cli:admin", "n3", NodeKeyDigest(short)); err != nil {
 		t.Fatal(err)
 	}
 	wantReason(t, r.ca.CheckPinnedNodeKey(ctx, "n3", short), ReasonNodeKeyChanged)
@@ -216,5 +216,34 @@ func TestCheckPinnedNodeKeyIsStrict(t *testing.T) {
 	_ = r.st.Close()
 	if err = r.ca.CheckPinnedNodeKey(ctx, "n1", pub); err == nil || ReasonOf(err) != "" {
 		t.Fatalf("closed store: %v", err)
+	}
+}
+
+// D-1258: a pending pin binds the full SHA-256 of the key, not the 64-bit id.
+func TestPendingPinBindsTheFullDigest(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	pub := edPub(t)
+	if got := NodeKeyDigest(pub); len(got) != 64 || got[:16] != NodeKeyID(pub) {
+		t.Fatalf("digest %q does not extend id %q", got, NodeKeyID(pub))
+	}
+	// A key whose id matches the pin but whose digest does not is refused (same first 64 bits).
+	forged := NodeKeyID(pub) + strings.Repeat("0", 48)
+	if err := r.ca.RotateNodeKey(ctx, "cli:admin", "n1", forged); err != nil {
+		t.Fatal(err)
+	}
+	wantReason(t, r.ca.CheckNodeKey(ctx, "n1", pub), ReasonNodeKeyChanged)
+	wantReason(t, r.ca.CheckPinnedNodeKey(ctx, "n1", pub), ReasonNodeKeyChanged)
+	if _, p, _, _ := r.st.PKINodeKeyGet(ctx, "n1"); p != "" {
+		t.Fatal("a key matching only the id completed the pin")
+	}
+	// The id alone is no longer accepted as a rotation target.
+	wantReason(t, r.ca.RotateNodeKey(ctx, "cli:admin", "n2", NodeKeyID(pub)), ReasonNodeKeyChanged)
+	// A pending pin written before the digest was required still matches by id.
+	if err := r.st.PKINodeKeyRotate(ctx, "cli:admin", "n3", NodeKeyID(pub)); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ca.CheckPinnedNodeKey(ctx, "n3", pub); err != nil {
+		t.Fatalf("legacy 16-hex pending pin: %v", err)
 	}
 }
