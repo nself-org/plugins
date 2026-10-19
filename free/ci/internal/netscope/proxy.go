@@ -129,6 +129,7 @@ func (p *Proxy) connect(w http.ResponseWriter, r *http.Request) {
 	}
 	up, err := p.Guard.dialPinned(ctx, p.Dialer, addrs, port)
 	if err != nil {
+		p.record(host, port, Verdict{Reason: ReasonDialFailed, Detail: err.Error()})
 		http.Error(w, "upstream unreachable", http.StatusBadGateway)
 		return
 	}
@@ -200,6 +201,7 @@ func (p *Proxy) forward(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := tr.RoundTrip(out)
 	if err != nil {
+		p.record(host, port, Verdict{Reason: ReasonDialFailed, Detail: err.Error()})
 		http.Error(w, "upstream unreachable", http.StatusBadGateway)
 		return
 	}

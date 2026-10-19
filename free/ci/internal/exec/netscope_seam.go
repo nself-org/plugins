@@ -13,6 +13,7 @@ package exec
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/netip"
 	"os"
@@ -121,16 +122,40 @@ func RuntimeNetworkCreate(ctx context.Context, binary, attempt, coordinator stri
 	if out, err := runNet(ctx, binary, nil, args...); err != nil {
 		return netip.Prefix{}, netFailed("network create", out, err)
 	}
-	out, err := runNet(ctx, binary, nil, "network", "inspect", "--format", "{{range .IPAM.Config}}{{.Subnet}} {{end}}", name)
+	// docker lists IPAM.Config[].Subnet, podman Subnets[].subnet: read the JSON both print, whatever the layout
+	out, err := runNet(ctx, binary, nil, "network", "inspect", name)
 	if err != nil {
 		return netip.Prefix{}, netFailed("network inspect", out, err)
 	}
-	for _, f := range strings.Fields(string(out)) {
-		if p, err := netip.ParsePrefix(f); err == nil && p.Addr().Is4() {
-			return p, nil
+	var doc any
+	if json.Unmarshal(out, &doc) == nil {
+		for _, f := range subnetsIn(doc) {
+			if p, err := netip.ParsePrefix(f); err == nil && p.Addr().Is4() {
+				return p, nil
+			}
 		}
 	}
 	return netip.Prefix{}, coded("E613", "the job network has no IPv4 subnet")
+}
+
+// subnetsIn collects the string values of every "Subnet"/"subnet" key in a decoded inspect document.
+func subnetsIn(v any) []string {
+	var out []string
+	switch x := v.(type) {
+	case []any:
+		for _, e := range x {
+			out = append(out, subnetsIn(e)...)
+		}
+	case map[string]any:
+		for k, e := range x {
+			if str, ok := e.(string); ok && strings.EqualFold(k, "subnet") {
+				out = append(out, str)
+				continue
+			}
+			out = append(out, subnetsIn(e)...)
+		}
+	}
+	return out
 }
 
 // RuntimeSidecarStart creates the proxy sidecar on the runtime's normal bridge, joins it to the job network

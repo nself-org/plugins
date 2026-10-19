@@ -4,6 +4,7 @@ package exec
 
 import (
 	"context"
+	"encoding/json"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -25,7 +26,7 @@ case "$*" in
   *"--env-file /dev/stdin"*) cat > ` + in + ` ;;
 esac
 case "$1 $2" in
-  "network inspect") echo "172.30.0.0/24 " ;;
+  "network inspect") echo '[{"Name":"n","IPAM":{"Config":[{"Subnet":"172.30.0.0/24"}]}}]' ;;
 esac
 case "$1" in
   inspect)
@@ -166,6 +167,21 @@ func TestNetProbeRunIsOnTheJobNetworkWithoutDNSOrCapabilities(t *testing.T) {
 	for _, want := range []string{"run --rm", "--network nself-ci-a1-net", "--dns 127.0.0.1", "--cap-drop ALL", "--read-only", "netproxy --probe 198.41.0.4:4000 [2a00::1]:80"} {
 		if !strings.Contains(run, want) {
 			t.Errorf("probe run lacks %q: %s", want, run)
+		}
+	}
+}
+
+func TestSubnetsInReadsDockerAndPodmanLayouts(t *testing.T) {
+	for name, doc := range map[string]string{
+		"docker": `[{"IPAM":{"Config":[{"Subnet":"172.30.0.0/24","Gateway":"172.30.0.1"}]}}]`,
+		"podman": `[{"name":"n","subnets":[{"subnet":"10.89.1.0/24","gateway":"10.89.1.1"}]}]`,
+	} {
+		var v any
+		if err := json.Unmarshal([]byte(doc), &v); err != nil {
+			t.Fatal(err)
+		}
+		if got := subnetsIn(v); len(got) != 1 || !strings.Contains(got[0], "/24") {
+			t.Errorf("%s: %v", name, got)
 		}
 	}
 }

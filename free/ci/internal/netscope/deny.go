@@ -28,6 +28,8 @@ const (
 	ReasonInvalid    Reason = "invalid_address"
 	ReasonNotAllowed Reason = "host_not_allowed"
 	ReasonResolve    Reason = "resolve_failed"
+	// ReasonDialFailed is an allowed destination the sidecar could not reach (an audit trail for diagnosis).
+	ReasonDialFailed Reason = "dial_failed"
 	// ReasonEventsDropped marks the last event of a sidecar that hit its event cap.
 	ReasonEventsDropped Reason = "events_dropped"
 )

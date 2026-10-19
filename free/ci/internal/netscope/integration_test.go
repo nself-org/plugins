@@ -255,6 +255,7 @@ if nslookup example.com >/dev/null 2>&1; then echo DNS-RESOLVED; else echo DNS-F
 	if strings.Contains(out, "REACHED:") || accepted() != 0 {
 		t.Errorf("a direct connection got through (host fixture accepted %d):\n%s", accepted(), out)
 	}
+	t.Logf("events: %+v", r.events.dump())
 	// each denial is one structured event, and the resources are gone
 	for _, host := range []string{"10.0.0.1.nip.io", "example.org", lan, "169.254.169.254", "fd00::1"} {
 		if n := r.events.count(host); n != 1 {
@@ -293,6 +294,7 @@ direct 1.1.1.1 443
 	if line := lineWith(out, "ANYHOST:"); strings.Contains(line, "403") {
 		t.Errorf("a public host was refused under internet: %q", line)
 	}
+	t.Logf("events: %+v", r.events.dump())
 	for _, host := range []string{exclusion, "prod.example.org", lan, "::ffff:10.0.0.1", "64:ff9b::a00:1", "2002:a00:1::1", "10.0.0.1"} {
 		if n := r.events.count(host); n != 1 {
 			t.Errorf("%d denial events for %s, want 1: %+v", n, host, r.events.dump())
@@ -378,5 +380,41 @@ func assertNoLeftovers(t *testing.T, id string) {
 		if err != nil || len(list) != 0 {
 			t.Errorf("leftover %s for %s: %v %v", kind, id, list, err)
 		}
+	}
+}
+
+// TestIntegrationDiagDualHomedRoutes records, for the evidence log, how the runtime routes a container that
+// is on both the normal bridge and an internal network without a host address (the sidecar's situation).
+func TestIntegrationDiagDualHomedRoutes(t *testing.T) {
+	requireRuntime(t, "docker")
+	sh := func(args ...string) string {
+		out, err := osexec.Command("docker", args...).CombinedOutput()
+		if err != nil {
+			return "ERR " + err.Error() + "\n" + string(out)
+		}
+		return string(out)
+	}
+	image := os.Getenv("TRUST04_TEST_IMAGE")
+	if image == "" {
+		image = "alpine:3.19"
+	}
+	t.Logf("docker version: %s", strings.TrimSpace(sh("version", "--format", "{{.Server.Version}} api={{.Server.APIVersion}}")))
+	for _, order := range []string{"bridge-first", "internal-first"} {
+		net, ctr := "t08-diag-"+order, "t08-diag-sc-"+order
+		_ = sh("rm", "-f", ctr)
+		_ = sh("network", "rm", net)
+		sh("network", "create", "--driver", "bridge", "--internal", "--ipv6=false", "--opt", "com.docker.network.bridge.inhibit_ipv4=true", net)
+		first, second := "bridge", net
+		if order == "internal-first" {
+			first, second = net, "bridge"
+		}
+		t.Logf("%s create: %s", order, strings.TrimSpace(sh("create", "--name", ctr, "--network", first, image, "sleep", "120")))
+		t.Logf("%s connect: %s", order, strings.TrimSpace(sh("network", "connect", second, ctr)))
+		t.Logf("%s start: %s", order, strings.TrimSpace(sh("start", ctr)))
+		for _, cmd := range []string{"ip route", "ip addr", "cat /etc/resolv.conf", "nslookup example.com 2>&1 | head -6", "wget -T4 -qO- http://example.com 2>&1 | head -c 60; echo rc=$?", "nc -w 3 1.1.1.1 443 </dev/null; echo nc-rc=$?"} {
+			t.Logf("%s $ %s\n%s", order, cmd, sh("exec", ctr, "sh", "-c", cmd))
+		}
+		_ = sh("rm", "-f", ctr)
+		_ = sh("network", "rm", net)
 	}
 }

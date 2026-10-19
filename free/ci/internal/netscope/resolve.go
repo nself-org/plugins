@@ -59,7 +59,11 @@ func (g Guard) Pin(ctx context.Context, host string) ([]netip.Addr, Verdict) {
 	}
 	addrs, err := g.Resolver.LookupNetIP(ctx, "ip", h)
 	if err != nil || len(addrs) == 0 {
-		return nil, Verdict{Reason: ReasonResolve, Detail: h}
+		detail := h
+		if err != nil {
+			detail += ": " + err.Error()
+		}
+		return nil, Verdict{Reason: ReasonResolve, Detail: detail}
 	}
 	pinned := make([]netip.Addr, 0, len(addrs))
 	for _, a := range addrs {
