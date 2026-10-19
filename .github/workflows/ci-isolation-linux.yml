@@ -38,8 +38,46 @@ env:
   TRUST04_TEST_IMAGE: 'alpine:3.19'
 
 jobs:
+  # The job tests the isolation, hygiene and local-provider packages. A pull request that changes nothing those
+  # packages are built from (go list -deps, so it follows new imports) starts no runner. Dispatch always runs it, and so
+  # does any checkout that has the isolation drill or the security suite: those build or run the whole binary.
+  scope:
+    name: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      run: ${{ steps.scope.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+          cache-dependency-path: free/ci/go.sum
+
+      - name: Scope
+        id: scope
+        env:
+          SCOPE_LIST_OUT: ${{ runner.temp }}/changed.txt
+        run: |
+          set -euo pipefail
+          bash .github/scripts/changed-scope.sh --global '^\.github/workflows/ci-isolation-linux\.yml$'
+          all=$(sed -n 's/^all=//p' "$GITHUB_OUTPUT" | tail -1)
+          run=true
+          if [ "$all" != true ] && [ ! -d free/ci/test ] && [ ! -e scripts/drill/isolation-levels/run ] && [ ! -e free/ci/scripts/drill/isolation-levels/run ]; then
+            run=$(CLOSURE_EXTRA="scripts/drill/isolation-levels free/ci/scripts/drill/isolation-levels free/ci/internal/invariants" \
+              bash .github/scripts/go-closure-changed.sh free/ci "$SCOPE_LIST_OUT" \
+              ./internal/isolation/... ./internal/netscope/... ./internal/hygiene/... ./internal/providers/ephemeral/local/...)
+          fi
+          echo "run=$run"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
   linux:
     name: isolation (ubuntu)
+    needs: scope
+    if: needs.scope.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:

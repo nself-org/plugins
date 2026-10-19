@@ -31,13 +31,35 @@ jobs:
     # assets (docker-compose.plugin.yml, hasura/, nginx/), so it gets both
     # kinds of coverage. Do not "fix" this loop by excluding monitoring.
     steps:
+      # The check name above is REQUIRED on main, so this job reports on every pull request and never
+      # leaves it pending. It narrows the work, not the report: a pull request builds only the plugins it
+      # touched (each plugin module is self-contained, replace targets live inside its own directory);
+      # push, dispatch and a change to this gate build all of them. See .github/wiki/CI-Scope.md.
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 2
+      - name: Scope (which plugins this run covers)
+        id: scope
+        run: bash .github/scripts/changed-scope.sh --global '^\.github/workflows/build-test\.yml$'
       - uses: actions/setup-go@v7
+        if: steps.scope.outputs.all == 'true' || steps.scope.outputs.plugin_count != '0'
         with:
           go-version: '1.26.4'
       - name: Build, vet, and test every Go plugin
+        env:
+          SCOPE_ALL: ${{ steps.scope.outputs.all }}
+          SCOPE_PLUGINS: ${{ steps.scope.outputs.plugins }}
         run: |
           failed=0
+          roots=free
+          if [ "$SCOPE_ALL" != "true" ]; then
+            if [ -z "$SCOPE_PLUGINS" ]; then
+              echo "No plugin changed in this pull request: nothing to build (the full run happens on push to main)."
+              exit 0
+            fi
+            roots=$(echo "$SCOPE_PLUGINS" | tr ',' '\n' | sed 's#^#free/#' | tr '\n' ' ')
+            echo "Pull request scope: $roots"
+          fi
           while IFS= read -r gomod; do
             d="$(dirname "$gomod")"
             if [ -f "$d/go.mod" ]; then
@@ -49,5 +71,5 @@ jobs:
               # is a directory"). CI only needs to know it compiles.
               ( cd "$d" && go build -o /dev/null ./... && go vet ./... && go test ./... ) || { echo "FAIL: $d"; failed=1; }
             fi
-          done < <(find free -name go.mod -not -path '*/vendor/*' -not -path '*/testdata/*' | sort)
+          done < <(find $roots -name go.mod -not -path '*/vendor/*' -not -path '*/testdata/*' | sort)
           exit $failed

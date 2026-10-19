@@ -8,8 +8,14 @@ name: nself-ci
 # validate.yml/build-test.yml/gitleaks.yml here — it does not replace them).
 
 on:
+  # Advisory gate: it needs a runner for minutes, so a pull request that only edits docs skips it.
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/wiki/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'LICENSE'
   push:
     branches: [main]
   workflow_dispatch:

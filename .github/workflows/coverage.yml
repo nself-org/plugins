@@ -11,14 +11,14 @@ on:
       - '.github/wiki/**'
       - '.github/ISSUE_TEMPLATE/**'
       - 'LICENSE'
+  # Go coverage can only move when a plugin's files change, so a pull request outside free/ skips it.
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - '.github/wiki/**'
-      - '.github/ISSUE_TEMPLATE/**'
-      - 'LICENSE'
-
+    paths:
+      - 'free/**'
+      - '.github/workflows/coverage.yml'
+      - '.github/scripts/changed-scope.sh'
+  workflow_dispatch:
 env:
   # Initial floor calibrated to current ecosystem coverage (S88b.T05 — introduced 2026-04-21).
   # Ratchet up as tests are added; never lower. Security-critical functions still
@@ -36,18 +36,36 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 2
+
+      # A pull request measures the plugins it touched; push to main, dispatch and a change to this gate
+      # measure all of them, and the aggregate floor is judged on that full run (the floor is 0 today).
+      - name: Scope (which plugins this run covers)
+        id: scope
+        run: bash .github/scripts/changed-scope.sh --global '^\.github/workflows/coverage\.yml$' --flag webhooks='^free/webhooks/'
 
       - uses: actions/setup-go@v7
+        if: steps.scope.outputs.all == 'true' || steps.scope.outputs.plugin_count != '0'
         with:
           go-version: '1.26.4'
 
       - name: Run coverage for each Go plugin
+        env:
+          SCOPE_ALL: ${{ steps.scope.outputs.all }}
+          SCOPE_PLUGINS: ${{ steps.scope.outputs.plugins }}
         run: |
           total_stmts=0
           covered_stmts=0
           failed=0
 
-          for d in free/*/; do
+          dirs=$(ls -d free/*/)
+          if [ "$SCOPE_ALL" != "true" ]; then
+            dirs=$(echo "$SCOPE_PLUGINS" | tr ',' '\n' | sed 's#^\(.*\)$#free/\1/#')
+            echo "Pull request scope: ${dirs:-no plugin}"
+          fi
+
+          for d in $dirs; do
             if [ ! -f "$d/go.mod" ]; then
               continue
             fi
@@ -86,6 +104,7 @@ jobs:
           [ "$failed" -eq 0 ] || exit 1
 
       - name: Enforce SSRF guard coverage (webhooks plugin ValidateWebhookURL)
+        if: steps.scope.outputs.webhooks == 'true'
         run: |
           webhooks_dir="free/webhooks"
           if [ ! -f "${webhooks_dir}/go.mod" ]; then
