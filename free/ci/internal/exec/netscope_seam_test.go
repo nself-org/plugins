@@ -13,9 +13,9 @@ import (
 
 const testSidecarImage = "gcr.io/distroless/static@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3"
 
-// fakeDocker puts a `docker` script first on PATH. It appends each call's argv (one line) to calls, copies
+// fakeNetDocker puts a `docker` script first on PATH. It appends each call's argv (one line) to calls, copies
 // stdin of a call that reads --env-file /dev/stdin to stdin.txt, and answers inspect queries.
-func fakeDocker(t *testing.T) (calls func() []string, stdin func() string) {
+func fakeNetDocker(t *testing.T) (calls func() []string, stdin func() string) {
 	t.Helper()
 	dir := t.TempDir()
 	log, in := filepath.Join(dir, "calls.txt"), filepath.Join(dir, "stdin.txt")
@@ -45,7 +45,7 @@ exit 0
 }
 
 func TestNetworkCreateIsInternalWithNoHostAddress(t *testing.T) {
-	calls, _ := fakeDocker(t)
+	calls, _ := fakeNetDocker(t)
 	prefix, err := RuntimeNetworkCreate(context.Background(), "docker", "a1", "c1")
 	if err != nil || prefix != netip.MustParsePrefix("172.30.0.0/24") {
 		t.Fatalf("%v %v", prefix, err)
@@ -60,7 +60,7 @@ func TestNetworkCreateIsInternalWithNoHostAddress(t *testing.T) {
 }
 
 func TestSidecarIsHardenedAndTakesItsConfigOnStdin(t *testing.T) {
-	calls, stdin := fakeDocker(t)
+	calls, stdin := fakeNetDocker(t)
 	bin := filepath.Join(t.TempDir(), "nself-ci")
 	if err := os.WriteFile(bin, []byte("x"), 0o755); err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestSidecarIsHardenedAndTakesItsConfigOnStdin(t *testing.T) {
 }
 
 func TestNetscopeSeamRefusesUnsafeArguments(t *testing.T) {
-	fakeDocker(t)
+	fakeNetDocker(t)
 	ctx := context.Background()
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "nself-ci")
@@ -156,7 +156,7 @@ func TestNetscopeSeamRefusesUnsafeArguments(t *testing.T) {
 }
 
 func TestNetProbeRunIsOnTheJobNetworkWithoutDNSOrCapabilities(t *testing.T) {
-	calls, _ := fakeDocker(t)
+	calls, _ := fakeNetDocker(t)
 	bin := filepath.Join(t.TempDir(), "nself-ci")
 	_ = os.WriteFile(bin, []byte("x"), 0o755)
 	if _, err := RuntimeNetProbeRun(context.Background(), "docker", "a1", testSidecarImage, bin, []string{"198.41.0.4:4000", "[2a00::1]:80"}); err != nil {

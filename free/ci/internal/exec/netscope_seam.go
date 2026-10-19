@@ -35,7 +35,7 @@ const (
 	maxSidecarLog   = 256 << 10
 )
 
-var safePath = regexp.MustCompile(`^/[A-Za-z0-9._/+-]{1,4000}$`)
+var safePath = regexp.MustCompile(`^/[A-Za-z0-9._/+-]{1,1000}$`)
 
 // NetworkName is the per-attempt internal network of an attempt.
 func NetworkName(attempt string) string { return "nself-ci-" + attempt + NetworkSuffix }
