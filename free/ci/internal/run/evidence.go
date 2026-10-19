@@ -74,6 +74,7 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 			attachDiagnosis(&c, o)
 		}
 		c.Flaky = o.Flaky
+		c.SecretSources = o.SecretSources
 		c.Findings = o.Findings
 		if o.Excerpt != "" {
 			c.Excerpt = diagnose.Excerpt(o.Excerpt, maxExcerpt) // built from redacted output by an OutcomeHook

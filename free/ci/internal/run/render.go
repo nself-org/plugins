@@ -56,8 +56,10 @@ type JobOutcome struct {
 	LogRef      string
 	Retries     []model.Retry
 	Flaky       *model.Flaky
-	retryable   bool // the failure is proven infrastructure (known signature) and may be retried
-	parked      bool // the failed attempt was queued for the store's retry path: the next attempt follows
+	// SecretSources is the secret Source's ref -> evidence label map of the final attempt (D-1070); no values.
+	SecretSources map[string]string
+	retryable     bool // the failure is proven infrastructure (known signature) and may be retried
+	parked        bool // the failed attempt was queued for the store's retry path: the next attempt follows
 }
 
 // Event is one thing that happened during a run.

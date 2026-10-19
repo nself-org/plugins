@@ -175,12 +175,21 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 			defer z.Zero() // values are zeroed on every exit: pass, fail, cancel and a lost attempt
 		}
 	}
+	secretSources := func() map[string]string { // labels only, read before Zero; a source with none reports nothing
+		if s, ok := spec.Secrets.(interface{ Sources() map[string]string }); ok {
+			if m := s.Sources(); len(m) > 0 {
+				return m
+			}
+		}
+		return nil
+	}
 	res := func() ciexec.AttemptResult {
 		defer rs.sess.slots.put(spec.Slot)
 		defer closeLog(lg) // before the attempt settles: a finished attempt always has its whole log stored
 		return rs.c.exec.Run(ctx, spec)
 	}()
 	o.Duration, o.ExitCode, o.Tail = res.Finished.Sub(res.Started), res.ExitCode, t.String()
+	o.SecretSources = secretSources()
 	if lg != nil {
 		o.LogRef = logRef
 	}

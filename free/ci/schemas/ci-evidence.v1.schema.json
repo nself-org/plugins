@@ -410,6 +410,12 @@
               "fails"
             ],
             "additionalProperties": false
+          },
+          "secret_sources": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         },
         "required": [

@@ -131,6 +131,8 @@ type Check struct {
 	Diagnosis   string `json:"diagnosis,omitempty"`   // the signature that decided failure_class (infra.oom, code, ...)
 	Remediation string `json:"remediation,omitempty"` // what to do next, in one sentence
 	Flaky       *Flaky `json:"flaky,omitempty"`       // visible debt: the check passed and failed on identical inputs
+	// SecretSources maps each secret ref the job resolved to its source label (`age:<file>`, `legacy-env`); never a value (D-1070).
+	SecretSources map[string]string `json:"secret_sources,omitempty"`
 }
 
 // Flaky marks a check whose result differed on identical inputs. It is debt

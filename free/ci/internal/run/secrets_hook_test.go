@@ -127,3 +127,34 @@ func TestResolverCallCarriesTheLiveCoordinator(t *testing.T) {
 		t.Fatal("the nested resolver call must carry the live coordinator id")
 	}
 }
+
+// D-1070: the Source's evidence label (`age:<file>`, `legacy-env`) reaches the check in the run evidence,
+// beside the ref and never the value.
+func TestSecretSourcesReachRunEvidence(t *testing.T) {
+	cli := &fakeCli{}
+	ConfigureSecrets(SecretsRuntime{Mode: secrets.ModePersonalLocal, Runner: cli})
+	t.Cleanup(func() { ConfigureSecrets(SecretsRuntime{Mode: secrets.ModePersonalLocal}) })
+	r := newRig(t, map[string]model.Job{"a": secretJob(`echo ok`), "b": sh(`echo plain`)}, gitFake{})
+	var ev model.Evidence
+	r.C.Hooks.AfterRuns = []AfterRunHook{afterFn(func(ri RunInfo) error { ev = ri.Evidence; return nil })}
+	r.run(t)
+	var got, plain map[string]string
+	for _, c := range ev.Checks {
+		switch c.JobID {
+		case "a":
+			got = c.SecretSources
+		case "b":
+			plain = c.SecretSources
+		}
+	}
+	if got["project/FOO"] != "age:ci.age" || len(got) != 1 {
+		t.Fatalf("check a secret_sources = %v, want project/FOO -> age:ci.age", got)
+	}
+	if len(plain) != 0 {
+		t.Fatalf("a job without secrets carries sources: %v", plain)
+	}
+	body, err := json.Marshal(ev)
+	if err != nil || strings.Contains(string(body), hookValue) {
+		t.Fatalf("evidence leaks the value or does not marshal: %v", err)
+	}
+}
