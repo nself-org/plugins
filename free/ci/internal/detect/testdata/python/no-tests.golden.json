@@ -1,0 +1,14 @@
+[
+  {
+    "kind": "package_manager",
+    "name": "pip",
+    "path": "pyproject.toml",
+    "confidence": "certain"
+  },
+  {
+    "kind": "stack",
+    "name": "python",
+    "path": "pyproject.toml",
+    "confidence": "certain"
+  }
+]

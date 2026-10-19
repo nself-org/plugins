@@ -1,0 +1,51 @@
+[
+  {
+    "id": "secrets.gitleaks",
+    "workdir": ".",
+    "required": true,
+    "tool": "gitleaks",
+    "argv": [
+      "gitleaks",
+      "detect",
+      "--source",
+      ".",
+      "--exit-code",
+      "1"
+    ]
+  },
+  {
+    "id": "security.trivy.fs",
+    "workdir": ".",
+    "required": false,
+    "tool": "trivy",
+    "argv": [
+      "trivy",
+      "fs",
+      "--format",
+      "json",
+      "--exit-code",
+      "1",
+      "."
+    ]
+  },
+  {
+    "id": "swift-build",
+    "workdir": ".",
+    "required": true,
+    "tool": "swift",
+    "argv": [
+      "swift",
+      "build"
+    ]
+  },
+  {
+    "id": "swift-test",
+    "workdir": ".",
+    "required": true,
+    "tool": "swift",
+    "argv": [
+      "swift",
+      "test"
+    ]
+  }
+]

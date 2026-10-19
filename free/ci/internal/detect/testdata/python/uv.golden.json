@@ -1,0 +1,27 @@
+[
+  {
+    "kind": "lockfile",
+    "name": "uv",
+    "path": "uv.lock",
+    "confidence": "certain",
+    "sha256": "53674b8fa26d6324fb35e489fb6a9bfbbd2ea0db6a841b790e613a2fde244b67"
+  },
+  {
+    "kind": "package_manager",
+    "name": "uv",
+    "path": "uv.lock",
+    "confidence": "certain"
+  },
+  {
+    "kind": "stack",
+    "name": "python",
+    "path": "pyproject.toml",
+    "confidence": "certain"
+  },
+  {
+    "kind": "test_framework",
+    "name": "pytest",
+    "path": "pyproject.toml",
+    "confidence": "certain"
+  }
+]

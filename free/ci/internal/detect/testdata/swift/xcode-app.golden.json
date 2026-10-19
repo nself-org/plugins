@@ -1,0 +1,14 @@
+[
+  {
+    "kind": "stack",
+    "name": "xcode",
+    "path": "App.xcodeproj/project.pbxproj",
+    "confidence": "certain"
+  },
+  {
+    "kind": "xcode_scheme",
+    "name": "App",
+    "path": "App.xcodeproj/xcshareddata/xcschemes/App.xcscheme",
+    "confidence": "certain"
+  }
+]
