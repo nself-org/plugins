@@ -255,7 +255,7 @@ func (r *verifyRig) run(args ...string) (int, string, string) {
 	return runArt(r.t, append([]string{"verify"}, args...)...)
 }
 
-func dataOf(t *testing.T, out string) map[string]any {
+func verifyDataOf(t *testing.T, out string) map[string]any {
 	t.Helper()
 	data, _ := checkEnvelope(t, out)["data"].(map[string]any)
 	if data == nil {
@@ -272,7 +272,7 @@ func TestArtifactsVerifyExitCodes(t *testing.T) {
 		t.Fatalf("good release: %d\n%s\n%s", code, out, errs)
 	}
 	code, out, _ = r.run(r.dir, "--json")
-	data := dataOf(t, out)
+	data := verifyDataOf(t, out)
 	if code != 0 || data["verified"] != true || data["slsa_build_level"] != "L1" || data["exit_code"] != float64(0) || data["artifacts"] != float64(1) {
 		t.Fatalf("good --json: %d %v", code, data)
 	}
@@ -286,7 +286,7 @@ func TestArtifactsVerifyExitCodes(t *testing.T) {
 		t.Fatalf("run input: %d", code)
 	}
 	code, out, _ = r.run("run-2", "--json")
-	if data = dataOf(t, out); code != 11 || data["reason"] != verify.ReasonReleaseMissing || data["slsa_build_level"] != "L1" {
+	if data = verifyDataOf(t, out); code != 11 || data["reason"] != verify.ReasonReleaseMissing || data["slsa_build_level"] != "L1" {
 		t.Fatalf("unknown run: %d %v", code, data)
 	}
 	releaseDirOf = func(context.Context, string) (string, bool, error) { return "", false, errors.New("store offline") }
@@ -315,7 +315,7 @@ func TestArtifactsVerifyExitCodes(t *testing.T) {
 	// 1: evidence that does not prove a full pass, and quarantined evidence.
 	r.selection = "affected"
 	r.publish()
-	if code, out, _ = r.run(r.dir, "--json"); code != 1 || dataOf(t, out)["reason"] != verify.ReasonEvidenceFailing {
+	if code, out, _ = r.run(r.dir, "--json"); code != 1 || verifyDataOf(t, out)["reason"] != verify.ReasonEvidenceFailing {
 		t.Fatalf("failing evidence: %d %s", code, out)
 	}
 	r.selection = ""
@@ -323,7 +323,7 @@ func TestArtifactsVerifyExitCodes(t *testing.T) {
 	oldQ := releaseQuarantined
 	releaseQuarantined = func(context.Context, model.Evidence) (bool, error) { return true, nil }
 	t.Cleanup(func() { releaseQuarantined = oldQ })
-	if code, out, _ = r.run(r.dir, "--json"); code != 1 || dataOf(t, out)["reason"] != verify.ReasonQuarantined {
+	if code, out, _ = r.run(r.dir, "--json"); code != 1 || verifyDataOf(t, out)["reason"] != verify.ReasonQuarantined {
 		t.Fatalf("quarantined evidence: %d %s", code, out)
 	}
 }
@@ -336,7 +336,7 @@ func TestArtifactsVerifyKeysFlagAndPin(t *testing.T) {
 	if err := os.Remove(filepath.Join(r.home, "trust", "ci-release.keys")); err != nil {
 		t.Fatal(err)
 	}
-	if code, out, _ := r.run(r.dir, "--json"); code != 11 || dataOf(t, out)["reason"] != verify.ReasonSignature {
+	if code, out, _ := r.run(r.dir, "--json"); code != 11 || verifyDataOf(t, out)["reason"] != verify.ReasonSignature {
 		t.Fatalf("no trust roots: %d %s", code, out)
 	}
 	if code, _, errs := r.run(r.dir, "--keys", keys); code != 0 {
@@ -356,7 +356,7 @@ func TestArtifactsVerifyKeysFlagAndPin(t *testing.T) {
 	releasePin = func(context.Context, string) (string, error) { return "", errors.New("origin unreachable") }
 	t.Cleanup(func() { releasePin = old })
 	code, out, _ := runArt(t, "verify", r.dir, "--json")
-	if data := dataOf(t, out); code != 11 || data["reason"] != verify.ReasonSignature || !strings.Contains(fmt.Sprint(data["message"]), "origin unreachable") {
+	if data := verifyDataOf(t, out); code != 11 || data["reason"] != verify.ReasonSignature || !strings.Contains(fmt.Sprint(data["message"]), "origin unreachable") {
 		t.Fatalf("unresolved pin must fail closed: %d %s", code, out)
 	}
 	// A key only the pinned default branch lists is trusted.
@@ -416,7 +416,7 @@ func TestArtifactsVerifyTamperMatrix(t *testing.T) {
 				want = 11
 			}
 			code, out, _ := r.run(r.dir, "--json")
-			data := dataOf(t, out)
+			data := verifyDataOf(t, out)
 			if code != want || data["reason"] != c.reason || data["verified"] != false || data["code"] != "E719" || data["slsa_build_level"] != "L1" {
 				t.Fatalf("want %s/%d, got %d %v", c.reason, want, code, data)
 			}
