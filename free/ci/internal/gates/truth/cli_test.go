@@ -23,7 +23,7 @@ func TestMainCheckExitCodesAndKinds(t *testing.T) {
 		t.Errorf("clean: %d %q", code, out)
 	}
 	code, out, _ := runMain("", "check", "--root", dirty, "rules.yaml")
-	if code != 1 || !strings.Contains(out, "FAIL truth.retired-term (1 finding(s))") || !strings.Contains(out, "a.md:1: retired-oldname") {
+	if code != 1 || !strings.Contains(out, "FAIL truth.retired-term (1 finding(s))") || !strings.Contains(out, "truth: retired-oldname a.md:1: Old Name") {
 		t.Errorf("dirty: %d %q", code, out)
 	}
 	if code, out, _ := runMain("", "check", "--root", dirty, "--kind", "dead-host", "rules.yaml"); code != 0 || strings.Count(out, "truth.") != 1 {

@@ -14,6 +14,7 @@ package truth
 // prefix; the kind is `truth`, required and substantive.
 
 import (
+	"errors"
 	"path/filepath"
 	"strconv"
 	"unicode/utf8"
@@ -67,19 +68,24 @@ func RunFull(root string, ruleFiles []string, rulesRoot string) ([]model.Check, 
 	}
 	rs, err := Load(rulesRoot, ruleFiles)
 	if err != nil {
-		return allChecks(func(c model.Check) model.Check {
+		return allChecks(RuleSet{}, func(c model.Check) model.Check {
 			c.Result, c.FailureClass, c.Excerpt = "error", "code", clip(err.Error())
 			return c
 		}), nil
 	}
 	res, err := Scan(root, rs, rs.Files)
 	if err != nil {
-		return allChecks(func(c model.Check) model.Check {
-			c.Result, c.FailureClass, c.Excerpt = "error", "infra", clip("cannot scan "+filepath.Base(root)+": "+err.Error())
+		var te *Error
+		class, text := model.FailureClass("infra"), "cannot scan "+filepath.Base(root)+": "+err.Error()
+		if errors.As(err, &te) {
+			class, text = "code", err.Error()
+		}
+		return allChecks(rs, func(c model.Check) model.Check {
+			c.Result, c.FailureClass, c.Excerpt = "error", class, clip(text)
 			return c
 		}), nil
 	}
-	return allChecks(func(c model.Check) model.Check {
+	return allChecks(rs, func(c model.Check) model.Check {
 		kind := c.ID[len(CheckID)+1:]
 		var found []Finding
 		rules := 0
@@ -104,9 +110,19 @@ func RunFull(root string, ruleFiles []string, rulesRoot string) ([]model.Check, 
 	}), res.Findings
 }
 
-func allChecks(fill func(model.Check) model.Check) []model.Check {
-	out := make([]model.Check, 0, len(Kinds))
-	for _, k := range Kinds {
+// allChecks returns one check per base kind, then one per claim kind the rules hold.
+func allChecks(rs RuleSet, fill func(model.Check) model.Check) []model.Check {
+	kinds := append([]string(nil), Kinds...)
+	for _, k := range ClaimKinds {
+		for _, r := range rs.Rules {
+			if r.Kind == k {
+				kinds = append(kinds, k)
+				break
+			}
+		}
+	}
+	out := make([]model.Check, 0, len(kinds))
+	for _, k := range kinds {
 		out = append(out, fill(model.Check{ID: CheckIDOf(k), JobID: CheckID, Kind: Kind, Tool: "nself-ci", Required: true, Substantive: true}))
 	}
 	return out

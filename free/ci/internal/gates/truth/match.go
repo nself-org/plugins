@@ -44,18 +44,26 @@ type compiled struct {
 	terms    []*Rule
 	termsLow []string
 	hosts    map[string][]*Rule // sha256 -> rules
+	claims   []*Rule            // numeric-claim and version-claim rules
+
+	regionRules []*Rule // rules that honour GENERATED regions, JSX and exempt comments
 }
 
 func compile(rs RuleSet) compiled {
 	c := compiled{hosts: map[string][]*Rule{}}
 	for i := range rs.Rules {
 		r := &rs.Rules[i]
+		if r.usesRegions() {
+			c.regionRules = append(c.regionRules, r)
+		}
 		switch r.Kind {
 		case KindBannedLiteral:
 			c.literals = append(c.literals, r)
 		case KindRetiredTerm:
 			c.terms = append(c.terms, r)
 			c.termsLow = append(c.termsLow, strings.ToLower(strings.TrimSpace(r.Term)))
+		case KindNumericClaim, KindVersionClaim:
+			c.claims = append(c.claims, r)
 		case KindDeadHost:
 			for _, h := range r.SHA256 {
 				c.hosts[h] = append(c.hosts[h], r)
@@ -65,47 +73,11 @@ func compile(rs RuleSet) compiled {
 	return c
 }
 
-// literalHits returns the banned-literal rules the line breaks.
-func (c compiled) literalHits(line string) []*Rule {
-	var out []*Rule
-	for _, r := range c.literals {
-		if strings.Contains(line, r.Literal) {
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
-// termHits returns the retired-term rules the line breaks.
-func (c compiled) termHits(line string) []*Rule {
-	if len(c.terms) == 0 {
-		return nil
-	}
-	low := strings.ToLower(line)
-	var out []*Rule
-	for i, t := range c.termsLow {
-		if hasWholeTerm(low, t) {
-			out = append(out, c.terms[i])
-		}
-	}
-	return out
-}
-
-func hasWholeTerm(low, term string) bool {
-	for from := 0; from < len(low); {
-		i := strings.Index(low[from:], term)
-		if i < 0 {
-			return false
-		}
-		start, end := from+i, from+i+len(term)
-		before, _ := utf8.DecodeLastRuneInString(low[:start])
-		after, _ := utf8.DecodeRuneInString(low[end:])
-		if (start == 0 || !isWordRune(before)) && (end == len(low) || !isWordRune(after)) {
-			return true
-		}
-		from = start + 1
-	}
-	return false
+// wholeTermAt reports whether low[start:end] is delimited by non-letters and non-digits.
+func wholeTermAt(low string, start, end int) bool {
+	before, _ := utf8.DecodeLastRuneInString(low[:start])
+	after, _ := utf8.DecodeRuneInString(low[end:])
+	return (start == 0 || !isWordRune(before)) && (end == len(low) || !isWordRune(after))
 }
 
 func isWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
@@ -149,4 +121,55 @@ func standalone(s string, start, end int) bool {
 		return false
 	}
 	return true
+}
+
+// forFile narrows the compiled rules to those that can fire on rel (the rule's
+// paths match and no exemption path covers the file), so a line is never
+// matched against a rule that cannot report on it.
+func (c compiled) forFile(rel string) compiled {
+	in := func(r *Rule) bool { return (len(r.Paths) == 0 || matchAny(r.Paths, rel)) && !r.pathExempt(rel) }
+	out := compiled{hosts: c.hosts}
+	for _, r := range c.literals {
+		if in(r) {
+			out.literals = append(out.literals, r)
+		}
+	}
+	for i, r := range c.terms {
+		if in(r) {
+			out.terms = append(out.terms, r)
+			out.termsLow = append(out.termsLow, c.termsLow[i])
+		}
+	}
+	for _, r := range c.claims {
+		if in(r) {
+			out.claims = append(out.claims, r)
+		}
+	}
+	for _, r := range c.regionRules {
+		if in(r) {
+			out.regionRules = append(out.regionRules, r)
+		}
+	}
+	for _, rs := range c.hosts {
+		for _, r := range rs {
+			if !in(r) {
+				out.hosts = c.hostsFor(in)
+				return out
+			}
+		}
+	}
+	return out
+}
+
+// hostsFor rebuilds the dead-host table with only the rules in() accepts.
+func (c compiled) hostsFor(in func(*Rule) bool) map[string][]*Rule {
+	h := map[string][]*Rule{}
+	for k, rs := range c.hosts {
+		for _, r := range rs {
+			if in(r) {
+				h[k] = append(h[k], r)
+			}
+		}
+	}
+	return h
 }
