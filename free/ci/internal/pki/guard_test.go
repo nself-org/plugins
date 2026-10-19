@@ -1,0 +1,622 @@
+package pki
+
+import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+// newGuardAt is a guard whose clock is the rig clock (certificates are issued at the rig epoch).
+func newGuardAt(r *rig) *Guard {
+	g := NewGuard(r.st)
+	g.now = r.clk.now
+	return g
+}
+
+func TestGuardRefreshFollowsTheStore(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	g := newGuardAt(r)
+	var cancelledA, cancelledB, cancelledOther atomic.Int32
+	stopA := g.watch("aa", func() { cancelledA.Add(1) })
+	g.watch("aa", func() { cancelledB.Add(1) })
+	g.watch("bb", func() { cancelledOther.Add(1) })
+	if g.next != 3 || len(g.watchers["aa"]) != 2 {
+		t.Fatalf("watcher ids must count up from 1: next=%d", g.next)
+	}
+	if err := g.Refresh(ctx); err != nil || g.Denied("aa") {
+		t.Fatalf("empty refresh: %v", err)
+	}
+	if _, err := r.st.PKIDeny(ctx, "cli:admin", "n1", "x", "aa"); err != nil {
+		t.Fatal(err)
+	}
+	if g.Denied("aa") {
+		t.Fatal("denied before a refresh")
+	}
+	if err := g.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !g.Denied("aa") || g.Denied("bb") || cancelledA.Load() != 1 || cancelledB.Load() != 1 || cancelledOther.Load() != 0 {
+		t.Fatalf("after deny: aa=%v a=%d b=%d other=%d", g.Denied("aa"), cancelledA.Load(), cancelledB.Load(), cancelledOther.Load())
+	}
+	// rows already seen are not replayed
+	if err := g.Refresh(ctx); err != nil || cancelledA.Load() != 1 {
+		t.Fatalf("replayed: %d %v", cancelledA.Load(), err)
+	}
+	// a later deny: only new rows cancel
+	if _, err := r.st.PKIDeny(ctx, "cli:admin", "n2", "x", "bb", "cc"); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Refresh(ctx); err != nil || !g.Denied("bb") || !g.Denied("cc") || cancelledOther.Load() != 1 || cancelledA.Load() != 1 {
+		t.Fatalf("second deny: %v", err)
+	}
+	// stop removes only its own watcher, then the entry
+	stopA()
+	if len(g.watchers["aa"]) != 1 {
+		t.Fatalf("watchers of aa: %d", len(g.watchers["aa"]))
+	}
+	// a denied serial that is stopped no longer has a map entry once empty
+	g.watch("zz", func() {})()
+	if _, ok := g.watchers["zz"]; ok {
+		t.Fatal("empty watcher set kept")
+	}
+	// Refresh surfaces a store error
+	_ = r.st.Close()
+	if err := g.Refresh(ctx); err == nil {
+		t.Fatal("refresh on a closed store succeeded")
+	}
+}
+
+func TestGuardRunRefreshesUntilCancelled(t *testing.T) {
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	r := newRig(t)
+	g := newGuardAt(r)
+	if _, err := r.st.PKIDeny(ctx, "cli:admin", "n1", "x", "pre"); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { g.Run(ctx, 20*time.Millisecond); close(done) }()
+	waitFor(t, func() bool { return g.Denied("pre") }, "initial refresh")
+	if _, err := r.st.PKIDeny(ctx, "cli:admin", "n1", "x", "later"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return g.Denied("later") }, "periodic refresh")
+	stop()
+	select {
+	case <-done:
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("Run did not stop")
+	}
+}
+
+func waitFor(t *testing.T, cond func() bool, what string) {
+	t.Helper()
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", what)
+}
+
+func TestGuardCheck(t *testing.T) {
+	ctx := context.Background()
+	t.Run("registered node", func(t *testing.T) {
+		r := newRig(t)
+		r.addNode("n1")
+		n := r.issueNode("n1", 0)
+		if err := NewGuard(r.st).Check(ctx, n.Cert); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("denied certificate", func(t *testing.T) {
+		r := newRig(t)
+		r.addNode("n1")
+		n := r.issueNode("n1", 0)
+		_, _ = r.st.PKIDeny(ctx, "cli:admin", "n1", "x", n.Serial)
+		err := NewGuard(r.st).Check(ctx, n.Cert)
+		wantReason(t, err, ReasonRevoked)
+	})
+	t.Run("denied certificate of an unregistered node is revoked, not unknown", func(t *testing.T) {
+		r := newRig(t)
+		n := r.issueNode("n1", 0)
+		_, _ = r.st.PKIDeny(ctx, "cli:admin", "n1", "x", n.Serial)
+		wantReason(t, NewGuard(r.st).Check(ctx, n.Cert), ReasonRevoked)
+	})
+	t.Run("unregistered node", func(t *testing.T) {
+		r := newRig(t)
+		n := r.issueNode("n1", 0)
+		wantReason(t, NewGuard(r.st).Check(ctx, n.Cert), ReasonUnknownNode)
+	})
+	t.Run("revoked node state without a denied serial", func(t *testing.T) {
+		r := newRig(t)
+		r.addNode("n1")
+		n := r.issueNode("n1", 0)
+		if _, err := r.st.NodeRevoke(ctx, "n1", "cli:admin", nil); err != nil {
+			t.Fatal(err)
+		}
+		err := NewGuard(r.st).Check(ctx, n.Cert)
+		wantReason(t, err, ReasonRevoked)
+	})
+	t.Run("user and coordinator certificates skip the node lookup", func(t *testing.T) {
+		r := newRig(t)
+		_, u, _ := r.issueUser("alice", 0)
+		g := newGuardAt(r)
+		if err := g.Check(ctx, u); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = r.st.PKIDeny(ctx, "cli:admin", "alice", "x", serialHex(u))
+		wantReason(t, g.Check(ctx, u), ReasonRevoked)
+		if err := g.Check(ctx, r.serverCert(nil, nil, 0).Leaf); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("store error counts as revoked", func(t *testing.T) {
+		r := newRig(t)
+		n := r.issueNode("n1", 0)
+		_ = r.st.Close()
+		wantReason(t, NewGuard(r.st).Check(ctx, n.Cert), ReasonRevoked)
+	})
+	t.Run("Check reads the store, not the cache", func(t *testing.T) {
+		r := newRig(t)
+		r.addNode("n1")
+		n := r.issueNode("n1", 0)
+		g := newGuardAt(r)
+		_ = g.Refresh(ctx)
+		_, _ = r.st.PKIDeny(ctx, "cli:admin", "n1", "x", n.Serial)
+		if g.Denied(n.Serial) {
+			t.Fatal("cache moved without refresh")
+		}
+		wantReason(t, g.Check(ctx, n.Cert), ReasonRevoked)
+	})
+}
+
+func TestGuardMiddlewareUnits(t *testing.T) {
+	r := newRig(t)
+	n := r.issueNode("n1", 0)
+	_, u, _ := r.issueUser("alice", 0)
+	g := newGuardAt(r)
+	if err := g.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var served atomic.Int32
+	var ctxSeen context.Context
+	h := g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, rq *http.Request) {
+		served.Add(1)
+		ctxSeen = rq.Context()
+		_, _ = io.WriteString(w, "ok")
+	}))
+	do := func(state *tls.ConnectionState) *httptest.ResponseRecorder {
+		rq := httptest.NewRequest("GET", "/x", nil)
+		rq.TLS = state
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, rq)
+		return rec
+	}
+	tests := []struct {
+		name   string
+		state  *tls.ConnectionState
+		code   int
+		body   string
+		served int32
+	}{
+		{"no TLS", nil, 401, "E660: no client certificate\n", 0},
+		{"no peer certificate", &tls.ConnectionState{}, 401, "E660: no client certificate\n", 0},
+		{"wrong kind", &tls.ConnectionState{PeerCertificates: []*x509.Certificate{u}}, 403, "E660: wrong certificate kind\n", 0},
+		{"no identity", &tls.ConnectionState{PeerCertificates: []*x509.Certificate{{}}}, 403, "E660: wrong certificate kind\n", 0},
+		{"ok", &tls.ConnectionState{PeerCertificates: []*x509.Certificate{n.Cert}}, 200, "ok", 1},
+	}
+	for _, c := range tests {
+		before := served.Load()
+		rec := do(c.state)
+		if rec.Code != c.code || rec.Body.String() != c.body || served.Load()-before != c.served {
+			t.Errorf("%s: %d %q served=%d", c.name, rec.Code, rec.Body.String(), served.Load()-before)
+		}
+	}
+	if len(g.watchers) != 0 {
+		t.Fatalf("watchers leaked: %d", len(g.watchers))
+	}
+	if ctxSeen.Err() == nil {
+		t.Fatal("the request context stays live after the handler returned")
+	}
+	// denied in memory: refused before the handler
+	_, _ = r.st.PKIDeny(context.Background(), "cli:admin", "n1", "x", n.Serial)
+	_ = g.Refresh(context.Background())
+	before := served.Load()
+	rec := do(&tls.ConnectionState{PeerCertificates: []*x509.Certificate{n.Cert}})
+	if rec.Code != 403 || rec.Body.String() != "E660: certificate revoked\n" || served.Load() != before {
+		t.Fatalf("denied: %d %q", rec.Code, rec.Body.String())
+	}
+	if len(g.watchers) != 0 {
+		t.Fatalf("watchers leaked after a refusal: %d", len(g.watchers))
+	}
+	// the user guard accepts the user certificate
+	uh := g.Middleware(KindUser)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
+	rq := httptest.NewRequest("GET", "/", nil)
+	rq.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{u}}
+	rec = httptest.NewRecorder()
+	uh.ServeHTTP(rec, rq)
+	if rec.Code != 204 {
+		t.Fatalf("user guard: %d", rec.Code)
+	}
+}
+
+// TestRequestGuardCancelsLiveRequestWithinOneSecond is the ticket's live-session check: a request
+// already running on an open mTLS connection is cancelled within 1 s of the revoke, and the next
+// request on that same connection is refused.
+func TestRequestGuardCancelsLiveRequestWithinOneSecond(t *testing.T) {
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	r := newRig(t)
+	r.addNode("n1")
+	n := r.issueNode("n1", 0)
+	g := newGuardAt(r)
+	if err := g.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	go g.Run(ctx, 100*time.Millisecond)
+
+	started := make(chan struct{}, 4)
+	cancelled := make(chan time.Time, 4)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/hold", func(w http.ResponseWriter, rq *http.Request) {
+		started <- struct{}{}
+		<-rq.Context().Done()
+		cancelled <- time.Now()
+	})
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, rq *http.Request) { _, _ = io.WriteString(w, "pong") })
+	srvCfg, err := r.ca.TLSServerConfig(KindNode, r.serverCert(nil, loopback, 0), g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewUnstartedServer(g.Middleware(KindNode)(mux))
+	srv.TLS = srvCfg
+	srv.StartTLS()
+	defer srv.Close()
+
+	cliCfg := r.clientCfg(&n.TLS)
+	tr := &http.Transport{TLSClientConfig: cliCfg, MaxConnsPerHost: 1, DisableKeepAlives: false}
+	defer tr.CloseIdleConnections()
+	cl := &http.Client{Transport: tr, Timeout: 5 * time.Second}
+
+	resp, err := cl.Get(srv.URL + "/ping")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) != "pong" || resp.StatusCode != 200 {
+		t.Fatalf("ping: %d %q", resp.StatusCode, body)
+	}
+	holdDone := make(chan error, 1)
+	go func() {
+		resp, err := cl.Get(srv.URL + "/hold")
+		if err == nil {
+			resp.Body.Close()
+		}
+		holdDone <- err
+	}()
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("hold request never started")
+	}
+	revokedAt := time.Now()
+	if _, err = r.ca.Revoke(context.Background(), "cli:admin", "n1", "stolen"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case at := <-cancelled:
+		if d := at.Sub(revokedAt); d > time.Second {
+			t.Fatalf("live request cancelled after %v", d)
+		}
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("live request not cancelled within 1 s of the revoke")
+	}
+	<-holdDone
+	// the next request, on a fresh or existing connection, is refused
+	resp, err = cl.Get(srv.URL + "/ping")
+	if err == nil {
+		resp.Body.Close()
+		if resp.StatusCode != 403 {
+			t.Fatalf("next request status %d", resp.StatusCode)
+		}
+	} // a rejected fresh handshake is also a refusal
+}
+
+// TestRequestGuardRefusesNextRequestOnExistingConnection pins the request-level check separately from the
+// handshake: the connection stays open across the revoke.
+func TestRequestGuardRefusesNextRequestOnExistingConnection(t *testing.T) {
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	r := newRig(t)
+	r.addNode("n1")
+	n := r.issueNode("n1", 0)
+	g := newGuardAt(r)
+	if err := g.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	go g.Run(ctx, 50*time.Millisecond)
+	srvCfg, _ := r.ca.TLSServerConfig(KindNode, r.serverCert(nil, loopback, 0), g)
+	srv := httptest.NewUnstartedServer(g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "pong") })))
+	srv.TLS = srvCfg
+	srv.StartTLS()
+	defer srv.Close()
+	var handshakes atomic.Int32
+	cliCfg := r.clientCfg(&n.TLS)
+	cliCfg.VerifyConnection = wrapCount(cliCfg.VerifyConnection, &handshakes)
+	tr := &http.Transport{TLSClientConfig: cliCfg, MaxConnsPerHost: 1}
+	defer tr.CloseIdleConnections()
+	cl := &http.Client{Transport: tr, Timeout: 5 * time.Second}
+	get := func() (int, error) {
+		resp, err := cl.Get(srv.URL)
+		if err != nil {
+			return 0, err
+		}
+		defer resp.Body.Close()
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return resp.StatusCode, nil
+	}
+	if code, err := get(); err != nil || code != 200 {
+		t.Fatalf("first: %d %v", code, err)
+	}
+	// deny straight in the store (not through lifecycle) so no handshake check can fire first
+	if _, err := r.st.PKIDeny(context.Background(), "cli:admin", "n1", "x", n.Serial); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return g.Denied(n.Serial) }, "guard refresh")
+	code, err := get()
+	if err != nil || code != 403 {
+		t.Fatalf("next request on the open connection: %d %v", code, err)
+	}
+	if handshakes.Load() != 1 {
+		t.Fatalf("the connection was not reused: %d handshakes", handshakes.Load())
+	}
+}
+
+func wrapCount(f func(tls.ConnectionState) error, n *atomic.Int32) func(tls.ConnectionState) error {
+	return func(cs tls.ConnectionState) error { n.Add(1); return f(cs) }
+}
+
+// TestGuardMiddlewareFailsClosedWhenStale: a guard that never refreshed, or whose last successful refresh
+// is older than StaleAfter, refuses every request with 503 (a store that cannot be read must not look
+// like an empty deny list).
+func TestGuardMiddlewareFailsClosedWhenStale(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	r.addNode("n1")
+	n := r.issueNode("n1", 0)
+	g := newGuardAt(r)
+	var served atomic.Int32
+	h := g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { served.Add(1) }))
+	do := func(state *tls.ConnectionState) *httptest.ResponseRecorder {
+		rq := httptest.NewRequest("GET", "/x", nil)
+		rq.TLS = state
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, rq)
+		return rec
+	}
+	good := &tls.ConnectionState{PeerCertificates: []*x509.Certificate{n.Cert}}
+	const body = "E660: revocation list unavailable\n"
+	expect503 := func(label string, state *tls.ConnectionState) {
+		t.Helper()
+		if rec := do(state); rec.Code != 503 || rec.Body.String() != body {
+			t.Fatalf("%s: %d %q", label, rec.Code, rec.Body.String())
+		}
+	}
+	if StaleAfter != 10*time.Second {
+		t.Fatalf("StaleAfter %v", StaleAfter)
+	}
+	// never refreshed: 503 even for a valid certificate and before the TLS checks
+	expect503("never refreshed", good)
+	expect503("never refreshed, no TLS", nil)
+	// a failed refresh does not make the guard fresh
+	closed := newRig(t)
+	_ = closed.st.Close()
+	cg := NewGuard(closed.st)
+	if err := cg.Refresh(ctx); err == nil || cg.fresh() {
+		t.Fatalf("failed refresh: err=%v fresh=%v", err, cg.fresh())
+	}
+	// a successful refresh makes it fresh
+	if err := g.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !g.okAt.Equal(r.clk.now()) {
+		t.Fatalf("okAt not recorded: %v", g.okAt)
+	}
+	if rec := do(good); rec.Code != 200 || served.Load() != 1 {
+		t.Fatalf("fresh: %d", rec.Code)
+	}
+	// aged just inside the window: still served
+	g.okAt = g.now().Add(-StaleAfter + 2*time.Second)
+	if rec := do(good); rec.Code != 200 {
+		t.Fatalf("9 s old: %d", rec.Code)
+	}
+	// aged past the window: 503 (white-box: the injected clock is not the guard's clock)
+	g.okAt = g.now().Add(-StaleAfter - time.Second)
+	expect503("stale", good)
+	if served.Load() != 2 {
+		t.Fatalf("a stale guard served a request: %d", served.Load())
+	}
+	// a failed refresh keeps the old timestamp, so a store outage ends in 503
+	stale := g.okAt
+	_ = r.st.Close()
+	if err := g.Refresh(ctx); err == nil || !g.okAt.Equal(stale) {
+		t.Fatalf("failed refresh moved okAt: %v", err)
+	}
+	// and a refresh that succeeds brings it back
+	g.okAt = time.Time{}
+	expect503("zero okAt", good)
+}
+
+// TestResumedStateIsStillChecked: VerifyConnection runs on every handshake, resumed or not, so a
+// ConnectionState with DidResume set and a denied leaf is rejected.
+func TestResumedStateIsStillChecked(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	r.addNode("n1")
+	n := r.issueNode("n1", 0)
+	cfg, err := r.ca.TLSServerConfig(KindNode, r.serverCert(nil, loopback, 0), NewGuard(r.st))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs := tls.ConnectionState{DidResume: true, PeerCertificates: []*x509.Certificate{n.Cert}, VerifiedChains: [][]*x509.Certificate{{n.Cert, r.ca.inter[KindNode].cert}}}
+	if err = cfg.VerifyConnection(cs); err != nil {
+		t.Fatalf("resumed, not denied: %v", err)
+	}
+	if _, err = r.st.PKIDeny(ctx, "cli:admin", "n1", "x", n.Serial); err != nil {
+		t.Fatal(err)
+	}
+	wantReason(t, cfg.VerifyConnection(cs), ReasonRevoked)
+}
+
+// TestGuardStaleBoundary pins the exact edge with an injected guard clock: an age of StaleAfter is
+// still served, one nanosecond more is refused.
+func TestGuardStaleBoundary(t *testing.T) {
+	r := newRig(t)
+	r.addNode("n1")
+	n := r.issueNode("n1", 0)
+	g := newGuardAt(r)
+	if g.now == nil {
+		t.Fatal("NewGuard left the clock unset")
+	}
+	clk := &testClock{t: epoch}
+	g.now = clk.now
+	if err := g.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !g.okAt.Equal(epoch) {
+		t.Fatalf("Refresh stamped %v, want the guard clock %v", g.okAt, epoch)
+	}
+	h := g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	code := func() int {
+		rq := httptest.NewRequest("GET", "/x", nil)
+		rq.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{n.Cert}}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, rq)
+		return rec.Code
+	}
+	for _, c := range []struct {
+		age  time.Duration
+		want int
+	}{{0, 200}, {StaleAfter - time.Nanosecond, 200}, {StaleAfter, 200}, {StaleAfter + time.Nanosecond, 503}, {time.Hour, 503}} {
+		clk.set(epoch.Add(c.age))
+		if got := code(); got != c.want || g.fresh() != (c.want == 200) {
+			t.Errorf("age %v: status %d, want %d", c.age, got, c.want)
+		}
+	}
+}
+
+// TestGuardMiddlewareValidityPeriod: TLS 1.3 never re-handshakes, so the per-request check refuses a
+// certificate outside [NotBefore, NotAfter) by the guard clock.
+func TestGuardMiddlewareValidityPeriod(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	r.addNode("n1")
+	n := r.issueNode("n1", time.Hour)
+	_, user, _ := r.issueUser("alice", 0)
+	g := newGuardAt(r)
+	h := g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") }))
+	do := func(leaf *x509.Certificate) *httptest.ResponseRecorder {
+		rq := httptest.NewRequest("GET", "/x", nil)
+		rq.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{leaf}}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, rq)
+		return rec
+	}
+	const outside = "E660: certificate outside its validity period\n"
+	nb, na := n.Cert.NotBefore, n.Cert.NotAfter
+	tests := []struct {
+		name string
+		at   time.Time
+		code int
+		body string
+	}{
+		{"inside", nb.Add(time.Minute), 200, "ok"},
+		{"exactly NotBefore", nb, 200, "ok"},
+		{"1ns before NotBefore", nb.Add(-time.Nanosecond), 403, outside},
+		{"long before NotBefore", nb.Add(-24 * time.Hour), 403, outside},
+		{"1ns before NotAfter", na.Add(-time.Nanosecond), 200, "ok"},
+		{"exactly NotAfter", na, 403, outside},
+		{"1ns after NotAfter", na.Add(time.Nanosecond), 403, outside},
+		{"long after NotAfter", na.Add(30 * day), 403, outside},
+	}
+	for _, c := range tests {
+		r.clk.set(c.at)
+		if err := g.Refresh(ctx); err != nil { // keep the deny list fresh at the new time
+			t.Fatal(err)
+		}
+		if rec := do(n.Cert); rec.Code != c.code || rec.Body.String() != c.body {
+			t.Errorf("%s: %d %q", c.name, rec.Code, rec.Body.String())
+		}
+	}
+	// the stale check comes first, the kind check before the validity check
+	r.clk.set(na.Add(31 * day))
+	if rec := do(n.Cert); rec.Code != 503 {
+		t.Errorf("stale and expired: %d", rec.Code)
+	}
+	_ = g.Refresh(ctx)
+	if rec := do(user); rec.Code != 403 || rec.Body.String() != "E660: wrong certificate kind\n" {
+		t.Errorf("wrong kind and expired: %d %q", rec.Code, rec.Body.String())
+	}
+	// a request already running is not cut off by the (fake) clock jumping past NotAfter: its context ends
+	// by a timer of the remaining validity (TestGuardCancelsRequestAtCertificateExpiry) or by the deny list
+	r.clk.set(nb.Add(time.Minute))
+	_ = g.Refresh(ctx)
+	started, release, done := make(chan context.Context), make(chan struct{}), make(chan struct{})
+	long := g.Middleware(KindNode)(http.HandlerFunc(func(w http.ResponseWriter, rq *http.Request) {
+		started <- rq.Context()
+		<-release
+	}))
+	go func() {
+		rq := httptest.NewRequest("GET", "/long", nil)
+		rq.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{n.Cert}}
+		long.ServeHTTP(httptest.NewRecorder(), rq)
+		close(done)
+	}()
+	rctx := <-started
+	r.clk.set(na.Add(time.Hour))
+	_ = g.Refresh(ctx)
+	if rctx.Err() != nil {
+		t.Fatal("the request context was cancelled by the clock")
+	}
+	close(release)
+	<-done
+}
+
+// TestGuardCancelsRequestAtCertificateExpiry: a request running when its certificate expires ends with it.
+func TestGuardCancelsRequestAtCertificateExpiry(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	r.addNode("n1")
+	n := r.issueNode("n1", time.Hour)
+	g := newGuardAt(r)
+	r.clk.set(n.Cert.NotAfter.Add(-150 * time.Millisecond))
+	if err := g.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	ended := make(chan error, 1)
+	h := g.Middleware(KindNode)(http.HandlerFunc(func(_ http.ResponseWriter, rq *http.Request) {
+		select {
+		case <-rq.Context().Done():
+			ended <- rq.Context().Err()
+		case <-time.After(10 * time.Second):
+			ended <- nil
+		}
+	}))
+	rq := httptest.NewRequest("GET", "/long", nil)
+	rq.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{n.Cert}}
+	go h.ServeHTTP(httptest.NewRecorder(), rq)
+	if err := <-ended; err == nil {
+		t.Fatal("the request outlived its certificate")
+	}
+}

@@ -20,6 +20,11 @@ const HostKeyMode = "host-key"
 
 func init() { RegisterRotateMode(HostKeyMode, rotateHostKey) }
 
+// pkiModes are the rotate modes of P7-NODE-07 (cert, node-key): they act on coordinator state only, so a
+// pull node without an ssh destination or pin can use them. Host-key recovery still needs the
+// destination, and every other mode still needs the pinned target.
+var pkiModes = map[string]bool{"cert": true, "node-key": true}
+
 // RotateOptions are the flags of `nodes rotate`.
 type RotateOptions struct {
 	NodeID  string
@@ -45,14 +50,14 @@ func (d *Deps) Rotate(ctx context.Context, o RotateOptions) error {
 		return err
 	}
 	spec, err := specOf(n.Capability)
-	if err != nil {
+	if err != nil && !pkiModes[mode] {
 		return err
 	}
 	// Modes that talk to the node (P7-NODE-07 credential rotation) get the pinned target, never a bare
 	// destination, so a new credential cannot travel over an unverified ssh. Host-key rotation is the
 	// recovery path for a lost pin, so it does not need one.
 	t, terr := d.targetFor(ctx, n.Capability)
-	if terr != nil && mode != HostKeyMode {
+	if terr != nil && mode != HostKeyMode && !pkiModes[mode] {
 		return terr
 	}
 	return fn(ctx, d, RotateRequest{NodeID: o.NodeID, Target: t, ScanDest: spec.Dest(), HostKey: o.HostKey, Flags: o.Flags})

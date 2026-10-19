@@ -1,0 +1,7 @@
+CREATE TABLE pki_authority (kind TEXT PRIMARY KEY, cert_der BLOB NOT NULL, key_sealed BLOB NOT NULL, not_after INTEGER NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE pki_cert (serial TEXT PRIMARY KEY, kind TEXT NOT NULL, node_id TEXT NOT NULL, subject TEXT NOT NULL, offer_id TEXT NOT NULL DEFAULT '', not_before INTEGER NOT NULL, not_after INTEGER NOT NULL, cap_after INTEGER NOT NULL DEFAULT 0, issued_at INTEGER NOT NULL);
+CREATE INDEX pki_cert_node ON pki_cert(node_id);
+CREATE TABLE pki_denied (serial TEXT PRIMARY KEY, node_id TEXT NOT NULL, reason TEXT NOT NULL, denied_at INTEGER NOT NULL);
+CREATE TABLE pki_offer (id TEXT PRIMARY KEY, code_hash BLOB NOT NULL UNIQUE, label TEXT NOT NULL, intent TEXT NOT NULL, cert_ttl_ns INTEGER NOT NULL, expires_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, locked INTEGER NOT NULL DEFAULT 0, withdrawn INTEGER NOT NULL DEFAULT 0, tainted INTEGER NOT NULL DEFAULT 0, redeemed_at INTEGER NOT NULL DEFAULT 0, node_id TEXT NOT NULL DEFAULT '', serial TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);
+CREATE TABLE pki_node_key (node_id TEXT PRIMARY KEY, key_id TEXT NOT NULL, public TEXT NOT NULL, pinned_at INTEGER NOT NULL);
+CREATE TABLE pki_token_key (kid TEXT PRIMARY KEY, public TEXT NOT NULL, key_sealed BLOB NOT NULL, created_at INTEGER NOT NULL, retired_at INTEGER NOT NULL DEFAULT 0);
