@@ -96,14 +96,6 @@ func (r *jsonRenderer) Event(e cirun.Event) {
 	if !r.stream || e.RunID == "" {
 		return
 	}
-	if e.Type == "log" { // best effort: never wait behind a slow consumer (see Emitter.TryEmit)
-		if !r.mu.TryLock() {
-			return
-		}
-		defer r.mu.Unlock()
-		r.sess.emitter(e.RunID).TryEmit("log", e.Job, "", map[string]any{"bytes": len(e.Text), "ref": nil, "reason": "log.not_kept"})
-		return
-	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	em := r.sess.emitter(e.RunID)
@@ -114,6 +106,8 @@ func (r *jsonRenderer) Event(e cirun.Event) {
 		em.Emit("planned", "", "", plannedData(e))
 	case "started":
 		em.Emit("started", e.Job, "", map[string]any{})
+	case "log": // best effort: dropped once a backlog builds behind a slow consumer
+		em.TryEmit("log", e.Job, "", map[string]any{"bytes": len(e.Text), "ref": nil, "reason": "log.not_kept"})
 	case "finished":
 		o := e.Out
 		if o == nil {

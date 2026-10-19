@@ -93,12 +93,13 @@ func TestEmitterSequenceAndFraming(t *testing.T) {
 func TestEmitterRefusesWhatItCannotFrame(t *testing.T) {
 	var buf bytes.Buffer
 	e := New(&buf, "ci", "r", "r", nil)
-	if e.Emit("not-a-type", "", "", nil) != 0 || buf.Len() != 0 {
+	if e.Emit("not-a-type", "", "", nil) != 0 || !e.Flush() || buf.Len() != 0 {
 		t.Fatal("an unknown event type was written")
 	}
 	if e.Emit("evidence", "", "", nil) == 0 {
 		t.Fatal("a valid type was refused")
 	}
+	e.Flush()
 }
 
 type failWriter struct{ n int }
@@ -113,10 +114,12 @@ func (f *failWriter) Write(p []byte) (int, error) {
 func TestEmitterStopsAfterAWriteError(t *testing.T) {
 	w := &failWriter{n: 1}
 	e := New(w, "ci", "r", "r", nil)
-	if e.Emit("queued", "", "", nil) != 1 || e.Err() != nil {
+	if e.Emit("queued", "", "", nil) != 1 || !e.Flush() || e.Err() != nil {
 		t.Fatal("first write")
 	}
-	if e.Emit("planned", "", "", nil) != 0 || e.Err() == nil {
+	e.Emit("planned", "", "", nil)
+	e.Flush()
+	if e.Err() == nil {
 		t.Fatal("a failed write must be reported")
 	}
 	if e.Emit("started", "", "", nil) != 0 || e.End(nil, nil) != 0 {
@@ -134,37 +137,78 @@ func TestEndCarriesMetaAndTheResult(t *testing.T) {
 	}
 }
 
-// blockedWriter stalls every write until release is closed.
-type blockedWriter struct{ release chan struct{} }
+// blockedWriter stalls every write until release is closed and counts lines.
+type blockedWriter struct {
+	release chan struct{}
+	mu      *sync.Mutex
+	buf     *bytes.Buffer
+}
 
-func (b blockedWriter) Write(p []byte) (int, error) { <-b.release; return len(p), nil }
+func (b blockedWriter) Write(p []byte) (int, error) {
+	<-b.release
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
 
-// A consumer that stops reading must not hold up best-effort records: TryEmit
-// returns at once while another record is stuck in a write.
-func TestTryEmitNeverWaitsBehindAStalledConsumer(t *testing.T) {
-	w := blockedWriter{release: make(chan struct{})}
+// A consumer that keeps its pipe open but stops reading must not block the
+// emitter's callers (the job output readers and the coordinator): every Emit and
+// TryEmit returns at once, best-effort records are dropped once a backlog
+// builds, and nothing that mattered is lost or reordered when the consumer
+// resumes.
+func TestStalledConsumerNeverBlocksTheCallers(t *testing.T) {
+	w := blockedWriter{release: make(chan struct{}), mu: &sync.Mutex{}, buf: &bytes.Buffer{}}
 	e := New(w, "ci", "r", "r", nil)
-	stuck := make(chan int64)
-	go func() { stuck <- e.Emit("queued", "", "", nil) }()
-	for e.mu.TryLock() { // wait until the writer goroutine holds the lock
-		e.mu.Unlock()
-		time.Sleep(time.Millisecond)
-	}
-	done := make(chan int64)
-	go func() { done <- e.TryEmit("log", "job", "", nil) }()
-	select {
-	case seq := <-done:
-		if seq != 0 {
-			t.Fatalf("a record was written behind a stalled write: seq %d", seq)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		e.Emit("queued", "", "", nil)
+		for i := 0; i < 5*maxLogBacklog; i++ {
+			e.TryEmit("log", "job", "", map[string]any{"bytes": 1})
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("TryEmit waited for the stalled consumer")
+		e.Emit("started", "job", "", nil)
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("an Emit waited for the stalled consumer")
 	}
 	close(w.release)
-	if seq := <-stuck; seq != 1 {
-		t.Fatalf("the stalled record got seq %d", seq)
+	if seq := e.End(map[string]any{"result": "pass"}, nil); seq == 0 {
+		t.Fatal("End failed after the consumer resumed")
 	}
-	if seq := e.TryEmit("log", "job", "", nil); seq != 2 {
-		t.Fatalf("seq %d after the consumer resumed, want 2 (a dropped record leaves no gap)", seq)
+	w.mu.Lock()
+	out := w.buf.Bytes()
+	w.mu.Unlock()
+	all := lines(t, out)
+	var prev int64
+	logs, started := 0, false
+	for i, l := range all {
+		var d struct {
+			Type string `json:"type"`
+			Seq  int64  `json:"seq"`
+		}
+		if err := json.Unmarshal(l.Data, &d); err != nil || d.Seq != prev+1 {
+			t.Fatalf("line %d: seq %d after %d (a dropped record must leave no gap): %v", i, d.Seq, prev, err)
+		}
+		prev = d.Seq
+		logs += map[bool]int{true: 1}[d.Type == "log"]
+		started = started || d.Type == "started"
+	}
+	if !started || logs == 0 || logs >= 5*maxLogBacklog {
+		t.Fatalf("started=%v, %d of %d log records kept: want the started record and a bounded number of logs", started, logs, 5*maxLogBacklog)
+	}
+}
+
+// A consumer that never reads again cannot hold End for ever.
+func TestEndGivesUpOnAStalledConsumer(t *testing.T) {
+	old := FlushTimeout
+	FlushTimeout = 200 * time.Millisecond
+	defer func() { FlushTimeout = old }()
+	w := blockedWriter{release: make(chan struct{}), mu: &sync.Mutex{}, buf: &bytes.Buffer{}}
+	defer close(w.release)
+	e := New(w, "ci", "r", "r", nil)
+	if seq := e.End(map[string]any{"result": "pass"}, nil); seq != 0 || e.Err() == nil {
+		t.Fatalf("End returned %d with err %v for a consumer that never reads", seq, e.Err())
 	}
 }

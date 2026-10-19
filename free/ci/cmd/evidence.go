@@ -199,7 +199,7 @@ func runVerify(args []string) int {
 		return usageErr("nself ci evidence verify <rev> | --file <f> [--at-revision <sha>] [--policy required] [--json [--stream]]")
 	}
 	const cmd = "ci evidence verify"
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 	defer stop()
 	ignoreBrokenPipe() // a vanished consumer must not skip the worktree cleanup
 	root, err := evidenceRoot(f.repo)

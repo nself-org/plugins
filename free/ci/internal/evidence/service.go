@@ -145,6 +145,7 @@ func VerifyRevision(ctx context.Context, env Env, rev string) (v Verdict, ran bo
 		return v, true, fail(CodeWorktree, ExitInternal, "the run for %s did not finish (%s)", short(rev), ev.Result)
 	}
 	v = Judge(ev, rev, &current)
+	env.checkScope(ctx, &v) // a rerun is held to the same repository and policy as a stored document
 	return v, true, nil
 }
 

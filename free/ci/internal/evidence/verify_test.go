@@ -190,7 +190,9 @@ func FuzzVerifyFile(f *testing.F) {
 	f.Add(body2, sampleRev)
 	cur := sampleInputs()
 	f.Fuzz(func(t *testing.T, doc []byte, want string) {
-		v, err := VerifyDocument(doc, want, &cur, nil)
+		// the machine "recorded" every document it decodes, so authentication does
+		// not hide the gate checks this fuzz target exists to attack
+		v, err := VerifyDocument(doc, want, &cur, func(ev model.Evidence) *model.Evidence { return &ev })
 		if err != nil {
 			if e, isErr := AsError(err); !isErr || e.Exit != ExitInvalid || v.Exit != ExitInvalid {
 				t.Fatalf("decode failure must be exit 11: %v %+v", err, v)
@@ -206,4 +208,17 @@ func FuzzVerifyFile(f *testing.F) {
 			t.Fatalf("exit 0 for a document that must not gate: %s (%v)", doc, derr)
 		}
 	})
+}
+
+// A passing release check must not hide that the document came from a --job
+// run: the pipeline kind decides, not the class.
+func TestJudgeAdhocWithAReleaseCheckStillFails(t *testing.T) {
+	ev := sampleEvidence()
+	ev.Pipeline.Kind = "adhoc"
+	ev.Checks[0].Kind = "release"
+	cur := sampleInputs()
+	v := Judge(ev, sampleRev, &cur)
+	if v.Report.Class != ClassRelease || v.Exit != ExitFails || !hasReason(v.Reasons, attest.ReasonAdhoc) {
+		t.Fatalf("class %s exit %d reasons %v", v.Report.Class, v.Exit, v.Reasons)
+	}
 }

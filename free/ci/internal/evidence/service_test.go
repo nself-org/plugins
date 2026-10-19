@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
@@ -273,5 +274,18 @@ func TestVerifyRevisionInterruptedRunIsNotAVerdict(t *testing.T) {
 				t.Fatalf("leftovers: %v", left)
 			}
 		})
+	}
+}
+
+// A rerun is judged against the policy in force now, like stored evidence:
+// an older revision's weaker policy file must not buy a pass.
+func TestVerifyRevisionRerunIsHeldToTheCurrentPolicy(t *testing.T) {
+	r, sha := newRig(t)
+	env := r.env()
+	env.Policy = func(context.Context) (string, error) { return "pol-stricter", nil }
+	v, ran, err := VerifyRevision(context.Background(), env, sha)
+	ok(t, err)
+	if !ran || v.Exit != ExitStale || !hasReason(v.Reasons, attest.ReasonPolicyMismatch) {
+		t.Fatalf("ran=%v exit %d reasons %v: a rerun under another policy must not pass", ran, v.Exit, v.Reasons)
 	}
 }

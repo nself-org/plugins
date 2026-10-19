@@ -92,7 +92,7 @@ func (w *TempWorktree) Remove() error {
 		if err := os.RemoveAll(w.dir); err != nil {
 			w.err = fail(CodeWorktree, ExitInternal, "cannot remove %s: %v", w.dir, err)
 		}
-		_, _, _ = w.c(ctx, "git", "-C", w.repo, "worktree", "prune")
+		_, _, _ = w.c(ctx, "git", "-C", w.repo, "worktree", "prune", "--expire=now")
 	})
 	return w.err
 }

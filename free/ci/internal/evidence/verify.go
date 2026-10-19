@@ -112,7 +112,7 @@ func Judge(ev model.Evidence, want string, current *model.InputDigests) Verdict 
 	if fresh.State != "current" {
 		add(ExitStale, attest.ReasonStale)
 	}
-	if k := v.Report.Class; k == ClassAdhoc || k == ClassDrill {
+	if k := ev.Pipeline.Kind; k == "adhoc" || k == "drill" { // the pipeline kind, not the class: a release check must not hide it
 		add(ExitFails, attest.ReasonAdhoc)
 	}
 	if ev.Selection.Mode != "full" { // an affected-only pass proves less than the required policy

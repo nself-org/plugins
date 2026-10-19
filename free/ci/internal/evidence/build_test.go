@@ -195,3 +195,14 @@ func TestJobRunIsAdhocEvidence(t *testing.T) {
 		t.Fatalf("a --job run is kind %q, want adhoc", k)
 	}
 }
+
+// An edit that git was told to hide, made while the jobs run, still unbinds.
+func TestHiddenEditDuringTheRunUnbinds(t *testing.T) {
+	dir, _ := newRepo(t, baseFiles)
+	script := "git -C " + dir + " update-index --skip-worktree a.txt && echo tampered >> " + filepath.Join(dir, "a.txt")
+	res, st := runPipeline(t, dir, t.TempDir(), buildPlan(t, jobsOf("sh", "-c", script)), cirun.Hooks{})
+	ev := runDoc(t, dir, st, res)
+	if ev.Binding.State != "unbound" || ev.WorktreeState != "dirty" {
+		t.Fatalf("a hidden edit made during the run left the evidence %s/%s", ev.Binding.State, ev.WorktreeState)
+	}
+}
