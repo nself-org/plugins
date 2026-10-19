@@ -107,7 +107,7 @@ func TestDockerStopBoundedByGrace(t *testing.T) {
 
 func TestOrphanContainerVanishedDuringSweep(t *testing.T) {
 	fakeDocker(t, "echo 'Error: No such container: gone' >&2\nexit 1\n")
-	if err := removeStaleContainer(context.Background(), "gone"); err != nil {
+	if err := removeStaleContainer(context.Background(), "docker", "gone"); err != nil {
 		t.Fatal(err)
 	}
 }
