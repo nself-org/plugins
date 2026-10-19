@@ -34,7 +34,7 @@ func (s *sess) serve(ctx context.Context, bundle string) error {
 		uploaded <- nil
 	}
 	pending := uploaded
-	s.lastAlive.Store(time.Now().UnixNano())
+	s.touch()
 	// The silence watchdog runs on its own goroutine, so a Sink callback that blocks cannot
 	// stop it; it cancels the context the callbacks run under.
 	hctx, stopCallbacks := context.WithCancel(ctx)
@@ -86,7 +86,7 @@ func (s *sess) watchSilence(ttl time.Duration, silent chan<- struct{}, cancel co
 		case <-quit:
 			return
 		case <-t.C:
-			if time.Since(time.Unix(0, s.lastAlive.Load())) > ttl {
+			if s.quietFor() > ttl {
 				cancel()
 				close(silent)
 				return
@@ -95,24 +95,36 @@ func (s *sess) watchSilence(ttl time.Duration, silent chan<- struct{}, cancel co
 	}
 }
 
+// touch records that the agent just proved it works on this lease. Times are offsets from
+// s.origin on the monotonic clock, so a wall-clock step cannot expire a healthy agent.
+func (s *sess) touch() { s.lastAlive.Store(int64(time.Since(s.origin))) }
+
+// quietFor is how long ago touch was last called.
+func (s *sess) quietFor() time.Duration {
+	return time.Since(s.origin) - time.Duration(s.lastAlive.Load())
+}
+
 // noteAlive stamps the arrival of a frame that proves the agent is working on this lease: a
 // heartbeat that reports it, or a log, digest, chunk or ref scoped to it. It runs on the reader
-// goroutine, before any Sink callback, so a slow Sink does not look like a silent agent.
+// goroutine, before any Sink callback, so a slow Sink does not look like a silent agent. A Sink
+// that blocks longer than the coordinator TTL does: the reader stops reading once 64 frames queue,
+// the watchdog fires, the callback is cancelled and the attempt is lost (retryable infra); the
+// Sink is the fault, and holding the agent's lease open behind it would be worse.
 func (s *sess) noteAlive(m protocol.Message) {
 	switch b := m.Body.(type) {
 	case *protocol.Heartbeat:
 		for _, ls := range b.Leases {
 			if ls.LeaseID == s.lease.LeaseID && ls.Epoch == s.lease.Epoch {
-				s.lastAlive.Store(time.Now().UnixNano())
+				s.touch()
 			}
 		}
 	case *protocol.Log:
 		if s.ours(m, b.LeaseID, epochOr(epochOf(m), s.lease.Epoch)) {
-			s.lastAlive.Store(time.Now().UnixNano())
+			s.touch()
 		}
 	case *protocol.Digest, *protocol.Chunk, *protocol.ArtifactRef, *protocol.CacheRef:
 		if s.scoped(m) || ownsRef(s, m) {
-			s.lastAlive.Store(time.Now().UnixNano())
+			s.touch()
 		}
 	}
 }

@@ -51,7 +51,8 @@ type sess struct {
 	blobs      map[string]*blobState
 	blobCount  int             // blobs opened in this session
 	committed  map[string]bool // sha256 of blobs received whole and verified
-	lastAlive  atomic.Int64    // unix nanos of the last frame that proves the agent works on this lease
+	origin     time.Time       // monotonic reference for lastAlive
+	lastAlive  atomic.Int64    // offset from origin of the last frame that proves the agent works on this lease
 	blobBytes  int64           // bytes announced in this session
 
 	helloTimedOut atomic.Bool // the hello timer killed ssh
@@ -85,7 +86,7 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, lease protocol.
 		return newErr(CodeTransport, ReasonConnect, "cannot start ssh for node %s: %v", node.Identity.ID, err)
 	}
 	s := &sess{d: d, node: node, lease: lease, sink: sink, conn: conn, frames: make(chan frame, 64),
-		stop: make(chan struct{}), readerDone: make(chan struct{}), blobs: map[string]*blobState{}, committed: map[string]bool{}}
+		stop: make(chan struct{}), readerDone: make(chan struct{}), origin: time.Now(), blobs: map[string]*blobState{}, committed: map[string]bool{}}
 	s.stderr, s.errDone = drain(conn.Stderr)
 	defer s.close()
 	if err := s.handshake(ctx); err != nil {
