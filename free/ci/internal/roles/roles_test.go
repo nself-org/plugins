@@ -1,0 +1,471 @@
+package roles
+
+// Purpose: tests of the role matrix, identities, tokens and the audit rows of decisions and mutations.
+// Inputs:  a real SQLite store in t.TempDir(), a real pki CA for certificates, an injected clock.
+// Outputs: pass or fail; no network.
+// Constraints: the matrix test covers every catalogued action x role x operator; mutants under
+//          testdata/mutants are killed by TestAuthorize* and TestActions*.
+
+import (
+	"context"
+	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
+	"math/big"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/audit"
+	"github.com/nself-org/plugins/free/ci/internal/pki"
+	"github.com/nself-org/plugins/free/ci/internal/store"
+)
+
+var epoch = time.Unix(1_800_000_000, 0)
+
+type rig struct {
+	t    *testing.T
+	st   *store.Store
+	svc  *Service
+	dir  string
+	path string
+	now  time.Time
+}
+
+func newRig(t *testing.T) *rig {
+	t.Helper()
+	r := &rig{t: t, dir: t.TempDir(), now: epoch}
+	r.path = filepath.Join(r.dir, "state.db")
+	st, err := store.Open(r.path, store.Options{Clock: func() time.Time { return r.now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	r.st = st
+	r.svc = New(st, &audit.Log{St: st})
+	r.svc.Now = func() time.Time { return r.now }
+	r.svc.Self = "alice"
+	return r
+}
+
+func (r *rig) op() Actor { return r.svc.Operator("cli:alice") }
+
+func (r *rig) auditRows() []store.AuditEntry {
+	rows, err := r.st.AuditEntries(context.Background(), 0, 0)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	return rows
+}
+
+func (r *rig) grant(principal string, role Role, projects ...string) {
+	r.t.Helper()
+	if err := r.svc.Grant(context.Background(), r.op(), Request{Principal: principal, Role: role, Projects: projects}); err != nil {
+		r.t.Fatal(err)
+	}
+}
+
+func (r *rig) tokenActor(principal string, role Role, projects ...string) Actor {
+	r.t.Helper()
+	tok, _, err := r.svc.IssueToken(context.Background(), r.op(), Request{Principal: principal, Role: role, Projects: projects})
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	a, err := r.svc.ActorFromToken(context.Background(), tok)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	return a
+}
+
+func TestAuthorizeRoleOrder(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		have, need Role
+		ok         bool
+	}{
+		{Member, Member, true}, {Member, Release, false}, {Member, Admin, false},
+		{Release, Member, true}, {Release, Release, true}, {Release, Admin, false},
+		{Admin, Member, true}, {Admin, Release, true}, {Admin, Admin, true},
+		{Role("root"), Member, false}, {Member, Role("root"), false},
+	} {
+		a := Actor{ID: "u", Kind: KindUser, Role: tc.have, Projects: []string{AllProjects}, svc: r.svc}
+		err := Authorize(ctx, a, tc.need, "p1")
+		if (err == nil) != tc.ok {
+			t.Errorf("%s needs %s: err=%v want ok=%v", tc.have, tc.need, err, tc.ok)
+		}
+		if err != nil && ReasonOf(err) == "" {
+			t.Errorf("a refusal is an E687 error with a reason: %v", err)
+		}
+	}
+	if err := Authorize(ctx, Actor{}, Member, ""); ReasonOf(err) != ReasonNoActor {
+		t.Fatalf("the zero actor is refused: %v", err)
+	}
+}
+
+func TestAuthorizeProjectScope(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	rel := r.tokenActor("bob", Release, "p1", "p2")
+	if err := Authorize(ctx, rel, Release, "p1"); err != nil {
+		t.Fatalf("allowlisted project: %v", err)
+	}
+	if err := Authorize(ctx, rel, Release, "p3"); ReasonOf(err) != ReasonProject {
+		t.Fatalf("other project must be refused: %v", err)
+	}
+	if err := Authorize(ctx, rel, Release, ""); ReasonOf(err) != ReasonProject {
+		t.Fatalf("a scoped actor cannot do a project-wide release action: %v", err)
+	}
+	if err := Authorize(ctx, rel, Member, ""); err != nil {
+		t.Fatalf("a member-level project-less check passes for a scoped actor: %v", err)
+	}
+	all := r.tokenActor("carol", Admin, AllProjects)
+	if err := Authorize(ctx, all, Admin, "anything"); err != nil {
+		t.Fatalf("* covers every project: %v", err)
+	}
+}
+
+// TestActionsMatrix checks every catalogued action for every role and the operator.
+func TestActionsMatrix(t *testing.T) {
+	r := newRig(t)
+	ctx := WithAuthor(context.Background(), "someone-else")
+	want := map[string]Role{
+		ActPolicyTeamSet: Admin, ActRunnerRegister: Admin, ActRunnerRevoke: Admin, ActNodeTrustSet: Admin, ActProviderAuthorize: Admin,
+		ActPolicySet: Admin, ActPrivacyZoneSet: Admin, ActSecretAuthorize: Admin, ActRunApprove: Release, ActSpendApprove: Admin,
+		ActReleaseStart: Release, ActLogsView: Member, ActArtifactsView: Member, ActAuditView: Release, ActRolesManage: Admin, ActTokenManage: Admin,
+	}
+	if got := Actions(); len(got) != len(want) {
+		t.Fatalf("the catalogue has %d actions, the table %d: %v", len(got), len(want), got)
+	}
+	for action, min := range want {
+		if got, ok := Needs(action); !ok || got != min {
+			t.Errorf("%s needs %s, catalogue says %s", action, min, got)
+		}
+		for _, have := range []Role{Member, Release, Admin} {
+			a := Actor{ID: "u-" + string(have), Kind: KindUser, Role: have, Projects: []string{AllProjects}, svc: r.svc}
+			err := AuthorizeAction(ctx, a, action, "p1")
+			if ok := have.Rank() >= min.Rank(); (err == nil) != ok {
+				t.Errorf("%s by %s: err=%v want allowed=%v", action, have, err, ok)
+			}
+		}
+		if err := AuthorizeAction(ctx, r.op(), action, "p1"); err != nil {
+			t.Errorf("the operator may do %s: %v", action, err)
+		}
+	}
+	member := Actor{ID: "m", Kind: KindUser, Role: Member, Projects: []string{AllProjects}, svc: r.svc}
+	for _, a := range []string{ActRunnerRegister, ActRunnerRevoke, ActPolicySet, ActRunApprove, ActSpendApprove, ActReleaseStart} {
+		if ReasonOf(AuthorizeAction(ctx, member, a, "p1")) != ReasonRole {
+			t.Errorf("a member must not do %s", a)
+		}
+	}
+	rel := Actor{ID: "r", Kind: KindUser, Role: Release, Projects: []string{AllProjects}, svc: r.svc}
+	for _, a := range []string{ActNodeTrustSet, ActSpendApprove} {
+		if AuthorizeAction(ctx, rel, a, "p1") == nil {
+			t.Errorf("only admin does %s", a)
+		}
+	}
+	if ReasonOf(AuthorizeAction(ctx, rel, "no.such.action", "p1")) != ReasonUnknownAct {
+		t.Fatal("an unknown action is refused")
+	}
+}
+
+func TestActionsReleaseStartAndApproveRules(t *testing.T) {
+	r := newRig(t)
+	rel := r.tokenActor("bob", Release, "p1")
+	ctx := WithAuthor(context.Background(), "author-1")
+	if err := AuthorizeAction(ctx, rel, ActReleaseStart, "p1"); err != nil {
+		t.Fatalf("release starts a release job on an allowlisted project: %v", err)
+	}
+	if ReasonOf(AuthorizeAction(ctx, rel, ActReleaseStart, "p2")) != ReasonProject {
+		t.Fatal("release.start on a project outside the allowlist is refused")
+	}
+	if ReasonOf(AuthorizeAction(ctx, rel, ActReleaseStart, "")) != ReasonProject {
+		t.Fatal("release.start needs a project")
+	}
+	if err := AuthorizeAction(ctx, rel, ActRunApprove, "p1"); err != nil {
+		t.Fatalf("release approves a run it did not author: %v", err)
+	}
+	own := WithAuthor(context.Background(), "bob")
+	if ReasonOf(AuthorizeAction(own, rel, ActRunApprove, "p1")) != ReasonSelfApproval {
+		t.Fatal("no self-approval")
+	}
+	if ReasonOf(AuthorizeAction(context.Background(), rel, ActRunApprove, "p1")) != ReasonNoAuthor {
+		t.Fatal("an unknown author fails closed")
+	}
+}
+
+func TestAuthorizeAuditsDecisions(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	member := r.tokenActor("m", Member, "p1")
+	base := len(r.auditRows())
+	if err := AuthorizeAction(ctx, member, ActLogsView, "p1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(r.auditRows()); got != base {
+		t.Fatalf("a member-level read writes no row, wrote %d", got-base)
+	}
+	if err := AuthorizeAction(ctx, member, ActPolicySet, "p1"); err == nil {
+		t.Fatal("member may not set policy")
+	}
+	if err := Authorize(ctx, r.op(), Admin, ""); err != nil {
+		t.Fatal(err)
+	}
+	rows := r.auditRows()[base:]
+	if len(rows) != 2 {
+		t.Fatalf("want exactly one row per audited decision (2), got %d", len(rows))
+	}
+	if !strings.Contains(rows[0].Detail, "result=deny") || !strings.Contains(rows[0].Detail, "reason=role") || !strings.HasPrefix(rows[0].Actor, "token:") {
+		t.Errorf("deny row: %+v", rows[0])
+	}
+	if !strings.Contains(rows[1].Detail, "result=allow") || rows[1].Actor != "operator:cli:alice" {
+		t.Errorf("the operator is allowed and still audited: %+v", rows[1])
+	}
+	if rep, _ := (&audit.Log{St: r.st}).Verify(ctx, 0); !rep.OK() || rep.Unsealed != 0 {
+		t.Fatalf("decision rows are sealed: %+v", rep)
+	}
+}
+
+func TestIdentityTokenStates(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	tok, row, err := r.svc.IssueToken(ctx, r.op(), Request{Principal: "bob", Role: Release, Projects: []string{"p1"}, TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := r.svc.ActorFromToken(ctx, tok)
+	if err != nil || a.ID != "bob" || a.Role != Release || len(a.Projects) != 1 || a.Kind != KindToken {
+		t.Fatalf("a valid token maps to its role and projects: %+v, %v", a, err)
+	}
+	if _, err = r.svc.ActorFromToken(ctx, tok+"x"); ReasonOf(err) != ReasonTokenUnknown {
+		t.Fatalf("unknown token: %v", err)
+	}
+	r.now = r.now.Add(2 * time.Hour)
+	if _, err = r.svc.ActorFromToken(ctx, tok); ReasonOf(err) != ReasonTokenExpired {
+		t.Fatalf("expired token: %v", err)
+	}
+	r.now = epoch
+	if found, err := r.svc.RevokeToken(ctx, r.op(), row.ID); err != nil || !found {
+		t.Fatalf("revoke: %v %v", found, err)
+	}
+	if _, err = r.svc.ActorFromToken(ctx, tok); ReasonOf(err) != ReasonTokenRevoked {
+		t.Fatalf("revoked token: %v", err)
+	}
+	if found, _ := r.svc.RevokeToken(ctx, r.op(), row.ID); found {
+		t.Fatal("a second revoke finds nothing")
+	}
+	if _, _, err = r.svc.IssueToken(ctx, r.op(), Request{Principal: "bob", Role: Admin, Projects: []string{"p"}, TTL: 100 * 24 * time.Hour * 10}); err == nil {
+		t.Fatal("a lifetime above the cap is refused")
+	}
+}
+
+func TestTokenStorageHoldsOnlyTheDigest(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	tok, _, err := r.svc.IssueToken(ctx, r.op(), Request{Principal: "bob", Role: Admin, Projects: []string{AllProjects}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tok) != 43 || strings.ContainsAny(tok, "+/=") {
+		t.Fatalf("a token is 32 random bytes in base64url (43 chars): %q", tok)
+	}
+	_ = r.st.Close() // flush the WAL
+	for _, f := range []string{r.path, r.path + "-wal", r.path + "-shm"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		if strings.Contains(string(b), tok) {
+			t.Fatalf("%s holds the clear token", filepath.Base(f))
+		}
+	}
+	st, err := store.Open(r.path, store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	if _, ok, _ := st.TokenByDigest(ctx, digestOf(tok)); !ok {
+		t.Fatal("the sha256 digest finds the token")
+	}
+	rows, _ := st.AuditEntries(ctx, 0, 0)
+	for _, e := range rows {
+		if strings.Contains(e.Detail+e.Target+e.Actor, tok) {
+			t.Fatal("an audit row holds the token")
+		}
+	}
+}
+
+func userCert(t *testing.T, r *rig, id string) (*x509.Certificate, *pki.CA) {
+	t.Helper()
+	ca, err := pki.New(context.Background(), pki.Options{Store: r.st, DataDir: r.dir, Now: func() time.Time { return r.now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := ca.IssueUser(context.Background(), id, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blk, _ := pem.Decode(b.CertPEM)
+	cert, err := x509.ParseCertificate(blk.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cert, ca
+}
+
+func TestIdentityPeerCertificates(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	cert, _ := userCert(t, r, "dave")
+	if _, err := r.svc.ActorFromPeer(ctx, cert); ReasonOf(err) != ReasonNoGrant {
+		t.Fatalf("a user certificate with no grant has no role: %v", err)
+	}
+	r.grant("dave", Release, "p1")
+	a, err := r.svc.ActorFromPeer(ctx, cert)
+	if err != nil || a.ID != "dave" || a.Kind != KindUser || a.Role != Release || AuthorizeAction(WithAuthor(ctx, "x"), a, ActRunApprove, "p1") != nil {
+		t.Fatalf("a user certificate maps to its actor: %+v, %v", a, err)
+	}
+	if found, err := r.svc.Revoke(ctx, r.op(), "dave"); err != nil || !found {
+		t.Fatal(err)
+	}
+	if _, err = r.svc.ActorFromPeer(ctx, cert); ReasonOf(err) != ReasonNoGrant {
+		t.Fatalf("a revoked grant takes effect at once: %v", err)
+	}
+	for _, kind := range []string{"node", "coordinator"} {
+		n := &x509.Certificate{SerialNumber: big.NewInt(7), NotBefore: r.now.Add(-time.Hour), NotAfter: r.now.Add(time.Hour), URIs: []*url.URL{{Scheme: "nself-ci", Opaque: kind + "/n1"}}}
+		if _, err = r.svc.ActorFromPeer(ctx, n); ReasonOf(err) != ReasonNodeKind || err.(*Error).ErrCode() != "E687" {
+			t.Fatalf("a %s certificate is rejected with E687: %v", kind, err)
+		}
+	}
+	if _, err = r.svc.ActorFromPeer(ctx, nil); ReasonOf(err) != ReasonBadCert {
+		t.Fatalf("no certificate: %v", err)
+	}
+	r.now = r.now.Add(3 * time.Hour)
+	if _, err = r.svc.ActorFromPeer(ctx, cert); ReasonOf(err) != ReasonBadCert {
+		t.Fatalf("an expired certificate: %v", err)
+	}
+}
+
+func TestPeerCertificateDeniedSerial(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	cert, _ := userCert(t, r, "erin")
+	r.grant("erin", Admin, AllProjects)
+	if _, err := r.svc.ActorFromPeer(ctx, cert); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.st.PKIDeny(ctx, "admin", "erin", "test", hexSerial(cert)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.svc.ActorFromPeer(ctx, cert); ReasonOf(err) != ReasonBadCert {
+		t.Fatalf("a denied serial is refused: %v", err)
+	}
+}
+
+func hexSerial(c *x509.Certificate) string { return hex.EncodeToString(c.SerialNumber.Bytes()) }
+
+func TestMutationsWriteExactlyOneRow(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	steps := []struct {
+		name string
+		do   func() error
+	}{
+		{"roles.grant", func() error {
+			return r.svc.Grant(ctx, r.op(), Request{Principal: "bob", Role: Member, Projects: []string{"p1"}})
+		}},
+		{"roles.revoke", func() error { _, err := r.svc.Revoke(ctx, r.op(), "bob"); return err }},
+		{"token.issue", func() error {
+			_, _, err := r.svc.IssueToken(ctx, r.op(), Request{Principal: "bob", Role: Member, Projects: []string{"p1"}})
+			return err
+		}},
+	}
+	for _, s := range steps {
+		before := len(r.auditRows())
+		if err := s.do(); err != nil {
+			t.Fatal(s.name, err)
+		}
+		rows := r.auditRows()[before:]
+		if len(rows) != 1 || rows[0].Action != s.name || rows[0].Head == nil {
+			t.Fatalf("%s must write exactly one sealed row: %+v", s.name, rows)
+		}
+	}
+	before := len(r.auditRows())
+	if found, _ := r.svc.Revoke(ctx, r.op(), "nobody"); found || len(r.auditRows()) != before {
+		t.Fatal("revoking nothing writes nothing")
+	}
+	member := r.tokenActor("m", Member, AllProjects)
+	if err := r.svc.Grant(ctx, member, Request{Principal: "x", Role: Admin, Projects: []string{AllProjects}}); ReasonOf(err) != ReasonRole {
+		t.Fatalf("only admin grants roles: %v", err)
+	}
+	for _, bad := range []Request{
+		{Principal: "Bad Name", Role: Member, Projects: []string{"p"}},
+		{Principal: "bob", Role: Role("owner"), Projects: []string{"p"}},
+		{Principal: "bob", Role: Member},
+		{Principal: "bob", Role: Member, Projects: []string{"a b"}},
+	} {
+		if r.svc.Grant(ctx, r.op(), bad) == nil {
+			t.Errorf("request %+v must be refused", bad)
+		}
+	}
+}
+
+func TestNonSelfPrincipals(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	Use(r.svc)
+	count := func() int {
+		n, err := NonSelfPrincipals(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if count() != 0 {
+		t.Fatal("an empty store has none")
+	}
+	if err := r.svc.Grant(ctx, r.op(), Request{Principal: "alice", Role: Admin, Projects: []string{AllProjects}, Self: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := r.svc.IssueToken(ctx, r.op(), Request{Principal: "alice", Role: Member, Projects: []string{AllProjects}, Self: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := r.svc.IssueToken(ctx, r.op(), Request{Principal: "alice", Role: Admin, Projects: []string{AllProjects}, Self: true}); err != nil {
+		t.Fatal(err)
+	}
+	if count() != 0 {
+		t.Fatalf("--self member and admin tokens and an admin grant count 0, got %d", count())
+	}
+	if r.svc.Grant(ctx, r.op(), Request{Principal: "bob", Role: Member, Projects: []string{"p"}, Self: true}) == nil {
+		t.Fatal("--self is only for the operator's own identity")
+	}
+	r.grant("bob", Admin, AllProjects)
+	if count() != 1 {
+		t.Fatalf("an admin grant for another identity counts 1, got %d", count())
+	}
+	if _, err := r.svc.Revoke(ctx, r.op(), "bob"); err != nil || count() != 0 {
+		t.Fatalf("revoking it counts 0, got %d (%v)", count(), err)
+	}
+	_, tok, _ := r.svc.IssueToken(ctx, r.op(), Request{Principal: "bob", Role: Member, Projects: []string{"p"}})
+	if count() != 1 {
+		t.Fatalf("a member token for another identity counts 1, got %d", count())
+	}
+	if _, err := r.svc.RevokeToken(ctx, r.op(), tok.ID); err != nil || count() != 0 {
+		t.Fatalf("revoking the token counts 0, got %d", count())
+	}
+	cert, _ := userCert(t, r, "frank")
+	if count() != 1 {
+		t.Fatalf("a live user certificate not marked self counts 1, got %d", count())
+	}
+	if err := r.st.CertSubjectPut(ctx, hexSerial(cert), "frank", store.SubjectSelf); err != nil || count() != 0 {
+		t.Fatalf("a self certificate counts 0, got %d (%v)", count(), err)
+	}
+	Use(nil)
+	if _, err := NonSelfPrincipals(ctx); err == nil {
+		t.Fatal("no installed service is an error, not a silent zero")
+	}
+}
