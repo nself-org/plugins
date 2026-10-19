@@ -52,6 +52,8 @@ type Coordinator struct {
 	Poll      time.Duration
 
 	exec *ciexec.Executor
+	// storeTTL overrides the store TTL (tests shorten the heartbeat window).
+	storeTTL time.Duration
 }
 
 // Result is how a run ended.
@@ -148,6 +150,14 @@ func (c *Coordinator) policy(ctx context.Context, h Hooks) (PolicyResult, error)
 	return r.Resolve(ctx, PolicyRequest{Root: c.Opts.Root, Pipeline: c.Plan.Pipeline.Name})
 }
 
+// openStore opens the run store, honouring the test TTL override.
+func (c *Coordinator) openStore() (*store.Store, error) {
+	if c.storeTTL > 0 {
+		return store.Open(c.storePath(), store.Options{TTL: c.storeTTL})
+	}
+	return OpenStore(c.storePath())
+}
+
 func (c *Coordinator) storePath() string {
 	if c.Opts.Home == "" {
 		return ""
@@ -214,7 +224,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	st, err := OpenStore(c.storePath())
+	st, err := c.openStore()
 	if err != nil {
 		return Result{}, err
 	}
@@ -258,26 +268,28 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 		out: map[string]*JobOutcome{}, done: map[string]chan struct{}{}, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
 	rs.render.Event(Event{Type: "planned", Plan: c.Plan})
 	start := time.Now()
-	c.drive(ctx, rs, st, coord.ID)
+	// the heartbeat spans drive and conclude: evidence building can outlast 3 x TTL
+	// and the run row must not read as dead before FinishPipeline closes it
+	stopBeat := beat(context.WithoutCancel(ctx), st, coord.ID)
+	defer stopBeat()
+	c.drive(ctx, rs)
 	if end := GitRevision(context.WithoutCancel(ctx), c.Opts.Root, c.capture()); end.SHA != rev.SHA || end.Dirty {
 		rev.Dirty = true // the tree moved or changed while jobs ran: the result is not bound to the start commit
 	}
 	res := c.conclude(finishIn{St: st, RunID: runID, Rev: rev, Source: source, Policy: pol, Hooks: h, Jobs: rs.outcomes(),
 		Cancelled: rs.userCancel || ctx.Err() != nil, Partial: c.Opts.Job != "" || c.Opts.Pipeline != "", Start: start, Post: post, Recovered: recovered, Skipped: c.Plan.Skipped, Begin: rs.begin})
+	stopBeat()
 	rs.render.Done(res.Summary)
 	return res, nil
 }
 
-// drive runs the jobs while the heartbeat and the cancel watcher are alive.
-func (c *Coordinator) drive(ctx context.Context, rs *runState, st *store.Store, coordID string) {
-	bg := context.WithoutCancel(ctx)
-	live, stop := context.WithCancel(bg)
-	runCtx, cancel := context.WithCancel(ctx)
-	rs.cancelRun = cancel
-	var wg sync.WaitGroup
-	wg.Add(2)
+// beat keeps the coordinator heartbeat alive until the returned stop is called
+// (idempotent; it waits for the goroutine to end).
+func beat(ctx context.Context, st *store.Store, coordID string) (stop func()) {
+	live, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
 	go func() {
-		defer wg.Done()
+		defer close(done)
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
 		for {
@@ -289,6 +301,17 @@ func (c *Coordinator) drive(ctx context.Context, rs *runState, st *store.Store, 
 			}
 		}
 	}()
+	return func() { cancel(); <-done }
+}
+
+// drive runs the jobs while the cancel watcher is alive.
+func (c *Coordinator) drive(ctx context.Context, rs *runState) {
+	bg := context.WithoutCancel(ctx)
+	live, stop := context.WithCancel(bg)
+	runCtx, cancel := context.WithCancel(ctx)
+	rs.cancelRun = cancel
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		rs.pollCancels(live)
