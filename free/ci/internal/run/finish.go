@@ -12,6 +12,7 @@ package run
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -91,6 +92,16 @@ func firstLineOf(s string) string {
 	return s
 }
 
+// afterRunExit is the exit status an AfterRun error asks for: its ExitCode(),
+// or 0 for an error that is only a note.
+func afterRunExit(err error) int {
+	var x interface{ ExitCode() int }
+	if errors.As(err, &x) {
+		return x.ExitCode()
+	}
+	return 0
+}
+
 // exitFor maps a result to the process exit code (model.ExitCodes, "ci").
 func exitFor(r model.Result) int {
 	switch r {
@@ -164,9 +175,11 @@ func (c *Coordinator) conclude(f finishIn) Result {
 	line, pnotes := c.postStatus(pctx, f, info, ev)
 	pdone()
 	notes = append(notes, pnotes...)
+	exit := exitFor(ev.Result)
 	for _, h := range f.Hooks.AfterRuns {
 		if err = guard("after-run hook", func() error { return h.AfterRun(bg, info) }); err != nil {
 			notes = append(notes, "after-run hook: "+firstLineOf(err.Error()))
+			exit = max(exit, afterRunExit(err)) // a failed publication must not read as a clean run (P7-CACHE-18)
 		}
 	}
 	for _, fin := range f.Hooks.Finalizers {
@@ -177,7 +190,7 @@ func (c *Coordinator) conclude(f finishIn) Result {
 	nctx, ndone := context.WithTimeout(bg, 30*time.Second) // a hung sink must not hold the run after its status went out
 	notes = append(notes, notifyRun(nctx, f.Hooks, NotifyRequest{Run: info, Status: line, Notes: append([]string(nil), notes...)})...)
 	ndone()
-	return Result{RunID: f.RunID, Exit: exitFor(ev.Result), Summary: Summary{RunID: f.RunID, Result: ev.Result, Jobs: f.Jobs, Skipped: f.Skipped,
+	return Result{RunID: f.RunID, Exit: exit, Summary: Summary{RunID: f.RunID, Result: ev.Result, Jobs: f.Jobs, Skipped: f.Skipped,
 		Status: line, Evidence: digest, Doc: ev, Notes: notes}}
 }
 

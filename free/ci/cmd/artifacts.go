@@ -63,7 +63,7 @@ func init() {
 	registerArtifactsSub("prune", artifactsPrune)
 }
 
-const artifactsUsage = "usage: nself ci artifacts list [--run R] [--attempt A] [--name N] [--kind K] | show <id> | get <id> --dest <dir> | prune [--release] [--older-than D] [--dry-run] | tools install | --cache <sub>  (all take --json)"
+const artifactsUsage = "usage: nself ci artifacts list [--run R] [--attempt A] [--name N] [--kind K] | show <id> | get <id> --dest <dir> | prune [--release] [--older-than D] [--dry-run] | tools install | verify <dir|manifest|run> | key [init|rotate] | sign <run> | release <run> --out <dir> | signer (started by the coordinator) | --cache <sub>  (all take --json)"
 
 func runArtifacts(args []string) int {
 	switch {
