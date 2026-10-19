@@ -144,7 +144,8 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 		return nil, fail(CodeRun, "run %s has no pipeline row", sess.RunID)
 	}
 	rd.d, err = dispatch.New(dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL,
-		Transport:     newTransportAdapter(rd.sink, rd.sink, rd.row.Project),
+		Transport: newTransportAdapter(rd.sink, rd.sink, rd.row.Project,
+			nodeScope{home: sess.Home, root: rd.row.Project, coordinator: sess.Coordinator.ID}),
 		DeliveryError: func(a dispatch.Admitted, err error) { rd.sink.ended(a.AttemptID, err) }})
 	if err != nil {
 		return nil, err
@@ -158,7 +159,7 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 // the preparers and the driver (transport.Deliver). sink receives the carrier's
 // output.
 func NewTransportAdapter(sink transport.Sink) dispatch.Transport {
-	return newTransportAdapter(sink, nil, "")
+	return newTransportAdapter(sink, nil, "", nodeScope{})
 }
 
 // carriers is what the adapter tells the run about the carriers it starts: the
@@ -167,14 +168,16 @@ type carriers interface {
 	carrierStart(ctx context.Context, attemptID, leaseID string) (context.Context, func())
 }
 
-func newTransportAdapter(sink transport.Sink, reg carriers, root string) dispatch.Transport {
-	return transportAdapter{sink: sink, reg: reg, root: root}
+func newTransportAdapter(sink transport.Sink, reg carriers, root string, scope nodeScope) dispatch.Transport {
+	return transportAdapter{sink: sink, reg: reg, root: root, scope: scope}
 }
 
 type transportAdapter struct {
 	sink transport.Sink
 	reg  carriers
 	root string // the repository whose revision a node receives
+	// scope is what the per-lease secret source needs besides the node (home, root, coordinator).
+	scope nodeScope
 }
 
 func (transportAdapter) Known(kind string) bool {
@@ -191,7 +194,13 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	if RemoteRepo != nil && a.root != "" {
 		RemoteRepo(a.root)
 	}
+	refs, err := leaseSecretRefs(d.Node, d.Job) // a secret job goes only where its values may go (D-1101)
+	if err != nil {
+		return err
+	}
+	sc := a.scope
+	sc.node = d.Node
 	lease := protocol.Lease{LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
-		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: []protocol.SecretRef{}, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
-	return transport.Deliver(ctx, d.Node, lease, a.sink)
+		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: refs, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
+	return transport.Deliver(withNodeScope(ctx, sc), d.Node, lease, a.sink)
 }

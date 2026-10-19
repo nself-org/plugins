@@ -7,10 +7,10 @@ package main
 // oldest agent it accepts, the agent TTL derived from the lease TTL, and the
 // repository a node receives a bundle of.
 // Inputs:  none. Outputs: a configured ssh.Default.
-// Constraints: no secret value is sent to a node: Secrets stays nil until a
-// per-lease secret source exists (the driver sends values only to an
-// operator-owned, uid-separated node under a PERSONAL coordinator, and only
-// when this source is set). The repository is pointed at once per root; a
+// Constraints: a secret value is sent only to an operator-owned, uid-separated
+// node under a PERSONAL coordinator (NSELF_CI_COORDINATOR_MODE is not "team"):
+// Personal follows the mode and Secrets is the per-lease source in internal/run.
+// A TEAM coordinator keeps jobs with secrets on its own machine. The repository is pointed at once per root; a
 // plain `nself ci` run serves one repository.
 
 import (
@@ -32,7 +32,8 @@ func init() { configureSSH(ssh.Default) }
 // configureSSH sets d for plain `nself ci`; the driver's own tests build their own drivers.
 func configureSSH(d *ssh.Driver) {
 	d.Renew = cirun.RenewLease
-	d.Personal = true
+	d.Personal = cirun.NodeSecretsAllowed() // values go to a node only under a PERSONAL coordinator (D-1101)
+	d.Secrets = cirun.NodeSecretSource
 	d.MinAgentVersion = minAgentVersion
 	d.Heartbeat = sshHeartbeat
 	// the coordinator treats an agent silent for agent_ttl + 2 heartbeats as lost: that is the lease TTL

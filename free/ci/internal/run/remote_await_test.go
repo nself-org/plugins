@@ -385,16 +385,22 @@ func TestSecretsNeverToForeignNode(t *testing.T) {
 		n.Identity.ID, n.Identity.Transport = "x1", probe.kind
 		n.Identity.Ownership.Value = &ownership
 		n.SecretsEligible = ownership == "operator"
-		a := newTransportAdapter(nil, nil, "")
+		a := newTransportAdapter(nil, nil, "", nodeScope{})
 		err := a.Deliver(context.Background(), deliveryFor(n, job))
-		if err != nil {
-			t.Fatal(err)
-		}
 		probe.mu.Lock()
 		got := probe.lease
 		probe.mu.Unlock()
-		if len(got.Secrets) != 0 {
-			t.Errorf("%s: the lease carries secret refs %v; a foreground run sends no secret value to any node", name, got.Secrets)
+		if ownership != "operator" {
+			if err == nil || got.LeaseID != "" {
+				t.Errorf("%s: a secret job reached the driver (err %v, lease %+v)", name, err, got.Secrets)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Secrets) != 2 { // the refs are names; the values never ride in the lease
+			t.Errorf("%s: the lease carries %v, want the two refs", name, got.Secrets)
 		}
 	}
 }
@@ -510,8 +516,8 @@ func TestRemoteAwaitLocalOnlyJobs(t *testing.T) {
 		"remote only":        {model.Job{Kind: "test", Run: []string{"true"}, RemoteOnly: true}, nil, false},
 		"artifacts":          {model.Job{Kind: "build", Run: []string{"true"}, Artifacts: []model.ArtifactDecl{{Path: "out"}}}, nil, true},
 		"cache":              {model.Job{Kind: "build", Run: []string{"true"}, Cache: &model.JobCacheConfig{}}, nil, true},
-		"secrets":            {model.Job{Kind: "test", Run: []string{"true"}, Secrets: []string{"project/K"}}, nil, true},
-		"secrets remote":     {model.Job{Kind: "test", Run: []string{"true"}, Secrets: []string{"project/K"}, RemoteOnly: true}, nil, true},
+		"secrets":            {model.Job{Kind: "test", Run: []string{"true"}, Secrets: []string{"project/K"}}, nil, false},
+		"secrets remote":     {model.Job{Kind: "test", Run: []string{"true"}, Secrets: []string{"project/K"}, RemoteOnly: true}, nil, false},
 		"services":           {model.Job{Kind: "test", Run: []string{"true"}, NeedsServices: []string{"db"}}, nil, true},
 		"labels":             {model.Job{Kind: "test", Run: []string{"true"}, Requirements: &model.Requirements{Labels: []string{"gpu"}}}, nil, true},
 		"labels remote only": {model.Job{Kind: "test", Run: []string{"true"}, Requirements: &model.Requirements{Labels: []string{"gpu"}}, RemoteOnly: true}, nil, false},

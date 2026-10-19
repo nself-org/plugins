@@ -111,6 +111,12 @@ func redactorInstalled(newRedactor func() ciexec.Redactor) func() bool {
 }
 
 func newSecretSource(a AttemptInfo, newRedactor func() ciexec.Redactor) ciexec.SecretSource {
+	return buildSecretSource(a, newRedactor, nil)
+}
+
+// buildSecretSource builds the Source of one attempt. own, when set, are the facts of an attempt that runs on
+// a node: the operator facts and the legacy environment source are not used for it.
+func buildSecretSource(a AttemptInfo, newRedactor func() ciexec.Redactor, own *secrets.Facts) ciexec.SecretSource {
 	secretsMu.Lock()
 	rt, probe := secretsRuntime, secretsProbe
 	secretsMu.Unlock()
@@ -127,6 +133,9 @@ func newSecretSource(a AttemptInfo, newRedactor func() ciexec.Redactor) ciexec.S
 	legacy := rt.Legacy
 	if legacy == nil && rt.Mode == secrets.ModePersonalLocal {
 		legacy = &secrets.LegacyEnv{Getenv: os.Getenv}
+	}
+	if own != nil {
+		facts, legacy = func(AttemptInfo) secrets.Facts { return *own }, nil
 	}
 	return secrets.New(secrets.Config{
 		Mode:    rt.Mode,

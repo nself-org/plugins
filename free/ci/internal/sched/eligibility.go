@@ -44,6 +44,16 @@ func toolPresent(c model.Capability, name string) bool {
 	}
 	return c.Tools.Browsers.Value != nil && has(*c.Tools.Browsers.Value, name)
 }
+
+// wantsSecrets reports whether the job declares a secret class other than none.
+func wantsSecrets(j Job) bool {
+	for _, c := range j.SecretClasses {
+		if c != "none" {
+			return true
+		}
+	}
+	return false
+}
 func limits(w World, j Job, r Runner) []model.PlacementReasonDetail {
 	pairs := []struct {
 		max, used int
@@ -114,6 +124,9 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 	jf := trust.JobFacts{Trust: j.Trust, SecretClasses: j.SecretClasses, Network: j.Network, PersonalOwnRun: j.PersonalOwnRun, Release: j.Pipeline.Release}
 	for _, tr := range trust.Admissible(jf, d, w.Policy.Trust) {
 		out = append(out, model.PlacementReasonDetail{Code: string(tr), Detail: string(tr)})
+	}
+	if r.Location != "local" && wantsSecrets(j) && !(c.SecretsEligible && c.Identity.Ownership.Value != nil && *c.Identity.Ownership.Value == "operator") {
+		out = append(out, reason(model.PlacementReason(trust.SecretsClassNotDeclared), "node is not secrets-eligible")) // a value goes only to the operator's own uid-separated node (D-1101)
 	}
 	if j.Requirements.IsolationMin != "" && trust.RankIsolation(d.Isolation) < trust.RankIsolation(trust.DecodeIsolation(string(j.Requirements.IsolationMin))) {
 		out = append(out, model.PlacementReasonDetail{Code: string(trust.IsolationBelowMinimum), Detail: "job isolation minimum"})
