@@ -150,7 +150,7 @@ Hasura row-level filter on all tables: `{"tenant_id": {"_eq": "X-Hasura-Tenant-I
 - **Bundle:** `shared` — no single bundle owns this plugin.
 - **License requirement:** `pro` tier or higher (`any-bundle`, `nself-plus`, `cloud`).
 - **Install:** `nself plugin install transactional-email` (requires any active pro license).
-- **Bundle classification (F06 update target):** Shared pro plugin — add to F06 as `transactional-email → shared-pro` after implementation lands.
+- **Bundle classification (F06 update target):** Shared licensed plugin — add to F06 as `transactional-email → shared-pro` after implementation lands.
 
 ---
 
@@ -206,7 +206,7 @@ nSelf's transactional-email plugin is self-hosted with no per-email cost from nS
   "requiredEntitlements": ["pro"],
   "requires_license": true,
   "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
+  "repository": "https://github.com/nself-org/bundles",
   "minNselfVersion": "1.1.0",
   "port": 3822,
   "category": "communication",
