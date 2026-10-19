@@ -56,6 +56,8 @@ var dynamicProgram = map[string]bool{
 	// nself-ci-agent job-shim replaces itself (syscall.Exec) with the step argv the agent sent on
 	// stdin, as a job user chosen by sudo; never ssh (P7-NODE-06).
 	"cmd/agent/job_shim.go:execShimRequest": true,
+	// The cibench timing harness starts the binary it measures (P7-CI-46).
+	"bench/spawn.go:spawn": true,
 	// The container runtime binary is checked against runtimeBinary (docker or
 	// podman by name or path) before any of these runs it (P7-TRUST-04).
 	"internal/exec/container.go:containerStopper": true,

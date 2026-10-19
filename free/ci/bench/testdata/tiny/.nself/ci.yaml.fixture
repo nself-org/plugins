@@ -1,0 +1,17 @@
+# The same three checks the v1.4 gate runs on a Go repo (gofmt, go vet, go test),
+# so the V15 and v1.4 wall times compare equal work. Run with --pipeline gate.
+version: 1
+jobs:
+  fmt:
+    kind: static
+    run: [gofmt, -l, .]
+  vet:
+    kind: static
+    run: [go, vet, ./...]
+  test:
+    kind: test
+    run: [go, test, -count=1, ./...]
+pipelines:
+  gate:
+    triggers: [manual]
+    jobs: [fmt, vet, test]
