@@ -7,6 +7,7 @@ package main
 // the flag sets are package-level, so each call resets them.
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"os"
@@ -323,5 +324,44 @@ jobs:
 	code, out, _ := capture(t, func() int { return runPlan([]string{"--json", "--repo", repo}) })
 	if code == 0 || strings.Contains(out, `"placement"`) {
 		t.Fatalf("an invalid policy is an error, not a plan without placement: exit %d\n%s", code, out)
+	}
+}
+
+// TestPlacePlanHookGetsTheBuiltPlan: the hook is handed the plan runPlan built
+// (job ids included), not a pipeline it must re-derive by planning again (D-0990).
+func TestPlacePlanHookGetsTheBuiltPlan(t *testing.T) {
+	repo, _ := placementRepo(t)
+	resetPlanFlags()
+	saved := placePlan
+	defer func() { placePlan = saved }()
+	var got []planned
+	placePlan = func(_ context.Context, pd planned) (any, []string, error) {
+		got = append(got, pd)
+		return map[string]string{"hook": "ok"}, nil, nil
+	}
+	code, out, errs := capture(t, func() int { return runPlan([]string{"--json", "--repo", repo}) })
+	if code != 0 || len(got) != 1 {
+		t.Fatalf("exit %d, hook calls %d: %s %s", code, len(got), out, errs)
+	}
+	var env struct {
+		Data struct {
+			Jobs []struct {
+				ID string `json:"id"`
+			} `json:"jobs"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatal(err)
+	}
+	if len(env.Data.Jobs) == 0 || len(env.Data.Jobs) != len(got[0].pl.Jobs) {
+		t.Fatalf("hook plan has %d jobs, output %d", len(got[0].pl.Jobs), len(env.Data.Jobs))
+	}
+	for i, j := range got[0].pl.Jobs {
+		if j.ID == "" || j.ID != env.Data.Jobs[i].ID {
+			t.Errorf("job %d: hook id %q, output id %q", i, j.ID, env.Data.Jobs[i].ID)
+		}
+	}
+	if got[0].root != repo {
+		t.Errorf("hook root %q, want %q", got[0].root, repo)
 	}
 }

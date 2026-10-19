@@ -7,7 +7,7 @@ package plan
 // Outputs: Plan.Placement (the `data.placement` key) and extra human cells;
 // with no PlaceFunc nothing is added and every other key is unchanged.
 // Constraints: the hook runs after the plan is built and validated and only
-// reads the model.Pipeline it is given; Placement is the last JSON key, so
+// reads the *Plan it is given (job ids, support, trigger and state included); Placement is the last JSON key, so
 // adding it leaves the bytes before it identical.
 
 import (
@@ -17,8 +17,8 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
-// PlaceFunc is the type of cmd's placePlan hook.
-type PlaceFunc func(ctx context.Context, p *model.Pipeline) (data any, human []string, err error)
+// PlaceFunc is the type of the placement hook ApplyPlacement calls.
+type PlaceFunc func(ctx context.Context, pl *Plan) (data any, human []string, err error)
 
 // ModelPipeline is the persisted pipeline: Jobs align index for index with
 // Plan.Jobs.
@@ -37,7 +37,7 @@ func (pl *Plan) ApplyPlacement(ctx context.Context, place PlaceFunc) ([]string, 
 	if place == nil {
 		return nil, nil
 	}
-	data, human, err := place(ctx, pl.ModelPipeline())
+	data, human, err := place(ctx, pl)
 	if err != nil {
 		return nil, err
 	}

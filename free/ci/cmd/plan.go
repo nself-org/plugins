@@ -39,8 +39,10 @@ import (
 var planFlags = flag.NewFlagSet("plan", flag.ContinueOnError)
 
 // placePlan, when set, adds placement to the plan after it is built and
-// validated: data goes under data.placement, human to the table.
-var placePlan func(ctx context.Context, p *model.Pipeline) (data any, human []string, err error)
+// validated: data goes under data.placement, human to the table. It gets the
+// planned facts of the plan runPlan built (job ids, support, world, checks),
+// so it never plans a second time.
+var placePlan func(ctx context.Context, pd planned) (data any, human []string, err error)
 
 var planOpts struct {
 	json                               bool
@@ -93,39 +95,16 @@ func runPlan(args []string) int {
 	}
 	o := planOpts
 	ctx := context.Background()
-	root := firstOf(o.repo, os.Getenv("NSELF_CI_REPO"))
-	var err error
-	if root == "" {
-		root, err = os.Getwd()
-	} else {
-		root, err = filepath.Abs(root)
-	}
+	pd, err := loadPlanned(ctx, planSpec{o.repo, o.cfg, o.base, o.pipeline, o.trigger})
 	if err != nil {
 		return planFail(o.json, err)
 	}
-	if err := config.CheckLeftover(root); err != nil {
-		return planFail(o.json, err)
+	p := pd.pl
+	var place plan.PlaceFunc
+	if placePlan != nil {
+		place = func(ctx context.Context, _ *plan.Plan) (any, []string, error) { return placePlan(ctx, pd) }
 	}
-	cfg := model.PipelineConfig{Version: 1}
-	path := firstOf(o.cfg, filepath.Join(root, config.FileName))
-	loaded, err := config.Load(path)
-	switch {
-	case err == nil:
-		cfg = loaded.Config
-	case !errors.Is(err, os.ErrNotExist) || o.cfg != "":
-		return planFail(o.json, err)
-	}
-	facts, checks, err := planChecks(root, cfg)
-	if err != nil {
-		return planFail(o.json, err)
-	}
-	in := plan.Input{Config: cfg, Facts: facts, Checks: checks, Revision: planRevision(ctx, root, o.base),
-		World: planWorld(cfg, checks), Pipeline: o.pipeline, Trigger: model.Trigger(o.trigger)}
-	p, err := plan.Build(in)
-	if err != nil {
-		return planFail(o.json, err)
-	}
-	cells, err := p.ApplyPlacement(ctx, placePlan)
+	cells, err := p.ApplyPlacement(ctx, place)
 	if err != nil {
 		return planFail(o.json, err)
 	}
