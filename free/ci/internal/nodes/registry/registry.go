@@ -235,11 +235,21 @@ func (r *Registry) Deauthorize(ctx context.Context, id, project, actor string) (
 		return nil
 	})
 }
+
+// QuarantineReason is the maintenance reason CheckAgeRecipient sets when a node presents a different identity.
+const QuarantineReason = "age_recipient_changed"
+
+// SetState moves a node to a lifecycle state. It refuses to move a quarantined node out of maintenance (E660).
 func (r *Registry) SetState(ctx context.Context, id, state, reason, actor string) (Node, error) {
 	if state != "online" && state != "offline" && state != "draining" && state != "maintenance" && state != "revoked" {
 		return Node{}, invalid("state")
 	}
 	return r.mutate(ctx, id, actor, "state", func(n *Node) error {
+		// A quarantined node (E660) leaves maintenance only through Recover. The check runs on the snapshot
+		// the write is compare-and-swapped against, so a caller's check-then-act race cannot clear it.
+		if n.Record.Reason == QuarantineReason && n.Record.State == "maintenance" && state != "maintenance" && state != "revoked" {
+			return &Error{Code: "E660", Reason: "quarantined"}
+		}
 		n.Record.State = state
 		n.Record.Reason = reason
 		n.Capability.Availability.State = model.Fact[string]{Value: &state, Source: "assigned", ObservedAt: time.Now().UTC(), Confidence: "known"}
@@ -270,7 +280,7 @@ func (r *Registry) CheckAgeRecipient(ctx context.Context, id, presented, actor s
 		return err
 	}
 	if n.Capability.Identity.AgeRecipient.Value != nil && *n.Capability.Identity.AgeRecipient.Value != presented {
-		_, err = r.SetState(ctx, id, "maintenance", "age_recipient_changed", actor)
+		_, err = r.SetState(ctx, id, "maintenance", QuarantineReason, actor)
 		if err != nil {
 			return err
 		}
@@ -291,7 +301,7 @@ func (r *Registry) CheckAgeRecipient(ctx context.Context, id, presented, actor s
 	})
 	var changed *Error
 	if errors.As(err, &changed) && changed.Code == "E660" {
-		_, flagErr := r.SetState(ctx, id, "maintenance", "age_recipient_changed", actor)
+		_, flagErr := r.SetState(ctx, id, "maintenance", QuarantineReason, actor)
 		if flagErr != nil {
 			return flagErr
 		}

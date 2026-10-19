@@ -287,3 +287,38 @@ func TestTrustRequiresAdminAuthority(t *testing.T) {
 		t.Fatal("store accepted zero authority")
 	}
 }
+
+// TestSetStateRefusesToLeaveQuarantine proves the registry itself refuses to move a quarantined node out of
+// maintenance, so a check-then-act race in a caller cannot overwrite the age_recipient_changed flag (D-1212).
+func TestSetStateRefusesToLeaveQuarantine(t *testing.T) {
+	r, c := setup(t)
+	ctx := context.Background()
+	id := c.Identity.ID
+	if err := r.CheckAgeRecipient(ctx, id, "age1first", "agent"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.CheckAgeRecipient(ctx, id, "age1changed", "agent"); err == nil {
+		t.Fatal("expected E660")
+	}
+	for _, state := range []string{"online", "draining"} {
+		_, err := r.SetState(ctx, id, state, "enabled by admin", "admin")
+		var coded *Error
+		if !errors.As(err, &coded) || coded.Code != "E660" || coded.Reason != "quarantined" {
+			t.Fatalf("SetState(%s) on a quarantined node: %v", state, err)
+		}
+	}
+	n, err := r.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n.Record.State != "maintenance" || n.Record.Reason != "age_recipient_changed" {
+		t.Fatalf("quarantine overwritten: %s %s", n.Record.State, n.Record.Reason)
+	}
+	// Re-flagging and revoking stay possible.
+	if _, err = r.SetState(ctx, id, "maintenance", "age_recipient_changed", "agent"); err != nil {
+		t.Fatalf("re-flag: %v", err)
+	}
+	if _, err = r.SetState(ctx, id, "revoked", "revoked", "admin"); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+}

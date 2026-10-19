@@ -21,7 +21,7 @@ import (
 
 // quarantineReason is the maintenance reason registry.CheckAgeRecipient sets when a node presents a
 // different identity (E660).
-const quarantineReason = "age_recipient_changed"
+const quarantineReason = registry.QuarantineReason
 
 // TestResult is what `nodes test` reports.
 type TestResult struct {
