@@ -21,7 +21,17 @@ func markerPath(home, attempt string) string {
 	return filepath.Join(home, "processes", attempt+".json")
 }
 
+// processIdentity names a process by its start instant. The native form
+// ("st:" prefix) needs no fork; markers written by older builds hold the ps
+// lstart text, so psIdentity stays for comparing against those.
 func processIdentity(pid int) (string, error) {
+	if id, ok := nativeStartID(pid); ok {
+		return id, nil
+	}
+	return psIdentity(pid)
+}
+
+func psIdentity(pid int) (string, error) {
 	out, err := osexec.Command("ps", "-o", "lstart=", "-p", strconv.Itoa(pid)).Output()
 	if err != nil {
 		return "", err
@@ -100,6 +110,9 @@ func (e *Executor) sweepProcessMarker(ctx context.Context, home, current, attemp
 		return nil
 	}
 	identity, err := processIdentity(marker.PID)
+	if err == nil && !strings.HasPrefix(marker.Identity, "st:") && strings.HasPrefix(identity, "st:") {
+		identity, err = psIdentity(marker.PID) // marker from an older build
+	}
 	if groupAlive(marker.PID) {
 		if err == nil && identity != "" && identity != marker.Identity {
 			// A different process has reused the leader PID. Do not kill its group.

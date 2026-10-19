@@ -5,10 +5,8 @@ package exec
 import (
 	"bytes"
 	"os"
-	osexec "os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -49,23 +47,8 @@ func processExists(pid int) bool {
 	return syscall.Kill(pid, 0) == nil || os.IsPermission(syscall.Kill(pid, 0))
 }
 
-func groupAlive(pgid int) bool {
-	out, err := osexec.Command("ps", "-A", "-o", "pgid=", "-o", "stat=").Output()
-	if err != nil {
-		return syscall.Kill(-pgid, 0) == nil
-	}
-	for _, line := range strings.Split(string(out), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) != 2 {
-			continue
-		}
-		group, parseErr := strconv.Atoi(fields[0])
-		if parseErr == nil && group == pgid && fields[1][0] != 'Z' {
-			return true
-		}
-	}
-	return false
-}
+// processGroupProbe is the signal-based fallback when /proc cannot be read.
+func processGroupProbe(pgid int) bool { return syscall.Kill(-pgid, 0) == nil }
 
 func adoptedDescendants(parents map[int]int, attempt string) []int {
 	if attempt == "" {
