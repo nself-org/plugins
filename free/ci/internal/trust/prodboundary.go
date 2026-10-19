@@ -7,8 +7,8 @@ package trust
 //          Isolation (all sourced by the caller, never from a node's own hello).
 // Outputs: BoundaryDeployHost, BoundaryOverrideMinimum, BoundaryCoordinatorHost reasons; RequiresAudit.
 // Constraints: pure (no os, net or database/sql); deploy-host matching belongs to P7-NODE-14, so only its facts
-//          arrive here; an unknown trust class decodes to untrusted, an unknown isolation to the weakest
-//          rank and an unknown coordinator mode to team.
+//          arrive here; an unknown trust class decodes to untrusted, an unknown isolation to rank -1
+//          (below process) and an unknown coordinator mode to team.
 
 import "github.com/nself-org/plugins/free/ci/internal/model"
 
@@ -17,7 +17,8 @@ func init() { AdmissionRules = append(AdmissionRules, admitBoundary) }
 // boundaryFloor is the isolation both the overridden deploy host and the coordinator host need.
 const boundaryFloor model.Isolation = "vm"
 
-// belowFloor is true when the declared isolation does not reach boundaryFloor (unknown values do not).
+// belowFloor is true when the declared isolation does not reach boundaryFloor; an unknown
+// value ranks -1, so it counts as below.
 func belowFloor(i model.Isolation) bool {
 	return RankIsolation(i) < RankIsolation(boundaryFloor)
 }

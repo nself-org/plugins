@@ -1,5 +1,8 @@
 package trust
 
+// Purpose: the E689 error code for the production boundary. It lives beside prodboundary.go (not in codes.go) so this
+// Ticket owns its whole write scope; the boundary.* reasons map to it in the scheduler that renders refusals.
+
 import "github.com/nself-org/plugins/free/ci/internal/model"
 
 func init() {

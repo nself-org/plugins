@@ -69,6 +69,14 @@ func pbRelease(s []model.SecretClass) bool {
 func TestInvariant_I15(t *testing.T) {
 	hosts, set := pbHosts(t)
 	n := 0
+	seen := map[string]int{}
+	t.Cleanup(func() {
+		for _, k := range []string{"deploy-refused", "override-bad", "override-ok", "audit-admitted", "floor-applies", "floor-skipped"} {
+			if seen[k] == 0 {
+				t.Errorf("I15 never visited the %s case: the variants do not cover the product", k)
+			}
+		}
+	})
 	invariants.Check(t, func(w invariants.World) error {
 		i := n
 		n++
@@ -82,11 +90,14 @@ func TestInvariant_I15(t *testing.T) {
 		own, vm := pbOwnClass(w.Trust), pbVM(w.Isolation)
 		switch {
 		case h.matched && !override:
+			seen["deploy-refused"]++
 			if !includes(rs, trust.BoundaryDeployHost) {
 				return fmt.Errorf("deploy host %q selected without override (%s/%s)", h.name, w.Trust, w.Isolation)
 			}
 		case h.matched:
 			bad := !own || !vm || pbRelease(w.Secrets)
+			seen["override-ok"] += map[bool]int{true: 0, false: 1}[bad]
+			seen["override-bad"] += map[bool]int{true: 1, false: 0}[bad]
 			if bad && !includes(rs, trust.BoundaryOverrideMinimum) {
 				return fmt.Errorf("override admitted trust=%s isolation=%s secrets=%v", w.Trust, w.Isolation, w.Secrets)
 			}
@@ -101,10 +112,17 @@ func TestInvariant_I15(t *testing.T) {
 				return fmt.Errorf("non-deploy host %q refused by the deploy boundary", h.name)
 			}
 		}
-		if len(rs) == 0 && h.matched && !trust.RequiresAudit(d) {
-			return fmt.Errorf("admitted placement on an overridden deploy host without an audit row")
+		if trust.RequiresAudit(d) != (h.matched && override) {
+			return fmt.Errorf("audit requirement wrong for host %q override=%v", h.name, override)
+		}
+		if len(rs) == 0 && h.matched && override {
+			seen["audit-admitted"]++
 		}
 		floor := coord && (w.Mode == "team" || !own) && !vm
+		if coord {
+			seen["floor-skipped"] += map[bool]int{true: 0, false: 1}[floor]
+			seen["floor-applies"] += map[bool]int{true: 1, false: 0}[floor]
+		}
 		if floor != includes(rs, trust.BoundaryCoordinatorHost) {
 			return fmt.Errorf("coordinator floor=%v mode=%s trust=%s isolation=%s coord=%v", floor, w.Mode, w.Trust, w.Isolation, coord)
 		}
@@ -160,10 +178,12 @@ func TestProdBoundary_OverrideMinimum(t *testing.T) {
 		{"collaborator vm", "collaborator", "vm", nil, true},
 		{"untrusted vm", "untrusted", "ephemeral-vm", nil, true},
 		{"unknown class vm", "bogus", "vm", nil, true},
+		{"empty class vm", "", "vm", nil, true},
 		{"owner vm release", "owner", "vm", []model.SecretClass{"release"}, true},
 		{"internal vm deploy", "internal", "vm", []model.SecretClass{"deploy"}, true},
 		{"owner vm unknown secret", "owner", "vm", []model.SecretClass{"bogus"}, true},
 		{"owner unknown isolation", "owner", "bogus", nil, true},
+		{"owner empty isolation", "owner", "", nil, true},
 	}
 	for _, c := range cases {
 		d := pbDecl(c.iso)
@@ -210,6 +230,10 @@ func TestProdBoundary_CoordinatorHost(t *testing.T) {
 		{"personal collaborator vm", trust.Personal, "collaborator", "vm", false},
 		{"personal untrusted sandboxed", trust.Personal, "untrusted", "sandboxed-container", true},
 		{"personal unknown class", trust.Personal, "bogus", "container", true},
+		{"personal empty class", trust.Personal, "", "container", true},
+		{"personal owner empty isolation", trust.Personal, "owner", "", false},
+		{"team owner empty isolation", trust.Team, "owner", "", true},
+		{"team owner unknown isolation", trust.Team, "owner", "bogus", true},
 		{"team owner process", trust.Team, "owner", "process", true},
 		{"team owner container", trust.Team, "owner", "container", true},
 		{"team internal sandboxed", trust.Team, "internal", "sandboxed-container", true},

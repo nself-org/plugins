@@ -1,0 +1,9 @@
+--- a/internal/trust/prodboundary.go
++++ b/internal/trust/prodboundary.go
+@@ -57,5 +57,5 @@
+ // RequiresAudit is true for every placement on an overridden deploy host: the placement is admitted only
+ // with an audit row, whatever the job.
+ func RequiresAudit(d Declaration) bool {
+-	return d.DeployHost.Matched && d.DeployHost.Override
++	return d.DeployHost.Override
+ }
