@@ -47,8 +47,8 @@ func text(field, v string) error {
 	switch {
 	case v == "":
 		return invalid("%s is empty", field)
-	case len(v) > maxField:
-		return invalid("%s is longer than %d bytes", field, maxField)
+	case utf8.RuneCountInString(v) > maxField:
+		return invalid("%s is longer than %d characters", field, maxField)
 	case !utf8.ValidString(v):
 		return invalid("%s is not valid UTF-8", field)
 	case strings.ContainsFunc(v, unicode.IsControl):

@@ -10,7 +10,7 @@ package manifest
 // only in letter case is refused (encoding/json would fold it onto the field,
 // and a payload could carry two spellings); every field of the contract must be
 // present (a nullable one may be null), so a missing size is not a zero size;
-// the decoded Manifest is not re-signed, so the bytes a verifier checks stay the
+// everything it accepts, Build writes back within the size cap; the decoded Manifest is not re-signed, so the bytes a verifier checks stay the
 // bytes the signature covers.
 
 import (
@@ -21,6 +21,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -57,7 +58,7 @@ func Decode(payload []byte) (Manifest, error) {
 	if err := json.Unmarshal(payload, &m); err != nil {
 		return Manifest{}, invalid("%s", err)
 	}
-	if err := validate(m); err != nil {
+	if _, err := Build(m); err != nil { // what Decode accepts, Build can write back
 		return Manifest{}, err
 	}
 	return m, nil
@@ -68,10 +69,25 @@ type frame struct {
 	object    bool
 	expectKey bool
 	keys      map[string]bool // exact spellings
-	folded    map[string]bool // lower-case spellings
+	folded    map[string]bool // case-folded spellings (foldKey)
 }
 
-// contractKeys holds every JSON field name of the contract, by lower case.
+// foldKey maps every rune to the smallest member of its Unicode simple-fold
+// orbit, so two names equal under encoding/json's case folding (which also joins
+// "K" U+212A with k and "ſ" U+017F with s) get one key.
+func foldKey(s string) string {
+	return strings.Map(func(r rune) rune {
+		min := r
+		for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+			if f < min {
+				min = f
+			}
+		}
+		return min
+	}, s)
+}
+
+// contractKeys holds every JSON field name of the contract, by foldKey.
 var contractKeys = func() map[string]string {
 	out := map[string]string{}
 	var walk func(t reflect.Type)
@@ -84,7 +100,7 @@ var contractKeys = func() map[string]string {
 		}
 		for i := 0; i < t.NumField(); i++ {
 			name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
-			out[strings.ToLower(name)] = name
+			out[foldKey(name)] = name
 			walk(t.Field(i).Type)
 		}
 	}
@@ -181,7 +197,7 @@ func checkShape(b []byte) error {
 				if stack[n-1].keys[t] {
 					return invalid("key %q repeats", t)
 				}
-				lower := strings.ToLower(t)
+				lower := foldKey(t)
 				if stack[n-1].folded[lower] {
 					return invalid("key %q repeats in another letter case", t)
 				}

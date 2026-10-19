@@ -9,7 +9,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 512,
-      "pattern": "^[^\\x00-\\x1f]+$"
+      "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
     },
     "revision": {
       "type": "string",
@@ -22,31 +22,31 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "pattern": "^[^\\x00-\\x1f]+$"
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
         },
         "pipeline": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "pattern": "^[^\\x00-\\x1f]+$"
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
         },
         "job_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "pattern": "^[^\\x00-\\x1f]+$"
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
         },
         "attempt_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "pattern": "^[^\\x00-\\x1f]+$"
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
         },
         "idempotency_key": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "pattern": "^[^\\x00-\\x1f]+$"
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
         },
         "finished_at": {
           "type": "string",
@@ -138,7 +138,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 512,
-                "pattern": "^[^\\x00-\\x1f]+$"
+                "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
               },
               "index_digest": {
                 "type": "string",
@@ -153,7 +153,7 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 512,
-                      "pattern": "^[^\\x00-\\x1f]+$"
+                      "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
                     },
                     "digest": {
                       "type": "string",
@@ -306,7 +306,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "pattern": "^[^\\x00-\\x1f]+$"
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
         }
       },
       "required": [
@@ -321,13 +321,13 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "pattern": "^[^\\x00-\\x1f]+$"
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
         },
         "coordinator": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "pattern": "^[^\\x00-\\x1f]+$"
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]+$"
         }
       },
       "required": [

@@ -16,6 +16,7 @@ package job
 
 import (
 	"context"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -85,10 +86,6 @@ func (g Gatherer) Provide(ctx context.Context, a Attempt) (Provider, *Error) {
 }
 
 func firstLine(s string) string {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			return s[:i]
-		}
-	}
-	return s
+	line, _, _ := strings.Cut(s, "\n")
+	return line
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -314,6 +315,9 @@ func TestDecodeRefusesCaseVariantsAndMissingFields(t *testing.T) {
 		"case duplicate":        strings.Replace(good, `"revision":"`+rev+`"`, `"revision":"`+rev+`","Revision":"`+strings.Repeat("b", 40)+`"`, 1),
 		"schema case duplicate": strings.Replace(good, `"schema":"ci.release-manifest/v1"`, `"schema":"ci.release-manifest/v2","SCHEMA":"ci.release-manifest/v1"`, 1),
 		"lone case variant":     strings.Replace(good, `"repo_id"`, `"REPO_ID"`, 1),
+		"kelvin sign alias":     strings.Replace(good, `"key_id"`, "\"\u212aey_id\"", 1),
+		"long s alias":          strings.Replace(good, `"schema":"ci.release-manifest/v1"`, `"schema":"ci.release-manifest/v2","\u017fchema":"ci.release-manifest/v1"`, 1),
+		"long s lone alias":     strings.Replace(good, `"sha256"`, "\"\u017fha256\"", 1),
 		"missing size":          strings.Replace(good, `,"size":99`, ``, 1),
 		"null size":             strings.Replace(good, `"size":99`, `"size":null`, 1),
 		"missing platform":      strings.Replace(good, `"platform":null,`, ``, 1),
@@ -408,5 +412,60 @@ func TestSchemaRejectsWhatGoRejects(t *testing.T) {
 	art(d, 0)["path"] = "artifacts/dir/.hidden/x..y"
 	if err := rs.Validate(d); err != nil {
 		t.Fatalf("a legal dotted name: %v", err)
+	}
+}
+
+// TestTextRulesAgreeBetweenGoAndSchema: length counts characters and control
+// characters (Unicode Cc) are refused by both.
+func TestTextRulesAgreeBetweenGoAndSchema(t *testing.T) {
+	rs := resolvedSchema(t)
+	for name, c := range map[string]struct {
+		repo string
+		ok   bool
+	}{
+		"512 two-byte characters": {strings.Repeat("é", 512), true},
+		"513 two-byte characters": {strings.Repeat("é", 513), false},
+		"DEL":                     {"a\u007fb", false},
+		"C1 control":              {"a\u0085b", false},
+		"NUL":                     {"a\u0000b", false},
+		"plain":                   {"repo-1", true},
+	} {
+		m := valid()
+		m.RepoID = c.repo
+		_, err := manifest.Build(m)
+		var doc map[string]any
+		if e := json.Unmarshal(mustBuild(t, valid()), &doc); e != nil {
+			t.Fatal(e)
+		}
+		doc["repo_id"] = c.repo
+		serr := rs.Validate(doc)
+		if (err == nil) != c.ok || (serr == nil) != c.ok {
+			t.Errorf("%s: Build %v, schema %v, want ok=%v", name, err, serr, c.ok)
+		}
+	}
+}
+
+// TestDecodeRefusesWhatBuildCannotWriteBack: U+2028 is three bytes raw and six
+// escaped, so a payload under the cap can exceed it once canonical.
+func TestDecodeRefusesWhatBuildCannotWriteBack(t *testing.T) {
+	var doc map[string]any
+	if err := json.Unmarshal(mustBuild(t, valid()), &doc); err != nil {
+		t.Fatal(err)
+	}
+	var mfs []any
+	for i := 0; i < 9000; i++ {
+		mfs = append(mfs, map[string]any{"digest": "sha256:" + hex64("6"), "platform": fmt.Sprintf("p%05d-", i) + strings.Repeat(string(rune(0x2028)), 100)})
+	}
+	doc["artifacts"].([]any)[0].(map[string]any)["image"].(map[string]any)["manifests"] = mfs
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(doc)
+	raw := bytes.ReplaceAll(buf.Bytes(), []byte("\\"+"u2028"), []byte(string(rune(0x2028)))) // encoding/json escapes it; write it raw
+	if len(raw) >= 4<<20 {
+		t.Fatalf("fixture too large: %d", len(raw))
+	}
+	if _, err := manifest.Decode(raw); !errors.Is(err, manifest.ErrInvalid) {
+		t.Fatalf("Decode accepted a payload Build cannot write back: %v", err)
 	}
 }

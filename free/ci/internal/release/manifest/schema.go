@@ -53,10 +53,10 @@ func open(s *jsonschema.Schema) {
 	open(s.Items)
 }
 
-// textRule is a free-text field: 1 to maxField bytes, no control characters.
+// textRule is a free-text field: 1 to maxField characters, no control character (Unicode category Cc).
 func textRule(s *jsonschema.Schema) {
 	one, most := 1, maxField
-	s.MinLength, s.MaxLength, s.Pattern = &one, &most, `^[^\x00-\x1f]+$`
+	s.MinLength, s.MaxLength, s.Pattern = &one, &most, `^[^\x00-\x1f\x7f-\x9f]+$`
 }
 
 func decorate(s *jsonschema.Schema) {

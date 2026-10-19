@@ -14,6 +14,9 @@ package run
 // Constraints: a release job runs only under the V15 engine (the v1.4 gate has
 // no release class): anywhere else it is refused. The facts come from the run's
 // own store rows and git worktree, never from a file the job could write.
+// A caller that supplies its own Hooks.Isolation replaces the registered one and
+// with it the deploy credential check on the final environment (the in-process
+// API of tests and embedders; the shipped binary uses the registered chain).
 // ReleaseInputs is the digester seam: until a package registers it, freshness is
 // unknown and every release job is refused with deps_stale (fail closed).
 
