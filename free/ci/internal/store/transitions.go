@@ -115,10 +115,20 @@ func (s *Store) apply(ctx context.Context, tx *sql.Tx, id string, from, to model
 		}
 	}
 	if to == "lost" || to == "cancelled" || to == "passed" || to == "failed" {
+		if to == "lost" { // the runner a retry avoids (retry anti-affinity); LeaseFail records the same fact
+			if _, err = tx.ExecContext(ctx, "UPDATE attempt SET previous_runner_id=coalesce((SELECT runner_id FROM lease WHERE attempt_id=?),previous_runner_id) WHERE id=?", id, id); err != nil {
+				return err
+			}
+		}
 		if _, err = tx.ExecContext(ctx, "DELETE FROM host_reservation WHERE lease_id IN (SELECT id FROM lease WHERE attempt_id=?)", id); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, "DELETE FROM lease WHERE attempt_id=?", id); err != nil {
+			return err
+		}
+	}
+	if from == "retryable" && to == "queued" { // a re-queued attempt is placed afresh: it must not keep the identity of its last admission (D-1044)
+		if _, err = tx.ExecContext(ctx, "DELETE FROM sched_admitted WHERE attempt_id=?", id); err != nil {
 			return err
 		}
 	}

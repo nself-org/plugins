@@ -7,37 +7,26 @@ package run
 // Inputs:  an AttemptSpec and the run Session in the context.
 // Outputs: an Admitted attempt, blocking until admitted, ctx done, E618 or E693.
 // Constraints: the new behaviour exists only under compat.V15(); in v1.4 mode
-// the hook is LocalAdmit, exactly as when no hook is registered. This
-// coordinator awaits only local attempts (runAttempt fails a remote one), so
-// the world holds the local runner alone until a remote await exists; the
-// dispatcher itself delivers remote leases (NewTransportAdapter). The local
-// runner carries the probe-derived declaration `ci plan` uses (owner trust
-// class, process isolation), so placement refuses untrusted work there. The
-// local admission policy (battery, reservations, the foreground
-// floor) still runs first, as in LocalAdmit. The job-to-sched mapping is
-// planview.SchedJob, the one `ci plan` uses; the world counts the per-job limit
-// over the run's own job rows (world.Deps.JobIDs), not every active attempt.
+// the hook is LocalAdmit, exactly as when no hook is registered. The world holds
+// this machine and every registered node (dispatch_world.go); a remote placement
+// is delivered by the dispatcher (NewTransportAdapter) and awaited by the run
+// loop (remote_await.go). The local admission policy (battery, reservations, the
+// foreground floor) still runs first, as in LocalAdmit.
 
 import (
 	"context"
 	"errors"
-	"runtime"
+	"fmt"
 	"sync"
 	"time"
 
 	compat "github.com/nself-org/cli/sdk/go/v2/compat"
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
-	"github.com/nself-org/plugins/free/ci/internal/model"
-	"github.com/nself-org/plugins/free/ci/internal/planview"
-	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
-	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
-	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
-	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
 func init() {
@@ -52,6 +41,8 @@ type runDispatch struct {
 	row  store.PipelineRow
 	polM sync.Mutex
 	pol  *sched.Policy // resolved once; a failed resolution is retried, never cached
+
+	sink *remoteSink // what the carriers of this run's remote leases report to
 }
 
 var (
@@ -63,10 +54,18 @@ var (
 type dispatchCleanup struct{}
 
 func (dispatchCleanup) AfterRun(_ context.Context, r RunInfo) error {
-	if v, ok := runDispatchers.LoadAndDelete(r.RunID); ok {
-		v.(*runDispatch).d.Close()
-	}
+	dispatchRelease(r.RunID)
 	return nil
+}
+
+// dispatchRelease closes the dispatcher of a run. Coordinator.Run defers it, so a run that
+// ends on an error path before AfterRun does not leave its dispatcher in the process map (D-1044).
+func dispatchRelease(runID string) {
+	if v, ok := runDispatchers.LoadAndDelete(runID); ok {
+		rd := v.(*runDispatch)
+		rd.d.Close()
+		rd.sink.release()
+	}
 }
 
 func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
@@ -92,10 +91,20 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 		return Admitted{}, err
 	}
 	cpu, mem := demandOf(s.Job)
+	sj := rd.schedJob(s, id, row, cpu, mem)
+	if s.N > 1 && ctx.Value(confirmingKey{}) == nil { // an infra retry avoids the runner that lost the previous attempt when it can
+		if prev, e := sess.Store.LeasePreviousRunner(ctx, fmt.Sprintf("%s.a%d", row, s.N-1)); e == nil && prev != "" {
+			_ = sess.Store.SetPreviousRunner(ctx, id, prev)
+		}
+	}
+	rd.sink.expect(id) // a remote carrier may report before this call returns
 	a, err := rd.d.Submit(ctx, dispatch.Job{
-		AttemptID: id, Sched: rd.schedJob(s, id, row, cpu, mem), Model: *s.Job, Revision: sess.Revision, Foreground: s.Foreground,
+		AttemptID: id, Sched: sj, Model: *s.Job, Revision: sess.Revision, Foreground: s.Foreground,
 		LocalCPU: max(dec.Slots*cpu, cpu), LocalMemMB: max(capacity.FreeMemoryMB-capacity.MemoryMB*dec.ReserveMemoryPercent/100, mem),
 	})
+	if err != nil || a.Local {
+		rd.sink.forget(id)
+	}
 	if err != nil {
 		var de *dispatch.Error
 		if errors.As(err, &de) {
@@ -120,7 +129,7 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	if err != nil {
 		return nil, err
 	}
-	rd := &runDispatch{sess: sess}
+	rd := &runDispatch{sess: sess, sink: newRemoteSink(sess.Store)}
 	for _, r := range rows {
 		if r.ID == sess.RunID {
 			rd.row = r
@@ -129,7 +138,9 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	if rd.row.ID == "" {
 		return nil, fail(CodeRun, "run %s has no pipeline row", sess.RunID)
 	}
-	rd.d, err = dispatch.New(dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll})
+	rd.d, err = dispatch.New(dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL,
+		Transport:     newTransportAdapter(rd.sink, rd.sink, rd.row.Project),
+		DeliveryError: func(a dispatch.Admitted, err error) { rd.sink.ended(a.AttemptID, err) }})
 	if err != nil {
 		return nil, err
 	}
@@ -137,88 +148,29 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	return rd, nil
 }
 
-// platform is the local runner's platform string.
-func platform() string { return runtime.GOOS + "/" + runtime.GOARCH }
-
-// schedJob maps the attempt with the mapping `ci plan` uses (planview.SchedJob),
-// then sets what only a run knows: the attempt key and number, the source trust
-// and the local demand. The job's own labels, tools, isolation floor and
-// accelerators are dropped: the local declaration carries no measured facts for
-// them until P7-TRUST-08, and the exec-time isolation hook is the gate for them.
-func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sched.Job {
-	j := planview.SchedJob(planview.Context{PipelineID: rd.sess.RunID, Project: rd.row.Project, Support: []string{platform()},
-		DefaultPlatform: platform(), Foreground: s.Foreground}, planview.PlannedJob{ID: row, Name: row, Job: *s.Job})
-	j.Key, j.Attempt, j.Trust, j.Accelerators = id, s.N, model.TrustClass(rd.row.SourceTrust), nil
-	j.Requirements = model.PlacementRequirements{Platform: platform(), CPU: int64(cpu), MemMB: int64(mem)}
-	return j
-}
-
-// policy resolves the run's effective scheduling policy once, as PolicyHook does.
-// A failure is returned and retried on the next call: a transient git or store
-// error must not fail every later job of the run.
-func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, error) {
-	rd.polM.Lock()
-	defer rd.polM.Unlock()
-	if rd.pol != nil {
-		return *rd.pol, nil
-	}
-	root := rd.row.Project
-	if root == "" {
-		root = "."
-	}
-	res := policy.Resolver{Store: rd.sess.Store, Run: policy.Runner(report.Capture)}
-	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGitCached(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root})
-	if err != nil {
-		return sched.Policy{}, err
-	}
-	p, err := schedpolicy.Placement(&got.Effective)
-	if err != nil {
-		return sched.Policy{}, err
-	}
-	rd.pol = &p
-	return p, nil
-}
-
-// world builds the local-only placement world of the run. The local runner is
-// declared the way `ci plan` declares it (planview.LocalCapability, then
-// MarkPersonalLocal): probe facts, owner trust class, process isolation. An
-// untrusted job is therefore unplaceable here by design.
-func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
-	capacity := rd.sess.Capacity()
-	local, err := planview.LocalCapability(planview.LocalFacts{Project: rd.row.Project, Platform: platform(), CPUs: capacity.CPUs,
-		MemMB: int64(capacity.MemoryMB), Now: time.Now()})
-	if err != nil {
-		return sched.World{}, "", err
-	}
-	// the run loop does not probe for docker: say unknown rather than a measured "no"
-	local.Tools.Docker = model.Fact[bool]{Source: "probe", ObservedAt: time.Now(), Confidence: "unknown"}
-	w, _, err := world.Build(ctx, world.Deps{Store: rd.sess.Store, Local: &local, LocalCapacity: &capacity, Policy: rd.policy, JobIDs: rd.sess.jobRows()}, p)
-	if err != nil {
-		return sched.World{}, "", err
-	}
-	keep := w.Runners[:0]
-	for _, r := range w.Runners {
-		if r.ID == "local" {
-			keep = append(keep, r)
-		}
-	}
-	if len(keep) != 1 {
-		// a registered node called "local" would inherit the personal-node declaration
-		return sched.World{}, "", fail(CodeOptions, "the node registry holds a node with the reserved id %q", "local")
-	}
-	w.Runners, w.Hosted = keep, nil
-	planview.MarkPersonalLocal(&w)
-	digest, err := world.Digest(w)
-	return w, digest, err
-}
-
 // NewTransportAdapter adapts internal/transport to the dispatcher's Transport:
 // Known looks the driver up by kind, Deliver builds the protocol lease and runs
 // the preparers and the driver (transport.Deliver). sink receives the carrier's
 // output.
-func NewTransportAdapter(sink transport.Sink) dispatch.Transport { return transportAdapter{sink} }
+func NewTransportAdapter(sink transport.Sink) dispatch.Transport {
+	return newTransportAdapter(sink, nil, "")
+}
 
-type transportAdapter struct{ sink transport.Sink }
+// carriers is what the adapter tells the run about the carriers it starts: the
+// run cancels one, and learns when it has ended.
+type carriers interface {
+	carrierStart(ctx context.Context, attemptID, leaseID string) (context.Context, func())
+}
+
+func newTransportAdapter(sink transport.Sink, reg carriers, root string) dispatch.Transport {
+	return transportAdapter{sink: sink, reg: reg, root: root}
+}
+
+type transportAdapter struct {
+	sink transport.Sink
+	reg  carriers
+	root string // the repository whose revision a node receives
+}
 
 func (transportAdapter) Known(kind string) bool {
 	_, ok := transport.Lookup(kind)
@@ -226,6 +178,14 @@ func (transportAdapter) Known(kind string) bool {
 }
 
 func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) error {
+	if a.reg != nil {
+		var end func()
+		ctx, end = a.reg.carrierStart(ctx, d.AttemptID, d.LeaseID)
+		defer end()
+	}
+	if RemoteRepo != nil && a.root != "" {
+		RemoteRepo(a.root)
+	}
 	lease := protocol.Lease{LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
 		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: []protocol.SecretRef{}, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
 	return transport.Deliver(ctx, d.Node, lease, a.sink)

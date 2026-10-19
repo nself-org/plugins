@@ -185,28 +185,20 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	}
 	capacity := placementProbe()
 	now := placementClock()
-	var local *model.Capability
-	if !hasNode(snap.Nodes, "local") { // a registered "local" node is the local runner
-		c, err := planview.LocalCapability(planview.LocalFacts{Project: project, Platform: pd.world.Platform, CPUs: capacity.CPUs,
-			MemMB: int64(capacity.MemoryMB), Docker: pd.world.Docker, Tools: pd.world.Tools, Now: now})
-		if err != nil {
-			return model.PlacementPlan{}, err
-		}
-		local = &c
-	}
 	pipe := sched.Pipeline{ID: pd.pl.Pipeline.ID}
 	if len(jobs) > 0 {
 		pipe = jobs[0].Pipeline
 	}
-	w, _, err := world.Build(ctx, world.Deps{Store: st, Local: local, LocalCapacity: &capacity, Jobs: jobs, Clock: func() time.Time { return now },
-		Policy: func(context.Context, string) (sched.Policy, error) { return sp, nil }}, pipe)
-	if err != nil {
-		return model.PlacementPlan{}, err
+	deps := world.Deps{Store: st, Jobs: jobs, LocalCapacity: &capacity, Clock: func() time.Time { return now },
+		Policy: func(context.Context, string) (sched.Policy, error) { return sp, nil }}
+	var w sched.World
+	var digest string
+	if hasNode(snap.Nodes, "local") { // a registered "local" node is the local runner
+		w, digest, err = world.Build(ctx, deps, pipe)
+	} else { // the same builder a run uses (P7-AUTO-28): one world for one set of inputs
+		w, digest, err = world.BuildForLocal(ctx, deps, world.LocalInput{Project: project, Platform: pd.world.Platform, Capacity: capacity,
+			Docker: pd.world.Docker, Tools: pd.world.Tools, Now: now}, pipe)
 	}
-	if local != nil {
-		planview.MarkPersonalLocal(&w)
-	}
-	digest, err := world.Digest(w)
 	if err != nil {
 		return model.PlacementPlan{}, err
 	}

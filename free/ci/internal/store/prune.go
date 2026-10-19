@@ -61,6 +61,8 @@ var pruneSteps = []string{
 	`DELETE FROM event_index WHERE run_id IN (SELECT value FROM json_each(?))`,
 	`DELETE FROM cache_entry WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM cache_attempt WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM sched_admitted WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM sched_refusal WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM attempt WHERE job_id IN (SELECT id FROM job WHERE pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM job WHERE pipeline_id IN (SELECT value FROM json_each(?))`,
 	`DELETE FROM pipeline WHERE id IN (SELECT value FROM json_each(?))`,

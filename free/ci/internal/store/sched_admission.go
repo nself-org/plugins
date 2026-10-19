@@ -234,3 +234,12 @@ func (s *Store) AdmittedIdentity(ctx context.Context, attemptID string) (user, t
 	}
 	return user, team, provider, runner, digest, err == nil, err
 }
+
+// SetPreviousRunner records the runner a queued retry attempt must avoid when another runner can
+// take it (retry anti-affinity, the same fact LeaseFail records for its own retries).
+func (s *Store) SetPreviousRunner(ctx context.Context, attemptID, runnerID string) error {
+	return s.write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "UPDATE attempt SET previous_runner_id=? WHERE id=? AND state='queued'", runnerID, attemptID)
+		return err
+	})
+}

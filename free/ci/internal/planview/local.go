@@ -17,8 +17,6 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
-	"github.com/nself-org/plugins/free/ci/internal/sched"
-	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
 // LocalFacts are the observations the local capability is built from.
@@ -111,23 +109,4 @@ func localDraft(f LocalFacts) model.Capability {
 	c.Identity.HostKeyFingerprints = []string{}
 	c.Verified = model.CapabilityVerified{By: "self", At: now}
 	return c
-}
-
-// MarkPersonalLocal declares the runner "local" the operator's own node of a
-// PERSONAL coordinator, which is what lets the owner's own checkout run there
-// under process isolation (trust.Admissible owner exception). world.Build
-// leaves these two facts unset (debt: move them into the builder, P7-SCHED-04
-// needs the same). A runner that hosts a TEAM coordinator is left alone. Call it
-// only when LocalCapability supplied the runner: a registered node that
-// happens to be called "local" was never probed and must not get the exception.
-func MarkPersonalLocal(w *sched.World) {
-	for i := range w.Runners {
-		r := &w.Runners[i]
-		if r.ID != "local" || r.CoordinatorHost && r.CoordinatorMode != trust.Personal {
-			continue
-		}
-		r.Decl.PersonalOwnNode = true
-		r.CoordinatorMode = trust.Personal
-		r.Decl.CoordinatorMode = trust.Personal
-	}
 }

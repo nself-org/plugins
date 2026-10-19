@@ -1,8 +1,48 @@
 package main
 
-// Purpose: registers the `ssh` transport driver (carrier A, push) in the
-// `nself ci` binary so transport.Lookup("ssh") finds it; P7-SCHED-04 delivers
-// leases through that lookup and leaves a lease of an unknown kind queued.
-// Inputs:  none. Outputs: the driver registered by the package's init.
+// Purpose: the composition root of the `ssh` transport (carrier A, push). It
+// registers the driver in the `nself ci` binary so transport.Lookup("ssh") finds
+// it, and sets ssh.Default before the first delivery (P7-AUTO-28, D-1054): lease
+// renewal through the run's lease engine, the PERSONAL coordinator flag, the
+// oldest agent it accepts, the agent TTL derived from the lease TTL, and the
+// repository a node receives a bundle of.
+// Inputs:  none. Outputs: a configured ssh.Default.
+// Constraints: no secret value is sent to a node: Secrets stays nil until a
+// per-lease secret source exists (the driver sends values only to an
+// operator-owned, uid-separated node under a PERSONAL coordinator, and only
+// when this source is set). The repository is pointed at once per root; a
+// plain `nself ci` run serves one repository.
 
-import _ "github.com/nself-org/plugins/free/ci/internal/transport/ssh"
+import (
+	"sync"
+	"time"
+
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
+	"github.com/nself-org/plugins/free/ci/internal/transport/ssh"
+)
+
+// minAgentVersion is the oldest nself-ci-agent a coordinator accepts (runner protocol v1).
+const minAgentVersion = "1.5.0"
+
+// sshHeartbeat is the agent heartbeat the driver asks for.
+const sshHeartbeat = 10 * time.Second
+
+func init() { configureSSH(ssh.Default) }
+
+// configureSSH sets d for plain `nself ci`; the driver's own tests build their own drivers.
+func configureSSH(d *ssh.Driver) {
+	d.Renew = cirun.RenewLease
+	d.Personal = true
+	d.MinAgentVersion = minAgentVersion
+	d.Heartbeat = sshHeartbeat
+	// the coordinator treats an agent silent for agent_ttl + 2 heartbeats as lost: that is the lease TTL
+	d.AgentTTL = cirun.RemoteLeaseTTL - 2*sshHeartbeat
+	var mu sync.Mutex
+	cirun.RemoteRepo = func(root string) {
+		mu.Lock()
+		defer mu.Unlock()
+		if d.RepoDir != root {
+			d.RepoDir = root
+		}
+	}
+}

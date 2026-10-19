@@ -16,6 +16,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
 func worldFixture(t *testing.T) (Deps, sched.Pipeline) {
@@ -119,10 +120,10 @@ func TestWorldBuild(t *testing.T) {
 	if local.ID != "local" || local.Avail.Slots != 0 {
 		t.Fatalf("local capacity: %s %+v", local.ID, local.Avail)
 	}
-	if local.CoordinatorHost || local.CoordinatorMode != "" {
-		t.Fatal("coordinator host inferred without provider")
+	if local.CoordinatorHost || local.CoordinatorMode != "personal" || !local.Decl.PersonalOwnNode || local.Decl.CoordinatorMode != "personal" {
+		t.Fatalf("the injected local runner is the PERSONAL own node and not a coordinator host: %+v", local.Decl)
 	}
-	const goldenDigest = "82bf42516c68a10acbe4a5f596f4a1d03fa8f074c06edf828e7630ed28470dbe"
+	const goldenDigest = "e2d715de349154f1cca0c9f2107373dd659f107fe827cd0a98a869a8e1772993"
 	if digest != goldenDigest {
 		t.Fatalf("golden world digest: got %s want %s", digest, goldenDigest)
 	}
@@ -242,7 +243,7 @@ func TestWorldBuildFractionalCapability(t *testing.T) {
 	if err != nil || string(canonical) != `{"economics":{"marginal_cost_per_min":0.25},"resources":{"cpu":0.5}}` {
 		t.Fatalf("fractional canonical bytes = %s: %v", canonical, err)
 	}
-	const goldenFractionalDigest = "a903efba736cc51c83ce965e636925355695b9a77fa0d434aa31cc0c5adfadf1"
+	const goldenFractionalDigest = "9d2054e19526227d0c3dcb883ac4dcc8cde76644d1818300d5cb58ec063bd9ff"
 	var previous string
 	for i := 0; i < 3; i++ {
 		w, digest, err := Build(context.Background(), d, p)
@@ -394,5 +395,42 @@ func TestWorldContributors(t *testing.T) {
 	partial, _, err := Build(context.Background(), d, p)
 	if err == nil || !strings.Contains(err.Error(), "outside") || len(partial.Runners) != 0 {
 		t.Fatalf("field ownership: %+v %v", partial, err)
+	}
+}
+
+func TestWorldDeclaresPersonalLocal(t *testing.T) {
+	for _, c := range []struct {
+		name       string
+		host       bool
+		mode       trust.CoordinatorMode
+		wantOwn    bool
+		wantMode   trust.CoordinatorMode
+		wantDeclOf trust.CoordinatorMode
+	}{
+		{"no coordinator", false, "", true, trust.Personal, trust.Personal},
+		{"personal coordinator host", true, trust.Personal, true, trust.Personal, trust.Personal},
+		{"team coordinator host keeps its mode", true, trust.Team, false, trust.Team, trust.Team},
+	} {
+		r := sched.Runner{ID: "local", CoordinatorHost: c.host, CoordinatorMode: c.mode}
+		r.Decl.CoordinatorMode = c.mode
+		declarePersonalLocal(&r)
+		if r.Decl.PersonalOwnNode != c.wantOwn || r.CoordinatorMode != c.wantMode || r.Decl.CoordinatorMode != c.wantDeclOf {
+			t.Errorf("%s: %+v mode %q", c.name, r.Decl, r.CoordinatorMode)
+		}
+	}
+}
+
+// A registered node called "local" is not the probed local runner: Build never gives it the owner exception.
+func TestWorldRegisteredLocalNodeIsNotPersonal(t *testing.T) {
+	d, p := worldFixture(t)
+	d.Local = nil
+	w, _, err := Build(context.Background(), d, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range w.Runners {
+		if r.Decl.PersonalOwnNode {
+			t.Fatalf("runner %s was declared a personal own node without an injected local runner", r.ID)
+		}
 	}
 }

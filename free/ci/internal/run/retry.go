@@ -94,7 +94,7 @@ func (rs *runState) park(ctx context.Context, pj plan.PlannedJob, job model.Job,
 	if ctx.Value(confirmingKey{}) != nil || !o.retryable || o.FailureClass != "infra" || n > infraBudget(job) || !rs.stillRunning(ctx, pj) {
 		return false
 	}
-	if rs.trans(id, "running", "lost", "infra") != nil { // a cancel intent or an unexpected state: settle normally
+	if !rs.toLost(id) { // a cancel intent or an unexpected state: settle normally
 		return false
 	}
 	for _, to := range []model.JobState{"retryable", "queued"} {
