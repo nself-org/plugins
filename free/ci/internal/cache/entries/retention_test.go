@@ -300,3 +300,32 @@ func TestKeyRefusesToExpandOversizedInputs(t *testing.T) {
 		t.Fatal("inputs far over the limit were accepted")
 	}
 }
+
+// TestFloorPruneKeepsEvictingWhenEntriesShareABlob: two entries reference the same
+// blob, so removing the oldest frees no disk; Prune must go on to the second one.
+func TestFloorPruneKeepsEvictingWhenEntriesShareABlob(t *testing.T) {
+	e := newEnv(t, envOpts{env: map[string]string{"NSELF_CI_STORE_MIN_FREE": "1000"}})
+	const content = "one shared blob of twenty bytes!"
+	a := e.save("sh1", trusted, "a", content)
+	e.advance(time.Minute)
+	b := e.save("sh2", trusted, "b", content)
+	if a.Blobs[0].SHA256 != b.Blobs[0].SHA256 || e.blobFiles() != 1 {
+		t.Fatalf("setup: the entries must share one blob (%d files)", e.blobFiles())
+	}
+	size := a.Bytes()
+	// free space is 1000 - size while the shared blob exists, and 1000 once it is gone
+	e.freeFn = func() int64 {
+		if e.blobFiles() == 0 {
+			return 1000
+		}
+		return 1000 - size
+	}
+	e.advance(2 * time.Hour)
+	res, err := e.es.Prune(e.ctx, 0)
+	if err != nil || res.Entries != 2 {
+		t.Fatalf("prune must evict both entries and reach the floor: %+v %v", res, err)
+	}
+	if e.blobFiles() != 0 || e.count() != 0 {
+		t.Fatalf("%d blob files and %d entries left", e.blobFiles(), e.count())
+	}
+}

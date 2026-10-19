@@ -163,7 +163,13 @@ func TestPruneKill(t *testing.T) {
 		t.Fatalf("template has %d blob files", got)
 	}
 	killed, byPhase, tried := 0, map[string]int{}, map[string]int{}
-	for i := 0; i < killIterations; i++ {
+	// every counted iteration is a confirmed SIGKILL of a child inside Prune; a missed
+	// window (the child finished first) is still checked for consistency but retried
+	for try := 0; killed < killIterations; try++ {
+		if try >= killIterations*4 {
+			t.Fatalf("only %d of %d kills landed in %d tries (%v)", killed, killIterations, try, byPhase)
+		}
+		i := killed
 		dir := t.TempDir()
 		copyTree(t, template.home, dir)
 		cmd := exec.Command(os.Args[0], "-test.run=^TestPruneKillChild$", "-test.count=1")
@@ -185,7 +191,7 @@ func TestPruneKill(t *testing.T) {
 		if phase == "sweeping" {
 			step = 200 * time.Microsecond // the cas sweep has no linger: strike while it runs
 		}
-		time.Sleep(time.Duration(i/len(killPhases)) * step)
+		time.Sleep(time.Duration(i/len(killPhases)) * step / time.Duration(1+try-killed)) // a missed window retries sooner
 		_ = cmd.Process.Signal(syscall.SIGKILL)
 		go func() { _, _ = io.Copy(io.Discard, out) }()
 		var ee *exec.ExitError
@@ -226,8 +232,5 @@ func TestPruneKill(t *testing.T) {
 			t.Fatalf("phase %q: %d kills in %d tries (the child finished before the kill)", ph, byPhase[ph], tried[ph])
 		}
 	}
-	if killed < killIterations*9/10 {
-		t.Fatalf("only %d of %d children were killed mid-prune: the fault window was missed (%v)", killed, killIterations, byPhase)
-	}
-	t.Logf("killed mid-prune in %d of %d iterations by phase %v", killed, killIterations, byPhase)
+	t.Logf("%d confirmed SIGKILLs inside Prune by phase %v, recovery verified after each", killed, byPhase)
 }

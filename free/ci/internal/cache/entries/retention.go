@@ -136,20 +136,28 @@ func (s *Store) prune(ctx context.Context, budget time.Duration) (Pruned, error)
 		return out, err
 	}
 	free, floor, ok, err := s.space()
-	if err != nil || !ok || free >= floor {
+	if err != nil || !ok {
 		return out, err
 	}
-	step.Limit, step.FreeBytes, cutoff = 0, floor-free, s.now()
-	r, err := s.be.CachePrune(ctx, step)
-	out.Entries, out.Bytes = out.Entries+r.Entries, out.Bytes+r.Bytes
-	if err != nil {
-		return out, err
-	}
-	if err = s.sweepBlobs(ctx, cutoff); err != nil {
-		return out, err
-	}
-	if free, _, _, err = s.space(); err != nil {
-		return out, err
+	// Entries share blobs (identical content), so evicting an entry may free nothing:
+	// keep evicting least recently used entries, sweeping and re-measuring, until the
+	// floor is met or no entry is left.
+	for free < floor {
+		step.Limit, step.FreeBytes, cutoff = 0, floor-free, s.now()
+		r, err := s.be.CachePrune(ctx, step)
+		out.Entries, out.Bytes = out.Entries+r.Entries, out.Bytes+r.Bytes
+		if err != nil {
+			return out, err
+		}
+		if err = s.sweepBlobs(ctx, cutoff); err != nil {
+			return out, err
+		}
+		if free, _, _, err = s.space(); err != nil {
+			return out, err
+		}
+		if r.Entries == 0 {
+			break
+		}
 	}
 	if free < floor {
 		return out, s.refuse(ctx, "prune", "store", ReasonDiskFloor)
