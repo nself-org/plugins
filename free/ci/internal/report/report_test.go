@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -223,4 +224,18 @@ func (t *takeover) Post(ctx context.Context, s Status) error {
 		_ = t.st.OutboxPosted(ctx, sha, key("o", "r"), t.seq, tok)
 	}
 	return t.fake.Post(ctx, s)
+}
+
+func TestCaptureInRunsInDir(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "marker.txt"), []byte("here"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, exit, err := CaptureIn(context.Background(), dir, "cat", "marker.txt")
+	if err != nil || exit != 0 || out != "here" {
+		t.Fatalf("out=%q exit=%d err=%v", out, exit, err)
+	}
+	if _, exit, _ := Capture(context.Background(), "cat", "marker.txt"); exit == 0 {
+		t.Fatal("Capture without a dir must not see the repository files")
+	}
 }
