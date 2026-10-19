@@ -25,8 +25,8 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
-// Verifier checks a token (pki.Tokens).
-type Verifier interface {
+// TokenVerifier checks a token (pki.Tokens).
+type TokenVerifier interface {
 	Verify(token string) (pki.TokenClaims, error)
 }
 
@@ -46,7 +46,7 @@ type LeaseView interface {
 
 // Gate admits or refuses lease-scoped calls.
 type Gate struct {
-	Tokens   Verifier
+	Tokens   TokenVerifier
 	Bindings Bindings
 	Leases   LeaseView
 

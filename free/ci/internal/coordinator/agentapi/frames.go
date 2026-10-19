@@ -100,6 +100,11 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 		act = func() error { return s.cfg.Sink.CacheRef(ctx, *b) }
 	case *protocol.Result:
 		act = func() error { return s.cfg.Sink.Result(ctx, *b) }
+	case *protocol.Digest, *protocol.Chunk:
+		if s.cfg.Blobs == nil {
+			return &fatal{protocol.CodeInvalid, "frame_type"}
+		}
+		act = func() error { return nil }
 	default:
 		return &fatal{protocol.CodeInvalid, "frame_type"}
 	}
@@ -124,6 +129,12 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 	if err == nil {
 		err = act()
 	}
+	switch m.Body.(type) {
+	case *protocol.Digest, *protocol.Chunk:
+		if err == nil {
+			return s.blobFrame(q, f, m)
+		}
+	}
 	_, isResult := m.Body.(*protocol.Result)
 	if err == nil && isResult {
 		if !sinkCommits(s.cfg.Sink) { // a sink that commits the result itself (the run's) must not be committed twice
@@ -143,6 +154,20 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 	}
 	if isResult || m.Type == "artifact-ref" {
 		return s.ack(f, m.Seq, m.LeaseID)
+	}
+	return nil
+}
+
+// blobFrame hands a digest or chunk frame to the blob handler and sends its replies.
+func (s *Server) blobFrame(q *request, f *flow, m protocol.Message) *fatal {
+	replies, err := s.cfg.Blobs.Frame(q.ctx, q.node, m)
+	if err != nil {
+		return s.refuse(q, f, m.LeaseID, *m.Epoch, m.Type, err)
+	}
+	for _, r := range replies {
+		if f.send(r) != nil {
+			return &fatal{protocol.CodeInvalid, "write"}
+		}
 	}
 	return nil
 }

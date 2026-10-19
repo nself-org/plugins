@@ -6,8 +6,11 @@ package agent
 // Constraints: bounded waits; counts are exact (no duplicate or missing line, one result).
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -392,5 +395,113 @@ func scenarioServerLeafKinds(t *testing.T) {
 		if name != "coordinator" && err == nil {
 			t.Fatalf("the agent accepted a %s-kind server leaf that chains to the pinned root", name)
 		}
+	}
+}
+
+func blobFrames(l protocol.Lease, data []byte, chunk int, from int, flip bool) []protocol.Message {
+	sum := sha256.Sum256(data)
+	digest := hex.EncodeToString(sum[:])
+	ep := l.Epoch
+	out := []protocol.Message{{Type: "digest", LeaseID: l.LeaseID, Epoch: &ep, Body: protocol.Digest{Stream: "artifact", SHA256: digest, Size: int64(len(data))}}}
+	for off := from; off < len(data); off += chunk {
+		end := min(off+chunk, len(data))
+		part := append([]byte(nil), data[off:end]...)
+		if flip && off == from {
+			part[0] ^= 0x01
+		}
+		out = append(out, protocol.Message{Type: "chunk", LeaseID: l.LeaseID, Epoch: &ep, Body: protocol.Chunk{Stream: "artifact", Offset: int64(off), Data: base64.StdEncoding.EncodeToString(part), Digest: digest, Final: end == len(data)}})
+	}
+	return out
+}
+
+func blobData(n int) []byte {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = byte(i*31 + 7)
+	}
+	return b
+}
+
+// scenarioBlob: a good blob is committed; one with a flipped byte is rejected by digest and fails the lease; an
+// interrupted blob resumes from the offset the coordinator reports.
+func scenarioBlob(t *testing.T) {
+	e := newE2E(t, "")
+	c := e.connect("n-1")
+	run := e.startLease(t, c, "n-1", "1")
+	data := blobData(10_000)
+	sum := sha256.Sum256(data)
+	digest := hex.EncodeToString(sum[:])
+
+	// interrupted: the first 4000 bytes, then the agent announces again and learns the offset
+	frames := blobFrames(run.l, data, 1000, 0, false)
+	for _, f := range frames[:5] { // digest + 4 chunks
+		if err := c.Send(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	off := recvType(t, c, "offset", 5*time.Second).Body.(*protocol.Offset)
+	if off.Offset != 0 || off.SHA256 != digest {
+		t.Fatalf("first offset = %+v", off)
+	}
+	eventually(t, 5*time.Second, "4000 bytes held", func() bool {
+		e.sink.mu.Lock()
+		defer e.sink.mu.Unlock()
+		b := e.sink.blobs[digest]
+		return b != nil && len(b.data) == 4000
+	})
+	if err := c.Send(frames[0]); err != nil { // announce again
+		t.Fatal(err)
+	}
+	off = recvType(t, c, "offset", 5*time.Second).Body.(*protocol.Offset)
+	if off.Offset != 4000 {
+		t.Fatalf("resume offset = %d, want 4000", off.Offset)
+	}
+	for _, f := range blobFrames(run.l, data, 1000, int(off.Offset), false)[1:] {
+		if err := c.Send(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	eventually(t, 5*time.Second, "the blob to commit", func() bool {
+		e.sink.mu.Lock()
+		defer e.sink.mu.Unlock()
+		return e.sink.blobs[digest].committed
+	})
+	if !bytes.Equal(e.sink.blobs[digest].data, data) {
+		t.Fatal("the committed blob differs from what was sent")
+	}
+
+	// corrupt: one flipped byte is caught by the digest; the lease is cancelled and Run fails
+	bad := blobData(5_000)
+	bad[0] ^= 0xff // another blob
+	badSum := sha256.Sum256(bad)
+	frames = blobFrames(run.l, bad, 1000, 0, false)
+	frames[2].Body = func() any {
+		b := frames[2].Body.(protocol.Chunk)
+		raw, _ := base64.StdEncoding.DecodeString(b.Data)
+		raw[3] ^= 0x01
+		b.Data = base64.StdEncoding.EncodeToString(raw)
+		return b
+	}()
+	for _, f := range frames {
+		if err := c.Send(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cn := recvType(t, c, "cancel", 5*time.Second).Body.(*protocol.Cancel)
+	if !strings.Contains(cn.Reason, ReasonBlob) {
+		t.Fatalf("cancel reason %q", cn.Reason)
+	}
+	select {
+	case err := <-run.done:
+		if ReasonOf(err) != ReasonBlob {
+			t.Fatalf("Run = %v, want E656 %s", err, ReasonBlob)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not fail on the corrupt blob")
+	}
+	e.sink.mu.Lock()
+	defer e.sink.mu.Unlock()
+	if b := e.sink.blobs[hex.EncodeToString(badSum[:])]; b != nil && b.committed {
+		t.Fatal("a blob that failed its digest was committed")
 	}
 }

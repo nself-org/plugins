@@ -109,7 +109,7 @@ func (d *Driver) cancelRun(rt *route) error {
 	defer timer.Stop()
 	select {
 	case <-rt.done:
-		return nil
+		return rt.err
 	case <-timer.C:
 		return fail(ReasonCancelLate, "node %s did not report lease %s within %s of the cancel", rt.node, rt.leaseID, d.grace())
 	}

@@ -58,6 +58,8 @@ type Config struct {
 	// Admit, when set, vets every lease-scoped call (a frame or a heartbeat entry) before the lease engine sees it
 	// (P7-NODE-08: the job token gate). A refusal drops the call and cancels that lease on the agent.
 	Admit func(ctx context.Context, c Call) error
+	// Blobs, when set, takes the digest and chunk frames of artifact and cache uploads (P7-NODE-08, CACHE delta 5).
+	Blobs BlobHandler
 	// PinnedAge returns the age recipient pinned for a node; nil trusts what hello presents.
 	PinnedAge func(ctx context.Context, nodeID string) (*string, error)
 

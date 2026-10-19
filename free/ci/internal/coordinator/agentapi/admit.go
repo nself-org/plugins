@@ -12,6 +12,7 @@ package agentapi
 //          by ending the stream, so a late frame of a finished lease cannot make the agent reconnect for ever.
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -23,6 +24,12 @@ const HeaderToken = "X-Nself-Job-Token"
 
 // maxTokens bounds the token header values of one request (an agent holds at most its slot count).
 const maxTokens = maxHeartbeatLeases
+
+// BlobHandler takes the blob frames of an upload (digest and chunk) and answers with the frames to send back
+// (offset). An error with Refusal() true cancels the lease on the agent; any other error fails the stream.
+type BlobHandler interface {
+	Frame(ctx context.Context, node string, m protocol.Message) (replies []protocol.Message, err error)
+}
 
 // Call is one lease-scoped call of an authenticated node.
 type Call struct {
@@ -61,15 +68,21 @@ func (s *Server) admit(q *request, f *flow, leaseID string, epoch uint64, typ st
 	if err == nil {
 		return true, nil
 	}
+	return false, s.refuse(q, f, leaseID, epoch, typ, err)
+}
+
+// refuse answers a call a hook turned down. A refusal (an error with Refusal() true) cancels the lease on the
+// agent with the error text and returns nil; any other error is the coordinator failing.
+func (s *Server) refuse(q *request, f *flow, leaseID string, epoch uint64, typ string, err error) *fatal {
 	var refusal interface{ Refusal() bool }
 	if !errors.As(err, &refusal) || !refusal.Refusal() {
-		return false, s.unavailable("admit "+typ, err)
+		return s.unavailable(typ, err)
 	}
 	s.cfg.Logf("agentapi: node %s lease %s refused: %v", q.node, leaseID, err)
 	e := epoch
 	msg := protocol.Message{Type: "cancel", LeaseID: leaseID, Epoch: &e, Body: protocol.Cancel{LeaseID: leaseID, Reason: err.Error()}}
 	if f.send(msg) != nil {
-		return false, &fatal{protocol.CodeInvalid, "write"}
+		return &fatal{protocol.CodeInvalid, "write"}
 	}
-	return false, nil
+	return nil
 }

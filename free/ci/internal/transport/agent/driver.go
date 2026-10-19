@@ -127,9 +127,19 @@ type route struct {
 	done               chan struct{}
 	once               sync.Once
 	lw                 *LogWriter
+	blobs              *blobSet
+	err                error // why the lease failed (a corrupt blob); read after done is closed
 }
 
 func (r *route) finish() { r.once.Do(func() { close(r.done) }) }
+
+// fail ends the run's wait with err.
+func (r *route) fail(err error) {
+	r.once.Do(func() {
+		r.err = err
+		close(r.done)
+	})
+}
 
 func (d *Driver) logf(format string, a ...any) {
 	if f := d.cfg().logf; f != nil {
@@ -211,7 +221,7 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, lease protocol.
 	for {
 		select {
 		case <-rt.done:
-			return nil
+			return rt.err
 		case <-ctx.Done():
 			return d.cancelRun(rt)
 		case <-tick.C:

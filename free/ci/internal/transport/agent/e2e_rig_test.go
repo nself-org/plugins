@@ -12,10 +12,12 @@ import (
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net"
 	"os"
@@ -39,6 +41,7 @@ type runSink struct {
 	results []protocol.Result
 	refs    []protocol.ArtifactRef
 	failLog error
+	blobs   map[string]*memBlob
 	eng     *lease.Engine // commits the result like the run's remote sink does
 }
 
@@ -69,8 +72,61 @@ func (s *runSink) ArtifactRef(_ context.Context, a protocol.ArtifactRef) error {
 	return nil
 }
 func (s *runSink) CacheRef(context.Context, protocol.CacheRef) error { return nil }
-func (s *runSink) Blob(context.Context, transport.BlobHeader) (transport.BlobWriter, error) {
-	return nil, os.ErrInvalid
+func (s *runSink) Blob(_ context.Context, h transport.BlobHeader) (transport.BlobWriter, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.blobs == nil {
+		s.blobs = map[string]*memBlob{}
+	}
+	b := s.blobs[h.SHA256]
+	if b == nil {
+		b = &memBlob{sink: s, head: h}
+		s.blobs[h.SHA256] = b
+	}
+	return b, nil
+}
+
+// memBlob keeps a partial blob across writers, like a sink with resumable storage.
+type memBlob struct {
+	sink      *runSink
+	head      transport.BlobHeader
+	data      []byte
+	committed bool
+	aborted   int
+}
+
+func (b *memBlob) Write(p []byte) (int, error) {
+	b.sink.mu.Lock()
+	defer b.sink.mu.Unlock()
+	b.data = append(b.data, p...)
+	return len(p), nil
+}
+func (b *memBlob) Offset() int64 {
+	b.sink.mu.Lock()
+	defer b.sink.mu.Unlock()
+	return int64(len(b.data))
+}
+func (b *memBlob) Close() error {
+	b.sink.mu.Lock()
+	defer b.sink.mu.Unlock()
+	b.committed = true
+	return nil
+}
+func (b *memBlob) Abort() error {
+	b.sink.mu.Lock()
+	defer b.sink.mu.Unlock()
+	b.aborted++
+	b.data = nil
+	return nil
+}
+func (b *memBlob) Verify(want string) error {
+	b.sink.mu.Lock()
+	defer b.sink.mu.Unlock()
+	sum := sha256.Sum256(b.data)
+	if hex.EncodeToString(sum[:]) != want {
+		return os.ErrInvalid
+	}
+	return nil
 }
 
 func (s *runSink) lines() []string {
@@ -117,7 +173,7 @@ func (e *e2e) start(addr string) {
 	}
 	leaf := &agentapi.LeafSource{CA: e.ca, ID: "coord-1", IPs: []net.IP{net.ParseIP("127.0.0.1")}}
 	cfg := agentapi.Config{CA: e.ca, Guard: pki.NewGuard(e.st), Cert: leaf.Get, Leases: e.eng, Sink: e.drv.Sink(), Source: e.drv, Store: e.st,
-		Admit: e.drv.Gate.Check, PollTimeout: 2 * time.Second, SourcePoll: 20 * time.Millisecond, GuardEvery: 50 * time.Millisecond}
+		Admit: e.drv.Gate.Check, Blobs: e.drv.Blobs(), PollTimeout: 2 * time.Second, SourcePoll: 20 * time.Millisecond, GuardEvery: 50 * time.Millisecond}
 	srv, err := agentapi.New(cfg)
 	if err != nil {
 		e.rt().Fatal(err)

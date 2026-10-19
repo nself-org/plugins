@@ -28,3 +28,5 @@ func TestPullRevokeWhilePollingClosesTheStreamAndRefusesTheHandshake(t *testing.
 	scenarioRevokeWhilePolling(t)
 }
 func TestPullRefusesAServerLeafOfNodeOrUserKind(t *testing.T) { scenarioServerLeafKinds(t) }
+
+func TestPullBlobDigestAndResumeByOffset(t *testing.T) { scenarioBlob(t) }
