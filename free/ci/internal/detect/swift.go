@@ -64,6 +64,10 @@ func validSwiftPackage(b []byte) bool {
 	return strings.Contains(text, "swift-tools-version") || strings.Contains(text, "Package(")
 }
 
+// XcodeNoSharedScheme is the reason of the unknown manifest fact an Xcode
+// container without a shared scheme yields; the planner names the remedy.
+const XcodeNoSharedScheme = "Xcode container has no shared scheme: share one in Xcode (Manage Schemes) to gate it"
+
 // xcodeContainer is an Xcode project or workspace and its evidence file.
 type xcodeContainer struct{ dir, evidence string }
 
@@ -90,7 +94,7 @@ func detectXcode(s Snapshot) []Fact {
 		}
 		schemes := s.sharedSchemes(c.dir)
 		if len(schemes) == 0 {
-			out = append(out, unknown("manifest", c.evidence, "Xcode container has no shared scheme: share one in Xcode (Manage Schemes) to gate it"))
+			out = append(out, unknown("manifest", c.evidence, XcodeNoSharedScheme))
 			continue
 		}
 		for _, p := range schemes {

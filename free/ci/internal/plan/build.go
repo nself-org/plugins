@@ -57,7 +57,7 @@ func Build(in Input) (*Plan, error) {
 			members[id] = true
 		}
 	}
-	skipped := []Skipped{}
+	skipped := xcodeNotes(in)
 	skip := func(id string, r model.Reason, detail string) { skipped = append(skipped, Skipped{id, r, detail}) }
 	for _, id := range ids {
 		if !members[id] {
