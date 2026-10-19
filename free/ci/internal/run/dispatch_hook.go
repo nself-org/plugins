@@ -164,7 +164,7 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 		root = "."
 	}
 	res := policy.Resolver{Store: rd.sess.Store, Run: policy.Runner(report.Capture)}
-	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGit(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root})
+	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGitCached(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root})
 	if err != nil {
 		return sched.Policy{}, err
 	}

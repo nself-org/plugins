@@ -15,6 +15,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 // ProjectID is the project-scope subject of a repository root: absolute, with
@@ -28,6 +30,40 @@ func ProjectID(root string) string {
 		return filepath.Clean(real)
 	}
 	return filepath.Clean(abs)
+}
+
+// projectIDWindow is how long a ProjectIDGitCached answer is reused. A run asks
+// for its project id three times on its start path (plan, policy hook, dispatch),
+// each with three git spawns; the repository's worktree layout does not change
+// inside a run's start (D-1008).
+const projectIDWindow = 10 * time.Second
+
+var projectIDs = struct {
+	sync.Mutex
+	byRoot map[string]cachedProjectID
+}{byRoot: map[string]cachedProjectID{}}
+
+type cachedProjectID struct {
+	id string
+	at time.Time
+}
+
+// ProjectIDGitCached is ProjectIDGit with the answer kept for projectIDWindow,
+// keyed by the root's filesystem id. Production start paths use it; tests that
+// swap the Runner use ProjectIDGit.
+func ProjectIDGitCached(ctx context.Context, run Runner, root string) string {
+	key := ProjectID(root)
+	projectIDs.Lock()
+	hit, ok := projectIDs.byRoot[key]
+	projectIDs.Unlock()
+	if ok && time.Since(hit.at) < projectIDWindow {
+		return hit.id
+	}
+	id := ProjectIDGit(ctx, run, root)
+	projectIDs.Lock()
+	projectIDs.byRoot[key] = cachedProjectID{id, time.Now()}
+	projectIDs.Unlock()
+	return id
 }
 
 // ProjectIDGit is the project id built from the paths git prints (its
