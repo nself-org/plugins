@@ -31,6 +31,12 @@
     "confidence": "certain"
   },
   {
+    "kind": "xcode_member",
+    "name": "app/App.xcodeproj",
+    "path": "app/App.xcworkspace/contents.xcworkspacedata",
+    "confidence": "certain"
+  },
+  {
     "kind": "xcode_scheme",
     "name": "App",
     "path": "app/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme",

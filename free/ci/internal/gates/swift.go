@@ -47,10 +47,11 @@ func swiftTestIndex(facts []detect.Fact) map[string]bool {
 // xcodeSchemes answers, per scheme, which container xcodebuild must name.
 type xcodeSchemes struct {
 	containers map[string]map[string]bool // workdir -> container dirs
+	member     map[string]string          // project container -> the workspace that lists it
 }
 
 func xcodeIndex(facts []detect.Fact) xcodeSchemes {
-	x := xcodeSchemes{containers: map[string]map[string]bool{}}
+	x := xcodeSchemes{containers: map[string]map[string]bool{}, member: map[string]string{}}
 	known := func(container string) {
 		work := path.Dir(container)
 		if x.containers[work] == nil {
@@ -67,6 +68,8 @@ func xcodeIndex(facts []detect.Fact) xcodeSchemes {
 			known(path.Dir(f.Path)) // every container counts, shared schemes or not
 		case f.Kind == "xcode_scheme":
 			known(xcodeContainerOf(f.Path))
+		case f.Kind == "xcode_member":
+			x.member[f.Name] = path.Dir(f.Path)
 		}
 	}
 	return x
@@ -82,6 +85,9 @@ func xcodeContainerOf(scheme string) string {
 // two projects sharing a scheme name both stay in the plan.
 func (x xcodeSchemes) plan(f detect.Fact, add addFn) {
 	container := xcodeContainerOf(f.Path)
+	if ws, ok := x.member[container]; ok {
+		container = ws // a project's scheme builds through the workspace that lists it
+	}
 	work := path.Dir(container)
 	target, argv := f.Name, []string(nil)
 	if len(x.containers[work]) > 1 {

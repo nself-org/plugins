@@ -72,6 +72,10 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 		probe = []string{probeTool, "--version"}
 	}
 	version := r.invoke(ctx, root, probe, ".", 30*time.Second)
+	if d.ID == "xcode-test" && (version.err != nil || version.exit != 0) {
+		// The Command Line Tools ship an xcodebuild stub that exits non-zero without Xcode.
+		return unavailable(c, d.Remediation)
+	}
 	if version.err == nil && version.exit == 0 {
 		v := strings.TrimSpace(version.output)
 		if len(v) > 120 {

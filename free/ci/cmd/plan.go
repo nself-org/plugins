@@ -233,6 +233,12 @@ func planRevision(ctx context.Context, root, base string) plan.Revision {
 // planGit runs git in a funnel workspace and returns its raw output; ok is
 // false on a non-zero exit or any failure.
 func planGit(ctx context.Context, root string, args ...string) (string, bool) {
+	return planRun(ctx, append([]string{"git", "-c", "core.fsmonitor=false", "-C", root}, args...)...)
+}
+
+// planRun runs a command in a funnel workspace and returns its raw output;
+// ok is false on a non-zero exit or any failure.
+func planRun(ctx context.Context, argv ...string) (string, bool) {
 	home, err := os.MkdirTemp("", "nself-ci-plan-")
 	if err != nil {
 		return "", false
@@ -243,7 +249,7 @@ func planGit(ctx context.Context, root string, args ...string) (string, bool) {
 	res := ex.Run(ctx, ciexec.JobSpec{
 		AttemptID: fmt.Sprintf("plan-git-%d", time.Now().UnixNano()), CoordinatorID: "plan",
 		Job: model.Job{Kind: "static"}, Home: home, Timeout: 30 * time.Second,
-		Command: append([]string{"git", "-c", "core.fsmonitor=false", "-C", root}, args...),
+		Command: argv,
 		Output:  func(b []byte) { buf.Write(b) },
 	})
 	return buf.String(), res.Err == nil && res.ExitCode == 0
@@ -256,7 +262,7 @@ var planToolAlias = map[string]string{"xcode": "xcodebuild"}
 func planWorld(cfg model.PipelineConfig, checks []plan.Check) plan.World {
 	w := plan.World{Platform: runtime.GOOS + "/" + runtime.GOARCH}
 	for _, t := range plan.WantedTools(cfg, checks) {
-		if t != "" && planOnPath(firstOf(planToolAlias[t], t)) {
+		if t != "" && planOnPath(firstOf(planToolAlias[t], t)) && planToolRuns(firstOf(planToolAlias[t], t)) {
 			w.Tools = append(w.Tools, t)
 		}
 	}
@@ -264,6 +270,16 @@ func planWorld(cfg model.PipelineConfig, checks []plan.Check) plan.World {
 	c := ciexec.Probe()
 	w.CPU, w.MemMB = c.CPUs, c.MemoryMB
 	return w
+}
+
+// planToolRuns is true unless the executable on PATH is a stub: the Command
+// Line Tools put an xcodebuild there that exits non-zero without Xcode.
+func planToolRuns(name string) bool {
+	if name != "xcodebuild" {
+		return true
+	}
+	_, ok := planRun(context.Background(), "xcodebuild", "-version")
+	return ok
 }
 
 func planOnPath(name string) bool {

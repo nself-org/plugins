@@ -16,6 +16,7 @@ package detect
 
 import (
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -81,6 +82,9 @@ func detectXcode(s Snapshot) []Fact {
 	var out []Fact
 	for _, c := range boxes {
 		out = append(out, fact("stack", "xcode", c.evidence))
+		if strings.HasSuffix(c.dir, ".xcworkspace") {
+			out = append(out, workspaceMembers(s, c, boxes)...)
+		}
 		schemes := s.sharedSchemes(c.dir)
 		if len(schemes) == 0 {
 			out = append(out, unknown("manifest", c.evidence, "Xcode container has no shared scheme: share one in Xcode (Manage Schemes) to gate it"))
@@ -103,5 +107,30 @@ func (s Snapshot) sharedSchemes(container string) []string {
 		}
 	}
 	sort.Strings(out)
+	return out
+}
+
+var workspaceRef = regexp.MustCompile(`location\s*=\s*"(?:group|container):([^"]+\.xcodeproj)"`)
+
+// workspaceMembers names the detected projects a workspace lists
+// (CocoaPods and SwiftPM monorepos build their app through the workspace):
+// one xcode_member fact per project, Name = the project container, Path = the
+// workspace file. Only plain group: and container: references count.
+func workspaceMembers(s Snapshot, ws xcodeContainer, boxes []xcodeContainer) []Fact {
+	b, err := s.read(ws.evidence)
+	if err != nil {
+		return nil
+	}
+	known := map[string]bool{}
+	for _, c := range boxes {
+		known[c.dir] = true
+	}
+	var out []Fact
+	for _, m := range workspaceRef.FindAllStringSubmatch(string(b), -1) {
+		project := path.Join(path.Dir(ws.dir), m[1])
+		if known[project] {
+			out = append(out, fact("xcode_member", project, ws.evidence))
+		}
+	}
 	return out
 }

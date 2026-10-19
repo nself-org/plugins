@@ -114,22 +114,23 @@ func TestSwiftCheckShapes(t *testing.T) {
 	}
 }
 
-// TestXcodeMonorepoNamesItsContainer: with a project and a workspace in one
-// directory every check names its container, and the two stay separate checks
-// even though they share a scheme name.
+// TestXcodeMonorepoNamesItsContainer: a project listed by a workspace builds
+// through that workspace, and the scheme the two share is one check.
 func TestXcodeMonorepoNamesItsContainer(t *testing.T) {
 	x := find(fixtureChecks(t, "swift", "monorepo", Options{}), "xcode-test")
-	if len(x) != 2 {
-		t.Fatalf("want an xcode-test per container, got %d: %+v", len(x), x)
+	want := []string{"xcodebuild", "test", "-workspace", "App.xcworkspace", "-scheme", "App", "-destination", "platform=macOS"}
+	if len(x) != 1 || x[0].Workdir != "app" || x[0].Target != "App.xcworkspace/App" || !reflect.DeepEqual(x[0].Command(), want) {
+		t.Fatalf("want one xcode-test through the workspace, got %+v", x)
 	}
-	want := map[string][]string{
-		"App.xcodeproj/App":   {"xcodebuild", "test", "-project", "App.xcodeproj", "-scheme", "App", "-destination", "platform=macOS"},
-		"App.xcworkspace/App": {"xcodebuild", "test", "-workspace", "App.xcworkspace", "-scheme", "App", "-destination", "platform=macOS"},
-	}
-	for _, p := range x {
-		if p.Workdir != "app" || !reflect.DeepEqual(p.Command(), want[p.Target]) {
-			t.Errorf("workdir %q target %q argv %v, want %v", p.Workdir, p.Target, p.Command(), want[p.Target])
-		}
+	// CocoaPods layout: the workspace has no scheme of its own, the project does.
+	pods := find(DefaultRegistry().Plan([]detect.Fact{
+		{Kind: "stack", Name: "xcode", Path: "App.xcodeproj/project.pbxproj", Confidence: detect.Certain},
+		{Kind: "stack", Name: "xcode", Path: "App.xcworkspace/contents.xcworkspacedata", Confidence: detect.Certain},
+		{Kind: "xcode_member", Name: "App.xcodeproj", Path: "App.xcworkspace/contents.xcworkspacedata", Confidence: detect.Certain},
+		{Kind: "xcode_scheme", Name: "App", Path: "App.xcodeproj/xcshareddata/xcschemes/App.xcscheme", Confidence: detect.Certain},
+	}, Options{}), "xcode-test")
+	if len(pods) != 1 || pods[0].Command()[2] != "-workspace" || pods[0].Command()[3] != "App.xcworkspace" {
+		t.Fatalf("a project listed by a workspace must build through it: %+v", pods)
 	}
 	// Two projects in one directory that share a scheme name both stay.
 	facts := []detect.Fact{

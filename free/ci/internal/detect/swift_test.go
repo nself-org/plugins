@@ -155,6 +155,32 @@ func TestSwiftEdgeCases(t *testing.T) {
 				}
 			}
 		}},
+		{"dependency trees are ignored", fstest.MapFS{
+			"Package.swift":                                file("// swift-tools-version:5.9\n"),
+			"Carthage/Checkouts/Dep/Package.swift":         file("// swift-tools-version:5.9\n"),
+			"app/SourcePackages/checkouts/X/Package.swift": file("// swift-tools-version:5.9\n"),
+			".tox/py/setup.py":                             file(""),
+		}, func(t *testing.T, facts []Fact) {
+			for _, f := range facts {
+				if f.Kind == "stack" && f.Path != "Package.swift" {
+					t.Fatalf("dependency tree scanned: %+v", f)
+				}
+			}
+		}},
+		{"workspace lists its projects", fstest.MapFS{
+			"app/App.xcodeproj/project.pbxproj":            file("x"),
+			"app/Other.xcodeproj/project.pbxproj":          file("x"),
+			"app/App.xcworkspace/contents.xcworkspacedata": file("<Workspace><FileRef location = \"group:App.xcodeproj\"></FileRef><FileRef location = \"group:Missing.xcodeproj\"></FileRef><FileRef location = \"group:Pods/Pods.xcodeproj\"></FileRef></Workspace>"),
+		}, func(t *testing.T, facts []Fact) {
+			if !has(facts, "xcode_member", "app/App.xcodeproj", "app/App.xcworkspace/contents.xcworkspacedata") {
+				t.Fatalf("member missing: %+v", facts)
+			}
+			for _, f := range facts {
+				if f.Kind == "xcode_member" && f.Name != "app/App.xcodeproj" {
+					t.Fatalf("only detected projects are members: %+v", f)
+				}
+			}
+		}},
 		{"scheme file names a scheme, nested files do not", fstest.MapFS{
 			"App.xcodeproj/project.pbxproj":                           file("x"),
 			"App.xcodeproj/xcshareddata/xcschemes/Two Words.xcscheme": file("x"),
