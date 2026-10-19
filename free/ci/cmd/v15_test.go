@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/nself-org/cli/sdk/go/v2/compat"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
 func TestV15OnlyFixture(t *testing.T) {
@@ -133,6 +134,21 @@ func TestBareRefusals(t *testing.T) {
 		if got := runV15(args); got != 1 {
 			t.Errorf("%s: exit %d, want 1", name, got)
 		}
+	}
+}
+
+// D-1021: `nself ci --` with nothing after the dashes is a usage error, not the full gate.
+func TestBareTrailingDashesIsUsage(t *testing.T) {
+	t.Setenv("NSELF_CI_REPO", t.TempDir())
+	for _, args := range [][]string{{"--"}, {"--pipeline", "deep", "--"}} {
+		if _, err := parseBare(args); err == nil || cirun.CodeOf(err) != cirun.CodeOptions {
+			t.Errorf("parseBare(%v) = %v, want an options error", args, err)
+		}
+	}
+	t.Setenv("NSELF_V15", "1")
+	t.Setenv("NSELF_CI_HOME", t.TempDir())
+	if got := runV15([]string{"--"}); got != 1 {
+		t.Errorf("exit %d, want 1", got)
 	}
 }
 

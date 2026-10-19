@@ -3,7 +3,7 @@ package adhoc
 // Purpose: stamp the ad-hoc facts on the run evidence before the evidence
 // builder (P7-CI-38) derives the per-attempt documents from it.
 // Inputs:  the base evidence document, the Mode, the redacted argv.
-// Outputs: the document with runner.isolation set to the level actually used,
+// Outputs: the document with runner.isolation set to the level the registry served,
 // the requested trust class, the redacted argv as the check's tool and the
 // network scope (and image) under tool_versions; then the registered builder's
 // result.
@@ -53,7 +53,10 @@ func (e evidenceStamp) Complete(ctx context.Context, begin any, f cirun.Evidence
 }
 
 func (e evidenceStamp) stamp(ev model.Evidence) model.Evidence {
-	ev.Runner.Isolation = e.mode.Level
+	ev.Runner.Isolation = e.mode.Served // what the registry served, never the level asked for (D-1021)
+	if ev.Runner.Isolation == "" {
+		ev.Runner.Isolation = e.mode.Level
+	}
 	if e.mode.Trust != "" {
 		ev.SourceTrust = e.mode.Trust
 	}
