@@ -89,10 +89,15 @@ func (d *Deps) dropOrphanPin(ctx context.Context, rep RevokeReport, id string, n
 		return rep, newErr(CodeNoRoute, "lock", "node %s is busy: %s", id, oneLine(lerr))
 	}
 	defer unlock()
-	if _, gerr := d.Registry.Get(ctx, id); gerr == nil {
+	switch _, gerr := d.Registry.Get(ctx, id); {
+	case gerr == nil:
 		unlock()
 		unlock = func() {}
 		return d.revoke(ctx, id, true)
+	case CodeOf(gerr) != CodeNotFound:
+		// Only a clean "not found" proves the pin is an orphan; any other read error (a cancelled
+		// context, a busy store) must not delete a pin an add may have just committed.
+		return rep, gerr
 	}
 	dropped := false
 	err := d.withPins(func(p remote.PinnedHostKeys) error {

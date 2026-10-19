@@ -289,3 +289,18 @@ func TestBadFlagWithJSONEqualsTrueStillEmitsEnvelope(t *testing.T) {
 		t.Fatalf("out = %s", out)
 	}
 }
+
+func TestOrphanPinSurvivesANonNotFoundRegistryError(t *testing.T) {
+	k := newKit(t)
+	if err := k.d.pin("orph2", []remote.HostKey{keyA}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // every registry read fails with a context error, not E650
+	if _, err := k.d.Remove(ctx, "orph2"); err == nil {
+		t.Fatal("remove with a dead context succeeded")
+	}
+	if p, _ := k.d.pins().Lookup(pinAlias("orph2")); len(p) != 1 {
+		t.Fatal("a registry read error deleted the pin")
+	}
+}
