@@ -147,13 +147,13 @@ func TestProbeUnavailableReasons(t *testing.T) {
 		"runsc not registered":           {okRunner(`{"runc":{"path":"runc"}}`), okStarter(), nil, isolation.ReasonRuntimeMissing, 0},
 		"runtime table broken":           {okRunner(`nope`), okStarter(), nil, isolation.ReasonProbeFailed, 0},
 		"runtime table query fails":      {&fakeRunner{info: map[string]string{"docker": dockerInfoRootful}, runtimeErr: errors.New("daemon gone")}, okStarter(), nil, isolation.ReasonProbeFailed, 0},
-		"registered but will not start":  {okRunner(`{"runsc":{"path":"runsc"}}`), &fakeStarter{err: errors.New("exit 125")}, nil, isolation.ReasonProbeFailed, 1},
-		"started without the banner":     {okRunner(`{"runsc":{"path":"runsc"}}`), &fakeStarter{out: "[    0.000000] Linux version 6.8.0"}, nil, isolation.ReasonProbeFailed, 1},
-		"kvm without /dev/kvm":           {okRunner(`{"runsc":{"runtimeArgs":["--platform=kvm"]}}`), okStarter(), nil, ReasonPlatformUnsupported, 0},
-		"unknown platform":               {okRunner(`{"runsc":{"runtimeArgs":["--platform","bogus"]}}`), okStarter(), nil, ReasonPlatformUnsupported, 0},
+		"registered but will not start":  {okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`), &fakeStarter{err: errors.New("exit 125")}, nil, isolation.ReasonProbeFailed, 1},
+		"started without the banner":     {okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`), &fakeStarter{out: "[    0.000000] Linux version 6.8.0"}, nil, isolation.ReasonProbeFailed, 1},
+		"kvm without /dev/kvm":           {okRunner(`{"runsc":{"path":"runsc","runtimeArgs":["--platform=kvm"]}}`), okStarter(), nil, ReasonPlatformUnsupported, 0},
+		"unknown platform":               {okRunner(`{"runsc":{"path":"runsc","runtimeArgs":["--platform","bogus"]}}`), okStarter(), nil, ReasonPlatformUnsupported, 0},
 		"no container runtime":           {&fakeRunner{info: map[string]string{}}, okStarter(), nil, isolation.ReasonRuntimeMissing, 0},
-		"podman only":                    {&fakeRunner{info: map[string]string{"podman": podmanInfo}, runtimes: `{"runsc":{}}`}, okStarter(), nil, isolation.ReasonRuntimeMissing, 0},
-		"separated node, rootful docker": {okRunner(`{"runsc":{"path":"runsc"}}`), okStarter(), func(o *Options) { o.Separated = func() bool { return true } }, isolation.ReasonRootful, 0},
+		"podman only":                    {&fakeRunner{info: map[string]string{"podman": podmanInfo}, runtimes: `{"runsc":{"path":"/usr/local/bin/runsc"}}`}, okStarter(), nil, isolation.ReasonRuntimeMissing, 0},
+		"separated node, rootful docker": {okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`), okStarter(), func(o *Options) { o.Separated = func() bool { return true } }, isolation.ReasonRootful, 0},
 	} {
 		t.Run(name, func(t *testing.T) {
 			av := newProfile(tc.runner, tc.starter, tc.mut).Probe(context.Background())
@@ -199,7 +199,7 @@ func TestProbePlatforms(t *testing.T) {
 func TestProbeVersionFailureIsNotAvailabilityFailure(t *testing.T) {
 	st := okStarter()
 	st.versionErr = errors.New("not on PATH")
-	av := newProfile(okRunner(`{"runsc":{}}`), st, nil).Probe(context.Background())
+	av := newProfile(okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`), st, nil).Probe(context.Background())
 	if !av.Available() || av.Facts["runsc_version"] != "unknown" {
 		t.Fatalf("%+v", av)
 	}
@@ -208,7 +208,7 @@ func TestProbeVersionFailureIsNotAvailabilityFailure(t *testing.T) {
 func TestProbeIsCachedForTheTTL(t *testing.T) {
 	now := time.Now()
 	st := okStarter()
-	p := newProfile(okRunner(`{"runsc":{}}`), st, func(o *Options) { o.Now = func() time.Time { return now } })
+	p := newProfile(okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`), st, func(o *Options) { o.Now = func() time.Time { return now } })
 	p.Probe(context.Background())
 	p.Probe(context.Background())
 	if st.starts != 1 {
@@ -243,7 +243,7 @@ func TestRegistrySelectsSandboxedOnlyWhenRunscStarts(t *testing.T) {
 		t.Fatalf("a host without runsc must be unavailable: %+v %v", av, err)
 	}
 	reg = &isolation.Registry{}
-	reg.Register(newProfile(okRunner(`{"runsc":{}}`), okStarter(), nil))
+	reg.Register(newProfile(okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`), okStarter(), nil))
 	p, av, err := reg.Select(context.Background(), "sandboxed-container")
 	if err != nil || p == nil || p.Level() != model.Isolation("sandboxed-container") || av.Level != "sandboxed-container" {
 		t.Fatalf("%v %+v %v", p, av, err)
@@ -281,7 +281,7 @@ func TestRuntimeTableIsReadOnEveryProbe(t *testing.T) {
 // A start cut short by the caller's context says nothing about the host and must not be remembered.
 func TestCancelledProbeIsNotCached(t *testing.T) {
 	st := okStarter()
-	p := newProfile(okRunner(`{"runsc":{}}`), st, nil)
+	p := newProfile(okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`), st, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if av := p.Probe(ctx); av.Available() {
@@ -295,7 +295,7 @@ func TestCancelledProbeIsNotCached(t *testing.T) {
 func TestConcurrentProbesShareOneStart(t *testing.T) {
 	st := okStarter()
 	st.delay = 50 * time.Millisecond
-	p := newProfile(okRunner(`{"runsc":{}}`), st, nil)
+	p := newProfile(okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`), st, nil)
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
@@ -336,7 +336,7 @@ func TestBannerMustBeAWholeLine(t *testing.T) {
 func TestProbeGivesUpWaitingWhenItsContextEnds(t *testing.T) {
 	st := okStarter()
 	st.delay = 300 * time.Millisecond
-	p := newProfile(okRunner(`{"runsc":{}}`), st, nil)
+	p := newProfile(okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`), st, nil)
 	go p.Probe(context.Background()) // holds the start
 	time.Sleep(50 * time.Millisecond)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)

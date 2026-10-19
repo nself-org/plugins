@@ -101,13 +101,20 @@ func RuntimeToolVersion(ctx context.Context, path string) (string, error) {
 // checkSandboxRuntime refuses a sandboxed-container job whose planned command does not run under
 // runsc, so the recorded level can never be stronger than the command that ran (a later planner
 // change that drops the flag fails here instead of running as a plain container). Only the flag
-// region (before the image) is read.
+// region (before the image) is read, and flag values are skipped: a `--label --runtime=runsc` pair
+// is a label, not a runtime.
 func checkSandboxRuntime(level model.Isolation, cmd ContainerCommand, image string) error {
 	if level != "sandboxed-container" {
 		return nil
 	}
 	for i := 1; i < len(cmd.Args) && cmd.Args[i] != image; i++ {
-		if cmd.Args[i] == "--runtime="+sandboxRuntime {
+		name, value, hasValue := strings.Cut(cmd.Args[i], "=")
+		takesValue := plannedFlags[name]
+		if takesValue && !hasValue && i+1 < len(cmd.Args) {
+			i++
+			value = cmd.Args[i]
+		}
+		if name == "--runtime" && value == sandboxRuntime {
 			return nil
 		}
 	}

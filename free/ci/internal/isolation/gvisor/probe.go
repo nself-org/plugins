@@ -77,7 +77,8 @@ func (in inspected) key() string {
 // profile's probe, the runtime table, the deny list and the platform). ok is false when the
 // level is unavailable; av then says why.
 func (p *Profile) inspect(ctx context.Context) (in inspected, av isolation.Availability, ok bool) {
-	base := p.base.Probe(ctx)
+	// the container profile caches a failed probe for its own TTL, so a caller's cancelled context must not reach it
+	base := p.base.Probe(context.WithoutCancel(ctx))
 	if !base.Available() {
 		return in, isolation.Availability{Reason: base.Reason}, false
 	}
@@ -103,7 +104,12 @@ func (p *Profile) inspect(ctx context.Context) (in inspected, av isolation.Avail
 	if foreign != "" {
 		return in, unavailable(ReasonRuntimeFlagDenied, map[string]string{"detail": "the runsc runtime entry has a key (" + foreign + ") whose settings this profile cannot read"}), false
 	}
-	if entry.Path != "" && !isRunsc(entry.Path) {
+	if entry.Path == "" {
+		// `docker info` leaves out runtimeType and options, so a containerd shim runtime (settings in a
+		// file nobody here reads) shows up as an entry with no path; `runsc install` always writes one
+		return in, unavailable(ReasonRuntimeFlagDenied, map[string]string{"detail": "the runsc runtime entry has no path (a containerd shim runtime keeps its settings in a file this profile cannot read)"}), false
+	}
+	if !isRunsc(entry.Path) {
 		return in, unavailable(isolation.ReasonProbeFailed, map[string]string{"detail": "the runtime named runsc points at " + entry.Path + ", which is not the runsc binary"}), false
 	}
 	platform, flag := checkArgs(entry.Args)

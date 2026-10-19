@@ -13,7 +13,7 @@ import (
 
 func wrapped(t *testing.T, network string) exec.JobSpec {
 	t.Helper()
-	p := newProfile(okRunner(`{"runsc":{}}`), okStarter(), nil)
+	p := newProfile(okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`), okStarter(), nil)
 	spec, err := p.Wrap(exec.JobSpec{AttemptID: "a1", CoordinatorID: "c1", Network: modelScope(network)})
 	if err != nil || spec.Plan == nil {
 		t.Fatalf("wrap: %v", err)
@@ -58,7 +58,7 @@ func TestCleanupHelperRunsUnderRunscToo(t *testing.T) {
 }
 
 func TestUnenforceableScopeIsRefusedNotWidened(t *testing.T) {
-	p := newProfile(okRunner(`{"runsc":{}}`), okStarter(), nil)
+	p := newProfile(okRunner(`{"runsc":{"path":"/usr/local/bin/runsc"}}`), okStarter(), nil)
 	_, err := p.Wrap(exec.JobSpec{AttemptID: "a1", Network: "internet"})
 	var ie *isolation.Error
 	if !errors.As(err, &ie) || ie.Code != "E679" {

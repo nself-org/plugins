@@ -101,7 +101,12 @@ func TestCheckSandboxRuntime(t *testing.T) {
 	if err := checkSandboxRuntime("sandboxed-container", with, image); err != nil {
 		t.Fatalf("runsc command refused: %v", err)
 	}
-	for name, cmd := range map[string]ContainerCommand{"no runtime": without, "runtime only in the job words": inJob} {
+	asLabel := ContainerCommand{Binary: "docker", Args: []string{"run", "--label", "--runtime=runsc", "--rm", image, "sh"}} // a label value
+	spaced := ContainerCommand{Binary: "docker", Args: []string{"run", "--runtime", "runsc", "--rm", image, "sh"}}
+	if err := checkSandboxRuntime("sandboxed-container", spaced, image); err != nil {
+		t.Fatalf("spaced runtime form refused: %v", err)
+	}
+	for name, cmd := range map[string]ContainerCommand{"no runtime": without, "runtime only in the job words": inJob, "runtime token that is a label value": asLabel} {
 		if err := checkSandboxRuntime("sandboxed-container", cmd, image); err == nil || !strings.Contains(err.Error(), "E613") {
 			t.Errorf("%s: want E613, got %v", name, err)
 		}
