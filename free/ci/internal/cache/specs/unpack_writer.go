@@ -15,6 +15,7 @@ package specs
 
 import (
 	"archive/tar"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -113,7 +114,10 @@ func (w *fileWriter) submit(name string, r io.Reader, h *tar.Header) error {
 	buf = buf[:h.Size]
 	if _, err := io.ReadFull(r, buf); err != nil {
 		w.free <- buf
-		return fmt.Errorf("specs: writing %q: %w", name, io.ErrUnexpectedEOF)
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			err = io.ErrUnexpectedEOF // a short body; any other error (a bomb guard's, a flipped bit's) is kept as it is
+		}
+		return fmt.Errorf("specs: writing %q: %w", name, err)
 	}
 	w.jobs <- writeJob{name: name, buf: buf, mode: os.FileMode(h.Mode & 0o777), at: h.ModTime}
 	return nil

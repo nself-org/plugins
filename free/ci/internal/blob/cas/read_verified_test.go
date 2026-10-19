@@ -66,3 +66,52 @@ func TestReadVerifiedPassesTheConsumersOwnError(t *testing.T) {
 		t.Fatalf("a sound blob was quarantined: %v", err)
 	}
 }
+
+// The descriptor ReadVerified reads is the one it checked: a blob cut short or
+// grown after the open is refused by size, and one swapped by rename after the
+// open cannot change what the consumer read.
+func TestReadVerifiedRefusesATruncatedOrGrownBlob(t *testing.T) {
+	for name, mutate := range map[string]func(p string){
+		"truncated": func(p string) { _ = os.Truncate(p, 100) },
+		"grown": func(p string) {
+			f, _ := os.OpenFile(p, os.O_WRONLY|os.O_APPEND, 0)
+			_, _ = f.Write([]byte("tail"))
+			_ = f.Close()
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, r := testStore(t), CacheRealm("ns")
+			d := putBlob(t, s, r, bytes.Repeat([]byte("z"), 4096))
+			p, _ := s.blobPath(r, d)
+			s.beforeHash = func() { mutate(p) }
+			err := s.ReadVerified(r, d, func(in io.Reader) error { _, e := io.Copy(io.Discard, in); return e })
+			if !errors.Is(err, ErrSizeMismatch) && !errors.Is(err, ErrDigestMismatch) {
+				t.Fatalf("err %v, want a size or digest mismatch", err)
+			}
+			if _, err := s.Stat(r, d); err == nil {
+				t.Fatal("the damaged blob was left in place")
+			}
+		})
+	}
+}
+
+func TestReadVerifiedIgnoresASwapByRenameAfterTheOpen(t *testing.T) {
+	s, r := testStore(t), CacheRealm("ns")
+	want := bytes.Repeat([]byte("good"), 1024)
+	d := putBlob(t, s, r, want)
+	p, _ := s.blobPath(r, d)
+	s.beforeHash = func() {
+		evil := p + ".swap"
+		_ = os.WriteFile(evil, bytes.Repeat([]byte("evil"), 1024), 0o600)
+		_ = os.Rename(evil, p)
+	}
+	var got []byte
+	err := s.ReadVerified(r, d, func(in io.Reader) error {
+		var e error
+		got, e = io.ReadAll(in)
+		return e
+	})
+	if err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("a swapped file changed what was read: %v", err)
+	}
+}

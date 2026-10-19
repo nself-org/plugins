@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -49,19 +50,42 @@ type cachedProjectID struct {
 }
 
 // ProjectIDGitCached is ProjectIDGit with the answer kept for projectIDWindow,
-// keyed by the root's filesystem id. Production start paths use it; tests that
-// swap the Runner use ProjectIDGit.
+// keyed by the root's resolved path (so two projects never share an answer).
+// Production start paths use it; tests that swap the Runner use ProjectIDGit.
+// An answer built while git could not be asked (a spawn error, a cancelled
+// context) is the fallback id, which loosens a project row: it is returned once
+// and never kept.
 func ProjectIDGitCached(ctx context.Context, run Runner, root string) string {
 	key := ProjectID(root)
+	now := time.Now()
 	projectIDs.Lock()
 	hit, ok := projectIDs.byRoot[key]
 	projectIDs.Unlock()
-	if ok && time.Since(hit.at) < projectIDWindow {
+	if ok && now.Sub(hit.at) < projectIDWindow {
 		return hit.id
 	}
-	id := ProjectIDGit(ctx, run, root)
+	var failed atomic.Bool
+	watch := run
+	if run != nil {
+		watch = func(c context.Context, argv ...string) (string, int, error) {
+			out, exit, err := run(c, argv...)
+			if err != nil {
+				failed.Store(true)
+			}
+			return out, exit, err
+		}
+	}
+	id := ProjectIDGit(ctx, watch, root)
+	if failed.Load() || ctx.Err() != nil {
+		return id
+	}
 	projectIDs.Lock()
-	projectIDs.byRoot[key] = cachedProjectID{id, time.Now()}
+	for k, v := range projectIDs.byRoot { // expired answers do not pile up in a long-lived process
+		if now.Sub(v.at) >= projectIDWindow {
+			delete(projectIDs.byRoot, k)
+		}
+	}
+	projectIDs.byRoot[key] = cachedProjectID{id, now}
 	projectIDs.Unlock()
 	return id
 }
