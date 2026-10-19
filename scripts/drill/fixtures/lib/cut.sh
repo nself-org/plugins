@@ -16,7 +16,7 @@
 #   the run's pid, so two runs never touch each other's rules; the system's firewall is left as it was. cut_exec drops
 #   privileges to the calling user with that group (Linux: setpriv with no_new_privs, so sudo and setuid binaries inside
 #   the cut fail; macOS: perl, which cannot offer that). While the cut is on, containers on any docker bridge cannot reach
-#   beyond the host: cut_preflight warns when other containers run. cut_remove is idempotent and runs on every exit path
+#   beyond the host: cut_preflight refuses while other containers run (DRILL_CUT_ALLOW_SHARED_HOST=1 overrides). cut_remove is idempotent and runs on every exit path
 #   the shell can see (the drill traps EXIT, INT, TERM and HUP); for SIGKILL a detached root watchdog removes the cut when
 #   the drill's pid is gone. By hand: `sudo nft list tables | grep drillcut` / `sudo pfctl -s Anchors`. Nothing here
 #   touches the network.
@@ -46,7 +46,11 @@ cut_preflight() {
 		command -v nft >/dev/null || cut_die "nft is required (apt-get install nftables)"
 		command -v setpriv >/dev/null || cut_die "setpriv (util-linux) is required"
 		! getent group "$CUT_GID" >/dev/null 2>&1 || cut_die "group id $CUT_GID is already in use; set CUT_GID to a free number"
-		if [ -n "$(docker ps -q 2>/dev/null)" ]; then echo "${EV_JOB:-drill}: warning: running containers lose outbound access (forwarding from docker bridges) while the cut is on" >&2; fi
+		# The cut drops forwarding out of every docker bridge and the docker daemon's own egress, so it would break other
+		# containers on a shared box. Refuse unless the caller says this host is the drill's own (hosted runner, throwaway VM).
+		if [ -n "$(docker ps -q 2>/dev/null)" ] && [ "${DRILL_CUT_ALLOW_SHARED_HOST:-}" != 1 ]; then
+			cut_die "containers are running; the cut would cut their network too. Stop them, or set DRILL_CUT_ALLOW_SHARED_HOST=1 on a host that is only for this drill"
+		fi
 		;;
 	Darwin) command -v pfctl >/dev/null || cut_die "pfctl is required" ;;
 	*) cut_die "no network cut for $CUT_OS" ;;

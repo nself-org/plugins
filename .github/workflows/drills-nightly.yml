@@ -70,6 +70,9 @@ jobs:
           chmod +x "$bin"
           echo "NSELF_CI_BIN=$bin" >> "$GITHUB_ENV"
 
+      - name: Install nft (scenario 1 cuts the network)
+        run: command -v nft >/dev/null || (sudo -n apt-get update -qq && sudo -n apt-get install -y -qq nftables)
+
       - name: Run the pipeline
         run: |
           set -o pipefail
