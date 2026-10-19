@@ -481,6 +481,13 @@
               "cancelled",
               "lost"
             ]
+          },
+          "diagnosis": {
+            "type": "string"
+          },
+          "excerpt": {
+            "type": "string",
+            "maxLength": 1024
           }
         },
         "required": [

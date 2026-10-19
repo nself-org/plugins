@@ -154,6 +154,9 @@ type Retry struct {
 	JobID   string       `json:"job_id"`
 	Attempt int          `json:"attempt"`
 	Class   FailureClass `json:"class"`
+	// Why the previous attempt failed (P7-CI-40; additive within v1): the signature and a short redacted excerpt.
+	Diagnosis string `json:"diagnosis,omitempty"`
+	Excerpt   string `json:"excerpt,omitempty"`
 }
 
 // Counts is the check count summary.

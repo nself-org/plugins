@@ -61,6 +61,8 @@ func runJob(t *testing.T, root, home, rev, script string) run.Result {
 }
 
 func TestFlakyListing(t *testing.T) {
+	run.FlakyHistory = Annotate // what cmd/runs_flaky.go registers: evidence echoes the listing
+	defer func() { run.FlakyHistory = nil }()
 	root, home := t.TempDir(), t.TempDir()
 	marker := filepath.Join(t.TempDir(), "runs")
 	if err := os.WriteFile(marker, nil, 0o600); err != nil {
@@ -70,9 +72,21 @@ func TestFlakyListing(t *testing.T) {
 	script := `n=$(wc -l < ` + marker + `); echo x >> ` + marker + `; if [ $((n % 2)) -eq 1 ]; then echo "--- FAIL: TestAlternates"; exit 1; fi`
 	var ids []string
 	var results []model.Result
+	var docs []model.Evidence
 	for i := 0; i < 3; i++ {
 		res := runJob(t, root, home, testSHA, script)
 		ids, results = append(ids, res.Summary.RunID), append(results, res.Summary.Result)
+		docs = append(docs, res.Summary.Doc)
+	}
+	// evidence echoes the debt once a second result differs, and never changes the result
+	if docs[0].Checks[0].Flaky != nil {
+		t.Errorf("first run marked flaky with no history: %+v", docs[0].Checks[0].Flaky)
+	}
+	if f := docs[2].Checks[0].Flaky; f == nil || f.Source != SourceHistory || f.Passes != 2 || f.Fails != 1 || docs[2].Checks[0].Result != "pass" {
+		t.Errorf("third run evidence flaky %+v result %s", f, docs[2].Checks[0].Result)
+	}
+	if f := docs[1].Checks[0].Flaky; f == nil || docs[1].Checks[0].Result != "fail" || docs[1].Result == "pass" {
+		t.Errorf("a flaky failure must stay a failure: flaky %+v check %+v", f, docs[1].Checks[0])
 	}
 	// a stable check on another revision must not appear
 	runJob(t, root, home, "fedcba9876543210fedcba9876543210fedcba98", "exit 0")

@@ -27,7 +27,19 @@ func Scan(ctx context.Context, st *store.Store, limit int) ([]Flake, error) {
 	if limit < 1 {
 		limit = DefaultRuns
 	}
-	limit = min(limit, MaxRuns)
+	docs, err := scanDocs(ctx, st, min(limit, MaxRuns))
+	if err != nil {
+		return nil, err
+	}
+	flakes := Detect(docs)
+	if flakes == nil {
+		flakes = []Flake{}
+	}
+	return flakes, nil
+}
+
+// scanDocs reads the evidence of up to limit recent runs, newest first.
+func scanDocs(ctx context.Context, st *store.Store, limit int) ([]Doc, error) {
 	var docs []Doc
 	read := 0
 	for before := int64(0); read < limit; {
@@ -50,9 +62,5 @@ func Scan(ctx context.Context, st *store.Store, limit int) ([]Flake, error) {
 		}
 		before = page.NextCreatedAt
 	}
-	flakes := Detect(docs)
-	if flakes == nil {
-		flakes = []Flake{}
-	}
-	return flakes, nil
+	return docs, nil
 }

@@ -137,7 +137,7 @@ func (rs *runState) runAttempt(ctx context.Context, i int, pj plan.PlannedJob, o
 			out.parked = false
 			break
 		}
-		retries = append(retries, model.Retry{JobID: pj.ID, Attempt: n + 1, Class: out.FailureClass})
+		retries = append(retries, model.Retry{JobID: pj.ID, Attempt: n + 1, Class: out.FailureClass, Diagnosis: out.Diagnosis, Excerpt: diagnose.Excerpt(out.Tail, 1024)})
 		rs.render.Event(Event{Type: "retrying", Job: pj.ID, Text: fmt.Sprintf("attempt %d failed (%s); retrying as attempt %d of at most %d", n, out.Diagnosis, n+1, infraBudget(job)+1)})
 		n++
 		out = rs.runAttemptN(ctx, i, pj, o, n)
@@ -166,9 +166,13 @@ func (rs *runState) confirmFlaky(ctx context.Context, i int, pj plan.PlannedJob,
 			break
 		}
 		n++
-		retries = append(retries, model.Retry{JobID: pj.ID, Attempt: n, Class: "code"})
+		retries = append(retries, model.Retry{JobID: pj.ID, Attempt: n, Class: "code", Diagnosis: "confirm-flaky"})
 		rs.render.Event(Event{Type: "retrying", Job: pj.ID, Text: "confirmation rerun " + strconv.Itoa(k+1) + " of the failed job (attempt " + strconv.Itoa(n) + ")"})
 		r := rs.runAttemptN(ctx, i, pj, o, n)
+		if r.parked { // a confirmation rerun is never retried: retire the attempt park queued, it ends failed
+			rs.retire(AttemptSpec{Pipeline: rs.mp, Job: &rs.mp.Jobs[i], N: n + 1})
+			r.parked = false
+		}
 		switch r.State {
 		case StatePassed:
 			passes++

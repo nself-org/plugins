@@ -29,6 +29,7 @@ var confirmFlakyFlag int
 
 func init() {
 	registerRunsFlag("flaky", runRunsFlaky)
+	cirun.FlakyHistory = flaky.Annotate
 	bareFlags.IntVar(&confirmFlakyFlag, "confirm-flaky", 0, "rerun a job that failed with a code failure up to N more times (recorded; the failure stays a failure)")
 	RegisterOptionsHook(func(o *RunOptions) error {
 		n := confirmFlakyFlag

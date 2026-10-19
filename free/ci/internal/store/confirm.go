@@ -43,6 +43,7 @@ func confirmationCount(ctx context.Context, tx *sql.Tx, previousID, state string
 		return 0, nil
 	}
 	var n int
-	err := tx.QueryRowContext(ctx, "SELECT count(*) FROM audit WHERE action='confirm-flaky' AND target=?", previousID).Scan(&n)
+	// the request must name a code-class failure: an audit label alone never authorises a retry of an infra attempt
+	err := tx.QueryRowContext(ctx, "SELECT count(*) FROM audit u JOIN attempt a ON a.id=u.target WHERE u.action='confirm-flaky' AND u.target=? AND a.failure_class='code'", previousID).Scan(&n)
 	return n, err
 }

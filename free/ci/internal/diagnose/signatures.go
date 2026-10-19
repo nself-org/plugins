@@ -6,13 +6,20 @@ package diagnose
 // Inputs:  none (a fixed table). Outputs: Signatures, matched by Classify.
 // Constraints: pure data; a row names one cause, one remediation, and where it
 // may match (an executor error is stronger evidence than program output, so
-// output rows match only the last TailWindow bytes and never a bare word);
+// output rows match only the last OutputLines lines and never a bare word; an
+// exit status counts only when the executor reported no error, and a plain
+// exit status chosen by the program (137, 127) is never enough on its own);
 // unknown stays code (misclassifying a code failure as infra hides bugs).
 
 import "regexp"
 
 // TailWindow is how much of the end of the output text signatures may match.
 const TailWindow = 4 << 10
+
+// OutputLines is how many of the last non-empty output lines signatures may
+// match: a test that prints an expected infra message and then goes on to
+// report its own assertion is a code failure.
+const OutputLines = 3
 
 // Signature IDs recorded in evidence (`check.diagnosis`).
 const (
@@ -43,10 +50,10 @@ func re(s string) *regexp.Regexp { return regexp.MustCompile(s) }
 var signatures = []signature{
 	{
 		id:          SigOOM,
-		exits:       []int{137}, // 128 + SIGKILL: the kernel OOM killer or an outside kill (a timeout is judged first)
+		exits:       []int{-1}, // killed by a signal (the executor reports exit -1, no error); a plain `exit 137` is the job's own code and is not enough
 		errText:     re(`(?i)signal: killed|oomkilled|out of memory`),
-		output:      re(`(?i)oomkilled|out of memory: kill|oom-kill|cannot allocate memory`),
-		remediation: "The process was killed, most likely for memory. Free memory on the runner, lower the job's parallelism, or raise `requires.mem_mb`; then run it again.",
+		output:      re(`(?i)oomkilled|out of memory: kill|oom-kill|cannot allocate memory|\d+\s+killed\b`),
+		remediation: "The process was killed by a signal, most likely for memory. Free memory on the runner, lower the job's parallelism, or raise `requires.mem_mb`; then run it again.",
 	},
 	{
 		id:          SigDisk,
@@ -68,7 +75,6 @@ var signatures = []signature{
 	},
 	{
 		id:          SigTool,
-		exits:       []int{127}, // the shell's "command not found"
 		errText:     re(`(?i)executable file not found|fork/exec .*: no such file or directory|command not found`),
 		output:      re(`(?i)command not found|executable file not found|: not found$`),
 		remediation: "A tool the job needs is not installed on the runner. Install it, or declare it under `requires.tools` so the job only lands where it exists.",

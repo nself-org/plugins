@@ -10,7 +10,8 @@ import (
 
 func TestClassifyOOM(t *testing.T) {
 	for name, in := range map[string]Input{
-		"exit 137 with no timeout":     {ExecClass: "code", ExitCode: 137},
+		"killed by a signal, no error": {ExecClass: "code", ExitCode: -1},
+		"shell Killed line after 137":  {ExecClass: "code", ExitCode: 137, Tail: "make\nsh: line 1:  4242 Killed   cc1\n"},
 		"container memory limit":       {ExecClass: "code", ExitCode: 1, Reason: "resource_limit"},
 		"kernel oom line in output":    {ExecClass: "code", ExitCode: 1, Tail: "build\nOut of memory: Killed process 4242 (cc1)\n"},
 		"exec reports a killed signal": {ExecClass: "infra", ExitCode: -1, Err: "signal: killed"},
@@ -39,8 +40,12 @@ func TestClassifyClasses(t *testing.T) {
 		{"disk full", Input{ExecClass: "code", ExitCode: 1, Tail: "write /tmp/x: no space left on device\n"}, "infra", SigDisk, true},
 		{"dns", Input{ExecClass: "code", ExitCode: 1, Tail: "curl: (6) Could not resolve host: proxy.golang.org\n"}, "infra", SigDNS, true},
 		{"docker down", Input{ExecClass: "infra", ExitCode: -1, Err: "Cannot connect to the Docker daemon at unix:///var/run/docker.sock"}, "infra", SigDocker, true},
-		{"missing tool by exit 127", Input{ExecClass: "code", ExitCode: 127, Tail: "sh: 1: golangci-lint: not found\n"}, "infra", SigTool, true},
+		{"missing tool by output", Input{ExecClass: "code", ExitCode: 127, Tail: "sh: 1: golangci-lint: not found\n"}, "infra", SigTool, true},
 		{"missing tool by exec error", Input{ExecClass: "infra", Err: `exec: "pnpm": executable file not found in $PATH`}, "infra", SigTool, true},
+		{"a program choosing exit 137 is code", Input{ExecClass: "code", ExitCode: 137, Tail: "assertion failed\n"}, "code", SigCode, false},
+		{"a program choosing exit 127 is code", Input{ExecClass: "code", ExitCode: 127, Tail: "assertion failed\n"}, "code", SigCode, false},
+		{"exit -1 with an executor error is not a signal kill", Input{ExecClass: "infra", ExitCode: -1, Err: "workspace cleanup failed"}, "infra", SigExecutor, false},
+		{"an expected infra message followed by the assertion is code", Input{ExecClass: "code", ExitCode: 1, Tail: "want error \"no space left on device\"\ngot nil\n--- FAIL: TestDisk\nFAIL\nexit status 1\n"}, "code", SigCode, false},
 		{"unmatched executor error stays infra", Input{ExecClass: "infra", Err: "workspace cleanup failed"}, "infra", SigExecutor, false},
 		{"program output naming a signature after a zero exit is not a failure", Input{ExecClass: "code", ExitCode: 0, Tail: "no space left on device"}, "code", SigCode, false},
 		{"a word in a code failure does not match", Input{ExecClass: "code", ExitCode: 1, Tail: "Killed 3 stale workers\nFAIL\n"}, "code", SigCode, false},

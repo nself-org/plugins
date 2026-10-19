@@ -135,6 +135,10 @@ func (c *Coordinator) conclude(f finishIn) Result {
 			digest, err = evidenceDigest(ev)
 		}
 	}
+	if err == nil {
+		markHistoryFlaky(bg, f.St, &ev)
+		digest, err = evidenceDigest(ev)
+	}
 	for _, e := range f.Recovered.Errors {
 		notes = append(notes, "recovery: "+firstLineOf(e.Error()))
 	}

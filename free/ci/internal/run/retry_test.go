@@ -250,4 +250,36 @@ func TestNoRetryAfterCancellation(t *testing.T) {
 	}
 }
 
+func TestConfirmationRerunThatFailsAsInfraLeavesNothingQueued(t *testing.T) {
+	t.Parallel()
+	m := newMarker(t)
+	job := counting(m, `if [ "$n" -lt 1 ]; then echo "--- FAIL: TestX"; exit 1; fi; echo "Cannot connect to the Docker daemon"; exit 1`)
+	job.Retry = &model.RetryConfig{InfraMax: 2}
+	r := newRig(t, map[string]model.Job{"unit": job}, gitFake{})
+	r.C.Opts.ConfirmFlaky = 2
+	res := r.run(t)
+	for _, a := range attemptsOf(t, r, res) {
+		if strings.HasPrefix(a, "queued") || strings.HasPrefix(a, "retryable") || strings.HasPrefix(a, "lost") {
+			t.Fatalf("a runnable or parked attempt was left behind: %v", attemptsOf(t, r, res))
+		}
+	}
+	if o := outcome(res, "unit"); o.State != StateFailed {
+		t.Fatalf("outcome %+v", o)
+	}
+}
+
+func TestRetryRecordKeepsTheEarlierFailureDiagnosis(t *testing.T) {
+	t.Parallel()
+	m := newMarker(t)
+	r := newRig(t, map[string]model.Job{"dl": counting(m, `if [ "$n" -lt 1 ]; then echo "curl: (6) Could not resolve host: example.test"; exit 6; fi; exit 0`)}, gitFake{})
+	res := r.run(t)
+	rt := res.Summary.Doc.Retries
+	if len(rt) != 1 || rt[0].Diagnosis != "infra.dns" || !strings.Contains(rt[0].Excerpt, "Could not resolve host") {
+		t.Fatalf("retries %+v", rt)
+	}
+	if c := checkOf(t, res, "dl"); c.Result != "pass" {
+		t.Fatalf("check %+v", c)
+	}
+}
+
 func planned(id string) plan.PlannedJob { return plan.PlannedJob{ID: id} }

@@ -59,6 +59,7 @@ func Classify(in Input) Diagnosis {
 	if len(tail) > TailWindow {
 		tail = tail[len(tail)-TailWindow:]
 	}
+	tail = lastLines(tail, OutputLines)
 	for _, s := range signatures {
 		if s.matches(in, tail) {
 			return infra(s)
@@ -84,7 +85,7 @@ func ForClass(c model.FailureClass) Diagnosis {
 
 func (s signature) matches(in Input, tail string) bool {
 	for _, x := range s.exits {
-		if in.ExitCode == x {
+		if in.Err == "" && in.ExitCode == x {
 			return true
 		}
 	}
@@ -120,4 +121,19 @@ func Excerpt(text string, max int) string {
 		cut = cut[i+1:] // start at a whole line when that costs under a quarter
 	}
 	return cut
+}
+
+// lastLines is the last n non-empty lines of text.
+func lastLines(text string, n int) string {
+	lines := strings.Split(strings.TrimRight(text, "\r\n "), "\n")
+	var keep []string
+	for i := len(lines) - 1; i >= 0 && len(keep) < n; i-- {
+		if strings.TrimSpace(lines[i]) != "" {
+			keep = append(keep, lines[i])
+		}
+	}
+	for i, j := 0, len(keep)-1; i < j; i, j = i+1, j-1 {
+		keep[i], keep[j] = keep[j], keep[i]
+	}
+	return strings.Join(keep, "\n")
 }
