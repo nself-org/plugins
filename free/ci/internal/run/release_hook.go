@@ -76,7 +76,8 @@ func releaseDispatch(ctx context.Context, s AttemptSpec, prev DispatchHook) (Adm
 		return Admitted{}, releaseFailure(&job.Error{Code: job.CodeNotAdmitted, Reason: job.NoEvidence, Message: "the run has no session"})
 	}
 	g := job.Gatherer{Store: sess.Store, Worktree: job.GitWorktree(job.Capture(report.Capture)), Inputs: ReleaseInputs, RepoID: shortDigest}
-	attempt := job.Attempt{RunID: sess.RunID, Revision: sess.Revision, Deps: s.Job.Deps}
+	attempt := job.Attempt{RunID: sess.RunID, Revision: sess.Revision, Deps: s.Job.Deps,
+		Dirty: sess.Dirty, ConfigOutside: sess.ConfigOutside, Subset: sess.Subset}
 	if s.Pipeline != nil {
 		attempt.Pipeline = model.PipelineRef{ID: sess.RunID, Name: s.Pipeline.Name, Kind: s.Pipeline.Kind}
 	}
