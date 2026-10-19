@@ -14,7 +14,9 @@ package run
 // runner carries the probe-derived declaration `ci plan` uses (owner trust
 // class, process isolation), so placement refuses untrusted work there. The
 // local admission policy (battery, reservations, the foreground
-// floor) still runs first, as in LocalAdmit.
+// floor) still runs first, as in LocalAdmit. The job-to-sched mapping is
+// planview.SchedJob, the one `ci plan` uses; the world counts the per-job limit
+// over the run's own job rows (world.Deps.JobIDs), not every active attempt.
 
 import (
 	"context"
@@ -90,10 +92,8 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 		return Admitted{}, err
 	}
 	cpu, mem := demandOf(s.Job)
-	a, err := rd.d.Submit(ctx, dispatch.Job{
-		AttemptID: id, Sched: rd.schedJob(s, id, row, cpu, mem), Model: *s.Job, Revision: sess.Revision, Foreground: s.Foreground,
-		LocalCPU: max(dec.Slots*cpu, cpu), LocalMemMB: max(capacity.FreeMemoryMB-capacity.MemoryMB*dec.ReserveMemoryPercent/100, mem),
-	})
+	a, err := rd.d.Submit(ctx, queueJob(sess, s, rd.schedJob(s, id, row, cpu, mem), id,
+		max(dec.Slots*cpu, cpu), max(capacity.FreeMemoryMB-capacity.MemoryMB*dec.ReserveMemoryPercent/100, mem)))
 	if err != nil {
 		var de *dispatch.Error
 		if errors.As(err, &de) {
@@ -102,6 +102,13 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 		return Admitted{}, err
 	}
 	return Admitted{AttemptID: a.AttemptID, LeaseID: a.LeaseID, RunnerID: a.RunnerID, Local: a.Local}, nil
+}
+
+// queueJob is the dispatcher's input for one attempt. Only an interactive run
+// (a person at a terminal) keeps the implicit foreground queue cap.
+func queueJob(sess *Session, s AttemptSpec, sj sched.Job, id string, localCPU, localMemMB int) dispatch.Job {
+	return dispatch.Job{AttemptID: id, Sched: sj, Model: *s.Job, Revision: sess.Revision, Foreground: s.Foreground,
+		NoDefaultQueueCap: !sess.Interactive, LocalCPU: localCPU, LocalMemMB: localMemMB}
 }
 
 // runDispatcher returns the dispatcher of the session's run, creating it once.
@@ -138,15 +145,17 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 // platform is the local runner's platform string.
 func platform() string { return runtime.GOOS + "/" + runtime.GOARCH }
 
+// schedJob maps the attempt with the mapping `ci plan` uses (planview.SchedJob),
+// then sets what only a run knows: the attempt key and number, the source trust
+// and the local demand. The job's own labels, tools, isolation floor and
+// accelerators are dropped: the local declaration carries no measured facts for
+// them until P7-TRUST-08, and the exec-time isolation hook is the gate for them.
 func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sched.Job {
-	var timeout time.Duration
-	if d, err := time.ParseDuration(s.Job.Timeout); err == nil {
-		timeout = d
-	}
-	return sched.Job{Key: id, ID: row, Name: row, Pipeline: sched.Pipeline{ID: rd.sess.RunID, Support: []string{platform()}, Foreground: s.Foreground},
-		Requirements: model.PlacementRequirements{Platform: platform(), CPU: int64(cpu), MemMB: int64(mem)},
-		Trust:        model.TrustClass(rd.row.SourceTrust), Network: "internet", TimeoutMs: timeout.Milliseconds(), Attempt: s.N, Priority: string(s.Job.Priority),
-		RemoteOnly: s.Job.RemoteOnly, PersonalOwnRun: true, Project: rd.row.Project}
+	j := planview.SchedJob(planview.Context{PipelineID: rd.sess.RunID, Project: rd.row.Project, Support: []string{platform()},
+		DefaultPlatform: platform(), Foreground: s.Foreground}, planview.PlannedJob{ID: row, Name: row, Job: *s.Job})
+	j.Key, j.Attempt, j.Trust, j.Accelerators = id, s.N, model.TrustClass(rd.row.SourceTrust), nil
+	j.Requirements = model.PlacementRequirements{Platform: platform(), CPU: int64(cpu), MemMB: int64(mem)}
+	return j
 }
 
 // policy resolves the run's effective scheduling policy once, as PolicyHook does.
@@ -163,7 +172,7 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 		root = "."
 	}
 	res := policy.Resolver{Store: rd.sess.Store, Run: policy.Runner(report.Capture)}
-	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGitCached(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root})
+	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: policy.ProjectIDGitCached(ctx, res.Run, root), Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root, Run: rd.sess.PolicyRun})
 	if err != nil {
 		return sched.Policy{}, err
 	}
@@ -188,7 +197,7 @@ func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World
 	}
 	// the run loop does not probe for docker: say unknown rather than a measured "no"
 	local.Tools.Docker = model.Fact[bool]{Source: "probe", ObservedAt: time.Now(), Confidence: "unknown"}
-	w, _, err := world.Build(ctx, world.Deps{Store: rd.sess.Store, Local: &local, LocalCapacity: &capacity, Policy: rd.policy}, p)
+	w, _, err := world.Build(ctx, world.Deps{Store: rd.sess.Store, Local: &local, LocalCapacity: &capacity, Policy: rd.policy, JobIDs: rd.sess.jobRows()}, p)
 	if err != nil {
 		return sched.World{}, "", err
 	}

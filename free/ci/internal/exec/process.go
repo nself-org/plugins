@@ -29,7 +29,7 @@ func (e *Executor) runProcess(ctx context.Context, s JobSpec, workspace string, 
 		}
 	}
 	env = append(env, "NSELF_CI_EXEC_ATTEMPT="+s.AttemptID)
-	return e.runCommandSig(ctx, nil, limitedCommand(s), workdir, env, s.Output, nil, func(pid int) error {
+	return e.runCommandSig(ctx, s.Stdin, limitedCommand(s), workdir, env, s.Output, nil, func(pid int) error {
 		return writeProcessMarker(s.Home, s.AttemptID, s.CoordinatorID, pid)
 	}, s.AttemptID)
 }

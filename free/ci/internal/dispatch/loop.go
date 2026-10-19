@@ -37,6 +37,10 @@ type Job struct {
 	// Revision is the commit a remote runner checks out.
 	Revision   string
 	Foreground bool
+	// NoDefaultQueueCap withholds the implicit 10 minute queue cap of a Foreground
+	// job: nobody waits at a terminal for a scripted or scheduled run. The policy's
+	// max_queue still applies (P7-AUTO-29).
+	NoDefaultQueueCap bool
 	// LocalCPU and LocalMemMB are the host capacity a local placement reserves
 	// against (0 = from the local runner's capability).
 	LocalCPU, LocalMemMB int

@@ -3,6 +3,7 @@ package exec
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -31,6 +32,13 @@ type JobSpec struct {
 	// MemoryMB alone is a reservation, enforced by container isolation, never by RLIMIT_AS.
 	MemoryLimitMB int
 	Output        func([]byte)
+	// Stdin, when set, is the job's standard input: how a one-job credential reaches a
+	// runner without touching argv, a container -e flag or a file. Nil keeps /dev/null.
+	// A planned container refuses it (its stdin carries the environment).
+	Stdin io.Reader
+	// Masks are exact values the output must never carry, whatever the patterns say
+	// (the value Stdin delivers); they are redacted even when split across chunks.
+	Masks []string
 	// Slot is the execution slot the attempt holds; isolation profiles derive the job UID from it.
 	Slot int
 	// Plan, when an Isolator sets it, builds the container command instead of the baseline flags.
@@ -136,6 +144,9 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	}
 	if e.Redactor == nil {
 		e.Redactor = passThroughRedactor{}
+	}
+	if len(s.Masks) > 0 {
+		e.Redactor = newValueMask(e.Redactor, s.Masks)
 	}
 	if e.Grace <= 0 {
 		e.Grace = 10 * time.Second

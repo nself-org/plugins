@@ -79,10 +79,7 @@ func SchedJobs(c Context, jobs []PlannedJob) ([]sched.Job, []Blocked) {
 		}
 		sort.Strings(support)
 	}
-	band := "normal"
-	if c.Foreground {
-		band = "interactive"
-	}
+	band := bandOf(c)
 	var out []sched.Job
 	var blocked []Blocked
 	for _, pj := range ordered {
@@ -95,6 +92,27 @@ func SchedJobs(c Context, jobs []PlannedJob) ([]sched.Job, []Blocked) {
 		}
 	}
 	return out, blocked
+}
+
+// SchedJob maps one planned job exactly as SchedJobs does, for a caller that
+// places jobs one at a time (a run). Support defaults to the job's own platform.
+func SchedJob(c Context, pj PlannedJob) sched.Job {
+	platform := pj.Platform
+	if platform == "" {
+		platform = c.DefaultPlatform
+	}
+	support := append([]string(nil), c.Support...)
+	if len(support) == 0 && platform != "" {
+		support = []string{platform}
+	}
+	return schedJob(c, bandOf(c), support, platform, pj)
+}
+
+func bandOf(c Context) string {
+	if c.Foreground {
+		return "interactive"
+	}
+	return "normal"
 }
 
 func schedJob(c Context, band string, support []string, platform string, pj PlannedJob) sched.Job {

@@ -207,6 +207,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	sess.Store, sess.Coordinator, sess.Exec, sess.RunID, sess.Revision = st, coord, c.exec, runID, rev.SHA
 	sess.Host, sess.Home, sess.Admission = hostName(), c.Opts.Home, c.Admission
 	sess.Admission.Force = sess.Admission.Force || c.Opts.Force
+	sess.PolicyRun, sess.Interactive = c.Opts.PolicyRun, c.Opts.Interactive
 	sess.Capacity = c.Capacity
 	if sess.Capacity == nil {
 		sess.Capacity = ciexec.Probe

@@ -1,0 +1,107 @@
+//go:build unix
+
+package signing_test
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/signing"
+)
+
+func runner(t *testing.T) *signing.FunnelRunner { return &signing.FunnelRunner{Home: t.TempDir()} }
+
+func TestFunnelRunnerFeedsStdinThroughAFifo(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	r := runner(t)
+	payload := strings.Repeat("payload-line\n", 20000) // larger than a pipe buffer
+	out, code, err := r.RunStdio(context.Background(), signing.StdioCall{Argv: []string{"cat"}, Stdin: []byte(payload), Timeout: 20 * time.Second})
+	if err != nil || code != 0 || string(out) != payload {
+		t.Fatalf("code %d err %v, %d bytes back", code, err, len(out))
+	}
+	if left, _ := filepath.Glob(filepath.Join(tmp, "sigio-*")); len(left) != 0 {
+		t.Fatalf("private fifo directory left behind: %v", left)
+	}
+}
+
+func TestFunnelRunnerNilStdinIsDevNull(t *testing.T) {
+	out, code, err := runner(t).RunStdio(context.Background(), signing.StdioCall{Argv: []string{"cat"}, Timeout: 10 * time.Second})
+	if err != nil || code != 0 || len(out) != 0 {
+		t.Fatalf("%d %v %q", code, err, out)
+	}
+}
+
+func TestFunnelRunnerExitCodeEnvAndDir(t *testing.T) {
+	r := runner(t)
+	dir := t.TempDir()
+	out, code, err := r.RunStdio(context.Background(), signing.StdioCall{Argv: []string{"/bin/sh", "-c", `pwd; echo "$MARK"; exit 7`}, Env: []string{"MARK=hello"}, Dir: dir, Timeout: 10 * time.Second})
+	want, _ := filepath.EvalSymlinks(dir)
+	got := strings.Fields(string(out))
+	if err != nil || code != 7 || len(got) != 2 || got[1] != "hello" {
+		t.Fatalf("code %d err %v out %q", code, err, out)
+	}
+	if real, _ := filepath.EvalSymlinks(got[0]); real != want {
+		t.Fatalf("ran in %s, want %s", got[0], want)
+	}
+	if _, code, _ := r.RunStdio(context.Background(), signing.StdioCall{Argv: []string{"true"}, Dir: filepath.Join(dir, "missing"), Timeout: 10 * time.Second}); code != 126 {
+		t.Fatalf("a missing directory exited %d", code)
+	}
+}
+
+// A child that never reads its stdin must not leave the writer blocked.
+func TestFunnelRunnerChildNeverReadsStdin(t *testing.T) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, code, err := runner(t).RunStdio(context.Background(), signing.StdioCall{Argv: []string{"/nonexistent-program"}, Stdin: []byte("x"), Timeout: 10 * time.Second})
+		if err != nil || code == 0 {
+			t.Errorf("%d %v", code, err)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("RunStdio hung on a child that never opened its stdin")
+	}
+}
+
+func TestFunnelRunnerTimeoutAndEmptyArgv(t *testing.T) {
+	if _, _, err := runner(t).RunStdio(context.Background(), signing.StdioCall{Argv: []string{"sleep", "30"}, Timeout: 300 * time.Millisecond}); !signing.IsReason(err, signing.ReasonSignerFailed) {
+		t.Fatalf("a timed-out call: %v", err)
+	}
+	if _, _, err := runner(t).RunStdio(context.Background(), signing.StdioCall{}); !signing.IsReason(err, signing.ReasonSignerFailed) {
+		t.Fatalf("an empty call: %v", err)
+	}
+}
+
+func TestFunnelRunnerKeepsTheOperatorEnvironmentOut(t *testing.T) {
+	t.Setenv("SOME_OPERATOR_TOKEN", "must-not-leak")
+	out, _, err := runner(t).RunStdio(context.Background(), signing.StdioCall{Argv: []string{"/usr/bin/env"}, Timeout: 10 * time.Second})
+	if err != nil || strings.Contains(string(out), "must-not-leak") || !strings.Contains(string(out), "PATH=") {
+		t.Fatalf("%v %q", err, out)
+	}
+	_ = os.Getenv
+}
+
+// While the child runs, its stdin FIFO sits in a private directory under TMPDIR.
+func TestFunnelRunnerFifoDirIsPrivateAndUnderTMPDIR(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	out, code, err := runner(t).RunStdio(context.Background(), signing.StdioCall{Argv: []string{"/bin/sh", "-c", `ls -ld "$NSELF_CI_STDIN"; ls -ld "$(dirname "$NSELF_CI_STDIN")"; cat`}, Stdin: []byte("x"), Timeout: 10 * time.Second})
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if err != nil || code != 0 || len(lines) != 3 || !strings.HasPrefix(lines[0], "prw-------") || !strings.HasPrefix(lines[1], "drwx------") || !strings.Contains(lines[1], filepath.Join(tmp, "sigio-")) || lines[2] != "x" {
+		t.Fatalf("%d %v %q", code, err, out)
+	}
+}
+
+func TestFunnelRunnerNoPrivateDirectory(t *testing.T) {
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+	if _, code, err := runner(t).RunStdio(context.Background(), signing.StdioCall{Argv: []string{"cat"}, Stdin: []byte("x"), Timeout: 10 * time.Second}); !signing.IsReason(err, signing.ReasonSignerFailed) || code != -1 {
+		t.Fatalf("%d %v", code, err)
+	}
+}

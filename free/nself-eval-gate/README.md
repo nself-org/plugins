@@ -39,7 +39,7 @@ Eval harness and autonomy-tier gate for nSelf. Three-mode scoring (exact, semant
 
 ## CLI: `nself eval`
 
-The plugin ships a second binary, `nself-eval` (`cmd/nself-eval/`), declared in `plugin.json` as the `commands` block (`command: eval`, subcommand `gate`). It is the port of core `nself ci eval [gate]`: same flags, same output, same exit contract. The HTTP service is unchanged.
+The plugin ships a second binary, `nself-eval` (`cmd/eval/`), declared in `plugin.json` as the `commands` block (`command: eval`, subcommand `gate`). It is the port of core `nself ci eval [gate]`: same flags, same output, same exit contract. The HTTP service is unchanged.
 
 ```bash
 nself eval --suite recall-quality-v1                    # run a suite, poll to completion

@@ -155,11 +155,11 @@ func (d *Dispatcher) settle(ctx context.Context, runs map[string]*pipelineRun, p
 	}
 }
 
-// pastDeadline reports whether q waited past max_queue (a foreground job has a
-// 10 minute default, R-DX-06).
+// pastDeadline reports whether q waited past max_queue (an interactive foreground
+// job has a 10 minute default, R-DX-06).
 func (d *Dispatcher) pastDeadline(q Queued, maxQueueMs int64, now time.Time) bool {
 	limit := maxQueueMs
-	if limit <= 0 && q.Job.Foreground {
+	if limit <= 0 && q.Job.Foreground && !q.Job.NoDefaultQueueCap {
 		limit = defaultForegroundQueueMs
 	}
 	return limit > 0 && now.Sub(q.EnqueuedAt) >= time.Duration(limit)*time.Millisecond

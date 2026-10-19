@@ -21,6 +21,7 @@ type Deps struct {
 	Registry       *registry.Registry
 	Local          *model.Capability
 	Jobs           []sched.Job
+	JobIDs         []string // store job ids whose active count bounds Counts.Job, besides Jobs; Previous is untouched
 	LocalCapacity  *ciexec.Capacity
 	Policy         func(context.Context, string) (sched.Policy, error)
 	Clock          func() time.Time
@@ -148,10 +149,14 @@ func Build(ctx context.Context, d Deps, pipeline sched.Pipeline) (sched.World, s
 			w.Counts.Provider++
 		}
 	}
+	jobIDs := append([]string(nil), d.JobIDs...)
 	for _, j := range d.Jobs {
+		jobIDs = append(jobIDs, j.ID)
+	}
+	for _, id := range jobIDs {
 		count := 0
 		for _, a := range snapshot.Active {
-			if a.JobID == j.ID {
+			if a.JobID == id {
 				count++
 			}
 		}
@@ -159,7 +164,7 @@ func Build(ctx context.Context, d Deps, pipeline sched.Pipeline) (sched.World, s
 			w.Counts.Job = count
 		}
 	}
-	if len(d.Jobs) == 0 {
+	if len(jobIDs) == 0 {
 		w.Counts.Job = w.Counts.Global
 	}
 	// No identity is stored on attempts yet. Global active work is a proven upper bound
