@@ -117,12 +117,9 @@ func (c Collector) plan(ctx context.Context, root *os.Root, decls []Decl) ([]pla
 		budget = DefaultMaxRecords
 	}
 	for _, d := range decls {
-		ents, err := expand(ctx, root.FS(), d.Path, budget-len(out))
+		ents, err := expand(ctx, root.FS(), d.Path, budget-len(out)) // what is left of the per-attempt budget, whichever way a declaration selects
 		if err != nil {
 			return nil, err
-		}
-		if len(out)+len(ents) > budget { // the budget spans declarations, whichever way a declaration selects
-			return nil, failf(ReasonSizeCap, "the declared outputs select more than %d files", budget)
 		}
 		if len(ents) == 0 {
 			return nil, failf(ReasonMissing, "declared artifact %q matched no file in the workdir", d.Path)
