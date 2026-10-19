@@ -97,7 +97,7 @@ jobs:
         if: steps.tag.outputs.rehearsal == 'true'
         run: |
           bash scripts/release/agent/manifest.sh --in dist --rehearsal
-          (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --pub "$GITHUB_WORKSPACE/dist/rehearsal-test.pub" "$GITHUB_WORKSPACE/dist")
+          (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --require-all-targets --pub "$GITHUB_WORKSPACE/dist/rehearsal-test.pub" "$GITHUB_WORKSPACE/dist")
           cat dist/SHA256SUMS
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -155,7 +155,7 @@ jobs:
           [[ "$KEY_ID" =~ ^agent-[0-9a-f]{16}$ ]] || { echo "ERROR: the key id secret is not agent-<16 hex>"; exit 1; }
           PUB="scripts/release/keys/${KEY_ID}.pub"
           [ -f "$PUB" ] || { echo "ERROR: ${PUB} is not committed; commit the agent public key first"; exit 1; }
-          (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --pub "$GITHUB_WORKSPACE/$PUB" "$GITHUB_WORKSPACE/dist")
+          (cd free/ci && CGO_ENABLED=0 go run -mod=vendor ./cmd/agent verify-release --require-all-targets --pub "$GITHUB_WORKSPACE/$PUB" "$GITHUB_WORKSPACE/dist")
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

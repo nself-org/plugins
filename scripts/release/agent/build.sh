@@ -44,6 +44,7 @@ CI_DIR="${REPO_ROOT}/free/ci"
 [ -d "$CI_DIR/cmd/agent" ] || { err "free/ci/cmd/agent not found under $REPO_ROOT"; exit 1; }
 command -v go >/dev/null 2>&1 || { err "go not found"; exit 1; }
 
+printf "[agent-build] %s\n" "$(go version)"
 mkdir -p "$OUT"
 if [ -n "$(ls -A "$OUT")" ]; then
   err "output directory is not empty: $OUT"

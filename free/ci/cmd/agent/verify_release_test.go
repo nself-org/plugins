@@ -127,3 +127,14 @@ func TestVerifyReleaseUsage(t *testing.T) {
 		t.Error("a missing DIR is a usage error (2)")
 	}
 }
+
+func TestVerifyReleaseRequireAllTargets(t *testing.T) {
+	dir, pub := releaseDir(t) // linux-amd64 and darwin-arm64 only
+	if code, _, _ := runVR("--pub", pub, dir); code != 0 {
+		t.Fatal("a partial directory verifies without the flag")
+	}
+	code, _, errs := runVR("--pub", pub, "--require-all-targets", dir)
+	if code != 1 || !strings.Contains(errs, "linux-arm64") || !strings.Contains(errs, "E665") {
+		t.Fatalf("a missing target must fail with --require-all-targets: code %d err %q", code, errs)
+	}
+}

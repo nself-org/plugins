@@ -133,12 +133,12 @@ the same bytes in `free/ci/internal/agent/verify` (`SigningInput`); a test signs
 
 | Script | Use |
 |---|---|
-| `build.sh --version V --out DIR` | reproducible build for the three targets (`CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, empty build id, vendored modules). Writes `SHA256SUMS` and `VERSION`. Two builds of one tree and version are byte-identical |
+| `build.sh --version V --out DIR` | reproducible build for the three targets (`CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, empty build id, vendored modules). Writes `SHA256SUMS` and `VERSION`. Two builds of one tree, version and Go toolchain are byte-identical (the log prints `go version`; the workflow pins the toolchain) |
 | `manifest.sh --in DIR [--rehearsal]` | writes and signs one manifest per binary. Key from `NSELF_AGENT_SIGNING_KEY` and `NSELF_AGENT_SIGNING_KEY_ID` (environment only; the id is derived from the key and checked). `--rehearsal` uses a throwaway key and writes `DIR/rehearsal-test.pub` |
 | `genkeys.sh OUTPUT.go` | generates `free/ci/internal/agent/verify/keys_gen.go` from `scripts/release/keys/agent-<16 hex>.pub` (run it with `go generate ./internal/agent/verify/...` in `free/ci`). A drift test fails when the committed file is stale |
 
-`nself-ci-agent verify-release --pub FILE [--version V] DIR` is the operator-side check: it verifies every binary in DIR against its manifest with exactly one public key
-(PEM SPKI). A binary without a manifest, a manifest without a binary or an empty directory fails.
+`nself-ci-agent verify-release --pub FILE [--version V] [--require-all-targets] DIR` is the operator-side check: it verifies every binary in DIR against its manifest with exactly one public key
+(PEM SPKI). A binary without a manifest, a manifest without a binary, a symlinked file or an empty directory fails; `--require-all-targets` (set by the workflow) also fails unless all three targets are present.
 
 ### Rehearsal (no key, no release, no network)
 
@@ -165,4 +165,4 @@ not revoked, of the agent purpose and valid; the signature verifies over the sig
 the file's sha256 is the signed sha256. Each failure carries its own reason key: `no_trusted_key`, `malformed_manifest`, `missing_signature`, `malformed_signature`,
 `unknown_key`, `wrong_purpose`, `revoked`, `key_not_valid`, `bad_signature`, `version_mismatch`, `target_mismatch`, `checksum_mismatch`, `unreadable_artifact`. Downloads
 use https (plain http only for a loopback host) and are size-bounded; the verified binary is moved into place with one rename, so an unverified file never sits at the
-final path. `NSELF_CI_AGENT_RELEASE_URL` points the download at a mirror or a local fixture directory.
+final path, in a fresh private directory per install (no persistent cache). An agent already installed on the node is used as it is when `--agent-binary` is not given (no download and no verification of the existing file); `nodes add` only installs when the node has none. `NSELF_CI_AGENT_RELEASE_URL` points the download at a mirror or a local fixture directory.

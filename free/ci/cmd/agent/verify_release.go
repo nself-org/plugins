@@ -4,7 +4,8 @@ package main
 //          (hq NODE D11, P7-NODE-15). It verifies every nself-ci-agent-<os>-<arch> file in DIR against its
 //          .manifest.json with exactly one public key, through the same internal/agent/verify package `nodes add` uses.
 // Inputs:  --pub FILE (PEM SPKI Ed25519 public key; there is no key discovery), --version V (default: DIR/VERSION, else the
-//          version the manifests agree on), DIR from build.sh and manifest.sh.
+//          version the manifests agree on), --require-all-targets (the release workflow sets it: all of linux-amd64, linux-arm64
+//          and darwin-arm64 must be present), DIR from build.sh and manifest.sh.
 // Outputs: one "ok <file> <version> <key id>" line per file on stdout; failures "E665: <reason>: <detail>" on stderr.
 //          Exit 0 only when every binary and manifest pair verifies, 1 on a failure, 2 on usage.
 // Constraints: a binary with no manifest, a manifest with no binary or an empty directory never passes. Nothing in DIR is
@@ -36,6 +37,7 @@ func runVerifyRelease(_ context.Context, args []string, sio IO) int {
 	fs.SetOutput(sio.Stderr)
 	pubPath := fs.String("pub", "", "PEM SPKI Ed25519 public key to verify against")
 	version := fs.String("version", "", "expected version (default: DIR/VERSION)")
+	all := fs.Bool("require-all-targets", false, "fail unless linux-amd64, linux-arm64 and darwin-arm64 are all present")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -48,8 +50,11 @@ func runVerifyRelease(_ context.Context, args []string, sio IO) int {
 		fmt.Fprintf(sio.Stderr, "verify-release: %v\n", err)
 		return 1
 	}
-	return verifyReleaseDir(v, fs.Arg(0), *version, sio.Stdout, sio.Stderr)
+	return verifyReleaseDir(v, fs.Arg(0), *version, *all, sio.Stdout, sio.Stderr)
 }
+
+// releaseTargets are the targets every real release carries (hq NODE D11).
+var releaseTargets = []string{"linux-amd64", "linux-arm64", "darwin-arm64"}
 
 // verifierFromPEM builds a Verifier trusting exactly the key in the PEM file.
 func verifierFromPEM(path string) (*verify.Verifier, error) {
@@ -69,7 +74,7 @@ func verifierFromPEM(path string) (*verify.Verifier, error) {
 	return verify.New([]signing.Key{{ID: signing.KeyID(signing.PurposeAgent, pub), Purpose: signing.PurposeAgent, Public: pub}}, nil)
 }
 
-func verifyReleaseDir(v *verify.Verifier, dir, version string, stdout, stderr io.Writer) int {
+func verifyReleaseDir(v *verify.Verifier, dir, version string, requireAll bool, stdout, stderr io.Writer) int {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		fmt.Fprintln(stderr, "verify-release: cannot read the release directory")
@@ -89,6 +94,14 @@ func verifyReleaseDir(v *verify.Verifier, dir, version string, stdout, stderr io
 	if len(bins) == 0 {
 		fmt.Fprintln(stderr, "verify-release: no nself-ci-agent-<os>-<arch> file in the directory")
 		return 1
+	}
+	if requireAll {
+		for _, t := range releaseTargets {
+			if !bins["nself-ci-agent-"+t] {
+				fmt.Fprintf(stderr, "verify-release: %s: target %s is missing from the release\n", verify.CodeVerify, t)
+				return 1
+			}
+		}
 	}
 	if version == "" {
 		if b, rerr := os.ReadFile(filepath.Join(dir, "VERSION")); rerr == nil {
