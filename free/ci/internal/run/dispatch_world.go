@@ -15,6 +15,7 @@ import (
 	"context"
 	"runtime"
 
+	"github.com/nself-org/plugins/free/ci/internal/fairq"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/planview"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
@@ -26,6 +27,20 @@ import (
 
 // platform is the local runner's platform string.
 func platform() string { return runtime.GOOS + "/" + runtime.GOARCH }
+
+// attemptBand is the priority band of an attempt: the band it declares, else the
+// one its run's trigger gives (fairq.For). Every live attempt is built with
+// Foreground set (the coordinator waits for it), so the flag says nothing about
+// the run and is not used. Background is held back to normal until P7-SCHED-12
+// can place background work: a background job today meets the interactive-
+// queued and operator-idle rules of sched for its own attempt and would never run.
+func attemptBand(declared, trigger string) string {
+	b := fairq.For(declared, trigger, false)
+	if b == fairq.Background {
+		b = fairq.Normal
+	}
+	return b.String()
+}
 
 // schedJob maps the attempt with the mapping `ci plan` uses (planview.SchedJob), then sets what
 // only a run knows: the attempt key and number, the source trust, the record flag and the local
@@ -39,6 +54,7 @@ func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sch
 	}
 	j := planview.SchedJob(c, planview.PlannedJob{ID: row, Name: row, Job: *s.Job})
 	j.Key, j.Attempt, j.Trust = id, s.N, model.TrustClass(rd.row.SourceTrust)
+	j.Pipeline.Band = attemptBand(s.Band, rd.row.Trigger)
 	j.Accelerators = nil
 	j.Pipeline.Record = rd.sess.Record
 	req := model.PlacementRequirements{Platform: platform(), CPU: int64(cpu), MemMB: int64(mem)}
@@ -77,7 +93,11 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 	if err != nil {
 		return sched.Policy{}, err
 	}
-	rd.pol = &p
+	qp, err := schedpolicy.Queue(&got.Effective)
+	if err != nil {
+		return sched.Policy{}, err
+	}
+	rd.pol, rd.qp = &p, qp
 	return p, nil
 }
 

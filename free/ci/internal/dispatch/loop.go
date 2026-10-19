@@ -52,7 +52,8 @@ type Config struct {
 	// Host scopes the local runner's reservations (X10).
 	Host string
 	// World builds the immutable placement input for one pipeline (P7-SCHED-18).
-	World     func(context.Context, sched.Pipeline) (sched.World, string, error)
+	World func(context.Context, sched.Pipeline) (sched.World, string, error)
+	// Orderer sets the placement order; nil is the Fair orderer (D9).
 	Orderer   Orderer
 	Sink      DecisionSink
 	Transport Transport
@@ -71,6 +72,12 @@ type Config struct {
 	// the default is two minutes. A tick ignores its caller's cancellation, so
 	// this is what keeps a hung dependency from holding the dispatcher for ever.
 	TickTimeout time.Duration
+	// Queue returns the fairness and queue-depth policy (sched.fairness.starvation_after,
+	// sched.queue.max_depth); nil, or an error, means the registered defaults.
+	Queue func(context.Context) (QueueLimits, error)
+	// Slots is the slot count a new job competes for, used for the expected wait
+	// of a refused submission (nil = 1).
+	Slots func() int
 	// DeliveryError observes a failed carrier run (the attempt is already marked lost).
 	DeliveryError func(Admitted, error)
 }
@@ -110,9 +117,6 @@ func New(cfg Config) (*Dispatcher, error) {
 	if cfg.Store == nil || cfg.World == nil || cfg.Host == "" {
 		return nil, fail(CodeUnplaceable, "a dispatcher needs a store, a world builder and a host")
 	}
-	if cfg.Orderer == nil {
-		cfg.Orderer = FIFO{}
-	}
 	if cfg.Sink == nil {
 		cfg.Sink = defaultSink(cfg)
 	}
@@ -132,6 +136,13 @@ func New(cfg Config) (*Dispatcher, error) {
 		}
 	}
 	d := &Dispatcher{cfg: cfg}
+	if d.cfg.Orderer == nil {
+		d.cfg.Orderer = NewFair(func() QueueLimits {
+			ctx, cancel := context.WithTimeout(context.Background(), queueLimitsTimeout)
+			defer cancel()
+			return d.queueLimits(ctx)
+		}, d.cfg.Clock)
+	}
 	d.life, d.stop = context.WithCancel(context.Background())
 	onStartMu.Lock()
 	hooks := append([]func(*Dispatcher) error(nil), onStart...)
@@ -167,7 +178,7 @@ func (d *Dispatcher) Close() {
 // Submit queues the job and blocks until it holds a lease, ctx is done
 // (ctx.Err()), or the dispatcher refuses it (E618, E693, or a store error).
 func (d *Dispatcher) Submit(ctx context.Context, j Job) (Admitted, error) {
-	e, err := d.enqueue(j)
+	e, err := d.enqueueCtx(ctx, j)
 	if err != nil {
 		return Admitted{}, err
 	}

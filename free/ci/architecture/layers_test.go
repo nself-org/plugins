@@ -136,7 +136,7 @@ func checkImport(m layerMap, pkg, file, imported string) error {
 		return fmt.Errorf("run imports providers outside hook")
 	}
 	if pkg == "internal/dispatch" && strings.HasPrefix(local, "internal/") {
-		allowed := []string{"world", "sched", "store", "lease", "transport", "exec", "model"}
+		allowed := []string{"world", "sched", "store", "lease", "transport", "exec", "model", "fairq"}
 		ok := false
 		for _, a := range allowed {
 			if local == "internal/"+a || strings.HasPrefix(local, "internal/"+a+"/") {

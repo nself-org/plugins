@@ -25,6 +25,7 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
+	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
@@ -41,6 +42,7 @@ type runDispatch struct {
 	row  store.PipelineRow
 	polM sync.Mutex
 	pol  *sched.Policy // resolved once; a failed resolution is retried, never cached
+	qp   schedpolicy.QueuePolicy
 
 	sink *remoteSink // what the carriers of this run's remote leases report to
 }
@@ -104,11 +106,7 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 		rd.sink.forget(id)
 	}
 	if err != nil {
-		var de *dispatch.Error
-		if errors.As(err, &de) {
-			return Admitted{}, fail(de.Code, "%s", de.Message)
-		}
-		return Admitted{}, err
+		return Admitted{}, mapDispatchError(err)
 	}
 	return Admitted{AttemptID: a.AttemptID, LeaseID: a.LeaseID, RunnerID: a.RunnerID, Local: a.Local}, nil
 }
@@ -118,6 +116,26 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 func queueJob(sess *Session, s AttemptSpec, sj sched.Job, id string, localCPU, localMemMB int) dispatch.Job {
 	return dispatch.Job{AttemptID: id, Sched: sj, Model: *s.Job, Revision: sess.Revision, Foreground: s.Foreground,
 		NoDefaultQueueCap: !sess.Interactive, LocalCPU: localCPU, LocalMemMB: localMemMB}
+}
+
+// mapDispatchError turns a dispatcher refusal (E618, E693, E694) into the
+// run's error with the same code and message; anything else passes through.
+func mapDispatchError(err error) error {
+	var de *dispatch.Error
+	if errors.As(err, &de) {
+		return fail(de.Code, "%s", de.Message)
+	}
+	return err
+}
+
+// queue is the run's fairness and queue-depth policy (D9), resolved with the placement policy.
+func (rd *runDispatch) queue(ctx context.Context) (dispatch.QueueLimits, error) {
+	if _, err := rd.policy(ctx, ""); err != nil {
+		return dispatch.QueueLimits{}, err
+	}
+	rd.polM.Lock()
+	defer rd.polM.Unlock()
+	return dispatch.QueueLimits{StarvationAfterMs: rd.qp.StarvationAfterMs, MaxDepth: rd.qp.MaxDepth}, nil
 }
 
 // runDispatcher returns the dispatcher of the session's run, creating it once.
@@ -143,7 +161,8 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	if rd.row.ID == "" {
 		return nil, fail(CodeRun, "run %s has no pipeline row", sess.RunID)
 	}
-	rd.d, err = dispatch.New(dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL,
+	rd.d, err = dispatch.New(dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL, Queue: rd.queue,
+		Slots:         func() int { return rd.sess.Capacity().CPUs },
 		Transport:     newTransportAdapter(rd.sink, rd.sink, rd.row.Project),
 		DeliveryError: func(a dispatch.Admitted, err error) { rd.sink.ended(a.AttemptID, err) }})
 	if err != nil {
