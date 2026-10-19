@@ -8,9 +8,12 @@ package main
 // env GITHUB_WEBHOOK_SECRET, NSELF_CI_ALLOWED_REPOS, NSELF_CI_ALLOW_UNSANDBOXED.
 // Outputs: HTTP server on :3845 until SIGINT/SIGTERM; exit 0, or 1 on error.
 // Constraints: the fail-closed defaults (secret, allowlist, Docker) are
-// unchanged; the gate binary a job runs is this executable (os.Executable).
+// unchanged; serve refuses to start on a deploy host (E663) and runs the
+// deploy-host refresh while up (serve_guard.go, D-1218); the gate
+// binary a job runs is this executable (os.Executable).
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -70,7 +73,13 @@ func serveCmd(args []string, eh flag.ErrorHandling) int {
 	if err != nil {
 		return 2
 	}
-	if err := serve.RunServe(cfg); err != nil {
+	stop, err := startServeGuard(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	defer stop()
+	if err := serveRun(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1
 	}
