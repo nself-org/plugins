@@ -231,6 +231,9 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	if s.Secrets != nil {
 		source = s.Secrets
 	}
+	if s.Plan != nil || s.Job.Isolation == "container" {
+		env = containerEnv(env)
+	}
 	secrets, err := source.Resolve(ctx, s.Job.Secrets)
 	if err != nil {
 		result.Err = err
