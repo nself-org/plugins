@@ -72,6 +72,14 @@ nrun() {
 vjson() { jq -e "$2" "$1" >/dev/null 2>&1; }
 runid_of() { sed -n 's/.* run \(r[0-9T]*-[0-9a-f]*\).*/\1/p' "$1" | tail -n 1; }
 tail1() { ev_snip "$1"; }
+# why RUN: the result of every check of RUN, and the end of the log of each one that did not pass (db-reachable aside).
+why() {
+	local id
+	jq -r '[.data.checks[] | "\(.id)=\(.result)"] | join(" ")' "$work/why.json" 2>/dev/null | tr -d '\n'
+	for id in $(jq -r '.data.checks[] | select(.result != "pass" and .id != "db-reachable") | .id' "$work/why.json" 2>/dev/null); do
+		nrun ci logs "$id" --run "$1" 2>&1 | tail -n 3 | tr '\n' ' ' | cut -c1-240 | sed "s/^/ [$id: /; s/\$/]/"
+	done
+}
 finish() { cd "$root" || true; ev_finish; exit $?; }
 
 docker_ok=0
@@ -176,7 +184,8 @@ if [ "$docker_ok" -eq 1 ]; then
 	if [ $rc -eq 0 ] && vjson "$work/y.json" ".data.result == \"pass\" and ($others) and ([.data.checks[] | select(.id == \"db-reachable\") | .result] == [\"pass\"])" && [ "$left" = 0 ] && [ "$nets" = 0 ]; then
 		ev_pass polyglot-service "all four jobs passed with the postgres service and nothing was left running (run $run_y)"
 	else
-		ev_fail polyglot-service "exit $rc, containers left $left, networks left $nets: $(tail1 "$work/y.out")"
+		cp "$work/y.json" "$work/why.json"
+		ev_fail polyglot-service "exit $rc, containers left $left, networks left $nets: $(why "$run_y")"
 	fi
 else
 	if [ ! -e "$work/bin/docker" ]; then
@@ -198,7 +207,8 @@ else
 	if [ $rc -ne 0 ] && grep -q 'E637' "$work/z.out" && grep -q 'start Docker or Colima' "$work/z.out" && vjson "$work/z.json" "($others) and ([.data.checks[] | select(.id == \"db-reachable\") | .result] == [\"error\"])"; then
 		ev_pass polyglot-docker-down "db-reachable ended E637 with its remediation and the other three jobs passed (run $run_z)"
 	else
-		ev_fail polyglot-docker-down "exit $rc: $(tail1 "$work/z.out") $(jq -c '[.data.checks[] | {id, result}]' "$work/z.json" 2>/dev/null | head -c 300)"
+		cp "$work/z.json" "$work/why.json"
+		ev_fail polyglot-docker-down "exit $rc: $(why "$run_z")"
 	fi
 fi
 
