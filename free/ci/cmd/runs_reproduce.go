@@ -92,8 +92,7 @@ func runRunsReproduce(args []string) int {
 // (machine-invoked, D29).
 func reproduceRun(home string, out io.Writer) reproduce.RunFunc {
 	return func(ctx context.Context, spec reproduce.RunSpec) (reproduce.RunOutcome, error) {
-		o := cirun.Options{Root: spec.Tree, Home: home, NoStatus: true, Pipeline: spec.Pipeline, Job: spec.Job,
-			Trigger: spec.Trigger, Container: spec.Container}
+		o := reproduceOptions(home, spec)
 		p, digest, subst, err := preparePlan(ctx, o)
 		if err != nil {
 			return reproduce.RunOutcome{}, err
@@ -114,6 +113,14 @@ func reproduceRun(home string, out io.Writer) reproduce.RunFunc {
 		}
 		return got, nil
 	}
+}
+
+// reproduceOptions are the run options of a reproduction. No status is posted
+// (machine-invoked, D29), but a person at a terminal keeps the foreground queue
+// cap (interactiveRun, D-1089).
+func reproduceOptions(home string, spec reproduce.RunSpec) cirun.Options {
+	return cirun.Options{Root: spec.Tree, Home: home, NoStatus: true, Pipeline: spec.Pipeline, Job: spec.Job,
+		Trigger: spec.Trigger, Container: spec.Container, Interactive: interactiveRun(spec.Trigger, os.Getenv)}
 }
 
 // reproduceFail prints an error and maps it to an exit code: a refusal the

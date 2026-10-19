@@ -258,12 +258,18 @@ func printVerdict(command string, f evidenceFlags, sess *streamSession, v eviden
 	return v.Exit
 }
 
+// verifyOptions are the run options of the verify --reproduce run; a person at
+// a terminal keeps the foreground queue cap (interactiveRun, D-1089).
+func verifyOptions(tree, home string) cirun.Options {
+	return cirun.Options{Root: tree, Home: home, NoStatus: true, Full: true, Interactive: interactiveRun("", os.Getenv)}
+}
+
 // verifyRun runs the required pipeline in a temporary worktree: no status is
 // posted (machine-invoked, D29) and the run's own output goes to stderr, or
 // to stdout as ci.events when --stream asked for it.
 func verifyRun(f evidenceFlags, home string) evidence.RunFunc {
 	return func(ctx context.Context, tree string) (model.Evidence, error) {
-		o := cirun.Options{Root: tree, Home: home, NoStatus: true, Full: true}
+		o := verifyOptions(tree, home)
 		var out io.Writer = os.Stderr
 		switch {
 		case f.stream:
