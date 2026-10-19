@@ -26,6 +26,8 @@ type ExecRunner struct {
 	CoordinatorID string
 	// Attempt is the attempt the calls serve; it prefixes the funnel's own call ids.
 	Attempt string
+	// Env is added to the environment of every call (a call's own Env follows it).
+	Env []string
 
 	seq atomic.Uint64
 }
@@ -83,7 +85,7 @@ func (x *ExecRunner) Run(ctx context.Context, c Call) (Output, error) {
 	if coord == "" {
 		coord = "secrets"
 	}
-	ex := &ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Env: callEnv(c.Env), NewRedactor: func() ciexec.Redactor { return passRedactor{} }}
+	ex := &ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Env: callEnv(append(append([]string(nil), x.Env...), c.Env...)), NewRedactor: func() ciexec.Redactor { return passRedactor{} }}
 	var cap capture
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: x.id(), CoordinatorID: coord, Command: c.Argv, Home: x.Home, Timeout: c.Timeout, Output: cap.write})
 	out := Output{Bytes: cap.buf, ExitCode: res.ExitCode}
