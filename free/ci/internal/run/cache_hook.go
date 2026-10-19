@@ -73,16 +73,17 @@ type cacheHook struct {
 	scanner  func() authz.ValueScanner
 	environ  func() []string
 	home     func() string
-	probe    func(ctx context.Context, argv []string) (string, error)
-	warn     func(string)
+	// probe runs a toolchain probe in the job's workdir with the job's environment
+	probe func(ctx context.Context, dir string, jobEnv map[string]string, argv []string) (string, error)
+	warn  func(string)
 }
 
 var cacheOn = &cacheHook{
 	scanner: func() authz.ValueScanner { return Redactions },
 	environ: os.Environ,
 	home:    func() string { h, _ := os.UserHomeDir(); return h },
-	probe: func(ctx context.Context, argv []string) (string, error) {
-		out, code, err := report.Capture(ctx, argv...)
+	probe: func(ctx context.Context, dir string, jobEnv map[string]string, argv []string) (string, error) {
+		out, code, err := report.CaptureIn(ctx, dir, jobEnv, argv...)
 		if err == nil && code != 0 {
 			err = fmt.Errorf("exit %d", code)
 		}
@@ -161,7 +162,9 @@ func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRo
 	es := entries.New(a.Store, blobs, entries.Options{Home: home, Project: func(string) authz.ProjectFacts { return authz.ProjectFacts{NoPrivateDeps: !priv} }})
 	in := specs.BeginInput{Engine: &specs.Engine{Entries: es, Blobs: blobs, Scanner: h.scanner(), Backend: a.Store}, Attempt: a.AttemptID, Epoch: a.Epoch,
 		Facts: facts, Root: filepath.Join(home, "cache-work", a.AttemptID), Detected: detected, Scope: scope, ExtraKeys: keys, Container: container,
-		Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process", JobEnv: a.Job.Env, Environ: flatEnv(env), Probe: h.probe, Home: h.home(), Getenv: func(k string) string { return env[k] }, Warn: h.warn}
+		Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process", JobEnv: a.Job.Env, Environ: flatEnv(env), Probe: func(ctx context.Context, argv []string) (string, error) {
+			return h.probe(ctx, workdir, a.Job.Env, argv)
+		}, Home: h.home(), Getenv: func(k string) string { return env[k] }, Warn: h.warn}
 	if container {
 		in.Platform, in.Isolation, in.Image = "linux/"+runtime.GOARCH, "container", h.imageDigest(ctx, a)
 	}

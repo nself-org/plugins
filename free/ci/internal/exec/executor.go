@@ -41,6 +41,10 @@ type JobSpec struct {
 	// Env, when an Isolator sets it, replaces the executor's EnvPolicy for this job (ad-hoc jobs
 	// get a minimal environment, P7-CI-52); job-declared env and secrets are still added after it.
 	Env EnvPolicy
+	// RunDir, when set, is an existing absolute directory a process-level command runs in
+	// instead of the private workspace (nothing is copied). Only read-only probes of a
+	// project's own toolchain use it; the job's environment still comes from Env and Job.Env.
+	RunDir string
 }
 
 // AttemptResult is the local outcome before durable store finalization.

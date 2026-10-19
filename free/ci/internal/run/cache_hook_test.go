@@ -30,7 +30,9 @@ func cacheRig(t *testing.T, jobs map[string]model.Job) *rig {
 	t.Setenv("NSELF_CI_STORE_MIN_FREE", "1")
 	t.Setenv("NSELF_CI_CACHE_DISABLE", "")
 	old := cacheOn.probe
-	cacheOn.probe = func(context.Context, []string) (string, error) { return "go version go1.27.2 test/test\n", nil }
+	cacheOn.probe = func(context.Context, string, map[string]string, []string) (string, error) {
+		return "go version go1.27.2 test/test\n", nil
+	}
 	t.Cleanup(func() { cacheOn.probe = old })
 	r := newRig(t, jobs, gitFake{})
 	lock(t, r.C.Opts.Root, "h1:one")
@@ -434,5 +436,27 @@ func TestCloseSessionRetractsOnlyAConfirmedNonPass(t *testing.T) {
 	closeSession(context.Background(), r.store(t), cacheEntry{s: f, id: "no-such-attempt"}) // history pruned: unknown, so not a confirmed non-pass
 	if f.retracted || !f.cleaned {
 		t.Fatalf("an attempt the store no longer knows must keep its entry: %+v", f)
+	}
+}
+
+// D-1035: the plan's tool probes run in the job's workdir with the job's env.
+func TestCacheHookProbeRunsInJobWorkdirAndEnv(t *testing.T) {
+	job := sh(populate)
+	job.Env = map[string]string{"GOTOOLCHAIN": "go1.27.2"}
+	r := cacheRig(t, map[string]model.Job{"build": job})
+	var dirs []string
+	var seen map[string]string
+	cacheOn.probe = func(_ context.Context, dir string, env map[string]string, _ []string) (string, error) {
+		dirs, seen = append(dirs, dir), env
+		return "go version go1.27.2 test/test\n", nil
+	}
+	if o := outcome(r.run(t), "build"); o.State != StatePassed {
+		t.Fatalf("%+v\n%s", o, r.Out)
+	}
+	if len(dirs) == 0 || dirs[0] != r.C.Opts.Root {
+		t.Fatalf("probe dirs %v, want %s", dirs, r.C.Opts.Root)
+	}
+	if seen["GOTOOLCHAIN"] != "go1.27.2" {
+		t.Fatalf("probe env %v lacks the job env", seen)
 	}
 }

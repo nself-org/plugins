@@ -224,3 +224,21 @@ func (t *takeover) Post(ctx context.Context, s Status) error {
 	}
 	return t.fake.Post(ctx, s)
 }
+
+// D-1035: a probe sees the job's workdir and the job's environment (the executor's
+// allowlist plus the job's env), not the operator's whole environment.
+func TestCaptureInRunsInDirWithJobEnv(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("D1035_OPERATOR_ONLY", "leaked")
+	out, code, err := CaptureIn(context.Background(), dir, map[string]string{"D1035_JOB": "pinned"},
+		"sh", "-c", `pwd; echo "job=$D1035_JOB op=$D1035_OPERATOR_ONLY"`)
+	if err != nil || code != 0 {
+		t.Fatalf("code %d err %v out %q", code, err, out)
+	}
+	if want := dir + "\njob=pinned op=\n"; out != want {
+		t.Fatalf("got %q want %q", out, want)
+	}
+}
