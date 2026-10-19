@@ -11,6 +11,9 @@
 #          free/ci/internal/gates/truth/run.go), and two test hooks: TRUTH_REPOS_FILE (repository names, one per
 #          line, replaces `gh repo list`) and TRUTH_CLONE_BASE (a directory holding <name>/ repositories cloned
 #          instead of https://github.com/<org>/<name>.git).
+#          A clone that carries .github/truth/ is also checked with scripts/truth/vendor-rules.sh --check
+#          (P7-TRUTH-04): byte copies of org.yaml and claims.yaml that drifted from this checkout add an
+#          error check `truth-sweep.<repo>.vendored-rules`, so the sweep fails (exit 2). plugins is the source and is skipped.
 # Usage:   run
 # Outputs: one line per repository on stderr, then the evidence document as one compact JSON line on stdout.
 #          Exit 0 when every repository is clean, 1 when a rule is broken, 2 when a clone or the engine failed
@@ -67,6 +70,10 @@ while read -r name; do
 	fi
 	if git clone --depth 1 --quiet --no-tags "$url" "$dest" 2>"$tmp/clone.err"; then
 		args+=("$name=$dest")
+		# A repo that vendors the rules (P7-TRUTH-04) must carry byte copies of ours; plugins is the source.
+		if [ "$name" != plugins ] && [ -d "$dest/.github/truth" ] && ! bash "$here/../../truth/vendor-rules.sh" --check "$dest" >/dev/null 2>"$tmp/vendor.err"; then
+			args+=("$name.vendored-rules=!vendored .github/truth/ differs from nself-org/plugins: $(head -c 300 "$tmp/vendor.err" | tr '\n' ' ')")
+		fi
 	else
 		args+=("$name=!clone failed: $(head -c 200 "$tmp/clone.err" | tr '\n' ' ')")
 	fi

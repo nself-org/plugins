@@ -51,7 +51,8 @@ func cmdCheck(args []string, out, errw io.Writer) int {
 	fs.SetOutput(errw)
 	root := fs.String("root", ".", "directory to scan")
 	rulesRoot := fs.String("rules-root", "", "directory the rule files are relative to (default: --root)")
-	kind := fs.String("kind", "", "report one rule kind only (banned-literal, retired-term, dead-host), or `rules` to validate the rule files without scanning")
+	kind := fs.String("kind", "", "report one rule kind only (banned-literal, retired-term, dead-host, numeric-claim, version-claim), or `rules` to validate the rule files without scanning")
+	asJSON := fs.Bool("json", false, "print one JSON document: {data:{result, checks, findings}}")
 	if err := fs.Parse(args); err != nil || fs.NArg() == 0 {
 		fmt.Fprintln(errw, "usage: check --root DIR [--rules-root DIR] [--kind K] RULEFILE...")
 		return 2
@@ -77,36 +78,26 @@ func cmdCheck(args []string, out, errw io.Writer) int {
 				only = append(only, c)
 			}
 		}
+		if len(only) == 0 && isClaimKind(*kind) && len(checks) > 0 && checks[0].Result == "error" {
+			only = checks // the rule files did not load: show that error, not "unknown --kind"
+		}
 		if len(only) == 0 {
-			fmt.Fprintf(errw, "truth: unknown --kind %q (rules, %s)\n", *kind, strings.Join(Kinds, ", "))
+			fmt.Fprintf(errw, "truth: unknown --kind %q (rules, %s)\n", *kind, strings.Join(append(append([]string(nil), Kinds...), ClaimKinds...), ", "))
 			return 2
 		}
 		checks = only
-	}
-	return report(checks, found, out)
-}
-
-// report prints the checks and returns the exit code.
-func report(checks []model.Check, found []Finding, out io.Writer) int {
-	code := 0
-	for _, c := range checks {
-		fmt.Fprintf(out, "%s %s (%d finding(s))\n", strings.ToUpper(string(c.Result)), c.ID, c.Findings)
-		if c.Result == "error" {
-			fmt.Fprintln(out, indent(c.Excerpt))
-		}
+		var keep []Finding
 		for _, f := range found {
-			if CheckIDOf(f.Kind) == c.ID {
-				fmt.Fprintln(out, "  "+Excerpt([]Finding{f}, 1))
+			if CheckIDOf(f.Kind) == CheckIDOf(*kind) {
+				keep = append(keep, f)
 			}
 		}
-		switch {
-		case c.Result == "error":
-			code = 2
-		case c.Result != "pass" && code == 0:
-			code = 1
-		}
+		found = keep
 	}
-	return code
+	if *asJSON {
+		return reportJSON(checks, found, out)
+	}
+	return report(checks, found, out)
 }
 
 func indent(s string) string { return "  " + strings.ReplaceAll(s, "\n", "\n  ") }
