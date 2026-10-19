@@ -8,8 +8,10 @@ package verify
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -119,6 +121,8 @@ func TestArtifactRefusesWhatProvenanceCannotVouchFor(t *testing.T) {
 		{"extra byproduct", signedBy(agent, func(f *provenance.AgentFacts) {
 			f.SBOMs = append(f.SBOMs, provenance.FileDigest{Name: "extra.json", SHA256: strings.Repeat("e", 64)})
 		}), nil},
+		{"built by another repository", signedBy(agent, func(f *provenance.AgentFacts) { f.Repo = "evil/plugins" }), nil},
+		{"built from another tag", signedBy(agent, func(f *provenance.AgentFacts) { f.Ref = "refs/tags/v9.9.9" }), nil},
 		{"signed by a ci-release key", func() release {
 			r := good
 			r.files.Provenance = envelopeBytes(t, ciRelease, provenance.PayloadType, good.statement(t, nil))
@@ -196,17 +200,47 @@ func TestProvenanceRefusesARevokedKeyAndABrokenSignature(t *testing.T) {
 	}
 }
 
+func TestProvenanceRefusesARevokedProvenanceKeyAndAForeignExtraSignature(t *testing.T) {
+	manifestKey := newSigner(t, signing.PurposeAgent)
+	provKey := newSigner(t, signing.PurposeAgent)
+	r := newRelease(t, manifestKey)
+	r.files.Provenance = envelopeBytes(t, provKey, provenance.PayloadType, r.statement(t, nil))
+	ok, err := mustVerifier(t, nil, manifestKey.key(), provKey.key()).Artifact(r.path, r.json(t), pinned, r.files)
+	if err != nil || ok.SHA256 != r.m.SHA256 {
+		t.Fatalf("two trusted agent keys must verify: %v", err)
+	}
+	// Only the provenance key is revoked: the manifest still verifies, so the refusal is the provenance check's.
+	_, err = mustVerifier(t, []string{provKey.KeyID()}, manifestKey.key(), provKey.key()).Artifact(r.path, r.json(t), pinned, r.files)
+	wantReason(t, err, ReasonProvenance)
+	if !strings.Contains(err.Error(), ReasonRevoked) {
+		t.Fatalf("the message should name the revoked key: %v", err)
+	}
+	// A valid agent signature plus one more from a trusted key of another purpose: the whole envelope fails.
+	plugin := newSigner(t, signing.PurposePlugins)
+	var env signing.Envelope
+	if err = json.Unmarshal(r.files.Provenance, &env); err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := base64Std(env.Payload)
+	extra, _ := plugin.Sign(signing.PAE(env.PayloadType, payload))
+	env.Signatures = append(env.Signatures, signing.EnvelopeSig{KeyID: plugin.KeyID(), Sig: signing.EncodeSig(extra)})
+	r.files.Provenance, _ = json.Marshal(env)
+	_, err = mustVerifier(t, nil, manifestKey.key(), provKey.key(), plugin.key()).Artifact(r.path, r.json(t), pinned, r.files)
+	wantReason(t, err, ReasonProvenance)
+}
+
 func TestProvenanceEnvelopeIsReadStrictly(t *testing.T) {
 	agent := newSigner(t, signing.PurposeAgent)
 	r := newRelease(t, agent)
 	v := mustVerifier(t, nil, agent.key())
 	good := string(r.files.Provenance)
 	for name, b := range map[string]string{
-		"unknown field":      strings.Replace(good, `{"payloadType"`, `{"extra":1,"payloadType"`, 1),
-		"repeated field":     strings.Replace(good, `{"payloadType"`, `{"payloadType":"x","payloadType"`, 1),
-		"case-folded repeat": strings.Replace(good, `{"payloadType"`, `{"PAYLOADTYPE":"x","payloadType"`, 1),
-		"trailing data":      good + `{}`,
-		"not JSON":           "DSSE",
+		"unknown field":          strings.Replace(good, `{"payloadType"`, `{"extra":1,"payloadType"`, 1),
+		"repeated field":         strings.Replace(good, `{"payloadType"`, `{"payloadType":"x","payloadType"`, 1),
+		"case-folded repeat":     strings.Replace(good, `{"payloadType"`, `{"PAYLOADTYPE":"x","payloadType"`, 1),
+		"trailing data":          good + `{}`,
+		"folded repeat (U+017F)": strings.Replace(good, `{"payloadType"`, `{"ſignatures":[],"payloadType"`, 1),
+		"not JSON":               "DSSE",
 	} {
 		r.files.Provenance = []byte(b)
 		_, err := v.Artifact(r.path, r.json(t), pinned, r.files)
@@ -257,6 +291,8 @@ func TestInstallReachesArtifact(t *testing.T) {
 	}
 }
 
+func base64Std(s string) ([]byte, error) { return base64.StdEncoding.DecodeString(s) }
+
 func asError(err error, target **Error) bool {
 	ve, ok := err.(*Error)
 	if ok {
@@ -265,10 +301,15 @@ func asError(err error, target **Error) bool {
 	return ok
 }
 
-// fakeSyft is a stand-in for the pinned syft: it prints the pinned version and writes a small document at each -o path.
-const fakeSyft = `#!/bin/sh
+// fakeSyft is a stand-in for syft: it prints the given version and writes a small document at each -o path.
+func fakeSyft(version string) string {
+	return strings.Replace(fakeSyftBody, "@VERSION@", version, 1)
+}
+
+const fakeSyftBody = `#!/bin/sh
+[ -z "${NSELF_AGENT_SIGNING_KEY:-}" ] || { echo "the signing key leaked into syft" >&2; exit 7; }
 case "$1" in
-  version) echo "Version:       1.54.1"; exit 0 ;;
+  version) echo "Version:       @VERSION@"; exit 0 ;;
   scan) shift
     while [ $# -gt 0 ]; do
       case "$1" in -o) echo "{\"format\":\"${2%%=*}\"}" > "${2#*=}"; shift 2 ;; *) shift ;; esac
@@ -276,9 +317,10 @@ case "$1" in
 esac
 `
 
-// scriptRelease runs manifest.sh and provenance.sh (--rehearsal) over fake binaries with a fake syft whose sha256 the test pins, and
-// returns the release directory.
-func scriptRelease(t *testing.T, pinnedSHA func(fake string) string) (dir string, out []byte, err error) {
+// scriptEnv is a release directory of fake binaries, a fake syft and a versions table that pins it.
+type scriptEnv struct{ dir, work, fake, table, scripts string }
+
+func scriptSetup(t *testing.T, syftVersion string, pinnedSHA func(fake string) string) scriptEnv {
 	t.Helper()
 	for _, tool := range []string{"bash", "openssl", "go"} {
 		if _, lerr := exec.LookPath(tool); lerr != nil {
@@ -292,37 +334,48 @@ func scriptRelease(t *testing.T, pinnedSHA func(fake string) string) (dir string
 	if goos == "" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
 		t.Skip("unsupported host")
 	}
-	work := t.TempDir()
-	dir = filepath.Join(work, "dist")
-	if err = os.Mkdir(dir, 0o755); err != nil {
+	e := scriptEnv{work: t.TempDir(), scripts: filepath.Join("..", "..", "..", "..", "..", "scripts", "release", "agent")}
+	e.dir = filepath.Join(e.work, "dist")
+	if err := os.Mkdir(e.dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	for _, target := range []string{"linux-amd64", "darwin-arm64"} {
-		if err = os.WriteFile(filepath.Join(dir, BinaryName(target)), []byte("agent bytes "+target), 0o755); err != nil {
+		if err := os.WriteFile(filepath.Join(e.dir, BinaryName(target)), []byte("agent bytes "+target), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err = os.WriteFile(filepath.Join(dir, "VERSION"), []byte("1.5.0\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(e.dir, "VERSION"), []byte("1.5.0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fake := filepath.Join(work, "syft")
-	if err = os.WriteFile(fake, []byte(fakeSyft), 0o755); err != nil {
+	e.fake = filepath.Join(e.work, "syft")
+	if err := os.WriteFile(e.fake, []byte(fakeSyft(syftVersion)), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	table := filepath.Join(work, "versions.yaml")
+	e.table = filepath.Join(e.work, "versions.yaml")
 	row := fmt.Sprintf("versions:\n  - name: syft\n    kind: tool\n    version: 1.54.1\n    sources:\n      - os: %s\n        arch: %s\n        url: https://127.0.0.1:1/syft.tgz\n        sha256: %s\n        binary_sha256: %s\n",
-		goos, runtime.GOARCH, strings.Repeat("1", 64), pinnedSHA(fake))
-	if err = os.WriteFile(table, []byte(row), 0o644); err != nil {
+		goos, runtime.GOARCH, strings.Repeat("1", 64), pinnedSHA(e.fake))
+	if err := os.WriteFile(e.table, []byte(row), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	scripts := filepath.Join("..", "..", "..", "..", "..", "scripts", "release", "agent")
-	if o, merr := exec.Command("bash", filepath.Join(scripts, "manifest.sh"), "--in", dir, "--rehearsal").CombinedOutput(); merr != nil {
+	return e
+}
+
+func (e scriptEnv) run(script string, extraEnv []string, args ...string) ([]byte, error) {
+	cmd := exec.Command("bash", append([]string{filepath.Join(e.scripts, script)}, args...)...)
+	cmd.Env = append(os.Environ(), append([]string{"NSELF_AGENT_SYFT=" + e.fake, "TMPDIR=" + e.work, "GOFLAGS="}, extraEnv...)...)
+	return cmd.CombinedOutput()
+}
+
+// scriptRelease runs manifest.sh and provenance.sh (--rehearsal) over fake binaries with a fake syft whose sha256 the test pins, and
+// returns the release directory.
+func scriptRelease(t *testing.T, syftVersion string, pinnedSHA func(fake string) string) (dir string, out []byte, err error) {
+	t.Helper()
+	e := scriptSetup(t, syftVersion, pinnedSHA)
+	if o, merr := e.run("manifest.sh", nil, "--in", e.dir, "--rehearsal"); merr != nil {
 		t.Fatalf("manifest.sh: %v\n%s", merr, o)
 	}
-	cmd := exec.Command("bash", filepath.Join(scripts, "provenance.sh"), "--in", dir, "--rehearsal", "--versions", table)
-	cmd.Env = append(os.Environ(), "NSELF_AGENT_SYFT="+fake, "TMPDIR="+work, "GOFLAGS=")
-	out, err = cmd.CombinedOutput()
-	return dir, out, err
+	out, err = e.run("provenance.sh", nil, "--in", e.dir, "--rehearsal", "--versions", e.table)
+	return e.dir, out, err
 }
 
 func fileSHA(t *testing.T) func(string) string {
@@ -364,7 +417,7 @@ func rehearsalVerifier(t *testing.T, dir string) *Verifier {
 // TestProvenanceScriptOutputVerifies runs the release scripts (rehearsal key, fake pinned syft, no network) and feeds what they wrote
 // to the same package the agent installer uses.
 func TestProvenanceScriptOutputVerifies(t *testing.T) {
-	dir, out, err := scriptRelease(t, fileSHA(t))
+	dir, out, err := scriptRelease(t, "1.54.1", fileSHA(t))
 	if err != nil {
 		t.Fatalf("provenance.sh: %v\n%s", err, out)
 	}
@@ -390,14 +443,71 @@ func TestProvenanceScriptOutputVerifies(t *testing.T) {
 
 // TestProvenanceScriptRunsOnlyThePinnedSyft: a syft whose sha256 is not the pin is never run, and nothing is written.
 func TestProvenanceScriptRunsOnlyThePinnedSyft(t *testing.T) {
-	dir, out, err := scriptRelease(t, func(string) string { return strings.Repeat("2", 64) })
-	if err == nil {
-		t.Fatalf("an unpinned syft was accepted:\n%s", out)
+	for name, c := range map[string]struct {
+		version string
+		sha     func(string) string
+	}{
+		"another sha256":   {"1.54.1", func(string) string { return strings.Repeat("2", 64) }},
+		"another version":  {"1.54.0", fileSHA(t)},
+		"unparsable build": {"", fileSHA(t)},
+	} {
+		dir, out, err := scriptRelease(t, c.version, c.sha)
+		if err == nil {
+			t.Fatalf("%s: an unpinned syft was accepted:\n%s", name, out)
+		}
+		if !strings.Contains(string(out), "cannot download the pinned syft") {
+			t.Fatalf("%s: expected the download refusal (the candidate must not be used), got:\n%s", name, out)
+		}
+		if m, _ := filepath.Glob(filepath.Join(dir, "*"+SuffixProvenance)); len(m) != 0 {
+			t.Fatalf("%s: provenance written without a pinned syft: %v", name, m)
+		}
 	}
-	if !strings.Contains(string(out), "cannot download the pinned syft") {
-		t.Fatalf("expected the download refusal, got:\n%s", out)
+}
+
+// TestProvenanceScriptSignsWithTheEnvironmentKeyAndLeaksNoKey is the release path: the key comes from the environment, the builder from
+// the GitHub variables, and no child process (syft here) ever sees the key.
+func TestProvenanceScriptSignsWithTheEnvironmentKeyAndLeaksNoKey(t *testing.T) {
+	e := scriptSetup(t, "1.54.1", fileSHA(t))
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if m, _ := filepath.Glob(filepath.Join(dir, "*"+SuffixProvenance)); len(m) != 0 {
-		t.Fatalf("provenance written without a pinned syft: %v", m)
+	der, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+	keyID := signing.KeyID(signing.PurposeAgent, pub)
+	env := []string{"NSELF_AGENT_SIGNING_KEY=" + keyPEM, "NSELF_AGENT_SIGNING_KEY_ID=" + keyID,
+		"GITHUB_WORKFLOW_REF=nself-org/plugins/.github/workflows/release-agent.yml@refs/tags/v1.5.0", "GITHUB_RUN_ID=77", "GITHUB_SHA=" + strings.Repeat("c", 40)}
+	if o, merr := e.run("manifest.sh", env, "--in", e.dir); merr != nil {
+		t.Fatalf("manifest.sh: %v\n%s", merr, o)
+	}
+	if o, perr := e.run("provenance.sh", env, "--in", e.dir, "--versions", e.table); perr != nil {
+		t.Fatalf("provenance.sh: %v\n%s", perr, o)
+	}
+	v := mustVerifier(t, nil, signing.Key{ID: keyID, Purpose: signing.PurposeAgent, Public: pub})
+	name := BinaryName("linux-amd64")
+	read := func(suffix string) []byte { b, _ := os.ReadFile(filepath.Join(e.dir, name+suffix)); return b }
+	files := Files{Provenance: read(SuffixProvenance), CycloneDX: read(SuffixCycloneDX), SPDX: read(SuffixSPDX)}
+	if _, err = v.Artifact(filepath.Join(e.dir, name), read(".manifest.json"), pinned, files); err != nil {
+		t.Fatal(err)
+	}
+	var env2 signing.Envelope
+	if err = json.Unmarshal(files.Provenance, &env2); err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := base64Std(env2.Payload)
+	st, err := provenance.Parse(payload)
+	if err != nil || st.Predicate.RunDetails.Metadata.InvocationID != "https://github.com/nself-org/plugins/actions/runs/77" || st.GitCommit() != strings.Repeat("c", 40) {
+		t.Fatalf("builder facts: %v %+v", err, st.Predicate.RunDetails)
+	}
+	if bytes.Contains(files.Provenance, []byte("PRIVATE")) {
+		t.Fatal("key text in the provenance file")
+	}
+	// Without the GitHub variables a real (non-rehearsal) run refuses.
+	e2 := scriptSetup(t, "1.54.1", fileSHA(t))
+	if o, merr := e2.run("provenance.sh", []string{"NSELF_AGENT_SIGNING_KEY=" + keyPEM, "NSELF_AGENT_SIGNING_KEY_ID=" + keyID, "GITHUB_WORKFLOW_REF="}, "--in", e2.dir, "--versions", e2.table); merr == nil {
+		t.Fatalf("a real run without GITHUB_WORKFLOW_REF must fail:\n%s", o)
 	}
 }

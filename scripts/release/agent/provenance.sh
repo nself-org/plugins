@@ -21,6 +21,7 @@
 #          NSELF_AGENT_SIGNING_KEY      PKCS8 PEM of the Ed25519 agent key (same three forms as manifest.sh).
 #          NSELF_AGENT_SIGNING_KEY_ID   agent-<first 16 hex of sha256(raw 32-byte public key)>; derived, never chosen.
 #          GITHUB_WORKFLOW_REF, GITHUB_RUN_ID, GITHUB_SHA   the builder, the run and the commit (set by GitHub Actions).
+#          The key is unset in this script's own environment as soon as it is in the 0600 file, so go and syft never see it.
 #          NSELF_AGENT_SYFT             optional path of a syft to try first; it is used only if it IS the pinned syft.
 #          NSELF_CI_HOME                where `nself ci artifacts tools install` places syft (default ~/.nself/ci).
 #          OPENSSL                      optional openssl binary; must be OpenSSL 3 or newer.
@@ -110,14 +111,12 @@ find_syft() {
   fi
   printf "[agent-provenance] downloading the pinned syft %s\n" "$PIN_VERSION"
   mkdir -p "$WORK/syft-dl"
-  curl -fsSL --proto '=https' --tlsv1.2 --max-time 300 -o "$WORK/syft-dl/syft.tgz" "$PIN_URL" || { err "cannot download the pinned syft"; return 1; }
+  curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --max-time 300 -o "$WORK/syft-dl/syft.tgz" "$PIN_URL" || { err "cannot download the pinned syft"; return 1; }
   [ "$(sha256_file "$WORK/syft-dl/syft.tgz")" = "$PIN_SHA" ] || { err "the downloaded syft archive does not have the pinned sha256"; return 1; }
   tar -xzf "$WORK/syft-dl/syft.tgz" -C "$WORK/syft-dl" syft || { err "the syft archive has no syft file"; return 1; }
   syft_is_pinned "$WORK/syft-dl/syft" || { err "the downloaded syft is not the pinned binary"; return 1; }
   SYFT="$WORK/syft-dl/syft"
 }
-SYFT=""
-find_syft || exit 1
 
 # ---- the signing key (the same handling as manifest.sh) ---------------------------------------------------------------------
 # The PEM marker lines are assembled from two pieces on purpose: written whole, a secret scanner reads this script as a committed key.
@@ -142,8 +141,7 @@ normalize_key() {
 
 if [ "$REHEARSAL" = "true" ]; then
   "$O" genpkey -algorithm ed25519 -out "$WORK/key.pem" 2>/dev/null
-  "$O" pkey -in "$WORK/key.pem" -pubout >> "$IN/rehearsal-test.pub" 2>/dev/null
-  chmod 644 "$IN/rehearsal-test.pub"
+  "$O" pkey -in "$WORK/key.pem" -pubout > "$WORK/rehearsal.pub" 2>/dev/null
   BUILDER="${GITHUB_WORKFLOW_REF:-nself-org/plugins/.github/workflows/release-agent.yml@refs/tags/v$VERSION}"
   RUN_ID="${GITHUB_RUN_ID:-1}"
   REVISION="${GITHUB_SHA:-$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)}"
@@ -151,6 +149,8 @@ if [ "$REHEARSAL" = "true" ]; then
 else
   [ -n "${NSELF_AGENT_SIGNING_KEY:-}" ] || { err "NSELF_AGENT_SIGNING_KEY is not set"; exit 1; }
   normalize_key "$NSELF_AGENT_SIGNING_KEY" > "$WORK/key.pem"
+  # The key now lives only in the 0600 file: go, syft and every other child process started below must not inherit it.
+  unset NSELF_AGENT_SIGNING_KEY
   BUILDER="${GITHUB_WORKFLOW_REF:-}"; RUN_ID="${GITHUB_RUN_ID:-}"; REVISION="${GITHUB_SHA:-}"
   [ -n "$BUILDER" ] && [ -n "$RUN_ID" ] && [ -n "$REVISION" ] || { err "GITHUB_WORKFLOW_REF, GITHUB_RUN_ID and GITHUB_SHA must be set (run this in the release workflow)"; exit 1; }
 fi
@@ -167,6 +167,10 @@ if [ "$REHEARSAL" != "true" ]; then
   [[ "${NSELF_AGENT_SIGNING_KEY_ID:-}" =~ ^agent-[0-9a-f]{16}$ ]] || { err "NSELF_AGENT_SIGNING_KEY_ID must look like agent-<16 hex>"; exit 1; }
   [ "$NSELF_AGENT_SIGNING_KEY_ID" = "$KEY_ID" ] || { err "NSELF_AGENT_SIGNING_KEY_ID does not match the key (expected agent-<16 hex of sha256(public key))"; exit 1; }
 fi
+
+# Only now: the key is out of the environment, so neither a candidate syft (run for its version) nor curl nor go ever sees it.
+SYFT=""
+find_syft || exit 1
 
 # ---- provgen, built once ----------------------------------------------------------------------------------------------------
 (cd "$ROOT/free/ci" && CGO_ENABLED=0 go build -mod=vendor -o "$WORK/provgen" ./tools/provgen) || { err "cannot build tools/provgen"; exit 1; }
@@ -206,4 +210,9 @@ for bin in "$IN"/nself-ci-agent-*-*; do
   count=$((count + 1))
 done
 [ "$count" -gt 0 ] || { err "no nself-ci-agent-<os>-<arch> files in $IN"; exit 1; }
+if [ "$REHEARSAL" = "true" ]; then
+  # Appended only after every target succeeded, so a failed run leaves the file as manifest.sh wrote it.
+  cat "$WORK/rehearsal.pub" >> "$IN/rehearsal-test.pub"
+  chmod 644 "$IN/rehearsal-test.pub"
+fi
 printf "[agent-provenance] wrote SBOMs and provenance for %s targets, key %s, syft %s\n" "$count" "$KEY_ID" "$PIN_VERSION"

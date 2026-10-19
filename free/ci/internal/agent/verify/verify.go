@@ -25,9 +25,9 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/signing"
+	"github.com/nself-org/plugins/free/ci/internal/provenance"
 )
 
 // Schema is the manifest schema this package reads.
@@ -70,8 +70,9 @@ func ParseManifest(data []byte) (Manifest, error) {
 	if len(data) == 0 || len(data) > MaxManifestBytes {
 		return m, fail(ReasonMalformedManifest, nil, "manifest size %d is outside 1..%d", len(data), MaxManifestBytes)
 	}
-	if dup := duplicateKey(data); dup {
-		return m, fail(ReasonMalformedManifest, nil, "manifest repeats a field")
+	// One value, valid UTF-8, no repeated field under Unicode simple case folding (encoding/json folds names the same way).
+	if err := provenance.CheckStrict(data); err != nil {
+		return m, fail(ReasonMalformedManifest, err, "manifest is not one JSON object with distinct fields")
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
@@ -88,34 +89,6 @@ func ParseManifest(data []byte) (Manifest, error) {
 		return Manifest{}, err
 	}
 	return m, nil
-}
-
-// duplicateKey reports whether the top-level JSON object repeats a field name, compared case-insensitively because encoding/json
-// matches field names that way and would keep the last one silently.
-// Input that is not an object is left to the strict decode that follows.
-func duplicateKey(data []byte) bool {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
-		return false
-	}
-	seen := map[string]bool{}
-	for dec.More() {
-		k, err := dec.Token()
-		name, ok := k.(string)
-		if err != nil || !ok {
-			return false
-		}
-		folded := strings.ToLower(name)
-		if seen[folded] {
-			return true
-		}
-		seen[folded] = true
-		var skip json.RawMessage
-		if err = dec.Decode(&skip); err != nil {
-			return false
-		}
-	}
-	return false
 }
 
 func (m Manifest) validate() error {

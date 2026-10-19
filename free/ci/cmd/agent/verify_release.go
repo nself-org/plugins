@@ -104,16 +104,25 @@ func verifyReleaseDir(v *verify.Verifier, dir, version string, requireAll bool, 
 		fmt.Fprintln(stderr, "verify-release: cannot read the release directory")
 		return 1
 	}
-	bins, manifests := map[string]bool{}, map[string]bool{}
+	bins, manifests, sides := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, e := range entries {
 		name := e.Name()
 		switch {
 		case !strings.HasPrefix(name, "nself-ci-agent-"):
 		case isSideFile(name):
+			sides[name] = true
 		case strings.HasSuffix(name, ".manifest.json"):
 			manifests[strings.TrimSuffix(name, ".manifest.json")] = true
 		default:
 			bins[name] = true
+		}
+	}
+	// A side file with neither a binary nor a manifest would be uploaded by the release workflow without ever being checked
+	// (one with a manifest fails below as "manifest without a binary").
+	for name := range sides {
+		if base := sideBase(name); !bins[base] && !manifests[base] {
+			fmt.Fprintf(stderr, "%s: %s: %s: %s has no binary in the directory\n", name, verify.CodeVerify, verify.ReasonProvenance, name)
+			return 1
 		}
 	}
 	if len(bins) == 0 {
@@ -203,6 +212,16 @@ func isSideFile(name string) bool {
 		}
 	}
 	return false
+}
+
+// sideBase is the binary name a side file belongs to.
+func sideBase(name string) string {
+	for _, suf := range sideSuffixes {
+		if strings.HasSuffix(name, suf) {
+			return strings.TrimSuffix(name, suf)
+		}
+	}
+	return name
 }
 
 // readSideFiles reads the two SBOMs and the provenance of one binary; a missing, special or oversized file is the provenance reason.

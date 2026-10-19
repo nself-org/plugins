@@ -26,7 +26,7 @@ import (
 // Size bounds of the three files.
 const (
 	MaxProvenanceBytes = 1 << 20
-	MaxSBOMBytes       = 64 << 20
+	MaxSBOMBytes       = 16 << 20
 )
 
 // File name suffixes next to a binary: nself-ci-agent-<target><suffix>.
@@ -48,7 +48,7 @@ func BinaryName(target string) string { return "nself-ci-agent-" + target }
 
 func provFail(format string, a ...any) *Error { return fail(ReasonProvenance, nil, format, a...) }
 
-// VerifyProvenance checks files against the verified manifest m (see the file comment). It does not look at the binary: its
+// VerifyProvenance checks files against the verified manifest m, which the caller must already have verified (see the file comment). It does not look at the binary: its
 // digest was proven equal to m.SHA256 by checkManifest.
 func (v *Verifier) VerifyProvenance(m Manifest, files Files) error {
 	if err := v.Ready(); err != nil {
@@ -79,8 +79,8 @@ func (v *Verifier) VerifyProvenance(m Manifest, files Files) error {
 
 // openEnvelope parses the DSSE envelope strictly and verifies its signature under the agent purpose.
 func (v *Verifier) openEnvelope(raw []byte) ([]byte, error) {
-	if duplicateKey(raw) {
-		return nil, provFail("the provenance envelope repeats a field")
+	if err := provenance.CheckStrict(raw); err != nil {
+		return nil, fail(ReasonProvenance, err, "the provenance envelope is not one JSON object with distinct fields")
 	}
 	var env signing.Envelope
 	dec := json.NewDecoder(bytes.NewReader(raw))
@@ -106,8 +106,8 @@ func checkStatement(st provenance.Statement, m Manifest, files Files) error {
 	if st.Predicate.BuildDefinition.BuildType != provenance.BuildTypeAgent {
 		return provFail("the provenance build type is %q, not the agent build type", clip(st.Predicate.BuildDefinition.BuildType))
 	}
-	if !strings.Contains(st.Predicate.RunDetails.Builder.ID, "/"+provenance.AgentWorkflow+"@") {
-		return provFail("the provenance builder is not the agent release workflow")
+	if err := checkBuilder(st, m); err != nil {
+		return err
 	}
 	name := BinaryName(m.Target)
 	if len(st.Subject) != 1 || st.Subject[0].Name != name || st.Subject[0].Digest["sha256"] != m.SHA256 {
@@ -126,6 +126,25 @@ func checkStatement(st provenance.Statement, m Manifest, files Files) error {
 		if !ok || want != hex.EncodeToString(sum[:]) {
 			return provFail("the %s file is not the SBOM the provenance names", name+sbom.suffix)
 		}
+	}
+	return nil
+}
+
+// ReleaseRepo is the repository whose release workflow builds the agent.
+const ReleaseRepo = "nself-org/plugins"
+
+// checkBuilder pins the builder: the release workflow of ReleaseRepo, at the ref the statement names, and a tag ref must be the
+// manifest's version (a rehearsal runs from a branch, so a non-tag ref is accepted).
+func checkBuilder(st provenance.Statement, m Manifest) error {
+	bd := st.Predicate.BuildDefinition
+	repo := "https://github.com/" + ReleaseRepo
+	ref := bd.ExternalParameters["ref"]
+	if bd.ExternalParameters["repository"] != repo || bd.ExternalParameters["workflow"] != provenance.AgentWorkflow ||
+		st.Predicate.RunDetails.Builder.ID != repo+"/"+provenance.AgentWorkflow+"@"+ref {
+		return provFail("the provenance builder is not the agent release workflow of %s", ReleaseRepo)
+	}
+	if strings.HasPrefix(ref, "refs/tags/") && ref != "refs/tags/v"+m.Version {
+		return provFail("the provenance was built from %s, not the tag of version %s", clip(ref), clip(m.Version))
 	}
 	return nil
 }

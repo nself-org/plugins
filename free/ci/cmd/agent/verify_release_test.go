@@ -148,6 +148,17 @@ func TestVerifyReleaseAcceptsAKeyFileWithTwoKeys(t *testing.T) {
 	}
 }
 
+func TestVerifyReleaseRefusesASideFileWithoutItsBinary(t *testing.T) {
+	dir, pub := releaseDir(t)
+	if err := os.WriteFile(filepath.Join(dir, "nself-ci-agent-linux-arm64"+verify.SuffixCycloneDX), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, errs := runVR("--pub", pub, dir)
+	if code != 1 || !strings.Contains(errs, verify.ReasonProvenance) || !strings.Contains(errs, "no binary") {
+		t.Fatalf("code %d err %q", code, errs)
+	}
+}
+
 func TestVerifyReleaseRefusesAnotherKeyAndAnEmptyDirectory(t *testing.T) {
 	dir, _ := releaseDir(t)
 	other, _, _ := ed25519.GenerateKey(rand.Reader)
