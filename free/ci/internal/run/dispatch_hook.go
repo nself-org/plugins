@@ -62,10 +62,17 @@ var (
 type dispatchCleanup struct{}
 
 func (dispatchCleanup) AfterRun(_ context.Context, r RunInfo) error {
-	if v, ok := runDispatchers.LoadAndDelete(r.RunID); ok {
+	closeRunDispatcher(r.RunID)
+	return nil
+}
+
+// closeRunDispatcher closes and forgets the run's dispatcher, if any. It is safe to
+// call twice: Coordinator.Run defers it so a run that never reaches AfterRun (a
+// panic between the jobs and the conclusion) does not keep its dispatcher.
+func closeRunDispatcher(runID string) {
+	if v, ok := runDispatchers.LoadAndDelete(runID); ok {
 		v.(*runDispatch).d.Close()
 	}
-	return nil
 }
 
 func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {

@@ -229,6 +229,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	post := c.prepareStatus(ctx, st, rev)
 	_ = st.Heartbeat(ctx, coord.ID)
 	runID := newRunID()
+	defer closeRunDispatcher(runID)
 	sess := newSession()
 	mp := c.Plan.ModelPipeline()
 	rows, err := c.persist(ctx, st, runID, rev, source, pol, sess, mp)

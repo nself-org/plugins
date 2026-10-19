@@ -186,3 +186,64 @@ func TestSchedAdmissionTransitionGuard(t *testing.T) {
 		t.Fatalf("a leased attempt still moves on: %v", err)
 	}
 }
+
+// TestSchedAdmittedLeavesWithTheActiveStates: the placement identity is deleted
+// when an attempt leaves leased/running/finalizing, so a re-queued attempt
+// admitted again through AdmitAndLease (no identity) is not counted under the old
+// user, and the table does not grow one row per attempt forever (D-1044).
+func TestSchedAdmittedLeavesWithTheActiveStates(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	admitSeed(t, s, "pipe", "proj", "a", "a1")
+	if _, err := s.AdmitPlacement(ctx, "host", admitDemand("a1", "r"), AdmitRequest{User: "ann", Team: "core", Provider: "prov"}); err != nil {
+		t.Fatal(err)
+	}
+	has := func() bool {
+		_, _, _, _, _, ok, err := s.AdmittedIdentity(ctx, "a1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
+	move := func(from, to model.JobState) {
+		t.Helper()
+		_, epoch, _ := s.AttemptStateEpoch(ctx, "a1")
+		if err := s.testTransition(ctx, "a1", from, to, TransitionDetail{Epoch: epoch}); err != nil {
+			t.Fatalf("%s -> %s: %v", from, to, err)
+		}
+	}
+	move("leased", "running")
+	if !has() {
+		t.Fatal("a running attempt lost its placement identity")
+	}
+	move("running", "retryable")
+	if has() {
+		t.Fatal("an attempt that left the active states kept its sched_admitted row")
+	}
+}
+
+// TestPruneRemovesAdmissionRows: pruning a pipeline drops the admission identity
+// and the refusal of its attempts (D-1044).
+func TestPruneRemovesAdmissionRows(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	admitSeed(t, s, "pipe", "proj", "a", "a1")
+	admitSeed(t, s, "pipe", "proj", "b", "a2")
+	if _, err := s.AdmitPlacement(ctx, "host", admitDemand("a1", "r"), AdmitRequest{User: "ann"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordRefusal(ctx, "a2", "limit", "pipeline limit"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.FinishPipeline(ctx, "pipe", "passed"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.DeletePipelines(ctx, []string{"pipe"}); err != nil || n != 1 {
+		t.Fatalf("removed %d, err %v", n, err)
+	}
+	for _, table := range []string{"sched_admitted", "sched_refusal"} {
+		if got := count(t, s, table); got != 0 {
+			t.Errorf("%s rows after the prune = %d, want 0", table, got)
+		}
+	}
+}

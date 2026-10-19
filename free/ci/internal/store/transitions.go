@@ -119,6 +119,13 @@ func (s *Store) apply(ctx context.Context, tx *sql.Tx, id string, from, to model
 			return err
 		}
 	}
+	if to != "leased" && to != "running" && to != "finalizing" {
+		// the placement identity belongs to the active states: an attempt that left them and
+		// is admitted again through the nil-hook path must not keep its old user and team
+		if _, err = tx.ExecContext(ctx, "DELETE FROM sched_admitted WHERE attempt_id=?", id); err != nil {
+			return err
+		}
+	}
 	if to == "lost" || to == "cancelled" || to == "passed" || to == "failed" {
 		if _, err = tx.ExecContext(ctx, "DELETE FROM host_reservation WHERE lease_id IN (SELECT id FROM lease WHERE attempt_id=?)", id); err != nil {
 			return err

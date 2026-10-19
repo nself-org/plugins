@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -51,6 +52,27 @@ func shJob(script string, deps ...string) model.Job {
 type zeroRun struct {
 	res  run.Result
 	home string
+	// placed holds, per attempt, the runner and world digest dispatch.Admit recorded
+	// while the attempt ran: the identity row is deleted when an attempt leaves the
+	// active states (D-1044), so it can only be read mid-run.
+	placed map[string][2]string
+}
+
+// placementProbe records the admission identity of each attempt as it starts.
+type placementProbe struct {
+	mu     sync.Mutex
+	placed map[string][2]string
+}
+
+func (p *placementProbe) AttemptStart(ctx context.Context, a run.AttemptInfo) error {
+	_, _, _, runner, digest, ok, err := a.Store.AdmittedIdentity(ctx, a.AttemptID)
+	if err != nil || !ok {
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.placed[a.AttemptID] = [2]string{runner, digest}
+	return nil
 }
 
 func zeroNodeRun(t *testing.T, v15 bool) zeroRun {
@@ -71,7 +93,8 @@ func zeroNodeRun(t *testing.T, v15 bool) zeroRun {
 		t.Fatal(err)
 	}
 	out := &bytes.Buffer{}
-	c := &run.Coordinator{Opts: run.Options{Root: root, Home: home}, Plan: pl, ConfigDigest: "cfg", Out: out, Capture: zeroGit, Reporter: &zeroReporter{},
+	probe := &placementProbe{placed: map[string][2]string{}}
+	c := &run.Coordinator{Opts: run.Options{Root: root, Home: home}, Hooks: run.Hooks{AttemptStarts: []run.AttemptStartHook{probe}}, Plan: pl, ConfigDigest: "cfg", Out: out, Capture: zeroGit, Reporter: &zeroReporter{},
 		Capacity: func() ciexec.Capacity {
 			return ciexec.Capacity{CPUs: 8, MemoryMB: 16384, FreeMemoryMB: 12000, BatteryPercent: -1, PluggedIn: true, Interactive: true}
 		}, Poll: 10 * time.Millisecond}
@@ -79,7 +102,7 @@ func zeroNodeRun(t *testing.T, v15 bool) zeroRun {
 	if err != nil {
 		t.Fatalf("Run: %v\n%s", err, out)
 	}
-	return zeroRun{res, home}
+	return zeroRun{res, home, probe.placed}
 }
 
 func TestZeroNode(t *testing.T) {
@@ -105,9 +128,11 @@ func TestZeroNode(t *testing.T) {
 		if j.State != p.State || j.Reason != p.Reason || j.FailureClass != p.FailureClass || j.ExitCode != p.ExitCode || j.N != p.N {
 			t.Errorf("job %s differs: dispatcher %+v, plain %+v", j.ID, j, p)
 		}
-		_, _, _, runner, digest, ok, err := st.AdmittedIdentity(context.Background(), j.AttemptID)
-		if err != nil || !ok || runner != "local" || digest == "" {
-			t.Errorf("job %s was not admitted through dispatch.Admit on the local runner: %q %q %v %v", j.ID, runner, digest, ok, err)
+		if got := engaged.placed[j.AttemptID]; got[0] != "local" || got[1] == "" {
+			t.Errorf("job %s was not admitted through dispatch.Admit on the local runner: %q", j.ID, got)
+		}
+		if _, _, _, _, _, ok, err := st.AdmittedIdentity(context.Background(), j.AttemptID); err != nil || ok {
+			t.Errorf("job %s kept its sched_admitted row after the attempt ended: %v %v", j.ID, ok, err)
 		}
 	}
 	// the evidence documents agree on everything a placement could change

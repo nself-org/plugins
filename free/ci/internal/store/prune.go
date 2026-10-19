@@ -53,6 +53,8 @@ var pruneSteps = []string{
 	`DELETE FROM host_reservation WHERE lease_id IN (SELECT l.id FROM lease l JOIN attempt a ON l.attempt_id=a.id JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM lease WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM cancel_intent WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM sched_admitted WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM sched_refusal WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM idempotency_key WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM declared_artifact WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM evidence WHERE pipeline_id IN (SELECT value FROM json_each(?))`,
