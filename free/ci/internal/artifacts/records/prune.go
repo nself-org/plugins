@@ -6,9 +6,9 @@ package records
 // Inputs:  PruneSpec, the Ledger, the Blobs.
 // Outputs: the removed records.
 // Constraints: the rows go in one ledger transaction first, then the blobs no
-// remaining record references are swept (the blob store keeps an unreferenced
-// blob for its one-hour grace, so a blob staged by a running attempt is
-// safe). Release-kind records are never touched without Release. A dry run
+// remaining record references are swept on every non-dry run (the blob store
+// keeps an unreferenced blob for its one-hour grace, so a blob a running
+// collection just stored is safe). Release-kind records are never touched without Release. A dry run
 // changes nothing.
 
 import (
@@ -33,9 +33,11 @@ func Prune(ctx context.Context, l Ledger, b Blobs, spec PruneSpec) ([]Record, er
 		spec.OlderThan = DefaultReleaseAge
 	}
 	removed, err := l.ArtifactPrune(ctx, spec)
-	if err != nil || spec.DryRun || len(removed) == 0 {
+	if err != nil || spec.DryRun {
 		return removed, err
 	}
+	// always sweep: blobs of collections that never reached a record (a refused
+	// scan, a full store) are reclaimed here, after the blob store's grace
 	return removed, sweepBlobs(ctx, l, b, spec.Now)
 }
 

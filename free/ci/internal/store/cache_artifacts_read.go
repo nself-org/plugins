@@ -101,12 +101,23 @@ func (s *Store) ArtifactGet(ctx context.Context, id string) (records.Record, boo
 	return recs[0], true, nil
 }
 
-// ArtifactMarkMissing remembers that a record's blob is gone.
-func (s *Store) ArtifactMarkMissing(ctx context.Context, id string) error {
+// ArtifactSetMissing remembers whether a committed record's blob is gone.
+func (s *Store) ArtifactSetMissing(ctx context.Context, id string, missing bool) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, "UPDATE cache_artifact SET missing=1 WHERE id=?", id)
+		_, err := tx.ExecContext(ctx, "UPDATE cache_artifact SET missing=? WHERE id=? AND state='committed'", missing, id)
 		return err
 	})
+}
+
+// ArtifactUsage sums committed bytes plus the staged bytes of attempts that
+// are still running or finalizing (their blobs are on disk already).
+func (s *Store) ArtifactUsage(ctx context.Context, project string) (records.Usage, error) {
+	var u records.Usage
+	err := s.readers.QueryRowContext(ctx, `SELECT coalesce(sum(size),0),coalesce(sum(CASE WHEN release=1 THEN size END),0),
+coalesce(sum(CASE WHEN project=? THEN size END),0),coalesce(sum(CASE WHEN project=? AND release=1 THEN size END),0) FROM cache_artifact
+WHERE state='committed' OR attempt_id IN (SELECT id FROM attempt WHERE state IN ('running','finalizing'))`, project, project).
+		Scan(&u.Total, &u.Release, &u.Project, &u.ProjectRelease)
+	return u, err
 }
 
 // ArtifactBlobRefs lists every blob a record (staged or committed) still needs.
@@ -137,6 +148,10 @@ func (s *Store) ArtifactPrune(ctx context.Context, spec records.PruneSpec) ([]re
 		args = append(args, now, spec.Now.Add(-spec.OlderThan).UnixNano())
 	}
 	cond += " OR (state='staged' AND attempt_id NOT IN (SELECT id FROM attempt WHERE state IN ('running','finalizing')))"
+	if spec.Project != "" { // a project-scoped prune never touches another project's rows
+		cond = "(" + cond + ") AND project=?"
+		args = append(args, spec.Project)
+	}
 	var removed []records.Record
 	err := s.write(ctx, func(tx *sql.Tx) error {
 		rows, err := tx.QueryContext(ctx, "SELECT "+artCols+" FROM cache_artifact WHERE "+cond+" ORDER BY created_at, id", args...)

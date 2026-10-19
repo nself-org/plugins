@@ -47,6 +47,9 @@ type Collector struct {
 	Scanner authz.ValueScanner
 	Policy  Policy
 	Limits  authz.Limits
+	// Usage is what the store holds now (Ledger.ArtifactUsage); the declared
+	// and streamed bytes are checked against the caps on top of it.
+	Usage Usage
 }
 
 // planned is one admitted file with the record name it will get.
@@ -56,9 +59,8 @@ type planned struct {
 	name string
 }
 
-// Collect stores every file the declarations select under base. Every entry of
-// every declaration is judged before the first byte is stored, so a refusal
-// leaves nothing behind.
+// Collect stores every file the declarations select under the directory base
+// (opened here; callers that hold a pinned root use CollectRoot).
 func (c Collector) Collect(ctx context.Context, project, base string, decls []Decl) ([]Staged, error) {
 	if info, err := os.Lstat(base); err != nil || !info.IsDir() {
 		return nil, failf(ReasonUnreadable, "job workdir %q is missing, not a directory or a symlink", base)
@@ -68,17 +70,28 @@ func (c Collector) Collect(ctx context.Context, project, base string, decls []De
 		return nil, failf(ReasonUnreadable, "job workdir: %v", err)
 	}
 	defer func() { _ = root.Close() }()
+	return c.CollectRoot(ctx, project, root, decls)
+}
+
+// CollectRoot stores every file the declarations select under root. Every
+// entry of every declaration is judged, and the declared bytes are checked
+// against the store caps (Usage), before the first byte is stored, so a
+// refusal leaves nothing behind; the bytes actually streamed are held to the
+// same budget.
+func (c Collector) CollectRoot(ctx context.Context, project string, root *os.Root, decls []Decl) ([]Staged, error) {
 	plan, err := c.plan(root, decls)
 	if err != nil {
 		return nil, err
 	}
 	realm := cas.ArtifactRealm(project)
 	out := make([]Staged, 0, len(plan))
+	var streamed int64
 	for _, p := range plan {
-		st, err := c.store(ctx, root, realm, p)
+		st, err := c.store(ctx, root, realm, p, streamed)
 		if err != nil {
 			return nil, err
 		}
+		streamed += st.Size
 		out = append(out, st)
 	}
 	return out, nil
@@ -127,6 +140,9 @@ func (c Collector) plan(root *os.Root, decls []Decl) ([]planned, error) {
 			out = append(out, planned{d, f, name})
 		}
 	}
+	if _, err := c.Policy.CheckCaps(c.Usage, total); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -154,7 +170,7 @@ func literalPrefix(p string) string {
 	return strings.Join(keep, "/")
 }
 
-func (c Collector) store(ctx context.Context, root *os.Root, realm cas.Realm, p planned) (Staged, error) {
+func (c Collector) store(ctx context.Context, root *os.Root, realm cas.Realm, p planned, streamed int64) (Staged, error) {
 	d, f, name := p.decl, p.f, p.name
 	if err := c.Policy.CheckDisk(f.info.Size()); err != nil {
 		return Staged{}, err
@@ -167,7 +183,11 @@ func (c Collector) store(ctx context.Context, root *os.Root, realm cas.Realm, p 
 	if now, err := file.Stat(); err != nil || !os.SameFile(now, f.info) || !now.Mode().IsRegular() {
 		return Staged{}, failf(ReasonUnreadable, "%s changed while it was collected", f.rel)
 	}
-	digest, size, err := c.Blobs.Put(ctx, realm, newScanReader(file, c.Scanner, f.rel, c.Policy.MaxFile))
+	sr := newScanReader(file, c.Scanner, f.rel, c.Policy.MaxFile)
+	if room := c.Policy.MaxTotal - c.Usage.Total - streamed; room < sr.max {
+		sr.max, sr.reason = max(room, 0), ReasonSizeCap
+	}
+	digest, size, err := c.Blobs.Put(ctx, realm, sr)
 	if err != nil {
 		return Staged{}, err
 	}

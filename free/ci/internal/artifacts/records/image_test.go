@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -136,7 +137,9 @@ func nestedIndexes(f map[string][]byte, levels int) {
 			delete(f, n)
 		}
 	}
-	leaf := []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:` + strings.Repeat("e", 64) + `","platform":{"os":"linux","architecture":"amd64"}}]}`)
+	mbody := []byte(`{"schemaVersion":2,"layers":[]}`)
+	f["blobs/sha256/"+dig(mbody)] = mbody
+	leaf := []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:` + dig(mbody) + `","platform":{"os":"linux","architecture":"amd64"}}]}`)
 	cur := leaf
 	for i := 1; i < levels; i++ {
 		f["blobs/sha256/"+dig(cur)] = cur
@@ -177,8 +180,15 @@ func rawTar(entries []tar.Header, bodies [][]byte) []byte {
 	return buf.Bytes()
 }
 
+var manifestBody = []byte(`{"schemaVersion":2,"layers":[]}`)
+
 func manifestIndex() []byte {
-	return []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:` + strings.Repeat("a", 64) + `"}]}`)
+	return []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:` + dig(manifestBody) + `"}]}`)
+}
+
+// withManifest appends the manifest blob manifestIndex refers to.
+func withManifest(hs []tar.Header, bs [][]byte) ([]tar.Header, [][]byte) {
+	return append(hs, tar.Header{Name: "blobs/sha256/" + dig(manifestBody)}), append(bs, manifestBody)
 }
 
 func TestImageSizeAndCountBoundaries(t *testing.T) {
@@ -187,10 +197,14 @@ func TestImageSizeAndCountBoundaries(t *testing.T) {
 		return append(append([]byte(nil), b...), bytes.Repeat([]byte(" "), n-len(b))...)
 	}
 	// index.json of exactly 1 MiB is read; one byte more is skipped (no index)
-	if _, err := records.ReadImageLayout(bytes.NewReader(rawTar([]tar.Header{{Name: "index.json"}}, [][]byte{pad(manifestIndex(), small)}))); err != nil {
+	one := func(idx []byte) []byte {
+		hs, bs := withManifest([]tar.Header{{Name: "index.json"}}, [][]byte{idx})
+		return rawTar(hs, bs)
+	}
+	if _, err := records.ReadImageLayout(bytes.NewReader(one(pad(manifestIndex(), small)))); err != nil {
 		t.Fatalf("1 MiB index: %v", err)
 	}
-	if _, err := records.ReadImageLayout(bytes.NewReader(rawTar([]tar.Header{{Name: "index.json"}}, [][]byte{pad(manifestIndex(), small+1)}))); !records.IsReason(err, records.ReasonImage) {
+	if _, err := records.ReadImageLayout(bytes.NewReader(one(pad(manifestIndex(), small+1)))); !records.IsReason(err, records.ReasonImage) {
 		t.Fatalf("1 MiB + 1 index: %v", err)
 	}
 	// entry count: 65536 entries read, 65537 refused
@@ -198,7 +212,8 @@ func TestImageSizeAndCountBoundaries(t *testing.T) {
 		hs := make([]tar.Header, n)
 		bs := make([][]byte, n)
 		hs[0], bs[0] = tar.Header{Name: "index.json"}, manifestIndex()
-		for i := 1; i < n; i++ {
+		hs[1], bs[1] = tar.Header{Name: "blobs/sha256/" + dig(manifestBody)}, manifestBody
+		for i := 2; i < n; i++ {
 			hs[i] = tar.Header{Name: fmt.Sprintf("f/%d", i)}
 		}
 		return rawTar(hs, bs)
@@ -211,12 +226,13 @@ func TestImageSizeAndCountBoundaries(t *testing.T) {
 	}
 	// small blobs held: 32 x 1 MiB is read, one more byte is refused
 	blobs := func(extra int) []byte {
-		hs := []tar.Header{{Name: "index.json"}}
-		bs := [][]byte{manifestIndex()}
-		for i := 0; i < 32; i++ {
+		hs, bs := withManifest([]tar.Header{{Name: "index.json"}}, [][]byte{manifestIndex()})
+		for i := 0; i < 31; i++ {
 			hs = append(hs, tar.Header{Name: fmt.Sprintf("blobs/sha256/%064x", i)})
 			bs = append(bs, bytes.Repeat([]byte{byte(i)}, small))
 		}
+		hs = append(hs, tar.Header{Name: fmt.Sprintf("blobs/sha256/%064x", 98)}) // fills the budget exactly: the manifest blob counts too
+		bs = append(bs, make([]byte, small-len(manifestBody)))
 		if extra > 0 {
 			hs = append(hs, tar.Header{Name: fmt.Sprintf("blobs/sha256/%064x", 99)})
 			bs = append(bs, make([]byte, extra))
@@ -232,20 +248,103 @@ func TestImageSizeAndCountBoundaries(t *testing.T) {
 }
 
 func TestImageManifestOrder(t *testing.T) {
-	d := func(c string) string { return `"sha256:` + strings.Repeat(c, 64) + `"` }
-	m := func(c, arch string) string {
-		return `{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":` + d(c) + `,"platform":{"os":"linux","architecture":"` + arch + `"}}`
+	bodies := map[string][]byte{}
+	m := func(body, arch string) string {
+		b := []byte(body)
+		bodies[dig(b)] = b
+		return `{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:` + dig(b) + `","platform":{"os":"linux","architecture":"` + arch + `"}}`
 	}
-	idx := []byte(`{"manifests":[` + strings.Join([]string{m("9", "arm64"), m("2", "amd64"), m("1", "amd64"), m("5", "386")}, ",") + `]}`)
-	info, err := records.ReadImageLayout(bytes.NewReader(rawTar([]tar.Header{{Name: "index.json"}}, [][]byte{idx})))
+	idx := []byte(`{"manifests":[` + strings.Join([]string{m("a", "arm64"), m("b", "amd64"), m("c", "amd64"), m("d", "386")}, ",") + `]}`)
+	hs, bs := []tar.Header{{Name: "index.json"}}, [][]byte{idx}
+	for d, b := range bodies {
+		hs, bs = append(hs, tar.Header{Name: "blobs/sha256/" + d}), append(bs, b)
+	}
+	info, err := records.ReadImageLayout(bytes.NewReader(rawTar(hs, bs)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var got []string
+	var plats []string
 	for _, mf := range info.Manifests {
-		got = append(got, mf.Platform+"="+mf.Digest[7:8])
+		plats = append(plats, mf.Platform)
 	}
-	if want := "linux/386=5 linux/amd64=1 linux/amd64=2 linux/arm64=9"; strings.Join(got, " ") != want {
-		t.Fatalf("order\n got %v\nwant %s", got, want)
+	if strings.Join(plats, " ") != "linux/386 linux/amd64 linux/amd64 linux/arm64" || info.Manifests[1].Digest >= info.Manifests[2].Digest {
+		t.Fatalf("order: %+v", info.Manifests)
+	}
+}
+
+func TestImageHostileLayouts(t *testing.T) {
+	desc := func(mt, d string) string { return `{"mediaType":"` + mt + `","digest":"sha256:` + d + `"}` }
+	const manifestT, indexT = "application/vnd.oci.image.manifest.v1+json", "application/vnd.oci.image.index.v1+json"
+	read := func(idx []byte, extra map[string][]byte) error {
+		hs, bs := []tar.Header{{Name: "index.json"}}, [][]byte{idx}
+		for n, b := range extra {
+			hs, bs = append(hs, tar.Header{Name: "blobs/sha256/" + n}), append(bs, b)
+		}
+		_, err := records.ReadImageLayout(bytes.NewReader(rawTar(hs, bs)))
+		return err
+	}
+	// a nested index listed many times is expanded once (no amplification)
+	manifests := make([]string, 0, 1000)
+	for i := 0; i < 1000; i++ {
+		b := []byte(fmt.Sprintf("m%d", i))
+		manifests = append(manifests, desc(manifestT, dig(b)))
+	}
+	extra := map[string][]byte{}
+	for i := 0; i < 1000; i++ {
+		b := []byte(fmt.Sprintf("m%d", i))
+		extra[dig(b)] = b
+	}
+	nested := []byte(`{"manifests":[` + strings.Join(manifests, ",") + `]}`)
+	extra[dig(nested)] = nested
+	refs := make([]string, 0, 1000)
+	for i := 0; i < 1000; i++ {
+		refs = append(refs, desc(indexT, dig(nested)))
+	}
+	top := []byte(`{"manifests":[` + strings.Join(refs, ",") + `]}`)
+	start := time.Now()
+	if err := read(top, extra); err != nil || time.Since(start) > 5*time.Second {
+		t.Fatalf("1000 refs to one nested index: %v after %v", err, time.Since(start))
+	}
+	// more than 1024 descriptors in one index, and more than 1024 manifests overall
+	many := make([]string, 0, 1025)
+	for i := 0; i < 1025; i++ {
+		many = append(many, desc(indexT, strings.Repeat("0", 63)+"1"))
+	}
+	if err := read([]byte(`{"manifests":[`+strings.Join(many, ",")+`]}`), nil); !records.IsReason(err, records.ReasonImage) {
+		t.Fatalf("1025 descriptors: %v", err)
+	}
+	for _, c := range []struct {
+		name string
+		idx  string
+	}{
+		{"not hex", `{"manifests":[` + desc(manifestT, strings.Repeat("z", 64)) + `]}`},
+		{"upper-case hex", `{"manifests":[` + desc(manifestT, strings.Repeat("A", 64)) + `]}`},
+		{"missing leaf", `{"manifests":[` + desc(manifestT, strings.Repeat("a", 64)) + `]}`},
+	} {
+		if err := read([]byte(c.idx), nil); !records.IsReason(err, records.ReasonImage) {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+	}
+	wrong := []byte("not the right bytes")
+	if err := read([]byte(`{"manifests":[`+desc(manifestT, strings.Repeat("b", 64))+`]}`), map[string][]byte{strings.Repeat("b", 64): wrong}); !records.IsReason(err, records.ReasonImage) {
+		t.Fatalf("leaf bytes that do not match their digest: %v", err)
+	}
+	// exactly 1024 manifests is fine, the 1025th across nested indexes is not
+	var ok []string
+	okExtra := map[string][]byte{}
+	for i := 0; i < 1024; i++ {
+		b := []byte(fmt.Sprintf("x%d", i))
+		okExtra[dig(b)] = b
+		ok = append(ok, desc(manifestT, dig(b)))
+	}
+	if err := read([]byte(`{"manifests":[`+strings.Join(ok, ",")+`]}`), okExtra); err != nil {
+		t.Fatalf("1024 manifests: %v", err)
+	}
+	extraB := []byte("one more")
+	okExtra[dig(extraB)] = extraB
+	nest2 := []byte(`{"manifests":[` + desc(manifestT, dig(extraB)) + `]}`)
+	okExtra[dig(nest2)] = nest2
+	if err := read([]byte(`{"manifests":[`+strings.Join(ok[:1023], ",")+`,`+desc(indexT, dig(nest2))+`,`+desc(manifestT, dig([]byte("x0")))+`]}`), okExtra); !records.IsReason(err, records.ReasonImage) {
+		t.Fatalf("1025 manifests overall: %v", err)
 	}
 }

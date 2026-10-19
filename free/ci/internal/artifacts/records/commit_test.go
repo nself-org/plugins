@@ -291,6 +291,54 @@ func TestGetReverifiesTheDigest(t *testing.T) {
 	}
 }
 
+func TestMissingFlagClearsWhenTheBlobsComeBack(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.write("a.txt", "bytes")
+	rec := e.commit("mf", model.ArtifactDecl{Path: "a.txt"})[0]
+	rd := records.Reader{Ledger: e.st, Blobs: e.blobs}
+	files := e.blobFiles()
+	saved, _ := os.ReadFile(files[0])
+	if err := os.Remove(files[0]); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := rd.Show(ctx, viewer, rec.ID); !got.Missing {
+		t.Fatal("not reported missing")
+	}
+	if err := os.WriteFile(files[0], saved, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := rd.Show(ctx, viewer, rec.ID)
+	if err != nil || got.Missing {
+		t.Fatalf("the restored blob must read as present: %+v %v", got, err)
+	}
+	if stored, _, _ := e.st.ArtifactGet(ctx, rec.ID); stored.Missing {
+		t.Fatal("the stored flag was not cleared")
+	}
+	if _, _, err = rd.Get(ctx, viewer, rec.ID, t.TempDir()+"/d", t.TempDir()); err != nil {
+		t.Fatalf("get after restore: %v", err)
+	}
+}
+
+func TestPruneSweepsBlobsOfCollectionsThatNeverStaged(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.write("orphan.txt", "stored but never staged")
+	ds, _ := records.Normalize(model.Job{Artifacts: []model.ArtifactDecl{decl("orphan.txt")}}, false, nil)
+	if _, err := e.collector().Collect(ctx, "proj", e.ws, ds); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.blobFiles()) != 1 {
+		t.Fatal("the collection stored nothing")
+	}
+	if _, err := records.Prune(ctx, e.st, e.blobs, records.PruneSpec{Now: e.now.Add(2 * time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(e.blobFiles()); n != 0 {
+		t.Fatalf("the unreferenced blob survived a prune that removed no record: %d", n)
+	}
+}
+
 func TestPruneRemovesRecordsAndBlobs(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()

@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func afterJobSpec(t *testing.T, home, script string, after func(context.Context, string) error) JobSpec {
+func afterJobSpec(t *testing.T, home, script string, after func(context.Context, *os.Root) error) JobSpec {
 	t.Helper()
 	return JobSpec{AttemptID: "aj", CoordinatorID: "coord", Home: home, Command: []string{"sh", "-c", script}, AfterJob: after}
 }
@@ -18,9 +18,9 @@ func TestAfterJobSeesTheWorkspaceBeforeItIsRemoved(t *testing.T) {
 	home := t.TempDir()
 	var seen string
 	var wsPath string
-	r := (&Executor{}).Run(context.Background(), afterJobSpec(t, home, "echo out > produced.txt", func(_ context.Context, ws string) error {
-		wsPath = ws
-		b, err := os.ReadFile(filepath.Join(ws, "produced.txt"))
+	r := (&Executor{}).Run(context.Background(), afterJobSpec(t, home, "echo out > produced.txt", func(_ context.Context, ws *os.Root) error {
+		wsPath = ws.Name()
+		b, err := ws.ReadFile("produced.txt")
 		seen = strings.TrimSpace(string(b))
 		return err
 	}))
@@ -37,7 +37,7 @@ func TestAfterJobSeesTheWorkspaceBeforeItIsRemoved(t *testing.T) {
 
 func TestAfterJobErrorFailsTheAttemptInfra(t *testing.T) {
 	boom := errors.New("E712 missing: no output")
-	r := (&Executor{}).Run(context.Background(), afterJobSpec(t, t.TempDir(), "true", func(context.Context, string) error { return boom }))
+	r := (&Executor{}).Run(context.Background(), afterJobSpec(t, t.TempDir(), "true", func(context.Context, *os.Root) error { return boom }))
 	if !errors.Is(r.Err, boom) || r.Attempt.State != "failed" || r.Attempt.FailureClass != "infra" {
 		t.Fatalf("result %+v", r)
 	}
@@ -45,7 +45,7 @@ func TestAfterJobErrorFailsTheAttemptInfra(t *testing.T) {
 
 func TestAfterJobSkippedWhenTheJobFailsOrIsCancelled(t *testing.T) {
 	calls := 0
-	hook := func(context.Context, string) error { calls++; return nil }
+	hook := func(context.Context, *os.Root) error { calls++; return nil }
 	if r := (&Executor{}).Run(context.Background(), afterJobSpec(t, t.TempDir(), "exit 4", hook)); r.ExitCode != 4 || r.Attempt.State == "passed" {
 		t.Fatalf("failing job: %+v", r)
 	}

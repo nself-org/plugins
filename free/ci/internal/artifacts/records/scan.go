@@ -4,9 +4,10 @@ package records
 // scan found nothing in it (R-SEC-18: scan before commit).
 // Inputs:  a reader, an authz.ValueScanner, the per-file cap.
 // Outputs: a reader that hands out bytes only once they were scanned.
-// Constraints: windows of 1 MiB with a 64 KiB overlap, so a value that spans
-// two windows is found; a value longer than the overlap that straddles a
-// window edge is not (registered secrets are far shorter). The blob store
+// Constraints: windows of 16 MiB with a 4 MiB overlap, so a value that spans
+// two windows is found; a value (in any encoding) longer than the overlap that
+// straddles a window edge is not. internal/redact has no bound on a registered
+// value's length, so 4 MiB is the supported bound (debt row for a Register cap). The blob store
 // publishes at EOF, so a match or an over-cap file aborts before any blob is
 // visible. A nil scanner refuses everything.
 
@@ -18,8 +19,8 @@ import (
 )
 
 const (
-	scanWindow  = 1 << 20
-	scanOverlap = 64 << 10
+	scanWindow  = 16 << 20
+	scanOverlap = 4 << 20
 )
 
 type scanReader struct {
@@ -27,6 +28,7 @@ type scanReader struct {
 	sc      authz.ValueScanner
 	name    string
 	max     int64
+	reason  string // the refusal when the stream outgrows max
 	read    int64
 	tail    []byte
 	out     []byte
@@ -35,7 +37,7 @@ type scanReader struct {
 }
 
 func newScanReader(src io.Reader, sc authz.ValueScanner, name string, max int64) *scanReader {
-	return &scanReader{src: src, sc: sc, name: name, max: max}
+	return &scanReader{src: src, sc: sc, name: name, max: max, reason: ReasonFileCap}
 }
 
 func (r *scanReader) Read(p []byte) (int, error) {
@@ -64,7 +66,7 @@ func (r *scanReader) fill() {
 		return
 	}
 	if r.read += int64(n); r.read > r.max {
-		r.err = failf(ReasonFileCap, "%s grew past the per-file cap %d B while it was read", r.name, r.max)
+		r.err = failf(r.reason, "%s grew past its byte budget %d B while it was read", r.name, r.max)
 		return
 	}
 	if len(chunk) == 0 {

@@ -12,6 +12,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // artRig is newRig with a floor the test volume always clears. These tests
@@ -228,7 +229,7 @@ func TestArtifactsHookPrunesExpiredAtFirstAttempt(t *testing.T) {
 	}
 }
 
-func TestWorkdirOf(t *testing.T) {
+func TestWorkdirRoot(t *testing.T) {
 	ws := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(ws, "real", "deep"), 0o700); err != nil {
 		t.Fatal(err)
@@ -236,15 +237,29 @@ func TestWorkdirOf(t *testing.T) {
 	if err := os.Symlink(filepath.Join(ws, "real"), filepath.Join(ws, "link")); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := workdirOf(ws, ""); err != nil || got != ws {
-		t.Fatalf("empty: %q %v", got, err)
+	if err := os.WriteFile(filepath.Join(ws, "file"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	resolved, _ := filepath.EvalSymlinks(ws)
-	if got, err := workdirOf(resolved, "real/deep"); err != nil || got != filepath.Join(resolved, "real", "deep") {
-		t.Fatalf("nested: %q %v", got, err)
+	pinned, err := os.OpenRoot(ws)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, bad := range []string{"..", "../x", "real/../../x", "missing", "link"} {
-		if _, err := workdirOf(resolved, bad); err == nil || !strings.HasPrefix(err.Error(), "E712") {
+	defer func() { _ = pinned.Close() }()
+	got, closeFn, err := workdirRoot(pinned, "")
+	if err != nil || got != pinned {
+		t.Fatalf("empty: %v", err)
+	}
+	closeFn()
+	if _, err = pinned.Stat("."); err != nil {
+		t.Fatal("closing the workspace itself must be a no-op")
+	}
+	sub, closeSub, err := workdirRoot(pinned, "real/deep")
+	if err != nil || sub == pinned {
+		t.Fatalf("nested: %v", err)
+	}
+	closeSub()
+	for _, bad := range []string{"..", "../x", "real/../../x", "missing", "link", "file"} {
+		if _, _, err := workdirRoot(pinned, bad); err == nil || !strings.HasPrefix(err.Error(), "E712") {
 			t.Fatalf("workdir %q: %v", bad, err)
 		}
 	}
@@ -252,7 +267,103 @@ func TestWorkdirOf(t *testing.T) {
 
 func TestArtifactsHookWithoutStoreIsInert(t *testing.T) {
 	a := AttemptInfo{AttemptID: "x", Job: model.Job{Artifacts: []model.ArtifactDecl{{Path: "p"}}}}
-	if artifactsOn.AttemptStart(context.Background(), a) != nil || artifactsOn.AfterJob(context.Background(), a, t.TempDir()) != nil || artifactsOn.AttemptFinalize(context.Background(), a, 1) != nil {
+	if artifactsOn.AttemptStart(context.Background(), a) != nil || artifactsOn.AfterJob(context.Background(), a, nil) != nil || artifactsOn.AttemptFinalize(context.Background(), a, 1) != nil {
 		t.Fatal("a hook without a store must do nothing")
+	}
+}
+
+func TestArtifactsHookDiskFloorRefusesBeforeAnyByteLands(t *testing.T) {
+	r := artRig(t, map[string]model.Job{"build": artJob(`echo data > out.txt`, model.ArtifactDecl{Path: "out.txt"})})
+	t.Setenv("NSELF_CI_STORE_MIN_FREE", "100%") // the floor is the whole volume: nothing can be written
+	res := r.run(t)
+	if o := outcome(res, "build"); o.State != StateFailed || o.Code != "E712" || !strings.Contains(o.Detail, "disk_floor") {
+		t.Fatalf("build: %+v", o)
+	}
+	if blobs, _ := filepath.Glob(filepath.Join(r.Home, "blobs", "artifacts-*", "sha256", "*", "*")); len(blobs) != 0 {
+		t.Fatalf("stored %v", blobs)
+	}
+}
+
+func TestArtifactsHookRefusesASecretInADeclaration(t *testing.T) {
+	red := redact.New()
+	const secret = "declared-secret-value-55443322"
+	if err := red.Register([]byte(secret)); err != nil {
+		t.Fatal(err)
+	}
+	saved := artifactsOn.scanner
+	artifactsOn.scanner = func() authz.ValueScanner { return red }
+	t.Cleanup(func() { artifactsOn.scanner = saved })
+	r := artRig(t, map[string]model.Job{"build": artJob(`touch ran`, model.ArtifactDecl{Path: "out.txt", Name: "n-" + secret})})
+	o := outcome(r.run(t), "build")
+	if o.State != StateFailed || o.Code != "E712" || strings.Contains(o.Detail, secret) {
+		t.Fatalf("build: %+v", o)
+	}
+	if _, err := os.Stat(filepath.Join(r.C.Opts.Root, "ran")); err == nil {
+		t.Fatal("the job ran")
+	}
+}
+
+// A callback from an earlier incarnation of the attempt keeps the epoch it
+// launched with and is refused (E711) instead of adopting the new one.
+func TestArtifactsHookStaleCallbackIsFenced(t *testing.T) {
+	r := artRig(t, map[string]model.Job{"build": sh("true")})
+	st := r.store(t)
+	ctx := context.Background()
+	if err := st.CreatePipeline(ctx, store.PipelineRow{ID: "pstale", Revision: "rev", Project: "proj", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CreateJob(ctx, store.JobRow{ID: "jstale", PipelineID: "pstale", Name: "stale", Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CreateAttempt(ctx, store.AttemptRow{ID: "stale", JobID: "jstale", N: 1}, ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []struct {
+		from, to model.JobState
+		epoch    int64
+	}{{"queued", "leased", 0}, {"leased", "running", 1}} {
+		if err := st.Transition(ctx, "stale", s.from, s.to, store.TransitionDetail{Epoch: s.epoch}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	job := model.Job{Artifacts: []model.ArtifactDecl{{Path: "out.txt"}}}
+	old := AttemptInfo{AttemptID: "stale", JobName: "stale", Job: job, Store: st, Home: r.Home, Epoch: 2}
+	if err := artifactsOn.AttemptStart(ctx, old); err != nil {
+		t.Fatal(err)
+	}
+	// the attempt row runs again: running -> lost -> retryable -> queued -> leased -> running
+	for _, s := range []struct {
+		from, to model.JobState
+		epoch    int64
+	}{{"running", "lost", 2}, {"lost", "retryable", 3}, {"retryable", "queued", 4}, {"queued", "leased", 5}, {"leased", "running", 6}} {
+		d := store.TransitionDetail{Epoch: s.epoch}
+		d.Operator = s.from == "lost" || s.from == "retryable"
+		if err := st.Transition(ctx, "stale", s.from, s.to, d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fresh := old
+	fresh.Epoch = 7
+	if err := artifactsOn.AttemptStart(ctx, fresh); err != nil {
+		t.Fatal(err)
+	}
+	ws := t.TempDir()
+	if err := os.WriteFile(filepath.Join(ws, "out.txt"), []byte("old workspace"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = root.Close() }()
+	err = artifactsOn.AfterJob(ctx, old, root) // the old incarnation's callback, resumed late
+	if err == nil || !strings.HasPrefix(err.Error(), "E711") {
+		t.Fatalf("stale callback: %v", err)
+	}
+	if staged, _ := st.ArtifactStaged(ctx, "stale"); len(staged) != 0 {
+		t.Fatalf("stale bytes were staged: %+v", staged)
+	}
+	if err = artifactsOn.AfterJob(ctx, fresh, root); err != nil {
+		t.Fatalf("the current incarnation stages: %v", err)
 	}
 }

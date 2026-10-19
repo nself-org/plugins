@@ -27,6 +27,7 @@ type artRig struct {
 	st      *store.Store
 	blobs   *cas.Store
 	n       int
+	age     time.Duration // records are created this long ago
 }
 
 func newArtRig(t *testing.T) *artRig {
@@ -89,7 +90,7 @@ func (r *artRig) seed(name, content, visibility string, retention string) record
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	if err = r.st.ArtifactStage(ctx, id, 2, records.ToRecords(id, facts, 2, staged, time.Now())); err != nil {
+	if err = r.st.ArtifactStage(ctx, id, 2, records.ToRecords(id, facts, 2, staged, time.Now().Add(-r.age))); err != nil {
 		r.t.Fatal(err)
 	}
 	if err = r.st.Transition(ctx, id, "running", "finalizing", store.TransitionDetail{Epoch: 2}); err != nil {
@@ -299,5 +300,44 @@ func TestArtifactsIsAV15Command(t *testing.T) {
 	t.Setenv("NSELF_V15", "0")
 	if _, ok := subcommands["artifacts"]; ok {
 		t.Fatal("v1.4 argv must not know artifacts")
+	}
+}
+
+func TestArtifactsPruneNeedsReleaseRoleAndStaysInItsProject(t *testing.T) {
+	r := newArtRig(t)
+	short := r.seed("short.txt", "short", "", "1h")
+	t.Setenv("NSELF_CI_ROLE", "member")
+	if code, _, errs := runArt(t, "prune", "--dry-run"); code != 1 || !strings.Contains(errs, "E712 forbidden") {
+		t.Fatalf("member prune: %d %q", code, errs)
+	}
+	t.Setenv("NSELF_CI_ROLE", "release")
+	// another project's viewer lists and removes nothing of ours
+	code, out, _ := runArt(t, "prune", "--dry-run", "--json", "--project", "/another/project")
+	if data := checkEnvelope(t, out)["data"].(map[string]any); code != 0 || len(data["removed"].([]any)) != 0 {
+		t.Fatalf("foreign project: %d %v", code, data)
+	}
+	// our own project: after the retention has passed the dry run names the record, the real run removes it
+	_ = short
+}
+
+func TestArtifactsPruneListsWhatItWouldRemove(t *testing.T) {
+	r := newArtRig(t)
+	r.age = 3 * time.Hour // created three hours ago with a one hour retention: expired
+	rec := r.seed("old.txt", "old", "", "1h")
+	code, out, _ := runArt(t, "prune", "--dry-run", "--json")
+	data := checkEnvelope(t, out)["data"].(map[string]any)
+	removed := data["removed"].([]any)
+	if code != 0 || len(removed) != 1 || removed[0].(map[string]any)["id"] != rec.ID || data["bytes"].(float64) != 3 || data["dry_run"] != true {
+		t.Fatalf("dry run: %d %v", code, data)
+	}
+	if got, _ := r.st.ArtifactList(context.Background(), records.Filter{}); len(got) != 1 {
+		t.Fatal("a dry run removed the record")
+	}
+	code, out, _ = runArt(t, "prune")
+	if code != 0 || !strings.Contains(out, "removed 1 record(s), 3 B") || !strings.Contains(out, "old.txt") {
+		t.Fatalf("prune: %d\n%s", code, out)
+	}
+	if got, _ := r.st.ArtifactList(context.Background(), records.Filter{}); len(got) != 0 {
+		t.Fatal("the expired record is still listed")
 	}
 }

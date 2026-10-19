@@ -11,11 +11,15 @@ package run
 // error, not a crash); the finalize hook gets the attempt's current epoch,
 // read just before the call, so a store write can fence on it.
 
-import "context"
+import (
+	"context"
+	"os"
+)
 
-// WorkspaceHook runs after a job's command exited 0, inside its workspace.
+// WorkspaceHook runs after a job's command exited 0, inside its workspace; the
+// root was opened by the executor before the job started.
 type WorkspaceHook interface {
-	AfterJob(ctx context.Context, a AttemptInfo, workspace string) error
+	AfterJob(ctx context.Context, a AttemptInfo, workspace *os.Root) error
 }
 
 // AttemptFinalizeHook runs between running -> finalizing and finalizing -> passed.
@@ -32,11 +36,11 @@ func RegisterAttemptFinalize(h AttemptFinalizeHook) {
 }
 
 // afterJob is the executor callback for info's attempt (nil without hooks).
-func (rs *runState) afterJob(info AttemptInfo) func(context.Context, string) error {
+func (rs *runState) afterJob(info AttemptInfo) func(context.Context, *os.Root) error {
 	if len(rs.hooks.Workspaces) == 0 {
 		return nil
 	}
-	return func(ctx context.Context, workspace string) error {
+	return func(ctx context.Context, workspace *os.Root) error {
 		for _, h := range rs.hooks.Workspaces {
 			if err := guard("workspace hook", func() error { return h.AfterJob(ctx, info, workspace) }); err != nil {
 				return err

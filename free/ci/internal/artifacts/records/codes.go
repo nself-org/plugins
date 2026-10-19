@@ -42,6 +42,7 @@ const (
 	ReasonDuplicate   = "duplicate_name"
 	ReasonAttempt     = "attempt_state"
 	ReasonEpoch       = "epoch"
+	ReasonForbidden   = "forbidden"
 )
 
 // Error is a refusal with a stable code and reason.

@@ -113,7 +113,8 @@ func TestCacheArtifactsMigrate(t *testing.T) {
 	if state, _, _ := s.AttemptStateEpoch(ctx, "b"); state != "passed" {
 		t.Fatalf("committed attempt state %s", state)
 	}
-	for _, q := range []string{"UPDATE cache_artifact SET sha256='" + artHex("9") + "' WHERE id=?", "UPDATE cache_artifact SET size=1 WHERE id=?", "UPDATE cache_artifact SET visibility='restricted' WHERE id=?", "UPDATE cache_artifact SET state='staged' WHERE id=?"} {
+	for _, q := range []string{"UPDATE cache_artifact SET sha256='" + artHex("9") + "' WHERE id=?", "UPDATE cache_artifact SET size=1 WHERE id=?", "UPDATE cache_artifact SET visibility='restricted' WHERE id=?", "UPDATE cache_artifact SET state='staged' WHERE id=?",
+		"UPDATE cache_artifact SET producer='x' WHERE id=?", "UPDATE cache_artifact SET kind='binary' WHERE id=?", "UPDATE cache_artifact SET image='{}' WHERE id=?", "UPDATE cache_artifact SET isolation='vm' WHERE id=?", "UPDATE cache_artifact SET retention='keep' WHERE id=?", "UPDATE cache_artifact SET run_id='other' WHERE id=?"} {
 		if _, err := s.writer.Exec(q, rb.ID); err == nil || !strings.Contains(err.Error(), "E712 immutable") {
 			t.Fatalf("%s: %v", q, err)
 		}
@@ -346,3 +347,60 @@ func stageCommit(t *testing.T, s *Store, id string, r records.Record) {
 		t.Fatal(err)
 	}
 }
+
+func TestCacheArtifactsPruneIsProjectScopedAndUsageCountsLiveStaged(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	seed(t, s, "a")
+	artRunning(t, s, "a", 1)
+	ra := artRec("a", "n", 0, artHex("a"), 100, now.Add(-48*time.Hour))
+	ra.ExpiresAt = ptrTime(now.Add(-time.Hour))
+	stageCommit(t, s, "a", ra)
+	if err := s.CreatePipeline(ctx, PipelineRow{ID: "pq", Revision: "rev", Project: "other", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateJob(ctx, JobRow{ID: "jq", PipelineID: "pq", Name: "q", Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateAttempt(ctx, AttemptRow{ID: "q", JobID: "jq", N: 1}, ""); err != nil {
+		t.Fatal(err)
+	}
+	artRunning(t, s, "q", 1)
+	rq := artRec("q", "n", 0, artHex("b"), 300, now.Add(-48*time.Hour))
+	rq.ExpiresAt = ptrTime(now.Add(-time.Hour))
+	stageCommit(t, s, "q", rq)
+	// the live staged bytes of a running attempt count toward usage
+	seed(t, s, "live")
+	artRunning(t, s, "live", 1)
+	if err := s.ArtifactStage(ctx, "live", 2, []records.Record{artRec("live", "n", 0, artHex("c"), 1000, now)}); err != nil {
+		t.Fatal(err)
+	}
+	if u, err := s.ArtifactUsage(ctx, "proj"); err != nil || u.Total != 1400 || u.Project != 1100 {
+		t.Fatalf("usage: %+v %v", u, err)
+	}
+	dry, err := s.ArtifactPrune(ctx, records.PruneSpec{Now: now, Project: "other", DryRun: true})
+	if err != nil || len(dry) != 1 || dry[0].Attempt != "q" {
+		t.Fatalf("a project-scoped prune lists only its project: %+v %v", dry, err)
+	}
+	if _, err = s.ArtifactPrune(ctx, records.PruneSpec{Now: now, Project: "other"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := s.ArtifactGet(ctx, ra.ID); !ok {
+		t.Fatal("another project's expired record was removed")
+	}
+	if err = s.ArtifactSetMissing(ctx, ra.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := s.ArtifactGet(ctx, ra.ID); !got.Missing {
+		t.Fatal("set missing")
+	}
+	if err = s.ArtifactSetMissing(ctx, ra.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := s.ArtifactGet(ctx, ra.ID); got.Missing {
+		t.Fatal("clear missing")
+	}
+}
+
+func ptrTime(t time.Time) *time.Time { return &t }

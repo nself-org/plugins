@@ -131,6 +131,9 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 		return rs.endEarly(ctx, pj, id, o, err)
 	}
 	info := rs.info(pj, job, id)
+	if _, epoch, err := rs.sess.Store.AttemptStateEpoch(context.WithoutCancel(ctx), id); err == nil {
+		info.Epoch = epoch // the capability this incarnation of the attempt launched with
+	}
 	setup, err := rs.prepare(ctx, &info)
 	defer rs.unprepare(info, setup)
 	if err != nil {
@@ -138,7 +141,9 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	}
 	spec := rs.spec(ctx, pj, setup.job, id)
 	spec.Mounts = setup.mounts
-	spec.AfterJob = rs.afterJob(info)
+	effective := info
+	effective.Job = setup.job // hooks see the isolation the job really runs under
+	spec.AfterJob = rs.afterJob(effective)
 	var t tail
 	var full *outputBuffer // everything the attempt prints, kept only for jobs an OutcomeHook asks about
 	if rs.wantsOutput(setup.job) {

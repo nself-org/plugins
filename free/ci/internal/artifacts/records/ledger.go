@@ -24,6 +24,7 @@ type Filter struct {
 
 // PruneSpec says what prune may remove.
 type PruneSpec struct {
+	Project   string // only this project's records ("" = every project: the automatic prune)
 	Now       time.Time
 	Release   bool          // include release-kind records
 	OlderThan time.Duration // with Release: also release records created before Now-OlderThan
@@ -50,7 +51,11 @@ type Ledger interface {
 	ArtifactCommit(ctx context.Context, attempt string, epoch int64, verified []Record, pol Policy) (string, error)
 	ArtifactList(ctx context.Context, f Filter) ([]Record, error)
 	ArtifactGet(ctx context.Context, id string) (Record, bool, error)
-	ArtifactMarkMissing(ctx context.Context, id string) error
+	// ArtifactSetMissing records whether a committed record's blob is gone.
+	ArtifactSetMissing(ctx context.Context, id string, missing bool) error
+	// ArtifactUsage sums the bytes the store holds: committed records plus the
+	// staged records of attempts that are still running or finalizing.
+	ArtifactUsage(ctx context.Context, project string) (Usage, error)
 	// ArtifactPrune deletes (or, with DryRun, lists) the records spec allows.
 	ArtifactPrune(ctx context.Context, spec PruneSpec) ([]Record, error)
 	// ArtifactBlobRefs lists every blob some record still references.

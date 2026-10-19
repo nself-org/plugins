@@ -138,7 +138,7 @@ func openArtifacts(fs *flag.FlagSet) (*artifactsEnv, error) {
 // artifactsExit prints err and maps it to an exit status (E713 and E683 are the caller's: 1).
 func artifactsExit(err error, command string, asJSON bool) int {
 	code, status, class := cirun.CodeOf(err), output.ExitInfra, output.ClassInfra
-	if code == records.CodeNotFound || code == authz.CodeArtifactPath {
+	if code == records.CodeNotFound || code == authz.CodeArtifactPath || records.IsReason(err, records.ReasonForbidden) {
 		status, class = output.ExitUser, output.ClassUser
 	}
 	if asJSON {

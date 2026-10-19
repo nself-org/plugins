@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -12,9 +11,9 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
-type wsFn func(AttemptInfo, string) error
+type wsFn func(AttemptInfo, *os.Root) error
 
-func (f wsFn) AfterJob(_ context.Context, a AttemptInfo, ws string) error { return f(a, ws) }
+func (f wsFn) AfterJob(_ context.Context, a AttemptInfo, ws *os.Root) error { return f(a, ws) }
 
 type finFn func(AttemptInfo, int64) error
 
@@ -25,8 +24,8 @@ func TestWorkspaceHookSeesOutputsOfAPassingJobOnly(t *testing.T) {
 	var mu sync.Mutex
 	seen := map[string]string{}
 	r := newRig(t, map[string]model.Job{"ok": sh(`echo built > out.txt`), "bad": sh(`echo nope > out.txt; exit 3`)}, gitFake{})
-	r.C.Hooks.Workspaces = []WorkspaceHook{wsFn(func(a AttemptInfo, ws string) error {
-		b, err := os.ReadFile(filepath.Join(ws, "out.txt"))
+	r.C.Hooks.Workspaces = []WorkspaceHook{wsFn(func(a AttemptInfo, ws *os.Root) error {
+		b, err := ws.ReadFile("out.txt")
 		mu.Lock()
 		defer mu.Unlock()
 		seen[a.JobName] = strings.TrimSpace(string(b))
@@ -41,7 +40,7 @@ func TestWorkspaceHookSeesOutputsOfAPassingJobOnly(t *testing.T) {
 func TestWorkspaceHookErrorFailsTheAttemptWithItsCode(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
-	r.C.Hooks.Workspaces = []WorkspaceHook{wsFn(func(AttemptInfo, string) error { return errors.New("E712 missing: nothing collected") })}
+	r.C.Hooks.Workspaces = []WorkspaceHook{wsFn(func(AttemptInfo, *os.Root) error { return errors.New("E712 missing: nothing collected") })}
 	res := r.run(t)
 	if o := outcome(res, "a"); o.State != StateFailed || o.Code != "E712" || o.FailureClass != "infra" || res.Exit == 0 {
 		t.Fatalf("a: %+v", o)
@@ -51,7 +50,7 @@ func TestWorkspaceHookErrorFailsTheAttemptWithItsCode(t *testing.T) {
 func TestWorkspaceHookPanicIsAnError(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
-	r.C.Hooks.Workspaces = []WorkspaceHook{wsFn(func(AttemptInfo, string) error { panic("boom") })}
+	r.C.Hooks.Workspaces = []WorkspaceHook{wsFn(func(AttemptInfo, *os.Root) error { panic("boom") })}
 	res := r.run(t)
 	if o := outcome(res, "a"); o.State != StateFailed || o.Code != CodeOptions {
 		t.Fatalf("a: %+v", o)
@@ -112,9 +111,9 @@ func TestResolvedAddsRegisteredSeams(t *testing.T) {
 	t.Cleanup(func() { Registered = saved })
 	Registered.Workspaces = nil
 	Registered.AttemptFinalizes = nil
-	RegisterWorkspace(wsFn(func(AttemptInfo, string) error { return nil }))
+	RegisterWorkspace(wsFn(func(AttemptInfo, *os.Root) error { return nil }))
 	RegisterAttemptFinalize(finFn(func(AttemptInfo, int64) error { return nil }))
-	local := Hooks{Workspaces: []WorkspaceHook{wsFn(func(AttemptInfo, string) error { return nil })}}
+	local := Hooks{Workspaces: []WorkspaceHook{wsFn(func(AttemptInfo, *os.Root) error { return nil })}}
 	got := local.Resolved()
 	if len(got.Workspaces) != 2 || len(got.AttemptFinalizes) != 1 {
 		t.Fatalf("workspaces %d, finalizes %d", len(got.Workspaces), len(got.AttemptFinalizes))

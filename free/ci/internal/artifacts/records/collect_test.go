@@ -291,3 +291,50 @@ func TestCollectRefusesSecretInNameAndSymlinkedWorkdir(t *testing.T) {
 		t.Fatal("something was stored")
 	}
 }
+
+func TestCollectFindsALongSecretAcrossTheWindowEdge(t *testing.T) {
+	e := newEnv(t)
+	e.pol.MaxFile = 64 << 20
+	long := strings.Repeat("z", 69999) + "Q" // longer than the 64 KiB overlap an earlier build used
+	if err := e.red.Register([]byte(long)); err != nil {
+		t.Fatal(err)
+	}
+	edge := 16 << 20 // the window size
+	e.write("edge.bin", strings.Repeat("!", edge-68000)+long+strings.Repeat("!", 100))
+	if _, err := collect(e, "edge.bin"); !records.IsReason(err, records.ReasonSecretMatch) {
+		t.Fatalf("%v", err)
+	}
+	if len(e.blobFiles()) != 0 {
+		t.Fatal("a blob holding the secret was published")
+	}
+}
+
+func TestCollectHonoursTheStoreBudget(t *testing.T) {
+	e := newEnv(t)
+	e.pol.MaxTotal, e.pol.MaxFile = 100, 100
+	e.write("a", strings.Repeat("a", 60))
+	c := e.collector()
+	c.Usage = records.Usage{Total: 50}
+	ds, _ := records.Normalize(model.Job{Artifacts: []model.ArtifactDecl{decl("a")}}, false, nil)
+	if _, err := c.Collect(context.Background(), "proj", e.ws, ds); !records.IsReason(err, records.ReasonSizeCap) {
+		t.Fatalf("declared bytes over the remaining room: %v", err)
+	}
+	if len(e.blobFiles()) != 0 {
+		t.Fatal("bytes were written before the quota check")
+	}
+	// a file that grows after planning is stopped by the streamed budget
+	c.Usage = records.Usage{Total: 30}
+	if _, err := c.Collect(context.Background(), "proj", e.ws, ds); err != nil {
+		t.Fatalf("60 B fit in 70 B of room: %v", err)
+	}
+	e.write("b", strings.Repeat("b", 40))
+	two, _ := records.Normalize(model.Job{Artifacts: []model.ArtifactDecl{decl("a"), decl("b")}}, false, nil)
+	c.Usage = records.Usage{Total: 0}
+	if _, err := c.Collect(context.Background(), "proj", e.ws, two); err != nil {
+		t.Fatalf("exactly the cap: %v", err)
+	}
+	c.Usage = records.Usage{Total: 1}
+	if _, err := c.Collect(context.Background(), "proj", e.ws, two); !records.IsReason(err, records.ReasonSizeCap) {
+		t.Fatalf("one over: %v", err)
+	}
+}

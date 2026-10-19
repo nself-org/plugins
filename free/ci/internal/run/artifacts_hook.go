@@ -18,9 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -58,6 +56,16 @@ func (h *artifactsHook) setup(a AttemptInfo) (records.Policy, *cas.Store, error)
 	return pol, blobs, err
 }
 
+// epochOf is the capability the attempt launched with (a.Epoch), or, for a
+// caller that did not set it, the current one.
+func epochOf(ctx context.Context, a AttemptInfo) (int64, error) {
+	if a.Epoch != 0 {
+		return a.Epoch, nil
+	}
+	_, epoch, err := a.Store.AttemptStateEpoch(ctx, a.AttemptID)
+	return epoch, err
+}
+
 // AttemptStart records the declarations of the attempt.
 func (h *artifactsHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
 	if a.Store == nil {
@@ -71,7 +79,12 @@ func (h *artifactsHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
 	if err != nil || len(decls) == 0 {
 		return err
 	}
-	_, epoch, err := a.Store.AttemptStateEpoch(ctx, a.AttemptID)
+	for _, d := range decls { // declaration text reaches records and list output
+		if sc := h.scanner(); sc == nil || len(sc.Scan([]byte(d.Path+"\n"+d.Name+"\n"+d.ImageRef))) != 0 {
+			return records.Failf(records.ReasonSecretMatch, "an artifact declaration holds a registered secret value (or no scanner is registered); nothing is declared")
+		}
+	}
+	epoch, err := epochOf(ctx, a)
 	if err != nil {
 		return err
 	}
@@ -86,8 +99,8 @@ func (h *artifactsHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
 	return nil
 }
 
-// AfterJob collects the declared outputs from the workspace.
-func (h *artifactsHook) AfterJob(ctx context.Context, a AttemptInfo, workspace string) error {
+// AfterJob collects the declared outputs from the workspace the executor pinned.
+func (h *artifactsHook) AfterJob(ctx context.Context, a AttemptInfo, workspace *os.Root) error {
 	if a.Store == nil {
 		return nil
 	}
@@ -95,19 +108,24 @@ func (h *artifactsHook) AfterJob(ctx context.Context, a AttemptInfo, workspace s
 	if err != nil || len(decls) == 0 {
 		return err
 	}
-	base, err := workdirOf(workspace, a.Job.Workdir)
+	root, closeRoot, err := workdirRoot(workspace, a.Job.Workdir)
 	if err != nil {
 		return err
 	}
+	defer closeRoot()
 	pol, blobs, err := h.setup(a)
 	if err != nil {
 		return err
 	}
-	_, epoch, err := a.Store.AttemptStateEpoch(ctx, a.AttemptID)
+	epoch, err := epochOf(ctx, a)
 	if err != nil {
 		return err
 	}
 	facts, err := a.Store.ArtifactFacts(ctx, a.AttemptID)
+	if err != nil {
+		return err
+	}
+	usage, err := a.Store.ArtifactUsage(ctx, facts.Project)
 	if err != nil {
 		return err
 	}
@@ -118,7 +136,7 @@ func (h *artifactsHook) AfterJob(ctx context.Context, a AttemptInfo, workspace s
 		facts.Isolation = "process"
 	}
 	facts.Producer = "nself-ci/" + a.JobName
-	staged, err := records.Collector{Blobs: blobs, Scanner: h.scanner(), Policy: pol}.Collect(ctx, facts.Project, base, decls)
+	staged, err := records.Collector{Blobs: blobs, Scanner: h.scanner(), Policy: pol, Usage: usage}.CollectRoot(ctx, facts.Project, root, decls)
 	if err != nil {
 		return err
 	}
@@ -142,18 +160,20 @@ func (h *artifactsHook) AttemptFinalize(ctx context.Context, a AttemptInfo, epoc
 	return err
 }
 
-// workdirOf resolves the job workdir inside the workspace the way the
-// executor does: relative, inside, and not through a symlink.
-func workdirOf(workspace, workdir string) (string, error) {
+// workdirRoot returns the job workdir inside the pinned workspace the way the
+// executor resolves it: relative, inside, and not a symlink. The returned
+// close func is a no-op when the workdir is the workspace itself.
+func workdirRoot(workspace *os.Root, workdir string) (*os.Root, func(), error) {
 	if workdir == "" {
-		return workspace, nil
+		return workspace, func() {}, nil
 	}
-	base := filepath.Join(workspace, workdir)
-	if rel, err := filepath.Rel(workspace, base); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", records.Failf(records.ReasonUnreadable, "job workdir %q escapes the workspace", workdir)
+	info, err := workspace.Lstat(workdir)
+	if err != nil || !info.IsDir() {
+		return nil, nil, records.Failf(records.ReasonUnreadable, "job workdir %q is missing, not a directory or a symlink", workdir)
 	}
-	if resolved, err := filepath.EvalSymlinks(base); err != nil || resolved != base {
-		return "", records.Failf(records.ReasonUnreadable, "job workdir %q is missing or a symlink", workdir)
+	sub, err := workspace.OpenRoot(workdir)
+	if err != nil {
+		return nil, nil, records.Failf(records.ReasonUnreadable, "job workdir %q escapes the workspace: %v", workdir, err)
 	}
-	return base, nil
+	return sub, func() { _ = sub.Close() }, nil
 }

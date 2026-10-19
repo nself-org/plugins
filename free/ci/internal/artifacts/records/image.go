@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -28,7 +29,10 @@ const (
 	imageMaxSmall   = 1 << 20
 	imageMaxHeld    = 32 << 20
 	imageMaxDepth   = 3
+	imageMaxDescs   = 1024 // manifests recorded per layout, and descriptors read per index
 )
+
+var hexDigest = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type ociDescriptor struct {
 	MediaType string `json:"mediaType"`
@@ -51,6 +55,7 @@ func ReadImageLayout(r io.Reader) (*ImageInfo, error) {
 	tr := tar.NewReader(r)
 	var index []byte
 	small := map[string][]byte{}
+	present := map[string]bool{} // every blob name in the tar, large ones included
 	held := 0
 	for n := 0; ; n++ {
 		h, err := tr.Next()
@@ -64,11 +69,14 @@ func ReadImageLayout(r io.Reader) (*ImageInfo, error) {
 			return nil, failf(ReasonImage, "more than %d entries", imageMaxEntries)
 		}
 		name := strings.TrimPrefix(strings.TrimPrefix(h.Name, "./"), "/")
+		blobName, isBlob := strings.CutPrefix(name, "blobs/sha256/")
+		if isBlob && h.Typeflag == tar.TypeReg {
+			present[blobName] = true
+		}
 		if h.Typeflag != tar.TypeReg || h.Size > imageMaxSmall {
 			continue
 		}
 		isIndex := name == "index.json"
-		blobName, isBlob := strings.CutPrefix(name, "blobs/sha256/")
 		if !isIndex && !isBlob {
 			continue
 		}
@@ -90,7 +98,8 @@ func ReadImageLayout(r io.Reader) (*ImageInfo, error) {
 	}
 	sum := sha256.Sum256(index)
 	info := &ImageInfo{IndexDigest: "sha256:" + hex.EncodeToString(sum[:])}
-	if err := collectManifests(index, small, 1, info); err != nil {
+	walker := &manifestWalk{small: small, present: present, seen: map[string]bool{}, out: info}
+	if err := walker.collect(index, 1); err != nil {
 		return nil, err
 	}
 	if len(info.Manifests) == 0 {
@@ -103,31 +112,39 @@ func ReadImageLayout(r io.Reader) (*ImageInfo, error) {
 	return info, nil
 }
 
-func collectManifests(index []byte, small map[string][]byte, depth int, out *ImageInfo) error {
+type manifestWalk struct {
+	small   map[string][]byte
+	present map[string]bool
+	seen    map[string]bool // nested indexes already expanded: each is read once
+	out     *ImageInfo
+}
+
+func (w *manifestWalk) collect(index []byte, depth int) error {
 	var ix ociIndex
 	if err := json.NewDecoder(bytes.NewReader(index)).Decode(&ix); err != nil {
 		return failf(ReasonImage, "index is not JSON: %v", err)
 	}
+	if len(ix.Manifests) > imageMaxDescs {
+		return failf(ReasonImage, "an index lists more than %d descriptors", imageMaxDescs)
+	}
 	for _, d := range ix.Manifests {
 		want, ok := strings.CutPrefix(d.Digest, "sha256:")
-		if !ok || len(want) != 64 {
+		if !ok || !hexDigest.MatchString(want) {
 			return failf(ReasonImage, "descriptor digest %q is not sha256:<hex>", d.Digest)
 		}
 		if isIndexType(d.MediaType) {
-			if depth >= imageMaxDepth {
-				return failf(ReasonImage, "index nesting deeper than %d", imageMaxDepth)
-			}
-			b, ok := small[want]
-			if !ok {
-				return failf(ReasonImage, "nested index %s is not in the layout", d.Digest)
-			}
-			if sum := sha256.Sum256(b); hex.EncodeToString(sum[:]) != want {
-				return failf(ReasonImage, "nested index %s does not match its digest", d.Digest)
-			}
-			if err := collectManifests(b, small, depth+1, out); err != nil {
+			if err := w.nested(want, d.Digest, depth); err != nil {
 				return err
 			}
 			continue
+		}
+		if !w.present[want] {
+			return failf(ReasonImage, "manifest %s is not in the layout", d.Digest)
+		}
+		if b, small := w.small[want]; small {
+			if sum := sha256.Sum256(b); hex.EncodeToString(sum[:]) != want {
+				return failf(ReasonImage, "manifest %s does not match its digest", d.Digest)
+			}
 		}
 		platform := "unknown"
 		if p := d.Platform; p != nil && p.OS != "" && p.Architecture != "" {
@@ -136,7 +153,28 @@ func collectManifests(index []byte, small map[string][]byte, depth int, out *Ima
 				platform += "/" + p.Variant
 			}
 		}
-		out.Manifests = append(out.Manifests, ImageManifest{Platform: platform, Digest: d.Digest})
+		if len(w.out.Manifests) >= imageMaxDescs {
+			return failf(ReasonImage, "the layout lists more than %d manifests", imageMaxDescs)
+		}
+		w.out.Manifests = append(w.out.Manifests, ImageManifest{Platform: platform, Digest: d.Digest})
 	}
 	return nil
+}
+
+func (w *manifestWalk) nested(want, full string, depth int) error {
+	if depth >= imageMaxDepth {
+		return failf(ReasonImage, "index nesting deeper than %d", imageMaxDepth)
+	}
+	if w.seen[want] {
+		return nil
+	}
+	b, ok := w.small[want]
+	if !ok {
+		return failf(ReasonImage, "nested index %s is not in the layout", full)
+	}
+	if sum := sha256.Sum256(b); hex.EncodeToString(sum[:]) != want {
+		return failf(ReasonImage, "nested index %s does not match its digest", full)
+	}
+	w.seen[want] = true
+	return w.collect(b, depth+1)
 }

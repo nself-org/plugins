@@ -33,6 +33,7 @@ type Reader struct {
 // List returns the committed records the viewer may see, newest first.
 func (r Reader) List(ctx context.Context, v authz.Viewer, f Filter) ([]Record, error) {
 	f.Project = v.Project
+	f.Limit = 0
 	all, err := r.Ledger.ArtifactList(ctx, f)
 	if err != nil {
 		return nil, err
@@ -66,14 +67,15 @@ func (r Reader) visible(ctx context.Context, v authz.Viewer, id string) (Record,
 	return rec, nil
 }
 
-// checkBlob marks a record missing when its blob is no longer in the store.
+// checkBlob reports whether the record's blob is in the store and keeps the
+// stored flag in step: gone sets it, a restored blob clears it.
 func (r Reader) checkBlob(ctx context.Context, rec Record) Record {
-	if _, err := r.Blobs.Stat(cas.ArtifactRealm(rec.Project), rec.SHA256); err != nil {
-		if !rec.Missing {
-			_ = r.Ledger.ArtifactMarkMissing(ctx, rec.ID)
-		}
-		rec.Missing = true
+	_, err := r.Blobs.Stat(cas.ArtifactRealm(rec.Project), rec.SHA256)
+	gone := err != nil
+	if gone != rec.Missing && (!gone || errors.Is(err, os.ErrNotExist)) {
+		_ = r.Ledger.ArtifactSetMissing(ctx, rec.ID, gone)
 	}
+	rec.Missing = gone
 	return rec
 }
 
@@ -108,11 +110,18 @@ func (r Reader) Get(ctx context.Context, v authz.Viewer, id, dest, cwd string) (
 }
 
 func (r Reader) write(dir, rel string, rec Record) (string, Record, error) {
+	before, err := os.Lstat(dir)
+	if err != nil || !before.IsDir() {
+		return "", rec, failf(ReasonUnreadable, "destination %q is not a plain directory", dir)
+	}
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return "", rec, failf(ReasonUnreadable, "destination: %v", err)
 	}
 	defer func() { _ = root.Close() }()
+	if opened, serr := root.Stat("."); serr != nil || !os.SameFile(before, opened) {
+		return "", rec, failf(ReasonUnreadable, "destination %q changed while it was opened", dir)
+	}
 	if d := filepath.Dir(rel); d != "." {
 		if err := root.MkdirAll(d, 0o700); err != nil {
 			return "", rec, failf(ReasonUnreadable, "destination: %v", err)

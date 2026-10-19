@@ -61,7 +61,11 @@ func (s *Store) artGate(ctx context.Context, tx *sql.Tx, out *error, op, attempt
 	return true, nil
 }
 
-func artFacts(ctx context.Context, tx *sql.Tx, attempt string) (f records.Facts, err error) {
+type rowQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func artFacts(ctx context.Context, tx rowQuerier, attempt string) (f records.Facts, err error) {
 	var kind string
 	err = tx.QueryRowContext(ctx, `SELECT p.project,p.id,j.name,p.revision,coalesce(r.id,coalesce(a.runner_id,'')),coalesce(r.platform,''),coalesce(r.isolation,''),j.kind
 FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id LEFT JOIN runner_ref r ON r.id=a.runner_id WHERE a.id=?`, attempt).
@@ -75,9 +79,7 @@ FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id
 
 // ArtifactFacts returns the stored facts of an attempt.
 func (s *Store) ArtifactFacts(ctx context.Context, attempt string) (records.Facts, error) {
-	var f records.Facts
-	err := s.write(ctx, func(tx *sql.Tx) (e error) { f, e = artFacts(ctx, tx, attempt); return })
-	return f, err
+	return artFacts(ctx, s.readers, attempt)
 }
 
 // ArtifactDeclare stores the declarations of an attempt (state running).

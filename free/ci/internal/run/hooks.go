@@ -32,6 +32,10 @@ type AttemptInfo struct {
 	Home string
 	// Store is the run's store; hooks read and write their own tables through it.
 	Store *store.Store
+	// Epoch is the attempt's lease epoch when it started running (0 when the
+	// caller did not set it). Hooks that write fenced rows use it, so a stale
+	// callback cannot adopt a later incarnation's epoch.
+	Epoch int64
 }
 
 // Outcome is how an attempt ended.

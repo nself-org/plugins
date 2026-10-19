@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
+	"github.com/nself-org/plugins/free/ci/internal/authz"
 )
 
 func artifactsShow(args []string) int {
@@ -109,6 +110,10 @@ func artifactsPrune(args []string) int {
 		return artifactsExit(err, "ci artifacts prune", false)
 	}
 	defer env.close()
+	if env.viewer.Role != authz.RoleRelease && env.viewer.Role != authz.RoleAdmin {
+		return artifactsExit(records.Failf(records.ReasonForbidden, "pruning needs the release or admin role"), "ci artifacts prune", env.json)
+	}
+	spec.Project = env.viewer.Project // a prune never reaches another project's records
 	removed, err := records.Prune(context.Background(), env.st, env.blobs, spec)
 	var bytes int64
 	for _, r := range removed {
