@@ -59,7 +59,7 @@ read -r -d '' CUT_PERL <<'PERL' || true
 my ($u, $g, $gs) = (shift, shift, shift);
 my %want = map { $_ => 1 } ($g, split " ", $gs);
 $( = $g;
-$) = "$g " . join(" ", $g, split(" ", $gs));
+$) = "$g " . join(" ", split(" ", $gs));
 $< = $u;
 $> = $u;
 my ($egid, @sup) = split " ", $);
@@ -69,12 +69,12 @@ die "drop failed: uid $< $> egid $egid groups $) (wanted uid $u gid $g groups $g
 exec { $ARGV[0] } @ARGV or die "exec $ARGV[0]: $!\n";
 PERL
 
-# cut_exec CMD...: run CMD as the calling user with group CUT_GID (and up to 15 of the user's other groups: macOS allows 16
-# in all). With no cut active it just runs CMD. Root is only used to set the group; the command never runs as root.
+# cut_exec CMD...: run CMD as the calling user with group CUT_GID (and up to 12 of the user's other groups: macOS allows 16
+# in all, and counts the first entry of the list as the egid). With no cut active it just runs CMD. Root is only used to set the group; the command never runs as root.
 cut_exec() {
 	if [ "$CUT_ACTIVE" -ne 1 ]; then "$@"; return; fi
 	local groups
-	groups=$(id -G | tr ' ' '\n' | head -n 15 | tr '\n' ' ')
+	groups=$(id -G | tr ' ' '\n' | head -n 12 | tr '\n' ' ')
 	if [ "$CUT_OS" = Linux ]; then
 		sudo -n setpriv --reuid "$(id -u)" --regid "$CUT_GID" --groups "$(printf '%s' "$groups" | tr -s ' ' ',' | sed 's/,$//')" --no-new-privs -- "$@"
 	else
@@ -107,7 +107,7 @@ table inet $CUT_TABLE {
 		meta skgid $CUT_GID tcp dport 53 counter drop
 		meta skgid $CUT_GID oifname != "lo" counter drop
 	}
-	chain fwd {
+	chain bridge_out {
 		type filter hook forward priority -10; policy accept;
 		iifname "docker0" oifname != "docker0" counter drop
 		iifname "br-*" oifname != "br-*" counter drop
@@ -116,9 +116,9 @@ table inet $CUT_TABLE {
 NFT
 		# The docker daemon makes its own connections (outside the drill's group); count and drop those too where nft can.
 		if sudo -n nft -f - >/dev/null 2>&1 <<NFT; then CUT_DOCKERD=1; fi
-add chain inet $CUT_TABLE dockerd { type filter hook output priority 0; policy accept; }
-add rule inet $CUT_TABLE dockerd socket cgroupv2 level 2 "system.slice/docker.service" oifname != "lo" counter drop
-add rule inet $CUT_TABLE dockerd socket cgroupv2 level 2 "system.slice/containerd.service" oifname != "lo" counter drop
+add chain inet $CUT_TABLE docker_daemon { type filter hook output priority 0; policy accept; }
+add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/docker.service" oifname != "lo" counter drop
+add rule inet $CUT_TABLE docker_daemon socket cgroupv2 level 2 "system.slice/containerd.service" oifname != "lo" counter drop
 NFT
 		# shellcheck disable=SC2034 # read by the drills
 		CUT_NOTE="counts non-loopback output and DNS (port 53) of the drill's group, forwarding out of docker bridges, and docker.service/containerd.service output: $([ $CUT_DOCKERD -eq 1 ] && echo measured || echo 'not measured here (nft lacks socket cgroupv2)')"
