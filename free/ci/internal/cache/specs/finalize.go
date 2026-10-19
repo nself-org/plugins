@@ -11,6 +11,7 @@ package specs
 // before the commit (Engine.Save).
 
 import (
+	"bytes"
 	"context"
 	"errors"
 
@@ -52,12 +53,32 @@ func (s *Session) Finalize(ctx context.Context, epoch int64) {
 		}
 		_, err := s.in.Engine.Save(ctx, SaveRequest{Base: s.base, Attempt: s.in.Attempt, Epoch: epoch, Namespace: s.own, Key: it.Key, Spec: it.Spec, Dirs: it.Dirs})
 		switch {
-		case err == nil, errors.Is(err, ErrEmpty):
+		case err == nil:
+			s.saved = append(s.saved, it.Key)
+		case errors.Is(err, ErrEmpty):
 		default:
 			s.use(ctx, it.Spec.ID, it.Key, resultOf(err), 0, 0)
 			s.warn("cache save of spec " + it.Spec.ID + " refused: " + reasonOf(err))
 		}
 	}
+}
+
+// Saved reports whether this session committed an entry.
+func (s *Session) Saved() bool { return len(s.saved) > 0 }
+
+// Retract drops the entries this session committed. The hook calls it when the
+// attempt did not settle `passed` (a cancel won the finalizing -> passed move
+// after the commit): a cancelled attempt must leave no cache behind.
+func (s *Session) Retract(ctx context.Context) {
+	for _, key := range s.saved {
+		list, _ := s.in.Engine.Backend.CacheEntries(ctx, key)
+		for _, m := range list {
+			if bytes.Equal(m.Namespace, s.own.Canonical()) && m.Writer.AttemptID == s.in.Attempt {
+				_ = s.in.Engine.Backend.CacheDrop(ctx, m, "attempt_not_passed")
+			}
+		}
+	}
+	s.saved = nil
 }
 
 func resultOf(err error) string {

@@ -79,10 +79,13 @@ type Item struct {
 
 // Session is one attempt's cache state.
 type Session struct {
-	in    BeginInput
-	base  *os.Root
-	own   authz.Namespace
-	items []*Item
+	in     BeginInput
+	parent *os.Root // the cache-work directory, pinned so Cleanup never walks a swapped path
+	name   string   // the attempt's directory name below parent
+	base   *os.Root
+	own    authz.Namespace
+	items  []*Item
+	saved  []string // keys this session committed (Retract)
 }
 
 // host is the host path of a directory relative to the cache root.
@@ -104,11 +107,7 @@ func Begin(ctx context.Context, in BeginInput) (*Session, error) {
 		return s, nil
 	}
 	s.own = own
-	if err := os.MkdirAll(in.Root, 0o700); err != nil {
-		return s, err
-	}
-	var err error
-	if s.base, err = os.OpenRoot(in.Root); err != nil {
+	if err := s.pin(); err != nil {
 		return s, err
 	}
 	var keys []string
@@ -131,6 +130,23 @@ func Begin(ctx context.Context, in BeginInput) (*Session, error) {
 		s.restore(ctx, it)
 	}
 	return s, nil
+}
+
+// pin creates the attempt's cache root and opens handles on it and on its parent.
+func (s *Session) pin() (err error) {
+	parent := filepath.Dir(s.in.Root)
+	if err = os.MkdirAll(parent, 0o700); err != nil {
+		return err
+	}
+	if s.parent, err = os.OpenRoot(parent); err != nil {
+		return err
+	}
+	s.name = filepath.Base(s.in.Root)
+	if err = s.parent.Mkdir(s.name, 0o700); err != nil && !os.IsExist(err) {
+		return err
+	}
+	s.base, err = s.parent.OpenRoot(s.name)
+	return err
 }
 
 // plan resolves one spec's key material and directories, or records why not.
@@ -273,7 +289,11 @@ func (s *Session) Cleanup() {
 		_ = s.base.Close()
 		s.base = nil
 	}
-	_ = os.RemoveAll(s.in.Root) // lstat based: a root swapped for a symlink loses the link, not its target
+	if s.parent != nil { // removal through the pinned parent never leaves it
+		_ = s.parent.RemoveAll(s.name)
+		_ = s.parent.Close()
+		s.parent = nil
+	}
 }
 
 func (s *Session) warn(msg string) {

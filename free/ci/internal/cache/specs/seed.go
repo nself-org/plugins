@@ -58,6 +58,9 @@ func (s *Session) seed(it *Item) {
 			if out, err := s.base.OpenFile(path.Join(it.Spec.ID, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600); err == nil {
 				_, _ = io.Copy(out, f)
 				_ = out.Close()
+				if s.in.Container { // the job UID differs from the agent's
+					_ = s.base.Chmod(path.Join(it.Spec.ID, name), 0o644)
+				}
 			}
 			_ = f.Close()
 		}

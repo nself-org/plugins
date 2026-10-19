@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -270,7 +271,11 @@ func TestUnpackJudgesTheRatioWhileWriting(t *testing.T) {
 		}
 		return string(b)
 	}
-	text := strings.Repeat("package m // some source text that compresses a few times over\n", 60000) // ~3.8 MiB
+	var sb strings.Builder
+	for i := 0; sb.Len() < 3<<20; i++ { // source-like text: unique lines, compresses a few times over
+		fmt.Fprintf(&sb, "func f%d(x int) int { return x*%d + %d } // line %d\n", i, i%97, i%13, i)
+	}
+	text := sb.String()
 	ok := tarGz(t, tent{name: "a.txt", body: "first"}, tent{name: "big.a", body: random(5 << 20)}, tent{name: "src.go", body: text}, tent{name: "z.txt", body: "last"})
 	dir := t.TempDir() + "/d"
 	if st, err := unpackTo(t, bytes.NewReader(ok), dir, cacheLimits(), UnpackOptions{}); err != nil || st.Files != 4 || st.Bytes < 8<<20 {
@@ -280,14 +285,61 @@ func TestUnpackJudgesTheRatioWhileWriting(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		many = append(many, tent{name: "z" + string(rune('a'+i%26)) + string(rune('a'+i/26)), size: 1 << 20}) // each at the ratio floor, 30 MiB in all
 	}
+	// a file that starts with a long run of zeros is judged on its whole, not on its prefix
+	mixed := tarGz(t, tent{name: "zeros-then-data.bin", body: strings.Repeat("\x00", 16<<20) + random(16<<20)})
+	if st, err := unpackTo(t, bytes.NewReader(mixed), t.TempDir()+"/d", cacheLimits(), UnpackOptions{}); err != nil || st.Bytes != 32<<20 {
+		t.Fatalf("a legitimate file with a compressible prefix: %+v %v", st, err)
+	}
 	for name, ents := range map[string][]tent{
 		"bomb after normal files": {{name: "a", body: "x"}, {name: "n.bin", body: random(1 << 20)}, {name: "bomb", size: 16 << 20}},
+		"six MiB of zeros":        {{name: "z.bin", size: 6 << 20}},
 		"many floor-sized zeros":  many,
 	} {
 		_, err := unpackTo(t, bytes.NewReader(tarGz(t, ents...)), t.TempDir()+"/d", cacheLimits(), UnpackOptions{})
 		var pe *authz.PathError
 		if !errors.As(err, &pe) || pe.Reason != authz.SizeRatio {
 			t.Errorf("%s: err %v", name, err)
+		}
+	}
+}
+
+func TestBombGuardStopsAStreamingBombEarly(t *testing.T) {
+	cr := &countReader{n: 1000}
+	g := &bombGuard{cr: cr, lim: effective(cacheLimits())}
+	e := g.entry(zeroReader{}, "huge")
+	buf := make([]byte, 1<<20)
+	var got int64
+	for {
+		n, err := e.Read(buf)
+		got += int64(n)
+		if err != nil {
+			var pe *authz.PathError
+			if !errors.As(err, &pe) || pe.Reason != authz.SizeRatio {
+				t.Fatalf("err %v", err)
+			}
+			break
+		}
+		if got > 4*streamFloor {
+			t.Fatal("the streaming guard never stopped the bomb")
+		}
+	}
+	if got > streamFloor+(2<<20) {
+		t.Fatalf("wrote %d bytes before stopping, want about streamFloor", got)
+	}
+}
+
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) { clear(p); return len(p), nil }
+
+func TestUnpackOtherReadOpensImplicitParents(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "m")
+	if _, err := unpackTo(t, bytes.NewReader(tarGz(t, tent{name: "d/e/f.txt", body: "x"})), dir, cacheLimits(), UnpackOptions{OtherRead: true}); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{dir, dir + "/d", dir + "/d/e"} {
+		if info, err := os.Stat(p); err != nil || info.Mode().Perm() != 0o755 {
+			t.Errorf("%s: %v %v", p, info, err)
 		}
 	}
 }

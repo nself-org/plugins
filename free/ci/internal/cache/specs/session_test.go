@@ -341,3 +341,45 @@ func countBlobs(t *testing.T, home string) (n int) {
 	})
 	return n
 }
+
+func TestSessionRetractDropsWhatItCommitted(t *testing.T) {
+	e := newEnv(t)
+	s := saved(t, e, "k1", ownerFacts)
+	if !s.Saved() || e.entryCount() != 1 {
+		t.Fatalf("saved %v entries %d", s.Saved(), e.entryCount())
+	}
+	s.Retract(e.ctx) // a cancel won the finalizing -> passed move
+	if e.entryCount() != 0 || s.Saved() {
+		t.Fatalf("entries after retract: %d", e.entryCount())
+	}
+	// another attempt's entry under the same key is never retracted
+	s2 := saved(t, e, "k2", ownerFacts)
+	e.running("k3", ownerFacts)
+	s3 := e.begin(e.input("k3", ownerFacts))
+	s3.Retract(e.ctx)
+	if e.entryCount() != 1 || !s2.Saved() {
+		t.Fatalf("entries %d", e.entryCount())
+	}
+}
+
+func TestSessionCleanupNeverLeavesItsPinnedParent(t *testing.T) {
+	e := newEnv(t)
+	e.running("c1", ownerFacts)
+	s := e.begin(e.input("c1", ownerFacts))
+	victim := filepath.Join(t.TempDir(), "victim")
+	putFile(t, victim+"/c1/precious.txt", "keep me")
+	work := filepath.Join(e.home, "cache-work")
+	if err := os.Rename(work, work+".moved"); err != nil { // the job swaps cache-work for a symlink to a victim directory
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, work); err != nil {
+		t.Fatal(err)
+	}
+	s.Cleanup()
+	if getFile(t, victim+"/c1/precious.txt") != "keep me" {
+		t.Fatal("Cleanup deleted through a swapped path")
+	}
+	if _, err := os.Stat(work + ".moved/c1"); !os.IsNotExist(err) {
+		t.Fatalf("the attempt's real directory was not removed: %v", err)
+	}
+}

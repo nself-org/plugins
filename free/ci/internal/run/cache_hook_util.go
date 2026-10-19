@@ -22,12 +22,13 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/detect"
 )
 
-// cacheLevel is where the job really runs: "process", or "container" for a job
-// that names a container, isolation container, or runs under --container. Any
-// other isolation (vm, sandbox, hosted) cannot see the host's cache dirs.
+// cacheLevel is where the job really runs, as the executor decides it: "container"
+// for the run's --container option or isolation container (a Container block
+// alone changes nothing), "process" for the default, and none for any other
+// isolation (vm, sandbox, hosted), which cannot see the host's cache dirs.
 func cacheLevel(a AttemptInfo) (string, bool) {
 	switch {
-	case a.Job.Isolation == "container" || a.Job.Container != nil || a.Container:
+	case a.Container || a.Job.Isolation == "container":
 		return "container", true
 	case a.Job.Isolation == "" || a.Job.Isolation == "process":
 		return "process", true
@@ -91,12 +92,15 @@ func flatEnv(m map[string]string) []string {
 }
 
 // sweepStale removes cache-work directories abandoned by a crashed run.
-func sweepStale(dir string, now time.Time) {
+func sweepStale(dir string, now time.Time, alive func(id string) bool) {
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return
 	}
 	for _, e := range ents {
+		if alive(e.Name()) {
+			continue
+		}
 		if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) > staleAfter {
 			_ = specs.RemoveTree(filepath.Join(dir, e.Name()))
 		}

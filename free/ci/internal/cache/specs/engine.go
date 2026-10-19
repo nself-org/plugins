@@ -35,6 +35,7 @@ var ErrEmpty = errors.New("specs: the cache directories are empty")
 
 // Backend is the persistence the engine needs beyond entries.Store.
 type Backend interface {
+	CacheEntries(ctx context.Context, key string) ([]entries.Manifest, error)
 	CacheDrop(ctx context.Context, m entries.Manifest, reason string) error
 	AppendAudit(ctx context.Context, actor, action, target, detail string) error
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
 	"github.com/nself-org/plugins/free/ci/internal/cache/specs"
 	"github.com/nself-org/plugins/free/ci/internal/detect"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -154,7 +155,7 @@ func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRo
 	if container {
 		in.Platform, in.Isolation, in.Image = "linux/"+runtime.GOARCH, "container", h.imageDigest(ctx, a)
 	}
-	sweepStale(filepath.Join(home, "cache-work"), time.Now())
+	sweepStale(filepath.Join(home, "cache-work"), time.Now(), func(id string) bool { _, mine := h.sessions.Load(id); return mine || live(ctx, a.Store, id) })
 	s, err := specs.Begin(ctx, in)
 	if err != nil {
 		h.warn("cache plan refused: " + firstLineOf(err.Error()))
@@ -194,27 +195,50 @@ func (h *cacheHook) Wants(a AttemptInfo) bool {
 	return ok && e.(cacheEntry).s.Wants()
 }
 
-// After removes the attempt's cache directories; it saves nothing.
-func (h *cacheHook) After(_ context.Context, a AttemptInfo, _ Outcome) error {
+// After removes the attempt's cache directories; it saves nothing. An attempt
+// that committed an entry and then did not settle `passed` (a cancel won the
+// finalizing -> passed move) has its entry dropped again.
+func (h *cacheHook) After(ctx context.Context, a AttemptInfo, _ Outcome) error {
 	if e, ok := h.sessions.LoadAndDelete(a.AttemptID); ok {
-		e.(cacheEntry).s.Cleanup()
+		s := e.(cacheEntry).s
+		if s.Saved() && a.Store != nil {
+			if state, _, err := a.Store.AttemptStateEpoch(ctx, a.AttemptID); err != nil || state != "passed" {
+				s.Retract(ctx)
+			}
+		}
+		s.Cleanup()
 	}
 	return nil
 }
 
-// evict cleans up sessions whose attempt never reached After: one whose attempt
-// ended (prepare failed after Before), or any older than staleAfter.
+func liveState(state model.JobState) bool {
+	return state == "queued" || state == "leased" || state == "running" || state == "finalizing"
+}
+
+// live reports whether an attempt may still use its cache directories. An
+// attempt the store cannot tell about is not live.
+func live(ctx context.Context, st *store.Store, id string) bool {
+	if st == nil {
+		return false
+	}
+	state, _, err := st.AttemptStateEpoch(ctx, id)
+	return err == nil && liveState(state)
+}
+
+// evict cleans up sessions whose attempt never reached After (prepare failed
+// after Before). It acts on an attempt the store says has ended; when the store
+// cannot say (or there is none) only on a session older than staleAfter. A
+// live attempt is never touched.
 func (h *cacheHook) evict(ctx context.Context, st *store.Store, now time.Time) {
 	h.sessions.Range(func(k, v any) bool {
 		e := v.(cacheEntry)
 		dead := now.Sub(e.at) > staleAfter
-		if !dead && st != nil {
+		if st != nil {
 			if state, _, err := st.AttemptStateEpoch(ctx, e.id); err == nil {
-				dead = state != "queued" && state != "leased" && state != "running" && state != "finalizing"
+				dead = !liveState(state)
 			}
 		}
-		if dead {
-			h.sessions.Delete(k)
+		if dead && h.sessions.CompareAndDelete(k, v) { // After may have claimed it
 			e.s.Cleanup()
 		}
 		return true

@@ -240,7 +240,9 @@ func TestCacheLevelFollowsTheEffectiveIsolation(t *testing.T) {
 		{"default", AttemptInfo{}, "process", true},
 		{"process", AttemptInfo{Job: model.Job{Isolation: "process"}}, "process", true},
 		{"container job", AttemptInfo{Job: model.Job{Isolation: "container"}}, "container", true},
-		{"container block", AttemptInfo{Job: model.Job{Container: &model.ContainerConfig{Image: "x"}}}, "container", true},
+		{"container block alone is still a process job", AttemptInfo{Job: model.Job{Container: &model.ContainerConfig{Image: "x"}}}, "process", true},
+		{"process isolation with a container block", AttemptInfo{Job: model.Job{Isolation: "process", Container: &model.ContainerConfig{Image: "x"}}}, "process", true},
+		{"--container beats a vm job", AttemptInfo{Container: true, Job: model.Job{Isolation: "vm"}}, "container", true},
 		{"--container run", AttemptInfo{Container: true}, "container", true},
 		{"vm", AttemptInfo{Job: model.Job{Isolation: "vm"}}, "", false},
 		{"hosted", AttemptInfo{Job: model.Job{Isolation: "hosted-disposable"}}, "", false},
@@ -292,5 +294,32 @@ func TestFactDirsIncludeEveryDetectedProject(t *testing.T) {
 	got := strings.Join(factDirs("/repo", "/repo/sub", facts), ",")
 	if got != "/repo,/repo/sub,/repo/sub/packages/web,/repo/sub/svc/api" {
 		t.Fatalf("dirs %s", got)
+	}
+}
+
+func TestCacheHookNeverEvictsALiveAttempt(t *testing.T) {
+	r := cacheRig(t, map[string]model.Job{"build": sh("true")})
+	st := r.store(t)
+	ctx := context.Background()
+	p := store.PipelineRow{ID: "pl1", Revision: "rev", Project: r.C.Opts.Root, Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
+	for i, e := range []error{st.CreatePipeline(ctx, p), st.CreateJob(ctx, store.JobRow{ID: "jl1", PipelineID: "pl1", Name: "b", Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}),
+		st.CreateAttempt(ctx, store.AttemptRow{ID: "live1", JobID: "jl1", N: 1}, ""),
+		st.Transition(ctx, "live1", "queued", "leased", store.TransitionDetail{Epoch: 0}), st.Transition(ctx, "live1", "leased", "running", store.TransitionDetail{Epoch: 1})} {
+		if e != nil {
+			t.Fatalf("step %d: %v", i, e)
+		}
+	}
+	h := &cacheHook{}
+	h.sessions.Store("live1", cacheEntry{s: &specs.Session{}, at: time.Now().Add(-3 * staleAfter), id: "live1"})
+	h.evict(ctx, st, time.Now())
+	if _, ok := h.sessions.Load("live1"); !ok {
+		t.Fatal("a running attempt's session was evicted for its age")
+	}
+	if err := st.Transition(ctx, "live1", "running", "failed", store.TransitionDetail{Epoch: 2, FailureClass: "infra"}); err != nil {
+		t.Fatal(err)
+	}
+	h.evict(ctx, st, time.Now())
+	if _, ok := h.sessions.Load("live1"); ok {
+		t.Fatal("the session of an ended attempt was kept")
 	}
 }

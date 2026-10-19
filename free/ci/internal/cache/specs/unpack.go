@@ -13,9 +13,10 @@ package specs
 // decompressed stream is bounded, whatever the headers claim. Directory modes
 // are applied last (owner access always kept) so a read-only directory can
 // still be filled; file times and modes are restored, set-id bits never.
-// The compression ratio is judged while the bytes are written (bombGuard):
-// the sanitiser only sees a header, before its data was read, so it is given
-// the entry's own size as its packed size and never trips on the ratio.
+// The compression ratio is judged by bombGuard (bomb.go) once an entry's bytes
+// were written, not at its header: the sanitiser only sees a header, before the
+// data was read, so it is given the entry's own size as its packed size and
+// never trips on the ratio.
 
 import (
 	"archive/tar"
@@ -23,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"sort"
@@ -46,41 +48,6 @@ type countReader struct {
 func (c *countReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	c.n += int64(n)
-	return n, err
-}
-
-// ratioSlack is the compressed read-ahead the guard forgives (flate buffers 4 KiB).
-const ratioSlack = 64 << 10
-
-// bombGuard stops an archive whose output outgrows MaxRatio times the
-// compressed bytes consumed so far, per entry and over the whole archive, once
-// the output passes RatioFloor.
-type bombGuard struct {
-	cr    *countReader
-	lim   authz.Limits
-	total int64
-}
-
-type guardedEntry struct {
-	g     *bombGuard
-	r     io.Reader
-	name  string
-	start int64
-	n     int64
-}
-
-func (g *bombGuard) entry(r io.Reader, name string) *guardedEntry {
-	return &guardedEntry{g: g, r: r, name: name, start: g.cr.n}
-}
-
-func (e *guardedEntry) Read(p []byte) (int, error) {
-	n, err := e.r.Read(p)
-	e.n += int64(n)
-	e.g.total += int64(n)
-	g := e.g
-	if (e.n > g.lim.RatioFloor && e.n > g.lim.MaxRatio*(g.cr.n-e.start+ratioSlack)) || (g.total > g.lim.RatioFloor && g.total > g.lim.MaxRatio*(g.cr.n+ratioSlack)) {
-		return n, &authz.PathError{Reason: authz.SizeRatio, Name: e.name}
-	}
 	return n, err
 }
 
@@ -172,16 +139,23 @@ func Unpack(r io.Reader, base *os.Root, rel string, lim authz.Limits, opt Unpack
 			}
 			st.Links++
 		default:
-			if err := writeFile(root, name, guard.entry(tr, h.Name), h, opt); err != nil {
+			ge := guard.entry(tr, h.Name)
+			if err := writeFile(root, name, ge, h, opt); err != nil {
+				return st, err
+			}
+			if err := ge.done(); err != nil {
 				return st, err
 			}
 			st.Files++
 			st.Bytes += h.Size
 		}
 	}
+	if err := guard.finish(); err != nil {
+		return st, err
+	}
 	sort.Slice(dirs, func(i, j int) bool { return len(dirs[i].name) > len(dirs[j].name) })
 	if opt.OtherRead {
-		if err := root.Chmod(".", 0o755); err != nil {
+		if err := openDirs(root); err != nil {
 			return st, err
 		}
 	}
@@ -192,6 +166,21 @@ func Unpack(r io.Reader, base *os.Root, rel string, lim authz.Limits, opt Unpack
 		_ = root.Chtimes(d.name, d.at, d.at)
 	}
 	return st, nil
+}
+
+// openDirs makes every directory of the tree (the root and the implicit
+// parents of a crafted archive too) traversable by other users.
+func openDirs(root *os.Root) error {
+	return fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || !d.IsDir() {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		return root.Chmod(p, info.Mode().Perm()|0o755)
+	})
 }
 
 func parents(root *os.Root, name string) error {
