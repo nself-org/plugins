@@ -22,6 +22,11 @@ func TestWorstOf(t *testing.T) {
 	if _, err := WorstOf([]Result{a, other}); err == nil {
 		t.Fatal("runs from two platforms were folded")
 	}
+	short := NewResult("", 20, []Metric{{Name: "x", Unit: "ms", P95: 1, N: 20}})
+	short.GOOS, short.GOARCH = a.GOOS, a.GOARCH
+	if _, err := WorstOf([]Result{a, short}); err == nil {
+		t.Fatal("a run with a missing metric was folded")
+	}
 	if _, err := WorstOf(nil); err == nil {
 		t.Fatal("no runs accepted")
 	}

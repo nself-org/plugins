@@ -59,10 +59,12 @@ jobs:
           path: cli
           persist-credentials: false
 
+      # The cli module needs a newer Go than the plugin pins, and setup-go sets
+      # GOTOOLCHAIN=local, so one toolchain (the newer) builds both.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version-file: free/ci/go.mod
-          cache-dependency-path: free/ci/go.sum
+          go-version-file: cli/go.mod
+          cache: false
 
       - name: Harness tests
         working-directory: free/ci
@@ -83,12 +85,16 @@ jobs:
       - name: Control - the gates fail an injected slowdown and pass a good result
         run: |
           set -u
-          if (cd cli && go run -mod=vendor ./tools/perfbench check -budget "$BUDGET" -in "$SLOW"); then
-            echo "::error::perfbench check passed a result ten times over budget"; exit 1
+          rc=0
+          (cd cli && go run -mod=vendor ./tools/perfbench check -budget "$BUDGET" -in "$SLOW") || rc=$?
+          if [ "$rc" -ne 1 ]; then
+            echo "::error::perfbench check exited $rc on a result ten times over budget; want 1 (a violation)"; exit 1
           fi
           cd free/ci
-          if go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$SLOW"; then
-            echo "::error::the ratio check passed a result ten times over budget"; exit 1
+          rc=0
+          go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$SLOW" || rc=$?
+          if [ "$rc" -ne 1 ]; then
+            echo "::error::the ratio check exited $rc on a result ten times over budget; want 1 (a violation)"; exit 1
           fi
           go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$OK"
 

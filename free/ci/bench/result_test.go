@@ -102,7 +102,7 @@ func TestBudgetFromResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b.Schema != BudgetSchemaV1 || b.P95MS["ci.startup"] != 13 || b.P95MS["ci.plan"] != 1 {
+	if b.Schema != BudgetSchemaV1 || b.P95MS["ci.startup"] != 13 || b.P95MS["ci.plan"] != MinCeilingMS {
 		t.Fatalf("%+v", b)
 	}
 	if _, ok := b.P95MS["ci.bytes"]; ok {
@@ -113,6 +113,10 @@ func TestBudgetFromResult(t *testing.T) {
 	}
 	if got := strings.Join(b.Names(), ","); got != "ci.plan,ci.startup" {
 		t.Fatalf("names %s", got)
+	}
+	big := NewResult("", 1, []Metric{Summarize("ci.big", "ms", []float64{100})})
+	if bb, err := BudgetFromResult(big, "", nil); err != nil || bb.P95MS["ci.big"] != 125 {
+		t.Fatalf("100 ms baseline + 25%%: %+v %v", bb, err)
 	}
 	zero := NewResult("", 1, []Metric{{Name: "ci.x", Unit: "ms"}})
 	if _, err := BudgetFromResult(zero, "", nil); err == nil {
