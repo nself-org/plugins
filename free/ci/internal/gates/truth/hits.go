@@ -5,9 +5,13 @@ package truth
 // Outputs: hits (rule, byte span, matched text, dead-host hash prefix).
 // Constraints: spans are byte offsets into the line, so an exemption regex can
 // cover them; a dead-host hit carries no text (the literal is never held); a
-// retired term ending in `(s)` also matches its plural.
+// retired term ending in `(s)` also matches its plural, and a space in a term matches a run of white space.
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+	"sync"
+)
 
 // hit is one rule broken at one place on a line.
 type hit struct {
@@ -55,7 +59,8 @@ func (c compiled) lineHits(line string) []hit {
 }
 
 // termSpans returns the spans of the whole-term matches of term in low. A term
-// ending in `(s)` matches with and without the plural s.
+// ending in `(s)` matches with and without the plural s, and a space in a term
+// matches any run of white space (two spaces, a tab, a no-break space).
 func termSpans(low, term string) [][2]int {
 	forms := []string{term}
 	if strings.HasSuffix(term, "(s)") {
@@ -64,12 +69,13 @@ func termSpans(low, term string) [][2]int {
 	}
 	var out [][2]int
 	for _, f := range forms {
+		re := termRegexp(f)
 		for from := 0; from < len(low); {
-			i := strings.Index(low[from:], f)
-			if i < 0 {
+			loc := re.FindStringIndex(low[from:])
+			if loc == nil {
 				break
 			}
-			start, end := from+i, from+i+len(f)
+			start, end := from+loc[0], from+loc[1]
 			if wholeTermAt(low, start, end) {
 				out = append(out, [2]int{start, end})
 			}
@@ -77,4 +83,27 @@ func termSpans(low, term string) [][2]int {
 		}
 	}
 	return out
+}
+
+// termGap is what one space of a term matches: a run of white space, no-break
+// and zero-width characters included.
+const termGap = `[\s\p{Zs}\x{200B}\x{200D}\x{00AD}]+`
+
+var termRegexps sync.Map // term form -> *regexp.Regexp
+
+// termRegexp compiles a term form: every character literal, every run of spaces a gap.
+func termRegexp(form string) *regexp.Regexp {
+	if re, ok := termRegexps.Load(form); ok {
+		return re.(*regexp.Regexp)
+	}
+	var b strings.Builder
+	for i, part := range strings.Fields(form) {
+		if i > 0 {
+			b.WriteString(termGap)
+		}
+		b.WriteString(regexp.QuoteMeta(part))
+	}
+	re := regexp.MustCompile(b.String())
+	termRegexps.Store(form, re)
+	return re
 }

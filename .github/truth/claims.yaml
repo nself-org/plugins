@@ -25,7 +25,7 @@ rules:
   # A count of plugins, commands, verbs, bundles or integrations typed by hand.
   - id: claims.counts
     kind: numeric-claim
-    pattern: '(?:^|[^0-9A-Za-z.,/_§#$@–—-])[1-9][0-9,]*\+?[*_`]{0,2}(?:(?:[\s\p{Zs}\x{200B}\x{200D}\x{00AD}]|&nbsp;|&#160;)+|-)(?:(?:free|licensed|paid|official|first-party|built-in|core|top-level|public|total|additional|optional|available|cli)(?:(?:[\s\p{Zs}\x{200B}\x{200D}\x{00AD}]|&nbsp;|&#160;)+|-))*[*_`]{0,2}(?:(?:nself|ɳself)(?:(?:[\s\p{Zs}\x{200B}\x{200D}\x{00AD}]|&nbsp;|&#160;)+|-)(?:plugins|commands|verbs|bundles|integrations)|(?:plugins?|commands?|verbs?|bundles?|integrations?))[*_`]{0,2}(?:[^A-Za-z0-9_-]|$)'
+    pattern: '(?:^|[^0-9A-Za-z.,/_§#$@–—-])[1-9][0-9,]*\+?[*_`]{0,2}(?:(?:[\s\p{Zs}\x{200B}\x{200D}\x{00AD}]|&nbsp;|&#160;)+|-)(?:(?:free|licensed|paid|official|first-party|built-in|core|top-level|public|total|additional|optional|available|cli|go|typescript|rust|python|node|js|ts)(?:(?:[\s\p{Zs}\x{200B}\x{200D}\x{00AD}]|&nbsp;|&#160;)+|-))*[*_`]{0,2}(?:(?:nself|ɳself)(?:(?:[\s\p{Zs}\x{200B}\x{200D}\x{00AD}]|&nbsp;|&#160;)+|-)(?:plugins|commands|verbs|bundles|integrations)|(?:plugins?|commands?|verbs?|bundles?|integrations?))[*_`]{0,2}(?:[^A-Za-z0-9_-]|$)'
     paths: &prose
       - "**/*.md"
       - "**/*.markdown"
@@ -45,6 +45,13 @@ rules:
     pattern: '[0-9٠-٩۰-۹]+\s*(?:إضافة|إضافات|أمر|أوامر|حزمة|حزم)'
     paths: *prose
     message: do not type the count in the translation; render it from the generated facts
+
+  # A bare count in a Markdown heading: "Family (12)" is a hand-typed count with no noun to match.
+  - id: claims.counts-heading
+    kind: numeric-claim
+    pattern: '^[ \t]{0,3}#{1,6}[ \t]+[^\n]*\([ \t]*[1-9][0-9,]*[ \t]*\)[ \t#]*$'
+    paths: *prose
+    message: do not type the count in a heading; render it from the generated facts or drop it
 
   # The current version of nSelf.
   - id: claims.current-version
@@ -70,6 +77,47 @@ rules:
       - {glob: "**/testdata/**", reason: "test fixtures state anything"}
       - {glob: "**/vendor/**", reason: "vendored trees are not ours"}
     message: say "licensed plugin(s)"; licensed plugins are sold only through Bundles or nSelf+
+
+  # Spelling variants of retired names. A space in a term already matches any run of white space (D-1261);
+  #   these rules cover the forms the org.yaml terms do not: a hyphen, and the ASCII spelling of the cancelled product.
+  - id: vocab.pro-plugin-hyphen
+    kind: retired-term
+    term: Pro-plugin(s)
+    paths: *prose
+    exempt_regions: true
+    exempt_paths: *history
+    exempt_matches:
+      - regex: '[/#=]pro-plugins?'
+        reason: a URL path, anchor or query value is a link target, not prose
+    message: say "licensed plugin(s)"; licensed plugins are sold only through Bundles or nSelf+
+
+  - id: vocab.plugins-pro-hyphen
+    kind: retired-term
+    term: Plugins-Pro
+    paths: *prose
+    exempt_regions: true
+    exempt_paths: *history
+    exempt_matches:
+      - regex: '[\w.-]*/plugins-pro\b'
+        reason: a repository slug or file path (vocab.bundles-repo-slug owns the slug)
+      - regex: 'plugins-pro/'
+        reason: a directory path
+      - regex: '`plugins-pro`'
+        reason: the name of the directory or package, in code formatting
+    message: say "Bundles"; licensed plugins are sold only through Bundles or nSelf+
+
+  - id: vocab.ntv-ascii
+    kind: retired-term
+    term: ntv
+    paths: *prose
+    exempt_regions: true
+    exempt_paths: *history
+    exempt_matches:
+      - regex: '[\w.-]*/ntv\b'
+        reason: a repository slug or file path to the archived repository
+      - regex: 'ntv/'
+        reason: a directory path
+    message: that product is cancelled; do not name it in current docs
 
   # The Bundles repository was renamed; GitHub redirects the old name.
   - id: vocab.bundles-repo-slug

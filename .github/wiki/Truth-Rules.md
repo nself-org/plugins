@@ -44,6 +44,7 @@ All rule files are `version: 1`. A rule has `id`, `kind`, `message` (what to wri
 | `exempt_matches` | all but dead-host | `[{regex, reason}]`: a hit inside a match of the regex is exempt. |
 | `exempt_regions` | retired-term, banned-literal | `true` makes the rule honour the markers below (the claim kinds always do). |
 | `term` ending in `(s)` | retired-term | Matches with and without the plural `s`. |
+| a space in a `term` | retired-term | Matches any run of white space (two spaces, a tab, a no-break space). |
 
 A `reason` has at least 8 characters.
 
@@ -70,8 +71,12 @@ A rule file may carry an `overrides` block keyed by rule id. It adds `exempt_pat
 |---|---|---|---|
 | `claims.counts` | numeric-claim | a count of plugins, commands, verbs, bundles or integrations | render it from the generated facts, or use words |
 | `claims.counts-ar` | numeric-claim | the same count in Arabic i18n values (Western or Arabic-Indic digits) | render it from the generated facts |
+| `claims.counts-heading` | numeric-claim | a bare count closing a Markdown heading, as in a title ending in a number in brackets | render it from the generated facts, or drop it |
 | `claims.current-version` | version-claim | a version typed next to "nself" or "current/latest release" | render it from the facts file |
 | `vocab.pro-plugin` | retired-term | the retired phrase for licensed plugins | "licensed plugin(s)" |
+| `vocab.pro-plugin-hyphen` | retired-term | the hyphenated form of the retired phrase for licensed plugins (link targets exempt) | "licensed plugin(s)" |
+| `vocab.plugins-pro-hyphen` | retired-term | the hyphenated form of the old Bundles name (slugs, paths and code-formatted folder names exempt) | "Bundles" |
+| `vocab.ntv-ascii` | retired-term | the plain-ASCII spelling of the cancelled TV product (repository slugs and paths exempt) | leave it out |
 | `vocab.bundles-repo-slug` | banned-literal | the old name of the Bundles repository | `nself-org/bundles` |
 
 `vocab.bundles-repo-slug` exempts Go module paths (`exempt_matches`): renaming a module path is a breaking change and GitHub redirects the old name.
