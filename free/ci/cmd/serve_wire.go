@@ -12,9 +12,13 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
+	"strconv"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/drain"
@@ -25,13 +29,28 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
+// servePublicURL is --public-url: the host names and addresses the agent listener's server certificate carries
+// (Epic D5), so a remote agent can verify the coordinator. Empty: loopback and the bind host only.
+var servePublicURL string
+
+func init() {
+	coordinator.RegisterFlag(func(fs *flag.FlagSet) {
+		fs.StringVar(&servePublicURL, "public-url", "", "URL agents reach this coordinator at (https://host:3864); its host becomes a SAN of the agent listener certificate")
+	})
+}
+
 // activeDrain is the drain that is running, so agent acks of a cancel reach it.
 var activeDrain atomic.Pointer[drain.Drainer]
 
-// noIntake is the drain's Intake: coordinator.Run has already paused the real one.
-type noIntake struct{}
+// agentIntake is the drain's Intake: coordinator.Run has already paused the intake queue; this stops the
+// agent API from handing out any further lease.
+type agentIntake struct{}
 
-func (noIntake) Stop() {}
+func (agentIntake) Stop() {
+	if s := activeAgent.Load(); s != nil {
+		s.StopOffering()
+	}
+}
 
 // liveCanceller sends a cancel through the running agent server, if any.
 type liveCanceller struct{}
@@ -47,12 +66,12 @@ func (liveCanceller) Cancel(nodeID, leaseID, reason string) error {
 // serveWire connects the listeners and the drain to the coordinator's store.
 func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string, cfg *coordinator.Config) (undo func()) {
 	useEnrollStore(st)
-	useAgentStore(st, home, "")
+	useAgentStore(st, home, servePublicURL)
 	reg := registry.New(st)
 	if ca, err := pki.New(ctx, pki.Options{Store: st, DataDir: home}); err != nil {
 		fmt.Fprintf(os.Stderr, "nself-ci-serve: the pairing service is off (coordinator PKI: %v)\n", err)
 	} else {
-		pairing.Use(pairing.New(pairing.Config{CA: ca, Store: st, Registry: reg, CoordinatorID: "local", Actor: "coordinator"}))
+		pairing.Use(pairing.New(pairing.Config{CA: ca, Store: st, Registry: reg, CoordinatorID: "local", AgentURL: servePublicURL, Actor: "coordinator"}))
 	}
 	agentOnAck = func(_, leaseID string) {
 		if d := activeDrain.Load(); d != nil {
@@ -60,9 +79,10 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 		}
 	}
 	eng := lease.New(st, reg, lease.Config{})
+	stopBeat := registerServe(ctx, st, eng)
 	cfg.Drain = func(dctx context.Context) error {
 		d, err := drain.New(drain.Config{
-			Intake: noIntake{}, Canceller: liveCanceller{}, Deadline: drain.FlagDeadline(), Logf: cfg.Logf,
+			Intake: agentIntake{}, Canceller: liveCanceller{}, Deadline: drain.FlagDeadline(), Logf: cfg.Logf,
 			Leases: &drain.EngineLeases{Engine: eng, CoordinatorID: coordinatorID, JobInfo: func(c context.Context, attempt string) (string, bool, error) {
 				return st.AttemptJobClass(c, attempt)
 			}},
@@ -77,5 +97,39 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 		}
 		return err
 	}
-	return func() { pairing.Use(nil); agentOnAck = nil }
+	return func() { stopBeat(); pairing.Use(nil); agentOnAck = nil }
+}
+
+// registerServe makes this serve process visible in the coordinator table and keeps its heartbeat fresh, so
+// `serve restore` sees an idle coordinator and refuses (backup.running), and the dispatcher's incarnation is
+// read from a table that has a row. It then gives the leases of earlier coordinators their restart grace
+// (Epic D6: expires_at = max(stored, start + TTL)). The returned func stops the heartbeat and waits for it.
+func registerServe(ctx context.Context, st *store.Store, eng *lease.Engine) (stop func()) {
+	host, _ := os.Hostname()
+	reg, err := st.Register(ctx, os.Getpid(), strconv.FormatInt(time.Now().UnixNano(), 10), "serve-"+host)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "nself-ci-serve: cannot register in the coordinator table (a restore will not see this process): %v\n", err)
+		return func() {}
+	}
+	inc, _ := st.HighestIncarnation(ctx)
+	if _, err = eng.Start(ctx, reg.ID, inc); err != nil {
+		fmt.Fprintf(os.Stderr, "nself-ci-serve: restart grace for earlier leases failed: %v\n", err)
+	}
+	bctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		t := time.NewTicker(10 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-bctx.Done():
+				return
+			case <-t.C:
+				_ = st.Heartbeat(bctx, reg.ID)
+			}
+		}
+	}()
+	return func() { cancel(); wg.Wait() }
 }

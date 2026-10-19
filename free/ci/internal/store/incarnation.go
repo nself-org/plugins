@@ -1,0 +1,17 @@
+package store
+
+// Purpose: the coordinator incarnation fenced remote leases carry (P7-NODE-20, Epic D6): the highest one in
+//          the coordinator table. A restore bumps every row, so a lease granted after a restore carries an
+//          incarnation above every lease granted before the backup, whichever process id serves.
+// Inputs:  none. Outputs: the highest incarnation, at least 1. Constraints: read-only.
+
+import "context"
+
+// HighestIncarnation returns the highest incarnation of any registered coordinator, and 1 when there is none.
+func (s *Store) HighestIncarnation(ctx context.Context) (int64, error) {
+	var n int64
+	if err := s.readers.QueryRowContext(ctx, `SELECT coalesce(max(incarnation),0) FROM coordinator`).Scan(&n); err != nil {
+		return 1, err
+	}
+	return max(n, 1), nil
+}

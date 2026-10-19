@@ -203,7 +203,10 @@ func (c *Coordinator) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot listen on %s: %w", c.cfg.Addr, err)
 	}
-	ctx, cancel := context.WithCancel(ctx)
+	// the work (dispatches, listeners, loops) runs on a context the shutdown signal does not cancel: the drain
+	// needs the running jobs alive; cancel() below ends them after Config.Drain returned
+	parent := ctx
+	ctx, cancel := context.WithCancel(context.WithoutCancel(parent))
 	defer cancel()
 	srv := &http.Server{Handler: c.Handler(isLoopback(ln.Addr().String())), ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second}
 	errc := make(chan error, 1)
@@ -215,7 +218,7 @@ func (c *Coordinator) Run(ctx context.Context) error {
 	stops, err := c.startListeners(ctx)
 	if err != nil {
 		_ = srv.Close()
-		if ctx.Err() != nil { // shutdown began while the listeners were starting: a clean stop, not a failure
+		if parent.Err() != nil { // shutdown began while the listeners were starting: a clean stop, not a failure
 			return nil
 		}
 		return err
@@ -227,17 +230,18 @@ func (c *Coordinator) Run(ctx context.Context) error {
 	}
 	var runErr error
 	select {
-	case <-ctx.Done():
+	case <-parent.Done():
 	case runErr = <-errc:
 	}
 	c.PauseIntake()
 	if c.cfg.Drain != nil && runErr == nil {
-		if err := c.cfg.Drain(context.WithoutCancel(ctx)); err != nil {
+		if err := c.cfg.Drain(ctx); err != nil {
 			c.cfg.Logf("drain: %v", err)
+			runErr = fmt.Errorf("drain: %w", err)
 		}
 	}
 	cancel()
-	sctx, scancel := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
+	sctx, scancel := context.WithTimeout(context.WithoutCancel(parent), 60*time.Second)
 	defer scancel()
 	_ = srv.Shutdown(sctx)
 	for _, stop := range stops {

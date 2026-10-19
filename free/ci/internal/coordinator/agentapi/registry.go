@@ -40,7 +40,8 @@ type session struct {
 	leaseSeq   uint64 // seq of the lease long-poll flow
 	ctlSeq     uint64 // seq of the control flow
 	epochs     map[string]uint64
-	reconciled bool // the first heartbeat of a session reports the leases the agent kept across the gap
+	owned      map[string]bool // leases already proven to belong to this node
+	reconciled bool            // the first heartbeat of a session reports the leases the agent kept across the gap
 	ctlLive    int
 }
 
@@ -84,7 +85,7 @@ func (s *Server) startSession(node string) *session {
 			c()
 		}
 	}
-	ns.sess = &session{id: newID(), seen: s.cfg.Now(), cancels: map[int]context.CancelFunc{}, epochs: map[string]uint64{}}
+	ns.sess = &session{id: newID(), seen: s.cfg.Now(), cancels: map[int]context.CancelFunc{}, epochs: map[string]uint64{}, owned: map[string]bool{}}
 	ns.signal()
 	return ns.sess
 }

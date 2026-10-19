@@ -36,6 +36,10 @@ func (s *Server) serveLeases(w http.ResponseWriter, r *http.Request) {
 		poll = t.C
 	}
 	for {
+		if s.paused.Load() {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		l, changed := s.popLease(q.node, q.sess)
 		if l == nil && s.cfg.Source != nil {
 			l = s.sourceLease(q)

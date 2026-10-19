@@ -158,7 +158,7 @@ func TestReconnectReportsLeases(t *testing.T) {
 	r := newRig(t, nil)
 	a := r.newAgent("n-1")
 	running, e1 := r.seedLease("1")
-	fenced, e2 := r.seedLease("2")
+	fenced, e2 := r.seedLease("2", "n-1")
 	a.connect()
 	u := a.openStream(0)
 	u.send(heartbeat(
@@ -316,16 +316,19 @@ func TestOnAckReportsLeaseAcks(t *testing.T) {
 	acks := make(chan got, 4)
 	r := newRig(t, func(c *Config) { c.OnAck = func(n, l string) { acks <- got{n, l} } })
 	a := r.newAgent("n-1")
+	held, _ := r.seedLease("7", "n-1")
+	foreign, _ := r.seedLease("8", "n-other") // a lease of another node: its ack from n-1 is dropped
 	a.connect()
 	u := a.openStream(0)
 	u.send(protocol.Message{Type: "ack", Body: protocol.Ack{AckSeq: 3}}) // no lease id: not reported
-	u.send(protocol.Message{Type: "ack", Body: protocol.Ack{AckSeq: 4, LeaseID: "l-7"}})
+	u.send(protocol.Message{Type: "ack", Body: protocol.Ack{AckSeq: 5, LeaseID: foreign}})
+	u.send(protocol.Message{Type: "ack", Body: protocol.Ack{AckSeq: 4, LeaseID: held}})
 	u.send(heartbeat())
 	u.read() // the heartbeat ack proves both acks were handled
 	select {
 	case g := <-acks:
-		if g != (got{"n-1", "l-7"}) {
-			t.Fatalf("OnAck = %+v, want node n-1 lease l-7", g)
+		if g != (got{"n-1", held}) {
+			t.Fatalf("OnAck = %+v, want node n-1 lease %s", g, held)
 		}
 	default:
 		t.Fatal("OnAck was not called")
@@ -334,5 +337,58 @@ func TestOnAckReportsLeaseAcks(t *testing.T) {
 	case g := <-acks:
 		t.Fatalf("unexpected extra OnAck %+v", g)
 	default:
+	}
+}
+
+// TestNodeCannotSpeakForAnotherNodesLease: a result, a log and a heartbeat for a lease another node holds end
+// the stream (E653 lease_not_held) and reach neither the lease engine nor the sink.
+func TestNodeCannotSpeakForAnotherNodesLease(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		msg  func(id string, epoch uint64) protocol.Message
+	}{
+		{"result", resultMsg},
+		{"heartbeat", func(id string, epoch uint64) protocol.Message {
+			return heartbeat(protocol.LeaseState{LeaseID: id, Epoch: epoch, State: "running"})
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRig(t, nil)
+			a := r.newAgent("n-1")
+			foreign, epoch := r.seedLease("9", "n-other")
+			a.connect()
+			u := a.openStream(0)
+			u.send(tc.msg(foreign, epoch))
+			if m := u.read(); m.Type != "reject" {
+				t.Fatalf("answer = %s %+v, want a reject", m.Type, m.Body)
+			}
+			if len(r.sink.results) != 0 {
+				t.Fatalf("the sink received a result for a lease the node does not hold")
+			}
+			if l, _ := r.st.LeaseGet(t.Context(), foreign); l.State != model.JobState("running") {
+				t.Fatalf("foreign lease moved to %s", l.State)
+			}
+		})
+	}
+}
+
+// TestStopOfferingHandsOutNothing: a draining coordinator answers the lease long-poll with 204 and keeps the
+// queued lease out of the agent's hands.
+func TestStopOfferingHandsOutNothing(t *testing.T) {
+	r := newRig(t, nil)
+	a := r.newAgent("n-1")
+	a.connect()
+	lease := protocol.Lease{LeaseID: "l-10", AttemptID: "a-10", Epoch: 4294967297, Token: "opaque", CompatMode: protocol.Compat15, Job: model.Job{}, Secrets: []protocol.SecretRef{}, ExpiresAt: "2030-01-01T00:00:00Z"}
+	if err := r.srv.Offer("n-1", lease); err != nil {
+		t.Fatal(err)
+	}
+	r.srv.StopOffering()
+	resp, err := a.cl.Do(a.req(http.MethodGet, "/v1/agent/leases", nil, map[string]string{HeaderWait: "5"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status %d while draining, want 204", resp.StatusCode)
 	}
 }

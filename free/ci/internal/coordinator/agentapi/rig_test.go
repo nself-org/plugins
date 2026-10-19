@@ -274,8 +274,12 @@ func readFrame(t *testing.T, r io.Reader) protocol.Message {
 }
 
 // seedLease creates one running attempt with a granted lease and returns its lease id and epoch.
-func (r *rig) seedLease(n string) (string, uint64) {
+func (r *rig) seedLease(n string, holder ...string) (string, uint64) {
 	r.t.Helper()
+	runner := "n-" + n // the node that holds the lease (the agent of the test by default)
+	if len(holder) > 0 {
+		runner = holder[0]
+	}
 	ctx := context.Background()
 	p := store.PipelineRow{ID: "p" + n, Project: "p", Revision: "r", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
 	steps := []func() error{
@@ -290,7 +294,7 @@ func (r *rig) seedLease(n string) (string, uint64) {
 			r.t.Fatal(err)
 		}
 	}
-	d := store.Demand{AttemptID: "a" + n, LeaseID: "l" + n, RunnerID: "r" + n, CPU: 1, MemMB: 1, CapacityCPU: 100, CapacityMemMB: 100, TTL: time.Minute}
+	d := store.Demand{AttemptID: "a" + n, LeaseID: "l" + n, RunnerID: runner, CPU: 1, MemMB: 1, CapacityCPU: 100, CapacityMemMB: 100, TTL: time.Minute}
 	fence, err := r.eng.Grant(ctx, "host", d, 1)
 	if err != nil {
 		r.t.Fatal(err)

@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/pki"
@@ -114,6 +115,7 @@ type Server struct {
 	nodes    map[string]*nodeState
 	connNode map[net.Conn]string
 
+	paused atomic.Bool // no new lease is handed to an agent (the drain)
 	bg     sync.WaitGroup
 	cancel context.CancelFunc
 	ln     net.Listener
@@ -215,3 +217,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	s.bg.Wait()
 	return err
 }
+
+// StopOffering makes the lease long-poll answer 204 from now on: a draining coordinator hands out no new
+// lease, queued or from the source. Leases an agent already holds are untouched.
+func (s *Server) StopOffering() { s.paused.Store(true) }
