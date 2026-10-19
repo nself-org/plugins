@@ -172,6 +172,21 @@ func (s *Store) DispatchIntentDelete(ctx context.Context, attemptID, runID strin
 	})
 }
 
+// DispatchIntentPrune forgets the intents created before the given time (the housekeeping sweep: an
+// intent of a finished attempt is audit only) and returns how many it removed.
+func (s *Store) DispatchIntentPrune(ctx context.Context, before time.Time) (int, error) {
+	var n int64
+	err := s.write(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `DELETE FROM dispatch_intent WHERE created_at < ?`, before.UnixNano())
+		if err != nil {
+			return err
+		}
+		n, err = res.RowsAffected()
+		return err
+	})
+	return int(n), err
+}
+
 // DispatchIntentGet returns the stored dispatch of an attempt; ok is false when it was never dispatched.
 func (s *Store) DispatchIntentGet(ctx context.Context, attemptID string) (DispatchIntent, bool, error) {
 	var d DispatchIntent

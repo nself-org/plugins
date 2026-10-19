@@ -14,9 +14,12 @@ package runtime
 //          Location.Kind ("hosted") are set here, never taken from the provider. A provider that
 //          reports down keeps its runners in the world, offline and ProviderDown, so the placement
 //          explanation says provider.down instead of hiding the runner. Dormant unless compat.V15().
+//          A capability whose id equals the id of an enrolled node, the local machine or another hosted
+//          runner is dropped and listed (E708): the dispatcher resolves a placement by runner id,
+//          and a hosted job must never be admitted onto a machine of the team's.
 //          Skipped() is the explanation source for a provider that is absent from the world: a runner
-//          that does not exist has no placement reason to carry the code, so `providers doctor`
-//          (P7-HOST-12) and `plan --explain` read the E700 line from here.
+//          that does not exist has no placement reason to carry the code, so `ci providers show` and
+//          `ci doctor --providers` (P7-HOST-12) and `plan --explain` read the E700 line from here.
 
 import (
 	"context"
@@ -121,6 +124,9 @@ func (c *Contributor) Fill(ctx context.Context, w *sched.World) error {
 	var runners []sched.Runner
 	var skipped []Skip
 	seen := map[string]bool{}
+	for _, r := range w.Runners { // an enrolled node or the local machine owns its id: a hosted capability may not take it over
+		seen[r.ID] = true
+	}
 	for _, p := range providers.All() {
 		if _, ok := p.(providers.Dispatcher); !ok {
 			continue
@@ -137,7 +143,11 @@ func (c *Contributor) Fill(ctx context.Context, w *sched.World) error {
 				continue
 			}
 			for _, cp := range caps {
-				if cp.Identity.ID == "" || seen[cp.Identity.ID] {
+				if cp.Identity.ID == "" {
+					continue
+				}
+				if seen[cp.Identity.ID] {
+					skipped = append(skipped, Skip{Provider: p.ID(), Code: "E708", Reason: "runner id " + cp.Identity.ID + " is already taken"})
 					continue
 				}
 				seen[cp.Identity.ID] = true

@@ -32,6 +32,9 @@ var credentials = struct {
 func RegisterCredential(provider string, fn func(context.Context) rest.AuthFunc) error {
 	credentials.Lock()
 	defer credentials.Unlock()
+	if provider == "github" || provider == "gitlab" {
+		return providers.NewError(providers.Config, "E700", "the credential rule of "+provider+" comes from the operator policy and cannot be replaced", 0, time.Time{})
+	}
 	if provider == "" || fn == nil {
 		return providers.NewError(providers.Config, "E700", "credential rule needs a provider and a function", 0, time.Time{})
 	}

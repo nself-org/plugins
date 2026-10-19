@@ -49,9 +49,12 @@ func attach(ctx context.Context, book Book, disp providers.Dispatcher, provider 
 		cancelRun(ctx, disp, h)
 		return providers.Handle{}, err
 	}
-	if won.Handle.RunID != h.RunID { // another carrier of this lease dispatched first: keep its run, stop ours
+	if won.Handle.RunID != h.RunID { // another carrier dispatched first: stop our run
 		cancelRun(ctx, disp, h)
-		return won.Handle, nil
+		if won.Epoch != epoch { // the winner is a retry of this attempt: this carrier's lease is dead and must not touch its run
+			return providers.Handle{}, refused("E708", "lease superseded by a newer epoch")
+		}
+		return won.Handle, nil // another carrier of this very lease: follow its run
 	}
 	return h, nil
 }

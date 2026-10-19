@@ -64,7 +64,7 @@ func intakeRig(t *testing.T) (http.Handler, *store.Store) {
 	return c.Handler(true), st
 }
 
-func post(h http.Handler, source, kind, delivery string, signed bool) *httptest.ResponseRecorder {
+func post(h http.Handler, source, kind, delivery string, signed bool, extra ...string) *httptest.ResponseRecorder {
 	req, body := prov.SignedTriggerFixture()
 	if !signed {
 		req.Header.Del("X-Hub-Signature-256")
@@ -74,6 +74,9 @@ func post(h http.Handler, source, kind, delivery string, signed bool) *httptest.
 	req2.Header.Set("X-Test-Source", source)
 	req2.Header.Set("X-Test-Kind", kind)
 	req2.Header.Set("X-Test-Delivery", delivery)
+	for i := 0; i+1 < len(extra); i += 2 {
+		req2.Header.Set(extra[i], extra[i+1])
+	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req2)
 	return w
@@ -126,6 +129,12 @@ func TestIngressAdapter(t *testing.T) {
 		h, st := intakeRig(t)
 		if w := post(h, "fake", "", "d-2", false); w.Code != 403 || queuedCount(t, st) != 0 {
 			t.Fatalf("unsigned delivery = %d, queued=%d", w.Code, queuedCount(t, st))
+		}
+	})
+	t.Run("facts naming another source are refused", func(t *testing.T) {
+		h, st := intakeRig(t)
+		if w := post(h, "fake", "", "d-forge", true, "X-Test-Facts-Source", "github"); w.Code != 403 || queuedCount(t, st) != 0 {
+			t.Fatalf("forged source = %d, queued=%d", w.Code, queuedCount(t, st))
 		}
 	})
 	t.Run("a request no source claims is not ours", func(t *testing.T) {

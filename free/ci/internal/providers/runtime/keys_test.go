@@ -72,13 +72,13 @@ func TestKeysOperatorOnly(t *testing.T) {
 	}
 	eff, err := merge(t, scope(trust.SourceUser, map[string]string{
 		KeyGitHubAPIURL: `"https://ghe.example/api/v3/"`, KeyGitHubTokenEnv: `"GHE_TOKEN"`, KeyGitHubAllowPrivateBase: `true`,
-		KeyGitLabAPIURL: `"http://gitlab.lan/api/v4"`, KeyGitLabTokenEnv: `"GL_TOKEN"`, KeyGitLabRunnerTokenEnv: `"GL_RUNNER"`, KeyGitLabAllowPrivateBase: `true`}))
+		KeyGitLabAPIURL: `"https://gitlab.lan/api/v4"`, KeyGitLabTokenEnv: `"GL_TOKEN"`, KeyGitLabRunnerTokenEnv: `"GL_RUNNER"`, KeyGitLabAllowPrivateBase: `true`}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	s, err := SettingsFrom(&eff)
 	want := Settings{GitHubAPIURL: "https://ghe.example/api/v3", GitHubTokenEnv: "GHE_TOKEN", GitHubAllowPrivateBase: true,
-		GitLabAPIURL: "http://gitlab.lan/api/v4", GitLabTokenEnv: "GL_TOKEN", GitLabRunnerTokenEnv: "GL_RUNNER", GitLabAllowPrivateBase: true}
+		GitLabAPIURL: "https://gitlab.lan/api/v4", GitLabTokenEnv: "GL_TOKEN", GitLabRunnerTokenEnv: "GL_RUNNER", GitLabAllowPrivateBase: true}
 	if err != nil || s != want || len(eff.Ignored()) != 0 {
 		t.Fatalf("operator values: %+v %v ignored=%v", s, err, eff.Ignored())
 	}
@@ -97,6 +97,7 @@ func TestKeyDecodersRefuseBadShapes(t *testing.T) {
 		KeyGitHubAllowPrivateBase: `"true"`,
 		KeyGitLabAllowPrivateBase: `1`,
 	}
+	bad[KeyGitHubAPIURL] = `"http://ghe.example/api/v3"` // the REST funnel refuses plain http, so the policy does too
 	for key, raw := range bad {
 		if _, err := merge(t, scope(trust.SourceUser, map[string]string{key: raw})); err == nil || !strings.Contains(err.Error(), "E672") {
 			t.Errorf("%s=%s must be refused with E672, got %v", key, raw, err)

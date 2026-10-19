@@ -100,6 +100,8 @@ func (IngressAdapter) Accept(ctx context.Context, r *http.Request, body []byte) 
 	}
 	if facts.Source == "" {
 		facts.Source = src.Name()
+	} else if facts.Source != src.Name() { // the delivery's identity is the source that verified it
+		return coordinator.Delivery{}, errors.New("trigger facts name another source")
 	}
 	raw, err := json.Marshal(facts)
 	if err != nil {

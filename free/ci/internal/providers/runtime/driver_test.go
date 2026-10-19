@@ -280,3 +280,23 @@ func TestDriverFactsAndSpecReachTheDispatcher(t *testing.T) {
 		t.Fatalf("dispatches %d", n)
 	}
 }
+
+// A hosted capability may not take the id of an enrolled node or the local machine: the dispatcher
+// resolves a placement by runner id and would admit a hosted job onto the team's own machine.
+func TestContributorDoesNotTakeOverARunnerID(t *testing.T) {
+	useProvider(t)
+	w := sched.World{Runners: []sched.Runner{{ID: "fake-hosted-1", Location: "lan"}}}
+	if err := DefaultContributor().Fill(context.Background(), &w); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Hosted) != 0 {
+		t.Fatalf("a hosted runner took the id of an enrolled one: %+v", w.Hosted)
+	}
+	var found bool
+	for _, s := range DefaultContributor().Skipped() {
+		found = found || s.Provider == "fake" && s.Code == "E708"
+	}
+	if !found {
+		t.Fatalf("the collision must be listed: %+v", DefaultContributor().Skipped())
+	}
+}

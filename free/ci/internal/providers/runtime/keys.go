@@ -117,7 +117,8 @@ func decodeEnvName(key string) func(json.RawMessage) (any, error) {
 	}
 }
 
-// decodeURL accepts an http or https base URL with a host, no user info, query or fragment.
+// decodeURL accepts an https base URL with a host, no user info, query or fragment (the REST funnel
+// refuses any other scheme, so a value it would refuse is refused here, at policy load).
 func decodeURL(key string) func(json.RawMessage) (any, error) {
 	return func(raw json.RawMessage) (any, error) {
 		v, err := decodeOne(key, raw)
@@ -129,8 +130,8 @@ func decodeURL(key string) func(json.RawMessage) (any, error) {
 			return nil, fail(key, "expected a URL string")
 		}
 		u, err := url.Parse(s)
-		if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Scheme != "https" && u.Scheme != "http" {
-			return nil, fail(key, "expected an http(s) base URL with a host and no user info, query or fragment")
+		if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Scheme != "https" {
+			return nil, fail(key, "expected an https base URL with a host and no user info, query or fragment")
 		}
 		return strings.TrimRight(s, "/"), nil
 	}

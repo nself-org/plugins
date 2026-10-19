@@ -103,6 +103,17 @@ func TestHostProviderMarksAndIntents(t *testing.T) {
 	if _, ok, _ = s.DispatchIntentGet(ctx, "a2"); ok {
 		t.Fatal("an undispatched attempt has no intent")
 	}
+	for i, at := range []time.Time{t0.Add(-48 * time.Hour), t0.Add(-time.Hour)} {
+		if _, err = s.DispatchIntentPut(ctx, DispatchIntent{AttemptID: "old" + string(rune('a'+i)), Provider: "github", RunID: "r", CreatedAt: at}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := s.DispatchIntentPrune(ctx, t0.Add(-24*time.Hour)); err != nil || n != 1 {
+		t.Fatalf("prune removed %d (%v), want only the 48 h old intent", n, err)
+	}
+	if _, ok, _ = s.DispatchIntentGet(ctx, "oldb"); !ok {
+		t.Fatal("the recent intent was pruned")
+	}
 	if _, err = s.DispatchIntentPut(ctx, DispatchIntent{AttemptID: "a3"}); err == nil {
 		t.Fatal("an intent without a provider and a run must be refused")
 	}

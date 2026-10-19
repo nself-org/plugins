@@ -159,8 +159,9 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, l protocol.Leas
 		return err
 	}
 	unknown := true // the state of the run at the provider is unknown until a poll says otherwise
+	keep := false   // the run finished and was collected: a failed delivery must not cost a second paid run
 	defer func() {
-		if err != nil {
+		if err != nil && !keep {
 			forget(ctx, book, disp, l.AttemptID, h, unknown && ctx.Err() == nil)
 		}
 	}()
@@ -177,6 +178,7 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, l protocol.Leas
 	if err != nil {
 		return err
 	}
+	keep = true
 	return sink.Result(ctx, protocol.Result{LeaseID: l.LeaseID, Epoch: l.Epoch, Evidence: evidence})
 }
 

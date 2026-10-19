@@ -35,3 +35,30 @@ func TestIngressDeclineIs200NotAcceptedAndStoresNothing(t *testing.T) {
 		t.Fatalf("a plain Accept error = %d, want 403", w.Code)
 	}
 }
+
+// An Ingress that holds per-repo secrets skips --allowed-repos only for a delivery that was verified with
+// such a secret (facts.auth per-repo); a shared-secret or secretless delivery stays under the allowlist.
+func TestIngressSecretHolderSkipsTheAllowlistOnlyForPerRepoAuth(t *testing.T) {
+	outside := func(facts string) Delivery {
+		return Delivery{Source: "fake", DeliveryID: "f-" + facts, Project: "x/outside", Revision: testSHA, Facts: []byte(`{"auth":"` + facts + `"}`)}
+	}
+	cases := []struct {
+		name    string
+		secrets bool
+		auth    string
+		want    int
+	}{
+		{"per-repo secret holder", true, "per-repo", 202},
+		{"secret holder, shared secret", true, "shared", 403},
+		{"secret holder, no auth (--insecure)", true, "none", 403},
+		{"ingress without secrets, per-repo claim", false, "per-repo", 403},
+	}
+	for i, c := range cases {
+		f := &fakeIngress{name: fmt.Sprintf("zz-fake-g%d", i), secrets: c.secrets, deliver: outside(c.auth)}
+		register(t, f)
+		r := newRig(t, nil)
+		if w := fakePost(r, f.name, []byte(`{}`)); w.Code != c.want || (c.want == 403 && queued(t, r.st) != 0) {
+			t.Errorf("%s: %d %s queued=%d, want %d", c.name, w.Code, w.Body, queued(t, r.st), c.want)
+		}
+	}
+}

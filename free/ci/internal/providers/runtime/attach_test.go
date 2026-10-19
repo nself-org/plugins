@@ -229,3 +229,57 @@ func TestContributorCachesTheCredentialCheck(t *testing.T) {
 		t.Fatalf("the check ran %d times within the TTL, want once", credCalls.n)
 	}
 }
+
+// An older carrier whose Dispatch was slow loses the Put race to the retry: it stops its own run and
+// is fenced out, it must not adopt, cancel or delete the retry's run.
+func TestAttachOlderCarrierLosingTheRaceToARetryIsFenced(t *testing.T) {
+	ctx, book := context.Background(), NewMemBook()
+	d := &stubDisp{}
+	d.onDisp = func() {
+		if _, err := book.Put(ctx, "a1", Entry{Handle: providers.Handle{Provider: "stub", RunID: "retry", Nonce: "nr"}, Epoch: 8}); err != nil {
+			t.Error(err)
+		}
+	}
+	if _, err := attachAt(ctx, book, d, 7); codeOf(err) != "E708" {
+		t.Fatalf("err=%v, want E708", err)
+	}
+	if d.cancels() != "run1" {
+		t.Fatalf("cancelled %q, want only the loser's own run1", d.cancels())
+	}
+	if e, ok, _ := book.Get(ctx, "a1"); !ok || e.Handle.RunID != "retry" {
+		t.Fatalf("the retry's entry must be untouched: %+v %v", e, ok)
+	}
+}
+
+// failingSink cannot take the result.
+type failingSink struct{ *recSink }
+
+func (failingSink) Result(context.Context, protocol.Result) error { return errors.New("store down") }
+
+// A run that finished and was collected keeps its handle when only the delivery of the result fails, so a
+// second carrier of the same lease collects again instead of paying for another run.
+func TestDriverKeepsTheHandleWhenOnlyTheResultDeliveryFails(t *testing.T) {
+	p := useProvider(t)
+	node, l := hostedLease("k1")
+	if err := defaultDriver.Run(context.Background(), node, l, failingSink{&recSink{}}); err == nil {
+		t.Fatal("the sink failure must surface")
+	}
+	if _, ok, _ := defaultDriver.Book().Get(context.Background(), "k1"); !ok {
+		t.Fatal("the handle of a finished run must survive a failed delivery")
+	}
+	sink := &recSink{}
+	if err := defaultDriver.Run(context.Background(), node, l, sink); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := p.counts(); n != 1 || len(sink.got()) != 1 {
+		t.Fatalf("dispatches=%d results=%d, want 1 and 1", n, len(sink.got()))
+	}
+}
+
+func TestRegisterCredentialRefusesBuiltInProviders(t *testing.T) {
+	for _, id := range []string{"github", "gitlab", ""} {
+		if err := RegisterCredential(id, func(context.Context) rest.AuthFunc { return nil }); codeOf(err) != "E700" {
+			t.Errorf("%q: %v", id, err)
+		}
+	}
+}
