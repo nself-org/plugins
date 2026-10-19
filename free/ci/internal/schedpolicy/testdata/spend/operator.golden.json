@@ -1,0 +1,89 @@
+{
+  "Currency": "EUR",
+  "PaidEnabled": true,
+  "MaxPaidTimeoutMs": 10800000,
+  "ApprovalThresholdMicro": {
+    "Micro": 20000000,
+    "Set": true
+  },
+  "MarginMicro": 250000,
+  "Rates": {
+    "github-hosted": {
+      "Class": "included",
+      "PerHourMicro": 0,
+      "PerMinuteMicro": 0,
+      "BillingIncrementMs": 0,
+      "MinimumChargeMicro": 0,
+      "ExtrasMicro": 0
+    },
+    "hetzner": {
+      "Class": "ephemeral",
+      "PerHourMicro": 5000,
+      "PerMinuteMicro": 0,
+      "BillingIncrementMs": 3600000,
+      "MinimumChargeMicro": 1000,
+      "ExtrasMicro": 200
+    }
+  },
+  "CeilingsMicro": {
+    "github-hosted": 0,
+    "hetzner": 60000000
+  },
+  "Budgets": {
+    "Job": {
+      "Micro": 1000000,
+      "Set": true
+    },
+    "Pipeline": {
+      "Micro": 5000000,
+      "Set": true
+    },
+    "Day": {
+      "Micro": 10000000,
+      "Set": true
+    },
+    "Month": {
+      "Micro": 100000000,
+      "Set": true
+    },
+    "Provider": {
+      "hetzner": 40000000
+    }
+  },
+  "OwnerCoordinator": {
+    "hetzner": "coord-1"
+  },
+  "Burst": {
+    "Enabled": {
+      "hetzner": true
+    },
+    "MaxConcurrent": 3,
+    "MarginMs": 90000,
+    "Trust": {
+      "Accepts": [
+        "owner",
+        "collaborator",
+        "internal"
+      ],
+      "Secrets": [
+        "none"
+      ],
+      "Isolation": "ephemeral-vm",
+      "PrivacyZone": "provider-allowlist"
+    },
+    "CloudVM": {
+      "Type": "cx22",
+      "Location": "nbg1",
+      "Image": "ubuntu-24.04",
+      "EnrollAddr": "0.0.0.0:7443",
+      "EnrollURL": "https://ci.example.test/enroll",
+      "TokenFile": "/etc/nself/burst.token",
+      "Agent": {
+        "amd64": {
+          "URL": "https://agents.example.test/ci/agent-amd64",
+          "SHA256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        }
+      }
+    }
+  }
+}
