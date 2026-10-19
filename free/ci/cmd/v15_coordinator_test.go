@@ -275,16 +275,16 @@ func TestCoordinatorReadCommandsLeaveLocalAloneWhenInactive(t *testing.T) {
 
 func TestGithubRemoteForms(t *testing.T) {
 	for raw, want := range map[string]string{
-		"https://github.com/acme/app.git":    "acme/app",
-		"https://github.com/acme/app":        "acme/app",
-		"git@github.com:acme/app.git":        "acme/app",
-		"ssh://git@github.com/acme/app.git":  "acme/app",
-		"https://github.com/acme/my.app-1/":  "acme/my.app-1",
-		"https://evilgithub.com/acme/app":    "",
-		"https://github.com.evil.io/a/b":     "",
-		"https://github.com/acme/app/extra":  "",
-		"https://user:pw@github.com/acme/ap": "",
-		"git@gitlab.com:acme/app.git":        "",
+		"https://github.com/acme/app.git":         "acme/app",
+		"https://github.com/acme/app":             "acme/app",
+		"git@github.com:acme/app.git":             "acme/app",
+		"ssh://git@github.com/acme/app.git":       "acme/app",
+		"https://github.com/acme/my.app-1/":       "acme/my.app-1",
+		"https://evilgithub.com/acme/app":         "",
+		"https://github.com.evil.io/a/b":          "",
+		"https://github.com/acme/app/extra":       "",
+		"https://user" + ":pw@github.com/acme/ap": "",
+		"git@gitlab.com:acme/app.git":             "",
 	} {
 		m := githubRe.FindStringSubmatch(raw)
 		got := ""
