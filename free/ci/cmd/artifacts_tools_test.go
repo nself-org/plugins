@@ -106,3 +106,19 @@ func TestArtifactsToolsUsage(t *testing.T) {
 		}
 	}
 }
+
+// D-1025: the usage line is the only help; every registered subcommand, and
+// the `tools install` verb, must appear in it.
+func TestArtifactsUsageListsEverySub(t *testing.T) {
+	for name := range artifactsSubs {
+		if !strings.Contains(artifactsUsage, name) {
+			t.Errorf("artifactsUsage does not list %q: %s", name, artifactsUsage)
+		}
+	}
+	if !strings.Contains(artifactsUsage, "tools install") {
+		t.Errorf("artifactsUsage does not list `tools install`: %s", artifactsUsage)
+	}
+	if code, _, errOut := runArt(t); code != 1 || !strings.Contains(errOut, "tools install") {
+		t.Errorf("bare invocation: code %d err %q", code, errOut)
+	}
+}
