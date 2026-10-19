@@ -66,7 +66,7 @@ func measureServices(ctx context.Context, cfg Config, home string, col *Collecto
 	// images, every start is cold and no warm sample is recorded (and that is
 	// reported below), instead of a cold start being filed as warm.
 	warm, cold := 0, 0
-	for try := 0; try < 3*(cfg.Runs+coldWant) && (warm < cfg.Runs || cold < coldWant); try++ {
+	for try := 0; try < 2*(cfg.Runs+coldWant) && (warm < cfg.Runs || cold < coldWant); try++ {
 		if coldWant > 0 && cold < coldWant && (warm >= cfg.Runs || try%2 == 1) {
 			if err := removeImages(ctx, cfg.Dir, images); err != nil {
 				return err
@@ -77,6 +77,7 @@ func measureServices(ctx context.Context, cfg Config, home string, col *Collecto
 		if err != nil {
 			return err
 		}
+		cfg.logf("service try %d: images present before start: %v, %.0f ms", try+1, present, ms)
 		switch {
 		case present && warm < cfg.Runs:
 			col.Add(MetricServiceWarm, "ms", ms)
