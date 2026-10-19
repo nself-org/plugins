@@ -130,3 +130,27 @@ func TestSchedAdmissionCapacityAndFence(t *testing.T) {
 		t.Fatalf("unknown attempt: %v", err)
 	}
 }
+
+// TestSchedAdmissionUnattributed: a lease made without a recorded identity (the
+// nil-hook local path, or one older than this migration set) counts against every
+// user, team and provider bucket, so unknown identities only tighten a limit.
+func TestSchedAdmissionUnattributed(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	admitSeed(t, s, "pipe", "proj", "old", "legacy")
+	admitSeed(t, s, "pipe", "proj", "new", "named")
+	if err := s.AdmitAndLease(ctx, "legacy-host", admitDemand("legacy", "r0")); err != nil {
+		t.Fatal(err)
+	}
+	var seen AdmitCounts
+	step := func(_ context.Context, v AdmitView) error { seen = v.Counts; return nil }
+	if _, err := s.AdmitPlacement(ctx, "host", admitDemand("named", "r1"), AdmitRequest{User: "ann", Team: "core", Provider: "prov"}, step); err != nil {
+		t.Fatal(err)
+	}
+	if seen.User != 1 || seen.Team != 1 || seen.Provider != 1 || seen.Global != 1 {
+		t.Fatalf("counters = %+v, want the unattributed lease in every identity bucket", seen)
+	}
+	if !IsHostCapacity(coded("E604", hostCapacityMessage)) || IsHostCapacity(coded("E604", "other")) || IsHostCapacity(nil) {
+		t.Fatal("IsHostCapacity")
+	}
+}

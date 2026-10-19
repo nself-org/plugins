@@ -67,16 +67,6 @@ type Config struct {
 	DeliveryError func(Admitted, error)
 }
 
-type entry struct {
-	queued   Queued
-	done     chan struct{}
-	res      Admitted
-	err      error
-	finished bool
-	reason   model.PlacementReason
-	fails    int // consecutive store errors while admitting
-}
-
 // Dispatcher places and admits queued attempts.
 type Dispatcher struct {
 	cfg   Config
@@ -84,8 +74,11 @@ type Dispatcher struct {
 	stop  context.CancelFunc
 	wg    sync.WaitGroup
 	tickM sync.Mutex
+	// quiesced is set under tickM by Close: no tick is running.
+	quiesced bool
 
 	mu       sync.Mutex
+	closed   bool
 	queue    []*entry
 	seq      uint64
 	ticked   uint64
@@ -141,9 +134,22 @@ func New(cfg Config) (*Dispatcher, error) {
 	return d, nil
 }
 
-// Close stops deliveries and waits for them.
+var errClosed = errors.New("dispatch: the dispatcher is closed")
+
+// Close refuses new work, lets a running tick finish its admissions, resolves
+// the waiting callers with an error and waits for the deliveries.
 func (d *Dispatcher) Close() {
+	d.mu.Lock()
+	d.closed = true
+	d.mu.Unlock()
 	d.stop()
+	// An in-flight tick commits and registers its deliveries before this
+	// returns from Lock; later ticks see closed and do nothing. Waiting for the
+	// deliveries happens outside the lock, or every Submit loop would block in
+	// Tick and never see the dispatcher close.
+	d.tickM.Lock()
+	d.quiesced = true
+	d.tickM.Unlock()
 	d.wg.Wait()
 }
 
@@ -163,125 +169,9 @@ func (d *Dispatcher) Submit(ctx context.Context, j Job) (Admitted, error) {
 			return e.res, e.err
 		case <-ctx.Done():
 			return d.drop(e, ctx.Err())
+		case <-d.life.Done():
+			return d.drop(e, errClosed)
 		case <-time.After(d.cfg.Poll):
 		}
 	}
-}
-
-func (d *Dispatcher) enqueue(j Job) (*entry, error) {
-	if j.AttemptID == "" || j.Sched.Key == "" {
-		return nil, fail(CodeUnplaceable, "a queued job needs an attempt and a key")
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	for _, e := range d.queue {
-		if !e.finished && e.queued.Job.Sched.Key == j.Sched.Key {
-			return nil, fail(CodeUnplaceable, "job key %q is already queued", j.Sched.Key)
-		}
-	}
-	d.seq++
-	e := &entry{queued: Queued{Job: j, EnqueuedAt: d.cfg.Clock(), Seq: d.seq}, done: make(chan struct{})}
-	d.queue = append(d.queue, e)
-	return e, nil
-}
-
-// due reports whether a waiter should tick: something was enqueued since the
-// last tick, or Poll has passed.
-func (d *Dispatcher) due() bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.seq != d.ticked || d.cfg.Clock().Sub(d.lastTick) >= d.cfg.Poll
-}
-
-// drop removes an unfinished entry (its caller gave up). An entry a tick
-// admitted just before the caller gave up keeps its result: the lease exists
-// and the caller must see it to cancel it.
-func (d *Dispatcher) drop(e *entry, cause error) (Admitted, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if !e.finished {
-		e.finished, e.err = true, cause
-		close(e.done)
-	}
-	d.compact()
-	return e.res, e.err
-}
-
-// finish resolves the entry with sequence seq once.
-func (d *Dispatcher) finish(seq uint64, a Admitted, err error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	for _, e := range d.queue {
-		if e.queued.Seq == seq && !e.finished {
-			e.finished, e.res, e.err = true, a, err
-			close(e.done)
-		}
-	}
-	d.compact()
-}
-
-func (d *Dispatcher) compact() {
-	live := d.queue[:0]
-	for _, e := range d.queue {
-		if !e.finished {
-			live = append(live, e)
-		}
-	}
-	d.queue = live
-}
-
-// pending snapshots the unfinished entries.
-func (d *Dispatcher) pending(now time.Time) []Queued {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.ticked, d.lastTick = d.seq, now
-	out := make([]Queued, 0, len(d.queue))
-	for _, e := range d.queue {
-		if !e.finished {
-			out = append(out, e.queued)
-		}
-	}
-	return out
-}
-
-// Tick places and admits every queued job once, in the Orderer's order.
-//
-// A tick works for every queued job, so it does not stop when the caller that
-// happened to run it gives up: that caller's cancellation must not fail
-// another caller's job.
-func (d *Dispatcher) Tick(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	ctx = context.WithoutCancel(ctx)
-	d.tickM.Lock()
-	defer d.tickM.Unlock()
-	now := d.cfg.Clock()
-	queued := d.pending(now)
-	if len(queued) == 0 {
-		return nil
-	}
-	ordered := d.cfg.Orderer.Order(queued)
-	if len(ordered) != len(queued) {
-		return errors.New("dispatch: the orderer must return exactly the queued jobs")
-	}
-	var groups [][]Queued
-	index := map[string]int{}
-	for _, q := range ordered {
-		id := q.Job.Sched.Pipeline.ID
-		i, ok := index[id]
-		if !ok {
-			i = len(groups)
-			index[id] = i
-			groups = append(groups, nil)
-		}
-		groups[i] = append(groups[i], q)
-	}
-	var first error
-	for _, g := range groups {
-		if err := d.tickGroup(ctx, g, now); err != nil && first == nil {
-			first = err
-		}
-	}
-	return first
 }

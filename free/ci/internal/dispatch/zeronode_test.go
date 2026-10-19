@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/nself-org/plugins/free/ci/internal/evidence" // registers the evidence builder, as the binary links it
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
@@ -108,6 +109,23 @@ func TestZeroNode(t *testing.T) {
 		if err != nil || !ok || runner != "local" || digest == "" {
 			t.Errorf("job %s was not admitted through dispatch.Admit on the local runner: %q %q %v %v", j.ID, runner, digest, ok, err)
 		}
+	}
+	// the evidence documents agree on everything a placement could change
+	pd, ed := plain.res.Summary.Doc, engaged.res.Summary.Doc
+	if len(ed.Checks) == 0 || len(ed.Checks) != len(pd.Checks) {
+		t.Fatalf("evidence checks: %d with the dispatcher, %d without", len(ed.Checks), len(pd.Checks))
+	}
+	for i, c := range ed.Checks {
+		p := pd.Checks[i]
+		if c.JobID != p.JobID || c.Result != p.Result || c.Reason != p.Reason || c.FailureClass != p.FailureClass || c.Findings != p.Findings || c.Required != p.Required {
+			t.Errorf("evidence check %d differs: %+v vs %+v", i, c, p)
+		}
+	}
+	if ed.Runner != pd.Runner || ed.Selection != pd.Selection || len(ed.Retries) != len(pd.Retries) {
+		t.Errorf("evidence runner/selection/retries differ: %+v %+v vs %+v %+v", ed.Runner, ed.Selection, pd.Runner, pd.Selection)
+	}
+	if ed.PlacementRef != nil || pd.PlacementRef != nil {
+		t.Errorf("placement_ref is SCHED-05's: %v %v", ed.PlacementRef, pd.PlacementRef)
 	}
 	// the control: without the dispatcher nothing records an admission identity
 	pst, err := store.Open(filepath.Join(plain.home, "state.db"), store.Options{})

@@ -7,8 +7,9 @@ package dispatch
 // and Request.Limits from the effective policy; 0 means no limit.
 // Outputs: nil or a *Refusal naming every level that is full.
 // Constraints: the runner limit is the lower of the policy limit and the runner's
-// own slots; the foreground floor (X17) admits one foreground job to an idle
-// local runner whatever the other levels say.
+// own slots, and a runner whose slots are known to be zero admits nothing; every
+// level is a hard limit, the foreground floor (X17) is the local admission policy
+// and eligibility rule 9, never a waiver here (an unenforced limit is no limit).
 
 import (
 	"context"
@@ -30,6 +31,9 @@ type level struct {
 
 func limitsStep(_ context.Context, v View) error {
 	r, c := v.Request, v.Counts
+	if r.SlotsKnown && r.RunnerSlots <= 0 {
+		return &Refusal{Reason: model.LimitRunner, Detail: "runner has no slots"}
+	}
 	runnerLimit := lowest(r.Limits.Runner, r.RunnerSlots)
 	levels := []level{
 		{model.LimitPipeline, c.Pipeline, r.Limits.Pipeline},
@@ -52,9 +56,6 @@ func limitsStep(_ context.Context, v View) error {
 		}
 	}
 	if first == "" {
-		return nil
-	}
-	if r.Foreground && r.Local && c.Runner == 0 {
 		return nil
 	}
 	return &Refusal{Reason: first, Detail: strings.Join(full, ", ") + " at its limit"}

@@ -30,11 +30,11 @@ func occupy(t *testing.T, st *store.Store, o who) string {
 	return id
 }
 
-func probe(t *testing.T, st *store.Store, limits sched.Limits) (Admitted, error, string) {
+func probe(t *testing.T, st *store.Store, limits sched.Limits) (string, error) {
 	t.Helper()
 	id := queueAttempt(t, st, "P", "J", "N")
-	a, err := tryProbe(st, id, limits)
-	return a, err, id
+	_, err := tryProbe(st, id, limits)
+	return id, err
 }
 
 // tryProbe admits the queued probe attempt id under limits.
@@ -69,7 +69,7 @@ func TestDispatchLimits(t *testing.T) {
 			occupy(t, st, c.occupy)
 			var limits sched.Limits
 			c.set(&limits, 1)
-			_, err, id := probe(t, st, limits)
+			id, err := probe(t, st, limits)
 			var ref *Refusal
 			if !errors.As(err, &ref) || ref.Reason != c.level {
 				t.Fatalf("limit 1 with one active: %v, want %s", err, c.level)
@@ -110,7 +110,7 @@ func TestDispatchLimitsRaised(t *testing.T) {
 func TestDispatchLimitsAllLevels(t *testing.T) {
 	st := openStore(t)
 	occupy(t, st, who{"P", "J", "N", "R", "V", "U", "T"})
-	_, err, _ := probe(t, st, sched.Limits{Pipeline: 1, Project: 1, Global: 1})
+	_, err := probe(t, st, sched.Limits{Pipeline: 1, Project: 1, Global: 1})
 	var ref *Refusal
 	if !errors.As(err, &ref) || ref.Reason != model.LimitPipeline {
 		t.Fatalf("first full level: %v", err)
@@ -122,25 +122,47 @@ func TestDispatchLimitsAllLevels(t *testing.T) {
 	}
 }
 
-// TestDispatchForegroundFloor: one foreground job always gets an idle local runner.
-func TestDispatchForegroundFloor(t *testing.T) {
+// TestDispatchLimitsAreHard: a foreground job gets no waiver from a full limit;
+// the floor (X17) is the local admission policy, not an exemption here.
+func TestDispatchLimitsAreHard(t *testing.T) {
 	st := openStore(t)
 	occupy(t, st, who{"p2", "o", "x", "r2", "v2", "u2", "t2"})
-	admit := func(name string, foreground bool) error {
-		id := queueAttempt(t, st, "P", "J", name)
-		_, err := Admit(context.Background(), st, Request{AttemptID: id, Placement: sched.Placement{JobKey: id, RunnerID: "local", CPU: 1, MemMB: 1}, Runner: testRunner("local", "local", 4), Job: testJob(id), Local: true,
-			Host: "h-" + id, CapacityCPU: 4, CapacityMemMB: 4096, Limits: sched.Limits{Global: 1}, Foreground: foreground})
-		return err
-	}
+	id := queueAttempt(t, st, "P", "J", "first")
+	_, err := Admit(context.Background(), st, Request{AttemptID: id, Placement: sched.Placement{JobKey: id, RunnerID: "local", CPU: 1, MemMB: 1}, Runner: testRunner("local", "local", 4), Job: testJob(id), Local: true,
+		Host: "h-" + id, CapacityCPU: 4, CapacityMemMB: 4096, Limits: sched.Limits{Global: 1}})
 	var ref *Refusal
-	if err := admit("background", false); !errors.As(err, &ref) || ref.Reason != model.LimitGlobal {
-		t.Fatalf("background job at the global limit: %v", err)
+	if !errors.As(err, &ref) || ref.Reason != model.LimitGlobal {
+		t.Fatalf("an idle local runner does not lift the global limit: %v", err)
 	}
-	if err := admit("first", true); err != nil {
-		t.Fatalf("foreground floor: %v", err)
+}
+
+// TestDispatchRunnerWithoutSlots: a runner known to have no slots admits nothing,
+// an unknown figure is not "unlimited" only because the caller says so.
+func TestDispatchRunnerWithoutSlots(t *testing.T) {
+	st := openStore(t)
+	id := queueAttempt(t, st, "P", "J", "N")
+	req := Request{AttemptID: id, Placement: sched.Placement{JobKey: id, RunnerID: "R", CPU: 1, MemMB: 1}, Runner: testRunner("R", "lan", 0), Job: testJob(id), Local: true, Host: "h", CapacityCPU: 4, CapacityMemMB: 4096, RunnerSlots: 0, SlotsKnown: true}
+	var ref *Refusal
+	if _, err := Admit(context.Background(), st, req); !errors.As(err, &ref) || ref.Reason != model.LimitRunner {
+		t.Fatalf("zero slots: %v", err)
 	}
-	if err := admit("second", true); !errors.As(err, &ref) {
-		t.Fatalf("the floor is one job, not a bypass: %v", err)
+	req.SlotsKnown = false
+	if _, err := Admit(context.Background(), st, req); err != nil {
+		t.Fatalf("unknown slots with capacity left: %v", err)
+	}
+}
+
+// TestDispatchStepConflict: a compare-and-set lost inside the transaction is a
+// conflict to re-plan, not a store failure.
+func TestDispatchStepConflict(t *testing.T) {
+	withSteps(t, map[string]Step{"zz-race": func(context.Context, View) error {
+		return &store.Error{Code: "E605", Message: "attempt state or epoch changed"}
+	}})
+	st := openStore(t)
+	id := queueAttempt(t, st, "P", "J", "N")
+	_, err := Admit(context.Background(), st, Request{AttemptID: id, Placement: sched.Placement{JobKey: id, RunnerID: "R", CPU: 1, MemMB: 1}, Runner: testRunner("R", "lan", 2), Job: testJob(id), Local: true, Host: "h", CapacityCPU: 4, CapacityMemMB: 4096})
+	if !errors.Is(err, ErrConflict) {
+		t.Fatalf("lost CAS: %v", err)
 	}
 }
 

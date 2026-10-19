@@ -51,11 +51,11 @@ func (d *Dispatcher) knownTransport(r sched.Runner) bool {
 	return d.cfg.Transport != nil && d.cfg.Transport.Known(r.Capability.Identity.Transport)
 }
 
-// deliver starts the carrier for a committed remote lease.
+// deliver starts the carrier for a committed remote lease; the caller has
+// already counted it in d.wg.
 func (d *Dispatcher) deliver(q Queued, r sched.Runner, a Admitted) {
 	delivery := Delivery{Node: r.Capability, Job: q.Job.Model, AttemptID: a.AttemptID, LeaseID: a.LeaseID, Token: a.Token, Epoch: a.Epoch, Revision: q.Job.Revision, ExpiresAt: d.cfg.Clock().Add(d.cfg.LeaseTTL), Hosted: r.Location == "hosted" || r.Ephemeral}
-	d.wg.Add(1)
-	go func() {
+	go func() { // admit registered the delivery with the WaitGroup
 		defer d.wg.Done()
 		if err := d.cfg.Transport.Deliver(d.life, delivery); err != nil && d.life.Err() == nil {
 			d.lose(a, err) // a closing dispatcher leaves its leases to the expiry sweep

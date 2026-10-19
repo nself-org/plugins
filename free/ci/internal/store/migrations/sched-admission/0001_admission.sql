@@ -1,3 +1,4 @@
+-- Expand-only. The three indexes at the end are on core tables; core always applies first (registry.go migrationList).
 CREATE TABLE sched_admitted (attempt_id TEXT PRIMARY KEY, pipeline_id TEXT NOT NULL, project TEXT NOT NULL, user_id TEXT NOT NULL, team_id TEXT NOT NULL, provider TEXT NOT NULL, runner_id TEXT NOT NULL, world_digest TEXT NOT NULL, admitted_at INTEGER NOT NULL);
 CREATE INDEX sched_admitted_user ON sched_admitted(user_id);
 CREATE INDEX sched_admitted_team ON sched_admitted(team_id);

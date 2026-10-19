@@ -11,10 +11,11 @@ package run
 // coordinator awaits only local attempts (runAttempt fails a remote one), so
 // the world holds the local runner alone until a remote await exists; the
 // dispatcher itself delivers remote leases (NewTransportAdapter). The local
-// runner is declared at the top of each trust axis: the isolation hook refuses
-// a job it cannot sandbox at exec time, and P7-TRUST-08's probe facts replace
-// this declaration. The local admission policy (battery, reservations, the
-// foreground floor) still runs first, as in LocalAdmit.
+// runner carries a PLACEHOLDER declaration at the top of each trust axis (debt:
+// not a measured fact; `ci explain` shows it as declared): the isolation hook
+// refuses a job it cannot sandbox at exec time, and P7-TRUST-08's probe facts
+// replace it. The local admission policy (battery, reservations, the foreground
+// floor) still runs first, as in LocalAdmit.
 
 import (
 	"context"
@@ -174,7 +175,7 @@ func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World
 	keep := w.Runners[:0]
 	for _, r := range w.Runners {
 		if r.ID == "local" {
-			r.Decl = localDeclaration()
+			r.Decl = localDeclarationPlaceholder()
 			keep = append(keep, r)
 		}
 	}
@@ -195,7 +196,10 @@ func localCapability(project string, c ciexec.Capacity) model.Capability {
 	return cap
 }
 
-func localDeclaration() trust.Declaration {
+// localDeclarationPlaceholder is what the PERSONAL coordinator says about its own
+// machine until a probe measures it. It is permissive on purpose: placement must
+// not refuse what LocalAdmit ran, and the exec-time isolation hook is the gate.
+func localDeclarationPlaceholder() trust.Declaration {
 	return trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged",
 		UIDSeparation: true, Ownership: "operator", PersonalOwnNode: true, NoLANRoute: true}
 }

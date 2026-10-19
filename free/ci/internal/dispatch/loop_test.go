@@ -219,7 +219,8 @@ func TestDispatchUnplaceable(t *testing.T) {
 		return e
 	}
 	fg := needTool(queueAttempt(t, st, "pipe", "proj", "fg"), true)
-	bg := needTool(queueAttempt(t, st, "pipe", "proj", "bg"), false)
+	bgID := queueAttempt(t, st, "pipe", "proj", "bg")
+	bg := needTool(bgID, false)
 	if err := d.Tick(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -230,8 +231,8 @@ func TestDispatchUnplaceable(t *testing.T) {
 	if resolved(bg) {
 		t.Fatal("a background job must wait, not fail")
 	}
-	if reason, _, ok, _ := st.Refusal(context.Background(), "pipe.bg.2"); ok && reason != "tools.missing" {
-		t.Fatalf("reason %q", reason)
+	if reason, _, ok, _ := st.Refusal(context.Background(), bgID); !ok || reason != "tools.missing" {
+		t.Fatalf("background reason = %q (recorded %v)", reason, ok)
 	}
 }
 

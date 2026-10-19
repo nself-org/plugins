@@ -8,6 +8,9 @@ package dispatch
 // Inputs:  a store and a Request naming the attempt, its placement and limits.
 // Outputs: an Admitted attempt (leased), or a *Refusal (stays queued, reason
 // recorded), ErrConflict (state moved; re-plan next tick) or a store error.
+// Token: a remote lease carries 32 random bytes; Admitted.Token is their hex form
+// (what the agent receives) and the store keeps only hex(sha256(raw bytes)), so a
+// verifier decodes the hex first. The token is never written or logged here.
 // Constraints: nothing else in the module may call store.AdmitPlacement,
 // store.AdmitAndLease or lease.Grant (TestAdmitChokepoint); a placement computed
 // from an older world is safe because the counters and reservations are re-read
@@ -43,8 +46,9 @@ type Request struct {
 	CapacityCPU, CapacityMemMB int
 	Limits                     sched.Limits
 	RunnerSlots, ProviderLimit int
-	Foreground                 bool
-	WorldDigest                string
+	// SlotsKnown says RunnerSlots is a real figure: zero then means "no slots".
+	SlotsKnown  bool
+	WorldDigest string
 	// LeaseTTL is the heartbeat TTL of a remote lease (0 = the store default).
 	LeaseTTL time.Duration
 	// Incarnation is the coordinator incarnation of a fenced remote lease.
@@ -123,7 +127,7 @@ func classify(ctx context.Context, st *store.Store, attemptID string, err error)
 		return refuse(ctx, st, attemptID, ref)
 	case errors.As(err, &se) && se.Code == "E605":
 		return ErrConflict
-	case errors.As(err, &se) && se.Code == "E604" && se.Message == "host capacity exhausted":
+	case store.IsHostCapacity(err):
 		return refuse(ctx, st, attemptID, &Refusal{Reason: model.CapacityBusy, Detail: "host reservation is full"})
 	}
 	return err

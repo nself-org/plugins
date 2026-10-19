@@ -61,6 +61,16 @@ type AdmitStep func(context.Context, AdmitView) error
 
 const activeStates = `('leased','running','finalizing')`
 
+// hostCapacityMessage is the message of the E604 a full host reservation raises.
+const hostCapacityMessage = "host capacity exhausted"
+
+// IsHostCapacity reports whether err is AdmitPlacement's full-host refusal: the
+// placement is fine and the attempt should wait, not fail.
+func IsHostCapacity(err error) bool {
+	var se *Error
+	return errors.As(err, &se) && se.Code == "E604" && se.Message == hostCapacityMessage
+}
+
 // AdmitPlacement admits one queued attempt; see the file comment.
 func (s *Store) AdmitPlacement(ctx context.Context, host string, d Demand, r AdmitRequest, steps ...AdmitStep) (int64, error) {
 	if host == "" || d.AttemptID == "" || d.LeaseID == "" || d.RunnerID == "" || d.CPU < 1 || d.MemMB < 1 || d.CapacityCPU < 1 || d.CapacityMemMB < 1 {
@@ -79,7 +89,7 @@ func (s *Store) AdmitPlacement(ctx context.Context, host string, d Demand, r Adm
 			return err
 		}
 		if v.UsedCPU+d.CPU > d.CapacityCPU || v.UsedMemMB+d.MemMB > d.CapacityMemMB {
-			return coded("E604", "host capacity exhausted")
+			return coded("E604", hostCapacityMessage)
 		}
 		counts, err := admitCounts(ctx, tx, v)
 		if err != nil {
@@ -137,13 +147,14 @@ func (s *Store) commitAdmission(ctx context.Context, tx *sql.Tx, v AdmitView, fe
 }
 
 // admitCounts reads all eight counters in one pass over the active attempts.
-// An attempt with no recorded identity counts as the blank user and team, so
-// unknown identities share one bucket and the limit fails closed.
+// An active attempt with no recorded identity (a lease made before this set
+// existed, or through the nil-hook local path) counts against every user, team
+// and provider bucket, so an unknown identity can only make a limit stricter.
 func admitCounts(ctx context.Context, tx *sql.Tx, v AdmitView) (AdmitCounts, error) {
 	var c AdmitCounts
 	err := tx.QueryRowContext(ctx, `SELECT count(*),
  coalesce(sum(j.pipeline_id=?),0), coalesce(sum(j.pipeline_id=? AND j.name=?),0), coalesce(sum(l.runner_id=?),0), coalesce(sum(p.project=?),0),
- coalesce(sum(?!='' AND sa.provider=?),0), coalesce(sum(coalesce(sa.user_id,'')=?),0), coalesce(sum(coalesce(sa.team_id,'')=?),0)
+ coalesce(sum(?!='' AND (sa.attempt_id IS NULL OR sa.provider=?)),0), coalesce(sum(sa.attempt_id IS NULL OR sa.user_id=?),0), coalesce(sum(sa.attempt_id IS NULL OR sa.team_id=?),0)
  FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id
  LEFT JOIN lease l ON l.attempt_id=a.id LEFT JOIN sched_admitted sa ON sa.attempt_id=a.id
  WHERE a.state IN `+activeStates,
