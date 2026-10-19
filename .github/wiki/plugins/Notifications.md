@@ -7,7 +7,7 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | deferred ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.6 |
+| **Version** | 1.2.12 |
 | **Install** | `nself plugin install notifications` |
 | **Requirements** | nSelf >=0.9.9 |
 
