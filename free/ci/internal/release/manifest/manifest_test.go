@@ -375,6 +375,26 @@ func TestDecodeRefusesCaseVariantsAndMissingFields(t *testing.T) {
 	}
 }
 
+// D-1138: the case-variant check is scoped to the struct that owns the field,
+// so a key inside an ignored extension object may differ in case from a field
+// name that only another struct carries.
+func TestDecodeCaseVariantCheckIsScopedToTheOwningStruct(t *testing.T) {
+	good := string(mustBuild(t, valid()))
+	for name, doc := range map[string]string{
+		"extension object":      strings.Replace(good, `"repo_id"`, `"ext":{"Name":1,"Path":2},"repo_id"`, 1),
+		"extension in an array": strings.Replace(good, `"repo_id"`, `"ext":[{"NAME":1}],"repo_id"`, 1),
+		"key of another struct": strings.Replace(good, `"repo_id"`, `"Name":1,"repo_id"`, 1),
+	} {
+		if _, err := manifest.Decode([]byte(doc)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// a case variant of a field of the SAME struct is still refused
+	if _, err := manifest.Decode([]byte(strings.Replace(good, `"path"`, `"Path"`, 1))); err == nil {
+		t.Error("a case variant of an artifact field was accepted")
+	}
+}
+
 func TestBuildRefusesWhatDecodeCouldNotRead(t *testing.T) {
 	m := valid()
 	m.Artifacts = m.Artifacts[:1]

@@ -7,8 +7,9 @@ package manifest
 // Constraints: bounded (size, depth); a repeated object key is refused so two
 // readers cannot disagree on which value counts; unknown additive fields are
 // accepted and dropped (X19); a key that differs from a field of the contract
-// only in letter case is refused (encoding/json would fold it onto the field,
-// and a payload could carry two spellings); every field of the contract must be
+// only in letter case is refused, per struct of the contract (encoding/json would
+// fold it onto the field, and a payload could carry two spellings; a key inside
+// an ignored extension object is not a field of any struct and is left alone); every field of the contract must be
 // present (a nullable one may be null), so a missing size is not a zero size;
 // everything it accepts, Build writes back within the size cap; the decoded Manifest is not re-signed, so the bytes a verifier checks stay the
 // bytes the signature covers.
@@ -87,27 +88,6 @@ func foldKey(s string) string {
 	}, s)
 }
 
-// contractKeys holds every JSON field name of the contract, by foldKey.
-var contractKeys = func() map[string]string {
-	out := map[string]string{}
-	var walk func(t reflect.Type)
-	walk = func(t reflect.Type) {
-		for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice {
-			t = t.Elem()
-		}
-		if t.Kind() != reflect.Struct {
-			return
-		}
-		for i := 0; i < t.NumField(); i++ {
-			name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
-			out[foldKey(name)] = name
-			walk(t.Field(i).Type)
-		}
-	}
-	walk(reflect.TypeOf(Manifest{}))
-	return out
-}()
-
 // checkPresence requires every field of the Go type in the decoded JSON value,
 // and a non-null value for a field that is not a pointer.
 func checkPresence(t reflect.Type, v any, path string) error {
@@ -126,6 +106,16 @@ func checkPresence(t reflect.Type, v any, path string) error {
 		obj, ok := v.(map[string]any)
 		if !ok {
 			return invalid("%s is not an object", path)
+		}
+		fields := map[string]string{} // foldKey -> json name, for this struct only
+		for i := 0; i < t.NumField(); i++ {
+			name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+			fields[foldKey(name)] = name
+		}
+		for key := range obj { // a key of an ignored extension object is not checked: it is not in this struct
+			if want, ok := fields[foldKey(key)]; ok && want != key {
+				return invalid("%s: key %q is a case variant of %q", path, key, want)
+			}
 		}
 		for i := 0; i < t.NumField(); i++ {
 			name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
@@ -204,9 +194,6 @@ func checkShape(b []byte) error {
 				lower := foldKey(t)
 				if stack[n-1].folded[lower] {
 					return invalid("key %q repeats in another letter case", t)
-				}
-				if want, ok := contractKeys[lower]; ok && want != t {
-					return invalid("key %q is a case variant of %q", t, want)
 				}
 				stack[n-1].keys[t], stack[n-1].folded[lower], stack[n-1].expectKey = true, true, false
 				continue
