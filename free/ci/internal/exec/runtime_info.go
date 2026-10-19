@@ -54,10 +54,10 @@ func isInfoQuery(args []string) bool {
 }
 
 // cachedInfo returns the shared `info` answer of binary, asking at most once per
-// window. The key holds the environment the CLI is started with.
+// window. The key holds the environment that picks the daemon the CLI talks to.
 func cachedInfo(ctx context.Context, binary string) ([]byte, error) {
 	key := binary
-	for _, k := range []string{"PATH", "HOME", "XDG_RUNTIME_DIR"} {
+	for _, k := range []string{"PATH", "HOME", "XDG_RUNTIME_DIR", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "CONTAINER_HOST"} {
 		key += "\x00" + os.Getenv(k)
 	}
 	for {

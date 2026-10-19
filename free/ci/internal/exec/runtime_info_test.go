@@ -77,3 +77,20 @@ func TestWarmRuntimeInfoLetsTheFirstRealQueryShareTheSpawn(t *testing.T) {
 		t.Fatalf("docker info ran %d times, want 1", n)
 	}
 }
+
+// A different daemon (DOCKER_HOST, DOCKER_CONTEXT) is a different question.
+func TestRuntimeInfoIsKeyedByTheDaemonTheCLIPicks(t *testing.T) {
+	calls := infoStubDocker(t)
+	ctx := context.Background()
+	t.Setenv("DOCKER_HOST", "unix:///a.sock")
+	if _, err := RuntimeQuery(ctx, "docker", "info"); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DOCKER_HOST", "unix:///b.sock")
+	if _, err := RuntimeQuery(ctx, "docker", "info"); err != nil {
+		t.Fatal(err)
+	}
+	if n := calls(); n != 2 {
+		t.Fatalf("docker info ran %d times for two daemons, want 2", n)
+	}
+}
