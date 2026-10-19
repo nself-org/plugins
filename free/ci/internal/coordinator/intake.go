@@ -33,7 +33,7 @@ const MaxBody = 25 << 20
 type Outcome = store.IntakeOutcome
 
 type enqueueOpts struct {
-	force                 bool
+	force                  bool
 	actor, idem, reqDigest string
 }
 

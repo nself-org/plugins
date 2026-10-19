@@ -156,7 +156,7 @@ func RegisterFlag(add func(*flag.FlagSet)) {
 func AddFlags(fs *flag.FlagSet) (addrs func() map[string]string) {
 	registry.Lock()
 	specs := append([]listenerSpec(nil), registry.listeners...)
-	extra := append([]func(*flag.FlagSet)(nil), registry.flags...)
+	extra := append(([]func(*flag.FlagSet))(nil), registry.flags...)
 	registry.Unlock()
 	vals := map[string]*string{}
 	for _, l := range specs {

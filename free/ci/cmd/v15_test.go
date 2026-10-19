@@ -38,9 +38,17 @@ func TestSharedKey(t *testing.T) {
 	if old == nil {
 		t.Fatal("v1.4 serve key missing")
 	}
+	real15 := v15Subcommands["serve"] // P7-NODE-10 registers the real V15 serve: park it while the fixture shares the key
+	delete(v15Subcommands, "serve")
 	subcommands["serve"] = func([]string) int { return 14 }
 	registerV15("serve", subcommandEntry{Handler: func([]string) int { return 15 }, V15Only: true, Flags: runsFlags})
-	defer func() { delete(v15Subcommands, "serve"); subcommands["serve"] = old }()
+	defer func() {
+		delete(v15Subcommands, "serve")
+		if real15.Handler != nil {
+			v15Subcommands["serve"] = real15
+		}
+		subcommands["serve"] = old
+	}()
 	t.Setenv("NSELF_V15", "1")
 	if got := runV15([]string{"serve"}); got != 15 {
 		t.Fatalf("v1.5 serve = %d", got)
