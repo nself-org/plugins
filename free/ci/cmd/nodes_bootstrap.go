@@ -5,8 +5,8 @@ package main
 // user for the job shim only, the agent under /opt/nself-ci-agent). The work is in
 // internal/nodes/bootstrap; this file registers the flags, the "system" installer and a guard hook.
 // Inputs:  `--system` (selects the installer), `--slots N` (job users, default 2), `--agent-binary`.
-// Outputs: a node that `nodes add` then records as uid-separated (system.users): jobs never run under
-//          the agent's UID, the node key is readable by the agent user alone.
+// Outputs: a node with the system layout installed. `nodes add` still records it as NOT uid-separated:
+//          the agent does not run jobs through the shim yet (debt row), so no secret or signing right follows.
 // Constraints: the ssh user must be root or have passwordless sudo (E669 no_root); `--system` without
 //          the installer having run (no --agent-binary, or another --installer) fails the add before the
 //          node is registered; a macOS node without a registered family gets the brew commands printed;
@@ -92,23 +92,10 @@ func systemGuard(_ context.Context, e lifecycle.HookEvent) error {
 	return nil
 }
 
-// systemSeparation reports the node as uid-separated once the system layout is verified in place.
-type systemSeparation struct {
-	inner lifecycle.SeparationProber
-	done  bool
-}
-
-func (s *systemSeparation) Detect(ctx context.Context, run func(context.Context, ...string) (string, error), p lifecycle.Platform) lifecycle.SeparationFacts {
-	if s.done && p.OS == "linux" {
-		return lifecycle.SeparationFacts{UIDSeparation: true, Reason: "system.users"}
-	}
-	return s.inner.Detect(ctx, run, p)
-}
-
 func systemInstall(ctx context.Context, d *lifecycle.Deps, r lifecycle.InstallRequest) error {
 	slots, err := strconv.Atoi(flagString(r.Flags, "slots"))
-	if err != nil || slots < 1 {
-		slots = defaultSlots
+	if err != nil {
+		return bootstrap.NewError(bootstrap.ReasonUsage, "--slots must be a whole number between 1 and %d", bootstrap.MaxSlots)
 	}
 	if r.Source == nil {
 		return bootstrap.NewError(bootstrap.ReasonUsage, "--system needs --agent-binary")
@@ -137,7 +124,9 @@ func systemInstall(ctx context.Context, d *lifecycle.Deps, r lifecycle.InstallRe
 	if err = linkAgent(ctx, run, r.Dir); err != nil {
 		return err
 	}
-	d.Separation = &systemSeparation{inner: d.Separation, done: true}
+	// The users, rules and directories exist, but nothing runs jobs through the shim yet and a push-mode
+	// agent still runs as the ssh user, so the node stays recorded as not uid-separated (review M2).
+	_, _ = fmt.Fprintln(d.Stderr, "system layout installed; the node is recorded as not uid-separated until the agent runs jobs through the job shim")
 	installed.Store(r.NodeID, true)
 	return nil
 }

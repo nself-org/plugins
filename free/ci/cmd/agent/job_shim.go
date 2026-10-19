@@ -126,11 +126,13 @@ func execShimRequest(req shimRequest, sio IO) int {
 		fmt.Fprintln(sio.Stderr, "error:", err)
 		return 127
 	}
-	if req.Dir != "" {
-		if err = os.Chdir(req.Dir); err != nil {
-			fmt.Fprintln(sio.Stderr, "error: cannot enter the job directory:", err)
-			return 126
-		}
+	dir := req.Dir
+	if dir == "" {
+		dir = "/" // never the agent's inherited cwd (its 0700 state directory)
+	}
+	if err = os.Chdir(dir); err != nil {
+		fmt.Fprintln(sio.Stderr, "error: cannot enter the job directory:", err)
+		return 126
 	}
 	err = syscall.Exec(path, req.Argv, req.Env) // only returns on failure
 	fmt.Fprintln(sio.Stderr, "error: exec:", err)

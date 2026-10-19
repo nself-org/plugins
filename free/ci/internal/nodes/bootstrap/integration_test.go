@@ -57,7 +57,7 @@ func (r *rig) layout(slots int) {
 		r.t.Errorf("sudo -l -U %s lists %d rules, want %d", AgentUser, rules, slots)
 	}
 	r.root("visudo -c >/dev/null")
-	for path, want := range map[string]string{AgentPath: "755 nself-ci", StateDir: "700 nself-ci", WorkDir: "711 nself-ci", JobsDir: "711 root"} {
+	for path, want := range map[string]string{AgentPath: "755 root", StateDir: "700 nself-ci", WorkDir: "711 nself-ci", JobsDir: "711 root"} {
 		if got := r.root("stat -c '%a %U' " + path); got != want {
 			r.t.Errorf("%s is %q, want %q", path, got, want)
 		}
@@ -84,9 +84,7 @@ func (r *rig) isolation() {
 	r.try("sudo -u " + AgentUser + " env NSELF_CI_AGENT_HOME=" + StateDir + " NSELF_CI_AGENT_WORK=" + WorkDir + " timeout 20 " + AgentPath + " serve --stdio </dev/null")
 	files := strings.Fields(r.root("ls " + StateDir))
 	if len(files) == 0 {
-		r.t.Log("the agent left no key file; planting synthetic key material owned by the agent user")
-		r.root("sudo -u " + AgentUser + " sh -c 'umask 077; echo synthetic > " + StateDir + "/node.key; echo synthetic > " + StateDir + "/age.key'")
-		files = []string{"node.key", "age.key"}
+		r.t.Fatalf("the agent created no key material in %s", StateDir)
 	}
 	for _, f := range files {
 		path := StateDir + "/" + f

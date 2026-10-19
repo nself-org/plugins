@@ -35,7 +35,7 @@ for n in %[3]s; do mk %[1]s-job-$n /nonexistent; done
 // dirsScript creates the directories with their owners and modes.
 func dirsScript(slots int) string {
 	return fmt.Sprintf(`set -eu
-install -d -o %[1]s -g %[1]s -m 0755 %[2]s %[2]s/bin
+install -d -o root -g root -m 0755 %[2]s %[2]s/bin
 install -d -o %[1]s -g %[1]s -m 0700 %[3]s
 install -d -o %[1]s -g %[1]s -m 0711 %[4]s
 install -d -o %[1]s -g %[1]s -m 0750 %[5]s
@@ -62,7 +62,7 @@ for n in %[2]s; do
   echo "%[3]s ALL=(%[3]s-job-$n) NOPASSWD: %[4]s job-shim" > "$tmp/%[3]s-job-$n"
   visudo -cf "$tmp/%[3]s-job-$n" >/dev/null
 done
-grep -Eq '^[#@]includedir[[:space:]]+%[1]s' /etc/sudoers || echo '#includedir %[1]s' >> /etc/sudoers
+grep -Eq '^[#@]includedir[[:space:]]+%[1]s' /etc/sudoers || { echo >> /etc/sudoers; echo '#includedir %[1]s' >> /etc/sudoers; }
 mkdir -p %[1]s
 for n in %[2]s; do
   install -o root -g root -m 0440 "$tmp/%[3]s-job-$n" %[1]s/%[3]s-job-$n
@@ -89,19 +89,20 @@ u=%[1]s
 rm -f %[2]s
 pkill -KILL -u "$u" >/dev/null 2>&1 || true
 rmdir %[3]s 2>/dev/null || true
-if [ -n "$(find / -xdev -user "$u" 2>/dev/null | head -n 1)" ]; then echo kept; exit 0; fi
+left=$(for d in / /var /tmp /home /opt /srv /usr/local /root; do [ -d "$d" ] && find "$d" -xdev -user "$u" 2>/dev/null | head -n 1; done | head -n 1)
+if [ -n "$left" ]; then echo kept; exit 0; fi
 userdel "$u" >/dev/null 2>&1 || true
 getent group "$u" >/dev/null 2>&1 && groupdel "$u" >/dev/null 2>&1 || true
-echo removed
+if id -u "$u" >/dev/null 2>&1; then echo kept; else echo removed; fi
 `, JobUser(n), SudoersFile(n), JobRoot(n))
 }
 
 // agentScript installs the uploaded binary (the file sits in the ssh user's home, the script's cwd).
 func agentScript(uploaded string) string {
 	return fmt.Sprintf(`set -eu
-install -o %[1]s -g %[1]s -m 0755 ./%[2]s %[3]s
-rm -f ./%[2]s
-`, AgentUser, uploaded, AgentPath)
+install -o root -g root -m 0755 ./%[1]s %[2]s
+rm -f ./%[1]s
+`, uploaded, AgentPath)
 }
 
 // verifyScript checks the layout after an install: every user exists and none is in the docker group,
@@ -110,13 +111,13 @@ rm -f ./%[2]s
 func verifyScript(slots int) string {
 	return fmt.Sprintf(`set -eu
 id -u %[1]s >/dev/null
-[ "$(stat -c %%a %[2]s)" = 700 ]
+[ "$(stat -c '%%a %%U' %[2]s)" = "700 %[1]s" ]
 for n in %[3]s; do
   id -u %[1]s-job-$n >/dev/null
   [ -f %[4]s/%[1]s-job-$n ]
 done
 for u in $(getent passwd | cut -d: -f1 | grep -E '^%[1]s(-job-[0-9]+)?$'); do
-  if id -nG "$u" | grep -qw docker; then echo "$u is in the docker group" >&2; exit 1; fi
+  if id -nG "$u" | grep -qwE 'docker|sudo|wheel|adm'; then echo "$u is in a privileged group" >&2; exit 1; fi
 done
 rules=$(sudo -n -l -U %[1]s 2>/dev/null | grep -c '%[5]s job-shim' || true)
 [ "$rules" = %[6]d ] || { echo "sudo lists $rules job-shim rules, want %[6]d" >&2; exit 1; }

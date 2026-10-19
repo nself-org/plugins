@@ -97,7 +97,7 @@ func fakeDeps(t *testing.T, osName string) (*lifecycle.Deps, *[][]string, *bytes
 	return d, &calls, &errb
 }
 
-func TestSystemInstallBootstrapsAndMarksTheNodeSeparated(t *testing.T) {
+func TestSystemInstallBootstrapsAndKeepsTheNodeUnseparated(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "agent")
 	if err := os.WriteFile(bin, []byte("x"), 0o755); err != nil {
 		t.Fatal(err)
@@ -117,9 +117,8 @@ func TestSystemInstallBootstrapsAndMarksTheNodeSeparated(t *testing.T) {
 			t.Errorf("the node never saw %q:\n%s", want, all)
 		}
 	}
-	facts := d.Separation.Detect(context.Background(), nil, lifecycle.Platform{OS: "linux"})
-	if !facts.UIDSeparation || facts.Reason != "system.users" {
-		t.Fatalf("separation = %+v", facts)
+	if facts := d.Separation.Detect(context.Background(), nil, lifecycle.Platform{OS: "linux"}); facts.UIDSeparation {
+		t.Fatalf("a node whose jobs do not run through the shim was marked separated: %+v", facts)
 	}
 	if _, ok := installed.Load("sys-1"); !ok {
 		t.Fatal("the guard would refuse a finished install")
@@ -162,6 +161,24 @@ func TestRunnerPinFromTheEmbeddedTable(t *testing.T) {
 	for arch, s := range pin.Sources {
 		if !strings.HasPrefix(s.URL, "https://github.com/actions/runner/releases/download/v"+pin.Version+"/") || !strings.Contains(s.URL, pin.Version) {
 			t.Errorf("%s url %q is not the pinned release", arch, s.URL)
+		}
+	}
+}
+
+func TestSystemInstallRefusesBadSlots(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "agent")
+	_ = os.WriteFile(bin, []byte("x"), 0o755)
+	for _, slots := range []string{"0", "-1", "65", "x"} {
+		d, calls, _ := fakeDeps(t, "Linux")
+		fs, _ := addFlags(t, "--system", "--slots", slots)
+		err := systemInstall(context.Background(), d, lifecycle.InstallRequest{NodeID: "bad", Platform: lifecycle.Platform{OS: "linux", Arch: "amd64"}, Dir: ".nself/ci-agent", Source: fakeSource{bin}, Flags: fs})
+		if bootstrap.ReasonOf(err) != bootstrap.ReasonUsage {
+			t.Errorf("--slots %s: %v", slots, err)
+		}
+		for _, c := range *calls {
+			if len(c) > 2 && c[len(c)-3] == "sh" && strings.Contains(c[len(c)-1], "useradd") {
+				t.Errorf("--slots %s created users", slots)
+			}
 		}
 	}
 }
