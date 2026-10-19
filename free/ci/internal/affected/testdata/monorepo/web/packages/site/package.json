@@ -1,0 +1,7 @@
+{
+  "name": "@example/site",
+  "version": "1.0.0",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {"test": "true"},
+  "dependencies": {"@example/ui": "workspace:*"}
+}
