@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/nself-org/cli/sdk/go/v2/remote"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -34,6 +35,11 @@ type HookEvent struct {
 	NodeID  string
 	Project string
 	Flags   *flag.FlagSet
+	// Dest is the destination as typed (`nodes add`); empty at the other points.
+	Dest string
+	// Capability is the draft a node is registered with (`nodes add`, after the probe); nil elsewhere.
+	// An add hook may set its DeployHost (P7-NODE-14) and nothing else.
+	Capability *model.Capability
 }
 
 // AddHook runs at a Point; an error from an add hook fails `nodes add` before the node is registered
