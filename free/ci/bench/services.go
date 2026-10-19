@@ -55,38 +55,67 @@ func measureServices(ctx context.Context, cfg Config, home string, col *Collecto
 	if err != nil {
 		return err
 	}
-	for i := 0; i < cfg.Runs; i++ {
+	coldWant := 0
+	if sc.Cold {
+		if coldWant = sc.ColdRuns; coldWant < 1 {
+			coldWant = cfg.Runs
+		}
+	}
+	// A sample is warm or cold by what docker says about the images right before
+	// the start, not by what this loop intended: if the teardown removes the
+	// images, every start is cold and no warm sample is recorded (and that is
+	// reported below), instead of a cold start being filed as warm.
+	warm, cold := 0, 0
+	for try := 0; try < 3*(cfg.Runs+coldWant) && (warm < cfg.Runs || cold < coldWant); try++ {
+		if coldWant > 0 && cold < coldWant && (warm >= cfg.Runs || try%2 == 1) {
+			if err := removeImages(ctx, cfg.Dir, images); err != nil {
+				return err
+			}
+		}
+		present := imagesPresent(ctx, cfg.Dir, images)
 		ms, _, err := up()
 		if err != nil {
 			return err
 		}
-		col.Add(MetricServiceWarm, "ms", ms)
-	}
-	if !sc.Cold {
-		return nil
-	}
-	n := sc.ColdRuns
-	if n < 1 {
-		n = cfg.Runs
-	}
-	for i := 0; i < n; i++ {
-		for _, img := range strings.Fields(images) {
-			r, err := spawn(ctx, []string{"docker", "image", "rm", img}, cfg.Dir, baseEnv())
-			if err != nil {
-				return fmt.Errorf("cold start needs the image removed: %w", err)
-			}
-			// An image that is already gone is the cold state this scenario wants.
-			if r.ExitCode != 0 && !strings.Contains(r.Tail, "No such image") {
-				return fmt.Errorf("cold start needs the image removed: docker image rm %s: exit %d: %s", img, r.ExitCode, r.Tail)
-			}
+		switch {
+		case present && warm < cfg.Runs:
+			col.Add(MetricServiceWarm, "ms", ms)
+			warm++
+		case !present && cold < coldWant:
+			col.Add(MetricServiceCold, "ms", ms)
+			cold++
 		}
-		ms, _, err := up()
-		if err != nil {
-			return err
-		}
-		col.Add(MetricServiceCold, "ms", ms)
+	}
+	if warm < cfg.Runs || cold < coldWant {
+		return fmt.Errorf("service scenarios recorded %d warm and %d cold samples, wanted %d and %d (images %s)",
+			warm, cold, cfg.Runs, coldWant, images)
 	}
 	return nil
+}
+
+// removeImages removes the images; one that is already gone is the cold state.
+func removeImages(ctx context.Context, dir, images string) error {
+	for _, img := range strings.Fields(images) {
+		r, err := spawn(ctx, []string{"docker", "image", "rm", img}, dir, baseEnv())
+		if err != nil {
+			return fmt.Errorf("cold start needs the image removed: %w", err)
+		}
+		if r.ExitCode != 0 && !strings.Contains(r.Tail, "No such image") {
+			return fmt.Errorf("cold start needs the image removed: docker image rm %s: exit %d: %s", img, r.ExitCode, r.Tail)
+		}
+	}
+	return nil
+}
+
+// imagesPresent reports whether every image is in the local store.
+func imagesPresent(ctx context.Context, dir, images string) bool {
+	for _, img := range strings.Fields(images) {
+		r, err := spawn(ctx, []string{"docker", "image", "inspect", "--format", "{{.Id}}", img}, dir, baseEnv())
+		if err != nil || r.ExitCode != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // imagesOf lists the images of the containers of compose project name. A
