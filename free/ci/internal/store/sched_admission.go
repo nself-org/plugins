@@ -108,26 +108,8 @@ func (s *Store) AdmitPlacement(ctx context.Context, host string, d Demand, r Adm
 		if v.UsedCPU+d.CPU > d.CapacityCPU || v.UsedMemMB+d.MemMB > d.CapacityMemMB {
 			return coded("E604", hostCapacityMessage)
 		}
-		if r.NodeID != "" {
-			var state, lifecycle string
-			if err := tx.QueryRowContext(ctx, "SELECT state,lifecycle FROM node WHERE id=?", r.NodeID).Scan(&state, &lifecycle); err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return &NodeUnavailableError{State: "unknown"}
-				}
-				return err
-			}
-			if state != "online" {
-				return &NodeUnavailableError{State: state}
-			}
-			var lc model.CapabilityLifecycle
-			if err := json.Unmarshal([]byte(lifecycle), &lc); err != nil {
-				return coded("E607", "node lifecycle is unreadable")
-			}
-			// r.Project is the scheduler's project id (the id a node authorizes); the pipeline row's
-			// project is a different identifier (the repository root), so it cannot stand in for it.
-			if lc.Discovered || lc.RevokedAt != nil || r.Project == "" || !slices.Contains(lc.AuthorizedProjects, r.Project) {
-				return &NodeUnavailableError{State: "unauthorized"}
-			}
+		if err := checkNodeAvailable(ctx, tx, r.NodeID, r.Project); err != nil {
+			return err
 		}
 		counts, err := admitCounts(ctx, tx, v)
 		if err != nil {
@@ -145,6 +127,36 @@ func (s *Store) AdmitPlacement(ctx context.Context, host string, d Demand, r Adm
 		return 0, err
 	}
 	return fence, nil
+}
+
+// checkNodeAvailable re-reads the registry row of nodeID inside tx and refuses
+// with *NodeUnavailableError unless the node is online, not revoked and still
+// authorizes project (the scheduler's project id; the pipeline row's project is
+// the repository root, a different identifier, so it cannot stand in). Empty
+// nodeID is a local or provider-hosted runner and always passes. AdmitPlacement
+// and LeaseGrant both call it, so no grant path skips the revoke guarantee (D-1086).
+func checkNodeAvailable(ctx context.Context, tx *sql.Tx, nodeID, project string) error {
+	if nodeID == "" {
+		return nil
+	}
+	var state, lifecycle string
+	if err := tx.QueryRowContext(ctx, "SELECT state,lifecycle FROM node WHERE id=?", nodeID).Scan(&state, &lifecycle); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return &NodeUnavailableError{State: "unknown"}
+		}
+		return err
+	}
+	if state != "online" {
+		return &NodeUnavailableError{State: state}
+	}
+	var lc model.CapabilityLifecycle
+	if err := json.Unmarshal([]byte(lifecycle), &lc); err != nil {
+		return coded("E607", "node lifecycle is unreadable")
+	}
+	if lc.Discovered || lc.RevokedAt != nil || project == "" || !slices.Contains(lc.AuthorizedProjects, project) {
+		return &NodeUnavailableError{State: "unauthorized"}
+	}
+	return nil
 }
 
 func (s *Store) commitAdmission(ctx context.Context, tx *sql.Tx, v AdmitView, fence *int64) error {

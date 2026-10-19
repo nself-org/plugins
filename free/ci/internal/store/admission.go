@@ -126,6 +126,10 @@ type Demand struct {
 	CPU, MemMB, CapacityCPU, CapacityMemMB    int
 	TTL                                       time.Duration
 	Epoch                                     int64
+	// NodeID names the registry node of a remote lease; LeaseGrant re-reads its
+	// row in the grant transaction and refuses a node that is not online, is
+	// revoked or no longer authorizes Project (D-1086). Empty for a local lease.
+	NodeID, Project string
 }
 type AdmissionStep func(context.Context, AdmissionView) error
 type AdmissionView struct {

@@ -45,13 +45,16 @@ func LeaseEpoch(incarnation, previous int64) int64 {
 	return incarnation<<32 | counter
 }
 
-// LeaseGrant atomically reserves a host, transitions the attempt, and issues a fence.
+// LeaseGrant atomically checks the node (when d.NodeID is set), reserves a host, transitions the attempt, and issues a fence.
 func (s *Store) LeaseGrant(ctx context.Context, host string, d Demand, incarnation int64) (int64, error) {
 	if host == "" || d.AttemptID == "" || d.LeaseID == "" || d.RunnerID == "" || d.CPU < 1 || d.MemMB < 1 || d.CapacityCPU < 1 || d.CapacityMemMB < 1 {
 		return 0, coded("E604", "invalid lease demand")
 	}
 	var fence int64
 	err := s.write(ctx, func(tx *sql.Tx) error {
+		if err := checkNodeAvailable(ctx, tx, d.NodeID, d.Project); err != nil {
+			return err
+		}
 		var usedCPU, usedMem int
 		if err := tx.QueryRowContext(ctx, "SELECT coalesce(sum(cpu),0),coalesce(sum(mem_mb),0) FROM host_reservation WHERE host=?", host).Scan(&usedCPU, &usedMem); err != nil {
 			return err
