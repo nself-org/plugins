@@ -38,6 +38,11 @@ func (s *Session) credentialsHidden(sp Spec) bool {
 			return true
 		}
 	}
+	for _, n := range sd.Names { // a config that names a registry or a token is credentials in all but name
+		if b, err := os.ReadFile(filepath.Join(s.toolHome(sd), n)); err == nil && cargoReg.Match(b) {
+			return true
+		}
+	}
 	return false
 }
 

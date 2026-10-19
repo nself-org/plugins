@@ -91,8 +91,15 @@ func flatEnv(m map[string]string) []string {
 	return out
 }
 
-// sweepStale removes cache-work directories abandoned by a crashed run.
+// sweepStale removes cache-work directories abandoned by a crashed run. Removal
+// goes through a handle on cache-work, so a planted symlink is removed as a
+// link and its target is never touched.
 func sweepStale(dir string, now time.Time, alive func(id string) bool) {
+	parent, err := os.OpenRoot(dir)
+	if err != nil {
+		return
+	}
+	defer func() { _ = parent.Close() }()
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -102,7 +109,7 @@ func sweepStale(dir string, now time.Time, alive func(id string) bool) {
 			continue
 		}
 		if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) > staleAfter {
-			_ = specs.RemoveTree(filepath.Join(dir, e.Name()))
+			_ = specs.RemoveIn(parent, e.Name())
 		}
 	}
 }

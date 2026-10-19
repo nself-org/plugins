@@ -237,6 +237,11 @@ func RemoveTree(dir string) error {
 	return os.RemoveAll(dir)
 }
 
+// RemoveIn deletes the entry rel of base, making directories owner-writable
+// first, without ever leaving base: a rel that is a symlink out of base is
+// refused (its link is removed, its target never touched).
+func RemoveIn(base *os.Root, rel string) error { return removeIn(base, rel) }
+
 // removeIn deletes the directory rel of base (same permission rule as RemoveTree)
 // without ever leaving base.
 func removeIn(base *os.Root, rel string) error {

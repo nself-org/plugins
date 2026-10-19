@@ -395,3 +395,35 @@ func TestCacheHookEvictionRetractsACancelledAttemptsEntry(t *testing.T) {
 		t.Fatalf("a passed attempt keeps its entry: %+v", pass)
 	}
 }
+
+func TestSweepStaleNeverFollowsASymlink(t *testing.T) {
+	victim := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(victim, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(victim, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	work := t.TempDir()
+	if err := os.Symlink(victim, filepath.Join(work, "old-link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(work, "old-dir", "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sweepStale(work, time.Now().Add(3*staleAfter), func(string) bool { return false })
+	if info, err := os.Stat(filepath.Join(victim, "sub")); err != nil || info.Mode().Perm() != 0o755 {
+		t.Fatalf("the link target was touched: %v %v", info, err)
+	}
+	if ents, _ := os.ReadDir(work); len(ents) != 0 {
+		t.Fatalf("stale entries left: %v", ents)
+	}
+	alive := filepath.Join(work, "live")
+	if err := os.MkdirAll(alive, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sweepStale(work, time.Now().Add(3*staleAfter), func(id string) bool { return id == "live" })
+	if _, err := os.Stat(alive); err != nil {
+		t.Fatal("a live attempt's dir was swept")
+	}
+}

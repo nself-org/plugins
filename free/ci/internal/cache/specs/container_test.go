@@ -3,7 +3,8 @@
 package specs
 
 // Container-tagged tests: they need a Docker daemon and the alpine:3.19 image
-// and fail (never skip) when either is missing.
+// and fail (never skip) when either is missing. The entries they restore come
+// from a synthetic writer (see seedSnapshot): no real attempt writes one yet.
 
 import (
 	"context"

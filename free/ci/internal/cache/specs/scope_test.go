@@ -1,6 +1,7 @@
 package specs
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -108,5 +109,35 @@ func TestPrivateDepsFollowsTheToolsEnvironmentFiles(t *testing.T) {
 	empty := t.TempDir()
 	if yes, why := PrivateDeps(PrivInput{Dirs: []string{dir}, Home: home, Environ: []string{"CARGO_HOME=" + empty}}); yes {
 		t.Fatalf("an empty CARGO_HOME is not private: %v", why)
+	}
+}
+
+func TestPrivateDepsSeesGoPrivateSettings(t *testing.T) {
+	dir, home := t.TempDir(), t.TempDir()
+	putFile(t, home+"/.config/go/env", "GOPRIVATE=example.invalid/corp\n")
+	if yes, _ := PrivateDeps(PrivInput{Dirs: []string{dir}, Home: home}); !yes {
+		t.Fatal("go env -w GOPRIVATE")
+	}
+	for _, env := range [][]string{{"GOPROXY=https://u:p@proxy.example.invalid"}, {"GOAUTH=netrc"}} {
+		if yes, _ := PrivateDeps(PrivInput{Dirs: []string{dir}, Home: t.TempDir(), Environ: env}); !yes {
+			t.Fatalf("%v", env)
+		}
+	}
+	if yes, why := PrivateDeps(PrivInput{Dirs: []string{dir}, Home: t.TempDir(), Environ: []string{"GOPROXY=https://proxy.golang.org,direct"}}); yes {
+		t.Fatalf("the public proxy is not private: %v", why)
+	}
+}
+
+func TestCargoConfigWithARegistryBlocksTheRebind(t *testing.T) {
+	e := newEnv(t)
+	userHome := t.TempDir()
+	putFile(t, userHome+"/.cargo/config.toml", "[registries.corp]\nindex = \"sparse+https://cargo.example.invalid/\"\n")
+	e.running("g1", ownerFacts)
+	in := e.input("g1", ownerFacts)
+	in.Detected = []detect.Fact{fact("stack", "rust", "Cargo.toml")}
+	in.Home = userHome
+	in.Probe = func(context.Context, []string) (string, error) { return "tool 1.0", nil }
+	if s := e.begin(in); len(s.items) != 0 || strings.Join(resultsOf(e.uses("g1")), ",") != "cargo:disabled" {
+		t.Fatalf("a cargo config that names a registry must not be rebound: %v", resultsOf(e.uses("g1")))
 	}
 }

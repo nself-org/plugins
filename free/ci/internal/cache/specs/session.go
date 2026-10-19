@@ -193,7 +193,11 @@ func (s *Session) restore(ctx context.Context, it *Item) {
 	s.seed(it)
 	job := authz.Job{Namespace: s.own, State: authz.StateRunning, Capability: authz.Capability{Attempt: s.in.Attempt, Epoch: s.in.Epoch}}
 	it.Access = authz.CacheAccess(job, s.own)
-	for _, ns := range append([]authz.Namespace{s.own}, s.snapshotSources()...) {
+	sources := []authz.Namespace{s.own}
+	if s.in.Container { // a process job cannot hold a read-only mount: it would unpack a snapshot only to deny it
+		sources = append(sources, s.snapshotSources()...)
+	}
+	for _, ns := range sources {
 		access, key := authz.CacheAccess(job, ns), it.Key
 		if !ns.Equal(s.own) {
 			key, _ = it.Mat.Key(ns)

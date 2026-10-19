@@ -20,13 +20,21 @@ func fill(t *testing.T, s *Session) {
 	putFile(t, filepath.Join(dirs.dir("build"), "ab", "cd-d"), "compiled")
 }
 
-// saved runs a whole passing owner attempt and returns the finished session.
-func saved(t *testing.T, e *env, id string, f entries.Facts) *Session {
+// savedFinalizing runs an attempt through its save and leaves it finalizing.
+func savedFinalizing(t *testing.T, e *env, id string, f entries.Facts) *Session {
 	t.Helper()
 	e.running(id, f)
 	s := e.begin(e.input(id, f))
 	fill(t, s)
 	s.Finalize(e.ctx, e.finalizing(id))
+	return s
+}
+
+// saved runs a whole passing attempt: the save, then the settle to passed.
+func saved(t *testing.T, e *env, id string, f entries.Facts) *Session {
+	t.Helper()
+	s := savedFinalizing(t, e, id, f)
+	e.settlePassed(id)
 	return s
 }
 
@@ -156,16 +164,15 @@ func TestSessionSnapshotsAreReadOnlyForLowerTrust(t *testing.T) {
 			t.Fatalf("uses %v", got)
 		}
 	})
-	t.Run("untrusted process job is denied a snapshot", func(t *testing.T) {
+	t.Run("an untrusted process job never reads a snapshot (it cannot hold it read-only)", func(t *testing.T) {
 		e := setup(t, ownerFacts)
 		e.running("u2", untrustFacts)
 		s := e.begin(e.input("u2", untrustFacts))
-		if got := resultsOf(e.uses("u2")); strings.Join(got, ",") != "go:denied" {
+		if got := resultsOf(e.uses("u2")); strings.Join(got, ",") != "go:miss" {
 			t.Fatalf("uses %v", got)
 		}
-		env, mounts := s.Setup()
-		if len(env) != 0 || len(mounts) != 0 || len(tree(t, s.dir("mod"))) != 0 {
-			t.Fatalf("a denied restore must leave nothing: %v %v", env, mounts)
+		if len(tree(t, s.dir("mod"))) != 0 || e.entryCount() != 1 {
+			t.Fatalf("the snapshot must be neither unpacked nor dropped: entries %d", e.entryCount())
 		}
 	})
 	for name, writer := range map[string]entries.Facts{
@@ -268,6 +275,7 @@ func TestSessionDropsAndRefusesACraftedEntry(t *testing.T) {
 	if err := e.es.Commit(e.ctx, "c1", fin, ns, m); err != nil {
 		t.Fatal(err)
 	}
+	e.settlePassed("c1")
 	e.running("c2", ownerFacts)
 	s := e.begin(e.input("c2", ownerFacts))
 	if got := strings.Join(resultsOf(e.uses("c2")), ","); got != "go:refused,go:miss" {
@@ -318,6 +326,7 @@ func TestSessionCargoBindsHomeAndSeedsConfig(t *testing.T) {
 	putFile(t, root+"/git/db/y", "db")
 	putFile(t, root+"/target/debug/app", "binary") // never cached: target/ is no spec dir
 	s.Finalize(e.ctx, e.finalizing("r1"))
+	e.settlePassed("r1")
 	e.running("r2", ownerFacts)
 	in.Attempt, in.Root = "r2", filepath.Join(e.home, "cache-work", "r2")
 	s2 := e.begin(in)
@@ -421,5 +430,37 @@ func TestSessionValidatesEveryDirLikeARestore(t *testing.T) {
 	s.Finalize(e.ctx, e.finalizing("v1"))
 	if e.entryCount() != 0 || strings.Join(resultsOf(e.uses("v1")), ",") != "go:miss,go:refused" {
 		t.Fatalf("entries %d uses %v", e.entryCount(), resultsOf(e.uses("v1")))
+	}
+}
+
+// An attempt that committed and then did not settle passed (a cancel won, or a crash) never serves its entry.
+func TestRestoreNeverServesAnEntryOfAnAttemptThatDidNotPass(t *testing.T) {
+	e := newEnv(t)
+	savedFinalizing(t, e, "w1", ownerFacts) // the writer is still finalizing: not served yet
+	e.running("r1", ownerFacts)
+	e.begin(e.input("r1", ownerFacts))
+	if got := strings.Join(resultsOf(e.uses("r1")), ","); got != "go:miss" || e.entryCount() != 1 {
+		t.Fatalf("an entry whose writer has not settled passed must not be served (and not dropped yet): %s entries %d", got, e.entryCount())
+	}
+	if err := e.st.Transition(e.ctx, "w1", "finalizing", "cancelled", storeDetail(3)); err != nil {
+		t.Fatal(err)
+	}
+	e.running("r2", ownerFacts)
+	e.begin(e.input("r2", ownerFacts))
+	if got := strings.Join(resultsOf(e.uses("r2")), ","); got != "go:miss" || e.entryCount() != 0 {
+		t.Fatalf("a cancelled writer's entry must be dropped: %s entries %d", got, e.entryCount())
+	}
+}
+
+// A process job never unpacks (or drops) a higher-trust snapshot only to deny it.
+func TestLowerTrustProcessJobLeavesTheSnapshotAlone(t *testing.T) {
+	e := newEnv(t)
+	saved(t, e, "w1", ownerFacts)
+	internal := ownerFacts
+	internal.Trust, internal.Protection = "internal", "unprotected"
+	e.running("p1", internal)
+	s := e.begin(e.input("p1", internal))
+	if got := strings.Join(resultsOf(e.uses("p1")), ","); got != "go:miss" || e.entryCount() != 1 || len(tree(t, s.dir("mod"))) != 0 {
+		t.Fatalf("uses %s entries %d", got, e.entryCount())
 	}
 }

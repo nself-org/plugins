@@ -184,7 +184,9 @@ func (e *env) beginUntrustedContainer(id string) *Session {
 	return e.begin(e.containerInput(id, untrustFacts))
 }
 
-// seedSnapshot stores the owner's protected entry for the container-level key,
+// seedSnapshot stores the owner's protected entry for the container-level key. It is a
+// SYNTHETIC writer: no real attempt produces a container-level entry yet (a container
+// job cannot populate a cache; debt), so the read-only paths are tested against it.
 // with one file f.txt per dir holding the given content. A container job
 // cannot populate a cache itself, so the entry goes in through the engine.
 func (e *env) seedSnapshot(id string, contents map[string]string) {
@@ -219,6 +221,7 @@ func (e *env) seedSnapshot(id string, contents map[string]string) {
 	if _, err := e.eng.Save(e.ctx, SaveRequest{Base: base, Attempt: id, Epoch: fin, Namespace: ns, Key: item.Key, Spec: item.Spec, Dirs: dirs}); err != nil {
 		e.t.Fatal(err)
 	}
+	e.settlePassed(id)
 }
 
 func mustGet(t *testing.T, id string) Spec {
@@ -232,3 +235,11 @@ func mustGet(t *testing.T, id string) Spec {
 
 // dir is the host path of the first item's directory name.
 func (s *Session) dir(name string) string { return s.host(s.items[0].Dirs[name]) }
+
+// settlePassed moves a finalizing attempt to passed, as the run does after the finalize hooks.
+func (e *env) settlePassed(id string) {
+	e.t.Helper()
+	if err := e.st.Transition(e.ctx, id, "finalizing", "passed", storeDetail(3)); err != nil {
+		e.t.Fatal(err)
+	}
+}

@@ -29,8 +29,9 @@ var (
 	urlCred     = regexp.MustCompile(`://[^/\s@:]+:[^/\s@]*@`)
 	cargoReg    = regexp.MustCompile(`(?m)^\s*\[(registries\.|source\.)[^\]]*\]|^\s*(token|credential-provider)\s*=`)
 	privateEnvs = []string{"GOPRIVATE", "GONOSUMDB", "GONOPROXY", "GONOSUMCHECK", "NPM_TOKEN", "NODE_AUTH_TOKEN", "npm_config__authtoken",
-		"npm_config__auth", "CARGO_REGISTRY_TOKEN", "UV_INDEX_USERNAME", "UV_INDEX_PASSWORD"}
-	urlEnvs = []string{"PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL", "UV_INDEX_URL", "UV_EXTRA_INDEX_URL", "npm_config_registry"}
+		"npm_config__auth", "CARGO_REGISTRY_TOKEN", "UV_INDEX_USERNAME", "UV_INDEX_PASSWORD", "GOAUTH"}
+	urlEnvs = []string{"PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL", "UV_INDEX_URL", "UV_EXTRA_INDEX_URL", "npm_config_registry", "GOPROXY"}
+	goEnvRe = regexp.MustCompile(`(?m)^\s*(GOPRIVATE|GONOSUMDB|GONOPROXY|GONOSUMCHECK|GOAUTH)\s*=\s*\S|://[^/\s@:]+:[^/\s@]*@`)
 )
 
 // PrivateDeps reports whether the job's dependency setup is authenticated or
@@ -68,6 +69,17 @@ func PrivateDeps(in PrivInput) (bool, []string) {
 		if p := toolHomes[f.env]; p != "" {
 			scanFile(filepath.Dir(p), filepath.Base(p), f.re, add)
 		}
+	}
+	// `go env -w` keeps its settings in the user's go/env file, which the job's go reads
+	var goenvs []string
+	if g := toolHomes["GOENV"]; g != "" {
+		goenvs = append(goenvs, g)
+	}
+	if in.Home != "" {
+		goenvs = append(goenvs, filepath.Join(in.Home, ".config", "go", "env"), filepath.Join(in.Home, "Library", "Application Support", "go", "env"))
+	}
+	for _, g := range goenvs {
+		scanFile(filepath.Dir(g), filepath.Base(g), goEnvRe, add)
 	}
 	if ch := toolHomes["CARGO_HOME"]; ch != "" { // the cargo spec rebinds and seeds from this home
 		for _, n := range []string{"config.toml", "config"} {

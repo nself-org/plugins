@@ -25,6 +25,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 // ReasonSecretMatch is the E711 reason of a save refused by the value scan.
@@ -35,6 +36,7 @@ var ErrEmpty = errors.New("specs: the cache directories are empty")
 
 // Backend is the persistence the engine needs beyond entries.Store.
 type Backend interface {
+	AttemptStateEpoch(ctx context.Context, id string) (model.JobState, int64, error)
 	CacheEntries(ctx context.Context, key string) ([]entries.Manifest, error)
 	CacheDrop(ctx context.Context, m entries.Manifest, reason string) error
 	AppendAudit(ctx context.Context, actor, action, target, detail string) error
@@ -69,6 +71,9 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 	if err != nil || !ok {
 		return false, 0, err
 	}
+	if !e.writerPassed(ctx, m) { // a cancel won after the commit and nobody retracted it (or a crash): never serve it
+		return false, 0, nil
+	}
 	bad := m.Spec != spec.ID || len(m.Blobs) != len(dirs)
 	for _, b := range m.Blobs {
 		if _, known := dirs[b.Path]; !known {
@@ -91,9 +96,27 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 	for _, d := range dirs {
 		_ = removeIn(base, d)
 	}
-	_ = e.Backend.CacheDrop(ctx, m, "unrestorable")
+	if access == authz.ModeRWOwn { // a lower-trust reader never deletes a higher-trust entry, it only audits
+		_ = e.Backend.CacheDrop(ctx, m, "unrestorable")
+	}
 	_ = e.Backend.AppendAudit(ctx, "cache", "cache.restore.refused", key, "reason="+refusalKey(err))
 	return false, 0, fmt.Errorf("cache restore refused: %w", err)
+}
+
+// writerPassed reports whether the attempt that committed m settled passed. An
+// attempt still finalizing is not served yet; one that ended any other way has
+// its entry dropped. An attempt the store no longer knows (history pruned) is
+// trusted: the commit itself required a recorded pass.
+func (e *Engine) writerPassed(ctx context.Context, m entries.Manifest) bool {
+	state, _, err := e.Backend.AttemptStateEpoch(ctx, m.Writer.AttemptID)
+	switch {
+	case err != nil || state == "passed":
+		return true
+	case state == "queued" || state == "leased" || state == "running" || state == "finalizing":
+		return false
+	}
+	_ = e.Backend.CacheDrop(ctx, m, "attempt_not_passed")
+	return false
 }
 
 // validate runs the restore checks over a freshly Put blob without writing it anywhere.
