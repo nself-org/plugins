@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"math/big"
 	"strings"
 	"testing"
 )
@@ -216,5 +217,61 @@ func TestCheckPinnedNodeKeyIsStrict(t *testing.T) {
 	_ = r.st.Close()
 	if err = r.ca.CheckPinnedNodeKey(ctx, "n1", pub); err == nil || ReasonOf(err) != "" {
 		t.Fatalf("closed store: %v", err)
+	}
+}
+
+// smallOrderKeys are encodings of the points of order dividing 8, canonical and not (D-1259).
+func smallOrderKeys() map[string][]byte {
+	le := func(h string, sign bool, add int) []byte {
+		v, _ := new(big.Int).SetString(h, 16)
+		v.Add(v, big.NewInt(int64(add)))
+		b := v.Bytes()
+		out := make([]byte, 32)
+		for i := range b {
+			out[len(b)-1-i] = b[i]
+		}
+		if sign {
+			out[31] |= 0x80
+		}
+		return out
+	}
+	const y8 = "7a03ac9277fdc74ec6cc392cfa53202a0f67100d760b3cba4fd84d3d706a17c7"
+	const negY8 = "05fc536d880238b13933c6d305acdfd5f098eff289f4c345b027b2c28f95e826"
+	const pm1 = "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec"
+	return map[string][]byte{
+		"zero y":                  le("0", false, 0),
+		"zero y, sign":            le("0", true, 0),
+		"identity":                le("0", false, 1),
+		"identity, sign":          le("0", true, 1),
+		"-1":                      le(pm1, false, 0),
+		"y8":                      le(y8, false, 0),
+		"y8, sign":                le(y8, true, 0),
+		"-y8":                     le(negY8, false, 0),
+		"-y8, sign":               le(negY8, true, 0),
+		"non-canonical identity":  le(pm1, false, 2), // y = p+1
+		"non-canonical zero":      le(pm1, false, 1), // y = p
+		"non-canonical zero sign": le(pm1, true, 1),
+	}
+}
+
+func TestSmallOrderNodeKeyIsRefused(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	for name, k := range smallOrderKeys() {
+		t.Run(name, func(t *testing.T) {
+			if len(k) != 32 || !SmallOrderNodeKey(k) {
+				t.Fatalf("not recognised as small order: %x", k)
+			}
+			wantReason(t, r.ca.PinNodeKey(ctx, "n-small", k), ReasonBadCSR)
+			wantReason(t, r.ca.CheckNodeKey(ctx, "n-small", k), ReasonBadCSR)
+			if _, _, ok, _ := r.st.PKINodeKeyGet(ctx, "n-small"); ok {
+				t.Fatal("a small-order key was pinned")
+			}
+		})
+	}
+	for i := 0; i < 50; i++ {
+		if SmallOrderNodeKey(edPub(t)) {
+			t.Fatal("a real key was refused")
+		}
 	}
 }

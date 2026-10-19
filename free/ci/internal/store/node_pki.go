@@ -177,16 +177,28 @@ func (s *Store) PKITokenKeyPut(ctx context.Context, kid, public string, sealed [
 	})
 }
 
+// PKITokenKeyBootstrap stores the first token key only when none exists, in one statement, so processes
+// that start together on an empty store keep exactly one key (the caller then re-reads the keys).
+func (s *Store) PKITokenKeyBootstrap(ctx context.Context, kid, public string, sealed []byte) error {
+	return s.write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `INSERT INTO pki_token_key(kid,public,key_sealed,created_at) SELECT ?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM pki_token_key)`, kid, public, sealed, s.now().UnixNano())
+		return err
+	})
+}
+
 // PKITokenKey is a stored job-token key (Sealed: AES-GCM sealed Ed25519 seed).
 type PKITokenKey struct {
 	KID, Public string
 	Sealed      []byte
 	Retired     bool
+	RetiredAt   int64 // unix nanoseconds, 0 while active
 }
 
 func (s *Store) PKITokenKeys(ctx context.Context) ([]PKITokenKey, error) {
-	rows, err := s.readers.QueryContext(ctx, `SELECT kid,public,key_sealed,retired_at>0 FROM pki_token_key ORDER BY created_at DESC,kid`)
-	return pkiCollect(rows, err, func(r *sql.Rows) (k PKITokenKey, e error) { return k, r.Scan(&k.KID, &k.Public, &k.Sealed, &k.Retired) })
+	rows, err := s.readers.QueryContext(ctx, `SELECT kid,public,key_sealed,retired_at>0,retired_at FROM pki_token_key ORDER BY created_at DESC,kid`)
+	return pkiCollect(rows, err, func(r *sql.Rows) (k PKITokenKey, e error) {
+		return k, r.Scan(&k.KID, &k.Public, &k.Sealed, &k.Retired, &k.RetiredAt)
+	})
 }
 
 func (s *Store) PKIOfferPut(ctx context.Context, o PKIOffer) error {

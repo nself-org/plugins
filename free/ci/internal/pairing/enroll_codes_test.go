@@ -225,6 +225,7 @@ func enrollMalformedKeepsCode(t *testing.T) {
 		e660   bool
 	}{
 		{"short node key", func(q *enroll.Request) { q.NodeKey = q.NodeKey[:5] }, ReasonBadRequest, false},
+		{"small-order node key", func(q *enroll.Request) { q.NodeKey = append([]byte{1}, make([]byte, 31)...) }, ReasonBadRequest, false},
 		{"bad node name", func(q *enroll.Request) { q.Name = "Bad Name!" }, ReasonBadRequest, false},
 		{"empty node name", func(q *enroll.Request) { q.Name = "" }, ReasonBadRequest, false},
 		{"malformed code shape", func(q *enroll.Request) { q.Code = "short" }, ReasonBadRequest, false},

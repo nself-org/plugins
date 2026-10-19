@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -222,7 +223,7 @@ func TestTokensKeyLoading(t *testing.T) {
 		pub, seed, _ := ed25519.GenerateKey(rand.Reader)
 		sealed, _ := Seal(kek(r), seed.Seed(), "token-key")
 		newKID := putKey(r, pub, sealed)
-		r.exec(`UPDATE pki_token_key SET retired_at=1 WHERE kid=?`, oldKID)
+		r.exec(`UPDATE pki_token_key SET retired_at=? WHERE kid=?`, r.clk.now().UnixNano(), oldKID)
 		tk := newTokens(t, r)
 		if tk.active != newKID || len(tk.pubs) != 2 {
 			t.Fatalf("active %s, %d keys", tk.active, len(tk.pubs))
@@ -253,7 +254,7 @@ func TestTokensKeyLoading(t *testing.T) {
 	t.Run("a retired key's blob is never unsealed", func(t *testing.T) {
 		r := newRig(t)
 		first := newTokens(t, r).active
-		r.exec(`UPDATE pki_token_key SET key_sealed=x'00', retired_at=1 WHERE kid=?`, first)
+		r.exec(`UPDATE pki_token_key SET key_sealed=x'00', retired_at=? WHERE kid=?`, r.clk.now().UnixNano(), first)
 		r.clk.advance(time.Second)
 		pub, seed, _ := ed25519.GenerateKey(rand.Reader)
 		sealed, _ := Seal(kek(r), seed.Seed(), "token-key")
@@ -309,7 +310,7 @@ func TestMintWithoutAnActiveKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.exec(`UPDATE pki_token_key SET retired_at=1`)
+	r.exec(`UPDATE pki_token_key SET retired_at=?`, r.clk.now().UnixNano())
 	tk, err := r.ca.Tokens(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -387,5 +388,89 @@ func TestTokenHasOneCanonicalString(t *testing.T) {
 		if !segments[name] {
 			t.Fatalf("no %s segment with spare bits was exercised", name)
 		}
+	}
+}
+
+// TestRetiredKeyCapsExp (D-1259 item 1): a retired key verifies only tokens whose exp is at most
+// retired_at + MaxRetiredTokenLife + TokenSlack, so retiring a key ends what it can vouch for.
+func TestRetiredKeyCapsExp(t *testing.T) {
+	r := newRig(t)
+	first := newTokens(t, r)
+	short, err := first.Mint(claims(0), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	long, err := first.Mint(claims(0), 100*24*time.Hour) // exp far beyond any job
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = first.Verify(long); err != nil {
+		t.Fatalf("an active key must verify its token: %v", err)
+	}
+	r.exec(`UPDATE pki_token_key SET retired_at=?`, r.clk.now().UnixNano())
+	retired := newTokens(t, r)
+	if _, err = retired.Verify(short); err != nil {
+		t.Fatalf("a short token of a retired key: %v", err)
+	}
+	_, err = retired.Verify(long)
+	wantReason(t, err, ReasonTokenExpired)
+	// the cap is exact: retired_at + life + slack passes, one second more does not
+	edge := first.ca.now().Add(MaxRetiredTokenLife + TokenSlack).Unix()
+	r.exec(`UPDATE pki_token_key SET retired_at=?`, r.clk.now().UnixNano())
+	forge := func(exp int64) string {
+		head := b64.EncodeToString([]byte(first.active)) + "." + func() string {
+			body, _ := json.Marshal(claims(exp))
+			return b64.EncodeToString(body)
+		}()
+		return head + "." + b64.EncodeToString(ed25519.Sign(first.priv, []byte(head)))
+	}
+	if _, err = retired.Verify(forge(edge)); err != nil {
+		t.Fatalf("exp at the cap: %v", err)
+	}
+	_, err = retired.Verify(forge(edge + 1))
+	wantReason(t, err, ReasonTokenExpired)
+}
+
+// TestTokensBootstrapRace (D-1259 item 2): processes that start together on an empty store end with one
+// token key, and every one of them signs with it.
+func TestTokensBootstrapRace(t *testing.T) {
+	r := newRig(t)
+	const n = 16
+	cas := make([]*CA, n)
+	for i := range cas {
+		ca, err := r.reload()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cas[i] = ca
+	}
+	start := make(chan struct{})
+	active := make([]string, n)
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i := range cas {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			tk, err := cas[i].Tokens(context.Background())
+			if err == nil {
+				active[i] = tk.active
+			}
+			errs[i] = err
+		}()
+	}
+	close(start)
+	wg.Wait()
+	for i := range cas {
+		if errs[i] != nil {
+			t.Fatalf("Tokens %d: %v", i, errs[i])
+		}
+		if active[i] != active[0] || active[i] == "" {
+			t.Fatalf("Tokens %d signs with %q, Tokens 0 with %q", i, active[i], active[0])
+		}
+	}
+	if k := r.count(`SELECT count(*) FROM pki_token_key`); k != 1 {
+		t.Fatalf("%d token keys after a concurrent bootstrap", k)
 	}
 }

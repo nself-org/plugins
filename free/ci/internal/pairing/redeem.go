@@ -51,7 +51,7 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 		return enroll.Response{}, &pki.Error{Reason: pki.ReasonClockSkew, Msg: "node and coordinator clocks differ by more than 120 s"}
 	}
 	name := strings.ToLower(req.Name)
-	if !pki.ValidID(name) || len(req.NodeKey) != ed25519.PublicKeySize || !ValidShape(req.Code) {
+	if !pki.ValidID(name) || len(req.NodeKey) != ed25519.PublicKeySize || pki.SmallOrderNodeKey(req.NodeKey) || !ValidShape(req.Code) {
 		return enroll.Response{}, fail(ReasonBadRequest, "request is incomplete")
 	}
 	csrFP, err := pki.CSRKeyFingerprint(req.CSR)

@@ -15,10 +15,51 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"math/big"
 	"regexp"
 )
 
 var keyIDPattern = regexp.MustCompile(`^[0-9a-f]{16}$`)
+
+// smallOrderY holds the y coordinates of the eight points of order dividing 8 on edwards25519 (0, 1, -1
+// and the two pairs +-y8); every small-order point has one of them. An encoding is that y with a sign bit,
+// and a y at or above p is a non-canonical spelling of y-p, so SmallOrderNodeKey reduces before it looks up.
+var smallOrderY = func() []*big.Int {
+	hexY := []string{
+		"00",
+		"01",
+		"7a03ac9277fdc74ec6cc392cfa53202a0f67100d760b3cba4fd84d3d706a17c7", // y8
+		"05fc536d880238b13933c6d305acdfd5f098eff289f4c345b027b2c28f95e826", // -y8
+	}
+	var out []*big.Int
+	for _, h := range hexY {
+		v, _ := new(big.Int).SetString(h, 16)
+		out = append(out, v)
+	}
+	return append(out, new(big.Int).Sub(ed25519P, big.NewInt(1))) // -1
+}()
+
+var ed25519P = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 255), big.NewInt(19))
+
+// SmallOrderNodeKey reports whether pub encodes a small-order point. Ed25519 verification accepts such a
+// key for crafted signatures on any message, so it is never a valid node key. The caller checks the length.
+func SmallOrderNodeKey(pub []byte) bool {
+	if len(pub) != ed25519.PublicKeySize {
+		return false
+	}
+	le := make([]byte, len(pub))
+	for i, b := range pub { // little endian to big endian, sign bit cleared
+		le[len(pub)-1-i] = b
+	}
+	le[0] &= 0x7f
+	y := new(big.Int).Mod(new(big.Int).SetBytes(le), ed25519P)
+	for _, w := range smallOrderY {
+		if y.Cmp(w) == 0 {
+			return true
+		}
+	}
+	return false
+}
 
 // NodeKeyID is the id of an Ed25519 node public key.
 func NodeKeyID(pub ed25519.PublicKey) string {
@@ -28,7 +69,7 @@ func NodeKeyID(pub ed25519.PublicKey) string {
 
 // PinNodeKey records the node key a node enrolled with.
 func (c *CA) PinNodeKey(ctx context.Context, nodeID string, pub ed25519.PublicKey) error {
-	if len(pub) != ed25519.PublicKeySize {
+	if len(pub) != ed25519.PublicKeySize || SmallOrderNodeKey(pub) {
 		return fail(ReasonBadCSR, "node key must be an Ed25519 public key")
 	}
 	return c.st.PKINodeKeyPut(ctx, nodeID, NodeKeyID(pub), base64.StdEncoding.EncodeToString(pub))

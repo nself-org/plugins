@@ -6,7 +6,8 @@ package pki
 // Constraints: exp is capped at job timeout + 5 min and must be in the future; the signing seed is
 //          sealed under the KEK and never stored raw; Verify refuses a malformed token, an unknown key
 //          id, a bad signature and an expired exp (E660 reasons token_*; P7-NODE-08 maps them to E661
-//          and owns replay binding by jti); a token never enters a job environment.
+//          and owns replay binding by jti); a retired key verifies exp up to retired_at + 24 h + 5 min only;
+//          a token never enters a job environment.
 
 import (
 	"context"
@@ -20,6 +21,11 @@ import (
 
 // TokenSlack is added to the job timeout for the cap on exp.
 const TokenSlack = 5 * time.Minute
+
+// MaxRetiredTokenLife bounds how long after retirement a retired key still vouches for a token: a retired
+// key verifies exp up to retired_at + MaxRetiredTokenLife + TokenSlack, so a token minted with a very long
+// exp does not outlive the key's retirement. No job runs longer than this.
+const MaxRetiredTokenLife = 24 * time.Hour
 
 // TokenClaims are the signed claims.
 type TokenClaims struct {
@@ -38,6 +44,8 @@ type Tokens struct {
 	active string
 	priv   ed25519.PrivateKey
 	pubs   map[string]ed25519.PublicKey
+	// retiredAt is the retirement time in unix seconds of every retired key (absent for an active key).
+	retiredAt map[string]int64
 }
 
 var b64 = base64.RawURLEncoding.Strict() // strict: one string per token, no non-canonical tail bits
@@ -58,20 +66,24 @@ func (c *CA) Tokens(ctx context.Context) (*Tokens, error) {
 			return nil, serr
 		}
 		kid := NodeKeyID(pub)
-		if err = c.st.PKITokenKeyPut(ctx, kid, base64.StdEncoding.EncodeToString(pub), sealed); err != nil {
+		// first creation is atomic: of several processes starting on an empty store only one key lands
+		if err = c.st.PKITokenKeyBootstrap(ctx, kid, base64.StdEncoding.EncodeToString(pub), sealed); err != nil {
 			return nil, err
 		}
 		if keys, err = c.st.PKITokenKeys(ctx); err != nil {
 			return nil, err
 		}
 	}
-	t := &Tokens{ca: c, pubs: map[string]ed25519.PublicKey{}}
+	t := &Tokens{ca: c, pubs: map[string]ed25519.PublicKey{}, retiredAt: map[string]int64{}}
 	for _, k := range keys {
 		raw, derr := base64.StdEncoding.DecodeString(k.Public)
 		if derr != nil || len(raw) != ed25519.PublicKeySize {
 			return nil, fail(ReasonTokenMalformed, "token key %s is damaged", k.KID)
 		}
 		t.pubs[k.KID] = raw
+		if k.Retired {
+			t.retiredAt[k.KID] = k.RetiredAt / int64(time.Second)
+		}
 		if t.active == "" && !k.Retired {
 			seed, uerr := Unseal(c.kek, k.Sealed, "token-key")
 			if uerr != nil || len(seed) != ed25519.SeedSize {
@@ -129,6 +141,9 @@ func (t *Tokens) Verify(token string) (TokenClaims, error) {
 	}
 	if cl.Exp <= t.ca.now().Unix() {
 		return TokenClaims{}, fail(ReasonTokenExpired, "token expired")
+	}
+	if at, retired := t.retiredAt[string(kid)]; retired && cl.Exp > at+int64((MaxRetiredTokenLife+TokenSlack).Seconds()) {
+		return TokenClaims{}, fail(ReasonTokenExpired, "token outlives its retired key")
 	}
 	return cl, nil
 }
