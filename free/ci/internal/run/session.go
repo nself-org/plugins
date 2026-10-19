@@ -19,6 +19,7 @@ import (
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -34,6 +35,14 @@ type Session struct {
 	Poll        time.Duration
 	Capacity    func() ciexec.Capacity
 	Admission   ciexec.AdmissionPolicy
+	// Plan is the run's plan and Record its Options.Record: the dispatch hook maps both
+	// into the scheduler job (P7-AUTO-28); a Session built without them still places.
+	Plan   *plan.Plan
+	Record bool
+	// LocalOnly says a job cannot be run on a node yet (nil = none): the dispatch hook keeps it on this machine.
+	LocalOnly func(model.Job) bool
+	// Clock is the time the placement world is built at (nil = time.Now); tests inject it so a plan and a run can be compared.
+	Clock       func() time.Time
 	Interactive bool      // a person waits at a terminal: only then does the implicit foreground queue cap apply
 	PolicyRun   RunValues // the per-run policy values of the invocation; the dispatcher resolves its placement policy with them
 
@@ -83,6 +92,14 @@ func (s *Session) jobRow(job *model.Job) (string, bool) {
 		}
 	}
 	return found, n == 1
+}
+
+// now is the session's clock.
+func (s *Session) now() time.Time {
+	if s.Clock != nil {
+		return s.Clock()
+	}
+	return time.Now()
 }
 
 // jobRows lists the row ids of the run's jobs.

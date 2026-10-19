@@ -124,8 +124,7 @@ func (rs *runState) runAttemptN(ctx context.Context, i int, pj plan.PlannedJob, 
 	rs.attempts[adm.AttemptID] = pj.ID
 	rs.mu.Unlock()
 	if !adm.Local {
-		_, _ = rs.settle(adm.AttemptID, "leased", "cancelled", "cancelled") // never leave a leased attempt a remote runner may still start
-		return failed(o, fail(CodeOptions, "attempt %s was placed on a remote runner; this coordinator cannot await it", adm.AttemptID))
+		return rs.runRemote(jctx, pj, *job, adm, o, n) // a node the dispatcher delivered the lease to (P7-AUTO-28)
 	}
 	return rs.runLeased(jctx, pj, *job, adm.AttemptID, o, n)
 }
@@ -222,27 +221,7 @@ func (rs *runState) pass(id string, o JobOutcome, info AttemptInfo) JobOutcome {
 	if mid == "cancelled" { // a cancel intent won the move to finalizing
 		return cancelled(o, "", "cancelled by the operator")
 	}
-	if ferr := rs.attemptFinalize(info); ferr != nil { // a hook refused: the attempt cannot pass (results before artifacts)
-		return rs.settleFinalizeFailed(id, o, ferr)
-	}
-	to, err := rs.settle(id, "finalizing", "passed", "")
-	if err != nil {
-		return failed(o, err)
-	}
-	bg, done := background(context.Background())
-	defer done()
-	if state, _, e := rs.sess.Store.AttemptStateEpoch(bg, id); e == nil {
-		to = state
-	}
-	switch to {
-	case "passed":
-		o.State = StatePassed
-	case "cancelled":
-		return cancelled(o, "", "cancelled by the operator")
-	default:
-		o.State, o.FailureClass, o.Detail = StateFailed, "infra", "a declared artifact was not committed"
-	}
-	return o
+	return rs.finalizePassed(id, o, info)
 }
 
 func (rs *runState) settleFailed(ctx context.Context, pj plan.PlannedJob, job model.Job, id string, o JobOutcome, n int) JobOutcome {

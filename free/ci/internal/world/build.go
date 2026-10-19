@@ -110,6 +110,7 @@ func Build(ctx context.Context, d Deps, pipeline sched.Pipeline) (sched.World, s
 			applyLocalCapacity(&cap, *d.LocalCapacity)
 		}
 		local := makeRunner(cap, facts.Serving, mode, snapshot)
+		declarePersonalLocal(&local)
 		if labels != nil {
 			extra, e := labels(ctx, "local")
 			if e != nil {
@@ -219,6 +220,21 @@ func makeRunner(c model.Capability, host bool, mode trust.CoordinatorMode, s sto
 	}
 	return r
 }
+
+// declarePersonalLocal declares the injected local runner the operator's own node of a PERSONAL
+// coordinator, which is what lets the owner's own checkout run there under process isolation
+// (the trust.Admissible owner exception). A runner that hosts a TEAM coordinator is left alone.
+// Only the injected Local runner gets this: a registered node, even one called "local", was
+// never probed and must not (D-0989; `ci plan` and a run build the same world).
+func declarePersonalLocal(r *sched.Runner) {
+	if r.CoordinatorHost && r.CoordinatorMode != trust.Personal {
+		return
+	}
+	r.Decl.PersonalOwnNode = true
+	r.CoordinatorMode = trust.Personal
+	r.Decl.CoordinatorMode = trust.Personal
+}
+
 func applyLocalCapacity(c *model.Capability, p ciexec.Capacity) {
 	if p.CPUs > 0 {
 		n := float64(p.CPUs)

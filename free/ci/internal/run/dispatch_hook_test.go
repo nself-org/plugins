@@ -1,7 +1,7 @@
 package run
 
 // Purpose: D-1040 regression. The dispatch hook's world must describe the
-// local runner with measured facts (planview.LocalCapability + MarkPersonalLocal,
+// local runner with measured facts (planview.LocalCapability, declared PERSONAL by world.Build,
 // the declaration `ci plan` uses), not a permissive placeholder, so placement
 // itself refuses work the machine cannot isolate.
 

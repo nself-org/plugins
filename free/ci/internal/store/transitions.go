@@ -14,8 +14,8 @@ var transitions = map[model.JobState]map[model.JobState]bool{
 	"leased":         {"running": true, "lost": true, "cancelled": true},
 	"running":        {"finalizing": true, "failed": true, "lost": true, "cancelled": true},
 	"finalizing":     {"passed": true, "failed": true, "cancelled": true},
-	"lost":           {"retryable": true, "needs-operator": true},
-	"retryable":      {"queued": true},
+	"lost":           {"retryable": true, "needs-operator": true, "cancelled": true}, // a cancelled run ends a lost attempt without a retry
+	"retryable":      {"queued": true, "cancelled": true},                            // a cancelled run ends a parked attempt before it is queued again
 	"needs-operator": {"queued": true, "failed": true, "cancelled": true},
 	"failed":         {"queued": true},
 }
@@ -67,7 +67,7 @@ func (s *Store) apply(ctx context.Context, tx *sql.Tx, id string, from, to model
 	if to == "retryable" && (kind == "release" || idempotent == 0 || n > infraMax) {
 		return coded("E604", "retry forbidden or exhausted")
 	}
-	if from == "lost" && (kind == "release" || idempotent == 0) && to != "needs-operator" {
+	if from == "lost" && (kind == "release" || idempotent == 0) && to != "needs-operator" && to != "cancelled" {
 		return coded("E609", "at-most-once attempt needs operator")
 	}
 	if (from == "failed" || from == "needs-operator") && to == "queued" && !d.Operator {
@@ -115,10 +115,20 @@ func (s *Store) apply(ctx context.Context, tx *sql.Tx, id string, from, to model
 		}
 	}
 	if to == "lost" || to == "cancelled" || to == "passed" || to == "failed" {
+		if to == "lost" { // the runner a retry avoids (retry anti-affinity); LeaseFail records the same fact
+			if _, err = tx.ExecContext(ctx, "UPDATE attempt SET previous_runner_id=coalesce((SELECT runner_id FROM lease WHERE attempt_id=?),previous_runner_id) WHERE id=?", id, id); err != nil {
+				return err
+			}
+		}
 		if _, err = tx.ExecContext(ctx, "DELETE FROM host_reservation WHERE lease_id IN (SELECT id FROM lease WHERE attempt_id=?)", id); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, "DELETE FROM lease WHERE attempt_id=?", id); err != nil {
+			return err
+		}
+	}
+	if from == "retryable" && to == "queued" { // a re-queued attempt is placed afresh: it must not keep the identity of its last admission (D-1044)
+		if _, err = tx.ExecContext(ctx, "DELETE FROM sched_admitted WHERE attempt_id=?", id); err != nil {
 			return err
 		}
 	}
