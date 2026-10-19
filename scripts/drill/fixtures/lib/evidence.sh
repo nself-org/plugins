@@ -82,5 +82,7 @@ ev_finish() {
 		  freshness: (if $dirty then {state: "unknown", reason: null} else {state: "current", reason: null} end),
 		  signature: {kind: "coordinator-recorded"}
 		}' "$EV_CHECKS" | tee "$EV_WORK/evidence.json"
+	# In CI the workflow uploads this copy, so every step's message is readable, not only the failing ones.
+	if [ -n "${CI:-}" ] && [ -d "$EV_ROOT/.drill-bin" ]; then cp "$EV_WORK/evidence.json" "$EV_ROOT/.drill-bin/$EV_JOB.evidence.json" 2>/dev/null || true; fi
 	[ "$(jq -r .result "$EV_WORK/evidence.json")" = pass ]
 }

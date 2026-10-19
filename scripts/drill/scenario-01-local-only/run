@@ -62,7 +62,7 @@ ln -s "$cli" "$work/bin/nself"
 ln -s "$glpath/gitleaks" "$work/bin-gl/gitleaks"
 # Docker is only used on Linux: the cut cannot see into the VM Docker Desktop runs on macOS, so a Mac is always the
 # no-Docker case here, whatever it has installed.
-for t in git go gofmt node; do
+for t in git go gofmt node jq; do
 	p=$(command -v "$t" 2>/dev/null) && ln -s "$p" "$work/bin/$t"
 done
 if [ "$(uname -s)" = Linux ] && p=$(command -v docker 2>/dev/null); then ln -s "$p" "$work/bin/docker"; fi
