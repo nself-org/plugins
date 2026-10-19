@@ -27,7 +27,7 @@ func Scan(ctx context.Context, st *store.Store, limit int) ([]Flake, error) {
 	if limit < 1 {
 		limit = DefaultRuns
 	}
-	docs, err := scanDocs(ctx, st, min(limit, MaxRuns))
+	docs, err := scanDocs(ctx, st, min(limit, MaxRuns), "")
 	if err != nil {
 		return nil, err
 	}
@@ -38,8 +38,11 @@ func Scan(ctx context.Context, st *store.Store, limit int) ([]Flake, error) {
 	return flakes, nil
 }
 
-// scanDocs reads the evidence of up to limit recent runs, newest first.
-func scanDocs(ctx context.Context, st *store.Store, limit int) ([]Doc, error) {
+// scanDocs reads the evidence of up to limit recent runs, newest first. A
+// non-empty revision decodes only the runs recorded at that revision: the others
+// belong to other groups (groupKey names the revision) and cannot change the
+// answer, so reading them is wasted work.
+func scanDocs(ctx context.Context, st *store.Store, limit int, revision string) ([]Doc, error) {
 	var docs []Doc
 	read := 0
 	for before := int64(0); read < limit; {
@@ -52,6 +55,9 @@ func scanDocs(ctx context.Context, st *store.Store, limit int) ([]Doc, error) {
 		}
 		for _, row := range page.Pipelines {
 			read++
+			if revision != "" && row.Revision != revision {
+				continue
+			}
 			stored, err := evidence.ForRun(ctx, st, row)
 			if err != nil {
 				return nil, err

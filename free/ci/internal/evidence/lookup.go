@@ -41,7 +41,7 @@ func decodeRows(rows []store.EvidenceView, pipelineID string, seen map[string]bo
 
 // ForRun returns the run-level evidence of one run, newest first.
 func ForRun(ctx context.Context, st *store.Store, row store.PipelineRow) ([]Stored, error) {
-	rows, err := st.EvidenceByRevision(ctx, row.Revision, row.InputDigest)
+	rows, err := st.EvidenceForPipeline(ctx, row.ID, row.Revision, row.InputDigest)
 	if err != nil {
 		return nil, err
 	}

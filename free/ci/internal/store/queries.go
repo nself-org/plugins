@@ -108,6 +108,28 @@ func (s *Store) FlakyCandidates(ctx context.Context) ([]FlakyCandidate, error) {
 	return out, rows.Err()
 }
 
+// EvidenceForPipeline returns the run-level documents (no attempt) of one
+// pipeline row recorded for revision and inputDigest, newest first. Filtering in
+// the query keeps the bodies of other runs that share the revision off the read:
+// a history scan asks once per run, so reading every sibling body made it
+// quadratic in the number of runs (D-1008).
+func (s *Store) EvidenceForPipeline(ctx context.Context, pipelineID, revision, inputDigest string) ([]EvidenceView, error) {
+	rows, err := s.readers.QueryContext(ctx, `SELECT id,pipeline_id,coalesce(attempt_id,''),revision,input_digest,body,created_at FROM evidence WHERE revision=? AND input_digest=? AND pipeline_id=? AND coalesce(attempt_id,'')='' ORDER BY created_at DESC`, revision, inputDigest, pipelineID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []EvidenceView
+	for rows.Next() {
+		var e EvidenceView
+		if err = rows.Scan(&e.ID, &e.PipelineID, &e.AttemptID, &e.Revision, &e.InputDigest, &e.Body, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) EvidenceByRevision(ctx context.Context, revision, inputDigest string) ([]EvidenceView, error) {
 	rows, err := s.readers.QueryContext(ctx, `SELECT id,pipeline_id,coalesce(attempt_id,''),revision,input_digest,body,created_at FROM evidence WHERE revision=? AND input_digest=? ORDER BY created_at DESC`, revision, inputDigest)
 	if err != nil {

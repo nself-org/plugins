@@ -25,7 +25,7 @@ func Annotate(ctx context.Context, st *store.Store, ev model.Evidence) map[strin
 	if st == nil || ev.Pipeline.Kind == "adhoc" {
 		return out
 	}
-	past, err := scanDocs(ctx, st, AnnotateRuns)
+	past, err := scanDocs(ctx, st, AnnotateRuns, ev.Revision)
 	if err != nil {
 		return out
 	}
