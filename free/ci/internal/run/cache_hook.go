@@ -122,6 +122,9 @@ func (h *cacheHook) Before(ctx context.Context, a AttemptInfo) (CacheSetup, erro
 		}
 		keys = c.Keys
 	}
+	// one entry per job: a hit is never saved again, so jobs sharing a key would
+	// all restore whichever partial cache won the save race (D-1008)
+	keys = append(append([]string(nil), keys...), "job="+a.JobName)
 	p, ok, err := a.Store.PipelineByID(ctx, a.RunID)
 	if err != nil || !ok || !filepath.IsAbs(p.Project) {
 		return none, nil

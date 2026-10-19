@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
@@ -186,20 +187,42 @@ func planRevision(ctx context.Context, root, base string) plan.Revision {
 	for _, kv := range os.Environ() {
 		rev.Env = append(rev.Env, strings.SplitN(kv, "=", 2)[0])
 	}
+	// Six independent read-only queries: each costs a funnel spawn, so they run
+	// side by side and the revision waits for the slowest one, not their sum.
+	type answer struct {
+		out string
+		ok  bool
+	}
+	remotes := []string{"main", "master", "trunk"}
+	queries := [][]string{{"rev-parse", "--abbrev-ref", "HEAD"}, {"symbolic-ref", "--short", "refs/remotes/origin/HEAD"},
+		{"describe", "--exact-match", "--tags", "HEAD"}}
+	for _, n := range remotes {
+		queries = append(queries, []string{"rev-parse", "--verify", "--quiet", "refs/remotes/origin/" + n})
+	}
+	answers := make([]answer, len(queries))
+	var wg sync.WaitGroup
+	for i, q := range queries {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			answers[i].out, answers[i].ok = git(q...)
+		}()
+	}
+	wg.Wait()
 	facts := plan.BranchFacts{Detached: true}
-	if b, ok := git("rev-parse", "--abbrev-ref", "HEAD"); ok && b != "HEAD" && b != "" {
-		facts.Branch, facts.Detached = b, false
-		rev.Branch = b
+	if b := answers[0]; b.ok && b.out != "HEAD" && b.out != "" {
+		facts.Branch, facts.Detached = b.out, false
+		rev.Branch = b.out
 	}
-	if s, ok := git("symbolic-ref", "--short", "refs/remotes/origin/HEAD"); ok {
-		facts.OriginHead = strings.TrimPrefix(s, "origin/")
+	if s := answers[1]; s.ok {
+		facts.OriginHead = strings.TrimPrefix(s.out, "origin/")
 	}
-	for _, n := range []string{"main", "master", "trunk"} {
-		if _, ok := git("rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+n); ok {
+	facts.ExactTag = answers[2].ok
+	for i, n := range remotes {
+		if answers[3+i].ok {
 			facts.Remotes = append(facts.Remotes, n)
 		}
 	}
-	_, facts.ExactTag = git("describe", "--exact-match", "--tags", "HEAD")
 	rev.DefaultBranch, rev.Release = plan.ClassifyRevision(facts)
 	base = firstOf(base, os.Getenv("NSELF_CI_BASE_SHA"))
 	if def := plan.DefaultBranchName(facts); base == "" && def != "" {
