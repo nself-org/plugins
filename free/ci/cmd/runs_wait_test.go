@@ -61,11 +61,12 @@ func finishRun(t *testing.T, home, id, status string) {
 	t.Helper()
 	st, err := store.Open(filepath.Join(home, "state.db"), store.Options{})
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err) // callers may run in a goroutine: no FailNow
+		return
 	}
 	defer func() { _ = st.Close() }()
 	if err = st.FinishPipeline(context.Background(), id, status); err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
 }
 

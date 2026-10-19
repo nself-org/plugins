@@ -85,15 +85,27 @@ func TestRunsFollow(t *testing.T) {
 		home := runsHome(t)
 		seedRun(t, home, "r-tail", "running", time.Now(), map[string]string{"build": "running"})
 		path := streamFile(t, home, "r-tail", evLine("queued", "r-tail", 1), evLine("started", "r-tail", 2))
-		go func() {
-			for _, l := range []string{evLine("check_result", "r-tail", 3), evLine("finished", "r-tail", 4), evLine("result", "r-tail", 5)} {
+		appendLine := func(l string) {
+			f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			_, _ = f.WriteString(l + "\n")
+			_ = f.Close()
+		}
+		done := make(chan struct{})
+		go func() { // the engine's order: records, the store's final status, then the evidence line
+			defer close(done)
+			for _, l := range []string{evLine("check_result", "r-tail", 3), evLine("finished", "r-tail", 4)} {
 				time.Sleep(60 * time.Millisecond)
-				f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
-				_, _ = f.WriteString(l + "\n")
-				_ = f.Close()
+				appendLine(l)
 			}
 			finishRun(t, home, "r-tail", "passed")
+			time.Sleep(60 * time.Millisecond)
+			appendLine(evLine("result", "r-tail", 5))
 		}()
+		defer func() { <-done }()
 		code, out, _ := capture(t, func() int { return runFollow([]string{"r-tail", "--from-seq", "0", "--json"}) })
 		types, seqs := parsed(t, out)
 		if code != 0 || len(types) != 5 || types[4] != "result" || !increasing(seqs) {
