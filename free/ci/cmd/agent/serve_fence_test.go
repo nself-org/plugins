@@ -103,7 +103,11 @@ func TestFenceHoldsWhileAcksArrive(t *testing.T) {
 }
 
 // TestSweepSkipsWhatALiveProcessHolds proves the orphan sweep removes dead roots and keeps held ones.
-func TestSweepSkipsWhatALiveProcessHolds(t *testing.T) {
+func TestSweepSkipsWhatALiveProcessHolds(t *testing.T) { checkSweep(t) }
+
+// checkSweep runs the dead-and-held-roots sweep case on the current host.
+func checkSweep(t *testing.T) {
+	t.Helper()
 	state := t.TempDir()
 	t.Setenv("NSELF_CI_AGENT_HOME", state)
 	old := time.Now().Add(-48 * time.Hour)
