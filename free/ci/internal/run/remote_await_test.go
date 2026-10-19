@@ -27,6 +27,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
@@ -493,7 +494,6 @@ func TestRemoteAwaitNodeFaultOnlyCountsAgainstTheNode(t *testing.T) {
 }
 
 func TestRemoteAwaitLocalOnlyJobs(t *testing.T) {
-	yes := true
 	rs := &runState{c: &Coordinator{}, hooks: Hooks{}}
 	for name, c := range map[string]struct {
 		job  model.Job
@@ -512,9 +512,12 @@ func TestRemoteAwaitLocalOnlyJobs(t *testing.T) {
 		"isolation":          {model.Job{Kind: "test", Run: []string{"true"}, Isolation: "container"}, nil, true},
 		"--container":        {model.Job{Kind: "test", Run: []string{"true"}}, func(o *Options) { o.Container = true }, true},
 		"--network":          {model.Job{Kind: "test", Run: []string{"true"}}, func(o *Options) { o.Network = "none" }, true},
+		"release":            {model.Job{Kind: "release", Run: []string{"true"}}, nil, true},
+		"at most once":       {model.Job{Kind: "test", Run: []string{"true"}, Idempotent: new(bool)}, nil, true},
+		"planner isolation":  {model.Job{Kind: "test", Run: []string{"true"}, Isolation: "process"}, nil, false},
+		"--service":          {model.Job{Kind: "test", Run: []string{"true"}}, func(o *Options) { o.Services = []string{"db"} }, true},
 		"--timeout":          {model.Job{Kind: "test", Run: []string{"true"}}, func(o *Options) { o.Timeout = time.Minute }, true},
 	} {
-		_ = yes
 		rs.c.Opts = Options{}
 		if c.opts != nil {
 			c.opts(&rs.c.Opts)
@@ -590,3 +593,50 @@ func TestRemoteAwaitCancelIntentBeatsTheLossSettlement(t *testing.T) {
 }
 
 func planJob(id string) plan.PlannedJob { return plan.PlannedJob{ID: id, Name: id} }
+
+type wantsAll struct{}
+
+func (wantsAll) Wants(model.Job) bool { return true }
+func (wantsAll) Outcome(context.Context, OutcomeFacts) (OutcomeChange, bool) {
+	return OutcomeChange{}, false
+}
+
+func TestRemoteAwaitJobsAnOutcomeHookReadsStayLocal(t *testing.T) {
+	rs := &runState{c: &Coordinator{}, hooks: Hooks{Outcomes: []OutcomeHook{wantsAll{}}}}
+	if !rs.localOnly(model.Job{Kind: "drill", Run: []string{"true"}}) {
+		t.Fatal("a job an outcome hook judges by its output ran on a node, where the output never reaches the hook")
+	}
+}
+
+func TestRemoteAwaitCancelNeedsNoRetryAuthorization(t *testing.T) {
+	ctx := context.Background()
+	for name, kind := range map[string]string{"release job": "release", "ordinary": "test"} {
+		st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = st.CreatePipeline(ctx, store.PipelineRow{ID: "p", Project: "/p", Revision: "r", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"}); err != nil {
+			t.Fatal(err)
+		}
+		// infra_max 0 and, for the release job, at-most-once: lost -> retryable is forbidden for both
+		if err = st.CreateJob(ctx, store.JobRow{ID: "j", PipelineID: "p", Name: "j", Kind: kind, Idempotent: kind != "release", InfraMax: 0, InputDigest: "i"}); err != nil {
+			t.Fatal(err)
+		}
+		if err = st.CreateAttempt(ctx, store.AttemptRow{ID: "j.a1", JobID: "j", N: 1}, ""); err != nil {
+			t.Fatal(err)
+		}
+		storetest.Lease(t, st, "j.a1")
+		_, epoch, _ := st.AttemptStateEpoch(ctx, "j.a1")
+		if err = st.Transition(ctx, "j.a1", "leased", "lost", store.TransitionDetail{Epoch: epoch, FailureClass: "infra"}); err != nil {
+			t.Fatal(err)
+		}
+		rs := &runState{sess: &Session{Store: st}}
+		if err = rs.driveToCancelled("j.a1"); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got, _, _ := st.AttemptStateEpoch(ctx, "j.a1"); got != "cancelled" {
+			t.Errorf("%s: a cancelled run left its lost attempt %s", name, got)
+		}
+		_ = st.Close()
+	}
+}

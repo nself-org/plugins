@@ -41,7 +41,7 @@ func codeIs(err error, code string) bool { var e *Error; return errors.As(err, &
 
 func TestTransitionTableExhaustive(t *testing.T) {
 	states := model.EnumValues("JobState")
-	allowed := map[string]bool{"queued>leased": true, "queued>cancelled": true, "leased>running": true, "leased>lost": true, "leased>cancelled": true, "running>finalizing": true, "running>failed": true, "running>lost": true, "running>cancelled": true, "finalizing>passed": true, "finalizing>failed": true, "finalizing>cancelled": true, "lost>retryable": true, "lost>needs-operator": true, "retryable>queued": true, "needs-operator>queued": true, "needs-operator>failed": true, "needs-operator>cancelled": true, "failed>queued": true}
+	allowed := map[string]bool{"queued>leased": true, "queued>cancelled": true, "leased>running": true, "leased>lost": true, "leased>cancelled": true, "running>finalizing": true, "running>failed": true, "running>lost": true, "running>cancelled": true, "finalizing>passed": true, "finalizing>failed": true, "finalizing>cancelled": true, "lost>retryable": true, "lost>needs-operator": true, "lost>cancelled": true, "retryable>queued": true, "needs-operator>queued": true, "needs-operator>failed": true, "needs-operator>cancelled": true, "failed>queued": true}
 	for _, from := range states {
 		for _, to := range states {
 			key := from + ">" + to

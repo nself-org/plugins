@@ -17,7 +17,9 @@ package run
 
 import (
 	"context"
+	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/diagnose"
@@ -26,6 +28,9 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
+
+// endedGrace is how long the run waits for the dispatcher to report a carrier that returned.
+const endedGrace = 5 * time.Second
 
 // remoteCancelWait bounds how long a cancelled run waits for the carrier to return.
 var remoteCancelWait = 15 * time.Second
@@ -89,30 +94,51 @@ func (rs *runState) runRemote(ctx context.Context, pj plan.PlannedJob, job model
 		}
 	})
 	ra.attach(emit)
-	defer func() { flush(); ra.detach() }()
+	var once sync.Once
+	finish := func() { once.Do(func() { flush(); ra.detach() }) } // before the tail is read: a redactor may hold the last bytes back
+	defer finish()
 	rs.render.Event(Event{Type: "started", Job: pj.ID})
 	if lg != nil {
 		o.LogRef = rs.logRef(info)
 	}
 	started := time.Now()
+	result := func(ev model.Evidence) JobOutcome {
+		finish()
+		return rs.remoteResult(ctx, pj, id, ev, o, n, info, &t, time.Since(started))
+	}
+	lost := func(cause error) JobOutcome {
+		finish()
+		return rs.remoteLost(ctx, pj, job, rd, id, cause, o, n, &t)
+	}
 	select {
 	case ev := <-ra.result:
-		return rs.remoteResult(ctx, pj, id, ev, o, n, info, &t, time.Since(started))
+		return result(ev)
 	case cause := <-ra.lost:
 		select {
 		case ev := <-ra.result: // the result won the race with the carrier's end
-			return rs.remoteResult(ctx, pj, id, ev, o, n, info, &t, time.Since(started))
+			return result(ev)
 		default:
 		}
-		return rs.remoteLost(ctx, pj, job, rd, id, cause, o, n, &t)
+		return lost(cause)
+	case <-ra.ended: // the carrier returned: its result, or the dispatcher's report of its loss (which follows at once), is next
+		select {
+		case ev := <-ra.result:
+			return result(ev)
+		case cause := <-ra.lost:
+			return lost(cause)
+		case <-time.After(endedGrace):
+			return lost(errors.New("the carrier ended without a result"))
+		}
 	case <-ctx.Done():
+		finish()
 		return rs.remoteCancelled(pj, rd, ra, id, o)
 	}
 }
 
 // driveToCancelled moves the attempt to cancelled from whichever state it is in, re-reading after a
 // lost compare-and-set (a result, a loss or a cancel intent can land between the read and the move).
-// A lost attempt reaches cancelled through retryable and queued, the way a parked attempt is retired.
+// A lost attempt is cancelled directly: a cancel needs no retry authorization (a release job, an
+// at-most-once job and an exhausted retry budget can all be cancelled).
 func (rs *runState) driveToCancelled(id string) error {
 	bg, done := background(context.Background())
 	defer done()
@@ -128,8 +154,6 @@ func (rs *runState) driveToCancelled(id string) error {
 			return nil
 		case "passed", "failed", "needs-operator":
 			return nil // it ended on its own first (needs-operator takes an operator to move)
-		case "lost":
-			to = "retryable"
 		case "retryable":
 			to = "queued"
 		}
@@ -152,23 +176,16 @@ func (rs *runState) remoteCancelled(pj plan.PlannedJob, rd *runDispatch, ra *rem
 	case <-ra.ended:
 	case <-time.After(remoteCancelWait):
 	}
-	o = rs.stopped(o, pj.ID)
-	if err != nil {
-		o.Detail = strings.TrimSpace(o.Detail + " (the attempt could not be recorded cancelled: " + err.Error() + ")")
-	}
-	return o
+	return rs.cancelledOutcome(pj, o, err)
 }
 
-// nodeFault says whether a carrier error is the node's doing (it counts against the node's breaker).
-// A bundle that cannot be made, a driver nobody configured and a refused secret are ours.
-func nodeFault(err error) bool {
-	t := err.Error()
-	for _, ours := range []string{"transport.ssh_checkout", "transport.ssh_not_configured", "transport.ssh_secrets_refused", "transport.ssh_no_destination", "transport.ssh_blob"} {
-		if strings.Contains(t, ours) {
-			return false
-		}
+// cancelledOutcome is the outcome of a cancelled attempt; a store error that left it unsettled is said.
+func (rs *runState) cancelledOutcome(pj plan.PlannedJob, o JobOutcome, settleErr error) JobOutcome {
+	o = rs.stopped(o, pj.ID)
+	if settleErr != nil {
+		o.Detail = strings.TrimSpace(o.Detail + " (the attempt could not be recorded cancelled: " + settleErr.Error() + ")")
 	}
-	return true
+	return o
 }
 
 // remoteLost ends an attempt whose carrier ended without a result (a lost session, a node that
@@ -193,8 +210,7 @@ func (rs *runState) remoteLost(ctx context.Context, pj plan.PlannedJob, job mode
 		}
 	}
 	if ctx.Err() != nil { // the run was cancelled too (Ctrl-C reaches ssh as well): cancelled, not lost
-		_ = rs.driveToCancelled(id)
-		return rs.stopped(o, pj.ID)
+		return rs.cancelledOutcome(pj, o, rs.driveToCancelled(id))
 	}
 	if runner := rd.runnerOf(bg, id); runner != "" && nodeFault(cause) {
 		_, _ = rd.sink.eng.Breaker(bg, runner, true) // best effort: three infra failures in a row put the node in maintenance
@@ -266,63 +282,4 @@ func (rs *runState) remoteResult(ctx context.Context, pj plan.PlannedJob, id str
 	}
 	o.State = StateFailed
 	return o
-}
-
-// finalizePassed ends a finalizing attempt whose job passed: the finalize hooks run
-// (results before artifacts), then it becomes passed. The local path and a remote
-// result share it.
-func (rs *runState) finalizePassed(id string, o JobOutcome, info AttemptInfo) JobOutcome {
-	if ferr := rs.attemptFinalize(info); ferr != nil { // a hook refused: the attempt cannot pass
-		return rs.settleFinalizeFailed(id, o, ferr)
-	}
-	to, err := rs.settle(id, "finalizing", "passed", "")
-	if err != nil {
-		return failed(o, err)
-	}
-	bg, done := background(context.Background())
-	defer done()
-	if state, _, e := rs.sess.Store.AttemptStateEpoch(bg, id); e == nil {
-		to = state
-	}
-	switch to {
-	case "passed":
-		o.State = StatePassed
-	case "cancelled":
-		return cancelled(o, "", "cancelled by the operator")
-	default:
-		o.State, o.FailureClass, o.Detail = StateFailed, "infra", "a declared artifact was not committed"
-	}
-	return o
-}
-
-// toLost makes sure the attempt is lost: a remote attempt the dispatcher already marked lost
-// stays so; a running one is moved.
-func (rs *runState) toLost(id string) bool {
-	bg, done := background(context.Background())
-	defer done()
-	if state, _, err := rs.sess.Store.AttemptStateEpoch(bg, id); err == nil && state == "lost" {
-		return true
-	}
-	return rs.trans(id, "running", "lost", "infra") == nil
-}
-
-// localOnly says a job must run on this machine because the remote path cannot honour what the
-// local one does: outcome hooks that read the output (drill), declared artifacts and caches (no
-// intake from a node yet), secrets (no value is sent to a node), services, requirements the world
-// cannot verify (labels, tools, an isolation floor, a container: the local runner reports no
-// measured facts for them) unless the job is remote-only, and the invocation's own controls
-// (--container, --network, --service, --timeout), which the agent never receives.
-func (rs *runState) localOnly(job model.Job) bool {
-	o := rs.c.Opts
-	if o.Container || o.Network != "" || o.Timeout > 0 || len(o.Services) > 0 {
-		return true
-	}
-	if rs.wantsOutput(job) || len(job.Artifacts) > 0 || job.Cache != nil || len(job.Secrets) > 0 || len(job.NeedsServices) > 0 {
-		return true
-	}
-	if job.RemoteOnly {
-		return false
-	}
-	r := job.Requirements
-	return r != nil && (len(r.Labels) > 0 || len(r.Tools) > 0 || len(r.Accelerators) > 0) || job.Isolation != "" || job.Container != nil
 }

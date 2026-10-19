@@ -14,7 +14,7 @@ var transitions = map[model.JobState]map[model.JobState]bool{
 	"leased":         {"running": true, "lost": true, "cancelled": true},
 	"running":        {"finalizing": true, "failed": true, "lost": true, "cancelled": true},
 	"finalizing":     {"passed": true, "failed": true, "cancelled": true},
-	"lost":           {"retryable": true, "needs-operator": true},
+	"lost":           {"retryable": true, "needs-operator": true, "cancelled": true}, // a cancelled run ends a lost attempt without a retry
 	"retryable":      {"queued": true},
 	"needs-operator": {"queued": true, "failed": true, "cancelled": true},
 	"failed":         {"queued": true},
@@ -67,7 +67,7 @@ func (s *Store) apply(ctx context.Context, tx *sql.Tx, id string, from, to model
 	if to == "retryable" && (kind == "release" || idempotent == 0 || n > infraMax) {
 		return coded("E604", "retry forbidden or exhausted")
 	}
-	if from == "lost" && (kind == "release" || idempotent == 0) && to != "needs-operator" {
+	if from == "lost" && (kind == "release" || idempotent == 0) && to != "needs-operator" && to != "cancelled" {
 		return coded("E609", "at-most-once attempt needs operator")
 	}
 	if (from == "failed" || from == "needs-operator") && to == "queued" && !d.Operator {
