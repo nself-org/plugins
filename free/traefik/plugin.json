@@ -25,7 +25,7 @@
   "license": "free",
   "licenseType": "free",
   "manifest_version": 2,
-  "maturity": "experimental",
+  "maturity": "implemented",
   "minNselfVersion": "1.4.12",
   "name": "traefik",
   "repository": "https://github.com/nself-org/plugins",
@@ -38,7 +38,7 @@
     "kind": "compose",
     "port": 8082
   },
-  "status": "experimental",
+  "status": "stable",
   "tier": "free",
   "version": "1.2.7"
 }

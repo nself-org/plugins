@@ -642,7 +642,7 @@
     {
       "bundles": [],
       "category": "development",
-      "checksum": "28dc4561c1275c6eaf53c472fc1ccbc85db5ad11cdfac057c6f0bb08fb5425e9",
+      "checksum": "e3a5bddecee70cc5a370fe4e18ced25178122c578c66a2a76650bae3dd0ee3b6",
       "commands": {
         "command": "ci",
         "subcommands": [
@@ -661,7 +661,7 @@
       "release_signature": {
         "alg": "ed25519",
         "key_id": "plugins-2ebca8dfad98e19e",
-        "sig": "1AAx7LRTuzN1msPwkKImnq+YNGbYb/i1ly5DpqYu8cnNrMvBTP6nBNtXS8AQEyXGLMFZxrk5hY8ZNJMS143IBw=="
+        "sig": "Xd7TSDvOZXhbv+uh6tReCR3n9ud2BbBBvRfYBw/6yKCy5c/8Jbmp/DJTfD2umyQ3sZmyGXZNJMoqizqSfDgrCg=="
       },
       "requires": {
         "nself": ">=1.4.12"
@@ -669,10 +669,10 @@
       "schema": null,
       "service_kind": "cli",
       "slug": "ci",
-      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.7/ci-1.2.7.tar.gz",
+      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.11/ci-1.2.11.tar.gz",
       "tier": "free",
       "tier_pair": false,
-      "version": "1.2.7"
+      "version": "1.2.11"
     },
     {
       "bundles": [
@@ -1544,7 +1544,7 @@
     {
       "bundles": [],
       "category": "infrastructure",
-      "checksum": "a90ff9d7744dfc04e9540608d500dfe9e6d8b61bfa3d6fd4934f3445e42b4eb1",
+      "checksum": "6b8193a30ed0162237fd1038a011a6a053b3685de7515dec76f9cd32eaa83385",
       "commands": {
         "command": "functions",
         "subcommands": [
@@ -1562,7 +1562,7 @@
       "release_signature": {
         "alg": "ed25519",
         "key_id": "plugins-2ebca8dfad98e19e",
-        "sig": "wmE4ZYQvOAAsXX9Kd01veLgy7O4YrtGqaEZ6QuKYZHE3LJMii+dZCv/qq7qvozBBt8w344K1Gq2Ua2bYH8YPBg=="
+        "sig": "4DfY/GFgG/A2+fUFIn7hnPdHRTeZtuZ0ekQhnT4NoS1eVK/NYs/gn+3BvsZW1M/d2hi+ThbafoSZs5y9Ot5/BA=="
       },
       "requires": {
         "nself": ">=1.4.12"
@@ -1570,10 +1570,10 @@
       "schema": null,
       "service_kind": "cli",
       "slug": "functions",
-      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.7/functions-1.2.7.tar.gz",
+      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.11/functions-1.2.11.tar.gz",
       "tier": "free",
       "tier_pair": false,
-      "version": "1.2.7"
+      "version": "1.2.11"
     },
     {
       "bundles": [],
@@ -1978,7 +1978,7 @@
       "description": "Deploy and manage nSelf on any Kubernetes cluster via the official Helm chart: values, install, upgrade, status and uninstall commands wrapping helm, plus backup and restore of the postgres database with content fingerprints.",
       "docs_url": null,
       "installable": true,
-      "maturity": "planned",
+      "maturity": "implemented",
       "release_signature": null,
       "requires": {
         "nself": ">=1.2.8"
@@ -3967,7 +3967,7 @@
       "description": "Traefik reverse proxy from the nSelf route model: file-provider configuration rendered from routes.json at route, TLS and upstream parity with nginx. No Docker socket, certificates from core.",
       "docs_url": null,
       "installable": true,
-      "maturity": "experimental",
+      "maturity": "implemented",
       "release_signature": {
         "alg": "ed25519",
         "key_id": "plugins-2ebca8dfad98e19e",

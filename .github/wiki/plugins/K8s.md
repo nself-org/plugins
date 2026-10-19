@@ -6,7 +6,7 @@
 | Field | Value |
 |---|---|
 | **Licence** | Free (MIT) |
-| **Maturity** | planned ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
 | **Version** | 1.2.6 |
 | **Install** | `nself plugin install k8s` |
 | **Commands** | `nself k8s`: `backup`, `install`, `restore`, `status`, `uninstall`, `upgrade`, `values` |
