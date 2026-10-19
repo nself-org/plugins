@@ -113,8 +113,8 @@ func TestQueueJobDefaultCap(t *testing.T) {
 }
 
 func TestIgnoredRunNotes(t *testing.T) {
-	got := ignoredRunNotes([]string{"sched.overrides.max_queue: E671 run scope widening", "sched.overrides.runner: E671 run scope widening"}, []string{"sched.overrides.max_queue"})
-	if len(got) != 1 || got[0] != "per-run policy value ignored: sched.overrides.runner: E671 run scope widening" {
+	got := ignoredRunNotes([]string{"sched.overrides.max_queue: E819 run scope widening", "sched.overrides.runner: E819 run scope widening"}, []string{"sched.overrides.max_queue"})
+	if len(got) != 1 || got[0] != "per-run policy value ignored: sched.overrides.runner: E819 run scope widening" {
 		t.Errorf("notes = %q", got)
 	}
 }

@@ -109,7 +109,7 @@ func TestRunScopeProjectBeatsRun(t *testing.T) {
 			ignored[ig.Key] = ig.Reason
 		}
 	}
-	if len(ignored) != 2 || !strings.Contains(ignored[schedpolicy.KeyRunner], "E671") || !strings.Contains(ignored[schedpolicy.KeyMaxQueue], "E671") {
+	if len(ignored) != 2 || !strings.Contains(ignored[schedpolicy.KeyRunner], "E819") || !strings.Contains(ignored[schedpolicy.KeyMaxQueue], "E819") {
 		t.Errorf("ignored run values = %v", ignored)
 	}
 }
@@ -130,7 +130,7 @@ func TestRunScopeSpendRefused(t *testing.T) {
 		t.Errorf("spend key accepted from the run scope: %v", got.Values[schedpolicy.KeyPaidEnabled])
 	}
 	for _, ig := range got.Ignored {
-		if ig.Key == schedpolicy.KeyPaidEnabled && ig.Scope == policy.SourceRun && strings.Contains(ig.Reason, "E671") {
+		if ig.Key == schedpolicy.KeyPaidEnabled && ig.Scope == policy.SourceRun && strings.Contains(ig.Reason, "E819") {
 			return
 		}
 	}

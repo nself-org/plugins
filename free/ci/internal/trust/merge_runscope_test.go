@@ -40,6 +40,7 @@ func runRegistry(t *testing.T) trust.Registry {
 		trust.KeySpec{Key: "x.subdef", Owner: "x", Kind: trust.TightenSubset, Default: []string{"a", "b", "c"}},
 		trust.KeySpec{Key: "x.sup", Owner: "x", Kind: trust.TightenSuperset},
 		trust.KeySpec{Key: "x.fam.*", Owner: "x", Kind: trust.TightenLower, Default: int64(100), Decode: numDecode},
+		trust.KeySpec{Key: "x.secret", Owner: "x", Kind: trust.TightenFixed, Secret: true},
 		trust.KeySpec{Key: "x.spend", Owner: "x", Kind: trust.TightenLower, Default: int64(5), Spend: true, Decode: numDecode},
 	)
 	if err != nil {
@@ -55,7 +56,7 @@ var runDomain = map[string][]string{
 	"x.ordlow": {`"a"`, `"b"`, `"c"`}, "x.ordhigh": {`"a"`, `"b"`, `"c"`},
 	"x.fixed": {`"p"`, `"q"`}, "x.fixeddef": {`"p"`, `"q"`}, "x.on": {`true`, `false`}, "x.onnone": {`true`, `false`},
 	"x.sub": {`[]`, `["a"]`, `["a","b"]`, `["b","c"]`, `["a","b","c"]`}, "x.subdef": {`[]`, `["a"]`, `["a","b"]`, `["b","c"]`, `["a","b","c","d"]`},
-	"x.sup": {`[]`, `["a"]`, `["a","b"]`, `["a","b","c"]`}, "x.fam.a": {`1`, `50`, `100`, `200`}, "x.spend": {`1`, `5`, `9`},
+	"x.sup": {`[]`, `["a"]`, `["a","b"]`, `["a","b","c"]`}, "x.fam.a": {`1`, `50`, `100`, `200`}, "x.spend": {`1`, `5`, `9`}, "x.secret": {`"s1"`, `"s2"`},
 }
 
 func randomValues(r *rand.Rand, keys []string) map[string]json.RawMessage {
@@ -182,8 +183,8 @@ func TestRunScopeNeverLoosens(t *testing.T) {
 			if !ok {
 				continue
 			}
-			if spec.Spend && src == trust.SourceRun {
-				t.Fatalf("seed %d: spend key %s set by the run scope", seed, k)
+			if (spec.Spend || spec.Secret) && src == trust.SourceRun {
+				t.Fatalf("seed %d: spend or secret key %s set by the run scope", seed, k)
 			}
 			if !inBase && src != trust.SourceRun {
 				t.Fatalf("seed %d: %s appeared from %s", seed, k, src)
@@ -230,12 +231,12 @@ func TestRunScopePreferenceOnlyPreset(t *testing.T) {
 
 // TestRunScopeIgnoredReported: a pinned runner beats a different one, an
 // unset Fixed key takes the run's value, a lower cap applies and a higher one
-// is ignored, and a Spend key is refused with E671; each refusal is listed.
+// is ignored, and a Spend or Secret key is refused with E819; each refusal is listed.
 func TestRunScopeIgnoredReported(t *testing.T) {
 	reg := runRegistry(t)
 	project := trust.Scope{Kind: trust.SourceProject, Values: map[string]json.RawMessage{"x.fixeddef": json.RawMessage(`"p"`), "x.low": json.RawMessage(`8`)}}
 	run := trust.Scope{Kind: trust.SourceRun, Values: map[string]json.RawMessage{
-		"x.fixeddef": json.RawMessage(`"q"`), "x.fixed": json.RawMessage(`"ms5"`), "x.low": json.RawMessage(`9`), "x.lownone": json.RawMessage(`3`), "x.spend": json.RawMessage(`1`),
+		"x.fixeddef": json.RawMessage(`"q"`), "x.fixed": json.RawMessage(`"ms5"`), "x.low": json.RawMessage(`9`), "x.lownone": json.RawMessage(`3`), "x.spend": json.RawMessage(`1`), "x.secret": json.RawMessage(`"s1"`),
 	}}
 	eff, _, err := reg.Merge("", project, run)
 	if err != nil {
@@ -251,7 +252,7 @@ func TestRunScopeIgnoredReported(t *testing.T) {
 		t.Errorf("x.fixed = %v from %s", v, src)
 	}
 	got := ignoredKeys(eff)
-	if len(got) != 3 || !strings.Contains(got["x.fixeddef"], "E671") || !strings.Contains(got["x.low"], "E671") || !strings.Contains(got["x.spend"], "spend") {
+	if _, _, set := eff.Value("x.secret"); set || len(got) != 4 || !strings.Contains(got["x.secret"], "secret") || !strings.Contains(got["x.fixeddef"], "E819") || !strings.Contains(got["x.low"], "E819") || !strings.Contains(got["x.spend"], "spend") {
 		t.Errorf("ignored = %v", got)
 	}
 	for _, ig := range eff.Ignored() {

@@ -61,17 +61,9 @@ func presetList() string {
 	return out
 }
 
-// stdinTerminal reports whether stdin is a terminal: a character device that
-// is not /dev/null (cron and scripts commonly redirect stdin from it). A seam
-// for tests.
-var stdinTerminal = func() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
-		return false
-	}
-	null, err := os.Stat(os.DevNull)
-	return err != nil || !os.SameFile(fi, null)
-}
+// stdinTerminal reports whether stdin is a terminal (isTerminal: a pipe, a file,
+// /dev/null and /dev/zero are not). A seam for tests.
+var stdinTerminal = func() bool { return isTerminal(os.Stdin) }
 
 // interactiveRun reports whether a person waits at a terminal: stdin is a
 // terminal, no --trigger names who started the run and NSELF_INVOKED_BY (set

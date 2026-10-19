@@ -155,7 +155,7 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 			if err != nil {
 				return Effective{}, "", fmt.Errorf("E672 %s: %w", key, err)
 			}
-			if spec.Spend && (scope.Kind == SourceProtectedBranch || scope.Kind == SourceRevision || scope.Kind == SourcePipeline || scope.Kind == SourceJob || scope.Kind == SourceRun) {
+			if spec.Spend && (scope.Kind == SourceProtectedBranch || scope.Kind == SourceRevision || scope.Kind == SourcePipeline || scope.Kind == SourceJob) {
 				e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 spend key requires operator scope"})
 				continue
 			}
@@ -227,8 +227,10 @@ var runPreferenceKeys = map[string]bool{"sched.preset": true}
 // nothing set yet and without a default is open: any value restricts it, except
 // an off switch or a free-form value, which restrict nothing.
 func runRefusal(spec KeySpec, key string, old any, exists bool, next any) string {
-	const widening = "E671 run scope widening"
+	const widening = "E819 run scope widening"
 	switch {
+	case spec.Spend || spec.Secret:
+		return "E819 spend or secret key requires operator scope"
 	case runPreferenceKeys[key]:
 		return ""
 	case spec.Kind == TightenAny:
