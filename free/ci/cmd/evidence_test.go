@@ -18,7 +18,7 @@ import (
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
-const ciYAML = "version: 1\njobs:\n  unit:\n    kind: test\n    run: [\"true\"]\n"
+const ciYAML = "version: 1\njobs:\n  unit:\n    kind: test\n    run: [\"sh\", \"-c\", \"echo job-output-must-not-travel\"]\n"
 
 func git(t *testing.T, dir string, args ...string) string {
 	t.Helper()
@@ -342,6 +342,7 @@ func TestStream(t *testing.T) {
 	all := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	var prev float64
 	var types []string
+	logs := 0
 	for i, raw := range all {
 		if strings.Contains(raw, "\n") || raw == "" {
 			t.Fatalf("line %d is not compact", i)
@@ -369,14 +370,20 @@ func TestStream(t *testing.T) {
 			schemaOK(t, l.Data["evidence"])
 		}
 		if str(l.Data, "type") == "log" {
-			for k := range l.Data {
-				switch k {
-				case "type", "seq", "ts", "run_id", "job", "attempt_id", "bytes", "ref", "reason":
-				default:
+			logs++
+			payload, _ := l.Data["data"].(map[string]any)
+			if len(payload) == 0 {
+				t.Fatalf("a log record has no payload: %s", raw)
+			}
+			for k := range payload {
+				if k != "bytes" && k != "ref" && k != "reason" {
 					t.Fatalf("a log record carries %q (only size and reason may travel): %s", k, raw)
 				}
 			}
 		}
+	}
+	if logs == 0 || strings.Contains(out, "job-output-must-not-travel") {
+		t.Errorf("%d log records, or job output travelled in the stream", logs)
 	}
 	for _, want := range []string{"queued", "planned", "started", "check_result", "finished", "result"} {
 		found := false
@@ -499,5 +506,25 @@ func TestStreamSurvivesAClosedPipe(t *testing.T) {
 	}
 	if left := r.leftovers(); len(left) != 0 {
 		t.Fatalf("temporary worktrees left behind: %v", left)
+	}
+}
+
+// In a clone with an origin the normal selector plans only the affected jobs;
+// verify must still run, and judge, the whole pipeline.
+func TestVerifyRunsTheFullPipelineInACloneWithAnOrigin(t *testing.T) {
+	r := newEvRepo(t)
+	bare := filepath.Join(t.TempDir(), "origin.git")
+	git(t, r.dir, "clone", "-q", "--bare", r.dir, bare)
+	git(t, r.dir, "remote", "add", "origin", bare)
+	git(t, r.dir, "fetch", "-q", "origin")
+	git(t, r.dir, "remote", "set-head", "origin", "main")
+	git(t, r.dir, "checkout", "-q", "-b", "feat")
+	head := r.commit("note.txt", "a change that selects only part of the pipeline\n")
+	data, code := r.ciJSON("evidence", "verify", head, "--json")
+	if code != 0 {
+		t.Fatalf("verify of a green feature commit: exit %d %v", code, data)
+	}
+	if mode := str(data, "evidence", "selection", "mode"); mode != "full" {
+		t.Fatalf("verify ran a %q selection, want full", mode)
 	}
 }

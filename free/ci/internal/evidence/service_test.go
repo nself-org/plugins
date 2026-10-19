@@ -117,6 +117,7 @@ func TestVerifyRevisionIgnoresEvidenceThatCannotGate(t *testing.T) {
 		"another policy":    func(r *rig) { r.policy = "pol-2" },
 		"a drill":           func(r *rig) { r.plan.Pipeline.Kind = "drill" },
 		"a named pipeline":  func(r *rig) { r.plan.Pipeline.Kind = "named" },
+		"affected only":     func(r *rig) { r.plan.Selection.Mode = "affected" },
 		"stale inputs only": func(r *rig) { commitFiles(r.t, r.dir, map[string]string{"go.sum": "x\n"}) },
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -124,7 +125,7 @@ func TestVerifyRevisionIgnoresEvidenceThatCannotGate(t *testing.T) {
 			dir, _ := newRepo(t, baseFiles)
 			r := &rig{t: t, dir: dir, home: t.TempDir(), policy: "pol-1", plan: buildPlan(t, jobsOf("true"))}
 			switch name {
-			case "adhoc evidence", "a drill", "a named pipeline", "dirty tree":
+			case "adhoc evidence", "a drill", "a named pipeline", "affected only", "dirty tree":
 				if name == "dirty tree" {
 					write(t, dir, "a.txt", "dirty\n")
 				} else {
@@ -250,5 +251,27 @@ func TestVerifyRevisionIgnoresACancelledRun(t *testing.T) {
 	ok(t, err)
 	if !ran || v.Exit != ExitOK || r.runs != 1 {
 		t.Fatalf("the cancelled run was returned: ran=%v runs=%d %+v", ran, r.runs, v)
+	}
+}
+
+// An interrupted or errored rerun is not a verdict on the revision: it must
+// not read as "the pipeline fails" (exit 1), and the worktree still goes.
+func TestVerifyRevisionInterruptedRunIsNotAVerdict(t *testing.T) {
+	for _, result := range []model.Result{"cancelled", "error"} {
+		t.Run(string(result), func(t *testing.T) {
+			t.Setenv("TMPDIR", t.TempDir())
+			dir, sha := newRepo(t, baseFiles)
+			env := Env{Root: dir, Run: func(context.Context, string) (model.Evidence, error) {
+				return model.Evidence{Result: result}, nil
+			}}
+			_, ran, err := VerifyRevision(context.Background(), env, sha)
+			e, isErr := AsError(err)
+			if !ran || !isErr || e.Exit != ExitInternal {
+				t.Fatalf("ran=%v err=%v: want an internal error (exit %d)", ran, err, ExitInternal)
+			}
+			if left, _ := filepath.Glob(filepath.Join(os.Getenv("TMPDIR"), "nself-ci-verify-*")); len(left) != 0 {
+				t.Fatalf("leftovers: %v", left)
+			}
+		})
 	}
 }

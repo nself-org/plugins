@@ -140,6 +140,10 @@ func VerifyRevision(ctx context.Context, env Env, rev string) (v Verdict, ran bo
 	if err != nil {
 		return v, true, err
 	}
+	if ctx.Err() != nil || ev.Result == "cancelled" || ev.Result == "error" {
+		// an interrupt or an infrastructure error is not a verdict on the revision: exit 2, never the "fails" exit of a red build
+		return v, true, fail(CodeWorktree, ExitInternal, "the run for %s did not finish (%s)", short(rev), ev.Result)
+	}
 	v = Judge(ev, rev, &current)
 	return v, true, nil
 }

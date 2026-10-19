@@ -13,6 +13,7 @@ package main
 
 import (
 	"io"
+	"os"
 	"os/signal"
 	"sync"
 	"syscall"
@@ -45,7 +46,20 @@ func (s *streamSession) emitter(runID string) *events.Emitter {
 // ignoreBrokenPipe makes a write to a closed stdout return EPIPE instead of
 // killing the process, so the events emitter stops quietly and deferred
 // cleanup (the verify worktree) still runs when a stream consumer goes away.
-func ignoreBrokenPipe() { signal.Ignore(syscall.SIGPIPE) }
+// It installs a handler rather than SIG_IGN: an ignored signal is inherited
+// by every job, a handled one is reset to the default on exec.
+var pipeOnce sync.Once
+
+func ignoreBrokenPipe() {
+	pipeOnce.Do(func() {
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, syscall.SIGPIPE)
+		go func() {
+			for range ch {
+			}
+		}()
+	})
+}
 
 // activeSession, when set, is the stream the "ci-events" renderer writes to.
 var (
