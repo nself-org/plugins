@@ -87,6 +87,24 @@ func TestEntriesHaveFlags(t *testing.T) {
 	}
 }
 
+// The ad-hoc job is the bare form `nself ci -- <cmd>`: it adds flags, never a first-level subcommand.
+func TestHelpHasNoAdhocSubcommand(t *testing.T) {
+	h := v15Help()
+	for _, l := range strings.Split(h, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(l), "adhoc") {
+			t.Fatalf("first-level adhoc listed: %q", l)
+		}
+	}
+	for _, want := range []string{"-isolation", "-image"} {
+		if !strings.Contains(h, want) {
+			t.Errorf("help lacks %s", want)
+		}
+	}
+	if _, ok := subcommands["adhoc"]; ok {
+		t.Fatal("adhoc registered as a subcommand")
+	}
+}
+
 func TestHelpHasNoApprove(t *testing.T) {
 	h := v15Help()
 	for _, l := range strings.Split(h, "\n") {
@@ -108,7 +126,6 @@ func TestBareRefusals(t *testing.T) {
 		"sha":       {"--sha", "abc123"},
 		"trust":     {"--trust", "owner"},
 		"network":   {"--network", "bogus"},
-		"no adhoc":  {"--", "echo", "hi"},
 		"bad flag":  {"--nope"},
 		"neg time":  {"--timeout=-1s"},
 		"job+adhoc": {"--job", "x", "--", "echo"},
