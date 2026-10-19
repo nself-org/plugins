@@ -238,3 +238,21 @@ func TestImplicitDeclarations(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestCollectTotalCapBoundary(t *testing.T) {
+	e := newEnv(t)
+	e.write("a", strings.Repeat("a", 60))
+	e.write("b", strings.Repeat("b", 40))
+	e.pol.MaxFile, e.pol.MaxTotal = 100, 100
+	ds, err := records.Normalize(model.Job{Artifacts: []model.ArtifactDecl{decl("a"), decl("b")}}, false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.collector().Collect(context.Background(), "proj", e.ws, ds); err != nil {
+		t.Fatalf("exactly the cap: %v", err)
+	}
+	e.pol.MaxTotal = 99
+	if _, err = e.collector().Collect(context.Background(), "proj", e.ws, ds); !records.IsReason(err, records.ReasonSizeCap) {
+		t.Fatalf("one byte over: %v", err)
+	}
+}

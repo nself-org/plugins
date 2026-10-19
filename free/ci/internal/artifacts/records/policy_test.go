@@ -144,6 +144,15 @@ func TestCheckFileAndCaps(t *testing.T) {
 	}
 }
 
+func TestRetentionAndTotalBoundaries(t *testing.T) {
+	if _, _, err := records.RetentionDuration("36500d"); err != nil {
+		t.Fatalf("36500d: %v", err)
+	}
+	if _, _, err := records.RetentionDuration("36501d"); err == nil {
+		t.Fatal("36501d")
+	}
+}
+
 func TestStoreDir(t *testing.T) {
 	t.Setenv("NSELF_CI_HOME", "/ci/home")
 	if got := records.StoreDir(""); got != "/ci/home" {

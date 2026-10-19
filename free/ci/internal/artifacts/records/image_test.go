@@ -100,20 +100,7 @@ func TestImageLayoutRefusals(t *testing.T) {
 				}
 			}
 		},
-		"too deep": func(f map[string][]byte) {
-			a := []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.index.v1+json","digest":"sha256:%s"}]}`)
-			b := []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.index.v1+json","digest":"sha256:%s"}]}`)
-			c := []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.index.v1+json","digest":"sha256:%s"}]}`)
-			d := []byte(`{"manifests":[]}`)
-			dd := dig(d)
-			c = []byte(fmt.Sprintf(string(c), dd))
-			cd := dig(c)
-			b = []byte(fmt.Sprintf(string(b), cd))
-			bd := dig(b)
-			a = []byte(fmt.Sprintf(string(a), bd))
-			f["index.json"] = a
-			f["blobs/sha256/"+bd], f["blobs/sha256/"+cd], f["blobs/sha256/"+dd] = b, c, d
-		},
+		"too deep": func(f map[string][]byte) { nestedIndexes(f, 4) },
 	}
 	for name, mut := range bad {
 		t.Run(name, func(t *testing.T) {
@@ -139,4 +126,126 @@ func collect2(e *env, d model.ArtifactDecl) ([]records.Staged, error) {
 		return nil, err
 	}
 	return e.collector().Collect(context.Background(), "proj", e.ws, ds)
+}
+
+// nestedIndexes rewrites index.json as a chain of `levels` indexes (the top one
+// included); the last holds one manifest.
+func nestedIndexes(f map[string][]byte, levels int) {
+	for n := range f {
+		if strings.HasPrefix(n, "blobs/") {
+			delete(f, n)
+		}
+	}
+	leaf := []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:` + strings.Repeat("e", 64) + `","platform":{"os":"linux","architecture":"amd64"}}]}`)
+	cur := leaf
+	for i := 1; i < levels; i++ {
+		f["blobs/sha256/"+dig(cur)] = cur
+		cur = []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.index.v1+json","digest":"sha256:` + dig(cur) + `"}]}`)
+	}
+	f["index.json"] = cur
+}
+
+func TestImageNestingDepthBoundary(t *testing.T) {
+	read := func(levels int) (*records.ImageInfo, error) {
+		tarball, _ := ociTar(t, func(f map[string][]byte) { nestedIndexes(f, levels) })
+		return records.ReadImageLayout(bytes.NewReader(tarball))
+	}
+	for levels := 1; levels <= 3; levels++ {
+		if info, err := read(levels); err != nil || len(info.Manifests) != 1 {
+			t.Fatalf("%d levels must read: %v", levels, err)
+		}
+	}
+	if _, err := read(4); !records.IsReason(err, records.ReasonImage) {
+		t.Fatalf("4 levels must be refused: %v", err)
+	}
+	if _, err := read(6); !records.IsReason(err, records.ReasonImage) {
+		t.Fatalf("6 levels must be refused: %v", err)
+	}
+}
+
+// rawTar writes regular entries in order.
+func rawTar(entries []tar.Header, bodies [][]byte) []byte {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	for i := range entries {
+		h := entries[i]
+		h.Typeflag, h.Mode, h.Size = tar.TypeReg, 0o644, int64(len(bodies[i]))
+		_ = tw.WriteHeader(&h)
+		_, _ = tw.Write(bodies[i])
+	}
+	_ = tw.Close()
+	return buf.Bytes()
+}
+
+func manifestIndex() []byte {
+	return []byte(`{"manifests":[{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":"sha256:` + strings.Repeat("a", 64) + `"}]}`)
+}
+
+func TestImageSizeAndCountBoundaries(t *testing.T) {
+	const small = 1 << 20
+	pad := func(b []byte, n int) []byte {
+		return append(append([]byte(nil), b...), bytes.Repeat([]byte(" "), n-len(b))...)
+	}
+	// index.json of exactly 1 MiB is read; one byte more is skipped (no index)
+	if _, err := records.ReadImageLayout(bytes.NewReader(rawTar([]tar.Header{{Name: "index.json"}}, [][]byte{pad(manifestIndex(), small)}))); err != nil {
+		t.Fatalf("1 MiB index: %v", err)
+	}
+	if _, err := records.ReadImageLayout(bytes.NewReader(rawTar([]tar.Header{{Name: "index.json"}}, [][]byte{pad(manifestIndex(), small+1)}))); !records.IsReason(err, records.ReasonImage) {
+		t.Fatalf("1 MiB + 1 index: %v", err)
+	}
+	// entry count: 65536 entries read, 65537 refused
+	many := func(n int) []byte {
+		hs := make([]tar.Header, n)
+		bs := make([][]byte, n)
+		hs[0], bs[0] = tar.Header{Name: "index.json"}, manifestIndex()
+		for i := 1; i < n; i++ {
+			hs[i] = tar.Header{Name: fmt.Sprintf("f/%d", i)}
+		}
+		return rawTar(hs, bs)
+	}
+	if _, err := records.ReadImageLayout(bytes.NewReader(many(1 << 16))); err != nil {
+		t.Fatalf("65536 entries: %v", err)
+	}
+	if _, err := records.ReadImageLayout(bytes.NewReader(many(1<<16 + 1))); !records.IsReason(err, records.ReasonImage) {
+		t.Fatalf("65537 entries: %v", err)
+	}
+	// small blobs held: 32 x 1 MiB is read, one more byte is refused
+	blobs := func(extra int) []byte {
+		hs := []tar.Header{{Name: "index.json"}}
+		bs := [][]byte{manifestIndex()}
+		for i := 0; i < 32; i++ {
+			hs = append(hs, tar.Header{Name: fmt.Sprintf("blobs/sha256/%064x", i)})
+			bs = append(bs, bytes.Repeat([]byte{byte(i)}, small))
+		}
+		if extra > 0 {
+			hs = append(hs, tar.Header{Name: fmt.Sprintf("blobs/sha256/%064x", 99)})
+			bs = append(bs, make([]byte, extra))
+		}
+		return rawTar(hs, bs)
+	}
+	if _, err := records.ReadImageLayout(bytes.NewReader(blobs(0))); err != nil {
+		t.Fatalf("32 MiB held: %v", err)
+	}
+	if _, err := records.ReadImageLayout(bytes.NewReader(blobs(1))); !records.IsReason(err, records.ReasonImage) {
+		t.Fatalf("32 MiB + 1 held: %v", err)
+	}
+}
+
+func TestImageManifestOrder(t *testing.T) {
+	d := func(c string) string { return `"sha256:` + strings.Repeat(c, 64) + `"` }
+	m := func(c, arch string) string {
+		return `{"mediaType":"application/vnd.oci.image.manifest.v1+json","digest":` + d(c) + `,"platform":{"os":"linux","architecture":"` + arch + `"}}`
+	}
+	idx := []byte(`{"manifests":[` + strings.Join([]string{m("9", "arm64"), m("2", "amd64"), m("1", "amd64"), m("5", "386")}, ",") + `]}`)
+	info, err := records.ReadImageLayout(bytes.NewReader(rawTar([]tar.Header{{Name: "index.json"}}, [][]byte{idx})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, mf := range info.Manifests {
+		got = append(got, mf.Platform+"="+mf.Digest[7:8])
+	}
+	if want := "linux/386=5 linux/amd64=1 linux/amd64=2 linux/arm64=9"; strings.Join(got, " ") != want {
+		t.Fatalf("order\n got %v\nwant %s", got, want)
+	}
 }

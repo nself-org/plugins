@@ -120,11 +120,7 @@ func (p Policy) floor(total uint64) uint64 {
 	if b == 0 && pct == 0 {
 		b, pct = defaultFloorBytes, defaultFloorPercent
 	}
-	f := uint64(b)
-	if byPct := total / 100 * uint64(pct); byPct > f {
-		f = byPct
-	}
-	return f
+	return max(uint64(b), total/100*uint64(pct))
 }
 
 // CheckDisk refuses a write when the volume of StorePath holds less than the
@@ -134,9 +130,7 @@ func (p Policy) CheckDisk(add int64) error {
 	if err != nil {
 		return failf(ReasonDiskFloor, "cannot read free space of %s: %v", p.StorePath, err)
 	}
-	if add < 0 {
-		add = 0
-	}
+	add = max(add, 0)
 	if floor := p.floor(total); free < floor+uint64(add) {
 		return failf(ReasonDiskFloor, "free space %d B is below the floor %d B (+%d B to write); free disk or lower NSELF_CI_STORE_MIN_FREE", free, floor, add)
 	}
