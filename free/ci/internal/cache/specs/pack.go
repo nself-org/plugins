@@ -4,20 +4,27 @@ package specs
 // files, directories and symlinks that stay inside the tree, nothing else.
 // Inputs:  the directory, a writer, the sanitiser limits.
 // Outputs: PackStats; ErrTooLarge when a limit is exceeded.
-// Constraints: reads go through an os.Root pinned on the directory, so a path
-// swapped by a lingering process cannot redirect them; every entry passes the
+// Constraints: reads go through an os.Root pinned on the attempt's cache root
+// before the job started, so a path swapped by a lingering process cannot
+// redirect them; a file is opened non-blocking and must still be a regular file
+// once open (a swapped-in FIFO cannot hang the save), and the walk stops when the
+// context ends. A file with several hard links is archived like any other: the
+// job runs as the operator and could copy the same bytes, and pnpm's store is
+// made of such files. Every entry passes the
 // same authz.Extractor a restore applies, so what is packed is restorable (an
 // entry the extractor refuses is skipped and counted, never written); headers
 // are normalized (no owner names, no set-id bits, second resolution times).
 
 import (
 	"archive/tar"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
@@ -33,10 +40,10 @@ type PackStats struct {
 	Bytes                       int64
 }
 
-// Pack writes dir to w as tar.
-func Pack(dir string, w io.Writer, lim authz.Limits) (PackStats, error) {
+// Pack writes the directory rel of base to w as tar.
+func Pack(ctx context.Context, base *os.Root, rel string, w io.Writer, lim authz.Limits) (PackStats, error) {
 	var st PackStats
-	root, err := os.OpenRoot(dir)
+	root, err := base.OpenRoot(rel)
 	if err != nil {
 		return st, err
 	}
@@ -45,6 +52,9 @@ func Pack(dir string, w io.Writer, lim authz.Limits) (PackStats, error) {
 	err = fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, werr error) error {
 		if werr != nil {
 			return werr
+		}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		if p == "." {
 			return nil
@@ -78,7 +88,7 @@ func Pack(dir string, w io.Writer, lim authz.Limits) (PackStats, error) {
 		case tar.TypeSymlink:
 			st.Links++
 		default:
-			if err := copyFile(root, p, tw, h.Size); err != nil {
+			if err := copyFile(ctx, root, p, tw, h.Size); err != nil {
 				return err
 			}
 			st.Files++
@@ -139,15 +149,32 @@ func header(root *os.Root, p string, info fs.FileInfo) (*tar.Header, bool, error
 	return h, true, nil
 }
 
-// copyFile copies exactly size bytes of p; a file that shrank is an error.
-func copyFile(root *os.Root, p string, w io.Writer, size int64) error {
-	f, err := root.Open(p)
+// copyFile copies exactly size bytes of p; a file that shrank, or that is no
+// longer a regular file once opened, is an error.
+func copyFile(ctx context.Context, root *os.Root, p string, w io.Writer, size int64) error {
+	f, err := root.OpenFile(p, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = f.Close() }()
-	if n, err := io.CopyN(w, f, size); err != nil {
+	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() {
+		return fmt.Errorf("specs: %q is no longer a regular file", p)
+	}
+	if n, err := io.CopyN(w, &ctxReader{ctx, f}, size); err != nil {
 		return fmt.Errorf("specs: %q changed while it was packed (%d of %d bytes): %w", p, n, size, err)
 	}
 	return nil
+}
+
+// ctxReader stops a copy when the context ends.
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c *ctxReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.r.Read(p)
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/cache/specs"
+	"github.com/nself-org/plugins/free/ci/internal/detect"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -200,13 +201,96 @@ func TestCacheFactsRecordDeclaredSecretsAndPrivateDeps(t *testing.T) {
 
 func TestCacheHookEvictsSessionsThatNeverReachedAfter(t *testing.T) {
 	h := &cacheHook{}
-	h.sessions.Store("old", cacheEntry{s: &specs.Session{}, at: time.Now().Add(-2 * staleAfter)})
-	h.sessions.Store("new", cacheEntry{s: &specs.Session{}, at: time.Now()})
-	h.evict(time.Now())
+	h.sessions.Store("old", cacheEntry{s: &specs.Session{}, at: time.Now().Add(-2 * staleAfter), id: "old"})
+	h.sessions.Store("new", cacheEntry{s: &specs.Session{}, at: time.Now(), id: "new"})
+	h.evict(context.Background(), nil, time.Now())
 	if _, ok := h.sessions.Load("old"); ok {
 		t.Fatal("a stale session was kept")
 	}
 	if _, ok := h.sessions.Load("new"); !ok {
 		t.Fatal("a live session was evicted")
+	}
+}
+
+func TestCacheHookJobEnvCannotLiftTheOperatorDisable(t *testing.T) {
+	j := sh(`case "$GOMODCACHE" in *cache-work*) exit 9;; esac`)
+	j.Env = map[string]string{"NSELF_CI_CACHE_DISABLE": "0"}
+	r := cacheRig(t, map[string]model.Job{"build": j})
+	t.Setenv("NSELF_CI_CACHE_DISABLE", "1")
+	if o := outcome(r.run(t), "build"); o.State != StatePassed || r.uses(t, o) != "" {
+		t.Fatalf("%+v\n%s", o, r.Out)
+	}
+	// and the job env can add a disable of its own
+	j2 := sh(`case "$GOMODCACHE" in *cache-work*) exit 9;; esac`)
+	j2.Env = map[string]string{"NSELF_CI_CACHE_DISABLE": "1"}
+	t.Setenv("NSELF_CI_CACHE_DISABLE", "")
+	r2 := cacheRig(t, map[string]model.Job{"build": j2})
+	if o := outcome(r2.run(t), "build"); o.State != StatePassed || r2.uses(t, o) != "" {
+		t.Fatalf("%+v\n%s", o, r2.Out)
+	}
+}
+
+func TestCacheLevelFollowsTheEffectiveIsolation(t *testing.T) {
+	cases := []struct {
+		name  string
+		a     AttemptInfo
+		level string
+		ok    bool
+	}{
+		{"default", AttemptInfo{}, "process", true},
+		{"process", AttemptInfo{Job: model.Job{Isolation: "process"}}, "process", true},
+		{"container job", AttemptInfo{Job: model.Job{Isolation: "container"}}, "container", true},
+		{"container block", AttemptInfo{Job: model.Job{Container: &model.ContainerConfig{Image: "x"}}}, "container", true},
+		{"--container run", AttemptInfo{Container: true}, "container", true},
+		{"vm", AttemptInfo{Job: model.Job{Isolation: "vm"}}, "", false},
+		{"hosted", AttemptInfo{Job: model.Job{Isolation: "hosted-disposable"}}, "", false},
+	}
+	for _, c := range cases {
+		if level, ok := cacheLevel(c.a); level != c.level || ok != c.ok {
+			t.Errorf("%s: %q %v, want %q %v", c.name, level, ok, c.level, c.ok)
+		}
+	}
+}
+
+func TestCacheHookEvictsTheSessionOfAnEndedAttempt(t *testing.T) {
+	// a run that asks for a service no hook provides fails in prepare, after Before
+	r := cacheRig(t, map[string]model.Job{"build": sh("true")})
+	r.C.Opts.Services = []string{"db"}
+	o := outcome(r.run(t), "build")
+	if o.State != StateFailed {
+		t.Fatalf("%+v\n%s", o, r.Out)
+	}
+	if _, ok := cacheOn.sessions.Load(o.AttemptID); !ok {
+		t.Fatal("the job never reached the cache hook")
+	}
+	cacheOn.evict(context.Background(), r.store(t), time.Now())
+	if _, ok := cacheOn.sessions.Load(o.AttemptID); ok {
+		t.Fatal("the session of an ended attempt was kept")
+	}
+	r.noCacheWork(t)
+}
+
+func TestCacheHookCachesAPnpmProject(t *testing.T) {
+	populateStore := `mkdir -p "$npm_config_store_dir/v3" && echo pkg > "$npm_config_store_dir/v3/p.json"`
+	r1 := cacheRig(t, map[string]model.Job{"install": sh(populateStore)})
+	for name, body := range map[string]string{"package.json": `{"name":"x","packageManager":"pnpm@9.0.0"}`, "pnpm-lock.yaml": "lockfileVersion: '9.0'\n"} {
+		if err := os.WriteFile(filepath.Join(r1.C.Opts.Root, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if o := outcome(r1.run(t), "install"); o.State != StatePassed || !strings.Contains(r1.uses(t, o), "pnpm:miss") || r1.entryCount(t) != 1 { // the Go dirs stay empty: only the pnpm store is saved
+		t.Fatalf("%+v uses %q entries %d\n%s", o, r1.uses(t, o), r1.entryCount(t), r1.Out)
+	}
+	r2 := r1.again(t, map[string]model.Job{"install": sh(`test "$(cat "$npm_config_store_dir/v3/p.json")" = pkg`)})
+	if o := outcome(r2.run(t), "install"); o.State != StatePassed || !strings.Contains(r2.uses(t, o), "pnpm:hit") {
+		t.Fatalf("%+v uses %q\n%s", o, r2.uses(t, o), r2.Out)
+	}
+}
+
+func TestFactDirsIncludeEveryDetectedProject(t *testing.T) {
+	facts := []detect.Fact{{Path: "go.mod"}, {Path: "packages/web/package.json"}, {Path: "svc/api/go.mod"}}
+	got := strings.Join(factDirs("/repo", "/repo/sub", facts), ",")
+	if got != "/repo,/repo/sub,/repo/sub/packages/web,/repo/sub/svc/api" {
+		t.Fatalf("dirs %s", got)
 	}
 }

@@ -50,11 +50,9 @@ func (s *Session) Finalize(ctx context.Context, epoch int64) {
 		if !it.canSave() {
 			continue
 		}
-		n, err := s.in.Engine.Save(ctx, SaveRequest{Attempt: s.in.Attempt, Epoch: epoch, Namespace: s.own, Key: it.Key, Spec: it.Spec, Dirs: it.Dirs})
+		_, err := s.in.Engine.Save(ctx, SaveRequest{Base: s.base, Attempt: s.in.Attempt, Epoch: epoch, Namespace: s.own, Key: it.Key, Spec: it.Spec, Dirs: it.Dirs})
 		switch {
-		case err == nil:
-			_ = n
-		case errors.Is(err, ErrEmpty):
+		case err == nil, errors.Is(err, ErrEmpty):
 		default:
 			s.use(ctx, it.Spec.ID, it.Key, resultOf(err), 0, 0)
 			s.warn("cache save of spec " + it.Spec.ID + " refused: " + reasonOf(err))

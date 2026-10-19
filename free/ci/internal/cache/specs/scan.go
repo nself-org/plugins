@@ -20,7 +20,7 @@ import (
 
 const (
 	scanWindow  = 1 << 20
-	scanOverlap = 256 << 10
+	scanOverlap = 1 << 20
 )
 
 // ErrSecretMatch means the stream holds a registered secret value, or no

@@ -5,7 +5,10 @@ package specs
 // Finalize saves, only for a passing attempt that is finalizing; Cleanup
 // removes the attempt's cache directories.
 // Inputs:  BeginInput (coordinator-attested facts, narrowed detector facts, the
-// job's environment, a tool probe) and the Engine.
+// job's environment, a tool probe) and the Engine. The attempt's cache root is
+// created and pinned (os.Root) in Begin, before the job starts; every later
+// read, write and removal goes through that handle, so a job that swaps a
+// directory for a symlink cannot steer the save or the cleanup outside it.
 // Outputs: Session with Setup, Finalize, Cleanup; usage rows per spec.
 // Constraints: authz.CacheAccess decides the mode of every namespace read:
 // rw-own for the attempt's own namespace, ro-snapshot for a protected namespace
@@ -18,10 +21,9 @@ package specs
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -65,8 +67,8 @@ type Item struct {
 	Spec   Spec
 	Mat    Material
 	Key    string
-	Root   string
-	Dirs   Dirs
+	Root   string     // host path of the spec's directory
+	Dirs   Dirs       // blob name -> directory relative to the cache root
 	Access authz.Mode // the authz mode of the namespace read: rw-own, ro-snapshot, or none
 	Hit    bool
 	NS     authz.Namespace
@@ -78,9 +80,13 @@ type Item struct {
 // Session is one attempt's cache state.
 type Session struct {
 	in    BeginInput
+	base  *os.Root
 	own   authz.Namespace
 	items []*Item
 }
+
+// host is the host path of a directory relative to the cache root.
+func (s *Session) host(rel string) string { return filepath.Join(s.in.Root, filepath.FromSlash(rel)) }
 
 // Begin plans, restores and returns the session; the error is a failure of the
 // plan itself (the caller then runs the job without a cache).
@@ -98,6 +104,13 @@ func Begin(ctx context.Context, in BeginInput) (*Session, error) {
 		return s, nil
 	}
 	s.own = own
+	if err := os.MkdirAll(in.Root, 0o700); err != nil {
+		return s, err
+	}
+	var err error
+	if s.base, err = os.OpenRoot(in.Root); err != nil {
+		return s, err
+	}
 	var keys []string
 	for _, sp := range list {
 		it, ok := s.plan(ctx, sp)
@@ -128,7 +141,11 @@ func (s *Session) plan(ctx context.Context, sp Spec) (*Item, bool) {
 	it := &Item{Spec: sp, Root: root, Dirs: Dirs{}, Access: authz.ModeNone}
 	for _, d := range sp.Dirs {
 		bound = append(bound, d.Env)
-		it.Dirs[d.Name] = filepath.Join(root, d.Name)
+		it.Dirs[d.Name] = path.Join(sp.ID, d.Name)
+	}
+	if s.credentialsHidden(sp) { // rebinding the tool home would hide the user's own credentials
+		s.use(ctx, sp.ID, "", "disabled", 0, 0)
+		return nil, false
 	}
 	for _, name := range bound {
 		if _, set := in.JobEnv[name]; set && name != "" { // the job pinned its own location: not ours to override
@@ -170,7 +187,7 @@ func (s *Session) snapshotSources() []authz.Namespace {
 func (s *Session) restore(ctx context.Context, it *Item) {
 	start := time.Now()
 	for _, d := range it.Dirs {
-		if err := os.MkdirAll(d, 0o700); err != nil {
+		if err := s.base.MkdirAll(d, 0o700); err != nil {
 			s.warn("cache dir for spec " + it.Spec.ID + " could not be created")
 			it.Access = authz.ModeNone
 			s.use(ctx, it.Spec.ID, it.Key, "disabled", 0, 0)
@@ -185,10 +202,10 @@ func (s *Session) restore(ctx context.Context, it *Item) {
 		if !ns.Equal(s.own) {
 			key, _ = it.Mat.Key(ns)
 		}
-		hit, n, err := s.in.Engine.Restore(ctx, ns, key, access, it.Spec, it.Dirs)
+		hit, n, err := s.in.Engine.Restore(ctx, s.base, ns, key, access, it.Spec, it.Dirs, UnpackOptions{OtherRead: s.in.Container})
 		ms := time.Since(start).Milliseconds()
 		if err != nil {
-			s.warn(fmt.Sprintf("cache restore of spec %s refused: %s", it.Spec.ID, refusalKey(errors.Unwrap(err))))
+			s.warn(fmt.Sprintf("cache restore of spec %s refused: %s", it.Spec.ID, refusalKey(err)))
 			s.use(ctx, it.Spec.ID, key, "refused", 0, ms)
 			s.reset(it)
 			continue
@@ -201,6 +218,9 @@ func (s *Session) restore(ctx context.Context, it *Item) {
 			it.Access = authz.ModeNone
 			s.use(ctx, it.Spec.ID, key, "denied", 0, ms)
 			return
+		}
+		if s.in.Container { // the job UID differs from the agent's: let it traverse the mount roots
+			_ = s.base.Chmod(it.Spec.ID, 0o755)
 		}
 		it.Hit, it.NS, it.Access, it.Bound, it.ReadOnly = true, ns, access, true, access == authz.ModeROSnapshot || s.in.Container
 		result := "hit"
@@ -217,8 +237,8 @@ func (s *Session) restore(ctx context.Context, it *Item) {
 // reset empties and recreates the dirs of it.
 func (s *Session) reset(it *Item) {
 	for _, d := range it.Dirs {
-		_ = RemoveTree(d)
-		_ = os.MkdirAll(d, 0o700)
+		_ = removeIn(s.base, d)
+		_ = s.base.MkdirAll(d, 0o700)
 	}
 }
 
@@ -236,43 +256,25 @@ func (s *Session) Setup() (map[string]string, []Mount) {
 			continue
 		}
 		for _, d := range it.Spec.Dirs {
+			host := s.host(it.Dirs[d.Name])
 			if d.Env != "" {
-				env[d.Env] = it.Dirs[d.Name]
+				env[d.Env] = host
 			}
-			mounts = append(mounts, Mount{Host: it.Dirs[d.Name], Target: it.Dirs[d.Name], ReadOnly: ro})
+			mounts = append(mounts, Mount{Host: host, Target: host, ReadOnly: ro})
 		}
 	}
 	return env, mounts
 }
 
-// seed copies the user's tool-home config files into it.Root (cargo's
-// config.toml) because the bound variable hides the user's own directory.
-func (s *Session) seed(it *Item) {
-	sd := it.Spec.Seed
-	if sd.HomeEnv == "" {
-		return
-	}
-	home := s.in.Getenv(sd.HomeEnv)
-	if home == "" && s.in.Home != "" {
-		home = filepath.Join(s.in.Home, sd.HomeDir)
-	}
-	for _, name := range sd.Names {
-		src := filepath.Join(home, name)
-		if info, err := os.Lstat(src); err != nil || !info.Mode().IsRegular() || info.Size() > 1<<20 {
-			continue
-		}
-		if f, err := os.Open(src); err == nil {
-			if out, err := os.OpenFile(filepath.Join(it.Root, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600); err == nil {
-				_, _ = io.Copy(out, f)
-				_ = out.Close()
-			}
-			_ = f.Close()
-		}
-	}
-}
-
 // Cleanup removes the attempt's cache directories.
-func (s *Session) Cleanup() { _ = RemoveTree(s.in.Root) }
+func (s *Session) Cleanup() {
+	if s.base != nil {
+		_ = chmodDirs(s.base, ".")
+		_ = s.base.Close()
+		s.base = nil
+	}
+	_ = os.RemoveAll(s.in.Root) // lstat based: a root swapped for a symlink loses the link, not its target
+}
 
 func (s *Session) warn(msg string) {
 	if s.in.Warn != nil {

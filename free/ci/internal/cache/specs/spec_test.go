@@ -179,7 +179,7 @@ func TestEnvironmentValuesNeverReachTheStore(t *testing.T) {
 	in := e.input("a1", ownerFacts)
 	in.Environ = []string{"GOFLAGS=-tags=plantedvalue-8f3a2c91", "PIP_INDEX_URL=https://user:plantedpass-77aa@example.invalid/simple"}
 	s := e.begin(in)
-	putFile(t, s.items[0].Dirs["mod"]+"/m.txt", "x")
+	putFile(t, s.dir("mod")+"/m.txt", "x")
 	s.Finalize(e.ctx, e.finalizing("a1"))
 	if e.entryCount() != 1 {
 		t.Fatal("no entry saved")

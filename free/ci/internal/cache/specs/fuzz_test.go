@@ -28,7 +28,7 @@ func FuzzRestoreArchive(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		parent := t.TempDir()
 		dir := filepath.Join(parent, "dir")
-		_, _ = Unpack(bytes.NewReader(data), dir, cacheLimits())
+		_, _ = unpackTo(t, bytes.NewReader(data), dir, cacheLimits(), UnpackOptions{})
 		defer func() { _ = RemoveTree(dir) }()
 		ents, err := os.ReadDir(parent)
 		if err != nil {

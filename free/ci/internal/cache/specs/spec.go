@@ -62,6 +62,9 @@ type SeedFile struct {
 	HomeEnv string   // variable naming the tool home, e.g. CARGO_HOME
 	HomeDir string   // default under the user's home, e.g. .cargo
 	Names   []string // files copied when present, e.g. config.toml, config
+	// Blockers are files of the tool home whose presence disables the spec,
+	// because rebinding the home would hide them (cargo's credentials).
+	Blockers []string
 }
 
 var (

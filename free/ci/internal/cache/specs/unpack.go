@@ -5,7 +5,8 @@ package specs
 // written, and every write goes through an os.Root pinned on the directory.
 // Inputs:  the blob reader, the destination directory, the sanitiser limits.
 // Outputs: UnpackStats; *authz.PathError (E683) for a refused header.
-// Constraints: traversal, absolute names, hard links, links out of the tree,
+// Constraints: the destination is a directory of an os.Root pinned before the
+// job started. Traversal, absolute names, hard links, links out of the tree,
 // devices, FIFOs, set-id bits, case collisions, writing through an earlier
 // symlink and entry, size and ratio bombs are all refused by the Extractor; an
 // error leaves a partial directory that the caller removes (RemoveTree). The
@@ -111,13 +112,22 @@ type dirMode struct {
 	at   time.Time
 }
 
-// Unpack extracts the tar+gzip stream r into dir (created 0700 if missing).
-func Unpack(r io.Reader, dir string, lim authz.Limits) (UnpackStats, error) {
+// UnpackOptions tune Unpack.
+type UnpackOptions struct {
+	// OtherRead makes the restored tree readable and traversable by other users
+	// (dirs 0755, files at least 0444, executable for all when the owner may execute): a container job runs under another UID
+	// than the agent that owns the cache root.
+	OtherRead bool
+}
+
+// Unpack extracts the tar+gzip stream r into the directory rel of base
+// (created 0700 if missing).
+func Unpack(r io.Reader, base *os.Root, rel string, lim authz.Limits, opt UnpackOptions) (UnpackStats, error) {
 	var st UnpackStats
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := base.MkdirAll(rel, 0o700); err != nil {
 		return st, err
 	}
-	root, err := os.OpenRoot(dir)
+	root, err := base.OpenRoot(rel)
 	if err != nil {
 		return st, err
 	}
@@ -151,7 +161,7 @@ func Unpack(r io.Reader, dir string, lim authz.Limits) (UnpackStats, error) {
 			if err := root.MkdirAll(name, 0o700); err != nil {
 				return st, err
 			}
-			dirs = append(dirs, dirMode{name, os.FileMode(h.Mode&0o777) | 0o700, h.ModTime})
+			dirs = append(dirs, dirMode{name, dirPerm(h, opt), h.ModTime})
 			st.Dirs++
 		case tar.TypeSymlink:
 			if err := parents(root, name); err != nil {
@@ -162,7 +172,7 @@ func Unpack(r io.Reader, dir string, lim authz.Limits) (UnpackStats, error) {
 			}
 			st.Links++
 		default:
-			if err := writeFile(root, name, guard.entry(tr, h.Name), h); err != nil {
+			if err := writeFile(root, name, guard.entry(tr, h.Name), h, opt); err != nil {
 				return st, err
 			}
 			st.Files++
@@ -170,6 +180,11 @@ func Unpack(r io.Reader, dir string, lim authz.Limits) (UnpackStats, error) {
 		}
 	}
 	sort.Slice(dirs, func(i, j int) bool { return len(dirs[i].name) > len(dirs[j].name) })
+	if opt.OtherRead {
+		if err := root.Chmod(".", 0o755); err != nil {
+			return st, err
+		}
+	}
 	for _, d := range dirs {
 		if err := root.Chmod(d.name, d.mode); err != nil {
 			return st, err
@@ -186,7 +201,15 @@ func parents(root *os.Root, name string) error {
 	return nil
 }
 
-func writeFile(root *os.Root, name string, r io.Reader, h *tar.Header) error {
+func dirPerm(h *tar.Header, opt UnpackOptions) os.FileMode {
+	m := os.FileMode(h.Mode&0o777) | 0o700
+	if opt.OtherRead {
+		m |= 0o755
+	}
+	return m
+}
+
+func writeFile(root *os.Root, name string, r io.Reader, h *tar.Header, opt UnpackOptions) error {
 	if err := parents(root, name); err != nil {
 		return err
 	}
@@ -204,7 +227,14 @@ func writeFile(root *os.Root, name string, r io.Reader, h *tar.Header) error {
 	if err != nil {
 		return fmt.Errorf("specs: writing %q: %w", name, err)
 	}
-	if err := root.Chmod(name, os.FileMode(h.Mode&0o777)|0o400); err != nil {
+	perm := os.FileMode(h.Mode&0o777) | 0o400
+	if opt.OtherRead {
+		perm |= 0o444
+		if perm&0o100 != 0 {
+			perm |= 0o111
+		}
+	}
+	if err := root.Chmod(name, perm); err != nil {
 		return err
 	}
 	_ = root.Chtimes(name, h.ModTime, h.ModTime)
@@ -224,6 +254,16 @@ func RemoveTree(dir string) error {
 	_ = chmodDirs(root, ".")
 	_ = root.Close()
 	return os.RemoveAll(dir)
+}
+
+// removeIn deletes the directory rel of base (same permission rule as RemoveTree)
+// without ever leaving base.
+func removeIn(base *os.Root, rel string) error {
+	if sub, err := base.OpenRoot(rel); err == nil {
+		_ = chmodDirs(sub, ".")
+		_ = sub.Close()
+	}
+	return base.RemoveAll(rel)
 }
 
 func chmodDirs(root *os.Root, dir string) error {

@@ -13,7 +13,7 @@ import "github.com/nself-org/plugins/free/ci/internal/detect"
 func init() {
 	mustRegister(Spec{ID: "go", Version: "1", Ecosystem: "go",
 		Dirs:      []Dir{{"mod", "GOMODCACHE"}, {"build", "GOCACHE"}},
-		EnvAllow:  []string{"GOFLAGS", "CGO_ENABLED", "GOOS", "GOARCH", "GOAMD64", "CC"},
+		EnvAllow:  []string{"GOFLAGS", "GOTOOLCHAIN", "CGO_ENABLED", "GOOS", "GOARCH", "GOAMD64", "CC"},
 		Lockfiles: []string{"go"}, Probes: []Probe{{"go", []string{"go", "version"}}},
 		applies: func(f []detect.Fact) bool { return has(f, "stack", "go") }})
 	mustRegister(Spec{ID: "pnpm", Version: "1", Ecosystem: "node",
@@ -31,7 +31,7 @@ func init() {
 		Dirs:      []Dir{{"git", ""}, {"registry", ""}},
 		EnvAllow:  []string{"RUSTFLAGS", "CARGO_*", "CC"},
 		Lockfiles: []string{"cargo"}, Probes: []Probe{{"cargo", []string{"cargo", "--version"}}, {"rustc", []string{"rustc", "--version"}}},
-		Seed:    SeedFile{HomeEnv: "CARGO_HOME", HomeDir: ".cargo", Names: []string{"config.toml", "config"}},
+		Seed:    SeedFile{HomeEnv: "CARGO_HOME", HomeDir: ".cargo", Names: []string{"config.toml", "config"}, Blockers: []string{"credentials.toml", "credentials"}},
 		applies: func(f []detect.Fact) bool { return has(f, "stack", "rust") }})
 	mustRegister(Spec{ID: "uv", Version: "1", Ecosystem: "python",
 		Dirs:      []Dir{{"cache", "UV_CACHE_DIR"}},

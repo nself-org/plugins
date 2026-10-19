@@ -15,9 +15,9 @@ import (
 // fill writes the files a Go job leaves in its two cache dirs.
 func fill(t *testing.T, s *Session) {
 	t.Helper()
-	dirs := s.items[0].Dirs
-	putFile(t, filepath.Join(dirs["mod"], "example.com", "m@v1", "m.go"), "package m")
-	putFile(t, filepath.Join(dirs["build"], "ab", "cd-d"), "compiled")
+	dirs := s
+	putFile(t, filepath.Join(dirs.dir("mod"), "example.com", "m@v1", "m.go"), "package m")
+	putFile(t, filepath.Join(dirs.dir("build"), "ab", "cd-d"), "compiled")
 }
 
 // saved runs a whole passing owner attempt and returns the finished session.
@@ -55,7 +55,7 @@ func TestSessionSavesAfterAPassAndRestoresTheNextRun(t *testing.T) {
 	if got := resultsOf(e.uses("a2")); strings.Join(got, ",") != "go:hit" {
 		t.Fatalf("second run: %v", got)
 	}
-	if getFile(t, filepath.Join(s2.items[0].Dirs["mod"], "example.com", "m@v1", "m.go")) != "package m" || getFile(t, filepath.Join(s2.items[0].Dirs["build"], "ab", "cd-d")) != "compiled" {
+	if getFile(t, filepath.Join(s2.dir("mod"), "example.com", "m@v1", "m.go")) != "package m" || getFile(t, filepath.Join(s2.dir("build"), "ab", "cd-d")) != "compiled" {
 		t.Fatal("restored content differs")
 	}
 	if s2.Wants() {
@@ -115,7 +115,7 @@ func TestSessionRefusesToSaveARegisteredValue(t *testing.T) {
 			e.running("s1", ownerFacts)
 			s := e.begin(e.input("s1", ownerFacts))
 			fill(t, s)
-			putFile(t, filepath.Join(s.items[0].Dirs["build"], "planted.txt"), content)
+			putFile(t, filepath.Join(s.dir("build"), "planted.txt"), content)
 			s.Finalize(e.ctx, e.finalizing("s1"))
 			if e.entryCount() != 0 || e.auditActions("cache.save.refused") != 1 {
 				t.Fatalf("entries %d, refusal audit rows %d", e.entryCount(), e.auditActions("cache.save.refused"))
@@ -164,7 +164,7 @@ func TestSessionSnapshotsAreReadOnlyForLowerTrust(t *testing.T) {
 			t.Fatalf("uses %v", got)
 		}
 		env, mounts := s.Setup()
-		if len(env) != 0 || len(mounts) != 0 || len(tree(t, s.items[0].Dirs["mod"])) != 0 {
+		if len(env) != 0 || len(mounts) != 0 || len(tree(t, s.dir("mod"))) != 0 {
 			t.Fatalf("a denied restore must leave nothing: %v %v", env, mounts)
 		}
 	})
@@ -211,7 +211,7 @@ func TestSessionReadOnlySnapshotHit(t *testing.T) {
 			t.Fatalf("an untrusted restore must mount read-only: %+v", m)
 		}
 	}
-	if getFile(t, filepath.Join(s.items[0].Dirs["mod"], "f.txt")) != "snapshot-mod" {
+	if getFile(t, filepath.Join(s.dir("mod"), "f.txt")) != "snapshot-mod" {
 		t.Fatal("restored content differs")
 	}
 	if s.Wants() {
@@ -279,7 +279,7 @@ func TestSessionDropsAndRefusesACraftedEntry(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(e.home, "cache-work", "escape")); err == nil {
 		t.Fatal("escape file written")
 	}
-	if len(tree(t, s.items[0].Dirs["mod"])) != 0 {
+	if len(tree(t, s.dir("mod"))) != 0 {
 		t.Fatal("a refused restore left files behind")
 	}
 }
@@ -289,11 +289,19 @@ func TestSessionCargoBindsHomeAndSeedsConfig(t *testing.T) {
 	userHome := t.TempDir()
 	putFile(t, userHome+"/.cargo/config.toml", "[build]\njobs = 2\n")
 	putFile(t, userHome+"/.cargo/credentials.toml", "[registry]\ntoken = \"x\"\n")
-	e.running("r1", ownerFacts)
-	in := e.input("r1", ownerFacts)
+	e.running("r0", ownerFacts)
+	in := e.input("r0", ownerFacts)
 	in.Detected = []detect.Fact{fact("stack", "rust", "Cargo.toml"), {Kind: "lockfile", Name: "cargo", Path: "Cargo.lock", SHA256: strings.Repeat("7", 64), Confidence: detect.Certain}}
 	in.Home = userHome
 	in.Probe = func(context.Context, []string) (string, error) { return "tool 1.0", nil }
+	if s := e.begin(in); len(s.items) != 0 || strings.Join(resultsOf(e.uses("r0")), ",") != "cargo:disabled" {
+		t.Fatalf("a tool home that holds credentials must not be hidden by a rebind: %v", resultsOf(e.uses("r0")))
+	}
+	if err := os.Remove(userHome + "/.cargo/credentials.toml"); err != nil {
+		t.Fatal(err)
+	}
+	e.running("r1", ownerFacts)
+	in.Attempt, in.Root = "r1", filepath.Join(e.home, "cache-work", "r1")
 	s := e.begin(in)
 	env, mounts := s.Setup()
 	root := filepath.Join(e.home, "cache-work", "r1", "cargo")

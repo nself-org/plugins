@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"errors"
 	"io"
 	"io/fs"
@@ -72,6 +73,28 @@ func tarGz(t testing.TB, ents ...tent) []byte {
 	return buf.Bytes()
 }
 
+// unpackTo extracts into the directory dir through a root pinned on its parent.
+func unpackTo(t testing.TB, r io.Reader, dir string, lim authz.Limits, opt UnpackOptions) (UnpackStats, error) {
+	t.Helper()
+	base, err := os.OpenRoot(filepath.Dir(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = base.Close() }()
+	return Unpack(r, base, filepath.Base(dir), lim, opt)
+}
+
+// packFrom packs the directory dir through a root pinned on its parent.
+func packFrom(t testing.TB, dir string, w io.Writer, lim authz.Limits) (PackStats, error) {
+	t.Helper()
+	base, err := os.OpenRoot(filepath.Dir(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = base.Close() }()
+	return Pack(context.Background(), base, filepath.Base(dir), w, lim)
+}
+
 // tree lists every path under dir with its type, mode and content or target.
 func tree(t testing.TB, dir string) []string {
 	t.Helper()
@@ -126,7 +149,7 @@ func TestPackUnpackRoundTrip(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	gz, _ := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
-	st, err := Pack(src, gz, cacheLimits())
+	st, err := packFrom(t, src, gz, cacheLimits())
 	if err != nil || gz.Close() != nil {
 		t.Fatalf("Pack: %v", err)
 	}
@@ -134,7 +157,7 @@ func TestPackUnpackRoundTrip(t *testing.T) {
 		t.Fatalf("stats %+v: want 3 files, 2 in-tree links, and the fifo and both escaping links skipped", st)
 	}
 	dst := filepath.Join(t.TempDir(), "dst")
-	if _, err := Unpack(&buf, dst, cacheLimits()); err != nil {
+	if _, err := unpackTo(t, &buf, dst, cacheLimits(), UnpackOptions{}); err != nil {
 		t.Fatalf("Unpack: %v", err)
 	}
 	t.Cleanup(func() { _ = RemoveTree(dst) })
@@ -179,7 +202,7 @@ func TestUnpackRefusesCraftedArchives(t *testing.T) {
 			parent := t.TempDir()
 			dir := filepath.Join(parent, "dir")
 			before := tree(t, parent)
-			_, err := Unpack(bytes.NewReader(tarGz(t, c.ents...)), dir, cacheLimits())
+			_, err := unpackTo(t, bytes.NewReader(tarGz(t, c.ents...)), dir, cacheLimits(), UnpackOptions{})
 			var pe *authz.PathError
 			if !errors.As(err, &pe) || pe.Reason != c.reason {
 				t.Fatalf("err %v, want reason %s", err, c.reason)
@@ -201,15 +224,15 @@ func TestUnpackBoundsTheDecompressedStream(t *testing.T) {
 	lim.MaxTotalBytes = 1 << 20
 	body := bytes.Repeat([]byte("ab"), 200<<10) // 400 KiB per file, compresses far below the ratio floor concerns
 	data := tarGz(t, tent{name: "a", body: string(body)}, tent{name: "b", body: string(body)}, tent{name: "c", body: string(body)})
-	_, err := Unpack(bytes.NewReader(data), t.TempDir()+"/d", lim)
+	_, err := unpackTo(t, bytes.NewReader(data), t.TempDir()+"/d", lim, UnpackOptions{})
 	var pe *authz.PathError
 	if !errors.As(err, &pe) || pe.Reason != authz.SizeTotal {
 		t.Fatalf("err %v", err)
 	}
-	if _, err := Unpack(strings.NewReader("not gzip at all"), t.TempDir()+"/d", cacheLimits()); err == nil {
+	if _, err := unpackTo(t, strings.NewReader("not gzip at all"), t.TempDir()+"/d", cacheLimits(), UnpackOptions{}); err == nil {
 		t.Fatal("a non-gzip stream was accepted")
 	}
-	if _, err := Unpack(bytes.NewReader(tarGz(t, tent{name: "a", body: "x"})[:30]), t.TempDir()+"/d", cacheLimits()); err == nil {
+	if _, err := unpackTo(t, bytes.NewReader(tarGz(t, tent{name: "a", body: "x"})[:30]), t.TempDir()+"/d", cacheLimits(), UnpackOptions{}); err == nil {
 		t.Fatal("a truncated archive was accepted")
 	}
 }
@@ -217,7 +240,7 @@ func TestUnpackBoundsTheDecompressedStream(t *testing.T) {
 func TestUnpackRefusesAnExistingFile(t *testing.T) {
 	dir := t.TempDir()
 	putFile(t, dir+"/f", "mine")
-	if _, err := Unpack(bytes.NewReader(tarGz(t, tent{name: "f", body: "theirs"})), dir, cacheLimits()); err == nil || getFile(t, dir+"/f") != "mine" {
+	if _, err := unpackTo(t, bytes.NewReader(tarGz(t, tent{name: "f", body: "theirs"})), dir, cacheLimits(), UnpackOptions{}); err == nil || getFile(t, dir+"/f") != "mine" {
 		t.Fatalf("an existing file was replaced (err %v)", err)
 	}
 }
@@ -228,7 +251,7 @@ func TestPackStopsAtTheLimits(t *testing.T) {
 	putFile(t, src+"/b", "2")
 	lim := cacheLimits()
 	lim.MaxEntries = 1
-	if _, err := Pack(src, io.Discard, lim); !errors.Is(err, ErrTooLarge) {
+	if _, err := packFrom(t, src, io.Discard, lim); !errors.Is(err, ErrTooLarge) {
 		t.Fatalf("err %v", err)
 	}
 }
@@ -250,7 +273,7 @@ func TestUnpackJudgesTheRatioWhileWriting(t *testing.T) {
 	text := strings.Repeat("package m // some source text that compresses a few times over\n", 60000) // ~3.8 MiB
 	ok := tarGz(t, tent{name: "a.txt", body: "first"}, tent{name: "big.a", body: random(5 << 20)}, tent{name: "src.go", body: text}, tent{name: "z.txt", body: "last"})
 	dir := t.TempDir() + "/d"
-	if st, err := Unpack(bytes.NewReader(ok), dir, cacheLimits()); err != nil || st.Files != 4 || st.Bytes < 8<<20 {
+	if st, err := unpackTo(t, bytes.NewReader(ok), dir, cacheLimits(), UnpackOptions{}); err != nil || st.Files != 4 || st.Bytes < 8<<20 {
 		t.Fatalf("a legitimate archive with large files: %+v %v", st, err)
 	}
 	var many []tent
@@ -261,7 +284,7 @@ func TestUnpackJudgesTheRatioWhileWriting(t *testing.T) {
 		"bomb after normal files": {{name: "a", body: "x"}, {name: "n.bin", body: random(1 << 20)}, {name: "bomb", size: 16 << 20}},
 		"many floor-sized zeros":  many,
 	} {
-		_, err := Unpack(bytes.NewReader(tarGz(t, ents...)), t.TempDir()+"/d", cacheLimits())
+		_, err := unpackTo(t, bytes.NewReader(tarGz(t, ents...)), t.TempDir()+"/d", cacheLimits(), UnpackOptions{})
 		var pe *authz.PathError
 		if !errors.As(err, &pe) || pe.Reason != authz.SizeRatio {
 			t.Errorf("%s: err %v", name, err)

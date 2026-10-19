@@ -65,7 +65,7 @@ func TestCacheReadOnlyMount(t *testing.T) {
 	if code != 0 || strings.Count(out, "exit=1") != 2 || !strings.Contains(out, "Read-only file system") || !strings.Contains(out, "owner-mod") {
 		t.Fatalf("exit %d, output:\n%s", code, out)
 	}
-	if got := tree(t, s.items[0].Dirs["mod"]); strings.Join(got, "|") != "f.txt -rw-r--r-- owner-mod" {
+	if got := tree(t, s.dir("mod")); strings.Join(got, "|") != "f.txt -rw-r--r-- owner-mod" {
 		t.Fatalf("host dir changed: %v", got)
 	}
 }
@@ -83,7 +83,7 @@ func TestCacheRoundTrip(t *testing.T) {
 	if code != 0 || !strings.HasPrefix(strings.TrimSpace(out), hex.EncodeToString(sum[:])) {
 		t.Fatalf("exit %d, output %q, want sha256 %x", code, out, sum)
 	}
-	if got := getFile(t, filepath.Join(s.items[0].Dirs["mod"], "f.txt")); got != body {
+	if got := getFile(t, filepath.Join(s.dir("mod"), "f.txt")); got != body {
 		t.Fatal("restored bytes differ from the saved bytes")
 	}
 }

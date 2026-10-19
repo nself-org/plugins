@@ -153,6 +153,27 @@ func TestArtifactsCacheShowVerifyPrune(t *testing.T) {
 	}
 }
 
+// TestArtifactsCacheRunOfAnotherProjectIsNotFound: a viewer never reads the
+// usage rows of a run that belongs to another project.
+func TestArtifactsCacheRunOfAnotherProjectIsNotFound(t *testing.T) {
+	r := newArtRig(t)
+	ctx := context.Background()
+	p := store.PipelineRow{ID: "runforeign", Revision: "rev", Project: "/some/other/project", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
+	for i, e := range []error{r.st.CreatePipeline(ctx, p), r.st.CreateJob(ctx, store.JobRow{ID: "jforeign", PipelineID: p.ID, Name: "build", Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}),
+		r.st.CreateAttempt(ctx, store.AttemptRow{ID: "foreign1", JobID: "jforeign", N: 1}, ""),
+		entries.New(r.st, r.blobs, entries.Options{Home: r.home}).RecordUse(ctx, entries.Use{Attempt: "foreign1", Spec: "go", Key: strings.Repeat("ab", 32), Result: "hit", Bytes: 7})} {
+		if e != nil {
+			t.Fatalf("seed step %d: %v", i, e)
+		}
+	}
+	for _, args := range [][]string{{"show", "--run", "runforeign", "--json"}, {"list", "--run", "runforeign"}, {"verify", "--run", "runforeign"}} {
+		code, out, errs := runCache(t, args...)
+		if code != 1 || !strings.Contains(errs+out, "E713") || strings.Contains(errs+out, "foreign1") || strings.Contains(errs+out, strings.Repeat("ab", 6)) {
+			t.Fatalf("%v: %d out=%q err=%q", args, code, out, errs)
+		}
+	}
+}
+
 func TestArtifactsCacheUsage(t *testing.T) {
 	newArtRig(t)
 	for _, args := range [][]string{{}, {"nope"}, {"show", "--run", "r", "extra"}} {

@@ -20,7 +20,6 @@ package run
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,7 +32,6 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
 	"github.com/nself-org/plugins/free/ci/internal/cache/specs"
-	"github.com/nself-org/plugins/free/ci/internal/config"
 	"github.com/nself-org/plugins/free/ci/internal/detect"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
 	"github.com/nself-org/plugins/free/ci/internal/report"
@@ -56,6 +54,7 @@ var CacheAttest func(ctx context.Context, a AttemptInfo, p store.PipelineRow) (C
 type cacheEntry struct {
 	s  *specs.Session
 	at time.Time
+	id string
 }
 
 type cacheHook struct {
@@ -92,8 +91,16 @@ const staleAfter = 24 * time.Hour
 // Before restores the cache of a.
 func (h *cacheHook) Before(ctx context.Context, a AttemptInfo) (CacheSetup, error) {
 	var none CacheSetup
-	env := mergeEnv(h.environ(), a.Job.Env)
-	if a.Store == nil || a.Epoch == 0 || off(env["NSELF_CI_CACHE_DISABLE"]) || a.Job.Cache != nil && a.Job.Cache.Disable {
+	environ := h.environ()
+	env := mergeEnv(environ, a.Job.Env)
+	// the operator's own environment decides first; the revision's job env can
+	// only add a disable, never lift one
+	if a.Store == nil || a.Epoch == 0 || off(lookup(environ, "NSELF_CI_CACHE_DISABLE")) || off(a.Job.Env["NSELF_CI_CACHE_DISABLE"]) ||
+		a.Job.Cache != nil && a.Job.Cache.Disable {
+		return none, nil
+	}
+	level, ok := cacheLevel(a)
+	if !ok { // a VM or sandbox does not see the host's cache directories
 		return none, nil
 	}
 	var scope, keys []string
@@ -127,17 +134,17 @@ func (h *cacheHook) Before(ctx context.Context, a AttemptInfo) (CacheSetup, erro
 			return none, nil
 		}
 	}
-	return h.begin(ctx, a, p, workdir, detected, scope, keys, att, env), nil
+	return h.begin(ctx, a, p, workdir, detected, scope, keys, att, env, level), nil
 }
 
-func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRow, workdir string, detected []detect.Fact, scope, keys []string, att CacheAttestation, env map[string]string) CacheSetup {
+func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRow, workdir string, detected []detect.Fact, scope, keys []string, att CacheAttestation, env map[string]string, level string) CacheSetup {
 	home := records.StoreDir(a.Home)
 	blobs, err := cas.New(home)
 	if err != nil {
 		return CacheSetup{}
 	}
-	container := a.Job.Isolation == "container" || a.Job.Container != nil
-	priv, _ := specs.PrivateDeps(specs.PrivInput{Dirs: []string{p.Project, workdir}, Home: h.home(), Environ: flatEnv(env)})
+	container := level == "container"
+	priv, _ := specs.PrivateDeps(specs.PrivInput{Dirs: factDirs(p.Project, workdir, detected), Home: h.home(), Environ: flatEnv(env)})
 	facts := cacheFacts(a, p, att, priv)
 	es := entries.New(a.Store, blobs, entries.Options{Home: home, Project: func(string) authz.ProjectFacts { return authz.ProjectFacts{NoPrivateDeps: !priv} }})
 	in := specs.BeginInput{Engine: &specs.Engine{Entries: es, Blobs: blobs, Scanner: h.scanner(), Backend: a.Store}, Attempt: a.AttemptID, Epoch: a.Epoch,
@@ -153,8 +160,8 @@ func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRo
 		s.Cleanup()
 		return CacheSetup{}
 	}
-	h.evict(time.Now())
-	h.sessions.Store(a.AttemptID, cacheEntry{s, time.Now()})
+	h.evict(ctx, a.Store, time.Now())
+	h.sessions.Store(a.AttemptID, cacheEntry{s: s, at: time.Now(), id: a.AttemptID})
 	envOut, mounts := s.Setup()
 	out := CacheSetup{Env: envOut}
 	for _, m := range mounts {
@@ -194,10 +201,18 @@ func (h *cacheHook) After(_ context.Context, a AttemptInfo, _ Outcome) error {
 	return nil
 }
 
-// evict cleans up sessions whose attempt never reached After.
-func (h *cacheHook) evict(now time.Time) {
+// evict cleans up sessions whose attempt never reached After: one whose attempt
+// ended (prepare failed after Before), or any older than staleAfter.
+func (h *cacheHook) evict(ctx context.Context, st *store.Store, now time.Time) {
 	h.sessions.Range(func(k, v any) bool {
-		if e := v.(cacheEntry); now.Sub(e.at) > staleAfter {
+		e := v.(cacheEntry)
+		dead := now.Sub(e.at) > staleAfter
+		if !dead && st != nil {
+			if state, _, err := st.AttemptStateEpoch(ctx, e.id); err == nil {
+				dead = state != "queued" && state != "leased" && state != "running" && state != "finalizing"
+			}
+		}
+		if dead {
 			h.sessions.Delete(k)
 			e.s.Cleanup()
 		}
@@ -218,61 +233,4 @@ func (h *cacheHook) imageDigest(ctx context.Context, a AttemptInfo) string {
 		return d
 	}
 	return ""
-}
-
-// topLevelDisabled reads the top-level `cache: {disable: true}` of the default
-// config (<root>/.nself/ci.yaml). The revision can only tighten, so an
-// unreadable or absent file means "not disabled here"; a config passed with
-// --config from elsewhere is not seen (debt D-cache-config-path).
-func topLevelDisabled(root string) bool {
-	l, err := config.Load(filepath.Join(root, ".nself", "ci.yaml"))
-	return err == nil && l.Config.Cache != nil && l.Config.Cache.Disable
-}
-
-func off(v string) bool { return v == "1" || strings.EqualFold(v, "true") }
-
-// workdirOf resolves the job's workdir below the project root (relative, inside).
-func workdirOf(root, workdir string) (string, error) {
-	if workdir == "" || workdir == "." {
-		return root, nil
-	}
-	if !fs.ValidPath(workdir) {
-		return "", fs.ErrInvalid
-	}
-	return filepath.Join(root, filepath.FromSlash(workdir)), nil
-}
-
-// mergeEnv overlays the job's env on the process environment.
-func mergeEnv(environ []string, job map[string]string) map[string]string {
-	out := map[string]string{}
-	for _, kv := range environ {
-		if k, v, ok := strings.Cut(kv, "="); ok {
-			out[k] = v
-		}
-	}
-	for k, v := range job {
-		out[k] = v
-	}
-	return out
-}
-
-func flatEnv(m map[string]string) []string {
-	out := make([]string, 0, len(m))
-	for k, v := range m {
-		out = append(out, k+"="+v)
-	}
-	return out
-}
-
-// sweepStale removes cache-work directories abandoned by a crashed run.
-func sweepStale(dir string, now time.Time) {
-	ents, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	for _, e := range ents {
-		if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) > staleAfter {
-			_ = specs.RemoveTree(filepath.Join(dir, e.Name()))
-		}
-	}
 }

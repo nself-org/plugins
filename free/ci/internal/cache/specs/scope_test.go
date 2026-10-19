@@ -58,6 +58,7 @@ func TestPrivateDepsSignals(t *testing.T) {
 	}{
 		"npmrc auth token":      {file: ".npmrc", body: "//registry.example.invalid/:_authToken=${NPM_TOKEN}\n"},
 		"npmrc without auth":    {file: ".npmrc", body: "registry=https://registry.example.invalid/\nsave-exact=true\n"},
+		"npmrc url creds":       {file: ".npmrc", body: "registry=https://u:p@registry.example.invalid/\n"},
 		"yarnrc token":          {file: ".yarnrc.yml", body: "npmRegistries:\n  x:\n    npmAuthToken: abc\n"},
 		"cargo registry":        {file: ".cargo/config.toml", body: "[registries.corp]\nindex = \"sparse+https://cargo.example.invalid/\"\n"},
 		"requirements cred url": {file: "requirements.txt", body: "--index-url https://u:p@pypi.example.invalid/simple\n"},
@@ -77,7 +78,7 @@ func TestPrivateDepsSignals(t *testing.T) {
 			}
 		}
 		got, why := PrivateDeps(PrivInput{Dirs: []string{dir}, Home: home, Environ: c.env})
-		want := strings.Contains(name, "auth token") || strings.Contains(name, "token") || strings.Contains(name, "cargo registry") || strings.Contains(name, "cred url") ||
+		want := strings.Contains(name, "auth token") || strings.Contains(name, "url creds") || strings.Contains(name, "token") || strings.Contains(name, "cargo registry") || strings.Contains(name, "cred url") ||
 			strings.Contains(name, "go private") || strings.Contains(name, "with creds") || strings.Contains(name, "netrc")
 		if got != want {
 			t.Errorf("%s: %v (%v), want %v", name, got, why, want)

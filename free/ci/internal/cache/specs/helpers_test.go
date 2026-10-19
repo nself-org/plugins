@@ -202,15 +202,21 @@ func (e *env) seedSnapshot(id string, contents map[string]string) {
 		e.t.Fatal(err)
 	}
 	dirs := Dirs{}
+	seed := filepath.Join(e.home, "seed-"+id)
 	for name, content := range contents {
-		dirs[name] = filepath.Join(e.home, "seed-"+id, name)
-		putFile(e.t, filepath.Join(dirs[name], "f.txt"), content)
+		dirs[name] = name
+		putFile(e.t, filepath.Join(seed, name, "f.txt"), content)
 	}
+	base, err := os.OpenRoot(seed)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer func() { _ = base.Close() }()
 	fin := e.finalizing(id)
 	if err := e.es.RecordResult(e.ctx, id, fin, true); err != nil {
 		e.t.Fatal(err)
 	}
-	if _, err := e.eng.Save(e.ctx, SaveRequest{Attempt: id, Epoch: fin, Namespace: ns, Key: item.Key, Spec: item.Spec, Dirs: dirs}); err != nil {
+	if _, err := e.eng.Save(e.ctx, SaveRequest{Base: base, Attempt: id, Epoch: fin, Namespace: ns, Key: item.Key, Spec: item.Spec, Dirs: dirs}); err != nil {
 		e.t.Fatal(err)
 	}
 }
@@ -223,3 +229,6 @@ func mustGet(t *testing.T, id string) Spec {
 	}
 	return s
 }
+
+// dir is the host path of the first item's directory name.
+func (s *Session) dir(name string) string { return s.host(s.items[0].Dirs[name]) }

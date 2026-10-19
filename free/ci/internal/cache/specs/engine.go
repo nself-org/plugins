@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
@@ -46,7 +47,8 @@ type Engine struct {
 	Backend Backend
 }
 
-// Dirs maps a spec dir name (the blob path) to its host directory.
+// Dirs maps a spec dir name (the blob path) to its directory relative to the
+// attempt's pinned cache root.
 type Dirs map[string]string
 
 func (d Dirs) names() []string {
@@ -61,7 +63,7 @@ func (d Dirs) names() []string {
 // Restore looks key up in ns under access and unpacks a hit into dirs. A miss
 // is (false, nil). A refused entry is dropped, the dirs are emptied and the
 // error carries the sanitiser's E683 or the reason.
-func (e *Engine) Restore(ctx context.Context, ns authz.Namespace, key string, access authz.Mode, spec Spec, dirs Dirs) (hit bool, bytes int64, err error) {
+func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace, key string, access authz.Mode, spec Spec, dirs Dirs, opt UnpackOptions) (hit bool, bytes int64, err error) {
 	m, ok, err := e.Entries.Lookup(ctx, ns, key, access)
 	if err != nil || !ok {
 		return false, 0, err
@@ -75,7 +77,7 @@ func (e *Engine) Restore(ctx context.Context, ns authz.Namespace, key string, ac
 	realm := cas.CacheRealm(string(m.Namespace))
 	if !bad {
 		for _, b := range m.Blobs {
-			if err = e.unpackBlob(realm, b.SHA256, dirs[b.Path]); err != nil {
+			if err = e.unpackBlob(base, realm, b.SHA256, dirs[b.Path], opt); err != nil {
 				break
 			}
 		}
@@ -86,20 +88,20 @@ func (e *Engine) Restore(ctx context.Context, ns authz.Namespace, key string, ac
 		return true, m.Bytes(), nil
 	}
 	for _, d := range dirs {
-		_ = RemoveTree(d)
+		_ = removeIn(base, d)
 	}
 	_ = e.Backend.CacheDrop(ctx, m, "unrestorable")
 	_ = e.Backend.AppendAudit(ctx, "cache", "cache.restore.refused", key, "reason="+refusalKey(err))
 	return false, 0, fmt.Errorf("cache restore refused: %w", err)
 }
 
-func (e *Engine) unpackBlob(realm cas.Realm, digest, dir string) error {
+func (e *Engine) unpackBlob(base *os.Root, realm cas.Realm, digest, rel string, opt UnpackOptions) error {
 	rc, err := e.Blobs.Open(realm, digest)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = rc.Close() }()
-	_, err = Unpack(rc, dir, cacheLimits())
+	_, err = Unpack(rc, base, rel, cacheLimits(), opt)
 	return err
 }
 
@@ -114,6 +116,7 @@ func refusalKey(err error) string {
 // SaveRequest is one entry to save. The entry's writer facts are the ones the
 // backend stored at RecordPlan; only the scan result is the saver's.
 type SaveRequest struct {
+	Base      *os.Root
 	Attempt   string
 	Epoch     int64
 	Namespace authz.Namespace
@@ -131,7 +134,7 @@ func (e *Engine) Save(ctx context.Context, r SaveRequest) (int64, error) {
 	var files int
 	var total int64
 	for _, name := range r.Dirs.names() {
-		digest, size, st, err := e.putDir(ctx, realm, r.Dirs[name], maxBytes-total)
+		digest, size, st, err := e.putDir(ctx, r.Base, realm, r.Dirs[name], maxBytes-total)
 		if err != nil {
 			return 0, e.refuse(ctx, r, err)
 		}
@@ -183,7 +186,7 @@ func (c *capWriter) Write(p []byte) (int, error) {
 }
 
 // putDir streams dir through tar, scan and gzip into the blob store.
-func (e *Engine) putDir(ctx context.Context, realm cas.Realm, dir string, budget int64) (string, int64, PackStats, error) {
+func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel string, budget int64) (string, int64, PackStats, error) {
 	pr, pw := io.Pipe()
 	var st PackStats
 	done := make(chan struct{})
@@ -193,7 +196,7 @@ func (e *Engine) putDir(ctx context.Context, realm cas.Realm, dir string, budget
 		defer func() { _ = pw.CloseWithError(err) }()
 		gz, _ := gzip.NewWriterLevel(&capWriter{w: pw, cap: budget}, gzip.BestSpeed)
 		sw := newScanWriter(gz, e.Scanner)
-		if st, err = Pack(dir, sw, cacheLimits()); err == nil {
+		if st, err = Pack(ctx, base, rel, sw, cacheLimits()); err == nil {
 			err = sw.Close()
 		}
 		if err == nil {

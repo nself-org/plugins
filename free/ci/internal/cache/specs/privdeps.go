@@ -24,7 +24,7 @@ type PrivInput struct {
 }
 
 var (
-	npmAuth     = regexp.MustCompile(`(?m)^\s*[^#;\n]*(_authToken|_auth|_password|:username)\s*=`)
+	npmAuth     = regexp.MustCompile(`(?m)^\s*[^#;\n]*(_authToken|_auth|_password|:username)\s*=|://[^/\s@:]+:[^/\s@]*@`)
 	yarnAuth    = regexp.MustCompile(`(?m)^\s*(npmAuthToken|npmAuthIdent)\s*:`)
 	urlCred     = regexp.MustCompile(`://[^/\s@:]+:[^/\s@]*@`)
 	cargoReg    = regexp.MustCompile(`(?m)^\s*\[(registries\.|source\.)[^\]]*\]|^\s*(token|credential-provider)\s*=`)
