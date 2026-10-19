@@ -10,7 +10,8 @@ package discovery
 //          through a discarding logger; the service is built with an explicit host
 //          name and explicit addresses, because the library otherwise calls os.Hostname() and resolves it
 //          (leaking the real host name into SRV and A records); the browse channel is drained while the
-//          query runs because the library drops sends to a full channel.
+//          query runs because the library drops sends to a full channel, and its entries are read only
+//          after the query returned because the library keeps mutating an entry it already sent.
 
 import (
 	"context"
@@ -30,24 +31,27 @@ var quiet = log.New(io.Discard, "", 0)
 
 func (systemNet) Browse(ctx context.Context, serviceType string, timeout time.Duration) ([]Entry, error) {
 	ch := make(chan *mdns.ServiceEntry, 64)
-	done := make(chan []Entry, 1)
+	done := make(chan []*mdns.ServiceEntry, 1)
 	go func() {
-		var got []Entry
+		// Only pointers are kept here: the library keeps writing to an entry it already sent (a later
+		// packet for the same name), so no field may be read until QueryContext has returned.
+		var got []*mdns.ServiceEntry
 		for e := range ch {
-			got = append(got, fromLibrary(e))
-			if len(got) >= RawCap {
-				break // a flood: stop collecting, keep draining below
+			if len(got) < RawCap {
+				got = append(got, e)
 			}
-		}
-		for range ch {
 		}
 		done <- got
 	}()
 	err := mdns.QueryContext(ctx, &mdns.QueryParam{Service: serviceType, Domain: "local", Timeout: timeout, Entries: ch, Logger: quiet})
 	close(ch)
-	got := <-done
-	if err != nil && len(got) == 0 && ctx.Err() == nil {
+	raw := <-done
+	if err != nil && len(raw) == 0 && ctx.Err() == nil {
 		return nil, err
+	}
+	got := make([]Entry, 0, len(raw))
+	for _, e := range raw {
+		got = append(got, fromLibrary(e))
 	}
 	return got, nil
 }
