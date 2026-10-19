@@ -107,7 +107,11 @@ func verifierFromPEM(path, revokedPath string) (*verify.Verifier, error) {
 			return nil, fmt.Errorf("the revoked file is not valid: %v", err)
 		}
 	}
-	return verify.New(keys, revoked)
+	v, err := verify.New(keys, revoked)
+	if err == nil && most > 1 {
+		v.AllowRehearsalKeys() // the manifest key and the provenance key of a rehearsal differ
+	}
+	return v, err
 }
 
 func verifyReleaseDir(v *verify.Verifier, dir, version string, requireAll bool, stdout, stderr io.Writer) int {

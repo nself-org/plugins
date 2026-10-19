@@ -140,7 +140,7 @@ func releaseServer(t *testing.T, body []byte, tamper bool) (*httptest.Server, *v
 	}
 	hits := &atomic.Int32{}
 	mux := http.NewServeMux()
-	cdx, spdx := []byte(`{"bomFormat":"CycloneDX"}`), []byte(`{"spdxVersion":"SPDX-2.3"}`)
+	cdx, spdx := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.6","metadata":{"component":{"name":"`+"nself-ci-agent-linux-amd64"+`"}}}`), []byte(`{"spdxVersion":"SPDX-2.3","name":"`+"nself-ci-agent-linux-amd64"+`"}`)
 	digest := func(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 	st, err := provenance.BuildAgent(provenance.AgentFacts{Repo: "nself-org/plugins", Ref: "refs/tags/v1.5.0", Revision: strings.Repeat("a", 40), RunID: "1",
 		Subjects: []provenance.FileDigest{{Name: "nself-ci-agent-linux-amd64", SHA256: m.SHA256}},

@@ -8,7 +8,8 @@ package verify
 // Constraints: the DSSE envelope is checked by cli sdk/go/signing under the agent purpose (a ci-release, plugins or unknown key is
 //          refused); the statement is parsed by internal/provenance; the single subject is the binary named from the signed
 //          target with the signed manifest's sha256; the byproducts are exactly the two SBOMs and carry the sha256 of the SBOM
-//          bytes given here. Nothing is read from disk, so the caller decides where the three files come from.
+//          bytes given here, and those bytes are SBOM documents that name the binary (sbom.go); the envelope is signed by the key of
+//          the manifest unless the verifier is a rehearsal one (AllowRehearsalKeys). Nothing is read from disk, so the caller decides where the three files come from.
 
 import (
 	"bytes"
@@ -17,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/signing"
@@ -66,9 +68,12 @@ func (v *Verifier) VerifyProvenance(m Manifest, files Files) error {
 			return provFail("the %s file is larger than %d bytes", f.name, f.max)
 		}
 	}
-	payload, err := v.openEnvelope(files.Provenance)
+	payload, signers, err := v.openEnvelope(files.Provenance)
 	if err != nil {
 		return err
+	}
+	if !v.rehearsal && !slices.Contains(signers, m.KeyID) {
+		return provFail("the provenance is not signed by the key of the manifest (%s)", clip(m.KeyID))
 	}
 	st, err := provenance.Parse(payload)
 	if err != nil {
@@ -77,28 +82,29 @@ func (v *Verifier) VerifyProvenance(m Manifest, files Files) error {
 	return checkStatement(st, m, files, v.tagsOnly)
 }
 
-// openEnvelope parses the DSSE envelope strictly and verifies its signature under the agent purpose.
-func (v *Verifier) openEnvelope(raw []byte) ([]byte, error) {
+// openEnvelope parses the DSSE envelope strictly and verifies its signature under the agent purpose. It returns the payload and the
+// ids of the keys that signed it.
+func (v *Verifier) openEnvelope(raw []byte) ([]byte, []string, error) {
 	if err := provenance.CheckStrict(raw); err != nil {
-		return nil, fail(ReasonProvenance, err, "the provenance envelope is not one JSON object with distinct fields")
+		return nil, nil, fail(ReasonProvenance, err, "the provenance envelope is not one JSON object with distinct fields")
 	}
 	var env signing.Envelope
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&env); err != nil {
-		return nil, provFail("the provenance file is not a DSSE envelope")
+		return nil, nil, provFail("the provenance file is not a DSSE envelope")
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
-		return nil, provFail("the provenance envelope has data after the object")
+		return nil, nil, provFail("the provenance envelope has data after the object")
 	}
-	ptype, payload, _, err := signing.VerifyEnvelope(v.sv, env)
+	ptype, payload, signers, err := signing.VerifyEnvelope(v.sv, env)
 	if err != nil {
-		return nil, fail(ReasonProvenance, err, "the provenance signature is refused (%s)", signingFailure(err, "").Reason)
+		return nil, nil, fail(ReasonProvenance, err, "the provenance signature is refused (%s)", signingFailure(err, "").Reason)
 	}
 	if ptype != provenance.PayloadType {
-		return nil, provFail("the provenance payload type %q is not %s", clip(ptype), provenance.PayloadType)
+		return nil, nil, provFail("the provenance payload type %q is not %s", clip(ptype), provenance.PayloadType)
 	}
-	return payload, nil
+	return payload, signers, nil
 }
 
 // checkStatement binds a verified statement to the manifest and to the SBOM bytes.
@@ -127,7 +133,10 @@ func checkStatement(st provenance.Statement, m Manifest, files Files, tagsOnly b
 			return provFail("the %s file is not the SBOM the provenance names", name+sbom.suffix)
 		}
 	}
-	return nil
+	if err := checkCycloneDX(files.CycloneDX, name); err != nil {
+		return err
+	}
+	return checkSPDX(files.SPDX, name)
 }
 
 // ReleaseRepo is the repository whose release workflow builds the agent.
