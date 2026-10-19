@@ -170,3 +170,17 @@ func TestProviderKeepsEveryReasonOfALongList(t *testing.T) {
 		t.Fatalf("detail %q", d)
 	}
 }
+
+// A registered node can carry the local label when contributors run (the world builder
+// strips it afterwards); only the injected runner "local" may be judged.
+func TestProviderIgnoresARemoteNodeWithAForgedLocalLabel(t *testing.T) {
+	remote := runner("lan1")
+	remote.Capability.Identity.Labels = append(remote.Capability.Identity.Labels, world.LocalLabel)
+	ex, err := ExclusionProvider(&source{report: notReady("busy")}, nil)(context.Background(), worldOf(runner("local"), remote))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, judged := ex["lan1"]; judged || len(ex["local"]) != 1 {
+		t.Fatalf("exclusions %+v", ex)
+	}
+}

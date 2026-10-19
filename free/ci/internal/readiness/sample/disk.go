@@ -1,22 +1,24 @@
 package sample
 
 // Purpose: the free-disk sample shared by every platform.
-// Inputs: Sampler.DiskPath (default: the home directory) and the injected FreeBytes.
+// Inputs: Sampler.DiskPath (default: the CI home, or its nearest existing parent) and the
+// injected FreeBytes.
 // Outputs: Live.DiskFreeMB, or a note saying why it is nil.
-// Constraints: one filesystem only (the one that holds the CI home and its workspaces).
+// Constraints: one filesystem only: the one that holds the CI home and its workspaces,
+// not the login home, which can sit on another volume.
 
-import "os"
+import "errors"
 
 // sampleDisk reads the free space of the filesystem under DiskPath.
 func (s Sampler) sampleDisk(live *Live) {
 	path := s.DiskPath
 	if path == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			live.note("disk_free_mb", err)
+		// Jobs run under <CI home>/work, so that volume is the one that fills up.
+		if path = CIHome(); path == "" {
+			live.note("disk_free_mb", errors.New("no CI home to measure"))
 			return
 		}
-		path = home
+		path = nearestExisting(path)
 	}
 	free := s.FreeBytes
 	if free == nil {

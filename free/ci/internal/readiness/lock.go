@@ -5,8 +5,9 @@ package readiness
 // Outputs: a held Lock, or E799 naming the holder's pid when another process holds it.
 // Constraints: an advisory flock on the open file, so the kernel drops it when the holder
 // dies and a stale file from a dead pid is simply taken over (the pid inside is only
-// for the message). The file is never deleted: removing it would let a second process
-// lock a different inode.
+// for the message). This code never deletes the file: removing it would let a second
+// process lock a different inode; Held() lets the owner notice when something else did.
+// The holder keeps the *Lock until Release (the package pins it against garbage collection).
 
 import (
 	"fmt"
@@ -14,10 +15,27 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Lock is a held run lock.
-type Lock struct{ f *os.File }
+type Lock struct {
+	f    *os.File
+	path string
+}
+
+// pinned keeps every held Lock reachable: an *os.File closes itself when it is garbage
+// collected, which would silently release the flock of a caller that dropped the *Lock.
+var pinned = struct {
+	sync.Mutex
+	locks map[*Lock]struct{}
+}{locks: map[*Lock]struct{}{}}
+
+func pin(l *Lock) {
+	pinned.Lock()
+	defer pinned.Unlock()
+	pinned.locks[l] = struct{}{}
+}
 
 // AcquireLock takes the lock at path without waiting.
 func AcquireLock(path string) (*Lock, error) {
@@ -47,7 +65,9 @@ func AcquireLock(path string) (*Lock, error) {
 		if err := f.Truncate(0); err == nil {
 			_, _ = f.WriteAt([]byte(strconv.Itoa(os.Getpid())+"\n"), 0)
 		}
-		return &Lock{f: f}, nil
+		l := &Lock{f: f, path: path}
+		pin(l)
+		return l, nil
 	}
 	return nil, fmt.Errorf("run lock file %s keeps being replaced", path)
 }
@@ -64,9 +84,19 @@ func (l *Lock) Release() error {
 	if l == nil || l.f == nil {
 		return nil
 	}
+	pinned.Lock()
+	delete(pinned.locks, l)
+	pinned.Unlock()
 	err := l.f.Close() // closing the descriptor releases the flock
 	l.f = nil
 	return err
+}
+
+// Held reports whether this process still holds the lock on the file now at the path. It is
+// false after Release and after the file was deleted or replaced (a second watcher could then
+// lock the new file), so a watcher checks it before each claim and stops when it turns false.
+func (l *Lock) Held() bool {
+	return l != nil && l.f != nil && stillAtPath(l.f, l.path)
 }
 
 func readHolder(f *os.File) string {

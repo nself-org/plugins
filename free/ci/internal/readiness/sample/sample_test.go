@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -125,7 +126,7 @@ func fakeMac(calls *[][]string) Runner {
 		case "/usr/bin/top":
 			return Result{Stdout: topOut}, nil
 		case "/bin/ps":
-			return Result{Stdout: "/sbin/launchd\n/Applications/OBS.app/Contents/MacOS/obs\n  \nSafari\n"}, nil
+			return Result{Stdout: "launchd\nobs\n  \nSafari\n"}, nil
 		}
 		return Result{ExitCode: 127}, nil
 	})
@@ -203,12 +204,20 @@ func TestLinuxProcesses(t *testing.T) {
 	}
 }
 
-func TestDiskDefaultsToTheHomeDirectory(t *testing.T) {
-	t.Setenv("HOME", "/home/ci-test")
+// Jobs run under <CI home>/work, so the disk floor measures the volume that holds the CI home
+// (nearest existing parent on a fresh host), not the login home.
+func TestDiskDefaultsToTheCIHome(t *testing.T) {
+	parent := t.TempDir()
+	t.Setenv("NSELF_CI_HOME", filepath.Join(parent, "not", "yet", "created"))
 	var asked string
 	s := Sampler{OS: "plan9", FreeBytes: func(p string) (uint64, error) { asked = p; return 3 << 20, nil }}
-	if live := s.Sample(context.Background()); live.DiskFreeMB == nil || asked != "/home/ci-test" {
+	if live := s.Sample(context.Background()); live.DiskFreeMB == nil || asked != parent {
 		t.Fatalf("asked %q live %+v", asked, live)
+	}
+	t.Setenv("NSELF_CI_HOME", "")
+	t.Setenv("HOME", parent)
+	if s.Sample(context.Background()); asked != parent {
+		t.Fatalf("the default CI home ~/.nself/ci falls back to the nearest existing parent: %q", asked)
 	}
 }
 
@@ -216,5 +225,16 @@ func TestRealStatfsReadsSomething(t *testing.T) {
 	live := Sampler{OS: "plan9", DiskPath: t.TempDir()}.Sample(context.Background())
 	if live.DiskFreeMB == nil || *live.DiskFreeMB < 0 {
 		t.Fatalf("statfs of a temp dir gave %+v (%v)", live.DiskFreeMB, live.Notes)
+	}
+}
+
+// An incomplete process list would let a yield_to target hide in the cut tail, so a truncated
+// `ps` is an error, never a shorter list.
+func TestDarwinTruncatedProcessListIsAnError(t *testing.T) {
+	run := RunnerFunc(func(context.Context, []string, time.Duration) (Result, error) {
+		return Result{Stdout: "launchd\n", Truncated: true}, nil
+	})
+	if names, err := (Sampler{OS: "darwin", Run: run}).Processes(context.Background()); err == nil {
+		t.Fatalf("truncated list returned %v", names)
 	}
 }

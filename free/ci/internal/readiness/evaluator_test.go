@@ -42,10 +42,11 @@ func TestEvaluatorEndToEndOnLinux(t *testing.T) {
 	cfg.Cmd = []string{"/opt/busy"}
 	hook := runnerOf(sample.Result{ExitCode: 3, Stdout: "nightly backup running"}, nil, nil, nil)
 	ev := Evaluator{
-		Config:  func(context.Context) (Config, error) { return cfg, nil },
-		Sampler: linuxHost(t, "8388608", "46.0"),
-		Hook:    hook,
-		Cores:   func() int { return 8 },
+		Config:   func(context.Context) (Config, error) { return cfg, nil },
+		Sampler:  linuxHost(t, "8388608", "46.0"),
+		Hook:     hook,
+		Cores:    func() int { return 8 },
+		CacheTTL: -1,
 	}
 	r, err := ev.Evaluate(context.Background())
 	if err != nil {
@@ -72,5 +73,45 @@ func TestEvaluatorConfigErrorFailsTheEvaluation(t *testing.T) {
 	ev := Evaluator{Config: func(context.Context) (Config, error) { return Config{}, boom }}
 	if _, err := ev.Evaluate(context.Background()); !errors.Is(err, boom) {
 		t.Fatalf("err %v", err)
+	}
+}
+
+func TestEvaluatorWithoutConfigRefuses(t *testing.T) {
+	if _, err := (&Evaluator{}).Evaluate(context.Background()); err == nil {
+		t.Fatal("a missing Config source would drop the operator's hook and yield_to; it must be an error")
+	}
+}
+
+func TestEvaluatorCachesForTheTTLAndWhenConfigChanges(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	cfg := DefaultConfig()
+	probes := 0
+	hook := sample.RunnerFunc(func(context.Context, []string, time.Duration) (sample.Result, error) {
+		probes++
+		return sample.Result{}, nil
+	})
+	cfg.Cmd = []string{"/opt/busy"}
+	ev := &Evaluator{
+		Config:   func(context.Context) (Config, error) { return cfg, nil },
+		Sampler:  linuxHost(t, "8388608", "0.1"),
+		Hook:     hook,
+		Cores:    func() int { return 8 },
+		CacheTTL: 5 * time.Second,
+		Now:      func() time.Time { return now },
+	}
+	for i := 0; i < 3; i++ {
+		if r, err := ev.Evaluate(context.Background()); err != nil || !r.Ready {
+			t.Fatalf("%+v %v", r, err)
+		}
+	}
+	if probes != 1 {
+		t.Fatalf("three calls inside the TTL must probe once, probed %d times", probes)
+	}
+	cfg.Cmd = []string{"/opt/other"} // an operator edit takes effect at once
+	_, _ = ev.Evaluate(context.Background())
+	now = now.Add(6 * time.Second) // the TTL passed
+	_, _ = ev.Evaluate(context.Background())
+	if probes != 3 {
+		t.Fatalf("a config change and an expired TTL must each probe again, probed %d times", probes)
 	}
 }

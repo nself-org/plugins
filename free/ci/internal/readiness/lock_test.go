@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -124,5 +125,43 @@ func TestRunLockSurvivesAnUnlinkedFile(t *testing.T) {
 	defer func() { _ = second.Release() }()
 	if third, err := AcquireLock(path); third != nil || err == nil {
 		t.Fatalf("the lock on the file now at the path must exclude a third holder: %v", err)
+	}
+}
+
+func TestRunLockHeldNoticesDeletionAndRelease(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "readiness.lock")
+	l, err := AcquireLock(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !l.Held() {
+		t.Fatal("a fresh lock is held")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if l.Held() {
+		t.Fatal("a lock whose file was deleted no longer excludes a second watcher: Held must say so")
+	}
+	_ = l.Release()
+	var none *Lock
+	if l.Held() || none.Held() {
+		t.Fatal("a released or nil lock is not held")
+	}
+}
+
+func TestRunLockSurvivesGarbageCollection(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "readiness.lock")
+	func() {
+		if _, err := AcquireLock(path); err != nil { // the caller drops the *Lock
+			t.Fatal(err)
+		}
+	}()
+	for i := 0; i < 3; i++ {
+		runtime.GC()
+	}
+	if second, err := AcquireLock(path); err == nil {
+		_ = second.Release()
+		t.Fatal("a dropped *Lock must keep holding the flock: the os.File finalizer released it")
 	}
 }

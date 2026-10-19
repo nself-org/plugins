@@ -92,9 +92,10 @@ func TestYieldTo(t *testing.T) {
 		t.Fatalf("matching is exact: %v", got)
 	}
 
-	ev := Evaluator{
-		Config:  func(context.Context) (Config, error) { return Config{YieldTo: []string{"zoom.us", "obs"}}, nil },
-		Sampler: sample.Sampler{OS: "darwin", Cores: 4, Run: psOnly("launchd\n/Applications/zoom.us.app/Contents/MacOS/zoom.us\nSafari\n"), FreeBytes: func(string) (uint64, error) { return 1 << 40, nil }},
+	ev := &Evaluator{
+		CacheTTL: -1,
+		Config:   func(context.Context) (Config, error) { return Config{YieldTo: []string{"zoom.us", "obs"}}, nil },
+		Sampler:  sample.Sampler{OS: "darwin", Cores: 4, Run: psOnly("launchd\nzoom.us\nSafari\n"), FreeBytes: func(string) (uint64, error) { return 1 << 40, nil }},
 	}
 	r, err := ev.Evaluate(context.Background())
 	if err != nil {
@@ -116,6 +117,9 @@ func TestYieldTo(t *testing.T) {
 func psOnly(ps string) sample.Runner {
 	return sample.RunnerFunc(func(_ context.Context, argv []string, _ time.Duration) (sample.Result, error) {
 		if argv[0] == "/bin/ps" {
+			if argv[1] != "-axco" {
+				return sample.Result{}, errors.New("ps must print short names only")
+			}
 			return sample.Result{Stdout: ps}, nil
 		}
 		return sample.Result{}, errors.New("not available in this test")

@@ -2,7 +2,7 @@ package sample
 
 // Purpose: the macOS readers, each one a fixed argv run through the exec funnel:
 // `vm_stat` (free + inactive + speculative pages, the same set the CI-32 probe counts),
-// `sysctl -n vm.loadavg`, `top -l 1 -n 0` for the CPU idle percentage and `ps -axo comm=`.
+// `sysctl -n vm.loadavg`, `top -l 1 -n 0` for the CPU idle percentage and `ps -axco comm=`.
 // Constraints: absolute binary paths, so a hijacked PATH cannot substitute them.
 
 import (
@@ -85,12 +85,17 @@ func vmStatFreeMB(out string) (int64, bool) {
 
 // darwinProcesses lists the base names of every process.
 func (s Sampler) darwinProcesses(ctx context.Context) ([]string, error) {
-	res, err := s.runner().Run(ctx, []string{"/bin/ps", "-axo", "comm="}, darwinTimeout)
+	// -c prints the executable name only (16 characters at most), a third of the size of
+	// the full paths; an incomplete list would let a yield_to target hide in the cut tail.
+	res, err := s.runner().Run(ctx, []string{"/bin/ps", "-axco", "comm="}, darwinTimeout)
 	if err != nil {
 		return nil, err
 	}
 	if res.ExitCode != 0 {
 		return nil, fmt.Errorf("ps exited %d", res.ExitCode)
+	}
+	if res.Truncated {
+		return nil, fmt.Errorf("process list longer than %d bytes", MaxOutput)
 	}
 	var names []string
 	for _, line := range strings.Split(res.Stdout, "\n") {

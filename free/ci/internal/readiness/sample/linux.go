@@ -5,7 +5,10 @@ package sample
 // average since boot, which says nothing about now).
 // Constraints: only /proc, through the injected readers. /proc/stat and /proc/loadavg are
 // host-wide even inside a cgroup-limited container, so idle and load describe the host, not
-// the job quota; that is the right question for a watch host (AUTO A6).
+// the job quota; that is the right question for a watch host (AUTO A6). iowait counts as
+// idle, so a host whose disk is saturated reads idle and its load is forgiven by design.
+// yield_to sees only the processes this PID namespace shows (hidepid=2 and containers hide
+// the rest).
 
 import (
 	"bytes"

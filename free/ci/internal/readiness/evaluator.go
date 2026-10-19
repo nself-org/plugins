@@ -7,19 +7,28 @@ package readiness
 // Outputs: Report; Evaluate returns an error only when the configuration cannot be read.
 // Constraints: static host facts (core count) come from the CI-32 capacity probe through
 // Cores, never re-probed here; every reader is injectable; the evaluator never pauses or
-// kills a running job (readiness gates admission only).
+// kills a running job (readiness gates admission only). A world is built on every dispatch
+// tick, so an answer is reused for CacheTTL while the configuration is unchanged: a probe
+// costs 250 ms on Linux and several process starts on macOS. Config is required: a missing
+// source would silently drop the operator's hook and yield_to.
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"sync"
+	"time"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/readiness/sample"
 )
 
-// Evaluator answers "may this host take CI work now?".
+// DefaultCacheTTL is how long an answer is reused when Evaluator.CacheTTL is zero.
+const DefaultCacheTTL = 5 * time.Second
+
+// Evaluator answers "may this host take CI work now?". Use it through a pointer.
 type Evaluator struct {
-	// Config returns the resolved readiness settings; nil means DefaultConfig.
+	// Config returns the resolved readiness settings (ConfigFrom of the effective policy).
 	Config func(ctx context.Context) (Config, error)
 	// Sampler reads the live values; its Cores is filled from Cores when zero.
 	Sampler sample.Sampler
@@ -27,20 +36,54 @@ type Evaluator struct {
 	Hook sample.Runner
 	// Cores returns the core count from the capacity probe; nil uses ciexec.Probe.
 	Cores func() int
+	// CacheTTL bounds how long an answer is reused; zero means DefaultCacheTTL, negative
+	// switches the cache off.
+	CacheTTL time.Duration
+	// Now is the clock for the cache; nil uses time.Now.
+	Now func() time.Time
 
 	coresOnce sync.Once
 	cores     int
+
+	mu       sync.Mutex
+	cachedAt time.Time
+	cachedBy Config
+	cached   *Report
+}
+
+func (e *Evaluator) now() time.Time {
+	if e.Now != nil {
+		return e.Now()
+	}
+	return time.Now()
 }
 
 // Evaluate samples the host and decides.
 func (e *Evaluator) Evaluate(ctx context.Context) (Report, error) {
-	cfg := DefaultConfig()
-	if e.Config != nil {
-		var err error
-		if cfg, err = e.Config(ctx); err != nil {
-			return Report{}, err
-		}
+	if e.Config == nil {
+		return Report{}, fmt.Errorf("readiness: the Evaluator has no Config source")
 	}
+	cfg, err := e.Config(ctx)
+	if err != nil {
+		return Report{}, err
+	}
+	ttl := e.CacheTTL
+	if ttl == 0 {
+		ttl = DefaultCacheTTL
+	}
+	e.mu.Lock() // one probe at a time: concurrent callers share its answer
+	defer e.mu.Unlock()
+	if ttl > 0 && e.cached != nil && e.now().Sub(e.cachedAt) < ttl && reflect.DeepEqual(e.cachedBy, cfg) {
+		return *e.cached, nil
+	}
+	r := e.probe(ctx, cfg)
+	if ttl > 0 && ctx.Err() == nil {
+		e.cached, e.cachedAt, e.cachedBy = &r, e.now(), cfg
+	}
+	return r, nil
+}
+
+func (e *Evaluator) probe(ctx context.Context, cfg Config) Report {
 	s := e.Sampler
 	if s.Cores < 1 {
 		e.coresOnce.Do(func() { // the core count does not change; the probe forks several tools on macOS
@@ -69,5 +112,5 @@ func (e *Evaluator) Evaluate(ctx context.Context) (Report, error) {
 		}
 		in.Hook = RunHook(ctx, run, cfg.Cmd)
 	}
-	return Decide(cfg, in), nil
+	return Decide(cfg, in)
 }

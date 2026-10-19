@@ -24,6 +24,9 @@ import (
 type Result struct {
 	ExitCode int
 	Stdout   string
+	// Truncated is true when the command printed more than MaxOutput bytes and the rest was
+	// dropped. A caller that needs the whole output (a process list) must treat it as an error.
+	Truncated bool
 }
 
 // Runner runs one argv with a timeout, without a shell. The error is a start failure,

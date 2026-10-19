@@ -10,7 +10,7 @@ package readiness
 // the operator's own interactive `nself ci` run is being planned. Passing a predicate that
 // is always true switches readiness off, so only that run path may supply it.
 // Outputs: autoworld.ExclusionFn; Register adds it under ProviderName.
-// Constraints: only the runner carrying world.LocalLabel is judged (remote nodes keep
+// Constraints: only the runner "local" carrying world.LocalLabel is judged (remote nodes keep
 // NODE-13's agent-side facts). Foreground floor (X17): the operator's own foreground run
 // keeps its one local slot whatever the answer, so a foreground run adds no exclusion.
 
@@ -27,6 +27,11 @@ import (
 // ProviderName is the name the provider registers under (providers run in name order).
 const ProviderName = "readiness"
 
+// localRunnerID is the id of the injected runner that is this machine (world.BuildForLocal).
+// Contributors run before the world builder strips world.LocalLabel from registered nodes,
+// so the label alone could make a remote node look local; the id closes that.
+const localRunnerID = "local"
+
 // Source is what the provider needs from an Evaluator.
 type Source interface {
 	Evaluate(ctx context.Context) (Report, error)
@@ -40,6 +45,9 @@ func ExclusionProvider(src Source, foreground func() bool) autoworld.ExclusionFn
 		}
 		var local []string
 		for _, r := range w.Runners {
+			if r.ID != localRunnerID { // a registered node can carry the label until the world builder strips it
+				continue
+			}
 			for _, l := range r.Capability.Identity.Labels {
 				if l == world.LocalLabel {
 					local = append(local, r.ID)

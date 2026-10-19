@@ -101,7 +101,7 @@ func TestReportMatchesSchema(t *testing.T) {
 	for name, r := range map[string]Report{
 		"ready":     Decide(DefaultConfig(), Inputs{Live: l}),
 		"refused":   Decide(DefaultConfig(), Inputs{Live: sample.Live{Notes: map[string]string{}}, YieldedTo: []string{"zoom.us"}}),
-		"all null":  {Schema: SchemaID, Why: []string{}, YieldedTo: []string{}},
+		"all null":  {Schema: SchemaID, Ready: true, Why: []string{}, YieldedTo: []string{}},
 		"yielding":  Decide(DefaultConfig(), Inputs{Live: l, YieldedTo: []string{"obs", "zoom.us"}}),
 		"hook said": Decide(DefaultConfig(), Inputs{Live: l, Hook: Hook{Ran: true, Result: HookNotReady, Why: "gaming"}}),
 	} {
@@ -115,10 +115,12 @@ func TestReportMatchesSchema(t *testing.T) {
 	}
 	// A document that drops a required field or adds one is refused.
 	for name, doc := range map[string]string{
-		"missing":  `{"schema":"ci.readiness/v1","ready":true,"why":[]}`,
-		"extra":    `{"schema":"ci.readiness/v1","ready":true,"why":[],"mem_free_mb":1,"load_per_core":0,"cpu_idle_pct":1,"disk_free_mb":1,"yielded_to":[],"x":1}`,
-		"wrong id": `{"schema":"ci.readiness/v2","ready":true,"why":[],"mem_free_mb":1,"load_per_core":0,"cpu_idle_pct":1,"disk_free_mb":1,"yielded_to":[]}`,
-		"idle 101": `{"schema":"ci.readiness/v1","ready":true,"why":[],"mem_free_mb":1,"load_per_core":0,"cpu_idle_pct":101,"disk_free_mb":1,"yielded_to":[]}`,
+		"missing":             `{"schema":"ci.readiness/v1","ready":true,"why":[]}`,
+		"extra":               `{"schema":"ci.readiness/v1","ready":true,"why":[],"mem_free_mb":1,"load_per_core":0,"cpu_idle_pct":1,"disk_free_mb":1,"yielded_to":[],"x":1}`,
+		"wrong id":            `{"schema":"ci.readiness/v2","ready":true,"why":[],"mem_free_mb":1,"load_per_core":0,"cpu_idle_pct":1,"disk_free_mb":1,"yielded_to":[]}`,
+		"ready with a reason": `{"schema":"ci.readiness/v1","ready":true,"why":["x"],"mem_free_mb":1,"load_per_core":0,"cpu_idle_pct":1,"disk_free_mb":1,"yielded_to":[]}`,
+		"refused without why": `{"schema":"ci.readiness/v1","ready":false,"why":[],"mem_free_mb":1,"load_per_core":0,"cpu_idle_pct":1,"disk_free_mb":1,"yielded_to":[]}`,
+		"idle 101":            `{"schema":"ci.readiness/v1","ready":true,"why":[],"mem_free_mb":1,"load_per_core":0,"cpu_idle_pct":101,"disk_free_mb":1,"yielded_to":[]}`,
 	} {
 		if err := model.ValidateJSON(schema, []byte(doc)); err == nil {
 			t.Errorf("%s must be refused", name)

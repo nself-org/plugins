@@ -5,16 +5,19 @@ package readiness
 // Inputs: the configured names and the running process names.
 // Outputs: the configured names that matched, sorted and de-duplicated.
 // Constraints: exact, case-sensitive match on the process name. Linux truncates a
-// process name to 15 characters, so a longer configured name matches its 15-character
-// prefix. Readiness gates admission only: nothing here pauses or kills a running job.
+// process name to 15 characters and macOS `ps -c` to 16, so a longer configured name
+// matches either prefix. Readiness gates admission only: nothing here pauses or kills a running job.
 
 import (
 	"sort"
 	"strings"
 )
 
-// linuxCommLen is the longest process name /proc/<pid>/comm reports.
-const linuxCommLen = 15
+// The longest process names the kernels report: Linux /proc/<pid>/comm, macOS MAXCOMLEN.
+const (
+	linuxCommLen  = 15
+	darwinCommLen = 16
+)
 
 // MatchYield returns the names in want that appear in running.
 func MatchYield(want, running []string) []string {
@@ -29,7 +32,7 @@ func MatchYield(want, running []string) []string {
 		if name == "" || seen[name] {
 			continue
 		}
-		if have[name] || len(name) > linuxCommLen && have[name[:linuxCommLen]] {
+		if have[name] || len(name) > linuxCommLen && have[name[:linuxCommLen]] || len(name) > darwinCommLen && have[name[:darwinCommLen]] {
 			seen[name] = true
 			hit = append(hit, name)
 		}
