@@ -207,8 +207,9 @@ func (s *Sink) Err() error {
 }
 
 // Close stores everything still held, then closes the writer. Safe to call
-// twice. When the disk is so slow that the flusher does not finish within
-// CloseTimeout, Close gives up with an error and leaves the writer to it.
+// twice. CloseTimeout bounds the whole call, the final flush and the writer's
+// closing fsync together: when the disk is so slow that either does not finish
+// in time, Close gives up with an error and leaves the rest to its goroutine.
 func (s *Sink) Close() error {
 	s.mu.Lock()
 	if s.closed {
@@ -218,21 +219,37 @@ func (s *Sink) Close() error {
 	s.closed = true
 	s.mu.Unlock()
 	close(s.stop)
+	deadline := time.NewTimer(CloseTimeout)
+	defer deadline.Stop()
 	select {
 	case <-s.finished:
-	case <-time.After(CloseTimeout):
-		err := fail(CodeStore, "storing the log did not finish within %v; later lines may be missing", CloseTimeout)
+	case <-deadline.C:
 		s.mu.Lock()
 		s.abandoned = true
-		if s.err == nil {
-			s.err = err
-		}
 		s.mu.Unlock()
-		return err
+		return s.giveUp()
 	}
 	err := s.Err()
-	if cerr := s.w.Close(); err == nil {
-		err = cerr
+	closed := make(chan error, 1)
+	go func() { closed <- s.w.Close() }() // the final fsync can stall as well; Writer.Close is idempotent
+	select {
+	case cerr := <-closed:
+		if err == nil {
+			err = cerr
+		}
+		return err
+	case <-deadline.C:
+		return s.giveUp()
+	}
+}
+
+// giveUp records and returns the timeout error unless a storage error came first.
+func (s *Sink) giveUp() error {
+	err := fail(CodeStore, "storing the log did not finish within %v; later lines may be missing", CloseTimeout)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err == nil {
+		s.err = err
 	}
 	return err
 }
