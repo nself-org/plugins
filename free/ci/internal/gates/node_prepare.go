@@ -28,6 +28,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/diagnose"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -45,6 +46,9 @@ const (
 	prepareFailed = "::nself-ci-prepare-failed::"
 	prepareExit   = 97
 	installLog    = ".nself-ci-install.log"
+	// nodePrepareBudget is the time one invocation gets when it installs first
+	// (the default is 10 minutes for the check alone).
+	nodePrepareBudget = 20 * time.Minute
 )
 
 // nodeSpec is what preparation needs to know about one Node directory.
@@ -63,6 +67,9 @@ type nodeSpec struct {
 	Berry bool
 	// Astro is true when package.json depends on astro.
 	Astro bool
+	// HasModules is true when a node_modules already sits in the working
+	// directory or next to the lockfile (an install this run does not redo).
+	HasModules bool
 }
 
 func nodeSpecFor(root string, p PlannedCheck) nodeSpec {
@@ -73,16 +80,19 @@ func nodeSpecFor(root string, p PlannedCheck) nodeSpec {
 	_, a2 := m.DevDependencies["astro"]
 	s.Astro = a1 || a2
 	work := path.Clean(p.Workdir)
+	s.HasModules = hasDir(root, work, "node_modules")
 	for dir := work; ; dir = path.Dir(dir) {
 		for _, lock := range nodeLockfiles[s.Manager] {
 			b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(dir), lock))
 			if err != nil {
 				continue
 			}
-			sum := sha256.Sum256(append([]byte(s.Manager+"\x00"), b...))
+			manifest, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(dir), "package.json")) // a changed manifest with the same lockfile installs again
+			sum := sha256.Sum256(append(append([]byte(s.Manager+"\x00"), b...), manifest...))
 			s.LockDir, s.Digest = dir, hex.EncodeToString(sum[:])
 			s.Berry = s.Manager == "yarn" && strings.Contains(string(b), "__metadata:")
 			s.Rel = relUp(work, dir)
+			s.HasModules = hasDir(root, work, "node_modules") || hasDir(root, dir, "node_modules")
 			marker, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(dir), filepath.FromSlash(nodePreparedMarker)))
 			s.Prepared = strings.TrimSpace(string(marker)) == s.Digest
 			return s
@@ -91,6 +101,11 @@ func nodeSpecFor(root string, p PlannedCheck) nodeSpec {
 			return s
 		}
 	}
+}
+
+func hasDir(root, dir, name string) bool {
+	st, err := os.Stat(filepath.Join(root, filepath.FromSlash(dir), name))
+	return err == nil && st.IsDir()
 }
 
 // relUp is the relative path from the directory work up to its ancestor dir.
@@ -140,7 +155,7 @@ const cacheEnv = `export npm_config_cache="$PWD/.nself-ci/npm" npm_config_store_
 // wrap returns the argv that prepares then runs the check: run is the plain
 // check command, returned unchanged when there is nothing to prepare.
 func (s nodeSpec) wrap(id string, run []string) []string {
-	tail := strings.Join(run, " ")
+	tail := shellJoin(run)
 	if id == "node.coverage" {
 		tail = s.Manager + " run test -- --coverage && cat coverage/lcov.info"
 	}
@@ -151,7 +166,8 @@ func (s nodeSpec) wrap(id string, run []string) []string {
 		return run
 	}
 	needInstall := s.LockDir != "" && !s.Prepared
-	needAstro := s.Astro && (id == "node.typecheck" || id == "node.build")
+	// astro sync needs the dependencies: this run installs them, or they are there already
+	needAstro := s.Astro && (id == "node.typecheck" || id == "node.build") && (needInstall || s.HasModules || s.LockDir != "")
 	if !needInstall && !needAstro {
 		if id == "node.coverage" {
 			return []string{"sh", "-c", tail}
@@ -160,17 +176,37 @@ func (s nodeSpec) wrap(id string, run []string) []string {
 	}
 	script := cacheEnv + "; "
 	if needInstall {
-		in := s.install() + " && printf %s " + s.Digest + " > " + nodePreparedMarker
+		in := s.install() + " && mkdir -p node_modules && printf %s " + s.Digest + " > " + nodePreparedMarker // Yarn PnP and a project without dependencies install no node_modules
 		if s.Rel != "." {
 			in = "cd " + s.Rel + " && " + in
 		}
 		// the log is read from the working directory, so name it absolutely
-		script += `LOG="$PWD/` + installLog + `"; ( ` + in + ` ) > "$LOG" 2>&1 || { tail -c 3000 "$LOG"; echo; echo ` + prepareFailed + `; exit ` + strconv.Itoa(prepareExit) + `; }; `
+		script += `LOG="$PWD/` + installLog + `"; ( ` + in + ` ) > "$LOG" 2>&1 || { head -c 1500 "$LOG"; echo; tail -c +1501 "$LOG" | tail -c 1500; echo; echo ` + prepareFailed + `; exit ` + strconv.Itoa(prepareExit) + `; }; `
 	}
 	if needAstro {
 		script += s.astroSync() + " && "
 	}
 	return []string{"sh", "-c", script + tail}
+}
+
+var shellSafe = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./-]+$`)
+
+// shellJoin quotes each argument for sh.
+func shellJoin(argv []string) string {
+	out := make([]string, len(argv))
+	for i, a := range argv {
+		if shellSafe.MatchString(a) {
+			out[i] = a
+		} else {
+			out[i] = "'" + strings.ReplaceAll(a, "'", `'\''`) + "'"
+		}
+	}
+	return strings.Join(out, " ")
+}
+
+// installs reports whether the wrapped command will run an install.
+func (s nodeSpec) installs() bool {
+	return runtime.GOOS != "windows" && s.LockDir != "" && !s.Prepared
 }
 
 var versionNumber = regexp.MustCompile(`\d+(\.\d+)*`)
@@ -193,6 +229,17 @@ func (s nodeSpec) pinMismatch(versionOutput string) string {
 
 func major(v string) string { return strings.SplitN(v, ".", 2)[0] }
 
+// ends keeps the first and the last half of a long log: a manager states its
+// verdict at the top (npm: "package.json and package-lock.json are not in sync")
+// and the cause or the log path at the bottom.
+func ends(log string, max int) string {
+	if len(log) <= max {
+		return log
+	}
+	head, tail := log[:max/2], log[len(log)-max/2:]
+	return strings.ToValidUTF8(head, "") + "\n...\n" + strings.ToValidUTF8(tail, "")
+}
+
 // prepareVerdict turns the result of a failed prepare (the sentinel is in the
 // output) into the check outcome. It reports whether the output was a prepare
 // failure at all.
@@ -202,21 +249,14 @@ func prepareVerdict(c *model.Check, res invocation) bool {
 		return false
 	}
 	log := strings.TrimSpace(res.output[:i])
-	// The whole log goes in as the error text, so a signature is found however
-	// many lines of manager noise follow it; only the causes of an install that
-	// are not the project's own count as infrastructure (a postinstall script
-	// that misses a tool is the project's).
-	d := diagnose.Classify(diagnose.Input{ExitCode: res.exit, Err: log})
-	if len(log) > 1024 {
-		log = log[len(log)-1024:]
-	}
-	switch d.Signature {
-	case diagnose.SigDisk, diagnose.SigDNS, diagnose.SigNetwork, diagnose.SigOOM:
+	d := diagnose.ClassifyInstall(log)
+	excerpt := ends(log, 1024)
+	if d.Class == "infra" {
 		c.Result, c.FailureClass = "error", "infra"
-		c.Excerpt = "E811: dependency install failed (" + d.Signature + "); " + d.Remediation + "\n" + log
+		c.Excerpt = "E811: dependency install failed (" + d.Signature + "); " + d.Remediation + "\n" + excerpt
 		return true
 	}
 	c.Result, c.FailureClass = "fail", "code"
-	c.Excerpt = log
+	c.Excerpt = excerpt
 	return true
 }

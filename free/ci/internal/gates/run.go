@@ -69,7 +69,11 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 	if strings.HasPrefix(d.ID, "node.") || p.Tool != "" {
 		probe = []string{probeTool, "--version"}
 	}
-	version := r.invoke(ctx, root, probe, ".", 30*time.Second)
+	probeDir := "."
+	if node.Manager != "" {
+		probeDir = p.Workdir // corepack picks the version by directory
+	}
+	version := r.invoke(ctx, root, probe, probeDir, 30*time.Second)
 	if d.ID == "xcode-test" && (version.err != nil || version.exit != 0) {
 		// The Command Line Tools ship an xcodebuild stub that exits non-zero without Xcode.
 		return unavailable(c, d.Remediation)
@@ -86,7 +90,11 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 			return c
 		}
 	}
-	res := r.invoke(ctx, root, argv, p.Workdir, 0)
+	var budget time.Duration // 0: the default
+	if node.installs() {
+		budget = nodePrepareBudget // a cold install shares the invocation with the check
+	}
+	res := r.invoke(ctx, root, argv, p.Workdir, budget)
 	if d.ID == "go.fmt" {
 		res.output = dropVendored(res.output)
 		if res.output == "" {

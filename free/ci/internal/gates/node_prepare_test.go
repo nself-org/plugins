@@ -33,7 +33,7 @@ func newNodeHost(t *testing.T) *nodeHost {
 		t.Skip("POSIX shells only")
 	}
 	h := &nodeHost{t: t, root: t.TempDir(), bin: t.TempDir()}
-	for _, tool := range []string{"sh", "ps", "tail", "cat", "mkdir"} {
+	for _, tool := range []string{"sh", "ps", "tail", "head", "cat", "mkdir"} {
 		p, err := exec.LookPath(tool)
 		if err != nil {
 			t.Fatal(err)
@@ -213,7 +213,7 @@ func TestMissingManagerE614(t *testing.T) {
 
 func TestAstroSyncWhenDeclared(t *testing.T) {
 	for pm, sync := range map[string]string{"npm": "npm exec --no-install -- astro sync", "pnpm": "pnpm exec astro sync", "yarn": "yarn run astro sync", "bun": "bun run astro sync"} {
-		s := nodeSpec{Manager: pm, Astro: true}
+		s := nodeSpec{Manager: pm, Astro: true, HasModules: true}
 		for _, id := range []string{"node.typecheck", "node.build"} {
 			if got := strings.Join(s.wrap(id, []string{pm, "run", "x"}), " "); !strings.Contains(got, sync+" && "+pm+" run x") {
 				t.Fatalf("%s %s: %s", pm, id, got)
@@ -228,6 +228,7 @@ func TestAstroSyncWhenDeclared(t *testing.T) {
 	t.Run("runs before the check", func(t *testing.T) {
 		h := newNodeHost(t)
 		h.write("package.json", manifest("pnpm@9.1.0", `"devDependencies":{"astro":"^5.0.0"},`))
+		h.write("node_modules/.keep", "") // installed already (no lockfile to install from)
 		h.manager("pnpm", "9.1.0", passing)
 		c := h.run("node.typecheck", ".")
 		if c.Result != "pass" || c.Excerpt != "EXEC exec astro sync\nRUN typecheck" {
@@ -295,5 +296,121 @@ func TestNodeWithoutLockfileKeepsEarlierBehaviour(t *testing.T) {
 	h.manager("npm", "10.2.4", passing)
 	if c := h.run("node.test", "."); c.Result != "pass" || c.Excerpt != "RUN test" {
 		t.Fatalf("%+v", c)
+	}
+}
+
+func TestNodePrepareInstallWithoutNodeModules(t *testing.T) {
+	// Yarn PnP and a project without dependencies install no node_modules
+	h := newNodeHost(t)
+	h.write("package.json", manifest("npm@10.2.4", ""))
+	h.write("package-lock.json", "{}")
+	h.manager("npm", "10.2.4", `case "$1" in ci) echo "up to date";; run) echo "RUN $2";; esac
+`)
+	if c := h.run("node.test", "."); c.Result != "pass" || c.Excerpt != "RUN test" {
+		t.Fatalf("%+v", c)
+	}
+}
+
+func TestNodePrepareInstallFailureClasses(t *testing.T) {
+	infra := map[string]string{
+		"npm enotfound":       "npm error code ENOTFOUND\nnpm error syscall getaddrinfo\nnpm error errno ENOTFOUND\nnpm error network request to https://registry.npmjs.org/x failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org\nnpm error A complete log of this run can be found in: /x/1.log",
+		"socket hang up":      "npm warn deprecated a\nnpm error network socket hang up\nnpm error network This is a problem related to network connectivity.\nnpm error network In most cases you are behind a proxy or have bad network settings.\nnpm error log",
+		"pnpm meta fetch":     " ERR_PNPM_META_FETCH_FAIL  GET https://registry.npmjs.org/x: Client network socket disconnected\nThis error happened while installing the dependencies of x",
+		"yarn network":        "info There appears to be trouble with your network connection. Retrying...\nerror An unexpected error occurred: \"https://registry.yarnpkg.com/x: getaddrinfo ENOTFOUND registry.yarnpkg.com\".",
+		"registry refuses":    "npm error code ECONNREFUSED\nnpm error syscall connect\nnpm error errno ECONNREFUSED\nnpm error log",
+		"pnpm 503":            " ERR_PNPM_FETCH_503  GET https://registry.npmjs.org/x: Service Unavailable - 503",
+		"disk":                "npm error code ENOSPC\nnpm error nospc",
+		"transient then real": "npm warn ECONNRESET retrying\nnpm warn ECONNRESET retrying\nnpm error code ENOSPC\nnpm error log",
+	}
+	code := map[string]string{
+		"out of sync":          "npm error `npm ci` can only install packages when your package.json and package-lock.json are in sync.\nnpm error Missing: x@1.0.0 from lock file",
+		"sync after transient": "npm warn ECONNRESET retrying\nnpm warn ECONNRESET retrying\nERR_PNPM_OUTDATED_LOCKFILE  Cannot install with \"frozen-lockfile\" because pnpm-lock.yaml is not up to date",
+		"berry sync":           "YN0028: The lockfile would have been modified by this install, which is explicitly forbidden.",
+		"classic sync":         "error Your lockfile needs to be updated, but yarn was run with `--frozen-lockfile`.",
+		"bun sync":             "error: lockfile had changes, but lockfile is frozen",
+		"not found package":    " ERR_PNPM_FETCH_404  GET https://registry.npmjs.org/nope: Not Found - 404",
+		"npm 404":              "npm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/nope - Not found",
+		"postinstall test":     "> app@1.0.0 postinstall\n--- FAIL: TestRetry (ETIMEDOUT expected)\nFAIL\nnpm error code 1",
+		"postinstall tool":     "sh: 1: tsc: not found\nnpm error code 127",
+	}
+	for want, set := range map[string]map[string]string{"infra": infra, "code": code} {
+		for name, msg := range set {
+			t.Run(want+"/"+name, func(t *testing.T) {
+				h := newNodeHost(t)
+				h.write("package.json", manifest("npm@10.2.4", ""))
+				h.write("package-lock.json", "{}")
+				h.manager("npm", "10.2.4", "cat <<'EOF'\n"+msg+"\nEOF\nexit 1\n")
+				c := h.run("node.lint", ".")
+				switch want {
+				case "infra":
+					if c.Result != "error" || c.FailureClass != "infra" || !strings.HasPrefix(c.Excerpt, "E811:") {
+						t.Fatalf("%+v", c)
+					}
+				default:
+					if c.Result != "fail" || c.FailureClass != "code" || strings.Contains(c.Excerpt, "E811") {
+						t.Fatalf("%+v", c)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestNodePrepareLongLogKeepsBothEnds(t *testing.T) {
+	h := newNodeHost(t)
+	h.write("package.json", manifest("npm@10.2.4", ""))
+	h.write("package-lock.json", "{}")
+	h.manager("npm", "10.2.4", `echo "npm error npm ci can only install packages when your package.json and package-lock.json are in sync"
+i=0; while [ $i -lt 120 ]; do echo "npm error Missing: package-$i@1.0.0 from lock file"; i=$((i+1)); done
+echo "npm error A complete log of this run can be found in: /x/final.log"
+exit 1
+`)
+	c := h.run("node.build", ".")
+	if c.Result != "fail" || c.FailureClass != "code" || !strings.Contains(c.Excerpt, "can only install packages") || !strings.Contains(c.Excerpt, "/x/final.log") || len(c.Excerpt) > 1100 {
+		t.Fatalf("%d bytes: %+v", len(c.Excerpt), c)
+	}
+}
+
+func TestPackageManagerPinIsProbedInTheWorkdir(t *testing.T) {
+	h := newNodeHost(t)
+	h.write("package.json", manifest("pnpm@9.1.0", ""))
+	h.write("sub/package.json", manifest("pnpm@10.0.0", ""))
+	h.write("sub/pin-version", "10.0.0")
+	h.manager("pnpm", "$(cat pin-version 2>/dev/null || echo 9.1.0)", passing)
+	if c := h.run("node.test", "sub"); c.Result != "pass" {
+		t.Fatalf("a member pinned to another major must be probed where it runs: %+v", c)
+	}
+	if c := h.run("node.test", "."); c.Result != "pass" {
+		t.Fatalf("%+v", c)
+	}
+}
+
+func TestAstroSyncNeedsDependencies(t *testing.T) {
+	h := newNodeHost(t)
+	h.write("package.json", manifest("pnpm@9.1.0", `"devDependencies":{"astro":"^5.0.0"},`))
+	h.manager("pnpm", "9.1.0", passing)
+	if c := h.run("node.build", "."); c.Excerpt != "RUN build" {
+		t.Fatalf("no lockfile and no node_modules: nothing to sync against, earlier behaviour: %+v", c)
+	}
+	h.write("node_modules/.keep", "")
+	if c := h.run("node.build", "."); c.Excerpt != "EXEC exec astro sync\nRUN build" {
+		t.Fatalf("%+v", c)
+	}
+}
+
+func TestNodeDigestFollowsTheManifest(t *testing.T) {
+	h := newNodeHost(t)
+	h.write("package.json", manifest("npm@10.2.4", ""))
+	h.write("package-lock.json", "{}")
+	a := nodeSpecFor(h.root, PlannedCheck{Workdir: "."}).Digest
+	h.write("package.json", manifest("npm@10.2.4", `"dependencies":{"left-pad":"1.0.0"},`))
+	if b := nodeSpecFor(h.root, PlannedCheck{Workdir: "."}).Digest; a == b || a == "" {
+		t.Fatal("a manifest edit with an unchanged lockfile must install again")
+	}
+}
+
+func TestShellJoinQuotes(t *testing.T) {
+	if got := shellJoin([]string{"npm", "run", "a b", "it's", "--", "--coverage"}); got != `npm run 'a b' 'it'\''s' -- --coverage` {
+		t.Fatal(got)
 	}
 }

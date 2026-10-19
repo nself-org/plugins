@@ -35,7 +35,7 @@ func entries(t *testing.T, dir string) []string {
 
 func TestNoLeakedTempAfterKill(t *testing.T) {
 	// every leg: make a temp dir and a temp file under the job's TMPDIR, then end in a way
-	const work = `mkdir .jobtmp && export TMPDIR=.jobtmp && mktemp -d "$TMPDIR/d.XXXXXX" >/dev/null && mktemp "$TMPDIR/f.XXXXXX" >/dev/null; `
+	const work = `mkdir .jobtmp && export TMPDIR=.jobtmp && mktemp -d "$TMPDIR/d.XXXXXX" >/dev/null && mktemp "$TMPDIR/f.XXXXXX" >/dev/null && echo ready; `
 	for name, leg := range map[string]struct {
 		script  string
 		timeout time.Duration
@@ -44,8 +44,8 @@ func TestNoLeakedTempAfterKill(t *testing.T) {
 	}{
 		"pass":      {script: "exit 0"},
 		"fail":      {script: "exit 3", failed: true},
-		"timeout":   {script: "sleep 30", timeout: 500 * time.Millisecond, failed: true},
-		"cancel":    {script: "sleep 30", cancel: 300 * time.Millisecond, failed: true},
+		"timeout":   {script: "sleep 30", timeout: 2 * time.Second, failed: true},
+		"cancel":    {script: "sleep 30", cancel: time.Second, failed: true},
 		"sigkill":   {script: "sleep 30 & kill -KILL $!; wait; exit 9", failed: true},
 		"self-kill": {script: "sleep 30 & kill -KILL $$", failed: true},
 	} {
@@ -62,8 +62,12 @@ func TestNoLeakedTempAfterKill(t *testing.T) {
 				time.AfterFunc(leg.cancel, stop)
 			}
 			e := &Executor{}
+			var out strings.Builder
 			res := e.Run(ctx, JobSpec{AttemptID: "leak-" + name, CoordinatorID: "coord", Job: model.Job{Isolation: "process"}, Home: home,
-				SourceDir: source, Timeout: leg.timeout, Command: []string{"sh", "-c", work + leg.script}})
+				SourceDir: source, Timeout: leg.timeout, Command: []string{"sh", "-c", work + leg.script}, Output: func(p []byte) { out.Write(p) }})
+			if !strings.Contains(out.String(), "ready") {
+				t.Fatalf("%s: the job never made its temp files (output %q, err %v), so the proof would be vacuous", name, out.String(), res.Err)
+			}
 			if (res.Attempt.State == "passed") == leg.failed {
 				t.Fatalf("%s: unexpected state %+v err %v", name, res.Attempt, res.Err)
 			}
@@ -74,5 +78,18 @@ func TestNoLeakedTempAfterKill(t *testing.T) {
 				t.Fatalf("operator TMPDIR gained entries after %s: %s", name, strings.Join(left, ", "))
 			}
 		})
+	}
+}
+
+// TestLeakCheckSeesALeak is the positive control: a job that writes into the
+// operator's TMPDIR is caught by the same listing the proof uses.
+func TestLeakCheckSeesALeak(t *testing.T) {
+	home, parent := t.TempDir(), t.TempDir()
+	t.Setenv("TMPDIR", parent)
+	e := &Executor{}
+	res := e.Run(context.Background(), JobSpec{AttemptID: "leak-control", CoordinatorID: "coord", Job: model.Job{Isolation: "process"}, Home: home,
+		Command: []string{"sh", "-c", `mktemp "$TMPDIR/leak.XXXXXX" >/dev/null`}})
+	if res.Err != nil || len(entries(t, parent)) != 1 {
+		t.Fatalf("the control job should leave exactly one file in the operator TMPDIR: err %v, entries %v", res.Err, entries(t, parent))
 	}
 }

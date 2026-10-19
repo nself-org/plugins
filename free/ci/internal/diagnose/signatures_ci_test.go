@@ -39,3 +39,28 @@ func TestFirstRowStaysOOM(t *testing.T) {
 		t.Fatalf("signatures[0] is %s", signatures[0].id)
 	}
 }
+
+func TestClassifyInstall(t *testing.T) {
+	for name, c := range map[string]struct {
+		log  string
+		want model.FailureClass
+		sig  string
+	}{
+		"dns far above the footer": {"npm error network getaddrinfo ENOTFOUND registry.npmjs.org\n" + footer, "infra", SigDNS},
+		"socket hang up":           {"npm error network socket hang up\n" + footer, "infra", SigNetwork},
+		"registry refuses":         {"npm error code ECONNREFUSED\n" + footer, "infra", SigNetwork},
+		"enospc":                   {"npm error code ENOSPC\n" + footer, "infra", SigDisk},
+		"sync beats a transient":   {"npm warn ECONNRESET retrying\nERR_PNPM_OUTDATED_LOCKFILE  not up to date\n", "code", SigCode},
+		"yarn berry sync":          {"YN0028: The lockfile would have been modified by this install\n", "code", SigCode},
+		"404 is the project's":     {" ERR_PNPM_FETCH_404  GET https://r/x: Not Found - 404\n", "code", SigCode},
+		"postinstall assertion":    {"--- FAIL: TestRetry (ETIMEDOUT expected)\nFAIL\n", "code", SigCode},
+		"nothing recognised":       {"something broke\n", "code", SigCode},
+	} {
+		d := ClassifyInstall(c.log)
+		if d.Class != c.want || d.Signature != c.sig || (c.want == "infra") != d.Retryable {
+			t.Errorf("%s: got %+v, want %s %s", name, d, c.want, c.sig)
+		}
+	}
+}
+
+const footer = "npm error A complete log of this run can be found in: /x/1.log\nnpm error line\nnpm error line\nnpm error line\n"
