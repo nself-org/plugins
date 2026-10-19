@@ -1,0 +1,68 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "ci.readiness/v1"
+    },
+    "ready": {
+      "type": "boolean"
+    },
+    "why": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "mem_free_mb": {
+      "type": [
+        "null",
+        "integer"
+      ],
+      "minimum": 0
+    },
+    "load_per_core": {
+      "type": [
+        "null",
+        "number"
+      ],
+      "minimum": 0
+    },
+    "cpu_idle_pct": {
+      "type": [
+        "null",
+        "number"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "disk_free_mb": {
+      "type": [
+        "null",
+        "integer"
+      ],
+      "minimum": 0
+    },
+    "yielded_to": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "$id": "https://nself.org/schemas/readiness.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "schema",
+    "ready",
+    "why",
+    "mem_free_mb",
+    "load_per_core",
+    "cpu_idle_pct",
+    "disk_free_mb",
+    "yielded_to"
+  ],
+  "additionalProperties": false
+}
