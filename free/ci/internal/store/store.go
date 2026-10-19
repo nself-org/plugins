@@ -20,7 +20,7 @@ type Options struct {
 	Clock         func() time.Time
 }
 
-// Store owns one writer connection and a separate read pool. The database requires local disk.
+// Store owns one writer connection (none after OpenReadOnly) and a separate read pool. The database requires local disk.
 type Store struct {
 	writer, readers *sql.DB
 	path            string
@@ -126,11 +126,16 @@ func Open(path string, opts Options) (*Store, error) {
 
 func (s *Store) Close() error {
 	a := s.readers.Close()
-	b := s.writer.Close()
-	return errors.Join(a, b)
+	if s.writer == nil {
+		return a
+	}
+	return errors.Join(a, s.writer.Close())
 }
 
 func (s *Store) write(ctx context.Context, fn func(*sql.Tx) error) error {
+	if s.writer == nil {
+		return coded("E607", "the run store was opened read-only")
+	}
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return err

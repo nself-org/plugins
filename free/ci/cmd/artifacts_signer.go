@@ -26,9 +26,9 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
-	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/secrets"
 	"github.com/nself-org/plugins/free/ci/internal/signing"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // signerIn and signerOut replace stdin and stdout in tests (nil: the process's own).
@@ -127,7 +127,7 @@ func signerRequest(ctx context.Context, root string) int {
 	if err != nil {
 		return signerFail(err)
 	}
-	st, err := cirun.OpenStore(runsStorePath())
+	st, err := store.OpenReadOnly(runsStorePath(), store.Options{})
 	if err != nil {
 		return signerFail(signing.Failf(signing.ReasonSignerFailed, "the run store could not be opened"))
 	}

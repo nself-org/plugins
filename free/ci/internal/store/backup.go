@@ -18,7 +18,11 @@ func (s *Store) Backup(ctx context.Context, w io.Writer) error {
 	defer func() { _ = os.RemoveAll(dir) }()
 	snap := filepath.Join(dir, "state.db")
 	quote := "'" + strings.ReplaceAll(snap, "'", "''") + "'"
-	if _, err = s.writer.ExecContext(ctx, "VACUUM INTO "+quote); err != nil {
+	db := s.writer
+	if db == nil {
+		db = s.readers
+	}
+	if _, err = db.ExecContext(ctx, "VACUUM INTO "+quote); err != nil {
 		return err
 	}
 	f, err := os.Open(snap)
