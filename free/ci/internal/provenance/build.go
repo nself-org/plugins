@@ -173,21 +173,28 @@ func Build(f ReleaseFacts) ([]byte, error) {
 // guard refuses facts the publication profile would redact: for a public
 // repository nothing private may reach the statement.
 func (f ReleaseFacts) guard(prof attest.Profile, locks, subjects, sboms []FileDigest) error {
-	if !prof.Public() {
-		return nil
-	}
 	values := []string{f.RepoID, f.Pipeline, f.Job, f.Isolation, f.NselfCIVersion, f.RunID, f.AttemptID}
-	for _, l := range locks {
-		values = append(values, l.Name)
-	}
-	for _, s := range subjects {
-		values = append(values, s.Name)
-	}
-	for _, s := range sboms {
-		values = append(values, s.Name)
+	for _, list := range [][]FileDigest{locks, subjects, sboms} {
+		values = append(values, names(list)...)
 	}
 	if f.Image != nil {
 		values = append(values, f.Image.Ref)
+	}
+	return keepPublic(prof, values...)
+}
+
+func names(list []FileDigest) []string {
+	out := make([]string, 0, len(list))
+	for _, f := range list {
+		out = append(out, f.Name)
+	}
+	return out
+}
+
+// keepPublic fails when a public profile would redact any of values.
+func keepPublic(prof attest.Profile, values ...string) error {
+	if !prof.Public() {
+		return nil
 	}
 	for _, v := range values {
 		if prof.Text(v) != v {

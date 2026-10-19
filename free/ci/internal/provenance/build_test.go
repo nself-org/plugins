@@ -282,17 +282,20 @@ func TestBuildAgent(t *testing.T) {
 
 func TestBuildAgentRefusesBadFacts(t *testing.T) {
 	for name, mutate := range map[string]func(*provenance.AgentFacts){
-		"repo":                func(f *provenance.AgentFacts) { f.Repo = "nself" },
-		"repo with space":     func(f *provenance.AgentFacts) { f.Repo = "a b/c" },
-		"ref":                 func(f *provenance.AgentFacts) { f.Ref = "" },
-		"ref with space":      func(f *provenance.AgentFacts) { f.Ref = "refs/tags/a b" },
-		"run id":              func(f *provenance.AgentFacts) { f.RunID = "12a" },
-		"revision":            func(f *provenance.AgentFacts) { f.Revision = "xyz" },
-		"no subjects":         func(f *provenance.AgentFacts) { f.Subjects = nil },
-		"bad sbom":            func(f *provenance.AgentFacts) { f.SBOMs[0].SHA256 = "x" },
-		"finish before start": func(f *provenance.AgentFacts) { f.FinishedOn = f.StartedOn.Add(-time.Second) },
-		"only a start":        func(f *provenance.AgentFacts) { f.FinishedOn = time.Time{} },
-		"only a finish":       func(f *provenance.AgentFacts) { f.StartedOn = time.Time{} },
+		"repo":                    func(f *provenance.AgentFacts) { f.Repo = "nself" },
+		"repo with space":         func(f *provenance.AgentFacts) { f.Repo = "a b/c" },
+		"ref":                     func(f *provenance.AgentFacts) { f.Ref = "" },
+		"ref with space":          func(f *provenance.AgentFacts) { f.Ref = "refs/tags/a b" },
+		"run id":                  func(f *provenance.AgentFacts) { f.RunID = "12a" },
+		"revision":                func(f *provenance.AgentFacts) { f.Revision = "xyz" },
+		"no subjects":             func(f *provenance.AgentFacts) { f.Subjects = nil },
+		"bad sbom":                func(f *provenance.AgentFacts) { f.SBOMs[0].SHA256 = "x" },
+		"finish before start":     func(f *provenance.AgentFacts) { f.FinishedOn = f.StartedOn.Add(-time.Second) },
+		"only a start":            func(f *provenance.AgentFacts) { f.FinishedOn = time.Time{} },
+		"only a finish":           func(f *provenance.AgentFacts) { f.StartedOn = time.Time{} },
+		"home path in an sbom":    func(f *provenance.AgentFacts) { f.SBOMs[0].Name = "/Users/alice/build/agent.cdx.json" },
+		"home path in a subject":  func(f *provenance.AgentFacts) { f.Subjects[0].Name = "/home/alice/agent" },
+		"private address subject": func(f *provenance.AgentFacts) { f.Subjects[1].Name = "agent-10.0.0.7" },
 	} {
 		f := agentFacts()
 		mutate(&f)

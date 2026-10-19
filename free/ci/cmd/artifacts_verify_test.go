@@ -268,7 +268,7 @@ func TestArtifactsVerifyExitCodes(t *testing.T) {
 	r := newVerifyRig(t, buildVerifyTemplate(t))
 	r.publish()
 	code, out, errs := r.run(r.dir)
-	if code != 0 || strings.TrimSpace(errs) != "note: quarantine state was not checked: no quarantine source is configured" || !strings.Contains(out, "release verified (SLSA Build L1)") || !strings.Contains(out, r.rev[:12]) {
+	if code != 0 || !strings.Contains(errs, "note: quarantine state was not checked") || !strings.Contains(errs, "note: no protected policy was supplied") || !strings.Contains(out, "release verified (SLSA Build L1)") || !strings.Contains(out, r.rev[:12]) {
 		t.Fatalf("good release: %d\n%s\n%s", code, out, errs)
 	}
 	code, out, _ = r.run(r.dir, "--json")

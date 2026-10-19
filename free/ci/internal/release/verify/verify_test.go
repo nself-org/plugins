@@ -274,6 +274,8 @@ func TestTamperMatrix(t *testing.T) {
 		}, reason: verify.ReasonEvidenceInvalid},
 		{name: "pin could not be resolved", after: func(r *rig) { r.opt.PinError = "origin unreachable" }, reason: verify.ReasonSignature},
 		{name: "pinned commit is not in the repository", mode: pinnedKeys, after: func(r *rig) { r.opt.Pin = strings.Repeat("a", 40) }, reason: verify.ReasonSignature},
+		{name: "protected policy digest differs", after: func(r *rig) { r.opt.PolicyDigest = "policy-2" }, reason: verify.ReasonEvidenceInvalid},
+		{name: "protected policy requires a job the evidence lacks", after: func(r *rig) { r.opt.RequiredJobs = []string{"build", "security"} }, reason: verify.ReasonEvidenceInvalid},
 		{name: "failing and quarantined", bend: func(r *rig) {
 			r.tweakEvidence = func(e *model.Evidence) { e.Selection.Mode = "affected" }
 		}, after: func(r *rig) {
@@ -410,4 +412,23 @@ func TestReplacementObjectsDoNotSwapThePinnedTree(t *testing.T) {
 	r.ownRepo()
 	git(t, r.repo, "replace", r.base, r.rev)
 	wantFail(t, r.verify(), verify.ReasonSignature, 11)
+}
+
+func TestProtectedPolicyOrTheEvidenceOwnRequirements(t *testing.T) {
+	r := newRig(t, operatorKeys)
+	if res := r.verify(); !res.Verified || len(res.Warnings) != 0 {
+		t.Fatalf("protected policy supplied: %+v", res)
+	}
+	for name, mutate := range map[string]func(*verify.Options){
+		"no digest":       func(o *verify.Options) { o.PolicyDigest = "" },
+		"no required job": func(o *verify.Options) { o.RequiredJobs = nil },
+		"neither":         func(o *verify.Options) { o.PolicyDigest, o.RequiredJobs = "", nil },
+	} {
+		r = newRig(t, operatorKeys)
+		mutate(&r.opt)
+		res := r.verify()
+		if !res.Verified || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "no protected policy was supplied") {
+			t.Errorf("%s: %+v", name, res)
+		}
+	}
 }

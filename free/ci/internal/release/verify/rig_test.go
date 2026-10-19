@@ -117,7 +117,7 @@ func newRig(t *testing.T, mode trustMode) *rig {
 	r.pub, r.otherPub = priv.Public().(ed25519.PublicKey), other.Public().(ed25519.PublicKey)
 	r.signer, r.other = signing.NewEd25519Signer(signing.PurposeCIRelease, priv), signing.NewEd25519Signer(signing.PurposeCIRelease, other)
 	line := keysLine(signing.KeyID(signing.PurposeCIRelease, r.pub), r.pub)
-	r.opt = verify.Options{Root: r.repo, Quarantined: func(context.Context, model.Evidence) (bool, error) { return false, nil }}
+	r.opt = verify.Options{Root: r.repo, PolicyDigest: "policy-1", RequiredJobs: []string{"build"}, Quarantined: func(context.Context, model.Evidence) (bool, error) { return false, nil }}
 	if mode == operatorKeys {
 		r.keysFile = filepath.Join(t.TempDir(), "ci-release.keys")
 		writeFile(t, filepath.Dir(r.keysFile), "ci-release.keys", line)

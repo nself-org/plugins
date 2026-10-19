@@ -318,3 +318,40 @@ func TestFailureExit(t *testing.T) {
 		t.Error("code")
 	}
 }
+
+func TestCheckSize(t *testing.T) {
+	dir := t.TempDir()
+	r := &run{dir: dir}
+	r.man.Evidence.Path, r.man.Provenance.Path = "evidence.json", "prov.json"
+	put := func(name string, n int64) {
+		f, err := os.Create(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = f.Truncate(n); err != nil { // sparse: no disk used
+			t.Fatal(err)
+		}
+		_ = f.Close()
+	}
+	put("art", 5)
+	put("evidence.json", maxEvidence)
+	put("evidence-big.json", maxEvidence+1)
+	put("prov.json", maxEnvelope)
+	put("prov-big.json", maxEnvelope+1)
+	put("sbom-ok", maxEvidence+1)
+	put("sbom-big", maxSBOM+1)
+	put("sbom-edge", maxSBOM)
+	sizes := map[string]int64{"art": 5, "art-wrong": 4}
+	put("art-wrong", 5)
+	for rel, ok := range map[string]bool{"art": true, "art-wrong": false, "evidence.json": true, "prov.json": true, "sbom-ok": true, "sbom-edge": true, "sbom-big": false, "missing": true} {
+		if f := r.checkSize(rel, sizes); (f == nil) != ok {
+			t.Errorf("%s: %v", rel, f)
+		}
+	}
+	r.man.Evidence.Path, r.man.Provenance.Path = "evidence-big.json", "prov-big.json"
+	for _, rel := range []string{"evidence-big.json", "prov-big.json"} {
+		if r.checkSize(rel, sizes) == nil {
+			t.Errorf("%s over its cap accepted", rel)
+		}
+	}
+}

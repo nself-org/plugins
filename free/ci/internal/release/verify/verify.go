@@ -49,6 +49,11 @@ type Options struct {
 	// fails closed (signature) rather than trust the operator files alone, since
 	// the branch may hold a revocation.
 	PinError string
+	// PolicyDigest and RequiredJobs are the protected policy's requirements for
+	// the evidence (P7-DEPL-19 supplies them). When empty, the evidence is judged
+	// against the requirements it states itself, which a Result warning says.
+	PolicyDigest string
+	RequiredJobs []string
 	// Revoked is an extra revocation check (P7-TRUST-20); nil revokes nothing.
 	Revoked func(keyID string) bool
 	// Quarantined tells whether the evidence was quarantined; nil quarantines

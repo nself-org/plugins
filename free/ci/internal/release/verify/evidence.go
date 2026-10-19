@@ -118,10 +118,17 @@ func (r *run) evidenceVerdict() *Failure {
 	// document; but it must hold the release job the manifest names, passing.
 	gate := attest.Gate{RepoID: r.ev.RepoID, Revision: m.Revision, PolicyDigest: r.ev.PolicyDigest, MinTrust: r.ev.SourceTrust, Current: &current,
 		RequiredJobs: []string{m.Release.JobID}}
-	for _, c := range r.ev.Checks {
+	if r.opt.PolicyDigest != "" {
+		gate.PolicyDigest = r.opt.PolicyDigest
+	}
+	gate.RequiredJobs = append(gate.RequiredJobs, r.opt.RequiredJobs...)
+	for _, c := range r.ev.Checks { // the evidence's own required checks always count; the protected policy adds to them
 		if c.Required {
 			gate.RequiredJobs = append(gate.RequiredJobs, c.JobID)
 		}
+	}
+	if r.opt.PolicyDigest == "" || len(r.opt.RequiredJobs) == 0 {
+		r.res.Warnings = append(r.res.Warnings, "no protected policy was supplied: the evidence was judged against the requirements it states itself")
 	}
 	for _, a := range m.Artifacts {
 		_, rs := authz.Promotable(authz.Artifact{Project: m.RepoID, Revision: m.Revision, SHA256: a.SHA256}, r.ev, gate)

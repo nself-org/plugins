@@ -27,6 +27,7 @@ const (
 	maxEnvelope = 8 << 20
 	maxSums     = 16 << 20
 	maxEvidence = 64 << 20
+	maxSBOM     = 256 << 20
 )
 
 type fileInfo struct {
@@ -102,6 +103,33 @@ func digest(dir, rel string) (fileInfo, error) {
 	h := sha256.New()
 	n, err := io.Copy(h, f)
 	return fileInfo{sha: hex.EncodeToString(h.Sum(nil)), size: n}, err
+}
+
+// checkSize compares the size of a listed file with what the manifest says
+// (an artifact) or with the cap of its kind (evidence, provenance, SBOM),
+// without reading it.
+func (r *run) checkSize(rel string, sizes map[string]int64) *Failure {
+	got, err := fileSize(r.dir, rel)
+	if err != nil {
+		return nil // digest reports the unreadable file
+	}
+	if want, ok := sizes[rel]; ok {
+		if got != want {
+			return fail(ReasonChecksum, "%q is %d bytes, the manifest says %d", rel, got, want)
+		}
+		return nil
+	}
+	limit := int64(maxSBOM)
+	switch rel {
+	case r.man.Evidence.Path:
+		limit = maxEvidence
+	case r.man.Provenance.Path:
+		limit = maxEnvelope
+	}
+	if got > limit {
+		return fail(ReasonChecksum, "%q is %d bytes, more than the %d a release file may hold", rel, got, limit)
+	}
+	return nil
 }
 
 // fileSize is the size of the regular file rel under dir without opening it.
@@ -196,10 +224,8 @@ func (r *run) checksums() *Failure {
 		sizes[a.Path] = a.Size
 	}
 	for _, l := range lines {
-		if want, ok := sizes[l.path]; ok { // a huge file is refused before it is hashed
-			if got, serr := fileSize(r.dir, l.path); serr == nil && got != want {
-				return fail(ReasonChecksum, "%q is %d bytes, the manifest says %d", l.path, got, want)
-			}
+		if f := r.checkSize(l.path, sizes); f != nil { // a huge file is refused before it is hashed
+			return f
 		}
 		info, err := digest(r.dir, l.path)
 		if errors.Is(err, fs.ErrNotExist) && strings.HasPrefix(l.path, "sbom/") {

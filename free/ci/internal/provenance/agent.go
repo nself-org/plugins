@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"sort"
 	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/attest"
 )
 
 // AgentWorkflow is the workflow file that builds an agent release.
@@ -48,6 +50,10 @@ func BuildAgent(f AgentFacts) ([]byte, error) {
 	}
 	sboms, err := files("sbom", f.SBOMs, 0)
 	if err != nil {
+		return nil, err
+	}
+	prof := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public, RepoID: f.Repo})
+	if err = keepPublic(prof, append(names(subjects), names(sboms)...)...); err != nil {
 		return nil, err
 	}
 	meta := Metadata{InvocationID: "https://github.com/" + f.Repo + "/actions/runs/" + f.RunID}
