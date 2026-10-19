@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -545,9 +546,23 @@ func TestHookWorldKeepsALocalOnlyJobOffNodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	has := false
+	for _, l := range sj.Requirements.Labels {
+		has = has || l == world.LocalLabel
+	}
+	if !has {
+		t.Fatalf("a local-only job must require the label of this machine, requirements %+v", sj.Requirements)
+	}
 	got := sched.Place(w, []sched.Job{sj})
 	if len(got.Placements) != 1 || got.Placements[0].RunnerID != "local" {
 		t.Fatalf("a local-only job must be placed on this machine: %+v %+v", got.Placements, got.Explanations)
+	}
+	for _, x := range got.Explanations {
+		for _, a := range x.Alternatives {
+			if a.RunnerID != "local" && a.Eligible {
+				t.Fatalf("a local-only job is eligible on %s", a.RunnerID)
+			}
+		}
 	}
 	rd.sess.LocalOnly = nil
 	free := rd.schedJob(AttemptSpec{Job: &model.Job{Kind: "test", Run: []string{"true"}, RemoteOnly: true}, N: 1, Foreground: true}, "r1.b.a1", "r1.b", 1, 256)
@@ -672,5 +687,85 @@ func TestRemoteAwaitLostThenCancelIntentEndsCancelled(t *testing.T) {
 		if e.state(t) != "cancelled" {
 			t.Errorf("%s: durable %s (outcome %q), want cancelled: a lost attempt with a cancel intent must not be stuck", name, e.state(t), o.State)
 		}
+	}
+}
+
+func TestRemoteAwaitCancelFromRetryableNeedsNoQueueMove(t *testing.T) {
+	e, rs, _ := lostEnv(t)
+	ctx := context.Background()
+	for _, to := range []string{"lost", "retryable"} {
+		from, epoch, _ := e.st.AttemptStateEpoch(ctx, e.id)
+		if err := e.st.Transition(ctx, e.id, from, model.JobState(to), store.TransitionDetail{Epoch: epoch, FailureClass: "infra"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, epoch, _ := e.st.AttemptStateEpoch(ctx, e.id)
+	if err := e.st.RequestCancel(ctx, e.id, "operator", epoch); err != nil { // the intent lands between park's two transactions
+		t.Fatal(err)
+	}
+	if err := rs.driveToCancelled(e.id); err != nil || e.state(t) != "cancelled" {
+		t.Fatalf("err %v, durable %s; a retryable attempt with a cancel intent must still end cancelled", err, e.state(t))
+	}
+}
+
+// Nothing but the injected local runner carries the label that lets a job stay on this machine.
+func TestHookWorldOnlyTheInjectedRunnerCarriesTheLocalLabel(t *testing.T) {
+	rd, st := registryRun(t, nil)
+	// a node an operator (or a bug) labelled as this machine, and a node called local
+	reg := registry.New(st)
+	n, err := reg.Get(context.Background(), "n1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = reg.UpdateCapability(context.Background(), "n1", withLabel(n.Capability, world.LocalLabel), "test"); err != nil {
+		t.Skipf("labels cannot be set through UpdateCapability here: %v", err)
+	}
+	w, _, err := rd.world(context.Background(), sched.Pipeline{ID: "r1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range w.Runners {
+		has := false
+		for _, l := range r.Capability.Identity.Labels {
+			has = has || l == world.LocalLabel
+		}
+		if has != (r.ID == "local") {
+			t.Errorf("runner %s: carries the local label = %v", r.ID, has)
+		}
+	}
+	job := sched.Job{Key: "r1.a.a1", ID: "r1.a", Name: "a", Pipeline: sched.Pipeline{ID: "r1", Support: []string{platform()}},
+		Requirements: model.PlacementRequirements{Platform: platform(), CPU: 1, MemMB: 256, Labels: []string{world.LocalLabel}}, Trust: "owner", Network: "internet",
+		TimeoutMs: 60000, PersonalOwnRun: true, Project: "/proj"}
+	if got := sched.Place(w, []sched.Job{job}); len(got.Placements) != 1 || got.Placements[0].RunnerID != "local" {
+		t.Fatalf("a local-only job must reach only this machine: %+v", got.Placements)
+	}
+}
+
+func withLabel(c model.Capability, l string) model.Capability {
+	c.Identity.Labels = append(append([]string(nil), c.Identity.Labels...), l)
+	return c
+}
+
+// A cancelled run stops the carrier: the carrier's context is cancelled before the run gives up waiting.
+func TestRemoteAwaitCancelStopsTheCarrierBeforeTheRunGivesUp(t *testing.T) {
+	e, rs, rd := lostEnv(t)
+	defer SetRemoteCancelWait(300 * time.Millisecond)()
+	cctx, end := e.sink.carrierStart(context.Background(), e.id, e.lease)
+	var stopped atomic.Bool
+	go func() { // the driver: it returns when its context is cancelled
+		select {
+		case <-cctx.Done():
+			stopped.Store(true)
+			end()
+		case <-time.After(5 * time.Second):
+		}
+	}()
+	ra := e.sink.attempt(e.id)
+	o := rs.remoteCancelled(planJob("unit"), rd, ra, e.id, JobOutcome{ID: "unit"})
+	if !stopped.Load() || o.State != StateCancelled {
+		t.Fatalf("carrier stopped = %v, outcome %q: the run gave up before the carrier was told to stop", stopped.Load(), o.State)
+	}
+	if e.state(t) != "cancelled" {
+		t.Fatalf("durable state %s", e.state(t))
 	}
 }

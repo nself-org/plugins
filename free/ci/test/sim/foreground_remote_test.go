@@ -465,7 +465,7 @@ func TestForegroundRemoteCancel(t *testing.T) {
 		return session.JobResult{Outcome: session.Outcome{State: "cancelled"}, Evidence: evidence(j.Lease, "cancelled", "", nil)}, nil
 	}
 	f := newFixture(t, map[string]func(context.Context, *node, session.JobRun) (session.JobResult, error){"n1": r, "n2": r})
-	ssh.Default.Heartbeat = 20 * time.Second             // the agent beats rarely, so a fenced heartbeat cannot be what stops the job: the cancel must
+	ssh.Default.Heartbeat = 50 * time.Second             // the agent beats rarely, so a fenced heartbeat cannot be what stops the job: the cancel must
 	t.Cleanup(run.SetRemoteCancelWait(10 * time.Minute)) // and the run's own wait cannot end it either
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -476,8 +476,13 @@ func TestForegroundRemoteCancel(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("the job never started on a node")
 	}
-	cancel()                                // Ctrl-C
-	res := wait(t, ch, "the cancelled run") // without the carrier cancel nothing ends it before the test's own deadline
+	cancel() // Ctrl-C
+	var res run.Result
+	select { // without the carrier cancel the only thing left is the 50 s heartbeat finding the lease gone
+	case res = <-ch:
+	case <-time.After(30 * time.Second):
+		t.Fatalf("the cancelled run did not end in 30 s: the remote job was not told to stop\n%s", out)
+	}
 	select {
 	case <-killed:
 	case <-time.After(15 * time.Second):

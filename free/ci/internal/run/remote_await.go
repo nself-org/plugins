@@ -154,8 +154,6 @@ func (rs *runState) driveToCancelled(id string) error {
 			return nil
 		case "passed", "failed", "needs-operator":
 			return nil // it ended on its own first (needs-operator takes an operator to move)
-		case "retryable":
-			to = "queued"
 		}
 		d := store.TransitionDetail{Epoch: epoch, FailureClass: "cancelled"}
 		if last = rs.sess.Store.Transition(bg, id, state, to, d); last != nil && CodeOf(last) != codeStoreRef {

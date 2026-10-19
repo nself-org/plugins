@@ -15,7 +15,7 @@ var transitions = map[model.JobState]map[model.JobState]bool{
 	"running":        {"finalizing": true, "failed": true, "lost": true, "cancelled": true},
 	"finalizing":     {"passed": true, "failed": true, "cancelled": true},
 	"lost":           {"retryable": true, "needs-operator": true, "cancelled": true}, // a cancelled run ends a lost attempt without a retry
-	"retryable":      {"queued": true},
+	"retryable":      {"queued": true, "cancelled": true},                            // a cancelled run ends a parked attempt before it is queued again
 	"needs-operator": {"queued": true, "failed": true, "cancelled": true},
 	"failed":         {"queued": true},
 }

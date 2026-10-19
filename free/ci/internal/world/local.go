@@ -64,17 +64,36 @@ func BuildForLocal(ctx context.Context, d Deps, in LocalInput, p sched.Pipeline)
 	}
 	if n > 1 {
 		// a registered node called "local" is the local runner (it was probed by nobody and must not get the
-		// owner exception): build again without the injected one, and label it as this machine
+		// owner exception): build again without the injected one
 		d.Local = nil
 		w, _, err = Build(ctx, d, p)
 		if err != nil {
 			return sched.World{}, "", err
 		}
-		for i := range w.Runners {
-			if w.Runners[i].ID == "local" {
-				w.Runners[i].Capability.Identity.Labels = append(w.Runners[i].Capability.Identity.Labels, LocalLabel)
-			}
+	}
+	// the label means "executes on this machine through the local path": only the injected runner has it,
+	// whatever a registered node, a pool or a contributor assigned (a registered node called local is an
+	// ssh endpoint and, in that rare setup, local-only jobs have no runner)
+	stripped := false
+	for i := range w.Runners {
+		r := &w.Runners[i]
+		if r.ID == "local" && n == 1 { // the injected runner: no registered node has this id
+			continue
 		}
+		var keep []string
+		had := false
+		for _, l := range r.Capability.Identity.Labels {
+			if l == LocalLabel {
+				had = true
+				continue
+			}
+			keep = append(keep, l)
+		}
+		if had {
+			r.Capability.Identity.Labels, stripped = keep, true
+		}
+	}
+	if stripped || n > 1 {
 		digest, err = Digest(w)
 		if err != nil {
 			return sched.World{}, "", err
