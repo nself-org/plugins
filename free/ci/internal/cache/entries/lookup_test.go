@@ -1,12 +1,14 @@
 package entries_test
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
+	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
 )
 
@@ -170,5 +172,19 @@ func TestVerifyDropsUnusableEntries(t *testing.T) {
 	rep, err := e.es.Verify(e.ctx)
 	if err != nil || rep.Checked != 3 || rep.Dropped != 2 || e.count() != 1 {
 		t.Fatalf("verify: %+v %v (%d left)", rep, err, e.count())
+	}
+}
+
+// TestCasReportsACorruptBlobAsE710: the integrity failure Lookup turns into a drop.
+func TestCasReportsACorruptBlobAsE710(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	m := e.save("e710", trusted, "k", "0123456789")
+	if err := os.WriteFile(e.blobPath(m, 0), []byte("9876543210"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := e.blobs.Open(cas.CacheRealm(string(m.Namespace)), m.Blobs[0].SHA256)
+	var ce *cas.Error
+	if !errors.Is(err, cas.ErrDigestMismatch) || !errors.As(err, &ce) || ce.Code() != "E710" {
+		t.Fatalf("want E710 digest_mismatch, got %v", err)
 	}
 }

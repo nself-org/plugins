@@ -45,6 +45,7 @@ func TestManifestRejects(t *testing.T) {
 		"negative epoch":          mutate(func(m *Manifest) { m.Writer.Epoch = -1 }),
 		"bad attempt":             mutate(func(m *Manifest) { m.Writer.AttemptID = "a b" }),
 		"bad trust":               mutate(func(m *Manifest) { m.Writer.SourceTrust = "root" }),
+		"no blobs":                mutate(func(m *Manifest) { m.Blobs = nil }),
 		"unsorted blobs":          mutate(func(m *Manifest) { m.Blobs[0].Path, m.Blobs[1].Path = m.Blobs[1].Path, m.Blobs[0].Path }),
 		"duplicate blob":          mutate(func(m *Manifest) { m.Blobs[1].Path = m.Blobs[0].Path }),
 		"bad digest":              mutate(func(m *Manifest) { m.Blobs[0].SHA256 = "xyz" }),

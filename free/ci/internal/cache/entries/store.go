@@ -58,6 +58,7 @@ type Store struct {
 	minFree  int64 // <0: derive from the volume
 	now      func() time.Time
 	open     func(cas.Realm, string) (io.ReadCloser, error) // cas.Open; replaced in tests
+	stat     func(cas.Realm, string) (os.FileInfo, error)   // cas.Stat; replaced in tests
 }
 
 // New builds a Store and reads the environment caps once.
@@ -76,7 +77,7 @@ func New(be Backend, blobs *cas.Store, opt Options) *Store {
 		s.now = time.Now
 	}
 	if blobs != nil {
-		s.open = blobs.Open
+		s.open, s.stat = blobs.Open, blobs.Stat
 	}
 	warn := func(name, v string) {
 		_, _ = io.WriteString(opt.Warn, "nself-ci: ignoring unparsable "+name+"="+strconv.Quote(v)+"\n")

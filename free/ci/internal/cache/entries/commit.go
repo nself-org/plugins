@@ -62,15 +62,17 @@ func (s *Store) check(m Manifest, shapeErr error) error {
 	}
 	realm := cas.CacheRealm(string(m.Namespace))
 	for _, b := range m.Blobs {
-		info, err := s.blobs.Stat(realm, b.SHA256)
-		switch {
-		case errors.Is(err, os.ErrNotExist) || errors.Is(err, cas.ErrInvalid):
+		info, err := s.stat(realm, b.SHA256)
+		if errors.Is(err, os.ErrNotExist) || errors.Is(err, cas.ErrInvalid) {
 			return &Refused{Reason: ReasonBlobInvalid, Err: fmt.Errorf("blob %q: %w", b.Path, err)}
-		case err != nil:
+		}
+		if err != nil {
 			return fmt.Errorf("entries: blob %q: %w", b.Path, err)
-		case info.Size() != b.Size:
+		}
+		if info.Size() != b.Size {
 			return &Refused{Reason: ReasonBlobInvalid, Err: bad("blob %q has %d bytes, manifest says %d", b.Path, info.Size(), b.Size)}
-		case s.now().Sub(info.ModTime()) > BlobMaxAge:
+		}
+		if s.now().Sub(info.ModTime()) > BlobMaxAge {
 			return &Refused{Reason: ReasonBlobInvalid, Err: fmt.Errorf("%w: %q", ErrBlobStale, b.Path)}
 		}
 	}

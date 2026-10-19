@@ -62,6 +62,8 @@ func (m Manifest) validate(checkNS bool) error {
 		return bad("key is not 64 hex digits")
 	case !specID.MatchString(m.Spec):
 		return bad("spec id")
+	case len(m.Blobs) == 0:
+		return bad("an entry needs at least one blob")
 	case len(m.Blobs) > maxBlobs:
 		return bad("too many blobs")
 	case m.CreatedAt < 0 || m.LastUsedAt < 0 || m.Writer.Epoch < 0:

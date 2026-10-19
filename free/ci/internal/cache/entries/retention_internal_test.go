@@ -165,3 +165,56 @@ func TestIntactRetriesRacedOpensAndClassifiesTheRest(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckClassifiesBlobStatErrors(t *testing.T) {
+	s, _, _ := newFake(t)
+	m := goodManifest()
+	now := s.now()
+	var info fakeFileInfo
+	s.stat = func(cas.Realm, string) (os.FileInfo, error) { return info, nil }
+	for _, c := range []struct {
+		name   string
+		stat   error
+		info   fakeFileInfo
+		reason string
+		plain  bool
+	}{
+		{"missing", os.ErrNotExist, fakeFileInfo{}, ReasonBlobInvalid, false},
+		{"not regular", cas.ErrInvalid, fakeFileInfo{}, ReasonBlobInvalid, false},
+		{"io error", errors.New("i/o"), fakeFileInfo{}, "", true},
+		{"wrong size", nil, fakeFileInfo{size: 99, mod: now}, ReasonBlobInvalid, false},
+		{"stale", nil, fakeFileInfo{size: 7, mod: now.Add(-BlobMaxAge - time.Minute)}, ReasonBlobInvalid, false},
+		{"fresh", nil, fakeFileInfo{size: 7, mod: now.Add(-BlobMaxAge + time.Minute)}, "", false},
+	} {
+		info = c.info
+		statErr := c.stat
+		s.stat = func(cas.Realm, string) (os.FileInfo, error) {
+			if statErr != nil {
+				return nil, statErr
+			}
+			return c.info, nil
+		}
+		m.Blobs = m.Blobs[:1]
+		m.Blobs[0].Size = 7
+		s.opt.DisableFloor = true
+		err := s.check(m, nil)
+		var r *Refused
+		switch {
+		case c.reason != "" && (!errors.As(err, &r) || r.Reason != c.reason):
+			t.Errorf("%s: %v", c.name, err)
+		case c.plain && (err == nil || errors.As(err, &r)):
+			t.Errorf("%s: want a plain error, got %v", c.name, err)
+		case c.reason == "" && !c.plain && err != nil:
+			t.Errorf("%s: %v", c.name, err)
+		}
+	}
+}
+
+type fakeFileInfo struct {
+	os.FileInfo
+	size int64
+	mod  time.Time
+}
+
+func (f fakeFileInfo) Size() int64        { return f.size }
+func (f fakeFileInfo) ModTime() time.Time { return f.mod }

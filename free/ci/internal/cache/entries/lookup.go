@@ -30,7 +30,7 @@ import (
 func (s *Store) intact(m Manifest) (reason string, err error) {
 	realm := cas.CacheRealm(string(m.Namespace))
 	for _, b := range m.Blobs {
-		info, e := s.blobs.Stat(realm, b.SHA256)
+		info, e := s.stat(realm, b.SHA256)
 		if e == nil && info.Size() != b.Size {
 			return "size_mismatch", nil
 		}

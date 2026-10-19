@@ -286,7 +286,9 @@ func (p pausingBackend) CacheEntries(ctx context.Context, key string) ([]entries
 // TestPausedPrunerWithAStaleReferenceSnapshotKeepsAFreshCommit: the pruner scans
 // references (none), a writer commits a fresh blob, the pruner is paused until
 // that blob is hours old, then sweeps with its stale reference set. The sweep's
-// age cutoff is the clock reading from BEFORE the scan, so the blob survives.
+// age cutoff is a clock reading from BEFORE the scan, so the blob survives. (It
+// guards a cutoff read after the scan; TestWriterPausedInsideItsCommit... guards
+// one read after the prune transaction.)
 func TestPausedPrunerWithAStaleReferenceSnapshotKeepsAFreshCommit(t *testing.T) {
 	e := newEnv(t, envOpts{})
 	key := e.key(trusted, "paused")
