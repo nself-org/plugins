@@ -88,6 +88,23 @@ func (s *Synth) Finish(v View, evidence any) {
 	s.em.End(evidence, nil)
 }
 
+// Replay writes one stored record (D-1061): the run's own event log, read from
+// the store, in place of the records Finish would rebuild. Records must come in
+// stored order from seq 1 so the emitter's seqs equal the stored ones.
+func (s *Synth) Replay(r events.Record) {
+	s.open = true
+	s.em.Emit(r.Type, r.Job, r.Attempt, r.Data)
+}
+
+// FinishStored closes a replayed stream: the `finished` record unless the log
+// held it (a run that died before writing it), then the evidence line.
+func (s *Synth) FinishStored(v View, finished bool, evidence any) {
+	if !finished {
+		s.em.Emit("finished", "", "", map[string]any{"result": v.State, "jobs": len(v.Jobs)})
+	}
+	s.em.End(evidence, nil)
+}
+
 // Flush waits until everything emitted so far was written.
 func (s *Synth) Flush() { s.em.Flush() }
 

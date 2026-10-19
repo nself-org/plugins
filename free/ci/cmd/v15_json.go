@@ -119,40 +119,13 @@ func (r *jsonRenderer) Event(e cirun.Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	em := r.sess.emitter(e.RunID)
-	switch e.Type {
-	case "queued":
-		em.Emit("queued", "", "", map[string]any{})
-	case "planned":
-		em.Emit("planned", "", "", plannedData(e))
-	case "started":
-		em.Emit("started", e.Job, "", map[string]any{})
-	case "log": // best effort: dropped once a backlog builds behind a slow consumer
+	if e.Type == "log" { // best effort: dropped once a backlog builds behind a slow consumer
 		em.TryEmit("log", e.Job, "", map[string]any{"bytes": len(e.Text), "ref": nil, "reason": "log.not_kept"})
-	case "finished":
-		o := e.Out
-		if o == nil {
-			return
-		}
-		em.Emit("check_result", e.Job, o.AttemptID, map[string]any{"state": o.State, "check": o.Check, "required": o.Required,
-			"reason": string(o.Reason), "failure_class": string(o.FailureClass), "exit_code": o.ExitCode, "duration_ms": o.Duration.Milliseconds()})
-		if o.State == cirun.StateCancelled {
-			em.Emit("cancelled", e.Job, o.AttemptID, map[string]any{})
-		}
+		return
 	}
-}
-
-func plannedData(e cirun.Event) map[string]any {
-	jobs := []map[string]any{}
-	skipped := []map[string]any{}
-	if e.Plan != nil {
-		for _, j := range e.Plan.Jobs {
-			jobs = append(jobs, map[string]any{"id": j.ID, "check": j.Check, "state": j.State, "reason": string(j.Reason), "blocked": string(j.Blocked)})
-		}
-		for _, k := range e.Plan.Skipped {
-			skipped = append(skipped, map[string]any{"job": k.Job, "reason": string(k.Reason)})
-		}
+	for _, rec := range e.Records() {
+		em.Emit(rec.Type, rec.Job, rec.Attempt, rec.Data)
 	}
-	return map[string]any{"jobs": jobs, "skipped": skipped}
 }
 
 func (r *jsonRenderer) Done(s cirun.Summary) {
@@ -172,7 +145,8 @@ func (r *jsonRenderer) Done(s cirun.Summary) {
 		return
 	}
 	em := r.sess.emitter(s.RunID)
-	em.Emit("finished", "", "", map[string]any{"result": string(s.Result), "jobs": len(s.Jobs)})
+	fin := s.Record()
+	em.Emit(fin.Type, fin.Job, fin.Attempt, fin.Data)
 	if r.noEnd {
 		return
 	}

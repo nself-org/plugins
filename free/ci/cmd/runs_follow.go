@@ -11,8 +11,9 @@ package main
 // usage) or 2 (the stream failed or the run died before it finished).
 // Constraints: read class (HTTP serves it as NDJSON, MCP lists no tool for it);
 // a run started with `--detach` replays its own event file byte for byte; any
-// other run (foreground, or on a coordinator) gets the records rebuilt from its
-// observable state, the store keeps no event log (event_index is not written);
+// other run replays the event log its engine stored (event_index, local store);
+// a run with no log (made before it existed, or on a coordinator) gets the
+// records rebuilt from its observable state;
 // a run that died without a result ends with an E648 child_exit error line.
 
 import (
@@ -133,8 +134,13 @@ func followFile(ctx context.Context, src *runSource, runID, path string, from in
 	return 0
 }
 
-// followSynth rebuilds the stream of a run with no event file.
+// followSynth streams a run with no event file: its stored log, else a rebuild.
 func followSynth(ctx context.Context, src *runSource, v detach.View, from int64) int {
+	if src.st != nil {
+		if code, ok := followStored(ctx, src, v, from); ok {
+			return code
+		}
+	}
 	syn := detach.NewSynth(os.Stdout, v.RunID, from)
 	for {
 		syn.Observe(v)
