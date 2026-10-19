@@ -145,7 +145,7 @@ func TestPublishTeamCoordinatorAwaitsAndResolvesNothing(t *testing.T) {
 	d := f.deps()
 	d.Team = true
 	rel, err := publish.Run(context.Background(), d, runID)
-	if err != nil || rel.State != publish.Awaiting || !strings.Contains(rel.Message, "--coordinator") {
+	if err != nil || rel.State != publish.Awaiting || rel.Message != "this TEAM coordinator holds no release key: run `"+publish.TeamCommand(runID)+"` on your own machine" {
 		t.Fatalf("release %+v err %v", rel, err)
 	}
 	if f.res.calls != 0 || f.signer.signs != 0 || f.signer.pubs != 0 {
@@ -200,7 +200,7 @@ func TestExportWritesAVerifiedCopy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if exp.Dir != out || !strings.Contains(exp.Message, "private operator material") || !reflect.DeepEqual(readDir(t, out), readDir(t, rel.Dir)) {
+	if exp.Dir != out || exp.Message != publish.PrivateNotice || !reflect.DeepEqual(readDir(t, out), readDir(t, rel.Dir)) {
 		t.Fatalf("export %+v", exp)
 	}
 	if _, err = publish.Export(context.Background(), f.deps(), runID, out, t.TempDir()); err == nil {
