@@ -80,15 +80,17 @@ nrun() {
 vjson() { jq -e "$2" "$1" >/dev/null 2>&1; }
 runid_of() { sed -n 's/.* run \(r[0-9T]*-[0-9a-f]*\).*/\1/p' "$1" | tail -n 1; }
 tail1() { ev_snip "$1"; }
-# why RUN [all]: the result of every check of RUN, and the end of the log of each one that did not pass (db-reachable
-# aside unless "all" is given: its failure is the expected one when Docker is down).
+# why RUN [all]: why the checks of RUN that did not pass failed (their diagnosis and the end of their log; db-reachable aside
+# unless "all" is given: its failure is the expected one when Docker is down), then every check's result.
 why() {
 	local id skip=db-reachable
 	[ "${2:-}" != all ] || skip=-
-	jq -r '[.data.checks[] | "\(.id)=\(.result)"] | join(" ")' "$work/why.json" 2>/dev/null | tr -d '\n'
 	for id in $(jq -r '.data.checks[] | select(.result != "pass" and .id != "'"$skip"'") | .id' "$work/why.json" 2>/dev/null); do
-		nrun ci logs "$id" --run "$1" 2>&1 | tail -n 3 | tr '\n' ' ' | cut -c1-240 | sed "s/^/ [$id: /; s/\$/]/"
+		printf '[%s: %s ' "$id" "$(jq -r --arg id "$id" '.data.checks[] | select(.id == $id) | .diagnosis // ""' "$work/why.json" 2>/dev/null)"
+		nrun ci logs "$id" --run "$1" 2>&1 | grep -v 'moved to' | tail -n 2 | tr '\n' ' ' | cut -c1-170
+		printf '] '
 	done
+	jq -r '[.data.checks[] | "\(.id)=\(.result)"] | join(" ")' "$work/why.json" 2>/dev/null | tr -d '\n'
 }
 # pk: where the cut's packet counter stands now, for the step messages (empty when there is no cut).
 pk() { [ -n "$nocut" ] || printf ' [cut packets %s]' "$(cut_packets)"; }

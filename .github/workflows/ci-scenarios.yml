@@ -95,12 +95,16 @@ jobs:
           jq -r '"scenario-01: " + ([.data.checks[] | select(.id == "drill-scenario-01-local-only") | .result][0] // "no result")' "$RUNNER_TEMP/evidence/scenario-01.json" | tee -a "$GITHUB_STEP_SUMMARY"
           jq -e '[.data.checks[] | select(.id == "drill-scenario-01-local-only") | .result] == ["pass"]' "$RUNNER_TEMP/evidence/scenario-01.json" >/dev/null
 
+      - name: Collect the drills' own evidence
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/evidence"
+          cp .drill-bin/*.evidence.json "$RUNNER_TEMP/evidence/" 2>/dev/null || true
+
       - name: Upload the evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: scenario-evidence-${{ matrix.os }}
-          path: |
-            ${{ runner.temp }}/evidence/
-            .drill-bin/*.evidence.json
+          path: ${{ runner.temp }}/evidence/
           if-no-files-found: ignore
