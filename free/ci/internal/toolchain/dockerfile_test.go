@@ -19,6 +19,8 @@ const dockerfilePath = "../../toolchain/Dockerfile"
 var (
 	fromDigestRe = regexp.MustCompile(`@sha256:[0-9a-f]{64}( |$)`)
 	argRe        = regexp.MustCompile(`(?m)^ARG ([A-Z0-9_]+)=(.*)$`)
+
+	govulncheckInstallRe = regexp.MustCompile(`go install "?golang\.org/x/vuln/cmd/govulncheck@v\$\{?GOVULNCHECK_VERSION\}?"?`)
 )
 
 func readDockerfile(t *testing.T) string {
@@ -138,5 +140,50 @@ func TestDockerfileNoUnverifiedDownloads(t *testing.T) {
 	}
 	if !strings.Contains(string(b), "sha256sum -c -") || !strings.Contains(string(b), "set -eu") {
 		t.Error("fetch-verified.sh does not verify the checksum under set -eu")
+	}
+}
+
+// checkGovulncheckBuild returns every way d fails to stamp govulncheck with its pinned
+// version (D-0996): a binary built from an unzipped module directory reports v0.0.0, so
+// the module must be served from a file GOPROXY and installed by `go install ...@v<pin>`.
+func checkGovulncheckBuild(d string) []string {
+	var out []string
+	if !govulncheckInstallRe.MatchString(d) {
+		out = append(out, "govulncheck is not installed with `go install golang.org/x/vuln/cmd/govulncheck@v<pin>`")
+	}
+	if !strings.Contains(d, "GOPROXY=file://") {
+		out = append(out, "govulncheck is not installed from the verified zip through a file GOPROXY")
+	}
+	if strings.Contains(d, "./cmd/govulncheck") {
+		out = append(out, "govulncheck is built from an unzipped directory, so it reports v0.0.0")
+	}
+	return out
+}
+
+func TestDockerfileStampsGovulncheckVersion(t *testing.T) {
+	for _, problem := range checkGovulncheckBuild(readDockerfile(t)) {
+		t.Error(problem)
+	}
+}
+
+// TestGovulncheckCheckCanFail: each way of losing the version stamp is caught.
+func TestGovulncheckCheckCanFail(t *testing.T) {
+	d := readDockerfile(t)
+	cases := []struct{ name, text, want string }{
+		{"directory build", govulncheckInstallRe.ReplaceAllString(d, "go build ./cmd/govulncheck"), "not installed with"},
+		{"unzipped dir", d + "\nRUN go build -o /x ./cmd/govulncheck\n", "unzipped directory"},
+		{"real proxy only", strings.ReplaceAll(d, "GOPROXY=file://", "GOPROXY=https://"), "file GOPROXY"},
+	}
+	for _, c := range cases {
+		if c.text == d {
+			t.Fatalf("%s: the mutation changed nothing", c.name)
+		}
+		found := false
+		for _, p := range checkGovulncheckBuild(c.text) {
+			found = found || strings.Contains(p, c.want)
+		}
+		if !found {
+			t.Errorf("%s: drift not detected (want a problem mentioning %q)", c.name, c.want)
+		}
 	}
 }
