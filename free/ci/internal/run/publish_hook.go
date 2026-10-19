@@ -62,7 +62,16 @@ func publication(r PublishRequest) (model.Evidence, attest.Profile, string) {
 	}
 	hosts, users := localNames()
 	p := attest.ProfileFor(attest.RepoFacts{Visibility: vis, RepoID: r.Run.Evidence.RepoID, Hostnames: hosts, Usernames: users})
-	return attest.PublishWith(r.Run.Evidence, p), p, r.Run.Evidence.Runner.ID
+	published := attest.PublishWith(r.Run.Evidence, p)
+	// PublishWith keeps the free text of a retry (why the previous attempt failed); the detail
+	// slot must not see what the profile would remove from the status text, so scrub it here.
+	pr := p.WithRunner(r.Run.Evidence.Runner.ID)
+	published.Retries = append([]model.Retry(nil), published.Retries...)
+	for i := range published.Retries {
+		published.Retries[i].Diagnosis = pr.Text(published.Retries[i].Diagnosis)
+		published.Retries[i].Excerpt = pr.Text(published.Retries[i].Excerpt)
+	}
+	return published, p, r.Run.Evidence.Runner.ID
 }
 
 func (attestPublisher) Publish(_ context.Context, r PublishRequest) (report.Status, error) {

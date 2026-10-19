@@ -278,7 +278,7 @@ func TestOffloadKeepsConfigOutsideDirty(t *testing.T) {
 	r := passRig(t)
 	r.C.ConfigOutside = true
 	r.C.Opts.Record = true
-	r.C.Hooks.Auto.Offload = fakeOffload{l: &slotLog{}, res: OffloadResult{Rev: Revision{SHA: strings.Repeat("cd", 20)}}}
+	r.C.Hooks.Auto.Offload = fakeOffload{l: &slotLog{}, res: OffloadResult{Rev: Revision{SHA: testSHA}}} // same SHA as HEAD, so only line "ConfigOutside" can keep the run unbound
 	res := r.run(t)
 	if len(r.Rep.all()) != 0 || !strings.Contains(res.Summary.Status, "not posted") {
 		t.Fatalf("config outside the tree must keep the run unbound: %q %+v", res.Summary.Status, r.Rep.all())
@@ -307,5 +307,27 @@ func TestPolicyRequestCarriesRunValues(t *testing.T) {
 	r.run(t)
 	if string(got.Run["sched.where"]) != `"all"` {
 		t.Fatalf("per-run values must reach the resolver: %v", got.Run)
+	}
+}
+
+// The evidence a detail publisher sees has retry text scrubbed like the rest (hostnames and user names).
+func TestPublicationScrubsRetryText(t *testing.T) {
+	hosts, users := localNames()
+	secret := "no space left on device at /Users/" + strings.Join(append(append([]string(nil), users...), hosts...), " ")
+	if len(hosts)+len(users) == 0 {
+		t.Skip("no local host or user name to plant")
+	}
+	ev := model.Evidence{Schema: "ci.evidence/v1", RepoID: "r1", Runner: model.RunnerRef{ID: "build-box", Provider: "local"},
+		Retries: []model.Retry{{JobID: "a", Attempt: 1, Diagnosis: secret, Excerpt: secret}}}
+	got, _, _ := publication(PublishRequest{Owner: "o", Repo: "r", Run: RunInfo{Evidence: ev}})
+	for _, text := range []string{got.Retries[0].Excerpt, got.Retries[0].Diagnosis} {
+		for _, name := range append(append([]string(nil), users...), hosts...) {
+			if strings.Contains(text, name) {
+				t.Fatalf("retry text still holds %q: %q", name, text)
+			}
+		}
+	}
+	if ev.Retries[0].Excerpt != secret {
+		t.Fatal("the unpublished evidence must not be modified")
 	}
 }

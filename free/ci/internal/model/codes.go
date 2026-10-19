@@ -60,6 +60,11 @@ func problems(rows []registration) []string {
 // CodeRanges reserves disjoint fabric allocations. Two blocks exist: E600-E719
 // (CI, NODE, TRUST, SCHED, HOST, CACHE; fully allocated and closed) and E790-E829
 // (AUTO, P7-AUTO-27). E720-E789 belong to k8s, infra, functions and plugin-dev.
+// AUTO sub-ranges by Ticket: 03 E790-E792, 04 E793, 05 E794-E796, 06 E797, 07 E798,
+// 08 E799-E800, 09 E801, 10 E802-E803, 11 E804-E805, 12 E806, 13 E807, 14 E808,
+// 15 E809-E810, 16 E811, 17 E812, 18 E813, 19 E814, 20 E815, 22 E816, 28 E817-E818,
+// 29 E819, 25 E820. Spare: E821 is taken by the "skipped: runner is isolated" case of
+// watch (P7-AUTO-11, AUTO D17), because E625 is P7-CI-37's; E822-E829 stay free.
 var CodeRanges = map[string][2]int{"CI": {600, 649}, "NODE": {650, 669}, "TRUST": {670, 689}, "SCHED": {690, 699}, "HOST": {700, 709}, "CACHE": {710, 719}, "AUTO": {790, 829}}
 
 // inFabricBlock reports whether n lies in one of the two blocks this module owns.
