@@ -12,7 +12,7 @@ const pinnedDigest = "sha256:" + "0123456789abcdef0123456789abcdef0123456789abcd
 func envOf(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
 
 func pinnedTable() string {
-	return "version: 1\nrows:\n  - name: toolchain-image\n    kind: image\n    purpose: p\n    owner: o\n    image: docker.io/nself/ci-toolchain\n    status: pinned\n    digest: " + pinnedDigest + "\n    upstream: {type: none, ref: ''}\n"
+	return "version: 1\nrows:\n  - name: toolchain-image\n    kind: image\n    purpose: p\n    owner: o\n    image: docker.io/nself/ci-toolchain\n    version: docker.io/nself/ci-toolchain@" + pinnedDigest + "\n    status: pinned\n    digest: " + pinnedDigest + "\n    upstream: {type: none, ref: ''}\n"
 }
 
 func pendingTable() string {

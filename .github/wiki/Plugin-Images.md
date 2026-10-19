@@ -21,7 +21,7 @@ records every image the plugins repo ships or depends on, pinned by digest. The 
 It is assembled from per-owner fragments in `images.d/` by `scripts/images/assemble.sh` (sorted keys, a duplicate
 name, a reference without `@sha256:` or an unknown kind fails and names the fragment). `assemble.sh --check`
 fails when a fragment changed without re-assembly. See `images.d/README.md` for how an owner adds an entry.
-The file is empty (`"images": {}`) until the first publish.
+Kind `ci` entries may omit the tag (an image pushed by digest only, such as `ci-toolchain`); every other kind needs one.
 
 ## Pinning
 

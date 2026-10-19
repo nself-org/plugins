@@ -66,7 +66,7 @@ func TestContainerRunPinnedImage(t *testing.T) {
 	}
 	repo := fixtureRepo(t)
 	fixture := filepath.Join(tmp, "versions.yaml")
-	table := "version: 1\nrows:\n  - name: toolchain-image\n    kind: image\n    purpose: fixture\n    owner: test\n    image: docker.io/library/alpine\n    status: pinned\n    digest: " + alpineDigest + "\n    upstream: {type: none, ref: ''}\n"
+	table := "version: 1\nrows:\n  - name: toolchain-image\n    kind: image\n    purpose: fixture\n    owner: test\n    image: docker.io/library/alpine\n    version: docker.io/library/alpine@" + alpineDigest + "\n    status: pinned\n    digest: " + alpineDigest + "\n    upstream: {type: none, ref: ''}\n"
 	if err := os.WriteFile(fixture, []byte(table), 0o644); err != nil {
 		t.Fatal(err)
 	}

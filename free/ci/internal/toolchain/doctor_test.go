@@ -155,3 +155,13 @@ func TestInstalledVersionParsing(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckImageRowPending(t *testing.T) {
+	v, err := ParseVersions([]byte(pendingTable()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := checkImageRow(v); c.Status != doctor.Pass || !strings.Contains(c.Message, "pending") {
+		t.Fatalf("pending row check %+v", c)
+	}
+}

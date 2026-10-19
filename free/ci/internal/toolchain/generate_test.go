@@ -6,6 +6,7 @@ package toolchain
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"os"
 	"strings"
@@ -131,5 +132,28 @@ func TestEmbeddedImageRowIsPinned(t *testing.T) {
 	row, ok := v.Row(ImageRow)
 	if !ok || row.Status != StatusPinned || row.Image != "docker.io/nself/ci-toolchain" || !digestRe.MatchString(row.Digest) || row.Version != row.Image+"@"+row.Digest {
 		t.Fatalf("image row %+v", row)
+	}
+}
+
+// TestImageRowMatchesTheImageLock: the pinned row and images.d/ci-toolchain.json name the same reference, so the daily
+// probe watches the image `nself ci --container` pulls (P7-CI-61).
+func TestImageRowMatchesTheImageLock(t *testing.T) {
+	v, err := Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	row, _ := v.Row(ImageRow)
+	raw, err := os.ReadFile("../../../../images.d/ci-toolchain.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var frag struct {
+		Name, Kind, Image string
+	}
+	if err := json.Unmarshal(raw, &frag); err != nil {
+		t.Fatal(err)
+	}
+	if frag.Name != "ci-toolchain" || frag.Kind != "ci" || frag.Image != row.Image+"@"+row.Digest {
+		t.Fatalf("lock fragment %+v does not match the pinned row %s@%s", frag, row.Image, row.Digest)
 	}
 }

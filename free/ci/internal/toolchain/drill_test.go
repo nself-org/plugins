@@ -158,7 +158,7 @@ func TestDrillFailsWhenAnArtifactIsGone(t *testing.T) {
 func TestDrillVerifiesAPinnedImageRow(t *testing.T) {
 	srv := mirror(t)
 	pinned := func(digestHex string) string {
-		row := `  - {name: toolchain-image, kind: image, purpose: p, owner: o, image: docker.io/nself/ci-toolchain, status: pinned, digest: "sha256:` + digestHex + `", upstream: {type: none, ref: ""}}`
+		row := `  - {name: toolchain-image, kind: image, purpose: p, owner: o, image: docker.io/nself/ci-toolchain, version: "docker.io/nself/ci-toolchain@sha256:` + digestHex + `", status: pinned, digest: "sha256:` + digestHex + `", upstream: {type: none, ref: ""}}`
 		table := fixtureTable("https://example.org/acme/demo-1.2.3.tgz")
 		i := strings.Index(table, "  - {name: toolchain-image")
 		return table[:i] + row + "\n"

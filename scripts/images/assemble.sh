@@ -26,7 +26,7 @@ def bad: . as $o |
   elif ([.. | strings | select(explode | any(. < 32 or . == 127))] | length) > 0 then "control character or newline in a value"
   elif ((.name | type) != "string") or (.name | test("^[A-Za-z0-9][A-Za-z0-9._/-]*$") | not) then "name must be a non-empty string of [A-Za-z0-9._/-]"
   elif ((.kind | type) != "string") or ((.kind | IN("plugin", "upstream", "ci")) | not) then "unknown kind \(.kind | tojson) (plugin|upstream|ci)"
-  elif ((.image | type) != "string") or (.image | test(if $o.kind == "ci" then "^[a-z0-9][^@[:space:]]*@sha256:[0-9a-f]{64}$" else "^[a-z0-9][^@[:space:]]*:[^@:/[:space:]]+@sha256:[0-9a-f]{64}$" end) | not) then "image \(.image | tojson) must be <repository>:<tag>@sha256:<64 hex> (kind ci: the tag may be omitted; repository starts with a letter or digit)"
+  elif ((.image | type) != "string") or (.image | test(if $o.kind == "ci" then "^[a-z0-9][^@[:space:]]*[^:@[:space:]]@sha256:[0-9a-f]{64}$" else "^[a-z0-9][^@[:space:]]*:[^@:/[:space:]]+@sha256:[0-9a-f]{64}$" end) | not) then "image \(.image | tojson) must be <repository>:<tag>@sha256:<64 hex> (kind ci: the tag may be omitted; repository starts with a letter or digit)"
   elif ((.platforms | type) != "array") or (.platforms | length) == 0 or (.platforms | all(type == "string" and test("^[a-z0-9]+/[a-z0-9]+(/[a-z0-9]+)?$")) | not) then "platforms must be a non-empty list like linux/amd64"
   elif ((.owner | type) != "string") or .owner == "" then "owner must be a non-empty string"
   else empty end;
@@ -81,6 +81,8 @@ if [ "$fixtures" = 1 ]; then
   neg tag-without-digest nodigest.json "{\"name\":\"y\",\"image\":\"nself/y:1\",$good}" 'nodigest.json: y: image'
   neg digest-without-tag notag.json "{\"name\":\"y\",\"image\":\"nself/y@$dig\",$good}" 'notag.json: y: image'
   neg ci-tag-without-digest cinodigest.json "{\"name\":\"y\",\"image\":\"nself/y:1\",\"kind\":\"ci\",\"platforms\":[\"linux/amd64\"],\"owner\":\"o\"}" 'cinodigest.json: y: image'
+  neg ci-empty-tag ciemptytag.json "{\"name\":\"y\",\"image\":\"nself/y:@$dig\",\"kind\":\"ci\",\"platforms\":[\"linux/amd64\"],\"owner\":\"o\"}" 'ciemptytag.json: y: image'
+  neg ci-leading-dash cidash.json "{\"name\":\"y\",\"image\":\"--help@$dig\",\"kind\":\"ci\",\"platforms\":[\"linux/amd64\"],\"owner\":\"o\"}" 'cidash.json: y: image'
   neg unknown-kind kind.json "{\"name\":\"y\",\"image\":\"nself/y:1@$dig\",\"kind\":\"weird\",\"platforms\":[\"linux/amd64\"],\"owner\":\"o\"}" 'kind.json: y: unknown kind'
   neg missing-owner owner.json "{\"name\":\"y\",\"image\":\"nself/y:1@$dig\",\"kind\":\"ci\",\"platforms\":[\"linux/amd64\"]}" 'owner.json: y: owner'
   neg malformed-json broken.json '{not json' 'broken.json'
