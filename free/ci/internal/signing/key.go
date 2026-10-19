@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"regexp"
 	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/signing"
@@ -36,6 +37,8 @@ const (
 	KeyName = "NSELF_CI_RELEASE_SIGNING_KEY"
 )
 
+var keyIDRe = regexp.MustCompile(`^ci-release-[0-9a-f]{16}$`)
+
 // notFoundCause is the CLI's code for a ref that is not in the store.
 const notFoundCause = "E541"
 
@@ -45,6 +48,7 @@ type Key struct {
 	ID     string
 	Public ed25519.PublicKey
 	priv   ed25519.PrivateKey
+	zeroed bool
 }
 
 // Zero overwrites the private key bytes.
@@ -53,7 +57,7 @@ func (k *Key) Zero() {
 		return
 	}
 	clear(k.priv)
-	k.Signer = nil
+	k.zeroed = true
 }
 
 // PublicB64 is the base64 public key of a trust line.
@@ -62,23 +66,25 @@ func (k *Key) PublicB64() string { return base64.StdEncoding.EncodeToString(k.Pu
 // ownSigner signs with the key held in Key.priv itself (the sdk signer keeps
 // a private copy Zero could not overwrite).
 type ownSigner struct {
-	id   string
-	priv ed25519.PrivateKey
+	id  string
+	key *Key
 }
 
 func (s *ownSigner) KeyID() string { return s.id }
 
 func (s *ownSigner) Sign(msg []byte) ([]byte, error) {
-	if len(s.priv) != ed25519.PrivateKeySize {
+	if s.key.zeroed || len(s.key.priv) != ed25519.PrivateKeySize {
 		return nil, Failf(ReasonSignerFailed, "the key was already zeroed")
 	}
-	return ed25519.Sign(s.priv, msg), nil
+	return ed25519.Sign(s.key.priv, msg), nil
 }
 
 func newKey(priv ed25519.PrivateKey) *Key {
 	pub, _ := priv.Public().(ed25519.PublicKey)
 	id := signing.KeyID(signing.PurposeCIRelease, pub)
-	return &Key{Signer: &ownSigner{id: id, priv: priv}, ID: id, Public: pub, priv: priv}
+	k := &Key{ID: id, Public: pub, priv: priv}
+	k.Signer = &ownSigner{id: id, key: k}
+	return k
 }
 
 // mapResolve turns a resolver error into an E717 refusal.
@@ -159,7 +165,12 @@ func checkStoredID(ctx context.Context, res secrets.ValueResolver, attempt strin
 	}
 	defer clear(raw)
 	if string(raw) != key.ID {
-		return Failf(ReasonKeyIDMismatch, "the stored key id %q is not the id of the stored key (%s)", echo(string(raw)), key.ID)
+		// a stored id of another shape is never echoed: a key pasted there by mistake must not reach a log
+		shown := "malformed"
+		if keyIDRe.Match(raw) {
+			shown = string(raw)
+		}
+		return Failf(ReasonKeyIDMismatch, "the stored key id (%s) is not the id of the stored key (%s)", shown, key.ID)
 	}
 	return nil
 }

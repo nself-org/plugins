@@ -29,11 +29,25 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/signing"
 )
 
-// signerStdin and signerStdout are replaced by tests.
+// signerIn and signerOut replace stdin and stdout in tests (nil: the process's own).
 var (
-	signerStdin  io.Reader = os.Stdin
-	signerStdout io.Writer = os.Stdout
+	signerIn  io.Reader
+	signerOut io.Writer
 )
+
+func signerStdin() io.Reader {
+	if signerIn != nil {
+		return signerIn
+	}
+	return os.Stdin
+}
+
+func signerStdout() io.Writer {
+	if signerOut != nil {
+		return signerOut
+	}
+	return os.Stdout
+}
 
 func init() {
 	registerArtifactsSub("signer", artifactsSigner)
@@ -82,7 +96,7 @@ func signerStore() signing.SecretStore {
 }
 
 func signerRequest(ctx context.Context) int {
-	req, payloads, err := signing.DecodeRequest(signerStdin)
+	req, payloads, err := signing.DecodeRequest(signerStdin())
 	if err != nil {
 		return signerFail(err)
 	}
@@ -110,7 +124,7 @@ func signerKey(info signing.KeyInfo, err error) int {
 }
 
 func signerWrite(v any) int {
-	if err := json.NewEncoder(signerStdout).Encode(v); err != nil {
+	if err := json.NewEncoder(signerStdout()).Encode(v); err != nil {
 		return 2
 	}
 	return 0
@@ -122,6 +136,6 @@ func signerFail(err error) int {
 	if se, ok := err.(*signing.Error); ok {
 		reason = se.Reason
 	}
-	_ = json.NewEncoder(signerStdout).Encode(signing.Response{Error: &signing.ResponseError{Code: signing.CodeSigning, Reason: reason, Message: err.Error()}})
+	_ = json.NewEncoder(signerStdout()).Encode(signing.Response{Error: &signing.ResponseError{Code: signing.CodeSigning, Reason: reason, Message: err.Error()}})
 	return 2
 }
