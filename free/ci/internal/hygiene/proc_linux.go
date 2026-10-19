@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 )
 
@@ -36,6 +38,8 @@ type procEntry struct {
 func isNoProc(error) bool { return false }
 
 // scanProcs returns the live processes owned by uid (when uid > 0) or tagged with the attempt id.
+// Each pid is judged on its own goroutine (a busy host has hundreds of them and the scan sits on the
+// path of every job's end, D-1008); the result keeps /proc's order.
 func scanProcs(attempt string, uid int) ([]procEntry, error) {
 	entries, err := os.ReadDir(procRoot)
 	if err != nil {
@@ -43,38 +47,76 @@ func scanProcs(attempt string, uid int) ([]procEntry, error) {
 	}
 	tag := []byte("NSELF_CI_EXEC_ATTEMPT=" + attempt + "\x00")
 	self := os.Getpid()
-	var out []procEntry
+	pids := make([]int, 0, len(entries))
 	for _, e := range entries {
-		pid, err := strconv.Atoi(e.Name())
-		if err != nil || pid == self {
-			continue
+		if pid, err := strconv.Atoi(e.Name()); err == nil && pid != self {
+			pids = append(pids, pid)
 		}
-		dir := filepath.Join(procRoot, e.Name())
-		_, start := statFields(dir)
+	}
+	found := make([]*procEntry, len(pids))
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range min(scanWorkers, len(pids)) {
+		wg.Go(func() {
+			for {
+				i := int(next.Add(1)) - 1
+				if i >= len(pids) {
+					return
+				}
+				found[i] = scanOne(pids[i], attempt, uid, tag)
+			}
+		})
+	}
+	wg.Wait()
+	var out []procEntry
+	for _, p := range found {
+		if p != nil {
+			out = append(out, *p)
+		}
+	}
+	return out, nil
+}
+
+// scanWorkers bounds the goroutines of one scan.
+const scanWorkers = 8
+
+// scanOne returns the entry for pid when it belongs to the attempt, else nil. Only a match pays for
+// the stat reads: it needs the start time before and after the identifying reads, so a PID reused
+// meanwhile (fields of two processes) is dropped.
+func scanOne(pid int, attempt string, uid int, tag []byte) *procEntry {
+	dir := filepath.Join(procRoot, strconv.Itoa(pid))
+	matches := func() (puid int, name string, ok bool) {
 		status, err := os.ReadFile(filepath.Join(dir, "status"))
 		if err != nil {
-			continue
+			return 0, "", false
 		}
 		puid, state, name := parseStatus(string(status))
 		if state == 'Z' || state == 'X' {
-			continue
+			return 0, "", false
 		}
-		match := uid > 0 && puid == uid
-		if !match && attempt != "" {
+		if uid > 0 && puid == uid {
+			return puid, name, true
+		}
+		if attempt != "" {
 			if env, err := os.ReadFile(filepath.Join(dir, "environ")); err == nil && containsTag(env, tag) {
-				match = true
+				return puid, name, true
 			}
 		}
-		if !match {
-			continue
-		}
-		pg, again := statFields(dir)
-		if start == "" || again != start {
-			continue // the PID was reused while it was being read: the fields describe two processes
-		}
-		out = append(out, procEntry{PID: pid, PGID: pg, UID: puid, Cmd: name, Start: start, Inodes: socketInodes(dir)})
+		return 0, "", false
 	}
-	return out, nil
+	if _, _, ok := matches(); !ok {
+		return nil
+	}
+	_, start := statFields(dir)
+	puid, name, ok := matches() // judged again once the start time is known: the match is of that process
+	if !ok || start == "" {
+		return nil
+	}
+	pg, again := statFields(dir)
+	if again != start {
+		return nil
+	}
+	return &procEntry{PID: pid, PGID: pg, UID: puid, Cmd: name, Start: start, Inodes: socketInodes(dir)}
 }
 
 func containsTag(env, tag []byte) bool {
