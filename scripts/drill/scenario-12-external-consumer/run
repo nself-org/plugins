@@ -108,13 +108,13 @@ if [ $rc -eq 10 ] && vjson "$work/st.json" '.data.freshness.state == "stale"'; t
 else
 	ev_fail stale-exit-10 "expected exit 10 and stale, got exit $rc: $(jq -c '.data.freshness' "$work/st.json" 2>/dev/null | head -c 200)"
 fi
-# The same, with the genuine (unedited) document from the producer's own store: stale, not forged.
+# A genuine document for the OLD commit, asked about the new one, is not evidence for it: refused (exit 11) and reads stale.
 nci producer evidence verify --file "$work/doc1.json" --at-revision "$c2" --json >"$work/sg.json" 2>"$work/sg.err"
 rc=$?
-if [ $rc -eq 10 ] && vjson "$work/sg.json" '.data.freshness.state == "stale"'; then
-	ev_pass stale-genuine "the genuine document verified at the new commit is stale (exit 10), not forged"
+if [ $rc -eq 11 ] && vjson "$work/sg.json" '.data.freshness.state == "stale"'; then
+	ev_pass old-evidence-not-reused "the genuine document of the old commit is refused for the new one (exit 11) and reads stale"
 else
-	ev_fail stale-genuine "expected exit 10 and stale, got exit $rc: $(jq -c '.data.freshness' "$work/sg.json" 2>/dev/null | head -c 200)"
+	ev_fail old-evidence-not-reused "expected exit 11 and stale, got exit $rc: $(jq -c '.data.freshness' "$work/sg.json" 2>/dev/null | head -c 200)"
 fi
 nci producer evidence verify "$c2" --json >"$work/v2.json" 2>"$work/v2.err"
 rc=$?

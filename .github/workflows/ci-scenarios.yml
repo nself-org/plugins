@@ -84,6 +84,7 @@ jobs:
           jq -e '[.data.checks[] | select(.id == "drill-scenario-12-external-consumer") | .result] == ["pass"]' "$RUNNER_TEMP/evidence/scenario-12.json" >/dev/null
 
       - name: Scenario 1, local only (network cut)
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
