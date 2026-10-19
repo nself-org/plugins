@@ -49,7 +49,8 @@ func (s *Store) intact(m Manifest) (reason string, err error) {
 }
 
 // Lookup returns the entry stored under key for ns when access allows it and
-// every blob is intact.
+// every blob is intact. The caller must derive access from authz.CacheAccess for
+// the attempt's own namespace and ns; Lookup does not know the attempt.
 func (s *Store) Lookup(ctx context.Context, ns authz.Namespace, key string, access authz.Mode) (Manifest, bool, error) {
 	if (access != authz.ModeRWOwn && access != authz.ModeROSnapshot) || !ns.Valid() || !hexKey.MatchString(key) {
 		return Manifest{}, false, nil

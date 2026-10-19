@@ -303,8 +303,8 @@ func TestCacheEntriesCommitNeverReplacesAnotherNamespace(t *testing.T) {
 	_, fin = cacheFinalizing(t, s, "second", other, []string{cacheKey}, true)
 	ons, _ := entries.NamespaceOf(other)
 	err := s.CacheCommit(ctx, entries.CommitRequest{Attempt: "second", Epoch: fin, Claimed: ons, Manifest: cacheManifest(t, other, cacheKey, 20)})
-	if err == nil {
-		t.Fatal("a foreign namespace replaced an entry")
+	if got := reasonOf(t, err); got != "namespace" {
+		t.Fatalf("a foreign namespace replaced an entry: %s", got)
 	}
 	list, lerr := s.CacheEntries(ctx, cacheKey)
 	if lerr != nil || len(list) != 1 || list[0].Writer.AttemptID != "first" || list[0].Bytes() != 10 {
@@ -386,10 +386,7 @@ func TestCacheEntriesResultAndPlanDoNotSurviveARerun(t *testing.T) {
 		t.Fatal(err)
 	}
 	// a failing result drops the planned set
-	cacheFinalizing(t, s, "bad", cacheTrusted, []string{oldKey}, true)
-	if err := s.CacheRecordResult(ctx, "bad", 3, false); err != nil {
-		t.Fatal(err)
-	}
+	cacheFinalizing(t, s, "bad", cacheTrusted, []string{oldKey}, false)
 	var n int
 	if err := s.readers.QueryRow("SELECT count(*) FROM cache_planned WHERE attempt_id='bad'").Scan(&n); err != nil || n != 0 {
 		t.Fatalf("planned keys after a failing result: %d %v", n, err)
@@ -464,5 +461,24 @@ func TestCacheEntriesCheckRunsOnlyAfterAuthorization(t *testing.T) {
 	req.Check = nil
 	if err := s.CacheCommit(ctx, req); err != nil {
 		t.Fatalf("the attempt must still be able to save: %v", err)
+	}
+}
+
+func TestCacheEntriesResultIsWriteOncePerRun(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	_, fin := cacheFinalizing(t, s, "w", cacheTrusted, []string{cacheKey}, false)
+	if got := reasonOf(t, s.CacheRecordResult(ctx, "w", fin, true)); got != "attempt_state" {
+		t.Fatalf("a failing result flipped to a pass: %s", got)
+	}
+	if err := s.CacheCommit(ctx, cacheReq(t, "w", fin, cacheTrusted, cacheKey, 10)); err == nil {
+		t.Fatal("committed after a failing result")
+	}
+	if err := s.CacheRecordResult(ctx, "w", fin, false); err != nil {
+		t.Fatalf("recording the same result again must be idempotent: %v", err)
+	}
+	_, fin = cacheFinalizing(t, s, "w2", cacheTrusted, []string{cacheKey}, true)
+	if got := reasonOf(t, s.CacheRecordResult(ctx, "w2", fin, false)); got != "attempt_state" {
+		t.Fatalf("a pass flipped to a failure: %s", got)
 	}
 }

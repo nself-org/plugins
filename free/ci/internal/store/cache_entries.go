@@ -128,12 +128,17 @@ func (s *Store) CacheRecordResult(ctx context.Context, attempt string, epoch int
 		if _, ok, err := s.cacheGate(ctx, tx, &refusal, "result", attempt, "finalizing", epoch); !ok || err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, "UPDATE cache_attempt SET passed=?,result_epoch=? WHERE attempt_id=?", passed, epoch, attempt)
-		if err != nil {
+		_, before, was, found, err := cacheFacts(ctx, tx, attempt)
+		switch {
+		case err != nil:
 			return err
-		}
-		if n, _ := res.RowsAffected(); n != 1 {
+		case !found:
 			return s.cacheRefuse(ctx, tx, &refusal, "result", attempt, entries.ReasonNotPlanned)
+		case before == epoch && was != passed: // a result is write-once per run
+			return s.cacheRefuse(ctx, tx, &refusal, "result", attempt, entries.ReasonAttemptState)
+		}
+		if err = execAll(ctx, tx, []any{"UPDATE cache_attempt SET passed=?,result_epoch=? WHERE attempt_id=?", passed, epoch, attempt}); err != nil {
+			return err
 		}
 		if passed {
 			return nil
@@ -181,8 +186,12 @@ func (s *Store) CacheCommit(ctx context.Context, c entries.CommitRequest) error 
 		for _, b := range e.Blobs {
 			total += b.Size
 		}
+		var foreign int
+		if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM cache_entry WHERE cache_key=? AND namespace<>?", e.Key, e.Namespace).Scan(&foreign); err != nil {
+			return err
+		}
 		switch {
-		case !bytes.Equal(e.Namespace, ns.Canonical()):
+		case !bytes.Equal(e.Namespace, ns.Canonical()) || foreign != 0: // never replace another namespace's entry
 			return refuse(entries.ReasonNamespace)
 		case planned != 1:
 			return refuse(entries.ReasonNotPlanned)
