@@ -38,6 +38,9 @@ type Options struct {
 	// Record marks a commit CI run of record (set by `ci runs rerun <sha>` and by watch);
 	// false for bare and dev runs. The dispatch hook maps it to sched.Pipeline.Record (P7-AUTO-27).
 	Record bool
+	// PolicyRun carries per-run policy values into PolicyRequest.Run (filled by P7-AUTO-29 from
+	// `--where`, `--prefer` and `--runner`); nil means none.
+	PolicyRun RunValues
 }
 
 // RunOptions is the name the cmd layer and its option hooks use.

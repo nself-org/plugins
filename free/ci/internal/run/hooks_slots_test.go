@@ -2,7 +2,9 @@ package run
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -123,15 +125,29 @@ func TestHookSlotsNoop(t *testing.T) {
 	r.C.Hooks.Auto = allSlots(l)
 	res := r.run(t)
 	posted := r.Rep.all()
-	if res.Exit != want.Exit || res.Summary.Result != want.Summary.Result || len(posted) != 1 || posted[0].State != wantPosted[0].State ||
-		posted[0].Revision != wantPosted[0].Revision || len(posted[0].Description) != len(wantPosted[0].Description) || len(res.Summary.Jobs) != len(want.Summary.Jobs) || len(res.Summary.Notes) != len(want.Summary.Notes) {
+	if res.Exit != want.Exit || res.Summary.Result != want.Summary.Result || len(posted) != 1 {
 		t.Fatalf("idle slots changed the run:\n got %+v %+v\nwant %+v %+v", res.Summary, posted, want.Summary, wantPosted)
+	}
+	// the evidence digest in the description differs per run (run id, times); everything else must match
+	if g, w := stripDigest(posted[0].Description), stripDigest(wantPosted[0].Description); g != w || posted[0].State != wantPosted[0].State || posted[0].Revision != wantPosted[0].Revision || posted[0].TargetURL != wantPosted[0].TargetURL {
+		t.Fatalf("idle slots changed the status: %+v vs %+v", posted[0], wantPosted[0])
+	}
+	if !reflect.DeepEqual(res.Summary.Notes, want.Summary.Notes) || len(res.Summary.Jobs) != len(want.Summary.Jobs) {
+		t.Fatalf("idle slots changed notes or jobs: %v vs %v", res.Summary.Notes, want.Summary.Notes)
+	}
+	for i, j := range res.Summary.Jobs {
+		if w := want.Summary.Jobs[i]; j.ID != w.ID || j.State != w.State || j.Reason != w.Reason || j.ExitCode != w.ExitCode {
+			t.Fatalf("job %d changed: %+v vs %+v", i, j, w)
+		}
 	}
 	if got := l.joined(); got != "offload:0123456,race,gate,detail,notify" {
 		t.Fatalf("call order = %s", got)
 	}
-	if len(l.detail) != 1 || l.detail[0].RunID != res.RunID || l.detail[0].Status.State != report.Success || len(l.detail[0].Run.Evidence.Checks) == 0 || l.detail[0].Revision != testSHA {
+	if len(l.detail) != 1 || l.detail[0].RunID != res.RunID || l.detail[0].Status.State != report.Success || len(l.detail[0].Evidence.Checks) == 0 || l.detail[0].Revision != testSHA {
 		t.Fatalf("detail request: %+v", l.detail)
+	}
+	if got := l.detail[0].Evidence.Runner.ID; got == "" || got == "local" {
+		t.Fatalf("detail evidence must be the published one (runner id pseudonymised), got runner id %q", got)
 	}
 	if len(l.notify) != 1 || l.notify[0].Run.Result != "pass" || !strings.Contains(l.notify[0].Status, "status posted") {
 		t.Fatalf("notify request: %+v", l.notify)
@@ -243,5 +259,53 @@ func TestOffloadAndNotifyFailures(t *testing.T) {
 		if res.Exit != 0 || !found || len(r.Rep.all()) != 1 {
 			t.Errorf("%s: a notify failure must be a note only: exit %d notes %v", name, res.Exit, res.Summary.Notes)
 		}
+	}
+}
+
+func stripDigest(d string) string {
+	if i := strings.Index(d, " (evidence "); i >= 0 {
+		return d[:i]
+	}
+	return d
+}
+
+// A snapshot revision from the offload hook never hides a config outside the tree, and
+// Options.Record is a plain flag that defaults to a dev run.
+func TestOffloadKeepsConfigOutsideDirty(t *testing.T) {
+	if (Options{}).Record {
+		t.Fatal("a bare run is not a run of record")
+	}
+	r := passRig(t)
+	r.C.ConfigOutside = true
+	r.C.Opts.Record = true
+	r.C.Hooks.Auto.Offload = fakeOffload{l: &slotLog{}, res: OffloadResult{Rev: Revision{SHA: strings.Repeat("cd", 20)}}}
+	res := r.run(t)
+	if len(r.Rep.all()) != 0 || !strings.Contains(res.Summary.Status, "not posted") {
+		t.Fatalf("config outside the tree must keep the run unbound: %q %+v", res.Summary.Status, r.Rep.all())
+	}
+}
+
+type captureResolver struct{ got *PolicyRequest }
+
+func (c captureResolver) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult, error) {
+	*c.got = r
+	return defaultResolver{}.Resolve(ctx, r)
+}
+
+// PolicyRequest.Run carries Options.PolicyRun to the resolver; a bare run sends none.
+func TestPolicyRequestCarriesRunValues(t *testing.T) {
+	var got PolicyRequest
+	r := passRig(t)
+	r.C.Hooks.Policy = captureResolver{&got}
+	r.run(t)
+	if got.Run != nil {
+		t.Fatalf("a bare run sends no per-run values: %v", got.Run)
+	}
+	r = passRig(t)
+	r.C.Hooks.Policy = captureResolver{&got}
+	r.C.Opts.PolicyRun = RunValues{"sched.where": json.RawMessage(`"all"`)}
+	r.run(t)
+	if string(got.Run["sched.where"]) != `"all"` {
+		t.Fatalf("per-run values must reach the resolver: %v", got.Run)
 	}
 }

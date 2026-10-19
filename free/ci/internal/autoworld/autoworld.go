@@ -79,7 +79,7 @@ func contribute(ctx context.Context, w *sched.World) error {
 	providers.RUnlock()
 	merged := map[string][]model.PlacementReasonDetail{}
 	for i, fn := range fns {
-		got, err := fn(ctx, *w)
+		got, err := callProvider(ctx, fn, *w)
 		if err != nil {
 			return fmt.Errorf("exclusion provider %s: %w", names[i], err)
 		}
@@ -101,4 +101,14 @@ func contribute(ctx context.Context, w *sched.World) error {
 		w.Exclusions = merged
 	}
 	return nil
+}
+
+// callProvider turns a provider panic into an error so one bad provider fails the world build, not the process.
+func callProvider(ctx context.Context, fn ExclusionFn, w sched.World) (got map[string][]model.PlacementReasonDetail, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panicked: %v", r)
+		}
+	}()
+	return fn(ctx, w)
 }

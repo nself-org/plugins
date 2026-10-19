@@ -106,7 +106,7 @@ func (c *Coordinator) policy(ctx context.Context, h Hooks) (PolicyResult, error)
 	if h.Policy != nil {
 		r = h.Policy
 	}
-	return r.Resolve(ctx, PolicyRequest{Root: c.Opts.Root, Pipeline: c.Plan.Pipeline.Name})
+	return r.Resolve(ctx, PolicyRequest{Root: c.Opts.Root, Pipeline: c.Plan.Pipeline.Name, Run: c.Opts.PolicyRun})
 }
 
 func (c *Coordinator) storePath() string {
@@ -172,6 +172,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 		return Result{}, err
 	}
 	defer release()
+	rev.Dirty = rev.Dirty || c.ConfigOutside // a snapshot revision never hides a config that lives outside the tree
 	source, err := c.classify(ctx, h, rev)
 	if err != nil {
 		return Result{}, err

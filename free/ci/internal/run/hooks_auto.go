@@ -34,13 +34,15 @@ type PublishGate interface {
 	Gate(ctx context.Context, r PublishRequest, s report.Status) error
 }
 
-// PublishDetailRequest is what a detail publisher receives next to the status:
-// the run id, the gate table (Run.Evidence.Checks) and the failing diagnostics
-// (Run.Jobs and the checks' diagnostics).
+// PublishDetailRequest is what a detail publisher receives next to the status: the
+// run id, the gate table (Evidence.Checks) and the failing diagnostics (the checks'
+// Diagnostics). Evidence is the PUBLISHED document, with the publication profile of
+// the repository applied (TRUST-11), exactly as for the status; the unpublished
+// evidence and job tails never reach this slot.
 type PublishDetailRequest struct {
 	Owner, Repo, RunID, Revision string
 	Status                       report.Status
-	Run                          RunInfo
+	Evidence                     model.Evidence
 	Projection                   model.ProjectionResult
 }
 
@@ -88,7 +90,9 @@ type NotifyRequest struct {
 	Notes  []string
 }
 
-// NotifyHook is called once per run after the AfterRun hooks and finalizers.
+// NotifyHook is called once per finished run (one that was persisted and concluded)
+// after the AfterRun hooks and finalizers. Runs refused before that point, such as an
+// offload refusal, return an error to the caller and notify nothing. Notes is a copy.
 type NotifyHook interface {
 	Notify(ctx context.Context, r NotifyRequest) error
 }
@@ -179,8 +183,18 @@ func publishGates(ctx context.Context, h Hooks, r PublishRequest, s report.Statu
 	return nil
 }
 
-// publishDetails calls every detail publisher after a status was delivered.
-func publishDetails(ctx context.Context, h Hooks, req PublishDetailRequest) []string {
+// publishDetails calls every detail publisher after a status was delivered, with
+// the evidence the publication profile leaves.
+func publishDetails(ctx context.Context, h Hooks, r PublishRequest, s report.Status) []string {
+	if len(h.Auto.Details) == 0 {
+		return nil
+	}
+	published, _, _ := publication(r)
+	proj := r.Projection
+	if len(published.Checks) > 0 {
+		proj = model.Projection(published)
+	}
+	req := PublishDetailRequest{Owner: r.Owner, Repo: r.Repo, RunID: r.Run.RunID, Revision: r.Run.Revision, Status: s, Evidence: published, Projection: proj}
 	var notes []string
 	for _, d := range h.Auto.Details {
 		if err := guard("publish detail", func() error { return d.Detail(ctx, req) }); err != nil {

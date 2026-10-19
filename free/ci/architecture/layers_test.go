@@ -25,6 +25,17 @@ const module = "github.com/nself-org/plugins/free/ci/"
 // (internal/providers/rest). os/exec is already banned for every package.
 var autoNoDirectIO = map[string]bool{"internal/claims": true, "internal/watch": true, "internal/hostedtier": true, "internal/fleet": true, "internal/providers/github/checks": true}
 
+// isNetworkImport is true for the standard-library packages that open connections;
+// pure helpers such as net/url and net/netip stay allowed.
+func isNetworkImport(imported string) bool {
+	for _, p := range []string{"net", "net/http", "net/rpc", "net/smtp", "net/textproto", "crypto/tls"} {
+		if imported == p || strings.HasPrefix(imported, p+"/") && p != "net" {
+			return true
+		}
+	}
+	return false
+}
+
 // autoRows lists every package the AUTO Epic creates with the layer kind its row must have.
 var autoRows = map[string]string{
 	"internal/pools": "domain", "internal/pools/record": "domain", "internal/nodes/inventory": "domain", "internal/autoworld": "domain",
@@ -91,7 +102,7 @@ func checkImport(m layerMap, pkg, file, imported string) error {
 	if (imported == "database/sql" || imported == "modernc.org/sqlite") && pkg != "internal/store" {
 		return fmt.Errorf("%s imports SQL outside store", pkg)
 	}
-	if autoNoDirectIO[pkg] && (imported == "net" || strings.HasPrefix(imported, "net/")) {
+	if autoNoDirectIO[pkg] && isNetworkImport(imported) {
 		return fmt.Errorf("%s imports %s: network access goes through its funnel (reporter, provider, remote or REST)", pkg, imported)
 	}
 	if (kind == "pure" || kind == "kernel") && (imported == "os" || imported == "net" || strings.HasPrefix(imported, "net/")) {
@@ -138,6 +149,12 @@ func checkImport(m layerMap, pkg, file, imported string) error {
 	}
 	if pkg == "internal/claims" && (local == "internal/transport" || strings.HasPrefix(local, "internal/transport/") || strings.HasPrefix(local, "internal/providers/")) {
 		return fmt.Errorf("claims imports %s: statuses go through the report.Reporter interface only", local)
+	}
+	if pkg == "internal/fleet" && (local == "internal/exec" || strings.HasPrefix(local, "internal/providers/")) {
+		return fmt.Errorf("fleet imports %s: remote work goes through the remote funnel (internal/transport) only", local)
+	}
+	if pkg == "internal/providers/github/checks" && (local == "internal/exec" || local == "internal/transport" || strings.HasPrefix(local, "internal/transport/")) {
+		return fmt.Errorf("checks imports %s: HTTP goes through the REST funnel (internal/providers/rest) only", local)
 	}
 	if pkg == "internal/store" && strings.HasPrefix(local, "internal/providers") {
 		return fmt.Errorf("store imports providers")
@@ -258,6 +275,9 @@ func TestAutoRows(t *testing.T) {
 		plant := []string{"os/exec", "database/sql", module + "cmd"}
 		if autoNoDirectIO[pkg] {
 			plant = append(plant, "net/http", "net")
+			if checkImport(m, pkg, "ok.go", "net/url") != nil {
+				t.Errorf("%s: net/url is a pure helper and must stay allowed", pkg)
+			}
 		}
 		if want == "pure" {
 			plant = append(plant, "os", "net/http")
@@ -270,6 +290,8 @@ func TestAutoRows(t *testing.T) {
 	}
 	for _, c := range []struct{ pkg, imp string }{
 		{"internal/claims", module + "internal/transport/ssh"}, {"internal/claims", module + "internal/providers/rest"},
+		{"internal/fleet", module + "internal/exec"}, {"internal/fleet", module + "internal/providers/rest"},
+		{"internal/providers/github/checks", module + "internal/exec"}, {"internal/providers/github/checks", module + "internal/transport/ssh"},
 	} {
 		if checkImport(m, c.pkg, "planted.go", c.imp) == nil {
 			t.Errorf("planted import %s in %s was accepted", c.imp, c.pkg)

@@ -96,3 +96,13 @@ func TestContributeFailsClosed(t *testing.T) {
 		t.Fatalf("a code outside the closed set must be refused: %v", err)
 	}
 }
+
+func TestContributeSurvivesProviderPanic(t *testing.T) {
+	reset(t)
+	_ = RegisterExclusion("boom", func(context.Context, sched.World) (map[string][]model.PlacementReasonDetail, error) {
+		panic("nil pool table")
+	})
+	if err := contribute(context.Background(), &sched.World{}); err == nil || !strings.Contains(err.Error(), "boom") || !strings.Contains(err.Error(), "panicked") {
+		t.Fatalf("a provider panic must become an error naming the provider: %v", err)
+	}
+}

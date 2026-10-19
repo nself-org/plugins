@@ -107,3 +107,21 @@ func TestBiasComponent(t *testing.T) {
 		t.Fatalf("the unbiased runner must win: %+v", got.Placements)
 	}
 }
+
+// Pipeline.Record and Job.QueuedMs appear in JSON only when set, so existing digests do not move.
+func TestRecordAndQueuedFieldsAreAdditive(t *testing.T) {
+	j := fixtureJob("job")
+	j.Pipeline.Record, j.QueuedMs = true, 1500
+	raw, _ := json.Marshal(j)
+	if !strings.Contains(string(raw), `"Record":true`) || !strings.Contains(string(raw), `"QueuedMs":1500`) {
+		t.Fatalf("set fields must serialise: %s", raw)
+	}
+	plain, _ := json.Marshal(fixtureJob("job"))
+	if strings.Contains(string(plain), "Record") || strings.Contains(string(plain), "QueuedMs") {
+		t.Fatalf("unset fields must not appear: %s", plain)
+	}
+	w := fixtureWorld(fixtureRunner("a", "lan"))
+	if a, b := Place(w, []Job{fixtureJob("job")}), Place(w, []Job{j}); a.Placements[0] != b.Placements[0] {
+		t.Fatal("Record and QueuedMs alone must not change a placement")
+	}
+}
