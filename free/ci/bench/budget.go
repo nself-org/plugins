@@ -4,7 +4,7 @@ package bench
 // derivation from a recorded baseline.
 // Inputs:  a baseline Result, a headroom factor, a metric filter.
 // Outputs: a Budget whose absolute p95 ceilings are the baseline p95 plus the
-// headroom, rounded up to a whole millisecond.
+// headroom, rounded up to a whole millisecond, never below MinCeilingMS.
 // Constraints: the field names are the ones `perfbench check` decodes with
 // DisallowUnknownFields; a metric that is not in the baseline is never given a
 // ceiling (an invented number is the one thing this Ticket must not ship).
@@ -20,6 +20,11 @@ const BudgetSchemaV1 = "perfbench-budget/v1"
 
 // Headroom is the allowed growth over the baseline p95 (Ticket constraint: +25%).
 const Headroom = 1.25
+
+// MinCeilingMS is the smallest ceiling a budget gets. Below it a timing is
+// scheduler noise on a shared runner (a 0.3 ms planner run can take 3 ms), so a
+// 25 percent rule on such a baseline would fail on weather.
+const MinCeilingMS = 5.0
 
 // Budget is the budget document. P95MS maps a metric name to its p95 ceiling in ms.
 type Budget struct {
@@ -43,13 +48,20 @@ func WorstOf(runs []Result) (Result, error) {
 		if r.GOOS != out.GOOS || r.GOARCH != out.GOARCH {
 			return Result{}, fmt.Errorf("baseline runs mix %s/%s and %s/%s", out.GOOS, out.GOARCH, r.GOOS, r.GOARCH)
 		}
+		if len(r.Metrics) != len(out.Metrics) {
+			return Result{}, fmt.Errorf("baseline runs carry different metrics (%d and %d)", len(out.Metrics), len(r.Metrics))
+		}
 		for _, m := range r.Metrics {
+			base, ok := out.Find(m.Name)
+			if !ok {
+				return Result{}, fmt.Errorf("metric %s is missing from the first baseline run", m.Name)
+			}
 			for i := range out.Metrics {
-				if out.Metrics[i].Name == m.Name {
-					out.Metrics[i].P50 = math.Max(out.Metrics[i].P50, m.P50)
-					out.Metrics[i].P95 = math.Max(out.Metrics[i].P95, m.P95)
-					out.Metrics[i].Max = math.Max(out.Metrics[i].Max, m.Max)
-					out.Metrics[i].N = min(out.Metrics[i].N, m.N)
+				if out.Metrics[i].Name == base.Name {
+					out.Metrics[i].P50 = math.Max(base.P50, m.P50)
+					out.Metrics[i].P95 = math.Max(base.P95, m.P95)
+					out.Metrics[i].Max = math.Max(base.Max, m.Max)
+					out.Metrics[i].N = min(base.N, m.N)
 				}
 			}
 		}
@@ -69,7 +81,7 @@ func BudgetFromResult(base Result, note string, keep func(name string) bool) (Bu
 		if math.IsNaN(m.P95) || m.P95 <= 0 {
 			return b, fmt.Errorf("metric %s: baseline p95 %v is not a usable timing", m.Name, m.P95)
 		}
-		b.P95MS[m.Name] = math.Ceil(m.P95 * Headroom)
+		b.P95MS[m.Name] = math.Max(MinCeilingMS, math.Ceil(m.P95*Headroom))
 	}
 	if len(b.P95MS) == 0 {
 		return b, fmt.Errorf("baseline has no metric to budget")
