@@ -73,7 +73,7 @@ func (s *Store) Lookup(ctx context.Context, ns authz.Namespace, key string, acce
 	}
 	i := slices.IndexFunc(list, func(m Manifest) bool { return bytes.Equal(m.Namespace, ns.Canonical()) })
 	if i < 0 { // the key exists, but only under other namespaces: a miss, never a fallback
-		return Manifest{}, false, s.be.AppendAudit(ctx, "cache", "cache.lookup.namespace_mismatch", key, "")
+		return Manifest{}, false, s.be.CacheAuditOnce(ctx, "cache.lookup.namespace_mismatch", key, "")
 	}
 	m := list[i]
 	if access == authz.ModeROSnapshot && !s.snapshotOK(m) {
@@ -102,19 +102,29 @@ func (s *Store) snapshotOK(m Manifest) bool {
 // VerifyReport counts a Verify pass.
 type VerifyReport struct{ Checked, Dropped int }
 
-// Verify re-hashes every entry and drops the unusable ones.
+// Verify re-hashes every entry and drops the unusable ones. It reads one key at a
+// time, so memory holds the key list and one key's entries, never every blob list.
 func (s *Store) Verify(ctx context.Context) (VerifyReport, error) {
 	var r VerifyReport
-	list, err := s.be.CacheEntries(ctx, "")
-	for _, m := range list {
+	keys, err := s.be.CacheKeys(ctx)
+	for _, key := range keys {
 		if err != nil {
 			break
 		}
-		r.Checked++
-		var reason string
-		if reason, err = s.intact(m); err == nil && reason != "" && reason != "unstable" {
-			r.Dropped++
-			err = s.be.CacheDrop(ctx, m, reason)
+		var list []Manifest
+		if list, err = s.be.CacheEntries(ctx, key); err != nil {
+			break
+		}
+		for _, m := range list {
+			r.Checked++
+			var reason string
+			if reason, err = s.intact(m); err == nil && reason != "" && reason != "unstable" {
+				r.Dropped++
+				err = s.be.CacheDrop(ctx, m, reason)
+			}
+			if err != nil {
+				break
+			}
 		}
 	}
 	return r, err

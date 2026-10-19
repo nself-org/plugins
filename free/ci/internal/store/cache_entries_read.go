@@ -63,6 +63,31 @@ func (s *Store) CacheEntries(ctx context.Context, key string) ([]entries.Manifes
 	return out, err
 }
 
+// CacheBlobRefs calls each once per distinct (namespace, sha256) any entry
+// references, from one statement, without building entries.
+func (s *Store) CacheBlobRefs(ctx context.Context, each func(ns []byte, sha string) error) error {
+	return cacheScan(ctx, s.readers, "SELECT DISTINCT namespace,sha256 FROM cache_entry_blob", nil, func(r *sql.Rows) error {
+		var ns []byte
+		var sha string
+		if err := r.Scan(&ns, &sha); err != nil {
+			return err
+		}
+		return each(ns, sha)
+	})
+}
+
+// CacheKeys lists the distinct keys of all entries, in key order.
+func (s *Store) CacheKeys(ctx context.Context) ([]string, error) {
+	var out []string
+	err := cacheScan(ctx, s.readers, "SELECT DISTINCT cache_key FROM cache_entry ORDER BY cache_key", nil, func(r *sql.Rows) error {
+		var k string
+		err := r.Scan(&k)
+		out = append(out, k)
+		return err
+	})
+	return out, err
+}
+
 // CacheTouch marks an entry used.
 func (s *Store) CacheTouch(ctx context.Context, ns []byte, key string) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
@@ -93,7 +118,7 @@ func (s *Store) CachePrune(ctx context.Context, p entries.PruneStep) (entries.Pr
 		out = entries.Pruned{}
 		now := s.now()
 		old, cutoff := now.Add(-p.Retention).UnixNano(), now.Add(-p.MaxAge).UnixNano()
-		if err := execAll(ctx, tx, []any{"DELETE FROM cache_use WHERE ts<?", old}, []any{"DELETE FROM cache_attempt WHERE recorded_at<? AND NOT EXISTS (SELECT 1 FROM attempt a WHERE a.id=cache_attempt.attempt_id AND a.state IN ('running','finalizing'))", old}); err != nil {
+		if err := execAll(ctx, tx, []any{"DELETE FROM cache_use WHERE ts<?", old}, []any{"DELETE FROM cache_audit_seen WHERE ts<?", old}, []any{"DELETE FROM cache_attempt WHERE recorded_at<? AND NOT EXISTS (SELECT 1 FROM attempt a WHERE a.id=cache_attempt.attempt_id AND a.state IN ('running','finalizing'))", old}); err != nil {
 			return err
 		}
 		type row struct {

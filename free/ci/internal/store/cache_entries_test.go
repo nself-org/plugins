@@ -396,8 +396,8 @@ func TestCacheEntriesPlanMustMatchThePipeline(t *testing.T) {
 			t.Errorf("%s: %s", name, got)
 		}
 	}
-	if cacheAuditCount(t, s, "cache.plan.refused", "m", "reason=namespace") != 2 {
-		t.Fatal("each refused plan needs an audit row")
+	if cacheAuditCount(t, s, "cache.plan.refused", "m", "reason=namespace") != 1 {
+		t.Fatal("refused plans of one attempt and reason share one audit row")
 	}
 }
 
