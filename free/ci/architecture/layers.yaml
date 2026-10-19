@@ -13,6 +13,7 @@ layers:
     - internal/affected
     - internal/trust
     - internal/trust/source
+    - internal/tiers
     - internal/invariants
   execution:
     - internal/exec
@@ -143,6 +144,25 @@ layers:
     - internal/triggers/schedule
     - internal/detach
     - internal/stats
+    - internal/pools
+    - internal/pools/record
+    - internal/nodes/inventory
+    - internal/autoworld
+    - internal/claims
+    - internal/watch
+    - internal/hostedtier
+    - internal/readiness
+    - internal/readiness/sample
+    - internal/offload
+    - internal/race
+    - internal/notify
+    - internal/svc
+    - internal/selftest
+    - internal/demand
+    - internal/fleet
+    - internal/where
+    - internal/evidence/projection
+    - internal/providers/github/checks
   composition:
     - cmd
     - cmd/agent

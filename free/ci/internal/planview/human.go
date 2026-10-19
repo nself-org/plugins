@@ -78,8 +78,8 @@ func alternativeCodes(alts []model.Alternative, n int) []string {
 	return codes
 }
 
-// componentOrder is the scoring order of Epic SCHED D4.
-var componentOrder = []string{"wait", "runtime", "cold_start", "transfer", "cache", "contention", "cost", "scarcity", "reliability"}
+// componentOrder is the scoring order of Epic SCHED D4; tier_rank (P7-AUTO-27) is last and present only when a Bias is set.
+var componentOrder = []string{"wait", "runtime", "cold_start", "transfer", "cache", "contention", "cost", "scarcity", "reliability", "tier_rank"}
 
 func componentText(c map[string]model.Component) string {
 	parts := make([]string, 0, len(componentOrder))

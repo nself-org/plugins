@@ -181,6 +181,7 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 	if r.Ephemeral && r.Used {
 		add(model.EphemeralUsed, "one job per runner")
 	}
+	out = append(out, w.Exclusions[r.ID]...)
 	return out
 }
 func hasInt(values []int, want int) bool {

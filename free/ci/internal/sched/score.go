@@ -77,5 +77,9 @@ func score(w World, j Job, r Runner) (int64, map[string]model.Component) {
 		total, _ = Add(total, term)
 	}
 	total, _ = Add(total, p.ClassBiasMs[classIndex(r.Class)])
+	if bias := w.Bias[r.ID]; bias != 0 { // absent for every runner unless a contributor set it: goldens keep nine components
+		comps["tier_rank"] = component(bias, 1000, "estimated")
+		total, _ = Add(total, bias)
+	}
 	return total, comps
 }

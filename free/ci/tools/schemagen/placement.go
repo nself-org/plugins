@@ -110,7 +110,7 @@ func decoratePlacement(s *jsonschema.Schema) {
 		v := m.AdditionalProperties
 		nonNegative(v.Properties["weight_permille"])
 		v.Properties["confidence"] = conf("known", "estimated", "unknown")
-		m.PropertyNames = &jsonschema.Schema{Enum: []any{"wait", "runtime", "cold_start", "transfer", "cache", "contention", "cost", "scarcity", "reliability"}}
+		m.PropertyNames = &jsonschema.Schema{Enum: []any{"wait", "runtime", "cold_start", "transfer", "cache", "contention", "cost", "scarcity", "reliability", "tier_rank"}}
 	}
 	if pl := job.Properties["placement"]; pl != nil {
 		pl.Properties["location"].Enum = []any{"local", "lan", "remote", "hosted"}
