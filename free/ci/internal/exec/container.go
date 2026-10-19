@@ -37,7 +37,9 @@ func containerWorkdir(s JobSpec) (string, error) {
 	return "/repo/" + filepath.ToSlash(rel), nil
 }
 
-func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string, env []string) (int, error) {
+// runContainer runs the baseline container. secretEnv (NAME=value) never reaches the env file or argv:
+// the argv carries `-e NAME` and the value sits in the docker CLI's own environment.
+func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string, env, secretEnv []string) (int, error) {
 	if s.Job.Container == nil || !imageRef.MatchString(s.Job.Container.Image) || strings.Contains(s.Job.Container.Image, "..") {
 		return -1, coded("E613", "invalid container image")
 	}
@@ -66,10 +68,16 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 	args = append(args, "--read-only", "--tmpfs=/tmp:size=256m", "--cpus="+strconv.FormatFloat(s.CPU, 'f', -1, 64), "--memory="+strconv.Itoa(s.MemoryMB)+"m", "--memory-swap="+strconv.Itoa(s.MemoryMB)+"m")
 	args = append(args, mountArgs(s.Mounts)...)
 	args = append(args, "--mount", "type=bind,src="+workspace+",dst=/repo", "--workdir="+workdir, "--env-file", envFile)
+	cliEnv := dockerHostEnv()
+	for _, kv := range secretEnv {
+		name, _, _ := strings.Cut(kv, "=")
+		args = append(args, "-e", name)
+		cliEnv = append(cliEnv, kv)
+	}
 	args = append(args, s.Job.Container.Image)
 	args = append(args, s.Command...)
 	stop := containerStopper("docker", name, e.Grace)
-	code, err := e.runCommand(ctx, append([]string{"docker"}, args...), workspace, dockerHostEnv(), s.Output, stop, nil, "")
+	code, err := e.runCommand(ctx, append([]string{"docker"}, args...), workspace, cliEnv, s.Output, stop, nil, "")
 	if err != nil {
 		stop()
 		return code, fmt.Errorf("%w: %v", coded("E613", "docker run"), err)

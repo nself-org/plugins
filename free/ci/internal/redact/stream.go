@@ -46,6 +46,9 @@ type Filter struct {
 // NewFilter starts a stream. Values registered later apply to bytes not yet released.
 func (r *Redactor) NewFilter() *Filter { return &Filter{r: r, mask: -1} }
 
+// Reads reports whether this stream masks with the given registry (P7-TRUST-02 checks it before it resolves).
+func (f *Filter) Reads(r *Redactor) bool { return f.r == r }
+
 // Redact masks one chunk and returns the bytes that are safe to release now.
 func (f *Filter) Redact(p []byte) []byte { return f.process(p, false) }
 

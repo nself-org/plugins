@@ -65,3 +65,30 @@ To enable `userns` on user-mode Linux, install `uidmap` (for `newuidmap`), give 
 - A job user's `cron` and `at` entries, SysV IPC objects and home directory are not cleaned by hygiene. `nself ci nodes add --system` is where those belong.
 - The agent cannot kill or remove files that a job user owns. A separated node passes hygiene a `JobRunner`, which its job shim implements, and the kill and the removal then run as the job user. Without one, cleanup reports `E681` and the node drains rather than claiming success.
 - Between a check and the action it guards (the process group kill, a volume removal, the mount snapshot) there is a few-millisecond window. Closing it needs a PID namespace or cgroup per job.
+
+## Secrets
+
+A job asks for secrets by reference, never by value: `secrets: [project/NPM_TOKEN, release/ANDROID_KEYSTORE_PASSWORD, environment/staging/API_KEY, deploy/prod/DEPLOY_KEY, team/SHARED_TOKEN]`. The part after the last slash is the environment variable the job sees, and two refs may not use the same variable (`E674`). Names that would change how a process or the docker client runs (`PATH`, `HOME`, `DOCKER_*`, `LD_*`, `DYLD_*`, `GIT_*`, `NSELF_CI_*` and similar) are refused too.
+
+| Class | Store file (`.secrets/`) | Who may get it |
+|---|---|---|
+| `project` | `ci.age` | trusted jobs on an eligible runner |
+| `environment/<env>` | `ci-<env>.age` | trusted jobs on an eligible runner |
+| `release` | `release.age` | `internal` or `owner` jobs on a dedicated-trusted node or a VM |
+| `deploy/<env>` | `<env>.age` | same as `release` |
+| `team` | the node's own team store | trusted jobs on an eligible runner; node-local, never granted with `nodes secrets grant` |
+
+How it works:
+
+- Refs are checked first: trust class of the job, the runner's facts, the runner's declared secret classes and the policy's `trust.secrets` allowlist. A refusal (`E677`) names the reasons and makes no resolver call. Untrusted jobs never get a secret.
+- Values come from one place: `nself config secrets resolve`, run on the node that executes the job. A TEAM coordinator passes references only and never holds a value. Only a PERSONAL coordinator over the SSH carrier to your own node may send a `project` or `environment` value.
+- On an agent node the resolver runs with `SECRETS_AGE_KEY_PATH` set to that node's own age identity, so the node decrypts only the files you granted to it: `nself ci nodes secrets grant <node> --class project` (also `environment/<env>`, `release`, `deploy/<env>`). `release` and `deploy` files go only to a dedicated-trusted node. A node whose registry entry has `secrets_eligible: false` (jobs could read its age key) is refused with `E677`. `revoke` always works; it does not unsee plaintext the node already read, so rotate the value afterwards.
+- Delivery is by environment only: the process environment, `docker run -e NAME` with the value in the docker CLI's own environment (never in argv), or `export` lines on the SSH stdin of a Tart VM. No file, URL, cache key, artifact or log ever holds a value.
+- Every value is registered with the output redactor before the job starts. If the installed redactor is the pass-through default, or a value cannot be registered (shorter than 6 bytes), nothing is injected and the attempt fails (`E676`) before it starts. Buffers are zeroed when the attempt ends, whether it passed, failed, was cancelled or lost.
+- No `nself config secrets resolve` in the installed CLI: the job fails before it starts with `E675`.
+
+Limits: only the byte buffers the Source owns are zeroed. Copies in Go strings (the job environment slice handed to the process, the redaction registry, the legacy-environment read) stay in the nself-ci process until it exits, and a failed availability probe is remembered until it restarts. Values live in process memory and the job's environment for the attempt. For container jobs dockerd also keeps `-e` values in the container configuration until the container is removed (`--rm` and the hygiene sweep remove it). `/proc/<pid>/environ` is readable only by that attempt's own job user.
+
+Android release builds: until `release.age` holds the keystore secrets, `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` in your own environment still work, on your own machine only. One audit row (`secret.legacy_env`, value-free) is written first; if it cannot be written the legacy value is not used. The `legacy-env` label is kept on the Source and is not yet copied into run evidence. A remote node never uses this path.
+
+A node granted a `release` or `deploy` file must be dedicated-trusted (operator-owned, assigned trust, accepts only `owner`, one authorized project); `nodes secrets grant` does not yet check that the project is the one the file belongs to, so grant these files only to a node dedicated to that project. Multi-line values (PEM keys) need the baseline container path today; the hardened path refuses them.

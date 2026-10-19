@@ -41,6 +41,9 @@ type JobSpec struct {
 	// Env, when an Isolator sets it, replaces the executor's EnvPolicy for this job (ad-hoc jobs
 	// get a minimal environment, P7-CI-52); job-declared env and secrets are still added after it.
 	Env EnvPolicy
+	// Secrets, when set, resolves this attempt's references instead of Executor.Secrets (P7-TRUST-02:
+	// the source is built per attempt, so it knows the attempt, its trust facts and its node).
+	Secrets SecretSource
 }
 
 // AttemptResult is the local outcome before durable store finalization.
@@ -189,7 +192,11 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		result.Err = err
 		return
 	}
-	secrets, err := e.Secrets.Resolve(ctx, s.Job.Secrets)
+	source := e.Secrets
+	if s.Secrets != nil {
+		source = s.Secrets
+	}
+	secrets, err := source.Resolve(ctx, s.Job.Secrets)
 	if err != nil {
 		result.Err = err
 		return
@@ -201,19 +208,20 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		}
 		env = append(env, k+"="+v)
 	}
+	var secretEnv []string // secret values travel apart from the env file (P7-TRUST-02: no secret on disk)
 	for k, v := range secrets {
 		if !safeID.MatchString(k) || strings.Contains(k, ".") {
 			result.Err = coded("E612", "invalid secret key")
 			return
 		}
-		env = append(env, k+"="+v)
+		secretEnv = append(secretEnv, k+"="+v)
 	}
 	if s.Plan != nil {
-		result.ExitCode, result.Reason, result.Err = e.runPlanned(ctx, s, workspace, env)
+		result.ExitCode, result.Reason, result.Err = e.runPlanned(ctx, s, workspace, append(env, secretEnv...))
 	} else if s.Job.Isolation == "container" {
-		result.ExitCode, result.Err = e.runContainer(ctx, s, workspace, env)
+		result.ExitCode, result.Err = e.runContainer(ctx, s, workspace, env, secretEnv)
 	} else {
-		result.ExitCode, result.Err = e.runProcess(ctx, s, workspace, env)
+		result.ExitCode, result.Err = e.runProcess(ctx, s, workspace, append(env, secretEnv...))
 	}
 	if s.AfterJob != nil && result.Err == nil && result.ExitCode == 0 && ctx.Err() == nil {
 		result.Err = s.AfterJob(ctx, pinned)

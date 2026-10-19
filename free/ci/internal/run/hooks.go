@@ -39,7 +39,8 @@ type AttemptInfo struct {
 	// Container is the run's --container option: every job runs in the toolchain
 	// container although Job still names no container (prepare applies it after
 	// the cache hook). The cache hook plans container-level mounts for it.
-	Container bool
+	Container   bool
+	SecretsInfo // project root and effective secrets allowlist (P7-TRUST-02)
 }
 
 // Outcome is how an attempt ended.
@@ -102,9 +103,6 @@ type PolicyRequest struct {
 	Root, Pipeline string
 	Config         map[string]any
 }
-
-// PolicyResult carries the digest stored on the pipeline row and in evidence.
-type PolicyResult struct{ Digest string }
 
 // PolicyResolver resolves the effective policy (P7-TRUST-27 registers it).
 type PolicyResolver interface {
@@ -202,7 +200,8 @@ type Hooks struct {
 	Image         ContainerImageHook
 	Publisher     Publisher
 	Isolation     ciexec.Isolator
-	NewRedactor   func() ciexec.Redactor // fresh per-attempt state; every output chunk passes it (P7-TRUST-19)
+	NewRedactor   func() ciexec.Redactor                                        // fresh per-attempt state; every output chunk passes it (P7-TRUST-19)
+	NewSecrets    func(AttemptInfo, func() ciexec.Redactor) ciexec.SecretSource // per-attempt secret source (P7-TRUST-02); nil = Registered's
 	Evidence      EvidenceBuilder
 	Logs          LogHook // stores each attempt's redacted output (P7-CI-39)
 	AttemptStarts []AttemptStartHook
