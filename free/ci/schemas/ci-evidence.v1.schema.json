@@ -375,6 +375,41 @@
               "null",
               "string"
             ]
+          },
+          "exit": {
+            "type": [
+              "null",
+              "integer"
+            ]
+          },
+          "diagnosis": {
+            "type": "string"
+          },
+          "remediation": {
+            "type": "string"
+          },
+          "flaky": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "passes": {
+                "type": "integer"
+              },
+              "fails": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "source",
+              "passes",
+              "fails"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [

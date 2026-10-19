@@ -68,8 +68,8 @@ func (rs *runState) settle(id string, from, to model.JobState, class model.Failu
 	return to, err
 }
 
-func (rs *runState) info(pj plan.PlannedJob, job model.Job, attemptID string) AttemptInfo {
-	return AttemptInfo{RunID: rs.sess.RunID, JobID: rs.rows[pj.ID], JobName: pj.ID, AttemptID: attemptID, Revision: rs.rev.SHA, N: 1,
+func (rs *runState) info(pj plan.PlannedJob, job model.Job, attemptID string, n int) AttemptInfo {
+	return AttemptInfo{RunID: rs.sess.RunID, JobID: rs.rows[pj.ID], JobName: pj.ID, AttemptID: attemptID, Revision: rs.rev.SHA, N: n,
 		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home}
 }
 
@@ -87,7 +87,8 @@ func (rs *runState) stopped(o JobOutcome, id string) JobOutcome {
 	return cancelled(o, "", "cancelled by the operator")
 }
 
-func (rs *runState) runAttempt(ctx context.Context, i int, pj plan.PlannedJob, o JobOutcome) JobOutcome {
+// runAttemptN creates, admits and runs attempt n of one job (retry.go decides whether there is a next).
+func (rs *runState) runAttemptN(ctx context.Context, i int, pj plan.PlannedJob, o JobOutcome, n int) JobOutcome {
 	jctx, stop := context.WithCancel(ctx)
 	defer stop()
 	rs.setCancel(pj.ID, stop)
@@ -95,13 +96,14 @@ func (rs *runState) runAttempt(ctx context.Context, i int, pj plan.PlannedJob, o
 		return rs.markOutcome(o, m)
 	}
 	job := &rs.mp.Jobs[i]
-	spec := AttemptSpec{Pipeline: rs.mp, Job: job, N: 1, Foreground: true}
+	spec := AttemptSpec{Pipeline: rs.mp, Job: job, N: n, Foreground: true}
 	if aid, e := AttemptIDFor(WithSession(jctx, rs.sess), spec); e == nil { // a cancel intent finds the attempt while it waits for admission
 		rs.mu.Lock()
 		rs.attempts[aid] = pj.ID
 		rs.mu.Unlock()
 	}
 	adm, err := CreateAttempt(WithSession(jctx, rs.sess), spec)
+	rs.retire(spec) // a parked previous attempt is superseded whether or not this one was admitted
 	if err != nil {
 		var ar *AdmissionRefused
 		switch {
@@ -115,7 +117,7 @@ func (rs *runState) runAttempt(ctx context.Context, i int, pj plan.PlannedJob, o
 		}
 		return failed(o, err)
 	}
-	o.AttemptID, o.N = adm.AttemptID, 1
+	o.AttemptID, o.N = adm.AttemptID, n
 	rs.mu.Lock()
 	rs.attempts[adm.AttemptID] = pj.ID
 	rs.mu.Unlock()
@@ -123,19 +125,20 @@ func (rs *runState) runAttempt(ctx context.Context, i int, pj plan.PlannedJob, o
 		_, _ = rs.settle(adm.AttemptID, "leased", "cancelled", "cancelled") // never leave a leased attempt a remote runner may still start
 		return failed(o, fail(CodeOptions, "attempt %s was placed on a remote runner; this coordinator cannot await it", adm.AttemptID))
 	}
-	return rs.runLeased(jctx, pj, *job, adm.AttemptID, o)
+	return rs.runLeased(jctx, pj, *job, adm.AttemptID, o, n)
 }
 
-func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model.Job, id string, o JobOutcome) JobOutcome {
+func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model.Job, id string, o JobOutcome, n int) JobOutcome {
 	if err := rs.trans(id, "leased", "running", ""); err != nil {
 		return rs.endEarly(ctx, pj, id, o, err)
 	}
-	info := rs.info(pj, job, id)
+	info := rs.info(pj, job, id, n)
 	setup, err := rs.prepare(ctx, &info)
 	defer rs.unprepare(info, setup)
 	if err != nil {
-		return rs.failPrepared(ctx, pj, id, o, err)
+		return rs.failPrepared(ctx, pj, job, id, o, err, n)
 	}
+	logRef := rs.logRef(info)
 	spec := rs.spec(ctx, pj, setup.job, id)
 	spec.Mounts = setup.mounts
 	var t tail
@@ -162,7 +165,11 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 		return rs.c.exec.Run(ctx, spec)
 	}()
 	o.Duration, o.ExitCode, o.Tail = res.Finished.Sub(res.Started), res.ExitCode, t.String()
+	if lg != nil {
+		o.LogRef = logRef
+	}
 	rs.judge(ctx, info, full, &res, &o)
+	rs.diagnose(&o, &res)
 	oc := Outcome{State: res.Attempt.State, FailureClass: res.Attempt.FailureClass, ExitCode: res.ExitCode}
 	defer func() {
 		if rs.hooks.Cache != nil {
@@ -187,7 +194,7 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	if res.Reason != "" {
 		o.Detail = strings.TrimSpace(o.Detail + " (" + res.Reason + ": the container may have hit its memory or process limit)")
 	}
-	return rs.settleFailed(id, o)
+	return rs.settleFailed(ctx, pj, job, id, o, n)
 }
 
 func (rs *runState) pass(id string, o JobOutcome) JobOutcome {
@@ -218,10 +225,13 @@ func (rs *runState) pass(id string, o JobOutcome) JobOutcome {
 	return o
 }
 
-func (rs *runState) settleFailed(id string, o JobOutcome) JobOutcome {
+func (rs *runState) settleFailed(ctx context.Context, pj plan.PlannedJob, job model.Job, id string, o JobOutcome, n int) JobOutcome {
 	class := o.FailureClass
 	if class == "" {
 		class = "code"
+	}
+	if rs.park(ctx, pj, job, id, &o, n) {
+		return o
 	}
 	to, err := rs.settle(id, "running", "failed", class)
 	if err != nil {
@@ -235,11 +245,15 @@ func (rs *runState) settleFailed(id string, o JobOutcome) JobOutcome {
 }
 
 // failPrepared ends a running attempt whose preparation failed.
-func (rs *runState) failPrepared(ctx context.Context, pj plan.PlannedJob, id string, o JobOutcome, err error) JobOutcome {
+func (rs *runState) failPrepared(ctx context.Context, pj plan.PlannedJob, job model.Job, id string, o JobOutcome, err error, n int) JobOutcome {
 	o = failed(o, err)
 	if ctx.Err() != nil {
 		_, _ = rs.settle(id, "running", "cancelled", "cancelled")
 		return rs.stopped(o, pj.ID)
+	}
+	rs.diagnosePrepare(&o, err)
+	if rs.park(ctx, pj, job, id, &o, n) {
+		return o
 	}
 	_, _ = rs.settle(id, "running", "failed", "infra")
 	return o

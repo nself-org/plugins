@@ -18,10 +18,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/diagnose"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
-const maxExcerpt = 2000
+const maxExcerpt = diagnose.ExcerptMax // contract:ci.evidence: excerpt <= 4 KiB
 
 // evidenceInput gathers what BuildEvidence needs.
 type evidenceInput struct {
@@ -69,11 +70,13 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 		c := model.Check{ID: firstNonEmpty(o.Check, o.ID), JobID: o.ID, Kind: string(o.Kind), Tool: o.Tool, Required: o.Required,
 			Substantive: o.Substantive, AllowFailure: o.AllowFailure, Result: checkResult(o), Reason: o.Reason, FailureClass: o.FailureClass}
 		if o.State == StateFailed || o.Code != "" {
-			c.Excerpt = clip(o.Tail, maxExcerpt) // the tail already passed the exec funnel's redactor (D-0948, P7-TRUST-19)
+			c.Excerpt = diagnose.Excerpt(o.Tail, maxExcerpt) // the tail already passed the exec funnel's redactor (D-0948, P7-TRUST-19)
+			attachDiagnosis(&c, o)
 		}
+		c.Flaky = o.Flaky
 		c.Findings = o.Findings
 		if o.Excerpt != "" {
-			c.Excerpt = clip(o.Excerpt, maxExcerpt) // built from redacted output by an OutcomeHook
+			c.Excerpt = diagnose.Excerpt(o.Excerpt, maxExcerpt) // built from redacted output by an OutcomeHook
 		}
 		e.Checks = append(e.Checks, c)
 		switch c.Result {
@@ -86,9 +89,7 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 		case "error":
 			e.Counts.Error++
 		}
-		if o.N > 1 {
-			e.Retries = append(e.Retries, model.Retry{JobID: o.ID, Attempt: o.N, Class: o.FailureClass})
-		}
+		e.Retries = append(e.Retries, o.Retries...)
 	}
 	e.Counts.Total = len(e.Checks)
 	e.Result = model.Verdict(e.Checks)
@@ -122,13 +123,6 @@ func shortDigest(s string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-func clip(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[len(s)-n:]
-}
-
 func firstNonEmpty(a, b string) string {
 	if a != "" {
 		return a
@@ -143,4 +137,18 @@ func (c *Coordinator) beginEvidence(ctx context.Context, h Hooks, rev Revision) 
 		_ = guard("evidence builder", func() error { begin = h.Evidence.Begin(ctx, c.Opts.Root, rev, c.capture()); return nil })
 	}
 	return begin
+}
+
+// attachDiagnosis copies the diagnostics of a failed job onto its check; a
+// failure the coordinator classified without a signature gets its class default.
+func attachDiagnosis(c *model.Check, o JobOutcome) {
+	c.Exit, c.Diagnosis, c.Remediation = o.Exit, o.Diagnosis, o.Remediation
+	if c.Diagnosis == "" {
+		d := diagnose.ForClass(o.FailureClass)
+		c.Diagnosis, c.Remediation = d.Signature, d.Remediation
+	}
+	if o.LogRef != "" {
+		ref := o.LogRef
+		c.LogRef = &ref
+	}
 }
