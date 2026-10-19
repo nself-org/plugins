@@ -41,6 +41,10 @@ import (
 // placementClock is the world's clock; tests pin it.
 var placementClock = time.Now
 
+// placementProbe reads the local host's capacity; tests pin it so the plan
+// does not depend on the machine's load, memory or battery.
+var placementProbe = ciexec.Probe
+
 func init() { placePlan = planPlacement }
 
 // planSpec selects the plan to place.
@@ -179,7 +183,7 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	if err != nil {
 		return model.PlacementPlan{}, err
 	}
-	capacity := ciexec.Probe()
+	capacity := placementProbe()
 	now := placementClock()
 	var local *model.Capability
 	if !hasNode(snap.Nodes, "local") { // a registered "local" node is the local runner
