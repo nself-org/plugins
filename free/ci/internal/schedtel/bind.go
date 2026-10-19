@@ -47,6 +47,14 @@ func bind(run string, s *Sink) {
 	bindMu.Unlock()
 }
 
+// bindLatest makes s the fallback sink, from the moment its dispatcher is
+// built: the first world of a run is built before the first decision.
+func bindLatest(s *Sink) {
+	bindMu.Lock()
+	lastSnk = s
+	bindMu.Unlock()
+}
+
 func sinkFor(run string) *Sink {
 	bindMu.Lock()
 	defer bindMu.Unlock()

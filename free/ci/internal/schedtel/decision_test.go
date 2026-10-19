@@ -11,6 +11,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/planview"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
+	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -106,12 +107,50 @@ func TestDecisionUnknownJobIsE692(t *testing.T) {
 func TestDecisionUnknownAttemptIsReportedByFinalizer(t *testing.T) {
 	e := newEnv(t)
 	sink := NewSink(e.st, e.ms)
-	sink.Record(context.Background(), decision("run-x", "ghost.a1", "ghost", "local", dispatch.OutcomeAdmitted))
-	if err := sink.takeErr(); err == nil || !strings.Contains(err.Error(), "ghost.a1") {
-		t.Fatalf("a decision for a missing attempt is an error, not a silent drop: %v", err)
+	for i := 0; i < 50; i++ { // a failing store fails on every tick
+		sink.Record(context.Background(), decision("run-x", "ghost.a1", "ghost", "local", dispatch.OutcomeAdmitted))
 	}
-	if err := sink.takeErr(); err != nil {
-		t.Fatalf("takeErr clears: %v", err)
+	err := (finalizer{}).Finalize(context.Background(), cirun.RunInfo{RunID: "run-x"})
+	if err == nil || !strings.Contains(err.Error(), "ghost.a1") || !strings.Contains(err.Error(), "45 more failures") {
+		t.Fatalf("a failure before any write reaches the run, bounded: %v", err)
+	}
+	if sinkFor("run-x") != nil {
+		t.Fatal("finalizer left the binding")
+	}
+}
+
+// The first world of a run is built before its first decision: the sink the
+// factory returns is already the contributor's store.
+func TestTelemetryFirstWorldSeesTheHistory(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		o := store.TelOutcome{AttemptID: "old" + string(rune('a'+i)), Project: "proj", JobKey: "build", Runner: "local", RunnerClass: "local", Result: "passed", RuntimeMs: 4000, TS: int64(i)}
+		if err := e.st.TelRecordOutcome(ctx, o, fold(4000, -1, int64(i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	q := e.attempt("fresh", "build")
+	bindLatest(NewSink(e.st, e.ms)) // what the dispatcher's sink factory does at New
+	t.Cleanup(func() { bindLatest(nil) })
+	w := sched.World{Runners: []sched.Runner{{ID: "local", Class: "local", Avail: sched.Avail{Slots: 1}}}}
+	if err := contribute(context.Background(), &w); err != nil {
+		t.Fatal(err)
+	}
+	if got := ptrVal(w.Estimates["local"][q].RuntimeMs); got != int64(4000) {
+		t.Fatalf("first tick estimate %v, want 4000", got)
+	}
+}
+
+func TestDecisionWaitStartsAtEnqueue(t *testing.T) {
+	e := newEnv(t)
+	sink := NewSink(e.st, e.ms)
+	attempt := e.attempt("run-q", "slow")
+	d := decision("run-q", attempt, "run-q.slow", "local", dispatch.OutcomeAdmitted)
+	d.EnqueuedAt = e.now.Add(-7 * time.Second)
+	sink.Record(context.Background(), d)
+	if got, _, _ := e.st.TelDecision(context.Background(), attempt); got.WaitMs != 7000 {
+		t.Fatalf("wait %d, want 7000 from the enqueue time", got.WaitMs)
 	}
 }
 

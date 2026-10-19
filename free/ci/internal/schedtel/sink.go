@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
@@ -32,8 +33,12 @@ type Sink struct {
 	mu    sync.Mutex
 	first map[string]int64  // attempt id -> ms of the first decision seen
 	last  map[string]string // attempt id -> signature of the last stored decision
-	err   error
+	errs  []error
+	more  int // failures past maxErrs, counted not kept
 }
+
+// maxErrs bounds the failures kept per run: a broken store fails on every tick.
+const maxErrs = 5
 
 // NewSink returns a sink writing to st; clock is unix milliseconds.
 func NewSink(st *store.Store, clock func() int64) *Sink {
@@ -49,9 +54,13 @@ func (s *Sink) Record(ctx context.Context, d dispatch.Decision) {
 		return
 	}
 	at := s.clock()
+	bind(d.Job.Pipeline.ID, s) // before any store call, so the finalizer reports even a first failure
 	s.mu.Lock()
 	if _, ok := s.first[id]; !ok {
 		s.first[id] = at
+		if !d.EnqueuedAt.IsZero() { // the real wait starts at enqueue, not at the first tick
+			s.first[id] = min(at, d.EnqueuedAt.UnixMilli())
+		}
 	}
 	sig := d.Outcome + "/" + string(d.Reason) + "/" + d.Explanation.Status
 	if d.Placement != nil {
@@ -94,7 +103,6 @@ func (s *Sink) store(ctx context.Context, d dispatch.Decision, at, waited int64)
 	if !ok {
 		return errors.New("schedtel: decision for unknown attempt " + id)
 	}
-	bind(meta.Run, s)
 	doc, err := json.Marshal(document(meta, d))
 	if err != nil {
 		return err
@@ -164,7 +172,11 @@ func classOf(r sched.Runner) string {
 
 func (s *Sink) fail(err error) {
 	s.mu.Lock()
-	s.err = errors.Join(s.err, err)
+	if len(s.errs) < maxErrs {
+		s.errs = append(s.errs, err)
+	} else {
+		s.more++
+	}
 	s.mu.Unlock()
 }
 
@@ -172,7 +184,10 @@ func (s *Sink) fail(err error) {
 func (s *Sink) takeErr() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	err := s.err
-	s.err = nil
+	err := errors.Join(s.errs...)
+	if s.more > 0 {
+		err = errors.Join(err, fmt.Errorf("schedtel: %d more failures", s.more))
+	}
+	s.errs, s.more = nil, 0
 	return err
 }

@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
@@ -42,6 +43,12 @@ type Decision struct {
 	// which is decided before placement). It is valid for the Record call only:
 	// a sink reads it and keeps no reference.
 	World *sched.World
+	// EnqueuedAt is when the attempt entered the dispatcher's queue (zero when
+	// unknown), so a sink can measure the real wait.
+	EnqueuedAt time.Time
+	// recorded is set when admit already told the sink (before it released the
+	// caller), so the end of the tick does not repeat it.
+	recorded bool
 }
 
 // DecisionSink receives decisions.

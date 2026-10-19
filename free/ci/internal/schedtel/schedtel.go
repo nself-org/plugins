@@ -19,7 +19,9 @@ func init() {
 			return nil
 		}
 		c := clock()
-		return NewSink(st, func() int64 { return c().UnixMilli() })
+		s := NewSink(st, func() int64 { return c().UnixMilli() })
+		bindLatest(s)
+		return s
 	}
 	if err := dispatch.RegisterSinkFactory(factory); err != nil {
 		panic(err)

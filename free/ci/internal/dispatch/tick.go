@@ -139,7 +139,7 @@ func (d *Dispatcher) Plan(w sched.World, queued []Queued) ([]Queued, sched.Resul
 
 // settle admits one job's placement, or explains why it waits, and records the decision.
 func (d *Dispatcher) settle(ctx context.Context, runs map[string]*pipelineRun, pr *pipelineRun, q Queued) {
-	dec := Decision{WorldDigest: pr.digest, Job: q.Job.Sched, Explanation: pr.explained[q.Job.Sched.Key], World: &pr.world}
+	dec := Decision{WorldDigest: pr.digest, Job: q.Job.Sched, Explanation: pr.explained[q.Job.Sched.Key], World: &pr.world, EnqueuedAt: q.EnqueuedAt}
 	if d.pastDeadline(q, pr.world.Policy.Overrides.MaxQueueMs, d.cfg.Clock()) { // earlier admissions took time too
 		d.timeout(ctx, q, pr.digest, d.cfg.Clock())
 		return
@@ -150,7 +150,9 @@ func (d *Dispatcher) settle(ctx context.Context, runs map[string]*pipelineRun, p
 	} else {
 		d.waiting(ctx, q, &dec)
 	}
-	d.cfg.Sink.Record(ctx, dec)
+	if !dec.recorded {
+		d.cfg.Sink.Record(ctx, dec)
+	}
 }
 
 // pastDeadline reports whether q waited past max_queue (a foreground job has a
@@ -168,5 +170,5 @@ func (d *Dispatcher) timeout(ctx context.Context, q Queued, digest string, now t
 	waited := now.Sub(q.EnqueuedAt).Round(time.Second)
 	d.remember(ctx, q, model.QueueTimeout, "")
 	d.finish(q.Seq, Admitted{}, fail(CodeQueueTimeout, "job %s waited %s in the queue; queue.timeout", q.Job.Sched.Name, waited))
-	d.cfg.Sink.Record(ctx, Decision{WorldDigest: digest, Job: q.Job.Sched, Outcome: OutcomeTimeout, Reason: model.QueueTimeout})
+	d.cfg.Sink.Record(ctx, Decision{WorldDigest: digest, Job: q.Job.Sched, Outcome: OutcomeTimeout, Reason: model.QueueTimeout, EnqueuedAt: q.EnqueuedAt})
 }

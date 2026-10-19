@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -49,6 +50,11 @@ func (nopReporter) Post(context.Context, report.Status) error { return nil }
 // and returns the run summary and the state home it wrote to.
 func dispatchedRun(t *testing.T) (cirun.Result, string) {
 	t.Helper()
+	return dispatchedRunIn(t, t.TempDir(), t.TempDir())
+}
+
+func dispatchedRunIn(t *testing.T, root, home string) (cirun.Result, string) {
+	t.Helper()
 	t.Setenv("NSELF_V15", "1")
 	yes := true
 	sh := func(script string, deps ...string) model.Job {
@@ -59,7 +65,6 @@ func dispatchedRun(t *testing.T) (cirun.Result, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root, home := t.TempDir(), t.TempDir()
 	if err = os.WriteFile(filepath.Join(root, "f.txt"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -162,6 +167,50 @@ func TestPlacementRefEvidenceCarriesTheDecisionRef(t *testing.T) {
 	for _, j := range res.Summary.Jobs {
 		if _, still := cirun.PlacementRef(context.Background(), j.AttemptID); still {
 			t.Errorf("finalizer left the ref of %s", j.AttemptID)
+		}
+	}
+}
+
+// The first world of a run is built before its first decision; the history of
+// earlier runs must already be in it.
+func TestTelemetryFirstTickUsesStoredEstimates(t *testing.T) {
+	root, home := t.TempDir(), t.TempDir()
+	first, _ := dispatchedRunIn(t, root, home)
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(home, "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	row, _, err := st.PipelineByID(ctx, first.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, job := range []string{"build", "test", "lint"} {
+		for i := 0; i < 3; i++ { // three samples of 4321 ms: estimated
+			o := store.TelOutcome{AttemptID: fmt.Sprintf("seed-%s-%d", job, i), Project: row.Project, JobKey: job, Runner: "local", RunnerClass: "local", Result: "passed", RuntimeMs: 4321, ColdStartMs: -1, TS: int64(i)}
+			fold := func(cur store.TelEstimator, _ bool) store.TelEstimator {
+				cur.RuntimeMs, cur.N = 4321, cur.N+1
+				return cur
+			}
+			if err = st.TelRecordOutcome(ctx, o, fold); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	second, _ := dispatchedRunIn(t, root, home)
+	recs, err := st.TelDecisions(ctx, second.RunID, 0)
+	if err != nil || len(recs) != 3 {
+		t.Fatalf("decisions of the second run: %d %v", len(recs), err)
+	}
+	for _, d := range recs {
+		var doc model.PlacementPlan
+		if err = json.Unmarshal(d.Doc, &doc); err != nil {
+			t.Fatal(err)
+		}
+		c := doc.Jobs[0].Placement.Components["runtime"]
+		if c.ValueMs != 4321 || c.Confidence != "estimated" {
+			t.Errorf("%s: runtime component %+v, want 4321 estimated on the first tick", d.JobName, c)
 		}
 	}
 }

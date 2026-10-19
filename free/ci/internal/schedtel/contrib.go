@@ -11,7 +11,9 @@ package schedtel
 // so the scheduler uses its own stand-in and marks it unknown; no store, no
 // estimates; a store failure leaves Estimates empty (the scheduler then uses
 // its unknown stand-ins) and is reported as a note on the run by the finalizer,
-// because telemetry must not stop a placement.
+// because telemetry must not stop a placement. The samples cover every queued
+// attempt in the store, so the world digest changes when an unrelated pipeline
+// queues a job (expected, see the handoff).
 
 import (
 	"context"
