@@ -1,0 +1,13 @@
+diff --git a/internal/roles/roles.go b/internal/roles/roles.go
+index 2eaff3ff..e75e2732 100644
+--- a/internal/roles/roles.go
++++ b/internal/roles/roles.go
+@@ -151,7 +151,7 @@ func Authorize(ctx context.Context, a Actor, role Role, project string) error {
+ func AuthorizeAction(ctx context.Context, a Actor, action, project string) error {
+ 	r, ok := catalogue[action]
+ 	if !ok {
+-		return a.decide(ctx, decision{action: "authorize", target: action, project: project, min: Admin, audited: true, forced: fail(ReasonUnknownAct, "unknown action %q", action)})
++		return a.decide(ctx, decision{action: "authorize", target: action, project: project, min: Admin, audited: true, forced: nil})
+ 	}
+ 	return a.decide(ctx, decision{action: "authorize", target: action, project: project, min: r.min, audited: r.audited, needProject: r.scoped, nonAuthor: r.needsAuthr})
+ }

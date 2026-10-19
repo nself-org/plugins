@@ -1,0 +1,13 @@
+diff --git a/internal/roles/actions.go b/internal/roles/actions.go
+index ca2ac312..1924535b 100644
+--- a/internal/roles/actions.go
++++ b/internal/roles/actions.go
+@@ -67,7 +67,7 @@ type actionRule struct {
+ 
+ var catalogue = map[string]actionRule{
+ 	ActPolicyTeamSet:     {min: Admin, audited: true},
+-	ActRunnerRegister:    {min: Admin, audited: true},
++	ActRunnerRegister:    {min: Member, audited: true},
+ 	ActRunnerRevoke:      {min: Admin, audited: true},
+ 	ActNodeTrustSet:      {min: Admin, audited: true},
+ 	ActProviderAuthorize: {min: Admin, audited: true},

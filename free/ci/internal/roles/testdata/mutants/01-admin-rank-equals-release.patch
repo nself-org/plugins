@@ -1,0 +1,13 @@
+diff --git a/internal/roles/actions.go b/internal/roles/actions.go
+index ca2ac312..874f64ab 100644
+--- a/internal/roles/actions.go
++++ b/internal/roles/actions.go
+@@ -27,7 +27,7 @@ func (r Role) Rank() int {
+ 	case Release:
+ 		return 2
+ 	case Admin:
+-		return 3
++		return 2
+ 	}
+ 	return 0
+ }

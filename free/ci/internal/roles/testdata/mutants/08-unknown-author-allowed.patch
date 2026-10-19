@@ -1,0 +1,12 @@
+diff --git a/internal/roles/decide.go b/internal/roles/decide.go
+index c1ab14e7..833894b3 100644
+--- a/internal/roles/decide.go
++++ b/internal/roles/decide.go
+@@ -50,7 +50,6 @@ func (a Actor) decide(ctx context.Context, d decision) error {
+ 		author, _ := ctx.Value(authKey{}).(string)
+ 		switch {
+ 		case author == "":
+-			err = fail(ReasonNoAuthor, "the author of the run is unknown, so it cannot be approved")
+ 		case principalOf(author) == principalOf(a.id):
+ 			err = fail(ReasonSelfApproval, "%s cannot approve its own run", a.Label())
+ 		}

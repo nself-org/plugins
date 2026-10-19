@@ -1,0 +1,13 @@
+diff --git a/internal/roles/decide.go b/internal/roles/decide.go
+index c1ab14e7..eac401ce 100644
+--- a/internal/roles/decide.go
++++ b/internal/roles/decide.go
+@@ -46,7 +46,7 @@ func (a Actor) decide(ctx context.Context, d decision) error {
+ 	if err == nil && d.needProject && d.project == "" {
+ 		err = fail(ReasonProject, "%s needs a project", d.target)
+ 	}
+-	if err == nil && d.nonAuthor && a.kind != KindOperator {
++	if err == nil && d.nonAuthor {
+ 		author, _ := ctx.Value(authKey{}).(string)
+ 		switch {
+ 		case author == "":
