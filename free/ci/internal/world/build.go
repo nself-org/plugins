@@ -199,8 +199,9 @@ func makeRunner(c model.Capability, host bool, mode trust.CoordinatorMode, s sto
 	if c.Economics.Class.Value != nil {
 		r.Class = *c.Economics.Class.Value
 	}
-	if c.Availability.State.Value != nil {
-		r.Active = *c.Availability.State.Value == "online"
+	// Active is interactive use the agent observed, not the online flag.
+	if c.Availability.Interactive.Value != nil {
+		r.Active = *c.Availability.Interactive.Value == "active"
 	}
 	reserved := s.Reservations[r.ID]
 	active := 0

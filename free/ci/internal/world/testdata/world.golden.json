@@ -758,7 +758,7 @@
       "CoordinatorMode": "",
       "ProviderDown": false,
       "QueuedAhead": 0,
-      "Active": true
+      "Active": false
     },
     {
       "ID": "01J00000000000000000000003",
@@ -1135,7 +1135,7 @@
       "CoordinatorMode": "",
       "ProviderDown": false,
       "QueuedAhead": 0,
-      "Active": true
+      "Active": false
     },
     {
       "ID": "local",
@@ -1512,7 +1512,7 @@
       "CoordinatorMode": "personal",
       "ProviderDown": false,
       "QueuedAhead": 0,
-      "Active": true
+      "Active": false
     }
   ],
   "Hosted": null,

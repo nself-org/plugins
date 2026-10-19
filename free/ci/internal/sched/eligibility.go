@@ -94,8 +94,15 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 			add(model.NodeMaintenance, "maintenance")
 		}
 	}
-	operatorOwned := r.Decl.Ownership == "operator" || c.Identity.Ownership.Value != nil && *c.Identity.Ownership.Value == "operator"
-	if c.Availability.PluggedIn.Value != nil && !*c.Availability.PluggedIn.Value || j.Pipeline.Band == "background" && operatorOwned && c.Availability.PluggedIn.Value == nil {
+	// Unknown ownership is treated as operator-owned (paired nodes report none), the same
+	// fail-closed rule the background admission step applies.
+	declared := r.Decl.Ownership
+	if declared == "" && c.Identity.Ownership.Value != nil {
+		declared = *c.Identity.Ownership.Value
+	}
+	operatorOwned := declared == "" || declared == "operator" || c.Identity.Ownership.Value != nil && *c.Identity.Ownership.Value == "operator"
+	// Battery is a background-band concern; foreground work is not refused for power at placement.
+	if j.Pipeline.Band == "background" && (c.Availability.PluggedIn.Value != nil && !*c.Availability.PluggedIn.Value || operatorOwned && c.Availability.PluggedIn.Value == nil) {
 		add(model.NodeOnBattery, "unplugged")
 	}
 	if j.Pipeline.Band == "background" && (c.Availability.Interactive.Value != nil && *c.Availability.Interactive.Value == "active" || operatorOwned && (c.Availability.Interactive.Value == nil || *c.Availability.Interactive.Value != "idle")) {
