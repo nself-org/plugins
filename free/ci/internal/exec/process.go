@@ -134,7 +134,7 @@ func (e *Executor) runCommandSig(ctx context.Context, stdin io.Reader, argv []st
 			}
 		}
 	}
-	tracker.snapshot()
+	tracker.snapshotAfterExit()
 	tracker.signalKill()
 	_ = killGroup(cmd.Process.Pid)
 	// Give the reader a short chance to drain output after the leader exits.

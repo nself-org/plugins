@@ -3,13 +3,18 @@
 package exec
 
 import (
+	"os"
 	osexec "os/exec"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
+
+// tableReads counts the full process-table reads of snapshot (tests).
+var tableReads atomic.Int64
 
 // processTree remembers children even after a shell exits or a child calls setsid.
 type processTree struct {
@@ -23,7 +28,8 @@ type processTree struct {
 
 func trackDescendants(root int, attempt string) *processTree {
 	t := &processTree{root: root, attempt: attempt, seen: make(map[int]struct{}), done: make(chan struct{}), stopped: make(chan struct{})}
-	t.snapshot()
+	// No snapshot here: a command that has just started has forked nothing worth a walk of the
+	// whole table, and the first tick comes within 50 ms. A short command is covered by snapshotAfterExit.
 	go func() {
 		defer close(t.stopped)
 		tick := time.NewTicker(50 * time.Millisecond)
@@ -54,6 +60,7 @@ func (t *processTree) stop() {
 // only the fallback when those fail.
 func (t *processTree) snapshot() {
 	for i := 0; i < 3; i++ {
+		tableReads.Add(1)
 		parents, err := processTable()
 		if err != nil {
 			if parents, err = psProcessTable(); err != nil {
@@ -64,6 +71,19 @@ func (t *processTree) snapshot() {
 			return
 		}
 	}
+}
+
+// snapshotAfterExit is snapshot for the moment the leader has exited: what it
+// left behind is either a child of the coordinator (adopted as subreaper) or
+// below a pid seen earlier, so the kernel's children lists find it without
+// reading the stat file of every process on the host (D-1008). Where those
+// lists are not available it is the full snapshot.
+func (t *processTree) snapshotAfterExit() {
+	if parents, ok := quickTable(os.Getpid(), t.root, t.pids(), t.attempt); ok {
+		t.absorb(parents)
+		return
+	}
+	t.snapshot()
 }
 
 // absorb adds the descendants found in parents to the seen set and reports
