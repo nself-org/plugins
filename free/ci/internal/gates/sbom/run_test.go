@@ -35,7 +35,7 @@ func (w withIso) IsolationName() string { return w.iso }
 func (s scripted) Run(_ context.Context, c sbom.Cmd) (sbom.Result, error) {
 	if len(c.Argv) == 2 && c.Argv[1] == "version" {
 		if s.version == "" {
-			return sbom.Result{}, errors.New("no such file")
+			return sbom.Result{}, errors.New("fork/exec " + c.Argv[0] + ": no such file or directory")
 		}
 		return sbom.Result{Output: "Version:       " + s.version + "\n"}, nil
 	}
@@ -189,7 +189,18 @@ func TestRunNeverRunsAToolPlantedInTheJobSource(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(planted), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(planted, []byte("#!/bin/sh\ntouch "+marker+"\necho 'Version: "+pinV+"'\n"), 0o755); err != nil {
+	if err := os.WriteFile(planted, []byte("#!/bin/sh\n: > '"+marker+"'\necho 'Version: "+pinV+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// control: the fixture does leave the marker when something runs it
+	control := sbom.ExecRunner{Executor: &exec.Executor{}, Home: t.TempDir(), SourceDir: src}
+	if _, err := control.Run(context.Background(), sbom.Cmd{Argv: []string{"/bin/sh", planted}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("positive control: the planted script did not leave its marker: %v", err)
+	}
+	if err := os.Remove(marker); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(src)

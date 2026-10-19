@@ -129,3 +129,18 @@ func TestValidateSPDX(t *testing.T) {
 		t.Fatalf("SPDX from another syft: %v", err)
 	}
 }
+
+func TestComponentTypeEnum(t *testing.T) {
+	for _, ok := range []string{"application", "framework", "library", "container", "platform", "operating-system", "device", "device-driver", "firmware", "file", "machine-learning-model", "data", "cryptographic-asset"} {
+		doc := mutateCDX(t, func(m map[string]any) { m["components"] = []any{map[string]any{"type": ok, "name": "x"}} })
+		if err := sbom.ValidateCycloneDX(doc, "fx", pinVersion); err != nil {
+			t.Errorf("type %q refused: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"bogus", "Library", "service", ""} {
+		doc := mutateCDX(t, func(m map[string]any) { m["components"] = []any{map[string]any{"type": bad, "name": "x"}} })
+		if err := sbom.ValidateCycloneDX(doc, "fx", pinVersion); !sbom.IsReason(err, sbom.ReasonInvalid) {
+			t.Errorf("type %q accepted: %v", bad, err)
+		}
+	}
+}

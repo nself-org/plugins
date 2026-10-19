@@ -89,6 +89,11 @@ func Install(ctx context.Context, o InstallOptions) (Installed, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return res, Failf(ReasonToolMissing, "cannot create %s: %v", dir, err)
 	}
+	for _, d := range []string{dir, filepath.Dir(dir)} { // a loose umask must not leave them group-writable
+		if err := os.Chmod(d, 0o755); err != nil {
+			return res, Failf(ReasonToolMissing, "cannot secure %s: %v", d, err)
+		}
+	}
 	if err := refuseNonRegular(res.Path, false); err != nil {
 		return res, err
 	}

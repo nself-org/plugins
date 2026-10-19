@@ -127,7 +127,7 @@ func Probe(ctx context.Context, r Runner, syft string) (string, error) {
 	}
 	res, err := r.Run(ctx, Cmd{Argv: []string{syft, "version"}, Env: map[string]string{"SYFT_CHECK_FOR_APP_UPDATE": "false"}, NoSource: true})
 	if err != nil {
-		if notFound(err) {
+		if notFound(err, syft) {
 			return "", Failf(ReasonToolMissing, "%s did not run: %v", ToolName, err)
 		}
 		// an infrastructure failure of the runner is not "the tool is missing"
@@ -173,8 +173,10 @@ func Resolve(ctx context.Context, r Runner, home string, mode Mode, pin Pin) (st
 	return "", Failf(ReasonToolMissing, "%s %s is not installed at %s; run `%s`", ToolName, pin.Version, want, InstallCommand)
 }
 
-// trusted accepts only a plain executable file (never a symlink) that other
-// users cannot write; a missing file is fs.ErrNotExist.
+// trusted accepts only a plain executable file (never a symlink) that the
+// current user owns and other users cannot write, inside tools/ and
+// syft-<version>/ directories held to the same rule; a missing file is
+// fs.ErrNotExist.
 func trusted(p string) error {
 	st, err := os.Lstat(p)
 	if err != nil {
@@ -185,19 +187,43 @@ func trusted(p string) error {
 		return errors.New("not a plain file")
 	case st.Mode()&0o111 == 0:
 		return errors.New("not executable")
-	case runtime.GOOS != "windows" && st.Mode().Perm()&0o022 != 0:
-		return errors.New("writable by group or others")
+	}
+	if err := plain(st, "file"); err != nil {
+		return err
+	}
+	for _, dir := range []string{filepath.Dir(p), filepath.Dir(filepath.Dir(p))} {
+		ds, err := os.Lstat(dir)
+		if err != nil {
+			return err
+		}
+		if !ds.IsDir() {
+			return errors.New(dir + " is not a plain directory")
+		}
+		if err := plain(ds, dir); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-// notFound reports a runner error that means the binary does not exist.
-func notFound(err error) bool {
-	if errors.Is(err, fs.ErrNotExist) {
-		return true
+// plain refuses an entry another user owns or can write.
+func plain(st os.FileInfo, what string) error {
+	switch {
+	case !ownedByUs(st):
+		return errors.New(what + " is not owned by the current user")
+	case runtime.GOOS != "windows" && st.Mode().Perm()&0o022 != 0:
+		return errors.New(what + " is writable by group or others")
 	}
+	return nil
+}
+
+// notFound reports a runner error that says the syft binary itself does not
+// exist (it must name the command: a missing docker CLI or a workspace failure
+// is the runner's, not the tool's).
+func notFound(err error, syft string) bool {
 	m := err.Error()
-	return strings.Contains(m, "no such file") || strings.Contains(m, "executable file not found") || strings.Contains(m, "not found")
+	return strings.Contains(m, syft+": no such file") || strings.Contains(m, `"`+syft+`": executable file not found`) ||
+		strings.Contains(m, syft+": executable file not found")
 }
 
 func checked(ctx context.Context, r Runner, syft string, pin Pin, what string) (string, error) {

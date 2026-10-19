@@ -140,11 +140,21 @@ func TestResolveContainerUsesPathSyftAtThePin(t *testing.T) {
 // syft would create a marker file if anything ran it.
 func TestResolveNeverExecutesAPlantedPathSyft(t *testing.T) {
 	dir, marker := t.TempDir(), filepath.Join(t.TempDir(), "ran")
-	script := "#!/bin/sh\ntouch " + marker + "\necho 'Version: 1.54.1'\n"
+	script := "#!/bin/sh\n: > '" + marker + "'\necho 'Version: 1.54.1'\n"
 	if err := os.WriteFile(filepath.Join(dir, "syft"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", dir)
+	t.Setenv("PATH", dir+":/usr/bin:/bin") // the executor itself needs sh
+	// control: the fixture does leave the marker when something runs it
+	if _, err := execRunner(t, t.TempDir()).Run(context.Background(), sbom.Cmd{Argv: []string{filepath.Join(dir, "syft"), "version"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, statErr := os.Stat(marker); statErr != nil {
+		t.Fatalf("positive control: the planted script did not leave its marker: %v", statErr)
+	}
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
 	_, err := sbom.Resolve(context.Background(), execRunner(t, t.TempDir()), t.TempDir(), sbom.ModeProcess, testPin())
 	if !sbom.IsReason(err, sbom.ReasonToolVersion) {
 		t.Fatalf("got %v", err)
@@ -233,6 +243,60 @@ func TestResolveRefusesUntrustworthyInstalls(t *testing.T) {
 			t.Fatalf("world-writable install: %v", err)
 		}
 	})
+	t.Run("permission table", func(t *testing.T) {
+		for _, mode := range []os.FileMode{0o644, 0o775, 0o757, 0o777, 0o4755} {
+			home := t.TempDir()
+			p := installedSyft(t, home)
+			if err := os.Chmod(p, mode); err != nil {
+				t.Fatal(err)
+			}
+			fr := &fakeRunner{versions: map[string]string{p: pinVersion}}
+			if _, err := sbom.Resolve(ctx, fr, home, sbom.ModeProcess, testPin()); mode != 0o4755 && !sbom.IsReason(err, sbom.ReasonToolMissing) {
+				t.Errorf("mode %o: %v", mode, err)
+			}
+			if len(fr.cmds) != 0 && mode != 0o4755 {
+				t.Errorf("mode %o: the file was run", mode)
+			}
+		}
+	})
+	t.Run("group-writable directory", func(t *testing.T) {
+		home := t.TempDir()
+		p := installedSyft(t, home)
+		for _, dir := range []string{filepath.Dir(p), filepath.Dir(filepath.Dir(p))} {
+			if err := os.Chmod(dir, 0o775); err != nil {
+				t.Fatal(err)
+			}
+			fr := &fakeRunner{versions: map[string]string{p: pinVersion}}
+			if _, err := sbom.Resolve(ctx, fr, home, sbom.ModeProcess, testPin()); !sbom.IsReason(err, sbom.ReasonToolMissing) || len(fr.cmds) != 0 {
+				t.Errorf("%s: %v", dir, err)
+			}
+			if err := os.Chmod(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := sbom.Resolve(ctx, &fakeRunner{versions: map[string]string{p: pinVersion}}, home, sbom.ModeProcess, testPin()); err != nil {
+			t.Fatalf("restored permissions: %v", err)
+		}
+	})
+	t.Run("symlinked tools directory", func(t *testing.T) {
+		home, real := t.TempDir(), t.TempDir()
+		if err := os.MkdirAll(filepath.Join(real, "syft-"+pinVersion), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(real, "syft-"+pinVersion, "syft")
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(real, filepath.Join(home, "tools")); err != nil {
+			t.Fatal(err)
+		}
+		fr := &fakeRunner{versions: map[string]string{sbom.ToolPath(home, pinVersion): pinVersion}}
+		// Lstat of tools/syft-<v>/syft succeeds through the symlinked tools/ component, but
+		// the tools/ entry itself is a symlink and is refused.
+		if _, err := sbom.Resolve(ctx, fr, home, sbom.ModeProcess, testPin()); !sbom.IsReason(err, sbom.ReasonToolMissing) || len(fr.cmds) != 0 {
+			t.Fatalf("symlinked tools/: %v cmds=%v", err, fr.cmds)
+		}
+	})
 	t.Run("not a plain version", func(t *testing.T) {
 		for _, v := range []string{"", "../x", "1/2", " 1", "-1"} {
 			if _, err := sbom.Resolve(ctx, &fakeRunner{}, t.TempDir(), sbom.ModeProcess, sbom.Pin{Version: v}); !sbom.IsReason(err, sbom.ReasonToolMissing) {
@@ -274,4 +338,14 @@ type exitRunner struct {
 
 func (e *exitRunner) Run(context.Context, sbom.Cmd) (sbom.Result, error) {
 	return sbom.Result{Exit: e.exit}, nil
+}
+
+func TestProbeRunsInAnEmptyWorkspace(t *testing.T) {
+	fr := &fakeRunner{versions: map[string]string{"/x/syft": pinVersion}}
+	if _, err := sbom.Probe(context.Background(), fr, "/x/syft"); err != nil {
+		t.Fatal(err)
+	}
+	if len(fr.cmds) != 1 || !fr.cmds[0].NoSource {
+		t.Fatalf("the version probe must not copy the job source: %+v", fr.cmds)
+	}
 }

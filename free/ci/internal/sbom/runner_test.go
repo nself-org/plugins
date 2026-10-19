@@ -55,3 +55,19 @@ func TestExecRunnerReportsExitAndMissingFile(t *testing.T) {
 		t.Fatal("nil executor passed")
 	}
 }
+
+func TestExecRunnerNoSourceLeavesTheWorkspaceEmpty(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "in.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := execRunner(t, src)
+	res, err := r.Run(context.Background(), sbom.Cmd{Argv: []string{"/bin/sh", "-c", "ls -A"}, NoSource: true})
+	if err != nil || strings.Contains(res.Output, "in.txt") {
+		t.Fatalf("NoSource still copied the source: %+v %v", res, err)
+	}
+	res, err = r.Run(context.Background(), sbom.Cmd{Argv: []string{"/bin/sh", "-c", "ls -A"}})
+	if err != nil || !strings.Contains(res.Output, "in.txt") {
+		t.Fatalf("the default must copy the source: %+v %v", res, err)
+	}
+}

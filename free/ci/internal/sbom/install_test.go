@@ -202,17 +202,18 @@ func TestInstallRefusesBadArchivesAndServers(t *testing.T) {
 func TestInstallRefusesUnusableOptions(t *testing.T) {
 	ctx := context.Background()
 	pin := sbom.Pin{Version: pinVersion, Sources: []toolchain.Source{{OS: "linux", Arch: "amd64", URL: "http://example.invalid/syft.tgz", SHA256: strings.Repeat("a", 64)}}}
+	httpsPin := sbom.Pin{Version: pinVersion, Sources: []toolchain.Source{{OS: "linux", Arch: "amd64", URL: "https://example.invalid/syft.tgz", SHA256: strings.Repeat("a", 64)}}}
 	if _, err := sbom.Install(ctx, sbom.InstallOptions{Home: t.TempDir(), Pin: pin, OS: "plan9", Arch: "mips"}); !sbom.IsReason(err, sbom.ReasonToolMissing) {
 		t.Fatalf("no source for the platform: %v", err)
 	}
 	if _, err := sbom.Install(ctx, sbom.InstallOptions{Home: t.TempDir(), Pin: pin, OS: "linux", Arch: "amd64"}); !sbom.IsReason(err, sbom.ReasonToolMissing) || !strings.Contains(err.Error(), "https") {
 		t.Fatalf("plain http source: %v", err)
 	}
-	if _, err := sbom.Install(ctx, sbom.InstallOptions{Home: "relative/home", Pin: pin, OS: "linux", Arch: "amd64"}); !sbom.IsReason(err, sbom.ReasonToolMissing) {
+	if _, err := sbom.Install(ctx, sbom.InstallOptions{Home: "relative/home", Pin: httpsPin, OS: "linux", Arch: "amd64"}); !sbom.IsReason(err, sbom.ReasonToolMissing) || !strings.Contains(err.Error(), "absolute") {
 		t.Fatalf("relative home: %v", err)
 	}
-	bad := sbom.Pin{Version: "../../x", Sources: pin.Sources}
-	if _, err := sbom.Install(ctx, sbom.InstallOptions{Home: t.TempDir(), Pin: bad, OS: "linux", Arch: "amd64"}); !sbom.IsReason(err, sbom.ReasonToolMissing) {
+	bad := sbom.Pin{Version: "../../x", Sources: httpsPin.Sources}
+	if _, err := sbom.Install(ctx, sbom.InstallOptions{Home: t.TempDir(), Pin: bad, OS: "linux", Arch: "amd64"}); !sbom.IsReason(err, sbom.ReasonToolMissing) || !strings.Contains(err.Error(), "plain version") {
 		t.Fatalf("path-like version: %v", err)
 	}
 }
