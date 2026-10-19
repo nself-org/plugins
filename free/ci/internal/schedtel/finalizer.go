@@ -8,8 +8,9 @@ package schedtel
 // store failure of the run (the coordinator turns it into a run note).
 // Constraints: only a job that ran to a verdict (passed or failed with no
 // infrastructure failure) updates the runtime estimate; cold start is the time
-// from admission to the end of the attempt minus the job's own runtime, so it
-// covers lease-to-start and teardown, and is skipped when the attempt has no end.
+// from admission to the attempt's leased -> running transition (started_at). An
+// attempt with no recorded start falls back to admission to end minus the job's
+// own runtime (which also covers teardown); one with no end is skipped.
 
 import (
 	"context"
@@ -58,11 +59,27 @@ func (s *Sink) outcome(ctx context.Context, j cirun.JobOutcome) error {
 		runtime = -1
 	}
 	cold := int64(-1)
-	if end, ended, err := s.st.TelAttemptEnd(ctx, j.AttemptID); err != nil {
-		return err
-	} else if ended && ran {
-		cold = max(end/1_000_000-dec.TS-runtime, 0)
+	if ran {
+		var err error
+		if cold, err = s.coldStart(ctx, j.AttemptID, dec.TS, runtime); err != nil {
+			return err
+		}
 		o.ColdStartMs = cold
 	}
 	return s.st.TelRecordOutcome(ctx, o, fold(runtime, cold, at))
+}
+
+// coldStart is the milliseconds from admission (admitMs) to the attempt starting
+// to run, or -1 when neither a start nor an end of the attempt was recorded.
+func (s *Sink) coldStart(ctx context.Context, attempt string, admitMs, runtime int64) (int64, error) {
+	if start, started, err := s.st.TelAttemptStart(ctx, attempt); err != nil {
+		return -1, err
+	} else if started {
+		return max(start/1_000_000-admitMs, 0), nil
+	}
+	end, ended, err := s.st.TelAttemptEnd(ctx, attempt)
+	if err != nil || !ended {
+		return -1, err
+	}
+	return max(end/1_000_000-admitMs-runtime, 0), nil
 }

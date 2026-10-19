@@ -60,8 +60,9 @@ func (e *env) attempt(run, name string) string {
 	return id
 }
 
-// finish moves the attempt to passed (or the given terminal state) at the current clock.
-func (e *env) finish(id string, to model.JobState) {
+// finish moves the attempt to passed (or the given terminal state) at the current
+// clock; running is the hook called once it is running (the job's own runtime).
+func (e *env) finish(id string, to model.JobState, running func()) {
 	e.t.Helper()
 	ctx := context.Background()
 	steps := []model.JobState{"leased", "running", "finalizing"}
@@ -74,6 +75,9 @@ func (e *env) finish(id string, to model.JobState) {
 			e.t.Fatal(err)
 		}
 		from = next
+		if next == "running" && running != nil {
+			running()
+		}
 	}
 }
 
@@ -117,7 +121,7 @@ func (e *env) runOnce(sink *Sink, i int, runtimeMs int64) (run, attempt string) 
 	sink.Record(ctx, decision(run, attempt, run+".build", "local", dispatch.OutcomeWaiting))
 	e.advance(40 * time.Millisecond)
 	sink.Record(ctx, decision(run, attempt, run+".build", "local", dispatch.OutcomeAdmitted))
-	e.advance(time.Duration(runtimeMs)*time.Millisecond + 500*time.Millisecond)
-	e.finish(attempt, "passed")
+	e.advance(500 * time.Millisecond) // lease to start
+	e.finish(attempt, "passed", func() { e.advance(time.Duration(runtimeMs) * time.Millisecond) })
 	return run, attempt
 }

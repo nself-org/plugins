@@ -103,7 +103,8 @@ func (s *Store) apply(ctx context.Context, tx *sql.Tx, id string, from, to model
 	if to == "cancelled" && err == nil && cancelEpoch != epoch {
 		return coded("E605", "cancel intent epoch changed")
 	}
-	result, err := tx.ExecContext(ctx, "UPDATE attempt SET state=?,epoch=epoch+1,failure_class=?,ended_at=CASE WHEN ? IN ('passed','failed','cancelled') THEN ? ELSE ended_at END WHERE id=? AND state=? AND epoch=?", to, d.FailureClass, to, s.now().UnixNano(), id, from, epoch)
+	now := s.now().UnixNano()
+	result, err := tx.ExecContext(ctx, "UPDATE attempt SET state=?,epoch=epoch+1,failure_class=?,started_at=CASE WHEN ?='running' THEN ? ELSE started_at END,ended_at=CASE WHEN ? IN ('passed','failed','cancelled') THEN ? ELSE ended_at END WHERE id=? AND state=? AND epoch=?", to, d.FailureClass, to, now, to, now, id, from, epoch)
 	if err != nil {
 		return err
 	}

@@ -104,6 +104,17 @@ func (s *Store) TelAttemptEnd(ctx context.Context, id string) (int64, bool, erro
 	return end.Int64, end.Valid, nil
 }
 
+// TelAttemptStart returns when an attempt began running (UnixNano), false while
+// it has not (or it is a row written before started_at was recorded).
+func (s *Store) TelAttemptStart(ctx context.Context, id string) (int64, bool, error) {
+	var start sql.NullInt64
+	err := s.readers.QueryRowContext(ctx, `SELECT started_at FROM attempt WHERE id=?`, id).Scan(&start)
+	if err != nil && err != sql.ErrNoRows {
+		return 0, false, coded("E607", err.Error())
+	}
+	return start.Int64, start.Valid, nil
+}
+
 // TelPutDecision stores (or replaces) the decision of one attempt and applies retention.
 func (s *Store) TelPutDecision(ctx context.Context, d TelDecision) error {
 	return s.telWrite(ctx, func(tx *sql.Tx) error {
