@@ -41,7 +41,7 @@ func TestIsTerminalRealDetector(t *testing.T) {
 
 // TestIsTerminalControllingTTY is the positive control: where the test process has
 // a controlling terminal (a developer shell), /dev/tty is a terminal. CI has none
-// and skips; a pty-based positive case needs a per-OS pty open this repo does not carry.
+// and the test only logs; a pty-based positive case needs a per-OS pty open this repo does not carry.
 func TestIsTerminalControllingTTY(t *testing.T) {
 	tty, err := os.Open("/dev/tty")
 	if err != nil {

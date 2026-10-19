@@ -66,9 +66,10 @@ func presetList() string {
 var stdinTerminal = func() bool { return isTerminal(os.Stdin) }
 
 // interactiveRun reports whether a person waits at a terminal: stdin is a
-// terminal, no --trigger names who started the run and NSELF_INVOKED_BY (a wrapper
-// or scheduler may set it to say a script, not a person, started the run) is empty. It replaces the
-// trigger-string guess of foregroundTrigger for real runs (P7-AUTO-29).
+// terminal, no --trigger names who started the run and NSELF_INVOKED_BY (a
+// wrapper or scheduler may set it to say a script started the run) is empty.
+// It replaces the trigger-string guess for real runs (P7-AUTO-29); only an
+// interactive run keeps the dispatcher's 10 minute foreground queue cap.
 func interactiveRun(trigger string, getenv func(string) string) bool {
 	return trigger == "" && getenv("NSELF_INVOKED_BY") == "" && stdinTerminal()
 }
