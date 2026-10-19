@@ -20,3 +20,12 @@ func AcquireServeLock(string) (func(), error) {
 
 // ServeHoldsLock is always false here.
 func ServeHoldsLock(string) bool { return false }
+
+// RecordSocket is a no-op here.
+func RecordSocket(string, string) error { return nil }
+
+// SocketFor is the default socket path here.
+func SocketFor(home string) string { return SocketPath(home) }
+
+// SocketIsOurs is always true here (there is no local serve).
+func SocketIsOurs(string) bool { return true }

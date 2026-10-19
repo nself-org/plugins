@@ -122,7 +122,12 @@ func refuseUnsupported(o *RunOptions) error {
 	add(o.Force, "--force")
 	add(o.NoStatus, "--no-status")
 	add(o.ConfirmFlaky > 0, "--confirm-flaky")
-	add(o.PolicyRun != nil, "--where/--prefer/--runner")
+	// the scheduling and image flags are applied by hooks that run after this one, so read their values
+	add(schedFlags.Prefer != "", "--prefer")
+	add(schedFlags.Runner != "", "--runner")
+	add(schedFlags.MaxQueue != "", "--max-queue")
+	add(adhocFlags.Image != "", "--image")
+	add(o.PolicyRun != nil, "--where")
 	add(bare.cfg != "", "--config")
 	add(bare.base != "", "--base")
 	if len(bad) == 0 {

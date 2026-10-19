@@ -23,14 +23,15 @@ import (
 
 // Config configures a Server.
 type Config struct {
-	Backend  Backend
-	Roles    *roles.Service
-	Allow    func(project string) bool // the coordinator's repo allowlist; nil allows no project (fail closed; Local mode ignores it)
-	Local    bool                      // unix-socket mode: the caller is the operator, no credential is read
-	Operator string                    // the operator principal id of Local mode
-	Poll     time.Duration             // events poll interval (default 500 ms)
-	MaxLife  time.Duration             // longest events or log stream before the client must reconnect (default 6 h)
-	Logf     func(format string, a ...any)
+	Backend    Backend
+	Roles      *roles.Service
+	Allow      func(project string) bool // the coordinator's repo allowlist; nil allows no project (fail closed; Local mode ignores it)
+	Local      bool                      // unix-socket mode: the caller is the operator, no credential is read
+	Operator   string                    // the operator principal id of Local mode
+	SubmitRole roles.Role                // the role POST /v1/runs needs (default release: a submit runs a commit's own pipeline config on the coordinator)
+	Poll       time.Duration             // events poll interval (default 500 ms)
+	MaxLife    time.Duration             // longest events or log stream before the client must reconnect (default 6 h)
+	Logf       func(format string, a ...any)
 }
 
 // Server is the user API.
@@ -49,6 +50,9 @@ func New(cfg Config) *Server {
 	}
 	if cfg.Logf == nil {
 		cfg.Logf = func(string, ...any) {}
+	}
+	if cfg.SubmitRole.Rank() == 0 {
+		cfg.SubmitRole = roles.Release
 	}
 	return &Server{cfg: cfg, lim: newLimiter()}
 }
@@ -102,7 +106,7 @@ func tryPattern(method, pattern string) (err error) {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	s.add(mux, routeSpec{http.MethodGet, PathPing, roles.Member, http.HandlerFunc(s.ping)})
-	s.add(mux, routeSpec{http.MethodPost, PathRuns, roles.Member, http.HandlerFunc(s.submit)})
+	s.add(mux, routeSpec{http.MethodPost, PathRuns, s.cfg.SubmitRole, http.HandlerFunc(s.submit)})
 	s.add(mux, routeSpec{http.MethodGet, PathRuns, roles.Member, http.HandlerFunc(s.list)})
 	s.add(mux, routeSpec{http.MethodGet, PathRunsPfx + "{id}", roles.Member, http.HandlerFunc(s.get)})
 	s.add(mux, routeSpec{http.MethodPost, PathRunsPfx + "{id}/cancel", roles.Member, http.HandlerFunc(s.cancel)})

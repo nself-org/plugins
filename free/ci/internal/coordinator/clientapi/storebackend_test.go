@@ -10,13 +10,16 @@ package clientapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
+	"github.com/nself-org/plugins/free/ci/internal/roles"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -233,5 +236,66 @@ func TestSameCommitInTwoProjectsIsNeverCrossed(t *testing.T) {
 		if it.ID == "run-shared" && it.Project != "" {
 			t.Fatalf("List attributed the shared pipeline to %q", it.Project)
 		}
+	}
+}
+
+// Pushing a project's dispatched row out of any window must not let another project take over its run:
+// ownership is decided over every dispatched row of the commit.
+func TestManyJunkRowsCannotHideAnotherProjectsRun(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	c, _ := coordinator.New(coordinator.Config{Store: st, PolicyDigest: "t"})
+	b := &StoreBackend{Store: st, Home: t.TempDir(), Enqueue: c.Enqueue}
+	if _, err = b.Submit(ctx, SubmitRequest{Project: "acme/app", Revision: goodRev}, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := st.IntakeClaim(ctx, "coord-a"); !ok {
+		t.Fatal("nothing to claim")
+	}
+	for i := 0; i < 260; i++ { // far more than any list window
+		if _, err = b.Submit(ctx, SubmitRequest{Project: "fork/app", Revision: fmt.Sprintf("%040x", i+1)}, "x"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mine, err := b.Submit(ctx, SubmitRequest{Project: "fork/app", Revision: goodRev}, "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for { // claim until the fork's row for goodRev is dispatched
+		row, ok, err := st.IntakeClaim(ctx, "coord-b")
+		if err != nil || !ok {
+			t.Fatalf("claim: %v %v", ok, err)
+		}
+		if row.ID == mine.ID {
+			break
+		}
+	}
+	run := store.PipelineRow{ID: "run-acme", Project: "/tmp/checkout", Revision: goodRev, Trigger: "api", SourceTrust: "owner", PrivacyZone: "local-only",
+		PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"}
+	if err = st.CreatePipeline(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	it, ok, _ := b.Get(ctx, mine.ID)
+	if !ok || it.ID != mine.ID {
+		t.Fatalf("the fork's row was tied to another project's pipeline: %+v", it)
+	}
+	if it, ok, _ = b.Get(ctx, "run-acme"); !ok || it.Project != "" {
+		t.Fatalf("the shared run must be unowned while two projects wait on its commit: %+v", it)
+	}
+}
+
+func TestRevisionLookupOnlyFindsRunsTheCallerMaySee(t *testing.T) {
+	r := newRig(t)
+	other := item("run-b", "acme/other", "passed")
+	mine := item("run-a", "acme/app", "passed")
+	r.be.runs = []RunItem{other, mine} // the newest run of this commit is not mine
+	tok := r.token("mia", roles.Member, time.Hour, "acme/app")
+	st, b := r.do(r.client(), "GET", PathRunsPfx+mine.Revision, tok, "")
+	if st != 200 || !strings.Contains(string(b), `"id":"run-a"`) {
+		t.Fatalf("a member must get their own run for that commit, not a 404: %d %s", st, b)
 	}
 }

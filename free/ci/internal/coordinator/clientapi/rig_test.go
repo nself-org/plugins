@@ -162,7 +162,7 @@ func newRig(t *testing.T) *rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api := New(Config{Backend: r.be, Roles: r.svc, Allow: func(p string) bool { return r.allow[p] }, Poll: 10 * time.Millisecond})
+	api := New(Config{Backend: r.be, Roles: r.svc, SubmitRole: roles.Member, Allow: func(p string) bool { return r.allow[p] }, Poll: 10 * time.Millisecond})
 	r.srv = httptest.NewUnstartedServer(api.Handler())
 	r.srv.TLS = TLSConfig(r.ca, func() (tls.Certificate, error) { return leaf, nil }, pki.NewGuard(st))
 	r.srv.StartTLS()

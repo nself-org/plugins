@@ -148,3 +148,59 @@ func TestCoordinatorClientUserConfigGuards(t *testing.T) {
 		t.Fatal("a broken configuration must be Active, so the work never silently runs on this machine")
 	}
 }
+
+func TestCoordinatorClientSocketRecordAndOwnerChecks(t *testing.T) {
+	home := t.TempDir()
+	if got := SocketFor(home); got != SocketPath(home) {
+		t.Fatalf("default socket %q", got)
+	}
+	release, err := AcquireServeLock(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	custom := filepath.Join(home, "x.sock")
+	if err = RecordSocket(home, custom); err != nil {
+		t.Fatal(err)
+	}
+	if err = RecordSocket(home, custom); err != nil { // idempotent: one socket line
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(LockPath(home))
+	if strings.Count(string(raw), "socket=") != 1 || !strings.Contains(string(raw), "pid=") || SocketFor(home) != custom {
+		t.Fatalf("lock file %q, socket %q", raw, SocketFor(home))
+	}
+	_ = os.WriteFile(LockPath(home), []byte("pid=1\nsocket=relative.sock\n"), 0o600)
+	if got := SocketFor(home); got != SocketPath(home) {
+		t.Fatalf("a relative socket path must be ignored, got %q", got)
+	}
+	// a regular file, or a link, at the socket path is not a serve's socket
+	plain := filepath.Join(t.TempDir(), "s.sock")
+	_ = os.WriteFile(plain, nil, 0o600)
+	if SocketIsOurs(plain) {
+		t.Fatal("a regular file passed for a socket")
+	}
+	if _, err = New(Target{Kind: LocalServe, Socket: plain}); !reasonIs(err, clientapi.ReasonServeDown) {
+		t.Fatalf("a planted file must be refused as the serve socket: %v", err)
+	}
+	link := filepath.Join(t.TempDir(), "l.sock")
+	_ = os.Symlink(plain, link)
+	if SocketIsOurs(link) {
+		t.Fatal("a symlink passed for a socket")
+	}
+}
+
+func TestCoordinatorClientLockFileIsNotFollowed(t *testing.T) {
+	home := t.TempDir()
+	victim := filepath.Join(t.TempDir(), "victim")
+	_ = os.WriteFile(victim, []byte("keep me"), 0o644)
+	if err := os.Symlink(victim, LockPath(home)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AcquireServeLock(home); err == nil {
+		t.Fatal("the lock must not be taken through a symlink")
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "keep me" {
+		t.Fatalf("the lock wrote through the link: %q", b)
+	}
+}

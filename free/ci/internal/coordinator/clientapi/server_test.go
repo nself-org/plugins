@@ -8,6 +8,7 @@ package clientapi
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -270,4 +271,32 @@ func TestEvidenceAndLogs(t *testing.T) {
 	}
 	st, b = r.do(r.client(), "GET", PathLogsPfx+"nojob?run=run-a", tok, "")
 	refused(t, st, b, 404, ReasonNotFound)
+}
+
+// A submit runs the commit's own pipeline config on the coordinator, so by default it needs the release
+// role; a member-submit coordinator still reserves naming a pipeline for release.
+func TestSubmitRoleAndNamedPipeline(t *testing.T) {
+	r := newRig(t)
+	anon := r.client()
+	member := r.token("mia", roles.Member, time.Hour, "acme/app")
+	release := r.token("ray", roles.Release, time.Hour, "acme/app")
+	strict := New(Config{Backend: r.be, Roles: r.svc, Allow: func(string) bool { return true }}) // default SubmitRole
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", PathRuns, strings.NewReader(submitBody("acme/app")))
+	req.TLS = &tls.ConnectionState{}
+	req.Header.Set("Authorization", "Bearer "+member)
+	strict.Handler().ServeHTTP(w, req)
+	refused(t, w.Code, w.Body.Bytes(), 403, ReasonRole)
+	if len(r.be.submits) != 0 {
+		t.Fatal("a refused submit reached the backend")
+	}
+	named := `{"project":"acme/app","revision":"` + goodRev + `","pipeline":"release"}`
+	st, b := r.do(anon, "POST", PathRuns, member, named) // this rig lets members submit
+	refused(t, st, b, 403, ReasonRole)
+	if st, b = r.do(anon, "POST", PathRuns, release, named); st != 202 {
+		t.Fatalf("a release holder may name a pipeline: %d %s", st, b)
+	}
+	if len(r.be.submits) != 1 || r.be.submits[0].Pipeline != "release" {
+		t.Fatalf("backend saw %+v", r.be.submits)
+	}
 }

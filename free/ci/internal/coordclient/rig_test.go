@@ -67,7 +67,7 @@ func newSim(t *testing.T) *sim {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api := clientapi.New(clientapi.Config{Roles: s.svc, Allow: func(p string) bool { return s.allow[p] }, Poll: 10 * time.Millisecond,
+	api := clientapi.New(clientapi.Config{Roles: s.svc, SubmitRole: roles.Member, Allow: func(p string) bool { return s.allow[p] }, Poll: 10 * time.Millisecond,
 		Backend: &clientapi.StoreBackend{Store: s.st, Home: s.dir, Enqueue: s.coord.Enqueue}})
 	// the listener is wrapped by hand: httptest.StartTLS would add its own certificate to the config, which a
 	// client that dials an IP (no SNI) would then be given instead of the coordinator's

@@ -22,9 +22,11 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/audit"
 	"github.com/nself-org/plugins/free/ci/internal/coordclient"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/clientapi"
+	"github.com/nself-org/plugins/free/ci/internal/detach"
 	"github.com/nself-org/plugins/free/ci/internal/logs"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
+	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -373,4 +375,51 @@ func FuzzGithubRemote(f *testing.F) {
 			t.Fatalf("%q produced %q/%q", raw, m[1], m[2])
 		}
 	})
+}
+
+// The scheduling and image flags are applied by hooks that run after the coordinator hook, so the
+// refusal reads their values: a run must never go out with one of them silently dropped.
+func TestCoordinatorHookRefusesFlagsAppliedByLaterHooks(t *testing.T) {
+	be, _ := localServe(t)
+	fakeRepo(t, "git@github.com:acme/app.git", "")
+	defer func() { schedFlags = schedpolicy.Flags{}; adhocFlags.Image = "" }()
+	for name, set := range map[string]func(){
+		"--prefer": func() { schedFlags.Prefer = "fast" }, "--runner": func() { schedFlags.Runner = "mm4" },
+		"--max-queue": func() { schedFlags.MaxQueue = "5m" }, "--image": func() { adhocFlags.Image = "x@sha256:" + strings.Repeat("a", 64) },
+	} {
+		schedFlags, adhocFlags.Image = schedpolicy.Flags{}, ""
+		set()
+		exit, exited, _, errw := hook(t, RunOptions{Root: t.TempDir()})
+		if !exited || exit != 1 || !strings.Contains(errw, name) {
+			t.Errorf("%s: exit %d exited %v %q", name, exit, exited, errw)
+		}
+	}
+	if len(be.submits) != 0 {
+		t.Fatal("a refused run reached the coordinator")
+	}
+}
+
+// `--detach` under a live serve must not verify against the serve's database (that opens it for writing):
+// the detached child submits over the socket and its first record is the proof.
+func TestDetachUnderALiveServeOpensNoStore(t *testing.T) {
+	localServe(t)
+	oldExe, oldArgs, oldTune, oldExit := detachExe, detachArgs, detachTune, detachExit
+	defer func() { detachExe, detachArgs, detachTune, detachExit = oldExe, oldArgs, oldTune, oldExit }()
+	detachExe = func() (string, error) { return "/usr/bin/true", nil }
+	detachArgs = func() []string { return []string{"--json"} }
+	var verifier = "unset"
+	detachTune = func(p *detach.Params) {
+		verifier = "none"
+		if p.Verify != nil {
+			verifier = "local store"
+		}
+	}
+	var out bytes.Buffer
+	oldOut := detachOut
+	detachOut = &out
+	defer func() { detachOut = oldOut }()
+	_ = runDetach(&RunOptions{JSON: true, Home: os.Getenv("NSELF_CI_HOME")})
+	if verifier != "none" {
+		t.Fatalf("detach verifier = %s; under a live serve it must not read the local store", verifier)
+	}
 }

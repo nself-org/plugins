@@ -1,16 +1,19 @@
 package main
 
-// Purpose: the user API and local-socket listeners of the V15 `ci serve` (P7-NODE-19, Epic D14):
-// `--api-addr` (default 127.0.0.1:3865, TLS 1.3, user certificates or scoped tokens) and `--api-socket`
-// ($NSELF_CI_HOME/serve.sock, mode 0600, the operator). Both register through coordinator.RegisterListener
-// and flags, so serve_v15.go is unchanged.
+// Purpose: the user API, local-socket and serve-lock listeners of the V15 `ci serve` (P7-NODE-19, Epic D14):
+// `--api-addr` (default 127.0.0.1:3865, TLS 1.3, user certificates or scoped tokens), `--api-socket`
+// ($NSELF_CI_HOME/serve.sock, mode 0600, the operator) and `--api-lock` (the flock on serve.lock that tells a
+// second `nself ci` to defer to this serve). All register through coordinator.RegisterListener and flags,
+// so serve_v15.go is unchanged.
 // Inputs:  the serve flags --data-dir, --api-addr, --api-socket, --api-public-url; the coordinator's store.
 // Outputs: HTTPS on the API address; a unix socket and the serve.lock flock while the serve runs.
 // Constraints: the server certificate comes from the coordinator PKI (SANs: localhost, loopback, the bind
 //          host and --api-public-url) and is renewed in place before it expires; an empty --api-addr or
 //          --api-socket turns that listener off; the socket is the operator's and takes the exclusive
-//          serve lock, so a second serve on the same home refuses to start; the repo allowlist of the
-//          coordinator applies to submits (an empty allowlist allows none).
+//          serve lock, so a second serve on the same home refuses to start; the lock is its own listener
+//          and stays held when the socket or the API is off or fails to bind (a serve without the lock
+//          would let a second `nself ci` write the same store); the repo allowlist of the coordinator
+//          applies to submits (an empty allowlist allows none); a submit needs the role --api-submit-role.
 
 import (
 	"context"
@@ -44,6 +47,7 @@ var userAPIFlags struct {
 func init() {
 	coordinator.RegisterFlag(func(fs *flag.FlagSet) {
 		fs.String("api-public-url", "", "URL users reach the user API at (its host goes into the server certificate)")
+		fs.String("api-submit-role", "release", "role that may start a run through the user API: release (default) or member. A run executes the commit's own pipeline config on this host and the coordinator does not yet classify fork pull requests or check release.start at dispatch, so member is safe only when every allowed repo's pipelines are trusted")
 		userAPIFlags.Lock()
 		userAPIFlags.fs = fs
 		userAPIFlags.Unlock()
@@ -52,6 +56,7 @@ func init() {
 		name, flag, def string
 		start           coordinator.ListenerStart
 	}{
+		{"api-lock", "api-lock", "on", startServeLock}, // sorts first: the lock exists before the socket is noted in it
 		{"user-api", "api-addr", "127.0.0.1:3865", startUserAPI},
 		{"local-socket", "api-socket", "auto", startLocalSocket},
 	} {
@@ -188,7 +193,12 @@ func startUserAPI(ctx context.Context, addr string, c *coordinator.Coordinator) 
 		_ = ln.Close()
 		return nil, err
 	}
-	api := clientapi.New(clientapi.Config{Roles: svc, Allow: c.RepoAllowed, Logf: c.Logf,
+	submitRole, ok := roles.ParseRole(serveFlag("api-submit-role"))
+	if !ok {
+		_ = ln.Close()
+		return nil, errors.New("--api-submit-role must be release or member")
+	}
+	api := clientapi.New(clientapi.Config{Roles: svc, SubmitRole: submitRole, Allow: c.RepoAllowed, Logf: c.Logf,
 		Backend: &clientapi.StoreBackend{Store: c.Store(), Home: home, Enqueue: c.Enqueue}})
 	gctx, cancel := context.WithCancel(ctx)
 	go guard.Run(gctx, 2*time.Second)
@@ -241,18 +251,30 @@ func startLocalSocket(ctx context.Context, addr string, c *coordinator.Coordinat
 	if path == "auto" {
 		path = coordclient.SocketPath(home)
 	}
-	release, err := coordclient.AcquireServeLock(home) // a second serve on this home is a mistake: refuse it
-	if err != nil {
-		return nil, err
-	}
 	ln, err := clientapi.ListenUnix(path)
 	if err != nil {
-		release()
 		return optional(c, "api-socket", err)
+	}
+	if err = coordclient.RecordSocket(home, path); err != nil {
+		_ = ln.Close()
+		return nil, err
 	}
 	api := clientapi.New(clientapi.Config{Roles: userRoles(c), Local: true, Operator: adminActor(), Logf: c.Logf,
 		Backend: &clientapi.StoreBackend{Store: c.Store(), Home: home, Enqueue: c.Enqueue}})
 	gctx, cancel := context.WithCancel(ctx)
 	c.Logf("local socket %s (mode 0600) held by pid %d", path, os.Getpid())
-	return serveOn(gctx, ln, api.Handler(), cancel, func() { _ = os.Remove(path); release() }), nil
+	return serveOn(gctx, ln, api.Handler(), cancel, func() { _ = os.Remove(path) }), nil
+}
+
+// startServeLock takes the serve lock for as long as the serve runs. A second serve on this home is refused.
+func startServeLock(ctx context.Context, addr string, c *coordinator.Coordinator) (func(context.Context) error, error) {
+	if ctx.Err() != nil || addr == "off" {
+		return noop, nil
+	}
+	release, err := coordclient.AcquireServeLock(serveHome())
+	if err != nil {
+		return nil, err
+	}
+	c.Logf("serve lock held on %s by pid %d", serveHome(), os.Getpid())
+	return func(context.Context) error { release(); return nil }, nil
 }

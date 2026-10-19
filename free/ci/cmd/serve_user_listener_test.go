@@ -129,3 +129,75 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 	}
 	t.Fatalf("timed out waiting for %s", what)
 }
+
+// The lock outlives a failed socket and an off socket: a serve that runs without it would let a second
+// `nself ci` write its store.
+func TestServeKeepsTheLockWhenTheSocketIsOffOrFails(t *testing.T) {
+	serveFixture(t, quietHost())
+	hook := func(c *coordinator.Config) {
+		c.Listen = func(network, _ string) (net.Listener, error) { return net.Listen(network, "127.0.0.1:0") }
+	}
+	for _, c := range []struct {
+		name string
+		long bool     // a data dir whose default socket path is over the 104-byte limit
+		sock []string // extra flags
+	}{{"off", false, []string{"--api-socket", ""}}, {"unbindable default path", true, nil}} {
+		base, err := os.MkdirTemp("", "ci-lock")
+		if err != nil {
+			t.Fatal(err)
+		}
+		data := base
+		if c.long {
+			data = filepath.Join(base, strings.Repeat("x", 60), strings.Repeat("y", 60))
+			if err = os.MkdirAll(data, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		args := func(wd string) []string {
+			return append([]string{"--insecure", "--workdir", filepath.Join(base, wd), "--data-dir", data, "--api-addr", freePort(t)}, c.sock...)
+		}
+		done := make(chan int, 1)
+		go func() { done <- serveV15(ctx, args("wd"), hook) }()
+		waitFor(t, c.name+": the serve lock", func() bool { return coordclient.ServeHoldsLock(data) })
+		if c2 := serveV15(ctx, args("wd2"), hook); c2 == 0 {
+			t.Errorf("%s: a second serve started on a home whose serve has no socket", c.name)
+		}
+		cancel()
+		if code := <-done; code != 0 {
+			t.Errorf("%s: exit %d", c.name, code)
+		}
+		_ = os.RemoveAll(base)
+	}
+}
+
+// A serve started with another --api-socket path says so in its lock file, and clients follow it.
+func TestClientFollowsTheSocketPathInTheLock(t *testing.T) {
+	serveFixture(t, quietHost())
+	data, err := os.MkdirTemp("", "ci-sockpath")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(data) }()
+	sock := filepath.Join(data, "elsewhere.sock")
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan int, 1)
+	hook := func(c *coordinator.Config) {
+		c.Listen = func(network, _ string) (net.Listener, error) { return net.Listen(network, "127.0.0.1:0") }
+	}
+	go func() {
+		done <- serveV15(ctx, []string{"--insecure", "--workdir", filepath.Join(data, "wd"), "--data-dir", data, "--api-addr", freePort(t), "--api-socket", sock}, hook)
+	}()
+	waitFor(t, "the socket", func() bool { _, err := os.Stat(sock); return err == nil && coordclient.ServeHoldsLock(data) })
+	if got := coordclient.SocketFor(data); got != sock {
+		t.Fatalf("SocketFor = %q, want %q", got, sock)
+	}
+	tg, _, err := coordclient.Resolve(coordclient.Inputs{Getenv: func(string) string { return "" }, Home: data})
+	if err != nil || tg.Kind != coordclient.LocalServe || tg.Socket != sock {
+		t.Fatalf("target %+v %v", tg, err)
+	}
+	cancel()
+	if code := <-done; code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+}

@@ -35,8 +35,8 @@ const intakePrefix = "in-"
 
 // Submit stores a manual trigger. The coordinator's semantic key makes a repeat of the same revision a
 // duplicate or a coalesced run, so a retried submit is safe.
-func (b *StoreBackend) Submit(ctx context.Context, r SubmitRequest, _ string) (SubmitResult, error) {
-	facts, _ := json.Marshal(map[string]string{"trigger": "api"})
+func (b *StoreBackend) Submit(ctx context.Context, r SubmitRequest, by string) (SubmitResult, error) {
+	facts, _ := json.Marshal(map[string]string{"trigger": "api", "submitter": by}) // the dispatch (and its audit) can see who asked
 	out, err := b.Enqueue(ctx, coordinator.Delivery{Source: "manual", Project: r.Project, Revision: r.Revision,
 		TriggerClass: "change", Pipeline: r.Pipeline, Facts: facts})
 	if err != nil {
@@ -54,7 +54,7 @@ func (b *StoreBackend) List(ctx context.Context, limit int) ([]RunItem, error) {
 	owned := map[string]bool{}
 	out := make([]RunItem, 0, len(rows))
 	for _, r := range rows {
-		it, _, e := b.fromIntake(ctx, r, false, rows)
+		it, _, e := b.fromIntake(ctx, r, false)
 		if e != nil {
 			return nil, e
 		}
@@ -69,7 +69,10 @@ func (b *StoreBackend) List(ctx context.Context, limit int) ([]RunItem, error) {
 		if !owned[p.ID] {
 			it := RunItem{RunView: cirun.RunView{ID: p.ID, Revision: p.Revision, Status: p.Status}}
 			if !pipelineEnded(p.Status) { // the same rule as Get: only a run still going can be tied to a dispatched row
-				it.Project = inflightProject(rows, p.Revision)
+				var e error
+				if it.Project, e = b.inflightOwner(ctx, p.Revision); e != nil {
+					return nil, e
+				}
 			}
 			out = append(out, it)
 		}
@@ -88,7 +91,7 @@ func (b *StoreBackend) Get(ctx context.Context, ref string) (RunItem, bool, erro
 			}
 			return RunItem{}, false, err
 		}
-		return b.fromIntake(ctx, row, true, nil)
+		return b.fromIntake(ctx, row, true)
 	}
 	if coordinator.ValidRevision(ref) { // `ci evidence <revision>`: the newest run of that commit
 		rows, err := b.Store.PipelinesByRevision(ctx, ref)
@@ -114,11 +117,9 @@ func (b *StoreBackend) Get(ctx context.Context, ref string) (RunItem, bool, erro
 	} else if ok {
 		it.Project = in.Project
 	} else if !pipelineEnded(row.Status) { // still running: its intake row does not name it yet
-		rows, e := b.Store.IntakeList(ctx, 200)
-		if e != nil {
-			return RunItem{}, false, e
+		if it.Project, err = b.inflightOwner(ctx, row.Revision); err != nil {
+			return RunItem{}, false, err
 		}
-		it.Project = inflightProject(rows, row.Revision)
 	}
 	return it, true, nil
 }
@@ -140,13 +141,12 @@ func inflightProject(rows []store.IntakeRow, revision string) string {
 	return project
 }
 
-// fromIntake describes the run an intake row stands for; jobs adds the job list of a started run. recent
-// is the newest intake rows when the caller already has them (nil: loaded on demand).
-func (b *StoreBackend) fromIntake(ctx context.Context, r store.IntakeRow, jobs bool, recent []store.IntakeRow) (RunItem, bool, error) {
+// fromIntake describes the run an intake row stands for; jobs adds the job list of a started run.
+func (b *StoreBackend) fromIntake(ctx context.Context, r store.IntakeRow, jobs bool) (RunItem, bool, error) {
 	pid := r.PipelineID
 	if pid == "" && r.State == store.IntakeDispatched {
 		var err error
-		if pid, err = b.inflightPipeline(ctx, r, recent); err != nil {
+		if pid, err = b.inflightPipeline(ctx, r); err != nil {
 			return RunItem{}, false, err
 		}
 	}
@@ -166,28 +166,42 @@ func (b *StoreBackend) fromIntake(ctx context.Context, r store.IntakeRow, jobs b
 	return RunItem{RunView: cirun.RunView{ID: r.ID, Revision: r.Revision, Status: intakeStatus(r)}, Project: r.Project}, true, nil
 }
 
+// inflightOwner is the project of the dispatched rows that wait on revision, or "" when there are none or
+// they disagree. It reads every such row, never a window: a window an attacker can push a row out of
+// would let one project's member be handed another project's run.
+func (b *StoreBackend) inflightOwner(ctx context.Context, revision string) (string, error) {
+	rows, err := b.Store.IntakeDispatchedByRevision(ctx, revision)
+	if err != nil {
+		return "", err
+	}
+	return inflightProject(rows, revision), nil
+}
+
 // inflightPipeline ties a dispatched intake row that names no pipeline yet to the running pipeline of its
 // revision. The tie is made only when it is unambiguous: if dispatched rows of two projects wait on the same
 // commit (a fork carries the same SHA), nobody can tell whose pipeline is whose, so none is returned and the
-// row stays a run without jobs until its dispatch finishes and names its pipeline.
-func (b *StoreBackend) inflightPipeline(ctx context.Context, r store.IntakeRow, recent []store.IntakeRow) (string, error) {
-	if recent == nil {
-		var err error
-		if recent, err = b.Store.IntakeList(ctx, 200); err != nil {
-			return "", err
-		}
-	}
-	if inflightProject(recent, r.Revision) != r.Project {
-		return "", nil
+// row stays a run without jobs until its dispatch finishes and names its pipeline. A pipeline some row
+// already names is never taken. The durable fix (the dispatch recording the intake id on the pipeline row)
+// belongs to the coordinator, not to this API.
+func (b *StoreBackend) inflightPipeline(ctx context.Context, r store.IntakeRow) (string, error) {
+	owner, err := b.inflightOwner(ctx, r.Revision)
+	if err != nil || owner != r.Project {
+		return "", err
 	}
 	rows, err := b.Store.PipelinesByRevision(ctx, r.Revision)
 	if err != nil {
 		return "", err
 	}
 	for _, p := range rows {
-		if !pipelineEnded(p.Status) {
-			return p.ID, nil
+		if pipelineEnded(p.Status) {
+			continue
 		}
+		if _, named, e := b.Store.IntakeByPipeline(ctx, p.ID); e != nil {
+			return "", e
+		} else if named {
+			continue
+		}
+		return p.ID, nil
 	}
 	return "", nil
 }

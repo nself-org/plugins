@@ -100,7 +100,7 @@ func Resolve(in Inputs) (Target, []string, error) {
 		return Target{Kind: Remote, URL: u, Creds: creds}, warns, nil
 	}
 	if ServeHoldsLock(home) {
-		return Target{Kind: LocalServe, Socket: SocketPath(home)}, warns, nil
+		return Target{Kind: LocalServe, Socket: SocketFor(home)}, warns, nil
 	}
 	return Target{Kind: InProcess}, warns, nil
 }

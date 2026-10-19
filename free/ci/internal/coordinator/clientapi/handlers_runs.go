@@ -81,9 +81,15 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, Failf(ReasonBadRequest, "need project owner/repo, a full hex revision and a plain pipeline name"))
 		return
 	}
-	if err := roles.Authorize(r.Context(), a, roles.Member, req.Project); err != nil {
+	if err := roles.Authorize(r.Context(), a, s.cfg.SubmitRole, req.Project); err != nil {
 		s.fail(w, err)
 		return
+	}
+	if req.Pipeline != "" { // choosing which pipeline of a commit runs is a release decision, whatever the submit role
+		if err := roles.AuthorizeAction(r.Context(), a, roles.ActReleaseStart, req.Project); err != nil {
+			s.fail(w, err)
+			return
+		}
 	}
 	if !s.cfg.Local && (s.cfg.Allow == nil || !s.cfg.Allow(req.Project)) { // the local operator may submit any project
 		s.fail(w, Failf(ReasonProjectBlocked, "project %s is not on the coordinator allowlist", req.Project))
@@ -93,7 +99,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	res, err := s.cfg.Backend.Submit(r.Context(), req, a.Label())
+	res, err := s.cfg.Backend.Submit(r.Context(), req, a.Label()+" role="+string(a.Role()))
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -132,18 +138,20 @@ func (s *Server) find(r *http.Request, a roles.Actor, ref string) (RunItem, erro
 	if len(ref) > 128 {
 		return RunItem{}, Failf(ReasonNotFound, "no such run")
 	}
-	if ref == "" || ref == "latest" {
+	if ref == "" || ref == "latest" || coordinator.ValidRevision(ref) {
 		all, err := s.cfg.Backend.List(r.Context(), 500)
 		if err != nil {
 			return RunItem{}, err
 		}
-		for _, it := range all {
-			if canSee(a, it) {
+		want := ref
+		ref = ""
+		for _, it := range all { // the newest run the caller may see (of that commit, when a commit was named)
+			if canSee(a, it) && (want == "" || want == "latest" || it.Revision == want) {
 				ref = it.ID
 				break
 			}
 		}
-		if ref == "" || ref == "latest" {
+		if ref == "" {
 			return RunItem{}, Failf(ReasonNotFound, "no run")
 		}
 	}

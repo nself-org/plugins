@@ -17,6 +17,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -32,7 +33,7 @@ func AcquireServeLock(home string) (release func(), err error) {
 	if err = os.MkdirAll(home, 0o700); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(LockPath(home), os.O_RDWR|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(LockPath(home), os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW, 0o600)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +51,7 @@ func AcquireServeLock(home string) (release func(), err error) {
 
 // ServeHoldsLock reports whether a live process holds the serve lock of home.
 func ServeHoldsLock(home string) bool {
-	f, err := os.Open(LockPath(home))
+	f, err := os.OpenFile(LockPath(home), os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return false
 	}
@@ -59,7 +60,7 @@ func ServeHoldsLock(home string) bool {
 		if errors.Is(err, syscall.EWOULDBLOCK) {
 			return true // held exclusively by someone else
 		}
-		c, derr := net.DialTimeout("unix", SocketPath(home), time.Second) // locks unsupported here (a network mount): ask the socket
+		c, derr := net.DialTimeout("unix", SocketFor(home), time.Second) // locks unsupported here (a network mount): ask the socket
 		if derr == nil {
 			_ = c.Close()
 		}
@@ -67,4 +68,41 @@ func ServeHoldsLock(home string) bool {
 	}
 	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 	return false
+}
+
+// RecordSocket notes in the lock file where the serve's socket is, so a client finds it even when the
+// serve was started with another --api-socket path.
+func RecordSocket(home, path string) error {
+	raw, _ := os.ReadFile(LockPath(home))
+	var keep []string
+	for _, l := range strings.Split(strings.TrimRight(string(raw), "\n"), "\n") {
+		if l != "" && !strings.HasPrefix(l, "socket=") {
+			keep = append(keep, l)
+		}
+	}
+	return os.WriteFile(LockPath(home), []byte(strings.Join(append(keep, "socket="+path), "\n")+"\n"), 0o600)
+}
+
+// SocketFor is the socket of the serve that holds home: the path it recorded, else the default.
+func SocketFor(home string) string {
+	raw, err := os.ReadFile(LockPath(home))
+	if err == nil {
+		for _, l := range strings.Split(string(raw), "\n") {
+			if p, ok := strings.CutPrefix(l, "socket="); ok && filepath.IsAbs(p) {
+				return p
+			}
+		}
+	}
+	return SocketPath(home)
+}
+
+// SocketIsOurs reports whether path is a unix socket owned by this user (not a symlink, not another
+// user's): a client never sends a run to a socket someone else could have planted.
+func SocketIsOurs(path string) bool {
+	fi, err := os.Lstat(path)
+	if err != nil || fi.Mode()&os.ModeSocket == 0 {
+		return false
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	return ok && int(st.Uid) == os.Getuid()
 }

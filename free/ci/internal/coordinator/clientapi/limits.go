@@ -41,10 +41,15 @@ func newLimiter() *limiter {
 	return &limiter{fails: map[string]*failCount{}, streams: map[string]int{}, now: time.Now}
 }
 
+// sourceOf is the address a request counts against: an IPv4 address, or the /64 of an IPv6 one (a host
+// owns a whole /64, so rotating inside it must not reset its count).
 func sourceOf(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
+		return ip.Mask(net.CIDRMask(64, 128)).String() + "/64"
 	}
 	return host
 }

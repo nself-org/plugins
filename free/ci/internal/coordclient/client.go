@@ -39,6 +39,9 @@ type Client struct {
 func New(t Target) (*Client, error) {
 	switch t.Kind {
 	case LocalServe:
+		if !SocketIsOurs(t.Socket) {
+			return nil, clientapi.Failf(clientapi.ReasonServeDown, "the local serve holds the lock but %s is not its socket (missing, a link, or another user's)", t.Socket)
+		}
 		tr := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			var d net.Dialer
 			return d.DialContext(ctx, "unix", t.Socket)

@@ -76,7 +76,7 @@ func runDetach(o *RunOptions) int {
 		return detachFail(out, o.JSON, &detach.Error{Reason: detach.ReasonSpawn, Message: err.Error(), Err: err})
 	}
 	p := detach.Params{Exe: exe, Args: detachArgs(), Home: o.Home, Env: os.Environ()}
-	if detach.CoordinatorOf(p.Args, os.Getenv) == detach.Local {
+	if detach.CoordinatorOf(p.Args, os.Getenv) == detach.Local && !coordResolver.Active() { // P7-NODE-19: a live serve or a user-config coordinator owns the runs; never open its store
 		v := &localVerifier{since: time.Now()}
 		defer v.close()
 		p.Verify = v.exists // stderr shares the stream file: only a run in the store is believed

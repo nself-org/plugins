@@ -96,11 +96,19 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		if e != nil || !ok {
 			return // the client reconnects; nothing is invented
 		}
-		if authorizeRun(ctx, a, next) != nil {
+		if !s.stillAllowed(r, next) {
 			return // the grant, token or certificate was revoked meanwhile
 		}
 		it = next
 	}
+}
+
+// stillAllowed re-authenticates the request (a revoked token or certificate, an expired grant, a changed
+// role all show here) and re-checks the run's visibility. It writes no audit row: a long stream would write
+// one per poll.
+func (s *Server) stillAllowed(r *http.Request, it RunItem) bool {
+	a, err := s.authenticate(r)
+	return err == nil && canSee(a, it)
 }
 
 // streamContext bounds a stream by Config.MaxLife and by the end of the caller's certificate.
@@ -143,7 +151,7 @@ func (s *Server) logs(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, stop := s.streamContext(r)
 	defer stop()
-	if lq.Follow { // a revoked or expired credential ends a followed log within a poll, as it ends an event stream
+	if lq.Follow { // a revoked or expired credential, or a run that changed hands, ends a followed log within a poll
 		go func() {
 			tick := time.NewTicker(2 * time.Second)
 			defer tick.Stop()
@@ -152,7 +160,8 @@ func (s *Server) logs(w http.ResponseWriter, r *http.Request) {
 				case <-ctx.Done():
 					return
 				case <-tick.C:
-					if authorizeRun(ctx, a, it) != nil {
+					fresh, ok, err := s.cfg.Backend.Get(ctx, it.ID)
+					if err != nil || !ok || !s.stillAllowed(r, fresh) {
 						stop()
 						return
 					}

@@ -1,8 +1,8 @@
 package store
 
-// Purpose: the two read-only intake queries the coordinator user API needs (P7-NODE-19): the newest rows
-// for `ci runs`, and the row that stands for a pipeline, which is how a run is tied to the owner/repo
-// project its caller may see (a pipeline row keeps only the checkout path).
+// Purpose: the read-only intake queries the coordinator user API needs (P7-NODE-19): the newest rows for
+// `ci runs`, the row that stands for a pipeline and the dispatched rows of one revision, which is how a
+// run is tied to the owner/repo project its caller may see (a pipeline row keeps only the checkout path).
 // Inputs:  a limit, or a pipeline id.
 // Outputs: IntakeRow values (newest first for the list).
 // Constraints: read-only; no new table or migration.
@@ -41,4 +41,23 @@ func (s *Store) IntakeByPipeline(ctx context.Context, pipelineID string) (Intake
 		return IntakeRow{}, false, nil
 	}
 	return r, err == nil, err
+}
+
+// IntakeDispatchedByRevision returns every dispatched row of revision that names no pipeline yet (no
+// limit: ownership of an in-flight run is decided over all of them, never over a window).
+func (s *Store) IntakeDispatchedByRevision(ctx context.Context, revision string) ([]IntakeRow, error) {
+	rows, err := s.readers.QueryContext(ctx, `SELECT `+intakeCols+` FROM intake WHERE state='dispatched' AND pipeline_id='' AND revision=? ORDER BY seq`, revision)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []IntakeRow
+	for rows.Next() {
+		r, err := scanIntake(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
