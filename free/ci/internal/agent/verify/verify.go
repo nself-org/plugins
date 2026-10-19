@@ -69,6 +69,9 @@ func ParseManifest(data []byte) (Manifest, error) {
 	if len(data) == 0 || len(data) > MaxManifestBytes {
 		return m, fail(ReasonMalformedManifest, nil, "manifest size %d is outside 1..%d", len(data), MaxManifestBytes)
 	}
+	if dup := duplicateKey(data); dup {
+		return m, fail(ReasonMalformedManifest, nil, "manifest repeats a field")
+	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&m); err != nil {
@@ -84,6 +87,32 @@ func ParseManifest(data []byte) (Manifest, error) {
 		return Manifest{}, err
 	}
 	return m, nil
+}
+
+// duplicateKey reports whether the top-level JSON object repeats a field name (encoding/json would keep the last one silently).
+// Input that is not an object is left to the strict decode that follows.
+func duplicateKey(data []byte) bool {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return false
+	}
+	seen := map[string]bool{}
+	for dec.More() {
+		k, err := dec.Token()
+		name, ok := k.(string)
+		if err != nil || !ok {
+			return false
+		}
+		if seen[name] {
+			return true
+		}
+		seen[name] = true
+		var skip json.RawMessage
+		if err = dec.Decode(&skip); err != nil {
+			return false
+		}
+	}
+	return false
 }
 
 func (m Manifest) validate() error {
@@ -147,7 +176,7 @@ func Default() (*Verifier, error) {
 		}
 		keys = append(keys, signing.Key{ID: e.ID, Purpose: signing.PurposeAgent, Public: pub})
 	}
-	return New(keys, nil)
+	return New(keys, generatedRevoked)
 }
 
 // HasKeys reports whether any key is trusted.
@@ -210,7 +239,7 @@ func signingFailure(err error, keyID string) *Error {
 	}{
 		{signing.ErrRevoked, ReasonRevoked}, {signing.ErrUnknownKey, ReasonUnknownKey}, {signing.ErrWrongPurpose, ReasonWrongPurpose},
 		{signing.ErrWrongScope, ReasonWrongPurpose}, {signing.ErrExpired, ReasonKeyNotValid}, {signing.ErrNotYetValid, ReasonKeyNotValid},
-		{signing.ErrBadSignature, ReasonBadSignature}, {signing.ErrMalformed, ReasonMalformedSig},
+		{signing.ErrBadSignature, ReasonBadSignature}, {signing.ErrMalformed, ReasonMalformedManifest}, // a bad key id; the signature text was checked before
 	}
 	for _, r := range reasons {
 		if errors.Is(err, r.sentinel) {
@@ -221,6 +250,10 @@ func signingFailure(err error, keyID string) *Error {
 }
 
 func fileSHA256(path string) (string, error) {
+	// A symlink is refused: the bytes read must be the bytes at the path the caller then uses.
+	if lst, err := os.Lstat(path); err != nil || !lst.Mode().IsRegular() {
+		return "", fail(ReasonUnreadable, err, "artifact is not a regular file (symlinks are refused)")
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return "", fail(ReasonUnreadable, err, "cannot open the artifact")

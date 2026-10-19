@@ -88,6 +88,11 @@ func TestVerifyReleaseFailures(t *testing.T) {
 		{"missing manifest", func(d string) { _ = os.Remove(filepath.Join(d, "nself-ci-agent-linux-amd64.manifest.json")) }, verify.ReasonMissingSignature},
 		{"manifest without binary", func(d string) { _ = os.Remove(filepath.Join(d, "nself-ci-agent-darwin-arm64")) }, "manifest without a binary"},
 		{"wrong version in VERSION", func(d string) { _ = os.WriteFile(filepath.Join(d, "VERSION"), []byte("1.4.0\n"), 0o644) }, verify.ReasonVersionMismatch},
+		{"symlinked manifest", func(d string) {
+			m := filepath.Join(d, "nself-ci-agent-linux-amd64.manifest.json")
+			_ = os.Rename(m, filepath.Join(d, "real.json"))
+			_ = os.Symlink(filepath.Join(d, "real.json"), m)
+		}, verify.ReasonUnreadable},
 	}
 	for _, c := range cases {
 		dir, pub := releaseDir(t)

@@ -81,45 +81,49 @@ func newFixture(t *testing.T, body []byte) *fixture {
 	return f
 }
 
-func (f *fixture) release(dir string) Release {
-	return Release{Version: "1.5.0", BaseURL: f.srv.URL, Verifier: f.verifier, Dir: dir}
+func (f *fixture) release() Release {
+	return Release{Version: "1.5.0", BaseURL: f.srv.URL, Verifier: f.verifier}
 }
 
 func TestReleaseDownloadsVerifiesAndPlaces(t *testing.T) {
 	f := newFixture(t, elfBytes(elf.EM_X86_64))
-	dir := t.TempDir()
-	path, cleanup, err := f.release(dir).Fetch(context.Background(), linuxAMD64)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cleanup != nil {
-		t.Fatal("a cache Dir keeps the binary; no cleanup expected")
-	}
-	if want := filepath.Join(dir, "1.5.0", "linux-amd64", "nself-ci-agent"); path != want {
-		t.Fatalf("placed at %s, want %s", path, want)
+	path, cleanup, err := f.release().Fetch(context.Background(), linuxAMD64)
+	if err != nil || cleanup == nil {
+		t.Fatalf("fetch: %v cleanup %v", err, cleanup != nil)
 	}
 	st, err := os.Stat(path)
 	if err != nil || st.Mode().Perm() != 0o700 {
 		t.Fatalf("placed file: %v mode %v", err, st)
 	}
-	entries, _ := os.ReadDir(filepath.Dir(path))
-	if len(entries) != 1 {
+	dir := filepath.Dir(path)
+	if dst, derr := os.Stat(dir); derr != nil || dst.Mode().Perm() != 0o700 {
+		t.Fatalf("private directory: %v", derr)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 || filepath.Base(path) != "nself-ci-agent" {
 		t.Fatalf("staging leftovers beside the binary: %v", entries)
+	}
+	got, _ := os.ReadFile(path)
+	if string(got) != string(f.binary) {
+		t.Fatal("placed bytes differ from the served bytes")
+	}
+	cleanup()
+	if _, err = os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("cleanup must remove the private directory: %v", err)
 	}
 }
 
-func TestReleaseWithoutDirUsesATemporaryDirectory(t *testing.T) {
+func TestReleaseTwoInstallsNeverShareADirectory(t *testing.T) {
 	f := newFixture(t, elfBytes(elf.EM_X86_64))
-	path, cleanup, err := f.release("").Fetch(context.Background(), linuxAMD64)
-	if err != nil || cleanup == nil {
-		t.Fatalf("fetch: %v cleanup %v", err, cleanup != nil)
+	p1, c1, err1 := f.release().Fetch(context.Background(), linuxAMD64)
+	p2, c2, err2 := f.release().Fetch(context.Background(), linuxAMD64)
+	if err1 != nil || err2 != nil {
+		t.Fatalf("fetch: %v %v", err1, err2)
 	}
-	if _, err = os.Stat(path); err != nil {
-		t.Fatal(err)
-	}
-	cleanup()
-	if _, err = os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("cleanup must remove the binary: %v", err)
+	defer c1()
+	defer c2()
+	if filepath.Dir(p1) == filepath.Dir(p2) {
+		t.Fatal("two installs share a directory")
 	}
 }
 
@@ -136,20 +140,19 @@ func TestReleaseRefusesWhatFailsVerificationAndPlacesNothing(t *testing.T) {
 	for _, c := range cases {
 		f := newFixture(t, elfBytes(elf.EM_X86_64))
 		c.mutate(f)
-		dir := t.TempDir()
-		_, _, err := f.release(dir).Fetch(context.Background(), linuxAMD64)
+		path, cleanup, err := f.release().Fetch(context.Background(), linuxAMD64)
 		if verify.ReasonOf(err) != c.reason || lifecycle.CodeOf(err) != "E665" {
 			t.Fatalf("%s: want E665 %s, got %v", c.name, c.reason, err)
 		}
-		if _, serr := os.Stat(filepath.Join(dir, "1.5.0", "linux-amd64", "nself-ci-agent")); !os.IsNotExist(serr) {
-			t.Fatalf("%s: a refused artifact was placed", c.name)
+		if path != "" || cleanup != nil {
+			t.Fatalf("%s: a refused artifact was handed out", c.name)
 		}
 	}
 }
 
 func TestReleaseRefusesABinaryForAnotherArchitecture(t *testing.T) {
 	f := newFixture(t, elfBytes(elf.EM_AARCH64)) // signed correctly, but not an amd64 image
-	_, _, err := f.release(t.TempDir()).Fetch(context.Background(), linuxAMD64)
+	_, _, err := f.release().Fetch(context.Background(), linuxAMD64)
 	if lifecycle.CodeOf(err) != lifecycle.CodeInvalid {
 		t.Fatalf("want E651 for a wrong-architecture binary, got %v", err)
 	}
@@ -158,7 +161,7 @@ func TestReleaseRefusesABinaryForAnotherArchitecture(t *testing.T) {
 func TestReleaseWithoutTrustedKeyFailsBeforeAnyDownload(t *testing.T) {
 	f := newFixture(t, elfBytes(elf.EM_X86_64))
 	empty, _ := verify.New(nil, nil)
-	r := f.release(t.TempDir())
+	r := f.release()
 	r.Verifier = empty
 	_, _, err := r.Fetch(context.Background(), linuxAMD64)
 	if verify.ReasonOf(err) != verify.ReasonNoTrustedKey || !strings.Contains(err.Error(), "--agent-binary") {
@@ -177,14 +180,14 @@ func TestReleaseWithoutTrustedKeyFailsBeforeAnyDownload(t *testing.T) {
 func TestReleaseURLRules(t *testing.T) {
 	f := newFixture(t, elfBytes(elf.EM_X86_64))
 	for _, base := range []string{"http://example.com/rel", "ftp://127.0.0.1/rel", "https://" + "user" + ":" + "pw" + "@example.com/rel", "file:///tmp/rel", "https://"} {
-		r := f.release(t.TempDir())
+		r := f.release()
 		r.BaseURL = base
 		if _, _, err := r.Fetch(context.Background(), linuxAMD64); lifecycle.CodeOf(err) != lifecycle.CodeInvalid {
 			t.Errorf("%q: want E651, got %v", base, err)
 		}
 	}
 	for _, v := range []string{"", "v1.5.0", "1.5", "1.5.0/../x"} {
-		r := f.release(t.TempDir())
+		r := f.release()
 		r.Version = v
 		if _, _, err := r.Fetch(context.Background(), linuxAMD64); lifecycle.CodeOf(err) != lifecycle.CodeInvalid {
 			t.Errorf("version %q: want E651, got %v", v, err)
@@ -196,7 +199,7 @@ func TestReleaseRefusesARedirectToPlainHTTPElsewhere(t *testing.T) {
 	f := newFixture(t, elfBytes(elf.EM_X86_64))
 	redirect := httptest.NewServer(http.RedirectHandler("http://example.com/evil", http.StatusFound))
 	t.Cleanup(redirect.Close)
-	r := f.release(t.TempDir())
+	r := f.release()
 	r.BaseURL = redirect.URL
 	if _, _, err := r.Fetch(context.Background(), linuxAMD64); lifecycle.CodeOf(err) != lifecycle.CodeNoRoute {
 		t.Fatalf("want E656 for a refused redirect, got %v", err)
@@ -207,7 +210,7 @@ func TestReleaseServerErrorsAndOversizeBodies(t *testing.T) {
 	missing := httptest.NewServer(http.NotFoundHandler())
 	t.Cleanup(missing.Close)
 	f := newFixture(t, elfBytes(elf.EM_X86_64))
-	r := f.release(t.TempDir())
+	r := f.release()
 	r.BaseURL = missing.URL
 	if _, _, err := r.Fetch(context.Background(), linuxAMD64); lifecycle.CodeOf(err) != lifecycle.CodeNoRoute {
 		t.Fatalf("404: want E656, got %v", err)

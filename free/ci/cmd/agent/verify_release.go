@@ -127,7 +127,11 @@ func verifyOne(v *verify.Verifier, dir, name string, hasBin, hasManifest bool, v
 	if !hasManifest {
 		return fmt.Errorf("%s: %s: no manifest for this binary", verify.CodeVerify, verify.ReasonMissingSignature)
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, name+".manifest.json"))
+	mpath := filepath.Join(dir, name+".manifest.json")
+	if lst, lerr := os.Lstat(mpath); lerr != nil || !lst.Mode().IsRegular() {
+		return fmt.Errorf("%s: %s: the manifest is not a regular file", verify.CodeVerify, verify.ReasonUnreadable)
+	}
+	raw, err := os.ReadFile(mpath)
 	if err != nil {
 		return fmt.Errorf("%s: %s: cannot read the manifest", verify.CodeVerify, verify.ReasonUnreadable)
 	}

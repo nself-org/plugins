@@ -8,3 +8,6 @@ type keyEntry struct{ ID, Public string }
 
 // generatedKeys is the trusted agent key set.
 var generatedKeys = []keyEntry{}
+
+// generatedRevoked is the revoked key id list (scripts/release/keys/agent-revoked.txt).
+var generatedRevoked = []string{}

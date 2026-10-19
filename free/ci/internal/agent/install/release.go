@@ -3,10 +3,11 @@ package install
 // Purpose: the signed Release source of `nself ci nodes add` (hq NODE D11, P7-NODE-15): it downloads the pinned nself-ci-agent
 //          release for a node's platform, verifies it through internal/agent/verify and only then places it.
 // Inputs:  a pinned version, a release base URL, a verify.Verifier, the node's lifecycle.Platform.
-// Outputs: the path of a verified binary (lifecycle.AgentSource.Fetch) and a cleanup that removes it unless a Dir was given.
-// Constraints: nothing is placed at its final path before verify.Artifact returns nil; the download lands in a private 0700
-//          staging directory next to the final directory and is moved with one rename, so a crash or a failed verify leaves
-//          no file a later run could mistake for a verified one. https only; plain http is accepted for a loopback host
+// Outputs: the path of a verified binary (lifecycle.AgentSource.Fetch) and a cleanup that removes its private directory.
+// Constraints: nothing is placed at its final path before verify.Artifact returns nil; every install gets a fresh 0700 directory
+//          (os.MkdirTemp, never an existing or shared path, no persistent cache), the download lands there as <name>.part and is
+//          moved with one rename, so a failed verify leaves no file a later run could mistake for a verified one and no other
+//          process can swap the verified file before the installer copies it. https only; plain http is accepted for a loopback host
 //          (a local fixture server) and never after a redirect from https. Bodies are size-bounded. The binary is never
 //          executed here. With no trusted key the source fails with E665 (reason no_trusted_key) naming --agent-binary.
 
@@ -34,16 +35,13 @@ const DefaultBaseURL = "https://github.com/nself-org/plugins/releases/download"
 
 // Release downloads, verifies and places the pinned agent. The zero Client is a client with a five-minute timeout.
 type Release struct {
-	// Version is the pinned release version without a leading v ("1.5.0"). Empty fails with no_trusted_key's sibling usage error.
+	// Version is the pinned release version without a leading v ("1.5.0").
 	Version string
 	// BaseURL is the directory URL that holds the release files; empty means DefaultBaseURL/v<Version>.
 	BaseURL string
 	// Verifier decides trust; nil means the compiled-in key set.
 	Verifier *verify.Verifier
-	// Dir is where the verified binary is placed (Dir/<version>/<target>/nself-ci-agent). Empty uses a temporary directory that
-	// the returned cleanup removes.
-	Dir    string
-	Client *http.Client
+	Client   *http.Client
 }
 
 var _ lifecycle.AgentSource = Release{}
@@ -69,27 +67,25 @@ func (r Release) Fetch(ctx context.Context, p lifecycle.Platform) (string, func(
 	if err != nil {
 		return "", nil, err
 	}
-	finalDir, cleanup, err := r.finalDir(target)
+	// A fresh private directory per install (mkdir 0700, never an existing path), so no other process can swap the verified file
+	// between this return and the installer's copy. The cleanup removes it; the installer calls it after copying.
+	dir, err := os.MkdirTemp("", "nself-ci-agent-")
 	if err != nil {
-		return "", nil, err
+		return "", nil, errf(lifecycle.CodeNoRoute, "cannot create a private directory: %w", err)
 	}
+	cleanup := func() { _ = os.RemoveAll(dir) }
 	ok := false
 	defer func() {
-		if !ok && cleanup != nil {
+		if !ok {
 			cleanup()
 		}
 	}()
-	stage, err := os.MkdirTemp(finalDir, ".stage-")
-	if err != nil {
-		return "", nil, errf(lifecycle.CodeNoRoute, "cannot create the staging directory: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(stage) }()
 	name := BinaryName + "-" + target
 	manifest, err := r.get(ctx, base+"/"+name+".manifest.json", verify.MaxManifestBytes)
 	if err != nil {
 		return "", nil, err
 	}
-	staged := filepath.Join(stage, BinaryName)
+	staged := filepath.Join(dir, BinaryName+".part")
 	if err = r.download(ctx, base+"/"+name, staged); err != nil {
 		return "", nil, err
 	}
@@ -102,28 +98,12 @@ func (r Release) Fetch(ctx context.Context, p lifecycle.Platform) (string, func(
 	if err = os.Chmod(staged, 0o700); err != nil {
 		return "", nil, errf(lifecycle.CodeNoRoute, "cannot place the agent: %w", err)
 	}
-	final := filepath.Join(finalDir, BinaryName)
+	final := filepath.Join(dir, BinaryName)
 	if err = os.Rename(staged, final); err != nil {
 		return "", nil, errf(lifecycle.CodeNoRoute, "cannot place the agent: %w", err)
 	}
 	ok = true
 	return final, cleanup, nil
-}
-
-// finalDir creates Dir/<version>/<target> (0700) or a temporary directory, and returns the cleanup for the latter.
-func (r Release) finalDir(target string) (string, func(), error) {
-	if r.Dir == "" {
-		tmp, err := os.MkdirTemp("", "nself-ci-agent-")
-		if err != nil {
-			return "", nil, errf(lifecycle.CodeNoRoute, "cannot create a temporary directory: %w", err)
-		}
-		return tmp, func() { _ = os.RemoveAll(tmp) }, nil
-	}
-	dir := filepath.Join(r.Dir, r.Version, target)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", nil, errf(lifecycle.CodeNoRoute, "cannot create %s: %w", dir, err)
-	}
-	return dir, nil, nil
 }
 
 func (r Release) baseURL() (string, error) {

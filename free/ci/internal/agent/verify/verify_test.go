@@ -172,9 +172,28 @@ func TestArtifactFailureReasonsAreDistinct(t *testing.T) {
 			_, err := mustVerifier(t, nil, agent.key()).Artifact(a.path, a.json(t), pinned)
 			return err
 		}},
+		{"key id that is not a key id", ReasonMalformedManifest, func() error {
+			a := good
+			a.m.KeyID = "bad id!"
+			_, err := mustVerifier(t, nil, agent.key()).Artifact(a.path, a.json(t), pinned)
+			return err
+		}},
 		{"unknown manifest field", ReasonMalformedManifest, func() error {
 			b := strings.Replace(string(good.json(t)), `"alg"`, `"extra":1,"alg"`, 1)
 			_, err := mustVerifier(t, nil, agent.key()).Artifact(good.path, []byte(b), pinned)
+			return err
+		}},
+		{"a repeated field", ReasonMalformedManifest, func() error {
+			b := strings.Replace(string(good.json(t)), `"alg":"ed25519"`, `"alg":"ed25519","version":"9.9.9"`, 1)
+			_, err := mustVerifier(t, nil, agent.key()).Artifact(good.path, []byte(b), pinned)
+			return err
+		}},
+		{"a symlinked binary", ReasonUnreadable, func() error {
+			link := filepath.Join(t.TempDir(), "link")
+			if err := os.Symlink(good.path, link); err != nil {
+				t.Skip("symlinks unavailable")
+			}
+			_, err := mustVerifier(t, nil, agent.key()).Artifact(link, good.json(t), pinned)
 			return err
 		}},
 		{"two manifests in one file", ReasonMalformedManifest, func() error {
@@ -355,6 +374,23 @@ func TestGeneratedKeySetLoads(t *testing.T) {
 	if err != nil || !strings.Contains(text, `ID: "`+id+`"`) {
 		t.Fatalf("genkeys.sh did not list the derived id %s: %v\n%s", id, err, text)
 	}
+	rev := filepath.Join(keys, "agent-revoked.txt")
+	_ = os.WriteFile(filepath.Join(keys, id+".pub"), pubPEM, 0o644)
+	_ = os.WriteFile(rev, []byte("# leaked\n\n"+id+"\n"), 0o644)
+	out := filepath.Join(tmp, "rev.go")
+	cmd := exec.Command("bash", filepath.Join(root, "scripts/release/agent/genkeys.sh"), "--keys-dir", keys, out)
+	cmd.Env = append(os.Environ(), "TMPDIR="+tmp)
+	if b, rerr := cmd.CombinedOutput(); rerr != nil {
+		t.Fatalf("genkeys.sh with a revoked list: %v\n%s", rerr, b)
+	}
+	if src, _ := os.ReadFile(out); !strings.Contains(string(src), `"`+id+`",`) {
+		t.Fatalf("the revoked id is missing from the generated file:\n%s", src)
+	}
+	_ = os.WriteFile(rev, []byte("plugins-0123456789abcdef\n"), 0o644)
+	if b, rerr := exec.Command("bash", filepath.Join(root, "scripts/release/agent/genkeys.sh"), "--keys-dir", keys, out).CombinedOutput(); rerr == nil {
+		t.Fatalf("a revoked entry that is not an agent id must be refused: %s", b)
+	}
+	_ = os.Remove(rev)
 	if _, err = gen("agent-0000000000000000.pub"); err == nil {
 		t.Fatal("a key file whose name is not its derived id must be refused")
 	}
@@ -376,6 +412,16 @@ func TestDefaultUsesTheCompiledKeySet(t *testing.T) {
 	if _, err = v.Artifact(a.path, a.json(t), pinned); err != nil {
 		t.Fatalf("artifact signed by the compiled-in key refused: %v", err)
 	}
+	oldRev := generatedRevoked
+	defer func() { generatedRevoked = oldRev }()
+	generatedRevoked = []string{s.KeyID()}
+	rv, err := Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = rv.Artifact(a.path, a.json(t), pinned)
+	wantReason(t, err, ReasonRevoked)
+	generatedRevoked = nil
 	generatedKeys = []keyEntry{{ID: s.KeyID(), Public: "AAAA"}}
 	if _, err = Default(); err == nil {
 		t.Fatal("a malformed compiled-in key must be refused")

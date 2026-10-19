@@ -44,6 +44,7 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       rehearsal: ${{ steps.tag.outputs.rehearsal }}
+      sums: ${{ steps.built.outputs.sums }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -80,6 +81,7 @@ jobs:
           cache: false
 
       - name: Build twice and compare
+        id: built
         env:
           STEP_TAG: ${{ steps.tag.outputs.tag }}
         run: |
@@ -88,6 +90,8 @@ jobs:
           diff -r "$RUNNER_TEMP/agent-a" "$RUNNER_TEMP/agent-b"
           mkdir -p dist
           cp -p "$RUNNER_TEMP"/agent-a/* dist/
+          # The digest of SHA256SUMS travels as a job output, a different channel from the artifact, so `sign` can refuse a swapped artifact.
+          echo "sums=$(sha256sum dist/SHA256SUMS | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Rehearsal signing and verification
         if: steps.tag.outputs.rehearsal == 'true'
@@ -127,6 +131,14 @@ jobs:
         with:
           name: agent-dist
           path: dist
+
+      - name: Refuse an artifact that is not what build produced
+        env:
+          EXPECTED_SUMS: ${{ needs.build.outputs.sums }}
+        run: |
+          [[ "$EXPECTED_SUMS" =~ ^[0-9a-f]{64}$ ]] || { echo "ERROR: build did not record the SHA256SUMS digest"; exit 1; }
+          [ "$(sha256sum dist/SHA256SUMS | cut -d' ' -f1)" = "$EXPECTED_SUMS" ] || { echo "ERROR: SHA256SUMS differs from what build recorded"; exit 1; }
+          (cd dist && sha256sum -c SHA256SUMS)
 
       # The key reaches manifest.sh through the environment of this one step only. manifest.sh writes it to a 0600 file in a 0700
       # temp directory that it removes on exit; nothing prints it and no step has `set -x`.
@@ -168,10 +180,15 @@ jobs:
           path: dist
 
       # Never --clobber: an asset already on the release stays the artifact of record. The release itself is created by
-      # release-tarballs.yml for the same tag; this job fails if it does not exist yet.
+      # release-tarballs.yml for the same tag; this job waits for it and fails if it never appears.
       - name: Upload missing assets
         run: |
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+          # release-tarballs.yml creates the release from the same tag push; wait for it (10 minutes at most) instead of racing it.
+          for attempt in $(seq 1 20); do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then break; fi
+            if [ "$attempt" = "20" ]; then echo "ERROR: release $TAG does not exist yet; re-run this workflow after release-tarballs creates it"; exit 1; fi
+            sleep 30
+          done
           have="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
           for f in dist/nself-ci-agent-*; do
             name="$(basename "$f")"

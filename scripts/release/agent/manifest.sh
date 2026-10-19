@@ -33,10 +33,10 @@ PMIN=1
 PMAX=1
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --in) IN="${2:-}"; shift 2 || true ;;
+    --in) [ "$#" -ge 2 ] || { err "--in needs a value"; exit 2; }; IN="$2"; shift 2 ;;
     --rehearsal) REHEARSAL=true; shift ;;
-    --protocol-min) PMIN="${2:-}"; shift 2 || true ;;
-    --protocol-max) PMAX="${2:-}"; shift 2 || true ;;
+    --protocol-min) [ "$#" -ge 2 ] || { err "--protocol-min needs a value"; exit 2; }; PMIN="$2"; shift 2 ;;
+    --protocol-max) [ "$#" -ge 2 ] || { err "--protocol-max needs a value"; exit 2; }; PMAX="$2"; shift 2 ;;
     *) err "unknown argument: $1"; printf "usage: %s --in DIR [--rehearsal] [--protocol-min N] [--protocol-max N]\n" "$0" >&2; exit 2 ;;
   esac
 done

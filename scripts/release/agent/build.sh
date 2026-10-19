@@ -25,8 +25,8 @@ VERSION=""
 OUT=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --version) VERSION="${2:-}"; shift 2 || true ;;
-    --out) OUT="${2:-}"; shift 2 || true ;;
+    --version) [ "$#" -ge 2 ] || { err "--version needs a value"; exit 2; }; VERSION="$2"; shift 2 ;;
+    --out) [ "$#" -ge 2 ] || { err "--out needs a value"; exit 2; }; OUT="$2"; shift 2 ;;
     *) err "unknown argument: $1"; printf "usage: %s --version V --out DIR\n" "$0" >&2; exit 2 ;;
   esac
 done

@@ -5,7 +5,7 @@ package main
 //          internal/agent/verify and only then hands the file to the installer.
 // Inputs:  agentPinnedVersion (set at release time with -ldflags "-X main.agentPinnedVersion=<x.y.z>"; empty until P7-NODE-29
 //          pins the first signed release); env NSELF_CI_AGENT_RELEASE_URL (a mirror or fixture directory URL; https, or http on a
-//          loopback host) and NSELF_CI_HOME (the verified binary is cached under NSELF_CI_HOME/agent-cache).
+//          loopback host).
 // Outputs: lifecycle.RegisterDefaultSource at init.
 // Constraints: the trusted keys are the compiled-in set only; there is no flag or variable that adds a key. With no key
 //          compiled in, the source fails with E665 naming --agent-binary, which is the state until P7-NODE-29.
@@ -13,7 +13,6 @@ package main
 import (
 	"context"
 	"os"
-	"path/filepath"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/install"
 	"github.com/nself-org/plugins/free/ci/internal/agent/verify"
@@ -36,11 +35,7 @@ func releaseSource() lifecycle.AgentSource {
 	if err != nil {
 		return failingSource{err}
 	}
-	r := install.Release{Version: agentPinnedVersion, BaseURL: os.Getenv("NSELF_CI_AGENT_RELEASE_URL"), Verifier: v}
-	if home := lifecycle.CIHome(); home != "" {
-		r.Dir = filepath.Join(home, "agent-cache")
-	}
-	return r
+	return install.Release{Version: agentPinnedVersion, BaseURL: os.Getenv("NSELF_CI_AGENT_RELEASE_URL"), Verifier: v}
 }
 
 // failingSource reports a setup error when the source is used.
