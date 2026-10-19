@@ -7,6 +7,7 @@ package agent
 
 import (
 	"context"
+	"github.com/nself-org/plugins/free/ci/internal/transport"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -117,3 +118,5 @@ func readLog(t *testing.T, path string) string {
 	}
 	return string(b)
 }
+
+func transportHeader() transport.BlobHeader { return transport.BlobHeader{Stream: "artifact"} }
