@@ -132,7 +132,7 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	}
 	info := rs.info(pj, job, id)
 	_, epoch, err := rs.sess.Store.AttemptStateEpoch(context.WithoutCancel(ctx), id)
-	if err != nil {
+	if err != nil && declares(job) { // only a job with fenced writes needs its launch epoch
 		return rs.failPrepared(ctx, pj, id, o, err)
 	}
 	info.Epoch = epoch // the capability this incarnation of the attempt launched with

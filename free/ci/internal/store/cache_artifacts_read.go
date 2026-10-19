@@ -173,17 +173,27 @@ func (s *Store) ArtifactPrune(ctx context.Context, spec records.PruneSpec) ([]re
 			}
 			removed = append(removed, r)
 		}
-		if err = errors.Join(rows.Err(), rows.Close()); err != nil || spec.DryRun || len(removed) == 0 {
+		if err = errors.Join(rows.Err(), rows.Close()); err != nil || spec.DryRun {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, "DELETE FROM cache_artifact WHERE "+cond, args...); err != nil {
-			return err
+		if len(removed) > 0 {
+			if _, err = tx.ExecContext(ctx, "DELETE FROM cache_artifact WHERE "+cond, args...); err != nil {
+				return err
+			}
+			if err = s.appendAudit(ctx, tx, "artifacts", "artifact.prune", "artifacts", fmt.Sprintf("records=%d release=%t", len(removed), spec.Release)); err != nil {
+				return err
+			}
 		}
-		// declarations of attempts that ended and hold no record any more
-		if _, err = tx.ExecContext(ctx, `DELETE FROM cache_artifact_decl WHERE attempt_id NOT IN (SELECT id FROM attempt WHERE state IN ('running','finalizing')) AND attempt_id NOT IN (SELECT attempt_id FROM cache_artifact)`); err != nil {
-			return err
+		// claims and declarations of attempts that are no longer running
+		for _, q := range []string{
+			`DELETE FROM cache_artifact_reserve WHERE attempt_id NOT IN (SELECT id FROM attempt WHERE state IN ('running','finalizing'))`,
+			`DELETE FROM cache_artifact_decl WHERE attempt_id NOT IN (SELECT id FROM attempt WHERE state IN ('running','finalizing')) AND attempt_id NOT IN (SELECT attempt_id FROM cache_artifact)`,
+		} {
+			if _, err = tx.ExecContext(ctx, q); err != nil {
+				return err
+			}
 		}
-		return s.appendAudit(ctx, tx, "artifacts", "artifact.prune", "artifacts", fmt.Sprintf("records=%d release=%t", len(removed), spec.Release))
+		return nil
 	})
 	if err != nil {
 		return nil, err

@@ -27,6 +27,11 @@ type AttemptFinalizeHook interface {
 	AttemptFinalize(ctx context.Context, a AttemptInfo, epoch int64) error
 }
 
+// finalizeWanter is an optional interface of an AttemptFinalizeHook: Wants
+// reports whether it has work for the attempt, so the run reads the epoch only
+// when some hook does.
+type finalizeWanter interface{ Wants(a AttemptInfo) bool }
+
 // RegisterWorkspace adds a WorkspaceHook; call from init().
 func RegisterWorkspace(h WorkspaceHook) { Registered.Workspaces = append(Registered.Workspaces, h) }
 
@@ -52,7 +57,13 @@ func (rs *runState) afterJob(info AttemptInfo) func(context.Context, *os.Root) e
 
 // attemptFinalize runs the finalize hooks of an attempt that is finalizing.
 func (rs *runState) attemptFinalize(info AttemptInfo) error {
-	if len(rs.hooks.AttemptFinalizes) == 0 {
+	var todo []AttemptFinalizeHook
+	for _, h := range rs.hooks.AttemptFinalizes {
+		if w, ok := h.(finalizeWanter); !ok || w.Wants(info) {
+			todo = append(todo, h)
+		}
+	}
+	if len(todo) == 0 {
 		return nil
 	}
 	bg, done := background(context.Background())
@@ -61,7 +72,7 @@ func (rs *runState) attemptFinalize(info AttemptInfo) error {
 	if err != nil {
 		return err
 	}
-	for _, h := range rs.hooks.AttemptFinalizes {
+	for _, h := range todo {
 		if err := guard("attempt finalize hook", func() error { return h.AttemptFinalize(bg, info, epoch) }); err != nil {
 			return err
 		}

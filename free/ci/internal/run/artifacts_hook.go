@@ -10,9 +10,10 @@ package run
 // registry (Redactions), NSELF_CI_* caps from the environment.
 // Outputs: records in the store, blobs in $NSELF_CI_HOME/blobs, a refusal
 // (E712/E683/E711) that fails the attempt with class infra.
-// Constraints: a job with no artifacts (and no implicit ones) costs one
-// store read; expired records are pruned once per process at the first
-// attempt, inside records.AutoPruneBudget; nothing here changes the evidence.
+// Constraints: a job with no artifacts (and no implicit ones) never touches the
+// store from these hooks; expired records are pruned at a declaring attempt at
+// most every 6 hours per store, inside records.AutoPruneBudget; nothing here
+// changes the evidence.
 
 import (
 	"context"
@@ -80,7 +81,11 @@ func (h *artifactsHook) scrub(err error) error {
 	if err == nil {
 		return nil
 	}
-	if sc := h.scanner(); sc != nil && len(sc.Scan([]byte(err.Error()))) == 0 {
+	sc := h.scanner()
+	if sc == nil {
+		return records.Failf(records.ReasonSecretMatch, "no secret scanner is registered; the error text was withheld")
+	}
+	if len(sc.Scan([]byte(err.Error()))) == 0 {
 		return err
 	}
 	var re *records.Error
@@ -130,8 +135,8 @@ const pruneEvery = 6 * time.Hour
 // pruneEvery per store directory; a failure is a warning, never a job failure.
 func (h *artifactsHook) autoPrune(ctx context.Context, a AttemptInfo) {
 	dir, now := records.StoreDir(a.Home), h.now()
-	if last, ok := h.pruned.Load(dir); ok && now.Sub(last.(time.Time)) < pruneEvery {
-		return
+	if last, ok := h.pruned.Load(dir); ok && !now.Before(last.(time.Time)) && now.Sub(last.(time.Time)) < pruneEvery {
+		return // a clock that moved backwards prunes again rather than stalling
 	}
 	h.pruned.Store(dir, now)
 	_, blobs, err := h.setup(a)
@@ -191,6 +196,9 @@ func (h *artifactsHook) afterJob(ctx context.Context, a AttemptInfo, workspace *
 	}
 	return a.Store.ArtifactStage(ctx, a.AttemptID, epoch, records.ToRecords(a.AttemptID, facts, epoch, staged, h.now()))
 }
+
+// Wants lets the run skip the finalize read for jobs that declare nothing.
+func (h *artifactsHook) Wants(a AttemptInfo) bool { return declares(a.Job) }
 
 // AttemptFinalize verifies and commits the staged records.
 func (h *artifactsHook) AttemptFinalize(ctx context.Context, a AttemptInfo, epoch int64) error {

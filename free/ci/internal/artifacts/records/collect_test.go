@@ -411,3 +411,33 @@ func TestCollectBoundsRecordsAndReservesBeforeWriting(t *testing.T) {
 		t.Fatalf("one over MaxDecls: %v", err)
 	}
 }
+
+func TestCollectBudgetAppliesToGlobsToo(t *testing.T) {
+	e := newEnv(t)
+	for i := 0; i < 6; i++ {
+		e.write(fmt.Sprintf("d/f%d", i), "x")
+	}
+	c := e.collector()
+	c.MaxRecords = 5
+	one, _ := records.Normalize(model.Job{Artifacts: []model.ArtifactDecl{decl("d/*")}}, false, nil)
+	if _, err := c.Collect(context.Background(), "proj", e.ws, one); !records.IsReason(err, records.ReasonSizeCap) {
+		t.Fatalf("a glob of 6 files over a budget of 5: %v", err)
+	}
+	c.MaxRecords = 6
+	if got, err := c.Collect(context.Background(), "proj", e.ws, one); err != nil || len(got) != 6 {
+		t.Fatalf("a glob of exactly the budget: %d %v", len(got), err)
+	}
+	// forty declarations of the same glob exceed the budget long before they are all expanded
+	many := make([]model.ArtifactDecl, 40)
+	for i := range many {
+		many[i] = model.ArtifactDecl{Path: "d/*", Name: fmt.Sprintf("n%d", i)}
+	}
+	ds, _ := records.Normalize(model.Job{Artifacts: many}, false, nil)
+	c.MaxRecords = 20
+	if _, err := c.Collect(context.Background(), "proj", e.ws, ds); !records.IsReason(err, records.ReasonSizeCap) {
+		t.Fatalf("40 globs of 6 files over a budget of 20: %v", err)
+	}
+	if len(e.blobFiles()) != 6 { // only the earlier successful collection stored anything
+		t.Fatalf("a refused plan stored bytes: %d blobs", len(e.blobFiles()))
+	}
+}

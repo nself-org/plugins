@@ -477,4 +477,21 @@ func TestCacheArtifactsReservationsStopConcurrentOverrun(t *testing.T) {
 	if u, _ := s.ArtifactUsage(ctx, "proj"); u.Total != 50<<10 {
 		t.Fatalf("after b ended: %+v", u)
 	}
+	// a claim of an attempt that ended another way is dropped by the next prune
+	seed(t, s, "c")
+	artRunning(t, s, "c", 1)
+	if err := s.ArtifactReserve(ctx, "c", 2, 10, pol); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Transition(ctx, "c", "running", "lost", TransitionDetail{Epoch: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ArtifactPrune(ctx, records.PruneSpec{Now: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	_ = s.readers.QueryRow("SELECT count(*) FROM cache_artifact_reserve WHERE attempt_id='c'").Scan(&left)
+	if left != 0 {
+		t.Fatalf("a lost attempt's claim survived a prune: %d", left)
+	}
 }

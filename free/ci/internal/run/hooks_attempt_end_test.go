@@ -119,3 +119,24 @@ func TestResolvedAddsRegisteredSeams(t *testing.T) {
 		t.Fatalf("workspaces %d, finalizes %d", len(got.Workspaces), len(got.AttemptFinalizes))
 	}
 }
+
+type wantsFin struct {
+	wants bool
+	calls *int
+}
+
+func (w wantsFin) Wants(AttemptInfo) bool { return w.wants }
+func (w wantsFin) AttemptFinalize(context.Context, AttemptInfo, int64) error {
+	*w.calls++
+	return nil
+}
+
+func TestFinalizeHooksThatDoNotWantTheAttemptAreSkipped(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
+	skipped, wanted := 0, 0
+	r.C.Hooks.AttemptFinalizes = []AttemptFinalizeHook{wantsFin{false, &skipped}, wantsFin{true, &wanted}}
+	if res := r.run(t); res.Exit != 0 || skipped != 0 || wanted != 1 {
+		t.Fatalf("exit %d skipped %d wanted %d", res.Exit, skipped, wanted)
+	}
+}

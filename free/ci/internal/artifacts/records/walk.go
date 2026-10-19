@@ -56,7 +56,9 @@ func expand(ctx context.Context, fsys fs.FS, pattern string, maxEntries int) ([]
 			return failf(ReasonMissing, "declared artifact %q: %v", rel, err)
 		}
 		if !info.IsDir() {
-			seen[rel] = found{rel, info}
+			if seen[rel] = (found{rel, info}); len(seen) > maxEntries {
+				return failf(ReasonSizeCap, "the declarations select more files than the per-attempt budget allows")
+			}
 			return nil
 		}
 		return fs.WalkDir(fsys, rel, func(p string, d fs.DirEntry, err error) error {
@@ -74,7 +76,7 @@ func expand(ctx context.Context, fsys fs.FS, pattern string, maxEntries int) ([]
 				return failf(ReasonUnreadable, "%s: %v", p, err)
 			}
 			if seen[p] = (found{p, fi}); len(seen) > maxEntries {
-				return failf(ReasonSizeCap, "the declarations select more than the allowed %d files", maxEntries)
+				return failf(ReasonSizeCap, "the declarations select more files than the per-attempt budget allows")
 			}
 			return nil
 		})

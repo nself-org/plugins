@@ -121,6 +121,9 @@ func (c Collector) plan(ctx context.Context, root *os.Root, decls []Decl) ([]pla
 		if err != nil {
 			return nil, err
 		}
+		if len(out)+len(ents) > budget { // the budget spans declarations, whichever way a declaration selects
+			return nil, failf(ReasonSizeCap, "the declared outputs select more than %d files", budget)
+		}
 		if len(ents) == 0 {
 			return nil, failf(ReasonMissing, "declared artifact %q matched no file in the workdir", d.Path)
 		}
