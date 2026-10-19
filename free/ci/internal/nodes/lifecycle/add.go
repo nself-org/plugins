@@ -41,6 +41,8 @@ type AddResult struct {
 	Fingerprints []string
 	Separation   SeparationFacts
 	AgentVersion string
+	// Warnings are advisory lines; the add succeeded.
+	Warnings []string
 }
 
 // nodeID derives the lower-case node id from the name or the host.
@@ -143,6 +145,9 @@ func (d *Deps) addPinned(ctx context.Context, o AddOptions, spec remote.HostSpec
 	}
 	if res.AgentVersion, err = d.agentVersion(ctx, t); err != nil {
 		return res, err
+	}
+	if o.Source == nil && src == nil {
+		res.Warnings = pinWarning(res.AgentVersion)
 	}
 	run := func(ctx context.Context, argv ...string) (string, error) { return d.Run(ctx, t, argv...) }
 	res.Separation = d.Separation.Detect(ctx, run, plat)

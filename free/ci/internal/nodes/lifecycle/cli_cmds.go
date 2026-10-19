@@ -59,7 +59,7 @@ func cmdAdd(ctx context.Context, d *Deps, dest string, f flags, fs *flag.FlagSet
 	}
 	v := ViewOf(r.Node)
 	data := map[string]any{"node": v, "host_key_fingerprints": r.Fingerprints, "agent_version": r.AgentVersion,
-		"separation_reason": r.Separation.Reason}
+		"separation_reason": r.Separation.Reason, "warnings": r.Warnings}
 	return result{data, func(w io.Writer) { renderAdd(w, v, r) }}, nil
 }
 
