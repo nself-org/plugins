@@ -37,7 +37,7 @@ func TestCopyTreeSymlinks(t *testing.T) {
 			if err := os.Symlink(tc.target, filepath.Join(src, "AGENTS.md")); err != nil {
 				t.Fatal(err)
 			}
-			err := copyTree(src, dst)
+			err := copyTree(src, dst, "")
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("copyTree error = %v, want %q", err, tc.wantErr)
@@ -101,7 +101,7 @@ func TestCopyTreeSymlinkChains(t *testing.T) {
 					t.Skipf("cannot create link %q -> %q: %v", path, target, err)
 				}
 			}
-			err := copyTree(src, dst)
+			err := copyTree(src, dst, "")
 			if tc.refuse {
 				if err == nil || !strings.Contains(err.Error(), "symlink in job source") {
 					t.Fatalf("copyTree error = %v, want refusal", err)

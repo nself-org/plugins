@@ -49,11 +49,41 @@ func linkStaysInside(link, rel string) bool {
 	return true
 }
 
-func copyTree(source, dest string) error {
+// skipRel returns the path of skip relative to root when skip lies
+// strictly inside root (both resolved through symlinks), else "". It keeps the
+// executor's state home out of the workspace copy when NSELF_CI_HOME points
+// inside the repository: the workspace lives under <home>/work, so copying the
+// home would copy the workspace into itself without end (D-1043).
+func skipRel(root, skip string) string {
+	if skip == "" {
+		return ""
+	}
+	r, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return ""
+	}
+	s, err := filepath.Abs(skip)
+	if err != nil {
+		return ""
+	}
+	if s, err = filepath.EvalSymlinks(s); err != nil {
+		return ""
+	}
+	rel, err := filepath.Rel(r, s)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ""
+	}
+	return rel
+}
+
+// copyTree copies source into dest. A skipDir that lies inside source is left
+// out of the copy.
+func copyTree(source, dest, skipDir string) error {
 	root, err := filepath.Abs(source)
 	if err != nil {
 		return err
 	}
+	skip := skipRel(root, skipDir)
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -64,6 +94,9 @@ func copyTree(source, dest string) error {
 		}
 		if rel == "." {
 			return nil
+		}
+		if skip != "" && rel == skip {
+			return filepath.SkipDir
 		}
 		target := filepath.Join(dest, rel)
 		if info.Mode()&os.ModeSymlink != 0 {

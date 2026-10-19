@@ -169,7 +169,7 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	}
 	defer func() { _ = pinned.Close() }()
 	if s.SourceDir != "" {
-		if err := copyTree(s.SourceDir, workspace); err != nil {
+		if err := copyTree(s.SourceDir, workspace, s.Home); err != nil {
 			result.Err = err
 			return
 		}
