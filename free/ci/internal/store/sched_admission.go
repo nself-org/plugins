@@ -45,7 +45,7 @@ type AdmitRequest struct {
 	// never gets a lease. Empty for a local or provider-hosted runner.
 	NodeID string
 	// Project is the project id the node must still authorize (the job's
-	// Project in the scheduler); empty skips that check.
+	// Project in the scheduler); required with NodeID, empty is refused.
 	Project string
 	// Incarnation > 0 issues a fenced remote lease (LeaseEpoch); 0 is a local lease.
 	Incarnation int64
@@ -123,7 +123,9 @@ func (s *Store) AdmitPlacement(ctx context.Context, host string, d Demand, r Adm
 			if err := json.Unmarshal([]byte(lifecycle), &lc); err != nil {
 				return coded("E607", "node lifecycle is unreadable")
 			}
-			if lc.Discovered || lc.RevokedAt != nil || r.Project != "" && !slices.Contains(lc.AuthorizedProjects, r.Project) {
+			// r.Project is the scheduler's project id (the id a node authorizes); the pipeline row's
+			// project is a different identifier (the repository root), so it cannot stand in for it.
+			if lc.Discovered || lc.RevokedAt != nil || r.Project == "" || !slices.Contains(lc.AuthorizedProjects, r.Project) {
 				return &NodeUnavailableError{State: "unauthorized"}
 			}
 		}
