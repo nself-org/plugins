@@ -23,6 +23,8 @@ lib=$root/scripts/drill/fixtures/lib
 . "$lib/make-fixtures.sh"
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/drill-s12.XXXXXX") || exit 2
+# Physical path: the executor refuses a workdir whose resolved path differs, and macOS TMPDIR sits behind /var -> /private/var.
+work=$(cd "$work" && pwd -P) || exit 2
 trap 'rm -rf "$work"' EXIT
 ev_begin scenario-12-external-consumer "${BASH_SOURCE[0]}" "$root" "$work"
 for tool in git jq go; do command -v "$tool" >/dev/null || tools_die "$tool is required"; done
