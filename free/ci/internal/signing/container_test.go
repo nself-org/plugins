@@ -18,6 +18,7 @@ import (
 	"os"
 	osexec "os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -128,7 +129,13 @@ func newWorld(t *testing.T) *world {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(body)
-	st, _ := json.Marshal(map[string]any{"_type": "https://in-toto.io/Statement/v1", "predicateType": "https://slsa.dev/provenance/v1", "predicate": map[string]any{},
+	predicate := map[string]any{
+		"buildDefinition": map[string]any{"buildType": signing.ReleaseBuildType, "externalParameters": map[string]any{"repository": "repo", "revision": p.Revision, "job": "publish"},
+			"resolvedDependencies": []map[string]any{{"uri": "git+repo@" + p.Revision, "digest": map[string]string{"gitCommit": p.Revision}}}},
+		"runDetails": map[string]any{"builder": map[string]any{"id": "https://nself.org/ci/builder/v1#coordinator/runner"},
+			"metadata":   map[string]any{"invocationId": p.ID + "/att-c"},
+			"byproducts": []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": hex.EncodeToString(sum[:])}}}}}
+	st, _ := json.Marshal(map[string]any{"_type": "https://in-toto.io/Statement/v1", "predicateType": "https://slsa.dev/provenance/v1", "predicate": predicate,
 		"subject": []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": hex.EncodeToString(sum[:])}}}})
 	w.items = []signing.Item{item(signing.PayloadStatement, st)}
 	return w
@@ -214,7 +221,7 @@ sleep 3; echo scan-done`
 	}
 	done := make(chan ciexec.AttemptResult, 1)
 	go func() {
-		done <- (&ciexec.Executor{Grace: time.Second}).Run(context.Background(), ciexec.JobSpec{AttemptID: "leak-job", CoordinatorID: "test-coord", Home: t.TempDir(),
+		done <- (&ciexec.Executor{Grace: time.Second}).Run(context.Background(), ciexec.JobSpec{AttemptID: "leak-job-" + strconv.Itoa(os.Getpid()), CoordinatorID: "test-coord", Home: t.TempDir(),
 			Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: image}}, Command: []string{"sh", "-c", job}, Mounts: []ciexec.Mount{{Host: ctl, Target: "/ctl", ReadOnly: true}},
 			Output: func(b []byte) { mu.Lock(); jobOut.Write(b); mu.Unlock() }})
 	}()
