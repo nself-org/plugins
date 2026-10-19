@@ -126,3 +126,12 @@ func asExit(err error, target **exec.ExitError) bool {
 	}
 	return ok
 }
+
+func TestSweepRefusesABadRevision(t *testing.T) {
+	rules := writeTree(t, map[string]string{"rules.yaml": fixtureRules()})
+	for _, rev := range []string{"", "abc", strings.Repeat("G", 40)} {
+		if code, _, _ := runMain("", "sweep", "--rules-root", rules, "--revision", rev, "rules.yaml", "--", "x="+rules); code != 2 {
+			t.Errorf("revision %q: exit %d", rev, code)
+		}
+	}
+}

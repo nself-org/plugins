@@ -1,6 +1,8 @@
 package truth
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -110,5 +112,44 @@ rules:
 	res, _ := scanFixture(t, map[string]string{"a.md": "BAD\n", "b.txt": "BAD\n", "d/c.md": "BAD\n"}, rules)
 	if len(res.Findings) != 2 {
 		t.Fatalf("%+v", res.Findings)
+	}
+}
+
+// A very long line must not hide the lines after it, and UTF-16 or oversized
+// files are counted, not silently passed.
+func TestLongLinesSkippedFilesAndSymlinkedRoot(t *testing.T) {
+	long := strings.Repeat("x", 1<<20+100)
+	res, _ := scanFixture(t, map[string]string{"big.txt": long + "\nhost " + plantedHost() + "\n", "u16.txt": "a\x00b"}, fixtureRules())
+	if len(res.Findings) != 1 || res.Findings[0].Line != 2 {
+		t.Errorf("a line after a 1 MiB line must still be read: %+v", res.Findings)
+	}
+	if res.Skipped != 1 {
+		t.Errorf("skipped = %d", res.Skipped)
+	}
+	checks := Run(writeTree(t, map[string]string{"rules.yaml": fixtureRules(), "u16.txt": "a\x00b", "ok.md": "fine\n"}), []string{"rules.yaml"}, "")
+	if !strings.Contains(checks[0].Excerpt, "1 file skipped") {
+		t.Errorf("the summary must say what was skipped: %q", checks[0].Excerpt)
+	}
+
+	real := writeTree(t, map[string]string{"rules.yaml": fixtureRules(), "a.md": "host " + plantedHost() + "\n"})
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	if got := byID(Run(link, []string{"rules.yaml"}, ""))["truth.dead-host"]; got.Result != "fail" {
+		t.Errorf("a symlinked root must be followed: %+v", got)
+	}
+	empty := writeTree(t, map[string]string{"rules.yaml": fixtureRules()})
+	for _, c := range Run(empty, []string{"rules.yaml"}, "") {
+		if c.Result != "pass" && c.Result != "error" {
+			t.Errorf("empty tree: %+v", c)
+		}
+	}
+}
+
+func TestScanOfAnEmptyTreeIsAnError(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := Scan(dir, RuleSet{}, nil); err == nil {
+		t.Error("a scan that read no file must not pass")
 	}
 }

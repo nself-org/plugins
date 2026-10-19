@@ -59,11 +59,20 @@ func matchAny(patterns []string, rel string) bool {
 }
 
 // validGlob reports whether path.Match accepts every segment of the pattern.
+//
+// A pattern with an empty segment (`docs/`, `a//b`) or a leading `./` or `/`
+// can never match a clean relative path, so it is refused rather than inert.
 func validGlob(pattern string) bool {
+	if pattern == "" || strings.HasPrefix(pattern, "/") || strings.HasPrefix(pattern, "./") {
+		return false
+	}
 	for _, seg := range strings.Split(pattern, "/") {
+		if seg == "" {
+			return false
+		}
 		if _, err := path.Match(seg, "x"); err != nil {
 			return false
 		}
 	}
-	return pattern != ""
+	return true
 }

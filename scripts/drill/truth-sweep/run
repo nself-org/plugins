@@ -43,8 +43,14 @@ else
 		chmod 600 "$tmp/gh-config/gh/hosts.yml"
 		export XDG_CONFIG_HOME="$tmp/gh-config"
 	fi
-	repos=$(gh repo list "$org" --visibility public --no-archived --limit 200 --json name,diskUsage \
-		-q '.[] | select(.diskUsage > 0) | .name' | grep -vx hq || true)
+	limit=200
+	listed=$(gh repo list "$org" --visibility public --no-archived --limit "$limit" --json name,diskUsage \
+		-q '.[] | select(.diskUsage > 0) | .name')
+	if [ "$(printf '%s\n' "$listed" | grep -c .)" -ge "$limit" ]; then
+		echo "truth-sweep: $limit repositories listed: the list may be cut off; raise the limit" >&2
+		exit 2
+	fi
+	repos=$(printf '%s\n' "$listed" | grep -vx hq || true)
 fi
 if [ -z "$repos" ]; then
 	echo "truth-sweep: the repository list is empty; a sweep over nothing proves nothing" >&2

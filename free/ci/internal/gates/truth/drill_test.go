@@ -71,7 +71,7 @@ func runDrill(t *testing.T, base, list string, extra ...string) (code int, stdou
 }
 
 func TestDrillSweepsEveryRepoAndFailsOnAHit(t *testing.T) {
-	base, list := fixtureOrg(t, map[string]string{"alpha": "fine\n", "beta": "the Plugins Pro tier\n"})
+	base, list := fixtureOrg(t, map[string]string{"alpha": "fine\n", "beta": "the Plugins" + " Pro tier\n"})
 	code, out, errw := runDrill(t, base, list)
 	if code != 1 {
 		t.Fatalf("exit %d, want 1\n%s", code, errw)

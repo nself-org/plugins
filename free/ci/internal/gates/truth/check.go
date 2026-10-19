@@ -16,6 +16,7 @@ package truth
 import (
 	"path/filepath"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/nself-org/plugins/free/ci/internal/gates"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -71,7 +72,7 @@ func RunFull(root string, ruleFiles []string, rulesRoot string) ([]model.Check, 
 			return c
 		}), nil
 	}
-	res, err := Scan(root, rs, selfFiles(root, rulesRoot, rs.Files))
+	res, err := Scan(root, rs, rs.Files)
 	if err != nil {
 		return allChecks(func(c model.Check) model.Check {
 			c.Result, c.FailureClass, c.Excerpt = "error", "infra", clip("cannot scan "+filepath.Base(root)+": "+err.Error())
@@ -112,7 +113,11 @@ func allChecks(fill func(model.Check) model.Check) []model.Check {
 }
 
 func summary(rules int, res Result) string {
-	return pluralise(rules, "rule") + ", " + pluralise(res.Files, "file") + " scanned, " + pluralise(res.Allowed, "allowlisted hit")
+	s := pluralise(rules, "rule") + ", " + pluralise(res.Files, "file") + " scanned, " + pluralise(res.Allowed, "allowlisted hit")
+	if res.Skipped > 0 {
+		s += ", " + pluralise(res.Skipped, "file") + " skipped (binary, UTF-16 or over 4 MiB)"
+	}
+	return s
 }
 
 func pluralise(n int, noun string) string {
@@ -127,15 +132,9 @@ func clip(s string) string {
 	if len(s) <= excerptLimit {
 		return s
 	}
-	return s[:excerptLimit-3] + "..."
-}
-
-// selfFiles are the rule files that live inside the scanned tree.
-func selfFiles(root, rulesRoot string, files []string) []string {
-	a, err1 := filepath.Abs(root)
-	b, err2 := filepath.Abs(rulesRoot)
-	if err1 != nil || err2 != nil || a != b {
-		return nil
+	cut := excerptLimit - 3
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
 	}
-	return files
+	return s[:cut] + "..."
 }

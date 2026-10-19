@@ -19,11 +19,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
+
+var revisionRe = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 // Main runs one command and returns the process exit code.
 func Main(args []string, in io.Reader, out, errw io.Writer) int {
@@ -115,6 +118,10 @@ func cmdSweep(args []string, out, errw io.Writer) int {
 	rulesRoot := fs.String("rules-root", ".", "directory the rule files are relative to")
 	revision := fs.String("revision", "", "40 hex digit revision the document is bound to")
 	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if !revisionRe.MatchString(*revision) {
+		fmt.Fprintln(errw, "truth: --revision must be 40 lower-case hex digits")
 		return 2
 	}
 	files, repos := splitDash(fs.Args())

@@ -110,7 +110,11 @@ func (rs *RuleSet) load(root, rel string, depth int, stack []string, seen map[st
 	if seen[clean] {
 		return nil
 	}
-	raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(clean)))
+	full := filepath.Join(root, filepath.FromSlash(clean))
+	if info, err := os.Lstat(full); err == nil && !info.Mode().IsRegular() {
+		return failf(clean, "", "a rule file must be a regular file (not a symlink or directory)")
+	}
+	raw, err := os.ReadFile(full)
 	if err != nil {
 		return failf(clean, "", "cannot read the rule file: %v", errors.Unwrap(err))
 	}
@@ -119,6 +123,10 @@ func (rs *RuleSet) load(root, rel string, depth int, stack []string, seen map[st
 	dec.KnownFields(true)
 	if err := dec.Decode(&f); err != nil && !errors.Is(err, io.EOF) {
 		return yamlError(clean, err)
+	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return failf(clean, "", "a rule file holds one YAML document; remove the extra `---` document")
 	}
 	seen[clean] = true
 	rs.Files = append(rs.Files, clean)
@@ -154,7 +162,7 @@ func (rs *RuleSet) load(root, rel string, depth int, stack []string, seen map[st
 		if err := rs.load(root, inc, depth+1, next, seen, ids); err != nil {
 			var te *Error
 			if errors.As(err, &te) && te.File == path.Clean(filepath.ToSlash(inc)) && te.Key == "" {
-				return failf(clean, fmt.Sprintf("include[%d]", i), "%s", te.Msg)
+				return failf(clean, fmt.Sprintf("include[%d]", i), "%s: %s", te.File, te.Msg)
 			}
 			return err
 		}

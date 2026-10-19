@@ -1,6 +1,8 @@
 package truth
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -89,5 +91,31 @@ func TestGlob(t *testing.T) {
 		if got := matchGlob(tc.pat, tc.rel); got != tc.want {
 			t.Errorf("matchGlob(%q, %q) = %v", tc.pat, tc.rel, got)
 		}
+	}
+}
+
+func TestLoadRefusesInertGlobsExtraDocumentsAndSymlinks(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"skip-dir.yaml": "version: 1\nskip: [\"docs/\"]\nrules: []\n",
+		"skip-dot.yaml": "version: 1\nskip: [\"./docs/x\"]\nrules: []\n",
+		"two-docs.yaml": "version: 1\nrules: []\n---\nversion: 1\nrules:\n  - {id: a, kind: banned-literal, literal: X, message: m}\n",
+		"inc-bad.yaml":  "version: 1\ninclude: [broken.yaml]\nrules: []\n",
+		"broken.yaml":   "rules: [\n",
+		"target.yaml":   "version: 1\nrules: []\n",
+	})
+	if err := os.Symlink(filepath.Join(dir, "target.yaml"), filepath.Join(dir, "link.yaml")); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	_, err := Load(dir, []string{"skip-dir.yaml"})
+	mustErr(t, err, "skip-dir.yaml", "skip[0]")
+	_, err = Load(dir, []string{"skip-dot.yaml"})
+	mustErr(t, err, "skip-dot.yaml", "skip[0]")
+	_, err = Load(dir, []string{"two-docs.yaml"})
+	mustErr(t, err, "two-docs.yaml", "")
+	_, err = Load(dir, []string{"link.yaml"})
+	mustErr(t, err, "link.yaml", "")
+	_, err = Load(dir, []string{"inc-bad.yaml"})
+	if e, ok := err.(*Error); !ok || e.Key != "include[0]" || !strings.Contains(e.Msg, "broken.yaml") {
+		t.Errorf("the included file must be named: %v", err)
 	}
 }

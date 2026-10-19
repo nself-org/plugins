@@ -10,8 +10,8 @@ package truth
 // the rule); a finding carries no matched text for a dead host; no network.
 
 import (
-	"bufio"
 	"bytes"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -20,10 +20,9 @@ import (
 	"strings"
 )
 
-const (
-	maxFileBytes = 4 << 20
-	maxLineBytes = 1 << 20
-)
+const maxFileBytes = 4 << 20
+
+var errNoFiles = errors.New("no text file was read (an empty tree, or every file skipped)")
 
 // Finding is one rule broken at one line.
 type Finding struct {
@@ -44,15 +43,21 @@ type Result struct {
 }
 
 // Scan applies rs to every file under root. selfFiles are repo-relative paths
-// of rule files that live inside root (never scanned).
+// of rule files: a file at one of those paths is never scanned, in any tree
+// (a clone of the repository that holds the rules carries its own copy).
 func Scan(root string, rs RuleSet, selfFiles []string) (Result, error) {
 	c := compile(rs)
 	self := map[string]bool{}
 	for _, f := range selfFiles {
 		self[filepath.ToSlash(f)] = true
 	}
+	real, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return Result{}, err
+	}
+	root = real
 	var res Result
-	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -74,6 +79,9 @@ func Scan(root string, rs RuleSet, selfFiles []string) (Result, error) {
 	})
 	if err != nil {
 		return Result{}, err
+	}
+	if res.Files == 0 {
+		return Result{}, errNoFiles
 	}
 	sort.SliceStable(res.Findings, func(i, j int) bool {
 		a, b := res.Findings[i], res.Findings[j]
@@ -106,10 +114,9 @@ func scanFile(p, rel string, rs RuleSet, c compiled, res *Result) error {
 		return nil
 	}
 	res.Files++
-	sc := bufio.NewScanner(bytes.NewReader(raw))
-	sc.Buffer(make([]byte, 0, 64<<10), maxLineBytes)
-	for n := 1; sc.Scan(); n++ {
-		line := sc.Text()
+	for n, b := range bytes.Split(raw, []byte{'\n'}) {
+		n++
+		line := strings.TrimSuffix(string(b), "\r")
 		add := func(r *Rule, hash string) {
 			if len(r.Paths) > 0 && !matchAny(r.Paths, rel) {
 				return
@@ -129,9 +136,6 @@ func scanFile(p, rel string, rs RuleSet, c compiled, res *Result) error {
 		for _, h := range c.hostHits(line) {
 			add(h.Rule, h.Prefix)
 		}
-	}
-	if err := sc.Err(); err != nil {
-		res.Skipped++ // a line longer than maxLineBytes: minified or generated, not prose
 	}
 	return nil
 }

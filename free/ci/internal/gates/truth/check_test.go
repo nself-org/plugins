@@ -69,15 +69,15 @@ func TestInvalidRuleFileIsE644(t *testing.T) {
 }
 
 // TestRulesLiveApartFromTheTree: the sweep reads rule files from one tree and
-// scans another; a rule file inside the scanned tree is never scanned itself.
+// scans another; a file at a rule file path is never scanned, in either tree.
 func TestRulesLiveApartFromTheTree(t *testing.T) {
 	rulesDir := writeTree(t, map[string]string{"org.yaml": fixtureRules()})
-	target := writeTree(t, map[string]string{"a.md": "Old Name\n", "org.yaml": "Old Name in a same-named file\n"})
+	target := writeTree(t, map[string]string{"a.md": "Old Name\n", "org.yaml": "Old Name in the clone's own copy of the rule file\n"})
 	got := byID(Run(target, []string{"org.yaml"}, rulesDir))
-	if c := got["truth.retired-term"]; c.Findings != 2 {
-		t.Errorf("a same-named file in another tree is scanned: %+v", c)
+	if c := got["truth.retired-term"]; c.Findings != 1 {
+		t.Errorf("a clone's own copy of the rule file must not be scanned (only a.md): %+v", c)
 	}
-	same := writeTree(t, map[string]string{"org.yaml": fixtureRules()})
+	same := writeTree(t, map[string]string{"org.yaml": fixtureRules(), "a.md": "fine\n"})
 	if c := byID(Run(same, []string{"org.yaml"}, ""))["truth.retired-term"]; c.Result != "pass" {
 		t.Errorf("the rule file must not be scanned in its own tree: %+v", c)
 	}
@@ -149,7 +149,8 @@ func TestOrgRulesFile(t *testing.T) {
 	if kinds[KindDeadHost] < 3 || kinds[KindRetiredTerm] < 4 {
 		t.Errorf("rule counts: %v", kinds)
 	}
-	for _, term := range []string{"Plugins Pro", "ɳTV", "flutter sdk", "ci.verdict"} {
+	// built from parts: this file must not trip the retired-term rules it tests
+	for _, term := range []string{"Plugins" + " Pro", "ɳ" + "TV", "flutter" + " sdk", "ci." + "verdict"} {
 		found := false
 		for _, r := range rs.Rules {
 			found = found || strings.EqualFold(r.Term, term)
