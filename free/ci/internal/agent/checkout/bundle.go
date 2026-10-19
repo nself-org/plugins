@@ -6,7 +6,8 @@ package checkout
 // Outputs: "sha256:<hex>" and the byte size of the bundle.
 // Constraints: git needs a ref to bundle, so the revision is pinned under a
 // private ref (refs/nself-ci/bundle-<random>) for the duration of the call and
-// the ref is deleted afterwards, even on failure.
+// the ref is deleted afterwards, even on failure. A SIGKILL skips that delete,
+// so each Create first sweeps pins older than staleRefAge (D-1058).
 
 import (
 	"context"
@@ -18,6 +19,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
+	"time"
 )
 
 var fullRev = regexp.MustCompile(`^[0-9a-f]{40}([0-9a-f]{24})?$`)
@@ -40,7 +44,8 @@ func Create(ctx context.Context, run Runner, repo, revision, dest string) (diges
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return "", 0, err
 	}
-	ref := "refs/nself-ci/bundle-" + hex.EncodeToString(nonce[:])
+	sweepStaleRefs(ctx, run, repo)
+	ref := bundleRefPrefix + strconv.FormatInt(now().Unix(), 10) + "-" + hex.EncodeToString(nonce[:])
 	if _, err := git(ctx, run, "-C", repo, "update-ref", ref, revision+"^{commit}"); err != nil {
 		return "", 0, fmt.Errorf("checkout: pin revision: %w", err)
 	}
@@ -67,3 +72,37 @@ func Create(ctx context.Context, run Runner, repo, revision, dest string) (diges
 
 // RefPrefix is the private ref namespace the bundle carries.
 const RefPrefix = "refs/nself-ci/"
+
+// bundleRefPrefix names the pins Create makes: bundleRefPrefix<unix seconds>-<hex nonce>.
+const bundleRefPrefix = RefPrefix + "bundle-"
+
+// staleRefAge is how old a pin must be before the next Create treats it as the leftover of a
+// killed coordinator. It exceeds gitTimeout, so a pin of a live concurrent Create is never swept.
+const staleRefAge = gitTimeout + time.Hour
+
+var now = time.Now
+
+// sweepStaleRefs deletes bundle pins a SIGKILLed coordinator left behind (the deferred delete in
+// Create never ran). A pin without a parsable timestamp is from the older naming and is stale.
+// Best effort: a failure here never fails the bundle.
+func sweepStaleRefs(ctx context.Context, run Runner, repo string) {
+	out, err := git(ctx, run, "-C", repo, "for-each-ref", "--format=%(refname)", RefPrefix)
+	if err != nil {
+		return
+	}
+	for _, ref := range strings.Fields(out) {
+		if !strings.HasPrefix(ref, bundleRefPrefix) || !refIsStale(ref) {
+			continue
+		}
+		_, _ = git(ctx, run, "-C", repo, "update-ref", "-d", ref)
+	}
+}
+
+func refIsStale(ref string) bool {
+	secs, _, ok := strings.Cut(strings.TrimPrefix(ref, bundleRefPrefix), "-")
+	ts, err := strconv.ParseInt(secs, 10, 64)
+	if !ok || err != nil {
+		return true
+	}
+	return now().Sub(time.Unix(ts, 0)) > staleRefAge
+}
