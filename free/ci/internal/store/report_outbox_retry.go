@@ -100,10 +100,20 @@ func (s *Store) OutboxBackoff(ctx context.Context, revision, statusContext strin
 
 // OutboxSuppress parks an undelivered entry that this process must not post
 // (another reporter owns it, or its payload cannot be read). A posting entry
-// is only listed by OutboxDue when its claim has expired.
+// is taken only once its claim has expired: a live claim belongs to a poster.
 func (s *Store) OutboxSuppress(ctx context.Context, revision, statusContext string, seq int64, reason string) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=?,reason=?,claimed_at=0 WHERE revision=? AND context=? AND seq=? AND state IN (?,?,?)", OutboxSuppressed, reason, revision, statusContext, seq, OutboxPending, OutboxFailed, OutboxPosting)
+		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=?,reason=?,claimed_at=0 WHERE revision=? AND context=? AND seq=? AND (state IN (?,?) OR (state=? AND claimed_at<=?))", OutboxSuppressed, reason, revision, statusContext, seq, OutboxPending, OutboxFailed, OutboxPosting, s.now().Add(-claimTTL).UnixNano())
+		return err
+	})
+}
+
+// OutboxReviveBelow makes the newest superseded entry below seq deliverable
+// again, for the case where the entry that superseded it can never be posted
+// (unreadable payload). Nothing is revived when a newer status was posted.
+func (s *Store) OutboxReviveBelow(ctx context.Context, revision, statusContext string, seq int64) error {
+	return s.write(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND state=? AND payload_json IS NOT NULL AND seq=(SELECT max(seq) FROM outbox WHERE revision=? AND context=? AND seq<? AND state=? AND payload_json IS NOT NULL) AND NOT EXISTS (SELECT 1 FROM outbox p WHERE p.revision=outbox.revision AND p.context=outbox.context AND p.seq>outbox.seq AND p.state=?)", OutboxPending, revision, statusContext, OutboxSuperseded, revision, statusContext, seq, OutboxSuperseded, OutboxPosted)
 		return err
 	})
 }

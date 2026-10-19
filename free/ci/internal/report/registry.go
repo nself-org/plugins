@@ -71,11 +71,22 @@ func (r *Registry) Resolve(remote string) (kind string, rep Reporter, ok bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for _, x := range append(append([]route(nil), r.routes...), r.gh) {
-		if x.match(remote) {
+		if matches(x.match, remote) {
 			return x.kind, x.rep, true
 		}
 	}
 	return "", nil, false
+}
+
+// matches asks a matcher; one that panics does not match. Matchers must be pure:
+// they run under the registry's read lock and must not call Register.
+func matches(match func(string) bool, remote string) (ok bool) {
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+	return match(remote)
 }
 
 // DefaultRegistry is the process-wide registry.

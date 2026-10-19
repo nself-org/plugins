@@ -127,3 +127,14 @@ func TestRegistryRouting(t *testing.T) {
 		t.Fatalf("kind = %q %v", kind, ok)
 	}
 }
+
+// A matcher that panics does not match, and does not take the registry down.
+func TestRegistryPanickingMatcher(t *testing.T) {
+	r := NewRegistry(&recorder{})
+	if err := r.Register("bad", func(string) bool { panic("boom") }, &recorder{}); err != nil {
+		t.Fatal(err)
+	}
+	if kind, _, ok := r.Resolve("https://github.com/a/b"); !ok || kind != KindGitHub {
+		t.Fatalf("resolve past a panicking matcher: %q %v", kind, ok)
+	}
+}

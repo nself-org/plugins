@@ -2,6 +2,9 @@ package report
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -215,5 +218,35 @@ func TestDrainParksUnreadableEntries(t *testing.T) {
 	list, err := d.Store.OutboxList(ctx)
 	if err != nil || len(rep.posted) != 1 || len(list) != 1 || list[0].State != "suppressed" || list[0].Reason != "unreadable payload" {
 		t.Fatalf("posted %+v, outbox %+v %v", rep.posted, list, err)
+	}
+}
+
+// TestDrainRevivesWhatAnUnreadableEntrySuperseded: the readable status below
+// an unreadable one still reaches the host.
+func TestDrainRevivesWhatAnUnreadableEntrySuperseded(t *testing.T) {
+	ctx, rep := context.Background(), &recorder{}
+	d, _ := newSender(t, rep)
+	good, _ := json.Marshal(status(Failure, "readable"))
+	if _, err := d.Store.OutboxEnqueue(ctx, sha, key("o", "r"), good); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Store.OutboxEnqueue(ctx, sha, key("o", "r"), []byte("{not json")); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := d.Drain(ctx); err != nil || n != 1 || len(rep.posted) != 1 || rep.posted[0].Description != "readable" {
+		t.Fatalf("n=%d posted=%+v %v", n, rep.posted, err)
+	}
+	if list, _ := d.Store.OutboxList(ctx); len(list) != 1 || list[0].Reason != "unreadable payload" {
+		t.Fatalf("the unreadable entry stays visible: %+v", list)
+	}
+}
+
+func TestCauseHasNoControlCharacters(t *testing.T) {
+	got := cause(errors.New("boom \x1b[31mred\x1b[0m\rtail\nsecond line"))
+	if strings.ContainsAny(got, "\x1b\r\n") || !strings.Contains(got, "boom") || strings.Contains(got, "second") {
+		t.Fatalf("cause = %q", got)
+	}
+	if n := len([]rune(cause(errors.New(strings.Repeat("é", 500))))); n != 200 {
+		t.Fatalf("cause length = %d runes", n)
 	}
 }

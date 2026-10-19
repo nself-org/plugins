@@ -39,16 +39,19 @@ func init() {
 	}
 }
 
-// ReportOwnerKey is the spec of providers.report_owner: operator scope only,
-// default personal.
+// ReportOwnerKey is the spec of providers.report_owner: operator scope only.
+// It has NO registered default on purpose: the merge seeds a Fixed key with its
+// default and then refuses any scope whose value differs (E670), so a default of
+// "personal" would make "team" impossible to set and would change every
+// effective-policy digest. A missing value reads as personal (ReportOwner).
 func ReportOwnerKey() policy.KeySpec {
-	return policy.KeySpec{Key: KeyReportOwner, Owner: "providers", Kind: policy.TightenFixed, Spend: true, Default: report.OwnerPersonal, Decode: decodeReportOwner}
+	return policy.KeySpec{Key: KeyReportOwner, Owner: "providers", Kind: policy.TightenFixed, Spend: true, Decode: decodeReportOwner}
 }
 
 func decodeReportOwner(raw json.RawMessage) (any, error) {
 	var v string
 	if err := json.Unmarshal(raw, &v); err != nil || (v != report.OwnerPersonal && v != report.OwnerTeam) {
-		return nil, fmt.Errorf("E672 %s: want %q or %q", KeyReportOwner, report.OwnerPersonal, report.OwnerTeam)
+		return nil, fmt.Errorf("want %q or %q", report.OwnerPersonal, report.OwnerTeam)
 	}
 	return v, nil
 }

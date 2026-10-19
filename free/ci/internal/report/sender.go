@@ -6,8 +6,10 @@ package report
 // by remote kind (the reporter registry) and the reporting owner (a PERSONAL
 // process never posts for a project whose providers.report_owner is team).
 // It sits beside the CI-37 Outbox, which keeps reserving seqs and storing
-// payloads; both use the same table and the same claim, so the seq rule of
-// CI-37 holds: a status is never posted below the last posted seq.
+// payloads; both use the same table and the same claim (store.OutboxClaim,
+// which also counts a parked newer seq), so the seq rule of CI-37 holds in
+// either engine: a status is never posted below a newer seq that was posted,
+// is being posted or is parked for a retry.
 // Inputs:  a store; a Registry; hooks for the remote and the owner of a status.
 // Outputs: delivered statuses, entries parked as failed, suppressed or superseded.
 // Constraints: a delivery failure never fails the caller; drain opportunities
@@ -19,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/rand/v2"
+	"strings"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -210,13 +213,17 @@ func (d *Sender) pause() time.Duration {
 	return 250 * time.Millisecond
 }
 
-// deliver posts one entry. lost is true when its claim was lost and the store
-// queued the newest status again; the caller drains once more.
+// deliver posts one entry. lost is true when the store queued another status
+// for delivery (a lost claim healed, or a status revived); the caller drains once more.
 func (d *Sender) deliver(ctx context.Context, it store.OutboxItem) (posted, lost bool, err error) {
 	var s Status
 	if json.Unmarshal(it.Payload, &s) != nil || s.Validate() != nil {
-		// Parked where `ci runs outbox` shows it, so it stops standing in the way of the rest.
-		return false, false, d.Store.OutboxSuppress(ctx, it.Revision, it.Context, it.Seq, "unreadable payload")
+		// Parked where `ci runs outbox` shows it; the readable status it superseded
+		// is queued again, because this entry can never be posted.
+		if err = d.Store.OutboxSuppress(ctx, it.Revision, it.Context, it.Seq, "unreadable payload"); err != nil {
+			return false, false, err
+		}
+		return false, true, d.Store.OutboxReviveBelow(ctx, it.Revision, it.Context, it.Seq) // lost: drain again
 	}
 	if d.suppressed(ctx, s) {
 		return false, false, d.Store.OutboxSuppress(ctx, it.Revision, it.Context, it.Seq, SuppressedReason)
@@ -257,10 +264,18 @@ func (d *Sender) owner(ctx context.Context, s Status) string {
 	return d.Owner(ctx, s)
 }
 
-// cause is the stored text of a failed post: one short line of at most 200 runes.
+// cause is the stored text of a failed post: one short line of at most 200
+// runes, with control characters (terminal escapes) turned into spaces.
 func cause(err error) string {
-	if r := []rune(firstLine(err.Error())); len(r) > 200 {
-		return string(r[:200])
+	m, _, _ := strings.Cut(err.Error(), "\n")
+	r := []rune(m)
+	if len(r) > 200 {
+		r = r[:200]
 	}
-	return firstLine(err.Error())
+	for i, c := range r {
+		if c < 0x20 || c == 0x7f {
+			r[i] = ' '
+		}
+	}
+	return string(r)
 }
