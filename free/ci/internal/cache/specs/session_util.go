@@ -40,7 +40,7 @@ func (s *Session) Cleanup() {
 		s.base = nil
 	}
 	if s.parent != nil { // removal through the pinned parent never leaves it
-		_ = s.parent.RemoveAll(s.name)
+		_ = removeAll(s.parent, s.name)
 		_ = s.parent.Close()
 		s.parent = nil
 	}

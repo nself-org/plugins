@@ -127,3 +127,41 @@ func TestUnpackStopsOnAWriteError(t *testing.T) {
 		t.Fatal("a colliding file was overwritten")
 	}
 }
+
+// A restored tree is deleted on several goroutines, read-only directories included.
+func TestRemoveInFansOutAndRemovesEverything(t *testing.T) {
+	var mu sync.Mutex
+	inFlight, peak := 0, 0
+	afterRemoveStart = func() {
+		mu.Lock()
+		inFlight++
+		peak = max(peak, inFlight)
+		mu.Unlock()
+		time.Sleep(20 * time.Millisecond)
+		mu.Lock()
+		inFlight--
+		mu.Unlock()
+	}
+	t.Cleanup(func() { afterRemoveStart = nil })
+	parent := t.TempDir()
+	for i := range 32 {
+		putFile(t, filepath.Join(parent, "tree", "build", fmt.Sprintf("%02x", i), "f"), "x")
+	}
+	if err := os.Chmod(filepath.Join(parent, "tree", "build", "05"), 0o500); err != nil { // read-only dir, like a module cache
+		t.Fatal(err)
+	}
+	base, err := os.OpenRoot(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = base.Close() }()
+	if err := removeIn(base, "tree"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(parent, "tree")); !os.IsNotExist(err) {
+		t.Fatalf("tree not removed: %v", err)
+	}
+	if runtime.GOMAXPROCS(0) > 1 && peak < 2 {
+		t.Fatalf("subtrees were removed one at a time (peak %d)", peak)
+	}
+}
