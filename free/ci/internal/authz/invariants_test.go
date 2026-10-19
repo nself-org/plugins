@@ -87,7 +87,7 @@ func TestInvariant_I11(t *testing.T) {
 }
 
 // The per-PR variant spelled out: two PRs, every ordering, every state.
-func TestInvariant_I11_PerPR(t *testing.T) {
+func TestCacheAccess_PerPRNamespacesDistinct(t *testing.T) {
 	a := mustNS(t, "untrusted", authz.Unprotected, "fork/repo", "1")
 	b := mustNS(t, "untrusted", authz.Unprotected, "fork/repo", "2")
 	if err := authz.CheckWrite(finalJob(a), b, currentCap); err == nil {
