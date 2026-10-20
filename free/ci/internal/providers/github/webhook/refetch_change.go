@@ -139,11 +139,12 @@ type comparison struct {
 // Changed files come from base...revision (the recorded base revision; absent for a new branch, and
 // possibly gone after a force-push, in which case the files stay unknown).
 //
-// Reachability means "the revision is reachable from the default branch": compare answers 200 for
+// Reachability means "the revision is reachable from the default branch" (its head sha, read first):
+// compare answers 200 for
 // any commit of the repository network, so a 200 alone proves nothing. Only the status says where the
 // revision sits: "behind" (the revision is an ancestor of the default branch) or "identical" is
 // reachable; "ahead" or "diverged" is an unmerged commit (a fork head, an unprotected branch) and is
-// not. A 404 on the default branch compare is "not in this repository" once the repository itself was
+// not. A default branch head that cannot be read leaves the fact unknown. A 404 on the compare is "not in this repository" once the repository itself was
 // read with the same token.
 func (r *fetch) compare(defaultBranch string, repoOK bool) {
 	if !isHex40(r.f.Revision) {
@@ -159,10 +160,20 @@ func (r *fetch) compare(defaultBranch string, repoOK bool) {
 	if !ok || !repoOK {
 		return
 	}
+	// compare from the head sha of the default branch, never from its name: git resolves refs/tags/<name>
+	// before refs/heads/<name>, so a tag named like the branch would stand in for the branch head
+	var branch struct {
+		Commit struct {
+			SHA string `json:"sha"`
+		} `json:"commit"`
+	}
+	if _, ok = r.call("/repos/{owner}/{repo}/branches/"+seg, r.params(), &branch); !ok || !isHex40(branch.Commit.SHA) {
+		return
+	}
 	var onDefault struct {
 		Status string `json:"status"`
 	}
-	status, ok := r.call("/repos/{owner}/{repo}/compare/"+seg+"..."+r.f.Revision, r.params(), &onDefault)
+	status, ok := r.call("/repos/{owner}/{repo}/compare/"+branch.Commit.SHA+"..."+r.f.Revision, r.params(), &onDefault)
 	switch {
 	case ok && (onDefault.Status == "behind" || onDefault.Status == "identical"):
 		r.f.SHAReachable = fact(true, "api", r.now)

@@ -35,6 +35,8 @@ var (
 	shaB = strings.Repeat("b", 40)
 	shaC = strings.Repeat("c", 40)
 	shaD = strings.Repeat("d", 40)
+	// shaMain is the head of the default branch ("main") in testdata/api/routes.json
+	shaMain = strings.Repeat("9", 40)
 
 	fixedNow = time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
 )
