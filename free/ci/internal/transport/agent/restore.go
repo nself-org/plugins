@@ -14,6 +14,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/blob/transfer"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/agentapi"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
@@ -101,4 +102,10 @@ func (h blobHandler) Refused(ctx context.Context, node string, m protocol.Messag
 		why = restore.ReasonStaleEpoch
 	}
 	rt.restore.Refuse(ctx, o.SHA256, why)
+}
+
+// WithContext returns the uploader bound to one transfer's context.
+func (u frameUp) WithContext(ctx context.Context) transfer.Uploader {
+	u.ctx = ctx
+	return u
 }

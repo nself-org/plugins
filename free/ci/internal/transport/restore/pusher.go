@@ -66,19 +66,20 @@ type Pusher struct {
 	Confirm time.Duration
 	Resumes int
 
-	mu      sync.Mutex
-	active  map[string]chan protocol.Offset // digest -> answers of the running transfer
-	queued  map[string]bool
-	refused map[string]bool    // reason+digest pairs already reported: a flood costs one event each
-	asked   map[string]int     // requests accepted per digest
-	stop    context.CancelFunc // ends the running transfer
-	closed  bool
-	queue   chan string
-	chunks  atomic.Int64
+	mu       sync.Mutex
+	active   map[string]chan protocol.Offset // digest -> answers of the running transfer
+	queued   map[string]bool
+	refused  map[string]bool    // reason+digest pairs already reported: a flood costs one event each
+	asked    map[string]int     // requests accepted per digest
+	byReason map[string]int     // refusals remembered per reason
+	stop     context.CancelFunc // ends the running transfer
+	closed   bool
+	queue    chan string
+	chunks   atomic.Int64
 }
 
-// maxRefused bounds the refusals remembered per lease.
-const maxRefused = 64
+// maxRefused bounds the refusals remembered per reason: a flood of one reason cannot hide another.
+const maxRefused = 16
 
 // New loads the plan of src and returns a pusher for it.
 func New(ctx context.Context, src transport.Restorer, up transfer.Uploader) (*Pusher, error) {
@@ -87,7 +88,7 @@ func New(ctx context.Context, src transport.Restorer, up transfer.Uploader) (*Pu
 		return nil, err
 	}
 	p := &Pusher{src: src, up: up, blobs: map[string]transport.RestoreBlob{}, active: map[string]chan protocol.Offset{},
-		queued: map[string]bool{}, refused: map[string]bool{}, asked: map[string]int{}, queue: make(chan string, queueLen)}
+		queued: map[string]bool{}, refused: map[string]bool{}, byReason: map[string]int{}, asked: map[string]int{}, queue: make(chan string, queueLen)}
 	for _, b := range list {
 		if b.Open != nil && b.Size > 0 {
 			p.blobs[strings.ToLower(b.SHA256)] = b
@@ -120,10 +121,11 @@ func (p *Pusher) Refuse(ctx context.Context, sha, reason string) {
 	key := reason + "/" + sha
 	p.mu.Lock()
 	seen := p.refused[key]
-	if !seen && len(p.refused) < maxRefused {
+	if !seen && p.byReason[reason] < maxRefused {
 		p.refused[key] = true
+		p.byReason[reason]++
 	} else if !seen {
-		seen = true // the table is full: the audit rows already say enough
+		seen = true // this reason has said enough
 	}
 	p.mu.Unlock()
 	if !seen {
@@ -252,7 +254,13 @@ func (p *Pusher) confirm(size int64) time.Duration {
 
 // push sends b until the node confirms a verified copy or the attempts run out.
 func (p *Pusher) push(ctx context.Context, b transport.RestoreBlob, answers chan protocol.Offset) {
-	s := transfer.Sender{Up: countingUp{p.up, &p.chunks}, Offsets: answers, WaitOffset: p.Wait, MaxResumes: p.Resumes}
+	up := p.up
+	if cu, ok := up.(interface {
+		WithContext(context.Context) transfer.Uploader
+	}); ok {
+		up = cu.WithContext(ctx) // a send that waits for room ends with this transfer, not with the run
+	}
+	s := transfer.Sender{Up: countingUp{up, &p.chunks}, Offsets: answers, WaitOffset: p.Wait, MaxResumes: p.Resumes}
 	ev := context.WithoutCancel(ctx) // an event about a cancelled transfer is still recorded
 	fail := func(why string) {
 		p.src.RestoreEvent(ev, transport.RestoreEvent{Kind: transport.RestoreFailed, SHA256: b.SHA256, Reason: why})
@@ -291,6 +299,20 @@ const (
 	again
 )
 
+// lastAnswer looks once at the answers already queued for a confirmation.
+func lastAnswer(answers <-chan protocol.Offset, b transport.RestoreBlob) verdict {
+	for {
+		select {
+		case o := <-answers:
+			if o.SHA256 == b.SHA256 && o.Offset == b.Size {
+				return confirmed
+			}
+		default:
+			return gaveUp
+		}
+	}
+}
+
 // awaitConfirm waits for the node's position after the final chunk: the size means it published
 // a verified copy, anything less means its re-hash failed and it wants the blob again.
 func (p *Pusher) awaitConfirm(ctx context.Context, answers <-chan protocol.Offset, b transport.RestoreBlob) verdict {
@@ -299,7 +321,7 @@ func (p *Pusher) awaitConfirm(ctx context.Context, answers <-chan protocol.Offse
 	for {
 		select {
 		case <-ctx.Done():
-			return gaveUp
+			return lastAnswer(answers, b) // a confirmation that arrived just before the cancel still counts
 		case <-timer.C:
 			return gaveUp
 		case o := <-answers:

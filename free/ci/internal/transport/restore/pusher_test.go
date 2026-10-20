@@ -310,6 +310,14 @@ func TestRefusalTableStaysBoundedAndNeverKeysOnNodeStrings(t *testing.T) {
 	if got := len(r.s.events); got > maxRefused+1 {
 		t.Fatalf("%d events for a flood", got)
 	}
+	r.p.Refuse(context.Background(), r.sha, ReasonStaleEpoch) // another reason is still reported
+	var stale bool
+	for len(r.s.events) > 0 {
+		stale = stale || (<-r.s.events).Reason == ReasonStaleEpoch
+	}
+	if !stale {
+		t.Fatal("a flood of one reason hid another")
+	}
 }
 
 func TestRequestForAnotherBlobEndsTheRunningTransfer(t *testing.T) {

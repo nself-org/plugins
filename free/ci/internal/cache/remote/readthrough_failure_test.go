@@ -189,3 +189,59 @@ func TestRemoveIfSameSparesAReplacedCopy(t *testing.T) {
 		t.Fatal("the verified-corrupt copy was kept")
 	}
 }
+
+// Two fetches that each fit the cap alone but not together: the second finds no room instead of overrunning the cap.
+func TestNodeReadThroughCountsConcurrentFetchReservations(t *testing.T) {
+	c, err := NewReadThrough(t.TempDir(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d1, d2 := []byte("0123456789"), []byte("abcdefghij")
+	dig := func(b []byte) string { return fmt.Sprintf("%x", sha256.Sum256(b)) }
+	started, release := make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		f, err := c.Open(context.Background(), "realm", dig(d1), 10, func(_ context.Context, w io.Writer) error {
+			close(started)
+			<-release // the first fetch has claimed 10 B and written none
+			_, err := w.Write(d1)
+			return err
+		})
+		if f != nil {
+			_ = f.Close()
+		}
+		done <- err
+	}()
+	<-started
+	_, err = c.Open(context.Background(), "realm", dig(d2), 10, func(_ context.Context, w io.Writer) error { _, err := w.Write(d2); return err })
+	if err == nil || !strings.Contains(err.Error(), "E711") {
+		t.Fatalf("second fetch under a full reservation: %v", err)
+	}
+	close(release)
+	if err = <-done; err != nil {
+		t.Fatalf("first fetch: %v", err)
+	}
+}
+
+// A fetch returns the descriptor that was hashed: pruning the published name right after the rename cannot take the bytes away.
+func TestNodeReadThroughOpenSurvivesAPruneAfterPublish(t *testing.T) {
+	c, err := NewReadThrough(t.TempDir(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("0123456789")
+	digest := fmt.Sprintf("%x", sha256.Sum256(data))
+	f, err := c.Open(context.Background(), "realm", digest, 10, func(_ context.Context, w io.Writer) error { _, err := w.Write(data); return err })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	name, _ := c.name("realm", digest)
+	if err = os.Remove(name); err != nil { // another lease evicted it
+		t.Fatal(err)
+	}
+	got, err := io.ReadAll(f)
+	if err != nil || string(got) != string(data) {
+		t.Fatalf("read %q %v after the name was pruned", got, err)
+	}
+}

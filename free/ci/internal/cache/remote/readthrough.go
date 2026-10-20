@@ -39,6 +39,12 @@ var readThroughMu sync.Mutex
 
 var errCopyMismatch = errors.New("E714 digest_mismatch: node cache copy failed verification")
 
+// errCopyChanged means the copy was replaced while it was being opened (another lease published it).
+var errCopyChanged = errors.New("cache copy changed while opening")
+
+// reservations holds the bytes each in-flight fetch has claimed, by temporary file; guarded by readThroughMu.
+var reservations = map[string]int64{}
+
 func NewReadThrough(dir string, maxBytes int64) (*ReadThrough, error) {
 	if maxBytes <= 0 {
 		maxBytes = DefaultNodeCacheMaxBytes
@@ -77,15 +83,23 @@ func (c *ReadThrough) Open(ctx context.Context, realm, digest string, size int64
 	if size < 0 || size > c.max {
 		return nil, fmt.Errorf("E711 size_cap: node cache blob exceeds cap")
 	}
-	seen, _ := os.Lstat(name)
-	if f, err := verifiedFile(ctx, name, digest, size); err == nil {
-		now := time.Now()
-		_ = os.Chtimes(name, now, now)
-		return f, nil
-	} else if errors.Is(err, errCopyMismatch) {
-		removeIfSame(name, seen)
-	} else if !os.IsNotExist(err) {
-		return nil, err
+	for try := 0; ; try++ {
+		seen, _ := os.Lstat(name)
+		f, err := verifiedFile(ctx, name, digest, size)
+		if err == nil {
+			now := time.Now()
+			_ = os.Chtimes(name, now, now)
+			return f, nil
+		}
+		if errors.Is(err, errCopyChanged) && try < 3 { // a valid copy was published meanwhile: look again
+			continue
+		}
+		if errors.Is(err, errCopyMismatch) {
+			removeIfSame(name, seen)
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+		break
 	}
 	if fetch == nil {
 		return nil, os.ErrNotExist
@@ -94,7 +108,8 @@ func (c *ReadThrough) Open(ctx context.Context, realm, digest string, size int64
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = f.Close(); _ = os.Remove(f.Name()) }()
+	tmp := f.Name()
+	defer func() { _ = f.Close(); releaseReservation(tmp); _ = os.Remove(tmp) }()
 	w := &boundedCopy{ctx: ctx, w: f, remaining: size}
 	if err := fetch(ctx, w); err != nil {
 		return nil, err
@@ -102,18 +117,27 @@ func (c *ReadThrough) Open(ctx context.Context, realm, digest string, size int64
 	if err := f.Close(); err != nil {
 		return nil, err
 	}
-	check, err := verifiedFile(ctx, f.Name(), digest, size)
+	// The verified descriptor is kept across the rename, so the caller gets the bytes that were hashed
+	// even if another lease prunes the published name before this returns.
+	check, err := verifiedFile(ctx, tmp, digest, size)
 	if err != nil {
 		return nil, err
 	}
-	_ = check.Close()
 	readThroughMu.Lock()
-	err = os.Rename(f.Name(), name)
+	err = os.Rename(tmp, name)
+	delete(reservations, tmp)
 	readThroughMu.Unlock()
 	if err != nil {
+		_ = check.Close()
 		return nil, err
 	}
-	return verifiedFile(ctx, name, digest, size)
+	return check, nil
+}
+
+func releaseReservation(tmp string) {
+	readThroughMu.Lock()
+	delete(reservations, tmp)
+	readThroughMu.Unlock()
 }
 
 // removeIfSame removes the corrupt copy that was verified, not a fresh one another lease has renamed over it since.
@@ -135,7 +159,12 @@ func (c *ReadThrough) stage(name string, size int64) (*os.File, error) {
 	if err := c.prune(size); err != nil {
 		return nil, err
 	}
-	return os.CreateTemp(filepath.Dir(name), ".fetch-")
+	f, err := os.CreateTemp(filepath.Dir(name), ".fetch-")
+	if err != nil {
+		return nil, err
+	}
+	reservations[f.Name()] = size
+	return f, nil
 }
 
 func verifiedFile(ctx context.Context, name, digest string, size int64) (*os.File, error) {
@@ -153,7 +182,7 @@ func verifiedFile(ctx context.Context, name, digest string, size int64) (*os.Fil
 	got, err := f.Stat()
 	if err != nil || !got.Mode().IsRegular() || !os.SameFile(info, got) {
 		_ = f.Close()
-		return nil, fmt.Errorf("cache copy changed while opening")
+		return nil, errCopyChanged
 	}
 	h := sha256.New()
 	n, err := io.Copy(h, &contextReader{ctx, f})
@@ -200,9 +229,10 @@ func (c *ReadThrough) prune(reserve int64) error {
 				return nil
 			}
 			if time.Since(info.ModTime()) < fetchTempGrace {
-				total += info.Size()
+				total += max(info.Size(), reservations[name]) // what the fetch has claimed, not just what it has written so far
 				return nil
 			}
+			delete(reservations, name)
 			return os.Remove(name)
 		}
 		if len(d.Name()) != 64 {
@@ -231,6 +261,9 @@ func (c *ReadThrough) prune(reserve int64) error {
 			return err
 		}
 		total -= item.size
+	}
+	if reserve > 0 && total+reserve > c.max {
+		return fmt.Errorf("E711 size_cap: no room under the node cache cap while other fetches run")
 	}
 	return nil
 }
