@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	_ "github.com/nself-org/plugins/free/ci/internal/blob/cas"
+	_ "github.com/nself-org/plugins/free/ci/internal/burst"
 	_ "github.com/nself-org/plugins/free/ci/internal/exec"
 	_ "github.com/nself-org/plugins/free/ci/internal/gates"
 	_ "github.com/nself-org/plugins/free/ci/internal/gates/truth"
@@ -28,6 +29,7 @@ import (
 var notYetLinked = map[string]bool{
 	"github.com/nself-org/plugins/free/ci/internal/agent/slots":    true,
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas":       true,
+	"github.com/nself-org/plugins/free/ci/internal/burst":          true, // E696/E697; links into cmd when the dispatcher wiring ships (debt row filed by P7-SCHED-08)
 	"github.com/nself-org/plugins/free/ci/internal/exec":           true,
 	"github.com/nself-org/plugins/free/ci/internal/gates":          true,
 	"github.com/nself-org/plugins/free/ci/internal/gates/truth":    true,
