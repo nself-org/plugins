@@ -28,17 +28,16 @@ func init() {
 	must(RegisterSubcommand("uninstall", "remove the system install of this node (--system; run as root)", runUninstall))
 }
 
-// localTools are the only programs the family runs on this machine, each by absolute path: the process
-// is root, so nothing is looked up through PATH.
-var localTools = map[string]string{"id": "/usr/bin/id", "sh": "/bin/sh", "uname": "/usr/bin/uname", "sudo": "/usr/bin/sudo"}
+// The only programs the family asks this machine to run (root checks `id -u`, then `sh -c <script>`),
+// each by absolute path: the process is root, so nothing is looked up through PATH.
+const (
+	idBin = "/usr/bin/id"
+	shBin = "/bin/sh"
+)
 
-// localRun runs one fixed argv on this machine and returns its combined output. It uses os.StartProcess:
-// os/exec stays inside internal/exec (architecture rule).
+// localRun runs one fixed argv on this machine and returns its combined output. It uses os.StartProcess
+// with a constant program (TestSingleSSHExecSite) because os/exec stays inside internal/exec.
 func localRun(ctx context.Context, argv ...string) (string, error) {
-	bin, ok := localTools[argv[0]]
-	if !ok {
-		return "", errors.New("uninstall runs no program named " + argv[0])
-	}
 	r, w, err := os.Pipe()
 	if err != nil {
 		return "", err
@@ -50,7 +49,16 @@ func localRun(ctx context.Context, argv ...string) (string, error) {
 		return "", err
 	}
 	defer null.Close()
-	proc, err := os.StartProcess(bin, append([]string{bin}, argv[1:]...), &os.ProcAttr{Files: []*os.File{null, w, w}})
+	attr := &os.ProcAttr{Files: []*os.File{null, w, w}}
+	var proc *os.Process
+	switch argv[0] {
+	case "id":
+		proc, err = os.StartProcess(idBin, append([]string{idBin}, argv[1:]...), attr)
+	case "sh":
+		proc, err = os.StartProcess(shBin, append([]string{shBin}, argv[1:]...), attr)
+	default:
+		err = errors.New("uninstall runs no program named " + argv[0])
+	}
 	w.Close()
 	if err != nil {
 		return "", err

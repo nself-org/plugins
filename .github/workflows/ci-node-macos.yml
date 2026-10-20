@@ -1,0 +1,119 @@
+name: ci-node-macos
+
+# The macOS leg of the node bootstrap (P7-NODE-31, Epic D20). A loopback sshd on port 2222 with a throwaway
+# key lets the real `nself ci nodes add --system` install the darwin layout (hidden agent user, per-slot
+# job users, sudoers job-shim rules, LaunchDaemon) on the GitHub-hosted macos-15 runner; free/ci/test/macos
+# then proves the separation and removes the layout again with `nself-ci-agent uninstall --system`.
+# The runner is disposable and the repository is public, so the leg is free. No secret is used: the keys
+# are generated in this job and die with it. Actions are pinned by commit SHA.
+
+on:
+  pull_request:
+    paths:
+      - 'free/ci/**'
+      - '.github/workflows/ci-node-macos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-node-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: '0'
+
+jobs:
+  macos-node:
+    name: macos-node (macos-15)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+          cache-dependency-path: free/ci/go.sum
+
+      - name: Pin the image (the leg depends on macOS details; fail loudly on a difference)
+        run: |
+          set -euo pipefail
+          sw_vers
+          test "$(sw_vers -productVersion | cut -d. -f1)" = 15
+          test "$(uname -m)" = arm64 -o "$(uname -m)" = x86_64
+          sudo -n true
+          # the id range the install uses must be free of nself-ci accounts on a fresh runner
+          if dscl . -list /Users | grep -q '^nself-ci'; then echo '::error::nself-ci accounts exist on a fresh runner'; exit 1; fi
+
+      - name: Build the agent and the ci binary
+        working-directory: free/ci
+        run: |
+          set -euo pipefail
+          go build -mod=vendor -o "$RUNNER_TEMP/nself-ci-agent" ./cmd/agent
+          go build -mod=vendor -o "$RUNNER_TEMP/nself-ci" ./cmd
+
+      - name: Start the loopback sshd (port 2222, throwaway key)
+        run: |
+          set -euo pipefail
+          leg="$RUNNER_TEMP/leg"
+          mkdir -p "$leg" /var/tmp/nself-ci-leg-stub
+          chmod 755 /var/tmp/nself-ci-leg-stub
+          ssh-keygen -q -t ed25519 -N '' -C leg-host -f "$leg/host_key"
+          ssh-keygen -q -t ed25519 -N '' -C leg-client -f "$leg/id_leg"
+          cp "$leg/id_leg.pub" "$leg/authorized_keys"
+          chmod 600 "$leg/authorized_keys"
+          cat > "$leg/sshd_config" <<CFG
+          Port 2222
+          ListenAddress 127.0.0.1
+          HostKey $leg/host_key
+          PidFile $leg/sshd.pid
+          AuthorizedKeysFile $leg/authorized_keys
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PubkeyAuthentication yes
+          UsePAM no
+          StrictModes no
+          AllowUsers $USER
+          CFG
+          cat > "$leg/ssh_config" <<CFG
+          Host 127.0.0.1
+            Port 2222
+            User $USER
+            IdentityFile $leg/id_leg
+            IdentitiesOnly yes
+            UserKnownHostsFile /dev/null
+            StrictHostKeyChecking no
+            LogLevel ERROR
+          CFG
+          /usr/sbin/sshd -f "$leg/sshd_config" -E "$leg/sshd.log"
+          for _ in $(seq 1 20); do nc -z 127.0.0.1 2222 && break; sleep 1; done
+          nc -z 127.0.0.1 2222
+          fp=$(ssh-keygen -lf "$leg/host_key.pub" | awk '{print $2}')
+          echo "NSELF_MACOS_LEG_HOSTKEY=$fp" >> "$GITHUB_ENV"
+          ssh -F "$leg/ssh_config" 127.0.0.1 true
+
+      - name: macOS leg
+        working-directory: free/ci
+        env:
+          NSELF_MACOS_LEG_SSH_CONFIG: ${{ runner.temp }}/leg/ssh_config
+          NSELF_MACOS_LEG_AGENT: ${{ runner.temp }}/nself-ci-agent
+          NSELF_MACOS_LEG_CI: ${{ runner.temp }}/nself-ci
+          NSELF_MACOS_LEG_STUB: /var/tmp/nself-ci-leg-stub
+        run: |
+          set -euo pipefail
+          export NSELF_MACOS_LEG_USER="$USER"
+          set +e
+          go test -mod=vendor -tags macosleg -count=1 -v -timeout 35m -run 'TestMacOSNode' ./test/macos/ 2>&1 | tee "$RUNNER_TEMP/leg.log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          if grep -q -- '--- SKIP' "$RUNNER_TEMP/leg.log"; then echo '::error::a leg test skipped'; exit 1; fi
+          exit "$rc"
+
+      - name: Leftovers and logs
+        if: always()
+        run: |
+          sudo -n /opt/nself-ci-agent/bin/nself-ci-agent uninstall --system || true
+          dscl . -list /Users | grep '^nself-ci' || echo 'no nself-ci accounts left'
+          if [ -f "$RUNNER_TEMP/leg/sshd.log" ]; then tail -n 40 "$RUNNER_TEMP/leg/sshd.log"; fi
