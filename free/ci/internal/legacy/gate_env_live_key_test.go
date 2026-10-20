@@ -55,7 +55,7 @@ func TestSecretsEnvLiveKeyGateTrackedValueOnly(t *testing.T) {
 	if err := os.WriteFile(path, []byte("fixture-value-without-assignment\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("git", "add", ".environments/prod/.env")
+	cmd := exec.Command("git", "add", "-f", ".environments/prod/.env")
 	cmd.Dir = root
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("track env fixture: %v: %s", err, out)
