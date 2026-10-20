@@ -109,7 +109,7 @@ func TestPlistIsWellFormedRunsAsTheAgentUserAndWaitsForJoin(t *testing.T) {
 	for _, want := range []string{
 		"<string>org.nself.ci-agent</string>", "<key>UserName</key>\n\t<string>nself-ci</string>", "<string>/opt/nself-ci-agent/bin/nself-ci-agent</string>",
 		"<string>pull</string>", "<key>RunAtLoad</key>\n\t<true/>", "<key>PathState</key>", "/var/db/nself-ci-agent/pki/enrollment.json",
-		"/var/log/nself-ci-agent/agent.log", "NSELF_CI_AGENT_HOME",
+		"/var/log/nself-ci-agent/agent.log", "NSELF_CI_AGENT_HOME", "<key>HOME</key>\n\t\t<string>/var/db/nself-ci-agent</string>",
 	} {
 		if !strings.Contains(p, want) {
 			t.Errorf("plist lacks %q", want)

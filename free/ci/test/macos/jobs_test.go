@@ -58,13 +58,15 @@ func (l *leg) jobs() {
 	root := jobRoot(1)
 	pkg := l.stageFixture(1, "pkg", "")
 	out, rc := l.shimJob(1, pkg, "/bin/sh", "-c", "id -un; echo $HOME; pwd")
-	if want := jobUser(1) + "\n" + root + "/home\n" + pkg; rc != 0 || out != want {
-		t.Fatalf("shell job: rc=%d\n%q\nwant %q", rc, out, want)
+	// /var is a symlink to /private/var, so the shell's own pwd may carry the /private prefix.
+	lines := strings.Split(out, "\n")
+	if rc != 0 || len(lines) != 3 || lines[0] != jobUser(1) || lines[1] != root+"/home" || !strings.HasSuffix(lines[2], pkg) {
+		t.Fatalf("shell job: rc=%d\n%q\nwant %s, %s/home, %s", rc, out, jobUser(1), root, pkg)
 	}
 	if out, rc = l.shimJob(1, pkg, "/usr/bin/swift", "test"); rc != 0 || !strings.Contains(out, "Executed 1 test") {
 		t.Fatalf("SwiftPM fixture as %s: rc=%d\n%s", jobUser(1), rc, out)
 	}
-	if out, rc = l.shimJob(1, pkg, "/usr/bin/xcodebuild", "test", "-scheme", "Fixture", "-destination", "platform=macOS"); rc != 0 || !strings.Contains(out, "TEST SUCCEEDED") {
+	if out, rc = l.shimJob(1, pkg, "/usr/bin/xcodebuild", "test", "-scheme", "Fixture-Package", "-destination", "platform=macOS"); rc != 0 || !strings.Contains(out, "TEST SUCCEEDED") {
 		t.Fatalf("Xcode fixture as %s: rc=%d\n%s", jobUser(1), rc, out)
 	}
 	if dd, _ := l.sudo("ls " + root + "/home/Library/Developer/Xcode/DerivedData"); dd == "" {

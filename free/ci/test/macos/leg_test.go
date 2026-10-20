@@ -145,9 +145,11 @@ func TestMacOSNode(t *testing.T) {
 		{"slots", (*leg).slotChanges}, {"xcode license", (*leg).xcodeLicense}, {"upgrade swap", (*leg).upgradeSwap},
 		{"uninstall", (*leg).uninstall},
 	}
+	// A later step does not depend on an earlier one passing (only on the add), so every step runs and one
+	// run reports all the failures; the uninstall is last and the cleanup below also runs when add fails.
 	for _, s := range steps {
 		ok := t.Run(s.name, func(t *testing.T) { l.t = t; s.run(l) })
-		if !ok {
+		if !ok && s.name == "add --system" {
 			// Leave nothing behind on a runner that is reused (an operator's own Mac): best-effort removal.
 			l.t = t
 			l.sudo(trusted + " uninstall --system")

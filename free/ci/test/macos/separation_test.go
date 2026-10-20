@@ -12,7 +12,7 @@ import "strings"
 
 func (l *leg) isolation() {
 	t := l.t
-	served, rc := l.sudo("sudo -u " + agentUser + " env NSELF_CI_AGENT_HOME=" + stateDir + " NSELF_CI_AGENT_WORK=/var/db/nself-ci-work " + agentPath + " serve --stdio </dev/null 2>&1")
+	served, rc := l.sudo("sudo -u " + agentUser + " env HOME=" + stateDir + " NSELF_CI_AGENT_HOME=" + stateDir + " NSELF_CI_AGENT_WORK=/var/db/nself-ci-work " + agentPath + " serve --stdio </dev/null 2>&1")
 	files := strings.Fields(l.mustSudo("ls " + stateDir))
 	if len(files) == 0 {
 		ls, _ := l.sudo("ls -laO " + stateDir + " " + agentPath + "; id " + agentUser + "; xattr -l " + agentPath)

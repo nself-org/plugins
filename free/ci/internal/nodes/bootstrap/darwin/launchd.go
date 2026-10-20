@@ -6,7 +6,9 @@ package darwin
 // loads it.
 // Inputs:  none for the plist (fixed layout); the script texts take no input either.
 // Outputs: Plist() text and three scripts.
-// Constraints: the service runs as `nself-ci`, never root; RunAtLoad plus a KeepAlive tied to the
+// Constraints: the service runs as `nself-ci`, never root, with HOME set to its private state directory (the
+//          account's own home is /var/empty, and a HOME inherited from an admin shell once made the start
+//          guard read that admin's files); RunAtLoad plus a KeepAlive tied to the
 //          enrollment file means launchd starts `pull` once at load and keeps it up only after
 //          `nself-ci-agent join` has written <state>/pki/enrollment.json (no crash loop on a node that
 //          has not joined); a changed plist is booted out and bootstrapped again, an unchanged one is
@@ -36,6 +38,8 @@ func Plist() string {
 	</array>
 	<key>EnvironmentVariables</key>
 	<dict>
+		<key>HOME</key>
+		<string>%[4]s</string>
 		<key>NSELF_CI_AGENT_HOME</key>
 		<string>%[4]s</string>
 		<key>NSELF_CI_AGENT_WORK</key>
