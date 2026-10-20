@@ -80,7 +80,7 @@ func ownerOf(decl ast.Decl) (string, *ast.Ident) {
 }
 
 // scanFile reports the uses in one parsed file that the allowlist does not cover.
-func scanFile(f *ast.File, rel string, add func(string)) {
+func scanFile(f *ast.File, rel string, grants map[token.Pos]bool, add func(string)) {
 	dir := filepath.ToSlash(filepath.Dir(rel))
 	usesReflect := false
 	for _, imp := range f.Imports {
@@ -101,6 +101,9 @@ func scanFile(f *ast.File, rel string, add func(string)) {
 			switch x := n.(type) {
 			case *ast.SelectorExpr:
 				name := x.Sel.Name
+				if grants[x.Sel.Pos()] {
+					return true
+				}
 				switch {
 				case reflective[name], name == "Method" && usesReflect:
 					report(name)
@@ -112,7 +115,7 @@ func scanFile(f *ast.File, rel string, add func(string)) {
 					report(name)
 				}
 			case *ast.Ident:
-				if banned[x.Name] && x != declName && !(x.Name == "LocalAdmit" && localFiles[rel]) && (x.Name == "LocalAdmit" || !chokeFuncs[key]) {
+				if banned[x.Name] && !grants[x.Pos()] && x != declName && !(x.Name == "LocalAdmit" && localFiles[rel]) && (x.Name == "LocalAdmit" || !chokeFuncs[key]) {
 					report(x.Name)
 				}
 			case *ast.BasicLit:
@@ -129,6 +132,11 @@ func scanFile(f *ast.File, rel string, add func(string)) {
 // allowlist, and how many files it read.
 func scanChokepoint(t *testing.T, root string) (violations []string, files int) {
 	t.Helper()
+	root, absErr := filepath.Abs(root)
+	if absErr != nil {
+		t.Fatal(absErr)
+	}
+	roleGrants := roleGrantPositions(t, root)
 	seen := map[string]bool{}
 	add := func(v string) { // a selector and its identifier are two nodes
 		if !seen[v] {
@@ -156,7 +164,7 @@ func scanChokepoint(t *testing.T, root string) (violations []string, files int) 
 			t.Fatalf("parse %s: %v", path, perr)
 		}
 		files++
-		scanFile(f, filepath.ToSlash(rel), add)
+		scanFile(f, filepath.ToSlash(rel), roleGrants[filepath.Clean(path)], add)
 		return nil
 	})
 	if err != nil {
