@@ -10,8 +10,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/burst"
 	"github.com/nself-org/plugins/free/ci/internal/burst/conformance"
@@ -272,5 +275,104 @@ func TestCloudVMPairingCodeNeverOnArgvEnvOrErrors(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), code) {
 		t.Fatalf("the error repeats the pairing code: %v", err)
+	}
+}
+
+// blockingRunner never answers: it waits for its context.
+type blockingRunner struct{}
+
+func (blockingRunner) Run(ctx context.Context, _, _, _ []string) ([]byte, int, error) {
+	<-ctx.Done()
+	return nil, -1, ctx.Err()
+}
+
+func TestCloudVMBoundsACallWhoseContextHasNoDeadline(t *testing.T) {
+	r := newRig(t)
+	p, err := cloudvm.New(cloudvm.Config{CoordinatorID: coord, ProviderID: providerID, Spend: r.spend, Pairing: r.pair, Intents: cloudvm.StoreIntents{Store: r.st, Coordinator: coord},
+		Home: r.home, Runner: blockingRunner{}, CallTimeout: 100 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the engine calls Teardown under context.WithoutCancel: a hung destroy must still end
+	ctx := context.WithoutCancel(context.Background())
+	start := time.Now()
+	for name, call := range map[string]func() error{
+		"teardown": func() error { return p.Teardown(ctx, "123") },
+		"list":     func() error { _, e := p.List(ctx, burst.OwnLabels(coord)); return e },
+		"provision": func() error {
+			_, e := p.Provision(ctx, intentOf("01J0000000000000000000HANG1"))
+			return e
+		},
+	} {
+		if err = call(); !errors.Is(err, burst.ErrUnavailable) {
+			t.Errorf("%s: want burst.ErrUnavailable at the deadline, got %v", name, err)
+		}
+	}
+	if time.Since(start) > 10*time.Second {
+		t.Fatalf("hung children held the calls for %v", time.Since(start))
+	}
+	if len(r.cloud.All()) != 0 {
+		t.Fatal("a hung provision created a server")
+	}
+}
+
+func TestCloudVMPurgesUserDataLeftByADeadCoordinator(t *testing.T) {
+	r := newRig(t)
+	dir := filepath.Join(r.home, "burst-userdata")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old, fresh, other := filepath.Join(dir, "ud-old"), filepath.Join(dir, "ud-fresh"), filepath.Join(dir, "notes")
+	for _, f := range []string{old, fresh, other} {
+		if err := os.WriteFile(f, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	past := time.Now().Add(-time.Hour)
+	for _, f := range []string{old, other} {
+		if err := os.Chtimes(f, past, past); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := cloudvm.New(cloudvm.Config{CoordinatorID: coord, Spend: r.spend, Pairing: r.pair, Intents: cloudvm.StoreIntents{Store: r.st, Coordinator: coord}, Home: r.home}); err != nil {
+		t.Fatal(err)
+	}
+	for f, want := range map[string]bool{old: false, fresh: true, other: true} {
+		if _, err := os.Stat(f); (err == nil) != want {
+			t.Errorf("%s present=%v, want %v", filepath.Base(f), err == nil, want)
+		}
+	}
+}
+
+func TestCloudVMConcurrentCallsAreSafe(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	errs := make(chan error, 32)
+	for i := 0; i < 6; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			tok := "01J00000000000000000CONC" + strconv.Itoa(10+i)
+			res, err := r.prov.Provision(ctx, intentOf(tok))
+			if err != nil {
+				errs <- err
+				return
+			}
+			if _, err = r.prov.List(ctx, map[string]string{"intent": tok}); err != nil {
+				errs <- err
+			}
+			if err = r.prov.Teardown(ctx, res.ID); err != nil {
+				errs <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+	if left := r.labelled(); len(left) != 0 {
+		t.Fatalf("servers left: %+v", left)
 	}
 }

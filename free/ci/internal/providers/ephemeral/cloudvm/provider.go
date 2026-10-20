@@ -23,11 +23,16 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/burst"
 	"github.com/nself-org/plugins/free/ci/internal/economics"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
+	"github.com/nself-org/plugins/free/ci/internal/pairing"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 )
 
 // DefaultProviderID is the provider id of the Hetzner recipe.
 const DefaultProviderID = "hetzner"
+
+// DefaultCallTimeout bounds one infra child when the caller's context has no deadline of its own (the
+// engine runs some calls under context.WithoutCancel): a hung child must never leave a machine without a teardown path.
+const DefaultCallTimeout = 3 * time.Minute
 
 // BootLatencyMs is the declared time from create to a joined node (server boot, cloud-init, agent download, enrollment).
 const BootLatencyMs = int64(150_000)
@@ -56,6 +61,8 @@ type Config struct {
 	Runner Runner
 	// Registry, when set, lets AfterIssue complete the facts of an enrolled burst node (nodefacts.go).
 	Registry *registry.Registry
+	// CallTimeout bounds an infra child whose context has no deadline (default DefaultCallTimeout).
+	CallTimeout time.Duration
 	// Now is the clock (default time.Now).
 	Now func() time.Time
 }
@@ -87,7 +94,41 @@ func New(cfg Config) (*Provider, error) {
 	if cfg.Runner == nil {
 		cfg.Runner = funnelRunner{home: cfg.Home, coordinator: cfg.CoordinatorID}
 	}
-	return &Provider{cfg: cfg, probed: map[string]bool{}, offers: map[string]string{}, byID: map[string]string{}}, nil
+	p := &Provider{cfg: cfg, probed: map[string]bool{}, offers: map[string]string{}, byID: map[string]string{}}
+	p.purgeStale()
+	return p, nil
+}
+
+// bound gives ctx a deadline when it has none.
+func (p *Provider) bound(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	d := p.cfg.CallTimeout
+	if d <= 0 {
+		d = DefaultCallTimeout
+	}
+	return context.WithTimeout(ctx, d)
+}
+
+// userDataDir is the 0700 directory of the user-data files.
+func (p *Provider) userDataDir() string { return filepath.Join(p.cfg.Home, "burst-userdata") }
+
+// purgeStale removes user-data files left by a coordinator that died while an infra child ran: a file
+// older than the offer's lifetime holds a code that can no longer be redeemed, so nothing needs it.
+func (p *Provider) purgeStale() {
+	if p.cfg.Home == "" {
+		return
+	}
+	entries, err := os.ReadDir(p.userDataDir())
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if info, ierr := e.Info(); ierr == nil && strings.HasPrefix(e.Name(), "ud-") && p.cfg.Now().Sub(info.ModTime()) > pairing.OfferTTL {
+			_ = os.Remove(filepath.Join(p.userDataDir(), e.Name()))
+		}
+	}
 }
 
 func ciHome() string {

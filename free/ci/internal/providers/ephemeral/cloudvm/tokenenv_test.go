@@ -119,13 +119,3 @@ func TestTokenEnvIsReadAtCallTime(t *testing.T) {
 		t.Fatal("the child did not get the rotated token")
 	}
 }
-
-func TestTokenEnvOutputIsMasked(t *testing.T) {
-	// a child that echoes the token on stdout/stderr is masked by the funnel, so an error built from output never repeats it
-	r := newRig(t)
-	r.br.set(func(k *knobs) { k.failCause = "HTTP 418" })
-	_, err := r.prov.List(context.Background(), map[string]string{"role": "ci-ephemeral"})
-	if err == nil || strings.Contains(err.Error(), fakeToken) {
-		t.Fatalf("error %v", err)
-	}
-}

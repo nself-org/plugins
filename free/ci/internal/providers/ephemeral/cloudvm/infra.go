@@ -115,11 +115,13 @@ func (p *Provider) run(ctx context.Context, token, verb string, args ...string) 
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := p.bound(ctx)
+	defer cancel()
 	argv := append([]string{exe, "infra", "server", verb, "--json"}, args...)
 	argv = append(argv, "--token-env", TokenEnv)
 	out, code, rerr := p.cfg.Runner.Run(ctx, argv, []string{TokenEnv + "=" + token}, []string{token})
 	if cerr := ctx.Err(); cerr != nil {
-		return nil, fail(ReasonInfra, errUnavailable, "infra %s ended with the caller's context: %v", verb, cerr)
+		return nil, fail(ReasonInfra, errUnavailable, "infra %s ended at its deadline: %v", verb, cerr)
 	}
 	env, ok := parseEnvelope(out)
 	switch {

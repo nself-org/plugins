@@ -212,8 +212,9 @@ func TestCloudVMFullCycleProvisionJoinJobTeardown(t *testing.T) {
 		t.Fatalf("accepts %v", accepts)
 	}
 
-	// the job ran (one job per node); the end of it tears the machine down and revokes the node
-	if err = r.eng.Teardown(ctx, res.Token, "job done"); err != nil {
+	// one job runs on the node (a second is refused); when it has passed, the engine's Tick ends the intent
+	r.runOneJob(name, c.Identity.Labels)
+	if _, err = r.eng.Tick(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if left := r.labelled(); len(left) != 0 {

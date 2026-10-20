@@ -78,8 +78,9 @@ func TestPrivacyDefaultKeepsPrivateProjectsOffTheBurstNode(t *testing.T) {
 	if !reasons(trust.Admissible(job, d, priv), trust.PrivacyHostedNotAuthorized) {
 		t.Fatal("a private-infrastructure project was admitted on a burst node")
 	}
-	// 3. the operator-scope override: the project allows provider-allowlist and the allowlist names the provider
-	allow := trust.Scope{Kind: trust.SourceProject, Values: map[string]json.RawMessage{"trust.privacy_zone": json.RawMessage(`"provider-allowlist"`), "trust.providers": json.RawMessage(`["ephemeral"]`)}}
+	// 3. the operator-scope override (team scope): it allows provider-allowlist and its allowlist names the provider
+	// (the real policy engine cannot loosen a private repository's baseline yet: debt D-1382)
+	allow := trust.Scope{Kind: trust.SourceTeam, Values: map[string]json.RawMessage{"trust.privacy_zone": json.RawMessage(`"provider-allowlist"`), "trust.providers": json.RawMessage(`["ephemeral"]`)}}
 	ok, _, err := reg.Merge("pin", allow)
 	if err != nil {
 		t.Fatal(err)

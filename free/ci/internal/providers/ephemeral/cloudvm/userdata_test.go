@@ -105,6 +105,11 @@ func TestUserDataClosedListShape(t *testing.T) {
 	if !strings.Contains(p.script, "< /run/nself-ci/code") || !strings.Contains(p.script, "rm -f /run/nself-ci/code") || !strings.Contains(p.script, "sha256sum -c") {
 		t.Fatalf("join must read the code from the file, remove it and check the agent sha256:\n%s", p.script)
 	}
+	for _, want := range []string{"export NSELF_CI_AGENT_HOME=", `export HOME="${HOME:-/root}"`, "--proto-redir '=https'"} {
+		if !strings.Contains(p.script, want) {
+			t.Fatalf("the join script lacks %q (cloud-init runs without HOME; redirects must stay https)", want)
+		}
+	}
 	if got := strings.Count(p.script, "https://"); got != 2 {
 		t.Fatalf("the script reaches %d https URLs, want the agent and the enroll URL only", got)
 	}

@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -90,9 +89,11 @@ func (p *Provider) probeUserData(ctx context.Context) error {
 	if ok {
 		return nil
 	}
+	ctx, cancel := p.bound(ctx)
+	defer cancel()
 	out, code, rerr := p.cfg.Runner.Run(ctx, []string{exe, "infra", "server", "provision", "--help"}, nil, nil)
 	if cerr := ctx.Err(); cerr != nil {
-		return fail(ReasonInfra, errUnavailable, "the user-data probe ended with the caller's context")
+		return fail(ReasonInfra, errUnavailable, "the user-data probe ended at its deadline")
 	}
 	if rerr != nil || code != 0 || !bytes.Contains(out, []byte("--user-data-file")) {
 		return fail(ReasonNoUserData, nil, "`nself infra server provision --help` does not list --user-data-file; upgrade nself and the infra plugin")
@@ -108,7 +109,7 @@ func (p *Provider) writeUserData(doc []byte) (path string, cleanup func(), err e
 	if p.cfg.Home == "" {
 		return "", nil, fail(ReasonUserData, nil, "no CI home for the user-data directory")
 	}
-	dir := filepath.Join(p.cfg.Home, "burst-userdata")
+	dir := p.userDataDir()
 	if err = os.MkdirAll(dir, 0o700); err != nil {
 		return "", nil, fail(ReasonUserData, nil, "the user-data directory cannot be made")
 	}
@@ -161,6 +162,9 @@ func (p *Provider) Provision(ctx context.Context, in burst.Intent) (burst.Resour
 		return burst.Resource{}, err
 	}
 	for _, r := range found {
+		// Adopted as the contract requires. After a coordinator restart this process holds no offer for the
+		// machine (the code in its user data belongs to a dead approver), so it cannot enroll: the engine's
+		// join timeout ends the intent and tears it down (debt row filed with P7-SCHED-10).
 		if r.Labels[burst.LabelRole] == burst.RoleEphemeral && r.Labels[burst.LabelCoordinator] == in.Labels[burst.LabelCoordinator] {
 			p.remember(r.ID, in.Token)
 			return r, nil

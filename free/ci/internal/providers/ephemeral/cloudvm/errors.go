@@ -34,7 +34,6 @@ const (
 	ReasonEnroll       = "enroll"        // the pairing offer failed
 	ReasonUserData     = "user_data"     // the user data cannot be rendered or written
 	ReasonTokenRefused = "token_refused" // the provider rejected the token
-	ReasonID           = "id"            // a resource id is not a number
 	ReasonEstimate     = "estimate"      // no usable declared rate
 	ReasonUnsupported  = "unsupported"   // this OS cannot keep the token file private
 )
