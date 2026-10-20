@@ -43,7 +43,7 @@ func (s *Service) ActorFromPeer(ctx context.Context, cert *x509.Certificate) (Ac
 	if denied {
 		return Actor{}, fail(ReasonBadCert, "the certificate is revoked")
 	}
-	g, ok, err := s.St.GrantGet(ctx, id)
+	g, ok, err := s.St.RoleAssignmentGet(ctx, id)
 	if err != nil {
 		return Actor{}, err
 	}

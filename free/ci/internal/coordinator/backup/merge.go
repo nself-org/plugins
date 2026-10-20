@@ -149,7 +149,7 @@ func mergePrior(ctx context.Context, st *store.Store, p prior, actor string) (me
 		}
 	}
 	for _, who := range p.revokedGrants { // positive evidence only: every grant of the principal was revoked in the replaced dir
-		if _, live, err := st.GrantGet(ctx, who); err != nil {
+		if _, live, err := st.RoleAssignmentGet(ctx, who); err != nil {
 			return c, fail(ReasonIO, "grant of %s cannot be read: %v", who, err)
 		} else if !live {
 			continue

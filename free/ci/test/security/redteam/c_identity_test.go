@@ -91,7 +91,7 @@ func (r *cRig) userCert(id string) tls.Certificate {
 
 func (r *cRig) grant(p string, role roles.Role, projects ...string) {
 	r.t.Helper()
-	if err := r.svc.Grant(context.Background(), r.op(), roles.Request{Principal: p, Role: role, Projects: projects}); err != nil {
+	if err := r.svc.Assign(context.Background(), r.op(), roles.Request{Principal: p, Role: role, Projects: projects}); err != nil {
 		r.t.Fatal(err)
 	}
 }
@@ -267,7 +267,7 @@ func TestC24ActionsByRole(t *testing.T) {
 	if err := roles.AuthorizeAction(ctx, roles.Actor{}, roles.ActLogsView, "p1"); err == nil {
 		t.Error("the zero Actor authorized")
 	}
-	if err := r.svc.Grant(ctx, scopedAdmin, roles.Request{Principal: "x", Role: roles.Admin, Projects: []string{roles.AllProjects}}); err == nil {
+	if err := r.svc.Assign(ctx, scopedAdmin, roles.Request{Principal: "x", Role: roles.Admin, Projects: []string{roles.AllProjects}}); err == nil {
 		t.Error("a project-scoped admin granted a coordinator-wide admin")
 	}
 	if _, _, err := r.svc.IssueToken(ctx, scopedAdmin, roles.Request{Principal: "x", Role: roles.Admin, Projects: []string{roles.AllProjects}}); err == nil {

@@ -16,23 +16,23 @@ func TestGrantReplaceRevoke(t *testing.T) {
 	put := func(role string) {
 		t.Helper()
 		in := AuditInput{Actor: "a", Action: "roles.grant", Target: "bob", Detail: role}
-		if err := s.GrantPut(ctx, Grant{Principal: "bob", Role: role, Projects: []string{"p"}, Subject: "bob", GrantedBy: "a"}, in); err != nil {
+		if err := s.RoleAssignmentPut(ctx, RoleAssignment{Principal: "bob", Role: role, Projects: []string{"p"}, Subject: "bob", GrantedBy: "a"}, in); err != nil {
 			t.Fatal(err)
 		}
 	}
 	put("member")
 	put("admin")
-	gs, _ := s.GrantList(ctx)
+	gs, _ := s.RoleAssignmentList(ctx)
 	if len(gs) != 1 || gs[0].Role != "admin" {
 		t.Fatalf("a new grant replaces the live one: %+v", gs)
 	}
-	if err := s.GrantPut(ctx, Grant{Principal: "x", Role: "owner", Subject: "x", GrantedBy: "a"}, AuditInput{Actor: "a", Action: "g", Target: "x"}); err == nil {
+	if err := s.RoleAssignmentPut(ctx, RoleAssignment{Principal: "x", Role: "owner", Subject: "x", GrantedBy: "a"}, AuditInput{Actor: "a", Action: "g", Target: "x"}); err == nil {
 		t.Fatal("a fourth role is refused by the table")
 	}
 	if found, err := s.GrantRevoke(ctx, "bob", AuditInput{Actor: "a", Action: "roles.revoke", Target: "bob"}); err != nil || !found {
 		t.Fatal(found, err)
 	}
-	if _, ok, _ := s.GrantGet(ctx, "bob"); ok {
+	if _, ok, _ := s.RoleAssignmentGet(ctx, "bob"); ok {
 		t.Fatal("revoked grant is not live")
 	}
 	if auditCount(t, s) != 3 {
@@ -116,13 +116,13 @@ func TestRevokeProceedsOnADamagedChain(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := AuditInput{Actor: "a", Action: "roles.revoke", Target: "bob", Detail: "d", Seal: standIn}
-	if err := s.GrantPut(ctx, Grant{Principal: "bob", Role: "admin", Projects: []string{"*"}, Subject: "bob", GrantedBy: "a"}, in); err != nil {
+	if err := s.RoleAssignmentPut(ctx, RoleAssignment{Principal: "bob", Role: "admin", Projects: []string{"*"}, Subject: "bob", GrantedBy: "a"}, in); err != nil {
 		t.Fatalf("a grant still records its row beside a damaged chain: %v", err)
 	}
 	if found, err := s.GrantRevoke(ctx, "bob", in); err != nil || !found {
 		t.Fatalf("a revocation must never be blocked by audit damage: %v %v", found, err)
 	}
-	if _, ok, _ := s.GrantGet(ctx, "bob"); ok {
+	if _, ok, _ := s.RoleAssignmentGet(ctx, "bob"); ok {
 		t.Fatal("the grant is revoked")
 	}
 	if n, err := s.AuditSeal(ctx, standIn); !codeIs(err, "E609") || n != 0 {

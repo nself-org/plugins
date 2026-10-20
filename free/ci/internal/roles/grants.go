@@ -87,8 +87,8 @@ func (s *Service) mutation(by Actor, action, target, detail string) (store.Audit
 	return s.Log.Input(audit.Event{Actor: by.Label(), Action: action, Target: target, Detail: detail})
 }
 
-// Grant gives (or replaces) a principal's role.
-func (s *Service) Grant(ctx context.Context, by Actor, r Request) error {
+// Assign gives (or replaces) a principal's role.
+func (s *Service) Assign(ctx context.Context, by Actor, r Request) error {
 	subject, err := s.check(ctx, by, r)
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func (s *Service) Grant(ctx context.Context, by Actor, r Request) error {
 	if err != nil {
 		return err
 	}
-	return s.St.GrantPut(ctx, store.Grant{Principal: r.Principal, Role: string(r.Role), Projects: r.Projects, Subject: subject, GrantedBy: by.Label()}, in)
+	return s.St.RoleAssignmentPut(ctx, store.RoleAssignment{Principal: r.Principal, Role: string(r.Role), Projects: r.Projects, Subject: subject, GrantedBy: by.Label()}, in)
 }
 
 // Revoke ends a principal's grant and every live token issued to the principal; false means there was
@@ -126,11 +126,11 @@ func (s *Service) reader(ctx context.Context, by Actor) error {
 }
 
 // List returns the live grants (member role and above may read them).
-func (s *Service) List(ctx context.Context, by Actor) ([]store.Grant, error) {
+func (s *Service) List(ctx context.Context, by Actor) ([]store.RoleAssignment, error) {
 	if err := s.reader(ctx, by); err != nil {
 		return nil, err
 	}
-	return s.St.GrantList(ctx)
+	return s.St.RoleAssignmentList(ctx)
 }
 
 // IssueToken creates a scoped token and returns its clear text. The text exists only in the return value.

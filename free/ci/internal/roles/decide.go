@@ -90,7 +90,7 @@ func (a Actor) refresh(ctx context.Context) (Actor, error) {
 				return a, fail(ReasonBadCert, "the certificate is revoked")
 			}
 		}
-		g, ok, err := a.svc.St.GrantGet(ctx, a.id)
+		g, ok, err := a.svc.St.RoleAssignmentGet(ctx, a.id)
 		if err != nil {
 			return a, err
 		}

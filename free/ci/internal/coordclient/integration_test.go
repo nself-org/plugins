@@ -46,7 +46,7 @@ func needIntegration(t *testing.T) {
 // grantMember gives principal the member role on projects.
 func (s *sim) grantMember(principal string, projects ...string) {
 	s.t.Helper()
-	if err := s.svc.Grant(context.Background(), s.op(), roles.Request{Principal: principal, Role: roles.Member, Projects: projects}); err != nil {
+	if err := s.svc.Assign(context.Background(), s.op(), roles.Request{Principal: principal, Role: roles.Member, Projects: projects}); err != nil {
 		s.t.Fatal(err)
 	}
 }

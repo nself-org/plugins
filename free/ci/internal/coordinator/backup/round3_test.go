@@ -72,7 +72,7 @@ func TestRestoreKeepsTokenAndGrantRevocations(t *testing.T) {
 	r, _ := seeded(t)
 	put := func(id, who string) {
 		t.Helper()
-		if err := r.st.GrantPut(ctx, store.Grant{Principal: who, Role: "admin", Subject: who, GrantedBy: "cli:test"}, store.AuditInput{Actor: "cli:test", Action: "t", Target: "x"}); err != nil {
+		if err := r.st.RoleAssignmentPut(ctx, store.RoleAssignment{Principal: who, Role: "admin", Subject: who, GrantedBy: "cli:test"}, store.AuditInput{Actor: "cli:test", Action: "t", Target: "x"}); err != nil {
 			t.Fatal(err)
 		}
 		tok := store.Token{ID: id, Digest: "d-" + id, Principal: who, Role: "admin", Subject: who, IssuedBy: "cli:test", ExpiresAt: r.clk.now().Add(time.Hour).UnixNano()}
@@ -101,10 +101,10 @@ func TestRestoreKeepsTokenAndGrantRevocations(t *testing.T) {
 	if tok, ok, _ := st2.TokenByID(ctx, "t-alice"); !ok || tok.RevokedAt == 0 {
 		t.Fatalf("alice's token survived her revoked grant: %+v", tok)
 	}
-	if _, live, _ := st2.GrantGet(ctx, "alice"); live {
+	if _, live, _ := st2.RoleAssignmentGet(ctx, "alice"); live {
 		t.Fatal("alice's revoked grant came back")
 	}
-	if _, live, _ := st2.GrantGet(ctx, "bob"); !live {
+	if _, live, _ := st2.RoleAssignmentGet(ctx, "bob"); !live {
 		t.Fatal("bob's grant, still live in the replaced dir, was wrongly revoked")
 	}
 }
@@ -162,7 +162,7 @@ func TestRollbackLineRemovesTheMarker(t *testing.T) {
 func TestRestoreDoesNotRevokeGrantsOfAFreshDir(t *testing.T) {
 	ctx := context.Background()
 	r, _ := seeded(t)
-	if err := r.st.GrantPut(ctx, store.Grant{Principal: "alice", Role: "admin", Subject: "alice", GrantedBy: "cli:test"}, store.AuditInput{Actor: "cli:test", Action: "t", Target: "x"}); err != nil {
+	if err := r.st.RoleAssignmentPut(ctx, store.RoleAssignment{Principal: "alice", Role: "admin", Subject: "alice", GrantedBy: "cli:test"}, store.AuditInput{Actor: "cli:test", Action: "t", Target: "x"}); err != nil {
 		t.Fatal(err)
 	}
 	arch := r.archive()
@@ -180,7 +180,7 @@ func TestRestoreDoesNotRevokeGrantsOfAFreshDir(t *testing.T) {
 		t.Fatalf("result %+v: a grant the replaced dir never held is not evidence of a revocation", res)
 	}
 	st2, _ := other.reopen(other.dir)
-	if _, live, _ := st2.GrantGet(ctx, "alice"); !live {
+	if _, live, _ := st2.RoleAssignmentGet(ctx, "alice"); !live {
 		t.Fatal("alice's grant was revoked by a restore onto a dir that never held it")
 	}
 }
