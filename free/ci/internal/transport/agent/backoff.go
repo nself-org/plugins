@@ -13,6 +13,9 @@ import (
 )
 
 // Default bounds (Epic D6, ticket constraint).
+// maxAttempts stops the attempt counter (and the doubling loop) growing without end.
+const maxAttempts = 64
+
 const (
 	BackoffMin   = time.Second
 	BackoffMax   = 60 * time.Second
@@ -43,13 +46,10 @@ func (b *Backoff) bounds() (lo, hi time.Duration) {
 func (b *Backoff) Next() time.Duration {
 	lo, hi := b.bounds()
 	ceiling := lo
-	for i := 0; i < b.attempt && ceiling < hi; i++ {
-		ceiling *= 2
+	for i := 0; i < b.attempt; i++ {
+		ceiling = min(ceiling*2, hi)
 	}
-	if ceiling > hi {
-		ceiling = hi
-	}
-	b.attempt++
+	b.attempt = min(b.attempt+1, maxAttempts)
 	r := b.Rand
 	if r == nil {
 		r = rand.Float64

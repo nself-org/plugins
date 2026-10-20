@@ -58,3 +58,45 @@ func TestBackoffDefaultRandomStaysInRange(t *testing.T) {
 		}
 	}
 }
+
+func TestBackoffMinEqualToMaxNeverGrows(t *testing.T) {
+	b := &Backoff{Min: 2 * time.Second, Max: 2 * time.Second, Rand: fixed(0.999999)}
+	for i := 0; i < 6; i++ {
+		if d := b.Next(); d > 2*time.Second || d < 1999*time.Millisecond {
+			t.Fatalf("attempt %d waited %v, want just under 2 s every time", i, d)
+		}
+	}
+}
+
+func TestBackoffMaxBelowMinFallsBackToTheDefaultMax(t *testing.T) {
+	b := &Backoff{Min: 10 * time.Second, Max: 5 * time.Second, Rand: fixed(0.999999)}
+	want := []time.Duration{10, 20, 40, 60, 60}
+	for i, w := range want {
+		if d := b.Next(); w*time.Second-d < 0 || w*time.Second-d > 5*time.Millisecond {
+			t.Fatalf("attempt %d waited %v, want just under %v", i, d, w*time.Second)
+		}
+	}
+}
+
+func TestBackoffNonPositiveMinUsesTheDefaultAndTheCounterIsBounded(t *testing.T) {
+	b := &Backoff{Min: -time.Second, Max: 0, Rand: fixed(0.999999)}
+	if d := b.Next(); d > time.Second || d < 999*time.Millisecond {
+		t.Fatalf("first delay %v, want just under the default 1 s", d)
+	}
+	for i := 0; i < 1000; i++ {
+		b.Next()
+	}
+	if b.attempt != maxAttempts {
+		t.Fatalf("attempt counter %d, want it held at %d", b.attempt, maxAttempts)
+	}
+	if d := b.Next(); d > BackoffMax {
+		t.Fatalf("delay %v above the max", d)
+	}
+}
+
+func TestBackoffMinOfZeroMeansOneSecondNotNoDelay(t *testing.T) {
+	b := &Backoff{Min: 0, Max: 4 * time.Second, Rand: fixed(0.5)}
+	if d := b.Next(); d != 500*time.Millisecond {
+		t.Fatalf("delay %v, want half of the default 1 s", d)
+	}
+}
