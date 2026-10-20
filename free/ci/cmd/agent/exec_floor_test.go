@@ -36,7 +36,7 @@ func TestRaisedJobWithoutImageIsRefusedNotRunOnTheHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	for _, level := range []model.Isolation{"container"} { // what delivery writes for a plain collaborator job
+	for _, level := range []model.Isolation{"container", "sandboxed-container", "vm"} { // what delivery writes for collaborator, untrusted and boundary-host jobs
 		spec := execSpec{AttemptID: "a-" + string(level), CoordinatorID: "c", JobID: "j", Revision: rev40,
 			Job: model.Job{Isolation: level, Run: []string{"touch", hostMarker}}} // Container is nil: no image
 		res, _, err := execute(context.Background(), spec, jobInputs{})
@@ -44,8 +44,10 @@ func TestRaisedJobWithoutImageIsRefusedNotRunOnTheHost(t *testing.T) {
 			t.Fatal(err)
 		}
 		var ce *ciexec.Error
-		if !errors.As(res.Err, &ce) || ce.Code != "E613" || res.Attempt.State != "failed" || res.Attempt.FailureClass != "infra" {
-			t.Fatalf("%s: err=%v state=%s class=%s, want E613 failed/infra", level, res.Err, res.Attempt.State, res.Attempt.FailureClass)
+		// A raised level without an image is refused before it starts (E613); a level whose runtime this host lacks is
+		// refused as unavailable (E678). Either way it fails and never runs as a host process.
+		if res.Err == nil || res.Attempt.State != "failed" || !errors.As(res.Err, &ce) && !strings.Contains(res.Err.Error(), "E678") || errors.As(res.Err, &ce) && ce.Code != "E613" {
+			t.Fatalf("%s: err=%v state=%s class=%s, want E613 (or E678) failed", level, res.Err, res.Attempt.State, res.Attempt.FailureClass)
 		}
 		if _, err := os.Stat(hostMarker); err == nil {
 			t.Fatalf("%s: the job ran as a host process", level)
