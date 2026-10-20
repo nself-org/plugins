@@ -106,18 +106,22 @@ func (v AdmitView) ApprovalState(ctx context.Context) (ApprovalState, bool, erro
 	return readApprovalState(ctx, v.tx, v.PipelineID)
 }
 
-// ApproveInput is one approval. ExpectSHA, when set, is the head SHA the approver looked at.
+// ApproveInput is one approval. ExpectSHA, when set, is the head SHA the approver looked at; BindAuthor
+// says ExpectAuthor is the author the non-author check ran against, so a facts rewrite between the check
+// and the write is refused. Check voids the standing approval of the run first (one audit row) when the
+// run moved since it was given.
 type ApproveInput struct {
-	Run, Approver, ExpectSHA string
-	Spend                    bool
+	Run, Approver, ExpectSHA, ExpectAuthor string
+	BindAuthor, Spend                      bool
+	Check                                  VoidCheck
 }
 
 // ApproveRun records an approval bound to the run's current binding and writes its audit row in the
 // same transaction. It returns ErrApprovalUnknownRun for a run that does not exist and
 // ErrApprovalStale when the run's head SHA is not ExpectSHA.
 func (s *Store) ApproveRun(ctx context.Context, in ApproveInput) (ApprovalRow, error) {
-	if in.Run == "" || in.Approver == "" {
-		return ApprovalRow{}, coded("E607", "approval needs a run and an approver")
+	if in.Run == "" || in.Approver == "" || in.Check == nil {
+		return ApprovalRow{}, coded("E607", "approval needs a run, an approver and a void check")
 	}
 	var row ApprovalRow
 	err := s.write(ctx, func(tx *sql.Tx) error {
@@ -129,6 +133,11 @@ func (s *Store) ApproveRun(ctx context.Context, in ApproveInput) (ApprovalRow, e
 			return ErrApprovalUnknownRun
 		case in.ExpectSHA != "" && !strings.EqualFold(in.ExpectSHA, st.Revision):
 			return ErrApprovalStale
+		case in.BindAuthor && in.ExpectAuthor != st.Author:
+			return ErrApprovalStale
+		}
+		if _, err = s.voidStale(ctx, tx, in.Run, in.Check); err != nil {
+			return err
 		}
 		cur := st.Current()
 		now := s.now().UnixNano()
@@ -138,10 +147,14 @@ func (s *Store) ApproveRun(ctx context.Context, in ApproveInput) (ApprovalRow, e
 			return err
 		}
 		row = ApprovalRow{ApprovalBinding: cur, Approver: in.Approver, Spend: in.Spend, ApprovedAt: now}
-		return s.appendAudit(ctx, tx, in.Approver, "approval.grant", in.Run, fmt.Sprintf("sha=%s config=%s head_repo=%q spend=%t", cur.HeadSHA, cur.ConfigDigest, cur.HeadRepo, in.Spend))
+		return s.appendAudit(ctx, tx, in.Approver, "approval.grant", in.Run, fmt.Sprintf("sha=%s config=%s head_repo=%q spend=%t", auditSafe(cur.HeadSHA), auditSafe(cur.ConfigDigest), auditSafe(cur.HeadRepo), in.Spend))
 	})
 	return row, err
 }
+
+// auditSafe makes a stored value fit an audit detail: appendAudit refuses a detail holding "secret=", so a
+// head repo or digest a forge chose must not be able to make a void or an approval unwritable.
+func auditSafe(v string) string { return strings.ReplaceAll(v, "=", "%3D") }
 
 // RecordApprovalFacts upserts the source facts of a run and voids an approval the new facts no longer
 // match, in one transaction.
@@ -219,7 +232,7 @@ func (s *Store) voidStale(ctx context.Context, tx *sql.Tx, run string, check Voi
 		}
 		cur := st.Current()
 		if err = s.appendAudit(ctx, tx, "system:approval", "approval.void", r, fmt.Sprintf("reasons=%s approved_sha=%s now_sha=%s approved_config=%s now_config=%s approved_head_repo=%q now_head_repo=%q approver=%s",
-			a.VoidReason, a.HeadSHA, cur.HeadSHA, a.ConfigDigest, cur.ConfigDigest, a.HeadRepo, cur.HeadRepo, a.Approver)); err != nil {
+			a.VoidReason, auditSafe(a.HeadSHA), auditSafe(cur.HeadSHA), auditSafe(a.ConfigDigest), auditSafe(cur.ConfigDigest), auditSafe(a.HeadRepo), auditSafe(cur.HeadRepo), auditSafe(a.Approver))); err != nil {
 			return nil, err
 		}
 		out = append(out, a)

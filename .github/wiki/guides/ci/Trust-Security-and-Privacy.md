@@ -179,9 +179,10 @@ nself ci runs approve <run> [--sha <sha>] [--spend] [--json]
 ```
 
 - The approver must hold `release` or `admin` and must not be the author of the run. The author's own approval is `E688` (`approval.self`); an unknown author is `E688` (`approval.author_unknown`); a member is `E687`. The local operator is exempt from the author rule, as for every `run.approve` decision.
-- An approval binds the run, its head SHA, its config digest and its head repo, as stored when the approval is recorded. `--sha` refuses the approval unless the run is still at that head (`approval.bad_binding`).
+- An approval binds the run, its head SHA, its config digest and its head repo, as stored when the approval is recorded. Name the run by its exact id: a prefix or `latest` needs `--sha <head>` too, because it can resolve to a run someone started a moment ago. `--sha` refuses the approval unless the run is still at that head (`approval.bad_binding`), before any spend is approved.
 - Any change of head SHA, config digest or head repo voids the approval and returns the run to pending; a re-run of the same SHA and digest keeps it. Validity is computed from the stored rows at every admission, so a void that has not been written yet still holds the run. `ci runs pending` writes the voids, one audit row each (`approval.void`); every approval writes one row (`approval.grant`) besides the `authorize` decision row.
-- `--spend` needs `admin` and calls the spend approval once before the run approval is recorded; if it is refused, nothing is recorded.
+- `--spend` needs `admin` and calls the spend approval once before the run approval is recorded; if it is refused, nothing is recorded. On a run that needs no trust approval, `--spend` records the spend approval only.
+- A void stands: if the binding changes and later matches again, the approval stays void and the run waits for a fresh approval. When a stale approval is replaced by a new one, its void row is written first.
 - The admission step reads only stored run facts inside the admission transaction (no network), so a push that lands between approval and lease returns the run to pending instead of leasing a SHA nobody approved.
 
 Handoff: `source.Binding`, `source.VoidReasons` and `source.RequiresApproval` are the pure rules (`internal/trust/source/approval.go`); the rows live in `internal/store/trust_approvals.go` (`trust_run_facts`, `trust_approvals`). The source hook records the facts with `Store.RecordApprovalFacts` (not yet wired: see the Epic Invalidations).

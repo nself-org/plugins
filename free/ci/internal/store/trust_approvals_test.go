@@ -61,7 +61,7 @@ func TestTrustApprovalsBindAndVoid(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	approvalSeed(t, s, "r1")
-	a, err := s.ApproveRun(ctx, ApproveInput{Run: "r1", Approver: "token:t1:bob", ExpectSHA: "sha-1"})
+	a, err := s.ApproveRun(ctx, ApproveInput{Run: "r1", Approver: "token:t1:bob", ExpectSHA: "sha-1", Check: exactCheck})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,20 +93,20 @@ func TestTrustApprovalsBindAndVoid(t *testing.T) {
 		t.Fatal("a voided approval is voided once")
 	}
 	// A stale approver (looked at sha-1, run is at sha-2) is refused; the current head can be approved again.
-	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "r1", Approver: "bob", ExpectSHA: "sha-1"}); !errors.Is(err, ErrApprovalStale) {
+	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "r1", Approver: "bob", ExpectSHA: "sha-1", Check: exactCheck}); !errors.Is(err, ErrApprovalStale) {
 		t.Fatalf("stale approver: %v", err)
 	}
-	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "r1", Approver: "bob", ExpectSHA: "sha-2"}); err != nil {
+	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "r1", Approver: "bob", ExpectSHA: "sha-2", Check: exactCheck}); err != nil {
 		t.Fatal(err)
 	}
 	st, _, _ = s.ApprovalState(ctx, "r1")
 	if st.Approval.VoidedAt != 0 || st.Approval.HeadSHA != "sha-2" {
 		t.Fatalf("a fresh approval replaces the voided one: %+v", st.Approval)
 	}
-	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "nope", Approver: "bob"}); !errors.Is(err, ErrApprovalUnknownRun) {
+	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "nope", Approver: "bob", Check: exactCheck}); !errors.Is(err, ErrApprovalUnknownRun) {
 		t.Fatalf("unknown run: %v", err)
 	}
-	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "r1"}); !codeIs(err, "E607") {
+	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "r1", Check: exactCheck}); !codeIs(err, "E607") {
 		t.Fatalf("no approver: %v", err)
 	}
 }
@@ -115,7 +115,7 @@ func TestTrustApprovalsFactsAndConfigVoid(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	approvalSeed(t, s, "r2")
-	if _, err := s.ApproveRun(ctx, ApproveInput{Run: "r2", Approver: "bob"}); err != nil {
+	if _, err := s.ApproveRun(ctx, ApproveInput{Run: "r2", Approver: "bob", Check: exactCheck}); err != nil {
 		t.Fatal(err)
 	}
 	// Re-recording the same facts keeps the approval.
@@ -128,7 +128,7 @@ func TestTrustApprovalsFactsAndConfigVoid(t *testing.T) {
 	if err != nil || len(v) != 1 || v[0].VoidReason != "void.head_repo" {
 		t.Fatalf("head repo change: %v %v", v, err)
 	}
-	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "r2", Approver: "bob"}); err != nil {
+	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "r2", Approver: "bob", Check: exactCheck}); err != nil {
 		t.Fatal(err)
 	}
 	moveRun(t, s, "r2", "sha-1", "cfg-2")
@@ -141,7 +141,7 @@ func TestTrustApprovalsFactsAndConfigVoid(t *testing.T) {
 	}
 	// A pruned run leaves nothing to bind to: its approval voids.
 	approvalSeed(t, s, "r3")
-	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "r3", Approver: "bob"}); err != nil {
+	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "r3", Approver: "bob", Check: exactCheck}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.writer.Exec("DELETE FROM pipeline WHERE id='r3'"); err != nil {
@@ -169,7 +169,7 @@ func TestTrustApprovalsPending(t *testing.T) {
 		t.Fatal(err)
 	}
 	needs := func(st ApprovalState) bool { return st.Requires || (!st.Facts && st.SourceTrust == "untrusted") }
-	if _, err := s.ApproveRun(ctx, ApproveInput{Run: "b", Approver: "bob"}); err != nil {
+	if _, err := s.ApproveRun(ctx, ApproveInput{Run: "b", Approver: "bob", Check: exactCheck}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.PendingApprovals(ctx, needs, exactCheck)
@@ -193,5 +193,51 @@ func TestTrustApprovalsPending(t *testing.T) {
 	}
 	if got, _ = s.PendingApprovals(ctx, needs, exactCheck); len(got) != 2 || strings.Contains(got[0].Run+got[1].Run, "a") {
 		t.Fatalf("a finished run is not pending: %v", got)
+	}
+}
+
+func TestTrustApprovalsReapproveVoidsFirst(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	approvalSeed(t, s, "r1")
+	if _, err := s.ApproveRun(ctx, ApproveInput{Run: "r1", Approver: "bob", Check: exactCheck}); err != nil {
+		t.Fatal(err)
+	}
+	// A push moves the head and nobody sweeps: the next approval must still leave a void row for the old one.
+	moveRun(t, s, "r1", "sha-2", "cfg-1")
+	if _, err := s.ApproveRun(ctx, ApproveInput{Run: "r1", Approver: "carol", Check: exactCheck}); err != nil {
+		t.Fatal(err)
+	}
+	if auditActions(t, s, "approval.void") != 1 || auditActions(t, s, "approval.grant") != 2 {
+		t.Fatalf("one void and two grants, got %d and %d", auditActions(t, s, "approval.void"), auditActions(t, s, "approval.grant"))
+	}
+	// The author the check ran against is bound: a facts rewrite in between is refused.
+	if _, err := s.RecordApprovalFacts(ctx, ApprovalRunFacts{Run: "r1", Author: "carol", HeadRepo: "fork/app", RequiresApproval: true}, exactCheck); err != nil {
+		t.Fatal(err)
+	}
+	in := ApproveInput{Run: "r1", Approver: "carol", Check: exactCheck, BindAuthor: true, ExpectAuthor: "mallory"}
+	if _, err := s.ApproveRun(ctx, in); !errors.Is(err, ErrApprovalStale) {
+		t.Fatalf("author moved under the approver: %v", err)
+	}
+	in.ExpectAuthor = "carol"
+	if _, err := s.ApproveRun(ctx, in); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTrustApprovalsHostileValuesStayWritable(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	approvalSeed(t, s, "r1")
+	if _, err := s.ApproveRun(ctx, ApproveInput{Run: "r1", Approver: "bob", Check: exactCheck}); err != nil {
+		t.Fatal(err)
+	}
+	// A forge-chosen head repo holding the audit scanner's marker must not make the void unwritable.
+	v, err := s.RecordApprovalFacts(ctx, ApprovalRunFacts{Run: "r1", Author: "mallory", HeadRepo: "x/Secret=y", RequiresApproval: true}, exactCheck)
+	if err != nil || len(v) != 1 {
+		t.Fatalf("void with a hostile head repo: %v %v", v, err)
+	}
+	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "r1", Approver: "bob", Check: exactCheck}); err != nil {
+		t.Fatalf("approval with a hostile head repo: %v", err)
 	}
 }

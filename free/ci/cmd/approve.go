@@ -11,7 +11,9 @@ package main
 //          derives from the run's root, never from the command line; --spend runs economics.ApproveSpend
 //          first (admin only, E687 otherwise) and records no approval when it fails; an approval binds to
 //          the head SHA, config digest and head repo of the run as stored when it is recorded, so any later
-//          change voids it; `pending` first writes the voids (one audit row each); the step reads only
+//          change voids it (and voids first, with its own audit row, when a stale approval stands); the run
+//          is named exactly or confirmed with --sha, never by a bare prefix or "latest"; --spend on a run
+//          that needs no trust approval records the spend approval only; `pending` first writes the voids (one audit row each); the step reads only
 //          stored facts inside the admission transaction (no network) and never writes.
 
 import (
@@ -129,6 +131,8 @@ type approvedOut struct {
 	HeadRepo     string `json:"head_repo,omitempty"`
 	Approver     string `json:"approver"`
 	Spend        bool   `json:"spend"`
+	// RunApproved is false when only the spend was approved (the run needs no trust approval).
+	RunApproved bool `json:"run_approved"`
 }
 
 func runApprove(args []string, env approveEnv) int {
@@ -152,6 +156,10 @@ func runApprove(args []string, env approveEnv) int {
 	}
 	if f.json {
 		return adminWriteData(env.adminEnv, "ci runs approve", out)
+	}
+	if !out.RunApproved {
+		fmt.Fprintf(env.Out, "spend approved for %s at %s by %s (the run needs no trust approval)\n", out.Run, out.HeadSHA, out.Approver)
+		return 0
 	}
 	fmt.Fprintf(env.Out, "approved %s at %s by %s (config %s)\n", out.Run, out.HeadSHA, out.Approver, out.ConfigDigest)
 	return 0
@@ -177,10 +185,23 @@ func approveRun(ctx context.Context, env approveEnv, svc *roles.Service, actor r
 		return approvedOut{}, err
 	}
 	project := policy.ProjectIDGit(ctx, env.Run, row.Project)
-	if err = roles.AuthorizeAction(roles.WithAuthor(ctx, st.Author), actor, roles.ActRunApprove, project); err != nil {
-		return approvedOut{}, authorToE688(err)
+	needed := approvalNeeded(st)
+	// run.approve (and its non-author rule) guards the trust approval; a spend-only approval is guarded by
+	// spend.approve inside ApproveSpend.
+	if needed {
+		if err = roles.AuthorizeAction(roles.WithAuthor(ctx, st.Author), actor, roles.ActRunApprove, project); err != nil {
+			return approvedOut{}, authorToE688(err)
+		}
 	}
-	if !approvalNeeded(st) {
+	// A prefix or "latest" can land on a run a stranger started a moment ago: the approver must name the
+	// run exactly, or confirm the head they looked at with --sha.
+	if ref != row.ID && f.sha == "" {
+		return approvedOut{}, source.NewApprovalError(source.ApprovalBadBinding, "%q is not an exact run id (it resolves to %s); give the exact id, or --sha <head> to confirm what you reviewed", ref, row.ID)
+	}
+	if f.sha != "" && !strings.EqualFold(f.sha, st.Revision) {
+		return approvedOut{}, source.NewApprovalError(source.ApprovalBadBinding, "run %s is at %s, not %s", st.Run, st.Revision, f.sha)
+	}
+	if !needed && !f.spend {
 		return approvedOut{}, source.NewApprovalError(source.ApprovalNotRequired, "run %s needs no approval", st.Run)
 	}
 	if f.spend {
@@ -189,16 +210,20 @@ func approveRun(ctx context.Context, env approveEnv, svc *roles.Service, actor r
 			return approvedOut{}, err
 		}
 	}
-	a, err := svc.St.ApproveRun(ctx, store.ApproveInput{Run: st.Run, Approver: actor.Label(), ExpectSHA: f.sha, Spend: f.spend})
+	out := approvedOut{Run: st.Run, HeadSHA: st.Revision, ConfigDigest: st.ConfigDigest, HeadRepo: st.HeadRepo, Approver: actor.Label(), Spend: f.spend}
+	if !needed {
+		return out, nil // the budget step holds any run over the threshold, whatever its trust class
+	}
+	a, err := svc.St.ApproveRun(ctx, store.ApproveInput{Run: st.Run, Approver: actor.Label(), ExpectSHA: st.Revision, BindAuthor: true, ExpectAuthor: st.Author, Spend: f.spend, Check: voidCheck})
 	switch {
 	case errors.Is(err, store.ErrApprovalStale):
-		return approvedOut{}, source.NewApprovalError(source.ApprovalBadBinding, "run %s is no longer at %s", st.Run, f.sha)
+		return approvedOut{}, source.NewApprovalError(source.ApprovalBadBinding, "run %s changed while it was being approved; look again", st.Run)
 	case errors.Is(err, store.ErrApprovalUnknownRun):
 		return approvedOut{}, source.NewApprovalError(source.ApprovalUnknownRun, "run %s is gone", st.Run)
 	case err != nil:
 		return approvedOut{}, err
 	}
-	return approvedOut{Run: a.Run, HeadSHA: a.HeadSHA, ConfigDigest: a.ConfigDigest, HeadRepo: a.HeadRepo, Approver: a.Approver, Spend: a.Spend}, nil
+	return approvedOut{Run: a.Run, HeadSHA: a.HeadSHA, ConfigDigest: a.ConfigDigest, HeadRepo: a.HeadRepo, Approver: a.Approver, Spend: a.Spend, RunApproved: true}, nil
 }
 
 // authorToE688 maps the non-author refusals of run.approve to E688; every other refusal stays E687.

@@ -378,3 +378,93 @@ func TestApprovedSHALease(t *testing.T) {
 		t.Fatalf("an owner run is not held: %v", err)
 	}
 }
+
+func TestApproveNamesTheRunExactly(t *testing.T) {
+	r := newApproveRig(t)
+	r.seed("run-aaaa1111", "mallory", "sha-1")
+	r.as("bob", roles.Release)
+	// A prefix (or "latest") may resolve to a run a stranger started a moment ago: refused without --sha.
+	for _, ref := range []string{"run-aaaa", "latest"} {
+		if code := r.approve(ref, "--json"); code != 1 {
+			t.Fatalf("%s exits %d", ref, code)
+		}
+		if _, code, msg := r.result(); code != "E688" || !strings.Contains(msg, source.ApprovalBadBinding) || r.approved("run-aaaa1111") {
+			t.Fatalf("%s: %s %s", ref, code, msg)
+		}
+	}
+	if code := r.approve("run-aaaa", "--sha", "sha-OTHER", "--json"); code != 1 || r.approved("run-aaaa1111") {
+		t.Fatalf("a wrong --sha is refused: %d", code)
+	}
+	if code := r.approve("run-aaaa", "--sha", "sha-1"); code != 0 || !r.approved("run-aaaa1111") {
+		t.Fatalf("a prefix confirmed by the head is accepted: %d %s", code, r.errb.String())
+	}
+}
+
+func TestApproveSpendOnlyAndOrdering(t *testing.T) {
+	r := newApproveRig(t)
+	ctx := context.Background()
+	st := r.store()
+	// A run that needs no trust approval can still be held for spend: --spend records the spend approval only.
+	if err := st.CreatePipeline(ctx, store.PipelineRow{ID: "run-own", Revision: "s1", Project: "/work/own", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "c", SelectionMode: "full", Status: "queued"}); err != nil {
+		t.Fatal(err)
+	}
+	r.as("carol", roles.Admin)
+	if code := r.approve("run-own", "--spend", "--json"); code != 0 {
+		t.Fatalf("spend-only exits %d: %s", code, r.out.String())
+	}
+	data, _, _ := r.result()
+	var got approvedOut
+	if err := json.Unmarshal(data, &got); err != nil || got.RunApproved || !got.Spend || len(r.spendCalls) != 1 {
+		t.Fatalf("spend-only: %+v %v calls=%v", got, err, r.spendCalls)
+	}
+	if s, _, _ := st.ApprovalState(ctx, "run-own"); s.HasApproval {
+		t.Fatal("spend-only records no run approval")
+	}
+	if code := r.approve("run-own", "--json"); code != 1 {
+		t.Fatalf("without --spend a run that needs no approval is refused: %d", code)
+	}
+	// A wrong --sha is refused before the spend approval is called.
+	r.spendCalls = nil
+	r.seed("run-1", "mallory", "sha-1")
+	if code := r.approve("run-1", "--spend", "--sha", "sha-OLD", "--json"); code != 1 || len(r.spendCalls) != 0 {
+		t.Fatalf("stale --sha with --spend: exit %d, spend calls %v", code, r.spendCalls)
+	}
+}
+
+func TestApprovalVoidedStaysHeldWhenBindingReturns(t *testing.T) {
+	r := newApproveRig(t)
+	attempt := r.seed("run-1", "mallory", "sha-1")
+	r.as("bob", roles.Release)
+	if code := r.approve("run-1"); code != 0 {
+		t.Fatal(code)
+	}
+	ctx := context.Background()
+	st := r.store()
+	facts := func(repo string) {
+		t.Helper()
+		if _, err := st.RecordApprovalFacts(ctx, store.ApprovalRunFacts{Run: "run-1", Author: "mallory", HeadRepo: repo, RequiresApproval: true}, voidCheck); err != nil {
+			t.Fatal(err)
+		}
+	}
+	facts("other/app") // the head repo changes: the approval is void
+	facts("fork/app")  // and changes back: the binding matches again, the void stands
+	var ref *dispatch.Refusal
+	if _, err := admitLocal(st, attempt); !errors.As(err, &ref) || !strings.Contains(ref.Detail, "voided") {
+		t.Fatalf("a voided approval must keep the run held: %v", err)
+	}
+	if code := runPending([]string{"--json"}, r.env()); code != 0 {
+		t.Fatal(code)
+	}
+	data, _, _ := r.result()
+	var list []pendingOut
+	if err := json.Unmarshal(data, &list); err != nil || len(list) != 1 || list[0].Run != "run-1" || !strings.Contains(strings.Join(list[0].Reasons, ","), source.VoidHeadRepo) {
+		t.Fatalf("pending must list it with the void reason: %+v %v", list, err)
+	}
+	// Approving the current head again releases it.
+	if code := r.approve("run-1"); code != 0 {
+		t.Fatal(code)
+	}
+	if _, err := admitLocal(st, attempt); err != nil {
+		t.Fatalf("re-approved run: %v", err)
+	}
+}
