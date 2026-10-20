@@ -43,6 +43,7 @@ func (s *sess) serve(ctx context.Context, bundle string) error {
 	quit := make(chan struct{})
 	defer close(quit)
 	go s.watchSilence(s.d.coordinatorTTL(), silent, stopCallbacks, quit)
+	defer s.startRestore(hctx)()
 	for {
 		select {
 		case <-ctx.Done():
@@ -122,7 +123,7 @@ func (s *sess) noteAlive(m protocol.Message) {
 		if s.ours(m, b.LeaseID, epochOr(epochOf(m), s.lease.Epoch)) {
 			s.touch()
 		}
-	case *protocol.Digest, *protocol.Chunk, *protocol.ArtifactRef, *protocol.CacheRef:
+	case *protocol.Digest, *protocol.Chunk, *protocol.Offset, *protocol.ArtifactRef, *protocol.CacheRef:
 		if s.scoped(m) || ownsRef(s, m) {
 			s.touch()
 		}
@@ -161,6 +162,9 @@ func (s *sess) lostErr(cause error) error {
 // agent's (cancelled) result, and returns the context's error. The deferred
 // close then ends the session; the agent kills the job's process group.
 func (s *sess) cancelAndDrain(ctx context.Context) error {
+	if s.restore != nil {
+		s.restore.Close() // a restore request that arrives from here on is refused
+	}
 	_ = s.send("cancel", protocol.Cancel{LeaseID: s.lease.LeaseID, Reason: "cancelled"}, true)
 	bg := context.WithoutCancel(ctx)
 	timer := time.NewTimer(s.d.cancelGrace())
@@ -226,6 +230,8 @@ func (s *sess) handle(ctx context.Context, m protocol.Message) (done bool, err e
 		return true, nil
 	case *protocol.Heartbeat:
 		return false, s.onHeartbeat(ctx, m, *b)
+	case *protocol.Offset:
+		s.onOffset(ctx, m, *b)
 	case *protocol.Digest:
 		if !s.scoped(m) {
 			return false, nil

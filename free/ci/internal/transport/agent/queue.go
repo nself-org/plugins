@@ -98,6 +98,9 @@ func (d *Driver) leaseGone(ctx context.Context, rt *route) (bool, string) {
 // cancelRun stops the job: it asks the agent to cancel and waits for its result for the grace period.
 func (d *Driver) cancelRun(rt *route) error {
 	const reason = "cancelled"
+	if rt.restore != nil {
+		rt.restore.Close() // a restore request that arrives from here on is refused
+	}
 	if cancel := d.cfg().cancel; cancel == nil || cancel(rt.node, rt.leaseID, reason) != nil {
 		d.mu.Lock()
 		if d.pending[rt.node] == nil {

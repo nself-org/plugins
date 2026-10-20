@@ -36,7 +36,8 @@ type activeLease struct {
 	secWake   chan struct{}
 	lines     atomic.Uint64 // safe
 	lw        *lineWriter
-	offsets   chan protocol.Offset // safe: the coordinator's offset answers (offsets.go)
+	offsets   chan protocol.Offset  // safe: the coordinator's offset answers (offsets.go)
+	inbound   chan protocol.Message // safe: the coordinator's digest and chunk frames (inbound.go)
 }
 
 func (l *activeLease) cancel() { l.cancelled.Store(true); l.cancelCtx() }
@@ -97,7 +98,7 @@ func (s *Session) onLease(m protocol.Message, l protocol.Lease) {
 	// frame's value is not a job deadline; a job ends by its own timeout, a
 	// cancel, a drain deadline or the agent fence (P7-NODE-09).
 	ctx, cancel := context.WithCancel(s.runCtx)
-	al := &activeLease{lease: l, cancelCtx: cancel, offsets: make(chan protocol.Offset, offsetBuffer), secWake: make(chan struct{}, 1), secVals: map[string]string{}, expires: exp, secSeen: map[string]bool{}}
+	al := &activeLease{lease: l, cancelCtx: cancel, offsets: make(chan protocol.Offset, offsetBuffer), inbound: make(chan protocol.Message, inboundBuffer), secWake: make(chan struct{}, 1), secVals: map[string]string{}, expires: exp, secSeen: map[string]bool{}}
 	if l.RunnerCredential != nil {
 		al.addMask(l.RunnerCredential.Value)
 	}
@@ -182,10 +183,16 @@ func (s *Session) runLease(ctx context.Context, al *activeLease, slot *slots.Slo
 	var setup JobSetup
 	skip := ""
 	for _, h := range s.jobHooks {
-		if h.Before == nil {
+		if h.Before == nil && h.BeforeTransfer == nil {
 			continue
 		}
-		got, err := h.Before(ctx, l, root)
+		var got JobSetup
+		var err error
+		if h.BeforeTransfer != nil {
+			got, err = h.BeforeTransfer(ctx, l, root, Transfer{Up: &uploader{s: s, al: al}, In: al.inbound})
+		} else {
+			got, err = h.Before(ctx, l, root)
+		}
 		if err != nil && ctx.Err() != nil {
 			skip = "cancelled" // the hook stopped because the lease was cancelled
 			break

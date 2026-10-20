@@ -105,7 +105,7 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 		act = func() error { return s.cfg.Sink.CacheRef(ctx, *b) }
 	case *protocol.Result:
 		act = func() error { return s.cfg.Sink.Result(ctx, *b) }
-	case *protocol.Digest, *protocol.Chunk:
+	case *protocol.Digest, *protocol.Chunk, *protocol.Offset:
 		if s.cfg.Blobs == nil {
 			return &fatal{protocol.CodeInvalid, "frame_type"}
 		}
@@ -135,7 +135,7 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 		err = act()
 	}
 	switch m.Body.(type) {
-	case *protocol.Digest, *protocol.Chunk:
+	case *protocol.Digest, *protocol.Chunk, *protocol.Offset:
 		if err == nil {
 			return s.blobFrame(q, f, m)
 		}
