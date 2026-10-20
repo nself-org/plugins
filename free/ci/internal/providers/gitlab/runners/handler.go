@@ -8,10 +8,10 @@ package runners
 // Outputs: a *model.Pipeline, or a *providers.Error: E708 label.not_allowed (a refusal), E703
 //          runner.demand_capped, E704 for a transient miss (no ledger yet, policy unreadable), E700 for a bad
 //          pin or an instance URL the restricted network scope cannot serve (an IP literal, a port other than 443,
-//          a private base). Unlike GitHub, which polls its queue and offers a capped job again (github/reconcile),
-//          no GitLab poll exists yet: the Job Hook is sent once and the ingress answers a declined one with a 200,
-//          so a capped or not-ready GitLab demand stays pending until GitLab's own stuck-job timeout (debt row;
-//          it must be closed before V15 is turned on). A subgroup project (a/b/c) is E702: the coordinator and
+//          a private base). A capped (E703) or not-ready (E704) demand is not lost: the Job Hook is sent once and
+//          the ingress answers a declined one with a 200, so Poller (poll.go, D-1389) lists the pending jobs
+//          of the named projects every tick and offers them again, as github/reconcile does for GitHub.
+//          A subgroup project (a/b/c) is E702: the coordinator and
 //          runnerjob.Spec accept group/project only (D-1365).
 // Constraints: the tag set is fixed: every tag of the demand must be one of providers.gitlab.runner.tags
 //          (exact, ASCII) and the demand must carry the nself tag, so a job that asks for a tag the
