@@ -94,7 +94,7 @@ func extract(r io.Reader, root *os.Root, lim authz.Limits, opt UnpackOptions) (U
 	if !dry {
 		fw = newFileWriter(root, opt)
 	}
-	defer fw.close() // an early return still waits for the writers
+	defer func() { _ = fw.close() }() // an early return still waits for the writers
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {

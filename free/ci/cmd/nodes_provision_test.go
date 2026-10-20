@@ -20,8 +20,8 @@ func capture(t *testing.T, fn func() int) (code int, out, errs string) {
 	os.Stdout, os.Stderr = wo, we
 	defer func() { os.Stdout, os.Stderr = so, se }()
 	code = fn()
-	wo.Close()
-	we.Close()
+	_ = wo.Close()
+	_ = we.Close()
 	bo, _ := io.ReadAll(ro)
 	be, _ := io.ReadAll(re)
 	return code, string(bo), string(be)

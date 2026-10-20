@@ -95,7 +95,7 @@ func shimUserOK(euid int, name string) bool {
 
 func runJobShim(_ context.Context, args []string, sio IO) int {
 	if len(args) != 0 {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent job-shim   (one JSON request line on stdin)")
+		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent job-shim   (one JSON request line on stdin)")
 		return 2
 	}
 	name := ""
@@ -103,17 +103,17 @@ func runJobShim(_ context.Context, args []string, sio IO) int {
 		name = u.Username
 	}
 	if !shimUserOK(os.Geteuid(), name) {
-		fmt.Fprintln(sio.Stderr, "error: job-shim runs only as a job user (nself-ci-job-<n>), through the agent's sudo rule")
+		_, _ = fmt.Fprintln(sio.Stderr, "error: job-shim runs only as a job user (nself-ci-job-<n>), through the agent's sudo rule")
 		return 1
 	}
 	raw, err := readShimRequest(sio.Stdin, maxShimRequest)
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 2
 	}
 	req, err := parseShimRequest(raw)
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 2
 	}
 	return execShimRequest(req, sio)
@@ -123,7 +123,7 @@ func runJobShim(_ context.Context, args []string, sio IO) int {
 func execShimRequest(req shimRequest, sio IO) int {
 	path, err := lookCommand(req.Argv[0])
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 127
 	}
 	dir := req.Dir
@@ -131,10 +131,10 @@ func execShimRequest(req shimRequest, sio IO) int {
 		dir = "/" // never the agent's inherited cwd (its 0700 state directory)
 	}
 	if err = os.Chdir(dir); err != nil {
-		fmt.Fprintln(sio.Stderr, "error: cannot enter the job directory:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error: cannot enter the job directory:", err)
 		return 126
 	}
 	err = syscall.Exec(path, req.Argv, req.Env) // only returns on failure
-	fmt.Fprintln(sio.Stderr, "error: exec:", err)
+	_, _ = fmt.Fprintln(sio.Stderr, "error: exec:", err)
 	return 126
 }
