@@ -30,6 +30,8 @@ type pipelineRun struct {
 	jobs      []Queued
 	placed    map[string]sched.Placement
 	explained map[string]sched.Explanation
+	// waitTotal counts the pipeline's jobs this tick left waiting; waitSeen those settled so far (waithook.go).
+	waitTotal, waitSeen int
 }
 
 // Tick places and admits every queued job once, in the Orderer's order. It
@@ -84,6 +86,11 @@ func (d *Dispatcher) Tick(ctx context.Context) error {
 		}
 		for _, x := range res.Explanations {
 			pr.explained[x.JobKey] = x
+		}
+		for _, q := range pr.jobs {
+			if _, ok := pr.placed[q.Job.Sched.Key]; !ok {
+				pr.waitTotal++
+			}
 		}
 	}
 	for _, q := range live {
@@ -149,6 +156,9 @@ func (d *Dispatcher) settle(ctx context.Context, runs map[string]*pipelineRun, p
 		d.admit(ctx, runs, pr, q, p, &dec)
 	} else {
 		d.waiting(ctx, q, &dec)
+		if dec.Outcome == OutcomeWaiting {
+			d.fireWaiting(ctx, pr, q)
+		}
 	}
 	if !dec.recorded {
 		d.cfg.Sink.Record(ctx, dec)

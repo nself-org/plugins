@@ -44,7 +44,15 @@ func (e *Engine) NodeJoined(ctx context.Context, token, nodeID string) error {
 
 // JoinFailed counts a join failure against the provider's breaker and tears the intent down.
 func (e *Engine) JoinFailed(ctx context.Context, token string) error {
-	err := e.o.Store.BurstWrite(ctx, func(t store.BurstTx) error {
+	if err := e.countJoinFailure(ctx, token); err != nil {
+		return err
+	}
+	return e.Teardown(ctx, token, "join failed")
+}
+
+// countJoinFailure counts one join failure of the intent's provider against its breaker.
+func (e *Engine) countJoinFailure(ctx context.Context, token string) error {
+	return e.o.Store.BurstWrite(ctx, func(t store.BurstTx) error {
 		in, ok, err := t.Intent(token)
 		if err != nil || !ok || in.Coordinator != e.o.Coordinator {
 			return refused("intent.unavailable", err, "intent %s is not this coordinator's", token)
@@ -52,10 +60,6 @@ func (e *Engine) JoinFailed(ctx context.Context, token string) error {
 		_, err = t.BreakerFail(in.Provider, BreakerThreshold, BreakerOpenMs, t.NowMs())
 		return err
 	})
-	if err != nil {
-		return err
-	}
-	return e.Teardown(ctx, token, "join failed")
 }
 
 // Tick ends the intents whose time has come, retries failed teardowns and sweeps.
@@ -76,6 +80,11 @@ func (e *Engine) Tick(ctx context.Context) (SweepReport, error) {
 		}
 		if reason == "" {
 			continue
+		}
+		if reason == ReasonJoinTimeout { // a machine that never joined is a join failure: it counts against the breaker
+			if err = e.countJoinFailure(ctx, in.Token); err != nil {
+				errs = append(errs, err)
+			}
 		}
 		if err = e.teardown(ctx, in.Token, reason, true); err != nil {
 			if errors.Is(err, ErrKilled) {

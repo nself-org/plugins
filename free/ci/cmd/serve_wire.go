@@ -101,7 +101,15 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 		}
 		return err
 	}
-	return func() { stopBeat(); undoHosted(); pairing.Use(nil); agentOnAck = nil }, nil
+	undoBurst, err := serveBurst(ctx, st, home)
+	if err != nil {
+		stopBeat()
+		undoHosted()
+		pairing.Use(nil)
+		agentOnAck = nil
+		return func() {}, err
+	}
+	return func() { undoBurst(); stopBeat(); undoHosted(); pairing.Use(nil); agentOnAck = nil }, nil
 }
 
 // registerServe makes this serve process visible in the coordinator table and keeps its heartbeat fresh, so

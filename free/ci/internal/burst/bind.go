@@ -46,6 +46,7 @@ func init() {
 		panic(err)
 	}
 	dispatch.OnStart(onStart)
+	dispatch.OnWaiting(onWaiting)
 	lifecycle.RegisterRevoker(store.BurstRevokeHook())
 }
 
@@ -84,3 +85,12 @@ func contributePending(ctx context.Context, w *sched.World) error {
 	w.Pending = pend
 	return nil
 }
+
+// Bound returns the bound engine, or nil when none is.
+func Bound() *Engine { return current() }
+
+// ProviderIDs lists the engine's provider ids in order.
+func (e *Engine) ProviderIDs() []string { return e.providerIDs() }
+
+// Coordinator is the coordinator id this engine labels its machines with.
+func (e *Engine) Coordinator() string { return e.o.Coordinator }

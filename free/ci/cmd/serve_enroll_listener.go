@@ -76,17 +76,7 @@ func noGit(context.Context, ...string) (string, int, error) { return "", 0, nil 
 // readBurstGate resolves the operator-scope policy (user, team rows; defaults) and reports whether any
 // burst provider is enabled. Nothing is read from a worktree: Revision is empty.
 func readBurstGate(ctx context.Context) (burstGate, error) {
-	rd, closeFn, err := enrollPolicyStore()
-	if err != nil {
-		return burstGate{}, err
-	}
-	defer closeFn()
-	res := policy.Resolver{Store: rd, Run: noGit}
-	got, err := res.Resolve(ctx, policy.Repo{Root: ".", Visibility: "unknown", Class: "owner"}, policy.Revision{})
-	if err != nil {
-		return burstGate{}, err
-	}
-	sp, err := schedpolicy.Spend(&got)
+	sp, err := resolveSpend(ctx)
 	if err != nil {
 		return burstGate{}, err
 	}
@@ -95,6 +85,22 @@ func readBurstGate(ctx context.Context) (burstGate, error) {
 		g.Enabled = g.Enabled || on
 	}
 	return g, nil
+}
+
+// resolveSpend is the effective operator-scope spend policy, read at call time (serve_burst.go uses it as
+// the burst engine's policy source, so a changed row is seen by the next decision).
+func resolveSpend(ctx context.Context) (schedpolicy.SpendPolicy, error) {
+	rd, closeFn, err := enrollPolicyStore()
+	if err != nil {
+		return schedpolicy.SpendPolicy{}, err
+	}
+	defer closeFn()
+	res := policy.Resolver{Store: rd, Run: noGit}
+	got, err := res.Resolve(ctx, policy.Repo{Root: ".", Visibility: "unknown", Class: "owner"}, policy.Revision{})
+	if err != nil {
+		return schedpolicy.SpendPolicy{}, err
+	}
+	return schedpolicy.Spend(&got)
 }
 
 // startEnrollListener is the ListenerStart of the enroll listener. A closed or unreadable gate returns a

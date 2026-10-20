@@ -139,6 +139,7 @@ type Engine struct {
 	orphans   map[string]bool
 	creating  map[string]bool
 	locks     map[string]*sync.Mutex
+	asks      map[string]*askState // waiting.go: one ask per job
 	loop      *loopState
 }
 
