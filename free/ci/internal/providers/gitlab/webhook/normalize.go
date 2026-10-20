@@ -28,7 +28,7 @@ var kinds = map[string]string{
 	"Push Hook": "push", "Tag Push Hook": "tag_push", "Merge Request Hook": "merge_request", "Job Hook": "build",
 }
 
-func (s *Source) normalize(ctx context.Context, auth model.TriggerAuth, event, delivery string, body []byte) (model.TriggerFacts, error) {
+func (s *Source) normalize(ctx context.Context, auth model.TriggerAuth, bound bool, event, delivery string, body []byte) (model.TriggerFacts, error) {
 	kind, served := kinds[event]
 	if !served {
 		return model.TriggerFacts{}, unsupported("event \"" + clip(event) + "\": skip")
@@ -40,7 +40,7 @@ func (s *Source) normalize(ctx context.Context, auth model.TriggerAuth, event, d
 	if p.ObjectKind != kind {
 		return model.TriggerFacts{}, unsupported("event does not match the payload")
 	}
-	f := s.baseFacts(p, auth, delivery)
+	f := s.baseFacts(p, auth, bound, delivery)
 	switch event {
 	case "Push Hook":
 		return s.fromPush(ctx, f, p)
@@ -52,11 +52,11 @@ func (s *Source) normalize(ctx context.Context, auth model.TriggerAuth, event, d
 	return s.fromJob(ctx, f, p)
 }
 
-func (s *Source) baseFacts(p glPayload, auth model.TriggerAuth, delivery string) model.TriggerFacts {
+func (s *Source) baseFacts(p glPayload, auth model.TriggerAuth, bound bool, delivery string) model.TriggerFacts {
 	now := s.Now()
 	name, id := p.probe().identity()
 	f := model.TriggerFacts{Schema: "ci.trigger-facts/v1", Source: Name, ReceivedAt: now, Auth: auth, Repo: name, DeliveryID: delivery}
-	if id > 0 {
+	if id > 0 && bound { // an id nothing bound to the name is the sender's claim: it must never address the API
 		f.RepoID = itoa(id)
 	}
 	actor := p.UserUsername

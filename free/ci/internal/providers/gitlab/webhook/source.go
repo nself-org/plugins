@@ -102,10 +102,11 @@ func (s *Source) Verify(ctx context.Context, r *http.Request, body []byte) (mode
 	if err != nil {
 		return model.TriggerFacts{}, err
 	}
-	if !s.identityHolds(name, id, auth, secret) {
+	bound, ok := s.identityHolds(name, id, auth, secret)
+	if !ok {
 		return model.TriggerFacts{}, errSignature()
 	}
-	f, err := s.normalize(ctx, auth, r.Header.Get(hdrEvent), deliveryID(r), body)
+	f, err := s.normalize(ctx, auth, bound, r.Header.Get(hdrEvent), deliveryID(r), body)
 	f.Repo = strings.ToLower(f.Repo) // the secret was found by the lower-case name; the project must not differ by case
 	return f, err
 }
@@ -136,19 +137,21 @@ func (s *Source) authenticate(ctx context.Context, r *http.Request, body []byte,
 // identityHolds binds the project name to its numeric id. A configured id is the whole rule (it never
 // consults the pin, so changing it in policy takes effect at once). With a signing secret and no
 // configured id, the first verified id seen for the name is pinned for the life of the process. A bare
-// token delivery is never pinned: its holder could claim any id for a token-only project and lock out the
-// project's real deliveries. A name the coordinator cannot enqueue, or no id, never holds.
-func (s *Source) identityHolds(name string, id int64, auth model.TriggerAuth, rs RepoSecret) bool {
+// token delivery with no configured id is never pinned (its holder could claim any id for a token-only
+// project and lock out the project's real deliveries), and so its id is not bound to anything: bound is
+// false and the facts carry no RepoID, so the API is addressed by the project's path, never by a number
+// the sender picked. A name the coordinator cannot enqueue, or no id, never holds (ok false).
+func (s *Source) identityHolds(name string, id int64, auth model.TriggerAuth, rs RepoSecret) (bound, ok bool) {
 	if !validName(name) || id <= 0 {
-		return false
+		return false, false
 	}
 	switch {
 	case rs.ID != 0:
-		return rs.ID == id
+		return true, rs.ID == id
 	case auth == "per-repo":
-		return s.pins.holds(strings.ToLower(name), id)
+		return true, s.pins.holds(strings.ToLower(name), id)
 	}
-	return true
+	return false, true
 }
 
 // deliveryID is webhook-id, else X-Gitlab-Event-UUID.

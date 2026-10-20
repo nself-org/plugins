@@ -76,14 +76,16 @@ func parsePayload(body []byte) (glPayload, error) {
 	return p, nil
 }
 
+type glProbeProject struct {
+	ID   int64  `json:"id"`
+	Path string `json:"path_with_namespace"`
+}
+
 // glProbe is all that is read from a body before it is authenticated: scalars only, so a hostile body
 // cannot make the unauthenticated decode allocate more than a copy of one string.
 type glProbe struct {
-	Project *struct {
-		ID   int64  `json:"id"`
-		Path string `json:"path_with_namespace"`
-	} `json:"project"`
-	ProjectID  int64 `json:"project_id"`
+	Project    *glProbeProject `json:"project"`
+	ProjectID  int64           `json:"project_id"`
 	Repository struct {
 		Homepage string `json:"homepage"`
 	} `json:"repository"`
@@ -173,10 +175,7 @@ func (p glPayload) probe() glProbe {
 	pr := glProbe{ProjectID: p.ProjectID}
 	pr.Repository.Homepage = p.Repository.Homepage
 	if p.Project != nil {
-		pr.Project = &struct {
-			ID   int64  `json:"id"`
-			Path string `json:"path_with_namespace"`
-		}{ID: p.Project.ID, Path: p.Project.Path}
+		pr.Project = &glProbeProject{ID: p.Project.ID, Path: p.Project.Path}
 	}
 	return pr
 }

@@ -125,10 +125,10 @@ func TestNormalizeGoldens(t *testing.T) {
 	t.Run("a bearer demand needs a readable job", func(t *testing.T) {
 		tokened := replace(fixture(t, "job_pending_nself"), `"path_with_namespace":"acme/app"`, `"path_with_namespace":"acme/tokened"`)
 		rg := newRig(t, both())
-		rg.gl.drop("/projects/1001/jobs/9001") // the API answers 404: the job state is unknown
+		// a bearer delivery's id is not bound to anything, so the API is addressed by path: no route yet = 404 = unknown
 		_, err := rg.bearer("Job Hook", bareToken, tokened)
 		wantDecline(t, "bearer demand, job unreadable", err, reasonUnsupported, "job.unverified")
-		rg.gl.set("/projects/1001/jobs/9001", 200, `{"id":9001,"status":"pending","tag_list":["nself"]}`)
+		rg.gl.set("/projects/acme%2Ftokened/jobs/9001", 200, `{"id":9001,"status":"pending","tag_list":["nself"]}`)
 		if f, err := rg.bearer("Job Hook", bareToken, tokened); err != nil || f.Auth != "bearer" || f.Kind != "runner_demand" {
 			t.Fatalf("bearer demand with a readable pending job: %+v %v", f, err)
 		}

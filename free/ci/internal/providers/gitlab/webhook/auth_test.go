@@ -228,15 +228,39 @@ func TestIdentityBinding(t *testing.T) {
 		_, err := rg.signed("Push Hook", recreated)
 		wantReject(t, "project recreated under the same name", err, reasonSignature)
 	})
-	t.Run("a bearer delivery never pins an id", func(t *testing.T) {
+	t.Run("a bearer delivery never pins an id nor addresses the API by one", func(t *testing.T) {
 		rg := newRig(t, both())
 		tokened := replace(fixture(t, "push"), `"path_with_namespace":"acme/app"`, `"path_with_namespace":"acme/tokened"`)
-		if _, err := rg.bearer("Push Hook", bareToken, replace(tokened, `"id":1001,"name"`, `"id":666,"name"`)); err != nil {
-			t.Fatal(err)
+		claim, err := rg.bearer("Push Hook", bareToken, replace(tokened, `"id":1001,"name"`, `"id":666,"name"`))
+		if err != nil || claim.RepoID != "" {
+			t.Fatalf("an id nothing bound to the name must not be recorded: %+v %v", claim, err)
 		}
-		if f, err := rg.bearer("Push Hook", bareToken, tokened); err != nil || f.RepoID != "1001" {
+		for _, p := range rg.gl.paths {
+			if strings.Contains(p, "666") {
+				t.Fatalf("the sender's claimed id addressed the API: %s", p)
+			}
+		}
+		if _, err = rg.src.Refetch(context.Background(), claim); err != nil && rg.gl.saw("/projects/666") {
+			t.Fatal("refetch used the claimed id")
+		}
+		for _, p := range rg.gl.paths {
+			if strings.Contains(p, "666") {
+				t.Fatalf("the sender's claimed id addressed the API on refetch: %s", p)
+			}
+		}
+		if f, err := rg.bearer("Push Hook", bareToken, tokened); err != nil {
 			t.Fatalf("the project's real delivery was locked out by an earlier claim: %+v %v", f, err)
 		}
+	})
+	t.Run("a configured id binds a bearer delivery", func(t *testing.T) {
+		rg := newRig(t, Secrets{Tokens: map[string]RepoSecret{"acme/tokened": {Env: tokenEnv, ID: 1001}}})
+		tokened := replace(fixture(t, "push"), `"path_with_namespace":"acme/app"`, `"path_with_namespace":"acme/tokened"`)
+		f, err := rg.bearer("Push Hook", bareToken, tokened)
+		if err != nil || f.RepoID != "1001" || f.Auth != "bearer" {
+			t.Fatalf("configured id: %+v %v", f, err)
+		}
+		_, err = rg.bearer("Push Hook", bareToken, replace(tokened, `"id":1001,"name"`, `"id":666,"name"`))
+		wantReject(t, "claimed id differs from the configured id", err, reasonSignature)
 	})
 	t.Run("name case does not matter", func(t *testing.T) {
 		rg := newRig(t, both())
