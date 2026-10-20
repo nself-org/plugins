@@ -111,7 +111,7 @@ func TestC39PromptCannotInjectTerminalControls(t *testing.T) {
 	ap := &pairing.PromptApprover{In: bufio.NewReader(strings.NewReader("\n")), Out: &out}
 	evil := "linux\u009b2J‮evil⁦x​\x1b[2J\x07"
 	_, err := ap.Approve(context.Background(), pairing.ApprovalRequest{OfferID: "o", NodeID: "n", NodeName: "n", OS: evil, Arch: evil, SourceAddr: evil, Label: evil,
-		CSRFingerprint: "SHA256:abc", NodeKeyID: "0123456789abcdef", CertTTL: time.Hour})
+		CSRFingerprint: "SHA256:abc", NodeKeyID: "node-key-1", CertTTL: time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestC39ApprovalNeedsTheExactFingerprint(t *testing.T) {
 	// new node and for an existing one, so every denial below is a decision and not a prompt that always denies.
 	for _, existing := range []bool{false, true} {
 		ap := &pairing.PromptApprover{In: bufio.NewReader(strings.NewReader(fp + "\n\n\n\n\n")), Out: &bytes.Buffer{}}
-		dec, err := ap.Approve(context.Background(), pairing.ApprovalRequest{OfferID: "o", NodeID: "n", NodeName: "n", CSRFingerprint: fp, NodeKeyID: "0123456789abcdef", CertTTL: time.Hour, Existing: existing})
+		dec, err := ap.Approve(context.Background(), pairing.ApprovalRequest{OfferID: "o", NodeID: "n", NodeName: "n", CSRFingerprint: fp, NodeKeyID: "node-key-1", CertTTL: time.Hour, Existing: existing})
 		if err != nil || !dec.Approve {
 			t.Fatalf("control: the exact fingerprint (existing=%v) was not approved: approve=%v err=%v", existing, dec.Approve, err)
 		}
@@ -146,7 +146,7 @@ func TestC39ApprovalNeedsTheExactFingerprint(t *testing.T) {
 	for _, typed := range []string{"", strings.ToLower(fp), strings.TrimPrefix(fp, "SHA256:"), fp[:len(fp)-1], fp + "=", fp + "x", "SHA256:" + strings.ToUpper(fp[7:]), "  "} {
 		var out bytes.Buffer
 		ap := &pairing.PromptApprover{In: bufio.NewReader(strings.NewReader(typed + "\n")), Out: &out}
-		dec, err := ap.Approve(context.Background(), pairing.ApprovalRequest{OfferID: "o", NodeID: "n", NodeName: "n", CSRFingerprint: fp, NodeKeyID: "0123456789abcdef", CertTTL: time.Hour})
+		dec, err := ap.Approve(context.Background(), pairing.ApprovalRequest{OfferID: "o", NodeID: "n", NodeName: "n", CSRFingerprint: fp, NodeKeyID: "node-key-1", CertTTL: time.Hour})
 		if err != nil || dec.Approve {
 			t.Errorf("typed %q: approve=%v err=%v", typed, dec.Approve, err)
 		}
