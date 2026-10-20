@@ -198,3 +198,24 @@ func TestBurstStoreRevokeHookMarksTheNodesIntentInTheRevokeTransaction(t *testin
 		t.Fatalf("another node's intent must not move: %+v", got)
 	}
 }
+
+func TestBurstStoreANodeBelongsToOneOpenIntent(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	for _, tok := range []string{"A", "B"} {
+		in, lease := burstIntent(tok)
+		if err := s.BurstWrite(ctx, func(b BurstTx) error { return b.PutIntent(in, lease) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.BurstWrite(ctx, func(b BurstTx) error { _, err := b.SetNode("A", "node-1", 1); return err }); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BurstWrite(ctx, func(b BurstTx) error { _, err := b.SetNode("B", "node-1", 2); return err }); err == nil {
+		t.Fatal("a second open intent bound to the same node: IntentOfNode would answer for an arbitrary one")
+	}
+	_ = s.BurstWrite(ctx, func(b BurstTx) error { return b.MarkTerminal("A", 3) })
+	if err := s.BurstWrite(ctx, func(b BurstTx) error { _, err := b.SetNode("B", "node-1", 4); return err }); err != nil {
+		t.Fatalf("once the first intent is terminal the node id is free again: %v", err)
+	}
+}

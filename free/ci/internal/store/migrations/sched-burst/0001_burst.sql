@@ -4,7 +4,8 @@ CREATE TABLE burst_intent (token TEXT PRIMARY KEY, coordinator_id TEXT NOT NULL,
   reserved_micro INTEGER NOT NULL, lifetime_ms INTEGER NOT NULL, state TEXT NOT NULL CHECK (state IN ('live','tearing-down','terminal')),
   resource_id TEXT NOT NULL DEFAULT '', node_id TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE INDEX burst_intent_state ON burst_intent(coordinator_id, state);
-CREATE INDEX burst_intent_node ON burst_intent(node_id);
+-- A node belongs to at most one open intent: IntentOfNode answers for one row.
+CREATE UNIQUE INDEX burst_intent_node ON burst_intent(node_id) WHERE node_id<>'' AND state<>'terminal';
 CREATE INDEX burst_intent_job ON burst_intent(job_key, created_at);
 CREATE TABLE burst_provisioning_lease (intent TEXT PRIMARY KEY, idle_until INTEGER NOT NULL, max_until INTEGER NOT NULL);
 CREATE TABLE burst_breaker (provider TEXT PRIMARY KEY, failures INTEGER NOT NULL, open_until INTEGER NOT NULL);
