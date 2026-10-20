@@ -68,7 +68,7 @@ func parsePull(args []string, sio IO) (pullFlags, bool) {
 	fs.BoolVar(&f.secretsOK, "secrets-eligible", false, "this node may receive project and environment secrets")
 	fs.BoolVar(&f.dedicated, "dedicated", false, "this node is dedicated to the project (also release and deploy secrets)")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || f.slots < 0 || (f.coordinator != "" && !idRE.MatchString(f.coordinator)) {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent pull [--slots N] [--coordinator ID] [--project DIR] [--secrets-eligible] [--dedicated]")
+		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent pull [--slots N] [--coordinator ID] [--project DIR] [--secrets-eligible] [--dedicated]")
 		return f, false
 	}
 	return f, true
@@ -111,31 +111,31 @@ func runPull(ctx context.Context, args []string, sio IO) int {
 		return 2
 	}
 	if err := RunPreStart(ctx, "pull"); err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	state, err := stateDir()
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	cred, err := enroll.LoadCredential(state)
 	if errors.Is(err, os.ErrNotExist) {
-		fmt.Fprintln(sio.Stderr, "error: this node has not joined a coordinator; run `nself-ci-agent join <enroll-url>` first")
+		_, _ = fmt.Fprintln(sio.Stderr, "error: this node has not joined a coordinator; run `nself-ci-agent join <enroll-url>` first")
 		return 1
 	}
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error: enrollment:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error: enrollment:", err)
 		return 1
 	}
 	base, err := url.Parse(cred.Enrollment.AgentURL)
 	if err != nil || base.Scheme != "https" || base.Hostname() == "" {
-		fmt.Fprintln(sio.Stderr, "error: the enrollment holds no https agent URL; join again")
+		_, _ = fmt.Fprintln(sio.Stderr, "error: the enrollment holds no https agent URL; join again")
 		return 1
 	}
 	tlsc, err := pullTLS(state, cred, base.Hostname())
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error: enrollment:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error: enrollment:", err)
 		return 1
 	}
 	if f.coordinator == "" {
@@ -148,17 +148,17 @@ func runPull(ctx context.Context, args []string, sio IO) int {
 func pullLoop(ctx context.Context, f pullFlags, state string, cred enroll.Credential, baseURL string, tlsc *tls.Config, sio IO) int {
 	key, err := nodekey.LoadOrCreate(state)
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error: node key:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error: node key:", err)
 		return 1
 	}
 	age, err := agekey.LoadOrCreate(ctx, state)
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error: age identity:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error: age identity:", err)
 		return 1
 	}
 	table, err := slots.Open(state, max(1, ciexec.Probe().CPUs/2))
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	table.Lower(f.slots)
@@ -178,7 +178,7 @@ func pullLoop(ctx context.Context, f pullFlags, state string, cred enroll.Creden
 			Status:      hostStatus,
 		})
 		if err != nil {
-			fmt.Fprintln(sio.Stderr, "error:", err)
+			_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 			return 1
 		}
 		began := time.Now()
@@ -189,7 +189,7 @@ func pullLoop(ctx context.Context, f pullFlags, state string, cred enroll.Creden
 		var rej *session.RejectError
 		switch {
 		case errors.As(err, &rej):
-			fmt.Fprintln(sio.Stderr, "error:", err)
+			_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 			return 1
 		case watch.drained():
 			return 0

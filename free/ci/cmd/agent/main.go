@@ -41,9 +41,9 @@ func main() {
 
 func run(ctx context.Context, args []string, sio IO) int {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent <command> [args]")
+		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent <command> [args]")
 		for _, l := range usageLines() {
-			fmt.Fprintln(sio.Stderr, l)
+			_, _ = fmt.Fprintln(sio.Stderr, l)
 		}
 		if len(args) == 0 {
 			return 2
@@ -52,7 +52,7 @@ func run(ctx context.Context, args []string, sio IO) int {
 	}
 	fn, ok := lookup(args[0])
 	if !ok {
-		fmt.Fprintf(sio.Stderr, "nself-ci-agent: unknown command %q\n", args[0])
+		_, _ = fmt.Fprintf(sio.Stderr, "nself-ci-agent: unknown command %q\n", args[0])
 		return 2
 	}
 	return fn(ctx, args[1:], sio)
@@ -118,28 +118,23 @@ func baseEvidence(spec execSpec, o cirun.JobOutcome, start, end time.Time) model
 		WorktreeState: "clean", Binding: model.Binding{State: "bound"},
 	}
 	c := model.Check{ID: o.Check, JobID: o.ID, Kind: string(o.Kind), Tool: o.Tool, Required: true, Substantive: true, FailureClass: o.FailureClass, Reason: o.Reason}
-	switch o.State {
-	case cirun.StatePassed:
-		c.Result = "pass"
+	c.Result = model.CheckResultFor(string(o.State), o.Code, o.FailureClass)
+	switch c.Result {
+	case "pass":
 		e.Counts.Pass = 1
-	case cirun.StateFailed:
-		c.Result, c.Excerpt = "fail", o.Tail
+	case "fail":
 		e.Counts.Fail = 1
-		if o.Code != "" || o.FailureClass == "infra" {
-			c.Result = "error"
-			e.Counts.Fail, e.Counts.Error = 0, 1
-		}
+		c.Excerpt = o.Tail
+	case "error":
+		e.Counts.Error = 1
+		c.Excerpt = o.Tail
 	default:
-		c.Result = "skip"
 		e.Counts.Skip = 1
 	}
 	e.Checks, e.Counts.Total = []model.Check{c}, 1
-	e.Result = model.Verdict(e.Checks)
+	e.Result = model.RunResult(e.Checks)
 	if o.State == cirun.StateCancelled {
 		e.Result = "cancelled"
-	}
-	if c.Result == "error" && e.Result == "pass" {
-		e.Result = "error"
 	}
 	s, f, ms := start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339), end.Sub(start).Milliseconds()
 	e.Timings = model.Timings{QueuedAt: &s, StartedAt: &s, FinishedAt: &f, DurationMS: &ms}

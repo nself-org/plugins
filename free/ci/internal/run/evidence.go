@@ -36,49 +36,10 @@ type evidenceInput struct {
 }
 
 func checkResult(o JobOutcome) model.CheckResult {
-	switch o.State {
-	case StatePassed:
-		return "pass"
-	case StateFailed:
-		// Only the code under test can `fail`: a broken runner, a lost lease and
-		// a stopped job say nothing about it (AUTO D6, D-0285).
-		switch {
-		case o.Code != "", o.FailureClass == "infra", o.FailureClass == "timeout", o.FailureClass == "lost":
-			return "error"
-		}
-		return "fail"
-	default:
-		return "skip"
-	}
+	return model.CheckResultFor(string(o.State), o.Code, o.FailureClass)
 }
 
-// runResult is the verdict of the checks with infrastructure told apart: a run
-// that is red only because a required check ended `error` (a full disk, an
-// unreachable registry, a lost runner, a timeout) is `error`, so the posted
-// status is not `failure`; any required check that really failed, or a
-// required check that was skipped on its own, keeps it `fail`.
-func runResult(checks []model.Check) model.Result {
-	v := model.Verdict(checks)
-	if v != "fail" {
-		return v
-	}
-	broken := false
-	for _, c := range checks {
-		switch {
-		case !c.Required:
-		case c.Result == "skip" && (c.Reason == "dep.failed" || c.Reason == "fail_fast.cancelled"):
-			// a consequence of another check (it needed one that did not pass, or fail-fast stopped it): the other check decides
-		case c.Result == "fail" && !c.AllowFailure, c.Result == "skip":
-			return v
-		case c.Result == "error":
-			broken = true
-		}
-	}
-	if broken {
-		return "error"
-	}
-	return v
-}
+func runResult(checks []model.Check) model.Result { return model.RunResult(checks) }
 
 // BuildEvidence assembles the ci.evidence/v1 document of a run.
 func buildEvidence(in evidenceInput) (model.Evidence, string, error) {

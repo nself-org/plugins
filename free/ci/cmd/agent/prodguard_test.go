@@ -63,6 +63,12 @@ func TestServeStdioExitsNonZeroWithE663OnADeployHost(t *testing.T) {
 func TestServeStdioExitsNonZeroWithE663OnAProdStackMarker(t *testing.T) {
 	useState(t)
 	dir := t.TempDir()
+	// The injected runner supplies Docker output, but the guard first checks PATH.
+	// Keep the fixture independent of whether Docker is installed on the test host.
+	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("ENV=prod\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

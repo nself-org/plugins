@@ -32,7 +32,7 @@ type ProjectionResult struct {
 
 // Projection derives a verdict and bounded summary from evidence checks.
 func Projection(e Evidence) ProjectionResult {
-	p := ProjectionResult{Result: Verdict(e.Checks), Total: len(e.Checks)}
+	p := ProjectionResult{Result: RunResult(e.Checks), Total: len(e.Checks)}
 	for _, check := range e.Checks {
 		if check.Result == "pass" {
 			p.Passed++

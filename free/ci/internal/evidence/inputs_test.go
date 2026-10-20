@@ -34,13 +34,13 @@ func asErr(err error, target **Error) bool {
 }
 
 func TestTreeFSReadsGitObjects(t *testing.T) {
-	dir, sha := newRepo(t, map[string]string{"a.txt": "one\n", "sub/b.txt": "two\n", "sub/deep/c.txt": "three\n"})
+	dir, _ := newRepo(t, map[string]string{"a.txt": "one\n", "sub/b.txt": "two\n", "sub/deep/c.txt": "three\n"})
 	if err := os.Symlink("a.txt", filepath.Join(dir, "link")); err != nil {
 		t.Skip("no symlinks")
 	}
 	gitRun(t, dir, "add", "-A")
 	gitRun(t, dir, "commit", "-q", "-m", "link")
-	sha = gitRun(t, dir, "rev-parse", "HEAD")
+	sha := gitRun(t, dir, "rev-parse", "HEAD")
 	write(t, dir, "a.txt", "edited in the working tree\n") // never visible through the tree
 	tree, err := TreeFS(context.Background(), nil, dir, sha)
 	ok(t, err)
@@ -188,13 +188,13 @@ func TestHiddenEditsUnbindTheTree(t *testing.T) {
 
 // A symlink where the config lives must fail closed, not read as "no config".
 func TestSymlinkedConfigFailsClosed(t *testing.T) {
-	dir, sha := newRepo(t, baseFiles)
+	dir, _ := newRepo(t, baseFiles)
 	ok(t, os.MkdirAll(filepath.Join(dir, ".nself"), 0o755))
 	ok(t, os.Symlink("../ext.yaml", filepath.Join(dir, ".nself", "ci.yaml")))
 	write(t, dir, "ext.yaml", "version: 1\n")
 	gitRun(t, dir, "add", "-A")
 	gitRun(t, dir, "commit", "-q", "-m", "link")
-	sha = gitRun(t, dir, "rev-parse", "HEAD")
+	sha := gitRun(t, dir, "rev-parse", "HEAD")
 	if _, err := InputsAt(context.Background(), nil, dir, sha); err == nil {
 		t.Fatal("a symlinked config was digested as if it were absent")
 	} else if e, _ := AsError(err); e == nil || e.Exit != ExitInvalid {
