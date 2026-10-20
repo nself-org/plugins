@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/gitlab/pipeline"
@@ -100,6 +102,9 @@ type fakeGL struct {
 	NextID     int64
 	Include    []byte // the include file raw at any sha
 	IncludeSt  int
+	Merged     string          // the merged_yaml the lint route answers; empty derives it from Include
+	LintSt     int             // a status other than 200 for the lint route
+	LintBad    bool            // valid: false
 	Stale      bool            // the pipeline list shows nothing yet
 	Extra      func(*fakePipe) // runs on every created pipeline (plants a second one)
 	NameInVars bool            // variables-mode pipelines get the workflow:name too
@@ -228,6 +233,16 @@ func (f *fakeGL) serve(w http.ResponseWriter, req *http.Request) {
 		f.create(w, body)
 	case p == projectBase+"/pipelines" && req.Method == "GET":
 		f.list(w, req)
+	case p == projectBase+"/ci/lint" && req.Method == "GET":
+		if f.LintSt != 0 {
+			w.WriteHeader(f.LintSt)
+			return
+		}
+		merged := f.Merged
+		if merged == "" {
+			merged = mergedFrom(f.t, f.Include, nil)
+		}
+		writeJSON(w, 200, map[string]any{"valid": !f.LintBad, "merged_yaml": merged})
 	case strings.HasPrefix(p, projectBase+"/pipelines/"):
 		f.pipeline(w, req, strings.TrimPrefix(p, projectBase))
 	case strings.HasPrefix(p, projectBase+"/repository/files/") && strings.HasSuffix(p, "/raw"):
@@ -439,4 +454,32 @@ func wantCode(t *testing.T, err error, code, reason string) {
 	if !errors.As(err, &pe) || pe.Code != code || (reason != "" && pe.Reason != reason) {
 		t.Fatalf("want %s/%s, got %v", code, reason, err)
 	}
+}
+
+// mergedFrom is what GitLab's lint answers as merged_yaml for a project whose only CI file is the
+// include: the body document of the include file, optionally changed by edit.
+func mergedFrom(t *testing.T, include []byte, edit func(map[string]any)) string {
+	t.Helper()
+	dec := yaml.NewDecoder(bytes.NewReader(include))
+	var body map[string]any
+	for {
+		var doc map[string]any
+		if err := dec.Decode(&doc); err != nil {
+			break
+		}
+		if _, ok := doc[gitlabtmpl.Job]; ok {
+			body = doc
+		}
+	}
+	if body == nil {
+		t.Fatal("no body document in the include file")
+	}
+	if edit != nil {
+		edit(body)
+	}
+	out, err := yaml.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
 }

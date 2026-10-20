@@ -69,6 +69,7 @@ func writeFixtures(t *testing.T, v variant) string {
 	vars, _ := json.Marshal([]map[string]string{{"key": "NSELF_CI_NONCE", "value": fixtureNonce}, {"key": "NSELF_CI_SPEC_DIGEST", "value": "sha256:" + hex.EncodeToString(sum[:])}})
 	zipB64 := base64.StdEncoding.EncodeToString(evidenceZip(t, "attempt-1", testRevision, nil))
 	jobs, _ := json.Marshal([]map[string]any{{"id": 5001, "name": "nself-ci", "status": "success", "artifacts": []map[string]any{{"file_type": "archive", "size": 1200}, {"file_type": "metadata", "size": 40}}}})
+	lint, _ := json.Marshal(map[string]any{"valid": true, "merged_yaml": mergedFrom(t, pinnedInclude(t), nil)})
 	pipe := project + "/pipelines/9001"
 	ex := []conformance.Exchange{
 		x("GET", project, "", 200, `{"id":77,"default_branch":"main","visibility":"public"}`),
@@ -103,7 +104,8 @@ func writeFixtures(t *testing.T, v variant) string {
 	}
 	ex = append(ex,
 		x("GET", project+"/repository/files/"+gitlabtmpl.Path+"/raw", "ref="+testHeadSHA, 200, string(pinnedInclude(t))),
-		x("GET", project+"/jobs/5001/artifacts", "", 200, zipB64))
+		x("GET", project+"/jobs/5001/artifacts", "", 200, zipB64),
+		x("GET", project+"/ci/lint", "content_ref="+testHeadSHA, 200, string(lint)))
 	for i, e := range ex {
 		raw, err := json.MarshalIndent(e, "", "  ")
 		if err != nil {
