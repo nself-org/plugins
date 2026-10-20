@@ -317,3 +317,46 @@ func TestNodesRemoteOutputOverLimitIsAnError(t *testing.T) {
 		t.Fatal("output of exactly the limit was flagged")
 	}
 }
+
+func TestNodesRemoteUpgradeClaimIsPerNodeAndRefusesNotQueues(t *testing.T) {
+	up := func(node string, args ...string) clientapi.NodeCommand {
+		return clientapi.NodeCommand{Verb: "upgrade", Node: node, Args: args}
+	}
+	relA, err := claimNode(up("a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = claimNode(up("a")); clientapi.ReasonOf(err) != clientapi.ReasonConflict {
+		t.Fatalf("second upgrade of a: %v", err)
+	}
+	if _, err = claimNode(clientapi.NodeCommand{Verb: "rotate", Node: "a", Args: []string{"--mode=upgrade"}}); clientapi.ReasonOf(err) != clientapi.ReasonConflict {
+		t.Fatalf("rotate in upgrade mode on a busy node: %v", err)
+	}
+	if rel, err := claimNode(clientapi.NodeCommand{Verb: "rotate", Node: "a", Args: []string{"--cert"}}); err != nil {
+		t.Fatalf("an emergency cert rotation was blocked: %v", err)
+	} else {
+		rel()
+	}
+	relB, err := claimNode(up("b"))
+	if err != nil {
+		t.Fatalf("another node: %v", err)
+	}
+	if _, err = claimNode(up("")); clientapi.ReasonOf(err) != clientapi.ReasonConflict {
+		t.Fatalf("upgrade --all beside single upgrades: %v", err)
+	}
+	relA()
+	relB()
+	relAll, err := claimNode(up(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = claimNode(up("c")); clientapi.ReasonOf(err) != clientapi.ReasonConflict {
+		t.Fatalf("upgrade during upgrade --all: %v", err)
+	}
+	relAll()
+	if rel, err := claimNode(up("c")); err != nil {
+		t.Fatalf("after release: %v", err)
+	} else {
+		rel()
+	}
+}

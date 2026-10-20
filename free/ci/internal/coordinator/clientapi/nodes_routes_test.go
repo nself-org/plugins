@@ -247,3 +247,28 @@ func TestNodesAuthzRotateKeyIDAndContentType(t *testing.T) {
 		t.Fatalf("form post = %d, runner calls %d", resp.StatusCode, len(nodeCalls()))
 	}
 }
+
+func TestNodesAuthzScopedMemberCannotReadNodes(t *testing.T) {
+	r := nodeRig(t)
+	tok := r.token("eve", roles.Member, time.Hour, "acme/app") // a member of one project
+	for _, path := range []string{PathNodes, PathNodesPfx + "n1"} {
+		st, b := r.do(r.client(), "GET", path, tok, "")
+		refused(t, st, b, 403, ReasonProject)
+	}
+	if got := nodeCalls(); len(got) != 0 {
+		t.Fatalf("ran %+v", got)
+	}
+}
+
+func TestNodesAuthzReadFailureHidesStoreText(t *testing.T) {
+	r := nodeRig(t)
+	nodeFake.Lock()
+	nodeFake.exit = 2
+	nodeFake.Unlock()
+	tok := r.token("bob", roles.Member, time.Hour, roles.AllProjects)
+	st, b := r.do(r.client(), "GET", PathNodes, tok, "")
+	var res NodeResult
+	if st != 422 || json.Unmarshal(b, &res) != nil || res.Exit != 2 || strings.Contains(res.Stdout+res.Stderr, "ran") {
+		t.Fatalf("%d %s", st, b)
+	}
+}

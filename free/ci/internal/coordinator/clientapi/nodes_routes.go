@@ -127,6 +127,12 @@ func (n nodeRoutes) handler(verb string, min roles.Role) http.Handler {
 			errServer.fail(w, err)
 			return
 		}
+		if (verb == "list" || verb == "show") && !wholeCoordinator(actor) {
+			// Node records name other projects' grants and trust settings; like a run the caller may not see,
+			// they are not shown to a caller scoped to some projects (decision 2026-10-20: fail closed).
+			errServer.fail(w, Failf(ReasonProject, "node information is coordinator-wide: it needs a grant on all projects"))
+			return
+		}
 		var run NodeRunner
 		if n.run != nil {
 			run = n.run()
@@ -140,12 +146,21 @@ func (n nodeRoutes) handler(verb string, min roles.Role) http.Handler {
 			errServer.fail(w, err)
 			return
 		}
+		if (verb == "list" || verb == "show") && res.Exit >= 2 {
+			// an infrastructure failure of a read: its text can carry store internals, a member must not get it
+			res = NodeResult{Exit: res.Exit, Stderr: "E607: the node registry could not be read\n"}
+		}
 		status := http.StatusOK
 		if res.Exit != 0 {
 			status = http.StatusUnprocessableEntity
 		}
 		writeJSON(w, status, res)
 	})
+}
+
+// wholeCoordinator reports whether actor is the operator or holds a grant on all projects.
+func wholeCoordinator(a roles.Actor) bool {
+	return a.Kind() == roles.KindOperator || slices.Contains(a.Projects(), roles.AllProjects)
 }
 
 // command validates the request and builds the runner's command.

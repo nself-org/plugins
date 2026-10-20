@@ -20,7 +20,9 @@ import (
 	"flag"
 	"io"
 	"os"
+	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -102,9 +104,32 @@ func (w *capWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// nodeSerial lets one upgrade or rotate run at a time in this process: the agent update engine keeps one
-// job per node in a package-level map, so two concurrent requests for a node would share it.
-var nodeSerial = make(chan struct{}, 1)
+// nodeBusy marks the nodes with an upgrade in flight ("*" is upgrade --all): the agent update engine keeps
+// one job per node in a package-level map, and a pull node's engine takes no node lock, so two runs on one
+// node would collide. A second request is refused (E664 conflict), not queued. The mark is released by the
+// worker goroutine when the handler returns, never by the request, so a client that gave up cannot reopen it.
+var nodeBusy = struct {
+	sync.Mutex
+	m map[string]bool
+}{m: map[string]bool{}}
+
+// claimNode marks cmd's node busy for an upgrade (or a rotate in upgrade mode) and returns the release.
+func claimNode(cmd clientapi.NodeCommand) (func(), error) {
+	if cmd.Verb != "upgrade" && !(cmd.Verb == "rotate" && slices.Contains(cmd.Args, "--mode=upgrade")) {
+		return func() {}, nil
+	}
+	key := cmd.Node
+	if key == "" {
+		key = "*"
+	}
+	nodeBusy.Lock()
+	defer nodeBusy.Unlock()
+	if nodeBusy.m["*"] || (key == "*" && len(nodeBusy.m) > 0) || nodeBusy.m[key] {
+		return nil, clientapi.Failf(clientapi.ReasonConflict, "an upgrade is already running on this coordinator for %s", map[bool]string{true: "the fleet", false: "this node"}[key == "*" || nodeBusy.m["*"]])
+	}
+	nodeBusy.m[key] = true
+	return func() { nodeBusy.Lock(); delete(nodeBusy.m, key); nodeBusy.Unlock() }, nil
+}
 
 // runNodeCommand is the clientapi.NodeRunner: it runs the local handler of cmd.Verb as actor.
 func runNodeCommand(ctx context.Context, actor string, cmd clientapi.NodeCommand) (clientapi.NodeResult, error) {
@@ -112,13 +137,9 @@ func runNodeCommand(ctx context.Context, actor string, cmd clientapi.NodeCommand
 	if st == nil {
 		return clientapi.NodeResult{}, clientapi.Failf(clientapi.ReasonNotFound, "node administration is not available on this server")
 	}
-	if cmd.Verb == "upgrade" || cmd.Verb == "rotate" {
-		select {
-		case nodeSerial <- struct{}{}:
-			defer func() { <-nodeSerial }()
-		case <-ctx.Done():
-			return clientapi.NodeResult{}, ctx.Err()
-		}
+	release, err := claimNode(cmd)
+	if err != nil {
+		return clientapi.NodeResult{}, err
 	}
 	var out, errw capWriter
 	env := lifecycle.Env{Out: &out, Err: &errw,
@@ -136,6 +157,7 @@ func runNodeCommand(ctx context.Context, actor string, cmd clientapi.NodeCommand
 	}
 	done := make(chan int, 1)
 	go func() {
+		defer release()
 		switch cmd.Verb {
 		case "set":
 			done <- runNodesSet(args, env, &out, &errw)
