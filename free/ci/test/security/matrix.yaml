@@ -1,0 +1,379 @@
+# P7-TRUST-17 matrix: item -> test. matrix_test.go checks it: every `test:` names a function of this
+# package, every `proof:` names a function that exists in the module package beside it, every item and
+# every threat row of hq architecture/ci-threat-model.md has a case, and every test of the suite is
+# named here. A `test:` line is a case this suite runs; `proof:` is an existing test of the owning
+# Ticket; `owner:` is the Ticket whose own acceptance carries the proof (its test lives in another repo,
+# on another host class or in a Ticket not yet merged).
+version: 1
+scenarios:
+  - id: scenario-7
+    item: public fork PR is untrusted, gets no secrets, runs on a hosted-disposable fake or gVisor with no LAN only, approval bound to the head SHA
+    cases:
+      - test: TestScenario7_PublicForkPR
+      - test: TestScenario7_OnlyLANNodeLeft
+      - test: TestScenario7_NoGVisorNoHostedWaits
+      - test: TestApprovalBoundToHeadSHA
+  - id: scenario-8
+    item: private-infrastructure work never reaches a hosted provider (jobs, source, artifacts, caches, logs) under LAN saturation
+    cases:
+      - test: TestScenario8_PrivateNeverHosted
+      - test: TestScenario8_LocalOnlyStaysOnPersonalNode
+directive_items:
+  - id: untrusted-pr-no-lan-no-secrets
+    item: untrusted PR cannot reach the trusted LAN or protected secrets
+    cases:
+      - test: TestScenario7_PublicForkPR
+      - test: TestUntrustedNeverReceivesSecret
+      - test: TestSecretNeverOnAHostedOrUntrustedRunner
+      - test: TestUntrustedNetworkScopeFloor
+  - id: private-only-never-external
+    item: private-only work never leaves private infrastructure
+    cases:
+      - test: TestScenario8_PrivateNeverHosted
+      - test: TestPlantedPRCannotAuthorizeHosted
+      - test: TestNoRequestReachesTelemetry
+  - id: scoped-runner-credentials
+    item: runner credentials are scoped (a node certificate is not a user certificate, a signature is bound to the lease holder)
+    cases:
+      - test: TestNodeCertRefusedByAdminAPI
+      - test: TestNodeListenerRefusesForeignAndRevokedCerts
+      - test: TestForgedEvidenceRefused
+  - id: revoked-runner-no-jobs
+    item: a revoked runner gets no jobs
+    cases:
+      - test: TestRevokedNodeGetsNoJob
+      - test: TestNodeListenerRefusesForeignAndRevokedCerts
+  - id: log-redaction
+    item: log redaction
+    cases:
+      - test: TestSecretValueNeverInOutput
+      - test: TestContainerGetsSecretNamesOnly
+  - id: no-workspace-leakage
+    item: no workspace leakage between attempts
+    cases:
+      - test: TestWorkspaceHygieneBetweenAttempts
+      - test: TestPerSlotUIDSeparation
+  - id: artifacts-authorized
+    item: artifacts stay authorized
+    cases:
+      - test: TestArtifactsStayAuthorized
+  - id: cache-respects-trust
+    item: the cache respects trust
+    cases:
+      - test: TestCacheRespectsTrust
+  - id: no-isolation-downgrade
+    item: no isolation downgrade
+    cases:
+      - test: TestRetryNeverLowersIsolation
+      - test: TestScenario7_NoGVisorNoHostedWaits
+  - id: forged-stale-evidence
+    item: forged or stale evidence cannot pass a current-revision gate
+    cases:
+      - test: TestStaleEvidenceNeverSatisfiesGate
+      - test: TestForgedEvidenceRefused
+      - test: TestSelfReportedAndUnverifiableEvidenceNeverGates
+  - id: authenticated-webhooks
+    item: webhooks and provider requests are authenticated
+    cases:
+      - test: TestWebhookAuthenticity
+      - test: TestRecordedForkPRToClassToPlacement
+  - id: authorized-control-plane
+    item: control-plane operations are authorized
+    cases:
+      - test: TestMemberCannotRunControlPlaneActions
+      - test: TestRunApprovalNeedsAnotherPerson
+      - test: TestRevokedTokenEndsAccess
+      - test: TestDecisionsAreAuditedAndTamperEvident
+  - id: prod-infra-ineligible
+    item: production infrastructure is CI-ineligible by default
+    cases:
+      - test: TestDeployHostNeverSelectedWithoutOverride
+      - test: TestDeployHostPlacementThroughDispatcher
+      - test: TestCoordinatorHostFloor
+review_additions:
+  - id: dispatcher-invariants
+    item: I01, I03 and I07 through invariants.CheckDispatcher against the real dispatcher (R-SEC-22)
+    cases:
+      - test: TestInvariant_I01
+      - test: TestInvariant_I03
+      - test: TestInvariant_I07
+  - id: planted-pr-policy
+    item: a planted PR widening policy (I16)
+    cases:
+      - test: TestPlantedPRCannotWidenPolicy
+      - test: TestPlantedPRCannotAuthorizeHosted
+      - test: TestRevisionMayTighten
+  - id: payload-to-class
+    item: recorded payload to facts to class, end to end (P7-HOST-05)
+    cases:
+      - test: TestRecordedForkPRToClassToPlacement
+  - id: approval-voided-by-push
+    item: approval voided by a push
+    cases:
+      - test: TestApprovalBoundToHeadSHA
+      - test: TestApprovalDoesNotTravel
+  - id: revoked-node-no-job
+    item: revoked node gets no job
+    cases:
+      - test: TestRevokedNodeGetsNoJob
+  - id: node-cert-admin-api
+    item: node certificate refused by the admin API
+    cases:
+      - test: TestNodeCertRefusedByAdminAPI
+  - id: untrusted-exclusion-onlink
+    item: untrusted cannot reach an exclusion address or an on-link prefix (I18)
+    cases:
+      - test: TestUntrustedCannotReachExclusionOrOnLink
+  - id: telemetry-zero
+    item: no request reaches a telemetry fake from the plugin or the agent in any mode (X15)
+    cases:
+      - test: TestNoRequestReachesTelemetry
+  - id: publication-profile
+    item: publication profile on a public fixture
+    cases:
+      - test: TestPublicationProfileOnPublicFixture
+  - id: cotenancy
+    item: untrusted never beside a secret-bearing attempt on one node
+    cases:
+      - test: TestCotenancyUntrustedNeverBesideSecrets
+  - id: uid-separation
+    item: per-slot UID separation
+    cases:
+      - test: TestPerSlotUIDSeparation
+  - id: lease-holder-signature
+    item: lease-holder-bound signatures
+    cases:
+      - test: TestForgedEvidenceRefused
+  - id: approval-checkout-binding
+    item: approval-to-checkout binding
+    cases:
+      - test: TestApprovalBindsLeaseCheckout
+threats:
+  - id: TM-01
+    cases:
+      - test: TestScenario7_PublicForkPR
+      - test: TestInvariant_I01
+      - test: TestInvariant_I07
+      - test: TestRecordedForkPRToClassToPlacement
+    also:
+      - {pkg: internal/secrets, proof: TestInvariant_I05}
+      - {pkg: internal/isolation/gvisor, proof: TestUntrustedAdhocSandboxed}
+  - id: TM-02
+    cases:
+      - test: TestCacheRespectsTrust
+      - test: TestStaleEvidenceNeverSatisfiesGate
+    also:
+      - {pkg: internal/authz, proof: TestInvariant_I11}
+      - {pkg: internal/attest, proof: TestInvariant_I13}
+  - id: TM-03
+    cases:
+      - test: TestSecretValueNeverInOutput
+    also:
+      - {pkg: internal/redact, proof: TestInvariant_I06}
+  - id: TM-04
+    cases:
+      - test: TestUntrustedCannotReachExclusionOrOnLink
+      - test: TestUntrustedNeverReceivesSecret
+      - test: TestNoRequestReachesTelemetry
+    also:
+      - {pkg: internal/netscope, proof: TestInvariant_I18}
+  - id: TM-05
+    cases:
+      - test: TestUntrustedCannotReachExclusionOrOnLink
+      - test: TestCotenancyUntrustedNeverBesideSecrets
+      - test: TestPerSlotUIDSeparation
+      - test: TestWorkspaceHygieneBetweenAttempts
+    also:
+      - {pkg: internal/hygiene, proof: TestInvariant_I08}
+      - {pkg: internal/hygiene, proof: TestInvariant_I17}
+  - id: TM-06
+    cases:
+      - test: TestInvariant_I01
+      - test: TestInvariant_I07
+    also:
+      - {pkg: internal/isolation/gvisor, proof: TestUntrustedAdhocSandboxed}
+  - id: TM-07
+    cases:
+      - test: TestRetryNeverLowersIsolation
+    also:
+      - {pkg: internal/trust, proof: TestInvariant_I10}
+      - {pkg: internal/isolation/container, proof: TestIntegrationNoSocketNoMountNoCapabilities}
+  - id: TM-08
+    cases:
+      - test: TestRetryNeverLowersIsolation
+      - test: TestScenario7_NoGVisorNoHostedWaits
+    also:
+      - {pkg: internal/trust, proof: TestInvariant_I04}
+  - id: TM-09
+    cases:
+      - test: TestWorkspaceHygieneBetweenAttempts
+    also:
+      - {pkg: internal/hygiene, proof: TestInvariant_I08}
+  - id: TM-10
+    also:
+      - {pkg: internal/isolation/container, proof: TestIntegrationForkBombStopsAtPidsLimit}
+      - {pkg: internal/isolation/container, proof: TestIntegrationMemoryHogIsKilledAndClassified}
+  - id: TM-11
+    cases:
+      - test: TestCotenancyUntrustedNeverBesideSecrets
+  - id: TM-12
+    cases:
+      - test: TestCacheRespectsTrust
+    also:
+      - {pkg: internal/authz, proof: TestInvariant_I11}
+    owner: P7-CACHE-11
+  - id: TM-13
+    cases:
+      - test: TestCacheRespectsTrust
+    owner: P7-CACHE-11
+  - id: TM-14
+    cases:
+      - test: TestArtifactsStayAuthorized
+    owner: P7-CACHE-11
+  - id: TM-15
+    cases:
+      - test: TestArtifactsStayAuthorized
+    owner: P7-CACHE-11
+  - id: TM-16
+    cases:
+      - test: TestSecretValueNeverInOutput
+    also:
+      - {pkg: internal/secrets, proof: TestInvariant_I06}
+    owner: P7-CACHE-11
+  - id: TM-17
+    cases:
+      - test: TestArtifactsStayAuthorized
+    also:
+      - {pkg: internal/attest, proof: TestInvariant_I13}
+    owner: P7-CACHE-11
+  - id: TM-18
+    cases:
+      - test: TestForgedEvidenceRefused
+    also:
+      - {pkg: internal/attest, proof: TestVerifyRemoteAdversarialFixtures}
+    owner: P7-CACHE-11
+  - id: TM-19
+    owner: P7-NODE-15
+  - id: TM-20
+    cases:
+      - test: TestRevokedNodeGetsNoJob
+      - test: TestForgedEvidenceRefused
+    also:
+      - {pkg: internal/attest, proof: TestVerifyRemoteInvariantI13Signed}
+      - {pkg: internal/hygiene, proof: TestInvariant_I17}
+  - id: TM-21
+    cases:
+      - test: TestNodeCertRefusedByAdminAPI
+      - test: TestRevokedTokenEndsAccess
+      - test: TestUntrustedNeverReceivesSecret
+    also:
+      - {pkg: internal/secrets, proof: TestInvariant_I05}
+  - id: TM-22
+    cases:
+      - test: TestPerSlotUIDSeparation
+    also:
+      - {pkg: internal/hygiene, proof: TestInvariant_I17}
+    owner: P7-NODE-31
+  - id: TM-23
+    cases:
+      - test: TestNodeCertRefusedByAdminAPI
+      - test: TestNodeListenerRefusesForeignAndRevokedCerts
+  - id: TM-24
+    cases:
+      - test: TestMemberCannotRunControlPlaneActions
+      - test: TestRunApprovalNeedsAnotherPerson
+      - test: TestRevokedTokenEndsAccess
+  - id: TM-25
+    cases:
+      - test: TestDecisionsAreAuditedAndTamperEvident
+    also:
+      - {pkg: internal/attest, proof: TestCheckpointRefusesEveryTamper}
+  - id: TM-26
+    cases:
+      - test: TestForgedEvidenceRefused
+    also:
+      - {pkg: internal/attest, proof: TestVerifyRemoteAdversarialFixtures}
+  - id: TM-27
+    cases:
+      - test: TestStaleEvidenceNeverSatisfiesGate
+    also:
+      - {pkg: internal/attest, proof: TestInvariant_I12}
+      - {pkg: internal/attest, proof: TestInvariant_I13}
+  - id: TM-28
+    cases:
+      - test: TestSelfReportedAndUnverifiableEvidenceNeverGates
+    also:
+      - {pkg: internal/attest, proof: TestInvariant_I13}
+  - id: TM-29
+    cases:
+      - test: TestSecretValueNeverInOutput
+    also:
+      - {pkg: internal/redact, proof: TestInvariant_I06}
+      - {pkg: internal/secrets, proof: TestInvariant_I06}
+  - id: TM-30
+    cases:
+      - test: TestContainerGetsSecretNamesOnly
+  - id: TM-31
+    cases:
+      - test: TestPlantedPRCannotWidenPolicy
+      - test: TestPlantedPRCannotAuthorizeHosted
+    also:
+      - {pkg: internal/trust, proof: TestInvariant_I09}
+      - {pkg: internal/trust, proof: TestInvariant_I16}
+      - {pkg: internal/policy, proof: TestPlantedPRIgnored}
+  - id: TM-32
+    cases:
+      - test: TestRecordedForkPRToClassToPlacement
+    owner: P7-TRUST-13
+  - id: TM-33
+    cases:
+      - test: TestWebhookAuthenticity
+    owner: P7-HOST-18
+  - id: TM-34
+    cases:
+      - test: TestApprovalBoundToHeadSHA
+      - test: TestApprovalDoesNotTravel
+      - test: TestApprovalBindsLeaseCheckout
+      - test: TestRunApprovalNeedsAnotherPerson
+  - id: TM-35
+    cases:
+      - test: TestScenario8_PrivateNeverHosted
+      - test: TestInvariant_I03
+      - test: TestPlantedPRCannotAuthorizeHosted
+  - id: TM-36
+    cases:
+      - test: TestNoRequestReachesTelemetry
+      - test: TestPublicationProfileOnPublicFixture
+  - id: TM-37
+    also:
+      - {pkg: internal/trust/source, proof: TestClassifyMachineInvokedCap}
+      - {pkg: internal/trust/source, proof: TestClassifyApplyCap}
+  - id: TM-38
+    also:
+      - {pkg: internal/sched, proof: TestInvariant_I19}
+    owner: P7-TRUST-27
+  - id: TM-39
+    owner: P7-NODE-07
+  - id: TM-40
+    owner: P7-NODE-03
+  - id: TM-41
+    cases:
+      - test: TestDeployHostNeverSelectedWithoutOverride
+      - test: TestDeployHostPlacementThroughDispatcher
+      - test: TestCoordinatorHostFloor
+    also:
+      - {pkg: internal/trust, proof: TestInvariant_I15}
+  - id: TM-42
+    owner: P7-TRUST-21
+  - id: TM-43
+    owner: P7-HOST-19
+  - id: TM-44
+    also:
+      - {pkg: internal/hygiene, proof: TestInvariant_I17}
+    owner: P7-TRUST-09
+  - id: TM-45
+    owner: P7-AUTO-11
+  - id: TM-46
+    owner: P7-AUTO-10
+  - id: TM-47
+    owner: P7-AUTO-03

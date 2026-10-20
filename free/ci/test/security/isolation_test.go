@@ -29,6 +29,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/hygiene"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/netscope"
+	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
@@ -37,7 +38,7 @@ func syntheticLAN() netscope.Facts {
 	return netscope.Facts{
 		OnLink:         []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24"), netip.MustParsePrefix("10.8.0.0/16"), netip.MustParsePrefix("2001:db8:10::/64")},
 		HostAddrs:      []netip.Addr{netip.MustParseAddr("192.168.1.5"), netip.MustParseAddr("2001:db8:10::5")},
-		Exclusion:      []netip.Prefix{netip.MustParsePrefix("203.0.113.50/32"), netip.MustParsePrefix("198.51.100.0/28")},
+		Exclusion:      []netip.Prefix{netip.MustParsePrefix("93.184.216.50/32"), netip.MustParsePrefix("8.8.8.0/28")},
 		ExclusionHosts: []string{"deploy.internal.example"},
 	}
 }
@@ -60,7 +61,7 @@ func TestUntrustedCannotReachExclusionOrOnLink(t *testing.T) {
 	f := syntheticLAN()
 	forbidden := []string{
 		"192.168.1.77", "192.168.1.5", "10.8.4.4", "10.0.0.1", "172.16.9.9", "192.168.200.1", // RFC1918, on-link and not
-		"203.0.113.50", "198.51.100.7", // deploy exclusion
+		"93.184.216.50", "8.8.8.7", // deploy exclusion (public addresses: only the exclusion set stops them)
 		"127.0.0.1", "169.254.169.254", "169.254.1.1", "100.64.0.1", "0.0.0.0", "224.0.0.1", // loopback, metadata, CGNAT, unspecified, multicast
 	}
 	for _, scope := range []model.NetworkScope{"restricted", "internet"} {
@@ -278,5 +279,34 @@ func TestWorkspaceHygieneBetweenAttempts(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("leaks %+v do not name the container", rep.Leaks)
+	}
+}
+
+// TestRetryNeverLowersIsolation is I10 (TM-07, TM-08): a retry, or a re-placement after a probe lowered a
+// node's level, keeps the floor of the attempt before it. Over every pair of levels the retry floor is
+// at least both, and the scheduler refuses a node below the previous attempt's level.
+func TestRetryNeverLowersIsolation(t *testing.T) {
+	levels := model.EnumValues("Isolation")
+	for _, prev := range levels {
+		for _, required := range levels {
+			got := trust.RetryIsolation(model.Isolation(prev), model.Isolation(required))
+			if trust.RankIsolation(got) < trust.RankIsolation(model.Isolation(prev)) || trust.RankIsolation(got) < trust.RankIsolation(model.Isolation(required)) {
+				t.Errorf("retry after %s with floor %s allowed %s", prev, required, got)
+			}
+		}
+	}
+	weak := lanRunner("container-node", 2)
+	weak.Decl.Isolation = "container"
+	world := func(previous map[string]model.Isolation) sched.World {
+		return sched.World{Runners: []sched.Runner{weak}, Policy: sched.Policy{Preset: "balanced", Trust: repoPolicy(t, "private", "owner")}, Costs: map[string]sched.Cost{},
+			Previous: map[string]string{}, PreviousIsolation: previous}
+	}
+	job := newJob("retry", "owner", "lan")
+	if res := sched.Place(world(nil), []sched.Job{job}); len(res.Placements) != 1 {
+		t.Fatalf("control: a first attempt on a container node was not placed: %+v", res.Explanations)
+	}
+	res := sched.Place(world(map[string]model.Isolation{job.Key: "vm"}), []sched.Job{job})
+	if len(res.Placements) != 0 {
+		t.Fatalf("a retry after a vm attempt was placed on a container node: %+v", res.Placements)
 	}
 }
