@@ -210,17 +210,17 @@ func parseLooseAddr(s string) (netip.Addr, bool) {
 	}
 	parts := strings.Split(s, ".")
 	if len(parts) != 4 {
-		return netip.Addr{}, false
+		return parseLegacyIPv4(s)
 	}
 	var b [4]byte
 	for i, part := range parts {
 		if part == "" || len(part) > 3 {
-			return netip.Addr{}, false
+			return parseLegacyIPv4(s)
 		}
 		n := 0
 		for _, c := range part {
 			if c < '0' || c > '9' {
-				return netip.Addr{}, false
+				return parseLegacyIPv4(s)
 			}
 			n = n*10 + int(c-'0')
 		}
