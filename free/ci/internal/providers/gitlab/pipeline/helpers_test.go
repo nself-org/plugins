@@ -101,7 +101,9 @@ type fakeGL struct {
 	Pipes      map[int64]*fakePipe
 	NextID     int64
 	Include    []byte // the include file raw at any sha
+	Root       []byte // the main .gitlab-ci.yml raw at any ref; nil answers 404
 	IncludeSt  int
+	BranchSt   int             // a status for the branch route (404 = the ref does not exist)
 	Merged     string          // the merged_yaml the lint route answers; empty derives it from Include
 	LintSt     int             // a status other than 200 for the lint route
 	LintBad    bool            // valid: false
@@ -113,7 +115,7 @@ type fakeGL struct {
 func newFakeGL(t *testing.T) *fakeGL {
 	t.Helper()
 	f := &fakeGL{t: t, Version: "18.2.1-ee", Login: testLogin, DefaultBranch: "main", Visibility: "public", CreateMode: "201",
-		Pipes: map[int64]*fakePipe{}, NextID: 9000, Include: pinnedInclude(t)}
+		Pipes: map[int64]*fakePipe{}, NextID: 9000, Include: pinnedInclude(t), Root: rootFile()}
 	f.srv = httptest.NewTLSServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.srv.Close)
 	return f
@@ -245,6 +247,18 @@ func (f *fakeGL) serve(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, 200, map[string]any{"valid": !f.LintBad, "merged_yaml": merged})
 	case strings.HasPrefix(p, projectBase+"/pipelines/"):
 		f.pipeline(w, req, strings.TrimPrefix(p, projectBase))
+	case strings.HasPrefix(p, projectBase+"/repository/branches/"):
+		if f.BranchSt != 0 {
+			w.WriteHeader(f.BranchSt)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"name": "x"})
+	case p == projectBase+"/repository/files/.gitlab-ci.yml/raw":
+		if f.Root == nil {
+			w.WriteHeader(404)
+			return
+		}
+		_, _ = w.Write(f.Root)
 	case strings.HasPrefix(p, projectBase+"/repository/files/") && strings.HasSuffix(p, "/raw"):
 		if f.IncludeSt != 0 {
 			w.WriteHeader(f.IncludeSt)
@@ -483,3 +497,7 @@ func mergedFrom(t *testing.T, include []byte, edit func(map[string]any)) string 
 	}
 	return string(out)
 }
+
+// rootFile is a main .gitlab-ci.yml that declares every pipeline input and maps it to a variable
+// (the snippet `providers gitlab init` prints), so the dispatch may use the inputs transport.
+func rootFile() []byte { return []byte(gitlabtmpl.RootSnippet()) }

@@ -3,44 +3,78 @@
 # agent-source: source
 # agent-commit: 839d28593b2409647f172553274791852aacd8b3
 #
-# One hosted attempt of the nSelf CI fabric. The coordinator creates the pipeline through the pipeline
-# API with `inputs` (GitLab 17.10 and later) or with variables of the same names; either way every
-# value reaches the job as an environment variable and never as part of a script. The job runs only
-# when NSELF_CI_NONCE is set on a pipeline created through the API, so the project's own pipelines are
-# untouched and a pipeline someone starts by hand or by a push never runs it. Include this file from
-# .gitlab-ci.yml and forward the inputs if you use them. Edit the template and run the command again.
-spec:
-  inputs:
-    spec:
-      default: ''
-    spec_digest:
-      default: ''
-    revision:
-      default: ''
-    fetch_ref:
-      default: ''
-    attempt:
-      default: ''
-    nonce:
-      default: ''
-    compat:
-      default: v1.5
-    runner_tag:
-      default: saas-linux-small-amd64
-    timeout_minutes:
-      default: '60'
----
-variables:
-  NSELF_CI_SPEC: '$[[ inputs.spec ]]'
-  NSELF_CI_SPEC_DIGEST: '$[[ inputs.spec_digest ]]'
-  NSELF_CI_REVISION: '$[[ inputs.revision ]]'
-  NSELF_CI_FETCH_REF: '$[[ inputs.fetch_ref ]]'
-  NSELF_CI_ATTEMPT: '$[[ inputs.attempt ]]'
-  NSELF_CI_NONCE: '$[[ inputs.nonce ]]'
-  NSELF_CI_COMPAT: '$[[ inputs.compat ]]'
-  NSELF_CI_RUNNER_TAG: '$[[ inputs.runner_tag ]]'
-  NSELF_CI_TIMEOUT_MINUTES: '$[[ inputs.timeout_minutes ]]'
-
+# One hosted attempt of the nSelf CI fabric. The coordinator creates a pipeline through the pipeline API
+# and the values reach the job as NSELF_CI_* environment variables, never as part of a script. The job
+# runs only when NSELF_CI_NONCE is set on a pipeline created through the API, so the project's own
+# pipelines are untouched and a pipeline someone starts by hand or by a push never runs it.
+# Include this file from the main .gitlab-ci.yml:
+#   include:
+#     - local: .gitlab/nself-ci.gitlab-ci.yml
+# The values travel as pipeline variables on every GitLab version. GitLab 17.10 and later can take them
+# as pipeline inputs instead (new projects may refuse pipeline variables). Inputs must be declared in
+# the main .gitlab-ci.yml, so use this as its start (the coordinator sends inputs only when the main
+# file at the pipeline ref declares all of them, and variables otherwise):
+#   spec:
+#     inputs:
+#       spec_digest:
+#         default: ''
+#       revision:
+#         default: ''
+#       fetch_ref:
+#         default: ''
+#       attempt:
+#         default: ''
+#       nonce:
+#         default: ''
+#       compat:
+#         default: ''
+#       runner_tag:
+#         default: ''
+#       timeout_minutes:
+#         default: ''
+#       spec_0:
+#         default: ''
+#       spec_1:
+#         default: ''
+#       spec_2:
+#         default: ''
+#       spec_3:
+#         default: ''
+#       spec_4:
+#         default: ''
+#       spec_5:
+#         default: ''
+#       spec_6:
+#         default: ''
+#       spec_7:
+#         default: ''
+#       spec_8:
+#         default: ''
+#       spec_9:
+#         default: ''
+#   ---
+#   variables:
+#     NSELF_CI_SPEC_DIGEST: '$[[ inputs.spec_digest ]]'
+#     NSELF_CI_REVISION: '$[[ inputs.revision ]]'
+#     NSELF_CI_FETCH_REF: '$[[ inputs.fetch_ref ]]'
+#     NSELF_CI_ATTEMPT: '$[[ inputs.attempt ]]'
+#     NSELF_CI_NONCE: '$[[ inputs.nonce ]]'
+#     NSELF_CI_COMPAT: '$[[ inputs.compat ]]'
+#     NSELF_CI_RUNNER_TAG: '$[[ inputs.runner_tag ]]'
+#     NSELF_CI_TIMEOUT_MINUTES: '$[[ inputs.timeout_minutes ]]'
+#     NSELF_CI_SPEC_0: '$[[ inputs.spec_0 ]]'
+#     NSELF_CI_SPEC_1: '$[[ inputs.spec_1 ]]'
+#     NSELF_CI_SPEC_2: '$[[ inputs.spec_2 ]]'
+#     NSELF_CI_SPEC_3: '$[[ inputs.spec_3 ]]'
+#     NSELF_CI_SPEC_4: '$[[ inputs.spec_4 ]]'
+#     NSELF_CI_SPEC_5: '$[[ inputs.spec_5 ]]'
+#     NSELF_CI_SPEC_6: '$[[ inputs.spec_6 ]]'
+#     NSELF_CI_SPEC_7: '$[[ inputs.spec_7 ]]'
+#     NSELF_CI_SPEC_8: '$[[ inputs.spec_8 ]]'
+#     NSELF_CI_SPEC_9: '$[[ inputs.spec_9 ]]'
+#   include:
+#     - local: .gitlab/nself-ci.gitlab-ci.yml
+# Edit the template and run the command again.
 workflow:
   name: '$NSELF_CI_PIPELINE_NAME'
   rules:
@@ -74,7 +108,8 @@ nself-ci:
       git -C "$src" fetch --quiet --depth 1 https://github.com/nself-org/plugins.git 839d28593b2409647f172553274791852aacd8b3
       git -C "$src" checkout --quiet FETCH_HEAD
       (cd "$src/free/ci" && CGO_ENABLED=0 go build -mod=vendor -trimpath -o "$work/nself-ci-agent" ./cmd/agent)
-      printf '%s' "$NSELF_CI_SPEC" | base64 -d | gzip -dc > "$work/job.json"
+      spec="${NSELF_CI_SPEC:-}${NSELF_CI_SPEC_0:-}${NSELF_CI_SPEC_1:-}${NSELF_CI_SPEC_2:-}${NSELF_CI_SPEC_3:-}${NSELF_CI_SPEC_4:-}${NSELF_CI_SPEC_5:-}${NSELF_CI_SPEC_6:-}${NSELF_CI_SPEC_7:-}${NSELF_CI_SPEC_8:-}${NSELF_CI_SPEC_9:-}"
+      printf '%s' "$spec" | base64 -d | gzip -dc > "$work/job.json"
       sum="$(sha256sum "$work/job.json" | cut -d ' ' -f 1)"
       if [ "sha256:$sum" != "$NSELF_CI_SPEC_DIGEST" ]; then
         echo "the job spec does not match its digest" >&2

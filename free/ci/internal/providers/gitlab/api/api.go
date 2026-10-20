@@ -31,6 +31,7 @@ const (
 	PipelineCancel   = "/projects/{id}/pipelines/{pipeline}/cancel"
 	CreatePipeline   = "/projects/{id}/pipeline"
 	LintPath         = "/projects/{id}/ci/lint"
+	BranchPath       = "/projects/{id}/repository/branches/{branch}"
 	StatusPath       = "/projects/{id}/statuses/{sha}"
 	artifactsZipPath = "/jobs/{job}/artifacts"
 	rawFilePath      = "/repository/files/{file}/raw"

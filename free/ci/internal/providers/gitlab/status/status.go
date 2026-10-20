@@ -16,12 +16,16 @@ package status
 //          Status has one; the project is "owner/repo" of the Status (a nested group is not reachable
 //          through report.Status, whose Validate refuses a slash); the token never appears in a URL,
 //          an error or a log; the matcher is pure: it reads the remote text and the policy's api_url
-//          host and calls nothing else.
+//          host and calls nothing else, and it matches only when compat.V15() (v1.4 has no GitLab
+//          reporter).
 
 import (
 	"context"
 	"net/url"
 	"strings"
+	"sync"
+
+	"github.com/nself-org/cli/sdk/go/v2/compat"
 
 	"github.com/nself-org/plugins/free/ci/internal/providers/gitlab/api"
 	"github.com/nself-org/plugins/free/ci/internal/providers/rest"
@@ -91,8 +95,11 @@ type body struct {
 // body builds the request body of a status.
 func (r *Reporter) body(s report.Status) body {
 	var ph Phase
-	if r.Phase != nil {
-		ph = r.Phase(s)
+	phaseMu.RLock()
+	hook := r.Phase
+	phaseMu.RUnlock()
+	if hook != nil {
+		ph = hook(s)
 	}
 	return body{State: Map(s.State, ph), Name: report.Context, Description: report.Truncate(s.Description), TargetURL: s.TargetURL}
 }
@@ -143,6 +150,9 @@ func remoteHost(remote string) string {
 // Match reports whether remote lives on the GitLab host of providers.gitlab.api_url. A policy that
 // cannot be read matches nothing, so a broken policy never captures a GitHub remote.
 func Match(remote string) bool {
+	if !compat.V15() { // compat.V15(P7-HOST-06): no GitLab reporter -> v1.4 behaviour, a GitLab remote has none
+		return false
+	}
 	s, err := runtime.CurrentSettings(context.Background())
 	if err != nil {
 		return false
@@ -158,4 +168,17 @@ func Match(remote string) bool {
 // RegistrationError is what init() could not register, if anything.
 var RegistrationError error
 
-func init() { RegistrationError = report.RegisterReporter(Kind, Match, &Reporter{}) }
+var registered = &Reporter{}
+
+func init() { RegistrationError = report.RegisterReporter(Kind, Match, registered) }
+
+var phaseMu sync.RWMutex
+
+// UsePhase installs the hook that refines pending to running and failed to canceled for the registered
+// reporter (the coordinator start calls it with a function that reads the run's projection; with none
+// installed only pending, success and failed are posted). Passing nil removes it.
+func UsePhase(fn func(report.Status) Phase) {
+	phaseMu.Lock()
+	defer phaseMu.Unlock()
+	registered.Phase = fn
+}

@@ -10,6 +10,8 @@ package pipeline_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -74,8 +76,8 @@ func TestDispatchModes(t *testing.T) {
 						t.Errorf("input %s = %q, want %q", k, inputs[k], v)
 					}
 				}
-				if len(vars) != 0 || inputs["spec"] == "" || !strings.HasPrefix(inputs["spec_digest"], "sha256:") {
-					t.Errorf("inputs mode sent variables %v or lost the spec", vars)
+				if len(vars) != 0 || inputs["spec_0"] == "" || inputs["spec"] != "" || !strings.HasPrefix(inputs["spec_digest"], "sha256:") {
+					t.Errorf("inputs mode sent variables %v or lost the spec chunks: %v", vars, inputs)
 				}
 				return
 			}
@@ -213,7 +215,11 @@ func TestSpecLimit(t *testing.T) {
 		t.Fatalf("a spec inside the limit: %v", err)
 	}
 	_, inputs, _ := createBody(t, f.requests("POST", "/pipeline")[0])
-	if n := len(inputs["spec"]); n == 0 || n > pipeline.MaxSpecChars {
+	joined := ""
+	for i := 0; i < 10; i++ {
+		joined += inputs["spec_"+strconv.Itoa(i)]
+	}
+	if n := len(joined); n == 0 || n > pipeline.MaxSpecChars {
 		t.Errorf("sent spec length %d", n)
 	}
 
@@ -319,4 +325,157 @@ func TestIdempotentDispatch(t *testing.T) {
 		_, err := p.Dispatch(ctx, attemptFor("attempt-1", 2))
 		wantCode(t, err, "E708", "attempt.superseded")
 	})
+}
+
+// TestInputsNeedTheMainFile proves the inputs transport is chosen only when the instance takes inputs
+// AND the main .gitlab-ci.yml at the dispatch ref declares every input (GitLab refuses inputs the main
+// file does not declare and an included file cannot receive them): a missing main file, a main file
+// without a spec header and one that declares only some inputs all fall back to variables.
+func TestInputsNeedTheMainFile(t *testing.T) {
+	v15(t)
+	partial := []byte("spec:\n  inputs:\n    nonce:\n      default: ''\n---\nvariables:\n  X: y\n")
+	for name, root := range map[string][]byte{"declares all": rootFile(), "missing": nil, "no spec header": []byte("variables:\n  X: y\n"),
+		"declares some": partial, "not yaml": []byte("a: [unclosed")} {
+		f := newFakeGL(t)
+		f.Root = root
+		if _, err := f.provider(options{}).Dispatch(context.Background(), attemptFor("attempt-1", 1)); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		_, inputs, vars := createBody(t, f.requests("POST", "/pipeline")[0])
+		if wantInputs := name == "declares all"; wantInputs != (len(inputs) > 0) || wantInputs == (len(vars) > 0) {
+			t.Errorf("%s: inputs=%d variables=%d", name, len(inputs), len(vars))
+		}
+	}
+}
+
+// TestInputChunks proves a spec longer than one input's 1 KB limit is split into spec_N chunks of at
+// most ChunkChars characters, no more than SpecChunks of them, that join back to exactly the spec the
+// variables transport sends, and that the inputs stay inside GitLab's limit of 20 per pipeline.
+func TestInputChunks(t *testing.T) {
+	v15(t)
+	a := attemptFor("attempt-1", 1)
+	x := uint32(7)
+	a.Spec = make([]byte, 5000)
+	for i := range a.Spec {
+		x ^= x << 13
+		x ^= x >> 17
+		x ^= x << 5
+		a.Spec[i] = byte(x)
+	}
+	fi, fv := newFakeGL(t), newFakeGL(t)
+	fv.Root = nil
+	if _, err := fi.provider(options{}).Dispatch(context.Background(), a); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fv.provider(options{}).Dispatch(context.Background(), a); err != nil {
+		t.Fatal(err)
+	}
+	_, inputs, _ := createBody(t, fi.requests("POST", "/pipeline")[0])
+	_, _, vars := createBody(t, fv.requests("POST", "/pipeline")[0])
+	joined, chunks := "", 0
+	for i := 0; i < 10; i++ {
+		c := inputs["spec_"+strconv.Itoa(i)]
+		if len(c) > 1000 {
+			t.Errorf("chunk %d has %d characters", i, len(c))
+		}
+		if c != "" {
+			chunks++
+		}
+		joined += c
+	}
+	if chunks < 6 || joined != vars["NSELF_CI_SPEC"] || len(inputs) > 20 {
+		t.Errorf("chunks=%d inputs=%d joined==variables spec: %v", chunks, len(inputs), joined == vars["NSELF_CI_SPEC"])
+	}
+}
+
+// TestCreate400IsDiagnosed proves a 400 from the create call is not always blamed on the pipeline
+// variables: when the ref does not exist the answer says so (the untrusted ref was never created),
+// otherwise variables mode gets the remediation and inputs mode a plain E702.
+func TestCreate400IsDiagnosed(t *testing.T) {
+	v15(t)
+	f := newFakeGL(t)
+	f.Version, f.CreateMode, f.BranchSt = "16.11.2", "400", 404
+	a := attemptFor("attempt-1", 1)
+	a.Trust = "untrusted"
+	_, err := f.provider(options{}).Dispatch(context.Background(), a)
+	var pe *providers.Error
+	if !errors.As(err, &pe) || pe.Code != "E702" || !strings.HasPrefix(pe.Reason, "ref.missing: create the branch nself-ci/untrusted") {
+		t.Fatalf("missing ref: %v", err)
+	}
+	f = newFakeGL(t)
+	f.Version, f.CreateMode = "16.11.2", "400"
+	_, err = f.provider(options{}).Dispatch(context.Background(), attemptFor("attempt-2", 1))
+	wantCode(t, err, "E702", pipeline.RemediationVariables)
+}
+
+// TestJournalFences proves the dispatch journal refuses what would run the wrong pipeline: a second
+// dispatch of one attempt number with another revision or spec (attempt.conflict), a late dispatch of an
+// earlier try after a later retry began (it must not cancel the retry), and an attempt number below 1.
+func TestJournalFences(t *testing.T) {
+	v15(t)
+	ctx := context.Background()
+	f := newFakeGL(t)
+	p := f.provider(options{})
+	if _, err := p.Dispatch(ctx, attemptFor("job-1", 1)); err != nil {
+		t.Fatal(err)
+	}
+	other := attemptFor("job-1", 1)
+	other.Revision = strings.Repeat("a", 40)
+	_, err := p.Dispatch(ctx, other)
+	wantCode(t, err, "E708", "attempt.conflict")
+	spec := attemptFor("job-1", 1)
+	spec.Spec = []byte(`{"kind":"other"}`)
+	_, err = p.Dispatch(ctx, spec)
+	wantCode(t, err, "E708", "attempt.conflict")
+
+	f = newFakeGL(t)
+	p = f.provider(options{})
+	first, err := p.Dispatch(ctx, attemptFor("job-1", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	retry, err := p.Dispatch(ctx, attemptFor("job-1-retry-2", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.Dispatch(ctx, attemptFor("job-1", 5)) // the first try, delivered late
+	wantCode(t, err, "E708", "attempt.superseded")
+	if f.Pipes[retryID(t, retry)].Cancelled != 0 {
+		t.Error("the late dispatch of the first try cancelled the retry's pipeline")
+	}
+	if f.Pipes[retryID(t, first)].Cancelled != 1 {
+		t.Error("the first try's pipeline was not cancelled by its retry")
+	}
+	for _, n := range []int{0, -3} {
+		_, err = p.Dispatch(ctx, attemptFor("job-9", n))
+		wantCode(t, err, "E708", "attempt.number")
+	}
+}
+
+func retryID(t *testing.T, h providers.Handle) int64 {
+	t.Helper()
+	i := strings.LastIndex(h.RunID, "/")
+	n, err := strconv.ParseInt(h.RunID[i+1:], 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// TestTooManyCandidates proves a crowded ref is a retryable E704 and never a silent cut: with more
+// pipelines on the ref than the search reads, the lookup refuses to guess.
+func TestTooManyCandidates(t *testing.T) {
+	v15(t)
+	f := newFakeGL(t)
+	f.CreateMode = "502-exists"
+	f.Extra = func(first *fakePipe) {
+		for i := 0; i < 120; i++ {
+			f.NextID++
+			twin := *first
+			twin.ID, twin.Name, twin.User = f.NextID, "other work", "someone"
+			f.Pipes[twin.ID] = &twin
+		}
+	}
+	_, err := f.provider(options{Window: 5 * time.Second}).Dispatch(context.Background(), attemptFor("attempt-1", 1))
+	wantCode(t, err, "E704", "run.candidates")
 }

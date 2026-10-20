@@ -5,8 +5,10 @@ package pipeline
 // Outputs: a request (allowlisted values, gzip+base64 spec, digest) and the body of the create call in
 //          either transport.
 // Constraints: anything outside the allowlists is E708 before a request is made; the encoded spec is at
-//          most MaxSpecChars (the documented limit of a pipeline variable value); inputs and variables
-//          carry the same values under the names the template declares.
+//          most MaxSpecChars (the documented limit of a pipeline variable value); variables carry one
+//          NSELF_CI_SPEC value, inputs carry the same spec as spec_0..spec_9 chunks of ChunkChars
+//          because a string inside a pipeline input must be under 1 KB (GitLab inputs documentation,
+//          read 2026-10-19); every other value has the same name in both transports.
 
 import (
 	"bytes"
@@ -100,6 +102,8 @@ func plan(a providers.Attempt) (request, error) {
 		return r, api.Refuse("repo")
 	case !attemptRE.MatchString(a.ID):
 		return r, api.Refuse("attempt")
+	case a.N < 1:
+		return r, api.Refuse("attempt.number")
 	case !revisionRE.MatchString(r.revision):
 		return r, api.Refuse("revision")
 	case a.FetchRef != "" && !fetchRefRE.MatchString(a.FetchRef):
@@ -166,11 +170,17 @@ func (r request) body(ref, nonce, mode string) createBody {
 	b := createBody{Ref: ref}
 	if mode == ModeInputs {
 		b.Inputs = map[string]string{}
+		for i := 0; i*gitlabtmpl.ChunkChars < len(r.spec); i++ {
+			b.Inputs["spec_"+strconv.Itoa(i)] = r.spec[i*gitlabtmpl.ChunkChars : min(len(r.spec), (i+1)*gitlabtmpl.ChunkChars)]
+		}
 	}
 	for _, v := range r.values(nonce) {
-		if mode == ModeInputs {
+		switch {
+		case mode == ModeInputs && v[1] == "spec":
+			// carried by the spec_N chunks above
+		case mode == ModeInputs:
 			b.Inputs[v[1]] = v[2]
-		} else {
+		default:
 			b.Variables = append(b.Variables, variable{Key: v[0], Value: v[2], VariableType: "env_var"})
 		}
 	}

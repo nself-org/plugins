@@ -174,6 +174,7 @@ func operatorPolicy(t *testing.T, kv map[string]string) {
 // and never for a GitHub remote, with the default api_url and with a self-managed one from the
 // operator's policy, and a remote on another host matches neither.
 func TestReporterRouting(t *testing.T) {
+	t.Setenv("NSELF_V15", "1")
 	if status.RegistrationError != nil {
 		t.Fatal(status.RegistrationError)
 	}
@@ -221,5 +222,46 @@ func TestReporterRouting(t *testing.T) {
 		if _, isGitLab := rep.(*status.Reporter); isGitLab {
 			t.Error("a GitHub remote resolved to the GitLab adapter")
 		}
+	}
+	t.Setenv("NSELF_V15", "")
+	if kind := kindOf("https://gitlab.lan/acme/widgets.git"); kind != "" {
+		t.Errorf("v1.4 routed a GitLab remote to %q; it has no GitLab reporter", kind)
+	}
+}
+
+// TestUsePhase proves the hook the coordinator installs reaches the registered reporter: with it a pending
+// status posts as running and a failure as canceled, and removing it restores the plain mapping.
+func TestUsePhase(t *testing.T) {
+	t.Setenv("NSELF_V15", "1")
+	_, rep, ok := report.DefaultRegistry.Resolve("https://gitlab.com/acme/widgets.git")
+	gl, isGitLab := rep.(*status.Reporter)
+	if !ok || !isGitLab {
+		t.Fatalf("no registered reporter: %T", rep)
+	}
+	c, calls := fake(t, 201)
+	gl.Client = func(context.Context) (*rest.Client, error) { return c, nil }
+	t.Cleanup(func() { gl.Client = nil; status.UsePhase(nil) })
+	post := func(s report.State) string {
+		if err := gl.Post(context.Background(), report.Status{Owner: "acme", Repo: "widgets", Revision: sha, State: s, Description: "d"}); err != nil {
+			t.Fatal(err)
+		}
+		got := calls()
+		return got[len(got)-1].Body["state"].(string)
+	}
+	if post(report.Pending) != "pending" || post(report.Failure) != "failed" {
+		t.Fatal("plain mapping")
+	}
+	status.UsePhase(func(s report.Status) status.Phase {
+		if s.State == report.Pending {
+			return status.PhaseRunning
+		}
+		return status.PhaseCanceled
+	})
+	if post(report.Pending) != "running" || post(report.Failure) != "canceled" || post(report.Success) != "success" {
+		t.Error("the hook did not refine the states")
+	}
+	status.UsePhase(nil)
+	if post(report.Pending) != "pending" {
+		t.Error("removing the hook did not restore the mapping")
 	}
 }

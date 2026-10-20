@@ -66,10 +66,10 @@ func TestRenderShape(t *testing.T) {
 		}
 		docs = append(docs, d)
 	}
-	if len(docs) != 2 {
-		t.Fatalf("documents = %d, want the spec header and the body", len(docs))
+	if len(docs) != 1 {
+		t.Fatalf("documents = %d, want one (the include file has no spec header)", len(docs))
 	}
-	job, ok := docs[1][Job].(map[string]any)
+	job, ok := docs[0][Job].(map[string]any)
 	if !ok {
 		t.Fatalf("no job %q in %v", Job, docs[1])
 	}
@@ -77,7 +77,7 @@ func TestRenderShape(t *testing.T) {
 	if len(rules) != 1 || !strings.Contains(rules[0].(map[string]any)["if"].(string), VarNonce) {
 		t.Errorf("the job must run only for a nonce: %v", job["rules"])
 	}
-	for _, want := range []string{"$[[ inputs.nonce ]]", "$NSELF_CI_RUNNER_TAG", "@sha256:"} {
+	for _, want := range []string{"#   spec:", "#     NSELF_CI_NONCE: '$[[ inputs.nonce ]]'", "$NSELF_CI_RUNNER_TAG", "@sha256:", "${NSELF_CI_SPEC_9:-}"} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("rendered file lost %q", want)
 		}
@@ -104,5 +104,38 @@ func TestGoldenFile(t *testing.T) {
 	want, err := os.ReadFile(path)
 	if err != nil || string(want) != string(out) {
 		t.Fatalf("golden differs (run UPDATE_GOLDEN=1 go test ./templates/gitlab): %v", err)
+	}
+}
+
+// TestInputsTable proves the root snippet and the input table agree: 18 inputs (inside GitLab's limit of
+// 20 per pipeline), every spec chunk fits the 1 KB limit of an input string, the chunks together hold
+// the 10,000 characters of a variable, the snippet parses, and its variables are the ones the job reads.
+func TestInputsTable(t *testing.T) {
+	in := Inputs()
+	if len(in) != SpecChunks+8 || len(in) > 20 || SpecChunks*ChunkChars < 10000 || ChunkChars >= 1024 {
+		t.Fatalf("inputs %d chunks %dx%d", len(in), SpecChunks, ChunkChars)
+	}
+	dec := yaml.NewDecoder(strings.NewReader(RootSnippet()))
+	var docs []map[string]any
+	for {
+		var d map[string]any
+		if err := dec.Decode(&d); err != nil {
+			break
+		}
+		docs = append(docs, d)
+	}
+	if len(docs) != 2 {
+		t.Fatalf("snippet documents = %d", len(docs))
+	}
+	declared := docs[0]["spec"].(map[string]any)["inputs"].(map[string]any)
+	vars := docs[1]["variables"].(map[string]any)
+	out, _ := Render(Options{AgentCommit: fixtureCommit})
+	for _, i := range in {
+		if _, ok := declared[i.Name]; !ok || vars[i.Var] != "$[[ inputs."+i.Name+" ]]" {
+			t.Errorf("input %s is not declared and mapped to %s", i.Name, i.Var)
+		}
+		if i.Var != VarSpec+"_"+strings.TrimPrefix(i.Name, "spec_") && !strings.Contains(string(out), i.Var) {
+			t.Errorf("the job never reads %s", i.Var)
+		}
 	}
 }

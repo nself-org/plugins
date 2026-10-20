@@ -62,7 +62,7 @@ func (p *Provider) Collect(ctx context.Context, h providers.Handle) (providers.C
 	if err != nil {
 		return providers.Collected{}, api.Unavailable("journal")
 	}
-	if !ok {
+	if !ok || rec.Project != project.Path { // a handle never points Collect at another project
 		return providers.Collected{}, api.NotEvidence(ReasonIntentUnknown)
 	}
 	if latest, found, lerr := p.jrnl().Latest(ctx, rec.Lineage); lerr != nil || !found || latest.Nonce != h.Nonce {

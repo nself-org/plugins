@@ -17,6 +17,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
+	"strconv"
 	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -31,13 +33,38 @@ type Record struct {
 	SpecDigest string `json:"spec_digest"`
 	Nonce      string `json:"nonce"`
 	Ref        string `json:"ref"`
+	Project    string `json:"project"`
 	// Mode is how the values travel: ModeInputs or ModeVariables. A pipeline begun before keeps its
 	// mode, so Collect knows which echo to look for.
 	Mode string `json:"mode"`
 }
 
-// errSuperseded means a higher attempt number was already begun.
+// errSuperseded means a higher attempt number, or a later retry of the job, was already begun.
 var errSuperseded = errors.New("attempt number superseded")
+
+// errConflict means the same attempt id and number was begun before for another project, revision or
+// spec: the first pipeline does not answer for this dispatch, and no second one is made.
+var errConflict = errors.New("attempt number begun with other values")
+
+var ordinalRE = regexp.MustCompile(`(?:-retry-|\.a)([0-9]+)$`)
+
+// retryOrdinal is the number a retry suffix carries ("job-retry-2", "row.a3"); the original id is 0.
+func retryOrdinal(attemptID string) int {
+	m := ordinalRE.FindStringSubmatch(attemptID)
+	if m == nil {
+		return 0
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// sameDispatch reports whether two records ask for the same pipeline.
+func sameDispatch(a, b Record) bool {
+	return a.Project == b.Project && a.Revision == b.Revision && a.SpecDigest == b.SpecDigest
+}
 
 // Journal remembers what was dispatched.
 type Journal interface {
@@ -68,9 +95,14 @@ func (j *memJournal) Begin(_ context.Context, r Record) (Record, *Record, error)
 	old, ok := j.latest[r.Lineage]
 	switch {
 	case ok && old.Attempt == r.Attempt && old.N == r.N:
+		if !sameDispatch(old, r) {
+			return Record{}, nil, errConflict
+		}
 		return old, nil, nil
 	case ok && old.Attempt == r.Attempt && old.N > r.N:
 		return Record{}, nil, errSuperseded
+	case ok && old.Attempt != r.Attempt && retryOrdinal(r.Attempt) < retryOrdinal(old.Attempt):
+		return Record{}, nil, errSuperseded // a late dispatch of an earlier try never replaces a later retry
 	}
 	j.latest[r.Lineage], j.nonces[r.Nonce] = r, r
 	if ok {
@@ -140,6 +172,8 @@ func (j storeJournal) Begin(ctx context.Context, r Record) (Record, *Record, err
 		switch {
 		case err != nil:
 			return Record{}, nil, err
+		case found && old.Attempt != r.Attempt && retryOrdinal(r.Attempt) < retryOrdinal(old.Attempt):
+			return Record{}, nil, errSuperseded
 		case found && old.Attempt != r.Attempt: // a retry with a new attempt id: it supersedes the row
 			previous = &old
 			if err = j.st.DispatchIntentDelete(ctx, "latest:"+r.Lineage, pending); err != nil {
@@ -148,6 +182,9 @@ func (j storeJournal) Begin(ctx context.Context, r Record) (Record, *Record, err
 		case d.Epoch > int64(r.N):
 			return Record{}, nil, errSuperseded
 		case d.Epoch == int64(r.N) && found:
+			if !sameDispatch(old, r) {
+				return Record{}, nil, errConflict
+			}
 			return old, nil, nil
 		case found:
 			previous = &old

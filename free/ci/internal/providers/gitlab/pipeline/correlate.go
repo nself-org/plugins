@@ -8,8 +8,8 @@ package pipeline
 //          NSELF_CI_NONCE variable equals it; the match must be exactly one pipeline, created by the
 //          token's own user, else E705 run.ambiguous (a pipeline echoing our nonce by another user is a
 //          planted one, never adopted); candidates are the pipelines on the ref, created by the API,
-//          updated inside the window of two minutes either side of the dispatch, newest first, at most
-//          maxCandidates; the search repeats every five seconds for up to FindWindow and never resends
+//          updated inside the window of two minutes either side of the dispatch, newest first; more
+//          than maxCandidates of them is a retryable E704, never a silent cut; the search repeats every five seconds for up to FindWindow and never resends
 //          the create call.
 
 import (
@@ -24,7 +24,7 @@ import (
 	gitlabtmpl "github.com/nself-org/plugins/free/ci/templates/gitlab"
 )
 
-const maxCandidates = 50
+const maxCandidates = 100
 
 // echoes reports whether the pipeline carries the nonce: in its name, or (variables mode) as the
 // value of its NSELF_CI_NONCE variable.
@@ -76,8 +76,8 @@ func (p *Provider) findPipeline(ctx context.Context, c *rest.Client, project api
 	if err != nil {
 		return 0, false, err
 	}
-	if len(candidates) > maxCandidates {
-		candidates = candidates[:maxCandidates]
+	if len(candidates) > maxCandidates { // never drop candidates silently: the target could be among them
+		return 0, false, api.Unavailable("run.candidates")
 	}
 	var titled, mine []api.Pipeline
 	for _, cand := range candidates {

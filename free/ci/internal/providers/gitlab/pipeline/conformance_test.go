@@ -39,13 +39,13 @@ import (
 const (
 	fixtureNonce = "00000000000000000000000000000001"
 	fixtureSpec  = `{"kind":"test","run":["true"]}`
-	project      = "/api/v4/projects/acme/widgets"
 )
 
 type variant struct {
 	name, version string
-	inputs        bool // the instance takes pipeline inputs
-	listing       bool // the create answers 502 and the pipeline is found by nonce
+	prefix        string // the API root: gitlab.com is /api/v4, a self-managed instance under a relative URL root is /gitlab/api/v4
+	inputs        bool   // the instance takes pipeline inputs and the main file declares them
+	listing       bool   // the create answers 502 and the pipeline is found by nonce
 }
 
 func pipeBody(status string, inputs bool) string {
@@ -65,6 +65,7 @@ func x(method, path, query string, status int, body string) conformance.Exchange
 func writeFixtures(t *testing.T, v variant) string {
 	t.Helper()
 	dir := t.TempDir()
+	project := v.prefix + "/projects/acme/widgets"
 	sum := sha256.Sum256([]byte(fixtureSpec))
 	vars, _ := json.Marshal([]map[string]string{{"key": "NSELF_CI_NONCE", "value": fixtureNonce}, {"key": "NSELF_CI_SPEC_DIGEST", "value": "sha256:" + hex.EncodeToString(sum[:])}})
 	zipB64 := base64.StdEncoding.EncodeToString(evidenceZip(t, "attempt-1", testRevision, nil))
@@ -73,14 +74,17 @@ func writeFixtures(t *testing.T, v variant) string {
 	pipe := project + "/pipelines/9001"
 	ex := []conformance.Exchange{
 		x("GET", project, "", 200, `{"id":77,"default_branch":"main","visibility":"public"}`),
-		x("GET", "/api/v4/version", "", 200, fmt.Sprintf(`{"version":%q,"revision":"abcdef0"}`, v.version)),
+		x("GET", v.prefix+"/version", "", 200, fmt.Sprintf(`{"version":%q,"revision":"abcdef0"}`, v.version)),
+	}
+	if v.inputs { // 17.10 and later: the main file at the ref is read to see whether it declares the inputs
+		ex = append(ex, x("GET", project+"/repository/files/.gitlab-ci.yml/raw", "ref=main", 200, string(rootFile())))
 	}
 	if !v.listing {
 		ex = append(ex, x("POST", project+"/pipeline", "", 201, pipeBody("created", v.inputs)))
 	} else {
 		ex = append(ex,
 			x("POST", project+"/pipeline", "", 502, ""),
-			x("GET", "/api/v4/user", "", 200, `{"username":"`+testLogin+`"}`),
+			x("GET", v.prefix+"/user", "", 200, `{"username":"`+testLogin+`"}`),
 			x("GET", project+"/pipelines", "order_by=id&page=1&per_page=100&ref=main&sort=desc&source=api&updated_after=2025-12-31T23%3A58%3A00Z&updated_before=2026-01-01T00%3A02%3A00Z", 200,
 				`[{"id":9001,"status":"created","source":"api","ref":"main","sha":"`+testHeadSHA+`"}]`),
 			x("GET", pipe, "", 200, pipeBody("created", v.inputs)))
@@ -96,7 +100,7 @@ func writeFixtures(t *testing.T, v variant) string {
 		x("POST", pipe+"/cancel", "", 200, pipeBody("success", v.inputs)), // already finished: still success
 		x("GET", pipe, "", 200, pipeBody("success", v.inputs)))
 	if !v.listing {
-		ex = append(ex, x("GET", "/api/v4/user", "", 200, `{"username":"`+testLogin+`"}`))
+		ex = append(ex, x("GET", v.prefix+"/user", "", 200, `{"username":"`+testLogin+`"}`))
 	}
 	ex = append(ex, x("GET", pipe+"/jobs", "include_retried=true&page=1&per_page=100", 200, string(jobs)))
 	if !v.inputs {
@@ -125,10 +129,10 @@ func writeFixtures(t *testing.T, v variant) string {
 func TestConformance(t *testing.T) {
 	v15(t)
 	for _, v := range []variant{
-		{"gitlab.com inputs", "18.2.1-ee", true, false},
-		{"gitlab.com inputs, create then 502", "18.2.1-ee", true, true},
-		{"self-managed variables", "15.11.13-ee", false, false},
-		{"self-managed variables, create then 502", "15.11.13-ee", false, true},
+		{"gitlab.com inputs", "18.2.1-ee", "/api/v4", true, false},
+		{"gitlab.com inputs, create then 502", "18.2.1-ee", "/api/v4", true, true},
+		{"self-managed variables", "15.11.13-ee", "/gitlab/api/v4", false, false},
+		{"self-managed variables, create then 502", "15.11.13-ee", "/gitlab/api/v4", false, true},
 	} {
 		t.Run(v.name, func(t *testing.T) { runConformance(t, v) })
 	}
@@ -146,7 +150,7 @@ func runConformance(t *testing.T, v variant) {
 			}
 			front := httptest.NewTLSServer(httputil.NewSingleHostReverseProxy(u))
 			t.Cleanup(front.Close)
-			client := &rest.Client{BaseURL: front.URL + "/api/v4", AllowPrivateBase: true, UserAgent: "pipeline-test", Provider: "gitlab",
+			client := &rest.Client{BaseURL: front.URL + v.prefix, AllowPrivateBase: true, UserAgent: "pipeline-test", Provider: "gitlab",
 				TLSConfig: front.Client().Transport.(*http.Transport).TLSClientConfig, Auth: func(context.Context) (string, error) { return testToken, nil }}
 			return pipeline.New(pipeline.Config{Client: func(context.Context) (*rest.Client, error) { return client, nil },
 				Clock: clk.Now, Nonce: func() (string, error) { return fixtureNonce, nil },

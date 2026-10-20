@@ -4,6 +4,8 @@ package gitlabtmpl
 // Inputs:  Options (the pinned agent commit; Version 0 is Current).
 // Outputs: the include file bytes, deterministic for the same Options; the template version.
 // Constraints: output depends on nothing but Options and the embedded files (golden-tested); the
+//          include file reads its values from the NSELF_CI_* environment only (pipeline variables, or
+//          the main file's variables when it maps pipeline inputs), so it has no spec: header; the
 //          template is read with {{ }} delimiters so GitLab's $[[ inputs.x ]] and $VAR stay literal;
 //          an agent commit is 40 or 64 hex; HeaderMarker, VersionOf and AgentCommitOf are what the
 //          pipeline provider and the drift check read back from a rendered file.
@@ -13,6 +15,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"text/template"
 )
 
@@ -45,6 +48,45 @@ const (
 	VarTimeout   = "NSELF_CI_TIMEOUT_MINUTES"
 )
 
+// Pipeline inputs (GitLab 17.10 and later) are optional: a string inside an input must be less than 1 KB, so
+// the spec travels as SpecChunks inputs of at most ChunkChars characters each; GitLab refuses inputs the
+// main .gitlab-ci.yml does not declare and a pipeline takes at most 20, so the main file declares exactly
+// the Inputs below (SpecChunks + 8 = 18) and maps each to the variable of the same row.
+const (
+	SpecChunks = 10
+	ChunkChars = 1000
+)
+
+// Input is one pipeline input and the variable the main file maps it to.
+type Input struct{ Name, Var string }
+
+// Inputs lists every input the main .gitlab-ci.yml declares for the inputs transport, in order.
+func Inputs() []Input {
+	in := []Input{{"spec_digest", VarDigest}, {"revision", VarRevision}, {"fetch_ref", VarFetchRef}, {"attempt", VarAttempt}, {"nonce", VarNonce},
+		{"compat", VarCompat}, {"runner_tag", VarRunnerTag}, {"timeout_minutes", VarTimeout}}
+	for i := 0; i < SpecChunks; i++ {
+		in = append(in, Input{"spec_" + strconv.Itoa(i), VarSpec + "_" + strconv.Itoa(i)})
+	}
+	return in
+}
+
+// RootSnippet is the YAML the project's main .gitlab-ci.yml needs to take pipeline inputs: the
+// declaration, the mapping to variables and the include. The dispatch uses inputs only when the main
+// file at the pipeline ref already declares all of them; otherwise it sends variables.
+func RootSnippet() string {
+	var b bytes.Buffer
+	b.WriteString("spec:\n  inputs:\n")
+	for _, in := range Inputs() {
+		b.WriteString("    " + in.Name + ":\n      default: ''\n")
+	}
+	b.WriteString("---\nvariables:\n")
+	for _, in := range Inputs() {
+		b.WriteString("  " + in.Var + ": '$[[ inputs." + in.Name + " ]]'\n")
+	}
+	b.WriteString("include:\n  - local: " + Path + "\n")
+	return b.String()
+}
+
 // CompatModes is the set of compat values; Timeouts the timeout choices the coordinator rounds up to.
 var (
 	CompatModes = []string{"v1.4", "v1.5"}
@@ -73,10 +115,6 @@ func Render(o Options) ([]byte, error) {
 	if !commitRE.MatchString(o.AgentCommit) {
 		return nil, fmt.Errorf("the agent needs the full commit id of nself-org/plugins")
 	}
-	tags, err := TagNames()
-	if err != nil {
-		return nil, err
-	}
 	image, err := Image()
 	if err != nil {
 		return nil, err
@@ -89,8 +127,12 @@ func Render(o Options) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	var snippet bytes.Buffer
+	for _, ln := range strings.Split(strings.TrimRight(RootSnippet(), "\n"), "\n") {
+		snippet.WriteString("#   " + ln + "\n")
+	}
 	var buf bytes.Buffer
-	err = t.Execute(&buf, map[string]any{"Version": o.Version, "AgentCommit": o.AgentCommit, "Image": image, "DefaultTag": tags[0]})
+	err = t.Execute(&buf, map[string]any{"Version": o.Version, "AgentCommit": o.AgentCommit, "Image": image, "Snippet": strings.TrimRight(snippet.String(), "\n")})
 	if err != nil {
 		return nil, err
 	}

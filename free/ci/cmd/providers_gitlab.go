@@ -125,8 +125,10 @@ func gitlabWrite(f gitlabInitFlags, root string, doc []byte, commit string) int 
 		return 0
 	}
 	fmt.Printf("wrote %s (template v%d, agent commit %s)\n", gitlabtmpl.Path, gitlabtmpl.Current, commit[:12])
-	fmt.Printf("next: add `include: [{local: %s}]` to .gitlab-ci.yml (forward the pipeline inputs if you use them),\n", gitlabtmpl.Path)
-	fmt.Printf("      commit both to the default branch, then run: nself ci providers gitlab init --check\n")
+	fmt.Printf("next: add `include: [{local: %s}]` to .gitlab-ci.yml, commit both to the default branch,\n", gitlabtmpl.Path)
+	fmt.Printf("      then run: nself ci providers gitlab init --check\n")
+	fmt.Printf("notes: the values travel as pipeline variables; for GitLab 17.10+ pipeline inputs copy the snippet in the file header\n")
+	fmt.Printf("       into .gitlab-ci.yml. Keep protected CI/CD variables out of this project: the default-branch pipeline can read them.\n")
 	return 0
 }
 
