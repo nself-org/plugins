@@ -449,23 +449,34 @@ func TestLogWriterKeepsNothingAfterTheCapNoteAcrossARestart(t *testing.T) {
 	}
 }
 
-func TestLogWriterLineOfInvalidBytesFitsTheTailWindow(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "wide.jsonl")
-	w, err := OpenLog(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := strings.Repeat("\xff", protocol.MaxFrame-200) // one byte in the frame, three in the log line
-	if ok, err := w.Append(logOf(1, text)); err != nil || !ok {
-		t.Fatalf("append: %v %v", ok, err)
-	}
-	_ = w.Close()
-	w, err = OpenLog(path)
-	if err != nil {
-		t.Fatalf("a widened line must still be found after a restart: %v", err)
-	}
-	defer w.Close()
-	if w.Last() != 1 {
-		t.Fatalf("tail %d", w.Last())
+func TestLogWriterExpandedLineFitsTheTailWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		unit string
+	}{
+		{"invalid UTF-8", "\xff"},
+		{"Unicode separator", "\u2028"},
+		{"escaped control", "\x00"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "wide.jsonl")
+			w, err := OpenLog(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			text := strings.Repeat(tc.unit, (protocol.MaxFrame-200)/len(tc.unit))
+			if ok, err := w.Append(logOf(1, text)); err != nil || !ok {
+				t.Fatalf("append: %v %v", ok, err)
+			}
+			_ = w.Close()
+			w, err = OpenLog(path)
+			if err != nil {
+				t.Fatalf("a widened line must still be found after a restart: %v", err)
+			}
+			defer w.Close()
+			if w.Last() != 1 {
+				t.Fatalf("tail %d", w.Last())
+			}
+		})
 	}
 }

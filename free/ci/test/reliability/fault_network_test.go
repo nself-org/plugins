@@ -19,6 +19,7 @@ func TestFaultPartitionPastTTL(t *testing.T) {
 	h := l.start(jobSpec{iter: 100, idempotent: true, infraMax: 1})
 	atts := h.waitAttempt(1, 60*time.Second, "leased", "running")
 	first := h.runnerOf(atts[0].ID)
+	original := atts[0]
 	fi := l.index(first)
 	h.waitRenewed(atts[0].ID)
 	until(t, 30*time.Second, "the job to beat", func() bool { return l.lines(fi, "/tmp/beats") >= 3 }, h.diagText)
@@ -46,6 +47,7 @@ func TestFaultPartitionPastTTL(t *testing.T) {
 	}
 	l.heal(fi)
 	l.waitConnected(30*time.Second, first)
+	l.assertStaleTraffic(original.ID, original.Epoch)
 
 	res := h.result(2 * time.Minute)
 	if res.Exit != 0 || res.Summary.Jobs[0].N != 2 {

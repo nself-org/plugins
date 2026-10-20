@@ -12,6 +12,7 @@ package reliability
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -112,4 +113,23 @@ func (l *lab) attemptState(attempt string) string {
 		l.t.Fatal(err)
 	}
 	return string(s)
+}
+
+// assertStaleTraffic checks the coordinator admission boundary after a fault heals.
+// Both a late result and a late log must retain the old fence and be refused.
+func (l *lab) assertStaleTraffic(attempt string, epoch int64) {
+	l.t.Helper()
+	for _, tc := range []struct {
+		name  string
+		check func(context.Context, string, int64) error
+	}{
+		{"result", l.c.eng.Result},
+		{"log", l.c.eng.Fence},
+	} {
+		err := tc.check(context.Background(), "lease-"+attempt, epoch)
+		var coded *store.Error
+		if !errors.As(err, &coded) || coded.Code != "E662" {
+			l.t.Errorf("late %s for %s: got %v, want E662", tc.name, attempt, err)
+		}
+	}
 }
