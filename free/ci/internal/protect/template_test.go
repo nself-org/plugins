@@ -120,20 +120,16 @@ func TestMutationPatchesApplyShape(t *testing.T) {
 }
 
 // A checkout-built engine cannot infer operator provenance from a fetched PR.
-<<<<<<< HEAD
 // Its override is scoped to disposable hosted runners, without secrets or writes,
 // and only a head in this very repository gets it: a fork head stays untrusted.
-=======
-// Its override is scoped to disposable hosted runners, without secrets or writes.
->>>>>>> 7ddde49 (fix(ci): audit operator trust inside disposable hosted workflow VMs)
 func TestHostedSourceWorkflowTrust(t *testing.T) {
 	for _, tc := range []struct {
 		file, job, command, runner string
 		calls                      int
 	}{
-		{"../../.github/workflows/nself-ci-source.yml", "nself-ci-source", `"$NSELF_CI_BIN"`, "ubuntu-latest", 1},
+{"../../.github/workflows/nself-ci-source.yml", "nself-ci-source", `"$NSELF_CI_BIN"`, "ubuntu-latest", 1},
 		{"../../.github/workflows/ci-scenarios.yml", "scenarios", ".drill-bin/nself-ci", "${{ matrix.os }}", 2},
-	} {
+} {
 		t.Run(tc.job, func(t *testing.T) {
 			d, raw := readWorkflow(t, tc.file)
 			job, ok := d.Jobs[tc.job]
@@ -142,7 +138,7 @@ func TestHostedSourceWorkflowTrust(t *testing.T) {
 			}
 			if len(d.Perm) != 1 || d.Perm["contents"] != "read" || strings.Contains(strings.ReplaceAll(raw, " ", ""), "${{secrets.") || strings.Contains(raw, "self-hosted") {
 				t.Fatal("operator override requires disposable hosted execution, no secrets and a read-only token")
-         }
+			}
 			if !strings.Contains(raw, "NSELF_CI_TRUST: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'owner' || '' }}") {
 				t.Fatal("the audited override must be set only for a head in this repository")
 			}
@@ -152,7 +148,7 @@ func TestHostedSourceWorkflowTrust(t *testing.T) {
 					if !strings.HasPrefix(strings.TrimSpace(line), tc.command+" ") {
 						continue
 					}
-				calls++
+					calls++
 				}
 				if strings.Contains(step.Run, tc.command+" ") && !strings.Contains(step.Run, `--trust "$NSELF_CI_TRUST"`) {
 					t.Fatalf("missing audited operator override: %s", step.Run)
