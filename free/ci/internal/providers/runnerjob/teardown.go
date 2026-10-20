@@ -131,7 +131,15 @@ func (s *Sweeper) sweepRepo(ctx context.Context, led *Ledger, k RepoKey, now tim
 		return errors.Join(append(errs, err)...)
 	}
 	for _, h := range handles {
-		errs = append(errs, m.Deregister(ctx, k.Repo, h))
+		if err = m.Deregister(ctx, k.Repo, h); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		for _, row := range open { // the registration is gone: its ledger row and demand slot go with it
+			if row.Handle == h {
+				errs = append(errs, led.MarkGone(ctx, row))
+			}
+		}
 	}
 	return errors.Join(errs...)
 }

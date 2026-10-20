@@ -148,7 +148,7 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 // cleanup is tried once in the job's own image, as it ran before the helper image existed.
 // It returns why the cleanup did not run or did not finish (nil when none is needed or it ran clean).
 func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) error {
-	run.Interactive, run.RunnerRoot = false, "" // the helper has no stdin and no runner root
+	run.Interactive, run.RunnerRoot, run.EnvFile = false, "", "" // the helper has no stdin, runner root or environment
 	helper, err := e.cleanupOnce(s, run)
 	if err == nil || !helper {
 		return err

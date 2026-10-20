@@ -468,3 +468,28 @@ func TestPlannedContainerRunnerRoot(t *testing.T) {
 		t.Fatalf("the runner tmpfs value changed: %q", RunnerRootTmpfs())
 	}
 }
+
+// TestPlannedContainerBackstopRequiresTheEnvFile (gp-gemini): a run that has an environment but whose command
+// leaves out --env-file is refused; with the pipe on fd 3 nobody would read it and the writer would wait.
+func TestPlannedContainerBackstopRequiresTheEnvFile(t *testing.T) {
+	fakeRuntime(t, "ok\n", "0")
+	args := []string{"run", "--rm", "--interactive", "--name", "nself-ci-x", "--label", "nself.ci.attempt=x", "--user", fixtureUID(), "--network=none", "--pids-limit", "64", "--memory", "64m", "--cpus", "1",
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only"}
+	cmd := func(extra ...string) ContainerCommand {
+		return ContainerCommand{Binary: "docker", Args: append(append(append([]string(nil), args...), extra...), "alpine:3.19", "true")}
+	}
+	run := ContainerRun{Name: "nself-ci-x", Image: "alpine:3.19", AttemptID: "x", Interactive: true, EnvFile: envFileFD}
+	if err := checkContainerCommand(cmd(), run); err == nil || !strings.Contains(err.Error(), "missing --env-file") {
+		t.Fatalf("a run with an environment and no --env-file must be refused, got %v", err)
+	}
+	if err := checkContainerCommand(cmd("--env-file", envFileFD), run); err != nil {
+		t.Fatalf("with the fd 3 env file it passes: %v", err)
+	}
+	run.EnvFile = ""
+	run.Interactive = false
+	noFlag := ContainerCommand{Binary: "docker", Args: append(append([]string(nil), args[:2]...), args[3:]...)}
+	noFlag.Args = append(noFlag.Args, "alpine:3.19", "true")
+	if err := checkContainerCommand(noFlag, run); err != nil {
+		t.Fatalf("a run with no environment (the cleanup helper) needs no --env-file: %v", err)
+	}
+}

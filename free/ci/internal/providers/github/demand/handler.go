@@ -94,7 +94,7 @@ func ascii(s string) bool {
 
 // labelsAllowed applies the fixed label set.
 func labelsAllowed(labels []string, jitLabel string) bool {
-	var self, mine bool
+	var self, mine, x64, arm bool
 	for _, l := range labels {
 		if !ascii(l) { // strings.ToLower folds "lİnux" to "linux", which GitHub's own match does not
 			return false
@@ -104,12 +104,16 @@ func labelsAllowed(labels []string, jitLabel string) bool {
 			self = true
 		case strings.ToLower(jitLabel):
 			mine = true
-		case "linux", "x64", "arm64":
+		case "linux":
+		case "x64":
+			x64 = true
+		case "arm64":
+			arm = true
 		default:
 			return false
 		}
 	}
-	return self && mine
+	return self && mine && !(x64 && arm) // a job that asks for both architectures can never be matched by one runner
 }
 
 // Synthesize implements providers.DemandHandler.

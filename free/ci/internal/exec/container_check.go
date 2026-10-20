@@ -101,6 +101,9 @@ func checkContainerCommand(c ContainerCommand, run ContainerRun) error {
 			return bad("missing " + want)
 		}
 	}
+	if run.EnvFile != "" && !named["--env-file"] {
+		return bad("missing --env-file: the environment pipe would never be read")
+	}
 	if run.RunnerRoot != "" && run.RunnerRoot != RunnerRootPath {
 		return bad("runner root is not " + RunnerRootPath)
 	}

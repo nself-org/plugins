@@ -136,3 +136,35 @@ func TestSweepIsDormantInV14AndUnbound(t *testing.T) {
 		t.Fatal("name or cadence")
 	}
 }
+
+// TestSweepFreesTheSlotOfAnOrphanItRemoves (gp-gemini): the minter lists a registration as an orphan (idle for
+// more than 70 minutes) and the sweep removes it; the ledger row and the demand's slot go with it, they do not
+// wait for the six-hour backstop.
+func TestSweepFreesTheSlotOfAnOrphanItRemoves(t *testing.T) {
+	use(t)
+	led := runnerjob.CurrentLedger()
+	ctx := context.Background()
+	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "40", 1); !ok {
+		t.Fatal("reserve")
+	}
+	if _, err := deliver(goodNode(), "attempt-orphan", runnerJob(t, "40")); err != nil {
+		t.Fatal(err)
+	}
+	forge.mu.Lock()
+	forge.orphanAfter["repo:101"] = true // the forge reports the registration of this attempt as an idle orphan
+	forge.mu.Unlock()
+	advance(75 * time.Minute)
+	if err := sweeper().Reconcile(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	if forge.alive() != 0 {
+		t.Fatalf("the orphan registration should be gone, %d left", forge.alive())
+	}
+	row, _, _ := ledgerRunner("attempt-orphan")
+	if row.State != "gone" {
+		t.Fatalf("the ledger row of a removed orphan is %q", row.State)
+	}
+	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "41", 1); !ok {
+		t.Fatal("the slot of the removed orphan must be free")
+	}
+}
