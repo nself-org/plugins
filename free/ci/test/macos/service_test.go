@@ -76,6 +76,10 @@ func (l *leg) upgradeSwap() {
 	if out, rc := l.sudo(agentPath + " version"); rc != 0 || !strings.HasPrefix(out, "nself-ci-agent ") {
 		t.Errorf("the swapped binary does not run: rc=%d %q", rc, out)
 	}
+	// The agent can swap files inside bin, but not the bin directory itself (its parent belongs to root).
+	if out, rc := l.sudo("sudo -u " + agentUser + " mv /opt/nself-ci-agent/bin /opt/nself-ci-agent/bin.old 2>&1"); rc == 0 {
+		t.Errorf("the agent user renamed its own bin directory: %s", out)
+	}
 	if out, rc := l.sudo("sudo -u " + jobUser(1) + " sh -c 'cp " + agentPath + " " + next + "' 2>&1"); rc == 0 {
 		t.Errorf("a job user could write into the agent directory: %s", out)
 	}

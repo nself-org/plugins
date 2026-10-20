@@ -44,13 +44,73 @@ func TestVerifyChecksTheRangeAndTheUniquenessOfEveryId(t *testing.T) {
 func TestTheRootShellRunsOnlyARootOwnedCopyOfTheAgent(t *testing.T) {
 	a := agentScript(".up")
 	mustContain(t, "agent", a,
-		"install -o nself-ci -g nself-ci -m 0755 ./.up /opt/nself-ci-agent/bin/nself-ci-agent",
 		"install -d -o root -g wheel -m 0755 /Library/PrivilegedHelperTools",
 		"install -o root -g wheel -m 0755 ./.up /Library/PrivilegedHelperTools/org.nself.ci-agent")
 	mustContain(t, "uninstall", uninstallScript(), "rm -f /Library/PrivilegedHelperTools/org.nself.ci-agent")
 	if TrustedPath == agentPath || strings.HasPrefix(TrustedPath, agentDir) {
 		t.Fatal("the trusted copy must not live where the agent user can replace it")
 	}
+}
+
+// Root must never create, chown or write an entry INSIDE a directory the agent user owns: the agent
+// could have swapped the name for a symlink (or hard-linked a root file in), and root would follow it.
+func TestRootWritesNothingInsideADirectoryTheAgentOwns(t *testing.T) {
+	a := agentScript(".up")
+	mustContain(t, "agent", a,
+		"sudo -n -u nself-ci sh -c 'rm -f /opt/nself-ci-agent/bin/.upload.new && cat > /opt/nself-ci-agent/bin/.upload.new && chmod 0755 /opt/nself-ci-agent/bin/.upload.new && mv -f /opt/nself-ci-agent/bin/.upload.new /opt/nself-ci-agent/bin/nself-ci-agent' < ./.up")
+	if strings.Contains(a, "install -o nself-ci") {
+		t.Fatal("root installs the binary straight into the agent-owned bin directory")
+	}
+	d := dirsScript(2)
+	mustContain(t, "dirs", d,
+		"install -d -o root -g wheel -m 0755 /opt/nself-ci-agent\n", "install -d -o nself-ci -g nself-ci -m 0755 /opt/nself-ci-agent/bin",
+		"install -d -o root -g wheel -m 0755 /var/log/nself-ci-agent", "chown -h nself-ci:nself-ci /var/log/nself-ci-agent/agent.log")
+	if strings.Contains(d, "-R") {
+		t.Fatalf("a recursive walk in the dirs script:\n%s", d)
+	}
+}
+
+func TestEveryScriptFixesItsPATH(t *testing.T) {
+	for name, s := range map[string]string{
+		"users": usersScript(2), "dirs": dirsScript(2), "sudoers": sudoersScript(), "list": listJobUsersScript(), "remove": removeSlotScript(2),
+		"agent": agentScript(".up"), "verify": verifyScript(2), "uninstall": uninstallScript(), "plist": plistScript(), "bootout": bootoutScript(), "xcode": xcodeProbeScript(""),
+	} {
+		if !strings.HasPrefix(s, "set -eu\nPATH=/usr/bin:/bin:/usr/sbin:/sbin\nexport PATH\n") {
+			t.Errorf("%s: does not fix PATH first:\n%s", name, s)
+		}
+	}
+}
+
+func TestTheSudoersRuleGoesBeforeASurplusUserIsRetired(t *testing.T) {
+	n, _, err := fullInstall(t, 1, func(n *fakeMac) { n.users = "nself-ci-job-1\nnself-ci-job-2\n" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	sudoers, retire := -1, -1
+	for i, s := range n.scripts() {
+		if strings.Contains(s, "visudo -cf") {
+			sudoers = i
+		}
+		if strings.Contains(s, "echo kept; exit 0") {
+			retire = i
+		}
+	}
+	if sudoers < 0 || retire < 0 || sudoers > retire {
+		t.Fatalf("sudoers script at %d, retire at %d: the rule must go first", sudoers, retire)
+	}
+}
+
+func TestAnIdThatStillOwnsFilesIsNotReused(t *testing.T) {
+	u := usersScript(1)
+	mustContain(t, "users", u, `find "$d" -xdev -uid "$i" -print`, "/Users/Shared", "/Volumes/*")
+	un := uninstallScript()
+	mustContain(t, "uninstall", un, `find "$d" -xdev -user "$u" -depth -delete`, "/private/tmp", `crontab -r -u "$u"`)
+}
+
+func TestJobUsersAreDeniedCronAndAt(t *testing.T) {
+	mustContain(t, "users", usersScript(2), "/var/at/cron.deny", "/var/at/at.deny", `grep -qx "$u" "$f" || echo "$u" >> "$f"`)
+	mustContain(t, "uninstall", uninstallScript(), `sed -i '' '/^nself-ci/d' "$f"`)
+	mustContain(t, "remove", removeSlotScript(2), `crontab -r -u "$u"`, `pgrep -u "$u"`)
 }
 
 func TestPerUserSystemFoldersDoNotKeepASlotAlive(t *testing.T) {
@@ -86,4 +146,12 @@ func TestXcodeLicenseIsExitCode69Only(t *testing.T) {
 	if got := xcodeWarning("absent"); got != "" {
 		t.Fatalf("absent Xcode warned: %q", got)
 	}
+}
+
+func TestRootNeverWalksATreeTheAgentOwns(t *testing.T) {
+	d := dirsScript(2)
+	if strings.Contains(d, "chown -R") || strings.Contains(d, "chmod -R") {
+		t.Fatalf("a root-run recursive chown or chmod over the agent's state directory:\n%s", d)
+	}
+	mustContain(t, "dirs", d, "install -d -o nself-ci -g nself-ci -m 0700 /var/db/nself-ci-agent")
 }

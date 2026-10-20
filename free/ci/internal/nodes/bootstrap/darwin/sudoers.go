@@ -32,8 +32,7 @@ func Sudoers(slots int) string {
 // sudoersScript validates the staged drop-in and installs it. The whole sudoers set is checked after
 // the install; on failure the previous drop-in comes back and /etc/sudoers is restored.
 func sudoersScript() string {
-	return fmt.Sprintf(`set -eu
-umask 077
+	return fmt.Sprintf(scriptHead+`umask 077
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/nself-ci.XXXXXX")
 cp /etc/sudoers "$tmp/sudoers.orig"
 had=0
@@ -64,8 +63,10 @@ ok=1
 // uid and gid is unique on the machine, each user's group id is its group's, and the root-owned copy of the
 // agent (the only binary uninstall may run as root) is root's alone.
 func verifyScript(slots int) string {
-	return fmt.Sprintf(`set -eu
-[ "$(stat -f '%%Lp %%Su' %[2]s)" = "700 %[1]s" ]
+	return fmt.Sprintf(scriptHead+`[ "$(stat -f '%%Lp %%Su' %[2]s)" = "700 %[1]s" ]
+[ "$(stat -f '%%Lp %%Su' %[10]s)" = "755 root" ]
+[ "$(stat -f '%%Lp %%Su' %[10]s/bin)" = "755 %[1]s" ]
+[ "$(stat -f '%%Lp %%Su' %[11]s)" = "755 root" ]
 for u in %[1]s $(for n in %[3]s; do echo %[1]s-job-$n; done); do
   dscl . -read "/Users/$u" UniqueID >/dev/null
   [ "$(dscl . -read "/Users/$u" IsHidden | awk '{print $NF}')" = 1 ]
@@ -84,5 +85,5 @@ rules=$(sudo -n -l -U %[1]s 2>/dev/null | grep -c '%[4]s job-shim' || true)
 [ "$rules" = %[5]d ] || { echo "sudo lists $rules job-shim rules, want %[5]d" >&2; exit 1; }
 all=$(sudo -n -l -U %[1]s 2>/dev/null | grep -cE '^[[:space:]]*[(]' || true)
 [ "$all" = %[5]d ] || { echo "sudo lists $all rules for %[1]s, want only the %[5]d job-shim rules" >&2; exit 1; }
-`, agentUser, StateDir, slotList(slots), agentPath, slots, IDLow, IDHigh, JobsDir, TrustedPath)
+`, agentUser, StateDir, slotList(slots), agentPath, slots, IDLow, IDHigh, JobsDir, TrustedPath, agentDir, logDir)
 }

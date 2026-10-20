@@ -109,6 +109,7 @@ jobs:
           rc=${PIPESTATUS[0]}
           set -e
           if grep -q -- '--- SKIP' "$RUNNER_TEMP/leg.log"; then echo '::error::a leg test skipped'; exit 1; fi
+          if ! grep -q -- '--- PASS: TestMacOSNode ' "$RUNNER_TEMP/leg.log"; then echo '::error::the leg did not pass (no tests ran, or they failed)'; exit 1; fi
           exit "$rc"
 
       - name: Leftovers and logs

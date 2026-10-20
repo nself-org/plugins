@@ -28,8 +28,7 @@ func xcodeProbeScript(pathPrefix string) string {
 	if pathPrefix != "" {
 		path = pathPrefix + ":" + path
 	}
-	return fmt.Sprintf(`set -eu
-P=%[2]s
+	return fmt.Sprintf(scriptHead+`P=%[2]s
 rc=0
 sudo -n -u %[1]s env PATH="$P" HOME=/var/empty xcodebuild -license check >/dev/null 2>&1 || rc=$?
 case "$rc" in 0) echo ok ;; 69) echo license ;; *) echo absent ;; esac

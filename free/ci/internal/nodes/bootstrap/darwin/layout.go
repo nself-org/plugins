@@ -62,6 +62,15 @@ const (
 	ReasonUninstall    = "uninstall_unsupported"
 )
 
+// scriptHead starts every script sent to a node: strict mode and a fixed PATH, so a root script never runs
+// a program that the invoking user's PATH (or a directory the agent user can write) points at.
+const scriptHead = "set -eu\nPATH=/usr/bin:/bin:/usr/sbin:/sbin\nexport PATH\n"
+
+// scanDirs are the places a job user can leave a file by permission: its job root, the work area and the
+// world-writable folders (the mounted volumes are added by the scripts). A whole-disk scan would walk
+// Xcode and the system volumes for minutes and find nothing.
+const scanDirs = JobsDir + " " + WorkDir + " /private/tmp /private/var/tmp /Users/Shared /Library/Caches"
+
 // JobRoot is the job root of slot n (n = 1..slots).
 func JobRoot(n int) string { return JobsDir + "/" + strconv.Itoa(n) }
 

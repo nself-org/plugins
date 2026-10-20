@@ -52,7 +52,7 @@ func localRun(ctx context.Context, argv ...string) (string, error) {
 		return "", err
 	}
 	defer null.Close()
-	attr := &os.ProcAttr{Files: []*os.File{null, w, w}}
+	attr := &os.ProcAttr{Files: []*os.File{null, w, w}, Env: []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin"}}
 	var proc *os.Process
 	switch argv[0] {
 	case "id":
@@ -92,7 +92,7 @@ func runUninstall(ctx context.Context, args []string, sio IO) int {
 	fs.SetOutput(sio.Stderr)
 	system := fs.Bool("system", false, "remove the system install (users, sudoers rules, service, directories)")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || !*system {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent uninstall --system   (run as root)")
+		fmt.Fprintf(sio.Stderr, "usage: sudo %s uninstall --system   (the root-owned copy of the agent)\n", darwin.TrustedPath)
 		return 2
 	}
 	f, ok := bootstrap.Lookup(runtime.GOOS)
@@ -101,7 +101,7 @@ func runUninstall(ctx context.Context, args []string, sio IO) int {
 		return 1
 	}
 	if os.Geteuid() != 0 {
-		fmt.Fprintln(sio.Stderr, "error: uninstall --system must run as root: sudo nself-ci-agent uninstall --system")
+		fmt.Fprintf(sio.Stderr, "error: uninstall --system must run as root: sudo %s uninstall --system\n", darwin.TrustedPath)
 		return 1
 	}
 	if exe, err := os.Executable(); err != nil || trustedRootPath(exe) != nil {

@@ -64,10 +64,12 @@ func (f *Family) Install(ctx context.Context, t remote.Target, o bootstrap.Optio
 		}
 		o.Logf("bootstrap %s: done", s.name)
 	}
-	if err = f.retireSurplus(ctx, el, o); err != nil {
+	// The sudoers drop-in shrinks to the new slot count BEFORE a surplus user is retired, so the agent
+	// cannot start a new shim as a user that is about to go.
+	if err = f.installSudoers(ctx, el, o); err != nil {
 		return err
 	}
-	if err = f.installSudoers(ctx, el, o); err != nil {
+	if err = f.retireSurplus(ctx, el, o); err != nil {
 		return err
 	}
 	if err = f.installAgent(ctx, el, o); err != nil {

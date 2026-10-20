@@ -143,6 +143,7 @@ func TestMacOSNode(t *testing.T) {
 		{"add --system", (*leg).addSystem}, {"layout", (*leg).layout}, {"isolation", (*leg).isolation},
 		{"job shim", (*leg).shim}, {"service", (*leg).service}, {"jobs as the job user", (*leg).jobs},
 		{"slots", (*leg).slotChanges}, {"xcode license", (*leg).xcodeLicense}, {"upgrade swap", (*leg).upgradeSwap},
+		{"hostile agent", (*leg).hostileAgent},
 		{"uninstall", (*leg).uninstall},
 	}
 	// A later step does not depend on an earlier one passing (only on the add), so every step runs and one

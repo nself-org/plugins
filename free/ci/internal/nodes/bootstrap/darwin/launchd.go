@@ -72,8 +72,7 @@ func Plist() string {
 
 // plistScript lints the staged plist, installs it and (re)loads the service when it is new or changed.
 func plistScript() string {
-	return fmt.Sprintf(`set -eu
-trap 'rm -f ./%[1]s' EXIT
+	return fmt.Sprintf(scriptHead+`trap 'rm -f ./%[1]s' EXIT
 plutil -lint ./%[1]s >/dev/null
 changed=1
 if [ -e %[2]s ] && cmp -s ./%[1]s %[2]s; then changed=0; fi
@@ -93,8 +92,7 @@ launchctl print system/%[3]s >/dev/null
 
 // bootoutScript unloads the service when it is loaded and removes its plist.
 func bootoutScript() string {
-	return fmt.Sprintf(`set -eu
-if launchctl print system/%[1]s >/dev/null 2>&1; then launchctl bootout system/%[1]s >/dev/null 2>&1 || true; fi
+	return fmt.Sprintf(scriptHead+`if launchctl print system/%[1]s >/dev/null 2>&1; then launchctl bootout system/%[1]s >/dev/null 2>&1 || true; fi
 for _ in 1 2 3 4 5 6 7 8 9 10; do launchctl print system/%[1]s >/dev/null 2>&1 || break; sleep 1; done
 rm -f %[2]s
 if launchctl print system/%[1]s >/dev/null 2>&1; then echo 'the service is still loaded' >&2; exit 1; fi

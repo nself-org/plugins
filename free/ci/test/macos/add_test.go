@@ -42,9 +42,9 @@ func (l *leg) layout() {
 		t.Errorf("job users: %s, want %d", out, slots)
 	}
 	for path, want := range map[string]string{
-		"/opt/nself-ci-agent": "755 " + agentUser, "/opt/nself-ci-agent/bin": "755 " + agentUser, agentPath: "755 " + agentUser,
+		"/opt/nself-ci-agent": "755 root", "/opt/nself-ci-agent/bin": "755 " + agentUser, agentPath: "755 " + agentUser,
 		stateDir: "700 " + agentUser, jobsDir: "711 root", jobRoot(1): "700 " + jobUser(1), jobRoot(2): "700 " + jobUser(2),
-		"/var/log/nself-ci-agent": "750 " + agentUser, "/etc/sudoers.d/nself-ci": "440 root",
+		"/var/log/nself-ci-agent": "755 root", "/var/log/nself-ci-agent/agent.log": "640 " + agentUser, "/etc/sudoers.d/nself-ci": "440 root",
 	} {
 		if got, _ := l.sudo("stat -f '%Lp %Su' " + path); got != want {
 			t.Errorf("%s is %q, want %q", path, got, want)
