@@ -12,8 +12,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -25,6 +23,7 @@ import (
 	"syscall"
 
 	"github.com/nself-org/plugins/free/ci/internal/adhoc"
+	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/config"
 	"github.com/nself-org/plugins/free/ci/internal/drill"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -190,17 +189,20 @@ func preparePlan(ctx context.Context, o RunOptions) (*plan.Plan, string, func(pl
 	if err := config.CheckLeftover(o.Root); err != nil {
 		return nil, "", nil, err
 	}
-	cfg, digest := model.PipelineConfig{Version: 1}, "builtin-defaults"
+	cfg := model.PipelineConfig{Version: 1}
 	path := firstOf(bare.cfg, filepath.Join(o.Root, config.FileName))
 	loaded, err := config.Load(path)
 	switch {
 	case err == nil:
 		cfg = loaded.Config
-		if raw, e := os.ReadFile(path); e == nil {
-			sum := sha256.Sum256(raw)
-			digest = hex.EncodeToString(sum[:])
-		}
 	case !errors.Is(err, os.ErrNotExist) || bare.cfg != "":
+		return nil, "", nil, err
+	}
+	// D-1270: the digest is the one the release freshness gate compares
+	// (evidence.InputsAt), the attest digest of the parsed config before drill
+	// expansion; a config outside the commit is refused by ConfigOutside.
+	digest, err := attest.ConfigDigest(cfg)
+	if err != nil {
 		return nil, "", nil, err
 	}
 	if cfg, err = drill.Expand(o.Root, cfg, o.Pipeline, o.Trigger); err != nil { // drills_dir subdirectories become kind drill jobs (P7-CI-02)
