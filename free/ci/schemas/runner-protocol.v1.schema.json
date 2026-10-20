@@ -672,6 +672,9 @@
               "lease_id": {
                 "type": "string"
               },
+              "network_scope": {
+                "type": "string"
+              },
               "runner_credential": {
                 "anyOf": [
                   {
