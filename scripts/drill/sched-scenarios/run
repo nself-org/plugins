@@ -21,7 +21,7 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/drill-sched.XXXXXX") || exit 2
 cleanup() { rm -rf "$work"; }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
-ev_begin sched-scenarios "${BASH_SOURCE[0]}" "$root" "$work"
+ev_begin sched-scenarios "$root/scripts/drill/sched-scenarios/run" "$root" "$work"
 for tool in go jq python3; do command -v "$tool" >/dev/null || {
 	echo "sched-scenarios: $tool is required" >&2
 	exit 2
