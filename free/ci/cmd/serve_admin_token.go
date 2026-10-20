@@ -73,6 +73,9 @@ func runAdminToken(args []string, env adminEnv) int {
 		if len(pos) != 2 {
 			return adminFail(env, command, f.json, adminUsage("usage: token revoke <id>"))
 		}
+		if err = adminRestorePending(env); err != nil {
+			return adminFail(env, command, f.json, err)
+		}
 		found, err := svc.RevokeToken(ctx, op, pos[1])
 		if err != nil {
 			return adminFail(env, command, f.json, err)

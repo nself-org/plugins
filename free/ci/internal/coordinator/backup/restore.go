@@ -14,6 +14,7 @@ package backup
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -70,7 +71,7 @@ func Restore(ctx context.Context, o Options, in io.Reader, kek []byte) (res Resu
 	// the marker goes down first: a coordinator that starts from now on refuses to, and a re-run after a
 	// failure knows what the dir it replaces held (the snapshot is kept in the marker)
 	first, rerun := readPending(o.DataDir)
-	mark := pendingMark{Empty: first.Empty, At: ts, Prior: first.Prior}
+	mark := pendingMark{Empty: first.Empty, At: ts, Prior: first.Prior, Saved: first.Saved}
 	if err = writePending(o.DataDir, mark); err != nil {
 		return res, fail(ReasonIO, "the restore marker cannot be written: %v", err)
 	}
@@ -104,14 +105,25 @@ func Restore(ctx context.Context, o Options, in io.Reader, kek []byte) (res Resu
 		return res, fail(ReasonIO, "the restore marker cannot be written: %v", err)
 	}
 	res.Empty = p.empty
-	saved, err := saveAside(ctx, o, old, p, es, kek, ts)
+	saved := first.Saved // a re-run of a restore that got past the swap: the first run's copies are the originals
+	if !(rerun && first.Prior != nil) {
+		if saved, err = saveAside(ctx, o, old, p, es, kek, ts); err != nil {
+			res.Saved, res.Rollback = savedNames(saved), rollbackLine(o.DataDir, saved)
+			return res, err
+		}
+		mark.Saved = saved
+		if err = writePending(o.DataDir, mark); err != nil {
+			return res, fail(ReasonIO, "the restore marker cannot be written: %v", err)
+		}
+	}
 	res.Saved = savedNames(saved)
 	res.Rollback = rollbackLine(o.DataDir, saved)
-	if err != nil {
-		return res, err
-	}
 	swapped = true
 	st, err := old.Restore(ctx, bytes.NewReader(image))
+	if errors.Is(err, store.ErrNotReplaced) { // the rename did not happen: nothing changed, so no marker stays (a re-run keeps its own)
+		swapped = false
+		return res, fail(ReasonIO, "the database image was refused: %v", err)
+	}
 	if err != nil { // the marker stays: the rename may have happened before the failure
 		return res, fail(ReasonIO, "the database image was refused: %v%s", err, rollbackHint(res.Rollback))
 	}

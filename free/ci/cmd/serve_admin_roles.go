@@ -76,6 +76,9 @@ func runAdminRoles(args []string, env adminEnv) int {
 		if len(pos) != 2 {
 			return adminFail(env, command, f.json, adminUsage("usage: roles revoke <principal>"))
 		}
+		if err = adminRestorePending(env); err != nil {
+			return adminFail(env, command, f.json, err)
+		}
 		found, err := svc.Revoke(ctx, op, pos[1])
 		if err != nil {
 			return adminFail(env, command, f.json, err)

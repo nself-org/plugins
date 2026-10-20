@@ -24,6 +24,7 @@ import (
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
 	"github.com/nself-org/plugins/free/ci/internal/audit"
+	"github.com/nself-org/plugins/free/ci/internal/coordinator/backup"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/lifecycle"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
@@ -34,6 +35,16 @@ import (
 type adminEnv struct {
 	Open     func(ctx context.Context) (*roles.Service, roles.Actor, func(), error)
 	Out, Err io.Writer
+	DataDir  string // the data dir the commands write into; "" skips the restore.pending check (tests)
+}
+
+// adminRestorePending refuses a command that revokes while an unfinished `serve restore` left its marker: a
+// revocation written into the half-restored dir is lost or wrong once the restore runs again (D-1307).
+func adminRestorePending(env adminEnv) error {
+	if env.DataDir == "" || !backup.Pending(env.DataDir) {
+		return nil
+	}
+	return &adminError{"E668", "an earlier `nself ci serve restore` did not finish on " + env.DataDir + "; run it again (or undo it) before revoking (incomplete_restore)"}
 }
 
 var idAlphabet = regexp.MustCompile(`[^a-z0-9._-]+`)
@@ -55,7 +66,7 @@ func operatorPrincipal() string {
 }
 
 func productionAdminEnv() adminEnv {
-	return adminEnv{Out: os.Stdout, Err: os.Stderr, Open: func(ctx context.Context) (*roles.Service, roles.Actor, func(), error) {
+	return adminEnv{Out: os.Stdout, Err: os.Stderr, DataDir: lifecycle.CIHome(), Open: func(ctx context.Context) (*roles.Service, roles.Actor, func(), error) {
 		st, err := store.Open(filepath.Join(lifecycle.CIHome(), "state.db"), store.Options{})
 		if err != nil {
 			return nil, roles.Actor{}, nil, err

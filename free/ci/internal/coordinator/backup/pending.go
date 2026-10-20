@@ -34,6 +34,9 @@ type pendingMark struct {
 	Empty bool        `json:"empty"`
 	At    string      `json:"at"`
 	Prior *priorState `json:"prior,omitempty"`
+	// Saved is original -> pre-restore copy of the FIRST run: a re-run finds a half-restored dir, so what it
+	// would copy aside is not the original, and the rollback line must keep pointing at the first copies.
+	Saved map[string]string `json:"saved,omitempty"`
 }
 
 func (p prior) state() *priorState {

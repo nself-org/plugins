@@ -281,3 +281,35 @@ func TestServeAdminRevokeEndsTokensToo(t *testing.T) {
 		t.Fatalf("the token is revoked: %s", r.out.String())
 	}
 }
+
+// TestServeAdminRevokeRefusesWhileARestoreIsPending: `roles revoke` and `token revoke` write into the data
+// dir, so a half-restored dir (restore.pending) refuses them, as `serve` and `serve backup` do (D-1307).
+func TestServeAdminRevokeRefusesWhileARestoreIsPending(t *testing.T) {
+	r := newAdminRig(t)
+	if code := runAdminToken([]string{"issue", "bob", "--role", "member", "--project", "p1", "--json"}, r.env()); code != 0 {
+		t.Fatalf("issue exited %d: %s", code, r.errb.String())
+	}
+	id, _ := r.data()["id"].(string)
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, "restore.pending"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := r.env()
+	env.DataDir = home
+	if code := runAdminToken([]string{"revoke", id}, env); code == 0 || !strings.Contains(r.errb.String(), "incomplete_restore") {
+		t.Fatalf("token revoke exited %d with %q: want a refusal naming incomplete_restore", code, r.errb.String())
+	}
+	env = r.env()
+	env.DataDir = home
+	if code := runAdminRoles([]string{"revoke", "bob"}, env); code == 0 || !strings.Contains(r.errb.String(), "incomplete_restore") {
+		t.Fatalf("roles revoke exited %d with %q: want a refusal naming incomplete_restore", code, r.errb.String())
+	}
+	if err := os.Remove(filepath.Join(home, "restore.pending")); err != nil {
+		t.Fatal(err)
+	}
+	env = r.env()
+	env.DataDir = home
+	if code := runAdminToken([]string{"revoke", id}, env); code != 0 {
+		t.Fatalf("token revoke exited %d once the marker was gone: %s", code, r.errb.String())
+	}
+}
