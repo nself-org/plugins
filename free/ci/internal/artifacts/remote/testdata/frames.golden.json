@@ -1,0 +1,52 @@
+{
+  "ack": [
+    "ack_seq",
+    "lease_id"
+  ],
+  "artifact-ref": [
+    "lease_id",
+    "path",
+    "sha256",
+    "size"
+  ],
+  "chunk": [
+    "data",
+    "digest",
+    "final",
+    "offset",
+    "stream"
+  ],
+  "digest": [
+    "sha256",
+    "size",
+    "stream"
+  ],
+  "heartbeat": [
+    "battery",
+    "interactive",
+    "leases",
+    "slots"
+  ],
+  "hello": [
+    "age_recipient",
+    "agent_version",
+    "capability_digest",
+    "compat_mode_supported",
+    "identity",
+    "node_key",
+    "slots",
+    "versions"
+  ],
+  "log": [
+    "lease_id",
+    "line_seq",
+    "stream",
+    "text"
+  ],
+  "result": [
+    "epoch",
+    "evidence",
+    "lease_id",
+    "signature"
+  ]
+}

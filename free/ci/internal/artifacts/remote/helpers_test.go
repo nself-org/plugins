@@ -62,7 +62,7 @@ func newRig(t *testing.T, job model.Job) *rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := &rig{t: t, st: st, blobs: blobs, clk: clk, pol: records.Policy{MaxFile: 1 << 20, MaxTotal: 8 << 20, ProjectShare: 50, StorePath: t.TempDir(),
+	r := &rig{t: t, st: st, blobs: blobs, clk: clk, pol: records.Policy{MaxFile: 4 << 20, MaxTotal: 64 << 20, ProjectShare: 50, StorePath: t.TempDir(),
 		Statfs: func(string) (uint64, uint64, error) { return 100 << 30, 100 << 30, nil }}}
 	r.eng = lease.New(st, nil, lease.Config{Clock: func() time.Time { return *clk }})
 	d := store.Demand{AttemptID: "a1", LeaseID: "lease-a1", RunnerID: "r1", CPU: 1, MemMB: 1, CapacityCPU: 100, CapacityMemMB: 100, TTL: r.eng.Config.TTL}
