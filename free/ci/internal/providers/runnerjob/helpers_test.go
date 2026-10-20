@@ -9,7 +9,6 @@ package runnerjob_test
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -129,6 +128,13 @@ var (
 // use binds a fresh store and the fake forge for one test and returns the store.
 func use(t *testing.T) *store.Store {
 	t.Helper()
+	st, _ := useAt(t)
+	return st
+}
+
+// useAt is use that also returns the directory of the store.
+func useAt(t *testing.T) (*store.Store, string) {
+	t.Helper()
 	setupMu.Do(func() {
 		for _, err := range []error{runnerjob.RegisterMinter(testKind, forge), transport.Register(driver), runnerjob.InstallCoordinator()} {
 			if err != nil {
@@ -141,8 +147,8 @@ func use(t *testing.T) *store.Store {
 	driver.mu.Lock()
 	driver.lease, driver.runs = protocol.Lease{}, 0
 	driver.mu.Unlock()
-	lastStorePath = filepath.Join(t.TempDir(), "state.db")
-	st, err := store.Open(lastStorePath, store.Options{})
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "state.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,10 +157,8 @@ func use(t *testing.T) *store.Store {
 	tick.t = epoch
 	tick.Unlock()
 	runnerjob.Use(runnerjob.NewLedger(st, clock))
-	return st
+	return st, dir
 }
-
-func ptr[T any](v T) *T { return &v }
 
 func known[T any](v T) model.Fact[T] {
 	return model.Fact[T]{Value: &v, Source: "assigned", Confidence: "known", ObservedAt: epoch}
@@ -194,19 +198,9 @@ func deliver(node model.Capability, attempt string, job model.Job) (protocol.Lea
 	return driver.lease, err
 }
 
-var errBoom = errors.New("synthetic failure")
-
 func ledgerRunner(attempt string) (runnerjob.Runner, bool, error) {
 	return runnerjob.CurrentLedger().Runner(context.Background(), attempt)
 }
 
 func jobRoot() session.JobRoot { return session.JobRoot{Dir: "/nonexistent"} }
 func outcome() session.Outcome { return session.Outcome{State: "passed"} }
-
-func itoa(n int) string { return strconv.Itoa(n) }
-
-// storePath is where use() put the database; the store keeps its path, so the test reads it from a
-// package variable set by use().
-func storePath(*store.Store) string { return lastStorePath }
-
-var lastStorePath string

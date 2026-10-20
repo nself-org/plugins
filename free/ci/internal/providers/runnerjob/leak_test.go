@@ -45,7 +45,7 @@ const stubScript = `echo "visible-in-env=$(env | grep -c '^ACTIONS_RUNNER_INPUT_
 // job. Each scan has a positive control (the planted value is found) and counts the files it read.
 func TestNoCredentialLeak(t *testing.T) {
 	needDocker(t, stubImage)
-	st := use(t)
+	_, storeDir := useAt(t)
 	l, err := deliver(goodNode(), "host19-leak", runnerJob(t, "51"))
 	if err != nil || l.RunnerCredential == nil {
 		t.Fatalf("deliver: %v", err)
@@ -81,8 +81,7 @@ func TestNoCredentialLeak(t *testing.T) {
 	if err = runnerjob.Teardown(context.Background(), runnerjob.CurrentLedger(), "host19-leak"); err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Dir(storePath(st))
-	read, hits := scanTree(dir, cred)
+	read, hits := scanTree(storeDir, cred)
 	t.Logf("store dir: %d entries read, %d hits", read, len(hits))
 	if read == 0 || len(hits) != 0 {
 		t.Errorf("store: %d entries read, credential in %v", read, hits)

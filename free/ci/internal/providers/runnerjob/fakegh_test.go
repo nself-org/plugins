@@ -1,3 +1,5 @@
+//go:build integration
+
 package runnerjob_test
 
 // Purpose: (a copy of github/demand's fakegh_test.go, kept in step by hand) a fake GitHub REST API on a local TLS server for the demand tests: generate-jitconfig, the

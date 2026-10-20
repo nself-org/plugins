@@ -116,13 +116,3 @@ func (f *fakeGH) registrar(t *testing.T, set jit.Settings, now func() time.Time)
 }
 
 func (f *fakeGH) count() int { f.mu.Lock(); defer f.mu.Unlock(); return len(f.runners) }
-
-func (f *fakeGH) names() []string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	var out []string
-	for _, r := range f.runners {
-		out = append(out, r.Name)
-	}
-	return out
-}
