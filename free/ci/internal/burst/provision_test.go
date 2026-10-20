@@ -339,8 +339,7 @@ func (m midCreate) Provision(ctx context.Context, in burst.Intent) (burst.Resour
 // TestBurstSlowCreateIsNotEndedUnderneath: the create call outlives the join window and a sweep runs meanwhile;
 // the intent must survive, nothing is released, and the machine is recorded when the call returns.
 func TestBurstSlowCreateIsNotEndedUnderneath(t *testing.T) {
-	var r *rig
-	r = newRig(t, func(r *rig) {
+	r := newRig(t, func(r *rig) {
 		r.wrap = func(p burst.Provider) burst.Provider {
 			return midCreate{p, func(ctx context.Context) {
 				r.clk.Advance(20 * time.Minute) // past idle + latency, and past nothing else
@@ -372,13 +371,11 @@ func TestBurstSlowCreateIsNotEndedUnderneath(t *testing.T) {
 
 // TestBurstMachineThatOutlivesItsIntentIsDeleted: another process ended the intent while the create call ran.
 func TestBurstMachineThatOutlivesItsIntentIsDeleted(t *testing.T) {
-	var r *rig
-	var token string
-	r = newRig(t, func(r *rig) {
+	r := newRig(t, func(r *rig) {
 		r.wrap = func(p burst.Provider) burst.Provider {
 			return midCreate{p, func(ctx context.Context) {
 				ins, _ := r.st.BurstIntents(ctx, coord)
-				token = ins[0].Token
+				token := ins[0].Token
 				_ = r.st.BurstWrite(ctx, func(b store.BurstTx) error { return b.MarkTerminal(token, b.NowMs()) })
 			}}
 		}
