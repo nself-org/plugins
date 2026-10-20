@@ -9,12 +9,14 @@ package run
 // machine and the same registered nodes the same way (D-1042, D-0989). The
 // hook's world holds registered nodes; a provider-hosted runner is dropped
 // because a foreground run cannot await a provider lease, unless a coordinator
-// process runs the pipeline (Session.AwaitProvider, D-1394). This file must not
+// process runs the pipeline, which keeps the hosted runners of the pipeline's own repository only
+// (Session.ProviderRepo, D-1394). This file must not
 // import internal/dispatch (only dispatch_hook.go may).
 
 import (
 	"context"
 	"runtime"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/fairq"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -112,7 +114,7 @@ func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World
 	if err != nil {
 		return sched.World{}, "", err
 	}
-	w, changed := dropProviderRunners(w, rd.sess.AwaitProvider)
+	w, changed := dropProviderRunners(w, rd.sess.ProviderRepo)
 	if !changed {
 		return w, digest, nil
 	}
@@ -120,22 +122,42 @@ func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World
 	return w, digest, err
 }
 
+// repoLabel is the label a hosted runner carries for the repository it dispatches to
+// (hosted.LabelRepo; this package may not import the provider).
+const repoLabel = "nself.repo="
+
 // dropProviderRunners removes the provider-hosted and ephemeral runners, which a foreground run cannot
-// await a lease on; with await (a coordinator process owns the run) it removes nothing. changed is false
-// when there was nothing to remove (the digest stays valid).
-func dropProviderRunners(w sched.World, await bool) (out sched.World, changed bool) {
-	if await {
+// await a lease on. With repo (a coordinator-owned run) the hosted runners labelled for that repository
+// stay: a runner of another repository would receive this job's spec and revision. changed is false when
+// there was nothing to remove (the digest stays valid).
+func dropProviderRunners(w sched.World, repo string) (out sched.World, changed bool) {
+	keep := func(rs []sched.Runner) []sched.Runner {
+		kept := rs[:0:0]
+		for _, r := range rs {
+			switch {
+			case r.Ephemeral:
+			case r.Location != "hosted":
+				kept = append(kept, r)
+			case repo != "" && hostedFor(r, repo):
+				kept = append(kept, r)
+			}
+		}
+		return kept
+	}
+	runners, hostedRunners := keep(w.Runners), keep(w.Hosted)
+	if len(runners) == len(w.Runners) && len(hostedRunners) == len(w.Hosted) {
 		return w, false
 	}
-	keep := w.Runners[:0:0]
-	for _, r := range w.Runners {
-		if r.Location != "hosted" && !r.Ephemeral {
-			keep = append(keep, r)
+	w.Runners, w.Hosted = runners, hostedRunners
+	return w, true
+}
+
+// hostedFor reports whether the hosted runner dispatches to repo ("owner/name", compared without case).
+func hostedFor(r sched.Runner, repo string) bool {
+	for _, l := range r.Capability.Identity.Labels {
+		if v, ok := strings.CutPrefix(l, repoLabel); ok {
+			return strings.EqualFold(v, repo)
 		}
 	}
-	if len(keep) == len(w.Runners) && len(w.Hosted) == 0 {
-		return w, false
-	}
-	w.Runners, w.Hosted = keep, nil
-	return w, true
+	return false
 }

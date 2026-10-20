@@ -121,32 +121,44 @@ func hostedFacts(t *testing.T, attempt string) string {
 	return f.Trust
 }
 
-func TestServeHostedWiring(t *testing.T) {
+func TestHostedTargets(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		allowed []string
 		want    []providers.Query
 	}{
-		{"every allowlisted repository is described", []string{"o/r", "o/s"}, []providers.Query{{Project: "o/r", Repo: "o/r"}, {Project: "o/s", Repo: "o/s"}}},
+		{"every allowlisted repository", []string{"o/r", "o/s"}, []providers.Query{{Project: "o/r", Repo: "o/r"}, {Project: "o/s", Repo: "o/s"}}},
 		{"an empty entry is skipped", []string{"", "o/r"}, []providers.Query{{Project: "o/r", Repo: "o/r"}}},
-		{"no allowlist describes nothing", nil, nil},
+		{"a repository named twice (flag and environment) is described once", []string{"o/r", "O/R", "o/r"}, []providers.Query{{Project: "o/r", Repo: "o/r"}}},
+		{"no allowlist describes nothing", nil, []providers.Query{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			p := useProbeProvider(t)
-			st := serveTestStore(t)
-			undo := serveHostedWith(st, func(context.Context) (*policy.Effective, error) { return nil, nil }, tc.allowed)
-			t.Cleanup(undo)
-			var w sched.World
-			if err := runtime.DefaultContributor().Fill(context.Background(), &w); err != nil {
-				t.Fatal(err)
-			}
-			if got := p.seen(); !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("described %+v, want %+v", got, tc.want)
-			}
-			if len(w.Hosted) != len(tc.want) {
-				t.Fatalf("hosted runners = %d, want %d", len(w.Hosted), len(tc.want))
+			if got := hostedTargets(tc.allowed); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("targets %+v, want %+v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestServeHostedDescribesOnlyGitHubHosted: another registered provider is never asked about the
+// allowlisted "owner/name" (it could read it as a project of its own forge).
+func TestServeHostedDescribesOnlyGitHubHosted(t *testing.T) {
+	p := useProbeProvider(t)
+	st := serveTestStore(t)
+	// an unreadable policy leaves github-hosted without a credential (E700), so the pass sends no request
+	undo := serveHostedWith(st, func(context.Context) (*policy.Effective, error) { return nil, errors.New("no policy in this test") }, []string{"o/r"})
+	t.Cleanup(undo)
+	var w sched.World
+	if err := runtime.DefaultContributor().Fill(context.Background(), &w); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.seen(); len(got) != 0 {
+		t.Fatalf("a provider other than github-hosted was described: %+v", got)
+	}
+	for _, r := range w.Hosted {
+		if r.Provider == probeProviderID {
+			t.Fatalf("a runner of the probe provider is in the world: %s", r.ID)
+		}
 	}
 }
 

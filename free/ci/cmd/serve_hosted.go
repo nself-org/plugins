@@ -6,7 +6,8 @@ package main
 //          runners for.
 // Inputs:  the open coordinator store, the data dir (the policy resolver's root) and the repository allowlist.
 // Outputs: serveHosted installs runtime.UseStore, runtime.UsePolicy, hosted.UsePolicy, hosted.UseStore,
-//          hosted.UseAttempts and runtime.DefaultContributor().SetTargets; the returned func removes them.
+//          hosted.UseAttempts and the contributor targets (GitHub-hosted only, each allowlisted repository
+//          once, lookups cached for hostedDescribeTTL); the returned func removes them.
 // Constraints: call once at coordinator start, before the first dispatch. The policy is the operator's own
 //          (store rows and user files): the coordinator reads no repository's policy file. An unreadable policy
 //          is an error to the provider, never a default that widens trust. An attempt the store does not know
@@ -15,6 +16,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +32,9 @@ import (
 // operatorPolicyTTL bounds how often the world builder (every dispatcher tick) re-resolves the policy.
 const operatorPolicyTTL = 10 * time.Second
 
+// hostedDescribeTTL bounds how often a repository's hosted runners are looked up (one API request each).
+const hostedDescribeTTL = 60 * time.Second
+
 // serveHosted installs the hosted-provider wiring and returns the func that removes it.
 func serveHosted(st *store.Store, home string, allowed []string) (undo func()) {
 	return serveHostedWith(st, operatorPolicySource(st, home, time.Now), allowed)
@@ -43,21 +48,36 @@ func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effecti
 	hosted.UseStore(st)
 	hosted.UseAttempts(attemptMetaFrom(st))
 	targets := hostedTargets(allowed)
-	runtime.DefaultContributor().SetTargets(func(context.Context) ([]providers.Query, error) { return targets, nil })
+	c := runtime.DefaultContributor()
+	// only the GitHub-hosted provider is described, and only for GitHub repositories: another provider
+	// would read the same "owner/name" as a project of its own forge
+	c.SetTargetsFor(func(_ context.Context, provider string) ([]providers.Query, error) {
+		if provider != hosted.ProviderID {
+			return nil, nil
+		}
+		return targets, nil
+	})
+	c.SetDescribeTTL(hostedDescribeTTL)
 	return func() {
-		runtime.DefaultContributor().SetTargets(nil)
+		c.SetTargetsFor(nil)
+		c.SetDescribeTTL(0)
 		hosted.UseAttempts(nil)
 		hosted.UsePolicy(nil)
 		runtime.UsePolicy(nil)
+		hosted.ReleaseStore()
+		runtime.ReleaseStore()
 	}
 }
 
 // hostedTargets are the repositories hosted runners are described for: the coordinator's allowlist, whose
-// entries are "owner/name" (the project of a pipeline the coordinator accepted).
+// entries are "owner/name" (the project of a pipeline the coordinator accepted). Each repository once,
+// whatever its case (a second Describe of the same repository would collide on its runner ids).
 func hostedTargets(allowed []string) []providers.Query {
 	out := make([]providers.Query, 0, len(allowed))
+	seen := map[string]bool{}
 	for _, r := range allowed {
-		if r != "" {
+		if k := strings.ToLower(r); r != "" && !seen[k] {
+			seen[k] = true
 			out = append(out, providers.Query{Project: r, Repo: r})
 		}
 	}

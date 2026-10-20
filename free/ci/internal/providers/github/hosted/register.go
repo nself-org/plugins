@@ -37,6 +37,9 @@ func init() {
 // at coordinator start, next to runtime.UseStore).
 func UseStore(st *store.Store) { defaultProvider.UseJournal(NewStoreJournal(st)) }
 
+// ReleaseStore puts the default provider's dispatch journal back in memory (the coordinator's store is closing).
+func ReleaseStore() { defaultProvider.UseJournal(NewMemJournal()) }
+
 // UseJournal replaces the dispatch journal.
 func (p *Provider) UseJournal(j Journal) {
 	p.mu.Lock()
