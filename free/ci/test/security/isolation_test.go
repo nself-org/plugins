@@ -342,16 +342,16 @@ func TestUntrustedCannotPinAnExcludedOrOnLinkName(t *testing.T) {
 		"mixed.example":     {netip.MustParseAddr("93.184.216.34"), netip.MustParseAddr("10.8.0.9")},
 		"self.example":      {netip.MustParseAddr("192.168.1.5")},
 		"cloudmeta.example": {netip.MustParseAddr("169.254.169.254")},
-		"zoned-lan.example": {netip.MustParseAddr("2001:db8:10::99")},
+		"onlink-v6.example": {netip.MustParseAddr("2001:db8:10::99")},
 	}
 	for _, scope := range []model.NetworkScope{"restricted", "internet"} {
-		g := netscope.Guard{Scope: scope, Facts: syntheticLAN(), ExtraHosts: []string{"cdn.example", "rebind.example", "lan-alias.example", "mapped.example", "mixed.example", "self.example", "cloudmeta.example", "zoned-lan.example"}, Resolver: res}
+		g := netscope.Guard{Scope: scope, Facts: syntheticLAN(), ExtraHosts: []string{"cdn.example", "rebind.example", "lan-alias.example", "mapped.example", "mixed.example", "self.example", "cloudmeta.example", "onlink-v6.example"}, Resolver: res}
 		for _, host := range []string{"deploy.internal.example", "x.deploy.internal.example", "DEPLOY.internal.example.", "a.b.deploy.internal.example"} {
 			if addrs, v := g.Pin(context.Background(), host); v.Allowed || v.Reason != netscope.ReasonExclusion {
 				t.Errorf("scope %s pinned the excluded name %q: %v %+v", scope, host, addrs, v)
 			}
 		}
-		for _, host := range []string{"rebind.example", "lan-alias.example", "mapped.example", "mixed.example", "self.example", "cloudmeta.example", "zoned-lan.example"} {
+		for _, host := range []string{"rebind.example", "lan-alias.example", "mapped.example", "mixed.example", "self.example", "cloudmeta.example", "onlink-v6.example"} {
 			if addrs, v := g.Pin(context.Background(), host); v.Allowed {
 				t.Errorf("scope %s pinned %q to %v", scope, host, addrs)
 			}

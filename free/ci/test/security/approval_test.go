@@ -69,12 +69,13 @@ func approvalStep(ctx context.Context, v dispatch.View) error {
 }
 
 // forkRun prepares a fork PR run that needs approval and is not approved yet.
-func forkRun(t *testing.T, r *rig, name string) (id string, submit func() (dispatch.Admitted, error), runID string) {
+// submit takes the wait: settle for a run that must stay held, a longer one for a run that must be admitted.
+func forkRun(t *testing.T, r *rig, name string) (id string, submit func(time.Duration) (dispatch.Admitted, error), runID string) {
 	t.Helper()
 	r.noAutoApprove = true
 	j := newJob(name, "untrusted", "restricted")
 	id, j = r.prepare(j, "untrusted")
-	return id, func() (dispatch.Admitted, error) { return r.enqueue(id, j, settle) }, "pipe-" + name
+	return id, func(wait time.Duration) (dispatch.Admitted, error) { return r.enqueue(id, j, wait) }, "pipe-" + name
 }
 
 func heldBecause(t *testing.T, r *rig, id string, a dispatch.Admitted, err error) {
@@ -94,7 +95,7 @@ func TestApprovalBoundToHeadSHA(t *testing.T) {
 	r := newRig(t, repoPolicy(t, "public", "untrusted"), gvisorRunner("gv1", 4))
 	id, submit, runID := forkRun(t, r, "fork1")
 
-	a, err := submit()
+	a, err := submit(settle)
 	heldBecause(t, r, id, a, err)
 
 	row, err := r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: voidCheck})
@@ -107,7 +108,7 @@ func TestApprovalBoundToHeadSHA(t *testing.T) {
 
 	// The contributor pushes again: the run's head moves before the lease is granted.
 	moveHead(t, r.db, runID, pushedRev, "i")
-	a, err = submit()
+	a, err = submit(settle)
 	heldBecause(t, r, id, a, err)
 	if st, _, _ := r.st.ApprovalState(context.Background(), runID); !st.HasApproval || len(voidCheck(st.Approval.ApprovalBinding, st.Current())) != 1 {
 		t.Fatalf("a push must leave a mismatch visible without any write: %+v", st)
@@ -123,7 +124,7 @@ func TestApprovalBoundToHeadSHA(t *testing.T) {
 	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: pushedRev, Check: voidCheck}); err != nil {
 		t.Fatal(err)
 	}
-	a, err = submit()
+	a, err = submit(2 * time.Second)
 	if got := runnerOf(t, a, err); got != "gv1" {
 		t.Fatalf("approved run placed on %q", got)
 	}
@@ -159,14 +160,14 @@ func TestApprovalDoesNotTravel(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Run B has no approval of its own: A's does not unlock it.
-	a, err := submitB()
+	a, err := submitB(settle)
 	heldBecause(t, r, idB, a, err)
 	// A changed config (the workflow file the PR edited) voids the approval of the same SHA.
 	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runB, Approver: "token:t1:bob", Check: voidCheck}); err != nil {
 		t.Fatal(err)
 	}
 	moveHead(t, r.db, runB, baseRev, "i-changed")
-	a, err = submitB()
+	a, err = submitB(settle)
 	heldBecause(t, r, idB, a, err)
 	// The binding rule itself, over the pure type: a run id alone is never a valid approval.
 	cur := source.Binding{Run: "r", HeadSHA: "abc", ConfigDigest: "d", HeadRepo: "fork/app"}
@@ -186,10 +187,12 @@ func TestApprovalDoesNotTravel(t *testing.T) {
 	}
 }
 
-// TestApprovalBindsLeaseCheckout (D18, TM-34): the revision a lease checks out is the stored pipeline
-// head, admission compares the approval with that head inside the admission transaction, and the
-// delivery that goes out carries exactly the approved head. A run whose head moved after the approval
-// is held and delivers nothing, for the old head or the new one.
+// TestApprovalBindsLeaseCheckout (D18, TM-34): the admission step compares the approval with the stored
+// pipeline head inside the admission transaction, the run dispatcher takes the lease's checkout revision
+// from that same stored head (the rig does what run/dispatch_hook.go does), and the delivery that goes out
+// carries exactly the approved head. A run whose head moved after the approval is held and delivers
+// nothing, for the old head or the new one. What this does not show: admission does not compare the
+// caller-supplied Job.Revision with the stored head; D-1360 files that production gap.
 func TestApprovalBindsLeaseCheckout(t *testing.T) {
 	r := newRig(t, repoPolicy(t, "public", "untrusted"), gvisorRunner("gv1", 4))
 	id, submit, runID := forkRun(t, r, "forkc")
@@ -197,7 +200,7 @@ func TestApprovalBindsLeaseCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, err := submit()
+	a, err := submit(2 * time.Second)
 	if got := runnerOf(t, a, err); got != "gv1" {
 		t.Fatalf("approved run placed on %q", got)
 	}
@@ -211,7 +214,7 @@ func TestApprovalBindsLeaseCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 	moveHead(t, r.db, run2, pushedRev, "i")
-	a2, err2 := submit2()
+	a2, err2 := submit2(settle)
 	heldBecause(t, r, id2, a2, err2)
 	for _, d := range r.tr.deliveries() {
 		if d.AttemptID == id2 {
@@ -220,7 +223,10 @@ func TestApprovalBindsLeaseCheckout(t *testing.T) {
 	}
 }
 
-// moveHead simulates a push to the pull request: the run's stored head SHA and config digest change.
+// moveHead moves the stored head SHA and config digest of a run. Production starts a new run for a push (the
+// new run has no approval: TestApprovalDoesNotTravel); no code updates a pipeline's revision in place. The raw
+// UPDATE builds the one state the sweep and the admission step must judge, an approval that no longer matches
+// the stored head, so the binding rule is proven where it decides.
 func moveHead(t *testing.T, dbPath, run, sha, digest string) {
 	t.Helper()
 	db, err := sql.Open("sqlite", dbPath)

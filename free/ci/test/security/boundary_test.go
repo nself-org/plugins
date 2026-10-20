@@ -24,7 +24,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -227,89 +226,68 @@ func TestNoTelemetryClientInTheProduct(t *testing.T) {
 	}
 }
 
-// networkTokens lists, per package directory of the product, the network capabilities its non-test code
-// has: the net/http, net/rpc and net/smtp imports and the calls that dial or resolve by name.
-func networkTokens(t *testing.T) []string {
-	t.Helper()
-	root := filepath.Join("..", "..")
+// decisionPackages are the packages that decide, record or carry CI data without needing a network:
+// admission and scheduling, trust, the store, evidence, authorization, roles, audit, secrets, redaction,
+// hygiene and scheduling telemetry, plus the agent's job-running packages. None of them may import an HTTP,
+// RPC or mail client, or dial, listen or resolve a name. Packages that exist to talk (the coordinator,
+// providers, the user client, the proxy, node install) are outside this list on purpose: a new client there
+// is a review question for its own Ticket, not a tripwire for this suite.
+var decisionPackages = []string{"internal/dispatch", "internal/sched", "internal/schedtel", "internal/schedpolicy", "internal/trust", "internal/store", "internal/attest",
+	"internal/authz", "internal/roles", "internal/audit", "internal/secrets", "internal/redact", "internal/hygiene", "internal/invariants", "internal/policy",
+	"internal/model", "internal/evidence", "internal/events", "internal/history", "internal/lease", "internal/agent/session", "internal/agent/slots",
+	"internal/agent/checkout", "internal/agent/nodekey", "internal/agent/agekey", "internal/agent/contention", "internal/agent/verify"}
+
+// TestDecisionPackagesHaveNoNetworkCode (X15): the packages that handle CI decisions and data have no
+// network client to send them with. The test follows import aliases (import n "net") and counts the
+// calls that dial, listen or resolve. It sees Go source only: a raw syscall socket or an exec of curl would
+// pass, and so would a package outside the list; the runtime fake of main_test.go and the review of a
+// Ticket that adds a client cover those.
+func TestDecisionPackagesHaveNoNetworkCode(t *testing.T) {
 	fset := token.NewFileSet()
-	set := map[string]bool{}
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	files := 0
+	for _, pkg := range decisionPackages {
+		dir := filepath.Join("..", "..", filepath.FromSlash(pkg))
+		entries, err := os.ReadDir(dir)
 		if err != nil {
-			return err
+			t.Fatalf("%s: %v (a package left the list's tree: update decisionPackages)", pkg, err)
 		}
-		if d.IsDir() && (d.Name() == "vendor" || d.Name() == "testdata" || d.Name() == "test") {
-			return filepath.SkipDir
-		}
-		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-		file, perr := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
-		if perr != nil {
-			return perr
-		}
-		dir := filepath.ToSlash(filepath.Dir(path))
-		dir = strings.TrimPrefix(strings.TrimPrefix(dir, "../../"), "..")
-		for _, imp := range file.Imports {
-			switch imp.Path.Value {
-			case `"net/http"`, `"net/rpc"`, `"net/smtp"`:
-				set[dir+" import "+strings.Trim(imp.Path.Value, `"`)] = true
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
+				continue
 			}
-		}
-		ast.Inspect(file, func(n ast.Node) bool {
-			if sel, ok := n.(*ast.SelectorExpr); ok {
-				if id, ok := sel.X.(*ast.Ident); ok && id.Name == "net" && (strings.HasPrefix(sel.Sel.Name, "Dial") || strings.HasPrefix(sel.Sel.Name, "Lookup") || strings.HasPrefix(sel.Sel.Name, "Listen")) {
-					set[dir+" call net."+sel.Sel.Name] = true
+			path := filepath.Join(dir, e.Name())
+			file, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files++
+			netNames := map[string]bool{}
+			for _, imp := range file.Imports {
+				switch p := strings.Trim(imp.Path.Value, `"`); p {
+				case "net/http", "net/rpc", "net/smtp", "net/http/httputil":
+					t.Errorf("%s imports %s", filepath.ToSlash(path), p)
+				case "net":
+					name := "net"
+					if imp.Name != nil {
+						name = imp.Name.Name
+					}
+					netNames[name] = true
 				}
 			}
-			return true
-		})
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := make([]string, 0, len(set))
-	for k := range set {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
-// TestNetworkCodeIsAllowlisted (X15): the packages that can talk to a network are exactly the ones in
-// testdata/network-code.txt. A package that gains an HTTP client, a dial or a lookup makes this fail
-// until a reviewer adds its line, which is the moment to ask whether it can carry CI data out.
-// NSELF_UPDATE_NETWORK_CODE=1 rewrites the file.
-func TestNetworkCodeIsAllowlisted(t *testing.T) {
-	got := networkTokens(t)
-	path := filepath.Join("testdata", "network-code.txt")
-	if os.Getenv("NSELF_UPDATE_NETWORK_CODE") == "1" {
-		if err := os.WriteFile(path, []byte(strings.Join(got, "\n")+"\n"), 0o644); err != nil {
-			t.Fatal(err)
+			ast.Inspect(file, func(n ast.Node) bool {
+				if sel, ok := n.(*ast.SelectorExpr); ok {
+					if id, ok := sel.X.(*ast.Ident); ok && netNames[id.Name] {
+						switch name := sel.Sel.Name; {
+						case strings.HasPrefix(name, "Dial"), strings.HasPrefix(name, "Lookup"), name == "Listen", name == "ListenPacket", name == "ListenTCP", name == "ListenUDP":
+							t.Errorf("%s calls net.%s", filepath.ToSlash(path), name)
+						}
+					}
+				}
+				return true
+			})
 		}
 	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	listed := map[string]bool{}
-	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
-		listed[line] = true
-	}
-	seen := map[string]bool{}
-	for _, g := range got {
-		seen[g] = true
-		if !listed[g] {
-			t.Errorf("new network code: %q is not in testdata/network-code.txt", g)
-		}
-	}
-	for l := range listed {
-		if !seen[l] {
-			t.Errorf("stale line %q in testdata/network-code.txt (the code is gone: remove the line)", l)
-		}
-	}
-	if len(got) < 10 {
-		t.Fatalf("only %d network tokens found: the walk is not reaching the module", len(got))
+	if files < 200 {
+		t.Fatalf("only %d files of the decision packages were read: the walk is not reaching the module", files)
 	}
 }

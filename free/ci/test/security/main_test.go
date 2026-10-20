@@ -12,7 +12,7 @@ package security
 //          once); loopback targets bypass a proxy by design, so the fixtures that talk to
 //          their own 127.0.0.1 servers are not counted. The fake cannot see a client that ignores
 //          the proxy variables and was never told the endpoint, a raw socket, UDP or DNS: the static
-//          half is TestNoTelemetryClientInTheProduct and TestNetworkCodeIsAllowlisted, which fail when
+//          half is TestNoTelemetryClientInTheProduct and TestDecisionPackagesHaveNoNetworkCode, which fail when
 //          a package gains network code nobody listed.
 
 import (

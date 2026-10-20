@@ -248,7 +248,8 @@ func (nullSink) Blob(context.Context, transport.BlobHeader) (transport.BlobWrite
 var currentHosted atomic.Pointer[fake.Fake]
 
 // fakeDriver is a transport driver of the NODE-02 registry (P7-NODE-02): it accepts a lease and
-// returns. A lease for a hosted-provider runner goes to the provider fake's Dispatch.
+// returns. A lease for a hosted-provider runner goes to the provider fake's Dispatch (the attempt it
+// builds is the fake's own request record; the source class is not read back from it).
 type fakeDriver struct{ kind string }
 
 func (d fakeDriver) Kind() string { return d.kind }

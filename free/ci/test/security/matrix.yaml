@@ -132,7 +132,7 @@ review_additions:
     cases:
       - test: TestNoRequestReachesTelemetry
       - test: TestNoTelemetryClientInTheProduct
-      - test: TestNetworkCodeIsAllowlisted
+      - test: TestDecisionPackagesHaveNoNetworkCode
   - id: publication-profile
     item: publication profile on a public fixture
     cases:
@@ -182,7 +182,7 @@ threats:
       - test: TestUntrustedCannotPinAnExcludedOrOnLinkName
       - test: TestUntrustedNeverReceivesSecret
       - test: TestNoTelemetryClientInTheProduct
-      - test: TestNetworkCodeIsAllowlisted
+      - test: TestDecisionPackagesHaveNoNetworkCode
     also:
       - {pkg: internal/netscope, proof: TestInvariant_I18}
   - id: TM-05
@@ -355,7 +355,7 @@ threats:
       - test: TestPlantedPRCannotAuthorizeHosted
   - id: TM-36
     cases:
-      - test: TestNetworkCodeIsAllowlisted
+      - test: TestDecisionPackagesHaveNoNetworkCode
       - test: TestNoRequestReachesTelemetry
       - test: TestPublicationProfileOnPublicFixture
   - id: TM-37

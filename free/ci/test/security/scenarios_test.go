@@ -82,6 +82,13 @@ func TestScenario7_PublicForkPR(t *testing.T) {
 	eff := repoPolicy(t, "public", "untrusted")
 	r := newRig(t, eff, lanRunner("lan1", 4), gvisorRunner("gv1", 2), hostedRunner("hosted1"))
 
+	// 0. Before any approval a stranger's first run is held, whatever room there is.
+	r.noAutoApprove = true
+	heldID, heldJob := r.prepare(newJob("fork-held", "untrusted", "restricted"), "untrusted")
+	ha, herr := r.enqueue(heldID, heldJob, settle)
+	heldBecause(t, r, heldID, ha, herr)
+	r.noAutoApprove = false
+
 	// 1. Four untrusted jobs: every one lands on gVisor or the hosted-disposable fake, none on the LAN node.
 	onGV, onHosted := 0, 0
 	for i := 0; i < 4; i++ {

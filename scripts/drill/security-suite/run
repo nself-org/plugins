@@ -55,8 +55,9 @@ for patch in "${patches[@]}"; do
 done
 for ((g = 0; g < jobs; g++)); do
 	(
-		bash "$root/free/ci/internal/invariants/testdata/mutate.sh" "$tmp/m$g" test/security/testdata/regressions 'Test' -tags security -skip 'TestRegressionPatchesCoverTheCategories' ./test/security/... >"$tmp/mut$g.txt" 2>&1
-		echo $? >"$tmp/mut$g.rc"
+		rc=0
+		bash "$root/free/ci/internal/invariants/testdata/mutate.sh" "$tmp/m$g" test/security/testdata/regressions 'Test' -tags security -skip 'TestRegressionPatchesCoverTheCategories' ./test/security/... >"$tmp/mut$g.txt" 2>&1 || rc=$?
+		echo "$rc" >"$tmp/mut$g.rc"
 	) &
 done
 wait
