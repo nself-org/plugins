@@ -1,7 +1,9 @@
 package store
 
-// Purpose: the delivery claim of the status outbox (P7-CI-37). Statuses of one
-// outbox key reach the host in seq order across processes. A claim carries a
+// Purpose: the delivery claim of the status outbox (P7-CI-37; P7-HOST-02 counts
+// a parked (failed) newer seq as newer too, so no engine posts an older status
+// past it). Statuses of one outbox key reach the host in seq order across
+// processes. A claim carries a
 // token (its claimed_at stamp); release and posted act only for the claim's
 // own token, so a poster that was suspended past the claim TTL and lost its
 // claim cannot disturb the one that took over.
@@ -39,7 +41,7 @@ func (s *Store) OutboxClaim(ctx context.Context, revision, statusContext string,
 		now := s.now()
 		cutoff := now.Add(-claimTTL).UnixNano()
 		var newer, older int
-		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq>? AND (state=? OR (state=? AND claimed_at>?))", revision, statusContext, seq, OutboxPosted, OutboxPosting, cutoff).Scan(&newer); err != nil {
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq>? AND (state IN (?,?) OR (state=? AND claimed_at>?))", revision, statusContext, seq, OutboxPosted, OutboxFailed, OutboxPosting, cutoff).Scan(&newer); err != nil {
 			return err
 		}
 		if newer > 0 {

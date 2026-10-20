@@ -168,7 +168,6 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 		}
 	}
 	rs.render.Event(Event{Type: "started", Job: pj.ID})
-	spec.Slot = rs.sess.slots.take(slotDir(rs.sess.Home))
 	if newSecrets := rs.hooks.secretsFactory(); newSecrets != nil && len(spec.Job.Secrets) > 0 {
 		spec.Secrets = newSecrets(info, rs.hooks.NewRedactor)
 		if z, ok := spec.Secrets.(interface{ Zero() }); ok {
@@ -176,9 +175,8 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 		}
 	}
 	res := func() ciexec.AttemptResult {
-		defer rs.sess.slots.put(spec.Slot)
-		defer closeLog(lg) // before the attempt settles: a finished attempt always has its whole log stored
-		return rs.c.exec.Run(ctx, spec)
+		defer closeLog(lg)              // before the attempt settles: a finished attempt always has its whole log stored
+		return rs.runWaiting(ctx, spec) // takes the execution slot and waits out an unavailable isolation level
 	}()
 	o.Duration, o.ExitCode, o.Tail = res.Finished.Sub(res.Started), res.ExitCode, t.String()
 	if lg != nil {

@@ -12,6 +12,8 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
+	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/storetest"
 )
 
 // counting is a script that appends a line to marker before running body, so a
@@ -300,3 +302,53 @@ func TestRetryRecordKeepsTheEarlierFailureDiagnosis(t *testing.T) {
 }
 
 func planned(id string) plan.PlannedJob { return plan.PlannedJob{ID: id} }
+
+// An operator cancel accepted for the parked predecessor in the window before the retry
+// supersedes it must reach the successor: retire consumes the predecessor's intent (D-1191).
+func TestRetireHandsAnAcceptedCancelToTheSuccessor(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	for name, intent := range map[string]bool{"cancel accepted": true, "no cancel": false} {
+		t.Run(name, func(t *testing.T) {
+			st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = st.Close() })
+			if err = st.CreatePipeline(ctx, store.PipelineRow{ID: "p", Project: "/p", Revision: "r", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"}); err != nil {
+				t.Fatal(err)
+			}
+			if err = st.CreateJob(ctx, store.JobRow{ID: "j", PipelineID: "p", Name: "j", Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}); err != nil {
+				t.Fatal(err)
+			}
+			if err = st.CreateAttempt(ctx, store.AttemptRow{ID: "j.a1", JobID: "j", N: 1}, ""); err != nil {
+				t.Fatal(err)
+			}
+			storetest.Lease(t, st, "j.a1") // the first attempt is parked for a retry: leased, lost, retryable, queued
+			epoch := int64(1)
+			for _, step := range [][2]model.JobState{{"leased", "lost"}, {"lost", "retryable"}, {"retryable", "queued"}} {
+				if err = st.Transition(ctx, "j.a1", step[0], step[1], store.TransitionDetail{Epoch: epoch, FailureClass: "infra"}); err != nil {
+					t.Fatal(err)
+				}
+				epoch++
+			}
+			if err = st.CreateAttempt(ctx, store.AttemptRow{ID: "j.a2", JobID: "j", N: 2}, ""); err != nil {
+				t.Fatal(err)
+			}
+			if intent {
+				if err = st.RequestCancel(ctx, "j.a1", "operator stop", epoch); err != nil {
+					t.Fatal(err)
+				}
+			}
+			job := &model.Job{}
+			rs := &runState{sess: &Session{Store: st, jobs: map[*model.Job]string{job: "j"}}}
+			rs.retire(AttemptSpec{Pipeline: &model.Pipeline{}, Job: job, N: 2})
+			if got, _, _ := st.AttemptStateEpoch(ctx, "j.a1"); got != "cancelled" {
+				t.Fatalf("the superseded attempt is %s, not cancelled", got)
+			}
+			if has, err := st.CancelIntent(ctx, "j.a2"); err != nil || has != intent {
+				t.Fatalf("successor cancel intent = %v (err %v), want %v", has, err, intent)
+			}
+		})
+	}
+}

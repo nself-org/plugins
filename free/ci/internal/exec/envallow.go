@@ -55,3 +55,25 @@ func envAllowed(name string) bool {
 	}
 	return false
 }
+
+// imageOwnedEnv names the variables the toolchain image sets for itself. A host value
+// would override them through the env file: a host PATH hides the image's go, cargo and
+// pnpm, and a host GOTOOLCHAIN=auto lets the job fetch an unpinned Go.
+var imageOwnedEnv = map[string]bool{
+	"PATH": true, "GOTOOLCHAIN": true,
+	// host toolchain homes and target would point the image's tools at paths and platforms it does not have
+	"GOROOT": true, "GOOS": true, "GOARCH": true, "CARGO_HOME": true, "RUSTUP_HOME": true, "PNPM_HOME": true, "NVM_DIR": true,
+}
+
+// containerEnv drops the operator's forwarded image-owned variables so a container job
+// keeps the image's own values. Variables the job declares itself are added after this.
+func containerEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, item := range env {
+		name, _, _ := strings.Cut(item, "=")
+		if !imageOwnedEnv[strings.ToUpper(name)] {
+			out = append(out, item)
+		}
+	}
+	return out
+}

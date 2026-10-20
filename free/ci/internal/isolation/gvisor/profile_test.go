@@ -104,3 +104,11 @@ func TestCancelledTeardownDoesNotPoisonTheNextProbe(t *testing.T) {
 		t.Fatalf("a cancelled teardown poisoned the probe: %+v", av)
 	}
 }
+
+// withRuntime keeps the image the command runs, which the executor's backstop checks the command against.
+func TestWithRuntimeKeepsTheImage(t *testing.T) {
+	out, err := withRuntime(exec.ContainerCommand{Binary: "docker", Args: []string{"run", "--rm", "img"}, Image: "img"})
+	if err != nil || out.Image != "img" {
+		t.Fatalf("%+v %v", out, err)
+	}
+}

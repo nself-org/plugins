@@ -386,7 +386,19 @@ bash free/k8s/tests/kind/run.sh
 ```
 
 The workflow runs on pull requests that touch `free/k8s/**` and by `workflow_dispatch` with inputs `source` (`branch`, or
-`registry` once the registry leg exists), `cli_ref` and `leg` (`install` or `day2`). A pull request runs both legs.
+`registry`), `cli_ref` and `leg` (`install` or `day2`). A pull request runs both legs from the branch.
+
+The registry leg (`SOURCE=registry bash free/k8s/tests/kind/run.sh`, or `source=registry` in the workflow) proves the plugin
+people actually get. It builds the cli, starts from an empty fixture `HOME`, reads the registry the cli reads (the
+`NSELF_PLUGIN_REGISTRY` override, else the cli default) and runs `nself add k8s`. Before any cluster exists it checks that the
+plugin directory was empty, that the installed manifest version equals the served registry row and the checkout's
+`free/k8s/plugin.json` version, and that `nself help --json k8s` lists `values` and `backup`. The version check alone is not
+enough, because a release can keep the same version with older bytes. While the served k8s predates the chart the leg fails and
+names the served version and the missing commands; once the release is served it runs the same values, install, upgrade and
+contract steps as the branch leg (or the day2 steps) against the installed plugin, and prints the cli sha and the served
+version it proved. It never falls back to a branch build. The selection and assertions live in `free/k8s/tests/kind/registry.sh`;
+`bash free/k8s/tests/kind/registry-test.sh` tests them offline against fixtures (registry as an array or a map, served older,
+equal and newer than the checkout, row missing, old and chart-era command listings) and runs on every pull request.
 
 The `day2` leg (`LEG=day2 bash free/k8s/tests/kind/run.sh`) installs into a dedicated namespace, seeds three tables with 1,000 rows,
 runs `nself k8s backup --json` (the envelope names the dump and every table's count), deletes the namespace, installs again,

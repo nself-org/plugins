@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/repos/acme/widgets/branches/main/protection",
+    "query": ""
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "body": "{\"url\": \"https://api.github.com/repos/acme/widgets/branches/main/protection\", \"required_status_checks\": {\"strict\": false, \"contexts\": [\"nself-ci\"]}}"
+  }
+}

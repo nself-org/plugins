@@ -52,6 +52,7 @@ adds the columns older tables lack (`tenant_id`). The first start after upgradin
 | `001_audit_log_init.sql` | Creates `np_auditlog_events` (partitioned, append-only, RLS) |
 | `002_add_source_target_plugin.sql` | Adds `source_plugin` and `target_plugin` columns |
 | `003_add_tenant_id_forward_compat.sql` | Adds nullable `tenant_id UUID` for Cloud multi-tenancy (S74-T03) |
+| `004_audit_log_reader_view.sql` | Creates `public.np_audit_log`, a read-only view over `np_auditlog_events` for the audit-analytics and siem readers |
 
 ## See also
 

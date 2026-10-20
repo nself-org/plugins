@@ -77,6 +77,9 @@ type Cost struct {
 	Class              string
 	RateMicro          int64
 	BillingIncrementMs int64
+	// DivMs makes RateMicro a price per DivMs milliseconds (0 or 1: per millisecond), so a
+	// declared hourly or per-minute rate keeps its precision instead of rounding up per millisecond.
+	DivMs              int64 `json:",omitempty"`
 	MinimumChargeMicro int64
 	ExtrasMicro        int64
 	Confidence         string
@@ -220,10 +223,7 @@ func (w *World) reservePlacement(r *Runner, p Placement) {
 	w.Counts.Team++
 	w.Counts.Global++
 
-	class := r.Class
-	if class == "" {
-		class = w.Costs[r.ID].Class
-	}
+	class := runnerClass(*w, *r)
 	if class == "included" && !labelMatches(r.Capability.Identity.Labels, "nself.visibility=public") {
 		if a, ok := w.Allowances[r.Provider]; ok {
 			a.RemainingEstimated, _ = Add(a.RemainingEstimated, -p.CostMicro)

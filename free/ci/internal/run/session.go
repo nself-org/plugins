@@ -45,6 +45,10 @@ type Session struct {
 	Clock       func() time.Time
 	Interactive bool      // a person waits at a terminal: only then does the implicit foreground queue cap apply
 	PolicyRun   RunValues // the per-run policy values of the invocation; the dispatcher resolves its placement policy with them
+	// Dirty, ConfigOutside and Subset are the state the run started in (D-1075): a dirty tree,
+	// a config the commit does not hold, or --job. A later clean probe never undoes them; the
+	// release gate reads them with the live worktree probe.
+	Dirty, ConfigOutside, Subset bool
 
 	mu    sync.Mutex
 	jobs  map[*model.Job]string // job row id by job pointer

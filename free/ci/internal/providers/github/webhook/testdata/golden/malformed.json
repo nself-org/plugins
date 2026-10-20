@@ -1,0 +1,4 @@
+{
+  "declined": "payload is not a supported GitHub event body",
+  "e706": "unsupported"
+}

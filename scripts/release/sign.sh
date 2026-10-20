@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# sign.sh SLUG VERSION TARBALL
+# sign.sh SLUG VERSION TARBALL [PLATFORM]
 #
-# Purpose: sign one plugin tarball with the free-tier release key (hq PLUG D7, contract plugins.release-signature v1).
-#   The signed message is the domain-separated string  "nself-plugin-v1\n<slug>\n<version>\n<sha256 hex of TARBALL>\n"
-#   (every field followed by a newline, the last one too), signed with raw Ed25519 (`openssl pkeyutl -sign -rawin`).
+# Purpose: sign one plugin tarball with the free-tier release key (hq PLUG D7, contract plugins.release-signature v1.1).
+#   Without PLATFORM, TARBALL is the source tarball and the signed message is the domain-separated string
+#   "nself-plugin-v1\n<slug>\n<version>\n<sha256 hex of TARBALL>\n" (every field followed by a newline, the last one too).
+#   With PLATFORM (one of darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64), TARBALL is that platform's binary
+#   tarball and the message is "nself-plugin-bin-v1\n<slug>\n<version>\n<platform>\n<sha256 hex of TARBALL>\n". The first lines
+#   differ, so a source signature never verifies as a platform signature and the reverse. Both use raw Ed25519
+#   (`openssl pkeyutl -sign -rawin`) and the same tier key; the three-argument form is byte-identical to v1.
 #
 # Inputs (environment only, never argv):
 #   NSELF_RELEASE_SIGNING_KEY_FREE     PKCS8 PEM of the Ed25519 private key (raw PEM, PEM with collapsed newlines, or base64 of the PEM).
@@ -22,13 +26,21 @@ set +x
 
 err() { printf "[sign] ERROR: %s\n" "$*" >&2; }
 
-if [ "$#" -ne 3 ]; then
-  printf "usage: %s SLUG VERSION TARBALL\n" "$0" >&2
+if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
+  printf "usage: %s SLUG VERSION TARBALL [PLATFORM]\n" "$0" >&2
   exit 2
 fi
 SLUG="$1"
 VERSION="$2"
 TARBALL="$3"
+PLATFORM="${4-}"
+
+if [ "$#" -eq 4 ]; then
+  case "$PLATFORM" in
+    darwin-amd64|darwin-arm64|linux-amd64|linux-arm64|windows-amd64) ;;
+    *) printf "[sign] ERROR: platform '%s' is not one of darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64\n" "$PLATFORM" >&2; exit 2 ;;
+  esac
+fi
 
 [[ "$SLUG" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { err "slug '$SLUG' is not lowercase-with-hyphens"; exit 2; }
 [[ "$VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]*$ ]] || { err "version '$VERSION' is not a plain version string"; exit 2; }
@@ -88,7 +100,11 @@ if [ "plugins-$DERIVED" != "$KEY_ID" ]; then
 fi
 
 SHA="$(sha256_file "$TARBALL")"
-printf 'nself-plugin-v1\n%s\n%s\n%s\n' "$SLUG" "$VERSION" "$SHA" > "$WORK/msg"
+if [ "$#" -eq 4 ]; then
+  printf 'nself-plugin-bin-v1\n%s\n%s\n%s\n%s\n' "$SLUG" "$VERSION" "$PLATFORM" "$SHA" > "$WORK/msg"
+else
+  printf 'nself-plugin-v1\n%s\n%s\n%s\n' "$SLUG" "$VERSION" "$SHA" > "$WORK/msg"
+fi
 "$O" pkeyutl -sign -rawin -inkey "$WORK/key.pem" -in "$WORK/msg" -out "$WORK/sig" 2>/dev/null || { err "signing failed (is the key Ed25519?)"; exit 1; }
 [ "$(wc -c < "$WORK/sig" | tr -d ' ')" = "64" ] || { err "signature is not 64 bytes; the key is not Ed25519"; exit 1; }
 SIG="$("$O" base64 -A -in "$WORK/sig")"

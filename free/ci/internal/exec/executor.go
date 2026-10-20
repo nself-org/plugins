@@ -81,6 +81,9 @@ type AttemptResult struct {
 	// Signal names the signal that ended the job (SIGSEGV, SIGKILL, ...); "" when it exited
 	// on its own. ExitCode is -1 then. Diagnosis tells a crash from an external kill by it.
 	Signal string
+	// Refused is true when the Isolator refused the attempt in Prepare: nothing ran, no workspace
+	// exists, no hook or secret was touched, so the attempt can be offered again.
+	Refused bool
 }
 
 // Executor runs each local job through one process or Docker funnel.
@@ -145,7 +148,7 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	}
 	if perr != nil {
 		// a node that cannot isolate is not the job's fault
-		result.Err, result.Attempt.FailureClass = perr, "infra"
+		result.Err, result.Attempt.FailureClass, result.Refused = perr, "infra", true
 		return
 	}
 	if e.Env == nil {
@@ -242,6 +245,9 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	source := e.Secrets
 	if s.Secrets != nil {
 		source = s.Secrets
+	}
+	if s.Plan != nil || s.Job.Isolation == "container" {
+		env = containerEnv(env)
 	}
 	secrets, err := source.Resolve(ctx, s.Job.Secrets)
 	if err != nil {

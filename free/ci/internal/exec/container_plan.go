@@ -12,6 +12,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,13 +29,18 @@ type ContainerRun struct {
 	CPU                                      float64
 	MemoryMB                                 int
 	Network                                  model.NetworkScope
+	// JobImageCleanup asks a planner to run the cleanup helper in the job's own image. The executor sets it for the
+	// second try when the planner's pinned helper image could not start (not pulled and no registry reachable).
+	JobImageCleanup bool
 }
 
 // ContainerCommand is one runtime CLI invocation: Binary is docker or podman and
-// Args follow it.
+// Args follow it. Image is the image the command runs; empty means ContainerRun.Image
+// (the cleanup helper runs a pinned helper image, never the job's).
 type ContainerCommand struct {
 	Binary string
 	Args   []string
+	Image  string
 }
 
 // ContainerPlanner builds the container command lines; it never starts anything.
@@ -104,7 +110,10 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 		stop()
 		err = coded("E613", "container run: "+err.Error())
 	}
-	e.cleanupPlanned(s, run)
+	if cleanErr := e.cleanupPlanned(s, run); cleanErr != nil && s.Output != nil {
+		// not a failure by itself: the host removes what it owns, and a workspace it cannot empty fails a clean run (E610)
+		s.Output([]byte("nself-ci: workspace cleanup helper did not finish: " + cleanErr.Error() + "\n"))
+	}
 	if err == nil && code == 125 { // the runtime itself failed (daemon, image pull, option), not the job
 		err = coded("E613", "container runtime failed to start the container (exit 125)")
 	}
@@ -113,18 +122,54 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 
 // cleanupPlanned runs the profile's cleanup command, best effort and time boxed; the
 // helper container is stopped and removed when the time box ends, so it never outlives the attempt.
-func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) {
+// The profile's helper image is tried first. If it does not start (an air-gapped node that never pulled it), the
+// cleanup is tried once in the job's own image, as it ran before the helper image existed.
+// It returns why the cleanup did not run or did not finish (nil when none is needed or it ran clean).
+func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) error {
+	helper, err := e.cleanupOnce(s, run)
+	if err == nil || !helper {
+		return err
+	}
+	run.JobImageCleanup = true
+	_, err2 := e.cleanupOnce(s, run)
+	if err2 != nil {
+		return coded("E613", "helper image: "+err.Error()+"; job image: "+err2.Error())
+	}
+	return nil
+}
+
+// cleanupOnce runs one cleanup command. helper reports that the command ran an image other than the job's.
+func (e *Executor) cleanupOnce(s JobSpec, run ContainerRun) (helper bool, err error) {
 	cmd, err := s.Plan.Cleanup(run)
-	if err != nil || cmd == nil || checkContainerCommand(*cmd, run) != nil || checkSandboxRuntime(s.Job.Isolation, *cmd, run.Image) != nil {
-		return
+	if err != nil || cmd == nil {
+		return false, err
+	}
+	if cmd.Image != "" && cmd.Image != run.Image { // the helper runs its own pinned image; the backstop checks that one
+		helper, run.Image = true, cmd.Image
+	}
+	if err := checkContainerCommand(*cmd, run); err != nil {
+		return helper, err
+	}
+	if err := checkSandboxRuntime(s.Job.Isolation, *cmd, run.Image); err != nil {
+		return helper, err
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), 30*time.Second)
 	defer cancel()
 	stop := containerStopper(cmd.Binary, flagValueOf(cmd.Args, "--name"), e.Grace)
 	local := Executor{Redactor: passThroughRedactor{}, Grace: e.Grace}
-	if _, err := local.runCommand(ctx, append([]string{cmd.Binary}, cmd.Args...), run.Workspace, dockerHostEnv(), nil, stop, nil, ""); err != nil || ctx.Err() != nil {
+	tail := &outputTail{max: 512}
+	code, err := local.runCommand(ctx, append([]string{cmd.Binary}, cmd.Args...), run.Workspace, dockerHostEnv(), tail.write, stop, nil, "")
+	if err != nil || ctx.Err() != nil {
 		stop()
+		if err == nil {
+			err = ctx.Err()
+		}
+		return helper, err
 	}
+	if code != 0 {
+		return helper, coded("E613", "cleanup helper exited "+strconv.Itoa(code)+": "+strings.TrimSpace(tail.String()))
+	}
+	return helper, nil
 }
 
 // flagValueOf returns the value of `--name <v>` or `--name=<v>` in args, or "".

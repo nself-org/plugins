@@ -110,8 +110,9 @@ func passRig(t *testing.T) *rig {
 // TestHookSlotsNoop: with nothing registered, and with slots that do nothing,
 // the run posts the same status and ends with the same verdict.
 func TestHookSlotsNoop(t *testing.T) {
-	if len(Registered.Auto.Gates)+len(Registered.Auto.Details) != 0 || Registered.Auto.Offload != nil || Registered.Auto.Race != nil || Registered.Auto.Notify != nil {
-		t.Fatal("the shipped build must register no AUTO slot")
+	// the notify hook (P7-AUTO-18) is the one slot the shipped build fills; it is inert without v1.5 and notify.sinks
+	if _, ok := Registered.Auto.Notify.(*notifyHook); len(Registered.Auto.Gates)+len(Registered.Auto.Details) != 0 || Registered.Auto.Offload != nil || Registered.Auto.Race != nil || !ok {
+		t.Fatal("the shipped build must register no AUTO slot but the notify hook")
 	}
 	base := passRig(t)
 	want := base.run(t)

@@ -1,0 +1,1 @@
+{"ref":"refs/heads/old-branch","before":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","after":"0000000000000000000000000000000000000000","created":false,"deleted":true,"forced":false,"head_commit":null,"repository":{"id":1001,"full_name":"o/r","private":false,"visibility":"public","fork":false,"default_branch":"main"},"sender":{"login":"maint","type":"User"}}

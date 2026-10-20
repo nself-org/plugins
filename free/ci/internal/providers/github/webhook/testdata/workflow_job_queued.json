@@ -1,0 +1,1 @@
+{"action":"queued","workflow_job":{"id":4001,"run_id":3001,"status":"queued","head_sha":"cccccccccccccccccccccccccccccccccccccccc","head_branch":"fix","name":"nself-ci","labels":["self-hosted","nself","linux","x64"]},"repository":{"id":1001,"full_name":"o/r","private":false,"visibility":"public","fork":false,"default_branch":"main"},"sender":{"login":"newbie","type":"User"}}

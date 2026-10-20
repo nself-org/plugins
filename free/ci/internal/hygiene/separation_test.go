@@ -33,7 +33,7 @@ func TestSeparationModes(t *testing.T) {
 		uid  int
 		user string
 	}{
-		{"system install", system, 2, JobShim, 2002, "nself-ci-job-2"},
+		{"system install", system, 2, JobShim, 2002, "nself-ci-job-3"},
 		{"userns", userns, 3, Userns, 100003, ""},
 		{"container", cont, 0, ContainerMapped, 65532, ""},
 		{"container skips the agent uid", withAgent(cont, 65532), 0, ContainerMapped, 65533, ""},

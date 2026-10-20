@@ -1,0 +1,28 @@
+{
+  "schema_version": "1",
+  "command": "help",
+  "data": {
+    "commands": [
+      {
+        "path": "nself k8s",
+        "canon": "plugin"
+      },
+      {
+        "path": "nself k8s install",
+        "canon": "plugin"
+      },
+      {
+        "path": "nself k8s upgrade",
+        "canon": "plugin"
+      },
+      {
+        "path": "nself k8s status",
+        "canon": "plugin"
+      },
+      {
+        "path": "nself k8s uninstall",
+        "canon": "plugin"
+      }
+    ]
+  }
+}

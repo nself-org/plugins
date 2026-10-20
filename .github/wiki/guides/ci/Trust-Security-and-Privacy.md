@@ -20,7 +20,7 @@ Every container gets:
 
 - A kernel escape. A container shares the host kernel. For code you do not trust, use the sandboxed container level (gVisor) or a VM.
 - Network egress on `lan`, and anything a job does with the hosts the proxy allows under `restricted` and `internet`.
-- Disk use inside the workspace. The workspace is removed after the attempt. If the job image has no shell, the cleanup helper cannot remove job-owned files and the workspace can stay on disk (tracked as debt).
+- Disk use inside the workspace. The workspace is removed after the attempt. Files the job user created are removed by a cleanup helper that runs in a separate busybox image pinned by digest (image lock entry `ci-cleanup`), never in the job image, so an image without a shell cannot leave them behind. If the helper image cannot start (an air-gapped node that never pulled `ci-cleanup`), the cleanup is tried once in the job image, as before; if that fails too, the job log says so and the host removes what it owns; a workspace it cannot empty fails a passing run as an infra failure (`E610`).
 
 ## The sandboxed container level (gVisor)
 
@@ -107,7 +107,7 @@ A scope is offered only where it is enforced. The probe builds the same network 
 - On a node where the agent user has no docker group (a separated node), only a rootless runtime counts. A rootful socket is root-equivalent. Set `NSELF_CI_NODE_SEPARATED=1` on such a node; unset means "not separated" and a rootful runtime is accepted.
 - Rootless runtimes map about 65536 UIDs, so only slots 0 to 3 run at once.
 
-When the level is unavailable the job fails with E678 and a stable reason. It never falls back to a weaker level.
+When the level is unavailable the job waits before it fails, and never falls back to a weaker level. A slot the runtime cannot map (`isolation.slot_uid_unmapped`, for example a fifth concurrent attempt on a rootless runtime) is waited out until another attempt frees one, for up to 30 minutes (slot 0 is never waited for: no other attempt can free a better one). A missing runtime, a failed probe or limits the runtime cannot enforce are retried for about a minute. The job log says `waiting for ... isolation` and repeats it every minute. Only a refusal before the job started is waited for. After the wait the job fails with E678 and its stable reason. Other reasons (a rootful runtime, an unenforceable network scope) fail at once.
 
 ## Workspace hygiene and job UID separation
 
@@ -214,3 +214,29 @@ Handoff for later Tickets: `roles.Authorize(ctx, actor, role, project)` and `rol
 
 Wiring left to the coordinator process (P7-NODE-10 and P7-TRUST-26): start `audit.Log.RunSealer` (60 s) so rows other packages write get sealed, call `audit.SetScanner(run.Redactions)` before its first `Append` or `AppendTx` (the `serve admin` commands do this themselves), and resolve an Actor per request, not per connection. `store.CertSubjectPut` has no caller until the command that issues user certificates records their subject.
 
+
+## Policy sources and `nself ci policy`
+
+The effective policy of a repository is merged from, loosest first: the defaults, your operator rows (scopes `user`, `team`, `project`, kept in the CI store), the protected default branch's `.nself/ci.yaml` `policy:` block read at the fetched `origin/<default>` tip (or at an admin pin), the checked-out revision's own `policy:` block, and the flags of one run. Every later scope can only tighten. A widening in the revision, and any Spend key (`economics.*`, `burst.*`) in the branch or the revision, is ignored and listed. A `policy:` block in a pull request therefore never loosens anything.
+
+```
+nself ci policy show [--effective] [--json] [--team <id>]
+nself ci policy set --scope user|team|project [--team <id>] <key> <value> [--json]
+nself ci policy unset --scope user|team|project [--team <id>] <key> [--json]
+nself ci policy pin <sha> | --clear [--json]
+```
+
+- `show` prints every effective key with the scope it came from, the pinned commit, the fetch state (`fresh`, `stale`, `none`), the policy digest and the ignored fields with their code (`E671`). `--effective` prints only the values. `--json` data is `{effective, sources, pinned_commit, fetch, digest, ignored: [{key, source, code, reason}]}`. A Secret key prints as `[REDACTED]`.
+- `set` takes the value as JSON when it parses as JSON (`true`, `["a","b"]`), else as a plain string (`restricted`). The value goes through the key's own decoder, a string outside the key's order is refused, and the new row must merge without loosening a parent (`E670`) with the stored rows of the user, team and project it names, the protected branch's policy and the strictest defaults (an untrusted source). That keeps a stored row from making a later run in this repository fail to resolve. An unknown key is `E672`. `--scope project` and `pin` apply to the repository the command runs in (the project id comes from git; if git cannot run the command refuses rather than guess); `--scope team` needs `--team <id>` (letters, digits, `.`, `-`, `_`, at most 64).
+- `pin <sha>` fixes the protected-branch commit the policy is read at. It accepts only a full commit id reachable from the fetched `origin/<default>` (else `E672`); `--clear` returns to the tip.
+- Every `set`, `unset`, `pin` and `--clear` needs the `admin` role (the local operator of a PERSONAL coordinator has it) and writes its policy row and one `policy.*` audit row in one transaction: both land or neither does. The role check itself writes its own `authorize` row first, so a successful write leaves two rows and a refused one leaves only the `authorize` row (`policy.refused` for a machine-invoked refusal). The audit row names the scope, the quoted subject, the key, a short digest and the new value; a Secret key's value is never written.
+
+### Machine-invoked callers cannot loosen trust policy
+
+When `NSELF_INVOKED_BY` is set (the MCP and HTTP invokers always set it; you can export it for an agent that uses the CLI), `set`, `unset` and `pin` refuse, with `E687` reason `machine_invoked`, any write that loosens a `trust.*` key: raising `trust.machine_invoked_cap`, unsetting any `trust.*` key, and every `pin` or `--clear`. The refusal writes nothing to the policy and one `policy.refused` audit row. Lowering a trust key (`trust.machine_invoked_cap` from `owner` to `untrusted`) works, and so do keys outside `trust.*`. A first value for a `trust.*` list key that has no default (`trust.providers`, `trust.self_reported_gates`) counts as loosening, because an unset list means none allowed. With the variable unset the operator's writes work as before. This guard is advisory against an agent that controls its own environment, which can simply unset the variable; the plan also marks the three write commands `cli-only` on the MCP and HTTP surfaces (P7-CI-62) so a remote caller cannot reach them at all; that mapping is not part of this command.
+
+### Known limits
+
+- A `team` row applies only where a caller names the team (`show --team`); no run path supplies one yet, so a TEAM coordinator's team rows are inert until the coordinator wiring (P7-NODE) passes the team id.
+- `pin` needs a fetched origin; with no origin there is nothing to pin against.
+- The checks read the store before the write transaction opens, so two writers at the same moment can race (for example a machine write over a concurrent operator tightening). The rows of other projects are not listed by the store, so a user-scope write is not checked against them; `policy show` in that repository reports a conflict as `E670`.
