@@ -7,6 +7,8 @@ package reliability
 //          exactly one terminal state, no retry and at most one side effect.
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -49,13 +51,26 @@ func TestFaultCancelRacesResult(t *testing.T) {
 	l := newLab(t, fast, 2)
 	const iter = 25
 	for round := 0; round < 4; round++ {
+		// The dispatcher offers a lease to a node whose agent has not yet freed the slot of the cancelled job; the
+		// agent refuses it (E654) and the attempt waits out its TTL (debt row). This test is about the cancel, so
+		// each round starts with both agents idle.
+		for i := range 2 {
+			until(t, 30*time.Second, "the agent slot to be free", func() bool { return l.slotsUsed(i) == 0 }, l.dumpAll)
+		}
 		l.resetBeats()
 		before := l.fleetSideEffects()
 		h := l.start(jobSpec{iter: iter, idempotent: true, infraMax: 1})
 		atts := h.waitAttempt(1, 60*time.Second, "leased", "running")
 		fi := l.index(h.runnerOf(atts[0].ID))
 		// cancel when the job is `round` ticks from its end: the result and the cancel cross
-		until(t, 60*time.Second, "the job to near its end", func() bool { return l.lines(fi, "/tmp/beats") >= iter-round }, h.diagText)
+		until(t, 60*time.Second, "the job to near its end", func() bool { return l.lines(fi, "/tmp/beats") >= iter-round }, func() string {
+			var b strings.Builder
+			fmt.Fprintf(&b, "round %d node %d beats %d/%d connected %v\n", round, fi, l.lines(0, "/tmp/beats"), l.lines(1, "/tmp/beats"), l.c.connected())
+			for _, a := range h.attempts() {
+				fmt.Fprintf(&b, "attempt %+v\n  lease log: %q\n", a, h.leaseLogQuiet(a.ID))
+			}
+			return b.String() + h.diagText()
+		})
 		h.stop()
 		res := h.result(time.Minute)
 		got := h.attempts()

@@ -77,6 +77,16 @@ func (l *lab) jobAlive(i int) bool {
 	return err == nil && strings.TrimSpace(out) != ""
 }
 
+// slotsUsed is the number of slots node i's agent holds (its slots.json entries); a missing file is none.
+func (l *lab) slotsUsed(i int) int {
+	out, err := l.tryExec(i, `grep -o '"index"' `+agentHome+`/slots.json 2>/dev/null | wc -l`)
+	if err != nil {
+		return -1
+	}
+	n, _ := strconv.Atoi(strings.TrimSpace(out))
+	return n
+}
+
 // agentAlive reports whether the agent process runs in node i.
 func (l *lab) agentAlive(i int) bool {
 	out, err := l.tryExec(i, `kill -0 $(cat /tmp/agent.pid) 2>/dev/null && echo up || echo down`)
@@ -153,4 +163,44 @@ func (l *lab) resetBeats() {
 	for i := range l.names {
 		l.sh(i, "rm -f /tmp/beats /tmp/starts")
 	}
+}
+
+// dump is node i's agent state: its files and its processes, for a failure message.
+func (l *lab) dump(i int) string {
+	out, err := l.tryExec(i, `ls -laR /home/nself/.nself 2>&1 | head -60; for p in /proc/[0-9]*; do echo "${p#/proc/}: $(tr '\0' ' ' < $p/cmdline 2>/dev/null | cut -c1-120)"; done`)
+	if err != nil {
+		return "(" + err.Error() + ")"
+	}
+	return out + "\n"
+}
+
+// dumpAll is every node's agent state, for a failure message.
+func (l *lab) dumpAll() string {
+	var b strings.Builder
+	for i := range l.ids {
+		b.WriteString(l.dump(i))
+	}
+	return b.String()
+}
+
+// auditSummary counts the audit rows by action and lists the first rows of the interesting ones, for a failure message.
+func (l *lab) auditSummary() string {
+	db, err := sql.Open("sqlite", l.c.home+"/state.db?mode=ro")
+	if err != nil {
+		return "(" + err.Error() + ")"
+	}
+	defer func() { _ = db.Close() }()
+	rows, err := db.Query("SELECT action||' '||target||' '||detail FROM audit ORDER BY seq DESC LIMIT 60")
+	if err != nil {
+		return "(" + err.Error() + ")"
+	}
+	defer func() { _ = rows.Close() }()
+	var b strings.Builder
+	for rows.Next() {
+		var d string
+		if rows.Scan(&d) == nil {
+			b.WriteString("audit " + d + "\n")
+		}
+	}
+	return b.String()
 }

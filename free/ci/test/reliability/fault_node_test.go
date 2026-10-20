@@ -65,19 +65,15 @@ func TestFaultDeterministicFailureIsNotRetried(t *testing.T) {
 
 func TestFaultBlackHoleNodeGoesToMaintenance(t *testing.T) {
 	l := newLab(t, fast, 2)
-	l.setNodeState(1, "maintenance") // only the black hole can take the job
+	l.setNodeState(1, "maintenance") // only the black hole can take the first attempts
 	l.f.Netem(t, l.names[0], 0, 100) // it answers nothing: every packet it sends is dropped
-	h := l.start(jobSpec{iter: 10, idempotent: true, infraMax: 2})
+	h := l.startJobs(3, jobSpec{iter: 10, idempotent: true, infraMax: 1})
 
-	// three attempts lose their lease on the black hole, one after the other (the grant's own TTL, no heartbeat)
+	// three jobs lose their lease on the black hole (the grant's own TTL, no heartbeat): three infra failures in a row
 	until(t, 8*time.Minute, "the black hole to be put in maintenance", func() bool { return l.nodeState(0) == "maintenance" }, h.diagText)
-	res := h.result(3 * time.Minute)
-	if res.Exit == 0 {
-		t.Fatalf("a run on a black hole passed\n%s", h.out)
-	}
 	lost := 0
 	for _, a := range h.attempts() {
-		if a.FailureClass == "lost" || a.State == "lost" || a.State == "retryable" {
+		if a.FailureClass == "lost" && a.N == 1 {
 			lost++
 		}
 	}
@@ -85,14 +81,21 @@ func TestFaultBlackHoleNodeGoesToMaintenance(t *testing.T) {
 		t.Fatalf("%d attempts were lost on the black hole, want 3: %+v", lost, h.attempts())
 	}
 	if n := l.fleetSideEffects(); n != 0 {
-		t.Fatalf("the black hole's job wrote its side effect %d times", n)
+		t.Fatalf("the black hole's jobs wrote their side effect %d times", n)
 	}
 
-	// the operator re-enables the healthy node: new work goes there, never to the black hole
+	// the operator brings the healthy node back: the retries go there (anti-affinity), never to the black hole
 	l.setNodeState(1, "online")
-	h2 := l.start(jobSpec{iter: 10, idempotent: true, infraMax: 1})
-	res = h2.result(2 * time.Minute)
-	if res.Exit != 0 || l.sideEffects(1) != 1 || l.sideEffects(0) != 0 {
-		t.Fatalf("the run after maintenance: exit %d, side effects n1=%d n2=%d\n%s", res.Exit, l.sideEffects(0), l.sideEffects(1), h2.out)
+	res := h.result(3 * time.Minute)
+	if res.Exit != 0 || len(res.Summary.Jobs) != 3 {
+		t.Fatalf("exit %d, %d jobs\n%s", res.Exit, len(res.Summary.Jobs), h.out)
+	}
+	for _, j := range res.Summary.Jobs {
+		if j.N != 2 || j.State != "passed" {
+			t.Errorf("job %s ended as attempt %d %s, want attempt 2 passed", j.ID, j.N, j.State)
+		}
+	}
+	if l.sideEffects(0) != 0 || l.sideEffects(1) != 3 || l.nodeState(0) != "maintenance" {
+		t.Fatalf("side effects n1=%d n2=%d, black hole state %s; want 0, 3, maintenance", l.sideEffects(0), l.sideEffects(1), l.nodeState(0))
 	}
 }

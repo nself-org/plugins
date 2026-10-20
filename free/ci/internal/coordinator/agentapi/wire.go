@@ -30,7 +30,8 @@ const (
 	HeaderWait = "X-Nself-Wait"
 )
 
-const writeTimeout = 10 * time.Second
+// writeTimeout bounds one frame write. It is a var so a test can shorten it; nothing else changes it.
+var writeTimeout = 10 * time.Second
 
 // refuse writes a JSON refusal.
 func refuse(w http.ResponseWriter, status int, code, reason, msg string) {
@@ -120,7 +121,11 @@ func newFlow(w http.ResponseWriter, rc *http.ResponseController, start uint64) (
 // send writes one frame (V and Seq are filled in) and flushes it.
 func (f *flow) send(m protocol.Message) error {
 	m.V, m.Seq = 1, f.seq+1
+	// The deadline bounds this write only. An HTTP/2 stream resets itself (INTERNAL_ERROR) when its write
+	// deadline passes, even if nothing is being written, so an armed deadline would end every idle control
+	// stream and idle upload stream writeTimeout after its last frame.
 	_ = f.rc.SetWriteDeadline(time.Now().Add(writeTimeout))
+	defer func() { _ = f.rc.SetWriteDeadline(time.Time{}) }()
 	if err := f.enc.Encode(m); err != nil {
 		return err
 	}

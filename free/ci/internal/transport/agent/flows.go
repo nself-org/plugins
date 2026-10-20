@@ -139,11 +139,15 @@ func (c *Carrier) once(ctx context.Context) error {
 	defer cancel()
 	errs := make(chan error, 3)
 	var wg sync.WaitGroup
-	for _, f := range []func(context.Context) error{c.pollLeases, c.readControl, c.upload} {
+	for name, f := range map[string]func(context.Context) error{"leases": c.pollLeases, "control": c.readControl, "upload": c.upload} {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			errs <- f(fctx)
+			if err := f(fctx); err != nil {
+				errs <- &flowError{name: name, err: err}
+				return
+			}
+			errs <- nil
 		}()
 	}
 	err := <-errs
@@ -240,3 +244,12 @@ func (c *Carrier) readControl(ctx context.Context) error {
 		}
 	}
 }
+
+// flowError names the flow that ended a connection, so a log line says which of the three failed.
+type flowError struct {
+	name string
+	err  error
+}
+
+func (e *flowError) Error() string { return e.name + " stream: " + e.err.Error() }
+func (e *flowError) Unwrap() error { return e.err }

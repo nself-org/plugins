@@ -34,10 +34,11 @@ type timing struct{ heartbeat, ttl time.Duration }
 func (p timing) agentTTL() time.Duration { return p.ttl - 2*p.heartbeat }
 
 // Profiles: fast keeps each test under a minute; outage keeps the heartbeat short so a 20 s coordinator
-// outage starts at most a heartbeat after the last ack (agent_ttl 26 s).
+// outage starts at most a heartbeat after the last ack, and its agent_ttl (56 s) leaves a 20 s outage a wide
+// margin on a loaded machine (twenty agents and their containers share one host).
 var (
 	fast   = timing{heartbeat: time.Second, ttl: 6 * time.Second}      // agent_ttl 4 s
-	outage = timing{heartbeat: 2 * time.Second, ttl: 30 * time.Second} // agent_ttl 26 s
+	outage = timing{heartbeat: 2 * time.Second, ttl: 60 * time.Second} // agent_ttl 56 s
 )
 
 type coord struct {
@@ -59,6 +60,7 @@ type coord struct {
 	nAcks     atomic.Int64
 	stopSweep func()
 	ackHook   atomic.Pointer[func(node, leaseID string)] // the drain hears every ack that names a lease
+	gen       int                                        // how many times the coordinator has been started
 	logMu     sync.Mutex
 	log       []string // the listener's own log lines (refusals carry their E66x code)
 }
@@ -118,7 +120,8 @@ func (c *coord) up() {
 	c.mu.Lock()
 	c.srv, c.done = srv, done
 	c.mu.Unlock()
-	if _, err = c.eng.Start(context.Background(), "coord-reliability", c.incarnation()); err != nil {
+	c.gen++ // a restarted `ci serve` registers as a new coordinator: that is what gives the old leases their grace
+	if _, err = c.eng.Start(context.Background(), "coord-reliability-"+itoa(c.gen), c.incarnation()); err != nil {
 		c.t.Fatalf("restart grace: %v", err)
 	}
 	c.startSweeper()

@@ -38,7 +38,10 @@ type jobSpec struct {
 	idempotent bool
 	infraMax   int
 	failExit   int // non-zero: exit with this status instead of writing the side effect
-	name       string
+	// retryIter, when set, is the iteration count on a node that already ran a job (its /tmp/starts exists): a
+	// retry then ends quickly while the first attempts of the fleet outlive a long setup and a long outage.
+	retryIter int
+	name      string
 }
 
 // label is what the job writes to the side-effect file (its name), so a retry on another node is told apart.
@@ -54,7 +57,13 @@ func (j jobSpec) script() string {
 	if j.failExit != 0 {
 		tail = `exit ` + itoa(j.failExit)
 	}
-	return `echo $(date +%s%N) >> /tmp/starts; i=0; while [ $i -lt ` + itoa(j.iter) + ` ]; do echo $(date +%s%N) >> /tmp/beats; echo tick-$i; sleep 0.2; i=$((i+1)); done; ` + tail
+	n := itoa(j.iter)
+	pick := ""
+	if j.retryIter > 0 {
+		pick = `n=` + n + `; [ -e /tmp/starts ] && n=` + itoa(j.retryIter) + `; `
+		n = `$n`
+	}
+	return pick + `echo $(date +%s%N) >> /tmp/starts; i=0; while [ $i -lt ` + n + ` ]; do echo $(date +%s%N) >> /tmp/beats; echo tick-$i; sleep 0.2; i=$((i+1)); done; ` + tail
 }
 
 func (j jobSpec) job() model.Job {
@@ -266,6 +275,15 @@ func (h *runHandle) leaseLog(attemptID string) []string {
 		out = append(out, strings.TrimRight(rec.Text, "\n"))
 	}
 	return out
+}
+
+// leaseLogQuiet is leaseLog for a failure message: an unreadable log is a short text, never a fatal.
+func (h *runHandle) leaseLogQuiet(attemptID string) string {
+	raw, err := os.ReadFile(agent.LogFile(h.l.c.home+"/agent-logs", "lease-"+attemptID))
+	if err != nil {
+		return "(" + err.Error() + ")"
+	}
+	return string(raw)
 }
 
 // assertTicks fails unless the log holds tick-0 .. tick-(n-1) exactly once each and in order: no duplicate

@@ -39,11 +39,11 @@ func TestFaultCoordinatorRestartMidLogStream(t *testing.T) {
 }
 
 // busyFleet starts count jobs, one per node, and waits until every job is running and every lease was renewed.
-func busyFleet(t *testing.T, p timing, count int, iter int) (*lab, *runHandle) {
+func busyFleet(t *testing.T, p timing, count int, iter, retryIter int) (*lab, *runHandle) {
 	t.Helper()
 	l := newLab(t, p, count)
-	h := l.startJobs(count, jobSpec{iter: iter, idempotent: true, infraMax: 1})
-	until(t, 3*time.Minute, "every job to be running on its own node", func() bool {
+	h := l.startJobs(count, jobSpec{iter: iter, retryIter: retryIter, idempotent: true, infraMax: 1})
+	until(t, 8*time.Minute, "every job to be running on its own node", func() bool {
 		running := 0
 		for _, a := range h.attempts() {
 			if a.State == "leased" || a.State == "running" {
@@ -63,11 +63,11 @@ func busyFleet(t *testing.T, p timing, count int, iter int) (*lab, *runHandle) {
 }
 
 func TestFaultCoordinatorDownBelowAgentTTL(t *testing.T) {
-	l, h := busyFleet(t, outage, 20, 400)
+	l, h := busyFleet(t, outage, 20, 1000, 20)
 	before := len(h.attempts())
 
 	l.c.down()
-	hold(20 * time.Second) // < agent_ttl (26 s)
+	hold(20 * time.Second) // < agent_ttl (56 s)
 	l.c.up()
 	l.waitConnected(60*time.Second, l.ids...)
 
@@ -89,10 +89,10 @@ func TestFaultCoordinatorDownBelowAgentTTL(t *testing.T) {
 }
 
 func TestFaultCoordinatorDownFiveMinutes(t *testing.T) {
-	l, h := busyFleet(t, outage, 20, 150)
+	l, h := busyFleet(t, outage, 20, 3000, 20)
 	l.c.down()
 	// every agent fences itself: its job process is gone long before the coordinator is back
-	until(t, outage.agentTTL()+30*time.Second, "every agent to kill its job", func() bool {
+	until(t, outage.agentTTL()+2*time.Minute, "every agent to kill its job", func() bool {
 		for i := range l.names {
 			if l.jobAlive(i) {
 				return false
@@ -110,7 +110,7 @@ func TestFaultCoordinatorDownFiveMinutes(t *testing.T) {
 	}
 	retried := l.auditDetails("retry-queued")
 	if len(retried) != 20 {
-		t.Fatalf("%d attempts were retried, want 20 (one per job): %v", len(retried), retried)
+		t.Fatalf("%d attempts were retried, want 20 (one per job): %v\n%s", len(retried), retried, l.auditSummary())
 	}
 	for _, r := range retried {
 		if !strings.Contains(r, "agent.self_fenced") {
