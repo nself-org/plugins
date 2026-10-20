@@ -86,10 +86,13 @@ func (r *Resolver) binary() string {
 }
 
 func (r *Resolver) env() []string {
-	if r.AgeKeyPath == "" {
-		return nil
+	// Released CLIs gate resolve behind V15; the exec funnel deliberately
+	// strips the operator environment, including an inherited NSELF_V15.
+	env := []string{"NSELF_V15=1"}
+	if r.AgeKeyPath != "" {
+		env = append(env, "SECRETS_AGE_KEY_PATH="+r.AgeKeyPath)
 	}
-	return []string{"SECRETS_AGE_KEY_PATH=" + r.AgeKeyPath}
+	return env
 }
 
 // Probe checks once that the cli has the resolve command. Absence is E675.

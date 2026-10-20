@@ -175,7 +175,7 @@ func TestAgentNodeUsesItsOwnIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range f.Calls() {
-		if len(c.Env) != 1 || c.Env[0] != "SECRETS_AGE_KEY_PATH=/var/lib/node/age.key" || strings.Contains(strings.Join(c.Env, ""), "operator") {
+		if len(c.Env) != 2 || c.Env[0] != "NSELF_V15=1" || c.Env[1] != "SECRETS_AGE_KEY_PATH=/var/lib/node/age.key" || strings.Contains(strings.Join(c.Env, ""), "operator") {
 			t.Fatalf("env %v", c.Env)
 		}
 	}
