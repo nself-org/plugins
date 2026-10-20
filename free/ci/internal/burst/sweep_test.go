@@ -326,3 +326,47 @@ func TestSweepAlertsOnceForAnOwnMachineOnADeployHost(t *testing.T) {
 		t.Fatalf("kept=%v alerts=%v", r.cloud.Has(m), r.alerts)
 	}
 }
+
+// D-1330: a restarted coordinator must not repeat an orphan alert it already sent.
+func TestSweepOrphanAlertSurvivesARestart(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	r.cloud.AddForeign(burst.IntentLabels(coord, token(31)), addr("192.0.2.231"))
+	r.clk.Advance(30 * time.Minute)
+	if _, err := r.eng.Sweep(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	r.build() // the coordinator restarts: the in-memory dedupe is gone
+	if _, err := r.eng.Sweep(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.alerts) != 1 || r.alerts[0].Kind != burst.AlertOrphan {
+		t.Fatalf("the orphan is alerted once across a restart: %v", r.alerts)
+	}
+}
+
+// D-1330: the decision log is pruned by the sweep (90 days; 20 000 rows).
+func TestSweepPrunesTheDecisionLog(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	now := r.clk.Now().UnixMilli()
+	day := (24 * time.Hour).Milliseconds()
+	for _, at := range []int64{now - 100*day, now - 91*day, now - 1*day} {
+		if err := r.st.BurstWrite(ctx, func(b store.BurstTx) error { return b.PutDecision(at, "fakecloud", "job-old", true, "allowed", "{}") }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := r.eng.Sweep(ctx, true); err != nil { // a dry run changes nothing
+		t.Fatal(err)
+	}
+	if got, _ := r.st.BurstDecisions(ctx, "job-old"); len(got) != 3 {
+		t.Fatalf("--dry-run must not prune: %d rows", len(got))
+	}
+	if _, err := r.eng.Sweep(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := r.st.BurstDecisions(ctx, "job-old")
+	if len(got) != 1 || got[0].At != now-1*day {
+		t.Fatalf("only the recent decision stays: %+v", got)
+	}
+}

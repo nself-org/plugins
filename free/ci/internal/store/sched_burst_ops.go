@@ -2,14 +2,15 @@ package store
 
 // Purpose: the counters and guards around burst intents (P7-SCHED-08): the
 // one-job-per-node record, the join breaker, the teardown-failure list, the
-// caps' counters and the decision log.
+// caps' counters, the decision log and the alert marks.
 // Inputs:  calls from internal/burst and its `ephemeral` admission step.
 // Outputs: counts, flags and rows.
 // Constraints: a node use row is written in the admission transaction, so it
 // commits with the lease or not at all; a failed teardown is alerted once (the
 // caller learns it from TeardownFailed) and blocks its provider until the
 // resource is confirmed gone; the breaker counts consecutive join failures and
-// opens for a fixed time; counts include only intents that still hold money.
+// opens for a fixed time; counts include only intents that still hold money; the
+// decision log and the alert marks are pruned by BurstPrune (age and row cap).
 
 import (
 	"context"
@@ -234,4 +235,45 @@ func (s *Store) BurstDecisions(ctx context.Context, jobKey string) ([]BurstDecis
 		out = append(out, d)
 	}
 	return out, rows.Err()
+}
+
+// BurstAlertOnce marks (kind, resource) as alerted and reports whether this is the first time, so the
+// operator is told once even across a coordinator restart.
+func (s *Store) BurstAlertOnce(ctx context.Context, kind, resource string) (first bool, err error) {
+	err = s.write(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO burst_alert_seen (kind,resource,at) VALUES (?,?,?)`, kind, resource, s.now().UnixMilli())
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		first = n == 1
+		return err
+	})
+	return first, err
+}
+
+// BurstPrune deletes decisions and alert marks older than before (unix milliseconds), then trims the
+// decision log to its newest maxDecisions rows. It returns how many decisions it removed.
+func (s *Store) BurstPrune(ctx context.Context, before int64, maxDecisions int) (removed int64, err error) {
+	err = s.write(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM burst_alert_seen WHERE at<?`, before); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `DELETE FROM burst_decision WHERE at<?`, before)
+		if err != nil {
+			return err
+		}
+		removed, err = res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		res, err = tx.ExecContext(ctx, `DELETE FROM burst_decision WHERE id <= (SELECT id FROM burst_decision ORDER BY id DESC LIMIT 1 OFFSET ?)`, maxDecisions)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		removed += n
+		return err
+	})
+	return removed, err
 }
