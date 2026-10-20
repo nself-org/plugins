@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/economics"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -25,6 +26,33 @@ import (
 
 // Teardown ends one intent; see the file comment.
 func (e *Engine) Teardown(ctx context.Context, token, reason string) error {
+	return e.teardown(ctx, token, reason, false)
+}
+
+// Idle and join-timeout teardowns are decided from a read that admission can overtake: they give way to a lease.
+func onlyIfUnused(reason string) bool { return reason == ReasonIdle || reason == ReasonJoinTimeout }
+
+// lockIntent serializes the teardowns of one intent (Tick, Sweep, JoinFailed and a failed Provision may meet).
+func (e *Engine) lockIntent(token string) func() {
+	e.mu.Lock()
+	m := e.locks[token]
+	if m == nil {
+		m = &sync.Mutex{}
+		e.locks[token] = m
+	}
+	e.mu.Unlock()
+	m.Lock()
+	return m.Unlock
+}
+
+func (e *Engine) teardown(ctx context.Context, token, reason string, ifUnused bool) error {
+	unlock := e.lockIntent(token)
+	defer unlock()
+	if e.isCreating(token) {
+		// the create call is still in flight in this process: ending the intent now would release money for a machine
+		// that is about to appear. The caller's next sweep retries.
+		return teardownFailed(nil, "intent %s is still being created; retried at the next sweep", token)
+	}
 	in, ok, err := e.o.Store.BurstIntent(ctx, token)
 	if err != nil {
 		return teardownFailed(err, "intent %s unreadable", token)
@@ -39,7 +67,10 @@ func (e *Engine) Teardown(ctx context.Context, token, reason string) error {
 	if !ok {
 		return e.failed(ctx, in, errors.New("provider not configured"), "provider "+in.Provider+" is not configured")
 	}
-	revokeErr := e.markAndRevoke(ctx, in, reason)
+	revokeErr := e.markAndRevoke(ctx, in, reason, ifUnused && onlyIfUnused(reason))
+	if errors.Is(revokeErr, errNowInUse) {
+		return nil // a lease won the race: the node is working, the intent stays live
+	}
 	if errors.Is(revokeErr, ErrKilled) {
 		return revokeErr
 	}
@@ -55,13 +86,19 @@ func (e *Engine) Teardown(ctx context.Context, token, reason string) error {
 	case revokeErr != nil:
 		return e.failed(ctx, in, revokeErr, "node revoke failed")
 	}
-	return e.finalize(ctx, in, reason)
+	if err = e.finalize(ctx, in, reason); err != nil {
+		return err
+	}
+	e.mu.Lock()
+	delete(e.locks, token)
+	e.mu.Unlock()
+	return nil
 }
 
 // markAndRevoke ends the node's life. A bound node is revoked first (its hook marks the intent in the
 // same transaction) and the intent is marked regardless. An unbound intent is marked first, which stops
 // a node from binding to it, and is read again: a node that bound between the read and the mark is revoked too.
-func (e *Engine) markAndRevoke(ctx context.Context, in store.BurstIntent, reason string) error {
+func (e *Engine) markAndRevoke(ctx context.Context, in store.BurstIntent, reason string, ifUnused bool) error {
 	mark := func() error {
 		return e.o.Store.BurstWrite(ctx, func(t store.BurstTx) error { return t.MarkTearingDown(in.Token, reason, t.NowMs()) })
 	}
@@ -74,18 +111,45 @@ func (e *Engine) markAndRevoke(ctx context.Context, in store.BurstIntent, reason
 	if err := e.at(PointBeforeMark); err != nil {
 		return err
 	}
+	if ifUnused {
+		var marked bool
+		err := e.o.Store.BurstWrite(ctx, func(t store.BurstTx) error {
+			var err error
+			marked, err = t.MarkTearingDownIfUnused(in.Token, reason, t.NowMs())
+			return err
+		})
+		if err != nil {
+			return err
+		}
+		if !marked {
+			if now, ok, rerr := e.o.Store.BurstIntent(ctx, in.Token); rerr == nil && ok && now.State == store.BurstLive {
+				return errNowInUse
+			}
+		}
+		if in.NodeID != "" {
+			return revoke(in.NodeID)
+		}
+		return e.revokeLateJoiner(ctx, in.Token, revoke)
+	}
 	if in.NodeID != "" {
 		return errors.Join(revoke(in.NodeID), mark())
 	}
 	if err := mark(); err != nil {
 		return err
 	}
-	again, ok, err := e.o.Store.BurstIntent(ctx, in.Token)
+	return e.revokeLateJoiner(ctx, in.Token, revoke)
+}
+
+// revokeLateJoiner revokes a node that bound to the intent between the read and the mark.
+func (e *Engine) revokeLateJoiner(ctx context.Context, token string, revoke func(string) error) error {
+	again, ok, err := e.o.Store.BurstIntent(ctx, token)
 	if err != nil || !ok || again.NodeID == "" {
 		return err
 	}
 	return revoke(again.NodeID)
 }
+
+var errNowInUse = errors.New("burst: the node took its job first")
 
 // own keeps the machines that carry this coordinator's labels and this intent.
 func (e *Engine) own(rs []Resource, token string) []Resource {
@@ -115,9 +179,6 @@ func (e *Engine) deleteResources(ctx context.Context, p Provider, in store.Burst
 			return false, errExcluded
 		}
 		ids[r.ID] = true
-	}
-	if in.ResourceID != "" {
-		ids[in.ResourceID] = true // recorded by this coordinator when it created the machine
 	}
 	for _, id := range sortedKeys(ids) {
 		if err = p.Teardown(ctx, id); err != nil && !errors.Is(err, ErrNotFound) {

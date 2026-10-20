@@ -79,6 +79,9 @@ func (e *Engine) Sweep(ctx context.Context, dryRun bool) (SweepReport, error) {
 
 func (e *Engine) judge(ctx context.Context, p Provider, ex deployguard.Set, r Resource) (SweepAction, error) {
 	token := r.Labels[LabelIntent]
+	if token != "" && !labelSafe(token) {
+		token = "" // a provider-controlled label never reaches a query or an audit row unless it is a plain token
+	}
 	act := SweepAction{Provider: p.ID(), Resource: r.ID, Intent: token}
 	f := SweepFacts{Mine: Mine(r.Labels, e.o.Coordinator), Excluded: excluded(ex, r), MaxLifetimeMs: e.cfg.MaxLifetime.Milliseconds(), GraceMs: e.cfg.Grace.Milliseconds()}
 	if !r.CreatedAt.IsZero() {

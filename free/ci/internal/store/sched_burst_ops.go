@@ -101,7 +101,7 @@ func burstCounts(ctx context.Context, q rowQuerier, provider, jobKey string, win
 	if c.JobWindow, err = burstCount(ctx, q, `SELECT COUNT(*) FROM burst_intent WHERE job_key=? AND created_at>=?`, jobKey, windowStart); err != nil {
 		return c, err
 	}
-	c.TeardownFailed, err = burstCount(ctx, q, `SELECT COUNT(*) FROM burst_teardown_failure WHERE provider=?`, provider)
+	c.TeardownFailed, err = burstCount(ctx, q, `SELECT COUNT(*) FROM burst_teardown_failure f JOIN burst_intent i ON i.token=f.intent WHERE f.provider=? AND i.state<>'terminal'`, provider)
 	return c, err
 }
 
@@ -165,8 +165,11 @@ func (t BurstTx) BreakerReset(provider string) error {
 // TeardownFailed records a failed teardown attempt. alert is true only the first
 // time, so the operator is told once however long the retries last.
 func (t BurstTx) TeardownFailed(intent, provider string, at int64) (alert bool, err error) {
-	if _, err = t.tx.ExecContext(t.ctx, `INSERT INTO burst_teardown_failure (intent,provider,first_failed_at,last_failed_at,attempts,alerted) VALUES (?,?,?,?,1,0)
- ON CONFLICT(intent) DO UPDATE SET last_failed_at=excluded.last_failed_at, attempts=attempts+1`, intent, provider, at, at); err != nil {
+	// Only an open intent can fail a teardown: a failure that lands after another teardown ended the intent
+	// would otherwise leave a row nothing ever clears, and the provider would stay blocked for good.
+	if _, err = t.tx.ExecContext(t.ctx, `INSERT INTO burst_teardown_failure (intent,provider,first_failed_at,last_failed_at,attempts,alerted)
+ SELECT ?,?,?,?,1,0 WHERE EXISTS (SELECT 1 FROM burst_intent WHERE token=? AND state<>'terminal')
+ ON CONFLICT(intent) DO UPDATE SET last_failed_at=excluded.last_failed_at, attempts=attempts+1`, intent, provider, at, at, intent); err != nil {
 		return false, err
 	}
 	res, err := t.tx.ExecContext(t.ctx, `UPDATE burst_teardown_failure SET alerted=1 WHERE intent=? AND alerted=0`, intent)

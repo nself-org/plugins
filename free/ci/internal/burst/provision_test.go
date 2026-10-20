@@ -323,3 +323,71 @@ func TestBurstEngineRejectsACoordinatorThatIsNotALabel(t *testing.T) {
 		}
 	}
 }
+
+// midCreate runs fn inside the provider's Provision, before the machine exists: the create is slow
+// and time passes, the way a real `infra server provision` can take longer than the idle window.
+type midCreate struct {
+	burst.Provider
+	fn func(context.Context)
+}
+
+func (m midCreate) Provision(ctx context.Context, in burst.Intent) (burst.Resource, error) {
+	m.fn(ctx)
+	return m.Provider.Provision(ctx, in)
+}
+
+// TestBurstSlowCreateIsNotEndedUnderneath: the create call outlives the join window and a sweep runs meanwhile;
+// the intent must survive, nothing is released, and the machine is recorded when the call returns.
+func TestBurstSlowCreateIsNotEndedUnderneath(t *testing.T) {
+	var r *rig
+	r = newRig(t, func(r *rig) {
+		r.wrap = func(p burst.Provider) burst.Provider {
+			return midCreate{p, func(ctx context.Context) {
+				r.clk.Advance(20 * time.Minute) // past idle + latency, and past nothing else
+				_, _ = r.eng.Tick(ctx)
+				r.clk.Advance(60 * time.Minute) // past max_lifetime too
+				_, _ = r.eng.Tick(ctx)
+			}}
+		}
+	})
+	res, err := r.eng.Provision(context.Background(), r.request("job-1"))
+	if err != nil {
+		t.Fatalf("the provision must succeed: %v", err)
+	}
+	in := r.intent(res.Token)
+	if in.State != store.BurstLive || in.ResourceID != res.Resource.ID || !r.cloud.Has(res.Resource.ID) {
+		t.Fatalf("intent %+v machine present=%v", in, r.cloud.Has(res.Resource.ID))
+	}
+	if row := r.resourceRow(res.Token); row.ConfirmedTeardownAt != nil {
+		t.Fatal("money released while the machine was still being created")
+	}
+	// once the create has returned the normal timers apply again.
+	if _, err = r.eng.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.cloud.All()) != 0 || r.intent(res.Token).State != store.BurstTerminal {
+		t.Fatal("after the create returned, the overdue intent is ended by the next sweep")
+	}
+}
+
+// TestBurstMachineThatOutlivesItsIntentIsDeleted: another process ended the intent while the create call ran.
+func TestBurstMachineThatOutlivesItsIntentIsDeleted(t *testing.T) {
+	var r *rig
+	var token string
+	r = newRig(t, func(r *rig) {
+		r.wrap = func(p burst.Provider) burst.Provider {
+			return midCreate{p, func(ctx context.Context) {
+				ins, _ := r.st.BurstIntents(ctx, coord)
+				token = ins[0].Token
+				_ = r.st.BurstWrite(ctx, func(b store.BurstTx) error { return b.MarkTerminal(token, b.NowMs()) })
+			}}
+		}
+	})
+	_, err := r.eng.Provision(context.Background(), r.request("job-1"))
+	if burst.ReasonOf(err) != "intent.ended" {
+		t.Fatalf("a provision whose intent ended is refused: %v", err)
+	}
+	if len(r.cloud.All()) != 0 {
+		t.Fatal("the machine that appeared after its intent ended must be deleted at once")
+	}
+}

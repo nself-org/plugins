@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -33,8 +34,8 @@ func TestBurstStoreIntentStateMovesForwardOnly(t *testing.T) {
 		t.Fatalf("lease %+v", l)
 	}
 	must(s.BurstWrite(ctx, func(b BurstTx) error {
-		if err := b.SetResource("T1", "res-1", 2000); err != nil {
-			return err
+		if ok, err := b.SetResource("T1", "res-1", 2000); err != nil || !ok {
+			return fmt.Errorf("set resource: %v %v", ok, err)
 		}
 		if bound, err := b.SetNode("T1", "node-1", 2100); err != nil || !bound {
 			t.Errorf("bind %v %v", bound, err)
@@ -116,6 +117,8 @@ func TestBurstStoreBreakerAndTeardownFailure(t *testing.T) {
 	if b, _ := s.Breaker(ctx, "cloud"); b.Failures != 0 || b.OpenUntil != 0 {
 		t.Fatalf("%+v", b)
 	}
+	in9, lease9 := burstIntent("T9")
+	_ = s.BurstWrite(ctx, func(b BurstTx) error { return b.PutIntent(in9, lease9) })
 	alerts := 0
 	for i := 0; i < 5; i++ {
 		_ = s.BurstWrite(ctx, func(b BurstTx) error {
@@ -217,5 +220,66 @@ func TestBurstStoreANodeBelongsToOneOpenIntent(t *testing.T) {
 	_ = s.BurstWrite(ctx, func(b BurstTx) error { return b.MarkTerminal("A", 3) })
 	if err := s.BurstWrite(ctx, func(b BurstTx) error { _, err := b.SetNode("B", "node-1", 4); return err }); err != nil {
 		t.Fatalf("once the first intent is terminal the node id is free again: %v", err)
+	}
+}
+
+func TestBurstStoreFailureOfAnEndedIntentLeavesNoRowAndNoBlock(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	in, lease := burstIntent("T1")
+	_ = s.BurstWrite(ctx, func(b BurstTx) error { return b.PutIntent(in, lease) })
+	_ = s.BurstWrite(ctx, func(b BurstTx) error { return b.MarkTerminal("T1", 5) })
+	var alert bool
+	_ = s.BurstWrite(ctx, func(b BurstTx) error {
+		var err error
+		alert, err = b.TeardownFailed("T1", "cloud", 6)
+		return err
+	})
+	if _, ok, _ := s.TeardownFailure(ctx, "T1"); alert || ok {
+		t.Fatalf("a teardown that failed after another teardown ended the intent must record nothing: alert=%v row=%v", alert, ok)
+	}
+	// and a row that did land does not block once its intent is terminal
+	in2, lease2 := burstIntent("T2")
+	_ = s.BurstWrite(ctx, func(b BurstTx) error { return b.PutIntent(in2, lease2) })
+	_ = s.BurstWrite(ctx, func(b BurstTx) error { _, err := b.TeardownFailed("T2", "cloud", 7); return err })
+	if c, _ := s.BurstCountsOf(ctx, "cloud", "x", 0); c.TeardownFailed != 1 {
+		t.Fatalf("%+v", c)
+	}
+	_ = s.BurstWrite(ctx, func(b BurstTx) error { return b.MarkTerminal("T2", 8) })
+	if c, _ := s.BurstCountsOf(ctx, "cloud", "x", 0); c.TeardownFailed != 0 {
+		t.Fatalf("a failure of a terminal intent must not block the provider: %+v", c)
+	}
+}
+
+func TestBurstStoreMarkIfUnusedGivesWayToALease(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	in, lease := burstIntent("T1")
+	_ = s.BurstWrite(ctx, func(b BurstTx) error {
+		if err := b.PutIntent(in, lease); err != nil {
+			return err
+		}
+		_, err := b.SetNode("T1", "node-1", 1)
+		return err
+	})
+	_ = s.BurstWrite(ctx, func(b BurstTx) error { _, err := b.NodeUse("node-1", "T1", "a1", 2); return err })
+	var marked bool
+	_ = s.BurstWrite(ctx, func(b BurstTx) error {
+		var err error
+		marked, err = b.MarkTearingDownIfUnused("T1", "idle", 3)
+		return err
+	})
+	if got, _, _ := s.BurstIntent(ctx, "T1"); marked || got.State != BurstLive {
+		t.Fatalf("a node that took its job is not torn down as idle: %v %+v", marked, got)
+	}
+	in2, lease2 := burstIntent("T2")
+	_ = s.BurstWrite(ctx, func(b BurstTx) error { return b.PutIntent(in2, lease2) })
+	_ = s.BurstWrite(ctx, func(b BurstTx) error {
+		var err error
+		marked, err = b.MarkTearingDownIfUnused("T2", "join timeout", 4)
+		return err
+	})
+	if got, _, _ := s.BurstIntent(ctx, "T2"); !marked || got.State != BurstTearingDown {
+		t.Fatalf("an unbound, unused intent is torn down: %v %+v", marked, got)
 	}
 }

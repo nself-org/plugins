@@ -117,6 +117,16 @@ func (c *Cloud) Age(id string, d time.Duration) {
 	}
 }
 
+// Relabel replaces a machine's labels (a machine that stopped being the lifecycle's, e.g. promoted to a deploy host).
+func (c *Cloud) Relabel(id string, labels map[string]string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if r, ok := c.res[id]; ok {
+		r.Labels = labels
+		c.res[id] = r
+	}
+}
+
 // All lists every machine, labelled or not, sorted by id (for assertions).
 func (c *Cloud) All() []burst.Resource {
 	c.mu.Lock()

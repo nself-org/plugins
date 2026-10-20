@@ -44,13 +44,41 @@ func (e *Engine) Provision(ctx context.Context, req Request) (Result, error) {
 	if !ok || req.JobKey == "" {
 		return Result{}, refused("provider.unknown", nil, "provider %q is not configured or the job has no key", req.Provider)
 	}
-	// One provision decides and commits at a time, so two callers cannot both see an empty window or a free slot;
-	// commitIntent re-counts inside its transaction as well, which also covers a second process on the same store.
+	d, token, err := e.admit(ctx, p, req)
+	if err != nil {
+		return Result{Decision: d}, err
+	}
+	defer e.setCreating(token, false)
+	if err = e.at(PointAfterIntent); err != nil {
+		return Result{Decision: d, Token: token}, err
+	}
+	res, err := e.create(ctx, p, token, req.Spec)
+	if err != nil {
+		if errors.Is(err, ErrKilled) {
+			return Result{Decision: d, Token: token}, err
+		}
+		e.setCreating(token, false) // the create call has returned (with an error): cleanup may proceed
+		_ = e.Teardown(context.WithoutCancel(ctx), token, "provision failed")
+		return Result{Decision: d, Token: token}, refused("provider.error", err, "%s: %s", p.ID(), errClass(err))
+	}
+	if err = e.at(PointAfterCreate); err != nil {
+		return Result{Decision: d, Token: token}, err
+	}
+	if err = e.record(ctx, p, token, res); err != nil {
+		return Result{Decision: d, Token: token, Resource: res}, err
+	}
+	return Result{Decision: d, Token: token, Resource: res}, nil
+}
+
+// admit decides and commits the intent. One provision decides and commits at a time, so two callers cannot both
+// see an empty window or a free slot; commitIntent re-counts inside its transaction as well, which also covers a
+// second process on the same store. The provider call happens after the lock is released.
+func (e *Engine) admit(ctx context.Context, p Provider, req Request) (Decision, string, error) {
 	e.provMu.Lock()
 	defer e.provMu.Unlock()
 	pol, err := e.o.Spend(ctx)
 	if err != nil {
-		return Result{}, refused("policy.unreadable", err, "the spend policy could not be read")
+		return Decision{}, "", refused("policy.unreadable", err, "the spend policy could not be read")
 	}
 	est, err := p.Estimate(ctx, req.Spec)
 	if err != nil {
@@ -59,15 +87,15 @@ func (e *Engine) Provision(ctx context.Context, req Request) (Result, error) {
 	now := e.now()
 	token, err := e.o.NewToken(now)
 	if err != nil {
-		return Result{}, refused("token", err, "no intent token")
+		return Decision{}, "", refused("token", err, "no intent token")
 	}
 	counts, err := e.o.Store.BurstCountsOf(ctx, p.ID(), req.JobKey, now.UnixMilli()-WindowMs(est.LatencyMs))
 	if err != nil {
-		return Result{}, refused("store", err, "counters unreadable")
+		return Decision{}, "", refused("store", err, "counters unreadable")
 	}
 	br, err := e.o.Store.Breaker(ctx, p.ID())
 	if err != nil {
-		return Result{}, refused("store", err, "breaker unreadable")
+		return Decision{}, "", refused("store", err, "breaker unreadable")
 	}
 	cloud := p.Class() == ClassCloud
 	in := Input{Provider: p.ID(), Cloud: cloud, Team: e.o.Team(), Enabled: pol.Burst.Enabled[p.ID()], Paid: cloud,
@@ -84,32 +112,17 @@ func (e *Engine) Provision(ctx context.Context, req Request) (Result, error) {
 	if err = e.o.Store.BurstWrite(ctx, func(t store.BurstTx) error {
 		return t.PutDecision(now.UnixMilli(), p.ID(), req.JobKey, d.Allow, d.Reason, string(raw))
 	}); err != nil {
-		return Result{Decision: d}, refused("store", err, "the decision could not be recorded")
+		return d, "", refused("store", err, "the decision could not be recorded")
 	}
 	if !d.Allow {
-		return Result{Decision: d}, refused(d.Reason, nil, "provider %s, job %s", p.ID(), req.JobKey)
+		return d, "", refused(d.Reason, nil, "provider %s, job %s", p.ID(), req.JobKey)
 	}
+	e.setCreating(token, true) // from the commit on, Tick must not end this intent before its create call returns
 	if err = e.commitIntent(ctx, token, p, req, est, now.UnixMilli(), int(pol.Burst.MaxConcurrent)); err != nil {
-		return Result{Decision: d}, err
+		e.setCreating(token, false)
+		return d, "", err
 	}
-	if err = e.at(PointAfterIntent); err != nil {
-		return Result{Decision: d, Token: token}, err
-	}
-	res, err := e.create(ctx, p, token, req.Spec)
-	if err != nil {
-		if errors.Is(err, ErrKilled) {
-			return Result{Decision: d, Token: token}, err
-		}
-		_ = e.Teardown(context.WithoutCancel(ctx), token, "provision failed")
-		return Result{Decision: d, Token: token}, refused("provider.error", err, "%s: %s", p.ID(), errClass(err))
-	}
-	if err = e.at(PointAfterCreate); err != nil {
-		return Result{Decision: d, Token: token}, err
-	}
-	if err = e.o.Store.BurstWrite(ctx, func(t store.BurstTx) error { return t.SetResource(token, res.ID, t.NowMs()) }); err != nil {
-		return Result{Decision: d, Token: token, Resource: res}, refused("store", err, "the resource id could not be recorded")
-	}
-	return Result{Decision: d, Token: token, Resource: res}, nil
+	return d, token, nil
 }
 
 // fitReason is the placement reason of a refused reservation.
@@ -216,8 +229,46 @@ func (e *Engine) Resume(ctx context.Context, token string, spec Spec) (Resource,
 	if err != nil {
 		return Resource{}, refused("provider.error", err, "%s: %s", p.ID(), errClass(err))
 	}
-	if err = e.o.Store.BurstWrite(ctx, func(t store.BurstTx) error { return t.SetResource(token, res.ID, t.NowMs()) }); err != nil {
-		return res, refused("store", err, "the resource id could not be recorded")
+	if err = e.record(ctx, p, token, res); err != nil {
+		return res, err
 	}
 	return res, nil
+}
+
+// record stores the resource id on the intent. When the intent already ended (a create that outlived its
+// own teardown), the machine is deleted at once and the provision fails: money was released for it already.
+func (e *Engine) record(ctx context.Context, p Provider, token string, res Resource) error {
+	var ok bool
+	err := e.o.Store.BurstWrite(ctx, func(t store.BurstTx) error {
+		var err error
+		ok, err = t.SetResource(token, res.ID, t.NowMs())
+		return err
+	})
+	if err != nil {
+		return refused("store", err, "the resource id could not be recorded")
+	}
+	if !ok {
+		if derr := p.Teardown(context.WithoutCancel(ctx), res.ID); derr != nil {
+			return teardownFailed(derr, "machine %s outlived intent %s and could not be deleted; the sweeper retries", res.ID, token)
+		}
+		return refused("intent.ended", nil, "the intent ended before the machine was created; it was deleted")
+	}
+	return nil
+}
+
+// setCreating marks an intent whose create call is in flight in this process.
+func (e *Engine) setCreating(token string, on bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if on {
+		e.creating[token] = true
+	} else {
+		delete(e.creating, token)
+	}
+}
+
+func (e *Engine) isCreating(token string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.creating[token]
 }

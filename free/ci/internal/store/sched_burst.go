@@ -136,10 +136,14 @@ func (s *Store) BurstIntents(ctx context.Context, coordinator string) ([]BurstIn
 	return out, rows.Err()
 }
 
-// SetResource records the provider's resource id on a non-terminal intent.
-func (t BurstTx) SetResource(token, resourceID string, at int64) error {
-	_, err := t.tx.ExecContext(t.ctx, `UPDATE burst_intent SET resource_id=?, updated_at=? WHERE token=? AND state<>'terminal'`, resourceID, at, token)
-	return err
+// SetResource records the provider's resource id on a non-terminal intent; false means the intent already ended.
+func (t BurstTx) SetResource(token, resourceID string, at int64) (bool, error) {
+	res, err := t.tx.ExecContext(t.ctx, `UPDATE burst_intent SET resource_id=?, updated_at=? WHERE token=? AND state<>'terminal'`, resourceID, at, token)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
 }
 
 // SetNode binds the enrolled node to a live intent; the node must be unbound.
@@ -156,6 +160,19 @@ func (t BurstTx) SetNode(token, nodeID string, at int64) (bool, error) {
 func (t BurstTx) MarkTearingDown(token, reason string, at int64) error {
 	_, err := t.tx.ExecContext(t.ctx, `UPDATE burst_intent SET state='tearing-down', reason=?, updated_at=? WHERE token=? AND state='live'`, reason, at, token)
 	return err
+}
+
+// MarkTearingDownIfUnused is MarkTearingDown for the idle and join-timeout teardowns: it refuses (false) when the
+// bound node has taken its one job, so a lease committed between the decision and the mark is never torn down under.
+// A refusal because the intent is no longer live is also false; the caller reads the intent to tell them apart.
+func (t BurstTx) MarkTearingDownIfUnused(token, reason string, at int64) (bool, error) {
+	res, err := t.tx.ExecContext(t.ctx, `UPDATE burst_intent SET state='tearing-down', reason=?, updated_at=? WHERE token=? AND state='live'
+ AND NOT EXISTS (SELECT 1 FROM burst_node_use u WHERE u.node_id=burst_intent.node_id AND burst_intent.node_id<>'')`, reason, at, token)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
 }
 
 // MarkTerminal ends an intent: its resource is confirmed gone.

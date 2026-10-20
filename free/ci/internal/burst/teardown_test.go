@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/burst"
+	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -288,5 +290,71 @@ func TestBurstJoinRacingTeardownIsStillRevoked(t *testing.T) {
 	}
 	if err := r.eng.NodeJoined(ctx, res2.Token, "node-2"); burst.CodeOf(err) != burst.CodeProvisionRefused {
 		t.Fatalf("a torn-down intent takes no node: %v", err)
+	}
+}
+
+// TestBurstConcurrentTeardownsLeaveNoStuckFailure: two teardowns of one intent meet a flapping API.
+func TestBurstConcurrentTeardownsLeaveNoStuckFailure(t *testing.T) {
+	for round := 0; round < 20; round++ {
+		r := newRig(t)
+		ctx := context.Background()
+		res := r.provision("job-1")
+		var wg sync.WaitGroup
+		for i := 0; i < 3; i++ {
+			wg.Add(1)
+			go func() { defer wg.Done(); _ = r.eng.Teardown(ctx, res.Token, "job done") }()
+		}
+		wg.Wait()
+		if err := r.eng.Teardown(ctx, res.Token, "settle"); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok, _ := r.st.TeardownFailure(ctx, res.Token); ok || r.intent(res.Token).State != store.BurstTerminal {
+			t.Fatalf("round %d: failure row left or intent open", round)
+		}
+		blocked := r.request("job-2")
+		blocked.QueuedDemand = 3
+		if _, err := r.eng.Provision(ctx, blocked); burst.ReasonOf(err) == burst.ReasonTeardownFailed {
+			t.Fatalf("round %d: the provider stays blocked after a finished teardown", round)
+		}
+	}
+}
+
+// TestBurstIdleTeardownGivesWayToALease: Tick decides "idle" from a read; a lease commits before the mark.
+func TestBurstIdleTeardownGivesWayToALease(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	res := r.provision("job-1")
+	r.join(res.Token, "node-1")
+	r.clk.Advance(6 * time.Minute) // idle for longer than 5 minutes
+	admitted := false
+	r.fault = func(p string) error {
+		if p == burst.PointBeforeMark && !admitted {
+			admitted = true
+			a := queue(t, r.st, "pidle")
+			if _, err := dispatch.Admit(ctx, r.st, admitReq(a, "node-1", "owner", true)); err != nil {
+				t.Errorf("the lease: %v", err)
+			}
+		}
+		return nil
+	}
+	if _, err := r.eng.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !admitted || r.intent(res.Token).State != store.BurstLive || len(r.revoked) != 0 || len(r.cloud.All()) != 1 {
+		t.Fatalf("a node that just took its job was torn down as idle: admitted=%v intent=%+v revoked=%v", admitted, r.intent(res.Token), r.revoked)
+	}
+}
+
+// TestBurstTeardownDeletesOnlyWhatListReturns: a recorded id is not deleted when the provider no longer lists the
+// machine under this coordinator's labels (it stopped being the lifecycle's).
+func TestBurstTeardownDeletesOnlyWhatListReturns(t *testing.T) {
+	r := newRig(t)
+	res := r.provision("job-1")
+	r.cloud.Relabel(res.Resource.ID, map[string]string{"role": "deploy-host"})
+	if err := r.eng.Teardown(context.Background(), res.Token, "job done"); err != nil {
+		t.Fatal(err)
+	}
+	if !r.cloud.Has(res.Resource.ID) {
+		t.Fatal("a machine that is no longer labelled for this lifecycle was deleted by its recorded id")
 	}
 }

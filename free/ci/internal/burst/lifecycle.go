@@ -77,7 +77,7 @@ func (e *Engine) Tick(ctx context.Context) (SweepReport, error) {
 		if reason == "" {
 			continue
 		}
-		if err = e.Teardown(ctx, in.Token, reason); err != nil {
+		if err = e.teardown(ctx, in.Token, reason, true); err != nil {
 			if errors.Is(err, ErrKilled) {
 				return SweepReport{}, err
 			}
@@ -90,6 +90,9 @@ func (e *Engine) Tick(ctx context.Context) (SweepReport, error) {
 
 // due says why an intent must be torn down now ("" when it must not).
 func (e *Engine) due(ctx context.Context, in store.BurstIntent) (string, error) {
+	if e.isCreating(in.Token) {
+		return "", nil // the create call has not returned: no timer applies yet
+	}
 	_, failed, err := e.o.Store.TeardownFailure(ctx, in.Token)
 	if err != nil {
 		return "", err
@@ -107,7 +110,7 @@ func (e *Engine) due(ctx context.Context, in store.BurstIntent) (string, error) 
 		return "lease expired", nil
 	case in.NodeID == "":
 		if ok && now >= lease.IdleUntil {
-			return "join timeout", nil
+			return ReasonJoinTimeout, nil
 		}
 		return "", nil
 	}
@@ -117,7 +120,7 @@ func (e *Engine) due(ctx context.Context, in store.BurstIntent) (string, error) 
 	}
 	if !used {
 		if ok && now >= lease.IdleUntil {
-			return "idle", nil
+			return ReasonIdle, nil
 		}
 		return "", nil
 	}

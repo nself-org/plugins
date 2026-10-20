@@ -89,6 +89,12 @@ const (
 // crash would: nothing after the point runs and nothing is cleaned up.
 var ErrKilled = errors.New("burst: coordinator killed (fault injection)")
 
+// The teardown reasons the lifecycle triggers decide from a read (they give way to a lease).
+const (
+	ReasonIdle        = "idle"
+	ReasonJoinTimeout = "join timeout"
+)
+
 // The fault points (Epic D12 acceptance).
 const (
 	PointAfterIntent = "after-intent"
@@ -131,6 +137,8 @@ type Engine struct {
 	mu        sync.Mutex
 	provMu    sync.Mutex
 	orphans   map[string]bool
+	creating  map[string]bool
+	locks     map[string]*sync.Mutex
 	loop      *loopState
 }
 
@@ -157,7 +165,7 @@ func New(o Options) (*Engine, error) {
 	if o.NewToken == nil {
 		o.NewToken = newULID
 	}
-	e := &Engine{o: o, cfg: o.Config.norm(), providers: map[string]Provider{}, orphans: map[string]bool{}}
+	e := &Engine{o: o, cfg: o.Config.norm(), providers: map[string]Provider{}, orphans: map[string]bool{}, creating: map[string]bool{}, locks: map[string]*sync.Mutex{}}
 	for _, p := range o.Providers {
 		if p == nil || p.ID() == "" {
 			return nil, errors.New("burst: a provider needs an id")
