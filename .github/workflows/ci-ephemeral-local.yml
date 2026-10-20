@@ -9,6 +9,8 @@ on:
   pull_request:
     paths:
       - 'free/ci/internal/providers/ephemeral/local/**'
+      - 'free/ci/internal/isolation/**'
+      - 'free/ci/internal/burst/**'
       - '.github/workflows/ci-ephemeral-local.yml'
   workflow_dispatch:
 
@@ -23,7 +25,7 @@ env:
   CGO_ENABLED: '0'
   GVISOR_RELEASE: '20261012.0'
   GVISOR_SHA512: '9606445eed5aedfcf05310e7ccef61d994089914c6622fc82624c24d2b18db1b2210f40e40a7be27b8b7772859de7d95c501b4eba66423053c960bf671377c5e'
-  TRUST04_TEST_IMAGE: 'alpine:3.19'
+  TRUST04_TEST_IMAGE: 'alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1'
 
 jobs:
   linux:

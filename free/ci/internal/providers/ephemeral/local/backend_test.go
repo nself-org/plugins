@@ -40,6 +40,7 @@ func TestContainerBackendLevels(t *testing.T) {
 		{"gvisor where runsc starts", &fakeProfile{level: "container", av: up("container")}, &fakeProfile{level: "sandboxed-container", av: up("sandboxed-container")}, "sandboxed-container", ""},
 		{"container where runsc is absent", &fakeProfile{level: "container", av: up("container")}, &fakeProfile{level: "sandboxed-container", av: down("isolation.runtime_missing")}, "container", ""},
 		{"container with no gvisor profile at all", &fakeProfile{level: "container", av: up("container")}, nil, "container", ""},
+		{"a profile that reports no level is E698, never an empty level", &fakeProfile{level: "", av: up("")}, nil, "", ReasonNoRuntime},
 		{"no container runtime is E698 and never a weaker level", &fakeProfile{level: "container", av: down("isolation.runtime_missing")}, &fakeProfile{level: "sandboxed-container", av: up("sandboxed-container")}, "", ReasonNoRuntime},
 	}
 	for _, c := range cases {
@@ -80,6 +81,8 @@ func TestContainerLeftoversAreLimitedToTheBurstNamespace(t *testing.T) {
 			inspectLine("/nself-ci-run-77-job", "2026-10-19T12:00:00Z", labels("run-77-job")) +
 			inspectLine("/nself-ci-burst-A1-clean", "2026-10-19T12:00:01Z", labels("burst-A1")) +
 			inspectLine("/nself-ci-burst-B2", "not a time", labels("burst-B2")) +
+			inspectLine("/nself-ci-burst-P3", `"2026-10-19T08:00:00.123456789-04:00"`, labels("burst-P3")) +
+			inspectLine("/nself-ci-burst-G4", "2026-10-19 12:00:00.5 +0000 UTC", labels("burst-G4")) +
 			"garbage\n"), nil
 	}
 	got, err := NewContainerBackend(prof, nil, q).Leftovers(context.Background())
@@ -89,8 +92,15 @@ func TestContainerLeftoversAreLimitedToTheBurstNamespace(t *testing.T) {
 	if asked[0] != "docker" || asked[1] != "inspect" {
 		t.Fatalf("asked %v", asked)
 	}
-	if len(got) != 2 {
-		t.Fatalf("an ordinary job container, a bad time and garbage must be skipped: %+v", got)
+	if len(got) != 5 {
+		t.Fatalf("an ordinary job container and garbage must be skipped, an unreadable time must not hide a leak: %+v", got)
+	}
+	byID := map[string]Found{}
+	for _, f := range got {
+		byID[f.ID] = f
+	}
+	if !byID["burst-B2"].CreatedAt.IsZero() || !byID["burst-P3"].CreatedAt.Equal(time.Date(2026, 10, 19, 12, 0, 0, 123456789, time.UTC)) || !byID["burst-G4"].CreatedAt.Equal(time.Date(2026, 10, 19, 12, 0, 0, 500000000, time.UTC)) {
+		t.Fatalf("created times: %+v", byID)
 	}
 	main, helper := got[0], got[1]
 	if main.ID != "burst-A1" || main.Labels[intentKey] != "A1" || main.Labels[coordKey] != "C1" || main.CreatedAt.IsZero() {

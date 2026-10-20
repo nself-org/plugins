@@ -58,6 +58,9 @@ func (b *containerBackend) Probe(ctx context.Context) (Offer, error) {
 		return Offer{}, unavailable(ReasonNoRuntime, nil, "%s", reasonText(av))
 	}
 	level := isolation.Effective(b.container.Level(), av.Level)
+	if level == "" {
+		return Offer{}, unavailable(ReasonNoRuntime, nil, "the container profile reported no isolation level")
+	}
 	if b.sandbox != nil {
 		if sav := b.sandbox.Probe(ctx); sav.Available() {
 			level = isolation.Effective(b.sandbox.Level(), sav.Level)
@@ -93,13 +96,28 @@ func (b *containerBackend) Leftovers(ctx context.Context) ([]Found, error) {
 	if bin == "" {
 		return nil, unavailable(ReasonNoRuntime, nil, "the container profile reported no runtime binary")
 	}
-	args := append([]string{"inspect", "--format", `{{.Name}}|{{.Created}}|{{json .Config.Labels}}`}, names...)
+	args := append([]string{"inspect", "--format", `{{.Name}}|{{json .Created}}|{{json .Config.Labels}}`}, names...)
 	out, qerr := b.query(ctx, bin, args...)
 	found := parseInspect(string(out))
 	if qerr != nil && len(found) == 0 {
 		return nil, qerr // nothing readable: not "no leftovers"
 	}
 	return found, nil // a container that vanished between ps and inspect only shortens the output
+}
+
+// parseCreated reads the creation time `inspect` prints: a JSON string in RFC3339 (Docker, Podman) or, as a
+// fallback, a Go time.Time string. An unreadable value is the zero time.
+func parseCreated(raw string) time.Time {
+	var s string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &s); err != nil {
+		s = strings.Trim(strings.TrimSpace(raw), `"`)
+	}
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02 15:04:05.999999999 -0700 MST"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
 }
 
 // parseInspect turns `Name|Created|{labels}` lines into Found values; a line it cannot read is skipped.
@@ -111,11 +129,11 @@ func parseInspect(out string) []Found {
 			continue
 		}
 		name := strings.TrimPrefix(parts[0], "/")
-		created, err := time.Parse(time.RFC3339Nano, parts[1])
+		created := parseCreated(parts[1]) // zero when unreadable: a labelled leak must still be listed (the sweeper ages it by its intent)
 		var labels map[string]string
 		id := strings.TrimPrefix(name, namePrefix)
 		// only ids in this provider's namespace: ordinary job containers carry the same labels and are not ours to list
-		if err != nil || json.Unmarshal([]byte(parts[2]), &labels) != nil || !strings.HasPrefix(name, namePrefix) || labels[roleKey] != roleValue || !idRe.MatchString(id) {
+		if json.Unmarshal([]byte(parts[2]), &labels) != nil || !strings.HasPrefix(name, namePrefix) || labels[roleKey] != roleValue || !idRe.MatchString(id) {
 			continue
 		}
 		f := Found{ID: id, CreatedAt: created, Labels: map[string]string{roleKey: roleValue, coordKey: labels[coordKey]}}

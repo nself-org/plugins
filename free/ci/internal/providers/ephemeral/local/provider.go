@@ -67,7 +67,7 @@ type Provider struct {
 	opts Options
 	lat  *latencies
 
-	provMu sync.Mutex // serialises Provision: capacity check and reservation are one step
+	provSem chan struct{} // serialises Provision (capacity check and reservation are one step); a waiter gives up with its ctx
 
 	mu     sync.Mutex
 	ledger map[string]entry
@@ -92,7 +92,7 @@ func New(o Options) (*Provider, error) {
 	if o.Now == nil {
 		o.Now = time.Now
 	}
-	return &Provider{opts: o, lat: newLatencies(), ledger: map[string]entry{}}, nil
+	return &Provider{opts: o, lat: newLatencies(), ledger: map[string]entry{}, provSem: make(chan struct{}, 1)}, nil
 }
 
 // ID is the provider id.
@@ -164,8 +164,12 @@ func (p *Provider) Provision(ctx context.Context, in burst.Intent) (burst.Resour
 	if err := ctx.Err(); err != nil {
 		return burst.Resource{}, err
 	}
-	p.provMu.Lock()
-	defer p.provMu.Unlock()
+	select {
+	case p.provSem <- struct{}{}:
+		defer func() { <-p.provSem }()
+	case <-ctx.Done():
+		return burst.Resource{}, ctx.Err()
+	}
 	id := idPrefix + in.Token
 	p.mu.Lock()
 	if e, ok := p.ledger[id]; ok {
@@ -231,7 +235,9 @@ func (p *Provider) used(off Offer, found []Found) int {
 	defer p.mu.Unlock()
 	seen := map[string]bool{}
 	for _, f := range found {
-		seen[f.ID] = true
+		if !strings.HasSuffix(f.ID, cleanSuffix) { // a job's cleanup helper is not a second slot
+			seen[f.ID] = true
+		}
 	}
 	for _, id := range off.Running {
 		seen[id] = true

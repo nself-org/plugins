@@ -381,3 +381,21 @@ func TestNewNeedsABackend(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCleanupHelperIsNotASecondSlot(t *testing.T) {
+	p := newProvider(t, newFake(), nil)
+	found := []Found{{ID: "burst-X1"}, {ID: "burst-X1-clean"}, {ID: "burst-Y2"}}
+	if got := p.used(Offer{}, found); got != 2 {
+		t.Fatalf("used %d slots, want 2 (the helper of burst-X1 is not a slot)", got)
+	}
+}
+
+func TestProvisionGivesUpWithItsContextWhileAnotherHoldsTheLock(t *testing.T) {
+	p := newProvider(t, newFake(), nil)
+	p.provSem <- struct{}{} // another Provision is stuck in a runtime call
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := p.Provision(ctx, intentFor("WAIT1")); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("a waiting Provision must return its ctx error, got %v", err)
+	}
+}

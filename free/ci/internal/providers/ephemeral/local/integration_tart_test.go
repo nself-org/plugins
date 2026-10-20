@@ -13,6 +13,7 @@ package local
 
 import (
 	"context"
+	"fmt"
 	"os"
 	osexec "os/exec"
 	"runtime"
@@ -57,9 +58,18 @@ func tartProvider(t *testing.T, home string) (*Provider, *tart.Profile) {
 
 func tartClones(t *testing.T) []string {
 	t.Helper()
+	left, err := tartClonesErr()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return left
+}
+
+// tartClonesErr is tartClones for goroutines, which must not call t.Fatal.
+func tartClonesErr() ([]string, error) {
 	out, err := osexec.Command("tart", "list", "--quiet").CombinedOutput()
 	if err != nil {
-		t.Fatalf("tart list: %v %s", err, out)
+		return nil, fmt.Errorf("tart list: %v %s", err, out)
 	}
 	var left []string
 	for _, l := range strings.Fields(string(out)) {
@@ -67,7 +77,7 @@ func tartClones(t *testing.T) []string {
 			left = append(left, l)
 		}
 	}
-	return left
+	return left, nil
 }
 
 type tartIsolator struct{ p *tart.Profile }
@@ -125,7 +135,12 @@ func TestTartOnePerJob(t *testing.T) {
 			case <-stop:
 				return
 			case <-time.After(2 * time.Second):
-				if n := int32(len(tartClones(t))); n > peak.Load() {
+				left, err := tartClonesErr()
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if n := int32(len(left)); n > peak.Load() {
 					peak.Store(n)
 				}
 			}
