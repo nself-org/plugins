@@ -6,7 +6,7 @@
 #   unexpected pass (a case whose outcome differs from `expected` in results.json), on an empty results file,
 #   on a skipped test, and on a case that maps to no threat-model row.
 # Inputs:  none for the full run. --check-mapping MODEL.md [MATRIX.yaml...] checks only the mapping: every case of
-#          the matrix (default matrix.yaml and matrix.d/*.yaml of the suite) names a threat id that is a row of the
+#          the matrix (default matrix.yaml of the suite) names a threat id that is a row of the
 #          threat model file MODEL.md, and every threat id TM-12 to TM-18 has at least one case.
 #          HQ (env) names the hq checkout; the full run passes its threat model to the mapping check.
 #          INTEGRATION=1 is set by the drill; the remote cases start the fabric sim (Docker Engine).
@@ -56,10 +56,7 @@ check_mapping() {
 }
 
 matrix_files() {
-	local f
 	echo "$suite/matrix.yaml"
-	for f in "$suite"/matrix.d/*.yaml; do [ -e "$f" ] && echo "$f"; done
-	return 0
 }
 
 if [ "${1:-}" = "--check-mapping" ]; then

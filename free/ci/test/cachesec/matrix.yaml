@@ -6,11 +6,885 @@
 # Case ids: C<row>-<AREA>-<nn>, e.g. C13-LOC-01 is the first local case of TM-13.
 version: 1
 cases:
+  - id: C12-AGT-01
+    threat: TM-12
+    carrier: agent
+    title: 'PR 1''s attempt handed a plan aimed at PR 2''s namespace uploads and refs a cache save'
+    expected: refused
+    code: E711
+    reason: not_planned
+    audit: cache.remote.refused
+  - id: C12-CAC-01
+    threat: TM-12
+    carrier: local
+    title: 'a fork PR attempt commits into the protected trusted namespace of its project'
+    expected: refused
+    code: E684
+    reason: cache_namespace
+    audit: cache.commit.denied
+  - id: C12-CAC-02
+    threat: TM-12
+    carrier: local
+    title: 'PR 1 commits into the namespace of PR 2 of the same fork'
+    expected: refused
+    code: E684
+    reason: cache_namespace
+    audit: cache.commit.denied
+  - id: C12-CAC-03
+    threat: TM-12
+    carrier: local
+    title: 'a PR attempt commits into the namespace of the same PR number from another head repo'
+    expected: refused
+    code: E684
+    reason: cache_namespace
+    audit: cache.commit.denied
+  - id: C12-CAC-04
+    threat: TM-12
+    carrier: local
+    title: 'keys differ when a byte shifts across a field boundary and an attempt that planned K'' cannot commit K'
+    expected: refused
+    code: E711
+    reason: not_planned
+    audit: cache.commit.refused
+  - id: C12-CAC-05
+    threat: TM-12
+    carrier: local
+    title: 'a manifest naming the trusted namespace under a commit that claims the attempt''s own'
+    expected: refused
+    code: E711
+    reason: namespace
+    audit: cache.commit.refused
+  - id: C12-COO-01
+    threat: TM-12
+    carrier: coordinator
+    title: 'a cache ref names a blob that only main''s realm holds'
+    expected: refused
+    code: E711
+    reason: blob_invalid
+    audit: cache.remote.refused
+  - id: C12-REM-01
+    threat: TM-12
+    carrier: coordinator
+    title: 'an artifact-ref names a digest that only another project''s artifact realm holds'
+    expected: refused
+    code: E712
+    reason: missing_blob
+    audit: none
+    gap: D-1451
+  - id: C12-SSH-01
+    threat: TM-12
+    carrier: ssh
+    title: 'a fork PR attempt handed a plan aimed at main''s namespace uploads and refs a cache save'
+    expected: refused
+    code: E711
+    reason: not_planned
+    audit: cache.remote.refused
+  - id: C12-SSH-02
+    threat: TM-12
+    carrier: ssh
+    title: 'an unprotected owner branch attempt aimed at main''s protected namespace commits a cache save'
+    expected: refused
+    code: E684
+    reason: cache_namespace
+    audit: cache.commit.denied
+  - id: C13-AGT-01
+    threat: TM-13
+    carrier: agent
+    title: 'a node whose lease epoch was fenced uploads a cache blob and its ref over the agent carrier'
+    expected: refused
+    code: E714
+    reason: stale_epoch
+    audit: cache.remote.refused
+  - id: C13-AGT-02
+    threat: TM-13
+    carrier: agent
+    title: 'a node whose lease epoch was fenced uploads an artifact blob and its ref over the agent carrier'
+    expected: refused
+    code: E714
+    reason: stale_epoch
+    audit: artifact.remote.refused
+  - id: C13-AGT-03
+    threat: TM-13
+    carrier: agent
+    title: 'a real container node on the agent pull carrier uploads a cache save after its lease epoch was fenced'
+    expected: refused
+    code: E714
+    reason: stale_epoch
+    audit: cache.remote.refused
+  - id: C13-AGT-04
+    threat: TM-13
+    carrier: agent
+    title: 'a real container node on the agent pull carrier uploads an artifact after its lease epoch was fenced'
+    expected: refused
+    code: E714
+    reason: stale_epoch
+    audit: artifact.remote.refused
+  - id: C13-ART-01
+    threat: TM-13
+    carrier: local
+    title: 'a cancelled attempt that keeps running commits its staged records after it ended'
+    expected: refused
+    code: E711
+    reason: attempt_state
+    audit: artifact.commit.refused
+  - id: C13-ART-02
+    threat: TM-13
+    carrier: local
+    title: 'a finalizing attempt commits its artifacts with an epoch older than its lease epoch'
+    expected: refused
+    code: E711
+    reason: epoch
+    audit: artifact.commit.refused
+  - id: C13-ART-03
+    threat: TM-13
+    carrier: local
+    title: 'a passed attempt reserves artifact store bytes after it ended'
+    expected: refused
+    code: E711
+    reason: attempt_state
+    audit: artifact.reserve.refused
+  - id: C13-ART-04
+    threat: TM-13
+    carrier: local
+    title: 'a running attempt stages artifact records with a stale epoch'
+    expected: refused
+    code: E711
+    reason: epoch
+    audit: artifact.stage.refused
+  - id: C13-ART-05
+    threat: TM-13
+    carrier: local
+    title: 'a failed attempt commits the records it staged'
+    expected: refused
+    code: E711
+    reason: attempt_state
+    audit: artifact.commit.refused
+  - id: C13-ART-06
+    threat: TM-13
+    carrier: local
+    title: 'a failed attempt reserves artifact store bytes'
+    expected: refused
+    code: E711
+    reason: attempt_state
+    audit: artifact.reserve.refused
+  - id: C13-CAC-01
+    threat: TM-13
+    carrier: local
+    title: 'a commit after the attempt passed and ended'
+    expected: refused
+    code: E711
+    reason: attempt_state
+    audit: cache.commit.refused
+  - id: C13-CAC-02
+    threat: TM-13
+    carrier: local
+    title: 'a commit by an attempt whose recorded result is a failure'
+    expected: refused
+    code: E711
+    reason: attempt_state
+    audit: cache.commit.refused
+  - id: C13-CAC-03
+    threat: TM-13
+    carrier: local
+    title: 'a commit after the attempt moved to the terminal failed state'
+    expected: refused
+    code: E711
+    reason: attempt_state
+    audit: cache.commit.refused
+  - id: C13-CAC-04
+    threat: TM-13
+    carrier: local
+    title: 'a commit by an attempt that is still running (not finalizing)'
+    expected: refused
+    code: E711
+    reason: attempt_state
+    audit: cache.commit.refused
+  - id: C13-CAC-05
+    threat: TM-13
+    carrier: local
+    title: 'a replay of a finished commit with other bytes (the plan was consumed)'
+    expected: refused
+    code: E711
+    reason: not_planned
+    audit: cache.commit.refused
   - id: C13-LOC-01
     threat: TM-13
     carrier: local
-    title: a finalizing attempt saves a cache entry with an epoch older than its lease epoch
+    title: 'a finalizing attempt saves a cache entry with an epoch older than its lease epoch'
     expected: refused
     code: E711
     reason: epoch
     audit: cache.commit.refused
+  - id: C13-SSH-01
+    threat: TM-13
+    carrier: ssh
+    title: 'a node whose lease epoch was fenced uploads a cache blob and its ref over the ssh carrier'
+    expected: refused
+    code: E714
+    reason: stale_epoch
+    audit: cache.remote.refused
+  - id: C13-SSH-02
+    threat: TM-13
+    carrier: ssh
+    title: 'a real sshd node running the real agent uploads a cache save after its lease epoch was fenced'
+    expected: refused
+    code: E714
+    reason: stale_epoch
+    audit: cache.remote.refused
+  - id: C13-SSH-03
+    threat: TM-13
+    carrier: ssh
+    title: 'a real sshd node running the real agent uploads an artifact after its lease epoch was fenced'
+    expected: refused
+    code: E714
+    reason: stale_epoch
+    audit: artifact.remote.refused
+  - id: C13-SSH-04
+    threat: TM-13
+    carrier: ssh
+    title: 'a node whose lease epoch was fenced uploads an artifact blob and its ref over the ssh carrier'
+    expected: refused
+    code: E714
+    reason: stale_epoch
+    audit: artifact.remote.refused
+  - id: C13-SSH-05
+    threat: TM-13
+    carrier: ssh
+    title: 'a zombie sends a cache save after its attempt ended and its result was recorded'
+    expected: refused
+    code: E711
+    reason: attempt_state
+    audit: cache.remote.refused
+  - id: C14-ART-01
+    threat: TM-14
+    carrier: local
+    title: 'a second attempt declares outputs that the store cap cannot hold next to a running claim (size bomb)'
+    expected: refused
+    code: E712
+    reason: size_cap
+    audit: artifact.reserve.refused
+  - id: C14-ART-02
+    threat: TM-14
+    carrier: local
+    title: 'staged outputs exceed the store cap at commit time'
+    expected: refused
+    code: E712
+    reason: size_cap
+    audit: artifact.commit.refused
+  - id: C14-ART-03
+    threat: TM-14
+    carrier: local
+    title: 'a symlink in the workdir points outside it'
+    expected: refused
+    code: E683
+    reason: link_escape
+    audit: none
+    gap: D-1450
+  - id: C14-ART-04
+    threat: TM-14
+    carrier: local
+    title: 'a symlink inside a collected directory has an absolute target'
+    expected: refused
+    code: E683
+    reason: link_absolute
+    audit: none
+    gap: D-1450
+  - id: C14-ART-05
+    threat: TM-14
+    carrier: local
+    title: 'a symlink that stays inside the workdir is declared as an artifact'
+    expected: refused
+    code: E683
+    reason: entry_irregular
+    audit: none
+    gap: D-1450
+  - id: C14-ART-06
+    threat: TM-14
+    carrier: local
+    title: 'a hardlink to a file outside the workdir is declared'
+    expected: refused
+    code: E683
+    reason: entry_hardlink
+    audit: none
+    gap: D-1450
+  - id: C14-ART-07
+    threat: TM-14
+    carrier: local
+    title: 'a FIFO is declared as an artifact'
+    expected: refused
+    code: E683
+    reason: entry_fifo
+    audit: none
+    gap: D-1450
+  - id: C14-ART-08
+    threat: TM-14
+    carrier: local
+    title: 'a setuid file is declared as an artifact'
+    expected: refused
+    code: E683
+    reason: entry_setid
+    audit: none
+    gap: D-1450
+  - id: C14-ART-09
+    threat: TM-14
+    carrier: local
+    title: 'a device node entry passes through the artifact path sanitiser'
+    expected: refused
+    code: E683
+    reason: entry_device
+    audit: none
+    gap: D-1450
+  - id: C14-ART-10
+    threat: TM-14
+    carrier: local
+    title: 'a ratio bomb entry (1 GiB from 1 KiB) passes through the artifact path sanitiser'
+    expected: refused
+    code: E683
+    reason: size_ratio
+    audit: none
+    gap: D-1450
+  - id: C14-ART-11
+    threat: TM-14
+    carrier: local
+    title: 'a declaration traverses out of the workdir'
+    expected: refused
+    code: E683
+    reason: path_traversal
+    audit: none
+    gap: D-1450
+  - id: C14-ART-12
+    threat: TM-14
+    carrier: local
+    title: 'a declaration names an absolute path'
+    expected: refused
+    code: E683
+    reason: path_absolute
+    audit: none
+    gap: D-1450
+  - id: C14-ART-13
+    threat: TM-14
+    carrier: local
+    title: 'a declaration targets .git/hooks'
+    expected: refused
+    code: E683
+    reason: path_dot_git
+    audit: none
+    gap: D-1450
+  - id: C14-ART-14
+    threat: TM-14
+    carrier: local
+    title: 'a file above the per-file artifact cap is collected'
+    expected: refused
+    code: E712
+    reason: file_cap
+    audit: none
+    gap: D-1450
+  - id: C14-ART-15
+    threat: TM-14
+    carrier: local
+    title: 'declared outputs exceed the total artifact cap at collection'
+    expected: refused
+    code: E712
+    reason: size_cap
+    audit: none
+    gap: D-1450
+  - id: C14-ART-16
+    threat: TM-14
+    carrier: local
+    title: 'a declaration selects more files than the per-attempt record budget'
+    expected: refused
+    code: E712
+    reason: size_cap
+    audit: none
+    gap: D-1450
+  - id: C14-ART-17
+    threat: TM-14
+    carrier: local
+    title: 'artifacts get into the working directory'
+    expected: refused
+    code: E683
+    reason: dest_cwd
+    audit: none
+    gap: D-1450
+  - id: C14-ART-18
+    threat: TM-14
+    carrier: local
+    title: 'artifacts get into a non-empty directory'
+    expected: refused
+    code: E683
+    reason: dest_not_empty
+    audit: none
+    gap: D-1450
+  - id: C14-ART-19
+    threat: TM-14
+    carrier: local
+    title: 'artifacts get into .git/hooks'
+    expected: refused
+    code: E683
+    reason: dest_under_git
+    audit: none
+    gap: D-1450
+  - id: C14-ART-20
+    threat: TM-14
+    carrier: local
+    title: 'artifacts get into a symlink leaf'
+    expected: refused
+    code: E683
+    reason: dest_symlink
+    audit: none
+    gap: D-1450
+  - id: C14-CAC-01
+    threat: TM-14
+    carrier: local
+    title: 'restore of a crafted cache entry with a tar entry that traverses out of the job root (../../outside)'
+    expected: refused
+    code: E683
+    reason: path_traversal
+    audit: cache.restore.refused
+  - id: C14-CAC-02
+    threat: TM-14
+    carrier: local
+    title: 'restore of a crafted cache entry with a tar entry with an absolute path'
+    expected: refused
+    code: E683
+    reason: path_absolute
+    audit: cache.restore.refused
+  - id: C14-CAC-03
+    threat: TM-14
+    carrier: local
+    title: 'restore of a crafted cache entry with a symlink whose target leaves the job root'
+    expected: refused
+    code: E683
+    reason: link_escape
+    audit: cache.restore.refused
+  - id: C14-CAC-04
+    threat: TM-14
+    carrier: local
+    title: 'restore of a crafted cache entry with a file written through an earlier in-tree symlink'
+    expected: refused
+    code: E683
+    reason: path_through_symlink
+    audit: cache.restore.refused
+  - id: C14-CAC-05
+    threat: TM-14
+    carrier: local
+    title: 'restore of a crafted cache entry with a hardlink to a file outside the job root'
+    expected: refused
+    code: E683
+    reason: entry_hardlink
+    audit: cache.restore.refused
+  - id: C14-CAC-06
+    threat: TM-14
+    carrier: local
+    title: 'restore of a crafted cache entry with a FIFO entry'
+    expected: refused
+    code: E683
+    reason: entry_fifo
+    audit: cache.restore.refused
+  - id: C14-CAC-07
+    threat: TM-14
+    carrier: local
+    title: 'restore of a crafted cache entry with a character device entry'
+    expected: refused
+    code: E683
+    reason: entry_device
+    audit: cache.restore.refused
+  - id: C14-CAC-08
+    threat: TM-14
+    carrier: local
+    title: 'restore of a crafted cache entry with a gzip ratio bomb (4 MiB of zeros in a few KiB)'
+    expected: refused
+    code: E683
+    reason: size_ratio
+    audit: cache.restore.refused
+  - id: C14-CAC-09
+    threat: TM-14
+    carrier: local
+    title: 'restore of a crafted cache entry with a set-id regular file'
+    expected: refused
+    code: E683
+    reason: entry_setid
+    audit: cache.restore.refused
+  - id: C14-REM-01
+    threat: TM-14
+    carrier: coordinator
+    title: 'an artifact-ref names a traversal path (../../.git/hooks/pre-commit) after a valid upload'
+    expected: refused
+    code: E712
+    reason: not_declared
+    audit: none
+    gap: D-1451
+  - id: C14-SSH-01
+    threat: TM-14
+    carrier: ssh
+    title: 'a node ships a cache archive with a traversal entry name'
+    expected: refused
+    code: E683
+    reason: path_traversal
+    audit: cache.remote.refused
+  - id: C14-SSH-02
+    threat: TM-14
+    carrier: ssh
+    title: 'a node ships a cache archive holding an absolute symlink'
+    expected: refused
+    code: E683
+    reason: link_absolute
+    audit: cache.remote.refused
+  - id: C14-SSH-03
+    threat: TM-14
+    carrier: ssh
+    title: 'a node ships a cache archive holding a hardlink out of the tree'
+    expected: refused
+    code: E683
+    reason: entry_hardlink
+    audit: cache.remote.refused
+  - id: C14-SSH-04
+    threat: TM-14
+    carrier: ssh
+    title: 'a node ships a cache archive holding a FIFO'
+    expected: refused
+    code: E683
+    reason: entry_fifo
+    audit: cache.remote.refused
+  - id: C14-SSH-05
+    threat: TM-14
+    carrier: ssh
+    title: 'a node ships a cache archive that is a ratio bomb'
+    expected: refused
+    code: E683
+    reason: size_ratio
+    audit: cache.remote.refused
+  - id: C15-ART-01
+    threat: TM-15
+    carrier: local
+    title: 'an ended attempt stages another digest under a name it already committed'
+    expected: refused
+    code: E711
+    reason: attempt_state
+    audit: artifact.stage.refused
+  - id: C15-ART-02
+    threat: TM-15
+    carrier: local
+    title: 'an ended attempt re-declares its outputs after committing'
+    expected: refused
+    code: E711
+    reason: attempt_state
+    audit: artifact.declare.refused
+  - id: C15-ART-03
+    threat: TM-15
+    carrier: local
+    title: 'artifacts get of a blob with a flipped bit'
+    expected: refused
+    code: E712
+    reason: digest_mismatch
+    audit: none
+    gap: D-1450
+  - id: C15-ART-04
+    threat: TM-15
+    carrier: local
+    title: 'artifacts get of a truncated blob'
+    expected: refused
+    code: E712
+    reason: digest_mismatch
+    audit: none
+    gap: D-1450
+  - id: C15-ART-05
+    threat: TM-15
+    carrier: local
+    title: 'artifacts get of a blob swapped for other bytes after commit'
+    expected: refused
+    code: E712
+    reason: digest_mismatch
+    audit: none
+    gap: D-1450
+  - id: C15-ART-06
+    threat: TM-15
+    carrier: local
+    title: 'artifacts get of a blob removed after commit'
+    expected: refused
+    code: E712
+    reason: missing_blob
+    audit: none
+    gap: D-1450
+  - id: C15-ART-07
+    threat: TM-15
+    carrier: local
+    title: 'a blob is flipped between stage and CommitAndVerify'
+    expected: refused
+    code: E712
+    reason: digest_mismatch
+    audit: none
+    gap: D-1450
+  - id: C15-ART-08
+    threat: TM-15
+    carrier: local
+    title: 'a blob is removed between stage and CommitAndVerify'
+    expected: refused
+    code: E712
+    reason: missing_blob
+    audit: none
+    gap: D-1450
+  - id: C15-ART-09
+    threat: TM-15
+    carrier: local
+    title: 'a cas blob with a flipped bit is read with ReadVerified'
+    expected: refused
+    code: E710
+    reason: digest_mismatch
+    audit: none
+    gap: D-1451
+  - id: C15-ART-10
+    threat: TM-15
+    carrier: local
+    title: 'a cas partial holds other bytes than its announced digest'
+    expected: refused
+    code: E710
+    reason: partial_conflict
+    audit: none
+    gap: D-1451
+  - id: C15-ART-11
+    threat: TM-15
+    carrier: local
+    title: 'a transfer stream with one flipped byte'
+    expected: refused
+    code: E714
+    reason: digest_mismatch
+    audit: none
+    gap: D-1451
+  - id: C15-ART-12
+    threat: TM-15
+    carrier: local
+    title: 'a transfer stream that ends before the announced size'
+    expected: refused
+    code: E714
+    reason: interrupted
+    audit: none
+    gap: D-1451
+  - id: C15-ART-13
+    threat: TM-15
+    carrier: local
+    title: 'a transfer stream with more bytes than announced'
+    expected: refused
+    code: E714
+    reason: protocol
+    audit: none
+    gap: D-1451
+  - id: C15-ART-14
+    threat: TM-15
+    carrier: local
+    title: 'a transfer announces a held digest at another size'
+    expected: refused
+    code: E714
+    reason: digest_mismatch
+    audit: none
+    gap: D-1451
+  - id: C15-ART-15
+    threat: TM-15
+    carrier: local
+    title: 'a transfer announces a blob above the per-file cap'
+    expected: refused
+    code: E714
+    reason: size_cap
+    audit: none
+    gap: D-1451
+  - id: C15-REM-01
+    threat: TM-15
+    carrier: coordinator
+    title: 'an artifact-ref states a size that differs from the stored blob (substitution attempt)'
+    expected: refused
+    code: E714
+    reason: digest_mismatch
+    audit: none
+    gap: D-1451
+  - id: C15-SSH-01
+    threat: TM-15
+    carrier: ssh
+    title: 'a node ships a partial (truncated) cache archive whose digest it computed itself'
+    expected: refused
+    code: E711
+    reason: blob_invalid
+    audit: cache.remote.refused
+  - id: C15-SSH-02
+    threat: TM-15
+    carrier: ssh
+    title: 'an artifact blob with one bit flipped in transit on a real sshd container carrier'
+    expected: refused
+    code: E656
+    reason: transport_ssh_blob
+    audit: none
+    gap: D-1451
+  - id: C15-SSH-03
+    threat: TM-15
+    carrier: ssh
+    title: 'an artifact blob cut in half in transit on a real sshd container carrier'
+    expected: refused
+    code: E656
+    reason: transport_ssh_blob
+    audit: none
+    gap: D-1451
+  - id: C16-ART-01
+    threat: TM-16
+    carrier: local
+    title: 'a registered secret value in an artifact file (raw)'
+    expected: refused
+    code: E712
+    reason: secret_match
+    audit: none
+    gap: D-1450
+  - id: C16-ART-02
+    threat: TM-16
+    carrier: local
+    title: 'a registered secret value in an artifact file (base64)'
+    expected: refused
+    code: E712
+    reason: secret_match
+    audit: none
+    gap: D-1450
+  - id: C16-ART-03
+    threat: TM-16
+    carrier: local
+    title: 'a registered secret value in an artifact file name'
+    expected: refused
+    code: E712
+    reason: secret_match
+    audit: none
+    gap: D-1450
+  - id: C16-CAC-01
+    threat: TM-16
+    carrier: local
+    title: 'a registered secret value in raw form inside a file of a cache dir at save time'
+    expected: refused
+    code: E711
+    reason: secret_match
+    audit: cache.save.refused
+  - id: C16-CAC-02
+    threat: TM-16
+    carrier: local
+    title: 'a registered secret value in base64 form inside a file of a cache dir at save time'
+    expected: refused
+    code: E711
+    reason: secret_match
+    audit: cache.save.refused
+  - id: C16-CAC-03
+    threat: TM-16
+    carrier: local
+    title: 'a registered secret value used as a file name in a cache dir at save time'
+    expected: refused
+    code: E711
+    reason: secret_match
+    audit: cache.save.refused
+  - id: C17-REL-01
+    threat: TM-17
+    carrier: local
+    title: 'a release job is submitted after a lockfile appeared since its dependency evidence (stale evidence)'
+    expected: refused
+    code: E715
+    reason: deps_stale
+    audit: sched_refusal
+  - id: C17-REL-02
+    threat: TM-17
+    carrier: local
+    title: 'a release job is judged on dependency evidence that names another repository'
+    expected: refused
+    code: E715
+    reason: deps_mismatch
+    audit: sched_refusal
+  - id: C17-REL-03
+    threat: TM-17
+    carrier: local
+    title: 'a release job whose run came from an untrusted source is submitted (untrusted output promoted into a release)'
+    expected: refused
+    code: E715
+    reason: trust
+    audit: sched_refusal
+  - id: C17-REL-04
+    threat: TM-17
+    carrier: local
+    title: 'a release job whose dependency ran on a remote node with signed-remote evidence is admitted (positive)'
+    expected: admitted
+  - id: C17-REL-05
+    threat: TM-17
+    carrier: local
+    title: 'the same signed-remote evidence is submitted again after the signing node was revoked'
+    expected: refused
+    code: E715
+    reason: deps_invalid
+    audit: evidence.revoke
+  - id: C17-REL-06
+    threat: TM-17
+    carrier: local
+    title: 'a published release whose run was quarantined by the revocation of a node that signed its evidence is verified'
+    expected: refused
+    code: E719
+    reason: quarantined
+    audit: release.quarantine
+  - id: C17-REL-07
+    threat: TM-17
+    carrier: local
+    title: 'a release attempt is submitted twice while the first submission is in flight (at-most-once)'
+    expected: refused
+    code: E715
+    reason: duplicate_submission
+    audit: none
+    gap: D-1453
+  - id: C18-SIG-01
+    threat: TM-18
+    carrier: signer
+    title: 'a release manifest re-signed with a plugins-purpose key (and naming that key) is verified'
+    expected: refused
+    code: E719
+    reason: key_purpose
+    audit: none
+    gap: D-1453
+  - id: C18-SIG-02
+    threat: TM-18
+    carrier: signer
+    title: 'a release manifest re-signed with an agent-purpose key (and naming that key) is verified'
+    expected: refused
+    code: E719
+    reason: key_purpose
+    audit: none
+    gap: D-1453
+  - id: C18-SIG-03
+    threat: TM-18
+    carrier: signer
+    title: 'the signer is asked to sign a manifest whose artifact digest is not a committed record of the run'
+    expected: refused
+    code: E717
+    reason: digest_not_committed
+    audit: none
+    gap: D-1453
+  - id: C18-SIG-04
+    threat: TM-18
+    carrier: signer
+    title: 'the signer is asked to sign a run while one of its jobs still has a running attempt'
+    expected: refused
+    code: E717
+    reason: payload_rejected
+    audit: none
+    gap: D-1453
+  - id: C18-SIG-05
+    threat: TM-18
+    carrier: signer
+    title: 'an untrusted job asks the secret layer for a release-class secret (the signing key ref itself is refused at parse, E674)'
+    expected: refused
+    code: E677
+    reason: untrusted
+    audit: none
+    gap: D-1453
+  - id: C18-TEAM-01
+    threat: TM-18
+    carrier: coordinator
+    title: 'a TEAM member (below the release role) fetches release inputs and a release blob from the coordinator'
+    expected: refused
+    code: E687
+    reason: role
+    audit: authorize
+  - id: C18-TEAM-02
+    threat: TM-18
+    carrier: coordinator
+    title: 'a release holder of another project asks for this project''s release inputs and blob and gets the same E713 body as an unknown run'
+    expected: refused
+    code: E713
+    reason: not_found
+    audit: authorize

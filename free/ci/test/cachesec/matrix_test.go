@@ -68,27 +68,18 @@ var (
 
 func loadMatrix(t *testing.T) matrixFile {
 	t.Helper()
-	files, err := filepath.Glob("matrix.d/*.yaml") // build-time fragments, folded into matrix.yaml at the end
+	raw, err := os.ReadFile("matrix.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var m matrixFile
-	for _, f := range append([]string{"matrix.yaml"}, files...) {
-		raw, err := os.ReadFile(f)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var part matrixFile
-		dec := yaml.NewDecoder(bytes.NewReader(raw))
-		dec.KnownFields(true)
-		if err = dec.Decode(&part); err != nil {
-			t.Fatalf("%s: %v", f, err)
-		}
-		m.Version = part.Version | m.Version
-		m.Cases = append(m.Cases, part.Cases...)
+	dec := yaml.NewDecoder(bytes.NewReader(raw))
+	dec.KnownFields(true)
+	if err = dec.Decode(&m); err != nil {
+		t.Fatalf("matrix.yaml: %v", err)
 	}
 	if m.Version != 1 || len(m.Cases) == 0 {
-		t.Fatalf("matrix: version %d, %d cases", m.Version, len(m.Cases))
+		t.Fatalf("matrix.yaml: version %d, %d cases", m.Version, len(m.Cases))
 	}
 	return m
 }
