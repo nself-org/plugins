@@ -46,7 +46,10 @@ type Uploader interface {
 type JobHook struct {
 	Name   string
 	Before func(ctx context.Context, lease protocol.Lease, root JobRoot) (JobSetup, error)
-	After  func(ctx context.Context, lease protocol.Lease, root JobRoot, out Outcome, up Uploader) error
+	// BeforeTransfer replaces Before for a hook that fetches blobs from the coordinator before the
+	// job (cache restore): it can answer and receive transfer frames through the Transfer.
+	BeforeTransfer func(ctx context.Context, lease protocol.Lease, root JobRoot, tr Transfer) (JobSetup, error)
+	After          func(ctx context.Context, lease protocol.Lease, root JobRoot, out Outcome, up Uploader) error
 }
 
 var (

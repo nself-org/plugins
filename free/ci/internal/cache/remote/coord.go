@@ -61,6 +61,7 @@ type Lease struct {
 	planned, closed bool
 	notify          chan struct{}
 	rcv             *transfer.Receiver
+	restored        map[string]bool // digests the node confirmed (restore_source.go)
 }
 
 func (h *Handler) Bind(b Binding) (*Lease, error) {

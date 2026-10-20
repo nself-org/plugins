@@ -24,6 +24,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
+	"github.com/nself-org/plugins/free/ci/internal/transport/restore"
 )
 
 type frame struct {
@@ -54,6 +55,7 @@ type sess struct {
 	origin     time.Time       // monotonic reference for lastAlive
 	lastAlive  atomic.Int64    // offset from origin of the last frame that proves the agent works on this lease
 	blobBytes  int64           // bytes announced in this session
+	restore    *restore.Pusher // the reverse blob path of this lease (restore.go); nil without a plan
 
 	helloTimedOut atomic.Bool // the hello timer killed ssh
 }

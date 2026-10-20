@@ -68,6 +68,7 @@ func (r *rig) agentSide() *agentSide {
 		r.t.Fatal(err)
 	}
 	drv.SetCancel(srv.Cancel)
+	drv.SetPush(srv.Push)
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ln) }()
 	r.t.Cleanup(func() {

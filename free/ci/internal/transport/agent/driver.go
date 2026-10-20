@@ -28,6 +28,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/pki"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
+	"github.com/nself-org/plugins/free/ci/internal/transport/restore"
 )
 
 // Kind is the transport driver name (capability identity.transport).
@@ -54,6 +55,8 @@ type Driver struct {
 	LogDir string
 	// Cancel asks the node's agent to stop a lease (agentapi.Server.Cancel); nil means no control stream.
 	Cancel func(node, leaseID, reason string) error
+	// Push queues a digest or chunk frame on the node's control stream (agentapi.Server.Push); nil serves no restores.
+	Push func(ctx context.Context, node string, m protocol.Message) error
 	// Leases reads the lease row, to notice a lease that expired or an attempt that ended.
 	Leases LeaseView
 	// CancelGrace is how long Run waits for the cancelled job's result (default 5 s).
@@ -118,6 +121,13 @@ func (d *Driver) Wire(w Wiring) {
 	d.Gate, d.Minter, d.Leases, d.LogDir, d.Logf = w.Gate, w.Minter, w.Leases, w.LogDir, w.Logf
 }
 
+// SetPush installs the function that sends a transfer frame to a node (agentapi.Server.Push).
+func (d *Driver) SetPush(fn func(ctx context.Context, node string, m protocol.Message) error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.Push = fn
+}
+
 // SetCancel installs the function that asks an agent to stop a lease (agentapi.Server.Cancel).
 func (d *Driver) SetCancel(fn func(node, leaseID, reason string) error) {
 	d.mu.Lock()
@@ -133,12 +143,13 @@ type cfg struct {
 	logDir string
 	logf   func(string, ...any)
 	cancel func(node, leaseID, reason string) error
+	push   func(ctx context.Context, node string, m protocol.Message) error
 }
 
 func (d *Driver) cfg() cfg {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return cfg{gate: d.Gate, minter: d.Minter, leases: d.Leases, logDir: d.LogDir, logf: d.Logf, cancel: d.Cancel}
+	return cfg{gate: d.Gate, minter: d.Minter, leases: d.Leases, logDir: d.LogDir, logf: d.Logf, cancel: d.Cancel, push: d.Push}
 }
 
 // Default is the driver registered for kind "agent"; the composition root sets its fields.
@@ -162,6 +173,9 @@ type route struct {
 	blobs              *blobSet
 	fwd, prevFwd       uint64 // highest log line_seq the run's sink accepted (and the one before)
 	err                error  // why the lease failed (a corrupt blob); read after done is closed
+	epoch              uint64 // the epoch the lease was delivered at
+	restore            *restore.Pusher
+	stopRestore        context.CancelFunc // ends the pusher's context, and any Push waiting for room
 }
 
 func (r *route) finish() { r.once.Do(func() { close(r.done) }) }
@@ -243,11 +257,14 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, lease protocol.
 	}
 	lease.Token = tok
 	d.prune(ctx, c.gate, time.Now())
-	rt := &route{node: nodeID, leaseID: lease.LeaseID, jti: jti, sink: sink, done: make(chan struct{})}
+	rt := &route{node: nodeID, leaseID: lease.LeaseID, jti: jti, sink: sink, done: make(chan struct{}), epoch: lease.Epoch}
+	stopRestore := d.attachRestore(ctx, rt, c.push)
 	if err = d.enqueue(rt, lease); err != nil {
+		stopRestore()
 		return err
 	}
 	defer d.release(rt)
+	defer stopRestore()
 	tick := time.NewTicker(d.poll())
 	defer tick.Stop()
 	for {

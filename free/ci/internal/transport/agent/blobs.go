@@ -100,6 +100,10 @@ func (h blobHandler) Frame(ctx context.Context, node string, m protocol.Message)
 	if late || rt.node != node {
 		return nil, nil
 	}
+	if o, ok := m.Body.(*protocol.Offset); ok { // a restore request or confirmation of the node (restore.go)
+		h.d.onOffset(ctx, rt, m, *o)
+		return nil, nil
+	}
 	bs := h.d.blobSetFor(rt)
 	if bs == nil { // the run ended since the route was found: nothing may open a writer in the sink now
 		return nil, nil

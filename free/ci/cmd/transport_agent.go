@@ -36,5 +36,5 @@ func wireAgentTransport(cfg *agentapi.Config, d agentDeps) (func(*agentapi.Serve
 	drv := agent.Default
 	drv.Wire(agent.Wiring{Gate: gate, Minter: tokens, Leases: d.Store, LogDir: agentLogDir(d.DataDir), Logf: agentLogf})
 	cfg.Sink, cfg.Source, cfg.Admit, cfg.Blobs = drv.Sink(), drv, drv.Admit, drv.Blobs()
-	return func(s *agentapi.Server) { drv.SetCancel(s.Cancel) }, nil
+	return func(s *agentapi.Server) { drv.SetCancel(s.Cancel); drv.SetPush(s.Push) }, nil
 }

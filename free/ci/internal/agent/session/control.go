@@ -22,6 +22,8 @@ func (s *Session) onMessage(m protocol.Message) (done bool, err error) {
 		return s.onDrain(m, *b)
 	case *protocol.Offset:
 		s.onOffset(m, *b)
+	case *protocol.Digest, *protocol.Chunk:
+		s.onInbound(m)
 	}
 	// heartbeat, ack, upgrade, chunk, digest, resume: carried by later
 	// tickets (P7-NODE-24 upgrade, P7-CACHE-19 cache restore); the session ignores them.

@@ -72,6 +72,7 @@ layers:
     - internal/transport
     - internal/transport/ssh
     - internal/transport/agent
+    - internal/transport/restore
     - internal/agent/session
     - internal/agent/slots
     - internal/agent/nodekey

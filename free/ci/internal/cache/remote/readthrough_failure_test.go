@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 )
@@ -29,7 +30,7 @@ func TestNodeReadThroughCancellationPreservesCopy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
+	_ = f.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := c.Open(ctx, "realm", digest, int64(len(data)), nil); !errors.Is(err, context.Canceled) {
@@ -39,7 +40,7 @@ func TestNodeReadThroughCancellationPreservesCopy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cancellation discarded intact copy: %v", err)
 	}
-	f.Close()
+	_ = f.Close()
 }
 
 func TestNodeReadThroughPrunesOrphan(t *testing.T) {
@@ -54,9 +55,43 @@ func TestNodeReadThroughPrunesOrphan(t *testing.T) {
 	if err := c.Prune(); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.Stat(orphan); err != nil {
+		t.Fatalf("a temporary file another lease is still writing was pruned: %v", err)
+	}
+	old := time.Now().Add(-2 * fetchTempGrace)
+	if err := os.Chtimes(orphan, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Prune(); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
 		t.Fatalf("orphan temporary file survived pruning: %v", err)
 	}
+}
+
+// A prune that runs while another lease is mid-fetch must not delete the transfer's temporary file.
+func TestNodeReadThroughPruneSparesAFetchInFlight(t *testing.T) {
+	c, err := NewReadThrough(t.TempDir(), 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("a blob that arrives while another lease prunes")
+	digest := fmt.Sprintf("%x", sha256.Sum256(data))
+	f, err := c.Open(context.Background(), "realm", digest, int64(len(data)), func(_ context.Context, w io.Writer) error {
+		if _, err := w.Write(data[:10]); err != nil {
+			return err
+		}
+		if err := c.Prune(); err != nil { // the other lease starts
+			return err
+		}
+		_, err := w.Write(data[10:])
+		return err
+	})
+	if err != nil {
+		t.Fatalf("a prune during the fetch spoiled it: %v", err)
+	}
+	_ = f.Close()
 }
 
 func TestNodeReadThroughReservesFetch(t *testing.T) {
@@ -89,7 +124,7 @@ func TestNodeReadThroughReservesFetch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		f.Close()
+		_ = f.Close()
 	}
 }
 
@@ -99,7 +134,7 @@ func TestNodeStageCopyFailureStillShips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	s.Copies, err = NewReadThrough(t.TempDir(), 100)
 	if err != nil {
 		t.Fatal(err)
@@ -123,5 +158,134 @@ func TestNodeStageCopyFailureStillShips(t *testing.T) {
 	}
 	if u.frames != 3 {
 		t.Fatalf("copy I/O failure blocked shared upload: %d frames", u.frames)
+	}
+}
+
+// A corrupt copy that was verified is removed; a fresh copy another lease renamed over it since is not.
+func TestRemoveIfSameSparesAReplacedCopy(t *testing.T) {
+	dir := t.TempDir()
+	name := filepath.Join(dir, "copy")
+	if err := os.WriteFile(name, []byte("corrupt"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	seen, err := os.Lstat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh := filepath.Join(dir, "fresh")
+	if err = os.WriteFile(fresh, []byte("verified"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Rename(fresh, name); err != nil {
+		t.Fatal(err)
+	}
+	removeIfSame(name, seen)
+	if got, err := os.ReadFile(name); err != nil || string(got) != "verified" {
+		t.Fatalf("the fresh copy was removed: %q %v", got, err)
+	}
+	now, _ := os.Lstat(name)
+	removeIfSame(name, now)
+	if _, err = os.Stat(name); !os.IsNotExist(err) {
+		t.Fatal("the verified-corrupt copy was kept")
+	}
+}
+
+// Two fetches that each fit the cap alone but not together: the second finds no room instead of overrunning the cap.
+func TestNodeReadThroughCountsConcurrentFetchReservations(t *testing.T) {
+	c, err := NewReadThrough(t.TempDir(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d1, d2 := []byte("0123456789"), []byte("abcdefghij")
+	dig := func(b []byte) string { return fmt.Sprintf("%x", sha256.Sum256(b)) }
+	started, release := make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		f, err := c.Open(context.Background(), "realm", dig(d1), 10, func(_ context.Context, w io.Writer) error {
+			close(started)
+			<-release // the first fetch has claimed 10 B and written none
+			_, err := w.Write(d1)
+			return err
+		})
+		if f != nil {
+			_ = f.Close()
+		}
+		done <- err
+	}()
+	<-started
+	_, err = c.Open(context.Background(), "realm", dig(d2), 10, func(_ context.Context, w io.Writer) error { _, err := w.Write(d2); return err })
+	if err == nil || !strings.Contains(err.Error(), "E711") {
+		t.Fatalf("second fetch under a full reservation: %v", err)
+	}
+	close(release)
+	if err = <-done; err != nil {
+		t.Fatalf("first fetch: %v", err)
+	}
+}
+
+// A fetch returns the descriptor that was hashed: pruning the published name right after the rename cannot take the bytes away.
+func TestNodeReadThroughOpenSurvivesAPruneAfterPublish(t *testing.T) {
+	c, err := NewReadThrough(t.TempDir(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("0123456789")
+	digest := fmt.Sprintf("%x", sha256.Sum256(data))
+	f, err := c.Open(context.Background(), "realm", digest, 10, func(_ context.Context, w io.Writer) error { _, err := w.Write(data); return err })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	name, _ := c.name("realm", digest)
+	if err = os.Remove(name); err != nil { // another lease evicted it
+		t.Fatal(err)
+	}
+	got, err := io.ReadAll(f)
+	if err != nil || string(got) != string(data) {
+		t.Fatalf("read %q %v after the name was pruned", got, err)
+	}
+}
+
+func TestNodeReadThroughPublishedName(t *testing.T) {
+	for _, realm := range []string{"realm-a", "realm-b"} {
+		t.Run(realm, func(t *testing.T) {
+			c, err := NewReadThrough(t.TempDir(), 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := "verified bytes"
+			digest := fmt.Sprintf("%x", sha256.Sum256([]byte(body)))
+			fetches := 0
+			fetch := func(_ context.Context, w io.Writer) error {
+				fetches++
+				_, err := io.WriteString(w, body)
+				return err
+			}
+			f, err := c.Open(context.Background(), realm, digest, int64(len(body)), fetch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := f.Name()
+			_ = f.Close()
+			expected, err := c.name(realm, digest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if name != expected {
+				t.Fatalf("published name = %q, want %q", name, expected)
+			}
+			if err := os.WriteFile(name, []byte("corrupt bytes!"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			f, err = c.Open(context.Background(), realm, digest, int64(len(body)), fetch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = f.Close() }()
+			got, err := io.ReadAll(f)
+			if err != nil || string(got) != body || fetches != 2 {
+				t.Fatalf("replacement = %q, fetches = %d, err = %v", got, fetches, err)
+			}
+		})
 	}
 }

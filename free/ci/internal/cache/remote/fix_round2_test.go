@@ -136,7 +136,7 @@ func TestCacheReceiverDistinctBlobCapAndDedupe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 	if len(l.held) != 1 {
 		t.Fatalf("dedupe charged blob count: %v", l.held)
 	}

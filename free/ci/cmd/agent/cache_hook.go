@@ -22,7 +22,7 @@ import (
 )
 
 func init() {
-	must(session.RegisterJobHook(session.JobHook{Name: "cache", Before: cacheBefore, After: cacheAfter}))
+	must(session.RegisterJobHook(session.JobHook{Name: "cache", BeforeTransfer: cacheBeforeTransfer, After: cacheAfter}))
 }
 
 type nodeCache struct {
@@ -36,7 +36,14 @@ type nodeCache struct {
 
 var nodeCaches sync.Map
 
+// cacheBefore restores from the node's own copies only (no transfer channel).
 func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (session.JobSetup, error) {
+	return cacheBeforeTransfer(ctx, l, root, session.Transfer{})
+}
+
+// cacheBeforeTransfer restores the planned cache; a blob the node lacks is fetched from the
+// coordinator over the lease's transfer channel (P7-CACHE-21).
+func cacheBeforeTransfer(ctx context.Context, l protocol.Lease, root session.JobRoot, tr session.Transfer) (session.JobSetup, error) {
 	setup := session.JobSetup{Env: map[string]string{}}
 	if l.Cache == nil || l.Cache.Access == "none" {
 		return setup, nil
@@ -77,6 +84,7 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 	if err != nil {
 		return cacheSetupMiss(err)
 	}
+	fetch := newFetcher(tr, l.Cache)
 	n := &nodeCache{lease: l, base: base, miss: map[string]bool{}, container: container}
 	good := false
 	defer func() {
@@ -110,9 +118,9 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 			if !valid {
 				break
 			}
-			// JobHook.Before has no carrier receiver. Until that protocol hook is
-			// available a missing copy is best effort; never read coordinator paths.
-			f, err := copyStore.Open(ctx, l.Cache.Namespace, b.SHA256, b.Size, nil)
+			// A missing or corrupt node copy is fetched from the coordinator, restricted to the
+			// lease plan; without a transfer channel it is a cold miss. Never read coordinator paths.
+			f, err := fetch.Open(ctx, copyStore, l.Cache.Namespace, b.SHA256, b.Size)
 			if err != nil {
 				valid = false
 				break
@@ -186,6 +194,14 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 	}
 	good = true
 	return setup, nil
+}
+
+// newFetcher builds the coordinator fetch of a lease; nil without a transfer channel.
+func newFetcher(tr session.Transfer, plan *protocol.LeaseCache) *remote.Fetcher {
+	if tr.Up == nil || tr.In == nil {
+		return nil
+	}
+	return remote.NewFetcher(remote.Wire{Offset: tr.Up.Offset, In: tr.In}, plan)
 }
 
 func bindCache(setup *session.JobSetup, sp specs.Spec, dir string, container bool) {

@@ -255,6 +255,15 @@ func (s cacheLeaseSink) Blob(ctx context.Context, h transport.BlobHeader) (trans
 	}
 	return s.Sink.Blob(ctx, h)
 }
+
+// RestoreBlobs and RestoreEvent make the sink a transport.Restorer: the carrier driver serves the
+// planned restore blobs to the node, and the lease records the outcome (P7-CACHE-21).
+func (s cacheLeaseSink) RestoreBlobs(ctx context.Context) ([]transport.RestoreBlob, error) {
+	return s.l.RestoreBlobs(ctx)
+}
+func (s cacheLeaseSink) RestoreEvent(ctx context.Context, e transport.RestoreEvent) {
+	s.l.RestoreEvent(ctx, e)
+}
 func (s cacheLeaseSink) CacheRef(ctx context.Context, r protocol.CacheRef) error {
 	return s.l.CacheRef(ctx, r)
 }
