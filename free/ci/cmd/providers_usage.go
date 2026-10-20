@@ -6,8 +6,8 @@ package main
 // Inputs:  argv after the key; env NSELF_CI_HOME (the run store), NSELF_CI_REPO; the operator's
 //          providers.github.* keys and the credential the HOST-16 runtime resolves.
 // Outputs: `disabled` when providers.github.billing_import is not true (no API call, exit 0); else a
-//          one-line summary or one v1 JSON envelope; exit 0, 1 (usage, E700, E709 and other
-//          provider refusals) or 2 (infrastructure).
+//          one-line summary or one v1 JSON envelope (an error too, with --json); exit 0, 1
+//          (usage, E700, E709 and other provider refusals) or 2 (rate limit, network, anything else).
 // Constraints: V15 only; writes the store only through economics.RecordUsage; requests only the
 //          non-summary billing usage endpoint (see internal/providers/github/usage); never asks for
 //          or refreshes a token scope. Live use waits for the owner to name the token scope.
@@ -109,16 +109,30 @@ func importUsage(ctx context.Context, root string) (usage.Result, error) {
 	return imp.Run(ctx)
 }
 
-// usageImportFail prints err and returns the exit code: a provider refusal is the caller's to fix (1).
+// usageImportFail prints err and returns the exit code: a provider refusal is the caller's to fix
+// (1); a retryable one (rate limit, network, outage) and any other failure is infrastructure (2).
 func usageImportFail(f providersUsageFlags, err error) int {
 	var pe *providers.Error
-	if !errors.As(err, &pe) {
-		return exitForError(err)
+	isProvider := errors.As(err, &pe)
+	exit, class := 2, output.ClassInfra
+	code := "E700"
+	if isProvider {
+		code = pe.Code
+		if pe.Class == providers.Auth || pe.Class == providers.Config {
+			exit, class = 1, output.ClassUser
+		}
 	}
-	if f.json {
-		_ = output.WriteError(os.Stdout, "ci providers usage import", output.ErrorDetail{Code: pe.Code, Message: err.Error(), Cause: pe.Reason, ExitCode: 1, Class: output.ClassUser}, nil)
-		return 1
+	if !f.json {
+		if !isProvider {
+			return exitForError(err)
+		}
+		fmt.Fprintf(os.Stderr, "%s: usage import failed (%s)\n", pe.Code, pe.Reason)
+		return exit
 	}
-	fmt.Fprintf(os.Stderr, "%s: usage import failed (%s)\n", pe.Code, pe.Reason)
-	return 1
+	detail := output.ErrorDetail{Code: code, Message: err.Error(), ExitCode: exit, Class: class}
+	if isProvider {
+		detail.Cause = pe.Reason
+	}
+	_ = output.WriteError(os.Stdout, "ci providers usage import", detail, nil)
+	return exit
 }

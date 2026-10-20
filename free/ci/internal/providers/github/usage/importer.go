@@ -33,8 +33,9 @@ import (
 const (
 	// Provider is the ledger provider id the rows are written under (the hosted GitHub class).
 	Provider = "github"
-	// LookbackDays is how many UTC days back (today included) one import reads. GitHub finalizes a
-	// day late, so re-reading a week corrects the partial lines of the last days.
+	// LookbackDays is how many UTC days back (today included) one import reads at least. GitHub
+	// finalizes a day late, so re-reading a week corrects the partial lines of the last days. Run
+	// reads from the first of the month when that is earlier, so no day of the month is ever skipped.
 	LookbackDays = 7
 )
 
@@ -125,6 +126,9 @@ func (i *Importer) Run(ctx context.Context) (Result, error) {
 	}
 	to := dayOf(now())
 	from := to.AddDate(0, 0, 1-LookbackDays)
+	if first := time.Date(to.Year(), to.Month(), 1, 0, 0, 0, 0, time.UTC); first.Before(from) {
+		from = first // the whole month: the monthly allowance counts every day, and the month request returns them anyway
+	}
 	res := Result{Account: acct.String(), From: from.Format("2006-01-02"), To: to.Format("2006-01-02")}
 	rows, err := i.Source.Usage(ctx, providers.Period{From: from, To: to})
 	if err != nil {

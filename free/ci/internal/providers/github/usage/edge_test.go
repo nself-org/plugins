@@ -78,10 +78,10 @@ func TestMissingCredentialStaysE700(t *testing.T) {
 
 func TestMalformedAmountsWriteNothing(t *testing.T) {
 	for name, line := range map[string]string{
-		"negative":  `{"date":"2026-10-14T00:00:00Z","product":"Actions","sku":"Actions Linux","quantity":-5,"unitType":"minutes","netAmount":1,"repositoryName":"a/b"}`,
+		"negative":  `{"date":"2026-10-14T00:00:00Z","product":"Actions","sku":"Actions Linux","quantity":-5,"unitType":"minutes","grossAmount":1,"repositoryName":"a/b"}`,
 		"no amount": `{"date":"2026-10-14T00:00:00Z","product":"Actions","sku":"Actions Linux","quantity":5,"unitType":"minutes","repositoryName":"a/b"}`,
-		"bad date":  `{"date":"yesterday","product":"Actions","sku":"Actions Linux","quantity":5,"unitType":"minutes","netAmount":1,"repositoryName":"a/b"}`,
-		"no sku":    `{"date":"2026-10-14T00:00:00Z","product":"Actions","quantity":5,"unitType":"minutes","netAmount":1,"repositoryName":"a/b"}`,
+		"bad date":  `{"date":"yesterday","product":"Actions","sku":"Actions Linux","quantity":5,"unitType":"minutes","grossAmount":1,"repositoryName":"a/b"}`,
+		"no sku":    `{"date":"2026-10-14T00:00:00Z","product":"Actions","quantity":5,"unitType":"minutes","grossAmount":1,"repositoryName":"a/b"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFakeBilling(t, map[string]reply{orgPath: {status: 200, body: `{"usageItems":[` + line + `]}`}})
@@ -149,7 +149,7 @@ func TestReconcilerImportsOncePerDay(t *testing.T) {
 	st := openLedger(t)
 	r.Store = st
 	ctx := context.Background()
-	if err := r.Reconcile(ctx, nil); err != nil || f.callCount() != 1 || len(rec.keys()) != 2 {
+	if err := r.Reconcile(ctx, nil); err != nil || f.callCount() != 1 || len(rec.keys()) != 3 {
 		t.Fatalf("first pass: calls=%d keys=%d err=%v", f.callCount(), len(rec.keys()), err)
 	}
 	now = today.Add(5 * time.Hour)
@@ -219,8 +219,8 @@ func TestReconcilerDormantAndOff(t *testing.T) {
 }
 
 func TestMalformedLineOfAnotherProductIsIgnored(t *testing.T) {
-	body := `{"usageItems":[{"date":"2026-10-14T00:00:00Z","product":"Copilot","sku":"Copilot Business","quantity":"many","unitType":"seats","netAmount":"NaN"},` +
-		`{"date":"2026-10-14T00:00:00Z","product":"Actions","sku":"Actions Linux","quantity":4,"unitType":"minutes","netAmount":0.5,"repositoryName":"a/b"}]}`
+	body := `{"usageItems":[{"date":"2026-10-14T00:00:00Z","product":"Copilot","sku":"Copilot Business","quantity":"many","unitType":"seats","grossAmount":"NaN"},` +
+		`{"date":"2026-10-14T00:00:00Z","product":"Actions","sku":"Actions Linux","quantity":4,"unitType":"minutes","grossAmount":0.5,"repositoryName":"a/b"}]}`
 	f := newFakeBilling(t, map[string]reply{orgPath: {status: 200, body: body}})
 	rec := &recorder{}
 	res, err := importer(f.source(t, "org:acme"), "org:acme", true, rec).Run(ledgerCtx(openLedger(t)))
@@ -237,5 +237,23 @@ func TestCanceledContextIsNotUnavailable(t *testing.T) {
 	var pe *providers.Error
 	if err == nil || (errors.As(err, &pe) && pe.Code == "E709") {
 		t.Fatalf("a stopped caller is not an unavailable API: %v", err)
+	}
+}
+
+func TestMissingScopeHintSurvivesInE709(t *testing.T) {
+	f := newFakeBilling(t, map[string]reply{orgPath: {status: 403, file: "forbidden.json", header: map[string]string{"X-OAuth-Scopes": "repo", "X-Accepted-OAuth-Scopes": "admin:org"}}})
+	_, err := importer(f.source(t, "org:acme"), "org:acme", true, &recorder{}).Run(ledgerCtx(openLedger(t)))
+	var pe *providers.Error
+	if !errors.As(err, &pe) || pe.Code != "E709" || pe.Reason != "http_403:missing_scope:admin:org" {
+		t.Fatalf("the operator needs the scope name to answer owner question 1: %v", err)
+	}
+}
+
+func TestPlainDayDateIsAccepted(t *testing.T) {
+	body := `{"usageItems":[{"date":"2026-10-14","product":"Actions","sku":"Actions Linux","quantity":4,"unitType":"minutes","grossAmount":0.5,"repositoryName":"a/b"}]}`
+	f := newFakeBilling(t, map[string]reply{orgPath: {status: 200, body: body}})
+	res, err := importer(f.source(t, "org:acme"), "org:acme", true, &recorder{}).Run(ledgerCtx(openLedger(t)))
+	if err != nil || res.Rows != 1 {
+		t.Fatalf("%+v %v", res, err)
 	}
 }

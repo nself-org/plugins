@@ -3,6 +3,9 @@ package usage
 // Purpose: GitHub, the providers.UsageSource that reads the enhanced-billing usage report (Epic D12).
 // Inputs:  Config (the guarded REST client, the billing account, a clock).
 // Outputs: providers.UsageRow lines for the Actions minutes of the requested period.
+//          NetMicro of a row carries the GROSS (pre-discount) amount: minutes inside the included quota
+//          have netAmount 0, and an allowance that counted them as free would never shrink. The rows
+//          therefore measure consumption of the allowance, not the invoice.
 // Constraints: only GET /users/{u}/settings/billing/usage or /organizations/{o}/settings/billing/usage
 //          is ever requested, with year, month and (for a one-day period) day. The preview
 //          /usage/summary and the retired /settings/billing/actions are never requested. Every request
@@ -78,7 +81,11 @@ func wrap(err error) error {
 	case pe.Class == providers.Quota, pe.Class == providers.Transient, pe.Class == providers.Outage, pe.Code == "E700":
 		return err
 	}
-	return unavailable(fmt.Sprintf("http_%d", pe.Status), pe.Status)
+	reason := fmt.Sprintf("http_%d", pe.Status)
+	if strings.HasPrefix(pe.Reason, "missing_scope:") {
+		reason += ":" + pe.Reason // names the scope the operator must grant (owner question 1)
+	}
+	return unavailable(reason, pe.Status)
 }
 
 type item struct {
@@ -87,7 +94,7 @@ type item struct {
 	SKU            string          `json:"sku"`
 	Quantity       json.RawMessage `json:"quantity"`
 	UnitType       string          `json:"unitType"`
-	NetAmount      json.RawMessage `json:"netAmount"`
+	GrossAmount    json.RawMessage `json:"grossAmount"`
 	RepositoryName string          `json:"repositoryName"`
 }
 
@@ -160,8 +167,11 @@ func (g *GitHub) row(it item) (providers.UsageRow, bool, error) {
 		return providers.UsageRow{}, false, nil
 	}
 	day, err := time.Parse(time.RFC3339, it.Date)
+	if err != nil {
+		day, err = time.Parse("2006-01-02", it.Date) // the docs show no format; accept the plain day too
+	}
 	q, qOK := number(it.Quantity)
-	n, nOK := number(it.NetAmount)
+	n, nOK := number(it.GrossAmount)
 	if err != nil || it.SKU == "" || !qOK || !nOK {
 		return providers.UsageRow{}, false, unavailable("shape.item", 200)
 	}

@@ -65,14 +65,16 @@ func TestImportRows(t *testing.T) {
 		st := openLedger(t)
 		rec := &recorder{}
 		res, err := importer(f.source(t, "org:acme"), "org:acme", true, rec).Run(ledgerCtx(st))
-		if err != nil || res.Rows != 2 || res.Account != "org:acme" || res.From != "2026-10-13" || res.To != "2026-10-19" {
+		if err != nil || res.Rows != 3 || res.Account != "org:acme" || res.From != "2026-10-01" || res.To != "2026-10-19" {
 			t.Fatalf("result: %+v, %v", res, err)
 		}
 		keys := rec.keys()
 		linux := keys[usage.Key("org:acme", "2026-10-14", "Actions Linux", "acme/widgets")]
 		mac := keys[usage.Key("org:acme", "2026-10-15", "Actions macOS 3-core", "acme/gadgets")]
-		if len(keys) != 2 || linux.Minutes != 150 || linux.CostMicro != 240_000 || mac.Minutes != 10 || mac.CostMicro != 620_000 {
-			t.Fatalf("rows (storage, Copilot, Packages and the out-of-window day must be absent; same-day duplicates fold): %+v", keys)
+		old := keys[usage.Key("org:acme", "2026-10-01", "Actions Linux", "acme/old")]
+		// Cost is the GROSS amount: 120 included minutes are netAmount 0 but still consume the allowance.
+		if len(keys) != 3 || linux.Minutes != 150 || linux.CostMicro != 1_200_000 || mac.Minutes != 10 || mac.CostMicro != 620_000 || old.Minutes != 999 {
+			t.Fatalf("rows (storage, Copilot and Packages must be absent; same-day duplicates fold; the whole month is read): %+v", keys)
 		}
 		if linux.Provider != usage.Provider || linux.Series != "Actions Linux" || linux.Date != "2026-10-14" {
 			t.Fatalf("line fields: %+v", linux)
@@ -81,7 +83,7 @@ func TestImportRows(t *testing.T) {
 			t.Fatalf("query: %q", got)
 		}
 		line := githubLine(t, st)
-		if line.Imported == nil || line.Imported.Micro != 860_000 || line.Imported.Confidence != economics.ConfKnown {
+		if line.Imported == nil || line.Imported.Micro != 9_810_000 || line.Imported.Confidence != economics.ConfKnown {
 			t.Fatalf("the ledger report must show the import as known: %+v", line.Imported)
 		}
 	})
@@ -94,11 +96,15 @@ func TestImportRows(t *testing.T) {
 			t.Fatalf("result: %+v, %v", res, err)
 		}
 		l := rec.keys()[usage.Key("user:octo", "2026-10-17", "Actions Linux", "octo/hello")]
-		if l.Minutes != 45 || l.CostMicro != 0 {
-			t.Fatalf("a fully discounted line is a known zero, not a missing row: %+v", l)
+		if l.Minutes != 45 || l.CostMicro != 360_000 {
+			t.Fatalf("a fully discounted (included) line still consumes the allowance at its gross value: %+v", l)
 		}
-		if line := githubLine(t, st); line.Imported == nil || line.Imported.Micro != 0 || line.Imported.Confidence != economics.ConfKnown {
+		if line := githubLine(t, st); line.Imported == nil || line.Imported.Micro != 360_000 || line.Imported.Confidence != economics.ConfKnown {
 			t.Fatalf("report: %+v", line.Imported)
+		}
+		in, err := st.Allowance(context.Background(), usage.Provider, "2026-10")
+		if err != nil || !in.HasImport || in.Imported != 360_000 {
+			t.Fatalf("an included-only month must shrink the allowance, not leave it at the ceiling: %+v %v", in, err)
 		}
 	})
 }
@@ -118,7 +124,7 @@ func TestIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	a, b := first.keys(), second.keys()
-	if len(a) != 2 || len(b) != 2 {
+	if len(a) != 3 || len(b) != 3 {
 		t.Fatalf("keys: %v / %v", a, b)
 	}
 	for k := range a {
@@ -126,7 +132,7 @@ func TestIdempotent(t *testing.T) {
 			t.Fatalf("second import wrote a different key %q", k)
 		}
 	}
-	if after := githubLine(t, st).Imported.Micro; after != before || before != 860_000 {
+	if after := githubLine(t, st).Imported.Micro; after != before || before != 9_810_000 {
 		t.Fatalf("the total moved from %d to %d: a duplicate row was written", before, after)
 	}
 }
