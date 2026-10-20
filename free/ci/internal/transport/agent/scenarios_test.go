@@ -561,13 +561,3 @@ func attemptEpoch2(t *testing.T, r *rig, att string) int64 {
 	}
 	return ep
 }
-
-// scenarioTokenTable runs the whole R-DS-15 table: acceptance by call type, and every refusal with its reason.
-func scenarioTokenTable(t *testing.T) {
-	t.Run("one token on log, heartbeat and result", TestGateAdmitsTheSameTokenOnLogHeartbeatAndResult)
-	t.Run("each refusal has its own reason", TestGateRefusalTable)
-	t.Run("expired", TestGateExpiredToken)
-	t.Run("terminal", TestGateTerminalAttempt)
-	t.Run("spent", TestGateSpentTokenIsReplayed)
-	t.Run("over the wire", func(t *testing.T) { scenarioWireRefusals(t) })
-}
