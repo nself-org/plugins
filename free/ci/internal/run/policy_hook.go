@@ -6,13 +6,13 @@ package run
 // Inputs: a PolicyRequest (the repository root). Outputs: a PolicyResult.
 // Constraints: the digest is the policy in force without the per-run values (they
 // steer placement only; evidence verification re-resolves without them); registered from init(); git runs through the exec funnel
-// (report.Capture); the operator rows come from the default state.db, because
-// PolicyRequest carries no store path (handoff: Coordinator.policy should pass
-// Opts.Home); the local run is classed owner and the repository visibility
+// (report.Capture); operator rows come from the coordinator home;
+// the local run is classed owner and the repository visibility
 // is unknown, which keeps hosted execution off.
 
 import (
 	"context"
+	"path/filepath"
 
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/report"
@@ -34,7 +34,13 @@ func init() { RegisterPolicy(PolicyHook{}) }
 func (h PolicyHook) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult, error) {
 	open := h.OpenStore
 	if open == nil {
-		open = func() (*store.Store, error) { return OpenStore("") }
+		open = func() (*store.Store, error) {
+			path := ""
+			if r.Home != "" {
+				path = filepath.Join(r.Home, "state.db")
+			}
+			return OpenStore(path)
+		}
 	}
 	capture := h.Capture
 	if capture == nil {
