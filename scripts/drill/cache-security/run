@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# cache-security drill (P7-CACHE-11, Epic CACHE): runs the cache, artifact and release security suite (build tag
+# cachesec, free/ci/test/cachesec) and checks its results and its mapping to the CI threat model.
+# Why: the suite proves that every cache, artifact and release attack of the threat model (TM-12 to TM-18) is
+#   refused with the expected code, reason key and audit row and that no bytes land. The drill fails on an
+#   unexpected pass (a case whose outcome differs from `expected` in results.json), on an empty results file,
+#   on a skipped test, and on a case that maps to no threat-model row.
+# Inputs:  HQ must name a readable threat-model checkout for the full run.
+#          --check-mapping MODEL.md [MATRIX.yaml...] checks only the mapping: every case of
+#          the matrix (default matrix.yaml of the suite) names a threat id that is a row of the
+#          threat model file MODEL.md, and every threat id TM-12 to TM-18 has at least one case.
+#          HQ (env) names the hq checkout; the full run passes its threat model to the mapping check.
+#          INTEGRATION=1 is set by the drill; the remote cases start the fabric sim (Docker Engine).
+# Usage:   run
+#          run --check-mapping "$HQ/architecture/ci-threat-model.md" [matrix.yaml ...]
+# Outputs: the test log tail on stderr; results.json and the generated threats-covered.md in suite/testdata/.
+#          Exit 0 when everything holds, 1 on a failed test, an unexpected pass or an unmapped case, 2 on usage
+#          or a missing tool.
+set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root=$(cd "$here/../../.." && pwd)
+suite="$root/free/ci/test/cachesec"
+
+# check_mapping MODEL MATRIX...: the mapping rules above. Prints each violation, returns 1 when any exists.
+check_mapping() {
+	local model=$1
+	shift
+	[ -r "$model" ] || { echo "cache-security: cannot read the threat model $model" >&2; return 2; }
+	[ "$#" -gt 0 ] || { echo "cache-security: no matrix file" >&2; return 2; }
+	local bad=0 out f
+	for f in "$@"; do
+		[ -r "$f" ] || { echo "cache-security: cannot read the matrix $f" >&2; return 2; }
+	done
+	# One line per case: "<id> <threat or ->". A new `- id:` item starts a case; its `threat:` line fills it in.
+	out=$(awk '
+		/^  - id:/ { if (id != "") print id, (th == "" ? "-" : th); id = $3; th = ""; next }
+		/^    threat:/ { th = $2 }
+		END { if (id != "") print id, (th == "" ? "-" : th) }
+	' "$@") || { echo "cache-security: the matrix could not be parsed" >&2; return 2; }
+	[ -n "$out" ] || { echo "cache-security: the matrix holds no case" >&2; return 1; }
+	local id th
+	while read -r id th; do
+		if [ "$th" = "-" ]; then
+			echo "cache-security: case $id names no threat-model row" >&2
+			bad=1
+		elif ! awk -v row="| $th |" 'index($0, row) == 1 { found=1 } END { exit !found }' "$model"; then
+			echo "cache-security: case $id maps to $th, which is not a row of the threat model" >&2
+			bad=1
+		fi
+	done <<<"$out"
+	local want
+	for want in TM-12 TM-13 TM-14 TM-15 TM-16 TM-17 TM-18; do
+		if ! awk '{ print $2 }' <<<"$out" | grep -qx "$want"; then
+			echo "cache-security: threat row $want has no case" >&2
+			bad=1
+		fi
+	done
+	return "$bad"
+}
+
+matrix_files() {
+	echo "$suite/matrix.yaml"
+}
+
+if [ "${1:-}" = "--check-mapping" ]; then
+	[ "$#" -ge 2 ] || { echo "usage: run --check-mapping MODEL.md [MATRIX.yaml...]" >&2; exit 2; }
+	model=$2
+	shift 2
+	if [ "$#" -eq 0 ]; then
+		files=()
+		while IFS= read -r f; do files+=("$f"); done < <(matrix_files)
+		set -- "${files[@]}"
+	fi
+	rc=0
+	check_mapping "$model" "$@" || rc=$?
+	[ "$rc" = 0 ] && echo "cache-security: mapping ok" >&2
+	exit "$rc"
+fi
+[ "$#" -eq 0 ] || { echo "usage: run | run --check-mapping MODEL.md [MATRIX.yaml...]" >&2; exit 2; }
+
+model=${HQ:+$HQ/architecture/ci-threat-model.md}
+if [ -z "$model" ] || [ ! -r "$model" ]; then
+	echo "cache-security: HQ must name a readable threat model checkout" >&2
+	exit 2
+fi
+check_mapping "$model" "$suite/matrix.yaml"
+
+for tool in go python3; do
+	command -v "$tool" >/dev/null || { echo "cache-security: $tool is required" >&2; exit 2; }
+done
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/cache-security.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+
+echo "cache-security: running free/ci/test/cachesec" >&2
+rm -f "$suite/testdata/results.json" # the suite rewrites it; a stale committed copy must not pass a run that never wrote one
+if ! (cd "$root/free/ci" && INTEGRATION=1 NSELF_V15=1 CGO_ENABLED=0 go test -mod=vendor -count=1 -v -tags 'cachesec integration' -timeout 60m ./test/cachesec/...) >"$tmp/suite.txt" 2>&1; then
+	tail -n 60 "$tmp/suite.txt" >&2
+	echo "cache-security: the suite failed" >&2
+	exit 1
+fi
+if grep -q -- '--- SKIP' "$tmp/suite.txt"; then
+	grep -- '--- SKIP' "$tmp/suite.txt" >&2
+	echo "cache-security: a test skipped; a missing prerequisite is a failure" >&2
+	exit 1
+fi
+grep -E '^(--- PASS|ok )' "$tmp/suite.txt" | tail -n 3 >&2
+
+python3 - "$suite/testdata/results.json" <<'PY' || { echo "cache-security: unexpected pass, or no results" >&2; exit 1; }
+import json, sys
+rows = json.load(open(sys.argv[1]))
+bad = [c["id"] for c in rows if c["outcome"] != c["expected"]]
+if bad or not rows:
+    print("outcome differs from expected (or no rows):", bad, file=sys.stderr)
+    sys.exit(1)
+print("cache-security: %d cases, every outcome equals expected" % len(rows), file=sys.stderr)
+PY
+
+"$0" --check-mapping "$model"
+python3 "$here/handoff.py" > "$suite/testdata/threats-covered.md"
+echo "cache-security: ok" >&2
