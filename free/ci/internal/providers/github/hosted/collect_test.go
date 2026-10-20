@@ -238,6 +238,15 @@ func TestStoreJournal(t *testing.T) {
 	if _, _, err = j.Begin(ctx, rec(1, "n3")); err == nil {
 		t.Fatal("a lower attempt number was accepted")
 	}
+	retry := rec(1, "n4")
+	retry.Attempt = "att-1-retry-2"
+	got4, prev4, err := j.Begin(ctx, retry)
+	if err != nil || got4.Nonce != "n4" || prev4 == nil || prev4.Nonce != "n2" {
+		t.Fatalf("retry with a new attempt id: %+v %+v %v", got4, prev4, err)
+	}
+	if latest, ok, err := j.Latest(ctx, "att-1"); err != nil || !ok || latest.Nonce != "n4" {
+		t.Fatalf("latest: %+v %v %v", latest, ok, err)
+	}
 	got, ok, err := j.ByNonce(ctx, "n1")
 	if err != nil || !ok || got.N != 1 || got.Revision != testRevision {
 		t.Fatalf("by nonce: %+v %v %v", got, ok, err)
