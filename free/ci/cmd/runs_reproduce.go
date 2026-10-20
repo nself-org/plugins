@@ -141,10 +141,10 @@ func writeReproduceError(code string, err error, exit int) int {
 func printReproduceReport(w io.Writer, r reproduce.Report) {
 	fmt.Fprintf(w, "reproduce %s at %.12s (%s, recorded on %s, now %s)\n", r.Job, r.Revision, r.Isolation, r.Platform, r.HostPlatform)
 	for _, d := range r.Drift {
-		switch {
-		case d.Kind == reproduce.DriftToolGone:
+		switch d.Kind {
+		case reproduce.DriftToolGone:
 			fmt.Fprintf(w, "  drift: %s is not available here (recorded %q)\n", d.Name, d.Recorded)
-		case d.Kind == reproduce.DriftIsolation:
+		case reproduce.DriftIsolation:
 			fmt.Fprintf(w, "  drift: recorded isolation %s, running as %s\n", d.Recorded, d.Current)
 		default:
 			fmt.Fprintf(w, "  drift: %s %s: recorded %q, now %q\n", d.Kind, d.Name, d.Recorded, d.Current)

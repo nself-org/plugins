@@ -31,7 +31,7 @@ type Env struct {
 }
 
 type flags struct {
-	json, acceptsSet       bool
+	json                   bool
 	project, name, hostKey string
 	agentBinary, installer string
 	mode                   string

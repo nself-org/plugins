@@ -141,7 +141,7 @@ func TestInstallRunnerInstance_EndToEndArgvAndEnv(t *testing.T) {
 		t.Fatalf("config.sh saw ACTIONS_RUNNER_INPUT_TOKEN=%q", env)
 	}
 	// no token on stdin: the script refuses before any host work
-	os.Remove(argvLog)
+	_ = os.Remove(argvLog)
 	out, err := LocalExecutor{}.RunInput(context.Background(), renderedScript(t, root), "")
 	if err == nil || !strings.Contains(out, "no runner registration token on stdin") {
 		t.Fatalf("empty stdin: out=%q err=%v", out, err)

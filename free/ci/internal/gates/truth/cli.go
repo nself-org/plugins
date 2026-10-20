@@ -31,7 +31,7 @@ var revisionRe = regexp.MustCompile(`^[0-9a-f]{40}$`)
 // Main runs one command and returns the process exit code.
 func Main(args []string, in io.Reader, out, errw io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(errw, "usage: run.go check|sweep|hash [flags] [rule files...]")
+		_, _ = fmt.Fprintln(errw, "usage: run.go check|sweep|hash [flags] [rule files...]")
 		return 2
 	}
 	switch args[0] {
@@ -42,7 +42,7 @@ func Main(args []string, in io.Reader, out, errw io.Writer) int {
 	case "hash":
 		return cmdHash(in, out, errw)
 	}
-	fmt.Fprintf(errw, "truth: unknown command %q (check, sweep, hash)\n", args[0])
+	_, _ = fmt.Fprintf(errw, "truth: unknown command %q (check, sweep, hash)\n", args[0])
 	return 2
 }
 
@@ -54,7 +54,7 @@ func cmdCheck(args []string, out, errw io.Writer) int {
 	kind := fs.String("kind", "", "report one rule kind only (banned-literal, retired-term, dead-host, numeric-claim, version-claim), or `rules` to validate the rule files without scanning")
 	asJSON := fs.Bool("json", false, "print one JSON document: {data:{result, checks, findings}}")
 	if err := fs.Parse(args); err != nil || fs.NArg() == 0 {
-		fmt.Fprintln(errw, "usage: check --root DIR [--rules-root DIR] [--kind K] RULEFILE...")
+		_, _ = fmt.Fprintln(errw, "usage: check --root DIR [--rules-root DIR] [--kind K] RULEFILE...")
 		return 2
 	}
 	base := *rulesRoot
@@ -64,10 +64,10 @@ func cmdCheck(args []string, out, errw io.Writer) int {
 	if *kind == "rules" {
 		rs, err := Load(base, fs.Args())
 		if err != nil {
-			fmt.Fprintln(out, "ERROR truth.rules\n  "+err.Error())
+			_, _ = fmt.Fprintln(out, "ERROR truth.rules\n  "+err.Error())
 			return 2
 		}
-		fmt.Fprintf(out, "PASS truth.rules (%d rule(s) in %d file(s))\n", len(rs.Rules), len(rs.Files))
+		_, _ = fmt.Fprintf(out, "PASS truth.rules (%d rule(s) in %d file(s))\n", len(rs.Rules), len(rs.Files))
 		return 0
 	}
 	checks, found := RunFull(*root, fs.Args(), *rulesRoot)
@@ -82,7 +82,7 @@ func cmdCheck(args []string, out, errw io.Writer) int {
 			only = checks // the rule files did not load: show that error, not "unknown --kind"
 		}
 		if len(only) == 0 {
-			fmt.Fprintf(errw, "truth: unknown --kind %q (rules, %s)\n", *kind, strings.Join(append(append([]string(nil), Kinds...), ClaimKinds...), ", "))
+			_, _ = fmt.Fprintf(errw, "truth: unknown --kind %q (rules, %s)\n", *kind, strings.Join(append(append([]string(nil), Kinds...), ClaimKinds...), ", "))
 			return 2
 		}
 		checks = only

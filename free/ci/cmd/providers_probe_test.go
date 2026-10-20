@@ -69,17 +69,17 @@ func renderedWorkflow(t *testing.T) string {
 func githubFixture(t *testing.T, untrustedPresent bool) *httptest.Server {
 	doc := renderedWorkflow(t)
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/user":
+		switch r.URL.Path {
+		case "/user":
 			if bearer(r) == "classic" {
 				w.Header().Set("X-OAuth-Scopes", "repo, workflow")
 			}
 			serveJSON(w, 200, map[string]string{"login": "octo"})
-		case r.URL.Path == "/repos/octo/widgets/actions/permissions/fork-pr-contributor-approval":
+		case "/repos/octo/widgets/actions/permissions/fork-pr-contributor-approval":
 			serveJSON(w, 200, map[string]string{"approval_policy": "first_time_contributors"})
-		case r.URL.Path == "/repos/octo/widgets":
+		case "/repos/octo/widgets":
 			serveJSON(w, 200, map[string]any{"default_branch": "main", "permissions": map[string]bool{"admin": true, "push": true, "pull": true}})
-		case r.URL.Path == "/repos/octo/widgets/contents/"+githubtmpl.Path:
+		case "/repos/octo/widgets/contents/" + githubtmpl.Path:
 			if ref := r.URL.Query().Get("ref"); ref == "main" || untrustedPresent && ref == "nself-ci/untrusted" {
 				serveJSON(w, 200, map[string]string{"encoding": "base64", "content": base64.StdEncoding.EncodeToString([]byte(doc))})
 				return
@@ -278,7 +278,7 @@ func TestNoSecretOutput(t *testing.T) {
 	}
 	env := cidoc.Env{Root: r.work, Capture: report.Capture, Getenv: func(k string) string { return planted[k] }}
 	for _, c := range pdoctor.RunWith(context.Background(), env, r.store()) {
-		all.WriteString(fmt.Sprintf("%+v\n", c))
+		fmt.Fprintf(&all, "%+v\n", c)
 	}
 	fg := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.URL.Path == "/-/health" {
