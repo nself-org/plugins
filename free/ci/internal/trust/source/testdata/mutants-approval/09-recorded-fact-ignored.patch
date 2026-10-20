@@ -1,0 +1,11 @@
+--- a/internal/trust/source/approval.go
++++ b/internal/trust/source/approval.go
+@@ -80,8 +80,5 @@
+ // source hook stored for the run (ok=false when none was stored); without it only an untrusted class
+ // holds: a collaborator's pushed commit is not held, a stranger's is.
+ func RequiresApproval(recorded, ok bool, class model.TrustClass) bool {
+-	if ok {
+-		return recorded
+-	}
+ 	return trust.DecodeTrust(string(class)) == untrusted
+ }

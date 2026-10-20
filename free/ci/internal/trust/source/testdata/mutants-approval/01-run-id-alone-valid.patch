@@ -1,0 +1,11 @@
+--- a/internal/trust/source/approval.go
++++ b/internal/trust/source/approval.go
+@@ -40,7 +40,7 @@
+ 
+ // Complete reports whether the binding names a run, a head SHA and a config digest.
+ func (b Binding) Complete() bool {
+-	return b.Run != "" && b.HeadSHA != "" && b.ConfigDigest != ""
++	return b.Run != ""
+ }
+ 
+ // Approval is a recorded approval: the binding the approver saw, and who approved it.

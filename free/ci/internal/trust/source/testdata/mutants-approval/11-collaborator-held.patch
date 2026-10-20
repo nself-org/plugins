@@ -1,0 +1,9 @@
+--- a/internal/trust/source/approval.go
++++ b/internal/trust/source/approval.go
+@@ -83,5 +83,5 @@
+ 	if ok {
+ 		return recorded
+ 	}
+-	return trust.DecodeTrust(string(class)) == untrusted
++	return trust.DecodeTrust(string(class)) != owner
+ }
