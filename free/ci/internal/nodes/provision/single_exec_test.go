@@ -70,6 +70,7 @@ var dynamicProgram = map[string]bool{
 	"internal/exec/container.go:containerStopper": true,
 	"internal/exec/runtime.go:runtimeQuery":       true,
 	"internal/exec/runtime.go:RuntimeRemove":      true,
+	"internal/exec/sweep.go:removeStaleContainer": true,
 	// The sandboxed-container probe (P7-TRUST-05): the runtime binary is checked against
 	// runtimeBinary, the runtime name and image against fixed patterns; runsc is run only by its
 	// absolute path with base name runsc, with the one argument --version.
