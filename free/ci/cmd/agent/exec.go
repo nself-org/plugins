@@ -209,7 +209,7 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	raw := &tailBuffer{max: excerptMax}
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: spec.AttemptID, CoordinatorID: agentIncarnation(spec.CoordinatorID), Job: job, Command: job.Run,
 		SourceDir: spec.SourceDir, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks, RunnerRoot: in.RunnerRoot,
-		CPU: jobCPU(in), MemoryMB: jobMemoryMB(in),
+		CPU: jobCPU(in), MemoryMB: jobMemoryMB(in), AfterJob: artifactsAfterJob(spec, in),
 		Output: func(b []byte) {
 			raw.Write(b)
 			if in.Output != nil {
