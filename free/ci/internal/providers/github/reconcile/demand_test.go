@@ -180,7 +180,7 @@ func TestPollRateBudget(t *testing.T) {
 		t.Errorf("queued-run lists read %d times, want %d (one per repository per tick, never stopped)", lists, 10*120)
 	}
 	if got := len(d.enq.deliveries()); got == 0 || got >= 10*3 {
-		t.Logf("deferred scans still enqueued %d heads", got)
+		t.Errorf("scans enqueued %d heads, want one per repository (1..%d)", got, 10*3-1)
 	}
 	// the first sweep alone: scans stop at 60% of the allowance and leave repositories for later
 	s2 := newRig(t, names...)

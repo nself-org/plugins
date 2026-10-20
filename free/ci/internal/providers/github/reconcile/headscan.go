@@ -73,9 +73,12 @@ func (e *Engine) scan(ctx context.Context, s *session, enq coordinator.Enqueuer,
 		if err = e.putFact(ctx, repo, "repoinfo", info); err != nil {
 			return res, err
 		}
-	} else if ok, gerr := e.getFact(ctx, repo, "repoinfo", &info); gerr != nil || !ok { // the ETag survived but the info did not: read it again
-		oldRepoTag, repoChanged = "", true
-		if _, err = s.get(ctx, "/repos/{owner}/{repo}", params, nil, "", &info); err != nil {
+	} else if ok, gerr := e.getFact(ctx, repo, "repoinfo", &info); gerr != nil || !ok { // the ETag survived but the info did not: read it again and keep it
+		if rr, err = s.get(ctx, "/repos/{owner}/{repo}", params, nil, "", &info); err != nil {
+			return res, err
+		}
+		repoChanged = true
+		if err = e.putFact(ctx, repo, "repoinfo", info); err != nil {
 			return res, err
 		}
 	}
