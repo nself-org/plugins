@@ -141,6 +141,9 @@ func (e *Executor) sweepRuntime(ctx context.Context, current, binary string) err
 }
 
 func removeStaleContainer(ctx context.Context, binary, id string) error {
+	if !runtimeBinary.MatchString(binary) {
+		return coded("E613", "container runtime removal refused")
+	}
 	out, err := osexec.CommandContext(ctx, binary, "rm", "-f", id).CombinedOutput()
 	if err != nil && strings.Contains(strings.ToLower(string(out)), "no such container") {
 		return nil
