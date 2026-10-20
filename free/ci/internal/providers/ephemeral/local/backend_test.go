@@ -251,3 +251,58 @@ func TestNoDirectOSExec(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// holdProfile is a Tart profile that keeps its slots in a ledger the way tart.Profile does.
+type holdProfile struct {
+	fakeProfile
+	slots int
+	held  map[string]bool
+}
+
+func (p *holdProfile) Hold(_ context.Context, a isolation.Attempt) error {
+	if p.held[a.ID] {
+		return nil
+	}
+	if len(p.held) >= p.slots {
+		return isolation.Unavailable("isolation.tart_no_free_slot", "both macOS VM slots are in use")
+	}
+	if p.held == nil {
+		p.held = map[string]bool{}
+	}
+	p.held[a.ID] = true
+	return nil
+}
+
+func (p *holdProfile) Teardown(ctx context.Context, a isolation.Attempt) error {
+	delete(p.held, a.ID)
+	return p.fakeProfile.Teardown(ctx, a)
+}
+
+// D-1381: a granted Tart slot is reserved in the profile's shared ledger, so a regular vm job holding the
+// slot at Provision refuses the grant (ErrQuota, no reservation) instead of failing it later at Wrap.
+func TestTartGrantHoldsItsSlotInTheSharedLedger(t *testing.T) {
+	vm := &holdProfile{fakeProfile: fakeProfile{level: "vm", av: isolation.Availability{Level: "vm", Facts: map[string]string{"slots_total": "2", "foreign_running": "0", "own_running": "0"}}}, slots: 2}
+	vm.held = map[string]bool{"regular-job": true} // a non-burst vm job booting in this process
+	b := NewTartBackend(vm).(*tartBackend)
+	b.platform = "darwin/arm64"
+	p := newProvider(t, b, nil)
+	ctx := context.Background()
+	in := func(tok string) burst.Intent {
+		i := intentFor(tok)
+		i.Spec.Platform = "darwin/arm64"
+		return i
+	}
+	r1, err := p.Provision(ctx, in("T1"))
+	if err != nil || !vm.held[r1.ID] {
+		t.Fatalf("the first grant holds a slot: %v %v", err, vm.held)
+	}
+	if _, err := p.Provision(ctx, in("T2")); !errors.Is(err, burst.ErrQuota) {
+		t.Fatalf("both slots are held, want ErrQuota, got %v", err)
+	}
+	if p.count() != 1 {
+		t.Fatal("a refused grant left a reservation")
+	}
+	if err := p.Teardown(ctx, r1.ID); err != nil || vm.held[r1.ID] {
+		t.Fatalf("teardown must give the slot back: %v %v", err, vm.held)
+	}
+}

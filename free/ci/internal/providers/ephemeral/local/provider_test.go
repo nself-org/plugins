@@ -150,6 +150,26 @@ func TestSlotAccounting(t *testing.T) {
 				return exec.Capacity{CPUs: 8, MemoryMB: 64 << 10, FreeMemoryMB: 64 << 10, BatteryPercent: -1}, reservation.Settings{ReservedCPU: 5}
 			}
 		}, 3},
+		// D-1381: the node's live load counts, not only its totals
+		{"free memory of a busy node", func(f *fakeBackend, o *Options) {
+			o.Host = func() (exec.Capacity, reservation.Settings) { // each granted sandbox takes its 512 MB from the free memory
+				f.mu.Lock()
+				defer f.mu.Unlock()
+				return exec.Capacity{CPUs: 64, MemoryMB: 64 << 10, FreeMemoryMB: 1100 - 512*len(f.prepared), BatteryPercent: -1}, reservation.Settings{}
+			}
+		}, 2},
+		{"regular lane jobs running", func(_ *fakeBackend, o *Options) {
+			o.Host = func() (exec.Capacity, reservation.Settings) {
+				return exec.Capacity{CPUs: 4, MemoryMB: 64 << 10, FreeMemoryMB: 64 << 10, BatteryPercent: -1}, reservation.Settings{}
+			}
+			o.Lanes = func() int { return 3 }
+		}, 1},
+		{"lanes fill the node", func(_ *fakeBackend, o *Options) {
+			o.Host = func() (exec.Capacity, reservation.Settings) {
+				return exec.Capacity{CPUs: 4, MemoryMB: 64 << 10, FreeMemoryMB: 64 << 10, BatteryPercent: -1}, reservation.Settings{}
+			}
+			o.Lanes = func() int { return 9 }
+		}, 0},
 		{"host reservation holds everything", func(_ *fakeBackend, o *Options) {
 			o.Host = func() (exec.Capacity, reservation.Settings) {
 				return exec.Capacity{CPUs: 4, MemoryMB: 64 << 10, BatteryPercent: -1}, reservation.Settings{ReservedCPU: 4}

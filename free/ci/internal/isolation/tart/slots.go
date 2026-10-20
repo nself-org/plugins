@@ -11,8 +11,9 @@ import "sync"
 // Slots is the in-process ledger.
 type Slots struct {
 	mu     sync.Mutex
-	inUse  int // attempts that hold a slot in this process
-	booted int // of those, VMs that were started (they show in the listing once Tart reports them running)
+	inUse  int             // attempts that hold a slot in this process
+	booted int             // of those, VMs that were started (they show in the listing once Tart reports them running)
+	held   map[string]bool // attempts that took their slot ahead of Wrap (a burst grant); inUse already counts them
 }
 
 // NewSlots returns an empty ledger; the run hook shares one between both profiles.
@@ -81,5 +82,53 @@ func (s *Slots) release(booted bool) {
 	}
 	if booted && s.booted > 0 {
 		s.booted--
+	}
+}
+
+// hold reserves a slot for the attempt ahead of its Wrap; it is idempotent per id and false when none is free.
+func (s *Slots) hold(id string, foreign, own int) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.held[id] {
+		return true
+	}
+	if s.freeLocked(foreign, own) == 0 {
+		return false
+	}
+	if s.held == nil {
+		s.held = map[string]bool{}
+	}
+	s.held[id] = true
+	s.inUse++
+	return true
+}
+
+// holds says whether the attempt has a held slot that Wrap has not yet taken over.
+func (s *Slots) holds(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.held[id]
+}
+
+// take turns the attempt's hold into its running reservation (release gives it back); false when it held none.
+func (s *Slots) take(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.held[id] {
+		return false
+	}
+	delete(s.held, id)
+	return true
+}
+
+// drop gives back a hold that was never taken (the grant was torn down before its job started).
+func (s *Slots) drop(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.held[id] {
+		delete(s.held, id)
+		if s.inUse > 0 {
+			s.inUse--
+		}
 	}
 }

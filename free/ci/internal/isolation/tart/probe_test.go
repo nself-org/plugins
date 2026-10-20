@@ -142,3 +142,50 @@ func TestWithoutBlockOptionScopesBelowLanAreUnenforceable(t *testing.T) {
 	}
 	r.noClones()
 }
+
+// D-1381: a burst grant holds its slot in the shared ledger, so a regular vm job booting in the same process
+// is refused at its own Wrap and the granted job's Wrap succeeds instead of failing for lack of a slot.
+func TestHeldSlotIsKeptForItsOwnWrap(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t, nil)
+	a, b := isolation.Attempt{ID: "burst-A", CoordinatorID: "coord-test"}, isolation.Attempt{ID: "burst-B", CoordinatorID: "coord-test"}
+	if err := r.p.Hold(ctx, a); err != nil {
+		t.Fatalf("hold A: %v", err)
+	}
+	if err := r.p.Hold(ctx, a); err != nil {
+		t.Fatalf("a second hold of the same attempt is idempotent: %v", err)
+	}
+	if err := r.p.Hold(ctx, b); err != nil {
+		t.Fatalf("hold B: %v", err)
+	}
+	if err := r.p.Hold(ctx, isolation.Attempt{ID: "burst-C"}); err == nil || err.(*isolation.Error).Reason != ReasonSlots {
+		t.Fatalf("a third hold must be refused with %s, got %v", ReasonSlots, err)
+	}
+	if _, err := r.p.Wrap(r.spec("regular-1", "true")); err == nil {
+		t.Fatal("a regular job must not boot while both slots are held")
+	}
+	sa, err := r.p.Wrap(r.spec("burst-A", "true"))
+	if err != nil {
+		t.Fatalf("the held attempt must find its slot: %v", err)
+	}
+	sa.Release(ctx)
+	if err := r.p.Hold(ctx, isolation.Attempt{ID: "burst-C"}); err != nil {
+		t.Fatalf("the slot of a released attempt is free again: %v", err)
+	}
+}
+
+func TestTeardownGivesBackAnUnusedHold(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t, nil)
+	for _, id := range []string{"burst-A", "burst-B"} {
+		if err := r.p.Hold(ctx, isolation.Attempt{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := r.p.Teardown(ctx, isolation.Attempt{ID: "burst-A", CoordinatorID: "coord-test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.p.Hold(ctx, isolation.Attempt{ID: "burst-C"}); err != nil {
+		t.Fatalf("a torn-down grant must free its hold: %v", err)
+	}
+}

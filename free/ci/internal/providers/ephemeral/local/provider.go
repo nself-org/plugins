@@ -18,6 +18,7 @@ package local
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"regexp"
@@ -59,7 +60,10 @@ type Options struct {
 	Host func() (exec.Capacity, reservation.Settings)
 	// MaxSlots caps concurrent sandboxes below what the host would allow (0 = no extra cap).
 	MaxSlots int
-	Now      func() time.Time
+	// Lanes reads how many regular (non-burst) lane jobs run on this node now; they hold slots burst must not
+	// grant again. Default: none known (the dispatch wiring of the coordinator supplies it).
+	Lanes func() int
+	Now   func() time.Time
 }
 
 // Provider is the local ephemeral provider.
@@ -186,18 +190,23 @@ func (p *Provider) Provision(ctx context.Context, in burst.Intent) (burst.Resour
 	if f, ok := adoptable(found, in); ok { // the runtime already holds this intent's sandbox
 		return p.record(id, off.Level, resFromFound(f)), nil
 	}
-	used, limit := p.used(off, found), p.limit(off, in.Spec)
+	used := p.used(off, found)
+	limit := p.limit(off, in.Spec, used)
 	if used >= limit && p.reclaim(ctx) { // orphans of a dead coordinator may be what fills the host
 		if off, found, err = p.probe(ctx); err != nil {
 			return burst.Resource{}, err
 		}
-		used, limit = p.used(off, found), p.limit(off, in.Spec)
+		used = p.used(off, found)
+		limit = p.limit(off, in.Spec, used)
 	}
 	if used >= limit {
 		return burst.Resource{}, fmt.Errorf("%w: %d of %d local slots are in use", burst.ErrQuota, used, limit)
 	}
 	att := isolation.Attempt{ID: id, CoordinatorID: in.Labels[coordKey]}
 	if err := p.opts.Backend.Prepare(ctx, att); err != nil {
+		if errors.Is(err, burst.ErrQuota) { // a slot taken by a non-burst job since the check above
+			return burst.Resource{}, err
+		}
 		return burst.Resource{}, classify(ctx, err)
 	}
 	res := burst.Resource{ID: id, Name: namePrefix + id, Labels: maps.Clone(in.Labels), CreatedAt: p.opts.Now()}

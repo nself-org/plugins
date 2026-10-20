@@ -13,10 +13,13 @@ package local
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"runtime"
 	"strconv"
 	"strings"
 
+	"github.com/nself-org/plugins/free/ci/internal/burst"
 	"github.com/nself-org/plugins/free/ci/internal/isolation"
 	"github.com/nself-org/plugins/free/ci/internal/isolation/tart"
 )
@@ -63,8 +66,27 @@ func atoi(s string, dflt int) int {
 	return dflt
 }
 
+// slotHolder is a profile that can reserve a VM slot in its shared ledger ahead of Wrap (tart.Profile).
+type slotHolder interface {
+	Hold(ctx context.Context, a isolation.Attempt) error
+}
+
+// Prepare checks Tart and holds the grant's slot in the profile's shared ledger, so a non-burst vm job booting in
+// this process cannot take it between the grant and the job's Wrap; no free slot is a burst.ErrQuota refusal.
 func (b *tartBackend) Prepare(ctx context.Context, a isolation.Attempt) error {
-	return b.vm.Prepare(ctx, a)
+	if err := b.vm.Prepare(ctx, a); err != nil {
+		return err
+	}
+	h, ok := b.vm.(slotHolder)
+	if !ok {
+		return nil
+	}
+	err := h.Hold(ctx, a)
+	var ie *isolation.Error
+	if errors.As(err, &ie) && ie.Reason == tart.ReasonSlots {
+		return fmt.Errorf("%w: %s", burst.ErrQuota, ie.Message)
+	}
+	return err
 }
 
 func (b *tartBackend) Teardown(ctx context.Context, a isolation.Attempt) error {

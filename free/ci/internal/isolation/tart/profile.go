@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -155,8 +156,28 @@ func (p *Profile) Prepare(ctx context.Context, a isolation.Attempt) error {
 	return nil
 }
 
+// Hold reserves a VM slot for the attempt in the shared ledger before its job exists (a burst grant), so a regular vm
+// job booting in this process cannot take it; Wrap of the same attempt id uses the held slot and Teardown gives an
+// unused one back. It is idempotent per attempt and refuses with ReasonSlots when both slots are busy.
+func (p *Profile) Hold(ctx context.Context, a isolation.Attempt) error {
+	if p.slots.holds(a.ID) {
+		return nil
+	}
+	av := p.probe(ctx, true)
+	if !av.Available() && av.Reason != ReasonSlots {
+		return isolation.Unavailable(av.Reason, "%s isolation is unavailable for attempt %s: %s", p.level, a.ID, av.Facts["hint"])
+	}
+	foreign, _ := strconv.Atoi(av.Facts["foreign_running"])
+	own, _ := strconv.Atoi(av.Facts["own_running"])
+	if !p.slots.hold(a.ID, foreign, own) {
+		return isolation.Unavailable(ReasonSlots, "both macOS VM slots are in use")
+	}
+	return nil
+}
+
 // Teardown removes the clone of an attempt if it is still there; it is idempotent.
 func (p *Profile) Teardown(ctx context.Context, a isolation.Attempt) error {
+	p.slots.drop(a.ID)
 	tool := p.opts.NewTool(a.CoordinatorID, p.home(""))
 	return destroyClone(ctx, tool, p.opts.Tart, CloneName(a.ID), nil)
 }

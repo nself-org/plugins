@@ -56,7 +56,8 @@ func (p *Profile) Wrap(s exec.JobSpec) (exec.JobSpec, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
 	defer cancel()
 	av := p.probe(ctx, true)
-	if !av.Available() {
+	// a held slot makes the probe read "no free slot"; the attempt that holds it still has its VM
+	if !av.Available() && !(av.Reason == ReasonSlots && p.slots.holds(s.AttemptID)) {
 		return s, isolation.Unavailable(av.Reason, "%s isolation is unavailable: %s", p.level, av.Facts["hint"])
 	}
 	if len(s.Command) == 0 {
@@ -89,7 +90,7 @@ func (p *Profile) Wrap(s exec.JobSpec) (exec.JobSpec, error) {
 	}
 	foreign, _ := strconv.Atoi(av.Facts["foreign_running"])
 	own, _ := strconv.Atoi(av.Facts["own_running"])
-	if !p.slots.reserve(foreign, own) {
+	if !p.slots.take(s.AttemptID) && !p.slots.reserve(foreign, own) {
 		return s, isolation.Unavailable(ReasonSlots, "both macOS VM slots are in use")
 	}
 	if s.Secrets != nil {
