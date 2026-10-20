@@ -22,6 +22,11 @@ type runnerFinalizer struct{}
 func (runnerFinalizer) Name() string { return "runnerjob" }
 
 func (runnerFinalizer) Finalize(ctx context.Context, info cirun.RunInfo) error {
+	// Every run is finalized; only a provider-runner pipeline has registrations. An evidence with no pipeline
+	// name is unknown, not "not a runner", so it is looked at.
+	if name := info.Evidence.Pipeline.Name; name != "" && name != runnerjob.PipelineName {
+		return nil
+	}
 	attempts := make([]string, 0, len(info.Jobs))
 	for _, j := range info.Jobs {
 		attempts = append(attempts, j.AttemptID)

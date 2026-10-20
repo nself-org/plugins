@@ -149,3 +149,34 @@ func TestLedgerDoesNotGrowWithEveryJobEverRun(t *testing.T) {
 		t.Fatal("an old ended row should be gone")
 	}
 }
+
+// TestEndingARetriedAttemptDoesNotFreeTheNewOnesSlot: attempt A1 of demand D is retried as A2 (both
+// registrations exist for a moment); when A1's registration is removed, D stays live for A2, so another
+// demand still cannot take the repository's only slot.
+func TestEndingARetriedAttemptDoesNotFreeTheNewOnesSlot(t *testing.T) {
+	use(t)
+	led := runnerjob.CurrentLedger()
+	ctx := context.Background()
+	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "30", 1); !ok {
+		t.Fatal("reserve")
+	}
+	for _, a := range []string{"retry-a1", "retry-a2"} {
+		if err := led.RecordRunner(ctx, runnerjob.Runner{Attempt: a, Provider: "fakeforge", Repo: testRepo, Demand: "30", Handle: "repo:" + a}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, _, _ := led.Runner(ctx, "retry-a1")
+	if err := led.MarkGone(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "31", 1); ok {
+		t.Fatal("the live runner of attempt 2 lost its slot when attempt 1 ended")
+	}
+	second, _, _ := led.Runner(ctx, "retry-a2")
+	if err := led.MarkGone(ctx, second); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "31", 1); !ok {
+		t.Fatal("when the last runner of the demand ends the slot is free")
+	}
+}

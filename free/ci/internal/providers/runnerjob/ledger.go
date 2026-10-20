@@ -82,9 +82,10 @@ type RepoKey struct{ Provider, Repo string }
 
 // Ledger keeps the rows.
 type Ledger struct {
-	fs  FactStore
-	now func() time.Time
-	mu  sync.Mutex
+	fs    FactStore
+	now   func() time.Time
+	mu    sync.Mutex
+	where map[string]string // attempt -> repo, for the attempts this process recorded (a restart falls back to the scan)
 }
 
 // NewLedger returns a ledger over fs; a nil clock is time.Now.
@@ -92,7 +93,7 @@ func NewLedger(fs FactStore, now func() time.Time) *Ledger {
 	if now == nil {
 		now = time.Now
 	}
-	return &Ledger{fs: fs, now: now}
+	return &Ledger{fs: fs, now: now, where: map[string]string{}}
 }
 
 func scopeOf(repo string) string { return strings.ToLower(repo) }
@@ -153,10 +154,10 @@ func (l *Ledger) save(ctx context.Context, provider, repo string, d repoDoc) err
 			delete(d.Runners, k)
 		}
 	}
-	if err := l.put(ctx, scopeOf(repo), "state", d); err != nil {
-		return err
+	if err := l.put(ctx, indexScope, "repo:"+provider+":"+scopeOf(repo), RepoKey{Provider: provider, Repo: repo}); err != nil {
+		return err // before the state: a demand is never recorded for a repository the sweep cannot find
 	}
-	return l.put(ctx, indexScope, "repo:"+provider+":"+scopeOf(repo), RepoKey{Provider: provider, Repo: repo})
+	return l.put(ctx, scopeOf(repo), "state", d)
 }
 
 // Reserve records a demand as pending unless the repository already has max live demands. A demand that
@@ -183,7 +184,10 @@ func (l *Ledger) Reserve(ctx context.Context, provider, repo, demand string, max
 		return false, nil
 	}
 	d.Demands[key] = demandRow{State: statePending, At: now}
-	return true, l.save(ctx, provider, repo, d)
+	if err = l.save(ctx, provider, repo, d); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // RecordRunner stores the registration of an attempt and marks its demand minted.
@@ -197,6 +201,7 @@ func (l *Ledger) RecordRunner(ctx context.Context, r Runner) error {
 	r.State, r.At = stateMinted, l.now()
 	d.Runners[r.Attempt] = r
 	d.Demands[demandKey(r.Provider, r.Demand)] = demandRow{State: stateMinted, At: r.At}
+	l.where[r.Attempt] = r.Repo
 	return l.save(ctx, r.Provider, r.Repo, d)
 }
 
@@ -221,12 +226,35 @@ func (l *Ledger) end(ctx context.Context, r Runner, demandState string) error {
 	now := l.now()
 	r.State, r.At = stateGone, now
 	d.Runners[r.Attempt] = r
-	d.Demands[demandKey(r.Provider, r.Demand)] = demandRow{State: demandState, At: now}
+	delete(l.where, r.Attempt)
+	if !heldByAnother(d, r) { // a retried attempt may hold the same demand: ending the old one must not free the new one's slot
+		d.Demands[demandKey(r.Provider, r.Demand)] = demandRow{State: demandState, At: now}
+	}
 	return l.save(ctx, r.Provider, r.Repo, d)
+}
+
+// heldByAnother reports whether a minted runner of another attempt carries r's demand.
+func heldByAnother(d repoDoc, r Runner) bool {
+	for _, o := range d.Runners {
+		if o.State == stateMinted && o.Attempt != r.Attempt && o.Provider == r.Provider && o.Demand == r.Demand {
+			return true
+		}
+	}
+	return false
 }
 
 // Runner returns the registration of an attempt, searching the repositories the ledger knows.
 func (l *Ledger) Runner(ctx context.Context, attempt string) (Runner, bool, error) {
+	l.mu.Lock()
+	repo, cached := l.where[attempt]
+	l.mu.Unlock()
+	if cached { // the common answer after a mint in this process: one document, not every repository
+		if d, err := l.docOf(ctx, repo); err == nil {
+			if r, ok := d.Runners[attempt]; ok {
+				return r, true, nil
+			}
+		}
+	}
 	repos, err := l.Repos(ctx)
 	if err != nil {
 		return Runner{}, false, err
@@ -243,6 +271,13 @@ func (l *Ledger) Runner(ctx context.Context, attempt string) (Runner, bool, erro
 		}
 	}
 	return Runner{}, false, nil
+}
+
+// docOf is load under the mutex.
+func (l *Ledger) docOf(ctx context.Context, repo string) (repoDoc, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.load(ctx, repo)
 }
 
 // Repos lists the repositories that ever held a demand.
