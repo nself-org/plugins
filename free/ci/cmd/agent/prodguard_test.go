@@ -62,6 +62,14 @@ func TestServeStdioExitsNonZeroWithE663OnADeployHost(t *testing.T) {
 
 func TestServeStdioExitsNonZeroWithE663OnAProdStackMarker(t *testing.T) {
 	useState(t)
+	// The guard probes for Docker before calling the injected runner.
+	// Give the fixture its own executable instead of depending on this host.
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "docker"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("ENV=prod\n"), 0o600); err != nil {
 		t.Fatal(err)
