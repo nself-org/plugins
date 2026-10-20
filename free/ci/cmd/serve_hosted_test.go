@@ -162,6 +162,23 @@ func TestServeHostedDescribesOnlyGitHubHosted(t *testing.T) {
 	}
 }
 
+func TestProviderRepoFor(t *testing.T) {
+	for _, tc := range []struct{ name, source, project, want string }{
+		{"github", "github", "o/r", "o/r"},
+		{"manual", "manual", "o/r", "o/r"},
+		{"no source", "", "o/r", "o/r"},
+		{"gitlab: the same path may be someone else's GitHub repository", "gitlab", "o/r", ""},
+		{"schedule delivery", "schedule", "o/r", ""},
+		{"unknown source", "forgejo", "o/r", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := providerRepoFor(tc.source, tc.project); got != tc.want {
+				t.Fatalf("providerRepoFor(%q, %q) = %q, want %q", tc.source, tc.project, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestServeHostedAttemptTrust: the trust class of a leased attempt is the pipeline's, an unknown attempt
 // keeps the safe default, and without the wiring everything is untrusted.
 func TestServeHostedAttemptTrust(t *testing.T) {

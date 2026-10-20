@@ -185,19 +185,19 @@ func (c *Contributor) Fill(ctx context.Context, w *sched.World) error {
 		if _, ok := p.(providers.Dispatcher); !ok {
 			continue
 		}
-		if err := c.credential(ctx, p.ID()); err != nil {
-			skipped = append(skipped, skip(p.ID(), "E700", err))
-			continue
-		}
 		qs := queries
 		if targetsFor != nil {
 			var err error
 			if qs, err = targetsFor(ctx, p.ID()); err != nil {
 				return err
 			}
-			if len(qs) == 0 {
+			if len(qs) == 0 { // not a target of this world: neither described nor listed as skipped
 				continue
 			}
+		}
+		if err := c.credential(ctx, p.ID()); err != nil {
+			skipped = append(skipped, skip(p.ID(), "E700", err))
+			continue
 		}
 		health := providers.HealthOf(ctx, p.ID())
 		for _, q := range qs {

@@ -117,3 +117,15 @@ func operatorPolicySource(st *store.Store, home string, now func() time.Time) fu
 		return eff, nil
 	}
 }
+
+// providerRepoFor is the repository whose GitHub-hosted runners a run may use: the project of a pipeline
+// whose code comes from github.com (the same sources coordinator.SafeCloneURL pins to it). A pipeline
+// from another forge gets none, whatever its owner/name: the same path on GitHub may be someone else's
+// public repository, and the job spec would land in its Actions logs.
+func providerRepoFor(source, project string) string {
+	switch source {
+	case "github", "manual", "":
+		return project
+	}
+	return ""
+}
