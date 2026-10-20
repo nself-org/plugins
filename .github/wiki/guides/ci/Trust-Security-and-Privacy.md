@@ -198,6 +198,42 @@ To enable `userns` on user-mode Linux, install `uidmap` (for `newuidmap`), give 
 - The agent cannot kill or remove files that a job user owns. A separated node passes hygiene a `JobRunner`, which its job shim implements, and the kill and the removal then run as the job user. Without one, cleanup reports `E681` and the node drains rather than claiming success.
 - Between a check and the action it guards (the process group kill, a volume removal, the mount snapshot) there is a few-millisecond window. Closing it needs a PID namespace or cgroup per job.
 
+## When each level was last verified
+
+A level that worked once may not work today: a runtime update or a kernel change can silently end it. So `nself ci doctor` shows, for each level, the date a passing check last proved it on this machine.
+
+```
+nself ci doctor            # lines isolation.container ... isolation.vm
+nself ci doctor --json     # each of those checks has "verified_at": an RFC 3339 time, or null
+```
+
+| Level | Reads | How it is proven |
+|---|---|---|
+| `isolation.container` | `verified <date> on <host class>` or `unverified since never` | the container integration tests |
+| `isolation.sandboxed-container` | same | the gVisor integration tests (needs `runsc`) |
+| `isolation.network` | same | the network scope integration tests |
+| `isolation.hygiene` | same | the workspace hygiene integration tests (Linux) |
+| `isolation.vm` | same on an Apple-silicon Mac; on Linux `unavailable (no KVM host, D-0120)` | the Tart tests (needs Tart and its test image) |
+| `isolation.ephemeral-vm` | Linux only: `unavailable (no KVM host, D-0120)` | not provable on Linux |
+
+The host class is the platform of the machine that ran the check, for example `linux/amd64`.
+
+**Where the date comes from.** The `isolation-levels` drill (`scripts/drill/isolation-levels/run`, job `drill-isolation-levels` of the `drills` pipeline) runs the integration tests of every level the host can run and records one check per level. Doctor reads the stored evidence of those runs and reports the newest passing check of each level. Doctor never writes. A level with no passing check reads `unverified since never`; that is the honest state of a machine that never ran the drill, so it is not a warning.
+
+**Run it.**
+
+```
+nself ci --pipeline drills --job drill-isolation-levels
+scripts/drill/isolation-levels/run          # same, started directly; NSELF_CI_BIN and NSELF_CI_HOME choose the binary and the store
+```
+
+A level whose prerequisite the host lacks (no running Docker or Podman, no `runsc`, no Tart) ends `error` with `reason: prerequisite.missing` in its excerpt. That is never a pass and never changes the last-verified date. A level that does not exist on the host class (for example `vm` on Linux) gets no check. `ISOLATION_DRILL_LEVELS=container,network` narrows the run to those levels. The drill runs real containers; give its job more than the default 10 minutes with a `drill-isolation-levels` job in `.nself/ci.yaml` if the host is slow. `scripts/drill/isolation-levels/selftest.sh` checks the drill script itself against fake tools.
+
+### Handoff
+
+- Stored evidence keeps each nested check only on the drill check's excerpt: the last line, `passed: <ids>`, lists the nested checks that passed (internal/drill writes it, `store.LastVerified` reads it). A format change must change both; a test pins them together.
+- The linux `ci-isolation-linux.yml` pull-request job runs the drill against a throwaway store and fails unless doctor shows a non-null `verified_at` for `isolation.container`, `isolation.sandboxed-container` and `isolation.network`.
+
 ## Secrets
 
 A job asks for secrets by reference, never by value: `secrets: [project/NPM_TOKEN, release/ANDROID_KEYSTORE_PASSWORD, environment/staging/API_KEY, deploy/prod/DEPLOY_KEY, team/SHARED_TOKEN]`. The part after the last slash is the environment variable the job sees, and two refs may not use the same variable (`E674`). Names that would change how a process or the docker client runs (`PATH`, `HOME`, `DOCKER_*`, `LD_*`, `DYLD_*`, `GIT_*`, `NSELF_CI_*` and similar) are refused too.
