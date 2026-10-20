@@ -106,6 +106,8 @@ func Run(args []string, env Env, out, errOut io.Writer) int {
 	// Ctrl-C, SIGTERM and SIGHUP cancel the run; the engine then rolls back or puts the node back on a context that survives it.
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
+	// After the first signal the rollback runs on its own context; a second Ctrl-C must then end the process, not be swallowed.
+	go func() { <-ctx.Done(); cancel() }()
 	d, closeFn, err := env.Lifecycle.Open(ctx, "")
 	if err != nil {
 		return fail(fmt.Errorf("E607: the CI store cannot be opened: %w", err))
@@ -129,6 +131,7 @@ func Run(args []string, env Env, out, errOut io.Writer) int {
 	for _, id := range ids {
 		res, rerr := upgradeNode(ctx, d, env, strings.ToLower(id), req)
 		if rerr == nil {
+			res.Note = noopNote(ctx, d, res)
 			done = append(done, res)
 			if !asJSON {
 				_, _ = fmt.Fprintln(out, describe(res))
@@ -248,38 +251,4 @@ func upgradable(ctx context.Context, d *lifecycle.Deps) (ids, skipped []string, 
 		return nil, skipped, usageErr("no ssh or reachable pull node is registered")
 	}
 	return ids, skipped, nil
-}
-
-func describe(r Result) string {
-	switch {
-	case r.Noop:
-		return fmt.Sprintf("node %s already runs %s", r.Node, r.To)
-	case r.Direction == Downgrade:
-		return fmt.Sprintf("node %s downgraded %s -> %s (audited)", r.Node, r.From, r.To)
-	}
-	return fmt.Sprintf("node %s upgraded %s -> %s", r.Node, r.From, r.To)
-}
-
-func usageErr(format string, a ...any) error { return fmt.Errorf("E651: "+format, a...) }
-
-// failOut prints the error and returns its exit class: E666 and usage are the caller's (1), host key and revoked are auth (3),
-// everything else is infrastructure (2).
-func failOut(out, errOut io.Writer, asJSON bool, err error) int {
-	code := lifecycle.CodeOf(err)
-	exit := output.ExitInfra
-	switch code {
-	case CodeRefused, "E651", "E650":
-		exit = output.ExitUser
-	case "E655", "E657":
-		exit = output.ExitAuth
-	}
-	if asJSON {
-		if code == "" {
-			code = "E607"
-		}
-		_ = output.WriteError(out, "ci nodes upgrade", output.ErrorDetail{Code: code, Message: err.Error(), ExitCode: exit}, nil)
-		return exit
-	}
-	_, _ = io.WriteString(errOut, err.Error()+"\n")
-	return exit
 }

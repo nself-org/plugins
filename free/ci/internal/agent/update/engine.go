@@ -79,6 +79,7 @@ type Result struct {
 	Direction  Direction `json:"direction"`
 	Noop       bool      `json:"noop"`
 	RolledBack bool      `json:"rolled_back"`
+	Note       string    `json:"note,omitempty"`
 }
 
 // Engine runs upgrades.
@@ -156,10 +157,12 @@ func (e *Engine) Run(ctx context.Context, n Node, rq Request) (res Result, err e
 		return res, e.rollback(ctx, n, &res, undo, rq, err)
 	}
 	if undo != nil {
-		if err = undo(ctx); err != nil {
-			return res, e.fail(ctx, n, err)
+		// On a context that survives a signal: the node is upgraded and healthy here, only the put-back is left.
+		uctx := context.WithoutCancel(ctx)
+		if err = undo(uctx); err != nil {
+			return res, e.fail(uctx, n, err)
 		}
-		err = e.step(ctx, StepEnable, n, "version=%s", rq.Version)
+		err = e.step(uctx, StepEnable, n, "version=%s", rq.Version)
 	}
 	return res, err
 }

@@ -134,3 +134,24 @@ func TestDrainPutsTheNodeBackAsItWas(t *testing.T) {
 		})
 	}
 }
+
+func TestNoopNoteNamesANodeAnInterruptedUpgradeLeftDrained(t *testing.T) {
+	d, ctx := registryDeps(t), context.Background()
+	addNode(t, d, "n1", "ssh")
+	res := Result{Node: "n1", To: "1.5.0", Noop: true}
+	if _, err := d.Registry.SetState(ctx, "n1", "draining", DrainReason, "cli:test"); err != nil {
+		t.Fatal(err)
+	}
+	if note := noopNote(ctx, d, res); !strings.Contains(note, "nodes enable n1") {
+		t.Fatalf("note %q", note)
+	}
+	if _, err := d.Registry.SetState(ctx, "n1", "draining", "drained by admin", "cli:test"); err != nil {
+		t.Fatal(err)
+	}
+	if note := noopNote(ctx, d, res); note != "" {
+		t.Fatalf("an admin's drain got a note: %q", note)
+	}
+	if noopNote(ctx, d, Result{Node: "n1"}) != "" {
+		t.Fatal("a real upgrade got a note")
+	}
+}

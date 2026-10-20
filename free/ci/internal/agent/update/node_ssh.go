@@ -119,6 +119,7 @@ func (n *SSHNode) Install(ctx context.Context, in InstallInput) error {
 	_, _ = rand.Read(nonce[:])
 	staged := agentBin + NewSuffix + "-" + hex.EncodeToString(nonce[:])
 	if err := n.Copy(ctx, n.Target, in.Staged, staged); err != nil {
+		n.discard(staged)
 		return fmt.Errorf("E656: cannot copy the agent to %s: %w", n.NodeID, err)
 	}
 	// Digest, smoke and a last look at the slot table run on the copy; the swap is the last command and runs only when all passed
@@ -142,6 +143,7 @@ echo SWAPPED`
 	if err != nil {
 		// A dropped or killed ssh does not stop the remote script (no tty): let it finish before anyone looks at the node.
 		n.settle(staged)
+		n.discard(staged)
 		return fmt.Errorf("E656: the new agent was not installed on %s: %w", n.NodeID, err)
 	}
 	switch lastLine(out) { // the markers are the last line, so a login banner cannot fake one
@@ -151,6 +153,14 @@ echo SWAPPED`
 		return nil
 	}
 	return fmt.Errorf("E656: the install on %s did not report a finished swap", n.NodeID)
+}
+
+// discard removes the staged file after a failed install, best effort. It is fail-safe: a script that is somehow still running then
+// fails its mv and the node keeps the agent it had.
+func (n *SSHNode) discard(staged string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	_, _ = n.Run(ctx, n.Target, "rm", "-f", staged)
 }
 
 // settle waits (bounded, on a context that outlives a cancelled run) until the staged file is gone: the install script removes it as

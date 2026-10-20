@@ -19,7 +19,7 @@ import (
 func (e *Engine) rollback(ctx context.Context, n Node, res *Result, undo func(context.Context) error, rq Request, cause error) error {
 	res.RolledBack = true
 	// A cancelled run must still be able to put the node right.
-	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Minute)
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), max(3*time.Minute, orDur(rq.HelloWait, DefaultHelloWait)+2*time.Minute))
 	defer cancel()
 	// The restore does not wait for its audit row: a store that fails right now must not leave a broken binary in place.
 	auditErr := e.step(rctx, StepRollback, n, "from=%s to=%s code=%s", res.To, res.From, codeOf(cause))
