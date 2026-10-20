@@ -54,7 +54,7 @@ func checkMounts(s JobSpec) error {
 				return coded("E612", "mount target collides with a reserved container path")
 			}
 		}
-		if m.ReadOnly && s.Job.Isolation != "container" {
+		if m.ReadOnly && s.Job.Isolation != "container" && s.Job.Isolation != "sandboxed-container" { // gVisor runs the same container CLI path
 			return coded("E611", "a read-only mount needs container isolation")
 		}
 	}
