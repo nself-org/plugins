@@ -48,7 +48,7 @@ func TestFaultFrozenNodePastTTL(t *testing.T) {
 		t.Fatalf("the stale job lived %v after the node thawed", took)
 	}
 	l.waitConnected(30*time.Second, first)
-	l.assertStaleTraffic(original.ID, original.Epoch) // the fenced agent is back and takes work again
+	l.assertStaleTraffic(original.ID, original.Epoch)
 
 	res := h.result(2 * time.Minute)
 	if res.Exit != 0 || len(res.Summary.Jobs) != 1 || res.Summary.Jobs[0].N != 2 {
@@ -57,6 +57,9 @@ func TestFaultFrozenNodePastTTL(t *testing.T) {
 	retries := res.Summary.Doc.Retries
 	if len(retries) != 1 || retries[0].Attempt != 2 || retries[0].Class != "infra" {
 		t.Fatalf("evidence retries = %+v, want one infra retry into attempt 2", retries)
+	}
+	if n := l.fleetStarts(); n != 2 || l.starts(fi) != 1 {
+		t.Fatalf("job starts: fleet=%d frozen node=%d, want 2 and 1", n, l.starts(fi))
 	}
 	if n := l.fleetSideEffects(); n != 1 {
 		t.Fatalf("the side effect was written %d times, want 1", n)

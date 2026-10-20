@@ -171,7 +171,7 @@ func (l *lab) dump(i int) string {
 	if err != nil {
 		return "(" + err.Error() + ")"
 	}
-	return out + "\n"
+	return out + "\n" + l.agentLog(i) + "\n"
 }
 
 // dumpAll is every node's agent state, for a failure message.

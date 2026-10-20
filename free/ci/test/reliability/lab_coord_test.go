@@ -13,7 +13,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -197,23 +196,6 @@ func (c *coord) logf(format string, a ...any) {
 	c.log = append(c.log, line)
 	c.logMu.Unlock()
 	c.t.Log(line)
-}
-
-// logged returns the logged lines that contain every one of subs.
-func (c *coord) logged(subs ...string) []string {
-	c.logMu.Lock()
-	defer c.logMu.Unlock()
-	var out []string
-next:
-	for _, l := range c.log {
-		for _, s := range subs {
-			if !strings.Contains(l, s) {
-				continue next
-			}
-		}
-		out = append(out, l)
-	}
-	return out
 }
 
 // cancel asks the agent that holds a lease to stop it (agentapi.Server.Cancel); the live listener answers.
