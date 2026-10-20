@@ -26,6 +26,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
 	"github.com/nself-org/plugins/free/ci/internal/pairing"
 	"github.com/nself-org/plugins/free/ci/internal/pki"
+	"github.com/nself-org/plugins/free/ci/internal/providers/runtime"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -84,6 +85,12 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 		return func() {}, err
 	}
 	undoHosted := serveHosted(st, home, cfg.AllowedRepos)
+	stopHosted, err := startHostedPolling(ctx, eng, runtime.StoreBook(st), ownedByThisProcess(st), cfg.Logf)
+	if err != nil {
+		stopBeat()
+		undoHosted()
+		return func() {}, err
+	}
 	cfg.Drain = func(dctx context.Context) error {
 		d, err := drain.New(drain.Config{
 			Intake: agentIntake{}, Canceller: liveCanceller{}, Deadline: drain.FlagDeadline(), Logf: cfg.Logf,
@@ -101,7 +108,7 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 		}
 		return err
 	}
-	return func() { stopBeat(); undoHosted(); pairing.Use(nil); agentOnAck = nil }, nil
+	return func() { stopHosted(); stopBeat(); undoHosted(); pairing.Use(nil); agentOnAck = nil }, nil
 }
 
 // registerServe makes this serve process visible in the coordinator table and keeps its heartbeat fresh, so
