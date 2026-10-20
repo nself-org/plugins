@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/user/runners",
+    "query": ""
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "body": "{\"id\": 101, \"token\": \"glrt-fixture-0001\", \"token_expires_at\": null}"
+  }
+}

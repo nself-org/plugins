@@ -37,6 +37,11 @@ const (
 	EnvProvider = "NSELF_RUNNERJOB_PROVIDER"
 	EnvRepo     = "NSELF_RUNNERJOB_REPO"
 	EnvDemand   = "NSELF_RUNNERJOB_DEMAND"
+	// EnvHosts carries the extra hosts the runner may reach under the restricted network scope: the
+	// operator's own forge host (a self-hosted GitLab), comma separated. Public facts, never a credential.
+	EnvHosts = "NSELF_RUNNERJOB_HOSTS"
+	// MaxHosts bounds Spec.Hosts.
+	MaxHosts = 4
 	// Isolation is the floor a forge-runner job runs under; below it a fork's code would share a kernel.
 	Isolation = model.Isolation("sandboxed-container")
 	// JobTimeout bounds one runner job (the forge's own job limit is six hours).
@@ -48,6 +53,7 @@ var (
 	demandPattern = regexp.MustCompile(`^[0-9]{1,20}$`)
 	imagePattern  = regexp.MustCompile(`^[a-z0-9][a-z0-9./_:-]*@sha256:[0-9a-f]{64}$`)
 	kindPattern   = regexp.MustCompile(`^[a-z][a-z0-9-]{0,40}$`)
+	hostPattern   = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$`)
 )
 
 // Spec is what Synthesize needs to describe one runner job.
@@ -59,6 +65,7 @@ type Spec struct {
 	Credential string   // lease credential kind, for example github-jitconfig
 	Arch       string   // amd64 or arm64
 	Command    []string // how the image starts one runner, for example /home/runner/run.sh
+	Hosts      []string // lower-case host names the runner may reach besides the provider's fixed list (self-hosted forge)
 }
 
 // Validate refuses a spec that could not describe a safe job.
@@ -78,6 +85,13 @@ func (s Spec) Validate() error {
 		return errors.New("runnerjob: only linux amd64 and arm64 runners are launched")
 	case len(s.Command) == 0 || strings.TrimSpace(s.Command[0]) == "":
 		return errors.New("runnerjob: the runner start command is empty")
+	case len(s.Hosts) > MaxHosts:
+		return errors.New("runnerjob: too many extra hosts")
+	}
+	for _, h := range s.Hosts {
+		if !hostPattern.MatchString(h) {
+			return errors.New("runnerjob: an extra host is not a plain lower-case host name")
+		}
 	}
 	return nil
 }
@@ -107,6 +121,9 @@ func Synthesize(s Spec) (*model.Pipeline, error) {
 		Secrets:          nil,
 		RunnerCredential: s.Credential,
 		RemoteOnly:       true,
+	}
+	if len(s.Hosts) > 0 {
+		job.Env[EnvHosts] = strings.Join(s.Hosts, ",")
 	}
 	return &model.Pipeline{
 		ID:        fmt.Sprintf("%s-%s-%s", PipelineName, s.Provider, s.Demand),

@@ -36,6 +36,8 @@ type ContainerRun struct {
 	// RunnerRoot, when set, is the path of an exec-capable tmpfs the container gets besides /tmp (a forge
 	// runner's root; RunnerRootPath is the only value the backstop accepts).
 	RunnerRoot string
+	// Entrypoint replaces the image entrypoint of the job container (the cleanup helper never gets it).
+	Entrypoint string
 	// JobImageCleanup asks a planner to run the cleanup helper in the job's own image. The executor sets it for the
 	// second try when the planner's pinned helper image could not start (not pulled and no registry reachable).
 	JobImageCleanup bool
@@ -91,8 +93,8 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 		envFile = envFileFD
 	}
 	run := ContainerRun{Name: "nself-ci-" + s.AttemptID, Image: s.Job.Container.Image, Workspace: workspace, Workdir: workdir, EnvFile: envFile, Interactive: interactive,
-		RunnerRoot: map[bool]string{true: RunnerRootPath}[s.RunnerRoot],
-		Command:    s.Command, Mounts: s.Mounts, AttemptID: s.AttemptID, CoordinatorID: s.CoordinatorID, Slot: s.Slot, CPU: s.CPU, MemoryMB: s.MemoryMB, Network: s.Network}
+		RunnerRoot: map[bool]string{true: RunnerRootPath}[s.RunnerRoot], Entrypoint: s.Entrypoint,
+		Command: s.Command, Mounts: s.Mounts, AttemptID: s.AttemptID, CoordinatorID: s.CoordinatorID, Slot: s.Slot, CPU: s.CPU, MemoryMB: s.MemoryMB, Network: s.Network}
 	if run.CPU <= 0 {
 		run.CPU = 1.5
 	}
@@ -148,7 +150,7 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 // cleanup is tried once in the job's own image, as it ran before the helper image existed.
 // It returns why the cleanup did not run or did not finish (nil when none is needed or it ran clean).
 func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) error {
-	run.Interactive, run.RunnerRoot, run.EnvFile = false, "", "" // the helper has no stdin, runner root or environment
+	run.Interactive, run.RunnerRoot, run.EnvFile, run.Entrypoint = false, "", "", "" // the helper has no stdin, runner root, environment or entrypoint of the job
 	helper, err := e.cleanupOnce(s, run)
 	if err == nil || !helper {
 		return err

@@ -127,7 +127,10 @@ func Build(p Params) (exec.ContainerCommand, error) {
 	if p.UsernsAuto {
 		args = append(args, "--userns=auto")
 	}
-	if p.Entrypoint != "" {
+	switch {
+	case r.Entrypoint != "": // the job's own (a runner credential job; the backstop accepts only the mounted agent)
+		args = append(args, "--entrypoint", r.Entrypoint)
+	case p.Entrypoint != "":
 		args = append(args, "--entrypoint", p.Entrypoint)
 	}
 	for _, m := range r.Mounts {

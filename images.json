@@ -19,6 +19,15 @@
         "linux/arm64"
       ]
     },
+    "ci-gitlab-runner": {
+      "image": "docker.io/gitlab/gitlab-runner:v19.4.1@sha256:77d03a5c881ff8f97381de4f96a66c080733eeab9c9cf502bd19916a18969113",
+      "kind": "ci",
+      "owner": "P7-HOST-07",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
     "ci-gvisor-probe": {
       "image": "docker.io/library/busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e",
       "kind": "ci",

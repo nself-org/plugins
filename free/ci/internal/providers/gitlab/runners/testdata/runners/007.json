@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/projects/acme/widgets/runners",
+    "query": "page=1&per_page=100&type=project_type"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "body": "[{\"id\": 102, \"description\": \"nself-glr-01JWMCKG007K3MQ8ZN4P2WXVTD\", \"paused\": false, \"runner_type\": \"project_type\"}, {\"id\": 103, \"description\": \"persistent-runner\", \"paused\": false, \"runner_type\": \"project_type\"}]"
+  }
+}

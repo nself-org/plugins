@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/runners/101",
+    "query": ""
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "body": "{\"id\": 101, \"description\": \"nself-glr-01KDVDNA007K3MQ8ZN4P2WXVTD\", \"paused\": false, \"runner_type\": \"project_type\", \"tag_list\": [\"nself\", \"nself-glr-01KDVDNA007K3MQ8ZN4P2WXVTD\"]}"
+  }
+}

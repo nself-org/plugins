@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "DELETE",
+    "path": "/runners/101",
+    "query": ""
+  },
+  "response": {
+    "status": 204,
+    "headers": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "body": ""
+  }
+}
