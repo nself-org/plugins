@@ -216,3 +216,24 @@ func TestScenario8_LocalOnlyStaysOnPersonalNode(t *testing.T) {
 		t.Fatal("local-only work reached the hosted provider")
 	}
 }
+
+// TestDeclarationsComeFromCapabilities: the admission facts the scenarios rely on (hosted, provider,
+// accepted classes, isolation, scopes, UID separation) are the ones the production derivation reads from
+// the capability, so a regression there changes what scenario 8 places.
+func TestDeclarationsComeFromCapabilities(t *testing.T) {
+	hosted, lan, gv := hostedRunner("h"), lanRunner("l", 1), gvisorRunner("g", 1)
+	if !hosted.Decl.Hosted || hosted.Decl.Provider != "fake" || hosted.Decl.Isolation != "hosted-disposable" || hosted.Decl.Network != "internet" || !hosted.Decl.NoLANRoute {
+		t.Errorf("hosted declaration %+v", hosted.Decl)
+	}
+	if lan.Decl.Hosted || lan.Decl.Isolation != "vm" || lan.Decl.Network != "privileged" || lan.Decl.NoLANRoute || lan.Decl.Ownership != "operator" || !lan.Decl.UIDSeparation {
+		t.Errorf("LAN declaration %+v", lan.Decl)
+	}
+	if gv.Decl.Hosted || gv.Decl.Isolation != "sandboxed-container" || gv.Decl.Network != "restricted" || len(gv.Decl.Accepts) != 4 {
+		t.Errorf("gVisor declaration %+v", gv.Decl)
+	}
+	loc := "lan"
+	hosted.Capability.Location.Kind.Value = &loc
+	if sched.DeclarationFromCapability(hosted.Capability, false, "").Hosted {
+		t.Error("control: a capability located on the LAN was declared hosted")
+	}
+}

@@ -51,7 +51,6 @@ func spellings(a netip.Addr) []netip.Addr {
 		netip.AddrFrom16([16]byte{10: 0xff, 11: 0xff, 12: b[0], 13: b[1], 14: b[2], 15: b[3]}),     // ::ffff:a.b.c.d
 		netip.AddrFrom16([16]byte{0x00, 0x64, 0xff, 0x9b, 12: b[0], 13: b[1], 14: b[2], 15: b[3]}), // 64:ff9b::a.b.c.d
 		netip.AddrFrom16([16]byte{0x20, 0x02, b[0], b[1], b[2], b[3], 15: 1}),                      // 6to4
-		a.WithZone("eth0").Unmap(),
 	}
 }
 
@@ -73,7 +72,7 @@ func TestUntrustedCannotReachExclusionOrOnLink(t *testing.T) {
 				}
 			}
 		}
-		for _, s := range []string{"::1", "fe80::1", "fc00::1", "fd12:3456::1", "2001:db8:10::99", "2001:db8:10::5", "ff02::1"} {
+		for _, s := range []string{"::1", "fe80::1", "fc00::1", "fd12:3456::1", "2001:db8:10::99", "2001:db8:10::5", "ff02::1", "2001:db8:10::99%eth0", "fe80::1%eth0", "192.168.1.5"} {
 			if v := netscope.Allowed(scope, netip.MustParseAddr(s), f); v.Allowed {
 				t.Errorf("scope %s allowed %s", scope, s)
 			}
@@ -161,9 +160,15 @@ func TestPerSlotUIDSeparation(t *testing.T) {
 	if _, err := hygiene.Separation(shim, 0); err == nil {
 		t.Fatal("a job-user table with a duplicate uid was accepted")
 	}
-	shim.JobUIDs = []int{agent, 2001}
-	if _, err := hygiene.Separation(shim, 0); err == nil {
-		t.Fatal("a job user equal to the agent's uid was accepted")
+	for name, uids := range map[string][]int{"the agent's uid": {agent, 2001}, "the coordinator's uid": {coord, 2001}, "root": {0, 2001}, "a container slot's uid": {65532, 2001}} {
+		shim.JobUIDs = uids
+		if p, err := hygiene.Separation(shim, 0); err == nil {
+			t.Fatalf("a job user table holding %s was accepted (uid %d)", name, p.UID)
+		}
+	}
+	shim.JobUIDs = []int{2000, 2001}
+	if p, err := hygiene.Separation(shim, 1); err != nil || p.UID != 2001 {
+		t.Fatalf("control: a valid job user table was refused: %+v %v", p, err)
 	}
 	// no separation and no exception: refused (E682), never the agent's uid
 	bare := hygiene.Facts{Isolation: "process", Trust: "internal", Coordinator: "team", Ownership: "operator", Slots: 1, AgentUID: agent, CoordinatorUID: coord}
@@ -312,5 +317,47 @@ func TestRetryNeverLowersIsolation(t *testing.T) {
 	res := sched.Place(world(map[string]model.Isolation{job.Key: "vm"}), []sched.Job{job})
 	if len(res.Placements) != 0 {
 		t.Fatalf("a retry after a vm attempt was placed on a container node: %+v", res.Placements)
+	}
+}
+
+// fakeResolver answers names from a table.
+type fakeResolver map[string][]netip.Addr
+
+func (f fakeResolver) LookupNetIP(_ context.Context, _, host string) ([]netip.Addr, error) {
+	if a, ok := f[host]; ok {
+		return a, nil
+	}
+	return nil, errors.New("no such host")
+}
+
+// TestUntrustedCannotPinAnExcludedOrOnLinkName is I18 by name: an exclusion host and every name below it
+// are refused before they are resolved, and a name that resolves to an excluded, on-link or host
+// address is refused at the pin, whichever spelling the resolver returns.
+func TestUntrustedCannotPinAnExcludedOrOnLinkName(t *testing.T) {
+	res := fakeResolver{
+		"cdn.example":       {netip.MustParseAddr("93.184.216.34")},
+		"rebind.example":    {netip.MustParseAddr("93.184.216.50")},
+		"lan-alias.example": {netip.MustParseAddr("192.168.1.20")},
+		"mapped.example":    {netip.MustParseAddr("::ffff:192.168.1.20")},
+		"mixed.example":     {netip.MustParseAddr("93.184.216.34"), netip.MustParseAddr("10.8.0.9")},
+		"self.example":      {netip.MustParseAddr("192.168.1.5")},
+		"cloudmeta.example": {netip.MustParseAddr("169.254.169.254")},
+		"zoned-lan.example": {netip.MustParseAddr("2001:db8:10::99")},
+	}
+	for _, scope := range []model.NetworkScope{"restricted", "internet"} {
+		g := netscope.Guard{Scope: scope, Facts: syntheticLAN(), ExtraHosts: []string{"cdn.example", "rebind.example", "lan-alias.example", "mapped.example", "mixed.example", "self.example", "cloudmeta.example", "zoned-lan.example"}, Resolver: res}
+		for _, host := range []string{"deploy.internal.example", "x.deploy.internal.example", "DEPLOY.internal.example.", "a.b.deploy.internal.example"} {
+			if addrs, v := g.Pin(context.Background(), host); v.Allowed || v.Reason != netscope.ReasonExclusion {
+				t.Errorf("scope %s pinned the excluded name %q: %v %+v", scope, host, addrs, v)
+			}
+		}
+		for _, host := range []string{"rebind.example", "lan-alias.example", "mapped.example", "mixed.example", "self.example", "cloudmeta.example", "zoned-lan.example"} {
+			if addrs, v := g.Pin(context.Background(), host); v.Allowed {
+				t.Errorf("scope %s pinned %q to %v", scope, host, addrs)
+			}
+		}
+		if addrs, v := g.Pin(context.Background(), "cdn.example"); !v.Allowed || len(addrs) != 1 {
+			t.Errorf("control: scope %s refused a name that resolves to a public address: %+v", scope, v)
+		}
 	}
 }

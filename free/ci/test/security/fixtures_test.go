@@ -80,6 +80,29 @@ func queueAttempt(t testing.TB, st *store.Store, pipe, proj, name, srcTrust stri
 	return id
 }
 
+func assigned[T any](v T) model.Fact[T] {
+	return model.Fact[T]{Value: &v, Source: "assigned", ObservedAt: time.Now(), Confidence: "known"}
+}
+
+// declare gives the runner the trust facts the coordinator assigns to its capability and derives the
+// admission declaration the way the world builder does (sched.DeclarationFromCapability), so a runner
+// that is hosted, accepts a class or offers a scope is so because of its capability and not because
+// the fixture says it in two places. noLAN is the derived "no route to the LAN" fact a probe proves.
+func declare(r *sched.Runner, iso model.Isolation, nets []model.NetworkScope, ownership string, noLAN bool) {
+	c := &r.Capability
+	c.Trust.Accepts = assigned([]model.TrustClass{"owner", "internal", "collaborator", "untrusted"})
+	c.Trust.Isolation = assigned(iso)
+	c.Trust.Network = assigned(nets)
+	c.Trust.SecretClasses = assigned([]model.SecretClass{})
+	c.Trust.PrivacyZone = assigned(model.PrivacyZone("private-infrastructure"))
+	c.Identity.Ownership = assigned(ownership)
+	c.Separation.UIDSeparation = assigned(true)
+	r.Decl = sched.DeclarationFromCapability(*c, false, "")
+	r.Decl.NoLANRoute = noLAN
+}
+
+var allScopes = []model.NetworkScope{"none", "internet", "restricted", "lan", "privileged"}
+
 // lanRunner is a LAN node that accepts every class, can reach the LAN and offers a VM.
 func lanRunner(id string, slots int) sched.Runner {
 	c := model.Capability{Schema: "ci.runner-capability/v1"}
@@ -93,12 +116,13 @@ func lanRunner(id string, slots int) sched.Runner {
 	c.Identity.Labels = []string{"arch=amd64"}
 	loc := "lan"
 	c.Location.Kind.Value = &loc
-	return sched.Runner{ID: id, Location: loc, Class: "owned", Provider: "operator", Avail: sched.Avail{Slots: slots, CPU: 8, MemMB: 8192}, Capability: c,
-		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: false, NoLANRoute: false}}
+	r := sched.Runner{ID: id, Location: loc, Class: "owned", Provider: "operator", Avail: sched.Avail{Slots: slots, CPU: 8, MemMB: 8192}, Capability: c}
+	declare(&r, "vm", allScopes, "operator", false)
+	return r
 }
 
-// hostedRunner is the hosted-disposable fake provider's capacity: one disposable
-// runner with no route to any LAN.
+// hostedRunner is the hosted-disposable fake provider's capacity: one disposable runner with no
+// route to any LAN. Its hosted flag comes from the capability's location, as in production.
 func hostedRunner(id string) sched.Runner {
 	r := lanRunner(id, 4)
 	loc := "hosted"
@@ -108,14 +132,14 @@ func hostedRunner(id string) sched.Runner {
 	// Hosted capacity for public repositories is free, so no allowance gates it: only the
 	// privacy rule stands between a private job and this runner.
 	r.Capability.Identity.Labels = append(r.Capability.Identity.Labels, "nself.visibility=public")
-	r.Decl = trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "hosted-disposable", Network: "internet", UIDSeparation: true, Ownership: "provider", Hosted: true, Provider: "fake", NoLANRoute: true}
+	declare(&r, "hosted-disposable", []model.NetworkScope{"none", "restricted", "internet"}, "provider", true)
 	return r
 }
 
 // gvisorRunner is a LAN-less Linux node with gVisor, the only non-hosted home of untrusted code.
 func gvisorRunner(id string, slots int) sched.Runner {
 	r := lanRunner(id, slots)
-	r.Decl.Isolation, r.Decl.Network, r.Decl.NoLANRoute = "sandboxed-container", "restricted", true
+	declare(&r, "sandboxed-container", []model.NetworkScope{"none", "restricted"}, "operator", true)
 	return r
 }
 

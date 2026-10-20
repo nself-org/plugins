@@ -32,6 +32,7 @@ directive_items:
       - test: TestScenario8_PrivateNeverHosted
       - test: TestPlantedPRCannotAuthorizeHosted
       - test: TestNoRequestReachesTelemetry
+      - test: TestDeclarationsComeFromCapabilities
   - id: scoped-runner-credentials
     item: runner credentials are scoped (a node certificate is not a user certificate, a signature is bound to the lease holder)
     cases:
@@ -84,6 +85,7 @@ directive_items:
       - test: TestRunApprovalNeedsAnotherPerson
       - test: TestRevokedTokenEndsAccess
       - test: TestDecisionsAreAuditedAndTamperEvident
+      - test: TestStoreFailureDeniesTheDecision
   - id: prod-infra-ineligible
     item: production infrastructure is CI-ineligible by default
     cases:
@@ -124,11 +126,13 @@ review_additions:
     item: untrusted cannot reach an exclusion address or an on-link prefix (I18)
     cases:
       - test: TestUntrustedCannotReachExclusionOrOnLink
+      - test: TestUntrustedCannotPinAnExcludedOrOnLinkName
   - id: telemetry-zero
     item: no request reaches a telemetry fake from the plugin or the agent in any mode (X15)
     cases:
       - test: TestNoRequestReachesTelemetry
       - test: TestNoTelemetryClientInTheProduct
+      - test: TestNetworkCodeIsAllowlisted
   - id: publication-profile
     item: publication profile on a public fixture
     cases:
@@ -175,8 +179,10 @@ threats:
   - id: TM-04
     cases:
       - test: TestUntrustedCannotReachExclusionOrOnLink
+      - test: TestUntrustedCannotPinAnExcludedOrOnLinkName
       - test: TestUntrustedNeverReceivesSecret
       - test: TestNoTelemetryClientInTheProduct
+      - test: TestNetworkCodeIsAllowlisted
     also:
       - {pkg: internal/netscope, proof: TestInvariant_I18}
   - id: TM-05
@@ -281,6 +287,7 @@ threats:
       - test: TestNodeListenerRefusesForeignAndRevokedCerts
   - id: TM-24
     cases:
+      - test: TestStoreFailureDeniesTheDecision
       - test: TestMemberCannotRunControlPlaneActions
       - test: TestRunApprovalNeedsAnotherPerson
       - test: TestRevokedTokenEndsAccess
@@ -337,6 +344,10 @@ threats:
       - test: TestApprovalBindsLeaseCheckout
       - test: TestUntrustedRunWithNoFactsIsHeld
       - test: TestRunApprovalNeedsAnotherPerson
+    also:
+      - {pkg: cmd, proof: TestApprovedSHALease}
+      - {pkg: cmd, proof: TestApprovalVoidedStaysHeldWhenBindingReturns}
+      - {pkg: cmd, proof: TestApproveAuthorRefused}
   - id: TM-35
     cases:
       - test: TestScenario8_PrivateNeverHosted
@@ -344,6 +355,7 @@ threats:
       - test: TestPlantedPRCannotAuthorizeHosted
   - id: TM-36
     cases:
+      - test: TestNetworkCodeIsAllowlisted
       - test: TestNoRequestReachesTelemetry
       - test: TestPublicationProfileOnPublicFixture
   - id: TM-37

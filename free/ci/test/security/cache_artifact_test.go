@@ -153,6 +153,11 @@ func TestArtifactsStayAuthorized(t *testing.T) {
 	if ok, why := authz.Promotable(art, untrusted, g); ok || !hasReason(why, attest.ReasonTrustBelowMin) {
 		t.Errorf("untrusted output was promotable: %v %v", ok, why)
 	}
+	collaborator := ev
+	collaborator.SourceTrust = "collaborator"
+	if ok, why := authz.Promotable(art, collaborator, g); ok || !hasReason(why, attest.ReasonTrustBelowMin) {
+		t.Errorf("a collaborator's output was promotable: %v %v", ok, why)
+	}
 	swapped := art
 	swapped.SHA256 = strings.Repeat("b", 64)
 	if ok, why := authz.Promotable(swapped, ev, g); ok || !hasReason(why, authz.ReasonArtifactUnbound) {

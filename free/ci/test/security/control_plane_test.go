@@ -92,7 +92,7 @@ func TestRunApprovalNeedsAnotherPerson(t *testing.T) {
 	if err := roles.AuthorizeAction(roles.WithAuthor(ctx, "mallory"), rel, roles.ActRunApprove, "acme/app"); err != nil {
 		t.Fatalf("control: a release role was refused the approval of another person's run: %v", err)
 	}
-	for _, author := range []string{"bob", "user:bob", "token:tok-1:bob", "BOB"} {
+	for _, author := range []string{"bob", "user:bob", "token:tok-1:bob", "BOB", "cli:bob", "operator:cli:bob", " bob "} {
 		if got := roles.ReasonOf(roles.AuthorizeAction(roles.WithAuthor(ctx, author), rel, roles.ActRunApprove, "acme/app")); got != roles.ReasonSelfApproval {
 			t.Errorf("author %q approving their own run: reason %q, want %q", author, got, roles.ReasonSelfApproval)
 		}
@@ -191,5 +191,22 @@ func TestDecisionsAreAuditedAndTamperEvident(t *testing.T) {
 	}
 	if rep, err := c.log.Verify(ctx, 0); err != nil || rep.OK() || rep.BadSeq != rows[len(rows)-1].Seq {
 		t.Fatalf("an edited audit row was not named: %+v %v", rep, err)
+	}
+}
+
+// TestStoreFailureDeniesTheDecision: when the actor's grant cannot be re-read, the decision is refused
+// (fail closed), not allowed on the strength of the state the actor was resolved with.
+func TestStoreFailureDeniesTheDecision(t *testing.T) {
+	c := newControlPlane(t)
+	ctx := context.Background()
+	admin := c.actor(roles.Admin, "frank", "acme/app")
+	if err := roles.AuthorizeAction(ctx, admin, roles.ActPolicySet, "acme/app"); err != nil {
+		t.Fatalf("control: %v", err)
+	}
+	if err := c.st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := roles.AuthorizeAction(ctx, admin, roles.ActPolicySet, "acme/app"); err == nil {
+		t.Fatal("a decision was allowed while the store could not be read")
 	}
 }

@@ -110,6 +110,7 @@ func TestStaleEvidenceNeverSatisfiesGate(t *testing.T) {
 		{"another repository", func(e *model.Evidence, g *attest.Gate) { g.RepoID = "repo-2" }, attest.ReasonRepoMismatch},
 		{"a required job vanished", func(e *model.Evidence, g *attest.Gate) { g.RequiredJobs = []string{"build", "lint", "deploy-check"} }, attest.ReasonJobsMismatch},
 		{"trust fell below the gate minimum", func(e *model.Evidence, g *attest.Gate) { e.SourceTrust = "untrusted" }, attest.ReasonTrustBelowMin},
+		{"trust one rank below the gate minimum", func(e *model.Evidence, g *attest.Gate) { e.SourceTrust = "collaborator" }, attest.ReasonTrustBelowMin},
 		{"worktree dirty", func(e *model.Evidence, g *attest.Gate) { e.WorktreeState = "dirty" }, attest.ReasonUnbound},
 		{"partial selection on a release gate", func(e *model.Evidence, g *attest.Gate) { e.Selection.Mode = "affected"; g.Class = attest.ClassRelease }, attest.ReasonSelectionPartial},
 		{"a failing check", func(e *model.Evidence, g *attest.Gate) {

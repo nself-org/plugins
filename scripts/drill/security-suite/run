@@ -36,5 +36,34 @@ fi
 grep -E '^(--- PASS|ok )' "$tmp/suite.txt" | tail -n 3 >&2
 
 echo "security-suite: planting the regressions" >&2
-bash "$root/free/ci/internal/invariants/testdata/mutate.sh" "$root/free/ci" test/security/testdata/regressions 'Test' -tags security ./test/security/... >&2
+# The harness runs patches one after the other (about 40 s each); the drill splits them over SECURITY_SUITE_JOBS
+# copies of the module (default 3) so the job stays inside a drill's default timeout. Each copy runs the same
+# harness. The check that the patch directory covers every category runs in the full suite above, so the
+# copies, which hold a share of the patches, skip it.
+jobs=${SECURITY_SUITE_JOBS:-3}
+patches=("$root"/free/ci/test/security/testdata/regressions/*.patch)
+for ((g = 0; g < jobs; g++)); do
+	m="$tmp/m$g"
+	mkdir -p "$m/test/security/testdata/regressions"
+	rsync -a --exclude vendor --exclude test/security/testdata/regressions "$root/free/ci/" "$m/"
+	ln -s "$root/free/ci/vendor" "$m/vendor"
+done
+i=0
+for patch in "${patches[@]}"; do
+	cp "$patch" "$tmp/m$((i % jobs))/test/security/testdata/regressions/"
+	i=$((i + 1))
+done
+for ((g = 0; g < jobs; g++)); do
+	(
+		bash "$root/free/ci/internal/invariants/testdata/mutate.sh" "$tmp/m$g" test/security/testdata/regressions 'Test' -tags security -skip 'TestRegressionPatchesCoverTheCategories' ./test/security/... >"$tmp/mut$g.txt" 2>&1
+		echo $? >"$tmp/mut$g.rc"
+	) &
+done
+wait
+status=0
+for ((g = 0; g < jobs; g++)); do
+	cat "$tmp/mut$g.txt" >&2
+	[ "$(cat "$tmp/mut$g.rc")" = 0 ] || status=1
+done
+[ "$status" = 0 ] || { echo "security-suite: a planted regression survived or the harness failed" >&2; exit 1; }
 echo "security-suite: ok" >&2

@@ -169,6 +169,9 @@ func TestMatrixIsComplete(t *testing.T) {
 		if len(th.Cases) == 0 && len(th.Also) == 0 && th.Owner == "" {
 			t.Errorf("%s has no case, no proof and no owner", th.ID)
 		}
+		if len(th.Cases) == 0 && len(th.Also) == 0 {
+			t.Logf("%s is carried by its owner Ticket %s, not by this suite", th.ID, th.Owner)
+		}
 	}
 	// Every test of the suite is named in the matrix (except the checks of the matrix itself).
 	var orphan []string
@@ -181,7 +184,25 @@ func TestMatrixIsComplete(t *testing.T) {
 	if len(orphan) > 0 {
 		t.Errorf("tests that no matrix row names: %v", orphan)
 	}
-	// With the hq checkout at hand, the threat rows are exactly the threat model's rows.
+	// The matrix has exactly the threat rows listed in testdata/threat-rows.txt (a copy of the ids of
+	// hq architecture/ci-threat-model.md; a row added there fails this until the matrix maps it).
+	listed := map[string]bool{}
+	rows, err := os.ReadFile(filepath.Join("testdata", "threat-rows.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range strings.Fields(string(rows)) {
+		listed[id] = true
+		if !ids[id] {
+			t.Errorf("threat row %s (testdata/threat-rows.txt) has no matrix row", id)
+		}
+	}
+	for id := range ids {
+		if !listed[id] {
+			t.Errorf("matrix row %s is not in testdata/threat-rows.txt", id)
+		}
+	}
+	// With the hq checkout at hand, that list is exactly the threat model's rows.
 	if hq := os.Getenv("HQ"); hq != "" {
 		raw, err := os.ReadFile(filepath.Join(hq, "architecture", "ci-threat-model.md"))
 		if err != nil {
@@ -195,13 +216,13 @@ func TestMatrixIsComplete(t *testing.T) {
 			t.Fatal("no TM rows found in the threat model")
 		}
 		for id := range model {
-			if !ids[id] {
-				t.Errorf("threat model row %s has no matrix row", id)
+			if !listed[id] {
+				t.Errorf("threat model row %s is missing from testdata/threat-rows.txt", id)
 			}
 		}
-		for id := range ids {
+		for id := range listed {
 			if !model[id] {
-				t.Errorf("matrix row %s is not in the threat model", id)
+				t.Errorf("testdata/threat-rows.txt row %s is not in the threat model", id)
 			}
 		}
 	}
@@ -233,7 +254,7 @@ func TestRegressionPatchesCoverTheCategories(t *testing.T) {
 	}
 	for _, f := range files {
 		raw, err := os.ReadFile(f)
-		if err != nil || !bytes.HasPrefix(raw, []byte("--- a/")) || !bytes.Contains(raw, []byte("\n+++ b/")) {
+		if err != nil || !(bytes.HasPrefix(raw, []byte("--- a/")) || bytes.HasPrefix(raw, []byte("diff --git a/"))) || !bytes.Contains(raw, []byte("\n+++ b/")) {
 			t.Errorf("%s is not a unified diff with a/ b/ paths (%v)", f, err)
 		}
 	}

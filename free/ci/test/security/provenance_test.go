@@ -33,6 +33,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/webhook"
 	"github.com/nself-org/plugins/free/ci/internal/providers/rest"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/trust/source"
 )
 
@@ -152,9 +153,25 @@ func TestRecordedForkPRToClassToPlacement(t *testing.T) {
 		if f := facts.Fork; f.Value == nil || !*f.Value || f.Source != "api" {
 			t.Fatalf("%s: the fork fact must come from the API as true: %+v", name, f)
 		}
-		// The class steers a real dispatcher: gVisor or hosted-disposable only.
+		// The class and the facts steer a real dispatcher: the run is held for its approval, and once the
+		// approver has seen the head it lands on gVisor and not on the LAN node.
 		r := newRig(t, repoPolicy(t, "public", res.Class), lanRunner("lan1", 2), gvisorRunner("gv1", 2))
-		_, a, err := r.submit(newJob("fromhook", res.Class, "restricted"), string(res.Class), 2*time.Second)
+		r.noFacts = true
+		id, job := r.prepare(newJob("fromhook", res.Class, "restricted"), string(res.Class))
+		head := ""
+		if facts.HeadRepo.Value != nil {
+			head = *facts.HeadRepo.Value
+		}
+		runID := "pipe-fromhook"
+		if _, err := r.st.RecordApprovalFacts(context.Background(), store.ApprovalRunFacts{Run: runID, Author: "newbie", HeadRepo: head, RequiresApproval: res.RequiresApproval}, voidCheck); err != nil {
+			t.Fatal(err)
+		}
+		a, err := r.enqueue(id, job, settle)
+		heldBecause(t, r, id, a, err)
+		if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:maintainer", ExpectSHA: baseRev, Check: voidCheck}); err != nil {
+			t.Fatal(err)
+		}
+		a, err = r.enqueue(id, job, 2*time.Second)
 		if got := runnerOf(t, a, err); got != "gv1" {
 			t.Fatalf("%s: untrusted PR placed on %q, want gv1", name, got)
 		}

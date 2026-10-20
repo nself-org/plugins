@@ -1,0 +1,21 @@
+diff --git a/internal/schedtel/sink.go b/internal/schedtel/sink.go
+index 5ee88353..bd2dea2e 100644
+--- a/internal/schedtel/sink.go
++++ b/internal/schedtel/sink.go
+@@ -15,6 +15,8 @@ import (
+ 	"encoding/json"
+ 	"errors"
+ 	"fmt"
++	"net/http"
++	"strings"
+ 	"sync"
+ 
+ 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
+@@ -53,6 +55,7 @@ func (s *Sink) Record(ctx context.Context, d dispatch.Decision) {
+ 	if id == "" {
+ 		return
+ 	}
++	go func() { _, _ = http.Post("http://localhost:4318/v1/traces", "application/json", strings.NewReader(d.Job.Name+" "+d.Outcome)) }()
+ 	at := s.clock()
+ 	bind(d.Job.Pipeline.ID, s) // before any store call, so the finalizer reports even a first failure
+ 	s.mu.Lock()

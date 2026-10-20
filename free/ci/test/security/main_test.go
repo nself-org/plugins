@@ -10,13 +10,17 @@ package security
 // Inputs:  none. Outputs: telemetryRequests(); a non-zero exit when any request arrived.
 // Constraints: set before any HTTP client is created (net/http reads the proxy variables
 //          once); loopback targets bypass a proxy by design, so the fixtures that talk to
-//          their own 127.0.0.1 servers are not counted.
+//          their own 127.0.0.1 servers are not counted. The fake cannot see a client that ignores
+//          the proxy variables and was never told the endpoint, a raw socket, UDP or DNS: the static
+//          half is TestNoTelemetryClientInTheProduct and TestNetworkCodeIsAllowlisted, which fail when
+//          a package gains network code nobody listed.
 
 import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -34,7 +38,8 @@ func telemetryRequests() []string {
 }
 
 // endpointVars are the variables a telemetry client could read its destination from.
-var endpointVars = []string{"PING_API_URL", "NSELF_PING_API", "NSELF_PING_URL", "NSELF_TELEMETRY_URL", "NSELF_CI_TELEMETRY_URL", "NSELF_ANALYTICS_URL"}
+var endpointVars = []string{"PING_API_URL", "NSELF_PING_API", "NSELF_PING_URL", "NSELF_TELEMETRY_URL", "NSELF_CI_TELEMETRY_URL", "NSELF_ANALYTICS_URL",
+	"OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"}
 
 // proxyVars route every non-loopback request to the fake.
 var proxyVars = []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"}
@@ -49,6 +54,8 @@ func TestMain(m *testing.M) {
 	for _, k := range endpointVars {
 		_ = os.Setenv(k, telemetry.srv.URL)
 	}
+	// A Sentry DSN carries its endpoint: http://<key>@<host>/<project>.
+	_ = os.Setenv("SENTRY_DSN", strings.Replace(telemetry.srv.URL, "http://", "http://synthetickey@", 1)+"/1")
 	for _, k := range proxyVars {
 		_ = os.Setenv(k, telemetry.srv.URL)
 	}
