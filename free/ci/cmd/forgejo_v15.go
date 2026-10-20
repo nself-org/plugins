@@ -61,6 +61,9 @@ func policyForgejoURL(ctx context.Context) (string, error) {
 	}
 	cfg, closeFn := loadProviderConfig(ctx, root)
 	defer closeFn()
+	if cfg.Effective != nil && cfg.ForgejoURL != "" {
+		return cfg.ForgejoURL, nil // an unrelated bad providers.* value must not hide a valid Forgejo URL
+	}
 	return cfg.ForgejoURL, cfg.Err
 }
 

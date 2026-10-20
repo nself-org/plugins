@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	cidoc "github.com/nself-org/plugins/free/ci/internal/doctor"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	pdoctor "github.com/nself-org/plugins/free/ci/internal/providers/doctor"
@@ -115,6 +116,22 @@ func TestAuthorizeRoles(t *testing.T) {
 	if projectRow(t, r, p, "trust.providers") != `["github-hosted","gitlab"]` {
 		t.Fatal("a refused command changed the row")
 	}
+	for _, bad := range []string{"has\nnewline", "../../etc", "x/../y", strings.Repeat("a", 2000)} {
+		if code := r.prov("authorize", "github-hosted", "--project", bad); code != 1 {
+			t.Fatalf("project %.20q must be refused, exit %d", bad, code)
+		}
+	}
+	// A revoke with nothing to remove writes nothing (an empty row would also drop outer scopes' providers);
+	// a non-admin is still refused.
+	audits := r.auditCount("policy.set")
+	if code := r.prov("revoke", "github-hosted", "--project", "proj-empty", "--json"); code != 0 || r.data()["changed"] != false || projectRow(t, r, "proj-empty", "trust.providers") != "" || r.auditCount("policy.set") != audits {
+		t.Fatalf("a no-op revoke must write nothing: exit %d: %s", code, r.out.String())
+	}
+	r.token = r.memberToken()
+	if code := r.prov("revoke", "github-hosted", "--project", "proj-empty", "--json"); code != 1 || !strings.HasPrefix(r.errCode(), "E687") {
+		t.Fatalf("a member's no-op revoke must still be refused, exit %d", code)
+	}
+	r.token = ""
 	r.token = r.memberToken()
 	if code := r.prov("revoke", "github-hosted", "--project", p); code != 1 || projectRow(t, r, p, "trust.providers") != `["github-hosted","gitlab"]` {
 		t.Fatalf("a member must not revoke: exit %d", code)
@@ -283,5 +300,49 @@ func TestProvidersListShow(t *testing.T) {
 	}
 	if code := runProviders("show", []string{"nope"}, providersEnvFor(r, vars)); code != 1 {
 		t.Fatalf("show of an unknown provider exited %d", code)
+	}
+}
+
+// TestProvidersHelpAndDoctorSelector proves the surface half of acceptance line 3: the providers help has
+// no doctor subcommand and points at `ci doctor --providers`, and that selector reaches the section (CI-DP
+// ids in the JSON report, exit code one of the three the doctor defines).
+func TestProvidersHelpAndDoctorSelector(t *testing.T) {
+	if strings.Contains(providersHelp[:strings.Index(providersHelp, "Provider checks")], "doctor") {
+		t.Fatal("the command list must not name a doctor subcommand")
+	}
+	if !strings.Contains(providersHelp, "nself ci doctor --providers") {
+		t.Fatal("the help must point at the doctor")
+	}
+	for k := range v15Subcommands {
+		if strings.HasPrefix(k, "providers ") && strings.Contains(k, "doctor") {
+			t.Fatalf("a doctor subcommand is registered: %s", k)
+		}
+	}
+	r := newPolicyRig(t, "")
+	t.Setenv("NSELF_CI_HOME", filepath.Dir(r.path))
+	var out, errb strings.Builder
+	code := cidoc.Run([]string{"--providers", "--json", "--repo", r.work}, &out, &errb, cidoc.DefaultDeps())
+	if code != cidoc.ExitClean && code != cidoc.ExitFailed && code != cidoc.ExitWarnings {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	var env struct {
+		Data struct {
+			Checks []cidoc.Check `json:"checks"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out.String()), &env); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, c := range env.Data.Checks {
+		if strings.HasPrefix(c.ID, "CI-DP") {
+			n++
+			if c.Status != cidoc.Pass && c.Remediation == "" {
+				t.Fatalf("%s lacks a remediation", c.ID)
+			}
+		}
+	}
+	if n < 10 {
+		t.Fatalf("only %d CI-DP checks in the report", n)
 	}
 }

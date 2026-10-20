@@ -16,6 +16,7 @@ import (
 	"slices"
 	"sort"
 
+	cidoc "github.com/nself-org/plugins/free/ci/internal/doctor"
 	"github.com/nself-org/plugins/free/ci/internal/economics"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
@@ -105,7 +106,7 @@ func showProvider(ctx context.Context, env providersEnv, cfg pdoctor.Config, st 
 	defer useOperatorPolicy(cfg)()
 	repo := f.repo
 	if repo == "" && health.Family(id) == "github" {
-		repo, _ = pdoctor.GitHubRepo(ctx, root, cidocCapture(env))
+		repo, _ = pdoctor.GitHubRepo(ctx, root, cidoc.CaptureFunc(env.Run))
 	}
 	d := showJSON2{ID: id, Family: health.Family(id), Repo: repo, Health: healthOf(ctx, st, id), Credential: credentialOf(ctx, env, cfg, id),
 		Authorization: authJSON{PrivacyZone: cfg.PrivacyZone, Providers: append([]string{}, cfg.Authorized...), Authorized: slices.Contains(cfg.Authorized, id)},
@@ -204,7 +205,3 @@ func unknownProvider(id string) error {
 }
 
 func oneLineMsg(err error) string { return plainText(fmt.Sprint(err)) }
-
-func cidocCapture(env providersEnv) func(ctx context.Context, argv ...string) (string, int, error) {
-	return env.Run
-}

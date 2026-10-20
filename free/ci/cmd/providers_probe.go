@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strings"
 
+	cidoc "github.com/nself-org/plugins/free/ci/internal/doctor"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	pdoctor "github.com/nself-org/plugins/free/ci/internal/providers/doctor"
 	"github.com/nself-org/plugins/free/ci/internal/providers/health"
@@ -46,7 +47,7 @@ type probeRow struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-var githubRepoName = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+var githubRepoName = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*/[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
 
 func productionProviderClient(cfg pdoctor.Config, family string, runner bool) (*rest.Client, error) {
 	switch family {
@@ -87,7 +88,7 @@ func testProvider(ctx context.Context, env providersEnv, cfg pdoctor.Config, roo
 	switch health.Family(id) {
 	case "github":
 		if repo == "" {
-			repo, _ = pdoctor.GitHubRepo(ctx, root, cidocCapture(env))
+			repo, _ = pdoctor.GitHubRepo(ctx, root, cidoc.CaptureFunc(env.Run))
 		}
 		rows = probeGitHub(ctx, env, cfg, repo)
 	case "gitlab":
@@ -124,7 +125,7 @@ type ghRepoInfo struct {
 }
 
 func probeGitHub(ctx context.Context, env providersEnv, cfg pdoctor.Config, repo string) []probeRow {
-	cred := pdoctor.GitHubCredential(ctx, cfg, env.Getenv, cidocCapture(env))
+	cred := pdoctor.GitHubCredential(ctx, cfg, env.Getenv, cidoc.CaptureFunc(env.Run))
 	if !cred.Present {
 		return []probeRow{{"credential", probeFail, "no GitHub credential resolves (" + cred.Source + "); online checks skipped"}}
 	}

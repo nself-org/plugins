@@ -8,7 +8,9 @@
 // Inputs:  doctor.Env (repository root, the exec funnel, the environment) and the CI store when one
 // exists; the operator policy, resolved the way `policy show` resolves it.
 // Outputs: doctor.Check values with a remediation each; Config for the commands.
-// Constraints: no network call (online checks are `nself ci providers test`); a credential value is
+// Constraints: the section sends no request of its own (online checks are `nself ci providers test`); the one
+// exception is `gh auth status`, which gh itself answers by asking the API whether its token is valid (CI-DP001
+// then warns "not authenticated" when the machine is offline); a credential value is
 // read only to learn its kind (the prefix) and is never stored, printed or put in a Detail;
 // a variable counts as present when it is non-empty; the section never writes.
 package doctor

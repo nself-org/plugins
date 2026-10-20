@@ -82,6 +82,9 @@ func runAuthorize(ctx context.Context, op, id string, f providersFlags, root str
 	if f.project == "" {
 		return fail(adminUsage("--project <p> is required: authorization is per project"))
 	}
+	if !validProject(f.project) {
+		return fail(adminUsage("--project %q is not a project id (an absolute repository path or a short name, no control characters, no .. segment)", f.project))
+	}
 	if _, ok := providers.Lookup(id); !ok {
 		return fail(unknownProvider(id))
 	}
@@ -100,6 +103,14 @@ func runAuthorize(ctx context.Context, op, id string, f providersFlags, root str
 		return fail(err)
 	}
 	next := withProvider(current, id, op == "authorize")
+	if op == "revoke" && !slices.Contains(current, id) {
+		// Nothing to remove: writing [] here would also drop providers that outer scopes authorize.
+		// The admin check still runs, so a non-admin learns nothing and is refused as usual.
+		if err = roles.Authorize(ctx, actor, roles.Admin, f.project); err != nil {
+			return fail(err)
+		}
+		return noRevoke(env, command, id, f)
+	}
 	set := func(key string, value any) error {
 		raw, _ := json.Marshal(value)
 		_, err := apply(ctx, actor, policy.Change{Op: policy.OpSet, Scope: "project", Project: f.project, Root: root, Key: key, Value: raw})
@@ -122,7 +133,7 @@ func runAuthorize(ctx context.Context, op, id string, f providersFlags, root str
 		return adminWriteData(env.adminEnv, command, data)
 	}
 	verb := map[string]string{"authorize": "authorized", "revoke": "revoked"}[op]
-	_, _ = fmt.Fprintf(env.Out, "%s %s for project %s: %s = %s\n", verb, plainText(id), plainText(f.project), keyTrustProviders, plainText(strings.Join(next, ",")))
+	_, _ = fmt.Fprintf(env.Out, "%s %s for project %s: %s = %s (the project row; admission uses its intersection with the user and team rows)\n", verb, plainText(id), plainText(f.project), keyTrustProviders, plainText(strings.Join(next, ",")))
 	if f.allowPrivate {
 		_, _ = fmt.Fprintf(env.Out, "set %s = %s for project %s\n", keyTrustPrivacyZone, zoneProviderAllow, plainText(f.project))
 		_, _ = fmt.Fprintf(env.Out, "next, declare what you accept to spend (this command is not run for you):\n  %s\n", ceilingCommand(id))
@@ -138,4 +149,26 @@ func allowPrivateHint(err error) error {
 		return err
 	}
 	return fmt.Errorf("%w; a private repository's baseline zone is private-infrastructure and the policy engine does not let an operator row loosen it yet (debt D-1382), so nothing was written", err)
+}
+
+// noRevoke reports a revoke that had nothing to remove (exit 0, nothing written).
+func noRevoke(env providersEnv, command, id string, f providersFlags) int {
+	if f.json {
+		return adminWriteData(env.adminEnv, command, map[string]any{"op": "revoke", "provider": id, "project": f.project, "changed": false})
+	}
+	_, _ = fmt.Fprintf(env.Out, "%s is not authorized at project scope for %s: nothing to revoke\n", plainText(id), plainText(f.project))
+	return 0
+}
+
+// validProject accepts the ids the policy commands use: an absolute repository path or a short name.
+func validProject(p string) bool {
+	if p == "" || len(p) > 1024 {
+		return false
+	}
+	for _, r := range p {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return !slices.Contains(strings.Split(p, "/"), "..")
 }
