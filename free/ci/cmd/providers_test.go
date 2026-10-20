@@ -226,8 +226,8 @@ func TestAuthorizeRoles(t *testing.T) {
 // TestAllowPrivate proves acceptance line 2: `--allow-private` also writes trust.privacy_zone
 // provider-allowlist (first, so a failure between the two writes admits nothing) and prints, without
 // running, the `ci policy set --scope project economics.ceilings.github-hosted <n>` command. Against the
-// real writer the zone write is refused today (E670: a private repository's baseline zone cannot be
-// loosened by an operator row, debt D-1382); the refusal leaves nothing behind and says why.
+// real writer a project row loosens a private repository's baseline zone (D-1382): both rows land, in
+// order, and the effective zone becomes provider-allowlist.
 func TestAllowPrivate(t *testing.T) {
 	r := newPolicyRig(t, "")
 	pDir := t.TempDir()
@@ -267,14 +267,17 @@ func TestAllowPrivate(t *testing.T) {
 		t.Fatalf("no zone and no ceiling hint without the flag: %v", d)
 	}
 	// The real writer.
-	if code := r.prov("authorize", "github-hosted", "--project", pDir, "--allow-private", "--json"); code != 1 {
-		t.Fatalf("exit %d: %s", code, r.out.String())
+	if code := r.prov("authorize", "github-hosted", "--project", pDir, "--allow-private", "--json"); code != 0 {
+		t.Fatalf("exit %d: %s %s", code, r.out.String(), r.errb.String())
 	}
-	if msg := r.errCode(); !strings.HasPrefix(msg, "E670") || !strings.Contains(msg, "D-1382") {
-		t.Fatalf("the refusal must name E670 and the debt: %q", msg)
+	if got := projectRow(t, r, p, "trust.privacy_zone"); got != `"provider-allowlist"` {
+		t.Fatalf("zone row %q", got)
 	}
-	if projectRow(t, r, p, "trust.privacy_zone") != "" || projectRow(t, r, p, "trust.providers") != "" || r.auditCount("policy.set") != 0 {
-		t.Fatal("a refused --allow-private left a row or an audit row")
+	if got := projectRow(t, r, p, "trust.providers"); got != `["github-hosted"]` {
+		t.Fatalf("providers row %q", got)
+	}
+	if d := r.data(); d["effective_zone"] != "provider-allowlist" {
+		t.Fatalf("effective zone: %v", d)
 	}
 }
 

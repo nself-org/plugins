@@ -24,7 +24,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -170,7 +169,7 @@ func runAuthorize(ctx context.Context, op, id string, f providersFlags, env prov
 	}
 	if f.allowPrivate {
 		if err = set(keyTrustPrivacyZone, zoneProviderAllow); err != nil {
-			return fail(allowPrivateHint(err))
+			return fail(err)
 		}
 	}
 	if err = set(keyTrustProviders, next); err != nil {
@@ -195,7 +194,7 @@ func reportWrite(env providersEnv, command, op, id, project string, next []strin
 	w := func(format string, a ...any) { _, _ = fmt.Fprintf(env.Out, format, a...) }
 	w("%s %s for project %s: %s = %s (the project row; admission uses its intersection with the user and team rows)\n", verb, plainText(id), plainText(project), keyTrustProviders, plainText(strings.Join(next, ",")))
 	if zone != zoneProviderAllow {
-		w("note: %s is read only when %s is %s; the effective zone of this project is %q (see debt D-1382 for private repositories)\n", keyTrustProviders, keyTrustPrivacyZone, zoneProviderAllow, zone)
+		w("note: %s is read only when %s is %s; the effective zone of this project is %q (a private repository needs --allow-private)\n", keyTrustProviders, keyTrustPrivacyZone, zoneProviderAllow, zone)
 	}
 	if f.allowPrivate {
 		w("set %s = %s for project %s\n", keyTrustPrivacyZone, zoneProviderAllow, plainText(project))
@@ -211,14 +210,4 @@ func noRevoke(env providersEnv, command, id, project string, asJSON bool) int {
 	}
 	_, _ = fmt.Fprintf(env.Out, "%s is not authorized at project scope for %s: nothing to revoke (a user or team scope row may still authorize it: see `nself ci policy show`)\n", plainText(id), plainText(project))
 	return 0
-}
-
-// allowPrivateHint says why the zone write was refused when the cause is the baseline, which a policy
-// row cannot loosen today (debt D-1382), so the operator is not left with a bare E670.
-func allowPrivateHint(err error) error {
-	var typed *roles.Error
-	if errors.As(err, &typed) || !strings.HasPrefix(err.Error(), "E670") {
-		return err
-	}
-	return fmt.Errorf("%w; a private repository's baseline zone is private-infrastructure and the policy engine does not let an operator row loosen it yet (debt D-1382), so nothing was written", err)
 }

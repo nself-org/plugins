@@ -168,7 +168,7 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 				e.values[key] = entry{value: v, source: scope.Kind}
 				continue
 			}
-			if exists && (!stricter(spec, old.value, v) || scope.Kind == SourceRevision && spec.Kind == TightenAny && !reflect.DeepEqual(old.value, v)) {
+			if exists && !operatorMayLoosen(key, scope.Kind, old.source) && (!stricter(spec, old.value, v) || scope.Kind == SourceRevision && spec.Kind == TightenAny && !reflect.DeepEqual(old.value, v)) {
 				if scope.Kind == SourceRevision {
 					e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 revision widening"})
 					continue
@@ -207,6 +207,18 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 	}
 	sum := sha256.Sum256(append(encoded, []byte(pinnedCommit)...))
 	return e, Digest(hex.EncodeToString(sum[:])), nil
+}
+
+// operatorMayLoosen reports whether a user, team or project row may set key looser than the value it
+// finds. Only trust.privacy_zone qualifies, and only against the baseline (SourceDefault): the baseline
+// zone of a private repository is private-infrastructure, and an operator authorizing a hosted provider
+// is the one way to leave it (D-1382). The revision and the run stay tighten-only, as does every scope
+// after an operator row, and the decision is bound in the digest through hostedProject.
+func operatorMayLoosen(key string, kind, from Source) bool {
+	if key != "trust.privacy_zone" || from != SourceDefault {
+		return false
+	}
+	return kind == SourceUser || kind == SourceTeam || kind == SourceProject
 }
 
 // Merge accepts a registry as its first argument through the default registry.
