@@ -19,6 +19,7 @@ import (
 	_ "github.com/nself-org/plugins/free/ci/internal/nodes/registry"
 	_ "github.com/nself-org/plugins/free/ci/internal/protocol"
 	_ "github.com/nself-org/plugins/free/ci/internal/providers"
+	_ "github.com/nself-org/plugins/free/ci/internal/providers/ephemeral/local"
 	_ "github.com/nself-org/plugins/free/ci/internal/sched"
 	_ "github.com/nself-org/plugins/free/ci/internal/store"
 	_ "github.com/nself-org/plugins/free/ci/internal/trust"
@@ -27,20 +28,21 @@ import (
 // notYetLinked lists code fragments imported above (blank) because cmd does not
 // link them until the V15 engine is wired in (P7-CI-37).
 var notYetLinked = map[string]bool{
-	"github.com/nself-org/plugins/free/ci/internal/agent/slots":    true,
-	"github.com/nself-org/plugins/free/ci/internal/blob/cas":       true,
-	"github.com/nself-org/plugins/free/ci/internal/burst":          true, // E696/E697; links into cmd when the dispatcher wiring ships (debt row filed by P7-SCHED-08)
-	"github.com/nself-org/plugins/free/ci/internal/exec":           true,
-	"github.com/nself-org/plugins/free/ci/internal/gates":          true,
-	"github.com/nself-org/plugins/free/ci/internal/gates/truth":    true,
-	"github.com/nself-org/plugins/free/ci/internal/lease":          true,
-	"github.com/nself-org/plugins/free/ci/internal/nodes/registry": true,
-	"github.com/nself-org/plugins/free/ci/internal/protocol":       true,
-	"github.com/nself-org/plugins/free/ci/internal/providers":      true,
-	"github.com/nself-org/plugins/free/ci/internal/sched":          true,
-	"github.com/nself-org/plugins/free/ci/internal/store":          true,
-	"github.com/nself-org/plugins/free/ci/internal/trust":          true,
-	"github.com/nself-org/plugins/free/ci/internal/world":          true,
+	"github.com/nself-org/plugins/free/ci/internal/agent/slots":               true,
+	"github.com/nself-org/plugins/free/ci/internal/blob/cas":                  true,
+	"github.com/nself-org/plugins/free/ci/internal/burst":                     true, // E696/E697; links into cmd when the dispatcher wiring ships (debt row filed by P7-SCHED-08)
+	"github.com/nself-org/plugins/free/ci/internal/exec":                      true,
+	"github.com/nself-org/plugins/free/ci/internal/gates":                     true,
+	"github.com/nself-org/plugins/free/ci/internal/gates/truth":               true,
+	"github.com/nself-org/plugins/free/ci/internal/lease":                     true,
+	"github.com/nself-org/plugins/free/ci/internal/nodes/registry":            true,
+	"github.com/nself-org/plugins/free/ci/internal/protocol":                  true,
+	"github.com/nself-org/plugins/free/ci/internal/providers":                 true,
+	"github.com/nself-org/plugins/free/ci/internal/providers/ephemeral/local": true, // E698; links into cmd when the burst wiring ships (D-1329)
+	"github.com/nself-org/plugins/free/ci/internal/sched":                     true,
+	"github.com/nself-org/plugins/free/ci/internal/store":                     true,
+	"github.com/nself-org/plugins/free/ci/internal/trust":                     true,
+	"github.com/nself-org/plugins/free/ci/internal/world":                     true,
 
 	// AUTO packages (P7-AUTO-27): each links into cmd when its own Ticket wires it; their E790-E829 codes register from a codes.go.
 	"github.com/nself-org/plugins/free/ci/internal/pools":                   true,
