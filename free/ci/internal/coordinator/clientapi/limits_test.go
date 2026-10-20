@@ -213,3 +213,50 @@ func TestFollowedLogEndsWhenTheTokenIsRevoked(t *testing.T) {
 		t.Fatal("the followed log outlived the revoked token")
 	}
 }
+
+// D-1408: every refused call to an admin route is an audited, chained deny row, so one member could grow
+// the audit chain without bound. After deniesPerMinute refusals the caller gets 429 and no further row.
+func TestRoleDenialsAreCappedPerActorAndStopWritingAuditRows(t *testing.T) {
+	r := nodeRig(t)
+	count := func() int {
+		rows, _ := r.st.AuditEntries(context.Background(), 0, 0)
+		return len(rows)
+	}
+	eve := r.token("eve", roles.Member, time.Hour, roles.AllProjects)
+	before := count()
+	for i := 0; i < deniesPerMinute; i++ {
+		st, b := r.do(r.client(), "POST", PathNodesPfx+"n1/drain", eve, ``)
+		refused(t, st, b, 403, roles.ReasonRole)
+	}
+	rows := count() - before
+	for i := 0; i < 20; i++ {
+		st, b := r.do(r.client(), "POST", PathNodesPfx+"n1/drain", eve, ``)
+		refused(t, st, b, 429, ReasonRateLimited)
+	}
+	if got := count() - before; got != rows {
+		t.Fatalf("%d audit rows after the cap, %d at the cap", got, rows)
+	}
+	bob := r.token("bob", roles.Member, time.Hour, roles.AllProjects)
+	if st, b := r.do(r.client(), "POST", PathNodesPfx+"n1/drain", bob, ``); st != 403 {
+		t.Fatalf("another actor must keep its own count: %d %s", st, b)
+	}
+}
+
+func TestDenyCountResetsAfterTheWindow(t *testing.T) {
+	l := newLimiter()
+	now := time.Unix(1_800_000_000, 0)
+	l.now = func() time.Time { return now }
+	for i := 0; i < deniesPerMinute; i++ {
+		if !l.denyAllowed("eve") {
+			t.Fatalf("refusal %d blocked early", i+1)
+		}
+		l.denied("eve")
+	}
+	if l.denyAllowed("eve") || !l.denyAllowed("bob") {
+		t.Fatal("the cap is per actor and exact")
+	}
+	now = now.Add(time.Minute + time.Second)
+	if !l.denyAllowed("eve") {
+		t.Fatal("the window must reset")
+	}
+}

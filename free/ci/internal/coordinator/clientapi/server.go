@@ -169,8 +169,10 @@ func (s *Server) add(mux *http.ServeMux, r routeSpec) {
 		actor, err := s.authenticate(req)
 		if err != nil {
 			s.lim.failed(src)
-		} else {
-			err = roles.Authorize(req.Context(), actor, r.role, "")
+		} else if !s.cfg.Local && !s.lim.denyAllowed(actor.ID()) {
+			err = Failf(ReasonRateLimited, "too many refused requests from this caller; wait a minute")
+		} else if err = roles.Authorize(req.Context(), actor, r.role, ""); err != nil && roles.ReasonOf(err) != "" {
+			s.lim.denied(actor.ID())
 		}
 		if err != nil {
 			s.fail(w, err)
