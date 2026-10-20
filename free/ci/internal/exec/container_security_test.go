@@ -111,3 +111,13 @@ func TestOrphanContainerVanishedDuringSweep(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestOrphanRemovalRefusesNonRuntime(t *testing.T) {
+	for _, binary := range []string{"", "ssh", "/usr/bin/ssh", "sh"} {
+		t.Run(binary, func(t *testing.T) {
+			if err := removeStaleContainer(context.Background(), binary, "gone"); err == nil {
+				t.Fatal("non-runtime program accepted")
+			}
+		})
+	}
+}
