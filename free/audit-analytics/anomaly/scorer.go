@@ -143,6 +143,7 @@ func (s *Scorer) detectFrequencySpikes(ctx context.Context) ([]Anomaly, error) {
 				FROM np_audit_log
 				WHERE created_at > NOW() - INTERVAL '7 days'
 				  AND created_at < NOW() - INTERVAL '5 minutes'
+				  AND user_id IS NOT NULL
 				GROUP BY 1,2,3,4
 			) buckets
 			GROUP BY user_id, action, hour
@@ -155,6 +156,7 @@ func (s *Scorer) detectFrequencySpikes(ctx context.Context) ([]Anomaly, error) {
 				COUNT(*) AS cnt
 			FROM np_audit_log
 			WHERE created_at > NOW() - INTERVAL '5 minutes'
+			  AND user_id IS NOT NULL
 			GROUP BY user_id, action, EXTRACT(HOUR FROM created_at)
 		)
 		SELECT
@@ -205,6 +207,7 @@ func (s *Scorer) detectBulkDeletes(ctx context.Context) ([]Anomaly, error) {
 		SELECT user_id, COUNT(*) AS cnt
 		  FROM np_audit_log
 		 WHERE action LIKE '%delete%'
+		   AND user_id IS NOT NULL
 		   AND created_at > NOW() - INTERVAL '1 minute'
 		 GROUP BY user_id
 		HAVING COUNT(*) >= $1
@@ -239,12 +242,14 @@ func (s *Scorer) detectNewIPs(ctx context.Context) ([]Anomaly, error) {
 			  FROM np_audit_log
 			 WHERE created_at > NOW() - INTERVAL '7 days'
 			   AND created_at < NOW() - INTERVAL '5 minutes'
+			   AND user_id IS NOT NULL
 			   AND context->>'ip' IS NOT NULL
 		),
 		recent AS (
 			SELECT DISTINCT user_id, context->>'ip' AS ip
 			  FROM np_audit_log
 			 WHERE created_at > NOW() - INTERVAL '5 minutes'
+			   AND user_id IS NOT NULL
 			   AND context->>'ip' IS NOT NULL
 		)
 		SELECT r.user_id, r.ip
@@ -286,6 +291,7 @@ func (s *Scorer) detectAfterHoursAdmin(ctx context.Context) ([]Anomaly, error) {
 			SELECT user_id, action, context->>'ip' AS ip
 			  FROM np_audit_log
 			 WHERE created_at > NOW() - INTERVAL '5 minutes'
+			   AND user_id IS NOT NULL
 			   AND action IN ('role_grant','schema_alter','plugin_install','gdpr_delete')
 			   AND (EXTRACT(HOUR FROM created_at) >= $1 OR EXTRACT(HOUR FROM created_at) < $2)
 		`, start, end)
@@ -294,6 +300,7 @@ func (s *Scorer) detectAfterHoursAdmin(ctx context.Context) ([]Anomaly, error) {
 			SELECT user_id, action, context->>'ip' AS ip
 			  FROM np_audit_log
 			 WHERE created_at > NOW() - INTERVAL '5 minutes'
+			   AND user_id IS NOT NULL
 			   AND action IN ('role_grant','schema_alter','plugin_install','gdpr_delete')
 			   AND EXTRACT(HOUR FROM created_at) BETWEEN $1 AND $2
 		`, start, end)

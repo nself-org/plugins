@@ -202,6 +202,10 @@ func (h *Handler) topActors(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) forceRefresh(w http.ResponseWriter, r *http.Request) {
+	if err := h.refresh(r.Context(), patterns.EnsureHeatmapViewSQL); err != nil {
+		jsonError(w, "refresh failed", http.StatusInternalServerError)
+		return
+	}
 	if err := h.refresh(r.Context(), "REFRESH MATERIALIZED VIEW CONCURRENTLY np_audit_heatmap"); err != nil {
 		jsonError(w, "refresh failed", http.StatusInternalServerError)
 		return

@@ -14,7 +14,7 @@ import (
 func ReadAuditRows(ctx context.Context, pool *pgxpool.Pool, since time.Time, limit int) ([]AuditRow, error) {
 	const q = `
 		SELECT
-			id::text,
+			COALESCE(id::text, ''),
 			tenant_id::text,
 			action,
 			table_name,
