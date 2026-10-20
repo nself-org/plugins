@@ -45,7 +45,7 @@ var catalog = []Entry{
 	{IDSkew, "node clock within 120 s", "Enable time sync on the node (chrony, systemd-timesyncd or the macOS time server) and re-run the check"},
 	{IDVersion, "agent and protocol version at or above the minimum", "Upgrade the agent: nself ci nodes upgrade <node>"},
 	{IDDrift, "toolchains agree across nodes", "Install the same toolchain version on the differing nodes, or pin it in .nself/ci.yaml and run: nself ci nodes test <node>"},
-	{IDDisk, "free disk and no orphan job roots", "Free disk space on the node; remove job roots whose lease is gone (the agent sweeps them at start: restart the agent)"},
+	{IDDisk, "free disk and no expired leases", "Free disk space on the node; for expired leases restart the agent (it sweeps job roots whose lease is gone at start)"},
 	{IDExposure, "no weak isolation on nodes taking untrusted work", "Re-add the node accepting owner work only (nself ci nodes add <node> --accepts owner), or run untrusted work in a VM"},
 	{IDDeploy, "no deploy-host overlap, exclusion refresh current", "Take the node out of the deploy inventory (or revoke it), then run: nself ci nodes test <node>"},
 	{IDBreaker, "node not held in maintenance by the breaker", "Fix the cause shown, then run: nself ci nodes enable <node>"},

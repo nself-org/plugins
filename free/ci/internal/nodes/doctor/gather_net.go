@@ -182,8 +182,9 @@ func (f *Facts) readVisibility(ctx context.Context, env doctor.Env) {
 // the node now presents a key other than the pinned one (CI-DN002 fails on it).
 func sshReason(err error) (reason string, refused bool) {
 	line, _, _ := strings.Cut(strings.TrimSpace(err.Error()), "\n")
+	line = strings.TrimRight(line, "\r")
 	if len(line) > 120 {
-		line = line[:120]
+		line = strings.ToValidUTF8(line[:120], "")
 	}
 	if strings.Contains(strings.ToLower(err.Error()), "host key verification failed") {
 		return "host key verification failed against the pin", true
