@@ -44,13 +44,16 @@ CGO_ENABLED=$cgo go test -mod=vendor ${race[@]+"${race[@]}"} -count=1 -v -tags s
 rc=$?
 ev_expect suite "go test -tags scenarios ./test/scenarios/..." "$rc" "exit $rc: $(ev_snip "$work/suite.txt")"
 if grep -q -- '--- SKIP' "$work/suite.txt"; then ev_fail no-skip "a scenario test skipped"; else ev_pass no-skip "no scenario test skipped"; fi
-ran=$(grep -c -- '^--- PASS: TestScenario\|^--- PASS: TestEconomics\|^--- PASS: TestBurst' "$work/suite.txt" || true)
-if [ "${ran:-0}" -ge 1 ]; then ev_pass tests-ran "$ran scenario tests passed"; else ev_fail tests-ran "no scenario test passed"; fi
+ran=$(grep -c -- '^--- PASS: Test' "$work/suite.txt" || true)
+want=$(grep -hE '^func Test[A-Za-z0-9_]+\(' test/scenarios/*_test.go | grep -vc '^func TestPlanted' || true)
+if [ "${ran:-0}" -eq "${want:-1}" ] && [ "${ran:-0}" -ge 1 ]; then ev_pass tests-ran "all $ran suite tests passed"; else ev_fail tests-ran "$ran suite tests passed, $want are declared"; fi
 
 # Step 2: every planted regression turns the suite red (the planted tests pass when the guard catches the defect).
+planted_names=$(grep -hoE '^func (TestPlanted[A-Za-z0-9_]+)' test/scenarios/*_test.go | awk '{print $2}' | sort -u | tr '\n' ' ')
 CGO_ENABLED=0 go test -mod=vendor -count=1 -json -tags 'scenarios planted' ./test/scenarios/... -run TestPlanted >"$work/planted.json" 2>"$work/planted.err"
-python3 "$root/scripts/ci/go-test-ran.py" TestPlanted <"$work/planted.json"
-ev_expect planted "every planted regression is detected" "$?" "$(tail -n 2 "$work/planted.err" | tr '\n' ' ')"
+# shellcheck disable=SC2086 # one argument per declared planted test
+python3 "$root/scripts/ci/go-test-ran.py" $planted_names <"$work/planted.json"
+ev_expect planted "every declared planted regression is detected (${planted_names:-none})" "$?" "$(tail -n 2 "$work/planted.err" | tr '\n' ' ')"
 
 # Step 3: the acceptance matrix names every suite test.
 missing=""

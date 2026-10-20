@@ -149,7 +149,8 @@ func TestScenario4MissingPlatformFailsAFreshForegroundRun(t *testing.T) {
 
 // TestScenario4Native is the native leg: on each hosted platform the entry for the host's own
 // platform places on the local runner. ci-sched-scenarios.yml runs it on ubuntu-24.04,
-// ubuntu-24.04-arm and macos-15; elsewhere it still passes for the platforms in the matrix.
+// ubuntu-24.04-arm and macos-15. On a host outside the matrix (darwin/amd64, say) it fails on purpose,
+// so a leg can never pass without placing its own platform.
 func TestScenario4Native(t *testing.T) {
 	host := runtime.GOOS + "/" + runtime.GOARCH
 	known := false

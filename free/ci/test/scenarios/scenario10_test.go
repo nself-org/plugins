@@ -31,15 +31,27 @@ func s10Runners() []sched.Runner {
 	return []sched.Runner{s10Runner("local", "local", 2), s10Runner("lan1", "lan", 2), s10Runner("lan2", "lan", 2)}
 }
 
+// s10JobRuntimeMs is the simulated runtime of every job. dispatch.Fair charges each job one unit
+// (internal/dispatch/order.go sets Cost 1 until the telemetry estimators feed a cost), so served
+// RUNTIME is fair only when jobs of both projects run alike; the test keeps them alike and holds the
+// Epic's bound, `max job runtime x slots`, on the served runtime of every admission prefix. Runtime
+// weighting of unequal jobs is not implemented by the orderer and is not claimed here (debt row).
+const s10JobRuntimeMs = int64(90_000)
+
 // s10CheckFair returns a violation for every admission prefix where two projects that both still
-// had queued jobs differ in served count by more than 1.
-func s10CheckFair(log []s10Event, total map[string]int) []string {
+// had queued jobs differ in served count by more than 1, or in served runtime by more than
+// max job runtime x slots.
+func s10CheckFair(log []s10Event, total map[string]int, slots int) []string {
 	served := map[string]int{}
 	var out []string
+	bound := s10JobRuntimeMs * int64(slots)
 	for i, e := range log {
 		served[e.Project]++
-		if served["alpha"] < total["alpha"] && served["beta"] < total["beta"] && abs(served["alpha"]-served["beta"]) > 1 {
-			out = append(out, fmt.Sprintf("after admission %d: alpha %d, beta %d", i+1, served["alpha"], served["beta"]))
+		if served["alpha"] < total["alpha"] && served["beta"] < total["beta"] {
+			runtimeGap := int64(abs(served["alpha"]-served["beta"])) * s10JobRuntimeMs
+			if abs(served["alpha"]-served["beta"]) > 1 || runtimeGap > bound {
+				out = append(out, fmt.Sprintf("after admission %d: alpha %d, beta %d (served runtime gap %d ms, bound %d ms)", i+1, served["alpha"], served["beta"], runtimeGap, bound))
+			}
 		}
 	}
 	return out
@@ -94,7 +106,7 @@ func TestScenario10SaturationStaysWithinCapacityAndFair(t *testing.T) {
 	next := 0
 	for step := 1; step <= 18; step++ {
 		log := rig.sink.events(dispatch.OutcomeAdmitted)
-		if v := append(append(s10CheckCapacity(rig.ctx, rig.st, rig.trueSlots, 8), s10CheckFair(log, total)...), s10CheckLeasesAdmitted(rig.ctx, rig.st, rig.attempts)...); len(v) > 0 {
+		if v := append(append(s10CheckCapacity(rig.ctx, rig.st, rig.trueSlots, 8), s10CheckFair(log, total, 6)...), s10CheckLeasesAdmitted(rig.ctx, rig.st, rig.attempts)...); len(v) > 0 {
 			t.Fatalf("step %d: %v\nadmission order: %+v", step, v, log)
 		}
 		if want := min(18, 6+next); len(log) != want {

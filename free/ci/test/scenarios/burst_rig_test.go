@@ -53,6 +53,8 @@ type burstRig struct {
 	cfg     burst.Config
 	path    string
 	wrap    func(burst.Provider) burst.Provider
+	// spend overrides the policy hook the engine reads (a planted defect feeds it a policy the coordinator does not have)
+	spend func(context.Context) (economics.Policy, error)
 }
 
 func burstPolicy() economics.Policy {
@@ -104,8 +106,12 @@ func (r *burstRig) newEngine() *burst.Engine {
 	if r.wrap != nil {
 		prov = r.wrap(prov)
 	}
+	spend := economics.StaticSpend(r.pol)
+	if r.spend != nil {
+		spend = r.spend
+	}
 	eng, err := burst.New(burst.Options{Store: r.st, Providers: []burst.Provider{prov}, Coordinator: burstCoord, Config: r.cfg, Now: r.clk.Now,
-		Spend: economics.StaticSpend(r.pol), Team: func() bool { return r.team }, Revoker: burstRevoker{r}, Alert: func(a burst.Alert) { r.alerts = append(r.alerts, a) },
+		Spend: spend, Team: func() bool { return r.team }, Revoker: burstRevoker{r}, Alert: func(a burst.Alert) { r.alerts = append(r.alerts, a) },
 		Exclusion: func(context.Context) (deployguard.Set, error) {
 			var es []deployguard.Entry
 			for _, a := range r.exclude {

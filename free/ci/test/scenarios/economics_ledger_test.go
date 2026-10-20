@@ -91,10 +91,18 @@ func TestEconomicsLedgerLabelsEstimatedComputedKnownAndUnknown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(rep.Recent) != 2 {
+		t.Fatalf("the report must list both admitted attempts before they settle, got %d", len(rep.Recent))
+	}
+	seen := map[string]bool{}
 	for _, line := range rep.Recent {
+		seen[line.Attempt] = true
 		if line.Estimate.Micro != 120_000 || line.Estimate.Confidence != economics.ConfEstimated || line.Actual != nil {
 			t.Fatalf("before settling, a paid attempt is an estimate of the 70 s bound (120 000 micro): %+v", line)
 		}
+	}
+	if !seen[a] || !seen[b] {
+		t.Fatalf("the pending report names %v, want both %s and %s", seen, a, b)
 	}
 	econFinalize(t, env, a, 50*time.Second) // observed: billed as one started minute, computed
 	econFinalize(t, env, b, 0)              // no duration anywhere: settles at the estimate, unknown
@@ -107,6 +115,9 @@ func TestEconomicsLedgerLabelsEstimatedComputedKnownAndUnknown(t *testing.T) {
 	}
 	if rep, err = economics.BuildReport(ctx, st, p, clk.Now()); err != nil {
 		t.Fatal(err)
+	}
+	if len(rep.Recent) != 2 {
+		t.Fatalf("the settled report must list both attempts, got %d", len(rep.Recent))
 	}
 	actual := map[string]economics.Figure{}
 	for _, line := range rep.Recent {

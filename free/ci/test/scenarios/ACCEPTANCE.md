@@ -18,6 +18,8 @@ names a test that does not exist, an item falls outside 2-6, or an item has no t
 | `TestBurstCoordinatorKillLeavesNoLabelledResourceAfterOneSweep` | 6 | Burst |
 | `TestBurstFullLifecycleLeavesNothingBehind` | 6 | Burst |
 | `TestBurstIdleVmIsTornDownAtIdleTimeout` | 6 | Burst |
+| `TestBurstNoProvisionWithoutADayOrMonthBudget` | 5, 6 | Burst: no cloud call without paid_enabled and a budget |
+| `TestBurstNoProvisionWithoutPaidEnabled` | 5, 6 | Burst: no cloud call without paid_enabled and a budget |
 | `TestBurstOneJobPerVmAndCertRevokedAtTeardown` | 6 | Burst |
 | `TestBurstOneQueuedJobCausesAtMostOneProvisionPerWindow` | 6 | Burst |
 | `TestBurstPersonalNeverProvisionsCloudCapacity` | 6 | Burst |
@@ -41,7 +43,8 @@ names a test that does not exist, an item falls outside 2-6, or an item has no t
 | `TestPlantedGitHubMetered` | 5 | Planted: GitHub provider priced as metered |
 | `TestPlantedLeaseOutsideAdmit` | 4 | Planted: lease created outside Admit |
 | `TestPlantedPriorityBypassesEligibility` | 4 | Planted: priority bypassing eligibility |
-| `TestPlantedProvisionWithoutBudget` | 5 | Planted: provisioning without budget |
+| `TestPlantedProvisionWithoutBudget` | 5 | Planted: placement of paid capacity without budget |
+| `TestPlantedProvisionWithoutSpend` | 5, 6 | Planted: cloud provision without paid_enabled and a budget |
 | `TestPlantedProvisioningStorm` | 6 | Planted: provisioning storm |
 | `TestPlantedReservationOvercommit` | 4 | Planted: reservation over-commit |
 | `TestPlantedRevisionBudgetEnablesSpend` | 5 | Planted: revision-set budget enabling spend |
@@ -59,6 +62,8 @@ names a test that does not exist, an item falls outside 2-6, or an item has no t
 | `TestScenario4MissingPlatformFailsAFreshForegroundRun` | 2 | Scenario 4, heterogeneous matrix |
 | `TestScenario4MissingPlatformWaitsOnACoordinator` | 2 | Scenario 4, heterogeneous matrix |
 | `TestScenario4Native` | 2 | Scenario 4, heterogeneous matrix |
+| `TestScenario4RealWorldDispatch` | 2 | Scenario 4, heterogeneous matrix |
+| `TestScenario4RealWorldPlacesEachEntryOnItsPlatform` | 2 | Scenario 4, heterogeneous matrix |
 | `TestScenario6DispatcherMovesOffHosted` | 3 | Scenario 6, hybrid |
 | `TestScenario6PlacementsFollowTheFixtureOrder` | 3 | Scenario 6, hybrid |
 | `TestScenario6PreserveHostedQuotaMovesWorkOffHosted` | 3 | Scenario 6, hybrid |

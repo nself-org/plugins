@@ -16,6 +16,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/burst"
 	"github.com/nself-org/plugins/free/ci/internal/burst/fakecloud"
+	"github.com/nself-org/plugins/free/ci/internal/economics"
 )
 
 // burstSloppyProvider is a provider whose Teardown deletes every other machine in the account too (a
@@ -59,6 +60,20 @@ func TestPlantedProvisioningStorm(t *testing.T) {
 	bad := burstCheckOneProvisionPerWindow(r, storm)
 	if len(bad) == 0 {
 		t.Fatal("planted regression not detected: a provision on every step passed the one-per-window check")
+	}
+	t.Logf("detected: %v", bad)
+}
+
+// TestPlantedProvisionWithoutSpend: the engine is fed a policy with paid spend and a budget while the
+// coordinator really has none (the guard reads the wrong policy); the cloud then sees a provision.
+func TestPlantedProvisionWithoutSpend(t *testing.T) {
+	r := burstNew(t, func(r *burstRig) {
+		r.pol.PaidEnabled = false
+		r.spend = economics.StaticSpend(burstPolicy())
+	})
+	bad := burstCheckNoProvisionWithoutSpend(r)
+	if len(bad) == 0 {
+		t.Fatal("planted regression not detected: a provision without paid_enabled and a budget passed the check")
 	}
 	t.Logf("detected: %v", bad)
 }

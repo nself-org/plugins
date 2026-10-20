@@ -87,7 +87,11 @@ func job(key, plat string) sched.Job {
 // registerNode puts a remote runner in the node registry as online, as world.Build finds it.
 func registerNode(t testing.TB, st *store.Store, r sched.Runner) {
 	t.Helper()
-	c, err := planview.LocalCapability(planview.LocalFacts{Project: "project", Platform: "linux/amd64", CPUs: 8, MemMB: 8192, Now: time.Now()})
+	plat := "linux/amd64"
+	if r.Capability.Platform.OS.Value != nil && r.Capability.Platform.Arch.Value != nil {
+		plat = *r.Capability.Platform.OS.Value + "/" + *r.Capability.Platform.Arch.Value // the stored row carries the runner's own platform
+	}
+	c, err := planview.LocalCapability(planview.LocalFacts{Project: "project", Platform: plat, CPUs: 8, MemMB: 8192, Now: time.Now()})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -127,7 +127,11 @@ func burstCheckSweepSpares(r *burstRig) []string {
 	r.exclude = []string{"198.51.100.77"}
 	r.putIntent(burstCoord, burstToken(5), store.BurstTerminal)
 	expired := r.cloud.AddForeign(burst.IntentLabels(burstCoord, burstToken(5)), burstAddr("192.0.2.206")) // ours, terminal intent: must be swept
-	spared := map[string]string{foreign: "foreign-coordinator", unlabelled: "unlabelled", otherRole: "other-role", relabelled: "relabelled", excluded: "excluded"}
+	// labelled ours, but the intent row it names belongs to another coordinator and is terminal: only the
+	// intent's owner check keeps the sweeper from reaping it
+	r.putIntent(burstOther, burstToken(6), store.BurstTerminal)
+	intentForeign := r.cloud.AddForeign(burst.IntentLabels(burstCoord, burstToken(6)), burstAddr("192.0.2.207"))
+	spared := map[string]string{foreign: "foreign-coordinator", unlabelled: "unlabelled", otherRole: "other-role", relabelled: "relabelled", excluded: "excluded", intentForeign: "foreign-intent"}
 	for id := range spared {
 		r.cloud.Age(id, 10*time.Hour)
 	}
