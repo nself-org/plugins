@@ -45,7 +45,8 @@ func invariantCase(kind string, f invariants.World) (sched.World, sched.Runner, 
 func checkDispatcherInvariant(t *testing.T, kind string) {
 	st := openStore(t)
 	var current sched.World
-	d, err := dispatch.New(dispatch.Config{Store: st, Host: "host", Transport: &fabricTransport{}, Poll: 5 * time.Millisecond,
+	registerKinds(t, lanRunner("node", 1), hostedRunner("provider"))
+	d, err := dispatch.New(dispatch.Config{Store: st, Host: "host", Transport: newFabricTransport(), Poll: 5 * time.Millisecond,
 		World: func(context.Context, sched.Pipeline) (sched.World, string, error) { return current, "invariant", nil }})
 	if err != nil {
 		t.Fatal(err)

@@ -21,14 +21,12 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
-	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -39,10 +37,8 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/logs"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/pki"
-	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
 	"github.com/nself-org/plugins/free/ci/internal/store"
-	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
 
 // TestRevokedNodeGetsNoJob revokes a node while the dispatcher still lists it (a stale
@@ -197,17 +193,6 @@ func TestNodeCertRefusedByAdminAPI(t *testing.T) {
 	}
 }
 
-// listenerSink is the transport.Sink behind the node listener: nothing is stored.
-type listenerSink struct{ mu sync.Mutex }
-
-func (*listenerSink) Log(context.Context, protocol.Log) error                 { return nil }
-func (*listenerSink) Result(context.Context, protocol.Result) error           { return nil }
-func (*listenerSink) ArtifactRef(context.Context, protocol.ArtifactRef) error { return nil }
-func (*listenerSink) CacheRef(context.Context, protocol.CacheRef) error       { return nil }
-func (*listenerSink) Blob(context.Context, transport.BlobHeader) (transport.BlobWriter, error) {
-	return nil, fmt.Errorf("unused")
-}
-
 // TestNodeListenerRefusesForeignAndRevokedCerts: the node listener serves a valid node
 // certificate and refuses a missing, user-kind, coordinator-kind and revoked one.
 func TestNodeListenerRefusesForeignAndRevokedCerts(t *testing.T) {
@@ -223,7 +208,7 @@ func TestNodeListenerRefusesForeignAndRevokedCerts(t *testing.T) {
 	}
 	loop := []net.IP{net.ParseIP("127.0.0.1")}
 	leafSrc := &agentapi.LeafSource{CA: ca, ID: "coord-1", IPs: loop}
-	srv, err := agentapi.New(agentapi.Config{CA: ca, Guard: pki.NewGuard(st), Cert: leafSrc.Get, Leases: lease.New(st, nil, lease.Config{}), Sink: &listenerSink{}, Store: st, PollTimeout: time.Second, GuardEvery: 100 * time.Millisecond})
+	srv, err := agentapi.New(agentapi.Config{CA: ca, Guard: pki.NewGuard(st), Cert: leafSrc.Get, Leases: lease.New(st, nil, lease.Config{}), Sink: &nullSink{}, Store: st, PollTimeout: time.Second, GuardEvery: 100 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
 	}

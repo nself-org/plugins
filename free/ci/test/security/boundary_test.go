@@ -145,7 +145,8 @@ func TestCoordinatorHostFloor(t *testing.T) {
 // fake; the fake sees nothing. The fake's own count is also asserted at the end of the suite.
 func TestNoRequestReachesTelemetry(t *testing.T) {
 	st := openStore(t)
-	d, err := dispatch.New(dispatch.Config{Store: st, Host: "host", Transport: &fabricTransport{}, Poll: 10 * time.Millisecond,
+	registerKinds(t, lanRunner("lan1", 4), hostedRunner("hosted1"))
+	d, err := dispatch.New(dispatch.Config{Store: st, Host: "host", Transport: newFabricTransport(), Poll: 10 * time.Millisecond,
 		World: worldOf(st, repoPolicy(t, "private", "owner"), lanRunner("lan1", 4), hostedRunner("hosted1"))}) // Sink nil: the production default
 	if err != nil {
 		t.Fatal(err)

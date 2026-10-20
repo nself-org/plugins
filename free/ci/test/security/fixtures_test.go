@@ -12,6 +12,7 @@ package security
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -24,11 +25,14 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/planview"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
+	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/fake"
 	"github.com/nself-org/plugins/free/ci/internal/report"
+	"github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/transport"
 	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
@@ -198,31 +202,71 @@ func (r *recSink) last(key string) (dispatch.Decision, bool) {
 	return dispatch.Decision{}, false
 }
 
-// transport is the fabric transport fake: every kind is known, a hosted lease goes to
-// the hosted provider fake, a node lease is recorded. Nothing else is delivered.
-type fabricTransport struct {
-	mu     sync.Mutex
-	hosted *fake.Fake
-	nodes  []dispatch.Delivery
-	sent   []dispatch.Delivery
+// nullSink is the transport.Sink behind the fake drivers: nothing is stored.
+type nullSink struct{}
+
+func (nullSink) Log(context.Context, protocol.Log) error                 { return nil }
+func (nullSink) Result(context.Context, protocol.Result) error           { return nil }
+func (nullSink) ArtifactRef(context.Context, protocol.ArtifactRef) error { return nil }
+func (nullSink) CacheRef(context.Context, protocol.CacheRef) error       { return nil }
+func (nullSink) Blob(context.Context, transport.BlobHeader) (transport.BlobWriter, error) {
+	return nil, fmt.Errorf("unused")
 }
 
-func (*fabricTransport) Known(string) bool { return true }
+// currentHosted is the hosted-provider fake of the running test: the fake driver of a hosted
+// runner hands its lease to it, the way the real hosted driver hands one to its provider.
+var currentHosted atomic.Pointer[fake.Fake]
+
+// fakeDriver is a transport driver of the NODE-02 registry (P7-NODE-02): it accepts a lease and
+// returns. A lease for a hosted-provider runner goes to the provider fake's Dispatch.
+type fakeDriver struct{ kind string }
+
+func (d fakeDriver) Kind() string { return d.kind }
+func (fakeDriver) Run(ctx context.Context, node model.Capability, lease protocol.Lease, _ transport.Sink) error {
+	if node.Identity.Provider == "fake" {
+		if h := currentHosted.Load(); h != nil {
+			_, err := h.Dispatch(ctx, providers.Attempt{ID: lease.AttemptID, N: 1, Project: "project", Revision: lease.Checkout.Revision, Trust: "untrusted"})
+			return err
+		}
+	}
+	return nil
+}
+
+var registered sync.Map
+
+// registerKinds registers a fake driver for the transport kind of each runner, once per process.
+func registerKinds(t testing.TB, runners ...sched.Runner) {
+	t.Helper()
+	for _, r := range runners {
+		kind := r.Capability.Identity.Transport
+		if _, loaded := registered.LoadOrStore(kind, true); loaded {
+			continue
+		}
+		if err := transport.Register(fakeDriver{kind}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// fabricTransport records every delivery and hands it to the real transport adapter, which looks the
+// driver up in the NODE-02 registry (the fakes above).
+type fabricTransport struct {
+	inner dispatch.Transport
+	mu    sync.Mutex
+	sent  []dispatch.Delivery
+}
+
+func newFabricTransport() *fabricTransport {
+	return &fabricTransport{inner: run.NewTransportAdapter(nullSink{})}
+}
+
+func (f *fabricTransport) Known(kind string) bool { return f.inner.Known(kind) }
 
 func (f *fabricTransport) Deliver(ctx context.Context, d dispatch.Delivery) error {
 	f.mu.Lock()
 	f.sent = append(f.sent, d)
-	if !d.Hosted {
-		f.nodes = append(f.nodes, d)
-		f.mu.Unlock()
-		return nil
-	}
 	f.mu.Unlock()
-	if f.hosted == nil {
-		return nil
-	}
-	_, err := f.hosted.Dispatch(ctx, providers.Attempt{ID: d.AttemptID, N: 1, Project: "project", Revision: d.Revision, Trust: "untrusted"})
-	return err
+	return f.inner.Deliver(ctx, d)
 }
 
 func (f *fabricTransport) deliveries() []dispatch.Delivery {
@@ -247,7 +291,10 @@ func newRig(t *testing.T, eff trust.Effective, runners ...sched.Runner) *rig {
 	db := filepath.Join(t.TempDir(), "state.db")
 	st := openStoreAt(t, db)
 	hosted := fake.New(fake.Options{Token: "synthetic-provider-token"})
-	r := &rig{t: t, db: db, st: st, sink: &recSink{}, tr: &fabricTransport{hosted: hosted}, hosted: hosted}
+	registerKinds(t, runners...)
+	currentHosted.Store(hosted)
+	t.Cleanup(func() { currentHosted.Store(nil) })
+	r := &rig{t: t, db: db, st: st, sink: &recSink{}, tr: newFabricTransport(), hosted: hosted}
 	d, err := dispatch.New(dispatch.Config{Store: st, Host: "host", Sink: r.sink, Transport: r.tr, World: worldOf(st, eff, runners...), Poll: 10 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
