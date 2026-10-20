@@ -281,7 +281,7 @@ func TestTeamSignMemberRefused(t *testing.T) {
 type tamper struct {
 	inner  *cas.Store
 	digest string
-	cut    bool
+	mode   string // "flip", "cut" or "grow"
 }
 
 func (t tamper) Stat(r cas.Realm, d string) (os.FileInfo, error) { return t.inner.Stat(r, d) }
@@ -292,9 +292,12 @@ func (t tamper) Open(r cas.Realm, d string) (io.ReadCloser, error) {
 	}
 	defer func() { _ = rc.Close() }()
 	b, _ := io.ReadAll(rc)
-	if t.cut {
+	switch t.mode {
+	case "cut":
 		b = b[:len(b)/2]
-	} else {
+	case "grow":
+		b = append(b, "-appended"...)
+	default:
 		b[0] ^= 0xff
 	}
 	return io.NopCloser(bytes.NewReader(b)), nil
@@ -303,14 +306,14 @@ func (t tamper) Open(r cas.Realm, d string) (io.ReadCloser, error) {
 // TestTeamSignTampered: a blob altered on the coordinator after the run fails the local re-hash with
 // E719 checksum, and nothing is signed: no output, the operator's key is never resolved.
 func TestTeamSignTampered(t *testing.T) {
-	for name, cut := range map[string]bool{"flipped byte": false, "truncated": true} {
+	for name, mode := range map[string]string{"flipped byte": "flip", "truncated": "cut", "grown": "grow"} {
 		t.Run(name, func(t *testing.T) {
 			tm := newTeam(t)
-			s := newSim(t, tm, tamper{inner: tm.blobs, digest: sumHex([]byte("app-bytes")), cut: cut})
+			s := newSim(t, tm, tamper{inner: tm.blobs, digest: sumHex([]byte("app-bytes")), mode: mode})
 			out := filepath.Join(t.TempDir(), "out")
 			_, err := remote.Sign(context.Background(), s.params(s.client(roles.Release, project), out))
 			re := asRemote(t, err)
-			if !cut && (re.ErrCode != verify.Code || re.Reason != verify.ReasonChecksum) {
+			if re.ErrCode != verify.Code || re.Reason != verify.ReasonChecksum {
 				t.Fatalf("want E719 checksum, got %v", err)
 			}
 			if exists(out) || tm.opRes.calls.Load() != 0 {

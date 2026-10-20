@@ -17,7 +17,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/audit"
+	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/clientapi"
 	"github.com/nself-org/plugins/free/ci/internal/release/publish"
@@ -99,6 +101,24 @@ func TestReleaseRoutesAnswerNotFoundUntilTheServeStarts(t *testing.T) {
 	if status, b := get(remote.InputsPath("run-1")); status != http.StatusNotFound || b.Code != "E713" {
 		t.Fatalf("an unknown run with the serve started: %d %+v", status, b)
 	}
+	// the shipped wiring reads the coordinator's own store and the blob store under its CI home
+	d := releaseRouteDeps.Load()
+	if d.Store != any(st) || d.Runs == nil {
+		t.Fatalf("deps %+v", d)
+	}
+	dirs, err := cas.New(records.StoreDir(serveHome()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, _, err := dirs.Put(context.Background(), cas.ArtifactRealm("p"), strings.NewReader("committed bytes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rc, err := d.Blobs.Open(cas.ArtifactRealm("p"), digest)
+	if err != nil {
+		t.Fatalf("the route's blob store is not the coordinator's: %v", err)
+	}
+	_ = rc.Close()
 	_ = stop(context.Background())
 	if releaseRouteDeps.Load() != nil {
 		t.Fatal("stopping the serve left the dependencies in place")

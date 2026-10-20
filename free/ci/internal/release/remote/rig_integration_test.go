@@ -259,11 +259,6 @@ func (t *tee) Write(b []byte) (int, error) {
 	return t.ResponseWriter.Write(b)
 }
 
-var (
-	routesOnce sync.Once
-	current    atomic.Pointer[remote.Deps]
-)
-
 // sim is the coordinator's user API over TLS 1.3.
 type sim struct {
 	t   *testing.T
@@ -278,26 +273,11 @@ type sim struct {
 // newSim serves the user API over tm's store. blobs replaces the coordinator's blob store (nil: the real one).
 func newSim(t *testing.T, tm *team, blobs signing.Blobs) *sim {
 	t.Helper()
-	routesOnce.Do(func() {
-		h := remote.Handlers{Deps: func() (remote.Deps, bool) {
-			d := current.Load()
-			if d == nil {
-				return remote.Deps{}, false
-			}
-			return *d, true
-		}}
-		for pattern, handler := range map[string]http.Handler{remote.PatternInputs: h.InputsHandler(), remote.PatternBlob: h.BlobHandler()} {
-			if err := clientapi.RegisterRoute(http.MethodGet, pattern, "member", handler); err != nil {
-				t.Fatal(err)
-			}
-		}
-	})
 	if blobs == nil {
 		blobs = tm.blobs
 	}
 	backend := &clientapi.StoreBackend{Store: tm.st, Home: tm.home}
-	current.Store(&remote.Deps{Runs: backend, Store: tm.st, Blobs: blobs})
-	t.Cleanup(func() { current.Store(nil) })
+	useDeps(t, &remote.Deps{Runs: backend, Store: tm.st, Blobs: blobs})
 	s := &sim{t: t, tm: tm, rec: &recorder{}}
 	var err error
 	if s.ca, err = pki.New(context.Background(), pki.Options{Store: tm.st, DataDir: tm.home}); err != nil {

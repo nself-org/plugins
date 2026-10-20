@@ -86,7 +86,11 @@ func fetchBlob(ctx context.Context, f Fetcher, blobs *cas.Store, in Inputs, rec 
 	if resp.StatusCode != http.StatusOK {
 		return refusal(resp)
 	}
-	digest, n, err := blobs.Put(ctx, cas.ArtifactRealm(in.Pipeline.Project), io.LimitReader(resp.Body, rec.Size+1))
+	body := &errReader{r: resp.Body}
+	digest, n, err := blobs.Put(ctx, cas.ArtifactRealm(in.Pipeline.Project), io.LimitReader(body, rec.Size+1))
+	if body.err != nil && ctx.Err() == nil { // the bytes did not arrive intact: a short or broken stream is a changed blob
+		return fail(verify.Code, verify.ReasonChecksum, "release blob %s did not arrive intact (%s); nothing was signed", rec.SHA256[:12], "short or interrupted stream")
+	}
 	if err != nil {
 		return fail(signing.CodeSigning, signing.ReasonSignerFailed, "a release blob could not be staged")
 	}
@@ -94,6 +98,20 @@ func fetchBlob(ctx context.Context, f Fetcher, blobs *cas.Store, in Inputs, rec 
 		return fail(verify.Code, verify.ReasonChecksum, "release blob %s changed on the coordinator: its bytes do not match the recorded digest; nothing was signed", rec.SHA256[:12])
 	}
 	return nil
+}
+
+// errReader remembers a read error of the network body, so a failure to receive is told from a failure to store.
+type errReader struct {
+	r   io.Reader
+	err error
+}
+
+func (e *errReader) Read(p []byte) (int, error) {
+	n, err := e.r.Read(p)
+	if err != nil && err != io.EOF {
+		e.err = err
+	}
+	return n, err
 }
 
 // uniqueBlobs lists one record per digest, sorted, so a digest is downloaded once.
@@ -127,7 +145,11 @@ func validate(in Inputs, run string) error {
 			return bad("an id is not plain text")
 		}
 	}
+	var total int64
 	for _, r := range in.Records {
+		if total += r.Size; total > MaxTotalBytes || total < 0 {
+			return bad("the blobs are larger than the operator's limit")
+		}
 		if r.Run != run || r.Project != p.Project || !shaRe.MatchString(r.SHA256) || r.Size < 0 || r.Size > MaxBlobBytes || !safeName(r.Name) || !plain(r.Attempt) {
 			return bad("a record is not a record of this run")
 		}

@@ -20,6 +20,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
@@ -27,6 +29,11 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/release/publish"
 	"github.com/nself-org/plugins/free/ci/internal/signing"
+)
+
+const (
+	workPrefix = ".team-sign-"
+	staleAfter = 6 * time.Hour
 )
 
 // Params are the inputs of Sign.
@@ -57,7 +64,8 @@ func Sign(ctx context.Context, p Params) (publish.Release, error) {
 	if err := os.MkdirAll(p.OperatorHome, 0o700); err != nil {
 		return publish.Release{}, fail(signing.CodeSigning, signing.ReasonSignerFailed, "the CI home could not be created")
 	}
-	home, err := os.MkdirTemp(p.OperatorHome, ".team-sign-")
+	sweepStale(p.OperatorHome, time.Now())
+	home, err := os.MkdirTemp(p.OperatorHome, workPrefix)
 	if err != nil {
 		return publish.Release{}, fail(signing.CodeSigning, signing.ReasonSignerFailed, "a private work directory could not be created")
 	}
@@ -99,9 +107,36 @@ func sameRepo(ctx context.Context, p Params, snap *Snapshot) error {
 		return fail(signing.CodeSigning, signing.ReasonSignerFailed, "no git runner is configured")
 	}
 	if id, ok := evidence.RepoID(ctx, capture, p.Root); !ok || id != ev.RepoID {
-		return fail(signing.CodeSigning, signing.ReasonPayloadRejected, "run %s belongs to repository %s, which is not the checkout at %s: run this command inside that repository (or pass --project)", p.Run, ev.RepoID, "<project>")
+		return fail(signing.CodeSigning, signing.ReasonPayloadRejected, "run %s belongs to repository %s, which is not the checkout at %s: run this command inside that repository (or pass --project)", p.Run, shown(ev.RepoID), p.Root)
 	}
 	return nil
+}
+
+// shown makes text from the coordinator safe to print: control characters out, cut at 80 runes.
+func shown(s string) string {
+	r := []rune(strings.Map(func(c rune) rune {
+		if unicode.IsControl(c) {
+			return '?'
+		}
+		return c
+	}, s))
+	if len(r) > 80 {
+		r = r[:80]
+	}
+	return string(r)
+}
+
+// sweepStale removes private work directories an earlier, killed run left behind.
+func sweepStale(operatorHome string, now time.Time) {
+	entries, err := os.ReadDir(operatorHome)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if info, ierr := e.Info(); ierr == nil && e.IsDir() && strings.HasPrefix(e.Name(), workPrefix) && now.Sub(info.ModTime()) > staleAfter {
+			_ = os.RemoveAll(filepath.Join(operatorHome, e.Name()))
+		}
+	}
 }
 
 // recover points the recovery hint of a publication failure at the TEAM command.

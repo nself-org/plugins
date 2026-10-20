@@ -26,12 +26,26 @@ func asErr(err error, out **Error) bool { return errors.As(err, out) }
 
 func hexSum(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 
-// script is a Fetcher that answers by path.
+// script is a Fetcher that answers by path; breakAfter makes a body fail after that many bytes.
 type script struct {
-	status map[string]int
-	body   map[string][]byte
-	calls  []string
+	status     map[string]int
+	body       map[string][]byte
+	breakAfter map[string]int
+	calls      []string
 }
+
+type brokenBody struct {
+	r io.Reader
+}
+
+func (b brokenBody) Read(p []byte) (int, error) {
+	n, err := b.r.Read(p)
+	if err == io.EOF {
+		return n, io.ErrUnexpectedEOF
+	}
+	return n, err
+}
+func (brokenBody) Close() error { return nil }
 
 func (s *script) GetRaw(_ context.Context, p string) (*http.Response, error) {
 	s.calls = append(s.calls, p)
@@ -42,6 +56,9 @@ func (s *script) GetRaw(_ context.Context, p string) (*http.Response, error) {
 	b, ok := s.body[p]
 	if !ok {
 		code, b = http.StatusNotFound, []byte(`{"code":"E713","reason":"not_found","message":"no such artifact"}`)
+	}
+	if n, broken := s.breakAfter[p]; broken && n < len(b) {
+		return &http.Response{StatusCode: code, Body: brokenBody{bytes.NewReader(b[:n])}}, nil
 	}
 	return &http.Response{StatusCode: code, Body: io.NopCloser(bytes.NewReader(b))}, nil
 }
@@ -103,6 +120,18 @@ func TestFetchRehashesEveryBlob(t *testing.T) {
 	}
 }
 
+func TestFetchTreatsAnInterruptedStreamAsAChangedBlob(t *testing.T) {
+	a := []byte("app-bytes")
+	in := goodInputs(a)
+	s := serve(t, in, map[string][]byte{hexSum(a): a})
+	s.breakAfter = map[string]int{BlobPath(tRun, hexSum(a)): 3}
+	_, _, err := Fetch(context.Background(), s, tRun, t.TempDir())
+	var re *Error
+	if err == nil || !asErr(err, &re) || re.ErrCode != verify.Code || re.Reason != verify.ReasonChecksum {
+		t.Fatalf("want E719 checksum, got %v", err)
+	}
+}
+
 func TestFetchRequestsOnlyListedDigestsOnce(t *testing.T) {
 	a := []byte("same")
 	in := goodInputs(a, a) // two records, one digest
@@ -123,21 +152,27 @@ func TestValidateRefusesMalformedDocuments(t *testing.T) {
 		return in
 	}
 	bad := map[string]Inputs{
-		"schema":               mut(func(i *Inputs) { i.Schema = "other/v9" }),
-		"run":                  mut(func(i *Inputs) { i.Run = "run-2" }),
-		"pipeline id":          mut(func(i *Inputs) { i.Pipeline.ID = "run-2" }),
-		"no evidence":          mut(func(i *Inputs) { i.Evidence = nil }),
-		"foreign run":          mut(func(i *Inputs) { i.Records[0].Run = "run-2" }),
-		"foreign proj":         mut(func(i *Inputs) { i.Records[0].Project = "/other" }),
-		"bad digest":           mut(func(i *Inputs) { i.Records[0].SHA256 = strings.Repeat("G", 64) }),
-		"short digest":         mut(func(i *Inputs) { i.Records[0].SHA256 = "abc" }),
-		"negative size":        mut(func(i *Inputs) { i.Records[0].Size = -1 }),
-		"huge size":            mut(func(i *Inputs) { i.Records[0].Size = MaxBlobBytes + 1 }),
-		"traversal":            mut(func(i *Inputs) { i.Records[0].Name = "../../etc/passwd" }),
-		"absolute":             mut(func(i *Inputs) { i.Records[0].Name = "/etc/passwd" }),
-		"backslash":            mut(func(i *Inputs) { i.Records[0].Name = `a\b` }),
-		"control id":           mut(func(i *Inputs) { i.Jobs[0].ID = "j1\x1b[31m" }),
-		"too many":             mut(func(i *Inputs) { i.Records = make([]records.Record, MaxRecords) }),
+		"schema":        mut(func(i *Inputs) { i.Schema = "other/v9" }),
+		"run":           mut(func(i *Inputs) { i.Run = "run-2" }),
+		"pipeline id":   mut(func(i *Inputs) { i.Pipeline.ID = "run-2" }),
+		"no evidence":   mut(func(i *Inputs) { i.Evidence = nil }),
+		"foreign run":   mut(func(i *Inputs) { i.Records[0].Run = "run-2" }),
+		"foreign proj":  mut(func(i *Inputs) { i.Records[0].Project = "/other" }),
+		"bad digest":    mut(func(i *Inputs) { i.Records[0].SHA256 = strings.Repeat("G", 64) }),
+		"short digest":  mut(func(i *Inputs) { i.Records[0].SHA256 = "abc" }),
+		"negative size": mut(func(i *Inputs) { i.Records[0].Size = -1 }),
+		"huge size":     mut(func(i *Inputs) { i.Records[0].Size = MaxBlobBytes + 1 }),
+		"traversal":     mut(func(i *Inputs) { i.Records[0].Name = "../../etc/passwd" }),
+		"absolute":      mut(func(i *Inputs) { i.Records[0].Name = "/etc/passwd" }),
+		"backslash":     mut(func(i *Inputs) { i.Records[0].Name = `a\b` }),
+		"control id":    mut(func(i *Inputs) { i.Jobs[0].ID = "j1\x1b[31m" }),
+		"too many":      mut(func(i *Inputs) { i.Records = make([]records.Record, MaxRecords) }),
+		"total too big": mut(func(i *Inputs) {
+			i.Records = append(i.Records, i.Records[0], i.Records[0])
+			for k := range i.Records {
+				i.Records[k].Size = 30 << 30
+			}
+		}),
 		"unknown kind":         mut(func(i *Inputs) { i.Records[0].Kind = "rootkit" }),
 		"control in platform":  mut(func(i *Inputs) { i.Records[0].Platform = "linux/amd64\x1b[31m" }),
 		"control in image ref": mut(func(i *Inputs) { i.Records[0].Image = &records.ImageInfo{Ref: "reg/app\n:1"} }),

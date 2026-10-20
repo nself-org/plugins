@@ -62,8 +62,8 @@ func (h Handlers) BlobHandler() http.Handler {
 		}
 		realm := cas.ArtifactRealm(rec.Project)
 		info, err := d.Blobs.Stat(realm, digest)
-		if err != nil || info.Size() != rec.Size {
-			h.fault(w, "release blob stat", errors.New("blob missing or resized"))
+		if err != nil {
+			h.fault(w, "release blob stat", errors.New("blob missing"))
 			return
 		}
 		rc, err := d.Blobs.Open(realm, digest)
@@ -73,10 +73,12 @@ func (h Handlers) BlobHandler() http.Handler {
 		}
 		defer func() { _ = rc.Close() }()
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Length", strconv.FormatInt(rec.Size, 10))
+		if info.Size() == rec.Size { // a resized blob goes out as stored (chunked): the operator's re-hash is what rejects it
+			w.Header().Set("Content-Length", strconv.FormatInt(rec.Size, 10))
+		}
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusOK)
-		_, _ = io.Copy(w, io.LimitReader(rc, rec.Size)) // the operator re-hashes: a truncated or altered stream fails there
+		_, _ = io.Copy(w, io.LimitReader(rc, MaxBlobBytes+1)) // the operator re-hashes: a truncated, grown or altered stream fails there
 	})
 }
 

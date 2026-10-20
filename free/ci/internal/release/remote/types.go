@@ -42,8 +42,9 @@ const (
 	MaxInputsBytes = 32 << 20
 	// MaxRecords is the most records one run may list (the store's own query cap).
 	MaxRecords = 1000
-	// MaxBlobBytes bounds one downloaded release blob.
-	MaxBlobBytes = int64(32) << 30
+	// MaxBlobBytes bounds one downloaded release blob; MaxTotalBytes all of a run's blobs together.
+	MaxBlobBytes  = int64(32) << 30
+	MaxTotalBytes = int64(64) << 30
 )
 
 var (
