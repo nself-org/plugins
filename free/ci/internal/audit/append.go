@@ -10,6 +10,7 @@ package audit
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -46,6 +47,16 @@ func (l *Log) Input(ev Event) (store.AuditInput, error) {
 
 // Seal chains every unsealed row and returns how many it sealed.
 func (l *Log) Seal(ctx context.Context) (int, error) { return l.St.AuditSeal(ctx, Chain) }
+
+// AcceptBreak records that actor inspected the cleared head at seq (the first row `Verify` reports) and
+// re-chains from it; see store.AuditAcceptBreak. It returns how many rows it re-chained.
+func (l *Log) AcceptBreak(ctx context.Context, seq int64, actor string) (int, error) {
+	in, err := l.Input(Event{Actor: actor, Action: "audit.accept-break", Target: "audit", Detail: "seq=" + strconv.FormatInt(seq, 10)})
+	if err != nil {
+		return 0, err
+	}
+	return l.St.AuditAcceptBreak(ctx, Chain, seq, in)
+}
 
 // AppendTx writes ev inside tx (a policy write's transaction); the process-wide scanner applies.
 func AppendTx(tx *store.Tx, ev Event) error {

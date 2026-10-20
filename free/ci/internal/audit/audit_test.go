@@ -396,3 +396,57 @@ func helperAppender(path string) int {
 	fmt.Printf("wrote=%d\n", n)
 	return 0
 }
+
+func TestAcceptBreakRechainsAndRecordsTheAcknowledgement(t *testing.T) {
+	l, _, path := newLog(t)
+	ctx := context.Background()
+	for i := 0; i < 4; i++ {
+		_ = l.Append(ctx, ev(i))
+	}
+	exec1(t, path, "UPDATE audit SET detail='forged', head=NULL, signature=NULL WHERE seq=2")
+	_ = l.Append(ctx, ev(7)) // kept unsealed beside the damage
+	var se *store.Error
+	if _, err := l.AcceptBreak(ctx, 3, "operator:cli:alice"); !errors.As(err, &se) || se.Code != "E609" {
+		t.Fatalf("the owner must name the first damaged row (2), not another: %v", err)
+	}
+	if rep, _ := l.Verify(ctx, 0); rep.BadSeq != 2 {
+		t.Fatalf("a refused accept changes nothing: %+v", rep)
+	}
+	n, err := l.AcceptBreak(ctx, 2, "operator:cli:alice")
+	if err != nil || n != 4 {
+		t.Fatalf("rows 2..5 are re-chained: %d %v", n, err)
+	}
+	rep, _ := l.Verify(ctx, 0)
+	if !rep.OK() || rep.Unsealed != 0 || rep.Rows != 6 {
+		t.Fatalf("the chain verifies again with the acknowledgement row: %+v", rep)
+	}
+	rows, _ := l.St.AuditEntries(ctx, 0, 0)
+	ack := rows[len(rows)-1]
+	if ack.Action != "audit.accept-break" || ack.Actor != "operator:cli:alice" || ack.Detail != "seq=2" || ack.Head == nil {
+		t.Fatalf("a sealed, owner-named acknowledgement row ends the log: %+v", ack)
+	}
+	if rows[1].Detail != "forged" {
+		t.Fatalf("the inspected row is kept as it is: %+v", rows[1])
+	}
+	if err = l.Append(ctx, ev(8)); err != nil {
+		t.Fatal(err)
+	}
+	if rep, _ = l.Verify(ctx, 0); !rep.OK() || rep.Sealed != 7 {
+		t.Fatalf("appends seal again after the accept: %+v", rep)
+	}
+}
+
+func TestAcceptBreakRefusesAHealthyChain(t *testing.T) {
+	l, _, _ := newLog(t)
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		_ = l.Append(ctx, ev(i))
+	}
+	var se *store.Error
+	if _, err := l.AcceptBreak(ctx, 2, "operator:cli:alice"); !errors.As(err, &se) || se.Code != "E609" {
+		t.Fatalf("a chain without a cleared head has nothing to accept: %v", err)
+	}
+	if rows, _ := l.St.AuditEntries(ctx, 0, 0); len(rows) != 3 {
+		t.Fatalf("a refused accept writes no row: %d", len(rows))
+	}
+}

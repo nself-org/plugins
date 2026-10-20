@@ -281,3 +281,35 @@ func TestServeAdminRevokeEndsTokensToo(t *testing.T) {
 		t.Fatalf("the token is revoked: %s", r.out.String())
 	}
 }
+
+func TestServeAdminAuditAcceptBreak(t *testing.T) {
+	r := newAdminRig(t)
+	for _, id := range []string{"a", "b", "c"} {
+		if code := runAdminRoles([]string{"grant", id, "--role", "member", "--project", "p1"}, r.env()); code != 0 {
+			t.Fatalf("grant %s: %d %s", id, code, r.errb.String())
+		}
+	}
+	db, err := sql.Open("sqlite", r.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err = db.Exec("UPDATE audit SET head=NULL, signature=NULL WHERE seq=2"); err != nil {
+		t.Fatal(err)
+	}
+	if code := runAdminAudit([]string{"--verify"}, r.env()); code != 1 {
+		t.Fatalf("the cleared head fails verification: %d", code)
+	}
+	if code := runAdminAudit([]string{"--accept-break", "2"}, r.env()); code != 1 {
+		t.Fatalf("--accept-break belongs to `audit seal`: %d", code)
+	}
+	if code := runAdminAudit([]string{"seal", "--accept-break", "3"}, r.env()); code == 0 ||!strings.Contains(r.errb.String(), "row 2") {
+		t.Fatalf("a wrong row is refused and the first damaged row is named: %d %q", code, r.errb.String())
+	}
+	if code := runAdminAudit([]string{"seal", "--accept-break", "2", "--json"}, r.env()); code != 0 || r.data()["rechained"].(float64) < 1 {
+		t.Fatalf("accept-break re-chains: %d %s %s", code, r.out.String(), r.errb.String())
+	}
+	if code := runAdminAudit([]string{"--verify"}, r.env()); code != 0 {
+		t.Fatalf("the accepted chain verifies: %d %q", code, r.errb.String())
+	}
+}

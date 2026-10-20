@@ -1,7 +1,8 @@
 package main
 
 // Purpose: `nself ci serve admin audit [--since T] [--verify] [--json]` and `audit seal` (P7-TRUST-12,
-// Epic D20): read, verify and seal the hash-chained audit log.
+// Epic D20): read, verify and seal the hash-chained audit log; `audit seal --accept-break <seq>` accepts a
+// cleared head and re-chains from it.
 // Inputs:  --since (an RFC 3339 time or a duration back from now), --verify, --json; the verb `seal`.
 // Outputs: rows, or the verify report ("unsealed: n"); `seal` prints how many rows it chained.
 // Constraints: V15 only; --verify is read-only and never seals, and exits 1 when a sealed row was changed
@@ -21,6 +22,7 @@ import (
 type adminAuditFlags struct {
 	json, verify bool
 	since        string
+	acceptBreak  int64
 }
 
 func adminAuditFlagSet(f *adminAuditFlags, w io.Writer) *flag.FlagSet {
@@ -29,6 +31,7 @@ func adminAuditFlagSet(f *adminAuditFlags, w io.Writer) *flag.FlagSet {
 	fs.BoolVar(&f.json, "json", false, "print one v1 JSON envelope")
 	fs.BoolVar(&f.verify, "verify", false, "verify the hash chain (read-only; reports unsealed rows)")
 	fs.StringVar(&f.since, "since", "", "only rows since this RFC 3339 time or this long ago (for example 24h)")
+	fs.Int64Var(&f.acceptBreak, "accept-break", 0, "with seal: accept the damaged row <seq> (the first one --verify names), re-chain from it and record who accepted")
 	return fs
 }
 
@@ -62,7 +65,10 @@ func runAdminAudit(args []string, env adminEnv) int {
 		return adminFail(env, command, adminHasJSON(args), err)
 	}
 	if len(pos) > 1 || (len(pos) == 1 && pos[0] != "seal") {
-		return adminFail(env, command, f.json, adminUsage("usage: nself ci serve admin audit [--since T] [--verify] [--json] | audit seal"))
+		return adminFail(env, command, f.json, adminUsage("usage: nself ci serve admin audit [--since T] [--verify] [--json] | audit seal [--accept-break <seq>]"))
+	}
+	if f.acceptBreak != 0 && len(pos) == 0 {
+		return adminFail(env, command, f.json, adminUsage("--accept-break goes with `audit seal`: nself ci serve admin audit seal --accept-break <seq>"))
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -72,7 +78,7 @@ func runAdminAudit(args []string, env adminEnv) int {
 	}
 	defer closeFn()
 	if len(pos) == 1 {
-		return adminAuditSeal(ctx, env, svc, op, f.json)
+		return adminAuditSeal(ctx, env, svc, op, f.json, f.acceptBreak)
 	}
 	if err = op.Can(roles.Release, ""); err != nil {
 		return adminFail(env, command, f.json, err)
@@ -137,10 +143,21 @@ func adminAuditVerify(ctx context.Context, env adminEnv, svc *roles.Service, asJ
 	return exit
 }
 
-func adminAuditSeal(ctx context.Context, env adminEnv, svc *roles.Service, op roles.Actor, asJSON bool) int {
+func adminAuditSeal(ctx context.Context, env adminEnv, svc *roles.Service, op roles.Actor, asJSON bool, acceptBreak int64) int {
 	const command = "ci serve admin audit"
 	if err := op.Can(roles.Admin, ""); err != nil {
 		return adminFail(env, command, asJSON, err)
+	}
+	if acceptBreak != 0 {
+		n, err := svc.Log.AcceptBreak(ctx, acceptBreak, op.Label())
+		if err != nil {
+			return adminFail(env, command, asJSON, err)
+		}
+		if asJSON {
+			return adminWriteData(env, command, map[string]any{"accepted": acceptBreak, "rechained": n})
+		}
+		_, _ = fmt.Fprintf(env.Out, "accepted the break at row %d; re-chained %d row(s)\n", acceptBreak, n)
+		return 0
 	}
 	n, err := svc.Log.Seal(ctx)
 	if err != nil {

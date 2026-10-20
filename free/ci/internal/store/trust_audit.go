@@ -109,6 +109,69 @@ func (s *Store) AuditSeal(ctx context.Context, seal AuditSealer) (n int, err err
 	return n, err
 }
 
+// AuditAcceptBreak is the owner's acceptance of a cleared head: seq must name the first unsealed row that
+// sits below a sealed one (the row `audit --verify` reports). In one transaction it re-chains that row and
+// every row above it, sealed or not, from the last good head below it, then writes ack (sealed) so the log
+// shows who accepted the break and where. It returns how many rows it re-chained. The rows' content is
+// never touched; only prev_head, head and signature. E609 when seq is not the first damaged row.
+func (s *Store) AuditAcceptBreak(ctx context.Context, seal AuditSealer, seq int64, ack AuditInput) (n int, err error) {
+	if seal == nil {
+		return 0, coded("E607", "no chain function")
+	}
+	err = s.writeRetry(ctx, func(tx *sql.Tx) (e error) {
+		n, e = s.acceptBreak(ctx, tx, seal, seq, ack)
+		return e
+	})
+	return n, err
+}
+
+func (s *Store) acceptBreak(ctx context.Context, tx *sql.Tx, seal AuditSealer, seq int64, ack AuditInput) (int, error) {
+	var first int64
+	err := tx.QueryRowContext(ctx, "SELECT COALESCE(MIN(seq),0) FROM audit WHERE head IS NULL AND seq < (SELECT COALESCE(MAX(seq),0) FROM audit WHERE head IS NOT NULL)").Scan(&first)
+	if err != nil {
+		return 0, err
+	}
+	if first == 0 {
+		return 0, coded("E609", "no unsealed row sits below a sealed row; there is no break to accept")
+	}
+	if first != seq {
+		return 0, coded("E609", "the first damaged audit row is row "+strconv.FormatInt(first, 10)+", not row "+strconv.FormatInt(seq, 10))
+	}
+	var prev []byte
+	err = tx.QueryRowContext(ctx, "SELECT head FROM audit WHERE seq<? AND head IS NOT NULL ORDER BY seq DESC LIMIT 1", seq).Scan(&prev)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT seq,ts,actor,action,target,detail FROM audit WHERE seq>=? ORDER BY seq", seq)
+	if err != nil {
+		return 0, err
+	}
+	var todo []AuditRow
+	for rows.Next() {
+		var r AuditRow
+		if err = rows.Scan(&r.Seq, &r.TS, &r.Actor, &r.Action, &r.Target, &r.Detail); err != nil {
+			_ = rows.Close()
+			return 0, err
+		}
+		todo = append(todo, r)
+	}
+	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		return 0, err
+	}
+	for _, r := range todo {
+		c, err := seal(prev, r)
+		if err != nil {
+			return 0, err
+		}
+		if _, err = tx.ExecContext(ctx, "UPDATE audit SET prev_head=?,head=?,signature=? WHERE seq=?", prev, c.Head, c.Signature, r.Seq); err != nil {
+			return 0, err
+		}
+		prev = c.Head
+	}
+	ack.Seal = seal
+	return len(todo), s.auditIn(ctx, tx, ack)
+}
+
 func sealPending(ctx context.Context, tx *sql.Tx, seal AuditSealer) (int, error) {
 	rows, err := tx.QueryContext(ctx, "SELECT seq,ts,actor,action,target,detail FROM audit WHERE head IS NULL ORDER BY seq")
 	if err != nil {

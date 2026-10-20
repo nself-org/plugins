@@ -154,7 +154,7 @@ const serveAdminHelp = `nself ci serve admin <group> ...  (coordinator host; rol
   token revoke <id> [--json]
   token list [--json]
   audit [--since <rfc3339|duration>] [--verify] [--json]
-  audit seal [--json]
+  audit seal [--accept-break <seq>] [--json]
 `
 
 func init() {
