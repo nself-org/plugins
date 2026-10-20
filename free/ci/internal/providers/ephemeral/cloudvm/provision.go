@@ -11,7 +11,8 @@ package cloudvm
 // the spend policy at call time; `provision --help` must offer --user-data-file (CI D26) or the call is
 // E698; the pairing code reaches the VM only through the 0600 user-data file, which is removed on every
 // exit; a failed create withdraws the offer; a created machine that answers without user data
-// or without the lifecycle labels is destroyed at once, because it could never join or be found.
+// or without the lifecycle labels is destroyed at once, because it could never join or be found; an adopted
+// machine whose offer died with a restart (and whose node has not joined) is destroyed and recreated.
 
 import (
 	"bytes"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/burst"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 var (
@@ -169,12 +171,18 @@ func (p *Provider) Provision(ctx context.Context, in burst.Intent) (burst.Resour
 		return burst.Resource{}, err
 	}
 	for _, r := range found {
-		// Adopted as the contract requires. After a coordinator restart this process holds no offer for the
-		// machine (the code in its user data belongs to a dead approver), so it cannot enroll: the engine's
-		// join timeout ends the intent and tears it down (debt D-1397).
-		if r.Labels[burst.LabelRole] == burst.RoleEphemeral && r.Labels[burst.LabelCoordinator] == in.Labels[burst.LabelCoordinator] {
+		if r.Labels[burst.LabelRole] != burst.RoleEphemeral || r.Labels[burst.LabelCoordinator] != in.Labels[burst.LabelCoordinator] {
+			continue
+		}
+		if p.adoptable(ctx, in.Token) {
 			p.remember(r.ID, in.Token)
 			return r, nil
+		}
+		// After a coordinator restart this process holds no offer for the machine (the code in its user data
+		// belongs to a dead approver), so it could never enroll and would bill until the join timeout (debt D-1397):
+		// delete it now and make a fresh one below.
+		if derr := p.destroyRetry(context.WithoutCancel(ctx), tok, r.ID); derr != nil {
+			return burst.Resource{}, fail(ReasonAnswer, derr, "machine %s of intent %s cannot be enrolled and could not be deleted", r.ID, in.Token)
 		}
 	}
 	offer, err := p.offer(ctx, in.Token)
@@ -188,6 +196,21 @@ func (p *Provider) Provision(ctx context.Context, in burst.Intent) (burst.Resour
 	}
 	p.remember(res.ID, in.Token)
 	return res, nil
+}
+
+// adoptable says whether a machine found for the intent can still enroll: this process holds the live
+// offer whose code is in its user data, or the node has already joined (a registry read that fails for any
+// reason but not-found keeps the machine, the fail-safe side).
+func (p *Provider) adoptable(ctx context.Context, token string) bool {
+	p.mu.Lock()
+	_, held := p.offers[token]
+	p.mu.Unlock()
+	if held || p.cfg.Registry == nil {
+		return held
+	}
+	_, err := p.cfg.Registry.Get(ctx, NodeName(token))
+	var se *store.Error
+	return err == nil || !(errors.As(err, &se) && se.Code == "E650")
 }
 
 func (p *Provider) remember(id, token string) {

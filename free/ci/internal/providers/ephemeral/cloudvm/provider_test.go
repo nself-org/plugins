@@ -378,3 +378,30 @@ func TestCloudVMConcurrentCallsAreSafe(t *testing.T) {
 		t.Fatalf("servers left: %+v", left)
 	}
 }
+
+// TestCloudVMProvisionAfterRestartReplacesAnUnenrollableMachine: debt D-1397. A restart between the create
+// and the join kills the offer's approver, so the machine found by its label could never enroll; it is deleted
+// and a fresh one (with a live offer) takes its place at once.
+func TestCloudVMProvisionAfterRestartReplacesAnUnenrollableMachine(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	in := intentOf("01J0000000000000000000RESTA")
+	a, err := r.prov.Provision(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.restart()
+	b, err := r.prov.Provision(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.ID == a.ID {
+		t.Fatalf("the machine of the dead offer was adopted: %s", a.ID)
+	}
+	if left := r.cloud.All(); len(left) != 1 || left[0].ID != b.ID {
+		t.Fatalf("expected only the fresh machine, got %+v", left)
+	}
+	if n := len(r.br.callsOf("destroy")); n != 1 {
+		t.Fatalf("destroy children %d", n)
+	}
+}
