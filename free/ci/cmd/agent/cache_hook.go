@@ -49,11 +49,11 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 		return setup, err
 	}
 	container := l.Job.Isolation == "container" || l.Job.Isolation == "sandboxed-container"
-	if (ns.Trust == "untrusted" || l.Cache.Access == "ro") && !container {
-		return setup, fmt.Errorf("E711 not_planned: read-only cache requires container isolation")
-	}
 	if ns.Trust == "untrusted" && l.Cache.Access == "rw" {
 		return setup, fmt.Errorf("E711 not_planned: untrusted writable cache")
+	}
+	if l.Cache.Access == "ro" && !container {
+		return setup, nil
 	}
 	if err := validateCachePlan(l.Cache); err != nil {
 		return setup, err

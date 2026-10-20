@@ -113,10 +113,18 @@ func remoteCachePlatform(node model.Capability) string {
 }
 
 // prepareCache runs before transport.Deliver and preserves the artifact Sink.
-func prepareCache(ctx context.Context, sink transport.Sink, lease *protocol.Lease, root, node string, hosted bool, platform string) transport.Sink {
+func prepareCache(ctx context.Context, sink transport.Sink, lease *protocol.Lease, root, node string, hosted bool, platform string, carrier string) transport.Sink {
 	if hosted {
 		return sink
 	}
+	isolation := string(lease.Job.Isolation)
+	if isolation == "" {
+		isolation = "process"
+	}
+	if isolation != "process" && isolation != "container" && isolation != "sandboxed-container" {
+		return sink
+	}
+	warn := func(err error) { cacheOn.warn("remote cache setup refused: " + firstLineOf(err.Error())) }
 	base, ok := sink.(*remoteSink)
 	if !ok {
 		if s, yes := sink.(leaseSink); yes {
@@ -128,24 +136,32 @@ func prepareCache(ctx context.Context, sink transport.Sink, lease *protocol.Leas
 	}
 	f, err := base.st.ArtifactFacts(ctx, lease.AttemptID)
 	if err != nil {
+		warn(err)
 		return sink
 	}
 	p, ok, err := base.st.PipelineByID(ctx, f.Run)
 	if err != nil || !ok {
+		if err == nil {
+			err = fmt.Errorf("cache pipeline %q unavailable", f.Run)
+		}
+		warn(err)
 		return sink
 	}
 	workdir, err := workdirOf(root, lease.Job.Workdir)
 	if err != nil {
+		warn(err)
 		return sink
 	}
 	detected, err := detect.DefaultRegistry().Detect(os.DirFS(workdir), func(string) bool { return true })
 	if err != nil {
+		warn(err)
 		return sink
 	}
 	var scope, keys []string
 	if c := lease.Job.Cache; c != nil {
 		scope, err = specs.CheckPaths(c.Paths)
 		if err != nil {
+			warn(err)
 			return sink
 		}
 		keys = c.Keys
@@ -156,15 +172,17 @@ func prepareCache(ctx context.Context, sink transport.Sink, lease *protocol.Leas
 	if CacheAttest != nil {
 		att, err = CacheAttest(ctx, a, p)
 		if err != nil {
+			warn(err)
 			return sink
 		}
 	}
-	env := mergeEnv(os.Environ(), lease.Job.Env)
+	env := lease.Job.Env
 	priv, _ := specs.PrivateDeps(specs.PrivInput{Dirs: factDirs(root, workdir, detected), Home: cacheOn.home(), Environ: flatEnv(env)})
 	facts := cacheFacts(a, p, att, priv)
 	home := records.StoreDir(base.home)
 	blobs, err := cas.New(home)
 	if err != nil {
+		warn(err)
 		return sink
 	}
 	es := entries.New(base.st, blobs, entries.Options{Home: home, Project: func(string) authz.ProjectFacts { return authz.ProjectFacts{NoPrivateDeps: !priv} }})
@@ -175,19 +193,19 @@ func prepareCache(ctx context.Context, sink transport.Sink, lease *protocol.Leas
 			image = ""
 		}
 	}
-	isolation := string(lease.Job.Isolation)
-	if isolation == "" {
-		isolation = "process"
-	}
 	// A remote process toolchain cannot be probed on the coordinator. Resolve
 	// safely disables those specs until coordinator facts supply its identity.
 	plan, err := cr.BuildPlan(ctx, cr.PlanInput{Entries: es, Backend: base.st, Facts: facts, Detected: detected, Scope: scope, ExtraKeys: append(keys, "job="+f.Job), Environ: flatEnv(env),
 		Platform: platform, Isolation: isolation, Container: isolation == "container" || isolation == "sandboxed-container", Image: image})
 	if err != nil || plan == nil {
+		if err != nil {
+			warn(err)
+		}
 		return sink
 	}
 	pol, err := records.PolicyFromEnv(os.Getenv)
 	if err != nil {
+		warn(err)
 		return sink
 	}
 	pol.StorePath = home
@@ -198,7 +216,7 @@ func prepareCache(ctx context.Context, sink transport.Sink, lease *protocol.Leas
 			}
 			return nil
 		}}}
-	l, err := h.Bind(cr.Binding{AttemptID: lease.AttemptID, LeaseID: lease.LeaseID, Epoch: int64(lease.Epoch), Node: node, Facts: facts, Plan: plan,
+	l, err := h.Bind(cr.Binding{AttemptID: lease.AttemptID, LeaseID: lease.LeaseID, Epoch: int64(lease.Epoch), Node: node, Facts: facts, Plan: plan, Unordered: !orderedCacheCarrier(carrier),
 		Fence: func(ctx context.Context) error {
 			return staleLease(base.eng.Fence(ctx, lease.LeaseID, int64(lease.Epoch)))
 		},
@@ -218,6 +236,12 @@ func prepareCache(ctx context.Context, sink transport.Sink, lease *protocol.Leas
 	}
 	lease.Cache = plan
 	return cacheLeaseSink{Sink: sink, l: l}
+}
+
+// Both built-in carriers serialize cache refs before the result frame. Unknown
+// carriers retain the full ref grace until their ordering contract is known.
+func orderedCacheCarrier(kind string) bool {
+	return kind == "ssh" || kind == "agent"
 }
 
 type cacheLeaseSink struct {

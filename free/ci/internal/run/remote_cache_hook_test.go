@@ -42,7 +42,7 @@ func TestPrepareRemoteCacheBuildsPlanWithNodePlatform(t *testing.T) {
 				lease := protocol.Lease{LeaseID: e.lease, AttemptID: e.id, Epoch: uint64(e.epoch), Job: model.Job{
 					Kind: "build", Isolation: "container", Container: &model.ContainerConfig{Image: "example.invalid/build@sha256:" + strings.Repeat("a", 64)},
 				}}
-				got := prepareCache(ctx, e.sink, &lease, root, "node", false, platform)
+				got := prepareCache(ctx, e.sink, &lease, root, "node", false, platform, "ssh")
 				if invalidPolicy {
 					if got != transport.Sink(e.sink) || lease.Cache != nil {
 						t.Fatalf("invalid policy advertised an unhandled cache plan: %T %+v", got, lease.Cache)
@@ -104,7 +104,7 @@ func TestPrepareRemoteCacheDisabledAndHosted(t *testing.T) {
 			case "unknown-platform":
 				platform = ""
 			}
-			if got := prepareCache(context.Background(), sink, lease, root, "n1", mode == "hosted", platform); got != transport.Sink(sink) || lease.Cache != nil {
+			if got := prepareCache(context.Background(), sink, lease, root, "n1", mode == "hosted", platform, "ssh"); got != transport.Sink(sink) || lease.Cache != nil {
 				t.Fatalf("disabled cache changed delivery: %T %+v", got, lease.Cache)
 			}
 		})
@@ -258,7 +258,7 @@ func TestPrepareRemoteCacheSandboxedContainer(t *testing.T) {
 		t.Fatal(err)
 	}
 	lease := protocol.Lease{LeaseID: e.lease, AttemptID: e.id, Epoch: uint64(e.epoch), Job: model.Job{Kind: "build", Isolation: "sandboxed-container", Container: &model.ContainerConfig{Image: "example.invalid/build@sha256:" + strings.Repeat("a", 64)}}}
-	got := prepareCache(context.Background(), e.sink, &lease, root, "node", false, "linux/amd64")
+	got := prepareCache(context.Background(), e.sink, &lease, root, "node", false, "linux/amd64", "ssh")
 	if _, ok := got.(cacheLeaseSink); !ok || lease.Cache == nil || len(lease.Cache.Save) != 1 || lease.Cache.Save[0].Spec != "buildx" {
 		t.Fatalf("sandboxed container did not plan container cache: %T %+v", got, lease.Cache)
 	}

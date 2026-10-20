@@ -50,8 +50,8 @@ func TestCacheHookReadOnlyMounts(t *testing.T) {
 	if setup.Env["GOMODCACHE"] == "" || setup.Env["GOCACHE"] == "" {
 		t.Fatal("missing tool environment", setup.Env)
 	}
-	if _, err := cacheBefore(context.Background(), cacheHookLease("ro", "process"), session.JobRoot{Dir: t.TempDir()}); err == nil {
-		t.Fatal("read-only process lease accepted")
+	if setup, err := cacheBefore(context.Background(), cacheHookLease("ro", "process"), session.JobRoot{Dir: t.TempDir()}); err != nil || len(setup.Env)+len(setup.Mounts) != 0 {
+		t.Fatalf("read-only process cache did not degrade: setup=%+v err=%v", setup, err)
 	}
 }
 
