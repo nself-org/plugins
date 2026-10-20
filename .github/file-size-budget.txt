@@ -4,7 +4,6 @@ free/access-controls/internal/handlers.go	1001
 free/admin-api/internal/db.go	403
 free/admin-api/internal/handlers.go	413
 free/analytics/internal/handlers.go	797
-free/audit-analytics/anomaly/scorer.go	366
 free/audit-log/sdk/devkit/cmd/new-plugin/main.go	510
 free/audit-log/sdk/identity.go	338
 free/auth-enterprise/go/handlers/mfa.go	333
@@ -14,7 +13,6 @@ free/auth-enterprise/go/sso/oidc.go	314
 free/auth-enterprise/go/sso/saml.go	385
 free/backup/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/backup/third_party/sdk/identity.go	338
-free/byok/handlers/byok.go	482
 free/cdn/internal/handlers.go	813
 free/claw-cli/cmd/claw_pair.go	301
 free/cloudflare/internal/handlers.go	614
