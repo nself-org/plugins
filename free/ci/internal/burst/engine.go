@@ -129,7 +129,16 @@ type Options struct {
 	Fault func(point string) error
 }
 
-// Engine runs the burst lifecycle of one coordinator.
+// Decision log retention: the sweep prunes burst_decision rows older than DecisionRetention and keeps at
+// most DecisionMaxRows of the newest.
+const (
+	DecisionRetention = 90 * 24 * time.Hour
+	DecisionMaxRows   = 20_000
+)
+
+// Engine runs the burst lifecycle of one coordinator. Run one engine per store: the provision lock (provMu)
+// serialises this engine's decisions only, so a second engine on the same store is covered by the
+// in-transaction re-count of the caps, not by the lock, and its alert marks and sweeps would race with the first.
 type Engine struct {
 	o         Options
 	cfg       Config

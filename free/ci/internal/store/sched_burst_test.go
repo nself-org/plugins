@@ -283,3 +283,45 @@ func TestBurstStoreMarkIfUnusedGivesWayToALease(t *testing.T) {
 		t.Fatalf("an unbound, unused intent is torn down: %v %+v", marked, got)
 	}
 }
+
+func TestBurstAlertOnceIsPersistedPerKindAndResource(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	for _, c := range []struct {
+		kind, res string
+		first     bool
+	}{{"orphan", "m-1", true}, {"orphan", "m-1", false}, {"excluded", "m-1", true}, {"orphan", "m-2", true}} {
+		got, err := s.BurstAlertOnce(ctx, c.kind, c.res)
+		if err != nil || got != c.first {
+			t.Fatalf("%s/%s: first=%v err=%v, want %v", c.kind, c.res, got, err, c.first)
+		}
+	}
+}
+
+func TestBurstPruneKeepsRecentDecisionsAndTheRowCap(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	put := func(at int64) {
+		t.Helper()
+		if err := s.BurstWrite(ctx, func(b BurstTx) error { return b.PutDecision(at, "cloud", "job-1", true, "allowed", "{}") }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, at := range []int64{10, 20, 1000, 1100, 1200, 1300} {
+		put(at)
+	}
+	if _, err := s.BurstAlertOnce(ctx, "orphan", "old"); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.BurstPrune(ctx, 500, 3) // older than 500 goes; then only the newest 3 stay
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.BurstDecisions(ctx, "job-1")
+	if n != 3 || len(got) != 3 || got[0].At != 1100 || got[2].At != 1300 {
+		t.Fatalf("pruned %d, left %+v", n, got)
+	}
+	if again, err := s.BurstPrune(ctx, 500, 3); err != nil || again != 0 {
+		t.Fatalf("a second prune has nothing to do: %d %v", again, err)
+	}
+}
