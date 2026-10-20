@@ -180,3 +180,22 @@ func TestEndingARetriedAttemptDoesNotFreeTheNewOnesSlot(t *testing.T) {
 		t.Fatal("when the last runner of the demand ends the slot is free")
 	}
 }
+
+// TestDelayedDemandStillMintsAfterOtherWrites (CR round 3, N1): a demand that waits past the pending window
+// while other demands write the repository document keeps its row, so it can take a free slot when its
+// pipeline finally reaches delivery.
+func TestDelayedDemandStillMintsAfterOtherWrites(t *testing.T) {
+	use(t)
+	led := runnerjob.CurrentLedger()
+	ctx := context.Background()
+	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "1", 3); !ok {
+		t.Fatal("reserve")
+	}
+	advance(80 * time.Minute)
+	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "2", 3); !ok { // a write that prunes
+		t.Fatal("reserve 2")
+	}
+	if _, err := deliverRaw(goodNode(), "late", runnerJob(t, "1")); err != nil {
+		t.Fatalf("a delayed demand with free slots must still mint: %v", err)
+	}
+}

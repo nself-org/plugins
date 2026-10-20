@@ -39,3 +39,14 @@ func TestCredentialWrapperIsMountedForEveryContainerLevel(t *testing.T) {
 		}
 	}
 }
+
+// TestRunnerJobAsksForRunnerSizedResources: a job that carries a runner credential gets 2 CPUs and 2 GB (the
+// runner and its memory-only root do not fit the 1 GB default); every other job keeps the default (0 = unset).
+func TestRunnerJobAsksForRunnerSizedResources(t *testing.T) {
+	if cpu, mem := jobCPU(jobInputs{RunnerRoot: true}), jobMemoryMB(jobInputs{RunnerRoot: true}); cpu != 2 || mem != 2048 {
+		t.Fatalf("runner job: %v CPU, %d MB", cpu, mem)
+	}
+	if cpu, mem := jobCPU(jobInputs{}), jobMemoryMB(jobInputs{}); cpu != 0 || mem != 0 {
+		t.Fatalf("ordinary job: %v CPU, %d MB", cpu, mem)
+	}
+}

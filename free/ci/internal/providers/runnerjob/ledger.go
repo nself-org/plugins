@@ -6,7 +6,7 @@ package runnerjob
 // Inputs:  a FactStore (the coordinator's *store.Store implements it) and a clock.
 // Outputs: Reserve (cap-checked, idempotent per demand), RecordRunner, Release, Runner, MarkGone, Open, Repos.
 // Constraints: one provider fact per repository (provider "runnerjob", key "state") holds a small document
-//          of the demands and runners that are live or ended in the last hour; every write drops the
+//          of the demands and runners that are live or ended recently; every write drops the
 //          rest, so the store does not grow with the number of jobs ever run. A row never holds a
 //          credential, only the handle a deregistration needs. A pending demand is live for PendingTTL
 //          (the forge honours an unused registration for 60 min), a minted one until the finalizer marks
@@ -75,7 +75,7 @@ type repoDoc struct {
 	Runners map[string]Runner    `json:"runners"`
 }
 
-// keepEnded is how long an ended demand or runner row stays in the document.
+// keepEnded is how long an ended demand or runner row stays in the document (an expired one: after MintedTTL).
 const keepEnded = time.Hour
 
 // RepoKey is one repository the sweep must look at.
@@ -146,7 +146,9 @@ func (l *Ledger) put(ctx context.Context, scope, key string, v any) error {
 func (l *Ledger) save(ctx context.Context, provider, repo string, d repoDoc) error {
 	now := l.now()
 	for k, r := range d.Demands {
-		if !live(r, now) && now.Sub(r.At) > keepEnded {
+		// A finished demand leaves after keepEnded. A demand whose window ran out while its pipeline waited
+		// stays long enough for Confirm to take a free slot for it (the background band can wait for hours).
+		if (r.State == stateDone && now.Sub(r.At) > keepEnded) || (!live(r, now) && now.Sub(r.At) > MintedTTL+keepEnded) {
 			delete(d.Demands, k)
 		}
 	}
