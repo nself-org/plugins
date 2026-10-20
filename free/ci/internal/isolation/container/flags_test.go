@@ -244,3 +244,28 @@ func TestBuildAddsTheRunnerRootOnlyWhenAsked(t *testing.T) {
 		t.Fatalf("runner root tmpfs missing or /tmp changed: %v", cmd.Args)
 	}
 }
+
+// TestBuildEntrypointOfTheJob (P7-HOST-07): a run that names an entrypoint gets exactly that --entrypoint before
+// the image, and it wins over the profile's (the cleanup helper's sh); a run without one keeps the profile's.
+func TestBuildEntrypointOfTheJob(t *testing.T) {
+	p := sampleParams()
+	cmd, err := Build(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(cmd.Args, "--entrypoint") {
+		t.Fatalf("no entrypoint asked but present: %v", cmd.Args)
+	}
+	p.Entrypoint = "sh"
+	if cmd, err = Build(p); err != nil || !slices.Contains(cmd.Args, "sh") {
+		t.Fatalf("profile entrypoint: %v %v", cmd.Args, err)
+	}
+	p.Run.Entrypoint = "/usr/local/bin/nself-ci-agent"
+	if cmd, err = Build(p); err != nil {
+		t.Fatal(err)
+	}
+	i := slices.Index(cmd.Args, "--entrypoint")
+	if i < 0 || cmd.Args[i+1] != "/usr/local/bin/nself-ci-agent" || slices.Contains(cmd.Args, "sh") || i > slices.Index(cmd.Args, p.Run.Image) {
+		t.Fatalf("job entrypoint: %v", cmd.Args)
+	}
+}

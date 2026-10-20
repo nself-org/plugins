@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/projects/acme/widgets",
+    "query": ""
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "body": "{\"id\": 4242, \"default_branch\": \"main\", \"visibility\": \"private\"}"
+  }
+}

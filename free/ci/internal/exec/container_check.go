@@ -85,6 +85,9 @@ func checkContainerCommand(c ContainerCommand, run ContainerRun) error {
 		if name == "--name" && value != run.Name && value != run.Name+"-clean" {
 			return bad("container name is not the attempt's: " + value)
 		}
+		if name == "--entrypoint" && named[name] { // Docker keeps the last one: a second would replace the wrapper
+			return bad("repeated --entrypoint")
+		}
 		seen[name+"="+value] = true
 		named[name] = true
 	}
@@ -109,6 +112,9 @@ func checkContainerCommand(c ContainerCommand, run ContainerRun) error {
 	}
 	if run.RunnerRoot != "" && !seen["--tmpfs="+RunnerRootTmpfs()] {
 		return bad("missing the runner root tmpfs")
+	}
+	if run.Entrypoint != "" && !seen["--entrypoint="+run.Entrypoint] {
+		return bad("missing the job entrypoint")
 	}
 	if run.Interactive && !named["--interactive"] {
 		return bad("missing --interactive: the job stdin would not reach the container")
@@ -188,6 +194,13 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 		if !run.Interactive {
 			return bad("--interactive without a job stdin")
 		}
+	case "--entrypoint":
+		// the cleanup helper (never interactive) runs sh; a job runs the entrypoint it asked for, and only a job that holds a stdin
+		// (a runner credential) may ask, and only for a program that is a read-only mount of the job (the agent
+		// that reads the credential from the stdin): any other path would bypass the credential wrapper
+		if value == "sh" && run.Interactive || value != "sh" && (run.Entrypoint == "" || value != run.Entrypoint || !run.Interactive || !mountedReadOnly(run, value)) {
+			return bad("entrypoint " + value)
+		}
 	case "--pids-limit":
 		if n, err := strconv.Atoi(value); err != nil || n < 1 || n > 1<<20 {
 			return bad("pids-limit must be a positive number")
@@ -232,4 +245,14 @@ func checkMount(spec, workspace string) error {
 		return bad("mount is not the job root bound at /repo")
 	}
 	return nil
+}
+
+// mountedReadOnly reports whether target is the destination of a read-only mount the executor accepted.
+func mountedReadOnly(run ContainerRun, target string) bool {
+	for _, m := range run.Mounts {
+		if m.ReadOnly && m.Target == target {
+			return true
+		}
+	}
+	return false
 }

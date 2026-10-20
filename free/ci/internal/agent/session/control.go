@@ -20,9 +20,11 @@ func (s *Session) onMessage(m protocol.Message) (done bool, err error) {
 		return false, s.onCancel(m, *b)
 	case *protocol.Drain:
 		return s.onDrain(m, *b)
+	case *protocol.Offset:
+		s.onOffset(m, *b)
 	}
-	// heartbeat, ack, upgrade, chunk, digest, offset, resume: carried by later
-	// tickets (P7-NODE-24 upgrade, P7-CACHE transfers); the session ignores them.
+	// heartbeat, ack, upgrade, chunk, digest, resume: carried by later
+	// tickets (P7-NODE-24 upgrade, P7-CACHE-19 cache restore); the session ignores them.
 	return false, nil
 }
 

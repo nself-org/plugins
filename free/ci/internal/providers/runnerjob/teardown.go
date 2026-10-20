@@ -117,7 +117,7 @@ func (s *Sweeper) sweepRepo(ctx context.Context, led *Ledger, k RepoKey, now tim
 		return nil
 	}
 	var errs []error
-	open, err := led.Open(ctx, k.Repo)
+	open, err := led.Open(ctx, k.Provider, k.Repo)
 	if err != nil {
 		return fail("ledger.read")
 	}

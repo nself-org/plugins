@@ -493,3 +493,55 @@ func TestPlannedContainerBackstopRequiresTheEnvFile(t *testing.T) {
 		t.Fatalf("a run with no environment (the cleanup helper) needs no --env-file: %v", err)
 	}
 }
+
+// TestPlannedContainerEntrypoint (P7-HOST-07): a runner image whose own entrypoint is a launcher (gitlab-runner)
+// gets the job's entrypoint, the mounted agent. The backstop accepts exactly the entrypoint the run asked for,
+// only for a run that holds a stdin (a runner credential), requires it then, and still allows the cleanup
+// helper's `sh`.
+func TestPlannedContainerEntrypoint(t *testing.T) {
+	fakeRuntime(t, "ok\n", "0")
+	const agent = "/usr/local/bin/nself-ci-agent"
+	base := []string{"run", "--rm", "--interactive", "--name", "nself-ci-x", "--label", "nself.ci.attempt=x", "--user", fixtureUID(), "--network=none", "--pids-limit", "64", "--memory", "64m", "--cpus", "1",
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only"}
+	cmd := func(entry ...string) ContainerCommand {
+		args := append([]string(nil), base...)
+		for _, v := range entry {
+			args = append(args, "--entrypoint", v)
+		}
+		return ContainerCommand{Binary: "docker", Args: append(args, "alpine:3.19", "true")}
+	}
+	run := ContainerRun{Name: "nself-ci-x", Image: "alpine:3.19", AttemptID: "x", Interactive: true}
+	mounted := []Mount{{Host: "/host/agent", Target: agent, ReadOnly: true}}
+	for name, tc := range map[string]struct {
+		cmd         ContainerCommand
+		entry       string
+		interactive bool
+		accept      bool
+		noMount     bool
+	}{
+		"asked and present":          {cmd(agent), agent, true, true, false},
+		"asked and missing":          {cmd(), agent, true, false, false},
+		"present but not asked":      {cmd(agent), "", true, false, false},
+		"another program":            {cmd("/bin/sh"), agent, true, false, false},
+		"asked path is not a mount":  {cmd("/bin/sh"), "/bin/sh", true, false, false},
+		"sh on a credential run":     {cmd("sh"), agent, true, false, false},
+		"two entrypoints":            {cmd(agent, "sh"), agent, true, false, false},
+		"agent not mounted":          {cmd(agent), agent, true, false, true},
+		"cleanup helper sh":          {cmd("sh"), "", false, true, false},
+		"asked without a job stdin":  {cmd(agent), agent, false, false, false},
+		"no entrypoint and none ask": {cmd(), "", true, true, false},
+	} {
+		run.Entrypoint, run.Interactive, run.Mounts = tc.entry, tc.interactive, mounted
+		if tc.noMount {
+			run.Mounts = nil
+		}
+		c := tc.cmd
+		if !tc.interactive { // the same command without --interactive, so only the entrypoint rule can refuse it
+			c = ContainerCommand{Binary: "docker", Args: append(append([]string(nil), c.Args[:2]...), c.Args[3:]...)}
+		}
+		err := checkContainerCommand(c, run)
+		if (err == nil) != tc.accept {
+			t.Errorf("%s: accepted=%v err=%v", name, err == nil, err)
+		}
+	}
+}

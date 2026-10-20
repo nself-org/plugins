@@ -1,0 +1,18 @@
+# The GitLab Runner image a project-runner job runs in (P7-HOST-07, Epic HOST D11): docker.io/gitlab/gitlab-runner
+# tag v19.4.1 (published 2026-09-24), pinned by its OCI index digest (linux/amd64 sha256:c38030ac4ff7...,
+# linux/arm64 sha256:5acf8fbbf9d4...). `gitlab-runner run-single --help` of this version names CI_SERVER_URL
+# and CI_SERVER_TOKEN as the variables of --url and --token, and --max-builds and --wait-timeout exist.
+# The image's own entrypoint is `dumb-init /entrypoint` (exec gitlab-runner "$@"), so a runner job overrides it
+# with the agent (--entrypoint) to reach the credential wrapper. The image is not part of the toolchain image.
+name: gitlab-runner-image
+kind: image
+# version repeats image@digest so the table shows the pinned reference; validateImage enforces it.
+version: docker.io/gitlab/gitlab-runner@sha256:77d03a5c881ff8f97381de4f96a66c080733eeab9c9cf502bd19916a18969113
+purpose: image of the one-job GitLab project runner that runnerjob launches for a pending GitLab job
+owner: internal/providers/gitlab/runners
+image: docker.io/gitlab/gitlab-runner
+digest: sha256:77d03a5c881ff8f97381de4f96a66c080733eeab9c9cf502bd19916a18969113
+status: pinned
+upstream:
+  type: oci
+  ref: docker.io/gitlab/gitlab-runner:v19.4.1

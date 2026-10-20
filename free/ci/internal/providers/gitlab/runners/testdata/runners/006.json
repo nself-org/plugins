@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/runners/101",
+    "query": ""
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "body": "{\"message\": \"404 Runner Not Found\"}"
+  }
+}

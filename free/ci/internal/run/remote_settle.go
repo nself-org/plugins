@@ -67,7 +67,7 @@ func (rs *runState) toLost(id string) bool {
 }
 
 // localOnly says a job must run on this machine because the remote path cannot honour what the
-// local one does: outcome hooks that read the output (drill), declared and implicit artifacts, caches (no
+// local one does: outcome hooks that read the output (drill), declared and implicit artifacts (unless the job is remote-only: the node then delivers them, remote_blob_hook.go), caches (no
 // intake from a node yet), release and at-most-once jobs (their idempotency key and deploy checks run
 // in prepare), secrets (no value is sent to a node), services, requirements the world
 // cannot verify (labels, tools, an isolation floor, a container: the local runner reports no
@@ -78,7 +78,7 @@ func (rs *runState) localOnly(job model.Job) bool {
 	if o.Container || o.Network != "" || o.Timeout > 0 || len(o.Services) > 0 {
 		return true
 	}
-	if rs.wantsOutput(job) || declares(job) || job.Kind == "release" || idempotencyKey(&job, "x") != "" || job.Cache != nil || len(job.Secrets) > 0 || len(job.NeedsServices) > 0 {
+	if rs.wantsOutput(job) || declares(job) && !job.RemoteOnly || job.Kind == "release" || idempotencyKey(&job, "x") != "" || job.Cache != nil || len(job.Secrets) > 0 || len(job.NeedsServices) > 0 {
 		return true
 	}
 	if job.RemoteOnly {
