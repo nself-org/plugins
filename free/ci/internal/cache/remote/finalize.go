@@ -8,10 +8,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"time"
 
-	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
 	"github.com/nself-org/plugins/free/ci/internal/cache/specs"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
@@ -26,37 +26,32 @@ func (l *Lease) Finalize(ctx context.Context, wait time.Duration) error {
 	if wait <= 0 || wait > 30*time.Second {
 		wait = 30 * time.Second
 	}
-	grace := min(wait, 2*time.Second)
-	l.mu.Lock()
-	fullGrace := l.b.Unordered || len(l.refs) > 0
-	l.mu.Unlock()
-	if fullGrace {
-		grace = wait
-	}
-	start := time.Now()
-	timer := time.NewTimer(grace)
-	defer timer.Stop()
-	for {
-		l.mu.Lock()
-		complete := len(l.refs) >= len(l.b.Plan.Save)
-		hasRefs := len(l.refs) > 0
-		l.mu.Unlock()
-		if complete {
-			break
-		}
-		if hasRefs && !fullGrace {
-			fullGrace = true
-			timer.Reset(max(0, wait-time.Since(start)))
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
-			goto commit
-		case <-l.notify:
+	if l.b.Unordered {
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+	waitRefs:
+		for {
+			l.mu.Lock()
+			complete := len(l.refs) >= len(l.b.Plan.Save)
+			l.mu.Unlock()
+			if complete {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-timer.C:
+				break waitRefs
+			case <-l.notify:
+			}
 		}
 	}
-commit:
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// Waiting for an unordered carrier must not consume the commit budget.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 35*time.Second)
+	defer cancel()
 	l.mu.Lock()
 	l.closed = true
 	refs := make([]protocol.CacheRef, 0, len(l.refs))
@@ -84,7 +79,7 @@ commit:
 			errs = append(errs, errors.Join(err, l.refuse(ctx, entries.ReasonBlobInvalid)))
 			continue
 		}
-		m := entries.Manifest{Namespace: ns.Canonical(), Key: r.Key, Spec: r.Spec, Writer: entries.Writer{ScannedClean: true}}
+		m := entries.Manifest{Namespace: ns.Canonical(), Key: r.Key, Spec: r.Spec, Writer: entries.Writer{ScannedClean: true, PrivateDeps: true}}
 		for _, b := range r.Blobs {
 			m.Blobs = append(m.Blobs, entries.Blob{Path: b.Path, SHA256: b.SHA256, Size: b.Size})
 		}
@@ -95,6 +90,8 @@ commit:
 		l.mu.Lock()
 		l.saved = append(l.saved, m)
 		l.mu.Unlock()
+		// Locality is advisory: upload does not confirm the node retained a copy.
+		// Copy publication may fail or the node may evict it; consumers must age LastSeen.
 		if l.b.Node != "" {
 			if err = l.h.Ledger.CacheLocalityPut(ctx, store.CacheLocalityRow{Node: l.b.Node, Realm: l.b.Plan.Namespace, Key: r.Key, Bytes: m.Bytes()}); err != nil {
 				warning := fmt.Errorf("cache locality: %w", err)
@@ -112,12 +109,9 @@ commit:
 // validateRef applies restore's archive checks before any entry is published.
 func (l *Lease) validateRef(ctx context.Context, r protocol.CacheRef) error {
 	for _, b := range r.Blobs {
-		f, err := l.h.Blobs.Open(cacheRealm(l.b.Plan.Namespace), b.SHA256)
-		if err != nil {
-			return err
-		}
-		err = specs.Validate(&contextReader{ctx: ctx, r: f}, authz.Limits{})
-		err = errors.Join(err, f.Close())
+		err := l.h.Blobs.ReadVerified(cacheRealm(l.b.Plan.Namespace), b.SHA256, func(r io.Reader) error {
+			return specs.Validate(&contextReader{ctx: ctx, r: r}, specs.CacheLimits())
+		})
 		if err != nil {
 			return fmt.Errorf("cache %s archive: %w", r.Spec, err)
 		}
@@ -143,9 +137,32 @@ func (l *Lease) RetractUsing(ctx context.Context, ledger Ledger) error {
 		errs = append(errs, err)
 		for _, m := range rows {
 			if bytes.Equal(m.Namespace, committed.Namespace) && m.Writer.AttemptID == l.b.AttemptID && m.Writer.Epoch == l.b.Epoch {
-				errs = append(errs, ledger.CacheDrop(ctx, m, "attempt_not_passed"))
+				if err := ledger.CacheDrop(ctx, m, "attempt_not_passed"); err != nil {
+					errs = append(errs, err)
+					continue
+				}
+				remaining, err := ledger.CacheEntries(ctx, m.Key)
+				errs = append(errs, err)
+				if err != nil || namespacePresent(remaining, m.Namespace) {
+					continue
+				}
+				rows, err := ledger.CacheLocality(ctx, "", l.b.Plan.Namespace, m.Key)
+				errs = append(errs, err)
+				for _, row := range rows {
+					errs = append(errs, ledger.CacheLocalityDrop(ctx, row.Node, row.Realm, row.Key))
+				}
 			}
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// namespacePresent keeps locality when a guarded drop left a replacement entry.
+func namespacePresent(rows []entries.Manifest, ns []byte) bool {
+	for _, row := range rows {
+		if bytes.Equal(row.Namespace, ns) {
+			return true
+		}
+	}
+	return false
 }

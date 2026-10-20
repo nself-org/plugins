@@ -263,14 +263,14 @@ func TestCacheFinalizeNoRefsUsesShortGrace(t *testing.T) {
 	if err := e.Result(context.Background(), "l", l.b.Epoch); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	if err := l.Finalize(ctx, 30*time.Second); err != nil {
 		t.Fatalf("ordered empty result waited full grace: %v", err)
 	}
 }
 
-func TestCacheFinalizePreservesFullGraceForPartialOrUnordered(t *testing.T) {
+func TestCacheFinalizeOrderedPartialImmediateUnorderedFullGrace(t *testing.T) {
 	for _, unordered := range []bool{false, true} {
 		t.Run(map[bool]string{false: "partial", true: "unordered"}[unordered], func(t *testing.T) {
 			l, _, e := coordinatorFixture(t)
@@ -286,10 +286,15 @@ func TestCacheFinalizePreservesFullGraceForPartialOrUnordered(t *testing.T) {
 			if err := e.Result(context.Background(), "l", l.b.Epoch); err != nil {
 				t.Fatal(err)
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 2200*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
-			if err := l.Finalize(ctx, 30*time.Second); !errors.Is(err, context.DeadlineExceeded) {
-				t.Fatalf("full grace ended early: %v", err)
+			start := time.Now()
+			err := l.Finalize(ctx, 30*time.Second)
+			if unordered && !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("unordered full grace ended early: %v", err)
+			}
+			if !unordered && (err != nil || time.Since(start) > 400*time.Millisecond) {
+				t.Fatalf("ordered partial result waited: %v (%s)", err, time.Since(start))
 			}
 		})
 	}

@@ -29,6 +29,8 @@ type Ledger interface {
 	LeaseGet(context.Context, string) (store.RemoteLease, error)
 	CacheAuditOnce(context.Context, string, string, string) error
 	CacheLocalityPut(context.Context, store.CacheLocalityRow) error
+	CacheLocality(context.Context, string, string, string) ([]store.CacheLocalityRow, error)
+	CacheLocalityDrop(context.Context, string, string, string) error
 }
 
 type Handler struct {
@@ -74,10 +76,17 @@ func (h *Handler) Bind(b Binding) (*Lease, error) {
 		lim.MaxFile, _ = h.Entries.Caps()
 	}
 	capBytes, _ := h.Entries.Caps()
+	maxBlobs := 0
+	for _, save := range b.Plan.Save {
+		maxBlobs += len(save.Dirs)
+	}
 	l.held = map[string]int64{}
 	lim.Budget = func(_ context.Context, sha string) (int64, error) {
 		l.mu.Lock()
 		defer l.mu.Unlock()
+		if _, held := l.held[sha]; !held && len(l.held) >= maxBlobs {
+			return 0, transfer.Failf(transfer.ReasonSizeCap, "cache lease blob count exceeds its save set")
+		}
 		left := capBytes
 		for d, n := range l.held {
 			if d != sha {
@@ -198,7 +207,7 @@ func (l *Lease) Blob(ctx context.Context, h transport.BlobHeader) (transport.Blo
 	}
 	h.Stream = transfer.StreamArtifact
 	w, err := l.rcv.Open(ctx, h)
-	if err == nil {
+	if err == nil && w.Offset() < h.Size {
 		l.mu.Lock()
 		l.held[h.SHA256] = h.Size
 		l.mu.Unlock()

@@ -155,6 +155,7 @@ func TestCacheFinalizeDoesNotOverrideFailure(t *testing.T) {
 
 func TestCacheFinalizeLateRefAndRetract(t *testing.T) {
 	l, s, e := coordinatorFixture(t)
+	l.b.Unordered = true
 	ctx := context.Background()
 	if err := l.Declare(ctx); err != nil {
 		t.Fatal(err)

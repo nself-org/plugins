@@ -23,6 +23,9 @@ func cacheLimits() authz.Limits {
 	return l
 }
 
+// CacheLimits returns the shared pack, restore and remote validation limits.
+func CacheLimits() authz.Limits { return cacheLimits() }
+
 func entryOf(h *tar.Header, packed int64) authz.Entry {
 	e := authz.Entry{Name: h.Name, LinkTarget: h.Linkname, Size: h.Size, Packed: packed, Mode: fs.FileMode(h.Mode) & fs.ModePerm}
 	switch h.Typeflag {
