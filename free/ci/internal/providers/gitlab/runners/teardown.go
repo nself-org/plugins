@@ -13,6 +13,8 @@ package runners
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"net/url"
 	"regexp"
 	"time"
@@ -97,8 +99,13 @@ func (r *Registrar) Orphans(ctx context.Context, scope providers.RunnerScope, be
 			continue
 		}
 		busy, err := r.hasRunningJob(ctx, itoa(x.ID))
-		if err != nil || busy {
-			continue // a job may still hold it, or it cannot be told: not an orphan yet
+		if err != nil {
+			// not an orphan yet, but a permanent failure (a missing scope, an outage) must not look like a clean sweep
+			slog.Warn("gitlab runner orphan check: running jobs unreadable", "runner", x.ID, "class", providers.ClassOf(err), "code", code(err))
+			continue
+		}
+		if busy {
+			continue // a job still holds it
 		}
 		out = append(out, providers.RunnerRef{ID: itoa(x.ID), Scope: scope})
 	}
@@ -115,4 +122,13 @@ func (r *Registrar) hasRunningJob(ctx context.Context, id string) (bool, error) 
 		return false, err
 	}
 	return len(jobs) > 0, nil
+}
+
+// code is the E70x code of err, "" for any other error.
+func code(err error) string {
+	var pe *providers.Error
+	if errors.As(err, &pe) {
+		return pe.Code
+	}
+	return ""
 }

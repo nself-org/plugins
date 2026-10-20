@@ -18,6 +18,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -78,15 +79,16 @@ type fakeGL struct {
 	calls []string         // "METHOD path" (escaped)
 	auths []string         // Authorization header of every request
 
-	tokenOverride string // when set, the token POST /user/runners replies
-	keepDel       bool   // DELETE answers 204 but the runner stays
-	raceDelete    bool   // DELETE removes the runner but answers 404
-	jobsStatus    int    // when non-zero, GET /runners/:id/jobs answers this status
+	garbage       map[string]bool // protection reads of these names answer 200 with a body that is not the protection
+	tokenOverride string          // when set, the token POST /user/runners replies
+	keepDel       bool            // DELETE answers 204 but the runner stays
+	raceDelete    bool            // DELETE removes the runner but answers 404
+	jobsStatus    int             // when non-zero, GET /runners/:id/jobs answers this status
 	statusFor     map[string]int
 }
 
 func newFakeGL(t *testing.T) *fakeGL {
-	f := &fakeGL{t: t, nextID: 100, jobs: map[int64]fakeJob{}, branch: map[string]bool{}, tags: map[string]bool{}, statusFor: map[string]int{}}
+	f := &fakeGL{t: t, nextID: 100, jobs: map[int64]fakeJob{}, branch: map[string]bool{}, tags: map[string]bool{}, garbage: map[string]bool{}, statusFor: map[string]int{}}
 	f.srv = httptest.NewTLSServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.srv.Close)
 	return f
@@ -196,9 +198,11 @@ func (f *fakeGL) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		f.reply(w, 200, out)
 	case len(seg) == 4 && seg[0] == "projects" && seg[2] == "protected_branches" && r.Method == "GET":
-		f.protection(w, f.branch, seg[3])
+		name, _ := url.PathUnescape(seg[3])
+		f.protection(w, f.branch, name)
 	case len(seg) == 4 && seg[0] == "projects" && seg[2] == "protected_tags" && r.Method == "GET":
-		f.protection(w, f.tags, seg[3])
+		name, _ := url.PathUnescape(seg[3])
+		f.protection(w, f.tags, name)
 	case len(seg) == 2 && seg[0] == "runners":
 		id, _ := strconv.ParseInt(seg[1], 10, 64)
 		i, x := f.find(id)
@@ -243,6 +247,12 @@ func (f *fakeGL) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *fakeGL) protection(w http.ResponseWriter, set map[string]bool, name string) {
+	if f.garbage[name] {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte("<html>sign in</html>"))
+		return
+	}
 	if set[name] {
 		f.reply(w, 200, map[string]any{"name": name})
 		return

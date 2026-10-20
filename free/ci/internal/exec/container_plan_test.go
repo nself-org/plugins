@@ -511,21 +511,28 @@ func TestPlannedContainerEntrypoint(t *testing.T) {
 		return ContainerCommand{Binary: "docker", Args: append(args, "alpine:3.19", "true")}
 	}
 	run := ContainerRun{Name: "nself-ci-x", Image: "alpine:3.19", AttemptID: "x", Interactive: true}
+	mounted := []Mount{{Host: "/host/agent", Target: agent, ReadOnly: true}}
 	for name, tc := range map[string]struct {
 		cmd         ContainerCommand
 		entry       string
 		interactive bool
 		accept      bool
+		noMount     bool
 	}{
-		"asked and present":          {cmd(agent), agent, true, true},
-		"asked and missing":          {cmd(), agent, true, false},
-		"present but not asked":      {cmd(agent), "", true, false},
-		"another program":            {cmd("/bin/sh"), agent, true, false},
-		"cleanup helper sh":          {cmd("sh"), "", true, true},
-		"asked without a job stdin":  {cmd(agent), agent, false, false},
-		"no entrypoint and none ask": {cmd(), "", true, true},
+		"asked and present":          {cmd(agent), agent, true, true, false},
+		"asked and missing":          {cmd(), agent, true, false, false},
+		"present but not asked":      {cmd(agent), "", true, false, false},
+		"another program":            {cmd("/bin/sh"), agent, true, false, false},
+		"asked path is not a mount":  {cmd("/bin/sh"), "/bin/sh", true, false, false},
+		"agent not mounted":          {cmd(agent), agent, true, false, true},
+		"cleanup helper sh":          {cmd("sh"), "", true, true, false},
+		"asked without a job stdin":  {cmd(agent), agent, false, false, false},
+		"no entrypoint and none ask": {cmd(), "", true, true, false},
 	} {
-		run.Entrypoint, run.Interactive = tc.entry, tc.interactive
+		run.Entrypoint, run.Interactive, run.Mounts = tc.entry, tc.interactive, mounted
+		if tc.noMount {
+			run.Mounts = nil
+		}
 		c := tc.cmd
 		if !tc.interactive { // the same command without --interactive, so only the entrypoint rule can refuse it
 			c = ContainerCommand{Binary: "docker", Args: append(append([]string(nil), c.Args[:2]...), c.Args[3:]...)}

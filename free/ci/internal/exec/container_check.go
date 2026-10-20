@@ -193,8 +193,9 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 		}
 	case "--entrypoint":
 		// the cleanup helper runs sh; a job runs the entrypoint it asked for, and only a job that holds a stdin
-		// (a runner credential) may ask: the entrypoint is the agent that reads the credential from it
-		if value != "sh" && (run.Entrypoint == "" || value != run.Entrypoint || !run.Interactive) {
+		// (a runner credential) may ask, and only for a program that is a read-only mount of the job (the agent
+		// that reads the credential from the stdin): any other path would bypass the credential wrapper
+		if value != "sh" && (run.Entrypoint == "" || value != run.Entrypoint || !run.Interactive || !mountedReadOnly(run, value)) {
 			return bad("entrypoint " + value)
 		}
 	case "--pids-limit":
@@ -241,4 +242,14 @@ func checkMount(spec, workspace string) error {
 		return bad("mount is not the job root bound at /repo")
 	}
 	return nil
+}
+
+// mountedReadOnly reports whether target is the destination of a read-only mount the executor accepted.
+func mountedReadOnly(run ContainerRun, target string) bool {
+	for _, m := range run.Mounts {
+		if m.ReadOnly && m.Target == target {
+			return true
+		}
+	}
+	return false
 }

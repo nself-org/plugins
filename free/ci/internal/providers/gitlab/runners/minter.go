@@ -10,11 +10,13 @@ package runners
 //          registrar's fixed tag list is the whole tag list. The runner is ref_protected only when
 //          Restriction proves the demand's job ref is a protected branch or tag (a failed proof, even a
 //          transient one, registers not_protected, which only widens which refs the runner serves, never
-//          who may use it: the project, the unique tag and locked still bind it). The credential goes
-//          back to the caller and nowhere else.
+//          who may use it: locked binds the runner to its project and ref_protected, when proven, to protected
+//          refs; the unique tag does not bind it to the demand's job, GitLab hands the runner any pending job of
+//          the project whose tags it holds). The credential goes back to the caller and nowhere else.
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"sync"
 	"time"
@@ -78,9 +80,12 @@ func (m *Minter) Mint(ctx context.Context, r runnerjob.Request) (runnerjob.Regis
 	scope := providers.RunnerScope{Repo: r.Repo}
 	var opt MintOptions
 	if job, perr := strconv.ParseInt(r.Demand, 10, 64); perr == nil {
-		if res, rerr := reg.Restriction(ctx, scope, job); rerr == nil {
-			opt.ProtectedOnly = res.ProtectedOnly
+		res, rerr := reg.Restriction(ctx, scope, job)
+		if rerr != nil {
+			// the runner is still made, not_protected; the operator must be able to see why it never is ref_protected
+			slog.Warn("gitlab runner protection proof failed, registering not_protected", "class", providers.ClassOf(rerr), "code", code(rerr))
 		}
+		opt.ProtectedOnly = rerr == nil && res.ProtectedOnly
 	}
 	minted, err := reg.MintRunner(ctx, providers.RunnerRequest{
 		Attempt: providers.Attempt{ID: r.AttemptID, Repo: r.Repo, Trust: "untrusted"}, Scope: scope,

@@ -118,23 +118,31 @@ func TestFixedTags(t *testing.T) {
 }
 
 // TestAccessLevel proves acceptance 4 (the access half): access_level is not_protected unless Restriction
-// verified a protected branch or tag; a merge request ref, an unknown job, a wildcard-only protection and
-// a failed read are all not_protected.
+// verified a protected branch or tag by its exact name (also one with a slash); a merge request ref, an
+// unknown job, a ref only a wildcard rule would cover, a 200 whose body is not that protection and a failed
+// read are all not_protected.
 func TestAccessLevel(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeGL(t)
 	r := f.registrar(clock)
-	f.branch["main"], f.tags["v1.0"] = true, true
+	f.branch["main"], f.branch["release/1.0"], f.branch["release-*"], f.tags["v1.0"] = true, true, true, true
 	f.jobs[1] = fakeJob{Ref: "main", Status: "pending"}
 	f.jobs[2] = fakeJob{Ref: "feature/x", Status: "pending"}
 	f.jobs[3] = fakeJob{Ref: "v1.0", Tag: true, Status: "pending"}
 	f.jobs[4] = fakeJob{Ref: "refs/merge-requests/7/head", Status: "pending"}
 	f.jobs[5] = fakeJob{Ref: "v2.0", Tag: true, Status: "pending"}
-	for job, want := range map[int64]bool{0: false, 1: true, 2: false, 3: true, 4: false, 5: false, 99: false} {
+	f.jobs[6] = fakeJob{Ref: "release/1.0", Status: "pending"} // a protected branch with a slash: the %2F path encoding
+	f.jobs[7] = fakeJob{Ref: "release-1", Status: "pending"}   // matched only by the wildcard rule release-*: unproven, not protected
+	f.jobs[8] = fakeJob{Ref: "main2", Status: "pending"}
+	f.garbage["main2"] = true // the protection read answers 200 with a body that is not that protection
+	for job, want := range map[int64]bool{0: false, 1: true, 2: false, 3: true, 4: false, 5: false, 6: true, 7: false, 99: false} {
 		got, err := r.Restriction(ctx, repoScope, job)
 		if err != nil || got.ProtectedOnly != want {
 			t.Errorf("job %d: protected %v err %v, want %v", job, got.ProtectedOnly, err, want)
 		}
+	}
+	if got, err := r.Restriction(ctx, repoScope, 8); got.ProtectedOnly || err == nil {
+		t.Errorf("a 200 that is not JSON must never prove protection and surfaces as an error: %+v %v", got, err)
 	}
 	f.statusFor["GET /projects/acme%2Fwidgets/jobs/1"] = 500
 	if _, err := r.Restriction(ctx, repoScope, 1); err == nil || providers.ClassOf(err) != providers.Transient {

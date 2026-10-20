@@ -5,7 +5,10 @@ package runners
 // Outputs: a Registrar. Its REST calls are the project read, POST /user/runners, the runner read, delete
 //          and pause, the project runner list, a runner's running jobs, and the job and protection reads
 //          behind Restriction.
-// Constraints: every request goes through rest.Client (SSRF guard, size caps, no retried POST). The client
+// Constraints: the token needs the create_runner and manage_runner scopes and, for the project, job and
+//          protection reads (project id, Restriction, orphan job check), read_api; its user must be Maintainer of the
+//          project (scopes and role are [Likely] from the GitLab docs, not verified live: DEF-003).
+//          Every request goes through rest.Client (SSRF guard, size caps, no retried POST). The client
 //          carries the runner-management token only (providers.gitlab.runner_token_env, a token with the
 //          create_runner and manage_runner scopes whose user is Maintainer of the project): FromPolicy
 //          never falls back to the Developer token of the dispatch provider, so a missing runner token is

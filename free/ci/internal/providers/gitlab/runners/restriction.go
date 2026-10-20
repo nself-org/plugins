@@ -52,12 +52,16 @@ func (r *Registrar) Restriction(ctx context.Context, scope providers.RunnerScope
 	if job.Tag {
 		path = protectedTagPath
 	}
-	resp, err := r.c.Do(ctx, "GET", path, p.With("name", job.Ref), nil, nil)
+	var prot struct {
+		Name string `json:"name"`
+	}
+	resp, err := r.c.Do(ctx, "GET", path, p.With("name", job.Ref), nil, &prot)
 	if err != nil {
 		if resp.Status == 404 {
 			return providers.Restriction{}, nil
 		}
 		return providers.Restriction{}, runnerErr(err, "restriction")
 	}
-	return providers.Restriction{ProtectedOnly: true}, nil
+	// a 200 whose body is not the protection of this exact ref (a proxy's login page, a wildcard answer) proves nothing
+	return providers.Restriction{ProtectedOnly: prot.Name == job.Ref}, nil
 }
