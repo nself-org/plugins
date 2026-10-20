@@ -38,6 +38,11 @@ type Found struct {
 	CreatedAt time.Time
 }
 
+// Reclaimer is an optional Backend part: it asks the adapter to remove the sandboxes of dead owners that its own
+// proof (not a label) can identify. The Tart adapter sweeps by lock-proven marker, so nothing it leaves behind is
+// visible to a label sweep; the provider calls Reclaim before it refuses a slot and before it lists leaks.
+type Reclaimer interface{ Reclaim(ctx context.Context) }
+
 // Backend is one platform's view of the adapters.
 type Backend interface {
 	// Platform is the os/arch the sandboxes run (`linux/amd64`, `darwin/arm64`).

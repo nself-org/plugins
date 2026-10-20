@@ -10,11 +10,22 @@ package local
 //          never exceeded (the share is computed by the same function the node admission uses).
 
 import (
+	"context"
 	"math"
 
 	"github.com/nself-org/plugins/free/ci/internal/burst"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/reservation"
 )
+
+// reclaim asks a backend that sweeps by its own proof (Tart) to remove dead owners' sandboxes; it reports whether
+// the backend can, so the caller re-reads capacity only when something may have changed.
+func (p *Provider) reclaim(ctx context.Context) bool {
+	r, ok := p.opts.Backend.(Reclaimer)
+	if ok {
+		r.Reclaim(ctx)
+	}
+	return ok
+}
 
 func (p *Provider) limit(off Offer, s burst.Spec) int {
 	lim := math.MaxInt

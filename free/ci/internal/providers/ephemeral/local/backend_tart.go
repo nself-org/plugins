@@ -4,7 +4,7 @@ package local
 // with Apple's two-VM limit reported as capacity.
 // Inputs:  the registered `vm` profile and the facts its probe reports (slots, running VMs).
 // Outputs: an Offer whose Total is the VM slots the host has left for us (Running lists the clones that
-//          hold them), Teardown through the profile (stop, delete, verified gone), and no Leftovers.
+//          hold them), Teardown through the profile (stop, delete, verified gone), and no Leftovers (Reclaim runs the profile sweep).
 // Constraints: no Tart, a missing base image digest or a non-arm64 host is an E698, never a
 //          weaker level; a host with both slots busy is not an error (Total tells the provider to
 //          offer nothing now). Tart keeps its clones' owner in a locked marker file, so clones left by
@@ -69,6 +69,11 @@ func (b *tartBackend) Prepare(ctx context.Context, a isolation.Attempt) error {
 
 func (b *tartBackend) Teardown(ctx context.Context, a isolation.Attempt) error {
 	return b.vm.Teardown(ctx, a)
+}
+
+// Reclaim runs the profile's lock-proven orphan sweep (Prepare sweeps after its probe); the outcome does not matter here.
+func (b *tartBackend) Reclaim(ctx context.Context) {
+	_ = b.vm.Prepare(ctx, isolation.Attempt{ID: "reclaim", CoordinatorID: "tart-reclaim"})
 }
 
 func (b *tartBackend) Leftovers(context.Context) ([]Found, error) { return nil, nil }

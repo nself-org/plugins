@@ -399,3 +399,55 @@ func TestProvisionGivesUpWithItsContextWhileAnotherHoldsTheLock(t *testing.T) {
 		t.Fatalf("a waiting Provision must return its ctx error, got %v", err)
 	}
 }
+
+// reclaimingBackend is a fake whose Reclaim removes the orphans a dead coordinator left (the Tart sweep).
+type reclaimingBackend struct {
+	*fakeBackend
+	reclaims int
+}
+
+func (r *reclaimingBackend) Reclaim(context.Context) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.reclaims++
+	r.running = nil
+}
+
+func TestProvisionReclaimsOrphansBeforeRefusingASlot(t *testing.T) {
+	fb := newFake()
+	fb.total, fb.running = 2, []string{"burst-DEAD1", "burst-DEAD2"} // two orphans fill Apple's limit
+	rb := &reclaimingBackend{fakeBackend: fb}
+	p, err := New(Options{Backend: rb, Host: bigHost, Now: func() time.Time { return epoch }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Provision(context.Background(), intentFor(tok1)); err != nil || rb.reclaims != 1 {
+		t.Fatalf("orphans must be swept before the slot is refused: err %v, reclaims %d", err, rb.reclaims)
+	}
+	// a backend that cannot reclaim still refuses
+	fb2 := newFake()
+	fb2.total, fb2.running = 1, []string{"burst-DEAD1"}
+	if _, err := newProvider(t, fb2, nil).Provision(context.Background(), intentFor(tok1)); !errors.Is(err, burst.ErrQuota) {
+		t.Fatalf("want ErrQuota, got %v", err)
+	}
+	if _, err := p.List(context.Background(), nil); err != nil || rb.reclaims != 2 {
+		t.Fatalf("List must reclaim for the sweeper: %v %d", err, rb.reclaims)
+	}
+}
+
+func TestProvisionAdoptsOnlyItsOwnCoordinatorsAndIntentsSandbox(t *testing.T) {
+	for name, labels := range map[string]map[string]string{
+		"another coordinator": {roleKey: roleValue, coordKey: "someone-else", intentKey: tok1},
+		"another intent":      {roleKey: roleValue, coordKey: coord, intentKey: tok2},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fb := newFake()
+			fb.add(Found{ID: "burst-" + tok2, CreatedAt: epoch.Add(-time.Hour), Labels: labels})
+			p := newProvider(t, fb, nil)
+			r, err := p.Provision(context.Background(), intentFor(tok1))
+			if err != nil || len(fb.prepared) != 1 || r.CreatedAt.Equal(epoch.Add(-time.Hour)) {
+				t.Fatalf("a foreign sandbox must not be adopted: %+v %v prepared %v", r, err, fb.prepared)
+			}
+		})
+	}
+}

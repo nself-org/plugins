@@ -68,10 +68,9 @@ type Provider struct {
 	lat  *latencies
 
 	provSem chan struct{} // serialises Provision (capacity check and reservation are one step); a waiter gives up with its ctx
-
-	mu     sync.Mutex
-	ledger map[string]entry
-	level  model.Isolation // last level a probe offered; Estimate reads it without calling the runtime
+	mu      sync.Mutex
+	ledger  map[string]entry
+	level   model.Isolation // last level a probe offered; Estimate reads it without calling the runtime
 }
 
 type entry struct {
@@ -188,6 +187,12 @@ func (p *Provider) Provision(ctx context.Context, in burst.Intent) (burst.Resour
 		return p.record(id, off.Level, resFromFound(f)), nil
 	}
 	used, limit := p.used(off, found), p.limit(off, in.Spec)
+	if used >= limit && p.reclaim(ctx) { // orphans of a dead coordinator may be what fills the host
+		if off, found, err = p.probe(ctx); err != nil {
+			return burst.Resource{}, err
+		}
+		used, limit = p.used(off, found), p.limit(off, in.Spec)
+	}
 	if used >= limit {
 		return burst.Resource{}, fmt.Errorf("%w: %d of %d local slots are in use", burst.ErrQuota, used, limit)
 	}
@@ -271,6 +276,7 @@ func (p *Provider) Teardown(ctx context.Context, id string) error {
 
 // List returns the reservations and the runtime's labelled sandboxes that carry every requested label.
 func (p *Provider) List(ctx context.Context, labels map[string]string) ([]burst.Resource, error) {
+	p.reclaim(ctx) // the sweeper lists to find leaks: let a backend that sweeps by its own proof do it now
 	found, err := p.opts.Backend.Leftovers(ctx)
 	if err != nil {
 		return nil, classify(ctx, err)

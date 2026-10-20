@@ -27,6 +27,8 @@ const (
 	namePrefix   = "nself-ci-"
 	attemptLabel = "nself.ci.attempt"
 	cleanSuffix  = "-clean"
+	// probeBudget bounds a probe that no longer follows its caller's cancellation.
+	probeBudget = 20 * time.Second
 )
 
 // Query asks the container runtime a read-only question (exec.RuntimeQuery in production).
@@ -50,6 +52,9 @@ func NewContainerBackend(container, sandbox isolation.Profile, q Query) Backend 
 func (b *containerBackend) Platform() string { return b.platform }
 
 func (b *containerBackend) Probe(ctx context.Context) (Offer, error) {
+	// the container profile caches what its probe saw for a while: a caller's cancellation must not become that answer
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), probeBudget)
+	defer cancel()
 	if b.container == nil {
 		return Offer{}, unavailable(ReasonNoAdapter, nil, "the container isolation profile is not registered")
 	}
