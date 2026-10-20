@@ -57,6 +57,13 @@ func ConfigureSecrets(rt SecretsRuntime) {
 	secretsMu.Unlock()
 }
 
+// SecretsMode is the mode of the configured secret Source.
+func SecretsMode() secrets.Mode {
+	secretsMu.Lock()
+	defer secretsMu.Unlock()
+	return secretsRuntime.Mode
+}
+
 func init() { RegisterSecrets(newSecretSource) }
 
 // SecretsInfo is what an attempt (AttemptInfo) and a policy result (PolicyResult) carry for the Source.

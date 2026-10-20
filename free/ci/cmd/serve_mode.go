@@ -18,6 +18,8 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/mode"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
+	"github.com/nself-org/plugins/free/ci/internal/secrets"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
@@ -68,5 +70,9 @@ func serveModeStart(ctx context.Context, fs *flag.FlagSet, st *store.Store, stde
 	}
 	_, _ = fmt.Fprintf(stderr, "nself-ci-serve: coordinator mode %s\n", d.Mode)
 	s := mode.Begin(mode.Options{Store: st})
+	if d.Mode == mode.Team { // D-1337: a team coordinator holds no PERSONAL-local secret facts, it passes refs only
+		cirun.ConfigureSecrets(cirun.SecretsRuntime{Mode: secrets.ModeTeamCoordinator})
+		return func() { s.End(); cirun.ConfigureSecrets(cirun.SecretsRuntime{Mode: secrets.ModePersonalLocal}) }, nil
+	}
 	return s.End, nil
 }

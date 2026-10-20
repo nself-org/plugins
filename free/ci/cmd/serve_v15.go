@@ -30,6 +30,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/backup"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/deployguard"
 	"github.com/nself-org/plugins/free/ci/internal/report"
+	"github.com/nself-org/plugins/free/ci/internal/roles"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/serve"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -175,6 +176,8 @@ type pipelineFacts struct {
 	Trigger   string          `json:"trigger"`
 	CloneURL  string          `json:"clone_url"`
 	Synthetic json.RawMessage `json:"synthetic"`
+	// Submitter is the audit label and role the user API stored ("user:bob role=member"); "" for a webhook.
+	Submitter string `json:"submitter"`
 }
 
 // dispatchPipeline runs one queued trigger: clone the revision into a fresh directory, plan it and run the
@@ -208,6 +211,9 @@ func dispatchPipeline(home string, f *v15ServeFlags) coordinator.Dispatcher {
 		p, digest, subst, err := preparePlan(ctx, o)
 		if err != nil {
 			return coordinator.RunResult{}, fmt.Errorf("plan failed: %w", err)
+		}
+		if err = submitterGate(ctx, roles.Current(), facts, row.Project, p); err != nil {
+			return coordinator.RunResult{}, err
 		}
 		out := io.Discard
 		if f.verbose {
