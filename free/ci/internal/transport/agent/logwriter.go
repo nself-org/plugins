@@ -26,9 +26,9 @@ import (
 
 // tailWindow is how much of the file end OpenLog reads to find the last complete line.
 //
-// A line is at most about three times its frame: the JSON encoder writes U+2028 and U+2029 as six bytes (three in
-// the frame) and an invalid byte as the three-byte U+FFFD.
-const tailWindow = 4 * protocol.MaxFrame
+// A line can grow sixfold: the JSON encoder escapes control bytes and invalid UTF-8 bytes as six-byte
+// sequences. Allow another frame for the JSON fields and a torn trailing frame after the last complete line.
+const tailWindow = 7 * protocol.MaxFrame
 
 var unsafeFile = regexp.MustCompile(`[^A-Za-z0-9_.-]`)
 
@@ -141,7 +141,7 @@ func (w *LogWriter) Append(l protocol.Log) (written bool, err error) {
 	}
 	var enc bytes.Buffer
 	je := json.NewEncoder(&enc)
-	je.SetEscapeHTML(false) // '<' stays one byte; only U+2028/2029 and invalid bytes grow (see tailWindow)
+	je.SetEscapeHTML(false) // '<' stays one byte; controls, U+2028/2029 and invalid bytes grow (see tailWindow)
 	if err := je.Encode(logLine{LineSeq: l.LineSeq, Stream: l.Stream, Text: l.Text}); err != nil {
 		return false, err
 	}

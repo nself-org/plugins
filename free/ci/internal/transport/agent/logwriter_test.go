@@ -7,6 +7,7 @@ package agent
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,7 +70,7 @@ func TestLogWriterReadsTheTailOnOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w2.Close()
+	defer func() { _ = w2.Close() }()
 	if w2.Last() != 3 {
 		t.Fatalf("tail = %d, want 3", w2.Last())
 	}
@@ -93,7 +94,7 @@ func TestLogWriterCutsATornTail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w2.Close()
+	defer func() { _ = w2.Close() }()
 	if w2.Last() != 2 {
 		t.Fatalf("tail = %d, want 2 (the torn line is not a line)", w2.Last())
 	}
@@ -120,7 +121,7 @@ func TestLogWriterOnlyATornLineStartsOver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 	if w.Last() != 0 {
 		t.Fatalf("tail = %d", w.Last())
 	}
@@ -166,7 +167,7 @@ func TestLogWriterBigLineAtTheFrameLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w2.Close()
+	defer func() { _ = w2.Close() }()
 	if w2.Last() != 3 {
 		t.Fatalf("tail = %d", w2.Last())
 	}
@@ -189,7 +190,8 @@ func writeLines(t *testing.T, path string, n int, textLen int) {
 
 func TestLogWriterReadsTheTailOfAFileLargerThanTheWindow(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "big.jsonl")
-	writeLines(t, path, 5000, 1000) // about 5 MiB, more than the 4 MiB window
+	const lines = tailWindow/1000 + 1
+	writeLines(t, path, lines, 1000) // payload alone exceeds the recovery window
 	if st, _ := os.Stat(path); st.Size() <= tailWindow {
 		t.Fatalf("file is %d bytes, want more than the window", st.Size())
 	}
@@ -197,24 +199,24 @@ func TestLogWriterReadsTheTailOfAFileLargerThanTheWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Last() != 5000 {
-		t.Fatalf("tail = %d, want 5000", w.Last())
+	if w.Last() != uint64(lines) {
+		t.Fatalf("tail = %d, want %d", w.Last(), lines)
 	}
 	_ = w.Close()
 	// and with a torn tail beyond the window
 	f, _ := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
-	_, _ = f.WriteString(`{"line_seq":5001,"stre`)
+	_, _ = fmt.Fprintf(f, `{"line_seq":%d,"stre`, lines+1)
 	_ = f.Close()
 	w, err = OpenLog(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w.Close()
-	if w.Last() != 5000 {
+	defer func() { _ = w.Close() }()
+	if w.Last() != uint64(lines) {
 		t.Fatalf("tail after a torn line = %d", w.Last())
 	}
-	if ok, _ := w.Append(logOf(5001, "z")); !ok {
-		t.Fatal("line 5001 not written")
+	if ok, _ := w.Append(logOf(uint64(lines+1), "z")); !ok {
+		t.Fatal("next line not written")
 	}
 	b, _ := os.ReadFile(path)
 	if !strings.HasSuffix(string(b), `"text":"z"}`+"\n") || strings.Contains(string(b), `"stre{`) {
@@ -253,7 +255,7 @@ func TestLogWriterAWindowSizedFileIsReadWhole(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a file exactly as large as the window: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 	if w.Last() != 7 {
 		t.Fatalf("tail = %d", w.Last())
 	}
@@ -265,7 +267,7 @@ func TestLogWriterEmptyFileHasNoTail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 	if w.Last() != 0 {
 		t.Fatal("tail of an empty file")
 	}
@@ -394,7 +396,7 @@ func TestLogWriterFindsTheLastLineWhenTheWindowStartsOnTheNewlineBeforeIt(t *tes
 	if err != nil {
 		t.Fatalf("the window starts on the newline that ends line 1: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 	if w.Last() != 2 {
 		t.Fatalf("tail = %d, want 2", w.Last())
 	}
@@ -439,7 +441,7 @@ func TestLogWriterKeepsNothingAfterTheCapNoteAcrossARestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w2.Close()
+	defer func() { _ = w2.Close() }()
 	for i := uint64(14); i <= 30; i++ {
 		_, _ = w2.Append(logOf(i, strings.Repeat("x", 20)))
 	}
@@ -449,23 +451,34 @@ func TestLogWriterKeepsNothingAfterTheCapNoteAcrossARestart(t *testing.T) {
 	}
 }
 
-func TestLogWriterLineOfInvalidBytesFitsTheTailWindow(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "wide.jsonl")
-	w, err := OpenLog(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := strings.Repeat("\xff", protocol.MaxFrame-200) // one byte in the frame, three in the log line
-	if ok, err := w.Append(logOf(1, text)); err != nil || !ok {
-		t.Fatalf("append: %v %v", ok, err)
-	}
-	_ = w.Close()
-	w, err = OpenLog(path)
-	if err != nil {
-		t.Fatalf("a widened line must still be found after a restart: %v", err)
-	}
-	defer w.Close()
-	if w.Last() != 1 {
-		t.Fatalf("tail %d", w.Last())
+func TestLogWriterExpandedLineFitsTheTailWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		unit string
+	}{
+		{"invalid UTF-8", "\xff"},
+		{"Unicode separator", "\u2028"},
+		{"escaped control", "\x00"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "wide.jsonl")
+			w, err := OpenLog(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			text := strings.Repeat(tc.unit, (protocol.MaxFrame-200)/len(tc.unit))
+			if ok, err := w.Append(logOf(1, text)); err != nil || !ok {
+				t.Fatalf("append: %v %v", ok, err)
+			}
+			_ = w.Close()
+			w, err = OpenLog(path)
+			if err != nil {
+				t.Fatalf("a widened line must still be found after a restart: %v", err)
+			}
+			defer func() { _ = w.Close() }()
+			if w.Last() != 1 {
+				t.Fatalf("tail %d", w.Last())
+			}
+		})
 	}
 }

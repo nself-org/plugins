@@ -28,6 +28,17 @@ func (e *Executor) Sweep(ctx context.Context, current string) error {
 	return e.sweep(ctx, current, home)
 }
 
+// SweepStaleProcesses kills the recorded process groups of attempts whose coordinator incarnation is no longer
+// live, in the executor home home. A long-lived agent calls it once at start: a SIGKILLed agent leaves its jobs
+// running, and nothing else would stop them before the next job on that node (P7-NODE-11). current is the live
+// incarnation; its own groups are left alone. An executor without a Stale checker sweeps nothing.
+func (e *Executor) SweepStaleProcesses(ctx context.Context, home, current string) error {
+	if e.Stale == nil {
+		return nil
+	}
+	return e.sweepProcesses(ctx, home, current)
+}
+
 func (e *Executor) sweep(ctx context.Context, current, home string) error {
 	if e.Stale == nil {
 		return nil

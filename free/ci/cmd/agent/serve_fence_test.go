@@ -205,3 +205,61 @@ func TestFenceCountsCheckoutChunksAsLiveness(t *testing.T) {
 	default:
 	}
 }
+
+// TestFencedLeasesAreReportedUntilAnAckClearsThem: the lease a fence left a marker for is reported as
+// self_fenced with its epoch by the next session, and a later heartbeat ack removes the marker.
+func TestFencedLeasesAreReportedUntilAnAckClearsThem(t *testing.T) {
+	f, inner, mono, state := fenceRig(t)
+	inner.in <- protocol.Message{V: 1, Type: "lease", Body: &protocol.Lease{LeaseID: "lease/9", Epoch: 7}}
+	inner.in <- welcome()
+	for range 2 {
+		if _, err := f.Recv(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mono.Store(int64(time.Second)) // far past agent_ttl: the watcher fences
+	waitFor(t, "the fence marker", 5*time.Second, func() bool {
+		ents, _ := os.ReadDir(filepath.Join(state, "self_fenced"))
+		return len(ents) == 1
+	})
+
+	next := newFenceCarrier(newScriptCarrier(), state) // the next session of the same agent
+	t.Cleanup(func() { _ = next.Close() })
+	got := next.fenced()
+	if len(got) != 1 || got[0].LeaseID != "lease/9" || got[0].Epoch != 7 || got[0].State != "self_fenced" {
+		t.Fatalf("fenced() = %+v, want lease/9 epoch 7 self_fenced", got)
+	}
+	if again := next.fenced(); len(again) != 1 {
+		t.Fatalf("an unacknowledged report must repeat, got %+v", again)
+	}
+	ack := uint64(1)
+	next.Carrier.(*scriptCarrier).in <- protocol.Message{V: 1, Type: "heartbeat", Ack: &ack, Body: &protocol.Heartbeat{}}
+	if _, err := next.Recv(); err != nil {
+		t.Fatal(err)
+	}
+	if left := next.fenced(); len(left) != 0 {
+		t.Fatalf("the acknowledged report was not cleared: %+v", left)
+	}
+}
+
+// A marker that is not JSON, or has no lease, is dropped instead of being reported forever.
+func TestFencedIgnoresAndDeletesBrokenMarkers(t *testing.T) {
+	state := t.TempDir()
+	dir := filepath.Join(state, "self_fenced")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{"old": "2026-01-01T00:00:00Z\n", "empty": `{"lease_id":""}`, "stale": `{"lease_id":"l","epoch":1,"at":"2001-01-01T00:00:00Z"}`} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f := newFenceCarrier(newScriptCarrier(), state)
+	t.Cleanup(func() { _ = f.Close() })
+	if got := f.fenced(); len(got) != 0 {
+		t.Fatalf("reported %+v", got)
+	}
+	if ents, _ := os.ReadDir(dir); len(ents) != 0 {
+		t.Fatalf("%d broken markers stayed", len(ents))
+	}
+}
