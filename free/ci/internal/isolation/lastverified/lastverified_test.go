@@ -121,3 +121,27 @@ func TestDrillExcerptFormatMatchesTheStoreReader(t *testing.T) {
 		t.Fatalf("the failed nested check must not verify: %+v", recs)
 	}
 }
+
+// D-1388: a pass that a newer run failed, or that is too old, is flagged; a fresh clean pass is not.
+func TestWarning(t *testing.T) {
+	now := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	fresh := Record{Level: Container, Status: Verified, VerifiedAt: now.Add(-24 * time.Hour), HostClass: "linux/amd64"}
+	if w := fresh.Warning(now, DefaultMaxAge); w != "" {
+		t.Errorf("a fresh clean pass: %q", w)
+	}
+	old := Record{Level: Container, Status: Verified, VerifiedAt: now.Add(-10 * 24 * time.Hour)}
+	if w := old.Warning(now, DefaultMaxAge); !strings.Contains(w, "10 days old") {
+		t.Errorf("a stale pass: %q", w)
+	}
+	if w := old.Warning(now, 0); w != "" {
+		t.Errorf("age check off: %q", w)
+	}
+	failed := fresh
+	failed.FailedAt = now.Add(-time.Hour)
+	if w := failed.Warning(now, DefaultMaxAge); w == "" || !strings.Contains(failed.Message(), "the newest run failed 2026-10-19") {
+		t.Errorf("a failure after the pass: %q / %q", w, failed.Message())
+	}
+	if w := (Record{Status: Unverified}).Warning(now, DefaultMaxAge); w != "" {
+		t.Errorf("unverified is not a warning: %q", w)
+	}
+}

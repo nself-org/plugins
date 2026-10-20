@@ -113,3 +113,40 @@ func TestLastVerifiedIgnoresUntrustedRuns(t *testing.T) {
 		t.Errorf("an owner run still verifies: %+v", got)
 	}
 }
+
+// D-1388: a pass that a newer run failed carries the failure time; a failure older than the pass does not.
+func TestLastVerifiedReportsANewerFailure(t *testing.T) {
+	s, _ := lvStore(t)
+	lvRecord(t, s, "e1", lvDoc(lvJob, "drill", "nested evidence: fail\n  fail isolation.network: old\npassed: isolation.container", "2026-10-02T03:00:00Z", "linux/amd64"))
+	lvRecord(t, s, "e2", lvDoc(lvJob, "drill", "passed: isolation.container isolation.network", "2026-10-03T03:00:00Z", "linux/amd64"))
+	lvRecord(t, s, "e3", lvDoc(lvJob, "drill", "nested evidence: fail\n  fail isolation.container: broke\n  error isolation.network\npassed: isolation.hygiene", "2026-10-05T03:00:00Z", "linux/amd64"))
+	got, err := s.LastVerified(context.Background(), lvJob, lvPrefix, []string{"isolation.container", "isolation.network", "isolation.hygiene"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 10, 5, 3, 0, 0, 0, time.UTC)
+	for _, id := range []string{"isolation.container", "isolation.network"} {
+		if !got[id].FailedAt.Equal(want) || got[id].FinishedAt.Day() != 3 {
+			t.Errorf("%s: want the 10-03 pass with a failure on 10-05: %+v", id, got[id])
+		}
+	}
+	if !got["isolation.hygiene"].FailedAt.IsZero() {
+		t.Errorf("hygiene passed in the newest run: %+v", got["isolation.hygiene"])
+	}
+}
+
+// D-1388: an old pass stays in reach when more than one page of newer drill documents sits above it.
+func TestLastVerifiedReadsPastOnePage(t *testing.T) {
+	old := lastVerifiedPage
+	lastVerifiedPage = 2
+	t.Cleanup(func() { lastVerifiedPage = old })
+	s, _ := lvStore(t)
+	lvRecord(t, s, "old", lvDoc(lvJob, "drill", "passed: isolation.container", "2026-09-01T03:00:00Z", "linux/amd64"))
+	for i := 0; i < 5; i++ {
+		lvRecord(t, s, fmt.Sprintf("n%d", i), lvDoc(lvJob, "drill", "passed: isolation.network", fmt.Sprintf("2026-10-0%dT03:00:00Z", i+1), "linux/amd64"))
+	}
+	got, err := s.LastVerified(context.Background(), lvJob, lvPrefix, []string{"isolation.container", "isolation.network"})
+	if err != nil || len(got) != 2 || got["isolation.container"].FinishedAt.Month() != time.September {
+		t.Fatalf("the old pass must be found past the first page: %+v, %v", got, err)
+	}
+}

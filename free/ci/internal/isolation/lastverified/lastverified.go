@@ -5,7 +5,7 @@
 // evidence of the isolation-levels drill (scripts/drill/isolation-levels); nothing here writes.
 // Inputs:  a Source (the run store) and the host OS.
 // Outputs: one Record per level: verified (date, revision, host class), unverified, or unavailable.
-// Constraints: a level is verified only by a passing nested check found in stored evidence; a source error or a level
+// Constraints: a pass that a newer run failed, or that is older than the configured age, is flagged (D-1388); a level is verified only by a passing nested check found in stored evidence; a source error or a level
 // with no passing check reads unverified, never verified; Linux vm and ephemeral-vm are always unavailable (no KVM
 // host, D-0120).
 package lastverified
@@ -61,8 +61,13 @@ type Record struct {
 	Status     Status
 	VerifiedAt time.Time // set when Status is Verified
 	Revision   string
-	HostClass  string // the runner platform of the verifying run, for example linux/amd64
+	HostClass  string    // the runner platform of the verifying run, for example linux/amd64
+	FailedAt   time.Time // set when the newest run that reported the level failed after the last pass (D-1388)
 }
+
+// DefaultMaxAge is how old a pass may be before the doctor warns; a host that runs the drill nightly misses a week
+// only when something is wrong.
+const DefaultMaxAge = 7 * 24 * time.Hour
 
 // Source supplies stored passes; *store.Store implements it.
 type Source interface {
@@ -95,7 +100,7 @@ func Read(ctx context.Context, src Source, goos string) ([]Record, error) {
 	for _, l := range levels {
 		r := Record{Level: l, Status: Unverified}
 		if v, ok := found[l.CheckID()]; ok && err == nil {
-			r = Record{Level: l, Status: Verified, VerifiedAt: v.FinishedAt, Revision: v.Revision, HostClass: v.Platform}
+			r = Record{Level: l, Status: Verified, VerifiedAt: v.FinishedAt, Revision: v.Revision, HostClass: v.Platform, FailedAt: v.FailedAt}
 		}
 		if goos == "linux" && (l == VM || l == EphemeralVM) {
 			r = Record{Level: l, Status: Unavailable}
@@ -113,11 +118,29 @@ func (r Record) Message() string {
 		if len(r.Revision) >= 7 {
 			msg += " (revision " + r.Revision[:7] + ")"
 		}
+		if !r.FailedAt.IsZero() {
+			msg += "; the newest run failed " + r.FailedAt.UTC().Format("2006-01-02")
+		}
 		return msg
 	case Unavailable:
 		return "unavailable (" + UnavailableNote + ")"
 	}
 	return "unverified since never"
+}
+
+// Warning says why a verified level should not be trusted as current, or "" when it can: the newest run of the level
+// failed after the last pass, or the pass is older than maxAge at now. maxAge <= 0 turns the age check off.
+func (r Record) Warning(now time.Time, maxAge time.Duration) string {
+	if r.Status != Verified {
+		return ""
+	}
+	if !r.FailedAt.IsZero() {
+		return "the newest run of this level failed after its last pass"
+	}
+	if maxAge > 0 && now.Sub(r.VerifiedAt) > maxAge {
+		return fmt.Sprintf("the last pass is %d days old (limit %d days)", int(now.Sub(r.VerifiedAt).Hours()/24), int(maxAge.Hours()/24))
+	}
+	return ""
 }
 
 func firstNonEmpty(a, b string) string {

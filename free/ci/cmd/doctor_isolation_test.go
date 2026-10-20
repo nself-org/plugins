@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/doctor"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
@@ -63,6 +64,46 @@ func seedDrillEvidence(t *testing.T, home, passed, platform string) {
 	}
 }
 
+// pinIsolationNow fixes the age check's clock for one test.
+func pinIsolationNow(t *testing.T, at time.Time) {
+	t.Helper()
+	old := isolationNow
+	isolationNow = func() time.Time { return at }
+	t.Cleanup(func() { isolationNow = old })
+}
+
+// D-1388: a pass older than the configured age, or failed by a newer run, is a warning, not a quiet pass.
+func TestDoctorIsolationWarnsOnStaleOrFailedPass(t *testing.T) {
+	home := t.TempDir()
+	seedDrillEvidence(t, home, "passed: isolation.container isolation.network", "linux/amd64") // finished 2026-10-03
+	pinIsolationNow(t, time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC))
+	stale := isolationJSON(t, home, "linux")
+	if c := stale["isolation.container"]; c["status"] != "warn" || !strings.Contains(c["message"].(string), "16 days old") {
+		t.Errorf("a 16-day-old pass must warn: %v", c)
+	}
+	pinIsolationNow(t, time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC))
+	if c := isolationJSON(t, home, "linux")["isolation.container"]; c["status"] != "pass" {
+		t.Errorf("a one-day-old pass stays a pass: %v", c)
+	}
+	st, err := cirun.OpenStore(filepath.Join(home, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	failedBody := `{"source_trust":"owner","revision":"0123456789abcdef","runner":{"platform":"linux/amd64"},"timings":{"finished_at":"2026-10-04T03:00:00Z"},` +
+		`"checks":[{"job_id":"drill-isolation-levels","kind":"drill","excerpt":"nested evidence: fail\n  fail isolation.container: broke\npassed: isolation.network"}]}`
+	if err = st.RecordRunEvidence(context.Background(), "e2", "p", "0123456789abcdef", "i", []byte(failedBody)); err != nil {
+		t.Fatal(err)
+	}
+	_ = st.Close()
+	checks := isolationJSON(t, home, "linux")
+	if c := checks["isolation.container"]; c["status"] != "warn" || !strings.Contains(c["message"].(string), "the newest run failed 2026-10-04") {
+		t.Errorf("a failed newest run must warn: %v", c)
+	}
+	if c := checks["isolation.network"]; c["status"] != "pass" {
+		t.Errorf("network passed in the newest run: %v", c)
+	}
+}
+
 func TestDoctorIsolationSection(t *testing.T) {
 	registered := false
 	for _, s := range doctor.Registered() {
@@ -72,6 +113,7 @@ func TestDoctorIsolationSection(t *testing.T) {
 		t.Fatal("the isolation section is not in the doctor registry")
 	}
 	home := t.TempDir()
+	pinIsolationNow(t, time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC))
 	seedDrillEvidence(t, home, "passed: isolation.container isolation.sandboxed-container isolation.network", "linux/amd64")
 	checks := isolationJSON(t, home, "linux")
 	for _, id := range []string{"isolation.container", "isolation.sandboxed-container", "isolation.network", "isolation.hygiene", "isolation.vm", "isolation.ephemeral-vm"} {

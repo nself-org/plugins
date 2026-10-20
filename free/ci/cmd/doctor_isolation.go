@@ -6,8 +6,8 @@ package main
 // isolation-levels drill (scripts/drill/isolation-levels). It registers itself in the doctor section registry
 // (P7-CI-50), so internal/doctor is not edited for it.
 // Inputs:  the machine's run store (NSELF_CI_HOME, default ~/.nself/ci/state.db); it is never created, and only queried (opening an existing store also applies the store's own directory mode and migrations).
-// Outputs: checks that always pass (an unverified level is the honest state of a host that never ran the drill, not a
-// fault); `verified_at` is an RFC 3339 time or null; Linux vm and ephemeral-vm read "unavailable (no KVM host, D-0120)".
+// Outputs: checks that pass (an unverified level is the honest state of a host that never ran the drill, not a
+// fault) or warn (a verified level whose newest run failed, or whose last pass is older than NSELF_CI_ISOLATION_MAX_AGE, default 7 days); `verified_at` is an RFC 3339 time or null; Linux vm and ephemeral-vm read "unavailable (no KVM host, D-0120)".
 // A store that cannot be read is one warning, and no level then reads verified.
 // Constraints: no evidence write, no store creation; a level is verified only by a stored passing check.
 
@@ -28,8 +28,12 @@ import (
 // isolationGOOS is the host OS the section reports for; tests replace it.
 var isolationGOOS = runtime.GOOS
 
+// isolationNow is the clock the age check reads; tests replace it.
+var isolationNow = time.Now
+
 const (
 	isolationDrillHint = "Run the isolation-levels drill on this host: nself ci --pipeline drills --job drill-isolation-levels"
+	isolationStaleHint = "Run the isolation-levels drill again and look at why the level failed or went stale: nself ci --pipeline drills --job drill-isolation-levels"
 	isolationStoreHint = "Check the state directory (NSELF_CI_HOME) and that no other nself-ci process holds it"
 )
 
@@ -61,6 +65,7 @@ func isolationChecks(ctx context.Context, env doctor.Env) []doctor.Check {
 	if storeErr == nil {
 		storeErr = readErr
 	}
+	maxAge := isolationMaxAge(env)
 	var out []doctor.Check
 	if storeErr != nil {
 		out = append(out, doctor.Check{
@@ -77,6 +82,12 @@ func isolationChecks(ctx context.Context, env doctor.Env) []doctor.Check {
 		case lastverified.Verified:
 			at := r.VerifiedAt.UTC().Format(time.RFC3339)
 			c.VerifiedAt = &at
+			if why := r.Warning(isolationNow(), maxAge); why != "" {
+				c.Status, c.Remediation = doctor.Warn, isolationStaleHint
+				if r.FailedAt.IsZero() {
+					c.Message += "; " + why
+				}
+			}
 		case lastverified.Unverified:
 			c.Remediation = isolationDrillHint
 		}
@@ -96,4 +107,15 @@ func isolationStorePath(env doctor.Env) string {
 		home = filepath.Join(user, ".nself", "ci")
 	}
 	return filepath.Join(home, "state.db")
+}
+
+// isolationMaxAge is the age past which a pass warns: NSELF_CI_ISOLATION_MAX_AGE (a Go duration; "0" turns the check
+// off), default lastverified.DefaultMaxAge. An unparsable value keeps the default.
+func isolationMaxAge(env doctor.Env) time.Duration {
+	if v := env.Getenv("NSELF_CI_ISOLATION_MAX_AGE"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d >= 0 {
+			return d
+		}
+	}
+	return lastverified.DefaultMaxAge
 }
