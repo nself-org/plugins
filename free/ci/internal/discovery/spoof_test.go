@@ -165,11 +165,13 @@ func parse(t *testing.T, path string) *ast.File {
 }
 
 // TestImportsCannotAuthorize: no code path of this package can authorize or pair a node from a record:
-// its non-test files import only the standard library, the mDNS library, yaml, the error-code registry
-// and the envelope writer. The registry, store, pairing and PKI packages are all absent.
+// its non-test files import only the standard library, the mDNS libraries (hashicorp/mdns for the server,
+// miekg/dns and x/net/ipv4 for the browse), yaml, the error-code registry and the envelope writer. The registry, store, pairing and PKI packages are all absent.
 func TestImportsCannotAuthorize(t *testing.T) {
 	allowed := map[string]bool{
 		"github.com/hashicorp/mdns":                           true,
+		"github.com/miekg/dns":                                true,
+		"golang.org/x/net/ipv4":                               true,
 		"gopkg.in/yaml.v3":                                    true,
 		"github.com/nself-org/plugins/free/ci/internal/model": true,
 		"github.com/nself-org/cli/sdk/go/v2/output":           true,

@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/hashicorp/mdns"
 )
 
 // TestZoneNamesAreExplicit: the library service carries our random names and addresses, never the
@@ -32,13 +30,6 @@ func TestZoneNamesAreExplicit(t *testing.T) {
 	}
 	if _, err = zoneFor(Service{Instance: id.Instance, Type: ServiceType, Domain: Domain, HostName: "no-trailing-dot", Port: 22, IPs: addr("192.168.1.20")}); err == nil {
 		t.Fatal("a non-FQDN host name must be refused, not defaulted to os.Hostname")
-	}
-}
-
-func TestFromLibraryMapsEntries(t *testing.T) {
-	e := fromLibrary(&mdns.ServiceEntry{Name: "n._nself-ci._tcp.local.", Host: "h.local.", AddrV4: net.ParseIP("192.168.1.9"), Port: 22, InfoFields: []string{"0a1b2c3d"}})
-	if e.Name != "n._nself-ci._tcp.local." || len(e.Addrs) != 1 || e.Addrs[0] != netip.MustParseAddr("192.168.1.9") || e.TXT[0] != "0a1b2c3d" {
-		t.Fatalf("%+v", e)
 	}
 }
 

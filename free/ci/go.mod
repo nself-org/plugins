@@ -5,7 +5,9 @@ go 1.26.4
 require (
 	github.com/google/jsonschema-go v0.4.2
 	github.com/hashicorp/mdns v1.0.7
+	github.com/miekg/dns v1.1.72
 	github.com/nself-org/cli/sdk/go/v2 v2.0.0-20261008225131-a4a60906574c
+	golang.org/x/net v0.60.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
 )
@@ -14,11 +16,9 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
-	github.com/miekg/dns v1.1.72 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0
 	golang.org/x/tools v0.50.0 // indirect
