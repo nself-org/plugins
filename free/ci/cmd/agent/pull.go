@@ -163,6 +163,7 @@ func pullLoop(ctx context.Context, f pullFlags, state string, cred enroll.Creden
 	}
 	table.Lower(f.slots)
 	logf := func(format string, a ...any) { fmt.Fprintf(sio.Stderr, "nself-ci-agent pull: "+format+"\n", a...) }
+	sweepOrphanJobs(ctx, f.coordinator, logf)
 	resolver := pullResolver(state, f, cred.Enrollment.NodeID, age.Path)
 	for ctx.Err() == nil {
 		car := agent.NewCarrier(agent.CarrierConfig{

@@ -11,11 +11,14 @@ package reliability
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/nself-org/plugins/free/ci/internal/transport/agent"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"testing"
 	"time"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
@@ -42,7 +45,7 @@ func (j jobSpec) script() string {
 	if j.failExit != 0 {
 		tail = `exit ` + itoa(j.failExit)
 	}
-	return `echo $(date +%s%N) >> /tmp/starts; i=0; while [ $i -lt ` + itoa(j.iter) + ` ]; do echo $(date +%s%N) >> /tmp/beats; sleep 0.2; i=$((i+1)); done; ` + tail
+	return `echo $(date +%s%N) >> /tmp/starts; i=0; while [ $i -lt ` + itoa(j.iter) + ` ]; do echo $(date +%s%N) >> /tmp/beats; echo tick-$i; sleep 0.2; i=$((i+1)); done; ` + tail
 }
 
 func (j jobSpec) job() model.Job {
@@ -220,4 +223,45 @@ func (h *runHandle) decision(attemptID string) string {
 		h.l.t.Fatalf("no placement decision for %s (found %v): %v", attemptID, ok, err)
 	}
 	return string(d.Doc)
+}
+
+// leaseLog is the coordinator's durable log of the attempt's lease: the text of every line, in order.
+func (h *runHandle) leaseLog(attemptID string) []string {
+	h.l.t.Helper()
+	raw, err := os.ReadFile(agent.LogFile(h.l.c.home+"/agent-logs", "lease-"+attemptID))
+	if err != nil {
+		h.l.t.Fatalf("lease log of %s: %v", attemptID, err)
+	}
+	var out []string
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		var rec struct {
+			LineSeq uint64 `json:"line_seq"`
+			Text    string `json:"text"`
+		}
+		if err = json.Unmarshal([]byte(line), &rec); err != nil {
+			h.l.t.Fatalf("lease log of %s: %q: %v", attemptID, line, err)
+		}
+		out = append(out, strings.TrimRight(rec.Text, "\n"))
+	}
+	return out
+}
+
+// assertTicks fails unless the log holds tick-0 .. tick-(n-1) exactly once each and in order: no duplicate
+// and no missing line after a resend.
+func assertTicks(t *testing.T, log []string, n int) {
+	t.Helper()
+	var ticks []string
+	for _, l := range log {
+		if strings.HasPrefix(l, "tick-") {
+			ticks = append(ticks, l)
+		}
+	}
+	if len(ticks) != n {
+		t.Fatalf("the log has %d tick lines, want %d: %v", len(ticks), n, ticks)
+	}
+	for i, l := range ticks {
+		if l != "tick-"+itoa(i) {
+			t.Fatalf("tick line %d is %q: a line was duplicated or lost: %v", i, l, ticks)
+		}
+	}
 }

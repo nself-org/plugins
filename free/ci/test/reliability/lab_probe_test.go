@@ -98,3 +98,9 @@ func (l *lab) unpause(i int) { l.f.Unpause(l.t, l.names[i]) }
 // partition detaches node i from the fleet network; heal puts it back.
 func (l *lab) partition(i int) { l.f.Partition(l.t, l.names[i]) }
 func (l *lab) heal(i int)      { l.f.Heal(l.t, l.names[i]) }
+
+// agentReachable reports whether node i answers docker exec and can open a connection to the coordinator.
+func (l *lab) agentReachable(i int) bool {
+	out, err := l.tryExec(i, "timeout 2 bash -c 'exec 3<>/dev/tcp/"+l.host+"/"+itoa(l.c.port)+"' && echo ok || echo no")
+	return err == nil && out == "ok"
+}
