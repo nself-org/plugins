@@ -54,7 +54,7 @@ func (c staleChecker) Stale(ctx context.Context, id string) (bool, error) {
 			return false, nil
 		}
 	}
-	return true, nil // no such coordinator: its leftovers belong to nobody
+	return false, nil // unknown here: it may belong to another CI home
 }
 
 // Recover cleans up after coordinators that died. current is the live
