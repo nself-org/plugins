@@ -1,0 +1,288 @@
+package main
+
+// Purpose: restore and collect a remote lease's coordinator-planned cache.
+// Inputs: lease cache plan, agent state, pinned workspace and registered secrets.
+// Outputs: tool environment, read-only container mounts and scanned cache uploads.
+// Constraints: a failed or cancelled job sends nothing; a secret in any planned
+// directory refuses the entire save set before the first transfer frame.
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+
+	"github.com/nself-org/plugins/free/ci/internal/agent/session"
+	"github.com/nself-org/plugins/free/ci/internal/authz"
+	"github.com/nself-org/plugins/free/ci/internal/cache/remote"
+	"github.com/nself-org/plugins/free/ci/internal/cache/specs"
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
+	"github.com/nself-org/plugins/free/ci/internal/protocol"
+)
+
+func init() {
+	must(session.RegisterJobHook(session.JobHook{Name: "cache", Before: cacheBefore, After: cacheAfter}))
+}
+
+type nodeCache struct {
+	lease     protocol.Lease
+	stage     *remote.NodeStage
+	base      *os.Root
+	work      *os.Root
+	miss      map[string]bool
+	container bool
+}
+
+var nodeCaches sync.Map
+
+func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (session.JobSetup, error) {
+	setup := session.JobSetup{Env: map[string]string{}}
+	if l.Cache == nil || l.Cache.Access == "none" {
+		return setup, nil
+	}
+	if l.Cache.Access != "rw" && l.Cache.Access != "ro" {
+		return setup, fmt.Errorf("E711 not_planned: invalid cache access")
+	}
+	ns, err := remote.DecodePlanNamespace(l.Cache.Namespace)
+	if err != nil {
+		return setup, err
+	}
+	container := l.Job.Isolation == "container" || l.Job.Isolation == "sandboxed-container"
+	if (ns.Trust == "untrusted" || l.Cache.Access == "ro") && !container {
+		return setup, fmt.Errorf("E711 not_planned: read-only cache requires container isolation")
+	}
+	if ns.Trust == "untrusted" && l.Cache.Access == "rw" {
+		return setup, fmt.Errorf("E711 not_planned: untrusted writable cache")
+	}
+	state, err := stateDir()
+	if err != nil {
+		return setup, err
+	}
+	copyStore, err := remote.NewReadThrough(filepath.Join(state, "cache-readthrough"), 0)
+	if err != nil {
+		return setup, err
+	}
+	if err = copyStore.Prune(); err != nil {
+		return setup, err
+	}
+	dir := filepath.Join(root.Dir, "cache-work")
+	if err = os.Mkdir(dir, 0755); err != nil {
+		return setup, err
+	}
+	base, err := os.OpenRoot(dir)
+	if err != nil {
+		return setup, err
+	}
+	n := &nodeCache{lease: l, base: base, miss: map[string]bool{}, container: container}
+	good := false
+	defer func() {
+		if !good {
+			_ = base.Close()
+		}
+	}()
+	seen := map[string]bool{}
+	for _, restore := range l.Cache.Restore {
+		sp, ok := specs.Get(restore.Spec)
+		if !ok || restore.Dir != restore.Spec {
+			return setup, fmt.Errorf("E711 not_planned: invalid restore spec")
+		}
+		seen[sp.ID] = true
+		for _, d := range sp.Dirs {
+			if err := base.MkdirAll(filepath.Join(sp.ID, d.Name), 0755); err != nil {
+				return setup, err
+			}
+		}
+		valid := true
+		for _, b := range restore.Blobs {
+			known := false
+			for _, d := range sp.Dirs {
+				known = known || d.Name == b.Path
+			}
+			if !known {
+				return setup, fmt.Errorf("E711 not_planned: invalid cache blob path")
+			}
+			// JobHook.Before has no carrier receiver. Until that protocol hook is
+			// available a missing copy is best effort; never read coordinator paths.
+			f, err := copyStore.Open(ctx, l.Cache.Namespace, b.SHA256, b.Size, nil)
+			if err != nil {
+				valid = false
+				break
+			}
+			lim := authz.DefaultLimits()
+			lim.AllowDotGit = true
+			_, err = specs.Unpack(f, base, filepath.Join(sp.ID, b.Path), lim, specs.UnpackOptions{OtherRead: container})
+			_ = f.Close()
+			if err != nil {
+				valid = false
+				break
+			}
+		}
+		if !valid {
+			_ = specs.RemoveIn(base, sp.ID)
+			for _, d := range sp.Dirs {
+				_ = base.MkdirAll(filepath.Join(sp.ID, d.Name), 0755)
+			}
+		}
+		if container {
+			_ = base.Chmod(sp.ID, 0755)
+		}
+		bindCache(&setup, sp, dir, container)
+	}
+	if l.Cache.Access == "rw" {
+		var saves []protocol.CacheSave
+		for _, save := range l.Cache.Save {
+			if seen[save.Spec] {
+				continue
+			}
+			sp, ok := specs.Get(save.Spec)
+			if !ok {
+				return setup, fmt.Errorf("E711 not_planned: invalid save spec")
+			}
+			n.miss[save.Spec] = true
+			saves = append(saves, save)
+			if container {
+				bindWorkspaceCache(&setup, sp)
+			} else {
+				for _, d := range sp.Dirs {
+					if err = base.MkdirAll(filepath.Join(sp.ID, d.Name), 0700); err != nil {
+						return setup, err
+					}
+				}
+				bindCache(&setup, sp, dir, false)
+			}
+		}
+		plan := *l.Cache
+		plan.Save = saves
+		n.lease.Cache = &plan
+		if len(saves) > 0 {
+			n.stage, err = remote.NewNodeStage(filepath.Join(root.Dir, "cache-stage"), n.lease)
+			if err != nil {
+				return setup, err
+			}
+			n.stage.Copies = copyStore
+		}
+	}
+	nodeCaches.Store(l.AttemptID, n)
+	good = true
+	return setup, nil
+}
+
+func bindCache(setup *session.JobSetup, sp specs.Spec, dir string, container bool) {
+	if sp.RootEnv != "" {
+		host := filepath.Join(dir, sp.ID)
+		setup.Env[sp.RootEnv] = host
+		if container {
+			setup.Mounts = append(setup.Mounts, ciexec.Mount{Host: host, Target: host, ReadOnly: true})
+		}
+		return
+	}
+	for _, d := range sp.Dirs {
+		host := filepath.Join(dir, sp.ID, d.Name)
+		if d.Env != "" {
+			setup.Env[d.Env] = host
+		}
+		if container {
+			setup.Mounts = append(setup.Mounts, ciexec.Mount{Host: host, Target: host, ReadOnly: true})
+		}
+	}
+}
+
+func bindWorkspaceCache(setup *session.JobSetup, sp specs.Spec) {
+	if sp.RootEnv != "" {
+		setup.Env[sp.RootEnv] = filepath.Join(specs.WorkspaceCacheDir, sp.ID)
+	}
+	for _, d := range sp.Dirs {
+		if d.Env != "" {
+			setup.Env[d.Env] = filepath.Join(specs.WorkspaceCacheDir, sp.ID, d.Name)
+		}
+	}
+}
+
+func cacheBeforeJob(spec execSpec) func(context.Context, *os.Root) error {
+	v, ok := nodeCaches.Load(spec.AttemptID)
+	if !ok {
+		return nil
+	}
+	n := v.(*nodeCache)
+	if !n.container || len(n.miss) == 0 {
+		return nil
+	}
+	return func(_ context.Context, ws *os.Root) error {
+		if err := ws.Mkdir(specs.WorkspaceCacheName, 0755); err != nil {
+			return err
+		}
+		work, err := ws.OpenRoot(specs.WorkspaceCacheName)
+		if err != nil {
+			return err
+		}
+		n.work = work
+		_ = work.Chmod(".", 0755)
+		for id := range n.miss {
+			sp, _ := specs.Get(id)
+			for _, d := range sp.Dirs {
+				if err = work.MkdirAll(filepath.Join(id, d.Name), 0755); err != nil {
+					return err
+				}
+			}
+			_ = work.Chmod(id, 0755)
+		}
+		return nil
+	}
+}
+
+// agentAfterJob composes the artifact collector with the cache collector while
+// the executor still owns the workspace. Cache refusal stays best effort.
+func agentAfterJob(spec execSpec, in jobInputs) func(context.Context, *os.Root) error {
+	artifact := artifactsAfterJob(spec, in)
+	return func(ctx context.Context, ws *os.Root) error {
+		if artifact != nil {
+			if err := artifact(ctx, ws); err != nil {
+				return err
+			}
+		}
+		if v, ok := nodeCaches.Load(spec.AttemptID); ok {
+			n := v.(*nodeCache)
+			if n.stage != nil {
+				base := n.base
+				if n.container {
+					base = n.work
+				}
+				if base != nil {
+					if err := n.stage.Collect(ctx, base, secretScanner(in)); err != nil {
+						fmt.Fprintln(os.Stderr, "cache save refused:", err)
+					}
+				}
+			}
+		}
+		return nil
+	}
+}
+
+func cacheAfter(ctx context.Context, l protocol.Lease, _ session.JobRoot, out session.Outcome, up session.Uploader) error {
+	v, ok := nodeCaches.LoadAndDelete(l.AttemptID)
+	if !ok {
+		return nil
+	}
+	n := v.(*nodeCache)
+	defer func() {
+		_ = n.base.Close()
+		if n.work != nil {
+			_ = n.work.Close()
+		}
+		if n.stage != nil {
+			_ = n.stage.Close()
+		}
+	}()
+	if out.State != "passed" || n.stage == nil {
+		return nil
+	}
+	src, ok := up.(session.OffsetSource)
+	if !ok {
+		return nil
+	}
+	if err := n.stage.Ship(ctx, src.Offsets(), up); err != nil {
+		fmt.Fprintln(os.Stderr, "cache upload refused:", err)
+	}
+	return nil
+}
