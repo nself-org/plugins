@@ -59,6 +59,9 @@ type jobInputs struct {
 	Masks []string
 	// RunnerRoot asks the container for the exec-capable runner tmpfs (a runner credential job).
 	RunnerRoot bool
+	// Entrypoint replaces the container image's entrypoint (a runner credential job on an image whose own
+	// entrypoint is a launcher: the agent binary, which then runs the credential wrapper).
+	Entrypoint string
 	Output     func([]byte)
 	// Tail returns the masked output tail for the failure excerpt (nil: use the raw tail).
 	Tail func() string
@@ -208,7 +211,7 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	}
 	raw := &tailBuffer{max: excerptMax}
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: spec.AttemptID, CoordinatorID: agentIncarnation(spec.CoordinatorID), Job: job, Command: job.Run,
-		SourceDir: spec.SourceDir, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks, RunnerRoot: in.RunnerRoot,
+		SourceDir: spec.SourceDir, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks, RunnerRoot: in.RunnerRoot, Entrypoint: in.Entrypoint,
 		CPU: jobCPU(in), MemoryMB: jobMemoryMB(in), AfterJob: artifactsAfterJob(spec, in),
 		Output: func(b []byte) {
 			raw.Write(b)

@@ -157,6 +157,11 @@ func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResu
 	return runSpec(ctx, spec, in)
 }
 
+// entrypointKinds are the credential kinds whose runner image has an entrypoint that is not a pass-through
+// (the gitlab-runner image runs `dumb-init /entrypoint`, which execs `gitlab-runner "$@"`), so the wrapper
+// must be the entrypoint. The GitHub runner image has none: its job command is appended after the image.
+var entrypointKinds = map[string]bool{"gitlab-runner-token": true}
+
 // containerAgentPath is where a container job sees the agent binary (a Linux agent: the
 // binary is bind-mounted read-only, so it must match the container's OS).
 const containerAgentPath = "/usr/local/bin/nself-ci-agent"
@@ -177,15 +182,40 @@ func wrapCredential(spec *execSpec, in *jobInputs, j session.JobRun) error {
 		return fmt.Errorf("agent binary: %w", err)
 	}
 	agent := exe
+	wrap := func() []string { return []string{agent, "cred-wrapper", rc.Kind, "--"} }
 	if spec.Job.Isolation == "container" || spec.Job.Isolation == "sandboxed-container" { // both run in a container image (gVisor is the same CLI path)
 		agent = containerAgentPath
 		in.Mounts = append(append([]ciexec.Mount(nil), in.Mounts...), ciexec.Mount{Host: exe, Target: agent, ReadOnly: true})
 		in.RunnerRoot = true
+		if entrypointKinds[rc.Kind] {
+			// the image's own entrypoint is a launcher (gitlab-runner): the agent takes its place and the
+			// command starts at the wrapper, so the wrapper still runs first and the credential reaches only the runner
+			in.Entrypoint = agent
+			wrap = func() []string { return []string{"cred-wrapper", rc.Kind, "--"} }
+		}
 	}
-	spec.Job.Run = append([]string{agent, "cred-wrapper", rc.Kind, "--"}, spec.Job.Run...)
+	spec.Job.Run = append(wrap(), spec.Job.Run...)
 	in.Stdin = io.MultiReader(bytes.NewReader(j.Credential), strings.NewReader("\n"))
 	in.Masks = append(in.Masks, string(j.Credential))
+	in.Masks = append(in.Masks, partialMasks(rc.Kind, string(j.Credential))...)
 	return nil
+}
+
+// routableToken matches the type marker of a routable runner token (glrt-t1_, glrt-t2_, ...).
+var routableToken = regexp.MustCompile(`^t[0-9]+_`)
+
+// partialMasks are the parts of a credential its program prints on its own. gitlab-runner logs the first nine
+// characters of the token's random part in "Starting runner for <url> with token <nine>" and in every
+// "runner=<nine>" field (measured on v19.4.1), so those nine are masked as well as the whole value.
+func partialMasks(kind, value string) []string {
+	if kind != "gitlab-runner-token" {
+		return nil
+	}
+	rest := routableToken.ReplaceAllString(strings.TrimPrefix(value, "glrt-"), "")
+	if len(rest) < 9 {
+		return nil
+	}
+	return []string{rest[:9]}
 }
 
 func hostStatus() session.Status {

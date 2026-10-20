@@ -48,3 +48,46 @@ func TestAgentHookGivesOnlyARunnerAttemptItsForgeHosts(t *testing.T) {
 		t.Fatalf("hosts must be forgotten when the lease ends: %v", got)
 	}
 }
+
+// TestAgentHookAddsTheOperatorsForgeHost (P7-HOST-07): a self-hosted GitLab's host travels in the job
+// (EnvHosts, set by the coordinator's Synthesize from policy) and joins the restricted allowlist for a runner
+// attempt; a name that is not a plain lower-case host is dropped, and the list is bounded.
+func TestAgentHookAddsTheOperatorsForgeHost(t *testing.T) {
+	s := runnerSpec("33")
+	s.Provider, s.Hosts = "gitlab", []string{"gitlab.example.com", "git.lan"}
+	p, err := runnerjob.Synthesize(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Jobs[0].Env[runnerjob.EnvHosts] != "gitlab.example.com,git.lan" {
+		t.Fatalf("env %v", p.Jobs[0].Env)
+	}
+	l := protocol.Lease{AttemptID: "att-gl", Job: p.Jobs[0], RunnerCredential: &protocol.RunnerCredential{Kind: "gitlab-runner-token", Value: "x"}}
+	l.Job.Env[runnerjob.EnvHosts] += ",Evil.Example,a b,*.example.com,,x.y,e1.example,e2.example,e3.example"
+	hook := runnerjob.Hook()
+	if _, err = hook.Before(context.Background(), l, jobRoot()); err != nil {
+		t.Fatal(err)
+	}
+	got := runnerjob.AttemptHosts(isolation.Attempt{ID: "att-gl"})
+	want := []string{"gitlab.example.com", "git.lan", "x.y", "e1.example"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("hosts %v, want %v", got, want)
+	}
+	_ = hook.After(context.Background(), l, jobRoot(), outcome(), nil)
+}
+
+// TestSpecHostsAreValidated (P7-HOST-07): extra hosts must be plain lower-case names, at most MaxHosts.
+func TestSpecHostsAreValidated(t *testing.T) {
+	for _, bad := range [][]string{{"Gitlab.com"}, {"a b"}, {"*.gitlab.com"}, {"-x.com"}, {""}, {"a", "b", "c", "d", "e"}, {"gitlab.com,evil.com"}} {
+		s := runnerSpec("34")
+		s.Hosts = bad
+		if err := s.Validate(); err == nil {
+			t.Errorf("hosts %v must be refused", bad)
+		}
+	}
+	s := runnerSpec("34")
+	s.Hosts = []string{"gitlab.com", "git.lan", "10.0.0.5"}
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}

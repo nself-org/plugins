@@ -1,0 +1,6 @@
+{
+  "token": "fixture-installation-token-0001",
+  "expires_at": "2026-10-20T13:00:00Z",
+  "permissions": {"checks": "write", "contents": "read", "metadata": "read", "statuses": "write"},
+  "repository_selection": "selected"
+}

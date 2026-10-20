@@ -1,0 +1,7 @@
+{
+  "name": "ci-gitlab-runner",
+  "kind": "ci",
+  "image": "docker.io/gitlab/gitlab-runner:v19.4.1@sha256:77d03a5c881ff8f97381de4f96a66c080733eeab9c9cf502bd19916a18969113",
+  "platforms": ["linux/amd64", "linux/arm64"],
+  "owner": "P7-HOST-07"
+}

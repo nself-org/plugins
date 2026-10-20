@@ -1,0 +1,1 @@
+{"id": 4242, "name": "nself-ci/gates", "head_sha": "0123456789abcdef0123456789abcdef01234567", "external_id": "run-0001", "status": "completed", "conclusion": "failure", "output": {"title": "t", "summary": "s", "annotations_count": 0}}

@@ -77,6 +77,9 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 		args = append(args, "-e", name)
 		cliEnv = append(cliEnv, kv)
 	}
+	if s.Entrypoint != "" {
+		args = append(args, "--entrypoint", s.Entrypoint)
+	}
 	args = append(args, s.Job.Container.Image)
 	args = append(args, s.Command...)
 	stop := containerStopper("docker", name, e.Grace)

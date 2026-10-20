@@ -48,6 +48,11 @@ type Response struct {
 	Status  int
 	RetryAt time.Time
 	ETag    string // the response ETag, for a later conditional request
+	// Scopes is the X-OAuth-Scopes header GitHub sends for a classic token (P7-HOST-12: `providers test`
+	// reports it; it is a list of scope names, never a credential). ScopesSet tells an empty list from
+	// no header, which fine-grained tokens and App tokens get.
+	Scopes    string
+	ScopesSet bool
 }
 
 // Request is one API request with the options Do and DoQuery leave out.
@@ -166,6 +171,8 @@ func (c *Client) DoRequest(ctx context.Context, rq Request, out any) (Response, 
 	defer func() { _ = resp.Body.Close() }()
 	response.Status = resp.StatusCode
 	response.ETag = resp.Header.Get("ETag")
+	response.Scopes = resp.Header.Get("X-OAuth-Scopes")
+	_, response.ScopesSet = resp.Header["X-Oauth-Scopes"]
 	limited, err := readLimited(resp.Body, apiCap)
 	if err != nil {
 		finalErr = classifyRead(err, "response.too_large")
