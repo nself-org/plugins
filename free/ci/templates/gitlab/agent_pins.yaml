@@ -1,0 +1,7 @@
+# Commits of nself-org/plugins the include template may build the agent from, oldest first; the last
+# entry is what `providers gitlab init` pins. Each commit is on the default branch and contains
+# free/ci/cmd/agent with the exec subcommand. The coordinator renders the include file from this list
+# when it checks a pipeline, so a file that pins any other commit is refused. Add a commit here in the
+# change that needs it; never remove one a pipeline may still use.
+source_commits:
+  - 839d28593b2409647f172553274791852aacd8b3 # same commit as the GitHub template (cmd/agent exec from P7-NODE-23)
