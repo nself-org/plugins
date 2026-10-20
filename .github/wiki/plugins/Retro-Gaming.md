@@ -7,7 +7,7 @@
 |---|---|
 | **Licence** | Free (MIT) |
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
-| **Version** | 1.2.6 |
+| **Version** | 1.2.13 |
 | **Install** | `nself plugin install retro-gaming` |
 | **Requirements** | nSelf >=1.0.0 |
 
@@ -22,7 +22,6 @@ Retro game library management with ROM cataloging, save state sync, play session
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
-- [CLI Commands](#cli-commands)
 - [REST API](#rest-api)
 - [Database Schema](#database-schema)
 - [Features](#features)
@@ -49,9 +48,8 @@ The Retro Gaming plugin provides a complete retro game library management system
 
 ```bash
 nself plugin install retro-gaming
-nself plugin retro-gaming init    # Creates schema and seeds default emulator cores
-nself plugin retro-gaming server
-nself plugin retro-gaming roms list
+nself build
+nself start
 ```
 
 ---
@@ -82,78 +80,35 @@ nself plugin retro-gaming roms list
 
 ---
 
-## CLI Commands
-
-| Command | Description | Options |
-|---------|-------------|---------|
-| `init` | Initialize schema and seed default emulator cores | - |
-| `server` | Start the API server | `-p, --port`, `-h, --host` |
-| `roms list` | List ROMs in library | `--platform`, `--genre`, `--favorites`, `--search`, `--sort`, `-l, --limit` |
-| `roms stats` | Show ROM library statistics | - |
-| `cores list` | List emulator cores | - |
-| `cores seed` | Seed default emulator cores | - |
-| `save-states` | List save states | `--rom <rom_id>` |
-| `sessions recent` | Show recent play sessions | - |
-| `stats` / `status` | Show overall statistics | - |
-
----
-
 ## REST API
 
-### ROMs
+The service starts as a server; it has no ROM, core, or session CLI subcommands.
+The following endpoints are declared in `free/retro-gaming/plugin.json` (`apiEndpoints`).
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/games/roms` | List ROMs with filters |
-| `POST` | `/api/games/roms` | Add a ROM to the library |
-| `GET` | `/api/games/roms/:id` | Get ROM details |
-| `PUT` | `/api/games/roms/:id` | Update ROM metadata |
-| `DELETE` | `/api/games/roms/:id` | Remove a ROM |
-| `POST` | `/api/games/roms/scan` | Scan storage for new ROMs |
-| `POST` | `/api/games/roms/:id/enrich` | Enrich ROM metadata from IGDB |
-
-### Save States
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/games/save-states/:rom_id` | List save states for a ROM |
-| `POST` | `/api/games/save-states/:rom_id` | Upload a save state |
-| `GET` | `/api/games/save-states/:rom_id/:id` | Get a specific save state |
-| `DELETE` | `/api/games/save-states/:rom_id/:id` | Delete a save state |
-
-### Emulator Cores
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/games/cores` | List all emulator cores |
-| `GET` | `/api/games/cores/platform/:platform` | Get cores for a platform |
-| `POST` | `/api/games/cores/:id/download` | Download/install a core |
-| `GET` | `/api/games/cores/installed` | List installed cores |
-
-### Play Sessions
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/games/sessions/start` | Start a play session |
-| `POST` | `/api/games/sessions/:id/end` | End a play session |
-| `GET` | `/api/games/sessions/recent` | Get recent sessions |
-
-### Controllers
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/games/controllers` | List controller configs |
-| `POST` | `/api/games/controllers` | Create controller config |
-| `PUT` | `/api/games/controllers/:id` | Update controller config |
-| `DELETE` | `/api/games/controllers/:id` | Delete controller config |
-
-### Stats and Health
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/stats` | Library statistics |
-| `GET` | `/health` | Health check |
-| `GET` | `/ready` | Readiness check |
+| Method | Path |
+|--------|------|
+| `GET` | `/api/games/roms` |
+| `GET` | `/api/games/roms/:id` |
+| `POST` | `/api/games/roms` |
+| `PATCH` | `/api/games/roms/:id` |
+| `DELETE` | `/api/games/roms/:id` |
+| `POST` | `/api/games/roms/scan` |
+| `GET` | `/api/games/save-states/:rom_id` |
+| `POST` | `/api/games/save-states/:rom_id` |
+| `GET` | `/api/games/save-states/:rom_id/:slot` |
+| `DELETE` | `/api/games/save-states/:rom_id/:slot` |
+| `GET` | `/api/games/cores` |
+| `GET` | `/api/games/cores/:platform` |
+| `GET` | `/api/games/cores/:core_name/download` |
+| `POST` | `/api/games/cores/installed` |
+| `GET` | `/api/games/cores/installed` |
+| `POST` | `/api/games/sessions/start` |
+| `POST` | `/api/games/sessions/:session_id/end` |
+| `GET` | `/api/games/sessions/recent` |
+| `GET` | `/api/games/controllers` |
+| `POST` | `/api/games/controllers` |
+| `DELETE` | `/api/games/controllers/:id` |
+| `POST` | `/api/games/roms/:id/enrich` |
 
 ---
 
@@ -295,5 +250,5 @@ nself plugin retro-gaming roms list
 | IGDB enrichment fails | Verify `RETROGAMING_IGDB_CLIENT_ID` and `RETROGAMING_IGDB_CLIENT_SECRET` are set |
 | ROMs not found during scan | Check `RETROGAMING_STORAGE_PATH` points to correct directory |
 | Save states not loading | Ensure core version matches the version used when saving |
-| No default cores after init | Run `nself plugin retro-gaming cores seed` manually |
+| No emulator cores | Inspect the core registry through the REST API; the binary has no `cores seed` command or automatic core seeding. |
 | Cover art not displaying | Check `RETROGAMING_CDN_URL` is configured and accessible |
