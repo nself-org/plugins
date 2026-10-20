@@ -14,6 +14,7 @@ package records
 import (
 	"errors"
 	"io"
+	"os"
 
 	"github.com/nself-org/plugins/free/ci/internal/authz"
 )
@@ -24,16 +25,17 @@ const (
 )
 
 type scanReader struct {
-	src     io.Reader
-	sc      authz.ValueScanner
-	name    string
-	max     int64
-	reason  string // the refusal when the stream outgrows max
-	read    int64
-	tail    []byte
-	out     []byte
-	err     error
-	matched bool
+	src        io.Reader
+	sc         authz.ValueScanner
+	name       string
+	max        int64
+	reason     string // the refusal when the stream outgrows max
+	read       int64
+	tail       []byte
+	out        []byte
+	err        error
+	compressed *os.File
+	matched    bool
 }
 
 func newScanReader(src io.Reader, sc authz.ValueScanner, name string, max int64) *scanReader {
@@ -69,6 +71,9 @@ func (r *scanReader) fill() {
 		return
 	}
 	if len(chunk) == 0 {
+		if err := r.scanCompressed(nil); err != nil {
+			r.err = err
+		}
 		return
 	}
 	if r.sc == nil {
@@ -76,8 +81,12 @@ func (r *scanReader) fill() {
 		return
 	}
 	window := append(append(make([]byte, 0, len(r.tail)+len(chunk)), r.tail...), chunk...)
-	if len(r.sc.Scan(window)) != 0 {
+	if !authz.CleanCandidates(r.sc, window) {
 		r.err, r.matched = failf(ReasonSecretMatch, "%s holds a registered secret value; it is not stored", r.name), true
+		return
+	}
+	if err := r.scanCompressed(chunk); err != nil {
+		r.err = err
 		return
 	}
 	keep := min(scanOverlap, len(window))
