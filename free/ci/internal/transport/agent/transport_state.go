@@ -76,6 +76,7 @@ func (c *Carrier) registerToken(ctx context.Context, l protocol.Lease) error {
 	}
 	c.mu.Lock()
 	c.epochs[l.LeaseID] = l.Epoch
+	c.tokenAt[l.LeaseID] = time.Now()
 	if c.tokens[l.LeaseID] != l.Token {
 		c.tokens[l.LeaseID] = l.Token
 		c.gen++
@@ -139,4 +140,32 @@ func (c *Carrier) confirmedSeq() uint64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.confirmed
+}
+
+// tokenGrace is how long a token outlives its lease's last mention in a heartbeat before it can be swept: a
+// heartbeat composed just before the lease started must not take the new lease's token with it.
+const tokenGrace = 2 * time.Minute
+
+// sweepTokens forgets the tokens of leases that a heartbeat no longer names, that have no frame left in the
+// buffer and that were registered more than tokenGrace ago (a lease that was refused or never ran sends no
+// result, so nothing else would drop its token and the header would grow). The caller holds c.mu.
+func (c *Carrier) sweepTokens(beat protocol.Message, now time.Time) {
+	named := map[string]bool{}
+	if hb, ok := beat.Body.(protocol.Heartbeat); ok {
+		for _, l := range hb.Leases {
+			named[l.LeaseID] = true
+		}
+	}
+	busy := map[string]bool{}
+	for _, f := range c.out {
+		busy[f.m.LeaseID] = true
+	}
+	for id, at := range c.tokenAt {
+		if named[id] || busy[id] || now.Sub(at) < tokenGrace {
+			continue
+		}
+		delete(c.tokens, id)
+		delete(c.epochs, id)
+		delete(c.tokenAt, id)
+	}
 }

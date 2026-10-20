@@ -214,7 +214,7 @@ func (s *Server) heartbeat(q *request, f *flow, seq uint64, hb *protocol.Heartbe
 			}
 			continue
 		}
-		if ls.State == "running" || ls.State == "self_fenced" {
+		if ls.State == "running" { // a self-fence report renews nothing, so it needs no token (the agent may have restarted since)
 			if ok, bad := s.admit(q, f, ls.LeaseID, ls.Epoch, "heartbeat", first); !ok {
 				if bad != nil {
 					return bad

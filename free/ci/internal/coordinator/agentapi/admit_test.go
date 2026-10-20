@@ -127,14 +127,14 @@ func TestAdmitHeartbeatReconcileFlag(t *testing.T) {
 	if m := u.read(); m.Type != "ack" {
 		t.Fatalf("first heartbeat answer %s", m.Type)
 	}
-	u.send(heartbeat(protocol.LeaseState{LeaseID: leaseID, Epoch: epoch, State: "running"}, protocol.LeaseState{LeaseID: leaseID, Epoch: epoch, State: "refused"}))
+	u.send(heartbeat(protocol.LeaseState{LeaseID: leaseID, Epoch: epoch, State: "running"}, protocol.LeaseState{LeaseID: leaseID, Epoch: epoch, State: "refused"}, protocol.LeaseState{LeaseID: leaseID, Epoch: epoch, State: "self_fenced"}))
 	if m := u.read(); m.Type != "ack" {
 		t.Fatalf("second heartbeat answer %s", m.Type)
 	}
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
 	if len(rec.calls) != 2 || !rec.calls[0].Reconcile || rec.calls[1].Reconcile || rec.calls[0].Type != "heartbeat" {
-		t.Fatalf("calls = %+v (a refused-state entry is not job work and is not vetted)", rec.calls)
+		t.Fatalf("calls = %+v (only a running entry renews a lease; refused and self_fenced entries are not vetted)", rec.calls)
 	}
 }
 
@@ -240,5 +240,20 @@ func TestResultCommittedOnlyOnceWhenTheSinkCommits(t *testing.T) {
 		if want := map[bool]string{false: "finalizing", true: "running"}[commits]; string(state) != want {
 			t.Fatalf("commits=%v: attempt is %s, want %s (the engine commits only for a sink that does not)", commits, state, want)
 		}
+	}
+}
+
+func TestTheTokensOfEveryLeaseAnAgentRunsFitTheHeader(t *testing.T) {
+	r := newRig(t, nil)
+	a := r.newAgent("n-1")
+	a.connect()
+	toks := make([]string, 0, maxTokens)
+	for i := 0; i < maxTokens; i++ {
+		toks = append(toks, "lease-"+strconv.Itoa(i)+"="+strings.Repeat("t", 440))
+	}
+	u := a.openStreamTokens(0, toks...) // fails the test when the listener answers 431
+	u.send(heartbeat())
+	if m := u.read(); m.Type != "ack" {
+		t.Fatalf("answer %s", m.Type)
 	}
 }

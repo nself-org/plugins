@@ -108,6 +108,10 @@ func (c *Config) defaults() error {
 	return nil
 }
 
+// maxHeaderBytes bounds a request's headers: the upstream stream carries one job token per lease the agent runs
+// (up to maxTokens of about 450 bytes each).
+const maxHeaderBytes = 128 << 10
+
 // agentTTL is how long an agent may go without a heartbeat ack before it fences itself (Epic D6).
 func (c *Config) agentTTL() time.Duration { return c.CoordinatorTTL - 2*c.Heartbeat }
 
@@ -150,7 +154,7 @@ func New(cfg Config) (*Server, error) {
 		TLSConfig:         tlsc,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
-		MaxHeaderBytes:    16 << 10,
+		MaxHeaderBytes:    maxHeaderBytes,
 		ConnState: func(c net.Conn, st http.ConnState) {
 			if st == http.StateClosed || st == http.StateHijacked {
 				s.dropConn(c)

@@ -75,7 +75,8 @@ type Carrier struct {
 	lastBeat  *protocol.Message
 	tokens    map[string]string
 	epochs    map[string]uint64 // epoch of each lease that has a token
-	gen       int               // bumped when the token set grows: the upstream stream restarts to carry it
+	tokenAt   map[string]time.Time
+	gen       int // bumped when the token set grows: the upstream stream restarts to carry it
 	liveGen   int
 	streaming bool          // an upstream stream is open: frames are being written
 	up        chan struct{} // closed and replaced when liveGen changes
@@ -92,7 +93,7 @@ func NewCarrier(cfg CarrierConfig) *Carrier {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Carrier{cfg: cfg, cl: newClient(cfg.Client), cancel: cancel, inbox: make(chan protocol.Message, 64), done: make(chan struct{}),
-		wake: make(chan struct{}, 1), space: make(chan struct{}, 1), tokens: map[string]string{}, epochs: map[string]uint64{}, up: make(chan struct{})}
+		wake: make(chan struct{}, 1), space: make(chan struct{}, 1), tokens: map[string]string{}, epochs: map[string]uint64{}, tokenAt: map[string]time.Time{}, up: make(chan struct{})}
 	go c.loop(ctx)
 	return c
 }
@@ -171,6 +172,7 @@ func (c *Carrier) Send(m protocol.Message) error {
 			if m.Type == "heartbeat" {
 				cp := m
 				c.lastBeat = &cp
+				c.sweepTokens(m, time.Now())
 			}
 			c.mu.Unlock()
 			c.signal(c.wake)
@@ -273,6 +275,7 @@ func (c *Carrier) trim(seq uint64) {
 			if f.m.Type == "result" { // the job is over and the coordinator has the result: its token is no longer needed
 				delete(c.tokens, f.m.LeaseID)
 				delete(c.epochs, f.m.LeaseID)
+				delete(c.tokenAt, f.m.LeaseID)
 			}
 			c.outBytes -= f.size
 			continue
