@@ -290,12 +290,7 @@ func TestUpgrade(t *testing.T) {
 					t.Fatalf("err %v version %s", err, installed(t, r.s))
 				}
 				if carrier == "agent" { // a pull agent goes back only to the binary it kept
-					if err = Swap(r.s.bin(), stubBinary(t, "1.4.0")); err != nil {
-						t.Fatal(err)
-					}
-					if err = Swap(r.s.bin(), stubBinary(t, "1.5.0")); err != nil {
-						t.Fatal(err)
-					}
+					keepPrev(t, r.s, "1.4.0", "1.5.0")
 				}
 				res, err := r.run(rel, "1.4.0", func(q *Request) { q.AllowDowngrade = true })
 				if err != nil || res.Direction != Downgrade || installed(t, r.s) != "1.4.0" {

@@ -2,22 +2,25 @@ package update
 
 // Purpose: the agent-side half of an upgrade (hq NODE D11): what `nself-ci-agent upgrade` and the protocol `upgrade` message do on
 //          the node itself: refuse while a job runs, fetch and verify the release, check the ceiling, swap atomically, keep
-//          .prev, and check that the new binary runs.
+//          .prev, and check that the installed file is the verified one.
 // Inputs:  LocalOptions: the state dir (slots, coordinators.json), the installed binary path, the target version, a Source.
 // Outputs: Result; the binary at BinPath is the new one and BinPath.prev the old one.
-// Constraints: a version equal to the kept .prev binary's is a restore (one rename, no download, allowed as a downgrade because it
-//          is the version the node ran before); any other downgrade needs AllowDowngrade; the staged binary must print the target
-//          version before it replaces anything, and the installed one again afterwards (else the old one is restored at once); the
-//          agent never restarts itself here: the service manager restarts it (the pull agent exits 0 after a drain) or the next
-//          ssh session starts the new binary.
+// Constraints: a version equal to the kept .prev binary's (recorded next to it as <bin>.prev.version when the swap kept it) is a
+//          restore (one rename, no download, allowed as a downgrade because it is the version the node ran before); any other
+//          downgrade needs AllowDowngrade; after the swap the installed file is hashed against the signed sha256 and the old binary
+//          is restored at once if it differs; the agent never executes the new binary here (os/exec is internal/exec's alone) and never
+//          restarts itself: the service manager restarts it (the pull agent exits 0 after a drain) or the next ssh session starts the
+//          new binary, and the coordinator's hello decides whether it stays (Engine rolls back with a restore message).
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
 	"regexp"
-	"time"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
 	"github.com/nself-org/plugins/free/ci/internal/agent/slots"
@@ -33,8 +36,6 @@ type LocalOptions struct {
 	AllowDowngrade bool
 	Platform       lifecycle.Platform
 	Source         Source
-	// Smoke runs `<bin> version` and returns the version it printed; nil runs the real binary.
-	Smoke func(ctx context.Context, bin string) (string, error)
 }
 
 var versionLineRe = regexp.MustCompile(`^nself-ci-agent (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?: |$)`)
@@ -58,27 +59,12 @@ func ParseVersionLine(out string) (string, bool) {
 	return m[1], true
 }
 
-func runVersion(ctx context.Context, bin string) (string, error) {
-	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(cctx, bin, "version").Output()
-	if err != nil {
-		return "", fmt.Errorf("E656: %s did not run: %w", bin, err)
-	}
-	v, ok := ParseVersionLine(string(out))
-	if !ok {
-		return "", fmt.Errorf("E656: %s printed an unexpected version line", bin)
-	}
-	return v, nil
-}
+// PrevVersionSuffix names the file that records which version the kept .prev binary is.
+const PrevVersionSuffix = PrevSuffix + ".version"
 
 // ApplyLocal upgrades the agent installed at o.BinPath.
 func ApplyLocal(ctx context.Context, o LocalOptions) (Result, error) {
 	res := Result{Node: "local", From: o.Current, To: o.Version, Direction: DirectionOf(o.Current, o.Version)}
-	smoke := o.Smoke
-	if smoke == nil {
-		smoke = runVersion
-	}
 	if _, used, err := slots.Status(o.StateDir); err != nil {
 		return res, fmt.Errorf("E656: cannot read the slot table: %w", err)
 	} else if used > 0 {
@@ -88,8 +74,8 @@ func ApplyLocal(ctx context.Context, o LocalOptions) (Result, error) {
 		res.Noop = true
 		return res, nil
 	}
-	if prevVersion, err := smoke(ctx, o.BinPath+PrevSuffix); err == nil && prevVersion == o.Version {
-		return res, restoreLocal(ctx, o, smoke, &res)
+	if kept, _ := os.ReadFile(o.BinPath + PrevVersionSuffix); strings.TrimSpace(string(kept)) == o.Version {
+		return res, restoreLocal(o, &res)
 	}
 	if res.Direction == Downgrade && !o.AllowDowngrade {
 		return res, refuse(ReasonDowngrade, "this agent runs %s; %s is a downgrade", o.Current, o.Version)
@@ -110,31 +96,42 @@ func ApplyLocal(ctx context.Context, o LocalOptions) (Result, error) {
 	if err = CheckCeiling(recs, prep.Manifest); err != nil {
 		return res, err
 	}
-	if got, serr := smoke(ctx, prep.Path); serr != nil || got != o.Version {
-		return res, fmt.Errorf("E656: the verified release does not run here as %s (%v)", o.Version, serr)
-	}
 	if err = Swap(o.BinPath, prep.Path); err != nil {
 		return res, err
 	}
-	if got, serr := smoke(ctx, o.BinPath); serr != nil || got != o.Version {
+	if got, herr := fileSHA256(o.BinPath); herr != nil || got != prep.Manifest.SHA256 {
 		if rerr := Restore(o.BinPath); rerr != nil {
-			return res, fmt.Errorf("E656: the new agent does not run and the previous one could not be restored: %v", rerr)
+			return res, fmt.Errorf("E656: the installed file is not the verified one and the previous agent could not be restored: %v", rerr)
 		}
 		res.RolledBack = true
-		return res, fmt.Errorf("E656: the new agent did not run as %s (%v); the previous agent is back", o.Version, serr)
+		return res, fmt.Errorf("E656: the installed agent is not the verified file; the previous agent is back")
+	}
+	if _, serr := os.Lstat(o.BinPath + PrevSuffix); serr == nil {
+		_ = os.WriteFile(o.BinPath+PrevVersionSuffix, []byte(o.Current+"\n"), 0o600)
 	}
 	return res, nil
 }
 
-// restoreLocal puts the kept previous binary back (the version asked for is the version it reports).
-func restoreLocal(ctx context.Context, o LocalOptions, smoke func(context.Context, string) (string, error), res *Result) error {
+// restoreLocal puts the kept previous binary back (the version asked for is the version it was recorded as).
+func restoreLocal(o LocalOptions, res *Result) error {
 	if err := Restore(o.BinPath); err != nil {
 		return err
 	}
-	if got, err := smoke(ctx, o.BinPath); err != nil || got != o.Version {
-		return fmt.Errorf("E656: the restored agent did not run as %s (%v)", o.Version, err)
-	}
+	_ = os.Remove(o.BinPath + PrevVersionSuffix)
 	_ = os.Remove(o.BinPath + NewSuffix)
 	res.Direction = Downgrade
 	return nil
+}
+
+func fileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+	h := sha256.New()
+	if _, err = io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }

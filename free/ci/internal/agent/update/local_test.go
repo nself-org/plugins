@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,8 +21,7 @@ import (
 )
 
 func localOpts(s *sim, current, target string, src Source) LocalOptions {
-	return LocalOptions{StateDir: s.state(), BinPath: s.bin(), Current: current, Version: target, Platform: hostPlatform, Source: src,
-		Smoke: func(ctx context.Context, bin string) (string, error) { return smokeIn(s, ctx, bin) }}
+	return LocalOptions{StateDir: s.state(), BinPath: s.bin(), Current: current, Version: target, Platform: hostPlatform, Source: src}
 }
 
 // smokeIn runs `<bin> version` with the sim's state dir, as the agent would see it.
@@ -87,12 +87,7 @@ func TestApplyLocalDowngradeNeedsTheFlagExceptRestoringPrev(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 	// with a kept previous binary of exactly that version, the move back is a restore: no download, no flag
-	if err = Swap(s.bin(), stubBinary(t, "1.4.0")); err != nil { // bin=1.4.0, .prev=1.5.0
-		t.Fatal(err)
-	}
-	if err = Swap(s.bin(), stubBinary(t, "1.5.0")); err != nil { // bin=1.5.0, .prev=1.4.0
-		t.Fatal(err)
-	}
+	keepPrev(t, s, "1.4.0", "1.5.0")
 	res, err := ApplyLocal(context.Background(), localOpts(s, "1.5.0", "1.4.0", failingSource{}))
 	if err != nil || res.Direction != Downgrade || installed(t, s) != "1.4.0" {
 		t.Fatalf("res %+v err %v version %s", res, err, installed(t, s))
@@ -105,16 +100,34 @@ func (failingSource) Prepare(context.Context, lifecycle.Platform) (Prepared, err
 	return Prepared{}, errors.New("the source must not be used")
 }
 
-func TestApplyLocalRestoresWhenTheNewBinaryDoesNotRun(t *testing.T) {
-	s, rel := newSim(t, "1.4.0"), newRelease(t, "1.5.0", 1, 1)
-	o := localOpts(s, "1.4.0", "1.5.0", rel.source())
-	o.Smoke = func(ctx context.Context, bin string) (string, error) {
-		if bin == s.bin() { // after the swap the installed file fails; the staged copy ran fine before it
-			return "", errors.New("exit status 1")
+// keepPrev leaves bin at version cur and the kept previous binary at version prev, as a finished ApplyLocal does.
+func keepPrev(t *testing.T, s *sim, prev, cur string) {
+	t.Helper()
+	for _, v := range []string{prev, cur} {
+		if err := Swap(s.bin(), stubBinary(t, v)); err != nil {
+			t.Fatal(err)
 		}
-		return smokeIn(s, ctx, bin)
 	}
-	res, err := ApplyLocal(context.Background(), o)
+	if err := os.WriteFile(s.bin()+PrevVersionSuffix, []byte(prev+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// lyingSource hands over a file that is not the one its manifest signed.
+type lyingSource struct{ real Prepared }
+
+func (l lyingSource) Prepare(context.Context, lifecycle.Platform) (Prepared, error) {
+	return l.real, nil
+}
+
+func TestApplyLocalRestoresWhenTheInstalledFileIsNotTheVerifiedOne(t *testing.T) {
+	s, rel := newSim(t, "1.4.0"), newRelease(t, "1.5.0", 1, 1)
+	p, err := rel.source().Prepare(context.Background(), hostPlatform)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Manifest.SHA256 = strings.Repeat("0", 64) // the signed digest is not the file's
+	res, err := ApplyLocal(context.Background(), localOpts(s, "1.4.0", "1.5.0", lyingSource{real: p}))
 	if err == nil || !res.RolledBack || installed(t, s) != "1.4.0" {
 		t.Fatalf("res %+v err %v version %s", res, err, installed(t, s))
 	}
@@ -163,4 +176,17 @@ func TestStoreAuditorWritesRowsTheAuditTableAccepts(t *testing.T) {
 	if err != nil || len(rows) != 1 || rows[0].Action != "node.upgrade.drain" || rows[0].Target != "n1" || rows[0].Actor != "cli:admin" {
 		t.Fatalf("rows %+v err %v", rows, err)
 	}
+}
+
+// runVersion runs `<bin> version` like cmd/agent's smoke does.
+func runVersion(ctx context.Context, bin string) (string, error) {
+	out, err := exec.CommandContext(ctx, bin, "version").Output()
+	if err != nil {
+		return "", err
+	}
+	v, ok := ParseVersionLine(string(out))
+	if !ok {
+		return "", errors.New("unexpected version line")
+	}
+	return v, nil
 }
