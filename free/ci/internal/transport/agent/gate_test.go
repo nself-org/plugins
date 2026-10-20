@@ -181,10 +181,25 @@ func TestGateReconcileMovesTheBindingToTheNewSession(t *testing.T) {
 		t.Fatalf("log from the new session: %v", err)
 	}
 	wantDenial(t, g.Check(ctx, call(lease, tok, ep)), ReasonWrongSession) // the old session no longer holds the token
-	// another certificate cannot reconcile someone else's token
-	thief := next
-	thief.Serial, thief.Session, thief.Reconcile = "dd04", "sess-3", true
-	wantDenial(t, g.Check(ctx, thief), ReasonWrongCertificate)
+	// without the reconcile heartbeat another certificate is refused, even from the current session
+	other := next
+	other.Serial, other.Reconcile, other.Type = "dd04", false, "log"
+	wantDenial(t, g.Check(ctx, other), ReasonWrongCertificate)
+	// a renewed certificate of the same node moves the binding with the reconcile heartbeat (7-day certificates)
+	renewed := next
+	renewed.Serial, renewed.Session, renewed.Reconcile, renewed.Type = "ee05", "sess-3", true, "heartbeat"
+	if err := g.Check(ctx, renewed); err != nil {
+		t.Fatalf("renewal reconcile: %v", err)
+	}
+	renewed.Reconcile, renewed.Type = false, "log"
+	if err := g.Check(ctx, renewed); err != nil {
+		t.Fatalf("log after the renewal: %v", err)
+	}
+	wantDenial(t, g.Check(ctx, next), ReasonWrongCertificate) // the old certificate no longer holds the token
+	// another node's certificate never gets here: the token names its runner
+	thief := renewed
+	thief.Node = "n-2"
+	wantDenial(t, g.Check(ctx, thief), ReasonWrongRunner)
 }
 
 func TestGateReconcileRaceLeavesOneHolder(t *testing.T) {

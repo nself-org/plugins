@@ -7,8 +7,8 @@ package store
 // Outputs: TokenBind (first writer wins, the stored row comes back), TokenCheck, TokenRebind (compare and swap
 //          of the session), TokenSpend (the job's result was accepted: the token is used up), TokenPrune.
 // Constraints: the table holds ids and times only, never a token; one jti has one row; a bind never replaces a
-//          row; a rebind changes the session only when the row still holds the session and serial the caller
-//          saw; rows are pruned one hour after the token's exp.
+//          row; a rebind changes the session (and the serial after a renewal) only when the row still holds the
+//          serial and session the caller saw; rows are pruned one hour after the token's exp.
 
 import (
 	"context"
@@ -75,14 +75,15 @@ func (s *Store) TokenCheck(ctx context.Context, jti string) (b TokenBinding, fou
 	return b, err == nil, err
 }
 
-// TokenRebind moves jti from session `from` to session `to` when the row still names that serial and session.
-// It reports whether the row moved.
-func (s *Store) TokenRebind(ctx context.Context, jti, serial, from, to string) (moved bool, err error) {
-	if to == "" {
-		return false, coded("E607", "a rebind needs a session")
+// TokenRebind moves jti from (fromSerial, fromSession) to (toSerial, toSession) when the row still names exactly
+// that serial and session. It reports whether the row moved. The serial changes when the node renewed its
+// certificate between two sessions.
+func (s *Store) TokenRebind(ctx context.Context, jti, fromSerial, fromSession, toSerial, toSession string) (moved bool, err error) {
+	if toSerial == "" || toSession == "" {
+		return false, coded("E607", "a rebind needs a serial and a session")
 	}
 	err = s.write(ctx, func(tx *sql.Tx) error {
-		res, e := tx.ExecContext(ctx, `UPDATE node_token SET session=? WHERE jti=? AND serial=? AND session=?`, to, jti, serial, from)
+		res, e := tx.ExecContext(ctx, `UPDATE node_token SET serial=?, session=? WHERE jti=? AND serial=? AND session=?`, toSerial, toSession, jti, fromSerial, fromSession)
 		if e != nil {
 			return e
 		}

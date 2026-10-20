@@ -128,8 +128,9 @@ func scenarioPartition(t *testing.T, partitionFor time.Duration) {
 	}
 }
 
-// scenarioRestart: the coordinator is killed mid-stream and comes back with no memory of the session; the agent
-// says hello again, resends what was not acknowledged, and no line is duplicated or lost.
+// scenarioRestart: the coordinator process is killed mid-stream and comes back with a new driver, a new run and no
+// memory of the session or the leases; the agent says hello again, resends what was not acknowledged, and the
+// durable log and the runs together hold every line exactly once.
 func scenarioRestart(t *testing.T) {
 	e := newE2E(t, "")
 	e.addNode("n-1")
@@ -156,24 +157,73 @@ func scenarioRestart(t *testing.T) {
 	for i := 9; i <= 12; i++ { // sent after the last ack: the agent still holds them
 		run.log(fmt.Sprintf("line-%d", i))
 	}
+	wantLines(t, e.sink, 12)
 	e.kill()
 	for i := 13; i <= 16; i++ {
 		run.log(fmt.Sprintf("line-%d", i))
 	}
+	old := e.swapCoordinator()
+	recovered := e.runLease(context.Background(), "n-1", run.l.LeaseID, run.l.AttemptID, run.l.Epoch) // the scheduler re-adopts the lease
+	eventually(t, 5*time.Second, "the recovered run to register", func() bool { return e.drv.hasRoute(run.l.LeaseID) })
 	e.start(addr) // a new listener: every session of the old one is gone
-	wantLines(t, e.sink, 16)
+	eventually(t, 15*time.Second, "the union of both runs to hold 16 lines", func() bool { return len(old.lines())+len(e.sink.lines()) >= 16 })
+	time.Sleep(200 * time.Millisecond) // let a duplicate show up
+	seen := map[string]int{}
+	for _, l := range append(old.lines(), e.sink.lines()...) {
+		seen[l]++
+	}
+	for i := 1; i <= 16; i++ {
+		if n := seen[fmt.Sprintf("line-%d", i)]; n != 1 {
+			t.Fatalf("line-%d reached the runs %d times: old %v new %v", i, n, old.lines(), e.sink.lines())
+		}
+	}
 	after, _, _ := e.st.TokenCheck(context.Background(), cl.JTI)
 	if after.Session == before.Session || after.Serial != before.Serial {
 		t.Fatalf("the token must move to the new session of the same certificate: before %+v after %+v", before, after)
-	}
-	run.finish()
-	if n := e.sink.nResults(); n != 1 {
-		t.Fatalf("%d results reached the run, want 1", n)
 	}
 	b := readLog(t, LogFile(e.drv.LogDir, run.l.LeaseID))
 	if strings.Count(b, "\n") != 16 {
 		t.Fatalf("the durable log has %d lines, want 16:\n%s", strings.Count(b, "\n"), b)
 	}
+	if err = c.Send(resultMsg(run.l)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err = <-recovered:
+		if err != nil {
+			t.Fatalf("recovered Run: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the recovered run never got the result")
+	}
+	if n := e.sink.nResults(); n != 1 || old.nResults() != 0 {
+		t.Fatalf("results: new run %d, old run %d", n, old.nResults())
+	}
+}
+
+// scenarioUnknownLeaseKeepsTheStream: after a restart a lease no run waits for is cancelled on its agent, and
+// the agent's stream and its other leases go on.
+func scenarioUnknownLeaseKeepsTheStream(t *testing.T) {
+	e := newE2E(t, "")
+	c := e.connect("n-1")
+	orphan := e.startLease(t, c, "n-1", "1")
+	orphan.log("line-1")
+	orphan.beat()
+	recvType(t, c, "heartbeat", 5*time.Second)
+	e.swapCoordinator() // the process restarted: nothing waits for the orphan lease any more
+	e.kill()
+	e.start(e.ln.Addr().String())
+	orphan.log("line-2") // the resend after the new hello is refused for this lease only
+	cn := recvType(t, c, "cancel", 10*time.Second).Body.(*protocol.Cancel)
+	if cn.LeaseID != orphan.l.LeaseID || !strings.Contains(cn.Reason, ReasonLeaseLost) {
+		t.Fatalf("cancel %+v", cn)
+	}
+	// a lease that is run after the restart still reaches the agent and finishes
+	fresh := e.startLease(t, c, "n-1", "2")
+	fresh.log("fresh-1")
+	fresh.beat()
+	recvType(t, c, "heartbeat", 10*time.Second)
+	fresh.finish()
 }
 
 // scenarioWireRefusals: the same token is accepted for every call of its session; a forged, missing, other

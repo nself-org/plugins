@@ -32,6 +32,11 @@ func sinkCommits(sink interface{}) bool {
 	return ok && c.CommitsResult()
 }
 
+func isRefusal(err error) bool {
+	var r interface{ Refusal() bool }
+	return errors.As(err, &r) && r.Refusal()
+}
+
 func isStale(err error) bool {
 	var se *store.Error
 	return errors.As(err, &se) && se.Code == "E662"
@@ -149,6 +154,8 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 	switch {
 	case isStale(err):
 		return s.sendStale(f, m.LeaseID, *m.Epoch)
+	case isRefusal(err): // the sink turned this lease down (no run waits for it): stop that lease, keep the stream
+		return s.refuse(q, f, m.LeaseID, *m.Epoch, m.Type, err)
 	case err != nil:
 		return s.unavailable("frame "+m.Type, err)
 	}

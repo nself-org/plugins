@@ -33,7 +33,7 @@ type TokenVerifier interface {
 // Bindings is the durable side of the gate (store.Store).
 type Bindings interface {
 	TokenBind(ctx context.Context, b store.TokenBinding) (store.TokenBinding, bool, error)
-	TokenRebind(ctx context.Context, jti, serial, from, to string) (bool, error)
+	TokenRebind(ctx context.Context, jti, fromSerial, fromSession, toSerial, toSession string) (bool, error)
 	TokenSpend(ctx context.Context, jti string) error
 	TokenCheck(ctx context.Context, jti string) (store.TokenBinding, bool, error)
 	TokenPrune(ctx context.Context, nowUnix int64) (int64, error)
@@ -51,7 +51,8 @@ type Gate struct {
 	Leases   LeaseView
 
 	mu    sync.Mutex
-	known map[use]bool // bindings this process already proved, so a log line costs no write
+	known map[use]bool    // bindings this process already proved, so a log line costs no write
+	spent map[string]bool // tokens whose result was accepted, so a racing first bind cannot cache them
 }
 
 type use struct{ jti, serial, session string }
@@ -104,8 +105,11 @@ func isStale(err error) bool {
 func (g *Gate) bind(ctx context.Context, c agentapi.Call, cl pki.TokenClaims) error {
 	u := use{cl.JTI, c.Serial, c.Session}
 	g.mu.Lock()
-	hit := g.known[u]
+	hit, spent := g.known[u], g.spent[cl.JTI]
 	g.mu.Unlock()
+	if spent {
+		return deny(ReasonReplayed, "lease %s: the result for this token was already accepted", c.LeaseID)
+	}
 	if hit {
 		return nil
 	}
@@ -113,11 +117,14 @@ func (g *Gate) bind(ctx context.Context, c agentapi.Call, cl pki.TokenClaims) er
 		return err
 	}
 	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.spent[cl.JTI] { // spent while this call was binding: do not remember it as usable
+		return deny(ReasonReplayed, "lease %s: the result for this token was already accepted", c.LeaseID)
+	}
 	if g.known == nil || len(g.known) >= maxKnown {
 		g.known = map[use]bool{}
 	}
 	g.known[u] = true
-	g.mu.Unlock()
 	return nil
 }
 
@@ -129,16 +136,17 @@ func (g *Gate) bindOnce(ctx context.Context, c agentapi.Call, cl pki.TokenClaims
 	switch {
 	case created:
 		return nil
-	case b.Serial != c.Serial:
+	case b.Serial != c.Serial && !c.Reconcile:
 		return deny(ReasonWrongCertificate, "lease %s: the token is bound to another certificate", c.LeaseID)
 	case b.Spent:
 		return deny(ReasonReplayed, "lease %s: the result for this token was already accepted", c.LeaseID)
-	case b.Session == c.Session:
+	case b.Session == c.Session && b.Serial == c.Serial:
 		return nil
 	case !c.Reconcile:
 		return deny(ReasonWrongSession, "lease %s: the token is bound to another session", c.LeaseID)
 	}
-	moved, err := g.Bindings.TokenRebind(ctx, cl.JTI, c.Serial, b.Session, c.Session)
+	// Same node, new session: a reconnect, or after a certificate renewal a new serial (the listener authenticated it as this node).
+	moved, err := g.Bindings.TokenRebind(ctx, cl.JTI, b.Serial, b.Session, c.Serial, c.Session)
 	if err != nil {
 		return err
 	}
@@ -171,6 +179,10 @@ func (g *Gate) forgetOtherSessions(jti, keep string) {
 // Spend marks the token of a finished job used up; call it after the result was accepted.
 func (g *Gate) Spend(ctx context.Context, jti string) error {
 	g.mu.Lock()
+	if g.spent == nil || len(g.spent) >= maxKnown {
+		g.spent = map[string]bool{}
+	}
+	g.spent[jti] = true
 	for u := range g.known {
 		if u.jti == jti {
 			delete(g.known, u)

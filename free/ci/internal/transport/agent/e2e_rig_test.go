@@ -345,3 +345,12 @@ func protoLease(leaseID, attemptID string, epoch uint64) protocol.Lease {
 }
 
 func (e *e2e) rt() *testing.T { return e.rig.t }
+
+// swapCoordinator replaces the driver and the run's sink with fresh ones on the same store, CA and log directory:
+// what a restarted coordinator process has. It returns the sink of the run that died.
+func (e *e2e) swapCoordinator() *runSink {
+	old := e.sink
+	e.sink = &runSink{eng: e.eng}
+	e.drv = &Driver{Gate: e.rig.gate(), Minter: e.tokens, Leases: e.st, LogDir: e.drv.LogDir, Poll: 30 * time.Millisecond, CancelGrace: 2 * time.Second}
+	return old
+}

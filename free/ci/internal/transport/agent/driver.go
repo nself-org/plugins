@@ -72,6 +72,12 @@ type Driver struct {
 	pending   map[string]map[string]string // node -> lease id -> reason: cancels that found no control stream
 }
 
+func (d *Driver) hasRoute(leaseID string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.routes[leaseID] != nil
+}
+
 var errNoGate = errors.New("agent transport: no job token gate is wired")
 
 // Admit is agentapi.Config.Admit: it vets the call with the gate and, before a heartbeat can be acknowledged,
@@ -85,6 +91,9 @@ func (d *Driver) Admit(ctx context.Context, c agentapi.Call) error {
 		return err
 	}
 	if c.Type == "heartbeat" {
+		if !d.hasRoute(c.LeaseID) { // no run waits for this lease: do not renew it, tell the agent to stop it
+			return lost("no run is waiting for lease %s on this coordinator", c.LeaseID)
+		}
 		if err := d.syncLogs(); err != nil {
 			d.logf("agent transport: syncing the lease logs: %v", err)
 			return err

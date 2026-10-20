@@ -77,7 +77,8 @@ func (c *Carrier) registerToken(ctx context.Context, l protocol.Lease) error {
 	c.mu.Lock()
 	c.epochs[l.LeaseID] = l.Epoch
 	c.tokenAt[l.LeaseID] = time.Now()
-	if c.tokens[l.LeaseID] != l.Token {
+	fresh := c.tokens[l.LeaseID] != l.Token
+	if fresh {
 		c.tokens[l.LeaseID] = l.Token
 		c.gen++
 	}
@@ -96,8 +97,10 @@ func (c *Carrier) registerToken(ctx context.Context, l protocol.Lease) error {
 		select {
 		case <-ch:
 		case <-ctx.Done():
+			c.forgetToken(l.LeaseID, fresh)
 			return ctx.Err()
 		case <-timer.C:
+			c.forgetToken(l.LeaseID, fresh)
 			return errors.New("carrier: the upstream stream did not pick up the job token")
 		}
 	}
@@ -185,4 +188,17 @@ func (c *Carrier) dropRefused(beat protocol.Message) {
 			delete(c.tokenAt, l.LeaseID)
 		}
 	}
+}
+
+// forgetToken drops a token whose lease was never handed to the session, so it is not reported as running
+// after the next reconnect. A token that was already known (a duplicate delivery) stays.
+func (c *Carrier) forgetToken(leaseID string, fresh bool) {
+	if !fresh {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.tokens, leaseID)
+	delete(c.epochs, leaseID)
+	delete(c.tokenAt, leaseID)
 }

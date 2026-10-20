@@ -29,6 +29,12 @@ const tailWindow = 2 * protocol.MaxFrame
 
 var unsafeFile = regexp.MustCompile(`[^A-Za-z0-9_.-]`)
 
+// MaxLogBytes caps the durable log of one lease.
+const MaxLogBytes = 256 << 20
+
+// logCap is MaxLogBytes; a test lowers it.
+var logCap int64 = MaxLogBytes
+
 // LogFile is the file name of a lease's log.
 func LogFile(dir, leaseID string) string {
 	return filepath.Join(dir, unsafeFile.ReplaceAllString(leaseID, "_")+".jsonl")
@@ -42,10 +48,11 @@ type logLine struct {
 
 // LogWriter appends the lines of one lease.
 type LogWriter struct {
-	mu    sync.Mutex
-	f     *os.File
-	last  uint64
-	dirty bool // lines were appended since the last Sync
+	mu     sync.Mutex
+	f      *os.File
+	last   uint64
+	dirty  bool // lines were appended since the last Sync
+	capped bool // the size cap was hit and the truncation line written
 }
 
 // OpenLog opens (creating) the log file, cuts off a torn last line and reads the tail line_seq.
@@ -125,14 +132,26 @@ func (w *LogWriter) Append(l protocol.Log) (written bool, err error) {
 	if l.LineSeq <= w.last {
 		return false, nil
 	}
-	b, err := json.Marshal(logLine{LineSeq: l.LineSeq, Stream: l.Stream, Text: l.Text})
-	if err != nil {
+	var enc bytes.Buffer
+	je := json.NewEncoder(&enc)
+	je.SetEscapeHTML(false) // '<' stays one byte, so a line is never longer than the frame that carried it
+	if err := je.Encode(logLine{LineSeq: l.LineSeq, Stream: l.Stream, Text: l.Text}); err != nil {
 		return false, err
 	}
-	b = append(b, '\n')
+	b := enc.Bytes() // the encoder ends the line with '\n'
 	before, err := w.f.Seek(0, io.SeekEnd)
 	if err != nil {
 		return false, err
+	}
+	if before+int64(len(b)) > logCap { // a runaway job cannot fill the coordinator's disk
+		if !w.capped {
+			w.capped = true
+			note, _ := json.Marshal(logLine{LineSeq: l.LineSeq, Stream: "stderr", Text: "[log truncated: the coordinator keeps at most 256 MiB of one lease's output]"})
+			_, _ = w.f.Write(append(note, '\n'))
+			w.last = l.LineSeq
+			w.dirty = true
+		}
+		return false, nil
 	}
 	if _, err = w.f.Write(b); err != nil {
 		_ = w.f.Truncate(before) // never leave half a line for the next append to follow

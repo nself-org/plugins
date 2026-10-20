@@ -441,3 +441,37 @@ func TestTrimOfAnAlreadyConfirmedSeqSignalsNothing(t *testing.T) {
 	default:
 	}
 }
+
+func TestRegisterTokenForgetsAFreshTokenWhenTheStreamNeverCarriesIt(t *testing.T) {
+	c := bareCarrier(t)
+	l := protoLease("l1", "a1", 7)
+	l.Token = "tok-1"
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- c.registerToken(ctx, l) }()
+	eventually(t, 2*time.Second, "the token to be registered", func() bool { _, toks := c.tokenSnapshot(); return toks["l1"] != "" })
+	cancel()
+	if err := <-done; err == nil {
+		t.Fatal("registerToken returned nil after its context ended")
+	}
+	if _, toks := c.tokenSnapshot(); len(toks) != 0 {
+		t.Fatalf("the token of a lease that was never handed over stays registered: %v", toks)
+	}
+	c.mu.Lock()
+	_, e1 := c.epochs["l1"]
+	_, e2 := c.tokenAt["l1"]
+	c.mu.Unlock()
+	if e1 || e2 {
+		t.Fatal("epoch or token time left behind")
+	}
+	// a token that was already known stays when a duplicate delivery gives up
+	c.setLive(1)
+	l2 := protoLease("l2", "a2", 3)
+	l2.Token = "tok-2"
+	go func() { _ = c.registerToken(context.Background(), l2) }()
+	eventually(t, 2*time.Second, "tok-2", func() bool { _, toks := c.tokenSnapshot(); return toks["l2"] != "" })
+	c.forgetToken("l2", false)
+	if _, toks := c.tokenSnapshot(); toks["l2"] != "tok-2" {
+		t.Fatal("a known token was forgotten")
+	}
+}

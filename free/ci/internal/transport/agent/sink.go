@@ -40,7 +40,7 @@ func (s *hubSink) route(leaseID string) (rt *route, late bool, err error) {
 	if d.finished[leaseID] {
 		return nil, true, nil
 	}
-	return nil, false, fail(ReasonLeaseLost, "no run is waiting for lease %s on this coordinator", leaseID)
+	return nil, false, lost("no run is waiting for lease %s on this coordinator", leaseID)
 }
 
 func (s *hubSink) Log(ctx context.Context, l protocol.Log) error {

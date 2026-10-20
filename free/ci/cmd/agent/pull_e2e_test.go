@@ -230,9 +230,19 @@ func startPull(t *testing.T, ctx context.Context, args ...string) (<-chan int, *
 	t.Helper()
 	errb := &lockedBuf{}
 	code := make(chan int, 1)
+	exited := make(chan struct{})
 	go func() {
+		defer close(exited)
 		code <- run(ctx, append([]string{"pull"}, args...), IO{Stdout: errb, Stderr: errb})
 	}()
+	// the loop writes into the state directory until it returns; TempDir removal must come after
+	t.Cleanup(func() {
+		select {
+		case <-exited:
+		case <-time.After(20 * time.Second):
+			t.Error("the pull loop did not exit after its context ended")
+		}
+	})
 	return code, errb
 }
 

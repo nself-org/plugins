@@ -79,7 +79,11 @@ func DenialReason(err error) string {
 type Error struct {
 	Code, Reason, Msg string
 	Err               error
+	refuse            bool // the call is refused and the lease cancelled; the stream goes on (agentapi.refuse)
 }
+
+// Refusal marks the errors that cancel one lease instead of failing the agent's stream.
+func (e *Error) Refusal() bool { return e.refuse }
 
 func (e *Error) Error() string {
 	s := e.Code + " " + e.Reason
@@ -101,4 +105,12 @@ func ReasonOf(err error) string {
 
 func fail(reason, format string, a ...any) *Error {
 	return &Error{Code: CodeTransport, Reason: reason, Msg: fmt.Sprintf(format, a...)}
+}
+
+// lost is the refusal of a call for a lease no run of this process is waiting for (the coordinator restarted, or
+// the run ended): the agent is told to stop that lease; its other leases and its stream are untouched.
+func lost(format string, a ...any) *Error {
+	e := fail(ReasonLeaseLost, format, a...)
+	e.refuse = true
+	return e
 }

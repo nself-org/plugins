@@ -329,3 +329,55 @@ func TestLogWriterFailedWriteLeavesNoHalfLine(t *testing.T) {
 	}
 	_ = ro.Close()
 }
+
+func TestLogWriterStopsAtTheCapWithOneTruncationNote(t *testing.T) {
+	old := logCap
+	logCap = 400
+	t.Cleanup(func() { logCap = old })
+	w, path := openTemp(t)
+	var wrote int
+	for i := uint64(1); i <= 40; i++ {
+		ok, err := w.Append(logOf(i, strings.Repeat("x", 30)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok {
+			wrote++
+		}
+	}
+	if wrote == 0 || wrote >= 40 {
+		t.Fatalf("%d of 40 lines were written under a cap of 400 bytes", wrote)
+	}
+	if err := w.Sync(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(b), "[log truncated"); n != 1 {
+		t.Fatalf("%d truncation notes:\n%s", n, b)
+	}
+	if lines := strings.Count(string(b), "\n"); lines != wrote+1 {
+		t.Fatalf("%d lines in the file, want %d lines and one note", lines, wrote)
+	}
+	if int64(len(b)) > logCap+200 {
+		t.Fatalf("the file is %d bytes, cap %d", len(b), logCap)
+	}
+	// a later line with a higher seq is still dropped, and the note is not repeated
+	if ok, _ := w.Append(logOf(99, "late")); ok {
+		t.Fatal("a line was written after the cap")
+	}
+}
+
+func TestLogWriterDoesNotEscapeHTMLSoALineStaysAsShortAsItsFrame(t *testing.T) {
+	w, path := openTemp(t)
+	if _, err := w.Append(logOf(1, "<a>&</a>")); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	escaped := "\\" + "u003c" // built in code: the escape must not be a literal in the source
+	if !strings.Contains(string(b), `"<a>&</a>"`) || strings.Contains(string(b), escaped) {
+		t.Fatalf("log line %q", b)
+	}
+}

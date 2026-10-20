@@ -95,24 +95,32 @@ func TestTokenRebindCompareAndSwap(t *testing.T) {
 	if _, _, err := s.TokenBind(ctx, tokRow("j1", "s1", "sess1", 5)); err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range []struct{ jti, serial, from, to string }{
-		{"j1", "s9", "sess1", "sess2"}, // another certificate
-		{"j1", "s1", "sess9", "sess2"}, // the caller saw another session
-		{"nope", "s1", "sess1", "sess2"},
-		{"j1", "s1", "sess1", ""},
+	for _, c := range []struct{ jti, fromSerial, fromSession, toSerial, toSession string }{
+		{"j1", "s9", "sess1", "s1", "sess2"}, // the caller saw another certificate
+		{"j1", "s1", "sess9", "s1", "sess2"}, // the caller saw another session
+		{"nope", "s1", "sess1", "s1", "sess2"},
+		{"j1", "s1", "sess1", "s1", ""},
+		{"j1", "s1", "sess1", "", "sess2"},
 	} {
-		if moved, _ := s.TokenRebind(ctx, c.jti, c.serial, c.from, c.to); moved {
+		if moved, _ := s.TokenRebind(ctx, c.jti, c.fromSerial, c.fromSession, c.toSerial, c.toSession); moved {
 			t.Fatalf("rebind %+v moved the row", c)
 		}
 	}
-	if moved, err := s.TokenRebind(ctx, "j1", "s1", "sess1", "sess2"); err != nil || !moved {
+	if moved, err := s.TokenRebind(ctx, "j1", "s1", "sess1", "s1", "sess2"); err != nil || !moved {
 		t.Fatalf("rebind: moved=%v err=%v", moved, err)
 	}
-	if moved, _ := s.TokenRebind(ctx, "j1", "s1", "sess1", "sess3"); moved {
+	if moved, _ := s.TokenRebind(ctx, "j1", "s1", "sess1", "s1", "sess3"); moved {
 		t.Fatal("a second rebind from the old session moved the row")
 	}
-	if b, _, _ := s.TokenCheck(ctx, "j1"); b.Session != "sess2" {
-		t.Fatalf("session after rebind: %q", b.Session)
+	if b, _, _ := s.TokenCheck(ctx, "j1"); b.Session != "sess2" || b.Serial != "s1" {
+		t.Fatalf("binding after rebind: %+v", b)
+	}
+	// a renewed certificate moves the serial together with the session
+	if moved, err := s.TokenRebind(ctx, "j1", "s1", "sess2", "s2", "sess4"); err != nil || !moved {
+		t.Fatalf("renewal rebind: moved=%v err=%v", moved, err)
+	}
+	if b, _, _ := s.TokenCheck(ctx, "j1"); b.Session != "sess4" || b.Serial != "s2" {
+		t.Fatalf("binding after a renewal: %+v", b)
 	}
 }
 
@@ -129,7 +137,7 @@ func TestTokenRebindRaceHasOneWinner(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if moved, _ := s.TokenRebind(ctx, "j1", "s1", "sess1", to); moved {
+			if moved, _ := s.TokenRebind(ctx, "j1", "s1", "sess1", "s1", to); moved {
 				mu.Lock()
 				won++
 				mu.Unlock()

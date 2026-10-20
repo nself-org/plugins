@@ -32,3 +32,7 @@ func TestPullRefusesAServerLeafOfNodeOrUserKind(t *testing.T) { scenarioServerLe
 func TestPullBlobDigestAndResumeByOffset(t *testing.T) { scenarioBlob(t) }
 
 func TestPullCancelRacingAResultResolvesByCompareAndSwap(t *testing.T) { scenarioCancelRace(t) }
+
+func TestPullALeaseNoRunWaitsForIsCancelledAndTheStreamGoesOn(t *testing.T) {
+	scenarioUnknownLeaseKeepsTheStream(t)
+}
