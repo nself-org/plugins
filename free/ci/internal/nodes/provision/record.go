@@ -55,7 +55,7 @@ func RunnerCapability(req RecordRequest, now time.Time) model.Capability {
 		user, host = host[:i], host[i+1:]
 	}
 	labels := append([]string{"github-runner"}, req.Labels...)
-	c := model.Capability{Schema: "ci.runner-capability/v1"}
+	c := model.NewCapability("provider", "provider", now)
 	c.Identity = model.CapabilityIdentity{
 		ID: id, Name: id, Provider: "ssh", Transport: "provider", Labels: labels, HostKeyFingerprints: []string{},
 		Ownership: knownFact("operator", "assigned", now), MachineID: unknownFact[string]("provider", now),
@@ -63,20 +63,10 @@ func RunnerCapability(req RecordRequest, now time.Time) model.Capability {
 	}
 	c.Platform = model.CapabilityPlatform{OS: knownFact("linux", "assigned", now), Arch: unknownFact[string]("provider", now),
 		Kernel: unknownFact[string]("provider", now), OSVersion: unknownFact[string]("provider", now), Virtualization: unknownFact[string]("provider", now)}
-	c.Resources = model.CapabilityResources{CPU: unknownFact[float64]("provider", now), MemMB: unknownFact[int64]("provider", now),
-		DiskFreeMB: unknownFact[int64]("provider", now), Accelerators: unknownFact[[]string]("provider", now),
-		Reserved: model.CapabilityReserved{CPU: unknownFact[float64]("assigned", now), MemMB: unknownFact[int64]("assigned", now)}}
-	c.Tools = model.CapabilityTools{Docker: unknownFact[bool]("provider", now), Podman: unknownFact[bool]("provider", now),
-		GVisor: unknownFact[bool]("provider", now), Tart: unknownFact[bool]("provider", now), Toolchains: map[string]model.Fact[string]{},
-		Browsers: unknownFact[[]string]("provider", now), Services: unknownFact[[]string]("provider", now), Custom: map[string]model.Fact[string]{}}
 	c.Availability = model.CapabilityAvailability{State: knownFact("online", "assigned", now), Slots: unknownFact[int]("provider", now),
 		Running: unknownFact[int]("provider", now), BatteryPct: unknownFact[int]("provider", now), PluggedIn: unknownFact[bool]("provider", now),
 		Interactive: unknownFact[string]("provider", now), Persistence: knownFact(true, "assigned", now),
 		OnBattery: unknownFact[string]("assigned", now), InteractivePolicy: unknownFact[string]("assigned", now)}
-	c.Location = model.CapabilityLocation{Kind: unknownFact[string]("provider", now), Region: unknownFact[string]("provider", now)}
-	c.Economics = model.CapabilityEconomics{Class: unknownFact[string]("provider", now), MarginalCostPerMin: unknownFact[float64]("provider", now),
-		Allowance: model.CapabilityAllowance{KnownRemaining: unknownFact[float64]("provider", now), ResetAt: unknownFact[time.Time]("provider", now),
-			Confidence: unknownFact[string]("provider", now)}}
 	c.Separation = model.CapabilitySeparation{UIDSeparation: knownFact(false, "assigned", now), UserNS: knownFact(false, "assigned", now),
 		SigningEligible: knownFact(false, "assigned", now)}
 	c.Verified = model.CapabilityVerified{By: "provider", At: now}

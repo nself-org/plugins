@@ -26,7 +26,7 @@ func known[T any](v T, src string, now time.Time) model.Fact[T] {
 
 // newCapability is the draft the probe fills in.
 func newCapability(id, name string, spec remote.HostSpec, p Platform, fps []string, sep SeparationFacts, agentVersion string, now time.Time) model.Capability {
-	c := model.Capability{Schema: "ci.runner-capability/v1"}
+	c := model.NewCapability("probe", "self", now)
 	c.Identity = model.CapabilityIdentity{
 		ID: id, Name: name, Provider: "ssh", Transport: "ssh", Labels: []string{}, HostKeyFingerprints: fps,
 		Ownership: unknown[string]("assigned", now), MachineID: unknown[string]("self", now), AgeRecipient: unknown[string]("self", now),
@@ -36,25 +36,10 @@ func newCapability(id, name string, spec remote.HostSpec, p Platform, fps []stri
 		OS: known(p.OS, "probe", now), Arch: known(p.Arch, "probe", now), Kernel: unknown[string]("probe", now),
 		OSVersion: unknown[string]("probe", now), Virtualization: unknown[string]("probe", now),
 	}
-	c.Resources = model.CapabilityResources{
-		CPU: unknown[float64]("probe", now), MemMB: unknown[int64]("probe", now), DiskFreeMB: unknown[int64]("probe", now),
-		Accelerators: unknown[[]string]("probe", now),
-		Reserved:     model.CapabilityReserved{CPU: unknown[float64]("assigned", now), MemMB: unknown[int64]("assigned", now)},
-	}
-	c.Tools = model.CapabilityTools{
-		Docker: unknown[bool]("probe", now), Podman: unknown[bool]("probe", now), GVisor: unknown[bool]("probe", now), Tart: unknown[bool]("probe", now),
-		Toolchains: map[string]model.Fact[string]{}, Browsers: unknown[[]string]("probe", now), Services: unknown[[]string]("probe", now),
-		Custom: map[string]model.Fact[string]{},
-	}
 	c.Availability = model.CapabilityAvailability{
 		State: known("offline", "assigned", now), Slots: unknown[int]("self", now), Running: unknown[int]("self", now),
 		BatteryPct: unknown[int]("probe", now), PluggedIn: unknown[bool]("probe", now), Interactive: unknown[string]("probe", now),
 		Persistence: unknown[bool]("assigned", now), OnBattery: unknown[string]("assigned", now), InteractivePolicy: unknown[string]("assigned", now),
-	}
-	c.Location = model.CapabilityLocation{Kind: unknown[string]("self", now), Region: unknown[string]("self", now)}
-	c.Economics = model.CapabilityEconomics{
-		Class: unknown[string]("self", now), MarginalCostPerMin: unknown[float64]("self", now),
-		Allowance: model.CapabilityAllowance{KnownRemaining: unknown[float64]("self", now), ResetAt: unknown[time.Time]("self", now), Confidence: unknown[string]("self", now)},
 	}
 	c.Separation = model.CapabilitySeparation{
 		UIDSeparation: known(sep.UIDSeparation, "probe", now), UserNS: known(sep.UserNS, "probe", now),
