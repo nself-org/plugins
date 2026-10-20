@@ -34,6 +34,7 @@ type simCoordinator struct {
 	finished   bool // the final chunk of the running transfer was sent
 	flip       int  // transfers whose first chunk gets a flipped byte
 	dropFirst  bool // the first chunk of the first transfer is lost
+	dropFinal  bool // the final chunk of the first transfer is lost
 	badSize    bool // the announce names the wrong size
 	chunksSent int
 	transfers  int
@@ -83,6 +84,10 @@ func (c *simCoordinator) stream(from int64) {
 			continue
 		}
 		c.finished = end == int64(len(c.data))
+		if c.dropFinal && c.finished {
+			c.dropFinal = false
+			continue
+		}
 		c.in <- protocol.Message{Type: "chunk", Body: &protocol.Chunk{Stream: "cache", Offset: pos, Data: base64.StdEncoding.EncodeToString(chunk), Digest: c.sha, Final: end == int64(len(c.data))}}
 	}
 }
@@ -288,5 +293,42 @@ func TestNilFetcherServesLocalCopiesOnly(t *testing.T) {
 	}
 	if NewFetcher(Wire{}, planFor(r.sim.sha, 1)) != nil {
 		t.Fatal("a fetcher without a channel")
+	}
+}
+
+func TestFetchAsksAgainWhenTheFinalChunkIsLost(t *testing.T) {
+	r := newFetchRig(t)
+	r.sim.dropFinal = true
+	r.f.Idle = 60 * time.Millisecond
+	f, err := r.open()
+	if err != nil {
+		t.Fatalf("a lost final chunk failed the fetch: %v", err)
+	}
+	r.mustRead(f)
+}
+
+func TestFetchStrayFramesDoNotExtendTheWait(t *testing.T) {
+	r := newFetchRig(t)
+	silent := Wire{Offset: func(protocol.Offset) error { return nil }, In: r.sim.in}
+	r.f = NewFetcher(silent, planFor(r.sim.sha, int64(len(r.sim.data))))
+	r.f.First = 150 * time.Millisecond
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() { // frames of another digest, faster than the wait
+		for {
+			select {
+			case <-stop:
+				return
+			case <-time.After(20 * time.Millisecond):
+				select {
+				case r.sim.in <- protocol.Message{Body: &protocol.Chunk{Stream: "cache", Digest: "ff", Data: "AA"}}:
+				default:
+				}
+			}
+		}
+	}()
+	start := time.Now()
+	if _, err := r.open(); !errors.Is(err, ErrNoRestore) || time.Since(start) > 2*time.Second {
+		t.Fatalf("err=%v after %s", err, time.Since(start))
 	}
 }

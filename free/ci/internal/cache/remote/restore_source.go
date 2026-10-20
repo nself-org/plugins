@@ -14,6 +14,7 @@ package remote
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -41,7 +42,7 @@ func (l *Lease) RestoreBlobs(ctx context.Context) ([]transport.RestoreBlob, erro
 			}
 			seen[sha] = true
 			out = append(out, transport.RestoreBlob{SHA256: sha, Size: size, Open: func() (io.ReadCloser, error) {
-				if err := l.live(ctx); err != nil {
+				if err := l.current(ctx); err != nil {
 					return nil, err
 				}
 				info, err := l.h.Blobs.Stat(realm, sha)
@@ -51,11 +52,38 @@ func (l *Lease) RestoreBlobs(ctx context.Context) ([]transport.RestoreBlob, erro
 				if info.Size() != size {
 					return nil, fmt.Errorf("E714 digest_mismatch: the stored blob is %d B, the plan says %d B", info.Size(), size)
 				}
-				return l.h.Blobs.Open(realm, sha)
+				rc, err := l.h.Blobs.Open(realm, sha)
+				if err != nil {
+					return nil, err
+				}
+				return liveBlob{ReadCloser: rc, check: func() error { return l.current(ctx) }}, nil
 			}})
 		}
 	}
 	return out, nil
+}
+
+// current fails once the lease is no longer the durable one; the first refusal leaves an audit row.
+func (l *Lease) current(ctx context.Context) error {
+	err := l.live(ctx)
+	if errors.Is(err, transfer.ErrStale) {
+		_ = l.h.Ledger.CacheAuditOnce(ctx, "cache.remote.refused", l.b.AttemptID, "reason=restore_stale_epoch")
+	}
+	return err
+}
+
+// liveBlob re-checks the lease before every read, so a lease that goes stale in the middle of a
+// blob stops receiving bytes at the next chunk.
+type liveBlob struct {
+	io.ReadCloser
+	check func() error
+}
+
+func (b liveBlob) Read(p []byte) (int, error) {
+	if err := b.check(); err != nil {
+		return 0, err
+	}
+	return b.ReadCloser.Read(p)
 }
 
 // RestoreEvent records one step of a restore.
@@ -81,8 +109,7 @@ func (l *Lease) copied(ctx context.Context, sha string) {
 	if l.b.Node == "" || l.b.Plan == nil {
 		return
 	}
-	if err := l.live(ctx); err != nil {
-		_ = l.refuse(ctx, transfer.ReasonStaleEpoch)
+	if err := l.current(ctx); err != nil {
 		return
 	}
 	l.mu.Lock()

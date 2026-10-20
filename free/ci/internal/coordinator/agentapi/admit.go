@@ -25,8 +25,9 @@ const HeaderToken = "X-Nself-Job-Token"
 // maxTokens bounds the token header values of one request (an agent holds at most its slot count).
 const maxTokens = maxHeartbeatLeases
 
-// BlobHandler takes the blob frames of an upload (digest and chunk) and the offset frames of a restore (the
-// node's requests and confirmations) and answers with the frames to send back (offset). An error with Refusal() true cancels the lease on the agent; any other error fails the stream.
+// BlobHandler takes the blob frames of an upload (digest and chunk) and the offset frames of a
+// restore (the node's requests and confirmations) and answers with the frames to send back (offset). An error with
+// Refusal() true cancels the lease on the agent; any other error fails the stream.
 type BlobHandler interface {
 	Frame(ctx context.Context, node string, m protocol.Message) (replies []protocol.Message, err error)
 }

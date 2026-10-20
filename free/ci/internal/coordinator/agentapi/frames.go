@@ -125,9 +125,11 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 		s.cfg.Logf("agentapi: node %s sent a %s frame for lease %s it does not hold", q.node, m.Type, m.LeaseID)
 		return &fatal{protocol.CodeInvalid, "lease_not_held"}
 	case unknownLease:
+		s.reportRefused(q, m, RefusedStale)
 		return s.sendStale(f, m.LeaseID, *m.Epoch)
 	}
 	if ok, bad := s.admit(q, f, m.LeaseID, *m.Epoch, m.Type, false); !ok {
+		s.reportRefused(q, m, RefusedDenied)
 		return bad
 	}
 	err := s.cfg.Leases.Fence(ctx, m.LeaseID, epoch)
@@ -153,6 +155,7 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 	}
 	switch {
 	case isStale(err):
+		s.reportRefused(q, m, RefusedStale)
 		return s.sendStale(f, m.LeaseID, *m.Epoch)
 	case isRefusal(err): // the sink turned this lease down (no run waits for it): stop that lease, keep the stream
 		return s.refuse(q, f, m.LeaseID, *m.Epoch, m.Type, err)

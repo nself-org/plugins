@@ -37,6 +37,7 @@ type simNode struct {
 	silent    bool
 	noConfirm bool
 	badFinals int
+	onChunk   func() // called once, after the first chunk
 
 	mu     sync.Mutex
 	got    bytes.Buffer
@@ -57,8 +58,14 @@ func (n *simNode) Digest(d protocol.Digest) error {
 
 func (n *simNode) Chunk(c protocol.Chunk) error {
 	n.mu.Lock()
-	defer n.mu.Unlock()
 	n.chunks++
+	if f := n.onChunk; f != nil && n.chunks == 1 {
+		n.onChunk = nil
+		n.mu.Unlock()
+		f()
+		n.mu.Lock()
+	}
+	defer n.mu.Unlock()
 	data, _ := base64.StdEncoding.DecodeString(c.Data)
 	if c.Offset == 0 {
 		n.got.Reset()
@@ -204,7 +211,6 @@ func TestOfferRefusals(t *testing.T) {
 	}{
 		{"digest outside the plan", protocol.Offset{Stream: Stream, SHA256: other}, ReasonNotPlanned},
 		{"position past the size", protocol.Offset{Stream: Stream, SHA256: r.sha, Offset: int64(len(r.data)) + 1}, ReasonBadOffset},
-		{"negative position", protocol.Offset{Stream: Stream, SHA256: r.sha, Offset: -1}, ReasonBadOffset},
 	}
 	for _, c := range cases {
 		r.p.Offer(context.Background(), c.o)
@@ -213,9 +219,16 @@ func TestOfferRefusals(t *testing.T) {
 			t.Errorf("%s: event %+v, want %s", c.name, e, c.want)
 		}
 	}
+	for i := 0; i < 50; i++ { // a flood of the same refusal is reported once
+		r.p.Offer(context.Background(), protocol.Offset{Stream: Stream, SHA256: other})
+		r.p.Offer(context.Background(), protocol.Offset{Stream: Stream, SHA256: r.sha, Offset: -1})
+	}
 	r.p.Offer(context.Background(), protocol.Offset{Stream: "artifact", SHA256: other}) // another stream is not ours
 	if r.n.chunks != 0 || len(r.s.events) != 0 {
 		t.Fatalf("a refusal sent %d chunks, %d extra events", r.n.chunks, len(r.s.events))
+	}
+	if !r.p.Planned() {
+		t.Fatal("refusals emptied the plan")
 	}
 }
 
@@ -237,5 +250,47 @@ func TestOpenErrorIsAFailureNotAPanic(t *testing.T) {
 	r.request(r.sha)
 	if e := r.event(t); e.Kind != transport.RestoreFailed {
 		t.Fatalf("event %+v", e)
+	}
+}
+
+func TestCloseStopsTheTransferInFlight(t *testing.T) {
+	r := newRig(t, func(n *simNode, p *Pusher) { n.noConfirm = true })
+	started := make(chan struct{})
+	r.n.onChunk = func() { close(started); r.p.Close() }
+	r.request(r.sha)
+	<-started
+	if e := r.event(t); e.Kind != transport.RestoreFailed {
+		t.Fatalf("event %+v", e)
+	}
+	r.n.mu.Lock()
+	defer r.n.mu.Unlock()
+	if r.n.chunks > 2 {
+		t.Fatalf("%d chunks went out after the cancel", r.n.chunks)
+	}
+}
+
+func TestLateConfirmationAndUpperCaseRequests(t *testing.T) {
+	r := newRig(t, nil)
+	r.p.Offer(context.Background(), protocol.Offset{Stream: Stream, SHA256: r.sha, Offset: int64(len(r.data))}) // nothing runs: a late confirmation, ignored
+	if len(r.p.queue) != 0 || r.n.chunks != 0 {
+		t.Fatal("a late confirmation started a transfer")
+	}
+	r.request(strings.ToUpper(r.sha))
+	if e := r.event(t); e.Kind != transport.RestoreCopied || e.SHA256 != r.sha {
+		t.Fatalf("an upper-case request was not served: %+v", e)
+	}
+}
+
+func TestRepeatedRequestsForOneBlobAreRefused(t *testing.T) {
+	r := newRig(t, func(_ *simNode, p *Pusher) { p.Resumes = 1 })
+	for i := 0; i < 2*(1+1); i++ { // every allowed request is served
+		r.request(r.sha)
+		if e := r.event(t); e.Kind != transport.RestoreCopied {
+			t.Fatalf("request %d: %+v", i, e)
+		}
+	}
+	r.request(r.sha)
+	if e := r.event(t); e.Kind != transport.RestoreRefused || e.Reason != ReasonRepeated {
+		t.Fatalf("a fifth request was not refused: %+v", e)
 	}
 }

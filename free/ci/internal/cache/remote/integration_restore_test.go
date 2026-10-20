@@ -250,27 +250,31 @@ func TestRemoteCacheRestoreRefusesADigestOutsideThePlan(t *testing.T) {
 	}
 }
 
-func TestRemoteCacheRestoreRefusesAStaleEpochSSH(t *testing.T) {
-	data := carrierCacheArchive(t)
-	p := &probe{skew: true}
-	r := newRig(t, restoreMod(data))
-	n := &node{t: t, data: data, tapFn: p.tap, hooksFn: func() []session.JobHook {
-		return []session.JobHook{{Name: "cache", BeforeTransfer: func(_ context.Context, l protocol.Lease, _ session.JobRoot, tr session.Transfer) (session.JobSetup, error) {
-			// ask for the planned blob under another epoch: nothing may be sent and an audit row is written
-			_ = tr.Up.Offset(protocol.Offset{Stream: "cache", SHA256: l.Cache.Restore[0].Blobs[0].SHA256})
-			return session.JobSetup{}, nil
-		}}}
-	}}
-	if err := r.runSSH(n); err != nil {
-		t.Fatal(err)
-	}
-	if !auditHas(t, r, "reason=restore_stale_epoch") {
-		t.Fatal("no audit row for a stale epoch request")
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.chunks != 0 || p.digests != 0 {
-		t.Fatalf("a stale epoch request was served: %d digest, %d chunk frames", p.digests, p.chunks)
+func TestRemoteCacheRestoreRefusesAStaleEpoch(t *testing.T) {
+	for name, run := range carriers {
+		t.Run(name, func(t *testing.T) {
+			data := carrierCacheArchive(t)
+			p := &probe{skew: true}
+			r := newRig(t, restoreMod(data))
+			n := &node{t: t, data: data, tapFn: p.tap, hooksFn: func() []session.JobHook {
+				return []session.JobHook{{Name: "cache", BeforeTransfer: func(_ context.Context, l protocol.Lease, _ session.JobRoot, tr session.Transfer) (session.JobSetup, error) {
+					// ask for the planned blob under another epoch: nothing may be sent and an audit row is written
+					_ = tr.Up.Offset(protocol.Offset{Stream: "cache", SHA256: l.Cache.Restore[0].Blobs[0].SHA256})
+					return session.JobSetup{}, nil
+				}}}
+			}}
+			if err := run(r, n); err != nil {
+				t.Fatal(err)
+			}
+			if !auditHas(t, r, "reason=restore_stale_epoch") {
+				t.Fatal("no audit row for a stale epoch request")
+			}
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			if p.chunks != 0 || p.digests != 0 {
+				t.Fatalf("a stale epoch request was served: %d digest, %d chunk frames", p.digests, p.chunks)
+			}
+		})
 	}
 }
 

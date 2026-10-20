@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
@@ -115,5 +116,21 @@ func TestRestoreLocalityIsNotWrittenUnderAStaleEpoch(t *testing.T) {
 	if r, _ := s.CacheLocality(context.Background(), "node", l.b.Plan.Namespace, restoreEntryKey); len(r) != 0 {
 		t.Fatalf("a zombie lease wrote locality: %+v", r)
 	}
-	assertAudit(t, s, "stale_epoch")
+	assertAudit(t, s, "restore_stale_epoch")
+}
+
+func TestRestoreBlobOpenIsBoundToTheLeaseRealm(t *testing.T) {
+	l, _, _, _ := restoreFixture(t)
+	other, size, err := l.h.Blobs.Put(context.Background(), cas.CacheRealm("another realm"), strings.NewReader("held only in another realm"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.b.Plan.Restore = []protocol.CacheRestore{{Spec: "go", Key: restoreEntryKey, Dir: "go", Blobs: []protocol.CacheBlob{{Path: "p", SHA256: other, Size: size}}}}
+	list, _ := l.RestoreBlobs(context.Background())
+	if len(list) != 1 {
+		t.Fatalf("list %d", len(list))
+	}
+	if _, err = list[0].Open(); err == nil {
+		t.Fatal("a blob of another realm was opened for this lease")
+	}
 }

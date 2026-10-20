@@ -39,6 +39,7 @@ const (
 	DefaultIdleWait = 30 * time.Second
 	maxResync       = 3
 	maxTransit      = 3
+	maxStalls       = 2
 )
 
 var (
@@ -133,25 +134,35 @@ func (f *Fetcher) fetch(ctx context.Context, sha string, size int64, w io.Writer
 		return err
 	}
 	rc := &inflight{sha: sha, size: size, h: sha256.New(), w: w, lastResync: -1}
-	wait := f.first()
+	deadline := time.Now().Add(f.first())
 	for {
-		timer := time.NewTimer(wait)
+		timer := time.NewTimer(time.Until(deadline))
 		select {
 		case <-ctx.Done():
 			timer.Stop()
 			return ctx.Err()
 		case <-timer.C:
+			if rc.announced && rc.stalls < maxStalls { // frames were lost (the last chunk, say): ask for the position again
+				rc.stalls++
+				if err := rc.offset(f.Wire.Offset, rc.next); err != nil {
+					f.broken = true
+					return err
+				}
+				deadline = time.Now().Add(f.idle())
+				continue
+			}
 			f.broken = true // a coordinator that does not answer is not asked again for this lease
 			return ErrNoRestore
 		case m := <-f.Wire.In:
 			timer.Stop()
-			wait = f.idle()
-			var done bool
+			var done, ours bool
 			var err error
 			switch b := m.Body.(type) {
 			case *protocol.Digest:
+				ours = sameDigest(b.SHA256, sha)
 				err = rc.announce(f.Wire.Offset, b)
 			case *protocol.Chunk:
+				ours = rc.announced && sameDigest(b.Digest, sha)
 				done, err = rc.chunk(f.Wire.Offset, b)
 			}
 			if err != nil || done {
@@ -160,8 +171,15 @@ func (f *Fetcher) fetch(ctx context.Context, sha string, size int64, w io.Writer
 				}
 				return err
 			}
+			if ours { // only progress of this blob extends the wait; stray frames do not
+				deadline = time.Now().Add(f.idle())
+			}
 		}
 	}
+}
+
+func sameDigest(got, want string) bool {
+	return strings.ToLower(strings.TrimPrefix(got, "sha256:")) == want
 }
 
 // inflight is the state of one blob being received.
@@ -172,6 +190,7 @@ type inflight struct {
 	w          io.Writer
 	announced  bool
 	resyncs    int
+	stalls     int
 	lastResync int64
 	sendFailed bool
 }
@@ -184,7 +203,7 @@ func (rc *inflight) offset(send func(protocol.Offset) error, at int64) error {
 
 // announce answers the coordinator's announce with the position held (a resume point after a cut).
 func (rc *inflight) announce(send func(protocol.Offset) error, d *protocol.Digest) error {
-	if strings.ToLower(strings.TrimPrefix(d.SHA256, "sha256:")) != rc.sha {
+	if !sameDigest(d.SHA256, rc.sha) {
 		return nil
 	}
 	if d.Size != rc.size {
@@ -198,7 +217,7 @@ func (rc *inflight) announce(send func(protocol.Offset) error, d *protocol.Diges
 // is not at the held position asks once for that position (the frames already in flight behind
 // it are dropped without another answer).
 func (rc *inflight) chunk(send func(protocol.Offset) error, c *protocol.Chunk) (bool, error) {
-	if !rc.announced || strings.ToLower(strings.TrimPrefix(c.Digest, "sha256:")) != rc.sha {
+	if !rc.announced || !sameDigest(c.Digest, rc.sha) {
 		return false, nil
 	}
 	if c.Offset != rc.next {

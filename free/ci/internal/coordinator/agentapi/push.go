@@ -18,7 +18,7 @@ import (
 )
 
 // pushHighWater bounds the control frames queued for one node while a blob is being pushed.
-const pushHighWater = 8
+const pushHighWater = 4
 
 // pushPoll is how often a full queue is looked at again.
 const pushPoll = 5 * time.Millisecond
@@ -49,5 +49,27 @@ func (s *Server) Push(ctx context.Context, nodeID string, m protocol.Message) er
 			return ctx.Err()
 		case <-t.C:
 		}
+	}
+}
+
+// RefusalReporter is implemented by a BlobHandler that wants to hear of an offset frame (a restore
+// request) the server turned away before it reached Frame: a stale epoch or a denied token.
+type RefusalReporter interface {
+	Refused(ctx context.Context, node string, m protocol.Message, reason string)
+}
+
+// Reasons passed to RefusalReporter.Refused.
+const (
+	RefusedStale  = "stale_epoch"
+	RefusedDenied = "denied"
+)
+
+// reportRefused tells the blob handler about a refused restore request.
+func (s *Server) reportRefused(q *request, m protocol.Message, reason string) {
+	if _, ok := m.Body.(*protocol.Offset); !ok || s.cfg.Blobs == nil {
+		return
+	}
+	if r, ok := s.cfg.Blobs.(RefusalReporter); ok {
+		r.Refused(q.ctx, q.node, m, reason)
 	}
 }

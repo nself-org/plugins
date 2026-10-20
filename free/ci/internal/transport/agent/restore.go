@@ -13,6 +13,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/coordinator/agentapi"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 	"github.com/nself-org/plugins/free/ci/internal/transport/restore"
@@ -66,4 +67,22 @@ func (d *Driver) onOffset(ctx context.Context, rt *route, m protocol.Message, o 
 	default:
 		rt.restore.Offer(ctx, o)
 	}
+}
+
+// Refused is agentapi.RefusalReporter: a restore request the listener turned away (stale epoch,
+// denied token) before it reached Frame still leaves an audit row.
+func (h blobHandler) Refused(ctx context.Context, node string, m protocol.Message, reason string) {
+	o, ok := m.Body.(*protocol.Offset)
+	if !ok {
+		return
+	}
+	rt, late, err := (*hubSink)(h.d).route(m.LeaseID)
+	if err != nil || late || rt.node != node || rt.restore == nil {
+		return
+	}
+	why := restore.ReasonDenied
+	if reason == agentapi.RefusedStale || m.Epoch == nil || *m.Epoch != rt.epoch { // the gate may name the stale epoch as a wrong job
+		why = restore.ReasonStaleEpoch
+	}
+	rt.restore.Refuse(ctx, o.SHA256, why)
 }

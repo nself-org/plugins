@@ -26,6 +26,9 @@ import (
 
 const DefaultNodeCacheMaxBytes int64 = 5 << 30
 
+// fetchTempGrace is how long a temporary fetch file may sit untouched before a prune removes it.
+const fetchTempGrace = 10 * time.Minute
+
 type ReadThrough struct {
 	dir string
 	max int64
@@ -64,9 +67,9 @@ func (c *ReadThrough) name(realm, digest string) (string, error) {
 
 // Open verifies an existing copy before returning it, or fetches and verifies a
 // replacement. The caller owns the returned file. A nil fetch permits hits only.
+// The global lock covers only the directory and file moves: hashing a copy and waiting for the
+// fetch run outside it, so one slow transfer does not hold up the other leases of the node.
 func (c *ReadThrough) Open(ctx context.Context, realm, digest string, size int64, fetch func(context.Context, io.Writer) error) (*os.File, error) {
-	readThroughMu.Lock()
-	defer readThroughMu.Unlock()
 	name, err := c.name(realm, digest)
 	if err != nil {
 		return nil, err
@@ -79,20 +82,16 @@ func (c *ReadThrough) Open(ctx context.Context, realm, digest string, size int64
 		_ = os.Chtimes(name, now, now)
 		return f, nil
 	} else if errors.Is(err, errCopyMismatch) {
+		readThroughMu.Lock()
 		_ = os.Remove(name)
+		readThroughMu.Unlock()
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 	if fetch == nil {
 		return nil, os.ErrNotExist
 	}
-	if err := os.MkdirAll(filepath.Dir(name), 0o700); err != nil {
-		return nil, err
-	}
-	if err := c.prune(size); err != nil {
-		return nil, err
-	}
-	f, err := os.CreateTemp(filepath.Dir(name), ".fetch-")
+	f, err := c.stage(name, size)
 	if err != nil {
 		return nil, err
 	}
@@ -109,10 +108,26 @@ func (c *ReadThrough) Open(ctx context.Context, realm, digest string, size int64
 		return nil, err
 	}
 	_ = check.Close()
-	if err := os.Rename(f.Name(), name); err != nil {
+	readThroughMu.Lock()
+	err = os.Rename(f.Name(), name)
+	readThroughMu.Unlock()
+	if err != nil {
 		return nil, err
 	}
 	return verifiedFile(ctx, name, digest, size)
+}
+
+// stage makes room for a blob of size bytes and opens the temporary file it is fetched into.
+func (c *ReadThrough) stage(name string, size int64) (*os.File, error) {
+	readThroughMu.Lock()
+	defer readThroughMu.Unlock()
+	if err := os.MkdirAll(filepath.Dir(name), 0o700); err != nil {
+		return nil, err
+	}
+	if err := c.prune(size); err != nil {
+		return nil, err
+	}
+	return os.CreateTemp(filepath.Dir(name), ".fetch-")
 }
 
 func verifiedFile(ctx context.Context, name, digest string, size int64) (*os.File, error) {

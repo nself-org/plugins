@@ -13,7 +13,7 @@ package session
 import "github.com/nself-org/plugins/free/ci/internal/protocol"
 
 // inboundBuffer is how many transfer frames one lease holds before it drops.
-const inboundBuffer = 16
+const inboundBuffer = 32
 
 // StreamCache is the transfer stream of cache blobs.
 const StreamCache = "cache"

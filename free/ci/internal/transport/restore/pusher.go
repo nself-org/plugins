@@ -37,13 +37,18 @@ const (
 	ReasonStaleEpoch = "stale_epoch"
 	ReasonCancelled  = "cancelled"
 	ReasonBadOffset  = "bad_offset"
+	ReasonDenied     = "denied"
 )
 
 // Defaults of the pusher.
 const (
-	DefaultConfirm = 60 * time.Second
-	queueLen       = 64
-	answerLen      = 64
+	DefaultConfirm = 20 * time.Second
+	// confirmRate is the node's assumed hash and publish speed, which stretches the confirmation wait of a big blob.
+	confirmRate = 20 << 20
+	queueLen    = 64
+	answerLen   = 64
+	// ReasonRepeated refuses a node that asks for the same blob again and again.
+	ReasonRepeated = "repeated"
 )
 
 // Pusher serves the restore requests of one lease.
@@ -58,13 +63,19 @@ type Pusher struct {
 	Confirm time.Duration
 	Resumes int
 
-	mu     sync.Mutex
-	active map[string]chan protocol.Offset // digest -> answers of the running transfer
-	queued map[string]bool
-	closed bool
-	queue  chan string
-	chunks atomic.Int64
+	mu      sync.Mutex
+	active  map[string]chan protocol.Offset // digest -> answers of the running transfer
+	queued  map[string]bool
+	refused map[string]bool    // reason+digest pairs already reported: a flood costs one event each
+	asked   map[string]int     // requests accepted per digest
+	stop    context.CancelFunc // ends the running transfer
+	closed  bool
+	queue   chan string
+	chunks  atomic.Int64
 }
+
+// maxRefused bounds the refusals remembered per lease.
+const maxRefused = 64
 
 // New loads the plan of src and returns a pusher for it.
 func New(ctx context.Context, src transport.Restorer, up transfer.Uploader) (*Pusher, error) {
@@ -73,7 +84,7 @@ func New(ctx context.Context, src transport.Restorer, up transfer.Uploader) (*Pu
 		return nil, err
 	}
 	p := &Pusher{src: src, up: up, blobs: map[string]transport.RestoreBlob{}, active: map[string]chan protocol.Offset{},
-		queued: map[string]bool{}, queue: make(chan string, queueLen)}
+		queued: map[string]bool{}, refused: map[string]bool{}, asked: map[string]int{}, queue: make(chan string, queueLen)}
 	for _, b := range list {
 		if b.Open != nil && b.Size > 0 {
 			p.blobs[strings.ToLower(b.SHA256)] = b
@@ -85,16 +96,29 @@ func New(ctx context.Context, src transport.Restorer, up transfer.Uploader) (*Pu
 // Planned reports whether the plan holds any blob.
 func (p *Pusher) Planned() bool { return len(p.blobs) > 0 }
 
-// Close ends the pusher: later offers are refused as cancelled.
+// Close ends the pusher: the transfer in flight stops before its next chunk and later offers are
+// refused as cancelled.
 func (p *Pusher) Close() {
 	p.mu.Lock()
 	p.closed = true
+	stop := p.stop
 	p.mu.Unlock()
+	if stop != nil {
+		stop()
+	}
 }
 
-// Refuse reports a refused request to the Restorer (a frame the driver fenced out).
+// Refuse reports a refused request to the Restorer (a frame the driver fenced out). The same
+// reason for the same digest is reported once, so a node that floods requests costs one event.
 func (p *Pusher) Refuse(ctx context.Context, sha, reason string) {
-	p.src.RestoreEvent(ctx, transport.RestoreEvent{Kind: transport.RestoreRefused, SHA256: sha, Reason: reason})
+	key := reason + "/" + sha
+	p.mu.Lock()
+	seen := p.refused[key] || len(p.refused) >= maxRefused
+	p.refused[key] = true
+	p.mu.Unlock()
+	if !seen {
+		p.src.RestoreEvent(ctx, transport.RestoreEvent{Kind: transport.RestoreRefused, SHA256: sha, Reason: reason})
+	}
 }
 
 // Offer takes one offset frame of the node for the lease (already fenced to its lease and epoch).
@@ -104,6 +128,7 @@ func (p *Pusher) Offer(ctx context.Context, o protocol.Offset) {
 		return
 	}
 	sha := strings.ToLower(o.SHA256)
+	o.SHA256 = sha
 	b, ok := p.blobs[sha]
 	switch {
 	case !ok:
@@ -113,17 +138,24 @@ func (p *Pusher) Offer(ctx context.Context, o protocol.Offset) {
 		p.Refuse(ctx, sha, ReasonBadOffset)
 		return
 	}
+	if reason := p.route(sha, b.Size, o); reason != "" {
+		p.Refuse(ctx, sha, reason)
+	}
+}
+
+// route sends the offset to the running transfer of its blob or queues it as a request. It returns
+// the reason to refuse it with, or "" when it was taken or is harmless to drop.
+func (p *Pusher) route(sha string, size int64, o protocol.Offset) string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
-		go p.Refuse(ctx, sha, ReasonCancelled)
-		return
+		return ReasonCancelled
 	}
 	if ch := p.active[sha]; ch != nil {
 		for {
 			select {
 			case ch <- o:
-				return
+				return ""
 			default:
 			}
 			select { // full: drop the oldest answer
@@ -132,14 +164,19 @@ func (p *Pusher) Offer(ctx context.Context, o protocol.Offset) {
 			}
 		}
 	}
-	if p.queued[sha] {
-		return
+	switch {
+	case p.queued[sha] || o.Offset == size: // asked already, or a late confirmation: nothing to send
+		return ""
+	case p.asked[sha] >= p.maxAsks():
+		return ReasonRepeated
 	}
 	select {
 	case p.queue <- sha:
 		p.queued[sha] = true
+		p.asked[sha]++
 	default: // the node asks again after its idle wait
 	}
+	return ""
 }
 
 // Run serves the requests, one blob at a time, until ctx ends.
@@ -149,22 +186,27 @@ func (p *Pusher) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case sha := <-p.queue:
+			tctx, cancel := context.WithCancel(ctx)
 			p.mu.Lock()
 			delete(p.queued, sha)
 			ch := make(chan protocol.Offset, answerLen)
 			p.active[sha] = ch
+			p.stop = cancel
 			closed := p.closed
 			p.mu.Unlock()
 			if !closed {
-				p.push(ctx, p.blobs[sha], ch)
+				p.push(tctx, p.blobs[sha], ch)
 			}
 			p.mu.Lock()
 			delete(p.active, sha)
+			p.stop = nil
 			p.mu.Unlock()
+			cancel()
 		}
 	}
 }
 
+// countingUp counts the chunk frames sent, which tells a blob the node already held (none) from one that was sent.
 type countingUp struct {
 	transfer.Uploader
 	n *atomic.Int64
@@ -182,18 +224,23 @@ func (p *Pusher) resumes() int {
 	return transfer.MaxResumes
 }
 
-func (p *Pusher) confirm() time.Duration {
+// maxAsks is how many times one blob may be requested: every send of it, with the node's own retries.
+func (p *Pusher) maxAsks() int { return 2 * (p.resumes() + 1) }
+
+// confirm is how long the node gets to hash and publish a blob of size bytes.
+func (p *Pusher) confirm(size int64) time.Duration {
 	if p.Confirm > 0 {
 		return p.Confirm
 	}
-	return DefaultConfirm
+	return DefaultConfirm + time.Duration(size/confirmRate)*time.Second
 }
 
 // push sends b until the node confirms a verified copy or the attempts run out.
 func (p *Pusher) push(ctx context.Context, b transport.RestoreBlob, answers chan protocol.Offset) {
 	s := transfer.Sender{Up: countingUp{p.up, &p.chunks}, Offsets: answers, WaitOffset: p.Wait, MaxResumes: p.Resumes}
+	ev := context.WithoutCancel(ctx) // an event about a cancelled transfer is still recorded
 	fail := func(why string) {
-		p.src.RestoreEvent(ctx, transport.RestoreEvent{Kind: transport.RestoreFailed, SHA256: b.SHA256, Reason: why})
+		p.src.RestoreEvent(ev, transport.RestoreEvent{Kind: transport.RestoreFailed, SHA256: b.SHA256, Reason: why})
 	}
 	for try := 0; try <= p.resumes(); try++ {
 		before := p.chunks.Load()
@@ -203,12 +250,12 @@ func (p *Pusher) push(ctx context.Context, b transport.RestoreBlob, answers chan
 			return
 		}
 		if p.chunks.Load() == before { // the node already held every byte
-			p.src.RestoreEvent(ctx, transport.RestoreEvent{Kind: transport.RestoreCopied, SHA256: b.SHA256, Bytes: b.Size})
+			p.src.RestoreEvent(ev, transport.RestoreEvent{Kind: transport.RestoreCopied, SHA256: b.SHA256, Bytes: b.Size})
 			return
 		}
 		switch p.awaitConfirm(ctx, answers, b) {
 		case confirmed:
-			p.src.RestoreEvent(ctx, transport.RestoreEvent{Kind: transport.RestoreCopied, SHA256: b.SHA256, Bytes: b.Size})
+			p.src.RestoreEvent(ev, transport.RestoreEvent{Kind: transport.RestoreCopied, SHA256: b.SHA256, Bytes: b.Size})
 			return
 		case again:
 			continue
@@ -220,6 +267,7 @@ func (p *Pusher) push(ctx context.Context, b transport.RestoreBlob, answers chan
 	fail("the node rejected the blob every time")
 }
 
+// verdict is the outcome of waiting for the node's confirmation.
 type verdict int
 
 const (
@@ -231,7 +279,7 @@ const (
 // awaitConfirm waits for the node's position after the final chunk: the size means it published
 // a verified copy, anything less means its re-hash failed and it wants the blob again.
 func (p *Pusher) awaitConfirm(ctx context.Context, answers <-chan protocol.Offset, b transport.RestoreBlob) verdict {
-	timer := time.NewTimer(p.confirm())
+	timer := time.NewTimer(p.confirm(b.Size))
 	defer timer.Stop()
 	for {
 		select {
