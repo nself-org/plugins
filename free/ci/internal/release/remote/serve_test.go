@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -40,7 +41,10 @@ const (
 func digestOf(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 
 // fakeStore is a finished release run in memory.
-type fakeStore struct{ recs []records.Record }
+type fakeStore struct {
+	recs  []records.Record
+	lists atomic.Int32 // ArtifactList calls: one per collect
+}
 
 func (f *fakeStore) PipelineByID(_ context.Context, id string) (store.PipelineRow, bool, error) {
 	return store.PipelineRow{ID: uRun, Project: uProj, Revision: uRev, InputDigest: "in", Status: "passed"}, id == uRun, nil
@@ -55,6 +59,7 @@ func (f *fakeStore) EvidenceByRevision(context.Context, string, string) ([]store
 	return []store.EvidenceView{{ID: "e", PipelineID: uRun, Body: []byte(`{"run_id":"run-1"}`)}}, nil
 }
 func (f *fakeStore) ArtifactList(context.Context, records.Filter) ([]records.Record, error) {
+	f.lists.Add(1)
 	return f.recs, nil
 }
 func (f *fakeStore) AttemptCoordinator(context.Context, string) (string, error) { return "c1", nil }
@@ -71,6 +76,7 @@ type localAPI struct {
 	srv   *httptest.Server
 	blobs *cas.Store
 	app   []byte
+	fs    *fakeStore
 }
 
 // newLocalAPI serves the routes to the local operator over a plain-HTTP test server.
@@ -99,6 +105,7 @@ func newLocalAPI(t *testing.T) *localAPI {
 			SHA256: put(b), Size: int64(len(b)), State: records.StateCommitted}
 	}
 	fs := &fakeStore{recs: []records.Record{rec("app", records.KindBinary, l.app), rec("app.cdx.json", records.KindSBOM, []byte("{}")), rec("build.log", records.KindLog, []byte("log"))}}
+	l.fs = fs
 	useDeps(t, &remote.Deps{Runs: fakeRuns{}, Store: fs, Blobs: blobs})
 	svc := roles.New(st, &audit.Log{St: st})
 	svc.Self = "alice"
@@ -145,6 +152,24 @@ func TestHandlersServeOnlyTheListedReleaseInputs(t *testing.T) {
 		if resp, body := l.get(t, path); resp.StatusCode != http.StatusNotFound || !bytes.Equal(body, want) {
 			t.Errorf("%s: %d %s, want 404 %s", name, resp.StatusCode, body, want)
 		}
+	}
+}
+
+// D-1356: signing a release of N blobs asked the store for the whole release-inputs list N times.
+func TestBlobRoutesCollectTheReleaseInputsOnceForARun(t *testing.T) {
+	l := newLocalAPI(t)
+	digests := []string{digestOf(l.app), digestOf([]byte("{}"))}
+	for i := 0; i < 6; i++ {
+		if resp, _ := l.get(t, remote.BlobPath(uRun, digests[i%2])); resp.StatusCode != http.StatusOK {
+			t.Fatalf("blob %d: %d", i, resp.StatusCode)
+		}
+	}
+	if n := l.fs.lists.Load(); n != 1 {
+		t.Fatalf("6 blob requests listed the run's records %d times, want 1", n)
+	}
+	// a digest outside the cached whitelist is still the one E713
+	if resp, body := l.get(t, remote.BlobPath(uRun, digestOf([]byte("log")))); resp.StatusCode != http.StatusNotFound || !strings.Contains(string(body), `"E713"`) {
+		t.Fatalf("log digest: %d %s", resp.StatusCode, body)
 	}
 }
 

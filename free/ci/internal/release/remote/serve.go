@@ -11,7 +11,8 @@ package remote
 // is not in this run's release inputs, a run of another project and a run that does not exist
 // all answer the same E713; a cache realm is unreachable because only artifact records are
 // listed; the coordinator never resolves a secret here and holds no key; nothing but ids, the
-// reason key and a fixed sentence reaches an error body.
+// reason key and a fixed sentence reaches an error body.; the blob route reuses the collected
+// inputs of a run for a few seconds (inputs_cache.go), the role and project checks and their audit row run on every request.
 
 import (
 	"encoding/json"
@@ -36,7 +37,7 @@ type Handlers struct {
 // InputsHandler is GET /v1/runs/{id}/release-inputs.
 func (h Handlers) InputsHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, in, ok := h.authorized(w, r)
+		_, in, ok := h.authorized(w, r, nil)
 		if !ok {
 			return
 		}
@@ -49,8 +50,9 @@ func (h Handlers) InputsHandler() http.Handler {
 
 // BlobHandler is GET /v1/runs/{id}/release-blobs/{sha256}.
 func (h Handlers) BlobHandler() http.Handler {
+	cache := newInputsCache() // one signing run fetches every blob: collect the whitelist once (D-1356)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d, in, ok := h.authorized(w, r)
+		d, in, ok := h.authorized(w, r, cache)
 		if !ok {
 			return
 		}
@@ -85,8 +87,9 @@ func (h Handlers) BlobHandler() http.Handler {
 	})
 }
 
-// authorized runs the checks common to both routes and returns the caller's inputs.
-func (h Handlers) authorized(w http.ResponseWriter, r *http.Request) (Deps, Inputs, bool) {
+// authorized runs the checks common to both routes and returns the caller's inputs; a non-nil
+// cache may answer the collect, never the role and project checks.
+func (h Handlers) authorized(w http.ResponseWriter, r *http.Request, cache *inputsCache) (Deps, Inputs, bool) {
 	ctx := r.Context()
 	d, ok := h.deps()
 	run := r.PathValue("id")
@@ -108,7 +111,9 @@ func (h Handlers) authorized(w http.ResponseWriter, r *http.Request) (Deps, Inpu
 		err = scopeError(roles.Authorize(ctx, actor, roles.Release, project))
 	}
 	var in Inputs
-	if err == nil {
+	if err == nil && cache != nil {
+		in, err = cache.collect(ctx, d, run, authz.Role(actor.Role()))
+	} else if err == nil {
 		in, err = d.collect(ctx, run, authz.Role(actor.Role()))
 	}
 	if err != nil {
