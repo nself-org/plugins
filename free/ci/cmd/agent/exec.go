@@ -55,9 +55,11 @@ type jobInputs struct {
 	Mounts  []ciexec.Mount
 	// Stdin is the job's standard input and Masks the exact values its output must not carry
 	// (the runner credential: see leaseRunner).
-	Stdin  io.Reader
-	Masks  []string
-	Output func([]byte)
+	Stdin io.Reader
+	Masks []string
+	// RunnerRoot asks the container for the exec-capable runner tmpfs (a runner credential job).
+	RunnerRoot bool
+	Output     func([]byte)
 	// Tail returns the masked output tail for the failure excerpt (nil: use the raw tail).
 	Tail func() string
 	// Skip names why the job must not run ("cancelled", "secrets_missing").
@@ -206,7 +208,8 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	}
 	raw := &tailBuffer{max: excerptMax}
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: spec.AttemptID, CoordinatorID: agentIncarnation(spec.CoordinatorID), Job: job, Command: job.Run,
-		SourceDir: spec.SourceDir, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks,
+		SourceDir: spec.SourceDir, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks, RunnerRoot: in.RunnerRoot,
+		CPU: jobCPU(in), MemoryMB: jobMemoryMB(in),
 		Output: func(b []byte) {
 			raw.Write(b)
 			if in.Output != nil {
@@ -217,4 +220,25 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 		return res, clipTail(in.Tail()), nil
 	}
 	return res, clipTail(raw.String()), nil
+}
+
+// A runner job holds the .NET runner (about 300 to 500 MB) and its memory-only root (the 88 MB bin/ copy in the
+// runner tmpfs, charged to the container's memory), so it asks for more than the 1 GB default.
+const (
+	runnerJobCPU      = 2
+	runnerJobMemoryMB = 2048
+)
+
+func jobCPU(in jobInputs) float64 {
+	if in.RunnerRoot {
+		return runnerJobCPU
+	}
+	return 0
+}
+
+func jobMemoryMB(in jobInputs) int {
+	if in.RunnerRoot {
+		return runnerJobMemoryMB
+	}
+	return 0
 }

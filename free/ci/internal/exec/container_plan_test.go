@@ -25,7 +25,8 @@ func fakeRuntime(t *testing.T, out string, code string) (calls func() []string) 
 func fakeRuntimeStdin(t *testing.T, out string, code string) (calls func() []string, stdin func() string) {
 	t.Helper()
 	dir := t.TempDir()
-	script := "#!/bin/sh\nd=$(dirname \"$0\")\necho \"$*\" >> \"$d/calls\"\ncase \"$*\" in *--entrypoint*) exit 0;; esac\ncase \"$1\" in run) ;; *) exit 0;; esac\ncat > \"$d/stdin\"\ncat \"$d/out\"\nexit $(cat \"$d/code\")\n"
+	fakeRuntimeDir = dir
+	script := "#!/bin/sh\nd=$(dirname \"$0\")\necho \"$*\" >> \"$d/calls\"\ncase \"$*\" in *--entrypoint*) exit 0;; esac\ncase \"$1\" in run) ;; *) exit 0;; esac\ncase \"$*\" in *\"--env-file /dev/fd/3\"*) cat /dev/fd/3 > \"$d/env3\";; esac\ncat > \"$d/stdin\"\ncat \"$d/out\"\nexit $(cat \"$d/code\")\n"
 	for name, body := range map[string]string{"docker": script, "out": out, "code": code} {
 		mode := os.FileMode(0600)
 		if name == "docker" {
@@ -45,11 +46,22 @@ func fakeRuntimeStdin(t *testing.T, out string, code string) (calls func() []str
 		}
 }
 
+// fakeRuntimeFD3 is the directory of the last fakeRuntimeStdin, so a test can read what arrived on fd 3.
+var fakeRuntimeDir string
+
+func fd3Seen() string {
+	data, _ := os.ReadFile(filepath.Join(fakeRuntimeDir, "env3"))
+	return string(data)
+}
+
 type hardPlanner struct{ unhardened bool }
 
 func (p hardPlanner) Plan(r ContainerRun) (ContainerCommand, error) {
 	args := append([]string{"run", "--rm"}, limitFlags(r)...)
 	args = append(args, "--user", fixtureUID(), "--network=none", "--env-file", r.EnvFile, "--mount", "type=bind,src="+r.Workspace+",dst=/repo")
+	if r.Interactive {
+		args = append(args, "--interactive")
+	}
 	if !p.unhardened {
 		args = append(args, "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only")
 	}
@@ -417,5 +429,67 @@ func TestPlannedCleanupFallsBackToTheJobImage(t *testing.T) {
 				t.Errorf("note = %v, want %v (output %q)", note, tc.wantNote, out.String())
 			}
 		})
+	}
+}
+
+// TestPlannedContainerRunnerRoot: a runner job gets one extra, exec-capable tmpfs at /runner and nothing else
+// new; the backstop accepts exactly that value and only for a run that asked for it, and requires it then.
+func TestPlannedContainerRunnerRoot(t *testing.T) {
+	fakeRuntime(t, "ok\n", "0")
+	base := []string{"run", "--rm", "--name", "nself-ci-x", "--label", "nself.ci.attempt=x", "--user", fixtureUID(), "--network=none", "--pids-limit", "64", "--memory", "64m", "--cpus", "1",
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only"}
+	with := func(tmpfs ...string) ContainerCommand {
+		args := append([]string(nil), base...)
+		for _, v := range tmpfs {
+			args = append(args, "--tmpfs", v)
+		}
+		return ContainerCommand{Binary: "docker", Args: append(args, "alpine:3.19", "true")}
+	}
+	run := ContainerRun{Name: "nself-ci-x", Image: "alpine:3.19", AttemptID: "x"}
+	for name, tc := range map[string]struct {
+		cmd    ContainerCommand
+		root   string
+		accept bool
+	}{
+		"asked and present":            {with("/tmp:rw,nosuid,size=256m", RunnerRootTmpfs()), RunnerRootPath, true},
+		"asked and missing":            {with("/tmp:rw,nosuid,size=256m"), RunnerRootPath, false},
+		"present but not asked":        {with("/tmp:rw,nosuid,size=256m", RunnerRootTmpfs()), "", false},
+		"asked with a wider value":     {with("/runner:rw,exec,size=99999m"), RunnerRootPath, false},
+		"asked with another path":      {with("/etc:rw,exec,size=1m"), RunnerRootPath, false},
+		"another root path is refused": {with(RunnerRootTmpfs()), "/opt", false},
+	} {
+		run.RunnerRoot = tc.root
+		err := checkContainerCommand(tc.cmd, run)
+		if (err == nil) != tc.accept {
+			t.Errorf("%s: accepted=%v err=%v", name, err == nil, err)
+		}
+	}
+	if RunnerRootTmpfs() != "/runner:rw,exec,nosuid,nodev,size=384m" {
+		t.Fatalf("the runner tmpfs value changed: %q", RunnerRootTmpfs())
+	}
+}
+
+// TestPlannedContainerBackstopRequiresTheEnvFile (gp-gemini): a run that has an environment but whose command
+// leaves out --env-file is refused; with the pipe on fd 3 nobody would read it and the writer would wait.
+func TestPlannedContainerBackstopRequiresTheEnvFile(t *testing.T) {
+	fakeRuntime(t, "ok\n", "0")
+	args := []string{"run", "--rm", "--interactive", "--name", "nself-ci-x", "--label", "nself.ci.attempt=x", "--user", fixtureUID(), "--network=none", "--pids-limit", "64", "--memory", "64m", "--cpus", "1",
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only"}
+	cmd := func(extra ...string) ContainerCommand {
+		return ContainerCommand{Binary: "docker", Args: append(append(append([]string(nil), args...), extra...), "alpine:3.19", "true")}
+	}
+	run := ContainerRun{Name: "nself-ci-x", Image: "alpine:3.19", AttemptID: "x", Interactive: true, EnvFile: envFileFD}
+	if err := checkContainerCommand(cmd(), run); err == nil || !strings.Contains(err.Error(), "missing --env-file") {
+		t.Fatalf("a run with an environment and no --env-file must be refused, got %v", err)
+	}
+	if err := checkContainerCommand(cmd("--env-file", envFileFD), run); err != nil {
+		t.Fatalf("with the fd 3 env file it passes: %v", err)
+	}
+	run.EnvFile = ""
+	run.Interactive = false
+	noFlag := ContainerCommand{Binary: "docker", Args: append(append([]string(nil), args[:2]...), args[3:]...)}
+	noFlag.Args = append(noFlag.Args, "alpine:3.19", "true")
+	if err := checkContainerCommand(noFlag, run); err != nil {
+		t.Fatalf("a run with no environment (the cleanup helper) needs no --env-file: %v", err)
 	}
 }

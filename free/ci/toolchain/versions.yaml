@@ -2,6 +2,17 @@
 # Source: free/ci/toolchain/pins/*.yaml. Change a pin there, then regenerate.
 version: 1
 rows:
+  - name: actions-runner-image
+    kind: image
+    version: ghcr.io/actions/actions-runner@sha256:4ffadc0002b2581327e06101fc8c06cd189232baf79fe561fac9caeb76f5e807
+    purpose: image of the one-job GitHub Actions runner that runnerjob launches for a queued workflow_job
+    owner: internal/providers/runnerjob
+    upstream:
+      type: oci
+      ref: ghcr.io/actions/actions-runner:2.338.0
+    image: ghcr.io/actions/actions-runner
+    digest: sha256:4ffadc0002b2581327e06101fc8c06cd189232baf79fe561fac9caeb76f5e807
+    status: pinned
   - name: debian
     kind: base-image
     version: trixie-slim

@@ -2,6 +2,7 @@ package container
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -200,5 +201,46 @@ func TestBuildOptionalFlags(t *testing.T) {
 	}
 	if has(c.Args, "--env-file") {
 		t.Error("env file emitted when empty")
+	}
+}
+
+// TestBuildAddsInteractiveOnlyForAJobStdin: a runner credential on the job's stdin needs the run to be
+// interactive; every other run stays without the flag (D-1001 for planned containers).
+func TestBuildAddsInteractiveOnlyForAJobStdin(t *testing.T) {
+	p := sampleParams()
+	cmd, err := Build(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(cmd.Args, "--interactive") {
+		t.Fatalf("no job stdin but interactive: %v", cmd.Args)
+	}
+	p.Run.Interactive, p.Run.EnvFile = true, "/dev/fd/3"
+	if cmd, err = Build(p); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(cmd.Args, "--interactive") || !slices.Contains(cmd.Args, "/dev/fd/3") {
+		t.Fatalf("job stdin but not interactive or no fd 3 env file: %v", cmd.Args)
+	}
+}
+
+// TestBuildAddsTheRunnerRootOnlyWhenAsked: the exec-capable tmpfs is one more --tmpfs, only for a run that
+// asked for it, and /tmp stays as it was (noexec by default).
+func TestBuildAddsTheRunnerRootOnlyWhenAsked(t *testing.T) {
+	p := sampleParams()
+	cmd, err := Build(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(cmd.Args, " "), "/runner") {
+		t.Fatalf("no runner root asked but present: %v", cmd.Args)
+	}
+	p.Run.RunnerRoot = exec.RunnerRootPath
+	if cmd, err = Build(p); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmd.Args, " ")
+	if !strings.Contains(joined, "--tmpfs "+exec.RunnerRootTmpfs()) || strings.Count(joined, "--tmpfs") != 2 || !strings.Contains(joined, "--tmpfs /tmp:rw,nosuid,size=256m") {
+		t.Fatalf("runner root tmpfs missing or /tmp changed: %v", cmd.Args)
 	}
 }

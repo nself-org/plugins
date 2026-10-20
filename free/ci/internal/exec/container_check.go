@@ -17,6 +17,18 @@ import (
 // pipe exec feeds, so no secret value touches disk or an argv (Epic D5).
 const envFileStdin = "/dev/stdin"
 
+// envFileFD is where the environment arrives when the job has a stdin of its own: the pipe exec passes
+// as the CLI's fd 3, so the job's stdin and the environment never share a stream.
+const envFileFD = "/dev/fd/3"
+
+// RunnerRootPath is where a forge runner's exec-capable tmpfs is mounted; RunnerRootTmpfs is the one --tmpfs
+// value that mounts it. The hardened profile's /tmp is noexec, and the runner must run from its own root, so
+// the root gets its own tmpfs: memory only, never the node's disk.
+const RunnerRootPath = "/runner"
+
+// RunnerRootTmpfs returns the --tmpfs value of the runner root.
+func RunnerRootTmpfs() string { return RunnerRootPath + ":rw,exec,nosuid,nodev,size=384m" }
+
 // minJobUID is the first job UID (Epic D12: 65532 + slot).
 const minJobUID = 65532
 
@@ -36,7 +48,7 @@ var plannedFlags = map[string]bool{
 	"--rm": false, "--read-only": false, "--name": true, "--label": true, "--network": true, "--dns": true,
 	"--cap-drop": true, "--security-opt": true, "--tmpfs": true, "--pids-limit": true, "--cpus": true,
 	"--memory": true, "--memory-swap": true, "--user": true, "--env": true, "--runtime": true, "--userns": true,
-	"--entrypoint": true, "--mount": true, "--workdir": true, "--env-file": true,
+	"--entrypoint": true, "--mount": true, "--workdir": true, "--env-file": true, "--interactive": false,
 }
 
 // checkContainerCommand refuses a planned command that is not a hardened `run` of run.Image.
@@ -89,10 +101,30 @@ func checkContainerCommand(c ContainerCommand, run ContainerRun) error {
 			return bad("missing " + want)
 		}
 	}
+	if run.EnvFile != "" && !named["--env-file"] {
+		return bad("missing --env-file: the environment pipe would never be read")
+	}
+	if run.RunnerRoot != "" && run.RunnerRoot != RunnerRootPath {
+		return bad("runner root is not " + RunnerRootPath)
+	}
+	if run.RunnerRoot != "" && !seen["--tmpfs="+RunnerRootTmpfs()] {
+		return bad("missing the runner root tmpfs")
+	}
+	if run.Interactive && !named["--interactive"] {
+		return bad("missing --interactive: the job stdin would not reach the container")
+	}
 	if !seen["--label=nself.ci.attempt="+run.AttemptID] {
 		return bad("missing the attempt label")
 	}
 	return nil
+}
+
+// envFileFor is the only env file value a planned command may carry.
+func envFileFor(run ContainerRun) string {
+	if run.Interactive {
+		return envFileFD
+	}
+	return envFileStdin
 }
 
 // checkFlagValue constrains the flags whose value decides the isolation.
@@ -142,12 +174,19 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 		}
 		return checkMount(value, run.Workspace)
 	case "--tmpfs":
+		if run.RunnerRoot != "" && value == RunnerRootTmpfs() {
+			return nil
+		}
 		if !strings.HasPrefix(value, "/tmp:") && value != "/tmp" {
 			return bad("tmpfs outside /tmp")
 		}
 	case "--env-file":
-		if value != envFileStdin {
-			return bad("env file must be read from stdin, never from disk")
+		if want := envFileFor(run); value != want {
+			return bad("env file must be read from " + want + ", never from disk")
+		}
+	case "--interactive":
+		if !run.Interactive {
+			return bad("--interactive without a job stdin")
 		}
 	case "--pids-limit":
 		if n, err := strconv.Atoi(value); err != nil || n < 1 || n > 1<<20 {

@@ -10,6 +10,7 @@ package exec
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -29,6 +30,12 @@ type ContainerRun struct {
 	CPU                                      float64
 	MemoryMB                                 int
 	Network                                  model.NetworkScope
+	// Interactive says the job has a stdin (a one-job runner credential, D-1001): the planner adds
+	// --interactive and the environment reaches the CLI on fd 3 (envFileFD) instead of its stdin.
+	Interactive bool
+	// RunnerRoot, when set, is the path of an exec-capable tmpfs the container gets besides /tmp (a forge
+	// runner's root; RunnerRootPath is the only value the backstop accepts).
+	RunnerRoot string
 	// JobImageCleanup asks a planner to run the cleanup helper in the job's own image. The executor sets it for the
 	// second try when the planner's pinned helper image could not start (not pulled and no registry reachable).
 	JobImageCleanup bool
@@ -56,9 +63,6 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	if s.Job.Container == nil || !imageRef.MatchString(s.Job.Container.Image) || strings.Contains(s.Job.Container.Image, "..") {
 		return -1, "", coded("E613", "invalid container image")
 	}
-	if s.Stdin != nil { // the CLI's stdin is the env file; a second stream cannot share it
-		return -1, "", coded("E613", "a planned container cannot take a job stdin")
-	}
 	workdir, err := containerWorkdir(s)
 	if err != nil {
 		return -1, "", err
@@ -79,8 +83,16 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	if err != nil {
 		return -1, "", err
 	}
-	run := ContainerRun{Name: "nself-ci-" + s.AttemptID, Image: s.Job.Container.Image, Workspace: workspace, Workdir: workdir, EnvFile: envFileStdin,
-		Command: s.Command, Mounts: s.Mounts, AttemptID: s.AttemptID, CoordinatorID: s.CoordinatorID, Slot: s.Slot, CPU: s.CPU, MemoryMB: s.MemoryMB, Network: s.Network}
+	// The CLI reads the environment from its stdin. A job with a stdin of its own needs that stream, so
+	// the environment moves to fd 3 (a pipe, never a file) and the CLI's stdin is the job's.
+	interactive := s.Stdin != nil
+	envFile := envFileStdin
+	if interactive {
+		envFile = envFileFD
+	}
+	run := ContainerRun{Name: "nself-ci-" + s.AttemptID, Image: s.Job.Container.Image, Workspace: workspace, Workdir: workdir, EnvFile: envFile, Interactive: interactive,
+		RunnerRoot: map[bool]string{true: RunnerRootPath}[s.RunnerRoot],
+		Command:    s.Command, Mounts: s.Mounts, AttemptID: s.AttemptID, CoordinatorID: s.CoordinatorID, Slot: s.Slot, CPU: s.CPU, MemoryMB: s.MemoryMB, Network: s.Network}
 	if run.CPU <= 0 {
 		run.CPU = 1.5
 	}
@@ -105,7 +117,17 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 			s.Output(b)
 		}
 	}
-	code, err := e.runCommandIn(ctx, bytes.NewReader(envData), append([]string{cmd.Binary}, cmd.Args...), workspace, dockerHostEnv(), sink, stop, nil, "")
+	var cliStdin io.Reader = bytes.NewReader(envData)
+	var extra []*os.File
+	if interactive {
+		pr, pw, perr := os.Pipe()
+		if perr != nil {
+			return -1, "", coded("E612", "environment pipe: "+perr.Error())
+		}
+		go func() { _, _ = pw.Write(envData); _ = pw.Close() }()
+		cliStdin, extra = s.Stdin, []*os.File{pr}
+	}
+	code, _, err := e.runCommandFiles(ctx, cliStdin, extra, append([]string{cmd.Binary}, cmd.Args...), workspace, dockerHostEnv(), sink, stop, nil, "")
 	if err != nil {
 		stop()
 		err = coded("E613", "container run: "+err.Error())
@@ -126,6 +148,7 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 // cleanup is tried once in the job's own image, as it ran before the helper image existed.
 // It returns why the cleanup did not run or did not finish (nil when none is needed or it ran clean).
 func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) error {
+	run.Interactive, run.RunnerRoot, run.EnvFile = false, "", "" // the helper has no stdin, runner root or environment
 	helper, err := e.cleanupOnce(s, run)
 	if err == nil || !helper {
 		return err

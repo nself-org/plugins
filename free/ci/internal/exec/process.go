@@ -47,17 +47,31 @@ func (e *Executor) runCommandIn(ctx context.Context, stdin io.Reader, argv []str
 // runCommandSig is runCommandIn that also names the signal that ended the
 // command (SIGSEGV, SIGKILL, ...; "" when it exited on its own).
 func (e *Executor) runCommandSig(ctx context.Context, stdin io.Reader, argv []string, dir string, env []string, sink func([]byte), onCancel func(), onStart func(int) error, attempt string) (int, string, error) {
+	return e.runCommandFiles(ctx, stdin, nil, argv, dir, env, sink, onCancel, onStart, attempt)
+}
+
+// runCommandFiles is runCommandSig that also hands the child extra open files (fd 3 and up). The
+// parent's copies are closed once the child has started, or on a failed start.
+func (e *Executor) runCommandFiles(ctx context.Context, stdin io.Reader, extra []*os.File, argv []string, dir string, env []string, sink func([]byte), onCancel func(), onStart func(int) error, attempt string) (int, string, error) {
+	closeExtra := func() {
+		for _, f := range extra {
+			_ = f.Close()
+		}
+	}
 	cmd := osexec.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = env
+	cmd.ExtraFiles = extra
 	if stdin != nil {
 		cmd.Stdin = stdin
 	}
 	if err := prepareProcess(cmd); err != nil {
+		closeExtra()
 		return -1, "", err
 	}
 	reader, writer, err := os.Pipe()
 	if err != nil {
+		closeExtra()
 		return -1, "", err
 	}
 	cmd.Stdout = writer
@@ -65,9 +79,11 @@ func (e *Executor) runCommandSig(ctx context.Context, stdin io.Reader, argv []st
 	if err = cmd.Start(); err != nil {
 		_ = reader.Close()
 		_ = writer.Close()
+		closeExtra()
 		return -1, "", err
 	}
 	_ = writer.Close()
+	closeExtra()
 	if onStart != nil {
 		if err := onStart(cmd.Process.Pid); err != nil {
 			_ = killGroup(cmd.Process.Pid)

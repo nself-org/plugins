@@ -134,8 +134,14 @@ func Build(p Params) (exec.ContainerCommand, error) {
 		args = append(args, "--mount", m.Spec())
 	}
 	args = append(args, "--mount", "type=bind,src="+r.Workspace+",dst=/repo", "--workdir", r.Workdir)
+	if r.RunnerRoot != "" { // the runner's own root: memory only, exec allowed, nothing it writes reaches the node's disk
+		args = append(args, "--tmpfs", exec.RunnerRootTmpfs())
+	}
 	if r.EnvFile != "" {
 		args = append(args, "--env-file", r.EnvFile)
+	}
+	if r.Interactive { // the job's stdin (a runner credential) must reach the container
+		args = append(args, "--interactive")
 	}
 	args = append(args, r.Image)
 	args = append(args, r.Command...)
