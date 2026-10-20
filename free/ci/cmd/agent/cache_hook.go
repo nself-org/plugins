@@ -27,7 +27,7 @@ func init() {
 
 type nodeCache struct {
 	lease     protocol.Lease
-	stage     *remote.NodeStage
+	stage     cacheStage
 	base      *os.Root
 	work      *os.Root
 	miss      map[string]bool
@@ -55,24 +55,27 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 	if ns.Trust == "untrusted" && l.Cache.Access == "rw" {
 		return setup, fmt.Errorf("E711 not_planned: untrusted writable cache")
 	}
+	if err := validateCachePlan(l.Cache); err != nil {
+		return setup, err
+	}
 	state, err := stateDir()
 	if err != nil {
-		return setup, err
+		return cacheSetupMiss(err)
 	}
 	copyStore, err := remote.NewReadThrough(filepath.Join(state, "cache-readthrough"), 0)
 	if err != nil {
-		return setup, err
+		return cacheSetupMiss(err)
 	}
 	if err = copyStore.Prune(); err != nil {
-		return setup, err
+		return cacheSetupMiss(err)
 	}
 	dir := filepath.Join(root.Dir, "cache-work")
 	if err = os.Mkdir(dir, 0755); err != nil {
-		return setup, err
+		return cacheSetupMiss(err)
 	}
 	base, err := os.OpenRoot(dir)
 	if err != nil {
-		return setup, err
+		return cacheSetupMiss(err)
 	}
 	n := &nodeCache{lease: l, base: base, miss: map[string]bool{}, container: container}
 	good := false
@@ -88,12 +91,14 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 			return setup, fmt.Errorf("E711 not_planned: invalid restore spec")
 		}
 		seen[sp.ID] = true
+		valid := len(restore.Blobs) > 0
 		for _, d := range sp.Dirs {
 			if err := base.MkdirAll(filepath.Join(sp.ID, d.Name), 0755); err != nil {
-				return setup, err
+				cacheWarn(err)
+				valid = false
+				break
 			}
 		}
-		valid := true
 		for _, b := range restore.Blobs {
 			known := false
 			for _, d := range sp.Dirs {
@@ -101,6 +106,9 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 			}
 			if !known {
 				return setup, fmt.Errorf("E711 not_planned: invalid cache blob path")
+			}
+			if !valid {
+				break
 			}
 			// JobHook.Before has no carrier receiver. Until that protocol hook is
 			// available a missing copy is best effort; never read coordinator paths.
@@ -119,10 +127,12 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 			}
 		}
 		if !valid {
-			_ = specs.RemoveIn(base, sp.ID)
-			for _, d := range sp.Dirs {
-				_ = base.MkdirAll(filepath.Join(sp.ID, d.Name), 0755)
+			if err := specs.RemoveIn(base, sp.ID); err != nil {
+				cacheWarn(err)
 			}
+			// A missing/partial restore binds nothing. Tool defaults remain
+			// writable and a partial directory is never exposed to the job.
+			continue
 		}
 		if container {
 			_ = base.Chmod(sp.ID, 0755)
@@ -139,31 +149,41 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 			if !ok {
 				return setup, fmt.Errorf("E711 not_planned: invalid save spec")
 			}
-			n.miss[save.Spec] = true
-			saves = append(saves, save)
 			if container {
 				bindWorkspaceCache(&setup, sp)
 			} else {
+				ready := true
 				for _, d := range sp.Dirs {
 					if err = base.MkdirAll(filepath.Join(sp.ID, d.Name), 0700); err != nil {
-						return setup, err
+						cacheWarn(err)
+						ready = false
+						break
 					}
+				}
+				if !ready {
+					continue
 				}
 				bindCache(&setup, sp, dir, false)
 			}
+			n.miss[save.Spec] = true
+			saves = append(saves, save)
 		}
 		plan := *l.Cache
 		plan.Save = saves
 		n.lease.Cache = &plan
 		if len(saves) > 0 {
-			n.stage, err = remote.NewNodeStage(filepath.Join(root.Dir, "cache-stage"), n.lease)
+			stage, err := remote.NewNodeStage(filepath.Join(root.Dir, "cache-stage"), n.lease)
 			if err != nil {
-				return setup, err
+				cacheWarn(err)
+			} else {
+				stage.Copies = copyStore
+				n.stage = stage
 			}
-			n.stage.Copies = copyStore
 		}
 	}
-	nodeCaches.Store(l.AttemptID, n)
+	if old, loaded := nodeCaches.Swap(l.AttemptID, n); loaded {
+		closeNodeCache(old.(*nodeCache))
+	}
 	good = true
 	return setup, nil
 }
@@ -197,92 +217,4 @@ func bindWorkspaceCache(setup *session.JobSetup, sp specs.Spec) {
 			setup.Env[d.Env] = filepath.Join(specs.WorkspaceCacheDir, sp.ID, d.Name)
 		}
 	}
-}
-
-func cacheBeforeJob(spec execSpec) func(context.Context, *os.Root) error {
-	v, ok := nodeCaches.Load(spec.AttemptID)
-	if !ok {
-		return nil
-	}
-	n := v.(*nodeCache)
-	if !n.container || len(n.miss) == 0 {
-		return nil
-	}
-	return func(_ context.Context, ws *os.Root) error {
-		if err := ws.Mkdir(specs.WorkspaceCacheName, 0755); err != nil {
-			return err
-		}
-		work, err := ws.OpenRoot(specs.WorkspaceCacheName)
-		if err != nil {
-			return err
-		}
-		n.work = work
-		_ = work.Chmod(".", 0755)
-		for id := range n.miss {
-			sp, _ := specs.Get(id)
-			for _, d := range sp.Dirs {
-				if err = work.MkdirAll(filepath.Join(id, d.Name), 0755); err != nil {
-					return err
-				}
-			}
-			_ = work.Chmod(id, 0755)
-		}
-		return nil
-	}
-}
-
-// agentAfterJob composes the artifact collector with the cache collector while
-// the executor still owns the workspace. Cache refusal stays best effort.
-func agentAfterJob(spec execSpec, in jobInputs) func(context.Context, *os.Root) error {
-	artifact := artifactsAfterJob(spec, in)
-	return func(ctx context.Context, ws *os.Root) error {
-		if artifact != nil {
-			if err := artifact(ctx, ws); err != nil {
-				return err
-			}
-		}
-		if v, ok := nodeCaches.Load(spec.AttemptID); ok {
-			n := v.(*nodeCache)
-			if n.stage != nil {
-				base := n.base
-				if n.container {
-					base = n.work
-				}
-				if base != nil {
-					if err := n.stage.Collect(ctx, base, secretScanner(in)); err != nil {
-						fmt.Fprintln(os.Stderr, "cache save refused:", err)
-					}
-				}
-			}
-		}
-		return nil
-	}
-}
-
-func cacheAfter(ctx context.Context, l protocol.Lease, _ session.JobRoot, out session.Outcome, up session.Uploader) error {
-	v, ok := nodeCaches.LoadAndDelete(l.AttemptID)
-	if !ok {
-		return nil
-	}
-	n := v.(*nodeCache)
-	defer func() {
-		_ = n.base.Close()
-		if n.work != nil {
-			_ = n.work.Close()
-		}
-		if n.stage != nil {
-			_ = n.stage.Close()
-		}
-	}()
-	if out.State != "passed" || n.stage == nil {
-		return nil
-	}
-	src, ok := up.(session.OffsetSource)
-	if !ok {
-		return nil
-	}
-	if err := n.stage.Ship(ctx, src.Offsets(), up); err != nil {
-		fmt.Fprintln(os.Stderr, "cache upload refused:", err)
-	}
-	return nil
 }
