@@ -12,10 +12,11 @@ import "strings"
 
 func (l *leg) isolation() {
 	t := l.t
-	l.mustSudo("sudo -u " + agentUser + " env NSELF_CI_AGENT_HOME=" + stateDir + " NSELF_CI_AGENT_WORK=/var/db/nself-ci-work " + agentPath + " serve --stdio </dev/null || true")
+	served, rc := l.sudo("sudo -u " + agentUser + " env NSELF_CI_AGENT_HOME=" + stateDir + " NSELF_CI_AGENT_WORK=/var/db/nself-ci-work " + agentPath + " serve --stdio </dev/null 2>&1")
 	files := strings.Fields(l.mustSudo("ls " + stateDir))
 	if len(files) == 0 {
-		t.Fatalf("the agent created no key material in %s", stateDir)
+		ls, _ := l.sudo("ls -laO " + stateDir + " " + agentPath + "; id " + agentUser + "; xattr -l " + agentPath)
+		t.Fatalf("the agent created no key material in %s: serve --stdio rc=%d\n%s\n%s", stateDir, rc, served, ls)
 	}
 	for _, f := range files {
 		path := stateDir + "/" + f
