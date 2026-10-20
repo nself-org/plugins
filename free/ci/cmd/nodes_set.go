@@ -157,6 +157,10 @@ func nodesSetOneLine(err error) string {
 
 // nodesSetFail prints err (a JSON error envelope with --json) and returns its exit code.
 func nodesSetFail(out, errOut io.Writer, asJSON bool, err error) int {
+	return nodesCommandFail(out, errOut, asJSON, "ci nodes set", err)
+}
+
+func nodesCommandFail(out, errOut io.Writer, asJSON bool, command string, err error) int {
 	code, exit := "E607", output.ExitInfra
 	var se *nodesSetError
 	var st *store.Error
@@ -170,7 +174,7 @@ func nodesSetFail(out, errOut io.Writer, asJSON bool, err error) int {
 		exit = output.ExitUser
 	}
 	if asJSON {
-		_ = output.WriteError(out, "ci nodes set", output.ErrorDetail{Code: code, Message: err.Error(), ExitCode: exit}, nil)
+		_ = output.WriteError(out, command, output.ErrorDetail{Code: code, Message: err.Error(), ExitCode: exit}, nil)
 		return exit
 	}
 	_, _ = io.WriteString(errOut, err.Error()+"\n")
