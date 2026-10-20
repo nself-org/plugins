@@ -691,3 +691,22 @@ func TestAClientWithoutAPinnedRootTrustsNobody(t *testing.T) {
 		t.Fatalf("transport %+v", tr)
 	}
 }
+
+func TestReleaseRemovesOnlyItsOwnLeaseFromTheQueue(t *testing.T) {
+	d := &Driver{}
+	r1 := &route{node: "n-1", leaseID: "l1", done: make(chan struct{})}
+	r2 := &route{node: "n-1", leaseID: "l2", done: make(chan struct{})}
+	for _, r := range []*route{r1, r2} {
+		if err := d.enqueue(r, protoLease(r.leaseID, "a-"+r.leaseID, 5)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d.release(r1)
+	l, _ := d.Next(context.Background(), "n-1")
+	if l == nil || l.LeaseID != "l2" {
+		t.Fatalf("next lease %+v, want l2 (l1 was released before delivery)", l)
+	}
+	if again, _ := d.Next(context.Background(), "n-1"); again != nil {
+		t.Fatalf("a released lease was delivered: %+v", again)
+	}
+}
