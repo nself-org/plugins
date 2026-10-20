@@ -112,24 +112,24 @@ func cmdSweep(args []string, out, errw io.Writer) int {
 		return 2
 	}
 	if !revisionRe.MatchString(*revision) {
-		fmt.Fprintln(errw, "truth: --revision must be 40 lower-case hex digits")
+		_, _ = fmt.Fprintln(errw, "truth: --revision must be 40 lower-case hex digits")
 		return 2
 	}
 	files, repos := splitDash(fs.Args())
 	if len(files) == 0 || len(repos) == 0 {
-		fmt.Fprintln(errw, "usage: sweep --rules-root DIR --revision SHA RULEFILE... -- NAME=DIR|NAME=!reason...")
+		_, _ = fmt.Fprintln(errw, "usage: sweep --rules-root DIR --revision SHA RULEFILE... -- NAME=DIR|NAME=!reason...")
 		return 2
 	}
 	digest, err := digestFiles(*rulesRoot, files)
 	if err != nil {
-		fmt.Fprintln(errw, failf(files[0], "", "%v", err))
+		_, _ = fmt.Fprintln(errw, failf(files[0], "", "%v", err))
 		return 2
 	}
 	var entries []SweepEntry
 	for _, r := range repos {
 		name, dir, ok := strings.Cut(r, "=")
 		if !ok || name == "" {
-			fmt.Fprintf(errw, "truth: bad repository argument %q (want NAME=DIR or NAME=!reason)\n", r)
+			_, _ = fmt.Fprintf(errw, "truth: bad repository argument %q (want NAME=DIR or NAME=!reason)\n", r)
 			return 2
 		}
 		if reason, bad := strings.CutPrefix(dir, "!"); bad {
@@ -140,17 +140,17 @@ func cmdSweep(args []string, out, errw io.Writer) int {
 	}
 	ev := SweepEvidence(*revision, digest, entries, time.Now())
 	for _, c := range ev.Checks {
-		fmt.Fprintf(errw, "%s %s (%d finding(s))\n", strings.ToUpper(string(c.Result)), c.ID, c.Findings)
+		_, _ = fmt.Fprintf(errw, "%s %s (%d finding(s))\n", strings.ToUpper(string(c.Result)), c.ID, c.Findings)
 		if c.Result != "pass" && c.Excerpt != "" {
-			fmt.Fprintln(errw, indent(c.Excerpt))
+			_, _ = fmt.Fprintln(errw, indent(c.Excerpt))
 		}
 	}
 	doc, err := json.Marshal(ev)
 	if err != nil {
-		fmt.Fprintln(errw, "truth: cannot encode the evidence:", err)
+		_, _ = fmt.Fprintln(errw, "truth: cannot encode the evidence:", err)
 		return 2
 	}
-	fmt.Fprintln(out, string(doc))
+	_, _ = fmt.Fprintln(out, string(doc))
 	switch ev.Result {
 	case "pass":
 		return 0
@@ -187,12 +187,12 @@ func cmdHash(in io.Reader, out, errw io.Writer) int {
 	n := 0
 	for sc.Scan() {
 		if l := strings.TrimSpace(sc.Text()); l != "" {
-			fmt.Fprintln(out, HashLiteral(l))
+			_, _ = fmt.Fprintln(out, HashLiteral(l))
 			n++
 		}
 	}
 	if sc.Err() != nil || n == 0 {
-		fmt.Fprintln(errw, "usage: hash < literals (one per line)")
+		_, _ = fmt.Fprintln(errw, "usage: hash < literals (one per line)")
 		return 2
 	}
 	return 0

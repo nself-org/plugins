@@ -11,7 +11,6 @@ package exec
 // returns E648 reason spawn (Epic D35); no shell sits between parent and child.
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -75,6 +74,3 @@ func StartDetached(argv, env []string, logPath string) (*Detached, error) {
 	go func() { _ = cmd.Wait(); close(exited) }()
 	return &Detached{PID: cmd.Process.Pid, Exited: exited}, nil
 }
-
-// errNoDetach is the cause the windows stub reports.
-var errNoDetach = errors.New("detach is not supported on this platform")
