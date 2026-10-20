@@ -1,0 +1,13 @@
+diff --git a/internal/netscope/deny.go b/internal/netscope/deny.go
+index 783e1ee5..72d03212 100644
+--- a/internal/netscope/deny.go
++++ b/internal/netscope/deny.go
+@@ -117,7 +117,7 @@ type Verdict struct {
+ }
+ 
+ // Unmap returns addr in the one spelling every check uses: no zone, IPv4-mapped IPv6 as IPv4.
+-func Unmap(addr netip.Addr) netip.Addr { return addr.WithZone("").Unmap() }
++func Unmap(addr netip.Addr) netip.Addr { return addr.Unmap() }
+ 
+ // Allowed decides whether a job under scope may reach addr. Only restricted and internet reach a proxy;
+ // none has no route and lan and privileged are never served by it, so those four answers are all "no".

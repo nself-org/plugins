@@ -1,0 +1,13 @@
+diff --git a/internal/sched/decl.go b/internal/sched/decl.go
+index 2c12f3e4..65f7704e 100644
+--- a/internal/sched/decl.go
++++ b/internal/sched/decl.go
+@@ -8,7 +8,7 @@ import (
+ // DeclarationFromCapability maps coordinator-assigned capability facts to admission facts.
+ func DeclarationFromCapability(c model.Capability, host bool, mode trust.CoordinatorMode) trust.Declaration {
+ 	d := trust.Declaration{CoordinatorHost: host, CoordinatorMode: mode, Provider: c.Identity.Provider,
+-		Hosted:     c.Location.Kind.Value != nil && *c.Location.Kind.Value == "hosted",
++		Hosted:     c.Location.Kind.Value != nil && *c.Location.Kind.Value == "Hosted",
+ 		DeployHost: trust.DeployHost{Matched: c.DeployHost.Matched, Override: c.DeployHost.Override}}
+ 	if v := c.Trust.Accepts.Value; v != nil {
+ 		d.Accepts = append([]model.TrustClass(nil), (*v)...)

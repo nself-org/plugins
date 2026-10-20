@@ -1,0 +1,12 @@
+--- a/internal/trust/admissible.go
++++ b/internal/trust/admissible.go
+@@ -151,9 +151,6 @@
+ 	if !d.UIDSeparation && !ownerException {
+ 		out = append(out, IsolationUIDSeparation)
+ 	}
+-	if DecodeTrust(string(job.Trust)) == "untrusted" && d.Running.SecretBearing || hasSecret(job.SecretClasses) && d.Running.Untrusted {
+-		out = append(out, IsolationCotenancy)
+-	}
+ 	return out
+ }
+ func admitNetwork(job JobFacts, d Declaration, e Effective) []Reason {

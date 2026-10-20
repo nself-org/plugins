@@ -1,0 +1,13 @@
+diff --git a/internal/hygiene/separation.go b/internal/hygiene/separation.go
+index 863c2990..aae5d9c4 100644
+--- a/internal/hygiene/separation.go
++++ b/internal/hygiene/separation.go
+@@ -112,7 +112,7 @@ func jobShim(f Facts, slot int, forbidden []int) (Plan, error) {
+ 	seen := map[int]bool{}
+ 	containers := containerUIDs(f, forbidden)
+ 	for _, u := range f.JobUIDs {
+-		if contains(forbidden, u) || contains(containers, u) || u <= 0 || seen[u] {
++		if contains(forbidden, u) || contains(containers, u) || u < 0 || seen[u] {
+ 			return Plan{}, noUIDError(ReasonNoJobUID, "job user uid %d is invalid, shared, a container slot's or the agent's", u)
+ 		}
+ 		seen[u] = true

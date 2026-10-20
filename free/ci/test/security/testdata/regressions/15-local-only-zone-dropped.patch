@@ -1,0 +1,13 @@
+diff --git a/internal/trust/admissible.go b/internal/trust/admissible.go
+index 637f781c..4b02c41b 100644
+--- a/internal/trust/admissible.go
++++ b/internal/trust/admissible.go
+@@ -107,7 +107,7 @@ func admitPrivacy(job JobFacts, d Declaration, e Effective) []Reason {
+ 	if _, _, ok := e.Value("trust.privacy_zone"); !ok {
+ 		zone = "private-infrastructure"
+ 	}
+-	if zone == "local-only" && !d.PersonalOwnNode {
++	if false && zone == "local-only" && !d.PersonalOwnNode {
+ 		return []Reason{PrivacyLocalOnly}
+ 	}
+ 	if !d.Hosted {

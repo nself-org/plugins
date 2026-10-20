@@ -1,0 +1,13 @@
+diff --git a/internal/roles/decide.go b/internal/roles/decide.go
+index c1ab14e7..0aa65e30 100644
+--- a/internal/roles/decide.go
++++ b/internal/roles/decide.go
+@@ -34,7 +34,7 @@ func (a Actor) decide(ctx context.Context, d decision) error {
+ 	var err error
+ 	if a.svc != nil && a.id != "" && a.kind != "" {
+ 		if a, err = a.refresh(ctx); err != nil && ReasonOf(err) == "" {
+-			return err // the store could not be read: fail closed without a decision row
++			return nil // the store could not be read: fail closed without a decision row
+ 		}
+ 	}
+ 	if err == nil {

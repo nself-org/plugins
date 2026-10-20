@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# security-suite drill (P7-TRUST-17, Epic TRUST): runs the CI fabric security acceptance suite (build tag
+# security, free/ci/test/security) and the planted regressions against it.
+# Why: the suite proves the directive's security list (scenarios 7 and 8, the invariants through the real
+#   dispatcher, approvals, evidence, isolation, secrets, control plane, telemetry). The regressions are patches
+#   to production code (secret to untrusted, LAN for untrusted, private job on hosted, stale evidence, deploy
+#   host, policy from the revision, approval surviving a push, CI data to telemetry, and more); the drill fails
+#   when any of them survives, because that means the suite no longer notices the bug it was written for.
+# Inputs:  none. Needs go and patch; rsync is used by the mutation harness.
+# Usage:   run
+# Outputs: the test log and one KILLED/SURVIVED line per regression on stderr.
+#          Exit 0 when the suite passes without a skip and every regression is killed, 1 when a test fails,
+#          a test skips or a regression survives, 2 when a tool is missing.
+set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root=$(cd "$here/../../.." && pwd)
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/security-suite.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+
+for tool in go patch rsync; do
+	command -v "$tool" >/dev/null || { echo "security-suite: $tool is required" >&2; exit 2; }
+done
+
+echo "security-suite: running free/ci/test/security" >&2
+if ! (cd "$root/free/ci" && CGO_ENABLED=0 go test -mod=vendor -count=1 -v -tags security ./test/security/...) >"$tmp/suite.txt" 2>&1; then
+	tail -n 60 "$tmp/suite.txt" >&2
+	echo "security-suite: the suite failed" >&2
+	exit 1
+fi
+if grep -q -- '--- SKIP' "$tmp/suite.txt"; then
+	grep -- '--- SKIP' "$tmp/suite.txt" >&2
+	echo "security-suite: a security test skipped; a missing prerequisite is a failure" >&2
+	exit 1
+fi
+grep -E '^(--- PASS|ok )' "$tmp/suite.txt" | tail -n 3 >&2
+
+echo "security-suite: planting the regressions" >&2
+# The harness runs patches one after the other (about 40 s each); the drill splits them over SECURITY_SUITE_JOBS
+# copies of the module (default 3) so the job stays inside a drill's default timeout. Each copy runs the same
+# harness. The check that the patch directory covers every category runs in the full suite above, so the
+# copies, which hold a share of the patches, skip it.
+jobs=${SECURITY_SUITE_JOBS:-3}
+patches=("$root"/free/ci/test/security/testdata/regressions/*.patch)
+for ((g = 0; g < jobs; g++)); do
+	m="$tmp/m$g"
+	mkdir -p "$m/test/security/testdata/regressions"
+	rsync -a --exclude vendor --exclude test/security/testdata/regressions "$root/free/ci/" "$m/"
+	ln -s "$root/free/ci/vendor" "$m/vendor"
+done
+i=0
+for patch in "${patches[@]}"; do
+	cp "$patch" "$tmp/m$((i % jobs))/test/security/testdata/regressions/"
+	i=$((i + 1))
+done
+for ((g = 0; g < jobs; g++)); do
+	(
+		rc=0
+		bash "$root/free/ci/internal/invariants/testdata/mutate.sh" "$tmp/m$g" test/security/testdata/regressions 'Test' -tags security -skip 'TestRegressionPatchesCoverTheCategories' ./test/security/... >"$tmp/mut$g.txt" 2>&1 || rc=$?
+		echo "$rc" >"$tmp/mut$g.rc"
+	) &
+done
+wait
+status=0
+for ((g = 0; g < jobs; g++)); do
+	cat "$tmp/mut$g.txt" >&2
+	[ "$(cat "$tmp/mut$g.rc")" = 0 ] || status=1
+done
+[ "$status" = 0 ] || { echo "security-suite: a planted regression survived or the harness failed" >&2; exit 1; }
+echo "security-suite: ok" >&2

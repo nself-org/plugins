@@ -1,0 +1,13 @@
+diff --git a/internal/netscope/resolve.go b/internal/netscope/resolve.go
+index ea4978c3..0c0bb6d4 100644
+--- a/internal/netscope/resolve.go
++++ b/internal/netscope/resolve.go
+@@ -104,7 +104,7 @@ func (g Guard) dialPinned(ctx context.Context, d Dialer, addrs []netip.Addr, por
+ func hostExcluded(list []string, h string) bool {
+ 	for _, x := range list {
+ 		x = strings.TrimLeft(x, ".") // ".corp.internal" means the domain and everything below it
+-		if x != "" && (h == x || strings.HasSuffix(h, "."+x)) {
++		if x != "" && (h == x) {
+ 			return true
+ 		}
+ 	}
