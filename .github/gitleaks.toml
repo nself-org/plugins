@@ -27,6 +27,11 @@ paths = [
   # Ad-hoc job argv redaction test (P7-CI-52 / D-1020): planted fake passwords, keys and tokens that the
   # test feeds through the argv scrubber to prove they are masked. One test file; no production source.
   '''free/ci/internal/adhoc/argv_test\.go$''',
+  # Pairing race test (free/ci/internal/pairing/existing_race_test.go): the SQL fixtures set a fake pki
+  # key_id (the digits 0-9 and a-f in order) on a throwaway in-memory node row to prove a late rotation
+  # is not overwritten. gitleaks 8.21.2 (the CI-pinned version) reads `key_id='...'` as generic-api-key.
+  # One test file; no production source.
+  '''free/ci/internal/pairing/existing_race_test\.go$''',
   # Vendored third-party source trees of free plugins (cargo/go vendor): generated tables and
   # test vectors trip generic-api-key. They are copies of upstream code, never our secrets.
   '''^free/[^/]+/vendor/''',
