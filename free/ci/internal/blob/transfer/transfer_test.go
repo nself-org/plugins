@@ -214,20 +214,52 @@ func TestVerifyRefusesAnotherDigestAndAbortedWriters(t *testing.T) {
 func TestSenderGivesUpAfterThreeRestarts(t *testing.T) {
 	data := pattern(4 * 1024)
 	offs := make(chan protocol.Offset, 64)
-	up := &fakeUp{offs: offs, onChunk: func(c protocol.Chunk) {
+	up := &fakeUp{offs: offs, answer: true, onChunk: func(c protocol.Chunk) {
 		// the receiver keeps asking for an earlier offset
 		offs <- protocol.Offset{Stream: c.Stream, SHA256: c.Digest, Offset: 1}
 	}}
-	up.offs <- protocol.Offset{Stream: StreamArtifact, SHA256: sum(data), Offset: 0}
 	s := &Sender{Up: up, Offsets: offs, ChunkSize: 1024}
 	err := s.Send(context.Background(), blobOf(data))
 	if !IsReason(err, ReasonInterrupted) {
 		t.Fatalf("err = %v, want E714 interrupted", err)
 	}
+	if up.digests != MaxResumes+1 {
+		t.Fatalf("announced %d times, want %d passes", up.digests, MaxResumes+1)
+	}
+}
+
+func TestSenderResumesAfterACutSend(t *testing.T) {
+	data := pattern(5 * 1024)
+	offs := make(chan protocol.Offset, 64)
+	cuts := 0
+	var sent []int64
+	up := &fakeUp{offs: offs, answer: true}
+	up.onChunkErr = func(c protocol.Chunk) error {
+		if c.Offset == 2*1024 && cuts == 0 {
+			cuts++
+			return errors.New("connection cut")
+		}
+		sent = append(sent, c.Offset)
+		return nil
+	}
+	up.first = func(pass int) int64 { return map[int]int64{1: 0, 2: 2 * 1024}[pass] }
+	s := &Sender{Up: up, Offsets: offs, ChunkSize: 1024}
+	if err := s.Send(context.Background(), blobOf(data)); err != nil {
+		t.Fatal(err)
+	}
+	want := []int64{0, 1024, 2048, 3072, 4096}
+	if len(sent) != len(want) {
+		t.Fatalf("chunks sent = %v, want %v (resume from the reported 2048, nothing resent)", sent, want)
+	}
+	for i := range want {
+		if sent[i] != want[i] {
+			t.Fatalf("chunks sent = %v, want %v", sent, want)
+		}
+	}
 }
 
 func TestSenderTimesOutWithoutAnOffset(t *testing.T) {
-	s := &Sender{Up: &fakeUp{offs: make(chan protocol.Offset)}, Offsets: make(chan protocol.Offset), WaitOffset: 20 * time.Millisecond}
+	s := &Sender{Up: &fakeUp{}, Offsets: make(chan protocol.Offset), WaitOffset: 20 * time.Millisecond}
 	if err := s.Send(context.Background(), blobOf(pattern(10))); !IsReason(err, ReasonInterrupted) {
 		t.Fatalf("err = %v", err)
 	}
@@ -236,8 +268,7 @@ func TestSenderTimesOutWithoutAnOffset(t *testing.T) {
 func TestSenderRejectsAnImpossibleOffset(t *testing.T) {
 	data := pattern(100)
 	offs := make(chan protocol.Offset, 1)
-	offs <- protocol.Offset{Stream: StreamArtifact, SHA256: sum(data), Offset: 101}
-	s := &Sender{Up: &fakeUp{offs: offs}, Offsets: offs}
+	s := &Sender{Up: &fakeUp{offs: offs, answer: true, first: func(int) int64 { return 101 }}, Offsets: offs}
 	if err := s.Send(context.Background(), blobOf(data)); !IsReason(err, ReasonProtocol) {
 		t.Fatalf("err = %v", err)
 	}
@@ -246,15 +277,33 @@ func TestSenderRejectsAnImpossibleOffset(t *testing.T) {
 	}
 }
 
+// fakeUp is a carrier end: with answer set, every announce is answered with first(pass) (default 0).
 type fakeUp struct {
-	offs    chan protocol.Offset
-	onChunk func(protocol.Chunk)
+	offs       chan protocol.Offset
+	answer     bool
+	first      func(pass int) int64
+	onChunk    func(protocol.Chunk)
+	onChunkErr func(protocol.Chunk) error
+	digests    int
 }
 
-func (f *fakeUp) Digest(protocol.Digest) error { return nil }
+func (f *fakeUp) Digest(d protocol.Digest) error {
+	f.digests++
+	if f.answer {
+		var off int64
+		if f.first != nil {
+			off = f.first(f.digests)
+		}
+		f.offs <- protocol.Offset{Stream: d.Stream, SHA256: d.SHA256, Offset: off}
+	}
+	return nil
+}
 func (f *fakeUp) Chunk(c protocol.Chunk) error {
 	if f.onChunk != nil {
 		f.onChunk(c)
+	}
+	if f.onChunkErr != nil {
+		return f.onChunkErr(c)
 	}
 	return nil
 }

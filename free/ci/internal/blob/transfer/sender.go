@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -84,36 +85,60 @@ func (s *Sender) wait() time.Duration {
 
 // Send announces b and streams what the receiver does not hold. It returns when the final chunk
 // is sent (or the receiver already held every byte); the artifact-ref that follows is the caller's
-// confirmation, because the receiver refuses it unless the blob was committed.
+// confirmation, because the receiver refuses it unless the blob was committed. A pass that is cut
+// (a chunk cannot be sent, or the receiver reports another offset) starts again from the announce
+// and continues at the offset the receiver reports, up to MaxResumes times.
 func (s *Sender) Send(ctx context.Context, b Blob) error {
 	if b.Size < 1 || !sha256Hex.MatchString(b.SHA256) || b.Open == nil {
 		return Failf(ReasonProtocol, "a blob to send needs a sha256, a size above zero and a reader")
 	}
-	if err := s.Up.Digest(protocol.Digest{Stream: b.Stream, SHA256: b.SHA256, Size: b.Size}); err != nil {
-		return Failf(ReasonInterrupted, "the announce of blob %s was not sent: %v", short(b.SHA256), err)
-	}
-	off, err := s.awaitOffset(ctx, b)
-	if err != nil {
-		return err
-	}
-	for resumes := 0; ; resumes++ {
-		if off == b.Size {
-			return nil
-		}
-		if off < 0 || off > b.Size {
-			return Failf(ReasonProtocol, "the receiver reported offset %d for blob %s of %d B", off, short(b.SHA256), b.Size)
-		}
-		next, err := s.stream(ctx, b, off)
+	var cut error
+	for pass := 0; pass <= s.resumes(); pass++ {
+		again, err := s.pass(ctx, b)
 		if err != nil {
 			return err
 		}
-		if next < 0 { // the whole blob went out
+		if !again.cut {
 			return nil
 		}
-		if resumes >= s.resumes() {
-			return Failf(ReasonInterrupted, "blob %s was restarted %d times; giving up", short(b.SHA256), s.resumes())
+		cut = again.why
+	}
+	return Failf(ReasonInterrupted, "blob %s was cut %d times (%v); giving up", short(b.SHA256), s.resumes()+1, cut)
+}
+
+// outcome of one pass: cut means start again.
+type outcome struct {
+	cut bool
+	why error
+}
+
+// pass announces b, learns the receiver's offset and streams from there.
+func (s *Sender) pass(ctx context.Context, b Blob) (outcome, error) {
+	s.drain()
+	if err := s.Up.Digest(protocol.Digest{Stream: b.Stream, SHA256: b.SHA256, Size: b.Size}); err != nil {
+		return outcome{cut: true, why: err}, nil
+	}
+	off, err := s.awaitOffset(ctx, b)
+	if err != nil {
+		return outcome{}, err
+	}
+	if off == b.Size {
+		return outcome{}, nil
+	}
+	if off < 0 || off > b.Size {
+		return outcome{}, Failf(ReasonProtocol, "the receiver reported offset %d for blob %s of %d B", off, short(b.SHA256), b.Size)
+	}
+	return s.stream(ctx, b, off)
+}
+
+// drain drops the answers of an earlier pass.
+func (s *Sender) drain() {
+	for {
+		select {
+		case <-s.Offsets:
+		default:
+			return
 		}
-		off = next
 	}
 }
 
@@ -138,37 +163,37 @@ func (s *Sender) awaitOffset(ctx context.Context, b Blob) (int64, error) {
 	}
 }
 
-// stream sends b from off. It returns -1 after the final chunk, or the offset a mid-stream answer
-// asked for.
-func (s *Sender) stream(ctx context.Context, b Blob, off int64) (int64, error) {
+// stream sends b from off. It reports cut when a chunk could not be sent or the receiver asked for
+// another position, and a zero outcome after the final chunk.
+func (s *Sender) stream(ctx context.Context, b Blob, off int64) (outcome, error) {
 	rc, err := b.Open()
 	if err != nil {
-		return -1, Failf(ReasonInterrupted, "blob %s cannot be read: %v", short(b.SHA256), err)
+		return outcome{}, Failf(ReasonInterrupted, "blob %s cannot be read: %v", short(b.SHA256), err)
 	}
 	defer func() { _ = rc.Close() }()
 	if _, err = io.CopyN(io.Discard, rc, off); err != nil {
-		return -1, Failf(ReasonInterrupted, "blob %s is shorter than offset %d: %v", short(b.SHA256), off, err)
+		return outcome{}, Failf(ReasonInterrupted, "blob %s is shorter than offset %d: %v", short(b.SHA256), off, err)
 	}
 	buf := make([]byte, s.chunk())
 	for pos := off; pos < b.Size; {
 		if err = ctx.Err(); err != nil {
-			return -1, Failf(ReasonInterrupted, "cancelled while sending blob %s", short(b.SHA256))
+			return outcome{}, Failf(ReasonInterrupted, "cancelled while sending blob %s", short(b.SHA256))
 		}
 		if moved, o := s.moved(b, pos); moved {
-			return o, nil
+			return outcome{cut: true, why: fmt.Errorf("the receiver asked for offset %d", o)}, nil
 		}
 		want := min(int64(len(buf)), b.Size-pos)
 		n, rerr := io.ReadFull(rc, buf[:want])
 		if rerr != nil && !(errors.Is(rerr, io.ErrUnexpectedEOF) && int64(n) == want) {
-			return -1, Failf(ReasonInterrupted, "blob %s ended at %d of %d B: %v", short(b.SHA256), pos+int64(n), b.Size, rerr)
+			return outcome{}, Failf(ReasonInterrupted, "blob %s ended at %d of %d B: %v", short(b.SHA256), pos+int64(n), b.Size, rerr)
 		}
 		final := pos+int64(n) == b.Size
 		if err = s.Up.Chunk(protocol.Chunk{Stream: b.Stream, Offset: pos, Data: base64.StdEncoding.EncodeToString(buf[:n]), Digest: b.SHA256, Final: final}); err != nil {
-			return -1, Failf(ReasonInterrupted, "a chunk of blob %s was not sent: %v", short(b.SHA256), err)
+			return outcome{cut: true, why: err}, nil
 		}
 		pos += int64(n)
 	}
-	return -1, nil
+	return outcome{}, nil
 }
 
 // moved drains the offset answers that arrived while streaming; one for this blob that is not the
