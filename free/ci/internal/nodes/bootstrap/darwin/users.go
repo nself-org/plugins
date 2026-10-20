@@ -24,7 +24,7 @@ func usersScript(slots int) string {
   i=%[2]d
   while [ "$i" -le %[3]d ]; do
     if ! echo "$used" | grep -qx "$i"; then
-      held=$(for d in %[5]s /Volumes/*; do [ -d "$d" ] && find "$d" -xdev -uid "$i" -print; done 2>/dev/null | head -n 1)
+      held=$({ %[5]s; } 2>/dev/null | head -n 1)
       if [ -z "$held" ]; then echo "$i"; return 0; fi
     fi
     i=$((i + 1))
@@ -51,7 +51,7 @@ mk() {
 }
 mk %[1]s
 for n in %[4]s; do mk %[1]s-job-$n; done
-`, agentUser, IDLow, IDHigh, slotList(slots), scanDirs)
+`, agentUser, IDLow, IDHigh, slotList(slots), ownedLoops(scanDirs, `-uid "$i"`, "-print"))
 }
 
 // dirsScript creates the directories with their owners and modes. Root only ever creates or changes an
@@ -97,10 +97,10 @@ if pgrep -u "$u" >/dev/null 2>&1; then echo kept; exit 0; fi
 rm -f "/var/at/tabs/$u"
 rmdir %[2]s 2>/dev/null || true
 find /private/var/folders -xdev -user "$u" -depth -delete >/dev/null 2>&1 || true
-left=$(for d in %[3]s /Volumes/*; do [ -d "$d" ] && find "$d" -xdev -user "$u" -print; done 2>/dev/null | head -n 1)
+left=$({ %[3]s; } 2>/dev/null | head -n 1)
 if [ -n "$left" ]; then echo kept; exit 0; fi
 dscl . -delete "/Users/$u" >/dev/null 2>&1 || true
 dscl . -delete "/Groups/$u" >/dev/null 2>&1 || true
 if dscl . -read "/Users/$u" UniqueID >/dev/null 2>&1; then echo kept; else echo removed; fi
-`, jobUser(n), JobRoot(n), scanDirs)
+`, jobUser(n), JobRoot(n), ownedLoops(scanDirs, `-user "$u"`, "-print"))
 }

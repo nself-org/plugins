@@ -10,6 +10,7 @@ package darwin
 //          internal/nodes/bootstrap); a path or name here is never built from a node's reply.
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/nself-org/plugins/free/ci/internal/nodes/bootstrap"
@@ -70,6 +71,20 @@ const scriptHead = "set -eu\nPATH=/usr/bin:/bin:/usr/sbin:/sbin\nexport PATH\n"
 // world-writable folders (the mounted volumes are added by the scripts). A whole-disk scan would walk
 // Xcode and the system volumes for minutes and find nothing.
 const scanDirs = JobsDir + " " + WorkDir + " /private/tmp /private/var/tmp /Users/Shared /Library/Caches"
+
+// volumeDepth bounds how deep a scan walks into each top-level mounted volume: an external disk can hold
+// millions of files, and a job user can only have written where a folder is world-writable, which is near
+// the top. The job root, work area and temporary folders are scanned in full.
+const volumeDepth = 4
+
+// ownedLoops is shell text that runs `find` for files matching match (for example `-user "$u"`) with the
+// given action (`-print` or `-depth -delete`) over dirs in full and over each mounted volume to volumeDepth.
+// Every find ends in `|| true`: macOS /bin/sh runs a command substitution with errexit on, so one find
+// that fails (an unreadable folder under /Library/Caches) must not end the loop before the volumes.
+func ownedLoops(dirs, match, action string) string {
+	return fmt.Sprintf(`for d in %[1]s; do if [ -d "$d" ]; then find "$d" -xdev %[2]s %[3]s 2>/dev/null || true; fi; done; for d in /Volumes/*; do if [ -d "$d" ]; then find "$d" -xdev -maxdepth %[4]d %[2]s %[3]s 2>/dev/null || true; fi; done`,
+		dirs, match, action, volumeDepth)
+}
 
 // JobRoot is the job root of slot n (n = 1..slots).
 func JobRoot(n int) string { return JobsDir + "/" + strconv.Itoa(n) }

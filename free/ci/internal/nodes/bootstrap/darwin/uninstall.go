@@ -43,7 +43,7 @@ for u in $(dscl . -list /Users | grep -E '^%[1]s(-job-[0-9]+)?$' || true); do
   pkill -KILL -u "$u" >/dev/null 2>&1 || true
   rm -f "/var/at/tabs/$u"
   find /private/var/folders -xdev -user "$u" -depth -delete >/dev/null 2>&1 || true
-  for d in %[9]s /Volumes/*; do [ -d "$d" ] && find "$d" -xdev -user "$u" -depth -delete >/dev/null 2>&1; done || true
+  %[9]s
   dscl . -delete "/Users/$u" >/dev/null 2>&1 || true
 done
 for g in $(dscl . -list /Groups | grep -E '^%[1]s(-job-[0-9]+)?$' || true); do
@@ -53,5 +53,5 @@ rm -rf %[3]s %[4]s %[5]s %[6]s %[7]s
 rm -f %[8]s
 left=$(dscl . -list /Users | grep -E '^%[1]s(-job-[0-9]+)?$' || true)
 [ -z "$left" ] || { echo "accounts still present: $left" >&2; exit 1; }
-`, agentUser, SudoersPath, agentDir, StateDir, WorkDir, JobsDir, logDir, TrustedPath, scanDirs)
+`, agentUser, SudoersPath, agentDir, StateDir, WorkDir, JobsDir, logDir, TrustedPath, ownedLoops(scanDirs, `-user "$u"`, "-depth -delete"))
 }

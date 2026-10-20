@@ -7,6 +7,7 @@ package darwin
 // Inputs:  script text. Constraints: no node, no disk; `sh -n` parsing lives in family_test.go.
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -104,7 +105,7 @@ func TestAnIdThatStillOwnsFilesIsNotReused(t *testing.T) {
 	u := usersScript(1)
 	mustContain(t, "users", u, `find "$d" -xdev -uid "$i" -print`, "/Users/Shared", "/Volumes/*")
 	un := uninstallScript()
-	mustContain(t, "uninstall", un, `find "$d" -xdev -user "$u" -depth -delete`, "/private/tmp")
+	mustContain(t, "uninstall", un, `-user "$u" -depth -delete`, "/private/tmp", "/Volumes/*")
 }
 
 // cron is root-only on a stock macOS; the install must not create cron.allow or cron.deny (a deny file
@@ -123,7 +124,7 @@ func TestPerUserSystemFoldersDoNotKeepASlotAlive(t *testing.T) {
 	r := removeSlotScript(2)
 	mustContain(t, "remove", r,
 		`find /private/var/folders -xdev -user "$u" -depth -delete`,
-		`/var/db/nself-ci-jobs`, `/private/tmp /private/var/tmp /Users/Shared /Library/Caches /Volumes/*`)
+		`/var/db/nself-ci-jobs`, `/private/tmp /private/var/tmp /Users/Shared /Library/Caches`, `for d in /Volumes/*`, `-maxdepth 4`)
 	if strings.Contains(r, "/Applications") || strings.Contains(r, "find /private/var -xdev") {
 		t.Fatal("the ownership scan walks Xcode or the whole system volume: minutes per slot on a real Mac")
 	}
@@ -160,4 +161,20 @@ func TestRootNeverWalksATreeTheAgentOwns(t *testing.T) {
 		t.Fatalf("a root-run recursive chown or chmod over the agent's state directory:\n%s", d)
 	}
 	mustContain(t, "dirs", d, "install -d -o nself-ci -g nself-ci -m 0700 /var/db/nself-ci-agent")
+}
+
+// macOS /bin/sh runs a command substitution with errexit on, so a `find` that fails on one folder (an
+// unreadable directory under /Library/Caches) used to end the scan before the next folder and the
+// mounted volumes. Run the real scan text under sh with a find that fails on the first folder.
+func TestAFailingFindDoesNotEndTheScan(t *testing.T) {
+	loops := ownedLoops("/tmp /", `-user "$u"`, "-print")
+	script := "set -eu\nu=x\nfind() { case \"$1\" in /tmp) return 1 ;; /) echo /leak ;; esac; }\nleft=$({ " + loops + "; } 2>/dev/null | head -n 1)\necho \"$left\"\n"
+	cmd := exec.Command("sh", "-c", script)
+	out, err := cmd.CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "/leak" {
+		t.Fatalf("the scan stopped at the failing find: %v %q", err, out)
+	}
+	if !strings.Contains(loops, "-maxdepth 4") {
+		t.Fatal("the mounted volumes are scanned without a depth bound")
+	}
 }

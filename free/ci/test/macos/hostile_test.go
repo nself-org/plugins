@@ -53,9 +53,12 @@ func (l *leg) hostileAgent() {
 	}
 	// cron: a hostile job must not leave a crontab behind.
 	for _, u := range []string{jobUser(1), agentUser} {
-		if out, rc := l.sudo("sudo -u " + u + " sh -c 'echo \"@daily /usr/bin/true\" | crontab - 2>&1'"); rc == 0 {
+		out, rc := l.sudo("sudo -u " + u + " sh -c 'echo \"@daily /usr/bin/true\" | crontab - 2>&1'")
+		if rc == 0 {
 			l.sudo("sudo -u " + u + " crontab -r")
 			t.Errorf("%s can install a crontab: %s", u, strings.TrimSpace(out))
+		} else if !strings.Contains(out, "not allowed") {
+			t.Errorf("%s: crontab failed for a reason other than the cron policy: %s", u, strings.TrimSpace(out))
 		}
 	}
 }
