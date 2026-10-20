@@ -101,14 +101,37 @@ func checkPolicyWrite(w PolicyWrite) error {
 	return nil
 }
 
+// PolicyRows reads the rows of one scope and subject inside the write
+// transaction, so a check made with it sees the state the write will replace.
+func (t *Tx) PolicyRows(scope, subject string) ([]PolicyRow, error) {
+	rows, err := t.tx.QueryContext(t.ctx, `SELECT key,value_json,updated_by,updated_at FROM trust_policy_row WHERE scope=? AND subject=? ORDER BY key`, scope, subject)
+	if err != nil {
+		return nil, err
+	}
+	return scanPolicyRows(rows, scope, subject)
+}
+
 // ApplyWrite applies w and then calls inTx in the same transaction. An error
 // from either rolls back both.
 func (s *Store) ApplyWrite(ctx context.Context, w PolicyWrite, inTx func(tx *Tx) error) error {
+	return s.ApplyChecked(ctx, w, nil, inTx)
+}
+
+// ApplyChecked is ApplyWrite with a check that runs first, in the same
+// transaction. The writer connection holds the database write lock from the
+// start of the transaction, so no other writer can commit between check and
+// write. An error from check, w or inTx rolls everything back.
+func (s *Store) ApplyChecked(ctx context.Context, w PolicyWrite, check, inTx func(tx *Tx) error) error {
 	if err := checkPolicyWrite(w); err != nil {
 		return err
 	}
 	return s.write(ctx, func(tx *sql.Tx) error {
 		now := s.now().UnixNano()
+		if check != nil {
+			if err := check(&Tx{s: s, ctx: ctx, tx: tx}); err != nil {
+				return err
+			}
+		}
 		var err error
 		switch w.Op {
 		case PolicySet:
@@ -140,6 +163,10 @@ func (s *Store) PolicyRows(ctx context.Context, scope, subject string) ([]Policy
 	if err != nil {
 		return nil, err
 	}
+	return scanPolicyRows(rows, scope, subject)
+}
+
+func scanPolicyRows(rows *sql.Rows, scope, subject string) ([]PolicyRow, error) {
 	defer func() { _ = rows.Close() }()
 	var out []PolicyRow
 	for rows.Next() {

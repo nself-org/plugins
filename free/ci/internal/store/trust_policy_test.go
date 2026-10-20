@@ -98,3 +98,34 @@ func TestPolicyWriteShapeAndPins(t *testing.T) {
 		t.Fatalf("unset: %+v", rows)
 	}
 }
+
+// D-1283: the check of ApplyChecked reads inside the write transaction and its error rolls the write back.
+func TestApplyCheckedReadsInsideTheTransaction(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	w := PolicyWrite{Op: PolicySet, Scope: "user", Subject: "local", Key: "trust.network", Value: []byte(`"none"`), Actor: "ali"}
+	if err := s.ApplyWrite(ctx, w, nil); err != nil {
+		t.Fatal(err)
+	}
+	w.Value = []byte(`"lan"`)
+	seen := ""
+	err := s.ApplyChecked(ctx, w, func(tx *Tx) error {
+		rows, err := tx.PolicyRows("user", "local")
+		if err != nil || len(rows) != 1 {
+			t.Fatalf("check read %v %v", rows, err)
+		}
+		seen = string(rows[0].Value)
+		return nil
+	}, nil)
+	if err != nil || seen != `"none"` {
+		t.Fatalf("the check must see the row before the write: %q %v", seen, err)
+	}
+	refuse := errors.New("refused")
+	w.Value = []byte(`"internet"`)
+	if err := s.ApplyChecked(ctx, w, func(*Tx) error { return refuse }, nil); !errors.Is(err, refuse) {
+		t.Fatalf("check error lost: %v", err)
+	}
+	if rows, _ := s.PolicyRows(ctx, "user", "local"); len(rows) != 1 || string(rows[0].Value) != `"lan"` {
+		t.Fatalf("a refused check must not write: %+v", rows)
+	}
+}

@@ -18,6 +18,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/audit"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
@@ -53,9 +54,14 @@ func shown(spec KeySpec, value json.RawMessage) string {
 	return string(value)
 }
 
+// rowReader reads the stored rows of one scope and subject. A write passes the
+// reader of its own transaction (store.Tx.PolicyRows), so the checks see the
+// state the write replaces and no other writer can commit in between (D-1283).
+type rowReader func(scope, subject string) ([]store.PolicyRow, error)
+
 // rows reads the stored rows of the user, team and project subjects a resolve
 // for c would merge, keyed by scope.
-func (w *Writer) rows(ctx context.Context, t target, c Change) (map[string]map[string]json.RawMessage, error) {
+func rows(read rowReader, t target, c Change) (map[string]map[string]json.RawMessage, error) {
 	out := map[string]map[string]json.RawMessage{"user": {}, "team": {}, "project": {}}
 	subjects := map[string]string{"user": LocalSubject, "team": c.Team, "project": c.Project}
 	subjects[t.scope] = t.subject
@@ -63,7 +69,7 @@ func (w *Writer) rows(ctx context.Context, t target, c Change) (map[string]map[s
 		if subject == "" {
 			continue
 		}
-		stored, err := w.Store.PolicyRows(ctx, scope, subject)
+		stored, err := read(scope, subject)
 		if err != nil {
 			return nil, fmt.Errorf("read %s policy: %w", scope, err)
 		}
@@ -75,12 +81,12 @@ func (w *Writer) rows(ctx context.Context, t target, c Change) (map[string]map[s
 }
 
 // stored is the row a write replaces (nil when there is none).
-func (w *Writer) stored(ctx context.Context, t target, key string) json.RawMessage {
-	rows, err := w.Store.PolicyRows(ctx, t.scope, t.subject)
+func stored(read rowReader, t target, key string) json.RawMessage {
+	rs, err := read(t.scope, t.subject)
 	if err != nil {
 		return json.RawMessage("null") // unreadable: loosens against everything
 	}
-	for _, r := range rows {
+	for _, r := range rs {
 		if r.Key == key {
 			return r.Value
 		}
