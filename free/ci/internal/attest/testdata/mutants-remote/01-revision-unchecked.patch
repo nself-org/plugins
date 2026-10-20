@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -148,7 +148,7 @@
+@@ -154,7 +154,7 @@
  	if !ok {
  		return remoteFail(RemoteAttemptUnknown, "no lease holder is recorded for the attempt", nil)
  	}

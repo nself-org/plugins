@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -188,7 +188,8 @@
+@@ -194,7 +194,8 @@
  			ledgerErr = err
  			return true
  		}

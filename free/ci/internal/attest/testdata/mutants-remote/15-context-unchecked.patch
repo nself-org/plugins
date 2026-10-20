@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -151,7 +151,7 @@
+@@ -157,7 +157,7 @@
  	if ev.Revision != facts.Revision {
  		return remoteFail(RemoteRevisionMismatch, "the evidence revision is not the attempt's revision", nil)
  	}

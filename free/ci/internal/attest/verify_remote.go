@@ -12,12 +12,12 @@ package attest
 //          says signing_eligible false never has its evidence accepted.
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"reflect"
 	"strings"
 	"time"
 
@@ -136,7 +136,13 @@ func contextMismatch(f AttemptFacts, ev model.Evidence) string {
 // are covered by the signature, not read by any check).
 func documentMatches(doc []byte, ev model.Evidence) bool {
 	var d model.Evidence
-	return json.Unmarshal(doc, &d) == nil && reflect.DeepEqual(d, ev)
+	if json.Unmarshal(doc, &d) != nil {
+		return false
+	}
+	// Compared as encoded JSON, not field by field: a nil and an empty slice that omitempty drops are one value.
+	a, errA := json.Marshal(d)
+	b, errB := json.Marshal(ev)
+	return errA == nil && errB == nil && bytes.Equal(a, b)
 }
 
 func verifyAgainst(ctx context.Context, led Ledger, ev model.Evidence, payload, raw []byte) error {

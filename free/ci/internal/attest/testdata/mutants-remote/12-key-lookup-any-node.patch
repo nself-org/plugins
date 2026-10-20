@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -174,11 +174,6 @@
+@@ -180,11 +180,6 @@
  		if len(found) == 0 {
  			return signing.Key{}, false, nil
  		}

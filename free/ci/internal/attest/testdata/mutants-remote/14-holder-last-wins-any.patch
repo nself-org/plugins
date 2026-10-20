@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -199,9 +199,7 @@
+@@ -205,9 +205,7 @@
  	}
  	holder := KeyNode{}
  	for _, n := range nodes {
