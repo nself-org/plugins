@@ -42,3 +42,51 @@ func TestRecordedArgvIsBounded(t *testing.T) {
 		t.Fatalf("recorded %d bytes", len(got))
 	}
 }
+
+func TestWellKnownSecretForms(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		argv []string
+	}{
+		{"mysql", []string{"mysql", "-p" + "fixture-value"}},
+		{"curl-user", []string{"curl", "-u", "user:fixture-value"}},
+		{"header", []string{"curl", "-H", "X-Api-Key: fixture-value"}},
+		{"json", []string{"curl", "-d", `{"password":"fixture-value"}`}},
+		{"nested-json", []string{"curl", "-d", `{"data":[{"api_key":"fixture-value"}]}`}},
+		{"long-user", []string{"curl", "--user=user:fixture-value"}},
+		{"short-header", []string{"curl", "-H", "X-Api-Key: k"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := redact.New()
+			Register(r, tc.argv)
+			got := Recorded(r, tc.argv)
+			if strings.Contains(got, "fixture-value") || strings.Contains(got, "X-Api-Key: k") {
+				t.Fatal("recorded command contains a sensitive value")
+			}
+			if tc.name != "short-header" {
+				f := r.NewFilter()
+				masked := string(append(f.Redact([]byte("value: fixture-value\n")), f.Flush()...))
+				if strings.Contains(masked, "fixture-value") {
+					t.Fatal("job output contains an extracted sensitive value")
+				}
+			}
+			if !strings.HasPrefix(got, tc.argv[0]+" ") {
+				t.Fatal("command name was lost")
+			}
+		})
+	}
+}
+
+func TestWellKnownFormsKeepPlainArguments(t *testing.T) {
+	for _, argv := range [][]string{
+		{"echo", "-plain"},
+		{"curl", "-H", "Content-Type: application/json"},
+		{"curl", "-d", `{"name":"example"}`},
+	} {
+		r := redact.New()
+		Register(r, argv)
+		if got := Recorded(r, argv); got != strings.Join(argv, " ") {
+			t.Fatal("plain arguments changed")
+		}
+	}
+}
