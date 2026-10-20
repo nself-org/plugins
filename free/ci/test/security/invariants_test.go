@@ -52,6 +52,16 @@ func checkDispatcherInvariant(t *testing.T, kind string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(d.Close)
+	if kind == "I03" {
+		// Control: the same hosted runner IS used for a public repository's untrusted job, so the
+		// zero placements below come from the privacy rule and not from a world that offers no room.
+		w, _, j := invariantCase("I03", invariants.World{Trust: "untrusted", Isolation: "hosted-disposable", Network: "restricted", Ownership: "operator"})
+		w.Policy.Trust = repoPolicy(t, "public", "untrusted")
+		queued := []dispatch.Queued{{Job: dispatch.Job{AttemptID: "control", Sched: j}, EnqueuedAt: time.Unix(1, 0), Seq: 1}}
+		if _, res := d.Plan(w, queued); len(res.Placements) != 1 {
+			t.Fatalf("I03 control: an untrusted public job was not placed on the hosted runner: %+v", res.Explanations)
+		}
+	}
 	const sampleEvery = 37
 	placedCases, admitted := 0, 0
 	invariants.CheckDispatcher(t, func(f invariants.World) error {
@@ -62,6 +72,9 @@ func checkDispatcherInvariant(t *testing.T, kind string) {
 		var verr error
 		switch kind {
 		case "I01":
+			// Same predicate the scheduler uses (trust.Admissible): this catches a placement the dispatcher
+			// makes against its own rules (ordering, admission, a stale world); a rule dropped from
+			// Admissible itself is caught by the scenario tests and the planted regressions.
 			if placed && len(trust.Admissible(trust.JobFacts{Trust: j.Trust, Network: j.Network, SecretClasses: j.SecretClasses, PersonalOwnRun: j.PersonalOwnRun}, r.Decl, w.Policy.Trust)) > 0 {
 				verr = fmt.Errorf("I01: the dispatcher placed a job its runner does not accept %+v", f)
 			}

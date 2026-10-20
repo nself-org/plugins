@@ -27,6 +27,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 func gitRunner(ctx context.Context, argv ...string) (string, int, error) {
@@ -175,4 +176,13 @@ func TestRevisionMayTighten(t *testing.T) {
 	r := newRig(t, got.Effective, lanRunner("lan1", 2))
 	id, a, err := r.submit(newJob("tight", "owner", "lan"), "owner", settle)
 	waitsBecause(t, r, id, a, err, "network.scope_not_offered")
+}
+
+// put writes one operator policy row (an operator-scope key of the store).
+func put(t *testing.T, st *store.Store, scope, subject, key, value string) {
+	t.Helper()
+	err := st.ApplyWrite(context.Background(), store.PolicyWrite{Op: store.PolicySet, Scope: scope, Subject: subject, Key: key, Value: []byte(value), Actor: "test"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 }

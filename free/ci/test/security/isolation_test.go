@@ -232,7 +232,11 @@ func TestWorkspaceHygieneBetweenAttempts(t *testing.T) {
 	if err = os.WriteFile(secretFile, []byte("synthetic-not-a-secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.Symlink("/etc", filepath.Join(root, "workspace", "escape")); err != nil {
+	sentinel := filepath.Join(t.TempDir(), "outside.txt") // what a symlink in the workspace points at
+	if err = os.WriteFile(sentinel, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Symlink(filepath.Dir(sentinel), filepath.Join(root, "workspace", "escape")); err != nil {
 		t.Fatal(err)
 	}
 	rt.add(exec.KindContainer, "c1", "att.a1")
@@ -248,8 +252,8 @@ func TestWorkspaceHygieneBetweenAttempts(t *testing.T) {
 	if _, serr := os.Lstat(root); !os.IsNotExist(serr) {
 		t.Fatalf("the job root of attempt 1 survived: %v", serr)
 	}
-	if _, serr := os.Stat("/etc/hostname"); serr != nil && !os.IsNotExist(serr) {
-		t.Fatalf("control: /etc became unreadable: %v", serr)
+	if b, serr := os.ReadFile(sentinel); serr != nil || string(b) != "keep" {
+		t.Fatalf("cleanup followed the workspace symlink and damaged what it points at: %q %v", b, serr)
 	}
 	next, err := hygiene.JobRoot(base, "att.a2")
 	if err != nil {

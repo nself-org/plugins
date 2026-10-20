@@ -10,15 +10,17 @@ package security
 // Inputs:  the real store and dispatcher; the pure rules of trust/source.
 // Outputs: pass or fail.
 // Constraints: the production step lives in `package main` of cmd/approve.go and cannot be imported,
-//          so approvalStep below mirrors it line for line over the same exported rules
-//          (store.AdmitView.ApprovalState, source.RequiresApproval, source.VoidReasons); its single
-//          deviation is that a run with no stored facts passes, so the other cases of this suite,
-//          which never record facts, are not held. cmd/approve_test.go proves the production step.
+//          so approvalStep below mirrors it branch for branch over the same exported rules
+//          (store.AdmitView.ApprovalState, source.RequiresApproval, source.VoidReasons). Every run of
+//          this suite records its facts like the source hook (rig.prepare), so no test relies on a
+//          bypass; a run with no facts is held when untrusted, as in production.
+//          cmd/approve_test.go proves the production step itself.
 
 import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -46,8 +48,8 @@ func approvalStep(ctx context.Context, v dispatch.View) error {
 	if err != nil {
 		return err
 	}
-	if !ok || !st.Facts {
-		return nil
+	if !ok {
+		return fmt.Errorf("approval: run %s has no pipeline row", v.PipelineID)
 	}
 	if !source.RequiresApproval(st.Requires, st.Facts, model.TrustClass(st.SourceTrust)) {
 		return nil
@@ -66,16 +68,13 @@ func approvalStep(ctx context.Context, v dispatch.View) error {
 	return nil
 }
 
-// forkRun prepares a fork PR run that needs approval and records its source facts.
+// forkRun prepares a fork PR run that needs approval and is not approved yet.
 func forkRun(t *testing.T, r *rig, name string) (id string, submit func() (dispatch.Admitted, error), runID string) {
 	t.Helper()
+	r.noAutoApprove = true
 	j := newJob(name, "untrusted", "restricted")
 	id, j = r.prepare(j, "untrusted")
-	runID = "pipe-" + name
-	if _, err := r.st.RecordApprovalFacts(context.Background(), store.ApprovalRunFacts{Run: runID, Author: "mallory", HeadRepo: "fork/app", RequiresApproval: true}, voidCheck); err != nil {
-		t.Fatal(err)
-	}
-	return id, func() (dispatch.Admitted, error) { return r.enqueue(id, j, settle) }, runID
+	return id, func() (dispatch.Admitted, error) { return r.enqueue(id, j, settle) }, "pipe-" + name
 }
 
 func heldBecause(t *testing.T, r *rig, id string, a dispatch.Admitted, err error) {
@@ -83,9 +82,9 @@ func heldBecause(t *testing.T, r *rig, id string, a dispatch.Admitted, err error
 	if err == nil {
 		t.Fatalf("run %s was admitted on %s, it must be held", id, a.RunnerID)
 	}
-	d, ok := r.sink.last(id)
-	if !ok || d.Reason != source.ReasonApprovalRequired {
-		t.Fatalf("decision: ok=%v reason=%q outcome=%q, want %s", ok, d.Reason, d.Outcome, source.ReasonApprovalRequired)
+	d := awaitDecision(t, r, id)
+	if d.Reason != source.ReasonApprovalRequired {
+		t.Fatalf("decision: reason=%q outcome=%q, want %s", d.Reason, d.Outcome, source.ReasonApprovalRequired)
 	}
 }
 
@@ -98,16 +97,16 @@ func TestApprovalBoundToHeadSHA(t *testing.T) {
 	a, err := submit()
 	heldBecause(t, r, id, a, err)
 
-	row, err := r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: "rev", Check: voidCheck})
+	row, err := r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: voidCheck})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if row.HeadSHA != "rev" || row.HeadRepo != "fork/app" || row.ConfigDigest != "i" {
+	if row.HeadSHA != baseRev || row.HeadRepo != "fork/app" || row.ConfigDigest != "i" {
 		t.Fatalf("approval binding %+v", row.ApprovalBinding)
 	}
 
 	// The contributor pushes again: the run's head moves before the lease is granted.
-	moveHead(t, r.db, runID, "rev2", "i")
+	moveHead(t, r.db, runID, pushedRev, "i")
 	a, err = submit()
 	heldBecause(t, r, id, a, err)
 	if st, _, _ := r.st.ApprovalState(context.Background(), runID); !st.HasApproval || len(voidCheck(st.Approval.ApprovalBinding, st.Current())) != 1 {
@@ -118,16 +117,37 @@ func TestApprovalBoundToHeadSHA(t *testing.T) {
 		t.Fatalf("sweep after the push: %+v %v", voided, err)
 	}
 	// An approver who looked at the old head is refused; one who looked at the new head is accepted.
-	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: "rev", Check: voidCheck}); !errors.Is(err, store.ErrApprovalStale) {
+	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: voidCheck}); !errors.Is(err, store.ErrApprovalStale) {
 		t.Fatalf("a stale approver: %v", err)
 	}
-	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: "rev2", Check: voidCheck}); err != nil {
+	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: pushedRev, Check: voidCheck}); err != nil {
 		t.Fatal(err)
 	}
 	a, err = submit()
 	if got := runnerOf(t, a, err); got != "gv1" {
 		t.Fatalf("approved run placed on %q", got)
 	}
+	// The lease checks out the head that was approved, not the one that was approved before it.
+	if ds := awaitDeliveries(r, 1); len(ds) != 1 || ds[0].Revision != pushedRev {
+		t.Fatalf("deliveries %+v, want one carrying the approved head %s", ds, pushedRev)
+	}
+}
+
+// awaitDeliveries waits (bounded) until the transport has seen n deliveries and returns them.
+func awaitDeliveries(r *rig, n int) []dispatch.Delivery {
+	for tries := 0; tries < 200 && len(r.tr.deliveries()) < n; tries++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	return r.tr.deliveries()
+}
+
+// TestUntrustedRunWithNoFactsIsHeld mirrors the production step: a stranger's run whose source facts
+// were never recorded needs an approval too (an unknown run is never waved through).
+func TestUntrustedRunWithNoFactsIsHeld(t *testing.T) {
+	r := newRig(t, repoPolicy(t, "public", "untrusted"), gvisorRunner("gv1", 4))
+	r.noFacts = true
+	id, a, err := r.submit(newJob("nofacts", "untrusted", "restricted"), "untrusted", settle)
+	heldBecause(t, r, id, a, err)
 }
 
 // TestApprovalDoesNotTravel: an approval is bound to its run, config digest and head repository.
@@ -145,7 +165,7 @@ func TestApprovalDoesNotTravel(t *testing.T) {
 	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runB, Approver: "token:t1:bob", Check: voidCheck}); err != nil {
 		t.Fatal(err)
 	}
-	moveHead(t, r.db, runB, "rev", "i-changed")
+	moveHead(t, r.db, runB, baseRev, "i-changed")
 	a, err = submitB()
 	heldBecause(t, r, idB, a, err)
 	// The binding rule itself, over the pure type: a run id alone is never a valid approval.
@@ -166,25 +186,37 @@ func TestApprovalDoesNotTravel(t *testing.T) {
 	}
 }
 
-// TestApprovalBindsLeaseCheckout (D18, TM-34): the revision the lease checks out is the stored
-// pipeline revision, and admission compares the approval with that revision inside the
-// admission transaction. The delivery that goes out carries the approved revision.
+// TestApprovalBindsLeaseCheckout (D18, TM-34): the revision a lease checks out is the stored pipeline
+// head, admission compares the approval with that head inside the admission transaction, and the
+// delivery that goes out carries exactly the approved head. A run whose head moved after the approval
+// is held and delivers nothing, for the old head or the new one.
 func TestApprovalBindsLeaseCheckout(t *testing.T) {
 	r := newRig(t, repoPolicy(t, "public", "untrusted"), gvisorRunner("gv1", 4))
 	id, submit, runID := forkRun(t, r, "forkc")
-	if _, err := r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: "rev", Check: voidCheck}); err != nil {
+	row, err := r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: voidCheck})
+	if err != nil {
 		t.Fatal(err)
 	}
 	a, err := submit()
 	if got := runnerOf(t, a, err); got != "gv1" {
 		t.Fatalf("approved run placed on %q", got)
 	}
-	for tries := 0; tries < 100 && len(r.tr.deliveries()) == 0; tries++ {
-		time.Sleep(10 * time.Millisecond)
+	ds := awaitDeliveries(r, 1)
+	if len(ds) != 1 || ds[0].AttemptID != id || ds[0].Revision != row.HeadSHA || ds[0].Revision != baseRev {
+		t.Fatalf("deliveries %+v, want exactly the approved attempt at the approved head %s", ds, row.HeadSHA)
 	}
-	ds := r.tr.deliveries()
-	if len(ds) != 1 || ds[0].AttemptID != id {
-		t.Fatalf("deliveries %+v, want exactly the approved attempt", ds)
+	// A second run, approved and then pushed: nothing is delivered for it.
+	id2, submit2, run2 := forkRun(t, r, "forkd")
+	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: run2, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: voidCheck}); err != nil {
+		t.Fatal(err)
+	}
+	moveHead(t, r.db, run2, pushedRev, "i")
+	a2, err2 := submit2()
+	heldBecause(t, r, id2, a2, err2)
+	for _, d := range r.tr.deliveries() {
+		if d.AttemptID == id2 {
+			t.Fatalf("a run whose head moved after its approval was delivered at %s", d.Revision)
+		}
 	}
 }
 

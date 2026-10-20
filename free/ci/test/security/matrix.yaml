@@ -14,7 +14,7 @@ scenarios:
       - test: TestScenario7_NoGVisorNoHostedWaits
       - test: TestApprovalBoundToHeadSHA
   - id: scenario-8
-    item: private-infrastructure work never reaches a hosted provider (jobs, source, artifacts, caches, logs) under LAN saturation
+    item: private-infrastructure work never reaches a hosted provider under LAN saturation. The gate is placement, so no job, source checkout, artifact, cache entry or log is ever sent to the provider (the delivery and the provider fake are asserted empty)
     cases:
       - test: TestScenario8_PrivateNeverHosted
       - test: TestScenario8_LocalOnlyStaysOnPersonalNode
@@ -128,6 +128,7 @@ review_additions:
     item: no request reaches a telemetry fake from the plugin or the agent in any mode (X15)
     cases:
       - test: TestNoRequestReachesTelemetry
+      - test: TestNoTelemetryClientInTheProduct
   - id: publication-profile
     item: publication profile on a public fixture
     cases:
@@ -148,6 +149,7 @@ review_additions:
     item: approval-to-checkout binding
     cases:
       - test: TestApprovalBindsLeaseCheckout
+      - test: TestUntrustedRunWithNoFactsIsHeld
 threats:
   - id: TM-01
     cases:
@@ -166,15 +168,15 @@ threats:
       - {pkg: internal/authz, proof: TestInvariant_I11}
       - {pkg: internal/attest, proof: TestInvariant_I13}
   - id: TM-03
-    cases:
-      - test: TestSecretValueNeverInOutput
     also:
+      - {pkg: internal/redact, proof: TestWorkflowCommandsNeutralised}
+      - {pkg: internal/redact, proof: TestEscapeSequencesNeutralised}
       - {pkg: internal/redact, proof: TestInvariant_I06}
   - id: TM-04
     cases:
       - test: TestUntrustedCannotReachExclusionOrOnLink
       - test: TestUntrustedNeverReceivesSecret
-      - test: TestNoRequestReachesTelemetry
+      - test: TestNoTelemetryClientInTheProduct
     also:
       - {pkg: internal/netscope, proof: TestInvariant_I18}
   - id: TM-05
@@ -231,13 +233,14 @@ threats:
       - test: TestArtifactsStayAuthorized
     owner: P7-CACHE-11
   - id: TM-15
-    cases:
-      - test: TestArtifactsStayAuthorized
+    also:
+      - {pkg: internal/artifacts/records, proof: TestTwoAttemptsSamePathTwoRecords}
+      - {pkg: internal/artifacts/records, proof: TestCommitFailsOnMissingOrTamperedBlob}
     owner: P7-CACHE-11
   - id: TM-16
-    cases:
-      - test: TestSecretValueNeverInOutput
     also:
+      - {pkg: internal/artifacts/records, proof: TestSecretNeverReachesTheStore}
+      - {pkg: internal/artifacts/records, proof: TestCollectSecretRawAndBase64}
       - {pkg: internal/secrets, proof: TestInvariant_I06}
     owner: P7-CACHE-11
   - id: TM-17
@@ -247,8 +250,6 @@ threats:
       - {pkg: internal/attest, proof: TestInvariant_I13}
     owner: P7-CACHE-11
   - id: TM-18
-    cases:
-      - test: TestForgedEvidenceRefused
     also:
       - {pkg: internal/attest, proof: TestVerifyRemoteAdversarialFixtures}
     owner: P7-CACHE-11
@@ -334,6 +335,7 @@ threats:
       - test: TestApprovalBoundToHeadSHA
       - test: TestApprovalDoesNotTravel
       - test: TestApprovalBindsLeaseCheckout
+      - test: TestUntrustedRunWithNoFactsIsHeld
       - test: TestRunApprovalNeedsAnotherPerson
   - id: TM-35
     cases:

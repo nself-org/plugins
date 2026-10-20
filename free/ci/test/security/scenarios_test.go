@@ -14,12 +14,14 @@ package security
 //          the decision sink says why it stayed queued.
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 )
 
@@ -33,16 +35,27 @@ func runnerOf(t *testing.T, a dispatch.Admitted, err error) string {
 	return a.RunnerID
 }
 
+// awaitDecision waits (bounded) for the sink to hold a decision for the job: a loaded host may
+// run the tick after the caller's budget ended.
+func awaitDecision(t *testing.T, r *rig, id string) dispatch.Decision {
+	t.Helper()
+	for tries := 0; tries < 500; tries++ {
+		if d, ok := r.sink.last(id); ok {
+			return d
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("no decision recorded for %s", id)
+	return dispatch.Decision{}
+}
+
 // waitsBecause asserts the job stayed queued and that the sink recorded a reason code in want.
 func waitsBecause(t *testing.T, r *rig, id string, a dispatch.Admitted, err error, want ...string) {
 	t.Helper()
 	if err == nil {
 		t.Fatalf("job %s was admitted on %s, it must wait", id, a.RunnerID)
 	}
-	d, ok := r.sink.last(id)
-	if !ok {
-		t.Fatalf("no decision recorded for %s", id)
-	}
+	d := awaitDecision(t, r, id)
 	if d.Placement != nil {
 		t.Fatalf("job %s was placed on %s although it must wait", id, d.Placement.RunnerID)
 	}
@@ -171,11 +184,35 @@ func TestScenario8_PrivateNeverHosted(t *testing.T) {
 	}
 }
 
-// TestScenario8_LocalOnlyStaysOnPersonalNode: the local-only zone is not even offered a LAN node
-// that is not the operator's own personal node, and never the hosted provider.
+// TestScenario8_LocalOnlyStaysOnPersonalNode: with the project's privacy zone set to local-only by the
+// operator, work runs on the operator's own personal node and nowhere else: not on another LAN node,
+// not on the hosted provider.
 func TestScenario8_LocalOnlyStaysOnPersonalNode(t *testing.T) {
-	scope := repoPolicy(t, "private", "owner")
-	r := newRig(t, scope, hostedRunner("hosted1"))
-	id, a, err := r.submit(newJob("hostedonly", "owner", "internet"), "owner", settle)
-	waitsBecause(t, r, id, a, err, "privacy.hosted_not_authorized")
+	st := openStore(t)
+	put(t, st, "project", "project", "trust.privacy_zone", `"local-only"`)
+	res := policy.Resolver{Store: st, Run: gitRunner}
+	got, err := res.Resolve(context.Background(), policy.Repo{Root: t.TempDir(), Project: "project", Visibility: "private", Class: "owner"}, policy.Revision{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Values["trust.privacy_zone"] != "local-only" {
+		t.Fatalf("zone %v", got.Values["trust.privacy_zone"])
+	}
+	other, mine := lanRunner("lan-other", 2), lanRunner("mine", 2)
+	mine.Decl.PersonalOwnNode = true
+
+	r := newRig(t, got.Effective, other, hostedRunner("hosted1"))
+	id, a, err := r.submit(newJob("local-nobody", "owner", "lan"), "owner", settle)
+	waitsBecause(t, r, id, a, err, "privacy.local_only", "privacy.hosted_not_authorized")
+
+	r = newRig(t, got.Effective, other, mine, hostedRunner("hosted1"))
+	for i := 0; i < 2; i++ {
+		_, a, err = r.submit(newJob("local-mine"+string(rune('a'+i)), "owner", "lan"), "owner", 2*time.Second)
+		if runnerOf(t, a, err) != "mine" {
+			t.Fatalf("local-only work placed on %q", a.RunnerID)
+		}
+	}
+	if hostedSawRequest(r.hosted) {
+		t.Fatal("local-only work reached the hosted provider")
+	}
 }

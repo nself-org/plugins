@@ -17,6 +17,12 @@ package security
 
 import (
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -84,7 +90,7 @@ func TestDeployHostPlacementThroughDispatcher(t *testing.T) {
 			}
 			continue
 		}
-		waitsBecause(t, r, id, a, err) // the ordinary node has one slot: the rest wait, they do not spill to the deploy host
+		waitsBecause(t, r, id, a, err, string(trust.BoundaryDeployHost)) // the ordinary node has one slot: the rest wait, they do not spill to the deploy host
 		if d, ok := r.sink.last(id); ok && d.Placement != nil && d.Placement.RunnerID == "deploy1" {
 			t.Fatal("work spilled onto a deploy host without an override")
 		}
@@ -166,5 +172,55 @@ func TestNoRequestReachesTelemetry(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // a background sender, if one existed, would have fired by now
 	if seen := telemetryRequests(); len(seen) != 0 {
 		t.Fatalf("the plugin sent %d request(s) to the telemetry endpoint or proxy: %v", len(seen), seen)
+	}
+}
+
+// TestNoTelemetryClientInTheProduct (X15): the agent cannot send what it has no client for. No package of
+// the agent imports net/http, and no string literal of the product names a telemetry or analytics
+// service or the ping_api. This is the static half of the zero-request promise; the runtime half is the
+// fake of main_test.go, which cannot see a client that ignores the proxy variables and an endpoint it
+// was never told.
+func TestNoTelemetryClientInTheProduct(t *testing.T) {
+	root := filepath.Join("..", "..")
+	banned := regexp.MustCompile(`(?i)ping\.nself\.org|ping_api|posthog|plausible|segment\.io|google-analytics|amplitude|datadog|sentry\.io|mixpanel`)
+	fset := token.NewFileSet()
+	checked := 0
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && (d.Name() == "vendor" || d.Name() == "testdata" || d.Name() == "test") {
+			return filepath.SkipDir
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		file, perr := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
+		if perr != nil {
+			return perr
+		}
+		checked++
+		slash := filepath.ToSlash(path)
+		// internal/agent/install downloads the agent release the operator named (a one-way fetch of a binary
+		// by checksum); every other package of the agent runs jobs and speaks only the carrier protocol.
+		inAgent := (strings.Contains(slash, "/internal/agent/") || strings.Contains(slash, "/cmd/agent/")) && !strings.Contains(slash, "/internal/agent/install/")
+		for _, imp := range file.Imports {
+			if inAgent && imp.Path.Value == `"net/http"` {
+				t.Errorf("%s: the agent imports net/http", slash)
+			}
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING && banned.MatchString(lit.Value) {
+				t.Errorf("%s: string literal %s names a telemetry endpoint", slash, lit.Value)
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checked < 100 {
+		t.Fatalf("only %d product files were read: the walk is not reaching the module", checked)
 	}
 }

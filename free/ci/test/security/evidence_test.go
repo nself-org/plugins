@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
-	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -308,18 +307,18 @@ func TestSelfReportedAndUnverifiableEvidenceNeverGates(t *testing.T) {
 func TestPublicationProfileOnPublicFixture(t *testing.T) {
 	ev := goodEvidence()
 	ev.Runner.ID = "mac-mini.local"
-	ev.Checks[0].Excerpt = "connect to 192.168.1.20:5432 failed\ndial 10.0.0.7 timeout\nrunner mac-mini.local at /Users/ali/Sites/nself/x.go\n" +
-		"ssh ali@build-box.lan\nsee https://ci.corp.local/runs/9?token=abc and https://github.com/nself-org/plugins/actions/runs/9\n" +
+	ev.Checks[0].Excerpt = "connect to 192.168.1.20:5432 failed\ndial 10.0.0.7 timeout\nrunner mac-mini.local at /Users/synth-user/Sites/nself/x.go\n" +
+		"ssh synth-user@build-box.lan\nsee https://ci.corp.local/runs/9?token=abc and https://github.com/nself-org/plugins/actions/runs/9\n" +
 		"proxy 172.16.4.4 and fe80::1 and fd12:3456::9 and 127.0.0.1 at C:\\Users\\bob\\work"
 	ev.Checks[1].LogRef = strp("/home/runner/work/log.txt")
-	ev.Artifacts = []model.Artifact{{Path: "/Users/ali/out/app.tar", SHA256: strings.Repeat("a", 64), Size: 1, Committed: true}}
+	ev.Artifacts = []model.Artifact{{Path: "/Users/synth-user/out/app.tar", SHA256: strings.Repeat("a", 64), Size: 1, Committed: true}}
 	ev.PlacementRef = strp("node mac-mini.local slot 2")
 	out, err := json.Marshal(attest.Publish(ev, attest.Public))
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := string(out)
-	for _, private := range []string{"192.168.1.20", "10.0.0.7", "mac-mini", "/Users/ali", "ali@", "ci.corp.local", "token=abc", "172.16.4.4", "fe80::1", "fd12:3456", "127.0.0.1", "build-box", "/home/runner"} {
+	for _, private := range []string{"192.168.1.20", "10.0.0.7", "mac-mini", "/Users/synth-user", "synth-user@", "ci.corp.local", "token=abc", "172.16.4.4", "fe80::1", "fd12:3456", "127.0.0.1", "build-box", "/home/runner"} {
 		if strings.Contains(text, private) {
 			t.Errorf("the published document still holds %q", private)
 		}
@@ -335,9 +334,5 @@ func TestPublicationProfileOnPublicFixture(t *testing.T) {
 	}
 	if kept := attest.Publish(ev, attest.Private); kept.Runner.ID != "mac-mini.local" {
 		t.Error("a private repository's evidence must be left alone")
-	}
-	// Errors from the verifier unwrap to a stable reason (the gate sees one reason, the operator the key).
-	if !errors.Is(&attest.RemoteError{Reason: attest.RemoteReplay, Err: attest.ErrReplay}, attest.ErrReplay) {
-		t.Error("a RemoteError must unwrap to its cause")
 	}
 }

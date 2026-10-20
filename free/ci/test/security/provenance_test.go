@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -62,9 +63,9 @@ func newGithubRig(t *testing.T) *githubRig {
 	if err = json.Unmarshal(raw, &routes); err != nil {
 		t.Fatal(err)
 	}
-	var count int
+	var count atomic.Int64
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		count++
+		count.Add(1)
 		rt, ok := routes[r.URL.Path]
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
@@ -77,7 +78,7 @@ func newGithubRig(t *testing.T) *githubRig {
 	}))
 	t.Cleanup(srv.Close)
 	now := time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
-	return &githubRig{srv: srv, hits: func() int { return count }, src: &webhook.Source{
+	return &githubRig{srv: srv, hits: func() int { return int(count.Load()) }, src: &webhook.Source{
 		Now:    func() time.Time { return now },
 		Getenv: func(k string) string { return map[string]string{"SYNTH_REPO_SECRET": hookSecret}[k] },
 		Secrets: func(context.Context) (map[string]webhook.RepoSecret, error) {
@@ -136,11 +137,12 @@ func (g *githubRig) classify(t *testing.T, event string, body []byte) (model.Tri
 func TestRecordedForkPRToClassToPlacement(t *testing.T) {
 	g := newGithubRig(t)
 	honest := hookFixture(t, "pr_fork_opened.json")
-	forged := bytes.Replace(honest, []byte(`"author_association":"FIRST_TIME_CONTRIBUTOR"`), []byte(`"author_association":"OWNER"`), 1)
-	forged = bytes.Replace(forged, []byte(`"fork":true`), []byte(`"fork":false`), 1)
-	forged = bytes.Replace(forged, []byte(`"login":"newbie"`), []byte(`"login":"maint"`), -1)
-	if bytes.Equal(honest, forged) {
-		t.Fatal("the forged payload equals the honest one")
+	forged := honest
+	for _, edit := range [][2]string{{`"author_association":"FIRST_TIME_CONTRIBUTOR"`, `"author_association":"OWNER"`}, {`"fork":true`, `"fork":false`}, {`"login":"newbie"`, `"login":"maint"`}} {
+		if !bytes.Contains(forged, []byte(edit[0])) {
+			t.Fatalf("the recorded fixture no longer holds %s: the forgery would be weaker than it claims", edit[0])
+		}
+		forged = bytes.ReplaceAll(forged, []byte(edit[0]), []byte(edit[1]))
 	}
 	for name, body := range map[string][]byte{"recorded": honest, "payload claims owner, no fork, maintainer login": forged} {
 		facts, res := g.classify(t, "pull_request", body)

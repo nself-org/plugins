@@ -53,6 +53,12 @@ func openStoreAt(t testing.TB, path string) *store.Store {
 	return s
 }
 
+// baseRev is the head SHA every pipeline of the suite starts at; pushedRev is what a push moves it to.
+var (
+	baseRev   = strings.Repeat("c", 40)
+	pushedRev = strings.Repeat("d", 40)
+)
+
 var rowSeq atomic.Int64
 
 // queueAttempt creates pipeline pipe (project proj, source class srcTrust), a job
@@ -60,7 +66,7 @@ var rowSeq atomic.Int64
 func queueAttempt(t testing.TB, st *store.Store, pipe, proj, name, srcTrust string) string {
 	t.Helper()
 	ctx := context.Background()
-	err := st.CreatePipeline(ctx, store.PipelineRow{ID: pipe, Revision: "rev", Project: proj, Trigger: "local", SourceTrust: srcTrust, PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"})
+	err := st.CreatePipeline(ctx, store.PipelineRow{ID: pipe, Revision: baseRev, Project: proj, Trigger: "local", SourceTrust: srcTrust, PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"})
 	if err != nil && !strings.Contains(err.Error(), "UNIQUE") {
 		t.Fatal(err)
 	}
@@ -284,6 +290,9 @@ type rig struct {
 	sink   *recSink
 	tr     *fabricTransport
 	hosted *fake.Fake
+	runs   map[string]string // attempt id -> run (pipeline) id
+	// noAutoApprove leaves a run that needs approval held; noFacts records no source facts for a run.
+	noAutoApprove, noFacts bool
 }
 
 func newRig(t *testing.T, eff trust.Effective, runners ...sched.Runner) *rig {
@@ -294,7 +303,7 @@ func newRig(t *testing.T, eff trust.Effective, runners ...sched.Runner) *rig {
 	registerKinds(t, runners...)
 	currentHosted.Store(hosted)
 	t.Cleanup(func() { currentHosted.Store(nil) })
-	r := &rig{t: t, db: db, st: st, sink: &recSink{}, tr: newFabricTransport(), hosted: hosted}
+	r := &rig{t: t, db: db, st: st, sink: &recSink{}, tr: newFabricTransport(), hosted: hosted, runs: map[string]string{}}
 	d, err := dispatch.New(dispatch.Config{Store: st, Host: "host", Sink: r.sink, Transport: r.tr, World: worldOf(st, eff, runners...), Poll: 10 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
@@ -305,21 +314,47 @@ func newRig(t *testing.T, eff trust.Effective, runners ...sched.Runner) *rig {
 }
 
 // prepare creates the pipeline (run "pipe-<key>"), job and queued attempt of job and returns the
-// attempt id; the job's key becomes the attempt id.
+// attempt id; the job's key becomes the attempt id. Like the source hook, it records the facts of the
+// run (a stranger's pull request needs an approval) and, unless the test says otherwise, approves
+// a run that needs one: the tests of placement are about placement, not about the hold.
 func (r *rig) prepare(job sched.Job, srcTrust string) (string, sched.Job) {
 	r.t.Helper()
-	id := queueAttempt(r.t, r.st, "pipe-"+job.Key, "project", job.Name, srcTrust)
+	runID := "pipe-" + job.Key
+	id := queueAttempt(r.t, r.st, runID, "project", job.Name, srcTrust)
 	job.Key = id
+	r.runs[id] = runID
+	if r.noFacts {
+		return id, job
+	}
+	ctx := context.Background()
+	needs := srcTrust == "untrusted"
+	head := ""
+	if needs {
+		head = "fork/app"
+	}
+	if _, err := r.st.RecordApprovalFacts(ctx, store.ApprovalRunFacts{Run: runID, Author: "contributor", HeadRepo: head, RequiresApproval: needs}, voidCheck); err != nil {
+		r.t.Fatal(err)
+	}
+	if needs && !r.noAutoApprove {
+		if _, err := r.st.ApproveRun(ctx, store.ApproveInput{Run: runID, Approver: "token:t0:maintainer", ExpectSHA: baseRev, Check: voidCheck}); err != nil {
+			r.t.Fatal(err)
+		}
+	}
 	return id, job
 }
 
 // enqueue submits a prepared attempt and waits up to wait for admission: the lease, or the
-// context error when the job stayed queued (the sink then holds why).
+// context error when the job stayed queued (the sink then holds why). The revision a lease checks
+// out is the run's stored head, as in the run dispatcher.
 func (r *rig) enqueue(id string, job sched.Job, wait time.Duration) (dispatch.Admitted, error) {
 	r.t.Helper()
+	rev := strings.Repeat("a", 40)
+	if st, ok, err := r.st.ApprovalState(context.Background(), r.runs[id]); err == nil && ok {
+		rev = st.Revision
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()
-	return r.d.Submit(ctx, dispatch.Job{AttemptID: id, Sched: job, Revision: strings.Repeat("a", 40)})
+	return r.d.Submit(ctx, dispatch.Job{AttemptID: id, Sched: job, Revision: rev})
 }
 
 // submit prepares and enqueues in one step.
