@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/doctor"
+	"github.com/nself-org/plugins/free/ci/internal/isolation"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -19,6 +20,9 @@ func isolationJSON(t *testing.T, home, goos string) map[string]map[string]any {
 	old := isolationGOOS
 	isolationGOOS = goos
 	t.Cleanup(func() { isolationGOOS = old })
+	oldProfiles := isolationProfiles
+	isolationProfiles = func() []isolation.Profile { return nil } // the availability section would probe this machine
+	t.Cleanup(func() { isolationProfiles = oldProfiles })
 	env := doctor.Env{Root: t.TempDir(), Getenv: func(k string) string {
 		if k == "NSELF_CI_HOME" {
 			return home

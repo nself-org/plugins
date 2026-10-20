@@ -234,6 +234,12 @@ A level whose prerequisite the host lacks (no running Docker or Podman, no `runs
 - Stored evidence keeps each nested check only on the drill check's excerpt: the last line, `passed: <ids>`, lists the nested checks that passed (internal/drill writes it, `store.LastVerified` reads it). A format change must change both; a test pins them together.
 - The linux `ci-isolation-linux.yml` pull-request job runs the drill against a throwaway store and fails unless doctor shows a non-null `verified_at` for `isolation.container`, `isolation.sandboxed-container` and `isolation.network`.
 
+## Whether each level can run now
+
+`nself ci doctor` also probes every isolation profile and prints one `isolation.<level>.availability` line per level (`isolation.container.availability`, `isolation.sandboxed-container.availability`, `isolation.vm.availability`, `isolation.ephemeral-vm.availability`). Each reads `available (<level>)` or `unavailable: <reason>`, such as `isolation.runtime_missing`, `isolation.tart_base_image` or `isolation.tart_no_free_slot`.
+
+For an unavailable level the line carries the fix as its `remediation` (the install steps: Tart from `brew install cirruslabs/cli/tart`, gVisor from its install page then `sudo runsc install`) and prints the profile facts under it. For Tart the facts are `tart_version`, `base_image`, `base_image_cached`, `free_slots`, `running_vms`, `softnet_block` and `licence_note`: Tart and softnet are third-party tools under their own licences, you install them, nSelf neither bundles nor redistributes them. An unavailable level is not a failure: these lines always pass, because a host without Tart or gVisor is a normal state.
+
 ## Secrets
 
 A job asks for secrets by reference, never by value: `secrets: [project/NPM_TOKEN, release/ANDROID_KEYSTORE_PASSWORD, environment/staging/API_KEY, deploy/prod/DEPLOY_KEY, team/SHARED_TOKEN]`. The part after the last slash is the environment variable the job sees, and two refs may not use the same variable (`E674`). Names that would change how a process or the docker client runs (`PATH`, `HOME`, `DOCKER_*`, `LD_*`, `DYLD_*`, `GIT_*`, `NSELF_CI_*` and similar) are refused too.
