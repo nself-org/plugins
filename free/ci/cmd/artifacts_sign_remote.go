@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/coordclient"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/clientapi"
@@ -54,6 +55,9 @@ func signRemote(ctx context.Context, run string, fs *flag.FlagSet) (publish.Rele
 	cwd, err := os.Getwd()
 	if err != nil {
 		return publish.Release{}, err
+	}
+	if _, err = authz.ArtifactGetDest(fs.Lookup("out").Value.String(), cwd); err != nil {
+		return publish.Release{}, err // a missing or unusable --out is a usage error, before any credential is read
 	}
 	target, warns, err := coordclient.Resolve(coordclient.Inputs{Flag: fs.Lookup("coordinator").Value.String(), RepoRoot: root})
 	for _, w := range warns {
