@@ -9,7 +9,6 @@ package reliability
 // Constraints: the run opens its own handle on the lab's store file; nothing here sleeps without a deadline.
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -81,7 +80,7 @@ type runHandle struct {
 	l    *lab
 	sha  string
 	ch   chan run.Result
-	out  *bytes.Buffer
+	out  *lockedBuffer
 	stop context.CancelFunc
 }
 
@@ -140,7 +139,7 @@ func (l *lab) startJobs(count int, spec jobSpec) *runHandle {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := &bytes.Buffer{}
+	out := &lockedBuffer{}
 	capture := func(_ context.Context, argv ...string) (string, int, error) {
 		switch j := strings.Join(argv, " "); {
 		case strings.Contains(j, "rev-parse HEAD"):
@@ -159,6 +158,7 @@ func (l *lab) startJobs(count int, spec jobSpec) *runHandle {
 	t.Cleanup(cancel)
 	go func() {
 		res, rerr := c.Run(ctx)
+		t.Logf("fixture job outcomes: %+v", res.Summary.Jobs)
 		if rerr != nil && ctx.Err() == nil {
 			t.Errorf("Run: %v\n%s", rerr, out)
 		}
