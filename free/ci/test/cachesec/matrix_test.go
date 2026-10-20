@@ -88,7 +88,11 @@ func loadMatrix(t *testing.T) matrixFile {
 
 // TestMatrixShape is the static half: it needs no store and no Docker.
 func TestMatrixShape(t *testing.T) {
-	m := loadMatrix(t)
+	checkMatrix(t, loadMatrix(t))
+}
+
+func checkMatrix(t *testing.T, m matrixFile) {
+	t.Helper()
 	ids := map[string]bool{}
 	covered := map[string]bool{}
 	for _, c := range m.Cases {
@@ -165,6 +169,10 @@ func TestCacheSecMatrix(t *testing.T) {
 		t.Fatal("INTEGRATION=1 is required: the remote cases start the fabric sim and a missing prerequisite is a failure, not a skip")
 	}
 	m := loadMatrix(t)
+	checkMatrix(t, m)
+	if t.Failed() {
+		t.Fatal("matrix validation failed; refusing to run cases or write results")
+	}
 	rows := make([]resultRow, 0, len(m.Cases))
 	for _, c := range m.Cases {
 		fn := registry[c.ID]

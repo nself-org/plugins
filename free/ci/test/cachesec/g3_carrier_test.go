@@ -24,6 +24,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -184,7 +185,7 @@ func (r *g3rig) RunSSH(n *g3node, sink *g3Sink) error {
 			_ = ew.Close()
 			done <- err
 		}()
-		return &sshdrv.Conn{Stdin: cw, Stdout: ar, Stderr: er, Wait: func() error { <-done; return nil },
+		return &sshdrv.Conn{Stdin: cw, Stdout: ar, Stderr: er, Wait: func() error { return <-done },
 			Kill: func() error { once.Do(cancel); _ = cr.Close(); _ = aw.Close(); return nil }}, nil
 	}
 	d := &sshdrv.Driver{Home: home, Start: starter, SSHVersion: func(context.Context) (sdkremote.Version, error) { return sdkremote.Version{Major: 9, Minor: 6}, nil },
@@ -229,8 +230,12 @@ func (r *g3rig) RunAgent(n *g3node, sink *g3Sink) error {
 	defer func() {
 		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(c)
-		<-done
+		if err := srv.Shutdown(c); err != nil {
+			t.Errorf("agent API shutdown: %v", err)
+		}
+		if err := <-done; err != nil {
+			t.Errorf("agent API serve: %v", err)
+		}
 	}()
 	pub, _, _ := ed25519.GenerateKey(rand.Reader)
 	b, err := os.ReadFile("../../internal/model/testdata/capability/valid/laptop.valid.json")
@@ -281,6 +286,11 @@ func (r *g3rig) RunAgent(n *g3node, sink *g3Sink) error {
 	defer cancel()
 	sessDone := make(chan error, 1)
 	go func() { sessDone <- s.Run(rctx) }()
-	defer func() { cancel(); <-sessDone }()
+	defer func() {
+		cancel()
+		if err := <-sessDone; err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("agent session shutdown: %v", err)
+		}
+	}()
 	return drv.Run(rctx, capab, r.Proto(), sink)
 }

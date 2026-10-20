@@ -75,7 +75,8 @@ func init() {
 				t.Fatalf("pair %d: a byte shifted across a field boundary gave the same key", i)
 			}
 		}
-		if in("ab", "c") != in("ab", "c") {
+		controlKey := in("ab", "c")
+		if in("ab", "c") != controlKey {
 			t.Fatal("control: the key is not deterministic")
 		}
 		a := authz.Namespace{Project: "proj", Trust: "untrusted", Protection: authz.Unprotected, HeadRepo: "ab", PR: "c"}

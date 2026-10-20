@@ -73,8 +73,12 @@ func (fl *g3Fleet) RunAgent(t *testing.T, r *g3rig, sink *g3Sink) error {
 	defer func() {
 		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = srv.Shutdown(c)
-		<-done
+		if err := srv.Shutdown(c); err != nil {
+			t.Errorf("fleet agent API shutdown: %v", err)
+		}
+		if err := <-done; err != nil {
+			t.Errorf("fleet agent API serve: %v", err)
+		}
 	}()
 	port := ln.Addr().(*net.TCPAddr).Port
 	host := ""

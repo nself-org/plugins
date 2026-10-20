@@ -5,14 +5,15 @@
 #   refused with the expected code, reason key and audit row and that no bytes land. The drill fails on an
 #   unexpected pass (a case whose outcome differs from `expected` in results.json), on an empty results file,
 #   on a skipped test, and on a case that maps to no threat-model row.
-# Inputs:  none for the full run. --check-mapping MODEL.md [MATRIX.yaml...] checks only the mapping: every case of
+# Inputs:  HQ must name a readable threat-model checkout for the full run.
+#          --check-mapping MODEL.md [MATRIX.yaml...] checks only the mapping: every case of
 #          the matrix (default matrix.yaml of the suite) names a threat id that is a row of the
 #          threat model file MODEL.md, and every threat id TM-12 to TM-18 has at least one case.
 #          HQ (env) names the hq checkout; the full run passes its threat model to the mapping check.
 #          INTEGRATION=1 is set by the drill; the remote cases start the fabric sim (Docker Engine).
 # Usage:   run
 #          run --check-mapping "$HQ/architecture/ci-threat-model.md" [matrix.yaml ...]
-# Outputs: the test log tail on stderr; free/ci/test/cachesec/testdata/results.json is rewritten by the suite.
+# Outputs: the test log tail on stderr; results.json and the generated threats-covered.md in suite/testdata/.
 #          Exit 0 when everything holds, 1 on a failed test, an unexpected pass or an unmapped case, 2 on usage
 #          or a missing tool.
 set -euo pipefail
@@ -43,7 +44,7 @@ check_mapping() {
 		if [ "$th" = "-" ]; then
 			echo "cache-security: case $id names no threat-model row" >&2
 			bad=1
-		elif ! grep -Eq "^\| $th \|" "$model"; then
+		elif ! awk -v row="| $th |" 'index($0, row) == 1 { found=1 } END { exit !found }' "$model"; then
 			echo "cache-security: case $id maps to $th, which is not a row of the threat model" >&2
 			bad=1
 		fi
@@ -78,6 +79,13 @@ if [ "${1:-}" = "--check-mapping" ]; then
 fi
 [ "$#" -eq 0 ] || { echo "usage: run | run --check-mapping MODEL.md [MATRIX.yaml...]" >&2; exit 2; }
 
+model=${HQ:+$HQ/architecture/ci-threat-model.md}
+if [ -z "$model" ] || [ ! -r "$model" ]; then
+	echo "cache-security: HQ must name a readable threat model checkout" >&2
+	exit 2
+fi
+check_mapping "$model" "$suite/matrix.yaml"
+
 for tool in go python3; do
 	command -v "$tool" >/dev/null || { echo "cache-security: $tool is required" >&2; exit 2; }
 done
@@ -108,10 +116,6 @@ if bad or not rows:
 print("cache-security: %d cases, every outcome equals expected" % len(rows), file=sys.stderr)
 PY
 
-model=${HQ:+$HQ/architecture/ci-threat-model.md}
-if [ -z "$model" ]; then
-	echo "cache-security: HQ is not set; the mapping check against the threat model is skipped here and runs in the verification" >&2
-else
-	"$0" --check-mapping "$model"
-fi
+"$0" --check-mapping "$model"
+python3 "$here/handoff.py" > "$suite/testdata/threats-covered.md"
 echo "cache-security: ok" >&2

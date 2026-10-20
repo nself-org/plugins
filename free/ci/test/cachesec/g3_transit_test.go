@@ -34,8 +34,7 @@ func (f *g3FaultWriter) Write(p []byte) (int, error) {
 		q := append([]byte(nil), p...)
 		q[len(q)/2] ^= 0x01
 		_, err := f.BlobWriter.Write(q)
-		f.s.note(err)
-		return len(p), err
+		return len(p), f.s.note(err)
 	}
 	if f.cut {
 		room := f.size/2 - f.n
@@ -48,18 +47,15 @@ func (f *g3FaultWriter) Write(p []byte) (int, error) {
 		}
 		n, err := f.BlobWriter.Write(q)
 		f.n += int64(n)
-		f.s.note(err)
-		return len(p), err
+		return len(p), f.s.note(err)
 	}
 	n, err := f.BlobWriter.Write(p)
-	f.s.note(err)
-	return n, err
+	return n, f.s.note(err)
 }
 
 func (f *g3FaultWriter) Close() error {
 	err := f.BlobWriter.Close()
-	f.s.note(err)
-	return err
+	return f.s.note(err)
 }
 
 func (f *g3FaultWriter) Abort() error {
@@ -72,8 +68,7 @@ func (f *g3FaultWriter) Abort() error {
 func (f *g3FaultWriter) Verify(want string) error {
 	if v, ok := f.BlobWriter.(interface{ Verify(string) error }); ok {
 		err := v.Verify(want)
-		f.s.note(err)
-		return err
+		return f.s.note(err)
 	}
 	return nil
 }

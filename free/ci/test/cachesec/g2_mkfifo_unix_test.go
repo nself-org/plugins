@@ -6,6 +6,4 @@ package cachesec
 
 import "syscall"
 
-const g2FifoSupported = true
-
 func g2Mkfifo(path string) error { return syscall.Mkfifo(path, 0o644) }

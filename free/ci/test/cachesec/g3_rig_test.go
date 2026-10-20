@@ -204,13 +204,6 @@ func (s *g3Sink) Errs() []error {
 	return append([]error(nil), s.errs...)
 }
 
-func (s *g3Sink) ready(ctx context.Context) error {
-	if s.r.plan != nil {
-		return s.r.cache.Declare(ctx)
-	}
-	return nil
-}
-
 func (s *g3Sink) Log(ctx context.Context, l protocol.Log) error {
 	s.mu.Lock()
 	s.logs = append(s.logs, l.Text)

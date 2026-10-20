@@ -6,6 +6,4 @@ package cachesec
 
 import "errors"
 
-const g2FifoSupported = false
-
 func g2Mkfifo(string) error { return errors.New("no mkfifo here") }
