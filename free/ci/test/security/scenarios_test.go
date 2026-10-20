@@ -203,7 +203,7 @@ func TestScenario8_LocalOnlyStaysOnPersonalNode(t *testing.T) {
 
 	r := newRig(t, got.Effective, other, hostedRunner("hosted1"))
 	id, a, err := r.submit(newJob("local-nobody", "owner", "lan"), "owner", settle)
-	waitsBecause(t, r, id, a, err, "privacy.local_only", "privacy.hosted_not_authorized")
+	waitsBecause(t, r, id, a, err, "privacy.local_only")
 
 	r = newRig(t, got.Effective, other, mine, hostedRunner("hosted1"))
 	for i := 0; i < 2; i++ {
