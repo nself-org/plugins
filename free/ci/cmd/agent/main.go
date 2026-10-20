@@ -41,9 +41,9 @@ func main() {
 
 func run(ctx context.Context, args []string, sio IO) int {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent <command> [args]")
+		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent <command> [args]")
 		for _, l := range usageLines() {
-			fmt.Fprintln(sio.Stderr, l)
+			_, _ = fmt.Fprintln(sio.Stderr, l)
 		}
 		if len(args) == 0 {
 			return 2
@@ -52,7 +52,7 @@ func run(ctx context.Context, args []string, sio IO) int {
 	}
 	fn, ok := lookup(args[0])
 	if !ok {
-		fmt.Fprintf(sio.Stderr, "nself-ci-agent: unknown command %q\n", args[0])
+		_, _ = fmt.Fprintf(sio.Stderr, "nself-ci-agent: unknown command %q\n", args[0])
 		return 2
 	}
 	return fn(ctx, args[1:], sio)

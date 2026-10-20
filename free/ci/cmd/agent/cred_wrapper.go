@@ -39,28 +39,28 @@ func init() {
 
 func runCredWrapper(ctx context.Context, args []string, sio IO) int {
 	if len(args) < 3 || args[1] != "--" || credEnv[args[0]] == "" {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent cred-wrapper <github-jitconfig|gitlab-runner-token> -- <command> [args...]")
+		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent cred-wrapper <github-jitconfig|gitlab-runner-token> -- <command> [args...]")
 		return 2
 	}
 	line, err := readCredential(sio.Stdin)
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	defer zeroBytes(line)
 	path, err := lookCommand(args[2])
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	env, err := ciexec.AllowlistEnv{}.Environment(ctx, model.Job{})
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	env = append(env, credEnv[args[0]]+"="+string(line))
 	err = syscall.Exec(path, args[2:], env) // the process becomes the runner command; only returns on failure
-	fmt.Fprintln(sio.Stderr, "error: exec:", err)
+	_, _ = fmt.Fprintln(sio.Stderr, "error: exec:", err)
 	return 1
 }
 

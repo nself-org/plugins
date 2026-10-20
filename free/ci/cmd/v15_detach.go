@@ -95,7 +95,7 @@ func runDetach(o *RunOptions) int {
 		}
 		return 0
 	}
-	fmt.Fprintf(out, "run %s %s (pid %d)\n  wait:   %s\n  follow: %s\n  cancel: %s\n", h.RunID, h.State, h.PID,
+	_, _ = fmt.Fprintf(out, "run %s %s (pid %d)\n  wait:   %s\n  follow: %s\n  cancel: %s\n", h.RunID, h.State, h.PID,
 		strings.Join(h.Commands.Wait, " "), strings.Join(h.Commands.Follow, " "), strings.Join(h.Commands.Cancel, " "))
 	return 0
 }

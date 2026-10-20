@@ -106,9 +106,13 @@ func countTrue(b ...bool) (n int) {
 	return n
 }
 
+// signerCLIEnv is added to every cli child of the signer: the funnel allowlists the
+// environment, and the released cli (1.4.x) has `config secrets resolve` only with NSELF_V15=1 (D-1236).
+var signerCLIEnv = []string{"NSELF_V15=1"}
+
 // signerResolver resolves release secrets through the exec funnel and the cli.
 func signerResolver(root string) secrets.ValueResolver {
-	return &secrets.Resolver{Runner: &secrets.ExecRunner{Home: os.Getenv("NSELF_CI_HOME"), CoordinatorID: "signer", Attempt: "key"}, Project: root}
+	return &secrets.Resolver{Runner: &secrets.ExecRunner{Home: os.Getenv("NSELF_CI_HOME"), CoordinatorID: "signer", Attempt: "key", Env: signerCLIEnv}, Project: root}
 }
 
 // signerStore writes the key with `nself config secrets set` over stdin.
@@ -120,7 +124,7 @@ func signerStore(root string) (signing.SecretStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &signing.CLIStore{Runner: &signing.FunnelRunner{Home: os.Getenv("NSELF_CI_HOME")}, Project: root, LockDir: filepath.Join(home, ".nself", "locks")}, nil
+	return &signing.CLIStore{Runner: &signing.FunnelRunner{Home: os.Getenv("NSELF_CI_HOME")}, Project: root, Env: signerCLIEnv, LockDir: filepath.Join(home, ".nself", "locks")}, nil
 }
 
 func signerRequest(ctx context.Context, root string) int {

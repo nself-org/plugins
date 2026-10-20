@@ -41,7 +41,7 @@ func runUpgrade(ctx context.Context, args []string, sio IO) int {
 	manifestURL := fs.String("manifest-url", "", "https URL of this platform's .manifest.json (default: the GitHub release of --version)")
 	allowDown := fs.Bool("allow-downgrade", false, "allow a version lower than this agent's")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || !verify.ValidVersion(*version) {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent upgrade --version X.Y.Z [--manifest-url URL] [--allow-downgrade]")
+		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent upgrade --version X.Y.Z [--manifest-url URL] [--allow-downgrade]")
 		return 2
 	}
 	target := verify.Target(runtime.GOOS, runtime.GOARCH)
@@ -49,7 +49,7 @@ func runUpgrade(ctx context.Context, args []string, sio IO) int {
 	if *manifestURL != "" {
 		u, err := url.Parse(*manifestURL)
 		if err != nil || path.Base(u.Path) != install.BinaryName+"-"+target+".manifest.json" {
-			fmt.Fprintf(sio.Stderr, "E651: --manifest-url must name %s-%s.manifest.json\n", install.BinaryName, target)
+			_, _ = fmt.Fprintf(sio.Stderr, "E651: --manifest-url must name %s-%s.manifest.json\n", install.BinaryName, target)
 			return 2
 		}
 		u.Path = path.Dir(u.Path)
@@ -57,7 +57,7 @@ func runUpgrade(ctx context.Context, args []string, sio IO) int {
 	}
 	state, err := stateDir()
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	exe, err := os.Executable()
@@ -65,12 +65,12 @@ func runUpgrade(ctx context.Context, args []string, sio IO) int {
 		exe, err = filepath.EvalSymlinks(exe)
 	}
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error: agent binary:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error: agent binary:", err)
 		return 1
 	}
 	v, err := upgradeVerifier()
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, err)
+		_, _ = fmt.Fprintln(sio.Stderr, err)
 		return 1
 	}
 	res, err := update.ApplyLocal(ctx, update.LocalOptions{
@@ -79,13 +79,13 @@ func runUpgrade(ctx context.Context, args []string, sio IO) int {
 		Source:   update.ReleaseSource{Release: install.Release{Version: *version, BaseURL: base, Verifier: v}},
 	})
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, err)
+		_, _ = fmt.Fprintln(sio.Stderr, err)
 		return 1
 	}
 	if res.Noop {
-		fmt.Fprintf(sio.Stdout, "nself-ci-agent already runs %s\n", res.To)
+		_, _ = fmt.Fprintf(sio.Stdout, "nself-ci-agent already runs %s\n", res.To)
 		return 0
 	}
-	fmt.Fprintf(sio.Stdout, "nself-ci-agent %s -> %s installed; the previous binary is kept as %s%s; restart the agent to run it\n", res.From, res.To, exe, update.PrevSuffix)
+	_, _ = fmt.Fprintf(sio.Stdout, "nself-ci-agent %s -> %s installed; the previous binary is kept as %s%s; restart the agent to run it\n", res.From, res.To, exe, update.PrevSuffix)
 	return 0
 }

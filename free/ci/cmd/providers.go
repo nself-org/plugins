@@ -91,7 +91,7 @@ func init() {
 	registerV15("providers", subcommandEntry{V15Only: true,
 		Flags: func() *flag.FlagSet { return flag.NewFlagSet("providers", flag.ContinueOnError) },
 		Handler: func(args []string) int {
-			fmt.Fprint(os.Stdout, providersHelp)
+			_, _ = fmt.Fprint(os.Stdout, providersHelp)
 			if len(args) > 0 && args[0] != "--help" && args[0] != "-h" && args[0] != "help" {
 				return 1
 			}
