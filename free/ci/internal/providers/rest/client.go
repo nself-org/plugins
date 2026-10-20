@@ -212,6 +212,9 @@ func (c *Client) download(ctx context.Context, rawURL string, maxBytes int64, w 
 	if maxBytes <= 0 || maxBytes > downloadCap {
 		maxBytes = downloadCap
 	}
+	if sameAuthority(u, c.BaseURL) {
+		ctx = context.WithValue(ctx, privateBaseKey{}, true)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		finalErr = config("download.url")
