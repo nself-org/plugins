@@ -1,0 +1,7 @@
+{
+  "total_count": 2,
+  "check_runs": [
+    {"id": 9001, "name": "nself-ci/gates", "external_id": "run-other", "status": "completed", "conclusion": "success", "output": {"title": "t", "summary": "s", "annotations_count": 0}},
+    {"id": 9002, "name": "nself-ci/gates", "external_id": "run-0001", "status": "completed", "conclusion": "failure", "output": {"title": "t", "summary": "s", "annotations_count": 3}}
+  ]
+}
