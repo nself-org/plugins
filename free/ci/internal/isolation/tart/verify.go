@@ -94,15 +94,15 @@ func (c netChecks) script() []byte {
 	b.WriteString("png() { if bound ping -c 1 -t 2 \"$1\"; then echo \"UP $1\"; else echo \"DOWN $1\"; fi; }\n")
 	b.WriteString("dns() { if bound nslookup -timeout=3 -retry=1 \"$1\"; then echo \"UP dns:$1\"; else echo \"DOWN dns:$1\"; fi; }\n")
 	for _, ap := range append(append([]netip.AddrPort(nil), c.TCPOpen...), c.TCPShut...) {
-		fmt.Fprintf(&b, "tcp %s %d\n", ap.Addr(), ap.Port())
+		fmt.Fprintf(&b, "tcp %s %d &\n", ap.Addr(), ap.Port())
 	}
 	for _, a := range append(append([]netip.Addr(nil), c.PingUp...), c.PingDown...) {
-		fmt.Fprintf(&b, "png %s\n", a)
+		fmt.Fprintf(&b, "png %s &\n", a)
 	}
 	for _, n := range c.DNSDown {
-		fmt.Fprintf(&b, "dns %s\n", n)
+		fmt.Fprintf(&b, "dns %s &\n", n)
 	}
-	b.WriteString("exit 0\n")
+	b.WriteString("wait\nexit 0\n") // the targets run at once, so a dropped one costs one timeout, not one each
 	return b.Bytes()
 }
 

@@ -91,8 +91,9 @@ func (a *attempt) start(ctx context.Context, ws *os.Root) error {
 		return fmt.Errorf("tart run: %w", err)
 	}
 	a.mu.Lock()
-	a.proc = proc
+	a.proc, a.booted = proc, true
 	a.mu.Unlock()
+	a.p.slots.markBooted()
 	ip, err := a.waitIP(ctx)
 	if err != nil {
 		return err
@@ -180,7 +181,10 @@ func (a *attempt) enforceNetwork(ctx context.Context) error {
 		a.mu.Unlock()
 		proxy = &h.Addr
 	} else if a.p.opts.Net.Facts != nil {
-		facts, _ = a.p.opts.Net.Facts(ctx)
+		var err error
+		if facts, err = a.p.opts.Net.Facts(ctx); err != nil { // without the facts the proof would test fewer targets
+			return err
+		}
 	}
 	return a.verifyNetwork(ctx, planChecks(a.plan, a.gateway, proxy, facts))
 }
@@ -232,7 +236,7 @@ func (a *attempt) collect(ctx context.Context, ws *os.Root) error {
 	defer func() { tmp.Close(); os.Remove(tmp.Name()) }()
 	rctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	lim := &limitFile{f: tmp, max: maxCollectBytes/3*4 + 1<<20, cancel: cancel}
+	lim := &limitFile{f: tmp, max: maxCollectBytes/3*4/76*77 + 4<<20, cancel: cancel} // base64, fold newlines, tar headers
 	res, err := a.tool.Run(rctx, a.sshArgv(collectCommand(remoteBase(a.att.ID), paths)), nil, lim)
 	if lim.exceeded {
 		return fmt.Errorf("collect outputs from %s: the VM sent more than the %d byte cap", a.name, maxCollectBytes)

@@ -10,8 +10,9 @@ import "sync"
 
 // Slots is the in-process ledger.
 type Slots struct {
-	mu    sync.Mutex
-	inUse int
+	mu     sync.Mutex
+	inUse  int // attempts that hold a slot in this process
+	booted int // of those, VMs that were started (they show in the listing once Tart reports them running)
 }
 
 // NewSlots returns an empty ledger; the run hook shares one between both profiles.
@@ -32,10 +33,12 @@ func vmCounts(vms []vmInfo) (foreign, own int) {
 }
 
 func (s *Slots) freeLocked(foreign, own int) int {
-	busy := own
-	if s.inUse > busy {
-		busy = s.inUse
+	// this process's reservations are all busy; listed clones beyond the ones it booted belong to other processes
+	others := own - s.booted
+	if others < 0 {
+		others = 0
 	}
+	busy := s.inUse + others
 	if free := MaxSlots - foreign - busy; free > 0 {
 		return free
 	}
@@ -60,10 +63,23 @@ func (s *Slots) reserve(foreign, own int) bool {
 	return true
 }
 
-func (s *Slots) release() {
+// markBooted records that a reserved attempt started its VM.
+func (s *Slots) markBooted() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.booted < s.inUse {
+		s.booted++
+	}
+}
+
+// release gives a slot back; booted says whether the attempt had started its VM.
+func (s *Slots) release(booted bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.inUse > 0 {
 		s.inUse--
+	}
+	if booted && s.booted > 0 {
+		s.booted--
 	}
 }

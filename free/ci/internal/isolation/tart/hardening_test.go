@@ -57,7 +57,7 @@ func TestCollectStopsAtTheByteCap(t *testing.T) {
 	maxCollectBytes = 3000
 	t.Cleanup(func() { maxCollectBytes = old })
 	r := newRig(t, nil)
-	s := r.spec("g1", "sh", "-c", "mkdir -p dist && head -c 3000000 /dev/urandom > dist/big.bin")
+	s := r.spec("g1", "sh", "-c", "mkdir -p dist && head -c 7000000 /dev/urandom > dist/big.bin")
 	s.Job.Artifacts = []model.ArtifactDecl{{Path: "dist"}}
 	res, _ := r.run(context.Background(), s)
 	if res.Err == nil || !strings.Contains(res.Err.Error(), "cap") {
@@ -183,4 +183,53 @@ func TestOldScratchIsSwept(t *testing.T) {
 	if _, err := os.Stat(fresh); err != nil {
 		t.Fatal("fresh scratch may belong to a running collect")
 	}
+}
+
+func TestScratchRuleKeepsMarkersOfOddAttemptIDs(t *testing.T) {
+	r := newRig(t, nil)
+	dir := stateDir(r.home)
+	c, err := claimMarker(dir, "nself-ci-x.out-1", marker{Name: "nself-ci-x.out-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.unlockKeep()
+	past := time.Now().Add(-72 * time.Hour)
+	os.Chtimes(c.path, past, past)
+	tool := r.p.opts.NewTool("c", r.home)
+	if _, err := tool.Run(context.Background(), []string{r.p.opts.Tart, "clone", testImage, "nself-ci-x.out-1"}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if gone := r.p.Sweep(context.Background(), tool, dir); len(gone) != 1 {
+		t.Fatalf("an attempt id containing .out- is a marker, not scratch: %v", gone)
+	}
+	r.noClones()
+}
+
+func TestProxyNeedsTheVMAddress(t *testing.T) {
+	start := HostProxy(nil, nil, nil)
+	if _, err := start(context.Background(), ProxyRequest{Scope: "restricted", Gateway: gw}); !isScopeErr(err) {
+		t.Fatalf("an unfiltered proxy must not start: %v", err)
+	}
+}
+
+func TestNoneScopeFailsWhenTheFactsCannotBeReadForTheProof(t *testing.T) {
+	calls := 0
+	r := newRig(t, func(o *Options) {
+		o.Net = NetSource{Facts: func(context.Context) (netFacts, error) {
+			calls++
+			if calls > 1 {
+				return netFacts{}, errTest
+			}
+			return facts(), nil
+		}}
+	})
+	t.Setenv("FAKE_SSH_NETCHECK", "1")
+	t.Setenv("FAKE_SSH_UP", "192.168.64.1")
+	s := r.spec("n9", "true")
+	s.Network = "none"
+	res, _ := r.run(context.Background(), s)
+	if res.Err == nil {
+		t.Fatal("a proof with fewer targets must not pass")
+	}
+	r.noClones()
 }

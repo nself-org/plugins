@@ -75,20 +75,36 @@ func TestSlotLedgerNeverOversubscribes(t *testing.T) {
 	if !first || !second || third {
 		t.Fatal("two reservations fit, a third must not")
 	}
-	r.p.slots.release()
+	r.p.slots.release(false)
 	if !r.p.slots.reserve(0, 0) {
 		t.Fatal("a released slot is free again")
 	}
-	r.p.slots.release()
-	r.p.slots.release()
+	r.p.slots.release(false)
+	r.p.slots.release(false)
 	one, two := r.p.slots.reserve(1, 0), r.p.slots.reserve(1, 0)
 	if !one || two {
 		t.Fatal("one foreign VM running leaves one slot")
 	}
-	r.p.slots.release()
-	// a clone that is booting and not listed yet is still busy; one that is listed is not counted twice
-	if r.p.slots.Free(0, 1) != 1 || !r.p.slots.reserve(0, 1) || r.p.slots.Free(0, 1) != 1 || !r.p.slots.reserve(0, 1) || r.p.slots.reserve(0, 1) {
-		t.Fatal("own listed clone and own reservation are the same slot")
+	r.p.slots.release(false)
+}
+
+func TestSlotLedgerCountsOtherProcessesClones(t *testing.T) {
+	s := NewSlots()
+	// another coordinator process runs one clone (listed: own=1); this process reserves one and is still booting
+	if !s.reserve(0, 1) {
+		t.Fatal("one slot is free")
+	}
+	if s.reserve(0, 1) {
+		t.Fatal("2 slots: the other process's clone plus our booting reservation are both busy")
+	}
+	// ours boots and shows in the listing: own=2, booted=1 -> still two busy, none free
+	s.markBooted()
+	if s.Free(0, 2) != 0 {
+		t.Fatal("two VMs are running")
+	}
+	s.release(true)
+	if s.Free(0, 1) != 1 {
+		t.Fatal("our VM is gone and the other process's clone remains")
 	}
 }
 

@@ -45,6 +45,7 @@ type attempt struct {
 	claim   *claim
 	proc    Proc
 	proxy   ProxyHandle
+	booted  bool
 	netEnv  []string
 	cfgPath string
 	once    sync.Once
@@ -200,7 +201,7 @@ func cutEnv(kv string) (string, string, bool) {
 func (a *attempt) release(ctx context.Context) {
 	a.once.Do(func() {
 		a.mu.Lock()
-		proc, proxy, cl := a.proc, a.proxy, a.claim
+		proc, proxy, cl, booted := a.proc, a.proxy, a.claim, a.booted
 		a.mu.Unlock()
 		if proxy.Close != nil {
 			proxy.Close()
@@ -209,7 +210,7 @@ func (a *attempt) release(ctx context.Context) {
 			if err := destroyClone(ctx, a.tool, a.p.opts.Tart, a.name, proc); err != nil {
 				a.p.opts.Log("clone %s could not be removed (%v); the next start sweeps it", a.name, err)
 				cl.unlockKeep() // the marker stays: the next Prepare's sweep retries the removal
-				a.p.slots.release()
+				a.p.slots.release(booted)
 				return
 			}
 		}
@@ -217,6 +218,6 @@ func (a *attempt) release(ctx context.Context) {
 			_ = proc.Kill()
 		}
 		cl.release()
-		a.p.slots.release()
+		a.p.slots.release(booted)
 	})
 }

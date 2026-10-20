@@ -16,6 +16,7 @@ if [ "$1" = "/bin/bash -s" ] && [ -n "$FAKE_SSH_NETCHECK" ]; then
     # emulate the in-VM network check: answer from FAKE_SSH_UP / FAKE_SSH_OPEN (dns names as dns:<name> in UP)
     echo "OS ${FAKE_SSH_OS:-Darwin}"
     while IFS= read -r line; do
+      line=${line% &}
       case "$line" in
         "dns "*) a=${line#dns }; case " $FAKE_SSH_UP " in *" dns:$a "*) echo "UP dns:$a" ;; *) echo "DOWN dns:$a" ;; esac ;;
         "png "*) a=${line#png }; case " $FAKE_SSH_UP " in *" $a "*) echo "UP $a" ;; *) echo "DOWN $a" ;; esac ;;

@@ -137,7 +137,7 @@ func TestPlanChecksAndJudge(t *testing.T) {
 			t.Fatalf("script lacks %q:\n%s", want, script)
 		}
 	}
-	if strings.Count(script, "png 192.168.64.1\n") != 1 {
+	if strings.Count(script, "png 192.168.64.1 &\n") != 1 {
 		t.Fatal("the gateway is a positive control, never a negative target")
 	}
 	if strings.Contains(script, "tcp 192.168.64.1 3128\ntcp 192.168.64.1 22\ntcp 192.168.64.1 3128") {
@@ -304,7 +304,7 @@ func TestHostProxyRefusesDestinationsAndStopsTheListener(t *testing.T) {
 	start := HostProxy(nil, func() (netscope.Facts, error) {
 		return netscope.Facts{HostAddrs: []netip.Addr{loop}}, nil
 	}, nil)
-	h, err := start(context.Background(), ProxyRequest{Scope: "restricted", Gateway: loop, Facts: netscope.Facts{}})
+	h, err := start(context.Background(), ProxyRequest{Scope: "restricted", Gateway: loop, VMAddr: loop, Facts: netscope.Facts{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +322,7 @@ func TestHostProxyRefusesDestinationsAndStopsTheListener(t *testing.T) {
 		c.Close()
 		t.Fatal("the listener must be closed")
 	}
-	if _, err := start(context.Background(), ProxyRequest{Scope: "restricted", Gateway: netip.MustParseAddr("192.168.64.1")}); !isScopeErr(err) {
+	if _, err := start(context.Background(), ProxyRequest{Scope: "restricted", Gateway: netip.MustParseAddr("192.168.64.1"), VMAddr: loop}); !isScopeErr(err) {
 		t.Fatalf("a gateway that is not a host address must fail: %v", err)
 	}
 }

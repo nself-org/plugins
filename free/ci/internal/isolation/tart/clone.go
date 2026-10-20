@@ -58,6 +58,11 @@ func claimMarker(dir, name string, m marker) (*claim, error) {
 			return nil, err
 		}
 		ok, err := tryLock(f)
+		if err == nil && !ok && emptyFile(f) && try < 5 { // a sweep is looking at a marker that has just been created
+			_ = f.Close()
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
 		if err != nil || !ok {
 			_ = f.Close()
 			if err == nil {
@@ -87,6 +92,12 @@ func claimMarker(dir, name string, m marker) (*claim, error) {
 		return nil, err
 	}
 	return &claim{f: f, path: path, dir: dir, name: name}, nil
+}
+
+// emptyFile reports whether f has no content yet (a claim that has not written its label).
+func emptyFile(f *os.File) bool {
+	fi, err := f.Stat()
+	return err == nil && fi.Size() == 0
 }
 
 // samePath reports whether the open file is the file currently at path.

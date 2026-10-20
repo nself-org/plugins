@@ -157,6 +157,9 @@ func HostProxy(res netscope.Resolver, discover func() (netscope.Facts, error), e
 		discover = netscope.Discover
 	}
 	return func(ctx context.Context, req ProxyRequest) (ProxyHandle, error) {
+		if !req.VMAddr.IsValid() {
+			return ProxyHandle{}, isolation.ScopeUnenforceable("the proxy needs the VM address to serve only that VM")
+		}
 		own, err := discover()
 		if err != nil {
 			return ProxyHandle{}, err
@@ -173,10 +176,7 @@ func HostProxy(res netscope.Resolver, discover func() (netscope.Facts, error), e
 			_ = ln.Close()
 			return ProxyHandle{}, fmt.Errorf("proxy address: %w", err)
 		}
-		var serve net.Listener = ln
-		if req.VMAddr.IsValid() {
-			serve = &sourceFilter{Listener: ln, allow: req.VMAddr}
-		}
+		serve := net.Listener(&sourceFilter{Listener: ln, allow: req.VMAddr})
 		p := &netscope.Proxy{
 			Guard:  netscope.Guard{Scope: req.Scope, Facts: netscope.Merge(req.Facts, own), ExtraHosts: req.Hosts, Resolver: res},
 			Dialer: &net.Dialer{Timeout: 15 * time.Second},

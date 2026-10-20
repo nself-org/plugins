@@ -2,6 +2,7 @@ package tart
 
 import (
 	"context"
+	"errors"
 	"github.com/nself-org/plugins/free/ci/internal/isolation"
 	"net/url"
 
@@ -35,3 +36,5 @@ func mustURL(s string) *url.URL {
 func isolationAttemptFor(id, coordinator string) isolation.Attempt {
 	return isolation.Attempt{ID: id, CoordinatorID: coordinator}
 }
+
+var errTest = errors.New("test: facts unreadable")
