@@ -108,7 +108,8 @@ func TestEveryJobRunningSubcommandRunsThePreStartGuard(t *testing.T) {
 	guarded := map[string][]string{"serve": {"--stdio"}, "pull": {}, "exec": {"--spec", "/nonexistent", "--evidence", "/nonexistent"}}
 	exempt := map[string]bool{ // no job runs, or started by an already guarded agent; join runs the guard itself
 		"version": true, "slots": true, "verify-release": true, "job-shim": true, "cred-wrapper": true, "join": true,
-		"upgrade": true, // replaces the agent file only; it refuses while a job runs and starts nothing
+		"upgrade":   true, // replaces the agent file only; it refuses while a job runs and starts nothing
+		"uninstall": true, // removes the system install (users, rules, service); it starts no job
 	}
 	regMu.RLock()
 	var names []string

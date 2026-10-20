@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.nself.ci-agent</string>
+	<key>UserName</key>
+	<string>nself-ci</string>
+	<key>GroupName</key>
+	<string>nself-ci</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/opt/nself-ci-agent/bin/nself-ci-agent</string>
+		<string>pull</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>NSELF_CI_AGENT_HOME</key>
+		<string>/var/db/nself-ci-agent</string>
+		<key>NSELF_CI_AGENT_WORK</key>
+		<string>/var/db/nself-ci-work</string>
+		<key>PATH</key>
+		<string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin</string>
+	</dict>
+	<key>WorkingDirectory</key>
+	<string>/var/db/nself-ci-work</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<dict>
+		<key>PathState</key>
+		<dict>
+			<key>/var/db/nself-ci-agent/pki/enrollment.json</key>
+			<true/>
+		</dict>
+	</dict>
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+	<key>StandardOutPath</key>
+	<string>/var/log/nself-ci-agent/agent.log</string>
+	<key>StandardErrorPath</key>
+	<string>/var/log/nself-ci-agent/agent.log</string>
+</dict>
+</plist>
