@@ -49,6 +49,9 @@ func (d *Dispatcher) Tick(ctx context.Context) error {
 	if closed || d.quiesced {
 		return errClosed
 	}
+	if d.cfg.Sweep != nil {
+		_ = d.cfg.Sweep(ctx) // best effort: validity is computed at admission, the sweep only writes the audit row
+	}
 	now := d.cfg.Clock()
 	queued := d.pending(now)
 	if len(queued) == 0 {

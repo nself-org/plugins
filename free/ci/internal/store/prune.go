@@ -7,7 +7,7 @@ package store
 // Constraints: a pipeline whose status is "running" is never deleted (the
 // check and the delete share one transaction, batches of pruneBatch); the removal covers jobs,
 // attempts, leases and reservations, cancel intents, idempotency keys,
-// declared artifacts, cache entries and cache facts written by those attempts (an
+// declared artifacts, approval and source-fact rows (trust_approvals, trust_run_facts), cache entries and cache facts written by those attempts (an
 // entry is served only while its writer attempt is on record as passed),
 // evidence and event-index rows of the pipeline, and one
 // audit row records the prune; the audit log itself is never pruned.
@@ -57,6 +57,8 @@ var pruneSteps = []string{
 	`DELETE FROM cancel_intent WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM idempotency_key WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM declared_artifact WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM trust_approvals WHERE run IN (SELECT value FROM json_each(?))`,
+	`DELETE FROM trust_run_facts WHERE run IN (SELECT value FROM json_each(?))`,
 	`DELETE FROM evidence WHERE pipeline_id IN (SELECT value FROM json_each(?))`,
 	`DELETE FROM event_index WHERE run_id IN (SELECT value FROM json_each(?))`,
 	`DELETE FROM cache_entry WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,

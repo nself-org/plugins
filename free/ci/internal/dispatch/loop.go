@@ -80,6 +80,9 @@ type Config struct {
 	Slots func() int
 	// DeliveryError observes a failed carrier run (the attempt is already marked lost).
 	DeliveryError func(Admitted, error)
+	// Sweep runs at the start of every tick, also when nothing is queued (D-1342: it writes the voids
+	// of stale run approvals); its error never fails the tick.
+	Sweep func(context.Context) error
 }
 
 // Dispatcher places and admits queued attempts.

@@ -28,6 +28,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
+	"github.com/nself-org/plugins/free/ci/internal/trust/source"
 )
 
 func init() {
@@ -163,6 +164,12 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 		return nil, fail(CodeRun, "run %s has no pipeline row", sess.RunID)
 	}
 	rd.d, err = dispatch.New(dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL, Queue: rd.queue,
+		Sweep: func(ctx context.Context) error {
+			_, err := sess.Store.SweepApprovals(ctx, "", func(a, cur store.ApprovalBinding) []string {
+				return source.VoidReasons(source.Binding(a), source.Binding(cur))
+			})
+			return err
+		},
 		Slots:         func() int { return rd.sess.Capacity().CPUs },
 		Incarnation:   func() int64 { return highestIncarnation(rd.sess.Store) },
 		Transport:     newTransportAdapter(rd.sink, rd.sink, rd.row.Project),

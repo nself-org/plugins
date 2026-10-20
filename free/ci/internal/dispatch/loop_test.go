@@ -329,3 +329,17 @@ func TestDispatchWorldError(t *testing.T) {
 		t.Fatalf("world error: tick=%v job=%v", err, e.err)
 	}
 }
+
+// D-1342: every tick runs the configured sweep, also when nothing is queued, so a stale approval is
+// voided without anyone running `ci runs pending`.
+func TestTickRunsSweepWithEmptyQueue(t *testing.T) {
+	st := openStore(t)
+	calls := 0
+	d := newDispatcher(t, Config{Store: st, World: liveWorld(st, nil), Sweep: func(context.Context) error { calls++; return nil }})
+	if err := d.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("sweep calls = %d, want 1", calls)
+	}
+}

@@ -241,3 +241,25 @@ func TestTrustApprovalsHostileValuesStayWritable(t *testing.T) {
 		t.Fatalf("approval with a hostile head repo: %v", err)
 	}
 }
+
+// D-1342: a pruned run takes its source facts and its approval row with it.
+func TestDeletePipelinesRemovesApprovalRows(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	approvalSeed(t, s, "r1")
+	approvalSeed(t, s, "r2")
+	if _, err := s.ApproveRun(ctx, ApproveInput{Run: "r1", Approver: "bob", Check: exactCheck}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.FinishPipeline(ctx, "r1", "passed"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := s.DeletePipelines(ctx, []string{"r1"}); err != nil || n != 1 {
+		t.Fatalf("removed %d, err %v; want 1", n, err)
+	}
+	for table, want := range map[string]int{"trust_run_facts": 1, "trust_approvals": 0} {
+		if got := count(t, s, table); got != want {
+			t.Errorf("%s rows = %d, want %d (only r2's facts stay)", table, got, want)
+		}
+	}
+}
