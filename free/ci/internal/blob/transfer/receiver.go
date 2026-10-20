@@ -37,9 +37,10 @@ var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 type Limits struct {
 	// MaxFile refuses an announce above it (NSELF_CI_ARTIFACT_MAX_FILE). Zero or less refuses everything.
 	MaxFile int64
-	// Budget returns how many more bytes the lease may take in total, before the bytes this
-	// receiver already accepted are subtracted. Nil means no total bound.
-	Budget func(ctx context.Context) (int64, error)
+	// Budget returns how many bytes the lease may still take for a NEW blob with this digest: what
+	// the caller holds against the lease (other blobs announced and not yet recorded) is already
+	// subtracted, so a re-announce of the same digest is never charged twice. Nil means no total bound.
+	Budget func(ctx context.Context, sha string) (int64, error)
 	// Disk refuses when writing add more bytes would cross the free-disk floor. Nil skips it.
 	Disk func(add int64) error
 }
@@ -51,16 +52,19 @@ type Receiver struct {
 	// Lease names the partial owner; any string, it is hashed.
 	Lease  string
 	Limits Limits
-	// Live returns nil while the lease epoch is the current one. Any error is a stale epoch.
+	// Live returns nil while the lease epoch is the current one. An error wrapping ErrStale is a
+	// stale epoch (refused, audited); any other error (a store fault) is a transient failure.
 	Live func(ctx context.Context) error
 	// Refused is told once per refused blob (by digest) when the epoch is stale, so the caller can
 	// write its audit row. It must not block.
 	Refused func(ctx context.Context, sha string, err *Error)
 
-	mu       sync.Mutex
-	accepted int64
-	told     map[string]bool
+	mu   sync.Mutex
+	told map[string]bool
 }
+
+// ErrStale is wrapped by a Live error that means "this lease epoch is no longer current".
+var ErrStale = errors.New("the lease epoch is no longer current")
 
 func (r *Receiver) writerID() string {
 	sum := sha256.Sum256([]byte(r.Lease))
@@ -75,6 +79,9 @@ func (r *Receiver) epoch(ctx context.Context, sha string) error {
 	err := r.Live(ctx)
 	if err == nil {
 		return nil
+	}
+	if !errors.Is(err, ErrStale) {
+		return Failf(ReasonInterrupted, "the lease check failed: %v", err)
 	}
 	e := Failf(ReasonStaleEpoch, "the lease epoch is no longer current; blob %s is refused", short(sha))
 	r.mu.Lock()
@@ -105,15 +112,22 @@ func (r *Receiver) Open(ctx context.Context, h transport.BlobHeader) (*Writer, e
 	if h.Size > r.Limits.MaxFile {
 		return nil, Failf(ReasonSizeCap, "blob %s is %d B, above the per-file cap %d B (NSELF_CI_ARTIFACT_MAX_FILE)", short(h.SHA256), h.Size, r.Limits.MaxFile)
 	}
-	if err := r.admit(ctx, h); err != nil {
-		return nil, err
-	}
 	if info, err := r.Store.Stat(r.Realm, h.SHA256); err == nil {
 		if info.Size() != h.Size {
 			return nil, Failf(ReasonDigest, "the realm holds blob %s at %d B, not the announced %d B", short(h.SHA256), info.Size(), h.Size)
 		}
-		return &Writer{r: r, h: h, done: true, offset: h.Size}, nil
+		// held already: re-verify its bytes and restart its sweep grace (cas.Refresh), so the blob a
+		// record is about to reference cannot be swept between this announce and that record
+		switch rerr := r.Store.Refresh(r.Realm, h.SHA256); {
+		case rerr == nil:
+			return &Writer{r: r, h: h, done: true, offset: h.Size}, nil
+		case !errors.Is(rerr, os.ErrNotExist):
+			return nil, Failf(ReasonDigest, "the stored blob %s failed re-verification: %v", short(h.SHA256), rerr)
+		}
 	} else if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, cas.ErrInvalid) {
+		return nil, err
+	}
+	if err := r.admit(ctx, h); err != nil {
 		return nil, err
 	}
 	if r.Limits.Disk != nil {
@@ -134,21 +148,17 @@ func (r *Receiver) Open(ctx context.Context, h transport.BlobHeader) (*Writer, e
 	return &Writer{r: r, h: h, p: p, offset: p.Offset()}, nil
 }
 
-// admit counts the blob against the lease byte budget.
+// admit refuses a new blob the lease has no room for.
 func (r *Receiver) admit(ctx context.Context, h transport.BlobHeader) error {
-	var left int64 = -1
-	if r.Limits.Budget != nil {
-		b, err := r.Limits.Budget(ctx)
-		if err != nil {
-			return err
-		}
-		left = b
+	if r.Limits.Budget == nil {
+		return nil
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if left >= 0 && r.accepted+h.Size > left {
-		return Failf(ReasonSizeCap, "blob %s (%d B) would take the lease past its byte budget (%d B left)", short(h.SHA256), h.Size, max(left-r.accepted, 0))
+	left, err := r.Limits.Budget(ctx, h.SHA256)
+	if err != nil {
+		return err
 	}
-	r.accepted += h.Size
+	if h.Size > left {
+		return Failf(ReasonSizeCap, "blob %s (%d B) would take the lease past its byte budget (%d B left)", short(h.SHA256), h.Size, max(left, 0))
+	}
 	return nil
 }

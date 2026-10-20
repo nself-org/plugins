@@ -5,12 +5,15 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
+	"github.com/nself-org/plugins/free/ci/internal/blob/transfer"
 	"github.com/nself-org/plugins/free/ci/internal/lease"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -81,7 +84,7 @@ func newRig(t *testing.T, job model.Job) *rig {
 	}
 	r.h = &Handler{Ledger: st, Blobs: blobs, Policy: r.pol}
 	r.lease = r.h.Bind(Binding{AttemptID: "a1", LeaseID: "lease-a1", Epoch: epoch, Job: job,
-		Fence: func(ctx context.Context) error { return r.eng.Fence(ctx, "lease-a1", epoch) },
+		Fence: func(ctx context.Context) error { return staleIfE662(r.eng.Fence(ctx, "lease-a1", epoch)) },
 		Ready: func(ctx context.Context) error {
 			state, epoch, err := st.AttemptStateEpoch(ctx, "a1")
 			if err == nil && state == "leased" {
@@ -90,6 +93,15 @@ func newRig(t *testing.T, job model.Job) *rig {
 			return err
 		}})
 	return r
+}
+
+// staleIfE662 is the adapter the run uses: the engine's E662 is the one verdict that means a stale lease.
+func staleIfE662(err error) error {
+	var se *store.Error
+	if errors.As(err, &se) && se.Code == "E662" {
+		return fmt.Errorf("%w: %v", transfer.ErrStale, err)
+	}
+	return err
 }
 
 // expire lets the lease lapse without a heartbeat: the engine fences the epoch and loses the attempt.

@@ -3,6 +3,7 @@ package transfer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync/atomic"
 	"testing"
@@ -113,9 +114,12 @@ func TestAnnounceRefusedBeforeAnyChunk(t *testing.T) {
 		mut    func(*Receiver)
 		reason string
 	}{
-		"file cap":     {func(r *Receiver) { r.Limits.MaxFile = 4999 }, ReasonSizeCap},
-		"lease bytes":  {func(r *Receiver) { r.Limits.Budget = func(context.Context) (int64, error) { return 4999, nil } }, ReasonSizeCap},
-		"stale epoch":  {func(r *Receiver) { r.Live = func(context.Context) error { return errors.New("epoch moved") } }, ReasonStaleEpoch},
+		"file cap":    {func(r *Receiver) { r.Limits.MaxFile = 4999 }, ReasonSizeCap},
+		"lease bytes": {func(r *Receiver) { r.Limits.Budget = func(context.Context, string) (int64, error) { return 4999, nil } }, ReasonSizeCap},
+		"stale epoch": {func(r *Receiver) {
+			r.Live = func(context.Context) error { return fmt.Errorf("%w: epoch moved", ErrStale) }
+		}, ReasonStaleEpoch},
+		"store fault":  {func(r *Receiver) { r.Live = func(context.Context) error { return errors.New("database is locked") } }, ReasonInterrupted},
 		"other stream": {func(r *Receiver) {}, ReasonProtocol},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -133,15 +137,31 @@ func TestAnnounceRefusedBeforeAnyChunk(t *testing.T) {
 	}
 }
 
-func TestLeaseByteBudgetCountsEveryBlob(t *testing.T) {
-	r := newReceiver(t, newStore(t), "lease-1")
-	r.Limits.Budget = func(context.Context) (int64, error) { return 100, nil }
-	a, b := pattern(60), pattern(70)
+func TestBudgetIsAskedPerDigestAndAHeldBlobIsFree(t *testing.T) {
+	st := newStore(t)
+	r := newReceiver(t, st, "lease-1")
+	var asked []string
+	r.Limits.Budget = func(_ context.Context, sha string) (int64, error) { asked = append(asked, sha); return 100, nil }
+	a, b := pattern(60), pattern(120)
 	if _, err := r.Open(context.Background(), transport.BlobHeader{Stream: StreamArtifact, SHA256: sum(a), Size: 60}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Open(context.Background(), transport.BlobHeader{Stream: StreamArtifact, SHA256: sum(b), Size: 70}); !IsReason(err, ReasonSizeCap) {
-		t.Fatalf("second blob err = %v, want size_cap (60+70 > 100)", err)
+	if _, err := r.Open(context.Background(), transport.BlobHeader{Stream: StreamArtifact, SHA256: sum(a), Size: 60}); err != nil {
+		t.Fatalf("a re-announce of the same digest must not be charged against itself: %v", err)
+	}
+	if _, err := r.Open(context.Background(), transport.BlobHeader{Stream: StreamArtifact, SHA256: sum(b), Size: 120}); !IsReason(err, ReasonSizeCap) {
+		t.Fatalf("120 B against 100 B left: %v", err)
+	}
+	if len(asked) != 3 || asked[0] != sum(a) || asked[2] != sum(b) {
+		t.Fatalf("budget asked for %v", asked)
+	}
+	// a blob the realm holds is answered without asking the budget at all
+	if err := newWire(t, newReceiver(t, st, "lease-2")).sender().Send(context.Background(), blobOf(a)); err != nil {
+		t.Fatal(err)
+	}
+	asked = nil
+	if w, err := r.Open(context.Background(), transport.BlobHeader{Stream: StreamArtifact, SHA256: sum(a), Size: 60}); err != nil || !w.Held() || len(asked) != 0 {
+		t.Fatalf("held blob: err=%v held=%v asked=%v", err, w != nil && w.Held(), asked)
 	}
 }
 
@@ -156,7 +176,7 @@ func TestStaleEpochMidStreamStopsTheWriteAndAuditsOncePerBlob(t *testing.T) {
 		if live.Load() {
 			return nil
 		}
-		return errors.New("moved")
+		return fmt.Errorf("%w: moved", ErrStale)
 	}
 	r.Refused = func(context.Context, string, *Error) { audits.Add(1) }
 	w := newWire(t, r)

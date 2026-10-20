@@ -61,10 +61,15 @@ func TestBindLeaseSinkOnlyChangesJobsThatDeclareOutputs(t *testing.T) {
 	if _, ok := bindLeaseSink(e.sink, e.delivery(artifactJob("out/a"))).(leaseSink); !ok {
 		t.Fatal("a job that declares artifacts did not get the lease sink")
 	}
-	// no rendezvous for the attempt: the run does not await it, nothing to bind
+	// no rendezvous for the attempt: the run does not await it; a job that declares outputs must not
+	// be answered by the sink that drops them
 	e2 := newRemoteEnv(t)
-	if got := bindLeaseSink(e2.sink, e2.delivery(artifactJob("out/a"))); got != transport.Sink(e2.sink) {
-		t.Fatal("an unexpected attempt got a bound sink")
+	got := bindLeaseSink(e2.sink, e2.delivery(artifactJob("out/a")))
+	if _, ok := got.(refusedSink); !ok {
+		t.Fatalf("an unexpected attempt got %T, want the refusing sink", got)
+	}
+	if err := got.ArtifactRef(context.Background(), protocol.ArtifactRef{LeaseID: e2.lease, Path: "out/a"}); err == nil {
+		t.Fatal("the refusing sink accepted an artifact-ref")
 	}
 }
 

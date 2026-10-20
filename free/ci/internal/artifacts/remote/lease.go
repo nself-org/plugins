@@ -6,6 +6,7 @@ package remote
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
@@ -24,25 +25,45 @@ type Lease struct {
 	rcv      *transfer.Receiver
 	declared bool
 	decls    []records.Decl
-	reserved int64
-	refs     map[string]int // path -> refs seen, to pick the nth declaration
+	pending  map[string]int64 // digest -> announced size of blobs held for this lease and not yet recorded by a ref
+	rowHeld  int64            // what this attempt's reserve row holds in the store now (ArtifactUsage counts it)
+	refs     map[string]int   // path -> refs seen, to pick the nth declaration
 	names    map[string]bool
 	audited  map[string]bool
 }
 
-// live is nil while the lease is current and the attempt can still take uploads.
-func (l *Lease) live(ctx context.Context) error {
-	if l.b.Fence != nil {
-		if err := l.b.Fence(ctx); err != nil {
-			return err
+// stale wraps cause as "this lease is no longer current" (transfer.ErrStale), the one class of
+// refusal that is audited and reported as E714 stale_epoch.
+func stale(format string, a ...any) error {
+	return fmt.Errorf("%w: "+format, append([]any{transfer.ErrStale}, a...)...)
+}
+
+// fence is nil while the lease epoch is current.
+func (l *Lease) fence(ctx context.Context) error {
+	if l.b.Fence == nil {
+		return nil
+	}
+	if err := l.b.Fence(ctx); err != nil {
+		if errors.Is(err, transfer.ErrStale) {
+			return stale("%v", err)
 		}
+		return err // a fault of the store or the engine, not a verdict on the lease
+	}
+	return nil
+}
+
+// live is nil while the lease is current and the attempt can still take uploads. A store fault is
+// returned as it is, not as a stale epoch.
+func (l *Lease) live(ctx context.Context) error {
+	if err := l.fence(ctx); err != nil {
+		return err
 	}
 	state, _, err := l.h.Ledger.AttemptStateEpoch(ctx, l.b.AttemptID)
 	if err != nil {
 		return err
 	}
 	if state != "leased" && state != "running" {
-		return errors.New("attempt " + string(state) + " takes no more uploads")
+		return stale("attempt %s takes no more uploads", state)
 	}
 	return nil
 }
@@ -66,13 +87,44 @@ func (l *Lease) refuse(ctx context.Context, sha string, e *transfer.Error) {
 	_ = l.h.Ledger.AppendAudit(ctx, "artifacts", "artifact.remote.refused", l.b.AttemptID, "reason="+e.Reason+" lease="+l.b.LeaseID+" sha="+short)
 }
 
-// ready moves the attempt to running and returns its stored facts.
-func (l *Lease) ready(ctx context.Context) (records.Facts, error) {
+// refusal turns a guard error into the error the caller returns: a stale lease is E714 stale_epoch
+// with one audit row for the blob; anything else (a store fault) passes through.
+func (l *Lease) refusal(ctx context.Context, sha string, err error) error {
+	if !errors.Is(err, transfer.ErrStale) {
+		return err
+	}
+	e := transfer.Failf(transfer.ReasonStaleEpoch, "the lease is no longer current: %v", err)
+	l.refuse(ctx, sha, e)
+	return e
+}
+
+// guard proves the lease is current, makes the attempt running, and returns the attempt epoch the
+// record writes are gated on. The epoch is read between two fences, so it belongs to this lease's
+// incarnation: a transition in between would have moved the lease too.
+func (l *Lease) guard(ctx context.Context, sha string) (int64, error) {
+	if err := l.live(ctx); err != nil {
+		return 0, l.refusal(ctx, sha, err)
+	}
 	if l.b.Ready != nil {
 		if err := l.b.Ready(ctx); err != nil {
-			return records.Facts{}, err
+			return 0, err
 		}
 	}
+	state, epoch, err := l.h.Ledger.AttemptStateEpoch(ctx, l.b.AttemptID)
+	if err != nil {
+		return 0, err
+	}
+	if state != "running" {
+		return 0, l.refusal(ctx, sha, stale("attempt %s, not running", state))
+	}
+	if err = l.fence(ctx); err != nil {
+		return 0, l.refusal(ctx, sha, err)
+	}
+	return epoch, nil
+}
+
+// facts reads the stored facts of the attempt once.
+func (l *Lease) factsOnce(ctx context.Context) (records.Facts, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.facts != nil {
@@ -86,52 +138,46 @@ func (l *Lease) ready(ctx context.Context) (records.Facts, error) {
 	return f, nil
 }
 
-// attemptEpoch is the attempt's own epoch, read after the lease was fenced: the record writes
-// are gated on it by the store, so a transition in between is a refusal, not a stale write.
-func (l *Lease) attemptEpoch(ctx context.Context) (int64, error) {
-	_, e, err := l.h.Ledger.AttemptStateEpoch(ctx, l.b.AttemptID)
-	return e, err
-}
-
 // Declare writes the attempt's declarations once. The agent's upload is checked against them and
 // CommitAndVerify fails a declaration nothing was delivered for, so a job that declares outputs
-// cannot pass without them. It is idempotent.
-func (l *Lease) Declare(ctx context.Context) error { return l.declare(ctx, "") }
+// cannot pass without them. It is idempotent per lease; a declaration left by an earlier
+// incarnation of the same attempt row is superseded by the store (ArtifactDeclare).
+func (l *Lease) Declare(ctx context.Context) error {
+	_, err := l.declare(ctx, "")
+	return err
+}
 
-func (l *Lease) declare(ctx context.Context, sha string) error {
-	if err := l.live(ctx); err != nil {
-		e := transfer.Failf(transfer.ReasonStaleEpoch, "the lease is no longer current: %v", err)
-		l.refuse(ctx, sha, e)
-		return e
-	}
-	f, err := l.ready(ctx)
+// declare returns the attempt epoch of the guard it ran.
+func (l *Lease) declare(ctx context.Context, sha string) (int64, error) {
+	epoch, err := l.guard(ctx, sha)
 	if err != nil {
-		return err
+		return 0, err
+	}
+	f, err := l.factsOnce(ctx)
+	if err != nil {
+		return 0, err
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.declared {
-		return nil
+		return epoch, nil
 	}
 	decls, err := records.Normalize(l.b.Job, f.Release, records.ImplicitDecls(l.b.Job))
 	if err != nil {
-		return err
+		return 0, err
 	}
-	if have, err := l.h.Ledger.ArtifactDecls(ctx, l.b.AttemptID); err != nil {
-		return err
-	} else if len(have) > 0 {
-		decls = have
-	} else if len(decls) > 0 {
-		e, err := l.attemptEpoch(ctx)
-		if err != nil {
-			return err
+	if len(decls) > 0 {
+		if err = l.h.Ledger.ArtifactDeclare(ctx, l.b.AttemptID, epoch, decls); records.IsReason(err, records.ReasonDeclaration) {
+			if decls, err = l.h.Ledger.ArtifactDecls(ctx, l.b.AttemptID); err == nil && len(decls) == 0 {
+				err = records.Failf(records.ReasonDeclaration, "attempt %s has declarations the store refuses to write", l.b.AttemptID)
+			}
 		}
-		if err = l.h.Ledger.ArtifactDeclare(ctx, l.b.AttemptID, e, decls); err != nil {
-			return err
+		if err != nil {
+			return 0, err
 		}
 	}
 	l.decls, l.declared = decls, true
-	return nil
+	return epoch, nil
 }
 
 func (l *Lease) receiver(f records.Facts) *transfer.Receiver {
@@ -140,22 +186,33 @@ func (l *Lease) receiver(f records.Facts) *transfer.Receiver {
 	if l.rcv == nil {
 		pol := l.h.Policy
 		l.rcv = &transfer.Receiver{Store: l.h.Blobs, Realm: cas.ArtifactRealm(f.Project), Lease: l.b.LeaseID, Live: l.live, Refused: l.refuse,
-			Limits: transfer.Limits{MaxFile: pol.MaxFile, Disk: pol.CheckDisk, Budget: func(ctx context.Context) (int64, error) { return l.budget(ctx, f.Project) }}}
+			Limits: transfer.Limits{MaxFile: pol.MaxFile, Disk: pol.CheckDisk, Budget: func(ctx context.Context, sha string) (int64, error) { return l.budget(ctx, f.Project, sha) }}}
 	}
 	return l.rcv
 }
 
 // budget is how many bytes the store still has room for in this project (the total cap and, in a
-// TEAM store, the project's share of it).
-func (l *Lease) budget(ctx context.Context, project string) (int64, error) {
+// TEAM store, the project's share of it) for a new blob with this digest: the usage already holds the
+// records this lease staged, and the blobs it announced but has not recorded yet are subtracted, the
+// blob in question excluded so a resume is not charged twice.
+func (l *Lease) budget(ctx context.Context, project, sha string) (int64, error) {
 	u, err := l.h.Ledger.ArtifactUsage(ctx, project)
 	if err != nil {
 		return 0, err
 	}
+	var held int64
+	l.mu.Lock()
+	for d, n := range l.pending {
+		if d != sha {
+			held += n
+		}
+	}
+	own := l.rowHeld // the usage includes this attempt's reserve row; it is counted through pending instead
+	l.mu.Unlock()
 	pol := l.h.Policy
-	left := pol.MaxTotal - u.Total
+	left := pol.MaxTotal - (u.Total - own) - held
 	if pol.Team {
-		left = min(left, pol.MaxTotal/100*int64(pol.ProjectShare)-u.Project)
+		left = min(left, pol.MaxTotal/100*int64(pol.ProjectShare)-(u.Project-own)-held)
 	}
 	return max(left, 0), nil
 }
@@ -165,10 +222,11 @@ func (l *Lease) Blob(ctx context.Context, h xport.BlobHeader) (xport.BlobWriter,
 	if h.Stream != transfer.StreamArtifact {
 		return nil, transfer.Failf(transfer.ReasonProtocol, "the %q stream is not an artifact stream", h.Stream)
 	}
-	if err := l.declare(ctx, h.SHA256); err != nil {
+	epoch, err := l.declare(ctx, h.SHA256)
+	if err != nil {
 		return nil, err
 	}
-	f, err := l.ready(ctx)
+	f, err := l.factsOnce(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -176,17 +234,36 @@ func (l *Lease) Blob(ctx context.Context, h xport.BlobHeader) (xport.BlobWriter,
 	if err != nil {
 		return nil, err
 	}
-	l.mu.Lock()
-	l.reserved += h.Size
-	total := l.reserved
-	l.mu.Unlock()
-	e, err := l.attemptEpoch(ctx)
-	if err == nil {
-		err = l.h.Ledger.ArtifactReserve(ctx, l.b.AttemptID, e, total, l.h.Policy)
+	if w.Held() {
+		return w, nil // the realm holds these bytes already: nothing to reserve
 	}
-	if err != nil {
+	l.mu.Lock()
+	if l.pending == nil {
+		l.pending = map[string]int64{}
+	}
+	l.pending[h.SHA256] = h.Size
+	var total int64
+	for _, n := range l.pending {
+		total += n
+	}
+	l.mu.Unlock()
+	if err = l.h.Ledger.ArtifactReserve(ctx, l.b.AttemptID, epoch, total, l.h.Policy); err != nil {
 		_ = w.Abort()
+		l.mu.Lock()
+		delete(l.pending, h.SHA256)
+		l.mu.Unlock()
 		return nil, err
 	}
+	l.mu.Lock()
+	l.rowHeld = total
+	l.mu.Unlock()
 	return w, nil
+}
+
+// recorded releases the claim of a blob a ref has turned into a record.
+func (l *Lease) recorded(sha string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.pending, sha)
+	l.rowHeld = 0 // staging a record deletes the attempt's reserve row: the record carries the claim now
 }

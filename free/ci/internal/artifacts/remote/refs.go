@@ -34,10 +34,10 @@ func (l *Lease) ArtifactRef(ctx context.Context, ref protocol.ArtifactRef) error
 	if ref.LeaseID != l.b.LeaseID {
 		return transfer.Failf(transfer.ReasonProtocol, "an artifact-ref names lease %q, not this one", ref.LeaseID)
 	}
-	if err := l.declare(ctx, ref.SHA256); err != nil {
+	if _, err := l.declare(ctx, ref.SHA256); err != nil {
 		return err
 	}
-	f, err := l.ready(ctx)
+	f, err := l.factsOnce(ctx)
 	if err != nil {
 		return err
 	}
@@ -64,12 +64,7 @@ func (l *Lease) ArtifactRef(ctx context.Context, ref protocol.ArtifactRef) error
 		}
 		st.Image.Ref = d.ImageRef
 	}
-	if err = l.live(ctx); err != nil { // the epoch may have moved while the blob was read
-		e := transfer.Failf(transfer.ReasonStaleEpoch, "the lease is no longer current; artifact-ref %s is refused", rel)
-		l.refuse(ctx, ref.SHA256, e)
-		return e
-	}
-	epoch, err := l.attemptEpoch(ctx)
+	epoch, err := l.guard(ctx, ref.SHA256) // the epoch may have moved while the blob was read
 	if err != nil {
 		return err
 	}
@@ -84,6 +79,7 @@ func (l *Lease) ArtifactRef(ctx context.Context, ref protocol.ArtifactRef) error
 		return err
 	}
 	l.claim(rel, name)
+	l.recorded(ref.SHA256)
 	return nil
 }
 
@@ -132,6 +128,10 @@ func (l *Lease) hold(ctx context.Context, realm cas.Realm, ref protocol.Artifact
 	}
 	if info.Size() != ref.Size {
 		return transfer.Failf(transfer.ReasonDigest, "%s: the stored blob is %d B, the ref says %d B", ref.Path, info.Size(), ref.Size)
+	}
+	// restart the blob's sweep grace: the record that references it is written a moment from now
+	if err = l.h.Blobs.Refresh(realm, ref.SHA256); err != nil {
+		return records.Failf(records.ReasonMissingBlob, "%s: the stored blob does not verify: %v", ref.Path, err)
 	}
 	return nil
 }

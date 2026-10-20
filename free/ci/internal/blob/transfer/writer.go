@@ -112,6 +112,13 @@ func (w *Writer) Abort() error {
 	return nil
 }
 
+// Held reports whether the realm already held the blob when it was announced (no byte will follow).
+func (w *Writer) Held() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.done && !w.published
+}
+
 // Published reports whether this writer made the blob visible (false for a duplicate).
 func (w *Writer) Published() bool {
 	w.mu.Lock()

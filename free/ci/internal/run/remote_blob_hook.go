@@ -20,6 +20,8 @@ package run
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
@@ -28,6 +30,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/blob/transfer"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
 
@@ -56,7 +59,7 @@ func (s *remoteSink) bindLease(d leaseFacts) transport.Sink {
 	}
 	ra := s.attempt(d.AttemptID)
 	if ra == nil {
-		return s
+		return refusedSink{s, fmt.Errorf("attempt %s has no rendezvous in this run; its artifacts cannot be taken", d.AttemptID)}
 	}
 	pol, err := records.PolicyFromEnv(os.Getenv)
 	if err != nil {
@@ -70,9 +73,19 @@ func (s *remoteSink) bindLease(d leaseFacts) transport.Sink {
 	}
 	h := &remote.Handler{Ledger: s.st, Blobs: blobs, Policy: pol}
 	l := h.Bind(remote.Binding{AttemptID: d.AttemptID, LeaseID: d.LeaseID, Epoch: d.Epoch, Job: d.Job,
-		Fence: func(ctx context.Context) error { return s.eng.Fence(ctx, d.LeaseID, d.Epoch) },
+		Fence: func(ctx context.Context) error { return staleLease(s.eng.Fence(ctx, d.LeaseID, d.Epoch)) },
 		Ready: func(ctx context.Context) error { return s.markRunning(ctx, ra) }})
 	return leaseSink{remoteSink: s, l: l}
+}
+
+// staleLease marks the engine's E662 (stale lease epoch) as the one verdict that means "this lease is
+// no longer current"; any other error from the engine is a fault and is reported as such.
+func staleLease(err error) error {
+	var se *store.Error
+	if errors.As(err, &se) && se.Code == "E662" {
+		return fmt.Errorf("%w: %v", transfer.ErrStale, err)
+	}
+	return err
 }
 
 // leaseSink is the Sink of one lease of a job that declares outputs.
