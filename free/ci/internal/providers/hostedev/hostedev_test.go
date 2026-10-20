@@ -127,6 +127,7 @@ func TestEvidenceRejections(t *testing.T) {
 		{"stale template", hostedev.ReasonStale, func(in *hostedev.VerifyInput) { in.MinTemplate = 3 }},
 		{"producer below minimum", hostedev.ReasonProducerStale, func(in *hostedev.VerifyInput) { in.MinAgent = "1.5.0" }},
 		{"spec digest", hostedev.ReasonSpec, func(in *hostedev.VerifyInput) { in.Spec = []byte(`{"kind":"test","run":["false"]}`) }},
+		{"spec digest malformed", hostedev.ReasonSpec, func(in *hostedev.VerifyInput) { in.SpecDigest, in.Spec = "sha256:short", nil }},
 		{"revision", hostedev.ReasonRevision, func(in *hostedev.VerifyInput) { in.Revision = strings.Repeat("9", 40) }},
 		{"attempt", hostedev.ReasonAttempt, func(in *hostedev.VerifyInput) { in.AttemptID = "attempt-8" }},
 		{"missing artifact", hostedev.ReasonMissing, func(in *hostedev.VerifyInput) { in.EvidenceZip, in.ArtifactSize = nil, 0 }},

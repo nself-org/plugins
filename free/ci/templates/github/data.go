@@ -21,7 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed nself-ci-dispatch.yml.tmpl actions.yaml labels.yaml multipliers.yaml redirect_hosts.yaml
+//go:embed nself-ci-dispatch.yml.tmpl actions.yaml agent_pins.yaml labels.yaml multipliers.yaml redirect_hosts.yaml
 var files embed.FS
 
 // Label is one allowed runner label and the platform it provides.
@@ -120,4 +120,20 @@ func Actions() (map[string]Pin, error) {
 		}
 	}
 	return doc.Actions, nil
+}
+
+// SourceCommits returns the commits of nself-org/plugins the agent may be built from, oldest first.
+func SourceCommits() ([]string, error) {
+	var doc struct {
+		Commits []string `yaml:"source_commits"`
+	}
+	if err := read("agent_pins.yaml", &doc); err != nil {
+		return nil, err
+	}
+	for _, c := range doc.Commits {
+		if !commitRE.MatchString(c) {
+			return nil, fmt.Errorf("agent_pins.yaml: %q is not a full commit id", c)
+		}
+	}
+	return doc.Commits, nil
 }

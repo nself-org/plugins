@@ -86,7 +86,7 @@ type VerifyInput struct {
 	WorkflowBytes []byte
 	// Rendering returns the coordinator's rendering of the workflow for a template version.
 	Rendering func(version int) ([]byte, error)
-	// TemplateVersion reads the version a workflow declares; nil uses the "# template: vN" header.
+	// TemplateVersion reads the version a workflow declares (negative: none); nil uses the "# template: vN" header.
 	TemplateVersion func([]byte) int
 	MinTemplate     int
 	Nonce           string
@@ -109,14 +109,15 @@ func reject(reason string) error {
 
 var headerVersion = regexp.MustCompile(`(?m)^# template: v([0-9]+)$`)
 
+// declaredVersion reads the "# template: vN" header; -1 means the workflow declares none.
 func declaredVersion(b []byte) int {
 	m := headerVersion.FindSubmatch(b[:min(len(b), 2048)])
 	if m == nil {
-		return 0
+		return -1
 	}
 	n, err := strconv.Atoi(string(m[1]))
 	if err != nil {
-		return 0
+		return -1
 	}
 	return n
 }
@@ -130,9 +131,8 @@ func Verify(_ context.Context, in VerifyInput) (model.ProviderAttestation, error
 	if err != nil {
 		return model.ProviderAttestation{}, err
 	}
-	sum := sha256.Sum256(in.Spec)
-	if in.SpecDigest == "" || "sha256:"+hex.EncodeToString(sum[:]) != in.SpecDigest {
-		return model.ProviderAttestation{}, reject(ReasonSpec)
+	if err = checkSpec(in); err != nil {
+		return model.ProviderAttestation{}, err
 	}
 	doc, err := readEvidence(in)
 	if err != nil {
@@ -179,7 +179,7 @@ func checkWorkflow(in VerifyInput) (int, error) {
 		read = declaredVersion
 	}
 	version := read(in.WorkflowBytes)
-	if version < 1 {
+	if version < 0 {
 		return 0, reject(ReasonTemplate)
 	}
 	if version < in.MinTemplate {
@@ -196,6 +196,30 @@ func checkWorkflow(in VerifyInput) (int, error) {
 		return 0, reject(ReasonEdited)
 	}
 	return version, nil
+}
+
+var digestRE = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+// checkSpec holds the dispatched spec digest to its shape and, when the spec itself is at hand, to
+// the spec: a provider's API echoes no dispatch inputs back, so the digest the coordinator journalled
+// is what is bound here and the workflow re-checks the spec against it before it runs anything.
+func checkSpec(in VerifyInput) error {
+	if !digestRE.MatchString(in.SpecDigest) {
+		return reject(ReasonSpec)
+	}
+	if len(in.Spec) > 0 {
+		sum := sha256.Sum256(in.Spec)
+		if "sha256:"+hex.EncodeToString(sum[:]) != in.SpecDigest {
+			return reject(ReasonSpec)
+		}
+	}
+	return nil
+}
+
+// ReadEvidence returns the evidence document inside an artifact zip, under the same size and shape
+// rules Verify applies; a caller that needs the document after Verify accepted the zip uses this.
+func ReadEvidence(zipBytes []byte) ([]byte, error) {
+	return readEvidence(VerifyInput{EvidenceZip: zipBytes})
 }
 
 // readEvidence returns the evidence.json inside the artifact zip.
