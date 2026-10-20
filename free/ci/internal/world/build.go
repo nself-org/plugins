@@ -168,9 +168,7 @@ func Build(ctx context.Context, d Deps, pipeline sched.Pipeline) (sched.World, s
 	if len(jobIDs) == 0 {
 		w.Counts.Job = w.Counts.Global
 	}
-	// No identity is stored on attempts yet. Global active work is a proven upper bound
-	// for any user's or team's work, so their limits can only fail closed.
-	w.Counts.User, w.Counts.Team = w.Counts.Global, w.Counts.Global
+	w.Counts.User, w.Counts.Team = identityCounts(snapshot, pipeline.ID, w.Counts.Global)
 	if snapshot.Queued[snapshot.Projects[pipeline.ID]] > 0 {
 		// Queued attempts carry no priority band yet. Treat them as interactive
 		// for every runner, a conservative bound for background admission.
@@ -262,4 +260,28 @@ func mergeLabels(a, b []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// identityCounts is the number of active attempts that count against the pipeline's user and team
+// limits: those admitted under the same identity, plus every attempt with no recorded identity, which
+// can only make a limit stricter (the same rule the admission transaction applies). A user or team the
+// pipeline has no recorded identity for keeps the global count, a proven upper bound.
+func identityCounts(s store.SchedWorld, pipelineID string, global int) (user, team int) {
+	who := s.Identities[pipelineID]
+	user, team = global, global
+	if who.User != "" {
+		user = 0
+	}
+	if who.Team != "" {
+		team = 0
+	}
+	for _, a := range s.Active {
+		if who.User != "" && (!a.Admitted || a.User == who.User) {
+			user++
+		}
+		if who.Team != "" && (!a.Admitted || a.Team == who.Team) {
+			team++
+		}
+	}
+	return user, team
 }

@@ -7,8 +7,12 @@ import (
 	"time"
 )
 
-// PipelineRow is durable pipeline metadata, never a secret-bearing config.
-type PipelineRow struct{ ID, Project, Revision, Trigger, SourceTrust, PrivacyZone, PolicyDigest, InputDigest, SelectionMode, SelectionReason, SelectionDigest, Status string }
+// PipelineRow is durable pipeline metadata, never a secret-bearing config. User and Team are the
+// identity the run was authorized for (empty when unknown); the world builder counts per identity from them.
+type PipelineRow struct {
+	ID, Project, Revision, Trigger, SourceTrust, PrivacyZone, PolicyDigest, InputDigest, SelectionMode, SelectionReason, SelectionDigest, Status string
+	User, Team                                                                                                                                   string
+}
 type JobRow struct {
 	ID, PipelineID, Name, Kind, InputDigest string
 	Idempotent, Required                    bool
@@ -22,7 +26,7 @@ type AttemptRow struct {
 // CreatePipeline records a new aggregate root.
 func (s *Store) CreatePipeline(ctx context.Context, p PipelineRow) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO pipeline(id,project,revision,trigger,source_trust,privacy_zone,policy_digest,input_digest,selection_mode,selection_reason,selection_digest,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, p.ID, p.Project, p.Revision, p.Trigger, p.SourceTrust, p.PrivacyZone, p.PolicyDigest, p.InputDigest, p.SelectionMode, p.SelectionReason, p.SelectionDigest, p.Status, s.now().UnixNano())
+		_, err := tx.ExecContext(ctx, `INSERT INTO pipeline(id,project,revision,trigger,source_trust,privacy_zone,policy_digest,input_digest,selection_mode,selection_reason,selection_digest,status,created_at,user_id,team_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, p.ID, p.Project, p.Revision, p.Trigger, p.SourceTrust, p.PrivacyZone, p.PolicyDigest, p.InputDigest, p.SelectionMode, p.SelectionReason, p.SelectionDigest, p.Status, s.now().UnixNano(), p.User, p.Team)
 		return err
 	})
 }

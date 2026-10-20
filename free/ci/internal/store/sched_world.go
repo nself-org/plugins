@@ -15,7 +15,11 @@ type SchedWorld struct {
 	PreviousByJob map[string]string
 	Reservations  map[string]SchedReservation
 	Projects      map[string]string
+	Identities    map[string]SchedIdentity // pipeline id to the identity it was submitted under
 }
+
+// SchedIdentity is the user and team a pipeline was authorized for; both empty means unknown.
+type SchedIdentity struct{ User, Team string }
 type SchedNode struct {
 	ID, State  string
 	Capability json.RawMessage
@@ -23,6 +27,10 @@ type SchedNode struct {
 type SchedAttempt struct {
 	PipelineID, Project, JobID, RunnerID, Provider, State string
 	Epoch                                                 int64
+	// Admitted says the attempt has a recorded placement identity (User, Team); an attempt
+	// leased without one (a lease made before the identity existed, or the nil-hook path) is not.
+	Admitted   bool
+	User, Team string
 }
 type SchedReservation struct{ CPU, MemMB, Slots int64 }
 
@@ -44,16 +52,19 @@ func (s *Store) WorldSnapshot(ctx context.Context) (out SchedWorld, err error) {
 	out.PreviousByJob = map[string]string{}
 	out.Reservations = map[string]SchedReservation{}
 	out.Projects = map[string]string{}
-	projectRows, err := tx.QueryContext(ctx, `SELECT id,project FROM pipeline ORDER BY id`)
+	out.Identities = map[string]SchedIdentity{}
+	projectRows, err := tx.QueryContext(ctx, `SELECT id,project,user_id,team_id FROM pipeline ORDER BY id`)
 	if err != nil {
 		return SchedWorld{}, err
 	}
 	for projectRows.Next() {
 		var id, project string
-		if err = projectRows.Scan(&id, &project); err != nil {
+		var who SchedIdentity
+		if err = projectRows.Scan(&id, &project, &who.User, &who.Team); err != nil {
 			break
 		}
 		out.Projects[id] = project
+		out.Identities[id] = who
 	}
 	if err == nil {
 		err = projectRows.Err()
@@ -82,13 +93,13 @@ func (s *Store) WorldSnapshot(ctx context.Context) (out SchedWorld, err error) {
 	if err != nil {
 		return SchedWorld{}, err
 	}
-	rows, err = tx.QueryContext(ctx, `SELECT p.id,p.project,j.id,coalesce(l.runner_id,a.runner_id,''),coalesce(r.provider,''),a.state,a.epoch FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id LEFT JOIN lease l ON l.attempt_id=a.id LEFT JOIN runner_ref r ON r.id=coalesce(l.runner_id,a.runner_id) WHERE a.state IN ('leased','running','finalizing') ORDER BY a.id`)
+	rows, err = tx.QueryContext(ctx, `SELECT p.id,p.project,j.id,coalesce(l.runner_id,a.runner_id,''),coalesce(r.provider,''),a.state,a.epoch,sa.attempt_id IS NOT NULL,coalesce(sa.user_id,''),coalesce(sa.team_id,'') FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id LEFT JOIN lease l ON l.attempt_id=a.id LEFT JOIN runner_ref r ON r.id=coalesce(l.runner_id,a.runner_id) LEFT JOIN sched_admitted sa ON sa.attempt_id=a.id WHERE a.state IN ('leased','running','finalizing') ORDER BY a.id`)
 	if err != nil {
 		return SchedWorld{}, err
 	}
 	for rows.Next() {
 		var a SchedAttempt
-		if err = rows.Scan(&a.PipelineID, &a.Project, &a.JobID, &a.RunnerID, &a.Provider, &a.State, &a.Epoch); err != nil {
+		if err = rows.Scan(&a.PipelineID, &a.Project, &a.JobID, &a.RunnerID, &a.Provider, &a.State, &a.Epoch, &a.Admitted, &a.User, &a.Team); err != nil {
 			break
 		}
 		out.Active = append(out.Active, a)
