@@ -55,7 +55,7 @@ func aFakeDocker(t *testing.T) func() [][]string {
 	t.Helper()
 	dir := t.TempDir()
 	log := filepath.Join(dir, "runs.log")
-	script := "#!/bin/sh\nif [ \"$1\" = run ]; then\n  for a in \"$@\"; do printf '%s\\n' \"$a\" >> '" + log + "'; done\n  printf -- '--SEP--\\n' >> '" + log + "'\nfi\nexit 0\n"
+	script := "#!/bin/sh\nif [ \"$1\" = info ]; then\n  printf '%s' '{\"ServerVersion\":\"24.0.0\",\"MemoryLimit\":true,\"PidsLimit\":true,\"CPUCfsQuota\":true,\"SecurityOptions\":[\"name=rootless\"]}'\nfi\nif [ \"$1\" = run ]; then\n  for a in \"$@\"; do printf '%s\\n' \"$a\" >> '" + log + "'; done\n  printf -- '--SEP--\\n' >> '" + log + "'\nfi\nexit 0\n"
 	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}

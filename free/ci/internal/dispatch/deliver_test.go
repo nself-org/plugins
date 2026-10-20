@@ -241,3 +241,23 @@ func TestDispatchDeliveryFails(t *testing.T) {
 		t.Fatalf("attempt is %s, want lost", state)
 	}
 }
+
+// TestDispatchRaisesDeliveredIsolationToTheFloor (A01): an untrusted job declared at `process` is placed on a
+// node that offers more, and the lease the driver receives carries the trust floor, not the declared level.
+func TestDispatchRaisesDeliveredIsolationToTheFloor(t *testing.T) {
+	registerDrivers(t)
+	st := dispatch.OpenStore(t)
+	node := dispatch.SchedRunner("node-floor", "lan", 2)
+	node.Capability.Identity.Transport = "fake-remote"
+	d := newDispatcher(t, dispatch.Config{Store: st, World: dispatch.LiveWorld(st, node)})
+	id := dispatch.QueueAttempt(t, st, "pipe", "proj", "job")
+	j := dispatch.QueuedJob(id)
+	j.Sched.Trust, j.Sched.Network, j.Sched.PersonalOwnRun = "untrusted", "restricted", false
+	j.Model = model.Job{Isolation: "process", Run: []string{"true"}}
+	if _, err := d.Submit(context.Background(), j); err != nil {
+		t.Fatal(err)
+	}
+	if got := wait(t, remote.got).lease.Job.Isolation; got != "sandboxed-container" {
+		t.Fatalf("an untrusted job declared at process was delivered at %q, want sandboxed-container", got)
+	}
+}
