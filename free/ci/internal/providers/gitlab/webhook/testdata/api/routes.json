@@ -124,7 +124,11 @@
   "status": 200,
   "body": {
    "id": 9001,
-   "status": "pending"
+   "status": "pending",
+   "tag_list": [
+    "nself",
+    "linux"
+   ]
   }
  },
  "/projects/acme%2Fapp/pipelines/501": {
@@ -137,5 +141,9 @@
     "username": "dev1"
    }
   }
+ },
+ "/projects/acme%2Fapp/merge_requests/7/diffs?page=4&per_page=100": {
+  "status": 200,
+  "body": []
  }
 }

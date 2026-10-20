@@ -11,7 +11,7 @@ package webhook
 //          (never invented); when every call fails the original facts come back with the first error.
 // Constraints: no classification (TRUST-13) and no dedup. GitLab has no author association, so
 //          FirstTime and AuthorAssociation stay unknown. Changed files come from the merge request
-//          diffs or the compare API; 300 files or more is unknown (nil).
+//          diffs or the compare API; more than 300 files is unknown (nil).
 
 import (
 	"context"
@@ -25,8 +25,12 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/providers/rest"
 )
 
-// maxChangedFiles is the file count from which the list is treated as truncated.
-const maxChangedFiles = 300
+// maxChangedFiles is the most files a change may have for its list to be recorded (Ticket: "MR changes
+// <= 300 files"); diffPage is the page size of the diffs route.
+const (
+	maxChangedFiles = 300
+	diffPage        = 100
+)
 
 // fetch carries one Refetch.
 type fetch struct {

@@ -58,10 +58,10 @@
     "confidence": ""
   },
   "visibility": {
-    "value": null,
-    "source": "",
-    "observed_at": "0001-01-01T00:00:00Z",
-    "confidence": ""
+    "value": "private",
+    "source": "payload",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
   },
   "sha_reachable": {
     "value": null,

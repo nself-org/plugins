@@ -165,24 +165,40 @@ func (s *Source) fromJob(ctx context.Context, f model.TriggerFacts, p glPayload)
 	if p.BuildID <= 0 || p.PipelineID <= 0 || !isHex40(rev) {
 		return f, unsupported("job without a job, pipeline and sha")
 	}
-	tags := p.tags()
-	wanted := false
-	for _, t := range tags {
-		wanted = wanted || t == DemandTag
-	}
-	if !wanted {
+	tags, tagSource := p.tags(), "payload"
+	if len(tags) > 0 && !hasTag(tags, DemandTag) { // the payload already says this job wants no runner of ours
 		return f, unsupported("job without the runner tag " + DemandTag)
+	}
+	job, known := s.jobOf(ctx, f.Repo, p.BuildID)
+	switch {
+	case known && !job.waiting(): // a replayed demand for a job that is long over
+		return f, decline(reasonStale, "trigger.stale")
+	case !known && f.Auth == "bearer":
+		// a bare token carries no timestamp, so with the API unreadable nothing says the delivery is not a replay
+		return f, unsupported("job.unverified")
+	}
+	if len(tags) == 0 { // a pending job's payload can lack the tags: the Jobs API has them
+		tags, tagSource = job.TagList, "api"
+		if !known || !hasTag(tags, DemandTag) {
+			return f, unsupported("job without the runner tag " + DemandTag)
+		}
 	}
 	now := f.ReceivedAt
 	// No Ref: the job's ref is the sender's to choose for a fork merge request, and the revision names the code.
 	f.Kind, f.Revision, f.RevisionSource = "runner_demand", rev, "payload"
-	f.RunnerLabels = payloadFact(append([]string{}, tags...), now)
+	f.RunnerLabels = fact(append([]string{}, tags...), tagSource, now)
 	f.ProviderJobID = payloadFact(itoa(p.BuildID), now)
 	f.ProviderRunID = payloadFact(itoa(p.PipelineID), now)
-	if pending, known := s.jobPending(ctx, f.Repo, p.BuildID); known && !pending { // a replayed demand for a job that is long over
-		return f, decline(reasonStale, "trigger.stale")
-	}
 	return f, nil
+}
+
+func hasTag(tags []string, want string) bool {
+	for _, t := range tags {
+		if t == want {
+			return true
+		}
+	}
+	return false
 }
 
 // checkHead runs the stale check: a known mismatch declines the delivery (E706 stale), an unknown

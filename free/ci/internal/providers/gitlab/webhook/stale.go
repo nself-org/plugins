@@ -90,26 +90,36 @@ func (s *Source) resolveTag(ctx context.Context, project, tag string) (string, b
 	return tagCommit(ctx, c, project, tag)
 }
 
-// jobPending asks whether a job is still waiting for a runner (one call, the stale budget). A captured
-// pending event can be replayed after NODE-10's dedup window; a demand for a job that already ran must
-// not start a runner. known is false on any failure.
-func (s *Source) jobPending(ctx context.Context, project string, job int64) (pending, known bool) {
+// jobState is the part of a job the demand needs: where it is and which runner tags it asks for.
+type jobState struct {
+	Status  string   `json:"status"`
+	TagList []string `json:"tag_list"`
+}
+
+// waiting reports whether the job has not run yet: created, pending, waiting_for_resource and scheduled
+// have not; a job that ran or runs (or sits on a manual gate) is a replayed demand.
+func (j jobState) waiting() bool {
+	switch j.Status {
+	case "running", "success", "failed", "canceled", "canceling", "skipped", "manual":
+		return false
+	}
+	return true
+}
+
+// jobOf reads a job (one call, the stale budget). A captured pending event can be replayed after
+// NODE-10's dedup window, so a demand for a job that already ran must not start a runner; and a pending
+// job's payload may carry no runner tags, so the Jobs API's tag_list is the fallback. known is false on
+// any failure.
+func (s *Source) jobOf(ctx context.Context, project string, job int64) (jobState, bool) {
 	ctx, cancel := context.WithTimeout(ctx, staleBudget)
 	defer cancel()
 	c, err := s.api(ctx)
 	if err != nil {
-		return false, false
+		return jobState{}, false
 	}
-	var j struct {
-		Status string `json:"status"`
-	}
+	var j jobState
 	if _, err = get(ctx, c, jobPath, projectParams(project, "job", itoa(job)), &j); err != nil || j.Status == "" {
-		return false, false
+		return jobState{}, false
 	}
-	// created, pending, waiting_for_resource and scheduled have not run; a job that ran or runs is replayed
-	switch j.Status {
-	case "running", "success", "failed", "canceled", "canceling", "skipped", "manual":
-		return false, true
-	}
-	return true, true
+	return j, true
 }

@@ -179,7 +179,7 @@ func (r *fetch) reachable(defaultBranch string, projOK bool) {
 
 // changed records the paths a change touches, both sides of a rename (a file moved out of a protected
 // path must still show the path it left). A merge request lists its own diffs (paged); a push or tag
-// compares the recorded base to the revision. 300 files or more is unknown.
+// compares the recorded base to the revision. More than 300 files is unknown.
 func (r *fetch) changed() {
 	if !isHex40(r.f.Revision) {
 		return
@@ -187,16 +187,10 @@ func (r *fetch) changed() {
 	var diffs []glDiff
 	switch {
 	case r.f.Kind == "pull_request":
-		r.calls++
-		d, err := api.List[glDiff](r.ctx, r.c, mrDiffsPath, r.params("iid", strconv.Itoa(r.f.PRNumber)), nil)
-		if err != nil {
-			if r.firstErr == nil {
-				r.firstErr = err
-			}
+		var ok bool
+		if diffs, ok = r.mrDiffs(); !ok {
 			return
 		}
-		r.okCalls++
-		diffs = d
 	case isHex40(r.f.BaseRevision):
 		var cmp comparison
 		q := url.Values{"from": {r.f.BaseRevision}, "to": {r.f.Revision}, "straight": {"true"}}
@@ -207,7 +201,7 @@ func (r *fetch) changed() {
 	default:
 		return
 	}
-	if len(diffs) >= maxChangedFiles {
+	if len(diffs) > maxChangedFiles {
 		return
 	}
 	names := make([]string, 0, len(diffs))
@@ -218,4 +212,22 @@ func (r *fetch) changed() {
 		}
 	}
 	r.f.ChangedFiles = model.Fact[[]string]{Value: &names, Source: "api", ObservedAt: r.now, Confidence: "known"}
+}
+
+// mrDiffs lists the merge request's changed files, a page of 100 at a time. A fourth page is read so a
+// merge request with exactly 300 files is told from one with more; more than 300 is not read on.
+func (r *fetch) mrDiffs() ([]glDiff, bool) {
+	var all []glDiff
+	for page := 1; page <= maxChangedFiles/diffPage+1; page++ {
+		q := url.Values{"per_page": {strconv.Itoa(diffPage)}, "page": {strconv.Itoa(page)}}
+		var items []glDiff
+		if _, ok := r.call(mrDiffsPath, r.params("iid", strconv.Itoa(r.f.PRNumber)), q, &items); !ok {
+			return nil, false
+		}
+		all = append(all, items...)
+		if len(items) < diffPage {
+			return all, true
+		}
+	}
+	return nil, false // still full after 400 files: far over the cap
 }

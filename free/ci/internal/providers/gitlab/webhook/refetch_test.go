@@ -142,7 +142,7 @@ func TestRefetch(t *testing.T) {
 			t.Fatalf("a compare that timed out says nothing: %s", boolOf(out.SHAReachable))
 		}
 	})
-	t.Run("changed files are unknown at 300", func(t *testing.T) {
+	t.Run("changed files: 300 are recorded, 301 are not", func(t *testing.T) {
 		rg := newRig(t, both())
 		in := mustFacts(t, rg, "Merge Request Hook", "mr_open")
 		page := func(n int) string {
@@ -158,12 +158,31 @@ func TestRefetch(t *testing.T) {
 		for p := 1; p <= 3; p++ {
 			rg.gl.set(key(p), 200, page(100))
 		}
+		rg.gl.set(key(4), 200, `[]`)
+		if out, _ := rg.src.Refetch(context.Background(), in); out.ChangedFiles.Value == nil || len(*out.ChangedFiles.Value) != 300 {
+			t.Fatalf("exactly 300 files is complete (Ticket: <= 300): %+v", out.ChangedFiles)
+		}
+		rg.gl.set(key(4), 200, page(1))
 		if out, _ := rg.src.Refetch(context.Background(), in); out.ChangedFiles.Value != nil {
-			t.Fatalf("300 files is truncated: must be unknown, got %d", len(*out.ChangedFiles.Value))
+			t.Fatalf("301 files is over the cap: must be unknown, got %d", len(*out.ChangedFiles.Value))
+		}
+		rg.gl.set(key(4), 200, page(100))
+		if out, _ := rg.src.Refetch(context.Background(), in); out.ChangedFiles.Value != nil {
+			t.Fatalf("400 files is over the cap: must be unknown")
 		}
 		rg.gl.set(key(3), 200, page(99))
 		if out, _ := rg.src.Refetch(context.Background(), in); out.ChangedFiles.Value == nil || len(*out.ChangedFiles.Value) != 299 {
 			t.Fatalf("299 files is complete: %+v", out.ChangedFiles)
+		}
+		// a push compares base to revision; the compare answer has no paging
+		pushIn := mustFacts(t, rg, "Push Hook", "push")
+		many := make([]string, 301)
+		for i := range many {
+			many[i] = fmt.Sprintf(`{"old_path":"g%d","new_path":"g%d"}`, i, i)
+		}
+		rg.gl.set("/projects/acme%2Fapp/repository/compare?from="+shaB+"&straight=true&to="+shaA, 200, `{"commits":[{}],"diffs":[`+strings.Join(many, ",")+`]}`)
+		if out, _ := rg.src.Refetch(context.Background(), pushIn); out.ChangedFiles.Value != nil {
+			t.Fatalf("a compare of 301 files is unknown")
 		}
 	})
 	t.Run("runner demand", func(t *testing.T) {

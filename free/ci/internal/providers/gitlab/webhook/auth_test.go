@@ -8,6 +8,9 @@ package webhook
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"strconv"
@@ -77,7 +80,8 @@ func TestVerifyAuthFacts(t *testing.T) {
 		for _, c := range []struct {
 			age  time.Duration
 			want string
-		}{{4*time.Minute + 59*time.Second, ""}, {-4*time.Minute - 59*time.Second, ""}, {6 * time.Minute, reasonTimestamp}, {-6 * time.Minute, reasonTimestamp}, {30 * 24 * time.Hour, reasonTimestamp}} {
+		}{{5 * time.Minute, ""}, {-5 * time.Minute, ""}, {4*time.Minute + 59*time.Second, ""}, {-4*time.Minute - 59*time.Second, ""},
+			{5*time.Minute + time.Second, reasonTimestamp}, {-5*time.Minute - time.Second, reasonTimestamp}, {6 * time.Minute, reasonTimestamp}, {-6 * time.Minute, reasonTimestamp}, {30 * 24 * time.Hour, reasonTimestamp}} {
 			d := delivery{event: "Push Hook", id: "msg-1", ts: rg.now.Add(-c.age), signSecret: signingSecret}
 			_, err := rg.src.Verify(context.Background(), d.request(push), push)
 			if c.want == "" {
@@ -133,6 +137,24 @@ func TestVerifyAuthFacts(t *testing.T) {
 			}
 		}
 	})
+	t.Run("a MAC with any byte changed", func(t *testing.T) {
+		rg := newRig(t, both())
+		ts := strconv.FormatInt(rg.now.Unix(), 10)
+		key, _ := decodeKey(signingSecret)
+		m := hmac.New(sha256.New, key)
+		m.Write(signedContent("msg-1", ts, push))
+		mac := m.Sum(nil)
+		for i := range mac { // the first byte, the last byte and every one between
+			bad := append([]byte{}, mac...)
+			bad[i] ^= 0x01
+			d := delivery{event: "Push Hook", id: "msg-1", ts: rg.now, signature: "v1," + base64.StdEncoding.EncodeToString(bad)}
+			_, err := rg.src.Verify(context.Background(), d.request(push), push)
+			wantReject(t, "MAC with byte "+strconv.Itoa(i)+" changed", err, reasonSignature)
+		}
+		short := delivery{event: "Push Hook", id: "msg-1", ts: rg.now, signature: "v1," + base64.StdEncoding.EncodeToString(mac[:31])}
+		_, err := rg.src.Verify(context.Background(), short.request(push), push)
+		wantReject(t, "truncated MAC", err, reasonSignature)
+	})
 	t.Run("a signature for another delivery id or timestamp", func(t *testing.T) {
 		rg := newRig(t, both())
 		ts := strconv.FormatInt(rg.now.Unix(), 10)
@@ -155,13 +177,13 @@ func TestNoBearerDowngrade(t *testing.T) {
 		Tokens:  map[string]RepoSecret{"acme/app": {Env: tokenEnv}}, // the same project under both keys
 	})
 	for name, d := range map[string]delivery{
-		"token only":            {event: "Push Hook", token: bareToken},
-		"token with ids":        {event: "Push Hook", id: "msg-1", ts: rg.now, token: bareToken},
-		"stripped signature":    {event: "Push Hook", id: "msg-1", ts: rg.now, token: bareToken, signSecret: ""},
-		"damaged signature":     {event: "Push Hook", id: "msg-1", ts: rg.now, token: bareToken, signature: "v1,AAAA"},
-		"token and wrong sig":   {event: "Push Hook", id: "msg-1", ts: rg.now, token: bareToken, signSecret: otherSecret},
-		"stale signed + token":  {event: "Push Hook", id: "msg-1", ts: rg.now.Add(-time.Hour), token: bareToken, signSecret: signingSecret},
-		"token of another case": {event: "Push Hook", uuid: "u", token: bareToken},
+		"token only":             {event: "Push Hook", token: bareToken},
+		"token with ids":         {event: "Push Hook", id: "msg-1", ts: rg.now, token: bareToken},
+		"stripped signature":     {event: "Push Hook", id: "msg-1", ts: rg.now, token: bareToken, signSecret: ""},
+		"damaged signature":      {event: "Push Hook", id: "msg-1", ts: rg.now, token: bareToken, signature: "v1,AAAA"},
+		"token and wrong sig":    {event: "Push Hook", id: "msg-1", ts: rg.now, token: bareToken, signSecret: otherSecret},
+		"stale signed + token":   {event: "Push Hook", id: "msg-1", ts: rg.now.Add(-time.Hour), token: bareToken, signSecret: signingSecret},
+		"token with an event id": {event: "Push Hook", uuid: "u", token: bareToken},
 	} {
 		_, err := rg.src.Verify(context.Background(), d.request(push), push)
 		if err == nil {
