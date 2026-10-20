@@ -1,0 +1,7 @@
+{
+  "name": "ci-actions-runner",
+  "kind": "ci",
+  "image": "ghcr.io/actions/actions-runner:2.338.0@sha256:4ffadc0002b2581327e06101fc8c06cd189232baf79fe561fac9caeb76f5e807",
+  "platforms": ["linux/amd64", "linux/arm64"],
+  "owner": "P7-HOST-19"
+}

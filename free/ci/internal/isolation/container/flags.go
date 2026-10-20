@@ -137,6 +137,9 @@ func Build(p Params) (exec.ContainerCommand, error) {
 	if r.EnvFile != "" {
 		args = append(args, "--env-file", r.EnvFile)
 	}
+	if r.Interactive { // the job's stdin (a runner credential) must reach the container
+		args = append(args, "--interactive")
+	}
 	args = append(args, r.Image)
 	args = append(args, r.Command...)
 	return exec.ContainerCommand{Binary: p.Binary, Args: args, Image: r.Image}, nil

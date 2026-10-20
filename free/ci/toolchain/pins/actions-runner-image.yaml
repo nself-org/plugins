@@ -1,0 +1,15 @@
+# The GitHub Actions runner image a JIT runner job runs in (P7-HOST-19, Epic HOST D6): ghcr.io/actions/actions-runner
+# tag 2.338.0 (the runner version pinned by github-actions-runner.yaml), pinned by its OCI index digest
+# (linux/amd64 sha256:660f7b9d1e00..., linux/arm64 sha256:9644537b29b4...). The image is not part of the toolchain image.
+name: actions-runner-image
+kind: image
+# version repeats image@digest so the table shows the pinned reference; validateImage enforces it.
+version: ghcr.io/actions/actions-runner@sha256:4ffadc0002b2581327e06101fc8c06cd189232baf79fe561fac9caeb76f5e807
+purpose: image of the one-job GitHub Actions runner that runnerjob launches for a queued workflow_job
+owner: internal/providers/runnerjob
+image: ghcr.io/actions/actions-runner
+digest: sha256:4ffadc0002b2581327e06101fc8c06cd189232baf79fe561fac9caeb76f5e807
+status: pinned
+upstream:
+  type: oci
+  ref: ghcr.io/actions/actions-runner:2.338.0

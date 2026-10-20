@@ -177,7 +177,7 @@ func wrapCredential(spec *execSpec, in *jobInputs, j session.JobRun) error {
 		return fmt.Errorf("agent binary: %w", err)
 	}
 	agent := exe
-	if spec.Job.Isolation == "container" {
+	if spec.Job.Isolation == "container" || spec.Job.Isolation == "sandboxed-container" { // both run in a container image (gVisor is the same CLI path)
 		agent = containerAgentPath
 		in.Mounts = append(append([]ciexec.Mount(nil), in.Mounts...), ciexec.Mount{Host: exe, Target: agent, ReadOnly: true})
 	}

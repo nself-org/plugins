@@ -2,6 +2,7 @@ package container
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -200,5 +201,25 @@ func TestBuildOptionalFlags(t *testing.T) {
 	}
 	if has(c.Args, "--env-file") {
 		t.Error("env file emitted when empty")
+	}
+}
+
+// TestBuildAddsInteractiveOnlyForAJobStdin: a runner credential on the job's stdin needs the run to be
+// interactive; every other run stays without the flag (D-1001 for planned containers).
+func TestBuildAddsInteractiveOnlyForAJobStdin(t *testing.T) {
+	p := sampleParams()
+	cmd, err := Build(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(cmd.Args, "--interactive") {
+		t.Fatalf("no job stdin but interactive: %v", cmd.Args)
+	}
+	p.Run.Interactive, p.Run.EnvFile = true, "/dev/fd/3"
+	if cmd, err = Build(p); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(cmd.Args, "--interactive") || !slices.Contains(cmd.Args, "/dev/fd/3") {
+		t.Fatalf("job stdin but not interactive or no fd 3 env file: %v", cmd.Args)
 	}
 }

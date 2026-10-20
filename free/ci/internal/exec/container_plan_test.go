@@ -25,7 +25,8 @@ func fakeRuntime(t *testing.T, out string, code string) (calls func() []string) 
 func fakeRuntimeStdin(t *testing.T, out string, code string) (calls func() []string, stdin func() string) {
 	t.Helper()
 	dir := t.TempDir()
-	script := "#!/bin/sh\nd=$(dirname \"$0\")\necho \"$*\" >> \"$d/calls\"\ncase \"$*\" in *--entrypoint*) exit 0;; esac\ncase \"$1\" in run) ;; *) exit 0;; esac\ncat > \"$d/stdin\"\ncat \"$d/out\"\nexit $(cat \"$d/code\")\n"
+	fakeRuntimeDir = dir
+	script := "#!/bin/sh\nd=$(dirname \"$0\")\necho \"$*\" >> \"$d/calls\"\ncase \"$*\" in *--entrypoint*) exit 0;; esac\ncase \"$1\" in run) ;; *) exit 0;; esac\ncase \"$*\" in *\"--env-file /dev/fd/3\"*) cat /dev/fd/3 > \"$d/env3\";; esac\ncat > \"$d/stdin\"\ncat \"$d/out\"\nexit $(cat \"$d/code\")\n"
 	for name, body := range map[string]string{"docker": script, "out": out, "code": code} {
 		mode := os.FileMode(0600)
 		if name == "docker" {
@@ -45,11 +46,22 @@ func fakeRuntimeStdin(t *testing.T, out string, code string) (calls func() []str
 		}
 }
 
+// fakeRuntimeFD3 is the directory of the last fakeRuntimeStdin, so a test can read what arrived on fd 3.
+var fakeRuntimeDir string
+
+func fd3Seen() string {
+	data, _ := os.ReadFile(filepath.Join(fakeRuntimeDir, "env3"))
+	return string(data)
+}
+
 type hardPlanner struct{ unhardened bool }
 
 func (p hardPlanner) Plan(r ContainerRun) (ContainerCommand, error) {
 	args := append([]string{"run", "--rm"}, limitFlags(r)...)
 	args = append(args, "--user", fixtureUID(), "--network=none", "--env-file", r.EnvFile, "--mount", "type=bind,src="+r.Workspace+",dst=/repo")
+	if r.Interactive {
+		args = append(args, "--interactive")
+	}
 	if !p.unhardened {
 		args = append(args, "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only")
 	}
