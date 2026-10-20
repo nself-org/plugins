@@ -1,7 +1,7 @@
 package backup
 
 // Purpose: D-1308 regressions for a restore over a live data dir: the dir lock, and the user files of the
-//          replaced dir (a never_hosts entry or an SSH pin added after the backup) surviving the swap.
+//          replaced dir (a never_hosts entry added after the backup) surviving the swap.
 // Inputs:  the rig; a real SQLite store in t.TempDir().
 // Outputs: pass or fail.
 // Constraints: no network; the lock is a real flock on a real file.
@@ -51,7 +51,7 @@ func TestRestoreKeepsNewerUserFiles(t *testing.T) {
 		}
 	}
 	arch := r.archive()
-	// after the backup: a never-host and an SSH pin are added to the live dir
+	// after the backup: a never-host and an SSH pin are added to the live dir (only the never-host is merged)
 	newer := "ci:\n  never_hosts: [203.0.113.99, 198.51.100.5]\n"
 	newerPins := oldPins + "[203.0.113.8]:22 ssh-ed25519 AAAANEWPIN\n"
 	for name, body := range map[string]string{"config.yaml": newer, "known_hosts": newerPins} {
@@ -66,9 +66,11 @@ func TestRestoreKeepsNewerUserFiles(t *testing.T) {
 			t.Fatalf("never_hosts lost %s after the restore:\n%s", want, cfg)
 		}
 	}
-	kh, _ := os.ReadFile(filepath.Join(r.dir, "known_hosts"))
-	if !strings.Contains(string(kh), "AAAANEWPIN") || !strings.Contains(string(kh), "AAAAOLDPIN") || strings.Count(string(kh), "AAAAOLDPIN") != 1 {
-		t.Fatalf("known_hosts after the restore:\n%s", kh)
+	if kh, _ := os.ReadFile(filepath.Join(r.dir, "known_hosts")); string(kh) != oldPins {
+		t.Fatalf("known_hosts is the archived file, as before:\n%s", kh)
+	}
+	if aside, _ := filepath.Glob(filepath.Join(r.dir, "known_hosts.pre-restore-*")); len(aside) != 1 {
+		t.Fatalf("the replaced known_hosts must stay as a pre-restore copy: %v", aside)
 	}
 }
 

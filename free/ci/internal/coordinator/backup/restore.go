@@ -9,7 +9,7 @@ package backup
 //          state.db.pre-restore-<ts> (and a different KEK, known_hosts, config.yaml likewise) before the
 //          swap; CI-31 Restore bumps every incarnation; the job-token keys are replaced, so a token minted
 //          before the restore fails verification; every lease passes restart grace; revocations and the deny
-//          list of the replaced dir are merged in, and so are its never_hosts and known_hosts lines; the data dir
+//          list of the replaced dir are merged in, and so are its never_hosts entries; the data dir
 //          is flocked for the swap; onto an EMPTY dir every node is needs-reconfirm.
 
 import (

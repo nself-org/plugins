@@ -4,10 +4,11 @@ package main
 
 // Purpose: TestServeSecondSignalIsNotSwallowed (D-1308): after the first signal starts the drain, the
 //          process stops catching signals, so a second one gets the default action and aborts a stuck drain.
-// Inputs:  a re-executed test binary that catches SIGUSR1 through signalContext, then receives it twice.
+// Inputs:  a re-executed test binary that catches SIGTERM through signalContext, then receives it twice.
 // Outputs: pass or fail.
-// Constraints: unix only (SIGUSR1); the child waits 3 s after the second signal, so a swallowed signal
-//          shows as a clean exit, a default action as death by SIGUSR1.
+// Constraints: unix only (Go ignores an un-notified SIGUSR1, so the test uses SIGTERM, whose default action ends the
+//          process); the child waits 3 s after the second signal, so a swallowed signal
+//          shows as a clean exit, a default action as death by SIGTERM.
 
 import (
 	"context"
@@ -23,12 +24,12 @@ func TestSignalContextChild(t *testing.T) {
 	if os.Getenv("NSELF_CI_SIGNAL_CHILD") != "1" {
 		t.Skip("child half of TestServeSecondSignalIsNotSwallowed")
 	}
-	ctx, stop := signalContext(context.Background(), syscall.SIGUSR1)
+	ctx, stop := signalContext(context.Background(), syscall.SIGTERM)
 	defer stop()
-	_ = syscall.Kill(os.Getpid(), syscall.SIGUSR1)
+	_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
 	<-ctx.Done()
 	time.Sleep(300 * time.Millisecond) // the drain is under way
-	_ = syscall.Kill(os.Getpid(), syscall.SIGUSR1)
+	_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
 	time.Sleep(3 * time.Second) // a swallowed second signal lets the child get here
 }
 
@@ -41,7 +42,7 @@ func TestServeSecondSignalIsNotSwallowed(t *testing.T) {
 		t.Fatalf("the second signal was swallowed: child exited %v", err)
 	}
 	ws, ok := ee.Sys().(syscall.WaitStatus)
-	if !ok || !ws.Signaled() || ws.Signal() != syscall.SIGUSR1 {
-		t.Fatalf("child ended %v, want death by SIGUSR1", ee)
+	if !ok || !ws.Signaled() || ws.Signal() != syscall.SIGTERM {
+		t.Fatalf("child ended %v, want death by SIGTERM", ee)
 	}
 }

@@ -1,13 +1,14 @@
 package backup
 
-// Purpose: what a restore keeps of the user files of the dir it replaces (D-1308): a never_hosts entry or an SSH
-//          pin added after the backup must survive the swap, because a missing never-host is a safety loss.
+// Purpose: what a restore keeps of the user files of the dir it replaces (D-1308): a never_hosts entry added
+//          after the backup must survive the swap, because a missing never-host is a safety loss.
 // Inputs:  the archived file and the replaced dir's copy of it.
 // Outputs: the bytes to install; the replaced dir's copies are read once, before the swap, and kept in the
 //          restore marker so a re-run merges the same inputs.
 // Constraints: config.yaml keeps the archived bytes unless the replaced file holds a never_hosts entry the
 //          archive lacks (then the file is re-encoded with the union; comments are lost); known_hosts is the
-//          archive's lines plus the replaced dir's lines the archive lacks; an unreadable file is ignored.
+//          archive's file as before (the replaced copy stays as known_hosts.pre-restore-<ts>); an unreadable
+//          file is ignored.
 
 import (
 	"os"
@@ -17,16 +18,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// userFiles are the home files a backup carries.
-var userFiles = []string{"known_hosts", "config.yaml"}
-
-// readUserFiles returns the replaced dir's copies, keyed by file name.
+// readUserFiles returns the replaced dir's config.yaml, keyed by file name (the only file that is merged).
 func readUserFiles(dataDir string) map[string]string {
 	out := map[string]string{}
-	for _, n := range userFiles {
-		if b, err := os.ReadFile(filepath.Join(dataDir, n)); err == nil {
-			out[n] = string(b)
-		}
+	if b, err := os.ReadFile(filepath.Join(dataDir, "config.yaml")); err == nil {
+		out["config.yaml"] = string(b)
 	}
 	return out
 }
@@ -36,8 +32,6 @@ func mergeUserFile(name string, archived []byte, replaced string) []byte {
 	switch name {
 	case "config.yaml":
 		return mergeConfig(archived, []byte(replaced))
-	case "known_hosts":
-		return mergeKnownHosts(archived, replaced)
 	}
 	return archived
 }
@@ -110,25 +104,4 @@ func mergeConfig(archived, replaced []byte) []byte {
 		return archived
 	}
 	return out
-}
-
-// mergeKnownHosts appends the replaced file's lines the archived file lacks.
-func mergeKnownHosts(archived []byte, replaced string) []byte {
-	seen := map[string]bool{}
-	for _, l := range strings.Split(string(archived), "\n") {
-		seen[strings.TrimSpace(l)] = true
-	}
-	out := string(archived)
-	for _, l := range strings.Split(replaced, "\n") {
-		t := strings.TrimSpace(l)
-		if t == "" || seen[t] {
-			continue
-		}
-		seen[t] = true
-		if out != "" && !strings.HasSuffix(out, "\n") {
-			out += "\n"
-		}
-		out += t + "\n"
-	}
-	return []byte(out)
 }
