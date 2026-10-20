@@ -42,7 +42,7 @@ func roleGrantPositions(t *testing.T, root string) map[string]map[token.Pos]bool
 		return result
 	}
 	pkgs, err := packages.Load(&packages.Config{Dir: root,
-		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports | packages.NeedDeps}, "./...")
+		Mode: packages.LoadSyntax}, "./...")
 	if err != nil {
 		t.Fatal(err)
 	}
