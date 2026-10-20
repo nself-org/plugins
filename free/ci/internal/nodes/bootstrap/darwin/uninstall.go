@@ -49,6 +49,10 @@ done
 for g in $(dscl . -list /Groups | grep -E '^%[1]s(-job-[0-9]+)?$' || true); do
   dscl . -delete "/Groups/$g" >/dev/null 2>&1 || true
 done
+if [ -f /var/at/cron.deny ]; then
+  keep=$(grep -Ev '^%[1]s(-job-[0-9]+)?$' /var/at/cron.deny || true)
+  if [ -n "$keep" ]; then echo "$keep" > /var/at/cron.deny; else : > /var/at/cron.deny; fi
+fi
 rm -rf %[3]s %[4]s %[5]s %[6]s %[7]s
 rm -f %[8]s
 left=$(dscl . -list /Users | grep -E '^%[1]s(-job-[0-9]+)?$' || true)

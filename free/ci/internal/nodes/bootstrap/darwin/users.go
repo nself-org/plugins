@@ -12,7 +12,10 @@ package darwin
 //          interrupted install) and any leftover group of its name are deleted and built again with a
 //          fresh id, so a stale group id can never give two accounts one uid; a slot user is removed
 //          only when it owns no file (its dirhelper folders under /private/var/folders do not count and
-//          are deleted with it).
+//          are deleted with it). Cron: macOS lets any user install a crontab (measured on macos-15: no
+//          policy file blocked a job user), and a crontab outlives the job and the account, so every
+//          account is appended to /var/at/cron.deny; the file is created only when the host would
+//          otherwise let a job user in (a root-only default must not be opened to everyone else).
 
 import "fmt"
 
@@ -51,6 +54,10 @@ mk() {
 }
 mk %[1]s
 for n in %[4]s; do mk %[1]s-job-$n; done
+if [ -f /var/at/cron.deny ] || ! sudo -n -u %[1]s-job-1 crontab -l 2>&1 | grep -q 'not allowed'; then
+  [ -f /var/at/cron.deny ] || { : > /var/at/cron.deny; chmod 0644 /var/at/cron.deny; }
+  for u in %[1]s $(for n in %[4]s; do echo %[1]s-job-$n; done); do grep -qx "$u" /var/at/cron.deny || echo "$u" >> /var/at/cron.deny; done
+fi
 `, agentUser, IDLow, IDHigh, slotList(slots), ownedLoops(scanDirs, `-uid "$i"`, "-print"))
 }
 
@@ -82,9 +89,7 @@ func listJobUsersScript() string {
 
 // removeSlotScript retires slot n. Its job root goes when empty; its per-user folders under
 // /private/var/folders (the system makes them for any process run as the user) are deleted; its crontab
-// file goes (cron and at are root-only on a stock macOS: neither /var/at/cron.allow nor cron.deny exists,
-// and this install adds neither, because creating cron.deny would open cron to every unlisted user; the
-// leg checks a job user cannot install a crontab); its user and group go only when no process and no file of the user is left in the places a job
+// file goes (`crontab -u` is refused for a denied user, so the file under /var/at/tabs is removed directly); its user and group go only when no process and no file of the user is left in the places a job
 // user can write (scanDirs and the top-level mounted volumes). The sudoers drop-in has already lost the
 // slot's rule (Install writes it first), so the agent cannot start a new shim for the user meanwhile.
 // It prints "removed" or "kept".

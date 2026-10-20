@@ -108,15 +108,18 @@ func TestAnIdThatStillOwnsFilesIsNotReused(t *testing.T) {
 	mustContain(t, "uninstall", un, `-user "$u" -depth -delete`, "/private/tmp", "/Volumes/*")
 }
 
-// cron is root-only on a stock macOS; the install must not create cron.allow or cron.deny (a deny file
-// opens cron to every user it does not list), and a leftover crontab file goes with its account.
-func TestCronPolicyIsLeftAloneAndLeftoverCrontabsGo(t *testing.T) {
-	for name, s := range map[string]string{"users": usersScript(2), "uninstall": uninstallScript(), "remove": removeSlotScript(2)} {
-		if strings.Contains(s, "cron.deny") || strings.Contains(s, "cron.allow") || strings.Contains(s, "at.deny") || strings.Contains(s, "sed -i") {
-			t.Errorf("%s edits the host's cron or at policy:\n%s", name, s)
+// A job user can install a crontab on macOS by default (measured on macos-15), and a crontab outlives the
+// job and the account. The accounts go into cron.deny, created only when the host would otherwise let a job
+// user in; uninstall drops exactly our names (not nself-ci-admin) and removes leftover crontab files.
+func TestCronDenyIsAppendedWhenNeededAndRemovedExactly(t *testing.T) {
+	mustContain(t, "users", usersScript(2), "/var/at/cron.deny", "crontab -l 2>&1 | grep -q 'not allowed'", `grep -qx "$u" /var/at/cron.deny || echo "$u" >> /var/at/cron.deny`)
+	un := uninstallScript()
+	mustContain(t, "uninstall", un, `grep -Ev '^nself-ci(-job-[0-9]+)?$' /var/at/cron.deny`, `rm -f "/var/at/tabs/$u"`)
+	for name, s := range map[string]string{"users": usersScript(2), "uninstall": un, "remove": removeSlotScript(2)} {
+		if strings.Contains(s, "sed -i") || strings.Contains(s, "crontab -r") || strings.Contains(s, "at.deny") {
+			t.Errorf("%s edits cron or at policy in a way review rejected:\n%s", name, s)
 		}
 	}
-	mustContain(t, "uninstall", uninstallScript(), `rm -f "/var/at/tabs/$u"`)
 	mustContain(t, "remove", removeSlotScript(2), `rm -f "/var/at/tabs/$u"`, `pgrep -u "$u"`)
 }
 
