@@ -1,7 +1,9 @@
 package rest
 
 import (
+	"context"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/providers"
@@ -19,14 +21,33 @@ type Outcome struct {
 // SetObserver installs an in-memory callback. Configure clients before concurrent use.
 func (c *Client) SetObserver(observer func(Outcome)) { c.observer = observer }
 
-func (c *Client) observe(method, path string, response Response, err error, start time.Time) {
+// defaultObserver sees the outcome of every client that has no observer of its own (P7-HOST-11:
+// the provider health breaker installs itself here, so no client builder has to know about it).
+var defaultObserver atomic.Pointer[func(Outcome)]
+
+// SetDefaultObserver installs the process-wide observer; nil removes it. A client's own observer
+// (SetObserver) takes precedence over it.
+func SetDefaultObserver(observer func(Outcome)) {
+	if observer == nil {
+		defaultObserver.Store(nil)
+		return
+	}
+	defaultObserver.Store(&observer)
+}
+
+func (c *Client) observe(ctx context.Context, method, path string, response Response, err error, start time.Time) {
 	out := Outcome{Provider: c.Provider, Class: providers.ClassOf(err), Status: response.Status, Duration: time.Since(start), RetryAt: response.RetryAt}
 	logger := c.Logger
 	if logger == nil {
 		logger = slog.Default()
 	}
 	logger.Info("provider request", "provider", c.Provider, "method", method, "path_template", path, "status", response.Status, "duration", out.Duration)
+	if ctx.Err() == context.Canceled {
+		return // the caller gave up: that says nothing about the provider
+	}
 	if c.observer != nil {
 		c.observer(out)
+	} else if fn := defaultObserver.Load(); fn != nil {
+		(*fn)(out)
 	}
 }

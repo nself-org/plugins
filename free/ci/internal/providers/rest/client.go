@@ -97,7 +97,7 @@ func (c *Client) DoRequest(ctx context.Context, rq Request, out any) (Response, 
 	start := time.Now()
 	var response Response
 	var finalErr error
-	defer func() { c.observe(method, pathTemplate, response, finalErr, start) }()
+	defer func() { c.observe(ctx, method, pathTemplate, response, finalErr, start) }()
 	base, err := url.Parse(c.BaseURL)
 	if err != nil || base.Scheme != "https" || base.Hostname() == "" || base.User != nil || base.RawQuery != "" {
 		finalErr = config("base.url")
@@ -196,7 +196,7 @@ func (c *Client) download(ctx context.Context, rawURL string, maxBytes int64, w 
 	start := time.Now()
 	var response Response
 	var finalErr error
-	defer func() { c.observe("GET", "<download>", response, finalErr, start) }()
+	defer func() { c.observe(ctx, "GET", "<download>", response, finalErr, start) }()
 	u, err := url.Parse(rawURL)
 	if err != nil || !c.allowedURL(u, true) {
 		finalErr = config("download.host")

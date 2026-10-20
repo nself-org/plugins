@@ -215,6 +215,9 @@ func (rs *runState) remoteLost(ctx context.Context, pj plan.PlannedJob, job mode
 	}
 	o = failed(o, cause)
 	o.Tail = t.String()
+	if pe, refused := providerRefusal(cause); refused { // a re-run cannot fix a refused credential or request
+		return rs.refusedOutcome(id, o, pe)
+	}
 	d := diagnose.Classify(diagnose.Input{Lost: true})
 	o.FailureClass, o.Diagnosis, o.Remediation = "infra", d.Signature, d.Remediation
 	o.retryable = true // the node, not the code, failed to deliver a result: a re-run elsewhere is the proof
