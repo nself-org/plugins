@@ -63,7 +63,7 @@ func (r *rig) auditRows() []store.AuditEntry {
 
 func (r *rig) grant(principal string, role Role, projects ...string) {
 	r.t.Helper()
-	if err := r.svc.Grant(context.Background(), r.op(), Request{Principal: principal, Role: role, Projects: projects}); err != nil {
+	if err := r.svc.Assign(context.Background(), r.op(), Request{Principal: principal, Role: role, Projects: projects}); err != nil {
 		r.t.Fatal(err)
 	}
 }
@@ -396,7 +396,7 @@ func TestMutationsWriteExactlyOneRow(t *testing.T) {
 		do   func() error
 	}{
 		{"roles.grant", func() error {
-			return r.svc.Grant(ctx, r.op(), Request{Principal: "bob", Role: Member, Projects: []string{"p1"}})
+			return r.svc.Assign(ctx, r.op(), Request{Principal: "bob", Role: Member, Projects: []string{"p1"}})
 		}},
 		{"roles.revoke", func() error { _, err := r.svc.Revoke(ctx, r.op(), "bob"); return err }},
 		{"token.issue", func() error {
@@ -419,7 +419,7 @@ func TestMutationsWriteExactlyOneRow(t *testing.T) {
 		t.Fatal("revoking nothing writes nothing")
 	}
 	member := r.tokenActor("m", Member, AllProjects)
-	if err := r.svc.Grant(ctx, member, Request{Principal: "x", Role: Admin, Projects: []string{AllProjects}}); ReasonOf(err) != ReasonRole {
+	if err := r.svc.Assign(ctx, member, Request{Principal: "x", Role: Admin, Projects: []string{AllProjects}}); ReasonOf(err) != ReasonRole {
 		t.Fatalf("only admin grants roles: %v", err)
 	}
 	for _, bad := range []Request{
@@ -428,7 +428,7 @@ func TestMutationsWriteExactlyOneRow(t *testing.T) {
 		{Principal: "bob", Role: Member},
 		{Principal: "bob", Role: Member, Projects: []string{"a b"}},
 	} {
-		if r.svc.Grant(ctx, r.op(), bad) == nil {
+		if r.svc.Assign(ctx, r.op(), bad) == nil {
 			t.Errorf("request %+v must be refused", bad)
 		}
 	}
@@ -448,7 +448,7 @@ func TestNonSelfPrincipals(t *testing.T) {
 	if count() != 0 {
 		t.Fatal("an empty store has none")
 	}
-	if err := r.svc.Grant(ctx, r.op(), Request{Principal: "alice", Role: Admin, Projects: []string{AllProjects}, Self: true}); err != nil {
+	if err := r.svc.Assign(ctx, r.op(), Request{Principal: "alice", Role: Admin, Projects: []string{AllProjects}, Self: true}); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := r.svc.IssueToken(ctx, r.op(), Request{Principal: "alice", Role: Member, Projects: []string{AllProjects}, Self: true}); err != nil {
@@ -460,7 +460,7 @@ func TestNonSelfPrincipals(t *testing.T) {
 	if count() != 0 {
 		t.Fatalf("--self member and admin tokens and an admin grant count 0, got %d", count())
 	}
-	if r.svc.Grant(ctx, r.op(), Request{Principal: "bob", Role: Member, Projects: []string{"p"}, Self: true}) == nil {
+	if r.svc.Assign(ctx, r.op(), Request{Principal: "bob", Role: Member, Projects: []string{"p"}, Self: true}) == nil {
 		t.Fatal("--self is only for the operator's own identity")
 	}
 	r.grant("bob", Admin, AllProjects)
@@ -580,7 +580,7 @@ func TestAuthorizeReservesSelfAsAName(t *testing.T) {
 		{Principal: "self", Role: Admin, Projects: []string{AllProjects}},
 		{Principal: "self", Role: Admin, Projects: []string{AllProjects}, Self: true}, // Service.Self is alice, not "self"
 	} {
-		if ReasonOf(r.svc.Grant(ctx, r.op(), req)) != ReasonBadRequest {
+		if ReasonOf(r.svc.Assign(ctx, r.op(), req)) != ReasonBadRequest {
 			t.Errorf("%+v must be refused", req)
 		}
 		if _, _, err := r.svc.IssueToken(ctx, r.op(), req); ReasonOf(err) != ReasonBadRequest {
@@ -590,10 +590,10 @@ func TestAuthorizeReservesSelfAsAName(t *testing.T) {
 	if err := r.st.CertSubjectPut(ctx, "01", "self", "self-lookalike"); err == nil {
 		t.Fatal("the store refuses a subject that is neither self nor the principal")
 	}
-	if err := r.st.GrantPut(ctx, store.Grant{Principal: "self", Role: "admin", Subject: "self", GrantedBy: "x"}, store.AuditInput{Actor: "x", Action: "a", Target: "t"}); err != nil {
+	if err := r.st.GrantPut(ctx, store.RoleGrant{Principal: "self", Role: "admin", Subject: "self", GrantedBy: "x"}, store.AuditInput{Actor: "x", Action: "a", Target: "t"}); err != nil {
 		t.Fatalf("subject self is how the operator's own grant is stored: %v", err)
 	}
-	if err := r.st.GrantPut(ctx, store.Grant{Principal: "self", Role: "admin", Subject: "bob", GrantedBy: "x"}, store.AuditInput{Actor: "x", Action: "a", Target: "t"}); err == nil {
+	if err := r.st.GrantPut(ctx, store.RoleGrant{Principal: "self", Role: "admin", Subject: "bob", GrantedBy: "x"}, store.AuditInput{Actor: "x", Action: "a", Target: "t"}); err == nil {
 		t.Fatal("a subject other than the principal's own name is refused")
 	}
 }
@@ -654,13 +654,13 @@ func TestAuthorizeMutationsRefreshTheActor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = r.svc.Grant(ctx, a, Request{Principal: "x1", Role: Member, Projects: []string{"p"}}); err != nil {
+	if err = r.svc.Assign(ctx, a, Request{Principal: "x1", Role: Member, Projects: []string{"p"}}); err != nil {
 		t.Fatalf("an admin token may grant: %v", err)
 	}
 	if _, err = r.svc.RevokeToken(ctx, r.op(), row.ID); err != nil {
 		t.Fatal(err)
 	}
-	if ReasonOf(r.svc.Grant(ctx, a, Request{Principal: "x2", Role: Member, Projects: []string{"p"}})) != ReasonTokenRevoked {
+	if ReasonOf(r.svc.Assign(ctx, a, Request{Principal: "x2", Role: Member, Projects: []string{"p"}})) != ReasonTokenRevoked {
 		t.Fatal("a revoked token must not administer through a resolved actor")
 	}
 	if _, _, err = r.svc.IssueToken(ctx, a, Request{Principal: "x2", Role: Member, Projects: []string{"p"}}); ReasonOf(err) != ReasonTokenRevoked {

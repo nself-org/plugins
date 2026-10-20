@@ -3,7 +3,7 @@ package store
 // Purpose: the TEAM role rows (Epic D19): live grants per principal, scoped user tokens stored as a
 // sha256 digest, and the subject marker of user certificates. Every mutation writes its audit row in the
 // same transaction (sealed when the caller passes a chain function).
-// Inputs:  Grant, Token values; the audit input of the mutation.
+// Inputs:  RoleGrant, Token values; the audit input of the mutation.
 // Outputs: rows, and NonSelfPrincipals' count for P7-NODE-20's mode check.
 // Constraints: expand-only migration set trust-roles, no foreign key into another set; a token's clear
 //          text never reaches this file (only its digest); subject is "self" (the data dir's own
@@ -29,8 +29,8 @@ func init() {
 // SubjectSelf marks an identity issued to the data dir's own operator.
 const SubjectSelf = "self"
 
-// Grant is one principal's live role.
-type Grant struct {
+// RoleGrant is one principal's live role.
+type RoleGrant struct {
 	ID                                  int64
 	Principal, Role, Subject, GrantedBy string
 	Projects                            []string
@@ -65,7 +65,7 @@ func decodeProjects(s string) []string {
 }
 
 // GrantPut replaces the principal's live grant (the old row is revoked, not edited).
-func (s *Store) GrantPut(ctx context.Context, g Grant, in AuditInput) error {
+func (s *Store) GrantPut(ctx context.Context, g RoleGrant, in AuditInput) error {
 	if g.Principal == "" || g.Role == "" || g.GrantedBy == "" || !subjectOK(g.Principal, g.Subject) {
 		return coded("E607", "invalid grant")
 	}
@@ -112,7 +112,7 @@ func (s *Store) GrantRevoke(ctx context.Context, principal string, in AuditInput
 
 const grantCols = "id,principal,role,projects,subject,granted_by,granted_at,COALESCE(revoked_at,0)"
 
-func scanGrant(r interface{ Scan(...any) error }) (g Grant, err error) {
+func scanGrant(r interface{ Scan(...any) error }) (g RoleGrant, err error) {
 	var p string
 	err = r.Scan(&g.ID, &g.Principal, &g.Role, &p, &g.Subject, &g.GrantedBy, &g.GrantedAt, &g.RevokedAt)
 	g.Projects = decodeProjects(p)
@@ -120,18 +120,18 @@ func scanGrant(r interface{ Scan(...any) error }) (g Grant, err error) {
 }
 
 // GrantGet returns the principal's live grant.
-func (s *Store) GrantGet(ctx context.Context, principal string) (Grant, bool, error) {
+func (s *Store) GrantGet(ctx context.Context, principal string) (RoleGrant, bool, error) {
 	g, err := scanGrant(s.readers.QueryRowContext(ctx, "SELECT "+grantCols+" FROM trust_grant WHERE principal=? AND revoked_at IS NULL", principal))
 	if errors.Is(err, sql.ErrNoRows) {
-		return Grant{}, false, nil
+		return RoleGrant{}, false, nil
 	}
 	return g, err == nil, err
 }
 
 // GrantList returns the live grants, by principal.
-func (s *Store) GrantList(ctx context.Context) ([]Grant, error) {
+func (s *Store) GrantList(ctx context.Context) ([]RoleGrant, error) {
 	rows, err := s.readers.QueryContext(ctx, "SELECT "+grantCols+" FROM trust_grant WHERE revoked_at IS NULL ORDER BY principal")
-	return pkiCollect(rows, err, func(r *sql.Rows) (Grant, error) { return scanGrant(r) })
+	return pkiCollect(rows, err, func(r *sql.Rows) (RoleGrant, error) { return scanGrant(r) })
 }
 
 // TokenPut stores a token's digest row.

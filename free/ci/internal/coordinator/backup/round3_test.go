@@ -72,7 +72,7 @@ func TestRestoreKeepsTokenAndGrantRevocations(t *testing.T) {
 	r, _ := seeded(t)
 	put := func(id, who string) {
 		t.Helper()
-		if err := r.st.GrantPut(ctx, store.Grant{Principal: who, Role: "admin", Subject: who, GrantedBy: "cli:test"}, store.AuditInput{Actor: "cli:test", Action: "t", Target: "x"}); err != nil {
+		if err := r.st.GrantPut(ctx, store.RoleGrant{Principal: who, Role: "admin", Subject: who, GrantedBy: "cli:test"}, store.AuditInput{Actor: "cli:test", Action: "t", Target: "x"}); err != nil {
 			t.Fatal(err)
 		}
 		tok := store.Token{ID: id, Digest: "d-" + id, Principal: who, Role: "admin", Subject: who, IssuedBy: "cli:test", ExpiresAt: r.clk.now().Add(time.Hour).UnixNano()}
@@ -162,7 +162,7 @@ func TestRollbackLineRemovesTheMarker(t *testing.T) {
 func TestRestoreDoesNotRevokeGrantsOfAFreshDir(t *testing.T) {
 	ctx := context.Background()
 	r, _ := seeded(t)
-	if err := r.st.GrantPut(ctx, store.Grant{Principal: "alice", Role: "admin", Subject: "alice", GrantedBy: "cli:test"}, store.AuditInput{Actor: "cli:test", Action: "t", Target: "x"}); err != nil {
+	if err := r.st.GrantPut(ctx, store.RoleGrant{Principal: "alice", Role: "admin", Subject: "alice", GrantedBy: "cli:test"}, store.AuditInput{Actor: "cli:test", Action: "t", Target: "x"}); err != nil {
 		t.Fatal(err)
 	}
 	arch := r.archive()
