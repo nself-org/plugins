@@ -219,8 +219,7 @@ func (s *Server) heartbeat(q *request, f *flow, seq uint64, hb *protocol.Heartbe
 				if bad != nil {
 					return bad
 				}
-				unacked = true // a lease the gate refused is not renewed, so the agent must fence it on its own clock
-				continue
+				continue // the lease is not renewed and the agent was told to stop it; the other leases still get their ack
 			}
 		}
 		var err error

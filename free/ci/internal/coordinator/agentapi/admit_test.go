@@ -169,7 +169,7 @@ func TestAdmitRefusalCancelsLeaseAndKeepsStream(t *testing.T) {
 	}
 }
 
-func TestAdmitHeartbeatRefusalSkipsRenewalAndWithholdsAck(t *testing.T) {
+func TestAdmitHeartbeatRefusalCancelsThatLeaseSkipsItsRenewalButStillAcks(t *testing.T) {
 	rec := &admitRec{err: refusal{"E661 expired: the token expired"}}
 	r := newRig(t, func(c *Config) { c.Admit = rec.hook })
 	a := r.newAgent("n-1")
@@ -180,9 +180,8 @@ func TestAdmitHeartbeatRefusalSkipsRenewalAndWithholdsAck(t *testing.T) {
 	if m := u.read(); m.Type != "cancel" {
 		t.Fatalf("answer %s, want a cancel", m.Type)
 	}
-	u.send(heartbeat())
-	if m := u.read(); m.Type != "ack" {
-		t.Fatalf("an empty heartbeat after a refusal answered %s", m.Type)
+	if m := u.read(); m.Type != "ack" { // one refused lease must not stop the acks of every other lease
+		t.Fatalf("answer %s, want the heartbeat ack", m.Type)
 	}
 	if rec.count() != 1 {
 		t.Fatalf("hook called %d times", rec.count())

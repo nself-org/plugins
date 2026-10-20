@@ -58,8 +58,11 @@ func (d *Driver) release(rt *route) {
 	}
 	d.finished[rt.leaseID] = true
 	d.order = append(d.order, rt.leaseID)
-	lw := rt.lw
+	lw, bs := rt.lw, rt.blobs
 	d.mu.Unlock()
+	if bs != nil {
+		bs.discardAll() // a blob in flight when the run ends is not left open in the sink
+	}
 	if lw != nil {
 		_ = lw.Close()
 	}

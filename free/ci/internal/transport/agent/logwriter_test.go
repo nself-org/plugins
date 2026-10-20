@@ -171,3 +171,161 @@ func TestLogWriterBigLineAtTheFrameLimit(t *testing.T) {
 		t.Fatalf("tail = %d", w2.Last())
 	}
 }
+
+func writeLines(t *testing.T, path string, n int, textLen int) {
+	t.Helper()
+	w, err := OpenLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.Repeat("y", textLen)
+	for i := 1; i <= n; i++ {
+		if _, err = w.Append(logOf(uint64(i), text)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = w.Close()
+}
+
+func TestLogWriterReadsTheTailOfAFileLargerThanTheWindow(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "big.jsonl")
+	writeLines(t, path, 3000, 1000) // about 3 MiB, more than the 2 MiB window
+	if st, _ := os.Stat(path); st.Size() <= tailWindow {
+		t.Fatalf("file is %d bytes, want more than the window", st.Size())
+	}
+	w, err := OpenLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Last() != 3000 {
+		t.Fatalf("tail = %d, want 3000", w.Last())
+	}
+	_ = w.Close()
+	// and with a torn tail beyond the window
+	f, _ := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
+	_, _ = f.WriteString(`{"line_seq":3001,"stre`)
+	_ = f.Close()
+	w, err = OpenLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	if w.Last() != 3000 {
+		t.Fatalf("tail after a torn line = %d", w.Last())
+	}
+	if ok, _ := w.Append(logOf(3001, "z")); !ok {
+		t.Fatal("line 3001 not written")
+	}
+	b, _ := os.ReadFile(path)
+	if !strings.HasSuffix(string(b), `"text":"z"}`+"\n") || strings.Contains(string(b), `"stre{`) {
+		t.Fatal("the torn fragment was not cut off")
+	}
+}
+
+func TestLogWriterRefusesAFileWithoutACompleteLineInItsWindow(t *testing.T) {
+	dir := t.TempDir()
+	noNewline := filepath.Join(dir, "a.jsonl")
+	if err := os.WriteFile(noNewline, []byte(strings.Repeat("x", tailWindow+10)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenLog(noNewline); err == nil || !strings.Contains(err.Error(), "no complete line") {
+		t.Fatalf("err = %v", err)
+	}
+	oneHugeLine := filepath.Join(dir, "b.jsonl")
+	if err := os.WriteFile(oneHugeLine, []byte(strings.Repeat("x", tailWindow+10)+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenLog(oneHugeLine); err == nil || !strings.Contains(err.Error(), "no complete line") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestLogWriterAWindowSizedFileIsReadWhole(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "edge.jsonl")
+	line := `{"line_seq":7,"stream":"stdout","text":"` + strings.Repeat("e", tailWindow-len(`{"line_seq":7,"stream":"stdout","text":""}`)-1) + `"}` + "\n"
+	if len(line) != tailWindow {
+		t.Fatalf("fixture is %d bytes, want %d", len(line), tailWindow)
+	}
+	if err := os.WriteFile(path, []byte(line), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w, err := OpenLog(path)
+	if err != nil {
+		t.Fatalf("a file exactly as large as the window: %v", err)
+	}
+	defer w.Close()
+	if w.Last() != 7 {
+		t.Fatalf("tail = %d", w.Last())
+	}
+}
+
+func TestLogWriterEmptyFileHasNoTail(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "empty.jsonl")
+	w, err := OpenLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.Close()
+	if w.Last() != 0 {
+		t.Fatal("tail of an empty file")
+	}
+	if ok, _ := w.Append(logOf(1, "a")); !ok {
+		t.Fatal("first line not written")
+	}
+	if ok, _ := w.Append(logOf(0, "a")); ok {
+		t.Fatal("line_seq 0 is not above the tail")
+	}
+}
+
+func TestLogWriterOpenFailures(t *testing.T) {
+	if _, err := OpenLog("/dev/null/x/y.jsonl"); err == nil {
+		t.Fatal("opened a log under a file")
+	}
+	dir := t.TempDir()
+	if _, err := OpenLog(dir); err == nil { // a directory is not a log file
+		t.Fatal("opened a directory")
+	}
+}
+
+func TestLogWriterSyncOnlyWhenDirtyAndCloseSyncs(t *testing.T) {
+	w, path := openTemp(t)
+	if err := w.Sync(); err != nil || w.dirty {
+		t.Fatal("sync of a clean writer")
+	}
+	_, _ = w.Append(logOf(1, "a"))
+	if !w.dirty {
+		t.Fatal("append did not mark the writer dirty")
+	}
+	if err := w.Sync(); err != nil || w.dirty {
+		t.Fatalf("sync: %v dirty=%v", err, w.dirty)
+	}
+	_, _ = w.Append(logOf(2, "b"))
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Sync(); err != nil {
+		t.Fatalf("sync after close = %v", err)
+	}
+	if b, _ := os.ReadFile(path); strings.Count(string(b), "\n") != 2 {
+		t.Fatal("lines lost")
+	}
+}
+
+func TestLogWriterFailedWriteLeavesNoHalfLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ro.jsonl")
+	if err := os.WriteFile(path, []byte(`{"line_seq":1,"stream":"stdout","text":"a"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ro, err := os.Open(path) // writes to a read-only descriptor fail
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &LogWriter{f: ro, last: 1}
+	if ok, err := w.Append(logOf(2, "b")); ok || err == nil {
+		t.Fatalf("append on a read-only file: ok=%v err=%v", ok, err)
+	}
+	if w.Last() != 1 || w.dirty {
+		t.Fatalf("a failed append changed the writer: last %d dirty %v", w.Last(), w.dirty)
+	}
+	_ = ro.Close()
+}

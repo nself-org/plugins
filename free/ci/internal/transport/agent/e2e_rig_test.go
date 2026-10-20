@@ -180,7 +180,7 @@ func (e *e2e) start(addr string) {
 	}
 	leaf := &agentapi.LeafSource{CA: e.ca, ID: "coord-1", IPs: e.ips}
 	cfg := agentapi.Config{CA: e.ca, Guard: pki.NewGuard(e.st), Cert: leaf.Get, Leases: e.eng, Sink: e.drv.Sink(), Source: e.drv, Store: e.st,
-		Admit: e.drv.Gate.Check, Blobs: e.drv.Blobs(), Heartbeat: e.heartbeat, CoordinatorTTL: e.coordTTL, PollTimeout: 2 * time.Second, SourcePoll: 20 * time.Millisecond, GuardEvery: 50 * time.Millisecond}
+		Admit: e.drv.Admit, Blobs: e.drv.Blobs(), Heartbeat: e.heartbeat, CoordinatorTTL: e.coordTTL, PollTimeout: 2 * time.Second, SourcePoll: 20 * time.Millisecond, GuardEvery: 50 * time.Millisecond}
 	srv, err := agentapi.New(cfg)
 	if err != nil {
 		e.rt().Fatal(err)

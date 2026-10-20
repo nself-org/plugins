@@ -112,7 +112,7 @@ func newPullRigWith(t *testing.T, o rigOpts) *pullRig {
 	r.minter = &recMinter{inner: r.tokens}
 	r.drv = &agent.Driver{Gate: gate, Minter: r.minter, Leases: st, LogDir: filepath.Join(dir, "logs"), Poll: 50 * time.Millisecond, CancelGrace: 5 * time.Second}
 	leaf := &agentapi.LeafSource{CA: ca, ID: "coord", IPs: []net.IP{net.ParseIP("127.0.0.1")}}
-	srv, err := agentapi.New(agentapi.Config{CA: ca, Guard: pki.NewGuard(st), Cert: leaf.Get, Leases: r.eng, Sink: r.drv.Sink(), Source: r.drv, Store: st, Admit: gate.Check,
+	srv, err := agentapi.New(agentapi.Config{CA: ca, Guard: pki.NewGuard(st), Cert: leaf.Get, Leases: r.eng, Sink: r.drv.Sink(), Source: r.drv, Store: st, Admit: r.drv.Admit,
 		Blobs: r.drv.Blobs(), Heartbeat: o.heartbeat, CoordinatorTTL: o.coordTTL, PollTimeout: 2 * time.Second, SourcePoll: 30 * time.Millisecond, GuardEvery: 50 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)

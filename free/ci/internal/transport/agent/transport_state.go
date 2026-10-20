@@ -169,3 +169,20 @@ func (c *Carrier) sweepTokens(beat protocol.Message, now time.Time) {
 		delete(c.tokenAt, id)
 	}
 }
+
+// dropRefused forgets the token of a lease the session refused to start ("refused" in a heartbeat): it will
+// never produce a result, and its token must not stay in the stream header or in the reconcile beat. The
+// caller holds c.mu.
+func (c *Carrier) dropRefused(beat protocol.Message) {
+	hb, ok := beat.Body.(protocol.Heartbeat)
+	if !ok {
+		return
+	}
+	for _, l := range hb.Leases {
+		if l.State == "refused" {
+			delete(c.tokens, l.LeaseID)
+			delete(c.epochs, l.LeaseID)
+			delete(c.tokenAt, l.LeaseID)
+		}
+	}
+}

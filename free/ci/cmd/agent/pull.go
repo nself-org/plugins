@@ -46,6 +46,9 @@ func init() {
 	must(RegisterSubcommand("pull", "keep an mTLS connection to the coordinator and run the leases it hands out (carrier B)", runPull))
 }
 
+// restartHealthy is how long a session must have lasted for the restart backoff to start over.
+const restartHealthy = 30 * time.Second
+
 type pullFlags struct {
 	slots          int
 	coordinator    string
@@ -178,7 +181,11 @@ func pullLoop(ctx context.Context, f pullFlags, state string, cred enroll.Creden
 			fmt.Fprintln(sio.Stderr, "error:", err)
 			return 1
 		}
+		began := time.Now()
 		err = s.Run(ctx)
+		if time.Since(began) >= restartHealthy {
+			f.restartBackoff.Reset()
+		}
 		var rej *session.RejectError
 		switch {
 		case errors.As(err, &rej):

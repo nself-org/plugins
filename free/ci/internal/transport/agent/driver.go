@@ -19,9 +19,11 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"sync"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/coordinator/agentapi"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/pki"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
@@ -68,6 +70,27 @@ type Driver struct {
 	order     []string
 	lastPrune time.Time
 	pending   map[string]map[string]string // node -> lease id -> reason: cancels that found no control stream
+}
+
+var errNoGate = errors.New("agent transport: no job token gate is wired")
+
+// Admit is agentapi.Config.Admit: it vets the call with the gate and, before a heartbeat can be acknowledged,
+// puts the lease logs on stable storage.
+func (d *Driver) Admit(ctx context.Context, c agentapi.Call) error {
+	g := d.cfg().gate
+	if g == nil { // fail closed: without a gate nothing identifies a job's own calls
+		return errNoGate
+	}
+	if err := g.Check(ctx, c); err != nil {
+		return err
+	}
+	if c.Type == "heartbeat" {
+		if err := d.syncLogs(); err != nil {
+			d.logf("agent transport: syncing the lease logs: %v", err)
+			return err
+		}
+	}
+	return nil
 }
 
 // Wiring is what the coordinator's composition root sets once its store and CA exist.
@@ -128,7 +151,8 @@ type route struct {
 	once               sync.Once
 	lw                 *LogWriter
 	blobs              *blobSet
-	err                error // why the lease failed (a corrupt blob); read after done is closed
+	fwd, prevFwd       uint64 // highest log line_seq the run's sink accepted (and the one before)
+	err                error  // why the lease failed (a corrupt blob); read after done is closed
 }
 
 func (r *route) finish() { r.once.Do(func() { close(r.done) }) }

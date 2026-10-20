@@ -360,3 +360,34 @@ func TestSleepCtxReturnsOnTimeOrCancel(t *testing.T) {
 		t.Fatal("a cancelled sleep returned nil")
 	}
 }
+
+func TestDropRefusedForgetsTheTokenOfALeaseThatNeverRan(t *testing.T) {
+	c := bareCarrier(t)
+	c.mu.Lock()
+	for _, id := range []string{"ran", "refused"} {
+		c.tokens[id], c.epochs[id], c.tokenAt[id] = "t", 1, time.Now()
+	}
+	c.dropRefused(beat(protocol.LeaseState{LeaseID: "refused", Epoch: 1, State: "refused"}, protocol.LeaseState{LeaseID: "ran", Epoch: 1, State: "running"}))
+	c.dropRefused(protocol.Message{Type: "heartbeat", Body: &protocol.Heartbeat{}})
+	_, ranKept := c.tokens["ran"]
+	_, refusedKept := c.tokens["refused"]
+	_, epochKept := c.epochs["refused"]
+	_, atKept := c.tokenAt["refused"]
+	c.mu.Unlock()
+	if !ranKept || refusedKept || epochKept || atKept {
+		t.Fatalf("ran kept %v; refused: token %v epoch %v time %v", ranKept, refusedKept, epochKept, atKept)
+	}
+}
+
+func TestSendingARefusedHeartbeatDropsTheTokenAtOnce(t *testing.T) {
+	c := bareCarrier(t)
+	c.mu.Lock()
+	c.tokens["l1"], c.epochs["l1"], c.tokenAt["l1"] = "t", 1, time.Now()
+	c.mu.Unlock()
+	if err := c.Send(beat(protocol.LeaseState{LeaseID: "l1", Epoch: 1, State: "refused"})); err != nil {
+		t.Fatal(err)
+	}
+	if _, toks := c.tokenSnapshot(); toks["l1"] != "" {
+		t.Fatal("the token of a refused lease stayed")
+	}
+}

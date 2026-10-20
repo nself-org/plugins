@@ -172,6 +172,7 @@ func (c *Carrier) Send(m protocol.Message) error {
 			if m.Type == "heartbeat" {
 				cp := m
 				c.lastBeat = &cp
+				c.dropRefused(m)
 				c.sweepTokens(m, time.Now())
 			}
 			c.mu.Unlock()

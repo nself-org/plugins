@@ -49,20 +49,67 @@ func (s *hubSink) Log(ctx context.Context, l protocol.Log) error {
 		return err
 	}
 	d := s.d()
-	if dir := d.cfg().logDir; dir != "" {
-		lw, err := d.logWriter(rt, dir)
-		if err != nil {
-			return fmt.Errorf("lease log: %w", err)
-		}
-		written, err := lw.Append(l)
-		if err != nil {
-			return fmt.Errorf("lease log: %w", err)
-		}
-		if !written {
-			return nil
+	dir := d.cfg().logDir
+	if dir == "" {
+		return rt.sink.Log(ctx, l)
+	}
+	lw, err := d.logWriter(rt, dir)
+	if err != nil {
+		return fmt.Errorf("lease log: %w", err)
+	}
+	// Forward to the run first, then persist: a run that fails the line makes the agent resend it, and the
+	// resend must not be taken for a duplicate. The high-water mark of what the run already saw keeps a
+	// resend after a failed write from reaching the run twice.
+	if l.LineSeq > lw.Last() && d.forward(rt, l.LineSeq) {
+		if err = rt.sink.Log(ctx, l); err != nil {
+			d.unforward(rt, l.LineSeq)
+			return err
 		}
 	}
-	return rt.sink.Log(ctx, l)
+	if _, err = lw.Append(l); err != nil {
+		return fmt.Errorf("lease log: %w", err)
+	}
+	return nil
+}
+
+// forward reserves seq for the run: true when the run has not seen a line this high.
+func (d *Driver) forward(rt *route, seq uint64) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if seq <= rt.fwd {
+		return false
+	}
+	rt.fwd, rt.prevFwd = seq, rt.fwd
+	return true
+}
+
+// unforward gives seq back after the run refused the line.
+func (d *Driver) unforward(rt *route, seq uint64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if rt.fwd == seq {
+		rt.fwd = rt.prevFwd
+	}
+}
+
+// syncLogs flushes every open lease log to stable storage; it runs before the driver lets an acknowledgement
+// go out.
+func (d *Driver) syncLogs() error {
+	d.mu.Lock()
+	var lws []*LogWriter
+	for _, rt := range d.routes {
+		if rt.lw != nil {
+			lws = append(lws, rt.lw)
+		}
+	}
+	d.mu.Unlock()
+	var first error
+	for _, lw := range lws {
+		if err := lw.Sync(); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
 }
 
 // logWriter opens the lease's log file once.
@@ -111,6 +158,9 @@ func (s *hubSink) Result(ctx context.Context, r protocol.Result) error {
 	rt, late, err := s.route(r.LeaseID)
 	if err != nil || late {
 		return err
+	}
+	if err = s.d().syncLogs(); err != nil { // the acknowledgement of the result covers every line before it
+		return fmt.Errorf("lease log: %w", err)
 	}
 	if err = rt.sink.Result(ctx, r); err != nil {
 		return err

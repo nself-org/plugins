@@ -129,10 +129,10 @@ func (g *Gate) bindOnce(ctx context.Context, c agentapi.Call, cl pki.TokenClaims
 	switch {
 	case created:
 		return nil
-	case b.Spent:
-		return deny(ReasonReplayed, "lease %s: the result for this token was already accepted", c.LeaseID)
 	case b.Serial != c.Serial:
 		return deny(ReasonWrongCertificate, "lease %s: the token is bound to another certificate", c.LeaseID)
+	case b.Spent:
+		return deny(ReasonReplayed, "lease %s: the result for this token was already accepted", c.LeaseID)
 	case b.Session == c.Session:
 		return nil
 	case !c.Reconcile:

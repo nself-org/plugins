@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/coordinator/agentapi"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/pki"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
@@ -541,3 +542,83 @@ type pruneCount struct {
 }
 
 func (p *pruneCount) TokenPrune(context.Context, int64) (int64, error) { p.n++; return 0, p.err }
+
+func TestAdmitFailsClosedWithoutAGateAndSyncsLogsBeforeAHeartbeatAck(t *testing.T) {
+	u := newUnit(t)
+	if err := u.d.Admit(context.Background(), agentapi.Call{LeaseID: "l1", Type: "log"}); err == nil || DenialReason(err) != "" {
+		t.Fatalf("without a gate Admit = %v, want a plain failure (not a refusal that cancels the lease)", err)
+	}
+	r := newRig(t)
+	lease, att, ep := r.seedLease("1", "n-1")
+	d := &Driver{Gate: r.gate(), Minter: r.tokens, Leases: r.st, LogDir: t.TempDir(), Poll: 10 * time.Millisecond}
+	rs := &runSink{eng: r.eng}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = d.Run(ctx, nodeCap("n-1"), protoLease(lease, att, ep), rs) }()
+	var l *protocol.Lease
+	eventually(t, 3*time.Second, "queued", func() bool { l, _ = d.Next(ctx, "n-1"); return l != nil })
+	if err := d.Sink().Log(ctx, protocol.Log{LeaseID: lease, LineSeq: 1, Stream: "stdout", Text: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	d.mu.Lock()
+	lw := d.routes[lease].lw
+	d.mu.Unlock()
+	lw.mu.Lock()
+	dirty := lw.dirty
+	lw.mu.Unlock()
+	if !dirty {
+		t.Fatal("a log line is on disk before any sync was asked for")
+	}
+	call := agentapi.Call{Node: "n-1", Session: "s", Serial: "aa", LeaseID: lease, Epoch: ep, Token: l.Token}
+	call.Type = "log"
+	if err := d.Admit(ctx, call); err != nil {
+		t.Fatal(err)
+	}
+	lw.mu.Lock()
+	still := lw.dirty
+	lw.mu.Unlock()
+	if !still {
+		t.Fatal("a log call synced the logs")
+	}
+	call.Type = "heartbeat"
+	if err := d.Admit(ctx, call); err != nil {
+		t.Fatal(err)
+	}
+	lw.mu.Lock()
+	clean := !lw.dirty
+	lw.mu.Unlock()
+	if !clean {
+		t.Fatal("the logs were not put on stable storage before the heartbeat could be acknowledged")
+	}
+	call.Token = "forged"
+	if err := d.Admit(ctx, call); DenialReason(err) != ReasonInvalid {
+		t.Fatalf("a forged token = %v", err)
+	}
+}
+
+func TestARunSinkThatFailsALineDoesNotLoseItOnResend(t *testing.T) {
+	u := newUnit(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	u.run(ctx, "n-1", "l1")
+	u.waitQueued(t, "n-1")
+	s := u.d.Sink()
+	u.rs.failLog = errors.New("run busy")
+	if err := s.Log(ctx, protocol.Log{LeaseID: "l1", LineSeq: 1, Text: "one"}); err == nil {
+		t.Fatal("the failure was swallowed")
+	}
+	u.rs.mu.Lock()
+	u.rs.failLog = nil
+	u.rs.mu.Unlock()
+	for _, seq := range []uint64{1, 1, 2} { // the agent resends line 1, then sends line 2
+		if err := s.Log(ctx, protocol.Log{LeaseID: "l1", LineSeq: seq, Text: fmt.Sprint("line-", seq)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := strings.Join(u.rs.lines(), ","); got != "line-1,line-2" {
+		t.Fatalf("run saw %q, want each line once", got)
+	}
+	if lw := u.d.routes["l1"].lw; lw.Last() != 2 {
+		t.Fatalf("durable tail %d", lw.Last())
+	}
+}

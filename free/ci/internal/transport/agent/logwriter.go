@@ -6,12 +6,11 @@ package agent
 // Inputs:  protocol.Log frames of one lease.
 // Outputs: <dir>/<lease>.jsonl; Append reports whether the line was new.
 // Constraints: the tail line_seq is read when the file is opened and a line with line_seq <= tail is dropped;
-//          a line is acknowledged (Append returns) only after fsync; a torn last line left by a kill -9 is cut
+//          a line is acknowledged only after Sync (the driver syncs before every heartbeat ack and result); a torn last line left by a kill -9 is cut
 //          off on open, so the writer never appends after half a line; the file is 0600 in a 0700 directory;
 //          text is stored as the agent sent it (already redacted at source).
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -43,9 +42,10 @@ type logLine struct {
 
 // LogWriter appends the lines of one lease.
 type LogWriter struct {
-	mu   sync.Mutex
-	f    *os.File
-	last uint64
+	mu    sync.Mutex
+	f     *os.File
+	last  uint64
+	dirty bool // lines were appended since the last Sync
 }
 
 // OpenLog opens (creating) the log file, cuts off a torn last line and reads the tail line_seq.
@@ -114,8 +114,8 @@ func (w *LogWriter) Last() uint64 {
 	return w.last
 }
 
-// Append writes l unless its line_seq is not above the tail; it returns after fsync. written is false for a
-// duplicate.
+// Append writes l unless its line_seq is not above the tail. written is false for a duplicate. The line is in
+// the file when Append returns and on stable storage after the next Sync.
 func (w *LogWriter) Append(l protocol.Log) (written bool, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -129,20 +129,34 @@ func (w *LogWriter) Append(l protocol.Log) (written bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	if _, err = w.f.Seek(0, io.SeekEnd); err != nil {
+	b = append(b, '\n')
+	before, err := w.f.Seek(0, io.SeekEnd)
+	if err != nil {
 		return false, err
 	}
-	bw := bufio.NewWriterSize(w.f, len(b)+1)
-	_, _ = bw.Write(b)
-	_ = bw.WriteByte('\n')
-	if err = bw.Flush(); err != nil {
-		return false, err
-	}
-	if err = w.f.Sync(); err != nil {
+	if _, err = w.f.Write(b); err != nil {
+		_ = w.f.Truncate(before) // never leave half a line for the next append to follow
 		return false, err
 	}
 	w.last = l.LineSeq
+	w.dirty = true
 	return true, nil
+}
+
+// Sync flushes the lines appended since the last Sync to stable storage. The pull driver calls it before it
+// acknowledges anything (a heartbeat or a result), so an acknowledged line is on disk while a stream of
+// thousands of lines per second does not pay one fsync each.
+func (w *LogWriter) Sync() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.f == nil || !w.dirty {
+		return nil
+	}
+	if err := w.f.Sync(); err != nil {
+		return err
+	}
+	w.dirty = false
+	return nil
 }
 
 // Close closes the file.
@@ -152,7 +166,11 @@ func (w *LogWriter) Close() error {
 	if w.f == nil {
 		return nil
 	}
-	err := w.f.Close()
+	var err error
+	if w.dirty {
+		err = w.f.Sync()
+	}
+	err = errors.Join(err, w.f.Close())
 	w.f = nil
 	return err
 }

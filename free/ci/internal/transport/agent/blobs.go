@@ -21,6 +21,7 @@ import (
 	"hash"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/agentapi"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
@@ -57,6 +58,7 @@ type blobState struct {
 
 // blobSet is the blob state of one lease.
 type blobSet struct {
+	mu     sync.Mutex
 	active map[string]*blobState // by stream
 	count  int
 	bytes  int64
@@ -91,6 +93,8 @@ func (h blobHandler) Frame(ctx context.Context, node string, m protocol.Message)
 	}
 	bs := rt.blobs
 	h.d.mu.Unlock()
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
 	var out []protocol.Message
 	switch b := m.Body.(type) {
 	case *protocol.Digest:
@@ -99,7 +103,7 @@ func (h blobHandler) Frame(ctx context.Context, node string, m protocol.Message)
 		err = bs.onChunk(*b)
 	}
 	if err != nil {
-		bs.discardAll()
+		bs.discardLocked()
 		rt.fail(err)
 	}
 	return out, err
@@ -221,6 +225,12 @@ func (bs *blobSet) failBlob(st *blobState, why string) error {
 
 // discardAll aborts every blob in flight.
 func (bs *blobSet) discardAll() {
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
+	bs.discardLocked()
+}
+
+func (bs *blobSet) discardLocked() {
 	for k, st := range bs.active {
 		st.discard()
 		delete(bs.active, k)

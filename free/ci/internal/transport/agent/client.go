@@ -81,7 +81,8 @@ func newClient(o Options) *client {
 		rt = &http.Transport{TLSClientConfig: o.TLS.Clone(), ForceAttemptHTTP2: true, ResponseHeaderTimeout: o.Wait + 15*time.Second, TLSHandshakeTimeout: 15 * time.Second,
 			HTTP2: &http.HTTP2Config{SendPingTimeout: 15 * time.Second, PingTimeout: 10 * time.Second}}
 	}
-	return &client{o: o, hc: &http.Client{Transport: rt}}
+	// the agent never follows a redirect: a custom header (the job token) would travel with it
+	return &client{o: o, hc: &http.Client{Transport: rt, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 }
 
 func (c *client) close() {
