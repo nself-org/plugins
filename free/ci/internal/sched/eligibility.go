@@ -74,7 +74,7 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 	}
 	// Hosted authorization comes from the job's effective trust grants; enrolled
 	// nodes require explicit project membership in their capability snapshot.
-	hosted := r.Location == "hosted" || c.Location.Kind.Value != nil && *c.Location.Kind.Value == "hosted" || r.Decl.Hosted
+	hosted := RunnerHosted(r)
 	if c.Schema != "ci.runner-capability/v1" || c.Lifecycle.Discovered || j.Project == "" || !hosted && !has(c.Lifecycle.AuthorizedProjects, j.Project) {
 		add(model.NodeDiscovered, "not authorized")
 	}

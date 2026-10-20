@@ -6,10 +6,12 @@ package dispatch
 // Inputs:  a queued job and the runner it was placed on.
 // Outputs: the job definition with Isolation = max(declared level, required floor).
 // Constraints: a level is never lowered; an empty or unknown declared level ranks lowest
-// (trust.RankIsolation), so it is replaced by the floor; a hosted delivery is left as written
-// (the provider's disposable environment is its isolation, and "hosted-disposable" is not a
-// level an agent can run). The floor is derived with the same trust functions sched.Place used,
-// from the job's and the runner's declared facts; policy-level minimums are not visible here.
+// (trust.RankIsolation), so it is replaced by the floor; a hosted delivery (sched.RunnerHosted,
+// the predicate placement uses) is left as written: the provider's disposable environment is its
+// isolation. "hosted-disposable" is not a level an agent can run, so on a non-hosted runner a
+// minimum of that rank is delivered as ephemeral-vm (same rank), kept with the trust floor.
+// The floor is derived with the same trust functions sched.Place used, from the job's and the
+// runner's declared facts plus the policy minimums (override and trust.isolation_min).
 
 import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -18,9 +20,10 @@ import (
 )
 
 // requiredIsolation is the lowest level the placement of q on r allows the job to run at, or ""
-// when no agent-run level applies (a hosted runner).
-func requiredIsolation(q Queued, r sched.Runner, hosted bool) model.Isolation {
-	if hosted {
+// when no agent-run level applies (a hosted runner). pol carries the policy-level minimums
+// (sched.overrides.min_isolation and trust.isolation_min), as placement applied them.
+func requiredIsolation(q Queued, r sched.Runner, pol sched.Policy) model.Isolation {
+	if sched.RunnerHosted(r) {
 		return ""
 	}
 	j := q.Job.Sched
@@ -37,13 +40,29 @@ func requiredIsolation(q Queued, r sched.Runner, hosted bool) model.Isolation {
 	facts := trust.JobFacts{Trust: j.Trust, SecretClasses: j.SecretClasses, Network: j.Network, PersonalOwnRun: j.PersonalOwnRun, Release: j.Pipeline.Release}
 	floor := trust.MinIsolation(facts, trust.RunnerFacts{Ownership: d.Ownership, Dedicated: trust.IsDedicatedTrusted(d), UIDSeparation: d.UIDSeparation,
 		PersonalOwnNode: d.PersonalOwnNode, NoLANRoute: d.NoLANRoute})
-	if m := j.Requirements.IsolationMin; m != "" && trust.RankIsolation(trust.DecodeIsolation(string(m))) > trust.RankIsolation(floor) {
-		floor = trust.DecodeIsolation(string(m))
+	policyMin := policyIsolation(pol.Trust)
+	for _, m := range []model.Isolation{j.Requirements.IsolationMin, pol.Overrides.MinIsolation, policyMin} {
+		if m == "" {
+			continue
+		}
+		if m = trust.DecodeIsolation(string(m)); m == "hosted-disposable" {
+			m = "ephemeral-vm" // same rank; a provider level is never an agent-run one
+		}
+		if trust.RankIsolation(m) > trust.RankIsolation(floor) {
+			floor = m
+		}
 	}
-	if floor == "hosted-disposable" { // a provider level, never an agent-run one
-		return ""
+	if floor == "hosted-disposable" { // an untrusted floor computed for a hosted runner
+		floor = "ephemeral-vm"
 	}
 	return floor
+}
+
+// policyIsolation reads the effective trust.isolation_min, as trust.Admissible does.
+func policyIsolation(e trust.Effective) model.Isolation {
+	v, _, _ := e.Value("trust.isolation_min")
+	s, _ := v.(string)
+	return model.Isolation(s)
 }
 
 // raiseIsolation returns job with its level raised to floor; it never lowers a level.

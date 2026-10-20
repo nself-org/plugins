@@ -53,9 +53,9 @@ func (d *Dispatcher) knownTransport(r sched.Runner) bool {
 
 // deliver starts the carrier for a committed remote lease; the caller has
 // already counted it in d.wg.
-func (d *Dispatcher) deliver(q Queued, r sched.Runner, a Admitted) {
-	hosted := r.Location == "hosted" || r.Ephemeral
-	delivery := Delivery{Node: r.Capability, Job: raiseIsolation(q.Job.Model, requiredIsolation(q, r, hosted)), AttemptID: a.AttemptID, LeaseID: a.LeaseID, Token: a.Token, Epoch: a.Epoch, Revision: q.Job.Revision, ExpiresAt: d.cfg.Clock().Add(d.cfg.LeaseTTL), Hosted: hosted}
+func (d *Dispatcher) deliver(q Queued, r sched.Runner, a Admitted, pol sched.Policy) {
+	hosted := sched.RunnerHosted(r)
+	delivery := Delivery{Node: r.Capability, Job: raiseIsolation(q.Job.Model, requiredIsolation(q, r, pol)), AttemptID: a.AttemptID, LeaseID: a.LeaseID, Token: a.Token, Epoch: a.Epoch, Revision: q.Job.Revision, ExpiresAt: d.cfg.Clock().Add(d.cfg.LeaseTTL), Hosted: hosted}
 	go func() { // admit registered the delivery with the WaitGroup
 		defer d.wg.Done()
 		if err := d.cfg.Transport.Deliver(d.life, delivery); err != nil && d.life.Err() == nil {
