@@ -24,7 +24,10 @@ const CertWarnWindow = 48 * time.Hour
 // none is the pass for a check that had nothing to look at.
 func (f Facts) none(id, what string) []doctor.Check {
 	msg := "no " + what
-	if f.StoreNote != "" {
+	switch {
+	case f.StoreErr != nil:
+		msg += " (the registry could not be read: " + f.StoreErr.Error() + ")"
+	case f.StoreNote != "":
 		msg += " (" + f.StoreNote + ")"
 	}
 	return []doctor.Check{result(id, doctor.Pass, "", msg)}
@@ -67,16 +70,26 @@ func checkHostKey(f Facts) []doctor.Check {
 	for _, n := range nodes {
 		id, pinned := n.ID(), f.Pins[n.ID()]
 		switch {
+		case f.HostKeyRefused[id]:
+			out = append(out, result(IDHostKey, doctor.Fail, id, fmt.Sprintf("node %s presents a host key that does not match its pin", id)))
 		case len(pinned) == 0:
 			out = append(out, result(IDHostKey, doctor.Fail, id, fmt.Sprintf("node %s has no pinned host key", id)))
 		case len(n.Cap.Identity.HostKeyFingerprints) > 0 && !overlaps(pinned, n.Cap.Identity.HostKeyFingerprints):
 			out = append(out, withDetail(result(IDHostKey, doctor.Fail, id, fmt.Sprintf("the pinned host key of node %s differs from the registered fingerprint", id)),
 				"pinned: "+fmt.Sprint(pinned)+"\nregistered: "+fmt.Sprint(n.Cap.Identity.HostKeyFingerprints)))
 		default:
-			out = append(out, result(IDHostKey, doctor.Pass, id, fmt.Sprintf("node %s host key is pinned", id)))
+			out = append(out, result(IDHostKey, doctor.Pass, id, fmt.Sprintf("node %s has a pinned host key%s", id, matchNote(n))))
 		}
 	}
 	return out
+}
+
+// matchNote says what the pin was compared with.
+func matchNote(n Node) string {
+	if len(n.Cap.Identity.HostKeyFingerprints) == 0 {
+		return " (no fingerprint is registered to compare with)"
+	}
+	return " matching the registered fingerprint"
 }
 
 func overlaps(a, b []string) bool {
@@ -85,7 +98,7 @@ func overlaps(a, b []string) bool {
 
 func checkOpenSSH(f Facts) []doctor.Check {
 	switch {
-	case len(f.sshNodes()) == 0 && f.SSHVersionErr != nil:
+	case len(f.sshNodes()) == 0:
 		return []doctor.Check{result(IDOpenSSH, doctor.Pass, "", "no ssh nodes registered, so the local OpenSSH client is not needed")}
 	case f.SSHVersionErr != nil:
 		return []doctor.Check{result(IDOpenSSH, doctor.Fail, "", "cannot determine the local OpenSSH version: "+f.SSHVersionErr.Error())}
@@ -134,6 +147,8 @@ func checkSkew(f Facts) []doctor.Check {
 			why := "not measured for this transport (agent nodes are checked at join)"
 			if err := f.SkewErr[id]; err != nil {
 				why = "not measured: " + err.Error()
+			} else if err := f.Reach[id]; err != nil {
+				why = "not measured: the node is unreachable"
 			}
 			out = append(out, result(IDSkew, doctor.Pass, id, fmt.Sprintf("clock of node %s %s", id, why)))
 			continue

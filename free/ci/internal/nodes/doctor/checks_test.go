@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -136,6 +137,7 @@ func TestEveryCheckFires(t *testing.T) {
 		{IDHostKey, doctor.Fail, "alpha", func(f *Facts) { f.Pins["alpha"] = []string{"SHA256:other"} }},
 		{IDOpenSSH, doctor.Fail, "", func(f *Facts) { f.SSHVersion = remote.Version{Major: 7, Minor: 9} }},
 		{IDOpenSSH, doctor.Fail, "", func(f *Facts) { f.SSHVersionErr = errors.New("no ssh") }},
+		{IDHostKey, doctor.Fail, "alpha", func(f *Facts) { f.HostKeyRefused = map[string]bool{"alpha": true} }},
 		{IDCert, doctor.Warn, "bravo", func(f *Facts) { f.CertExpiry["bravo"] = t0.Add(36 * time.Hour) }},
 		{IDCert, doctor.Fail, "bravo", func(f *Facts) { f.CertExpiry["bravo"] = t0.Add(-time.Hour) }},
 		{IDCert, doctor.Fail, "bravo", func(f *Facts) { delete(f.CertExpiry, "bravo") }},
@@ -148,6 +150,7 @@ func TestEveryCheckFires(t *testing.T) {
 		{IDDisk, doctor.Warn, "alpha", func(f *Facts) { f.Nodes[0].Cap.Resources.DiskFreeMB = fact(int64(3000)) }},
 		{IDDisk, doctor.Fail, "alpha", func(f *Facts) { f.Nodes[0].Cap.Resources.DiskFreeMB = fact(int64(500)) }},
 		{IDDisk, doctor.Warn, "bravo", func(f *Facts) { f.ExpiredLeases = map[string]int{"bravo": 2} }},
+		{IDDisk, doctor.Warn, "leases", func(f *Facts) { f.LeaseErr = errors.New("database is locked") }},
 		{IDExposure, doctor.Fail, "alpha", func(f *Facts) {
 			f.Nodes[0].Cap.Trust.Accepts = fact([]model.TrustClass{"untrusted"})
 		}},
@@ -170,6 +173,11 @@ func TestEveryCheckFires(t *testing.T) {
 			f.Nodes[0].Cap.Identity.Provider = "github-jit"
 			f.Nodes[0].Cap.Availability.Persistence = fact(true)
 			f.RepoVisibility = "public"
+		}},
+		{IDSeparate, doctor.Warn, "", func(f *Facts) { f.ModeErr = errors.New("database is locked") }},
+		{IDGitHub, doctor.Warn, "alpha", func(f *Facts) {
+			f.Nodes[0].Cap.Identity.Provider = "github-jit"
+			f.Nodes[0].Cap.Availability.Persistence = fact(true)
 		}},
 		{IDSeparate, doctor.Fail, "alpha", func(f *Facts) {
 			f.TeamMode = true
@@ -216,11 +224,52 @@ func TestNoNodesPassesEveryCheck(t *testing.T) {
 	}
 }
 
-func TestPersistentGitHubRunnerOnUnknownVisibilityIsNotAccused(t *testing.T) {
+func TestPersistentGitHubRunnerOnPrivateRepoPasses(t *testing.T) {
 	f := healthy(t)
 	f.Nodes[0].Cap.Identity.Provider = "github-jit"
 	f.Nodes[0].Cap.Availability.Persistence = fact(true)
+	f.RepoVisibility = "private"
 	if st := worst(byID(Evaluate(f), IDGitHub)); st != doctor.Pass {
-		t.Fatalf("unknown visibility = %s, want pass", st)
+		t.Fatalf("private repository = %s, want pass", st)
 	}
+}
+
+func TestSmallCases(t *testing.T) {
+	t.Run("old OpenSSH does not matter without ssh nodes", func(t *testing.T) {
+		f := healthy(t)
+		f.Nodes = f.Nodes[1:] // the agent node only
+		f.SSHVersion = remote.Version{Major: 7, Minor: 4}
+		if st := worst(byID(Evaluate(f), IDOpenSSH)); st != doctor.Pass {
+			t.Fatalf("status = %s", st)
+		}
+	})
+	t.Run("an unreachable ssh node says so instead of naming the transport", func(t *testing.T) {
+		f := healthy(t)
+		f.Reach["alpha"] = errors.New("refused")
+		delete(f.Skew, "alpha")
+		for _, c := range byID(Evaluate(f), IDSkew) {
+			if c.Subject == "alpha" && !strings.Contains(c.Message, "unreachable") {
+				t.Fatalf("message = %q", c.Message)
+			}
+		}
+	})
+	t.Run("an unreadable registry is named on every empty pass", func(t *testing.T) {
+		f := Facts{Now: t0, StoreErr: errors.New("disk I/O error"), DiscoveryOff: true}
+		for _, id := range []string{IDSkew, IDVersion, IDDisk, IDCert} {
+			rows := byID(Evaluate(f), id)
+			if len(rows) == 0 || !strings.Contains(rows[0].Message, "disk I/O error") {
+				t.Errorf("%s = %+v, want the store error in the message", id, rows)
+			}
+		}
+	})
+	t.Run("discovery reports both states", func(t *testing.T) {
+		f := healthy(t)
+		if m := byID(Evaluate(f), IDDiscovery)[0].Message; !strings.Contains(m, "off") {
+			t.Errorf("off message = %q", m)
+		}
+		f.DiscoveryOff = false
+		if m := byID(Evaluate(f), IDDiscovery)[0].Message; !strings.Contains(m, "on") {
+			t.Errorf("on message = %q", m)
+		}
+	})
 }

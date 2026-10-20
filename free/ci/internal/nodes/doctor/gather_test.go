@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,6 +21,8 @@ import (
 const fakeHostKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okmM+Pmz0ysGiv"
 
 type fakes struct {
+	mu     sync.Mutex // the checks dial and run in parallel
+	refuse bool       // RunRemote answers as ssh does for a changed host key
 	dialed []string
 	ran    [][]string
 	skew   time.Duration
@@ -31,14 +34,21 @@ func (fk *fakes) deps(open func(string) (*store.Store, error)) Deps {
 		OpenStore:  open,
 		SSHVersion: func(context.Context) (remote.Version, error) { return remote.Version{Major: 9, Minor: 6}, nil },
 		Dial: func(_ context.Context, addr string) error {
+			fk.mu.Lock()
 			fk.dialed = append(fk.dialed, addr)
+			fk.mu.Unlock()
 			if strings.HasPrefix(addr, "down.") {
 				return errors.New("connection refused")
 			}
 			return nil
 		},
 		RunRemote: func(_ context.Context, _ remote.Target, argv ...string) (string, error) {
+			fk.mu.Lock()
 			fk.ran = append(fk.ran, argv)
+			fk.mu.Unlock()
+			if fk.refuse {
+				return "", errors.New("Host key verification failed.\r\nsecond line")
+			}
 			return strconv.FormatInt(t0.Add(fk.skew).Unix(), 10), nil
 		},
 	}
@@ -137,6 +147,33 @@ func TestGatherReadsRegistryPinsAndClocks(t *testing.T) {
 	}
 	if len(fk.dialed) != 2 {
 		t.Errorf("dialed = %v", fk.dialed)
+	}
+}
+
+func TestGatherRefusedHostKeyFailsTheHostKeyCheck(t *testing.T) {
+	home := t.TempDir()
+	st, err := store.Open(filepath.Join(home, "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := sshNode(t, "01J0000000000000000000SSH1")
+	n.Cap.Identity.SSH.Hostname = "up.lan.test"
+	n.Cap.Identity.HostKeyFingerprints = nil
+	if _, err = registry.New(st).Register(context.Background(), n.Cap, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	_ = st.Close()
+	if err = (remote.PinnedHostKeys{Path: filepath.Join(home, "known_hosts")}).Add("nself-ci-"+n.ID(), fakeHostKey); err != nil {
+		t.Fatal(err)
+	}
+	fk := &fakes{refuse: true}
+	f := Gather(context.Background(), env(home), fk.deps(openExisting))
+	if !f.HostKeyRefused[n.ID()] {
+		t.Fatalf("refusal not recorded: %+v err %v", f.HostKeyRefused, f.SkewErr)
+	}
+	rows := byID(Evaluate(f), IDHostKey)
+	if len(rows) != 1 || rows[0].Status != doctor.Fail || strings.Contains(rows[0].Message, "second line") {
+		t.Fatalf("host key rows = %+v", rows)
 	}
 }
 

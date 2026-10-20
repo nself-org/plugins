@@ -5,8 +5,9 @@ package doctor
 // binary's limits. The network and ssh readings are in gather_net.go.
 // Inputs:  Deps (every outside reader is a field, so tests run with fakes); the CI home.
 // Outputs: Facts.
-// Constraints: read only. The store is opened only when its file already exists (a doctor run never creates a
-//          state database); a store that cannot be read becomes StoreErr, not a panic; nothing is written to the registry.
+// Constraints: no registry or lease row is written. The store is opened only when its file already exists (a doctor
+//          run never creates a state database); store.Open applies the store's own migrations to an older database,
+//          which is the only write a doctor run can cause. A store that cannot be read becomes StoreErr, not a panic.
 
 import (
 	"context"
@@ -84,6 +85,7 @@ func Gather(ctx context.Context, env doctor.Env, d Deps) Facts {
 		Now: now, MinAgentVersion: Settings.MinAgentVersion, MinProtocol: Settings.MinProtocol,
 		Reach: map[string]error{}, Pins: map[string][]string{}, CertExpiry: map[string]time.Time{},
 		Skew: map[string]time.Duration{}, SkewErr: map[string]error{}, ExpiredLeases: map[string]int{},
+		HostKeyRefused: map[string]bool{},
 	}
 	if Settings.PinnedRelease != nil {
 		f.PinnedRelease = Settings.PinnedRelease()
@@ -142,9 +144,9 @@ func (f *Facts) readStore(ctx context.Context, path, home string, d Deps) {
 	f.readCerts(ctx, st)
 	f.readLeases(ctx, st)
 	f.ExclusionWarnings = deployguard.New(st, home, "doctor").Warnings(ctx)
-	if mode, found, mErr := st.CoordinatorModeGet(ctx); mErr == nil && found && mode == store.CoordinatorTeam {
-		f.TeamMode = true
-	}
+	mode, found, mErr := st.CoordinatorModeGet(ctx)
+	f.ModeErr = mErr
+	f.TeamMode = mErr == nil && found && mode == store.CoordinatorTeam
 }
 
 // readCerts records, per agent node, the latest expiry among certificates that are not on the deny list.
@@ -169,11 +171,12 @@ func (f *Facts) readCerts(ctx context.Context, st *store.Store) {
 }
 
 // readLeases counts, per node, leases past their deadline whose attempt is still leased or running: the job
-// root of such a lease is an orphan until the coordinator fences it. A lease belongs to a node when its runner
+// root of such a lease may be an orphan until the coordinator fences it (the disk of the node is not read). A lease belongs to a node when its runner
 // id is the node id or starts with it followed by ":" or "/".
 func (f *Facts) readLeases(ctx context.Context, st *store.Store) {
 	leases, err := st.LeaseExpired(ctx, f.Now)
 	if err != nil {
+		f.LeaseErr = err
 		return
 	}
 	for _, l := range leases {

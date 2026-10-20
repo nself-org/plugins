@@ -39,18 +39,18 @@ type Entry struct {
 
 var catalog = []Entry{
 	{IDReach, "node reachable", "Check the node is powered on and on the network, then run: nself ci nodes test <node>"},
-	{IDHostKey, "pinned host key matches", "Verify the host key out of band, then run: nself ci nodes rotate <node> --host-key SHA256:<fingerprint>"},
+	{IDHostKey, "pinned host key present and matching", "Verify the host key out of band, then run: nself ci nodes rotate <node> --host-key SHA256:<fingerprint>"},
 	{IDOpenSSH, "local OpenSSH client 8.0 or newer", "Upgrade the OpenSSH client on this machine to 8.0 or newer (ssh -V shows the version)"},
 	{IDCert, "node certificate not near expiry", "Renew the certificate: nself ci nodes rotate <node>, or re-pair the node if it no longer connects"},
 	{IDSkew, "node clock within 120 s", "Enable time sync on the node (chrony, systemd-timesyncd or the macOS time server) and re-run the check"},
 	{IDVersion, "agent and protocol version at or above the minimum", "Upgrade the agent: nself ci nodes upgrade <node>"},
 	{IDDrift, "toolchains agree across nodes", "Install the same toolchain version on the differing nodes, or pin it in .nself/ci.yaml and run: nself ci nodes test <node>"},
 	{IDDisk, "free disk and no orphan job roots", "Free disk space on the node; remove job roots whose lease is gone (the agent sweeps them at start: restart the agent)"},
-	{IDExposure, "no docker socket exposure on nodes taking untrusted work", "Re-add the node accepting owner work only (nself ci nodes add <node> --accepts owner), or run untrusted work in a VM"},
+	{IDExposure, "no weak isolation on nodes taking untrusted work", "Re-add the node accepting owner work only (nself ci nodes add <node> --accepts owner), or run untrusted work in a VM"},
 	{IDDeploy, "no deploy-host overlap, exclusion refresh current", "Take the node out of the deploy inventory (or revoke it), then run: nself ci nodes test <node>"},
 	{IDBreaker, "node not held in maintenance by the breaker", "Fix the cause shown, then run: nself ci nodes enable <node>"},
 	{IDDiscovery, "LAN discovery setting", "Set ci.discovery to off in the user config.yaml to switch LAN discovery off, or NSELF_CI_DISCOVERY=1 to allow it"},
-	{IDUpgrade, "no agent upgrade held by a coordinator ceiling", "Run: nself ci nodes upgrade <node> after upgrading the coordinator, or wait for the coordinator to accept the release"},
+	{IDUpgrade, "agents at the pinned release", "Run: nself ci nodes upgrade <node> after upgrading the coordinator, or wait for the coordinator to accept the release"},
 	{IDGitHub, "no persistent GitHub runner on a public repository", "Use a just-in-time GitHub runner for public repositories (provider github-jit) and remove the persistent runner"},
 	{IDSeparate, "UID separation on nodes offered to a TEAM coordinator", "Enable unprivileged user namespaces on the node and re-add it, or remove it from the TEAM coordinator"},
 }

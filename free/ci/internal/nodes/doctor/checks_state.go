@@ -5,7 +5,9 @@ package doctor
 // repositories and UID separation under a TEAM coordinator.
 // Inputs:  Facts.
 // Outputs: one result per node (or per toolchain / per notice) per check, or one pass naming why there was nothing to check.
-// Constraints: pure; thresholds are the named constants below.
+// Constraints: pure; thresholds are the named constants below. Not covered by data this slice has: a privileged
+//          container flag or a docker socket mount (CI-DN009 reads the capability facts: untrusted work, isolation,
+//          docker present, user namespace) and a coordinator protocol ceiling (CI-DN013 compares agent versions only).
 
 import (
 	"fmt"
@@ -106,16 +108,19 @@ func checkDisk(f Facts) []doctor.Check {
 			if st == doctor.Pass {
 				st = doctor.Warn
 			}
-			problems = append(problems, fmt.Sprintf("%d job root(s) with an expired lease not reclaimed", orphans))
+			problems = append(problems, fmt.Sprintf("%d expired lease(s) not yet fenced (a job root may be orphaned)", orphans))
 		}
 		switch {
 		case len(problems) > 0:
 			out = append(out, result(IDDisk, st, id, fmt.Sprintf("node %s: %s", id, strings.Join(problems, "; "))))
 		case free == nil:
-			out = append(out, result(IDDisk, doctor.Pass, id, fmt.Sprintf("node %s has not reported free disk", id)))
+			out = append(out, result(IDDisk, doctor.Pass, id, fmt.Sprintf("node %s has not reported free disk (no expired leases)", id)))
 		default:
-			out = append(out, result(IDDisk, doctor.Pass, id, fmt.Sprintf("node %s has %d MB free and no orphan job roots", id, *free)))
+			out = append(out, result(IDDisk, doctor.Pass, id, fmt.Sprintf("node %s has %d MB free and no expired leases", id, *free)))
 		}
+	}
+	if f.LeaseErr != nil {
+		out = append(out, result(IDDisk, doctor.Warn, "leases", "expired leases could not be read, so orphan job roots are not checked: "+f.LeaseErr.Error()))
 	}
 	return out
 }
@@ -136,7 +141,7 @@ func checkExposure(f Facts) []doctor.Check {
 		case iso == "" || iso == "process":
 			out = append(out, result(IDExposure, doctor.Fail, id, fmt.Sprintf("node %s takes untrusted work with no container isolation", id)))
 		case docker && iso == "container" && !boolFact(n.Cap.Separation.UserNS):
-			out = append(out, result(IDExposure, doctor.Fail, id, fmt.Sprintf("node %s takes untrusted work in plain containers with the docker socket reachable and no user namespace", id)))
+			out = append(out, result(IDExposure, doctor.Fail, id, fmt.Sprintf("node %s takes untrusted work in plain containers with docker present and no user namespace", id)))
 		default:
 			out = append(out, result(IDExposure, doctor.Pass, id, fmt.Sprintf("node %s isolates untrusted work (%s)", id, iso)))
 		}
@@ -228,10 +233,13 @@ func checkGitHub(f Facts) []doctor.Check {
 		if !strings.HasPrefix(n.Cap.Identity.Provider, "github") || !boolFact(n.Cap.Availability.Persistence) {
 			continue
 		}
-		if f.RepoVisibility == "public" {
-			out = append(out, result(IDGitHub, doctor.Fail, id, fmt.Sprintf("persistent GitHub runner %s serves a public repository, where anyone can submit workflow code", id)))
-		} else {
-			out = append(out, result(IDGitHub, doctor.Pass, id, fmt.Sprintf("persistent GitHub runner %s; the repository is not known to be public", id)))
+		switch f.RepoVisibility {
+		case "public":
+			out = append(out, result(IDGitHub, doctor.Fail, id, fmt.Sprintf("persistent GitHub runner %s and the repository doctor ran in is public, where anyone can submit workflow code", id)))
+		case "":
+			out = append(out, result(IDGitHub, doctor.Warn, id, fmt.Sprintf("persistent GitHub runner %s; the visibility of the repository doctor ran in could not be read", id)))
+		default:
+			out = append(out, result(IDGitHub, doctor.Pass, id, fmt.Sprintf("persistent GitHub runner %s; the repository doctor ran in is %s", id, f.RepoVisibility)))
 		}
 	}
 	if len(out) == 0 {
@@ -241,6 +249,9 @@ func checkGitHub(f Facts) []doctor.Check {
 }
 
 func checkSeparate(f Facts) []doctor.Check {
+	if f.ModeErr != nil {
+		return []doctor.Check{result(IDSeparate, doctor.Warn, "", "the coordinator mode could not be read, so TEAM offers are not checked: "+f.ModeErr.Error())}
+	}
 	if !f.TeamMode {
 		return []doctor.Check{result(IDSeparate, doctor.Pass, "", "the coordinator is not in TEAM mode")}
 	}

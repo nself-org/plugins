@@ -46,12 +46,15 @@ type Facts struct {
 	Skew       map[string]time.Duration // node id to remote minus local clock
 	SkewErr    map[string]error         // node id to why no reading was possible
 
-	ExpiredLeases map[string]int // node id to leases past their deadline whose job root is not reclaimed
+	ExpiredLeases  map[string]int  // node id to leases past their deadline whose attempt is still leased or running (not yet fenced)
+	LeaseErr       error           // leases could not be read
+	HostKeyRefused map[string]bool // node id to "the live ssh host key was refused against the pin"
 
 	ExclusionWarnings []string // deploy-host refresh failures (deployguard)
 	DiscoveryOff      bool
 	DiscoveryErr      error  // the discovery switch is unreadable or invalid (fails closed to off)
 	TeamMode          bool   // the coordinator mode row says team
+	ModeErr           error  // the coordinator mode row could not be read
 	RepoVisibility    string // "public", "private", "internal" or "" (unknown) for the repository doctor ran in
 
 	// Limits from the binary.

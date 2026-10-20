@@ -5,11 +5,14 @@ package doctor
 // Inputs:  Facts.Nodes, the CI home, Deps and the doctor Env.
 // Outputs: Facts.Pins, Reach, Skew, SkewErr and RepoVisibility.
 // Constraints: one fixed argv on a node (`date -u +%s`), only over the D4 option set and the pinned key, never
-//          trust-on-first-use (a node with no pin is not contacted); every reading has its own short timeout inside
-//          the section budget and runs in parallel; no secret is read or sent; the dial sends no payload.
+//          trust-on-first-use (a node with no pin is not asked for its clock); every reading has its own short timeout
+//          inside the section budget and runs in parallel; no secret is read or sent; the dial sends no payload. The
+//          visibility reading runs `git remote get-url origin` and one `gh api repos/<owner>/<repo>` call, only when a
+//          persistent GitHub runner is registered.
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -101,11 +104,11 @@ func (f *Facts) readNet(ctx context.Context, env doctor.Env, home string, d Deps
 			if err != nil {
 				return
 			}
-			skew, sErr := f.readSkew(ctx, id, spec, home, d)
+			skew, refused, sErr := f.readSkew(ctx, id, spec, home, d)
 			mu.Lock()
 			defer mu.Unlock()
 			if sErr != nil {
-				f.SkewErr[id] = sErr
+				f.SkewErr[id], f.HostKeyRefused[id] = sErr, refused
 				return
 			}
 			f.Skew[id] = skew
@@ -117,32 +120,33 @@ func (f *Facts) readNet(ctx context.Context, env doctor.Env, home string, d Deps
 
 // readSkew returns remote minus local time over the pinned route. A node with no pin or an unusable local ssh is
 // not contacted.
-func (f *Facts) readSkew(ctx context.Context, id string, spec remote.HostSpec, home string, d Deps) (time.Duration, error) {
+func (f *Facts) readSkew(ctx context.Context, id string, spec remote.HostSpec, home string, d Deps) (skew time.Duration, refused bool, err error) {
 	if len(f.Pins[id]) == 0 {
-		return 0, fmt.Errorf("no pinned host key")
+		return 0, false, fmt.Errorf("no pinned host key")
 	}
 	if f.SSHVersionErr != nil || !f.SSHVersion.AtLeast(8, 0) {
-		return 0, fmt.Errorf("local OpenSSH is not usable")
+		return 0, false, fmt.Errorf("local OpenSSH is not usable")
 	}
-	opts := append(remote.CISSHFlags(), remote.CIOptions(strings.ToLower(id), filepath.Join(home, "known_hosts"), f.SSHVersion)...)
-	target, err := spec.Target(opts)
-	if err != nil {
-		return 0, fmt.Errorf("invalid destination")
+	opts := append(remote.CISSHFlags(), remote.CIOptions(id, filepath.Join(home, "known_hosts"), f.SSHVersion)...)
+	target, tErr := spec.Target(opts)
+	if tErr != nil {
+		return 0, false, fmt.Errorf("invalid destination")
 	}
 	rctx, cancel := context.WithTimeout(ctx, skewTimeout)
 	defer cancel()
 	before := d.Now()
-	out, err := d.RunRemote(rctx, target, "date", "-u", "+%s")
+	out, runErr := d.RunRemote(rctx, target, "date", "-u", "+%s")
 	after := d.Now()
-	if err != nil {
-		return 0, fmt.Errorf("the clock could not be read")
+	if runErr != nil {
+		reason, refused := sshReason(runErr)
+		return 0, refused, errors.New(reason)
 	}
-	secs, err := strconv.ParseInt(strings.TrimSpace(out), 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("the clock output was not a time")
+	secs, pErr := strconv.ParseInt(strings.TrimSpace(out), 10, 64)
+	if pErr != nil {
+		return 0, false, fmt.Errorf("the clock output was not a time")
 	}
 	mid := before.Add(after.Sub(before) / 2)
-	return time.Unix(secs, 0).Sub(mid), nil
+	return time.Unix(secs, 0).Sub(mid), false, nil
 }
 
 var githubRemote = regexp.MustCompile(`github\.com[:/]([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?\s*$`)
@@ -172,4 +176,17 @@ func (f *Facts) readVisibility(ctx context.Context, env doctor.Env) {
 	if v := strings.TrimSpace(out); v == "public" || v == "private" || v == "internal" {
 		f.RepoVisibility = v
 	}
+}
+
+// sshReason turns an ssh error into a short reason. refused is true when ssh rejected the host key against the pin:
+// the node now presents a key other than the pinned one (CI-DN002 fails on it).
+func sshReason(err error) (reason string, refused bool) {
+	line, _, _ := strings.Cut(strings.TrimSpace(err.Error()), "\n")
+	if len(line) > 120 {
+		line = line[:120]
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "host key verification failed") {
+		return "host key verification failed against the pin", true
+	}
+	return "the clock could not be read: " + line, false
 }
