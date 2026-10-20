@@ -212,7 +212,7 @@ func (p *Provider) Dispatch(ctx context.Context, a providers.Attempt) (providers
 	}
 	h := providers.Handle{Provider: p.ID(), Nonce: stand.Nonce, Ref: stand.Ref}
 	if stand.Nonce != fresh { // this attempt number was begun before: its run may exist already
-		if id, found, ferr := p.findRun(ctx, c, r.repo, stand.Nonce, start.Add(-leaseTTL-window), start.Add(window)); ferr != nil {
+		if id, found, ferr := p.awaitRun(ctx, c, r.repo, stand.Nonce, start.Add(-leaseTTL-window), start.Add(window)); ferr != nil {
 			return providers.Handle{}, ferr
 		} else if found {
 			h.RunID = runHandle(r.repo, id)
@@ -235,7 +235,7 @@ func (p *Provider) send(ctx context.Context, c *rest.Client, r request, h provid
 	case err != nil && !transient(err):
 		return providers.Handle{}, err
 	}
-	id, found, ferr := p.awaitRun(ctx, c, r.repo, h.Nonce, start)
+	id, found, ferr := p.awaitRun(ctx, c, r.repo, h.Nonce, start.Add(-window), start.Add(window))
 	switch {
 	case found:
 		h.RunID = runHandle(r.repo, id)

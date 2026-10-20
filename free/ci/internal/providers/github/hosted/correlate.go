@@ -69,11 +69,11 @@ func (p *Provider) findRun(ctx context.Context, c *rest.Client, repo repoRef, no
 	return mine[0].ID, true, nil
 }
 
-// awaitRun repeats findRun around the dispatch time until the run shows or the window passes.
-func (p *Provider) awaitRun(ctx context.Context, c *rest.Client, repo repoRef, nonce string, at time.Time) (int64, bool, error) {
+// awaitRun repeats findRun over [from, to] until the run shows or the window passes.
+func (p *Provider) awaitRun(ctx context.Context, c *rest.Client, repo repoRef, nonce string, from, to time.Time) (int64, bool, error) {
 	var last error
 	for i := 0; i <= int(p.cfg.FindWindow/findStep); i++ {
-		id, found, err := p.findRun(ctx, c, repo, nonce, at.Add(-window), at.Add(window))
+		id, found, err := p.findRun(ctx, c, repo, nonce, from, to)
 		switch {
 		case found:
 			return id, true, nil

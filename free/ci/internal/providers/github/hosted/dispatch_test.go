@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/hosted"
@@ -128,6 +129,28 @@ func TestIdempotentDispatch(t *testing.T) {
 		}
 		if pages := len(f.requests("GET", "/workflows/nself-ci-dispatch.yml/runs")); pages != 2 {
 			t.Fatalf("listing pages = %d", pages)
+		}
+	})
+	t.Run("a restart whose listing lags waits for the run instead of resending", func(t *testing.T) {
+		f := newFakeGH(t)
+		journal := hosted.NewMemJournal()
+		h1, err := f.provider(options{Journal: journal}).Dispatch(ctx, attemptFor("att-1", 1))
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Stale = true // the run exists but the listing does not show it yet
+		waits := 0
+		wait := func(context.Context, time.Duration) error {
+			if waits++; waits == 3 {
+				f.mu.Lock()
+				f.Stale = false
+				f.mu.Unlock()
+			}
+			return nil
+		}
+		h2, err := f.provider(options{Journal: journal, Wait: wait, Nonce: func() (string, error) { return strings.Repeat("f", 32), nil }}).Dispatch(ctx, attemptFor("att-1", 1))
+		if err != nil || h2 != h1 || len(f.Runs) != 1 || len(f.requests("POST", "/dispatches")) != 1 {
+			t.Fatalf("%+v %v runs=%d posts=%d", h2, err, len(f.Runs), len(f.requests("POST", "/dispatches")))
 		}
 	})
 	t.Run("two runs with one nonce are ambiguous", func(t *testing.T) {

@@ -142,6 +142,7 @@ type options struct {
 	ID       string
 	Window   time.Duration
 	Nonce    func() (string, error)
+	Wait     func(context.Context, time.Duration) error
 }
 
 func (f *fakeGH) provider(o options) *hosted.Provider {
@@ -157,9 +158,13 @@ func (f *fakeGH) provider(o options) *hosted.Provider {
 	if nonce == nil {
 		nonce = nonces()
 	}
+	wait := o.Wait
+	if wait == nil {
+		wait = func(context.Context, time.Duration) error { return nil }
+	}
 	return hosted.New(hosted.Config{ID: o.ID, Client: func(context.Context) (*rest.Client, error) { return f.client(), nil },
 		Settings: func(context.Context) (hosted.Settings, error) { return s, nil }, Clock: func() time.Time { return epoch },
-		Wait: func(context.Context, time.Duration) error { return nil }, Nonce: nonce, Journal: o.Journal, Download: f.download,
+		Wait: wait, Nonce: nonce, Journal: o.Journal, Download: f.download,
 		FindWindow: window})
 }
 
