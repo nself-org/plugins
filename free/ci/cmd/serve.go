@@ -33,9 +33,7 @@ func (l *listFlag) Set(v string) error {
 	if v == "" {
 		return nil
 	}
-	for _, p := range strings.Split(v, ",") {
-		l.vals = append(l.vals, p)
-	}
+	l.vals = append(l.vals, strings.Split(v, ",")...)
 	return nil
 }
 
