@@ -47,6 +47,18 @@ type Client struct {
 type Response struct {
 	Status  int
 	RetryAt time.Time
+	ETag    string // the response ETag, for a later conditional request
+}
+
+// Request is one API request with the options Do and DoQuery leave out.
+type Request struct {
+	Method, Path string
+	Params       map[string]string
+	Query        url.Values
+	Body         any
+	// IfNoneMatch makes the request conditional (P7-HOST-17). A 304 answer is then a success with
+	// Status 304 and nothing decoded; it costs no primary rate limit.
+	IfNoneMatch string
 }
 
 func (c *Client) baseHost() string {
@@ -75,6 +87,13 @@ func (c *Client) Do(ctx context.Context, method, pathTemplate string, params map
 // DoQuery is Do with a URL query (paging, filters). The query is encoded here and never reaches the
 // log, and a pathTemplate that carries its own "?" is still refused, so a value cannot smuggle one in.
 func (c *Client) DoQuery(ctx context.Context, method, pathTemplate string, params map[string]string, query url.Values, body, out any) (Response, error) {
+	return c.DoRequest(ctx, Request{Method: method, Path: pathTemplate, Params: params, Query: query, Body: body}, out)
+}
+
+// DoRequest is DoQuery with the optional parts of Request: a conditional request (If-None-Match) and
+// the ETag of the answer.
+func (c *Client) DoRequest(ctx context.Context, rq Request, out any) (Response, error) {
+	method, pathTemplate, params, query, body := rq.Method, rq.Path, rq.Params, rq.Query, rq.Body
 	start := time.Now()
 	var response Response
 	var finalErr error
@@ -120,6 +139,9 @@ func (c *Client) DoQuery(ctx context.Context, method, pathTemplate string, param
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.userAgent())
+	if rq.IfNoneMatch != "" {
+		req.Header.Set("If-None-Match", rq.IfNoneMatch)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -143,10 +165,14 @@ func (c *Client) DoQuery(ctx context.Context, method, pathTemplate string, param
 	}
 	defer func() { _ = resp.Body.Close() }()
 	response.Status = resp.StatusCode
+	response.ETag = resp.Header.Get("ETag")
 	limited, err := readLimited(resp.Body, apiCap)
 	if err != nil {
 		finalErr = classifyRead(err, "response.too_large")
 		return response, finalErr
+	}
+	if resp.StatusCode == http.StatusNotModified && rq.IfNoneMatch != "" {
+		return response, nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		finalErr = classify(resp.StatusCode, resp.Header, limited, time.Now())
