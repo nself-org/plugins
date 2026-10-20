@@ -135,7 +135,7 @@ func (e *Engine) redeliverHook(ctx context.Context, s *session, repo string, h g
 		}
 		params["delivery"] = strconv.FormatInt(latest[g].ID, 10)
 		if _, err = s.post(ctx, "/repos/{owner}/{repo}/hooks/{hook}/deliveries/{delivery}/attempts", params); err != nil {
-			if denied(err) { // the token may list deliveries but not redeliver them: scan the heads instead
+			if forbidden(err) { // the token may list deliveries but not redeliver them: scan the heads instead
 				return done, false, nil
 			}
 			var quota *QuotaStop

@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -48,6 +49,7 @@ func baseFacts(repo string, kind model.TriggerKind, deliveryID, revision string,
 // repoInfo is what the repository object tells every head of the repository.
 type repoInfo struct {
 	ID            int64  `json:"id"`
+	FullName      string `json:"full_name"`
 	DefaultBranch string `json:"default_branch"`
 	Private       bool   `json:"private"`
 	Visibility    string `json:"visibility"`
@@ -121,6 +123,11 @@ func headFacts(repo string, info repoInfo, h head, now time.Time) model.TriggerF
 	return f
 }
 
+// refusal reports whether an error class means "this job is not for us" rather than "try again".
+func refusal(c providers.ErrorClass) bool {
+	return c != providers.Transient && c != providers.Outage && c != providers.Quota && c != providers.Auth
+}
+
 // delivery turns validated facts into a Delivery. For a runner demand it calls the registered handler: a
 // refusal is ErrDeclined, no handler is ErrNoHandler and any other failure ErrHandlerFailed.
 func delivery(ctx context.Context, f model.TriggerFacts) (coordinator.Delivery, error) {
@@ -146,10 +153,10 @@ func delivery(ctx context.Context, f model.TriggerFacts) (coordinator.Delivery, 
 	p, err := h.Synthesize(ctx, f)
 	var pe *providers.Error
 	switch {
-	case errors.As(err, &pe) && pe.Code != "", err == nil && p == nil:
+	case errors.As(err, &pe) && pe.Code != "" && refusal(pe.Class), err == nil && p == nil:
 		return d, ErrDeclined // a refusal with a reason, or nothing to run
 	case err != nil:
-		return d, ErrHandlerFailed
+		return d, fmt.Errorf("%w: %v", ErrHandlerFailed, err)
 	}
 	d.Synthetic = p
 	return d, nil

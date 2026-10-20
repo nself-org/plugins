@@ -116,7 +116,7 @@ func decodeHookURL(raw json.RawMessage) (any, error) {
 type Settings struct {
 	Ingress      string
 	PollInterval time.Duration
-	HookURL      string // "" means every active hook that covers push or pull_request events
+	HookURL      string // "" means no hook is recognised: nothing is redelivered
 	JITLabel     string
 }
 

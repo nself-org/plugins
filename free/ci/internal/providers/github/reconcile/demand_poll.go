@@ -71,8 +71,9 @@ type ghRun struct {
 		Login string `json:"login"`
 	} `json:"actor"`
 	Repository struct {
-		ID      int64 `json:"id"`
-		Private *bool `json:"private"` // absent is unknown, never public
+		ID       int64  `json:"id"`
+		FullName string `json:"full_name"`
+		Private  *bool  `json:"private"` // absent is unknown, never public
 	} `json:"repository"`
 	HeadRepository *struct {
 		ID       int64  `json:"id"`
@@ -232,6 +233,9 @@ func (e *Engine) listRuns(ctx context.Context, s *session, repo, status string) 
 func (e *Engine) handRun(ctx context.Context, s *session, enq coordinator.Enqueuer, repo string, st Settings, run ghRun) error {
 	if run.ID <= 0 || len(run.HeadSHA) != 40 {
 		return nil
+	}
+	if err := e.checkIdentity(ctx, repo, run.Repository.ID, run.Repository.FullName); err != nil {
+		return err
 	}
 	runKey := strconv.FormatInt(run.ID, 10) + "@" + run.UpdatedAt
 	if done, err := e.marked(ctx, "run", repo, runKey); err != nil || done { // its jobs were read at this update

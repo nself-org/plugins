@@ -70,6 +70,9 @@ func (e *Engine) scan(ctx context.Context, s *session, enq coordinator.Enqueuer,
 	}
 	repoChanged := rr.Status != 304
 	if repoChanged {
+		if err = e.checkIdentity(ctx, repo, info.ID, info.FullName); err != nil {
+			return res, err
+		}
 		if err = e.putFact(ctx, repo, "repoinfo", info); err != nil {
 			return res, err
 		}
@@ -78,6 +81,9 @@ func (e *Engine) scan(ctx context.Context, s *session, enq coordinator.Enqueuer,
 			return res, err
 		}
 		repoChanged = true
+		if err = e.checkIdentity(ctx, repo, info.ID, info.FullName); err != nil {
+			return res, err
+		}
 		if err = e.putFact(ctx, repo, "repoinfo", info); err != nil {
 			return res, err
 		}

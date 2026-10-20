@@ -88,21 +88,26 @@ func (e *Engine) getFact(ctx context.Context, scope, key string, into any) (bool
 }
 
 type etagRow struct {
-	ETag string `json:"etag"`
+	ETag string    `json:"etag"`
+	At   time.Time `json:"at"`
 }
 
-// etag returns the stored ETag of (repo, key), "" when none.
+// etag returns the stored ETag of (repo, key), "" when none or when it is older than enqRetry: a repository
+// that never changes is still read in full now and then, which is what lets a head that was enqueued but
+// never got a terminal status be offered again.
 func (e *Engine) etag(ctx context.Context, repo, key string) (string, error) {
 	var row etagRow
-	_, err := e.getFact(ctx, repo, "etag:"+key, &row)
-	return row.ETag, err
+	if _, err := e.getFact(ctx, repo, "etag:"+key, &row); err != nil || e.now().Sub(row.At) >= enqRetry {
+		return "", err
+	}
+	return row.ETag, nil
 }
 
 func (e *Engine) setEtag(ctx context.Context, repo, key, etag string) error {
 	if etag == "" {
 		return nil
 	}
-	return e.putFact(ctx, repo, "etag:"+key, etagRow{ETag: etag})
+	return e.putFact(ctx, repo, "etag:"+key, etagRow{ETag: etag, At: e.now()})
 }
 
 // ledger counts the non-304 requests of the current hour, split by what spent them.
@@ -151,7 +156,8 @@ func (e *Engine) roll() {
 }
 
 // allow reports whether kind may make another counted request this hour. The hourly allowance is hard
-// for both kinds; head scans may use only 60% of it, which keeps the rest for demand polling.
+// for both kinds; head scans may use only 60% of it (40% is reserved for demand polling) and demand
+// polling only 80% (20% is reserved for head scans, the only push trigger in poll mode).
 func (e *Engine) allow(ctx context.Context, kind string) bool {
 	e.ensureLedger(ctx)
 	e.mu.Lock()
@@ -160,7 +166,10 @@ func (e *Engine) allow(ctx context.Context, kind string) bool {
 	if e.ledger.Scan+e.ledger.Demand >= e.HourlyBudget {
 		return false
 	}
-	return kind != kindScan || e.ledger.Scan < e.HourlyBudget*60/100
+	if kind == kindScan {
+		return e.ledger.Scan < e.HourlyBudget*60/100
+	}
+	return e.ledger.Demand < e.HourlyBudget*80/100 // head scans keep a floor: in poll mode they are the only push trigger
 }
 
 func (e *Engine) spend(ctx context.Context, kind string) {
@@ -178,6 +187,8 @@ func (e *Engine) spend(ctx context.Context, kind string) {
 
 // flush writes the ledger when it changed.
 func (e *Engine) flush(ctx context.Context) error {
+	e.fmu.Lock()
+	defer e.fmu.Unlock()
 	e.mu.Lock()
 	l := e.ledger
 	e.ledger.dirty = false
@@ -208,16 +219,25 @@ func (e *Engine) loadBackoff(ctx context.Context) (backoff, error) {
 // counts as blocked: without the record the quota window is unknown, and a request inside it is the one
 // thing the stop forbids.
 func (e *Engine) blockedUntil(ctx context.Context) (time.Time, bool) {
+	e.mu.Lock()
+	floor := e.floor
+	e.mu.Unlock()
 	b, err := e.loadBackoff(ctx)
 	if err != nil {
 		return e.now().Add(backoffMin), true
 	}
-	return b.RetryAt, b.RetryAt.After(e.now())
+	until := b.RetryAt
+	if floor.After(until) {
+		until = floor
+	}
+	return until, until.After(e.now())
 }
 
 // noteQuota records a quota error: the provider's own retry time when it gave one, else an exponential
 // delay of 30 s x 2^n capped at 15 min with +-20% jitter. It returns the time recorded.
 func (e *Engine) noteQuota(ctx context.Context, stated time.Time) time.Time {
+	e.qmu.Lock()
+	defer e.qmu.Unlock()
 	b, _ := e.loadBackoff(ctx)
 	now := e.now()
 	retry := stated.UTC()
@@ -235,12 +255,17 @@ func (e *Engine) noteQuota(ctx context.Context, stated time.Time) time.Time {
 	}
 	b.N++
 	b.RetryAt = retry
+	e.mu.Lock()
+	e.floor = retry // held in memory too: a failed store write must not reopen the window
+	e.mu.Unlock()
 	_ = e.putFact(ctx, scopeToken, "backoff", b)
 	return retry
 }
 
 // noteOK clears the failure count after a pass that made requests without a quota error.
 func (e *Engine) noteOK(ctx context.Context) {
+	e.qmu.Lock()
+	defer e.qmu.Unlock()
 	if b, err := e.loadBackoff(ctx); err == nil && b.N > 0 {
 		b.N = 0
 		_ = e.putFact(ctx, scopeToken, "backoff", b)

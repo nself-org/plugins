@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -337,6 +338,11 @@ func TestRedeliverRefusedFallsBack(t *testing.T) {
 	if len(r.f.repos["acme/app"].Redelivered) != 0 || len(r.enq.deliveries()) != 1 {
 		t.Fatalf("403 on redelivery: redelivered %v, enqueued %d; want the head scan", r.f.repos["acme/app"].Redelivered, len(r.enq.deliveries()))
 	}
+	r = setup(map[string]int{"901": 404}) // an aged-out delivery: the newer one is still redelivered
+	err0 := r.e.GitHub().Reconcile(context.Background(), r.enq)
+	if err0 == nil || strings.Join(r.f.repos["acme/app"].Redelivered, ",") != "902" || len(r.enq.deliveries()) != 0 {
+		t.Fatalf("404 on the oldest: err=%v redelivered=%v enqueued=%d, want an error and 902 only", err0, r.f.repos["acme/app"].Redelivered, len(r.enq.deliveries()))
+	}
 	r = setup(map[string]int{"901": 422}) // the oldest cannot be redelivered; the newer one still is
 	err := r.e.GitHub().Reconcile(context.Background(), r.enq)
 	if err == nil || strings.Join(r.f.repos["acme/app"].Redelivered, ",") != "902" {
@@ -355,14 +361,12 @@ func TestHeadScanReviewFixes(t *testing.T) {
 		t.Fatalf("pending head: err=%v enqueued=%d, want 1", err, len(r.enq.deliveries()))
 	}
 	// the mark holds for a while, then the head is offered again (the intake dedups a live row by delivery id)
-	repo.Rev++
 	r.clk.Advance(SweepEvery)
 	_ = r.e.GitHub().Reconcile(context.Background(), r.enq)
 	if len(r.enq.deliveries()) != 1 {
 		t.Fatalf("marked head enqueued again at once: %d", len(r.enq.deliveries()))
 	}
-	repo.Rev++
-	r.clk.Advance(enqRetry)
+	r.clk.Advance(enqRetry) // the repository is quiet (304 on every read): the stored ETags age out too
 	_ = r.e.GitHub().Reconcile(context.Background(), r.enq)
 	if len(r.enq.deliveries()) != 2 {
 		t.Fatalf("expired mark: %d deliveries, want the head offered again", len(r.enq.deliveries()))
@@ -416,5 +420,86 @@ func TestPullRequestFactsFromFork(t *testing.T) {
 	f = r.enq.facts(t, indexOf(r.enq, ownHead))
 	if f.Fork.Value == nil || *f.Fork.Value {
 		t.Errorf("same-repository PR must be Fork=false: %+v", f.Fork)
+	}
+}
+
+// failingState wraps a State and refuses to write facts (a store that went read-only).
+type failingState struct {
+	State
+	failFacts bool
+}
+
+func (f failingState) ProviderFactPut(ctx context.Context, fact StoredFact) (bool, error) {
+	if f.failFacts {
+		return false, errors.New("store is read-only")
+	}
+	return f.State.ProviderFactPut(ctx, fact)
+}
+
+// TestQuotaRecordSurvives covers the quota record: the two Reconcilers write it concurrently without
+// losing the stop, and a failed store write does not reopen the window.
+func TestQuotaRecordSurvives(t *testing.T) {
+	r := newRig(t, "acme/app")
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	for i := 0; i < 40; i++ {
+		wg.Add(2)
+		go func() { defer wg.Done(); r.e.noteQuota(ctx, time.Time{}) }()
+		go func() { defer wg.Done(); r.e.noteOK(ctx) }()
+	}
+	wg.Wait()
+	r.e.noteQuota(ctx, r.clk.Now().Add(30*time.Minute))
+	r.e.noteOK(ctx)
+	if _, blocked := r.e.blockedUntil(ctx); !blocked {
+		t.Fatal("a concurrent noteOK erased the quota stop")
+	}
+	e2 := NewEngine()
+	e2.Now, e2.Jitter = r.clk.Now, func() float64 { return 0.5 }
+	e2.Use(failingState{State: newMemState(), failFacts: true})
+	e2.noteQuota(ctx, time.Time{})
+	if _, blocked := e2.blockedUntil(ctx); !blocked {
+		t.Fatal("a failed store write reopened the quota window")
+	}
+}
+
+// TestRepositoryIdentity covers the rename / transfer guard: a repository that answers under another name
+// or another id is never swept.
+func TestRepositoryIdentity(t *testing.T) {
+	r := newRig(t, "acme/app")
+	repo := r.f.repos["acme/app"]
+	if err := r.e.GitHub().Reconcile(context.Background(), r.enq); err != nil || len(r.enq.deliveries()) != 1 {
+		t.Fatalf("first sweep: err=%v enqueued=%d", err, len(r.enq.deliveries()))
+	}
+	repo.ID, repo.Rev = 999, repo.Rev+1 // someone else registered the name
+	repo.Branches["main"] = sha('9', 9)
+	r.clk.Advance(SweepEvery)
+	err := r.e.GitHub().Reconcile(context.Background(), r.enq)
+	if !errors.Is(err, ErrIdentity) || len(r.enq.deliveries()) != 1 {
+		t.Fatalf("id changed: err=%v enqueued=%d, want ErrIdentity and nothing new", err, len(r.enq.deliveries()))
+	}
+	r2 := newRig(t, "acme/app")
+	r2.f.repos["acme/app"].Name = "acme/renamed" // the API answers as another repository
+	if err = r2.e.GitHub().Reconcile(context.Background(), r2.enq); !errors.Is(err, ErrIdentity) || len(r2.enq.deliveries()) != 0 {
+		t.Fatalf("renamed: err=%v enqueued=%d", err, len(r2.enq.deliveries()))
+	}
+}
+
+// TestLedgerFloors covers the ledger split: demand polling stops at 80% of the allowance so head scans keep
+// a floor, and scans stop at 60%.
+func TestLedgerFloors(t *testing.T) {
+	r := newRig(t, "acme/app")
+	r.e.HourlyBudget = 100
+	ctx := context.Background()
+	for i := 0; i < 80; i++ {
+		r.e.spend(ctx, kindDemand)
+	}
+	if r.e.allow(ctx, kindDemand) || !r.e.allow(ctx, kindScan) {
+		t.Fatal("at 80 demand calls demand must stop and scans must go on")
+	}
+	for i := 0; i < 20; i++ {
+		r.e.spend(ctx, kindScan)
+	}
+	if r.e.allow(ctx, kindScan) {
+		t.Fatal("the hourly allowance is hard")
 	}
 }

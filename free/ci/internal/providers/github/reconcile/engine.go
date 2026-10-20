@@ -64,6 +64,9 @@ type Engine struct {
 	PassCalls    int                                             // requests per repository per head-scan pass (default MaxPassCalls)
 
 	mu     sync.Mutex
+	qmu    sync.Mutex // serialises the read-modify-write of the quota record (both Reconcilers write it)
+	fmu    sync.Mutex // serialises ledger writes so an older snapshot never lands last
+	floor  time.Time  // the latest RetryAt recorded in this process, kept even when the store write fails
 	state  State
 	ledger ledger
 	ticks  map[string]int // per repository, demand ticks since the last in_progress sweep

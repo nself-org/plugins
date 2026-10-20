@@ -194,7 +194,7 @@ func (f *forge) route(w http.ResponseWriter, r *http.Request) int {
 	q := r.URL.Query()
 	switch {
 	case len(rest) == 0:
-		return jsonOut(w, r, 200, map[string]any{"id": repo.ID, "default_branch": repo.Default, "private": false, "visibility": "public", "rev": repo.Rev})
+		return jsonOut(w, r, 200, map[string]any{"id": repo.ID, "full_name": repo.Name, "default_branch": repo.Default, "private": false, "visibility": "public", "rev": repo.Rev})
 	case rest[0] == "branches" && len(rest) == 1:
 		var out []map[string]any
 		for _, b := range repo.Protected {
@@ -273,7 +273,7 @@ func (f *forge) runs(w http.ResponseWriter, r *http.Request, repo *fRepo, rest [
 				continue
 			}
 			o := map[string]any{"id": run.ID, "status": run.Status, "event": run.Event, "head_sha": run.Head, "updated_at": "2026-10-19T12:00:00Z",
-				"actor": map[string]string{"login": "octo"}, "repository": map[string]any{"id": repo.ID, "private": false}}
+				"actor": map[string]string{"login": "octo"}, "repository": map[string]any{"id": repo.ID, "full_name": repo.Name, "private": false}}
 			if run.HeadRepoNam != "" {
 				o["head_repository"] = map[string]any{"id": run.HeadRepoID, "full_name": run.HeadRepoNam}
 			}

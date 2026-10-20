@@ -88,6 +88,13 @@ func denied(err error) bool {
 	return errors.As(err, &pe) && pe.Class != providers.Quota && (pe.Status == 403 || pe.Status == 404)
 }
 
+// forbidden is denied for a 403 only: a 404 on one delivery means that delivery is gone, not that the token
+// may not redeliver.
+func forbidden(err error) bool {
+	var pe *providers.Error
+	return errors.As(err, &pe) && pe.Class != providers.Quota && pe.Status == 403
+}
+
 func repoParams(full string) map[string]string {
 	owner, repo, _ := strings.Cut(full, "/")
 	return map[string]string{"owner": owner, "repo": repo}

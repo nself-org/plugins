@@ -22,6 +22,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
+	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
@@ -96,6 +97,10 @@ func TestPollDemand(t *testing.T) {
 	repo.Runs = []fRun{{ID: 5150, Status: "queued", Event: "push", Head: sha('6', 6), Jobs: []fJob{{ID: 8101, Status: "queued", Labels: []string{"nself"}}, {ID: 8102, Status: "queued", Labels: []string{"self-hosted"}}}}}
 	if err := tick(t, r); err != nil || len(handler.take()) != 0 {
 		t.Fatalf("[nself] only and [self-hosted] only must yield no demand (err=%v)", err)
+	}
+	// a coded but transient handler error (class Transient) is retried, not a refusal
+	if refusal(providers.Transient) || !refusal(providers.Config) {
+		t.Fatal("refusal() must separate transient failures from refusals")
 	}
 	// a handler that fails without refusing is asked again next tick; one that refuses is asked once
 	handler.mu.Lock()
