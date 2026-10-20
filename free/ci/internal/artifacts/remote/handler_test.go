@@ -85,16 +85,10 @@ func TestRefNeedsTheBlobAtTheStatedSize(t *testing.T) {
 	}
 }
 
-func TestEmptyArtifactIsStoredByTheRef(t *testing.T) {
-	ctx := context.Background()
+func TestEmptyArtifactRefIsRefused(t *testing.T) {
 	r := newRig(t, jobWith("out/empty"))
-	bad := ref("out/empty", nil)
-	bad.SHA256 = sum([]byte("x"))
-	if err := r.lease.ArtifactRef(ctx, bad); !transfer.IsReason(err, transfer.ReasonDigest) {
-		t.Fatalf("empty file with another digest: %v", err)
-	}
-	if err := r.lease.ArtifactRef(ctx, ref("out/empty", nil)); err != nil {
-		t.Fatal(err)
+	if err := r.lease.ArtifactRef(context.Background(), ref("out/empty", nil)); !transfer.IsReason(err, transfer.ReasonProtocol) {
+		t.Fatalf("empty file: %v", err)
 	}
 }
 

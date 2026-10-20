@@ -107,8 +107,9 @@ func (ra *remoteAttempt) attach(out func([]byte)) {
 
 // remoteSink is the transport.Sink of a run's remote leases.
 type remoteSink struct {
-	st  *store.Store
-	eng *lease.Engine
+	st   *store.Store
+	eng  *lease.Engine
+	home string // the run's state directory (Options.Home), where the artifact blobs live
 
 	mu sync.Mutex
 	by map[string]*remoteAttempt // attempt id

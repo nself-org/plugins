@@ -153,6 +153,7 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 		return nil, err
 	}
 	rd := &runDispatch{sess: sess, sink: newRemoteSink(sess.Store)}
+	rd.sink.home = sess.Home
 	for _, r := range rows {
 		if r.ID == sess.RunID {
 			rd.row = r
@@ -213,7 +214,7 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	}
 	lease := protocol.Lease{LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
 		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: []protocol.SecretRef{}, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
-	return transport.Deliver(ctx, d.Node, lease, a.sink)
+	return transport.Deliver(ctx, d.Node, lease, bindLeaseSink(a.sink, d))
 }
 
 // highestIncarnation is the incarnation fenced leases carry: the highest of the coordinator table, so a

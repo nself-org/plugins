@@ -9,12 +9,11 @@ package remote
 // Constraints: the path is judged by the same sanitiser the collector uses
 // (authz.ArtifactPath); the record's project, run, job and revision come from
 // the store; the blob must already be in the project's realm at the stated size
-// (CommitAndVerify re-hashes it later); an empty file is stored here because the
-// carriers do not transfer zero-byte blobs; nothing the node sends is trusted
-// beyond the digest it proves.
+// (CommitAndVerify re-hashes it later); the carriers announce blobs of one byte
+// or more, so a ref for an empty file is refused (the agent reports it first);
+// nothing the node sends is trusted beyond the digest it proves.
 
 import (
-	"bytes"
 	"context"
 	"math"
 	"os"
@@ -42,8 +41,8 @@ func (l *Lease) ArtifactRef(ctx context.Context, ref protocol.ArtifactRef) error
 	if err != nil {
 		return err
 	}
-	if !sha256Hex.MatchString(ref.SHA256) || ref.Size < 0 {
-		return transfer.Failf(transfer.ReasonProtocol, "an artifact-ref needs a sha256 and a size of zero or more")
+	if !sha256Hex.MatchString(ref.SHA256) || ref.Size < 1 {
+		return transfer.Failf(transfer.ReasonProtocol, "an artifact-ref needs a sha256 and a size of at least one byte (the carriers do not transfer empty blobs)")
 	}
 	rel, d, name, err := l.resolve(ref.Path)
 	if err != nil {
@@ -124,16 +123,6 @@ func (l *Lease) claim(p, name string) {
 
 // hold checks the blob a ref names is in the realm at the stated size.
 func (l *Lease) hold(ctx context.Context, realm cas.Realm, ref protocol.ArtifactRef) error {
-	if ref.Size == 0 {
-		sha, n, err := l.h.Blobs.Put(ctx, realm, bytes.NewReader(nil))
-		if err != nil {
-			return err
-		}
-		if sha != ref.SHA256 || n != 0 {
-			return transfer.Failf(transfer.ReasonDigest, "an empty artifact must carry the digest of no bytes")
-		}
-		return nil
-	}
 	info, err := l.h.Blobs.Stat(realm, ref.SHA256)
 	if err != nil {
 		if os.IsNotExist(err) {
