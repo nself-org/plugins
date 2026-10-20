@@ -55,6 +55,17 @@ func coordinatorFloorApplies(job JobFacts, d Declaration) bool {
 	return !ownTrust(job.Trust)
 }
 
+// BoundaryMinIsolation is the level a job placed on d must run at under D21 and D28: the vm floor when
+// the placement is on an overridden deploy host, or on a coordinator host where the floor binds, else "".
+// Admission checks the node's declared level; a delivery layer that sets the job's own level uses this so
+// the job is not run below the level admission relied on (P7-TRUST-18).
+func BoundaryMinIsolation(job JobFacts, d Declaration) model.Isolation {
+	if d.DeployHost.Matched && d.DeployHost.Override || d.CoordinatorHost && coordinatorFloorApplies(job, d) {
+		return boundaryFloor
+	}
+	return ""
+}
+
 // RequiresAudit is true for every placement on an overridden deploy host: the placement is admitted only
 // with an audit row, whatever the job.
 func RequiresAudit(d Declaration) bool {

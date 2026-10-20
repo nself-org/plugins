@@ -5,6 +5,14 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
+// RunnerHosted reports whether r is a provider-hosted runner: the one predicate placement
+// (eligibility), settlement and delivery share, so a runner is hosted for all of them or none.
+// Ephemeral alone does not make a runner hosted: a burst or ephemeral node still runs the agent.
+func RunnerHosted(r Runner) bool {
+	k := r.Capability.Location.Kind.Value
+	return r.Location == "hosted" || k != nil && *k == "hosted" || r.Decl.Hosted
+}
+
 // DeclarationFromCapability maps coordinator-assigned capability facts to admission facts.
 func DeclarationFromCapability(c model.Capability, host bool, mode trust.CoordinatorMode) trust.Declaration {
 	d := trust.Declaration{CoordinatorHost: host, CoordinatorMode: mode, Provider: c.Identity.Provider,

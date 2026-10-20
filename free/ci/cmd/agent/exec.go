@@ -205,7 +205,13 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	for k, v := range in.Env {
 		job.Env[k] = v
 	}
-	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}, NewRedactor: ciexec.NewOutputRedactor, Stale: agentStale{}}
+	// The same Isolator chain the local run path uses (hardened container, gVisor, network scope planner);
+	// an executor without one would run a container job in the legacy container and a process job on the host.
+	iso := cirun.Hooks{}.Resolved().Isolation
+	if iso == nil {
+		return ciexec.AttemptResult{}, "", errors.New("no isolator is registered; the agent will not run a job without one")
+	}
+	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}, NewRedactor: ciexec.NewOutputRedactor, Stale: agentStale{}, Isolation: iso}
 	if len(in.Secrets) > 0 {
 		ex.Secrets = mapSecrets(in.Secrets)
 	}

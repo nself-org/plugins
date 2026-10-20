@@ -16,6 +16,7 @@ import (
 	"fmt"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/sched"
 )
 
 // admit sends one placement through the chokepoint and settles the job.
@@ -39,7 +40,7 @@ func (d *Dispatcher) admit(ctx context.Context, runs map[string]*pipelineRun, pr
 	if !local {
 		host = r.ID
 	}
-	req := Request{AttemptID: q.Job.AttemptID, Placement: p, Runner: r, Job: q.Job.Sched, Local: local, Node: !local && r.Location != "hosted" && !r.Ephemeral && !r.Decl.Hosted, Host: host, CapacityCPU: cpu, CapacityMemMB: mem,
+	req := Request{AttemptID: q.Job.AttemptID, Placement: p, Runner: r, Job: q.Job.Sched, Local: local, Node: !local && !sched.RunnerHosted(r), Host: host, CapacityCPU: cpu, CapacityMemMB: mem,
 		Limits: pr.world.Policy.Limits, RunnerSlots: slots, SlotsKnown: known, WorldDigest: dec.WorldDigest, Incarnation: d.incarnation(), LeaseTTL: d.cfg.LeaseTTL}
 	if d.cfg.ProviderLimit != nil {
 		req.ProviderLimit = d.cfg.ProviderLimit(r.Provider)
@@ -61,7 +62,7 @@ func (d *Dispatcher) admit(ctx context.Context, runs map[string]*pipelineRun, pr
 		}
 		d.finish(q.Seq, a, nil)
 		if !local {
-			d.deliver(q, r, a)
+			d.deliver(q, r, a, pr.world.Policy)
 		}
 	case errors.Is(err, ErrConflict):
 		dec.Outcome = OutcomeConflict
