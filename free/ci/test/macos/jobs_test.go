@@ -24,7 +24,7 @@ func (l *leg) shimJob(n int, dir string, argv ...string) (string, int) {
 	l.t.Helper()
 	root := jobRoot(n)
 	env := []string{"HOME=" + root + "/home", "TMPDIR=" + root + "/tmp", "PATH=/usr/bin:/bin:/usr/sbin:/sbin",
-		"CLANG_MODULE_CACHE_PATH=" + root + "/home/.cache/clang", "XDG_CACHE_HOME=" + root + "/home/.cache"}
+		"CLANG_MODULE_CACHE_PATH=" + root + "/home/.cache/clang", "XDG_CACHE_HOME=" + root + "/home/.cache", "CFFIXED_USER_HOME=" + root + "/home"}
 	req, err := json.Marshal(map[string]any{"argv": argv, "dir": dir, "env": env})
 	if err != nil {
 		l.t.Fatal(err)
@@ -47,7 +47,7 @@ func (l *leg) stageFixture(n int, name, variant string) string {
 	pkg := root + "/" + name
 	l.mustSudo("mkdir -p " + root + "/home " + root + "/tmp " + pkg + " && cp -R " + src + "/. " + pkg + "/ && mv " + pkg + "/Package.swift.fixture " + pkg + "/Package.swift")
 	if variant == "failing" {
-		l.mustSudo("sed -i '' 's/XCTAssertEqual(add(2, 3), 5)/XCTAssertEqual(add(2, 3), 6)/' " + pkg + "/Tests/FixtureTests/FixtureTests.swift")
+		l.mustSudo("sed -i '' 's/XCTAssertEqual(fixtureSum(2, 3), 5)/XCTAssertEqual(fixtureSum(2, 3), 6)/' " + pkg + "/Tests/FixtureTests/FixtureTests.swift")
 	}
 	l.mustSudo("chown -R " + jobUser(n) + " " + root + " && chmod 700 " + root)
 	return pkg
@@ -66,7 +66,7 @@ func (l *leg) jobs() {
 	if out, rc = l.shimJob(1, pkg, "/usr/bin/swift", "test"); rc != 0 || !strings.Contains(out, "Executed 1 test") {
 		t.Fatalf("SwiftPM fixture as %s: rc=%d\n%s", jobUser(1), rc, out)
 	}
-	if out, rc = l.shimJob(1, pkg, "/usr/bin/xcodebuild", "test", "-scheme", "Fixture-Package", "-destination", "platform=macOS"); rc != 0 || !strings.Contains(out, "TEST SUCCEEDED") {
+	if out, rc = l.shimJob(1, pkg, "/usr/bin/xcodebuild", "test", "-scheme", "Fixture", "-destination", "platform=macOS"); rc != 0 || !strings.Contains(out, "TEST SUCCEEDED") {
 		t.Fatalf("Xcode fixture as %s: rc=%d\n%s", jobUser(1), rc, out)
 	}
 	if dd, _ := l.sudo("ls " + root + "/home/Library/Developer/Xcode/DerivedData"); dd == "" {

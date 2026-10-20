@@ -3,6 +3,6 @@ import XCTest
 
 final class FixtureTests: XCTestCase {
     func testAdd() {
-        XCTAssertEqual(add(2, 3), 5)
+        XCTAssertEqual(fixtureSum(2, 3), 5)
     }
 }

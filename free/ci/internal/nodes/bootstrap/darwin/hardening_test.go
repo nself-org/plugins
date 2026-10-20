@@ -57,8 +57,10 @@ func TestPerUserSystemFoldersDoNotKeepASlotAlive(t *testing.T) {
 	r := removeSlotScript(2)
 	mustContain(t, "remove", r,
 		`find /private/var/folders -xdev -user "$u" -depth -delete`,
-		`find /private/var -xdev -path /private/var/folders -prune -o -user "$u" -print`,
-		`/Volumes/*`)
+		`/var/db/nself-ci-jobs`, `/private/tmp /private/var/tmp /Users/Shared /Library/Caches /Volumes/*`)
+	if strings.Contains(r, "/Applications") || strings.Contains(r, "find /private/var -xdev") {
+		t.Fatal("the ownership scan walks Xcode or the whole system volume: minutes per slot on a real Mac")
+	}
 	mustContain(t, "uninstall", uninstallScript(), `find /private/var/folders -xdev -user "$u" -depth -delete`)
 	if strings.Index(r, "-depth -delete") > strings.Index(r, "left=") {
 		t.Fatal("the folders must be deleted before the ownership scan")

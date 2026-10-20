@@ -74,18 +74,20 @@ func listJobUsersScript() string {
 
 // removeSlotScript retires slot n. Its job root goes when empty; its per-user folders under
 // /private/var/folders (the system makes them for any process run as the user) are deleted; its user and
-// group go only when the user owns no other file under the places a job can write, including the
-// top-level mounted volumes. It prints "removed" or "kept".
+// group go only when the user owns no other file in the places a job user can write: its job root and the
+// work area, the temporary and shared folders, the shared caches and the top-level mounted volumes. A scan
+// of the whole disk would walk Xcode and the system volumes for minutes per slot and find nothing: the
+// account has no write permission anywhere else. It prints "removed" or "kept".
 func removeSlotScript(n int) string {
 	return fmt.Sprintf(`set -eu
 u=%[1]s
 pkill -KILL -u "$u" >/dev/null 2>&1 || true
 rmdir %[2]s 2>/dev/null || true
 find /private/var/folders -xdev -user "$u" -depth -delete >/dev/null 2>&1 || true
-left=$({ find /private/var -xdev -path /private/var/folders -prune -o -user "$u" -print; for d in /private/tmp /Users /Library /opt /usr/local /Applications /Volumes/*; do [ -d "$d" ] && find "$d" -xdev -user "$u" -print; done; } 2>/dev/null | head -n 1)
+left=$(for d in %[3]s %[4]s /private/tmp /private/var/tmp /Users/Shared /Library/Caches /Volumes/*; do [ -d "$d" ] && find "$d" -xdev -user "$u" -print; done 2>/dev/null | head -n 1)
 if [ -n "$left" ]; then echo kept; exit 0; fi
 dscl . -delete "/Users/$u" >/dev/null 2>&1 || true
 dscl . -delete "/Groups/$u" >/dev/null 2>&1 || true
 if dscl . -read "/Users/$u" UniqueID >/dev/null 2>&1; then echo kept; else echo removed; fi
-`, jobUser(n), JobRoot(n))
+`, jobUser(n), JobRoot(n), JobsDir, WorkDir)
 }
