@@ -1,0 +1,13 @@
+[
+  {
+    "id": "C13-LOC-01",
+    "threat": "TM-13",
+    "carrier": "local",
+    "expected": "refused",
+    "outcome": "refused",
+    "code": "E711",
+    "reason": "epoch",
+    "audit": "cache.commit.refused",
+    "landed_bytes": 0
+  }
+]

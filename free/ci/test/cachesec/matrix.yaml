@@ -1,0 +1,16 @@
+# P7-CACHE-11 matrix: every case of the cache, artifact and release security suite, mapped to a row of
+# hq architecture/ci-threat-model.md (TM-12 to TM-18). matrix_test.go checks it: every case has a function
+# registered under its id, every function has a row, every threat row of the suite has a case, and a
+# refused case names the code, the reason key and the audit action the production code must produce.
+# `expected: refused` also means no bytes reachable in the attacked store afterwards.
+# Case ids: C<row>-<AREA>-<nn>, e.g. C13-LOC-01 is the first local case of TM-13.
+version: 1
+cases:
+  - id: C13-LOC-01
+    threat: TM-13
+    carrier: local
+    title: a finalizing attempt saves a cache entry with an epoch older than its lease epoch
+    expected: refused
+    code: E711
+    reason: epoch
+    audit: cache.commit.refused
