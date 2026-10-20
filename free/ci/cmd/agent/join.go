@@ -52,21 +52,21 @@ func runJoin(ctx context.Context, args []string, sio IO) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent join [--expect-fingerprint SHA256:<fp>] [--name N] <enroll-url>")
+		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent join [--expect-fingerprint SHA256:<fp>] [--name N] <enroll-url>")
 		return 2
 	}
 	if err := RunPreStart(ctx, "join"); err != nil {
-		fmt.Fprintf(sio.Stderr, "nself-ci-agent join: %v\n", err)
+		_, _ = fmt.Fprintf(sio.Stderr, "nself-ci-agent join: %v\n", err)
 		return 1
 	}
 	state, err := stateDir()
 	if err != nil {
-		fmt.Fprintf(sio.Stderr, "nself-ci-agent join: %v\n", err)
+		_, _ = fmt.Fprintf(sio.Stderr, "nself-ci-agent join: %v\n", err)
 		return 1
 	}
 	key, err := nodekey.LoadOrCreate(state)
 	if err != nil {
-		fmt.Fprintf(sio.Stderr, "nself-ci-agent join: node key: %v\n", err)
+		_, _ = fmt.Fprintf(sio.Stderr, "nself-ci-agent join: node key: %v\n", err)
 		return 1
 	}
 	host, _ := os.Hostname()
@@ -94,23 +94,23 @@ func runJoin(ctx context.Context, args []string, sio IO) int {
 	}
 	if tty {
 		opts.Confirm = func(fp string) (bool, error) {
-			fmt.Fprintf(sio.Stderr, "The coordinator's root fingerprint is\n  %s\nCompare it with the one `nself ci nodes pair` printed.\n", fp)
+			_, _ = fmt.Fprintf(sio.Stderr, "The coordinator's root fingerprint is\n  %s\nCompare it with the one `nself ci nodes pair` printed.\n", fp)
 			a, err := line("Type yes to trust it: ")
 			return strings.EqualFold(a, "yes"), err
 		}
 	}
 	res, err := enroll.Join(ctx, opts)
 	if err != nil {
-		fmt.Fprintf(sio.Stderr, "nself-ci-agent join: %v\n", err)
+		_, _ = fmt.Fprintf(sio.Stderr, "nself-ci-agent join: %v\n", err)
 		return 1
 	}
 	if err = enroll.SaveCredential(state, res, time.Now()); err != nil {
-		fmt.Fprintf(sio.Stderr, "nself-ci-agent join: the certificate was issued but could not be saved: %v\n", err)
+		_, _ = fmt.Fprintf(sio.Stderr, "nself-ci-agent join: the certificate was issued but could not be saved: %v\n", err)
 		return 1
 	}
-	fmt.Fprintf(sio.Stdout, "Joined as %s. Certificate valid until %s (renews at two thirds of its life).\n", res.NodeID, res.NotAfter.Local().Format(time.DateTime))
+	_, _ = fmt.Fprintf(sio.Stdout, "Joined as %s. Certificate valid until %s (renews at two thirds of its life).\n", res.NodeID, res.NotAfter.Local().Format(time.DateTime))
 	if err = pairing.RunJoinHooks(ctx, res, state); err != nil {
-		fmt.Fprintf(sio.Stderr, "nself-ci-agent join: enrolled, but %v\n", err)
+		_, _ = fmt.Fprintf(sio.Stderr, "nself-ci-agent join: enrolled, but %v\n", err)
 		return 1
 	}
 	return 0

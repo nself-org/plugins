@@ -79,7 +79,7 @@ func finish(d Deps, err error) int {
 	if err == nil {
 		return 0
 	}
-	fmt.Fprintf(d.Err, "Error: %v\n", err)
+	_, _ = fmt.Fprintf(d.Err, "Error: %v\n", err)
 	var coder interface{ ExitCode() int }
 	if errors.As(err, &coder) {
 		return coder.ExitCode()
@@ -155,12 +155,12 @@ func RunProvision(args []string, d Deps) int {
 		}
 	}
 	if !jsonOut {
-		fmt.Fprintf(d.Out, "Provisioning %s (%d instance(s))...\n", ex.Label(), opts.Instances)
+		_, _ = fmt.Fprintf(d.Out, "Provisioning %s (%d instance(s))...\n", ex.Label(), opts.Instances)
 	}
 	result, err := Provision(d.Ctx, ex, m, opts)
 	if !jsonOut {
 		for _, step := range result.Steps {
-			fmt.Fprintf(d.Out, "  [%s] %s\n", step.Name, step.Output)
+			_, _ = fmt.Fprintf(d.Out, "  [%s] %s\n", step.Name, step.Output)
 		}
 	}
 	if err != nil {
@@ -183,7 +183,7 @@ func RunProvision(args []string, d Deps) int {
 		}
 		return 0
 	}
-	fmt.Fprintln(d.Out, "Provision complete.")
+	_, _ = fmt.Fprintln(d.Out, "Provision complete.")
 	return 0
 }
 
