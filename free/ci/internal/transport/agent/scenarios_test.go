@@ -330,7 +330,7 @@ func scenarioRevokeWhilePolling(t *testing.T) {
 	if _, err := e.st.PKIDeny(context.Background(), "test", "n-1", "revoked", serial); err != nil {
 		t.Fatal(err)
 	}
-	e.srv.CloseNode("n-1")
+	// no CloseNode here: a revoke run by the CLI in another process reaches the listener only through the deny list
 	eventually(t, 3*time.Second, "the agent to notice the closed connections", func() bool {
 		mu.Lock()
 		defer mu.Unlock()
@@ -347,8 +347,13 @@ func scenarioRevokeWhilePolling(t *testing.T) {
 			t.Fatalf("a revoked node was welcomed again: %s", n)
 		}
 	}
-	if len(e.srv.NodesConnected()) != 0 {
-		t.Fatalf("revoked node still connected: %v", e.srv.NodesConnected())
+	// a new connection with the revoked certificate fails at the handshake
+	tlsc, _ := pki.TLSClientConfig(pki.ClientOptions{RootDER: e.ca.RootDER(), Cert: &cert, ServerName: "127.0.0.1"})
+	cl := newClient(Options{BaseURL: e.base, TLS: tlsc})
+	defer cl.close()
+	hello, _ := encode(e.hello(), 1)
+	if m, _, err := cl.hello(context.Background(), hello); err == nil {
+		t.Fatalf("a revoked certificate completed a hello: %+v", m)
 	}
 }
 

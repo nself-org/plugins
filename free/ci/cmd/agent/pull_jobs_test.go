@@ -114,7 +114,10 @@ func TestPullFencesItsJobBeforeTheLeaseExpiresAndAttemptsNeverOverlap(t *testing
 	}
 	// the coordinator's lease for the old attempt is still valid when the job is already gone
 	l1, err := r.st.LeaseGet(context.Background(), leaseID)
-	if err == nil && l1.ExpiresAt != 0 && time.Unix(0, lastOld).After(time.Unix(0, l1.ExpiresAt)) {
+	if err != nil || l1.ExpiresAt == 0 {
+		t.Fatalf("the lease must still be on record when the job is gone: %+v %v", l1, err)
+	}
+	if time.Unix(0, lastOld).After(time.Unix(0, l1.ExpiresAt)) {
 		t.Fatalf("the job outlived its lease: last output %v, lease expiry %v", time.Unix(0, lastOld), time.Unix(0, l1.ExpiresAt))
 	}
 
