@@ -178,6 +178,10 @@ func runSpec(ctx context.Context, spec execSpec, in jobInputs) (session.JobResul
 	return session.JobResult{Outcome: session.Outcome{State: string(res.Attempt.State), ExitCode: res.ExitCode, FailureClass: string(res.Attempt.FailureClass)}, Evidence: doc}, err
 }
 
+// agentIsolation is the executor's Isolator for agent runs; nil keeps the executor baseline. A node that
+// offers an isolation level above process installs its registry here before serving.
+var agentIsolation ciexec.Isolator
+
 // execute runs the job through the executor in a per-run work area and returns
 // its result and the masked output tail for the failure excerpt.
 func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptResult, string, error) {
@@ -205,12 +209,15 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	for k, v := range in.Env {
 		job.Env[k] = v
 	}
-	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}, NewRedactor: ciexec.NewOutputRedactor, Stale: agentStale{}}
+	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}, NewRedactor: ciexec.NewOutputRedactor, Stale: agentStale{}, Isolation: agentIsolation}
+	// The lease's secrets are this attempt's own source: they travel on the JobSpec (not the Executor) so an
+	// isolation profile that wraps JobSpec.Secrets (the Tart vm profile) can capture and deliver them (D-1353).
+	var attemptSecrets ciexec.SecretSource
 	if len(in.Secrets) > 0 {
-		ex.Secrets = mapSecrets(in.Secrets)
+		attemptSecrets = mapSecrets(in.Secrets)
 	}
 	raw := &tailBuffer{max: excerptMax}
-	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: spec.AttemptID, CoordinatorID: agentIncarnation(spec.CoordinatorID), Job: job, Command: job.Run,
+	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: spec.AttemptID, CoordinatorID: agentIncarnation(spec.CoordinatorID), Job: job, Command: job.Run, Secrets: attemptSecrets,
 		SourceDir: spec.SourceDir, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks, RunnerRoot: in.RunnerRoot, Entrypoint: in.Entrypoint,
 		CPU: jobCPU(in), MemoryMB: jobMemoryMB(in), AfterJob: artifactsAfterJob(spec, in),
 		Output: func(b []byte) {
