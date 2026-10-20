@@ -132,7 +132,7 @@ func checkImport(m layerMap, pkg, file, imported string) error {
 	if pkg == "internal/run" && local == "internal/dispatch" && file != "dispatch_hook.go" {
 		return fmt.Errorf("run imports dispatch outside hook")
 	}
-	if pkg == "internal/run" && strings.HasPrefix(local, "internal/providers") && file != "trust_hook.go" {
+	if pkg == "internal/run" && strings.HasPrefix(local, "internal/providers") && file != "trust_hook.go" && file != "detail_publisher.go" { // the two hooks that connect a provider package (P7-AUTO-22: the optional GitHub App checks adapter)
 		return fmt.Errorf("run imports providers outside hook")
 	}
 	if pkg == "internal/dispatch" && strings.HasPrefix(local, "internal/") {
