@@ -5,7 +5,7 @@ package main
 //          hosted driver the trust class of an attempt, and names the repositories the world describes hosted
 //          runners for.
 // Inputs:  the open coordinator store, the data dir (the policy resolver's root) and the repository allowlist.
-// Outputs: serveHosted installs runtime.UseStore, runtime.UsePolicy, hosted.UsePolicy, hosted.UseStore,
+// Outputs: serveHosted installs runtime.UseStore, runtime.UsePolicy, usage.UsePolicy, usage.Use, hosted.UsePolicy, hosted.UseStore,
 //          hosted.UseAttempts and the contributor targets (GitHub-hosted only, each allowlisted repository
 //          once, lookups cached for hostedDescribeTTL); the returned func removes them.
 // Constraints: call once at coordinator start, before the first dispatch. The policy is the operator's own
@@ -24,6 +24,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	pdoctor "github.com/nself-org/plugins/free/ci/internal/providers/doctor"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/hosted"
+	"github.com/nself-org/plugins/free/ci/internal/providers/github/usage"
 	"github.com/nself-org/plugins/free/ci/internal/providers/runtime"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -44,6 +45,8 @@ func serveHosted(st *store.Store, home string, allowed []string) (undo func()) {
 func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effective, error), allowed []string) (undo func()) {
 	runtime.UseStore(st)
 	runtime.UsePolicy(src)
+	usage.UsePolicy(src)
+	usage.Use(st)
 	hosted.UsePolicy(src)
 	hosted.UseStore(st)
 	hosted.UseAttempts(attemptMetaFrom(st))
@@ -63,6 +66,8 @@ func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effecti
 		c.SetDescribeTTL(0)
 		hosted.UseAttempts(nil)
 		hosted.UsePolicy(nil)
+		usage.UsePolicy(nil)
+		usage.Use(nil)
 		runtime.UsePolicy(nil)
 		hosted.ReleaseStore()
 		runtime.ReleaseStore()
