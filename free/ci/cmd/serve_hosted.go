@@ -24,6 +24,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	pdoctor "github.com/nself-org/plugins/free/ci/internal/providers/doctor"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/hosted"
+	"github.com/nself-org/plugins/free/ci/internal/providers/github/reconcile"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/webhook"
 	"github.com/nself-org/plugins/free/ci/internal/providers/runtime"
 	"github.com/nself-org/plugins/free/ci/internal/report"
@@ -46,6 +47,8 @@ func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effecti
 	runtime.UseStore(st)
 	runtime.UsePolicy(src)
 	webhook.UsePolicy(src)
+	reconcile.Use(st)
+	reconcile.UsePolicy(src)
 	hosted.UsePolicy(src)
 	hosted.UseStore(st)
 	hosted.UseAttempts(attemptMetaFrom(st))
@@ -67,6 +70,8 @@ func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effecti
 		hosted.UsePolicy(nil)
 		runtime.UsePolicy(nil)
 		webhook.UsePolicy(nil)
+		reconcile.UsePolicy(nil)
+		reconcile.Use(nil)
 		hosted.ReleaseStore()
 		runtime.ReleaseStore()
 	}
