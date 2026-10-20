@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -78,31 +77,6 @@ func TestDiscoverUsageAndNetworkFailure(t *testing.T) {
 	code, _, errs := runCmd(t, n, nil)
 	if code != 2 || !strings.Contains(errs, "browse failed") {
 		t.Fatalf("a socket failure is exit 2, got %d %q", code, errs)
-	}
-}
-
-func TestStripAdvertiseFlag(t *testing.T) {
-	cases := []struct {
-		in, rest []string
-		on       bool
-	}{
-		{nil, []string{}, false},
-		{[]string{"--advertise", "https://c:3866"}, []string{"https://c:3866"}, true},
-		{[]string{"--name", "n1", "-advertise", "u"}, []string{"--name", "n1", "u"}, true},
-		{[]string{"--advertise=true", "u"}, []string{"u"}, true},
-		{[]string{"--advertise", "--advertise=false", "u"}, []string{"u"}, false},
-		{[]string{"--expect-fingerprint", "SHA256:x", "u"}, []string{"--expect-fingerprint", "SHA256:x", "u"}, false},
-		{[]string{"u", "--", "--advertise"}, []string{"u", "--", "--advertise"}, false},
-		{[]string{"--advertise=0", "u"}, []string{"u"}, false},
-		{[]string{"-advertise=1", "u"}, []string{"u"}, true},
-		{[]string{"--advertise=maybe", "u"}, []string{"--advertise=maybe", "u"}, false},
-		{[]string{"--advertiser", "u"}, []string{"--advertiser", "u"}, false},
-	}
-	for _, c := range cases {
-		rest, on := StripAdvertiseFlag(c.in)
-		if on != c.on || !slices.Equal(rest, c.rest) {
-			t.Errorf("%v: got %v %v, want %v %v", c.in, rest, on, c.rest, c.on)
-		}
 	}
 }
 

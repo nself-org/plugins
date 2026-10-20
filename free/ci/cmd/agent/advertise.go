@@ -6,18 +6,16 @@ package main
 // Outputs: for the window only, one mDNS record (random instance and host name, one TXT record: a random
 //          8-character id) and a line on stderr naming that id; the advertisement stops when join
 //          finishes enrolling, when the window (the pairing code lifetime) ends, or when the process ends.
-// Constraints: join.go does not declare the flag and is outside this Ticket's scope, so init removes it
-//          from os.Args before join parses them (internal/discovery.StripAdvertiseFlag) and, only when the
-//          flag was given, registers a PreStart hook that starts the advertisement and a join hook that
-//          stops it. Without the flag nothing is registered (TestGuardIsRegisteredFirst keeps holding).
-//          This file sorts before prodguard.go, so with the flag the hook runs the production guard itself
-//          first (the guard then runs a second time as its own hook and may repeat a warning); an E667
-//          refusal stops join before anything is published.
+// Constraints: join declares the flag through RegisterJoinFlags, so `join -h` lists it; the start step runs
+//          after the PreStart hooks, so the production guard has already run once (an E667 or E663 refusal
+//          stops join before anything is published). The stop hook is registered always and does nothing
+//          unless an advertisement is live.
 
 import (
 	"context"
+	"flag"
 	"fmt"
-	"os"
+	"io"
 
 	"github.com/nself-org/plugins/free/ci/internal/discovery"
 	"github.com/nself-org/plugins/free/ci/internal/pairing"
@@ -26,48 +24,42 @@ import (
 
 const advertiseName = "advertise"
 
-// advertiser is the join invocation's advertisement state; guard is replaced by tests of this binary.
+// advertiser is the join invocation's advertisement state; advertiseGuard is replaced by tests of this binary.
 var advertiser struct {
-	requested bool
-	live      *discovery.Advertisement
+	live *discovery.Advertisement
+	out  io.Writer
 }
 
 var advertiseGuard = &discovery.Guard{}
 
 func init() {
-	if len(os.Args) >= 2 && os.Args[1] == "join" {
-		rest, on := discovery.StripAdvertiseFlag(os.Args[2:])
-		os.Args = append([]string{os.Args[0], "join"}, rest...)
-		advertiser.requested = on
-	}
-	if !advertiser.requested {
-		return // without the flag nothing is registered, so the PreStart order stays prodguard first
-	}
-	must(RegisterPreStart(advertiseName, advertisePreStart))
+	must(RegisterJoinFlags(advertiseName, declareAdvertise))
 	must(pairing.RegisterJoinHook(advertiseName, advertiseStop))
 }
 
-func advertisePreStart(ctx context.Context, command string) error {
-	if command != "join" {
+// declareAdvertise adds --advertise to join and returns the step that publishes the record when it is set.
+func declareAdvertise(fs *flag.FlagSet) JoinStart {
+	on := fs.Bool("advertise", false, "publish a LAN record during the pairing window so `nself ci nodes discover` lists this node")
+	return func(ctx context.Context, sio IO) error {
+		advertiser.live, advertiser.out = nil, sio.Stderr
+		if !*on {
+			return nil
+		}
+		a, err := advertiseGuard.Advertise(ctx, pairing.OfferTTL, discovery.SSHPort, nil)
+		if err != nil {
+			return err
+		}
+		advertiser.live = a
+		a.Announce(sio.Stderr)
 		return nil
 	}
-	if err := prodGuard(ctx, command); err != nil {
-		return err
-	}
-	a, err := advertiseGuard.Advertise(ctx, pairing.OfferTTL, discovery.SSHPort, nil)
-	if err != nil {
-		return err
-	}
-	advertiser.live = a
-	a.Announce(os.Stderr)
-	return nil
 }
 
 // advertiseStop ends the advertisement once the enrollment is saved.
 func advertiseStop(_ context.Context, _ enroll.JoinResult, _ string) error {
 	if advertiser.live != nil {
 		advertiser.live.Stop()
-		fmt.Fprintln(os.Stderr, "LAN discovery stopped.")
+		fmt.Fprintln(advertiser.out, "LAN discovery stopped.")
 	}
 	return nil
 }

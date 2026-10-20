@@ -10,6 +10,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"sort"
@@ -29,6 +30,13 @@ type Subcommand func(ctx context.Context, args []string, sio IO) int
 // registers the production guard). A non-nil error stops the command.
 type PreStartHook func(ctx context.Context, command string) error
 
+// JoinStart is the step a join flag runs once the flags are parsed and the PreStart hooks have passed.
+type JoinStart func(ctx context.Context, sio IO) error
+
+// JoinFlags declares extra flags on the join FlagSet and returns the step to run (nil when there is
+// nothing to start). A step error stops join.
+type JoinFlags func(fs *flag.FlagSet) (start JoinStart)
+
 type command struct {
 	summary string
 	run     Subcommand
@@ -43,7 +51,18 @@ var (
 	regMu    sync.RWMutex
 	commands = map[string]command{}
 	prestart []preStart
+	joinExt  []joinExtension
 )
+
+type joinStep struct {
+	name string
+	run  JoinStart
+}
+
+type joinExtension struct {
+	name string
+	add  JoinFlags
+}
 
 // RegisterSubcommand adds a subcommand. An empty or duplicate name is an error.
 func RegisterSubcommand(name, summary string, run Subcommand) error {
@@ -73,6 +92,37 @@ func RegisterPreStart(name string, run PreStartHook) error {
 	}
 	prestart = append(prestart, preStart{name, run})
 	return nil
+}
+
+// RegisterJoinFlags lets a feature declare its own join flags (as lifecycle.RegisterFlags does for nodes
+// add). An empty or duplicate name or a nil function is an error.
+func RegisterJoinFlags(name string, add JoinFlags) error {
+	regMu.Lock()
+	defer regMu.Unlock()
+	if name == "" || add == nil {
+		return fmt.Errorf("join flags need a name and a function")
+	}
+	for _, e := range joinExt {
+		if e.name == name {
+			return fmt.Errorf("duplicate join flags %q", name)
+		}
+	}
+	joinExt = append(joinExt, joinExtension{name, add})
+	return nil
+}
+
+// declareJoinFlags adds every registered extension's flags to fs and returns the start steps, in order.
+func declareJoinFlags(fs *flag.FlagSet) []joinStep {
+	regMu.RLock()
+	exts := append([]joinExtension(nil), joinExt...)
+	regMu.RUnlock()
+	var starts []joinStep
+	for _, e := range exts {
+		if start := e.add(fs); start != nil {
+			starts = append(starts, joinStep{e.name, start})
+		}
+	}
+	return starts
 }
 
 // RunPreStart runs every hook for command in order and stops at the first error.

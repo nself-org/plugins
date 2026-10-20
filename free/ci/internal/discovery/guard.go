@@ -24,7 +24,7 @@ const (
 	ServiceType = "_nself-ci._tcp"
 	// Domain is the mDNS domain.
 	Domain = "local."
-	// MaxWindow is the longest advertisement: the pairing code lifetime (internal/pairing.OfferTTL).
+	// MaxWindow is the longest advertisement: the pairing code lifetime (internal/pairing.OfferTTL; a test in cmd/agent keeps them in step).
 	MaxWindow = 10 * time.Minute
 	// SSHPort is the port a candidate record names: the push carrier's port, advisory only.
 	SSHPort = 22
