@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -241,5 +242,84 @@ func TestBurstLocalProviderWorksInPersonalMode(t *testing.T) {
 	}
 	if in := r.intent(res.Token); in.State != store.BurstTerminal || len(r.cloud.All()) != 0 {
 		t.Fatalf("%+v", in)
+	}
+}
+
+// TestBurstConcurrentProvisionsShareOneWindow: one queued job asks twice at once, from the same engine
+// and from a second engine on the same store; exactly one machine appears.
+func TestBurstConcurrentProvisionsShareOneWindow(t *testing.T) {
+	for _, name := range []string{"same engine", "two engines"} {
+		t.Run(name, func(t *testing.T) {
+			r := newRig(t)
+			// A barrier between the counters and the commit makes the race certain: both callers have counted an empty window
+			// before either commits, unless something serializes them.
+			var bm sync.Mutex
+			arrived, gate := 0, make(chan struct{})
+			r.teamHook = func() {
+				bm.Lock()
+				arrived++
+				if arrived == 2 {
+					close(gate)
+				}
+				bm.Unlock()
+				select {
+				case <-gate:
+				case <-time.After(300 * time.Millisecond):
+				}
+			}
+			r.build()
+			second := r.eng
+			if name == "two engines" {
+				second = r.newEngine()
+			}
+			q := r.request("job-1")
+			q.QueuedDemand = 3
+			var wg sync.WaitGroup
+			errs := make([]error, 2)
+			for i, e := range []*burst.Engine{r.eng, second} {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					_, errs[i] = e.Provision(context.Background(), q)
+				}()
+			}
+			wg.Wait()
+			ok := 0
+			for _, err := range errs {
+				if err == nil {
+					ok++
+				} else if burst.CodeOf(err) != burst.CodeProvisionRefused {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			}
+			if ok != 1 || len(r.cloud.All()) != 1 {
+				t.Fatalf("%d succeeded, %d machines: one job, one provision per window", ok, len(r.cloud.All()))
+			}
+		})
+	}
+}
+
+type listFails struct{ burst.Provider }
+
+func (listFails) List(context.Context, map[string]string) ([]burst.Resource, error) {
+	return nil, burst.ErrUnavailable
+}
+
+func TestBurstNoCreateWithoutAList(t *testing.T) {
+	r := newRig(t, func(r *rig) { r.wrap = func(p burst.Provider) burst.Provider { return listFails{p} } })
+	if _, err := r.eng.Provision(context.Background(), r.request("job-1")); burst.ReasonOf(err) != "provider.error" {
+		t.Fatalf("%v", err)
+	}
+	if r.cloud.Calls["Provision"] != 0 {
+		t.Fatal("Provision was called although the adopt-by-label List failed")
+	}
+}
+
+func TestBurstEngineRejectsACoordinatorThatIsNotALabel(t *testing.T) {
+	r := newRig(t)
+	for _, bad := range []string{"", "has space", strings.Repeat("x", 64), "a=b", "ü"} {
+		if _, err := burst.New(burst.Options{Store: r.st, Coordinator: bad, Spend: r.eng2Spend(), Exclusion: r.eng2Exclusion()}); err == nil {
+			t.Errorf("coordinator %q accepted", bad)
+		}
 	}
 }

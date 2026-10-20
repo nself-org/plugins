@@ -268,3 +268,30 @@ func TestEphemeralNodeBeingTornDownTakesNothing(t *testing.T) {
 		t.Fatalf("%s: %s", ref.Reason, ref.Detail)
 	}
 }
+
+// TestEphemeralStepRejectsASecondIntentLabel: the budget step reads the first intent label it finds,
+// so a runner may not carry another intent's label in any position.
+func TestEphemeralStepRejectsASecondIntentLabel(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	mine := r.provision("job-1")
+	r.join(mine.Token, "node-1")
+	other := r.request("job-2")
+	other.QueuedDemand = 2
+	victim, err := r.eng.Provision(ctx, other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, theirs := economics.IntentLabelPrefix+mine.Token, economics.IntentLabelPrefix+victim.Token
+	for _, labels := range [][]string{{theirs, own}, {own, theirs}, {theirs}} {
+		a := queue(t, r.st, "p7")
+		_, err := dispatch.Admit(ctx, r.st, admitReq(a, "node-1", "owner", true, labels...))
+		if ref := refusal(t, err); ref.Reason != model.LabelsMismatch {
+			t.Fatalf("labels %v: %s", labels, ref.Reason)
+		}
+	}
+	a := queue(t, r.st, "p7")
+	if _, err = dispatch.Admit(ctx, r.st, admitReq(a, "node-1", "owner", true, own, own)); err != nil {
+		t.Fatalf("the same own label twice is harmless: %v", err)
+	}
+}

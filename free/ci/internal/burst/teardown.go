@@ -40,6 +40,9 @@ func (e *Engine) Teardown(ctx context.Context, token, reason string) error {
 		return e.failed(ctx, in, errors.New("provider not configured"), "provider "+in.Provider+" is not configured")
 	}
 	revokeErr := e.markAndRevoke(ctx, in, reason)
+	if errors.Is(revokeErr, ErrKilled) {
+		return revokeErr
+	}
 	if err = e.at(PointMidTeardown); err != nil {
 		return err
 	}
@@ -55,19 +58,33 @@ func (e *Engine) Teardown(ctx context.Context, token, reason string) error {
 	return e.finalize(ctx, in, reason)
 }
 
-// markAndRevoke revokes the bound node (its hook marks the intent in the same
-// transaction) and marks the intent tearing-down regardless, so admission refuses it.
+// markAndRevoke ends the node's life. A bound node is revoked first (its hook marks the intent in the
+// same transaction) and the intent is marked regardless. An unbound intent is marked first, which stops
+// a node from binding to it, and is read again: a node that bound between the read and the mark is revoked too.
 func (e *Engine) markAndRevoke(ctx context.Context, in store.BurstIntent, reason string) error {
-	var revokeErr error
-	if in.NodeID != "" {
-		if e.o.Revoker == nil {
-			revokeErr = errors.New("no node revoker configured")
-		} else {
-			revokeErr = e.o.Revoker.Revoke(ctx, in.NodeID)
-		}
+	mark := func() error {
+		return e.o.Store.BurstWrite(ctx, func(t store.BurstTx) error { return t.MarkTearingDown(in.Token, reason, t.NowMs()) })
 	}
-	err := e.o.Store.BurstWrite(ctx, func(t store.BurstTx) error { return t.MarkTearingDown(in.Token, reason, t.NowMs()) })
-	return errors.Join(revokeErr, err)
+	revoke := func(node string) error {
+		if e.o.Revoker == nil {
+			return errors.New("no node revoker configured")
+		}
+		return e.o.Revoker.Revoke(ctx, node)
+	}
+	if err := e.at(PointBeforeMark); err != nil {
+		return err
+	}
+	if in.NodeID != "" {
+		return errors.Join(revoke(in.NodeID), mark())
+	}
+	if err := mark(); err != nil {
+		return err
+	}
+	again, ok, err := e.o.Store.BurstIntent(ctx, in.Token)
+	if err != nil || !ok || again.NodeID == "" {
+		return err
+	}
+	return revoke(again.NodeID)
 }
 
 // own keeps the machines that carry this coordinator's labels and this intent.

@@ -44,6 +44,10 @@ func (e *Engine) Provision(ctx context.Context, req Request) (Result, error) {
 	if !ok || req.JobKey == "" {
 		return Result{}, refused("provider.unknown", nil, "provider %q is not configured or the job has no key", req.Provider)
 	}
+	// One provision decides and commits at a time, so two callers cannot both see an empty window or a free slot;
+	// commitIntent re-counts inside its transaction as well, which also covers a second process on the same store.
+	e.provMu.Lock()
+	defer e.provMu.Unlock()
 	pol, err := e.o.Spend(ctx)
 	if err != nil {
 		return Result{}, refused("policy.unreadable", err, "the spend policy could not be read")
@@ -85,7 +89,7 @@ func (e *Engine) Provision(ctx context.Context, req Request) (Result, error) {
 	if !d.Allow {
 		return Result{Decision: d}, refused(d.Reason, nil, "provider %s, job %s", p.ID(), req.JobKey)
 	}
-	if err = e.commitIntent(ctx, token, p, req, est, now.UnixMilli()); err != nil {
+	if err = e.commitIntent(ctx, token, p, req, est, now.UnixMilli(), int(pol.Burst.MaxConcurrent)); err != nil {
 		return Result{Decision: d}, err
 	}
 	if err = e.at(PointAfterIntent); err != nil {
@@ -117,7 +121,10 @@ func fitReason(err error) string {
 	return "reservation"
 }
 
-var errDryRun = errors.New("burst: dry run rolled back")
+var (
+	errDryRun    = errors.New("burst: dry run rolled back")
+	errCapsMoved = errors.New("burst: the caps changed before the commit")
+)
 
 // fits asks economics whether the lifetime reservation would fit, in a transaction that is rolled back.
 func (e *Engine) fits(ctx context.Context, token, provider, pipeline string) error {
@@ -134,7 +141,7 @@ func (e *Engine) fits(ctx context.Context, token, provider, pipeline string) err
 }
 
 // commitIntent writes the intent row and, for a paid provider, the lifetime reservation in one transaction.
-func (e *Engine) commitIntent(ctx context.Context, token string, p Provider, req Request, est Estimate, nowMs int64) error {
+func (e *Engine) commitIntent(ctx context.Context, token string, p Provider, req Request, est Estimate, nowMs int64, maxConc int) error {
 	ectx := e.econCtx(ctx)
 	err := e.o.Store.LedgerWrite(ectx, func(t store.LedgerTx) error {
 		var reserved int64
@@ -148,6 +155,13 @@ func (e *Engine) commitIntent(ctx context.Context, token string, p Provider, req
 			}
 			reserved = row.ReservedMicro
 		}
+		counts, err := t.Burst().Counts(p.ID(), req.JobKey, nowMs-WindowMs(est.LatencyMs))
+		if err != nil {
+			return err
+		}
+		if counts.JobWindow >= 1 || counts.Open >= max(maxConc, 0) || req.QueuedDemand <= counts.InFlight {
+			return errCapsMoved
+		}
 		lease := store.BurstLease{IdleUntil: nowMs + e.cfg.IdleTimeout.Milliseconds() + EffectiveLatency(est.LatencyMs), MaxUntil: nowMs + e.cfg.MaxLifetime.Milliseconds()}
 		return t.Burst().PutIntent(store.BurstIntent{Token: token, Coordinator: e.o.Coordinator, Provider: p.ID(), Pipeline: req.Pipeline, JobKey: req.JobKey,
 			Platform: req.Spec.Platform, ReservedMicro: reserved, LifetimeMs: e.cfg.LifetimeMs(), CreatedAt: nowMs}, lease)
@@ -155,6 +169,9 @@ func (e *Engine) commitIntent(ctx context.Context, token string, p Provider, req
 	var se *economics.SpendError
 	if errors.As(err, &se) {
 		return refused(string(se.Reason), err, "%s", se.Detail)
+	}
+	if errors.Is(err, errCapsMoved) {
+		return refused(ReasonProviderCap, err, "another provision took the slot first")
 	}
 	if err != nil {
 		return refused("store", err, "the intent could not be committed")
@@ -165,11 +182,13 @@ func (e *Engine) commitIntent(ctx context.Context, token string, p Provider, req
 // create lists by the intent label and adopts a machine that is already there; only
 // when there is none does it call Provision (itself idempotent by the label).
 func (e *Engine) create(ctx context.Context, p Provider, token string, spec Spec) (Resource, error) {
-	if found, err := p.List(ctx, map[string]string{LabelIntent: token}); err == nil {
-		for _, r := range found {
-			if Mine(r.Labels, e.o.Coordinator) && r.Labels[LabelIntent] == token {
-				return r, nil
-			}
+	found, err := p.List(ctx, map[string]string{LabelIntent: token})
+	if err != nil {
+		return Resource{}, err // idempotence must not depend on the provider alone: no list, no create
+	}
+	for _, r := range found {
+		if Mine(r.Labels, e.o.Coordinator) && r.Labels[LabelIntent] == token {
+			return r, nil
 		}
 	}
 	r, err := p.Provision(ctx, Intent{Token: token, Spec: spec, Labels: IntentLabels(e.o.Coordinator, token)})

@@ -264,3 +264,65 @@ func TestSweepFiltersLabelsItself(t *testing.T) {
 		t.Fatal("a provider that lists everything must not make the sweeper delete what is not ours")
 	}
 }
+
+type zeroCreated struct{ burst.Provider }
+
+func (z zeroCreated) List(ctx context.Context, l map[string]string) ([]burst.Resource, error) {
+	rs, err := z.Provider.List(ctx, l)
+	for i := range rs {
+		rs[i].CreatedAt = time.Time{}
+	}
+	return rs, err
+}
+
+// TestSweepUnknownAgeIsNotInfiniteAge: a provider that reports no creation time must not make a
+// young live machine look expired; an intent-less machine of unknown age is kept and alerted.
+func TestSweepUnknownAgeIsNotInfiniteAge(t *testing.T) {
+	r := newRig(t, func(r *rig) { r.wrap = func(p burst.Provider) burst.Provider { return zeroCreated{p} } })
+	live := r.provision("job-1")
+	orphan := r.cloud.AddForeign(burst.IntentLabels(coord, token(60)), addr("192.0.2.160"))
+	if _, err := r.eng.Sweep(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if !r.cloud.Has(live.Resource.ID) || !r.cloud.Has(orphan) {
+		t.Fatal("unknown creation time was read as expired")
+	}
+	r.clk.Advance(71 * time.Minute) // the intent's own age now forces the live machine
+	if _, err := r.eng.Sweep(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if r.cloud.Has(live.Resource.ID) {
+		t.Fatal("the intent's age still forces a deletion")
+	}
+}
+
+func TestSweepRetriesAFailedDirectDelete(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	r.put(token(70), "fakecloud", store.BurstTerminal)
+	m := r.cloud.AddForeign(burst.IntentLabels(coord, token(70)), addr("192.0.2.170"))
+	r.cloud.FailTeardown(errors.New("api 500"))
+	if _, err := r.eng.Sweep(ctx, false); burst.CodeOf(err) != burst.CodeTeardownFailed || !r.cloud.Has(m) {
+		t.Fatalf("a failed delete is reported: %v", err)
+	}
+	r.cloud.FailTeardown(nil)
+	if _, err := r.eng.Sweep(ctx, false); err != nil || r.cloud.Has(m) {
+		t.Fatalf("the next sweep deletes it: %v", err)
+	}
+}
+
+func TestSweepAlertsOnceForAnOwnMachineOnADeployHost(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	m := r.cloud.AddForeign(burst.IntentLabels(coord, token(80)), addr("198.51.100.80"))
+	r.exclude = []string{"198.51.100.80"}
+	r.cloud.Age(m, 5*time.Hour)
+	for i := 0; i < 3; i++ {
+		if _, err := r.eng.Sweep(ctx, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !r.cloud.Has(m) || len(r.alerts) != 1 || r.alerts[0].Kind != burst.AlertExcluded {
+		t.Fatalf("kept=%v alerts=%v", r.cloud.Has(m), r.alerts)
+	}
+}

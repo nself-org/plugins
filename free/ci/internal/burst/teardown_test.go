@@ -255,3 +255,38 @@ type superset struct{ burst.Provider }
 func (s superset) List(ctx context.Context, _ map[string]string) ([]burst.Resource, error) {
 	return s.Provider.List(ctx, nil)
 }
+
+// TestBurstJoinRacingTeardownIsStillRevoked: a node binds to the intent after Teardown read it
+// as unbound and before it was marked; the node is revoked all the same.
+func TestBurstJoinRacingTeardownIsStillRevoked(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	res := r.provision("job-1")
+	r.addNode("node-1")
+	raced := false
+	r.fault = func(p string) error {
+		if p == burst.PointBeforeMark && !raced {
+			raced = true
+			return r.eng.NodeJoined(ctx, res.Token, "node-1")
+		}
+		return nil
+	}
+	if err := r.eng.Teardown(ctx, res.Token, "idle"); err != nil {
+		t.Fatal(err)
+	}
+	if !raced || len(r.revoked) != 1 || r.revoked[0] != "node-1" || len(r.denied) != 1 {
+		t.Fatalf("raced=%v revoked %v denied %v: the node that joined during the teardown must be revoked", raced, r.revoked, r.denied)
+	}
+	if nr, _ := r.st.NodeGet(ctx, "node-1"); nr.State != "revoked" {
+		t.Fatalf("node %+v", nr)
+	}
+	// and a node cannot bind after the mark
+	r.addNode("node-2")
+	res2 := r.provision("job-2")
+	if err := r.eng.Teardown(ctx, res2.Token, "idle"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.eng.NodeJoined(ctx, res2.Token, "node-2"); burst.CodeOf(err) != burst.CodeProvisionRefused {
+		t.Fatalf("a torn-down intent takes no node: %v", err)
+	}
+}

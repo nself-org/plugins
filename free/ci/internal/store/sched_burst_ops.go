@@ -81,18 +81,27 @@ type BurstCounts struct {
 
 // BurstCountsOf reads the counters of a provider for a job key.
 func (s *Store) BurstCountsOf(ctx context.Context, provider, jobKey string, windowStart int64) (BurstCounts, error) {
+	return burstCounts(ctx, s.readers, provider, jobKey, windowStart)
+}
+
+// Counts reads the same counters inside the transaction, so the caps are re-checked at the commit.
+func (t BurstTx) Counts(provider, jobKey string, windowStart int64) (BurstCounts, error) {
+	return burstCounts(t.ctx, t.tx, provider, jobKey, windowStart)
+}
+
+func burstCounts(ctx context.Context, q rowQuerier, provider, jobKey string, windowStart int64) (BurstCounts, error) {
 	var c BurstCounts
 	var err error
-	if c.InFlight, err = burstCount(ctx, s.readers, `SELECT COUNT(*) FROM burst_intent WHERE provider=? AND state='live' AND node_id=''`, provider); err != nil {
+	if c.InFlight, err = burstCount(ctx, q, `SELECT COUNT(*) FROM burst_intent WHERE provider=? AND state='live' AND node_id=''`, provider); err != nil {
 		return c, err
 	}
-	if c.Open, err = burstCount(ctx, s.readers, `SELECT COUNT(*) FROM burst_intent WHERE provider=? AND state<>'terminal'`, provider); err != nil {
+	if c.Open, err = burstCount(ctx, q, `SELECT COUNT(*) FROM burst_intent WHERE provider=? AND state<>'terminal'`, provider); err != nil {
 		return c, err
 	}
-	if c.JobWindow, err = burstCount(ctx, s.readers, `SELECT COUNT(*) FROM burst_intent WHERE job_key=? AND created_at>=?`, jobKey, windowStart); err != nil {
+	if c.JobWindow, err = burstCount(ctx, q, `SELECT COUNT(*) FROM burst_intent WHERE job_key=? AND created_at>=?`, jobKey, windowStart); err != nil {
 		return c, err
 	}
-	c.TeardownFailed, err = burstCount(ctx, s.readers, `SELECT COUNT(*) FROM burst_teardown_failure WHERE provider=?`, provider)
+	c.TeardownFailed, err = burstCount(ctx, q, `SELECT COUNT(*) FROM burst_teardown_failure WHERE provider=?`, provider)
 	return c, err
 }
 

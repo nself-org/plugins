@@ -41,6 +41,8 @@ type rig struct {
 	cfg     burst.Config
 	path    string
 	wrap    func(burst.Provider) burst.Provider
+	// teamHook runs when the engine asks whether it is a TEAM coordinator: after the counters are read, before the commit.
+	teamHook func()
 }
 
 func policy() economics.Policy {
@@ -77,14 +79,22 @@ func (r *rig) open() *store.Store {
 }
 
 // build (re)creates the engine; a second call after a "kill" is the restarted coordinator.
-func (r *rig) build() {
+func (r *rig) build() { r.eng = r.newEngine() }
+
+// newEngine builds another engine over the same store, cloud and clock.
+func (r *rig) newEngine() *burst.Engine {
 	r.t.Helper()
 	var prov burst.Provider = r.cloud
 	if r.wrap != nil {
 		prov = r.wrap(prov)
 	}
 	eng, err := burst.New(burst.Options{Store: r.st, Providers: []burst.Provider{prov}, Coordinator: coord, Config: r.cfg, Now: r.clk.Now,
-		Spend: economics.StaticSpend(r.pol), Team: func() bool { return r.team }, Revoker: revoker{r}, Alert: func(a burst.Alert) { r.alerts = append(r.alerts, a) },
+		Spend: economics.StaticSpend(r.pol), Team: func() bool {
+			if r.teamHook != nil {
+				r.teamHook()
+			}
+			return r.team
+		}, Revoker: revoker{r}, Alert: func(a burst.Alert) { r.alerts = append(r.alerts, a) },
 		Exclusion: func(context.Context) (deployguard.Set, error) {
 			var es []deployguard.Entry
 			for _, a := range r.exclude {
@@ -100,7 +110,7 @@ func (r *rig) build() {
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	r.eng = eng
+	return eng
 }
 
 // revoker revokes through the real store aggregate with the burst hook and a recording deny-list stand-in.

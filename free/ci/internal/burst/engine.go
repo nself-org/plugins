@@ -82,6 +82,7 @@ type Alert struct {
 const (
 	AlertTeardownFailed = "burst.teardown_failed"
 	AlertOrphan         = "burst.orphan"
+	AlertExcluded       = "burst.excluded"
 )
 
 // ErrKilled is returned by a Fault hook to stop the engine at a point exactly as a
@@ -95,6 +96,8 @@ const (
 	PointAfterJoin   = "after-join"
 	PointMidJob      = "mid-job"
 	PointMidTeardown = "mid-teardown"
+	// PointBeforeMark is inside Teardown, after the intent was read and before it is marked tearing-down.
+	PointBeforeMark = "before-mark"
 )
 
 // Options builds an Engine.
@@ -126,6 +129,7 @@ type Engine struct {
 	cfg       Config
 	providers map[string]Provider
 	mu        sync.Mutex
+	provMu    sync.Mutex
 	orphans   map[string]bool
 	loop      *loopState
 }
@@ -137,6 +141,8 @@ func New(o Options) (*Engine, error) {
 		return nil, errors.New("burst: a store is required")
 	case o.Coordinator == "":
 		return nil, errors.New("burst: a coordinator id is required")
+	case !labelSafe(o.Coordinator):
+		return nil, errors.New("burst: the coordinator id must be 1 to 63 characters of letters, digits, '.', '_' or '-' (it is a machine label)")
 	case o.Spend == nil:
 		return nil, errors.New("burst: a spend policy source is required")
 	case o.Exclusion == nil:
@@ -211,3 +217,16 @@ var (
 	errExcluded    = errors.New("burst: resource is in the exclusion set")
 	errStillListed = errors.New("burst: resource still listed")
 )
+
+// labelSafe reports whether v can be a label value at every provider.
+func labelSafe(v string) bool {
+	if v == "" || len(v) > MaxLabelValue {
+		return false
+	}
+	for _, c := range v {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
+}

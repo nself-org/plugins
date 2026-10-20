@@ -11,7 +11,8 @@ package burst
 // treats not-found as success; List returns only resources carrying every
 // requested label; every resource carries role, coordinator_id and intent, each
 // value at most 63 characters; CreatedAt is the provider's own clock reading and
-// never zero; no method may block past its context.
+// never zero (on Provision and List results alike); Estimate is local arithmetic and
+// never calls the provider API (it runs before the intent is committed); no method may block past its context.
 
 import (
 	"context"

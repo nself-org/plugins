@@ -93,6 +93,15 @@ func TestConformanceKitCatchesBrokenProviders(t *testing.T) {
 				return r, err
 			}}
 		}},
+		{"list reports no created at", "provision_labels_and_created_at", func(p burst.Provider) burst.Provider {
+			return wrapper{Provider: p, list: func(ctx context.Context, l map[string]string, p burst.Provider) ([]burst.Resource, error) {
+				rs, err := p.List(ctx, l)
+				for i := range rs {
+					rs[i].CreatedAt = time.Time{}
+				}
+				return rs, err
+			}}
+		}},
 		{"long labels accepted", "labels_within_63_characters", func(p burst.Provider) burst.Provider {
 			return wrapper{Provider: p, provision: func(ctx context.Context, in burst.Intent, p burst.Provider) (burst.Resource, error) {
 				if len(in.Token) > burst.MaxLabelValue {

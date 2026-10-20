@@ -35,14 +35,12 @@ func Step(ctx context.Context, v dispatch.View) error {
 	if err != nil {
 		return err
 	}
-	claimed := ""
+	// Every intent label must name the enrolled intent: the budget step reads the first one it finds,
+	// so a runner that lists its own intent after another's must not pass.
 	for _, l := range r.Capability.Identity.Labels {
-		if tok, ok := strings.CutPrefix(l, economics.IntentLabelPrefix); ok {
-			claimed = tok
+		if tok, ok := strings.CutPrefix(l, economics.IntentLabelPrefix); ok && (!bound || in.Token != tok) {
+			return &dispatch.Refusal{Reason: model.LabelsMismatch, Detail: "runner " + r.ID + " names a burst intent it is not enrolled with"}
 		}
-	}
-	if claimed != "" && (!bound || in.Token != claimed) {
-		return &dispatch.Refusal{Reason: model.LabelsMismatch, Detail: "runner " + r.ID + " names a burst intent it is not enrolled with"}
 	}
 	if !r.Ephemeral && !bound {
 		return nil

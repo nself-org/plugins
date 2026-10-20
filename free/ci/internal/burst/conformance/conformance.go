@@ -145,6 +145,11 @@ func provisionLabels(t tb, s Subject) {
 	if r.ID == "" || r.CreatedAt.IsZero() {
 		t.Fatalf("resource needs an id and the provider's CreatedAt: %+v", r)
 	}
+	for _, l := range list(t, s.Provider, map[string]string{burst.LabelIntent: "01J0000000000000000000TOK1"}) {
+		if l.CreatedAt.IsZero() {
+			t.Errorf("List must report the provider's CreatedAt for %s: the sweeper's age rule depends on it", l.ID)
+		}
+	}
 	for k, want := range burst.IntentLabels(coordA, "01J0000000000000000000TOK1") {
 		if r.Labels[k] != want {
 			t.Errorf("label %s = %q, want %q", k, r.Labels[k], want)

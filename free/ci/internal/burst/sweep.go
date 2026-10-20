@@ -53,12 +53,15 @@ func (e *Engine) Sweep(ctx context.Context, dryRun bool) (SweepReport, error) {
 				errs = append(errs, err)
 				continue
 			}
+			if act.Reason == SweepExcluded && Mine(r.Labels, e.o.Coordinator) && !dryRun {
+				e.alertOnce(Alert{Kind: AlertExcluded, Provider: id, Intent: r.Labels[LabelIntent], Resource: r.ID, Detail: "carries this coordinator's labels but is in the deploy-host exclusion set; left alone"})
+			}
 			if act.Reason == SweepForeign || act.Reason == SweepExcluded {
 				continue // not ours to report as an action
 			}
 			if !dryRun {
 				if act.Intentless && !act.Delete {
-					e.alertOrphan(r, id)
+					e.alertOnce(Alert{Kind: AlertOrphan, Provider: id, Resource: r.ID, Detail: "labelled for this coordinator but no intent row; deleted after max_lifetime + grace"})
 				}
 				if act.Delete {
 					if derr := e.remove(ctx, p, r, act); derr != nil {
@@ -77,8 +80,10 @@ func (e *Engine) Sweep(ctx context.Context, dryRun bool) (SweepReport, error) {
 func (e *Engine) judge(ctx context.Context, p Provider, ex deployguard.Set, r Resource) (SweepAction, error) {
 	token := r.Labels[LabelIntent]
 	act := SweepAction{Provider: p.ID(), Resource: r.ID, Intent: token}
-	f := SweepFacts{Mine: Mine(r.Labels, e.o.Coordinator), Excluded: excluded(ex, r), MaxLifetimeMs: e.cfg.MaxLifetime.Milliseconds(), GraceMs: e.cfg.Grace.Milliseconds(),
-		AgeMs: e.now().Sub(r.CreatedAt).Milliseconds()}
+	f := SweepFacts{Mine: Mine(r.Labels, e.o.Coordinator), Excluded: excluded(ex, r), MaxLifetimeMs: e.cfg.MaxLifetime.Milliseconds(), GraceMs: e.cfg.Grace.Milliseconds()}
+	if !r.CreatedAt.IsZero() {
+		f.AgeMs = e.now().Sub(r.CreatedAt).Milliseconds()
+	}
 	if token != "" {
 		in, ok, err := e.o.Store.BurstIntent(ctx, token)
 		if err != nil {
@@ -88,6 +93,11 @@ func (e *Engine) judge(ctx context.Context, p Provider, ex deployguard.Set, r Re
 			f.Mine = false // the label says ours, the intent row says another coordinator's: touch nothing
 		}
 		f.HasIntent, f.IntentState = ok, in.State
+		if ok && r.CreatedAt.IsZero() {
+			// A provider that reports no creation time (the conformance kit forbids it) must not read as "infinitely old":
+			// the intent's own birth is the best clock there is.
+			f.AgeMs = max(e.now().UnixMilli()-in.CreatedAt, 0)
+		}
 	}
 	v := SweepDecide(f)
 	act.Delete, act.Reason, act.Intentless = v.Delete, v.Reason, !f.HasIntent
@@ -111,13 +121,14 @@ func (e *Engine) remove(ctx context.Context, p Provider, r Resource, a SweepActi
 	})
 }
 
-// alertOrphan tells the operator once per run about an intent-less machine with this coordinator's labels.
-func (e *Engine) alertOrphan(r Resource, provider string) {
+// alertOnce tells the operator once per run about a machine (kind and resource are the dedupe key).
+func (e *Engine) alertOnce(a Alert) {
+	key := a.Kind + "/" + a.Resource
 	e.mu.Lock()
-	seen := e.orphans[r.ID]
-	e.orphans[r.ID] = true
+	seen := e.orphans[key]
+	e.orphans[key] = true
 	e.mu.Unlock()
 	if !seen && e.o.Alert != nil {
-		e.o.Alert(Alert{Kind: AlertOrphan, Provider: provider, Resource: r.ID, Detail: "labelled for this coordinator but no intent row; deleted after max_lifetime + grace"})
+		e.o.Alert(a)
 	}
 }
