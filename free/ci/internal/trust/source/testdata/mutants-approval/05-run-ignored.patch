@@ -1,0 +1,13 @@
+--- a/internal/trust/source/approval.go
++++ b/internal/trust/source/approval.go
+@@ -57,9 +57,7 @@
+ 		return []string{VoidIncomplete}
+ 	}
+ 	var out []string
+-	if a.Run != cur.Run {
+-		out = append(out, VoidRun)
+-	}
++	_ = VoidRun
+ 	if !strings.EqualFold(a.HeadSHA, cur.HeadSHA) {
+ 		out = append(out, VoidHeadSHA)
+ 	}

@@ -207,6 +207,24 @@ Limits, so you can judge them: the reflog expires and is read for the last 5000 
 
 Handoff for later Tickets: `source.Classify(model.TriggerFacts) Result` and `source.ClassifyLocal(source.GitFacts) Result` are pure (`internal/trust/source`). `run.SourceTrust` is the registered `TrustClassifier`; `Decide` returns the reasons, `ClassifyForge(ctx, root, facts)` classifies a forge trigger (P7-TRUST-17 feeds it recorded deliveries; P7-TRUST-24 reads `RequiresApproval`). The `Kind`, `Auth` and `Repo` fields of the facts carry no source label: the adapters must derive them from the authenticated delivery, not from its body. `source.ApplyCap` is the one place the machine cap lowers a class.
 
+### Run approvals
+
+A run that needs approval waits in the `approval` admission step with the placement reason `approval.required` until a valid approval exists. A run needs approval when the source facts recorded for it say so, or, with no facts recorded, when its source trust is `untrusted` (a collaborator's pushed commit is not held; a stranger's is).
+
+```
+nself ci runs pending [--json]                    # held runs with reason keys
+nself ci runs approve <run> [--sha <sha>] [--spend] [--json]
+```
+
+- The approver must hold `release` or `admin` and must not be the author of the run. The author's own approval is `E688` (`approval.self`); an unknown author is `E688` (`approval.author_unknown`); a member is `E687`. The local operator is exempt from the author rule, as for every `run.approve` decision.
+- An approval binds the run, its head SHA, its config digest and its head repo, as stored when the approval is recorded. Name the run by its exact id: a prefix or `latest` needs `--sha <head>` too, because it can resolve to a run someone started a moment ago. `--sha` refuses the approval unless the run is still at that head (`approval.bad_binding`), before any spend is approved.
+- Any change of head SHA, config digest or head repo voids the approval and returns the run to pending; a re-run of the same SHA and digest keeps it. Validity is computed from the stored rows at every admission, so a void that has not been written yet still holds the run. `ci runs pending` writes the voids, one audit row each (`approval.void`); every approval writes one row (`approval.grant`) besides the `authorize` decision row.
+- `--spend` needs `admin` and calls the spend approval once before the run approval is recorded; if it is refused, nothing is recorded. On a run that needs no trust approval, `--spend` records the spend approval only.
+- A void stands: if the binding changes and later matches again, the approval stays void and the run waits for a fresh approval. When a stale approval is replaced by a new one, its void row is written first.
+- The admission step reads only stored run facts inside the admission transaction (no network), so a push that lands between approval and lease returns the run to pending instead of leasing a SHA nobody approved.
+
+Handoff: `source.Binding`, `source.VoidReasons` and `source.RequiresApproval` are the pure rules (`internal/trust/source/approval.go`); the rows live in `internal/store/trust_approvals.go` (`trust_run_facts`, `trust_approvals`). The source hook records the facts with `Store.RecordApprovalFacts` (not yet wired: see the Epic Invalidations).
+
 ## Roles, tokens and the audit log
 
 A TEAM coordinator knows three roles, ordered `member < release < admin`, and no per-user permissions. In PERSONAL mode the operator on the coordinator host is allowed everything (access to the data directory is admin access) and every decision is still audited.

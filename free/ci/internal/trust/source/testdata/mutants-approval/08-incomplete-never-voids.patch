@@ -1,0 +1,12 @@
+--- a/internal/trust/source/approval.go
++++ b/internal/trust/source/approval.go
+@@ -53,9 +53,6 @@
+ // VoidReasons lists the binding fields in which cur differs from the approval, in a fixed order.
+ // An incomplete approved or current binding voids with VoidIncomplete alone.
+ func VoidReasons(a Binding, cur Binding) []string {
+-	if !a.Complete() || !cur.Complete() {
+-		return []string{VoidIncomplete}
+-	}
+ 	var out []string
+ 	if a.Run != cur.Run {
+ 		out = append(out, VoidRun)
