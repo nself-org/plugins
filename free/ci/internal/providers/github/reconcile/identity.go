@@ -37,7 +37,7 @@ func (e *Engine) checkIdentity(ctx context.Context, repo string, id int64, fullN
 			ID int64 `json:"id"`
 		}{id})
 	case pin.ID != id:
-		return fmt.Errorf("%w: %s changed repository id", ErrIdentity, repo)
+		return fmt.Errorf("%w: %s changed repository id (a deleted and recreated repository: remove the stored identity fact github/%s/identity to accept the new one)", ErrIdentity, repo, lower(repo))
 	}
 	return nil
 }

@@ -338,10 +338,16 @@ func TestRedeliverRefusedFallsBack(t *testing.T) {
 	if len(r.f.repos["acme/app"].Redelivered) != 0 || len(r.enq.deliveries()) != 1 {
 		t.Fatalf("403 on redelivery: redelivered %v, enqueued %d; want the head scan", r.f.repos["acme/app"].Redelivered, len(r.enq.deliveries()))
 	}
-	r = setup(map[string]int{"901": 404}) // an aged-out delivery: the newer one is still redelivered
+	r = setup(map[string]int{"901": 404}) // an aged-out delivery: skipped for good, the newer one is still redelivered
 	err0 := r.e.GitHub().Reconcile(context.Background(), r.enq)
-	if err0 == nil || strings.Join(r.f.repos["acme/app"].Redelivered, ",") != "902" || len(r.enq.deliveries()) != 0 {
-		t.Fatalf("404 on the oldest: err=%v redelivered=%v enqueued=%d, want an error and 902 only", err0, r.f.repos["acme/app"].Redelivered, len(r.enq.deliveries()))
+	if err0 != nil || strings.Join(r.f.repos["acme/app"].Redelivered, ",") != "902" || len(r.enq.deliveries()) != 0 {
+		t.Fatalf("404 on the oldest: err=%v redelivered=%v enqueued=%d, want no error and 902 only", err0, r.f.repos["acme/app"].Redelivered, len(r.enq.deliveries()))
+	}
+	r.clk.Advance(SweepEvery)
+	r.f.reset()
+	_ = r.e.GitHub().Reconcile(context.Background(), r.enq)
+	if n := r.f.count(func(q reqRec) bool { return q.Method == "POST" }); n != 0 {
+		t.Fatalf("the gone delivery was tried again: %d POSTs", n)
 	}
 	r = setup(map[string]int{"901": 422}) // the oldest cannot be redelivered; the newer one still is
 	err := r.e.GitHub().Reconcile(context.Background(), r.enq)

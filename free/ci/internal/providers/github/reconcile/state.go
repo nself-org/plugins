@@ -196,11 +196,17 @@ func (e *Engine) flush(ctx context.Context) error {
 	if !l.dirty {
 		return nil
 	}
-	return e.putFact(ctx, scopeToken, "ledger", struct {
+	err := e.putFact(ctx, scopeToken, "ledger", struct {
 		Hour   int64 `json:"hour"`
 		Scan   int   `json:"scan"`
 		Demand int   `json:"demand"`
 	}{l.Hour, l.Scan, l.Demand})
+	if err != nil { // keep it dirty: the next flush writes it again
+		e.mu.Lock()
+		e.ledger.dirty = true
+		e.mu.Unlock()
+	}
+	return err
 }
 
 // backoff is the quota stop shared by both Reconcilers.

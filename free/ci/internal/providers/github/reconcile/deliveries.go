@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/providers"
 )
 
 // redeliverHorizon is how far back a failed delivery is still worth redelivering (GitHub keeps 3 days).
@@ -137,6 +139,13 @@ func (e *Engine) redeliverHook(ctx context.Context, s *session, repo string, h g
 		if _, err = s.post(ctx, "/repos/{owner}/{repo}/hooks/{hook}/deliveries/{delivery}/attempts", params); err != nil {
 			if forbidden(err) { // the token may list deliveries but not redeliver them: scan the heads instead
 				return done, false, nil
+			}
+			var pe *providers.Error
+			if errors.As(err, &pe) && pe.Status == 404 { // that delivery is gone: skip it for good, the newer ones go on
+				if merr := e.mark(ctx, "redeliver", repo, id); merr != nil {
+					return done, true, merr
+				}
+				continue
 			}
 			var quota *QuotaStop
 			if errors.As(err, &quota) || errors.Is(err, ErrCallBound) || errors.Is(err, ErrBudget) {
