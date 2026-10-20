@@ -1,0 +1,17 @@
+{
+ "object_kind": "push",
+ "event_name": "push",
+ "before": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+ "after": "0000000000000000000000000000000000000000",
+ "ref": "refs/heads/old",
+ "checkout_sha": null,
+ "user_username": "dev1",
+ "project_id": 1001,
+ "project": {
+  "id": 1001,
+  "name": "app",
+  "path_with_namespace": "acme/app",
+  "web_url": "https://gitlab.example.com/acme/app",
+  "visibility_level": 0
+ }
+}

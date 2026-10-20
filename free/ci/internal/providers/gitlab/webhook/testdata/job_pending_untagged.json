@@ -1,0 +1,28 @@
+{
+ "object_kind": "build",
+ "ref": "refs/merge-requests/7/head",
+ "tag": false,
+ "before_sha": "0000000000000000000000000000000000000000",
+ "sha": "dddddddddddddddddddddddddddddddddddddddd",
+ "build_id": 9001,
+ "build_name": "test",
+ "build_stage": "test",
+ "build_status": "pending",
+ "pipeline_id": 501,
+ "project_id": 1001,
+ "project_name": "Acme / app",
+ "user": {
+  "id": 55,
+  "name": "Dev One",
+  "username": "dev1"
+ },
+ "tag_list": [
+  "linux"
+ ],
+ "repository": {
+  "name": "app",
+  "homepage": "https://gitlab.example.com/acme/app",
+  "git_http_url": "https://gitlab.example.com/acme/app.git",
+  "visibility_level": 0
+ }
+}

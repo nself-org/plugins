@@ -1,0 +1,15 @@
+{
+ "object_kind": "tag_push",
+ "before": "cccccccccccccccccccccccccccccccccccccccc",
+ "after": "0000000000000000000000000000000000000000",
+ "ref": "refs/tags/v0.9",
+ "checkout_sha": null,
+ "user_username": "dev1",
+ "project": {
+  "id": 1001,
+  "name": "app",
+  "path_with_namespace": "acme/app",
+  "web_url": "https://gitlab.example.com/acme/app",
+  "visibility_level": 0
+ }
+}

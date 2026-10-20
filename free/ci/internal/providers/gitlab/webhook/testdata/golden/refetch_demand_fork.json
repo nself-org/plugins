@@ -1,0 +1,117 @@
+{
+  "schema": "ci.trigger-facts/v1",
+  "source": "gitlab",
+  "kind": "runner_demand",
+  "delivery_id": "msg-1",
+  "received_at": "2026-10-19T12:00:00Z",
+  "auth": "per-repo",
+  "repo": "acme/app",
+  "repo_id": "1001",
+  "revision": "dddddddddddddddddddddddddddddddddddddddd",
+  "revision_source": "payload",
+  "actor": {
+    "value": "dev1",
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "actor_permission": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "author_association": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "head_repo": {
+    "value": "contrib/app-fork",
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "fork": {
+    "value": true,
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "first_time": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "bot": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "protected_ref": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "visibility": {
+    "value": "private",
+    "source": "payload",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "sha_reachable": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "head_current": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "changed_files": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "group_protected_only": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "run_event": {
+    "value": "merge_request_event",
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "runner_labels": {
+    "value": [
+      "nself",
+      "linux"
+    ],
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "provider_job_id": {
+    "value": "9001",
+    "source": "payload",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "provider_run_id": {
+    "value": "501",
+    "source": "payload",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  }
+}
