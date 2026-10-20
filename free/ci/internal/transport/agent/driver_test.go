@@ -149,7 +149,7 @@ func TestRunQueuesALeaseWithASignedTokenForThisNodeAttemptAndEpoch(t *testing.T)
 	u.m.mu.Lock()
 	defer u.m.mu.Unlock()
 	cl := u.m.claims[0]
-	if l.LeaseID != "l1" || l.Token != "token-"+cl.JTI || cl.RunnerID != "n-1" || cl.AttemptID != "att-l1" || cl.Epoch != 7 || cl.Revision != "rev1" || cl.JTI == "" || cl.JobID == "" {
+	if l.LeaseID != "l1" || l.Token != "token-"+cl.JTI || cl.RunnerID != "n-1" || cl.AttemptID != "att-l1" || cl.Epoch != 7 || cl.Revision != strings.Repeat("a", 40) || cl.JTI == "" || cl.JobID == "" {
 		t.Fatalf("lease %+v claims %+v", l, cl)
 	}
 	if u.m.limits[0] != time.Minute {

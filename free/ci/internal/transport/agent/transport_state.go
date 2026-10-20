@@ -1,0 +1,142 @@
+package agent
+
+// Purpose: the transport-session state of the pull carrier: renumbering the buffered frames for a new
+//          transport session (with the reconciling heartbeat first), the job tokens the upstream stream carries,
+//          and the resume position (confirmed seq).
+// Inputs:  the carrier's frame buffer, token set and seq counters; leases the long-poll delivers.
+// Outputs: the first frame of a new session, token generations, adopted resume positions.
+// Constraints: the caller of the unexported helpers holds c.mu where noted; a token is registered with the
+//          upstream stream before the session sees its lease.
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/protocol"
+)
+
+// resetTransport renumbers the buffered frames for a new transport session; the caller holds c.mu. Old
+// heartbeats and acks are dropped (stale), and the latest heartbeat goes first so the coordinator reconciles
+// the leases this agent kept.
+func (c *Carrier) resetTransport() {
+	c.nextT, c.confirmed, c.written = 0, 0, 0
+	keep := c.out[:0]
+	c.outBytes = 0
+	for _, f := range c.out {
+		if f.m.Type == "heartbeat" || f.m.Type == "ack" {
+			continue
+		}
+		f.tseq = 0
+		keep = append(keep, f)
+		c.outBytes += f.size
+	}
+	c.out = keep
+	if beat := c.reconcileBeat(); beat != nil {
+		b, _ := encode(*beat, 1)
+		c.out = append([]*outFrame{{m: *beat, size: len(b)}}, c.out...)
+		c.outBytes += len(b)
+	}
+}
+
+// reconcileBeat is the first frame of a new transport session: the latest heartbeat the session sent plus an
+// entry for every lease this carrier delivered that the heartbeat does not name (it started after it), or just
+// the delivered leases when the session sent none yet. Every lease the agent kept is named, so the coordinator
+// rebinds each token to the new session. The caller holds c.mu.
+func (c *Carrier) reconcileBeat() *protocol.Message {
+	var hb protocol.Heartbeat
+	if c.lastBeat != nil {
+		if b, ok := c.lastBeat.Body.(protocol.Heartbeat); ok {
+			hb = b
+			hb.Leases = append([]protocol.LeaseState(nil), b.Leases...)
+		}
+	}
+	named := map[string]bool{}
+	for _, l := range hb.Leases {
+		named[l.LeaseID] = true
+	}
+	for id := range c.tokens {
+		if !named[id] {
+			hb.Leases = append(hb.Leases, protocol.LeaseState{LeaseID: id, Epoch: c.epochs[id], State: "running"})
+		}
+	}
+	if hb.Leases == nil {
+		if c.lastBeat == nil {
+			return nil
+		}
+		hb.Leases = []protocol.LeaseState{}
+	}
+	return &protocol.Message{Type: "heartbeat", Body: hb}
+}
+
+// registerToken records the token of a lease and waits until the upstream stream carries it.
+func (c *Carrier) registerToken(ctx context.Context, l protocol.Lease) error {
+	if l.Token == "" {
+		return nil
+	}
+	c.mu.Lock()
+	c.epochs[l.LeaseID] = l.Epoch
+	if c.tokens[l.LeaseID] != l.Token {
+		c.tokens[l.LeaseID] = l.Token
+		c.gen++
+	}
+	want := c.gen
+	c.mu.Unlock()
+	c.signal(c.wake)
+	timer := time.NewTimer(10 * time.Second)
+	defer timer.Stop()
+	for {
+		c.mu.Lock()
+		ok, ch := c.liveGen >= want, c.up
+		c.mu.Unlock()
+		if ok {
+			return nil
+		}
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			return errors.New("carrier: the upstream stream did not pick up the job token")
+		}
+	}
+}
+
+// tokenSnapshot returns the current token generation and a copy of the tokens.
+func (c *Carrier) tokenSnapshot() (int, map[string]string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	cp := make(map[string]string, len(c.tokens))
+	for k, v := range c.tokens {
+		cp[k] = v
+	}
+	return c.gen, cp
+}
+
+func (c *Carrier) setLive(gen int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if gen > c.liveGen {
+		c.liveGen = gen
+		close(c.up)
+		c.up = make(chan struct{})
+	}
+}
+
+// adopt takes the coordinator's last accepted seq as confirmed when it lies between what the agent knew and
+// what it sent.
+func (c *Carrier) adopt(last uint64) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if last < c.confirmed || last > c.nextT {
+		return false
+	}
+	c.trim(last)
+	return true
+}
+
+func (c *Carrier) confirmedSeq() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.confirmed
+}

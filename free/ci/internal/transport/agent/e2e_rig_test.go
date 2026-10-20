@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -147,19 +148,25 @@ func (s *runSink) nResults() int {
 
 type e2e struct {
 	*rig
-	drv  *Driver
-	srv  *agentapi.Server
-	ln   net.Listener
-	base string
-	sink *runSink
-	pub  ed25519.PublicKey
+	ips       []net.IP      // SANs of the server leaf (default loopback)
+	heartbeat time.Duration // listener timings (0: defaults)
+	coordTTL  time.Duration
+	drv       *Driver
+	srv       *agentapi.Server
+	ln        net.Listener
+	base      string
+	sink      *runSink
+	pub       ed25519.PublicKey
 }
 
 // newE2E starts the listener on addr ("" picks a free loopback port).
-func newE2E(t *testing.T, addr string) *e2e {
+func newE2E(t *testing.T, addr string) *e2e { return newE2EWith(t, addr, nil, 0, 0) }
+
+// newE2EWith starts the listener on addr with extra SAN addresses and listener timings.
+func newE2EWith(t *testing.T, addr string, ips []net.IP, heartbeat, coordTTL time.Duration) *e2e {
 	t.Helper()
 	r := newRig(t)
-	e := &e2e{rig: r, sink: &runSink{eng: r.eng}}
+	e := &e2e{rig: r, sink: &runSink{eng: r.eng}, ips: append([]net.IP{net.ParseIP("127.0.0.1")}, ips...), heartbeat: heartbeat, coordTTL: coordTTL}
 	e.drv = &Driver{Gate: r.gate(), Minter: r.tokens, Leases: r.st, LogDir: t.TempDir(), Poll: 30 * time.Millisecond, CancelGrace: 2 * time.Second}
 	e.pub, _, _ = ed25519.GenerateKey(rand.Reader)
 	e.start(addr)
@@ -171,9 +178,9 @@ func (e *e2e) start(addr string) {
 	if addr == "" {
 		addr = "127.0.0.1:0"
 	}
-	leaf := &agentapi.LeafSource{CA: e.ca, ID: "coord-1", IPs: []net.IP{net.ParseIP("127.0.0.1")}}
+	leaf := &agentapi.LeafSource{CA: e.ca, ID: "coord-1", IPs: e.ips}
 	cfg := agentapi.Config{CA: e.ca, Guard: pki.NewGuard(e.st), Cert: leaf.Get, Leases: e.eng, Sink: e.drv.Sink(), Source: e.drv, Store: e.st,
-		Admit: e.drv.Gate.Check, Blobs: e.drv.Blobs(), PollTimeout: 2 * time.Second, SourcePoll: 20 * time.Millisecond, GuardEvery: 50 * time.Millisecond}
+		Admit: e.drv.Gate.Check, Blobs: e.drv.Blobs(), Heartbeat: e.heartbeat, CoordinatorTTL: e.coordTTL, PollTimeout: 2 * time.Second, SourcePoll: 20 * time.Millisecond, GuardEvery: 50 * time.Millisecond}
 	srv, err := agentapi.New(cfg)
 	if err != nil {
 		e.rt().Fatal(err)
@@ -334,7 +341,7 @@ func eventually(t *testing.T, within time.Duration, what string, cond func() boo
 // protoLease is the lease the dispatcher hands to Deliver for the seeded attempt.
 func protoLease(leaseID, attemptID string, epoch uint64) protocol.Lease {
 	return protocol.Lease{LeaseID: leaseID, AttemptID: attemptID, Epoch: epoch, CompatMode: protocol.Compat15, Job: model.Job{Kind: "test", Run: []string{"true"}, Timeout: "1m"},
-		Checkout: protocol.Checkout{Revision: "rev1"}, Secrets: []protocol.SecretRef{}, ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}
+		Checkout: protocol.Checkout{Revision: strings.Repeat("a", 40)}, Secrets: []protocol.SecretRef{}, ExpiresAt: time.Now().Add(time.Minute).UTC().Format(time.RFC3339)}
 }
 
 func (e *e2e) rt() *testing.T { return e.rig.t }
