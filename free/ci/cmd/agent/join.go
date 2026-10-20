@@ -80,7 +80,7 @@ func runJoin(ctx context.Context, args []string, sio IO) int {
 	}
 	in := bufio.NewReader(sio.Stdin)
 	line := func(q string) (string, error) {
-		fmt.Fprint(sio.Stderr, q)
+		_, _ = fmt.Fprint(sio.Stderr, q)
 		s, err := in.ReadString('\n')
 		if err != nil && (err != io.EOF || s == "") {
 			return "", err

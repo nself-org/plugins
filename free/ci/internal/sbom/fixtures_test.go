@@ -1,3 +1,5 @@
+//go:build sbomtool
+
 package sbom_test
 
 import (

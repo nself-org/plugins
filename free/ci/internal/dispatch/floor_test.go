@@ -71,7 +71,7 @@ func TestRaiseIsolationNeverLowers(t *testing.T) {
 	for _, level := range []model.Isolation{"process", "container", "sandboxed-container", "vm", "ephemeral-vm"} {
 		for _, floor := range []model.Isolation{"", "process", "container", "sandboxed-container"} {
 			got := raiseIsolation(model.Job{Isolation: level}, floor).Isolation
-			if got != level && !(floor != "" && got == floor) {
+			if got != level && (floor == "" || got != floor) {
 				t.Fatalf("level %q floor %q gave %q", level, floor, got)
 			}
 			if rank := map[model.Isolation]int{"process": 0, "container": 1, "sandboxed-container": 2, "vm": 3, "ephemeral-vm": 4}; rank[got] < rank[level] {
