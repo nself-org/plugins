@@ -115,6 +115,10 @@ func (n *nodeSecrets) start(l protocol.Lease) {
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
+		if n.resolve == nil {
+			n.logf("pull: lease %s declares secrets and this node has no resolver", l.LeaseID)
+			return
+		}
 		vals, err := n.resolve(n.ctx, l.AttemptID, refs)
 		if err != nil {
 			n.logf("pull: secrets of lease %s could not be resolved on this node: %s", l.LeaseID, codeOf(err))

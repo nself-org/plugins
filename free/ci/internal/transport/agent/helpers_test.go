@@ -120,3 +120,5 @@ func readLog(t *testing.T, path string) string {
 }
 
 func transportHeader() transport.BlobHeader { return transport.BlobHeader{Stream: "artifact"} }
+
+func ctxBG() context.Context { return context.Background() }

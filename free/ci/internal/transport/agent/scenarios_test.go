@@ -12,6 +12,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -504,4 +505,69 @@ func scenarioBlob(t *testing.T) {
 	if b := e.sink.blobs[hex.EncodeToString(badSum[:])]; b != nil && b.committed {
 		t.Fatal("a blob that failed its digest was committed")
 	}
+}
+
+// scenarioCancelRace: a cancel and a result for the same attempt race; the store's compare-and-swap lets exactly
+// one win. The cancel that loses gets E605 (state changed concurrently); the result that loses gets E662 (the
+// lease is gone, so the agent stops and cleans up). Never two winners and never none.
+func scenarioCancelRace(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	wins := map[string]int{}
+	for i := 0; i < 25; i++ {
+		lease, att, ep := r.seedLease(fmt.Sprint(i), "n-1")
+		aep := attemptEpoch2(t, r, att)
+		var resErr, canErr error
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		wg.Add(2)
+		go func() { defer wg.Done(); <-start; resErr = r.eng.Result(ctx, lease, int64(ep)) }()
+		go func() {
+			defer wg.Done()
+			<-start
+			canErr = r.st.Transition(ctx, att, "running", "cancelled", store.TransitionDetail{Epoch: aep})
+		}()
+		close(start)
+		wg.Wait()
+		switch {
+		case resErr == nil && canErr == nil:
+			t.Fatalf("round %d: both the result and the cancel won", i)
+		case resErr != nil && canErr != nil:
+			t.Fatalf("round %d: neither won: result %v, cancel %v", i, resErr, canErr)
+		case resErr == nil:
+			wins["result"]++
+			wantLoser(t, canErr, "E605") // the cancel meets a finalizing attempt: state changed concurrently
+		default:
+			wins["cancel"]++
+			wantLoser(t, resErr, "E662") // the result meets a cancelled attempt: stale lease, the agent cleans up
+		}
+	}
+	t.Logf("wins: %v", wins)
+}
+
+func wantLoser(t *testing.T, err error, code string) {
+	t.Helper()
+	var se *store.Error
+	if !errors.As(err, &se) || se.Code != code {
+		t.Fatalf("the loser got %v, want %s", err, code)
+	}
+}
+
+func attemptEpoch2(t *testing.T, r *rig, att string) int64 {
+	t.Helper()
+	_, ep, err := r.st.AttemptStateEpoch(context.Background(), att)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ep
+}
+
+// scenarioTokenTable runs the whole R-DS-15 table: acceptance by call type, and every refusal with its reason.
+func scenarioTokenTable(t *testing.T) {
+	t.Run("one token on log, heartbeat and result", TestGateAdmitsTheSameTokenOnLogHeartbeatAndResult)
+	t.Run("each refusal has its own reason", TestGateRefusalTable)
+	t.Run("expired", TestGateExpiredToken)
+	t.Run("terminal", TestGateTerminalAttempt)
+	t.Run("spent", TestGateSpentTokenIsReplayed)
+	t.Run("over the wire", func(t *testing.T) { scenarioWireRefusals(t) })
 }
