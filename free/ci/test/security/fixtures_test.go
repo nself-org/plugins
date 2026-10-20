@@ -195,16 +195,16 @@ func (r *recSink) last(key string) (dispatch.Decision, bool) {
 
 // transport is the fabric transport fake: every kind is known, a hosted lease goes to
 // the hosted provider fake, a node lease is recorded. Nothing else is delivered.
-type transport struct {
+type fabricTransport struct {
 	mu     sync.Mutex
 	hosted *fake.Fake
 	nodes  []dispatch.Delivery
 	sent   []dispatch.Delivery
 }
 
-func (*transport) Known(string) bool { return true }
+func (*fabricTransport) Known(string) bool { return true }
 
-func (f *transport) Deliver(ctx context.Context, d dispatch.Delivery) error {
+func (f *fabricTransport) Deliver(ctx context.Context, d dispatch.Delivery) error {
 	f.mu.Lock()
 	f.sent = append(f.sent, d)
 	if !d.Hosted {
@@ -220,7 +220,7 @@ func (f *transport) Deliver(ctx context.Context, d dispatch.Delivery) error {
 	return err
 }
 
-func (f *transport) deliveries() []dispatch.Delivery {
+func (f *fabricTransport) deliveries() []dispatch.Delivery {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]dispatch.Delivery(nil), f.sent...)
@@ -232,7 +232,7 @@ type rig struct {
 	st     *store.Store
 	d      *dispatch.Dispatcher
 	sink   *recSink
-	tr     *transport
+	tr     *fabricTransport
 	hosted *fake.Fake
 }
 
@@ -240,7 +240,7 @@ func newRig(t *testing.T, eff trust.Effective, runners ...sched.Runner) *rig {
 	t.Helper()
 	st := openStore(t)
 	hosted := fake.New(fake.Options{Token: "synthetic-provider-token"})
-	r := &rig{t: t, st: st, sink: &recSink{}, tr: &transport{hosted: hosted}, hosted: hosted}
+	r := &rig{t: t, st: st, sink: &recSink{}, tr: &fabricTransport{hosted: hosted}, hosted: hosted}
 	d, err := dispatch.New(dispatch.Config{Store: st, Host: "host", Sink: r.sink, Transport: r.tr, World: worldOf(st, eff, runners...), Poll: 10 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
