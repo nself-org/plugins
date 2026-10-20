@@ -76,14 +76,14 @@ func (s *Store) TokenCheck(ctx context.Context, jti string) (b TokenBinding, fou
 }
 
 // TokenRebind moves jti from (fromSerial, fromSession) to (toSerial, toSession) when the row still names exactly
-// that serial and session. It reports whether the row moved. The serial changes when the node renewed its
+// that serial and session and the token is not spent. It reports whether the row moved. The serial changes when the node renewed its
 // certificate between two sessions.
 func (s *Store) TokenRebind(ctx context.Context, jti, fromSerial, fromSession, toSerial, toSession string) (moved bool, err error) {
 	if toSerial == "" || toSession == "" {
 		return false, coded("E607", "a rebind needs a serial and a session")
 	}
 	err = s.write(ctx, func(tx *sql.Tx) error {
-		res, e := tx.ExecContext(ctx, `UPDATE node_token SET serial=?, session=? WHERE jti=? AND serial=? AND session=?`, toSerial, toSession, jti, fromSerial, fromSession)
+		res, e := tx.ExecContext(ctx, `UPDATE node_token SET serial=?, session=? WHERE jti=? AND serial=? AND session=? AND spent=0`, toSerial, toSession, jti, fromSerial, fromSession)
 		if e != nil {
 			return e
 		}

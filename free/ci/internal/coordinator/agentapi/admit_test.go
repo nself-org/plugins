@@ -256,3 +256,40 @@ func TestTheTokensOfEveryLeaseAnAgentRunsFitTheHeader(t *testing.T) {
 		t.Fatalf("answer %s", m.Type)
 	}
 }
+
+func TestAHeartbeatThatFailedHalfwayDoesNotReconcileTheSession(t *testing.T) {
+	rec := &admitRec{}
+	r := newRig(t, func(c *Config) { c.Admit = rec.hook })
+	a := r.newAgent("n-1")
+	leaseID, epoch := r.seedLease("1")
+	a.connect()
+	u := a.openStreamTokens(0, leaseID+"=tok-1")
+	// the second entry has an invalid epoch: the heartbeat ends the stream after the first entry was vetted
+	u.send(heartbeat(protocol.LeaseState{LeaseID: leaseID, Epoch: epoch, State: "running"}, protocol.LeaseState{LeaseID: leaseID, Epoch: 0, State: "running"}))
+	if m := u.read(); m.Type != "reject" {
+		t.Fatalf("answer %s, want reject", m.Type)
+	}
+	u2 := a.openStreamTokens(0, leaseID+"=tok-1")
+	u2.send(heartbeat(protocol.LeaseState{LeaseID: leaseID, Epoch: epoch, State: "running"}))
+	if m := u2.read(); m.Type != "ack" {
+		t.Fatalf("resent heartbeat answer %s", m.Type)
+	}
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(rec.calls) != 2 || !rec.calls[0].Reconcile || !rec.calls[1].Reconcile {
+		t.Fatalf("calls = %+v: the resent heartbeat must still reconcile the session", rec.calls)
+	}
+}
+
+func TestACacheRefIsAcknowledgedLikeAnArtifactRef(t *testing.T) {
+	r := newRig(t, nil)
+	a := r.newAgent("n-1")
+	leaseID, epoch := r.seedLease("1")
+	a.connect()
+	u := a.openStream(0)
+	u.send(protocol.Message{Type: "cache-ref", LeaseID: leaseID, Epoch: &epoch, Body: protocol.CacheRef{LeaseID: leaseID, Spec: "go", Key: "k1", Blobs: []protocol.CacheBlob{}}})
+	m := u.read()
+	if m.Type != "ack" {
+		t.Fatalf("answer %s, want ack", m.Type)
+	}
+}

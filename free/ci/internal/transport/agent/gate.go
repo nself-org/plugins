@@ -162,6 +162,9 @@ func (g *Gate) bindOnce(ctx context.Context, c agentapi.Call, cl pki.TokenClaims
 	if !found || now.Serial != c.Serial || now.Session != c.Session {
 		return deny(ReasonWrongSession, "lease %s: the token is bound to another session", c.LeaseID)
 	}
+	if now.Spent {
+		return deny(ReasonReplayed, "lease %s: the result for this token was already accepted", c.LeaseID)
+	}
 	return nil
 }
 

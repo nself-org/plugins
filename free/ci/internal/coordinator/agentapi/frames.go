@@ -159,7 +159,7 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 	case err != nil:
 		return s.unavailable("frame "+m.Type, err)
 	}
-	if isResult || m.Type == "artifact-ref" {
+	if isResult || m.Type == "artifact-ref" || m.Type == "cache-ref" {
 		return s.ack(f, m.Seq, m.LeaseID)
 	}
 	return nil
@@ -200,7 +200,6 @@ func (s *Server) sendStale(f *flow, leaseID string, epoch uint64) *fatal {
 func (s *Server) heartbeat(q *request, f *flow, seq uint64, hb *protocol.Heartbeat) *fatal {
 	s.mu.Lock()
 	first := !q.sess.reconciled
-	q.sess.reconciled = true
 	s.mu.Unlock()
 	unacked := false
 	if len(hb.Leases) > maxHeartbeatLeases {
@@ -259,6 +258,9 @@ func (s *Server) heartbeat(q *request, f *flow, seq uint64, hb *protocol.Heartbe
 		}
 		s.mu.Unlock()
 	}
+	s.mu.Lock() // only a heartbeat that was processed to its end reconciles the session; a resent one reconciles again
+	q.sess.reconciled = true
+	s.mu.Unlock()
 	if unacked {
 		return nil
 	}

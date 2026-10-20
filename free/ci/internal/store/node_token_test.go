@@ -193,3 +193,20 @@ func TestTokenPrune(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenRebindRefusesASpentToken(t *testing.T) {
+	s, _ := pkiTestStore(t)
+	ctx := context.Background()
+	if _, _, err := s.TokenBind(ctx, tokRow("j1", "s1", "sess1", 5)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.TokenSpend(ctx, "j1"); err != nil {
+		t.Fatal(err)
+	}
+	if moved, err := s.TokenRebind(ctx, "j1", "s1", "sess1", "s1", "sess2"); err != nil || moved {
+		t.Fatalf("a spent token moved to a new session: moved=%v err=%v", moved, err)
+	}
+	if b, _, _ := s.TokenCheck(ctx, "j1"); b.Session != "sess1" || !b.Spent {
+		t.Fatalf("binding %+v", b)
+	}
+}
