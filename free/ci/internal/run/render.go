@@ -58,6 +58,7 @@ type JobOutcome struct {
 	Flaky       *model.Flaky
 	retryable   bool // the failure is proven infrastructure (known signature) and may be retried
 	parked      bool // the failed attempt was queued for the store's retry path: the next attempt follows
+	refused     bool // the provider refused the dispatch (credential, permission, configuration): no rerun of any kind
 }
 
 // Event is one thing that happened during a run.

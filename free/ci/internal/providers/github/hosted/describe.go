@@ -58,12 +58,17 @@ func (p *Provider) Describe(ctx context.Context, q providers.Query) ([]model.Cap
 	}
 	visibility := "private"
 	var info repoInfo
-	if _, err = c.Do(ctx, "GET", repoPath, repo.params(), nil, &info); err != nil {
-		if isCredentialMissing(err) {
-			return nil, err
+	// While the provider is down the lookup is not sent: every world build would otherwise be one more
+	// request against a failing API. The runner is described as private (the rule for an unreadable
+	// repository) and stays offline; the next probe or recovery describes it fully (P7-HOST-11).
+	if providers.HealthOf(ctx, p.ID()).State != "down" {
+		if _, err = c.Do(ctx, "GET", repoPath, repo.params(), nil, &info); err != nil {
+			if isCredentialMissing(err) {
+				return nil, err
+			}
+		} else if info.Visibility == visibilityPublic && !info.Private {
+			visibility = visibilityPublic
 		}
-	} else if info.Visibility == visibilityPublic && !info.Private {
-		visibility = visibilityPublic
 	}
 	now := p.cfg.Clock().UTC().Truncate(time.Second)
 	out := make([]model.Capability, 0, len(labels))
@@ -119,7 +124,9 @@ func capability(repo repoRef, project, visibility string, l githubtmpl.Label, no
 	c.Separation.UIDSeparation, c.Separation.SigningEligible = assigned(true, now), assigned(false, now)
 	c.Protocol.Versions, c.Protocol.Min = []int{1}, 1
 	c.Verified = model.CapabilityVerified{By: "provider", At: now}
-	c.Lifecycle.Discovered, c.Lifecycle.Eligible = true, true
+	// Discovered means "found but not enrolled": the scheduler refuses such a runner (node.discovered),
+	// so a hosted runner, authorized through the job's trust grants, must not carry it (P7-HOST-11).
+	c.Lifecycle.Discovered, c.Lifecycle.Eligible = false, true
 	c.Lifecycle.AuthorizedProjects = []string{}
 	if project != "" {
 		c.Lifecycle.AuthorizedProjects = []string{project}
