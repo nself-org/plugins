@@ -124,6 +124,7 @@ func Build(ctx context.Context, d Deps, pipeline sched.Pipeline) (sched.World, s
 		w.Runners[i].QueuedAhead = int64(snapshot.Queued[snapshot.Projects[pipeline.ID]])
 	}
 	sort.Slice(w.Runners, func(i, j int) bool { return w.Runners[i].ID < w.Runners[j].ID })
+	fillRunning(w.Runners, snapshot.Active, d.Jobs) // TM-11: what runs on each node decides isolation.cotenancy
 	for _, a := range snapshot.Active {
 		w.Counts.Global++
 		if a.PipelineID == pipeline.ID {
@@ -180,6 +181,9 @@ func Build(ctx context.Context, d Deps, pipeline sched.Pipeline) (sched.World, s
 	}
 	if err = runContributors(ctx, &w); err != nil {
 		return sched.World{}, "", err
+	}
+	if floor := previousIsolation(d.Jobs, snapshot.PreviousByJob, w.Runners, w.Hosted); len(floor) > 0 && w.PreviousIsolation == nil {
+		w.PreviousIsolation = floor // TM-08: a retry never lowers isolation
 	}
 	digest, err := Digest(w)
 	if err != nil {

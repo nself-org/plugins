@@ -23,7 +23,9 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/exec"
+	"github.com/nself-org/plugins/free/ci/internal/isolation"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
 const aModuleRoot = "../../.." // free/ci
@@ -80,9 +82,6 @@ func aAnyContains(src map[string]string, skipDirs []string, needles ...string) (
 // A11: the node agent executes leases through an Executor with no Isolator (Isolation nil means the
 // baseline isolator: process, or the unhardened legacy container).
 func TestA11_AgentExecutorHasAnIsolator(t *testing.T) {
-	if !openFinding(t, "A01") {
-		return
-	}
 	text, err := os.ReadFile(filepath.Join(aModuleRoot, "cmd/agent/exec.go"))
 	if err != nil {
 		t.Fatal(err)
@@ -102,7 +101,8 @@ func TestA11_AgentExecutorHasAnIsolator(t *testing.T) {
 // of the hardened flags, and a sandboxed-container job is refused (fail closed, E611).
 func TestA12_AgentBuiltExecutorContainerHardening(t *testing.T) {
 	runs := aFakeDocker(t)
-	ex := &exec.Executor{Env: exec.AllowlistEnv{}, NewRedactor: exec.NewOutputRedactor, Grace: time.Second}
+	iso := cirun.Hooks{}.Resolved().Isolation // what cmd/agent/exec.go installs on its lease executor
+	ex := &exec.Executor{Env: exec.AllowlistEnv{}, NewRedactor: exec.NewOutputRedactor, Grace: time.Second, Isolation: iso}
 	run := func(level model.Isolation, net model.NetworkScope, id string) exec.AttemptResult {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -111,28 +111,23 @@ func TestA12_AgentBuiltExecutorContainerHardening(t *testing.T) {
 	}
 	sb := run("sandboxed-container", "none", "rt-sb")
 	var ce *exec.Error
-	if !errors.As(sb.Err, &ce) || ce.Code != "E611" || len(runs()) != 0 {
-		t.Errorf("sandboxed-container on an agent-built executor must fail closed with E611: err=%v runs=%d", sb.Err, len(runs()))
+	var ie *isolation.Error // the registered Isolator refuses a level no profile can provide (E678); a bare executor refuses it with E611
+	if !(errors.As(sb.Err, &ce) && ce.Code == "E611" || errors.As(sb.Err, &ie) && ie.Code == "E678") || len(runs()) != 0 {
+		t.Errorf("sandboxed-container on an agent-built executor must fail closed (E611 or E678): err=%v runs=%d", sb.Err, len(runs()))
 	}
-	if !openFinding(t, "A01") {
-		return
-	}
-	if res := run("container", "internet", "rt-c1"); res.Err != nil || len(runs()) != 1 {
+	if res := run("container", "none", "rt-c1"); res.Err != nil || len(runs()) < 1 { // the hardened profile adds a workspace-cleanup run after the job
 		t.Fatalf("legacy container run: err=%v runs=%v", res.Err, runs())
 	}
 	args := strings.Join(runs()[0], " ")
 	for _, want := range []string{"--cap-drop=ALL", "no-new-privileges", "--user", "--pids-limit", "--network"} {
 		if !strings.Contains(args, want) {
-			t.Errorf("container planned by an agent-built executor lacks %s (internet scope, so no proxy either): %s", want, args)
+			t.Errorf("container planned by an agent-built executor lacks %s: %s", want, args)
 		}
 	}
 }
 
 // A14: the retry isolation floor reads World.PreviousIsolation; the world builder must fill it.
 func TestA14_RetryFloorInputIsFilled(t *testing.T) {
-	if !openFinding(t, "A04") {
-		return
-	}
 	src := aSources(t, "internal", "cmd")
 	if p, ok := aAnyContains(src, []string{"internal/sched/"}, "PreviousIsolation"); !ok {
 		t.Error("nothing outside internal/sched ever sets World.PreviousIsolation, so a retry or re-placement has no isolation floor in production")
@@ -143,9 +138,6 @@ func TestA14_RetryFloorInputIsFilled(t *testing.T) {
 
 // A15: the co-tenancy rule reads Declaration.Running; some production code must say what runs on a node.
 func TestA15_CotenancyInputIsFilled(t *testing.T) {
-	if !openFinding(t, "A05") {
-		return
-	}
 	src := aSources(t, "internal", "cmd")
 	if p, ok := aAnyContains(src, []string{"internal/trust/"}, "SecretBearing", "trust.Running{", "Running.Untrusted"); !ok {
 		t.Error("nothing outside internal/trust ever sets Declaration.Running, so isolation.cotenancy can never fire in production")
