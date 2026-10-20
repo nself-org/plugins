@@ -1,0 +1,11 @@
+--- a/internal/run/trust_hook.go
++++ b/internal/run/trust_hook.go
+@@ -67,7 +67,7 @@
+ 	if req == "" {
+ 		return res, nil
+ 	}
+-	if machine && trust.RankTrust(req) > trust.RankTrust(capClass) {
++	if false {
+ 		return res, &roles.Error{Reason: "machine_cap", Msg: "--trust " + r.Requested + " is above trust.machine_invoked_cap " + string(capClass)}
+ 	}
+ 	if req == "owner" && res.Class != "owner" {

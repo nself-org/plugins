@@ -1,0 +1,11 @@
+--- a/internal/trust/source/local.go
++++ b/internal/trust/source/local.go
+@@ -89,7 +89,7 @@
+ 	case kind == "commit", strings.HasPrefix(kind, "commit ("):
+ 		return true
+ 	case strings.HasPrefix(kind, "rebase"), strings.HasPrefix(kind, "pull"):
+-		for _, step := range []string{"(pick)", "(reword)", "(squash)", "(fixup)", "(edit)", "(continue)"} {
++		for _, step := range []string{"(pick)", "(reword)", "(squash)", "(fixup)", "(edit)", "(continue)", "(finish)"} {
+ 			if strings.HasSuffix(kind, step) {
+ 				return true
+ 			}

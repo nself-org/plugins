@@ -1,0 +1,11 @@
+--- a/internal/run/trust_git.go
++++ b/internal/run/trust_git.go
+@@ -30,7 +30,7 @@
+ 
+ func (h SourceTrust) git(ctx context.Context, root string) func(args ...string) (string, int) {
+ 	return func(args ...string) (string, int) {
+-		out, exit, err := h.capture()(ctx, append([]string{"git", "--no-replace-objects", "-c", "core.fsmonitor=false", "-C", root}, args...)...)
++		out, exit, err := h.capture()(ctx, append([]string{"git", "-c", "core.fsmonitor=false", "-C", root}, args...)...)
+ 		if err != nil {
+ 			return "", -1
+ 		}

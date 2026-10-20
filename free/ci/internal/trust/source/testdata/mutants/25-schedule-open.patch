@@ -1,0 +1,11 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -116,7 +116,7 @@
+ 		}
+ 	case "schedule":
+ 		if !protected && !reachable {
+-			bind(untrusted, ReasonProvenance)
++			bind(collaborator, ReasonProvenance)
+ 		}
+ 	case "pull_request":
+ 		if !reachable {

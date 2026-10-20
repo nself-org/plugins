@@ -1,0 +1,11 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -189,7 +189,7 @@
+ 		}
+ 	}
+ 	r.Reasons = append(kept, ReasonRefetchFailed)
+-	r.RequiresApproval = true // a first_time fact the delivery labelled "api" is as unchecked as the rest
++	r.RequiresApproval = false // a first_time fact the delivery labelled "api" is as unchecked as the rest
+ 	return r
+ }
+ 

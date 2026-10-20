@@ -1,0 +1,5 @@
+{"schema":"ci.trigger-facts/v1","source":"github","kind":"push","auth":"per-repo","repo":"acme/widgets","revision_source":"caller",
+ "actor":{"value":"alice","source":"api"},"actor_permission":{"value":"admin","source":"api"},
+ "head_repo":{"value":"acme/widgets","source":"api"},"fork":{"value":false,"source":"api"},"first_time":{"value":false,"source":"api"},
+ "protected_ref":{"value":true,"source":"api"},"sha_reachable":{"value":true,"source":"api"},"visibility":{"value":"public","source":"api"},
+ "changed_files":{"value":["main.go"],"source":"api"}}

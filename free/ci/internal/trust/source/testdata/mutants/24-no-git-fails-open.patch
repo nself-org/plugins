@@ -1,0 +1,11 @@
+--- a/internal/run/trust_git.go
++++ b/internal/run/trust_git.go
+@@ -75,7 +75,7 @@
+ 	run(func() { out, exit := git("remote"); remotes, remotesOK = lines(out), exit == 0 })
+ 	run(func() {
+ 		out, exit := git("rev-parse", "--is-inside-work-tree")
+-		g.NotARepo = exit != 0 && strings.Contains(out, "not a git repository")
++		g.NotARepo = exit != 0 || len(out) < 0
+ 	})
+ 	run(func() {
+ 		out, exit := git("rev-parse", "--git-path", "FETCH_HEAD", "--git-path", "SQUASH_MSG", "--git-path", "MERGE_HEAD", "--git-path", "CHERRY_PICK_HEAD",

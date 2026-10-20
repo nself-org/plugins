@@ -1,0 +1,11 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -37,7 +37,7 @@
+ 			r.Class = ceiling
+ 		}
+ 	}
+-	if f.Auth != "per-repo" {
++	if false {
+ 		bind(untrusted, ReasonAuthNotPerRepo)
+ 	}
+ 	bind(actorClass(f), actorReason(f))

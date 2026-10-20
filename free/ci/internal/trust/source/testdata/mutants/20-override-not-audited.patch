@@ -1,0 +1,12 @@
+--- a/internal/run/trust_hook.go
++++ b/internal/run/trust_hook.go
+@@ -71,9 +71,6 @@
+ 		return res, &roles.Error{Reason: "machine_cap", Msg: "--trust " + r.Requested + " is above trust.machine_invoked_cap " + string(capClass)}
+ 	}
+ 	if req == "owner" && res.Class != "owner" {
+-		if err := h.auditOverride(ctx, r, res); err != nil {
+-			return res, err
+-		}
+ 		res.Class, res.Reasons = "owner", append(res.Reasons, source.ReasonLocalOverride)
+ 		return res, nil
+ 	}

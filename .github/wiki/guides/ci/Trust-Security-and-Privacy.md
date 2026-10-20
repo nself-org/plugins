@@ -134,6 +134,41 @@ Android release builds: until `release.age` holds the keystore secrets, `ANDROID
 
 A node granted a `release` or `deploy` file must be dedicated-trusted (operator-owned, assigned trust, accepts only `owner`, one authorized project); `nodes secrets grant` does not yet check that the project is the one the file belongs to, so grant these files only to a node dedicated to that project. Multi-line values (PEM keys) need the baseline container path today; the hardened path refuses them.
 
+## Source trust: who made the code
+
+Every run has a source trust class: `owner`, `internal`, `collaborator` or `untrusted`. It decides what the run may touch (secrets, network, isolation) and it is never taken from a payload field, a job input or `.nself/ci.yaml`. A coordinator that runs jobs as you only starts `owner` and `internal` work; anything below needs an isolated runner.
+
+**A forge trigger** (a webhook or a poll) is classified from facts the forge API gave: `trust = min(actor permission, revision provenance)`. The delivery's own claims can lower the class and never raise it. `ClassifyForge` re-fetches the facts from the API first; if they cannot be re-fetched (the call failed, or no registered provider can) the result is `untrusted` with the reason `source.refetch_failed`.
+
+| Fact | Result |
+|---|---|
+| Auth is `shared`, `bearer` or `none` | `untrusted` |
+| Fork or other head repository, or no proof the head is this repository | `untrusted` |
+| Actor has `admin` on the repository | up to `owner`; `write` or `maintain`: up to `collaborator`; anything else or unknown: `untrusted` |
+| Push to a protected ref, or a sha reachable from a protected branch | `owner` is possible; any other push or a pull request: `collaborator` at most |
+| Tag, API or manual trigger | `owner` only when the sha is reachable from a protected branch or tag rule; otherwise `untrusted` |
+| Schedule | needs a protected ref or a reachable sha, else `untrusted` |
+| `[bot]` login, Dependabot, Renovate, or a diff of lockfiles only | `untrusted` |
+| A runner-demand job | `untrusted` unless the group takes protected refs only, the event is `push`, `schedule` or `workflow_dispatch`, and the head is this repository |
+| Head moved since the delivery | `untrusted` |
+
+A missing fact takes its untrusted value. A first-time contributor's run needs an approval. The repository's visibility must come from the API as `public` before a run may use hosted infrastructure; unknown or changed visibility keeps the `private-infrastructure` zone.
+
+**A local run** is classified from git, by provenance and never by author name or email (anyone can write your email into a commit). Git runs with `--no-replace-objects`.
+
+- `owner`: HEAD is on the `origin` default branch; or the reflogs show that every commit that branch does not contain was made here. The oldest reflog entry of a commit decides: `commit`, `commit (amend)`, a rebase step that rewrites a commit (also under `pull --rebase`), a merge commit, `cherry-pick` and `revert` count; `checkout`, `fetch`, `pull` that fast-forwards, `branch: Created from`, `rebase (finish)` and anything that fast-forwards do not. Pushing your own commits changes nothing: you still made them. A stranger's commit you fetched or checked out has an arrival entry, and a branch you fetched back from a peer keeps your `commit` entries.
+- `collaborator`: HEAD is on another branch of `origin`. Pull-request namespaces (`refs/remotes/origin/pr/*`, `pull/*`, `mr/*` and any refspec that maps something other than `refs/heads/*`) do not count as branches.
+- `untrusted`: anything else, including a stranger's pull request checked out with `gh pr checkout`, an unfinished merge, squash, cherry-pick, revert or rebase (the tree holds content no commit accounts for), and any case where git could not answer.
+- A repository with no remote, a directory that is not a git repository, and a repository without a commit are your own directory: `owner`. A remote that is configured but never fetched is judged by the reflog like a branch with no default.
+
+Limits, so you can judge them: the reflog expires and is read for the last 5000 entries, so an old branch (or more than 500 commits beyond the default branch) may fall to `untrusted`; run `git remote set-head origin -a` so the default branch is known when it is not `main` or `master`. A commit you rebase, amend or cherry-pick is a new commit made here, even when its content came from someone else's branch, so rebasing a stranger's pull request before you test it makes it `owner` (patch-id matching against remote commits is the planned fix, see the debt register). Uncommitted changes count as yours. A repository you extracted from an archive, or cloned from a stranger, is whatever its `origin` says it is. Run `nself ci --trust owner` when you know better, and use an isolated runner for code you did not write.
+
+**`--trust owner`** forces `owner` and writes one audit row (`trust.override`) that names the revision, the verdict it replaced and its reasons. If the row cannot be written the run is refused (`E625`). `--trust` with a lower class always works; it never raises a class except to `owner`.
+
+**Agents.** When `NSELF_INVOKED_BY` is set (the MCP and HTTP invokers set it; export it for a CLI agent, which is advisory because the agent controls its own environment), the class is capped by the operator policy key `trust.machine_invoked_cap` (default `owner`, no cap), with the reason `source.machine_invoked_cap`. `--trust` above the cap fails with `E687` (reason `machine_cap`). Set `untrusted` for unattended agents.
+
+Handoff for later Tickets: `source.Classify(model.TriggerFacts) Result` and `source.ClassifyLocal(source.GitFacts) Result` are pure (`internal/trust/source`). `run.SourceTrust` is the registered `TrustClassifier`; `Decide` returns the reasons, `ClassifyForge(ctx, root, facts)` classifies a forge trigger (P7-TRUST-17 feeds it recorded deliveries; P7-TRUST-24 reads `RequiresApproval`). The `Kind`, `Auth` and `Repo` fields of the facts carry no source label: the adapters must derive them from the authenticated delivery, not from its body. `source.ApplyCap` is the one place the machine cap lowers a class.
+
 ## Roles, tokens and the audit log
 
 A TEAM coordinator knows three roles, ordered `member < release < admin`, and no per-user permissions. In PERSONAL mode the operator on the coordinator host is allowed everything (access to the data directory is admin access) and every decision is still audited.

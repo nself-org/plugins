@@ -1,0 +1,11 @@
+--- a/internal/trust/source/local.go
++++ b/internal/trust/source/local.go
+@@ -67,7 +67,7 @@
+ 		}
+ 	}
+ 	for _, c := range g.OffDefault {
+-		if !MadeHere(g.ReflogCreated[c.SHA]) {
++		if !MadeHere(g.ReflogCreated[c.SHA]) && false {
+ 			return false
+ 		}
+ 	}

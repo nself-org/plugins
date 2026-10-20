@@ -1,0 +1,11 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -48,7 +48,7 @@
+ 	if bot(f) {
+ 		bind(untrusted, ReasonBot)
+ 	}
+-	if files, ok := claimed(f.ChangedFiles); ok && LockfileOnly(files) {
++	if files, ok := claimed(f.ChangedFiles); ok && LockfileOnly(files[:0]) {
+ 		bind(untrusted, ReasonLockfileOnly)
+ 	}
+ 	if cur, ok := claimed(f.HeadCurrent); ok && !cur {
