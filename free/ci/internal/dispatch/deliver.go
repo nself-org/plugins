@@ -37,6 +37,10 @@ type Delivery struct {
 	ExpiresAt time.Time
 	// Hosted marks a provider lease (the runner is not an enrolled node).
 	Hosted bool
+	// Trust is the attempt's source trust class and Network the scope its job declared (empty: the class
+	// default). The lease carries both; the adapter refuses a pair netscope.Effective forbids (D-1331).
+	Trust   model.TrustClass
+	Network model.NetworkScope
 }
 
 // Transport delivers leases. The run package adapts internal/transport to it.
@@ -54,7 +58,8 @@ func (d *Dispatcher) knownTransport(r sched.Runner) bool {
 // deliver starts the carrier for a committed remote lease; the caller has
 // already counted it in d.wg.
 func (d *Dispatcher) deliver(q Queued, r sched.Runner, a Admitted) {
-	delivery := Delivery{Node: r.Capability, Job: q.Job.Model, AttemptID: a.AttemptID, LeaseID: a.LeaseID, Token: a.Token, Epoch: a.Epoch, Revision: q.Job.Revision, ExpiresAt: d.cfg.Clock().Add(d.cfg.LeaseTTL), Hosted: r.Location == "hosted" || r.Ephemeral}
+	delivery := Delivery{Node: r.Capability, Job: q.Job.Model, AttemptID: a.AttemptID, LeaseID: a.LeaseID, Token: a.Token, Epoch: a.Epoch, Revision: q.Job.Revision, ExpiresAt: d.cfg.Clock().Add(d.cfg.LeaseTTL), Hosted: r.Location == "hosted" || r.Ephemeral,
+		Trust: q.Job.Sched.Trust, Network: q.Job.Sched.Requirements.Network}
 	go func() { // admit registered the delivery with the WaitGroup
 		defer d.wg.Done()
 		if err := d.cfg.Transport.Deliver(d.life, delivery); err != nil && d.life.Err() == nil {

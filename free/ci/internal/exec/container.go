@@ -56,7 +56,7 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 	args := []string{"run", "--rm", "--name", name, "--label", "nself.ci.attempt=" + s.AttemptID, "--label", "nself.ci.coordinator=" + s.CoordinatorID}
 	if s.Network == "" || s.Network == "none" {
 		args = append(args, "--network=none")
-	} else if s.Network != "internet" {
+	} else if s.Network != "internet" && s.Network != "lan" { // both are the runtime's default network: raw access, nothing to enforce
 		return -1, coded("E613", "unsupported network scope")
 	}
 	if s.CPU <= 0 {

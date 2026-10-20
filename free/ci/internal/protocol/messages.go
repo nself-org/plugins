@@ -119,6 +119,11 @@ type Lease struct {
 	ExpiresAt        string            `json:"expires_at"`
 	Cache            *LeaseCache       `json:"cache,omitempty"`
 	RunnerCredential *RunnerCredential `json:"runner_credential,omitempty"`
+	// Trust is the source trust class of the attempt and Network the scope the job declared (empty: the class
+	// default). The agent derives the scope it runs under from both (netscope.Effective); an absent Trust is
+	// untrusted, so a coordinator that sends neither gets the most restrictive reading.
+	Trust   model.TrustClass   `json:"trust,omitempty"`
+	Network model.NetworkScope `json:"network,omitempty"`
 }
 type Chunk struct {
 	Stream string `json:"stream"`

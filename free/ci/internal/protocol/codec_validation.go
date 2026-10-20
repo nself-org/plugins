@@ -167,6 +167,9 @@ func validate(kind string, body any, epoch *uint64, leaseID string) error {
 		if v.RunnerCredential != nil && v.RunnerCredential.Kind != "github-jitconfig" && v.RunnerCredential.Kind != "gitlab-runner-token" {
 			return invalid("runner_credential")
 		}
+		if v.Trust != "" && !v.Trust.Valid() || v.Network != "" && !v.Network.Valid() {
+			return invalid("lease_scope")
+		}
 	case *Result:
 		if v.Epoch == 0 || v.LeaseID == "" {
 			return invalid("result_epoch")

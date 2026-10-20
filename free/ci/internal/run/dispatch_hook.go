@@ -23,6 +23,7 @@ import (
 	compat "github.com/nself-org/cli/sdk/go/v2/compat"
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
+	"github.com/nself-org/plugins/free/ci/internal/netscope"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
@@ -211,7 +212,12 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	if RemoteRepo != nil && a.root != "" {
 		RemoteRepo(a.root)
 	}
-	lease := protocol.Lease{LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
+	// The same refusal the agent applies (E679): an untrusted job never gets lan or privileged, so nothing is
+	// leased for it. Both ends check; neither trusts the other.
+	if _, err := netscope.Effective(d.Trust, d.Network); err != nil {
+		return err
+	}
+	lease := protocol.Lease{Trust: d.Trust, Network: d.Network, LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
 		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: []protocol.SecretRef{}, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
 	return transport.Deliver(ctx, d.Node, lease, a.sink)
 }

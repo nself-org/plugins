@@ -672,6 +672,9 @@
               "lease_id": {
                 "type": "string"
               },
+              "network": {
+                "type": "string"
+              },
               "runner_credential": {
                 "anyOf": [
                   {
@@ -719,6 +722,9 @@
                 "type": "array"
               },
               "token": {
+                "type": "string"
+              },
+              "trust": {
                 "type": "string"
               }
             },

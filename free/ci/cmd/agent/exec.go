@@ -45,6 +45,9 @@ type execSpec struct {
 	// Revision is the full commit the job runs against (40 or 64 hex).
 	Revision  string `json:"revision"`
 	SourceDir string `json:"source_dir,omitempty"`
+	// Trust and Network are the lease's source trust class and declared network scope (lease_scope.go).
+	Trust   model.TrustClass   `json:"trust,omitempty"`
+	Network model.NetworkScope `json:"network,omitempty"`
 }
 
 // jobInputs are what a lease adds to its spec.
@@ -189,6 +192,10 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 		return ciexec.AttemptResult{Attempt: model.Attempt{ID: spec.AttemptID, State: "failed", FailureClass: "infra"}, ExitCode: -1, Started: now, Finished: now,
 			Err: &ciexec.Error{Code: "E612", Message: "declared secrets were not delivered before the lease expired"}}, "", nil
 	}
+	scope, err := jobScope(spec)
+	if err != nil {
+		return refusedScope(spec.AttemptID, err), "", nil
+	}
 	base, err := workBase()
 	if err != nil {
 		return ciexec.AttemptResult{}, "", err
@@ -211,7 +218,7 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	}
 	raw := &tailBuffer{max: excerptMax}
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: spec.AttemptID, CoordinatorID: agentIncarnation(spec.CoordinatorID), Job: job, Command: job.Run,
-		SourceDir: spec.SourceDir, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks, RunnerRoot: in.RunnerRoot, Entrypoint: in.Entrypoint,
+		SourceDir: spec.SourceDir, Network: scope, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks, RunnerRoot: in.RunnerRoot, Entrypoint: in.Entrypoint,
 		CPU: jobCPU(in), MemoryMB: jobMemoryMB(in),
 		Output: func(b []byte) {
 			raw.Write(b)
