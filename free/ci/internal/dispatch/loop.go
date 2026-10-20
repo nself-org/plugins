@@ -78,6 +78,11 @@ type Config struct {
 	// Slots is the slot count a new job competes for, used for the expected wait
 	// of a refused submission (nil = 1).
 	Slots func() int
+	// PendingSpend records the estimate of a run that has jobs held awaiting spend approval
+	// (economics.NotePending); a job held that way never reaches the budget step, so ApproveSpend
+	// would find no figure. nil means no spend is tracked. A failure is retried on the
+	// next tick, which repeats the call while the job stays held.
+	PendingSpend func(ctx context.Context, run string, estimateMicro int64) error
 	// DeliveryError observes a failed carrier run (the attempt is already marked lost).
 	DeliveryError func(Admitted, error)
 }

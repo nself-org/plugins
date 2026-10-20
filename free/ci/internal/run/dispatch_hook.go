@@ -43,6 +43,8 @@ type runDispatch struct {
 	polM sync.Mutex
 	pol  *sched.Policy // resolved once; a failed resolution is retried, never cached
 	qp   schedpolicy.QueuePolicy
+	// spend is the spend policy resolved with pol; economics answers from it while the dispatcher runs.
+	spend schedpolicy.SpendPolicy
 
 	sink *remoteSink // what the carriers of this run's remote leases report to
 }
@@ -67,6 +69,7 @@ func dispatchRelease(runID string) {
 		rd := v.(*runDispatch)
 		rd.d.Close()
 		rd.sink.release()
+		econRelease()
 	}
 }
 
@@ -161,12 +164,20 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	if rd.row.ID == "" {
 		return nil, fail(CodeRun, "run %s has no pipeline row", sess.RunID)
 	}
+	// The spend policy is resolved before the dispatcher starts and economics is bound to it:
+	// the admission step answers from memory, and an unbound process refuses metered and ephemeral runners.
+	if _, err = rd.policy(ctx, ""); err != nil {
+		return nil, err
+	}
+	econAcquire(sess.Store, sess.Host, rd.spendPolicy)
 	rd.d, err = dispatch.New(dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL, Queue: rd.queue,
 		Slots:         func() int { return rd.sess.Capacity().CPUs },
 		Incarnation:   func() int64 { return highestIncarnation(rd.sess.Store) },
+		PendingSpend:  notePending,
 		Transport:     newTransportAdapter(rd.sink, rd.sink, rd.row.Project),
 		DeliveryError: func(a dispatch.Admitted, err error) { rd.sink.ended(a.AttemptID, err) }})
 	if err != nil {
+		econRelease()
 		return nil, err
 	}
 	runDispatchers.Store(sess.RunID, rd)

@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -99,4 +100,14 @@ func ApplyPolicy(sp *sched.Policy, p Policy, coordinator string) {
 	if p.ApprovalThresholdMicro.Set {
 		sp.ApprovalThresholdMicro = p.ApprovalThresholdMicro.Micro
 	}
+}
+
+func init() {
+	cirun.RegisterSpend(cirun.SpendWiring{
+		Bind: func(st *store.Store, coordinator string, spend func(context.Context) (Policy, error)) func() {
+			return Bind(Env{Store: st, Spend: spend, Coordinator: coordinator})
+		},
+		ApplyPolicy: ApplyPolicy,
+		NotePending: NotePending,
+	})
 }

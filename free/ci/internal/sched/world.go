@@ -180,6 +180,9 @@ type Explanation struct {
 	Status       string                        `json:"status"`
 	Reasons      []model.PlacementReasonDetail `json:"reasons"`
 	Alternatives []model.Alternative           `json:"alternatives"`
+	// EstimateMicro is the worst-case cost of a job held awaiting-approval: the cheapest runner
+	// that only lacks the approval. The dispatcher notes it so ApproveSpend has a figure.
+	EstimateMicro int64 `json:"estimate_micro,omitempty"`
 }
 type Result struct {
 	Placements   []Placement    `json:"placements"`

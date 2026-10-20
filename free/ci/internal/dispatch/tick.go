@@ -86,6 +86,7 @@ func (d *Dispatcher) Tick(ctx context.Context) error {
 			pr.explained[x.JobKey] = x
 		}
 	}
+	d.notePending(ctx, runs)
 	for _, q := range live {
 		d.settle(ctx, runs, runs[q.Job.Sched.Pipeline.ID], q)
 	}

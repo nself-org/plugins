@@ -97,7 +97,12 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 	if err != nil {
 		return sched.Policy{}, err
 	}
-	rd.pol, rd.qp = &p, qp
+	sp, err := schedpolicy.Spend(&got)
+	if err != nil {
+		return sched.Policy{}, err
+	}
+	applySpend(&p, sp, rd.sess.Host)
+	rd.pol, rd.qp, rd.spend = &p, qp, sp
 	return p, nil
 }
 

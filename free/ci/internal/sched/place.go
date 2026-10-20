@@ -41,6 +41,7 @@ func Place(w World, jobs []Job) Result {
 		bestScore := int64(0)
 		bestIndex := -1
 		approvalOnly := false
+		approvalCost := int64(0)
 		noStaticCandidate := true
 		for i, r := range runners {
 			anti := j.Attempt > 1 && staticCandidates > 1
@@ -88,6 +89,9 @@ func Place(w World, jobs []Job) Result {
 				noStaticCandidate = false
 			}
 			if onlyApproval {
+				if cost, _ := worstCost(j.TimeoutMs, w.Costs[r.ID]); !approvalOnly || cost < approvalCost {
+					approvalCost = cost
+				}
 				approvalOnly = true
 			}
 			x.Alternatives = append(x.Alternatives, alt)
@@ -97,7 +101,7 @@ func Place(w World, jobs []Job) Result {
 			result.Placements = append(result.Placements, *best)
 			w.reservePlacement(&runners[bestIndex], *best)
 		} else if approvalOnly {
-			x.Status = "awaiting-approval"
+			x.Status, x.EstimateMicro = "awaiting-approval", approvalCost
 		} else if w.OpenRegistry && noStaticCandidate {
 			x.Status = "waiting"
 			x.Reasons = append(x.Reasons, reason(model.PlatformNoneAvailable, "registry open"))
