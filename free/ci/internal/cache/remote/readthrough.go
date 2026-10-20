@@ -131,7 +131,15 @@ func (c *ReadThrough) Open(ctx context.Context, realm, digest string, size int64
 		_ = check.Close()
 		return nil, err
 	}
-	return check, nil
+	// Duplicate the verified descriptor with its published name; reopening the path
+	// would race eviction or replacement by another lease.
+	fd, err := syscall.Dup(int(check.Fd()))
+	_ = check.Close()
+	if err != nil {
+		return nil, err
+	}
+	syscall.CloseOnExec(fd)
+	return os.NewFile(uintptr(fd), name), nil
 }
 
 func releaseReservation(tmp string) {
@@ -164,40 +172,6 @@ func (c *ReadThrough) stage(name string, size int64) (*os.File, error) {
 		return nil, err
 	}
 	reservations[f.Name()] = size
-	return f, nil
-}
-
-func verifiedFile(ctx context.Context, name, digest string, size int64) (*os.File, error) {
-	info, err := os.Lstat(name)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("cache copy unavailable")
-	}
-	f, err := os.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK, 0)
-	if err != nil {
-		return nil, err
-	}
-	got, err := f.Stat()
-	if err != nil || !got.Mode().IsRegular() || !os.SameFile(info, got) {
-		_ = f.Close()
-		return nil, errCopyChanged
-	}
-	h := sha256.New()
-	n, err := io.Copy(h, &contextReader{ctx, f})
-	if err != nil {
-		_ = f.Close()
-		return nil, err
-	}
-	if n != size || hex.EncodeToString(h.Sum(nil)) != digest {
-		_ = f.Close()
-		return nil, errCopyMismatch
-	}
-	if _, err = f.Seek(0, io.SeekStart); err != nil {
-		_ = f.Close()
-		return nil, err
-	}
 	return f, nil
 }
 

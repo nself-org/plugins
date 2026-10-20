@@ -30,7 +30,7 @@ func TestNodeReadThroughCancellationPreservesCopy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
+	_ = f.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := c.Open(ctx, "realm", digest, int64(len(data)), nil); !errors.Is(err, context.Canceled) {
@@ -40,7 +40,7 @@ func TestNodeReadThroughCancellationPreservesCopy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cancellation discarded intact copy: %v", err)
 	}
-	f.Close()
+	_ = f.Close()
 }
 
 func TestNodeReadThroughPrunesOrphan(t *testing.T) {
@@ -124,7 +124,7 @@ func TestNodeReadThroughReservesFetch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		f.Close()
+		_ = f.Close()
 	}
 }
 
@@ -134,7 +134,7 @@ func TestNodeStageCopyFailureStillShips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	s.Copies, err = NewReadThrough(t.TempDir(), 100)
 	if err != nil {
 		t.Fatal(err)
@@ -235,7 +235,7 @@ func TestNodeReadThroughOpenSurvivesAPruneAfterPublish(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	name, _ := c.name("realm", digest)
 	if err = os.Remove(name); err != nil { // another lease evicted it
 		t.Fatal(err)
@@ -243,5 +243,49 @@ func TestNodeReadThroughOpenSurvivesAPruneAfterPublish(t *testing.T) {
 	got, err := io.ReadAll(f)
 	if err != nil || string(got) != string(data) {
 		t.Fatalf("read %q %v after the name was pruned", got, err)
+	}
+}
+
+func TestNodeReadThroughPublishedName(t *testing.T) {
+	for _, realm := range []string{"realm-a", "realm-b"} {
+		t.Run(realm, func(t *testing.T) {
+			c, err := NewReadThrough(t.TempDir(), 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := "verified bytes"
+			digest := fmt.Sprintf("%x", sha256.Sum256([]byte(body)))
+			fetches := 0
+			fetch := func(_ context.Context, w io.Writer) error {
+				fetches++
+				_, err := io.WriteString(w, body)
+				return err
+			}
+			f, err := c.Open(context.Background(), realm, digest, int64(len(body)), fetch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := f.Name()
+			_ = f.Close()
+			expected, err := c.name(realm, digest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if name != expected {
+				t.Fatalf("published name = %q, want %q", name, expected)
+			}
+			if err := os.WriteFile(name, []byte("corrupt bytes!"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			f, err = c.Open(context.Background(), realm, digest, int64(len(body)), fetch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = f.Close() }()
+			got, err := io.ReadAll(f)
+			if err != nil || string(got) != body || fetches != 2 {
+				t.Fatalf("replacement = %q, fetches = %d, err = %v", got, fetches, err)
+			}
+		})
 	}
 }

@@ -143,7 +143,7 @@ func TestRestoreBlobReadStopsWhenTheLeaseGoesStaleMidBlob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	buf := make([]byte, 16)
 	if _, err = rc.Read(buf); err != nil {
 		t.Fatal(err)
