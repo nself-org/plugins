@@ -72,6 +72,10 @@ func TestB_Cache_NamespaceCollisionMatrix(t *testing.T) {
 }
 
 func TestB_Cache_TrustSpellingNeverReachesTrustedNamespace(t *testing.T) {
+	// positive control: the canonical spelling builds, and owner is a snapshot source (so the checks below can fail)
+	if own, err := authz.CacheNamespace("proj", "owner", authz.Protected, "", ""); err != nil || !authz.IsSnapshotSource(own) {
+		t.Fatalf("control: canonical owner namespace err=%v snapshot source=%v", err, err == nil && authz.IsSnapshotSource(own))
+	}
 	for _, spell := range []string{"", " owner", "owner ", "Owner", "OWNER", "owner\x00", "ownеr", "internal ", "Internal", "root", "trusted", "member", "admin"} {
 		ns, err := authz.CacheNamespace("proj", model.TrustClass(spell), authz.Protected, "", "")
 		if err != nil {

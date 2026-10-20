@@ -86,6 +86,9 @@ func TestA34_RuntimeArgumentSpellings(t *testing.T) {
 func TestA35_BannerIsTheProof(t *testing.T) {
 	ctx := context.Background()
 	table := aRuntimes("/usr/local/bin/runsc")
+	if av := gvisor.New(aGVisor(table, aStarter{out: aBanner})).Probe(ctx); !av.Available() { // positive control: the real banner makes it available
+		t.Fatalf("control: a runtime that printed the gVisor banner is not available: %+v", av)
+	}
 	for name, st := range map[string]aStarter{
 		"no banner":                {out: "hello\n"},
 		"empty":                    {out: ""},

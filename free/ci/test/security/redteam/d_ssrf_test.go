@@ -104,6 +104,9 @@ func TestD14_RedirectIntoLoopbackRefused(t *testing.T) {
 		if err == nil {
 			t.Errorf("%s: redirect into loopback succeeded", name)
 		}
+		if forge.hits.Load() < 1 { // positive control: the first hop was reached, so the refusal is of the redirect
+			t.Errorf("%s: the redirecting forge was never reached (err %v), the redirect refusal was not exercised", name, err)
+		}
 		if n := canary.hits.Load(); n != 0 {
 			t.Fatalf("%s: canary received %d request(s) through a redirect", name, n)
 		}
