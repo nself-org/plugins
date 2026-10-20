@@ -74,7 +74,11 @@ func (c *Coordinator) dispatchLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		}
-		row, ok, err := c.cfg.Store.IntakeClaim(ctx, c.cfg.ID)
+		var row store.IntakeRow
+		ok, err := false, error(nil)
+		if !c.paused.Load() {
+			row, ok, err = c.cfg.Store.IntakeClaim(ctx, c.cfg.ID)
+		}
 		if err != nil || !ok {
 			<-sem
 			if err != nil && ctx.Err() == nil {

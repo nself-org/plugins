@@ -9,7 +9,12 @@
 #
 # Output in DIR (created; must be empty or absent):
 #   <slug>-<version>.tar.gz   source tarballs, version = TAG without the leading v
-#   releases.json             release-data shape: {"releases": {"<slug>": {version, sha256, release_tag, release_signature}}}
+#   <slug>-<version>-<platform>.tar.gz
+#                             fixture binary tarballs for the FIRST slug only (contract v1.1): one per platform, each a deterministic
+#                             tarball of a stub file nself-<slug> (never a real build, no toolchain, no network), signed under the
+#                             platform domain with the same throwaway key
+#   releases.json             release-data shape: {"releases": {"<slug>": {version, sha256, release_tag, release_signature}}}; the
+#                             first slug's row also carries platform_checksums and platform_signatures
 #   rehearsal-test.pub        PEM SPKI public half of the throwaway key. It is the only key these signatures verify against:
 #                             scripts/release/verify-signatures.sh --pub DIR/rehearsal-test.pub DIR
 #
@@ -83,11 +88,29 @@ while IFS= read -r dir; do
   # The throwaway key is handed to the signer through its environment only, for this one call.
   sig="$(NSELF_RELEASE_SIGNING_KEY_FREE="$(cat "$KEYDIR/key.pem")" NSELF_RELEASE_SIGNING_KEY_FREE_ID="$KEY_ID" \
     OPENSSL="$O" bash scripts/release/sign.sh "$slug" "$VERSION" "$tarball")"
-  jq -nc --arg s "$slug" --arg v "$VERSION" --arg t "$TAG" --arg sha "$sha" --argjson sig "$sig" \
-    '{($s): {version: $v, sha256: $sha, release_tag: $t, release_signature: $sig}}' >> "$ROWS"
+  plat='{}'
+  psig='{}'
+  if [ "$count" -eq 0 ]; then
+    stub="$KEYDIR/stub"
+    mkdir -p "$stub"
+    for platform in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64; do
+      printf 'stub binary for %s %s %s\n' "$slug" "$VERSION" "$platform" > "$stub/nself-${slug}"
+      chmod 755 "$stub/nself-${slug}"
+      ptar="${OUT}/${slug}-${VERSION}-${platform}.tar.gz"
+      bash scripts/deterministic-tar.sh "$ptar" -C "$stub" "nself-${slug}"
+      psha="$(sha256_file "$ptar")"
+      psignature="$(NSELF_RELEASE_SIGNING_KEY_FREE="$(cat "$KEYDIR/key.pem")" NSELF_RELEASE_SIGNING_KEY_FREE_ID="$KEY_ID" \
+        OPENSSL="$O" bash scripts/release/sign.sh "$slug" "$VERSION" "$ptar" "$platform")"
+      plat="$(jq -c --arg p "$platform" --arg sha "$psha" '.[$p] = $sha' <<<"$plat")"
+      psig="$(jq -c --arg p "$platform" --argjson sig "$psignature" '.[$p] = $sig' <<<"$psig")"
+    done
+  fi
+  jq -nc --arg s "$slug" --arg v "$VERSION" --arg t "$TAG" --arg sha "$sha" --argjson sig "$sig" --argjson plat "$plat" --argjson psig "$psig" \
+    '{($s): ({version: $v, sha256: $sha, release_tag: $t, release_signature: $sig}
+      + (if ($plat | length) > 0 then {platform_checksums: $plat, platform_signatures: $psig} else {} end))}' >> "$ROWS"
   count=$((count + 1))
 done < <(find free -maxdepth 1 -mindepth 1 -type d | sort)
 
 [ "$count" -gt 0 ] || { err "no free plugin with a plugin.json found under $REPO_ROOT/free"; exit 1; }
 jq -sS '{schema_version: 1, releases: (add)}' "$ROWS" > "$OUT/releases.json"
-log "built and signed ${count} tarball(s) for ${TAG} into ${OUT} (throwaway key ${KEY_ID}; public half: rehearsal-test.pub)"
+log "built and signed ${count} source tarball(s) (and the fixture binary tarballs of the first slug) for ${TAG} into ${OUT} (throwaway key ${KEY_ID}; public half: rehearsal-test.pub)"

@@ -1,0 +1,10 @@
+--- a/internal/attest/sign.go
++++ b/internal/attest/sign.go
+@@ -53,7 +53,6 @@
+ 
+ func payloadOf(obj map[string]any) ([]byte, error) {
+ 	delete(obj, "signature")
+-	delete(obj, "freshness")
+ 	c, err := trust.Canonical(obj)
+ 	if err != nil {
+ 		return nil, err

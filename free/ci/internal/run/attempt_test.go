@@ -142,7 +142,10 @@ func (f fakePolicy) Resolve(context.Context, PolicyRequest) (PolicyResult, error
 }
 
 func TestTrustFlagNeedsClassifier(t *testing.T) {
-	t.Parallel()
+	// Not parallel: it empties the registered classifier (P7-TRUST-13 registers one) for its duration.
+	was := Registered.Trust
+	Registered.Trust = nil
+	t.Cleanup(func() { Registered.Trust = was })
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
 	r.C.Opts.Trust = "owner"
 	if _, err := r.C.Run(context.Background()); CodeOf(err) != CodeTrust {

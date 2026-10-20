@@ -147,7 +147,7 @@
     "np_contentacquisition_acquisition_rules"
   ],
   "tier": "free",
-  "version": "1.2.6",
+  "version": "1.2.13",
   "webhooks": [
     "acquisition.subscribed",
     "acquisition.new_release_detected",

@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "DELETE",
+    "path": "/orgs/acme/actions/runners/runner-1",
+    "query": ""
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "body": "{\"message\": \"Not Found\", \"documentation_url\": \"https://docs.github.com/rest\"}"
+  }
+}

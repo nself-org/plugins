@@ -1,14 +1,15 @@
 package services
 
 // Purpose: keyed lifecycle of provisions for the orchestrator hook (P7-CI-42).
-// The hook request carries no attempt id, so two jobs asking for the same key
-// would be indistinguishable at Down. The Pool therefore serialises Up per key
-// (the second Up waits for the first Down) and ties each provision to a
-// safety net: a job context that ends before Down tears the project down.
+// The key is the attempt id, so every attempt has its own provision and its own
+// Down, and jobs of one run that need the same services never share or wait for
+// each other. Each provision is tied to a safety net: a job context that ends
+// before Down tears the project down.
 // Inputs:  a Provisioner, a key, the specs. Outputs: the job environment.
-// Constraints: the safety net keeps the entry and the slot until the owning
-// job's Down, so that Down cannot hit a later job with the same key; teardown
-// runs once, whoever asks first, and Down returns only after it finished.
+// Constraints: the safety net keeps the entry until the owning attempt's Down;
+// teardown runs once, whoever asks first, and Down returns only after it
+// finished. A second Up for a key that is still live is refused. Down belongs after Up has returned: a Down that
+// arrives while Up is still running finds nothing to tear down.
 
 import (
 	"context"
@@ -18,14 +19,14 @@ import (
 
 // Pool tracks the live provisions by key.
 type Pool struct {
-	mu    sync.Mutex
-	slots map[string]chan struct{}
-	live  map[string]*liveProvision
+	mu   sync.Mutex
+	live map[string]*liveProvision
+	busy map[string]bool // keys whose Up is running
 }
 
 // NewPool returns an empty Pool.
 func NewPool() *Pool {
-	return &Pool{slots: map[string]chan struct{}{}, live: map[string]*liveProvision{}}
+	return &Pool{live: map[string]*liveProvision{}, busy: map[string]bool{}}
 }
 
 // liveProvision is one running provision.
@@ -47,14 +48,23 @@ func (l *liveProvision) teardown(ctx context.Context) error {
 	return l.err
 }
 
-// Up waits for the key's slot, provisions, and returns the job environment.
+// Up provisions the key and returns the job environment. A key that is live (or being provisioned) is refused: the
+// owner's Down must come first.
 func (pl *Pool) Up(ctx context.Context, prov *Provisioner, key string, specs []Spec) (map[string]string, error) {
-	if err := pl.acquire(ctx, key); err != nil {
-		return nil, err
+	pl.mu.Lock()
+	if pl.live[key] != nil || pl.busy[key] {
+		pl.mu.Unlock()
+		return nil, fail(CodeProvision, "services for %s are already up", key)
 	}
+	pl.busy[key] = true
+	pl.mu.Unlock()
+	defer func() { // also on a panic in the provisioner
+		pl.mu.Lock()
+		delete(pl.busy, key)
+		pl.mu.Unlock()
+	}()
 	h, err := prov.Up(ctx, specs)
 	if err != nil {
-		pl.release(key)
 		return nil, err
 	}
 	l := &liveProvision{prov: prov, handle: h, done: make(chan struct{})}
@@ -65,8 +75,8 @@ func (pl *Pool) Up(ctx context.Context, prov *Provisioner, key string, specs []S
 	return h.Env, nil
 }
 
-// Down tears the key's provision down and frees the slot. It returns only when
-// the teardown has finished, including one the safety net started.
+// Down tears the key's provision down. It returns only when the teardown has
+// finished, including one the safety net started.
 func (pl *Pool) Down(ctx context.Context, key string) error {
 	pl.mu.Lock()
 	l := pl.live[key]
@@ -76,7 +86,6 @@ func (pl *Pool) Down(ctx context.Context, key string) error {
 		return nil
 	}
 	l.stop()
-	defer pl.release(key)
 	// The orchestrator's cleanup context is short (15 s); a teardown that is cut
 	// off leaves containers behind, so it gets its own budget.
 	bg, done := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
@@ -89,33 +98,4 @@ func (pl *Pool) safetyNet(l *liveProvision) {
 	bg, done := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer done()
 	_ = l.teardown(bg)
-}
-
-// acquire waits for the slot of key, or for ctx.
-func (pl *Pool) acquire(ctx context.Context, key string) error {
-	pl.mu.Lock()
-	ch, ok := pl.slots[key]
-	if !ok {
-		ch = make(chan struct{}, 1)
-		pl.slots[key] = ch
-	}
-	pl.mu.Unlock()
-	select {
-	case ch <- struct{}{}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (pl *Pool) release(key string) {
-	pl.mu.Lock()
-	ch := pl.slots[key]
-	pl.mu.Unlock()
-	if ch != nil {
-		select {
-		case <-ch:
-		default:
-		}
-	}
 }

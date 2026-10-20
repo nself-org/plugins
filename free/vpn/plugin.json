@@ -170,7 +170,7 @@
     "np_vpn_leak_tests"
   ],
   "tier": "free",
-  "version": "1.2.6",
+  "version": "1.2.13",
   "views": [
     "np_vpn_active_connections",
     "np_vpn_server_stats",

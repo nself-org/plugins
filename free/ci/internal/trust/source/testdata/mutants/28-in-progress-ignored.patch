@@ -1,0 +1,11 @@
+--- a/internal/trust/source/local.go
++++ b/internal/trust/source/local.go
+@@ -33,7 +33,7 @@
+ 	if g.NotARepo {
+ 		return done(owner, ReasonLocalNoGit)
+ 	}
+-	if g.InProgress {
++	if false {
+ 		return done(untrusted, ReasonLocalInProgress)
+ 	}
+ 	if g.NoRemotes && len(g.Missing) == 0 {

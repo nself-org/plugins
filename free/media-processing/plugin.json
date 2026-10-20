@@ -278,7 +278,7 @@
     "transcoding"
   ],
   "tier": "free",
-  "version": "1.2.6",
+  "version": "1.2.13",
   "webhooks": [
     "job.analyzing",
     "job.cancelled",

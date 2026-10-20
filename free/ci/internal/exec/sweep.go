@@ -15,7 +15,7 @@ type StaleChecker interface {
 	Stale(context.Context, string) (bool, error)
 }
 
-// Sweep removes only labelled containers owned by stale coordinators.
+// Sweep removes only labelled containers (docker or podman) owned by stale coordinators.
 func (e *Executor) Sweep(ctx context.Context, current string) error {
 	home := os.Getenv("NSELF_CI_HOME")
 	if home == "" {
@@ -92,17 +92,34 @@ func sweepRelease(current string, claimed time.Time) {
 	}
 }
 
-// sweepContainers removes the labelled containers of stale coordinators.
+// sweepRuntimes are the container runtimes whose orphans the sweep removes: the profile may have run a job under
+// either, and an agent crash leaves the container behind in the one that started it (D-0965).
+var sweepRuntimes = []string{"docker", "podman"}
+
+// sweepContainers removes the labelled containers of stale coordinators from every installed runtime. A runtime
+// that fails does not stop the others from being swept; the first failure is returned.
 func (e *Executor) sweepContainers(ctx context.Context, current string) error {
-	if _, err := osexec.LookPath("docker"); err != nil {
+	var first error
+	for _, binary := range sweepRuntimes {
+		if err := e.sweepRuntime(ctx, current, binary); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
+}
+
+// sweepRuntime removes the stale coordinators' labelled containers of one runtime; a missing or stopped runtime
+// has nothing to sweep.
+func (e *Executor) sweepRuntime(ctx context.Context, current, binary string) error {
+	if _, err := osexec.LookPath(binary); err != nil {
 		return nil
 	}
-	if _, err := RuntimeQuery(ctx, "docker", "info"); err != nil { // the shared probe: hygiene and the isolation facts ask the same question
+	if _, err := RuntimeQuery(ctx, binary, "info"); err != nil { // the shared probe: hygiene and the isolation facts ask the same question
 		return nil
 	}
-	out, err := RuntimeQuery(ctx, "docker", "ps", "-a", "--filter", "label=nself.ci.coordinator", "--filter", "label=nself.ci.attempt", "--format", "{{.ID}} {{.Label \"nself.ci.coordinator\"}}")
+	out, err := RuntimeQuery(ctx, binary, "ps", "-a", "--filter", "label=nself.ci.coordinator", "--filter", "label=nself.ci.attempt", "--format", "{{.ID}} {{.Label \"nself.ci.coordinator\"}}")
 	if err != nil {
-		return coded("E613", "docker orphan listing failed")
+		return coded("E613", binary+" orphan listing failed")
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		parts := strings.Fields(line)
@@ -116,15 +133,15 @@ func (e *Executor) sweepContainers(ctx context.Context, current string) error {
 		if !stale {
 			continue
 		}
-		if err := removeStaleContainer(ctx, parts[0]); err != nil {
-			return coded("E613", "docker orphan removal failed")
+		if err := removeStaleContainer(ctx, binary, parts[0]); err != nil {
+			return coded("E613", binary+" orphan removal failed")
 		}
 	}
 	return nil
 }
 
-func removeStaleContainer(ctx context.Context, id string) error {
-	out, err := osexec.CommandContext(ctx, "docker", "rm", "-f", id).CombinedOutput()
+func removeStaleContainer(ctx context.Context, binary, id string) error {
+	out, err := osexec.CommandContext(ctx, binary, "rm", "-f", id).CombinedOutput()
 	if err != nil && strings.Contains(strings.ToLower(string(out)), "no such container") {
 		return nil
 	}

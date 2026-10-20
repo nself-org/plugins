@@ -133,7 +133,7 @@ func TestBareRefusals(t *testing.T) {
 	t.Setenv("NSELF_CI_HOME", t.TempDir())
 	for name, args := range map[string][]string{
 		"sha":       {"--sha", "abc123"},
-		"trust":     {"--trust", "owner"},
+		"trust":     {"--trust", "bogus"},
 		"network":   {"--network", "bogus"},
 		"bad flag":  {"--nope"},
 		"neg time":  {"--timeout=-1s"},

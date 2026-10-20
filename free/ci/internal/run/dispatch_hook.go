@@ -163,6 +163,7 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	}
 	rd.d, err = dispatch.New(dispatch.Config{Store: sess.Store, Host: sess.Host, World: rd.world, Poll: sess.Poll, LeaseTTL: RemoteLeaseTTL, Queue: rd.queue,
 		Slots:         func() int { return rd.sess.Capacity().CPUs },
+		Incarnation:   func() int64 { return highestIncarnation(rd.sess.Store) },
 		Transport:     newTransportAdapter(rd.sink, rd.sink, rd.row.Project),
 		DeliveryError: func(a dispatch.Admitted, err error) { rd.sink.ended(a.AttemptID, err) }})
 	if err != nil {
@@ -213,4 +214,13 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	lease := protocol.Lease{LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
 		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: []protocol.SecretRef{}, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
 	return transport.Deliver(ctx, d.Node, lease, a.sink)
+}
+
+// highestIncarnation is the incarnation fenced leases carry: the highest of the coordinator table, so a
+// leased epoch after a `serve restore` exceeds every epoch granted before the backup (P7-NODE-20).
+func highestIncarnation(st *store.Store) int64 {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	n, _ := st.HighestIncarnation(ctx) // a failed read is 1, the old behaviour
+	return n
 }

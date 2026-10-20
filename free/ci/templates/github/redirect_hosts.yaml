@@ -1,0 +1,5 @@
+# Hosts an artifact download may be redirected to; anything else is refused.
+hosts:
+  - api.github.com
+  - "*.actions.githubusercontent.com"
+  - "*.blob.core.windows.net"

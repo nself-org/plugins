@@ -16,6 +16,7 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/report"
+	"github.com/nself-org/plugins/free/ci/internal/services"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -131,10 +132,20 @@ type RemoteResolver interface {
 	Resolve(ctx context.Context, ref string) (RunView, bool, error)
 }
 
-// ServicesRequest asks for the services a job needs.
+// ServicesRequest asks for the services one attempt needs.
 type ServicesRequest struct {
 	RunID string
-	Names []string
+	// AttemptID is the attempt the services belong to. The hook keys its provisions by it, so two jobs of one
+	// run that need the same services each get their own and tear down only their own.
+	AttemptID string
+	Names     []string
+	// Specs are Names resolved against the run's .nself/ci.yaml, read from the repository root rather than the
+	// process's working directory. Empty: the hook resolves Names itself.
+	Specs []services.Spec
+	// Isolation and Network are the level and network scope the attempt runs under, for hooks that attach the
+	// job to the services' network.
+	Isolation model.Isolation
+	Network   model.NetworkScope
 }
 
 // ServicesSetup is what started services add to a job.

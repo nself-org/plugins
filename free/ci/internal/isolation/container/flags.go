@@ -139,5 +139,5 @@ func Build(p Params) (exec.ContainerCommand, error) {
 	}
 	args = append(args, r.Image)
 	args = append(args, r.Command...)
-	return exec.ContainerCommand{Binary: p.Binary, Args: args}, nil
+	return exec.ContainerCommand{Binary: p.Binary, Args: args, Image: r.Image}, nil
 }

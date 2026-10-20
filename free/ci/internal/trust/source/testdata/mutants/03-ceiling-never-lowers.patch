@@ -1,0 +1,11 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -33,7 +33,7 @@
+ 		if trust.RankTrust(ceiling) < trust.RankTrust(owner) {
+ 			r.Reasons = append(r.Reasons, reason)
+ 		}
+-		if trust.RankTrust(ceiling) < trust.RankTrust(r.Class) {
++		if trust.RankTrust(ceiling) > trust.RankTrust(r.Class) {
+ 			r.Class = ceiling
+ 		}
+ 	}

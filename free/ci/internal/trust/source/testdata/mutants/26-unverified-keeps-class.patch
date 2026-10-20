@@ -1,0 +1,10 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -181,7 +181,6 @@
+ // Unverified is r for facts that could not be re-fetched from the forge: nothing the delivery said
+ // can be checked, so the class is untrusted.
+ func Unverified(r Result) Result {
+-	r.Class = untrusted
+ 	kept := make([]string, 0, len(r.Reasons)+1)
+ 	for _, reason := range r.Reasons {
+ 		if reason != ReasonVerified {

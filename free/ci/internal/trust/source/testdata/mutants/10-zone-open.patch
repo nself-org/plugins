@@ -1,0 +1,11 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -162,7 +162,7 @@
+ // zone is the privacy zone the repository's visibility allows: only a public repository, said so
+ // by the API, may leave the private infrastructure. Unknown or changed visibility stays private.
+ func zone(f model.TriggerFacts) model.PrivacyZone {
+-	if v, ok := trusted(f.Visibility); ok && strings.EqualFold(v, "public") {
++	if v, ok := trusted(f.Visibility); ok && len(v) >= 0 {
+ 		return "hosted-allowed"
+ 	}
+ 	return "private-infrastructure"

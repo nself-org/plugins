@@ -1,0 +1,11 @@
+--- a/internal/trust/source/classify.go
++++ b/internal/trust/source/classify.go
+@@ -146,7 +146,7 @@
+ 	switch {
+ 	case !ok || !only, !eok, !hok, !strings.EqualFold(head, f.Repo):
+ 		bind(untrusted, ReasonRunnerDemand)
+-	case event != "push" && event != "schedule" && event != "workflow_dispatch":
++	case event != "push" && event != "schedule" && event != "workflow_dispatch" && false:
+ 		bind(untrusted, ReasonRunnerDemand) // issue_comment, pull_request_target, workflow_run and the like run the default branch on a stranger's input
+ 	}
+ }

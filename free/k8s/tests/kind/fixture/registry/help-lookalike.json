@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "command": "help",
+  "data": {
+    "commands": [
+      {
+        "path": "nself k8s",
+        "canon": "plugin"
+      },
+      {
+        "path": "nself k8s install",
+        "canon": "plugin"
+      },
+      {
+        "path": "nself k8s values-file",
+        "canon": "plugin"
+      },
+      {
+        "path": "nself k8s backups",
+        "canon": "plugin"
+      }
+    ]
+  }
+}

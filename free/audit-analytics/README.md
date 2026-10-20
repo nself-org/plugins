@@ -20,7 +20,7 @@ Advanced audit log analytics plugin for nSelf. Provides anomaly detection, user 
 
 - nSelf CLI >= 1.0.9
 - Free (MIT), no license key required to run.
-- Postgres with `np_audit_log` table populated by the `audit` plugin
+- Postgres with the `audit-log` plugin's `np_auditlog_events` table (read through its `np_audit_log` view)
 
 ## Installation
 
@@ -68,6 +68,6 @@ Unbundled — available as a standalone free plugin.
 
 ## Database migrations
 
-The plugin applies `migrations/*.sql` at boot through the nSelf migration helper (ledger `np_audit_analytics.schema_migrations`); the tables live in `public`. The `np_audit_heatmap` materialized view and the anomaly and top-actor queries read `public.np_audit_log`. No shipped plugin creates that table today (audit-log writes `np_auditlog_events`, tracked in hq quality debt), so the view is skipped on every database, the plugin still boots, and the analytics endpoints stay empty until the table exists.
+The plugin applies `migrations/*.sql` at boot through the nSelf migration helper (ledger `np_audit_analytics.schema_migrations`); the tables live in `public`. The `np_audit_heatmap` materialized view and the anomaly and top-actor queries read `public.np_audit_log`, a read-only view that the `audit-log` plugin creates over its canonical table `np_auditlog_events` (audit-log migration 004). If the view does not exist yet when this plugin first starts, migration 002 skips the heatmap; the plugin then creates it itself (`patterns/heatmap_view.sql`) before every refresh, so it appears once audit-log has run.
 
 The manifest declares `requires.plugins: ["audit-log"]` because that plugin owns the audit data; a CLI that reads manifest v2 installs it first.

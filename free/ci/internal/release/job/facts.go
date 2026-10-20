@@ -35,8 +35,12 @@ type RunState struct {
 	// Deps names the release job's deps; Outcomes holds a row for each one that exists.
 	Deps     []string
 	Outcomes []Dep
-	// Clean says the worktree is clean and at Revision.
+	// Clean says the worktree is clean and at Revision now.
 	Clean bool
+	// StartDirty says the run began on a dirty tree or on a config the commit does
+	// not hold: it stays unbound even when the tree was cleaned later. Subset says
+	// the run was started with --job: its pipeline is ad hoc and its selection partial.
+	StartDirty, Subset bool
 	// Bound holds the inputs at Revision, Now the inputs in the worktree; nil
 	// means no digester answered (freshness is then unknown, which refuses).
 	Bound, Now *model.InputDigests
@@ -78,7 +82,11 @@ func BuildFacts(s RunState) Facts {
 		Producer: model.Producer{Kind: "coordinator-recorded", Version: "1"}, Signature: model.Signature{Kind: "coordinator-recorded"},
 		ToolVersions: map[string]string{}, Checks: checks, Artifacts: []model.Artifact{}, Retries: []model.Retry{},
 		Selection: s.Selection}
-	if s.Clean {
+	if s.Subset {
+		ev.Pipeline.Kind = "adhoc"
+		ev.Selection.Mode, ev.Selection.Reason = "affected", "selection.affected"
+	}
+	if s.Clean && !s.StartDirty {
 		ev.WorktreeState, ev.Binding = "clean", model.Binding{State: "bound"}
 	} else {
 		reason := model.BindingReason("dirty")

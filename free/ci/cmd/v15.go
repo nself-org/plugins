@@ -29,6 +29,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/drill"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
+	"github.com/nself-org/plugins/free/ci/internal/report"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
@@ -255,7 +256,7 @@ func runBare(args []string) int {
 	if err != nil {
 		return exitForError(err)
 	}
-	c := &cirun.Coordinator{Opts: o, Plan: p, ConfigDigest: digest, ConfigOutside: configOutside(o.Root), Substantive: subst, Out: os.Stdout}
+	c := &cirun.Coordinator{Opts: o, Plan: p, ConfigDigest: digest, ConfigOutside: configOutside(ctx, o.Root), Substantive: subst, Out: os.Stdout}
 	res, err := c.Run(ctx)
 	if err != nil {
 		return exitForError(err)
@@ -263,12 +264,9 @@ func runBare(args []string) int {
 	return res.Exit
 }
 
-// configOutside is true when --config names a file other than the repo's own
-// .nself/ci.yaml: that run cannot be bound to the commit.
-func configOutside(root string) bool {
-	if bare.cfg == "" {
-		return false
-	}
-	abs, err := filepath.Abs(bare.cfg)
-	return err != nil || filepath.Clean(abs) != filepath.Join(root, config.FileName)
+// configOutside is true when the config the run reads is not the repo's own
+// .nself/ci.yaml as the commit holds it (another --config path, an ignored,
+// untracked, edited or symlinked file): that run cannot be bound to the commit.
+func configOutside(ctx context.Context, root string) bool {
+	return cirun.ConfigOutsideTree(ctx, root, firstOf(bare.cfg, filepath.Join(root, config.FileName)), config.FileName, report.Capture)
 }

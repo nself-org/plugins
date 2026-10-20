@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -64,12 +65,16 @@ type Config struct {
 	StaleAfter   time.Duration
 	ID           string
 	Logf         func(format string, a ...any)
+	// Drain, when set, runs once after the context ends and before the dispatches are cancelled, with new
+	// claims already stopped (PauseIntake); P7-NODE-20 wires the graceful drain through it.
+	Drain func(ctx context.Context) error
 }
 
 // Coordinator is the TEAM coordinator.
 type Coordinator struct {
-	cfg  Config
-	wake chan struct{}
+	cfg    Config
+	wake   chan struct{}
+	paused atomic.Bool
 }
 
 // New fills the defaults of cfg.
@@ -198,7 +203,10 @@ func (c *Coordinator) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cannot listen on %s: %w", c.cfg.Addr, err)
 	}
-	ctx, cancel := context.WithCancel(ctx)
+	// the work (dispatches, listeners, loops) runs on a context the shutdown signal does not cancel: the drain
+	// needs the running jobs alive; cancel() below ends them after Config.Drain returned
+	parent := ctx
+	ctx, cancel := context.WithCancel(context.WithoutCancel(parent))
 	defer cancel()
 	srv := &http.Server{Handler: c.Handler(isLoopback(ln.Addr().String())), ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second}
 	errc := make(chan error, 1)
@@ -210,6 +218,9 @@ func (c *Coordinator) Run(ctx context.Context) error {
 	stops, err := c.startListeners(ctx)
 	if err != nil {
 		_ = srv.Close()
+		if parent.Err() != nil { // shutdown began while the listeners were starting: a clean stop, not a failure
+			return nil
+		}
 		return err
 	}
 	var wg sync.WaitGroup
@@ -219,11 +230,18 @@ func (c *Coordinator) Run(ctx context.Context) error {
 	}
 	var runErr error
 	select {
-	case <-ctx.Done():
+	case <-parent.Done():
 	case runErr = <-errc:
 	}
+	c.PauseIntake()
+	if c.cfg.Drain != nil && runErr == nil {
+		if err := c.cfg.Drain(ctx); err != nil {
+			c.cfg.Logf("drain: %v", err)
+			runErr = fmt.Errorf("drain: %w", err)
+		}
+	}
 	cancel()
-	sctx, scancel := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
+	sctx, scancel := context.WithTimeout(context.WithoutCancel(parent), 60*time.Second)
 	defer scancel()
 	_ = srv.Shutdown(sctx)
 	for _, stop := range stops {

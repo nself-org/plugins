@@ -25,6 +25,9 @@ type Subject struct {
 	New      func(baseURL string, clk Clock) providers.Provider
 	Fixtures string
 	Secrets  [][]byte
+	// Attempt replaces the kit's default attempt for a provider whose fixtures need real values
+	// (a repository, a full revision). The zero value keeps the default.
+	Attempt providers.Attempt
 }
 
 // Run checks the base contract and every extension implemented by the subject.
@@ -43,7 +46,7 @@ func Run(t *testing.T, s Subject) {
 	if p == nil {
 		t.Fatal("nil provider")
 	}
-	for _, issue := range Check(p, s.Secrets, &logs) {
+	for _, issue := range CheckAttempt(p, s.Secrets, &logs, s.Attempt) {
 		t.Error(issue)
 	}
 	for _, issue := range r.Problems() {
@@ -59,6 +62,11 @@ func Run(t *testing.T, s Subject) {
 // Check returns independent contract failures, allowing planted defects to be
 // proved without making a parent test fail intentionally.
 func Check(p providers.Provider, secrets [][]byte, logs *bytes.Buffer) []string {
+	return CheckAttempt(p, secrets, logs, providers.Attempt{})
+}
+
+// CheckAttempt is Check with the attempt the dispatcher is exercised with; the zero Attempt is the default.
+func CheckAttempt(p providers.Provider, secrets [][]byte, logs *bytes.Buffer, attempt providers.Attempt) []string {
 	var issues []string
 	ctx := context.Background()
 	if p.ID() == "" {
@@ -72,7 +80,10 @@ func Check(p providers.Provider, secrets [][]byte, logs *bytes.Buffer) []string 
 		}
 	}
 	if d, ok := p.(providers.Dispatcher); ok {
-		a := providers.Attempt{ID: "attempt-1", N: 2, Revision: "revision-1"}
+		a := attempt
+		if a.ID == "" {
+			a = providers.Attempt{ID: "attempt-1", N: 2, Revision: "revision-1"}
+		}
 		h, err := d.Dispatch(ctx, a)
 		if err != nil {
 			issues = append(issues, "dispatch: "+err.Error())
@@ -182,7 +193,15 @@ func bindingOK(c providers.Collected, a providers.Attempt, h providers.Handle) b
 	if json.Unmarshal(c.Evidence, &evidence) != nil {
 		return false
 	}
-	return evidence["attempt"] == a.ID && evidence["revision"] == a.Revision && evidence["nonce"] == h.Nonce
+	// The attempt is a string in the kit's own documents and an {id, n} object in ci.evidence/v1.
+	attempt := evidence["attempt"]
+	if object, ok := attempt.(map[string]any); ok {
+		attempt = object["id"]
+	}
+	if nonce, present := evidence["nonce"]; present && nonce != h.Nonce {
+		return false // the attestation carries the nonce; a document that also names one must agree
+	}
+	return attempt == a.ID && evidence["revision"] == a.Revision
 }
 func requestLeak(header http.Header, secrets [][]byte) string {
 	for key, values := range header {

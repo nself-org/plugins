@@ -20,7 +20,7 @@ Every container gets:
 
 - A kernel escape. A container shares the host kernel. For code you do not trust, use the sandboxed container level (gVisor) or a VM.
 - Network egress on `lan` and `internet`.
-- Disk use inside the workspace. The workspace is removed after the attempt. If the job image has no shell, the cleanup helper cannot remove job-owned files and the workspace can stay on disk (tracked as debt).
+- Disk use inside the workspace. The workspace is removed after the attempt. Files the job user created are removed by a cleanup helper that runs in a separate busybox image pinned by digest (image lock entry `ci-cleanup`), never in the job image, so an image without a shell cannot leave them behind. If the helper image cannot start (an air-gapped node that never pulled `ci-cleanup`), the cleanup is tried once in the job image, as before; if that fails too, the job log says so and the host removes what it owns; a workspace it cannot empty fails a passing run as an infra failure (`E610`).
 
 ## The sandboxed container level (gVisor)
 
@@ -69,7 +69,7 @@ Some toolchains do not run under gVisor because they need a syscall the Sentry l
 - On a node where the agent user has no docker group (a separated node), only a rootless runtime counts. A rootful socket is root-equivalent. Set `NSELF_CI_NODE_SEPARATED=1` on such a node; unset means "not separated" and a rootful runtime is accepted.
 - Rootless runtimes map about 65536 UIDs, so only slots 0 to 3 run at once.
 
-When the level is unavailable the job fails with E678 and a stable reason. It never falls back to a weaker level.
+When the level is unavailable the job waits before it fails, and never falls back to a weaker level. A slot the runtime cannot map (`isolation.slot_uid_unmapped`, for example a fifth concurrent attempt on a rootless runtime) is waited out until another attempt frees one, for up to 30 minutes (slot 0 is never waited for: no other attempt can free a better one). A missing runtime, a failed probe or limits the runtime cannot enforce are retried for about a minute. The job log says `waiting for ... isolation` and repeats it every minute. Only a refusal before the job started is waited for. After the wait the job fails with E678 and its stable reason. Other reasons (a rootful runtime, an unenforceable network scope) fail at once.
 
 ## Workspace hygiene and job UID separation
 
@@ -134,6 +134,41 @@ Android release builds: until `release.age` holds the keystore secrets, `ANDROID
 
 A node granted a `release` or `deploy` file must be dedicated-trusted (operator-owned, assigned trust, accepts only `owner`, one authorized project); `nodes secrets grant` does not yet check that the project is the one the file belongs to, so grant these files only to a node dedicated to that project. Multi-line values (PEM keys) need the baseline container path today; the hardened path refuses them.
 
+## Source trust: who made the code
+
+Every run has a source trust class: `owner`, `internal`, `collaborator` or `untrusted`. It decides what the run may touch (secrets, network, isolation) and it is never taken from a payload field, a job input or `.nself/ci.yaml`. A coordinator that runs jobs as you only starts `owner` and `internal` work; anything below needs an isolated runner.
+
+**A forge trigger** (a webhook or a poll) is classified from facts the forge API gave: `trust = min(actor permission, revision provenance)`. The delivery's own claims can lower the class and never raise it. `ClassifyForge` re-fetches the facts from the API first; if they cannot be re-fetched (the call failed, or no registered provider can) the result is `untrusted` with the reason `source.refetch_failed`.
+
+| Fact | Result |
+|---|---|
+| Auth is `shared`, `bearer` or `none` | `untrusted` |
+| Fork or other head repository, or no proof the head is this repository | `untrusted` |
+| Actor has `admin` on the repository | up to `owner`; `write` or `maintain`: up to `collaborator`; anything else or unknown: `untrusted` |
+| Push to a protected ref, or a sha reachable from a protected branch | `owner` is possible; any other push or a pull request: `collaborator` at most |
+| Tag, API or manual trigger | `owner` only when the sha is reachable from a protected branch or tag rule; otherwise `untrusted` |
+| Schedule | needs a protected ref or a reachable sha, else `untrusted` |
+| `[bot]` login, Dependabot, Renovate, or a diff of lockfiles only | `untrusted` |
+| A runner-demand job | `untrusted` unless the group takes protected refs only, the event is `push`, `schedule` or `workflow_dispatch`, and the head is this repository |
+| Head moved since the delivery | `untrusted` |
+
+A missing fact takes its untrusted value. A first-time contributor's run needs an approval. The repository's visibility must come from the API as `public` before a run may use hosted infrastructure; unknown or changed visibility keeps the `private-infrastructure` zone.
+
+**A local run** is classified from git, by provenance and never by author name or email (anyone can write your email into a commit). Git runs with `--no-replace-objects`.
+
+- `owner`: HEAD is on the `origin` default branch; or the reflogs show that every commit that branch does not contain was made here. The oldest reflog entry of a commit decides: `commit`, `commit (amend)`, a rebase step that rewrites a commit (also under `pull --rebase`), a merge commit, `cherry-pick` and `revert` count; `checkout`, `fetch`, `pull` that fast-forwards, `branch: Created from`, `rebase (finish)` and anything that fast-forwards do not. Pushing your own commits changes nothing: you still made them. A stranger's commit you fetched or checked out has an arrival entry, and a branch you fetched back from a peer keeps your `commit` entries.
+- `collaborator`: HEAD is on another branch of `origin`. Pull-request namespaces (`refs/remotes/origin/pr/*`, `pull/*`, `mr/*` and any refspec that maps something other than `refs/heads/*`) do not count as branches.
+- `untrusted`: anything else, including a stranger's pull request checked out with `gh pr checkout`, an unfinished merge, squash, cherry-pick, revert or rebase (the tree holds content no commit accounts for), and any case where git could not answer.
+- A repository with no remote, a directory that is not a git repository, and a repository without a commit are your own directory: `owner`. A remote that is configured but never fetched is judged by the reflog like a branch with no default.
+
+Limits, so you can judge them: the reflog expires and is read for the last 5000 entries, so an old branch (or more than 500 commits beyond the default branch) may fall to `untrusted`; run `git remote set-head origin -a` so the default branch is known when it is not `main` or `master`. A commit you rebase, amend or cherry-pick is a new commit made here, even when its content came from someone else's branch, so rebasing a stranger's pull request before you test it makes it `owner` (patch-id matching against remote commits is the planned fix, see the debt register). Uncommitted changes count as yours. A repository you extracted from an archive, or cloned from a stranger, is whatever its `origin` says it is. Run `nself ci --trust owner` when you know better, and use an isolated runner for code you did not write.
+
+**`--trust owner`** forces `owner` and writes one audit row (`trust.override`) that names the revision, the verdict it replaced and its reasons. If the row cannot be written the run is refused (`E625`). `--trust` with a lower class always works; it never raises a class except to `owner`.
+
+**Agents.** When `NSELF_INVOKED_BY` is set (the MCP and HTTP invokers set it; export it for a CLI agent, which is advisory because the agent controls its own environment), the class is capped by the operator policy key `trust.machine_invoked_cap` (default `owner`, no cap), with the reason `source.machine_invoked_cap`. `--trust` above the cap fails with `E687` (reason `machine_cap`). Set `untrusted` for unattended agents.
+
+Handoff for later Tickets: `source.Classify(model.TriggerFacts) Result` and `source.ClassifyLocal(source.GitFacts) Result` are pure (`internal/trust/source`). `run.SourceTrust` is the registered `TrustClassifier`; `Decide` returns the reasons, `ClassifyForge(ctx, root, facts)` classifies a forge trigger (P7-TRUST-17 feeds it recorded deliveries; P7-TRUST-24 reads `RequiresApproval`). The `Kind`, `Auth` and `Repo` fields of the facts carry no source label: the adapters must derive them from the authenticated delivery, not from its body. `source.ApplyCap` is the one place the machine cap lowers a class.
+
 ## Roles, tokens and the audit log
 
 A TEAM coordinator knows three roles, ordered `member < release < admin`, and no per-user permissions. In PERSONAL mode the operator on the coordinator host is allowed everything (access to the data directory is admin access) and every decision is still audited.
@@ -170,9 +205,65 @@ Every grant, token and user certificate records a `subject`: `self` when it was 
 
 There is one audit table. The `trust-audit` set chains it: each sealed row's `head` is the sha256 of the previous head and the canonical row (seq, time, actor, action, target, detail). `Append` inserts a row and seals every pending row in one `BEGIN IMMEDIATE` transaction, so concurrent writers, even in a second process, lose no row. Rows other packages write through the core audit API (every node mutation) are sealed by the next `Append`, by `audit seal`, or by a sealer the TEAM coordinator runs every 60 s. `audit --verify` only reads, inside one snapshot: it prints `unsealed: <n>` and exits 1 when rows are still unsealed after 60 s, when a sealed row no longer matches its hash (the row is named), when the chain link is broken, when a seq number is missing (rows are never deleted, so a gap or an AUTOINCREMENT counter above the last row means rows were removed, including the newest ones), or when an unsealed row sits below a sealed one (a cleared head). `audit seal` refuses to re-chain such a row (E609), so the damage stays visible. An `Append` or a mutation still records its row, left unsealed, so a revocation is never blocked by tampering; `--verify` keeps failing until the log is restored from backup (there is no accept-the-break command yet). An event whose actor, action, target or detail contains a registered secret value, in any encoding the redactor knows, is refused (`E687`, reason `audit_secret`) and nothing is written. P7-TRUST-26 policy writes call `audit.AppendTx` to put their row in the policy write's own transaction.
 
-What the chain does not give you: it detects an edit that was not recomputed. Someone who can write the database and recompute every later row defeats it; the TEAM checkpoint (P7-TRUST-20) detects that. A PERSONAL coordinator has neither a checkpoint nor a second writer to guard against, so the chain there is a tidy record, not evidence. Someone who can write the database can also clear heads and let the next `Append` re-chain them; that counts as a database writer too. (Removing the newest rows is caught by the seq check above, but only until the counter itself is edited.)
+What the chain does not give you: it detects an edit that was not recomputed. Someone who can write the database and recompute every later row defeats it; the TEAM checkpoint detects that (see Signed evidence, revocation and the audit checkpoint). A PERSONAL coordinator has neither a checkpoint nor a second writer to guard against, so the chain there is a tidy record, not evidence. Someone who can write the database can also clear heads and let the next `Append` re-chain them; that counts as a database writer too. (Removing the newest rows is caught by the seq check above, but only until the counter itself is edited.)
 
 Handoff for later Tickets: `roles.Authorize(ctx, actor, role, project)` and `roles.AuthorizeAction(ctx, actor, action, project)` are the calls a route makes; `WithAuthor(ctx, id)` carries a run's author for `run.approve`. Both write one `authorize` row per release- or admin-level decision (allowed or refused, an unknown role included) and none for member-level reads, so a mutation that writes its own row records two rows for one request. The `serve admin` commands write only their own mutation row and do not audit failed validation, failed token or certificate sign-in, or the local operator's own reads. The non-author rule for `run.approve` compares principal ids (an audit label such as `token:tok-1:bob` names `bob`); the local operator is exempt, being the only person of a PERSONAL coordinator.
 
 Wiring left to the coordinator process (P7-NODE-10 and P7-TRUST-26): start `audit.Log.RunSealer` (60 s) so rows other packages write get sealed, call `audit.SetScanner(run.Redactions)` before its first `Append` or `AppendTx` (the `serve admin` commands do this themselves), and resolve an Actor per request, not per connection. `store.CertSubjectPut` has no caller until the command that issues user certificates records their subject.
 
+
+## Signed evidence, revocation and the audit checkpoint
+
+A node that is signing eligible signs the evidence of every job it runs. The signature is Ed25519 with the node key over `nself-ci-evidence/v1`, a newline, and the canonical JSON of the document without its `signature` and `freshness` fields (numbers kept as written, fields a newer producer added stay in). The key id is `ci-node-` plus the first 16 hex characters of the sha256 of the public key. The coordinator accepts a `signed-remote` document only when all of these hold; otherwise the gate sees `evidence.signature_unverifiable` and the log gets an `E686` reason:
+
+| Reason | Meaning |
+|---|---|
+| `signature_missing`, `signature_malformed`, `key_malformed` | no usable signature or key id |
+| `attempt_unknown` | the document names no attempt, or the coordinator recorded no lease holder for it |
+| `revision_mismatch`, `context_mismatch` | the document's revision, or its run id, repository id, source trust, policy digest or selection mode is not what the coordinator recorded for the attempt, the document names no job or another job than the attempt's, or one of its checks belongs to another job (a node chooses every field of its own evidence and vouches for its own job only, so the coordinator compares each field it knows; the repository id is the form the run's own evidence uses, the first 8 bytes of the sha256 of the project in hex, and a producer that uses another form is refused) |
+| `replay` | the same signature was already used for another attempt |
+| `key_revoked`, `key_unknown`, `key_purpose`, `signature_invalid` | the key checks, all made by the CLI's `sdk/go/signing` against the keys the node registry pinned |
+| `lease_holder_mismatch` | the key belongs to a node that did not hold the lease of that attempt |
+| `node_not_eligible` | the node's registry record says `signing_eligible: false` |
+| `ledger_unavailable` | the coordinator store could not be read (a refusal, never a pass) |
+
+A node signs only if its agent state directory holds an empty file named `signing-eligible` (a regular file, not a symlink, not writable by group or other). Create it, or let provisioning create it, only on a node whose jobs cannot read the node key: a separate job UID, a user namespace or a container. Without the file results carry no signature and count as unsigned. The coordinator's `signing_eligible` fact decides regardless of the file. A node key that was rotated away no longer verifies old evidence; a revoked key stays revoked (the id is derived from the key).
+
+**Revocation.** `run.RevokeNode` (and `attest.Revoker`) revoke every evidence key a node pinned or ever used, in one transaction, and quarantine the runs those keys signed. The call returns the gates, posted statuses and promoted releases the revoked evidence supported. It writes an `evidence.revoke` audit event and one `release.quarantine` event per promoted release, and re-posts each affected status as `error` with the reason `node.revoked`. `nself ci artifacts verify` reports a quarantined release as `quarantined` and exits 1; it reads the quarantine index from the coordinator store, so on a machine without one it cannot know and reports nothing. A node revoked with `nodes revoke` (registry state `revoked`) or by `RevokeNode` no longer verifies new evidence; a key pinned for it later is refused too.
+
+**Audit checkpoint (TEAM only).** The audit chain detects an edit that was not recomputed. A signed checkpoint detects a database writer who recomputed every row.
+
+```
+nself ci serve admin audit checkpoint export <path> [--json]
+nself ci serve admin audit checkpoint verify --pubkey <fingerprint> <path> [--json]
+```
+
+`export` (admin, TEAM coordinator only; PERSONAL mode refuses with a reason) seals the log, refuses a damaged chain, signs the head of the newest row with the coordinator's `ci-audit` key (`audit-checkpoint.key`, mode 0600, created on the first export in the data directory) and prints the key's sha256 fingerprint. Copy the checkpoint file and the fingerprint off this host: the key sits in the same data directory as the database, so only a checkpoint kept elsewhere detects a rewrite by someone who can write that directory. `verify` takes the fingerprint you pinned elsewhere; it never trusts the key in the data directory, refuses to run without `--pubkey`, checks the signature, re-verifies the whole chain and then compares the head of the checkpointed row with the live one. It exits 1 when the chain was rewritten (even with every hash recomputed) or rows were removed. Rows added after the checkpoint do not break it.
+
+Handoff for later Tickets: the coordinator calls `run.UseAttestStore(st)` at start (the first attempt also sets it), a node revocation calls `run.RevokeNode`, and the coordinator that receives a result frame builds the signed-remote document with `producer.kind: signed-remote` and `signature: {kind: runner-ed25519, key_id, value}` from the frame; the agent signs the document it sends, so that document must already carry `attempt.id`, `job`, the real `repo_id`, `run_id`, `source_trust`, `policy_digest` and checks for its own job only (the agent's base document does not yet: D-1299; the marker file and the revoke caller are unwired: D-1300).
+
+## Policy sources and `nself ci policy`
+
+The effective policy of a repository is merged from, loosest first: the defaults, your operator rows (scopes `user`, `team`, `project`, kept in the CI store), the protected default branch's `.nself/ci.yaml` `policy:` block read at the fetched `origin/<default>` tip (or at an admin pin), the checked-out revision's own `policy:` block, and the flags of one run. Every later scope can only tighten. A widening in the revision, and any Spend key (`economics.*`, `burst.*`) in the branch or the revision, is ignored and listed. A `policy:` block in a pull request therefore never loosens anything.
+
+```
+nself ci policy show [--effective] [--json] [--team <id>]
+nself ci policy set --scope user|team|project [--team <id>] <key> <value> [--json]
+nself ci policy unset --scope user|team|project [--team <id>] <key> [--json]
+nself ci policy pin <sha> | --clear [--json]
+```
+
+- `show` prints every effective key with the scope it came from, the pinned commit, the fetch state (`fresh`, `stale`, `none`), the policy digest and the ignored fields with their code (`E671`). `--effective` prints only the values. `--json` data is `{effective, sources, pinned_commit, fetch, digest, ignored: [{key, source, code, reason}]}`. A Secret key prints as `[REDACTED]`.
+- `set` takes the value as JSON when it parses as JSON (`true`, `["a","b"]`), else as a plain string (`restricted`). The value goes through the key's own decoder, a string outside the key's order is refused, and the new row must merge without loosening a parent (`E670`) with the stored rows of the user, team and project it names, the protected branch's policy and the strictest defaults (an untrusted source). That keeps a stored row from making a later run in this repository fail to resolve. An unknown key is `E672`. `--scope project` and `pin` apply to the repository the command runs in (the project id comes from git; if git cannot run the command refuses rather than guess); `--scope team` needs `--team <id>` (letters, digits, `.`, `-`, `_`, at most 64).
+- `pin <sha>` fixes the protected-branch commit the policy is read at. It accepts only a full commit id reachable from the fetched `origin/<default>` (else `E672`); `--clear` returns to the tip.
+- Every `set`, `unset`, `pin` and `--clear` needs the `admin` role (the local operator of a PERSONAL coordinator has it) and writes its policy row and one `policy.*` audit row in one transaction: both land or neither does. The role check itself writes its own `authorize` row first, so a successful write leaves two rows and a refused one leaves only the `authorize` row (`policy.refused` for a machine-invoked refusal). The audit row names the scope, the quoted subject, the key, a short digest and the new value; a Secret key's value is never written.
+
+### Machine-invoked callers cannot loosen trust policy
+
+When `NSELF_INVOKED_BY` is set (the MCP and HTTP invokers always set it; you can export it for an agent that uses the CLI), `set`, `unset` and `pin` refuse, with `E687` reason `machine_invoked`, any write that loosens a `trust.*` key: raising `trust.machine_invoked_cap`, unsetting any `trust.*` key, and every `pin` or `--clear`. The refusal writes nothing to the policy and one `policy.refused` audit row. Lowering a trust key (`trust.machine_invoked_cap` from `owner` to `untrusted`) works, and so do keys outside `trust.*`. A first value for a `trust.*` list key that has no default (`trust.providers`, `trust.self_reported_gates`) counts as loosening, because an unset list means none allowed. With the variable unset the operator's writes work as before. This guard is advisory against an agent that controls its own environment, which can simply unset the variable; the plan also marks the three write commands `cli-only` on the MCP and HTTP surfaces (P7-CI-62) so a remote caller cannot reach them at all; that mapping is not part of this command.
+
+### Known limits
+
+- A `team` row applies only where a caller names the team (`show --team`); no run path supplies one yet, so a TEAM coordinator's team rows are inert until the coordinator wiring (P7-NODE) passes the team id.
+- `pin` needs a fetched origin; with no origin there is nothing to pin against.
+- The checks read the store before the write transaction opens, so two writers at the same moment can race (for example a machine write over a concurrent operator tightening). The rows of other projects are not listed by the store, so a user-scope write is not checked against them; `policy show` in that repository reports a conflict as `E670`.

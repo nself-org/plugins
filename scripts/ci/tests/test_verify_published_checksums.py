@@ -58,9 +58,9 @@ esac
         gh.chmod(0o755)
         self.exception()
 
-    def archive(self, name):
+    def archive(self, name, marker=""):
         with tarfile.open(self.assets / name, "w:gz") as archive:
-            data = b"fixture bytes\n"
+            data = b"fixture bytes\n" + marker.encode()
             entry = tarfile.TarInfo("nself-demo")
             entry.size = len(data)
             archive.addfile(entry, io.BytesIO(data))
@@ -72,14 +72,45 @@ esac
                      f"    reason: fixture\n    owner_ref: TEST\n    expires: {expires}\n")
         (self.root / "scripts/conformance/exceptions.yaml").write_text(text)
 
-    def verify(self):
+    def sha(self, name):
+        return hashlib.sha256((self.assets / name).read_bytes()).hexdigest()
+
+    def sign_platforms(self, platforms=PLATFORMS, sha=None):
+        """Add a platform signature per platform to the signatures file; sha overrides the covered hash."""
+        doc = json.loads(self.signatures.read_text())
+        doc["demo"]["platform_signatures"] = {
+            p: {"sha256": sha or self.sha(f"demo-1.0.0-{p}.tar.gz"),
+                "key_id": "fixture", "alg": "ed25519", "sig": f"fixture-{p}"}
+            for p in platforms
+        }
+        self.signatures.write_text(json.dumps(doc))
+
+    def verify(self, signed=True):
         env = dict(os.environ, PATH=f"{self.bin}{os.pathsep}{os.environ['PATH']}",
                    FIXTURE_ASSETS=str(self.assets), CONF_TODAY="2026-10-14")
+        args = ["--write", "--signatures", str(self.signatures)] if signed else ["--write"]
         return subprocess.run(
-            ["bash", str(self.root / "scripts/verify-published-checksums.sh"),
-             "--write", "--signatures", str(self.signatures), "v1.0.0"],
+            ["bash", str(self.root / "scripts/verify-published-checksums.sh"), *args, "v1.0.0"],
             env=env, text=True, capture_output=True, check=False,
         )
+
+    def archive_all(self):
+        for platform in PLATFORMS:
+            self.archive(f"demo-1.0.0-{platform}.tar.gz", marker=platform)
+
+    def seed_row(self, signatures=True, **extra):
+        """A releases.json row already on v1.0.0, as a previous --write left it."""
+        row = {"version": "1.0.0", "release_tag": "v1.0.0", "sha256": self.sha("demo-1.0.0.tar.gz"),
+               "release_signature": {"key_id": "fixture", "alg": "ed25519", "sig": "src"},
+               "platform_checksums": {p: self.sha(f"demo-1.0.0-{p}.tar.gz") for p in PLATFORMS}}
+        if signatures:
+            row["platform_signatures"] = {p: {"key_id": "fixture", "alg": "ed25519", "sig": f"old-{p}"} for p in PLATFORMS}
+        row.update(extra)
+        self.releases.write_text(json.dumps({"releases": {"demo": row}}))
+        return row
+
+    def row(self):
+        return json.loads(self.releases.read_text())["releases"]["demo"]
 
     def assert_missing_platforms(self, count=5):
         result = self.verify()
@@ -115,13 +146,95 @@ esac
         self.assert_missing_platforms(count=4)
 
     def test_complete_binary_release_records_all_platforms(self):
-        for platform in PLATFORMS:
-            self.archive(f"demo-1.0.0-{platform}.tar.gz")
+        self.archive_all()
+        self.sign_platforms()
         result = self.verify()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        row = json.loads(self.releases.read_text())["releases"]["demo"]
+        row = self.row()
         self.assertEqual(set(row["platform_checksums"]), set(PLATFORMS))
         self.assertEqual(row["binaries"], ["nself-demo"])
+        # Each platform carries its own signature object, without the covered sha256 (that is platform_checksums).
+        self.assertEqual(row["platform_signatures"], {
+            p: {"key_id": "fixture", "alg": "ed25519", "sig": f"fixture-{p}"} for p in PLATFORMS})
+
+    def test_published_platform_without_signature_stops_the_write(self):
+        self.archive_all()
+        self.sign_platforms()
+        for missing in ("absent", "stale", "none"):
+            with self.subTest(missing=missing):
+                self.sign_platforms()
+                doc = json.loads(self.signatures.read_text())
+                if missing == "absent":
+                    del doc["demo"]["platform_signatures"]["linux-arm64"]
+                elif missing == "stale":
+                    doc["demo"]["platform_signatures"]["linux-arm64"]["sha256"] = "0" * 64
+                else:
+                    del doc["demo"]["platform_signatures"]
+                self.signatures.write_text(json.dumps(doc))
+                result = self.verify()
+                output = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 1, output)
+                self.assertIn("UNSIGNED demo/", output)
+                self.assertEqual(self.releases.read_text(), self.original)
+
+    def test_platform_signature_for_another_platforms_bytes_is_refused(self):
+        self.archive_all()
+        self.sign_platforms()
+        doc = json.loads(self.signatures.read_text())
+        # darwin-arm64 carries the signed hash of darwin-amd64.
+        doc["demo"]["platform_signatures"]["darwin-arm64"]["sha256"] = self.sha("demo-1.0.0-darwin-amd64.tar.gz")
+        self.signatures.write_text(json.dumps(doc))
+        result = self.verify()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("UNSIGNED demo/darwin-arm64", result.stdout)
+
+    def test_source_only_release_gets_no_platform_signatures(self):
+        self.exception(expires="2026-12-31")
+        self.sign_platforms(sha="0" * 64)
+        result = self.verify()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("platform_signatures", self.row())
+
+    def test_rewrite_keeps_platform_signatures_when_bytes_are_unchanged(self):
+        self.archive_all()
+        self.seed_row()
+        result = self.verify(signed=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.row()["platform_signatures"], {
+            p: {"key_id": "fixture", "alg": "ed25519", "sig": f"old-{p}"} for p in PLATFORMS})
+
+    def test_rewrite_drops_only_the_platform_signature_whose_bytes_changed(self):
+        self.archive_all()
+        self.seed_row()
+        self.archive("demo-1.0.0-linux-arm64.tar.gz", marker="rebuilt")
+        result = self.verify(signed=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        kept = self.row()["platform_signatures"]
+        self.assertEqual(set(kept), set(PLATFORMS) - {"linux-arm64"})
+
+    def test_rewrite_drops_all_platform_signatures_when_source_bytes_changed(self):
+        self.archive_all()
+        self.seed_row()
+        self.archive("demo-1.0.0.tar.gz", marker="rebuilt")
+        result = self.verify(signed=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        row = self.row()
+        self.assertIsNone(row["release_signature"])
+        self.assertNotIn("platform_signatures", row)
+
+    def test_rewrite_drops_platform_signatures_made_for_another_version(self):
+        self.archive_all()
+        self.seed_row(version="0.9.0")
+        result = self.verify(signed=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("platform_signatures", self.row())
+
+    def test_rewrite_without_platform_signatures_adds_none(self):
+        self.archive_all()
+        self.seed_row(signatures=False)
+        result = self.verify(signed=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("platform_signatures", self.row())
 
     def test_source_plugin_needs_no_binary_exception(self):
         self.manifest.write_text("{}")

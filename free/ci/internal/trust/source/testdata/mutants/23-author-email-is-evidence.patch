@@ -1,0 +1,17 @@
+--- a/internal/run/trust_git.go
++++ b/internal/run/trust_git.go
+@@ -94,6 +94,14 @@
+ 		return g
+ 	}
+ 	g.ReflogCreated = source.OldestEntries(entries)
++	if me, _ := git("config", "user.email"); me != "" { // MUTANT: trust the author email
++		out, _ := git("log", "-n", "500", "--format=%H %ae", rev)
++		for _, l := range lines(out) {
++			if sha, email, ok := strings.Cut(l, " "); ok && email == me {
++				g.ReflogCreated[sha] = "commit: by email"
++			}
++		}
++	}
+ 	var fetched []string
+ 	if pathsOK {
+ 		var ok bool

@@ -1,0 +1,11 @@
+--- a/internal/trust/source/local.go
++++ b/internal/trust/source/local.go
+@@ -58,7 +58,7 @@
+ // made on this machine. Being pushed does not change that: a pushed commit of yours still has its
+ // `commit` entry, while a stranger's commit you fetched, pulled or checked out has an arrival entry.
+ func createdHere(g GitFacts) bool {
+-	if (g.DefaultRemoteRef == "" && !g.NeverFetched) || len(g.OffDefault) == 0 {
++	if g.DefaultRemoteRef == "" || len(g.OffDefault) == 0 {
+ 		return false
+ 	}
+ 	for _, m := range []string{MissingDefaultRef, MissingRemoteRefs, MissingCommits, MissingReflog} {

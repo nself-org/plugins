@@ -48,14 +48,15 @@ func score(w World, j Job, r Runner) (int64, map[string]model.Component) {
 	if s.CostMicro != nil {
 		cost = *s.CostMicro
 	}
-	if r.Class == "local" || r.Class == "owned" {
+	class := runnerClass(w, r)
+	if class == "local" || class == "owned" {
 		cost = 0
 	}
 	vals[6], _ = Mul(cost, p.MsPerCostMicro)
 	if s.ScarcityMs != nil {
 		vals[7] = *s.ScarcityMs
 		confs[7] = confidence(s.Confidence)
-	} else if r.Class == "included" {
+	} else if class == "included" {
 		vals[7] = run / 2
 	}
 	vals[8] = run / 20
@@ -76,7 +77,7 @@ func score(w World, j Job, r Runner) (int64, map[string]model.Component) {
 		term /= 1000
 		total, _ = Add(total, term)
 	}
-	total, _ = Add(total, p.ClassBiasMs[classIndex(r.Class)])
+	total, _ = Add(total, p.ClassBiasMs[classIndex(class)])
 	if bias := w.Bias[r.ID]; bias != 0 { // absent for every runner unless a contributor set it: goldens keep nine components
 		comps["tier_rank"] = component(bias, 1000, "estimated")
 		total, _ = Add(total, bias)

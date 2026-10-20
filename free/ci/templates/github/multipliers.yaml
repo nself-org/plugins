@@ -1,0 +1,9 @@
+# Per-OS minute multipliers for private repositories on standard hosted runners [Likely]:
+# https://docs.github.com/en/billing/reference/actions-minute-multipliers
+# Public repositories are not metered. This is data for the scheduler, not a price.
+checked: 2026-10-19
+source_url: https://docs.github.com/en/billing/reference/actions-minute-multipliers
+multipliers:
+  linux: 1
+  windows: 2
+  macos: 10

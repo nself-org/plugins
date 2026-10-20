@@ -1,0 +1,11 @@
+--- a/internal/run/trust_git.go
++++ b/internal/run/trust_git.go
+@@ -83,7 +83,7 @@
+ 		paths, pathsOK = lines(out), exit == 0 && len(lines(out)) == 7
+ 	})
+ 	run(func() {
+-		out, exit := git("reflog", "show", "--all", "--date=unix", "--format=%H%x09%gd%x09%gs", "-n", "5000")
++		out, exit := git("reflog", "show", "--date=unix", "--format=%H%x09%gd%x09%gs", "-n", "5000")
+ 		if exit != 0 {
+ 			miss(source.MissingReflog)
+ 		}

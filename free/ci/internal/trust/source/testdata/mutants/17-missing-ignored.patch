@@ -1,0 +1,15 @@
+--- a/internal/trust/source/local.go
++++ b/internal/trust/source/local.go
+@@ -61,11 +61,7 @@
+ 	if (g.DefaultRemoteRef == "" && !g.NeverFetched) || len(g.OffDefault) == 0 {
+ 		return false
+ 	}
+-	for _, m := range []string{MissingDefaultRef, MissingRemoteRefs, MissingCommits, MissingReflog} {
+-		if g.missing(m) {
+-			return false
+-		}
+-	}
++
+ 	for _, c := range g.OffDefault {
+ 		if !MadeHere(g.ReflogCreated[c.SHA]) {
+ 			return false

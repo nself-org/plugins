@@ -22,14 +22,20 @@
 #     summary line; nothing is modified. Exit 0 if no mismatches, exit 1 if any (a value disagreed or an expected asset was
 #     missing from the release).
 #   --write: writes version, sha256, release_tag, tarball_url, platform_checksums and binaries (the nself-* files in the
-#     linux-amd64 tarball) into releases.json, keeping an existing release_signature, then tells you to run
+#     linux-amd64 tarball) into releases.json, keeping an existing release_signature and platform_signatures, then tells you to run
 #     scripts/plugin-counts.sh to regenerate registry.json. Exit 0 on success, exit 1 if any expected asset could not be
 #     downloaded (releases.json is not written then).
 #   --signatures FILE (with --write): the plugins to write are exactly the signed ones (plus rows already on TAG), instead of the
 #     manifest-version scan. FILE is the release workflow's signing output, {"<slug>": {"sha256", "release_signature"}}
 #     (see scripts/release/sign.sh). A row's release_signature is taken from it only when its sha256 equals the freshly
 #     downloaded published bytes; a row with no matching signature is UNSIGNED and, like a missing asset, stops the write (exit 1),
-#     so a release can never land half-signed. Without the flag an existing release_signature is kept (nulled if the bytes changed).
+#     so a release can never land half-signed. The same holds per platform (contract plugins.release-signature v1.1): FILE rows may
+#     carry "platform_signatures": {"<platform>": {"sha256", "key_id", "alg", "sig"}}, a published platform tarball whose sha256 has
+#     no signature over exactly that sha256 is UNSIGNED, and releases.json gets platform_signatures {"<platform>": {"key_id",
+#     "alg", "sig"}} (the sha256 is dropped: it is platform_checksums). Without the flag an existing release_signature is kept
+#     (nulled if the bytes changed) and an existing platform signature is kept only while the row's version, source sha256 and that
+#     platform's sha256 are all unchanged (a binary tarball carries no version, so identical bytes under a new version would
+#     otherwise keep a signature made for the old one); otherwise it is dropped.
 #
 # Constraints: requires `gh` (authenticated, repo access), `jq`, `tar`, and `sha256sum`/`shasum`. Never creates or publishes
 #   a release, never tags, never touches anything but releases.json.
@@ -246,6 +252,26 @@ while IFS= read -r name; do
     fi
   fi
 
+  psigs_json="{}"
+  if [ "$WRITE" = "true" ] && [ -n "$SIGNATURES_FILE" ]; then
+    # Every published platform tarball needs a signature over exactly its published sha256 (the same no-half-signed rule as the source).
+    unsigned_platform=0
+    for platform in $(jq -r 'keys[]' <<<"$platforms_json"); do
+      p_sha="$(jq -r --arg p "$platform" '.[$p]' <<<"$platforms_json")"
+      psig="$(jq -c --arg n "$name" --arg p "$platform" --arg sha "$p_sha" 'try (.[$n].platform_signatures[$p]) catch null
+        | select(type == "object" and .sha256 == $sha and (.key_id | type) == "string" and (.alg | type) == "string" and (.sig | type) == "string")
+        | {key_id, alg, sig}' "$SIGNATURES_FILE")"
+      if [ -z "$psig" ]; then
+        printf "UNSIGNED %s/%s: %s has no platform signature for the published sha256 %s\n" "$name" "$platform" "$SIGNATURES_FILE" "$p_sha"
+        UNSIGNED=$((UNSIGNED + 1))
+        unsigned_platform=1
+        continue
+      fi
+      psigs_json="$(jq -c --arg p "$platform" --argjson s "$psig" '.[$p] = $s' <<<"$psigs_json")"
+    done
+    [ "$unsigned_platform" -eq 0 ] || continue
+  fi
+
   if [ "$WRITE" = "true" ]; then
     # The binaries a released CLI requires of the archive: the nself-* files in the linux-amd64 tarball.
     binaries_json="[]"
@@ -256,13 +282,20 @@ while IFS= read -r name; do
     fi
     RELEASES_JSON="$(jq --arg n "$name" --arg v "$VERSION" --arg tag "$TAG" --arg sha "$computed_sha" \
       --arg url "https://github.com/${REPO}/releases/download/${TAG}/${tarball_name}" \
-      --argjson plat "$platforms_json" --argjson bins "$binaries_json" --argjson sig "$sig_json" '
-      .releases[$n] = ((.releases[$n] // {release_signature: null})
+      --argjson plat "$platforms_json" --argjson bins "$binaries_json" --argjson sig "$sig_json" \
+      --argjson psig "$psigs_json" --argjson signed "$([ -n "$SIGNATURES_FILE" ] && echo true || echo false)" '
+      (.releases[$n] // {release_signature: null}) as $old
+      | .releases[$n] = ($old
         | (if .sha256 != $sha then .release_signature = null else . end)
         | (if $sig != null then .release_signature = $sig else . end)
         | . + {version: $v, sha256: $sha, release_tag: $tag, tarball_url: $url}
         | del(.tarball)
         | if ($plat | length) > 0 then .platform_checksums = $plat else del(.platform_checksums) end
+        | .platform_signatures = (if $signed then $psig
+            elif $old.version == $v and .release_signature != null then
+              (($old.platform_signatures // {}) | with_entries(select(.key as $p | $plat[$p] != null and ($old.platform_checksums // {})[$p] == $plat[$p])))
+            else {} end)
+        | if (.platform_signatures | length) == 0 then del(.platform_signatures) else . end
         | if ($bins | length) > 0 then .binaries = $bins else del(.binaries) end)' <<<"$RELEASES_JSON")"
     WRITTEN=$((WRITTEN + 1))
   fi

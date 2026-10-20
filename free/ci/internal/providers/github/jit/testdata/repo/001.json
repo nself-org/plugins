@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/repos/acme/widgets/actions/runners/generate-jitconfig",
+    "query": ""
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "Content-Type": [
+        "application/json"
+      ]
+    },
+    "body": "{\"runner\": {\"id\": 23, \"name\": \"nself-jit-fixture\", \"os\": \"unknown\", \"status\": \"offline\", \"busy\": false, \"labels\": [{\"id\": 0, \"name\": \"self-hosted\", \"type\": \"read-only\"}]}, \"encoded_jit_config\": \"synthetic-jit-config-repo-value\"}"
+  }
+}
