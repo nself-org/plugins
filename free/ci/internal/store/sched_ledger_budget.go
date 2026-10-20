@@ -138,7 +138,10 @@ func (s *Store) PutUsage(ctx context.Context, u UsageRow) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO ledger_usage(key,provider,period,day,series,minutes,cost_micro,balance_micro,reported_at) VALUES (?,?,?,?,?,?,?,?,?)",
 			u.Key, u.Provider, u.Period, u.Day, u.Series, u.Minutes, u.CostMicro, u.BalanceMicro, u.ReportedAt)
-		return err
+		if err != nil {
+			return err
+		}
+		return ledgerTx(s, ctx, tx).pruneLedger()
 	})
 }
 
