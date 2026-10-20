@@ -131,8 +131,31 @@ func validate(in Inputs, run string) error {
 		if r.Run != run || r.Project != p.Project || !shaRe.MatchString(r.SHA256) || r.Size < 0 || r.Size > MaxBlobBytes || !safeName(r.Name) || !plain(r.Attempt) {
 			return bad("a record is not a record of this run")
 		}
+		if _, ok := records.ParseKind(string(r.Kind)); !ok || !recordText(r) {
+			return bad("a record carries a value that is not plain text")
+		}
 	}
 	return nil
+}
+
+// recordText reports whether every free-text field that reaches the manifest or provenance is plain.
+func recordText(r records.Record) bool {
+	for _, s := range []string{r.ID, r.Job, r.Platform, r.RunnerID, r.Isolation, r.Producer, r.Retention, string(r.Visibility)} {
+		if !plain(s) {
+			return false
+		}
+	}
+	if r.Image != nil {
+		if !plain(r.Image.Ref) || !plain(r.Image.IndexDigest) || len(r.Image.Manifests) > MaxRecords {
+			return false
+		}
+		for _, m := range r.Image.Manifests {
+			if !plain(m.Platform) || !plain(m.Digest) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func ids(in Inputs) []string {
