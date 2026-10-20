@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -218,7 +218,8 @@
+@@ -220,7 +220,8 @@
  	// The use is recorded under the coordinator's own context (equal to the evidence's, checked above), so
  	// a revocation finds the runs, repositories and jobs the key vouched for.
  	use := Use{AttemptID: attempt, KeyID: keyID, SigDigest: digest, NodeID: holder.NodeID, RunID: facts.RunID, RepoID: facts.RepoID, Revision: facts.Revision, Job: facts.Job}

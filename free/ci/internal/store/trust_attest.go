@@ -130,11 +130,11 @@ func (l AttestLedger) Consume(ctx context.Context, u attest.Use) error {
 			return attest.ErrRevoked
 		}
 		var nodeRevoked int
-		if err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM attest_revoked_node WHERE node_id=?)+(SELECT count(*) FROM node WHERE id=? AND state='revoked')`, u.NodeID, u.NodeID).Scan(&nodeRevoked); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM attest_revoked_node WHERE node_id=?)+(SELECT count(*)=0 FROM node WHERE id=? AND state<>'revoked')`, u.NodeID, u.NodeID).Scan(&nodeRevoked); err != nil {
 			return err
 		}
 		if nodeRevoked > 0 {
-			return attest.ErrRevoked
+			return attest.ErrRevoked // revoked, or no registry record any more (nodes remove)
 		}
 		var other int
 		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM attest_use WHERE key_id=? AND sig_digest=? AND attempt_id<>?`, u.KeyID, u.SigDigest, u.AttemptID).Scan(&other); err != nil {

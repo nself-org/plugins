@@ -153,6 +153,7 @@ func TestAttestNodesByKeyReadsPinAndEligibility(t *testing.T) {
 
 func TestAttestReplaySetIsPerSignatureAcrossAttempts(t *testing.T) {
 	r := newAttestRig(t)
+	r.exec(`INSERT INTO node(id,name,version,lifecycle,trust_json,deploy_host_json,state,created_at,updated_at) VALUES('node-1','n',1,'{}','{}','{}','online',1,1)`)
 	u := attest.Use{AttemptID: "att-1", KeyID: "ci-node-0123456789abcdef", SigDigest: "d1", NodeID: "node-1", RunID: "run-1", RepoID: "repo", Revision: strings.Repeat("a", 40), Job: "build"}
 	for i := 0; i < 2; i++ {
 		if err := r.led.Consume(r.ctx, u); err != nil {
@@ -260,6 +261,12 @@ func TestAttestRevokedNodeAndKeyAreRefused(t *testing.T) {
 		t.Fatalf("consume for a registry-revoked node: %v", err)
 	}
 	r.exec(`UPDATE node SET state='online' WHERE id='node-1'`)
+	// a node deleted after the verifier's check (nodes remove) is refused at the write too
+	r.exec(`DELETE FROM node WHERE id='node-1'`)
+	if err := r.led.Consume(r.ctx, attest.Use{AttemptID: "att-0", KeyID: keyID, SigDigest: "d0", NodeID: "node-1", RunID: "run-0"}); !errors.Is(err, attest.ErrRevoked) {
+		t.Fatalf("consume for a removed node: %v", err)
+	}
+	r.exec(`INSERT INTO node(id,name,version,lifecycle,trust_json,deploy_host_json,state,created_at,updated_at) VALUES('node-1','node-1',1,'{}','{}','{}','online',1,1)`)
 	// a revocation that commits after the verifier's check refuses the use at the write
 	u := attest.Use{AttemptID: "att-1", KeyID: keyID, SigDigest: "d1", NodeID: "node-1", RunID: "run-1"}
 	if _, err := r.led.RevokeNode(r.ctx, "node-1", "node.revoked"); err != nil {

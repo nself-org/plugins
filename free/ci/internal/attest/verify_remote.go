@@ -140,6 +140,8 @@ func documentMatches(doc []byte, ev model.Evidence) bool {
 		return false
 	}
 	// Compared as encoded JSON, not field by field: a nil and an empty slice that omitempty drops are one value.
+	// Freshness is recomputed at read time and is not signed, so it is not compared.
+	d.Freshness, ev.Freshness = model.Freshness{}, model.Freshness{}
 	a, errA := json.Marshal(d)
 	b, errB := json.Marshal(ev)
 	return errA == nil && errB == nil && bytes.Equal(a, b)

@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -148,7 +148,7 @@
+@@ -150,7 +150,7 @@
  func verifyAgainst(ctx context.Context, led Ledger, ev model.Evidence, payload, raw []byte) error {
  	keyID, attempt, digest := *ev.Signature.KeyID, ev.Attempt.ID, SignatureDigest(raw)
  	facts, ok, err := led.AttemptFacts(ctx, attempt)

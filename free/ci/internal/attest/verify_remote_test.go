@@ -312,6 +312,15 @@ func TestVerifyRemoteRefusesADocumentThatIsNotTheEvidence(t *testing.T) {
 	}
 }
 
+func TestVerifyRemoteIgnoresReadTimeFreshness(t *testing.T) {
+	good := mustSign(t, attemptEvidence("att-1"), keyA)
+	reread := good
+	reread.Freshness = model.Freshness{State: "stale"} // recomputed at read time by the caller, never signed
+	if err := verifierOf(newLedger()).VerifyEvidence(marshal(t, good), reread); err != nil {
+		t.Fatalf("a re-evaluated freshness broke the binding: %v", err)
+	}
+}
+
 func TestVerifyRemoteIsIdempotentAndAcceptsBothEncodings(t *testing.T) {
 	good := mustSign(t, attemptEvidence("att-1"), keyA)
 	l := newLedger()
