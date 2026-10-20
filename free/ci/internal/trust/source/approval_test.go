@@ -17,7 +17,7 @@ import (
 )
 
 func base() Binding {
-	return Binding{Run: "run-1", HeadSHA: strings.Repeat("a", 40), ConfigDigest: "sha256:cfg", HeadRepo: "acme/app"}
+	return Binding{Run: "run-1", HeadSHA: strings.Repeat("a", 40), ConfigDigest: "sha256:cfg", HeadRepo: "acme/app", Author: "mallory"}
 }
 
 func TestApprovalVoidOnSync(t *testing.T) {
@@ -35,7 +35,10 @@ func TestApprovalVoidOnSync(t *testing.T) {
 		{"head repo changed (fork swapped)", flip(func(b *Binding) { b.HeadRepo = "evil/app" }), []string{VoidHeadRepo}},
 		{"head repo cleared", flip(func(b *Binding) { b.HeadRepo = "" }), []string{VoidHeadRepo}},
 		{"another run", flip(func(b *Binding) { b.Run = "run-2" }), []string{VoidRun}},
-		{"every field", Binding{Run: "r", HeadSHA: strings.Repeat("c", 40), ConfigDigest: "x", HeadRepo: "z/z"}, []string{VoidRun, VoidHeadSHA, VoidConfigDigest, VoidHeadRepo}},
+		{"author changed (facts rewritten)", flip(func(b *Binding) { b.Author = "eve" }), []string{VoidAuthor}},
+		{"author cleared", flip(func(b *Binding) { b.Author = "" }), []string{VoidAuthor}},
+		{"author case is not a change", flip(func(b *Binding) { b.Author = "Mallory" }), nil},
+		{"every field", Binding{Run: "r", HeadSHA: strings.Repeat("c", 40), ConfigDigest: "x", HeadRepo: "z/z", Author: "z"}, []string{VoidRun, VoidHeadSHA, VoidConfigDigest, VoidHeadRepo, VoidAuthor}},
 		{"head repo case is not a change", flip(func(b *Binding) { b.HeadRepo = "ACME/App" }), nil},
 		{"SHA hex case is not a change", flip(func(b *Binding) { b.HeadSHA = strings.ToUpper(b.HeadSHA) }), nil},
 	}

@@ -34,6 +34,7 @@ const (
 	AllowanceBelowMargin        PlacementReason = "allowance.below_margin"
 	BudgetExceeded              PlacementReason = "budget.exceeded"
 	ApprovalPending             PlacementReason = "approval.pending"
+	ApprovalRequired            PlacementReason = "approval.required" // the trust approval step (D18), not the spend approval
 	ProviderDown                PlacementReason = "provider.down"
 	RunnerRemoteOnly            PlacementReason = "runner.remote_only"
 	LimitPipeline               PlacementReason = "limit.pipeline"
@@ -60,7 +61,7 @@ var placementReasons = map[PlacementReason]bool{
 	NodeRevoked: true, NodeDiscovered: true, NodeDeployHost: true, NodeProtocol: true, NodeOffline: true, NodeDraining: true, NodeMaintenance: true, NodeOnBattery: true, NodeInteractive: true, NodeReservation: true,
 	PlatformMismatch: true, ToolsMissing: true, ResourcesInsufficient: true, LabelsMismatch: true, CapacityBusy: true, RetryAntiAffinity: true,
 	OverrideExcluded: true, OverrideMinIsolation: true, OverrideMaxCost: true, OverrideMaxQueue: true,
-	CostUnknownRate: true, CostUnbounded: true, PaidDisabled: true, BudgetUnset: true, ProviderOwnedElsewhere: true, BurstTeamOnly: true, AllowanceUnknown: true, AllowanceBelowMargin: true, BudgetExceeded: true, ApprovalPending: true,
+	CostUnknownRate: true, CostUnbounded: true, PaidDisabled: true, BudgetUnset: true, ProviderOwnedElsewhere: true, BurstTeamOnly: true, AllowanceUnknown: true, AllowanceBelowMargin: true, BudgetExceeded: true, ApprovalPending: true, ApprovalRequired: true,
 	ProviderDown: true, RunnerRemoteOnly: true, LimitPipeline: true, LimitJob: true, LimitRunner: true, LimitProvider: true, LimitProject: true, LimitUser: true, LimitTeam: true, LimitGlobal: true, BackgroundInteractiveQueued: true, BackgroundContention: true, EphemeralUsed: true,
 	PlatformNoneAvailable: true, QueueTimeout: true, BackpressureQueueFull: true,
 	PoolExcluded: true, NodeNotReady: true, TierWaiting: true,

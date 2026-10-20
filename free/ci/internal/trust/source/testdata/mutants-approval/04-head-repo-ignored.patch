@@ -1,6 +1,6 @@
 --- a/internal/trust/source/approval.go
 +++ b/internal/trust/source/approval.go
-@@ -66,9 +66,7 @@
+@@ -70,10 +70,8 @@
  	if a.ConfigDigest != cur.ConfigDigest {
  		out = append(out, VoidConfigDigest)
  	}
@@ -8,6 +8,6 @@
 -		out = append(out, VoidHeadRepo)
 -	}
 +	_ = VoidHeadRepo
- 	return out
- }
- 
+ 	if !strings.EqualFold(a.Author, cur.Author) {
+ 		out = append(out, VoidAuthor)
+ 	}

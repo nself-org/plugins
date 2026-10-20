@@ -5,11 +5,13 @@ package source
 // Inputs:  the Binding an approver saw and the Binding the run has now.
 // Outputs: Valid, VoidReasons, RequiresApproval, the Reason key of a held run.
 // Constraints: pure (no os, no exec, no net, no database/sql). A binding is (run, head SHA, config
-//          digest, head repo); an approval keyed by run id alone is never valid, so a binding with an
+//          digest, head repo, author); an approval keyed by run id alone is never valid, so a binding with an
 //          empty run, head SHA or config digest is never valid. The head repo may be empty on both
 //          sides (a local run has no forge) but must then be empty on both. SHAs compare exactly
 //          (case-folded hex); repositories compare case-insensitively as forges do; the config digest
-//          compares exactly.
+//          compares exactly. The author compares case-insensitively like a forge login and may be empty on
+//          both sides; the non-author rule ran against the author the approver saw, so a change of author
+//          voids the approval.
 
 import (
 	"strings"
@@ -27,6 +29,7 @@ const (
 	VoidHeadSHA      = "void.head_sha"
 	VoidConfigDigest = "void.config_digest"
 	VoidHeadRepo     = "void.head_repo"
+	VoidAuthor       = "void.author"
 	VoidIncomplete   = "void.incomplete"
 )
 
@@ -36,6 +39,7 @@ type Binding struct {
 	HeadSHA      string
 	ConfigDigest string
 	HeadRepo     string
+	Author       string
 }
 
 // Complete reports whether the binding names a run, a head SHA and a config digest.
@@ -69,11 +73,14 @@ func VoidReasons(a Binding, cur Binding) []string {
 	if !strings.EqualFold(a.HeadRepo, cur.HeadRepo) {
 		out = append(out, VoidHeadRepo)
 	}
+	if !strings.EqualFold(a.Author, cur.Author) {
+		out = append(out, VoidAuthor)
+	}
 	return out
 }
 
 // Valid reports whether the approval still holds for the current binding. A re-run of the same SHA
-// and digest keeps it; any change of head SHA, config digest or head repo voids it.
+// and digest keeps it; any change of head SHA, config digest, head repo or author voids it.
 func Valid(a Binding, cur Binding) bool { return len(VoidReasons(a, cur)) == 0 }
 
 // RequiresApproval says whether a run waits for an approval. recorded is the classification fact the

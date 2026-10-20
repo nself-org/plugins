@@ -469,3 +469,51 @@ func TestApprovalVoidedStaysHeldWhenBindingReturns(t *testing.T) {
 		t.Fatalf("re-approved run: %v", err)
 	}
 }
+
+// An author change after approval voids it through the real rule (D-1343).
+func TestApproveAuthorChangeVoidsApproval(t *testing.T) {
+	r := newApproveRig(t)
+	r.seed("run-1", "mallory", "sha-1")
+	r.as("bob", roles.Release)
+	if code := r.approve("run-1"); code != 0 || !r.approved("run-1") {
+		t.Fatalf("approve: %d %s %s", code, r.out.String(), r.errb.String())
+	}
+	if _, err := r.store().RecordApprovalFacts(context.Background(), store.ApprovalRunFacts{Run: "run-1", Author: "bob", HeadRepo: "fork/app", RequiresApproval: true}, voidCheck); err != nil {
+		t.Fatal(err)
+	}
+	if r.approved("run-1") {
+		t.Fatal("the approval survived a change of author")
+	}
+}
+
+// A release user scoped to one project gets the same answer for an unknown run as for a run of another
+// project, so the pre-check does not reveal which run ids exist (D-1343).
+func TestApproveScopedReleaseLearnsNothingAboutRuns(t *testing.T) {
+	r := newApproveRig(t)
+	r.seed("run-1", "mallory", "sha-1")
+	ctx := context.Background()
+	svc, op, closeFn, err := r.adminRig.env().Open(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeFn()
+	tok, _, err := svc.IssueToken(ctx, op, roles.Request{Principal: "carol", Role: roles.Release, Projects: []string{"/work/elsewhere"}, TTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.token = tok
+	var answers []string
+	for _, run := range []string{"run-1", "no-such-run"} {
+		if code := r.approve(run, "--json"); code != 1 {
+			t.Fatalf("%s exits %d", run, code)
+		}
+		_, code, msg := r.result()
+		answers = append(answers, code+" "+msg)
+		if code != "E687" {
+			t.Fatalf("%s: %s %s", run, code, msg)
+		}
+	}
+	if answers[0] != answers[1] {
+		t.Fatalf("existing and unknown runs are told apart: %q vs %q", answers[0], answers[1])
+	}
+}

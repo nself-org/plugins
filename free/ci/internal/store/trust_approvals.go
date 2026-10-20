@@ -2,7 +2,7 @@ package store
 
 // Purpose: the run approval rows (Epic D18, P7-TRUST-24): the source facts the classification hook
 // records for a run (author, head repo, whether it needs approval) and the approval bound to the
-// run's head SHA, config digest and head repo.
+// run's head SHA, config digest, head repo and author.
 // Inputs:  run ids, ApprovalRunFacts, ApproveInput, and a void check the caller supplies (the rule
 //          lives in trust/source; the store never judges a binding).
 // Outputs: ApprovalState (pipeline columns, facts and approval joined), voided approvals, pending runs.
@@ -37,7 +37,7 @@ var (
 )
 
 // ApprovalBinding is what an approval is bound to; trust/source.Binding has the same fields.
-type ApprovalBinding struct{ Run, HeadSHA, ConfigDigest, HeadRepo string }
+type ApprovalBinding struct{ Run, HeadSHA, ConfigDigest, HeadRepo, Author string }
 
 // ApprovalRunFacts are the source facts recorded for a run.
 type ApprovalRunFacts struct {
@@ -66,9 +66,9 @@ type ApprovalState struct {
 }
 
 // Current is the binding the run has now: the pipeline row's revision and input digest and the
-// recorded head repo.
+// recorded head repo and author.
 func (st ApprovalState) Current() ApprovalBinding {
-	return ApprovalBinding{Run: st.Run, HeadSHA: st.Revision, ConfigDigest: st.ConfigDigest, HeadRepo: st.HeadRepo}
+	return ApprovalBinding{Run: st.Run, HeadSHA: st.Revision, ConfigDigest: st.ConfigDigest, HeadRepo: st.HeadRepo, Author: st.Author}
 }
 
 // VoidCheck returns the field names in which cur differs from approved (empty when still valid).
@@ -81,14 +81,14 @@ type approvalQuerier interface {
 const approvalStateSQL = `SELECT p.id,p.project,p.revision,p.input_digest,p.source_trust,p.finished_at IS NOT NULL,
  f.run IS NOT NULL,coalesce(f.author,''),coalesce(f.head_repo,''),coalesce(f.requires_approval,0),
  a.run IS NOT NULL,coalesce(a.head_sha,''),coalesce(a.config_digest,''),coalesce(a.head_repo,''),coalesce(a.approver,''),
- coalesce(a.spend,0),coalesce(a.approved_at,0),coalesce(a.voided_at,0),coalesce(a.void_reason,'')
+ coalesce(a.spend,0),coalesce(a.approved_at,0),coalesce(a.voided_at,0),coalesce(a.void_reason,''),coalesce(a.author,'')
  FROM pipeline p LEFT JOIN trust_run_facts f ON f.run=p.id LEFT JOIN trust_approvals a ON a.run=p.id WHERE p.id=?`
 
 func readApprovalState(ctx context.Context, q approvalQuerier, run string) (ApprovalState, bool, error) {
 	var st ApprovalState
 	a := &st.Approval
 	err := q.QueryRowContext(ctx, approvalStateSQL, run).Scan(&st.Run, &st.Project, &st.Revision, &st.ConfigDigest, &st.SourceTrust, &st.Finished,
-		&st.Facts, &st.Author, &st.HeadRepo, &st.Requires, &st.HasApproval, &a.HeadSHA, &a.ConfigDigest, &a.HeadRepo, &a.Approver, &a.Spend, &a.ApprovedAt, &a.VoidedAt, &a.VoidReason)
+		&st.Facts, &st.Author, &st.HeadRepo, &st.Requires, &st.HasApproval, &a.HeadSHA, &a.ConfigDigest, &a.HeadRepo, &a.Approver, &a.Spend, &a.ApprovedAt, &a.VoidedAt, &a.VoidReason, &a.Author)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ApprovalState{}, false, nil
 	}
@@ -141,13 +141,13 @@ func (s *Store) ApproveRun(ctx context.Context, in ApproveInput) (ApprovalRow, e
 		}
 		cur := st.Current()
 		now := s.now().UnixNano()
-		if _, err = tx.ExecContext(ctx, `INSERT INTO trust_approvals(run,head_sha,config_digest,head_repo,approver,spend,approved_at,voided_at,void_reason) VALUES (?,?,?,?,?,?,?,NULL,'')
- ON CONFLICT(run) DO UPDATE SET head_sha=excluded.head_sha,config_digest=excluded.config_digest,head_repo=excluded.head_repo,approver=excluded.approver,spend=excluded.spend,approved_at=excluded.approved_at,voided_at=NULL,void_reason=''`,
-			in.Run, cur.HeadSHA, cur.ConfigDigest, cur.HeadRepo, in.Approver, in.Spend, now); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO trust_approvals(run,head_sha,config_digest,head_repo,author,approver,spend,approved_at,voided_at,void_reason) VALUES (?,?,?,?,?,?,?,?,NULL,'')
+ ON CONFLICT(run) DO UPDATE SET head_sha=excluded.head_sha,config_digest=excluded.config_digest,head_repo=excluded.head_repo,author=excluded.author,approver=excluded.approver,spend=excluded.spend,approved_at=excluded.approved_at,voided_at=NULL,void_reason=''`,
+			in.Run, cur.HeadSHA, cur.ConfigDigest, cur.HeadRepo, cur.Author, in.Approver, in.Spend, now); err != nil {
 			return err
 		}
 		row = ApprovalRow{ApprovalBinding: cur, Approver: in.Approver, Spend: in.Spend, ApprovedAt: now}
-		return s.appendAudit(ctx, tx, in.Approver, "approval.grant", in.Run, fmt.Sprintf("sha=%s config=%s head_repo=%q spend=%t", auditSafe(cur.HeadSHA), auditSafe(cur.ConfigDigest), auditSafe(cur.HeadRepo), in.Spend))
+		return s.appendAudit(ctx, tx, in.Approver, "approval.grant", in.Run, fmt.Sprintf("sha=%s config=%s head_repo=%q author=%q spend=%t", auditSafe(cur.HeadSHA), auditSafe(cur.ConfigDigest), auditSafe(cur.HeadRepo), auditSafe(cur.Author), in.Spend))
 	})
 	return row, err
 }
@@ -216,7 +216,7 @@ func (s *Store) voidStale(ctx context.Context, tx *sql.Tx, run string, check Voi
 		}
 		if !ok { // the run was pruned: the approval has nothing left to bind to
 			st = ApprovalState{Run: r, Approval: ApprovalRow{}}
-			if err = tx.QueryRowContext(ctx, "SELECT head_sha,config_digest,head_repo,approver,spend,approved_at FROM trust_approvals WHERE run=?", r).Scan(&st.Approval.HeadSHA, &st.Approval.ConfigDigest, &st.Approval.HeadRepo, &st.Approval.Approver, &st.Approval.Spend, &st.Approval.ApprovedAt); err != nil {
+			if err = tx.QueryRowContext(ctx, "SELECT head_sha,config_digest,head_repo,author,approver,spend,approved_at FROM trust_approvals WHERE run=?", r).Scan(&st.Approval.HeadSHA, &st.Approval.ConfigDigest, &st.Approval.HeadRepo, &st.Approval.Author, &st.Approval.Approver, &st.Approval.Spend, &st.Approval.ApprovedAt); err != nil {
 				return nil, err
 			}
 			st.Approval.Run, st.HasApproval = r, true
@@ -231,8 +231,8 @@ func (s *Store) voidStale(ctx context.Context, tx *sql.Tx, run string, check Voi
 			return nil, err
 		}
 		cur := st.Current()
-		if err = s.appendAudit(ctx, tx, "system:approval", "approval.void", r, fmt.Sprintf("reasons=%s approved_sha=%s now_sha=%s approved_config=%s now_config=%s approved_head_repo=%q now_head_repo=%q approver=%s",
-			a.VoidReason, auditSafe(a.HeadSHA), auditSafe(cur.HeadSHA), auditSafe(a.ConfigDigest), auditSafe(cur.ConfigDigest), auditSafe(a.HeadRepo), auditSafe(cur.HeadRepo), auditSafe(a.Approver))); err != nil {
+		if err = s.appendAudit(ctx, tx, "system:approval", "approval.void", r, fmt.Sprintf("reasons=%s approved_sha=%s now_sha=%s approved_config=%s now_config=%s approved_head_repo=%q now_head_repo=%q approved_author=%q now_author=%q approver=%s",
+			a.VoidReason, auditSafe(a.HeadSHA), auditSafe(cur.HeadSHA), auditSafe(a.ConfigDigest), auditSafe(cur.ConfigDigest), auditSafe(a.HeadRepo), auditSafe(cur.HeadRepo), auditSafe(a.Author), auditSafe(cur.Author), auditSafe(a.Approver))); err != nil {
 			return nil, err
 		}
 		out = append(out, a)
