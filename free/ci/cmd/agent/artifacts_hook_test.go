@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -147,5 +148,27 @@ func TestArtifactsHookRefusesEmptyFilesAndSecretValues(t *testing.T) {
 			}
 			_ = artifactsAfter(context.Background(), l, root, session.Outcome{State: "failed"}, newRecUp())
 		})
+	}
+}
+
+// brokenUp is a carrier whose digest frame cannot be sent: the shipping fails part-way.
+type brokenUp struct{ *recUp }
+
+func (brokenUp) Digest(protocol.Digest) error { return errors.New("carrier cut") }
+
+// A failed delivery must reach the session as ErrHookFatal, or the job would pass with part of its outputs.
+func TestArtifactsAfterWrapsAFailedShipAsHookFatal(t *testing.T) {
+	l := hookLease("out/*.txt")
+	root := session.JobRoot{Dir: t.TempDir()}
+	if _, err := artifactsBefore(context.Background(), l, root); err != nil {
+		t.Fatal(err)
+	}
+	after := artifactsAfterJob(execSpec{AttemptID: l.AttemptID, Job: l.Job}, jobInputs{})
+	if err := after(context.Background(), workspaceWith(t, map[string]string{"out/a.txt": "alpha"})); err != nil {
+		t.Fatal(err)
+	}
+	err := artifactsAfter(context.Background(), l, root, session.Outcome{State: "passed"}, brokenUp{newRecUp()})
+	if !errors.Is(err, session.ErrHookFatal) {
+		t.Fatalf("err = %v, want ErrHookFatal", err)
 	}
 }
