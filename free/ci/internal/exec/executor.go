@@ -37,6 +37,10 @@ type JobSpec struct {
 	Stdin io.Reader
 	// RunnerRoot gives a planned container the exec-capable runner tmpfs (RunnerRootPath), memory only.
 	RunnerRoot bool
+	// Entrypoint, when set, replaces the container image's entrypoint (`--entrypoint`), so a runner image
+	// whose own entrypoint is a launcher (the gitlab-runner image) still starts the credential wrapper. Only
+	// the agent binary mounted for a runner credential is accepted by the backstop. Containers only.
+	Entrypoint string
 	// Masks are exact values the output must never carry (the value Stdin delivers), even split across chunks.
 	Masks []string
 	// Slot is the execution slot the attempt holds; isolation profiles derive the job UID from it.

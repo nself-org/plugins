@@ -10,11 +10,14 @@ package runnerjob
 // Constraints: the hosts are exact names (the scope allowlist has no wildcard), so the numbered
 //          `*.actions.githubusercontent.com` service hosts are not all expressible: a runner whose
 //          region answers from an unlisted name cannot connect and fails closed (debt row on the scope
-//          allowlist). The list is per provider and fixed in this file; nothing a demand or a workflow
-//          carries adds a host. The note is removed when the lease ends.
+//          allowlist). The list is per provider and fixed in this file, plus the operator's own forge host that
+//          the coordinator's Synthesize put in the job (EnvHosts, from policy; a self-hosted GitLab); nothing a
+//          demand or a workflow carries adds a host (a lease with a runner credential is built only by the
+//          preparer, and RunnerCredential is not a pipeline field). The note is removed when the lease ends.
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
@@ -47,11 +50,24 @@ func AttemptHosts(a isolation.Attempt) []string {
 	return append([]string(nil), notes.hosts[a.ID]...)
 }
 
+// extraHosts reads the operator's own forge hosts the coordinator put in the job (EnvHosts): at most
+// MaxHosts plain lower-case names, anything else dropped.
+func extraHosts(v string) []string {
+	var out []string
+	for _, h := range strings.Split(v, ",") {
+		if hostPattern.MatchString(h) && len(out) < MaxHosts {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
 func note(l protocol.Lease) {
 	if l.RunnerCredential == nil || l.Job.Env[EnvProvider] == "" {
 		return
 	}
-	list := ProviderHosts[l.Job.Env[EnvProvider]]
+	list := append([]string(nil), ProviderHosts[l.Job.Env[EnvProvider]]...)
+	list = append(list, extraHosts(l.Job.Env[EnvHosts])...)
 	if len(list) == 0 {
 		return
 	}

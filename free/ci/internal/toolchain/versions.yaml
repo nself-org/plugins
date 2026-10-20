@@ -43,6 +43,17 @@ rows:
         arch: arm64
         url: https://github.com/actions/runner/releases/download/v2.338.0/actions-runner-linux-arm64-2.338.0.tar.gz
         sha256: 628b4a7258487b80c1d3c221095a7ded349f5ae0175fd3dfab708d07428f041b
+  - name: gitlab-runner-image
+    kind: image
+    version: docker.io/gitlab/gitlab-runner@sha256:77d03a5c881ff8f97381de4f96a66c080733eeab9c9cf502bd19916a18969113
+    purpose: image of the one-job GitLab project runner that runnerjob launches for a pending GitLab job
+    owner: internal/providers/gitlab/runners
+    upstream:
+      type: oci
+      ref: docker.io/gitlab/gitlab-runner:v19.4.1
+    image: docker.io/gitlab/gitlab-runner
+    digest: sha256:77d03a5c881ff8f97381de4f96a66c080733eeab9c9cf502bd19916a18969113
+    status: pinned
   - name: gitleaks
     kind: tool
     version: 8.30.1

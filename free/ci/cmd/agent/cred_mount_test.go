@@ -3,6 +3,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
@@ -48,5 +49,62 @@ func TestRunnerJobAsksForRunnerSizedResources(t *testing.T) {
 	}
 	if cpu, mem := jobCPU(jobInputs{}), jobMemoryMB(jobInputs{}); cpu != 0 || mem != 0 {
 		t.Fatalf("ordinary job: %v CPU, %d MB", cpu, mem)
+	}
+}
+
+// TestGitLabRunnerTakesTheEntrypoint (P7-HOST-07): the gitlab-runner image's own entrypoint is a launcher
+// (`dumb-init /entrypoint`, which execs `gitlab-runner "$@"`), so a gitlab-runner-token job in a container
+// replaces it with the mounted agent and its command starts at the wrapper; the GitHub kind keeps the
+// appended command; a process job needs neither.
+func TestGitLabRunnerTakesTheEntrypoint(t *testing.T) {
+	for _, tc := range []struct {
+		kind       string
+		isolation  model.Isolation
+		entrypoint string
+		argv       []string
+	}{
+		{"gitlab-runner-token", "sandboxed-container", containerAgentPath, []string{"cred-wrapper", "gitlab-runner-token", "--", "gitlab-runner", "run-single"}},
+		{"gitlab-runner-token", "container", containerAgentPath, []string{"cred-wrapper", "gitlab-runner-token", "--", "gitlab-runner", "run-single"}},
+		{"github-jitconfig", "sandboxed-container", "", []string{containerAgentPath, "cred-wrapper", "github-jitconfig", "--", "gitlab-runner", "run-single"}},
+	} {
+		spec := execSpec{Job: model.Job{Isolation: tc.isolation, Run: []string{"gitlab-runner", "run-single"}}}
+		var in jobInputs
+		j := session.JobRun{Credential: []byte("GLRT-SYNTHETIC-1"), Lease: protocol.Lease{RunnerCredential: &protocol.RunnerCredential{Kind: tc.kind, Value: "GLRT-SYNTHETIC-1"}}}
+		if err := wrapCredential(&spec, &in, j); err != nil {
+			t.Fatal(err)
+		}
+		if in.Entrypoint != tc.entrypoint || strings.Join(spec.Job.Run, " ") != strings.Join(tc.argv, " ") {
+			t.Fatalf("%s/%s: entrypoint %q argv %v", tc.kind, tc.isolation, in.Entrypoint, spec.Job.Run)
+		}
+		wantMasks := 1 + len(partialMasks(tc.kind, "GLRT-SYNTHETIC-1"))
+		if in.Stdin == nil || len(in.Masks) != wantMasks || in.Masks[0] != "GLRT-SYNTHETIC-1" || !in.RunnerRoot || len(in.Mounts) != 1 {
+			t.Fatalf("%s/%s: stdin %v masks %v root %v mounts %v", tc.kind, tc.isolation, in.Stdin, in.Masks, in.RunnerRoot, in.Mounts)
+		}
+	}
+	spec := execSpec{Job: model.Job{Isolation: "process", Run: []string{"gitlab-runner"}}}
+	var in jobInputs
+	j := session.JobRun{Credential: []byte("X"), Lease: protocol.Lease{RunnerCredential: &protocol.RunnerCredential{Kind: "gitlab-runner-token", Value: "X"}}}
+	if err := wrapCredential(&spec, &in, j); err != nil || in.Entrypoint != "" || spec.Job.Run[1] != "cred-wrapper" {
+		t.Fatalf("process job: %v entrypoint %q argv %v", err, in.Entrypoint, spec.Job.Run)
+	}
+}
+
+// TestPartialMasksCoverWhatGitLabRunnerPrints (P7-HOST-07): gitlab-runner prints the first nine characters of
+// the token's random part (measured on v19.4.1: "with token AAAAAAAAA ..." and "runner=AAAAAAAAA"), also for a
+// routable token (glrt-t2_...), so those nine are masked; other kinds and too-short values add nothing.
+func TestPartialMasksCoverWhatGitLabRunnerPrints(t *testing.T) {
+	for _, tc := range []struct {
+		kind, value string
+		want        []string
+	}{
+		{"gitlab-runner-token", "glrt-AAAAAAAAAAAA", []string{"AAAAAAAAA"}},
+		{"gitlab-runner-token", "glrt-t2_AAAAAAAAAAAA", []string{"AAAAAAAAA"}},
+		{"gitlab-runner-token", "glrt-short", nil},
+		{"github-jitconfig", "glrt-AAAAAAAAAAAA", nil},
+	} {
+		got := partialMasks(tc.kind, tc.value)
+		if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+			t.Errorf("%s %q: %v, want %v", tc.kind, tc.value, got, tc.want)
+		}
 	}
 }

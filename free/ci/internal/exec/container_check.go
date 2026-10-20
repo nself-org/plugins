@@ -110,6 +110,9 @@ func checkContainerCommand(c ContainerCommand, run ContainerRun) error {
 	if run.RunnerRoot != "" && !seen["--tmpfs="+RunnerRootTmpfs()] {
 		return bad("missing the runner root tmpfs")
 	}
+	if run.Entrypoint != "" && !seen["--entrypoint="+run.Entrypoint] {
+		return bad("missing the job entrypoint")
+	}
 	if run.Interactive && !named["--interactive"] {
 		return bad("missing --interactive: the job stdin would not reach the container")
 	}
@@ -187,6 +190,12 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 	case "--interactive":
 		if !run.Interactive {
 			return bad("--interactive without a job stdin")
+		}
+	case "--entrypoint":
+		// the cleanup helper runs sh; a job runs the entrypoint it asked for, and only a job that holds a stdin
+		// (a runner credential) may ask: the entrypoint is the agent that reads the credential from it
+		if value != "sh" && (run.Entrypoint == "" || value != run.Entrypoint || !run.Interactive) {
+			return bad("entrypoint " + value)
 		}
 	case "--pids-limit":
 		if n, err := strconv.Atoi(value); err != nil || n < 1 || n > 1<<20 {
