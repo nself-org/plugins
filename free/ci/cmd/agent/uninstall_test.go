@@ -56,3 +56,19 @@ func TestLocalRunUsesFixedProgramsOnly(t *testing.T) {
 		t.Fatalf("an unlisted program ran: %v", err)
 	}
 }
+
+func TestTrustedRootPathRefusesFilesAnotherUserCanChange(t *testing.T) {
+	mine := t.TempDir() + "/agent"
+	if err := os.WriteFile(mine, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := trustedRootPath(mine); err == nil {
+		t.Fatal("a file in a user-owned directory passed the root-ownership check")
+	}
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if err := trustedRootPath("/bin/sh"); err != nil {
+		t.Fatalf("/bin/sh is root's alone, yet: %v", err)
+	}
+}

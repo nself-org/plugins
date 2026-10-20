@@ -4,8 +4,11 @@ package main
 // node. It is the bootstrap family's Uninstall, run on the node itself: the launchd service, the hidden
 // agent user, the job users and their groups, the sudoers drop-in and the agent, state, work, job and
 // log directories.
-// Inputs:  `--system` (required: it names what is removed). Run it as root (`sudo nself-ci-agent
-//          uninstall --system`): the accounts and the sudoers file belong to root.
+// Inputs:  `--system` (required: it names what is removed). Run it as root from the root-owned copy
+//          (`sudo /Library/PrivilegedHelperTools/org.nself.ci-agent uninstall --system`): the accounts
+//          and the sudoers file belong to root, and the installed agent belongs to the agent user, so
+//          a root shell must not execute it (the command refuses when the binary or any directory
+//          above it is not root-owned and closed to group and others).
 // Outputs: one line per step on stderr; exit 0 removed, 1 failed, 2 usage.
 // Constraints: only a family registered for this machine's GOOS acts (today darwin); no family is E669
 //          reason uninstall_unsupported; it starts no job, so the PreStart production guard does not
@@ -21,7 +24,7 @@ import (
 	"runtime"
 
 	"github.com/nself-org/plugins/free/ci/internal/nodes/bootstrap"
-	_ "github.com/nself-org/plugins/free/ci/internal/nodes/bootstrap/darwin" // registers the darwin family
+	"github.com/nself-org/plugins/free/ci/internal/nodes/bootstrap/darwin" // registers the darwin family
 )
 
 func init() {
@@ -99,6 +102,14 @@ func runUninstall(ctx context.Context, args []string, sio IO) int {
 	}
 	if os.Geteuid() != 0 {
 		fmt.Fprintln(sio.Stderr, "error: uninstall --system must run as root: sudo nself-ci-agent uninstall --system")
+		return 1
+	}
+	if exe, err := os.Executable(); err != nil || trustedRootPath(exe) != nil {
+		why := "the running binary"
+		if err == nil {
+			why = trustedRootPath(exe).Error()
+		}
+		fmt.Fprintf(sio.Stderr, "error: refusing to run as root from a file the agent user can change (%s).\nRun the root-owned copy: sudo %s uninstall --system\n", why, darwin.TrustedPath)
 		return 1
 	}
 	o := bootstrap.Options{Run: localRun, Stdout: sio.Stdout,

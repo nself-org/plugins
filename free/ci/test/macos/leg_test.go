@@ -29,8 +29,10 @@ const (
 	stateDir  = "/var/db/nself-ci-agent"
 	jobsDir   = "/var/db/nself-ci-jobs"
 	plistPath = "/Library/LaunchDaemons/org.nself.ci-agent.plist"
-	label     = "org.nself.ci-agent"
-	slots     = 2
+	// trusted is the root-owned copy of the agent: the only binary a root shell may run (uninstall).
+	trusted = "/Library/PrivilegedHelperTools/org.nself.ci-agent"
+	label   = "org.nself.ci-agent"
+	slots   = 2
 )
 
 func jobUser(n int) string { return fmt.Sprintf("nself-ci-job-%d", n) }
@@ -138,7 +140,7 @@ func TestMacOSNode(t *testing.T) {
 		if !ok {
 			// Leave nothing behind on a runner that is reused (an operator's own Mac): best-effort removal.
 			l.t = t
-			l.sudo(agentPath + " uninstall --system")
+			l.sudo(trusted + " uninstall --system")
 			t.FailNow()
 		}
 	}

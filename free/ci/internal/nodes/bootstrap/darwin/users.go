@@ -7,8 +7,12 @@ package darwin
 // Outputs: script text for `sh -c`.
 // Constraints: POSIX sh; `set -eu`; no backslash (the sdk refuses one in an argument); every account gets
 //          a UniqueID and a group id that is free in 450-499 (checked against users AND groups), shell
-//          /usr/bin/false, home /var/empty, IsHidden 1, password `*`, and its own group; an existing
-//          account is left alone; a slot user is removed only when it owns no file.
+//          /usr/bin/false, home /var/empty, IsHidden 1, password `*`, and its own group; IsHidden is
+//          written last and is the commit marker: a complete account is left alone, a partial one (an
+//          interrupted install) and any leftover group of its name are deleted and built again with a
+//          fresh id, so a stale group id can never give two accounts one uid; a slot user is removed
+//          only when it owns no file (its dirhelper folders under /private/var/folders do not count and
+//          are deleted with it).
 
 import "fmt"
 
@@ -27,9 +31,10 @@ free_id() {
 }
 mk() {
   u=$1
-  if dscl . -read "/Users/$u" UniqueID >/dev/null 2>&1; then return 0; fi
-  id=$(dscl . -read "/Groups/$u" PrimaryGroupID 2>/dev/null | awk '{print $NF}')
-  case "$id" in ''|*[!0-9]*) id=$(free_id) || { echo "no free id in %[2]d-%[3]d" >&2; exit 1; } ;; esac
+  if dscl . -read "/Users/$u" IsHidden >/dev/null 2>&1; then return 0; fi
+  dscl . -delete "/Users/$u" >/dev/null 2>&1 || true
+  dscl . -delete "/Groups/$u" >/dev/null 2>&1 || true
+  id=$(free_id) || { echo "no free id in %[2]d-%[3]d" >&2; exit 1; }
   dscl . -create "/Groups/$u"
   dscl . -create "/Groups/$u" PrimaryGroupID "$id"
   dscl . -create "/Groups/$u" RealName "nSelf CI"
@@ -67,14 +72,17 @@ func listJobUsersScript() string {
 	return fmt.Sprintf("set -eu\ndscl . -list /Users | grep -E '^%s-job-[0-9]+$' || true\n", agentUser)
 }
 
-// removeSlotScript retires slot n. Its job root goes when empty; its user and group go only when the user
-// owns no file under the places a job can write. It prints "removed" or "kept".
+// removeSlotScript retires slot n. Its job root goes when empty; its per-user folders under
+// /private/var/folders (the system makes them for any process run as the user) are deleted; its user and
+// group go only when the user owns no other file under the places a job can write, including the
+// top-level mounted volumes. It prints "removed" or "kept".
 func removeSlotScript(n int) string {
 	return fmt.Sprintf(`set -eu
 u=%[1]s
 pkill -KILL -u "$u" >/dev/null 2>&1 || true
 rmdir %[2]s 2>/dev/null || true
-left=$(for d in /private/var /private/tmp /Users /Library /opt /usr/local /Applications; do [ -d "$d" ] && find "$d" -xdev -user "$u" 2>/dev/null | head -n 1; done | head -n 1)
+find /private/var/folders -xdev -user "$u" -depth -delete >/dev/null 2>&1 || true
+left=$({ find /private/var -xdev -path /private/var/folders -prune -o -user "$u" -print; for d in /private/tmp /Users /Library /opt /usr/local /Applications /Volumes/*; do [ -d "$d" ] && find "$d" -xdev -user "$u" -print; done; } 2>/dev/null | head -n 1)
 if [ -n "$left" ]; then echo kept; exit 0; fi
 dscl . -delete "/Users/$u" >/dev/null 2>&1 || true
 dscl . -delete "/Groups/$u" >/dev/null 2>&1 || true

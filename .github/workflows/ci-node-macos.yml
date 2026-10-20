@@ -42,7 +42,6 @@ jobs:
           set -euo pipefail
           sw_vers
           test "$(sw_vers -productVersion | cut -d. -f1)" = 15
-          test "$(uname -m)" = arm64 -o "$(uname -m)" = x86_64
           sudo -n true
           # the id range the install uses must be free of nself-ci accounts on a fresh runner
           if dscl . -list /Users | grep -q '^nself-ci'; then echo '::error::nself-ci accounts exist on a fresh runner'; exit 1; fi
@@ -115,6 +114,6 @@ jobs:
       - name: Leftovers and logs
         if: always()
         run: |
-          sudo -n /opt/nself-ci-agent/bin/nself-ci-agent uninstall --system || true
-          dscl . -list /Users | grep '^nself-ci' || echo 'no nself-ci accounts left'
+          if [ -x /Library/PrivilegedHelperTools/org.nself.ci-agent ]; then sudo -n /Library/PrivilegedHelperTools/org.nself.ci-agent uninstall --system || true; fi
+          if dscl . -list /Users | grep -q '^nself-ci'; then echo '::error::nself-ci accounts survived the leg'; exit 1; fi
           if [ -f "$RUNNER_TEMP/leg/sshd.log" ]; then tail -n 40 "$RUNNER_TEMP/leg/sshd.log"; fi

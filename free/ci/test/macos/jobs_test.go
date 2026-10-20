@@ -75,7 +75,9 @@ func (l *leg) jobs() {
 		t.Errorf("a failing XCTest did not fail the run: rc=%d\n%s", rc, out)
 	}
 	// Nothing the job wrote may live outside its job root: caches, DerivedData and temp files go to HOME/TMPDIR.
-	stray, _ := l.sudo("find /private/var/folders /private/var/tmp /private/tmp /Users /Library -xdev -user " + jobUser(1) + " 2>/dev/null | head -n 5")
+	// The system makes per-user folders under /private/var/folders for any process run as a user; slot
+	// retirement and uninstall delete them (checked there), so they are not counted here.
+	stray, _ := l.sudo("find /private/var/tmp /private/tmp /Users /Library -xdev -user " + jobUser(1) + " 2>/dev/null | head -n 5")
 	if stray != "" {
 		t.Errorf("the job left files outside its job root:\n%s", stray)
 	}

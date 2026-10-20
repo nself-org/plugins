@@ -54,12 +54,13 @@ func (l *leg) shim() {
 		"sudo -u " + agentUser + " sudo -n -u " + jobUser(1) + " /usr/bin/true",
 		"sudo -u " + agentUser + " sudo -n -u root /usr/bin/true",
 		"sudo -u " + agentUser + " sudo -n -u " + jobUser(1) + " " + agentPath + " version",
-		"sudo -u " + agentUser + " sudo -n -u " + jobUser(9) + " " + agentPath + " job-shim",
+		"sudo -u " + agentUser + " sudo -n -u " + jobUser(1) + " /bin/sh -c id",
 		"sudo -u " + jobUser(1) + " sudo -n -u " + jobUser(2) + " " + agentPath + " job-shim",
-		"sudo -u " + agentUser + " " + agentPath + " job-shim </dev/null",
+		"sudo -u " + jobUser(1) + " sudo -n -u " + agentUser + " /usr/bin/true",
 	} {
-		if out, rc := l.sudo(denied + " 2>&1"); rc == 0 {
-			t.Errorf("the rule allowed: %s\n%s", denied, out)
+		// sudo refuses with "a password is required" under -n when no rule matches (or "not allowed").
+		if out, rc := l.sudo(denied + " 2>&1"); rc == 0 || !(strings.Contains(out, "password is required") || strings.Contains(out, "not allowed")) {
+			t.Errorf("the rule allowed it, or refused for another reason: %s\nrc=%d %s", denied, rc, out)
 		}
 	}
 }

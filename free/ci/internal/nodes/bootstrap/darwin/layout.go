@@ -35,6 +35,10 @@ const (
 	WorkDir = "/var/db/nself-ci-work"
 	// JobsDir holds one 0700 job root per slot, owned by that slot's job user; a job's HOME lives in it.
 	JobsDir = "/var/db/nself-ci-jobs"
+	// TrustedPath is a root-owned copy of the agent, installed beside Apple's own privileged helpers. The
+	// agent under /opt is owned by the agent user (so an upgrade needs no root), which means a root
+	// shell must never run it; `uninstall --system` runs only from this copy.
+	TrustedPath = "/Library/PrivilegedHelperTools/org.nself.ci-agent"
 	// Label is the launchd label of the pull-mode service.
 	Label = "org.nself.ci-agent"
 	// PlistPath is the LaunchDaemon of pull mode.

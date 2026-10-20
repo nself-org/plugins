@@ -45,10 +45,11 @@ cleanup() {
     if ! cmp -s "$tmp/sudoers.orig" /etc/sudoers; then cp "$tmp/sudoers.orig" /etc/sudoers 2>/dev/null || true; fi
   fi
   rm -rf "$tmp"
+  rm -f ./%[2]s
 }
 trap cleanup EXIT
 visudo -cf ./%[2]s >/dev/null
-grep -Eq '^[#@]includedir[[:space:]]+(/private)?%[3]s' /etc/sudoers || { echo >> /etc/sudoers; echo '#includedir %[3]s' >> /etc/sudoers; }
+grep -Eq '^[#@]includedir[[:space:]]+(/private)?%[3]s([[:space:]]|$)' /etc/sudoers || { echo >> /etc/sudoers; echo '#includedir %[3]s' >> /etc/sudoers; }
 mkdir -p %[3]s
 install -o root -g wheel -m 0440 ./%[2]s %[1]s
 rm -f ./%[2]s
@@ -59,7 +60,9 @@ ok=1
 
 // verifyScript checks the layout after an install: every account exists, is hidden, has shell
 // /usr/bin/false and an id in range, is in no admin group, the state directory is the agent's alone,
-// and sudo itself lists exactly one job-shim rule per slot for the agent user and nothing else.
+// and sudo itself lists exactly one job-shim rule per slot for the agent user and nothing else. Every
+// uid and gid is unique on the machine, each user's group id is its group's, and the root-owned copy of the
+// agent (the only binary uninstall may run as root) is root's alone.
 func verifyScript(slots int) string {
 	return fmt.Sprintf(`set -eu
 [ "$(stat -f '%%Lp %%Su' %[2]s)" = "700 %[1]s" ]
@@ -68,13 +71,18 @@ for u in %[1]s $(for n in %[3]s; do echo %[1]s-job-$n; done); do
   [ "$(dscl . -read "/Users/$u" IsHidden | awk '{print $NF}')" = 1 ]
   [ "$(dscl . -read "/Users/$u" UserShell | awk '{print $NF}')" = /usr/bin/false ]
   uid=$(dscl . -read "/Users/$u" UniqueID | awk '{print $NF}')
-  [ "$uid" -ge %[6]d ] && [ "$uid" -le %[7]d ]
+  { [ "$uid" -ge %[6]d ] && [ "$uid" -le %[7]d ]; } || { echo "$u has uid $uid, outside %[6]d-%[7]d" >&2; exit 1; }
+  [ "$(dscl . -list /Users UniqueID | awk -v id="$uid" '$2 == id' | wc -l | tr -d ' ')" = 1 ] || { echo "uid $uid is shared" >&2; exit 1; }
+  gid=$(dscl . -read "/Users/$u" PrimaryGroupID | awk '{print $NF}')
+  [ "$(dscl . -read "/Groups/$u" PrimaryGroupID | awk '{print $NF}')" = "$gid" ] || { echo "$u: group id differs from the user's" >&2; exit 1; }
+  [ "$(dscl . -list /Groups PrimaryGroupID | awk -v id="$gid" '$2 == id' | wc -l | tr -d ' ')" = 1 ] || { echo "gid $gid is shared" >&2; exit 1; }
   if id -Gn "$u" | grep -qwE 'admin|wheel|_appserveradm|_appserverusr'; then echo "$u is in a privileged group" >&2; exit 1; fi
 done
 for n in %[3]s; do [ -d %[8]s/$n ]; done
+[ ! -e %[9]s ] || [ "$(stat -f '%%Lp %%Su' %[9]s)" = "755 root" ]
 rules=$(sudo -n -l -U %[1]s 2>/dev/null | grep -c '%[4]s job-shim' || true)
 [ "$rules" = %[5]d ] || { echo "sudo lists $rules job-shim rules, want %[5]d" >&2; exit 1; }
 all=$(sudo -n -l -U %[1]s 2>/dev/null | grep -cE '^[[:space:]]*[(]' || true)
 [ "$all" = %[5]d ] || { echo "sudo lists $all rules for %[1]s, want only the %[5]d job-shim rules" >&2; exit 1; }
-`, agentUser, StateDir, slotList(slots), agentPath, slots, IDLow, IDHigh, JobsDir)
+`, agentUser, StateDir, slotList(slots), agentPath, slots, IDLow, IDHigh, JobsDir, TrustedPath)
 }

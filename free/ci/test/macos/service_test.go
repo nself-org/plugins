@@ -19,6 +19,9 @@ func (l *leg) service() {
 	if out, rc := l.sudo("plutil -lint " + plistPath); rc != 0 {
 		t.Fatalf("plutil -lint: %s", out)
 	}
+	if got, _ := l.sudo("plutil -extract UserName raw -o - " + plistPath); got != agentUser {
+		t.Errorf("the service runs as %q, want %s", got, agentUser)
+	}
 	if got, _ := l.sudo("stat -f '%Lp %Su' " + plistPath); got != "644 root" {
 		t.Errorf("plist is %q, want 644 root", got)
 	}
@@ -26,18 +29,25 @@ func (l *leg) service() {
 	if rc != 0 {
 		t.Fatalf("the service is not loaded: %s", out)
 	}
-	runs := launchRuns(out)
+	// Not enrolled: launchd ran `pull` once at load (RunAtLoad), then must leave it alone. Wait out the
+	// first run and two throttle intervals, and the run count must not move.
+	time.Sleep(15 * time.Second)
+	first, _ := l.sudo("launchctl print system/" + label)
+	runs := launchRuns(first)
+	time.Sleep(25 * time.Second)
+	if later, _ := l.sudo("launchctl print system/" + label); launchRuns(later) != runs {
+		t.Fatalf("the service restarts without an enrollment (runs %d -> %d): a crash loop on a node that has not joined", runs, launchRuns(later))
+	}
 	l.mustSudo("sudo -u " + agentUser + " sh -c 'mkdir -p " + stateDir + "/pki && echo {} > " + stateDir + "/pki/enrollment.json'")
+	defer l.mustSudo("rm -f " + stateDir + "/pki/enrollment.json")
 	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
 		now, _ := l.sudo("launchctl print system/" + label)
 		if launchRuns(now) > runs {
-			l.mustSudo("rm -f " + stateDir + "/pki/enrollment.json")
 			return
 		}
 		time.Sleep(2 * time.Second)
 	}
-	l.mustSudo("rm -f " + stateDir + "/pki/enrollment.json")
 	t.Fatalf("launchd did not start the service after the enrollment file appeared (runs stayed %d)", runs)
 }
 
@@ -76,10 +86,18 @@ func (l *leg) upgradeSwap() {
 
 func (l *leg) uninstall() {
 	t := l.t
-	if out, rc := l.sudo(agentPath + " uninstall --system 2>&1"); rc != 0 {
+	// The installed agent belongs to nself-ci: a root shell must refuse to run it, and run the root-owned copy.
+	if out, rc := l.sudo(agentPath + " uninstall --system 2>&1"); rc == 0 || !strings.Contains(out, "refusing to run as root") {
+		t.Fatalf("uninstall ran as root from the agent-owned binary: rc=%d\n%s", rc, out)
+	}
+	if got, _ := l.sudo("stat -f '%Lp %Su' " + trusted); got != "755 root" {
+		t.Fatalf("the trusted copy is %q, want 755 root", got)
+	}
+	uid1, _ := l.sudo("dscl . -read /Users/" + jobUser(1) + " UniqueID | awk '{print $NF}'")
+	if out, rc := l.sudo(trusted + " uninstall --system 2>&1"); rc != 0 {
 		t.Fatalf("uninstall --system: rc=%d\n%s", rc, out)
 	}
-	for _, gone := range []string{"/opt/nself-ci-agent", stateDir, jobsDir, "/var/db/nself-ci-work", "/var/log/nself-ci-agent", "/etc/sudoers.d/nself-ci", plistPath} {
+	for _, gone := range []string{"/opt/nself-ci-agent", stateDir, jobsDir, "/var/db/nself-ci-work", "/var/log/nself-ci-agent", "/etc/sudoers.d/nself-ci", plistPath, trusted} {
 		if _, rc := l.sudo("test -e " + gone); rc == 0 {
 			t.Errorf("%s survived uninstall", gone)
 		}
@@ -89,6 +107,11 @@ func (l *leg) uninstall() {
 	}
 	if out, _ := l.sudo("dscl . -list /Groups | grep -c '^nself-ci' || true"); out != "0" {
 		t.Errorf("%s nself-ci groups survived uninstall", out)
+	}
+	if uid1 != "" {
+		if left, _ := l.sudo("find /private/var/folders /private/var/tmp /private/tmp /Users /Library -xdev -uid " + uid1 + " 2>/dev/null | head -n 3"); left != "" {
+			t.Errorf("files owned by the removed uid %s survived uninstall:\n%s", uid1, left)
+		}
 	}
 	if _, rc := l.sudo("launchctl print system/" + label); rc == 0 {
 		t.Error("the service is still loaded after uninstall")
