@@ -42,3 +42,22 @@ func TestRecordedArgvIsBounded(t *testing.T) {
 		t.Fatalf("recorded %d bytes", len(got))
 	}
 }
+
+func TestDashPrefixedSecretValues(t *testing.T) {
+	for _, value := range []string{"-synthetic-value", "--synthetic-value", "-x"} {
+		t.Run(value, func(t *testing.T) {
+			r := redact.New()
+			argv := []string{"deploy", "--token", value}
+			Register(r, argv)
+			if strings.Contains(Recorded(r, argv), value) {
+				t.Fatal("recorded argv exposes secret value")
+			}
+			if len(value) >= redact.MinValueLen {
+				f := r.NewFilter()
+				if strings.Contains(string(append(f.Redact([]byte(value)), f.Flush()...)), value) {
+					t.Fatal("output exposes secret value")
+				}
+			}
+		})
+	}
+}
