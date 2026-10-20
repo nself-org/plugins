@@ -175,6 +175,7 @@ type route struct {
 	err                error  // why the lease failed (a corrupt blob); read after done is closed
 	epoch              uint64 // the epoch the lease was delivered at
 	restore            *restore.Pusher
+	stopRestore        context.CancelFunc // ends the pusher's context, and any Push waiting for room
 }
 
 func (r *route) finish() { r.once.Do(func() { close(r.done) }) }

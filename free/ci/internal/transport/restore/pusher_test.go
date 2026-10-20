@@ -103,7 +103,7 @@ func newRig(t *testing.T, tune func(*simNode, *Pusher)) *rig {
 	t.Helper()
 	data := bytes.Repeat([]byte("0123456789abcdef"), 100000) // 1.6 MB: four chunks
 	b, sha := blobOf(data)
-	s := &src{blobs: []transport.RestoreBlob{b}, events: make(chan transport.RestoreEvent, 16)}
+	s := &src{blobs: []transport.RestoreBlob{b}, events: make(chan transport.RestoreEvent, 256)}
 	n := &simNode{size: b.Size}
 	p, err := New(context.Background(), s, n)
 	if err != nil {
@@ -292,5 +292,65 @@ func TestRepeatedRequestsForOneBlobAreRefused(t *testing.T) {
 	r.request(r.sha)
 	if e := r.event(t); e.Kind != transport.RestoreRefused || e.Reason != ReasonRepeated {
 		t.Fatalf("a fifth request was not refused: %+v", e)
+	}
+}
+
+func TestRefusalTableStaysBoundedAndNeverKeysOnNodeStrings(t *testing.T) {
+	r := newRig(t, nil)
+	for i := 0; i < 5000; i++ {
+		r.p.Refuse(context.Background(), strings.Repeat("x", 4096)+string(rune('a'+i%26))+strings.Repeat("y", i), ReasonNotPlanned)
+		r.p.Refuse(context.Background(), hex.EncodeToString([]byte{byte(i), byte(i >> 8), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30}), ReasonNotPlanned)
+	}
+	r.p.mu.Lock()
+	n := len(r.p.refused)
+	r.p.mu.Unlock()
+	if n > maxRefused {
+		t.Fatalf("%d refusals remembered, the bound is %d", n, maxRefused)
+	}
+	if got := len(r.s.events); got > maxRefused+1 {
+		t.Fatalf("%d events for a flood", got)
+	}
+}
+
+func TestRequestForAnotherBlobEndsTheRunningTransfer(t *testing.T) {
+	first, second := bytes.Repeat([]byte("first blob "), 200000), []byte("second blob")
+	b1, sha1 := blobOf(first)
+	b2, sha2 := blobOf(second)
+	s := &src{blobs: []transport.RestoreBlob{b1, b2}, events: make(chan transport.RestoreEvent, 16)}
+	n := &simNode{size: b1.Size, noConfirm: true}
+	p, err := New(context.Background(), s, n)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Wait, p.Confirm = 5*time.Second, 5*time.Second
+	n.p = p
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { p.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+	p.Offer(ctx, protocol.Offset{Stream: Stream, SHA256: sha1})
+	deadline := time.After(5 * time.Second)
+	for { // the first transfer is out and waiting for its confirmation
+		n.mu.Lock()
+		c := n.chunks
+		n.mu.Unlock()
+		if c > 0 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("the first transfer never started")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	start := time.Now()
+	p.Offer(ctx, protocol.Offset{Stream: Stream, SHA256: sha2}) // the node gave up on the first blob and asks for another
+	select {
+	case e := <-s.events:
+		if e.SHA256 != sha1 || e.Kind != transport.RestoreFailed {
+			t.Fatalf("event %+v", e)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatalf("the abandoned transfer held the pusher for %s", time.Since(start))
 	}
 }

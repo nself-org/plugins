@@ -18,6 +18,7 @@ package restore
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,8 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
+
+var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // Stream is the protocol stream of cache blobs.
 const Stream = "cache"
@@ -111,10 +114,17 @@ func (p *Pusher) Close() {
 // Refuse reports a refused request to the Restorer (a frame the driver fenced out). The same
 // reason for the same digest is reported once, so a node that floods requests costs one event.
 func (p *Pusher) Refuse(ctx context.Context, sha, reason string) {
+	if !sha256Hex.MatchString(sha) {
+		sha = "" // a node-made string is never a map key
+	}
 	key := reason + "/" + sha
 	p.mu.Lock()
-	seen := p.refused[key] || len(p.refused) >= maxRefused
-	p.refused[key] = true
+	seen := p.refused[key]
+	if !seen && len(p.refused) < maxRefused {
+		p.refused[key] = true
+	} else if !seen {
+		seen = true // the table is full: the audit rows already say enough
+	}
 	p.mu.Unlock()
 	if !seen {
 		p.src.RestoreEvent(ctx, transport.RestoreEvent{Kind: transport.RestoreRefused, SHA256: sha, Reason: reason})
@@ -167,6 +177,11 @@ func (p *Pusher) route(sha string, size int64, o protocol.Offset) string {
 	switch {
 	case p.queued[sha] || o.Offset == size: // asked already, or a late confirmation: nothing to send
 		return ""
+	}
+	if p.stop != nil { // the node fetches one blob at a time: a request for another digest means it gave up on the running one
+		p.stop()
+	}
+	switch {
 	case p.asked[sha] >= p.maxAsks():
 		return ReasonRepeated
 	}

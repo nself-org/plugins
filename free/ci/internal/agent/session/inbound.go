@@ -30,7 +30,7 @@ type Transfer struct {
 // onInbound routes one digest or chunk frame to its lease.
 func (s *Session) onInbound(m protocol.Message) {
 	l, ok := s.active[m.LeaseID]
-	if !ok || m.Epoch == nil || *m.Epoch != l.lease.Epoch {
+	if !ok || m.Epoch == nil || *m.Epoch != l.lease.Epoch || l.cancelled.Load() {
 		return
 	}
 	switch b := m.Body.(type) {

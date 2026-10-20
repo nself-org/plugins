@@ -10,6 +10,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
@@ -133,4 +134,24 @@ func TestRestoreBlobOpenIsBoundToTheLeaseRealm(t *testing.T) {
 	if _, err = list[0].Open(); err == nil {
 		t.Fatal("a blob of another realm was opened for this lease")
 	}
+}
+
+func TestRestoreBlobReadStopsWhenTheLeaseGoesStaleMidBlob(t *testing.T) {
+	l, s, blobs, _ := restoreFixture(t)
+	list, _ := l.RestoreBlobs(context.Background())
+	rc, err := list[1].Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rc.Close()
+	buf := make([]byte, 16)
+	if _, err = rc.Read(buf); err != nil {
+		t.Fatal(err)
+	}
+	l.b.Epoch++ // the lease moves on between two chunks
+	time.Sleep(liveEvery + 100*time.Millisecond)
+	if n, err := rc.Read(buf); err == nil || n != 0 {
+		t.Fatalf("read %d bytes under a stale epoch (err %v) of %d B", n, err, blobs[1].Size)
+	}
+	assertAudit(t, s, "restore_stale_epoch")
 }

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 )
@@ -54,9 +55,43 @@ func TestNodeReadThroughPrunesOrphan(t *testing.T) {
 	if err := c.Prune(); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.Stat(orphan); err != nil {
+		t.Fatalf("a temporary file another lease is still writing was pruned: %v", err)
+	}
+	old := time.Now().Add(-2 * fetchTempGrace)
+	if err := os.Chtimes(orphan, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Prune(); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
 		t.Fatalf("orphan temporary file survived pruning: %v", err)
 	}
+}
+
+// A prune that runs while another lease is mid-fetch must not delete the transfer's temporary file.
+func TestNodeReadThroughPruneSparesAFetchInFlight(t *testing.T) {
+	c, err := NewReadThrough(t.TempDir(), 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("a blob that arrives while another lease prunes")
+	digest := fmt.Sprintf("%x", sha256.Sum256(data))
+	f, err := c.Open(context.Background(), "realm", digest, int64(len(data)), func(_ context.Context, w io.Writer) error {
+		if _, err := w.Write(data[:10]); err != nil {
+			return err
+		}
+		if err := c.Prune(); err != nil { // the other lease starts
+			return err
+		}
+		_, err := w.Write(data[10:])
+		return err
+	})
+	if err != nil {
+		t.Fatalf("a prune during the fetch spoiled it: %v", err)
+	}
+	_ = f.Close()
 }
 
 func TestNodeReadThroughReservesFetch(t *testing.T) {
@@ -123,5 +158,34 @@ func TestNodeStageCopyFailureStillShips(t *testing.T) {
 	}
 	if u.frames != 3 {
 		t.Fatalf("copy I/O failure blocked shared upload: %d frames", u.frames)
+	}
+}
+
+// A corrupt copy that was verified is removed; a fresh copy another lease renamed over it since is not.
+func TestRemoveIfSameSparesAReplacedCopy(t *testing.T) {
+	dir := t.TempDir()
+	name := filepath.Join(dir, "copy")
+	if err := os.WriteFile(name, []byte("corrupt"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	seen, err := os.Lstat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh := filepath.Join(dir, "fresh")
+	if err = os.WriteFile(fresh, []byte("verified"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Rename(fresh, name); err != nil {
+		t.Fatal(err)
+	}
+	removeIfSame(name, seen)
+	if got, err := os.ReadFile(name); err != nil || string(got) != "verified" {
+		t.Fatalf("the fresh copy was removed: %q %v", got, err)
+	}
+	now, _ := os.Lstat(name)
+	removeIfSame(name, now)
+	if _, err = os.Stat(name); !os.IsNotExist(err) {
+		t.Fatal("the verified-corrupt copy was kept")
 	}
 }

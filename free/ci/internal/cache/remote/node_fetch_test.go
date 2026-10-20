@@ -332,3 +332,29 @@ func TestFetchStrayFramesDoNotExtendTheWait(t *testing.T) {
 		t.Fatalf("err=%v after %s", err, time.Since(start))
 	}
 }
+
+func TestFetchRepeatedAnnouncesDoNotHoldTheLeaseForever(t *testing.T) {
+	r := newFetchRig(t)
+	silent := Wire{Offset: func(protocol.Offset) error { return nil }, In: r.sim.in}
+	r.f = NewFetcher(silent, planFor(r.sim.sha, int64(len(r.sim.data))))
+	r.f.First, r.f.Idle = 120*time.Millisecond, 120*time.Millisecond
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() { // a buggy coordinator announces again and again, never sending a byte
+		for {
+			select {
+			case <-stop:
+				return
+			case <-time.After(15 * time.Millisecond):
+				select {
+				case r.sim.in <- protocol.Message{Body: &protocol.Digest{Stream: "cache", SHA256: r.sim.sha, Size: int64(len(r.sim.data))}}:
+				default:
+				}
+			}
+		}
+	}()
+	start := time.Now()
+	if _, err := r.open(); !errors.Is(err, ErrNoRestore) || time.Since(start) > 5*time.Second {
+		t.Fatalf("err=%v after %s", err, time.Since(start))
+	}
+}

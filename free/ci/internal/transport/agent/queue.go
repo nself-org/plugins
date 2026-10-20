@@ -100,6 +100,7 @@ func (d *Driver) cancelRun(rt *route) error {
 	const reason = "cancelled"
 	if rt.restore != nil {
 		rt.restore.Close() // a restore request that arrives from here on is refused
+		rt.stopRestore()   // a chunk waiting for room on the control stream is not queued behind the cancel
 	}
 	if cancel := d.cfg().cancel; cancel == nil || cancel(rt.node, rt.leaseID, reason) != nil {
 		d.mu.Lock()

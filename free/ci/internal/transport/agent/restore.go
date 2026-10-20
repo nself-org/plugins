@@ -11,6 +11,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/agentapi"
@@ -26,9 +27,24 @@ type frameUp struct {
 	rt   *route
 }
 
+// controlGap is how long a push waits for a node whose control stream is reconnecting.
+const controlGap = 5 * time.Second
+
 func (u frameUp) frame(kind string, body any) error {
 	e := u.rt.epoch
-	return u.push(u.ctx, u.rt.node, protocol.Message{Type: kind, LeaseID: u.rt.leaseID, Epoch: &e, Body: body})
+	m := protocol.Message{Type: kind, LeaseID: u.rt.leaseID, Epoch: &e, Body: body}
+	deadline := time.Now().Add(controlGap)
+	for {
+		err := u.push(u.ctx, u.rt.node, m)
+		if err == nil || !errors.Is(err, agentapi.ErrNoControlStream) || time.Now().After(deadline) {
+			return err
+		}
+		select { // the stream is being reopened: the sender must not burn its passes in microseconds
+		case <-u.ctx.Done():
+			return u.ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 func (u frameUp) Digest(d protocol.Digest) error { return u.frame("digest", d) }
 func (u frameUp) Chunk(c protocol.Chunk) error   { return u.frame("chunk", c) }
@@ -45,7 +61,7 @@ func (d *Driver) attachRestore(ctx context.Context, rt *route, push func(context
 		cancel()
 		return func() {}
 	}
-	rt.restore = p
+	rt.restore, rt.stopRestore = p, cancel
 	done := make(chan struct{})
 	go func() { defer close(done); p.Run(rctx) }()
 	return func() {

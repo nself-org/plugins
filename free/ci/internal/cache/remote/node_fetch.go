@@ -40,6 +40,7 @@ const (
 	maxResync       = 3
 	maxTransit      = 3
 	maxStalls       = 2
+	maxAnnounces    = 8
 )
 
 var (
@@ -155,15 +156,17 @@ func (f *Fetcher) fetch(ctx context.Context, sha string, size int64, w io.Writer
 			return ErrNoRestore
 		case m := <-f.Wire.In:
 			timer.Stop()
-			var done, ours bool
+			var done, progress bool
 			var err error
+			before := rc.next
 			switch b := m.Body.(type) {
 			case *protocol.Digest:
-				ours = sameDigest(b.SHA256, sha)
+				first := !rc.announced
 				err = rc.announce(f.Wire.Offset, b)
+				progress = sameDigest(b.SHA256, sha) && (first || rc.announces <= maxAnnounces)
 			case *protocol.Chunk:
-				ours = rc.announced && sameDigest(b.Digest, sha)
 				done, err = rc.chunk(f.Wire.Offset, b)
+				progress = rc.next != before
 			}
 			if err != nil || done {
 				if rc.sendFailed {
@@ -171,7 +174,7 @@ func (f *Fetcher) fetch(ctx context.Context, sha string, size int64, w io.Writer
 				}
 				return err
 			}
-			if ours { // only progress of this blob extends the wait; stray frames do not
+			if progress { // only progress of this blob extends the wait; stray, repeated and out of order frames do not
 				deadline = time.Now().Add(f.idle())
 			}
 		}
@@ -191,6 +194,7 @@ type inflight struct {
 	announced  bool
 	resyncs    int
 	stalls     int
+	announces  int
 	lastResync int64
 	sendFailed bool
 }
@@ -210,6 +214,7 @@ func (rc *inflight) announce(send func(protocol.Offset) error, d *protocol.Diges
 		return fmt.Errorf("E714 digest_mismatch: the coordinator announced %d B for a planned %d B blob", d.Size, rc.size)
 	}
 	rc.announced = true
+	rc.announces++
 	return rc.offset(send, rc.next)
 }
 
@@ -240,6 +245,7 @@ func (rc *inflight) chunk(send func(protocol.Offset) error, c *protocol.Chunk) (
 	}
 	_, _ = rc.h.Write(data)
 	rc.next += int64(len(data))
+	rc.resyncs, rc.lastResync = 0, -1 // the sender caught up: gaps are counted again from here
 	if !c.Final {
 		return false, nil
 	}

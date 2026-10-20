@@ -77,14 +77,13 @@ func (c *ReadThrough) Open(ctx context.Context, realm, digest string, size int64
 	if size < 0 || size > c.max {
 		return nil, fmt.Errorf("E711 size_cap: node cache blob exceeds cap")
 	}
+	seen, _ := os.Lstat(name)
 	if f, err := verifiedFile(ctx, name, digest, size); err == nil {
 		now := time.Now()
 		_ = os.Chtimes(name, now, now)
 		return f, nil
 	} else if errors.Is(err, errCopyMismatch) {
-		readThroughMu.Lock()
-		_ = os.Remove(name)
-		readThroughMu.Unlock()
+		removeIfSame(name, seen)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -115,6 +114,15 @@ func (c *ReadThrough) Open(ctx context.Context, realm, digest string, size int64
 		return nil, err
 	}
 	return verifiedFile(ctx, name, digest, size)
+}
+
+// removeIfSame removes the corrupt copy that was verified, not a fresh one another lease has renamed over it since.
+func removeIfSame(name string, seen os.FileInfo) {
+	readThroughMu.Lock()
+	defer readThroughMu.Unlock()
+	if now, err := os.Lstat(name); err == nil && seen != nil && os.SameFile(seen, now) {
+		_ = os.Remove(name)
+	}
 }
 
 // stage makes room for a blob of size bytes and opens the temporary file it is fetched into.
@@ -186,7 +194,15 @@ func (c *ReadThrough) prune(reserve int64) error {
 		if d.IsDir() {
 			return nil
 		}
-		if strings.HasPrefix(d.Name(), ".fetch-") {
+		if strings.HasPrefix(d.Name(), ".fetch-") { // another lease may still be writing it: it counts, and goes only when stale
+			info, err := d.Info()
+			if err != nil {
+				return nil
+			}
+			if time.Since(info.ModTime()) < fetchTempGrace {
+				total += info.Size()
+				return nil
+			}
 			return os.Remove(name)
 		}
 		if len(d.Name()) != 64 {

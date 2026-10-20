@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/blob/transfer"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -56,7 +57,7 @@ func (l *Lease) RestoreBlobs(ctx context.Context) ([]transport.RestoreBlob, erro
 				if err != nil {
 					return nil, err
 				}
-				return liveBlob{ReadCloser: rc, check: func() error { return l.current(ctx) }}, nil
+				return &liveBlob{ReadCloser: rc, check: func() error { return l.current(ctx) }}, nil
 			}})
 		}
 	}
@@ -72,16 +73,24 @@ func (l *Lease) current(ctx context.Context) error {
 	return err
 }
 
-// liveBlob re-checks the lease before every read, so a lease that goes stale in the middle of a
-// blob stops receiving bytes at the next chunk.
+// liveBlob re-checks the lease while the blob is read, so a lease that goes stale in the middle of a
+// blob stops receiving bytes within liveEvery. Skipping to a resume offset reads in small steps; the
+// time bound keeps that from becoming a store query per step.
 type liveBlob struct {
 	io.ReadCloser
 	check func() error
+	last  time.Time
 }
 
-func (b liveBlob) Read(p []byte) (int, error) {
-	if err := b.check(); err != nil {
-		return 0, err
+// liveEvery is the longest a read goes without a lease check.
+const liveEvery = 200 * time.Millisecond
+
+func (b *liveBlob) Read(p []byte) (int, error) {
+	if b.last.IsZero() || time.Since(b.last) >= liveEvery {
+		if err := b.check(); err != nil {
+			return 0, err
+		}
+		b.last = time.Now()
 	}
 	return b.ReadCloser.Read(p)
 }
