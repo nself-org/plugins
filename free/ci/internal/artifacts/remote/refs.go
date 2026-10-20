@@ -15,6 +15,7 @@ package remote
 
 import (
 	"context"
+	"errors"
 	"math"
 	"os"
 	"regexp"
@@ -30,7 +31,8 @@ import (
 var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // ArtifactRef records one delivered artifact (transport.Sink.ArtifactRef).
-func (l *Lease) ArtifactRef(ctx context.Context, ref protocol.ArtifactRef) error {
+func (l *Lease) ArtifactRef(ctx context.Context, ref protocol.ArtifactRef) (resultErr error) {
+	defer func() { l.auditRefusal(ctx, ref.SHA256, resultErr) }()
 	if ref.LeaseID != l.b.LeaseID {
 		return transfer.Failf(transfer.ReasonProtocol, "an artifact-ref names lease %q, not this one", ref.LeaseID)
 	}
@@ -140,7 +142,7 @@ func (l *Lease) hold(ctx context.Context, realm cas.Realm, ref protocol.Artifact
 	}
 	// restart the blob's sweep grace: the record that references it is written a moment from now
 	if err = l.h.Blobs.Refresh(realm, ref.SHA256); err != nil {
-		return records.Failf(records.ReasonMissingBlob, "%s: the stored blob does not verify: %v", ref.Path, err)
+		return errors.Join(records.Failf(records.ReasonMissingBlob, "%s: the stored blob does not verify: %v", ref.Path, err), err)
 	}
 	return nil
 }

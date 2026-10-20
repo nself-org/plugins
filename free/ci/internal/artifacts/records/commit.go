@@ -12,6 +12,7 @@ package records
 
 import (
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -37,7 +38,8 @@ func ToRecords(attempt string, f Facts, epoch int64, staged []Staged, now time.T
 
 // CommitAndVerify verifies every staged record of the attempt against its
 // stored bytes and commits them. It returns the committed records.
-func CommitAndVerify(ctx context.Context, l Ledger, b Blobs, attempt string, epoch int64, pol Policy) ([]Record, error) {
+func CommitAndVerify(ctx context.Context, l Ledger, b Blobs, attempt string, epoch int64, pol Policy) (records []Record, resultErr error) {
+	defer func() { resultErr = auditIntegrity(ctx, l, attempt, resultErr) }()
 	decls, err := l.ArtifactDecls(ctx, attempt)
 	if err != nil {
 		return nil, err
@@ -84,7 +86,7 @@ func verifyBlob(b Blobs, r Record) error {
 	}
 	rc, err := b.Open(realm, r.SHA256) // hashes into a snapshot first: a differing digest is an error here
 	if err != nil {
-		return failf(ReasonDigest, "%s: the stored bytes do not verify: %v", r.Name, err)
+		return errors.Join(failf(ReasonDigest, "%s: the stored bytes do not verify: %v", r.Name, err), err)
 	}
 	defer func() { _ = rc.Close() }()
 	if n, err := io.Copy(io.Discard, rc); err != nil || n != r.Size {

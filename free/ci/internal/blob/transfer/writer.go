@@ -86,7 +86,8 @@ func (w *Writer) publish() error {
 }
 
 // Verify checks the whole blob against want (the announced digest) and publishes it when it matches.
-func (w *Writer) Verify(want string) error {
+func (w *Writer) Verify(want string) (resultErr error) {
+	defer func() { w.r.notify(context.Background(), w.h.SHA256, resultErr) }()
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if want != w.h.SHA256 {
@@ -96,7 +97,8 @@ func (w *Writer) Verify(want string) error {
 }
 
 // Close publishes the blob when it is whole and its digest matches.
-func (w *Writer) Close() error {
+func (w *Writer) Close() (resultErr error) {
+	defer func() { w.r.notify(context.Background(), w.h.SHA256, resultErr) }()
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.publish()

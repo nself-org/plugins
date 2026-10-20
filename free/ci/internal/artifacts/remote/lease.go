@@ -70,23 +70,30 @@ func (l *Lease) live(ctx context.Context) error {
 	return nil
 }
 
-// refuse audits a stale-epoch refusal: one row per blob (by digest; "" is the result frame).
+// refuse audits a transfer refusal once per blob, code and reason.
 func (l *Lease) refuse(ctx context.Context, sha string, e *transfer.Error) {
+	l.auditCode(ctx, sha, e.Code(), e.Reason)
+}
+
+func (l *Lease) auditCode(ctx context.Context, sha, code, reason string) {
+	if !sha256Hex.MatchString(sha) {
+		sha = ""
+	}
 	l.mu.Lock()
 	if l.audited == nil {
 		l.audited = map[string]bool{}
 	}
-	done := l.audited[sha]
-	l.audited[sha] = true
+	done := l.audited[sha+"/"+code+"/"+reason]
+	l.audited[sha+"/"+code+"/"+reason] = true
 	l.mu.Unlock()
 	if done {
 		return
 	}
-	short := sha
-	if len(short) > 12 {
-		short = short[:12]
+	short := ""
+	if sha256Hex.MatchString(sha) {
+		short = sha[:12]
 	}
-	_ = l.h.Ledger.AppendAudit(ctx, "artifacts", "artifact.remote.refused", l.b.AttemptID, "reason="+e.Reason+" lease="+l.b.LeaseID+" sha="+short)
+	_ = l.h.Ledger.AppendAudit(ctx, "artifacts", "artifact.remote.refused", l.b.AttemptID, "code="+code+" reason="+reason+" lease="+l.b.LeaseID+" sha="+short)
 }
 
 // refusal turns a guard error into the error the caller returns: a stale lease is E714 stale_epoch

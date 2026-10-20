@@ -55,7 +55,7 @@ type Receiver struct {
 	// Live returns nil while the lease epoch is the current one. An error wrapping ErrStale is a
 	// stale epoch (refused, audited); any other error (a store fault) is a transient failure.
 	Live func(ctx context.Context) error
-	// Refused is told once per refused blob (by digest) when the epoch is stale, so the caller can
+	// Refused is told once per refused blob and reason, so the caller can
 	// write its audit row. It must not block.
 	Refused func(ctx context.Context, sha string, err *Error)
 
@@ -84,22 +84,14 @@ func (r *Receiver) epoch(ctx context.Context, sha string) error {
 		return Failf(ReasonInterrupted, "the lease check failed: %v", err)
 	}
 	e := Failf(ReasonStaleEpoch, "the lease epoch is no longer current; blob %s is refused", short(sha))
-	r.mu.Lock()
-	first := !r.told[sha]
-	if r.told == nil {
-		r.told = map[string]bool{}
-	}
-	r.told[sha] = true
-	r.mu.Unlock()
-	if first && r.Refused != nil {
-		r.Refused(ctx, sha, e)
-	}
+	r.notify(ctx, sha, e)
 	return e
 }
 
 // Open admits an announced blob. A blob the realm already holds opens as a finished writer
 // (offset == size), which is how a duplicate is answered without a byte on the wire.
-func (r *Receiver) Open(ctx context.Context, h transport.BlobHeader) (*Writer, error) {
+func (r *Receiver) Open(ctx context.Context, h transport.BlobHeader) (writer *Writer, resultErr error) {
+	defer func() { r.notify(ctx, h.SHA256, resultErr) }()
 	if h.Stream != StreamArtifact {
 		return nil, Failf(ReasonProtocol, "the %q stream is not carried here", h.Stream)
 	}
@@ -161,4 +153,27 @@ func (r *Receiver) admit(ctx context.Context, h transport.BlobHeader) error {
 		return Failf(ReasonSizeCap, "blob %s (%d B) would take the lease past its byte budget (%d B left)", short(h.SHA256), h.Size, max(left, 0))
 	}
 	return nil
+}
+
+// notify reports each stable refusal once per blob and reason. Store faults are
+// not verdicts and are deliberately omitted.
+func (r *Receiver) notify(ctx context.Context, sha string, err error) {
+	var e *Error
+	if !errors.As(err, &e) || e.Reason == ReasonInterrupted {
+		return
+	}
+	if !sha256Hex.MatchString(sha) {
+		sha = ""
+	}
+	key := sha + "/" + e.Reason
+	r.mu.Lock()
+	first := !r.told[key]
+	if r.told == nil {
+		r.told = map[string]bool{}
+	}
+	r.told[key] = true
+	r.mu.Unlock()
+	if first && r.Refused != nil {
+		r.Refused(ctx, sha, e)
+	}
 }
