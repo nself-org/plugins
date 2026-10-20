@@ -22,6 +22,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/blob/transfer"
 )
 
 const DefaultNodeCacheMaxBytes int64 = 5 << 30
@@ -34,7 +36,7 @@ type ReadThrough struct {
 // Instances share the lock: concurrent leases use the same on-disk cap.
 var readThroughMu sync.Mutex
 
-var errCopyMismatch = errors.New("E714 digest_mismatch: node cache copy failed verification")
+var errCopyMismatch = transfer.Failf(transfer.ReasonDigest, "node cache copy failed verification")
 
 func NewReadThrough(dir string, maxBytes int64) (*ReadThrough, error) {
 	if maxBytes <= 0 {
