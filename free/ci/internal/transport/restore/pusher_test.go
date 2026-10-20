@@ -362,3 +362,14 @@ func TestRequestForAnotherBlobEndsTheRunningTransfer(t *testing.T) {
 		t.Fatalf("the abandoned transfer held the pusher for %s", time.Since(start))
 	}
 }
+
+func TestAConfirmationQueuedBehindAShortPositionCounts(t *testing.T) {
+	b, sha := blobOf(bytes.Repeat([]byte("x"), 1000))
+	answers := make(chan protocol.Offset, 4)
+	answers <- protocol.Offset{Stream: Stream, SHA256: sha, Offset: 0}
+	answers <- protocol.Offset{Stream: Stream, SHA256: sha, Offset: b.Size}
+	p := &Pusher{Confirm: time.Second}
+	if got := p.awaitConfirm(context.Background(), answers, b); got != confirmed {
+		t.Fatalf("verdict %d, want confirmed", got)
+	}
+}

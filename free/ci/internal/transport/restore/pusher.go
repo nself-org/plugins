@@ -331,6 +331,9 @@ func (p *Pusher) awaitConfirm(ctx context.Context, answers <-chan protocol.Offse
 			if o.Offset == b.Size {
 				return confirmed
 			}
+			if lastAnswer(answers, b) == confirmed { // a position short of the size, then the confirmation: the copy is there
+				return confirmed
+			}
 			return again
 		}
 	}
