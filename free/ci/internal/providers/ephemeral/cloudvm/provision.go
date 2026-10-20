@@ -53,6 +53,11 @@ func recipeOf(cv schedpolicy.CloudVM, spec burst.Spec) (recipe, error) {
 			return recipe{}, fail(ReasonRecipe, nil, "%s is not set", f.key)
 		}
 	}
+	for _, f := range []struct{ key, val string }{{schedpolicy.KeyCloudType, cv.Type}, {schedpolicy.KeyCloudLocation, cv.Location}, {schedpolicy.KeyCloudImage, cv.Image}} {
+		if !labelShape.MatchString(f.val) { // the policy decoder checks this too; the argv never trusts one layer
+			return recipe{}, fail(ReasonRecipe, nil, "%s is not a plain name", f.key)
+		}
+	}
 	arch := archOf(cv.Type)
 	if pf := spec.Platform; pf != "" && pf != "linux" && pf != "linux/"+arch {
 		return recipe{}, fail(ReasonPlatform, nil, "platform %q does not fit server type %s (%s)", pf, cv.Type, arch)

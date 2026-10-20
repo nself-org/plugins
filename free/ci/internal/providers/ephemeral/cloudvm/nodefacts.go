@@ -11,10 +11,9 @@ package cloudvm
 //          approval (accepts, secret classes, privacy zone) are kept; `hosted` is what makes a project in the
 //          default privacy zone (private-infrastructure) inadmissible on the node (trust.admitPrivacy), and the
 //          provider-allowlist zone admits it only when the operator names provider `ephemeral` in
-//          trust.providers; when a step fails, pairing returns the error to the joining node (it never receives
-//          its certificate) while the node row and the issued certificate stay: the node has no intent
-//          label, so the budget step refuses it any job, and the engine's idle clock ends the intent and
-//          revokes both.
+//          trust.providers; when a step fails, pairing returns the error to the joining node: it never
+//          receives its certificate, so it cannot connect or take a job, and the engine's idle clock ends
+//          the intent and revokes the node row and the issued certificate.
 
 import (
 	"context"

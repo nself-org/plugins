@@ -152,6 +152,8 @@ func TestCloudVMRecipeErrors(t *testing.T) {
 		{"no type", func(r *rig) { r.pol.Burst.CloudVM.Type = "" }, cloudvm.ReasonRecipe},
 		{"no enroll url", func(r *rig) { r.pol.Burst.CloudVM.EnrollURL = "" }, cloudvm.ReasonRecipe},
 		{"no token file", func(r *rig) { r.pol.Burst.CloudVM.TokenFile = "" }, cloudvm.ReasonRecipe},
+		{"type with an option in it", func(r *rig) { r.pol.Burst.CloudVM.Type = "--help" }, cloudvm.ReasonRecipe},
+		{"image with a space", func(r *rig) { r.pol.Burst.CloudVM.Image = "ubuntu 24.04" }, cloudvm.ReasonRecipe},
 		{"no agent for the arch", func(r *rig) { r.pol.Burst.CloudVM.Agent = map[string]schedpolicy.AgentBinary{} }, cloudvm.ReasonAgent},
 		{"arm type, amd64 agent only", func(r *rig) { r.pol.Burst.CloudVM.Type = "cax11" }, cloudvm.ReasonPlatform},
 	}
