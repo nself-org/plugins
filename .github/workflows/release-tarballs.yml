@@ -16,7 +16,10 @@ name: Release Plugin Tarballs (Free)
 #                 GITHUB_TOKEN. No PAT, no cross-repo trigger. The projections (registry.json, catalog.json, counts.json) need the
 #                 private bundles repo, which this token cannot read: the PR body tells the maintainer to regenerate them.
 # Checksums and signatures always describe the bytes on the Release, never a rebuild: the Release asset is the artifact of record.
-# Idempotent: re-running skips assets already present on the release. See .github/wiki/Releasing.md.
+# Idempotent: re-running skips assets already present on the release. Limit (contract v1.1): the `sign` job signs a platform tarball
+# only if THIS run built the exact bytes, so a full re-run whose rebuild is not byte-identical to the published platform tarballs
+# (a changed runner gzip/zlib or Go toolchain) fails `sign`; a draft-first upload of platform tarballs fails it too. See Releasing.md.
+# See .github/wiki/Releasing.md.
 
 on:
   push:
@@ -409,7 +412,7 @@ jobs:
           {
             echo "### Published tarballs for ${TAG}"
             echo
-            echo "$(wc -l < published-sha256.txt | tr -d ' ') tarball(s) on the Release; $(wc -l < not-attested.txt | tr -d ' ') differ from this run's rebuild (published, not attested); $(wc -l < built-sha256.txt | tr -d ' ') built by this run and eligible for platform signing."
+            echo "$(wc -l < published-sha256.txt | tr -d ' ') tarball(s) on the Release; $(wc -l < not-attested.txt | tr -d ' ') differ from this run's rebuild (published, not attested); $(wc -l < built-sha256.txt | tr -d ' ') built by this run (source and platform tarballs); only those platform tarballs are eligible for platform signing."
             echo
             echo '```'
             cat published-sha256.txt
@@ -610,8 +613,10 @@ jobs:
               ln -s "${PWD}/${f}" "$bin_stage/"
             done
           done
-          if ! bash scripts/release/platform-built-check.sh expected/built-sha256.txt "$bin_stage"; then
-            echo "ERROR: a platform tarball on the Release was not built by this run; nothing is signed. Delete the foreign asset and re-run the release (Releasing.md)."
+          if [ -z "$(ls -A "$bin_stage")" ]; then
+            echo "No platform tarball for the signed plugins; nothing to sign beyond the source tarballs"
+          elif ! bash scripts/release/platform-built-check.sh expected/built-sha256.txt "$bin_stage"; then
+            echo "ERROR: a platform tarball on the Release was not built by this run; nothing is signed. Delete that platform tarball AND its .sha256 from the Release, then re-run the release (Releasing.md)."
             exit 1
           fi
           : > platform-signatures.ndjson

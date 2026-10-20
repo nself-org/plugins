@@ -59,7 +59,10 @@ asset that is already on the Release stays the artifact of record and everything
 - The `sign` job signs a platform tarball only if its `<sha256>  <name>` line is in `built-sha256.txt`, the list `publish` wrote of the tarballs this run built
   (`scripts/release/platform-built-check.sh`). The publish job never uses `--clobber`, so a tarball already on the Release wins over this run's build; without
   this check anyone with `contents: write` could upload a binary while the reviewer decides and receive the official platform signature. A refusal fails the job
-  with nothing more signed: delete the foreign or draft-uploaded platform asset from the Release and re-run, so this run's build is the one published.
+  with nothing more signed: delete that platform tarball AND its `.sha256` from the Release (the first run uploaded a `.sha256` from the foreign bytes, and `publish`
+  never overwrites one) and re-run, so this run's build is the one published. Two consequences to plan for: a draft-first upload of platform tarballs (the old flow) now fails `sign`,
+  so for a plugin with binaries let the workflow publish the platform tarballs (or delete the draft's platform assets before tagging); and a full re-run whose rebuild is not
+  byte-identical to the published platform tarballs (changed runner gzip or Go toolchain) fails `sign` the same way.
 - `release-data` writes a platform signature into `releases.json` only when the signed sha256 equals the sha256 of the published bytes in that run; a published
   platform tarball with no such signature stops the write (`UNSIGNED`), so a release never lands half-signed. Rewriting an existing row keeps a platform signature only
   while the row's version, source sha256 and that platform's sha256 are all unchanged.

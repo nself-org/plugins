@@ -46,6 +46,10 @@ shopt -s nullglob
 for f in "$DIR"/*-darwin-amd64.tar.gz "$DIR"/*-darwin-arm64.tar.gz "$DIR"/*-linux-amd64.tar.gz "$DIR"/*-linux-arm64.tar.gz "$DIR"/*-windows-amd64.tar.gz; do
   name="$(basename "$f")"
   checked=$((checked + 1))
+  # A name with a line break or tab could smuggle a granted "<sha><TAB><name>" line into the match below.
+  case "$name" in
+    *$'\n'*|*$'\t'*) err "not built by this run: refusing a file name with a line break or tab"; fail=1; continue ;;
+  esac
   sha="$(sha256_file "$f")"
   if ! printf '%s\n' "$GRANTS" | grep -qxF -- "$(printf '%s\t%s' "$sha" "$name")"; then
     err "not built by this run: $name"

@@ -181,6 +181,14 @@ rc=0; check "$T/nope.txt" "$BIN" >/dev/null 2>&1 || rc=$?
 [ "$rc" = 2 ] && pass "built check: a missing list is a usage error, not a pass" || fail "missing list exit $rc"
 rc=0; check "$BUILT" "$T/nodir" >/dev/null 2>&1 || rc=$?
 [ "$rc" = 2 ] && pass "built check: a missing directory is a usage error" || fail "missing directory exit $rc"
+# A file name carrying a line break plus a granted line must not ride on that grant (Opus review).
+NL="$T/newline"; mkdir "$NL"
+printf 'evil' > "$T/evil.bin"
+evsha="$(sha256_file "$T/evil.bin")"
+nlname="x"$'\n'"${evsha}"$'\t'"bar-linux-amd64.tar.gz"
+cp "$T/evil.bin" "$NL/$nlname"
+printf '%s  bar-linux-amd64.tar.gz\n' "$evsha" > "$T/nl.txt"
+if check "$T/nl.txt" "$NL" >/dev/null 2>&1; then fail "built check passed a file name with a line break"; else pass "built check refuses a file name with a line break"; fi
 # Symlinked entries are read through (the workflow stages symlinks).
 LNK="$T/linked"; mkdir "$LNK"; ln -s "$PLIN" "$LNK/demo-1.2.3-linux-amd64.tar.gz"
 check "$BUILT" "$LNK" >/dev/null 2>&1 && pass "built check follows symlinks" || fail "built check refused a symlinked built tarball"

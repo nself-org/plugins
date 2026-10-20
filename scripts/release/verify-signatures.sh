@@ -149,6 +149,7 @@ for f in "$DIR"/*.tar.gz; do
       continue
     fi
     printf 'nself-plugin-bin-v1\n%s\n%s\n%s\n%s\n' "$slug" "$version" "$platform" "$actual" > "$WORK/msg"
+    # shellcheck disable=SC2016  # the jq filter is passed as text; $s and $p are jq variables
     if ! sig_check '.releases[$s].platform_signatures[$p]' "$slug" "$platform" "$WORK/msg"; then
       err "platform signature mismatch: $slug $version $platform"
       fail=1
@@ -164,6 +165,7 @@ for f in "$DIR"/*.tar.gz; do
     continue
   fi
   printf 'nself-plugin-v1\n%s\n%s\n%s\n' "$slug" "$version" "$actual" > "$WORK/msg"
+  # shellcheck disable=SC2016  # the jq filter is passed as text; $s is a jq variable
   if ! sig_check '.releases[$s].release_signature' "$slug" "" "$WORK/msg"; then
     err "signature mismatch: $slug $version"
     fail=1
