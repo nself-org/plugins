@@ -8,7 +8,7 @@ package runnerjob
 // Constraints: the preparer re-checks what placement already proved, because it is the last step before
 //          a credential exists: remote only, container isolation sandboxed-container, no secrets, a
 //          digest-pinned image, a Linux node that offers at least that isolation and the restricted
-//          network scope. Any miss is E708 and nothing is minted. A lease that already carries a
+//          network scope. Any miss is E708 and nothing is minted; a demand that is not live (finished, or expired while it waited and its slot is taken) is E703 and nothing is minted either. A lease that already carries a
 //          credential is refused (nobody else may set one). If the ledger write fails after the mint the
 //          registration is removed again at once. A second delivery of the same attempt removes the
 //          earlier registration first (the credential is not stored, so it cannot be reused) and keeps the
@@ -112,6 +112,11 @@ func prepare(ctx context.Context, node model.Capability, l *protocol.Lease, job 
 		return err
 	}
 	repo, demand := job.Env[EnvRepo], job.Env[EnvDemand]
+	if ok, err := led.Confirm(ctx, m.Provider(), repo, demand); err != nil {
+		return fail("ledger.read")
+	} else if !ok { // the demand ended, expired with the cap taken since, or is unknown: no registration for it
+		return providers.NewError(providers.Quota, "E703", "runner.demand_not_live", 0, time.Time{})
+	}
 	if prev, ok, err := led.Runner(ctx, l.AttemptID); err != nil {
 		return fail("ledger.read")
 	} else if ok && prev.State == stateMinted {

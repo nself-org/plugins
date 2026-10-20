@@ -190,7 +190,17 @@ func runnerJob(t *testing.T, demand string) model.Job {
 	return p.Jobs[0]
 }
 
+// deliver hands a lease for job to the transport chain, as the dispatcher does after the demand handler
+// reserved the demand (cap 50 here; tests of the cap reserve first with their own, and use deliverRaw).
 func deliver(node model.Capability, attempt string, job model.Job) (protocol.Lease, error) {
+	if d := job.Env["NSELF_RUNNERJOB_DEMAND"]; d != "" && runnerjob.CurrentLedger() != nil {
+		_, _ = runnerjob.CurrentLedger().Reserve(context.Background(), "fakeforge", testRepo, d, 50)
+	}
+	return deliverRaw(node, attempt, job)
+}
+
+// deliverRaw delivers without reserving the demand first.
+func deliverRaw(node model.Capability, attempt string, job model.Job) (protocol.Lease, error) {
 	l := protocol.Lease{LeaseID: "lease-" + attempt, AttemptID: attempt, Job: job}
 	err := transport.Deliver(context.Background(), node, l, nil)
 	driver.mu.Lock()

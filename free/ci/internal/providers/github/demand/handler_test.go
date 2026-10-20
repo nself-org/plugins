@@ -50,6 +50,7 @@ func TestLabelFilter(t *testing.T) {
 		{"self-hosted", "nself", "ubuntu-latest"}, {"self-hosted", "nself", "ubuntu-22.04"}, {"self-hosted", "nself", "macOS"},
 		{"self-hosted", "nself", "windows-latest"}, {"self-hosted", "nself", "gpu"}, {"self-hosted", "nself", "nself-jit-01ABC"},
 		{"self-hosted"}, {"nself"}, {"self-hosted", "linux", "x64"}, {"ubuntu-latest"},
+		{"self-hosted", "nself", "l\u0130nux"}, {"self-hosted", "nself", "linux\u200b"}, {"self-hosted", "nself\u2010x"}, {"self-hosted", "", "nself"},
 	}
 	for i, labels := range refused {
 		p, err := h.Synthesize(context.Background(), demandFor(t, 6000+i, labels...))

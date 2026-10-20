@@ -35,12 +35,14 @@ const CredentialKind = "github-jitconfig"
 
 // runnerScript starts the one runner of the image under the hardened profile. The stock run.sh cannot: the
 // profile's root file system is read-only, /tmp is noexec and the runner writes next to its own binary
-// (_diag, _work, run-helper.sh). So the script copies bin/ (88 MB) into the writable workspace, which
-// can execute, links the read-only externals/ (371 MB) and runs Runner.Listener from there. The runner
-// reads the one-job registration from ACTIONS_RUNNER_INPUT_JITCONFIG, which cred-wrapper set in this
-// shell's environment; the script never names it.
-const runnerScript = `set -e; r=/repo/runner; mkdir -p "$r/_work"; cp -a /home/runner/bin "$r/bin"; ` +
-	`ln -s /home/runner/externals "$r/externals"; exec "$r/bin/Runner.Listener" run`
+// (_diag, the .runner, .credentials and .credentials_rsaparams files, run-helper.sh). The agent gives a
+// runner job an exec-capable tmpfs at /runner (memory only), so the script copies bin/ (88 MB) there, links
+// the read-only externals/ and the workspace's _work, and runs Runner.Listener from /runner. The decoded
+// credential files the runner writes therefore live in memory, never on the node's disk. The runner reads
+// the one-job registration from ACTIONS_RUNNER_INPUT_JITCONFIG, which cred-wrapper set in this shell's
+// environment; the script never names it.
+const runnerScript = `set -e; r=/runner; mkdir -p /repo/_work; cp -a /home/runner/bin "$r/bin"; ` +
+	`ln -s /home/runner/externals "$r/externals"; ln -s /repo/_work "$r/_work"; exec "$r/bin/Runner.Listener" run`
 
 // RunnerCommand is the job command of a GitHub runner job.
 var RunnerCommand = []string{"sh", "-c", runnerScript}
@@ -80,10 +82,23 @@ func archOf(labels []string) string {
 	return "amd64"
 }
 
+// ascii reports whether every byte of s is below 0x80.
+func ascii(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
+}
+
 // labelsAllowed applies the fixed label set.
 func labelsAllowed(labels []string, jitLabel string) bool {
 	var self, mine bool
 	for _, l := range labels {
+		if !ascii(l) { // strings.ToLower folds "lİnux" to "linux", which GitHub's own match does not
+			return false
+		}
 		switch l = strings.ToLower(l); l {
 		case "self-hosted":
 			self = true

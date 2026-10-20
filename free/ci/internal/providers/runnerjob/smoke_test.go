@@ -21,7 +21,7 @@ func TestRunnerImageSmoke(t *testing.T) {
 	for _, sandboxed := range []bool{false, true} {
 		id := map[bool]string{false: "host19-smoke-c", true: "host19-smoke-g"}[sandboxed]
 		start := time.Now()
-		run, ran := runLeg(t, id, realImage, demand.CredentialKind, invalid, demand.RunnerCommand, sandboxed, 60*time.Second)
+		run, ran := runLegWith(t, id, realImage, demand.CredentialKind, invalid, demand.RunnerCommand, sandboxed, 60*time.Second, true, nil)
 		if !ran {
 			continue
 		}

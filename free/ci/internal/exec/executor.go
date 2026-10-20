@@ -32,12 +32,12 @@ type JobSpec struct {
 	// MemoryMB alone is a reservation, enforced by container isolation, never by RLIMIT_AS.
 	MemoryLimitMB int
 	Output        func([]byte)
-	// Stdin, when set, is the job's standard input: how a one-job credential reaches a
-	// runner without touching argv, a container -e flag or a file. Nil keeps /dev/null.
-	// A planned container takes it too (interactive; its environment moves to fd 3).
+	// Stdin, when set, is the job's standard input: how a one-job credential reaches a runner without touching
+	// argv, a container -e flag or a file (a planned container runs interactive, env on fd 3). Nil keeps /dev/null.
 	Stdin io.Reader
-	// Masks are exact values the output must never carry, whatever the patterns say
-	// (the value Stdin delivers); they are redacted even when split across chunks.
+	// RunnerRoot gives a planned container the exec-capable runner tmpfs (RunnerRootPath), memory only.
+	RunnerRoot bool
+	// Masks are exact values the output must never carry (the value Stdin delivers), even split across chunks.
 	Masks []string
 	// Slot is the execution slot the attempt holds; isolation profiles derive the job UID from it.
 	Slot int

@@ -223,3 +223,24 @@ func TestBuildAddsInteractiveOnlyForAJobStdin(t *testing.T) {
 		t.Fatalf("job stdin but not interactive or no fd 3 env file: %v", cmd.Args)
 	}
 }
+
+// TestBuildAddsTheRunnerRootOnlyWhenAsked: the exec-capable tmpfs is one more --tmpfs, only for a run that
+// asked for it, and /tmp stays as it was (noexec by default).
+func TestBuildAddsTheRunnerRootOnlyWhenAsked(t *testing.T) {
+	p := sampleParams()
+	cmd, err := Build(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(cmd.Args, " "), "/runner") {
+		t.Fatalf("no runner root asked but present: %v", cmd.Args)
+	}
+	p.Run.RunnerRoot = exec.RunnerRootPath
+	if cmd, err = Build(p); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmd.Args, " ")
+	if !strings.Contains(joined, "--tmpfs "+exec.RunnerRootTmpfs()) || strings.Count(joined, "--tmpfs") != 2 || !strings.Contains(joined, "--tmpfs /tmp:rw,nosuid,size=256m") {
+		t.Fatalf("runner root tmpfs missing or /tmp changed: %v", cmd.Args)
+	}
+}

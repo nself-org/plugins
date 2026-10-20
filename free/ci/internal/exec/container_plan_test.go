@@ -431,3 +431,40 @@ func TestPlannedCleanupFallsBackToTheJobImage(t *testing.T) {
 		})
 	}
 }
+
+// TestPlannedContainerRunnerRoot: a runner job gets one extra, exec-capable tmpfs at /runner and nothing else
+// new; the backstop accepts exactly that value and only for a run that asked for it, and requires it then.
+func TestPlannedContainerRunnerRoot(t *testing.T) {
+	fakeRuntime(t, "ok\n", "0")
+	base := []string{"run", "--rm", "--name", "nself-ci-x", "--label", "nself.ci.attempt=x", "--user", fixtureUID(), "--network=none", "--pids-limit", "64", "--memory", "64m", "--cpus", "1",
+		"--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only"}
+	with := func(tmpfs ...string) ContainerCommand {
+		args := append([]string(nil), base...)
+		for _, v := range tmpfs {
+			args = append(args, "--tmpfs", v)
+		}
+		return ContainerCommand{Binary: "docker", Args: append(args, "alpine:3.19", "true")}
+	}
+	run := ContainerRun{Name: "nself-ci-x", Image: "alpine:3.19", AttemptID: "x"}
+	for name, tc := range map[string]struct {
+		cmd    ContainerCommand
+		root   string
+		accept bool
+	}{
+		"asked and present":            {with("/tmp:rw,nosuid,size=256m", RunnerRootTmpfs()), RunnerRootPath, true},
+		"asked and missing":            {with("/tmp:rw,nosuid,size=256m"), RunnerRootPath, false},
+		"present but not asked":        {with("/tmp:rw,nosuid,size=256m", RunnerRootTmpfs()), "", false},
+		"asked with a wider value":     {with("/runner:rw,exec,size=99999m"), RunnerRootPath, false},
+		"asked with another path":      {with("/etc:rw,exec,size=1m"), RunnerRootPath, false},
+		"another root path is refused": {with(RunnerRootTmpfs()), "/opt", false},
+	} {
+		run.RunnerRoot = tc.root
+		err := checkContainerCommand(tc.cmd, run)
+		if (err == nil) != tc.accept {
+			t.Errorf("%s: accepted=%v err=%v", name, err == nil, err)
+		}
+	}
+	if RunnerRootTmpfs() != "/runner:rw,exec,nosuid,nodev,size=384m" {
+		t.Fatalf("the runner tmpfs value changed: %q", RunnerRootTmpfs())
+	}
+}

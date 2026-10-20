@@ -66,6 +66,7 @@ type Runner struct {
 type demandRow struct {
 	State string    `json:"state"`
 	At    time.Time `json:"at"`
+	Max   int       `json:"max,omitempty"` // the cap in force when the demand was reserved, for Confirm
 }
 
 // repoDoc is the state of one repository.
@@ -183,7 +184,42 @@ func (l *Ledger) Reserve(ctx context.Context, provider, repo, demand string, max
 	if n >= max {
 		return false, nil
 	}
-	d.Demands[key] = demandRow{State: statePending, At: now}
+	d.Demands[key] = demandRow{State: statePending, At: now, Max: max}
+	if err = l.save(ctx, provider, repo, d); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// Confirm says whether a demand may be minted now. A live demand may. A demand whose pending or minted
+// window ran out while its pipeline waited (the background band waits for an idle node) takes a slot again
+// only if one is free under the cap it was reserved with; a demand that ended, or that the document no
+// longer knows, may not (a rerun of a finished demand is a new demand and goes through Reserve).
+func (l *Ledger) Confirm(ctx context.Context, provider, repo, demand string) (bool, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	d, err := l.load(ctx, repo)
+	if err != nil {
+		return false, err
+	}
+	now, key := l.now(), demandKey(provider, demand)
+	row, ok := d.Demands[key]
+	switch {
+	case !ok || row.State == stateDone:
+		return false, nil
+	case live(row, now):
+		return true, nil
+	}
+	n := 0
+	for k, r := range d.Demands {
+		if k != key && live(r, now) {
+			n++
+		}
+	}
+	if row.Max < 1 || n >= row.Max {
+		return false, nil
+	}
+	d.Demands[key] = demandRow{State: statePending, At: now, Max: row.Max}
 	if err = l.save(ctx, provider, repo, d); err != nil {
 		return false, err
 	}
@@ -200,7 +236,8 @@ func (l *Ledger) RecordRunner(ctx context.Context, r Runner) error {
 	}
 	r.State, r.At = stateMinted, l.now()
 	d.Runners[r.Attempt] = r
-	d.Demands[demandKey(r.Provider, r.Demand)] = demandRow{State: stateMinted, At: r.At}
+	k := demandKey(r.Provider, r.Demand)
+	d.Demands[k] = demandRow{State: stateMinted, At: r.At, Max: d.Demands[k].Max}
 	l.where[r.Attempt] = r.Repo
 	return l.save(ctx, r.Provider, r.Repo, d)
 }
@@ -227,8 +264,8 @@ func (l *Ledger) end(ctx context.Context, r Runner, demandState string) error {
 	r.State, r.At = stateGone, now
 	d.Runners[r.Attempt] = r
 	delete(l.where, r.Attempt)
-	if !heldByAnother(d, r) { // a retried attempt may hold the same demand: ending the old one must not free the new one's slot
-		d.Demands[demandKey(r.Provider, r.Demand)] = demandRow{State: demandState, At: now}
+	if k := demandKey(r.Provider, r.Demand); !heldByAnother(d, r) { // a retried attempt may hold the same demand: ending the old one must not free the new one's slot
+		d.Demands[k] = demandRow{State: demandState, At: now, Max: d.Demands[k].Max}
 	}
 	return l.save(ctx, r.Provider, r.Repo, d)
 }

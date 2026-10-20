@@ -180,6 +180,7 @@ func wrapCredential(spec *execSpec, in *jobInputs, j session.JobRun) error {
 	if spec.Job.Isolation == "container" || spec.Job.Isolation == "sandboxed-container" { // both run in a container image (gVisor is the same CLI path)
 		agent = containerAgentPath
 		in.Mounts = append(append([]ciexec.Mount(nil), in.Mounts...), ciexec.Mount{Host: exe, Target: agent, ReadOnly: true})
+		in.RunnerRoot = true
 	}
 	spec.Job.Run = append([]string{agent, "cred-wrapper", rc.Kind, "--"}, spec.Job.Run...)
 	in.Stdin = io.MultiReader(bytes.NewReader(j.Credential), strings.NewReader("\n"))

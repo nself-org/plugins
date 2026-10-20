@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
@@ -188,5 +189,71 @@ func TestSecondDeliveryKeepsTheDemandSlot(t *testing.T) {
 	forge.mintErr = nil
 	if _, err := deliver(goodNode(), "attempt-s", runnerJob(t, "20")); err != nil || forge.alive() != 1 {
 		t.Fatalf("a later delivery mints again: %v alive %d", err, forge.alive())
+	}
+}
+
+// TestLateMintCannotExceedTheCap (Opus M2): demands 1 and 2 hold the two slots, wait longer than the
+// pending window for placement and expire; demands 3 and 4 are then reserved and take the slots. When the
+// pipelines of 1 and 2 finally reach delivery they are refused, so two registrations exist, not four.
+func TestLateMintCannotExceedTheCap(t *testing.T) {
+	use(t)
+	led := runnerjob.CurrentLedger()
+	ctx := context.Background()
+	for _, d := range []string{"1", "2"} {
+		if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, d, 2); !ok {
+			t.Fatal("reserve", d)
+		}
+	}
+	advance(runnerjob.PendingTTL + time.Minute)
+	for _, d := range []string{"3", "4"} {
+		if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, d, 2); !ok {
+			t.Fatal("the expired demands must have freed their slots for", d)
+		}
+	}
+	for _, d := range []string{"1", "2"} {
+		if _, err := deliverRaw(goodNode(), "late-"+d, runnerJob(t, d)); code(err) != "E703 runner.demand_not_live" {
+			t.Fatalf("demand %s: a late mint over a taken cap must be refused, got %v", d, err)
+		}
+	}
+	for _, d := range []string{"3", "4"} {
+		if _, err := deliverRaw(goodNode(), "ok-"+d, runnerJob(t, d)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if forge.alive() != 2 {
+		t.Fatalf("%d registrations for a cap of 2", forge.alive())
+	}
+}
+
+// TestExpiredDemandWithAFreeSlotMintsAgain: the same wait, but nobody took the slot: the late pipeline
+// mints, and the slot counts again.
+func TestExpiredDemandWithAFreeSlotMintsAgain(t *testing.T) {
+	use(t)
+	led := runnerjob.CurrentLedger()
+	ctx := context.Background()
+	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "1", 1); !ok {
+		t.Fatal("reserve")
+	}
+	advance(runnerjob.PendingTTL + time.Minute)
+	if _, err := deliverRaw(goodNode(), "late", runnerJob(t, "1")); err != nil {
+		t.Fatalf("a late demand with a free slot may mint: %v", err)
+	}
+	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "2", 1); ok {
+		t.Fatal("the late registration holds the slot again")
+	}
+}
+
+// TestRerunOfAFinishedDemandIsRefused (Opus M2 variant): once a demand is closed, a new attempt for the same
+// demand id mints nothing; a rerun is a new demand and goes through Reserve.
+func TestRerunOfAFinishedDemandIsRefused(t *testing.T) {
+	use(t)
+	if _, err := deliver(goodNode(), "first", runnerJob(t, "7")); err != nil {
+		t.Fatal(err)
+	}
+	if err := finalize(context.Background(), "first"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := deliverRaw(goodNode(), "again", runnerJob(t, "7")); code(err) != "E703 runner.demand_not_live" || forge.alive() != 0 {
+		t.Fatalf("a finished demand must not mint again: %v alive %d", err, forge.alive())
 	}
 }

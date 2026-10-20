@@ -21,6 +21,14 @@ const envFileStdin = "/dev/stdin"
 // as the CLI's fd 3, so the job's stdin and the environment never share a stream.
 const envFileFD = "/dev/fd/3"
 
+// RunnerRootPath is where a forge runner's exec-capable tmpfs is mounted; RunnerRootTmpfs is the one --tmpfs
+// value that mounts it. The hardened profile's /tmp is noexec, and the runner must run from its own root, so
+// the root gets its own tmpfs: memory only, never the node's disk.
+const RunnerRootPath = "/runner"
+
+// RunnerRootTmpfs returns the --tmpfs value of the runner root.
+func RunnerRootTmpfs() string { return RunnerRootPath + ":rw,exec,nosuid,nodev,size=384m" }
+
 // minJobUID is the first job UID (Epic D12: 65532 + slot).
 const minJobUID = 65532
 
@@ -93,6 +101,12 @@ func checkContainerCommand(c ContainerCommand, run ContainerRun) error {
 			return bad("missing " + want)
 		}
 	}
+	if run.RunnerRoot != "" && run.RunnerRoot != RunnerRootPath {
+		return bad("runner root is not " + RunnerRootPath)
+	}
+	if run.RunnerRoot != "" && !seen["--tmpfs="+RunnerRootTmpfs()] {
+		return bad("missing the runner root tmpfs")
+	}
 	if run.Interactive && !named["--interactive"] {
 		return bad("missing --interactive: the job stdin would not reach the container")
 	}
@@ -157,6 +171,9 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 		}
 		return checkMount(value, run.Workspace)
 	case "--tmpfs":
+		if run.RunnerRoot != "" && value == RunnerRootTmpfs() {
+			return nil
+		}
 		if !strings.HasPrefix(value, "/tmp:") && value != "/tmp" {
 			return bad("tmpfs outside /tmp")
 		}

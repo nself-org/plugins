@@ -33,6 +33,9 @@ type ContainerRun struct {
 	// Interactive says the job has a stdin (a one-job runner credential, D-1001): the planner adds
 	// --interactive and the environment reaches the CLI on fd 3 (envFileFD) instead of its stdin.
 	Interactive bool
+	// RunnerRoot, when set, is the path of an exec-capable tmpfs the container gets besides /tmp (a forge
+	// runner's root; RunnerRootPath is the only value the backstop accepts).
+	RunnerRoot string
 	// JobImageCleanup asks a planner to run the cleanup helper in the job's own image. The executor sets it for the
 	// second try when the planner's pinned helper image could not start (not pulled and no registry reachable).
 	JobImageCleanup bool
@@ -88,7 +91,8 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 		envFile = envFileFD
 	}
 	run := ContainerRun{Name: "nself-ci-" + s.AttemptID, Image: s.Job.Container.Image, Workspace: workspace, Workdir: workdir, EnvFile: envFile, Interactive: interactive,
-		Command: s.Command, Mounts: s.Mounts, AttemptID: s.AttemptID, CoordinatorID: s.CoordinatorID, Slot: s.Slot, CPU: s.CPU, MemoryMB: s.MemoryMB, Network: s.Network}
+		RunnerRoot: map[bool]string{true: RunnerRootPath}[s.RunnerRoot],
+		Command:    s.Command, Mounts: s.Mounts, AttemptID: s.AttemptID, CoordinatorID: s.CoordinatorID, Slot: s.Slot, CPU: s.CPU, MemoryMB: s.MemoryMB, Network: s.Network}
 	if run.CPU <= 0 {
 		run.CPU = 1.5
 	}
@@ -144,7 +148,7 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 // cleanup is tried once in the job's own image, as it ran before the helper image existed.
 // It returns why the cleanup did not run or did not finish (nil when none is needed or it ran clean).
 func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) error {
-	run.Interactive = false // the helper has no stdin
+	run.Interactive, run.RunnerRoot = false, "" // the helper has no stdin and no runner root
 	helper, err := e.cleanupOnce(s, run)
 	if err == nil || !helper {
 		return err

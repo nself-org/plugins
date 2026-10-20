@@ -28,6 +28,9 @@ func TestCredentialWrapperIsMountedForEveryContainerLevel(t *testing.T) {
 		if inContainer != tc.mounted || (len(in.Mounts) == 1) != tc.mounted {
 			t.Fatalf("isolation %q: wrapper %q, mounts %v", tc.isolation, spec.Job.Run[0], in.Mounts)
 		}
+		if in.RunnerRoot != tc.mounted {
+			t.Fatalf("isolation %q: the runner tmpfs is asked for exactly when the job runs in a container (got %v)", tc.isolation, in.RunnerRoot)
+		}
 		if tc.mounted && !in.Mounts[0].ReadOnly {
 			t.Fatalf("isolation %q: the agent mount must be read-only", tc.isolation)
 		}

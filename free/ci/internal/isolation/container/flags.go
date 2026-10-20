@@ -134,6 +134,9 @@ func Build(p Params) (exec.ContainerCommand, error) {
 		args = append(args, "--mount", m.Spec())
 	}
 	args = append(args, "--mount", "type=bind,src="+r.Workspace+",dst=/repo", "--workdir", r.Workdir)
+	if r.RunnerRoot != "" { // the runner's own root: memory only, exec allowed, nothing it writes reaches the node's disk
+		args = append(args, "--tmpfs", exec.RunnerRootTmpfs())
+	}
 	if r.EnvFile != "" {
 		args = append(args, "--env-file", r.EnvFile)
 	}

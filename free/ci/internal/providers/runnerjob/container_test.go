@@ -106,11 +106,21 @@ type jobRun struct {
 	// that held the credential.
 	HomeRead int
 	HomeHits []string
+	// NeedleHits are the files of the state directory that held a needle while the job ran.
+	NeedleHits []string
 }
 
 // runLeg runs command in image under the container profile (or gVisor when asked and available) with the
 // credential on the job's stdin and the wrapper in front.
 func runLeg(t *testing.T, id, image, kind, cred string, command []string, sandboxed bool, limit time.Duration) (jobRun, bool) {
+	t.Helper()
+	return runLegWith(t, id, image, kind, cred, command, sandboxed, limit, false, nil)
+}
+
+// runLegWith is runLeg that also gives the job the runner tmpfs (what the agent does for a runner credential
+// job) and reports which of needles (decoded parts of the credential) were found in the agent's state while
+// the job ran.
+func runLegWith(t *testing.T, id, image, kind, cred string, command []string, sandboxed bool, limit time.Duration, runnerRoot bool, needles []string) (jobRun, bool) {
 	t.Helper()
 	id += "-" + strconv.Itoa(os.Getpid()) // container names are global to the daemon: two runs of this test at once must not meet
 	agent := buildAgent(t)
@@ -141,8 +151,8 @@ func runLeg(t *testing.T, id, image, kind, cred string, command []string, sandbo
 		Command: append([]string{agentPath, "cred-wrapper", kind, "--"}, command...),
 		Mounts:  []exec.Mount{{Host: agent, Target: agentPath, ReadOnly: true}},
 		Job:     model.Job{Isolation: level, Container: &model.ContainerConfig{Image: image}},
-		Stdin:   io.MultiReader(bytes.NewReader([]byte(cred)), strings.NewReader("\n")), Masks: []string{cred},
-		CPU: 1, MemoryMB: 512, Network: "none", Timeout: limit}
+		Stdin:   io.MultiReader(bytes.NewReader([]byte(cred)), strings.NewReader("\n")), Masks: []string{cred}, RunnerRoot: runnerRoot,
+		CPU: 1, MemoryMB: 2048, Network: "none", Timeout: limit}
 	e := &exec.Executor{Isolation: wrapIsolator{iso}, Grace: 2 * time.Second, NewRedactor: exec.NewOutputRedactor}
 	t.Cleanup(func() { _ = exec.RuntimeRemove(context.Background(), "docker", "nself-ci-"+id) })
 
@@ -172,6 +182,11 @@ func runLeg(t *testing.T, id, image, kind, cred string, command []string, sandbo
 			read, hits := scanTree(home, cred)
 			run.HomeRead = max(run.HomeRead, read)
 			run.HomeHits = append(run.HomeHits, hits...)
+			for _, n := range needles {
+				if _, found := scanTree(home, n); len(found) > 0 {
+					run.NeedleHits = append(run.NeedleHits, found...)
+				}
+			}
 		}
 	}()
 	run.Res = e.Run(context.Background(), spec)
