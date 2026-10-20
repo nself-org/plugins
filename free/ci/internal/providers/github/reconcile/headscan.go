@@ -217,6 +217,7 @@ func (e *Engine) sweepHead(ctx context.Context, s *session, enq coordinator.Enqu
 	if err != nil {
 		return false, err
 	}
+	d.Reconcile = true // the sweep found no terminal status: a build that finished lately already ran this head
 	if _, err = enq.Enqueue(ctx, d); err != nil {
 		return false, err
 	}

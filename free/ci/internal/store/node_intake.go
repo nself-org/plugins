@@ -6,7 +6,8 @@ package store
 // Inputs:  IntakeRequest (the trigger with its semantic key), or a claim owner for the dispatch loop.
 // Outputs: IntakeOutcome (enqueued, duplicate, coalesced or replay), claimed rows, queue statistics.
 // Constraints: a delivery id runs once; a semantic key coalesces into a live row (a webhook trigger also into
-//          a row completed within the 72 h redelivery horizon) unless Force, which writes an audit row; the
+//          a row of the same event completed within the 72 h redelivery horizon, a Reconcile sweep trigger
+//          also into one of the same source whatever its event) unless Force, which writes an audit row; the
 //          idempotency key is stored as a digest; claims carry a heartbeat so a dead owner's rows requeue.
 
 import (
@@ -64,7 +65,7 @@ type IntakeRow struct {
 type IntakeRequest struct {
 	Source, Event, DeliveryID, Project, Revision, TriggerClass, PolicyDigest, SemanticKey, Pipeline string
 	Facts                                                                                           []byte
-	Webhook, Force                                                                                  bool
+	Webhook, Reconcile, Force                                                                       bool
 	Actor                                                                                           string
 	Horizon                                                                                         time.Duration
 	IdemDigest, ReqDigest                                                                           string
@@ -125,8 +126,8 @@ func (s *Store) IntakeEnqueue(ctx context.Context, r IntakeRequest) (IntakeOutco
 			horizon = IntakeRetention
 		}
 		var into string
-		e := tx.QueryRowContext(ctx, `SELECT id FROM intake WHERE semantic_key=? AND (state IN ('queued','dispatched') OR (?=1 AND state='done' AND finished_at>? AND source=? AND event=?)) ORDER BY seq DESC LIMIT 1`,
-			r.SemanticKey, r.Webhook, now-int64(horizon), r.Source, r.Event).Scan(&into)
+		e := tx.QueryRowContext(ctx, `SELECT id FROM intake WHERE semantic_key=? AND (state IN ('queued','dispatched') OR (?=1 AND state='done' AND finished_at>? AND source=? AND event=?) OR (?=1 AND state='done' AND finished_at>? AND source=?)) ORDER BY seq DESC LIMIT 1`,
+			r.SemanticKey, r.Webhook, now-int64(horizon), r.Source, r.Event, r.Reconcile, now-int64(horizon), r.Source).Scan(&into)
 		if e != nil && !errors.Is(e, sql.ErrNoRows) {
 			return e
 		}

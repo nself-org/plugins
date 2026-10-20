@@ -489,6 +489,30 @@ func TestReconcilerTriggersDedupAgainstLivePipelines(t *testing.T) {
 	}
 }
 
+// TestReconcileDeliveryCoalescesIntoFinishedBuild proves D-1320 through the coordinator: a Delivery with
+// Reconcile set is absorbed by a build that finished within the redelivery horizon, and one without it is not.
+func TestReconcileDeliveryCoalescesIntoFinishedBuild(t *testing.T) {
+	r := newRig(t, nil)
+	ctx := context.Background()
+	r.post("/webhook", "push", "done-1", pushBody(testSHA))
+	row, ok, err := r.st.IntakeClaim(ctx, "t")
+	if err != nil || !ok {
+		t.Fatalf("claim = %+v %v %v", row, ok, err)
+	}
+	if err = r.st.IntakeFinish(ctx, row.ID, "t", "run1", "exit=0", true); err != nil {
+		t.Fatal(err)
+	}
+	sweep := Delivery{Source: "github", DeliveryID: "reconcile:o/r:" + testSHA, Project: "o/r", Revision: testSHA, Reconcile: true}
+	out, err := r.c.Enqueue(ctx, sweep)
+	if err != nil || out.Kind != store.IntakeCoalesced || out.ID != row.ID {
+		t.Fatalf("sweep after a finished build = %+v, %v, want coalesced into %s", out, err, row.ID)
+	}
+	sweep.Reconcile, sweep.DeliveryID = false, "other"
+	if out, err = r.c.Enqueue(ctx, sweep); err != nil || out.Kind != store.IntakeEnqueued {
+		t.Fatalf("a plain trigger after a finished build = %+v, %v, want its own run", out, err)
+	}
+}
+
 func TestEnqueueFromScheduleSource(t *testing.T) {
 	r := newRig(t, nil)
 	out, err := r.c.Enqueue(context.Background(), Delivery{Source: "schedule", Project: "o/r", Revision: testSHA, TriggerClass: "schedule"})

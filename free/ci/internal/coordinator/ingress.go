@@ -29,6 +29,7 @@ type Delivery struct {
 	Facts        json.RawMessage // source facts (event, ref, clone_url, ...); opaque to the intake
 	Pipeline     string          // the requested pipeline, "" for the default
 	Synthetic    *model.Pipeline // a pipeline the source built itself (runner demand), if any
+	Reconcile    bool            // a sweep trigger: a build of the same key finished within the redelivery horizon absorbs it
 }
 
 // Ingress turns the requests of one provider into Deliveries.

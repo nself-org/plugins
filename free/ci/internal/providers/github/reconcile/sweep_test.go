@@ -303,6 +303,20 @@ func TestPollHeadScan(t *testing.T) {
 	}
 }
 
+// TestHeadScanDeliveriesAreReconcileTriggers proves D-1320 on the sweep side: every head the scan enqueues
+// carries Reconcile, so a build that finished inside the redelivery horizon absorbs it.
+func TestHeadScanDeliveriesAreReconcileTriggers(t *testing.T) {
+	r := newRig(t, "acme/app")
+	r.f.repos["acme/app"].Branches = map[string]string{"main": sha('a', 1)}
+	if err := r.e.GitHub().Reconcile(context.Background(), r.enq); err != nil {
+		t.Fatal(err)
+	}
+	got := r.enq.deliveries()
+	if len(got) != 1 || !got[0].Reconcile {
+		t.Fatalf("head scan deliveries = %+v, want one with Reconcile set", got)
+	}
+}
+
 // TestRedeliverRefusedFallsBack proves the review fixes of the delivery leg: the hook_url match has a host
 // and path boundary, a refused redelivery (the token may list but not redeliver) falls back to the head
 // scan, and one failing delivery does not hide the newer ones.

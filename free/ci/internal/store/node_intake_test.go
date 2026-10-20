@@ -258,3 +258,62 @@ func TestIntakeDoneWindowNeedsSameSourceAndEvent(t *testing.T) {
 		t.Fatalf("the same push redelivered under a new id = %+v, want coalesced", d)
 	}
 }
+
+// builtPush stores and completes a webhook push build for key "k", then moves the clock by age.
+func builtPush(t *testing.T, age time.Duration) (*Store, IntakeOutcome) {
+	t.Helper()
+	ctx := context.Background()
+	s, clk := intakeStore(t)
+	push := req("d1", "k")
+	push.Event = "push"
+	a, _ := s.IntakeEnqueue(ctx, push)
+	_, _, _ = s.IntakeClaim(ctx, "me")
+	_ = s.IntakeFinish(ctx, a.ID, "me", "run1", "exit=0", true)
+	clk.add(age)
+	return s, a
+}
+
+func sweepReq(delivery string) IntakeRequest {
+	r := req(delivery, "k")
+	r.Webhook, r.Reconcile, r.Event = false, true, "pull_request"
+	return r
+}
+
+// TestIntakeReconcileCoalescesIntoCompletedRow proves D-1320: a sweep trigger (Reconcile) for a head a
+// webhook already built within the redelivery horizon is absorbed by the done row, whatever the event.
+func TestIntakeReconcileCoalescesIntoCompletedRow(t *testing.T) {
+	s, a := builtPush(t, 71*time.Hour)
+	if b, _ := s.IntakeEnqueue(context.Background(), sweepReq("r1")); b.Kind != IntakeCoalesced || b.ID != a.ID {
+		t.Fatalf("sweep 71 h after a finished build = %+v, want coalesced into %s", b, a.ID)
+	}
+}
+
+// TestIntakeReconcileStillBuildsWhenNothingFinished proves the flag absorbs only a done row of the same
+// source inside the horizon: a plain trigger, another source, a past-horizon row and a failed row each get
+// their own run.
+func TestIntakeReconcileStillBuildsWhenNothingFinished(t *testing.T) {
+	ctx := context.Background()
+	s, _ := builtPush(t, time.Hour)
+	plain := sweepReq("p1")
+	plain.Reconcile = false
+	if c, _ := s.IntakeEnqueue(ctx, plain); c.Kind != IntakeEnqueued {
+		t.Fatalf("a non-sweep, non-webhook trigger = %+v, want its own run", c)
+	}
+	s, _ = builtPush(t, time.Hour)
+	other := sweepReq("o1")
+	other.Source = "gitea"
+	if d, _ := s.IntakeEnqueue(ctx, other); d.Kind != IntakeEnqueued {
+		t.Fatalf("a sweep from another source = %+v, want its own run", d)
+	}
+	s, _ = builtPush(t, 73*time.Hour)
+	if e, _ := s.IntakeEnqueue(ctx, sweepReq("l1")); e.Kind != IntakeEnqueued {
+		t.Fatalf("sweep past the horizon = %+v, want a new run", e)
+	}
+	s, _ = intakeStore(t)
+	a, _ := s.IntakeEnqueue(ctx, req("d1", "k"))
+	_, _, _ = s.IntakeClaim(ctx, "me")
+	_ = s.IntakeFinish(ctx, a.ID, "me", "run1", "exit=1", false)
+	if f, _ := s.IntakeEnqueue(ctx, sweepReq("f1")); f.Kind != IntakeEnqueued {
+		t.Fatalf("sweep after a failed build = %+v, want a new run", f)
+	}
+}

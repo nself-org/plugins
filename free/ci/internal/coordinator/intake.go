@@ -81,7 +81,7 @@ func (c *Coordinator) enqueue(ctx context.Context, d Delivery, webhook bool, o e
 	out, err := c.cfg.Store.IntakeEnqueue(ctx, store.IntakeRequest{
 		Source: d.Source, Event: event, DeliveryID: d.DeliveryID, Project: d.Project, Revision: d.Revision, TriggerClass: d.TriggerClass,
 		PolicyDigest: c.cfg.PolicyDigest, SemanticKey: semanticKey(strings.ToLower(d.Project), d.Revision, d.TriggerClass, c.cfg.PolicyDigest, keyPipeline),
-		Pipeline: d.Pipeline, Facts: blob, Webhook: webhook, Force: c.cfg.Force || o.force, Actor: o.actor,
+		Pipeline: d.Pipeline, Facts: blob, Webhook: webhook, Reconcile: d.Reconcile, Force: c.cfg.Force || o.force, Actor: o.actor,
 		IdemDigest: o.idem, ReqDigest: o.reqDigest,
 	})
 	if err != nil {
