@@ -218,8 +218,8 @@ func refusal(resp *http.Response) error {
 		}
 		return r
 	}, b.Message)
-	if len(msg) > 300 {
-		msg = msg[:300]
+	if r := []rune(msg); len(r) > 300 {
+		msg = string(r[:300])
 	}
 	return fail(b.Code, reason, "%s", msg)
 }

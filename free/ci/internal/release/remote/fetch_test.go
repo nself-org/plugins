@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/release/verify"
@@ -183,6 +184,7 @@ func TestRefusalIsSanitized(t *testing.T) {
 		{"not json", 502, []byte("<html>bad gateway</html>"), "E664"},
 		{"escape codes", 403, body("E664", "role", "\x1b[2Jevil\r\nline"), "E664"},
 		{"long message", 403, body("E664", "role", strings.Repeat("m", 5000)), "E664"},
+		{"long multibyte message", 403, body("E664", "role", strings.Repeat("é", 5000)), "E664"},
 	}
 	for _, c := range cases {
 		s := &script{status: map[string]int{InputsPath(tRun): c.status}, body: map[string][]byte{InputsPath(tRun): c.raw}}
@@ -191,7 +193,7 @@ func TestRefusalIsSanitized(t *testing.T) {
 		if err == nil || !asErr(err, &re) || re.ErrCode != c.wantCode {
 			t.Fatalf("%s: %v", c.name, err)
 		}
-		if strings.ContainsAny(re.Msg, "\x1b\r\n") || len(re.Msg) > 400 || strings.Contains(re.Msg, "pwned") {
+		if strings.ContainsAny(re.Msg, "\x1b\r\n") || len(re.Msg) > 700 || strings.Contains(re.Msg, "pwned") || !utf8.ValidString(re.Msg) {
 			t.Fatalf("%s: message not sanitized: %q", c.name, re.Msg)
 		}
 	}
