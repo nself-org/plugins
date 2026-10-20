@@ -8,6 +8,10 @@ package discovery
 // Constraints: only --advertise, -advertise and their =<bool> forms (strconv.ParseBool) count; the
 //          flag stops at a literal "--". Debt: when join.go can declare the flag itself, delete this file's
 //          caller and use the flag value directly.
+// Security: the vendored mDNS server answers any sender on 0.0.0.0:5353 and does not check that a query is
+//          link-local (RFC 6762 s11), and no goodbye packet is sent at Stop (peers cache the record up to
+//          120 s). Run join --advertise only on a firewalled host: UDP 5353 must not be reachable from
+//          outside the LAN. It publishes only a private IPv4, a random host name and the window id (D-1269).
 
 import (
 	"strconv"

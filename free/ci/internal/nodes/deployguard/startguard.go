@@ -42,16 +42,7 @@ func NewLocal(run RunFunc) Local {
 		MachineIDs: []string{"/etc/machine-id", "/var/lib/dbus/machine-id"}, HostKeys: "/etc/ssh/ssh_host_*_key.pub"}
 }
 
-func readSmall(p string) ([]byte, error) {
-	fi, err := os.Stat(p)
-	if err != nil {
-		return nil, err
-	}
-	if fi.Size() > 1<<20 {
-		return nil, os.ErrInvalid
-	}
-	return os.ReadFile(p)
-}
+func readSmall(p string) ([]byte, error) { return readBounded(p) }
 
 func interfaceAddrs() ([]netip.Addr, error) { return addrsFrom(net.InterfaceAddrs) }
 

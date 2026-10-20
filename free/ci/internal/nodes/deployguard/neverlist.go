@@ -10,6 +10,8 @@ package deployguard
 //          file is an error (the caller keeps the cached inventory and warns); a file over 1 MiB is refused.
 
 import (
+	"errors"
+	"io"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -39,19 +41,49 @@ func ConfigPath(home string) string {
 	return filepath.Join(home, "config.yaml")
 }
 
+// maxFile caps every file the guard reads from the host (config, machine ids, host keys).
+const maxFile = 1 << 20
+
+// readBounded reads a regular file of at most maxFile bytes. A FIFO or device is refused before the open (an
+// open or read would block or never end), the open handle is checked again, and a file that grows after the
+// check is still cut off by the read bound.
+func readBounded(path string) ([]byte, error) {
+	if fi, err := os.Stat(path); err != nil {
+		return nil, err
+	} else if !fi.Mode().IsRegular() {
+		return nil, os.ErrInvalid
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, os.ErrInvalid
+	}
+	b, err := io.ReadAll(io.LimitReader(f, maxFile+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > maxFile {
+		return nil, os.ErrInvalid
+	}
+	return b, nil
+}
+
 func loadConfig(path string) (userConfig, error) {
 	var c userConfig
-	fi, err := os.Stat(path)
+	b, err := readBounded(path)
 	if os.IsNotExist(err) {
 		return c, nil
 	}
-	if err != nil {
-		return c, err
+	if errors.Is(err, os.ErrInvalid) {
+		return c, newErr(ReasonInventory, "%s is not a regular file of at most 1 MiB", filepath.Base(path))
 	}
-	if fi.Size() > 1<<20 {
-		return c, newErr(ReasonInventory, "%s is larger than 1 MiB", filepath.Base(path))
-	}
-	b, err := os.ReadFile(path)
 	if err != nil {
 		return c, err
 	}
