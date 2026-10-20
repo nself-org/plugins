@@ -127,6 +127,9 @@ func (c *fakeClient) DoQuery(ctx context.Context, method, path string, params ma
 	case method == "POST":
 		reply = "create-reply.json"
 	default:
+		if bearer != testToken {
+			f.t.Errorf("%s %s used a bearer that is not the installation token", method, path)
+		}
 		return rest.Response{Status: 200}, nil
 	}
 	if bearer != testToken {

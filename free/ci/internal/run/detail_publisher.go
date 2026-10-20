@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -108,7 +109,7 @@ func keyText(v string) string {
 // publisher returns the cached publisher or builds one. The cache key is a digest, never the key.
 func (h *checksDetail) publisher(s appSettings, pem string) (*checks.Publisher, error) {
 	sum := sha256.Sum256([]byte(pem))
-	sig := strings.Join([]string{s.App.AppID, s.App.InstallationID, s.APIURL, hex.EncodeToString(sum[:])}, "|")
+	sig := strings.Join([]string{s.App.AppID, s.App.InstallationID, s.APIURL, strconv.FormatBool(s.AllowPrivate), hex.EncodeToString(sum[:])}, "|")
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.pub != nil && h.sig == sig {
