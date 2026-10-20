@@ -9,10 +9,12 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/hosted"
+	"github.com/nself-org/plugins/free/ci/internal/providers/rest"
 	githubtmpl "github.com/nself-org/plugins/free/ci/templates/github"
 )
 
@@ -118,6 +120,18 @@ func TestDescribe(t *testing.T) {
 		if caps, err := f.provider(options{}).Describe(ctx, q); err != nil || caps != nil || len(f.Reqs) != 0 {
 			t.Fatalf("v1.4: %v %v %d", caps, err, len(f.Reqs))
 		}
+	})
+	t.Run("a missing credential reaches the caller", func(t *testing.T) {
+		f := newFakeGH(t)
+		p := hosted.New(hosted.Config{Client: func(context.Context) (*rest.Client, error) {
+			c := f.client()
+			c.Auth = func(context.Context) (string, error) {
+				return "", providers.NewError(providers.Config, "E700", "token_env", 0, time.Time{})
+			}
+			return c, nil
+		}})
+		_, err := p.Describe(ctx, q)
+		wantCode(t, err, "E700", "")
 	})
 	t.Run("a malformed repository is refused", func(t *testing.T) {
 		f := newFakeGH(t)

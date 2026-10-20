@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -203,11 +204,22 @@ func (f *fakeGH) serve(w http.ResponseWriter, req *http.Request) {
 	case strings.HasSuffix(p, "/dispatches") && req.Method == "POST":
 		f.dispatch(w, body)
 	case strings.HasSuffix(p, "/runs") && req.Method == "GET":
+		var ids []int64
+		for id := range f.Runs {
+			ids = append(ids, id)
+		}
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		per, _ := strconv.Atoi(req.URL.Query().Get("per_page"))
+		page, _ := strconv.Atoi(req.URL.Query().Get("page"))
+		if per <= 0 {
+			per = 30
+		}
+		if page <= 0 {
+			page = 1
+		}
 		var list []map[string]any
-		if !f.Stale {
-			for _, r := range f.Runs {
-				list = append(list, f.runJSON(r))
-			}
+		for i := (page - 1) * per; !f.Stale && i < len(ids) && i < page*per; i++ {
+			list = append(list, f.runJSON(f.Runs[ids[i]]))
 		}
 		writeJSON(w, 200, map[string]any{"workflow_runs": list})
 	case strings.HasSuffix(p, "/cancel"):

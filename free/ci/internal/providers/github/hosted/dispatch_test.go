@@ -115,6 +115,21 @@ func TestIdempotentDispatch(t *testing.T) {
 			t.Fatalf("%+v %v runs=%d", h2, err, len(f.Runs))
 		}
 	})
+	t.Run("the run on the second page of a busy listing is found", func(t *testing.T) {
+		f := newFakeGH(t)
+		f.DispatchMode = "204"
+		for i := 0; i < 100; i++ { // one full page of other people's runs, older than ours
+			f.NextID++
+			f.Runs[f.NextID] = &fakeRun{ID: f.NextID, Status: "completed", Event: "workflow_dispatch", Title: "nself-ci other", Login: testLogin}
+		}
+		h, err := f.provider(options{}).Dispatch(ctx, attemptFor("att-1", 1))
+		if err != nil || h.RunID != "acme/widgets/9101" {
+			t.Fatalf("%+v %v", h, err)
+		}
+		if pages := len(f.requests("GET", "/workflows/nself-ci-dispatch.yml/runs")); pages != 2 {
+			t.Fatalf("listing pages = %d", pages)
+		}
+	})
 	t.Run("two runs with one nonce are ambiguous", func(t *testing.T) {
 		f := newFakeGH(t)
 		f.DispatchMode = "204"

@@ -13,6 +13,7 @@ package hosted
 import (
 	"context"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +21,11 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/providers/rest"
 )
 
-const window = 2 * time.Minute
+const (
+	window   = 2 * time.Minute
+	pageSize = 100
+	maxPages = 3
+)
 
 // findRun lists workflow_dispatch runs created in [from, to] and returns the one run titled with nonce.
 func (p *Provider) findRun(ctx context.Context, c *rest.Client, repo repoRef, nonce string, from, to time.Time) (int64, bool, error) {
@@ -28,18 +33,26 @@ func (p *Provider) findRun(ctx context.Context, c *rest.Client, repo repoRef, no
 	if err != nil {
 		return 0, false, err
 	}
-	q := url.Values{}
-	q.Set("event", "workflow_dispatch")
-	q.Set("created", from.UTC().Format(time.RFC3339)+".."+to.UTC().Format(time.RFC3339))
-	q.Set("per_page", "100")
-	var list struct {
-		Runs []runInfo `json:"workflow_runs"`
-	}
-	if _, err = c.DoQuery(ctx, "GET", workflowRuns, repo.params(), q, nil, &list); err != nil {
-		return 0, false, err
+	var runs []runInfo
+	for page := 1; page <= maxPages; page++ {
+		q := url.Values{}
+		q.Set("event", "workflow_dispatch")
+		q.Set("created", from.UTC().Format(time.RFC3339)+".."+to.UTC().Format(time.RFC3339))
+		q.Set("per_page", strconv.Itoa(pageSize))
+		q.Set("page", strconv.Itoa(page))
+		var list struct {
+			Runs []runInfo `json:"workflow_runs"`
+		}
+		if _, err = c.DoQuery(ctx, "GET", workflowRuns, repo.params(), q, nil, &list); err != nil {
+			return 0, false, err
+		}
+		runs = append(runs, list.Runs...)
+		if len(list.Runs) < pageSize {
+			break
+		}
 	}
 	var titled, mine []runInfo
-	for _, r := range list.Runs {
+	for _, r := range runs {
 		if strings.Contains(r.DisplayTitle, nonce) {
 			titled = append(titled, r)
 			if r.Actor.Login == login {

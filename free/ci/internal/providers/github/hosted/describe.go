@@ -14,6 +14,7 @@ package hosted
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"time"
@@ -58,7 +59,7 @@ func (p *Provider) Describe(ctx context.Context, q providers.Query) ([]model.Cap
 	visibility := "private"
 	var info repoInfo
 	if _, err = c.Do(ctx, "GET", repoPath, repo.params(), nil, &info); err != nil {
-		if providers.ClassOf(err) == providers.Auth && isCredentialMissing(err) {
+		if isCredentialMissing(err) {
 			return nil, err
 		}
 	} else if info.Visibility == visibilityPublic && !info.Private {
@@ -73,8 +74,8 @@ func (p *Provider) Describe(ctx context.Context, q providers.Query) ([]model.Cap
 }
 
 func isCredentialMissing(err error) bool {
-	pe, ok := err.(*providers.Error)
-	return ok && pe.Code == "E700"
+	var pe *providers.Error
+	return errors.As(err, &pe) && pe.Code == "E700"
 }
 
 func known[T any](v T, now time.Time) model.Fact[T] {
