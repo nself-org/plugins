@@ -24,6 +24,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	pdoctor "github.com/nself-org/plugins/free/ci/internal/providers/doctor"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/hosted"
+	"github.com/nself-org/plugins/free/ci/internal/providers/health"
 	"github.com/nself-org/plugins/free/ci/internal/providers/runtime"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -42,6 +43,11 @@ func serveHosted(st *store.Store, home string, allowed []string) (undo func()) {
 
 // serveHostedWith is serveHosted with the policy source given (tests).
 func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effective, error), allowed []string) (undo func()) {
+	oldSender := report.Default
+	sender := *oldSender
+	sender.Store = st
+	report.Default = &sender
+	health.UseStore(st)
 	runtime.UseStore(st)
 	runtime.UsePolicy(src)
 	hosted.UsePolicy(src)
@@ -59,6 +65,9 @@ func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effecti
 	})
 	c.SetDescribeTTL(hostedDescribeTTL)
 	return func() {
+		health.Default().Wait()
+		health.UseStore(nil)
+		report.Default = oldSender
 		c.SetTargetsFor(nil)
 		c.SetDescribeTTL(0)
 		hosted.UseAttempts(nil)
