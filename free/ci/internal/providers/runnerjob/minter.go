@@ -17,7 +17,6 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
-	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
 
@@ -72,8 +71,8 @@ func RegisterMinter(kind string, m Minter) error {
 var installOnce sync.Once
 var installErr error
 
-// InstallCoordinator registers the coordinator-side parts once: the transport preparer, the run
-// finalizer and the orphan sweep Reconciler. A provider package calls it from its init(); the agent
+// InstallCoordinator registers the coordinator-side parts once: the transport preparer and the orphan
+// sweep Reconciler (the run finalizer is registered by the composition root, which may import run). A provider package calls it from its init(); the agent
 // binary, which links this package for its hook, never does.
 func InstallCoordinator() error {
 	installOnce.Do(func() {
@@ -81,7 +80,6 @@ func InstallCoordinator() error {
 			installErr = err
 			return
 		}
-		cirun.RegisterFinalizer(finalizer{})
 		installErr = coordinator.RegisterReconciler(&Sweeper{})
 	})
 	return installErr

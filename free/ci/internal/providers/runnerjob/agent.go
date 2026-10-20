@@ -2,9 +2,9 @@ package runnerjob
 
 // Purpose: the agent-side half of the restricted network scope for a runner job (Epic D6, review F6).
 // A restricted job may reach only the package registries and the hosts policy declares; a forge runner
-// must also reach its forge. InstallAgent registers a job hook that notes, for the attempts whose lease
-// carries a runner credential, the provider's host list, and gives the scope planner a hosts source that
-// answers only for those attempts. Every other restricted job keeps the unchanged allowlist.
+// must also reach its forge. Hook is a job hook that notes, for the attempts whose lease carries a runner
+// credential, the provider's host list, and AttemptHosts is the hosts source for the scope planner that
+// answers only for those attempts (the agent's composition root wires both, cmd/agent/runnerjob_wire.go). Every other restricted job keeps the unchanged allowlist.
 // Inputs:  the lease (the runner credential kind and the provider marker of the job); the attempt id.
 // Outputs: AttemptHosts for run.RegisterNetscopeHosts; the "runnerjob" job hook.
 // Constraints: the hosts are exact names (the scope allowlist has no wildcard), so the numbered
@@ -20,7 +20,6 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
 	"github.com/nself-org/plugins/free/ci/internal/isolation"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
-	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
 // ProviderHosts is the host allowlist of a forge's runner, by provider id. GitHub: the web and API
@@ -80,14 +79,4 @@ func Hook() session.JobHook {
 			return nil
 		},
 	}
-}
-
-// InstallAgent wires the hook and the hosts source into this process. The agent's composition root
-// calls it once at start.
-func InstallAgent() error {
-	if err := session.RegisterJobHook(Hook()); err != nil {
-		return err
-	}
-	cirun.RegisterNetscopeHosts(AttemptHosts)
-	return nil
 }

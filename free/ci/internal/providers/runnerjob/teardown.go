@@ -18,7 +18,6 @@ import (
 
 	"github.com/nself-org/cli/sdk/go/v2/compat"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
-	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
 // OrphanAge is how old an idle registration must be before the sweep removes it: the forge honours an
@@ -28,20 +27,17 @@ const OrphanAge = 70 * time.Minute
 // SweepEvery is the cadence of the orphan sweep.
 const SweepEvery = 5 * time.Minute
 
-type finalizer struct{}
-
-func (finalizer) Name() string { return "runnerjob" }
-
-// Finalize deregisters the runner of every attempt of the run that has one.
-func (finalizer) Finalize(ctx context.Context, info cirun.RunInfo) error {
+// Finalize removes the registration of every listed attempt that has one. The composition root adapts it
+// to run.Finalizer (cmd/providers_github_demand.go): this package may not import run.
+func Finalize(ctx context.Context, attempts []string) error {
 	led := CurrentLedger()
 	if led == nil {
 		return nil
 	}
 	var errs []error
-	for _, j := range info.Jobs {
-		if j.AttemptID != "" {
-			errs = append(errs, Teardown(ctx, led, j.AttemptID))
+	for _, a := range attempts {
+		if a != "" {
+			errs = append(errs, Teardown(ctx, led, a))
 		}
 	}
 	return errors.Join(errs...)

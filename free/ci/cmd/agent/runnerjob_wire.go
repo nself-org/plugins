@@ -4,6 +4,13 @@ package main
 // and the hosts source that give a runner job's restricted network scope its forge host allowlist.
 // Both act only for a lease that carries a runner credential, so every other job is unchanged.
 
-import "github.com/nself-org/plugins/free/ci/internal/providers/runnerjob"
+import (
+	"github.com/nself-org/plugins/free/ci/internal/agent/session"
+	"github.com/nself-org/plugins/free/ci/internal/providers/runnerjob"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
+)
 
-func init() { must(runnerjob.InstallAgent()) }
+func init() {
+	must(session.RegisterJobHook(runnerjob.Hook()))
+	cirun.RegisterNetscopeHosts(runnerjob.AttemptHosts)
+}

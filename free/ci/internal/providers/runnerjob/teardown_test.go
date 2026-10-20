@@ -8,26 +8,11 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/runnerjob"
-	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
-func closedRun(attempts ...string) cirun.RunInfo {
-	var jobs []cirun.JobOutcome
-	for _, a := range attempts {
-		jobs = append(jobs, cirun.JobOutcome{AttemptID: a})
-	}
-	return cirun.RunInfo{RunID: "run-1", Jobs: jobs}
-}
-
-func finalizerOf(t *testing.T) cirun.Finalizer {
-	t.Helper()
-	for _, f := range cirun.Registered.Finalizers {
-		if f.Name() == "runnerjob" {
-			return f
-		}
-	}
-	t.Fatal("the runnerjob finalizer is not registered")
-	return nil
+// finalize is what the run finalizer (cmd/providers_github_demand.go) calls for a closed run.
+func finalize(ctx context.Context, attempts ...string) error {
+	return runnerjob.Finalize(ctx, attempts)
 }
 
 // TestFinalizerDeregistersAndFreesTheSlot: when a run closes, the runner of each of its attempts is
@@ -46,8 +31,7 @@ func TestFinalizerDeregistersAndFreesTheSlot(t *testing.T) {
 	if forge.alive() != 1 {
 		t.Fatal("registration should exist before the run closes")
 	}
-	f := finalizerOf(t)
-	if err := f.Finalize(ctx, closedRun("attempt-z", "attempt-without-runner", "")); err != nil {
+	if err := finalize(ctx, "attempt-z", "attempt-without-runner", ""); err != nil {
 		t.Fatal(err)
 	}
 	if forge.alive() != 0 {
@@ -56,7 +40,7 @@ func TestFinalizerDeregistersAndFreesTheSlot(t *testing.T) {
 	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "22", 1); !ok {
 		t.Fatal("the slot of a finished demand must be free")
 	}
-	if err := f.Finalize(ctx, closedRun("attempt-z")); err != nil || len(forge.deregCalls) != 1 {
+	if err := finalize(ctx, "attempt-z"); err != nil || len(forge.deregCalls) != 1 {
 		t.Fatalf("second finalize: %v, deregister calls %v", err, forge.deregCalls)
 	}
 }
@@ -69,7 +53,7 @@ func TestFinalizerKeepsTheRowWhenAbsenceIsNotProven(t *testing.T) {
 		t.Fatal(err)
 	}
 	forge.deregErr = providers.NewError(providers.Config, "E707", "deregister_unverified", 0, epoch)
-	err := finalizerOf(t).Finalize(context.Background(), closedRun("attempt-y"))
+	err := finalize(context.Background(), "attempt-y")
 	if err == nil || !strings.Contains(err.Error(), "E707") {
 		t.Fatalf("want E707, got %v", err)
 	}
@@ -78,7 +62,7 @@ func TestFinalizerKeepsTheRowWhenAbsenceIsNotProven(t *testing.T) {
 		t.Fatalf("row state %q", row.State)
 	}
 	forge.deregErr = nil
-	if err = finalizerOf(t).Finalize(context.Background(), closedRun("attempt-y")); err != nil || forge.alive() != 0 {
+	if err = finalize(context.Background(), "attempt-y"); err != nil || forge.alive() != 0 {
 		t.Fatalf("retry: %v alive %d", err, forge.alive())
 	}
 }

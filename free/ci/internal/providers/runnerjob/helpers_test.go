@@ -141,7 +141,8 @@ func use(t *testing.T) *store.Store {
 	driver.mu.Lock()
 	driver.lease, driver.runs = protocol.Lease{}, 0
 	driver.mu.Unlock()
-	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+	lastStorePath = filepath.Join(t.TempDir(), "state.db")
+	st, err := store.Open(lastStorePath, store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,6 +168,7 @@ func goodNode() model.Capability {
 	c.Trust.Isolation = known(model.Isolation("sandboxed-container"))
 	c.Trust.Network = known([]model.NetworkScope{"none", "restricted"})
 	c.Tools.GVisor = known(true)
+	c.Availability.PluggedIn, c.Availability.Interactive = known(true), known("idle") // the background band needs both
 	return c
 }
 
@@ -200,3 +202,11 @@ func ledgerRunner(attempt string) (runnerjob.Runner, bool, error) {
 
 func jobRoot() session.JobRoot { return session.JobRoot{Dir: "/nonexistent"} }
 func outcome() session.Outcome { return session.Outcome{State: "passed"} }
+
+func itoa(n int) string { return strconv.Itoa(n) }
+
+// storePath is where use() put the database; the store keeps its path, so the test reads it from a
+// package variable set by use().
+func storePath(*store.Store) string { return lastStorePath }
+
+var lastStorePath string

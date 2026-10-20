@@ -33,8 +33,17 @@ const Source = "github"
 // CredentialKind is the lease credential kind of a GitHub JIT config.
 const CredentialKind = "github-jitconfig"
 
-// RunnerCommand starts the one runner of the image (the image's own run.sh).
-var RunnerCommand = []string{"/home/runner/run.sh"}
+// runnerScript starts the one runner of the image under the hardened profile. The stock run.sh cannot: the
+// profile's root file system is read-only, /tmp is noexec and the runner writes next to its own binary
+// (_diag, _work, run-helper.sh). So the script copies bin/ (88 MB) into the writable workspace, which
+// can execute, links the read-only externals/ (371 MB) and runs Runner.Listener from there. The runner
+// reads the one-job registration from ACTIONS_RUNNER_INPUT_JITCONFIG, which cred-wrapper set in this
+// shell's environment; the script never names it.
+const runnerScript = `set -e; r=/repo/runner; mkdir -p "$r/_work"; cp -a /home/runner/bin "$r/bin"; ` +
+	`ln -s /home/runner/externals "$r/externals"; exec "$r/bin/Runner.Listener" run`
+
+// RunnerCommand is the job command of a GitHub runner job.
+var RunnerCommand = []string{"sh", "-c", runnerScript}
 
 // Handler implements providers.DemandHandler. The zero value uses the process-wide policy source, the
 // pinned image row and the bound ledger.
