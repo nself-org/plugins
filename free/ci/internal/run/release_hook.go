@@ -19,6 +19,7 @@ package run
 // API of tests and embedders; the shipped binary uses the registered chain).
 // ReleaseInputs is the digester seam: until a package registers it, freshness is
 // unknown and every release job is refused with deps_stale (fail closed).
+// internal/evidence registers it and ReleaseWorktree (release_hook.go there).
 
 import (
 	"context"
@@ -34,6 +35,12 @@ import (
 // now the state of the working tree under root. The package that owns input
 // digests registers it (internal/evidence imports run, so run cannot call it).
 var ReleaseInputs job.Inputs
+
+// ReleaseWorktree probes the checkout under a root for the release gate: its
+// HEAD sha and whether it is dirty. Nil means job.GitWorktree. internal/evidence
+// registers its own binding (ReadWorktree), so the gate and the run's evidence
+// agree on what dirty means.
+var ReleaseWorktree job.Worktree
 
 // releaseStash holds the provider of every release attempt that is being submitted.
 var releaseStash = job.NewStash()
@@ -75,7 +82,11 @@ func releaseDispatch(ctx context.Context, s AttemptSpec, prev DispatchHook) (Adm
 	if sess == nil {
 		return Admitted{}, releaseFailure(&job.Error{Code: job.CodeNotAdmitted, Reason: job.NoEvidence, Message: "the run has no session"})
 	}
-	g := job.Gatherer{Store: sess.Store, Worktree: job.GitWorktree(job.Capture(report.Capture)), Inputs: ReleaseInputs, RepoID: shortDigest}
+	probe := ReleaseWorktree
+	if probe == nil {
+		probe = job.GitWorktree(job.Capture(report.Capture))
+	}
+	g := job.Gatherer{Store: sess.Store, Worktree: probe, Inputs: ReleaseInputs, RepoID: shortDigest}
 	attempt := job.Attempt{RunID: sess.RunID, Revision: sess.Revision, Deps: s.Job.Deps,
 		Dirty: sess.Dirty, ConfigOutside: sess.ConfigOutside, Subset: sess.Subset}
 	if s.Pipeline != nil {

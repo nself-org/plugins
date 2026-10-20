@@ -49,16 +49,6 @@ var newSBOMStep = func(home string, pin sbom.Pin) android.SBOMStep { return andr
 func init() {
 	registerV15("build", subcommandEntry{V15Only: true, Hidden: true, Handler: runBuildV15,
 		Flags: func() *flag.FlagSet { return buildV15Flags(&buildOpts{}, flag.ContinueOnError) }})
-	if cirun.ReleaseInputs == nil { // D-1074: freshness of a release run, bound (git objects) and now (tree)
-		cirun.ReleaseInputs = func(ctx context.Context, root, rev string) (model.InputDigests, model.InputDigests, error) {
-			bound, err := evidence.InputsAt(ctx, report.Capture, root, rev)
-			if err != nil {
-				return bound, model.InputDigests{}, err
-			}
-			now, err := evidence.InputsOf(os.DirFS(root))
-			return bound, now, err
-		}
-	}
 }
 
 // buildV15Flags declares the unchanged v1.4 flags of `build`.

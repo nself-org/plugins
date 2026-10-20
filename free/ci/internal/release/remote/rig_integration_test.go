@@ -8,8 +8,8 @@ package remote_test
 // real run store and blob store, the real user API over TLS 1.3 with a real PKI, role service and
 // scoped tokens, and the two release routes registered through clientapi.RegisterRoute.
 // Constraints: a missing prerequisite (git) is t.Fatal, never t.Skip; 127.0.0.1 only; every key is
-// generated per test; the only fakes are the release-inputs digester seam (until internal/evidence
-// registers it, D-1074) and the secret store behind each resolver.
+// generated per test; the only fakes are the release-inputs digester seam (a stand-in that matches
+// internal/evidence's own for a clean tree) and the secret store behind each resolver.
 
 import (
 	"bytes"

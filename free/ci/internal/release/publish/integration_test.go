@@ -8,8 +8,9 @@ package publish_test
 // blob store and verifier, and the real signing handler (with a generated
 // release key standing in for `artifacts key init`) as the signer.
 // Constraints: a missing prerequisite (git) is t.Fatal, never t.Skip; no
-// network; the only fakes are the release-inputs digester seam (until
-// internal/evidence registers it, D-1074) and the secret store behind the signer.
+// network; the only fakes are the release-inputs digester seam (a
+// stand-in that matches internal/evidence's own for a clean tree) and the
+// secret store behind the signer.
 
 import (
 	"bytes"
