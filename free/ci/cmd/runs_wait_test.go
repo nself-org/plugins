@@ -193,7 +193,7 @@ func TestRunsWait(t *testing.T) {
 		runsHome(t)
 		fake := &fakeRemote{views: []cirun.RunView{{ID: "remote-1", Status: "running"}, {ID: "remote-1", Status: "passed", Jobs: []cirun.JobView{{Name: "build", State: "passed"}}}}}
 		old := cirun.Registered.Remote
-		cirun.Registered.Remote = append(append([]cirun.RemoteResolver(nil), old...), fake)
+		cirun.Registered.Remote = []cirun.RemoteResolver{fake} // instead of the real client (P7-NODE-19), which pins https and a root
 		t.Cleanup(func() { cirun.Registered.Remote = old })
 		code, w, _ := waitJSON(t, "remote-1", "--coordinator", "http://127.0.0.1:9", "--timeout", "10s", "--json")
 		if code != 0 || w.Data.State != "passed" || len(w.Data.Jobs) != 1 {

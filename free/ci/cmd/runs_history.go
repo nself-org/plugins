@@ -55,6 +55,9 @@ func runRunsList(args []string) int {
 	if err != nil || len(pos) > 0 || f.limit < 1 {
 		return usageErr("nself ci runs list [--limit N] [--json] [--repo dir]")
 	}
+	if code, ok := coordRuns(context.Background(), "", f.json); ok { // a coordinator or live local serve owns the runs (P7-NODE-19)
+		return code
+	}
 	root, err := evidenceRoot(f.repo)
 	if err != nil {
 		return exitForError(err)
@@ -107,6 +110,11 @@ func runRunsPrune(args []string) int {
 	pos, err := parseMixed(newHistoryFlagSet(&f, true), args)
 	if err != nil || len(pos) > 0 || f.keep < 0 || f.maxAgeDays < 0 || f.maxLogBytes < 0 {
 		return usageErr("nself ci runs prune [--dry-run] [--keep N] [--max-age-days N] [--max-log-bytes N] [--json]")
+	}
+	if !f.dryRun { // P7-NODE-19: a serve owns the store, a second writer must not prune it
+		if code, ok := refuseWhileServe("`runs prune`"); ok {
+			return code
+		}
 	}
 	home := os.Getenv("NSELF_CI_HOME")
 	pol, perr := history.LoadPolicy(home)

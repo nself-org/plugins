@@ -115,6 +115,9 @@ func runResolve(args []string) int {
 		fmt.Fprintln(os.Stderr, resolveUsage)
 		return 1
 	}
+	if code, ok := refuseWhileServe("`runs resolve`"); ok { // P7-NODE-19: a serve owns the store
+		return code
+	}
 	ctx := context.Background()
 	st, err := cirun.OpenStore(runsStorePath())
 	if err != nil {

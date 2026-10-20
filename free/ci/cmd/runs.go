@@ -83,6 +83,9 @@ func runRuns(args []string) int {
 		}
 	}
 	ctx := context.Background()
+	if code, ok := coordRuns(ctx, ref, asJSON); ok { // a coordinator or live local serve owns the runs (P7-NODE-19)
+		return code
+	}
 	for _, r := range cirun.Registered.Remote {
 		if v, ok, err := r.Resolve(ctx, ref); err == nil && ok {
 			return printRun(asJSON, v)
@@ -169,6 +172,9 @@ func runCancel(args []string) int {
 		return 1
 	}
 	ctx := context.Background()
+	if code, ok := coordCancel(ctx, args[0]); ok { // never open the store of a local serve (P7-NODE-19)
+		return code
+	}
 	st, err := cirun.OpenStore(runsStorePath())
 	if err != nil {
 		return exitForError(err)
