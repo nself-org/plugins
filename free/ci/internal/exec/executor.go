@@ -229,6 +229,9 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	} else {
 		result.ExitCode, result.Signal, result.Err = e.runProcess(ctx, s, workspace, append(env, secretEnv...))
 	}
+	if s.AfterExit != nil && result.Err == nil && ctx.Err() == nil {
+		result.Err = s.AfterExit(result.ExitCode)
+	}
 	if s.AfterJob != nil && result.Err == nil && result.ExitCode == 0 && ctx.Err() == nil {
 		result.Err = s.AfterJob(ctx, pinned)
 	}

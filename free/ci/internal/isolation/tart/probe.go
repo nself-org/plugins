@@ -102,13 +102,11 @@ func (p *Profile) probeNow(ctx context.Context) isolation.Availability {
 		return unavailable(isolation.ReasonProbeFailed, err.Error(), facts)
 	}
 	foreign, own := vmCounts(vms)
-	if p.slots.Free(foreign, own) == 0 {
-		// two orphans of a dead coordinator must not block the runner for good: sweep, then look again
-		p.sweepOnce(pctx, "tart-probe")
-		if again, err := listVMs(pctx, tool, p.opts.Tart); err == nil {
-			vms = again
-			foreign, own = vmCounts(vms)
-		}
+	booting := p.bootingElsewhere(stateDir(p.home("")), vms)
+	if p.slots.Free(foreign, own+booting) == 0 {
+		// two orphans of a dead coordinator must not block the runner for good, but a sweep deletes each clone
+		// under a two minute budget: it runs beside the probe, which answers "no slot" now and finds the room next time
+		p.sweepAsync(ctx, "tart-probe")
 	}
 	for _, v := range vms {
 		if v.Name == image || strings.TrimPrefix(v.Name, "local/") == image {
@@ -118,7 +116,8 @@ func (p *Profile) probeNow(ctx context.Context) isolation.Availability {
 	if facts["base_image_cached"] == "" {
 		facts["base_image_cached"] = "false"
 	}
-	free := p.slots.Free(foreign, own)
+	free := p.slots.Free(foreign, own+booting)
+	facts["booting_other"] = strconv.Itoa(booting)
 	facts["running_vms"] = strconv.Itoa(foreign + own)
 	facts["foreign_running"], facts["own_running"] = strconv.Itoa(foreign), strconv.Itoa(own)
 	facts["free_slots"] = strconv.Itoa(free)

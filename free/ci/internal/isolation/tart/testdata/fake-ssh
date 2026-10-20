@@ -6,6 +6,8 @@ echo "$*" >> "$D/ssh.log"
 [ "$1" = "-F" ] || { echo "no -F" >&2; exit 255; }
 cfg="$2"; alias="$3"; shift 3
 [ -n "$FAKE_SSH_FAIL" ] && exit 255
+# FAKE_SSH_DROP: the transport fails once the job session starts (the readiness probe and the copy still work)
+if [ "$1" = "/bin/bash -s" ] && [ -n "$FAKE_SSH_DROP" ] && [ -z "$FAKE_SSH_NETCHECK" ]; then cat >/dev/null; exit 255; fi
 [ -f "$cfg" ] || exit 255
 home="$D/vms/$alias/home"
 [ -d "$home" ] || { echo "no VM $alias" >&2; exit 255; }
@@ -20,6 +22,8 @@ if [ "$1" = "/bin/bash -s" ] && [ -n "$FAKE_SSH_NETCHECK" ]; then
       case "$line" in
         "dns "*) a=${line#dns }; case " $FAKE_SSH_UP " in *" dns:$a "*) echo "UP dns:$a" ;; *) echo "DOWN dns:$a" ;; esac ;;
         "png "*) a=${line#png }; case " $FAKE_SSH_UP " in *" $a "*) echo "UP $a" ;; *) echo "DOWN $a" ;; esac ;;
+        "png6 "*) a=${line#png6 }; case "$a" in ::1) echo "UP $a" ;; *) case " $FAKE_SSH_UP " in *" $a "*) echo "UP $a" ;; *) echo "DOWN $a" ;; esac ;; esac ;;
+        "rt6 "*) a=${line#rt6 }; case " $FAKE_SSH_UP " in *" route:$a "*) echo "UP route:$a" ;; *) echo "DOWN route:$a" ;; esac ;;
         "tcp "*) set -- $line; a="$2:$3"; case " $FAKE_SSH_OPEN " in *" $a "*) echo "OPEN $a" ;; *) echo "SHUT $a" ;; esac ;;
       esac
     done

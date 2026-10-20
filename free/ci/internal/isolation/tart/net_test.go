@@ -121,6 +121,15 @@ func goodOutput(c netChecks) string {
 	for _, a := range c.PingDown {
 		b.WriteString("DOWN " + a.String() + "\n")
 	}
+	for _, a := range c.Ping6Up {
+		b.WriteString("UP " + a.String() + "\n")
+	}
+	for _, a := range c.Ping6Down {
+		b.WriteString("DOWN " + a.String() + "\n")
+	}
+	for _, a := range c.Route6Down {
+		b.WriteString("DOWN route:" + a.String() + "\n")
+	}
 	for _, d := range c.DNSDown {
 		b.WriteString("DOWN dns:" + d + "\n")
 	}
@@ -132,7 +141,7 @@ func TestPlanChecksAndJudge(t *testing.T) {
 	c := planChecks(softnetPlan{Scope: "restricted"}, gw, &px, facts())
 	script := string(c.script())
 	for _, want := range []string{"tcp 192.168.64.1 3128", "tcp 1.1.1.1 443", "tcp 2606:4700:4700::1111 443", "tcp 192.168.64.1 22", "tcp 192.168.64.1 445",
-		"png 1.1.1.1", "png 192.168.1.20", "png 5.75.235.42", "dns example.com", "uname -s"} {
+		"png 1.1.1.1", "png6 ::1", "png6 2606:4700:4700::1111", "rt6 2606:4700:4700::1111", "png 192.168.1.20", "png 5.75.235.42", "dns example.com", "uname -s"} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("script lacks %q:\n%s", want, script)
 		}
@@ -154,14 +163,21 @@ func TestPlanChecksAndJudge(t *testing.T) {
 		"public v6 leaks": func(s string) string {
 			return strings.Replace(s, "SHUT 2606:4700:4700::1111:443", "OPEN 2606:4700:4700::1111:443", 1)
 		},
-		"lan leaks":            func(s string) string { return strings.Replace(s, "DOWN 192.168.1.20", "UP 192.168.1.20", 1) },
-		"host sshd at gateway": func(s string) string { return strings.Replace(s, "SHUT 192.168.64.1:22", "OPEN 192.168.64.1:22", 1) },
-		"dns leaks":            func(s string) string { return strings.Replace(s, "DOWN dns:example.com", "UP dns:example.com", 1) },
-		"linux guest":          func(s string) string { return strings.Replace(s, "OS Darwin", "OS Linux", 1) },
-		"no gateway answer":    func(s string) string { return strings.Replace(s, "UP 192.168.64.1", "DOWN 192.168.64.1", 1) },
-		"silence":              func(string) string { return "" },
-		"missing target":       func(s string) string { return strings.Replace(s, "DOWN 5.75.235.42\n", "", 1) },
-		"missing tcp":          func(s string) string { return strings.Replace(s, "SHUT 192.168.64.1:445\n", "", 1) },
+		"public v6 ping leaks": func(s string) string {
+			return strings.Replace(s, "DOWN 2606:4700:4700::1111", "UP 2606:4700:4700::1111", 1)
+		},
+		"v6 route exists": func(s string) string {
+			return strings.Replace(s, "DOWN route:2606:4700:4700::1111", "UP route:2606:4700:4700::1111", 1)
+		},
+		"no v6 positive control": func(s string) string { return strings.Replace(s, "UP ::1", "DOWN ::1", 1) },
+		"lan leaks":              func(s string) string { return strings.Replace(s, "DOWN 192.168.1.20", "UP 192.168.1.20", 1) },
+		"host sshd at gateway":   func(s string) string { return strings.Replace(s, "SHUT 192.168.64.1:22", "OPEN 192.168.64.1:22", 1) },
+		"dns leaks":              func(s string) string { return strings.Replace(s, "DOWN dns:example.com", "UP dns:example.com", 1) },
+		"linux guest":            func(s string) string { return strings.Replace(s, "OS Darwin", "OS Linux", 1) },
+		"no gateway answer":      func(s string) string { return strings.Replace(s, "UP 192.168.64.1", "DOWN 192.168.64.1", 1) },
+		"silence":                func(string) string { return "" },
+		"missing target":         func(s string) string { return strings.Replace(s, "DOWN 5.75.235.42\n", "", 1) },
+		"missing tcp":            func(s string) string { return strings.Replace(s, "SHUT 192.168.64.1:445\n", "", 1) },
 	}
 	for name, mut := range mutations {
 		if err := c.judge([]byte(mut(good))); !isScopeErr(err) {

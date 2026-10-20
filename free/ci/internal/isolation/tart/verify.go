@@ -37,13 +37,17 @@ type netChecks struct {
 	// TCPOpen must connect (the proxy). TCPShut must not. PingUp must answer (the gateway). PingDown must not.
 	TCPOpen, TCPShut []netip.AddrPort
 	PingUp, PingDown []netip.Addr
+	// Ping6Up must answer over IPv6 (the guest's own loopback: the control that proves ping6 works at all),
+	// Ping6Down must not. Route6Down are IPv6 destinations the guest must have no route to.
+	Ping6Up, Ping6Down, Route6Down []netip.Addr
 	// DNSDown are names that must not resolve through the VM's resolver.
 	DNSDown []string
 }
 
 // planChecks derives the checks for a plan.
 func planChecks(plan softnetPlan, gateway netip.Addr, proxy *netip.AddrPort, f netscope.Facts) netChecks {
-	c := netChecks{PingUp: []netip.Addr{gateway}, PingDown: []netip.Addr{publicCanary}}
+	c := netChecks{PingUp: []netip.Addr{gateway}, PingDown: []netip.Addr{publicCanary},
+		Ping6Up: []netip.Addr{netip.IPv6Loopback()}, Ping6Down: []netip.Addr{publicCanary6}, Route6Down: []netip.Addr{publicCanary6}}
 	c.TCPShut = append(c.TCPShut, netip.AddrPortFrom(publicCanary, 443), netip.AddrPortFrom(publicCanary, 80), netip.AddrPortFrom(publicCanary6, 443))
 	for _, port := range gatewayServices {
 		if proxy == nil || proxy.Port() != port {
@@ -92,12 +96,20 @@ func (c netChecks) script() []byte {
 	b.WriteString("bound() { \"$@\" >/dev/null 2>&1 & p=$!; ( sleep 8; kill $p ) >/dev/null 2>&1 & k=$!; wait $p 2>/dev/null; rc=$?; kill $k >/dev/null 2>&1; return $rc; }\n")
 	b.WriteString("tcp() { if bound bash -c 'exec 3<>/dev/tcp/$0/$1' \"$1\" \"$2\"; then echo \"OPEN $1:$2\"; else echo \"SHUT $1:$2\"; fi; }\n")
 	b.WriteString("png() { if bound ping -c 1 -t 2 \"$1\"; then echo \"UP $1\"; else echo \"DOWN $1\"; fi; }\n")
+	b.WriteString("png6() { if bound ping6 -c 1 \"$1\"; then echo \"UP $1\"; else echo \"DOWN $1\"; fi; }\n")
+	b.WriteString("rt6() { if bound route -n get -inet6 \"$1\"; then echo \"UP route:$1\"; else echo \"DOWN route:$1\"; fi; }\n")
 	b.WriteString("dns() { if bound nslookup -timeout=3 -retry=1 \"$1\"; then echo \"UP dns:$1\"; else echo \"DOWN dns:$1\"; fi; }\n")
 	for _, ap := range append(append([]netip.AddrPort(nil), c.TCPOpen...), c.TCPShut...) {
 		fmt.Fprintf(&b, "tcp %s %d &\n", ap.Addr(), ap.Port())
 	}
 	for _, a := range append(append([]netip.Addr(nil), c.PingUp...), c.PingDown...) {
 		fmt.Fprintf(&b, "png %s &\n", a)
+	}
+	for _, a := range append(append([]netip.Addr(nil), c.Ping6Up...), c.Ping6Down...) {
+		fmt.Fprintf(&b, "png6 %s &\n", a)
+	}
+	for _, a := range c.Route6Down {
+		fmt.Fprintf(&b, "rt6 %s &\n", a)
 	}
 	for _, n := range c.DNSDown {
 		fmt.Fprintf(&b, "dns %s &\n", n)
@@ -133,6 +145,11 @@ func (c netChecks) judge(out []byte) error {
 			return isolation.ScopeUnenforceable("the network check has no positive control: the VM got no answer from the gateway %s", a)
 		}
 	}
+	for _, a := range c.Ping6Up { // the control that shows IPv6 ICMP works at all
+		if got[a.String()] != "UP" {
+			return isolation.ScopeUnenforceable("the network check has no IPv6 positive control: ping6 got no answer from %s inside the VM", a)
+		}
+	}
 	for _, ap := range c.TCPShut {
 		switch got[tcpKey(ap)] {
 		case "SHUT":
@@ -149,6 +166,24 @@ func (c netChecks) judge(out []byte) error {
 			return isolation.ScopeUnenforceable("the VM can reach %s, which the network scope forbids", a)
 		default:
 			return isolation.ScopeUnenforceable("the network check did not report on %s", a)
+		}
+	}
+	for _, a := range c.Ping6Down {
+		switch got[a.String()] {
+		case "DOWN":
+		case "UP":
+			return isolation.ScopeUnenforceable("the VM can reach %s over IPv6, which the network scope forbids (softnet filters IPv4 only)", a)
+		default:
+			return isolation.ScopeUnenforceable("the network check did not report on %s", a)
+		}
+	}
+	for _, a := range c.Route6Down {
+		switch got["route:"+a.String()] {
+		case "DOWN":
+		case "UP":
+			return isolation.ScopeUnenforceable("the VM has an IPv6 route to %s, which the network scope forbids (softnet filters IPv4 only)", a)
+		default:
+			return isolation.ScopeUnenforceable("the network check did not report on the IPv6 route to %s", a)
 		}
 	}
 	for _, n := range c.DNSDown {

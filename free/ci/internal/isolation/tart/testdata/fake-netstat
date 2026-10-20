@@ -1,0 +1,7 @@
+#!/bin/sh
+# Fake `netstat -anv -p tcp`: prints the file named by FAKE_NETSTAT_FILE after the header; FAKE_NETSTAT_FAIL=1 fails.
+[ -n "$FAKE_NETSTAT_FAIL" ] && { echo "netstat: boom" >&2; exit 1; }
+echo "Active Internet connections (including servers)"
+echo "Proto Recv-Q Send-Q  Local Address          Foreign Address        (state)      rhiwat shiwat    pid   epid state    options"
+[ -n "$FAKE_NETSTAT_FILE" ] && cat "$FAKE_NETSTAT_FILE"
+exit 0

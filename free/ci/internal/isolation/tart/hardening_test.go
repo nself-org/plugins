@@ -144,7 +144,11 @@ func TestOrphansThatFillBothSlotsAreSweptByTheProbe(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	av := r.p.Probe(context.Background())
+	if av := r.p.Probe(context.Background()); av.Available() {
+		t.Fatalf("the probe answers before the sweep ends: %+v", av)
+	}
+	r.p.bg.Wait()
+	av := r.p.probe(context.Background(), true)
 	if !av.Available() || av.Facts["free_slots"] != "2" {
 		t.Fatalf("two orphans must not block the runner: %+v", av)
 	}

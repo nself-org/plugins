@@ -39,8 +39,8 @@ var baseImageRef = regexp.MustCompile(`^[A-Za-z0-9][^\s@]*@sha256:[0-9a-f]{64}$`
 
 // Options configures a Profile; every field has a default.
 type Options struct {
-	// Tart and SSH are the binaries ("tart", "/usr/bin/ssh").
-	Tart, SSH string
+	// Tart, SSH and Netstat are the binaries ("tart", "/usr/bin/ssh", "/usr/sbin/netstat").
+	Tart, SSH, Netstat string
 	// BaseImage reads ci.tart.base_image from operator scope; the digest (@sha256:) is required.
 	BaseImage func() string
 	// SSHUser and SSHKey come from ci.tart.ssh_user (default "admin") and ci.tart.ssh_key (optional identity file).
@@ -69,12 +69,14 @@ type Profile struct {
 	level model.Isolation
 	opts  Options
 
-	mu      sync.Mutex
-	av      isolation.Availability
-	at      time.Time
-	slots   *Slots
-	sweepAt map[string]time.Time
-	dirs    map[string]bool // state directories of attempts this process wrapped
+	mu       sync.Mutex
+	av       isolation.Availability
+	at       time.Time
+	slots    *Slots
+	sweepAt  map[string]time.Time
+	dirs     map[string]bool // state directories of attempts this process wrapped
+	sweeping bool            // a background sweep is running
+	bg       sync.WaitGroup  // background sweeps (tests wait on it)
 }
 
 var _ isolation.Profile = (*Profile)(nil)
@@ -87,6 +89,9 @@ func New(level model.Isolation, o Options) *Profile {
 	}
 	if o.SSH == "" {
 		o.SSH = "/usr/bin/ssh" // SIP-protected: dyld ignores DYLD_* for it
+	}
+	if o.Netstat == "" {
+		o.Netstat = "/usr/sbin/netstat" // SIP-protected, like ssh
 	}
 	if o.GOOS == "" {
 		o.GOOS = runtime.GOOS

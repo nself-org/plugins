@@ -55,6 +55,11 @@ type JobSpec struct {
 	// started, so a path swapped by the job cannot redirect it. An error ends
 	// the attempt as failed, class infra, with that error.
 	AfterJob func(ctx context.Context, workspace *os.Root) error
+	// AfterExit, when set, runs once the command ended on its own (no cancel, no start error) with the exit
+	// code the process reported, before AfterJob. A non-nil error ends the attempt as failed, class infra:
+	// how a profile whose command is a remote session tells a transport failure (ssh exit 255) from a job
+	// that exited with the same code.
+	AfterExit func(exitCode int) error
 	// Env, when an Isolator sets it, replaces the executor's EnvPolicy for this job (ad-hoc jobs
 	// get a minimal environment, P7-CI-52); job-declared env and secrets are still added after it.
 	Env EnvPolicy

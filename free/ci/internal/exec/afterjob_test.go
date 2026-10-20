@@ -56,3 +56,19 @@ func TestAfterJobSkippedWhenTheJobFailsOrIsCancelled(t *testing.T) {
 		t.Fatalf("hook ran %d times for a failed or cancelled job", calls)
 	}
 }
+
+func TestAfterExitSeesTheExitCodeAndFailsTheAttemptInfra(t *testing.T) {
+	var got = -2
+	boom := errors.New("transport failed")
+	spec := afterJobSpec(t, t.TempDir(), "exit 255", nil)
+	spec.AfterExit = func(code int) error { got = code; return boom }
+	r := (&Executor{}).Run(context.Background(), spec)
+	if got != 255 || !errors.Is(r.Err, boom) || r.Attempt.FailureClass != "infra" {
+		t.Fatalf("code %d result %+v", got, r)
+	}
+	spec = afterJobSpec(t, t.TempDir(), "exit 255", nil)
+	spec.AfterExit = func(int) error { return nil }
+	if r := (&Executor{}).Run(context.Background(), spec); r.Err != nil || r.ExitCode != 255 || r.Attempt.FailureClass != "code" {
+		t.Fatalf("an accepted exit stays a code failure: %+v", r)
+	}
+}

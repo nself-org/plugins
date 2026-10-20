@@ -21,6 +21,9 @@ import (
 // sweepWindow is how long one sweep stands for the attempts that start after it.
 const sweepWindow = 30 * time.Second
 
+// sweepBudget bounds one background sweep.
+const sweepBudget = 10 * time.Minute
+
 var cloneName = regexp.MustCompile(`^nself-ci-[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 
 // sweepOnce sweeps the state directories this process knows, at most once per window each.
@@ -48,6 +51,28 @@ func (p *Profile) sweepOnce(ctx context.Context, coordinator string) {
 			p.Sweep(ctx, p.opts.NewTool(coordinator, filepath.Dir(d)), d)
 		}
 	}
+}
+
+// sweepAsync starts a sweep that outlives the caller's context (a probe is bounded by probeTimeout, a sweep is
+// not) unless one is already running.
+func (p *Profile) sweepAsync(ctx context.Context, coordinator string) {
+	p.mu.Lock()
+	if p.sweeping {
+		p.mu.Unlock()
+		return
+	}
+	p.sweeping = true
+	p.mu.Unlock()
+	p.bg.Add(1)
+	go func() {
+		defer p.bg.Done()
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sweepBudget)
+		defer cancel()
+		p.sweepOnce(sctx, coordinator)
+		p.mu.Lock()
+		p.sweeping = false
+		p.mu.Unlock()
+	}()
 }
 
 // Sweep removes the orphan clones recorded in dir and returns their names.

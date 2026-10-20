@@ -62,8 +62,10 @@ func (a *attempt) writeSSHConfig(ip netip.Addr) error {
 
 // start is the BeforeJob hook: it takes the clone from nothing to a running VM holding the workspace.
 func (a *attempt) start(ctx context.Context, ws *os.Root) error {
+	a.p.slots.hold(a.name) // before the lock exists, so a peer count in this process never takes it for another's
 	cl, err := claimMarker(a.dir, a.name, marker{Name: a.name, Attempt: a.att.ID, Coordinator: a.att.CoordinatorID, PID: os.Getpid(), Created: time.Now().UTC()})
 	if err != nil {
+		a.p.slots.unhold(a.name)
 		return isolation.Unavailable(isolation.ReasonProbeFailed, "cannot label the clone: %v", err)
 	}
 	a.mu.Lock()

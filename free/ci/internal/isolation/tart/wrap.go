@@ -40,6 +40,7 @@ type attempt struct {
 	vmIP    netip.Addr
 	plan    softnetPlan
 	secrets *capturingSource
+	status  *exitStatus
 
 	mu      sync.Mutex
 	claim   *claim
@@ -87,11 +88,18 @@ func (p *Profile) Wrap(s exec.JobSpec) (exec.JobSpec, error) {
 	if err := a.planNetwork(ctx, s.Network, av.Facts["softnet_block"] == "true"); err != nil {
 		return s, err
 	}
+	var err error
+	if a.status, err = newExitStatus(s.Output); err != nil {
+		return s, fmt.Errorf("tart: %w", err)
+	}
 	foreign, _ := strconv.Atoi(av.Facts["foreign_running"])
 	own, _ := strconv.Atoi(av.Facts["own_running"])
+	booting, _ := strconv.Atoi(av.Facts["booting_other"])
+	own += booting // attempts of other processes still booting hold a slot the listing does not show yet
 	if !p.slots.reserve(foreign, own) {
 		return s, isolation.Unavailable(ReasonSlots, "both macOS VM slots are in use")
 	}
+	s.Output, s.AfterExit = a.status.write, chainExit(s.AfterExit, a.afterExit)
 	if s.Secrets != nil {
 		a.secrets = &capturingSource{inner: s.Secrets}
 		s.Secrets = a.secrets
@@ -114,6 +122,18 @@ func (p *Profile) Wrap(s exec.JobSpec) (exec.JobSpec, error) {
 		}
 	}
 	return s, nil
+}
+
+func chainExit(prev, ours func(int) error) func(int) error {
+	return func(code int) error {
+		if err := ours(code); err != nil {
+			return err
+		}
+		if prev != nil {
+			return prev(code)
+		}
+		return nil
+	}
 }
 
 func chainBefore(prev, ours func(context.Context, *os.Root) error) func(context.Context, *os.Root) error {
@@ -158,6 +178,11 @@ func (a *attempt) planNetwork(ctx context.Context, scope model.NetworkScope, sof
 	if a.plan, err = planSoftnet(scope, facts, gw, softnetBlock); err != nil {
 		return err
 	}
+	if scope = effectiveScope(scope); scope != "lan" && scope != "privileged" {
+		if err := a.checkHostListeners(ctx); err != nil {
+			return err
+		}
+	}
 	if a.plan.NeedProxy && a.p.opts.Net.Proxy == nil {
 		return isolation.ScopeUnenforceable("no egress proxy is available on this host, so the %s scope cannot be enforced", a.plan.Scope)
 	}
@@ -185,7 +210,7 @@ func (a *attempt) script() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return buildScript(a.command, wd, env, sec)
+	return buildScriptStatus(a.command, wd, env, sec, a.status.prefix)
 }
 
 func cutEnv(kv string) (string, string, bool) {
@@ -207,6 +232,7 @@ func (a *attempt) release(ctx context.Context) {
 			proxy.Close()
 		}
 		if cl != nil { // a clone may exist only when the marker was claimed
+			defer a.p.slots.unhold(a.name)
 			if err := destroyClone(ctx, a.tool, a.p.opts.Tart, a.name, proc); err != nil {
 				a.p.opts.Log("clone %s could not be removed (%v); the next start sweeps it", a.name, err)
 				cl.unlockKeep() // the marker stays: the next Prepare's sweep retries the removal
