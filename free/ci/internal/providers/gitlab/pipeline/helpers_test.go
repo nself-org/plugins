@@ -103,14 +103,16 @@ type fakeGL struct {
 	Include    []byte // the include file raw at any sha
 	Root       []byte // the main .gitlab-ci.yml raw at any ref; nil answers 404
 	IncludeSt  int
-	BranchSt   int             // a status for the branch route (404 = the ref does not exist)
-	RootSt     int             // a status for the main file route
-	Merged     string          // the merged_yaml the lint route answers; empty derives it from Include
-	LintSt     int             // a status other than 200 for the lint route
-	LintBad    bool            // valid: false
-	Stale      bool            // the pipeline list shows nothing yet
-	Extra      func(*fakePipe) // runs on every created pipeline (plants a second one)
-	NameInVars bool            // variables-mode pipelines get the workflow:name too
+	BranchSt   int              // a status for the branch route (404 = the ref does not exist)
+	RootSt     int              // a status for the main file route
+	Merged     string           // the merged_yaml the lint route answers; empty derives it from Include
+	LintSt     int              // a status other than 200 for the lint route
+	LintBad    bool             // valid: false
+	Includes   []map[string]any // the includes array the lint route answers; nil answers the generated local include
+	NoIncludes bool             // the lint route answers no includes key at all (an older GitLab)
+	Stale      bool             // the pipeline list shows nothing yet
+	Extra      func(*fakePipe)  // runs on every created pipeline (plants a second one)
+	NameInVars bool             // variables-mode pipelines get the workflow:name too
 }
 
 func newFakeGL(t *testing.T) *fakeGL {
@@ -245,7 +247,15 @@ func (f *fakeGL) serve(w http.ResponseWriter, req *http.Request) {
 		if merged == "" {
 			merged = mergedFrom(f.t, f.Include, nil)
 		}
-		writeJSON(w, 200, map[string]any{"valid": !f.LintBad, "merged_yaml": merged})
+		answer := map[string]any{"valid": !f.LintBad, "merged_yaml": merged}
+		if !f.NoIncludes {
+			inc := f.Includes
+			if inc == nil {
+				inc = []map[string]any{lintInclude("local", "/"+gitlabtmpl.Path)}
+			}
+			answer["includes"] = inc
+		}
+		writeJSON(w, 200, answer)
 	case strings.HasPrefix(p, projectBase+"/pipelines/"):
 		f.pipeline(w, req, strings.TrimPrefix(p, projectBase))
 	case strings.HasPrefix(p, projectBase+"/repository/branches/"):
@@ -482,6 +492,11 @@ func wantCode(t *testing.T, err error, code, reason string) {
 	if !errors.As(err, &pe) || pe.Code != code || (reason != "" && pe.Reason != reason) {
 		t.Fatalf("want %s/%s, got %v", code, reason, err)
 	}
+}
+
+// lintInclude is one entry of the includes array GitLab's lint answers.
+func lintInclude(kind, location string) map[string]any {
+	return map[string]any{"type": kind, "location": location, "blob": "https://gitlab.test/blob", "raw": "https://gitlab.test/raw", "extra": map[string]any{}}
 }
 
 // mergedFrom is what GitLab's lint answers as merged_yaml for a project whose only CI file is the

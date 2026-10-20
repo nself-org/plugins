@@ -104,6 +104,19 @@ func TestEvidenceRejections(t *testing.T) {
 		{name: "default cache is inherited", version: "18.2.1-ee", reason: hostedev.ReasonEdited, tune: func(f *fakeGL) {
 			f.Merged = mergedFrom(t, f.Include, func(top map[string]any) { top["default"] = map[string]any{"cache": map[string]any{"key": "shared"}} })
 		}},
+		{name: "project adds a remote include", version: "18.2.1-ee", reason: hostedev.ReasonEdited, tune: func(f *fakeGL) {
+			f.Includes = []map[string]any{lintInclude("local", "/"+gitlabtmpl.Path), lintInclude("remote", "https://evil.test/ci.yml")}
+		}},
+		{name: "project adds a second local include", version: "18.2.1-ee", reason: hostedev.ReasonEdited, tune: func(f *fakeGL) {
+			f.Includes = []map[string]any{lintInclude("local", "/"+gitlabtmpl.Path), lintInclude("local", "/ci/extra.yml")}
+		}},
+		{name: "project adds a component include", version: "18.2.1-ee", reason: hostedev.ReasonEdited, tune: func(f *fakeGL) {
+			f.Includes = []map[string]any{lintInclude("local", "/"+gitlabtmpl.Path), lintInclude("component", "gitlab.test/group/comp@1.0")}
+		}},
+		{name: "generated include is not among the includes", version: "18.2.1-ee", reason: hostedev.ReasonEdited, tune: func(f *fakeGL) {
+			f.Includes = []map[string]any{lintInclude("project", "group/shared")}
+		}},
+		{name: "lint answers no includes", version: "18.2.1-ee", reason: pipeline.ReasonConfig, tune: func(f *fakeGL) { f.NoIncludes = true }},
 		{name: "merged config unreadable", version: "18.2.1-ee", reason: pipeline.ReasonConfig, tune: func(f *fakeGL) { f.LintSt = 404 }},
 		{name: "merged config invalid", version: "18.2.1-ee", reason: pipeline.ReasonConfig, tune: func(f *fakeGL) { f.LintBad = true }},
 		{name: "merged config is not yaml", version: "18.2.1-ee", reason: pipeline.ReasonConfig, tune: func(f *fakeGL) { f.Merged = "a: [unclosed" }},

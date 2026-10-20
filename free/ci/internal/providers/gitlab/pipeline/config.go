@@ -5,16 +5,17 @@ package pipeline
 //          local `nself-ci:` job, a global before_script, a variable or a default cache could change what
 //          the generated job does while the include file stays byte-identical. See checkConfig for the
 //          two bindings (untrusted ref: byte-exact root; default branch: merged configuration).
-// Inputs:  GET /projects/:id/ci/lint?content_ref=<pipeline sha> (the merged configuration at the
-//          pipeline's own commit) and the include file bytes.
+// Inputs:  GET /projects/:id/ci/lint?content_ref=<pipeline sha> (the merged configuration and the
+//          includes it was built from, at the pipeline's own commit) and the include file bytes.
 // Outputs: nil, or E705: workflow.edited when the merged nself-ci job differs from the include file's
 //          job or a global setting that every job inherits is present; config.unverified when the
 //          merged configuration cannot be read or does not parse; a transient failure stays transient.
 // Constraints: this runs after hostedev.Verify, so a wrong include file keeps its own reason; the
 //          comparison is structural (parsed YAML, not text); only inheritance that changes what a job
 //          executes is refused (before_script, after_script, hooks, services, cache at the top level
-//          and under default:), the project's other jobs and variables are its own business; nothing
-//          here reads a token or sends a body.
+//          and under default:), the project's other jobs and variables are its own business; every
+//          include except the generated local file is refused (D-1347); nothing here reads a token or
+//          sends a body.
 
 import (
 	"bytes"
@@ -23,6 +24,7 @@ import (
 	"io"
 	"net/url"
 	"reflect"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -39,8 +41,38 @@ const ReasonConfig = "config.unverified"
 var inherited = []string{"before_script", "after_script", "hooks", "services", "cache"}
 
 type lintAnswer struct {
-	Valid      bool   `json:"valid"`
-	MergedYAML string `json:"merged_yaml"`
+	Valid      bool          `json:"valid"`
+	MergedYAML string        `json:"merged_yaml"`
+	Includes   *[]lintSource `json:"includes"`
+}
+
+// lintSource is one file the lint resolved into the merged configuration.
+type lintSource struct {
+	Type     string `json:"type"`
+	Location string `json:"location"`
+}
+
+// onlyGeneratedInclude refuses every include except the generated local file (and the main file, should
+// the lint list it): a remote, project, template or component include, a second local file, or a
+// generated file that is not among the includes at all can change the merged job after creation or hide
+// behind rules the static lint cannot evaluate (D-1347). An answer without the includes key (an older
+// GitLab) cannot be checked and is unverified, not accepted.
+func onlyGeneratedInclude(includes *[]lintSource) error {
+	if includes == nil {
+		return api.NotEvidence(ReasonConfig)
+	}
+	found := false
+	for _, in := range *includes {
+		loc := strings.TrimPrefix(in.Location, "/")
+		if in.Type != "local" || (loc != gitlabtmpl.Path && loc != gitlabtmpl.RootPath) {
+			return api.NotEvidence(hostedev.ReasonEdited)
+		}
+		found = found || loc == gitlabtmpl.Path
+	}
+	if !found {
+		return api.NotEvidence(hostedev.ReasonEdited)
+	}
+	return nil
 }
 
 func (p *Provider) checkMerged(ctx context.Context, c *rest.Client, project api.Project, sha string, include []byte) error {
@@ -53,6 +85,9 @@ func (p *Provider) checkMerged(ctx context.Context, c *rest.Client, project api.
 	}
 	if !a.Valid || a.MergedYAML == "" {
 		return api.NotEvidence(ReasonConfig)
+	}
+	if err := onlyGeneratedInclude(a.Includes); err != nil {
+		return err
 	}
 	return compareMerged(a.MergedYAML, include)
 }
@@ -106,7 +141,8 @@ func compareMerged(merged string, include []byte) error {
 // file was already compared by hostedev), so no other mapping, include, variable or job can exist.
 // Trusted work ran on the project's default branch, whose CI file its maintainers own and who can run
 // anything on this coordinator's runners anyway: there the merged configuration is checked (checkMerged,
-// best effort, not a security boundary: lint is static and does not see conditional includes).
+// best effort, not a security boundary: lint is static, so a remote include can still change after the
+// run; every include except the generated local file is refused, see onlyGeneratedInclude).
 func (p *Provider) checkConfig(ctx context.Context, c *rest.Client, project api.Project, sha string, include []byte, rec Record) error {
 	if rec.Trusted {
 		return p.checkMerged(ctx, c, project, sha, include)
