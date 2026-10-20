@@ -45,6 +45,7 @@ type pullRig struct {
 	srv    *agentapi.Server
 	base   string
 	sink   *pullSink
+	px     *netProxy
 }
 
 // pullSink is the run's sink: it records output and commits results like the run's remote sink.
@@ -82,7 +83,15 @@ func (s *pullSink) text() string {
 	return strings.Join(s.lines, "\n")
 }
 
-func newPullRig(t *testing.T) *pullRig {
+type rigOpts struct {
+	heartbeat, coordTTL time.Duration // listener timings (0: defaults)
+	leaseTTL            time.Duration // the engine's lease TTL (0: default)
+	proxy               bool          // put a TCP proxy in front of the listener
+}
+
+func newPullRig(t *testing.T) *pullRig { return newPullRigWith(t, rigOpts{}) }
+
+func newPullRigWith(t *testing.T, o rigOpts) *pullRig {
 	t.Helper()
 	dir := t.TempDir()
 	st, err := store.Open(filepath.Join(dir, "state.db"), store.Options{})
@@ -94,7 +103,7 @@ func newPullRig(t *testing.T) *pullRig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := &pullRig{t: t, st: st, ca: ca, eng: lease.New(st, nil, lease.Config{})}
+	r := &pullRig{t: t, st: st, ca: ca, eng: lease.New(st, nil, lease.Config{TTL: o.leaseTTL})}
 	if r.tokens, err = ca.Tokens(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +113,7 @@ func newPullRig(t *testing.T) *pullRig {
 	r.drv = &agent.Driver{Gate: gate, Minter: r.minter, Leases: st, LogDir: filepath.Join(dir, "logs"), Poll: 50 * time.Millisecond, CancelGrace: 5 * time.Second}
 	leaf := &agentapi.LeafSource{CA: ca, ID: "coord", IPs: []net.IP{net.ParseIP("127.0.0.1")}}
 	srv, err := agentapi.New(agentapi.Config{CA: ca, Guard: pki.NewGuard(st), Cert: leaf.Get, Leases: r.eng, Sink: r.drv.Sink(), Source: r.drv, Store: st, Admit: gate.Check,
-		Blobs: r.drv.Blobs(), PollTimeout: 2 * time.Second, SourcePoll: 30 * time.Millisecond, GuardEvery: 50 * time.Millisecond})
+		Blobs: r.drv.Blobs(), Heartbeat: o.heartbeat, CoordinatorTTL: o.coordTTL, PollTimeout: 2 * time.Second, SourcePoll: 30 * time.Millisecond, GuardEvery: 50 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,6 +122,10 @@ func newPullRig(t *testing.T) *pullRig {
 		t.Fatal(err)
 	}
 	r.srv, r.base = srv, "https://"+ln.Addr().String()
+	if o.proxy {
+		r.px = newNetProxy(t, ln.Addr().String())
+		r.base = "https://" + r.px.addr()
+	}
 	r.drv.SetCancel(srv.Cancel)
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ln) }()
@@ -181,7 +194,7 @@ func (r *pullRig) seed(n, node string) (string, string, uint64) {
 			r.t.Fatal(err)
 		}
 	}
-	fence, err := r.eng.Grant(ctx, "host", store.Demand{AttemptID: "a" + n, LeaseID: "l" + n, RunnerID: node, CPU: 1, MemMB: 1, CapacityCPU: 100, CapacityMemMB: 100, TTL: 2 * time.Minute}, 1)
+	fence, err := r.eng.Grant(ctx, "host", store.Demand{AttemptID: "a" + n, LeaseID: "l" + n, RunnerID: node, CPU: 1, MemMB: 1, CapacityCPU: 100, CapacityMemMB: 100, TTL: r.leaseTTL()}, 1)
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -318,3 +331,10 @@ func (m *recMinter) Mint(cl pki.TokenClaims, d time.Duration) (string, error) {
 }
 
 func (m *recMinter) last() string { m.mu.Lock(); defer m.mu.Unlock(); return m.tok }
+
+func (r *pullRig) leaseTTL() time.Duration {
+	if r.eng.Config.TTL > 0 {
+		return r.eng.Config.TTL
+	}
+	return 2 * time.Minute
+}

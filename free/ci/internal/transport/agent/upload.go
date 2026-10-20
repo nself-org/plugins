@@ -66,6 +66,8 @@ func (c *Carrier) streamOnce(ctx context.Context, gen int, toks map[string]strin
 	}
 	defer resp.Body.Close()
 	c.setLive(gen)
+	c.setStreaming(true)
+	defer c.setStreaming(false)
 	rctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	readDone, writeDone := make(chan error, 1), make(chan error, 1)
@@ -171,4 +173,10 @@ func (c *Carrier) readStream(ctx context.Context, body io.Reader) error {
 			return err
 		}
 	}
+}
+
+func (c *Carrier) setStreaming(on bool) {
+	c.mu.Lock()
+	c.streaming = on
+	c.mu.Unlock()
 }

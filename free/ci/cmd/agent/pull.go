@@ -39,6 +39,9 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/transport/agent"
 )
 
+// pullResolver builds the node-side secret resolver; tests replace it with a fake that needs no nself cli.
+var pullResolver = nodeResolver
+
 func init() {
 	must(RegisterSubcommand("pull", "keep an mTLS connection to the coordinator and run the leases it hands out (carrier B)", runPull))
 }
@@ -157,7 +160,7 @@ func pullLoop(ctx context.Context, f pullFlags, state string, cred enroll.Creden
 	}
 	table.Lower(f.slots)
 	logf := func(format string, a ...any) { fmt.Fprintf(sio.Stderr, "nself-ci-agent pull: "+format+"\n", a...) }
-	resolver := nodeResolver(state, f, cred.Enrollment.NodeID, age.Path)
+	resolver := pullResolver(state, f, cred.Enrollment.NodeID, age.Path)
 	for ctx.Err() == nil {
 		car := agent.NewCarrier(agent.CarrierConfig{
 			Client: agent.Options{BaseURL: baseURL, TLS: tlsc, OnSkew: func(d time.Duration) { noteSkew(state, d) }},

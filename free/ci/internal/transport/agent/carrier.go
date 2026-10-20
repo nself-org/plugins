@@ -28,7 +28,7 @@ import (
 // Timings; variables so tests can shorten them.
 var (
 	sendTimeout = 30 * time.Second
-	flushGrace  = 5 * time.Second
+	flushGrace  = 2 * time.Second
 )
 
 // maxOutBytes bounds the frames kept for resend.
@@ -77,6 +77,7 @@ type Carrier struct {
 	epochs    map[string]uint64 // epoch of each lease that has a token
 	gen       int               // bumped when the token set grows: the upstream stream restarts to carry it
 	liveGen   int
+	streaming bool          // an upstream stream is open: frames are being written
 	up        chan struct{} // closed and replaced when liveGen changes
 	err       error         // why the carrier ended, for Recv
 }
@@ -200,10 +201,12 @@ func (c *Carrier) Recv() (protocol.Message, error) {
 	return protocol.Message{}, io.EOF
 }
 
-// Close waits a bounded time for the written results to be acknowledged, then stops the carrier.
+// Close waits a bounded time for the written results to be acknowledged while a stream is open, then stops the
+// carrier. With no stream (a partition) it returns at once: the agent fence calls Close to end the session and
+// kill its jobs, and that must not wait.
 func (c *Carrier) Close() error {
 	deadline := time.Now().Add(flushGrace)
-	for time.Now().Before(deadline) && !c.flushed() {
+	for time.Now().Before(deadline) && c.isStreaming() && !c.flushed() {
 		select {
 		case <-c.done:
 			deadline = time.Time{}
@@ -223,6 +226,12 @@ func (c *Carrier) Close() error {
 	<-c.done
 	c.cl.close()
 	return nil
+}
+
+func (c *Carrier) isStreaming() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.streaming
 }
 
 // flushed says every frame was written and no result or reference still waits for its ack.
