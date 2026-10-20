@@ -28,6 +28,11 @@ const (
 	scopeToken = "_token" // facts about the credential, not a repository
 	backoffMin = 30 * time.Second
 	backoffMax = 15 * time.Minute
+	// maxRetryAfter caps a retry time the provider states (the primary limit resets within the hour).
+	maxRetryAfter = time.Hour
+	// enqRetry is how long an enqueued head stays marked: after it a head that still lacks a terminal
+	// status is offered to the intake again (a failed intake row accepts a redelivery).
+	enqRetry = 6 * time.Hour
 )
 
 func lower(repo string) string { return strings.ToLower(repo) }
@@ -40,6 +45,16 @@ func (e *Engine) marked(ctx context.Context, kind, repo, id string) (bool, error
 	}
 	_, ok, err := s.ProviderMarkGet(ctx, markName, kind+"|"+lower(repo)+"|"+id)
 	return ok, err
+}
+
+// markedWithin is marked for a mark that expires: one older than max counts as not set.
+func (e *Engine) markedWithin(ctx context.Context, kind, repo, id string, max time.Duration) (bool, error) {
+	s := e.store()
+	if s == nil {
+		return false, errNoStore
+	}
+	at, ok, err := s.ProviderMarkGet(ctx, markName, kind+"|"+lower(repo)+"|"+id)
+	return ok && e.now().Sub(at) < max, err
 }
 
 func (e *Engine) mark(ctx context.Context, kind, repo, id string) error {
@@ -114,7 +129,10 @@ func (e *Engine) ensureLedger(ctx context.Context) {
 		return
 	}
 	var l ledger
-	ok, _ := e.getFact(ctx, scopeToken, "ledger", &l)
+	ok, err := e.getFact(ctx, scopeToken, "ledger", &l)
+	if err != nil {
+		return // read again next time; the counters stay at what this process has seen
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if !e.ledger.loaded {
@@ -180,24 +198,32 @@ type backoff struct {
 	N       int       `json:"n"`
 }
 
-func (e *Engine) loadBackoff(ctx context.Context) backoff {
+func (e *Engine) loadBackoff(ctx context.Context) (backoff, error) {
 	var b backoff
-	_, _ = e.getFact(ctx, scopeToken, "backoff", &b)
-	return b
+	_, err := e.getFact(ctx, scopeToken, "backoff", &b)
+	return b, err
 }
 
-// blockedUntil returns the recorded RetryAt when it is still in the future.
+// blockedUntil returns the recorded RetryAt when it is still in the future. A store that cannot be read
+// counts as blocked: without the record the quota window is unknown, and a request inside it is the one
+// thing the stop forbids.
 func (e *Engine) blockedUntil(ctx context.Context) (time.Time, bool) {
-	b := e.loadBackoff(ctx)
+	b, err := e.loadBackoff(ctx)
+	if err != nil {
+		return e.now().Add(backoffMin), true
+	}
 	return b.RetryAt, b.RetryAt.After(e.now())
 }
 
 // noteQuota records a quota error: the provider's own retry time when it gave one, else an exponential
 // delay of 30 s x 2^n capped at 15 min with +-20% jitter. It returns the time recorded.
 func (e *Engine) noteQuota(ctx context.Context, stated time.Time) time.Time {
-	b := e.loadBackoff(ctx)
+	b, _ := e.loadBackoff(ctx)
 	now := e.now()
 	retry := stated.UTC()
+	if limit := now.Add(maxRetryAfter); retry.After(limit) { // a hostile or broken server must not park the sweep for years
+		retry = limit
+	}
 	if !retry.After(now) {
 		d := backoffMin
 		for i := 0; i < b.N && d < backoffMax; i++ {
@@ -215,7 +241,7 @@ func (e *Engine) noteQuota(ctx context.Context, stated time.Time) time.Time {
 
 // noteOK clears the failure count after a pass that made requests without a quota error.
 func (e *Engine) noteOK(ctx context.Context) {
-	if b := e.loadBackoff(ctx); b.N > 0 {
+	if b, err := e.loadBackoff(ctx); err == nil && b.N > 0 {
 		b.N = 0
 		_ = e.putFact(ctx, scopeToken, "backoff", b)
 	}

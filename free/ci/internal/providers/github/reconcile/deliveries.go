@@ -7,12 +7,14 @@ package reconcile
 //          or no hook of the coordinator exists, which sends the caller to the head scan.
 // Constraints: one delivery id (GUID) is redelivered at most once, remembered by a host-provider mark, and a
 //          GUID with any successful attempt is not redelivered; only the newest page (100) of deliveries is
-//          read; the admin:repo_hook scope is never requested from code (a refusal is the signal to fall
-//          back); the hook is the coordinator's when active, covering push, pull_request or workflow_job
-//          events and, when providers.github.hook_url is set, living under that URL.
+//          read; the admin:repo_hook scope is never requested from code (a refusal of the list or of a
+//          redelivery is the signal to fall back); the hook is the coordinator's only when
+//          providers.github.hook_url is set, the hook is active, covers push, pull_request or workflow_job
+//          events and lives under that URL (scheme and host exact, path on a "/" boundary).
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"slices"
 	"strconv"
@@ -39,17 +41,31 @@ type ghDelivery struct {
 	StatusCode  int       `json:"status_code"`
 }
 
-// ours reports whether h is the coordinator's hook under the settings.
+// ours reports whether h is the coordinator's hook under the settings. Without providers.github.hook_url
+// no hook is recognised (a repository can hold hooks of other services, and a redelivery would trigger
+// them), so the head scan runs instead.
 func (h ghHook) ours(st Settings) bool {
-	if !h.Active {
-		return false
-	}
-	if st.HookURL != "" && !strings.HasPrefix(strings.TrimRight(h.Config.URL, "/"), st.HookURL) {
+	if !h.Active || !urlUnder(h.Config.URL, st.HookURL) {
 		return false
 	}
 	return slices.ContainsFunc(h.Events, func(ev string) bool {
 		return ev == "*" || ev == "push" || ev == "pull_request" || ev == "workflow_job"
 	})
+}
+
+// urlUnder reports whether got is want or lives under it: same scheme and host (exact, case-insensitive)
+// and a path equal to want's or continuing it after a "/".
+func urlUnder(got, want string) bool {
+	if want == "" {
+		return false
+	}
+	g, err1 := url.Parse(got)
+	w, err2 := url.Parse(want)
+	if err1 != nil || err2 != nil || g.Scheme != w.Scheme || !strings.EqualFold(g.Host, w.Host) {
+		return false
+	}
+	gp, wp := strings.TrimRight(g.Path, "/"), strings.TrimRight(w.Path, "/")
+	return gp == wp || strings.HasPrefix(gp, wp+"/")
 }
 
 // redeliver runs the webhook-mode leg for repo. usable is false when the head scan must run instead.
@@ -107,6 +123,7 @@ func (e *Engine) redeliverHook(ctx context.Context, s *session, repo string, h g
 	}
 	slices.SortFunc(guids, func(a, b string) int { return int(latest[a].ID - latest[b].ID) }) // oldest first
 	done := 0
+	var firstErr error
 	for _, g := range guids {
 		id := strconv.FormatInt(h.ID, 10) + ":" + g
 		seen, err := e.marked(ctx, "redeliver", repo, id)
@@ -118,12 +135,22 @@ func (e *Engine) redeliverHook(ctx context.Context, s *session, repo string, h g
 		}
 		params["delivery"] = strconv.FormatInt(latest[g].ID, 10)
 		if _, err = s.post(ctx, "/repos/{owner}/{repo}/hooks/{hook}/deliveries/{delivery}/attempts", params); err != nil {
-			return done, true, err
+			if denied(err) { // the token may list deliveries but not redeliver them: scan the heads instead
+				return done, false, nil
+			}
+			var quota *QuotaStop
+			if errors.As(err, &quota) || errors.Is(err, ErrCallBound) || errors.Is(err, ErrBudget) {
+				return done, true, err
+			}
+			if firstErr == nil { // one refused delivery must not hide the newer ones
+				firstErr = err
+			}
+			continue
 		}
 		if err = e.mark(ctx, "redeliver", repo, id); err != nil {
 			return done, true, err
 		}
 		done++
 	}
-	return done, true, nil
+	return done, true, firstErr
 }

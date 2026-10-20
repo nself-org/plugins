@@ -131,7 +131,7 @@ func TestRedeliverOnce(t *testing.T) {
 	if len(repo.Redelivered) != 2 {
 		t.Fatalf("second pass redelivered more: %v", repo.Redelivered)
 	}
-	// without hook_url every active hook that covers push counts as the coordinator's
+	// without hook_url no hook is recognised: nothing is redelivered to a third party, the heads are scanned
 	r2 := newRig(t, "acme/app")
 	r2.f.repos["acme/app"].Hooks = repo.Hooks
 	r2.f.repos["acme/app"].Deliveries = map[int64][]fDelivery{12: repo.Deliveries[12]}
@@ -139,14 +139,14 @@ func TestRedeliverOnce(t *testing.T) {
 	if err := r2.e.GitHub().Reconcile(context.Background(), r2.enq); err != nil {
 		t.Fatal(err)
 	}
-	if got := r2.f.repos["acme/app"].Redelivered; len(got) != 1 || got[0] != "951" {
-		t.Fatalf("no hook_url: redelivered %v, want 951", got)
+	if got := r2.f.repos["acme/app"].Redelivered; len(got) != 0 || len(r2.enq.deliveries()) != 1 {
+		t.Fatalf("no hook_url: redelivered %v, enqueued %d; want none and the head scan", got, len(r2.enq.deliveries()))
 	}
 	// deliveries refused (404) fall back to the head scan
 	r3 := newRig(t, "acme/app")
 	r3.f.repos["acme/app"].Hooks = repo.Hooks
 	r3.f.repos["acme/app"].DeliveryDeny = true
-	r3.policy(map[string]string{KeyIngress: `"webhook"`})
+	r3.policy(map[string]string{KeyIngress: `"webhook"`, KeyHookURL: `"https://ci.example"`})
 	if err := r3.e.GitHub().Reconcile(context.Background(), r3.enq); err != nil {
 		t.Fatal(err)
 	}
@@ -293,11 +293,128 @@ func TestPollHeadScan(t *testing.T) {
 	w := newRig(t, "acme/app")
 	w.f.repos["acme/app"].Hooks = []fHook{{ID: 1, Active: true, Events: []string{"push"}, URL: "https://ci.example/webhook"}}
 	w.f.repos["acme/app"].Deliveries[1] = []fDelivery{{ID: 5, GUID: "gg", Code: 500, AgeHrs: 1}}
-	w.policy(map[string]string{KeyIngress: `"webhook"`})
+	w.policy(map[string]string{KeyIngress: `"webhook"`, KeyHookURL: `"https://ci.example"`})
 	if err := w.e.GitHub().Reconcile(context.Background(), w.enq); err != nil {
 		t.Fatal(err)
 	}
 	if got := w.f.repos["acme/app"].Redelivered; len(got) != 1 || w.f.count(hasPath("/pulls")) != 0 || len(w.enq.deliveries()) != 0 {
 		t.Errorf("webhook mode: redelivered %v, pulls requests %d, enqueued %d", got, w.f.count(hasPath("/pulls")), len(w.enq.deliveries()))
+	}
+}
+
+// TestRedeliverRefusedFallsBack proves the review fixes of the delivery leg: the hook_url match has a host
+// and path boundary, a refused redelivery (the token may list but not redeliver) falls back to the head
+// scan, and one failing delivery does not hide the newer ones.
+func TestRedeliverRefusedFallsBack(t *testing.T) {
+	for _, c := range []struct {
+		got, want string
+		ok        bool
+	}{
+		{"https://ci.example/webhook", "https://ci.example", true},
+		{"https://CI.example/webhook/", "https://ci.example/webhook", true},
+		{"https://ci.example.evil.net/x", "https://ci.example", false},
+		{"https://ci.example/webhooks", "https://ci.example/webhook", false},
+		{"http://ci.example/webhook", "https://ci.example", false},
+		{"https://ci.example/webhook", "", false},
+	} {
+		if got := urlUnder(c.got, c.want); got != c.ok {
+			t.Errorf("urlUnder(%q, %q) = %v, want %v", c.got, c.want, got, c.ok)
+		}
+	}
+	setup := func(fail map[string]int) *rig {
+		r := newRig(t, "acme/app")
+		repo := r.f.repos["acme/app"]
+		repo.Hooks = []fHook{{ID: 11, Active: true, Events: []string{"push"}, URL: "https://ci.example/webhook"}}
+		repo.Deliveries[11] = []fDelivery{{ID: 901, GUID: "g1", Code: 500, AgeHrs: 5}, {ID: 902, GUID: "g2", Code: 500, AgeHrs: 1}}
+		repo.RedeliverFail = fail
+		r.policy(map[string]string{KeyIngress: `"webhook"`, KeyHookURL: `"https://ci.example"`})
+		return r
+	}
+	r := setup(map[string]int{"901": 403, "902": 403}) // listing allowed, redelivering not
+	if err := r.e.GitHub().Reconcile(context.Background(), r.enq); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.f.repos["acme/app"].Redelivered) != 0 || len(r.enq.deliveries()) != 1 {
+		t.Fatalf("403 on redelivery: redelivered %v, enqueued %d; want the head scan", r.f.repos["acme/app"].Redelivered, len(r.enq.deliveries()))
+	}
+	r = setup(map[string]int{"901": 422}) // the oldest cannot be redelivered; the newer one still is
+	err := r.e.GitHub().Reconcile(context.Background(), r.enq)
+	if err == nil || strings.Join(r.f.repos["acme/app"].Redelivered, ",") != "902" {
+		t.Fatalf("422 on the oldest: err=%v redelivered=%v, want an error and 902", err, r.f.repos["acme/app"].Redelivered)
+	}
+}
+
+// TestHeadScanReviewFixes covers the review findings of the scan: a pending nself-ci status is not
+// terminal, the default branch survives the branch cap, an enqueue mark expires so a head that still has no
+// terminal status is offered again, and a provider-stated retry time is capped.
+func TestHeadScanReviewFixes(t *testing.T) {
+	r := newRig(t, "acme/app")
+	repo := r.f.repos["acme/app"]
+	repo.Status[repo.Branches["main"]] = "pending"
+	if err := r.e.GitHub().Reconcile(context.Background(), r.enq); err != nil || len(r.enq.deliveries()) != 1 {
+		t.Fatalf("pending head: err=%v enqueued=%d, want 1", err, len(r.enq.deliveries()))
+	}
+	// the mark holds for a while, then the head is offered again (the intake dedups a live row by delivery id)
+	repo.Rev++
+	r.clk.Advance(SweepEvery)
+	_ = r.e.GitHub().Reconcile(context.Background(), r.enq)
+	if len(r.enq.deliveries()) != 1 {
+		t.Fatalf("marked head enqueued again at once: %d", len(r.enq.deliveries()))
+	}
+	repo.Rev++
+	r.clk.Advance(enqRetry)
+	_ = r.e.GitHub().Reconcile(context.Background(), r.enq)
+	if len(r.enq.deliveries()) != 2 {
+		t.Fatalf("expired mark: %d deliveries, want the head offered again", len(r.enq.deliveries()))
+	}
+	// 25 protected branches sorted before the default branch: the default is still scanned
+	r2 := newRig(t, "acme/app")
+	repo2 := r2.f.repos["acme/app"]
+	repo2.Default = "zz-default"
+	repo2.Branches = map[string]string{"zz-default": sha('9', 9)}
+	repo2.Protected = []string{}
+	for i := 0; i < 25; i++ {
+		name := fmt.Sprintf("b%02d", i)
+		repo2.Branches[name] = fmt.Sprintf("%040x", 0xdef000+i)
+		repo2.Protected = append(repo2.Protected, name)
+	}
+	repo2.Protected = append(repo2.Protected, "zz-default") // protected and last in the list
+	if err := r2.e.GitHub().Reconcile(context.Background(), r2.enq); err != nil {
+		t.Fatal(err)
+	}
+	if indexOf(r2.enq, sha('9', 9)) < 0 || len(r2.enq.deliveries()) != MaxBranchHeads {
+		t.Fatalf("default branch cut or cap wrong: %d deliveries, default at %d", len(r2.enq.deliveries()), indexOf(r2.enq, sha('9', 9)))
+	}
+	// a stated retry time far in the future is capped at an hour
+	e := NewEngine()
+	e.Now, e.Jitter = r.clk.Now, func() float64 { return 0.5 }
+	e.Use(newMemState())
+	if got := e.noteQuota(context.Background(), r.clk.Now().Add(24*365*time.Hour)).Sub(r.clk.Now()); got != maxRetryAfter {
+		t.Errorf("stated retry capped at %v, want %v", got, maxRetryAfter)
+	}
+}
+
+// TestPullRequestFactsFromFork covers the fork facts of a scanned pull request: a fork head names its
+// repository and is a fork; a deleted fork leaves both unknown (never "not a fork"); a same-repository head
+// is not a fork.
+func TestPullRequestFactsFromFork(t *testing.T) {
+	r := newRig(t, "acme/app")
+	repo := r.f.repos["acme/app"]
+	forkHead, goneHead, ownHead := sha('1', 1), sha('2', 2), sha('3', 3)
+	repo.Pulls = []fPull{{Number: 1, Head: forkHead, HeadRepoID: 900, HeadName: "forker/app"}, {Number: 2, Head: goneHead, HeadRepoID: -1}, {Number: 3, Head: ownHead}}
+	if err := r.e.GitHub().Reconcile(context.Background(), r.enq); err != nil {
+		t.Fatal(err)
+	}
+	f := r.enq.facts(t, indexOf(r.enq, forkHead))
+	if f.Fork.Value == nil || !*f.Fork.Value || f.HeadRepo.Value == nil || *f.HeadRepo.Value != "forker/app" || f.Fork.Source != "api" {
+		t.Errorf("fork PR facts %+v", f)
+	}
+	f = r.enq.facts(t, indexOf(r.enq, goneHead))
+	if f.Fork.Value != nil || f.HeadRepo.Value != nil {
+		t.Errorf("deleted fork must stay unknown: %+v %+v", f.Fork, f.HeadRepo)
+	}
+	f = r.enq.facts(t, indexOf(r.enq, ownHead))
+	if f.Fork.Value == nil || *f.Fork.Value {
+		t.Errorf("same-repository PR must be Fork=false: %+v", f.Fork)
 	}
 }

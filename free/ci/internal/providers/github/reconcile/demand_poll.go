@@ -29,6 +29,7 @@ import (
 
 	"github.com/nself-org/cli/sdk/go/v2/compat"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
+	"github.com/nself-org/plugins/free/ci/internal/providers"
 )
 
 // Bounds of one demand tick.
@@ -98,6 +99,9 @@ func (d *Demand) Reconcile(ctx context.Context, enq coordinator.Enqueuer) error 
 	st, err := e.settings(ctx)
 	if err != nil || st.Ingress != IngressPoll {
 		return err
+	}
+	if providers.DemandHandlerFor(Source) == nil { // nobody to hand a demand to yet (P7-HOST-19): read nothing, consume nothing
+		return nil
 	}
 	if _, blocked := e.blockedUntil(ctx); blocked {
 		return nil
@@ -217,7 +221,11 @@ func (e *Engine) listRuns(ctx context.Context, s *session, repo, status string) 
 	if resp.Status == 304 {
 		return nil, old, false, nil
 	}
-	return out.WorkflowRuns, resp.ETag, true, nil
+	etag = resp.ETag
+	if len(out.WorkflowRuns) >= runsPerPage { // a full page may hide more runs: never remember it as fully read
+		etag = ""
+	}
+	return out.WorkflowRuns, etag, true, nil
 }
 
 // handRun reads the jobs of one run and hands over every new job that asks for this operator's runners.
@@ -254,7 +262,7 @@ func (e *Engine) handRun(ctx context.Context, s *session, enq coordinator.Enqueu
 		switch {
 		case errors.Is(err, ErrDeclined):
 			// handed over and refused: remembered below so the job is not offered every tick
-		case err != nil:
+		case err != nil: // includes ErrHandlerFailed and ErrNoHandler: nothing is marked, the job is offered again
 			return err
 		default:
 			if _, err = enq.Enqueue(ctx, d); err != nil {

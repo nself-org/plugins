@@ -25,8 +25,14 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 )
 
-// ErrDeclined means the demand handler (or its absence) declined a job; the job is not retried.
-var ErrDeclined = errors.New("reconcile: runner demand declined")
+var (
+	// ErrDeclined means the demand handler refused a job; the job is not offered again.
+	ErrDeclined = errors.New("reconcile: runner demand declined")
+	// ErrNoHandler means no DemandHandler is registered for the source yet.
+	ErrNoHandler = errors.New("reconcile: no runner demand handler registered")
+	// ErrHandlerFailed means the handler failed without refusing (transient); the job is offered again.
+	ErrHandlerFailed = errors.New("reconcile: runner demand handler failed")
+)
 
 func apiFact[T any](v T, now time.Time) model.Fact[T] {
 	return model.Fact[T]{Value: &v, Source: "api", ObservedAt: now, Confidence: "known"}
@@ -115,8 +121,8 @@ func headFacts(repo string, info repoInfo, h head, now time.Time) model.TriggerF
 	return f
 }
 
-// delivery turns validated facts into a Delivery. For a runner demand it calls the registered handler;
-// a missing handler or a handler that refuses is ErrDeclined.
+// delivery turns validated facts into a Delivery. For a runner demand it calls the registered handler: a
+// refusal is ErrDeclined, no handler is ErrNoHandler and any other failure ErrHandlerFailed.
 func delivery(ctx context.Context, f model.TriggerFacts) (coordinator.Delivery, error) {
 	if err := f.Validate(); err != nil {
 		return coordinator.Delivery{}, err
@@ -135,11 +141,15 @@ func delivery(ctx context.Context, f model.TriggerFacts) (coordinator.Delivery, 
 	}
 	h := providers.DemandHandlerFor(f.Source)
 	if h == nil {
-		return d, ErrDeclined
+		return d, ErrNoHandler
 	}
 	p, err := h.Synthesize(ctx, f)
-	if err != nil || p == nil {
-		return d, ErrDeclined
+	var pe *providers.Error
+	switch {
+	case errors.As(err, &pe) && pe.Code != "", err == nil && p == nil:
+		return d, ErrDeclined // a refusal with a reason, or nothing to run
+	case err != nil:
+		return d, ErrHandlerFailed
 	}
 	d.Synthetic = p
 	return d, nil

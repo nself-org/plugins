@@ -165,8 +165,15 @@ func (e *Engine) branchHeads(ctx context.Context, s *session, params map[string]
 		}
 		out = append(out, head{SHA: b.Commit.SHA, Branch: info.DefaultBranch, Protected: b.Protected})
 	}
+	for _, b := range list { // the default branch goes first so the cap can never cut it
+		if b.Name == info.DefaultBranch {
+			out = append(out, head{SHA: b.Commit.SHA, Branch: b.Name, Protected: true})
+		}
+	}
 	for _, b := range list {
-		out = append(out, head{SHA: b.Commit.SHA, Branch: b.Name, Protected: true})
+		if b.Name != info.DefaultBranch {
+			out = append(out, head{SHA: b.Commit.SHA, Branch: b.Name, Protected: true})
+		}
 	}
 	if len(out) > MaxBranchHeads {
 		out = out[:MaxBranchHeads]
@@ -182,11 +189,11 @@ func (e *Engine) branchHeads(ctx context.Context, s *session, params map[string]
 
 // sweepHead enqueues h unless it was handled before or already has a terminal nself-ci status.
 func (e *Engine) sweepHead(ctx context.Context, s *session, enq coordinator.Enqueuer, repo string, info repoInfo, h head) (bool, error) {
-	for _, kind := range []string{"enq", "term"} {
-		seen, err := e.marked(ctx, kind, repo, h.SHA)
-		if err != nil || seen {
-			return false, err
-		}
+	if seen, err := e.marked(ctx, "term", repo, h.SHA); err != nil || seen {
+		return false, err
+	}
+	if seen, err := e.markedWithin(ctx, "enq", repo, h.SHA, enqRetry); err != nil || seen {
+		return false, err
 	}
 	var combined ghCombined
 	p := repoParams(repo)

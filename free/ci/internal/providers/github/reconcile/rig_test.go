@@ -76,20 +76,21 @@ type fRun struct {
 }
 
 type fRepo struct {
-	Name         string
-	ID           int64
-	Default      string
-	Branches     map[string]string // branch -> sha
-	Protected    []string
-	Pulls        []fPull
-	Status       map[string]string // sha -> nself-ci state
-	Hooks        []fHook
-	Deliveries   map[int64][]fDelivery
-	Redelivered  []string
-	Runs         []fRun
-	Rev          int
-	HooksDenied  bool
-	DeliveryDeny bool
+	Name          string
+	ID            int64
+	Default       string
+	Branches      map[string]string // branch -> sha
+	Protected     []string
+	Pulls         []fPull
+	Status        map[string]string // sha -> nself-ci state
+	Hooks         []fHook
+	Deliveries    map[int64][]fDelivery
+	Redelivered   []string
+	RedeliverFail map[string]int // delivery id -> status the attempts endpoint answers with
+	Runs          []fRun
+	Rev           int
+	HooksDenied   bool
+	DeliveryDeny  bool
 }
 
 type reqRec struct {
@@ -206,9 +207,11 @@ func (f *forge) route(w http.ResponseWriter, r *http.Request) int {
 	case rest[0] == "pulls":
 		out := []map[string]any{}
 		for _, p := range repo.Pulls {
-			hr := map[string]any{"id": repo.ID, "full_name": repo.Name}
-			if p.HeadRepoID != 0 {
+			var hr any = map[string]any{"id": repo.ID, "full_name": repo.Name}
+			if p.HeadRepoID > 0 {
 				hr = map[string]any{"id": p.HeadRepoID, "full_name": p.HeadName}
+			} else if p.HeadRepoID < 0 {
+				hr = nil // the fork was deleted
 			}
 			out = append(out, map[string]any{"number": p.Number, "author_association": p.Assoc,
 				"head": map[string]any{"sha": p.Head, "repo": hr}, "base": map[string]any{"ref": "main", "sha": repo.Branches["main"]}})
@@ -253,6 +256,9 @@ func (f *forge) hooks(w http.ResponseWriter, r *http.Request, repo *fRepo, rest 
 		return jsonOut(w, r, 200, out)
 	}
 	if len(rest) == 4 && rest[3] == "attempts" && r.Method == http.MethodPost {
+		if code := repo.RedeliverFail[rest[2]]; code != 0 {
+			return jsonOut(w, r, code, map[string]string{"message": "refused"})
+		}
 		repo.Redelivered = append(repo.Redelivered, rest[2])
 		return jsonOut(w, r, 202, map[string]string{})
 	}
@@ -385,7 +391,8 @@ func init() {
 type captureHandler struct {
 	mu     sync.Mutex
 	calls  []model.TriggerFacts
-	refuse bool
+	refuse bool // answer with a providers.Error that has a code: a refusal
+	fail   bool // answer with a plain error: a transient failure
 }
 
 func (h *captureHandler) Synthesize(_ context.Context, f model.TriggerFacts) (*model.Pipeline, error) {
@@ -393,7 +400,10 @@ func (h *captureHandler) Synthesize(_ context.Context, f model.TriggerFacts) (*m
 	defer h.mu.Unlock()
 	h.calls = append(h.calls, f)
 	if h.refuse {
-		return nil, fmt.Errorf("refused")
+		return nil, providers.NewError(providers.Config, "E708", "label.not_allowed", 0, time.Time{})
+	}
+	if h.fail {
+		return nil, fmt.Errorf("capacity store unavailable")
 	}
 	return &model.Pipeline{ID: "demand-" + f.DeliveryID, Name: "demand"}, nil
 }
@@ -423,7 +433,7 @@ func newRig(t *testing.T, repos ...string) *rig {
 	t.Setenv("NSELF_V15", "1")
 	handler.take()
 	handler.mu.Lock()
-	handler.refuse = false
+	handler.refuse, handler.fail = false, false
 	handler.mu.Unlock()
 	f := newForge(t)
 	for i, name := range repos {

@@ -92,9 +92,26 @@ func TestPollDemand(t *testing.T) {
 		f.Fork.Value == nil || !*f.Fork.Value || f.HeadRepo.Source != "api" || f.Ref != "" || f.Actor.Value == nil || *f.Actor.Value != "octo" {
 		t.Errorf("in_progress facts %+v", f)
 	}
-	// a handler that refuses is asked once, not every tick
+	// a labels-only [nself] job (no self-hosted) is not ours
+	repo.Runs = []fRun{{ID: 5150, Status: "queued", Event: "push", Head: sha('6', 6), Jobs: []fJob{{ID: 8101, Status: "queued", Labels: []string{"nself"}}, {ID: 8102, Status: "queued", Labels: []string{"self-hosted"}}}}}
+	if err := tick(t, r); err != nil || len(handler.take()) != 0 {
+		t.Fatalf("[nself] only and [self-hosted] only must yield no demand (err=%v)", err)
+	}
+	// a handler that fails without refusing is asked again next tick; one that refuses is asked once
 	handler.mu.Lock()
-	handler.refuse = true
+	handler.fail = true
+	handler.mu.Unlock()
+	repo.Runs = []fRun{{ID: 5250, Status: "queued", Event: "push", Head: sha('7', 7), Jobs: []fJob{{ID: 9050, Status: "queued", Labels: nself}}}}
+	for i := 0; i < 2; i++ {
+		if err := tick(t, r); err == nil {
+			t.Fatal("a failing handler must surface as an error")
+		}
+	}
+	if n := len(handler.take()); n != 2 {
+		t.Errorf("failing handler was asked %d times, want 2 (retried each tick)", n)
+	}
+	handler.mu.Lock()
+	handler.fail, handler.refuse = false, true
 	handler.mu.Unlock()
 	repo.Runs = []fRun{{ID: 5200, Status: "queued", Event: "push", Head: sha('4', 4), Jobs: []fJob{{ID: 9001, Status: "queued", Labels: nself}}}}
 	for i := 0; i < 3; i++ {
@@ -165,8 +182,15 @@ func TestPollRateBudget(t *testing.T) {
 	if got := len(d.enq.deliveries()); got == 0 || got >= 10*3 {
 		t.Logf("deferred scans still enqueued %d heads", got)
 	}
-	if d.e.ledger.Scan > 60 {
-		t.Errorf("scans spent %d of the hour's %d, the cap is 60%%", d.e.ledger.Scan, d.e.HourlyBudget)
+	// the first sweep alone: scans stop at 60% of the allowance and leave repositories for later
+	s2 := newRig(t, names...)
+	s2.e.HourlyBudget = 60
+	_ = s2.e.GitHub().Reconcile(context.Background(), s2.enq)
+	if sc := s2.e.ledger.Scan; sc > 36 || sc < 32 || len(s2.enq.deliveries()) >= 10 {
+		t.Errorf("scans spent %d of %d (cap 60%%), enqueued %d heads; want the cap reached and some repositories deferred", sc, s2.e.HourlyBudget, len(s2.enq.deliveries()))
+	}
+	if err := s2.e.Demand().Reconcile(context.Background(), s2.enq); err != nil || s2.e.ledger.Demand == 0 {
+		t.Errorf("demand polling stopped with the scans deferred: err=%v spent=%d", err, s2.e.ledger.Demand)
 	}
 
 	// 429 with retry-after: back off, then resume
