@@ -1,0 +1,9 @@
+{"usageItems":[
+ {"date":"2026-10-14T00:00:00Z","product":"Actions","sku":"Actions Linux","quantity":120,"unitType":"minutes","pricePerUnit":0.008,"grossAmount":0.96,"discountAmount":0.96,"netAmount":0,"organizationName":"acme","repositoryName":"acme/widgets"},
+ {"date":"2026-10-14T00:00:00Z","product":"Actions","sku":"Actions Linux","quantity":30,"unitType":"minutes","pricePerUnit":0.008,"grossAmount":0.24,"discountAmount":0,"netAmount":0.24,"organizationName":"acme","repositoryName":"acme/widgets"},
+ {"date":"2026-10-15T00:00:00Z","product":"Actions","sku":"Actions macOS 3-core","quantity":10,"unitType":"minutes","pricePerUnit":0.062,"grossAmount":0.62,"discountAmount":0,"netAmount":0.62,"organizationName":"acme","repositoryName":"acme/gadgets"},
+ {"date":"2026-10-15T00:00:00Z","product":"Actions","sku":"Actions storage","quantity":3.5,"unitType":"GigabyteHours","pricePerUnit":0.0003,"grossAmount":0.001,"discountAmount":0,"netAmount":0.001,"organizationName":"acme","repositoryName":"acme/widgets"},
+ {"date":"2026-10-15T00:00:00Z","product":"Copilot","sku":"Copilot Business","quantity":1,"unitType":"seats","pricePerUnit":19,"grossAmount":19,"discountAmount":0,"netAmount":19,"organizationName":"acme","repositoryName":""},
+ {"date":"2026-10-16T00:00:00Z","product":"Packages","sku":"Packages data transfer","quantity":2,"unitType":"gigabytes","pricePerUnit":0.5,"grossAmount":1,"discountAmount":0,"netAmount":1,"organizationName":"acme","repositoryName":"acme/widgets"},
+ {"date":"2026-10-01T00:00:00Z","product":"Actions","sku":"Actions Linux","quantity":999,"unitType":"minutes","pricePerUnit":0.008,"grossAmount":7.99,"discountAmount":0,"netAmount":7.99,"organizationName":"acme","repositoryName":"acme/old"}
+]}

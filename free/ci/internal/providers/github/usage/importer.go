@@ -1,0 +1,166 @@
+package usage
+
+// Purpose: Importer, the off-by-default step that turns a UsageSource's lines into SCHED-07 ledger
+// rows (Epic D12).
+// Inputs:  Settings (billing_import, billing_account), a providers.UsageSource, a recorder (default
+//          economics.RecordUsage) and a clock.
+// Outputs: Result; one economics.Usage per (account, date, sku, repo) with the key
+//          github:<account>:<date>:<sku>:<repo>, so a second import of the same period replaces the
+//          same rows (RecordUsage is an upsert by key) and never adds one.
+// Constraints: with billing_import false Run returns Disabled before the source is touched (no API
+//          call, no credential read). The whole period is read and converted before the first write,
+//          so a failing report writes nothing. No remaining value is computed or reported here.
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math"
+	"sort"
+	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/economics"
+	"github.com/nself-org/plugins/free/ci/internal/policy"
+	"github.com/nself-org/plugins/free/ci/internal/providers"
+	"github.com/nself-org/plugins/free/ci/internal/providers/rest"
+	"github.com/nself-org/plugins/free/ci/internal/providers/runtime"
+)
+
+const (
+	// Provider is the ledger provider id the rows are written under (the hosted GitHub class).
+	Provider = "github"
+	// LookbackDays is how many UTC days back (today included) one import reads. GitHub finalizes a
+	// day late, so re-reading a week corrects the partial lines of the last days.
+	LookbackDays = 7
+)
+
+// Recorder writes one usage line; economics.RecordUsage is the production one.
+type Recorder func(context.Context, economics.Usage) error
+
+// Importer imports one account's usage.
+type Importer struct {
+	Settings Settings
+	Source   providers.UsageSource // may be nil only while Settings.Import is false
+	Record   Recorder              // default economics.RecordUsage
+	Now      func() time.Time      // default time.Now
+}
+
+// Result says what a run did.
+type Result struct {
+	Disabled bool   `json:"disabled"`
+	Account  string `json:"account,omitempty"`
+	From     string `json:"from,omitempty"`
+	To       string `json:"to,omitempty"`
+	Rows     int    `json:"rows"`
+}
+
+// FromPolicy builds an Importer from the operator's effective policy: the API URL, token source and
+// private-base switch come from the providers.github.* keys, the import switch and account from ours.
+// With the import off it builds no client.
+func FromPolicy(ctx context.Context, eff *policy.Effective) (*Importer, error) {
+	set, err := SettingsFrom(eff)
+	if err != nil || !set.Import {
+		return &Importer{Settings: set}, err
+	}
+	acct, err := ParseAccount(set.Account)
+	if err != nil {
+		return nil, unconfigured()
+	}
+	rs, err := runtime.SettingsFrom(eff)
+	if err != nil {
+		return nil, err
+	}
+	client := &rest.Client{BaseURL: rs.GitHubAPIURL, Auth: runtime.Credential(ctx, "github"), UserAgent: "usage",
+		APIVersion: apiVersion, Provider: "github", AllowPrivateBase: rs.GitHubAllowPrivateBase}
+	src, err := New(Config{Client: client, Account: acct})
+	if err != nil {
+		return nil, err
+	}
+	return &Importer{Settings: set, Source: src}, nil
+}
+
+func unconfigured() error {
+	return providers.NewError(providers.Config, "E700", "billing_account", 0, time.Time{})
+}
+
+// Run imports the last LookbackDays days.
+func (i *Importer) Run(ctx context.Context) (Result, error) {
+	if !i.Settings.Import {
+		return Result{Disabled: true}, nil
+	}
+	acct, err := ParseAccount(i.Settings.Account)
+	if err != nil || i.Source == nil {
+		return Result{}, unconfigured()
+	}
+	now := time.Now
+	if i.Now != nil {
+		now = i.Now
+	}
+	to := dayOf(now())
+	from := to.AddDate(0, 0, 1-LookbackDays)
+	res := Result{Account: acct.String(), From: from.Format("2006-01-02"), To: to.Format("2006-01-02")}
+	rows, err := i.Source.Usage(ctx, providers.Period{From: from, To: to})
+	if err != nil {
+		return res, err
+	}
+	lines, err := lines(acct, rows, now())
+	if err != nil {
+		return res, err
+	}
+	record := i.Record
+	if record == nil {
+		record = economics.RecordUsage
+	}
+	var errs []error
+	for _, l := range lines {
+		if err := record(ctx, l); err != nil {
+			errs = append(errs, fmt.Errorf("record %s: %w", l.Key, err))
+			continue
+		}
+		res.Rows++
+	}
+	return res, errors.Join(errs...)
+}
+
+// Key is the idempotent ledger key of one line.
+func Key(account, date, sku, repo string) string {
+	return "github:" + account + ":" + date + ":" + sku + ":" + repo
+}
+
+// lines folds source rows that share a key (GitHub can list one sku and repo twice a day) and
+// returns them in key order.
+func lines(acct Account, rows []providers.UsageRow, at time.Time) ([]economics.Usage, error) {
+	type sum struct {
+		minutes float64
+		micro   int64
+		date    string
+		sku     string
+	}
+	by := map[string]*sum{}
+	for _, r := range rows {
+		date := r.Date.UTC().Format("2006-01-02")
+		k := Key(acct.String(), date, r.SKU, r.Repo)
+		s := by[k]
+		if s == nil {
+			s = &sum{date: date, sku: r.SKU}
+			by[k] = s
+		}
+		s.minutes += r.Quantity
+		s.micro += r.NetMicro
+		if s.micro < 0 || s.minutes < 0 || s.minutes > math.MaxInt32*1e3 {
+			return nil, unavailable("shape.amount", 200)
+		}
+	}
+	keys := make([]string, 0, len(by))
+	for k := range by {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]economics.Usage, 0, len(keys))
+	for _, k := range keys {
+		s := by[k]
+		out = append(out, economics.Usage{Key: k, Provider: Provider, Date: s.date, Series: s.sku,
+			Minutes: int64(math.Round(s.minutes)), CostMicro: s.micro, ReportedAt: at})
+	}
+	return out, nil
+}
