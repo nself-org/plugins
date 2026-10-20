@@ -30,6 +30,9 @@ var (
 	errNoHello     = errors.New("carrier: no hello to send")
 )
 
+// healthy says a connection lasted long enough for the backoff to start over.
+func healthy(lasted time.Duration) bool { return lasted >= healthyAfter }
+
 // permanent wraps an error that ends the carrier (the session has been told).
 type permanent struct{ error }
 
@@ -70,7 +73,7 @@ func (c *Carrier) loop(ctx context.Context) {
 			c.sess = ""
 			c.mu.Unlock()
 		}
-		if time.Since(began) >= healthyAfter {
+		if healthy(time.Since(began)) {
 			bo.Reset()
 		}
 		d := bo.Next()

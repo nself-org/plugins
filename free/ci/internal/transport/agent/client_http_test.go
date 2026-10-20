@@ -265,3 +265,92 @@ func TestSkewIsServerMinusAgentClock(t *testing.T) {
 	}
 	_ = pki.ClockSkew
 }
+
+func TestNewClientDefaultsAndTransportTimings(t *testing.T) {
+	cl := newClient(Options{BaseURL: "https://x", TLS: &tls.Config{MinVersion: tls.VersionTLS13}})
+	defer cl.close()
+	if cl.o.Wait != 20*time.Second {
+		t.Fatalf("default wait %v", cl.o.Wait)
+	}
+	if cl.o.Now == nil {
+		t.Fatal("no default clock")
+	}
+	for _, w := range []time.Duration{0, -time.Second} {
+		if c := newClient(Options{BaseURL: "https://x", Wait: w, TLS: &tls.Config{}}); c.o.Wait != 20*time.Second {
+			t.Fatalf("wait %v kept", w)
+		}
+	}
+	tr := newTransport(&tls.Config{MinVersion: tls.VersionTLS13}, 7*time.Second)
+	if tr.ResponseHeaderTimeout != 22*time.Second || tr.TLSHandshakeTimeout != 15*time.Second || !tr.ForceAttemptHTTP2 ||
+		tr.HTTP2 == nil || tr.HTTP2.SendPingTimeout != 15*time.Second || tr.HTTP2.PingTimeout != 10*time.Second {
+		t.Fatalf("transport timings %+v %+v", tr, tr.HTTP2)
+	}
+	if got := newClient(Options{BaseURL: "https://x", Wait: 3 * time.Second, TLS: &tls.Config{}}).hc.Transport.(*http.Transport).ResponseHeaderTimeout; got != 18*time.Second {
+		t.Fatalf("header timeout %v", got)
+	}
+}
+
+func TestHelloAcceptsTheToleranceExactlyAndRefusesOneSecondMore(t *testing.T) {
+	now := time.Date(2030, 1, 1, 12, 0, 0, 0, time.UTC)
+	for name, c := range map[string]struct {
+		date time.Time
+		bad  bool
+	}{"plus 120": {now.Add(120 * time.Second), false}, "plus 121": {now.Add(121 * time.Second), true}, "minus 120": {now.Add(-120 * time.Second), false}, "minus 121": {now.Add(-121 * time.Second), true}} {
+		_, cl := newScripted2(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Date", c.date.Format(http.TimeFormat))
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			_, _ = w.Write(frameBytes(t, "welcome", 1, protocol.Welcome{Version: 1, SessionID: "s"}))
+		})
+		cl.o.Now = func() time.Time { return now }
+		_, _, err := cl.hello(context.Background(), []byte("x\n"))
+		if (err != nil) != c.bad {
+			t.Errorf("%s: err = %v", name, err)
+		}
+	}
+}
+
+func TestHelloReadsAWelcomeOfExactlyTheMaximumFrameSize(t *testing.T) {
+	probe := frameBytes(t, "welcome", 1, protocol.Welcome{Version: 1, SessionID: ""})
+	pad := strings.Repeat("s", protocol.MaxFrame-len(probe))
+	big := frameBytes(t, "welcome", 1, protocol.Welcome{Version: 1, SessionID: pad})
+	if len(big) != protocol.MaxFrame {
+		t.Fatalf("fixture is %d bytes, want %d", len(big), protocol.MaxFrame)
+	}
+	_, cl := newScripted2(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = w.Write(big)
+	})
+	m, _, err := cl.hello(context.Background(), []byte("x\n"))
+	if err != nil || m.Type != "welcome" {
+		t.Fatalf("a maximum-size welcome: %v", err)
+	}
+}
+
+func TestHealthyAfterThirtySeconds(t *testing.T) {
+	if healthy(30*time.Second-1) || !healthy(30*time.Second) || !healthy(time.Hour) {
+		t.Fatal("healthy boundary")
+	}
+}
+
+func TestReadControlEndsWithStreamEndedOnEOFAndWithTheErrorOtherwise(t *testing.T) {
+	mode := "eof"
+	_, cl := newScripted2(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		if mode == "eof" {
+			_, _ = w.Write(frameBytes(t, "drain", 1, protocol.Drain{Deadline: "2030-01-01T00:00:00Z"}))
+			return
+		}
+		_, _ = io.WriteString(w, "garbage\n")
+	})
+	c := &Carrier{cl: cl, inbox: make(chan protocol.Message, 4), sess: "s1", cfg: CarrierConfig{Logf: func(string, ...any) {}}}
+	if err := c.readControl(context.Background()); !errors.Is(err, errStreamEnded) {
+		t.Fatalf("clean end = %v", err)
+	}
+	if m := <-c.inbox; m.Type != "drain" {
+		t.Fatalf("delivered %s", m.Type)
+	}
+	mode = "garbage"
+	if err := c.readControl(context.Background()); err == nil || errors.Is(err, errStreamEnded) {
+		t.Fatalf("garbage = %v", err)
+	}
+}

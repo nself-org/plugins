@@ -68,18 +68,31 @@ type client struct {
 	hc *http.Client
 }
 
+// The client's timings are nanosecond counts converted once, so that no arithmetic is left in the code.
+const (
+	defaultWait      = time.Duration(20e9) // the lease long-poll wait
+	headerSlack      = time.Duration(15e9) // how long past the wait the coordinator may take to answer
+	handshakeTimeout = time.Duration(15e9)
+	pingAfter        = time.Duration(15e9) // h2 ping after this much silence: finds a half-open connection in pingAfter + pingTimeout
+	pingTimeout      = time.Duration(10e9)
+)
+
+// newTransport is the HTTPS transport of the pull connection.
+func newTransport(tlsc *tls.Config, wait time.Duration) *http.Transport {
+	return &http.Transport{TLSClientConfig: tlsc.Clone(), ForceAttemptHTTP2: true, ResponseHeaderTimeout: wait + headerSlack, TLSHandshakeTimeout: handshakeTimeout,
+		HTTP2: &http.HTTP2Config{SendPingTimeout: pingAfter, PingTimeout: pingTimeout}}
+}
+
 func newClient(o Options) *client {
 	if o.Wait <= 0 {
-		o.Wait = 20 * time.Second
+		o.Wait = defaultWait
 	}
 	if o.Now == nil {
 		o.Now = time.Now
 	}
 	rt := o.Transport
 	if rt == nil {
-		// h2 pings find a half-open connection (a coordinator that vanished without a reset) in about 25 s
-		rt = &http.Transport{TLSClientConfig: o.TLS.Clone(), ForceAttemptHTTP2: true, ResponseHeaderTimeout: o.Wait + 15*time.Second, TLSHandshakeTimeout: 15 * time.Second,
-			HTTP2: &http.HTTP2Config{SendPingTimeout: 15 * time.Second, PingTimeout: 10 * time.Second}}
+		rt = newTransport(o.TLS, o.Wait)
 	}
 	// the agent never follows a redirect: a custom header (the job token) would travel with it
 	return &client{o: o, hc: &http.Client{Transport: rt, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
