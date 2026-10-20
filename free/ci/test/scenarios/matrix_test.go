@@ -22,7 +22,7 @@ import (
 
 var (
 	testFunc  = regexp.MustCompile(`(?m)^func (Test[A-Za-z0-9_]+)\(`)
-	matrixRow = regexp.MustCompile("(?m)^\\| `(Test[A-Za-z0-9_]+)` \\| ([0-9, ]+) \\|")
+	matrixRow = regexp.MustCompile("(?m)^\\| `(Test[A-Za-z0-9_]+)` \\| ([0-9, -]+) \\|")
 )
 
 func suiteTests(t *testing.T) map[string]bool {
@@ -57,6 +57,7 @@ func TestAcceptanceMatrixMapsEveryTest(t *testing.T) {
 		rows[m[1]] = items
 		for _, it := range items {
 			switch it {
+			case "-": // a test that proves no acceptance item itself (this one): it never counts as coverage
 			case "2", "3", "4", "5", "6":
 				covered[it] = true
 			default:

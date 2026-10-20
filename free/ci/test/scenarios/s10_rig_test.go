@@ -120,18 +120,26 @@ type s10Orderer struct {
 	inner dispatch.Orderer
 	mu    sync.Mutex
 	last  int
+	most  int // the longest queue any tick ordered
 	ch    chan struct{}
 }
 
 func (o *s10Orderer) Order(q []dispatch.Queued) []dispatch.Queued {
 	o.mu.Lock()
 	o.last = len(q)
+	o.most = max(o.most, len(q))
 	o.mu.Unlock()
 	select {
 	case o.ch <- struct{}{}:
 	default:
 	}
 	return o.inner.Order(q)
+}
+
+func (o *s10Orderer) mostLen() int {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.most
 }
 
 func (o *s10Orderer) lastLen() int {

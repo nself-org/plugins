@@ -21,9 +21,11 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
+	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
 var matrixPlatforms = []string{"darwin/arm64", "linux/amd64", "linux/arm64"}
@@ -147,10 +149,11 @@ func TestScenario4MissingPlatformFailsAFreshForegroundRun(t *testing.T) {
 	}
 }
 
-// TestScenario4Native is the native leg: on each hosted platform the entry for the host's own
-// platform places on the local runner. ci-sched-scenarios.yml runs it on ubuntu-24.04,
-// ubuntu-24.04-arm and macos-15. On a host outside the matrix (darwin/amd64, say) it fails on purpose,
-// so a leg can never pass without placing its own platform.
+// TestScenario4Native is the native leg: on each hosted platform the local runner is described by
+// world.BuildForLocal from this machine's own platform (the path `ci plan` and a run take through
+// planview.LocalCapability), and the entry for that platform places on it while the others stay off it.
+// ci-sched-scenarios.yml runs it on ubuntu-24.04, ubuntu-24.04-arm and macos-15. On a host outside the
+// matrix (darwin/amd64, say) it fails on purpose, so a leg can never pass without placing its own platform.
 func TestScenario4Native(t *testing.T) {
 	host := runtime.GOOS + "/" + runtime.GOARCH
 	known := false
@@ -160,7 +163,16 @@ func TestScenario4Native(t *testing.T) {
 	if !known {
 		t.Fatalf("host platform %s is outside the scenario matrix %v", host, matrixPlatforms)
 	}
-	w := sched.World{Runners: []sched.Runner{runner("local", "local", host, 2)}, Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}}
+	st := openStore(t)
+	pol := func(context.Context, string) (sched.Policy, error) { return sched.Policy{Preset: "balanced"}, nil }
+	w, _, err := world.BuildForLocal(context.Background(), world.Deps{Store: st, Policy: pol, Clock: newClock().Now},
+		world.LocalInput{Project: "project", Platform: host, Capacity: ciexec.Capacity{CPUs: 8, MemoryMB: 8192}, DockerUnknown: true, Now: newClock().Now()}, sched.Pipeline{ID: "pipe", Support: matrixPlatforms})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Runners) != 1 || w.Runners[0].ID != "local" {
+		t.Fatalf("the native world must hold exactly the local runner: %+v", w.Runners)
+	}
 	jobs := make([]sched.Job, 0, len(matrixPlatforms))
 	for _, p := range matrixPlatforms {
 		j := job("build-"+strings.ReplaceAll(p, "/", "-"), p)
@@ -168,11 +180,12 @@ func TestScenario4Native(t *testing.T) {
 		jobs = append(jobs, j)
 	}
 	res := sched.Place(w, jobs)
-	if res.ErrorCode != "" || len(res.Placements) != 1 || res.Placements[0].RunnerID != "local" || res.Placements[0].JobKey != "build-"+strings.ReplaceAll(host, "/", "-") {
+	own := "build-" + strings.ReplaceAll(host, "/", "-")
+	if res.ErrorCode != "" || len(res.Placements) != 1 || res.Placements[0].RunnerID != "local" || res.Placements[0].JobKey != own {
 		t.Fatalf("native placement on %s: %+v", host, res)
 	}
 	for _, x := range res.Explanations {
-		if x.JobKey != res.Placements[0].JobKey && x.Status == "placed" {
+		if x.JobKey != own && x.Status == "placed" {
 			t.Fatalf("%s placed on a host of another platform", x.JobKey)
 		}
 	}

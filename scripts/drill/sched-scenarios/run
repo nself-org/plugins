@@ -39,13 +39,26 @@ cgo=1
 	cgo=0
 }
 
+# The native leg (TestScenario4Native) places this machine's own platform, so it only exists for the three platforms of the
+# matrix; on another host (an Intel Mac, say) the hosted workflow runs it and this drill leaves it out and says so.
+skip=()
+native=1
+case "$(go env GOOS)/$(go env GOARCH)" in
+linux/amd64 | linux/arm64 | darwin/arm64) ;;
+*)
+	skip=(-skip '^TestScenario4Native$')
+	native=0
+	;;
+esac
+
 # Step 1: the scenario suite, real store, world, sched, dispatch, fairq, economics and burst.
-CGO_ENABLED=$cgo go test -mod=vendor ${race[@]+"${race[@]}"} -count=1 -v -tags scenarios ./test/scenarios/... >"$work/suite.txt" 2>&1
+CGO_ENABLED=$cgo go test -mod=vendor ${race[@]+"${race[@]}"} -count=1 -v -tags scenarios ${skip[@]+"${skip[@]}"} ./test/scenarios/... >"$work/suite.txt" 2>&1
 rc=$?
 ev_expect suite "go test -tags scenarios ./test/scenarios/..." "$rc" "exit $rc: $(ev_snip "$work/suite.txt")"
 if grep -q -- '--- SKIP' "$work/suite.txt"; then ev_fail no-skip "a scenario test skipped"; else ev_pass no-skip "no scenario test skipped"; fi
 ran=$(grep -c -- '^--- PASS: Test' "$work/suite.txt" || true)
 want=$(grep -hE '^func Test[A-Za-z0-9_]+\(' test/scenarios/*_test.go | grep -vc '^func TestPlanted' || true)
+[ "$native" -eq 1 ] || want=$((want - 1))
 if [ "${ran:-0}" -eq "${want:-1}" ] && [ "${ran:-0}" -ge 1 ]; then ev_pass tests-ran "all $ran suite tests passed"; else ev_fail tests-ran "$ran suite tests passed, $want are declared"; fi
 
 # Step 2: every planted regression turns the suite red (the planted tests pass when the guard catches the defect).

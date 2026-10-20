@@ -87,11 +87,20 @@ func TestScenario10SaturationStaysWithinCapacityAndFair(t *testing.T) {
 		}
 	})
 	rig := newS10Rig(t, s10Runners(), nil, nil)
+	// One project submits its whole flood before the other starts, so arrival order (FIFO) would serve
+	// 6 jobs of the first project before any of the second: only fair queuing keeps the gap at 1. The seed
+	// picks which project floods first, so every seed discriminates between the orderers.
+	first, second := "alpha", "beta"
+	if rand.New(rand.NewSource(seed)).Intn(2) == 1 {
+		first, second = second, first
+	}
 	projects := []string{}
 	for i := 0; i < 9; i++ {
-		projects = append(projects, "alpha", "beta")
+		projects = append(projects, first)
 	}
-	rand.New(rand.NewSource(seed)).Shuffle(len(projects), func(i, k int) { projects[i], projects[k] = projects[k], projects[i] })
+	for i := 0; i < 9; i++ {
+		projects = append(projects, second)
+	}
 	for _, p := range projects {
 		rig.submit(p, "")
 	}
@@ -153,8 +162,10 @@ func TestScenario10BackpressureCarriesExpectedWait(t *testing.T) {
 	if !errors.As(err, &de) || de.Code != "E694" {
 		t.Fatalf("the E694 must unwrap to a dispatch error: %v", err)
 	}
-	if got := rig.ord.lastLen(); got != depth+1 {
-		t.Fatalf("the refused job entered the queue: %d queued", got)
+	// the refused job never entered the queue: after a full tick no tick has ordered more than the 6 accepted jobs
+	rig.release()
+	if got := rig.ord.mostLen(); got != depth+1 {
+		t.Fatalf("the longest queue a tick ordered was %d jobs, want %d (the refused job entered the queue)", got, depth+1)
 	}
 }
 

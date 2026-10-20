@@ -27,6 +27,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/trust"
+	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
 // econStore opens a store whose clock is clk.
@@ -122,8 +123,8 @@ func econPaid(id, class, provider string) sched.Runner {
 	return r
 }
 
-// econWorld is liveWorld plus the four economics fields (costs, spend policy, budgets still open in the
-// current window, valid approvals), built from the same exported calls the contributors make.
+// econWorld is liveWorld plus the economics fields: the spend policy and costs from the exported calls the
+// contributors make, budgets, allowances and approvals from the real contributors through world.Build.
 func econWorld(t testing.TB, st *store.Store, p economics.Policy, clk *clock, runners ...sched.Runner) func(context.Context, sched.Pipeline) (sched.World, string, error) {
 	return liveWorld(t, st, func(w *sched.World) {
 		ctx := context.Background()
@@ -131,32 +132,16 @@ func econWorld(t testing.TB, st *store.Store, p economics.Policy, clk *clock, ru
 		for _, r := range w.Runners {
 			w.Costs[r.ID] = economics.CostFor(p, r.Class, r.Provider)
 		}
-		high, err := st.WindowHigh(ctx, clk.Now().UTC().Format("2006-01-02"))
+		// budgets still open, allowances and valid approvals come from the production contributors, run by
+		// world.Build with the economics environment bound; the cost of each runner is the same CostFor call
+		// the costs contributor makes (the runners here are not registry rows, so the contributor cannot see them)
+		bw, _, err := world.Build(economics.WithEnv(ctx, econEnv(st, p, clk)), world.Deps{Store: st, Clock: clk.Now,
+			Policy: func(context.Context, string) (sched.Policy, error) { return sched.Policy{}, nil }}, sched.Pipeline{ID: "pipe"})
 		if err != nil {
 			t.Error(err)
 			return
 		}
-		day := max(clk.Now().UTC().Format("2006-01-02"), high)
-		open := func(b schedpolicy.Budget, scope, key, window string) sched.Budget {
-			if !b.Set {
-				return sched.Budget{}
-			}
-			held, err := st.Reserved(ctx, scope, key, window)
-			if err != nil {
-				t.Error(err)
-			}
-			return sched.Budget{Set: true, Remaining: max(b.Micro-held, 0)}
-		}
-		w.Budgets = sched.Budgets{Job: sched.Budget{Set: p.Budgets.Job.Set, Remaining: p.Budgets.Job.Micro}, Pipeline: sched.Budget{Set: p.Budgets.Pipeline.Set, Remaining: p.Budgets.Pipeline.Micro},
-			Day: open(p.Budgets.Day, "day", "", day), Month: open(p.Budgets.Month, "month", "", day[:7])}
-		valid, err := st.ValidApprovals(ctx)
-		if err != nil {
-			t.Error(err)
-		}
-		w.Approvals = map[string]bool{}
-		for run := range valid {
-			w.Approvals[run] = true
-		}
+		w.Budgets, w.Approvals, w.Allowances = bw.Budgets, bw.Approvals, bw.Allowances
 	}, runners...)
 }
 

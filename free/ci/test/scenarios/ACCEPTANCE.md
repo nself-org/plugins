@@ -14,7 +14,7 @@ names a test that does not exist, an item falls outside 2-6, or an item has no t
 
 | Test | Acceptance item | What it proves |
 |---|---|---|
-| `TestAcceptanceMatrixMapsEveryTest` | 2, 3, 4, 5, 6 | Matrix completeness |
+| `TestAcceptanceMatrixMapsEveryTest` | - | Matrix completeness (counts toward no item) |
 | `TestBurstCoordinatorKillLeavesNoLabelledResourceAfterOneSweep` | 6 | Burst |
 | `TestBurstFullLifecycleLeavesNothingBehind` | 6 | Burst |
 | `TestBurstIdleVmIsTornDownAtIdleTimeout` | 6 | Burst |
@@ -46,7 +46,7 @@ names a test that does not exist, an item falls outside 2-6, or an item has no t
 | `TestPlantedProvisionWithoutBudget` | 5 | Planted: placement of paid capacity without budget |
 | `TestPlantedProvisionWithoutSpend` | 5, 6 | Planted: cloud provision without paid_enabled and a budget |
 | `TestPlantedProvisioningStorm` | 6 | Planted: provisioning storm |
-| `TestPlantedReservationOvercommit` | 4 | Planted: reservation over-commit |
+| `TestPlantedReservationOvercommit` | 4 | Planted: reservation over-commit (the capacity observer sees a world that advertises more slots than the runner has) |
 | `TestPlantedRevisionBudgetEnablesSpend` | 5 | Planted: revision-set budget enabling spend |
 | `TestPlantedSweeperDeletesForeign` | 6 | Planted: sweeper deleting a foreign resource |
 | `TestPolicyPaidEnabledAdminAudited` | 5 | Economics |
@@ -65,6 +65,24 @@ names a test that does not exist, an item falls outside 2-6, or an item has no t
 | `TestScenario4RealWorldDispatch` | 2 | Scenario 4, heterogeneous matrix |
 | `TestScenario4RealWorldPlacesEachEntryOnItsPlatform` | 2 | Scenario 4, heterogeneous matrix |
 | `TestScenario6DispatcherMovesOffHosted` | 3 | Scenario 6, hybrid |
+| `TestScenario6ExplainListsEveryAlternative` | 3 | Scenario 6, hybrid |
 | `TestScenario6PlacementsFollowTheFixtureOrder` | 3 | Scenario 6, hybrid |
 | `TestScenario6PreserveHostedQuotaMovesWorkOffHosted` | 3 | Scenario 6, hybrid |
 | `TestScenario6ResultIsDeterministic` | 3 | Scenario 6, hybrid |
+
+## Known limits (what this suite does not prove, and why)
+
+These are production gaps found while writing the suite. They are outside this Ticket's write scope; each has a debt row in hq
+(`quality/debt.yaml`, filed by P7-SCHED-15) and the matrix does not claim them.
+
+- **Coordinator wait for a missing platform (item 2).** `TestScenario4MissingPlatformWaitsOnACoordinator` sets `World.OpenRegistry`
+  by hand: no production code sets it, so on a real coordinator a missing platform ends `unplaceable`, not `waiting` with
+  `platform.none_available`. The suite proves the scheduler contract, not the coordinator wiring. The foreground E618 half is proven end to end.
+- **Spend approval wiring (item 5).** `economics.NotePending` has no production caller, so a held run records no estimate and
+  `ApproveSpend` has nothing to approve; `TestEconomicsApprovalPausesUntilAnAdminApproves` calls `NotePending` itself. The pause, the
+  approval, the world contributor that reads approvals and the admission are real.
+- **Served-runtime fairness (item 4).** `dispatch.Fair` charges every job one unit, so fairness is by job count; the test keeps job
+  runtimes equal and holds the Epic's `max job runtime x slots` bound on that basis. Unequal runtimes are not weighted by the orderer.
+- **Burst VM in the dispatcher's world (item 6).** Burst is not wired into the coordinator (D-1329): `NodeJoined` only binds the node, and no
+  production code marks a joined VM `Ephemeral` or hosted in the world. The lifecycle, sweeper, reservation, one-job-per-VM admission step and
+  I03 placement rules are proven against the engine, the admission step and `sched.Place`; the delivery of a job to a joined VM is not.
