@@ -4,10 +4,12 @@ package cachesec
 
 // Purpose: TM-13 cases on the local artifact store (writes by a stale, ended or failed attempt).
 // Inputs: a real store, cas and the records package through g2World. Outputs: registered cases
-// C13-ART-01..06 of matrix.d/g2.yaml.
+// C13-ART-01..06 of matrix.yaml.
 // Constraints: production packages only; each case runs the honest operation first on a control
-// attempt of the same world (so a refusal cannot come from a broken fixture); Landed is the size of
-// the committed records of the attacking attempt.
+// attempt of the same world (so a refusal cannot come from a broken fixture); Landed is the new
+// reachable bytes since Mark() (new committed record bytes plus new blobs). A zombie's blob staged
+// before it was ended is no record's blob (staged rows are dropped at the end of an attempt, checked
+// by g2StagedDropped, and cas.Sweep removes the blob), so it is not reachable and is not counted.
 
 import (
 	"strings"
@@ -76,7 +78,7 @@ func g2Refuse(t *testing.T, g *g2World, err error, attempt, wantReason string) O
 		t.Fatalf("reason %s, want %s (%v)", got.Reason, wantReason, err)
 	}
 	got.Audit = g2RefusedAudit(t, g.world, attempt, wantReason)
-	got.Landed = g.CommittedBytes(attempt)
+	got.Landed = g.LandedSince() // Mark() was taken just before the attack
 	return got
 }
 
@@ -89,6 +91,7 @@ func init() {
 		if err := g.St.Transition(g.ctx, "z1", "finalizing", "cancelled", store.TransitionDetail{Epoch: 3}); err != nil {
 			t.Fatal(err)
 		}
+		g.Mark()
 		_, err := g.St.ArtifactCommit(g.ctx, "z1", 4, held, g.Pol)
 		g2StagedDropped(t, g, "z1")
 		return g2Refuse(t, g, err, "z1", records.ReasonAttempt)
@@ -97,6 +100,7 @@ func init() {
 		g := newG2World(t)
 		g2Control(t, g)
 		g2Zombie(g, "z2")
+		g.Mark()
 		_, err := records.CommitAndVerify(g.ctx, g.St, g.Blobs, "z2", 2, g.Pol)
 		return g2Refuse(t, g, err, "z2", records.ReasonEpoch)
 	})
@@ -108,6 +112,7 @@ func init() {
 			t.Fatalf("a running attempt could not reserve (control): %v", err)
 		}
 		g.Pass("z3")
+		g.Mark()
 		err := g.St.ArtifactReserve(g.ctx, "z3", 4, 100, g.Pol)
 		return g2Refuse(t, g, err, "z3", records.ReasonAttempt)
 	})
@@ -120,6 +125,7 @@ func init() {
 		if err != nil {
 			t.Fatal(err)
 		}
+		g.Mark()
 		err = g.St.ArtifactStage(g.ctx, "z4", 1, records.ToRecords("z4", f, 1, st, g.clockTime()))
 		got := g2Refuse(t, g, err, "z4", records.ReasonEpoch)
 		if staged, _ := g.St.ArtifactStaged(g.ctx, "z4"); len(staged) != 0 {
@@ -133,6 +139,7 @@ func init() {
 		g2Zombie(g, "z5")
 		held := g2Held(t, g, "z5")
 		g.End("z5", model.JobState("failed"))
+		g.Mark()
 		_, err := g.St.ArtifactCommit(g.ctx, "z5", 4, held, g.Pol)
 		g2StagedDropped(t, g, "z5")
 		return g2Refuse(t, g, err, "z5", records.ReasonAttempt)
@@ -144,6 +151,7 @@ func init() {
 		if err := g.St.Transition(g.ctx, "z6", "running", "failed", store.TransitionDetail{Epoch: 2}); err != nil {
 			t.Fatal(err)
 		}
+		g.Mark()
 		err := g.St.ArtifactReserve(g.ctx, "z6", 3, 4096, g.Pol)
 		return g2Refuse(t, g, err, "z6", records.ReasonAttempt)
 	})

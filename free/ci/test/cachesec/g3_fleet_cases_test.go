@@ -2,9 +2,10 @@
 
 package cachesec
 
-// Purpose: group g3 cases that run on the real simharness fleet: an artifact write by a node whose lease
-// epoch was fenced (TM-13), and (corruption in transit is FINDING-g3-1: refused but not audited, so it has no matrix row). Each case has an honest control on the same fleet.
-// Inputs: the shared g3Fleet. Outputs: registered cases of matrix.d/g3.yaml.
+// Purpose: group g3 cases that run on the real simharness fleet: a cache or artifact write by a node whose lease
+// epoch was fenced (TM-13) over the real ssh client and the real agent pull carrier. g3_transit_test.go adds the
+// sink-boundary faults on the same fleet. Each case has an honest control on the same fleet.
+// Inputs: the shared g3Fleet. Outputs: registered cases of the g3 rows of matrix.yaml.
 // Constraints: the real agent builds the blobs; the coordinator handlers are production code; the only
 // injected fault is a wrapper around the admitted blob writer.
 

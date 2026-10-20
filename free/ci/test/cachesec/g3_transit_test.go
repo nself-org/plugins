@@ -2,11 +2,12 @@
 
 package cachesec
 
-// Purpose: TM-15 blobs damaged in transit on the real ssh carrier (real sshd container, real agent): one bit flipped
-// and a blob cut in half at the transfer boundary of the coordinator sink. The carrier refuses the blob (E656
+// Purpose: TM-15 blobs damaged at the SINK BOUNDARY of the real ssh carrier (real sshd container, real agent): one bit
+// flipped and a blob cut in half at the transfer boundary of the coordinator sink. The fault is applied after the
+// carrier delivered the bytes to the sink, not on the wire (no netem or proxy fault). The carrier refuses the blob (E656
 // transport.ssh_blob) and the handler's own verdict is captured from the writer; production appends no audit row for
 // either (debt D-1451), so the case asserts "none".
-// Inputs: the shared g3Fleet. Outputs: registered fleet cases of matrix.d/g3.yaml.
+// Inputs: the shared g3Fleet. Outputs: registered fleet cases of the g3 rows of matrix.yaml.
 // Constraints: the only injected fault is a wrapper around the admitted blob writer; no production check is changed.
 
 import (

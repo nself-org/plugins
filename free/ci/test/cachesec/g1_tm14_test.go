@@ -8,7 +8,8 @@ package cachesec
 // into a pinned job root. Production must refuse with E683 (authz.PathError), write an audit row
 // (cache.restore.refused), drop the entry and leave the filesystem untouched.
 // Inputs: a real store, cas and specs.Engine. Outputs: registered cases C14-CAC-01..09.
-// Constraints: production packages only. Every case first restores an honest tar of the same
+// Constraints: production packages only. Landed is measured, never a constant: the filesystem walk plus
+// the bytes the dropped entry still serves. Every case first restores an honest tar of the same
 // fixture into a separate job root (positive control), then the crafted tar. Landed is read from
 // the filesystem: bytes of every regular file (and one per other node) under the scratch parent
 // except the control root and the sentinel file, plus the entry bytes still reachable.
@@ -147,10 +148,11 @@ func g1Restore(t *testing.T, crafted []byte) Observed {
 	if b, err := os.ReadFile(victim); err != nil || string(b) != g1Sentinel {
 		t.Fatalf("the sentinel outside the job root changed: %q %v", b, err)
 	}
-	if h, _, _ := w.Es.Lookup(w.ctx, ns, kBad, authz.ModeRWOwn); len(h.Blobs) != 0 {
-		t.Fatal("the refused entry is still served")
+	h, _, lerr := w.Es.Lookup(w.ctx, ns, kBad, authz.ModeRWOwn)
+	if lerr != nil {
+		t.Fatal(lerr)
 	}
-	got.Landed = g1Walk(t, parent)
+	got.Landed = h.Bytes() + g1Walk(t, parent) // entry bytes still served + bytes the restore left on disk
 	return got
 }
 

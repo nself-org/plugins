@@ -228,3 +228,20 @@ func (r *g4Release) Verify() verify.Result {
 	r.t.Helper()
 	return verify.Release(context.Background(), r.Dir, r.Opt)
 }
+
+// Accepted is the number of artifact bytes in the release directory that the verdict res accepts: the size of
+// artifacts/ when the release verified, 0 when it did not (a refused release lets no artifact through).
+func (r *g4Release) Accepted(res verify.Result) (n int64) {
+	if !res.Verified {
+		return 0
+	}
+	_ = filepath.WalkDir(filepath.Join(r.Dir, "artifacts"), func(p string, d os.DirEntry, err error) error {
+		if err == nil && d.Type().IsRegular() {
+			if st, serr := d.Info(); serr == nil {
+				n += st.Size()
+			}
+		}
+		return nil
+	})
+	return n
+}

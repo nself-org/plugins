@@ -6,9 +6,14 @@ package cachesec
 // declarations (E683 path refusals), size caps at collection time (E712) and `artifacts get`
 // destinations (E683). Production refuses each and stores nothing, but appends no audit row: the
 // rows say `audit: none, gap: D-1450` and each case asserts that no audit row appeared.
-// Inputs: g2World. Outputs: registered cases of matrix.d/g2.yaml.
+// Inputs: g2World. Outputs: registered cases of matrix.yaml.
 // Constraints: production packages only; an honest control of the same operation runs first on the
 // same fixture; Landed is the new blob and record bytes (collect) or new bytes under the cwd (get).
+// Audit snapshot: records.Collector, records.Reader, records.Normalize and authz.ArtifactPath are
+// pure or sinkless: they take no audit hook, so no audit row CAN exist for these refusals today and
+// `audit: none` holds by construction. The gap (D-1450) is the missing hook. The cases still compare
+// the world sink before and after (g.Mark/g.AuditSince), so the day a caller wires the world sink
+// into the call the snapshot sees the row; a row appended elsewhere is not detected by these cases.
 
 import (
 	"io/fs"
@@ -81,24 +86,29 @@ func g2SanitiserCase(honest, evil authz.Entry) func(*testing.T) Observed {
 	}
 }
 
-// g2CapCase refuses a collection under a tight policy with E712.
+// g2CapCase refuses a collection under a tight policy with E712. The limits are applied to the collector
+// BEFORE the honest control, and the very same collector runs the attack: a collector that rejected honest
+// input would fail the control.
 func g2CapCase(tune func(c *records.Collector), setup func(t *testing.T, g *g2World) string) func(*testing.T) Observed {
 	return func(t *testing.T) Observed {
 		g := newG2World(t)
-		g.Write("ok.txt", "fine")
-		if err := g2Collect(g, "ok.txt"); err != nil {
-			t.Fatalf("control: %v", err)
-		}
-		path := setup(t, g)
 		c := g.Collector()
 		tune(&c)
-		ds, err := records.Normalize(model.Job{Artifacts: []model.ArtifactDecl{{Path: path}}}, false, nil)
-		if err != nil {
-			t.Fatal(err)
+		collect := func(path string) error {
+			ds, err := records.Normalize(model.Job{Artifacts: []model.ArtifactDecl{{Path: path}}}, false, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = c.Collect(g.ctx, g2Project, g.Ws, ds)
+			return err
 		}
+		g.Write("ok.txt", "fine")
+		if err := collect("ok.txt"); err != nil {
+			t.Fatalf("control (tuned collector): %v", err)
+		}
+		path := setup(t, g)
 		g.Mark()
-		_, err = c.Collect(g.ctx, g2Project, g.Ws, ds)
-		got := refusal(t, err, func(err error) string { return g2RecordsReason(t, err) })
+		got := refusal(t, collect(path), func(err error) string { return g2RecordsReason(t, err) })
 		got.Audit, got.Landed = g.AuditSince(), g.LandedSince()
 		return got
 	}

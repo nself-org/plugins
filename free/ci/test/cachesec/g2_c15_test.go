@@ -7,7 +7,11 @@ package cachesec
 // cas (E710) and a corrupted, short, oversize or mis-announced stream into the blob transfer
 // receiver (E714). Production refuses each and publishes nothing, but appends no audit row: records
 // rows say `gap: D-1450`, cas and transfer rows `gap: D-1451`; each case asserts no audit row appeared.
-// Inputs: g2World. Outputs: registered cases of matrix.d/g2.yaml.
+// Inputs: g2World. Outputs: registered cases of matrix.yaml.
+// Audit snapshot: records.Reader/CommitAndVerify, cas and transfer.Receiver take no audit hook (the
+// Receiver.Refused callback fires for stale_epoch only), so no row CAN exist for these refusals today
+// and `audit: none` holds by construction; the gap (D-1450, D-1451) is the missing hook. The cases
+// still compare the world sink before and after (g.Mark/g.AuditSince) so a wired sink is seen.
 // Constraints: production packages only; an honest control of the same operation runs first; Landed
 // is new reachable blob or record bytes, plus bytes written under the get destination.
 

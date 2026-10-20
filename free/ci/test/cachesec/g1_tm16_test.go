@@ -8,8 +8,8 @@ package cachesec
 // Inputs: a real store, cas and specs.Engine with a redact.Redactor holding one fake value.
 // Outputs: registered cases C16-CAC-01..03.
 // Constraints: production packages only; the value is the obviously fake SYNTHETIC_TOKEN below. The
-// positive control saves an honest directory of the same attempt first. Landed counts the entry
-// bytes added by the attack; the case also fails when the blob store gained a file (the scan aborts
+// positive control saves an honest directory of the same attempt first. Landed is measured: the entry
+// bytes plus the blob-store bytes the attack added; the case also fails when the blob store gained a file (the scan aborts
 // the stream before a blob is visible).
 
 import (
@@ -25,16 +25,19 @@ import (
 
 const g1Fake = "SYNTHETIC_TOKEN_aaaa1111bbbb2222"
 
-// g1BlobFiles counts regular files in the blob store under home.
-func g1BlobFiles(t *testing.T, home string) (n int) {
+// g1BlobFiles counts the regular files in the blob store under home and their bytes.
+func g1BlobFiles(t *testing.T, home string) (n int, bytes int64) {
 	t.Helper()
 	_ = filepath.WalkDir(filepath.Join(home, "blobs"), func(p string, d os.DirEntry, err error) error {
 		if err == nil && d.Type().IsRegular() {
 			n++
+			if info, e := d.Info(); e == nil {
+				bytes += info.Size()
+			}
 		}
 		return nil
 	})
-	return n
+	return n, bytes
 }
 
 // g1Smuggle saves an honest dir (control) and then a dir built by put, with the fake value registered.
@@ -71,7 +74,8 @@ func g1Smuggle(t *testing.T, put func(dir string)) Observed {
 	if _, err := eng.Save(w.ctx, req(kOK, "ok")); err != nil { // positive control
 		t.Fatalf("control: the honest save was refused: %v", err)
 	}
-	baseBytes, baseBlobs := w.EntryBytes(), g1BlobFiles(t, w.Home)
+	baseBytes := w.EntryBytes()
+	baseBlobs, baseBlobBytes := g1BlobFiles(t, w.Home)
 
 	_, err = eng.Save(w.ctx, req(kBad, "bad"))
 	got := refusal(t, err, g1ReasonE711(t))
@@ -80,13 +84,14 @@ func g1Smuggle(t *testing.T, put func(dir string)) Observed {
 	if len(rows) != 1 || !strings.Contains(rows[0].Detail, "reason=secret_match") || strings.Contains(rows[0].Detail, g1Fake) {
 		t.Fatalf("audit rows %+v: want one secret_match row that does not carry the value", rows)
 	}
-	if n := g1BlobFiles(t, w.Home); n != baseBlobs {
-		t.Fatalf("the blob store holds %d files, had %d: a blob of the refused save was left", n, baseBlobs)
+	blobs, blobBytes := g1BlobFiles(t, w.Home)
+	if blobs != baseBlobs {
+		t.Fatalf("the blob store holds %d files, had %d: a blob of the refused save was left", blobs, baseBlobs)
 	}
 	if w.g1Visible(kBad) != 0 {
 		t.Fatal("the refused entry is visible")
 	}
-	got.Landed = w.EntryBytes() - baseBytes
+	got.Landed = (w.EntryBytes() - baseBytes) + (blobBytes - baseBlobBytes) // entry bytes and blob bytes the attack added
 	return got
 }
 

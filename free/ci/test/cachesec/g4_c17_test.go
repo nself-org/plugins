@@ -2,15 +2,18 @@
 
 package cachesec
 
-// Purpose: TM-17 cases on the local carrier: a release job without passing dependency evidence, untrusted
-// output promoted into a release, the positive case (dependencies that ran on a remote node, signed, admitted
-// once the TRUST-20 verifier is registered), the same after that node is revoked, and a published release whose
-// run was quarantined. Admission goes through the real dispatch.Admit with job.Step (the production release
+// Purpose: TM-17 cases on the local carrier: a release job without passing dependency evidence (stale, another
+// repository, an untrusted source, a FAILED dependency, a MISSING dependency), the at-most-once duplicate
+// submission, the positive case (a dependency that ran on a remote node, signed, judged by the release gate once the
+// TRUST-20 verifier is registered), the same after that node is revoked, and a published release whose run was
+// quarantined. Admission goes through the real dispatch.Admit with job.Step (the production release
 // step) so the refusal is recorded the way the coordinator records it (sched_refusal, read with store.Refusal).
-// The signed-remote cases (04, 05) call job.Evaluate directly, not dispatch.Admit: debt D-1454 (the TRUST-20 verifier's Consume
-// waits for the writer lock the admission transaction holds, so signed-remote Facts through the step time out and fail closed).
-// Inputs: newWorld, g4Setup, newG4Release. Outputs: registered cases C17-REL-01..06.
-// Constraints: production packages only; nothing is weakened. Landed is 1 when a refused attempt was leased.
+// The signed-remote cases (04, 05) use the gate (job.Evaluate and Stash.Guard, the pre-queue judgment run.releaseDispatch
+// uses), not dispatch.Admit: debt D-1454 (the TRUST-20 verifier's Consume waits for the writer lock the admission
+// transaction holds, so signed-remote Facts through the dispatcher step time out and fail closed).
+// Inputs: newWorld, g4Setup, newG4Release. Outputs: registered cases C17-REL-01..09.
+// Constraints: production packages only; nothing is weakened. Landed is measured: attempts that got a lease because of
+//          the refused call (g4Leased delta), submissions that reached the dispatcher, artifacts verify accepted.
 
 import (
 	"context"
@@ -61,7 +64,7 @@ func g4Refused(t *testing.T, fx g4Fixture, attempt string, ref *dispatch.Refusal
 	return 0
 }
 
-// g4Admission is the shape of C17-REL-01..03: an honest attempt is admitted, the bent one is refused.
+// g4Admission is the shape of C17-REL-01..03 and 08..09: an honest attempt is admitted, the bent one is refused.
 func g4Admission(t *testing.T, bend func(*job.RunState), mutate func(*job.Facts), reason string) Observed {
 	w := newWorld(t)
 	fx := g4Setup(w, "owner")
@@ -92,6 +95,15 @@ func init() {
 		return g4Admission(t, func(s *job.RunState) { s.SourceTrust = "untrusted" }, nil, job.Trust) // output of an untrusted source
 	})
 
+	// A dependency that FAILED: the release job's deps_failing (not just stale or foreign evidence).
+	register("C17-REL-08", func(t *testing.T) Observed {
+		return g4Admission(t, func(s *job.RunState) { s.Outcomes[0].Status = "failed" }, nil, job.DepsFailing)
+	})
+	// A dependency that is MISSING from the run (no row for it): deps_jobs_mismatch.
+	register("C17-REL-09", func(t *testing.T) Observed {
+		return g4Admission(t, func(s *job.RunState) { s.Outcomes = s.Outcomes[1:] }, nil, job.DepsJobsMismatch)
+	})
+
 	// C17-REL-07: release at-most-once. A second submission of an attempt that is already being submitted is refused
 	// E715 duplicate_submission; Guard refuses before the attempt queues, so production audits nothing (debt D-1453).
 	register("C17-REL-07", func(t *testing.T) Observed {
@@ -105,9 +117,11 @@ func init() {
 		}()
 		<-entered // the first submission is in flight
 		submitted := 0
+		mark, leased := g4MarkAudit(w), g4Leased(w)
 		err := stash.Guard(w.ctx, "rel-dup", job.Static(facts), func() error { submitted++; return nil })
 		close(release)
-		if submitted != 0 {
+		reached := int64(submitted) + (g4Leased(w) - leased) // submissions that reached the dispatcher + leases they made
+		if reached != 0 {
 			t.Fatal("the duplicate reached the dispatcher")
 		}
 		if first := <-done; first != nil { // control: the first submission was admitted and completed
@@ -120,15 +134,23 @@ func init() {
 		if err = stash.Guard(w.ctx, "rel-dup", job.Static(facts), func() error { submitted++; return nil }); err != nil || submitted != 1 {
 			t.Fatalf("after the first finished the attempt can be submitted again (a retry): err %v submitted %d", err, submitted)
 		}
-		return Observed{Outcome: Refused, Code: e.Code, Reason: e.Reason, Audit: g4None(w), Landed: 0}
+		return Observed{Outcome: Refused, Code: e.Code, Reason: e.Reason, Audit: g4None(w, mark), Landed: reached}
 	})
 
+	// C17-REL-04 is the gate evaluation of signed-remote evidence: the release gate (job.Evaluate) and the pre-queue
+	// judgment (Stash.Guard) admit it. No production path takes it through dispatch.Admit: the step re-judges the
+	// Facts inside the admission transaction and the verifier's Consume then waits for the writer lock the
+	// transaction holds (D-1454), so the dispatcher path self-blocks and fails closed after about 10 s.
 	register("C17-REL-04", func(t *testing.T) Observed {
 		w := newWorld(t)
 		fx := g4Setup(w, "owner")
 		facts := fx.Facts(true, nil) // the build ran on node "storetest" and the node signed its evidence
 		if e := job.Evaluate(facts); e != nil {
 			t.Fatalf("signed remote evidence was refused: %v", e)
+		}
+		reached := false
+		if err := job.NewStash().Guard(w.ctx, "rel-remote", job.Static(facts), func() error { reached = true; return nil }); err != nil || !reached {
+			t.Fatalf("the pre-queue guard did not pass the signed-remote facts on: %v", err)
 		}
 		return Observed{Outcome: Admitted}
 	})
@@ -148,11 +170,19 @@ func init() {
 		if err != nil || len(aff.Keys) == 0 || len(aff.Releases) != 1 {
 			t.Fatalf("revoke: %+v %v", aff, err)
 		}
-		e := g4E715(t, facts) // the very same signed document, after the revocation
-		if len(g4AuditRows(w, "release.quarantine")) != 1 {
-			t.Fatalf("the promoted release was not audited as quarantined: %v", g4AuditRows(w, ""))
+		// the revocation (the precondition) audited itself; those rows are not the refusal's.
+		if len(g4AuditRows(w, "evidence.revoke")) != 1 || len(g4AuditRows(w, "release.quarantine")) != 1 {
+			t.Fatalf("the revocation did not audit the revoke and the quarantined release: %v", g4AuditRows(w, ""))
 		}
-		return Observed{Outcome: Refused, Code: e.Code, Reason: e.Reason, Audit: g4Has(w, "evidence.revoke"), Landed: 0}
+		mark, leased := g4MarkAudit(w), g4Leased(w)
+		e := g4E715(t, facts) // the very same signed document, after the revocation
+		reached := 0
+		err = job.NewStash().Guard(w.ctx, "rel-after", job.Static(facts), func() error { reached++; return nil }) // and through the pre-queue guard
+		if je, ok := err.(*job.Error); !ok || je.Reason != e.Reason || reached != 0 {
+			t.Fatalf("the guard did not refuse the revoked node's evidence: %v (reached %d)", err, reached)
+		}
+		// The refusal appends no audit row of its own (debt D-1453): the table is unchanged around the refusing calls.
+		return Observed{Outcome: Refused, Code: e.Code, Reason: e.Reason, Audit: g4None(w, mark), Landed: int64(reached) + (g4Leased(w) - leased)}
 	})
 
 	register("C17-REL-06", func(t *testing.T) Observed {
@@ -175,6 +205,11 @@ func init() {
 		if _, err := cirun.RevokeNode(w.ctx, w.St, &audit.Log{St: w.St}, g4Node, "operator:cli:alice"); err != nil {
 			t.Fatal(err)
 		}
+		// the revocation (the precondition) audited the quarantine of the promoted release; the refusal below adds none.
+		if len(g4AuditRows(w, "release.quarantine")) != 1 {
+			t.Fatalf("the promoted release was not audited as quarantined: %v", g4AuditRows(w, ""))
+		}
+		mark := g4MarkAudit(w)
 		res := rel.Verify()
 		if res.Verified {
 			t.Fatal("a release of a quarantined run verified")
@@ -182,6 +217,6 @@ func init() {
 		if res.Code != verify.Code || res.Exit != 1 {
 			t.Fatalf("code %s exit %d", res.Code, res.Exit)
 		}
-		return Observed{Outcome: Refused, Code: res.Code, Reason: res.Reason, Audit: g4Has(w, "release.quarantine"), Landed: 0}
+		return Observed{Outcome: Refused, Code: res.Code, Reason: res.Reason, Audit: g4None(w, mark), Landed: rel.Accepted(res)}
 	})
 }

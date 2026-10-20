@@ -4,7 +4,7 @@ package cachesec
 
 // Purpose: TM-13 on the remote carriers: a node writes a cache entry or an artifact after its lease epoch
 // was fenced (expired lease) or after the attempt ended.
-// Inputs: g3rig fixtures. Outputs: registered cases of matrix.d/g3.yaml.
+// Inputs: g3rig fixtures. Outputs: registered cases of the g3 rows of matrix.yaml.
 // Constraints: production handlers only; each refusal has an honest control on a fresh world.
 
 import (

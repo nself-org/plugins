@@ -6,7 +6,10 @@ package cachesec
 // in a file name) is refused by the collector (E712 secret_match) and nothing is stored or staged.
 // Production appends no audit row for the scan verdict: the rows say `audit: none, gap: D-1450` and
 // each case asserts that no audit row appeared.
-// Inputs: g2World with a redact.Redactor. Outputs: registered cases of matrix.d/g2.yaml.
+// Inputs: g2World with a redact.Redactor. Outputs: registered cases of matrix.yaml.
+// Audit snapshot: records.Collector takes no audit hook, so no row CAN exist today and `audit: none`
+// holds by construction (gap D-1450 is the missing hook); the cases still compare the world sink
+// before and after (g.Mark/g.AuditSince) so a wired sink is seen.
 // Constraints: synthetic value only; honest control (a clean file in the same workdir) first.
 
 import (

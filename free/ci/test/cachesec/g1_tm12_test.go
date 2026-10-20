@@ -5,8 +5,7 @@ package cachesec
 // Purpose: TM-12 cases (cache poisoning across trust, PR or project, key collision included) on the
 // local carrier: a commit into a namespace the attempt does not own, and key collisions through
 // field boundaries. The read-side halves (secret-bearing snapshot, trusted job reading an
-// untrusted PR's entry) are plain tests in g1_miss_test.go because a read refusal is a miss with
-// no fabric code.
+// untrusted PR's entry) are the miss cases C12-CAC-06 and C12-CAC-07 in g1_miss_test.go.
 // Inputs: a real store and cas (newWorld). Outputs: registered cases C12-CAC-01..05.
 // Constraints: production packages only. Each case commits an honest entry of the same attempt
 // first (positive control); Landed is the entry bytes added by the attack, so the control does

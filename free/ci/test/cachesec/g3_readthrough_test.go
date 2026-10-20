@@ -2,10 +2,12 @@
 
 package cachesec
 
-// Purpose: node-side TM-15 behaviour of cache/remote.ReadThrough (FINDING-g3-2: the refusal is correct but node-side,
-// so it has no audit row and no matrix row): a corrupted copy is deleted and never served, and a fetch that delivers
-// other bytes than the digest names is refused and publishes nothing.
-// Inputs: a temp read-through dir. Outputs: pass or fail. Constraints: production code only.
+// Purpose: C15-NODE-01, node-side TM-15 behaviour of cache/remote.ReadThrough: a corrupted copy is deleted and never
+// served, and a fetch that delivers other bytes than the digest names is refused and publishes nothing. The node holds
+// no ledger, so production appends no audit row (debt D-1452).
+// Inputs: a temp read-through dir. Outputs: the registered case C15-NODE-01 (carrier agent: the copy lives on a node).
+// Constraints: production code only. ReadThrough returns an untyped error ("E714 digest_mismatch: ..."), so the code
+// and reason key are derived from that error text prefix, the only form production offers.
 
 import (
 	"context"
@@ -19,7 +21,11 @@ import (
 	cacheremote "github.com/nself-org/plugins/free/ci/internal/cache/remote"
 )
 
-func TestG3NodeReadThroughRefusesCorruption(t *testing.T) {
+func init() {
+	register("C15-NODE-01", g3NodeReadThrough)
+}
+
+func g3NodeReadThrough(t *testing.T) Observed {
 	dir := t.TempDir()
 	rt, err := cacheremote.NewReadThrough(dir, 1<<20)
 	if err != nil {
@@ -57,10 +63,24 @@ func TestG3NodeReadThroughRefusesCorruption(t *testing.T) {
 		_, err := w.Write([]byte(strings.ToUpper(string(data))))
 		return err
 	})
-	if f != nil || err == nil || !strings.Contains(err.Error(), "E714 digest_mismatch") {
+	if f != nil || err == nil {
 		t.Fatalf("a corrupting fetch was published: file=%v err=%v", f != nil, err)
 	}
+	fields := strings.Fields(err.Error()) // "E714 digest_mismatch: node cache copy failed verification"
+	if len(fields) < 2 || !strings.HasPrefix(fields[0], "E") {
+		t.Fatalf("the refusal carries no fabric code prefix: %v", err)
+	}
+	refusal := Observed{Outcome: Refused, Code: fields[0], Reason: strings.TrimSuffix(fields[1], ":")}
 	if _, err = rt.Open(ctx, "realm-b", sum, int64(len(data)), nil); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("the refused fetch left a copy behind: %v", err)
 	}
+	var landed int64
+	_ = filepath.Walk(dir, func(_ string, fi os.FileInfo, _ error) error {
+		if fi != nil && fi.Mode().IsRegular() {
+			landed += fi.Size()
+		}
+		return nil
+	})
+	refusal.Audit, refusal.Landed = "none", landed
+	return refusal
 }

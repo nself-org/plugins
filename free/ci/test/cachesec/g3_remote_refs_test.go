@@ -4,9 +4,9 @@ package cachesec
 
 // Purpose: artifact-ref refusals on the coordinator handler that production does not audit yet (debt D-1451):
 // a crafted path (TM-14), another project's digest (TM-12) and a size that disagrees with the stored blob (TM-15).
-// Each case asserts the refusal code and reason AND that no refusal audit row was appended (Observed.Audit = "none"),
+// Each case baselines the bytes reachable after its authorized upload and reports only what the refused ref added. Each case asserts the refusal code and reason AND that no refusal audit row was appended (Observed.Audit = "none"),
 // so it fails the day production adds the row. The handler is driven directly through the sink (carrier coordinator).
-// Inputs: g3rig fixtures. Outputs: registered cases of matrix.d/g3.yaml.
+// Inputs: g3rig fixtures. Outputs: registered cases of the g3 rows of matrix.yaml.
 // Constraints: production handlers only; every case first admits the honest ref on a fresh world (positive control).
 
 import (
@@ -25,6 +25,16 @@ func g3RefWorld(t *testing.T, w *world, id string, f entries.Facts) (*g3rig, *g3
 		t.Fatal(err)
 	}
 	return r, s
+}
+
+// g3Added is what the refused ref made reachable beyond base (the bytes reachable before it, incl. the authorized
+// upload): blobs by digest in the attacker's realm and any staged record of the attempt. It must be 0.
+func g3Added(t *testing.T, r *g3rig, base int64, digest string) int64 {
+	t.Helper()
+	if staged, err := r.w.St.ArtifactStaged(r.w.ctx, r.id); err != nil || len(staged) != 0 {
+		t.Fatalf("the refused ref left %d staged records (err %v)", len(staged), err)
+	}
+	return r.Landed(digest) - base
 }
 
 func g3ArtRefOf(r *g3rig, path string, size int64) protocol.ArtifactRef {
@@ -47,9 +57,10 @@ func init() {
 		if err := g3Upload(w.ctx, s, "artifact", g3ArtData); err != nil {
 			t.Fatal(err)
 		}
+		base := r.Landed(g3Sum(g3ArtData)) // the authorized upload: the blob is reachable by digest, no record names it
 		got := g3Refused(t, s.ArtifactRef(w.ctx, g3ArtRefOf(r, "../../.git/hooks/pre-commit", int64(len(g3ArtData)))))
 		got.Audit = g3NoAudit(t, w)
-		got.Landed = r.Landed() // records only: the uploaded blob has no record
+		got.Landed = g3Added(t, r, base, g3Sum(g3ArtData))
 		return got
 	})
 
@@ -71,9 +82,12 @@ func init() {
 		}
 		_ = vr
 		r, s := g3RefWorld(t, w, "ratk1", g3Main)
+		if base := r.Landed(g3Sum(g3ArtData)); base != 0 {
+			t.Fatalf("the attacker's realm already holds %d B of the victim's digest", base)
+		}
 		got := g3Refused(t, s.ArtifactRef(w.ctx, g3ArtRefOf(r, "out/a.txt", int64(len(g3ArtData)))))
 		got.Audit = g3NoAudit(t, w)
-		got.Landed = r.Landed()
+		got.Landed = g3Added(t, r, 0, g3Sum(g3ArtData)) // the victim's digest must not become reachable in the attacker's project
 		return got
 	})
 
@@ -92,9 +106,10 @@ func init() {
 		if err := g3Upload(w.ctx, s, "artifact", g3ArtData); err != nil {
 			t.Fatal(err)
 		}
+		base := r.Landed(g3Sum(g3ArtData))
 		got := g3Refused(t, s.ArtifactRef(w.ctx, g3ArtRefOf(r, "out/a.txt", int64(len(g3ArtData))+5)))
 		got.Audit = g3NoAudit(t, w)
-		got.Landed = r.Landed()
+		got.Landed = g3Added(t, r, base, g3Sum(g3ArtData))
 		return got
 	})
 }

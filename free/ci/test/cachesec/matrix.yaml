@@ -54,6 +54,19 @@ cases:
     code: E711
     reason: namespace
     audit: cache.commit.refused
+  - id: C12-CAC-06
+    threat: TM-12
+    carrier: local
+    title: 'an untrusted PR job reads ro-snapshots of the protected namespace built by a secret-bearing, private-deps or unscanned job (or a foreign project reads at all)'
+    expected: miss
+    reason: secret_bearing_snapshot
+  - id: C12-CAC-07
+    threat: TM-12
+    carrier: local
+    title: 'a trusted job reads what an untrusted PR wrote, by namespace and by the same key in its own namespace'
+    expected: miss
+    reason: untrusted_entry
+    audit: cache.lookup.namespace_mismatch
   - id: C12-COO-01
     threat: TM-12
     carrier: coordinator
@@ -250,10 +263,26 @@ cases:
   - id: C13-SSH-05
     threat: TM-13
     carrier: ssh
-    title: 'a zombie sends a cache save after its attempt ended and its result was recorded'
+    title: 'handler level: a cache save after Finalize closed the handler (the attempt is left finalizing, frames sent straight to the sink)'
     expected: refused
     code: E711
     reason: attempt_state
+    audit: cache.remote.refused
+  - id: C13-SSH-06
+    threat: TM-13
+    carrier: ssh
+    title: 'late cache blob and ref (attempt passed) and late artifact blob and ref (attempt failed) after the attempt really ended, over the ssh carrier'
+    expected: refused
+    code: E714
+    reason: stale_epoch
+    audit: cache.remote.refused
+  - id: C13-AGT-05
+    threat: TM-13
+    carrier: agent
+    title: 'late cache blob and ref (attempt passed) and late artifact blob and ref (attempt failed) after the attempt really ended, over the agent carrier'
+    expected: refused
+    code: E714
+    reason: stale_epoch
     audit: cache.remote.refused
   - id: C14-ART-01
     threat: TM-14
@@ -687,6 +716,33 @@ cases:
     reason: size_cap
     audit: none
     gap: D-1451
+  - id: C15-ART-16
+    threat: TM-15
+    carrier: local
+    title: 'live attempt B stages a record that carries the id of the record attempt A committed'
+    expected: refused
+    code: E712
+    reason: duplicate_name
+    audit: none
+    gap: D-1450
+  - id: C15-ART-17
+    threat: TM-15
+    carrier: local
+    title: 'live attempt B commits a list that holds the record attempt A committed'
+    expected: refused
+    code: E712
+    reason: digest_mismatch
+    audit: none
+    gap: D-1450
+  - id: C15-ART-18
+    threat: TM-15
+    carrier: local
+    title: 'live attempt B commits its record for A''s name with the digest of A''s blob'
+    expected: refused
+    code: E712
+    reason: digest_mismatch
+    audit: none
+    gap: D-1450
   - id: C15-REM-01
     threat: TM-15
     carrier: coordinator
@@ -707,7 +763,7 @@ cases:
   - id: C15-SSH-02
     threat: TM-15
     carrier: ssh
-    title: 'an artifact blob with one bit flipped in transit on a real sshd container carrier'
+    title: 'an artifact blob with one bit flipped at the sink boundary of the real ssh carrier (real sshd container and agent; the fault is applied after the carrier delivered the bytes, not on the wire)'
     expected: refused
     code: E656
     reason: transport_ssh_blob
@@ -716,12 +772,21 @@ cases:
   - id: C15-SSH-03
     threat: TM-15
     carrier: ssh
-    title: 'an artifact blob cut in half in transit on a real sshd container carrier'
+    title: 'an artifact blob cut in half at the sink boundary of the real ssh carrier (real sshd container and agent; the fault is applied after the carrier delivered the bytes, not on the wire)'
     expected: refused
     code: E656
     reason: transport_ssh_blob
     audit: none
     gap: D-1451
+  - id: C15-NODE-01
+    threat: TM-15
+    carrier: agent
+    title: 'a node read-through copy that is corrupted on disk, and a fetch that delivers other bytes than its digest, are not served'
+    expected: refused
+    code: E714
+    reason: digest_mismatch
+    audit: none
+    gap: D-1452
   - id: C16-ART-01
     threat: TM-16
     carrier: local
@@ -800,24 +865,26 @@ cases:
   - id: C17-REL-04
     threat: TM-17
     carrier: local
-    title: 'a release job whose dependency ran on a remote node with signed-remote evidence is admitted (positive)'
+    title: 'gate evaluation (job.Evaluate and the Stash.Guard pre-queue judgment) of a release job whose dependency ran on a remote node with signed-remote evidence admits it (positive; the dispatcher step self-blocks on it, D-1454)'
     expected: admitted
   - id: C17-REL-05
     threat: TM-17
     carrier: local
-    title: 'the same signed-remote evidence is submitted again after the signing node was revoked'
+    title: 'the same signed-remote evidence is judged again (gate and guard) after the signing node was revoked; the refusing call appends no audit row (the revoke precondition audited itself)'
     expected: refused
     code: E715
     reason: deps_invalid
-    audit: evidence.revoke
+    audit: none
+    gap: D-1453
   - id: C17-REL-06
     threat: TM-17
     carrier: local
-    title: 'a published release whose run was quarantined by the revocation of a node that signed its evidence is verified'
+    title: 'a published release whose run was quarantined by the revocation of a node that signed its evidence is verified; the refusing verify appends no audit row (the revoke precondition audited the quarantine)'
     expected: refused
     code: E719
     reason: quarantined
-    audit: release.quarantine
+    audit: none
+    gap: D-1453
   - id: C17-REL-07
     threat: TM-17
     carrier: local
@@ -827,6 +894,22 @@ cases:
     reason: duplicate_submission
     audit: none
     gap: D-1453
+  - id: C17-REL-08
+    threat: TM-17
+    carrier: local
+    title: 'a release job is submitted while one of its dependencies FAILED'
+    expected: refused
+    code: E715
+    reason: deps_failing
+    audit: sched_refusal
+  - id: C17-REL-09
+    threat: TM-17
+    carrier: local
+    title: 'a release job is submitted while one of its dependencies is MISSING from the run'
+    expected: refused
+    code: E715
+    reason: deps_jobs_mismatch
+    audit: sched_refusal
   - id: C18-SIG-01
     threat: TM-18
     carrier: signer
@@ -857,7 +940,7 @@ cases:
   - id: C18-SIG-04
     threat: TM-18
     carrier: signer
-    title: 'the signer is asked to sign a run while one of its jobs still has a running attempt'
+    title: 'the signing client is asked to sign a run while one of its jobs still has a running attempt (no signer process starts, no key is resolved; after the attempt ends the same request signs)'
     expected: refused
     code: E717
     reason: payload_rejected

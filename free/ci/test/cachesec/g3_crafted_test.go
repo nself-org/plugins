@@ -6,7 +6,7 @@ package cachesec
 // stager) ships a crafted cache archive or names a crafted artifact path. The coordinator validates what it
 // receives with the restore sanitiser before an entry is committed.
 // Inputs: crafted tar.gz bytes and artifact refs sent by a scripted node over the in-process ssh carrier.
-// Outputs: registered cases of matrix.d/g3.yaml.
+// Outputs: registered cases of the g3 rows of matrix.yaml.
 // Constraints: synthetic names and payloads; the coordinator handler is production code; a refused save leaves
 // no entry (the unreferenced staging blob is not reachable and is swept by cas.Sweep).
 

@@ -183,3 +183,24 @@ func g4AuditRows(w *world, action string) (out []store.AuditEntry) {
 	}
 	return out
 }
+
+// g4Mark is a snapshot of the audit table: the number of rows at the moment it was taken.
+type g4Mark int
+
+// g4MarkAudit snapshots the world's audit table (the store sink); a refusing call is wrapped between a mark and g4None.
+func g4MarkAudit(w *world) g4Mark { return g4Mark(len(g4AuditRows(w, ""))) }
+
+// g4Leased counts the attempts of run-1 that are no longer queued (leased, running or ended): a refused call must not add one.
+func g4Leased(w *world) (n int64) {
+	w.t.Helper()
+	atts, err := w.St.PipelineAttempts(w.ctx, g4Run)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	for _, a := range atts {
+		if a.State != "queued" {
+			n++
+		}
+	}
+	return n
+}

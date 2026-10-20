@@ -4,7 +4,7 @@ package cachesec
 
 // Purpose: TM-12 on the remote carriers: a remote attempt aims its cache or artifact write at another trust
 // class, another PR or another project, and the coordinator-side handler refuses it.
-// Inputs: g3rig fixtures with scripted nodes. Outputs: registered cases of matrix.d/g3.yaml.
+// Inputs: g3rig fixtures with scripted nodes. Outputs: registered cases of the g3 rows of matrix.yaml.
 // Constraints: production handlers only; each refusal has an honest control on a fresh world.
 
 import (
