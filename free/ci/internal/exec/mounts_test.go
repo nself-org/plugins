@@ -50,6 +50,20 @@ func TestCheckMountsRefusesUnsafe(t *testing.T) {
 	}
 }
 
+// The gVisor profile runs through the same container CLI, so it holds a read-only bind (the credential
+// wrapper's agent binary) exactly as the baseline container does; only a process job refuses one.
+func TestCheckMountsAcceptsReadOnlyForBothContainerLevels(t *testing.T) {
+	t.Parallel()
+	for _, level := range []model.Isolation{"container", "sandboxed-container"} {
+		if err := checkMounts(JobSpec{Job: model.Job{Isolation: level}, Mounts: []Mount{{Host: "/opt/agent", Target: "/usr/local/bin/agent", ReadOnly: true}}}); err != nil {
+			t.Errorf("%s: read-only mount refused: %v", level, err)
+		}
+	}
+	if err := checkMounts(JobSpec{Job: model.Job{Isolation: "process"}, Mounts: []Mount{{Host: "/opt/agent", Target: "/a", ReadOnly: true}}}); err == nil {
+		t.Error("process job accepted a read-only mount")
+	}
+}
+
 // A process job cannot be held read-only, so a read-only mount must refuse
 // the job instead of silently handing it a writable host path.
 func TestProcessJobRefusesReadOnlyMount(t *testing.T) {
