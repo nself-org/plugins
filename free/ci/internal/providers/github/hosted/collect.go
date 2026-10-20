@@ -33,6 +33,12 @@ func EvidenceArtifact(nonce string) string { return "nself-ci-evidence-" + nonce
 // ReasonIntentUnknown is the E705 reason for a handle this coordinator never journalled.
 const ReasonIntentUnknown = "intent.unknown"
 
+// The other E705 reasons Collect adds to hostedev's: a replaced attempt and a foreign actor.
+const (
+	ReasonSuperseded = "attempt.superseded"
+	ReasonActor      = "run.actor"
+)
+
 // Collect implements providers.Dispatcher.
 func (p *Provider) Collect(ctx context.Context, h providers.Handle) (providers.Collected, error) {
 	repo, params, err := p.handleParams(h)
@@ -46,6 +52,12 @@ func (p *Provider) Collect(ctx context.Context, h providers.Handle) (providers.C
 	if !ok {
 		return providers.Collected{}, notEvidence(ReasonIntentUnknown)
 	}
+	if latest, found, lerr := p.jrnl().Latest(ctx, rec.Lineage); lerr != nil || !found || latest.Nonce != h.Nonce {
+		if lerr != nil {
+			return providers.Collected{}, failure(providers.Transient, "E704", "journal")
+		}
+		return providers.Collected{}, notEvidence(ReasonSuperseded) // a newer attempt of this job replaced it
+	}
 	c, err := p.client(ctx)
 	if err != nil {
 		return providers.Collected{}, err
@@ -56,6 +68,13 @@ func (p *Provider) Collect(ctx context.Context, h providers.Handle) (providers.C
 	}
 	if run.Status != "completed" {
 		return providers.Collected{}, failure(providers.Transient, "E704", "run.incomplete")
+	}
+	login, err := p.whoami(ctx, c)
+	if err != nil {
+		return providers.Collected{}, err
+	}
+	if run.Actor.Login != login { // a run somebody else dispatched is never ours
+		return providers.Collected{}, notEvidence(ReasonActor)
 	}
 	workflow, err := p.workflowAt(ctx, c, repo, run.HeadSHA)
 	if err != nil {
@@ -121,7 +140,7 @@ func (p *Provider) fetchArtifact(ctx context.Context, c *rest.Client, repo repoR
 	var list struct {
 		Artifacts []artifactInfo `json:"artifacts"`
 	}
-	if _, err := c.Do(ctx, "GET", artifactsFor, params, nil, &list); err != nil {
+	if _, err := c.DoQuery(ctx, "GET", artifactsFor, params, url.Values{"per_page": {"100"}}, nil, &list); err != nil {
 		return artifactInfo{}, nil, err
 	}
 	var art artifactInfo

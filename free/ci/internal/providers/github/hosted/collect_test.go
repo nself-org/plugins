@@ -221,7 +221,7 @@ func TestStoreJournal(t *testing.T) {
 	j := hosted.NewStoreJournal(st)
 	ctx := context.Background()
 	rec := func(n int, nonce string) hosted.Record {
-		return hosted.Record{Attempt: "att-1", N: n, Revision: testRevision, SpecDigest: "sha256:" + strings.Repeat("a", 64), Nonce: nonce, Ref: "main"}
+		return hosted.Record{Attempt: "att-1", Lineage: "att-1", N: n, Revision: testRevision, SpecDigest: "sha256:" + strings.Repeat("a", 64), Nonce: nonce, Ref: "main"}
 	}
 	first, prev, err := j.Begin(ctx, rec(1, "n1"))
 	if err != nil || prev != nil || first.Nonce != "n1" {
@@ -245,4 +245,41 @@ func TestStoreJournal(t *testing.T) {
 	if _, ok, _ = j.ByNonce(ctx, "nope"); ok {
 		t.Fatal("an unknown nonce was found")
 	}
+}
+
+// TestRetryWithANewAttemptIdCancelsThePreviousRun proves the retry paths real coordinators use (the
+// lease store's "<id>-retry-<n>" and CI-40's "<row>.a<N>" attempt ids) share one journal line, so the
+// retry cancels the run of the attempt it replaces; and that a superseded or foreign run is never
+// collected.
+func TestRetryWithANewAttemptIdCancelsThePreviousRun(t *testing.T) {
+	v15(t)
+	ctx := context.Background()
+	for _, ids := range [][2]string{{"job7.a1", "job7.a2"}, {"att-1", "att-1-retry-2"}, {"job7.a1-retry-1", "job7.a2"}} {
+		f := newFakeGH(t)
+		p := f.provider(options{})
+		first, err := p.Dispatch(ctx, attemptFor(ids[0], 1))
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := p.Dispatch(ctx, attemptFor(ids[1], 1))
+		if err != nil || second.RunID == first.RunID || !f.Runs[9001].Cancelled || f.Runs[9002].Cancelled {
+			t.Fatalf("%v: %+v %v cancelled=%v", ids, second, err, f.Runs[9001].Cancelled)
+		}
+		f.Workflow = pinnedWorkflow(t)
+		f.finish(9001, ids[0], testRevision, nil)
+		_, err = p.Collect(ctx, first)
+		wantCode(t, err, "E705", hosted.ReasonSuperseded)
+	}
+	for in, want := range map[string]string{"job7.a3": "job7", "att-1-retry-2": "att-1", "plain": "plain", "x.a1-retry-2": "x", ".a1": ".a1", "a.b": "a.b"} {
+		if got := hosted.Lineage(in); got != want {
+			t.Errorf("Lineage(%q) = %q, want %q", in, got, want)
+		}
+	}
+	t.Run("a run by another actor is not collected", func(t *testing.T) {
+		f := newFakeGH(t)
+		p, h := dispatched(t, f, nil)
+		f.Runs[9001].Login = "mallory"
+		_, err := p.Collect(ctx, h)
+		wantCode(t, err, "E705", hosted.ReasonActor)
+	})
 }

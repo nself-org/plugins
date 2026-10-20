@@ -25,6 +25,7 @@ import (
 // Record is one intended dispatch.
 type Record struct {
 	Attempt    string `json:"attempt"`
+	Lineage    string `json:"lineage"`
 	N          int    `json:"n"`
 	Revision   string `json:"revision"`
 	SpecDigest string `json:"spec_digest"`
@@ -38,8 +39,11 @@ var errSuperseded = errors.New("attempt number superseded")
 // Journal remembers what was dispatched.
 type Journal interface {
 	// Begin records r. When (r.Attempt, r.N) was begun before it returns that earlier record as stand;
-	// previous is the record of a lower number of the same attempt, when there is one.
+	// previous is the record of a lower number of the same attempt, or of an earlier attempt of the
+	// same lineage (a retry has a new attempt id), when there is one.
 	Begin(ctx context.Context, r Record) (stand Record, previous *Record, err error)
+	// Latest returns the newest record of a lineage.
+	Latest(ctx context.Context, lineage string) (Record, bool, error)
 	// ByNonce returns the record of a nonce.
 	ByNonce(ctx context.Context, nonce string) (Record, bool, error)
 }
@@ -58,18 +62,25 @@ func NewMemJournal() Journal {
 func (j *memJournal) Begin(_ context.Context, r Record) (Record, *Record, error) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	old, ok := j.latest[r.Attempt]
+	old, ok := j.latest[r.Lineage]
 	switch {
-	case ok && old.N == r.N:
+	case ok && old.Attempt == r.Attempt && old.N == r.N:
 		return old, nil, nil
-	case ok && old.N > r.N:
+	case ok && old.Attempt == r.Attempt && old.N > r.N:
 		return Record{}, nil, errSuperseded
 	}
-	j.latest[r.Attempt], j.nonces[r.Nonce] = r, r
+	j.latest[r.Lineage], j.nonces[r.Nonce] = r, r
 	if ok {
 		return r, &old, nil
 	}
 	return r, nil, nil
+}
+
+func (j *memJournal) Latest(_ context.Context, lineage string) (Record, bool, error) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	r, ok := j.latest[lineage]
+	return r, ok, nil
 }
 
 func (j *memJournal) ByNonce(_ context.Context, nonce string) (Record, bool, error) {
@@ -109,15 +120,28 @@ func (j storeJournal) ByNonce(ctx context.Context, nonce string) (Record, bool, 
 	return r, err == nil, err
 }
 
+func (j storeJournal) Latest(ctx context.Context, lineage string) (Record, bool, error) {
+	d, ok, err := j.st.DispatchIntentGet(ctx, "latest:"+lineage)
+	if err != nil || !ok {
+		return Record{}, false, err
+	}
+	return j.ByNonce(ctx, d.Nonce)
+}
+
 func (j storeJournal) Begin(ctx context.Context, r Record) (Record, *Record, error) {
 	var previous *Record
-	if d, ok, err := j.st.DispatchIntentGet(ctx, "latest:"+r.Attempt); err != nil {
+	if d, ok, err := j.st.DispatchIntentGet(ctx, "latest:"+r.Lineage); err != nil {
 		return Record{}, nil, err
 	} else if ok {
 		old, found, err := j.ByNonce(ctx, d.Nonce)
 		switch {
 		case err != nil:
 			return Record{}, nil, err
+		case found && old.Attempt != r.Attempt: // a retry with a new attempt id: it supersedes the row
+			previous = &old
+			if err = j.st.DispatchIntentDelete(ctx, "latest:"+r.Lineage, pending); err != nil {
+				return Record{}, nil, err
+			}
 		case d.Epoch > int64(r.N):
 			return Record{}, nil, errSuperseded
 		case d.Epoch == int64(r.N) && found:
@@ -129,7 +153,7 @@ func (j storeJournal) Begin(ctx context.Context, r Record) (Record, *Record, err
 	if _, err := j.put(ctx, "intent:"+r.Nonce, r); err != nil {
 		return Record{}, nil, err
 	}
-	won, err := j.put(ctx, "latest:"+r.Attempt, r)
+	won, err := j.put(ctx, "latest:"+r.Lineage, r)
 	if err != nil {
 		return Record{}, nil, err
 	}

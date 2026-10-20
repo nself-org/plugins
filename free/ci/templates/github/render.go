@@ -92,7 +92,7 @@ func (o Options) check() error {
 
 func hasQuote(s string) bool {
 	for _, c := range s {
-		if c == '\'' || c == '\n' || c == '\r' || c == ' ' {
+		if c == '\'' || c == '\n' || c == '\r' || c == ' ' || c == '$' || c == '{' || c == '}' || c == '`' {
 			return true
 		}
 	}

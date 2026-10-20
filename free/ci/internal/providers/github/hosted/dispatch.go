@@ -134,6 +134,21 @@ func plan(a providers.Attempt) (request, error) {
 	return r, nil
 }
 
+var retrySuffix = regexp.MustCompile(`(-retry-[0-9]+|\.a[0-9]+)$`)
+
+// Lineage is the attempt id without the suffixes a retry adds ("<id>-retry-2" from the lease store,
+// "<row>.a2" from the bounded infra retry), so every retry of one job shares one journal line and the
+// retry cancels the run of the attempt it replaces.
+func Lineage(attemptID string) string {
+	for {
+		trimmed := retrySuffix.ReplaceAllString(attemptID, "")
+		if trimmed == attemptID || trimmed == "" {
+			return attemptID
+		}
+		attemptID = trimmed
+	}
+}
+
 // maxWindowsSpec keeps the spec inside the 32,767 character limit of a Windows environment variable.
 const maxWindowsSpec = 30000
 
@@ -216,7 +231,7 @@ func (p *Provider) Dispatch(ctx context.Context, a providers.Attempt) (providers
 		return providers.Handle{}, err
 	}
 	start := p.cfg.Clock()
-	stand, previous, err := p.jrnl().Begin(ctx, Record{Attempt: a.ID, N: a.N, Revision: r.revision, SpecDigest: r.digest, Nonce: fresh, Ref: ref})
+	stand, previous, err := p.jrnl().Begin(ctx, Record{Attempt: a.ID, Lineage: Lineage(a.ID), N: a.N, Revision: r.revision, SpecDigest: r.digest, Nonce: fresh, Ref: ref})
 	if err != nil {
 		if errors.Is(err, errSuperseded) {
 			return providers.Handle{}, refuse("attempt.superseded")

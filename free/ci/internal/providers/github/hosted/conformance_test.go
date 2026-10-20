@@ -69,8 +69,13 @@ func writeFixtures(t *testing.T, listing bool) string {
 		{Request: conformance.Request{Method: "POST", Path: run + "/cancel"}, Response: conformance.Response{Status: 202, Body: `{}`}},
 		{Request: conformance.Request{Method: "POST", Path: run + "/cancel"}, Response: conformance.Response{Status: 409, Body: `{"message":"Cannot cancel a workflow run that is completed."}`}},
 		{Request: conformance.Request{Method: "GET", Path: run}, Response: conformance.Response{Status: 200, Body: runBody("completed")}},
+	}...)
+	if !listing { // the 204 variant already asked who the token is
+		exchanges = append(exchanges, conformance.Exchange{Request: conformance.Request{Method: "GET", Path: "/user"}, Response: conformance.Response{Status: 200, Body: `{"login":"` + testLogin + `"}`}})
+	}
+	exchanges = append(exchanges, []conformance.Exchange{
 		{Request: conformance.Request{Method: "GET", Path: "/repos/acme/widgets/contents/" + hosted.WorkflowPath, Query: "ref=" + testHeadSHA}, Response: conformance.Response{Status: 200, Body: string(contents)}},
-		{Request: conformance.Request{Method: "GET", Path: run + "/artifacts"}, Response: conformance.Response{Status: 200, Body: string(artifacts)}},
+		{Request: conformance.Request{Method: "GET", Path: run + "/artifacts", Query: "per_page=100"}, Response: conformance.Response{Status: 200, Body: string(artifacts)}},
 		{Request: conformance.Request{Method: "GET", Path: "/repos/acme/widgets/actions/artifacts/4001/zip"}, Response: conformance.Response{Status: 200, Body: zipB64}},
 	}...)
 	for i, x := range exchanges {
