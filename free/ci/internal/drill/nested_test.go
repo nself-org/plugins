@@ -124,3 +124,17 @@ func TestNonDrillJobIsUntouched(t *testing.T) {
 		t.Fatalf("a test job that prints a failing document must still pass: %+v", c)
 	}
 }
+
+// The excerpt ends with the ids that passed, which the isolation record reads back (P7-TRUST-25).
+func TestJudgeExcerptEndsWithPassedIDs(t *testing.T) {
+	for name, want := range map[string]string{"pass": PassedPrefix + "step-one step-two", "fail-nested": PassedPrefix + "step-one"} {
+		ch, known := Judge(fixtureDoc(t, name), false)
+		if !known {
+			t.Fatalf("%s: no document", name)
+		}
+		lines := strings.Split(strings.TrimRight(ch.Excerpt, "\n"), "\n")
+		if got := lines[len(lines)-1]; got != want {
+			t.Errorf("%s: last excerpt line %q, want %q", name, got, want)
+		}
+	}
+}
