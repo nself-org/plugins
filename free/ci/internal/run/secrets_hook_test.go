@@ -142,3 +142,47 @@ func TestResolverCoordinatorIDIsAnExecutorSafeID(t *testing.T) {
 		t.Fatalf("the executor refused the coordinator id %q: %v", got, res.Err)
 	}
 }
+
+// D-1325: the local facts follow the class the coordinator gave the source. A class outside what the local
+// coordinator runs (owner, internal) gets no project secret, so a later change that lets collaborator work
+// run locally cannot inherit internal-level secrets.
+func TestLocalFactsFollowTheSourceClass(t *testing.T) {
+	refs, err := secrets.ParseAll([]string{"project/FOO"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		source   model.TrustClass
+		wantTrst model.TrustClass
+		allowed  bool
+	}{
+		{"owner", "owner", true},
+		{"internal", "internal", true},
+		{"", "internal", true}, // an attempt built without a class keeps the local default
+		{"collaborator", "collaborator", false},
+		{"untrusted", "untrusted", false},
+	} {
+		f := localFacts(AttemptInfo{Source: c.source})
+		if f.Job.Trust != c.wantTrst {
+			t.Errorf("source %q: job trust %q, want %q", c.source, f.Job.Trust, c.wantTrst)
+		}
+		if got := len(secrets.Check(refs, f)) == 0; got != c.allowed {
+			t.Errorf("source %q: project secret allowed=%v, want %v", c.source, got, c.allowed)
+		}
+	}
+}
+
+// The coordinator hands each attempt the class its classifier returned (the source of the run).
+func TestAttemptCarriesTheClassifiedSource(t *testing.T) {
+	var got []model.TrustClass
+	r := newRig(t, map[string]model.Job{"a": secretJob(`echo ran`)}, gitFake{})
+	r.C.Hooks.Trust = fakeTrust("internal")
+	r.C.Hooks.NewSecrets = func(a AttemptInfo, _ func() ciexec.Redactor) ciexec.SecretSource {
+		got = append(got, a.Source)
+		return nil
+	}
+	outcome(r.run(t), "a")
+	if len(got) == 0 || got[0] != "internal" {
+		t.Fatalf("attempt source classes %v, want [internal]", got)
+	}
+}

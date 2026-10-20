@@ -40,7 +40,10 @@ type AttemptInfo struct {
 	// Container is the run's --container option: every job runs in the toolchain
 	// container although Job still names no container (prepare applies it after
 	// the cache hook). The cache hook plans container-level mounts for it.
-	Container   bool
+	Container bool
+	// Source is the class the run's classifier gave the source (owner, internal, ...); "" = not set.
+	// Secret eligibility follows it (D-1325), not a fixed local default.
+	Source      model.TrustClass
 	SecretsInfo // project root and effective secrets allowlist (P7-TRUST-02)
 }
 

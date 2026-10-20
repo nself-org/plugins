@@ -225,7 +225,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	if subst == nil {
 		subst = func(plan.PlannedJob) bool { return true }
 	}
-	rs := &runState{c: c, sess: sess, hooks: h, pol: pol, pl: c.Plan, mp: mp, rev: rev, rows: rows, subst: subst, render: stampRun(NewRenderer(out, c.Opts), runID), subset: keep, begin: c.beginEvidence(ctx, h, rev),
+	rs := &runState{c: c, sess: sess, hooks: h, pol: pol, source: source, pl: c.Plan, mp: mp, rev: rev, rows: rows, subst: subst, render: stampRun(NewRenderer(out, c.Opts), runID), subset: keep, begin: c.beginEvidence(ctx, h, rev),
 		out: map[string]*JobOutcome{}, done: map[string]chan struct{}{}, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
 	sess.Dirty, sess.ConfigOutside, sess.Subset = rev.Dirty, c.ConfigOutside, keep != nil
 	sess.LocalOnly = rs.localOnly

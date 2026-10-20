@@ -7,14 +7,15 @@ package run
 // policy, a different CLI binary).
 // Outputs: a *secrets.Source per attempt that has secrets; the executor calls Zero() when the attempt ends.
 // Constraints: the default is the local coordinator on the operator's own machine: it only runs owner and
-// internal sources (the trust gate in Coordinator.Run), so the job facts are `internal`, the weakest class
-// that can reach this code. Values are registered with Redactions (the registry the installed redactor
+// internal sources (the trust gate in Coordinator.Run), and the job facts carry the class the coordinator
+// gave the source (AttemptInfo.Source); a class outside owner and internal resolves no secret. Values are registered with Redactions (the registry the installed redactor
 // reads); if the installed redactor is not a registry filter the Source resolves nothing (E676).
 
 import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
@@ -84,18 +85,28 @@ func (h Hooks) secretsFactory() func(AttemptInfo, func() ciexec.Redactor) ciexec
 	return Registered.NewSecrets
 }
 
-// localFacts are the facts of a job run by the local coordinator on the operator's own machine.
+// localFacts are the facts of a job run by the local coordinator on the operator's own machine. The job
+// trust is the class the coordinator gave the source ("internal" when the attempt carries none). The local
+// declaration accepts owner and internal only, so a source outside them resolves no secret at all (D-1325).
 func localFacts(a AttemptInfo) secrets.Facts {
 	iso := a.Job.Isolation
 	if iso == "" {
 		iso = "process"
 	}
-	decl := trust.Declaration{Accepts: []model.TrustClass{"owner", "internal"}, Ownership: "operator", Source: "assigned",
+	accepts := []model.TrustClass{"owner", "internal"}
+	decl := trust.Declaration{Accepts: accepts, Ownership: "operator", Source: "assigned",
 		PersonalOwnNode: true, PersonalOwnRun: true, ReleaseJob: a.Job.Kind == "release"}
 	runner := trust.RunnerFacts{Ownership: "operator", PersonalOwnNode: true, Dedicated: trust.IsDedicatedTrusted(decl), Isolation: iso}
+	class, allowed, has := a.Source, a.SecretClasses, a.HasSecretClasses
+	if class == "" {
+		class = "internal"
+	}
+	if !slices.Contains(accepts, class) {
+		allowed, has = nil, true // an empty allowlist: every secret class is refused (SecretsNotInPolicy)
+	}
 	return secrets.Facts{
-		Job:    trust.JobFacts{Trust: "internal", PersonalOwnRun: true, Release: a.Job.Kind == "release", Mode: trust.Personal},
-		Runner: runner, Allowed: a.SecretClasses, HasPolicy: a.HasSecretClasses,
+		Job:    trust.JobFacts{Trust: class, PersonalOwnRun: true, Release: a.Job.Kind == "release", Mode: trust.Personal},
+		Runner: runner, Allowed: allowed, HasPolicy: has,
 	}
 }
 
