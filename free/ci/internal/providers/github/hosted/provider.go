@@ -174,6 +174,3 @@ func (p *Provider) whoami(ctx context.Context, c *rest.Client) (string, error) {
 	p.mu.Unlock()
 	return u.Login, nil
 }
-
-// minimumTemplate is the oldest template version the evidence check accepts.
-func minimumTemplate() int { return githubtmpl.Minimum }
