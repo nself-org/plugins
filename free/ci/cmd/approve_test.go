@@ -320,7 +320,20 @@ func TestPendingList(t *testing.T) {
 }
 
 func admitLocal(st *store.Store, attempt string) (dispatch.Admitted, error) {
-	return dispatch.Admit(context.Background(), st, dispatch.Request{AttemptID: attempt,
+	return admitLocalAt(st, attempt, storedRevision(st, attempt))
+}
+
+// storedRevision is the head the run dispatcher takes the lease's checkout revision from: the pipeline row.
+func storedRevision(st *store.Store, attempt string) string {
+	run := strings.TrimSuffix(attempt, ".a1")
+	if got, ok, err := st.ApprovalState(context.Background(), run); err == nil && ok {
+		return got.Revision
+	}
+	return ""
+}
+
+func admitLocalAt(st *store.Store, attempt, revision string) (dispatch.Admitted, error) {
+	return dispatch.Admit(context.Background(), st, dispatch.Request{AttemptID: attempt, Revision: revision,
 		Placement: sched.Placement{JobKey: attempt, RunnerID: "local", CPU: 1, MemMB: 128}, Runner: sched.Runner{ID: "local", Class: "owned", Provider: "operator"},
 		Job: sched.Job{ID: attempt, Name: attempt, Project: "project"}, Local: true, Host: "h-" + attempt, CapacityCPU: 4, CapacityMemMB: 4096})
 }
@@ -466,5 +479,30 @@ func TestApprovalVoidedStaysHeldWhenBindingReturns(t *testing.T) {
 	}
 	if _, err := admitLocal(st, attempt); err != nil {
 		t.Fatalf("re-approved run: %v", err)
+	}
+}
+
+// TestApprovalRefusesForeignCheckoutRevision (D-1360, TM-34): a Request whose revision is not the stored
+// head the approval binds is held with approval.required, even under a valid approval; the matching
+// revision leases (compared case-insensitively, as the binding is).
+func TestApprovalRefusesForeignCheckoutRevision(t *testing.T) {
+	r := newApproveRig(t)
+	attempt := r.seed("run-1", "mallory", "sha-1")
+	r.as("bob", roles.Release)
+	if code := r.approve("run-1"); code != 0 {
+		t.Fatal(code)
+	}
+	st := r.store()
+	for _, rev := range []string{"sha-evil", ""} {
+		var ref *dispatch.Refusal
+		if _, err := admitLocalAt(st, attempt, rev); !errors.As(err, &ref) || ref.Reason != model.PlacementReason(source.ReasonApprovalRequired) || !strings.Contains(ref.Detail, "sha-1") {
+			t.Fatalf("lease revision %q under an approval for sha-1 must be held: %v", rev, err)
+		}
+		if state, _, _ := st.AttemptStateEpoch(context.Background(), attempt); state != "queued" {
+			t.Fatalf("held attempt is %s", state)
+		}
+	}
+	if _, err := admitLocalAt(st, attempt, "SHA-1"); err != nil {
+		t.Fatalf("the approved revision must lease: %v", err)
 	}
 }

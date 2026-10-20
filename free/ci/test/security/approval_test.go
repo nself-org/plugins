@@ -57,6 +57,9 @@ func approvalStep(ctx context.Context, v dispatch.View) error {
 	hold := func(why string) error {
 		return &dispatch.Refusal{Reason: model.PlacementReason(source.ReasonApprovalRequired), Detail: why}
 	}
+	if !strings.EqualFold(v.Request.Revision, st.Revision) {
+		return hold("the lease checks out " + v.Request.Revision + " but run " + st.Run + " is at " + st.Revision)
+	}
 	switch reasons := voidCheck(st.Approval.ApprovalBinding, st.Current()); {
 	case !st.HasApproval:
 		return hold("run " + st.Run + " waits for an approval")
@@ -191,8 +194,8 @@ func TestApprovalDoesNotTravel(t *testing.T) {
 // pipeline head inside the admission transaction, the run dispatcher takes the lease's checkout revision
 // from that same stored head (the rig does what run/dispatch_hook.go does), and the delivery that goes out
 // carries exactly the approved head. A run whose head moved after the approval is held and delivers
-// nothing, for the old head or the new one. What this does not show: admission does not compare the
-// caller-supplied Job.Revision with the stored head; D-1360 files that production gap.
+// nothing, for the old head or the new one. A caller-supplied Job.Revision that differs from the stored head is
+// held too (TestApprovalRefusesForeignCheckoutRevision, D-1360).
 func TestApprovalBindsLeaseCheckout(t *testing.T) {
 	r := newRig(t, repoPolicy(t, "public", "untrusted"), gvisorRunner("gv1", 4))
 	id, submit, runID := forkRun(t, r, "forkc")
@@ -219,6 +222,25 @@ func TestApprovalBindsLeaseCheckout(t *testing.T) {
 	for _, d := range r.tr.deliveries() {
 		if d.AttemptID == id2 {
 			t.Fatalf("a run whose head moved after its approval was delivered at %s", d.Revision)
+		}
+	}
+}
+
+// TestApprovalRefusesForeignCheckoutRevision (D-1360, TM-34): a caller that queues revision X for a run whose
+// row and approval say Y gets nothing delivered, even though the approval is valid for Y.
+func TestApprovalRefusesForeignCheckoutRevision(t *testing.T) {
+	r := newRig(t, repoPolicy(t, "public", "untrusted"), gvisorRunner("gv1", 4))
+	r.noAutoApprove = true
+	j := newJob("forke", "untrusted", "restricted")
+	id, j := r.prepare(j, "untrusted")
+	if _, err := r.st.ApproveRun(context.Background(), store.ApproveInput{Run: "pipe-forke", Approver: "token:t1:bob", ExpectSHA: baseRev, Check: voidCheck}); err != nil {
+		t.Fatal(err)
+	}
+	a, err := r.enqueueAt(id, j, strings.Repeat("e", 40), settle)
+	heldBecause(t, r, id, a, err)
+	for _, d := range r.tr.deliveries() {
+		if d.AttemptID == id {
+			t.Fatalf("a lease for a foreign revision was delivered at %s", d.Revision)
 		}
 	}
 }

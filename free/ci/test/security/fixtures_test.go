@@ -377,6 +377,12 @@ func (r *rig) enqueue(id string, job sched.Job, wait time.Duration) (dispatch.Ad
 	if st, ok, err := r.st.ApprovalState(context.Background(), r.runs[id]); err == nil && ok {
 		rev = st.Revision
 	}
+	return r.enqueueAt(id, job, rev, wait)
+}
+
+// enqueueAt submits with an explicit checkout revision, the caller-supplied Job.Revision.
+func (r *rig) enqueueAt(id string, job sched.Job, rev string, wait time.Duration) (dispatch.Admitted, error) {
+	r.t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()
 	return r.d.Submit(ctx, dispatch.Job{AttemptID: id, Sched: job, Revision: rev})

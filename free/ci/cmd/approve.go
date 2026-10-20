@@ -13,8 +13,9 @@ package main
 //          the head SHA, config digest and head repo of the run as stored when it is recorded, so any later
 //          change voids it (and voids first, with its own audit row, when a stale approval stands); the run
 //          is named exactly or confirmed with --sha, never by a bare prefix or "latest"; --spend on a run
-//          that needs no trust approval records the spend approval only; `pending` first writes the voids (one audit row each); the step reads only
-//          stored facts inside the admission transaction (no network) and never writes.
+//          that needs no trust approval records the spend approval only; `pending` first writes the voids (one audit row each); the step also
+//          refuses a lease whose checkout revision (Request.Revision, caller-supplied) differs from the stored head
+//          the approval binds (D-1360); the step reads only stored facts inside the admission transaction (no network) and never writes.
 
 import (
 	"context"
@@ -83,6 +84,10 @@ func approvalStep(ctx context.Context, v dispatch.View) error {
 	}
 	hold := func(why string) error {
 		return &dispatch.Refusal{Reason: model.PlacementReason(source.ReasonApprovalRequired), Detail: why}
+	}
+	// The revision the lease checks out is caller-supplied: it must be the stored head the approval binds.
+	if !strings.EqualFold(v.Request.Revision, st.Revision) {
+		return hold("the lease checks out " + v.Request.Revision + " but run " + st.Run + " is at " + st.Revision)
 	}
 	switch reasons := voidCheck(st.Approval.ApprovalBinding, st.Current()); {
 	case !st.HasApproval:

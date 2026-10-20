@@ -60,6 +60,9 @@ type Request struct {
 	Node bool
 	// Incarnation is the coordinator incarnation of a fenced remote lease.
 	Incarnation int64
+	// Revision is the commit the lease checks out (Job.Revision, caller-supplied). The approval step
+	// refuses it unless it equals the stored pipeline revision the approval binds (D-1360, TM-34).
+	Revision string
 }
 
 // Admitted is an attempt that holds a lease.
