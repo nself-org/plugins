@@ -285,13 +285,13 @@ func TestIdentityBinding(t *testing.T) {
 // that could be a secret value, a bad project name or a duplicate.
 func TestKeysDecode(t *testing.T) {
 	for _, k := range Keys() {
-		good := []string{`{"acme/app":"MY_SECRET"}`, `{"acme/app":{"env":"MY_SECRET","id":9}}`, `{}`}
+		good := []string{`{"acme/app":"MY_SECRET"}`, `{"acme/app":{"env":"MY_SECRET","id":9}}`, `{"acme/team/app":"MY_SECRET"}`, `{}`}
 		for _, g := range good {
 			if _, err := k.Decode([]byte(g)); err != nil {
 				t.Fatalf("%s: %s refused: %v", k.Key, g, err)
 			}
 		}
-		for _, bad := range []string{`null`, `[]`, `"x"`, `{"acme":"S"}`, `{"a/b/c":"S"}`, `{"acme/app":"has space"}`, `{"acme/app":"whsec_abc="}`,
+		for _, bad := range []string{`null`, `[]`, `"x"`, `{"acme":"S"}`, `{"a/b/../c":"S"}`, `{"a//c":"S"}`, `{"acme/app":"has space"}`, `{"acme/app":"whsec_abc="}`,
 			`{"acme/app":{"env":"S","id":-1}}`, `{"acme/app":{"env":"S","extra":1}}`, `{"acme/app":"S","Acme/App":"T"}`, `{"acme/app":""}`, `{"acme/app":1}`, `{} {}`} {
 			if _, err := k.Decode([]byte(bad)); err == nil {
 				t.Fatalf("%s: %s must be refused", k.Key, bad)

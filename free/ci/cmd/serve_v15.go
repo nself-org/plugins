@@ -188,7 +188,7 @@ func dispatchPipeline(home string, f *v15ServeFlags) coordinator.Dispatcher {
 			return coordinator.RunResult{}, errors.New("synthetic pipelines are not dispatched by this coordinator")
 		}
 		// a stored row is checked again here: nothing that reaches git may start with "-" or leave the project's host
-		if !coordinator.ValidProject(row.Project) || !coordinator.ValidRevision(row.Revision) || (row.Pipeline != "" && !coordinator.ValidPipeline(row.Pipeline)) {
+		if !coordinator.ValidProjectFor(row.Source, row.Project) || !coordinator.ValidRevision(row.Revision) || (row.Pipeline != "" && !coordinator.ValidPipeline(row.Pipeline)) {
 			return coordinator.RunResult{}, errors.New("refused: project, revision or pipeline is not valid")
 		}
 		cloneURL, err := coordinator.SafeCloneURL(row.Source, row.Project, facts.CloneURL)
