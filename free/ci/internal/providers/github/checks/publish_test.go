@@ -222,7 +222,7 @@ func TestAnnotationPaging(t *testing.T) {
 			var b checkBody
 			_ = json.Unmarshal(c.Body, &b)
 			n := len(b.Output.Annotations)
-			if n > PageSize {
+			if n > 50 || PageSize != 50 { // the literal: GitHub accepts 50 annotations per request
 				t.Fatalf("%d located: a request carried %d annotations", tc.located, n)
 			}
 			total += n
