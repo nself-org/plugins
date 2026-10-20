@@ -11,11 +11,17 @@ package runners
 //          Both are idempotent (a 404 means the runner is already gone). The Job Hook source (HOST-21)
 //          skips jobs that are not pending, so the ingress calls OnRunning from the coordinator wiring
 //          (P7-NODE-20); the hook source is not changed here.
+//          D-1390: that wiring is webhook.Source.OnRunning. The Source calls it for an authenticated running
+//          Job Hook (it then still declines the delivery) and wire.go installs ObserveRunning, so no
+//          coordinator wiring is needed. The pause is a race, not a close: the job already runs when the hook
+//          arrives (debt row).
 
 import (
 	"context"
 	"encoding/json"
+	"time"
 
+	"github.com/nself-org/cli/sdk/go/v2/compat"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/gitlab/api"
 )
@@ -105,4 +111,39 @@ func (r *Registrar) OnRunning(ctx context.Context, ev RunningEvent) (paused bool
 		return false, nil
 	}
 	return r.pause(ctx, providers.RunnerRef{ID: itoa(ev.RunnerID), Scope: providers.RunnerScope{Repo: ev.Project}})
+}
+
+// runningBudget bounds the pause the webhook path waits for: a slow GitLab must not hold the delivery.
+const runningBudget = 15 * time.Second
+
+// RunningObserver returns the webhook.Source.OnRunning hook of a Registrar: it pauses the runner a running
+// Job Hook names, and does nothing for a body that is not one. The error is dropped on purpose: the
+// delivery is declined either way and the sweep deletes the runner at run close.
+func RunningObserver(r *Registrar) func(ctx context.Context, body []byte) {
+	return func(ctx context.Context, body []byte) {
+		ev, ok := ParseJobHook(body)
+		if !ok {
+			return
+		}
+		ctx, cancel := context.WithTimeout(ctx, runningBudget)
+		defer cancel()
+		_, _ = r.OnRunning(ctx, ev)
+	}
+}
+
+// ObserveRunning is RunningObserver over the Registrar of the operator's installed policy. It does nothing
+// before V15 is on, with no policy installed, or when the runner settings do not build a Registrar.
+func ObserveRunning(ctx context.Context, body []byte) {
+	if !compat.V15() {
+		return
+	}
+	eff, err := currentPolicy(ctx)
+	if err != nil || eff == nil {
+		return
+	}
+	r, err := FromPolicy(eff)
+	if err != nil {
+		return
+	}
+	RunningObserver(r)(ctx, body)
 }

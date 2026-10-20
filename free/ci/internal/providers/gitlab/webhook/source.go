@@ -48,12 +48,15 @@ const (
 
 // Source is the GitLab trigger source. The zero value is not usable: call New.
 type Source struct {
-	Now     func() time.Time                            // clock
-	Getenv  func(string) string                         // secret lookup, at call time
-	Policy  func(context.Context) (Secrets, error)      // the operator's secrets (lower-case name -> entry)
-	NewAPI  func(context.Context) (*rest.Client, error) // the REST client for API facts
-	pins    pinTable
-	regErrs []error
+	Now    func() time.Time                            // clock
+	Getenv func(string) string                         // secret lookup, at call time
+	Policy func(context.Context) (Secrets, error)      // the operator's secrets (lower-case name -> entry)
+	NewAPI func(context.Context) (*rest.Client, error) // the REST client for API facts
+	// OnRunning, when set, receives the raw body of every authenticated Job Hook that reports a running job
+	// (D-1390: the runner pause of review F6). It must not trust the body; the delivery is still declined.
+	OnRunning func(ctx context.Context, body []byte)
+	pins      pinTable
+	regErrs   []error
 }
 
 // New returns a Source wired to the process: real clock and environment, the installed policy and the

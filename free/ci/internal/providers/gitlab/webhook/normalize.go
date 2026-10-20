@@ -40,6 +40,9 @@ func (s *Source) normalize(ctx context.Context, auth model.TriggerAuth, bound bo
 	if p.ObjectKind != kind {
 		return model.TriggerFacts{}, unsupported("event does not match the payload")
 	}
+	if event == "Job Hook" && p.BuildStatus == "running" && s.OnRunning != nil {
+		s.OnRunning(ctx, body) // already authenticated and bound to its project; the delivery is still declined below
+	}
 	f := s.baseFacts(p, auth, bound, delivery)
 	switch event {
 	case "Push Hook":

@@ -5,7 +5,7 @@ package runners
 // Inputs:  init().
 // Outputs: providers.DemandHandlerFor("gitlab") is the Handler; runnerjob.KindOf("gitlab") is
 //          gitlab-runner-token; RegistrationErrors lists anything init could not register.
-// Constraints: nothing runs unless compat.V15(). The ledger is the launcher's one shared ledger: the
+// Constraints: nothing runs unless compat.V15() (ObserveRunning checks it too). The ledger is the launcher's one shared ledger: the
 //          coordinator start binds it once (github/demand.Bind, which calls runnerjob.Use), so there is no
 //          second Bind here; until it is bound the handler answers E704 and the demand is offered again.
 //          The coordinator start also installs UsePolicy of this package next to runtime.UsePolicy
@@ -14,10 +14,12 @@ package runners
 
 import (
 	"github.com/nself-org/plugins/free/ci/internal/providers"
+	"github.com/nself-org/plugins/free/ci/internal/providers/gitlab/webhook"
 	"github.com/nself-org/plugins/free/ci/internal/providers/runnerjob"
 )
 
 func init() {
+	webhook.Default.OnRunning = ObserveRunning // D-1390: a running Job Hook pauses the runner of its job
 	if err := runnerjob.InstallCoordinator(); err != nil {
 		registrationErrors = append(registrationErrors, err)
 	}
