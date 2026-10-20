@@ -46,6 +46,17 @@ func (s *Store) OutboxClaim(ctx context.Context, revision, statusContext string,
 		}
 		if newer > 0 {
 			result = ClaimSuperseded
+			// An expired in-flight delivery may have landed after the newer
+			// status. Repost that status even if this poster never acknowledges.
+			var expired int
+			if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq=? AND state=? AND claimed_at<=?", revision, statusContext, seq, OutboxPosting, cutoff).Scan(&expired); err != nil {
+				return err
+			}
+			if expired > 0 {
+				if _, err := requeueNewest(ctx, tx, revision, statusContext, seq); err != nil {
+					return err
+				}
+			}
 			_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state IN (?,?,?)", OutboxSuperseded, revision, statusContext, seq, OutboxReserved, OutboxPending, OutboxPosting)
 			return err
 		}
