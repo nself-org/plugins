@@ -78,9 +78,15 @@ jobs:
           # --trust owner. A fork head leaves this empty, stays untrusted and is refused, as intended.
           NSELF_CI_TRUST: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'owner' || '' }}
         run: |
-          set -o pipefail
-          mkdir -p "$RUNNER_TEMP/evidence"
-          status=0
+         set -o pipefail
+         mkdir -p "$RUNNER_TEMP/evidence"
+         status=0
+         args=(--no-status --json)
+         if [ -n "$NSELF_CI_TRUST" ]; then args+=(--trust "$NSELF_CI_TRUST"); fi
+         "$NSELF_CI_BIN" "${args[@]}" > "$RUNNER_TEMP/evidence/nself-ci-source.json" || status=$?
+          # This disposable GitHub-hosted VM is the outer isolation boundary.
+          # The checkout-built engine audits this explicit local-operator override;
+          # no repository secrets or writable token are available to its jobs.
           args=(--no-status --json)
           if [ -n "$NSELF_CI_TRUST" ]; then args+=(--trust "$NSELF_CI_TRUST"); fi
           "$NSELF_CI_BIN" "${args[@]}" > "$RUNNER_TEMP/evidence/nself-ci-source.json" || status=$?
