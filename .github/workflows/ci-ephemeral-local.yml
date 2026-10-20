@@ -1,0 +1,105 @@
+name: ci-ephemeral-local
+
+# Linux evidence for the local ephemeral provider (P7-SCHED-09, Constitution 10.3, Epic D20).
+# Two legs on GitHub-hosted ubuntu-24.04: with gVisor runsc installed from a digest-pinned release the provider
+# offers sandboxed-container slots; without it the same host offers container-level slots and nothing lower.
+# The Tart leg runs on the operator's Apple-silicon Mac (tag integration_tart), never here.
+
+on:
+  pull_request:
+    paths:
+      - 'free/ci/internal/providers/ephemeral/local/**'
+      - 'free/ci/internal/isolation/**'
+      - 'free/ci/internal/burst/**'
+      - '.github/workflows/ci-ephemeral-local.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-ephemeral-local-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: '0'
+  GVISOR_RELEASE: '20261012.0'
+  GVISOR_SHA512: '9606445eed5aedfcf05310e7ccef61d994089914c6622fc82624c24d2b18db1b2210f40e40a7be27b8b7772859de7d95c501b4eba66423053c960bf671377c5e'
+  TRUST04_TEST_IMAGE: 'alpine:3.19@sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1'
+
+jobs:
+  linux:
+    name: ephemeral local (${{ matrix.leg }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: sandboxed-container
+            runsc: 'true'
+          - leg: container
+            runsc: 'false'
+    env:
+      EPHEMERAL_LOCAL_EXPECT: ${{ matrix.leg }}
+      INSTALL_RUNSC: ${{ matrix.runsc }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+          cache-dependency-path: free/ci/go.sum
+
+      - name: Container runtime
+        run: |
+          set -euo pipefail
+          docker info --format '{{.ServerVersion}}'
+          docker pull "$TRUST04_TEST_IMAGE"
+
+      - name: Install gVisor runsc
+        if: env.INSTALL_RUNSC == 'true'
+        run: |
+          set -euo pipefail
+          base="https://storage.googleapis.com/gvisor/releases/release/${GVISOR_RELEASE}/x86_64"
+          curl -fsSL -o "$RUNNER_TEMP/gvisor.tar.bz2" "$base/gvisor.tar.bz2"
+          echo "${GVISOR_SHA512}  $RUNNER_TEMP/gvisor.tar.bz2" | sha512sum -c -
+          sudo tar -xjf "$RUNNER_TEMP/gvisor.tar.bz2" -C /usr/local/bin
+          sudo runsc install
+          sudo systemctl restart docker
+          docker info --format '{{json .Runtimes}}' | tee "$RUNNER_TEMP/runtimes.json"
+          grep -q runsc "$RUNNER_TEMP/runtimes.json"
+
+      - name: No runsc on the container-only leg
+        if: env.INSTALL_RUNSC != 'true'
+        run: |
+          set -euo pipefail
+          if docker info --format '{{json .Runtimes}}' | grep -q runsc; then
+            echo "runsc is registered on the container-only leg: the leg proves nothing" >&2
+            exit 1
+          fi
+
+      - name: Unit tests
+        run: |
+          set -euo pipefail
+          cd free/ci
+          CGO_ENABLED=1 go test -mod=vendor -race -count=1 ./internal/providers/ephemeral/local/...
+
+      - name: Integration tests
+        run: |
+          set -euo pipefail
+          cd free/ci
+          go test -mod=vendor -count=1 -json -tags integration -run '^TestLinux' ./internal/providers/ephemeral/local/... > "$RUNNER_TEMP/integration.json" || rc=$?
+          jq -j 'select(.Action == "output") | .Output' "$RUNNER_TEMP/integration.json"
+          [ "${rc:-0}" -eq 0 ]
+          python3 ../../scripts/ci/go-test-ran.py TestLinuxOneSandboxPerJob TestLinuxLeakIsFoundAdoptedAndRemoved < "$RUNNER_TEMP/integration.json"
+
+      - name: No labelled container is left
+        run: |
+          set -euo pipefail
+          left="$(docker ps -a --filter label=role=ci-ephemeral --format '{{.Names}}')"
+          if [ -n "$left" ]; then
+            echo "docker ps -a --filter label=role=ci-ephemeral is not empty:" >&2
+            echo "$left" >&2
+            exit 1
+          fi
