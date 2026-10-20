@@ -38,6 +38,7 @@ func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
 	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
 	if err != nil {
 		log.Printf("migrations: status: %v", err)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return map[string]int{"applied": -1, "expected": -1}
 	}
