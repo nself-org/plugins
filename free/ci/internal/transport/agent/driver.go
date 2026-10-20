@@ -161,6 +161,7 @@ type route struct {
 	lw                 *LogWriter
 	blobs              *blobSet
 	fwd, prevFwd       uint64 // highest log line_seq the run's sink accepted (and the one before)
+	resultDone         bool   // the run's sink took the result; guarded by Driver.mu
 	err                error  // why the lease failed (a corrupt blob); read after done is closed
 }
 

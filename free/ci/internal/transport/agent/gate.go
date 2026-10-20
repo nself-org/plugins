@@ -197,7 +197,14 @@ func (g *Gate) Spend(ctx context.Context, jti string) error {
 		}
 	}
 	g.mu.Unlock()
-	return g.Bindings.TokenSpend(ctx, jti)
+	if err := g.Bindings.TokenSpend(ctx, jti); err != nil {
+		// Not spent after all: forget the mark so the resend of the result still passes the gate and spends again.
+		g.mu.Lock()
+		delete(g.spent, jti)
+		g.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 // Prune removes the bindings of tokens that expired more than an hour ago.

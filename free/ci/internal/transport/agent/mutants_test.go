@@ -323,7 +323,7 @@ type spendFails struct{ Bindings }
 
 func (spendFails) TokenSpend(context.Context, string) error { return errors.New("db locked") }
 
-func TestResultLogsAFailedSpendAndNothingElse(t *testing.T) {
+func TestResultLogsEachFailedSpendAttemptAndFailsTheFrame(t *testing.T) {
 	for _, failing := range []bool{false, true} {
 		r := newRig(t)
 		lease, att, ep := r.seedLease("1", "n-1")
@@ -339,13 +339,20 @@ func TestResultLogsAFailedSpendAndNothingElse(t *testing.T) {
 		}()
 		eventually(t, 3*time.Second, "queued", func() bool { l, _ := d.Next(context.Background(), "n-1"); return l != nil })
 		res := protocol.Result{LeaseID: lease, Epoch: ep, Evidence: []byte(`{}`), Signature: protocol.Signature{KeyID: "k", Value: "v"}}
-		if err := d.Sink().Result(context.Background(), res); err != nil {
-			t.Fatal(err)
+		err := d.Sink().Result(context.Background(), res)
+		if failing {
+			if err == nil {
+				t.Fatal("a spend that never succeeds must fail the Result frame")
+			}
+		} else {
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = <-done; err != nil {
+				t.Fatal(err)
+			}
 		}
-		if err := <-done; err != nil {
-			t.Fatal(err)
-		}
-		if want := map[bool]int{false: 0, true: 1}[failing]; logged != want {
+		if want := map[bool]int{false: 0, true: spendAttempts}[failing]; logged != want {
 			t.Fatalf("failing=%v: %d log lines, want %d", failing, logged, want)
 		}
 	}

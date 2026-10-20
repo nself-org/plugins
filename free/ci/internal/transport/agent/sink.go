@@ -9,11 +9,13 @@ package agent
 //          reaching the run; a frame for a lease this process never delivered is refused with a lost refusal
 //          (agentapi cancels that lease on the agent and keeps the stream), a frame for a lease whose Run already returned is accepted and dropped (it is a
 //          resend); CommitsResult is true because the run's sink commits the result through the lease engine,
-//          so agentapi must not commit it a second time; the token is spent after the sink accepted the result.
+//          so agentapi must not commit it a second time; the token is spent after the sink accepted the result, retried a few times; a spend that keeps
+//          failing fails the frame so the agent resends it, and the resend only spends (the result is committed once).
 
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
@@ -165,17 +167,59 @@ func (s *hubSink) Result(ctx context.Context, r protocol.Result) error {
 	if err != nil || late {
 		return err
 	}
-	if err = s.d().syncLogs(); err != nil { // the acknowledgement of the result covers every line before it
-		return fmt.Errorf("lease log: %w", err)
+	d := s.d()
+	if !d.committed(rt) { // a resend after a failed spend must not commit the result a second time
+		if err = d.syncLogs(); err != nil { // the acknowledgement of the result covers every line before it
+			return fmt.Errorf("lease log: %w", err)
+		}
+		if err = rt.sink.Result(ctx, r); err != nil {
+			return err
+		}
+		d.markCommitted(rt)
 	}
-	if err = rt.sink.Result(ctx, r); err != nil {
-		return err
-	}
-	if d := s.d(); d.cfg().gate != nil {
-		if err = d.cfg().gate.Spend(ctx, rt.jti); err != nil {
-			d.logf("agent transport: cannot spend the token of lease %s: %v", rt.leaseID, err)
+	if g := d.cfg().gate; g != nil {
+		if err = d.spend(ctx, g, rt); err != nil {
+			// Fail the frame: the agent resends it and the resend spends the token again.
+			return fmt.Errorf("spend the token of lease %s: %w", rt.leaseID, err)
 		}
 	}
 	rt.finish()
 	return nil
+}
+
+// spendAttempts and spendWait bound the retries of TokenSpend after a committed result.
+const (
+	spendAttempts = 3
+	spendWait     = 20 * time.Millisecond
+)
+
+// spend spends the token of rt, retrying a failed store write a few times.
+func (d *Driver) spend(ctx context.Context, g *Gate, rt *route) (err error) {
+	for i := 0; i < spendAttempts; i++ {
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return err
+			case <-time.After(spendWait):
+			}
+		}
+		if err = g.Spend(ctx, rt.jti); err == nil {
+			return nil
+		}
+		d.logf("agent transport: cannot spend the token of lease %s (attempt %d of %d): %v", rt.leaseID, i+1, spendAttempts, err)
+	}
+	return err
+}
+
+// committed reports whether the run's sink already took the result of rt.
+func (d *Driver) committed(rt *route) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return rt.resultDone
+}
+
+func (d *Driver) markCommitted(rt *route) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	rt.resultDone = true
 }
