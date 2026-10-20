@@ -121,8 +121,8 @@ func scanFile(f *ast.File, rel string, grants map[token.Pos]bool, add func(strin
 				case banned[name] && !chokeFuncs[key] && !(name == "Grant" && roleGrantFiles[rel]):
 					report(name)
 				}
-		case *ast.Ident:
-				if banned[x.Name] && !grants[x.Pos()] && x != declName && !(x.Name == "LocalAdmit" && localFiles[rel]) && (x.Name == "LocalAdmit" || !chokeFuncs[key]) {
+			case *ast.Ident:
+				if banned[x.Name] && !grants[x.Pos()] && x != declName && (x.Name != "LocalAdmit" || !localFiles[rel]) && (x.Name == "LocalAdmit" || !chokeFuncs[key]) {
 					report(x.Name)
 				}
 			case *ast.BasicLit:
