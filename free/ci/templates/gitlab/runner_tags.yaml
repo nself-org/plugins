@@ -1,0 +1,13 @@
+# Runner tags a GitLab pipeline job may ask for, with the platform each provides. The list is data, not
+# a lookup: a Developer project token cannot read runner details (the runners API needs Maintainer),
+# so Describe offers exactly these tags and the include template passes the chosen one to `tags:`.
+# Only the small shared runners of gitlab.com are listed; a tag with "large" in it is refused by the
+# loader, so a larger (billed) runner can never be reached by editing this file alone.
+# Source: https://docs.gitlab.com/ci/runners/hosted_runners/linux/ (read 2026-10-19).
+tags:
+  - tag: saas-linux-small-amd64
+    os: linux
+    arch: amd64
+  - tag: saas-linux-small-arm64
+    os: linux
+    arch: arm64

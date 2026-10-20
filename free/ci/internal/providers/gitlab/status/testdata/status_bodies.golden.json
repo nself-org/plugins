@@ -1,0 +1,120 @@
+[
+  {
+    "name": "pending",
+    "state_in": "pending",
+    "phase": "",
+    "description_in": "queued",
+    "target_url_in": "",
+    "request": "/api/v4/projects/acme%2Fwidgets/statuses/0123456789abcdef0123456789abcdef01234567",
+    "body": {
+      "description": "queued",
+      "name": "nself-ci",
+      "state": "pending"
+    }
+  },
+  {
+    "name": "running",
+    "state_in": "pending",
+    "phase": "running",
+    "description_in": "running: 3/9 checks",
+    "target_url_in": "",
+    "request": "/api/v4/projects/acme%2Fwidgets/statuses/0123456789abcdef0123456789abcdef01234567",
+    "body": {
+      "description": "running: 3/9 checks",
+      "name": "nself-ci",
+      "state": "running"
+    }
+  },
+  {
+    "name": "success",
+    "state_in": "success",
+    "phase": "",
+    "description_in": "pass: 9/9 checks passed",
+    "target_url_in": "",
+    "request": "/api/v4/projects/acme%2Fwidgets/statuses/0123456789abcdef0123456789abcdef01234567",
+    "body": {
+      "description": "pass: 9/9 checks passed",
+      "name": "nself-ci",
+      "state": "success"
+    }
+  },
+  {
+    "name": "failed",
+    "state_in": "failure",
+    "phase": "",
+    "description_in": "fail: 8/9 checks passed",
+    "target_url_in": "",
+    "request": "/api/v4/projects/acme%2Fwidgets/statuses/0123456789abcdef0123456789abcdef01234567",
+    "body": {
+      "description": "fail: 8/9 checks passed",
+      "name": "nself-ci",
+      "state": "failed"
+    }
+  },
+  {
+    "name": "error",
+    "state_in": "error",
+    "phase": "",
+    "description_in": "the runner was lost",
+    "target_url_in": "",
+    "request": "/api/v4/projects/acme%2Fwidgets/statuses/0123456789abcdef0123456789abcdef01234567",
+    "body": {
+      "description": "the runner was lost",
+      "name": "nself-ci",
+      "state": "failed"
+    }
+  },
+  {
+    "name": "canceled",
+    "state_in": "failure",
+    "phase": "canceled",
+    "description_in": "cancelled by the operator",
+    "target_url_in": "",
+    "request": "/api/v4/projects/acme%2Fwidgets/statuses/0123456789abcdef0123456789abcdef01234567",
+    "body": {
+      "description": "cancelled by the operator",
+      "name": "nself-ci",
+      "state": "canceled"
+    }
+  },
+  {
+    "name": "long description",
+    "state_in": "success",
+    "phase": "",
+    "description_in": "checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed ",
+    "target_url_in": "",
+    "request": "/api/v4/projects/acme%2Fwidgets/statuses/0123456789abcdef0123456789abcdef01234567",
+    "body": {
+      "description": "checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed checks passed…",
+      "name": "nself-ci",
+      "state": "success"
+    }
+  },
+  {
+    "name": "multi-line description",
+    "state_in": "pending",
+    "phase": "",
+    "description_in": "line one\nline two",
+    "target_url_in": "",
+    "request": "/api/v4/projects/acme%2Fwidgets/statuses/0123456789abcdef0123456789abcdef01234567",
+    "body": {
+      "description": "line one line two",
+      "name": "nself-ci",
+      "state": "pending"
+    }
+  },
+  {
+    "name": "target url",
+    "state_in": "success",
+    "phase": "",
+    "description_in": "pass",
+    "target_url_in": "https://ci.example.test/run/1",
+    "request": "/api/v4/projects/acme%2Fwidgets/statuses/0123456789abcdef0123456789abcdef01234567",
+    "body": {
+      "description": "pass",
+      "name": "nself-ci",
+      "state": "success",
+      "target_url": "https://ci.example.test/run/1"
+    }
+  }
+]

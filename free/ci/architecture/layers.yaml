@@ -137,6 +137,7 @@ layers:
     - internal/providers/github/reconcile
     - internal/providers/github/demand
     - internal/providers/github/usage
+    - templates/gitlab
     - internal/providers/gitlab/api
     - internal/providers/gitlab/pipeline
     - internal/providers/gitlab/status

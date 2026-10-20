@@ -1,0 +1,8 @@
+# Hosts an artifact download may be redirected to; anything else is refused. The GitLab host itself is
+# allowed for the first request only (the REST funnel's rule), so a self-managed instance that serves
+# artifacts through its own workhorse needs nothing here; one that redirects to object storage on a
+# host of its own is not supported until that host is listed.
+hosts:
+  - storage.googleapis.com
+  - "*.storage.googleapis.com"
+  - "*.amazonaws.com"
