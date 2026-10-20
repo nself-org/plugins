@@ -75,6 +75,8 @@ func githubFixture(t *testing.T, untrustedPresent bool) *httptest.Server {
 				w.Header().Set("X-OAuth-Scopes", "repo, workflow")
 			}
 			serveJSON(w, 200, map[string]string{"login": "octo"})
+		case r.URL.Path == "/repos/octo/widgets/actions/permissions/fork-pr-contributor-approval":
+			serveJSON(w, 200, map[string]string{"approval_policy": "first_time_contributors"})
 		case r.URL.Path == "/repos/octo/widgets":
 			serveJSON(w, 200, map[string]any{"default_branch": "main", "permissions": map[string]bool{"admin": true, "push": true, "pull": true}})
 		case r.URL.Path == "/repos/octo/widgets/contents/"+githubtmpl.Path:
@@ -148,6 +150,9 @@ func TestProvidersTestGitHub(t *testing.T) {
 	wantRow(t, rows, "workflow, default branch", probeOK, "present on main")
 	wantRow(t, rows, "workflow, untrusted ref", probeFail, "missing on nself-ci/untrusted")
 	wantRow(t, rows, "webhook secret", probeFail, "NSELF_TEST_HOOK is empty")
+	if code := r.do("set", "--scope", "user", "providers.github.jit.label", "nself"); code != 0 {
+		t.Fatalf("set exited %d: %s", code, r.errb.String())
+	}
 	srv = githubFixture(t, true)
 	vars := map[string]string{"NSELF_TEST_GH": "github_pat_PLANTED0002", "NSELF_TEST_HOOK": "PLANTED-hook-0003"}
 	if code := run(vars, "fine-grained", srv); code != 0 {
@@ -157,6 +162,11 @@ func TestProvidersTestGitHub(t *testing.T) {
 	wantRow(t, rows, "scopes", probeUnknown, "fine-grained")
 	wantRow(t, rows, "workflow, untrusted ref", probeOK, "present on nself-ci/untrusted")
 	wantRow(t, rows, "webhook secret", probeOK, "NSELF_TEST_HOOK is set")
+	// JIT is on: the policy is read and recorded as the fact CI-DP010 of the doctor reads.
+	wantRow(t, rows, "fork pr approval", probeWarn, "first_time_contributors")
+	if f, ok, err := r.store().ProviderFactGet(context.Background(), "github", "octo/widgets", "fork_pr_approval_policy"); err != nil || !ok || !strings.Contains(string(f.Value), "first_time_contributors") {
+		t.Fatalf("the approval fact was not recorded: %v %v %s", ok, err, f.Value)
+	}
 	if _, bad := rows["credential kind"]; bad {
 		t.Fatal("a fine-grained token has no kind warning")
 	}
@@ -255,7 +265,7 @@ func TestNoSecretOutput(t *testing.T) {
 		{"list", nil, nil}, {"list", []string{"--json"}, nil}, {"show", []string{"github-hosted"}, nil}, {"show", []string{"gitlab", "--json"}, nil},
 		{"test", []string{"github-hosted", "--repo", "octo/widgets"}, gh}, {"test", []string{"github-hosted", "--repo", "octo/widgets", "--json"}, gh},
 		{"test", []string{"gitlab", "--repo", "group/proj"}, gl}, {"test", []string{"gitlab", "--repo", "group/proj", "--json"}, gl},
-		{"authorize", []string{"gitlab", "--project", "p9", "--json"}, nil}, {"revoke", []string{"gitlab", "--project", "p9"}, nil},
+		{"authorize", []string{"gitlab", "--project", r.work, "--json"}, nil}, {"revoke", []string{"gitlab", "--project", r.work}, nil},
 	} {
 		env := providersEnvFor(r, planted)
 		if tc.srv != nil {

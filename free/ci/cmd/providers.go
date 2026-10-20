@@ -138,7 +138,7 @@ func runProviders(op string, args []string, env providersEnv) int {
 		return adminFail(env.adminEnv, command, f.json, fmt.Errorf("the repository root is unknown: %w", err))
 	}
 	if op == "authorize" || op == "revoke" {
-		return runAuthorize(ctx, op, pos[0], f, root, env)
+		return runAuthorize(ctx, op, pos[0], f, env)
 	}
 	st, err := env.OpenStore()
 	if err != nil {
@@ -154,7 +154,7 @@ func runProviders(op string, args []string, env providersEnv) int {
 	case "show":
 		return showProvider(ctx, env, cfg, st, root, pos[0], f)
 	}
-	return testProvider(ctx, env, cfg, root, pos[0], f)
+	return testProvider(ctx, env, cfg, st, root, pos[0], f)
 }
 
 type healthJSON struct {

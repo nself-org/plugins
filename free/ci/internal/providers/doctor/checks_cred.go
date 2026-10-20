@@ -61,8 +61,8 @@ func (s *state) checkGitLabCredentials() (doctor.Check, doctor.Check) {
 	if c := GitLabCredential(s.cfg, s.env.Getenv, false); c.Present {
 		tok.Message = "GitLab token: " + c.Source
 	} else {
-		tok.Status, tok.Message = doctor.Fail, "providers.gitlab.token_env names "+c.Env+", which is empty or unset"
-		tok.Remediation = "Export " + c.Env + " with a token that has api scope and the Developer role on the project"
+		tok.Status, tok.Message = doctor.Fail, "no GitLab token resolves: providers.gitlab.token_env names "+orNone(c.Env)+", which is empty or unset"
+		tok.Remediation = "Export " + orNone(c.Env) + " with a token that has api scope and the Developer role on the project"
 	}
 	if c := GitLabCredential(s.cfg, s.env.Getenv, true); c.Source != "none" {
 		if c.Present {
@@ -77,3 +77,11 @@ func (s *state) checkGitLabCredentials() (doctor.Check, doctor.Check) {
 
 // oneLine collapses white space so a multi-line error stays on one report line.
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+// orNone names an unset variable key in a message.
+func orNone(env string) string {
+	if env == "" {
+		return "no variable"
+	}
+	return env
+}

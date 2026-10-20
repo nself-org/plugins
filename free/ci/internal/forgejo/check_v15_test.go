@@ -103,3 +103,32 @@ func TestPolicyKey(t *testing.T) {
 		t.Error("a nil policy must be an error, not the default")
 	}
 }
+
+func TestURLWithPasswordIsNeverEchoed(t *testing.T) {
+	res := Check(context.Background(), CheckConfig{URL: "https://admin:S3cretValue@forge.example.org"})
+	var buf bytes.Buffer
+	Print(&buf, res)
+	raw, _ := json.Marshal(res)
+	if res.Healthy || res.Server != "invalid URL" || strings.Contains(buf.String()+string(raw), "S3cretValue") {
+		t.Fatalf("a refused URL must not echo its password: %+v %s", res, buf.String())
+	}
+}
+
+func TestAdminProbeDoesNotFollowRedirects(t *testing.T) {
+	var followed bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/-/health":
+			_, _ = w.Write([]byte(`{"healthy": true}`))
+		case "/api/v1/repos/search":
+			http.Redirect(w, r, "/elsewhere", http.StatusMovedPermanently)
+		case "/elsewhere":
+			followed = true
+		}
+	}))
+	defer srv.Close()
+	res := Check(context.Background(), CheckConfig{URL: srv.URL, User: "admin", Pass: "fake-password-0001"})
+	if followed || res.API != "HTTP 301" {
+		t.Fatalf("the authenticated probe followed a redirect: followed=%v api=%q", followed, res.API)
+	}
+}

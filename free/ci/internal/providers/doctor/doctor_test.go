@@ -243,6 +243,9 @@ func TestDoctorChecks(t *testing.T) {
 		put("first_time_contributors")
 		want(t, find(t, r.run(), "CI-DP010", ""), cidoctor.Pass, "not enabled") // JIT is off: nothing to warn about
 		r.row("providers.github.jit.label", `"nself"`)
+		other := newRig(t, ghRemote) // JIT on and no recorded fact: unknown is a warning, never a false green
+		other.row("providers.github.jit.label", `"nself"`)
+		want(t, find(t, other.run(), "CI-DP010", ""), cidoctor.Warn, "not recorded")
 		want(t, find(t, r.run(), "CI-DP010", ""), cidoctor.Warn, "first_time_contributors")
 		put("all_external_contributors")
 		want(t, find(t, r.run(), "CI-DP010", ""), cidoctor.Pass, "all external contributors")
@@ -263,6 +266,14 @@ func TestDoctorChecks(t *testing.T) {
 		r := newRig(t, ghRemote)
 		r.row("providers.forgejo.url", `"http://forge.example.com:3844"`)
 		want(t, find(t, r.run(), "CI-DP012", ""), cidoctor.Warn, "plain http")
+	})
+	t.Run("a GitHub mirror origin of a GitLab-only operator is not nagged", func(t *testing.T) {
+		r := newRig(t, ghRemote)
+		checks := r.run()
+		want(t, find(t, checks, "CI-DP006", ""), cidoctor.Pass, "not set up")
+		want(t, find(t, checks, "CI-DP007", ""), cidoctor.Pass, "not set up")
+		r.row("providers.github.untrusted_ref", `"ci/untrusted"`)
+		want(t, find(t, r.run(), "CI-DP006", ""), cidoctor.Warn, "missing")
 	})
 	t.Run("the section sends no request", func(t *testing.T) {
 		r := newRig(t, ghRemote)

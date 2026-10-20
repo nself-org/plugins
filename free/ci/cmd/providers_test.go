@@ -35,6 +35,11 @@ func providersEnvFor(r *policyRig, vars map[string]string) providersEnv {
 		OpenStore: func() (*store.Store, error) { return store.Open(r.path, store.Options{Clock: r.now}) }}
 }
 
+// canonProject is the project-scope subject of a directory, as the commands compute it.
+func canonProject(dir string) string {
+	return policy.ProjectIDGit(context.Background(), policy.Runner(report.Capture), dir)
+}
+
 func (r *policyRig) prov(op string, args ...string) int {
 	return runProviders(op, args, providersEnvFor(r, nil))
 }
@@ -83,16 +88,17 @@ func has(rs []trust.Reason, want trust.Reason) bool {
 // privacy.provider_not_allowlisted; a revision's .nself/ci.yaml claiming the authorization changes nothing.
 func TestAuthorizeRoles(t *testing.T) {
 	r := newPolicyRig(t, "")
-	const p = "proj-1"
+	pDir, p2Dir, emptyDir := t.TempDir(), t.TempDir(), t.TempDir()
+	p, p2 := canonProject(pDir), canonProject(p2Dir)
 	r.token = r.memberToken()
-	if code := r.prov("authorize", "github-hosted", "--project", p, "--json"); code != 1 || !strings.HasPrefix(r.errCode(), "E687") {
+	if code := r.prov("authorize", "github-hosted", "--project", pDir, "--json"); code != 1 || !strings.HasPrefix(r.errCode(), "E687") {
 		t.Fatalf("a member must be refused with E687, exit %d: %s", code, r.out.String())
 	}
 	if projectRow(t, r, p, "trust.providers") != "" || r.auditCount("policy.set") != 0 {
 		t.Fatal("a refused authorization wrote a row or an audit row")
 	}
 	r.token = ""
-	if code := r.prov("authorize", "github-hosted", "--project", p, "--json"); code != 0 {
+	if code := r.prov("authorize", "github-hosted", "--project", pDir, "--json"); code != 0 {
 		t.Fatalf("admin authorize exited %d: %s %s", code, r.out.String(), r.errb.String())
 	}
 	if got := projectRow(t, r, p, "trust.providers"); got != `["github-hosted"]` || r.auditCount("policy.set") != 1 {
@@ -101,7 +107,7 @@ func TestAuthorizeRoles(t *testing.T) {
 	if d := r.data(); d["op"] != "authorize" || d["provider"] != "github-hosted" || d["project"] != p {
 		t.Fatalf("data: %v", d)
 	}
-	if code := r.prov("authorize", "gitlab", "--project", p); code != 0 || projectRow(t, r, p, "trust.providers") != `["github-hosted","gitlab"]` {
+	if code := r.prov("authorize", "gitlab", "--project", pDir); code != 0 || projectRow(t, r, p, "trust.providers") != `["github-hosted","gitlab"]` {
 		t.Fatalf("a second provider is added in order: exit %d %q", code, projectRow(t, r, p, "trust.providers"))
 	}
 	for name, args := range map[string][]string{
@@ -116,7 +122,7 @@ func TestAuthorizeRoles(t *testing.T) {
 	if projectRow(t, r, p, "trust.providers") != `["github-hosted","gitlab"]` {
 		t.Fatal("a refused command changed the row")
 	}
-	for _, bad := range []string{"has\nnewline", "../../etc", "x/../y", strings.Repeat("a", 2000)} {
+	for _, bad := range []string{"proj-1", "has\nnewline", "x/../y", strings.Repeat("a", 2000), ""} {
 		if code := r.prov("authorize", "github-hosted", "--project", bad); code != 1 {
 			t.Fatalf("project %.20q must be refused, exit %d", bad, code)
 		}
@@ -124,16 +130,16 @@ func TestAuthorizeRoles(t *testing.T) {
 	// A revoke with nothing to remove writes nothing (an empty row would also drop outer scopes' providers);
 	// a non-admin is still refused.
 	audits := r.auditCount("policy.set")
-	if code := r.prov("revoke", "github-hosted", "--project", "proj-empty", "--json"); code != 0 || r.data()["changed"] != false || projectRow(t, r, "proj-empty", "trust.providers") != "" || r.auditCount("policy.set") != audits {
+	if code := r.prov("revoke", "github-hosted", "--project", emptyDir, "--json"); code != 0 || r.data()["changed"] != false || projectRow(t, r, canonProject(emptyDir), "trust.providers") != "" || r.auditCount("policy.set") != audits {
 		t.Fatalf("a no-op revoke must write nothing: exit %d: %s", code, r.out.String())
 	}
 	r.token = r.memberToken()
-	if code := r.prov("revoke", "github-hosted", "--project", "proj-empty", "--json"); code != 1 || !strings.HasPrefix(r.errCode(), "E687") {
+	if code := r.prov("revoke", "github-hosted", "--project", emptyDir, "--json"); code != 1 || !strings.HasPrefix(r.errCode(), "E687") {
 		t.Fatalf("a member's no-op revoke must still be refused, exit %d", code)
 	}
 	r.token = ""
 	r.token = r.memberToken()
-	if code := r.prov("revoke", "github-hosted", "--project", p); code != 1 || projectRow(t, r, p, "trust.providers") != `["github-hosted","gitlab"]` {
+	if code := r.prov("revoke", "github-hosted", "--project", pDir); code != 1 || projectRow(t, r, p, "trust.providers") != `["github-hosted","gitlab"]` {
 		t.Fatalf("a member must not revoke: exit %d", code)
 	}
 	r.token = ""
@@ -147,7 +153,11 @@ func TestAuthorizeRoles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if code := r.prov("revoke", "github-hosted", "--project", p, "--json"); code != 0 || projectRow(t, r, p, "trust.providers") != `["gitlab"]` {
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(pDir, link); err != nil {
+		t.Fatal(err)
+	}
+	if code := r.prov("revoke", "github-hosted", "--project", link, "--json"); code != 0 || projectRow(t, r, p, "trust.providers") != `["gitlab"]` {
 		t.Fatalf("revoke: exit %d, row %q", code, projectRow(t, r, p, "trust.providers"))
 	}
 	zone(p)
@@ -157,8 +167,7 @@ func TestAuthorizeRoles(t *testing.T) {
 	if has(reasonsFor(t, r, p, "gitlab"), trust.PrivacyProviderNotAllowlisted) {
 		t.Fatal("revoking one provider must leave the others")
 	}
-	const p2 = "proj-2"
-	if code := r.prov("authorize", "github-hosted", "--project", p2); code != 0 {
+	if code := r.prov("authorize", "github-hosted", "--project", p2Dir); code != 0 {
 		t.Fatalf("authorize exited %d", code)
 	}
 	zone(p2)
@@ -193,14 +202,15 @@ func TestAuthorizeRoles(t *testing.T) {
 // loosened by an operator row, debt D-1382); the refusal leaves nothing behind and says why.
 func TestAllowPrivate(t *testing.T) {
 	r := newPolicyRig(t, "")
-	const p = "proj-private"
+	pDir := t.TempDir()
+	p := canonProject(pDir)
 	var calls []policy.Change
 	env := providersEnvFor(r, nil)
 	env.Apply = func(_ context.Context, _ roles.Actor, c policy.Change) (policy.Result, error) {
 		calls = append(calls, c)
 		return policy.Result{}, nil
 	}
-	if code := runProviders("authorize", []string{"github-hosted", "--project", p, "--allow-private"}, env); code != 0 {
+	if code := runProviders("authorize", []string{"github-hosted", "--project", pDir, "--allow-private"}, env); code != 0 {
 		t.Fatalf("exit %d: %s %s", code, r.out.String(), r.errb.String())
 	}
 	if len(calls) != 2 || calls[0].Key != "trust.privacy_zone" || string(calls[0].Value) != `"provider-allowlist"` ||
@@ -222,14 +232,14 @@ func TestAllowPrivate(t *testing.T) {
 		calls = append(calls, c)
 		return policy.Result{}, nil
 	}
-	if code := runProviders("authorize", []string{"gitlab", "--project", p, "--json"}, env); code != 0 || len(calls) != 1 || calls[0].Key != "trust.providers" {
+	if code := runProviders("authorize", []string{"gitlab", "--project", pDir, "--json"}, env); code != 0 || len(calls) != 1 || calls[0].Key != "trust.providers" {
 		t.Fatalf("without the flag only the allowlist is written: exit %d, %+v", code, calls)
 	}
 	if d := r.data(); d["ceiling_command"] != nil || d["privacy_zone"] != nil {
 		t.Fatalf("no zone and no ceiling hint without the flag: %v", d)
 	}
 	// The real writer.
-	if code := r.prov("authorize", "github-hosted", "--project", p, "--allow-private", "--json"); code != 1 {
+	if code := r.prov("authorize", "github-hosted", "--project", pDir, "--allow-private", "--json"); code != 1 {
 		t.Fatalf("exit %d: %s", code, r.out.String())
 	}
 	if msg := r.errCode(); !strings.HasPrefix(msg, "E670") || !strings.Contains(msg, "D-1382") {

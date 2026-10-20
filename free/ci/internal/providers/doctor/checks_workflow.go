@@ -71,6 +71,10 @@ func (s *state) checkWorkflows(ctx context.Context) (doctor.Check, doctor.Check)
 	ref := s.cfg.Hosted.UntrustedRef
 	d := WorkflowState(ctx, s.env.Root, branch, s.env.Capture)
 	u := WorkflowState(ctx, s.env.Root, ref, s.env.Capture)
+	if d == "missing" && u == "missing" && !s.githubInUse() {
+		def.Message, unt.Message = "GitHub-hosted capacity is not set up for this repository (no providers.github.* key, no authorization, no workflow)", "GitHub-hosted capacity is not set up for this repository"
+		return def, unt
+	}
 	fix := "Run `nself ci providers github init`, commit " + githubtmpl.Path + " and push it to " + branch
 	describe := func(c *doctor.Check, where, st, remediation string) {
 		c.Message = "the dispatch workflow on " + where + " is " + st
@@ -90,4 +94,20 @@ func (s *state) checkWorkflows(ctx context.Context) (doctor.Check, doctor.Check)
 	}
 	describe(&unt, ref, u, untrustedFix)
 	return def, unt
+}
+
+// githubInUse reports whether the operator set up GitHub-hosted capacity: any providers.github.* key, or a
+// GitHub provider in trust.providers. A GitLab-only operator with a GitHub mirror as origin is not nagged.
+func (s *state) githubInUse() bool {
+	for key := range s.cfg.Set {
+		if strings.HasPrefix(key, "providers.github.") {
+			return true
+		}
+	}
+	for _, id := range s.cfg.Authorized {
+		if strings.HasPrefix(id, "github") {
+			return true
+		}
+	}
+	return false
 }

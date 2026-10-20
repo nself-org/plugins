@@ -84,12 +84,16 @@ func (s *state) checkForkApproval(ctx context.Context) doctor.Check {
 	switch {
 	case !s.cfg.JIT:
 		return mk(id, name, doctor.Pass, "just-in-time runners are not enabled", "")
-	case !ok || s.st == nil:
-		return mk(id, name, doctor.Pass, "no stored fork-approval fact for this repository", "")
+	case !ok:
+		return mk(id, name, doctor.Pass, "no GitHub repository to check", "")
+	case s.st == nil:
+		return mk(id, name, doctor.Warn, "just-in-time runners are enabled and there is no state database to hold the fork-approval policy of "+repo,
+			"Run `nself ci providers test github-hosted`, which records it")
 	}
 	f, found, err := s.st.ProviderFactGet(ctx, factProvider, repo, jit.FactApprovalPolicy)
 	if err != nil || !found {
-		return mk(id, name, doctor.Pass, "no stored fork-approval fact for "+repo, "")
+		return mk(id, name, doctor.Warn, "just-in-time runners are enabled and the fork pull request approval policy of "+repo+" is not recorded, so it is unknown",
+			"Run `nself ci providers test github-hosted --repo "+repo+"`: it reads the policy from GitHub and records it")
 	}
 	var v struct {
 		Policy string `json:"approval_policy"`

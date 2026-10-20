@@ -127,7 +127,7 @@ func Check(ctx context.Context, cfg CheckConfig) Result {
 	}
 	res := Result{URL: base, API: APINotConfigured}
 	if ValidateURL(base) != nil {
-		res.Server = "invalid URL"
+		res.URL, res.Server = redacted(base), "invalid URL"
 		return res
 	}
 	res.Healthy, res.Server = serverState(ctx, client, base)
@@ -135,6 +135,16 @@ func Check(ctx context.Context, cfg CheckConfig) Result {
 		res.API = apiState(ctx, client, base, cfg.User, cfg.Pass)
 	}
 	return res
+}
+
+// redacted is base without user info, so a URL refused for carrying a password never echoes it.
+func redacted(base string) string {
+	u, err := url.Parse(base)
+	if err != nil {
+		return "(unparseable)"
+	}
+	u.User, u.RawQuery, u.Fragment = nil, "", ""
+	return u.String()
 }
 
 func serverState(ctx context.Context, client *http.Client, base string) (bool, string) {
@@ -162,7 +172,11 @@ func apiState(ctx context.Context, client *http.Client, base, user, pass string)
 		return "unreachable"
 	}
 	req.SetBasicAuth(user, pass)
-	resp, err := client.Do(req)
+	// The password goes to the configured server only: a redirect (for example https to http on the same
+	// host) is an answer, not a place to follow it to.
+	noFollow := *client
+	noFollow.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := noFollow.Do(req)
 	if err != nil {
 		return "unreachable"
 	}

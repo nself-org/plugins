@@ -26,8 +26,10 @@ import (
 	cidoc "github.com/nself-org/plugins/free/ci/internal/doctor"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	pdoctor "github.com/nself-org/plugins/free/ci/internal/providers/doctor"
+	"github.com/nself-org/plugins/free/ci/internal/providers/github/jit"
 	"github.com/nself-org/plugins/free/ci/internal/providers/health"
 	"github.com/nself-org/plugins/free/ci/internal/providers/rest"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 	githubtmpl "github.com/nself-org/plugins/free/ci/templates/github"
 	gitlabtmpl "github.com/nself-org/plugins/free/ci/templates/gitlab"
 )
@@ -78,7 +80,7 @@ func providerFailure(err error) string {
 	return oneLineMsg(err)
 }
 
-func testProvider(ctx context.Context, env providersEnv, cfg pdoctor.Config, root, id string, f providersFlags) int {
+func testProvider(ctx context.Context, env providersEnv, cfg pdoctor.Config, st *store.Store, root, id string, f providersFlags) int {
 	const command = "ci providers test"
 	if _, ok := providers.Lookup(id); !ok {
 		return adminFail(env.adminEnv, command, f.json, unknownProvider(id))
@@ -90,7 +92,7 @@ func testProvider(ctx context.Context, env providersEnv, cfg pdoctor.Config, roo
 		if repo == "" {
 			repo, _ = pdoctor.GitHubRepo(ctx, root, cidoc.CaptureFunc(env.Run))
 		}
-		rows = probeGitHub(ctx, env, cfg, repo)
+		rows = probeGitHub(ctx, env, cfg, st, repo)
 	case "gitlab":
 		rows = probeGitLab(ctx, env, cfg, repo)
 	default:
@@ -124,7 +126,7 @@ type ghRepoInfo struct {
 	} `json:"permissions"`
 }
 
-func probeGitHub(ctx context.Context, env providersEnv, cfg pdoctor.Config, repo string) []probeRow {
+func probeGitHub(ctx context.Context, env providersEnv, cfg pdoctor.Config, st *store.Store, repo string) []probeRow {
 	cred := pdoctor.GitHubCredential(ctx, cfg, env.Getenv, cidoc.CaptureFunc(env.Run))
 	if !cred.Present {
 		return []probeRow{{"credential", probeFail, "no GitHub credential resolves (" + cred.Source + "); online checks skipped"}}
@@ -153,10 +155,10 @@ func probeGitHub(ctx context.Context, env providersEnv, cfg pdoctor.Config, repo
 	if !githubRepoName.MatchString(repo) {
 		return append(rows, probeRow{"repository", probeSkip, "pass --repo owner/name (no GitHub origin remote found)"})
 	}
-	return append(rows, probeGitHubRepo(ctx, c, cfg, repo, env)...)
+	return append(rows, probeGitHubRepo(ctx, c, cfg, st, repo, env)...)
 }
 
-func probeGitHubRepo(ctx context.Context, c *rest.Client, cfg pdoctor.Config, repo string, env providersEnv) []probeRow {
+func probeGitHubRepo(ctx context.Context, c *rest.Client, cfg pdoctor.Config, st *store.Store, repo string, env providersEnv) []probeRow {
 	owner, name, _ := strings.Cut(repo, "/")
 	params := map[string]string{"owner": owner, "repo": name}
 	var info ghRepoInfo
@@ -172,7 +174,39 @@ func probeGitHubRepo(ctx context.Context, c *rest.Client, cfg pdoctor.Config, re
 	for _, ref := range []struct{ label, branch string }{{"workflow, default branch", info.DefaultBranch}, {"workflow, untrusted ref", cfg.Hosted.UntrustedRef}} {
 		rows = append(rows, probeWorkflow(ctx, c, params, ref.label, ref.branch))
 	}
+	if cfg.JIT {
+		rows = append(rows, probeForkApproval(ctx, c, cfg, st, repo))
+	}
 	return append(rows, probeSecretEnv("webhook secret", cfg.GitHubSecretEnv(repo), env))
+}
+
+// probeForkApproval reads the repository's fork pull request approval policy and records it as the
+// host-provider fact github/<repo>/fork_pr_approval_policy, which CI-DP010 of the doctor reads (nothing
+// else writes it). It runs only when just-in-time runners are enabled; the one write is that fact.
+func probeForkApproval(ctx context.Context, c *rest.Client, cfg pdoctor.Config, st *store.Store, repo string) probeRow {
+	const name = "fork pr approval"
+	settings := jit.DefaultSettings()
+	if cfg.Effective != nil {
+		if s, err := jit.SettingsFrom(cfg.Effective); err == nil {
+			settings = s
+		}
+	}
+	jc := jit.Config{Client: c, Settings: settings}
+	if st != nil {
+		jc.Facts = st
+	}
+	reg, err := jit.New(jc)
+	if err != nil {
+		return probeRow{name, probeFail, providerFailure(err)}
+	}
+	policyName, err := reg.FetchApprovalPolicy(ctx, providers.RunnerScope{Repo: repo})
+	switch {
+	case err != nil:
+		return probeRow{name, probeFail, providerFailure(err)}
+	case policyName != jit.StrictApproval:
+		return probeRow{name, probeWarn, repo + " approves fork pull requests under " + policyName + ", weaker than " + jit.StrictApproval + " (just-in-time runners are enabled)"}
+	}
+	return probeRow{name, probeOK, repo + " requires approval for all external contributors"}
 }
 
 func probeWorkflow(ctx context.Context, c *rest.Client, params map[string]string, label, branch string) probeRow {

@@ -88,6 +88,8 @@ func probeGitLab(ctx context.Context, env providersEnv, cfg pdoctor.Config, proj
 	switch {
 	case runRows != nil:
 		rows = append(rows, runRows...)
+	case rself.Revoked || !rself.Active:
+		rows = append(rows, probeRow{"runner token", probeFail, "token " + rself.Name + " is not active"})
 	case !slices.Contains(rself.Scopes, "create_runner"):
 		rows = append(rows, probeRow{"runner token", probeFail, "scopes [" + strings.Join(rself.Scopes, ", ") + "] lack create_runner"})
 	default:

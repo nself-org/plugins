@@ -6,7 +6,9 @@ package main
 // (policy.Writer): authorize adds the provider id to trust.providers at project scope, revoke removes
 // it, and --allow-private first sets trust.privacy_zone to provider-allowlist at project scope so a
 // private repository may use the provider at all.
-// Inputs:  the provider id, --project, --allow-private; the stored project row of trust.providers.
+// Inputs:  the provider id, --project (the repository path of the project: it is canonicalized with
+//          policy.ProjectIDGit, the same id admission, `policy set` and the doctor key their rows by),
+//          --allow-private; the stored project row of trust.providers.
 // Outputs: what was written and, for --allow-private, the SCHED ceiling command the operator runs
 //          next (printed, never run); one v1 JSON envelope with --json.
 // Constraints: V15 only; side-effect class write (operator policy only). Every write is
@@ -14,7 +16,9 @@ package main
 //          E651) writes nothing. The zone is written first: provider-allowlist with an empty
 //          trust.providers admits nothing, so a failure between the two writes is safe. No provider
 //          code is involved: a revision's .nself/ci.yaml cannot authorize anything here, because
-//          trust.* keys in a revision only tighten. A non-admin, a machine-invoked caller that would
+//          trust.* keys in a revision only tighten. The read-modify-write of the list is not one
+//          transaction (the writer has no compare-and-swap; debt D-1386): two admins changing the same
+//          project at the same moment can lose one change. A non-admin, a machine-invoked caller that would
 //          loosen trust.*, and a token without the project are refused by the writer, not here.
 
 import (
@@ -22,11 +26,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
+	pdoctor "github.com/nself-org/plugins/free/ci/internal/providers/doctor"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
 )
 
@@ -76,14 +83,45 @@ func withProvider(list []string, id string, add bool) []string {
 	return slices.Compact(out)
 }
 
-func runAuthorize(ctx context.Context, op, id string, f providersFlags, root string, env providersEnv) int {
+// resolveProject turns --project into the project-scope subject: a repository path (absolute, ~/…, or
+// starting with a dot) run through policy.ProjectIDGit, so a symlink or a linked worktree reaches the same row
+// admission reads. A bare name is refused: no policy command keys a row by a name.
+func resolveProject(ctx context.Context, run policy.Runner, p string) (string, error) {
+	bad := adminUsage("--project %q is not a repository path: pass the project's directory (absolute, ~/…, or ./…)", p)
+	if p == "" || len(p) > 4096 {
+		return "", bad
+	}
+	for _, r := range p {
+		if r < 0x20 || r == 0x7f {
+			return "", bad
+		}
+	}
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", bad
+		}
+		p = filepath.Join(home, strings.TrimPrefix(p, "~"))
+	}
+	if !filepath.IsAbs(p) && p != "." && !strings.HasPrefix(p, "./") && !strings.HasPrefix(p, "../") {
+		return "", bad
+	}
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return "", bad
+	}
+	return policy.ProjectIDGit(ctx, run, abs), nil
+}
+
+func runAuthorize(ctx context.Context, op, id string, f providersFlags, env providersEnv) int {
 	command := "ci providers " + op
 	fail := func(err error) int { return policyFail(env.policyEnv, command, f.json, err) }
 	if f.project == "" {
-		return fail(adminUsage("--project <p> is required: authorization is per project"))
+		return fail(adminUsage("--project <repository path> is required: authorization is per project"))
 	}
-	if !validProject(f.project) {
-		return fail(adminUsage("--project %q is not a project id (an absolute repository path or a short name, no control characters, no .. segment)", f.project))
+	project, err := resolveProject(ctx, env.Run, f.project)
+	if err != nil {
+		return fail(err)
 	}
 	if _, ok := providers.Lookup(id); !ok {
 		return fail(unknownProvider(id))
@@ -98,7 +136,7 @@ func runAuthorize(ctx context.Context, op, id string, f providersFlags, root str
 		w := &policy.Writer{Store: svc.St, Log: svc.Log, Run: env.Run, Machine: env.Machine}
 		apply = w.Apply
 	}
-	current, err := storedProviders(ctx, svc, f.project)
+	current, err := storedProviders(ctx, svc, project)
 	if err != nil {
 		return fail(err)
 	}
@@ -106,14 +144,14 @@ func runAuthorize(ctx context.Context, op, id string, f providersFlags, root str
 	if op == "revoke" && !slices.Contains(current, id) {
 		// Nothing to remove: writing [] here would also drop providers that outer scopes authorize.
 		// The admin check still runs, so a non-admin learns nothing and is refused as usual.
-		if err = roles.Authorize(ctx, actor, roles.Admin, f.project); err != nil {
+		if err = roles.Authorize(ctx, actor, roles.Admin, project); err != nil {
 			return fail(err)
 		}
-		return noRevoke(env, command, id, f)
+		return noRevoke(env, command, id, project, f.json)
 	}
 	set := func(key string, value any) error {
 		raw, _ := json.Marshal(value)
-		_, err := apply(ctx, actor, policy.Change{Op: policy.OpSet, Scope: "project", Project: f.project, Root: root, Key: key, Value: raw})
+		_, err := apply(ctx, actor, policy.Change{Op: policy.OpSet, Scope: "project", Project: project, Root: project, Key: key, Value: raw})
 		return err
 	}
 	if f.allowPrivate {
@@ -124,7 +162,14 @@ func runAuthorize(ctx context.Context, op, id string, f providersFlags, root str
 	if err = set(keyTrustProviders, next); err != nil {
 		return fail(err)
 	}
-	data := map[string]any{"op": op, "provider": id, "project": f.project, "trust_providers": next}
+	zone := pdoctor.Load(ctx, project, env.Run, svc.St).PrivacyZone
+	return reportWrite(env, command, op, id, project, next, zone, f)
+}
+
+// reportWrite prints what a write changed, with the ceiling command for --allow-private and the note
+// that trust.providers matters only under the provider-allowlist zone.
+func reportWrite(env providersEnv, command, op, id, project string, next []string, zone string, f providersFlags) int {
+	data := map[string]any{"op": op, "provider": id, "project": project, "trust_providers": next, "effective_zone": zone}
 	if f.allowPrivate {
 		data["privacy_zone"] = zoneProviderAllow
 		data["ceiling_command"] = ceilingCommand(id)
@@ -133,11 +178,24 @@ func runAuthorize(ctx context.Context, op, id string, f providersFlags, root str
 		return adminWriteData(env.adminEnv, command, data)
 	}
 	verb := map[string]string{"authorize": "authorized", "revoke": "revoked"}[op]
-	_, _ = fmt.Fprintf(env.Out, "%s %s for project %s: %s = %s (the project row; admission uses its intersection with the user and team rows)\n", verb, plainText(id), plainText(f.project), keyTrustProviders, plainText(strings.Join(next, ",")))
-	if f.allowPrivate {
-		_, _ = fmt.Fprintf(env.Out, "set %s = %s for project %s\n", keyTrustPrivacyZone, zoneProviderAllow, plainText(f.project))
-		_, _ = fmt.Fprintf(env.Out, "next, declare what you accept to spend (this command is not run for you):\n  %s\n", ceilingCommand(id))
+	w := func(format string, a ...any) { _, _ = fmt.Fprintf(env.Out, format, a...) }
+	w("%s %s for project %s: %s = %s (the project row; admission uses its intersection with the user and team rows)\n", verb, plainText(id), plainText(project), keyTrustProviders, plainText(strings.Join(next, ",")))
+	if zone != zoneProviderAllow {
+		w("note: %s is read only when %s is %s; the effective zone of this project is %q (see debt D-1382 for private repositories)\n", keyTrustProviders, keyTrustPrivacyZone, zoneProviderAllow, zone)
 	}
+	if f.allowPrivate {
+		w("set %s = %s for project %s\n", keyTrustPrivacyZone, zoneProviderAllow, plainText(project))
+		w("next, declare what you accept to spend (run it inside %s; this command is not run for you):\n  %s\n", plainText(project), ceilingCommand(id))
+	}
+	return 0
+}
+
+// noRevoke reports a revoke that had nothing to remove (exit 0, nothing written).
+func noRevoke(env providersEnv, command, id, project string, asJSON bool) int {
+	if asJSON {
+		return adminWriteData(env.adminEnv, command, map[string]any{"op": "revoke", "provider": id, "project": project, "changed": false})
+	}
+	_, _ = fmt.Fprintf(env.Out, "%s is not authorized at project scope for %s: nothing to revoke\n", plainText(id), plainText(project))
 	return 0
 }
 
@@ -149,26 +207,4 @@ func allowPrivateHint(err error) error {
 		return err
 	}
 	return fmt.Errorf("%w; a private repository's baseline zone is private-infrastructure and the policy engine does not let an operator row loosen it yet (debt D-1382), so nothing was written", err)
-}
-
-// noRevoke reports a revoke that had nothing to remove (exit 0, nothing written).
-func noRevoke(env providersEnv, command, id string, f providersFlags) int {
-	if f.json {
-		return adminWriteData(env.adminEnv, command, map[string]any{"op": "revoke", "provider": id, "project": f.project, "changed": false})
-	}
-	_, _ = fmt.Fprintf(env.Out, "%s is not authorized at project scope for %s: nothing to revoke\n", plainText(id), plainText(f.project))
-	return 0
-}
-
-// validProject accepts the ids the policy commands use: an absolute repository path or a short name.
-func validProject(p string) bool {
-	if p == "" || len(p) > 1024 {
-		return false
-	}
-	for _, r := range p {
-		if r < 0x20 || r == 0x7f {
-			return false
-		}
-	}
-	return !slices.Contains(strings.Split(p, "/"), "..")
 }
