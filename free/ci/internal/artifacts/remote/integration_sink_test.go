@@ -17,11 +17,12 @@ import (
 )
 
 type simSink struct {
-	r       *rig
-	mu      sync.Mutex
-	logs    []string
-	errs    []error
-	results int
+	r        *rig
+	mu       sync.Mutex
+	logs     []string
+	errs     []error
+	results  int
+	evidence []byte
 }
 
 func (r *rig) sink() *simSink {
@@ -49,6 +50,7 @@ func (s *simSink) Result(ctx context.Context, res protocol.Result) error {
 	}
 	s.mu.Lock()
 	s.results++
+	s.evidence = append([]byte(nil), res.Evidence...)
 	s.mu.Unlock()
 	return nil
 }
@@ -140,4 +142,10 @@ func (s *simSink) nResults() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.results
+}
+
+func (s *simSink) lastEvidence() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return string(s.evidence)
 }

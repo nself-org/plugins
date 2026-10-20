@@ -25,9 +25,11 @@ type Lease struct {
 	rcv      *transfer.Receiver
 	declared bool
 	decls    []records.Decl
-	pending  map[string]int64 // digest -> announced size of blobs held for this lease and not yet recorded by a ref
-	rowHeld  int64            // what this attempt's reserve row holds in the store now (ArtifactUsage counts it)
-	refs     map[string]int   // path -> refs seen, to pick the nth declaration
+	pending  map[string]int64            // digest -> announced size of blobs held for this lease and not yet recorded by a ref
+	rowHeld  int64                       // what this attempt's reserve row holds in the store now (ArtifactUsage counts it)
+	staged   int64                       // bytes of the records this lease staged (the store's reserve gate does not count them)
+	writers  map[string]*transfer.Writer // digest -> the writer Blob handed out: its bytes were verified in this lease
+	refs     map[string]int              // path -> refs seen, to pick the nth declaration
 	names    map[string]bool
 	audited  map[string]bool
 }
@@ -185,7 +187,7 @@ func (l *Lease) receiver(f records.Facts) *transfer.Receiver {
 	defer l.mu.Unlock()
 	if l.rcv == nil {
 		pol := l.h.Policy
-		l.rcv = &transfer.Receiver{Store: l.h.Blobs, Realm: cas.ArtifactRealm(f.Project), Lease: l.b.LeaseID, Live: l.live, Refused: l.refuse,
+		l.rcv = &transfer.Receiver{Store: l.h.Blobs, Realm: cas.ArtifactRealm(f.Project), Lease: fmt.Sprintf("%s/%d", l.b.LeaseID, l.b.Epoch), Live: l.live, Refused: l.refuse,
 			Limits: transfer.Limits{MaxFile: pol.MaxFile, Disk: pol.CheckDisk, Budget: func(ctx context.Context, sha string) (int64, error) { return l.budget(ctx, f.Project, sha) }}}
 	}
 	return l.rcv
@@ -235,14 +237,20 @@ func (l *Lease) Blob(ctx context.Context, h xport.BlobHeader) (xport.BlobWriter,
 		return nil, err
 	}
 	if w.Held() {
-		return w, nil // the realm holds these bytes already: nothing to reserve
+		l.mu.Lock()
+		if l.writers == nil {
+			l.writers = map[string]*transfer.Writer{}
+		}
+		l.writers[h.SHA256] = w
+		l.mu.Unlock()
+		return w, nil // the realm holds these bytes already (re-verified by Open): nothing to reserve
 	}
 	l.mu.Lock()
 	if l.pending == nil {
-		l.pending = map[string]int64{}
+		l.pending, l.writers = map[string]int64{}, map[string]*transfer.Writer{}
 	}
-	l.pending[h.SHA256] = h.Size
-	var total int64
+	l.pending[h.SHA256], l.writers[h.SHA256] = h.Size, w
+	total := l.staged // the store's reserve gate counts other attempts' staged rows, never this attempt's own
 	for _, n := range l.pending {
 		total += n
 	}
@@ -260,10 +268,20 @@ func (l *Lease) Blob(ctx context.Context, h xport.BlobHeader) (xport.BlobWriter,
 	return w, nil
 }
 
+// verified reports whether this lease itself published or re-verified the blob, so a ref need not
+// hash it again (CommitAndVerify does, before anything can pass).
+func (l *Lease) verified(sha string) bool {
+	l.mu.Lock()
+	w := l.writers[sha]
+	l.mu.Unlock()
+	return w != nil && (w.Published() || w.Held())
+}
+
 // recorded releases the claim of a blob a ref has turned into a record.
-func (l *Lease) recorded(sha string) {
+func (l *Lease) recorded(sha string, size int64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	delete(l.pending, sha)
+	l.staged += size
 	l.rowHeld = 0 // staging a record deletes the attempt's reserve row: the record carries the claim now
 }

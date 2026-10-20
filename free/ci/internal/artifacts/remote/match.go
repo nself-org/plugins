@@ -19,32 +19,54 @@ import (
 
 func hasMeta(s string) bool { return strings.ContainsAny(s, "*?[") }
 
+// maxComponents bounds the path a node may name and the pattern a job may declare (the collector
+// bounds the pattern at 64 parts; a path deeper than this selects nothing real).
+const maxComponents = 256
+
 // selects reports whether pattern selects rel (a file path).
 func selects(pattern, rel string) bool {
-	return matchParts(strings.Split(pattern, "/"), strings.Split(rel, "/"))
+	pc, rc := strings.Split(pattern, "/"), strings.Split(rel, "/")
+	if len(pc) > maxComponents || len(rc) > maxComponents {
+		return false
+	}
+	memo := map[[2]int]bool{}
+	seen := map[[2]int]bool{}
+	var match func(i, j int) bool
+	match = func(i, j int) bool {
+		key := [2]int{i, j}
+		if seen[key] {
+			return memo[key]
+		}
+		seen[key] = true
+		memo[key] = matchAt(pc, rc, i, j, match)
+		return memo[key]
+	}
+	return match(0, 0)
 }
 
-func matchParts(pc, rc []string) bool {
-	if len(pc) == 0 {
+// matchAt decides whether pc[i:] selects rc[j:], asking match for the sub-problems (memoised, so a
+// pattern with several "**" parts is polynomial).
+func matchAt(pc, rc []string, i, j int, match func(i, j int) bool) bool {
+	if i == len(pc) {
 		return true // the pattern named rel or a directory above it
 	}
-	if pc[0] == "**" {
-		if matchParts(pc[1:], rc) {
+	if pc[i] == "**" {
+		if match(i+1, j) {
 			return true
 		}
-		return len(rc) > 1 && matchParts(pc, rc[1:]) // "**" consumes directories, never the file itself
+		return len(rc)-j > 1 && match(i, j+1) // "**" consumes directories, never the file itself
 	}
-	if len(rc) == 0 {
+	if j == len(rc) {
 		return false
 	}
-	if hasMeta(pc[0]) {
-		if ok, err := path.Match(pc[0], rc[0]); err != nil || !ok {
+	if hasMeta(pc[i]) {
+		if ok, err := path.Match(pc[i], rc[j]); err != nil || !ok {
 			return false
 		}
-	} else if pc[0] != rc[0] {
+	} else if pc[i] != rc[j] {
 		return false
 	}
-	return matchParts(pc[1:], rc[1:])
+	return match(i+1, j+1)
 }
 
 // literalPrefix is the leading components of a pattern that hold no wildcard.

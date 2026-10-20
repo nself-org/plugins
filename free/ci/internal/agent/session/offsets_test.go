@@ -3,6 +3,9 @@ package session
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -79,4 +82,36 @@ func TestOffsetFloodNeverBlocksTheSessionAndKeepsTheNewest(t *testing.T) {
 	}
 	r.car.next(t, "digest")
 	r.car.next(t, "result")
+}
+
+func hookFailing(err error) JobHook {
+	return JobHook{Name: "artifacts", After: func(context.Context, protocol.Lease, JobRoot, Outcome, Uploader) error { return err }}
+}
+
+// resultEvidence runs one lease through a hook that fails and returns the evidence of the result.
+func resultEvidence(t *testing.T, state string, hookErr error) string {
+	t.Helper()
+	runner := RunnerFunc(func(ctx context.Context, j JobRun) (JobResult, error) {
+		return JobResult{Outcome: Outcome{State: state}, Evidence: json.RawMessage(`{"schema":"ci.evidence/v1","result":"pass"}`)}, nil
+	})
+	r := startRig(t, runner, func(c *Config) { c.Hooks = []JobHook{hookFailing(hookErr)} })
+	r.handshake()
+	r.lease(testLease("l1", 1))
+	return string(r.car.next(t, "result").Body.(protocol.Result).Evidence)
+}
+
+// TestFatalHookErrorTurnsAPassIntoAnError proves a hook that owes the coordinator something the pass
+// depends on (the job's artifacts) cannot let the job pass when it fails, while an ordinary hook
+// error stays a log line and a failed job is left as it is.
+func TestFatalHookErrorTurnsAPassIntoAnError(t *testing.T) {
+	fatal := fmt.Errorf("%w: only 1 of 2 artifacts arrived", ErrHookFatal)
+	if ev := resultEvidence(t, "passed", fatal); !strings.Contains(ev, "agent_hook_failed") || !strings.Contains(ev, `"result":"error"`) {
+		t.Fatalf("a fatal hook error left the evidence %s", ev)
+	}
+	if ev := resultEvidence(t, "passed", errors.New("cosmetic")); strings.Contains(ev, "agent_hook_failed") {
+		t.Fatalf("an ordinary hook error changed the evidence: %s", ev)
+	}
+	if ev := resultEvidence(t, "failed", fatal); strings.Contains(ev, "agent_hook_failed") {
+		t.Fatalf("a failed job's evidence was replaced: %s", ev)
+	}
 }

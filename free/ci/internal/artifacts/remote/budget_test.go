@@ -3,8 +3,10 @@ package remote
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/blob/transfer"
@@ -126,4 +128,47 @@ func TestAnotherLeaseObjectOfTheSameEpochAdoptsTheDeclarations(t *testing.T) {
 	}
 	var _ records.Decl
 	_ = protocol.ArtifactRef{}
+}
+
+func TestManyRefsToOneBlobAreEachChargedAgainstTheStore(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t, jobWith("out/*"))
+	r.h.Policy.MaxTotal = 10_000
+	d := data(7, 3000)
+	if err := r.upload(d); err != nil {
+		t.Fatal(err)
+	}
+	var ok int
+	var last error
+	for i := 0; i < 10; i++ {
+		last = r.lease.ArtifactRef(ctx, ref("out/f"+string(rune('a'+i)), d))
+		if last != nil {
+			break
+		}
+		ok++
+	}
+	if ok != 3 || !transfer.IsReason(last, transfer.ReasonSizeCap) {
+		t.Fatalf("%d refs of 3000 B accepted under a 10000 B cap (last error %v), want 3 then E714 size_cap", ok, last)
+	}
+	u, _ := r.st.ArtifactUsage(ctx, "proj")
+	if u.Total > 10_000 {
+		t.Fatalf("store usage %d B above the cap", u.Total)
+	}
+}
+
+func TestSelectIsPolynomialInTheNumberOfDoubleStars(t *testing.T) {
+	deep := strings.Repeat("d/", 200) + "x"
+	start := time.Now()
+	if selects("**/**/**/**/**/**/y", deep) {
+		t.Fatal("no file y")
+	}
+	if !selects("**/**/**/**/x", deep) {
+		t.Fatal("x is selected")
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Fatalf("took %s", time.Since(start))
+	}
+	if selects("a", strings.Repeat("a/", maxComponents+1)+"b") {
+		t.Fatal("a path deeper than the bound selects nothing")
+	}
 }

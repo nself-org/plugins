@@ -150,6 +150,20 @@ func TestRemoteArtifactsSSH(t *testing.T) {
 			t.Fatalf("attempt state %s after the session died", state)
 		}
 	})
+	t.Run("a delivery that stops after the first ref cannot let the job pass", func(t *testing.T) {
+		r := newRig(t, outputJob())
+		n := &node{t: t, files: outputs(), job: outputJob(), failRefAt: 2}
+		if err := r.runSSH(n); err != nil {
+			t.Fatal(err)
+		}
+		if ev := r.snk.(*simSink).lastEvidence(); !strings.Contains(ev, "agent_hook_failed") || !strings.Contains(ev, `"result":"error"`) {
+			t.Fatalf("the result of a partial delivery says %s, want an error result", ev)
+		}
+		staged, _ := r.st.ArtifactStaged(context.Background(), "a1")
+		if len(staged) != 1 {
+			t.Fatalf("%d records staged, want only the first ref's", len(staged))
+		}
+	})
 	t.Run("an artifact-ref for an undeclared path is refused", func(t *testing.T) {
 		r := newRig(t, outputJob())
 		small := outputs()["out/small.txt"]

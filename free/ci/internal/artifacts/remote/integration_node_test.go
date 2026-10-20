@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -40,6 +41,8 @@ type node struct {
 	dieAtChunk int                   // kill the carrier at the Nth chunk frame, as a lost ssh session does (0 = never)
 	extraRef   *protocol.ArtifactRef // sent after the real refs
 	cut        int
+	failRefAt  int // fail the Nth artifact-ref once (1-based, 0 = never), as a cut connection does between two refs
+	refs       int
 	onChunk    func(k int) // runs before the Nth chunk is handed to the carrier
 
 	mu     sync.Mutex
@@ -69,7 +72,7 @@ func (n *node) hooks() []session.JobHook {
 				return nil
 			}
 			if err := st.Ship(ctx, up.(session.OffsetSource).Offsets(), &cutter{n: n, Uploader: up}); err != nil {
-				return err
+				return fmt.Errorf("%w: %v", session.ErrHookFatal, err) // as cmd/agent/artifacts_hook.go does
 			}
 			if n.extraRef != nil {
 				return up.ArtifactRef(*n.extraRef)
@@ -82,6 +85,17 @@ func (n *node) hooks() []session.JobHook {
 type cutter struct {
 	n *node
 	session.Uploader
+}
+
+func (c *cutter) ArtifactRef(a protocol.ArtifactRef) error {
+	c.n.mu.Lock()
+	c.n.refs++
+	fail := c.n.failRefAt != 0 && c.n.refs == c.n.failRefAt
+	c.n.mu.Unlock()
+	if fail {
+		return errors.New("connection cut")
+	}
+	return c.Uploader.ArtifactRef(a)
 }
 
 func (c *cutter) Chunk(ch protocol.Chunk) error {

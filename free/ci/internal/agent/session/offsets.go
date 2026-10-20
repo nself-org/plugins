@@ -11,7 +11,16 @@ package session
 // unknown lease or another epoch is ignored; session.Uploader is unchanged, so
 // a hook asks for the channel with a type assertion.
 
-import "github.com/nself-org/plugins/free/ci/internal/protocol"
+import (
+	"errors"
+
+	"github.com/nself-org/plugins/free/ci/internal/protocol"
+)
+
+// ErrHookFatal is wrapped by an After hook error that must end a passing job as an error: the hook
+// owed the coordinator something the pass depends on (the declared artifacts), and could not deliver
+// it. Any other After error is only logged.
+var ErrHookFatal = errors.New("job hook failed and the job cannot pass")
 
 // offsetBuffer is how many unread answers a lease keeps.
 const offsetBuffer = 64

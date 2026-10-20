@@ -52,6 +52,12 @@ func (l *Lease) ArtifactRef(ctx context.Context, ref protocol.ArtifactRef) error
 	if err = l.hold(ctx, realm, ref); err != nil {
 		return err
 	}
+	// every record counts against the store, however many refs name one blob
+	if left, berr := l.budget(ctx, f.Project, ref.SHA256); berr != nil {
+		return berr
+	} else if ref.Size > left {
+		return transfer.Failf(transfer.ReasonSizeCap, "%s: a record of %d B would take the project past the artifact store cap (%d B left)", rel, ref.Size, left)
+	}
 	st := records.Staged{Decl: d, Name: name, Rel: rel, SHA256: ref.SHA256, Size: ref.Size}
 	if d.Kind == records.KindImage {
 		rc, oerr := l.h.Blobs.Open(realm, ref.SHA256)
@@ -79,7 +85,7 @@ func (l *Lease) ArtifactRef(ctx context.Context, ref protocol.ArtifactRef) error
 		return err
 	}
 	l.claim(rel, name)
-	l.recorded(ref.SHA256)
+	l.recorded(ref.SHA256, ref.Size)
 	return nil
 }
 
@@ -128,6 +134,9 @@ func (l *Lease) hold(ctx context.Context, realm cas.Realm, ref protocol.Artifact
 	}
 	if info.Size() != ref.Size {
 		return transfer.Failf(transfer.ReasonDigest, "%s: the stored blob is %d B, the ref says %d B", ref.Path, info.Size(), ref.Size)
+	}
+	if l.verified(ref.SHA256) {
+		return nil // published or re-verified by this lease a moment ago
 	}
 	// restart the blob's sweep grace: the record that references it is written a moment from now
 	if err = l.h.Blobs.Refresh(realm, ref.SHA256); err != nil {

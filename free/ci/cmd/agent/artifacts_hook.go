@@ -11,7 +11,8 @@ package main
 // Outputs: digest, chunk and artifact-ref frames; an infra failure of the
 // attempt when a declared output cannot be delivered.
 // Constraints: the hook acts only for a lease whose job declares outputs; only a
-// passing job is collected and only a passing outcome is sent; collection runs
+// passing job is collected and only a passing outcome is sent; a failed delivery
+// wraps session.ErrHookFatal, so the session turns a passing result into an error; collection runs
 // in the agent process, never under the job's UID; the staging directory is
 // removed when the lease ends.
 
@@ -83,7 +84,11 @@ func artifactsAfter(ctx context.Context, l protocol.Lease, _ session.JobRoot, ou
 	}
 	src, ok := up.(session.OffsetSource)
 	if !ok {
-		return fmt.Errorf("artifacts: this carrier cannot receive offset answers")
+		return fmt.Errorf("%w: artifacts: this carrier cannot receive offset answers", session.ErrHookFatal)
 	}
-	return st.Ship(ctx, src.Offsets(), up)
+	if err := st.Ship(ctx, src.Offsets(), up); err != nil {
+		// a passing job whose declared outputs did not all arrive must not pass
+		return fmt.Errorf("%w: %v", session.ErrHookFatal, err)
+	}
+	return nil
 }
