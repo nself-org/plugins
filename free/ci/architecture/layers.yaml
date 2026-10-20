@@ -131,6 +131,7 @@ layers:
     - internal/providers/runnerjob
     - internal/providers/hostedev
     - internal/providers/github/hosted
+    - templates/github
     - internal/providers/github/jit
     - internal/providers/github/webhook
     - internal/providers/github/reconcile

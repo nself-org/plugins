@@ -1,0 +1,20 @@
+# Standard GitHub-hosted runner labels the dispatch workflow may run on, and
+# nothing else: no larger runners (-large, -xlarge) and no custom label.
+# Checked against GitHub's runner reference on 2026-10-19:
+# https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+# Newer standard labels exist there (for example ubuntu-26.04); a label joins this
+# list through a template change with its own review.
+checked: 2026-10-19
+source_url: https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+labels:
+  - {label: ubuntu-24.04, os: linux, arch: amd64}
+  - {label: ubuntu-22.04, os: linux, arch: amd64}
+  - {label: ubuntu-latest, os: linux, arch: amd64}
+  - {label: ubuntu-24.04-arm, os: linux, arch: arm64}
+  - {label: ubuntu-22.04-arm, os: linux, arch: arm64}
+  - {label: windows-2025, os: windows, arch: amd64}
+  - {label: windows-2022, os: windows, arch: amd64}
+  - {label: windows-latest, os: windows, arch: amd64}
+  - {label: macos-15, os: darwin, arch: arm64}
+  - {label: macos-14, os: darwin, arch: arm64}
+  - {label: macos-latest, os: darwin, arch: arm64}
