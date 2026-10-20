@@ -420,11 +420,11 @@ func TestVerifyRemoteGateAcceptsOnlyVerifiedEvidence(t *testing.T) {
 	}
 }
 
-// TestInvariant_I13_SignedRemote is the signed half of I13: in every world, signed-remote evidence is
+// TestVerifyRemoteInvariantI13Signed is the signed half of I13: in every world, signed-remote evidence is
 // accepted by a gate only when its signature verifies and the rest of the gate agrees; a signature that
 // does not verify (edited, other revision, revoked, unknown, replayed, ineligible, other lease holder)
 // never satisfies it.
-func TestInvariant_I13_SignedRemote(t *testing.T) {
+func TestVerifyRemoteInvariantI13Signed(t *testing.T) {
 	var n, rejected, accepted int
 	invariants.Check(t, func(w invariants.World) error {
 		sc := build(w)
