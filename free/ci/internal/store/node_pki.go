@@ -145,14 +145,6 @@ func (s *Store) PKIIsDenied(ctx context.Context, serial string) (bool, error) {
 	return n > 0, err
 }
 
-// PKINodeKeyPut pins a node's Ed25519 key, replacing any earlier pin.
-func (s *Store) PKINodeKeyPut(ctx context.Context, nodeID, keyID, public string) error {
-	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO pki_node_key(node_id,key_id,public,pinned_at) VALUES(?,?,?,?)`, nodeID, keyID, public, s.now().UnixNano())
-		return err
-	})
-}
-
 // PKINodeKeyGet returns the pin (ok false when none).
 func (s *Store) PKINodeKeyGet(ctx context.Context, nodeID string) (keyID, public string, ok bool, err error) {
 	err = s.readers.QueryRowContext(ctx, `SELECT key_id,public FROM pki_node_key WHERE node_id=?`, nodeID).Scan(&keyID, &public)

@@ -46,7 +46,7 @@ func Pack(ctx context.Context, base *os.Root, rel string, w io.Writer, lim authz
 	return pack(ctx, base, rel, w, lim, nil)
 }
 
-// pack is Pack with an optional inflater that scans inside gzip payloads.
+// pack is Pack with an optional compressed-content scanner.
 func pack(ctx context.Context, base *os.Root, rel string, w io.Writer, lim authz.Limits, inf *inflater) (PackStats, error) {
 	var st PackStats
 	root, err := base.OpenRoot(rel)
@@ -157,7 +157,7 @@ func header(root *os.Root, p string, info fs.FileInfo) (*tar.Header, bool, error
 
 // copyFile copies exactly size bytes of p; a file that shrank, or that is no
 // longer a regular file once opened, is an error. With an inflater, a file that
-// starts like gzip is also inflated on the way and scanned (the same bytes, so
+// starts like gzip or ZIP is also expanded and scanned (the same bytes, so
 // the file cannot change between the copy and the scan).
 func copyFile(ctx context.Context, root *os.Root, p string, w io.Writer, size int64, inf *inflater) error {
 	f, err := root.OpenFile(p, os.O_RDONLY|syscall.O_NONBLOCK, 0)
@@ -169,22 +169,26 @@ func copyFile(ctx context.Context, root *os.Root, p string, w io.Writer, size in
 		return fmt.Errorf("specs: %q is no longer a regular file", p)
 	}
 	src := bufio.NewReader(&ctxReader{ctx, f})
-	if inf == nil || !isGzip(src) {
+	head, _ := src.Peek(4)
+	if inf == nil || !authz.Compressed(head) {
 		return copyN(w, src, p, size)
 	}
-	pr, pw := io.Pipe()
-	scanned := make(chan error, 1)
-	go func() {
-		err := inf.scan(pr)
-		_ = pr.CloseWithError(err) // a refusal reaches the copy at its next write
-		scanned <- err
-	}()
-	cerr := copyN(io.MultiWriter(w, pw), src, p, size)
-	_ = pw.Close()
-	if serr := <-scanned; serr != nil {
-		return serr
+	tmp, err := os.CreateTemp("", "nself-cache-scan-*")
+	if err != nil {
+		return err
 	}
-	return cerr
+	defer func() { _ = tmp.Close(); _ = os.Remove(tmp.Name()) }()
+	if err := copyN(io.MultiWriter(w, tmp), src, p, size); err != nil {
+		return err
+	}
+	err = authz.ScanArchive(tmp, size, inf.sc, &inf.left)
+	if errors.Is(err, authz.ErrSecretContent) {
+		return ErrSecretMatch
+	}
+	if errors.Is(err, authz.ErrScanBudget) {
+		return ErrTooLarge
+	}
+	return err
 }
 
 func copyN(w io.Writer, r io.Reader, p string, size int64) error {

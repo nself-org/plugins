@@ -31,7 +31,7 @@ var (
 	urlRe      = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://[^\s"'<>\x60)\]}]+`)
 	ipv4Re     = regexp.MustCompile(`(?:[0-9]{1,3}\.){3}[0-9]{1,3}`)
 	ipv6Re     = regexp.MustCompile(`[0-9A-Fa-f:]*:[0-9A-Fa-f:]*:[0-9A-Fa-f:.]*`)
-	homeRe     = regexp.MustCompile(`(/Users|/home)/([^/\s:"'\x60?#&]+)|/root\b|[A-Za-z]:\\Users\\([^\\\s"'?#&]+)`)
+	homeRe     = regexp.MustCompile(`/private/var/folders/[^\s:"'\x60?#&]+|(/Users|/home)/([^/\s:"'\x60?#&]+)|/root\b|[A-Za-z]:\\Users\\([^\\\s"'?#&]+)`)
 	userHostRe = regexp.MustCompile(`([A-Za-z0-9._-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})`)
 	localHost  = regexp.MustCompile(`(?i)\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:` + privateSuffixAlternation() + `)\b`)
 )
@@ -111,6 +111,7 @@ func (p Profile) scrub(s string, seen []string) string {
 		}
 		return m
 	})
+	s = p.scrubLegacyIPv4(s)
 	s = ipv6Re.ReplaceAllStringFunc(s, p.redactIPv6Spans)
 	for lit, repl := range p.aliases {
 		s = replaceToken(s, lit, repl)

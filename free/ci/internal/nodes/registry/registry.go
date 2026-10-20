@@ -35,15 +35,13 @@ func safeTrust() model.CapabilityTrust {
 	f.Confidence = "known"
 	return model.CapabilityTrust{Accepts: f, Isolation: assigned[model.Isolation](nil), Network: assigned[[]model.NetworkScope](nil), SecretClasses: assigned[[]model.SecretClass](nil), PrivacyZone: assigned[model.PrivacyZone](nil)}
 }
-func eligible(c model.Capability) bool {
-	return c.Separation.UIDSeparation.Value != nil && *c.Separation.UIDSeparation.Value
-}
 
 // Register records discovery without authorizing a project or accepting node trust.
 func (r *Registry) Register(ctx context.Context, c model.Capability, actor string) (Node, error) {
 	if c.Identity.ID == "" {
 		return Node{}, invalid("/identity/id")
 	}
+	c = discoveryPlacement(c)
 	c.Trust = safeTrust()
 	c.Identity.Ownership = assigned[string](nil)
 	c.Identity.AgeRecipient = model.Fact[string]{Source: "self", ObservedAt: time.Now().UTC(), Confidence: "unknown"}
@@ -142,6 +140,7 @@ func (r *Registry) UpdateCapability(ctx context.Context, id string, in model.Cap
 		if !reflect.DeepEqual(old.Tools, in.Tools) {
 			drift = append(drift, "/tools")
 		}
+		in = preservePlacement(in, old)
 		in.Trust = old.Trust
 		in.Lifecycle = old.Lifecycle
 		in.DeployHost = old.DeployHost

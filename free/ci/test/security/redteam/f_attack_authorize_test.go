@@ -169,9 +169,6 @@ func TestF05PlantedRevisionPolicy(t *testing.T) {
 // forgejo URL decide where a token is sent and which variable is read. Setting them as a machine-invoked caller
 // (a prompt-injected agent) must be refused; today only trust.* keys are checked (the root cause of C05).
 func TestF06MachineInvokedCannotRepointProviders(t *testing.T) {
-	if !openFinding(t, "P02") {
-		return
-	}
 	b := fNew(t)
 	machine := []string{"NSELF_INVOKED_BY=mcp"}
 	for _, kv := range [][2]string{{"providers.github.api_url", `"https://attacker.example"`}, {"providers.github.token_env", `"AWS_SECRET_ACCESS_KEY"`},

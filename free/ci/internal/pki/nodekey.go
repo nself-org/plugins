@@ -15,6 +15,8 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 	"regexp"
 )
 
@@ -31,7 +33,7 @@ func (c *CA) PinNodeKey(ctx context.Context, nodeID string, pub ed25519.PublicKe
 	if len(pub) != ed25519.PublicKeySize {
 		return fail(ReasonBadCSR, "node key must be an Ed25519 public key")
 	}
-	return c.st.PKINodeKeyPut(ctx, nodeID, NodeKeyID(pub), base64.StdEncoding.EncodeToString(pub))
+	return nodeKeyBindingError(c.st.PKINodeKeyPut(ctx, nodeID, NodeKeyID(pub), base64.StdEncoding.EncodeToString(pub)))
 }
 
 // RepinNodeKey finalizes the pin of a re-pairing node after CheckPinnedNodeKey passed: a compare-and-set
@@ -45,12 +47,15 @@ func (c *CA) RepinNodeKey(ctx context.Context, nodeID string, pub ed25519.Public
 	if err == nil && !swapped {
 		return fail(ReasonNodeKeyChanged, "node %s changed its node key pin during the enrollment", nodeID)
 	}
-	return err
+	return nodeKeyBindingError(err)
 }
 
 // CheckNodeKey compares a hello's node key with the pin. With no pin it pins (an SSH node's first
 // hello). A pending pin (after rotate) accepts exactly the key id the operator named.
 func (c *CA) CheckNodeKey(ctx context.Context, nodeID string, pub ed25519.PublicKey) error {
+	if err := c.st.PKINodeKeyExclusive(ctx, nodeID, NodeKeyID(pub), base64.StdEncoding.EncodeToString(pub)); err != nil {
+		return nodeKeyBindingError(err)
+	}
 	keyID, pinned, ok, err := c.st.PKINodeKeyGet(ctx, nodeID)
 	if err != nil {
 		return err
@@ -91,4 +96,11 @@ func (c *CA) RotateNodeKey(ctx context.Context, actor, nodeID, keyID string) err
 		return fail(ReasonNodeKeyChanged, "node key id must be 16 lower-case hex characters")
 	}
 	return c.st.PKINodeKeyRotate(ctx, actor, nodeID, keyID)
+}
+
+func nodeKeyBindingError(err error) error {
+	if errors.Is(err, store.ErrNodeKeyBound) {
+		return fail(ReasonNodeKeyChanged, "node key is already bound to another node")
+	}
+	return err
 }

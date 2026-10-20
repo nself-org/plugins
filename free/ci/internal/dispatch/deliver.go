@@ -25,6 +25,7 @@ import (
 // Delivery is what the carrier needs to start one leased attempt.
 type Delivery struct {
 	Node      model.Capability
+	Network   model.NetworkScope
 	Job       model.Job
 	AttemptID string
 	LeaseID   string
@@ -55,7 +56,7 @@ func (d *Dispatcher) knownTransport(r sched.Runner) bool {
 // already counted it in d.wg.
 func (d *Dispatcher) deliver(q Queued, r sched.Runner, a Admitted, pol sched.Policy) {
 	hosted := sched.RunnerHosted(r)
-	delivery := Delivery{Node: r.Capability, Job: raiseIsolation(q.Job.Model, requiredIsolation(q, r, pol)), AttemptID: a.AttemptID, LeaseID: a.LeaseID, Token: a.Token, Epoch: a.Epoch, Revision: q.Job.Revision, ExpiresAt: d.cfg.Clock().Add(d.cfg.LeaseTTL), Hosted: hosted}
+	delivery := Delivery{Network: q.Job.Sched.Network, Node: r.Capability, Job: raiseIsolation(q.Job.Model, requiredIsolation(q, r, pol)), AttemptID: a.AttemptID, LeaseID: a.LeaseID, Token: a.Token, Epoch: a.Epoch, Revision: q.Job.Revision, ExpiresAt: d.cfg.Clock().Add(d.cfg.LeaseTTL), Hosted: hosted}
 	go func() { // admit registered the delivery with the WaitGroup
 		defer d.wg.Done()
 		if err := d.cfg.Transport.Deliver(d.life, delivery); err != nil && d.life.Err() == nil {

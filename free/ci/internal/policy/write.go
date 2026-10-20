@@ -155,7 +155,7 @@ func (w *Writer) row(ctx context.Context, keys *Keyset, actor roles.Actor, c Cha
 		pw.Op, pw.Value = store.PolicySet, value
 		res.Value = shown(spec, value)
 	}
-	if w.Machine && strings.HasPrefix(c.Key, "trust.") && (c.Op == OpUnset || w.loosens(keys, spec, w.stored(ctx, t, c.Key), value)) {
+	if w.Machine && (strings.HasPrefix(c.Key, "trust.") || spec.Spend) && (c.Op == OpUnset || w.loosens(keys, spec, w.stored(ctx, t, c.Key), value)) {
 		return Result{}, w.refuseMachine(ctx, actor, c.Op, t.scope+"/"+c.Key)
 	}
 	if c.Op == OpSet { // an unset cannot make the remaining rows loosen a parent

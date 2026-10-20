@@ -87,9 +87,6 @@ func TestC39CodeIsSingleUseUnderRace(t *testing.T) {
 // to node b, neither by the enrollment pin nor by the first-hello pin (the evidence verifier, the
 // revocation set and the quarantine all key on the key id).
 func TestC39ReusedPublicKeyIsRefused(t *testing.T) {
-	if !openFinding(t, "C03") {
-		return
-	}
 	r := cNewRig(t)
 	ctx := context.Background()
 	pub, _, _ := ed25519.GenerateKey(rand.Reader)
