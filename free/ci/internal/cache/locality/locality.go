@@ -17,6 +17,9 @@ package locality
 // carries a nil MissBytes: a zero is never reported for an unknown fact. When only some of a
 // job's specs have an entry the sum covers those and the confidence is "estimated". With no
 // Source bound the contributor leaves Cache empty (every fact unknown) and never fails a build.
+// Which namespaces a job reads follows the restore code (plan.go): a snapshot entry counts only for
+// a container job and only when its writer facts permit a snapshot; a spec the plan could not key
+// makes the fact an estimate, never known. Entries are not re-hashed, so the facts are advisory.
 
 import (
 	"context"

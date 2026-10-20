@@ -74,7 +74,7 @@ func runner(id, platform string, host bool) sched.Runner {
 // planned returns the realm and key of job j's own-namespace entry for spec on platform.
 func planned(t testing.TB, j Job, platform, spec string) candidate {
 	t.Helper()
-	for _, p := range planJob(context.Background(), j, platform, j.Probe) {
+	for _, p := range planJob(context.Background(), j, platform, false, j.Probe).specs {
 		if p.spec == spec {
 			return p.candidates[0]
 		}
@@ -85,7 +85,8 @@ func planned(t testing.TB, j Job, platform, spec string) candidate {
 
 func entry(c candidate, size int64) entries.Manifest {
 	ns, _ := base64.RawURLEncoding.DecodeString(c.realm)
-	return entries.Manifest{Namespace: ns, Key: c.key, Blobs: []entries.Blob{{Path: "a", SHA256: strings.Repeat("0", 64), Size: size}}}
+	return entries.Manifest{Namespace: ns, Key: c.key, Writer: entries.Writer{ScannedClean: true},
+		Blobs: []entries.Blob{{Path: "a", SHA256: strings.Repeat("0", 64), Size: size}}}
 }
 
 func job(key string, detected []detect.Fact) Job {
@@ -231,17 +232,62 @@ func TestLocalityProbeRunsOncePerBuild(t *testing.T) {
 	}
 }
 
-func TestLocalityUntrustedJobReadsOwnerSnapshot(t *testing.T) {
-	// A fork job has no entry of its own; the ledger holds one in the owner's protected namespace.
-	snap := Job{Key: "ci", Facts: ownerFacts, Detected: goFacts, Image: imageDigest}
-	key := planned(t, snap, platformLinux, "go")
-	fork := Job{Key: "pr", Facts: entries.Facts{Project: "/work/proj", Trust: "untrusted", Protection: "unprotected", HeadRepo: "fork/x", PR: "7"},
-		Detected: goFacts, Image: imageDigest}
+// TestLocalitySnapshotAndRemoteRules: the namespaces a job reads follow specs.Session on a store
+// holder (own, then snapshots for container jobs only) and remote.BuildPlan on a node (trusted:
+// own only; untrusted: the owner namespace, container jobs only); a snapshot entry counts only
+// when its writer facts permit a snapshot.
+func TestLocalitySnapshotAndRemoteRules(t *testing.T) {
+	fork := entries.Facts{Project: "/work/proj", Trust: "untrusted", Protection: "unprotected", HeadRepo: "fork/x", PR: "7"}
+	internal := entries.Facts{Project: "/work/proj", Trust: "internal", Protection: "protected"}
+	ownerKey := planned(t, Job{Facts: ownerFacts, Detected: goFacts, Image: imageDigest}, platformLinux, "go")
+	cases := []struct {
+		name      string
+		facts     entries.Facts
+		container bool
+		holder    bool
+		writer    entries.Writer
+		want      string
+	}{
+		{"fork container job on a cold node reads the owner snapshot", fork, true, false, entries.Writer{ScannedClean: true}, "11/known"},
+		{"fork process job on a node gets no cache", fork, false, false, entries.Writer{ScannedClean: true}, "nil/unknown"},
+		{"snapshot written with private deps is not eligible", fork, true, false, entries.Writer{ScannedClean: true, PrivateDeps: true}, "nil/unknown"},
+		{"snapshot written after secrets is not eligible", fork, true, false, entries.Writer{ScannedClean: true, SecretsReceived: true}, "nil/unknown"},
+		{"snapshot never scanned clean is not eligible", fork, true, false, entries.Writer{}, "nil/unknown"},
+		{"trusted node job reads its own namespace only", internal, true, false, entries.Writer{ScannedClean: true}, "nil/unknown"},
+		{"internal container job on the store holder reads the owner snapshot", internal, true, true, entries.Writer{ScannedClean: true}, "0/known"},
+		{"internal process job on the store holder reads no snapshot", internal, false, true, entries.Writer{ScannedClean: true}, "nil/unknown"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := entry(ownerKey, 11)
+			m.Writer = c.writer
+			fx := newFixture(t)
+			fx.in = Inputs{Ledger: &fakeLedger{entries: map[string][]entries.Manifest{ownerKey.key: {m}}},
+				Jobs: []Job{{Key: "pr", Facts: c.facts, Detected: goFacts, Image: imageDigest, Container: c.container}}}
+			fx.w.Runners = []sched.Runner{runner("r", platformLinux, c.holder)}
+			if g := miss(build(t, fx)["r"]["pr"]); g != c.want {
+				t.Fatalf("got %s, want %s", g, c.want)
+			}
+		})
+	}
+}
+
+// A spec the plan could not key (its probe failed) is an unknown component: the fact over the
+// other specs is an estimate, never "known".
+func TestLocalityUnkeyableSpecIsEstimated(t *testing.T) {
+	probe := func(_ context.Context, argv []string) (string, error) {
+		if argv[0] == "go" {
+			return "", errors.New("go not installed")
+		}
+		return "v1.0.0", nil
+	}
+	j := Job{Key: "both", Facts: ownerFacts, Detected: append(append([]detect.Fact{}, goFacts...), pnpmFacts...), Probe: probe}
+	key := planned(t, j, platformLinux, "pnpm")
 	fx := newFixture(t)
-	fx.in = Inputs{Ledger: &fakeLedger{entries: map[string][]entries.Manifest{key.key: {entry(key, 11)}}}, Jobs: []Job{fork}}
-	fx.w.Runners = []sched.Runner{runner("node-c", platformLinux, false)}
-	if g := miss(build(t, fx)["node-c"]["pr"]); g != "11/known" {
-		t.Fatalf("fork job on a cold node = %s, want 11/known (owner snapshot)", g)
+	fx.in = Inputs{Ledger: &fakeLedger{entries: map[string][]entries.Manifest{key.key: {entry(key, 5)}}}, Jobs: []Job{j}}
+	fx.w.Runners = []sched.Runner{runner("coordinator", platformLinux, true)}
+	if g := miss(build(t, fx)["coordinator"]["both"]); g != "0/estimated" {
+		t.Fatalf("got %s, want 0/estimated", g)
 	}
 }
 

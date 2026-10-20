@@ -27,9 +27,14 @@ const (
 
 type copyKey struct{ node, realm, key string }
 
+// entrySize is what the ledger says about one (realm, key): ok when an entry exists, bytes its
+// size, snapshotOK when its writer facts permit a read-only snapshot restore (no secrets
+// received, no private dependencies, scanned clean; entries.Store.snapshotOK adds the
+// project's own policy, which the contributor cannot see).
 type entrySize struct {
-	bytes int64
-	ok    bool
+	bytes      int64
+	ok         bool
+	snapshotOK bool
 }
 
 // holdsStore reports a runner whose own store is the entries store: the coordinator host, or the
@@ -84,7 +89,8 @@ func compute(ctx context.Context, w *sched.World, in Inputs) map[string]map[stri
 		}
 		for _, m := range list {
 			if base64.RawURLEncoding.EncodeToString(m.Namespace) == c.realm {
-				s = entrySize{m.Bytes(), true}
+				w := m.Writer
+				s = entrySize{m.Bytes(), true, !w.SecretsReceived && !w.PrivateDeps && w.ScannedClean}
 				break
 			}
 		}
@@ -114,7 +120,7 @@ func compute(ctx context.Context, w *sched.World, in Inputs) map[string]map[stri
 		platform string
 		holder   bool
 	}
-	plans := map[planKey][]plannedSpec{}
+	plans := map[planKey]jobPlan{}
 	out := map[string]map[string]sched.CacheFact{}
 	for _, r := range w.Runners {
 		holder, platform := holdsStore(r), platformOf(r)
@@ -134,7 +140,7 @@ func compute(ctx context.Context, w *sched.World, in Inputs) map[string]map[stri
 				if holder {
 					probe = memo.wrap(j.Probe)
 				}
-				p = planJob(ctx, j, platform, probe)
+				p = planJob(ctx, j, platform, !holder, probe)
 				plans[pk] = p
 			}
 			facts[j.Key] = fold(p, size, holds)
@@ -148,14 +154,18 @@ func compute(ctx context.Context, w *sched.World, in Inputs) map[string]map[stri
 }
 
 // fold combines the specs of one job: a spec counts when an entry exists in the first readable
-// namespace that has one; it adds 0 when the runner holds it, else the entry size.
-func fold(planned []plannedSpec, size func(candidate) entrySize, holds func(candidate) bool) sched.CacheFact {
+// namespace that has a usable one (a snapshot entry must be snapshot eligible); it adds 0 when
+// the runner holds it, else the entry size. Specs the plan could not key or read count as
+// unknown, so "known" means every spec the job's facts select was looked at. Entries are not
+// re-hashed and the writer attempt's state is not read (the store retracts entries whose attempt
+// did not pass), so the fact is advisory.
+func fold(p jobPlan, size func(candidate) entrySize, holds func(candidate) bool) sched.CacheFact {
 	var miss int64
 	found := 0
-	for _, p := range planned {
-		for _, c := range p.candidates {
+	for _, ps := range p.specs {
+		for _, c := range ps.candidates {
 			s := size(c)
-			if !s.ok {
+			if !s.ok || c.snapshot && !s.snapshotOK {
 				continue
 			}
 			found++
@@ -168,7 +178,7 @@ func fold(planned []plannedSpec, size func(candidate) entrySize, holds func(cand
 	switch {
 	case found == 0:
 		return sched.CacheFact{Confidence: unknown}
-	case found == len(planned):
+	case found == p.total:
 		return sched.CacheFact{MissBytes: &miss, Confidence: known}
 	}
 	return sched.CacheFact{MissBytes: &miss, Confidence: estimated}
