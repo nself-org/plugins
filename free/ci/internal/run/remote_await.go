@@ -75,7 +75,7 @@ func (rs *runState) runRemote(ctx context.Context, pj plan.PlannedJob, job model
 		ra = rd.sink.attempt(id)
 	}
 	if ra == nil {
-		rs.driveToCancelled(id)
+		_ = rs.driveToCancelled(id)
 		return failed(o, fail(CodeOptions, "attempt %s was placed on a remote runner; this run has no way to await it", id))
 	}
 	info := rs.info(pj, job, id, n)

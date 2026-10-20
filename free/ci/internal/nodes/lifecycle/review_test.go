@@ -166,8 +166,8 @@ func TestPinFileChangesAreSerializedAcrossProcesses(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- k.d.pin("pl1", []remote.HostKey{keyA}) }()
 	select {
-	case <-done:
-		t.Fatal("pin wrote the pin file while another process held the pin lock")
+	case err := <-done:
+		t.Fatalf("pin returned %v while another process held the pin lock", err)
 	case <-time.After(300 * time.Millisecond):
 	}
 	unlock()
