@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/doctor"
 	"github.com/nself-org/plugins/free/ci/internal/forgejo"
@@ -30,6 +31,9 @@ import (
 
 // factProvider is the provider name the JIT registrar files the fork-approval fact under.
 const factProvider = "github"
+
+// factMaxAge is how long a recorded fork-approval policy is trusted before the doctor asks for a new read.
+const factMaxAge = 30 * 24 * time.Hour
 
 type secretRef struct{ subject, env string }
 
@@ -101,8 +105,13 @@ func (s *state) checkForkApproval(ctx context.Context) doctor.Check {
 	if json.Unmarshal(f.Value, &v) != nil || v.Policy == "" {
 		return mk(id, name, doctor.Warn, "the stored fork-approval fact for "+repo+" is unreadable", "Run a just-in-time dispatch to record it again")
 	}
-	if v.Policy == jit.StrictApproval {
-		return mk(id, name, doctor.Pass, repo+" requires approval for all external contributors", "")
+	age := time.Since(f.ObservedAt)
+	switch {
+	case age > factMaxAge:
+		return mk(id, name, doctor.Warn, "the fork pull request approval policy of "+repo+" was recorded "+f.ObservedAt.UTC().Format("2006-01-02")+" and may have changed since",
+			"Run `nself ci providers test github-hosted --repo "+repo+"` to read it again")
+	case v.Policy == jit.StrictApproval:
+		return mk(id, name, doctor.Pass, repo+" requires approval for all external contributors (recorded "+f.ObservedAt.UTC().Format("2006-01-02")+")", "")
 	}
 	return mk(id, name, doctor.Warn, repo+" approves fork pull requests under policy "+v.Policy+", weaker than "+jit.StrictApproval+", while just-in-time runners are enabled: a public repository's fork can run code on your runner",
 		"In the repository settings (Actions, General, Fork pull request workflows) require approval for all external contributors, or disable just-in-time runners for it")

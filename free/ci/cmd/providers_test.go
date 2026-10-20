@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -177,6 +178,33 @@ func TestAuthorizeRoles(t *testing.T) {
 	if n := r.auditCount("policy.set"); n != 4 {
 		t.Fatalf("authorize, authorize, revoke and authorize are audited once each, got %d rows", n)
 	}
+	// The project is a directory: a linked worktree maps to its main worktree's id, ~/x and ./x are paths,
+	// and a failing git is refused (no row admission would read).
+	wt := filepath.Join(t.TempDir(), "wt")
+	policyGit(t, r.work, "worktree", "add", "-q", "--detach", wt)
+	if code := r.prov("authorize", "gitlab", "--project", wt); code != 0 || !strings.Contains(projectRow(t, r, r.project(), "trust.providers"), "gitlab") {
+		t.Fatalf("a linked worktree must key the main worktree's row: exit %d, %q", code, projectRow(t, r, r.project(), "trust.providers"))
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, "proj"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if code := r.prov("authorize", "gitlab", "--project", "~/proj"); code != 0 || projectRow(t, r, canonProject(filepath.Join(home, "proj")), "trust.providers") != `["gitlab"]` {
+		t.Fatalf("~/proj: exit %d", code)
+	}
+	t.Chdir(home)
+	if code := r.prov("authorize", "gitlab", "--project", "./proj"); code != 0 {
+		t.Fatalf("./proj: exit %d", code)
+	}
+	if code := r.prov("authorize", "gitlab", "--project", "a\x00b"); code != 1 {
+		t.Fatalf("a NUL byte must be refused, exit %d", code)
+	}
+	noGit := providersEnvFor(r, nil)
+	noGit.Run = func(context.Context, ...string) (string, int, error) { return "", 0, os.ErrNotExist }
+	if code := runProviders("authorize", []string{"gitlab", "--project", pDir}, noGit); code != 1 || !strings.Contains(r.errb.String(), "git could not be run") {
+		t.Fatalf("a failing git must refuse the write, exit %d: %s", code, r.errb.String())
+	}
 	// A revision claiming the authorization changes nothing.
 	own := r.project()
 	for _, args := range [][]string{{"authorize", "github-hosted", "--project", own}, {"revoke", "github-hosted", "--project", own}} {
@@ -190,7 +218,7 @@ func TestAuthorizeRoles(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := pdoctor.Load(context.Background(), r.work, report.Capture, r.store())
-	if cfg.Err != nil || len(cfg.Authorized) != 0 {
+	if cfg.Err != nil || slices.Contains(cfg.Authorized, "github-hosted") {
 		t.Fatalf("a revision's claim must not authorize: err %v, authorized %v", cfg.Err, cfg.Authorized)
 	}
 }

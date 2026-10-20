@@ -203,6 +203,8 @@ func probeForkApproval(ctx context.Context, c *rest.Client, cfg pdoctor.Config, 
 	switch {
 	case err != nil:
 		return probeRow{name, probeFail, providerFailure(err)}
+	case st == nil:
+		return probeRow{name, probeUnknown, repo + " uses policy " + policyName + "; not recorded: there is no CI state database yet (run a CI command once to create it)"}
 	case policyName != jit.StrictApproval:
 		return probeRow{name, probeWarn, repo + " approves fork pull requests under " + policyName + ", weaker than " + jit.StrictApproval + " (just-in-time runners are enabled)"}
 	}

@@ -30,6 +30,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
@@ -110,7 +111,20 @@ func resolveProject(ctx context.Context, run policy.Runner, p string) (string, e
 	if err != nil {
 		return "", bad
 	}
-	return policy.ProjectIDGit(ctx, run, abs), nil
+	var spawnFailed atomic.Bool
+	watch := func(c context.Context, argv ...string) (string, int, error) {
+		out, exit, err := run(c, argv...)
+		if err != nil {
+			spawnFailed.Store(true)
+		}
+		return out, exit, err
+	}
+	id := policy.ProjectIDGit(ctx, watch, abs)
+	if spawnFailed.Load() {
+		// As cmd/policy.go: a project id built without git would key a row admission never reads.
+		return "", adminUsage("git could not be run, so the project id of %s is unknown; a project row would not match the runs", abs)
+	}
+	return id, nil
 }
 
 func runAuthorize(ctx context.Context, op, id string, f providersFlags, env providersEnv) int {
@@ -195,7 +209,7 @@ func noRevoke(env providersEnv, command, id, project string, asJSON bool) int {
 	if asJSON {
 		return adminWriteData(env.adminEnv, command, map[string]any{"op": "revoke", "provider": id, "project": project, "changed": false})
 	}
-	_, _ = fmt.Fprintf(env.Out, "%s is not authorized at project scope for %s: nothing to revoke\n", plainText(id), plainText(project))
+	_, _ = fmt.Fprintf(env.Out, "%s is not authorized at project scope for %s: nothing to revoke (a user or team scope row may still authorize it: see `nself ci policy show`)\n", plainText(id), plainText(project))
 	return 0
 }
 

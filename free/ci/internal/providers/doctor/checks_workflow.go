@@ -72,7 +72,7 @@ func (s *state) checkWorkflows(ctx context.Context) (doctor.Check, doctor.Check)
 	d := WorkflowState(ctx, s.env.Root, branch, s.env.Capture)
 	u := WorkflowState(ctx, s.env.Root, ref, s.env.Capture)
 	if d == "missing" && u == "missing" && !s.githubInUse() {
-		def.Message, unt.Message = "GitHub-hosted capacity is not set up for this repository (no providers.github.* key, no authorization, no workflow)", "GitHub-hosted capacity is not set up for this repository"
+		def.Message, unt.Message = "GitHub-hosted capacity is not set up for this repository (no providers.github.* key, no authorization, no workflow); run `nself ci providers github init` to set it up", "GitHub-hosted capacity is not set up for this repository"
 		return def, unt
 	}
 	fix := "Run `nself ci providers github init`, commit " + githubtmpl.Path + " and push it to " + branch
