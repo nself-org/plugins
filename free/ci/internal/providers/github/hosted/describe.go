@@ -81,6 +81,11 @@ func known[T any](v T, now time.Time) model.Fact[T] {
 	return model.Fact[T]{Value: &v, Source: "provider", Confidence: "known", ObservedAt: now}
 }
 
+// assigned is a fact the provider declares by policy (trust, economics), as the schema requires.
+func assigned[T any](v T, now time.Time) model.Fact[T] {
+	return model.Fact[T]{Value: &v, Source: "assigned", Confidence: "known", ObservedAt: now}
+}
+
 func capability(repo repoRef, project, visibility string, l githubtmpl.Label, now time.Time) model.Capability {
 	c := model.Capability{Schema: "ci.runner-capability/v1"}
 	id := runnerIDPrefix + repo.String() + ":" + l.Label
@@ -104,21 +109,22 @@ func capability(repo repoRef, project, visibility string, l githubtmpl.Label, no
 	c.Availability.State, c.Availability.Slots = known("online", now), known(hostCapacity, now)
 	c.Availability.Persistence = known(false, now)
 	c.Location.Kind = known("hosted", now)
-	c.Economics.Class = known("included", now)
-	c.Trust.Accepts = known([]model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, now)
-	c.Trust.Isolation = known(model.Isolation("hosted-disposable"), now)
-	c.Trust.Network = known([]model.NetworkScope{"internet"}, now)
-	c.Trust.SecretClasses = known([]model.SecretClass{"none"}, now)
-	c.Trust.PrivacyZone = known(model.PrivacyZone("hosted-allowed"), now)
-	c.Separation.UIDSeparation, c.Separation.SigningEligible = known(true, now), known(false, now)
+	c.Economics.Class = assigned("included", now)
+	c.Trust.Accepts = assigned([]model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, now)
+	c.Trust.Isolation = assigned(model.Isolation("hosted-disposable"), now)
+	c.Trust.Network = assigned([]model.NetworkScope{"internet"}, now)
+	c.Trust.SecretClasses = assigned([]model.SecretClass{"none"}, now)
+	c.Trust.PrivacyZone = assigned(model.PrivacyZone("hosted-allowed"), now)
+	c.Separation.UIDSeparation, c.Separation.SigningEligible = assigned(true, now), assigned(false, now)
 	c.Protocol.Versions, c.Protocol.Min = []int{1}, 1
-	c.Verified = model.CapabilityVerified{By: ProviderID, At: now}
+	c.Verified = model.CapabilityVerified{By: "provider", At: now}
 	c.Lifecycle.Discovered, c.Lifecycle.Eligible = true, true
 	c.Lifecycle.AuthorizedProjects = []string{}
 	if project != "" {
 		c.Lifecycle.AuthorizedProjects = []string{project}
 	}
 	c.Identity.HostKeyFingerprints = []string{}
+	c.Tools.Toolchains, c.Tools.Custom = map[string]model.Fact[string]{}, map[string]model.Fact[string]{}
 	unknowns(reflect.ValueOf(&c).Elem(), now)
 	return c
 }

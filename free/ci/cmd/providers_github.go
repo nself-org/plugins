@@ -1,0 +1,147 @@
+package main
+
+// Purpose: `nself ci providers github init [--check] [--stdout] [--agent-source release|source]
+// [--dir <repo>] [--json]` (P7-HOST-03, Epic D5): render the GitHub-hosted dispatch workflow from
+// templates/github, write it to <repo>/.github/workflows/nself-ci-dispatch.yml (or stdout), or check
+// that the default branch and the untrusted-ref copies in local git still equal the rendering.
+// Inputs:  argv after the key; the operator's policy keys providers.github.untrusted_ref and
+//          providers.github.agent_source (defaults when no policy source is installed); local git.
+// Outputs: the file, or its text on stdout, or a per-ref report with the exact commands that create
+//          or update the untrusted ref (never run here); one v1 JSON envelope with --json.
+// Constraints: V15 only; side-effect class: writes one local file and nothing else, never pushes, never
+//          calls the network except the signed-release fetch of --agent-source release; an existing
+//          file that is not generated (no marker) is never overwritten; git runs through the CI
+//          command funnel (report.Capture); exit 0 ok, 1 drift or refusal, 2 usage.
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/nself-org/cli/sdk/go/v2/output"
+
+	"github.com/nself-org/plugins/free/ci/internal/providers/github/hosted"
+	githubtmpl "github.com/nself-org/plugins/free/ci/templates/github"
+)
+
+type githubInitFlags struct {
+	check, stdout, json bool
+	agentSource, dir    string
+}
+
+func newGithubInitFlags(f *githubInitFlags) *flag.FlagSet {
+	fs := flag.NewFlagSet("providers github init", flag.ContinueOnError)
+	fs.BoolVar(&f.check, "check", false, "compare the default-branch and untrusted-ref copies in local git with the rendering")
+	fs.BoolVar(&f.stdout, "stdout", false, "print the workflow instead of writing it")
+	fs.StringVar(&f.agentSource, "agent-source", "", "where the runner gets the agent: release (signed, default) or source (pinned commit)")
+	fs.StringVar(&f.dir, "dir", "", "repository root (env NSELF_CI_REPO; default: current directory)")
+	fs.BoolVar(&f.json, "json", false, "print one v1 JSON envelope")
+	return fs
+}
+
+func init() {
+	registerV15("providers github init", subcommandEntry{V15Only: true, Handler: runGithubInit,
+		Flags: func() *flag.FlagSet { return newGithubInitFlags(&githubInitFlags{}) }})
+}
+
+// githubRenderOptions picks the agent source and builds the render options.
+func githubRenderOptions(ctx context.Context, f githubInitFlags, s hosted.Settings) (githubtmpl.Options, error) {
+	source := firstOf(f.agentSource, s.AgentSource)
+	switch source {
+	case githubtmpl.SourceMode:
+		commits, err := githubtmpl.SourceCommits()
+		if err != nil || len(commits) == 0 {
+			return githubtmpl.Options{}, fmt.Errorf("no agent commit is pinned in this build")
+		}
+		return githubtmpl.Options{AgentSource: source, AgentCommit: commits[len(commits)-1]}, nil
+	case githubtmpl.ReleaseMode:
+		version, pins, err := githubReleasePins(ctx)
+		if err != nil {
+			return githubtmpl.Options{}, fmt.Errorf("%w (use --agent-source source to build the agent from the pinned commit)", err)
+		}
+		return githubtmpl.Options{AgentSource: source, ReleaseVersion: version, Pins: pins}, nil
+	}
+	return githubtmpl.Options{}, fmt.Errorf("--agent-source must be release or source, not %q", source)
+}
+
+func githubInitFail(f githubInitFlags, code string, err error) int {
+	if f.json {
+		_ = output.WriteError(os.Stdout, "ci providers github init", output.ErrorDetail{Code: code, Message: err.Error(), ExitCode: 1}, nil)
+	} else {
+		fmt.Fprintln(os.Stderr, "error:", err)
+	}
+	return 1
+}
+
+func runGithubInit(args []string) int {
+	var f githubInitFlags
+	fs := newGithubInitFlags(&f)
+	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || f.check && f.stdout {
+		return usageErr("nself ci providers github init [--check | --stdout] [--agent-source release|source] [--dir <repo>] [--json]")
+	}
+	ctx := context.Background()
+	s, err := hosted.CurrentSettings(ctx)
+	if err != nil {
+		return githubInitFail(f, "E702", err)
+	}
+	opts, err := githubRenderOptions(ctx, f, s)
+	if err != nil {
+		return githubInitFail(f, "E702", err)
+	}
+	doc, err := githubtmpl.Render(opts)
+	if err != nil {
+		return githubInitFail(f, "E702", err)
+	}
+	root := firstOf(f.dir, os.Getenv("NSELF_CI_REPO"))
+	if root == "" {
+		if root, err = os.Getwd(); err != nil {
+			return githubInitFail(f, "E702", err)
+		}
+	}
+	switch {
+	case f.stdout:
+		_, _ = os.Stdout.Write(doc)
+		return 0
+	case f.check:
+		return githubCheck(ctx, f, root, doc, s.UntrustedRef)
+	}
+	return githubWrite(f, root, doc, opts, s.UntrustedRef)
+}
+
+func githubWrite(f githubInitFlags, root string, doc []byte, opts githubtmpl.Options, untrusted string) int {
+	path := filepath.Join(root, githubtmpl.Path)
+	if old, err := os.ReadFile(path); err == nil && !strings.HasPrefix(string(old), githubtmpl.HeaderMarker) {
+		return githubInitFail(f, "E702", fmt.Errorf("%s exists and is not generated by this command; move it away first", githubtmpl.Path))
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return githubInitFail(f, "E702", err)
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".nself-ci-dispatch-")
+	if err != nil {
+		return githubInitFail(f, "E702", err)
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if _, err = tmp.Write(doc); err == nil {
+		err = tmp.Chmod(0o644)
+	}
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		return githubInitFail(f, "E702", err)
+	}
+	if f.json {
+		_ = output.WriteData(os.Stdout, "ci providers github init", map[string]any{"path": githubtmpl.Path, "template": githubtmpl.Current,
+			"agent_source": opts.AgentSource, "untrusted_ref": untrusted}, nil)
+		return 0
+	}
+	fmt.Printf("wrote %s (template v%d, agent source %s)\n", githubtmpl.Path, githubtmpl.Current, opts.AgentSource)
+	fmt.Printf("next: commit it to the default branch, then run: nself ci providers github init --check\n")
+	return 0
+}
