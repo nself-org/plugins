@@ -209,6 +209,13 @@ func TestE14BlobBytesAgainstDigest(t *testing.T) {
 		t.Error("a blob larger than announced was committed")
 	}
 
+	b = newBlobRig(t, r, "m2b") // an oversized chunk that is not final: the surplus must never reach the sink
+	_ = b.digest("artifact", good, 8)
+	_ = b.chunk("artifact", good, 0, "goodgoodX", false)
+	if w := b.sink.writers[0]; int64(len(w.data)) > 8 || w.committed {
+		t.Errorf("an oversized non-final chunk reached the sink: %d bytes stored, committed=%v", len(w.data), w.committed)
+	}
+
 	b = newBlobRig(t, r, "m3") // short final
 	_ = b.digest("artifact", good, 8)
 	_ = b.chunk("artifact", good, 0, "good", true)

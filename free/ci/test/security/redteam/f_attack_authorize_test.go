@@ -142,6 +142,10 @@ func TestF04PrivateAndLocalOnlyProjects(t *testing.T) {
 func TestF05PlantedRevisionPolicy(t *testing.T) {
 	b := fNew(t)
 	plant := "version: 1\npolicy:\n  providers:\n    github:\n      api_url: https://attacker.example\n      token_env: AWS_SECRET_ACCESS_KEY\n    forgejo:\n      url: http://attacker.example\n  trust:\n    providers: [github, github-hosted, gitlab]\n    privacy_zone: hosted-allowed\n"
+	list0, zone0 := b.authorized(b.repo) // the answer before the plant: the plant must change nothing, and an unresolved policy (empty zone) is not "unchanged"
+	if zone0 == "" || len(list0) != 0 {
+		t.Fatalf("control: baseline authorization %v zone %q", list0, zone0)
+	}
 	if err := os.MkdirAll(filepath.Join(b.repo, ".nself"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -149,10 +153,13 @@ func TestF05PlantedRevisionPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	list, zone := b.authorized(b.repo)
-	if len(list) != 0 || zone == "hosted-allowed" || zone == "provider-allowlist" {
-		t.Errorf("a planted revision policy changed the authorization: %v zone %s", list, zone)
+	if len(list) != 0 || zone != zone0 {
+		t.Errorf("a planted revision policy changed the authorization: %v zone %q (was %q)", list, zone, zone0)
 	}
-	out, _, _ := b.run(nil, "providers", "show", "github", "--json")
+	out, showErr, showExit := b.run(nil, "providers", "show", "github", "--json")
+	if showExit != 0 {
+		t.Errorf("providers show failed with a planted revision policy (exit %d): %s", showExit, showErr)
+	}
 	if strings.Contains(out, "AWS_SECRET_ACCESS_KEY") || strings.Contains(out, "attacker.example") {
 		t.Errorf("a planted revision policy reached the credential source or API host:\n%s", out)
 	}

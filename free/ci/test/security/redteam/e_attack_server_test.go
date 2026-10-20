@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
+	"github.com/nself-org/plugins/free/ci/internal/transport/agent"
 )
 
 // barrier sends a heartbeat and reads until its ack, so every frame sent before it has been handled. It
@@ -164,6 +165,11 @@ func TestE26ResultReplayAndForeignLease(t *testing.T) {
 	h.send(eResult(lease, ep))
 	if m, ok := h.read(3 * time.Second); !ok || m.Type != "ack" {
 		t.Fatalf("control: honest result not acknowledged: %v %v", m.Type, ok)
+	}
+	// the gate alone, before the token is spent: a wrong epoch is refused for its own reason
+	fresh := &agent.Gate{Tokens: r.tokens, Bindings: r.st, Leases: r.st}
+	if err := fresh.Check(t.Context(), eCall(lease, ep+1, "n-1", "zz", "sz", tok, false)); err == nil || !strings.Contains(err.Error(), "another job or attempt") {
+		t.Errorf("a wrong epoch was not refused as another attempt: %v", err)
 	}
 	if err := r.gate.Spend(t.Context(), "jti-1"); err != nil {
 		t.Fatal(err)
@@ -314,5 +320,39 @@ func TestE20AdmitWiredInProduction(t *testing.T) {
 	s.barrier(t)
 	if logs, _ := r.sink.counts(); logs == 1 {
 		t.Log("with Admit unset the listener admits token-less lease frames (documented NODE-20 default; wired in production)")
+	}
+}
+
+// TestE26ForeignLeaseAndEpochWithoutTheGate (TM-26, TM-13): the listener's own lease-holder and epoch fence
+// must refuse a result from a node that does not hold the lease and a result at a wrong epoch even when no
+// job-token gate stands in front of them (Admit unset), so a gate bug cannot hide a missing fence.
+func TestE26ForeignLeaseAndEpochWithoutTheGate(t *testing.T) {
+	r := newERig(t, false)
+	a := r.newAgent("n-1")
+	b := r.newAgent("n-2")
+	lease, _, ep := r.seedLease("1", "n-1")
+	a.connect()
+	b.connect()
+	s := b.openStream()
+	s.send(eResult(lease, ep))
+	s.read(2 * time.Second)
+	if _, res := r.sink.counts(); res != 0 {
+		t.Fatalf("a node that does not hold the lease delivered a result (%d) with no gate in front", res)
+	}
+	for _, e := range []uint64{0, ep + 1, 1 << 63} {
+		x := a.openStream()
+		x.send(eResult(lease, e))
+		x.read(2 * time.Second)
+		if _, res := r.sink.counts(); res != 0 {
+			t.Fatalf("a result at epoch %d reached the sink with no gate in front", e)
+		}
+	}
+	h := a.openStream()
+	h.send(eResult(lease, ep))
+	if m, ok := h.read(3 * time.Second); !ok || m.Type != "ack" {
+		t.Fatalf("control: honest result not acknowledged: %v %v", m.Type, ok)
+	}
+	if _, res := r.sink.counts(); res != 1 {
+		t.Errorf("control: sink holds %d results, want 1", res)
 	}
 }

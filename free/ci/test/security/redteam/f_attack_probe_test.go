@@ -43,15 +43,19 @@ func TestF08ProbeURLsNeverReachLocalOrPrivateSpace(t *testing.T) {
 	fSet(t, b, "providers.github.token_env", `"`+fTokenVar+`"`)
 	hosts := []string{"127.0.0.1:" + v4.port(), "localhost:" + v4.port(), "127.1:" + v4.port(), "2130706433:" + v4.port(), "0x7f000001:" + v4.port(),
 		"017700000001:" + v4.port(), "[::ffff:127.0.0.1]:" + v4.port(), "localhost.:" + v4.port(), "127.0.0.1.:" + v4.port(), "0.0.0.0:" + v4.port(),
-		"169.254.169.254", "10.0.0.5", "192.168.1.1", "100.64.0.1", "[fd00::1]", "[fe80::1]"}
+		"169.254.169.254", "10.0.0.5", "172.16.0.1", "192.168.1.1", "100.64.0.1", "[fd00::1]", "[fe80::1]"}
 	if v6 != nil {
 		hosts = append(hosts, "[::1]:"+v6.port(), "[0:0:0:0:0:ffff:7f00:1]:"+v6.port())
 	}
+	refused := map[string]bool{"169.254.169.254": true, "10.0.0.5": true, "172.16.0.1": true, "192.168.1.1": true, "100.64.0.1": true, "[fd00::1]": true, "[fe80::1]": true, "127.0.0.1:" + v4.port(): true}
 	for _, h := range hosts {
 		fSet(t, b, "providers.github.api_url", `"https://`+h+`"`)
 		out, errOut, _ := b.run(nil, "providers", "test", "github", "--json")
 		if strings.Contains(out+errOut, fakeSecret) {
 			t.Errorf("host %s: the token is in the output", h)
+		}
+		if refused[h] && !strings.Contains(out+errOut, "ssrf.private") { // no canary listens there: only the refusal itself shows the guard fired
+			t.Errorf("host %s: the probe was not refused as ssrf.private: %s%s", h, out, errOut)
 		}
 	}
 	// positive control: with the operator opt-in the same canary is reached, so the zero above is the guard
@@ -83,6 +87,7 @@ func TestF09CredentialNeverPrinted(t *testing.T) {
 	fSet(t, b, "providers.github.token_env", `"`+fTokenVar+`"`)
 	fSet(t, b, "providers.gitlab.token_env", `"NSELF_REDTEAM_GL"`)
 	fSet(t, b, "providers.gitlab.runner_token_env", `"NSELF_REDTEAM_GLR"`)
+	fSet(t, b, "providers.github.webhook_secrets", `{"o/r":"NSELF_REDTEAM_WH"}`) // the webhook secret variable is read by the doctor: its value must not be echoed
 	var all strings.Builder
 	grab := func(args ...string) {
 		out, errOut, _ := b.run(nil, args...)

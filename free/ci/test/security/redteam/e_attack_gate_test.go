@@ -12,6 +12,7 @@ package redteam
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -111,6 +112,27 @@ func TestE21RebindIsCompareAndSwap(t *testing.T) {
 	}
 	if _, err := r.st.TokenRebind(ctx, "j", "aa", "s1", "", ""); err == nil {
 		t.Error("a rebind to an empty serial and session was accepted")
+	}
+	if _, created, err := r.st.TokenBind(ctx, store.TokenBinding{JTI: "k", Serial: "aa", Session: "s1", NodeID: "n-1", Exp: time.Now().Add(time.Minute).Unix()}); err != nil || !created {
+		t.Fatalf("bind k: %v %v", created, err)
+	}
+	if err := r.st.TokenSpend(ctx, "k"); err != nil {
+		t.Fatal(err)
+	}
+	if moved, err := r.st.TokenRebind(ctx, "k", "aa", "s1", "bb", "s2"); moved || err != nil {
+		t.Errorf("a spent token was rebound: moved=%v err=%v", moved, err)
+	}
+	if got, _, _ := r.st.TokenCheck(ctx, "k"); got.Serial != "aa" || got.Session != "s1" || !got.Spent {
+		t.Errorf("the spent row changed: %+v", got)
+	}
+	// a plain frame from the right session but another certificate is refused as a wrong certificate, not as a session mix-up
+	lease, att, ep := r.seedLease("9", "n-1")
+	tok := r.mint("jti-9", "n-1", att, ep)
+	if err := r.gate.Check(ctx, eCall(lease, ep, "n-1", "aa09", "s1", tok, false)); err != nil {
+		t.Fatalf("control: %v", err)
+	}
+	if err := r.gate.Check(ctx, eCall(lease, ep, "n-1", "bb09", "s1", tok, false)); err == nil || !strings.Contains(err.Error(), "another certificate") {
+		t.Errorf("a new certificate on a plain frame was not refused as a wrong certificate: %v", err)
 	}
 	if err := r.st.TokenSpend(ctx, "ghost"); err != nil {
 		t.Fatal(err)
