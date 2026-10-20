@@ -256,3 +256,15 @@ func runVersion(ctx context.Context, bin string) (string, error) {
 	}
 	return v, nil
 }
+
+func TestReleaseSourceFollowsTheStorageRedirectOfARelease(t *testing.T) {
+	rel := newReleaseVia(t, "1.5.0", 1, 2, true)
+	p, err := rel.source().Prepare(context.Background(), hostPlatform)
+	if err != nil {
+		t.Fatalf("a release served through a redirect (GitHub) must verify: %v", err)
+	}
+	defer p.Cleanup()
+	if p.Manifest.Version != "1.5.0" || p.Manifest.ProtocolMax != 2 {
+		t.Fatalf("manifest %+v", p.Manifest)
+	}
+}

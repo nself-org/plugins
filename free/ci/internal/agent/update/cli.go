@@ -17,8 +17,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
@@ -100,7 +103,8 @@ func Run(args []string, env Env, out, errOut io.Writer) int {
 	req := Request{Version: version, AllowDowngrade: get("allow-downgrade").String() == "true"}
 	req.DrainWait, _ = time.ParseDuration(get("drain-wait").String())
 	req.HelloWait, _ = time.ParseDuration(get("hello-wait").String())
-	ctx, cancel := context.WithCancel(context.Background())
+	// Ctrl-C, SIGTERM and SIGHUP cancel the run; the engine then rolls back or puts the node back on a context that survives it.
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
 	d, closeFn, err := env.Lifecycle.Open(ctx, "")
 	if err != nil {

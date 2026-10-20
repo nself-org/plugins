@@ -53,6 +53,9 @@ type fakeNode struct {
 	restoreErr      error
 	oldHelloErr     error
 	versionErr      error
+	coordErr        error
+	drainErr        error
+	busyErr         error
 	noDowngrade     bool
 	calls           []string
 }
@@ -71,10 +74,13 @@ func (n *fakeNode) Version(context.Context) (string, error) {
 	return n.version, nil
 }
 func (n *fakeNode) Coordinators(context.Context) ([]session.CoordinatorRecord, error) {
-	return n.recs, nil
+	return n.recs, n.coordErr
 }
 func (n *fakeNode) Drain(context.Context) (func(context.Context) error, error) {
 	n.rec("drain")
+	if n.drainErr != nil {
+		return nil, n.drainErr
+	}
 	if !n.online {
 		return nil, nil
 	}
@@ -82,6 +88,9 @@ func (n *fakeNode) Drain(context.Context) (func(context.Context) error, error) {
 }
 func (n *fakeNode) Busy(context.Context) (int, error) {
 	n.rec("busy")
+	if n.busyErr != nil {
+		return 0, n.busyErr
+	}
 	if len(n.busy) == 0 {
 		return 0, nil
 	}
@@ -343,5 +352,34 @@ func TestEngineFailureRowsHoldTheCodeOnly(t *testing.T) {
 	e := Engine{Source: fakeSource{err: errors.New("E665: remote command on admin@secret-host failed")}, Audit: a}
 	if _, err := e.Run(context.Background(), n, Request{Version: "1.5.0"}); err == nil || strings.Join(a.steps, ",") != StepFailed || strings.Contains(strings.Join(a.details, ";"), "secret-host") {
 		t.Fatalf("err %v audit %v %v", err, a.steps, a.details)
+	}
+}
+
+func TestEngineEveryFailureLeavesAFailedRow(t *testing.T) {
+	cases := map[string]func(*fakeNode){
+		"coordinators": func(n *fakeNode) { n.coordErr = errors.New("E656: unreadable") },
+		"drain":        func(n *fakeNode) { n.drainErr = errors.New("E657: revoked") },
+		"busy":         func(n *fakeNode) { n.busyErr = errors.New("E656: slots unreadable") },
+	}
+	for name, set := range cases {
+		t.Run(name, func(t *testing.T) {
+			n, a := newFake("1.4.0", "1.5.0"), &recAudit{}
+			set(n)
+			if _, err := run(n, a, Request{}, manifest("1.5.0", 1, 1)); err == nil || !strings.Contains(strings.Join(a.steps, ","), StepFailed) {
+				t.Fatalf("err %v audit %v", err, a.steps)
+			}
+		})
+	}
+}
+
+func TestEngineCancelledWaitIsAuditedAndTheNodeIsPutBack(t *testing.T) {
+	n, a := newFake("1.4.0", "1.5.0"), &recAudit{}
+	n.busy = []int{1}
+	ctx, cancel := context.WithCancel(context.Background())
+	e := Engine{Source: fakeSource{m: manifest("1.5.0", 1, 1)}, Audit: a}
+	go func() { time.Sleep(30 * time.Millisecond); cancel() }()
+	_, err := e.Run(ctx, n, Request{Version: "1.5.0", Poll: 5 * time.Millisecond, DrainWait: time.Minute})
+	if err == nil || !strings.Contains(strings.Join(a.steps, ","), StepFailed) || n.calls[len(n.calls)-1] != "enable" {
+		t.Fatalf("err %v audit %v calls %v", err, a.steps, n.calls)
 	}
 }

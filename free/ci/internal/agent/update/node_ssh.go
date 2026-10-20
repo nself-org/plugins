@@ -11,6 +11,8 @@ package update
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -38,8 +40,8 @@ type SSHNode struct {
 	// DrainFn and ProbeFn are the lifecycle commands for this node.
 	DrainFn func(ctx context.Context) (undo func(context.Context) error, err error)
 	ProbeFn func(ctx context.Context) error
-	// HelloPoll is the pause between version checks while waiting for hello.
-	HelloPoll time.Duration
+	// HelloPoll is the pause between version checks while waiting for hello; SettleWait bounds the wait for a cut-off install script.
+	HelloPoll, SettleWait time.Duration
 
 	// from is the version seen first; Restore puts back a .prev only when the marker next to it names this version.
 	from string
@@ -112,7 +114,10 @@ func (n *SSHNode) Install(ctx context.Context, in InstallInput) error {
 	if in.Staged == "" || in.SHA256 == "" {
 		return fmt.Errorf("E656: no verified binary to install on %s", n.NodeID)
 	}
-	staged := agentBin + NewSuffix
+	// A name of its own per run: two coordinators upgrading one node never share a staged file.
+	var nonce [6]byte
+	_, _ = rand.Read(nonce[:])
+	staged := agentBin + NewSuffix + "-" + hex.EncodeToString(nonce[:])
 	if err := n.Copy(ctx, n.Target, in.Staged, staged); err != nil {
 		return fmt.Errorf("E656: cannot copy the agent to %s: %w", n.NodeID, err)
 	}
@@ -123,27 +128,50 @@ chmod 700 "$f"
 if command -v sha256sum >/dev/null 2>&1; then got=$(sha256sum "$f"); else got=$(shasum -a 256 "$f"); fi
 [ "${got%% *}" = "$want" ] || { rm -f "$f"; echo "checksum mismatch" >&2; exit 3; }
 out=$("$f" version) || { rm -f "$f"; exit 4; }
-last=$(printf '%s\n' "$out" | tail -n 1)
+last=$(printf '%s' "$out" | tail -n 1)
 case "$last" in "nself-ci-agent $ver "*|"nself-ci-agent $ver") ;; *) rm -f "$f"; echo "version mismatch" >&2; exit 5;; esac
 if [ -e "$bin" ]; then
   used=$("$bin" slots | tail -n 1 | awk '{print $4}')
   [ "$used" = 0 ] || { rm -f "$f"; echo BUSY; exit 0; }
 fi
 chmod 755 "$f"
-if [ -e "$bin" ]; then rm -f "$bin.prev" "$bin.prev.version"; ln "$bin" "$bin.prev" 2>/dev/null || cp -p "$bin" "$bin.prev"; printf '%s\n' "$from" > "$bin.prev.version"; fi
+if [ -e "$bin" ]; then rm -f "$bin.prev" "$bin.prev.version"; ln "$bin" "$bin.prev" 2>/dev/null || cp -p "$bin" "$bin.prev"; echo "$from" > "$bin.prev.version"; fi
 mv -f "$f" "$bin"
 echo SWAPPED`
 	out, err := n.Run(ctx, n.Target, "sh", "-c", script, "sh", staged, in.SHA256, in.Version, agentBin, n.from)
 	if err != nil {
+		// A dropped or killed ssh does not stop the remote script (no tty): let it finish before anyone looks at the node.
+		n.settle(staged)
 		return fmt.Errorf("E656: the new agent was not installed on %s: %w", n.NodeID, err)
 	}
-	if strings.Contains(out, "BUSY") {
+	switch lastLine(out) { // the markers are the last line, so a login banner cannot fake one
+	case "BUSY":
 		return refuse(ReasonRunningJob, "a job started on %s during the copy; nothing was installed", n.NodeID)
+	case "SWAPPED":
+		return nil
 	}
-	if !strings.Contains(out, "SWAPPED") {
-		return fmt.Errorf("E656: the install on %s did not report a finished swap", n.NodeID)
+	return fmt.Errorf("E656: the install on %s did not report a finished swap", n.NodeID)
+}
+
+// settle waits (bounded, on a context that outlives a cancelled run) until the staged file is gone: the install script removes it as
+// its last act, whether it swapped or gave up. A partial copy that no script ever picked up stays and is simply left.
+func (n *SSHNode) settle(staged string) {
+	wait := n.SettleWait
+	if wait <= 0 {
+		wait = 30 * time.Second
 	}
-	return nil
+	poll := n.HelloPoll
+	if poll <= 0 {
+		poll = time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), wait+10*time.Second)
+	defer cancel()
+	for end := time.Now().Add(wait); time.Now().Before(end); time.Sleep(poll) {
+		out, err := n.Run(ctx, n.Target, "sh", "-c", `[ ! -e "$1" ] && echo GONE`, "sh", staged)
+		if err == nil && lastLine(out) == "GONE" {
+			return
+		}
+	}
 }
 
 // Restart is nothing for the ssh carrier: no daemon runs, the next session starts the installed binary.
@@ -179,15 +207,15 @@ func (n *SSHNode) Restore(ctx context.Context) error {
 		return fmt.Errorf("E656: %s has no recorded previous version", n.NodeID)
 	}
 	script := `[ "$(cat "$1.prev.version" 2>/dev/null)" = "$2" ] || { echo NOPREV; exit 0; }
-mv -f "$1.prev" "$1"; rm -f "$1.prev.version"; echo RESTORED`
+mv -f "$1.prev" "$1" && rm -f "$1.prev.version" && echo RESTORED`
 	out, err := n.Run(ctx, n.Target, "sh", "-c", script, "sh", agentBin, n.from)
 	if err != nil {
 		return fmt.Errorf("E656: cannot restore the previous agent on %s: %w", n.NodeID, err)
 	}
-	switch {
-	case strings.Contains(out, "RESTORED"):
+	switch lastLine(out) {
+	case "RESTORED":
 		return nil
-	case strings.Contains(out, "NOPREV"):
+	case "NOPREV":
 		return nil // the swap never happened: the installed agent already is the previous one
 	}
 	return fmt.Errorf("E656: the restore on %s did not report a result", n.NodeID)

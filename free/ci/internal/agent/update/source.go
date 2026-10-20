@@ -77,7 +77,7 @@ func (r *recorder) RoundTrip(req *http.Request) (*http.Response, error) {
 		next = http.DefaultTransport
 	}
 	resp, err := next.RoundTrip(req)
-	if err != nil || resp.StatusCode != http.StatusOK || !strings.HasSuffix(req.URL.Path, ".manifest.json") {
+	if err != nil || resp.StatusCode != http.StatusOK || !fromManifestRequest(req) {
 		return resp, err
 	}
 	b, rerr := io.ReadAll(io.LimitReader(resp.Body, verify.MaxManifestBytes+1))
@@ -90,4 +90,19 @@ func (r *recorder) RoundTrip(req *http.Request) (*http.Response, error) {
 	r.mu.Unlock()
 	resp.Body = io.NopCloser(bytes.NewReader(b))
 	return resp, nil
+}
+
+// fromManifestRequest is true when req, or the request that a redirect chain started from, asked for the manifest: GitHub answers a
+// release asset with a 302 to a storage URL whose path no longer names the file.
+func fromManifestRequest(req *http.Request) bool {
+	for r := req; r != nil; {
+		if strings.HasSuffix(r.URL.Path, ".manifest.json") {
+			return true
+		}
+		if r.Response == nil {
+			return false
+		}
+		r = r.Response.Request
+	}
+	return false
 }

@@ -122,14 +122,14 @@ func (e *Engine) Run(ctx context.Context, n Node, rq Request) (res Result, err e
 	}
 	recs, err := n.Coordinators(ctx)
 	if err != nil {
-		return res, err
+		return res, e.fail(ctx, n, err)
 	}
 	if cerr := CheckCeiling(recs, prep.Manifest); cerr != nil {
 		return res, e.refuse(ctx, n, cerr)
 	}
 	undo, err := n.Drain(ctx)
 	if err != nil {
-		return res, err
+		return res, e.fail(ctx, n, err)
 	}
 	if err = e.step(ctx, StepDrain, n, "restore=%t", undo != nil); err != nil {
 		return res, e.reenable(ctx, n, undo, err)
@@ -157,7 +157,7 @@ func (e *Engine) Run(ctx context.Context, n Node, rq Request) (res Result, err e
 	}
 	if undo != nil {
 		if err = undo(ctx); err != nil {
-			return res, err
+			return res, e.fail(ctx, n, err)
 		}
 		err = e.step(ctx, StepEnable, n, "version=%s", rq.Version)
 	}
@@ -195,7 +195,7 @@ func (e *Engine) waitIdle(ctx context.Context, n Node, rq Request) error {
 	for {
 		busy, err := n.Busy(ctx)
 		if err != nil {
-			return err
+			return e.fail(ctx, n, err)
 		}
 		if busy == 0 {
 			return e.step(ctx, StepWait, n, "idle")
@@ -205,7 +205,7 @@ func (e *Engine) waitIdle(ctx context.Context, n Node, rq Request) error {
 		}
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return e.fail(context.WithoutCancel(ctx), n, ctx.Err())
 		case <-time.After(poll):
 		}
 	}

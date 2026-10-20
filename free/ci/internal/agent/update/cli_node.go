@@ -18,8 +18,11 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/nodes/lifecycle"
 )
 
+// DrainReason is the registry reason of a node that `nodes upgrade` drained.
+const DrainReason = "upgrade in progress"
+
 // drainFn drains the node and returns what puts it back as it was: enabled when it was online, its old state and reason when it
-// was in maintenance or offline, nothing when the admin had drained it already.
+// was in maintenance, offline or drained by the admin.
 func drainFn(d *lifecycle.Deps, id string) func(context.Context) (func(context.Context) error, error) {
 	return func(ctx context.Context) (func(context.Context) error, error) {
 		n, err := d.Registry.Get(ctx, id)
@@ -30,16 +33,22 @@ func drainFn(d *lifecycle.Deps, id string) func(context.Context) (func(context.C
 		if _, err = d.Drain(ctx, id); err != nil {
 			return nil, err
 		}
-		switch prev {
-		case "online":
-			return func(ctx context.Context) error { _, err := d.Enable(ctx, id); return err }, nil
-		case "maintenance", "offline":
-			return func(ctx context.Context) error {
-				_, err := d.Registry.SetState(ctx, id, prev, reason, d.Actor)
-				return err
-			}, nil
+		// The reason marks the drain as ours: a run that was cut off (Ctrl-C, a lost session) leaves it, and the next run puts the
+		// node back online instead of mistaking it for the admin's own drain.
+		if _, err = d.Registry.SetState(ctx, id, "draining", DrainReason, d.Actor); err != nil {
+			return nil, err
 		}
-		return nil, nil
+		if prev == "draining" && reason == DrainReason {
+			prev = "online"
+		}
+		if prev == "online" {
+			return func(ctx context.Context) error { _, err := d.Enable(ctx, id); return err }, nil
+		}
+		// maintenance, offline and an admin's own drain go back as they were, with their reason
+		return func(ctx context.Context) error {
+			_, err := d.Registry.SetState(ctx, id, prev, reason, d.Actor)
+			return err
+		}, nil
 	}
 }
 

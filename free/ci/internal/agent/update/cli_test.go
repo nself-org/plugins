@@ -104,3 +104,33 @@ func TestVersionFlagAcceptsALeadingV(t *testing.T) {
 		t.Fatalf("code %d stderr %q", code, errOut.String())
 	}
 }
+
+func TestDrainPutsTheNodeBackAsItWas(t *testing.T) {
+	for name, c := range map[string]struct{ state, reason, wantState, wantReason string }{
+		"online":                      {"online", "", "online", "enabled by admin"},
+		"maintenance":                 {"maintenance", "disk swap", "maintenance", "disk swap"},
+		"admin drain":                 {"draining", "drained by admin", "draining", "drained by admin"},
+		"drain left by a cut-off run": {"draining", DrainReason, "online", "enabled by admin"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			d, ctx := registryDeps(t), context.Background()
+			addNode(t, d, "n1", "ssh")
+			if _, err := d.Registry.SetState(ctx, "n1", c.state, c.reason, "cli:test"); err != nil {
+				t.Fatal(err)
+			}
+			undo, err := drainFn(d, "n1")(ctx)
+			if err != nil || undo == nil {
+				t.Fatalf("undo %v err %v", undo != nil, err)
+			}
+			if n, _ := d.Registry.Get(ctx, "n1"); n.Record.State != "draining" || n.Record.Reason != DrainReason {
+				t.Fatalf("during the upgrade: %s / %s", n.Record.State, n.Record.Reason)
+			}
+			if err = undo(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if n, _ := d.Registry.Get(ctx, "n1"); n.Record.State != c.wantState || n.Record.Reason != c.wantReason {
+				t.Fatalf("after: %s / %s, want %s / %s", n.Record.State, n.Record.Reason, c.wantState, c.wantReason)
+			}
+		})
+	}
+}

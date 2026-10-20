@@ -128,6 +128,12 @@ type release struct {
 
 // newRelease serves stub version v signed with a fresh key, speaking protocol pmin..pmax.
 func newRelease(t testing.TB, v string, pmin, pmax int) *release {
+	return newReleaseVia(t, v, pmin, pmax, false)
+}
+
+// newReleaseVia is newRelease; with redirect every file is answered with a 302 to a storage-like path that no longer names the
+// file (what GitHub does with a release asset).
+func newReleaseVia(t testing.TB, v string, pmin, pmax int, redirect bool) *release {
 	t.Helper()
 	body, err := os.ReadFile(stubBinary(t, v))
 	if err != nil {
@@ -165,7 +171,15 @@ func newRelease(t testing.TB, v string, pmin, pmax int) *release {
 	mj, _ := json.Marshal(m)
 	files := map[string][]byte{"": body, ".manifest.json": mj, verify.SuffixCycloneDX: cdx, verify.SuffixSPDX: spdx, verify.SuffixProvenance: prov}
 	mux := http.NewServeMux()
+	blobs := 0
 	for suffix, b := range files {
+		if redirect {
+			blobs++
+			blob := fmt.Sprintf("/blob/%d-%x", blobs, sha256.Sum256(b))
+			mux.HandleFunc(blob, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(b) })
+			mux.HandleFunc("/"+name+suffix, func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, blob, http.StatusFound) })
+			continue
+		}
 		mux.HandleFunc("/"+name+suffix, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(b) })
 	}
 	srv := httptest.NewServer(mux)
@@ -225,12 +239,20 @@ func (s *sim) version(ctx context.Context) (string, error) {
 	return v, nil
 }
 
-// Run executes argv in the sim home (the remote command line, one argument per element).
+// Run executes argv in the sim home the way remote.RunArgv does: an argument with a backslash is refused, every element is
+// single-quoted, the line goes to a POSIX shell, and stdout and stderr come back together, trimmed.
 func (s *sim) Run(ctx context.Context, _ remote.Target, argv ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	quoted := make([]string, len(argv))
+	for i, a := range argv {
+		if strings.ContainsRune(a, '\\') {
+			return "", fmt.Errorf("remote: argument %d holds a backslash, which is not quoted safely for every remote shell", i)
+		}
+		quoted[i] = remote.ShellQuote(a)
+	}
+	cmd := exec.CommandContext(ctx, "sh", "-c", strings.Join(quoted, " "))
 	cmd.Dir = s.Home
-	out, err := cmd.Output()
-	return string(out), err
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
 }
 
 // Copy puts a local file at remotePath under the sim home.

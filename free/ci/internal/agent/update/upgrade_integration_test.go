@@ -9,6 +9,7 @@ package update
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -366,6 +367,71 @@ func TestUpgradeSSHScript(t *testing.T) {
 		}
 		if st, _ := os.Stat(r.s.bin()); st.Mode().Perm() != 0o755 {
 			t.Fatalf("mode %v", st.Mode().Perm())
+		}
+	})
+}
+
+// bannerRun wraps a node's Run so every answer starts with a login banner that mentions the script's markers.
+func bannerRun(run func(context.Context, remote.Target, ...string) (string, error)) func(context.Context, remote.Target, ...string) (string, error) {
+	return func(ctx context.Context, tg remote.Target, argv ...string) (string, error) {
+		out, err := run(ctx, tg, argv...)
+		return "Welcome. BUSY SWAPPED RESTORED NOPREV\n" + out, err
+	}
+}
+
+func TestUpgradeSSHFailures(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("INTEGRATION=1 runs the sim-node upgrade")
+	}
+	t.Run("a_login_banner_cannot_fake_a_marker", func(t *testing.T) {
+		rel := newRelease(t, "1.5.0", 1, 1)
+		r := newRig(t, "ssh", "1.4.0", rel)
+		n := r.node.Node.(*SSHNode)
+		n.Run = bannerRun(r.s.Run)
+		if _, err := r.run(rel, "1.5.0", nil); err != nil || installed(t, r.s) != "1.5.0" || r.state != "online" {
+			t.Fatalf("err %v version %s state %s", err, installed(t, r.s), r.state)
+		}
+	})
+	t.Run("an_ssh_that_drops_after_the_swap_is_rolled_back", func(t *testing.T) {
+		rel := newRelease(t, "1.5.0", 1, 1)
+		r := newRig(t, "ssh", "1.4.0", rel)
+		n := r.node.Node.(*SSHNode)
+		n.SettleWait = 200 * time.Millisecond
+		n.HelloPoll = 5 * time.Millisecond
+		n.Run = func(ctx context.Context, tg remote.Target, argv ...string) (string, error) {
+			out, err := r.s.Run(ctx, tg, argv...)
+			if err == nil && strings.Contains(out, "SWAPPED") {
+				return "", errors.New("connection reset by peer") // the script finished on the node; the answer never arrived
+			}
+			return out, err
+		}
+		res, err := r.run(rel, "1.5.0", nil)
+		if err == nil || !res.RolledBack || installed(t, r.s) != "1.4.0" || r.state != "online" {
+			t.Fatalf("res %+v err %v version %s state %s", res, err, installed(t, r.s), r.state)
+		}
+	})
+	t.Run("a_restore_that_cannot_move_the_file_is_an_error", func(t *testing.T) {
+		r := newRig(t, "ssh", "1.4.0")
+		n := r.node.Node.(*SSHNode)
+		if _, err := n.Version(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		r.s.flag("bin/nself-ci-agent"+PrevVersionSuffix, "1.4.0\n") // a marker for this version, but no .prev file
+		if err := n.Restore(context.Background()); err == nil {
+			t.Fatal("Restore reported success although mv failed")
+		}
+	})
+	t.Run("a_half_copied_staged_file_never_replaces_the_agent", func(t *testing.T) {
+		rel := newRelease(t, "1.5.0", 1, 1)
+		r := newRig(t, "ssh", "1.4.0", rel)
+		n := r.node.Node.(*SSHNode)
+		n.Copy = func(ctx context.Context, tg remote.Target, local, remotePath string) error {
+			b, _ := os.ReadFile(local)
+			return os.WriteFile(filepath.Join(r.s.Home, remotePath), b[:len(b)/2], 0o600) // cut off
+		}
+		_, err := r.run(rel, "1.5.0", nil)
+		if err == nil || installed(t, r.s) != "1.4.0" || r.state != "online" {
+			t.Fatalf("err %v version %s state %s", err, installed(t, r.s), r.state)
 		}
 	})
 }

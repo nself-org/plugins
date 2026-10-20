@@ -125,3 +125,10 @@ func TestSwapKeepsTheModeOfTheFileItReplacesAndDropsAStaleMarker(t *testing.T) {
 		t.Fatalf("first install mode %v", st.Mode().Perm())
 	}
 }
+
+func TestCeilingRefusesADamagedCoordinatorRecord(t *testing.T) {
+	recs := []session.CoordinatorRecord{{Coordinator: session.Coordinator{ID: "c1"}, ProtocolMin: 1, ProtocolMax: 1, MinAgentVersion: "not-a-version"}}
+	if ReasonOf(CheckCeiling(recs, manifest("1.5.0", 1, 1))) != ReasonCeiling || ReasonOf(CheckMinAgent(recs, "1.5.0")) != ReasonCeiling {
+		t.Fatal("a record whose min_agent_version cannot be read must refuse, not skip the check")
+	}
+}
