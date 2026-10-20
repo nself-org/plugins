@@ -127,11 +127,15 @@ func TestEconomicsConcurrentSubmissionsNeverExceedTheBudget(t *testing.T) {
 			t.Fatal(err)
 		}
 		var sum int64
+		rows := 0
 		for _, id := range ids {
 			if row, found, _ := st.LedgerAttempt(ctxT(t), id); found && row.EstMicro > 0 {
 				sum += row.EstMicro
-
+				rows++
 			}
+		}
+		if rows != admitted { // every admitted attempt holds exactly one reservation row
+			t.Fatalf("seed %d round %d: %d ledger rows for %d admitted attempts", seed, round, rows, admitted)
 		}
 		if held > budget || sum != held || admitted == 0 || refused == 0 || len(unexpected) > 0 || admitted+refused != attempts {
 			t.Fatalf("seed %d round %d (%s budget %d): reserved %d, ledger estimates %d, admitted %d, refused %d, other %v",

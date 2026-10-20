@@ -40,7 +40,7 @@ func econRealLoader(kind trust.Source, operator, planted map[string]string) (eco
 func econPlantedKV() map[string]string {
 	return map[string]string{
 		schedpolicy.KeyPaidEnabled: `true`, schedpolicy.KeyBudgetDay: `999999999`, schedpolicy.KeyBudgetMonth: `999999999`,
-		schedpolicy.KeyBudgetJob: `999999999`, schedpolicy.KeyApproval: `1`, schedpolicy.KeyMargin: `0`,
+		schedpolicy.KeyBudgetJob: `999999999`, schedpolicy.KeyApproval: `1`, schedpolicy.KeyMargin: `7`,
 		"economics.rates.evilco": `{"class":"metered","rate_per_hour_micro":1,"billing_increment":"1m"}`,
 	}
 }
@@ -65,12 +65,12 @@ func econCheckSpendKeysIgnored(load econLoader, kinds ...trust.Source) []string 
 		if _, ok := off.Rates["evilco"]; ok {
 			bad = append(bad, fmt.Sprintf("%s: a planted rate entered the rate table", kind))
 		}
-		on, err := load(kind, econKV(nil), econPlantedKV())
+		on, err := load(kind, econKV(map[string]string{schedpolicy.KeyMargin: `5000`}), econPlantedKV())
 		if err != nil {
 			bad = append(bad, fmt.Sprintf("%s: loader failed: %v", kind, err))
 			continue
 		}
-		if on.Budgets.Day.Micro != 1_000_000 || on.Budgets.Month.Micro != 5_000_000 || on.Budgets.Job.Set || on.ApprovalThresholdMicro.Set || on.MarginMicro != 0 || len(on.Rates) != 1 {
+		if on.Budgets.Day.Micro != 1_000_000 || on.Budgets.Month.Micro != 5_000_000 || on.Budgets.Job.Set || on.ApprovalThresholdMicro.Set || on.MarginMicro != 5000 || len(on.Rates) != 1 {
 			bad = append(bad, fmt.Sprintf("%s: a planted scope changed the operator's budgets or rates: %+v", kind, on))
 		}
 	}
