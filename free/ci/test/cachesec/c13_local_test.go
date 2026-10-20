@@ -18,17 +18,16 @@ var untrustedPR1 = entries.Facts{Project: "proj", Trust: "untrusted", Protection
 func init() {
 	register("C13-LOC-01", func(t *testing.T) Observed {
 		w := newWorld(t)
-		ns, err := entries.NamespaceOf(untrustedPR1)
-		if err != nil {
-			t.Fatal(err)
+		keyHonest, keyZombie := w.Key(untrustedPR1, "honest"), w.Key(untrustedPR1, "zombie")
+		ns := w.NS(untrustedPR1)
+		fin := w.Attempt("z1", untrustedPR1, []string{keyHonest, keyZombie}, true)
+		// control: the same attempt saves a planned key with the current epoch
+		if err := w.Es.Commit(w.ctx, "z1", fin, ns, w.Manifest(untrustedPR1, keyHonest, "honest bytes")); err != nil {
+			t.Fatalf("control: the honest commit was refused: %v", err)
 		}
-		key, err := entries.Key(entries.KeyInputs{Namespace: ns, SpecID: "go", SpecVersion: "1", Platform: "linux/amd64", Isolation: "container"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		fin := w.Attempt("z1", untrustedPR1, []string{key}, true)
-		m := w.Manifest(untrustedPR1, key, "zombie bytes")
-		err = w.Es.Commit(w.ctx, "z1", fin-1, ns, m) // the zombie holds the epoch before the current lease
+		before := w.EntryBytes()
+		m := w.Manifest(untrustedPR1, keyZombie, "zombie bytes")
+		err := w.Es.Commit(w.ctx, "z1", fin-1, ns, m) // the zombie holds the epoch before the current lease
 		got := refusal(t, err, func(err error) string {
 			var r *entries.Refused
 			if !errors.As(err, &r) {
@@ -37,7 +36,7 @@ func init() {
 			return r.Reason
 		})
 		got.Audit = w.AuditOf("cache.commit.refused")
-		got.Landed = w.EntryBytes()
+		got.Landed = w.EntryBytes() - before
 		return got
 	})
 }

@@ -35,10 +35,11 @@ import (
 
 const (
 	Refused  = "refused"
+	Miss     = "miss"
 	Admitted = "admitted"
 )
 
-// Observed is what one case saw. Outcome is Refused or Admitted; Code is the fabric code ("E711"),
+// Observed is what one case saw. Outcome is Refused, Miss or Admitted; Code is the fabric code ("E711"),
 // Reason its reason key, Audit the audit action recorded for the refusal, Landed the bytes that
 // reached the attacked store.
 type Observed struct {

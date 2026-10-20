@@ -2,11 +2,13 @@
 
 package cachesec
 
-// Purpose: audit "none" marks a refusal that production does not audit yet; the row names its debt id in `gap`. The case must
-// observe NO audit row, so it fails the day production adds one and the row is flipped. TestCacheSecMatrix runs every case of matrix.yaml against its expected outcome and writes
+// Purpose: TestCacheSecMatrix runs every case of matrix.yaml against its expected outcome and writes
 // testdata/results.json (P7-CACHE-11). It fails when a case has no function, a function has no row, a
 // row names no threat-model row, a threat row of the suite's range (TM-12 to TM-18) has no case, a
-// refusal lacks its code, reason key or audit row, or a refusal let bytes land.
+// refusal lacks its code, reason key or audit row, or a refusal let bytes land. Expected outcomes: refused (a coded
+// refusal), miss (a read that returns nothing and carries no fabric code, e.g. a cache lookup of another namespace),
+// admitted (the positive release case). Audit "none" marks a refusal that production does not audit yet: the row
+// names its debt id in `gap`, and the case asserts that no audit row appeared.
 // Inputs:  matrix.yaml; $HQ (the hq checkout) to check the TM ids against architecture/ci-threat-model.md;
 //          INTEGRATION=1 (the remote cases start the fabric sim and fail, never skip, without it).
 // Outputs: testdata/results.json, one row per case: id, threat, carrier, expected, outcome, code, reason,
@@ -110,12 +112,16 @@ func TestMatrixShape(t *testing.T) {
 			if (c.Audit == "none") != (c.Gap != "") || (c.Gap != "" && !gapPattern.MatchString(c.Gap)) {
 				t.Errorf("%s: audit none needs gap: D-nnnn (the debt row), and a gap needs audit none", c.ID)
 			}
+		case Miss:
+			if c.Code != "" || !reasonPattern.MatchString(c.Reason) || (c.Audit == "none") != (c.Gap != "") {
+				t.Errorf("%s: a miss carries a reason key and no code, and audit none only with a gap", c.ID)
+			}
 		case Admitted:
 			if c.Code != "" || c.Reason != "" {
 				t.Errorf("%s: an admitted case carries no code or reason", c.ID)
 			}
 		default:
-			t.Errorf("%s: expected must be %s or %s", c.ID, Refused, Admitted)
+			t.Errorf("%s: expected must be %s, %s or %s", c.ID, Refused, Miss, Admitted)
 		}
 		if registry[c.ID] == nil {
 			t.Errorf("%s: no function registered for this case", c.ID)
@@ -172,6 +178,11 @@ func TestCacheSecMatrix(t *testing.T) {
 			row.Outcome, row.Code, row.Reason, row.Audit, row.Landed = got.Outcome, got.Code, got.Reason, got.Audit, got.Landed
 			if got.Outcome != c.Expected {
 				t.Errorf("outcome %q, expected %q", got.Outcome, c.Expected)
+			}
+			if c.Expected == Miss {
+				if got.Code != "" || got.Reason != c.Reason || got.Audit != c.Audit || got.Landed != 0 {
+					t.Errorf("miss %s/%s audit %q landed %d, expected reason %s audit %q landed 0", got.Code, got.Reason, got.Audit, got.Landed, c.Reason, c.Audit)
+				}
 			}
 			if c.Expected == Refused {
 				if got.Code != c.Code || got.Reason != c.Reason {

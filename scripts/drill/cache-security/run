@@ -27,13 +27,16 @@ check_mapping() {
 	shift
 	[ -r "$model" ] || { echo "cache-security: cannot read the threat model $model" >&2; return 2; }
 	[ "$#" -gt 0 ] || { echo "cache-security: no matrix file" >&2; return 2; }
-	local bad=0 out
+	local bad=0 out f
+	for f in "$@"; do
+		[ -r "$f" ] || { echo "cache-security: cannot read the matrix $f" >&2; return 2; }
+	done
 	# One line per case: "<id> <threat or ->". A new `- id:` item starts a case; its `threat:` line fills it in.
 	out=$(awk '
 		/^  - id:/ { if (id != "") print id, (th == "" ? "-" : th); id = $3; th = ""; next }
 		/^    threat:/ { th = $2 }
 		END { if (id != "") print id, (th == "" ? "-" : th) }
-	' "$@")
+	' "$@") || { echo "cache-security: the matrix could not be parsed" >&2; return 2; }
 	[ -n "$out" ] || { echo "cache-security: the matrix holds no case" >&2; return 1; }
 	local id th
 	while read -r id th; do
@@ -82,6 +85,7 @@ tmp=$(mktemp -d "${TMPDIR:-/tmp}/cache-security.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
 echo "cache-security: running free/ci/test/cachesec" >&2
+rm -f "$suite/testdata/results.json" # the suite rewrites it; a stale committed copy must not pass a run that never wrote one
 if ! (cd "$root/free/ci" && INTEGRATION=1 NSELF_V15=1 CGO_ENABLED=0 go test -mod=vendor -count=1 -v -tags 'cachesec integration' -timeout 60m ./test/cachesec/...) >"$tmp/suite.txt" 2>&1; then
 	tail -n 60 "$tmp/suite.txt" >&2
 	echo "cache-security: the suite failed" >&2
