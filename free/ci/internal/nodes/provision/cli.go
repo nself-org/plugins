@@ -79,7 +79,7 @@ func finish(d Deps, err error) int {
 	if err == nil {
 		return 0
 	}
-	fmt.Fprintf(d.Err, "Error: %v\n", err)
+	_, _ = fmt.Fprintf(d.Err, "Error: %v\n", err)
 	var coder interface{ ExitCode() int }
 	if errors.As(err, &coder) {
 		return coder.ExitCode()
@@ -94,7 +94,7 @@ func parseCommand(fs *flagSet, name string, args []string, d Deps) (done bool, c
 	}
 	if fs.help.on {
 		txt, _ := Help(name)
-		fmt.Fprint(d.Out, txt)
+		_, _ = fmt.Fprint(d.Out, txt)
 		return true, 0
 	}
 	return false, 0
@@ -155,12 +155,12 @@ func RunProvision(args []string, d Deps) int {
 		}
 	}
 	if !jsonOut {
-		fmt.Fprintf(d.Out, "Provisioning %s (%d instance(s))...\n", ex.Label(), opts.Instances)
+		_, _ = fmt.Fprintf(d.Out, "Provisioning %s (%d instance(s))...\n", ex.Label(), opts.Instances)
 	}
 	result, err := Provision(d.Ctx, ex, m, opts)
 	if !jsonOut {
 		for _, step := range result.Steps {
-			fmt.Fprintf(d.Out, "  [%s] %s\n", step.Name, step.Output)
+			_, _ = fmt.Fprintf(d.Out, "  [%s] %s\n", step.Name, step.Output)
 		}
 	}
 	if err != nil {
@@ -183,7 +183,7 @@ func RunProvision(args []string, d Deps) int {
 		}
 		return 0
 	}
-	fmt.Fprintln(d.Out, "Provision complete.")
+	_, _ = fmt.Fprintln(d.Out, "Provision complete.")
 	return 0
 }
 
@@ -233,7 +233,7 @@ func RunVerify(args []string, d Deps) int {
 			return finish(d, err)
 		}
 	} else {
-		fmt.Fprint(d.Out, RenderMatrix(reports))
+		_, _ = fmt.Fprint(d.Out, RenderMatrix(reports))
 	}
 	if FoundProblems(reports) {
 		return 1 // output is already written, as core's silent errs.Exit(1)

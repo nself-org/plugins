@@ -158,10 +158,10 @@ func runApprove(args []string, env approveEnv) int {
 		return adminWriteData(env.adminEnv, "ci runs approve", out)
 	}
 	if !out.RunApproved {
-		fmt.Fprintf(env.Out, "spend approved for %s at %s by %s (the run needs no trust approval)\n", out.Run, out.HeadSHA, out.Approver)
+		_, _ = fmt.Fprintf(env.Out, "spend approved for %s at %s by %s (the run needs no trust approval)\n", out.Run, out.HeadSHA, out.Approver)
 		return 0
 	}
-	fmt.Fprintf(env.Out, "approved %s at %s by %s (config %s)\n", out.Run, out.HeadSHA, out.Approver, out.ConfigDigest)
+	_, _ = fmt.Fprintf(env.Out, "approved %s at %s by %s (config %s)\n", out.Run, out.HeadSHA, out.Approver, out.ConfigDigest)
 	return 0
 }
 

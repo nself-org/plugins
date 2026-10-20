@@ -148,3 +148,46 @@ func TestCheckAddTakesTheDestinationFromTheDraftWhenNoneIsGiven(t *testing.T) {
 		t.Fatalf("%+v %v %+v", res, err, c.DeployHost)
 	}
 }
+
+// D-1219: the check before contact refuses a match unless the override is confirmed; one confirmation and one
+// audit row cover the pre-contact check and the later CheckAdd of the same node.
+func TestCheckPreAddRefusesAMatchBeforeContact(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		dest    string
+		allow   bool
+		confirm Confirmer
+		reason  string
+		audits  int
+	}{
+		{"match without the flag", FixtureHostV4, false, yes, ReasonMatched, 0},
+		{"match with the flag, confirmed", FixtureHostV4, true, yes, "", 1},
+		{"match with the flag, not confirmed", FixtureHostV4, true, func(string, string) (bool, error) { return false, nil }, ReasonNotConfirmed, 0},
+		{"match with the flag, no terminal", FixtureHostV4, true, nil, ReasonNoTTY, 0},
+		{"unlisted host", FixtureOther, false, yes, "", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRig(t)
+			ctx := context.Background()
+			_ = r.g.Seen(ctx, r.rootA)
+			q := AddRequest{NodeID: "box", Dest: "ci@" + tc.dest, Allow: tc.allow, Confirm: tc.confirm}
+			res, _, err := r.g.CheckPreAdd(ctx, q)
+			if got := ReasonOf(err); got != tc.reason || (tc.reason == "") != (err == nil) {
+				t.Fatalf("err %v reason %q, want %q", err, got, tc.reason)
+			}
+			if n := r.auditCount("node.deploy_host.override"); n != tc.audits {
+				t.Fatalf("%d audit rows, want %d", n, tc.audits)
+			}
+			if err != nil || !res.Matched {
+				return
+			}
+			c := draftCapability(t, r, tc.dest)
+			q.Capability, q.Confirmed = c, res.ConfirmKey()
+			asked := false
+			q.Confirm = func(string, string) (bool, error) { asked = true; return true, nil }
+			if _, _, err = r.g.CheckAdd(ctx, q); err != nil || asked || !c.DeployHost.Matched || !c.DeployHost.Override || r.auditCount("node.deploy_host.override") != 1 {
+				t.Fatalf("confirmed CheckAdd: err %v asked %v draft %+v audits %d", err, asked, c.DeployHost, r.auditCount("node.deploy_host.override"))
+			}
+		})
+	}
+}

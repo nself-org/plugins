@@ -88,7 +88,7 @@ func (d *Deps) dropOrphanPin(ctx context.Context, rep RevokeReport, id string, n
 	if lerr != nil {
 		return rep, newErr(CodeNoRoute, "lock", "node %s is busy: %s", id, oneLine(lerr))
 	}
-	defer unlock()
+	defer func() { unlock() }()
 	switch _, gerr := d.Registry.Get(ctx, id); {
 	case gerr == nil:
 		unlock()

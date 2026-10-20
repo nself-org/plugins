@@ -204,3 +204,49 @@ func TestProjectRootAndHelpers(t *testing.T) {
 		t.Fatal(adminActor())
 	}
 }
+
+// D-1219: the pre-contact hook refuses a deploy host before `nodes add` scans or installs anything, and
+// an override confirmed there is not asked for again at the add point.
+func TestPreAddHookRefusesADeployHostBeforeContact(t *testing.T) {
+	stubNself(t)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name   string
+		dest   string
+		allow  bool
+		reason string
+	}{
+		{"deploy host", "ci@" + deployguard.FixtureHostV4, false, deployguard.ReasonMatched},
+		{"deploy host, flag, no terminal", deployguard.FixtureHostV4, true, deployguard.ReasonNoTTY},
+		{"unlisted host", deployguard.FixtureOther, false, ""},
+		{"unlisted host, flag", deployguard.FixtureOther, true, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := lifecycle.HookEvent{Point: lifecycle.PointPreAdd, NodeID: "pre-box", Dest: tc.dest, Flags: addFlagSet(tc.allow)}
+			err := deployHostHook(ctx, lifecycle.PointPreAdd, e)
+			if got := deployguard.ReasonOf(err); got != tc.reason || (tc.reason == "") != (err == nil) {
+				t.Fatalf("err %v reason %q, want %q", err, got, tc.reason)
+			}
+			if _, kept := preConfirmed.LoadAndDelete("pre-box"); kept {
+				t.Fatal("a refused or unmatched pre-add recorded a confirmation")
+			}
+		})
+	}
+	// A confirmation recorded by the pre-contact check is consumed by the add check: no second prompt.
+	// A different match found after contact (here: another kind) is not covered by that confirmation.
+	preConfirmed.Store("pre-box", deployguard.Result{Source: deployguard.SourceInventory, Kind: deployguard.KindFingerprint}.ConfirmKey())
+	cx := draft(t, "pre-box", deployguard.FixtureHostV4)
+	ex := lifecycle.HookEvent{Point: lifecycle.PointAdd, NodeID: "pre-box", Dest: deployguard.FixtureHostV4, Capability: cx, Flags: addFlagSet(true)}
+	if err := deployHostHook(ctx, lifecycle.PointAdd, ex); deployguard.ReasonOf(err) != deployguard.ReasonNoTTY || cx.DeployHost.Override {
+		t.Fatalf("a confirmation of another match was reused: %v %+v", err, cx.DeployHost)
+	}
+	preConfirmed.Store("pre-box", deployguard.Result{Source: deployguard.SourceInventory, Kind: deployguard.KindAddress}.ConfirmKey())
+	c := draft(t, "pre-box", deployguard.FixtureHostV4)
+	e := lifecycle.HookEvent{Point: lifecycle.PointAdd, NodeID: "pre-box", Dest: deployguard.FixtureHostV4, Capability: c, Flags: addFlagSet(true)}
+	if err := deployHostHook(ctx, lifecycle.PointAdd, e); err != nil || !c.DeployHost.Matched || !c.DeployHost.Override {
+		t.Fatalf("add after a pre-add confirmation: %v %+v", err, c.DeployHost)
+	}
+	if _, kept := preConfirmed.Load("pre-box"); kept {
+		t.Fatal("the confirmation was not consumed")
+	}
+}

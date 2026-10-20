@@ -116,7 +116,9 @@ func TestRunWaitingStopsOnCancel(t *testing.T) {
 	rs, spec := waitRun(t, iso)
 	rs.sess.slots.take(slotDir(rs.sess.Home)) // slot 0 is held elsewhere, so the attempt waits on slot 1
 	ctx, cancel := context.WithCancel(context.Background())
-	time.AfterFunc(50*time.Millisecond, cancel)
+	defer cancel()
+	// Cancel once the attempt enters its wait, independently of executor setup time.
+	spec.Output = func([]byte) { cancel() }
 	start := time.Now()
 	res := rs.runWaiting(ctx, spec)
 	if string(res.Attempt.State) != "cancelled" || time.Since(start) > 5*time.Second {
