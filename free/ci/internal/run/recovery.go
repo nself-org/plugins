@@ -101,12 +101,26 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 	for _, a := range lost {
 		d := store.TransitionDetail{Epoch: a.Epoch, FailureClass: "lost", Reason: "coordinator lost"}
 		err = st.Transition(ctx, a.ID, "lost", "retryable", d)
+		if CodeOf(err) == codeStoreRef {
+			err = st.Transition(ctx, a.ID, "lost", "cancelled", store.TransitionDetail{Epoch: a.Epoch, FailureClass: "cancelled", Reason: "coordinator lost"})
+			if err != nil {
+				rep.Errors = append(rep.Errors, err)
+			}
+			continue
+		}
 		var se *store.Error
 		switch {
 		case err == nil:
 			rep.Retryable++
 		case errors.As(err, &se) && (se.Code == "E604" || se.Code == "E609"):
-			if err = st.Transition(ctx, a.ID, "lost", "needs-operator", d); err != nil {
+			if err = st.Transition(ctx, a.ID, "lost", "needs-operator", d); CodeOf(err) == codeStoreRef {
+				err = st.Transition(ctx, a.ID, "lost", "cancelled", store.TransitionDetail{Epoch: a.Epoch, FailureClass: "cancelled", Reason: "coordinator lost"})
+				if err != nil {
+					rep.Errors = append(rep.Errors, err)
+				}
+				continue
+			}
+			if err != nil {
 				rep.Errors = append(rep.Errors, err)
 				continue
 			}
