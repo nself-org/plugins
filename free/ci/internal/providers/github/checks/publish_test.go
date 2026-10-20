@@ -246,7 +246,7 @@ func TestInstallationTokenRefresh(t *testing.T) {
 	p := newPublisher(t, f, func() time.Time { return clock })
 	ctx := context.Background()
 	get := func() string {
-		tok, err := p.Tokens.Token(ctx)
+		tok, err := p.tokens("widgets").Token(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -274,6 +274,11 @@ func TestInstallationTokenRefresh(t *testing.T) {
 			if len(b.Permissions) != 4 || b.Permissions["checks"] != "write" || b.Permissions["statuses"] != "write" || b.Permissions["contents"] != "read" || b.Permissions["metadata"] != "read" {
 				t.Fatalf("permissions: %v", b.Permissions)
 			}
+			var rb struct{ Repositories []string }
+			_ = json.Unmarshal(c.Body, &rb)
+			if len(rb.Repositories) != 1 || rb.Repositories[0] != "widgets" {
+				t.Fatalf("the token must be limited to the one repository: %v", rb.Repositories)
+			}
 			if c.Params["id"] != "777" {
 				t.Fatalf("installation: %v", c.Params)
 			}
@@ -284,9 +289,9 @@ func TestInstallationTokenRefresh(t *testing.T) {
 	f2.expires = "2020-01-01T00:00:00Z"
 	clock = t0
 	p2 := newPublisher(t, f2, func() time.Time { return clock })
-	_, _ = p2.Tokens.Token(ctx)
+	_, _ = p2.tokens("widgets").Token(ctx)
 	clock = t0.Add(defaultLifetime)
-	_, _ = p2.Tokens.Token(ctx)
+	_, _ = p2.tokens("widgets").Token(ctx)
 	if f2.count("POST", "/app/installations/{id}/access_tokens") != 2 {
 		t.Fatal("an already-expired expiry must not be cached as valid")
 	}
@@ -393,5 +398,72 @@ func TestParseKeyForms(t *testing.T) {
 		if _, err := ParseKey([]byte(bad)); err == nil {
 			t.Fatalf("%q must not parse", bad)
 		}
+	}
+}
+
+// TestRetryCompletesMissingAnnotations: a check run that already holds some annotations (an earlier
+// page failed) receives only the rest, and the table text rides on every page.
+func TestRetryCompletesMissingAnnotations(t *testing.T) {
+	var lines []string
+	for i := 1; i <= 120; i++ {
+		lines = append(lines, fmt.Sprintf("pkg/f.go:%d:1: problem %d", i, i))
+	}
+	ev := fixtureEvidence(check("lint", "fail", func(c *model.Check) { c.Excerpt = strings.Join(lines, "\n") }))
+	key, _ := testKey(t)
+	f := newFake(t, key)
+	f.list = "list-existing.json" // run-0001 holds 3 annotations
+	if err := newPublisher(t, f, fixedNow).Detail(context.Background(), request(report.Failure, ev)); err != nil {
+		t.Fatal(err)
+	}
+	total, first := 0, true
+	for _, c := range f.snapshot() {
+		if c.Path != pathUpdate {
+			continue
+		}
+		var b checkBody
+		_ = json.Unmarshal(c.Body, &b)
+		total += len(b.Output.Annotations)
+		if first && (len(b.Output.Annotations) != 50 || b.Output.Annotations[0].Start != 4) {
+			t.Fatalf("the first page must resume after the 3 held annotations: %+v", b.Output.Annotations[:1])
+		}
+		first = false
+		if b.Output.Text == "" {
+			t.Fatal("every page carries the table text")
+		}
+	}
+	if total != 117 {
+		t.Fatalf("sent %d, want 117", total)
+	}
+}
+
+// TestMarkdownInjectionEscaped: check text from a repository cannot make links, images, HTML or mentions.
+func TestMarkdownInjectionEscaped(t *testing.T) {
+	ev := fixtureEvidence(check("x", "fail", func(c *model.Check) {
+		c.ID = "[evil](https://attacker.example)![i](https://attacker.example/p.png)<b>@owner"
+		c.Remediation = "<img src=x> [a](b)"
+	}))
+	out := Table(ev, model.Projection(ev))
+	// the id is shown in a code span (rendered literally); every other cell is escaped
+	if !strings.Contains(out, "| `[evil](https://attacker.example)") || !strings.Contains(out, `\<img src=x\> \[a\](b)`) {
+		t.Fatalf("not escaped:\n%s", out)
+	}
+	sum := cell("allowed failures: [x](https://attacker.example) @owner")
+	if strings.Contains(sum, "[x]") || strings.Contains(sum, " @owner") {
+		t.Fatalf("summary text not escaped: %s", sum)
+	}
+}
+
+// TestTokenPerRepository: a token is pinned to and cached per repository.
+func TestTokenPerRepository(t *testing.T) {
+	key, _ := testKey(t)
+	f := newFake(t, key)
+	p := newPublisher(t, f, fixedNow)
+	for _, repo := range []string{"widgets", "gadgets", "widgets"} {
+		if _, err := p.tokens(repo).Token(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := f.count("POST", "/app/installations/{id}/access_tokens"); n != 2 {
+		t.Fatalf("exchanges %d, want 2 (one per repository)", n)
 	}
 }

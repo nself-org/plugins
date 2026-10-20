@@ -7,6 +7,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
+	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
 func TestKeysRegistered(t *testing.T) {
@@ -116,5 +117,44 @@ func TestTableTruncates(t *testing.T) {
 	out := Table(ev, model.Projection(ev))
 	if len(out) > MaxText || !strings.Contains(out, "more checks are not shown") {
 		t.Fatalf("len %d", len(out))
+	}
+}
+
+func opScope(kind policy.Source, kv map[string]string) trust.Scope {
+	vals := map[string]json.RawMessage{}
+	for k, v := range kv {
+		vals[k] = json.RawMessage(v)
+	}
+	return trust.Scope{Kind: kind, Values: vals}
+}
+
+// TestConfigFromOperatorPolicy: the three keys set at operator scope reach ConfigFrom; the same keys
+// set by a repository (revision, project, protected branch) are ignored with E671 and change nothing.
+func TestConfigFromOperatorPolicy(t *testing.T) {
+	reg, err := trust.NewRegistry(Keys()...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := map[string]string{KeyAppID: `12345`, KeyInstallationID: `"777"`, KeyKeyEnv: `"NSELF_CI_APP_KEY"`}
+	eff, _, err := reg.Merge("", opScope(policy.SourceUser, set))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ConfigFrom(&eff)
+	if err != nil || got != (Config{AppID: "12345", InstallationID: "777", KeyEnv: "NSELF_CI_APP_KEY"}) || !got.Enabled() {
+		t.Fatalf("operator scope: %+v %v", got, err)
+	}
+	for _, kind := range []policy.Source{policy.SourceProtectedBranch, policy.SourceRevision, policy.SourceRun} {
+		eff, _, err := reg.Merge("", opScope(kind, set))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := ConfigFrom(&eff)
+		if err != nil || got.Enabled() || got.Partial() {
+			t.Fatalf("%v scope must change nothing: %+v %v", kind, got, err)
+		}
+		if len(eff.Ignored()) != 3 {
+			t.Fatalf("%v: ignored %+v", kind, eff.Ignored())
+		}
 	}
 }

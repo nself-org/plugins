@@ -39,6 +39,7 @@ type ClientFactory func(auth rest.AuthFunc) (API, error)
 // TokenSource caches one installation token.
 type TokenSource struct {
 	AppID, InstallationID string
+	Repo                  string // the repository the token is limited to ("" = every repository of the installation)
 	Key                   *rsa.PrivateKey
 	Client                ClientFactory
 	Now                   func() time.Time
@@ -79,14 +80,18 @@ func (t *TokenSource) Token(ctx context.Context) (string, error) {
 	}
 	registerValue(t.Red, []byte(jwt))
 	jwtAuth := func(context.Context) (string, error) { return jwt, nil }
+	req := map[string]any{"permissions": permissions}
+	if t.Repo != "" { // least privilege: the token works on the one repository being published
+		req["repositories"] = []string{t.Repo}
+	}
 	c, err := t.Client(jwtAuth)
 	if err != nil {
 		return "", coded("the App client could not be built")
 	}
 	var reply tokenReply
-	_, err = c.DoQuery(ctx, "POST", "/app/installations/{id}/access_tokens", map[string]string{"id": t.InstallationID}, nil, map[string]any{"permissions": permissions}, &reply)
+	_, err = c.DoQuery(ctx, "POST", "/app/installations/{id}/access_tokens", map[string]string{"id": t.InstallationID}, nil, req, &reply)
 	if err != nil {
-		return "", coded("the installation token was not obtained: " + maskString(t.Red, firstLine(err.Error())))
+		return "", coded("the installation token was not obtained: " + safeText(t.Red, err.Error()))
 	}
 	if reply.Token == "" {
 		return "", coded("the installation token was not obtained: empty answer")

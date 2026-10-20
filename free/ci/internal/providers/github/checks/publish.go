@@ -16,7 +16,9 @@ package checks
 
 import (
 	"context"
+	"crypto/rsa"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -38,10 +40,24 @@ type Request struct {
 
 // Publisher publishes check runs for one App installation.
 type Publisher struct {
-	Tokens *TokenSource
 	Client ClientFactory
 	Now    func() time.Time
 	Red    *redact.Redactor
+
+	app, installation string
+	key               *rsa.PrivateKey
+	mu                sync.Mutex
+	sources           map[string]*TokenSource // one installation token per repository
+}
+
+// tokens returns the token source of repo, which caches its token until 60 s before expiry.
+func (p *Publisher) tokens(repo string) *TokenSource {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.sources[repo] == nil {
+		p.sources[repo] = &TokenSource{AppID: p.app, InstallationID: p.installation, Repo: repo, Key: p.key, Client: p.Client, Now: p.Now, Red: p.Red}
+	}
+	return p.sources[repo]
 }
 
 // New builds a Publisher from the configuration and the PEM. The PEM is parsed once and then
@@ -56,7 +72,7 @@ func New(cfg Config, pem []byte, client ClientFactory, now func() time.Time) (*P
 	if now == nil {
 		now = time.Now
 	}
-	return &Publisher{Tokens: &TokenSource{AppID: cfg.AppID, InstallationID: cfg.InstallationID, Key: key, Client: client, Now: now, Red: red}, Client: client, Now: now, Red: red}, nil
+	return &Publisher{Client: client, Now: now, Red: red, app: cfg.AppID, installation: cfg.InstallationID, key: key, sources: map[string]*TokenSource{}}, nil
 }
 
 type output struct {
@@ -105,10 +121,11 @@ func (p *Publisher) Detail(ctx context.Context, r Request) error {
 		return nil
 	}
 	// the token first: once it is known to the redactor, every text rendered below is masked against it
-	if _, err := p.Tokens.Token(ctx); err != nil {
+	tokens := p.tokens(r.Repo)
+	if _, err := tokens.Token(ctx); err != nil {
 		return err
 	}
-	client, err := p.Client(p.Tokens.Auth())
+	client, err := p.Client(tokens.Auth())
 	if err != nil {
 		return coded("the App client could not be built")
 	}
@@ -116,41 +133,41 @@ func (p *Publisher) Detail(ctx context.Context, r Request) error {
 		if e, ok := err.(*Error); ok {
 			return e
 		}
-		return coded("the check run was not published: " + maskString(p.Red, firstLine(err.Error())))
+		return coded("the check run was not published: " + safeText(p.Red, err.Error()))
 	}
 	return nil
 }
 
 func (p *Publisher) publish(ctx context.Context, c API, r Request, conclusion Conclusion) error {
 	params := map[string]string{"owner": r.Owner, "repo": r.Repo}
-	out := output{Title: Title(r.Projection), Summary: maskString(p.Red, cell(r.Projection.Summary)), Text: maskString(p.Red, Table(r.Evidence, r.Projection))}
-	pages := Pages(annotationsMasked(p.Red, r.Evidence))
+	out := output{Title: maskString(p.Red, Title(r.Projection)), Summary: maskString(p.Red, cell(r.Projection.Summary)), Text: capText(maskString(p.Red, Table(r.Evidence, r.Projection)))}
+	all := annotationsMasked(p.Red, r.Evidence)
 
 	existing, err := p.find(ctx, c, r)
 	if err != nil {
 		return err
 	}
 	body := checkBody{Status: "completed", Conclusion: string(conclusion), CompletedAt: p.Now().UTC().Format(time.RFC3339), Output: &out}
-	if existing == nil || existing.Output.AnnotationsCount == 0 { // a repeat never doubles the annotations
-		if len(pages) > 0 {
-			out.Annotations, pages = pages[0], pages[1:]
-		}
-	} else {
-		pages = nil
+	if existing != nil { // a repeat sends only what the check run does not hold yet, so a failed page is completed on retry and nothing is doubled
+		all = all[min(existing.Output.AnnotationsCount, len(all)):]
+	}
+	pages := Pages(all)
+	if len(pages) > 0 {
+		out.Annotations, pages = pages[0], pages[1:]
 	}
 	var id int64
 	if existing == nil {
 		body.Name, body.HeadSHA, body.ExternalID = CheckName, r.Revision, r.RunID
 		var made checkRun
 		if _, err := c.DoQuery(ctx, "POST", pathCreate, params, nil, body, &made); err != nil {
-			return coded("the check run was not created: " + maskString(p.Red, firstLine(err.Error())))
+			return coded("the check run was not created: " + safeText(p.Red, err.Error()))
 		}
 		id = made.ID
 	} else {
 		id = existing.ID
 		params["id"] = itoa(id)
 		if _, err := c.DoQuery(ctx, "PATCH", pathUpdate, params, nil, body, nil); err != nil {
-			return coded("the check run was not updated: " + maskString(p.Red, firstLine(err.Error())))
+			return coded("the check run was not updated: " + safeText(p.Red, err.Error()))
 		}
 	}
 	if len(pages) > 0 && id == 0 {
@@ -158,9 +175,9 @@ func (p *Publisher) publish(ctx context.Context, c API, r Request, conclusion Co
 	}
 	for i, page := range pages { // later pages: GitHub appends annotations on update
 		params["id"] = itoa(id)
-		more := checkBody{Output: &output{Title: out.Title, Summary: out.Summary, Annotations: page}}
+		more := checkBody{Output: &output{Title: out.Title, Summary: out.Summary, Text: out.Text, Annotations: page}} // text again: an update may replace it
 		if _, err := c.DoQuery(ctx, "PATCH", pathUpdate, params, nil, more, nil); err != nil {
-			return coded("annotation page " + itoa(int64(i+2)) + " was not sent: " + maskString(p.Red, firstLine(err.Error())))
+			return coded("annotation page " + itoa(int64(i+2)) + " was not sent: " + safeText(p.Red, err.Error()))
 		}
 	}
 	return nil
@@ -172,7 +189,7 @@ func (p *Publisher) find(ctx context.Context, c API, r Request) (*checkRun, erro
 	q := url.Values{"check_name": {CheckName}, "filter": {"all"}, "per_page": {"100"}}
 	params := map[string]string{"owner": r.Owner, "repo": r.Repo, "ref": r.Revision}
 	if _, err := c.DoQuery(ctx, "GET", pathList, params, q, nil, &list); err != nil {
-		return nil, coded("existing check runs were not read: " + maskString(p.Red, firstLine(err.Error())))
+		return nil, coded("existing check runs were not read: " + safeText(p.Red, err.Error()))
 	}
 	for i := range list.CheckRuns {
 		if x := list.CheckRuns[i]; x.Name == CheckName && x.ExternalID == r.RunID {
@@ -186,6 +203,8 @@ func annotationsMasked(red *redact.Redactor, ev model.Evidence) []Annotation {
 	a := Annotations(ev)
 	for i := range a {
 		a[i].Message = maskString(red, a[i].Message)
+		a[i].Title = maskString(red, a[i].Title)
+		a[i].Path = maskString(red, a[i].Path)
 	}
 	return a
 }

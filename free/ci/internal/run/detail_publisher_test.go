@@ -8,15 +8,19 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/checks"
 	"github.com/nself-org/plugins/free/ci/internal/providers/rest"
+	"github.com/nself-org/plugins/free/ci/internal/providers/runtime"
 	"github.com/nself-org/plugins/free/ci/internal/report"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 
 	"encoding/pem"
 )
@@ -259,5 +263,30 @@ func TestChecksPublisherCached(t *testing.T) {
 func TestKeyText(t *testing.T) {
 	if keyText("  ") != "" || keyText("a\\nb") != "a\nb" || keyText("a\nb\\nc") != "a\nb\\nc" {
 		t.Fatal("keyText")
+	}
+}
+
+// TestLoadAppSettingsReadsOperatorRows: the production loader finds the three App keys and the API URL
+// stored as operator rows through the real resolver; with no rows it reports no App.
+func TestLoadAppSettingsReadsOperatorRows(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("NSELF_CI_HOME", home)
+	got, err := loadAppSettings(context.Background())
+	if err != nil || got.App.Enabled() || got.App.Partial() {
+		t.Fatalf("empty store: %+v %v", got, err)
+	}
+	st, err := store.Open(filepath.Join(home, "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range map[string]string{checks.KeyAppID: `12345`, checks.KeyInstallationID: `777`, checks.KeyKeyEnv: `"APP_KEY_VAR"`, runtime.KeyGitHubAPIURL: `"https://ghe.example/api/v3"`} {
+		if err = st.ApplyWrite(context.Background(), store.PolicyWrite{Op: store.PolicySet, Scope: "user", Subject: policy.LocalSubject, Key: k, Value: []byte(v), Actor: "test"}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = st.Close()
+	got, err = loadAppSettings(context.Background())
+	if err != nil || got.App != (checks.Config{AppID: "12345", InstallationID: "777", KeyEnv: "APP_KEY_VAR"}) || got.APIURL != "https://ghe.example/api/v3" {
+		t.Fatalf("operator rows: %+v %v", got, err)
 	}
 }

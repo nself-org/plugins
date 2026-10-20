@@ -41,3 +41,6 @@ func truncRunes(s string, n int) string {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+// safeText masks first and cuts second: a secret that straddles the cut must not leave a prefix.
+func safeText(r *redact.Redactor, s string) string { return firstLine(maskString(r, s)) }

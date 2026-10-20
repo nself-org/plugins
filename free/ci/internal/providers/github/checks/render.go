@@ -43,8 +43,9 @@ func cell(s string) string {
 	var b strings.Builder
 	for _, r := range s {
 		switch {
-		case r == '|':
-			b.WriteString(`\|`)
+		case strings.ContainsRune("|[]!<>*_@#&~\\", r):
+			b.WriteByte('\\')
+			b.WriteRune(r)
 		case r == '`':
 			b.WriteByte('\'')
 		case r == '\n' || r == '\r' || r == '\t':
@@ -55,6 +56,21 @@ func cell(s string) string {
 		}
 	}
 	return truncRunes(strings.TrimSpace(b.String()), maxCell)
+}
+
+// code is text for a code span: nothing inside is interpreted, so only the characters that end
+// the span or the table cell are replaced.
+func code(s string) string {
+	s = strings.Map(func(r rune) rune {
+		switch {
+		case r == '`' || r == '|':
+			return '\''
+		case unicode.IsControl(r):
+			return ' '
+		}
+		return r
+	}, s)
+	return truncRunes(strings.TrimSpace(s), maxCell)
 }
 
 func yesNo(b bool) string {
@@ -79,7 +95,7 @@ func Table(ev model.Evidence, proj model.ProjectionResult) string {
 		if c.Flaky != nil {
 			step = strings.TrimSpace(step + " (flaky: " + strconv.Itoa(c.Flaky.Passes) + " pass, " + strconv.Itoa(c.Flaky.Fails) + " fail on identical inputs)")
 		}
-		row := fmt.Sprintf("| `%s` | %s | %s | %s | %d | %s |\n", cell(c.ID), cell(string(c.Result)), yesNo(c.Required), cell(class), c.Findings, cell(step))
+		row := fmt.Sprintf("| `%s` | %s | %s | %s | %d | %s |\n", code(c.ID), cell(string(c.Result)), yesNo(c.Required), cell(class), c.Findings, cell(step))
 		if b.Len()+len(row) > MaxText-200 {
 			notShown = len(ev.Checks) - i
 			break
@@ -153,4 +169,18 @@ func Pages(a []Annotation) [][]Annotation {
 		a = a[n:]
 	}
 	return out
+}
+
+// capText keeps the output text inside GitHub's 65535 bytes after masking (a placeholder can be
+// longer than the value it replaces).
+func capText(s string) string {
+	const limit = 65000
+	if len(s) <= limit {
+		return s
+	}
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "\n\n(output cut)\n"
 }
