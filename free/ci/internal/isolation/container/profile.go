@@ -165,11 +165,15 @@ func (pl *planner) Plan(r exec.ContainerRun) (exec.ContainerCommand, error) {
 	return Build(pl.params(r))
 }
 
-// cleanupScript removes whatever the job UID created under the workspace mount.
+// cleanupScript removes whatever the job UID created under the workspace mount. It runs in CleanupImage, not the
+// job's image, so it works when the job image has no shell.
 const cleanupScript = `chmod -R u+rwX /repo 2>/dev/null; rm -rf -- /repo/* /repo/.[!.]* /repo/..?* 2>/dev/null; true`
 
 func (pl *planner) Cleanup(r exec.ContainerRun) (*exec.ContainerCommand, error) {
 	r.Name += "-clean"
+	if !r.JobImageCleanup {
+		r.Image = CleanupImage
+	}
 	r.Command = []string{"-c", cleanupScript}
 	r.EnvFile, r.Workdir, r.CPU, r.MemoryMB, r.Mounts = "", "/repo", 0.5, 128, nil
 	p := pl.params(r)
