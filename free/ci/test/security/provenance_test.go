@@ -78,9 +78,11 @@ func newGithubRig(t *testing.T) *githubRig {
 	t.Cleanup(srv.Close)
 	now := time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
 	return &githubRig{srv: srv, hits: func() int { return count }, src: &webhook.Source{
-		Now:      func() time.Time { return now },
-		Getenv:   func(k string) string { return map[string]string{"SYNTH_REPO_SECRET": hookSecret}[k] },
-		Secrets:  func(context.Context) (map[string]webhook.RepoSecret, error) { return map[string]webhook.RepoSecret{"o/r": {Env: "SYNTH_REPO_SECRET"}}, nil },
+		Now:    func() time.Time { return now },
+		Getenv: func(k string) string { return map[string]string{"SYNTH_REPO_SECRET": hookSecret}[k] },
+		Secrets: func(context.Context) (map[string]webhook.RepoSecret, error) {
+			return map[string]webhook.RepoSecret{"o/r": {Env: "SYNTH_REPO_SECRET"}}, nil
+		},
 		Insecure: func() bool { return false },
 		NewAPI: func(context.Context) (*rest.Client, error) {
 			return &rest.Client{BaseURL: srv.URL, AllowPrivateBase: true, Provider: webhook.Name, TLSConfig: srv.Client().Transport.(*http.Transport).TLSClientConfig}, nil

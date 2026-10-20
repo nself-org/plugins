@@ -200,10 +200,10 @@ func TestNodeCertRefusedByAdminAPI(t *testing.T) {
 // listenerSink is the transport.Sink behind the node listener: nothing is stored.
 type listenerSink struct{ mu sync.Mutex }
 
-func (*listenerSink) Log(context.Context, protocol.Log) error                { return nil }
-func (*listenerSink) Result(context.Context, protocol.Result) error          { return nil }
+func (*listenerSink) Log(context.Context, protocol.Log) error                 { return nil }
+func (*listenerSink) Result(context.Context, protocol.Result) error           { return nil }
 func (*listenerSink) ArtifactRef(context.Context, protocol.ArtifactRef) error { return nil }
-func (*listenerSink) CacheRef(context.Context, protocol.CacheRef) error      { return nil }
+func (*listenerSink) CacheRef(context.Context, protocol.CacheRef) error       { return nil }
 func (*listenerSink) Blob(context.Context, transport.BlobHeader) (transport.BlobWriter, error) {
 	return nil, fmt.Errorf("unused")
 }
