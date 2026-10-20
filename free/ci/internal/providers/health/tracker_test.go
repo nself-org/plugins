@@ -266,3 +266,29 @@ func TestDownloadOutcomesAreIgnored(t *testing.T) {
 		t.Fatalf("download failures opened the API breaker: %+v", h)
 	}
 }
+
+// TestDescribeProbesOnlyWhenTheWindowOpens: while the provider is down the hosted Describe sends no
+// repository lookup (a world build adds no request to a failing API); once the probe gap has passed
+// the lookup is sent, so a world build is itself the probe and a healthy API closes the breaker.
+func TestDescribeProbesOnlyWhenTheWindowOpens(t *testing.T) {
+	clk := newClock()
+	tr := health.New(health.Options{Clock: clk.Now})
+	api := newFakeAPI(t)
+	s := newStack(t, api, tr)
+	hostedJob := schedJob("probe-job", true)
+	failN(tr, health.DownAfter)
+	before := api.total()
+	s.explain(hostedJob)
+	s.explain(hostedJob)
+	if n := api.total() - before; n != 0 {
+		t.Fatalf("%d requests were sent while the provider was down", n)
+	}
+	clk.advance(health.ProbeAfter + time.Second)
+	s.explain(hostedJob)
+	if n := api.count("GET /repos/o/r"); n != 1 {
+		t.Fatalf("the repository lookup must be sent once the probe gap has passed, saw %d", n)
+	}
+	if h := tr.HealthOf(context.Background(), provID); h.State != "up" {
+		t.Fatalf("a healthy answer to the probe must close the breaker: %+v", h)
+	}
+}
