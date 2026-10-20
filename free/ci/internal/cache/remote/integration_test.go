@@ -39,7 +39,8 @@ type rig struct {
 	now      time.Time
 }
 
-func newRig(t *testing.T) *rig {
+// newRig builds the coordinator side of one lease; mods change the cache plan before it is bound.
+func newRig(t *testing.T, mods ...func(*rig, *protocol.LeaseCache)) *rig {
 	t.Helper()
 	r := &rig{t: t, now: time.Now()}
 	clock := func() time.Time { r.mu.Lock(); defer r.mu.Unlock(); return r.now }
@@ -74,6 +75,9 @@ func newRig(t *testing.T) *rig {
 		t.Fatal(err)
 	}
 	plan := &protocol.LeaseCache{Namespace: base64.RawURLEncoding.EncodeToString(ns.Canonical()), Access: "rw", Save: []protocol.CacheSave{{Spec: "go", Key: strings.Repeat("a", 64), Dirs: []string{"go/mod"}}}}
+	for _, mod := range mods {
+		mod(r, plan)
+	}
 	h := &Handler{Ledger: r.st, Entries: entries.New(r.st, r.blobs, entries.Options{DisableFloor: true}), Blobs: r.blobs, Limits: transfer.Limits{MaxFile: 4 << 20}}
 	r.lease, err = h.Bind(Binding{AttemptID: "a1", LeaseID: "lease-a1", Node: "n-1", Epoch: epoch, Facts: facts, Plan: plan, Fence: func(ctx context.Context) error {
 		err := r.eng.Fence(ctx, "lease-a1", epoch)
@@ -106,10 +110,22 @@ func (r *rig) expire() {
 
 type simSink struct{ r *rig }
 
-func (r *rig) sink() *simSink                                    { s := &simSink{r: r}; r.snk = s; return s }
-func (s *simSink) Log(ctx context.Context, _ protocol.Log) error { return s.r.lease.Declare(ctx) }
+func (r *rig) sink() *simSink { s := &simSink{r: r}; r.snk = s; return s }
+func (s *simSink) declare(ctx context.Context) error {
+	if len(s.r.lease.b.Plan.Save) == 0 { // a restore-only plan has nothing to declare; the attempt still starts running
+		return s.r.lease.b.Ready(ctx)
+	}
+	return s.r.lease.Declare(ctx)
+}
+func (s *simSink) Log(ctx context.Context, _ protocol.Log) error { return s.declare(ctx) }
+func (s *simSink) RestoreBlobs(ctx context.Context) ([]transport.RestoreBlob, error) {
+	return s.r.lease.RestoreBlobs(ctx)
+}
+func (s *simSink) RestoreEvent(ctx context.Context, e transport.RestoreEvent) {
+	s.r.lease.RestoreEvent(ctx, e)
+}
 func (s *simSink) Result(ctx context.Context, res protocol.Result) error {
-	if err := s.r.lease.Declare(ctx); err != nil {
+	if err := s.declare(ctx); err != nil {
 		return err
 	}
 	return s.r.eng.Result(ctx, res.LeaseID, int64(res.Epoch))
@@ -129,15 +145,26 @@ type node struct {
 	data   []byte
 	onSend func()
 	once   sync.Once
+	// tapFn and hooksFn replace the default carrier and job hooks (integration_restore_test.go).
+	tapFn   func(session.Carrier) session.Carrier
+	hooksFn func() []session.JobHook
 }
 
-func (n *node) tap(c session.Carrier) session.Carrier { return c }
+func (n *node) tap(c session.Carrier) session.Carrier {
+	if n.tapFn != nil {
+		return n.tapFn(c)
+	}
+	return c
+}
 func (n *node) runner() session.Runner {
 	return session.RunnerFunc(func(context.Context, session.JobRun) (session.JobResult, error) {
 		return session.JobResult{Outcome: session.Outcome{State: "passed"}, Evidence: []byte(`{"schema":"test","ok":true}`)}, nil
 	})
 }
 func (n *node) hooks() []session.JobHook {
+	if n.hooksFn != nil {
+		return n.hooksFn()
+	}
 	return []session.JobHook{{Name: "cache", After: func(ctx context.Context, l protocol.Lease, _ session.JobRoot, out session.Outcome, up session.Uploader) error {
 		if out.State != "passed" {
 			return nil
@@ -202,9 +229,8 @@ func (r *rig) assertCommit(data []byte) {
 	}
 }
 
-// These exercise actual carrier upload and fenced commit. The subsequent node
-// read-through fetch is an explicit coordinator-store callback: protocol v1
-// currently exposes no coordinator-to-node blob request path.
+// These exercise actual carrier upload and fenced commit. The node restore over
+// the same carriers is covered by integration_restore_test.go.
 func TestRemoteCacheSSH(t *testing.T) {
 	r := newRig(t)
 	data := carrierCacheArchive(t)
