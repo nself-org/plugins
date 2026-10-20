@@ -38,13 +38,24 @@ type Fetcher interface {
 
 // Fetch downloads and re-hashes the release inputs of run into stage.
 func Fetch(ctx context.Context, f Fetcher, run, stage string) (*Snapshot, *cas.Store, error) {
-	if !ValidRunID(run) {
-		return nil, nil, fail(signing.CodeSigning, signing.ReasonPayloadRejected, "run id is not a plain name")
-	}
-	in, err := fetchInputs(ctx, f, run)
+	in, err := FetchInputs(ctx, f, run)
 	if err != nil {
 		return nil, nil, err
 	}
+	return FetchBlobs(ctx, f, in, stage)
+}
+
+// FetchInputs reads and validates the release-inputs document of run (no blob is requested yet, so a
+// caller can refuse a run that is not its own before anything large is downloaded).
+func FetchInputs(ctx context.Context, f Fetcher, run string) (Inputs, error) {
+	if !ValidRunID(run) {
+		return Inputs{}, fail(signing.CodeSigning, signing.ReasonPayloadRejected, "run id is not a plain name")
+	}
+	return fetchInputs(ctx, f, run)
+}
+
+// FetchBlobs downloads every blob the inputs list into a private blob store at stage and re-hashes each.
+func FetchBlobs(ctx context.Context, f Fetcher, in Inputs, stage string) (*Snapshot, *cas.Store, error) {
 	blobs, err := cas.New(stage)
 	if err != nil {
 		return nil, nil, fail(signing.CodeSigning, signing.ReasonSignerFailed, "the staging blob store could not be opened")
@@ -146,7 +157,12 @@ func validate(in Inputs, run string) error {
 		}
 	}
 	var total int64
+	sizeOf := map[string]int64{}
 	for _, r := range in.Records {
+		if prior, dup := sizeOf[r.SHA256]; dup && prior != r.Size {
+			return bad("one digest is listed with two sizes")
+		}
+		sizeOf[r.SHA256] = r.Size
 		if total += r.Size; total > MaxTotalBytes || total < 0 {
 			return bad("the blobs are larger than the operator's limit")
 		}

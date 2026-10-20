@@ -78,6 +78,9 @@ func (h Handlers) BlobHandler() http.Handler {
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusOK)
+		if r.Method == http.MethodHead {
+			return // headers only: the mux answers HEAD on a GET route, and no byte of the blob is read for it
+		}
 		_, _ = io.Copy(w, io.LimitReader(rc, MaxBlobBytes+1)) // the operator re-hashes: a truncated, grown or altered stream fails there
 	})
 }

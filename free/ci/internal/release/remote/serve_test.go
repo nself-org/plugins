@@ -43,7 +43,7 @@ func digestOf(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToStrin
 type fakeStore struct{ recs []records.Record }
 
 func (f *fakeStore) PipelineByID(_ context.Context, id string) (store.PipelineRow, bool, error) {
-	return store.PipelineRow{ID: uRun, Project: uProj, Revision: uRev, InputDigest: "in"}, id == uRun, nil
+	return store.PipelineRow{ID: uRun, Project: uProj, Revision: uRev, InputDigest: "in", Status: "passed"}, id == uRun, nil
 }
 func (f *fakeStore) PipelineJobs(context.Context, string) ([]store.RunJob, error) {
 	return []store.RunJob{{ID: "r", Name: "publish", Kind: "release"}}, nil
@@ -145,6 +145,23 @@ func TestHandlersServeOnlyTheListedReleaseInputs(t *testing.T) {
 		if resp, body := l.get(t, path); resp.StatusCode != http.StatusNotFound || !bytes.Equal(body, want) {
 			t.Errorf("%s: %d %s, want 404 %s", name, resp.StatusCode, body, want)
 		}
+	}
+}
+
+func TestHandlersAnswerHeadWithoutReadingTheBlob(t *testing.T) {
+	l := newLocalAPI(t)
+	req, err := http.NewRequest(http.MethodHead, l.srv.URL+remote.BlobPath(uRun, digestOf(l.app)), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK || len(body) != 0 || resp.Header.Get("Content-Length") != "9" {
+		t.Fatalf("HEAD: %d %q %v", resp.StatusCode, body, resp.Header)
 	}
 }
 

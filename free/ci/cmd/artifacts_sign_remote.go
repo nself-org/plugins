@@ -35,7 +35,7 @@ import (
 func init() {
 	publish.RegisterSignSource("coordinator", func(fs *flag.FlagSet) {
 		fs.String("coordinator", "", "sign a TEAM coordinator's release here, on this machine (https://host[:port]; needs --out)")
-		fs.String("out", "", "fresh empty directory to write the release into (with --coordinator)")
+		fs.String("out", "", "fresh empty directory to write the release into (read only with --coordinator; a local sign ignores it)")
 	}, signRemote)
 }
 

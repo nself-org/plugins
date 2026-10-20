@@ -173,6 +173,10 @@ func TestValidateRefusesMalformedDocuments(t *testing.T) {
 				i.Records[k].Size = 30 << 30
 			}
 		}),
+		"digest with two sizes": mut(func(i *Inputs) {
+			i.Records = append(i.Records, i.Records[0])
+			i.Records[1].Size++
+		}),
 		"unknown kind":         mut(func(i *Inputs) { i.Records[0].Kind = "rootkit" }),
 		"control in platform":  mut(func(i *Inputs) { i.Records[0].Platform = "linux/amd64\x1b[31m" }),
 		"control in image ref": mut(func(i *Inputs) { i.Records[0].Image = &records.ImageInfo{Ref: "reg/app\n:1"} }),

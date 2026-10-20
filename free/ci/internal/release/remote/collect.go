@@ -52,7 +52,25 @@ func (d Deps) resolve(ctx context.Context, run string) (string, error) {
 	if !ok || it.ID != run || it.Project == "" {
 		return "", errNotFound
 	}
+	// A run that has not ended has no release, and its project is only a guess by revision (D-1338): evidence is
+	// recorded a moment before the pipeline is finished, so an unfinished run must never reach a project's holder.
+	pipe, found, err := d.Store.PipelineByID(ctx, run)
+	if err != nil {
+		return "", err
+	}
+	if !found || !pipelineEnded(pipe.Status) {
+		return "", errNotFound
+	}
 	return it.Project, nil
+}
+
+// pipelineEnded mirrors the user API: a run is over once it is no longer queued or running.
+func pipelineEnded(status string) bool {
+	switch status {
+	case "", "queued", "running":
+		return false
+	}
+	return true
 }
 
 func sbomOrRelease(k records.Kind) bool {

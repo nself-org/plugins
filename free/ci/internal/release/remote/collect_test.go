@@ -49,6 +49,8 @@ func (m *memBackend) AttemptCoordinator(context.Context, string) (string, error)
 
 type fixedRuns struct{ id, project string }
 
+func (f fixedRuns) withStore(m *memBackend) Deps { return Deps{Runs: f, Store: m} }
+
 func (f fixedRuns) Get(_ context.Context, ref string) (clientapi.RunItem, bool, error) {
 	if ref != f.id {
 		return clientapi.RunItem{}, false, nil
@@ -68,7 +70,7 @@ func rec(name string, kind records.Kind, attempt, sha string, mod func(*records.
 }
 
 func newMem() *memBackend {
-	return &memBackend{pipe: store.PipelineRow{ID: tRun, Project: tProj, Revision: tRev, InputDigest: "in"},
+	return &memBackend{pipe: store.PipelineRow{ID: tRun, Project: tProj, Revision: tRev, InputDigest: "in", Status: "passed"},
 		jobs:     []store.RunJob{{ID: "t", Name: "test", Kind: "test"}, {ID: "r", Name: "publish", Kind: "release"}},
 		attempts: []store.AttemptView{{ID: "t.a1", JobID: "t", N: 1, State: "passed"}, {ID: "r.a1", JobID: "r", N: 1, State: "failed"}, {ID: "r.a2", JobID: "r", N: 2, State: "passed"}},
 		evidence: []store.EvidenceView{{ID: "job-ev", PipelineID: tRun, AttemptID: "r.a2", Body: []byte(`{"job":true}`)}, {ID: "run-ev", PipelineID: tRun, Body: []byte(`{"run":true}`)}}}
@@ -146,11 +148,14 @@ func TestCollectRefusesUnknownRunMissingEvidenceAndHugeLists(t *testing.T) {
 }
 
 func TestResolveUsesTheRunsOwnProject(t *testing.T) {
-	d := Deps{Runs: fixedRuns{id: tRun, project: "acme/app"}}
+	d := fixedRuns{id: tRun, project: "acme/app"}.withStore(newMem())
 	if p, err := d.resolve(context.Background(), tRun); err != nil || p != "acme/app" {
 		t.Fatalf("%q %v", p, err)
 	}
-	for _, d := range []Deps{{Runs: fixedRuns{id: tRun, project: ""}}, {Runs: fixedRuns{id: "other", project: "acme/app"}}} {
+	running := newMem()
+	running.pipe.Status = "running" // evidence is recorded a moment before the run ends: no release yet, and the project is a guess (D-1338)
+	for _, d := range []Deps{fixedRuns{id: tRun, project: ""}.withStore(newMem()), fixedRuns{id: "other", project: "acme/app"}.withStore(newMem()),
+		fixedRuns{id: tRun, project: "acme/app"}.withStore(running)} {
 		if _, err := d.resolve(context.Background(), tRun); err != errNotFound {
 			t.Fatalf("want not found, got %v", err)
 		}

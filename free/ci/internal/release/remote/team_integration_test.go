@@ -383,6 +383,19 @@ func TestTeamSignHidesWhatTheCallerMaySee(t *testing.T) {
 			t.Errorf("%s: status %d body %s, want 404 %s", name, status, body, want)
 		}
 	}
+	// a run that has not ended is "not found" to everyone (its project is only a guess by revision, D-1338)
+	if err = tm.st.FinishPipeline(context.Background(), tm.runID, "running"); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{remote.InputsPath(tm.runID), remote.BlobPath(tm.runID, app)} {
+		if status, body := get(own, path); status != http.StatusNotFound || !bytes.Equal(body, want) {
+			t.Errorf("running run %s: %d %s", path, status, body)
+		}
+	}
+	if err = tm.st.FinishPipeline(context.Background(), tm.runID, "passed"); err != nil {
+		t.Fatal(err)
+	}
+
 	// a path the router itself refuses never reaches the bytes
 	for _, path := range []string{"/v1/runs/..%2f..%2fx/release-inputs", remote.BlobPath(tm.runID, app+"/x")} {
 		if status, body := get(own, path); status == http.StatusOK || bytes.Contains(body, []byte("app-bytes")) {
@@ -406,6 +419,11 @@ func TestTeamSignWrongRepository(t *testing.T) {
 	_, err := remote.Sign(context.Background(), p)
 	if re := asRemote(t, err); re.ErrCode != signing.CodeSigning || !strings.Contains(re.Msg, "belongs to repository") {
 		t.Fatalf("want a repository refusal, got %v", err)
+	}
+	for _, r := range s.rec.requests {
+		if strings.Contains(r, "release-blobs") {
+			t.Fatalf("a foreign repository downloaded a blob before it was refused: %s", r)
+		}
 	}
 	if exists(out) || tm.opRes.calls.Load() != 0 {
 		t.Fatalf("a foreign repository reached the key (out %v, resolutions %d)", exists(out), tm.opRes.calls.Load())

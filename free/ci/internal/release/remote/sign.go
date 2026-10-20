@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -35,6 +36,9 @@ const (
 	workPrefix = ".team-sign-"
 	staleAfter = 6 * time.Hour
 )
+
+// heartbeat is how often a running sign touches its work directory (a variable so a test can speed it up).
+var heartbeat = 5 * time.Minute
 
 // Params are the inputs of Sign.
 type Params struct {
@@ -73,11 +77,17 @@ func Sign(ctx context.Context, p Params) (publish.Release, error) {
 	if err = copyTrust(p.OperatorHome, home); err != nil {
 		return publish.Release{}, fail(signing.CodeSigning, signing.ReasonSignerFailed, "the operator's trust files could not be read")
 	}
-	snap, blobs, err := Fetch(ctx, p.Fetcher, p.Run, filepath.Join(home, "blobs"))
+	stop := keepAlive(home)
+	defer stop()
+	in, err := FetchInputs(ctx, p.Fetcher, p.Run)
 	if err != nil {
 		return publish.Release{}, err
 	}
-	if err = sameRepo(ctx, p, snap); err != nil {
+	if err = sameRepo(ctx, p, in); err != nil { // before any blob is downloaded and before the key is touched
+		return publish.Release{}, err
+	}
+	snap, blobs, err := FetchBlobs(ctx, p.Fetcher, in, filepath.Join(home, "blobs"))
+	if err != nil {
 		return publish.Release{}, err
 	}
 	d := publish.Deps{Src: snap, Blobs: blobs, Ledger: snap, Signer: p.NewSigner(snap, blobs, snap.Inputs().Pipeline.Project), Home: home,
@@ -97,9 +107,9 @@ func Sign(ctx context.Context, p Params) (publish.Release, error) {
 }
 
 // sameRepo refuses to use the key for a run of another repository than the operator's checkout.
-func sameRepo(ctx context.Context, p Params, snap *Snapshot) error {
+func sameRepo(ctx context.Context, p Params, in Inputs) error {
 	var ev model.Evidence
-	if err := jsonUnmarshal(snap.Inputs().Evidence, &ev); err != nil || ev.RepoID == "" {
+	if err := jsonUnmarshal(in.Evidence, &ev); err != nil || ev.RepoID == "" {
 		return fail(signing.CodeSigning, signing.ReasonPayloadRejected, "the stored evidence does not name its repository")
 	}
 	capture := p.Capture
@@ -110,6 +120,28 @@ func sameRepo(ctx context.Context, p Params, snap *Snapshot) error {
 		return fail(signing.CodeSigning, signing.ReasonPayloadRejected, "run %s belongs to repository %s, which is not the checkout at %s: run this command inside that repository (or pass --project)", p.Run, shown(ev.RepoID), p.Root)
 	}
 	return nil
+}
+
+// keepAlive touches dir every few minutes while a sign runs, so the sweep of another sign never takes
+// a long download for an abandoned one. The returned function stops it.
+func keepAlive(dir string) func() {
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		t := time.NewTicker(heartbeat)
+		defer t.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case now := <-t.C:
+				_ = os.Chtimes(dir, now, now)
+			}
+		}
+	}()
+	return func() { close(done); wg.Wait() }
 }
 
 // shown makes text from the coordinator safe to print: control characters out, cut at 80 runes.

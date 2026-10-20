@@ -46,3 +46,34 @@ func TestSweepStaleRemovesOnlyOldWorkDirectories(t *testing.T) {
 		}
 	}
 }
+
+func TestKeepAliveStopsTheSweepOfALiveDownload(t *testing.T) {
+	old := heartbeat
+	heartbeat = 5 * time.Millisecond
+	t.Cleanup(func() { heartbeat = old })
+	home := t.TempDir()
+	dir := filepath.Join(home, workPrefix+"live")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().Add(-10 * time.Hour)
+	if err := os.Chtimes(dir, past, past); err != nil {
+		t.Fatal(err)
+	}
+	stop := keepAlive(dir)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if st, err := os.Stat(dir); err == nil && time.Since(st.ModTime()) < time.Minute {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the work directory was never touched")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	stop()
+	sweepStale(home, time.Now())
+	if _, err := os.Stat(dir); err != nil {
+		t.Fatalf("a live work directory was swept: %v", err)
+	}
+}

@@ -56,6 +56,10 @@ func startReleaseRoutes(ctx context.Context, addr string, c *coordinator.Coordin
 	if ctx.Err() != nil || addr == "off" {
 		return noop, nil
 	}
+	if c.Store() == nil { // a nil *store.Store would pass the interface's nil check and panic per request
+		c.Logf("release routes are off: the coordinator has no store")
+		return noop, nil
+	}
 	home := serveHome()
 	blobs, err := cas.New(records.StoreDir(home))
 	if err != nil {
