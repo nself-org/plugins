@@ -31,25 +31,42 @@ the chain uses the workflow's own `GITHUB_TOKEN` plus scoped repository secrets:
 | Job | Permissions | Secrets | Does |
 |---|---|---|---|
 | `build` | contents read | none | deterministic source and per-platform tarballs (`scripts/deterministic-tar.sh`) |
-| `publish` | contents write, id-token write, attestations write | Cloudflare R2 (R2 step only) | uploads missing tarballs to the Release (never `--clobber`), re-downloads the published bytes, writes the `.sha256` files from them, mirrors those bytes to R2 and reads each object back, attests build provenance for the tarballs this run built, records the published sha256 list (also in the job summary) |
-| `sign` | contents read | free-tier signing key (signing step only) | bound to the `release-signing` Environment; downloads what the Release serves, refuses it unless it equals the list `publish` recorded, signs the source tarballs; runs the tag's own commit of `sign.sh` |
+| `publish` | contents write, id-token write, attestations write | Cloudflare R2 (R2 step only) | uploads missing tarballs to the Release (never `--clobber`), re-downloads the published bytes, writes the `.sha256` files from them, mirrors those bytes to R2 and reads each object back, attests build provenance for the tarballs this run built, records the published sha256 list (also in the job summary) and the list of tarballs this run built (`built-sha256.txt`) |
+| `sign` | contents read | free-tier signing key (signing step only) | bound to the `release-signing` Environment; downloads what the Release serves, refuses it unless it equals the list `publish` recorded, signs the source tarballs and, under their own domain, the platform tarballs of every plugin it signed (only tarballs this run built); runs the tag's own commit of `sign.sh` |
 | `release-data` | contents write, pull-requests write | none | writes `releases.json` from the published bytes and the signatures, opens the release-data PR |
 
 Checksums and signatures always describe the bytes on the Release, never a rebuild. Gzip output differs between machines, so an
 asset that is already on the Release stays the artifact of record and everything downstream follows it.
 
-### Signature format (contract `plugins.release-signature` v1, hq PLUG D7)
+### Signature format (contract `plugins.release-signature` v1.1, hq PLUG D7)
 
 - Message: `nself-plugin-v1\n<slug>\n<version>\n<sha256 hex of the source tarball>\n`, signed with raw Ed25519
   (`openssl pkeyutl -sign -rawin`).
 - `release_signature` in `releases.json` and the projections: `{"key_id": "plugins-<16 hex>", "alg": "ed25519", "sig": "<base64>"}`.
   `sig` is the 64-byte signature in standard padded base64 (the text `sdk/go/signing` `EncodeSig` produces); `verify-signatures.sh` accepts only that canonical text. `key_id` is derived,
   never chosen: `plugins-` plus the first 16 hex of sha256 over the raw 32-byte public key. `sign.sh` refuses a key id that does not match its key.
-- Only the source tarball `<slug>-<version>.tar.gz` is signed. The per-platform binary tarballs are covered by `platform_checksums` (in the unsigned
-  `releases.json`) and by the provenance attestation; verify them with `gh attestation verify <file> --repo nself-org/plugins`. Only bytes this run built
+- The source tarball `<slug>-<version>.tar.gz` is signed under the message above. Since v1.1 each platform (binary) tarball
+  `<slug>-<version>-<platform>.tar.gz` is signed too, under its own domain: `nself-plugin-bin-v1\n<slug>\n<version>\n<platform>\n<sha256 hex of that
+  platform tarball>\n`, the same raw Ed25519 and the same tier key. `<platform>` is one of `darwin-amd64`, `darwin-arm64`, `linux-amd64`, `linux-arm64`,
+  `windows-amd64`. The first lines differ, so a source signature never verifies as a platform signature and the reverse. `releases.json` rows carry
+  `platform_signatures` `{"<platform>": {"key_id", "alg", "sig"}}` next to `platform_checksums`. A platform signature covers slug, version, platform and the tarball
+  bytes; it does not cover the registry's `binaryName`, `pluginType` or `repository` fields, so a hostile registry can choose which signed tarball of a slug and
+  version installs, never unsigned bytes. The provenance attestation (`gh attestation verify <file> --repo nself-org/plugins`) stays as a second check. Only bytes this run built
   and the Release still serves unchanged are attested: a tarball uploaded earlier (a draft upload, an older run) is published and checksummed but carries no
   attestation, and the `publish` job summary says which.
-  `verify-signatures.sh` counts source tarballs (checksum + signature) and binary tarballs (checksum only) separately.
+  `verify-signatures.sh` counts source tarballs and binary tarballs separately, each checked for checksum and signature; on a signed row a binary tarball with a
+  checksum and no platform signature fails (`unsigned platform`).
+- The `sign` job signs a platform tarball only if its `<sha256>  <name>` line is in `built-sha256.txt`, the list `publish` wrote of the tarballs this run built
+  (`scripts/release/platform-built-check.sh`). The publish job never uses `--clobber`, so a tarball already on the Release wins over this run's build; without
+  this check anyone with `contents: write` could upload a binary while the reviewer decides and receive the official platform signature. A refusal fails the job
+  with nothing more signed: delete that platform tarball AND its `.sha256` from the Release (the first run uploaded a `.sha256` from the foreign bytes, and `publish`
+  never overwrites one) and re-run, so this run's build is the one published. Two consequences to plan for: a draft-first upload of platform tarballs (the old flow) now fails `sign`,
+  so for a plugin with binaries let the workflow publish the platform tarballs (or delete the draft's platform assets before tagging); and a full re-run whose rebuild is not
+  byte-identical to the published platform tarballs (changed runner gzip or Go toolchain) fails `sign` the same way.
+- `release-data` writes a platform signature into `releases.json` only when the signed sha256 equals the sha256 of the published bytes in that run; a published
+  platform tarball with no such signature stops the write (`UNSIGNED`), so a release never lands half-signed. Rewriting an existing row keeps a platform signature only
+  while the row's version, source sha256 and that platform's sha256 are all unchanged.
+- The licensed tier has no platform producer (bundles serves source through ping); a pinned licensed tier keeps refusing platform packages (debt D-1286).
 - A source tarball is signed only when its plugin's manifest `version` equals the tag's version; the signed set is exactly the set of rows
   `release-data` writes. Both scripts accept Ed25519 keys only and refuse anything else.
 - Verification order is checksum, then signature, both before extraction.
@@ -58,9 +75,11 @@ asset that is already on the Release stays the artifact of record and everything
 
 | Script | Use |
 |---|---|
-| `sign.sh SLUG VERSION TARBALL` | prints the `release_signature` JSON. Key from `NSELF_RELEASE_SIGNING_KEY_FREE` (PKCS8 PEM) and `NSELF_RELEASE_SIGNING_KEY_FREE_ID`, environment only; written to a 0600 temp file removed on exit |
-| `verify-signatures.sh --pub FILE DIR` | checks every `*.tar.gz` in DIR against `DIR/releases.json` and exactly the public key FILE (PEM SPKI). Failures on stderr: `checksum mismatch`, `missing release data`, `missing tarball`, `unsigned`, `signature mismatch`. No key discovery |
-| `rehearse.sh --tag T --no-upload --out DIR` | builds all source tarballs and signs them with a throwaway key; writes `DIR/releases.json` and `DIR/rehearsal-test.pub`. Two runs of one tag give byte-identical tarballs |
+| `sign.sh SLUG VERSION TARBALL [PLATFORM]` | prints the `release_signature` JSON (with `PLATFORM`, the platform-domain signature for that platform tarball; a fifth argument or an unknown platform is exit 2). Key from `NSELF_RELEASE_SIGNING_KEY_FREE` (PKCS8 PEM) and `NSELF_RELEASE_SIGNING_KEY_FREE_ID`, environment only; written to a 0600 temp file removed on exit |
+| `verify-signatures.sh --pub FILE DIR` | checks every `*.tar.gz` in DIR against `DIR/releases.json` and exactly the public key FILE (PEM SPKI). Failures on stderr: `checksum mismatch`, `missing release data`, `missing tarball`, `unsigned`, `signature mismatch`, `unsigned platform`, `platform signature mismatch`, `orphan platform signature`. No key discovery |
+| `platform-built-check.sh BUILT_LIST DIR` | exit 0 only if every platform tarball in DIR has its exact `<sha256>  <name>` line in BUILT_LIST (the sign job's gate); `not built by this run: <file>` otherwise |
+| `platform-signatures-test.sh` | offline gate: platform signatures accepted only for their slug, version, platform and bytes; built-check cases; the committed fixture `testdata/platform-v1/` (throwaway key, made by `sign.sh`) for the cli verifier. `--regen-testdata` rebuilds the fixture |
+| `rehearse.sh --tag T --no-upload --out DIR` | builds all source tarballs and signs them with a throwaway key, plus fixture binary tarballs (stub payload, all five platforms) for the first slug; writes `DIR/releases.json` and `DIR/rehearsal-test.pub`. Two runs of one tag give byte-identical tarballs |
 | `keys/` | committed release public keys (`plugins-release-free-<id>.pub`). Empty until P7-PLUG-69 commits the production key, which must happen before the first real tag run |
 
 OpenSSL 3 is required (`OPENSSL=/path/to/openssl` to pick one); macOS system LibreSSL cannot sign or verify Ed25519 with `-rawin`.

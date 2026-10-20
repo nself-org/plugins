@@ -4,18 +4,22 @@ name: Release Plugin Tarballs (Free)
 #   build         deterministic source + per-platform tarballs (scripts/deterministic-tar.sh); no secrets, read-only token.
 #   publish       uploads the missing tarballs to the GitHub Release (never --clobber), writes the .sha256 files from the PUBLISHED
 #                 bytes, mirrors those bytes to Cloudflare R2 and attests build provenance for the tarballs this run built and the
-#                 Release serves unchanged; records the published sha256 list the signer is held to. Holds the R2 secrets, never the
-#                 signing key.
+#                 Release serves unchanged; records the published sha256 list the signer is held to and the sha256 list of the
+#                 tarballs THIS run built (built-sha256.txt). Holds the R2 secrets, never the signing key.
 #   sign          bound to the protected Environment `release-signing` (required reviewer): the only job that can read the free-tier
 #                 signing key (NSELF_RELEASE_SIGNING_KEY_FREE + _ID). Downloads what is on the Release, refuses it unless it is
-#                 byte-for-byte what publish recorded, and signs the source tarballs per hq PLUG D7 (scripts/release/sign.sh). The
-#                 licensed key is never here. Runs the tag's own commit of sign.sh, the code the reviewer approved.
-#   release-data  re-downloads the published bytes, writes sha256 + release_signature into releases.json
+#                 byte-for-byte what publish recorded, and signs the source tarballs per hq PLUG D7 (scripts/release/sign.sh) and, under
+#                 their own domain (contract plugins.release-signature v1.1), the platform tarballs of every signed plugin, but only
+#                 tarballs this run built (scripts/release/platform-built-check.sh). The licensed key is never here. Runs the tag's own commit of sign.sh, the code the reviewer approved.
+#   release-data  re-downloads the published bytes, writes sha256 + release_signature + platform_signatures into releases.json
 #                 (scripts/verify-published-checksums.sh --write --signatures) and opens the release-data PR with the workflow's own
 #                 GITHUB_TOKEN. No PAT, no cross-repo trigger. The projections (registry.json, catalog.json, counts.json) need the
 #                 private bundles repo, which this token cannot read: the PR body tells the maintainer to regenerate them.
 # Checksums and signatures always describe the bytes on the Release, never a rebuild: the Release asset is the artifact of record.
-# Idempotent: re-running skips assets already present on the release. See .github/wiki/Releasing.md.
+# Idempotent: re-running skips assets already present on the release. Limit (contract v1.1): the `sign` job signs a platform tarball
+# only if THIS run built the exact bytes, so a full re-run whose rebuild is not byte-identical to the published platform tarballs
+# (a changed runner gzip/zlib or Go toolchain) fails `sign`; a draft-first upload of platform tarballs fails it too. See Releasing.md.
+# See .github/wiki/Releasing.md.
 
 on:
   push:
@@ -394,13 +398,21 @@ jobs:
 
       # What the reviewer of the `sign` job approves: the sha256 of every tarball the Release serves right now. `sign` refuses any
       # tarball that is not in this list with this hash, so an asset swapped while the approval waits is never signed.
+      #
+      # built-sha256.txt is the shorter list the platform signer is held to: the tarballs this run built that the Release serves
+      # unchanged (attest/). A platform tarball is signed only if its "<sha256>  <name>" line is in it, so a binary uploaded to the
+      # Release by anyone else during the approval wait is published but never signed.
       - name: Record the published checksums
         run: |
           (cd published && sha256sum -- *.tar.gz) > published-sha256.txt
+          : > built-sha256.txt
+          if compgen -G 'attest/*.tar.gz' >/dev/null; then
+            (cd attest && sha256sum -- *.tar.gz) > built-sha256.txt
+          fi
           {
             echo "### Published tarballs for ${TAG}"
             echo
-            echo "$(wc -l < published-sha256.txt | tr -d ' ') tarball(s) on the Release; $(wc -l < not-attested.txt | tr -d ' ') differ from this run's rebuild (published, not attested)."
+            echo "$(wc -l < published-sha256.txt | tr -d ' ') tarball(s) on the Release; $(wc -l < not-attested.txt | tr -d ' ') differ from this run's rebuild (published, not attested); $(wc -l < built-sha256.txt | tr -d ' ') built by this run (source and platform tarballs); only those platform tarballs are eligible for platform signing."
             echo
             echo '```'
             cat published-sha256.txt
@@ -418,7 +430,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: published-sha256
-          path: published-sha256.txt
+          path: |
+            published-sha256.txt
+            built-sha256.txt
           retention-days: 30
           if-no-files-found: error
 
@@ -549,10 +563,11 @@ jobs:
           (cd published && sha256sum -- *.tar.gz) | sort > actual-sha256.txt
           sort expected/published-sha256.txt | diff - actual-sha256.txt || { echo "ERROR: the Release no longer serves the bytes the publish job recorded; nothing is signed"; exit 1; }
 
-      # Source tarballs only (<slug>-<version>.tar.gz): the signed message names slug, version and the source tarball's sha256.
-      # Binary tarballs (<slug>-<version>-<platform>.tar.gz) are covered by platform_checksums and, when this run built them, the
-      # provenance attestation made in the publish job.
-      - name: Sign the published source tarballs (hq PLUG D7)
+      # Source tarballs (<slug>-<version>.tar.gz): the signed message names slug, version and the source tarball's sha256.
+      # Platform tarballs (<slug>-<version>-<platform>.tar.gz) of every plugin signed here are signed under their own domain
+      # (contract v1.1): the message names slug, version, platform and that tarball's sha256. They are signed only if
+      # platform-built-check.sh confirms this run built the exact bytes; otherwise the job fails and signs nothing more.
+      - name: Sign the published source and platform tarballs (hq PLUG D7, contract v1.1)
         env:
           NSELF_RELEASE_SIGNING_KEY_FREE: ${{ secrets.NSELF_RELEASE_SIGNING_KEY_FREE }}
           NSELF_RELEASE_SIGNING_KEY_FREE_ID: ${{ secrets.NSELF_RELEASE_SIGNING_KEY_FREE_ID }}
@@ -586,11 +601,55 @@ jobs:
           rm -f signatures.ndjson
           echo "Signed ${count} source tarball(s)"
 
+          # Platform tarballs of the signed plugins only (a plugin left unsigned above gets none). Every one must be a tarball this
+          # run built: the Release never takes a clobbering upload, so an asset put there by anyone else during the approval wait
+          # is already published, and signing it would hand it the official platform signature.
+          platforms="darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64"
+          bin_stage="$(mktemp -d)"
+          for slug in $(jq -r 'keys[]' signatures.json); do
+            for platform in $platforms; do
+              f="published/${slug}-${VERSION}-${platform}.tar.gz"
+              [ -e "$f" ] || continue
+              ln -s "${PWD}/${f}" "$bin_stage/"
+            done
+          done
+          if [ -z "$(ls -A "$bin_stage")" ]; then
+            echo "No platform tarball for the signed plugins; nothing to sign beyond the source tarballs"
+          elif ! bash scripts/release/platform-built-check.sh expected/built-sha256.txt "$bin_stage"; then
+            echo "ERROR: a platform tarball on the Release was not built by this run; nothing is signed. Delete that platform tarball AND its .sha256 from the Release, then re-run the release (Releasing.md)."
+            exit 1
+          fi
+          : > platform-signatures.ndjson
+          pcount=0
+          for slug in $(jq -r 'keys[]' signatures.json); do
+            for platform in $platforms; do
+              f="published/${slug}-${VERSION}-${platform}.tar.gz"
+              [ -e "$f" ] || continue
+              psig="$(bash scripts/release/sign.sh "$slug" "$VERSION" "$f" "$platform")"
+              psha="$(sha256sum "$f" | cut -d' ' -f1)"
+              jq -nc --arg s "$slug" --arg p "$platform" --arg sha "$psha" --argjson sig "$psig" \
+                '{($s): {platform_signatures: {($p): ($sig + {sha256: $sha})}}}' >> platform-signatures.ndjson
+              pcount=$((pcount + 1))
+            done
+          done
+          jq -sS 'reduce .[1:][] as $r (.[0]; . * $r)' signatures.json platform-signatures.ndjson > signatures.merged.json
+          mv signatures.merged.json signatures.json
+          rm -f platform-signatures.ndjson
+          echo "Signed ${pcount} platform tarball(s)"
+
           # Once a release public key is committed (P7-PLUG-69 commits the first), only a committed key may have signed.
+          # The stage mirrors releases.json: platform_checksums from the covered sha256, platform_signatures without it.
           stage="$(mktemp -d)"
-          jq --arg v "$VERSION" 'map_values(. + {version: $v}) | {releases: .}' signatures.json > "$stage/releases.json"
+          jq --arg v "$VERSION" 'map_values(. + {version: $v}
+              + (if has("platform_signatures") then {platform_checksums: (.platform_signatures | map_values(.sha256)),
+                                                      platform_signatures: (.platform_signatures | map_values(del(.sha256)))} else {} end))
+            | {releases: .}' signatures.json > "$stage/releases.json"
           for slug in $(jq -r 'keys[]' signatures.json); do
             ln -s "${PWD}/published/${slug}-${VERSION}.tar.gz" "$stage/"
+          done
+          for f in "$bin_stage"/*.tar.gz; do
+            [ -e "$f" ] || continue
+            ln -s "$(readlink "$f")" "$stage/"
           done
           pinned=0
           ok=0
