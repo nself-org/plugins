@@ -200,7 +200,7 @@
     "outlook"
   ],
   "tier": "free",
-  "version": "1.2.6",
+  "version": "1.2.13",
   "webhooks": [
     "event.cancelled",
     "event.created",
