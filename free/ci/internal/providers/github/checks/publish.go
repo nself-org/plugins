@@ -140,7 +140,7 @@ func (p *Publisher) Detail(ctx context.Context, r Request) error {
 
 func (p *Publisher) publish(ctx context.Context, c API, r Request, conclusion Conclusion) error {
 	params := map[string]string{"owner": r.Owner, "repo": r.Repo}
-	out := output{Title: maskString(p.Red, Title(r.Projection)), Summary: maskString(p.Red, cell(r.Projection.Summary)), Text: capText(maskString(p.Red, Table(r.Evidence, r.Projection)))}
+	out := output{Title: truncRunes(maskString(p.Red, Title(r.Projection)), 255), Summary: maskString(p.Red, cell(r.Projection.Summary)), Text: capText(maskString(p.Red, Table(r.Evidence, r.Projection)))}
 	all := annotationsMasked(p.Red, r.Evidence)
 
 	existing, err := p.find(ctx, c, r)
@@ -203,7 +203,7 @@ func annotationsMasked(red *redact.Redactor, ev model.Evidence) []Annotation {
 	a := Annotations(ev)
 	for i := range a {
 		a[i].Message = maskString(red, a[i].Message)
-		a[i].Title = maskString(red, a[i].Title)
+		a[i].Title = truncRunes(maskString(red, a[i].Title), 255)
 		a[i].Path = maskString(red, a[i].Path)
 	}
 	return a

@@ -105,14 +105,14 @@ func appPEM(t *testing.T) string {
 func appDetail(t *testing.T, f *fakeFunnel, s appSettings, key string) *checksDetail {
 	return &checksDetail{
 		Load:    func(context.Context) (appSettings, error) { return s, nil },
-		Getenv:  func(name string) string { return map[string]string{"APP_KEY_VAR": key}[name] },
+		Getenv:  func(name string) string { return map[string]string{"NSELF_CI_APP_KEY_VAR": key}[name] },
 		Client:  f.factory,
 		Now:     func() time.Time { return time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC) },
 		Enabled: func() bool { return true },
 	}
 }
 
-var enabledApp = appSettings{App: checks.Config{AppID: "12345", InstallationID: "777", KeyEnv: "APP_KEY_VAR"}, APIURL: "https://api.github.com"}
+var enabledApp = appSettings{App: checks.Config{AppID: "12345", InstallationID: "777", KeyEnv: "NSELF_CI_APP_KEY_VAR"}, APIURL: "https://api.github.com"}
 
 // TestDetailPublisherTwoOutputs: through the real run path a failing run posts the status AND
 // the check run (two outputs, same conclusion); a passing run concludes success.
@@ -279,14 +279,50 @@ func TestLoadAppSettingsReadsOperatorRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for k, v := range map[string]string{checks.KeyAppID: `12345`, checks.KeyInstallationID: `777`, checks.KeyKeyEnv: `"APP_KEY_VAR"`, runtime.KeyGitHubAPIURL: `"https://ghe.example/api/v3"`} {
+	for k, v := range map[string]string{checks.KeyAppID: `12345`, checks.KeyInstallationID: `777`, checks.KeyKeyEnv: `"NSELF_CI_APP_KEY_VAR"`, runtime.KeyGitHubAPIURL: `"https://ghe.example/api/v3"`} {
 		if err = st.ApplyWrite(context.Background(), store.PolicyWrite{Op: store.PolicySet, Scope: "user", Subject: policy.LocalSubject, Key: k, Value: []byte(v), Actor: "test"}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
 	_ = st.Close()
 	got, err = loadAppSettings(context.Background())
-	if err != nil || got.App != (checks.Config{AppID: "12345", InstallationID: "777", KeyEnv: "APP_KEY_VAR"}) || got.APIURL != "https://ghe.example/api/v3" {
+	if err != nil || got.App != (checks.Config{AppID: "12345", InstallationID: "777", KeyEnv: "NSELF_CI_APP_KEY_VAR"}) || got.APIURL != "https://ghe.example/api/v3" {
 		t.Fatalf("operator rows: %+v %v", got, err)
+	}
+}
+
+// TestChecksConclusionFollowsRunResult: through the real evidence rule (runResult) and the real status
+// rule (defaultStatus), the check run's conclusion agrees with the status for every shape of run.
+func TestChecksConclusionFollowsRunResult(t *testing.T) {
+	chk := func(id string, result model.CheckResult, mut func(*model.Check)) model.Check {
+		c := model.Check{ID: id, JobID: id, Kind: "test", Required: true, Substantive: true, Result: result}
+		if mut != nil {
+			mut(&c)
+		}
+		return c
+	}
+	cases := []struct {
+		name   string
+		checks []model.Check
+		state  report.State
+		want   checks.Conclusion
+	}{
+		{"all pass", []model.Check{chk("a", "pass", nil)}, report.Success, checks.Success},
+		{"code failure", []model.Check{chk("a", "pass", nil), chk("b", "fail", nil)}, report.Failure, checks.Failure},
+		{"infra error only", []model.Check{chk("a", "error", func(c *model.Check) { c.FailureClass = "infra" })}, report.Error, checks.Neutral},
+		{"lost runner", []model.Check{chk("a", "error", func(c *model.Check) { c.FailureClass = "lost" })}, report.Error, checks.Neutral},
+		{"--job: unselected required job skipped, selected one errors", []model.Check{chk("a", "skip", func(c *model.Check) { c.Reason = "pipeline.excluded" }), chk("b", "error", nil)}, report.Failure, checks.Failure},
+		{"error plus code failure", []model.Check{chk("a", "error", nil), chk("b", "fail", nil)}, report.Failure, checks.Failure},
+	}
+	for _, c := range cases {
+		ev := model.Evidence{Checks: c.checks}
+		ev.Result = runResult(c.checks)
+		st := defaultStatus(PublishRequest{Run: RunInfo{Result: ev.Result}, Projection: model.Projection(ev)})
+		if st.State != c.state {
+			t.Fatalf("%s: status %s, want %s (the rig is wrong)", c.name, st.State, c.state)
+		}
+		if got := checks.ConclusionFor(st.State, ev); got != c.want {
+			t.Errorf("%s: conclusion %q, want %q", c.name, got, c.want)
+		}
 	}
 }

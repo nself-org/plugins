@@ -126,6 +126,9 @@ func Annotations(ev model.Evidence) []Annotation {
 		level := "failure"
 		switch c.Result {
 		case "fail":
+			if !c.Required || c.AllowFailure { // an optional check must not paint the gate red
+				level = "warning"
+			}
 		case "error":
 			level = "warning"
 		default:
@@ -147,7 +150,7 @@ func Annotations(ev model.Evidence) []Annotation {
 				return r
 			}, m[3])), maxMessage)
 			key := c.ID + "\x00" + m[1] + "\x00" + m[2] + "\x00" + msg
-			if seen[key] || !utf8.ValidString(msg) {
+			if msg == "" || seen[key] || !utf8.ValidString(msg) {
 				continue
 			}
 			seen[key] = true

@@ -114,11 +114,12 @@ func TestCheckRunGateTableGolden(t *testing.T) {
 	}
 }
 
-// TestConclusionMapping: pass -> success; code failure -> failure; infra error -> neutral;
-// cancelled -> cancelled; lost -> neutral; pending -> none.
+// TestConclusionMapping: the check run follows the status of record. pass -> success; status failure
+// -> failure; status error (infra error, lost runner, timeout) -> neutral; a failure whose every
+// unsuccessful required check was cancelled, or a cancelled run -> cancelled; pending -> none.
+// The pairs are the ones a real run produces (run.TestChecksConclusionFollowsRunResult feeds the
+// real evidence builder through this function).
 func TestConclusionMapping(t *testing.T) {
-	infra := func(c *model.Check) { c.FailureClass = "infra" }
-	lost := func(c *model.Check) { c.FailureClass = "lost" }
 	cancelled := func(c *model.Check) { c.FailureClass = "cancelled" }
 	code := func(c *model.Check) { c.FailureClass = "code" }
 	cases := []struct {
@@ -131,13 +132,12 @@ func TestConclusionMapping(t *testing.T) {
 		{"pass", report.Success, "pass", []model.Check{check("a", "pass", nil)}, Success},
 		{"code failure", report.Failure, "fail", []model.Check{check("a", "fail", code)}, Failure},
 		{"unclassified failure", report.Failure, "fail", []model.Check{check("a", "fail", nil)}, Failure},
-		{"infra error status", report.Error, "error", []model.Check{check("a", "error", infra)}, Neutral},
-		{"infra failure", report.Failure, "fail", []model.Check{check("a", "error", infra)}, Neutral},
-		{"lost", report.Failure, "fail", []model.Check{check("a", "error", lost)}, Neutral},
+		{"skip plus error stays a failure", report.Failure, "fail", []model.Check{check("a", "skip", nil), check("b", "error", nil)}, Failure},
+		{"infra error status", report.Error, "error", []model.Check{check("a", "error", func(c *model.Check) { c.FailureClass = "infra" })}, Neutral},
+		{"lost status", report.Error, "error", []model.Check{check("a", "error", func(c *model.Check) { c.FailureClass = "lost" })}, Neutral},
 		{"cancelled result", report.Failure, "cancelled", []model.Check{check("a", "error", cancelled)}, Cancelled},
-		{"cancelled class only", report.Failure, "fail", []model.Check{check("a", "error", cancelled)}, Cancelled},
-		{"code beats infra", report.Failure, "fail", []model.Check{check("a", "fail", code), check("b", "error", infra)}, Failure},
-		{"allowed failure ignored", report.Failure, "fail", []model.Check{check("a", "error", infra), check("b", "fail", func(c *model.Check) { c.AllowFailure = true })}, Neutral},
+		{"cancelled class only", report.Failure, "fail", []model.Check{check("a", "fail", cancelled), check("o", "fail", func(c *model.Check) { c.Required = false })}, Cancelled},
+		{"cancelled and code", report.Failure, "fail", []model.Check{check("a", "fail", cancelled), check("b", "fail", code)}, Failure},
 		{"success status over failing run", report.Success, "fail", []model.Check{check("a", "fail", code)}, Failure},
 		{"pending", report.Pending, "", nil, ""},
 	}
@@ -465,5 +465,40 @@ func TestTokenPerRepository(t *testing.T) {
 	}
 	if n := f.count("POST", "/app/installations/{id}/access_tokens"); n != 2 {
 		t.Fatalf("exchanges %d, want 2 (one per repository)", n)
+	}
+}
+
+// TestFailedExchangeIsHeld: a repository the installation does not cover costs one exchange per window, not one per run.
+func TestFailedExchangeIsHeld(t *testing.T) {
+	key, _ := testKey(t)
+	f := newFake(t, key)
+	f.failPath = "/app/installations/{id}/access_tokens"
+	f.failErr = errBoom
+	clock := t0
+	p := newPublisher(t, f, func() time.Time { return clock })
+	ts := p.tokens("outside")
+	for i := 0; i < 3; i++ {
+		if _, err := ts.Token(context.Background()); err == nil {
+			t.Fatal("want an error")
+		}
+	}
+	if n := f.count("POST", "/app/installations/{id}/access_tokens"); n != 1 {
+		t.Fatalf("exchanges %d, want 1 inside the hold window", n)
+	}
+	clock = t0.Add(failureHold)
+	_, _ = ts.Token(context.Background())
+	if n := f.count("POST", "/app/installations/{id}/access_tokens"); n != 2 {
+		t.Fatalf("exchanges %d, want a retry after the window", n)
+	}
+}
+
+func TestEmptyMessageAnnotationSkipped(t *testing.T) {
+	ev := fixtureEvidence(check("a", "fail", func(c *model.Check) { c.Excerpt = "x/y.go:10: \x01\x02\nx/y.go:11: real" }))
+	if got := Annotations(ev); len(got) != 1 || got[0].Start != 11 {
+		t.Fatalf("%+v", got)
+	}
+	opt := fixtureEvidence(check("a", "fail", func(c *model.Check) { c.Required = false; c.Excerpt = "x/y.go:1: optional" }))
+	if got := Annotations(opt); len(got) != 1 || got[0].Level != "warning" {
+		t.Fatalf("an optional check must annotate as a warning: %+v", got)
 	}
 }

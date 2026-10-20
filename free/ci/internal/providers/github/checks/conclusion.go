@@ -2,8 +2,8 @@ package checks
 
 // Purpose: the conclusion a check run carries, derived from the status that was posted and the
 // published evidence, so the check run never disagrees with the status of record.
-// Mapping (Ticket P7-AUTO-22): pass -> success; code failure -> failure; infra error -> neutral;
-// cancelled -> cancelled; lost -> neutral.
+// Mapping (Ticket P7-AUTO-22): pass -> success; code failure -> failure (status failure); infra
+// error and lost -> neutral (status error); cancelled -> cancelled.
 // Constraints: pure; success needs both a success status and a passing run.
 
 import (
@@ -22,53 +22,42 @@ const (
 	Cancelled Conclusion = "cancelled"
 )
 
-// ConclusionFor maps the posted status and the evidence to a conclusion. It returns "" for a
-// pending status (the run has no conclusion yet).
+// ConclusionFor maps the posted status and the evidence to a conclusion. The check run follows the
+// status of record and never re-derives it: the coordinator already told a run that failed in the
+// code (status failure) from one that broke in the infrastructure (status error, which covers a
+// lost runner and a timeout), and a rule of our own would drift from it (run/evidence.go runResult).
+// The only addition is cancelled: a failure whose every unsuccessful required check was cancelled.
+// It returns "" for a pending status (the run has no conclusion yet).
 func ConclusionFor(state report.State, ev model.Evidence) Conclusion {
-	if ev.Result == "cancelled" {
+	switch {
+	case ev.Result == "cancelled":
 		return Cancelled
-	}
-	switch state {
-	case report.Success:
-		if ev.Result == "pass" {
-			return Success
-		}
-		// a success status over a run that did not pass cannot happen through the coordinator;
+	case state == report.Success && ev.Result == "pass":
+		return Success
+	case state == report.Success, state == report.Failure && !onlyCancelled(ev):
+		// a success status over a run that did not pass cannot come out of the coordinator;
 		// never report better than the evidence
 		return Failure
-	case report.Error:
+	case state == report.Failure:
+		return Cancelled
+	case state == report.Error:
 		return Neutral
-	case report.Failure:
-		return failureConclusion(ev)
 	}
 	return ""
 }
 
-// failureConclusion looks at what failed: when nothing failed for a reason of the code under test
-// (every unsuccessful required check was an infrastructure error, a lost runner or a cancel), the
-// run says "neutral" or "cancelled" rather than blaming the code.
-func failureConclusion(ev model.Evidence) Conclusion {
-	var infra, cancelled, code int
+// onlyCancelled says at least one required check was cancelled and no required check failed or
+// ended in any other way.
+func onlyCancelled(ev model.Evidence) bool {
+	cancelled := 0
 	for _, c := range ev.Checks {
-		if c.Result == "pass" || c.Result == "skip" || !c.Required && c.Result != "error" || c.AllowFailure && c.Result == "fail" {
+		if !c.Required || c.Result == "pass" || c.AllowFailure && c.Result == "fail" {
 			continue
 		}
-		switch {
-		case c.FailureClass == "cancelled":
-			cancelled++
-		case c.Result == "error" || c.FailureClass == "infra" || c.FailureClass == "lost":
-			infra++
-		default:
-			code++
+		if c.FailureClass != "cancelled" {
+			return false
 		}
+		cancelled++
 	}
-	switch {
-	case code > 0:
-		return Failure
-	case cancelled > 0 && infra == 0:
-		return Cancelled
-	case infra > 0 || cancelled > 0:
-		return Neutral
-	}
-	return Failure
+	return cancelled > 0
 }

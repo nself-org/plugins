@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 )
@@ -27,6 +28,9 @@ const (
 	KeyInstallationID = "providers.github.app.installation_id"
 	KeyKeyEnv         = "providers.github.app.key_env"
 	keyOwner          = "P7-AUTO-22"
+	// EnvPrefix is required of key_env: the job environment allowlist never forwards a NSELF_CI_ name,
+	// while it forwards HOME, GO*, CGO_*, LC_* and XDG_* to every job (repository code).
+	EnvPrefix = "NSELF_CI_"
 )
 
 // Config is the resolved App configuration. The zero value means "no App".
@@ -106,8 +110,8 @@ func decodeEnvName(raw json.RawMessage) (any, error) {
 		return nil, err
 	}
 	s, ok := v.(string)
-	if !ok || s != "" && !envName.MatchString(s) {
-		return nil, fail(KeyKeyEnv, "expected the NAME of an environment variable such as NSELF_CI_APP_KEY (never the key itself)")
+	if !ok || s != "" && (!envName.MatchString(s) || !strings.HasPrefix(s, EnvPrefix)) {
+		return nil, fail(KeyKeyEnv, "expected the NAME of an environment variable that starts with NSELF_CI_, such as NSELF_CI_APP_KEY (never the key itself)")
 	}
 	return s, nil
 }

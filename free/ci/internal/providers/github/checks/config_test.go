@@ -40,7 +40,7 @@ func TestDecoders(t *testing.T) {
 	}
 	bad := map[string][]string{
 		KeyAppID:  {`0`, `-1`, `1.5`, `"12a"`, `""`, `true`, `null`, `[1]`, `12 13`, `"0123"`, `99999999999999999999`},
-		KeyKeyEnv: {`"` + dashes + `BEGIN RSA PRIVATE KEY` + dashes + `"`, `"has space"`, `1`, `null`, `"1ABC"`},
+		KeyKeyEnv: {`"` + dashes + `BEGIN RSA PRIVATE KEY` + dashes + `"`, `"has space"`, `"HOME"`, `"XDG_APP_KEY"`, `"APP_KEY"`, `1`, `null`, `"1ABC"`},
 	}
 	for key, rows := range bad {
 		for _, v := range rows {

@@ -25,6 +25,9 @@ import (
 // refreshMargin is how long before expiry a cached token is replaced.
 const refreshMargin = 60 * time.Second
 
+// failureHold is how long a failed exchange is remembered per repository.
+const failureHold = 5 * time.Minute
+
 // defaultLifetime is assumed when GitHub sends no usable expiry (the real one is 1 hour).
 const defaultLifetime = 5 * time.Minute
 
@@ -45,9 +48,11 @@ type TokenSource struct {
 	Now                   func() time.Time
 	Red                   *redact.Redactor
 
-	mu      sync.Mutex
-	token   string
-	expires time.Time
+	mu          sync.Mutex
+	token       string
+	expires     time.Time
+	failure     error // the last exchange failed: not retried until failedUntil, so a repository outside the installation costs one round trip per window
+	failedUntil time.Time
 }
 
 func (t *TokenSource) now() time.Time {
@@ -74,6 +79,20 @@ func (t *TokenSource) Token(ctx context.Context) (string, error) {
 	if t.token != "" && now.Before(t.expires.Add(-refreshMargin)) {
 		return t.token, nil
 	}
+	if t.failure != nil && now.Before(t.failedUntil) {
+		return "", t.failure
+	}
+	tok, err := t.exchange(ctx, now)
+	if err != nil {
+		t.failure, t.failedUntil = err, now.Add(failureHold)
+		return "", err
+	}
+	t.failure, t.token = nil, tok
+	return tok, nil
+}
+
+// exchange signs a JWT and trades it for an installation token (the caller holds the lock).
+func (t *TokenSource) exchange(ctx context.Context, now time.Time) (string, error) {
 	jwt, err := SignJWT(t.AppID, t.Key, now)
 	if err != nil {
 		return "", err
@@ -101,8 +120,7 @@ func (t *TokenSource) Token(ctx context.Context) (string, error) {
 	if reply.ExpiresAt.IsZero() || !reply.ExpiresAt.After(now) {
 		t.expires = now.Add(defaultLifetime)
 	}
-	t.token = reply.Token
-	return t.token, nil
+	return reply.Token, nil
 }
 
 // Auth is the AuthFunc of the installation client.
