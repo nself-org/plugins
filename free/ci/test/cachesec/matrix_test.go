@@ -2,7 +2,8 @@
 
 package cachesec
 
-// Purpose: TestCacheSecMatrix runs every case of matrix.yaml against its expected outcome and writes
+// Purpose: audit "none" marks a refusal that production does not audit yet; the row names its debt id in `gap`. The case must
+// observe NO audit row, so it fails the day production adds one and the row is flipped. TestCacheSecMatrix runs every case of matrix.yaml against its expected outcome and writes
 // testdata/results.json (P7-CACHE-11). It fails when a case has no function, a function has no row, a
 // row names no threat-model row, a threat row of the suite's range (TM-12 to TM-18) has no case, a
 // refusal lacks its code, reason key or audit row, or a refusal let bytes land.
@@ -33,6 +34,7 @@ type matrixCase struct {
 	Code     string `yaml:"code"`
 	Reason   string `yaml:"reason"`
 	Audit    string `yaml:"audit"`
+	Gap      string `yaml:"gap"`
 }
 
 type matrixFile struct {
@@ -60,6 +62,7 @@ var (
 	caseIDPattern = regexp.MustCompile(`^C(1[2-8])-[A-Z0-9]+-\d{2}$`)
 	codePattern   = regexp.MustCompile(`^E\d{3}$`)
 	reasonPattern = regexp.MustCompile(`^[a-z0-9_]+$`)
+	gapPattern    = regexp.MustCompile(`^D-\d{4}$`)
 	carriers      = map[string]bool{"local": true, "ssh": true, "agent": true, "coordinator": true, "signer": true}
 )
 
@@ -111,6 +114,10 @@ func TestMatrixShape(t *testing.T) {
 		case Refused:
 			if !codePattern.MatchString(c.Code) || !reasonPattern.MatchString(c.Reason) || c.Audit == "" {
 				t.Errorf("%s: a refusal needs a code, a reason key and an audit action", c.ID)
+			}
+			// audit: none is a known gap of production, never a choice: it names the open debt row that owns the missing audit row.
+			if (c.Audit == "none") != (c.Gap != "") || (c.Gap != "" && !gapPattern.MatchString(c.Gap)) {
+				t.Errorf("%s: audit none needs gap: D-nnnn (the debt row), and a gap needs audit none", c.ID)
 			}
 		case Admitted:
 			if c.Code != "" || c.Reason != "" {
