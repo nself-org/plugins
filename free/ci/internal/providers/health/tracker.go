@@ -60,6 +60,7 @@ type Tracker struct {
 	breakers map[string]*Breaker
 	loaded   map[string]time.Time
 	drainMu  sync.Mutex
+	saveMu   sync.Mutex // saves are ordered: each reads the newest snapshot under it
 	wg       sync.WaitGroup
 	saveErrs atomic.Int64
 	drains   atomic.Int64
@@ -119,9 +120,12 @@ func (t *Tracker) Observe(o rest.Outcome) {
 	}
 	fam := Family(o.Provider)
 	b, st := t.breaker(fam)
+	if st != nil && !b.Observed() { // the first outcome after a restart must start from the saved state
+		t.reload(context.Background(), st, fam, b)
+	}
 	recovered, changed := b.Observe(o, t.clock())
 	if changed && st != nil {
-		t.save(st, fam, b.Snapshot())
+		t.save(st, fam, b)
 	}
 	if recovered && t.drain != nil {
 		t.startDrain()
@@ -173,8 +177,10 @@ func (t *Tracker) reload(ctx context.Context, st Store, fam string, b *Breaker) 
 	}
 }
 
-func (t *Tracker) save(st Store, fam string, s Snapshot) {
-	raw, err := json.Marshal(s)
+func (t *Tracker) save(st Store, fam string, b *Breaker) {
+	t.saveMu.Lock()
+	defer t.saveMu.Unlock()
+	raw, err := json.Marshal(b.Snapshot())
 	if err != nil {
 		t.saveErrs.Add(1)
 		return

@@ -52,6 +52,20 @@ func TestBreakerTable(t *testing.T) {
 			{5 * s, oc("transient", 0), "up", "", false}, {6 * s, oc("transient", 0), "up", "", false}, {7 * s, oc("transient", 0), "up", "", false},
 			{8 * s, oc("transient", 0), "up", "", false},
 		}},
+		{"two 5xx answers sixty seconds apart are not a sixty second run", []step{
+			{0, oc("transient", 503), "up", "", false}, {61 * s, oc("transient", 503), "up", "", false},
+		}},
+		{"5xx answers more than a minute apart restart the run", []step{
+			{0, oc("transient", 503), "up", "", false}, {30 * s, oc("transient", 503), "up", "", false}, {100 * s, oc("transient", 503), "up", "", false},
+			{110 * s, oc("transient", 503), "up", "", false}, {130 * s, oc("transient", 503), "up", "", false}, // 3 answers, only 30 s long
+		}},
+		{"a failure that sent no request is not evidence", []step{
+			{0, oc("transient", 0), "up", "", false}, {1 * s, oc("transient", 0), "up", "", false}, {2 * s, oc("config", 0), "up", "", false},
+			{3 * s, oc("auth", 0), "up", "", false}, {4 * s, oc("transient", 0), "up", "", false}, {5 * s, oc("transient", 0), "up", "", false},
+			{6 * s, oc("transient", 0), "down", health.ReasonDown, false},      // the five real failures, the two local ones neither counted nor resetting
+			{40 * s, oc("config", 0), "degraded", health.ReasonProbing, false}, // a missing credential does not close an open breaker
+			{41 * s, oc("auth", 0), "degraded", health.ReasonProbing, false},
+		}},
 		{"5xx answers for sixty seconds open it on the third", []step{
 			{0, oc("transient", 503), "up", "", false}, {30 * s, oc("transient", 502), "up", "", false}, {60 * s, oc("transient", 500), "down", health.ReasonDown, false},
 		}},
@@ -66,7 +80,7 @@ func TestBreakerTable(t *testing.T) {
 			{3 * s, oc("outage", 0), "up", "", false}, {4 * s, oc("outage", 0), "down", health.ReasonDown, false}, // next probe at 34 s
 			{20 * s, nil, "down", health.ReasonDown, false},
 			{34 * s, nil, "degraded", health.ReasonProbing, false},           // the probe slot
-			{35 * s, nil, "down", health.ReasonDown, false},                  // the slot is taken
+			{35 * s, nil, "degraded", health.ReasonProbing, false},           // a read never uses the window up
 			{36 * s, oc("transient", 0), "down", health.ReasonDown, false},   // probe failed: next at 96 s (gap 60 s)
 			{95 * s, nil, "down", health.ReasonDown, false},                  //
 			{96 * s, nil, "degraded", health.ReasonProbing, false},           //

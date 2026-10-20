@@ -21,12 +21,12 @@ type Outcome struct {
 // SetObserver installs an in-memory callback. Configure clients before concurrent use.
 func (c *Client) SetObserver(observer func(Outcome)) { c.observer = observer }
 
-// defaultObserver sees the outcome of every client that has no observer of its own (P7-HOST-11:
+// defaultObserver sees the outcome of every client (P7-HOST-11:
 // the provider health breaker installs itself here, so no client builder has to know about it).
 var defaultObserver atomic.Pointer[func(Outcome)]
 
-// SetDefaultObserver installs the process-wide observer; nil removes it. A client's own observer
-// (SetObserver) takes precedence over it.
+// SetDefaultObserver installs the process-wide observer; nil removes it. It sees the outcome of
+// every client, after the client's own observer (SetObserver) has seen it.
 func SetDefaultObserver(observer func(Outcome)) {
 	if observer == nil {
 		defaultObserver.Store(nil)
@@ -47,7 +47,8 @@ func (c *Client) observe(ctx context.Context, method, path string, response Resp
 	}
 	if c.observer != nil {
 		c.observer(out)
-	} else if fn := defaultObserver.Load(); fn != nil {
+	}
+	if fn := defaultObserver.Load(); fn != nil { // the process-wide observer sees every client, also one with its own
 		(*fn)(out)
 	}
 }

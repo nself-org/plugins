@@ -8,11 +8,15 @@ package health
 // Constraints: down after DownAfter consecutive transient or outage outcomes within DownWindow, or
 //          after 5xx answers for ServerSpan with no answer in between; degraded while a quota
 //          outcome's RetryAt (or QuotaPause when it carries none) is in the future, and the breaker
-//          never opens for a quota answer; a down breaker lets one probe through after the probe
-//          gap (ProbeAfter, doubling to ProbeMax on each failed probe) and one reachable answer
-//          closes it. An answer with any non-5xx status, an auth or config refusal included, proves
-//          the provider is reachable, so it ends an outage but is not a success for placement
-//          (that stays the caller's decision). A zero-value Breaker is not usable: call NewBreaker.
+//          never opens for a quota answer; after the probe gap (ProbeAfter, doubling to ProbeMax on
+//          each failed probe) a down breaker reads degraded/provider.probing, so placement may send
+//          a request, and one reachable answer closes it. An answer is an HTTP response with a
+//          non-5xx status (an auth or config refusal included): it proves the provider is
+//          reachable, so it ends an outage but is not a success for placement. A failure that sent
+//          no request (a missing credential, a refused URL: Status 0, class other than transient or
+//          outage) says nothing about the provider and is ignored. The 5xx rule needs three 5xx
+//          answers, no two more than ServerSpan apart. Health is a pure read: it never claims a
+//          probe slot, so a display path cannot use one up. A zero-value Breaker is not usable.
 
 import (
 	"sync"
@@ -30,7 +34,7 @@ const (
 	ProbeAfter = 30 * time.Second // first probe gap
 	ProbeMax   = 10 * time.Minute // the probe gap stops doubling here
 	QuotaPause = time.Minute      // degraded span of a quota answer that names no RetryAt
-	probeLease = 10 * time.Second // a claimed probe slot is held this long
+	ServerRun  = 3                // 5xx answers the sixty second rule needs
 )
 
 // Reasons carried in providers.Health.Reason.
@@ -56,7 +60,8 @@ type Breaker struct {
 	snap    Snapshot
 	fails   []time.Time // the current run of consecutive failures, newest last, at most DownAfter
 	server  time.Time   // first 5xx of the unbroken run of 5xx answers; zero when none
-	claimed time.Time   // when the probe slot was handed out (memory only)
+	last5xx time.Time   // the newest 5xx of that run
+	servers int         // 5xx answers in that run
 	seen    bool        // this process observed an outcome: its state is authoritative
 }
 
@@ -70,10 +75,11 @@ func (b *Breaker) Observe(o rest.Outcome, now time.Time) (recovered, changed boo
 	defer b.mu.Unlock()
 	b.seen = true
 	before := b.snap
-	switch o.Class {
-	case providers.Transient, providers.Outage:
+	switch {
+	case o.Class == providers.Transient || o.Class == providers.Outage:
 		b.fail(o, now)
-	case providers.Quota:
+	case o.Status <= 0: // no response came back and nothing was sent: not evidence either way
+	case o.Class == providers.Quota:
 		recovered = b.answer()
 		b.quota(o, now)
 	default:
@@ -88,33 +94,34 @@ func (b *Breaker) fail(o rest.Outcome, now time.Time) {
 		if !now.Before(b.snap.NextProbe) { // a probe (or a late one) failed: wait twice as long
 			b.snap.ProbeGap = min(max(b.snap.ProbeGap, ProbeAfter)*2, ProbeMax)
 			b.snap.NextProbe = now.Add(b.snap.ProbeGap)
-			b.claimed = time.Time{}
 		}
 		return
 	}
 	if n := len(b.fails); n > 0 && now.Sub(b.fails[n-1]) > DownWindow { // a stale run is not a streak
-		b.fails, b.server = nil, time.Time{}
+		b.fails = nil
 	}
 	if len(b.fails) == DownAfter {
 		b.fails = b.fails[1:]
 	}
 	b.fails = append(b.fails, now)
 	server := o.Status >= 500
-	if server && b.server.IsZero() {
-		b.server = now
+	if server {
+		if b.servers == 0 || now.Sub(b.last5xx) > ServerSpan { // a gap longer than the span breaks the run
+			b.server, b.servers = now, 0
+		}
+		b.last5xx, b.servers = now, b.servers+1
 	}
 	streak := len(b.fails) == DownAfter && now.Sub(b.fails[0]) <= DownWindow
-	long := server && now.Sub(b.server) >= ServerSpan
+	long := server && b.servers >= ServerRun && now.Sub(b.server) >= ServerSpan
 	if streak || long {
 		b.snap.Down, b.snap.DownSince, b.snap.ProbeGap = true, now, ProbeAfter
 		b.snap.NextProbe = now.Add(ProbeAfter)
-		b.claimed = time.Time{}
 	}
 }
 
 // answer records an answer that proves the provider is reachable; it reports a down -> up move.
 func (b *Breaker) answer() (recovered bool) {
-	b.fails, b.server, b.claimed = nil, time.Time{}, time.Time{}
+	b.fails, b.server, b.last5xx, b.servers = nil, time.Time{}, time.Time{}, 0
 	if b.snap.Down {
 		b.snap.Down, b.snap.DownSince, b.snap.NextProbe, b.snap.ProbeGap = false, time.Time{}, time.Time{}, 0
 		return true
@@ -139,9 +146,9 @@ func (b *Breaker) quota(o rest.Outcome, now time.Time) {
 	}
 }
 
-// Health is the state at now. A down breaker whose probe gap has passed hands out one probe slot
-// (reported as degraded, reason provider.probing, so placement may send one request); the slot is
-// held for a few seconds and the breaker reads down again until an outcome or the lease ends it.
+// Health is the state at now. It is a pure read. A down breaker whose probe gap has passed reads
+// degraded with reason provider.probing: placement may send a request, and the first outcome ends
+// the window (a failure doubles the gap, an answer closes the breaker).
 func (b *Breaker) Health(now time.Time) providers.Health {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -149,11 +156,8 @@ func (b *Breaker) Health(now time.Time) providers.Health {
 	switch {
 	case s.Down && now.Before(s.NextProbe):
 		return providers.Health{State: "down", Reason: ReasonDown, Since: s.DownSince, RetryAt: s.NextProbe}
-	case s.Down && !b.claimed.IsZero() && now.Sub(b.claimed) < probeLease:
-		return providers.Health{State: "down", Reason: ReasonDown, Since: s.DownSince, RetryAt: b.claimed.Add(probeLease)}
 	case s.Down:
-		b.claimed = now
-		return providers.Health{State: "degraded", Reason: ReasonProbing, Since: s.DownSince, RetryAt: now.Add(probeLease)}
+		return providers.Health{State: "degraded", Reason: ReasonProbing, Since: s.DownSince, RetryAt: s.NextProbe}
 	case s.DegradedUntil.After(now):
 		return providers.Health{State: "degraded", Reason: ReasonQuota, Since: s.DegradedSince, RetryAt: s.DegradedUntil}
 	}

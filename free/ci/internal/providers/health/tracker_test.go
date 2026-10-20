@@ -203,3 +203,28 @@ func TestNoRetryOnAuth(t *testing.T) {
 		t.Fatal("a second retry past infra_max must be refused")
 	}
 }
+
+// TestFirstOutcomeAfterRestartKeepsSavedState: the first outcome a restarted process sees (here a
+// failure during the probe window, before anything read the health) starts from the saved state, so
+// the saved outage is not forgotten and the probe gap doubles from where it was.
+func TestFirstOutcomeAfterRestartKeepsSavedState(t *testing.T) {
+	ctx := context.Background()
+	clk := newClock()
+	st := openStore(t, clk.Now)
+	a := health.New(health.Options{Clock: clk.Now, Store: st})
+	failN(a, health.DownAfter)
+	clk.advance(health.ProbeAfter + time.Second)
+	b := health.New(health.Options{Clock: clk.Now, Store: st})
+	b.Observe(outcome("transient", 503)) // no HealthOf, no Load before it
+	got := b.HealthOf(ctx, "github-hosted")
+	if got.State != "down" || !got.RetryAt.After(clk.Now().Add(health.ProbeAfter)) {
+		t.Fatalf("a failed probe after a restart must double the saved gap: %+v", got)
+	}
+	c := health.New(health.Options{Clock: clk.Now, Store: st})
+	c.Observe(outcome("", 200)) // the first outcome is an answer: the saved outage ends and is saved
+	clk.advance(2 * time.Second)
+	d := health.New(health.Options{Clock: clk.Now, Store: st})
+	if got = d.HealthOf(ctx, "github-hosted"); got.State != "up" {
+		t.Fatalf("the recovery seen first after a restart must be saved: %+v", got)
+	}
+}

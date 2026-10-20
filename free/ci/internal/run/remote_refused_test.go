@@ -54,6 +54,8 @@ func TestRemoteAwaitTransientProviderErrorIsRetried(t *testing.T) {
 	for _, cause := range []error{
 		providers.NewError(providers.Transient, "E704", "server", 503, time.Time{}),
 		providers.NewError(providers.Config, "E708", "lease superseded by a newer epoch", 0, time.Time{}),
+		providers.NewError(providers.Config, "E702", "request", 409, time.Time{}),  // a conflict may pass on a second try
+		providers.NewError(providers.Config, "E702", "response", 200, time.Time{}), // an answer that did not parse: a proxy during an outage
 	} {
 		e, rs, rd := lostByDispatcher(t)
 		job := model.Job{Retry: &model.RetryConfig{InfraMax: 1}}
