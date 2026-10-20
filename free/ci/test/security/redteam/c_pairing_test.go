@@ -134,6 +134,15 @@ func TestC39PromptCannotInjectTerminalControls(t *testing.T) {
 // padding is a denial; Equal on two empty strings is true, so the denial on empty input must come from the caller.
 func TestC39ApprovalNeedsTheExactFingerprint(t *testing.T) {
 	fp := pki.SPKIFingerprint([]byte("a public key"))
+	// positive control: the exact fingerprint (then four empty answers for the trust fields) approves, for a
+	// new node and for an existing one, so every denial below is a decision and not a prompt that always denies.
+	for _, existing := range []bool{false, true} {
+		ap := &pairing.PromptApprover{In: bufio.NewReader(strings.NewReader(fp + "\n\n\n\n\n")), Out: &bytes.Buffer{}}
+		dec, err := ap.Approve(context.Background(), pairing.ApprovalRequest{OfferID: "o", NodeID: "n", NodeName: "n", CSRFingerprint: fp, NodeKeyID: "0123456789abcdef", CertTTL: time.Hour, Existing: existing})
+		if err != nil || !dec.Approve {
+			t.Fatalf("control: the exact fingerprint (existing=%v) was not approved: approve=%v err=%v", existing, dec.Approve, err)
+		}
+	}
 	for _, typed := range []string{"", strings.ToLower(fp), strings.TrimPrefix(fp, "SHA256:"), fp[:len(fp)-1], fp + "=", fp + "x", "SHA256:" + strings.ToUpper(fp[7:]), "  "} {
 		var out bytes.Buffer
 		ap := &pairing.PromptApprover{In: bufio.NewReader(strings.NewReader(typed + "\n")), Out: &out}

@@ -88,3 +88,59 @@ func TestC37C44TrustOverrideAndCap(t *testing.T) {
 		t.Errorf("control: the audited operator override: class %q err %v rows %d", res.Class, err, count())
 	}
 }
+
+// TestC37C44CapBitesOnAReachableOwnerAndARequestNeverRaises isolates two controls the test above leaves
+// masked (its git runner makes every verdict untrusted before the cap or the request is read):
+//   - a machine-invoked run whose verdict is owner (no repository there) is capped to collaborator;
+//   - a request below the verdict lowers the class, a request above it never raises it.
+func TestC37C44CapBitesOnAReachableOwnerAndARequestNeverRaises(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "state.db")
+	st, err := store.Open(path, store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := roles.New(st, &audit.Log{St: st})
+	w := &policy.Writer{Store: st, Log: &audit.Log{St: st}}
+	if _, err := w.Apply(ctx, svc.Operator("cli:alice"), policy.Change{Op: policy.OpSet, Scope: "user", Key: "trust.machine_invoked_cap", Value: json.RawMessage(`"collaborator"`)}); err != nil {
+		t.Fatal(err)
+	}
+	_ = st.Close()
+	open := func() (*store.Store, error) { return store.Open(path, store.Options{}) }
+	classifier := func(invoker, gitOut string, exit int) run.SourceTrust {
+		return run.SourceTrust{
+			Capture:   func(context.Context, ...string) (string, int, error) { return gitOut, exit, nil },
+			OpenStore: open,
+			Getenv: func(k string) string {
+				if k == "NSELF_INVOKED_BY" {
+					return invoker
+				}
+				return ""
+			},
+		}
+	}
+	const noRepo, broken = "fatal: not a git repository", "fatal: unsafe repository"
+	decide := func(invoker, gitOut, requested string) (string, error) {
+		res, err := classifier(invoker, gitOut, 128).Decide(ctx, run.TrustRequest{Root: t.TempDir(), Requested: requested})
+		return string(res.Class), err
+	}
+	if got, err := decide("", noRepo, ""); err != nil || got != "owner" {
+		t.Fatalf("control: a directory that is no repository is the operator's own: class %q err %v", got, err)
+	}
+	if got, err := decide("mcp", noRepo, ""); err != nil || got != "collaborator" {
+		t.Errorf("machine-invoked owner verdict with cap collaborator: class %q err %v, want collaborator", got, err)
+	}
+	// lowering works
+	if got, err := decide("", noRepo, "collaborator"); err != nil || got != "collaborator" {
+		t.Errorf("control: --trust collaborator on an owner verdict: class %q err %v", got, err)
+	}
+	// a request above the verdict is not granted, only --trust owner (audited) raises
+	for _, req := range []string{"internal", "collaborator", "untrusted"} {
+		if got, err := decide("", broken, req); err != nil || got != "untrusted" {
+			t.Errorf("--trust %s on an untrusted verdict: class %q err %v, want untrusted", req, got, err)
+		}
+	}
+	if got, err := decide("mcp", noRepo, "internal"); err == nil {
+		t.Errorf("a machine-invoked --trust internal above the cap collaborator was granted: class %q", got)
+	}
+}
