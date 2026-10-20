@@ -287,3 +287,46 @@ func TestTrustRequiresAdminAuthority(t *testing.T) {
 		t.Fatal("store accepted zero authority")
 	}
 }
+
+// D-1332: a node's probe proof of enforced network scopes is kept only when the node offers container isolation
+// or better; below that no scope can be enforced, so the fact is discarded.
+func TestUpdateCapabilityKeepsNetworkProofOnlyForContainerIsolation(t *testing.T) {
+	r, c := setup(t)
+	ctx := context.Background()
+	id := c.Identity.ID
+	admin, err := store.NewAdminAuthority("admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	setIsolation := func(level model.Isolation) {
+		t.Helper()
+		n, e := r.Get(ctx, id)
+		if e != nil {
+			t.Fatal(e)
+		}
+		tr := n.Capability.Trust
+		tr.Isolation = model.Fact[model.Isolation]{Value: &level, Source: "assigned", ObservedAt: time.Now().UTC(), Confidence: "known"}
+		if _, e = r.SetTrust(ctx, id, tr, admin); e != nil {
+			t.Fatal(e)
+		}
+	}
+	scopes := []model.NetworkScope{"none", "restricted"}
+	in := c
+	in.Network = &model.CapabilityNetwork{EnforcedScopes: model.Fact[[]model.NetworkScope]{Value: &scopes, Source: "probe", ObservedAt: time.Now().UTC(), Confidence: "known"}}
+
+	reported := func(level model.Isolation) model.Capability { // the probe reports the isolation it sees
+		p := in
+		p.Trust.Isolation.Value = &level
+		return p
+	}
+	setIsolation("process")
+	n, _, err := r.UpdateCapability(ctx, id, reported("process"), "probe")
+	if err != nil || n.Capability.Network != nil {
+		t.Fatalf("a process-isolation node kept a network proof: %v %+v", err, n.Capability.Network)
+	}
+	setIsolation("container")
+	n, _, err = r.UpdateCapability(ctx, id, reported("container"), "probe")
+	if err != nil || n.Capability.Network == nil || len(*n.Capability.Network.EnforcedScopes.Value) != 2 {
+		t.Fatalf("a container node lost its network proof: %v %+v", err, n.Capability.Network)
+	}
+}

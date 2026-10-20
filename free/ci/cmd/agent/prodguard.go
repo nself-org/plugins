@@ -1,7 +1,7 @@
 package main
 
 // Purpose: the agent's production start guard (P7-NODE-14, Epic D9). Registered as a PreStart hook, it
-// stops `serve`, `exec`, `join` and `pull` on a host that is a deploy host (local identity in the exclusion set,
+// stops `serve`, `exec`, `join`, `pull` and `netscope-probe` on a host that is a deploy host (local identity in the exclusion set,
 // or a running compose project with ENV=prod) before the command reads or writes anything.
 // Inputs:  the command name from RunPreStart; the local host and $NSELF_CI_HOME (config.yaml, state.db).
 // Outputs: nil, or an E663 error that makes the command exit non-zero; warnings on stderr.

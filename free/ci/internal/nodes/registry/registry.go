@@ -156,6 +156,10 @@ func (r *Registry) UpdateCapability(ctx context.Context, id string, in model.Cap
 			in.Trust.Isolation = reportedIsolation
 			in.Trust.Isolation.Source = "assigned"
 		}
+		// the proof of enforced network scopes is a runtime-network claim: no node below container isolation can make it
+		if in.Trust.Isolation.Value == nil || isolationRank(*in.Trust.Isolation.Value) < isolationRank("container") {
+			in.Network = nil
+		}
 		if err := model.ValidateCapability(in); err != nil {
 			return invalid(err.Error())
 		}

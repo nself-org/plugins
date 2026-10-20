@@ -95,3 +95,36 @@ func TestContributorPublishesTheProofForTheLocalRunnerOnly(t *testing.T) {
 		t.Fatalf("%+v", w.Network)
 	}
 }
+
+// D-1332: a registered node's probe result (capability network.enforced_scopes) reaches World.Network, but only
+// while it is fresh, stated by a probe, and from a registered ssh or agent node that is not called "local".
+func TestContributorReadsTheProbeResultOfRegisteredNodes(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	node := func(id, transport string, source string, age time.Duration, scopes ...model.NetworkScope) sched.Runner {
+		r := sched.Runner{ID: id}
+		r.Capability.Identity = model.CapabilityIdentity{ID: id, Provider: transport, Transport: transport}
+		f := model.Fact[[]model.NetworkScope]{Source: source, ObservedAt: now.Add(-age), Confidence: "known", Value: &scopes}
+		if scopes == nil {
+			f.Value, f.Confidence = nil, "unknown"
+		}
+		r.Capability.Network = &model.CapabilityNetwork{EnforcedScopes: f}
+		return r
+	}
+	w := sched.World{NowMs: now.UnixMilli(), Runners: []sched.Runner{
+		node("agent-ok", "agent", "probe", time.Minute, "none", "restricted"),
+		node("ssh-ok", "ssh", "probe", time.Hour, "none"),
+		node("stale", "agent", "probe", 48*time.Hour, "none", "restricted"),
+		node("future", "agent", "probe", -time.Hour, "none", "restricted"),
+		node("self-said", "agent", "self", time.Minute, "none", "restricted"),
+		node("unknown", "agent", "probe", time.Minute),
+		node("hosted", "provider", "probe", time.Minute, "none", "restricted"),
+		node("local", "ssh", "probe", time.Minute, "none", "restricted"),
+		{ID: "no-section"},
+	}}
+	if err := contributeNetwork(context.Background(), &w); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Network) != 2 || !reflect.DeepEqual(w.Network["agent-ok"].Enforced, []model.NetworkScope{"none", "restricted"}) || !reflect.DeepEqual(w.Network["ssh-ok"].Enforced, []model.NetworkScope{"none"}) {
+		t.Fatalf("%+v", w.Network)
+	}
+}

@@ -52,6 +52,9 @@ func collect(ctx context.Context, c *model.Capability, runner commandRunner, exp
 		c.Resources.CPU = observed(parseNproc(outputs[cmdNproc]), now)
 	}
 	applyToolFacts(c, outputs, *osName, now)
+	if !local { // the local machine's own proof is read from this process by the world builder
+		collectNetscope(ctx, c, runner, now)
+	}
 	// This is an offered isolation ceiling. Registry.UpdateCapability may only lower it.
 	ceiling := model.Isolation("process")
 	if c.Tools.Docker.Value != nil && *c.Tools.Docker.Value || c.Tools.Podman.Value != nil && *c.Tools.Podman.Value {

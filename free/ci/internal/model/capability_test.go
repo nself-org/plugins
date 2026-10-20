@@ -85,3 +85,44 @@ func TestCapabilitySchemaCurrent(t *testing.T) {
 		t.Fatal("runner capability schema drift; run go generate ./internal/model/...")
 	}
 }
+
+// D-1332: the probe's proof of enforced network scopes is an optional fact; only a probe may state it.
+func TestCapabilityNetworkEnforcedScopes(t *testing.T) {
+	body, err := os.ReadFile("testdata/capability/valid/vps.valid.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c Capability
+	if err := json.Unmarshal(body, &c); err != nil {
+		t.Fatal(err)
+	}
+	if c.Network != nil {
+		t.Fatal("a fixture without a probe result must have no network section")
+	}
+	scopes := []NetworkScope{"none", "restricted"}
+	c.Network = &CapabilityNetwork{EnforcedScopes: Fact[[]NetworkScope]{Value: &scopes, Source: "probe", ObservedAt: c.Verified.At, Confidence: "known"}}
+	if err := ValidateCapability(c); err != nil {
+		t.Fatalf("probe fact refused: %v", err)
+	}
+	raw, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Capability
+	if err := json.Unmarshal(raw, &back); err != nil || back.Network == nil || len(*back.Network.EnforcedScopes.Value) != 2 {
+		t.Fatalf("round trip: %v %+v", err, back.Network)
+	}
+	for name, mutate := range map[string]func(*Capability){
+		"self source":     func(c *Capability) { c.Network.EnforcedScopes.Source = "self" },
+		"assigned source": func(c *Capability) { c.Network.EnforcedScopes.Source = "assigned" },
+		"unknown scope":   func(c *Capability) { v := []NetworkScope{"everything"}; c.Network.EnforcedScopes.Value = &v },
+	} {
+		bad := c
+		n := *c.Network
+		bad.Network = &n
+		mutate(&bad)
+		if err := ValidateCapability(bad); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+}

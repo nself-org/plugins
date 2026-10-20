@@ -285,3 +285,80 @@ func TestProbeDarwinFactsAndIsolation(t *testing.T) {
 		t.Fatal("GPU kind missing")
 	}
 }
+
+// D-1332: an ssh probe asks the node's agent for the scopes it proved, only on a node with a container runtime,
+// and keeps a fresh result instead of running the proof again.
+func TestProbeRecordsTheNodesNetworkProof(t *testing.T) {
+	r := setupProbe(t, "01J00000000000000000000000")
+	setIsolation(t, r, "01J00000000000000000000000", "container")
+	calls, reply := 0, `noise`+"\n"+`{"scopes":["none","restricted"]}`
+	runner := func(ctx context.Context, command string) (string, error) {
+		switch command {
+		case cmdTools:
+			return "/usr/bin/docker", nil
+		case cmdDocker:
+			return "27.1.0", nil
+		case cmdNetscope:
+			calls++
+			return reply, nil
+		}
+		return fixtureRunner(ctx, command)
+	}
+	p := &SSHProber{Registry: r, runner: runner}
+	id := "01J00000000000000000000000"
+	n, err := p.Probe(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the node offers container isolation, so the registry keeps the fact
+	if n.Capability.Network == nil || n.Capability.Network.EnforcedScopes.Value == nil || !reflect.DeepEqual(*n.Capability.Network.EnforcedScopes.Value, []model.NetworkScope{"none", "restricted"}) {
+		t.Fatalf("network proof missing: %+v", n.Capability.Network)
+	}
+	if n.Capability.Network.EnforcedScopes.Source != "probe" || calls != 1 {
+		t.Fatalf("source %q after %d proofs", n.Capability.Network.EnforcedScopes.Source, calls)
+	}
+	now := time.Now().UTC()
+	c := n.Capability
+	collectNetscope(context.Background(), &c, runner, now)
+	if calls != 1 {
+		t.Fatal("a fresh proof was probed again")
+	}
+	collectNetscope(context.Background(), &c, runner, now.Add(netscopeTTL+time.Second))
+	if calls != 2 {
+		t.Fatal("a stale proof was not probed again")
+	}
+	reply = `{"scopes":["everything"]}`
+	c.Network = nil
+	collectNetscope(context.Background(), &c, runner, now)
+	if c.Network == nil || c.Network.EnforcedScopes.Value != nil || c.Network.EnforcedScopes.Confidence != "unknown" {
+		t.Fatalf("an unknown scope was believed: %+v", c.Network)
+	}
+}
+
+func TestProbeSkipsTheNetworkProofWithoutAContainerRuntime(t *testing.T) {
+	c := model.Capability{}
+	collectNetscope(context.Background(), &c, func(context.Context, string) (string, error) {
+		t.Fatal("proof run without a runtime")
+		return "", nil
+	}, time.Now())
+	if c.Network != nil {
+		t.Fatalf("%+v", c.Network)
+	}
+}
+
+func setIsolation(t *testing.T, r *registry.Registry, id string, level model.Isolation) {
+	t.Helper()
+	n, err := r.Get(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := n.Capability.Trust
+	tr.Isolation = model.Fact[model.Isolation]{Value: &level, Source: "assigned", ObservedAt: time.Now().UTC(), Confidence: "known"}
+	admin, err := store.NewAdminAuthority("admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.SetTrust(context.Background(), id, tr, admin); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -105,7 +105,7 @@ func TestGuardIsRegisteredFirst(t *testing.T) {
 // it reads its spec. A new subcommand has to be classified here, so a job runner cannot skip the guard
 // by accident.
 func TestEveryJobRunningSubcommandRunsThePreStartGuard(t *testing.T) {
-	guarded := map[string][]string{"serve": {"--stdio"}, "pull": {}, "exec": {"--spec", "/nonexistent", "--evidence", "/nonexistent"}}
+	guarded := map[string][]string{"serve": {"--stdio"}, "pull": {}, "exec": {"--spec", "/nonexistent", "--evidence", "/nonexistent"}, "netscope-probe": {}}
 	exempt := map[string]bool{ // no job runs, or started by an already guarded agent; join runs the guard itself
 		"version": true, "slots": true, "verify-release": true, "job-shim": true, "cred-wrapper": true, "join": true,
 		"upgrade": true, // replaces the agent file only; it refuses while a job runs and starts nothing

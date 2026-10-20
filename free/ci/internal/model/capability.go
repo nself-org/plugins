@@ -23,6 +23,8 @@ type Capability struct {
 	Protocol        CapabilityProtocol     `json:"protocol"`
 	DeployHost      CapabilityDeployHost   `json:"deploy_host"`
 	Lifecycle       CapabilityLifecycle    `json:"lifecycle"`
+	// Network is optional: a node that never reported a probe result has none, which reads as "nothing proven".
+	Network *CapabilityNetwork `json:"network,omitempty"`
 }
 
 // UnmarshalJSON validates the original document before any unknown fields can be dropped.
@@ -125,6 +127,12 @@ type CapabilityTrust struct {
 	Network       Fact[[]NetworkScope] `json:"network"`
 	SecretClasses Fact[[]SecretClass]  `json:"secret_classes"`
 	PrivacyZone   Fact[PrivacyZone]    `json:"privacy_zone"`
+}
+
+// CapabilityNetwork is what the node's probe proved about the scopes it enforces (network.enforced_scopes, D-1332).
+// It is evidence, never trust: SCHED derives NoLANRoute from it and the coordinator may discard it.
+type CapabilityNetwork struct {
+	EnforcedScopes Fact[[]NetworkScope] `json:"enforced_scopes"`
 }
 type CapabilityVerified struct {
 	By string    `json:"by"`

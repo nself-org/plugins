@@ -60,6 +60,11 @@ func CapabilitySchema() ([]byte, error) {
 			field.AllOf = append(field.AllOf, &jsonschema.Schema{If: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"value": {Const: anyPtr(nil)}}}, Then: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"source": {Const: anyPtr("provider")}}}})
 		}
 	}
+	if network := s.Properties["network"]; network != nil { // optional: the probe's proof of enforced scopes
+		scopes := network.Properties["enforced_scopes"]
+		scopes.Properties["value"].Items.Enum = stringChoices(EnumValues("NetworkScope"))
+		scopes.Properties["source"].Enum = choices("probe")
+	}
 	s.Properties["verified"].Properties["by"].Enum = choices("self", "probe", "provider")
 	s.Properties["deploy_host"].Properties["source"].Enum = choices(nil, "inventory", "never-list", "marker")
 	b, err := json.MarshalIndent(s, "", "  ")

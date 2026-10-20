@@ -5,7 +5,8 @@ package run
 //          (deployguard.LocalSet over the CI home: the cached entries of its state.db and the never-list), or a
 //          source the serve wiring registers instead; optional policy hosts.
 // Outputs: the isolation.AttemptPlanner every profile built with the default planner uses; the world
-//          contributor that sets sched.World.Network["local"] from the probe, so SCHED derives NoLANRoute.
+//          contributor that sets sched.World.Network["local"] from the probe and the entries of registered
+//          nodes from their reported probe results, so SCHED derives NoLANRoute.
 // Constraints: an exclusion set that exists and cannot be read makes restricted and internet unavailable (E679)
 //          rather than run with less than the operator wrote down; the probe runs in the background and never blocks a world build; until it has a result the
 // fact is absent (never guessed), so an untrusted job is not admitted on the strength of it; a node without a
@@ -134,7 +135,25 @@ func containerRuntime(ctx context.Context) string {
 
 var localProof = &scopeProof{prober: &netscope.Prober{Planner: netscopePlanner}, binary: containerRuntime}
 
+// contributeNetwork publishes the proof of the local runner (this machine's probe) and the proofs registered
+// nodes reported (netscope_remote.go).
 func contributeNetwork(ctx context.Context, w *sched.World) error {
+	net := map[string]sched.NetworkFact{}
+	if scopes := localScopes(ctx, w); len(scopes) > 0 {
+		net["local"] = sched.NetworkFact{Enforced: scopes}
+	}
+	for _, r := range w.Runners {
+		if scopes := remoteScopes(r, w.NowMs); len(scopes) > 0 {
+			net[r.ID] = sched.NetworkFact{Enforced: scopes}
+		}
+	}
+	if len(net) > 0 {
+		w.Network = net
+	}
+	return nil
+}
+
+func localScopes(ctx context.Context, w *sched.World) []model.NetworkScope {
 	var local *sched.Runner
 	n := 0
 	for i := range w.Runners {
@@ -153,10 +172,7 @@ func contributeNetwork(ctx context.Context, w *sched.World) error {
 	if n != 1 || id.Transport != "local" || id.Provider != "local" || !hasLabel(id.Labels, world.LocalLabel) {
 		return nil
 	}
-	if scopes := localProof.get(ctx); len(scopes) > 0 {
-		w.Network = map[string]sched.NetworkFact{"local": {Enforced: scopes}}
-	}
-	return nil
+	return localProof.get(ctx)
 }
 
 func hasLabel(labels []string, want string) bool {

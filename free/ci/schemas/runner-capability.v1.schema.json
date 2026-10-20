@@ -4024,6 +4024,103 @@
         "revoked_at"
       ],
       "additionalProperties": false
+    },
+    "network": {
+      "type": [
+        "null",
+        "object"
+      ],
+      "properties": {
+        "enforced_scopes": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "internet",
+                  "restricted",
+                  "lan",
+                  "privileged"
+                ]
+              }
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "probe"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "enforced_scopes"
+      ],
+      "additionalProperties": false
     }
   },
   "$id": "https://nself.org/schemas/runner-capability.v1.schema.json",
