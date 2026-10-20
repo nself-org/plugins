@@ -331,7 +331,9 @@ func TestResultLogsAFailedSpendAndNothingElse(t *testing.T) {
 		logged := 0
 		d := &Driver{Gate: &Gate{Tokens: r.tokens, Bindings: b, Leases: r.st}, Minter: r.tokens, Leases: r.st, Poll: 10 * time.Millisecond, Logf: func(string, ...any) { logged++ }}
 		done := make(chan error, 1)
-		go func() { done <- d.Run(context.Background(), nodeCap("n-1"), protoLease(lease, att, ep), &runSink{eng: r.eng}) }()
+		go func() {
+			done <- d.Run(context.Background(), nodeCap("n-1"), protoLease(lease, att, ep), &runSink{eng: r.eng})
+		}()
 		eventually(t, 3*time.Second, "queued", func() bool { l, _ := d.Next(context.Background(), "n-1"); return l != nil })
 		res := protocol.Result{LeaseID: lease, Epoch: ep, Evidence: []byte(`{}`), Signature: protocol.Signature{KeyID: "k", Value: "v"}}
 		if err := d.Sink().Result(context.Background(), res); err != nil {
@@ -551,8 +553,16 @@ type lockedBytes struct {
 	b  bytes.Buffer
 }
 
-func (l *lockedBytes) Write(p []byte) (int, error) { l.mu.Lock(); defer l.mu.Unlock(); return l.b.Write(p) }
-func (l *lockedBytes) lines() int                  { l.mu.Lock(); defer l.mu.Unlock(); return bytes.Count(l.b.Bytes(), []byte("\n")) }
+func (l *lockedBytes) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+func (l *lockedBytes) lines() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return bytes.Count(l.b.Bytes(), []byte("\n"))
+}
 
 func TestWriteFramesNumbersEachFrameAndRemembersTheHighestWritten(t *testing.T) {
 	c := bareCarrier(t)
