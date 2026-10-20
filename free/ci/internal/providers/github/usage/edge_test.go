@@ -178,8 +178,15 @@ func TestReconcilerFailureKeepsTheMarkOpen(t *testing.T) {
 	if err := r.Reconcile(context.Background(), nil); err == nil || !strings.Contains(err.Error(), "E709") {
 		t.Fatalf("got %v", err)
 	}
-	if len(mk.m) != 0 {
-		t.Fatalf("a failed import moved the mark: %v", mk.m)
+	if _, ok := mk.m[usage.Name+"|org:acme"]; ok {
+		t.Fatalf("a failed import moved the success mark: %v", mk.m)
+	}
+	if err := r.Reconcile(context.Background(), nil); err != nil || f.callCount() != 1 {
+		t.Fatalf("a retry inside the backoff must not call the API: calls=%d err=%v", f.callCount(), err)
+	}
+	r.Clock = func() time.Time { return today.Add(usage.Backoff + time.Minute) }
+	if err := r.Reconcile(context.Background(), nil); err == nil || f.callCount() != 2 {
+		t.Fatalf("after the backoff the import is tried again: calls=%d err=%v", f.callCount(), err)
 	}
 }
 
@@ -208,5 +215,27 @@ func TestReconcilerDormantAndOff(t *testing.T) {
 	t.Setenv("NSELF_V15", "1")
 	if err := (&usage.Reconciler{}).Reconcile(context.Background(), nil); err != nil {
 		t.Fatalf("no policy installed yet: %v", err)
+	}
+}
+
+func TestMalformedLineOfAnotherProductIsIgnored(t *testing.T) {
+	body := `{"usageItems":[{"date":"2026-10-14T00:00:00Z","product":"Copilot","sku":"Copilot Business","quantity":"many","unitType":"seats","netAmount":"NaN"},` +
+		`{"date":"2026-10-14T00:00:00Z","product":"Actions","sku":"Actions Linux","quantity":4,"unitType":"minutes","netAmount":0.5,"repositoryName":"a/b"}]}`
+	f := newFakeBilling(t, map[string]reply{orgPath: {status: 200, body: body}})
+	rec := &recorder{}
+	res, err := importer(f.source(t, "org:acme"), "org:acme", true, rec).Run(ledgerCtx(openLedger(t)))
+	if err != nil || res.Rows != 1 {
+		t.Fatalf("a bad Copilot line must not stop the Actions import: %+v %v", res, err)
+	}
+}
+
+func TestCanceledContextIsNotUnavailable(t *testing.T) {
+	f := newFakeBilling(t, map[string]reply{orgPath: {status: 200, file: "org_october.json"}})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := importer(f.source(t, "org:acme"), "org:acme", true, &recorder{}).Run(ctx)
+	var pe *providers.Error
+	if err == nil || (errors.As(err, &pe) && pe.Code == "E709") {
+		t.Fatalf("a stopped caller is not an unavailable API: %v", err)
 	}
 }

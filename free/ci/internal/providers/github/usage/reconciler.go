@@ -3,9 +3,11 @@ package usage
 // Purpose: the daily import on the TEAM coordinator's Reconciler tick (P7-HOST-10, Epic D12/D19). The
 // coordinator calls Reconcile every Every(); the pass imports at most once per Interval, remembered
 // as a host-provider mark (name "github-usage", key = the account), so a restart never re-imports
-// early and a failed pass retries on the next tick.
+// early. A failed pass retries after Backoff (an attempt mark, name "github-usage-attempt"), not on
+// every tick.
 // Inputs:  the policy source (UsePolicy), the coordinator's store (Use), an injected clock.
-// Outputs: ledger rows as Importer writes them; the mark moves to the pass time only after a success.
+// Outputs: ledger rows as Importer writes them; the success mark moves to the pass time only after a
+//          success.
 // Constraints: dormant unless compat.V15(); with billing_import false a pass makes no API call and
 //          writes no mark. The Reconciler never enqueues a trigger. It needs the coordinator start to
 //          call UsePolicy and Use once (the same wiring HOST-16 documents for its own Use functions).
@@ -30,6 +32,11 @@ const (
 	Every = time.Hour
 	// Interval is the minimum time between two imports of one account.
 	Interval = 24 * time.Hour
+	// AttemptName is the provider_mark name of the last attempt, success or failure.
+	AttemptName = "github-usage-attempt"
+	// Backoff is the minimum time between two attempts after a failed one, so a token without the
+	// billing scope (403) or a retired endpoint (410) costs a few calls a day, not one a tick.
+	Backoff = 6 * time.Hour
 )
 
 // Marks is the host-provider mark store; *store.Store satisfies it.
@@ -99,6 +106,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, _ coordinator.Enqueuer) erro
 		return err
 	} else if ok && now().Sub(at) < Interval {
 		return nil
+	}
+	if at, ok, err := marks.ProviderMarkGet(ctx, AttemptName, set.Account); err != nil {
+		return err
+	} else if ok && now().Sub(at) < Backoff {
+		return nil // the last attempt failed recently
+	}
+	// The attempt mark is written before the call, so a crash or a hang also counts as an attempt.
+	if err := marks.ProviderMarkPut(ctx, AttemptName, set.Account, now()); err != nil {
+		return err
 	}
 	build := r.Build
 	if build == nil {

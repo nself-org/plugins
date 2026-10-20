@@ -9,14 +9,18 @@ package usage
 //          same rows (RecordUsage is an upsert by key) and never adds one.
 // Constraints: with billing_import false Run returns Disabled before the source is touched (no API
 //          call, no credential read). The whole period is read and converted before the first write,
-//          so a failing report writes nothing. No remaining value is computed or reported here.
+//          so a failing or malformed report writes nothing; a ledger write that fails midway leaves
+//          the earlier lines in place, the error names the key, and a rerun converges (same keys).
+//          No remaining value is computed or reported here.
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/economics"
@@ -70,13 +74,36 @@ func FromPolicy(ctx context.Context, eff *policy.Effective) (*Importer, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := &rest.Client{BaseURL: rs.GitHubAPIURL, Auth: runtime.Credential(ctx, "github"), UserAgent: "usage",
+	client := &rest.Client{BaseURL: rs.GitHubAPIURL, Auth: AuthFrom(rs), UserAgent: "usage",
 		APIVersion: apiVersion, Provider: "github", AllowPrivateBase: rs.GitHubAllowPrivateBase}
 	src, err := New(Config{Client: client, Account: acct})
 	if err != nil {
 		return nil, err
 	}
 	return &Importer{Settings: set, Source: src}, nil
+}
+
+// AuthFrom is the GitHub token source of the policy in hand: the variable named by
+// providers.github.token_env, else gh's own login for the API host (the rule runtime.Credential
+// applies to the process-wide policy). It is built from rs so the token and the API URL always come
+// from the same effective policy, whether or not the coordinator installed a policy source.
+func AuthFrom(rs runtime.Settings) rest.AuthFunc {
+	if rs.GitHubTokenEnv != "" {
+		return rest.EnvToken(rs.GitHubTokenEnv)
+	}
+	return rest.GHToken(ghHost(rs.GitHubAPIURL))
+}
+
+// ghHost is the host gh knows the login by: api.github.com is github.com, a GHES API URL is its own host.
+func ghHost(apiURL string) string {
+	u, err := url.Parse(apiURL)
+	if err != nil || u.Hostname() == "" {
+		return ""
+	}
+	if h := strings.ToLower(u.Hostname()); h != "api.github.com" {
+		return h
+	}
+	return "github.com"
 }
 
 func unconfigured() error {
@@ -146,8 +173,11 @@ func lines(acct Account, rows []providers.UsageRow, at time.Time) ([]economics.U
 			by[k] = s
 		}
 		s.minutes += r.Quantity
+		if r.NetMicro < 0 || s.micro > math.MaxInt64-r.NetMicro {
+			return nil, unavailable("shape.amount", 200)
+		}
 		s.micro += r.NetMicro
-		if s.micro < 0 || s.minutes < 0 || s.minutes > math.MaxInt32*1e3 {
+		if s.minutes < 0 || s.minutes > math.MaxInt32*1e3 {
 			return nil, unavailable("shape.amount", 200)
 		}
 	}

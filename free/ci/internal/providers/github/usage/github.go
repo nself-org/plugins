@@ -13,6 +13,7 @@ package usage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -66,6 +67,9 @@ func unavailable(reason string, status int) *providers.Error {
 
 // wrap turns a funnel error into E709 unless it only asks for a retry or a credential.
 func wrap(err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err // the caller stopped; the API did not fail
+	}
 	var pe *providers.Error
 	if !errors.As(err, &pe) {
 		return unavailable("request", 0)
@@ -78,13 +82,13 @@ func wrap(err error) error {
 }
 
 type item struct {
-	Date           string   `json:"date"`
-	Product        string   `json:"product"`
-	SKU            string   `json:"sku"`
-	Quantity       *float64 `json:"quantity"`
-	UnitType       string   `json:"unitType"`
-	NetAmount      *float64 `json:"netAmount"`
-	RepositoryName string   `json:"repositoryName"`
+	Date           string          `json:"date"`
+	Product        string          `json:"product"`
+	SKU            string          `json:"sku"`
+	Quantity       json.RawMessage `json:"quantity"`
+	UnitType       string          `json:"unitType"`
+	NetAmount      json.RawMessage `json:"netAmount"`
+	RepositoryName string          `json:"repositoryName"`
 }
 
 type report struct {
@@ -156,15 +160,26 @@ func (g *GitHub) row(it item) (providers.UsageRow, bool, error) {
 		return providers.UsageRow{}, false, nil
 	}
 	day, err := time.Parse(time.RFC3339, it.Date)
-	if err != nil || it.SKU == "" || it.Quantity == nil || it.NetAmount == nil {
+	q, qOK := number(it.Quantity)
+	n, nOK := number(it.NetAmount)
+	if err != nil || it.SKU == "" || !qOK || !nOK {
 		return providers.UsageRow{}, false, unavailable("shape.item", 200)
 	}
-	q, n := *it.Quantity, *it.NetAmount
 	if bad(q) || bad(n) {
 		return providers.UsageRow{}, false, unavailable("shape.amount", 200)
 	}
 	return providers.UsageRow{Account: g.account.String(), Date: dayOf(day), Product: "Actions", SKU: it.SKU, Quantity: q, Unit: "minutes",
 		NetMicro: int64(math.Round(n * 1e6)), Repo: it.RepositoryName}, true, nil
+}
+
+// number reads a JSON number; a missing, null or non-numeric value is not one. It runs only for
+// Actions minute lines, so a malformed line of another product never fails the import.
+func number(raw json.RawMessage) (float64, bool) {
+	var v *float64
+	if len(raw) == 0 || json.Unmarshal(raw, &v) != nil || v == nil {
+		return 0, false
+	}
+	return *v, true
 }
 
 // bad reports an amount that cannot be a consumption: negative, NaN, infinite or past int64 micro-units.
