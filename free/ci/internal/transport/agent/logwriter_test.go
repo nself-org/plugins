@@ -189,7 +189,7 @@ func writeLines(t *testing.T, path string, n int, textLen int) {
 
 func TestLogWriterReadsTheTailOfAFileLargerThanTheWindow(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "big.jsonl")
-	writeLines(t, path, 3000, 1000) // about 3 MiB, more than the 2 MiB window
+	writeLines(t, path, 5000, 1000) // about 5 MiB, more than the 4 MiB window
 	if st, _ := os.Stat(path); st.Size() <= tailWindow {
 		t.Fatalf("file is %d bytes, want more than the window", st.Size())
 	}
@@ -197,24 +197,24 @@ func TestLogWriterReadsTheTailOfAFileLargerThanTheWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Last() != 3000 {
-		t.Fatalf("tail = %d, want 3000", w.Last())
+	if w.Last() != 5000 {
+		t.Fatalf("tail = %d, want 5000", w.Last())
 	}
 	_ = w.Close()
 	// and with a torn tail beyond the window
 	f, _ := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
-	_, _ = f.WriteString(`{"line_seq":3001,"stre`)
+	_, _ = f.WriteString(`{"line_seq":5001,"stre`)
 	_ = f.Close()
 	w, err = OpenLog(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer w.Close()
-	if w.Last() != 3000 {
+	if w.Last() != 5000 {
 		t.Fatalf("tail after a torn line = %d", w.Last())
 	}
-	if ok, _ := w.Append(logOf(3001, "z")); !ok {
-		t.Fatal("line 3001 not written")
+	if ok, _ := w.Append(logOf(5001, "z")); !ok {
+		t.Fatal("line 5001 not written")
 	}
 	b, _ := os.ReadFile(path)
 	if !strings.HasSuffix(string(b), `"text":"z"}`+"\n") || strings.Contains(string(b), `"stre{`) {
@@ -420,5 +420,52 @@ func TestLogWriterAcceptsALineThatFillsTheCapExactly(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(path); !strings.Contains(string(b), "[log truncated") {
 		t.Fatal("no truncation note")
+	}
+}
+
+func TestLogWriterKeepsNothingAfterTheCapNoteAcrossARestart(t *testing.T) {
+	old := logCap
+	logCap = 300
+	t.Cleanup(func() { logCap = old })
+	w, path := openTemp(t)
+	for i := uint64(1); i <= 12; i++ {
+		_, _ = w.Append(logOf(i, strings.Repeat("x", 20)))
+	}
+	if ok, _ := w.Append(logOf(13, "s")); ok { // a short line that would fit under the cap is still dropped
+		t.Fatal("a line was written after the note")
+	}
+	_ = w.Close()
+	w2, err := OpenLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w2.Close()
+	for i := uint64(14); i <= 30; i++ {
+		_, _ = w2.Append(logOf(i, strings.Repeat("x", 20)))
+	}
+	b, _ := os.ReadFile(path)
+	if n := strings.Count(string(b), "[log truncated"); n != 1 {
+		t.Fatalf("%d truncation notes after a restart:\n%s", n, b)
+	}
+}
+
+func TestLogWriterLineOfInvalidBytesFitsTheTailWindow(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "wide.jsonl")
+	w, err := OpenLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.Repeat("\xff", protocol.MaxFrame-200) // one byte in the frame, three in the log line
+	if ok, err := w.Append(logOf(1, text)); err != nil || !ok {
+		t.Fatalf("append: %v %v", ok, err)
+	}
+	_ = w.Close()
+	w, err = OpenLog(path)
+	if err != nil {
+		t.Fatalf("a widened line must still be found after a restart: %v", err)
+	}
+	defer w.Close()
+	if w.Last() != 1 {
+		t.Fatalf("tail %d", w.Last())
 	}
 }

@@ -212,6 +212,7 @@ func TestGateAfterALostRebindRaceAdmitsOnlyTheWinnerSession(t *testing.T) {
 		"other serial":           {b: store.TokenBinding{Serial: "zz", Session: "sess-2"}, found: true, reason: ReasonWrongSession},
 		"other session":          {b: store.TokenBinding{Serial: "aa01", Session: "sess-9"}, found: true, reason: ReasonWrongSession},
 		"winner is spent":        {b: store.TokenBinding{Serial: "aa01", Session: "sess-2", Spent: true}, found: true, reason: ReasonReplayed},
+		"spent, other session":   {b: store.TokenBinding{Serial: "aa01", Session: "sess-1", Spent: true}, found: true, reason: ReasonReplayed},
 		"store failure":          {err: boom},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -585,5 +586,46 @@ func TestWriteFramesNumbersEachFrameAndRemembersTheHighestWritten(t *testing.T) 
 	cancel()
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+type hookBindings struct {
+	Bindings
+	onBind func()
+}
+
+func (h *hookBindings) TokenBind(ctx context.Context, b store.TokenBinding) (store.TokenBinding, bool, error) {
+	got, created, err := h.Bindings.TokenBind(ctx, b)
+	if h.onBind != nil {
+		h.onBind()
+	}
+	return got, created, err
+}
+
+func TestGateDoesNotCacheABindingThatOverlappedARebind(t *testing.T) {
+	r := newRig(t)
+	lease, att, ep := r.seedLease("1", "n-1")
+	tok := r.mint("jti-1", "n-1", att, ep)
+	hb := &hookBindings{Bindings: r.st}
+	g := &Gate{Tokens: r.tokens, Bindings: hb, Leases: r.st}
+	hb.onBind = func() { g.forgetOtherSessions("jti-1", "sess-2") } // a reconnect moved the token while this call was binding
+	if err := g.Check(context.Background(), call(lease, tok, ep)); err != nil {
+		t.Fatal(err)
+	}
+	g.mu.Lock()
+	n := len(g.known)
+	g.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("%d bindings cached; the session that overlapped the rebind must prove itself again", n)
+	}
+	hb.onBind = nil
+	if err := g.Check(context.Background(), call(lease, tok, ep)); err != nil {
+		t.Fatal(err)
+	}
+	g.mu.Lock()
+	n = len(g.known)
+	g.mu.Unlock()
+	if n != 1 {
+		t.Fatalf("%d bindings cached after an undisturbed check", n)
 	}
 }

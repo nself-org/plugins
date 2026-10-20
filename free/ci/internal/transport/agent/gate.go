@@ -52,6 +52,7 @@ type Gate struct {
 
 	mu    sync.Mutex
 	known map[use]bool    // bindings this process already proved, so a log line costs no write
+	moves uint64          // rebinds so far: a bind that overlapped one does not cache what it proved
 	spent map[string]bool // tokens whose result was accepted, so a racing first bind cannot cache them
 }
 
@@ -105,7 +106,7 @@ func isStale(err error) bool {
 func (g *Gate) bind(ctx context.Context, c agentapi.Call, cl pki.TokenClaims) error {
 	u := use{cl.JTI, c.Serial, c.Session}
 	g.mu.Lock()
-	hit, spent := g.known[u], g.spent[cl.JTI]
+	hit, spent, moves := g.known[u], g.spent[cl.JTI], g.moves
 	g.mu.Unlock()
 	if spent {
 		return deny(ReasonReplayed, "lease %s: the result for this token was already accepted", c.LeaseID)
@@ -120,6 +121,9 @@ func (g *Gate) bind(ctx context.Context, c agentapi.Call, cl pki.TokenClaims) er
 	defer g.mu.Unlock()
 	if g.spent[cl.JTI] { // spent while this call was binding: do not remember it as usable
 		return deny(ReasonReplayed, "lease %s: the result for this token was already accepted", c.LeaseID)
+	}
+	if g.moves != moves { // a rebind ran meanwhile: this session may no longer hold the token, so prove it again next time
+		return nil
 	}
 	if g.known == nil || len(g.known) >= maxKnown {
 		g.known = map[use]bool{}
@@ -159,11 +163,11 @@ func (g *Gate) bindOnce(ctx context.Context, c agentapi.Call, cl pki.TokenClaims
 	if err != nil {
 		return err
 	}
+	if found && now.Spent { // the rebind may have failed because the result was accepted meanwhile
+		return deny(ReasonReplayed, "lease %s: the result for this token was already accepted", c.LeaseID)
+	}
 	if !found || now.Serial != c.Serial || now.Session != c.Session {
 		return deny(ReasonWrongSession, "lease %s: the token is bound to another session", c.LeaseID)
-	}
-	if now.Spent {
-		return deny(ReasonReplayed, "lease %s: the result for this token was already accepted", c.LeaseID)
 	}
 	return nil
 }
@@ -172,6 +176,7 @@ func (g *Gate) bindOnce(ctx context.Context, c agentapi.Call, cl pki.TokenClaims
 func (g *Gate) forgetOtherSessions(jti, keep string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	g.moves++
 	for u := range g.known {
 		if u.jti == jti && u.session != keep {
 			delete(g.known, u)

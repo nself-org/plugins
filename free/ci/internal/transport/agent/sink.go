@@ -6,8 +6,8 @@ package agent
 // Inputs:  protocol.Log, ArtifactRef, CacheRef, Result and blob requests from agentapi.
 // Outputs: calls on the owning run's Sink; <LogDir>/<lease>.jsonl; the run's Run call returns after Result.
 // Constraints: a log line is acknowledged only after fsync and a duplicate line_seq is dropped without
-//          reaching the run; a frame for a lease this process never delivered is refused (the agent keeps it
-//          and retries), a frame for a lease whose Run already returned is accepted and dropped (it is a
+//          reaching the run; a frame for a lease this process never delivered is refused with a lost refusal
+//          (agentapi cancels that lease on the agent and keeps the stream), a frame for a lease whose Run already returned is accepted and dropped (it is a
 //          resend); CommitsResult is true because the run's sink commits the result through the lease engine,
 //          so agentapi must not commit it a second time; the token is spent after the sink accepted the result.
 

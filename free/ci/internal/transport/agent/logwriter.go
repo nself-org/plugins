@@ -25,7 +25,10 @@ import (
 )
 
 // tailWindow is how much of the file end OpenLog reads to find the last complete line.
-const tailWindow = 2 * protocol.MaxFrame
+//
+// A line is at most about three times its frame: the JSON encoder writes U+2028 and U+2029 as six bytes (three in
+// the frame) and an invalid byte as the three-byte U+FFFD.
+const tailWindow = 4 * protocol.MaxFrame
 
 var unsafeFile = regexp.MustCompile(`[^A-Za-z0-9_.-]`)
 
@@ -34,6 +37,9 @@ const MaxLogBytes = 256 << 20
 
 // logCap is MaxLogBytes; a test lowers it.
 var logCap int64 = MaxLogBytes
+
+// truncNote is the text of the line that ends a log which reached the cap.
+const truncNote = "[log truncated: the coordinator keeps at most 256 MiB of one lease's output]"
 
 // LogFile is the file name of a lease's log.
 func LogFile(dir, leaseID string) string {
@@ -111,6 +117,7 @@ func (w *LogWriter) recover() error {
 		return fmt.Errorf("log file: the last line is not a log line: %w", err)
 	}
 	w.last = ll.LineSeq
+	w.capped = ll.Text == truncNote // a restart does not write a second note
 	return nil
 }
 
@@ -134,7 +141,7 @@ func (w *LogWriter) Append(l protocol.Log) (written bool, err error) {
 	}
 	var enc bytes.Buffer
 	je := json.NewEncoder(&enc)
-	je.SetEscapeHTML(false) // '<' stays one byte, so a line is never longer than the frame that carried it
+	je.SetEscapeHTML(false) // '<' stays one byte; only U+2028/2029 and invalid bytes grow (see tailWindow)
 	if err := je.Encode(logLine{LineSeq: l.LineSeq, Stream: l.Stream, Text: l.Text}); err != nil {
 		return false, err
 	}
@@ -143,10 +150,10 @@ func (w *LogWriter) Append(l protocol.Log) (written bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	if before+int64(len(b)) > logCap { // a runaway job cannot fill the coordinator's disk
+	if w.capped || before+int64(len(b)) > logCap { // a runaway job cannot fill the coordinator's disk; after the note nothing more is kept
 		if !w.capped {
 			w.capped = true
-			note, _ := json.Marshal(logLine{LineSeq: l.LineSeq, Stream: "stderr", Text: "[log truncated: the coordinator keeps at most 256 MiB of one lease's output]"})
+			note, _ := json.Marshal(logLine{LineSeq: l.LineSeq, Stream: "stderr", Text: truncNote})
 			_, _ = w.f.Write(append(note, '\n'))
 			w.last = l.LineSeq
 			w.dirty = true
