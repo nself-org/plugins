@@ -14,7 +14,9 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
+	"errors"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -133,7 +135,9 @@ func newPullRigWith(t *testing.T, o rigOpts) *pullRig {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(ctx)
-		<-done
+		if err := <-done; err != nil && !errors.Is(err, http.ErrServerClosed) {
+			t.Errorf("agent server shutdown: %v", err)
+		}
 	})
 	return r
 }

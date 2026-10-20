@@ -71,7 +71,10 @@ jobs:
           set -o pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
           status=0
-          "$NSELF_CI_BIN" --no-status --json > "$RUNNER_TEMP/evidence/nself-ci-source.json" || status=$?
+          # This disposable GitHub-hosted VM is the outer isolation boundary.
+          # The checkout-built engine audits this explicit local-operator override;
+          # no repository secrets or writable token are available to its jobs.
+          "$NSELF_CI_BIN" --trust owner --no-status --json > "$RUNNER_TEMP/evidence/nself-ci-source.json" || status=$?
           {
             echo "### nself-ci/source (built from $GITHUB_SHA)"
             echo "exit code: $status"

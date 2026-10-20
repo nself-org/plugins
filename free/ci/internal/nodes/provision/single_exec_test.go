@@ -46,6 +46,7 @@ var dynamicProgram = map[string]bool{
 	"internal/exec/process.go:runCommand":       true,
 	"internal/exec/process.go:runCommandIn":     true,
 	"internal/exec/process.go:runCommandSig":    true,
+	"internal/exec/process.go:runCommandFiles":  true,
 	// `nself ci --detach` re-executes the plugin binary (os.Executable) in a new
 	// session; the program is the caller's own binary, never ssh (P7-CI-63).
 	"internal/exec/detach.go:StartDetached": true,
@@ -56,11 +57,14 @@ var dynamicProgram = map[string]bool{
 	// nself-ci-agent job-shim replaces itself (syscall.Exec) with the step argv the agent sent on
 	// stdin, as a job user chosen by sudo; never ssh (P7-NODE-06).
 	"cmd/agent/job_shim.go:execShimRequest": true,
+	// The cibench timing harness starts the binary it measures (P7-CI-46).
+	"bench/spawn.go:spawn": true,
 	// The container runtime binary is checked against runtimeBinary (docker or
 	// podman by name or path) before any of these runs it (P7-TRUST-04).
 	"internal/exec/container.go:containerStopper": true,
 	"internal/exec/runtime.go:runtimeQuery":       true,
 	"internal/exec/runtime.go:RuntimeRemove":      true,
+	"internal/exec/sweep.go:removeStaleContainer": true,
 	// The sandboxed-container probe (P7-TRUST-05): the runtime binary is checked against
 	// runtimeBinary, the runtime name and image against fixed patterns; runsc is run only by its
 	// absolute path with base name runsc, with the one argument --version.
