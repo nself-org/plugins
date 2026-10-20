@@ -52,7 +52,7 @@ type Gate struct {
 
 	mu    sync.Mutex
 	known map[use]bool    // bindings this process already proved, so a log line costs no write
-	moves uint64          // rebinds so far: a bind that overlapped one does not cache what it proved
+	moves *byte           // replaced by every rebind: a bind that overlapped one does not cache what it proved
 	spent map[string]bool // tokens whose result was accepted, so a racing first bind cannot cache them
 }
 
@@ -176,7 +176,7 @@ func (g *Gate) bindOnce(ctx context.Context, c agentapi.Call, cl pki.TokenClaims
 func (g *Gate) forgetOtherSessions(jti, keep string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.moves++
+	g.moves = new(byte)
 	for u := range g.known {
 		if u.jti == jti && u.session != keep {
 			delete(g.known, u)
