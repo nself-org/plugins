@@ -1,0 +1,1 @@
+{"inputs":{"attempt_id":"synthetic-attempt","nonce":"synthetic-nonce","revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"ref":"refs/heads/main","workflow":".github/workflows/nself-ci-dispatch.yml","repository":{"id":1001,"full_name":"o/r","private":false,"visibility":"public","fork":false,"default_branch":"main"},"sender":{"login":"ci-token-owner","type":"User"}}
