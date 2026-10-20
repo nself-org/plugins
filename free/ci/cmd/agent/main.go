@@ -84,6 +84,9 @@ func jobOutcome(spec execSpec, res ciexec.AttemptResult, tail string) cirun.JobO
 	o := cirun.JobOutcome{ID: spec.JobID, Name: spec.JobID, Check: spec.JobID, Tool: "nself-ci-agent", Kind: spec.Job.Kind,
 		Required: true, Substantive: true, FailureClass: res.Attempt.FailureClass, ExitCode: res.ExitCode, AttemptID: spec.AttemptID, N: 1,
 		Duration: res.Finished.Sub(res.Started), Tail: tail, Reason: model.Reason(res.Reason)}
+	if spec.Evidence != nil {
+		o.N = max(spec.Evidence.AttemptN, 1)
+	}
 	switch res.Attempt.State {
 	case "passed":
 		o.State = cirun.StatePassed
@@ -116,6 +119,12 @@ func baseEvidence(spec execSpec, o cirun.JobOutcome, start, end time.Time) model
 		Producer:     model.Producer{Kind: "self-reported", Version: "1"}, ToolVersions: map[string]string{}, Artifacts: []model.Artifact{}, Retries: []model.Retry{},
 		Selection: model.Selection{Mode: "full", Reason: "selection.full_required"}, Freshness: model.Freshness{State: "current"}, Signature: model.Signature{Kind: "coordinator-recorded"},
 		WorktreeState: "clean", Binding: model.Binding{State: "bound"},
+	}
+	e.Attempt = &model.AttemptRef{ID: spec.AttemptID, N: max(o.N, 1)}
+	if spec.Evidence != nil {
+		c := spec.Evidence
+		e.RunID, e.Pipeline.ID, e.RepoID = c.RunID, c.RunID, c.RepoID
+		e.SourceTrust, e.PolicyDigest, e.Selection.Mode = c.SourceTrust, c.PolicyDigest, c.SelectionMode
 	}
 	c := model.Check{ID: o.Check, JobID: o.ID, Kind: string(o.Kind), Tool: o.Tool, Required: true, Substantive: true, FailureClass: o.FailureClass, Reason: o.Reason}
 	switch o.State {

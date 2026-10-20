@@ -217,6 +217,10 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	}
 	lease := protocol.Lease{LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
 		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: []protocol.SecretRef{}, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
+	var err error
+	if lease.Evidence, err = remoteEvidenceContext(ctx, a.sink, d.AttemptID); err != nil {
+		return err
+	}
 	sink := bindLeaseSink(a.sink, leaseFacts{AttemptID: d.AttemptID, LeaseID: d.LeaseID, Epoch: d.Epoch, Job: d.Job, Hosted: d.Hosted})
 	sink = prepareCache(ctx, sink, &lease, a.root, d.Node.Identity.ID, d.Hosted, remoteCachePlatform(d.Node), d.Node.Identity.Transport)
 	return transport.Deliver(ctx, d.Node, lease, sink)

@@ -119,6 +119,19 @@ type Lease struct {
 	ExpiresAt        string            `json:"expires_at"`
 	Cache            *LeaseCache       `json:"cache,omitempty"`
 	RunnerCredential *RunnerCredential `json:"runner_credential,omitempty"`
+	Evidence         *EvidenceContext  `json:"evidence,omitempty"`
+}
+
+// EvidenceContext is coordinator-recorded context that signed remote evidence must match.
+// It conveys no authority: the coordinator verifies it against its own ledger.
+type EvidenceContext struct {
+	RunID         string              `json:"run_id"`
+	RepoID        string              `json:"repo_id"`
+	SourceTrust   model.TrustClass    `json:"source_trust"`
+	PolicyDigest  string              `json:"policy_digest"`
+	SelectionMode model.SelectionMode `json:"selection_mode"`
+	Job           string              `json:"job"`
+	AttemptN      int                 `json:"attempt_n"`
 }
 type Chunk struct {
 	Stream string `json:"stream"`

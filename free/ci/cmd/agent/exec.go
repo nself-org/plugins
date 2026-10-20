@@ -28,6 +28,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/evidence"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
@@ -38,10 +39,11 @@ func init() {
 
 // execSpec is the job a hosted workflow or a test hands to `exec`.
 type execSpec struct {
-	AttemptID     string    `json:"attempt_id"`
-	CoordinatorID string    `json:"coordinator_id"`
-	JobID         string    `json:"job_id"`
-	Job           model.Job `json:"job"`
+	AttemptID     string                    `json:"attempt_id"`
+	CoordinatorID string                    `json:"coordinator_id"`
+	JobID         string                    `json:"job_id"`
+	Job           model.Job                 `json:"job"`
+	Evidence      *protocol.EvidenceContext `json:"evidence,omitempty"`
 	// Revision is the full commit the job runs against (40 or 64 hex).
 	Revision  string `json:"revision"`
 	SourceDir string `json:"source_dir,omitempty"`
