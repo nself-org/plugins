@@ -11,7 +11,7 @@ Every container gets:
 - `--cap-drop=ALL`, `--security-opt no-new-privileges` and a read-only root filesystem, with a 256 MB `/tmp`.
 - A numeric user, `65532 + slot`, never root and never the agent's own UID. Two concurrent attempts that share a home never share a slot.
 - A pids, memory and CPU limit.
-- Network `none` unless the job asks for more. `lan` is NAT on the default bridge today; it does not block the host gateway. The network planner (P7-TRUST-08) tightens that.
+- Network `none` unless the job asks for more. `restricted` and `internet` go through a per-attempt proxy (see Network scopes). `lan` is NAT on the default bridge; it does not block the host gateway, which is why an untrusted job can never have it.
 - One bind mount, the attempt workspace at `/repo`. A cache restore may add read-only binds. Read-write host mounts, runtime sockets, `/var/run`, `/run` and system directories are refused.
 - The labels `nself.ci.attempt`, `role=ci-ephemeral` and `coordinator_id`, so an orphan sweep can find them.
 - The job environment through the runtime's stdin env file. No value reaches an argv or a file on disk.
@@ -19,7 +19,7 @@ Every container gets:
 ## What it does not block
 
 - A kernel escape. A container shares the host kernel. For code you do not trust, use the sandboxed container level (gVisor) or a VM.
-- Network egress on `lan` and `internet`.
+- Network egress on `lan`, and anything a job does with the hosts the proxy allows under `restricted` and `internet`.
 - Disk use inside the workspace. The workspace is removed after the attempt. Files the job user created are removed by a cleanup helper that runs in a separate busybox image pinned by digest (image lock entry `ci-cleanup`), never in the job image, so an image without a shell cannot leave them behind. If the helper image cannot start (an air-gapped node that never pulled `ci-cleanup`), the cleanup is tried once in the job image, as before; if that fails too, the job log says so and the host removes what it owns; a workspace it cannot empty fails a passing run as an infra failure (`E610`).
 
 ## The sandboxed container level (gVisor)
@@ -61,7 +61,45 @@ Some toolchains do not run under gVisor because they need a syscall the Sentry l
 
 - `ci doctor` does not yet print the install steps; the profile exposes them as the `hint` fact on an unavailable result (`gvisor.InstallHint`).
 - Podman support needs a way to read and judge its runtime table.
-- Network scopes `restricted` and `internet` need the scope planner of P7-TRUST-08, as for the container level.
+- Network scopes `restricted` and `internet` use the same scope planner as the container level; the sidecar and the job network are created by the container profile, and the sandboxed job runs on that network under `runsc`.
+
+## Network scopes
+
+A job runs under one scope. An undeclared scope takes the default of its trust class: `owner` and `internal` get `lan`, `collaborator` gets `internet`, `untrusted` gets `restricted`. An untrusted job that declares `lan` or `privileged` is refused (`E680`), before any resource exists.
+
+| Scope | What the job can reach |
+|---|---|
+| `none` | Nothing. The container has no interface but `lo`. |
+| `restricted` | Only an allowlist of package registries, through the proxy: `proxy.golang.org`, `sum.golang.org`, `registry.npmjs.org`, `registry.yarnpkg.com`, `crates.io`, `static.crates.io`, `index.crates.io`, `pypi.org`, `files.pythonhosted.org`, plus the hosts the policy key `trust.providers` names. |
+| `internet` | Any public host, through the proxy. |
+
+`restricted` serves ports 443 and 80 only; `internet` serves any port of a public host.
+| `lan` | The default bridge (owner and internal jobs only). |
+| `privileged` | Raw access (owner and internal jobs only). |
+
+`restricted` and `internet` need no root and no firewall rule. For each attempt the container profile creates a Docker or Podman network with `--internal` (no route out) and `com.docker.network.bridge.inhibit_ipv4=true` (no address for the host on that bridge), with IPv6 off. A second container, the proxy sidecar, is joined to that network and to the runtime's normal bridge. It runs the static `nself-ci` binary, mounted read-only into a minimal image pinned by digest (`ci-netproxy` in `images.json`), as `nself-ci netproxy`. The job gets `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` (upper and lower case) that point at the sidecar, and `--dns 127.0.0.1`, so the job resolves no name. The proxy lives in neither the agent nor the coordinator.
+
+The proxy takes `CONNECT` and absolute-form HTTP requests. For each request it resolves the name once, unmaps every address (an IPv4-mapped address becomes IPv4), checks all answers against the deny set, and dials the address it checked. The deny set is:
+
+- the special-purpose IPv4 and IPv6 ranges, which include the NAT64, local-use NAT64, 6to4 and Teredo forms of an IPv4 address, so `::ffff:10.0.0.1`, `64:ff9b::a00:1` and `2002:a00:1::1` are refused like `10.0.0.1`;
+- the host's own addresses and every prefix configured on its interfaces or in its routes, IPv4 and IPv6, global unicast prefixes included (a `/64` LAN of public addresses is a LAN);
+- the deploy exclusion set of the host (the cached entries of its `state.db` and the never-list in `config.yaml`, read with `deployguard.LocalSet`), by address, prefix and name. Each excluded name is also resolved once when the scope is set up and its addresses join the set, so dialling the address, or another name for it, is refused too. A set that exists and cannot be read, or an entry that does not parse, makes the scope unavailable (`E679`) instead of running with less.
+
+No environment variable loosens the set (`NSELF_ALLOW_PRIVATE_URLS` of the SDK guard has no counterpart). Each refusal is one structured event (`network.denied`, with the scope, host, port and reason) that the planner reads back when the attempt ends. The proxy never logs a path, header or body, its refusal answer names no reason, and a sidecar records at most 1000 events (the last one says so). The planner also records an event when the sidecar log could not be read back or the attempt's resources could not be removed.
+
+A tool that ignores proxy variables fails under `restricted` and `internet`. That is intended: there is no silent bypass.
+
+### What a runner proves
+
+A scope is offered only where it is enforced. The probe builds the same network and sidecar a job gets, then runs one container on it that tries to connect to the host's own addresses (on a port where the probe listens), to `169.254.169.254` and to a raw public address. If any connection succeeds, or the listener sees one, `restricted` and `internet` are withheld. The result is the capability fact `network.enforced_scopes`; the scheduler derives `NoLANRoute` from it, so a runner cannot declare it. Where the network or the sidecar cannot be created the scope is unavailable (`E679`), never approximated. The sidecar runs the host's own binary in a Linux container, so `restricted` and `internet` are Linux-host features (Docker or Podman, rootless included); on macOS they report unavailable.
+
+### Known limits
+
+- The exclusion set is the one this host can build for itself. A team coordinator that keeps the set in its own store can replace it with `run.RegisterNetscopeExclusions`; nothing registers one yet.
+- The scheduler reads the proof for the local runner. A remote node's `network.enforced_scopes` is not reported yet, so no untrusted job is placed on a remote node on the strength of it. The agent does not yet pass the lease's network scope into the executor (container jobs there run with `none`), and `netscope.Effective`, which refuses `lan` and `privileged` for an untrusted job, is called by the scheduler's admission rules only.
+- The proxy sees the destination host and port, not the encrypted content. It does not check the TLS server name, so a shared CDN host on the allowlist can be used for traffic to another site behind it, and uploading to an allowlisted registry is still an exfiltration path. `restricted` limits where a job can talk, not what it says.
+- The host's other routing tables (policy routing for a VPN) and a public address that hairpins to a LAN service through the router are not in the on-link set. Put such addresses in the never-list.
+- The sidecar bind-mounts this process's own binary, so the file must be readable and executable by other users (mode `0755`), or the scope is unavailable (`E679`).
 
 ## What a node must provide
 

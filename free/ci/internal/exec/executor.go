@@ -60,6 +60,13 @@ type JobSpec struct {
 	// Secrets, when set, resolves this attempt's references instead of Executor.Secrets (P7-TRUST-02:
 	// the source is built per attempt, so it knows the attempt, its trust facts and its node).
 	Secrets SecretSource
+	// Release, when an Isolator sets it, runs once after the attempt ended on any path (pass, failure, cancel),
+	// with a context that survives the attempt's cancellation: it removes what the isolation profile created
+	// for this attempt outside the container (P7-TRUST-08: the job network and its proxy sidecar).
+	Release func(ctx context.Context)
+	// NetEnv, when an Isolator sets it, is added to the job environment after the job's own env, so the job
+	// cannot override it: the proxy variables of a restricted or internet scope (P7-TRUST-08).
+	NetEnv []string
 }
 
 // AttemptResult is the local outcome before durable store finalization.
@@ -134,9 +141,14 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	if e.Isolation == nil {
 		e.Isolation = baselineIsolator{}
 	}
-	if err := e.Isolation.Prepare(ctx, &s); err != nil {
+	perr := e.Isolation.Prepare(ctx, &s)
+	if s.Release != nil { // set even when Prepare failed late: whatever it created is removed
+		release := s.Release
+		defer func() { release(context.WithoutCancel(ctx)) }()
+	}
+	if perr != nil {
 		// a node that cannot isolate is not the job's fault
-		result.Err, result.Attempt.FailureClass, result.Refused = err, "infra", true
+		result.Err, result.Attempt.FailureClass, result.Refused = perr, "infra", true
 		return
 	}
 	if e.Env == nil {
@@ -249,6 +261,7 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		}
 		env = append(env, k+"="+v)
 	}
+	env = append(env, s.NetEnv...)
 	var secretEnv []string // secret values travel apart from the env file (P7-TRUST-02: no secret on disk)
 	for k, v := range secrets {
 		if !safeID.MatchString(k) || strings.Contains(k, ".") {

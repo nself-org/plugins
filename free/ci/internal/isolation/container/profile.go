@@ -98,22 +98,58 @@ func (p *Profile) Prepare(ctx context.Context, a isolation.Attempt) error {
 	return nil
 }
 
-// Wrap attaches the planner; the network scope is checked now so E679 surfaces before any workspace exists.
+// networkSetupTimeout bounds the creation of a per-attempt network and its proxy sidecar inside Wrap.
+const networkSetupTimeout = 4 * time.Minute
+
+// Wrap attaches the planner; the network scope is planned now so E679 surfaces before any workspace exists.
+// A scope that needs per-attempt resources (restricted, internet) creates them here and hands their removal
+// to the spec's Release, which the executor runs on every path.
 func (p *Profile) Wrap(s exec.JobSpec) (exec.JobSpec, error) {
 	facts, av := p.probe(context.Background())
 	if !av.Available() {
 		return s, isolation.Unavailable(av.Reason, "container isolation is unavailable")
 	}
-	plan, err := p.opts.Network.Plan(s.Network)
-	if err != nil {
-		return s, err
-	}
-	pl := &planner{facts: facts, uids: p.opts.UIDs(), net: plan}
+	pl := &planner{facts: facts, uids: p.opts.UIDs()}
 	if _, err := SlotUID(s.Slot, pl.uids, pl.params(exec.ContainerRun{}).MaxUID); err != nil {
 		return s, err // refused before any workspace exists
 	}
+	plan, err := p.planNetwork(&s, facts.Binary)
+	if err != nil {
+		return s, err
+	}
+	pl.net = plan
 	s.Plan = pl
 	return s, nil
+}
+
+// planNetwork plans the scope; for an isolation.AttemptPlanner it also creates the attempt's resources and
+// chains their removal onto s.Release and the proxy variables onto s.NetEnv.
+func (p *Profile) planNetwork(s *exec.JobSpec, binary string) (isolation.NetworkPlan, error) {
+	ap, ok := p.opts.Network.(isolation.AttemptPlanner)
+	if !ok {
+		return p.opts.Network.Plan(s.Network)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), networkSetupTimeout)
+	defer cancel()
+	a := isolation.Attempt{ID: s.AttemptID, CoordinatorID: s.CoordinatorID, Slot: s.Slot}
+	plan, err := ap.PlanAttempt(ctx, binary, a, s.Network)
+	if err != nil {
+		if plan.Release != nil {
+			plan.Release(context.WithoutCancel(ctx))
+		}
+		return plan, err
+	}
+	if rel := plan.Release; rel != nil {
+		prev := s.Release
+		s.Release = func(ctx context.Context) {
+			rel(ctx)
+			if prev != nil {
+				prev(ctx)
+			}
+		}
+	}
+	s.NetEnv = append(s.NetEnv, plan.Env...)
+	return plan, nil
 }
 
 // Teardown removes the attempt's container if it is still there.
