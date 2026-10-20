@@ -228,11 +228,14 @@ func TestC37MachineInvokedCannotLoosen(t *testing.T) {
 		t.Fatalf("control: %v", err)
 	}
 	for name, err := range map[string]error{
-		"raise the cap":       set(machine, "trust.machine_invoked_cap", `"owner"`),
-		"raise the cap, same": set(machine, "trust.machine_invoked_cap", `"internal"`),
-		"lower isolation":     set(machine, "trust.isolation_min", `"process"`),
-		"widen secrets":       set(machine, "trust.secrets", `["project","environment","team","release","deploy"]`),
-		"first-time approval": set(machine, "trust.approval.first_time", `false`),
+		"enable paid spend":        set(machine, "economics.paid_enabled", `true`),
+		"raise daily budget":       set(machine, "economics.budgets.day", `1000000000`),
+		"raise approval threshold": set(machine, "economics.approval_threshold_micro", `1000000000`),
+		"raise the cap":            set(machine, "trust.machine_invoked_cap", `"owner"`),
+		"raise the cap, same":      set(machine, "trust.machine_invoked_cap", `"internal"`),
+		"lower isolation":          set(machine, "trust.isolation_min", `"process"`),
+		"widen secrets":            set(machine, "trust.secrets", `["project","environment","team","release","deploy"]`),
+		"first-time approval":      set(machine, "trust.approval.first_time", `false`),
 		"unset the cap": func() error {
 			_, e := machine.Apply(ctx, op, policy.Change{Op: policy.OpUnset, Scope: "user", Key: "trust.machine_invoked_cap"})
 			return e
@@ -255,9 +258,6 @@ func TestC37MachineInvokedCannotLoosen(t *testing.T) {
 // TestC38MachineInvokedCannotEnableSpend (TM-38, C05): the machine-invoked refusal covers trust.* only;
 // a capped caller can set paid placement and budgets, which loosen policy the same way.
 func TestC38MachineInvokedCannotEnableSpend(t *testing.T) {
-	if !openFinding(t, "C05") {
-		return
-	}
 	ctx := context.Background()
 	w, op := cMachineWriter(t, true)
 	for key, val := range map[string]string{"economics.paid_enabled": `true`, "economics.budgets.day": `1000000000`, "economics.approval_threshold_micro": `1000000000`} {
