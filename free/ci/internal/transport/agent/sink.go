@@ -139,6 +139,9 @@ func (s *hubSink) ArtifactRef(ctx context.Context, a protocol.ArtifactRef) error
 	if err != nil || late {
 		return err
 	}
+	if err = s.d().syncLogs(); err != nil { // its acknowledgement lets the agent drop the log lines before it
+		return fmt.Errorf("lease log: %w", err)
+	}
 	return rt.sink.ArtifactRef(ctx, a)
 }
 
@@ -146,6 +149,9 @@ func (s *hubSink) CacheRef(ctx context.Context, c protocol.CacheRef) error {
 	rt, late, err := s.route(c.LeaseID)
 	if err != nil || late {
 		return err
+	}
+	if err = s.d().syncLogs(); err != nil { // its acknowledgement lets the agent drop the log lines before it
+		return fmt.Errorf("lease log: %w", err)
 	}
 	return rt.sink.CacheRef(ctx, c)
 }

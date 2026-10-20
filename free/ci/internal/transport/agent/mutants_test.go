@@ -8,6 +8,8 @@ package agent
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io"
 	"net/http"
@@ -627,5 +629,65 @@ func TestGateDoesNotCacheABindingThatOverlappedARebind(t *testing.T) {
 	g.mu.Unlock()
 	if n != 1 {
 		t.Fatalf("%d bindings cached after an undisturbed check", n)
+	}
+}
+
+func TestArtifactAndCacheRefsPutTheLogOnStableStorageFirst(t *testing.T) {
+	u := newUnit(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	u.run(ctx, "n-1", "l1")
+	u.waitQueued(t, "n-1")
+	s := u.d.Sink()
+	dirty := func() bool {
+		u.d.mu.Lock()
+		lw := u.d.routes["l1"].lw
+		u.d.mu.Unlock()
+		lw.mu.Lock()
+		defer lw.mu.Unlock()
+		return lw.dirty
+	}
+	for i, ref := range []func() error{
+		func() error {
+			return s.ArtifactRef(ctx, protocol.ArtifactRef{LeaseID: "l1", Path: "a", SHA256: "x", Size: 1})
+		},
+		func() error { return s.CacheRef(ctx, protocol.CacheRef{LeaseID: "l1", Spec: "s", Key: "k"}) },
+	} {
+		if err := s.Log(ctx, protocol.Log{LeaseID: "l1", LineSeq: uint64(i + 1), Stream: "stdout", Text: "x"}); err != nil {
+			t.Fatal(err)
+		}
+		if !dirty() {
+			t.Fatal("a log line is synced on its own; it must wait for an acknowledgement")
+		}
+		if err := ref(); err != nil {
+			t.Fatal(err)
+		}
+		if dirty() {
+			t.Fatalf("reference %d was forwarded with unsynced log lines before it", i)
+		}
+	}
+}
+
+func TestBlobSetExistsOnlyWhileTheRouteIsRegistered(t *testing.T) {
+	d := &Driver{}
+	rt := &route{node: "n-1", leaseID: "l1", done: make(chan struct{})}
+	if err := d.enqueue(rt, protoLease("l1", "a1", 5)); err != nil {
+		t.Fatal(err)
+	}
+	if d.blobSetFor(rt) == nil || d.blobSetFor(rt) != rt.blobs {
+		t.Fatal("no blob set for a live route")
+	}
+	d.release(rt)
+	if d.blobSetFor(rt) != nil {
+		t.Fatal("a blob set for a released route would open a writer nobody discards")
+	}
+}
+
+func TestAClientWithoutAPinnedRootTrustsNobody(t *testing.T) {
+	cl := newClient(Options{BaseURL: "https://127.0.0.1:1/"})
+	t.Cleanup(cl.close)
+	tr, ok := cl.hc.Transport.(*http.Transport)
+	if !ok || tr.TLSClientConfig == nil || tr.TLSClientConfig.RootCAs == nil || !tr.TLSClientConfig.RootCAs.Equal(x509.NewCertPool()) || tr.TLSClientConfig.MinVersion != tls.VersionTLS13 {
+		t.Fatalf("transport %+v", tr)
 	}
 }

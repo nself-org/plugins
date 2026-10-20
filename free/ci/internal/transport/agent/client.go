@@ -16,6 +16,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -92,6 +93,9 @@ func newClient(o Options) *client {
 	}
 	rt := o.Transport
 	if rt == nil {
+		if o.TLS == nil { // fail closed: no pinned root means no handshake can succeed, never the system roots
+			o.TLS = &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: x509.NewCertPool()}
+		}
 		rt = newTransport(o.TLS, o.Wait)
 	}
 	// the agent never follows a redirect: a custom header (the job token) would travel with it

@@ -166,6 +166,16 @@ func (c *Carrier) Send(m protocol.Message) error {
 			c.mu.Unlock()
 			return io.ErrClosedPipe
 		}
+		select {
+		case <-c.done: // the loop ended (a permanent reject): nothing would ever send this frame
+			err := c.err
+			c.mu.Unlock()
+			if err == nil {
+				err = io.ErrClosedPipe
+			}
+			return err
+		default:
+		}
 		if c.outBytes+f.size <= maxOutBytes || len(c.out) == 0 {
 			c.out = append(c.out, f)
 			c.outBytes += f.size

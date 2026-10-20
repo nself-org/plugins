@@ -78,6 +78,19 @@ func (d *Driver) Blobs() agentapi.BlobHandler { return blobHandler{d} }
 
 type blobHandler struct{ d *Driver }
 
+// blobSetFor returns the blob set of a route, creating it on first use; nil once the route was released.
+func (d *Driver) blobSetFor(rt *route) *blobSet {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.routes[rt.leaseID] != rt {
+		return nil
+	}
+	if rt.blobs == nil {
+		rt.blobs = &blobSet{active: map[string]*blobState{}}
+	}
+	return rt.blobs
+}
+
 // Frame handles one digest or chunk frame of a lease.
 func (h blobHandler) Frame(ctx context.Context, node string, m protocol.Message) ([]protocol.Message, error) {
 	rt, late, err := (*hubSink)(h.d).route(m.LeaseID)
@@ -87,12 +100,10 @@ func (h blobHandler) Frame(ctx context.Context, node string, m protocol.Message)
 	if late || rt.node != node {
 		return nil, nil
 	}
-	h.d.mu.Lock()
-	if rt.blobs == nil {
-		rt.blobs = &blobSet{active: map[string]*blobState{}}
+	bs := h.d.blobSetFor(rt)
+	if bs == nil { // the run ended since the route was found: nothing may open a writer in the sink now
+		return nil, nil
 	}
-	bs := rt.blobs
-	h.d.mu.Unlock()
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
 	var out []protocol.Message
