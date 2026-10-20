@@ -1,0 +1,12 @@
+// swift-tools-version:5.9
+import PackageDescription
+
+// A framework-shaped library with an XCTest bundle and no host app: the headless fixture of the macOS leg.
+let package = Package(
+    name: "Fixture",
+    products: [.library(name: "Fixture", targets: ["Fixture"])],
+    targets: [
+        .target(name: "Fixture"),
+        .testTarget(name: "FixtureTests", dependencies: ["Fixture"]),
+    ]
+)
