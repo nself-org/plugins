@@ -23,7 +23,15 @@ func (l *leg) hostileAgent() {
 	l.mustSudo("printf decoy > " + decoy + " && chown root:wheel " + decoy + " && chmod 0644 " + decoy)
 	defer l.sudo("rm -f " + decoy + " " + stateDir + "/hard")
 	// What a compromised agent can still do inside the directories it owns.
-	l.sudo("sudo -u " + agentUser + " ln " + decoy + " " + stateDir + "/hard 2>&1")
+	linked := false
+	if out, rc := l.sudo("sudo -u " + agentUser + " ln " + decoy + " " + stateDir + "/hard 2>&1"); rc == 0 {
+		linked = true
+		if n, _ := l.sudo("stat -f %l " + decoy); n != "2" {
+			t.Fatalf("the hard link exists but the decoy has %s links", n)
+		}
+	} else {
+		t.Logf("the OS refused the agent's hard link to a root file (fine): %s", out)
+	}
 	l.mustSudo("sudo -u " + agentUser + " sh -c 'rm -f /opt/nself-ci-agent/bin/nself-ci-agent /opt/nself-ci-agent/bin/.upload.new && ln -s " + decoy + " /opt/nself-ci-agent/bin/nself-ci-agent && ln -s " + decoy + " /opt/nself-ci-agent/bin/.upload.new'")
 	// What it must not be able to do: take over the name launchd writes its log to.
 	if out, rc := l.sudo("sudo -u " + agentUser + " sh -c 'rm -f /var/log/nself-ci-agent/agent.log; ln -s " + decoy + " /var/log/nself-ci-agent/agent.log' 2>&1"); rc == 0 {
@@ -33,6 +41,7 @@ func (l *leg) hostileAgent() {
 	if got, _ := l.sudo("stat -f '%Lp %Su %Sg' " + decoy); got != "644 root wheel" {
 		t.Fatalf("the re-run changed the decoy to %q: root followed a link the agent planted", got)
 	}
+	t.Logf("hard link planted: %v", linked)
 	if got, _ := l.sudo("cat " + decoy); got != "decoy" {
 		t.Fatalf("the decoy now reads %q: root or the agent wrote through a planted link", got)
 	}

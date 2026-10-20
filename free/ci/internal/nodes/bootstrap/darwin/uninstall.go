@@ -41,16 +41,13 @@ sleep 1
 rm -f %[2]s
 for u in $(dscl . -list /Users | grep -E '^%[1]s(-job-[0-9]+)?$' || true); do
   pkill -KILL -u "$u" >/dev/null 2>&1 || true
-  crontab -r -u "$u" >/dev/null 2>&1 || true
+  rm -f "/var/at/tabs/$u"
   find /private/var/folders -xdev -user "$u" -depth -delete >/dev/null 2>&1 || true
   for d in %[9]s /Volumes/*; do [ -d "$d" ] && find "$d" -xdev -user "$u" -depth -delete >/dev/null 2>&1; done || true
   dscl . -delete "/Users/$u" >/dev/null 2>&1 || true
 done
 for g in $(dscl . -list /Groups | grep -E '^%[1]s(-job-[0-9]+)?$' || true); do
   dscl . -delete "/Groups/$g" >/dev/null 2>&1 || true
-done
-for f in /var/at/cron.deny /var/at/at.deny; do
-  if [ -f "$f" ]; then sed -i '' '/^%[1]s/d' "$f"; fi
 done
 rm -rf %[3]s %[4]s %[5]s %[6]s %[7]s
 rm -f %[8]s

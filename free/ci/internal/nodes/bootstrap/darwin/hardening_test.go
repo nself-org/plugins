@@ -104,13 +104,19 @@ func TestAnIdThatStillOwnsFilesIsNotReused(t *testing.T) {
 	u := usersScript(1)
 	mustContain(t, "users", u, `find "$d" -xdev -uid "$i" -print`, "/Users/Shared", "/Volumes/*")
 	un := uninstallScript()
-	mustContain(t, "uninstall", un, `find "$d" -xdev -user "$u" -depth -delete`, "/private/tmp", `crontab -r -u "$u"`)
+	mustContain(t, "uninstall", un, `find "$d" -xdev -user "$u" -depth -delete`, "/private/tmp")
 }
 
-func TestJobUsersAreDeniedCronAndAt(t *testing.T) {
-	mustContain(t, "users", usersScript(2), "/var/at/cron.deny", "/var/at/at.deny", `grep -qx "$u" "$f" || echo "$u" >> "$f"`)
-	mustContain(t, "uninstall", uninstallScript(), `sed -i '' '/^nself-ci/d' "$f"`)
-	mustContain(t, "remove", removeSlotScript(2), `crontab -r -u "$u"`, `pgrep -u "$u"`)
+// cron is root-only on a stock macOS; the install must not create cron.allow or cron.deny (a deny file
+// opens cron to every user it does not list), and a leftover crontab file goes with its account.
+func TestCronPolicyIsLeftAloneAndLeftoverCrontabsGo(t *testing.T) {
+	for name, s := range map[string]string{"users": usersScript(2), "uninstall": uninstallScript(), "remove": removeSlotScript(2)} {
+		if strings.Contains(s, "cron.deny") || strings.Contains(s, "cron.allow") || strings.Contains(s, "at.deny") || strings.Contains(s, "sed -i") {
+			t.Errorf("%s edits the host's cron or at policy:\n%s", name, s)
+		}
+	}
+	mustContain(t, "uninstall", uninstallScript(), `rm -f "/var/at/tabs/$u"`)
+	mustContain(t, "remove", removeSlotScript(2), `rm -f "/var/at/tabs/$u"`, `pgrep -u "$u"`)
 }
 
 func TestPerUserSystemFoldersDoNotKeepASlotAlive(t *testing.T) {

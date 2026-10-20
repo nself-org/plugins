@@ -51,11 +51,6 @@ mk() {
 }
 mk %[1]s
 for n in %[4]s; do mk %[1]s-job-$n; done
-mkdir -p /var/at
-for f in /var/at/cron.deny /var/at/at.deny; do
-  [ -e "$f" ] || { : > "$f"; chmod 0644 "$f"; }
-  for u in %[1]s $(for n in %[4]s; do echo %[1]s-job-$n; done); do grep -qx "$u" "$f" || echo "$u" >> "$f"; done
-done
 `, agentUser, IDLow, IDHigh, slotList(slots), scanDirs)
 }
 
@@ -87,7 +82,9 @@ func listJobUsersScript() string {
 
 // removeSlotScript retires slot n. Its job root goes when empty; its per-user folders under
 // /private/var/folders (the system makes them for any process run as the user) are deleted; its crontab
-// goes; its user and group go only when no process and no file of the user is left in the places a job
+// file goes (cron and at are root-only on a stock macOS: neither /var/at/cron.allow nor cron.deny exists,
+// and this install adds neither, because creating cron.deny would open cron to every unlisted user; the
+// leg checks a job user cannot install a crontab); its user and group go only when no process and no file of the user is left in the places a job
 // user can write (scanDirs and the top-level mounted volumes). The sudoers drop-in has already lost the
 // slot's rule (Install writes it first), so the agent cannot start a new shim for the user meanwhile.
 // It prints "removed" or "kept".
@@ -97,7 +94,7 @@ pkill -KILL -u "$u" >/dev/null 2>&1 || true
 sleep 1
 pkill -KILL -u "$u" >/dev/null 2>&1 || true
 if pgrep -u "$u" >/dev/null 2>&1; then echo kept; exit 0; fi
-crontab -r -u "$u" >/dev/null 2>&1 || true
+rm -f "/var/at/tabs/$u"
 rmdir %[2]s 2>/dev/null || true
 find /private/var/folders -xdev -user "$u" -depth -delete >/dev/null 2>&1 || true
 left=$(for d in %[3]s /Volumes/*; do [ -d "$d" ] && find "$d" -xdev -user "$u" -print; done 2>/dev/null | head -n 1)
