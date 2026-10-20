@@ -1,0 +1,141 @@
+{
+ "/projects/acme%2Fapp": {
+  "status": 200,
+  "body": {
+   "id": 1001,
+   "path_with_namespace": "acme/app",
+   "visibility": "private",
+   "default_branch": "main"
+  }
+ },
+ "/projects/acme%2Fapp/repository/branches/main": {
+  "status": 200,
+  "body": {
+   "name": "main",
+   "protected": true,
+   "commit": {
+    "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   }
+  }
+ },
+ "/projects/acme%2Fapp/repository/branches/feature%2Fx": {
+  "status": 200,
+  "body": {
+   "name": "feature/x",
+   "protected": false,
+   "commit": {
+    "id": "dddddddddddddddddddddddddddddddddddddddd"
+   }
+  }
+ },
+ "/projects/acme%2Fapp/repository/tags/v1.0.0": {
+  "status": 200,
+  "body": {
+   "name": "v1.0.0",
+   "commit": {
+    "id": "cccccccccccccccccccccccccccccccccccccccc"
+   }
+  }
+ },
+ "/projects/acme%2Fapp/merge_requests/7": {
+  "status": 200,
+  "body": {
+   "iid": 7,
+   "sha": "dddddddddddddddddddddddddddddddddddddddd",
+   "source_project_id": 1001,
+   "target_project_id": 1001
+  }
+ },
+ "/projects/2002": {
+  "status": 200,
+  "body": {
+   "id": 2002,
+   "path_with_namespace": "contrib/app-fork"
+  }
+ },
+ "/users?username=dev1": {
+  "status": 200,
+  "body": [
+   {
+    "id": 55,
+    "username": "dev1",
+    "bot": false
+   }
+  ]
+ },
+ "/projects/acme%2Fapp/members/all/55": {
+  "status": 200,
+  "body": {
+   "id": 55,
+   "access_level": 30
+  }
+ },
+ "/projects/acme%2Fapp/repository/compare?from=main&to=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+  "status": 200,
+  "body": {
+   "commits": [],
+   "diffs": [],
+   "compare_timeout": false
+  }
+ },
+ "/projects/acme%2Fapp/repository/compare?from=main&to=dddddddddddddddddddddddddddddddddddddddd": {
+  "status": 200,
+  "body": {
+   "commits": [
+    {}
+   ],
+   "diffs": [],
+   "compare_timeout": false
+  }
+ },
+ "/projects/acme%2Fapp/repository/compare?from=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb&straight=true&to=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+  "status": 200,
+  "body": {
+   "commits": [
+    {}
+   ],
+   "diffs": [
+    {
+     "old_path": "docs/a.md",
+     "new_path": "docs/a.md"
+    },
+    {
+     "old_path": "old/x.go",
+     "new_path": "new/x.go"
+    }
+   ],
+   "compare_timeout": false
+  }
+ },
+ "/projects/acme%2Fapp/merge_requests/7/diffs?page=1&per_page=100": {
+  "status": 200,
+  "body": [
+   {
+    "old_path": "main.go",
+    "new_path": "main.go"
+   },
+   {
+    "old_path": "ci/old.yml",
+    "new_path": "ci/new.yml"
+   }
+  ]
+ },
+ "/projects/acme%2Fapp/jobs/9001": {
+  "status": 200,
+  "body": {
+   "id": 9001,
+   "status": "pending"
+  }
+ },
+ "/projects/acme%2Fapp/pipelines/501": {
+  "status": 200,
+  "body": {
+   "id": 501,
+   "source": "merge_request_event",
+   "ref": "refs/merge-requests/7/head",
+   "user": {
+    "username": "dev1"
+   }
+  }
+ }
+}

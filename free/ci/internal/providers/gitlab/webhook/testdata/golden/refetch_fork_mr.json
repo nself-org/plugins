@@ -1,0 +1,121 @@
+{
+  "schema": "ci.trigger-facts/v1",
+  "source": "gitlab",
+  "kind": "pull_request",
+  "delivery_id": "msg-1",
+  "received_at": "2026-10-19T12:00:00Z",
+  "auth": "per-repo",
+  "repo": "acme/app",
+  "repo_id": "1001",
+  "ref": "refs/merge-requests/7/head",
+  "revision": "dddddddddddddddddddddddddddddddddddddddd",
+  "revision_source": "payload",
+  "base_ref": "refs/heads/main",
+  "pr_number": 7,
+  "actor": {
+    "value": "dev1",
+    "source": "payload",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "actor_permission": {
+    "value": "write",
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "author_association": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "head_repo": {
+    "value": "contrib/app-fork",
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "fork": {
+    "value": true,
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "first_time": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "bot": {
+    "value": false,
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "protected_ref": {
+    "value": true,
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "visibility": {
+    "value": "private",
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "sha_reachable": {
+    "value": false,
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "head_current": {
+    "value": true,
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "changed_files": {
+    "value": [
+      "main.go",
+      "ci/new.yml",
+      "ci/old.yml"
+    ],
+    "source": "api",
+    "observed_at": "2026-10-19T12:00:00Z",
+    "confidence": "known"
+  },
+  "group_protected_only": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "run_event": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "runner_labels": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "provider_job_id": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  },
+  "provider_run_id": {
+    "value": null,
+    "source": "",
+    "observed_at": "0001-01-01T00:00:00Z",
+    "confidence": ""
+  }
+}

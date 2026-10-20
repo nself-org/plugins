@@ -1,0 +1,33 @@
+{
+ "object_kind": "merge_request",
+ "event_type": "merge_request",
+ "user": {
+  "id": 55,
+  "name": "Dev One",
+  "username": "dev1"
+ },
+ "project": {
+  "id": 1001,
+  "name": "app",
+  "path_with_namespace": "acme/app",
+  "web_url": "https://gitlab.example.com/acme/app",
+  "visibility_level": 0
+ },
+ "object_attributes": {
+  "iid": 7,
+  "action": "reopen",
+  "state": "opened",
+  "source_project_id": 1001,
+  "target_project_id": 1001,
+  "source_branch": "feature/x",
+  "target_branch": "main",
+  "last_commit": {
+   "id": "dddddddddddddddddddddddddddddddddddddddd",
+   "message": "wip"
+  },
+  "source": {
+   "id": 1001,
+   "path_with_namespace": "acme/app"
+  }
+ }
+}
