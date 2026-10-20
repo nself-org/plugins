@@ -83,6 +83,7 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 	if err != nil { // a serve a restore cannot see would be replaced under its own feet: refuse to run
 		return func() {}, err
 	}
+	undoHosted := serveHosted(st, home, cfg.AllowedRepos)
 	cfg.Drain = func(dctx context.Context) error {
 		d, err := drain.New(drain.Config{
 			Intake: agentIntake{}, Canceller: liveCanceller{}, Deadline: drain.FlagDeadline(), Logf: cfg.Logf,
@@ -100,7 +101,7 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 		}
 		return err
 	}
-	return func() { stopBeat(); pairing.Use(nil); agentOnAck = nil }, nil
+	return func() { stopBeat(); undoHosted(); pairing.Use(nil); agentOnAck = nil }, nil
 }
 
 // registerServe makes this serve process visible in the coordinator table and keeps its heartbeat fresh, so

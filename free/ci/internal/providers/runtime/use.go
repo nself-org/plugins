@@ -9,6 +9,13 @@ package runtime
 
 import "github.com/nself-org/plugins/free/ci/internal/store"
 
+// ReleaseStore detaches the driver and the contributor from the coordinator's store (the coordinator is
+// stopping and the store is about to close): handles go back to an in-memory book.
+func ReleaseStore() {
+	defaultDriver.SetBook(NewMemBook())
+	defaultContributor.SetStore(nil)
+}
+
 // UseStore makes the default driver and contributor use st and returns the durable Book.
 func UseStore(st *store.Store) Book {
 	b := StoreBook(st)
