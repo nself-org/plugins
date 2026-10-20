@@ -107,7 +107,8 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 // registerServe makes this serve process visible in the coordinator table and keeps its heartbeat fresh, so
 // `serve restore` sees an idle coordinator and refuses (backup.running), and the dispatcher's incarnation is
 // read from a table that has a row. It then gives the leases of earlier coordinators their restart grace
-// (Epic D6: expires_at = max(stored, start + TTL)). The returned func stops the heartbeat and waits for it.
+// (Epic D6: expires_at = max(stored, start + TTL)) and starts the expiry sweeper, the only thing that fails a
+// lease whose node stopped heartbeating (P7-NODE-11). The returned func stops both and waits for them.
 func registerServe(ctx context.Context, st *store.Store, eng *lease.Engine) (stop func(), err error) {
 	host, _ := os.Hostname()
 	reg, err := st.Register(ctx, os.Getpid(), strconv.FormatInt(time.Now().UnixNano(), 10), "serve-"+host)
@@ -118,6 +119,7 @@ func registerServe(ctx context.Context, st *store.Store, eng *lease.Engine) (sto
 	if _, err = eng.Start(ctx, reg.ID, inc); err != nil {
 		fmt.Fprintf(os.Stderr, "nself-ci-serve: restart grace for earlier leases failed: %v\n", err)
 	}
+	stopSweep := eng.StartSweeper(lease.DefaultSweepEvery, agentLogf)
 	bctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -134,7 +136,7 @@ func registerServe(ctx context.Context, st *store.Store, eng *lease.Engine) (sto
 			}
 		}
 	}()
-	return func() { cancel(); wg.Wait() }, nil
+	return func() { stopSweep(); cancel(); wg.Wait() }, nil
 }
 
 // ownedByThisProcess reports whether a coordinator row was registered by this process: the pipelines this
