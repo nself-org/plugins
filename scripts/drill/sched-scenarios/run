@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# sched-scenarios drill (P7-SCHED-15, Epic SCHED D20, Epic acceptance 2-6).
+#
+# Purpose: run the in-process scheduler acceptance suite (free/ci/test/scenarios, build tag `scenarios`) as a `kind: drill`
+#   job of the plugins `drills` pipeline: scenario 4 (heterogeneous matrix), 6 (hybrid), 10 (capacity saturation), the economics
+#   and burst items, and the planted-regression tests that prove each guard turns the suite red. One check per step in the one
+#   ci.evidence document printed on the last stdout line.
+# Inputs:  this checkout, go, jq, python3. Optional: SCHED_SCENARIOS_NO_RACE=1 skips -race (by hand only).
+# Outputs: ONE ci.evidence/v1 document on the last stdout line; progress on stderr. Exit 0 when every step held, 1 when a step
+#          failed, 2 when a tool is missing (checked first).
+# Constraints: pure in-process (no Docker, no network, no ssh, no cloud, no owned host); the Go module is built with the vendored
+#          modules; a `--- SKIP` line in the output fails the run (tagged tests call t.Fatal, never t.Skip).
+set -uo pipefail
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+lib=$root/scripts/drill/fixtures/lib
+# shellcheck source=/dev/null
+. "$lib/evidence.sh"
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/drill-sched.XXXXXX") || exit 2
+cleanup() { rm -rf "$work"; }
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+ev_begin sched-scenarios "${BASH_SOURCE[0]}" "$root" "$work"
+for tool in go jq python3; do command -v "$tool" >/dev/null || {
+	echo "sched-scenarios: $tool is required" >&2
+	exit 2
+}; done
+# shellcheck disable=SC2034 # read by ev_finish
+EV_TOOLS=$(jq -nc --arg go "$(go env GOVERSION)" --arg os "$(uname -sr)" '{go: $go, os: $os}')
+tmp=${TMPDIR:-/tmp}
+export TMPDIR=$tmp
+
+cd "$root/free/ci" || exit 2
+race=(-race)
+cgo=1
+[ -z "${SCHED_SCENARIOS_NO_RACE:-}" ] || {
+	race=()
+	cgo=0
+}
+
+# Step 1: the scenario suite, real store, world, sched, dispatch, fairq, economics and burst.
+CGO_ENABLED=$cgo go test -mod=vendor ${race[@]+"${race[@]}"} -count=1 -v -tags scenarios ./test/scenarios/... >"$work/suite.txt" 2>&1
+rc=$?
+ev_expect suite "go test -tags scenarios ./test/scenarios/..." "$rc" "exit $rc: $(ev_snip "$work/suite.txt")"
+if grep -q -- '--- SKIP' "$work/suite.txt"; then ev_fail no-skip "a scenario test skipped"; else ev_pass no-skip "no scenario test skipped"; fi
+ran=$(grep -c -- '^--- PASS: TestScenario\|^--- PASS: TestEconomics\|^--- PASS: TestBurst' "$work/suite.txt" || true)
+if [ "${ran:-0}" -ge 1 ]; then ev_pass tests-ran "$ran scenario tests passed"; else ev_fail tests-ran "no scenario test passed"; fi
+
+# Step 2: every planted regression turns the suite red (the planted tests pass when the guard catches the defect).
+CGO_ENABLED=0 go test -mod=vendor -count=1 -json -tags 'scenarios planted' ./test/scenarios/... -run TestPlanted >"$work/planted.json" 2>"$work/planted.err"
+python3 "$root/scripts/ci/go-test-ran.py" TestPlanted <"$work/planted.json"
+ev_expect planted "every planted regression is detected" "$?" "$(tail -n 2 "$work/planted.err" | tr '\n' ' ')"
+
+# Step 3: the acceptance matrix names every suite test.
+missing=""
+while read -r name; do
+	grep -q "\`$name\`" test/scenarios/ACCEPTANCE.md || missing="$missing $name"
+done < <(grep -hoE '^func (Test[A-Za-z0-9_]+)' test/scenarios/*_test.go | awk '{print $2}' | sort -u)
+if [ -z "$missing" ]; then ev_pass matrix "every suite test is in test/scenarios/ACCEPTANCE.md"; else ev_fail matrix "not in the acceptance matrix:$missing"; fi
+
+ev_finish
