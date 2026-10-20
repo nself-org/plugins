@@ -96,6 +96,9 @@ func runV15(args []string) int {
 			continue
 		}
 		if entry, ok := v15Subcommands[strings.Join(args[:n], " ")]; ok {
+			if code, done := nodesRemoteDispatch(strings.Join(args[:n], " "), args[n:]); done { // `nodes <sub> --coordinator <url>` (P7-NODE-26)
+				return code
+			}
 			return entry.Handler(args[n:])
 		}
 	}

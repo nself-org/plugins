@@ -3,11 +3,16 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Weekly full-history sweep (Mondays 06:17 UTC). Advisory: it fails only its own scheduled run,
+    # never a push or a PR, so a fixture from long ago cannot block unrelated work.
+    - cron: '17 6 * * 1'
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A cancelled push scan would leave its commit range unscanned, so only PR runs are superseded.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   gitleaks:
     runs-on: ubuntu-latest
@@ -22,18 +27,31 @@ jobs:
       - name: Configure git for gitleaks
         run: git config diff.renameLimit 1861
       - name: Scan for secrets
-        # Scan only this change's own history. A bare `gitleaks detect` walks every ref the
-        # checkout fetched (`git log --all`), so a synthetic fixture on one open branch failed
-        # every other PR (D-1031).
+        # Scan only this change's own commits. A bare `gitleaks detect` walks every ref the checkout
+        # fetched (`git log --all`), so a synthetic fixture on one open branch failed every other PR
+        # (D-1031); and on a push, `HEAD` re-scanned the whole history, so any fixture ever committed
+        # failed every later push. Pull request: base..head. Push: before..sha, or the head commit
+        # alone on a first push or a force-push whose old tip is gone. Schedule or manual run: the
+        # full history of HEAD.
         env:
           EVENT: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_SHA: ${{ github.sha }}
         run: |
-          if [ "$EVENT" = "pull_request" ]; then
-            RANGE="$BASE_SHA..$HEAD_SHA"
-          else
-            RANGE="HEAD"
-          fi
+          case "$EVENT" in
+            pull_request)
+              RANGE="$PR_BASE..$PR_HEAD" ;;
+            push)
+              if [ -n "$PUSH_BEFORE" ] && ! printf '%s' "$PUSH_BEFORE" | grep -Eq '^0+$' \
+                 && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+                RANGE="$PUSH_BEFORE..$PUSH_SHA"
+              else
+                RANGE="-1 $PUSH_SHA"
+              fi ;;
+            *)
+              RANGE="HEAD" ;;
+          esac
           echo "Gitleaks scope: $RANGE"
           gitleaks detect --source=. --log-level=warn --redact --config .github/gitleaks.toml --log-opts="$RANGE"

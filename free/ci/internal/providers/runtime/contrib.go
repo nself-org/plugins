@@ -43,9 +43,26 @@ type Skip struct{ Provider, Code, Reason string }
 type Contributor struct {
 	mu      sync.Mutex
 	targets func(context.Context) ([]providers.Query, error)
-	store   *store.Store
-	skipped []Skip
-	creds   map[string]credCheck
+	// targetsFor, when set, names the queries per provider id and replaces targets (a provider that
+	// gets none is not described): a repository path of one forge is never offered to another.
+	targetsFor func(ctx context.Context, provider string) ([]providers.Query, error)
+	store      *store.Store
+	skipped    []Skip
+	creds      map[string]credCheck
+	// describeTTL > 0 keeps a Describe result per provider and query for that long: the world is built
+	// every dispatcher tick and Describe may cost an API request.
+	describeTTL time.Duration
+	described   map[describeKey]describeHit
+}
+
+type describeKey struct {
+	provider string
+	q        providers.Query
+}
+
+type describeHit struct {
+	caps []model.Capability
+	at   time.Time
 }
 
 // credCheck remembers whether a provider's credential resolved, for credCheckTTL: a world is built
@@ -76,6 +93,43 @@ func (c *Contributor) SetTargets(fn func(context.Context) ([]providers.Query, er
 	c.targets = fn
 }
 
+// SetTargetsFor installs a per-provider source of queries; it replaces SetTargets. nil removes it.
+func (c *Contributor) SetTargetsFor(fn func(ctx context.Context, provider string) ([]providers.Query, error)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.targetsFor = fn
+}
+
+// SetDescribeTTL keeps each Describe result for d (0 = ask every pass). Failures are never kept.
+func (c *Contributor) SetDescribeTTL(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.describeTTL, c.described = d, nil
+}
+
+// describe returns the capabilities of p for q, from the cache when it is fresh.
+func (c *Contributor) describe(ctx context.Context, p providers.Provider, q providers.Query) ([]model.Capability, error) {
+	key := describeKey{p.ID(), q}
+	c.mu.Lock()
+	ttl := c.describeTTL
+	hit, ok := c.described[key]
+	c.mu.Unlock()
+	if ttl > 0 && ok && time.Since(hit.at) < ttl {
+		return hit.caps, nil
+	}
+	caps, err := p.Describe(ctx, q)
+	if err != nil || ttl <= 0 {
+		return caps, err
+	}
+	c.mu.Lock()
+	if c.described == nil {
+		c.described = map[describeKey]describeHit{}
+	}
+	c.described[key] = describeHit{caps: caps, at: time.Now()}
+	c.mu.Unlock()
+	return caps, nil
+}
+
 // ForgetCredentials drops the cached credential checks (after a policy change).
 func (c *Contributor) ForgetCredentials() {
 	c.mu.Lock()
@@ -104,7 +158,7 @@ func (c *Contributor) Fill(ctx context.Context, w *sched.World) error {
 		return nil
 	}
 	c.mu.Lock()
-	targets, st := c.targets, c.store
+	targets, targetsFor, st := c.targets, c.targetsFor, c.store
 	c.mu.Unlock()
 	queries := []providers.Query{{}}
 	if targets != nil {
@@ -131,13 +185,23 @@ func (c *Contributor) Fill(ctx context.Context, w *sched.World) error {
 		if _, ok := p.(providers.Dispatcher); !ok {
 			continue
 		}
+		qs := queries
+		if targetsFor != nil {
+			var err error
+			if qs, err = targetsFor(ctx, p.ID()); err != nil {
+				return err
+			}
+			if len(qs) == 0 { // not a target of this world: neither described nor listed as skipped
+				continue
+			}
+		}
 		if err := c.credential(ctx, p.ID()); err != nil {
 			skipped = append(skipped, skip(p.ID(), "E700", err))
 			continue
 		}
 		health := providers.HealthOf(ctx, p.ID())
-		for _, q := range queries {
-			caps, err := p.Describe(ctx, q)
+		for _, q := range qs {
+			caps, err := c.describe(ctx, p, q)
 			if err != nil {
 				skipped = append(skipped, skip(p.ID(), "E704", err))
 				continue

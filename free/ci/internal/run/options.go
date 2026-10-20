@@ -41,6 +41,11 @@ type Options struct {
 	// Interactive is true for a person waiting at a terminal: stdin is a terminal, no --trigger
 	// and no NSELF_INVOKED_BY. Only an interactive run gets the 10 minute foreground queue cap.
 	Interactive bool
+	// ProviderRepo is the "owner/name" repository a coordinator process (`serve`) accepted this pipeline
+	// for. The coordinator can wait for a provider lease, so the placement world keeps the provider-hosted
+	// runners of that repository and no others (a job never runs on another repository's runner). Empty
+	// for a bare foreground run, which cannot await a lease and drops every provider runner (D-1394).
+	ProviderRepo string
 	// PolicyRun carries per-run policy values into PolicyRequest.Run (filled by P7-AUTO-29 from
 	// `--where`, `--prefer` and `--runner`); nil means none.
 	PolicyRun RunValues

@@ -40,9 +40,13 @@ type hostedProv struct {
 	down       bool
 	slots      int
 	mutate     func(*providers.Collected)
+	described  []providers.Query
 }
 
-func (h *hostedProv) Describe(context.Context, providers.Query) ([]model.Capability, error) {
+func (h *hostedProv) Describe(_ context.Context, q providers.Query) ([]model.Capability, error) {
+	h.mu.Lock()
+	h.described = append(h.described, q)
+	h.mu.Unlock()
 	return []model.Capability{hostedCapability("fake-hosted-1", h.slots)}, nil
 }
 func (h *hostedProv) Dispatch(ctx context.Context, a providers.Attempt) (providers.Handle, error) {
@@ -119,6 +123,7 @@ func useProvider(t *testing.T) *hostedProv {
 	prov.mu.Lock()
 	prov.Fake = fake.New(fake.Options{Evidence: evidenceFor})
 	prov.live, prov.liveErr, prov.dispatches, prov.cancels, prov.down, prov.slots, prov.mutate = providers.Finished, nil, 0, 0, false, 2, nil
+	prov.described = nil
 	prov.mu.Unlock()
 	t.Setenv("NSELF_V15", "1")
 	defaultDriver.SetBook(NewMemBook())
@@ -126,9 +131,13 @@ func useProvider(t *testing.T) *hostedProv {
 	defaultDriver.SetClock(nil, nil)
 	defaultContributor.SetStore(nil)
 	defaultContributor.SetTargets(nil)
+	defaultContributor.SetTargetsFor(nil)
+	defaultContributor.SetDescribeTTL(0)
 	defaultContributor.ForgetCredentials()
 	UsePolicy(nil)
 	t.Cleanup(func() {
+		defaultContributor.SetTargetsFor(nil)
+		defaultContributor.SetDescribeTTL(0)
 		defaultDriver.SetBook(NewMemBook())
 		defaultDriver.SetFacts(nil)
 		defaultDriver.SetClock(nil, nil)
@@ -245,4 +254,10 @@ func hostedLease(id string) (model.Capability, protocol.Lease) {
 	node.Identity.Provider, node.Identity.Transport = "fake", Kind
 	return node, protocol.Lease{LeaseID: "l-" + id, AttemptID: id, Epoch: 1<<32 | 1, CompatMode: protocol.Compat15,
 		Job: model.Job{Kind: "test", Run: []string{"true"}, Timeout: "5m"}, Checkout: protocol.Checkout{Revision: testRev}}
+}
+
+func (h *hostedProv) queries() []providers.Query {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]providers.Query(nil), h.described...)
 }
