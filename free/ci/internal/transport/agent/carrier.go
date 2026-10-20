@@ -168,11 +168,8 @@ func (c *Carrier) Send(m protocol.Message) error {
 		}
 		select {
 		case <-c.done: // the loop ended (a permanent reject): nothing would ever send this frame
-			err := c.err
+			err := errors.Join(io.ErrClosedPipe, c.err) // the reject that ended the loop, when there is one
 			c.mu.Unlock()
-			if err == nil {
-				err = io.ErrClosedPipe
-			}
 			return err
 		default:
 		}
