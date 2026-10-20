@@ -47,7 +47,15 @@ func (e *Engine) lockIntent(token string) func() {
 
 func (e *Engine) teardown(ctx context.Context, token, reason string, ifUnused bool) error {
 	unlock := e.lockIntent(token)
-	defer unlock()
+	drop := false // the intent is unknown, foreign or ended: its lock entry has no further use
+	defer func() {
+		unlock()
+		if drop {
+			e.mu.Lock()
+			delete(e.locks, token)
+			e.mu.Unlock()
+		}
+	}()
 	if e.isCreating(token) {
 		// the create call is still in flight in this process: ending the intent now would release money for a machine
 		// that is about to appear. The caller's next sweep retries.
@@ -58,9 +66,11 @@ func (e *Engine) teardown(ctx context.Context, token, reason string, ifUnused bo
 		return teardownFailed(err, "intent %s unreadable", token)
 	}
 	if !ok || in.Coordinator != e.o.Coordinator {
+		drop = true
 		return teardownFailed(nil, "intent %s is not this coordinator's", token)
 	}
 	if in.State == store.BurstTerminal {
+		drop = true
 		return nil
 	}
 	p, ok := e.providers[in.Provider]
@@ -89,9 +99,7 @@ func (e *Engine) teardown(ctx context.Context, token, reason string, ifUnused bo
 	if err = e.finalize(ctx, in, reason); err != nil {
 		return err
 	}
-	e.mu.Lock()
-	delete(e.locks, token)
-	e.mu.Unlock()
+	drop = true
 	return nil
 }
 
@@ -122,7 +130,11 @@ func (e *Engine) markAndRevoke(ctx context.Context, in store.BurstIntent, reason
 			return err
 		}
 		if !marked {
-			if now, ok, rerr := e.o.Store.BurstIntent(ctx, in.Token); rerr == nil && ok && now.State == store.BurstLive {
+			now, ok, rerr := e.o.Store.BurstIntent(ctx, in.Token)
+			if rerr != nil {
+				return rerr // not knowing who won is not a reason to revoke a node that may be working
+			}
+			if ok && now.State == store.BurstLive {
 				return errNowInUse
 			}
 		}

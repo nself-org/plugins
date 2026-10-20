@@ -225,6 +225,8 @@ func (e *Engine) Resume(ctx context.Context, token string, spec Spec) (Resource,
 	if !ok {
 		return Resource{}, refused("provider.unknown", nil, "provider %q is not configured", in.Provider)
 	}
+	e.setCreating(token, true)
+	defer e.setCreating(token, false)
 	res, err := e.create(ctx, p, token, spec)
 	if err != nil {
 		return Resource{}, refused("provider.error", err, "%s: %s", p.ID(), errClass(err))
