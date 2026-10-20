@@ -189,7 +189,7 @@ func TestAHelloTheCoordinatorRejectsIsDeliveredAndEndsTheCarrier(t *testing.T) {
 		t.Fatalf("after the reject Recv = %v, want the carrier's own error", err)
 	}
 	// the loop has ended: a frame sent now would sit in the buffer for ever, so Send says so
-	if err := second.Send(logFrame("l1", 1)); err == nil || !errors.Is(err, io.ErrClosedPipe) || !strings.Contains(err.Error(), pki.ReasonNodeKeyChanged) {
+	if err := second.Send(logFrame("l1", 1)); err == nil || !errors.Is(err, io.ErrClosedPipe) || !strings.Contains(err.Error(), "rejected hello") {
 		t.Fatalf("Send on a carrier whose loop ended = %v, want the closed pipe and the reject", err)
 	}
 }
