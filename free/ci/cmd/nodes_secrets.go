@@ -80,7 +80,7 @@ func dedicatedNode(c model.Capability) bool {
 }
 
 func runNodesSecrets(verb string, args []string, d nodesSecretsDeps) int {
-	fail := func(err error) int { fmt.Fprintf(d.Stderr, "Error: %v\n", err); return 1 }
+	fail := func(err error) int { _, _ = fmt.Fprintf(d.Stderr, "Error: %v\n", err); return 1 }
 	var nodeID string
 	if len(args) > 0 && args[0] != "" && args[0][0] != '-' {
 		nodeID, args = args[0], args[1:]
@@ -88,7 +88,7 @@ func runNodesSecrets(verb string, args []string, d nodesSecretsDeps) int {
 	fs := nodesSecretsFlags()
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || nodeID == "" {
-		fmt.Fprintf(d.Stderr, "usage: nself ci nodes secrets %s <node> --class <class>[/<env>] [--project <dir>]\n", verb)
+		_, _ = fmt.Fprintf(d.Stderr, "usage: nself ci nodes secrets %s <node> --class <class>[/<env>] [--project <dir>]\n", verb)
 		return 1
 	}
 	class, env, err := secrets.ParseClass(fs.Lookup("class").Value.String())
@@ -141,9 +141,9 @@ func runNodesSecrets(verb string, args []string, d nodesSecretsDeps) int {
 	if err = st.AppendAudit(ctx, d.Actor, "node.secrets."+verb, nodeID, "class="+string(class)+";file="+file); err != nil {
 		return fail(fmt.Errorf("the %s took effect on store file %s but its audit row could not be written: %w", verb, file, err))
 	}
-	fmt.Fprintf(d.Stdout, "%s: node %s, store file %s\n", verb, nodeID, file)
+	_, _ = fmt.Fprintf(d.Stdout, "%s: node %s, store file %s\n", verb, nodeID, file)
 	if verb == "revoke" {
-		fmt.Fprintln(d.Stdout, "Removal does not revoke plaintext the node already read: rotate the values in that file.")
+		_, _ = fmt.Fprintln(d.Stdout, "Removal does not revoke plaintext the node already read: rotate the values in that file.")
 	}
 	return 0
 }

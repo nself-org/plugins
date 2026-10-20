@@ -51,10 +51,10 @@ func runPending(args []string, env approveEnv) int {
 		return adminWriteData(env.adminEnv, "ci runs pending", list)
 	}
 	for _, p := range list {
-		fmt.Fprintf(env.Out, "%s  %s  %s  %s\n", plainText(p.Run), plainText(p.HeadSHA), strings.Join(p.Reasons, ","), plainText(p.Project))
+		_, _ = fmt.Fprintf(env.Out, "%s  %s  %s  %s\n", plainText(p.Run), plainText(p.HeadSHA), strings.Join(p.Reasons, ","), plainText(p.Project))
 	}
 	if len(list) == 0 {
-		fmt.Fprintln(env.Out, "no run waits for approval")
+		_, _ = fmt.Fprintln(env.Out, "no run waits for approval")
 	}
 	return 0
 }

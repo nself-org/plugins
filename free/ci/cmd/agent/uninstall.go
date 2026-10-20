@@ -92,17 +92,17 @@ func runUninstall(ctx context.Context, args []string, sio IO) int {
 	fs.SetOutput(sio.Stderr)
 	system := fs.Bool("system", false, "remove the system install (users, sudoers rules, service, directories)")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || !*system {
-		fmt.Fprintf(sio.Stderr, "usage: sudo %s uninstall --system   (the root-owned copy of the agent)\n", darwin.TrustedPath)
+		_, _ = fmt.Fprintf(sio.Stderr, "usage: sudo %s uninstall --system   (the root-owned copy of the agent)\n", darwin.TrustedPath)
 		return 2
 	}
 	f, ok := bootstrap.Lookup(runtime.GOOS)
 	if !ok {
-		fmt.Fprintln(sio.Stderr, bootstrap.NewError("uninstall_unsupported", "no system install exists for %s; nothing to remove", runtime.GOOS))
+		_, _ = fmt.Fprintln(sio.Stderr, bootstrap.NewError("uninstall_unsupported", "no system install exists for %s; nothing to remove", runtime.GOOS))
 		return 1
 	}
 	fmt.Fprintf(sio.Stderr, "uninstall layout bundled with nself-ci-agent %s\n", Version)
 	if os.Geteuid() != 0 {
-		fmt.Fprintf(sio.Stderr, "error: uninstall --system must run as root: sudo %s uninstall --system\n", darwin.TrustedPath)
+		_, _ = fmt.Fprintf(sio.Stderr, "error: uninstall --system must run as root: sudo %s uninstall --system\n", darwin.TrustedPath)
 		return 1
 	}
 	if exe, err := os.Executable(); err != nil || trustedRootPath(exe) != nil {
@@ -110,13 +110,13 @@ func runUninstall(ctx context.Context, args []string, sio IO) int {
 		if err == nil {
 			why = trustedRootPath(exe).Error()
 		}
-		fmt.Fprintf(sio.Stderr, "error: refusing to run as root from a file the agent user can change (%s).\nRun the root-owned copy: sudo %s uninstall --system\n", why, darwin.TrustedPath)
+		_, _ = fmt.Fprintf(sio.Stderr, "error: refusing to run as root from a file the agent user can change (%s).\nRun the root-owned copy: sudo %s uninstall --system\n", why, darwin.TrustedPath)
 		return 1
 	}
 	o := bootstrap.Options{Run: localRun, Stdout: sio.Stdout,
-		Logf: func(format string, a ...any) { fmt.Fprintf(sio.Stderr, format+"\n", a...) }}
+		Logf: func(format string, a ...any) { _, _ = fmt.Fprintf(sio.Stderr, format+"\n", a...) }}
 	if err := f.Uninstall(ctx, o); err != nil {
-		fmt.Fprintln(sio.Stderr, err)
+		_, _ = fmt.Fprintln(sio.Stderr, err)
 		return 1
 	}
 	return 0

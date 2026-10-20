@@ -77,32 +77,32 @@ func runExecCmd(ctx context.Context, args []string, sio IO) int {
 	specPath := fs.String("spec", "", "job spec JSON file")
 	evPath := fs.String("evidence", "", "where to write the evidence document")
 	if err := fs.Parse(args); err != nil || *specPath == "" || *evPath == "" || fs.NArg() != 0 {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent exec --spec <file> --evidence <path>")
+		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent exec --spec <file> --evidence <path>")
 		return 2
 	}
 	if err := RunPreStart(ctx, "exec"); err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	raw, err := os.ReadFile(*specPath)
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 2
 	}
 	var spec execSpec
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&spec); err != nil {
-		fmt.Fprintln(sio.Stderr, "error: spec:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error: spec:", err)
 		return 2
 	}
 	res, err := runSpec(ctx, spec, jobInputs{Output: func(b []byte) { _, _ = sio.Stdout.Write(b) }})
 	if err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	if err := writeEvidence(*evPath, res.Evidence); err != nil {
-		fmt.Fprintln(sio.Stderr, "error:", err)
+		_, _ = fmt.Fprintln(sio.Stderr, "error:", err)
 		return 1
 	}
 	if res.Outcome.State != "passed" {
