@@ -84,7 +84,7 @@ func (r *fetch) call(template string, params map[string]string, q url.Values, ou
 	return status, true
 }
 
-func (r *fetch) params(kv ...string) map[string]string { return projectParams(r.f.Repo, kv...) }
+func (r *fetch) params(kv ...string) map[string]string { return projectParams(projectRef(r.f), kv...) }
 
 // glPipeline is the part of a pipeline a demand needs.
 type glPipeline struct {

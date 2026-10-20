@@ -19,10 +19,10 @@ import (
 // TestStaleDelivery proves a replayed delivery is declined once the API shows the ref, tag, merge
 // request head or job has moved, and that an unreadable answer never blocks a trigger.
 func TestStaleDelivery(t *testing.T) {
-	const branch = "/projects/acme%2Fapp/repository/branches/main"
-	const tag = "/projects/acme%2Fapp/repository/tags/v1.0.0"
-	const mr = "/projects/acme%2Fapp/merge_requests/7"
-	const job = "/projects/acme%2Fapp/jobs/9001"
+	const branch = "/projects/1001/repository/branches/main"
+	const tag = "/projects/1001/repository/tags/v1.0.0"
+	const mr = "/projects/1001/merge_requests/7"
+	const job = "/projects/1001/jobs/9001"
 	stale := `{"name":"main","protected":true,"commit":{"id":"` + shaB + `"}}`
 
 	t.Run("branch moved", func(t *testing.T) {
@@ -46,12 +46,12 @@ func TestStaleDelivery(t *testing.T) {
 	t.Run("job already ran", func(t *testing.T) {
 		for _, status := range []string{"running", "success", "failed", "canceled"} {
 			rg := newRig(t, both())
-			rg.gl.set(job, 200, `{"id":9001,"status":"`+status+`"}`)
+			rg.gl.set(job, 200, `{"id":9001,"status":"`+status+`","tag_list":["nself"]}`)
 			_, err := rg.signed("Job Hook", fixture(t, "job_pending_nself"))
 			wantDecline(t, "job "+status, err, reasonStale, "trigger.stale")
 		}
 		rg := newRig(t, both())
-		rg.gl.set(job, 200, `{"id":9001,"status":"waiting_for_resource"}`)
+		rg.gl.set(job, 200, `{"id":9001,"status":"waiting_for_resource","tag_list":["nself"]}`)
 		if f, err := rg.signed("Job Hook", fixture(t, "job_pending_nself")); err != nil || f.Kind != "runner_demand" {
 			t.Fatalf("a job that has not run is still a demand: %+v %v", f, err)
 		}

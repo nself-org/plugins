@@ -36,8 +36,8 @@ func boolOf(f model.Fact[bool]) string {
 // ProtectedRef from the target branch; the other families (push, tag, demand) and every failure mode.
 func TestRefetch(t *testing.T) {
 	const (
-		forkMR = "/projects/acme%2Fapp/merge_requests/7"
-		member = "/projects/acme%2Fapp/members/all/55"
+		forkMR = "/projects/1001/merge_requests/7"
+		member = "/projects/1001/members/all/55"
 	)
 	t.Run("fork merge request", func(t *testing.T) {
 		rg := newRig(t, both())
@@ -87,7 +87,7 @@ func TestRefetch(t *testing.T) {
 		rg = newRig(t, both())
 		in := mustFacts(t, rg, "Push Hook", "push")
 		rg.gl.drop(member)
-		rg.gl.drop("/projects/acme%2Fapp")
+		rg.gl.drop("/projects/1001")
 		out, _ = rg.src.Refetch(context.Background(), in)
 		if out.ActorPermission.Value != nil {
 			t.Fatalf("a 404 may mean no access: permission must stay unknown, got %+v", out.ActorPermission)
@@ -125,7 +125,7 @@ func TestRefetch(t *testing.T) {
 		if out, err = rg.src.Refetch(context.Background(), tg); err != nil || boolOf(out.HeadCurrent) != "true" || strOf(out.HeadRepo) != "acme/app" {
 			t.Fatalf("tag facts: %+v %v", out, err)
 		}
-		rg.gl.set("/projects/acme%2Fapp/repository/tags/v1.0.0", 200, `{"commit":{"id":"`+shaB+`"}}`)
+		rg.gl.set("/projects/1001/repository/tags/v1.0.0", 200, `{"commit":{"id":"`+shaB+`"}}`)
 		if out, _ = rg.src.Refetch(context.Background(), tg); boolOf(out.HeadCurrent) != "false" {
 			t.Fatalf("a tag that moved: current = %s", boolOf(out.HeadCurrent))
 		}
@@ -133,11 +133,11 @@ func TestRefetch(t *testing.T) {
 	t.Run("reachability", func(t *testing.T) {
 		rg := newRig(t, both())
 		in := mustFacts(t, rg, "Push Hook", "push")
-		rg.gl.drop("/projects/acme%2Fapp/repository/compare?from=main&to=" + shaA)
+		rg.gl.drop("/projects/1001/repository/compare?from=" + shaA + "&to=" + shaA)
 		if out, _ := rg.src.Refetch(context.Background(), in); boolOf(out.SHAReachable) != "false" {
 			t.Fatalf("404 on a readable project = not in the project: %s", boolOf(out.SHAReachable))
 		}
-		rg.gl.set("/projects/acme%2Fapp/repository/compare?from=main&to="+shaA, 200, `{"commits":[],"compare_timeout":true}`)
+		rg.gl.set("/projects/1001/repository/compare?from="+shaA+"&to="+shaA, 200, `{"commits":[],"compare_timeout":true}`)
 		if out, _ := rg.src.Refetch(context.Background(), in); out.SHAReachable.Value != nil {
 			t.Fatalf("a compare that timed out says nothing: %s", boolOf(out.SHAReachable))
 		}
@@ -153,7 +153,7 @@ func TestRefetch(t *testing.T) {
 			return "[" + strings.Join(items, ",") + "]"
 		}
 		key := func(p int) string {
-			return "/projects/acme%2Fapp/merge_requests/7/diffs?page=" + strconv.Itoa(p) + "&per_page=100"
+			return "/projects/1001/merge_requests/7/diffs?page=" + strconv.Itoa(p) + "&per_page=100"
 		}
 		for p := 1; p <= 3; p++ {
 			rg.gl.set(key(p), 200, page(100))
@@ -180,7 +180,7 @@ func TestRefetch(t *testing.T) {
 		for i := range many {
 			many[i] = fmt.Sprintf(`{"old_path":"g%d","new_path":"g%d"}`, i, i)
 		}
-		rg.gl.set("/projects/acme%2Fapp/repository/compare?from="+shaB+"&straight=true&to="+shaA, 200, `{"commits":[{}],"diffs":[`+strings.Join(many, ",")+`]}`)
+		rg.gl.set("/projects/1001/repository/compare?from="+shaB+"&straight=true&to="+shaA, 200, `{"commits":[{}],"diffs":[`+strings.Join(many, ",")+`]}`)
 		if out, _ := rg.src.Refetch(context.Background(), pushIn); out.ChangedFiles.Value != nil {
 			t.Fatalf("a compare of 301 files is unknown")
 		}
@@ -195,16 +195,16 @@ func TestRefetch(t *testing.T) {
 		if strOf(out.RunEvent) != "merge_request_event" || out.RunEvent.Source != "api" || boolOf(out.Fork) != "false" || strOf(out.HeadRepo) != "acme/app" || strOf(out.Actor) != "dev1" {
 			t.Fatalf("demand facts: event %s fork %s head %s actor %s", strOf(out.RunEvent), boolOf(out.Fork), strOf(out.HeadRepo), strOf(out.Actor))
 		}
-		rg.gl.set("/projects/acme%2Fapp/merge_requests/7", 200, `{"iid":7,"sha":"`+shaD+`","source_project_id":2002,"target_project_id":1001}`)
+		rg.gl.set("/projects/1001/merge_requests/7", 200, `{"iid":7,"sha":"`+shaD+`","source_project_id":2002,"target_project_id":1001}`)
 		if out, _ = rg.src.Refetch(context.Background(), in); boolOf(out.Fork) != "true" || strOf(out.HeadRepo) != "contrib/app-fork" {
 			t.Fatalf("a fork merge request pipeline: fork %s head %s", boolOf(out.Fork), strOf(out.HeadRepo))
 		}
 		golden(t, "refetch_demand_fork", out)
-		rg.gl.set("/projects/acme%2Fapp/pipelines/501", 200, `{"source":"push","ref":"main","user":{"username":"dev1"}}`)
+		rg.gl.set("/projects/1001/pipelines/501", 200, `{"source":"push","ref":"main","user":{"username":"dev1"}}`)
 		if out, _ = rg.src.Refetch(context.Background(), in); strOf(out.RunEvent) != "push" || boolOf(out.Fork) != "false" {
 			t.Fatalf("a push pipeline runs the project's own code: %s %s", strOf(out.RunEvent), boolOf(out.Fork))
 		}
-		rg.gl.set("/projects/acme%2Fapp/pipelines/501", 200, `{"source":"external_pull_request_event","ref":"main","user":{"username":"dev1"}}`)
+		rg.gl.set("/projects/1001/pipelines/501", 200, `{"source":"external_pull_request_event","ref":"main","user":{"username":"dev1"}}`)
 		if out, _ = rg.src.Refetch(context.Background(), in); out.Fork.Value != nil || out.HeadRepo.Value != nil {
 			t.Fatalf("an external pull request pipeline says nothing about the source: %s %s", boolOf(out.Fork), strOf(out.HeadRepo))
 		}
@@ -228,19 +228,42 @@ func TestRefetch(t *testing.T) {
 			t.Fatalf("an invalid project name passes through untouched: %v", err)
 		}
 	})
-	t.Run("paths are escaped", func(t *testing.T) {
+	t.Run("the project is addressed by its verified id, else by an escaped path", func(t *testing.T) {
 		rg := newRig(t, both())
-		if _, err := rg.src.Refetch(context.Background(), mustFacts(t, rg, "Merge Request Hook", "mr_open")); err != nil {
+		in := mustFacts(t, rg, "Merge Request Hook", "mr_open")
+		if _, err := rg.src.Refetch(context.Background(), in); err != nil {
 			t.Fatal(err)
 		}
-		for _, p := range []string{"/projects/acme%2Fapp", "/projects/acme%2Fapp/repository/branches/main"} {
+		for _, p := range []string{"/projects/1001", "/projects/1001/repository/branches/main"} {
 			if !rg.gl.saw(p) {
 				t.Fatalf("expected a call to %s, saw %v", p, rg.gl.paths)
 			}
 		}
 		for _, p := range rg.gl.paths {
+			if strings.Contains(p, "acme") {
+				t.Fatalf("a verified id must address the project, not its renamable path: %s", p)
+			}
+		}
+		rg = newRig(t, both())
+		in.RepoID = "" // facts stored without an id fall back to the path, escaped into one segment
+		_, _ = rg.src.Refetch(context.Background(), in)
+		if !rg.gl.saw("/projects/acme%2Fapp") {
+			t.Fatalf("expected the escaped path, saw %v", rg.gl.paths)
+		}
+		for _, p := range rg.gl.paths {
 			if strings.Contains(p, "acme/app") {
 				t.Fatalf("project path not escaped as one segment: %s", p)
+			}
+		}
+	})
+	t.Run("a tag named like the default branch cannot stand in for it", func(t *testing.T) {
+		rg := newRig(t, both())
+		in := mustFacts(t, rg, "Push Hook", "push")
+		rg.gl.drop("/projects/1001/repository/compare?from=main&to=" + shaA)
+		_, _ = rg.src.Refetch(context.Background(), in)
+		for _, p := range rg.gl.paths {
+			if strings.Contains(p, "from=main") {
+				t.Fatalf("the compare must start from the default head id, not its name: %s", p)
 			}
 		}
 	})

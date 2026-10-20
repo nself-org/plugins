@@ -15,7 +15,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -47,9 +46,7 @@ func FuzzGitLabWebhook(f *testing.F) {
 	f.Add("Push Hook", []byte(`{"object_kind":"push","project":{"id":1,"path_with_namespace":"o/r"},"after":"`+strings.Repeat("a", 40)+`","ref":"refs/heads/x"}`))
 	f.Add("Job Hook", []byte(`{"object_kind":"build","project_id":1,"repository":{"homepage":"https://h/o/r.git"},"build_status":"pending","build_id":1,"pipeline_id":1,"sha":"`+strings.Repeat("b", 40)+`","tag_list":["nself"]}`))
 	f.Fuzz(func(t *testing.T, event string, body []byte) {
-		var probe glPayload
-		_ = json.Unmarshal(body, &probe)
-		name, _ := identity(probe)
+		name, _ := probeBody(body).identity()
 		src := &Source{
 			Now:    func() time.Time { return fixedNow },
 			Getenv: func(string) string { return "synthetic-fuzz-token" },

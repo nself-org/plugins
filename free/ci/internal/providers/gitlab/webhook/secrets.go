@@ -3,8 +3,10 @@ package webhook
 // Purpose: the two operator keys providers.gitlab.webhook_signing_secrets and
 // providers.gitlab.webhook_tokens (map project -> environment variable name) and the binding of a
 // project name to its numeric id (Epic D11, review F2).
-// Inputs:  the effective policy (UsePolicy installs the source; the coordinator start calls it with the
-//          same function it gives runtime.UsePolicy); environment variables named by the keys.
+// Inputs:  the effective policy (UsePolicy installs the source; the coordinator start is to call it with
+//          the same function it gives runtime.UsePolicy, which no code does yet for this source or the
+//          GitHub one, so until it is wired every delivery is refused: fail closed); environment
+//          variables named by the keys.
 // Outputs: Keys (the specs registered at init), SecretsFrom, UsePolicy, and the id pins.
 // Constraints: operator scope only (Spend), Fixed, nil registered default (a Fixed key with a default
 //          could never be set, see the HOST-16 ruling). A value is an environment variable NAME, never
@@ -124,8 +126,9 @@ var policySource struct {
 	fn func(context.Context) (*policy.Effective, error)
 }
 
-// UsePolicy installs the source of the operator's effective policy (the coordinator start does this
-// once, next to runtime.UsePolicy). With none installed there are no secrets. nil removes it.
+// UsePolicy installs the source of the operator's effective policy (the coordinator start is to do this
+// once, next to runtime.UsePolicy; see the header). With none installed there are no secrets, so nothing
+// verifies. nil removes it.
 func UsePolicy(fn func(context.Context) (*policy.Effective, error)) {
 	policySource.Lock()
 	defer policySource.Unlock()
@@ -146,7 +149,7 @@ func currentSecrets(ctx context.Context) (Secrets, error) {
 	return SecretsFrom(eff)
 }
 
-// pinTable remembers the first verified project id of each name.
+// pinTable remembers the first verified (signed) project id of each name.
 type pinTable struct {
 	mu  sync.Mutex
 	ids map[string]int64

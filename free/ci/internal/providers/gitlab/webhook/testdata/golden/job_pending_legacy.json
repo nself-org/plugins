@@ -98,7 +98,7 @@
       "nself",
       "linux"
     ],
-    "source": "payload",
+    "source": "api",
     "observed_at": "2026-10-19T12:00:00Z",
     "confidence": "known"
   },

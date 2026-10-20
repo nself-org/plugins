@@ -108,7 +108,7 @@ func (i *intakeRig) facts(w *httptest.ResponseRecorder) model.TriggerFacts {
 // stale timestamp and a wrong token are 403 with nothing enqueued.
 func TestIntakeEndToEnd(t *testing.T) {
 	rg := newRig(t, both())
-	rg.gl.set("/projects/acme%2Fapp/merge_requests/7", 200, `{"iid":7,"sha":"`+shaD+`","source_project_id":2002,"target_project_id":1001}`)
+	rg.gl.set("/projects/1001/merge_requests/7", 200, `{"iid":7,"sha":"`+shaD+`","source_project_id":2002,"target_project_id":1001}`)
 	wire(t, rg)
 	in := newIntake(t, "acme/tokened")
 	mr := fixture(t, "mr_fork_open")

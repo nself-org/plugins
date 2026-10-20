@@ -63,10 +63,7 @@ type glPayload struct {
 	ProjectID   int64    `json:"project_id"`
 	SHA         string   `json:"sha"`
 	TagList     []string `json:"tag_list"`
-	Runner      *struct {
-		Tags []string `json:"tags"`
-	} `json:"runner"`
-	Repository struct {
+	Repository  struct {
 		Homepage string `json:"homepage"`
 	} `json:"repository"`
 }
@@ -79,10 +76,23 @@ func parsePayload(body []byte) (glPayload, error) {
 	return p, nil
 }
 
+// glProbe is all that is read from a body before it is authenticated: scalars only, so a hostile body
+// cannot make the unauthenticated decode allocate more than a copy of one string.
+type glProbe struct {
+	Project *struct {
+		ID   int64  `json:"id"`
+		Path string `json:"path_with_namespace"`
+	} `json:"project"`
+	ProjectID  int64 `json:"project_id"`
+	Repository struct {
+		Homepage string `json:"homepage"`
+	} `json:"repository"`
+}
+
 // identity is the project a body claims to be from: project.path_with_namespace and project.id, or for
-// a Job Hook (which has no project object) project_id and the path of repository.homepage. Nothing it
-// returns is trusted until the delivery authenticates under that project's own secret.
-func identity(p glPayload) (name string, id int64) {
+// an older Job Hook (which has no project object) project_id and the path of repository.homepage. Nothing
+// it returns is trusted until the delivery authenticates under that project's own secret.
+func (p glProbe) identity() (name string, id int64) {
 	if p.Project != nil {
 		return p.Project.Path, p.Project.ID
 	}
@@ -92,16 +102,17 @@ func identity(p glPayload) (name string, id int64) {
 	return name, p.ProjectID
 }
 
-// tags are the runner tags a job asks for.
-func (p glPayload) tags() []string {
-	if len(p.TagList) > 0 {
-		return p.TagList
-	}
-	if p.Runner != nil {
-		return p.Runner.Tags
-	}
-	return nil
+// probeBody decodes the identity probe; a body that does not parse names no project.
+func probeBody(body []byte) glProbe {
+	var p glProbe
+	_ = json.Unmarshal(body, &p)
+	return p
 }
+
+// tags are the runner tags a job asks for, when the payload says (the Jobs API is the other source). The
+// payload's runner object lists the tags of the runner that took the job, which say nothing about what the
+// job asked for, so it is not read.
+func (p glPayload) tags() []string { return p.TagList }
 
 // visibilityOf maps GitLab's numeric visibility_level; an absent or unknown value is unknown.
 func visibilityOf(v *int) (string, bool) {
@@ -155,4 +166,17 @@ func clip(s string) string {
 		}
 		return r
 	}, s)
+}
+
+// probe is the identity part of a decoded payload (the same scalars probeBody reads).
+func (p glPayload) probe() glProbe {
+	pr := glProbe{ProjectID: p.ProjectID}
+	pr.Repository.Homepage = p.Repository.Homepage
+	if p.Project != nil {
+		pr.Project = &struct {
+			ID   int64  `json:"id"`
+			Path string `json:"path_with_namespace"`
+		}{ID: p.Project.ID, Path: p.Project.Path}
+	}
+	return pr
 }

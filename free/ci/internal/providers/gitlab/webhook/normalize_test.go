@@ -66,7 +66,7 @@ func TestNormalizeGoldens(t *testing.T) {
 			t.Fatalf("MR names the merge request, not the source branch: %+v", f)
 		}
 		f, _ = rg.signed("Job Hook", fixture(t, "job_pending_nself"))
-		if f.Kind != "runner_demand" || f.Ref != "" || f.RunnerLabels.Value == nil || len(*f.RunnerLabels.Value) != 2 || f.RunnerLabels.Source != "payload" {
+		if f.Kind != "runner_demand" || f.Ref != "" || f.RunnerLabels.Value == nil || len(*f.RunnerLabels.Value) != 2 || f.RunnerLabels.Source != "api" {
 			t.Fatalf("job demand facts: %+v", f)
 		}
 		// a pending job's payload may carry no runner: the tags then come from the Jobs API, and say so
@@ -77,6 +77,11 @@ func TestNormalizeGoldens(t *testing.T) {
 		// the older payload (no project object) names its project by repository.homepage
 		if f, _ = rg.signed("Job Hook", fixture(t, "job_pending_legacy")); f.Repo != "acme/app" || f.Kind != "runner_demand" {
 			t.Fatalf("legacy job payload: %+v", f)
+		}
+		// the runner object of the payload lists the tags of the runner that took the job, not what the job asked for
+		rg.gl.set("/projects/1001/jobs/9001", 200, `{"id":9001,"status":"pending","tag_list":["linux"]}`)
+		if _, err := rg.signed("Job Hook", fixture(t, "job_pending_nself")); err == nil {
+			t.Fatal("a job whose own tags lack nself became a demand because of the runner's tags")
 		}
 		f, _ = rg.signed("Push Hook", fixture(t, "push"))
 		if f.Visibility.Value == nil || *f.Visibility.Value != "private" || f.Visibility.Source != "payload" {
@@ -109,7 +114,7 @@ func TestNormalizeGoldens(t *testing.T) {
 
 	t.Run("job tags only from the API", func(t *testing.T) {
 		rg := newRig(t, both())
-		rg.gl.set("/projects/acme%2Fapp/jobs/9001", 200, `{"id":9001,"status":"pending","tag_list":["linux"]}`)
+		rg.gl.set("/projects/1001/jobs/9001", 200, `{"id":9001,"status":"pending","tag_list":["linux"]}`)
 		_, err := rg.signed("Job Hook", fixture(t, "job_pending_notags"))
 		wantDecline(t, "API tags without nself", err, reasonUnsupported, "runner tag nself")
 		rg.gl.failAll()
@@ -120,16 +125,17 @@ func TestNormalizeGoldens(t *testing.T) {
 	t.Run("a bearer demand needs a readable job", func(t *testing.T) {
 		tokened := replace(fixture(t, "job_pending_nself"), `"path_with_namespace":"acme/app"`, `"path_with_namespace":"acme/tokened"`)
 		rg := newRig(t, both())
-		_, err := rg.bearer("Job Hook", bareToken, tokened) // no job route for acme/tokened: the API says 404, the state is unknown
+		rg.gl.drop("/projects/1001/jobs/9001") // the API answers 404: the job state is unknown
+		_, err := rg.bearer("Job Hook", bareToken, tokened)
 		wantDecline(t, "bearer demand, job unreadable", err, reasonUnsupported, "job.unverified")
-		rg.gl.set("/projects/acme%2Ftokened/jobs/9001", 200, `{"id":9001,"status":"pending"}`)
+		rg.gl.set("/projects/1001/jobs/9001", 200, `{"id":9001,"status":"pending","tag_list":["nself"]}`)
 		if f, err := rg.bearer("Job Hook", bareToken, tokened); err != nil || f.Auth != "bearer" || f.Kind != "runner_demand" {
 			t.Fatalf("bearer demand with a readable pending job: %+v %v", f, err)
 		}
 		// a signed demand has a timestamp window, so an unreadable job does not block it
 		rg.gl.failAll()
-		if f, err := rg.signed("Job Hook", fixture(t, "job_pending_nself")); err != nil || f.Kind != "runner_demand" {
-			t.Fatalf("signed demand with the API down: %+v %v", f, err)
+		if f, err := rg.signed("Job Hook", fixture(t, "job_pending_legacy")); err != nil || f.Kind != "runner_demand" || f.RunnerLabels.Source != "payload" {
+			t.Fatalf("signed demand with the API down uses the payload's own tag_list, as a payload fact: %+v %v", f, err)
 		}
 	})
 

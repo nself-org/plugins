@@ -11,7 +11,9 @@ package webhook
 import (
 	"context"
 	"net/url"
+	"strings"
 
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/providers/gitlab/api"
 	"github.com/nself-org/plugins/free/ci/internal/providers/rest"
 )
@@ -54,4 +56,14 @@ func projectParams(project string, kv ...string) map[string]string {
 		m[kv[i]] = kv[i+1]
 	}
 	return m
+}
+
+// projectRef is how the API addresses the project of verified facts: by the numeric id the delivery was
+// bound to, which survives a rename (an old path can redirect to, or be taken over by, another project),
+// else by path.
+func projectRef(f model.TriggerFacts) string {
+	if id := f.RepoID; id != "" && strings.Trim(id, "0123456789") == "" {
+		return id
+	}
+	return f.Repo
 }

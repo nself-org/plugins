@@ -1,5 +1,5 @@
 {
- "/projects/acme%2Fapp": {
+ "/projects/1001": {
   "status": 200,
   "body": {
    "id": 1001,
@@ -8,7 +8,7 @@
    "default_branch": "main"
   }
  },
- "/projects/acme%2Fapp/repository/branches/main": {
+ "/projects/1001/repository/branches/main": {
   "status": 200,
   "body": {
    "name": "main",
@@ -18,7 +18,7 @@
    }
   }
  },
- "/projects/acme%2Fapp/repository/branches/feature%2Fx": {
+ "/projects/1001/repository/branches/feature%2Fx": {
   "status": 200,
   "body": {
    "name": "feature/x",
@@ -28,7 +28,7 @@
    }
   }
  },
- "/projects/acme%2Fapp/repository/tags/v1.0.0": {
+ "/projects/1001/repository/tags/v1.0.0": {
   "status": 200,
   "body": {
    "name": "v1.0.0",
@@ -37,7 +37,7 @@
    }
   }
  },
- "/projects/acme%2Fapp/merge_requests/7": {
+ "/projects/1001/merge_requests/7": {
   "status": 200,
   "body": {
    "iid": 7,
@@ -63,14 +63,14 @@
    }
   ]
  },
- "/projects/acme%2Fapp/members/all/55": {
+ "/projects/1001/members/all/55": {
   "status": 200,
   "body": {
    "id": 55,
    "access_level": 30
   }
  },
- "/projects/acme%2Fapp/repository/compare?from=main&to=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+ "/projects/1001/repository/compare?from=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&to=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
   "status": 200,
   "body": {
    "commits": [],
@@ -78,7 +78,7 @@
    "compare_timeout": false
   }
  },
- "/projects/acme%2Fapp/repository/compare?from=main&to=dddddddddddddddddddddddddddddddddddddddd": {
+ "/projects/1001/repository/compare?from=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&to=dddddddddddddddddddddddddddddddddddddddd": {
   "status": 200,
   "body": {
    "commits": [
@@ -88,7 +88,7 @@
    "compare_timeout": false
   }
  },
- "/projects/acme%2Fapp/repository/compare?from=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb&straight=true&to=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
+ "/projects/1001/repository/compare?from=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb&straight=true&to=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {
   "status": 200,
   "body": {
    "commits": [
@@ -107,7 +107,7 @@
    "compare_timeout": false
   }
  },
- "/projects/acme%2Fapp/merge_requests/7/diffs?page=1&per_page=100": {
+ "/projects/1001/merge_requests/7/diffs?page=1&per_page=100": {
   "status": 200,
   "body": [
    {
@@ -120,7 +120,7 @@
    }
   ]
  },
- "/projects/acme%2Fapp/jobs/9001": {
+ "/projects/1001/jobs/9001": {
   "status": 200,
   "body": {
    "id": 9001,
@@ -131,7 +131,7 @@
    ]
   }
  },
- "/projects/acme%2Fapp/pipelines/501": {
+ "/projects/1001/pipelines/501": {
   "status": 200,
   "body": {
    "id": 501,
@@ -142,7 +142,7 @@
    }
   }
  },
- "/projects/acme%2Fapp/merge_requests/7/diffs?page=4&per_page=100": {
+ "/projects/1001/merge_requests/7/diffs?page=4&per_page=100": {
   "status": 200,
   "body": []
  }

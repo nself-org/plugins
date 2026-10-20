@@ -13,7 +13,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -226,6 +228,16 @@ func TestIdentityBinding(t *testing.T) {
 		_, err := rg.signed("Push Hook", recreated)
 		wantReject(t, "project recreated under the same name", err, reasonSignature)
 	})
+	t.Run("a bearer delivery never pins an id", func(t *testing.T) {
+		rg := newRig(t, both())
+		tokened := replace(fixture(t, "push"), `"path_with_namespace":"acme/app"`, `"path_with_namespace":"acme/tokened"`)
+		if _, err := rg.bearer("Push Hook", bareToken, replace(tokened, `"id":1001,"name"`, `"id":666,"name"`)); err != nil {
+			t.Fatal(err)
+		}
+		if f, err := rg.bearer("Push Hook", bareToken, tokened); err != nil || f.RepoID != "1001" {
+			t.Fatalf("the project's real delivery was locked out by an earlier claim: %+v %v", f, err)
+		}
+	})
 	t.Run("name case does not matter", func(t *testing.T) {
 		rg := newRig(t, both())
 		f, err := rg.signed("Push Hook", replace(push, `"acme/app"`, `"Acme/App"`))
@@ -264,5 +276,24 @@ func TestKeysDecode(t *testing.T) {
 	}
 	if k := Keys(); len(k) != 2 || k[0].Key != "providers.gitlab.webhook_signing_secrets" || k[1].Key != "providers.gitlab.webhook_tokens" {
 		t.Fatalf("keys = %+v", k)
+	}
+}
+
+// TestNoPreAuthAmplification proves the unauthenticated path allocates little however the body is
+// shaped (Opus review M1): a body that is mostly a long list of empty strings is refused for about
+// the cost of the identity probe, not of decoding the list.
+func TestNoPreAuthAmplification(t *testing.T) {
+	body := []byte(`{"tag_list":[` + strings.Repeat(`"",`, 1<<20) + `""],"runner":{"tags":[` + strings.Repeat(`"",`, 1<<18) + `""]}}`)
+	rg := newRig(t, both())
+	d := delivery{event: "Job Hook", id: "msg-1", ts: rg.now, signSecret: signingSecret}
+	req := d.request(body)
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, err := rg.src.Verify(context.Background(), req, body)
+	runtime.ReadMemStats(&after)
+	wantReject(t, "slice-heavy body without a project", err, reasonSignature)
+	if grew := after.TotalAlloc - before.TotalAlloc; grew > uint64(len(body))/4 {
+		t.Fatalf("an unauthenticated %d byte body allocated %d bytes: the pre-auth decode must not materialize its lists", len(body), grew)
 	}
 }

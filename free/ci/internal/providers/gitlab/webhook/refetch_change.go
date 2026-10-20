@@ -160,15 +160,21 @@ type glDiff struct {
 	NewPath string `json:"new_path"`
 }
 
-// reachable answers "the revision is reachable from the default branch": comparing the default branch
-// to the revision lists the commits only the revision has, and none means it is an ancestor of (or the
-// same as) the default branch. A 404 is "not in this project" once the project itself was read.
+// reachable answers "the revision is reachable from the default branch". The default branch is read to
+// its head commit first and the compare starts from that id, never from the branch name: a tag of the
+// same name would win the name. Comparing the default head to the revision lists the commits only the
+// revision has, and none means it is an ancestor of (or the same as) the default head. A 404 is "not in
+// this project" once the project itself was read.
 func (r *fetch) reachable(defaultBranch string, projOK bool) {
 	if !isHex40(r.f.Revision) || defaultBranch == "" || !projOK {
 		return
 	}
+	var head glRef
+	if _, ok := r.call(api.BranchPath, r.params("branch", defaultBranch), nil, &head); !ok || !isHex40(strings.ToLower(head.Commit.ID)) {
+		return
+	}
 	var cmp comparison
-	status, ok := r.call(comparePath, r.params(), url.Values{"from": {defaultBranch}, "to": {r.f.Revision}}, &cmp)
+	status, ok := r.call(comparePath, r.params(), url.Values{"from": {strings.ToLower(head.Commit.ID)}, "to": {r.f.Revision}}, &cmp)
 	switch {
 	case ok && !cmp.CompareTimeout:
 		r.f.SHAReachable = fact(len(cmp.Commits) == 0, "api", r.now)

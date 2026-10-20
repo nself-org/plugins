@@ -61,16 +61,16 @@ func (s *Source) headCurrent(ctx context.Context, f model.TriggerFacts, want str
 	}
 	switch f.Kind {
 	case "push":
-		got, _, ok := branchOf(ctx, c, f.Repo, strings.TrimPrefix(f.Ref, "refs/heads/"))
+		got, _, ok := branchOf(ctx, c, projectRef(f), strings.TrimPrefix(f.Ref, "refs/heads/"))
 		return ok && strings.EqualFold(got.Commit.ID, want), ok
 	case "tag":
-		got, ok := tagCommit(ctx, c, f.Repo, strings.TrimPrefix(f.Ref, "refs/tags/"))
+		got, ok := tagCommit(ctx, c, projectRef(f), strings.TrimPrefix(f.Ref, "refs/tags/"))
 		return ok && strings.EqualFold(got, want), ok
 	case "pull_request":
 		var mr struct {
 			SHA string `json:"sha"`
 		}
-		params := projectParams(f.Repo, "iid", strconv.Itoa(f.PRNumber))
+		params := projectParams(projectRef(f), "iid", strconv.Itoa(f.PRNumber))
 		if _, err = get(ctx, c, mrPath, params, &mr); err != nil || mr.SHA == "" {
 			return false, false
 		}

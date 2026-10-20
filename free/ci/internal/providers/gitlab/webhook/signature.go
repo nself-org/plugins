@@ -66,7 +66,8 @@ func verifySigned(secret, id, ts, header string, body []byte, now time.Time) err
 		return errSignature()
 	}
 	m := hmac.New(sha256.New, key)
-	m.Write(signedContent(id, ts, body))
+	m.Write([]byte(id + "." + ts + "."))
+	m.Write(body) // streamed: no copy of a body that is up to 25 MiB on the unauthenticated path
 	want := m.Sum(nil)
 	entries := strings.Fields(header)
 	if len(entries) > maxSigEntries {
