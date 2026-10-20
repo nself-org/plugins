@@ -63,6 +63,58 @@ Some toolchains do not run under gVisor because they need a syscall the Sentry l
 - Podman support needs a way to read and judge its runtime table.
 - Network scopes `restricted` and `internet` use the same scope planner as the container level; the sidecar and the job network are created by the container profile, and the sandboxed job runs on that network under `runsc`.
 
+## The macOS VM level (Tart)
+
+On an Apple-silicon Mac the `vm` and `ephemeral-vm` levels run each attempt in a fresh clone of a VM image, through [Tart](https://tart.run). Linux has no `vm` level here. You install Tart and its network filter (softnet) yourself: nSelf does not bundle, download or redistribute either, and `ci doctor` shows the licence note that goes with them. The levels are the same profile; every attempt gets its own clone, so `ephemeral-vm` adds nothing a `vm` job lacks.
+
+### Set up
+
+1. Install Tart and softnet (for example `brew install cirruslabs/cli/tart`).
+2. Build or pull a base image your jobs need, with Remote Login (ssh) on and a key you control in the image user's `authorized_keys`.
+3. Tell nSelf in `~/.nself/ci/config.yaml`:
+
+```yaml
+ci:
+  tart:
+    base_image: ghcr.io/you/macos-ci@sha256:<64 hex digits>   # the digest is required
+    ssh_user: admin                                            # default
+    ssh_key: /Users/you/.ssh/tart_ci                           # identity file the image trusts
+```
+
+No image is shipped and a tag without a digest is refused: the level reports `isolation.tart_base_image` (E678) until the setting is right.
+
+### What a job gets
+
+- A clone named `nself-ci-<attempt>`. The workspace is copied in over the ssh session (a tar stream), the job runs there, and only the artifact paths the job declares come back. Nothing from the host is mounted into the VM.
+- Secrets are written as `export` lines on the ssh session's stdin. They are never on the `tart` or `ssh` command line and never in a file.
+- The clone is stopped and deleted on every exit path: pass, failure, cancel and timeout. A clone that cannot be deleted keeps a marker, and the next start retries.
+- Orphans: each clone has a marker file under `<CI home>/tart/` that the running attempt keeps locked. If the coordinator dies (even `kill -9`), the lock goes with it, and the sweep at the next attempt start stops and deletes the clone. A VM you named `nself-ci-*` by hand has no marker and is never touched.
+- Apple allows two macOS VMs at once. The profile counts free slots (`free_slots` in `ci doctor`) and never starts a third; the job waits.
+
+### Network scopes on Tart
+
+| Scope | How it is enforced |
+|---|---|
+| `lan`, `privileged` | Tart's default NAT. Owner and internal work only; netscope refuses these for untrusted jobs. |
+| `none`, `restricted`, `internet` | softnet with default deny: `--net-softnet-block` lists `0.0.0.0/0` plus the deploy exclusion set, the host's on-link prefixes and its addresses, and `--net-softnet-allow` lists only the Tart gateway address (the ssh session and the proxy live there). |
+
+`restricted` and `internet` go through the same egress proxy as the container level (public hosts only, the deploy exclusion set refused), served by the coordinator on the gateway address, and the ssh session sets `HTTP_PROXY` and `HTTPS_PROXY`. Before the job starts, a check runs inside the VM: the proxy must answer, the gateway must answer, and the public internet, the Mac's own LAN addresses and the exclusion set must not. A scope that cannot be proven fails the attempt with `E679` (`network.scope_unenforceable`), and the clone is deleted. If the installed Tart has no softnet block option, or no proxy can be started, every scope below `lan` is unavailable.
+
+### Known limits
+
+- Real-run evidence needs an Apple-silicon Mac with Tart; GitHub-hosted macOS runners do not allow nested virtualisation.
+- softnet filters by destination address, not port. The gateway address is allowed, so anything on your Mac that listens on all interfaces (ssh, file sharing, screen sharing) is reachable from the VM on that address. Turn those services off on a Mac that runs untrusted jobs, or keep untrusted work on a Mac that offers none of them.
+- Host keys of an ephemeral clone are not pinned: the session is `BatchMode` with no forwarding and no agent, on a private NAT.
+- IPv6 is not filtered by softnet rules; the VM image should not route it.
+- A job that declares secrets needs a per-attempt secret source in its run; a run without one is refused rather than started without its secrets.
+- Declared artifact paths are literal paths (no globs). Symlinks and special files in them are refused.
+- The Tart gateway is `192.168.64.1` unless the Mac's vmnet network was changed; a different address makes the network check fail closed.
+
+### Handoff
+
+- `ci doctor` does not print the Tart facts yet; the profile exposes `tart_version`, `licence_note`, `free_slots`, `softnet_block` and `base_image_cached` as availability facts.
+- The tagged integration tests (`-tags tart`) are the real-run evidence; they run on a Mac with Tart and the environment variables listed at the top of `integration_test.go`.
+
 ## Network scopes
 
 A job runs under one scope. An undeclared scope takes the default of its trust class: `owner` and `internal` get `lan`, `collaborator` gets `internet`, `untrusted` gets `restricted`. An untrusted job that declares `lan` or `privileged` is refused (`E680`), before any resource exists.
