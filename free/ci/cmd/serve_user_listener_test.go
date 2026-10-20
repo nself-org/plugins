@@ -57,7 +57,7 @@ func TestServeStartsUserAPIAndLocalSocket(t *testing.T) {
 	wg.Add(1)
 	go func() { defer wg.Done(); code = serveV15(ctx, args, hook) }()
 	sock := coordclient.SocketPath(data)
-	waitFor(t, "the serve lock and the socket", func() bool {
+	waitUntil(t, "the serve lock and the socket", func() bool {
 		_, err := os.Stat(sock)
 		return err == nil && coordclient.ServeHoldsLock(data)
 	})
@@ -87,7 +87,7 @@ func TestServeStartsUserAPIAndLocalSocket(t *testing.T) {
 	hc := &http.Client{Transport: &http.Transport{TLSClientConfig: cfg}, Timeout: 10 * time.Second}
 	var status int
 	var body string
-	waitFor(t, "the user API", func() bool {
+	waitUntil(t, "the user API", func() bool {
 		req, _ := http.NewRequest("GET", "https://"+api+"/v1/ping", nil)
 		req.Header.Set("Authorization", "Bearer "+tok)
 		resp, err := hc.Do(req)
@@ -120,7 +120,7 @@ func TestServeStartsUserAPIAndLocalSocket(t *testing.T) {
 	_ = tls.VersionTLS13
 }
 
-func waitFor(t *testing.T, what string, ok func() bool) {
+func waitUntil(t *testing.T, what string, ok func() bool) {
 	t.Helper()
 	for end := time.Now().Add(15 * time.Second); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
 		if ok() {
@@ -159,7 +159,7 @@ func TestServeKeepsTheLockWhenTheSocketIsOffOrFails(t *testing.T) {
 		}
 		done := make(chan int, 1)
 		go func() { done <- serveV15(ctx, args("wd"), hook) }()
-		waitFor(t, c.name+": the serve lock", func() bool { return coordclient.ServeHoldsLock(data) })
+		waitUntil(t, c.name+": the serve lock", func() bool { return coordclient.ServeHoldsLock(data) })
 		if c2 := serveV15(ctx, args("wd2"), hook); c2 == 0 {
 			t.Errorf("%s: a second serve started on a home whose serve has no socket", c.name)
 		}
@@ -188,7 +188,7 @@ func TestClientFollowsTheSocketPathInTheLock(t *testing.T) {
 	go func() {
 		done <- serveV15(ctx, []string{"--insecure", "--workdir", filepath.Join(data, "wd"), "--data-dir", data, "--api-addr", freePort(t), "--api-socket", sock}, hook)
 	}()
-	waitFor(t, "the socket", func() bool { _, err := os.Stat(sock); return err == nil && coordclient.ServeHoldsLock(data) })
+	waitUntil(t, "the socket", func() bool { _, err := os.Stat(sock); return err == nil && coordclient.ServeHoldsLock(data) })
 	if got := coordclient.SocketFor(data); got != sock {
 		t.Fatalf("SocketFor = %q, want %q", got, sock)
 	}
