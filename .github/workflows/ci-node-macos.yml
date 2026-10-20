@@ -76,6 +76,7 @@ jobs:
           UsePAM no
           StrictModes no
           AllowUsers $USER
+          Subsystem sftp /usr/libexec/sftp-server
           CFG
           cat > "$leg/ssh_config" <<CFG
           Host 127.0.0.1
