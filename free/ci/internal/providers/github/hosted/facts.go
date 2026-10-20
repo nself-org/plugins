@@ -54,10 +54,22 @@ func labelValue(labels []string, prefix string) string {
 	return ""
 }
 
+const labelProvider = "nself.provider="
+
+// repoOK applies the repository path check the node's provider registered (GitLab accepts a path of up
+// to 20 segments); a provider with none, and a node with no provider label, need GitHub's owner/name.
+func repoOK(provider, repo string) bool {
+	if check := runtime.RepoCheck(provider); check != nil {
+		return check(repo)
+	}
+	_, ok := parseRepo(repo)
+	return ok
+}
+
 // Facts implements runtime.FactsSource.
 func Facts(ctx context.Context, node model.Capability, l protocol.Lease) (runtime.AttemptFacts, error) {
 	repo := labelValue(node.Identity.Labels, LabelRepo)
-	if _, ok := parseRepo(repo); !ok {
+	if !repoOK(labelValue(node.Identity.Labels, labelProvider), repo) {
 		return runtime.AttemptFacts{}, refuse("node.repo")
 	}
 	// The lease epoch counts the times this attempt was handed out again after a loss: it is the

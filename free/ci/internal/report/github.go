@@ -10,6 +10,7 @@ package report
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -54,6 +55,9 @@ func Args(s Status) []string {
 func (g GH) Post(ctx context.Context, s Status) error {
 	if err := s.Validate(); err != nil {
 		return err
+	}
+	if strings.Contains(s.Repo, "/") {
+		return errors.New("report: invalid owner or repo")
 	}
 	out, exit, err := g.capture(ctx, Args(s)...)
 	if err != nil {

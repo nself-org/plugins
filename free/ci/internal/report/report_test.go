@@ -239,3 +239,34 @@ func TestCaptureInRunsInDir(t *testing.T) {
 		t.Fatal("Capture without a dir must not see the repository files")
 	}
 }
+
+// TestNestedProjectPath proves D-1345: a GitLab project in a subgroup travels as Owner "group" and Repo
+// "sub/project" and validates, a malformed path never does, and the GitHub reporter (one owner, one repo)
+// refuses a nested Repo before it builds an endpoint.
+func TestNestedProjectPath(t *testing.T) {
+	ok := Status{Owner: "group", Repo: "sub/project", Revision: sha, State: Success}
+	if err := ok.Validate(); err != nil {
+		t.Fatalf("nested project refused: %v", err)
+	}
+	deep := strings.TrimSuffix(strings.Repeat("s/", 18), "/")
+	if err := (Status{Owner: "g", Repo: deep + "/p", Revision: sha, State: Success}).Validate(); err != nil {
+		t.Fatalf("20 segments refused: %v", err)
+	}
+	for _, repo := range []string{"sub//p", "sub/../p", "sub/", "/p", "sub/.hidden", deep + "/s/p"} {
+		if err := (Status{Owner: "g", Repo: repo, Revision: sha, State: Success}).Validate(); err == nil {
+			t.Errorf("repo %q accepted", repo)
+		}
+	}
+	called := false
+	gh := GH{Capture: func(context.Context, ...string) (string, int, error) { called = true; return "", 0, nil }}
+	if err := gh.Post(context.Background(), ok); err == nil || called {
+		t.Errorf("GitHub reporter accepted a nested repo (err=%v, ran=%v)", err, called)
+	}
+}
+
+// TestTruncateStripsLineBreaks proves D-1345: a carriage return is a line break too.
+func TestTruncateStripsLineBreaks(t *testing.T) {
+	if got := Truncate("a\r\nb\rc\nd"); strings.ContainsAny(got, "\r\n") {
+		t.Fatalf("line break kept: %q", got)
+	}
+}

@@ -265,3 +265,17 @@ func TestUsePhase(t *testing.T) {
 		t.Error("removing the hook did not restore the mapping")
 	}
 }
+
+// TestPostNestedProject proves D-1345: a project in a subgroup (Owner "group", Repo "sub/widgets") gets
+// its commit status at the full, escaped project path.
+func TestPostNestedProject(t *testing.T) {
+	c, calls := fake(t, 201)
+	rep := &status.Reporter{Client: func(context.Context) (*rest.Client, error) { return c, nil }}
+	if err := rep.Post(context.Background(), report.Status{Owner: "group", Repo: "sub/widgets", Revision: sha, State: report.Success}); err != nil {
+		t.Fatalf("nested project refused: %v", err)
+	}
+	got := calls()
+	if len(got) != 1 || !strings.Contains(got[0].URI, "group%2Fsub%2Fwidgets/statuses/"+sha) {
+		t.Fatalf("requests: %+v", got)
+	}
+}
