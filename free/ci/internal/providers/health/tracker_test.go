@@ -15,6 +15,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/health"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 func failN(tr *health.Tracker, n int) {
@@ -136,5 +137,69 @@ func TestIgnoredProviders(t *testing.T) {
 	}
 	if h := tr.HealthOf(context.Background(), "notify"); h.State != "up" {
 		t.Fatalf("notify tracked: %+v", h)
+	}
+}
+
+// TestNoRetryOnAuth proves acceptance line 3 through the real hosted stack (the GitHub-hosted
+// provider against the fake API, placed by the scheduler, delivered by the dispatcher). A 401 on
+// dispatch ends the carrier with a provider error of class auth, code E701, after one request, and
+// never counts against the provider's health; the run loop does not retry that class
+// (internal/run TestRemoteAwaitProviderRefusalIsNotRetried). A 500 ends it with class transient,
+// E704, which the run loop retries within retry.infra_max (TestRemoteAwaitTransientProviderErrorIsRetried),
+// and the store refuses the retry past that bound.
+func TestNoRetryOnAuth(t *testing.T) {
+	clk := newClock()
+	tr := health.New(health.Options{Clock: clk.Now})
+	api := newFakeAPI(t)
+	s := newStack(t, api, tr)
+	api.setMode(modeUnauth)
+	aid := s.queue("auth", 1)
+	if _, err := s.submit(context.Background(), aid, "auth", true); err != nil {
+		t.Fatal(err)
+	}
+	var pe *providers.Error
+	if err := s.waitDeliveryErrors(1)[0]; !errors.As(err, &pe) || pe.Class != providers.Auth || pe.Code != "E701" {
+		t.Fatalf("a 401 on dispatch must end the carrier with E701 (auth): %v", err)
+	}
+	before := api.total()
+	time.Sleep(200 * time.Millisecond)
+	if after := api.total(); after != before {
+		t.Fatalf("the provider kept sending after the refusal: %d -> %d requests", before, after)
+	}
+	if h := tr.HealthOf(context.Background(), provID); h.State != "up" {
+		t.Fatalf("a credential refusal is not an outage: %+v", h)
+	}
+	if n := api.count("POST /repos/o/r/actions/workflows/"); n > 1 {
+		t.Fatalf("workflow dispatch was sent %d times after a 401", n)
+	}
+
+	api.setMode(mode5xx)
+	aid2 := s.queue("flaky", 1)
+	if _, err := s.submit(context.Background(), aid2, "flaky", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.waitDeliveryErrors(2)[1]; !errors.As(err, &pe) || pe.Class != providers.Transient || pe.Code != "E704" {
+		t.Fatalf("a 500 on dispatch must end the carrier with E704 (transient): %v", err)
+	}
+	// infra_max is 1: the lost first attempt may be retried, the lost second one may not.
+	ctx := context.Background()
+	_, epoch, _ := s.st.AttemptStateEpoch(ctx, aid2)
+	if err := s.st.Transition(ctx, aid2, "lost", "retryable", store.TransitionDetail{Epoch: epoch, FailureClass: "infra"}); err != nil {
+		t.Fatalf("the first retry must be authorized: %v", err)
+	}
+	_, epoch, _ = s.st.AttemptStateEpoch(ctx, aid2)
+	if err := s.st.Transition(ctx, aid2, "retryable", "queued", store.TransitionDetail{Epoch: epoch, FailureClass: "infra"}); err != nil {
+		t.Fatal(err)
+	}
+	api.setMode(modeUnauth) // the 500s above may have opened the breaker; a refusal loses the attempt without it
+	tr.Breaker(provID).Observe(outcome("", 200), clk.Now())
+	aid3 := s.queue("flaky", 2)
+	if _, err := s.submit(ctx, aid3, "flaky", true); err != nil {
+		t.Fatal(err)
+	}
+	s.waitDeliveryErrors(3)
+	_, epoch, _ = s.st.AttemptStateEpoch(ctx, aid3)
+	if err := s.st.Transition(ctx, aid3, "lost", "retryable", store.TransitionDetail{Epoch: epoch, FailureClass: "infra"}); err == nil {
+		t.Fatal("a second retry past infra_max must be refused")
 	}
 }

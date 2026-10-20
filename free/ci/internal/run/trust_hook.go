@@ -14,6 +14,7 @@ package run
 import (
 	"cmp"
 	"context"
+	"errors"
 	"os"
 	"strings"
 
@@ -165,4 +166,18 @@ func (h SourceTrust) auditOverride(ctx context.Context, r TrustRequest, res sour
 		return fail(CodeTrust, "--trust owner needs an audit row and it could not be written: %v", err)
 	}
 	return nil
+}
+
+// providerRefusal returns the provider error when cause is a refusal a retry cannot fix (P7-HOST-11).
+// It lives here because the layering test lets only this file of the package name providers.
+func providerRefusal(cause error) (*providers.Error, bool) {
+	var pe *providers.Error
+	if !errors.As(cause, &pe) {
+		return nil, false
+	}
+	switch pe.Code {
+	case "E700", "E701", "E702":
+		return pe, pe.Class == providers.Auth || pe.Class == providers.Config
+	}
+	return nil, false
 }

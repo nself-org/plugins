@@ -60,6 +60,9 @@ func TestDescribe(t *testing.T) {
 				len(*c.Trust.SecretClasses.Value) != 1 || (*c.Trust.SecretClasses.Value)[0] != "none" || (*c.Trust.Network.Value)[0] != "internet" || c.SecretsEligible {
 				t.Errorf("%s: facts %+v", label, c.Trust)
 			}
+			if c.Lifecycle.Discovered || !c.Lifecycle.Eligible { // the scheduler refuses a "discovered" runner as node.discovered
+				t.Errorf("%s: lifecycle %+v is not placeable", label, c.Lifecycle)
+			}
 			if !hasLabel(c, hosted.LabelProject+"widgets") || !hasLabel(c, hosted.LabelRepo+"acme/widgets") {
 				t.Errorf("%s: labels %v", label, c.Identity.Labels)
 			}
