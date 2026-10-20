@@ -36,6 +36,7 @@ type activeLease struct {
 	secWake   chan struct{}
 	lines     atomic.Uint64 // safe
 	lw        *lineWriter
+	offsets   chan protocol.Offset // safe: the coordinator's offset answers (offsets.go)
 }
 
 func (l *activeLease) cancel() { l.cancelled.Store(true); l.cancelCtx() }
@@ -96,7 +97,7 @@ func (s *Session) onLease(m protocol.Message, l protocol.Lease) {
 	// frame's value is not a job deadline; a job ends by its own timeout, a
 	// cancel, a drain deadline or the agent fence (P7-NODE-09).
 	ctx, cancel := context.WithCancel(s.runCtx)
-	al := &activeLease{lease: l, cancelCtx: cancel, secWake: make(chan struct{}, 1), secVals: map[string]string{}, expires: exp, secSeen: map[string]bool{}}
+	al := &activeLease{lease: l, cancelCtx: cancel, offsets: make(chan protocol.Offset, offsetBuffer), secWake: make(chan struct{}, 1), secVals: map[string]string{}, expires: exp, secSeen: map[string]bool{}}
 	if l.RunnerCredential != nil {
 		al.addMask(l.RunnerCredential.Value)
 	}

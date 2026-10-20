@@ -35,15 +35,22 @@ func (s *Session) finish(ctx context.Context, al *activeLease, root JobRoot, res
 	hookCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
 	defer cancel()
 	up := &uploader{s: s, al: al}
+	hookFatal := false
 	for _, h := range s.jobHooks {
 		if h.After == nil {
 			continue
 		}
 		if err := h.After(hookCtx, l, root, res.Outcome, up); err != nil {
 			_ = s.send("log", protocol.Log{LeaseID: l.LeaseID, LineSeq: al.lines.Add(1), Stream: "stderr", Text: oneLine(al.redact("agent: job hook " + h.Name + ": " + err.Error()))}, al)
+			hookFatal = hookFatal || errors.Is(err, ErrHookFatal)
 		}
 	}
 	ev, cerr := canonicalJSON(res.Evidence)
+	if hookFatal && res.Outcome.State == "passed" {
+		// A hook that owes the coordinator something the result depends on (the artifacts of the job)
+		// failed to deliver it: the job did not pass, whatever its command said.
+		ev, cerr = json.RawMessage(`{"schema":"ci.evidence/v1","result":"error","reason":"agent_hook_failed"}`), nil
+	}
 	if cerr != nil {
 		// The runner failed before it had a document. This one cannot validate as
 		// ci.evidence/v1, so the coordinator records the lease as errored.
