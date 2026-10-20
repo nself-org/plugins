@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/nself-org/plugins/free/ci/internal/cache/locality"
 	"github.com/nself-org/plugins/free/ci/internal/fairq"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/planview"
@@ -108,6 +109,7 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 // facts, the PERSONAL own node declaration, docker unknown because the run loop
 // does not probe for it) and every registered node.
 func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
+	ctx = locality.WithSource(ctx, rd.cacheLocalitySource())
 	capacity := rd.sess.Capacity()
 	w, digest, err := world.BuildForLocal(ctx, world.Deps{Store: rd.sess.Store, JobIDs: rd.sess.jobRows(), Policy: rd.policy, Clock: rd.sess.now},
 		world.LocalInput{Project: rd.row.Project, Platform: platform(), Capacity: capacity, DockerUnknown: true, Now: rd.sess.now()}, p)

@@ -300,3 +300,24 @@ func TestLocalityDigestStable(t *testing.T) {
 		t.Fatalf("two builds differ:\n%s\n%s", ja, jb)
 	}
 }
+
+func TestContextSourcesDoNotShareJobs(t *testing.T) {
+	for _, key := range []string{"run-a", "run-b"} {
+		t.Run(key, func(t *testing.T) {
+			t.Parallel()
+			ctx := WithSource(t.Context(), func(context.Context) (Inputs, error) {
+				return Inputs{Ledger: &fakeLedger{}, Jobs: []Job{{Key: key}}}, nil
+			})
+			w := sched.World{Runners: []sched.Runner{runner("local", platformLinux, true)}}
+			if err := Contribute(ctx, &w); err != nil {
+				t.Fatal(err)
+			}
+			if len(w.Cache["local"]) != 1 {
+				t.Fatalf("cross-run facts: %+v", w.Cache)
+			}
+			if _, ok := w.Cache["local"][key]; !ok {
+				t.Fatalf("wrong job key: %+v", w.Cache)
+			}
+		})
+	}
+}

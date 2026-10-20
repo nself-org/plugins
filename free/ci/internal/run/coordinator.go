@@ -208,7 +208,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	sess.Store, sess.Coordinator, sess.Exec, sess.RunID, sess.Revision = st, coord, c.exec, runID, rev.SHA
 	sess.Host, sess.Home, sess.Admission = hostName(), c.Opts.Home, c.Admission
 	sess.Admission.Force = sess.Admission.Force || c.Opts.Force
-	sess.Plan, sess.Record = c.Plan, c.Opts.Record
+	sess.Plan, sess.Record, sess.Container = c.Plan, c.Opts.Record, c.Opts.Container
 	sess.PolicyRun, sess.Interactive, sess.ProviderRepo = c.Opts.PolicyRun, c.Opts.Interactive, c.Opts.ProviderRepo
 	sess.Capacity = c.Capacity
 	if sess.Capacity == nil {

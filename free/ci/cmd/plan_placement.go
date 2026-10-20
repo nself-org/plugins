@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/cache/locality"
 	"github.com/nself-org/plugins/free/ci/internal/config"
 	"github.com/nself-org/plugins/free/ci/internal/drill"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
@@ -34,6 +35,7 @@ import (
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
@@ -178,6 +180,15 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	}
 	jobs, blocked := planview.SchedJobs(planview.Context{PipelineID: pd.pl.Pipeline.ID, Project: project, Support: pd.pl.Support,
 		DefaultPlatform: pd.world.Platform, Foreground: foregroundTrigger(string(pd.pl.Trigger))}, plannedJobs(pd))
+	var cacheAttempts []cirun.AttemptInfo
+	plannedByID := map[string]model.Job{}
+	for _, j := range plannedJobs(pd) {
+		plannedByID[j.ID] = j.Job
+	}
+	for _, j := range jobs {
+		cacheAttempts = append(cacheAttempts, cirun.AttemptInfo{AttemptID: j.Key, JobName: j.ID, Job: plannedByID[j.ID]})
+	}
+	ctx = locality.WithSource(ctx, cirun.CacheLocalitySource(st, store.PipelineRow{Project: pd.root, SourceTrust: "owner"}, cacheAttempts))
 	capacity := placementProbe()
 	now := placementClock()
 	pipe := sched.Pipeline{ID: pd.pl.Pipeline.ID}

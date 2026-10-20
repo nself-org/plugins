@@ -57,7 +57,10 @@ func platformOf(r sched.Runner) string {
 // It never fails a build: no source, a source error or an empty job list leaves Cache empty,
 // which the scheduler reads as unknown for every pair.
 func Contribute(ctx context.Context, w *sched.World) error {
-	src := current()
+	src, ok := ctx.Value(sourceKey{}).(Source)
+	if !ok {
+		src = current()
+	}
 	if src == nil {
 		return nil
 	}

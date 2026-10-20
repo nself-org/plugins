@@ -37,8 +37,9 @@ type Session struct {
 	Admission   ciexec.AdmissionPolicy
 	// Plan is the run's plan and Record its Options.Record: the dispatch hook maps both
 	// into the scheduler job (P7-AUTO-28); a Session built without them still places.
-	Plan   *plan.Plan
-	Record bool
+	Plan      *plan.Plan
+	Record    bool
+	Container bool // the run-level --container option also determines locality cache keys
 	// LocalOnly says a job cannot be run on a node yet (nil = none): the dispatch hook keeps it on this machine.
 	LocalOnly func(model.Job) bool
 	// Clock is the time the placement world is built at (nil = time.Now); tests inject it so a plan and a run can be compared.

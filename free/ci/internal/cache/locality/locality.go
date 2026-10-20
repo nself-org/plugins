@@ -98,3 +98,10 @@ func current() Source {
 	defer bound.RUnlock()
 	return bound.src
 }
+
+type sourceKey struct{}
+
+// WithSource binds a source to one world build without sharing it with concurrent runs.
+func WithSource(ctx context.Context, src Source) context.Context {
+	return context.WithValue(ctx, sourceKey{}, src)
+}
