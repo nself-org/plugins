@@ -154,6 +154,7 @@ func (h SourceTrust) gather(ctx context.Context, root, rev string) source.GitFac
 		run(func() { g.OffDefault = listed("rev-list", "-n", "501", rev) })
 	}
 	wg.Wait()
+	h.verifyRewrites(ctx, root, &g, append(refs, fetched...))
 	return g
 }
 
@@ -206,7 +207,7 @@ func fetchHeads(root, path string) ([]string, bool) {
 	var shas []string
 	for _, l := range lines(string(b)) {
 		sha, _, _ := strings.Cut(l, "\t")
-		if fullSHA.MatchString(sha) && !slices.Contains(shas, sha) && len(shas) < 64 {
+		if fullSHA.MatchString(sha) && !slices.Contains(shas, sha) {
 			shas = append(shas, sha)
 		}
 	}

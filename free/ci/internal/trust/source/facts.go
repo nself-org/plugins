@@ -92,6 +92,9 @@ type GitFacts struct {
 	// ReflogCreated maps a commit to the subject of its OLDEST reflog entry in any log (OldestEntries),
 	// the way it first reached this repository, for example "commit: fix" or "branch: Created from FETCH_HEAD".
 	ReflogCreated map[string]string
+	// RewriteVerified records rewrites checked against every fetched history: true only
+	// when their patch is absent from all of them. Missing verification cannot raise trust.
+	RewriteVerified map[string]bool
 	// Missing lists the facts that could not be gathered (the Missing* keys).
 	Missing []string
 }

@@ -300,7 +300,7 @@ func TestClassifyLocalFacts(t *testing.T) {
 		{"head on the default branch", source.GitFacts{Head: "a", DefaultRemoteRef: def, ReachableFromDefault: true}, "owner"},
 		{"own unpushed commit made here", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "commit: work"}}, "owner"},
 		{"amend, rebase, cherry-pick and merge count", source.GitFacts{Head: "d", DefaultRemoteRef: def, OffDefault: c("a", "b", "c", "d"),
-			ReflogCreated: map[string]string{"a": "commit (amend): w", "b": "rebase (pick): w", "c": "cherry-pick: w", "d": "merge feat: Merge made by the 'ort' strategy."}}, "owner"},
+			ReflogCreated: map[string]string{"a": "commit (amend): w", "b": "rebase (pick): w", "c": "cherry-pick: w", "d": "merge feat: Merge made by the 'ort' strategy."}, RewriteVerified: map[string]bool{"a": true, "b": true, "c": true}}, "owner"},
 		{"stranger commit, reflog says checkout", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "checkout: moving from main to pr"}}, "untrusted"},
 		{"stranger commit, no reflog entry", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a")}, "untrusted"},
 		{"fast-forward merge is not creation", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: map[string]string{"a": "merge FETCH_HEAD: Fast-forward"}}, "untrusted"},

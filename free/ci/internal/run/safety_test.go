@@ -45,10 +45,35 @@ func TestStatusNotPostedForPartialCancelledOrOutsideConfig(t *testing.T) {
 		})
 	}
 	// Ctrl-C: the run context ends while a job runs; nothing is posted
-	r := newRig(t, map[string]model.Job{"a": sh("sleep 60")}, gitFake{})
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() { time.Sleep(1500 * time.Millisecond); cancel() }()
+	started := filepath.Join(t.TempDir(), "started")
+	job := sh(`printf started > "$STARTED"; sleep 60`)
+	job.Env = map[string]string{"STARTED": started}
+	r := newRig(t, map[string]model.Job{"a": job}, gitFake{})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	observed := make(chan struct{})
+	go func() {
+		defer close(observed)
+		tick := time.NewTicker(10 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			if _, err := os.Stat(started); err == nil {
+				cancel()
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
+		}
+	}()
 	res, err := r.C.Run(ctx)
+	cancel()
+	<-observed
+	if _, err := os.Stat(started); err != nil {
+		t.Fatalf("job never started: %v", err)
+	}
 	if err != nil || res.Exit == 0 || len(r.Rep.all()) != 0 || !strings.Contains(res.Summary.Status, report.ReasonCancelled) {
 		t.Fatalf("exit %d err %v status %q posted %+v", res.Exit, err, res.Summary.Status, r.Rep.all())
 	}

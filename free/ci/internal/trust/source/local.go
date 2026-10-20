@@ -5,7 +5,7 @@ package source
 // Outputs: a Result; owner only on provenance, never on who the author says they are.
 // Constraints: pure. owner when HEAD is reachable from the default branch of the remote, or when
 //          the local reflogs first recorded every commit the default branch does not contain as created
-//          here (commit, commit (amend), rebase, merge, cherry-pick; never checkout, fetch, pull, a
+//          here (commit, amend, rebase, merge, cherry-pick; rewrites also need a unique patch; never checkout, fetch, pull, a
 //          fast-forward). A pushed commit of yours still counts: D17 asks for "on no ref of any remote",
 //          but an arrival entry is the proof of a stranger's commit and the push test made `nself ci`
 //          refuse your own pushed branch (lead ruling, TRUST EPIC Invalidations 2026-10-19).
@@ -57,6 +57,7 @@ func ClassifyLocal(g GitFacts) Result {
 // createdHere: there are commits beyond the default branch and the reflogs first recorded every one as
 // made on this machine. Being pushed does not change that: a pushed commit of yours still has its
 // `commit` entry, while a stranger's commit you fetched, pulled or checked out has an arrival entry.
+// Rewrites additionally need proof that no fetched history contains the same patch.
 func createdHere(g GitFacts) bool {
 	if (g.DefaultRemoteRef == "" && !g.NeverFetched) || len(g.OffDefault) == 0 {
 		return false
@@ -67,7 +68,7 @@ func createdHere(g GitFacts) bool {
 		}
 	}
 	for _, c := range g.OffDefault {
-		if !MadeHere(g.ReflogCreated[c.SHA]) {
+		if !MadeHere(g.ReflogCreated[c.SHA]) || Rewritten(g.ReflogCreated[c.SHA]) && !g.RewriteVerified[c.SHA] {
 			return false
 		}
 	}
@@ -101,4 +102,13 @@ func MadeHere(subject string) bool {
 		return true
 	}
 	return false
+}
+
+// Rewritten reports creation entries that may preserve someone else's patch.
+// MadeHere alone proves where the commit object was made, not where its code originated.
+func Rewritten(subject string) bool {
+	kind, _, _ := strings.Cut(subject, ":")
+	kind = strings.TrimSpace(kind)
+	return kind == "commit (amend)" || strings.HasPrefix(kind, "rebase") ||
+		strings.HasPrefix(kind, "cherry-pick") || strings.HasPrefix(kind, "pull") && !strings.Contains(subject, "Merge made by")
 }
