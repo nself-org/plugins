@@ -63,7 +63,7 @@ func Place(w World, jobs []Job) Result {
 					if best == nil || sc < bestScore {
 						p := Placement{JobKey: j.Key, RunnerID: r.ID, CPU: j.Requirements.CPU, MemMB: j.Requirements.MemMB}
 						cost, _ := worstCost(j.TimeoutMs, w.Costs[r.ID])
-						if r.Class == "owned" || r.Class == "local" {
+						if c := runnerClass(w, r); c == "owned" || c == "local" {
 							cost = 0
 						}
 						p.CostMicro = cost
