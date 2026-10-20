@@ -207,9 +207,6 @@ func TestD41_NodeCannotSelfDeclareHostedToSkipProjectAuthorization(t *testing.T)
 	if dHas(dEligibility(t, n, "personal-proj"), model.NodeDiscovered) {
 		t.Fatal("positive control: the authorized project was refused")
 	}
-	if !openFinding(t, "D41") {
-		return
-	}
 	forged := n.Capability
 	hosted := "hosted"
 	forged.Location.Kind = model.Fact[string]{Value: &hosted, Source: "self", ObservedAt: time.Now().UTC(), Confidence: "known"}
@@ -229,9 +226,6 @@ func TestD41_NodeCannotSelfDeclareHostedToSkipProjectAuthorization(t *testing.T)
 // D42: node-reported labels are kept verbatim, including the pool.* namespace the pool design assigns.
 func TestD42_NodeCannotAssignItselfPoolLabels(t *testing.T) {
 	r, c := dRegistry(t)
-	if !openFinding(t, "D42") {
-		return
-	}
 	forged := dCapability(t)
 	forged.Identity.Labels = append(append([]string(nil), forged.Identity.Labels...), "pool.team", "pool.record")
 	updated, _, err := r.UpdateCapability(context.Background(), c.Identity.ID, forged, "node")
