@@ -8,6 +8,7 @@ package coordclient
 
 import (
 	"context"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -112,5 +113,17 @@ func TestNodesClientNoCredential(t *testing.T) {
 	s := nodeSim(t)
 	if _, err := New(s.target(Creds{CA: s.rootFile()})); !reasonIs(err, clientapi.ReasonNoCredential) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestNodesClientLiftsTheHeaderTimeoutOnACopy(t *testing.T) {
+	s := nodeSim(t)
+	cl := tokenClient(s, roles.Admin)
+	orig := cl.hc.Transport.(*http.Transport)
+	if orig.ResponseHeaderTimeout == 0 {
+		t.Fatal("the shared transport lost its header timeout")
+	}
+	if got := cl.nodeHTTP().Transport.(*http.Transport); got == orig || got.ResponseHeaderTimeout != 0 {
+		t.Fatalf("node client transport: shared=%v timeout=%v", got == orig, got.ResponseHeaderTimeout)
 	}
 }

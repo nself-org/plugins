@@ -10,6 +10,7 @@ package clientapi
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -221,4 +222,28 @@ func TestNodesAuthzUnavailableBeforeServe(t *testing.T) {
 	tok := r.token("ada", roles.Admin, time.Hour, roles.AllProjects)
 	st, b := r.do(r.client(), "GET", PathNodes, tok, "")
 	refused(t, st, b, 404, ReasonNotFound)
+}
+
+func TestNodesAuthzRotateKeyIDAndContentType(t *testing.T) {
+	r := nodeRig(t)
+	tok := r.token("ada", roles.Admin, time.Hour, roles.AllProjects)
+	if st, b := r.do(r.client(), "POST", PathNodesPfx+"n1/rotate", tok, `{"mode":"node-key","key_id":"k1"}`); st != 200 {
+		t.Fatalf("%d %s", st, b)
+	}
+	got := nodeCalls()
+	if len(got) != 1 || strings.Join(got[0].cmd.Args, " ") != "--mode=node-key --key-id=k1" {
+		t.Fatalf("ran %+v", got)
+	}
+	// a form post (the shape a cross-site request has) is refused before the runner
+	req, _ := http.NewRequest("POST", r.srv.URL+PathNodesPfx+"n1/revoke", strings.NewReader("a=b"))
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := r.client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != 400 || len(nodeCalls()) != 1 {
+		t.Fatalf("form post = %d, runner calls %d", resp.StatusCode, len(nodeCalls()))
+	}
 }

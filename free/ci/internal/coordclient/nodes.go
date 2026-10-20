@@ -51,6 +51,20 @@ func jsonQuery(asJSON bool) string {
 	return ""
 }
 
+// nodeHTTP is the client's HTTP client with the response-header timeout lifted: a node command answers when
+// it ends, and an upgrade waits for running jobs for minutes. The caller's context carries the deadline.
+func (c *Client) nodeHTTP() *http.Client {
+	t, ok := c.hc.Transport.(*http.Transport)
+	if !ok {
+		return c.hc
+	}
+	t2 := t.Clone()
+	t2.ResponseHeaderTimeout = 0
+	hc := *c.hc
+	hc.Transport = t2
+	return &hc
+}
+
 // node sends one request and decodes the NodeResult of a 200 or 422 answer.
 func (c *Client) node(ctx context.Context, method, path string, body []byte) (clientapi.NodeResult, error) {
 	var rd io.Reader
@@ -67,7 +81,11 @@ func (c *Client) node(ctx context.Context, method, path string, body []byte) (cl
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
-	resp, err := c.hc.Do(req)
+	hc := c.nodeHTTP()
+	if t, ok := hc.Transport.(*http.Transport); ok && t != c.hc.Transport {
+		defer t.CloseIdleConnections()
+	}
+	resp, err := hc.Do(req)
 	if err != nil {
 		return clientapi.NodeResult{}, netError(err)
 	}

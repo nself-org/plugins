@@ -72,6 +72,7 @@ type NodeRequest struct {
 	// rotate
 	HostKey string `json:"host_key,omitempty"`
 	Mode    string `json:"mode,omitempty"`
+	KeyID   string `json:"key_id,omitempty"`
 	// upgrade: exactly one of Node and All
 	Node           string `json:"node,omitempty"`
 	All            bool   `json:"all,omitempty"`
@@ -152,6 +153,9 @@ func (n nodeRoutes) command(verb string, r *http.Request) (NodeCommand, error) {
 	cmd := NodeCommand{Verb: verb}
 	var req NodeRequest
 	if r.Method == http.MethodPost {
+		if ct := r.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(strings.ToLower(ct), "application/json") {
+			return cmd, Failf(ReasonBadRequest, "send the body as application/json")
+		}
 		dec := json.NewDecoder(io.LimitReader(r.Body, maxNodeBody))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&req); err != nil && !errors.Is(err, io.EOF) {
@@ -197,9 +201,9 @@ func nodeArgs(verb string, q NodeRequest) ([]string, error) {
 		return nil
 	}
 	own := map[string][]string{"set": {"reserve_cpu", "reserve_mem", "interactive", "on_battery", "persistence"},
-		"rotate": {"host_key", "mode"}, "upgrade": {"node", "all", "version", "allow_downgrade"}}[verb]
+		"rotate": {"host_key", "mode", "key_id"}, "upgrade": {"node", "all", "version", "allow_downgrade"}}[verb]
 	given := map[string]bool{"reserve_cpu": q.ReserveCPU != "", "reserve_mem": q.ReserveMem != "", "interactive": q.Interactive != "",
-		"on_battery": q.OnBattery != "", "persistence": q.Persistence != "", "host_key": q.HostKey != "", "mode": q.Mode != "",
+		"on_battery": q.OnBattery != "", "persistence": q.Persistence != "", "host_key": q.HostKey != "", "mode": q.Mode != "", "key_id": q.KeyID != "",
 		"node": q.Node != "", "all": q.All, "version": q.Version != "", "allow_downgrade": q.AllowDowngrade}
 	for k, on := range given {
 		if on && !slices.Contains(own, k) {
@@ -207,7 +211,7 @@ func nodeArgs(verb string, q NodeRequest) ([]string, error) {
 		}
 	}
 	for _, f := range []struct{ flag, v string }{{"reserve-cpu", q.ReserveCPU}, {"reserve-mem", q.ReserveMem}, {"interactive", q.Interactive},
-		{"on-battery", q.OnBattery}, {"persistence", q.Persistence}, {"host-key", q.HostKey}, {"mode", q.Mode}, {"version", q.Version}} {
+		{"on-battery", q.OnBattery}, {"persistence", q.Persistence}, {"host-key", q.HostKey}, {"mode", q.Mode}, {"key-id", q.KeyID}, {"version", q.Version}} {
 		if err := take(f.flag, f.v); err != nil {
 			return nil, err
 		}

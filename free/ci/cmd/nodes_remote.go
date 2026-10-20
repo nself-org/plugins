@@ -40,7 +40,7 @@ var nodesRoutedSubs = map[string]bool{"list": true, "show": true, "set": true, "
 	"remove": true, "rotate": true, "upgrade": true}
 
 const (
-	nodesRunTimeout = 15 * time.Minute
+	nodesRunTimeout = 2 * time.Hour // an upgrade waits for running jobs, node by node
 	nodesOutCap     = 1 << 20
 )
 
@@ -86,20 +86,39 @@ func startNodeAdmin(ctx context.Context, addr string, c *coordinator.Coordinator
 }
 
 // capWriter keeps at most nodesOutCap bytes and drops the rest.
-type capWriter struct{ b bytes.Buffer }
+type capWriter struct {
+	b    bytes.Buffer
+	over bool
+}
 
 func (w *capWriter) Write(p []byte) (int, error) {
-	if room := nodesOutCap - w.b.Len(); room > 0 {
+	room := nodesOutCap - w.b.Len()
+	if room > 0 {
 		w.b.Write(p[:min(len(p), room)])
+	}
+	if len(p) > room {
+		w.over = true
 	}
 	return len(p), nil
 }
+
+// nodeSerial lets one upgrade or rotate run at a time in this process: the agent update engine keeps one
+// job per node in a package-level map, so two concurrent requests for a node would share it.
+var nodeSerial = make(chan struct{}, 1)
 
 // runNodeCommand is the clientapi.NodeRunner: it runs the local handler of cmd.Verb as actor.
 func runNodeCommand(ctx context.Context, actor string, cmd clientapi.NodeCommand) (clientapi.NodeResult, error) {
 	st := nodeAdminDeps.Load()
 	if st == nil {
 		return clientapi.NodeResult{}, clientapi.Failf(clientapi.ReasonNotFound, "node administration is not available on this server")
+	}
+	if cmd.Verb == "upgrade" || cmd.Verb == "rotate" {
+		select {
+		case nodeSerial <- struct{}{}:
+			defer func() { <-nodeSerial }()
+		case <-ctx.Done():
+			return clientapi.NodeResult{}, ctx.Err()
+		}
 	}
 	var out, errw capWriter
 	env := lifecycle.Env{Out: &out, Err: &errw,
@@ -129,6 +148,9 @@ func runNodeCommand(ctx context.Context, actor string, cmd clientapi.NodeCommand
 	}()
 	select {
 	case code := <-done:
+		if out.over || errw.over {
+			return clientapi.NodeResult{Exit: max(code, 2), Stderr: "the answer is longer than the 1 MiB limit of the user API; read it on the coordinator host\n"}, nil
+		}
 		return clientapi.NodeResult{Exit: code, Stdout: out.b.String(), Stderr: errw.b.String()}, nil
 	case <-time.After(nodesRunTimeout):
 		return clientapi.NodeResult{}, errors.New("node command timed out")
@@ -196,7 +218,7 @@ func nodesRemoteDispatch(key string, args []string) (code int, handled bool) {
 func takeCoordinatorFlag(args []string) (url string, rest []string, found bool, err error) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
-		name, val, hasVal := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		name, val, hasVal := strings.Cut(strings.TrimPrefix(strings.TrimPrefix(a, "-"), "-"), "=")
 		if !strings.HasPrefix(a, "-") || name != "coordinator" {
 			rest = append(rest, a)
 			continue
@@ -241,6 +263,9 @@ func nodesRemoteRequest(sub string, args []string) (id string, q clientapi.NodeR
 	case "rotate":
 		fs.StringVar(&q.HostKey, "host-key", "", "")
 		fs.StringVar(&q.Mode, "mode", "", "")
+		fs.StringVar(&q.KeyID, "key-id", "", "")
+		fs.BoolFunc("cert", "", func(string) error { q.Mode = "cert"; return nil })
+		fs.BoolFunc("node-key", "", func(string) error { q.Mode = "node-key"; return nil })
 	case "upgrade":
 		fs.StringVar(&q.Version, "version", "", "")
 		fs.BoolVar(&q.All, "all", false, "")

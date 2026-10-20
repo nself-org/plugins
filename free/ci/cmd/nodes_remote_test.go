@@ -168,6 +168,9 @@ func TestNodesRemoteAdminRevokesWithChainedAudit(t *testing.T) {
 	if code, _, out, errw := r.run("nodes set", "lap1", "--reserve-cpu", "50%", "--json"); code != 0 || !strings.Contains(out, "settings") {
 		t.Fatalf("set = %d %q %q", code, out, errw)
 	}
+	if code, _, _, errw := r.run("nodes enable", "lap1"); code != 0 {
+		t.Fatalf("enable = %d %q", code, errw)
+	}
 	code, _, out, errw := r.run("nodes revoke", "lap1", "--json")
 	if code != 0 || !strings.Contains(out, `"node"`) {
 		t.Fatalf("revoke = %d %q %q", code, out, errw)
@@ -184,6 +187,17 @@ func TestNodesRemoteAdminRevokesWithChainedAudit(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(out), &env); err != nil || env.Data.Closed < 1 {
 		t.Fatalf("revoke closed no live sessions: %s (%v)", out, err)
+	}
+	// each mutation: one decision row (authorize, admin) and exactly one node row, both under the caller
+	byAction := map[string]int{}
+	allEs, _ := r.st.AuditEntries(context.Background(), 0, 10000)
+	for _, e := range allEs {
+		if strings.HasPrefix(e.Action, "node.") && strings.Contains(e.Actor, "ada") {
+			byAction[e.Action]++
+		}
+	}
+	if byAction["node.state"] != 2 || byAction["node.settings"] != 1 || byAction["node.revoke"] != 1 || len(byAction) != 3 {
+		t.Fatalf("node audit rows by action under the caller: %v (want drain+enable state 2, settings 1, revoke 1)", byAction)
 	}
 	if n := r.auditRows("node.revoke"); n != 1 {
 		t.Fatalf("revoke wrote %d node.revoke rows, want 1", n)
@@ -274,4 +288,32 @@ func nodesRemoteDispatchErr(key string, args []string) (code int, handled bool, 
 	defer func() { coordOut, coordErr = oldO, oldE }()
 	code, handled = nodesRemoteDispatch(key, args)
 	return code, handled, ob.String(), eb.String()
+}
+
+func TestNodesRemoteRequestBuildsRotateAndUpgradeFlags(t *testing.T) {
+	id, q, err := nodesRemoteRequest("rotate", []string{"lap1", "--node-key", "--key-id", "k1"})
+	if err != nil || id != "lap1" || q.Mode != "node-key" || q.KeyID != "k1" {
+		t.Fatalf("rotate = %q %+v %v", id, q, err)
+	}
+	if _, q, err = nodesRemoteRequest("upgrade", []string{"--all", "--version", "1.5.0", "--allow-downgrade"}); err != nil || !q.All || q.Version != "1.5.0" || !q.AllowDowngrade || q.Node != "" {
+		t.Fatalf("upgrade --all = %+v %v", q, err)
+	}
+	if id, q, err = nodesRemoteRequest("upgrade", []string{"Lap1"}); err != nil || id != "" || q.Node != "lap1" {
+		t.Fatalf("upgrade node = %q %+v %v", id, q, err)
+	}
+	if _, _, err = nodesRemoteRequest("upgrade", []string{"--all", "lap1"}); err == nil {
+		t.Fatal("upgrade with a node and --all was accepted")
+	}
+}
+
+func TestNodesRemoteOutputOverLimitIsAnError(t *testing.T) {
+	var w capWriter
+	if _, err := w.Write(make([]byte, nodesOutCap+1)); err != nil || !w.over || w.b.Len() != nodesOutCap {
+		t.Fatalf("over=%v len=%d err=%v", w.over, w.b.Len(), err)
+	}
+	var ok capWriter
+	_, _ = ok.Write(make([]byte, nodesOutCap))
+	if ok.over {
+		t.Fatal("output of exactly the limit was flagged")
+	}
 }
