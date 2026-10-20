@@ -8,9 +8,11 @@ package adhoc
 // Constraints: token shapes (ghp_, sk_live_, AKIA, JWT...) are masked by the
 // P7-TRUST-02 redactor with no help; a value that follows a secret-looking name
 // (`--token=V`, `PASSWORD=V`, `--api-key V`) is registered, then masked. Nothing
-// is guessed beyond that: an argument that is only a word stays visible.
+// is guessed for plain words; known credential flags and structured payloads
+// are also recognized.
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -27,6 +29,29 @@ var secretName = regexp.MustCompile(`(?i)(token|secret|passw(or)?d|passwd|creden
 func secretValues(argv []string) [][]byte {
 	var out [][]byte
 	for i, a := range argv {
+		if i > 0 {
+			prev := argv[i-1]
+			// Register the complete argument as well as its sensitive component:
+			// short values must still be hidden in Recorded by position.
+			switch {
+			case strings.HasPrefix(a, "-p") && len(a) > 2 && !strings.HasPrefix(a, "--") && (argv[0] == "mysql" || strings.HasSuffix(argv[0], "/mysql")):
+				out = append(out, []byte(a), []byte(a[2:]))
+			case prev == "-u" || prev == "--user" || strings.HasPrefix(a, "--user="):
+				out = append(out, []byte(a))
+				credentials := strings.TrimPrefix(a, "--user=")
+				if _, password, ok := strings.Cut(credentials, ":"); ok && password != "" {
+					out = append(out, []byte(password))
+				}
+			case (prev == "-H" || prev == "--header") && secretName.MatchString(strings.SplitN(a, ":", 2)[0]):
+				out = append(out, []byte(a))
+				if _, v, ok := strings.Cut(a, ":"); ok && strings.TrimSpace(v) != "" {
+					out = append(out, []byte(strings.TrimSpace(v)))
+				}
+			case strings.Contains(a, "{") && secretName.MatchString(a):
+				out = append(out, []byte(a))
+				out = append(out, jsonSecrets(a)...)
+			}
+		}
 		name, value, hasValue := strings.Cut(strings.TrimLeft(a, "-"), "=")
 		if !secretName.MatchString(name) {
 			continue
@@ -79,4 +104,32 @@ func Recorded(r *redact.Redactor, argv []string) string {
 		line = line[:cut] + "…"
 	}
 	return line
+}
+
+// jsonSecrets registers string values below sensitive JSON keys for output masking.
+func jsonSecrets(arg string) [][]byte {
+	var value any
+	if json.Unmarshal([]byte(arg), &value) != nil {
+		return nil
+	}
+	var out [][]byte
+	var walk func(any, bool)
+	walk = func(v any, sensitive bool) {
+		switch x := v.(type) {
+		case string:
+			if sensitive && x != "" {
+				out = append(out, []byte(x))
+			}
+		case map[string]any:
+			for key, child := range x {
+				walk(child, sensitive || secretName.MatchString(key))
+			}
+		case []any:
+			for _, child := range x {
+				walk(child, sensitive)
+			}
+		}
+	}
+	walk(value, false)
+	return out
 }

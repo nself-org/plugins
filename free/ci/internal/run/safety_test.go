@@ -45,9 +45,25 @@ func TestStatusNotPostedForPartialCancelledOrOutsideConfig(t *testing.T) {
 		})
 	}
 	// Ctrl-C: the run context ends while a job runs; nothing is posted
-	r := newRig(t, map[string]model.Job{"a": sh("sleep 60")}, gitFake{})
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() { time.Sleep(1500 * time.Millisecond); cancel() }()
+	marker := filepath.Join(t.TempDir(), "started")
+	r := newRig(t, map[string]model.Job{"a": sh("touch " + strconv.Quote(marker) + "; sleep 60")}, gitFake{})
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	go func() {
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if _, err := os.Stat(marker); err == nil {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
 	res, err := r.C.Run(ctx)
 	if err != nil || res.Exit == 0 || len(r.Rep.all()) != 0 || !strings.Contains(res.Summary.Status, report.ReasonCancelled) {
 		t.Fatalf("exit %d err %v status %q posted %+v", res.Exit, err, res.Summary.Status, r.Rep.all())
