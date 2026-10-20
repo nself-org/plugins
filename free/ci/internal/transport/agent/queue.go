@@ -49,9 +49,7 @@ func (d *Driver) release(rt *route) {
 		}
 	}
 	d.queues[rt.node] = q
-	if p := d.pending[rt.node]; p != nil {
-		delete(p, rt.leaseID)
-	}
+	delete(d.pending[rt.node], rt.leaseID) // a nil map is fine
 	if len(d.order) >= maxFinished {
 		delete(d.finished, d.order[0])
 		d.order = d.order[1:]

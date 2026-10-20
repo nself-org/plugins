@@ -34,22 +34,37 @@ type scriptedServer struct {
 
 func newScripted2(t *testing.T, resp func(w http.ResponseWriter, r *http.Request)) (*scriptedServer, *client) {
 	t.Helper()
+	s, o := scriptedOptions(t, resp)
+	cl := newClient(o)
+	t.Cleanup(cl.close)
+	return s, cl
+}
+
+// scriptedOptions starts the scripted HTTPS server and returns client options that trust it. The request body is
+// read whole before resp runs.
+func scriptedOptions(t *testing.T, resp func(w http.ResponseWriter, r *http.Request)) (*scriptedServer, Options) {
+	t.Helper()
 	s := &scriptedServer{resp: resp}
-	s.srv = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	o := rawOptions(t, s, func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		s.mu.Lock()
 		s.last, s.body = r, b
 		s.mu.Unlock()
 		s.resp(w, r)
-	}))
+	})
+	return s, o
+}
+
+// rawOptions serves h as is (a streaming handler reads the body itself).
+func rawOptions(t *testing.T, s *scriptedServer, h http.HandlerFunc) Options {
+	t.Helper()
+	s.srv = httptest.NewUnstartedServer(h)
 	s.srv.EnableHTTP2 = true
 	s.srv.StartTLS()
 	t.Cleanup(s.srv.Close)
 	pool := x509.NewCertPool()
 	pool.AddCert(s.srv.Certificate())
-	cl := newClient(Options{BaseURL: s.srv.URL + "/", TLS: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS13}, Wait: 7 * time.Second})
-	t.Cleanup(cl.close)
-	return s, cl
+	return Options{BaseURL: s.srv.URL + "/", TLS: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS13}, Wait: 7 * time.Second}
 }
 
 func frameBytes(t *testing.T, typ string, seq uint64, body any) []byte {

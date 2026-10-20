@@ -184,14 +184,14 @@ func (d *Driver) grace() time.Duration {
 	if d.CancelGrace > 0 {
 		return d.CancelGrace
 	}
-	return 5 * time.Second
+	return time.Duration(5e9)
 }
 
 func (d *Driver) poll() time.Duration {
 	if d.Poll > 0 {
 		return d.Poll
 	}
-	return time.Second
+	return time.Duration(1e9)
 }
 
 // jobTimeout is the timeout a job declares, or the default.
@@ -212,11 +212,10 @@ func newJTI() string {
 const pruneEvery = 10 * time.Minute
 
 // prune removes expired token bindings, at most once per pruneEvery.
-func (d *Driver) prune(ctx context.Context, g *Gate) {
+func (d *Driver) prune(ctx context.Context, g *Gate, now time.Time) {
 	if g == nil {
 		return
 	}
-	now := time.Now()
 	d.mu.Lock()
 	due := now.Sub(d.lastPrune) >= pruneEvery
 	if due {
@@ -243,7 +242,7 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, lease protocol.
 		return fail(ReasonNotConfigure, "cannot sign the job token: %v", err)
 	}
 	lease.Token = tok
-	d.prune(ctx, c.gate)
+	d.prune(ctx, c.gate, time.Now())
 	rt := &route{node: nodeID, leaseID: lease.LeaseID, jti: jti, sink: sink, done: make(chan struct{})}
 	if err = d.enqueue(rt, lease); err != nil {
 		return err

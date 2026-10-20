@@ -141,9 +141,7 @@ func (c *Carrier) writeFrames(ctx context.Context, w io.Writer, gen int) error {
 		}
 		written = tseq
 		c.mu.Lock()
-		if tseq > c.written {
-			c.written = tseq
-		}
+		c.written = max(c.written, tseq)
 		c.mu.Unlock()
 	}
 }

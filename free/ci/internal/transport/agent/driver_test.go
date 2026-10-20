@@ -510,16 +510,16 @@ func TestPruneRunsAtMostEveryTenMinutes(t *testing.T) {
 	cb := &pruneCount{}
 	g := &Gate{Bindings: cb}
 	d := &Driver{}
-	d.prune(context.Background(), g)
-	d.prune(context.Background(), g)
-	d.prune(context.Background(), nil)
+	d.prune(context.Background(), g, time.Now())
+	d.prune(context.Background(), g, time.Now())
+	d.prune(context.Background(), nil, time.Now())
 	if cb.n != 1 {
 		t.Fatalf("pruned %d times, want 1", cb.n)
 	}
 	d.mu.Lock()
 	d.lastPrune = time.Now().Add(-pruneEvery - time.Second)
 	d.mu.Unlock()
-	d.prune(context.Background(), g)
+	d.prune(context.Background(), g, time.Now())
 	if cb.n != 2 {
 		t.Fatalf("pruned %d times after the interval, want 2", cb.n)
 	}
@@ -529,7 +529,7 @@ func TestPruneRunsAtMostEveryTenMinutes(t *testing.T) {
 	d.mu.Unlock()
 	var noted []string
 	d.Logf = func(f string, a ...any) { noted = append(noted, f) }
-	d.prune(context.Background(), g)
+	d.prune(context.Background(), g, time.Now())
 	if len(noted) != 1 {
 		t.Fatal("a failed prune was not logged")
 	}

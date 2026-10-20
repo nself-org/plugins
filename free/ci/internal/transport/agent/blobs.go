@@ -244,8 +244,5 @@ func (st *blobState) discard() {
 }
 
 func short(d string) string {
-	if len(d) > 12 {
-		return d[:12]
-	}
-	return d
+	return d[:min(len(d), 12)]
 }
