@@ -1,5 +1,6 @@
 package main
 
+// List pending approvals after voiding stale approval bindings.
 import (
 	"context"
 	"flag"
@@ -11,6 +12,8 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/roles"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/trust/source"
+	"io"
+	"strings"
 )
 
 type pendingOut struct {
