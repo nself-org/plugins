@@ -8,7 +8,8 @@ package main
 // byte-identical files and signs nothing when the release is intact.
 // Inputs:  argv after `sign`; env NSELF_CI_HOME, NSELF_CI_REPO; the flags of
 // every source registered with publish.RegisterSignSource (P7-CACHE-17 adds
-// `--coordinator <url>`); at most one source flag may be set.
+// `--coordinator <url>`); at most one source flag may be set, and a source's companion
+// flag (--out of --coordinator) is refused without it.
 // Outputs: the release directory and key id, or one v1 JSON envelope; exit 0,
 // 1 (usage, nothing to publish) or 2 (E717 / E719).
 // Constraints: V15 only; side-effect class write (the release directory and
@@ -55,6 +56,17 @@ func artifactsSign(args []string) int {
 				return 1
 			}
 			chosen = &srcs[i]
+		}
+	}
+	for _, s := range srcs {
+		if chosen != nil && s.Name == chosen.Name {
+			continue
+		}
+		for _, c := range s.Companions {
+			if f := fs.Lookup(c); f != nil && f.Value.String() != "" && f.Value.String() != f.DefValue {
+				fmt.Fprintf(os.Stderr, "nself ci artifacts sign: --%s needs --%s\n%s\n", c, s.Name, signUsage)
+				return 1
+			}
 		}
 	}
 	ctx := context.Background()

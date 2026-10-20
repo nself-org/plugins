@@ -38,6 +38,21 @@ func TestSignCoordinatorSourceIsRegistered(t *testing.T) {
 	}
 }
 
+// A companion flag of a source (--out of --coordinator) set alone must be refused: the local signer
+// ignores it, so the command would exit 0 having written nothing to the directory (D-1357).
+func TestSignCompanionFlagWithoutItsSourceIsRefused(t *testing.T) {
+	t.Setenv("NSELF_CI_HOME", t.TempDir())
+	t.Setenv("NSELF_V15", "1")
+	out := filepath.Join(t.TempDir(), "out")
+	code, stdout, errs := capture(t, func() int { return artifactsSign([]string{"run-1", "--out", out}) })
+	if code != 1 || !strings.Contains(errs, "--out needs --coordinator") {
+		t.Fatalf("lone --out: code %d stdout %q stderr %q", code, stdout, errs)
+	}
+	if _, err := filepath.EvalSymlinks(out); err == nil {
+		t.Fatal("a refused sign created the output directory")
+	}
+}
+
 func TestSignCoordinatorUsageAndRefusals(t *testing.T) {
 	t.Setenv("NSELF_CI_HOME", t.TempDir())
 	t.Setenv("NSELF_CI_COORDINATOR", "")
