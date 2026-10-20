@@ -6,6 +6,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -389,5 +390,54 @@ func TestSendingARefusedHeartbeatDropsTheTokenAtOnce(t *testing.T) {
 	}
 	if _, toks := c.tokenSnapshot(); toks["l1"] != "" {
 		t.Fatal("the token of a refused lease stayed")
+	}
+}
+
+func TestSendAcceptsAFrameThatFillsTheBufferExactlyAndWaitsForOneByteMore(t *testing.T) {
+	c := bareCarrier(t)
+	m := logFrame("l1", 1)
+	b, _ := encode(m, 1)
+	size := len(b)
+	c.mu.Lock()
+	c.out = append(c.out, &outFrame{tseq: 1, size: 1})
+	c.outBytes = maxOutBytes - size // this frame fits exactly
+	c.mu.Unlock()
+	done := make(chan error, 1)
+	go func() { done <- c.Send(m) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("a frame that fills the buffer exactly was made to wait")
+	}
+	old := sendTimeout
+	sendTimeout = 80 * time.Millisecond
+	defer func() { sendTimeout = old }()
+	if err := c.Send(logFrame("l1", 2)); !errors.Is(err, errStalled) { // one byte over
+		t.Fatalf("a frame over the limit = %v, want the stall", err)
+	}
+}
+
+func TestTrimOfAnAlreadyConfirmedSeqSignalsNothing(t *testing.T) {
+	c := bareCarrier(t)
+	_ = c.Send(logFrame("l1", 1))
+	c.mu.Lock()
+	c.out[0].tseq = 1
+	c.trim(1)
+	c.mu.Unlock()
+	select {
+	case <-c.space:
+	default:
+		t.Fatal("trimming a frame must wake a blocked Send")
+	}
+	c.mu.Lock()
+	c.trim(1)
+	c.mu.Unlock()
+	select {
+	case <-c.space:
+		t.Fatal("a repeated ack woke a sender")
+	default:
 	}
 }
