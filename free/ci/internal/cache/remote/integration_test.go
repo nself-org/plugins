@@ -3,6 +3,7 @@
 package remote
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -74,7 +75,7 @@ func newRig(t *testing.T) *rig {
 	}
 	plan := &protocol.LeaseCache{Namespace: base64.RawURLEncoding.EncodeToString(ns.Canonical()), Access: "rw", Save: []protocol.CacheSave{{Spec: "go", Key: strings.Repeat("a", 64), Dirs: []string{"go/mod"}}}}
 	h := &Handler{Ledger: r.st, Entries: entries.New(r.st, r.blobs, entries.Options{DisableFloor: true}), Blobs: r.blobs, Limits: transfer.Limits{MaxFile: 4 << 20}}
-	r.lease = h.Bind(Binding{AttemptID: "a1", LeaseID: "lease-a1", Node: "n-1", Epoch: epoch, Facts: facts, Plan: plan, Fence: func(ctx context.Context) error {
+	r.lease, err = h.Bind(Binding{AttemptID: "a1", LeaseID: "lease-a1", Node: "n-1", Epoch: epoch, Facts: facts, Plan: plan, Fence: func(ctx context.Context) error {
 		err := r.eng.Fence(ctx, "lease-a1", epoch)
 		var se *store.Error
 		if errors.As(err, &se) && se.Code == "E662" {
@@ -88,6 +89,9 @@ func newRig(t *testing.T) *rig {
 		}
 		return err
 	}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	return r
 }
 
@@ -203,7 +207,7 @@ func (r *rig) assertCommit(data []byte) {
 // currently exposes no coordinator-to-node blob request path.
 func TestRemoteCacheSSH(t *testing.T) {
 	r := newRig(t)
-	data := bytes.Repeat([]byte("synthetic cache data"), 70000)
+	data := carrierCacheArchive(t)
 	if err := r.runSSH(&node{t: t, data: data}); err != nil {
 		t.Fatal(err)
 	}
@@ -211,12 +215,33 @@ func TestRemoteCacheSSH(t *testing.T) {
 }
 func TestRemoteCacheAgent(t *testing.T) {
 	r := newRig(t)
-	data := bytes.Repeat([]byte("synthetic cache data"), 70000)
+	data := carrierCacheArchive(t)
 	if err := r.runAgent(&node{t: t, data: data}); err != nil {
 		t.Fatal(err)
 	}
 	r.assertCommit(data)
 }
+
+func carrierCacheArchive(t *testing.T) []byte {
+	t.Helper()
+	data := bytes.Repeat([]byte("synthetic cache data"), 70000)
+	var out bytes.Buffer
+	tw := tar.NewWriter(&out)
+	if err := tw.WriteHeader(&tar.Header{Name: "payload", Mode: 0600, Size: int64(len(data))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() <= 512<<10 {
+		t.Fatal("cache fixture must span multiple carrier chunks")
+	}
+	return out.Bytes()
+}
+
 func TestRemoteCacheZombie(t *testing.T) {
 	r := newRig(t)
 	_ = r.runSSH(&node{t: t, data: []byte("synthetic cache data"), onSend: r.expire})

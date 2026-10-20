@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
+	cr "github.com/nself-org/plugins/free/ci/internal/cache/remote"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
 
@@ -173,10 +175,93 @@ func TestRemoteCacheFinalizeRegistrationAndDeadline(t *testing.T) {
 type remoteCacheLedger struct {
 	state     model.JobState
 	retracted int
+	err       error
 }
 
 func (s *remoteCacheLedger) AttemptStateEpoch(context.Context, string) (model.JobState, int64, error) {
-	return s.state, 1, nil
+	return s.state, 1, s.err
+}
+
+func TestRemoteCacheCleanupRetractsWhenStateCannotBeProven(t *testing.T) {
+	id := "cache-unknown-state"
+	ledger := &remoteCacheLedger{state: "passed", err: errors.New("state unavailable")}
+	remoteCaches.Store(id, &remoteCacheRecord{run: id, attempt: id, lease: ledger, store: ledger})
+	t.Cleanup(func() { remoteCaches.Delete(id) })
+	oldWarn := cacheOn.warn
+	var warnings []string
+	cacheOn.warn = func(s string) { warnings = append(warnings, s) }
+	t.Cleanup(func() { cacheOn.warn = oldWarn })
+	if err := (remoteCacheFinalize{}).AfterRun(context.Background(), RunInfo{RunID: id}); err != nil {
+		t.Fatal(err)
+	}
+	if ledger.retracted != 1 || len(warnings) == 0 || !strings.Contains(warnings[0], "state unavailable") {
+		t.Fatalf("unproven pass retained cache: retract=%d warnings=%v", ledger.retracted, warnings)
+	}
+}
+
+type remoteCacheFreshRetractor struct {
+	remoteCacheLedger
+	fresh bool
+}
+
+func (l *remoteCacheFreshRetractor) RetractUsing(ctx context.Context, ledger cr.Ledger) error {
+	l.fresh = true
+	_, _, err := ledger.AttemptStateEpoch(ctx, "run1.jobA.a1")
+	return err
+}
+
+func TestRemoteCacheCleanupReopensClosedStore(t *testing.T) {
+	e := newRemoteEnv(t)
+	home := t.TempDir()
+	// Checkpoint through a second live handle, then close the original handle.
+	// SQLite backup is unnecessary here: make the fallback DB a separate fixture
+	// with the same durable attempt identity.
+	fresh, err := store.Open(filepath.Join(home, "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = fresh.CreatePipeline(context.Background(), store.PipelineRow{ID: "run1", Project: "/proj", Revision: "rev", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = fresh.CreateJob(context.Background(), store.JobRow{ID: "run1.jobA", PipelineID: "run1", Name: "jobA", Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = fresh.CreateAttempt(context.Background(), store.AttemptRow{ID: e.id, JobID: "run1.jobA", N: 1}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err = fresh.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = e.st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	l := &remoteCacheFreshRetractor{}
+	remoteCaches.Store(e.id, &remoteCacheRecord{run: "closed-cache-run", attempt: e.id, home: home, lease: l, store: e.st})
+	t.Cleanup(func() { remoteCaches.Delete(e.id) })
+	if err = (remoteCacheFinalize{}).AfterRun(context.Background(), RunInfo{RunID: "closed-cache-run"}); err != nil {
+		t.Fatal(err)
+	}
+	if !l.fresh || l.retracted != 0 {
+		t.Fatalf("closed ledger reused: fresh=%v old retractions=%d", l.fresh, l.retracted)
+	}
+}
+
+func TestPrepareRemoteCacheSandboxedContainer(t *testing.T) {
+	t.Setenv("NSELF_CI_CACHE_DISABLE", "")
+	t.Setenv("NSELF_CI_ARTIFACT_MAX_FILE", "")
+	e := newRemoteEnv(t)
+	e.sink.home = t.TempDir()
+	e.sink.expect(e.id, testRev)
+	t.Cleanup(func() { remoteCaches.Delete(e.id) })
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "Dockerfile"), []byte("FROM scratch\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	lease := protocol.Lease{LeaseID: e.lease, AttemptID: e.id, Epoch: uint64(e.epoch), Job: model.Job{Kind: "build", Isolation: "sandboxed-container", Container: &model.ContainerConfig{Image: "example.invalid/build@sha256:" + strings.Repeat("a", 64)}}}
+	got := prepareCache(context.Background(), e.sink, &lease, root, "node", false, "linux/amd64")
+	if _, ok := got.(cacheLeaseSink); !ok || lease.Cache == nil || len(lease.Cache.Save) != 1 || lease.Cache.Save[0].Spec != "buildx" {
+		t.Fatalf("sandboxed container did not plan container cache: %T %+v", got, lease.Cache)
+	}
 }
 func (s *remoteCacheLedger) Finalize(context.Context, time.Duration) error { return nil }
 func (s *remoteCacheLedger) Retract(context.Context) error {

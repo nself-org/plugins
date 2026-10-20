@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -21,14 +22,15 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/detect"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
 
 var remoteCaches sync.Map // attempt id -> *remoteCacheRecord
 
 type remoteCacheRecord struct {
-	run, attempt string
-	lease        interface {
+	run, attempt, home string
+	lease              interface {
 		Finalize(context.Context, time.Duration) error
 		Retract(context.Context) error
 	}
@@ -69,10 +71,30 @@ func (remoteCacheFinalize) AfterRun(ctx context.Context, r RunInfo) error {
 			return true
 		}
 		state, _, err := e.store.AttemptStateEpoch(ctx, e.attempt)
-		if err != nil || state == "passed" {
+		var fresh *store.Store
+		if err != nil {
+			cacheOn.warn("remote cache settlement read failed: " + firstLineOf(err.Error()))
+			if e.home != "" {
+				path := filepath.Join(e.home, "state.db")
+				if _, statErr := os.Stat(path); statErr == nil {
+					fresh, err = store.Open(path, store.Options{})
+					if err == nil {
+						defer fresh.Close()
+						state, _, err = fresh.AttemptStateEpoch(ctx, e.attempt)
+					}
+				}
+			}
+		}
+		if err == nil && state == "passed" {
 			return true
 		}
-		if err := e.lease.Retract(ctx); err != nil {
+		retract := e.lease.Retract
+		if l, ok := e.lease.(interface {
+			RetractUsing(context.Context, cr.Ledger) error
+		}); ok && fresh != nil {
+			retract = func(ctx context.Context) error { return l.RetractUsing(ctx, fresh) }
+		}
+		if err := retract(ctx); err != nil {
 			cacheOn.warn("remote cache retract refused: " + firstLineOf(err.Error()))
 		}
 		return true
@@ -160,7 +182,7 @@ func prepareCache(ctx context.Context, sink transport.Sink, lease *protocol.Leas
 	// A remote process toolchain cannot be probed on the coordinator. Resolve
 	// safely disables those specs until coordinator facts supply its identity.
 	plan, err := cr.BuildPlan(ctx, cr.PlanInput{Entries: es, Backend: base.st, Facts: facts, Detected: detected, Scope: scope, ExtraKeys: append(keys, "job="+f.Job), Environ: flatEnv(env),
-		Platform: platform, Isolation: isolation, Container: isolation == "container", Image: image})
+		Platform: platform, Isolation: isolation, Container: isolation == "container" || isolation == "sandboxed-container", Image: image})
 	if err != nil || plan == nil {
 		return sink
 	}
@@ -169,13 +191,14 @@ func prepareCache(ctx context.Context, sink transport.Sink, lease *protocol.Leas
 		return sink
 	}
 	pol.StorePath = home
-	h := &cr.Handler{Ledger: base.st, Entries: es, Blobs: blobs, Limits: transfer.Limits{Disk: func(n int64) error {
-		if err := pol.CheckDisk(n); err != nil {
-			return &entries.Refused{Reason: entries.ReasonDiskFloor, Err: err}
-		}
-		return nil
-	}}}
-	l := h.Bind(cr.Binding{AttemptID: lease.AttemptID, LeaseID: lease.LeaseID, Epoch: int64(lease.Epoch), Node: node, Facts: facts, Plan: plan,
+	h := &cr.Handler{Ledger: base.st, Entries: es, Blobs: blobs,
+		Warn: func(err error) { cacheOn.warn(firstLineOf(err.Error())) }, Limits: transfer.Limits{Disk: func(n int64) error {
+			if err := pol.CheckDisk(n); err != nil {
+				return &entries.Refused{Reason: entries.ReasonDiskFloor, Err: err}
+			}
+			return nil
+		}}}
+	l, err := h.Bind(cr.Binding{AttemptID: lease.AttemptID, LeaseID: lease.LeaseID, Epoch: int64(lease.Epoch), Node: node, Facts: facts, Plan: plan,
 		Fence: func(ctx context.Context) error {
 			return staleLease(base.eng.Fence(ctx, lease.LeaseID, int64(lease.Epoch)))
 		},
@@ -186,8 +209,12 @@ func prepareCache(ctx context.Context, sink transport.Sink, lease *protocol.Leas
 			}
 			return base.markRunning(ctx, ra)
 		}})
+	if err != nil {
+		cacheOn.warn("remote cache binding refused: " + firstLineOf(err.Error()))
+		return sink
+	}
 	if plan.Access == "rw" && len(plan.Save) > 0 {
-		remoteCaches.Store(lease.AttemptID, &remoteCacheRecord{run: f.Run, attempt: lease.AttemptID, lease: l, store: base.st})
+		remoteCaches.Store(lease.AttemptID, &remoteCacheRecord{run: f.Run, attempt: lease.AttemptID, home: home, lease: l, store: base.st})
 	}
 	lease.Cache = plan
 	return cacheLeaseSink{Sink: sink, l: l}

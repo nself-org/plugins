@@ -53,7 +53,7 @@ func coordinatorFixture(t *testing.T) (*Lease, *store.Store, *lease.Engine) {
 		t.Fatal(err)
 	}
 	h := &Handler{Ledger: s, Entries: entries.New(s, b, entries.Options{DisableFloor: true}), Blobs: b}
-	l := h.Bind(Binding{AttemptID: "a", LeaseID: "l", Epoch: epoch, Facts: f,
+	l, err := h.Bind(Binding{AttemptID: "a", LeaseID: "l", Epoch: epoch, Facts: f,
 		Plan: &protocol.LeaseCache{Namespace: base64.RawURLEncoding.EncodeToString(ns.Canonical()), Access: "rw", Save: []protocol.CacheSave{{Spec: "go", Key: strings.Repeat("a", 64), Dirs: []string{"go/mod"}}}},
 		Fence: func(ctx context.Context) error {
 			if err := e.Fence(ctx, "l", epoch); err != nil {
@@ -69,6 +69,9 @@ func coordinatorFixture(t *testing.T) (*Lease, *store.Store, *lease.Engine) {
 			return err
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	return l, s, e
 }
 
@@ -156,7 +159,7 @@ func TestCacheFinalizeLateRefAndRetract(t *testing.T) {
 	if err := l.Declare(ctx); err != nil {
 		t.Fatal(err)
 	}
-	digest, n, err := l.h.Blobs.Put(ctx, cacheRealm(l.b.Plan.Namespace), bytes.NewBufferString("synthetic cache bytes"))
+	digest, n, err := l.h.Blobs.Put(ctx, cacheRealm(l.b.Plan.Namespace), bytes.NewReader(cacheArchive(t, "payload", false)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +198,11 @@ func TestCacheReceiverLeaseBudget(t *testing.T) {
 		}
 		return ""
 	}})
-	l = l.h.Bind(l.b)
+	var err error
+	l, err = l.h.Bind(l.b)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.Background()
 	hdr := func(data string) transport.BlobHeader {
 		return transport.BlobHeader{Stream: StreamCache, SHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(data))), Size: int64(len(data))}
@@ -213,8 +220,12 @@ func TestCacheReceiverLeaseBudget(t *testing.T) {
 func TestCacheNilPlanRefused(t *testing.T) {
 	l, _, _ := coordinatorFixture(t)
 	l.b.Plan = nil
-	l = l.h.Bind(l.b)
-	err := l.CacheRef(context.Background(), protocol.CacheRef{})
+	var err error
+	l, err = l.h.Bind(l.b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = l.CacheRef(context.Background(), protocol.CacheRef{})
 	var refusal *entries.Refused
 	if !errors.As(err, &refusal) || refusal.Reason != entries.ReasonNotPlanned {
 		t.Fatalf("nil plan refusal=%v", err)

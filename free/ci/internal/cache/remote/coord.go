@@ -27,7 +27,7 @@ type Ledger interface {
 	CacheDrop(context.Context, entries.Manifest, string) error
 	AttemptStateEpoch(context.Context, string) (model.JobState, int64, error)
 	LeaseGet(context.Context, string) (store.RemoteLease, error)
-	AppendAudit(context.Context, string, string, string, string) error
+	CacheAuditOnce(context.Context, string, string, string) error
 	CacheLocalityPut(context.Context, store.CacheLocalityRow) error
 }
 
@@ -36,6 +36,7 @@ type Handler struct {
 	Entries *entries.Store
 	Blobs   *cas.Store
 	Limits  transfer.Limits
+	Warn    func(error)
 }
 type Binding struct {
 	AttemptID, LeaseID, Node string
@@ -43,6 +44,8 @@ type Binding struct {
 	Facts                    entries.Facts
 	Plan                     *protocol.LeaseCache
 	Fence, Ready             func(context.Context) error
+	// Unordered preserves the full ref grace for carriers without ordered delivery.
+	Unordered bool
 }
 
 type Lease struct {
@@ -58,10 +61,13 @@ type Lease struct {
 	rcv             *transfer.Receiver
 }
 
-func (h *Handler) Bind(b Binding) *Lease {
+func (h *Handler) Bind(b Binding) (*Lease, error) {
 	l := &Lease{h: h, b: b, refs: map[string]protocol.CacheRef{}, notify: make(chan struct{}, 1)}
 	if b.Plan == nil {
-		return l
+		return l, nil
+	}
+	if _, err := DecodePlanNamespace(b.Plan.Namespace); err != nil {
+		return nil, fmt.Errorf("cache plan namespace: %w", err)
 	}
 	lim := h.Limits
 	if lim.MaxFile <= 0 {
@@ -82,13 +88,13 @@ func (h *Handler) Bind(b Binding) *Lease {
 	}
 	l.rcv = &transfer.Receiver{Store: h.Blobs, Realm: cacheRealm(b.Plan.Namespace), Lease: fmt.Sprintf("cache/%s/%d", b.LeaseID, b.Epoch), Limits: lim,
 		Live: l.live, Refused: func(ctx context.Context, _ string, e *transfer.Error) {
-			_ = h.Ledger.AppendAudit(ctx, "cache", "cache.remote.refused", b.AttemptID, "reason="+e.Reason)
+			_ = h.Ledger.CacheAuditOnce(ctx, "cache.remote.refused", b.AttemptID, "reason="+e.Reason)
 		}}
-	return l
+	return l, nil
 }
 
 func (l *Lease) refuse(ctx context.Context, reason string) error {
-	auditErr := l.h.Ledger.AppendAudit(ctx, "cache", "cache.remote.refused", l.b.AttemptID, "reason="+reason)
+	auditErr := l.h.Ledger.CacheAuditOnce(ctx, "cache.remote.refused", l.b.AttemptID, "reason="+reason)
 	if reason == transfer.ReasonStaleEpoch {
 		return errors.Join(transfer.Failf(reason, "the cache lease is no longer current"), auditErr)
 	}

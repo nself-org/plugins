@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -17,6 +18,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -31,6 +33,8 @@ type ReadThrough struct {
 
 // Instances share the lock: concurrent leases use the same on-disk cap.
 var readThroughMu sync.Mutex
+
+var errCopyMismatch = errors.New("E714 digest_mismatch: node cache copy failed verification")
 
 func NewReadThrough(dir string, maxBytes int64) (*ReadThrough, error) {
 	if maxBytes <= 0 {
@@ -74,12 +78,18 @@ func (c *ReadThrough) Open(ctx context.Context, realm, digest string, size int64
 		now := time.Now()
 		_ = os.Chtimes(name, now, now)
 		return f, nil
+	} else if errors.Is(err, errCopyMismatch) {
+		_ = os.Remove(name)
+	} else if !os.IsNotExist(err) {
+		return nil, err
 	}
-	_ = os.Remove(name)
 	if fetch == nil {
 		return nil, os.ErrNotExist
 	}
 	if err := os.MkdirAll(filepath.Dir(name), 0o700); err != nil {
+		return nil, err
+	}
+	if err := c.prune(size); err != nil {
 		return nil, err
 	}
 	f, err := os.CreateTemp(filepath.Dir(name), ".fetch-")
@@ -99,9 +109,6 @@ func (c *ReadThrough) Open(ctx context.Context, realm, digest string, size int64
 		return nil, err
 	}
 	_ = check.Close()
-	if err := c.prune(size); err != nil {
-		return nil, err
-	}
 	if err := os.Rename(f.Name(), name); err != nil {
 		return nil, err
 	}
@@ -110,7 +117,10 @@ func (c *ReadThrough) Open(ctx context.Context, realm, digest string, size int64
 
 func verifiedFile(ctx context.Context, name, digest string, size int64) (*os.File, error) {
 	info, err := os.Lstat(name)
-	if err != nil || !info.Mode().IsRegular() {
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("cache copy unavailable")
 	}
 	f, err := os.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK, 0)
@@ -124,9 +134,13 @@ func verifiedFile(ctx context.Context, name, digest string, size int64) (*os.Fil
 	}
 	h := sha256.New()
 	n, err := io.Copy(h, &contextReader{ctx, f})
-	if err != nil || n != size || hex.EncodeToString(h.Sum(nil)) != digest {
+	if err != nil {
 		_ = f.Close()
-		return nil, fmt.Errorf("E714 digest_mismatch: node cache copy failed verification")
+		return nil, err
+	}
+	if n != size || hex.EncodeToString(h.Sum(nil)) != digest {
+		_ = f.Close()
+		return nil, errCopyMismatch
 	}
 	if _, err = f.Seek(0, io.SeekStart); err != nil {
 		_ = f.Close()
@@ -156,6 +170,9 @@ func (c *ReadThrough) prune(reserve int64) error {
 		}
 		if d.IsDir() {
 			return nil
+		}
+		if strings.HasPrefix(d.Name(), ".fetch-") {
+			return os.Remove(name)
 		}
 		if len(d.Name()) != 64 {
 			return nil

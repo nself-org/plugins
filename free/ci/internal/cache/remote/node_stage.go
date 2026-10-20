@@ -149,7 +149,7 @@ func (s *NodeStage) Ship(ctx context.Context, offsets <-chan protocol.Offset, up
 		return fmt.Errorf("E711 not_planned: read-only node save")
 	}
 	if err := s.publishCopies(ctx); err != nil {
-		return err
+		_, _ = fmt.Fprintf(os.Stderr, "cache: publish node copies: %v\n", err)
 	}
 	sender := transfer.Sender{Up: up, Offsets: offsets, WaitOffset: s.WaitOffset}
 	sent := map[string]bool{}

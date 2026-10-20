@@ -227,7 +227,7 @@ func TestNodeStagePublishedCopySurvivesStageClose(t *testing.T) {
 	}
 }
 
-func TestNodeStageCombinedCopiesExceedCapSendsNothing(t *testing.T) {
+func TestNodeStageCombinedCopiesExceedCapStillShips(t *testing.T) {
 	l := nodeSaveLease()
 	s, err := NewNodeStage(filepath.Join(t.TempDir(), "stage"), l)
 	if err != nil {
@@ -245,12 +245,12 @@ func TestNodeStageCombinedCopiesExceedCapSendsNothing(t *testing.T) {
 		}
 		s.refs = append(s.refs, protocol.CacheRef{LeaseID: l.LeaseID, Spec: fmt.Sprintf("spec-%d", i), Key: strings.Repeat(fmt.Sprint(i), 64), Blobs: []protocol.CacheBlob{{Path: "data", SHA256: digest, Size: size}}})
 	}
-	u := &nodeUploader{}
-	if err := s.Ship(context.Background(), nil, u); err == nil || !strings.Contains(err.Error(), "size_cap") {
-		t.Fatal("combined cap not refused", err)
+	u := &nodeUploader{offsets: make(chan protocol.Offset, 1)}
+	if err := s.Ship(context.Background(), u.offsets, u); err != nil {
+		t.Fatal("local copy cap blocked shared upload", err)
 	}
-	if u.frames != 0 {
-		t.Fatalf("cap refusal sent %d frames", u.frames)
+	if u.frames != 6 {
+		t.Fatalf("shared upload sent %d frames, want two digests, chunks, refs", u.frames)
 	}
 	for _, ref := range s.refs {
 		for _, b := range ref.Blobs {
