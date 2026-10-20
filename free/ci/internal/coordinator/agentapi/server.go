@@ -55,6 +55,11 @@ type Config struct {
 	// OnAck, when set, is called with the authenticated node id and the lease id of every agent ack that
 	// names a lease (the drain learns a cancel was acknowledged). It must not block.
 	OnAck func(nodeID, leaseID string)
+	// Admit, when set, vets every lease-scoped call (a frame or a heartbeat entry) before the lease engine sees it
+	// (P7-NODE-08: the job token gate). A refusal drops the call and cancels that lease on the agent.
+	Admit func(ctx context.Context, c Call) error
+	// Blobs, when set, takes the digest and chunk frames of artifact and cache uploads (P7-NODE-08, CACHE delta 5).
+	Blobs BlobHandler
 	// PinnedAge returns the age recipient pinned for a node; nil trusts what hello presents.
 	PinnedAge func(ctx context.Context, nodeID string) (*string, error)
 
@@ -103,6 +108,10 @@ func (c *Config) defaults() error {
 	return nil
 }
 
+// maxHeaderBytes bounds a request's headers: the upstream stream carries one job token per lease the agent runs
+// (up to maxTokens of about 450 bytes each).
+const maxHeaderBytes = 128 << 10
+
 // agentTTL is how long an agent may go without a heartbeat ack before it fences itself (Epic D6).
 func (c *Config) agentTTL() time.Duration { return c.CoordinatorTTL - 2*c.Heartbeat }
 
@@ -145,7 +154,7 @@ func New(cfg Config) (*Server, error) {
 		TLSConfig:         tlsc,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
-		MaxHeaderBytes:    16 << 10,
+		MaxHeaderBytes:    maxHeaderBytes,
 		ConnState: func(c net.Conn, st http.ConnState) {
 			if st == http.StateClosed || st == http.StateHijacked {
 				s.dropConn(c)

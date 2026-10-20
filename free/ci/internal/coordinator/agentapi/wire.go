@@ -10,6 +10,7 @@ package agentapi
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -40,12 +41,15 @@ func refuse(w http.ResponseWriter, status int, code, reason, msg string) {
 
 // request is one authenticated request of a node.
 type request struct {
-	node  string
-	sess  *session
-	ctx   context.Context
-	rc    *http.ResponseController
-	leave func()
-	stop  context.CancelFunc
+	node string
+	sess *session
+	// serial is the hex serial of the client certificate; tokens are the job tokens of this request by lease id.
+	serial string
+	tokens map[string]string
+	ctx    context.Context
+	rc     *http.ResponseController
+	leave  func()
+	stop   context.CancelFunc
 }
 
 // begin authenticates the request's node from the certificate, binds the session named by the header
@@ -69,7 +73,8 @@ func (s *Server) begin(w http.ResponseWriter, r *http.Request, needSession bool)
 	}
 	ctx, cancel := context.WithCancel(r.Context())
 	conn, _ := r.Context().Value(connKey{}).(net.Conn)
-	q := &request{node: node, sess: sess, ctx: ctx, rc: http.NewResponseController(w), stop: cancel}
+	q := &request{node: node, sess: sess, ctx: ctx, rc: http.NewResponseController(w), stop: cancel,
+		serial: hex.EncodeToString(r.TLS.PeerCertificates[0].SerialNumber.Bytes()), tokens: parseTokens(r.Header.Values(HeaderToken))}
 	if sess == nil { // hello: no session yet, only the connection is tracked
 		q.leave = s.trackConn(node, conn)
 		return q

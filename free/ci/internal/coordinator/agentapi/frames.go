@@ -26,6 +26,17 @@ const maxHeartbeatLeases = 256
 
 const staleReason = "E662 stale epoch: stop the job and clean its workspace"
 
+// sinkCommits says whether the sink commits a result through the lease engine itself (P7-NODE-08: the run's sink).
+func sinkCommits(sink interface{}) bool {
+	c, ok := sink.(interface{ CommitsResult() bool })
+	return ok && c.CommitsResult()
+}
+
+func isRefusal(err error) bool {
+	var r interface{ Refusal() bool }
+	return errors.As(err, &r) && r.Refusal()
+}
+
 func isStale(err error) bool {
 	var se *store.Error
 	return errors.As(err, &se) && se.Code == "E662"
@@ -94,6 +105,11 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 		act = func() error { return s.cfg.Sink.CacheRef(ctx, *b) }
 	case *protocol.Result:
 		act = func() error { return s.cfg.Sink.Result(ctx, *b) }
+	case *protocol.Digest, *protocol.Chunk:
+		if s.cfg.Blobs == nil {
+			return &fatal{protocol.CodeInvalid, "frame_type"}
+		}
+		act = func() error { return nil }
 	default:
 		return &fatal{protocol.CodeInvalid, "frame_type"}
 	}
@@ -111,13 +127,25 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 	case unknownLease:
 		return s.sendStale(f, m.LeaseID, *m.Epoch)
 	}
+	if ok, bad := s.admit(q, f, m.LeaseID, *m.Epoch, m.Type, false); !ok {
+		return bad
+	}
 	err := s.cfg.Leases.Fence(ctx, m.LeaseID, epoch)
 	if err == nil {
 		err = act()
 	}
+	switch m.Body.(type) {
+	case *protocol.Digest, *protocol.Chunk:
+		if err == nil {
+			return s.blobFrame(q, f, m)
+		}
+	}
 	_, isResult := m.Body.(*protocol.Result)
 	if err == nil && isResult {
-		if err = s.cfg.Leases.Result(ctx, m.LeaseID, epoch); err == nil {
+		if !sinkCommits(s.cfg.Sink) { // a sink that commits the result itself (the run's) must not be committed twice
+			err = s.cfg.Leases.Result(ctx, m.LeaseID, epoch)
+		}
+		if err == nil {
 			s.mu.Lock()
 			delete(q.sess.epochs, m.LeaseID)
 			s.mu.Unlock()
@@ -126,11 +154,27 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 	switch {
 	case isStale(err):
 		return s.sendStale(f, m.LeaseID, *m.Epoch)
+	case isRefusal(err): // the sink turned this lease down (no run waits for it): stop that lease, keep the stream
+		return s.refuse(q, f, m.LeaseID, *m.Epoch, m.Type, err)
 	case err != nil:
 		return s.unavailable("frame "+m.Type, err)
 	}
-	if isResult || m.Type == "artifact-ref" {
+	if isResult || m.Type == "artifact-ref" || m.Type == "cache-ref" {
 		return s.ack(f, m.Seq, m.LeaseID)
+	}
+	return nil
+}
+
+// blobFrame hands a digest or chunk frame to the blob handler and sends its replies.
+func (s *Server) blobFrame(q *request, f *flow, m protocol.Message) *fatal {
+	replies, err := s.cfg.Blobs.Frame(q.ctx, q.node, m)
+	if err != nil {
+		return s.refuse(q, f, m.LeaseID, *m.Epoch, m.Type, err)
+	}
+	for _, r := range replies {
+		if f.send(r) != nil {
+			return &fatal{protocol.CodeInvalid, "write"}
+		}
 	}
 	return nil
 }
@@ -156,7 +200,6 @@ func (s *Server) sendStale(f *flow, leaseID string, epoch uint64) *fatal {
 func (s *Server) heartbeat(q *request, f *flow, seq uint64, hb *protocol.Heartbeat) *fatal {
 	s.mu.Lock()
 	first := !q.sess.reconciled
-	q.sess.reconciled = true
 	s.mu.Unlock()
 	unacked := false
 	if len(hb.Leases) > maxHeartbeatLeases {
@@ -176,6 +219,14 @@ func (s *Server) heartbeat(q *request, f *flow, seq uint64, hb *protocol.Heartbe
 				return bad
 			}
 			continue
+		}
+		if ls.State == "running" { // a self-fence report renews nothing, so it needs no token (the agent may have restarted since)
+			if ok, bad := s.admit(q, f, ls.LeaseID, ls.Epoch, "heartbeat", first); !ok {
+				if bad != nil {
+					return bad
+				}
+				continue // the lease is not renewed and the agent was told to stop it; the other leases still get their ack
+			}
 		}
 		var err error
 		switch {
@@ -207,6 +258,9 @@ func (s *Server) heartbeat(q *request, f *flow, seq uint64, hb *protocol.Heartbe
 		}
 		s.mu.Unlock()
 	}
+	s.mu.Lock() // only a heartbeat that was processed to its end reconciles the session; a resent one reconciles again
+	q.sess.reconciled = true
+	s.mu.Unlock()
 	if unacked {
 		return nil
 	}
