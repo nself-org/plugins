@@ -10,11 +10,12 @@ package main
 //          author's own approval is E688 and a member's is E687; the project id roles are checked against
 //          derives from the run's root, never from the command line; --spend runs economics.ApproveSpend
 //          first (admin only, E687 otherwise) and records no approval when it fails; an approval binds to
-//          the head SHA, config digest and head repo of the run as stored when it is recorded, so any later
-//          change voids it (and voids first, with its own audit row, when a stale approval stands); the run
+//          the head SHA, config digest, head repo and author of the run as stored when it is recorded, so any
+//          later change voids it (and voids first, with its own audit row, when a stale approval stands); the run
 //          is named exactly or confirmed with --sha, never by a bare prefix or "latest"; --spend on a run
 //          that needs no trust approval records the spend approval only; `pending` first writes the voids (one audit row each); the step reads only
-//          stored facts inside the admission transaction (no network) and never writes.
+//          stored facts inside the admission transaction (no network) and never writes; a project-scoped
+//          release user gets one E687 for an unknown run, a run of another project and a run needing no approval.
 
 import (
 	"context"
@@ -166,19 +167,28 @@ func runApprove(args []string, env approveEnv) int {
 }
 
 func approveRun(ctx context.Context, env approveEnv, svc *roles.Service, actor roles.Actor, ref string, f approveFlags) (approvedOut, error) {
-	// An identity that cannot approve learns nothing about which runs exist.
-	if err := actor.Can(roles.Release, ""); err != nil && roles.ReasonOf(err) != roles.ReasonProject {
-		return approvedOut{}, err
+	// An identity that cannot approve learns nothing about which runs exist. A project-scoped release user
+	// may approve in some projects only: until a project check passes they get the one refusal (scoped)
+	// for an unknown run, a run of another project and a run that needs no approval alike.
+	scoped := actor.Can(roles.Release, "")
+	if scoped != nil && roles.ReasonOf(scoped) != roles.ReasonProject {
+		return approvedOut{}, scoped
 	}
 	row, err := cirun.ResolveRun(ctx, svc.St, ref)
 	if err != nil {
-		if cirun.CodeOf(err) == cirun.CodeRun {
-			return approvedOut{}, source.NewApprovalError(source.ApprovalUnknownRun, "no run matches %q", ref)
+		switch {
+		case cirun.CodeOf(err) != cirun.CodeRun:
+			return approvedOut{}, err
+		case scoped != nil:
+			return approvedOut{}, scoped
 		}
-		return approvedOut{}, err
+		return approvedOut{}, source.NewApprovalError(source.ApprovalUnknownRun, "no run matches %q", ref)
 	}
 	st, ok, err := svc.St.ApprovalState(ctx, row.ID)
 	if err == nil && !ok {
+		if scoped != nil {
+			return approvedOut{}, scoped
+		}
 		err = source.NewApprovalError(source.ApprovalUnknownRun, "run %s has no stored facts", row.ID)
 	}
 	if err != nil {
@@ -190,7 +200,14 @@ func approveRun(ctx context.Context, env approveEnv, svc *roles.Service, actor r
 	// spend.approve inside ApproveSpend.
 	if needed {
 		if err = roles.AuthorizeAction(roles.WithAuthor(ctx, st.Author), actor, roles.ActRunApprove, project); err != nil {
+			if scoped != nil && roles.ReasonOf(err) == roles.ReasonProject {
+				return approvedOut{}, scoped
+			}
 			return approvedOut{}, authorToE688(err)
+		}
+	} else if scoped != nil {
+		if err = actor.Can(roles.Release, project); err != nil {
+			return approvedOut{}, scoped
 		}
 	}
 	// A prefix or "latest" can land on a run a stranger started a moment ago: the approver must name the
