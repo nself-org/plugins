@@ -1482,8 +1482,8 @@
         "Provider": "local",
         "UIDSeparation": true,
         "Running": {
-          "Untrusted": true,
-          "SecretBearing": true
+          "Untrusted": false,
+          "SecretBearing": false
         },
         "DeployHost": {
           "Matched": false,
