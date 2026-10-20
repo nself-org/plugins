@@ -229,3 +229,27 @@ func TestCoordinatorClientEventsStopAtOnceWhenTheOutputBreaks(t *testing.T) {
 		t.Fatalf("err %v after %d requests, want the pipe error after 1", err, len(f.reqs))
 	}
 }
+
+func TestCoordinatorClientEventsStopWhenTheResultCannotBeWritten(t *testing.T) {
+	lines := runLines(t)
+	f := &flaky{t: t, lines: lines}
+	f.plan = func(_ int, _ int64) ([]int, bool) {
+		all := make([]int, len(lines))
+		for i := range all {
+			all[i] = i
+		}
+		return all, false
+	}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	c := &Client{base: srv.URL, hc: srv.Client()}
+	_, err := c.Events(context.Background(), "run-1", func(_ []byte, rec detach.Record) error {
+		if rec.Final() {
+			return io.ErrClosedPipe
+		}
+		return nil
+	})
+	if !errors.Is(err, io.ErrClosedPipe) || len(f.reqs) != 1 {
+		t.Fatalf("err %v after %d requests: a result that cannot be written must end the stream, not look delivered", err, len(f.reqs))
+	}
+}

@@ -9,11 +9,13 @@ package coordclient
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -193,5 +195,56 @@ func TestCoordinatorClientRemoteNeverFollowsARedirect(t *testing.T) {
 	cl := s.client(Creds{CA: s.rootFile(), TokenFile: s.tokenFile("mia", roles.Member, time.Hour, "acme/app")})
 	if _, _, err := cl.Get(context.Background(), "latest"); !reasonIs(err, clientapi.ReasonTransport) || hits != 0 {
 		t.Fatalf("err %v, hits %d", err, hits)
+	}
+}
+
+// A recorder server: the paths, methods and headers the client really sends.
+func TestCoordinatorClientRequestShape(t *testing.T) {
+	var paths, methods, ctypes []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths, methods, ctypes = append(paths, r.URL.Path), append(methods, r.Method), append(ctypes, r.Header.Get("Content-Type"))
+		switch {
+		case r.URL.Path == "/v1/runs" && r.Method == "POST":
+			w.WriteHeader(202)
+			_, _ = w.Write([]byte(`{"id":"in-1","state":"queued","outcome":"enqueued"}`))
+		case strings.HasSuffix(r.URL.Path, "/cancel"):
+			_, _ = w.Write([]byte(`{"id":"x","cancelled":2}`))
+		case r.URL.Path == "/v1/runs/forbidden":
+			w.WriteHeader(403)
+			_, _ = w.Write([]byte(`{"code":"E664","reason":"role","message":"no"}`))
+		default:
+			_, _ = w.Write([]byte(`{"id":"run-1","revision":"` + testRev + `","status":"passed"}`))
+		}
+	}))
+	defer srv.Close()
+	c := &Client{base: srv.URL, hc: srv.Client()}
+	ctx := context.Background()
+	if _, err := c.Submit(ctx, clientapi.SubmitRequest{Project: "acme/app", Revision: testRev}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := c.Get(ctx, ""); !ok || err != nil { // the empty reference means "latest"
+		t.Fatalf("get latest: %v %v", ok, err)
+	}
+	if n, err := c.Cancel(ctx, "x"); n != 2 || err != nil {
+		t.Fatalf("cancel: %d %v", n, err)
+	}
+	if it, ok, err := c.Get(ctx, "forbidden"); ok || !reasonIs(err, clientapi.ReasonRole) || it.ID != "" {
+		t.Fatalf("a refusal is an error and not a found run: %+v %v %v", it, ok, err)
+	}
+	if strings.Join(paths, " ") != "/v1/runs /v1/runs/latest /v1/runs/x/cancel /v1/runs/forbidden" || strings.Join(methods, " ") != "POST GET POST GET" {
+		t.Fatalf("paths %v methods %v", paths, methods)
+	}
+	if ctypes[0] != "application/json" || ctypes[1] != "" {
+		t.Fatalf("a body is declared JSON and a bodiless request declares nothing: %v", ctypes)
+	}
+}
+
+func TestCoordinatorClientNetErrorTextNeverPrintsNil(t *testing.T) {
+	err := netError(errors.New("boom"))
+	if !reasonIs(err, clientapi.ReasonTransport) || !strings.Contains(err.Error(), "boom") || strings.Contains(err.Error(), "nil") {
+		t.Fatalf("%v", err)
+	}
+	if got := netError(context.Canceled); !errors.Is(got, context.Canceled) {
+		t.Fatalf("a cancelled context passes through: %v", got)
 	}
 }
