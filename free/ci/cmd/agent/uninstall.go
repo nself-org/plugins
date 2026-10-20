@@ -45,13 +45,13 @@ func localRun(ctx context.Context, argv ...string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	null, err := os.Open(os.DevNull)
 	if err != nil {
-		w.Close()
+		_ = w.Close()
 		return "", err
 	}
-	defer null.Close()
+	defer func() { _ = null.Close() }()
 	attr := &os.ProcAttr{Files: []*os.File{null, w, w}, Env: []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin"}}
 	var proc *os.Process
 	switch argv[0] {
@@ -62,7 +62,7 @@ func localRun(ctx context.Context, argv ...string) (string, error) {
 	default:
 		err = errors.New("uninstall runs no program named " + argv[0])
 	}
-	w.Close()
+	_ = w.Close()
 	if err != nil {
 		return "", err
 	}

@@ -127,7 +127,7 @@ func TestBackpressureLimits(t *testing.T) {
 	if _, err = d2.enqueue(jobIn("alpha", "x2")); err == nil {
 		t.Fatal("over the cap")
 	}
-	d2.drop(e, errors.New("gone"))
+	_ = d2.drop(e, errors.New("gone"))
 	if _, err = d2.enqueue(jobIn("alpha", "x2")); err != nil {
 		t.Fatalf("a drained queue accepts again: %v", err)
 	}

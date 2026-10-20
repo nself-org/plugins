@@ -94,7 +94,7 @@ func parseCommand(fs *flagSet, name string, args []string, d Deps) (done bool, c
 	}
 	if fs.help.on {
 		txt, _ := Help(name)
-		fmt.Fprint(d.Out, txt)
+		_, _ = fmt.Fprint(d.Out, txt)
 		return true, 0
 	}
 	return false, 0
@@ -233,7 +233,7 @@ func RunVerify(args []string, d Deps) int {
 			return finish(d, err)
 		}
 	} else {
-		fmt.Fprint(d.Out, RenderMatrix(reports))
+		_, _ = fmt.Fprint(d.Out, RenderMatrix(reports))
 	}
 	if FoundProblems(reports) {
 		return 1 // output is already written, as core's silent errs.Exit(1)
