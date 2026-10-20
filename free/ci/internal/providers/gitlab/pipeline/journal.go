@@ -34,6 +34,9 @@ type Record struct {
 	Nonce      string `json:"nonce"`
 	Ref        string `json:"ref"`
 	Project    string `json:"project"`
+	// Trusted is whether the dispatch ran on the project's default branch (owner, internal, collaborator)
+	// or on the generated untrusted ref; Collect holds an untrusted pipeline to the generated root file.
+	Trusted bool `json:"trusted"`
 	// Mode is how the values travel: ModeInputs or ModeVariables. A pipeline begun before keeps its
 	// mode, so Collect knows which echo to look for.
 	Mode string `json:"mode"`
@@ -204,6 +207,9 @@ func (j storeJournal) Begin(ctx context.Context, r Record) (Record, *Record, err
 		stand, found, err := j.ByNonce(ctx, won.Nonce)
 		if err != nil || !found {
 			return Record{}, nil, errors.Join(errSuperseded, err)
+		}
+		if !sameDispatch(stand, r) {
+			return Record{}, nil, errConflict
 		}
 		return stand, previous, nil
 	}

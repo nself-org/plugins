@@ -87,6 +87,41 @@ func RootSnippet() string {
 	return b.String()
 }
 
+// RootPath is the main CI file of a project; RootKinds name the two generated variants of it.
+const RootPath = ".gitlab-ci.yml"
+
+// The generated roots of the untrusted ref.
+const (
+	RootVariables = "variables"
+	RootInputs    = "inputs"
+)
+
+// RenderRoot returns the main .gitlab-ci.yml the untrusted ref carries: it includes the generated file
+// and nothing else. The inputs variant also declares the pipeline inputs and maps them to variables.
+// The untrusted ref holds exactly this file and the include file, so the coordinator can compare both
+// byte for byte at the commit a pipeline ran on (anyone who can push to that ref can otherwise map the
+// values to anything).
+func RenderRoot(kind string) []byte {
+	var b bytes.Buffer
+	b.WriteString(HeaderMarker + "\n# root: " + kind + "\n")
+	if kind == RootInputs {
+		b.WriteString(RootSnippet())
+	} else {
+		b.WriteString("include:\n  - local: " + Path + "\n")
+	}
+	return b.Bytes()
+}
+
+// RootKindOf says which generated root file is (RootInputs, RootVariables), or "" for any other bytes.
+func RootKindOf(file []byte) string {
+	for _, k := range []string{RootInputs, RootVariables} {
+		if bytes.Equal(file, RenderRoot(k)) {
+			return k
+		}
+	}
+	return ""
+}
+
 // CompatModes is the set of compat values; Timeouts the timeout choices the coordinator rounds up to.
 var (
 	CompatModes = []string{"v1.4", "v1.5"}

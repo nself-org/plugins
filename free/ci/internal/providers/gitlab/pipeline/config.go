@@ -1,9 +1,10 @@
 package pipeline
 
-// Purpose: prove the pipeline ran the generated job and nothing the project's own CI file put in its
-//          way (Epic D11): hostedev compares the include file's bytes, but GitLab merges every CI file
-//          of a project, so a local `nself-ci:` job, a global before_script or a default cache could
-//          change what the generated job does while the include file stays byte-identical.
+// Purpose: prove the pipeline ran the generated job and nothing else put in its way (Epic D11):
+//          hostedev compares the include file's bytes, but GitLab merges every CI file of a project, so a
+//          local `nself-ci:` job, a global before_script, a variable or a default cache could change what
+//          the generated job does while the include file stays byte-identical. See checkConfig for the
+//          two bindings (untrusted ref: byte-exact root; default branch: merged configuration).
 // Inputs:  GET /projects/:id/ci/lint?content_ref=<pipeline sha> (the merged configuration at the
 //          pipeline's own commit) and the include file bytes.
 // Outputs: nil, or E705: workflow.edited when the merged nself-ci job differs from the include file's
@@ -95,6 +96,34 @@ func compareMerged(merged string, include []byte) error {
 				return api.NotEvidence(hostedev.ReasonEdited)
 			}
 		}
+	}
+	return nil
+}
+
+// checkConfig applies the configuration binding that fits the dispatch. Untrusted work ran on the
+// generated untrusted ref, which anyone with push rights can write: the main .gitlab-ci.yml at the
+// pipeline's own sha must be byte for byte the generated root of the journalled transport (the include
+// file was already compared by hostedev), so no other mapping, include, variable or job can exist.
+// Trusted work ran on the project's default branch, whose CI file its maintainers own and who can run
+// anything on this coordinator's runners anyway: there the merged configuration is checked (checkMerged,
+// best effort, not a security boundary: lint is static and does not see conditional includes).
+func (p *Provider) checkConfig(ctx context.Context, c *rest.Client, project api.Project, sha string, include []byte, rec Record) error {
+	if rec.Trusted {
+		return p.checkMerged(ctx, c, project, sha, include)
+	}
+	root, err := p.fetch(ctx, c, api.RawFileURL(c.BaseURL, project, gitlabtmpl.RootPath, sha), 256<<10)
+	if err != nil {
+		if api.IsTransient(err) {
+			return err
+		}
+		return api.NotEvidence(hostedev.ReasonEdited)
+	}
+	want := gitlabtmpl.RootVariables
+	if rec.Mode == ModeInputs {
+		want = gitlabtmpl.RootInputs
+	}
+	if gitlabtmpl.RootKindOf(root) != want {
+		return api.NotEvidence(hostedev.ReasonEdited)
 	}
 	return nil
 }

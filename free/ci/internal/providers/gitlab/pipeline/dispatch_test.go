@@ -18,6 +18,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/gitlab/pipeline"
+	gitlabtmpl "github.com/nself-org/plugins/free/ci/templates/gitlab"
 )
 
 func createBody(t *testing.T, r recorded) (ref string, inputs map[string]string, vars map[string]string) {
@@ -395,6 +396,7 @@ func TestCreate400IsDiagnosed(t *testing.T) {
 	v15(t)
 	f := newFakeGL(t)
 	f.Version, f.CreateMode, f.BranchSt = "16.11.2", "400", 404
+	f.Root = gitlabtmpl.RenderRoot(gitlabtmpl.RootVariables) // an older instance: the untrusted ref carries the variables root
 	a := attemptFor("attempt-1", 1)
 	a.Trust = "untrusted"
 	_, err := f.provider(options{}).Dispatch(context.Background(), a)
@@ -478,4 +480,53 @@ func TestTooManyCandidates(t *testing.T) {
 	}
 	_, err := f.provider(options{Window: 5 * time.Second}).Dispatch(context.Background(), attemptFor("attempt-1", 1))
 	wantCode(t, err, "E704", "run.candidates")
+}
+
+// TestUntrustedRefMustBeGenerated proves untrusted work dispatches only when the untrusted ref carries
+// exactly one of the two generated root files: an edited root, a missing one and an inputs root on an
+// instance older than 17.10 are E702 before anything is created; the variables root on a new instance
+// gives the variables transport and the inputs root the inputs transport. The ref is writable by every
+// project member, so the root is what decides how the values reach the job (review F1).
+func TestUntrustedRefMustBeGenerated(t *testing.T) {
+	v15(t)
+	ctx := context.Background()
+	untrusted := func() providers.Attempt {
+		a := attemptFor("attempt-1", 1)
+		a.Trust = "untrusted"
+		return a
+	}
+	edited := append(gitlabtmpl.RenderRoot(gitlabtmpl.RootInputs), []byte("variables:\n  NSELF_CI_SPEC_DIGEST: sha256:forged\n")...)
+	for name, c := range map[string]struct {
+		root    []byte
+		version string
+		reason  string // empty: dispatch works
+		mode    string
+	}{
+		"edited root":                  {edited, "18.2.1-ee", pipeline.ReasonDrifted, ""},
+		"project's own root":           {[]byte("include:\n  - local: other.yml\n"), "18.2.1-ee", pipeline.ReasonDrifted, ""},
+		"no root":                      {nil, "18.2.1-ee", pipeline.ReasonDrifted, ""},
+		"inputs root on an old GitLab": {gitlabtmpl.RenderRoot(gitlabtmpl.RootInputs), "17.9.3", "untrusted_ref.needs_inputs: the ref carries the inputs root but this GitLab is older than 17.10", ""},
+		"inputs root on a new GitLab":  {gitlabtmpl.RenderRoot(gitlabtmpl.RootInputs), "18.2.1-ee", "", pipeline.ModeInputs},
+		"variables root on a new one":  {gitlabtmpl.RenderRoot(gitlabtmpl.RootVariables), "18.2.1-ee", "", pipeline.ModeVariables},
+		"variables root on an old one": {gitlabtmpl.RenderRoot(gitlabtmpl.RootVariables), "15.11.13", "", pipeline.ModeVariables},
+	} {
+		f := newFakeGL(t)
+		f.Root, f.Version = c.root, c.version
+		_, err := f.provider(options{}).Dispatch(ctx, untrusted())
+		posts := f.requests("POST", "/pipeline")
+		if c.reason != "" {
+			wantCode(t, err, "E702", c.reason)
+			if len(posts) != 0 {
+				t.Errorf("%s: %d pipelines were created", name, len(posts))
+			}
+			continue
+		}
+		if err != nil || len(posts) != 1 {
+			t.Fatalf("%s: %v posts=%d", name, err, len(posts))
+		}
+		_, inputs, vars := createBody(t, posts[0])
+		if (c.mode == pipeline.ModeInputs) != (len(inputs) > 0) || (c.mode == pipeline.ModeVariables) != (len(vars) > 0) {
+			t.Errorf("%s: inputs=%d variables=%d, want %s", name, len(inputs), len(vars), c.mode)
+		}
+	}
 }

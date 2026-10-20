@@ -97,8 +97,8 @@ func TestListPages(t *testing.T) {
 	}
 	total = api.PageSize * 10
 	pages = nil
-	if got, err = api.List[item](context.Background(), c, "/things", nil, nil); err != nil || len(got) != api.PageSize*api.MaxPages || len(pages) != api.MaxPages {
-		t.Errorf("max pages: %d items %d requests %v", len(got), len(pages), err)
+	if got, err = api.List[item](context.Background(), c, "/things", nil, nil); err == nil || got != nil || len(pages) != api.MaxPages || !api.IsTransient(err) {
+		t.Errorf("a listing still full at MaxPages must be a retryable error, not a silent cut: %d items %d requests %v", len(got), len(pages), err)
 	}
 	_, err = api.List[item](context.Background(), c, "/things", nil, map[string][]string{"fail": {"1"}})
 	if providers.ClassOf(err) != providers.Transient {

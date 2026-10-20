@@ -5,7 +5,8 @@ package api
 // Outputs: *rest.Client; every item of a list route, up to MaxPages pages.
 // Constraints: the funnel returns no response headers, so x-next-page cannot be read; a listing stops at
 //          the first page shorter than PageSize, which is the same end as an empty x-next-page and costs
-//          one extra request when the last page is exactly full; the token is resolved per call by the
+//          one extra request when the last page is exactly full; a listing that is still full at
+//          MaxPages is a retryable E704 (list.too_long), never a silent cut; the token is resolved per call by the
 //          funnel and is never held here; a client is built per call so a policy change takes effect
 //          without a restart.
 
@@ -50,8 +51,8 @@ func List[T any](ctx context.Context, c *rest.Client, path string, params map[st
 		}
 		all = append(all, items...)
 		if len(items) < PageSize {
-			break
+			return all, nil
 		}
 	}
-	return all, nil
+	return nil, Unavailable("list.too_long") // a full last page: items beyond it would be cut without a word
 }

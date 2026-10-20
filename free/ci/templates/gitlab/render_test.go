@@ -139,3 +139,42 @@ func TestInputsTable(t *testing.T) {
 		}
 	}
 }
+
+// TestRenderRoot proves the two generated roots of the untrusted ref: each is deterministic, starts with
+// the GENERATED marker, parses as YAML, includes the generated file (the inputs root also declares and
+// maps every input), RootKindOf names each one and nothing else, and a single changed byte is no root.
+func TestRenderRoot(t *testing.T) {
+	v, in := RenderRoot(RootVariables), RenderRoot(RootInputs)
+	if string(RenderRoot(RootVariables)) != string(v) || string(RenderRoot(RootInputs)) != string(in) || string(v) == string(in) {
+		t.Fatal("roots are not deterministic or not distinct")
+	}
+	for kind, doc := range map[string][]byte{RootVariables: v, RootInputs: in} {
+		if !strings.HasPrefix(string(doc), HeaderMarker+"\n# root: "+kind+"\n") || RootKindOf(doc) != kind {
+			t.Errorf("%s: header or kind: %q", kind, strings.SplitN(string(doc), "\n", 3)[1])
+		}
+		dec := yaml.NewDecoder(strings.NewReader(string(doc)))
+		var last map[string]any
+		for {
+			var d map[string]any
+			if err := dec.Decode(&d); err != nil {
+				break
+			}
+			last = d
+		}
+		inc, _ := last["include"].([]any)
+		if len(inc) != 1 || inc[0].(map[string]any)["local"] != Path {
+			t.Errorf("%s: include = %v", kind, last["include"])
+		}
+		if kind == RootVariables && len(last) != 1 {
+			t.Errorf("the variables root holds more than the include: %v", last)
+		}
+		if kind == RootInputs && len(last["variables"].(map[string]any)) != len(Inputs()) {
+			t.Errorf("the inputs root maps %d variables, want %d", len(last["variables"].(map[string]any)), len(Inputs()))
+		}
+		for _, bad := range [][]byte{append(append([]byte{}, doc...), '#'), doc[:len(doc)-1], []byte(strings.Replace(string(doc), "include", "inclusion", 1)), nil} {
+			if RootKindOf(bad) != "" {
+				t.Errorf("%s: a changed file passed as a root", kind)
+			}
+		}
+	}
+}

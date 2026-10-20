@@ -148,7 +148,7 @@ func ArtifactsURL(baseURL string, p Project, job int64) string {
 
 // RawFileURL is the download link of a file's raw bytes at ref under baseURL.
 func RawFileURL(baseURL string, p Project, file, ref string) string {
-	return strings.TrimRight(baseURL, "/") + "/projects/" + escape(p.Path) + strings.Replace(rawFilePath, "{file}", escape(file), 1) + "?ref=" + escape(ref)
+	return strings.TrimRight(baseURL, "/") + "/projects/" + escape(p.Path) + strings.Replace(rawFilePath, "{file}", escape(file), 1) + "?ref=" + url.QueryEscape(ref)
 }
 
 // Failure builds a providers.Error with a reason key.

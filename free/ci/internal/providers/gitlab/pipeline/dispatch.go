@@ -8,7 +8,7 @@ package pipeline
 // Outputs: providers.Handle{Provider, RunID "group/.../name/<id>", Nonce, Ref}.
 // Constraints: the revision sent is the admitted one and no ref is resolved to a revision; the only
 //          lookups before the request are the default branch (trusted work only), the instance version
-//          and, on 17.10 and later, the main CI file (inputs.go); a 400 from the create call is told
+//          and the main CI file of the ref (inputs.go: for untrusted work it must be a generated root); a 400 from the create call is told
 //          apart by one branch lookup (missing ref) before it is blamed on the pipeline variables; untrusted work (and any trust class this build does not know) dispatches on the
 //          untrusted ref; the values travel as pipeline `inputs` when the instance takes them (GitLab
 //          17.10 and later) and the main CI file declares them, else as variables; anything outside the allowlists is
@@ -57,7 +57,7 @@ func validRef(s string) bool {
 // mode asks the instance for its version and the main CI file for its inputs: inputs when the instance
 // is 17.10 or later and the main file at ref declares them (inputs.go), variables otherwise (and when
 // the version cannot be read for a reason that is not worth retrying).
-func (p *Provider) mode(ctx context.Context, c *rest.Client, project api.Project, ref string) (string, error) {
+func (p *Provider) mode(ctx context.Context, c *rest.Client, project api.Project, ref string, trusted bool) (string, error) {
 	var v struct {
 		Version string `json:"version"`
 	}
@@ -65,7 +65,10 @@ func (p *Provider) mode(ctx context.Context, c *rest.Client, project api.Project
 		if api.IsTransient(err) || api.IsCredentialMissing(err) {
 			return "", err
 		}
-		return ModeVariables, nil
+		v.Version = "" // not readable: no inputs
+	}
+	if !trusted {
+		return p.untrustedMode(ctx, c, project, ref, v.Version)
 	}
 	if !api.SupportsInputs(v.Version) {
 		return ModeVariables, nil
@@ -97,7 +100,7 @@ func (p *Provider) Dispatch(ctx context.Context, a providers.Attempt) (providers
 	if err != nil {
 		return providers.Handle{}, err
 	}
-	mode, err := p.mode(ctx, c, r.project, ref)
+	mode, err := p.mode(ctx, c, r.project, ref, r.trusted)
 	if err != nil {
 		return providers.Handle{}, err
 	}
@@ -106,7 +109,7 @@ func (p *Provider) Dispatch(ctx context.Context, a providers.Attempt) (providers
 		return providers.Handle{}, err
 	}
 	start := p.cfg.Clock()
-	stand, previous, err := p.jrnl().Begin(ctx, Record{Attempt: a.ID, Lineage: Lineage(a.ID), N: a.N, Revision: r.revision, SpecDigest: r.digest, Nonce: fresh, Ref: ref, Mode: mode, Project: r.project.Path})
+	stand, previous, err := p.jrnl().Begin(ctx, Record{Attempt: a.ID, Lineage: Lineage(a.ID), N: a.N, Revision: r.revision, SpecDigest: r.digest, Nonce: fresh, Ref: ref, Mode: mode, Project: r.project.Path, Trusted: r.trusted})
 	if err != nil {
 		if errors.Is(err, errSuperseded) {
 			return providers.Handle{}, api.Refuse("attempt.superseded")

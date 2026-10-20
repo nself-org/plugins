@@ -34,9 +34,11 @@ import (
 // ProviderID is the id the provider registers under and the identity.provider of its runners.
 const ProviderID = "gitlab"
 
-// DefaultUntrustedRef is the branch untrusted work is dispatched on. The project keeps it unprotected
-// and without access to protected variables; the operator creates it (providers gitlab init --check
-// says whether it exists in local git).
+// DefaultUntrustedRef is the branch untrusted work is dispatched on. It is an orphan commit of exactly the
+// two generated files (the generated root .gitlab-ci.yml and the include file), kept unprotected, in a
+// project that holds no protected CI/CD variables; anyone who can push can rewrite it, so the dispatch
+// reads the root at the ref and Collect compares root and include byte for byte at the pipeline sha.
+// `providers gitlab init --check` says whether it exists in local git and prints how to create it.
 const DefaultUntrustedRef = "nself-ci/untrusted"
 
 // MinProducerVersion is the lowest evidence producer version accepted by default (see hosted).

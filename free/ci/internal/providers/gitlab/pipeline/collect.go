@@ -9,8 +9,8 @@ package pipeline
 // Outputs: providers.Collected{Evidence, Attestation} or an E705 whose reason is one hostedev key.
 // Constraints: no ref is resolved; the include file is read at the pipeline's own sha, not at the
 //          revision under test, and compared byte for byte with the coordinator's rendering by
-//          hostedev, then the merged configuration at that sha must hold the same nself-ci job and
-//          no inherited script setting (config.go); the hostedev run is mapped from GitLab like this: Event is the pipeline source
+//          hostedev, then checkConfig binds the rest of the configuration (config.go: the byte-exact
+//          generated root for untrusted work, the merged configuration for trusted work); the hostedev run is mapped from GitLab like this: Event is the pipeline source
 //          (must be "api"), Path is the include path and is claimed only when the pipeline holds
 //          exactly one job named nself-ci, HeadBranch and HeadSHA are the pipeline's ref and sha,
 //          DisplayTitle is the pipeline name (inputs mode) or the echoed NSELF_CI_NONCE variable
@@ -132,7 +132,7 @@ func (p *Provider) Collect(ctx context.Context, h providers.Handle) (providers.C
 	if rec.Mode == ModeVariables && echoed != rec.SpecDigest { // the pipeline ran with another spec
 		return providers.Collected{}, api.NotEvidence(hostedev.ReasonSpec)
 	}
-	if err = p.checkMerged(ctx, c, project, pl.SHA, file); err != nil { // the project's own CI files did not change the job
+	if err = p.checkConfig(ctx, c, project, pl.SHA, file, rec); err != nil { // nothing but the generated job ran
 		return providers.Collected{}, err
 	}
 	doc, err := hostedev.ReadEvidence(zipBytes)

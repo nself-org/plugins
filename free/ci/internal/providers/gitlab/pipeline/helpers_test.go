@@ -287,15 +287,24 @@ func (f *fakeGL) serve(w http.ResponseWriter, req *http.Request) {
 
 func (f *fakeGL) list(w http.ResponseWriter, req *http.Request) {
 	q := req.URL.Query()
-	var out []map[string]any
+	var all []map[string]any
 	for id := f.NextID; id > 9000 && !f.Stale; id-- {
 		pl := f.Pipes[id]
 		if pl != nil && pl.Ref == q.Get("ref") && pl.Source == q.Get("source") {
 			item := f.pipeJSON(pl)
 			delete(item, "name")
 			delete(item, "user")
-			out = append(out, item)
+			all = append(all, item)
 		}
+	}
+	per, _ := strconv.Atoi(q.Get("per_page"))
+	page, _ := strconv.Atoi(q.Get("page"))
+	if per <= 0 || page <= 0 {
+		per, page = len(all)+1, 1
+	}
+	out := []map[string]any{}
+	for i := (page - 1) * per; i < len(all) && i < page*per; i++ {
+		out = append(out, all[i])
 	}
 	writeJSON(w, 200, out)
 }
@@ -498,6 +507,7 @@ func mergedFrom(t *testing.T, include []byte, edit func(map[string]any)) string 
 	return string(out)
 }
 
-// rootFile is a main .gitlab-ci.yml that declares every pipeline input and maps it to a variable
-// (the snippet `providers gitlab init` prints), so the dispatch may use the inputs transport.
-func rootFile() []byte { return []byte(gitlabtmpl.RootSnippet()) }
+// rootFile is a main .gitlab-ci.yml that declares every pipeline input and maps it to a variable (the
+// generated inputs root), so the dispatch may use the inputs transport; it is also the exact file the
+// untrusted ref must carry for inputs.
+func rootFile() []byte { return gitlabtmpl.RenderRoot(gitlabtmpl.RootInputs) }

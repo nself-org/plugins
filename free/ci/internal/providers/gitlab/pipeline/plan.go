@@ -36,7 +36,7 @@ const (
 )
 
 // RemediationVariables is the E702 reason when a project refuses pipeline variables.
-const RemediationVariables = "pipeline.variables_refused: set the project's pipeline variables role to developer, or use GitLab 17.10+ pipeline inputs"
+const RemediationVariables = "pipeline.create_refused: the project refuses pipeline variables (set its variables role to developer or use GitLab 17.10+ pipeline inputs), or workflow:rules filter the pipeline"
 
 var (
 	revisionRE = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)

@@ -195,3 +195,78 @@ func TestMergedConfigKeepsOtherProjectSettings(t *testing.T) {
 	_, err := p.Collect(ctx, h)
 	wantCode(t, err, "E704", "")
 }
+
+// untrustedDispatched dispatches an untrusted attempt on a fake whose untrusted ref carries the given
+// generated root.
+func untrustedDispatched(t *testing.T, version, root string) (*fakeGL, providers.Dispatcher, providers.Handle) {
+	t.Helper()
+	v15(t)
+	f := newFakeGL(t)
+	f.Version, f.Root = version, gitlabtmpl.RenderRoot(root)
+	p := f.provider(options{})
+	a := attemptFor("attempt-1", 1)
+	a.Trust = "untrusted"
+	h, err := p.Dispatch(context.Background(), a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return f, p, h
+}
+
+// TestUntrustedCollectBindsTheRoot proves review F1/F2/F4: for work that ran on the untrusted ref
+// (writable by every project member) the main .gitlab-ci.yml at the pipeline sha must be byte for byte the
+// generated root of the journalled transport. Anything else, such as a remapped NSELF_CI_SPEC_DIGEST in
+// inputs mode, a conditional include, a global variable that changes git or PATH, a different job, or a
+// root of the other transport, is refused as workflow.edited; the merged-configuration lint is not asked
+// (it cannot see those things), and a transient failure to read the root stays retryable.
+func TestUntrustedCollectBindsTheRoot(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct{ name, version, root string }{{"inputs", "18.2.1-ee", gitlabtmpl.RootInputs}, {"variables", "16.11.2", gitlabtmpl.RootVariables}} {
+		f, p, h := untrustedDispatched(t, tc.version, tc.root)
+		f.finish(9001, "attempt-1", testRevision, nil)
+		if _, err := p.Collect(ctx, h); err != nil {
+			t.Fatalf("%s: the generated root was refused: %v", tc.name, err)
+		}
+		if n := len(f.requests("GET", "/ci/lint")); n != 0 {
+			t.Errorf("%s: %d lint requests for untrusted work", tc.name, n)
+		}
+		good := string(f.Root)
+		for name, tamper := range map[string]string{
+			"remapped spec digest":     good + "variables:\n  NSELF_CI_SPEC_DIGEST: 'sha256:forged'\n",
+			"conditional include":      good + "other:\n  include:\n    - local: x.yml\n      rules:\n        - if: $NSELF_CI_NONCE\n",
+			"git hooks path":           good + "variables:\n  GIT_CONFIG_COUNT: '1'\n  GIT_CONFIG_KEY_0: core.hooksPath\n",
+			"changed include path":     strings.Replace(good, ".gitlab/nself-ci.gitlab-ci.yml", ".gitlab/evil.yml", 1),
+			"trailing newline removed": strings.TrimSuffix(good, "\n"),
+			"the other transport":      string(gitlabtmpl.RenderRoot(map[string]string{gitlabtmpl.RootInputs: gitlabtmpl.RootVariables, gitlabtmpl.RootVariables: gitlabtmpl.RootInputs}[tc.root])),
+			"empty":                    "",
+		} {
+			f.Root = []byte(tamper)
+			_, err := p.Collect(ctx, h)
+			wantCode(t, err, "E705", hostedev.ReasonEdited)
+			if t.Failed() {
+				t.Fatalf("%s/%s", tc.name, name)
+			}
+		}
+		f.Root = nil // the root cannot be read at the sha
+		_, err := p.Collect(ctx, h)
+		wantCode(t, err, "E705", hostedev.ReasonEdited)
+		f.Root = []byte(good)
+		if _, err := p.Collect(ctx, h); err != nil {
+			t.Fatalf("%s: the generated root is accepted again: %v", tc.name, err)
+		}
+	}
+}
+
+// TestTrustedCollectKeepsTheLint proves the other binding is still asked for work that ran on the default
+// branch: one lint request, and no root comparison (the project's maintainers own that file).
+func TestTrustedCollectKeepsTheLint(t *testing.T) {
+	f, p, h := dispatched(t, "18.2.1-ee", nil)
+	f.finish(9001, "attempt-1", testRevision, nil)
+	f.Root = []byte("anything: the project owns this file\n")
+	if _, err := p.Collect(context.Background(), h); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(f.requests("GET", "/ci/lint")); n != 1 {
+		t.Errorf("%d lint requests", n)
+	}
+}

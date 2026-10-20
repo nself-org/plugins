@@ -7,7 +7,9 @@
 # and the values reach the job as NSELF_CI_* environment variables, never as part of a script. The job
 # runs only when NSELF_CI_NONCE is set on a pipeline created through the API, so the project's own
 # pipelines are untouched and a pipeline someone starts by hand or by a push never runs it.
-# Include this file from the main .gitlab-ci.yml:
+# Include this file from the main .gitlab-ci.yml (the job uses the stage test: add it to your stages: list
+# if you have one; a project that sets its own workflow:rules also needs a rule that sets
+# NSELF_CI_PIPELINE_NAME, see the workflow block below):
 #   include:
 #     - local: .gitlab/nself-ci.gitlab-ci.yml
 # The values travel as pipeline variables on every GitLab version. GitLab 17.10 and later can take them
@@ -26,6 +28,8 @@ workflow:
 
 nself-ci:
   stage: test
+  needs: []
+  dependencies: []
   image: {{.Image}}
   tags:
     - '$NSELF_CI_RUNNER_TAG'
@@ -34,6 +38,7 @@ nself-ci:
   script:
     - |
       set -eu
+      rm -f "$CI_PROJECT_DIR/evidence.json"
       want="$NSELF_CI_REVISION"
       fetch="${NSELF_CI_FETCH_REF:-$want}"
       git fetch --quiet --depth 1 origin "$fetch"
