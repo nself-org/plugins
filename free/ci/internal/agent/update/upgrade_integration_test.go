@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nself-org/cli/sdk/go/v2/remote"
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
 	"github.com/nself-org/plugins/free/ci/internal/agent/slots"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
@@ -73,6 +74,12 @@ func (t *traced) Hello(ctx context.Context, w time.Duration) (string, error) {
 	return v, err
 }
 
+// CanDowngrade passes the wrapped node's answer through (the engine asks for it by type assertion).
+func (t *traced) CanDowngrade() bool {
+	d, ok := t.Node.(Downgrader)
+	return !ok || d.CanDowngrade()
+}
+
 func (t *traced) Probe(ctx context.Context) error { t.ev.add("probe"); return t.Node.Probe(ctx) }
 
 // simControl is the coordinator-side view of a pull agent on the sim home; Upgrade runs the agent's own handler.
@@ -97,7 +104,9 @@ func (c *simControl) Upgrade(_, version, _ string) error {
 		src = r.source()
 	}
 	cur, _ := c.s.version(context.Background())
-	_, err := ApplyLocal(context.Background(), localOpts(c.s, cur, version, src))
+	o := localOpts(c.s, cur, version, src)
+	o.AllowRestore = true // what the agent's upgrade-message handler sets: the coordinator may send it back to the binary it kept
+	_, err := ApplyLocal(context.Background(), o)
 	c.mu.Lock()
 	if err != nil && c.agentErr == nil { // keep the first refusal; the rollback message that follows succeeds
 		c.agentErr = err
@@ -138,18 +147,24 @@ func newRig(t *testing.T, carrier, installed string, releases ...*release) *rig 
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	r := &rig{t: t, carrier: carrier, s: newSim(t, installed), st: st, ev: &events{}, state: "online"}
-	drain := func(context.Context) (bool, error) { was := r.state == "online"; r.state = "draining"; return was, nil }
-	enable := func(context.Context) error { r.state = "online"; return nil }
+	drain := func(context.Context) (func(context.Context) error, error) {
+		was := r.state == "online"
+		r.state = "draining"
+		if !was {
+			return nil, nil
+		}
+		return func(context.Context) error { r.state = "online"; return nil }, nil
+	}
 	probe := func(context.Context) error { r.probes++; return nil }
 	var inner Node
 	if carrier == "ssh" {
-		inner = &SSHNode{NodeID: "n1", Plat: hostPlatform, Run: r.s.Run, Copy: r.s.Copy, DrainFn: drain, EnableFn: enable, ProbeFn: probe, HelloPoll: 5 * time.Millisecond}
+		inner = &SSHNode{NodeID: "n1", Plat: hostPlatform, Run: r.s.Run, Copy: r.s.Copy, DrainFn: drain, ProbeFn: probe, HelloPoll: 5 * time.Millisecond}
 	} else {
 		r.ctl = &simControl{s: r.s, releases: map[string]*release{}}
 		for _, rel := range releases {
 			r.ctl.releases[rel.Version] = rel
 		}
-		inner = &AgentNode{NodeID: "n1", Plat: hostPlatform, Ctl: r.ctl, DrainFn: drain, EnableFn: enable, ProbeFn: probe}
+		inner = &AgentNode{NodeID: "n1", Plat: hostPlatform, Ctl: r.ctl, DrainFn: drain, ProbeFn: probe}
 	}
 	r.node = &traced{Node: inner, ev: r.ev}
 	return r
@@ -289,10 +304,14 @@ func TestUpgrade(t *testing.T) {
 				if ReasonOf(err) != ReasonDowngrade || !strings.HasPrefix(err.Error(), "E666:") || installed(t, r.s) != "1.5.0" {
 					t.Fatalf("err %v version %s", err, installed(t, r.s))
 				}
-				if carrier == "agent" { // a pull agent goes back only to the binary it kept
-					keepPrev(t, r.s, "1.4.0", "1.5.0")
-				}
 				res, err := r.run(rel, "1.4.0", func(q *Request) { q.AllowDowngrade = true })
+				if carrier == "agent" {
+					// the upgrade message carries no downgrade permission: a pull agent is downgraded on the node itself
+					if ReasonOf(err) != ReasonDowngrade || installed(t, r.s) != "1.5.0" || r.ev.index("install") >= 0 || r.state != "online" {
+						t.Fatalf("err %v version %s events %v", err, installed(t, r.s), r.ev.all())
+					}
+					return
+				}
 				if err != nil || res.Direction != Downgrade || installed(t, r.s) != "1.4.0" {
 					t.Fatalf("res %+v err %v version %s", res, err, installed(t, r.s))
 				}
@@ -302,4 +321,51 @@ func TestUpgrade(t *testing.T) {
 			})
 		})
 	}
+}
+
+// sshOnly holds the cases that exercise the ssh install script itself.
+func TestUpgradeSSHScript(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("INTEGRATION=1 runs the sim-node upgrade")
+	}
+	t.Run("a_job_that_starts_during_the_copy_blocks_the_swap", func(t *testing.T) {
+		rel := newRelease(t, "1.5.0", 1, 1)
+		r := newRig(t, "ssh", "1.4.0", rel)
+		n := r.node.Node.(*SSHNode)
+		n.Copy = func(ctx context.Context, tg remote.Target, local, remotePath string) error {
+			err := r.s.Copy(ctx, tg, local, remotePath)
+			r.s.flag("busy", "1") // another coordinator leases a job while the file travels
+			return err
+		}
+		_, err := r.run(rel, "1.5.0", nil)
+		if ReasonOf(err) != ReasonRunningJob || installed(t, r.s) != "1.4.0" || r.state != "online" {
+			t.Fatalf("err %v version %s state %s", err, installed(t, r.s), r.state)
+		}
+		if _, serr := os.Stat(r.s.bin() + NewSuffix); serr == nil {
+			t.Fatal("the staged copy was left on the node")
+		}
+	})
+	t.Run("a_stale_prev_is_never_restored", func(t *testing.T) {
+		r := newRig(t, "ssh", "1.4.0")
+		n := r.node.Node.(*SSHNode)
+		if _, err := n.Version(context.Background()); err != nil { // records 1.4.0 as the version before the upgrade
+			t.Fatal(err)
+		}
+		b, _ := os.ReadFile(stubBinary(t, "1.3.0"))
+		_ = os.WriteFile(r.s.bin()+PrevSuffix, b, 0o755)
+		r.s.flag("bin/nself-ci-agent"+PrevVersionSuffix, "1.3.0\n")
+		if err := n.Restore(context.Background()); err != nil || installed(t, r.s) != "1.4.0" {
+			t.Fatalf("err %v version %s: an older .prev replaced the installed agent", err, installed(t, r.s))
+		}
+	})
+	t.Run("the_installed_file_keeps_the_mode_job_users_need", func(t *testing.T) {
+		rel := newRelease(t, "1.5.0", 1, 1)
+		r := newRig(t, "ssh", "1.4.0", rel)
+		if _, err := r.run(rel, "1.5.0", nil); err != nil {
+			t.Fatal(err)
+		}
+		if st, _ := os.Stat(r.s.bin()); st.Mode().Perm() != 0o755 {
+			t.Fatalf("mode %v", st.Mode().Perm())
+		}
+	})
 }

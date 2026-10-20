@@ -53,10 +53,9 @@ type AgentNode struct {
 	NodeID string
 	Plat   lifecycle.Platform
 	Ctl    AgentControl
-	// DrainFn, EnableFn and ProbeFn are the lifecycle commands for this node.
-	DrainFn  func(ctx context.Context) (wasOnline bool, err error)
-	EnableFn func(ctx context.Context) error
-	ProbeFn  func(ctx context.Context) error
+	// DrainFn and ProbeFn are the lifecycle commands for this node.
+	DrainFn func(ctx context.Context) (undo func(context.Context) error, err error)
+	ProbeFn func(ctx context.Context) error
 
 	from, manifestURL string
 	sent              time.Time
@@ -85,7 +84,13 @@ func (n *AgentNode) Coordinators(context.Context) ([]session.CoordinatorRecord, 
 }
 
 // Drain implements Node.
-func (n *AgentNode) Drain(ctx context.Context) (bool, error) { return n.DrainFn(ctx) }
+func (n *AgentNode) Drain(ctx context.Context) (func(context.Context) error, error) {
+	return n.DrainFn(ctx)
+}
+
+// CanDowngrade is false: the upgrade message carries no downgrade permission, so a pull agent goes back only to the binary it kept
+// (the rollback). An operator downgrades it on the node with `nself-ci-agent upgrade --allow-downgrade`.
+func (n *AgentNode) CanDowngrade() bool { return false }
 
 // Busy implements Node.
 func (n *AgentNode) Busy(ctx context.Context) (int, error) { return n.Ctl.ActiveJobs(ctx, n.NodeID) }
@@ -124,6 +129,3 @@ func (n *AgentNode) Restore(_ context.Context) error {
 	}
 	return nil
 }
-
-// Enable implements Node.
-func (n *AgentNode) Enable(ctx context.Context) error { return n.EnableFn(ctx) }

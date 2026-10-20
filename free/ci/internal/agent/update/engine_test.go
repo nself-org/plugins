@@ -27,8 +27,8 @@ func (f fakeSource) Prepare(context.Context, lifecycle.Platform) (Prepared, erro
 }
 
 type recAudit struct {
-	steps  []string
-	failOn string
+	steps, details []string
+	failOn         string
 }
 
 func (r *recAudit) Step(_ context.Context, step, node, detail string) error {
@@ -36,6 +36,7 @@ func (r *recAudit) Step(_ context.Context, step, node, detail string) error {
 		return errors.New("audit store down")
 	}
 	r.steps = append(r.steps, step)
+	r.details = append(r.details, detail)
 	return nil
 }
 
@@ -51,6 +52,8 @@ type fakeNode struct {
 	probeErr        error
 	restoreErr      error
 	oldHelloErr     error
+	versionErr      error
+	noDowngrade     bool
 	calls           []string
 }
 
@@ -58,14 +61,25 @@ func newFake(from, to string) *fakeNode {
 	return &fakeNode{version: from, target: to, online: true, swapOnInstall: true}
 }
 
-func (n *fakeNode) rec(s string)                            { n.calls = append(n.calls, s) }
-func (n *fakeNode) ID() string                              { return "n1" }
-func (n *fakeNode) Platform() lifecycle.Platform            { return hostPlatform }
-func (n *fakeNode) Version(context.Context) (string, error) { return n.version, nil }
+func (n *fakeNode) rec(s string)                 { n.calls = append(n.calls, s) }
+func (n *fakeNode) ID() string                   { return "n1" }
+func (n *fakeNode) Platform() lifecycle.Platform { return hostPlatform }
+func (n *fakeNode) Version(context.Context) (string, error) {
+	if n.versionErr != nil && n.version == n.target { // a swapped binary that cannot start
+		return "", n.versionErr
+	}
+	return n.version, nil
+}
 func (n *fakeNode) Coordinators(context.Context) ([]session.CoordinatorRecord, error) {
 	return n.recs, nil
 }
-func (n *fakeNode) Drain(context.Context) (bool, error) { n.rec("drain"); return n.online, nil }
+func (n *fakeNode) Drain(context.Context) (func(context.Context) error, error) {
+	n.rec("drain")
+	if !n.online {
+		return nil, nil
+	}
+	return func(context.Context) error { n.rec("enable"); return nil }, nil
+}
 func (n *fakeNode) Busy(context.Context) (int, error) {
 	n.rec("busy")
 	if len(n.busy) == 0 {
@@ -103,7 +117,10 @@ func (n *fakeNode) Restore(context.Context) error {
 	}
 	return n.restoreErr
 }
-func (n *fakeNode) Enable(context.Context) error { n.rec("enable"); return nil }
+
+type pullFake struct{ *fakeNode }
+
+func (pullFake) CanDowngrade() bool { return false }
 
 func manifest(v string, pmin, pmax int) verify.Manifest {
 	return verify.Manifest{Version: v, Target: "linux-amd64", SHA256: strings.Repeat("a", 64), ProtocolMin: pmin, ProtocolMax: pmax}
@@ -280,7 +297,51 @@ func TestEngineStopsWhenAnAuditRowCannotBeWritten(t *testing.T) {
 func TestEngineUnverifiedReleaseTouchesNothing(t *testing.T) {
 	n, a := newFake("1.4.0", "1.5.0"), &recAudit{}
 	e := Engine{Source: fakeSource{err: fmt.Errorf("E665: bad_signature")}, Audit: a}
-	if _, err := e.Run(context.Background(), n, Request{Version: "1.5.0"}); err == nil || len(n.calls) != 0 || len(a.steps) != 0 {
+	if _, err := e.Run(context.Background(), n, Request{Version: "1.5.0"}); err == nil || len(n.calls) != 0 || strings.Join(a.steps, ",") != StepFailed {
+		t.Fatalf("err %v calls %v audit %v", err, n.calls, a.steps)
+	}
+}
+
+func TestEngineBrokenBinaryThatCannotAnswerVersionIsRolledBack(t *testing.T) {
+	n, a := newFake("1.4.0", "1.5.0"), &recAudit{}
+	n.installErr, n.versionErr = errors.New("E656: the new agent was not installed"), errors.New("segfault")
+	res, err := run(n, a, Request{}, manifest("1.5.0", 1, 1))
+	if err == nil || !res.RolledBack || n.version != "1.4.0" || n.calls[len(n.calls)-1] != "enable" {
+		t.Fatalf("err %v res %+v version %s calls %v", err, res, n.version, n.calls)
+	}
+}
+
+func TestEngineRefusedInstallBecauseAJobStartedChangesNothing(t *testing.T) {
+	n, a := newFake("1.4.0", "1.5.0"), &recAudit{}
+	n.swapOnInstall, n.installErr = false, refuse(ReasonRunningJob, "a job started during the copy")
+	res, err := run(n, a, Request{}, manifest("1.5.0", 1, 1))
+	if ReasonOf(err) != ReasonRunningJob || res.RolledBack || strings.Contains(strings.Join(n.calls, ","), "restore") || n.calls[len(n.calls)-1] != "enable" {
+		t.Fatalf("err %v res %+v calls %v", err, res, n.calls)
+	}
+}
+
+func TestEngineRollbackDoesNotWaitForItsAuditRow(t *testing.T) {
+	n, a := newFake("1.4.0", "1.5.0"), &recAudit{failOn: StepRollback}
+	n.probeErr = errors.New("probe failed")
+	res, err := run(n, a, Request{}, manifest("1.5.0", 1, 1))
+	if err == nil || !res.RolledBack || n.version != "1.4.0" {
+		t.Fatalf("a failing audit store left the broken binary: err %v version %s", err, n.version)
+	}
+}
+
+func TestEnginePullNodeDowngradeIsRefusedBeforeTheDrain(t *testing.T) {
+	n, a := newFake("1.5.0", "1.4.0"), &recAudit{}
+	e := Engine{Source: fakeSource{m: manifest("1.4.0", 1, 1)}, Audit: a}
+	_, err := e.Run(context.Background(), pullFake{n}, Request{Version: "1.4.0", AllowDowngrade: true, Poll: time.Millisecond})
+	if ReasonOf(err) != ReasonDowngrade || len(n.calls) != 0 {
 		t.Fatalf("err %v calls %v", err, n.calls)
+	}
+}
+
+func TestEngineFailureRowsHoldTheCodeOnly(t *testing.T) {
+	n, a := newFake("1.4.0", "1.5.0"), &recAudit{}
+	e := Engine{Source: fakeSource{err: errors.New("E665: remote command on admin@secret-host failed")}, Audit: a}
+	if _, err := e.Run(context.Background(), n, Request{Version: "1.5.0"}); err == nil || strings.Join(a.steps, ",") != StepFailed || strings.Contains(strings.Join(a.details, ";"), "secret-host") {
+		t.Fatalf("err %v audit %v %v", err, a.steps, a.details)
 	}
 }

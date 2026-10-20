@@ -18,22 +18,29 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/nodes/lifecycle"
 )
 
-func drainFn(d *lifecycle.Deps, id string) func(context.Context) (bool, error) {
-	return func(ctx context.Context) (bool, error) {
+// drainFn drains the node and returns what puts it back as it was: enabled when it was online, its old state and reason when it
+// was in maintenance or offline, nothing when the admin had drained it already.
+func drainFn(d *lifecycle.Deps, id string) func(context.Context) (func(context.Context) error, error) {
+	return func(ctx context.Context) (func(context.Context) error, error) {
 		n, err := d.Registry.Get(ctx, id)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
-		online := n.Record.State == "online"
+		prev, reason := n.Record.State, n.Record.Reason
 		if _, err = d.Drain(ctx, id); err != nil {
-			return false, err
+			return nil, err
 		}
-		return online, nil
+		switch prev {
+		case "online":
+			return func(ctx context.Context) error { _, err := d.Enable(ctx, id); return err }, nil
+		case "maintenance", "offline":
+			return func(ctx context.Context) error {
+				_, err := d.Registry.SetState(ctx, id, prev, reason, d.Actor)
+				return err
+			}, nil
+		}
+		return nil, nil
 	}
-}
-
-func enableFn(d *lifecycle.Deps, id string) func(context.Context) error {
-	return func(ctx context.Context) error { _, err := d.Enable(ctx, id); return err }
 }
 
 func probeFn(d *lifecycle.Deps, id string) func(context.Context) error {

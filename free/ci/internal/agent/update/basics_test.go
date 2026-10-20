@@ -101,3 +101,27 @@ func TestParseVersionLine(t *testing.T) {
 		}
 	}
 }
+
+func TestSwapKeepsTheModeOfTheFileItReplacesAndDropsAStaleMarker(t *testing.T) {
+	dir := t.TempDir()
+	bin, staged := filepath.Join(dir, "agent"), filepath.Join(dir, "staged")
+	_ = os.WriteFile(bin, []byte("old"), 0o755)
+	_ = os.WriteFile(staged, []byte("new"), 0o700)
+	_ = os.WriteFile(bin+PrevVersionSuffix, []byte("0.9.0\n"), 0o600)
+	if err := Swap(bin, staged); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := os.Stat(bin); st.Mode().Perm() != 0o755 {
+		t.Fatalf("mode %v: job users can no longer run the agent", st.Mode().Perm())
+	}
+	if _, err := os.Stat(bin + PrevVersionSuffix); err == nil {
+		t.Fatal("a marker from an earlier swap survived")
+	}
+	fresh := filepath.Join(dir, "fresh")
+	if err := Swap(fresh, staged); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := os.Stat(fresh); st.Mode().Perm() != 0o755 {
+		t.Fatalf("first install mode %v", st.Mode().Perm())
+	}
+}

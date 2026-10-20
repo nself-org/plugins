@@ -80,17 +80,83 @@ func TestApplyLocalRefusesPastTheCoordinatorCeiling(t *testing.T) {
 	}
 }
 
-func TestApplyLocalDowngradeNeedsTheFlagExceptRestoringPrev(t *testing.T) {
+func TestApplyLocalDowngradeNeedsTheFlag(t *testing.T) {
 	s, rel := newSim(t, "1.5.0"), newRelease(t, "1.4.0", 1, 1)
 	_, err := ApplyLocal(context.Background(), localOpts(s, "1.5.0", "1.4.0", rel.source()))
 	if ReasonOf(err) != ReasonDowngrade || installed(t, s) != "1.5.0" {
 		t.Fatalf("err %v", err)
 	}
-	// with a kept previous binary of exactly that version, the move back is a restore: no download, no flag
-	keepPrev(t, s, "1.4.0", "1.5.0")
-	res, err := ApplyLocal(context.Background(), localOpts(s, "1.5.0", "1.4.0", failingSource{}))
+	o := localOpts(s, "1.5.0", "1.4.0", rel.source())
+	o.AllowDowngrade = true
+	if res, err := ApplyLocal(context.Background(), o); err != nil || res.Direction != Downgrade || installed(t, s) != "1.4.0" {
+		t.Fatalf("res %+v err %v version %s", res, err, installed(t, s))
+	}
+}
+
+func TestApplyLocalRestoreOfThePreviousBinaryNeedsAnExplicitRequest(t *testing.T) {
+	s := newSim(t, "1.5.0")
+	keepPrev(t, s, "1.4.0", "1.5.0") // bin=1.5.0, .prev=1.4.0 recorded as 1.4.0
+	// an operator typing `upgrade --version 1.4.0` without the flag is a downgrade like any other
+	_, err := ApplyLocal(context.Background(), localOpts(s, "1.5.0", "1.4.0", failingSource{}))
+	if ReasonOf(err) != ReasonDowngrade || installed(t, s) != "1.5.0" {
+		t.Fatalf("err %v version %s", err, installed(t, s))
+	}
+	// a coordinator that raised its minimum agent version past the kept binary cannot be sent back to it
+	if err = session.RecordWelcome(s.state(), session.Coordinator{ID: "c1"}, protocol.Welcome{Version: 1, MinAgentVersion: "1.5.0"}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	o := localOpts(s, "1.5.0", "1.4.0", failingSource{})
+	o.AllowRestore = true
+	if _, err = ApplyLocal(context.Background(), o); ReasonOf(err) != ReasonCeiling || installed(t, s) != "1.5.0" {
+		t.Fatalf("err %v version %s", err, installed(t, s))
+	}
+	_ = os.Remove(filepath.Join(s.state(), session.CoordinatorsFile))
+	res, err := ApplyLocal(context.Background(), o)
 	if err != nil || res.Direction != Downgrade || installed(t, s) != "1.4.0" {
 		t.Fatalf("res %+v err %v version %s", res, err, installed(t, s))
+	}
+	if _, serr := os.Stat(s.bin() + PrevVersionSuffix); serr == nil {
+		t.Fatal("the marker outlived the restore")
+	}
+}
+
+func TestApplyLocalIgnoresAStaleMarker(t *testing.T) {
+	s := newSim(t, "1.5.0")
+	keepPrev(t, s, "1.3.0", "1.4.0")
+	if err := Swap(s.bin(), stubBinary(t, "1.5.0")); err != nil { // a later swap by another carrier: .prev is now 1.4.0
+		t.Fatal(err)
+	}
+	o := localOpts(s, "1.5.0", "1.3.0", failingSource{})
+	o.AllowRestore = true
+	if _, err := ApplyLocal(context.Background(), o); ReasonOf(err) != ReasonDowngrade || installed(t, s) != "1.5.0" {
+		t.Fatalf("a marker from an older swap restored the wrong binary: %v (version %s)", err, installed(t, s))
+	}
+}
+
+// busyDuringPrepare leases a job while the release downloads, like a second coordinator would.
+type busyDuringPrepare struct {
+	Source
+	state string
+	t     *testing.T
+}
+
+func (b busyDuringPrepare) Prepare(ctx context.Context, p lifecycle.Platform) (Prepared, error) {
+	tbl, err := slots.Open(b.state, 2)
+	if err != nil {
+		b.t.Fatal(err)
+	}
+	if _, err = tbl.Acquire(slots.Self("c2", "lease-2")); err != nil {
+		b.t.Fatal(err)
+	}
+	return b.Source.Prepare(ctx, p)
+}
+
+func TestApplyLocalLooksAgainForJobsRightBeforeTheSwap(t *testing.T) {
+	s, rel := newSim(t, "1.4.0"), newRelease(t, "1.5.0", 1, 1)
+	src := busyDuringPrepare{Source: rel.source(), state: s.state(), t: t}
+	_, err := ApplyLocal(context.Background(), localOpts(s, "1.4.0", "1.5.0", src))
+	if ReasonOf(err) != ReasonRunningJob || installed(t, s) != "1.4.0" {
+		t.Fatalf("err %v version %s", err, installed(t, s))
 	}
 }
 

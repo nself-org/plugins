@@ -43,8 +43,9 @@ type Node interface {
 	Version(ctx context.Context) (string, error)
 	// Coordinators are the node's recorded coordinators (<state>/coordinators.json).
 	Coordinators(ctx context.Context) ([]session.CoordinatorRecord, error)
-	// Drain stops new leases; wasOnline says whether Enable should undo it.
-	Drain(ctx context.Context) (wasOnline bool, err error)
+	// Drain stops new leases. undo puts the node back as it was (enabled when it was online, in maintenance when it was); nil
+	// when there is nothing to put back (the admin had drained it already).
+	Drain(ctx context.Context) (undo func(context.Context) error, err error)
 	// Busy is the number of jobs running on the node.
 	Busy(ctx context.Context) (int, error)
 	// Install swaps the binary and keeps the previous one.
@@ -55,8 +56,10 @@ type Node interface {
 	Probe(ctx context.Context) error
 	// Restore puts the previous binary back.
 	Restore(ctx context.Context) error
-	Enable(ctx context.Context) error
 }
+
+// Downgrader is implemented by a Node that can refuse a downgrade before anything is drained (a pull agent goes back only to the binary it kept).
+type Downgrader interface{ CanDowngrade() bool }
 
 // Request is one `nodes upgrade` of one node.
 type Request struct {
@@ -92,7 +95,7 @@ func (e *Engine) Run(ctx context.Context, n Node, rq Request) (res Result, err e
 	}
 	prep, err := e.Source.Prepare(ctx, n.Platform())
 	if err != nil {
-		return res, err
+		return res, e.fail(ctx, n, err)
 	}
 	defer func() {
 		if prep.Cleanup != nil {
@@ -110,6 +113,9 @@ func (e *Engine) Run(ctx context.Context, n Node, rq Request) (res Result, err e
 		if !rq.AllowDowngrade {
 			return res, e.refuse(ctx, n, refuse(ReasonDowngrade, "node %s runs %s; %s is a downgrade (pass --allow-downgrade)", n.ID(), res.From, rq.Version))
 		}
+		if d, ok := n.(Downgrader); ok && !d.CanDowngrade() {
+			return res, e.refuse(ctx, n, refuse(ReasonDowngrade, "node %s is a pull node: it goes back only to the binary it kept; run `nself-ci-agent upgrade --version %s --allow-downgrade` on the node", n.ID(), rq.Version))
+		}
 		if err = e.step(ctx, StepDowngrade, n, "from=%s to=%s", res.From, rq.Version); err != nil {
 			return res, err
 		}
@@ -121,35 +127,36 @@ func (e *Engine) Run(ctx context.Context, n Node, rq Request) (res Result, err e
 	if cerr := CheckCeiling(recs, prep.Manifest); cerr != nil {
 		return res, e.refuse(ctx, n, cerr)
 	}
-	wasOnline, err := n.Drain(ctx)
+	undo, err := n.Drain(ctx)
 	if err != nil {
 		return res, err
 	}
-	if err = e.step(ctx, StepDrain, n, "was_online=%t", wasOnline); err != nil {
-		return res, e.reenable(ctx, n, wasOnline, err)
+	if err = e.step(ctx, StepDrain, n, "restore=%t", undo != nil); err != nil {
+		return res, e.reenable(ctx, n, undo, err)
 	}
 	if err = e.waitIdle(ctx, n, rq); err != nil {
-		return res, e.reenable(ctx, n, wasOnline, err)
+		return res, e.reenable(ctx, n, undo, err)
 	}
 	if err = n.Install(ctx, InstallInput{Version: rq.Version, Staged: prep.Path, SHA256: prep.Manifest.SHA256, ManifestURL: rq.ManifestURL}); err != nil {
-		// A dropped connection after the swap looks like a failed install: ask the node what it runs before deciding.
-		v, verr := n.Version(context.WithoutCancel(ctx))
-		switch {
-		case verr != nil:
-			return res, fmt.Errorf("%w (the node stays drained: its agent version is unknown: %s)", err, oneLine(verr))
-		case v != res.From:
-			return res, e.rollback(ctx, n, &res, wasOnline, err)
+		// A refused install (a job started during the copy) changed nothing. Any other failure may have come after the swap (a dropped
+		// connection, a binary that cannot start): ask the node what it runs, and when that is unknown or new, roll back (Restore
+		// puts a .prev back only when it is the version this node ran before, so it cannot go further back).
+		if ReasonOf(err) == ReasonRunningJob {
+			return res, e.reenable(ctx, n, undo, e.refuse(ctx, n, err))
 		}
-		return res, e.reenable(ctx, n, wasOnline, err)
+		if v, verr := n.Version(context.WithoutCancel(ctx)); verr == nil && v == res.From {
+			return res, e.reenable(ctx, n, undo, e.fail(ctx, n, err))
+		}
+		return res, e.rollback(ctx, n, &res, undo, rq, err)
 	}
 	if err = e.step(ctx, StepInstall, n, "from=%s to=%s", res.From, rq.Version); err != nil {
-		return res, e.rollback(ctx, n, &res, wasOnline, err)
+		return res, e.rollback(ctx, n, &res, undo, rq, err)
 	}
 	if err = e.verifyHealth(ctx, n, rq); err != nil {
-		return res, e.rollback(ctx, n, &res, wasOnline, err)
+		return res, e.rollback(ctx, n, &res, undo, rq, err)
 	}
-	if wasOnline {
-		if err = n.Enable(ctx); err != nil {
+	if undo != nil {
+		if err = undo(ctx); err != nil {
 			return res, err
 		}
 		err = e.step(ctx, StepEnable, n, "version=%s", rq.Version)
@@ -202,78 +209,4 @@ func (e *Engine) waitIdle(ctx context.Context, n Node, rq Request) error {
 		case <-time.After(poll):
 		}
 	}
-}
-
-// rollback restores the previous binary after a failure past the swap and re-checks it; the node is enabled again only when that works.
-func (e *Engine) rollback(ctx context.Context, n Node, res *Result, wasOnline bool, cause error) error {
-	res.RolledBack = true
-	// A cancelled run must still be able to put the node right.
-	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Minute)
-	defer cancel()
-	if err := e.step(rctx, StepRollback, n, "from=%s reason=%s", res.To, oneLine(cause)); err != nil {
-		return fmt.Errorf("E656: upgrade of %s failed (%v) and the rollback could not be recorded (%v); the node stays drained", n.ID(), oneLine(cause), oneLine(err))
-	}
-	var rerr error
-	if rerr = n.Restore(rctx); rerr == nil {
-		if rerr = n.Restart(rctx); rerr == nil {
-			var got string
-			if got, rerr = n.Hello(rctx, DefaultHelloWait); rerr == nil && got != res.From {
-				rerr = fmt.Errorf("said hello as %s, not %s", got, res.From)
-			}
-		}
-	}
-	if rerr == nil {
-		rerr = n.Probe(rctx)
-	}
-	if rerr != nil {
-		return fmt.Errorf("E656: upgrade of %s failed (%v) and the rollback failed (%v); the node stays drained", n.ID(), oneLine(cause), oneLine(rerr))
-	}
-	if wasOnline {
-		if err := n.Enable(rctx); err != nil {
-			return fmt.Errorf("E656: upgrade of %s failed (%v); the previous agent is back but the node could not be enabled (%v)", n.ID(), oneLine(cause), oneLine(err))
-		}
-	}
-	return fmt.Errorf("E656: upgrade of %s to %s failed and was rolled back to %s: %s", n.ID(), res.To, res.From, oneLine(cause))
-}
-
-// reenable undoes the drain after a failure before anything was installed.
-func (e *Engine) reenable(ctx context.Context, n Node, wasOnline bool, cause error) error {
-	if wasOnline {
-		if err := n.Enable(context.WithoutCancel(ctx)); err != nil {
-			return fmt.Errorf("%w (and the node could not be enabled again: %s)", cause, oneLine(err))
-		}
-	}
-	return cause
-}
-
-// refuse audits a refusal and returns it.
-func (e *Engine) refuse(ctx context.Context, n Node, rerr error) error {
-	if err := e.step(ctx, StepRefused, n, "reason=%s", ReasonOf(rerr)); err != nil {
-		return err
-	}
-	return rerr
-}
-
-func (e *Engine) step(ctx context.Context, step string, n Node, format string, a ...any) error {
-	if err := e.Audit.Step(ctx, step, n.ID(), fmt.Sprintf(format, a...)); err != nil {
-		return fmt.Errorf("E656: cannot record the %s step of %s: %w", step, n.ID(), err)
-	}
-	return nil
-}
-
-func orDur(d, def time.Duration) time.Duration {
-	if d <= 0 {
-		return def
-	}
-	return d
-}
-
-func oneLine(err error) string {
-	s := err.Error()
-	for i, r := range s {
-		if r == '\n' || r == '\r' {
-			return s[:i]
-		}
-	}
-	return s
 }

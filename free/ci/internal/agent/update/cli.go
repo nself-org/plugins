@@ -85,7 +85,7 @@ func Run(args []string, env Env, out, errOut io.Writer) int {
 	}
 	get := func(n string) flag.Value { return fs.Lookup(n).Value }
 	asJSON := get("json").String() == "true"
-	version := get("version").String()
+	version := strings.TrimPrefix(get("version").String(), "v")
 	if version == "" {
 		version = env.DefaultVersion
 	}
@@ -108,9 +108,15 @@ func Run(args []string, env Env, out, errOut io.Writer) int {
 	}
 	defer closeFn()
 	ids := pos
+	var skipped []string
 	if all {
-		if ids, err = upgradable(ctx, d); err != nil {
+		if ids, skipped, err = upgradable(ctx, d); err != nil {
 			return fail(err)
+		}
+		for _, id := range skipped {
+			if !asJSON {
+				_, _ = fmt.Fprintf(errOut, "skipped %s: a pull node is upgraded by the coordinator process that holds its control stream\n", id)
+			}
 		}
 	} else if remote.ValidateNodeID(strings.ToLower(ids[0])) != nil {
 		return fail(usageErr("the node id is not valid (letters, digits, dot, dash, underscore)"))
@@ -128,7 +134,7 @@ func Run(args []string, env Env, out, errOut io.Writer) int {
 		return fail(fmt.Errorf("%w (done: %d of %d)", rerr, len(done), len(ids)))
 	}
 	if asJSON {
-		if output.WriteData(out, "ci nodes upgrade", map[string]any{"nodes": done}, nil) != nil {
+		if output.WriteData(out, "ci nodes upgrade", map[string]any{"nodes": done, "skipped": skipped}, nil) != nil {
 			return output.ExitInfra
 		}
 	}
@@ -178,7 +184,7 @@ func sshMode(ctx context.Context, d *lifecycle.Deps, r lifecycle.RotateRequest) 
 		return err
 	}
 	node := &SSHNode{NodeID: r.NodeID, Plat: plat, Target: r.Target, Run: d.Run, Copy: d.Copy,
-		DrainFn: drainFn(d, r.NodeID), EnableFn: enableFn(d, r.NodeID), ProbeFn: probeFn(d, r.NodeID)}
+		DrainFn: drainFn(d, r.NodeID), ProbeFn: probeFn(d, r.NodeID)}
 	j.res, j.err = runEngine(ctx, d, j, node)
 	return j.err
 }
@@ -193,7 +199,7 @@ func runAgent(ctx context.Context, d *lifecycle.Deps, j *job, c model.Capability
 	if err != nil {
 		return Result{Node: id}, err
 	}
-	node := &AgentNode{NodeID: id, Plat: plat, Ctl: ctl, DrainFn: drainFn(d, id), EnableFn: enableFn(d, id), ProbeFn: probeFn(d, id)}
+	node := &AgentNode{NodeID: id, Plat: plat, Ctl: ctl, DrainFn: drainFn(d, id), ProbeFn: probeFn(d, id)}
 	return runEngine(ctx, d, j, node)
 }
 
@@ -215,23 +221,29 @@ func releaseBase(base, version string) string {
 	return install.DefaultBaseURL + "/v" + version
 }
 
-// upgradable lists the ssh and pull nodes that are not revoked.
-func upgradable(ctx context.Context, d *lifecycle.Deps) ([]string, error) {
+// upgradable lists the ssh and pull nodes that are not revoked; pull nodes this process cannot reach come back as skipped.
+func upgradable(ctx context.Context, d *lifecycle.Deps) (ids, skipped []string, err error) {
 	all, err := d.Registry.List(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	var ids []string
+	_, noCtl := CurrentAgentControl()
 	for _, n := range all {
-		t := n.Capability.Identity.Transport
-		if (t == "ssh" || t == "agent") && n.Record.State != "revoked" && n.Capability.Lifecycle.RevokedAt == nil {
-			ids = append(ids, n.Capability.Identity.ID)
+		t, id := n.Capability.Identity.Transport, n.Capability.Identity.ID
+		switch {
+		case n.Record.State == "revoked" || n.Capability.Lifecycle.RevokedAt != nil:
+		case t == "ssh":
+			ids = append(ids, id)
+		case t == "agent" && noCtl != nil:
+			skipped = append(skipped, id)
+		case t == "agent":
+			ids = append(ids, id)
 		}
 	}
 	if len(ids) == 0 {
-		return nil, usageErr("no ssh or agent node is registered")
+		return nil, skipped, usageErr("no ssh or reachable pull node is registered")
 	}
-	return ids, nil
+	return ids, skipped, nil
 }
 
 func describe(r Result) string {

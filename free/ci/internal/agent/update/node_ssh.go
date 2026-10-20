@@ -35,12 +35,14 @@ type SSHNode struct {
 	Target remote.Target
 	Run    func(ctx context.Context, t remote.Target, argv ...string) (string, error)
 	Copy   func(ctx context.Context, t remote.Target, local, remotePath string) error
-	// DrainFn, EnableFn and ProbeFn are the lifecycle commands for this node.
-	DrainFn  func(ctx context.Context) (wasOnline bool, err error)
-	EnableFn func(ctx context.Context) error
-	ProbeFn  func(ctx context.Context) error
+	// DrainFn and ProbeFn are the lifecycle commands for this node.
+	DrainFn func(ctx context.Context) (undo func(context.Context) error, err error)
+	ProbeFn func(ctx context.Context) error
 	// HelloPoll is the pause between version checks while waiting for hello.
 	HelloPoll time.Duration
+
+	// from is the version seen first; Restore puts back a .prev only when the marker next to it names this version.
+	from string
 }
 
 var _ Node = (*SSHNode)(nil)
@@ -61,6 +63,9 @@ func (n *SSHNode) Version(ctx context.Context) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("E656: the agent of %s printed an unexpected version line", n.NodeID)
 	}
+	if n.from == "" {
+		n.from = v
+	}
 	return v, nil
 }
 
@@ -73,14 +78,21 @@ func (n *SSHNode) Coordinators(ctx context.Context) ([]session.CoordinatorRecord
 	var doc struct {
 		Coordinators []session.CoordinatorRecord `json:"coordinators"`
 	}
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &doc); err != nil {
+	// A login banner may precede the document: it starts at the first brace.
+	raw := out
+	if i := strings.Index(raw, "{"); i >= 0 {
+		raw = raw[i:]
+	}
+	if err := json.NewDecoder(strings.NewReader(raw)).Decode(&doc); err != nil {
 		return nil, fmt.Errorf("E656: the coordinators file of %s is not readable JSON", n.NodeID)
 	}
 	return doc.Coordinators, nil
 }
 
 // Drain implements Node.
-func (n *SSHNode) Drain(ctx context.Context) (bool, error) { return n.DrainFn(ctx) }
+func (n *SSHNode) Drain(ctx context.Context) (func(context.Context) error, error) {
+	return n.DrainFn(ctx)
+}
 
 // Busy reads the host slot table (`slots` prints "cap N used M"): every coordinator and carrier shares it.
 func (n *SSHNode) Busy(ctx context.Context) (int, error) {
@@ -104,18 +116,32 @@ func (n *SSHNode) Install(ctx context.Context, in InstallInput) error {
 	if err := n.Copy(ctx, n.Target, in.Staged, staged); err != nil {
 		return fmt.Errorf("E656: cannot copy the agent to %s: %w", n.NodeID, err)
 	}
-	// Digest and smoke run on the copy; the swap is the last command and runs only when both passed.
-	script := `set -e; f="$1"; want="$2"; ver="$3"; bin="$4"
+	// Digest, smoke and a last look at the slot table run on the copy; the swap is the last command and runs only when all passed
+	// (another coordinator may have leased a job since the idle check). The marker names the version that .prev holds.
+	script := `set -e; f="$1"; want="$2"; ver="$3"; bin="$4"; from="$5"
 chmod 700 "$f"
 if command -v sha256sum >/dev/null 2>&1; then got=$(sha256sum "$f"); else got=$(shasum -a 256 "$f"); fi
 [ "${got%% *}" = "$want" ] || { rm -f "$f"; echo "checksum mismatch" >&2; exit 3; }
 out=$("$f" version) || { rm -f "$f"; exit 4; }
-case "$out" in "nself-ci-agent $ver "*|"nself-ci-agent $ver") ;; *) rm -f "$f"; echo "version mismatch" >&2; exit 5;; esac
+last=$(printf '%s\n' "$out" | tail -n 1)
+case "$last" in "nself-ci-agent $ver "*|"nself-ci-agent $ver") ;; *) rm -f "$f"; echo "version mismatch" >&2; exit 5;; esac
+if [ -e "$bin" ]; then
+  used=$("$bin" slots | tail -n 1 | awk '{print $4}')
+  [ "$used" = 0 ] || { rm -f "$f"; echo BUSY; exit 0; }
+fi
 chmod 755 "$f"
-if [ -e "$bin" ]; then rm -f "$bin.prev"; ln "$bin" "$bin.prev" 2>/dev/null || cp -p "$bin" "$bin.prev"; fi
-mv -f "$f" "$bin"`
-	if _, err := n.Run(ctx, n.Target, "sh", "-c", script, "sh", staged, in.SHA256, in.Version, agentBin); err != nil {
+if [ -e "$bin" ]; then rm -f "$bin.prev" "$bin.prev.version"; ln "$bin" "$bin.prev" 2>/dev/null || cp -p "$bin" "$bin.prev"; printf '%s\n' "$from" > "$bin.prev.version"; fi
+mv -f "$f" "$bin"
+echo SWAPPED`
+	out, err := n.Run(ctx, n.Target, "sh", "-c", script, "sh", staged, in.SHA256, in.Version, agentBin, n.from)
+	if err != nil {
 		return fmt.Errorf("E656: the new agent was not installed on %s: %w", n.NodeID, err)
+	}
+	if strings.Contains(out, "BUSY") {
+		return refuse(ReasonRunningJob, "a job started on %s during the copy; nothing was installed", n.NodeID)
+	}
+	if !strings.Contains(out, "SWAPPED") {
+		return fmt.Errorf("E656: the install on %s did not report a finished swap", n.NodeID)
 	}
 	return nil
 }
@@ -146,16 +172,26 @@ func (n *SSHNode) Hello(ctx context.Context, wait time.Duration) (string, error)
 // Probe implements Node.
 func (n *SSHNode) Probe(ctx context.Context) error { return n.ProbeFn(ctx) }
 
-// Restore puts the previous binary back with one rename.
+// Restore puts the previous binary back with one rename, and only when the marker next to it says it is the version this node ran
+// before the upgrade (a stale .prev from an older upgrade is never put back).
 func (n *SSHNode) Restore(ctx context.Context) error {
-	if _, err := n.Run(ctx, n.Target, "mv", "-f", agentBin+PrevSuffix, agentBin); err != nil {
+	if n.from == "" {
+		return fmt.Errorf("E656: %s has no recorded previous version", n.NodeID)
+	}
+	script := `[ "$(cat "$1.prev.version" 2>/dev/null)" = "$2" ] || { echo NOPREV; exit 0; }
+mv -f "$1.prev" "$1"; rm -f "$1.prev.version"; echo RESTORED`
+	out, err := n.Run(ctx, n.Target, "sh", "-c", script, "sh", agentBin, n.from)
+	if err != nil {
 		return fmt.Errorf("E656: cannot restore the previous agent on %s: %w", n.NodeID, err)
 	}
-	return nil
+	switch {
+	case strings.Contains(out, "RESTORED"):
+		return nil
+	case strings.Contains(out, "NOPREV"):
+		return nil // the swap never happened: the installed agent already is the previous one
+	}
+	return fmt.Errorf("E656: the restore on %s did not report a result", n.NodeID)
 }
-
-// Enable implements Node.
-func (n *SSHNode) Enable(ctx context.Context) error { return n.EnableFn(ctx) }
 
 func lastLine(s string) string {
 	s = strings.TrimRight(s, "\r\n ")

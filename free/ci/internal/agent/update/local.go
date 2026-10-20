@@ -34,8 +34,11 @@ type LocalOptions struct {
 	Current        string
 	Version        string
 	AllowDowngrade bool
-	Platform       lifecycle.Platform
-	Source         Source
+	// AllowRestore lets a request for the version recorded at .prev.version put that binary back without AllowDowngrade: the
+	// coordinator's rollback message sets it, an operator typing the command does not (they pass AllowDowngrade).
+	AllowRestore bool
+	Platform     lifecycle.Platform
+	Source       Source
 }
 
 var versionLineRe = regexp.MustCompile(`^nself-ci-agent (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?: |$)`)
@@ -59,9 +62,6 @@ func ParseVersionLine(out string) (string, bool) {
 	return m[1], true
 }
 
-// PrevVersionSuffix names the file that records which version the kept .prev binary is.
-const PrevVersionSuffix = PrevSuffix + ".version"
-
 // ApplyLocal upgrades the agent installed at o.BinPath.
 func ApplyLocal(ctx context.Context, o LocalOptions) (Result, error) {
 	res := Result{Node: "local", From: o.Current, To: o.Version, Direction: DirectionOf(o.Current, o.Version)}
@@ -74,7 +74,14 @@ func ApplyLocal(ctx context.Context, o LocalOptions) (Result, error) {
 		res.Noop = true
 		return res, nil
 	}
-	if kept, _ := os.ReadFile(o.BinPath + PrevVersionSuffix); strings.TrimSpace(string(kept)) == o.Version {
+	if kept, _ := os.ReadFile(o.BinPath + PrevVersionSuffix); strings.TrimSpace(string(kept)) == o.Version && (o.AllowRestore || o.AllowDowngrade) {
+		recs, rerr := session.ReadCoordinators(o.StateDir)
+		if rerr != nil {
+			return res, fmt.Errorf("E656: cannot read the recorded coordinators: %w", rerr)
+		}
+		if cerr := CheckMinAgent(recs, o.Version); cerr != nil {
+			return res, cerr
+		}
 		return res, restoreLocal(o, &res)
 	}
 	if res.Direction == Downgrade && !o.AllowDowngrade {
@@ -96,10 +103,15 @@ func ApplyLocal(ctx context.Context, o LocalOptions) (Result, error) {
 	if err = CheckCeiling(recs, prep.Manifest); err != nil {
 		return res, err
 	}
+	// Look again right before the swap: another coordinator may have leased a job during the download.
+	if _, used, serr := slots.Status(o.StateDir); serr != nil || used > 0 {
+		return res, refuse(ReasonRunningJob, "a job started during the download; nothing was installed")
+	}
 	if err = Swap(o.BinPath, prep.Path); err != nil {
 		return res, err
 	}
 	if got, herr := fileSHA256(o.BinPath); herr != nil || got != prep.Manifest.SHA256 {
+		_ = os.Remove(o.BinPath + PrevVersionSuffix)
 		if rerr := Restore(o.BinPath); rerr != nil {
 			return res, fmt.Errorf("E656: the installed file is not the verified one and the previous agent could not be restored: %v", rerr)
 		}

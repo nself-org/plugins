@@ -38,3 +38,13 @@ func CheckCeiling(records []session.CoordinatorRecord, m verify.Manifest) error 
 	}
 	return nil
 }
+
+// CheckMinAgent refuses a version below the minimum agent version of a recorded coordinator (the check a restore can make without a manifest).
+func CheckMinAgent(records []session.CoordinatorRecord, version string) error {
+	for _, r := range records {
+		if r.MinAgentVersion != "" && verify.ValidVersion(r.MinAgentVersion) && Compare(version, r.MinAgentVersion) < 0 {
+			return refuse(ReasonCeiling, "version %s is below %s, the minimum agent version coordinator %s accepts", version, r.MinAgentVersion, r.ID)
+		}
+	}
+	return nil
+}

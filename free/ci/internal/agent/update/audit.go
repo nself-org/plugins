@@ -24,6 +24,7 @@ const (
 	StepEnable    = "enable"
 	StepRollback  = "rollback"
 	StepRefused   = "refused"
+	StepFailed    = "failed"
 	StepDowngrade = "downgrade"
 	StepNoop      = "noop"
 )
