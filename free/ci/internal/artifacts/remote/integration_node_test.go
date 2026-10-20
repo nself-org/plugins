@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -39,6 +40,7 @@ type node struct {
 	dieAtChunk int                   // kill the carrier at the Nth chunk frame, as a lost ssh session does (0 = never)
 	extraRef   *protocol.ArtifactRef // sent after the real refs
 	cut        int
+	onChunk    func(k int) // runs before the Nth chunk is handed to the carrier
 
 	mu     sync.Mutex
 	stage  *Stage
@@ -50,6 +52,9 @@ func (n *node) hooks() []session.JobHook {
 	return []session.JobHook{{Name: "artifacts",
 		Before: func(_ context.Context, l protocol.Lease, root session.JobRoot) (session.JobSetup, error) {
 			st, err := NewStage(filepath.Join(root.Dir, "artifacts-stage"), l.LeaseID)
+			if st != nil {
+				st.WaitOffset = 3 * time.Second // a cancelled lease gets no answers: do not wait the default
+			}
 			n.mu.Lock()
 			n.stage = st
 			n.mu.Unlock()
@@ -86,7 +91,11 @@ func (c *cutter) Chunk(ch protocol.Chunk) error {
 	if cut {
 		c.n.cut++
 	}
+	k, hook := c.n.chunks, c.n.onChunk
 	c.n.mu.Unlock()
+	if hook != nil {
+		hook(k)
+	}
 	if cut {
 		return errors.New("connection cut")
 	}

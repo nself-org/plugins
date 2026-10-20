@@ -27,6 +27,12 @@ func pattern(n int) []byte {
 	return b
 }
 
+// sinkProbe is what a test reads back from the simulation sink.
+type sinkProbe interface {
+	saw(text string) bool
+	refused(reason string) int
+}
+
 // rig is a real store with one running attempt and a handler over it.
 type rig struct {
 	t     *testing.T
@@ -36,6 +42,7 @@ type rig struct {
 	lease *Lease
 	eng   *lease.Engine
 	clk   *time.Time
+	snk   sinkProbe // the simulation sink (integration_sink_test.go), once a test made one
 	pol   records.Policy
 }
 
@@ -43,7 +50,7 @@ func newRig(t *testing.T, job model.Job) *rig {
 	t.Helper()
 	ctx := context.Background()
 	clk := new(time.Time)
-	*clk = time.Unix(1_000_000, 0)
+	*clk = time.Now()
 	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{Clock: func() time.Time { return *clk }})
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +72,7 @@ func newRig(t *testing.T, job model.Job) *rig {
 	r := &rig{t: t, st: st, blobs: blobs, clk: clk, pol: records.Policy{MaxFile: 4 << 20, MaxTotal: 64 << 20, ProjectShare: 50, StorePath: t.TempDir(),
 		Statfs: func(string) (uint64, uint64, error) { return 100 << 30, 100 << 30, nil }}}
 	r.eng = lease.New(st, nil, lease.Config{Clock: func() time.Time { return *clk }})
-	d := store.Demand{AttemptID: "a1", LeaseID: "lease-a1", RunnerID: "r1", CPU: 1, MemMB: 1, CapacityCPU: 100, CapacityMemMB: 100, TTL: r.eng.Config.TTL}
+	d := store.Demand{AttemptID: "a1", LeaseID: "lease-a1", RunnerID: "n-1", CPU: 1, MemMB: 1, CapacityCPU: 100, CapacityMemMB: 100, TTL: r.eng.Config.TTL}
 	epoch, err := r.eng.Grant(ctx, "host", d, 1)
 	if err != nil {
 		t.Fatal(err)

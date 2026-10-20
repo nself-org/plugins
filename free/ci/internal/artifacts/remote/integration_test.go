@@ -165,3 +165,91 @@ func TestRemoteArtifactsSSH(t *testing.T) {
 		}
 	})
 }
+
+func TestRemoteArtifactsAgent(t *testing.T) {
+	t.Run("delivered", func(t *testing.T) {
+		r := newRig(t, outputJob())
+		n := &node{t: t, files: outputs(), job: outputJob()}
+		if err := r.runAgent(n); err != nil {
+			t.Fatal(err)
+		}
+		r.assertDelivered(outputs())
+		checkFrames(t, n.sent())
+	})
+	t.Run("a cut at the second chunk resumes and nothing is visible before the final chunk", func(t *testing.T) {
+		r := newRig(t, outputJob())
+		big := outputs()["out/big.bin"]
+		n := &node{t: t, files: outputs(), job: outputJob(), cutChunk: 2}
+		visibleBeforeFinal := false
+		n.onChunk = func(k int) {
+			if k <= 3 && r.has(big) { // chunks 1..3 are big.bin's; the last of them is the final one
+				visibleBeforeFinal = true
+			}
+		}
+		if err := r.runAgent(n); err != nil {
+			t.Fatal(err)
+		}
+		if visibleBeforeFinal || n.cut != 1 {
+			t.Fatalf("visible before final: %v, cuts injected: %d", visibleBeforeFinal, n.cut)
+		}
+		r.assertDelivered(outputs())
+	})
+	t.Run("flipped byte in transit ends the lease and shows nothing", func(t *testing.T) {
+		r := newRig(t, outputJob())
+		if err := r.runAgent(&node{t: t, files: outputs(), job: outputJob(), flipChunk: 2}); err == nil {
+			t.Fatal("a corrupt blob did not end the lease")
+		}
+		r.nothingVisible(outputs())
+	})
+	t.Run("an artifact-ref for an undeclared path is refused", func(t *testing.T) {
+		r := newRig(t, outputJob())
+		small := outputs()["out/small.txt"]
+		n := &node{t: t, files: outputs(), job: outputJob(), extraRef: &protocol.ArtifactRef{Path: "secrets/not-declared.txt", SHA256: sum(small), Size: int64(len(small))}}
+		if err := r.runAgent(n); err == nil {
+			t.Fatal("the lease ended cleanly with an undeclared ref")
+		}
+		if !r.snk.saw("not_declared") {
+			t.Fatal("the handler never refused the undeclared path with E712 not_declared")
+		}
+		staged, _ := r.st.ArtifactStaged(context.Background(), "a1")
+		for _, s := range staged {
+			if strings.HasPrefix(s.Name, "secrets/") {
+				t.Fatalf("an undeclared path was staged: %+v", s)
+			}
+		}
+	})
+}
+
+// TestRemoteArtifactsZombie: the lease lapses (the engine bumps the epoch and loses the attempt)
+// while the node is still uploading. Nothing a zombie sends is committed. On carrier A the handler
+// is the first line: it refuses every write with E714 stale_epoch and writes one audit row for the
+// blob. On carrier B the listener's token and lease gate (E662) refuses the zombie's calls before
+// they reach the handler, so the handler's row is not required there.
+func TestRemoteArtifactsZombie(t *testing.T) {
+	for name, run := range map[string]func(*rig, *node) error{"ssh": (*rig).runSSH, "agent": (*rig).runAgent} {
+		t.Run(name, func(t *testing.T) {
+			r := newRig(t, outputJob())
+			n := &node{t: t, files: outputs(), job: outputJob()}
+			n.onChunk = func(k int) {
+				if k == 2 {
+					r.expire() // the lease lapses after the first chunk landed
+				}
+			}
+			if err := run(r, n); err == nil {
+				t.Fatal("a zombie's upload was accepted")
+			}
+			r.nothingVisible(outputs())
+			if state, _, _ := r.st.AttemptStateEpoch(context.Background(), "a1"); state == "passed" || state == "finalizing" {
+				t.Fatalf("attempt state %s after a zombie upload", state)
+			}
+			if name == "ssh" {
+				if got := r.audits("artifact.remote.refused"); got != 1 {
+					t.Fatalf("audit rows = %d, want one for the refused blob", got)
+				}
+				if r.snk.refused("stale_epoch") == 0 {
+					t.Fatal("no write was refused with E714 stale_epoch")
+				}
+			}
+		})
+	}
+}

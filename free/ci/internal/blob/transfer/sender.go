@@ -33,7 +33,7 @@ const (
 	// MaxResumes is how many times one blob may restart from a reported offset.
 	MaxResumes = 3
 	// DefaultWaitOffset bounds the wait for an offset answer.
-	DefaultWaitOffset = 60 * time.Second
+	DefaultWaitOffset = 30 * time.Second
 )
 
 // Uploader is the sending side of a carrier (session.Uploader satisfies it).

@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/authz"
@@ -37,6 +38,9 @@ type Uploader interface {
 
 // Stage is the collected outputs of one lease.
 type Stage struct {
+	// WaitOffset bounds the wait for the receiver's answer to an announce (0: the transfer default).
+	WaitOffset time.Duration
+
 	dir   string
 	lease string
 	blobs *cas.Store
@@ -106,7 +110,7 @@ func (s *Stage) Ship(ctx context.Context, offsets <-chan protocol.Offset, up Upl
 	s.mu.Lock()
 	staged := s.staged
 	s.mu.Unlock()
-	send := &transfer.Sender{Up: up, Offsets: offsets}
+	send := &transfer.Sender{Up: up, Offsets: offsets, WaitOffset: s.WaitOffset}
 	sent := map[string]bool{}
 	for _, f := range staged {
 		if !sent[f.SHA256] {
