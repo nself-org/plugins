@@ -82,8 +82,8 @@ func (w *LogWriter) recover() error {
 	if size == 0 {
 		return nil
 	}
-	start := max(0, size-tailWindow)
-	buf := make([]byte, size-start)
+	buf := make([]byte, min(size, tailWindow))
+	start := size - int64(len(buf))
 	if _, err = w.f.ReadAt(buf, start); err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}

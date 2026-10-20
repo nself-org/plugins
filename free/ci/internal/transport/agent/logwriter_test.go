@@ -381,3 +381,44 @@ func TestLogWriterDoesNotEscapeHTMLSoALineStaysAsShortAsItsFrame(t *testing.T) {
 		t.Fatalf("log line %q", b)
 	}
 }
+
+func TestLogWriterFindsTheLastLineWhenTheWindowStartsOnTheNewlineBeforeIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "edge.jsonl")
+	first := `{"line_seq":1,"stream":"stdout","text":"a"}` + "\n"
+	head, tail := `{"line_seq":2,"stream":"stdout","text":"`, `"}`+"\n"
+	pad := strings.Repeat("p", tailWindow-1-len(head)-len(tail)) // the last line is one byte short of the window
+	if err := os.WriteFile(path, []byte(first+head+pad+tail), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w, err := OpenLog(path)
+	if err != nil {
+		t.Fatalf("the window starts on the newline that ends line 1: %v", err)
+	}
+	defer w.Close()
+	if w.Last() != 2 {
+		t.Fatalf("tail = %d, want 2", w.Last())
+	}
+}
+
+func TestLogWriterAcceptsALineThatFillsTheCapExactly(t *testing.T) {
+	old := logCap
+	t.Cleanup(func() { logCap = old })
+	probe, probePath := openTemp(t)
+	if _, err := probe.Append(logOf(1, "xxxx")); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := os.Stat(probePath)
+	logCap = 2 * st.Size()
+	w, path := openTemp(t)
+	for i := uint64(1); i <= 2; i++ {
+		if ok, err := w.Append(logOf(i, "xxxx")); err != nil || !ok {
+			t.Fatalf("line %d: written=%v err=%v (two lines fill the cap exactly)", i, ok, err)
+		}
+	}
+	if ok, _ := w.Append(logOf(3, "xxxx")); ok {
+		t.Fatal("a third line went past the cap")
+	}
+	if b, _ := os.ReadFile(path); !strings.Contains(string(b), "[log truncated") {
+		t.Fatal("no truncation note")
+	}
+}
