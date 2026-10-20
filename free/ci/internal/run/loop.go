@@ -103,8 +103,6 @@ func depOK(d JobOutcome) bool {
 	switch d.State {
 	case StatePassed:
 		return true
-	case StateFailed:
-		return d.AllowFailure
 	case StateSkipped:
 		return d.Reason != "dep.failed" && d.Reason != "fail_fast.cancelled"
 	}
