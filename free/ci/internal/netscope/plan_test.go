@@ -331,3 +331,23 @@ func TestPlanReportsAnUnreadableLog(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+// An address written in the excluded host list is an excluded address (a name that points at it is refused too).
+func TestPlanTreatsAnAddressInTheHostListAsExcluded(t *testing.T) {
+	rt := &fakeRuntime{log: ReadyLine()}
+	p := testPlanner(rt)
+	p.Exclusion = func(context.Context) (Exclusions, error) { return Exclusions{Hosts: []string{"198.51.100.22", "[2606:2800::9]"}}, nil }
+	if _, err := p.PlanAttempt(context.Background(), "docker", att, "internet"); err != nil {
+		t.Fatal(err)
+	}
+	_, f, _ := DecodeConfig(rt.sidecar.Config)
+	for _, a := range []string{"198.51.100.22", "2606:2800::9"} {
+		found := false
+		for _, pr := range f.Exclusion {
+			found = found || pr.Contains(netip.MustParseAddr(a))
+		}
+		if !found {
+			t.Errorf("%s is not in the exclusion: %v", a, f.Exclusion)
+		}
+	}
+}

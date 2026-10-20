@@ -23,7 +23,7 @@ var RestrictedHosts = []string{
 
 // NormalizeHost lowercases a host and drops one trailing dot; "" for an unusable name.
 func NormalizeHost(h string) string {
-	h = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(h), "."))
+	h = strings.ToLower(strings.TrimRight(strings.TrimSpace(h), ".")) // every trailing dot: "a.b.." is "a.b"
 	if h == "" || strings.ContainsAny(h, " \t\r\n/\\@") {
 		return ""
 	}

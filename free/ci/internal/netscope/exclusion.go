@@ -11,6 +11,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
 )
@@ -74,7 +75,10 @@ func (p *Planner) exclusionFacts(ctx context.Context, ex Exclusions) (Facts, err
 			return Facts{}, scopeFailed("exclusion host %q does not parse", h)
 		}
 		f.ExclusionHosts = append(f.ExclusionHosts, n)
-		if _, err := netip.ParseAddr(n); err != nil {
+		if a, err := netip.ParseAddr(strings.Trim(n, "[]")); err == nil { // an address in the host list is an excluded address
+			a = Unmap(a)
+			f.Exclusion = append(f.Exclusion, netip.PrefixFrom(a, a.BitLen()))
+		} else {
 			names = append(names, n)
 		}
 	}

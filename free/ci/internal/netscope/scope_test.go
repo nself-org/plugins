@@ -124,4 +124,10 @@ func TestHostMatching(t *testing.T) {
 	if !hostExcluded([]string{"example.com"}, "api.example.com") || hostExcluded([]string{"example.com"}, "notexample.com") {
 		t.Error("exclusion host matching")
 	}
+	if !hostExcluded([]string{".corp.internal"}, "sub.corp.internal") || !hostExcluded([]string{".corp.internal"}, "corp.internal") {
+		t.Error("a leading dot in the excluded name must still match the domain and its subdomains")
+	}
+	if NormalizeHost("deploy.corp.internal..") != "deploy.corp.internal" || NormalizeHost("Deploy.Corp.Internal.") != "deploy.corp.internal" {
+		t.Error("trailing dots survive normalisation: the excluded name would not match the dotted spelling")
+	}
 }

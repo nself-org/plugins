@@ -103,6 +103,7 @@ func (g Guard) dialPinned(ctx context.Context, d Dialer, addrs []netip.Addr, por
 // hostExcluded reports whether h is one of the excluded names or below one.
 func hostExcluded(list []string, h string) bool {
 	for _, x := range list {
+		x = strings.TrimLeft(x, ".") // ".corp.internal" means the domain and everything below it
 		if x != "" && (h == x || strings.HasSuffix(h, "."+x)) {
 			return true
 		}

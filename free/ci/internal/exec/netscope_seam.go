@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -252,7 +253,7 @@ func RuntimeNetProbeRun(ctx context.Context, binary, attempt, image, proxyBinary
 	if ap, err := netip.ParseAddrPort(proxy); err != nil || !ap.IsValid() {
 		return nil, netRefused("probe proxy " + proxy)
 	}
-	name := "nself-ci-" + attempt + "-probe"
+	name := "nself-ci-" + attempt + "-probe-" + strconv.FormatInt(time.Now().UnixNano(), 36) // one name per run: chunks follow each other
 	args := []string{"run", "--rm", "--name", name, "--network", NetworkName(attempt), "--dns", "127.0.0.1", "--cap-drop", "ALL",
 		"--security-opt", "no-new-privileges", "--read-only", "--pids-limit", "64", "--memory", "64m", "--memory-swap", "64m",
 		"--cpus", "0.5", "--user", sidecarUID, "--label", AttemptLabel + "=" + attempt, "--label", "nself.ci.probe=1", "--env", "NSELF_V15=1",
