@@ -60,7 +60,7 @@ func TestGateRefusalTable(t *testing.T) {
 	if err := g.Check(ctx, call(lease, good, ep)); err != nil {
 		t.Fatal(err)
 	}
-	tampered := good[:len(good)-2] + "AA"
+	tampered := tamper(good)
 	for _, c := range []struct {
 		name   string
 		mod    func(*agentapi.Call)
@@ -282,3 +282,13 @@ func TestGateStoreFailureIsNotARefusal(t *testing.T) {
 }
 
 func jobState(s string) model.JobState { return model.JobState(s) }
+
+// tamper changes the first character of the signature part, which always changes the signature.
+func tamper(token string) string {
+	i := strings.LastIndexByte(token, '.') + 1
+	c := byte('A')
+	if token[i] == 'A' {
+		c = 'B'
+	}
+	return token[:i] + string(c) + token[i+1:]
+}
