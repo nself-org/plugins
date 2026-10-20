@@ -59,7 +59,7 @@
       "*"
     ]
   },
-  "port": 3733,
+  "port": 3712,
   "repository": "https://github.com/nself-org/plugins",
   "requires": {
     "nself": ">=1.0.0"
@@ -151,7 +151,7 @@
     "compose": "docker-compose.plugin.yml",
     "healthcheck": "/health",
     "kind": "compose",
-    "port": 3733
+    "port": 3712
   },
   "status": "stable",
   "tables": [
