@@ -27,6 +27,7 @@ func TestPromotable_Refusals(t *testing.T) {
 		bend func(*authz.Artifact, *model.Evidence, *attest.Gate)
 		want attest.Reason
 	}{
+		{"unknown minimum trust", func(_ *authz.Artifact, _ *model.Evidence, g *attest.Gate) { g.MinTrust = "misspelled" }, attest.ReasonTrustBelowMin},
 		{"stale", func(_ *authz.Artifact, _ *model.Evidence, g *attest.Gate) {
 			c := *g.Current
 			c.Config = strings.Repeat("d", 64)

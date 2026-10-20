@@ -42,7 +42,7 @@ func Promotable(a Artifact, ev model.Evidence, g attest.Gate) (bool, []attest.Re
 	g.Class = attest.ClassRelease
 	g.FullSelection = true
 	g.AllowSelfReported = false
-	if trust.RankTrust(g.MinTrust) < trust.RankTrust(promoteMinTrust) {
+	if rank := trust.RankTrust(g.MinTrust); g.MinTrust == "" || (rank >= 0 && rank < trust.RankTrust(promoteMinTrust)) {
 		g.MinTrust = promoteMinTrust
 	}
 	reasons := attest.GateAccept(ev, g)
