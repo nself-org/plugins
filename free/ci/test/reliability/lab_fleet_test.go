@@ -148,9 +148,9 @@ func (l *lab) enroll(i int, name, bin string) {
 }
 
 // registerNode adds the node to the store as an online agent node that accepts owner and internal work.
-func (l *lab) registerNode(id string) {
+func (l *lab) registerNode(id string, mutate ...func(*model.Capability)) {
 	t := l.t
-	c, err := planview.LocalCapability(planview.LocalFacts{Project: "reliability", Platform: hostPlatform(), CPUs: 4, MemMB: 8192, Now: time.Now()})
+	c, err := planview.LocalCapability(planview.LocalFacts{Project: "reliability", Platform: hostPlatform(), CPUs: 1, MemMB: 1024, Now: time.Now()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,6 +160,9 @@ func (l *lab) registerNode(id string) {
 	c.Lifecycle.AuthorizedProjects = []string{l.root}
 	c.Location.Kind.Value, c.Economics.Class.Value = &lan, &owned
 	c.Separation.UIDSeparation = model.Fact[bool]{Value: &uid, Source: "self", ObservedAt: time.Now(), Confidence: "known"}
+	for _, m := range mutate {
+		m(&c)
+	}
 	doc, err := json.Marshal(c)
 	if err != nil {
 		t.Fatal(err)
@@ -251,3 +254,21 @@ func (l *lab) tryExec(i int, script string) (string, error) {
 // hostPlatform is the platform the run asks every job for (run.platform: the coordinator host). The nodes declare
 // it, so placement works on a macOS developer machine too; the fixture job is a shell script and runs anywhere.
 func hostPlatform() string { return runtime.GOOS + "/" + runtime.GOARCH }
+
+// setNodeState moves node i in the registry (online, maintenance, draining...), as the operator or the breaker does.
+func (l *lab) setNodeState(i int, state string) {
+	l.t.Helper()
+	if _, err := registry.New(l.c.st).SetState(context.Background(), l.ids[i], state, "reliability suite", "test"); err != nil {
+		l.t.Fatal(err)
+	}
+}
+
+// nodeState is the registry state of node i.
+func (l *lab) nodeState(i int) string {
+	l.t.Helper()
+	n, err := registry.New(l.c.st).Get(context.Background(), l.ids[i])
+	if err != nil {
+		l.t.Fatal(err)
+	}
+	return n.Record.State
+}

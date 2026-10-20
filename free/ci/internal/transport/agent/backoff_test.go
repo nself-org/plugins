@@ -100,3 +100,21 @@ func TestBackoffMinOfZeroMeansOneSecondNotNoDelay(t *testing.T) {
 		t.Fatalf("delay %v, want half of the default 1 s", d)
 	}
 }
+
+// The reconnect delay never exceeds a tenth of the agent_ttl the coordinator announced (floor: the minimum
+// delay), so an agent with a job is back before it fences; before any welcome the delay is untouched.
+func TestCapBackoffByAgentTTL(t *testing.T) {
+	for _, c := range []struct {
+		name         string
+		d, ttl, want time.Duration
+	}{
+		{"no welcome yet", 50 * time.Second, 0, 50 * time.Second},
+		{"default agent_ttl 25 s", 50 * time.Second, 25 * time.Second, 2500 * time.Millisecond},
+		{"already short", 2 * time.Second, 25 * time.Second, 2 * time.Second},
+		{"tiny agent_ttl keeps the floor", 50 * time.Second, 2 * time.Second, BackoffMin},
+	} {
+		if got := capBackoff(c.d, c.ttl); got != c.want {
+			t.Errorf("%s: capBackoff(%v, %v) = %v, want %v", c.name, c.d, c.ttl, got, c.want)
+		}
+	}
+}

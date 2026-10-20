@@ -11,6 +11,7 @@ package reliability
 //          docker exec and report false.
 
 import (
+	"database/sql"
 	"strconv"
 	"strings"
 	"time"
@@ -103,4 +104,53 @@ func (l *lab) heal(i int)      { l.f.Heal(l.t, l.names[i]) }
 func (l *lab) agentReachable(i int) bool {
 	out, err := l.tryExec(i, "timeout 2 bash -c 'exec 3<>/dev/tcp/"+l.host+"/"+itoa(l.c.port)+"' && echo ok || echo no")
 	return err == nil && out == "ok"
+}
+
+// fleetSideEffectsByJob counts, per job name, the lines every node wrote to its side-effect file.
+func (l *lab) fleetSideEffectsByJob() map[string]int {
+	l.t.Helper()
+	out := map[string]int{}
+	for i := range l.names {
+		for _, name := range strings.Fields(l.sh(i, "cat /tmp/side-effect 2>/dev/null || true")) {
+			out[name]++
+		}
+	}
+	return out
+}
+
+// auditDetails returns the detail of every audit row of an action (the lease engine writes the loss reason of a
+// retry as the detail of "retry-queued").
+func (l *lab) auditDetails(action string) []string {
+	l.t.Helper()
+	db, err := sql.Open("sqlite", l.c.home+"/state.db?mode=ro")
+	if err != nil {
+		l.t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	rows, err := db.Query("SELECT target||' '||detail FROM audit WHERE action=? ORDER BY seq", action)
+	if err != nil {
+		l.t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var d string
+		if err = rows.Scan(&d); err != nil {
+			l.t.Fatal(err)
+		}
+		out = append(out, d)
+	}
+	return out
+}
+
+// hold lets a fault last d. It is the length of the fault, not a wait for an event: every observable end of the
+// fault is asserted by the caller afterwards.
+func hold(d time.Duration) { <-time.After(d) }
+
+// resetBeats clears the start and beat files of every node (the side-effect files stay: they are the record).
+func (l *lab) resetBeats() {
+	l.t.Helper()
+	for i := range l.names {
+		l.sh(i, "rm -f /tmp/beats /tmp/starts")
+	}
 }

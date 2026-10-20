@@ -31,6 +31,9 @@ func TestMain(m *testing.M) {
 	if buildDir != "" {
 		_ = os.RemoveAll(buildDir)
 	}
+	for _, d := range cleanups {
+		_ = os.RemoveAll(d)
+	}
 	os.Exit(code)
 }
 
@@ -83,3 +86,36 @@ func dockerArch() string {
 	}
 	return "amd64"
 }
+
+var (
+	cliOnce sync.Once
+	cliPath string
+	cliErr  error
+)
+
+// ciBinary builds the nself-ci command (host platform) once per test binary, for the tests that run a command.
+func ciBinary(t *testing.T) string {
+	t.Helper()
+	cliOnce.Do(func() {
+		dir, err := os.MkdirTemp("", "reliability-ci-")
+		if err != nil {
+			cliErr = err
+			return
+		}
+		cleanups = append(cleanups, dir)
+		cliPath = filepath.Join(dir, "ci")
+		cmd := exec.Command("go", "build", "-mod=vendor", "-o", cliPath, "./cmd")
+		cmd.Dir = "../.."
+		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+		if out, berr := cmd.CombinedOutput(); berr != nil {
+			cliErr = &buildError{err: berr, out: string(out)}
+		}
+	})
+	if cliErr != nil {
+		t.Fatalf("build the ci command: %v", cliErr)
+	}
+	return cliPath
+}
+
+// cleanups are removed when the test binary exits.
+var cleanups []string

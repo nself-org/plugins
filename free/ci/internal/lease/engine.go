@@ -119,6 +119,12 @@ func (e *Engine) lose(ctx context.Context, l store.RemoteLease, reason string, e
 	if err == nil || hasCode(err, "E605") {
 		e.prune(l.ID)
 	}
+	if err == nil && expired {
+		// A node that went silent failed its job as infrastructure: three in a row put it in maintenance (D6).
+		// A fence the agent reported itself is not counted: it follows the coordinator's own outage as often as
+		// the node's. The streak is best effort; the attempt is already lost and retried.
+		_, _ = e.Breaker(ctx, l.RunnerID, true)
+	}
 	return err
 }
 

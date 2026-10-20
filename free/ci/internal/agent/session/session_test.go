@@ -405,3 +405,31 @@ func TestEpochMemoryIsBounded(t *testing.T) {
 		t.Fatalf("kept %d ids, want %d", len(s.seenEpoch), maxSeen)
 	}
 }
+
+// TestHeartbeatReportsFencedLeases proves the leases an earlier session fenced are named in the heartbeat as
+// self_fenced with their epoch, for as long as the callback returns them.
+func TestHeartbeatReportsFencedLeases(t *testing.T) {
+	var pending atomic.Bool
+	pending.Store(true)
+	r := startRig(t, RunnerFunc(func(ctx context.Context, j JobRun) (JobResult, error) {
+		return JobResult{Outcome: Outcome{State: "passed"}, Evidence: json.RawMessage(`{}`)}, nil
+	}), func(c *Config) {
+		c.Fenced = func() []protocol.LeaseState {
+			if pending.Load() {
+				return []protocol.LeaseState{{LeaseID: "old", Epoch: 9, State: "self_fenced"}}
+			}
+			return nil
+		}
+	})
+	r.handshake()
+	r.clock.advance(10 * time.Second)
+	hb := r.car.next(t, "heartbeat").Body.(protocol.Heartbeat)
+	if len(hb.Leases) != 1 || hb.Leases[0] != (protocol.LeaseState{LeaseID: "old", Epoch: 9, State: "self_fenced"}) {
+		t.Fatalf("heartbeat %+v", hb)
+	}
+	pending.Store(false)
+	r.clock.advance(10 * time.Second)
+	if hb = r.car.next(t, "heartbeat").Body.(protocol.Heartbeat); len(hb.Leases) != 0 {
+		t.Fatalf("a cleared fence is still reported: %+v", hb)
+	}
+}

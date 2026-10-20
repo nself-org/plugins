@@ -77,6 +77,10 @@ type Config struct {
 	Signer Signer
 	// Status reports battery and interactivity for the heartbeat; nil reports neither.
 	Status func() Status
+	// Fenced returns the leases this agent fenced itself in an earlier session (state self_fenced, with their
+	// epochs). Every heartbeat reports them until the callback stops returning them, so the coordinator can
+	// fail those leases at once instead of waiting for them to expire (Epic D6). nil reports none.
+	Fenced func() []protocol.LeaseState
 	Resume *Resume
 }
 

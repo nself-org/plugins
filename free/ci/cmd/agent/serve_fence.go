@@ -10,6 +10,7 @@ package main
 // as session loss, which the session already turns into a process-group kill.
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,15 +31,16 @@ type fenceCarrier struct {
 	// newFence builds the fence; tests supply fake clocks.
 	newFence func(coordinatorTTL, heartbeat time.Duration) *lease.AgentFence
 
-	mu     sync.Mutex
-	fence  *lease.AgentFence
-	leases map[string]bool
-	stop   chan struct{}
-	once   sync.Once
+	mu       sync.Mutex
+	fence    *lease.AgentFence
+	leases   map[string]uint64 // lease id -> epoch
+	reported []string          // marker files the last fenced() call returned; an ack of a later heartbeat clears them
+	stop     chan struct{}
+	once     sync.Once
 }
 
 func newFenceCarrier(inner session.Carrier, state string) *fenceCarrier {
-	return &fenceCarrier{Carrier: inner, state: state, leases: map[string]bool{}, stop: make(chan struct{}),
+	return &fenceCarrier{Carrier: inner, state: state, leases: map[string]uint64{}, stop: make(chan struct{}),
 		newFence: func(ttl, hb time.Duration) *lease.AgentFence { return lease.NewAgentFence(nil, nil, ttl, hb) }}
 }
 
@@ -56,7 +58,7 @@ func (c *fenceCarrier) Recv() (protocol.Message, error) {
 		if len(c.leases) >= maxTracked {
 			clear(c.leases)
 		}
-		c.leases[b.LeaseID] = true
+		c.leases[b.LeaseID] = b.Epoch
 		c.mu.Unlock()
 	case *protocol.Chunk:
 		// A checkout chunk proves the coordinator is alive and sending. Its heartbeat acks queue
@@ -73,6 +75,9 @@ func (c *fenceCarrier) Recv() (protocol.Message, error) {
 		c.mu.Unlock()
 		if f != nil && m.Ack != nil {
 			f.Ack()
+		}
+		if m.Ack != nil {
+			c.clearReported()
 		}
 	}
 	return m, nil
@@ -113,15 +118,16 @@ func (c *fenceCarrier) watch(f *lease.AgentFence, every time.Duration) {
 
 func (c *fenceCarrier) onFence() {
 	c.mu.Lock()
-	ids := make([]string, 0, len(c.leases))
-	for id := range c.leases {
-		ids = append(ids, id)
+	held := make(map[string]uint64, len(c.leases))
+	for id, epoch := range c.leases {
+		held[id] = epoch
 	}
 	c.mu.Unlock()
 	dir := filepath.Join(c.state, "self_fenced")
 	if err := os.MkdirAll(dir, 0o700); err == nil {
-		for _, id := range ids {
-			_ = os.WriteFile(filepath.Join(dir, fenceName.ReplaceAllString(id, "_")), []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0o600)
+		for id, epoch := range held {
+			doc, _ := json.Marshal(fenceMarker{LeaseID: id, Epoch: epoch, At: time.Now().UTC().Format(time.RFC3339)})
+			_ = os.WriteFile(filepath.Join(dir, fenceName.ReplaceAllString(id, "_")), append(doc, '\n'), 0o600)
 		}
 	}
 	fmt.Fprintln(os.Stderr, "fence: the coordinator stopped acknowledging heartbeats; ending the session and killing its jobs")
@@ -132,4 +138,58 @@ func (c *fenceCarrier) onFence() {
 func (c *fenceCarrier) Close() error {
 	c.once.Do(func() { close(c.stop) })
 	return c.Carrier.Close()
+}
+
+// fenceMarker is the record of one self-fenced lease in <state>/self_fenced.
+type fenceMarker struct {
+	LeaseID string `json:"lease_id"`
+	Epoch   uint64 `json:"epoch"`
+	At      string `json:"at"`
+}
+
+// fenceMarkerMaxAge is how long a marker is reported: a lease older than this expired long ago.
+const fenceMarkerMaxAge = 24 * time.Hour
+
+// fenced returns the leases an earlier session fenced (session.Config.Fenced): the new session reports them as
+// self_fenced in its heartbeats, and the coordinator fails them as agent.self_fenced at once. The markers are
+// removed when a heartbeat sent after this call is acknowledged. A marker that does not parse, or is old, is
+// deleted without being reported.
+func (c *fenceCarrier) fenced() []protocol.LeaseState {
+	dir := filepath.Join(c.state, "self_fenced")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []protocol.LeaseState
+	var names []string
+	for _, e := range entries {
+		path := filepath.Join(dir, e.Name())
+		raw, rerr := os.ReadFile(path)
+		var m fenceMarker
+		if rerr != nil || json.Unmarshal(raw, &m) != nil || m.LeaseID == "" {
+			_ = os.Remove(path)
+			continue
+		}
+		if at, terr := time.Parse(time.RFC3339, m.At); terr != nil || time.Since(at) > fenceMarkerMaxAge {
+			_ = os.Remove(path)
+			continue
+		}
+		out = append(out, protocol.LeaseState{LeaseID: m.LeaseID, Epoch: m.Epoch, State: "self_fenced"})
+		names = append(names, e.Name())
+	}
+	c.mu.Lock()
+	c.reported = names
+	c.mu.Unlock()
+	return out
+}
+
+// clearReported removes the markers the last fenced() call returned.
+func (c *fenceCarrier) clearReported() {
+	c.mu.Lock()
+	names := c.reported
+	c.reported = nil
+	c.mu.Unlock()
+	for _, n := range names {
+		_ = os.Remove(filepath.Join(c.state, "self_fenced", n))
+	}
 }

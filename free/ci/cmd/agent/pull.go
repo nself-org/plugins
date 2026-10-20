@@ -170,13 +170,15 @@ func pullLoop(ctx context.Context, f pullFlags, state string, cred enroll.Creden
 			Client: agent.Options{BaseURL: baseURL, TLS: tlsc, OnSkew: func(d time.Duration) { noteSkew(state, d) }},
 			Logf:   logf,
 		})
-		watch := &drainWatch{Frames: agent.WithNodeSecrets(newFenceCarrier(car, state), resolver, logf)}
+		fence := newFenceCarrier(car, state)
+		watch := &drainWatch{Frames: agent.WithNodeSecrets(fence, resolver, logf)}
 		s, err := session.New(session.Config{
 			Carrier: watch, Key: key, Slots: table, StateDir: state,
 			Facts:       session.Facts{AgentVersion: Version, MachineID: machineID(), CapabilityDigest: capabilityDigest(), AgeRecipient: age.Recipient},
 			Runner:      leaseRunner{coordinator: f.coordinator},
 			Coordinator: session.Coordinator{ID: f.coordinator, RootFingerprint: cred.Enrollment.RootFingerprint},
 			Status:      hostStatus,
+			Fenced:      fence.fenced,
 		})
 		if err != nil {
 			fmt.Fprintln(sio.Stderr, "error:", err)

@@ -38,10 +38,19 @@ type jobSpec struct {
 	idempotent bool
 	infraMax   int
 	failExit   int // non-zero: exit with this status instead of writing the side effect
+	name       string
+}
+
+// label is what the job writes to the side-effect file (its name), so a retry on another node is told apart.
+func (j jobSpec) label() string {
+	if j.name == "" {
+		return "unit"
+	}
+	return j.name
 }
 
 func (j jobSpec) script() string {
-	tail := `echo done >> /tmp/side-effect`
+	tail := `echo ` + j.label() + ` >> /tmp/side-effect`
 	if j.failExit != 0 {
 		tail = `exit ` + itoa(j.failExit)
 	}
@@ -100,11 +109,24 @@ type noReport struct{}
 func (noReport) Post(context.Context, report.Status) error { return nil }
 
 // start begins a run of the fixture job and returns its handle; the run is cancelled by t.Cleanup.
-func (l *lab) start(spec jobSpec) *runHandle {
+func (l *lab) start(spec jobSpec) *runHandle { return l.startJobs(1, spec) }
+
+// startJobs begins a run of count independent copies of the fixture job (unit when one, unit01.. otherwise).
+func (l *lab) startJobs(count int, spec jobSpec) *runHandle {
 	t := l.t
 	t.Helper()
 	root, sha := l.root, l.commit()
-	pl, err := plan.Build(plan.Input{Config: model.PipelineConfig{Version: 1, Jobs: map[string]model.Job{"unit": spec.job()}},
+	jobs := map[string]model.Job{}
+	for i := 1; i <= count; i++ {
+		name := "unit"
+		if count > 1 {
+			name = fmt.Sprintf("unit%02d", i)
+		}
+		js := spec
+		js.name = name
+		jobs[name] = js.job()
+	}
+	pl, err := plan.Build(plan.Input{Config: model.PipelineConfig{Version: 1, Jobs: jobs},
 		World: plan.World{Platform: hostPlatform(), CPU: 4, MemMB: 8192}})
 	if err != nil {
 		t.Fatal(err)

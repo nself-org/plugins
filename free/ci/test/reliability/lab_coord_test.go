@@ -58,6 +58,7 @@ type coord struct {
 	acks      map[string]time.Time
 	nAcks     atomic.Int64
 	stopSweep func()
+	ackHook   atomic.Pointer[func(node, leaseID string)] // the drain hears every ack that names a lease
 	logMu     sync.Mutex
 	log       []string // the listener's own log lines (refusals carry their E66x code)
 }
@@ -130,6 +131,9 @@ func (c *coord) incarnation() int64 {
 
 func (c *coord) onAck(node, leaseID string) {
 	c.nAcks.Add(1)
+	if h := c.ackHook.Load(); h != nil {
+		(*h)(node, leaseID)
+	}
 	c.mu.Lock()
 	c.acks[node] = time.Now()
 	c.mu.Unlock()
@@ -207,4 +211,30 @@ next:
 		out = append(out, l)
 	}
 	return out
+}
+
+// cancel asks the agent that holds a lease to stop it (agentapi.Server.Cancel); the live listener answers.
+func (c *coord) cancel(node, leaseID, reason string) error {
+	c.mu.Lock()
+	srv := c.srv
+	c.mu.Unlock()
+	if srv == nil {
+		return fmt.Errorf("the listener is down")
+	}
+	return srv.Cancel(node, leaseID, reason)
+}
+
+// countAttempts sets *n to the number of attempt rows of a job.
+func (c *coord) countAttempts(n *int, jobID string) {
+	c.t.Helper()
+	for i := 0; ; i++ {
+		_, _, ok, err := c.st.AttemptAt(context.Background(), jobID, i+1)
+		if err != nil {
+			c.t.Fatal(err)
+		}
+		if !ok {
+			*n = i
+			return
+		}
+	}
 }
