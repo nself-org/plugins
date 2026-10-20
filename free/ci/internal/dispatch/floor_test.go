@@ -127,3 +127,31 @@ func TestPolicyMinimumsRaiseTheDeliveredLevel(t *testing.T) {
 		}
 	}
 }
+
+// TestProductionBoundaryRaisesTheDeliveredLevel (P7-TRUST-18, cross-family review): admission only checks the
+// node's declared level on a coordinator host or an overridden deploy host; delivery must also run the job at
+// the vm floor there (D21, D28), except for a personal coordinator's own owner and internal work.
+func TestProductionBoundaryRaisesTheDeliveredLevel(t *testing.T) {
+	deploy := model.Capability{}
+	deploy.DeployHost.Matched, deploy.DeployHost.Override = true, true
+	cases := []struct {
+		name string
+		tr   model.TrustClass
+		r    sched.Runner
+		want model.Isolation
+	}{
+		{"collaborator on a team coordinator host runs at vm", "collaborator", sched.Runner{CoordinatorHost: true, CoordinatorMode: trust.Team}, "vm"},
+		{"collaborator on a personal coordinator host runs at vm", "collaborator", sched.Runner{CoordinatorHost: true, CoordinatorMode: trust.Personal}, "vm"},
+		{"untrusted on a coordinator host runs at vm, above the sandbox floor", "untrusted", sched.Runner{CoordinatorHost: true, CoordinatorMode: trust.Personal}, "vm"},
+		{"owner work on a team coordinator host runs at vm", "owner", sched.Runner{CoordinatorHost: true, CoordinatorMode: trust.Team}, "vm"},
+		{"owner work on a personal coordinator host keeps its normal level", "owner", sched.Runner{CoordinatorHost: true, CoordinatorMode: trust.Personal}, "container"},
+		{"owner work on an overridden deploy host runs at vm", "owner", sched.Runner{Capability: deploy}, "vm"},
+		{"a node that is neither keeps the trust floor", "collaborator", sched.Runner{}, "container"},
+	}
+	for _, c := range cases {
+		got := raiseIsolation(model.Job{Isolation: "process"}, requiredIsolation(floorQueued(c.tr, ""), c.r, sched.Policy{})).Isolation
+		if got != c.want {
+			t.Errorf("%s: delivered at %q, want %q", c.name, got, c.want)
+		}
+	}
+}

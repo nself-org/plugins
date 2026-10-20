@@ -11,7 +11,8 @@ package dispatch
 // isolation. "hosted-disposable" is not a level an agent can run, so on a non-hosted runner a
 // minimum of that rank is delivered as ephemeral-vm (same rank), kept with the trust floor.
 // The floor is derived with the same trust functions sched.Place used, from the job's and the
-// runner's declared facts plus the policy minimums (override and trust.isolation_min).
+// runner's declared facts plus the policy minimums (override and trust.isolation_min) and the
+// production boundary's vm floor (deploy host override, coordinator host).
 
 import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -31,6 +32,8 @@ func requiredIsolation(q Queued, r sched.Runner, pol sched.Policy) model.Isolati
 	if len(d.Accepts) == 0 {
 		d = sched.DeclarationFromCapability(r.Capability, r.CoordinatorHost, r.CoordinatorMode)
 	}
+	d.CoordinatorHost, d.CoordinatorMode = r.CoordinatorHost, r.CoordinatorMode // as sched eligibility sets them
+
 	if d.PersonalOwnNode { // the same dedicated trusted case sched.Place derives (R-DX-12)
 		d.PersonalOwnRun = d.PersonalOwnRun || j.PersonalOwnRun
 		for _, c := range j.SecretClasses {
@@ -41,7 +44,8 @@ func requiredIsolation(q Queued, r sched.Runner, pol sched.Policy) model.Isolati
 	floor := trust.MinIsolation(facts, trust.RunnerFacts{Ownership: d.Ownership, Dedicated: trust.IsDedicatedTrusted(d), UIDSeparation: d.UIDSeparation,
 		PersonalOwnNode: d.PersonalOwnNode, NoLANRoute: d.NoLANRoute})
 	policyMin := policyIsolation(pol.Trust)
-	for _, m := range []model.Isolation{j.Requirements.IsolationMin, pol.Overrides.MinIsolation, policyMin} {
+	// The production boundary (D21, D28): admission only checks the node's declared level; the job itself must run at vm there.
+	for _, m := range []model.Isolation{j.Requirements.IsolationMin, pol.Overrides.MinIsolation, policyMin, trust.BoundaryMinIsolation(facts, d)} {
 		if m == "" {
 			continue
 		}
