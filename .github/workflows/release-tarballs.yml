@@ -16,9 +16,9 @@ name: Release Plugin Tarballs (Free)
 #                 GITHUB_TOKEN. No PAT, no cross-repo trigger. The projections (registry.json, catalog.json, counts.json) need the
 #                 private bundles repo, which this token cannot read: the PR body tells the maintainer to regenerate them.
 # Checksums and signatures always describe the bytes on the Release, never a rebuild: the Release asset is the artifact of record.
-# Idempotent: re-running skips assets already present on the release. Limit (contract v1.1): the `sign` job signs a platform tarball
-# only if THIS run built the exact bytes, so a full re-run whose rebuild is not byte-identical to the published platform tarballs
-# (a changed runner gzip/zlib or Go toolchain) fails `sign`; a draft-first upload of platform tarballs fails it too. See Releasing.md.
+# Idempotent: re-running skips assets already present on the release. Limit (contract v1.1): the `sign` job signs source and platform tarballs
+# only if THIS run built the exact bytes, so a full re-run whose rebuild is not byte-identical to the published tarballs
+# (a changed runner gzip/zlib or Go toolchain) fails `sign`; a draft-first upload of source or platform tarballs fails it too. See Releasing.md.
 # See .github/wiki/Releasing.md.
 
 on:
@@ -399,7 +399,7 @@ jobs:
       # What the reviewer of the `sign` job approves: the sha256 of every tarball the Release serves right now. `sign` refuses any
       # tarball that is not in this list with this hash, so an asset swapped while the approval waits is never signed.
       #
-      # built-sha256.txt is the shorter list the platform signer is held to: the tarballs this run built that the Release serves
+      # built-sha256.txt is the shorter list every signer is held to: the tarballs this run built that the Release serves
       # unchanged (attest/). A platform tarball is signed only if its "<sha256>  <name>" line is in it, so a binary uploaded to the
       # Release by anyone else during the approval wait is published but never signed.
       - name: Record the published checksums
@@ -412,7 +412,7 @@ jobs:
           {
             echo "### Published tarballs for ${TAG}"
             echo
-            echo "$(wc -l < published-sha256.txt | tr -d ' ') tarball(s) on the Release; $(wc -l < not-attested.txt | tr -d ' ') differ from this run's rebuild (published, not attested); $(wc -l < built-sha256.txt | tr -d ' ') built by this run (source and platform tarballs); only those platform tarballs are eligible for platform signing."
+            echo "$(wc -l < published-sha256.txt | tr -d ' ') tarball(s) on the Release; $(wc -l < not-attested.txt | tr -d ' ') differ from this run's rebuild (published, not attested); $(wc -l < built-sha256.txt | tr -d ' ') built by this run (source and platform tarballs); only those source and platform tarballs are eligible for signing."
             echo
             echo '```'
             cat published-sha256.txt
@@ -566,7 +566,7 @@ jobs:
       # Source tarballs (<slug>-<version>.tar.gz): the signed message names slug, version and the source tarball's sha256.
       # Platform tarballs (<slug>-<version>-<platform>.tar.gz) of every plugin signed here are signed under their own domain
       # (contract v1.1): the message names slug, version, platform and that tarball's sha256. They are signed only if
-      # platform-built-check.sh confirms this run built the exact bytes; otherwise the job fails and signs nothing more.
+      # platform-built-check.sh confirms this run built the exact bytes; otherwise the job fails before signing.
       - name: Sign the published source and platform tarballs (hq PLUG D7, contract v1.1)
         env:
           NSELF_RELEASE_SIGNING_KEY_FREE: ${{ secrets.NSELF_RELEASE_SIGNING_KEY_FREE }}
@@ -576,6 +576,11 @@ jobs:
           VERSION="${TAG#v}"
           if [ -z "$NSELF_RELEASE_SIGNING_KEY_FREE" ] || [ -z "$NSELF_RELEASE_SIGNING_KEY_FREE_ID" ]; then
             echo "ERROR: the release-signing Environment has no free-tier signing key and key id (P7-PROD-59 creates them)"
+            exit 1
+          fi
+          # Check every published source and platform before the signing key is used.
+          if ! bash scripts/release/platform-built-check.sh expected/built-sha256.txt published; then
+            echo "ERROR: a published tarball was not built by this run. Delete that tarball AND its .sha256 from the Release, then re-run (Releasing.md)."
             exit 1
           fi
           : > signatures.ndjson

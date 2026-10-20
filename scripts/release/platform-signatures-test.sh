@@ -174,9 +174,9 @@ if check "$T/partial.txt" "$BIN" >/dev/null 2>&1; then fail "built check passed 
 # Garbage and substring lines grant nothing.
 printf 'zz  demo-1.2.3-linux-amd64.tar.gz\n%s demo-1.2.3-linux-amd64.tar.gz\n' "$(sha256_file "$PLIN")" > "$T/garbage.txt"
 if check "$T/garbage.txt" "$BIN" >/dev/null 2>&1; then fail "built check accepted malformed list lines"; else pass "built check ignores malformed list lines"; fi
-# Source tarballs and unrelated files in DIR are not platform tarballs.
+# Source tarballs require the same build evidence as platform tarballs.
 SRCONLY="$T/srconly"; mkdir "$SRCONLY"; cp "$SRC" "$SRCONLY/"
-check "$T/empty.txt" "$SRCONLY" >/dev/null 2>&1 && pass "built check ignores source tarballs" || fail "built check refused a source tarball"
+if check "$T/empty.txt" "$SRCONLY" >/dev/null 2>&1; then fail "built check passed an unlisted source tarball"; else pass "built check refuses an unlisted source tarball"; fi
 rc=0; check "$T/nope.txt" "$BIN" >/dev/null 2>&1 || rc=$?
 [ "$rc" = 2 ] && pass "built check: a missing list is a usage error, not a pass" || fail "missing list exit $rc"
 rc=0; check "$BUILT" "$T/nodir" >/dev/null 2>&1 || rc=$?

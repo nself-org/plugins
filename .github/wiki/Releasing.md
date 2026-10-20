@@ -58,13 +58,18 @@ v1.2.13 is the first release that signs the whole free catalogue (every `free/*/
   attestation, and the `publish` job summary says which.
   `verify-signatures.sh` counts source tarballs and binary tarballs separately, each checked for checksum and signature; on a signed row a binary tarball with a
   checksum and no platform signature fails (`unsigned platform`).
-- The `sign` job signs a platform tarball only if its `<sha256>  <name>` line is in `built-sha256.txt`, the list `publish` wrote of the tarballs this run built
-  (`scripts/release/platform-built-check.sh`). The publish job never uses `--clobber`, so a tarball already on the Release wins over this run's build; without
-  this check anyone with `contents: write` could upload a binary while the reviewer decides and receive the official platform signature. A refusal fails the job
-  with nothing more signed: delete that platform tarball AND its `.sha256` from the Release (the first run uploaded a `.sha256` from the foreign bytes, and `publish`
-  never overwrites one) and re-run, so this run's build is the one published. Two consequences to plan for: a draft-first upload of platform tarballs (the old flow) now fails `sign`,
-  so for a plugin with binaries let the workflow publish the platform tarballs (or delete the draft's platform assets before tagging); and a full re-run whose rebuild is not
-  byte-identical to the published platform tarballs (changed runner gzip or Go toolchain) fails `sign` the same way.
+<!-- BEGIN GENERATED:release-built-signing -->
+- Before signing any source or platform tarball, the `sign` job requires every published tarball's
+  exact `<sha256>  <name>` line in `built-sha256.txt`, the list `publish` wrote of bytes this run built
+  and the Release serves unchanged (`scripts/release/platform-built-check.sh`). The publish job never
+  uses `--clobber`: a previously uploaded asset wins over this run's build. Without this gate someone
+  with `contents: write` could upload source or a binary and receive the official signature.
+  A refusal stops signing. Delete each refused tarball AND its `.sha256` from the Release, then re-run
+  so this run's build is published. For draft-first releases, let the workflow upload both source and
+  platform tarballs, or remove the draft's tarballs and their `.sha256` assets before tagging. A full
+  re-run whose rebuild differs from published bytes (for example a changed gzip or Go toolchain)
+  requires the same recovery.
+<!-- END GENERATED:release-built-signing -->
 - `release-data` writes a platform signature into `releases.json` only when the signed sha256 equals the sha256 of the published bytes in that run; a published
   platform tarball with no such signature stops the write (`UNSIGNED`), so a release never lands half-signed. Rewriting an existing row keeps a platform signature only
   while the row's version, source sha256 and that platform's sha256 are all unchanged.
