@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -141,5 +142,47 @@ func TestApplies(t *testing.T) {
 	own.Artifacts = []model.ArtifactDecl{{Path: "dist/app.apk", Name: "app", Kind: "package"}}
 	if !Applies(JobName, lane) || Applies("other", lane) || Applies(JobName, test) || Applies(JobName, own) {
 		t.Fatal("Applies is wrong: only the lane's own release job takes the SBOM step")
+	}
+}
+
+// D-1271: an APK holds no package database, so its documents list no Gradle
+// dependency; the step also inventories the directory of every Gradle
+// dependency lockfile (the build tree and caches are not searched).
+func TestSBOMStepInventoriesGradleLockfiles(t *testing.T) {
+	home := t.TempDir()
+	installSyft(t, home)
+	ws := workspace(t, "mobile", "app-release.apk")
+	for _, f := range []string{"app/gradle.lockfile", "gradle/dependency-locks/lib.lockfile", "app/build/gradle.lockfile", ".gradle/gradle.lockfile"} {
+		p := filepath.Join(ws.Name(), "mobile", f)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("com.squareup.okhttp3:okhttp:4.12.0=releaseRuntimeClasspath\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fs := &fakeSyft{t: t}
+	var dirs []string
+	step := SBOMStep{Home: home, Pin: testPin(), NewRunner: func(dir string) sbom.Runner {
+		dirs = append(dirs, strings.TrimPrefix(dir, filepath.Join(ws.Name(), "mobile")))
+		return fs
+	}}
+	if err := step.Run(context.Background(), Job("mobile", nil, 0, nil), ws); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"/app/build/outputs/apk/release", "/app", "/gradle/dependency-locks"}
+	if !slices.Equal(dirs, want) {
+		t.Fatalf("syft source dirs %q, want %q", dirs, want)
+	}
+	for _, name := range []string{"gradle-deps-1", "gradle-deps-2"} {
+		for _, ext := range []string{".cdx.json", ".spdx.json"} {
+			f := filepath.Join("mobile", SBOMDir, ArtifactName, name+ext)
+			if b, err := ws.ReadFile(f); err != nil || len(b) == 0 {
+				t.Errorf("%s: %v", f, err)
+			}
+		}
+	}
+	if _, err := ws.ReadFile(filepath.Join("mobile", SBOMDir, ArtifactName, "gradle-deps-3.cdx.json")); err == nil {
+		t.Error("a lockfile under the build tree or .gradle was inventoried")
 	}
 }

@@ -13,7 +13,9 @@ package android
 // install` runs, through internal/sbom (never a syft on PATH); every write goes
 // through the workspace root, so nothing lands outside it; an APK with no
 // cataloguable component is accepted (an Android app has no package-manager
-// database inside; the documents still bind the APK digest and syft version).
+// database inside; the documents still bind the APK digest and syft version),
+// so the directory of each Gradle dependency lockfile is inventoried as well
+// (gradle-deps-N, D-1271); a build with no lockfile gets the APK documents only.
 
 import (
 	"context"
@@ -21,6 +23,9 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -80,18 +85,95 @@ func (s SBOMStep) Run(ctx context.Context, job model.Job, ws *os.Root) error {
 	if err != nil {
 		return err
 	}
+	names := make([]string, len(docs))
+	for i := range docs {
+		names[i] = apks[i]
+	}
+	locks, err := s.lockfileDocs(ctx, ws, workdir, syft)
+	if err != nil {
+		return err
+	}
+	docs = append(docs, locks...)
+	for _, d := range locks {
+		names = append(names, d.Name)
+	}
 	dir := path.Join(workdir, SBOMDir, ArtifactName)
 	if err = ws.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	for i, d := range docs {
 		for ext, body := range map[string][]byte{".cdx.json": d.CDX, ".spdx.json": d.SPDX} {
-			if err = ws.WriteFile(path.Join(dir, apks[i]+ext), body, 0o600); err != nil {
+			if err = ws.WriteFile(path.Join(dir, names[i]+ext), body, 0o600); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// lockfileDocs inventories the directory of every Gradle dependency lockfile
+// under the workdir (D-1271): the APK documents bind the file but list no
+// Gradle dependency, these do. Documents are named gradle-deps-N.
+func (s SBOMStep) lockfileDocs(ctx context.Context, ws *os.Root, workdir, syft string) ([]sbom.Doc, error) {
+	root, err := ws.OpenRoot(workdir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	dirs, err := lockfileDirs(root.FS())
+	if err != nil {
+		return nil, err
+	}
+	var docs []sbom.Doc
+	for i, d := range dirs {
+		target := sbom.Target{Name: fmt.Sprintf("gradle-deps-%d", i+1), Path: ".", Kind: sbom.SourceDir}
+		out, err := sbom.Generate(ctx, s.runner(filepath.Join(root.Name(), filepath.FromSlash(d))), syft, s.Pin, []sbom.Target{target})
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, out...)
+	}
+	return docs, nil
+}
+
+// maxLockDirs bounds the lockfile directories one build may inventory.
+const maxLockDirs = 32
+
+// skipDirs are never searched for lockfiles: build output, caches, VCS data and our own output.
+var skipDirs = map[string]bool{"build": true, ".gradle": true, "node_modules": true, ".git": true, ".nself-ci": true}
+
+// lockfileDirs lists, sorted and without duplicates, the directories holding a
+// gradle.lockfile or a legacy gradle/dependency-locks/*.lockfile.
+func lockfileDirs(fsys fs.FS) ([]string, error) {
+	seen := map[string]bool{}
+	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if skipDirs[d.Name()] {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		dir := path.Dir(p)
+		if d.Name() == "gradle.lockfile" || (strings.HasSuffix(d.Name(), ".lockfile") && path.Base(dir) == "dependency-locks") {
+			seen[dir] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(seen) > maxLockDirs {
+		return nil, sbom.Failf(sbom.ReasonInvalid, "the build holds Gradle lockfiles in %d directories, more than the %d allowed", len(seen), maxLockDirs)
+	}
+	dirs := make([]string, 0, len(seen))
+	for d := range seen {
+		dirs = append(dirs, d)
+	}
+	sort.Strings(dirs)
+	return dirs, nil
 }
 
 func (s SBOMStep) runner(dir string) sbom.Runner {

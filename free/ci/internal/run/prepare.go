@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
+	sbomgate "github.com/nself-org/plugins/free/ci/internal/gates/sbom"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 )
@@ -102,7 +103,7 @@ func (rs *runState) unprepare(info AttemptInfo, p prepared) {
 }
 
 func (rs *runState) spec(ctx context.Context, pj plan.PlannedJob, job model.Job, id string) ciexec.JobSpec {
-	s := ciexec.JobSpec{AttemptID: id, CoordinatorID: safeID(rs.sess.Coordinator.ID), Job: job, Command: job.Run,
+	s := ciexec.JobSpec{AttemptID: id, CoordinatorID: safeID(rs.sess.Coordinator.ID), Job: job, Command: sbomgate.StripCheck(job.Run), // release.sbom names a check, never a program (D-1271)
 		SourceDir: rs.c.Opts.Root, Home: rs.sess.Home, Network: model.NetworkScope(rs.c.Opts.Network)}
 	cpu, mem := demandOf(&job)
 	s.CPU, s.MemoryMB = float64(cpu), mem // a container gets exactly its reservation, not the engine default
