@@ -14,10 +14,10 @@ var Version = "1.5.0"
 func init() {
 	must(RegisterSubcommand("version", "print the agent version", func(_ context.Context, args []string, sio IO) int {
 		if len(args) != 0 {
-			fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent version")
+			_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent version")
 			return 2
 		}
-		fmt.Fprintf(sio.Stdout, "nself-ci-agent %s %s/%s\n", Version, runtime.GOOS, runtime.GOARCH)
+		_, _ = fmt.Fprintf(sio.Stdout, "nself-ci-agent %s %s/%s\n", Version, runtime.GOOS, runtime.GOARCH)
 		return 0
 	}))
 }

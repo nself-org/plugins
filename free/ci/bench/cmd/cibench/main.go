@@ -125,7 +125,7 @@ func budgetCmd(o options, stderr io.Writer) int {
 		if informational[name] || strings.HasSuffix(name, ".v14") {
 			return false
 		}
-		return !(o.onlyCore && strings.HasPrefix(name, "ci.service_"))
+		return !o.onlyCore || !strings.HasPrefix(name, "ci.service_")
 	}
 	b, err := bench.BudgetFromResult(res, o.note, keep)
 	if err != nil {
