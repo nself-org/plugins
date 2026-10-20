@@ -194,6 +194,7 @@ func wrapCredential(spec *execSpec, in *jobInputs, j session.JobRun) error {
 			wrap = func() []string { return []string{"cred-wrapper", rc.Kind, "--"} }
 		}
 	}
+	in.Network = "restricted" // the forge host allowlist applies (runnerjob.AttemptHosts); the lease carries no trust class
 	spec.Job.Run = append(wrap(), spec.Job.Run...)
 	in.Stdin = io.MultiReader(bytes.NewReader(j.Credential), strings.NewReader("\n"))
 	in.Masks = append(in.Masks, string(j.Credential))

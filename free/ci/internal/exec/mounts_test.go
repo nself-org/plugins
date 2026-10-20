@@ -67,3 +67,15 @@ func TestProcessJobRefusesReadOnlyMount(t *testing.T) {
 		t.Fatalf("read-write mount on a process job: %+v", ok)
 	}
 }
+
+// D-1367: both container levels can hold a mount read-only (the runner job mounts the agent binary
+// read-only under sandboxed-container); process and the empty level cannot.
+func TestReadOnlyMountNeedsAContainerLevel(t *testing.T) {
+	t.Parallel()
+	for level, wantErr := range map[model.Isolation]bool{"container": false, "sandboxed-container": false, "process": true, "": true} {
+		err := checkMounts(JobSpec{Job: model.Job{Isolation: level}, Mounts: []Mount{{Host: "/a", Target: "/b", ReadOnly: true}}})
+		if (err != nil) != wantErr {
+			t.Errorf("isolation %q: err %v, want error %v", level, err, wantErr)
+		}
+	}
+}

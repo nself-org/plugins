@@ -54,7 +54,8 @@ func checkMounts(s JobSpec) error {
 				return coded("E612", "mount target collides with a reserved container path")
 			}
 		}
-		if m.ReadOnly && s.Job.Isolation != "container" {
+		// both container levels hold a mount read-only (sandboxed-container is the same CLI path under runsc)
+		if m.ReadOnly && s.Job.Isolation != "container" && s.Job.Isolation != "sandboxed-container" {
 			return coded("E611", "a read-only mount needs container isolation")
 		}
 	}
