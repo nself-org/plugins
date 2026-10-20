@@ -114,7 +114,7 @@ var nodeBusy = struct {
 
 // claimNode marks cmd's node busy for an upgrade (or a rotate in upgrade mode) and returns the release.
 func claimNode(cmd clientapi.NodeCommand) (func(), error) {
-	if cmd.Verb != "upgrade" && !(cmd.Verb == "rotate" && slices.Contains(cmd.Args, "--mode=upgrade")) {
+	if cmd.Verb != "upgrade" && (cmd.Verb != "rotate" || !slices.Contains(cmd.Args, "--mode=upgrade")) {
 		return func() {}, nil
 	}
 	key := cmd.Node
