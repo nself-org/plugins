@@ -55,12 +55,18 @@ type Config struct {
 	// Home is the CI state directory (default NSELF_CI_HOME, else ~/.nself/ci); the funnel and the
 	// 0700 user-data directory live under it.
 	Home string
+	// PluginHome is the HOME the infra child sees (default: the coordinator's own home, read once in New).
+	// The nself CLI finds the infra plugin under $HOME/.nself/plugins/bin and, with no HOME, falls back to
+	// the world-writable /tmp, so the value is assigned here, never inherited and never left unset.
+	PluginHome string
 	// Nself is the nself binary (default: nself on PATH, resolved per call).
 	Nself string
 	// Runner runs the infra child (default: the exec funnel).
 	Runner Runner
 	// Registry, when set, lets AfterIssue complete the facts of an enrolled burst node (nodefacts.go).
 	Registry *registry.Registry
+	// DestroyWait is the pause between destroy attempts of an unusable created machine (default DefaultDestroyWait; negative: none).
+	DestroyWait time.Duration
 	// CallTimeout bounds an infra child whose context has no deadline (default DefaultCallTimeout).
 	CallTimeout time.Duration
 	// Now is the clock (default time.Now).
@@ -90,6 +96,13 @@ func New(cfg Config) (*Provider, error) {
 	}
 	if cfg.Home == "" {
 		cfg.Home = ciHome()
+	}
+	if cfg.PluginHome == "" {
+		h, err := os.UserHomeDir()
+		if err != nil || !filepath.IsAbs(h) {
+			return nil, fail(ReasonRecipe, err, "the coordinator has no home directory for the infra plugin (set Config.PluginHome)")
+		}
+		cfg.PluginHome = h
 	}
 	if cfg.Runner == nil {
 		cfg.Runner = funnelRunner{home: cfg.Home, coordinator: cfg.CoordinatorID}

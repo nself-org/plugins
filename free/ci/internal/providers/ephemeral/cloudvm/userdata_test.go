@@ -83,12 +83,14 @@ func TestUserDataClosedListShape(t *testing.T) {
 	if p.codeFileMode != "0600" || p.codeFile != d.PairingCode+"\n" {
 		t.Fatalf("code file mode %q content %q", p.codeFileMode, p.codeFile)
 	}
-	first, _ := p.runcmd[0].([]any)
-	if len(p.runcmd) != 2 || len(first) < 5 || first[0] != "systemctl" || first[1] != "mask" || !containsAll(first, "ssh.service", "ssh.socket", "sshd.service") {
-		t.Fatalf("sshd is not masked first: %v", p.runcmd)
+	stop, _ := p.runcmd[0].([]any)
+	masked, _ := p.runcmd[1].([]any)
+	if len(p.runcmd) != 3 || len(stop) < 4 || stop[0] != "systemctl" || stop[1] != "disable" || stop[2] != "--now" || !containsAll(stop, "ssh.service", "ssh.socket") ||
+		len(masked) < 3 || masked[0] != "systemctl" || masked[1] != "mask" || !containsAll(masked, "ssh.service", "ssh.socket") || containsAll(masked, "sshd.service") {
+		t.Fatalf("sshd is not stopped and masked first (the sshd.service alias is not named: masking an alias fails on Debian images): %v", p.runcmd)
 	}
-	if !reflect.DeepEqual(p.runcmd[1], []any{"/bin/sh", "/run/nself-ci/join.sh"}) {
-		t.Fatalf("second command %v", p.runcmd[1])
+	if !reflect.DeepEqual(p.runcmd[2], []any{"/bin/sh", "/run/nself-ci/join.sh"}) {
+		t.Fatalf("last command %v", p.runcmd[2])
 	}
 	// exactly the closed list: the code once (its file), every other value in the script
 	if n := strings.Count(string(doc), d.PairingCode); n != 1 {

@@ -50,7 +50,7 @@ func TestTokenEnvChildEnvironmentIsTheTokenOnly(t *testing.T) {
 	}
 	for _, c := range calls {
 		for _, name := range envNames(c.Env) {
-			if name != cloudvm.TokenEnv && name != "NSELF_CI_EXEC_ATTEMPT" { // the funnel's own marker is the only addition
+			if name != cloudvm.TokenEnv && name != "HOME" && name != "NSELF_CI_EXEC_ATTEMPT" { // the funnel's own marker is the only addition
 				t.Errorf("%v: the child inherited %s", c.Argv, name)
 			}
 		}
@@ -58,6 +58,9 @@ func TestTokenEnvChildEnvironmentIsTheTokenOnly(t *testing.T) {
 			if a == bareTokenFlag || strings.Contains(a, fakeToken) {
 				t.Errorf("%v: the token is on the command line", c.Argv)
 			}
+		}
+		if !envHas(c.Env, "HOME="+pluginHome) { // the nself plugin router falls back to /tmp when HOME is unset
+			t.Errorf("%v: HOME is not the assigned plugin home: %v", c.Argv, envNames(c.Env))
 		}
 		serverVerb := len(c.Argv) > 3 && c.Argv[3] != "--help"
 		if serverVerb != envHas(c.Env, cloudvm.TokenEnv+"="+fakeToken) {

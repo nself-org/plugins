@@ -90,7 +90,7 @@ export NSELF_CI_AGENT_HOME=/var/lib/nself-ci-agent
 mkdir -p "$NSELF_CI_AGENT_HOME"
 cd /run/nself-ci
 trap 'rm -f /run/nself-ci/code' EXIT
-curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output nself-ci-agent {{sh .AgentURL}}
+curl --fail --silent --show-error --retry 5 --retry-all-errors --location --proto '=https' --proto-redir '=https' --tlsv1.2 --output nself-ci-agent {{sh .AgentURL}}
 printf '%s  %s\n' {{sh .AgentSHA256}} nself-ci-agent | sha256sum -c -
 install -m 0755 nself-ci-agent /usr/local/bin/nself-ci-agent
 /usr/local/bin/nself-ci-agent join --expect-fingerprint {{sh .RootFingerprint}} {{sh .EnrollURL}} < /run/nself-ci/code
@@ -112,7 +112,8 @@ write_files:
     owner: root:root
     content: {{yaml .Script}}
 runcmd:
-  - [systemctl, mask, --now, ssh.service, ssh.socket, sshd.service]
+  - [systemctl, disable, --now, ssh.socket, ssh.service]
+  - [systemctl, mask, ssh.socket, ssh.service]
   - [/bin/sh, /run/nself-ci/join.sh]
 `
 

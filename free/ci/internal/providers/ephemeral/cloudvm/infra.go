@@ -6,7 +6,8 @@ package cloudvm
 // Inputs:  verb arguments built by this package; the token read from the token file.
 // Outputs: servers as burst.Resource, or a classified error.
 // Constraints: argv is fixed, absolute for the binary, and never holds the token (--token-env names
-// the variable, the token flag is never used); the child environment is NSELF_CI_BURST_TOKEN only;
+// the variable, the token flag is never used); the child environment is a fixed HOME (the coordinator's own, so the nself plugin router never falls back
+// to /tmp) and NSELF_CI_BURST_TOKEN, nothing inherited;
 // the envelope is found by decoding JSON documents that start a line, because the funnel merges
 // stdout and stderr; an error envelope is classified by its code and cause (E745 not found, E747
 // token, E744 with HTTP 429 quota, 5xx or network error unavailable); a detail carries the code and
@@ -17,11 +18,14 @@ import (
 	"context"
 	"encoding/json"
 	"net/netip"
+	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/burst"
 )
+
+var codeRe = regexp.MustCompile(`^E[0-9]{3}$`)
 
 // TokenEnv is the one variable the infra child reads the token from.
 const TokenEnv = "NSELF_CI_BURST_TOKEN"
@@ -81,6 +85,9 @@ func (w wireServer) resource(now time.Time) burst.Resource {
 // classify turns an error envelope into the lifecycle's error classes.
 func classify(e envelope, verb string) error {
 	code, cause := e.Error.Code, e.Error.Cause
+	if !codeRe.MatchString(code) {
+		code = "an unreadable code"
+	}
 	detail := "infra " + verb + " answered " + code
 	if safeCause(cause) {
 		detail += " (" + cause + ")"
@@ -109,6 +116,11 @@ func safeCause(c string) bool {
 	return c[5] >= '1' && c[5] <= '5' && c[6] >= '0' && c[6] <= '9' && c[7] >= '0' && c[7] <= '9'
 }
 
+// childEnv is the closed environment of one infra child: the assigned HOME plus the given entries.
+func (p *Provider) childEnv(extra ...string) []string {
+	return append([]string{"HOME=" + p.cfg.PluginHome}, extra...)
+}
+
 // run executes one infra verb with the token and returns the data of a success envelope.
 func (p *Provider) run(ctx context.Context, token, verb string, args ...string) (json.RawMessage, error) {
 	exe, err := p.nself()
@@ -119,7 +131,7 @@ func (p *Provider) run(ctx context.Context, token, verb string, args ...string) 
 	defer cancel()
 	argv := append([]string{exe, "infra", "server", verb, "--json"}, args...)
 	argv = append(argv, "--token-env", TokenEnv)
-	out, code, rerr := p.cfg.Runner.Run(ctx, argv, []string{TokenEnv + "=" + token}, []string{token})
+	out, code, rerr := p.cfg.Runner.Run(ctx, argv, p.childEnv(TokenEnv+"="+token), []string{token})
 	if cerr := ctx.Err(); cerr != nil {
 		return nil, fail(ReasonInfra, errUnavailable, "infra %s ended at its deadline: %v", verb, cerr)
 	}

@@ -86,8 +86,10 @@ type knobs struct {
 	// dropUserData makes provision answer user_data false; stripLabels answers without labels.
 	dropUserData, stripLabels bool
 	// failCause is the cause of the next failing E744 envelope ("HTTP 429", "network error", ...).
-	failCause string
-	outage    bool
+	failCode     string // overrides the code of the failing envelope
+	failDestroys int    // the next N destroy calls fail with HTTP 503
+	failCause    string
+	outage       bool
 	// token is the token the fake accepts.
 	token string
 }
@@ -233,7 +235,11 @@ func (b *bridge) handle(req bridgeReq) bridgeResp {
 		return errEnvelope(cmd, "E744", "network error", 4)
 	}
 	if k.failCause != "" {
-		return errEnvelope(cmd, "E744", k.failCause, 4)
+		code := "E744"
+		if k.failCode != "" {
+			code = k.failCode
+		}
+		return errEnvelope(cmd, code, k.failCause, 4)
 	}
 	ctx := context.Background()
 	switch verb {
@@ -271,6 +277,15 @@ func (b *bridge) handle(req bridgeReq) bridgeResp {
 		}
 		return bridgeResp{Stdout: envelope(cmd, map[string]any{"servers": servers, "count": len(servers)})}
 	case "destroy":
+		b.mu.Lock()
+		failing := b.k.failDestroys > 0
+		if failing {
+			b.k.failDestroys--
+		}
+		b.mu.Unlock()
+		if failing {
+			return errEnvelope(cmd, "E744", "HTTP 503", 4)
+		}
 		ids := flagValues(req.Argv, "--id")
 		if len(ids) != 1 || !b.cloud.Has(fcID(ids[0])) {
 			return errEnvelope(cmd, "E745", "HTTP 404", 1)

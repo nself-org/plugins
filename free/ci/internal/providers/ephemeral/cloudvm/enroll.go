@@ -86,6 +86,14 @@ func (p *Provider) certTTL() time.Duration {
 
 // offer makes the intent-bound pairing offer and remembers its code for withdrawal.
 func (p *Provider) offer(ctx context.Context, token string) (pairing.OfferResult, error) {
+	p.mu.Lock()
+	_, held := p.offers[token]
+	p.mu.Unlock()
+	if held {
+		return pairing.OfferResult{}, fail(ReasonEnroll, nil, "intent %s already holds a pairing offer", token)
+	}
+	ctx, cancel := p.bound(ctx)
+	defer cancel()
 	res, err := p.cfg.Pairing.Offer(ctx, pairing.OfferOptions{
 		Approver: &approver{p: p, token: token}, TTL: pairing.OfferTTL, CertTTL: p.certTTL(), Intent: token, Label: "burst " + p.cfg.ProviderID,
 	})
@@ -105,7 +113,9 @@ func (p *Provider) withdraw(ctx context.Context, token string) {
 	delete(p.offers, token)
 	p.mu.Unlock()
 	if ok {
-		_ = p.cfg.Pairing.Withdraw(context.WithoutCancel(ctx), code)
+		wctx, cancel := p.bound(context.WithoutCancel(ctx))
+		defer cancel()
+		_ = p.cfg.Pairing.Withdraw(wctx, code)
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/burst"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
@@ -96,7 +97,7 @@ func (p *Provider) probeUserData(ctx context.Context) error {
 	}
 	ctx, cancel := p.bound(ctx)
 	defer cancel()
-	out, code, rerr := p.cfg.Runner.Run(ctx, []string{exe, "infra", "server", "provision", "--help"}, nil, nil)
+	out, code, rerr := p.cfg.Runner.Run(ctx, []string{exe, "infra", "server", "provision", "--help"}, p.childEnv(), nil)
 	if cerr := ctx.Err(); cerr != nil {
 		return fail(ReasonInfra, errUnavailable, "the user-data probe ended at its deadline")
 	}
@@ -147,6 +148,7 @@ func (p *Provider) Provision(ctx context.Context, in burst.Intent) (burst.Resour
 	if err := checkIntent(in); err != nil {
 		return burst.Resource{}, err
 	}
+	p.purgeStale()
 	pol, err := p.cfg.Spend(ctx)
 	if err != nil {
 		return burst.Resource{}, fail(ReasonRecipe, err, "the spend policy could not be read")
@@ -169,7 +171,7 @@ func (p *Provider) Provision(ctx context.Context, in burst.Intent) (burst.Resour
 	for _, r := range found {
 		// Adopted as the contract requires. After a coordinator restart this process holds no offer for the
 		// machine (the code in its user data belongs to a dead approver), so it cannot enroll: the engine's
-		// join timeout ends the intent and tears it down (debt row filed with P7-SCHED-10).
+		// join timeout ends the intent and tears it down (debt row D-ADOPT-ENROLL, see the ticket evidence).
 		if r.Labels[burst.LabelRole] == burst.RoleEphemeral && r.Labels[burst.LabelCoordinator] == in.Labels[burst.LabelCoordinator] {
 			p.remember(r.ID, in.Token)
 			return r, nil
@@ -229,7 +231,7 @@ func (p *Provider) create(ctx context.Context, tok string, rc recipe, in burst.I
 	res := ans.Server.resource(p.cfg.Now())
 	if !ans.UserData || !labelsCarry(res.Labels, in.Labels) {
 		// Not joinable or not findable: delete it rather than let it bill until the sweep.
-		derr := p.destroy(context.WithoutCancel(ctx), tok, res.ID)
+		derr := p.destroyRetry(context.WithoutCancel(ctx), tok, res.ID)
 		return burst.Resource{}, fail(ReasonAnswer, derr, "the created server %s carries no user data or lacks the lifecycle labels; it was deleted (%v)", res.ID, derr == nil)
 	}
 	return res, nil
@@ -242,6 +244,29 @@ func labelsCarry(got, want map[string]string) bool {
 		}
 	}
 	return true
+}
+
+// destroyAttempts and the wait between them: a created machine that cannot be found by its labels has no
+// other teardown path, so one failed destroy is not given up on.
+const destroyAttempts = 3
+
+// DefaultDestroyWait is the pause between two destroy attempts of an unusable machine.
+const DefaultDestroyWait = 2 * time.Second
+
+func (p *Provider) destroyRetry(ctx context.Context, tok, id string) (err error) {
+	wait := p.cfg.DestroyWait
+	if wait == 0 {
+		wait = DefaultDestroyWait
+	}
+	for i := 0; i < destroyAttempts; i++ {
+		if i > 0 && wait > 0 {
+			time.Sleep(wait)
+		}
+		if err = p.destroy(ctx, tok, id); err == nil {
+			return nil
+		}
+	}
+	return err
 }
 
 // destroy runs the destroy child for one server id; not found is success.

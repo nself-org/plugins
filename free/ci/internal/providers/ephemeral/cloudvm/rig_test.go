@@ -32,6 +32,7 @@ import (
 const (
 	coord      = "01J00000000000000000COORD1"
 	fakeToken  = "synthetic-token-0001-not-real"
+	pluginHome = "/home/coordinator-test"
 	agentSHA   = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	agentURL   = "https://agents.example.test/nself-ci-agent-linux-amd64"
 	providerID = "hetzner"
@@ -143,7 +144,7 @@ func (r *rig) build() {
 	r.pair = pairing.New(pairing.Config{CA: ca, Store: r.st, Registry: r.reg, CoordinatorID: "local", AgentURL: "https://agent.test:3865", Actor: "cli:burst-test",
 		Poll: 20 * time.Millisecond, AfterIssue: func(ctx context.Context, id string) error { return r.prov.AfterIssue(ctx, id) }})
 	r.prov, err = cloudvm.New(cloudvm.Config{CoordinatorID: coord, ProviderID: providerID, Spend: r.spend, Pairing: r.pair,
-		Intents: cloudvm.StoreIntents{Store: r.st, Coordinator: coord}, Lifetime: r.cfg, Home: r.home, Registry: r.reg, Now: r.clk.Now})
+		Intents: cloudvm.StoreIntents{Store: r.st, Coordinator: coord}, Lifetime: r.cfg, Home: r.home, Registry: r.reg, Now: r.clk.Now, PluginHome: pluginHome, DestroyWait: -1})
 	if err != nil {
 		r.t.Fatal(err)
 	}
