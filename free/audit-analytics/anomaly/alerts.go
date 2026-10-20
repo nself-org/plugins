@@ -110,7 +110,7 @@ func (a *Alerter) sendWebhook(ctx context.Context, anomaly Anomaly) error {
 	if err != nil {
 		return fmt.Errorf("send webhook: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook returned %d", resp.StatusCode)

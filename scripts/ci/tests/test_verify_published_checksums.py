@@ -24,6 +24,7 @@ class PublishedChecksumsTests(unittest.TestCase):
         scripts = self.root / "scripts"
         scripts.mkdir()
         shutil.copy2(ROOT / "scripts/verify-published-checksums.sh", scripts)
+        shutil.copy2(ROOT / "scripts/verify-published-checksums-lib.sh", scripts)
         shutil.copytree(ROOT / "scripts/conformance", scripts / "conformance")
         self.manifest = self.root / "free/demo/plugin.json"
         self.manifest.parent.mkdir(parents=True)
