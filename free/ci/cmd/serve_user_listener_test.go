@@ -201,3 +201,39 @@ func TestClientFollowsTheSocketPathInTheLock(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 }
+
+// D-1406: a listener of a running serve reads the serve flags while the next serve parses its own flag set.
+// Building and parsing a flag set must not touch what a running serve's listeners read.
+func TestParsingAServeFlagSetDoesNotRaceWithRunningListeners(t *testing.T) {
+	fs, _, _ := newServeV15Flags()
+	if _, err := parseInterspersed(fs, []string{"--data-dir", "/first"}); err != nil {
+		t.Fatal(err)
+	}
+	publishServeFlags(fs)
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { // a listener of the first serve, still starting or shutting down
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				_ = serveFlag("data-dir")
+				_ = explicitFlag("api-socket")
+			}
+		}
+	}()
+	for i := 0; i < 200; i++ { // a second serve builds and parses its flags
+		next, _, _ := newServeV15Flags()
+		if _, err := parseInterspersed(next, []string{"--data-dir", "/second", "--api-socket", ""}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	close(stop)
+	wg.Wait()
+	if got := serveFlag("data-dir"); got != "/first" {
+		t.Fatalf("data-dir = %q; only a published flag set may change what listeners read", got)
+	}
+}

@@ -38,7 +38,9 @@ import (
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
-// userAPIFlags is the serve flag set the listeners read --data-dir and --api-public-url from.
+// userAPIFlags is the parsed serve flag set the listeners read --data-dir and --api-public-url from. It is
+// set only by publishServeFlags, after Parse: a flag set that is still being parsed is written by Parse
+// without this lock, so a listener of an earlier serve must never see it (D-1406).
 var userAPIFlags struct {
 	sync.Mutex
 	fs *flag.FlagSet
@@ -48,9 +50,6 @@ func init() {
 	coordinator.RegisterFlag(func(fs *flag.FlagSet) {
 		fs.String("api-public-url", "", "URL users reach the user API at (its host goes into the server certificate)")
 		fs.String("api-submit-role", "release", "role that may start a run through the user API: release (default) or member. A run executes the commit's own pipeline config on this host and the coordinator does not yet classify fork pull requests or check release.start at dispatch, so member is safe only when every allowed repo's pipelines are trusted")
-		userAPIFlags.Lock()
-		userAPIFlags.fs = fs
-		userAPIFlags.Unlock()
 	})
 	for _, l := range []struct {
 		name, flag, def string
@@ -64,6 +63,13 @@ func init() {
 			panic("nself-ci: " + err.Error())
 		}
 	}
+}
+
+// publishServeFlags makes the parsed flag set of this serve the one its listeners read.
+func publishServeFlags(fs *flag.FlagSet) {
+	userAPIFlags.Lock()
+	userAPIFlags.fs = fs
+	userAPIFlags.Unlock()
 }
 
 // serveFlag reads a parsed serve flag.
