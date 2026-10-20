@@ -12,7 +12,8 @@ package health
 //          each failed probe) a down breaker reads degraded/provider.probing, so placement may send
 //          a request, and one reachable answer closes it. An answer is an HTTP response with a
 //          non-5xx status (an auth or config refusal included): it proves the provider is
-//          reachable, so it ends an outage but is not a success for placement. A failure that sent
+//          reachable, so it ends an outage but is not a success for placement; a quota answer (429)
+//          does not end one, it only marks the provider degraded. A failure that sent
 //          no request (a missing credential, a refused URL: Status 0, class other than transient or
 //          outage) says nothing about the provider and is ignored. The 5xx rule needs three 5xx
 //          answers, no two more than ServerSpan apart. Health is a pure read: it never claims a
@@ -71,18 +72,30 @@ func NewBreaker() *Breaker { return &Breaker{} }
 // Observe feeds one outcome. It reports whether the breaker moved from down to up and whether its
 // durable state changed (the tracker persists on a change).
 func (b *Breaker) Observe(o rest.Outcome, now time.Time) (recovered, changed bool) {
+	return b.ObserveFrom(nil, o, now)
+}
+
+// ObserveFrom is Observe for a breaker that may not have seen an outcome yet: under the same lock it
+// first takes the saved state, so the first outcome after a restart starts from what was saved and
+// a recovery it causes counts as a change.
+func (b *Breaker) ObserveFrom(saved *Snapshot, o rest.Outcome, now time.Time) (recovered, changed bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if saved != nil && !b.seen {
+		b.snap = *saved
+	}
 	b.seen = true
 	before := b.snap
 	switch {
-	case o.Class == providers.Transient || o.Class == providers.Outage:
+	case (o.Class == providers.Transient || o.Class == providers.Outage) && (o.Status <= 0 || o.Status >= 500):
 		b.fail(o, now)
 	case o.Status <= 0: // no response came back and nothing was sent: not evidence either way
 	case o.Class == providers.Quota:
-		recovered = b.answer()
+		if !b.snap.Down { // a limit answer is not a success: it does not end an outage
+			b.answer()
+		}
 		b.quota(o, now)
-	default:
+	default: // an answer, also a transient-classed local error behind a non-5xx response (a failed write of a download)
 		recovered = b.answer()
 	}
 	return recovered, b.snap != before

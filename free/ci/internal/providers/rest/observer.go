@@ -16,6 +16,8 @@ type Outcome struct {
 	Status   int
 	Duration time.Duration
 	RetryAt  time.Time
+	// Download is set for an artifact download: its host is a CDN, so it says nothing about the API.
+	Download bool
 }
 
 // SetObserver installs an in-memory callback. Configure clients before concurrent use.
@@ -36,14 +38,14 @@ func SetDefaultObserver(observer func(Outcome)) {
 }
 
 func (c *Client) observe(ctx context.Context, method, path string, response Response, err error, start time.Time) {
-	out := Outcome{Provider: c.Provider, Class: providers.ClassOf(err), Status: response.Status, Duration: time.Since(start), RetryAt: response.RetryAt}
+	out := Outcome{Provider: c.Provider, Class: providers.ClassOf(err), Status: response.Status, Duration: time.Since(start), RetryAt: response.RetryAt, Download: path == "<download>"}
 	logger := c.Logger
 	if logger == nil {
 		logger = slog.Default()
 	}
 	logger.Info("provider request", "provider", c.Provider, "method", method, "path_template", path, "status", response.Status, "duration", out.Duration)
-	if ctx.Err() == context.Canceled {
-		return // the caller gave up: that says nothing about the provider
+	if ctx.Err() != nil {
+		return // the caller gave up or ran out of its own budget: that says nothing about the provider
 	}
 	if c.observer != nil {
 		c.observer(out)

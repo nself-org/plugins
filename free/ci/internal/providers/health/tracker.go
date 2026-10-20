@@ -59,6 +59,7 @@ type Tracker struct {
 	ignore   map[string]bool
 	breakers map[string]*Breaker
 	loaded   map[string]time.Time
+	floor    map[string]time.Time // newest ObservedAt seen or written per family: a save never goes below it
 	drainMu  sync.Mutex
 	saveMu   sync.Mutex // saves are ordered: each reads the newest snapshot under it
 	wg       sync.WaitGroup
@@ -68,7 +69,7 @@ type Tracker struct {
 
 // New returns a tracker.
 func New(o Options) *Tracker {
-	t := &Tracker{clock: o.Clock, store: o.Store, drain: o.Drain, ignore: map[string]bool{}, breakers: map[string]*Breaker{}, loaded: map[string]time.Time{}}
+	t := &Tracker{clock: o.Clock, store: o.Store, drain: o.Drain, ignore: map[string]bool{}, breakers: map[string]*Breaker{}, loaded: map[string]time.Time{}, floor: map[string]time.Time{}}
 	if t.clock == nil {
 		t.clock = time.Now
 	}
@@ -115,15 +116,16 @@ func (t *Tracker) breaker(family string) (*Breaker, Store) {
 
 // Observe feeds one request outcome to the breaker of its provider API.
 func (t *Tracker) Observe(o rest.Outcome) {
-	if o.Provider == "" || t.ignore[o.Provider] {
+	if o.Provider == "" || o.Download || t.ignore[o.Provider] {
 		return
 	}
 	fam := Family(o.Provider)
 	b, st := t.breaker(fam)
+	var saved *Snapshot
 	if st != nil && !b.Observed() { // the first outcome after a restart must start from the saved state
-		t.reload(context.Background(), st, fam, b)
+		saved = t.read(context.Background(), st, fam)
 	}
-	recovered, changed := b.Observe(o, t.clock())
+	recovered, changed := b.ObserveFrom(saved, o, t.clock())
 	if changed && st != nil {
 		t.save(st, fam, b)
 	}
@@ -165,16 +167,29 @@ func (t *Tracker) reload(ctx context.Context, st Store, fam string, b *Breaker) 
 	}
 	t.loaded[fam] = now
 	t.mu.Unlock()
+	if s := t.read(ctx, st, fam); s != nil {
+		b.Restore(*s)
+	}
+}
+
+// read returns the saved state of a family, nil when there is none, and raises the save floor.
+func (t *Tracker) read(ctx context.Context, st Store, fam string) *Snapshot {
 	c, stop := context.WithTimeout(ctx, storeTimeout)
 	defer stop()
 	f, found, err := st.ProviderFactGet(c, fam, factScope, factKey)
 	if err != nil || !found {
-		return
+		return nil
 	}
+	t.mu.Lock()
+	if f.ObservedAt.After(t.floor[fam]) {
+		t.floor[fam] = f.ObservedAt
+	}
+	t.mu.Unlock()
 	var s Snapshot
-	if json.Unmarshal(f.Value, &s) == nil {
-		b.Restore(s)
+	if json.Unmarshal(f.Value, &s) != nil {
+		return nil
 	}
+	return &s
 }
 
 func (t *Tracker) save(st Store, fam string, b *Breaker) {
@@ -185,9 +200,16 @@ func (t *Tracker) save(st Store, fam string, b *Breaker) {
 		t.saveErrs.Add(1)
 		return
 	}
+	t.mu.Lock()
+	at := t.clock()
+	if fl := t.floor[fam]; !at.After(fl) { // the clock stepped back, or another process wrote later: stay above it
+		at = fl.Add(time.Nanosecond)
+	}
+	t.floor[fam] = at
+	t.mu.Unlock()
 	c, stop := context.WithTimeout(context.Background(), storeTimeout)
 	defer stop()
-	if _, err = st.ProviderFactPut(c, store.ProviderFact{Provider: fam, Scope: factScope, Key: factKey, Value: raw, ObservedAt: t.clock()}); err != nil {
+	if kept, err := st.ProviderFactPut(c, store.ProviderFact{Provider: fam, Scope: factScope, Key: factKey, Value: raw, ObservedAt: at}); err != nil || !kept {
 		t.saveErrs.Add(1)
 	}
 }

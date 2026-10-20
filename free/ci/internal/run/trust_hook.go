@@ -177,8 +177,8 @@ func providerRefusal(cause error) (*providers.Error, bool) {
 	}
 	switch pe.Code {
 	case "E700", "E701", "E702":
-		if pe.Status == 408 || pe.Status == 409 || pe.Status == 425 || pe.Status/100 == 2 {
-			return nil, false // a conflict, a timeout or an answer that did not parse (a proxy during an outage) may pass on a second try
+		if pe.Status == 408 || pe.Status == 409 || pe.Status == 425 || pe.Status/100 == 2 || pe.Reason == "provider policy unreadable" {
+			return nil, false // a conflict, a timeout, an answer that did not parse (a proxy during an outage) or an unreadable policy store may pass on a second try
 		}
 		return pe, pe.Class == providers.Auth || pe.Class == providers.Config
 	}

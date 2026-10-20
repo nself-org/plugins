@@ -38,6 +38,13 @@ func retryable(job model.Job) bool {
 	return job.Kind != "release" && (job.Idempotent == nil || *job.Idempotent)
 }
 
+// confirmable says a failed attempt may be rerun by --confirm-flaky: a failed code attempt of a
+// retryable job. A refused dispatch (credential, permission, configuration) is a code failure too,
+// but a rerun would send the same bad request again, so it is never confirmable (P7-HOST-11).
+func confirmable(job model.Job, out JobOutcome) bool {
+	return retryable(job) && out.State == StateFailed && out.FailureClass == "code" && !out.refused
+}
+
 // infraBudget is how many extra attempts a job may use for infra failures.
 func infraBudget(job model.Job) int {
 	if !retryable(job) || job.Retry == nil {
@@ -154,7 +161,7 @@ func (rs *runState) runAttempt(ctx context.Context, i int, pj plan.PlannedJob, o
 			retries = append(retries, why)
 		}
 	}
-	if rs.c.Opts.ConfirmFlaky > 0 && retryable(job) && out.State == StateFailed && out.FailureClass == "code" {
+	if rs.c.Opts.ConfirmFlaky > 0 && confirmable(job, out) {
 		retries, out.Flaky = rs.confirmFlaky(ctx, i, pj, o, retries, n, out.AttemptID)
 	}
 	out.Retries = retries

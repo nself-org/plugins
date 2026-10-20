@@ -105,6 +105,17 @@ func TestBreakerTable(t *testing.T) {
 			{3 * s, oc("outage", 0), "up", "", false}, {4 * s, oc("outage", 0), "down", health.ReasonDown, false},
 			{40 * s, oc("auth", 401), "up", "", true},
 		}},
+		{"a 429 does not end an outage and a 503 429 503 pattern keeps counting only unbroken runs", []step{
+			{0, oc("outage", 0), "up", "", false}, {1 * s, oc("outage", 0), "up", "", false}, {2 * s, oc("outage", 0), "up", "", false},
+			{3 * s, oc("outage", 0), "up", "", false}, {4 * s, oc("outage", 0), "down", health.ReasonDown, false},
+			{40 * s, oc("quota", 429), "degraded", health.ReasonProbing, false}, // still down: a limit answer is not a success
+			{41 * s, oc("", 200), "degraded", health.ReasonQuota, true},         // closed, still inside the rate-limit window
+		}},
+		{"a transient-classed error behind a non-5xx response is an answer", []step{ // a failed write of a download, status 200
+			{0, oc("outage", 0), "up", "", false}, {1 * s, oc("outage", 0), "up", "", false}, {2 * s, oc("outage", 0), "up", "", false},
+			{3 * s, oc("outage", 0), "up", "", false}, {4 * s, oc("outage", 0), "down", health.ReasonDown, false},
+			{40 * s, oc("transient", 200), "up", "", true},
+		}},
 		{"auth and config refusals alone never open it", []step{
 			{0, oc("auth", 401), "up", "", false}, {1 * s, oc("config", 422), "up", "", false}, {2 * s, oc("auth", 403), "up", "", false},
 			{3 * s, oc("auth", 401), "up", "", false}, {4 * s, oc("config", 404), "up", "", false}, {5 * s, oc("auth", 401), "up", "", false},

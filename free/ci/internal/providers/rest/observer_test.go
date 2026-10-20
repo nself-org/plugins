@@ -64,3 +64,37 @@ func TestCancelledRequestIsNotReported(t *testing.T) {
 		t.Fatalf("a cancelled request reached the observer %d times: it says nothing about the provider", n)
 	}
 }
+
+func TestCallerDeadlineIsNotReportedAndDownloadsAreMarked(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/slow" {
+			<-r.Context().Done()
+			return
+		}
+		_, _ = w.Write([]byte("data"))
+	}))
+	t.Cleanup(srv.Close)
+	var mu sync.Mutex
+	var outs []Outcome
+	SetDefaultObserver(func(o Outcome) { mu.Lock(); outs = append(outs, o); mu.Unlock() })
+	t.Cleanup(func() { SetDefaultObserver(nil) })
+	c := &Client{BaseURL: srv.URL, AllowPrivateBase: true, Provider: "p", TLSConfig: srv.Client().Transport.(*http.Transport).TLSClientConfig}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := c.Do(ctx, "GET", "/slow", nil, nil, nil); err == nil {
+		t.Fatal("the request past its deadline must fail")
+	}
+	mu.Lock()
+	n := len(outs)
+	mu.Unlock()
+	if n != 0 {
+		t.Fatalf("a caller's own deadline reached the observer %d times", n)
+	}
+	c.observe(context.Background(), "GET", "<download>", Response{Status: 200}, nil, time.Now())
+	c.observe(context.Background(), "GET", "/user", Response{Status: 200}, nil, time.Now())
+	mu.Lock()
+	defer mu.Unlock()
+	if len(outs) != 2 || !outs[0].Download || outs[1].Download {
+		t.Fatalf("a download must be reported once and marked, an API call not: %+v", outs)
+	}
+}

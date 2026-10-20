@@ -228,3 +228,41 @@ func TestFirstOutcomeAfterRestartKeepsSavedState(t *testing.T) {
 		t.Fatalf("the recovery seen first after a restart must be saved: %+v", got)
 	}
 }
+
+// TestSaveSurvivesAClockThatStepsBack: a save never goes below what the store holds, so a clock
+// that stepped back cannot make the store drop the newest state (and the loss is counted if it does).
+func TestSaveSurvivesAClockThatStepsBack(t *testing.T) {
+	ctx := context.Background()
+	clk := newClock()
+	st := openStore(t, clk.Now)
+	a := health.New(health.Options{Clock: clk.Now, Store: st})
+	a.Observe(outcome("quota", 429)) // saved at T
+	clk.advance(-time.Hour)          // the clock steps back
+	failN(a, health.DownAfter)       // down, saved "at" T-1h
+	if a.SaveErrors() != 0 {
+		t.Fatalf("save errors: %d", a.SaveErrors())
+	}
+	b := health.New(health.Options{Clock: clk.Now, Store: st})
+	if got := b.HealthOf(ctx, "github-hosted"); got.State != "down" {
+		t.Fatalf("the outage must reach the store although the clock stepped back: %+v", got)
+	}
+}
+
+// TestUseStoreTypedNil: handing the default tracker a nil *store.Store must not panic later.
+func TestUseStoreTypedNil(t *testing.T) {
+	health.UseStore(nil)
+	health.Default().Observe(outcome("transient", 503)) // would panic on a typed-nil interface
+}
+
+// TestDownloadOutcomesAreIgnored: an artifact download goes to a CDN and says nothing about the API.
+func TestDownloadOutcomesAreIgnored(t *testing.T) {
+	tr := health.New(health.Options{Clock: newClock().Now})
+	for i := 0; i < 2*health.DownAfter; i++ {
+		o := outcome("transient", 503)
+		o.Download = true
+		tr.Observe(o)
+	}
+	if h := tr.HealthOf(context.Background(), "github-hosted"); h.State != "up" {
+		t.Fatalf("download failures opened the API breaker: %+v", h)
+	}
+}

@@ -139,7 +139,7 @@ func (f *fakeAPI) posted() []postedStatus {
 // client is a REST funnel client for the fake, labelled as the GitHub API like production.
 func (f *fakeAPI) client() *rest.Client {
 	return &rest.Client{BaseURL: f.srv.URL, AllowPrivateBase: true, Provider: "github", APIVersion: "2022-11-28", UserAgent: "health-test",
-		TLSConfig: f.srv.Client().Transport.(*http.Transport).TLSClientConfig,
+		TLSConfig: f.srv.Client().Transport.(*http.Transport).TLSClientConfig.Clone(), // one config per client: net/http edits NextProtos in place
 		Auth:      func(context.Context) (string, error) { return testToken, nil }}
 }
 

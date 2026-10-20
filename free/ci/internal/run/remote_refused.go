@@ -6,13 +6,13 @@ package run
 //          the operator; a transient or outage error keeps the bounded infra retry (CI-40).
 // Inputs:  the provider error code the carrier ended with (providerRefusal, in trust_hook.go, decides).
 // Outputs: the finished JobOutcome of a refused dispatch.
-// Constraints: only providers.Error values of class auth or config with these codes count; every
+// Constraints: --confirm-flaky never reruns a refused dispatch (JobOutcome.refused); only providers.Error values of class auth or config with these codes count; every
 //          other carrier error (E704, E708 lease races, ssh) takes the existing lost path.
 
 // refusedOutcome settles a lost attempt whose dispatch was refused: failure class code, not
 // retryable, left for the operator.
 func (rs *runState) refusedOutcome(id string, o JobOutcome, code string) JobOutcome {
-	o.FailureClass, o.Code, o.retryable = "code", code, false
+	o.FailureClass, o.Code, o.retryable, o.refused = "code", code, false, true
 	o.Diagnosis, o.Remediation = "provider.refused", "The provider refused the dispatch ("+code+"); fix the credential, permission or provider configuration, then run it again."
 	if _, err := rs.settle(id, "lost", "needs-operator", "code"); err != nil {
 		return failed(o, err)

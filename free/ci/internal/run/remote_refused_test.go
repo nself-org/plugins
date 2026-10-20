@@ -39,7 +39,7 @@ func TestRemoteAwaitProviderRefusalIsNotRetried(t *testing.T) {
 		cause := errors.Join(errors.New("deliver"), providers.NewError(c.class, c.code, "credential", 401, time.Time{}))
 		job := model.Job{Retry: &model.RetryConfig{InfraMax: 1}}
 		o := rs.remoteLost(context.Background(), planJob("unit"), job, rd, e.id, cause, JobOutcome{ID: "unit"}, 1, &tail{})
-		if o.State != StateFailed || o.FailureClass != "code" || o.Code != c.code || o.parked || o.retryable {
+		if o.State != StateFailed || o.FailureClass != "code" || o.Code != c.code || o.parked || o.retryable || !o.refused {
 			t.Errorf("%s: outcome %+v", c.code, o)
 		}
 		if got := e.state(t); got != "needs-operator" {
@@ -62,6 +62,41 @@ func TestRemoteAwaitTransientProviderErrorIsRetried(t *testing.T) {
 		o := rs.remoteLost(context.Background(), planJob("unit"), job, rd, e.id, cause, JobOutcome{ID: "unit"}, 1, &tail{})
 		if o.FailureClass != "infra" || !o.parked {
 			t.Errorf("%v: outcome %+v, want an infra failure parked for retry", cause, o)
+		}
+	}
+}
+
+// TestRefusedDispatchIsNeverConfirmed: --confirm-flaky reruns a failed code attempt, but not a
+// refused dispatch, which would send the same bad credential or request again.
+func TestRefusedDispatchIsNeverConfirmed(t *testing.T) {
+	job := model.Job{Kind: "test"}
+	code := JobOutcome{State: StateFailed, FailureClass: "code"}
+	if !confirmable(job, code) {
+		t.Fatal("a plain code failure of a retryable job must stay confirmable")
+	}
+	code.refused = true
+	if confirmable(job, code) {
+		t.Fatal("a refused dispatch must not be rerun by --confirm-flaky")
+	}
+}
+
+// TestProviderRefusalFilter: which provider errors count as a refusal a retry cannot fix.
+func TestProviderRefusalFilter(t *testing.T) {
+	for _, c := range []struct {
+		err  *providers.Error
+		want bool
+	}{
+		{providers.NewError(providers.Auth, "E701", "credential", 401, time.Time{}), true},
+		{providers.NewError(providers.Config, "E700", "gh.auth.login", 0, time.Time{}), true},
+		{providers.NewError(providers.Config, "E702", "request", 404, time.Time{}), true},
+		{providers.NewError(providers.Config, "E702", "request", 409, time.Time{}), false},
+		{providers.NewError(providers.Config, "E702", "response", 200, time.Time{}), false},
+		{providers.NewError(providers.Config, "E700", "provider policy unreadable", 0, time.Time{}), false},
+		{providers.NewError(providers.Transient, "E704", "server", 503, time.Time{}), false},
+		{providers.NewError(providers.Config, "E708", "lease superseded by a newer epoch", 0, time.Time{}), false},
+	} {
+		if _, got := providerRefusal(c.err); got != c.want {
+			t.Errorf("%s/%s status %d: refusal = %v, want %v", c.err.Code, c.err.Reason, c.err.Status, got, c.want)
 		}
 	}
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/rest"
 	"github.com/nself-org/plugins/free/ci/internal/report"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 var (
@@ -33,7 +34,13 @@ func Default() *Tracker {
 }
 
 // UseStore makes the process-wide tracker persist its state in the coordinator's store.
-func UseStore(s Store) { Default().SetStore(s) }
+func UseStore(s *store.Store) {
+	if s == nil { // a typed nil would otherwise become a non-nil Store and panic in every request
+		Default().SetStore(nil)
+		return
+	}
+	Default().SetStore(s)
+}
 
 func init() { Install(Default()) }
 
