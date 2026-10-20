@@ -172,9 +172,10 @@ jobs:
             exit 0
           fi
           work="$(mktemp -d)"
-          (cd free/ci && go build -mod=vendor -o "$work/nself-ci" .)
+          (cd free/ci && CGO_ENABLED=0 go build -mod=vendor -o "$work/nself-ci" ./cmd)
           NSELF_CI_BIN="$work/nself-ci" NSELF_CI_HOME="$work/home" "$drill"
-          NSELF_CI_HOME="$work/home" "$work/nself-ci" doctor --json | tee "$work/doctor.json"
+          # doctor exits 12 when any unrelated check warns; the jq checks below decide the step.
+          NSELF_V15=1 NSELF_CI_HOME="$work/home" "$work/nself-ci" doctor --json | tee "$work/doctor.json" || [[ ${PIPESTATUS[0]} -eq 12 ]]
           for check in isolation.container isolation.sandboxed-container isolation.network; do
             jq -e --arg c "$check" '.. | objects | select(.id? == $c or .name? == $c) | .verified_at | select(. != null)' "$work/doctor.json" >/dev/null
           done

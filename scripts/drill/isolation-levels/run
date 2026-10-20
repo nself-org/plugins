@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# isolation-levels drill (P7-TRUST-25, R-DX-25, P7-CI D17): proves, on this host, the isolation levels it can run and
+# prints ONE ci.evidence/v1 document with one check per level (isolation.<level>). `nself ci doctor` reads the passing
+# checks back as "verified <date> on <host class>", so a level that stops working shows as stale instead of trusted.
+#
+# Levels (host class):  container, sandboxed-container (gVisor), network (scopes) and hygiene on Linux; vm (Tart) on an
+#   Apple-silicon Mac. Linux has no vm level (no KVM host, D-0120). Each level runs the integration tests of its package
+#   (go test -tags integration | tart); a prerequisite the host lacks makes that level's check `error` with
+#   "reason: prerequisite.missing" in its excerpt, which never counts as a pass. A level that does not exist on this
+#   host class gets no check at all.
+# Inputs:  NSELF_CI_BIN (default nself-ci on PATH) and NSELF_CI_HOME (the run store) for a direct run; ISOLATION_DRILL_LEVELS
+#   (comma list, narrows the levels); TRUST04_TEST_IMAGE (default alpine:3.19); for vm NSELF_TEST_TART_IMAGE,
+#   NSELF_TEST_TART_SSH_KEY and optionally NSELF_TEST_LAN_ADDR, NSELF_TEST_EXCLUDED_ADDR.
+# Outputs: inside a drills job the document is the last stdout line and the exit code is 0 only when no check failed or
+#   errored. Run directly (outside nself-ci) it runs itself as the job `drill-isolation-levels` of the drills pipeline
+#   under $NSELF_CI_BIN, so the evidence lands in the store at $NSELF_CI_HOME for `nself ci doctor`.
+# Constraints: bash 3.2 compatible (macOS); jq and go are needed; no secret is read or printed.
+set -uo pipefail
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+job=drill-isolation-levels
+say() { printf 'isolation-levels: %s\n' "$*" >&2; }
+
+if [ -z "${NSELF_CI_RUN_ID:-}" ]; then # not inside a job: record through nself-ci
+	bin=${NSELF_CI_BIN:-nself-ci}
+	command -v "$bin" >/dev/null 2>&1 || { say "$bin not found; set NSELF_CI_BIN to the nself-ci binary"; exit 2; }
+	cd "$root" || exit 2
+	NSELF_V15=1 NSELF_CI_REPO=$root exec "$bin" --no-status --pipeline drills --job "$job"
+fi
+
+for tool in jq go; do
+	command -v "$tool" >/dev/null 2>&1 || { say "$tool is required"; exit 2; }
+done
+work=$(mktemp -d "${TMPDIR:-/tmp}/isolation-levels.XXXXXX") || exit 2
+trap 'rm -rf "$work"' EXIT
+checks=$work/checks.ndjson
+: >"$checks"
+started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+t0=$(date +%s)
+goos=$(uname -s | tr '[:upper:]' '[:lower:]')
+arch=$(uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
+image=${TRUST04_TEST_IMAGE:-alpine:3.19}
+
+# record LEVEL RESULT EXCERPT: one nested check, id isolation.<level>.
+record() {
+	say "$2 isolation.$1: $(printf '%s' "$3" | head -n 1 | cut -c1-200)"
+	jq -nc --arg id "isolation.$1" --arg job "$job" --arg result "$2" --arg excerpt "$3" '
+		{id: $id, job_id: $job, kind: "drill", tool: "go", tool_version: null, required: true, substantive: true,
+		 result: $result, findings: (if $result == "pass" then 0 else 1 end), excerpt: $excerpt[0:3000], log_ref: null}' >>"$checks"
+}
+missing() { record "$1" error "reason: prerequisite.missing - $2"; }
+
+# snip FILE: why a go test run died, on one line: the failing tests, then the last lines.
+snip() {
+	{
+		grep -E '^(--- FAIL|FAIL|panic|fatal error)' "$1" 2>/dev/null | head -n 4 | cut -c1-160
+		grep -E 'prerequisite missing|required' "$1" 2>/dev/null | head -n 1 | cut -c1-160
+		tail -n 2 "$1" 2>/dev/null | cut -c1-120
+	} | tr '\n' ' '
+}
+
+# runtime_ok: a container runtime answers; sets rt.
+runtime_ok() {
+	rt=
+	for c in docker podman; do
+		if command -v "$c" >/dev/null 2>&1 && "$c" info >/dev/null 2>&1; then rt=$c; return 0; fi
+	done
+	return 1
+}
+# image_ok: the test image is local or can be pulled.
+image_ok() { "$rt" image inspect "$image" >/dev/null 2>&1 || "$rt" pull -q "$image" >/dev/null 2>&1; }
+runsc_ok() {
+	if [ "$rt" = docker ]; then docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q runsc; else command -v runsc >/dev/null 2>&1; fi
+}
+
+# prereq LEVEL: prints why the host cannot run the level, nothing when it can.
+prereq() {
+	case $1 in
+	container | network | hygiene)
+		runtime_ok || { echo "no running docker or podman"; return; }
+		image_ok || echo "test image $image is neither local nor pullable"
+		;;
+	sandboxed-container)
+		runtime_ok || { echo "no running docker or podman"; return; }
+		runsc_ok || { echo "the gVisor runtime runsc is not registered"; return; }
+		image_ok || echo "test image $image is neither local nor pullable"
+		;;
+	vm)
+		command -v tart >/dev/null 2>&1 || { echo "tart is not installed"; return; }
+		[ -n "${NSELF_TEST_TART_IMAGE:-}" ] || { echo "NSELF_TEST_TART_IMAGE is not set"; return; }
+		[ -n "${NSELF_TEST_TART_SSH_KEY:-}" ] || echo "NSELF_TEST_TART_SSH_KEY is not set"
+		;;
+	esac
+}
+
+# leg LEVEL TAGS PACKAGE: run the integration tests of one level and record the result.
+leg() {
+	local level=$1 tags=$2 pkg=$3 why out rc
+	why=$(prereq "$level")
+	if [ -n "$why" ]; then missing "$level" "$why"; return; fi
+	out=$work/$level.out
+	(cd "$root/free/ci" && CGO_ENABLED=0 TRUST04_TEST_IMAGE=$image go test -mod=vendor -count=1 -v -timeout 20m -tags "$tags" "$pkg") >"$out" 2>&1
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		record "$level" fail "go test -tags $tags $pkg exited $rc: $(snip "$out")"
+	elif grep -q -- '--- SKIP' "$out"; then
+		record "$level" fail "a test skipped; a missing prerequisite must fail, never skip: $(grep -m1 -- '--- SKIP' "$out" | cut -c1-120)"
+	elif ! grep -q -- '^--- PASS' "$out"; then
+		record "$level" fail "go test -tags $tags $pkg ran no passing test"
+	else
+		record "$level" pass "go test -tags $tags $pkg: $(grep -c -- '^--- PASS' "$out") passing tests"
+	fi
+}
+
+case "$goos/$arch" in
+linux/*) default_levels="container sandboxed-container network hygiene" ;;
+darwin/arm64) default_levels="vm" ;;
+*) default_levels="" ;;
+esac
+levels=$default_levels
+if [ -n "${ISOLATION_DRILL_LEVELS:-}" ]; then levels=$(printf '%s' "$ISOLATION_DRILL_LEVELS" | tr ',' ' '); fi
+[ -n "$levels" ] || say "no isolation level can be proven on $goos/$arch"
+
+# linux_leg LEVEL TAGS PACKAGE: the level exists on Linux only.
+linux_leg() { if [ "$goos" = linux ]; then leg "$@"; else missing "$1" "needs a Linux host"; fi; }
+
+for level in $levels; do
+	case $level in
+	container) linux_leg container integration ./internal/isolation/container/... ;;
+	sandboxed-container) linux_leg sandboxed-container integration ./internal/isolation/gvisor/... ;;
+	network) linux_leg network integration ./internal/netscope/... ;;
+	hygiene) linux_leg hygiene integration ./internal/hygiene/... ;;
+	vm)
+		if [ "$goos/$arch" = darwin/arm64 ]; then
+			leg vm tart ./internal/isolation/tart/...
+		else
+			missing vm "needs an Apple-silicon Mac (Linux has no vm level: no KVM host, D-0120)"
+		fi
+		;;
+	*)
+		say "unknown level '$level' in ISOLATION_DRILL_LEVELS"
+		exit 2
+		;;
+	esac
+done
+[ -s "$checks" ] || exit 0 # nothing to prove on this host class: no document, exit 0, nothing recorded as verified
+
+finished=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+revision=$(git -C "$root" rev-parse HEAD 2>/dev/null || true)
+[[ "$revision" =~ ^[0-9a-f]{40}$ ]] || revision=0000000000000000000000000000000000000000
+dirty=false
+[ -n "$(git -C "$root" status --porcelain --untracked-files=no 2>/dev/null || true)" ] && dirty=true
+sha() { sha256sum "$@" 2>/dev/null || shasum -a 256 "$@"; }
+first=$(git -C "$root" rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 || true)
+repo_id="local:$(printf '%s' "${first:-none}" | sha | cut -d' ' -f1)"
+cfg=$(sha "${BASH_SOURCE[0]}" | cut -d' ' -f1)
+case "${GITHUB_EVENT_NAME:-}" in schedule | push | pull_request) trigger=$GITHUB_EVENT_NAME ;; workflow_dispatch) trigger=manual ;; *) trigger=local ;; esac
+
+jq -sc --arg revision "$revision" --arg repo "$repo_id" --arg run "${GITHUB_RUN_ID:-$job-$t0}" --arg trigger "$trigger" \
+	--arg cfg "$cfg" --argjson dirty "$dirty" --arg platform "$goos/$arch" --arg host "$(hostname)" --arg job "$job" \
+	--arg provider "$([ -n "${GITHUB_RUN_ID:-}" ] && echo github || echo local)" \
+	--arg started "$started" --arg finished "$finished" --argjson ms "$((($(date +%s) - t0) * 1000))" '
+	. as $checks
+	| ([$checks[] | select(.result == "pass")] | length) as $pass
+	| ([$checks[] | select(.result == "fail")] | length) as $fail
+	| ([$checks[] | select(.result == "error")] | length) as $err
+	| {
+	  schema: "ci.evidence/v1", revision: $revision, repo_id: $repo, run_id: $run,
+	  pipeline: {id: "drills", name: "drills", kind: "drill"}, job: $job,
+	  trigger: $trigger, source_trust: "owner", policy_digest: "none",
+	  input_digests: {config: $cfg, generated: [], lockfiles: []},
+	  worktree_state: (if $dirty then "dirty" else "clean" end), tracked_changes_digest: null,
+	  binding: (if $dirty then {state: "unbound", reason: "dirty"} else {state: "bound", reason: null} end),
+	  runner: {id: $host, provider: $provider, platform: $platform, isolation: "process"},
+	  producer: {kind: "self-reported", version: ($job + "/1")},
+	  timings: {queued_at: null, started_at: $started, finished_at: $finished, duration_ms: $ms},
+	  tool_versions: {}, checks: $checks, artifacts: [], retries: [],
+	  selection: {mode: "full", reason: "selection.full_required", digest: "none"},
+	  result: (if $fail > 0 then "fail" elif $err > 0 then "error" else "pass" end),
+	  counts: {pass: $pass, fail: $fail, skip: 0, error: $err, total: ($checks | length)},
+	  freshness: (if $dirty then {state: "unknown", reason: null} else {state: "current", reason: null} end),
+	  signature: {kind: "coordinator-recorded"}
+	}' "$checks" | tee "$work/evidence.json"
+[ "$(jq -r .result "$work/evidence.json")" = pass ]

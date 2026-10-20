@@ -70,7 +70,15 @@ func Judge(output string, truncated bool) (cirun.OutcomeChange, bool) {
 	return ch, true
 }
 
-// summary lists the nested checks that did not pass, then the totals.
+// PassedPrefix starts the last line of the excerpt: the ids of the nested checks that passed, space separated
+// (P7-TRUST-25 reads it back as the per-level record of the isolation drill). It is last because the evidence
+// excerpt keeps the tail when it is cut.
+const PassedPrefix = "passed: "
+
+// maxPassedIDs bounds the passed line so a drill with a huge document cannot fill the excerpt.
+const maxPassedIDs = 64
+
+// summary lists the nested checks that did not pass, then the totals, then the ids that passed.
 func summary(ev model.Evidence) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "nested evidence: %s (pass %d, fail %d, skip %d, error %d)\n", ev.Result, ev.Counts.Pass, ev.Counts.Fail, ev.Counts.Skip, ev.Counts.Error)
@@ -83,6 +91,15 @@ func summary(ev model.Evidence) string {
 			fmt.Fprintf(&b, ": %s", why)
 		}
 		b.WriteByte('\n')
+	}
+	var passed []string
+	for _, c := range ev.Checks {
+		if c.Result == "pass" && len(passed) < maxPassedIDs && !strings.ContainsAny(c.ID, " \t\r\n") {
+			passed = append(passed, c.ID)
+		}
+	}
+	if len(passed) > 0 {
+		b.WriteString(PassedPrefix + strings.Join(passed, " ") + "\n")
 	}
 	return b.String()
 }

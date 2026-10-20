@@ -13,7 +13,10 @@
 // directory is read.
 package doctor
 
-import "sort"
+import (
+	"encoding/json"
+	"sort"
+)
 
 // Status is the outcome of one check.
 type Status string
@@ -41,6 +44,24 @@ type Check struct {
 	Detail      string `json:"detail,omitempty"`
 	Remediation string `json:"remediation"`
 	Subject     string `json:"subject,omitempty"`
+
+	// HasVerifiedAt makes the JSON carry "verified_at": the RFC 3339 time in VerifiedAt, or null when it is nil
+	// (a section that reports a last-verified date, P7-TRUST-25). Left false, the field is absent.
+	HasVerifiedAt bool    `json:"-"`
+	VerifiedAt    *string `json:"-"`
+}
+
+type plainCheck Check
+
+// MarshalJSON adds verified_at, null included, to a check that reports one; every other check is unchanged.
+func (c Check) MarshalJSON() ([]byte, error) {
+	if !c.HasVerifiedAt {
+		return json.Marshal(plainCheck(c))
+	}
+	return json.Marshal(struct {
+		plainCheck
+		VerifiedAt *string `json:"verified_at"`
+	}{plainCheck(c), c.VerifiedAt})
 }
 
 // ExitCode maps a list of checks to the doctor exit code: 10 when any check
