@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -196,7 +196,7 @@
+@@ -204,7 +204,7 @@
  		}
  	}
  	switch {

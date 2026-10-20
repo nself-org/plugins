@@ -132,19 +132,19 @@ func TestAttestNodesByKeyReadsPinAndEligibility(t *testing.T) {
 	r := newAttestRig(t)
 	a := r.pinKey("node-a", 1, ptr(true))
 	b := r.pinKey("node-b", 2, ptr(false))
-	c := r.pinKey("node-c", 3, nil) // pinned, no registry record: not eligible
+	c := r.pinKey("node-c", 3, nil) // pinned, no registry record: not a node at all
 	r.exec(`INSERT INTO pki_node_key(node_id,key_id,public,pinned_at) VALUES('node-pending','0123456789abcdef','',1)`)
 	r.exec(`INSERT INTO pki_node_key(node_id,key_id,public,pinned_at) VALUES('node-liar','fedcba9876543210',?,1)`, base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	for key, want := range map[string]struct {
 		node     string
 		eligible bool
-	}{a: {"node-a", true}, b: {"node-b", false}, c: {"node-c", false}} {
+	}{a: {"node-a", true}, b: {"node-b", false}} {
 		got, err := r.led.NodesByKey(r.ctx, key)
 		if err != nil || len(got) != 1 || got[0].NodeID != want.node || got[0].SigningEligible != want.eligible || len(got[0].Public) != 32 {
 			t.Fatalf("%s: %+v %v", key, got, err)
 		}
 	}
-	for _, key := range []string{"0123456789abcdef", "fedcba9876543210", "ffffffffffffffff"} {
+	for _, key := range []string{c, "0123456789abcdef", "fedcba9876543210", "ffffffffffffffff"} {
 		if got, err := r.led.NodesByKey(r.ctx, key); err != nil || len(got) != 0 {
 			t.Fatalf("%s (pending pin, key that does not hash to its id, unknown): %+v %v", key, got, err)
 		}
@@ -252,6 +252,12 @@ func TestAttestRevokedNodeAndKeyAreRefused(t *testing.T) {
 	r.exec(`UPDATE node SET state='revoked' WHERE id='node-1'`)
 	if got, _ := r.led.NodesByKey(r.ctx, keyHex); len(got) != 0 {
 		t.Fatalf("a registry-revoked node still pins a key: %+v", got)
+	}
+	r.exec(`UPDATE node SET state='online' WHERE id='node-1'`)
+	// a registry revocation that commits after the verifier's check refuses the use at the write too
+	r.exec(`UPDATE node SET state='revoked' WHERE id='node-1'`)
+	if err := r.led.Consume(r.ctx, attest.Use{AttemptID: "att-0", KeyID: keyID, SigDigest: "d0", NodeID: "node-1", RunID: "run-0"}); !errors.Is(err, attest.ErrRevoked) {
+		t.Fatalf("consume for a registry-revoked node: %v", err)
 	}
 	r.exec(`UPDATE node SET state='online' WHERE id='node-1'`)
 	// a revocation that commits after the verifier's check refuses the use at the write

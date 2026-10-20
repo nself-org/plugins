@@ -15,7 +15,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"time"
 
@@ -76,7 +78,7 @@ func (v *RunnerVerifier) VerifyEvidence(doc []byte, ev model.Evidence) error {
 	if err != nil {
 		return remoteFail(RemoteSignatureInvalid, "no signing payload: "+err.Error(), nil)
 	}
-	if !documentMatches(obj, ev) {
+	if !documentMatches(doc, ev) {
 		return remoteFail(RemoteSignatureInvalid, "the document and the decoded evidence disagree", nil)
 	}
 	payload, err := payloadOf(obj)
@@ -117,20 +119,24 @@ func contextMismatch(f AttemptFacts, ev model.Evidence) string {
 		return "policy_digest"
 	case string(ev.Selection.Mode) != f.SelectionMode:
 		return "selection.mode"
-	case ev.Job != nil && *ev.Job != f.Job:
+	case ev.Job == nil || *ev.Job != f.Job:
 		return "job"
+	}
+	for _, c := range ev.Checks {
+		if c.JobID != f.Job {
+			return "checks.job_id" // a node vouches for its own job only
+		}
 	}
 	return ""
 }
 
-// documentMatches reports whether the bytes that are signed and the decoded evidence the checks read
-// name the same revision, run, repository and attempt, so a caller that pairs the two cannot have the
-// signature cover one document while the lease and revision checks judge another.
-func documentMatches(obj map[string]any, ev model.Evidence) bool {
-	str := func(m map[string]any, k string) string { v, _ := m[k].(string); return v }
-	att, _ := obj["attempt"].(map[string]any)
-	return str(obj, "revision") == ev.Revision && str(obj, "run_id") == ev.RunID && str(obj, "repo_id") == ev.RepoID &&
-		att != nil && str(att, "id") == ev.Attempt.ID
+// documentMatches reports whether the signed bytes decode to the very evidence the checks read, so a
+// caller that pairs a document with another evidence cannot have the signature cover one document while the
+// lease, context and revision checks judge another. Fields the model does not know are not compared (they
+// are covered by the signature, not read by any check).
+func documentMatches(doc []byte, ev model.Evidence) bool {
+	var d model.Evidence
+	return json.Unmarshal(doc, &d) == nil && reflect.DeepEqual(d, ev)
 }
 
 func verifyAgainst(ctx context.Context, led Ledger, ev model.Evidence, payload, raw []byte) error {

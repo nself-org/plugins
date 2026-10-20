@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -109,8 +109,6 @@
+@@ -113,8 +113,6 @@
  		return "run_id"
  	case ev.RepoID != f.RepoID:
  		return "repo_id"

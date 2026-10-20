@@ -61,10 +61,10 @@ func (r statusReposter) Repost(ctx context.Context, keys []attest.StatusKey, sta
 
 // RevokeNode revokes the evidence keys of nodeID on behalf of actor and returns the re-evaluation set.
 func RevokeNode(ctx context.Context, st *store.Store, log *audit.Log, nodeID, actor string) (attest.Affected, error) {
-	// The process-wide sender when the composition root configured it (D-1291); otherwise one over this
-	// store, so a revocation always queues its re-posts.
+	// The process-wide sender when the composition root configured it over this very store (D-1291);
+	// otherwise one over this store, so a revocation always queues its re-posts in the store it revoked in.
 	sender := report.Default
-	if sender == nil || sender.Store == nil {
+	if sender == nil || sender.Store != st {
 		sender = &report.Sender{Store: st}
 	}
 	r := attest.Revoker{Ledger: store.AttestLedger{S: st}, Reposter: statusReposter{sender: sender}}

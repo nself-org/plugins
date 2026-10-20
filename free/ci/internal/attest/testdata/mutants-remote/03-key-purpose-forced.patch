@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -172,7 +172,8 @@
+@@ -180,7 +180,8 @@
  			}
  		}
  		nodes = found

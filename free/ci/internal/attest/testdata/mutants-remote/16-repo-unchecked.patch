@@ -1,6 +1,6 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -107,8 +107,6 @@
+@@ -111,8 +111,6 @@
  	switch {
  	case ev.RunID != f.RunID:
  		return "run_id"

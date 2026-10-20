@@ -62,10 +62,10 @@ func (l AttestLedger) AttemptFacts(ctx context.Context, attemptID string) (a att
 }
 
 // NodesByKey lists the nodes that pin the 16-hex key id (a pending pin has no key and is skipped; a row
-// whose key does not hash to the id is skipped; a node revoked in the registry or by RevokeNode is skipped), each with the signing_eligible fact of its registry record.
+// whose key does not hash to the id is skipped; a node revoked in the registry or by RevokeNode, or one with no registry record, is skipped), each with the signing_eligible fact of its registry record.
 func (l AttestLedger) NodesByKey(ctx context.Context, nodeKeyID string) ([]attest.KeyNode, error) {
-	rows, err := l.S.readers.QueryContext(ctx, `SELECT k.node_id,k.public,coalesce(c.doc_json,'') FROM pki_node_key k LEFT JOIN capability_snapshot c ON c.node_id=k.node_id LEFT JOIN node n ON n.id=k.node_id
- WHERE k.key_id=? AND k.public<>'' AND coalesce(n.state,'')<>'revoked' AND NOT EXISTS (SELECT 1 FROM attest_revoked_node r WHERE r.node_id=k.node_id) ORDER BY k.node_id`, nodeKeyID)
+	rows, err := l.S.readers.QueryContext(ctx, `SELECT k.node_id,k.public,coalesce(c.doc_json,'') FROM pki_node_key k LEFT JOIN capability_snapshot c ON c.node_id=k.node_id JOIN node n ON n.id=k.node_id
+ WHERE k.key_id=? AND k.public<>'' AND n.state<>'revoked' AND NOT EXISTS (SELECT 1 FROM attest_revoked_node r WHERE r.node_id=k.node_id) ORDER BY k.node_id`, nodeKeyID)
 	all, err := pkiCollect(rows, err, func(r *sql.Rows) (n attest.KeyNode, e error) {
 		var public string
 		var capability []byte
@@ -120,13 +120,20 @@ func (l AttestLedger) Consume(ctx context.Context, u attest.Use) error {
 	}
 	s := l.S
 	return s.write(ctx, func(tx *sql.Tx) error {
-		// A revocation that committed after the verifier's check wins: the use is refused here, so every
+		// A revocation (of the key, of the node, or the registry's own revoked state) that committed after the verifier's check wins: the use is refused here, so every
 		// use row that exists was written before the key was revoked and is quarantined with it.
 		var revoked int
 		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM attest_revoked WHERE key_id=?`, u.KeyID).Scan(&revoked); err != nil {
 			return err
 		}
 		if revoked > 0 {
+			return attest.ErrRevoked
+		}
+		var nodeRevoked int
+		if err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM attest_revoked_node WHERE node_id=?)+(SELECT count(*) FROM node WHERE id=? AND state='revoked')`, u.NodeID, u.NodeID).Scan(&nodeRevoked); err != nil {
+			return err
+		}
+		if nodeRevoked > 0 {
 			return attest.ErrRevoked
 		}
 		var other int

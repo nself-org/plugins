@@ -126,9 +126,15 @@ func verifierOf(l attest.Ledger) *attest.RunnerVerifier {
 	return &attest.RunnerVerifier{Ledger: func() attest.Ledger { return l }}
 }
 
+// attemptEvidence is goodEvidence as one attempt of job "build" records it: its own job only.
 func attemptEvidence(attempt string) model.Evidence {
 	ev := goodEvidence()
 	ev.Attempt = &model.AttemptRef{ID: attempt, N: 1}
+	ev.Job = strp("build")
+	ev.Checks = append([]model.Check(nil), ev.Checks...)
+	for i := range ev.Checks {
+		ev.Checks[i].JobID = "build"
+	}
 	return ev
 }
 
@@ -204,6 +210,11 @@ func remoteCases(t testing.TB) []remoteCase {
 		{name: "forged-selection-mode", ev: forged(func(e *model.Evidence) { e.Selection.Mode = "affected" }), reason: attest.RemoteContextMismatch},
 		{name: "forged-run-id", ev: forged(func(e *model.Evidence) { e.RunID = "" }), reason: attest.RemoteContextMismatch},
 		{name: "forged-job", ev: forged(func(e *model.Evidence) { e.Job = strp("deploy") }), reason: attest.RemoteContextMismatch},
+		{name: "forged-no-job", ev: forged(func(e *model.Evidence) { e.Job = nil }), reason: attest.RemoteContextMismatch},
+		{name: "forged-foreign-check", ev: forged(func(e *model.Evidence) {
+			e.Checks = append([]model.Check(nil), e.Checks...)
+			e.Checks[0].JobID = "lint"
+		}), reason: attest.RemoteContextMismatch},
 		{name: "revoked-during-verification", ev: good, ledger: func(l *memLedger) { l.revokeOnConsume = true }, reason: attest.RemoteKeyRevoked},
 		{name: "empty-revision", ev: noRevision, reason: attest.RemoteRevisionMismatch},
 		{name: "two-keys-under-one-id", ev: good, ledger: func(l *memLedger) {
@@ -385,6 +396,7 @@ func TestVerifyRemoteLedgerFailuresFailClosed(t *testing.T) {
 func TestVerifyRemoteGateAcceptsOnlyVerifiedEvidence(t *testing.T) {
 	good := mustSign(t, attemptEvidence("att-1"), keyA)
 	g := goodGate(good)
+	g.RequiredJobs = []string{"build"}
 	attest.RegisterRemoteVerifier(verifierOf(newLedger()))
 	t.Cleanup(func() { attest.RegisterRemoteVerifier(nil) })
 	if got := attest.GateAccept(good, g); len(got) != 0 {
@@ -413,6 +425,13 @@ func TestInvariant_I13_SignedRemote(t *testing.T) {
 		n++
 		ev := sc.ev
 		ev.Attempt = &model.AttemptRef{ID: "att-1", N: 1}
+		// one attempt vouches for its own job only: every world is judged on the single required job "build"
+		ev.Job = strp("build")
+		ev.Checks = append([]model.Check(nil), ev.Checks...)
+		for i := range ev.Checks {
+			ev.Checks[i].JobID = "build"
+		}
+		sc.gate.RequiredJobs = []string{"build"}
 		l := newLedger()
 		facts := attest.AttemptFacts{RunnerID: holderNode, Revision: ev.Revision, RunID: ev.RunID, RepoID: ev.RepoID, SourceTrust: string(ev.SourceTrust),
 			PolicyDigest: ev.PolicyDigest, SelectionMode: string(ev.Selection.Mode), Job: "build"}

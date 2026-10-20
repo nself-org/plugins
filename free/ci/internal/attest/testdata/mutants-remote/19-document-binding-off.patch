@@ -1,11 +1,11 @@
 --- a/internal/attest/verify_remote.go
 +++ b/internal/attest/verify_remote.go
-@@ -74,7 +74,7 @@
+@@ -78,7 +78,7 @@
  	if err != nil {
  		return remoteFail(RemoteSignatureInvalid, "no signing payload: "+err.Error(), nil)
  	}
--	if !documentMatches(obj, ev) {
-+	if false && !documentMatches(obj, ev) {
+-	if !documentMatches(doc, ev) {
++	if false && !documentMatches(doc, ev) {
  		return remoteFail(RemoteSignatureInvalid, "the document and the decoded evidence disagree", nil)
  	}
  	payload, err := payloadOf(obj)
