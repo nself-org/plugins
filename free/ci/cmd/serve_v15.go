@@ -204,7 +204,7 @@ func dispatchPipeline(home string, f *v15ServeFlags) coordinator.Dispatcher {
 			return coordinator.RunResult{}, fmt.Errorf("checkout failed: %w", err)
 		}
 		o := RunOptions{Root: dir, Home: home, Pipeline: row.Pipeline, Trigger: serveTrigger(facts.Trigger),
-			Container: !f.unsandboxed, Timeout: time.Duration(f.timeout) * time.Second, Stream: f.verbose}
+			Container: !f.unsandboxed, AwaitProvider: true, Timeout: time.Duration(f.timeout) * time.Second, Stream: f.verbose}
 		p, digest, subst, err := preparePlan(ctx, o)
 		if err != nil {
 			return coordinator.RunResult{}, fmt.Errorf("plan failed: %w", err)

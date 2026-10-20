@@ -8,7 +8,8 @@ package run
 // the world is world.BuildForLocal, so a plan and a run describe the same
 // machine and the same registered nodes the same way (D-1042, D-0989). The
 // hook's world holds registered nodes; a provider-hosted runner is dropped
-// because a foreground run cannot await a provider lease. This file must not
+// because a foreground run cannot await a provider lease, unless a coordinator
+// process runs the pipeline (Session.AwaitProvider, D-1394). This file must not
 // import internal/dispatch (only dispatch_hook.go may).
 
 import (
@@ -111,16 +112,30 @@ func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World
 	if err != nil {
 		return sched.World{}, "", err
 	}
-	keep := w.Runners[:0]
+	w, changed := dropProviderRunners(w, rd.sess.AwaitProvider)
+	if !changed {
+		return w, digest, nil
+	}
+	digest, err = world.Digest(w)
+	return w, digest, err
+}
+
+// dropProviderRunners removes the provider-hosted and ephemeral runners, which a foreground run cannot
+// await a lease on; with await (a coordinator process owns the run) it removes nothing. changed is false
+// when there was nothing to remove (the digest stays valid).
+func dropProviderRunners(w sched.World, await bool) (out sched.World, changed bool) {
+	if await {
+		return w, false
+	}
+	keep := w.Runners[:0:0]
 	for _, r := range w.Runners {
 		if r.Location != "hosted" && !r.Ephemeral {
 			keep = append(keep, r)
 		}
 	}
 	if len(keep) == len(w.Runners) && len(w.Hosted) == 0 {
-		return w, digest, nil
+		return w, false
 	}
 	w.Runners, w.Hosted = keep, nil
-	digest, err = world.Digest(w)
-	return w, digest, err
+	return w, true
 }

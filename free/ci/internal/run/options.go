@@ -41,6 +41,10 @@ type Options struct {
 	// Interactive is true for a person waiting at a terminal: stdin is a terminal, no --trigger
 	// and no NSELF_INVOKED_BY. Only an interactive run gets the 10 minute foreground queue cap.
 	Interactive bool
+	// AwaitProvider is true when a coordinator process (`serve`) runs the pipeline: it can wait for a
+	// provider lease, so the placement world keeps provider-hosted runners. A bare foreground run
+	// cannot, and drops them (D-1394).
+	AwaitProvider bool
 	// PolicyRun carries per-run policy values into PolicyRequest.Run (filled by P7-AUTO-29 from
 	// `--where`, `--prefer` and `--runner`); nil means none.
 	PolicyRun RunValues
