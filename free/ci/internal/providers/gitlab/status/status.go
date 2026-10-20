@@ -182,3 +182,14 @@ func UsePhase(fn func(report.Status) Phase) {
 	defer phaseMu.Unlock()
 	registered.Phase = fn
 }
+
+// PhaseOf is the phase the installed hook gives a status (PhaseNone with no hook).
+func PhaseOf(s report.Status) Phase {
+	phaseMu.RLock()
+	hook := registered.Phase
+	phaseMu.RUnlock()
+	if hook == nil {
+		return PhaseNone
+	}
+	return hook(s)
+}

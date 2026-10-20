@@ -43,6 +43,12 @@ func init() {
 // at coordinator start, next to runtime.UseStore).
 func UseStore(st *store.Store) { defaultProvider.UseJournal(NewStoreJournal(st)) }
 
+// ReleaseStore puts the default provider's dispatch journal back in memory (the coordinator's store is closing).
+func ReleaseStore() { defaultProvider.UseJournal(NewMemJournal()) }
+
+// Journal returns the dispatch journal in use.
+func (p *Provider) Journal() Journal { return p.jrnl() }
+
 var _ providers.TrustFacts = (*Provider)(nil)
 
 // UseTrustFacts installs the refetcher of trigger facts from the GitLab API (P7-HOST-21 calls this from
