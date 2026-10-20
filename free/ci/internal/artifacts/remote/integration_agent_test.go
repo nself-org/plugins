@@ -134,7 +134,11 @@ func (r *rig) runAgent(n *node) error {
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	limit := 60 * time.Second
+	if r.deadline > 0 {
+		limit = r.deadline
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
 	sessDone := make(chan error, 1)
 	go func() { sessDone <- s.Run(ctx) }()

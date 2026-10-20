@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
@@ -203,6 +204,7 @@ func TestRemoteArtifactsAgent(t *testing.T) {
 	})
 	t.Run("an artifact-ref for an undeclared path is refused", func(t *testing.T) {
 		r := newRig(t, outputJob())
+		r.deadline = 8 * time.Second // the refused frame stays at the head of the pull carrier's queue; the lease ends by the deadline
 		small := outputs()["out/small.txt"]
 		n := &node{t: t, files: outputs(), job: outputJob(), extraRef: &protocol.ArtifactRef{Path: "secrets/not-declared.txt", SHA256: sum(small), Size: int64(len(small))}}
 		if err := r.runAgent(n); err == nil {

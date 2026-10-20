@@ -42,8 +42,10 @@ type rig struct {
 	lease *Lease
 	eng   *lease.Engine
 	clk   *time.Time
-	snk   sinkProbe // the simulation sink (integration_sink_test.go), once a test made one
-	pol   records.Policy
+	// deadline bounds a carrier B run (0: 60 s); a poisoned frame blocks the pull carrier's queue, so the lease ends by it
+	deadline time.Duration
+	snk      sinkProbe // the simulation sink (integration_sink_test.go), once a test made one
+	pol      records.Policy
 }
 
 func newRig(t *testing.T, job model.Job) *rig {
