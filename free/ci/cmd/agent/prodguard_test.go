@@ -69,6 +69,12 @@ func TestServeStdioExitsNonZeroWithE663OnAProdStackMarker(t *testing.T) {
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	dir := t.TempDir()
+	// The marker guard checks for docker on PATH before calling the injected runner.
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "docker"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("ENV=prod\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
