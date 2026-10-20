@@ -5,14 +5,16 @@ package main
 // Linux, isolation.ephemeral-vm) saying when this machine last proved the level, from the stored evidence of the
 // isolation-levels drill (scripts/drill/isolation-levels). It registers itself in the doctor section registry
 // (P7-CI-50), so internal/doctor is not edited for it.
-// Inputs:  the machine's run store (NSELF_CI_HOME, default ~/.nself/ci/state.db); it is only read, and never created.
+// Inputs:  the machine's run store (NSELF_CI_HOME, default ~/.nself/ci/state.db); it is never created, and only queried (opening an existing store also applies the store's own directory mode and migrations).
 // Outputs: checks that always pass (an unverified level is the honest state of a host that never ran the drill, not a
 // fault); `verified_at` is an RFC 3339 time or null; Linux vm and ephemeral-vm read "unavailable (no KVM host, D-0120)".
 // A store that cannot be read is one warning, and no level then reads verified.
-// Constraints: no write, no store creation; a level is verified only by a stored passing check.
+// Constraints: no evidence write, no store creation; a level is verified only by a stored passing check.
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -39,7 +41,13 @@ func isolationChecks(ctx context.Context, env doctor.Env) []doctor.Check {
 	var src lastverified.Source
 	storeErr := error(nil)
 	if path := isolationStorePath(env); path != "" {
-		if _, err := os.Stat(path); err == nil {
+		_, statErr := os.Stat(path)
+		switch {
+		case errors.Is(statErr, fs.ErrNotExist):
+			// No store yet: every level reads unverified, which is true.
+		case statErr != nil:
+			storeErr = statErr
+		default:
 			st, openErr := cirun.OpenStore(path)
 			if openErr != nil {
 				storeErr = openErr

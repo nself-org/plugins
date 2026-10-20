@@ -56,7 +56,7 @@ func seedDrillEvidence(t *testing.T, home, passed, platform string) {
 		t.Fatal(err)
 	}
 	excerpt, _ := json.Marshal("nested evidence\n" + passed)
-	body := `{"revision":"0123456789abcdef","runner":{"platform":"` + platform + `"},"timings":{"finished_at":"2026-10-03T03:00:00Z"},` +
+	body := `{"source_trust":"owner","revision":"0123456789abcdef","runner":{"platform":"` + platform + `"},"timings":{"finished_at":"2026-10-03T03:00:00Z"},` +
 		`"checks":[{"job_id":"drill-isolation-levels","kind":"drill","excerpt":` + string(excerpt) + `}]}`
 	if err = st.RecordRunEvidence(ctx, "e", "p", "0123456789abcdef", "i", []byte(body)); err != nil {
 		t.Fatal(err)

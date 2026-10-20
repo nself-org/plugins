@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -16,7 +17,7 @@ func lvDoc(job, kind, excerpt, finished, platform string) []byte {
 	if finished != "" {
 		timing = `"` + finished + `"`
 	}
-	return []byte(fmt.Sprintf(`{"revision":"rev-%s","runner":{"platform":%q},"timings":{"finished_at":%s},"checks":[{"job_id":%q,"kind":%q,"excerpt":%q}]}`,
+	return []byte(fmt.Sprintf(`{"revision":"rev-%s","source_trust":"owner","runner":{"platform":%q},"timings":{"finished_at":%s},"checks":[{"job_id":%q,"kind":%q,"excerpt":%q}]}`,
 		finished, platform, timing, job, kind, excerpt))
 }
 
@@ -91,5 +92,24 @@ func TestLastVerifiedIgnoresAttemptEvidenceAndFallsBackToStoreTime(t *testing.T)
 	got, err := s.LastVerified(ctx, lvJob, lvPrefix, []string{"isolation.container"})
 	if err != nil || got["isolation.container"].FinishedAt.IsZero() || got["isolation.container"].FinishedAt.Year() != 2026 {
 		t.Fatalf("a document with no finish time uses the store time: %+v, %v", got, err)
+	}
+}
+
+func TestLastVerifiedIgnoresUntrustedRuns(t *testing.T) {
+	s, _ := lvStore(t)
+	for i, trust := range []string{"untrusted", "collaborator", ""} {
+		body := strings.Replace(string(lvDoc(lvJob, "drill", "passed: isolation.container", "2026-10-03T03:00:00Z", "linux/amd64")), `"source_trust":"owner"`, `"source_trust":"`+trust+`"`, 1)
+		lvRecord(t, s, fmt.Sprintf("u%d", i), []byte(body))
+	}
+	got, err := s.LastVerified(context.Background(), lvJob, lvPrefix, []string{"isolation.container"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("a run of a collaborator or untrusted source must not verify a level: %+v", got)
+	}
+	lvRecord(t, s, "o1", lvDoc(lvJob, "drill", "passed: isolation.container", "2026-10-02T03:00:00Z", "linux/amd64"))
+	if got, _ = s.LastVerified(context.Background(), lvJob, lvPrefix, []string{"isolation.container"}); len(got) != 1 {
+		t.Errorf("an owner run still verifies: %+v", got)
 	}
 }

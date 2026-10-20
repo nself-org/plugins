@@ -105,7 +105,7 @@ func TestDrillExcerptFormatMatchesTheStoreReader(t *testing.T) {
 		t.Fatalf("judge: %+v", ch)
 	}
 	excerpt, _ := json.Marshal(ch.Excerpt)
-	run := `{"revision":"0123456789abcdef0123456789abcdef01234567","runner":{"platform":"linux/amd64"},"timings":{"finished_at":"2026-10-04T03:00:00Z"},"checks":[{"job_id":"` + Job + `","kind":"drill","excerpt":` + string(excerpt) + `}]}`
+	run := `{"source_trust":"owner","revision":"0123456789abcdef0123456789abcdef01234567","runner":{"platform":"linux/amd64"},"timings":{"finished_at":"2026-10-04T03:00:00Z"},"checks":[{"job_id":"` + Job + `","kind":"drill","excerpt":` + string(excerpt) + `}]}`
 	if err = st.CreatePipeline(ctx, store.PipelineRow{ID: "p", Revision: "r", Project: "x", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}); err != nil {
 		t.Fatal(err)
 	}

@@ -5,7 +5,7 @@ package store
 // so there is no write command and nothing here writes.
 // Inputs:  the drill job id, the nested check ids to look for and the prefix of the line that lists the passed ids.
 // Outputs: per check id, when it last passed, in which revision and on which runner platform.
-// Constraints: run-level evidence only (attempt_id is NULL); newest first, at most lastVerifiedScan rows read; a body
+// Constraints: run-level evidence only (attempt_id is NULL); only runs whose source_trust is owner or internal; newest first, at most lastVerifiedScan rows read; a body
 // that does not decode, or a check of another job, is ignored; a check that is not listed as passed is never reported.
 
 import (
@@ -28,8 +28,9 @@ type Verification struct {
 
 // lastVerifiedDoc is the part of a ci.evidence/v1 document this query reads.
 type lastVerifiedDoc struct {
-	Revision string `json:"revision"`
-	Runner   struct {
+	Revision    string `json:"revision"`
+	SourceTrust string `json:"source_trust"`
+	Runner      struct {
 		Platform string `json:"platform"`
 	} `json:"runner"`
 	Timings struct {
@@ -65,7 +66,7 @@ func (s *Store) LastVerified(ctx context.Context, jobID, passedPrefix string, id
 			return nil, err
 		}
 		var doc lastVerifiedDoc
-		if json.Unmarshal(body, &doc) != nil {
+		if json.Unmarshal(body, &doc) != nil || !trustedForVerification(doc.SourceTrust) {
 			continue
 		}
 		at := time.Unix(0, created).UTC()
@@ -87,6 +88,10 @@ func (s *Store) LastVerified(ctx context.Context, jobID, passedPrefix string, id
 	}
 	return out, rows.Err()
 }
+
+// trustedForVerification is true for runs of the owner or the organisation. A run of a collaborator or an untrusted
+// source can name its job like the drill, so its evidence never proves an isolation level.
+func trustedForVerification(trust string) bool { return trust == "owner" || trust == "internal" }
 
 // passedIDs reads the ids on the last line of an excerpt that starts with prefix.
 func passedIDs(excerpt, prefix string) []string {
