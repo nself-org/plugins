@@ -257,7 +257,8 @@ func TestDispatchRaisesDeliveredIsolationToTheFloor(t *testing.T) {
 	if _, err := d.Submit(context.Background(), j); err != nil {
 		t.Fatal(err)
 	}
-	if got := wait(t, remote.got).lease.Job.Isolation; got != "sandboxed-container" {
-		t.Fatalf("an untrusted job declared at process was delivered at %q, want sandboxed-container", got)
+	lease := wait(t, remote.got).lease
+	if lease.Job.Isolation != "sandboxed-container" || lease.NetworkScope != "restricted" {
+		t.Fatalf("delivered isolation=%s network=%s, want sandboxed-container restricted", lease.Job.Isolation, lease.NetworkScope)
 	}
 }
