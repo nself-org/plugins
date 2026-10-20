@@ -11,7 +11,9 @@ package runnerjob
 //          network scope. Any miss is E708 and nothing is minted. A lease that already carries a
 //          credential is refused (nobody else may set one). If the ledger write fails after the mint the
 //          registration is removed again at once. A second delivery of the same attempt removes the
-//          earlier registration first: the credential is not stored, so it cannot be reused. The value
+//          earlier registration first (the credential is not stored, so it cannot be reused) and keeps the
+//          demand's slot while it mints again. A job that carries the runner markers but no credential kind
+//          (a pipeline read back from the store without Restore) is refused, never run as an ordinary job. The value
 //          never appears in an error, a log line or the ledger.
 
 import (
@@ -87,6 +89,9 @@ func checkPlacement(node model.Capability, j model.Job) error {
 
 func prepare(ctx context.Context, node model.Capability, l *protocol.Lease, job model.Job) error {
 	if job.RunnerCredential == "" {
+		if job.Env[EnvProvider] != "" && job.Env[EnvDemand] != "" { // a runner job read back from the store without Restore: never run it as an ordinary job
+			return refuse("runner.restore_missing")
+		}
 		return nil
 	}
 	// compat.V15(P7-HOST-19): a lease never carries a forge-runner credential (v1.4) -> the credential is minted after admission
@@ -113,7 +118,7 @@ func prepare(ctx context.Context, node model.Capability, l *protocol.Lease, job 
 		if err = m.Deregister(ctx, prev.Repo, prev.Handle); err != nil {
 			return err
 		}
-		if err = led.MarkGone(ctx, prev); err != nil {
+		if err = led.Release(ctx, prev); err != nil { // the demand keeps its slot until the new registration exists
 			return fail("ledger.write")
 		}
 	}

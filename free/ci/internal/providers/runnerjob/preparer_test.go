@@ -8,6 +8,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
+	"github.com/nself-org/plugins/free/ci/internal/providers/runnerjob"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
 
@@ -146,5 +147,46 @@ func TestPreparerSecondDeliveryReplacesTheRegistration(t *testing.T) {
 	}
 	if forge.alive() != 1 || len(forge.minted) != 2 || len(forge.deregCalls) != 1 || forge.deregCalls[0] != "repo:101" {
 		t.Fatalf("alive %d minted %d deregistered %v", forge.alive(), len(forge.minted), forge.deregCalls)
+	}
+}
+
+// TestPreparerRefusesARunnerJobThatLostItsCredentialKind: the runner markers are in the job env but the
+// json:"-" credential kind is gone (the pipeline came back from the store without Restore). It is refused,
+// never run as an ordinary job on a node.
+func TestPreparerRefusesARunnerJobThatLostItsCredentialKind(t *testing.T) {
+	use(t)
+	job := runnerJob(t, "19")
+	job.RunnerCredential, job.RemoteOnly = "", false
+	l, err := deliver(goodNode(), "attempt-lost", job)
+	if code(err) != "E708 runner.restore_missing" || l.RunnerCredential != nil || len(forge.minted) != 0 {
+		t.Fatalf("err %v lease %+v minted %v", err, l.RunnerCredential, forge.minted)
+	}
+}
+
+// TestSecondDeliveryKeepsTheDemandSlot: while a retried attempt mints again (or its mint fails) another
+// demand cannot take the slot of the first, so max_pending holds across a re-delivery.
+func TestSecondDeliveryKeepsTheDemandSlot(t *testing.T) {
+	use(t)
+	led := runnerjob.CurrentLedger()
+	ctx := context.Background()
+	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "20", 1); !ok {
+		t.Fatal("reserve")
+	}
+	if _, err := deliver(goodNode(), "attempt-s", runnerJob(t, "20")); err != nil {
+		t.Fatal(err)
+	}
+	forge.mintErr = providers.NewError(providers.Transient, "E704", "forge down", 0, epoch)
+	if _, err := deliver(goodNode(), "attempt-s", runnerJob(t, "20")); err == nil {
+		t.Fatal("the second mint should have failed")
+	}
+	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "21", 1); ok {
+		t.Fatal("another demand took the slot while the first was between registrations")
+	}
+	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "20", 1); !ok {
+		t.Fatal("the same demand, offered again, keeps its slot")
+	}
+	forge.mintErr = nil
+	if _, err := deliver(goodNode(), "attempt-s", runnerJob(t, "20")); err != nil || forge.alive() != 1 {
+		t.Fatalf("a later delivery mints again: %v alive %d", err, forge.alive())
 	}
 }

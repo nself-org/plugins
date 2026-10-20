@@ -2,6 +2,10 @@ package runnerjob_test
 
 import (
 	"context"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -85,5 +89,63 @@ func TestLedgerPendingDemandExpires(t *testing.T) {
 	advance(runnerjob.MintedTTL)
 	if ok, _ := led.Reserve(ctx, "fakeforge", testRepo, "3", 1); !ok {
 		t.Fatal("past MintedTTL nothing can still be running")
+	}
+}
+
+// TestLedgerReserveIsAtomicUnderConcurrency: thirty demands of one repository race for three slots and
+// exactly three win.
+func TestLedgerReserveIsAtomicUnderConcurrency(t *testing.T) {
+	use(t)
+	led := runnerjob.CurrentLedger()
+	var won atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 30; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if ok, err := led.Reserve(context.Background(), "fakeforge", testRepo, strconv.Itoa(1000+i), 3); err == nil && ok {
+				won.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if won.Load() != 3 {
+		t.Fatalf("%d demands took a slot, the cap is 3", won.Load())
+	}
+}
+
+// TestLedgerDoesNotGrowWithEveryJobEverRun: ended demands and runners leave the repository document an hour
+// after they end, so the document holds what is live (or just ended) and nothing older.
+func TestLedgerDoesNotGrowWithEveryJobEverRun(t *testing.T) {
+	st := use(t)
+	led := runnerjob.CurrentLedger()
+	ctx := context.Background()
+	for i := 0; i < 20; i++ {
+		d := strconv.Itoa(2000 + i)
+		if ok, err := led.Reserve(ctx, "fakeforge", testRepo, d, 5); err != nil || !ok {
+			t.Fatal(err)
+		}
+		r := runnerjob.Runner{Attempt: "att-" + d, Provider: "fakeforge", Repo: testRepo, Demand: d, Handle: "repo:" + d}
+		if err := led.RecordRunner(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+		got, _, _ := led.Runner(ctx, "att-"+d)
+		if err := led.MarkGone(ctx, got); err != nil {
+			t.Fatal(err)
+		}
+		advance(10 * time.Minute)
+	}
+	f, ok, err := st.ProviderFactGet(ctx, "runnerjob", testRepo, "state")
+	if err != nil || !ok {
+		t.Fatalf("no state document: %v", err)
+	}
+	if n := strings.Count(string(f.Value), `"attempt"`); n > 7 {
+		t.Fatalf("the document keeps %d runner rows after 200 minutes; ended ones should leave after an hour: %s", n, f.Value)
+	}
+	if got, ok, _ := led.Runner(ctx, "att-2019"); !ok || got.State != "gone" {
+		t.Fatalf("a recently ended row is still readable: %+v %v", got, ok)
+	}
+	if _, ok, _ := led.Runner(ctx, "att-2000"); ok {
+		t.Fatal("an old ended row should be gone")
 	}
 }

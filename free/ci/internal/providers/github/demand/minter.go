@@ -24,11 +24,8 @@ import (
 
 // Minter is the GitHub runnerjob.Minter.
 type Minter struct {
-	// Registrar returns the JIT registrar; nil builds one from the operator policy and keeps it.
+	// Registrar returns the JIT registrar; nil builds one from the operator policy for each call.
 	Registrar func(context.Context) (*jit.Registrar, error)
-
-	mu  sync.Mutex
-	reg *jit.Registrar
 }
 
 var _ runnerjob.Minter = (*Minter)(nil)
@@ -59,23 +56,16 @@ func (m *Minter) registrar(ctx context.Context) (*jit.Registrar, error) {
 	if fn != nil {
 		return fn(ctx)
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.reg != nil {
-		return m.reg, nil
-	}
 	eff, err := currentPolicy(ctx)
 	if err != nil {
 		return nil, providers.NewError(providers.Config, "E700", "policy.unreadable", 0, time.Time{})
 	}
-	if eff != nil {
-		m.reg, err = jit.FromPolicy(ctx, eff, nil)
-		return m.reg, err
+	if eff != nil { // built per call: the handler reads the jit label per demand, so a changed label applies to the next runner
+		return jit.FromPolicy(ctx, eff, nil)
 	}
 	rs := runtime.DefaultSettings()
 	client := &rest.Client{BaseURL: rs.GitHubAPIURL, Auth: runtime.Credential(ctx, Source), UserAgent: "jit", APIVersion: "2022-11-28", Provider: Source}
-	m.reg, err = jit.New(jit.Config{Client: client, Settings: jit.DefaultSettings()})
-	return m.reg, err
+	return jit.New(jit.Config{Client: client, Settings: jit.DefaultSettings()})
 }
 
 // Mint registers one single-job runner for the repository.

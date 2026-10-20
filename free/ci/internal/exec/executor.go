@@ -34,8 +34,7 @@ type JobSpec struct {
 	Output        func([]byte)
 	// Stdin, when set, is the job's standard input: how a one-job credential reaches a
 	// runner without touching argv, a container -e flag or a file. Nil keeps /dev/null.
-	// A planned container takes it too: the run is then interactive and its environment moves from
-	// the CLI's stdin to fd 3 (envFileFD).
+	// A planned container takes it too (interactive; its environment moves to fd 3).
 	Stdin io.Reader
 	// Masks are exact values the output must never carry, whatever the patterns say
 	// (the value Stdin delivers); they are redacted even when split across chunks.

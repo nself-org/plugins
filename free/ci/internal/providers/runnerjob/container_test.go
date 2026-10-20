@@ -19,6 +19,8 @@ import (
 	"os"
 	osexec "os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -110,6 +112,7 @@ type jobRun struct {
 // credential on the job's stdin and the wrapper in front.
 func runLeg(t *testing.T, id, image, kind, cred string, command []string, sandboxed bool, limit time.Duration) (jobRun, bool) {
 	t.Helper()
+	id += "-" + strconv.Itoa(os.Getpid()) // container names are global to the daemon: two runs of this test at once must not meet
 	agent := buildAgent(t)
 	home := t.TempDir()
 	out := &outBuf{}
@@ -120,7 +123,10 @@ func runLeg(t *testing.T, id, image, kind, cred string, command []string, sandbo
 	if sandboxed {
 		g := gvisor.New(gvisor.Options{})
 		if av := g.Probe(context.Background()); !av.Available() {
-			t.Logf("gVisor leg not run on this host: %+v", av)
+			if runtime.GOOS == "linux" { // the gVisor leg is the one the design rests on: a Linux host without runsc fails
+				t.Fatalf("gVisor (runsc registered with Docker) is required on Linux: %+v", av)
+			}
+			t.Logf("gVisor leg not run on this host (%s): %+v", runtime.GOOS, av)
 			return jobRun{}, false
 		}
 		iso, level = g, "sandboxed-container"
@@ -142,8 +148,10 @@ func runLeg(t *testing.T, id, image, kind, cred string, command []string, sandbo
 
 	run := jobRun{Home: home, Level: string(level)}
 	sampled, finished := make(chan struct{}), make(chan struct{})
-	go func() { // sample the node while the job is alive
+	go func() { // sample the node every 150 ms for as long as the job is alive, and keep every sample
 		defer close(sampled)
+		var inspect, ps strings.Builder
+		defer func() { run.Inspect, run.Ps = inspect.String(), ps.String() }()
 		for end := time.Now().Add(limit); time.Now().Before(end); time.Sleep(150 * time.Millisecond) {
 			select {
 			case <-finished:
@@ -151,13 +159,19 @@ func runLeg(t *testing.T, id, image, kind, cred string, command []string, sandbo
 			default:
 			}
 			b, err := osexec.Command("docker", "inspect", "nself-ci-"+id).Output()
-			if err == nil && len(b) > 10 {
-				run.Inspect = string(b)
-				ps, _ := osexec.Command("ps", "-axww", "-o", "args=").Output()
-				run.Ps = string(ps)
-				run.HomeRead, run.HomeHits = scanTree(home, cred)
-				return
+			if err != nil || len(b) < 10 {
+				continue
 			}
+			if inspect.Len() < 1<<20 {
+				inspect.Write(b)
+			}
+			p, _ := osexec.Command("ps", "-axww", "-o", "args=").Output()
+			if ps.Len() < 4<<20 {
+				ps.Write(p)
+			}
+			read, hits := scanTree(home, cred)
+			run.HomeRead = max(run.HomeRead, read)
+			run.HomeHits = append(run.HomeHits, hits...)
 		}
 	}()
 	run.Res = e.Run(context.Background(), spec)
