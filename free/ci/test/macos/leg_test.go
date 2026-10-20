@@ -74,6 +74,16 @@ func newLeg(t *testing.T) *leg {
 			t.Fatal(err)
 		}
 	}
+	// `nodes add` reads the project's deploy inventory through `nself deploy targets --json` (the production
+	// boundary, P7-NODE-14) and refuses a node when it cannot. A runner has no nself CLI and no deploy host,
+	// so a stub answers the two read-only calls with the contract's shape and an empty inventory.
+	stub := "#!/bin/sh\ncase \"$*\" in\n" +
+		"  \"help --json deploy targets\") echo '{\"data\":{\"commands\":[{\"path\":\"deploy targets\",\"side_effect\":\"read\"}]}}' ;;\n" +
+		"  \"deploy targets --json\") echo '{\"command\":\"deploy targets\",\"data\":{\"targets\":[]}}' ;;\n" +
+		"  *) exit 2 ;;\nesac\n"
+	if err := os.WriteFile(filepath.Join(bin, "nself"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return l
 }
