@@ -77,7 +77,9 @@ func newClient(o Options) *client {
 	}
 	rt := o.Transport
 	if rt == nil {
-		rt = &http.Transport{TLSClientConfig: o.TLS.Clone(), ForceAttemptHTTP2: true, ResponseHeaderTimeout: o.Wait + 15*time.Second, TLSHandshakeTimeout: 15 * time.Second}
+		// h2 pings find a half-open connection (a coordinator that vanished without a reset) in about 25 s
+		rt = &http.Transport{TLSClientConfig: o.TLS.Clone(), ForceAttemptHTTP2: true, ResponseHeaderTimeout: o.Wait + 15*time.Second, TLSHandshakeTimeout: 15 * time.Second,
+			HTTP2: &http.HTTP2Config{SendPingTimeout: 15 * time.Second, PingTimeout: 10 * time.Second}}
 	}
 	return &client{o: o, hc: &http.Client{Transport: rt}}
 }
