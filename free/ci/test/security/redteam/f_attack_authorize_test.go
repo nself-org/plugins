@@ -88,7 +88,7 @@ func TestF02ProjectSpellings(t *testing.T) {
 // TestF03RevokeSurvivesAConcurrentAuthorize (TM-35): a revoke that exits 0 must leave the provider revoked,
 // even when another authorize of the same project runs at the same moment (read-modify-write, debt D-1386).
 func TestF03RevokeSurvivesAConcurrentAuthorize(t *testing.T) {
-	if !openFinding(t, "F01") {
+	if !openFinding(t, "P01") {
 		return
 	}
 	b := fNew(t)
@@ -162,7 +162,7 @@ func TestF05PlantedRevisionPolicy(t *testing.T) {
 // forgejo URL decide where a token is sent and which variable is read. Setting them as a machine-invoked caller
 // (a prompt-injected agent) must be refused; today only trust.* keys are checked (the root cause of C05).
 func TestF06MachineInvokedCannotRepointProviders(t *testing.T) {
-	if !openFinding(t, "F02") {
+	if !openFinding(t, "P02") {
 		return
 	}
 	b := fNew(t)

@@ -23,7 +23,7 @@ func fMsg(c map[string]any) string { s, _ := c["message"].(string); return s }
 // section cannot know the health of the provider APIs or the stored authorization; it must not report
 // "API: up" and an empty authorization list as passing checks.
 func TestF12CorruptStoreIsNotGreen(t *testing.T) {
-	if !openFinding(t, "F05") {
+	if !openFinding(t, "P05") {
 		return
 	}
 	b := fNew(t)
@@ -49,7 +49,7 @@ func TestF12CorruptStoreIsNotGreen(t *testing.T) {
 // policy unresolvable; CI-DP014 (hosted authorization) must then not pass, and the defaults it falls back
 // to must not be reported as the operator's authorization.
 func TestF13MalformedPolicyIsNotGreen(t *testing.T) {
-	if !openFinding(t, "F06") {
+	if !openFinding(t, "P06") {
 		return
 	}
 	b := fNew(t)

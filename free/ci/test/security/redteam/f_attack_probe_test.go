@@ -124,7 +124,7 @@ func TestF09CredentialNeverPrinted(t *testing.T) {
 // into providers.github.token_env must be refused; otherwise the token is stored, written to the audit row
 // and printed by list, show and the doctor as the credential "source".
 func TestF10PastedTokenAsVariableName(t *testing.T) {
-	if !openFinding(t, "F03") {
+	if !openFinding(t, "P03") {
 		return
 	}
 	b := fNew(t)
@@ -139,7 +139,7 @@ func TestF10PastedTokenAsVariableName(t *testing.T) {
 // TestF11ForgejoURLFlagCannotRedirectTheAdminPassword (TM-33, TM-43): the admin password goes to the
 // policy-resolved host only. A machine-invoked caller passing --url must not make it go to another host.
 func TestF11ForgejoURLFlagCannotRedirectTheAdminPassword(t *testing.T) {
-	if !openFinding(t, "F04") {
+	if !openFinding(t, "P04") {
 		return
 	}
 	b := fNew(t)
