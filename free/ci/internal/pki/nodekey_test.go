@@ -94,6 +94,7 @@ func TestCheckNodeKey(t *testing.T) {
 		wantReason(t, r.ca.CheckNodeKey(ctx, "fresh", make(ed25519.PublicKey, 5)), ReasonBadCSR)
 	})
 	t.Run("pending pin after rotate", func(t *testing.T) {
+		pub, other := edPub(t), edPub(t)
 		if err := r.ca.PinNodeKey(ctx, "n9", pub); err != nil {
 			t.Fatal(err)
 		}
@@ -126,6 +127,7 @@ func TestCheckNodeKey(t *testing.T) {
 		wantReason(t, r.ca.CheckNodeKey(ctx, "n10", short), ReasonNodeKeyChanged)
 	})
 	t.Run("pending pin on a node with no earlier pin", func(t *testing.T) {
+		pub := edPub(t)
 		if err := r.ca.RotateNodeKey(ctx, "cli:admin", "n11", NodeKeyID(pub)); err != nil {
 			t.Fatal(err)
 		}
