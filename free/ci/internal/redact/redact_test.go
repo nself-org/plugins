@@ -34,8 +34,9 @@ func TestRegisterMaximum(t *testing.T) {
 	}
 	err := r.Register(make([]byte, 128<<10+1))
 	var e *Error
-	if !errors.As(err, &e) || e.Code != "E680" || strings.Contains(err.Error(), "\x00") {
-		t.Fatalf("want E680, got %v", err)
+	// D-1334: E680 belongs to the TRUST scope-setup failure (Epic D25); a too-long value shares E673 with a too-short one.
+	if !errors.As(err, &e) || e.Code != "E673" || strings.Contains(err.Error(), "\x00") || !strings.Contains(err.Error(), "128 KiB") {
+		t.Fatalf("want E673 naming the 128 KiB maximum, got %v", err)
 	}
 }
 
