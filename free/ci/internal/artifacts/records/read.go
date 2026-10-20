@@ -80,7 +80,10 @@ func (r Reader) checkBlob(ctx context.Context, rec Record) Record {
 }
 
 // Get writes the record's bytes under dest/<name> and returns the path.
-func (r Reader) Get(ctx context.Context, v authz.Viewer, id, dest, cwd string) (string, Record, error) {
+func (r Reader) Get(ctx context.Context, v authz.Viewer, id, dest, cwd string) (path string, record Record, resultErr error) {
+	defer func() {
+		resultErr = AuditRefusal(ctx, r.Ledger, "artifact.get.refused", id, resultErr)
+	}()
 	rec, err := r.visible(ctx, v, id)
 	if err != nil {
 		return "", Record{}, err

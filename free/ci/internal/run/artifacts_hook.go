@@ -97,7 +97,7 @@ func (h *artifactsHook) scrub(err error) error {
 
 // AttemptStart records the declarations of the attempt.
 func (h *artifactsHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
-	return h.scrub(h.attemptStart(ctx, a))
+	return records.AuditRefusal(ctx, a.Store, "artifact.collect.refused", a.AttemptID, h.scrub(h.attemptStart(ctx, a)))
 }
 
 func (h *artifactsHook) attemptStart(ctx context.Context, a AttemptInfo) error {
@@ -150,7 +150,7 @@ func (h *artifactsHook) autoPrune(ctx context.Context, a AttemptInfo) {
 
 // AfterJob collects the declared outputs from the workspace the executor pinned.
 func (h *artifactsHook) AfterJob(ctx context.Context, a AttemptInfo, workspace *os.Root) error {
-	return h.scrub(h.afterJob(ctx, a, workspace))
+	return records.AuditRefusal(ctx, a.Store, "artifact.collect.refused", a.AttemptID, h.scrub(h.afterJob(ctx, a, workspace)))
 }
 
 func (h *artifactsHook) afterJob(ctx context.Context, a AttemptInfo, workspace *os.Root) error {
