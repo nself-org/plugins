@@ -6,8 +6,9 @@ package runners
 // Outputs: Registration{Handle: the runner id, Credential: the glrt- token, ExpiresAt}; Deregister proves
 //          the runner absent; Orphans lists idle nself-glr-<ulid> runners.
 // Constraints: every registration is for an untrusted attempt (a project runner is never governed by a
-//          group, so nothing proves a job safe: review F6); the demand's tags are not passed on, so the
-//          registrar's fixed tag list is the whole tag list. The runner is ref_protected only when
+//          group, so nothing proves a job safe: review F6); the demand's own tags are not copied: the
+//          runner carries the operator's tags that the job asks for (read from the API by Assess), plus its unique
+//          one, never an architecture tag that contradicts the runner's. The runner is ref_protected only when
 //          Restriction proves the demand's job ref is a protected branch or tag (a failed proof, even a
 //          transient one, registers not_protected, which only widens which refs the runner serves, never
 //          who may use it: locked binds the runner to its project and ref_protected, when proven, to protected
@@ -68,7 +69,11 @@ func (m *Minter) registrar(ctx context.Context) (*Registrar, error) {
 	if err != nil {
 		return nil, providers.NewError(providers.Config, "E700", "policy.unreadable", 0, time.Time{})
 	}
-	return New(Config{Client: NewClient(rs), Settings: set})
+	c, err := NewClient(rs)
+	if err != nil {
+		return nil, err
+	}
+	return New(Config{Client: c, Settings: set})
 }
 
 // Mint creates one single-job runner for the project.
@@ -78,14 +83,14 @@ func (m *Minter) Mint(ctx context.Context, r runnerjob.Request) (runnerjob.Regis
 		return runnerjob.Registration{}, err
 	}
 	scope := providers.RunnerScope{Repo: r.Repo}
-	var opt MintOptions
+	opt := MintOptions{Arch: r.Arch}
 	if job, perr := strconv.ParseInt(r.Demand, 10, 64); perr == nil {
-		res, rerr := reg.Restriction(ctx, scope, job)
-		if rerr != nil {
-			// the runner is still made, not_protected; the operator must be able to see why it never is ref_protected
-			slog.Warn("gitlab runner protection proof failed, registering not_protected", "class", providers.ClassOf(rerr), "code", code(rerr))
+		a, aerr := reg.Assess(ctx, scope, job)
+		if aerr != nil {
+			// the runner is still made, not_protected and with the architecture-filtered tags; the operator must be able to see why
+			slog.Warn("gitlab runner demand assessment failed, registering not_protected", "class", providers.ClassOf(aerr), "code", code(aerr))
 		}
-		opt.ProtectedOnly = rerr == nil && res.ProtectedOnly
+		opt.ProtectedOnly, opt.Tags = aerr == nil && a.ProtectedOnly, a.Tags
 	}
 	minted, err := reg.MintRunner(ctx, providers.RunnerRequest{
 		Attempt: providers.Attempt{ID: r.AttemptID, Repo: r.Repo, Trust: "untrusted"}, Scope: scope,

@@ -524,8 +524,10 @@ func TestPlannedContainerEntrypoint(t *testing.T) {
 		"present but not asked":      {cmd(agent), "", true, false, false},
 		"another program":            {cmd("/bin/sh"), agent, true, false, false},
 		"asked path is not a mount":  {cmd("/bin/sh"), "/bin/sh", true, false, false},
+		"sh on a credential run":     {cmd("sh"), agent, true, false, false},
+		"two entrypoints":            {cmd(agent, "sh"), agent, true, false, false},
 		"agent not mounted":          {cmd(agent), agent, true, false, true},
-		"cleanup helper sh":          {cmd("sh"), "", true, true, false},
+		"cleanup helper sh":          {cmd("sh"), "", false, true, false},
 		"asked without a job stdin":  {cmd(agent), agent, false, false, false},
 		"no entrypoint and none ask": {cmd(), "", true, true, false},
 	} {

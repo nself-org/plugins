@@ -56,6 +56,7 @@ type fakeRunner struct {
 }
 
 type fakeJob struct {
+	Tags     []string // the job's tag_list
 	Ref      string
 	Tag      bool
 	Status   string
@@ -192,7 +193,7 @@ func (f *fakeGL) serve(w http.ResponseWriter, r *http.Request) {
 			f.reply(w, 404, map[string]string{"message": "404 Not found"})
 			return
 		}
-		out := map[string]any{"id": id, "ref": j.Ref, "tag": j.Tag, "status": j.Status}
+		out := map[string]any{"id": id, "ref": j.Ref, "tag": j.Tag, "status": j.Status, "tag_list": j.Tags}
 		if j.RunnerID != 0 {
 			out["runner"] = map[string]any{"id": j.RunnerID}
 		}

@@ -183,11 +183,18 @@ func TestRunnerTokenOnly(t *testing.T) {
 		}
 	}
 	t.Setenv("NSELF_CI_GITLAB_TOKEN", devToken) // the dispatch provider's token is set, the runner token is not
-	c := runners.NewClient(gitlabSettings(f.srv.URL, ""))
+	c, err := runners.NewClient(gitlabSettings(f.srv.URL, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
 	c.TLSConfig = f.client("").TLSConfig
 	g, err := runners.New(runners.Config{Client: c, Clock: clock})
 	if err != nil {
 		t.Fatal(err)
+	}
+	same := gitlabSettings(f.srv.URL, "NSELF_CI_GITLAB_TOKEN") // the runner token variable is the Developer token's
+	if _, err = runners.NewClient(same); code(err) != "E700" || reason(err) != "runner_token_env.same_as_token_env" {
+		t.Fatalf("one variable for both tokens must be refused: %v", err)
 	}
 	before := len(f.calls)
 	_, err = g.MintRunner(context.Background(), runnerReq(), runners.MintOptions{})
@@ -196,7 +203,9 @@ func TestRunnerTokenOnly(t *testing.T) {
 		t.Fatalf("want E700 and no request, got %v after %d calls", err, len(f.calls)-before)
 	}
 	t.Setenv("NSELF_CI_GITLAB_RUNNER_TOKEN", runnerToken)
-	c = runners.NewClient(gitlabSettings(f.srv.URL, "NSELF_CI_GITLAB_RUNNER_TOKEN"))
+	if c, err = runners.NewClient(gitlabSettings(f.srv.URL, "NSELF_CI_GITLAB_RUNNER_TOKEN")); err != nil {
+		t.Fatal(err)
+	}
 	c.TLSConfig = f.client("").TLSConfig
 	g, _ = runners.New(runners.Config{Client: c, Clock: clock})
 	if _, err = g.MintRunner(context.Background(), runnerReq(), runners.MintOptions{}); err != nil {
@@ -258,5 +267,56 @@ func TestRegistrarIdentity(t *testing.T) {
 	}
 	if _, err = runners.New(runners.Config{}); err == nil {
 		t.Fatal("no client must be refused")
+	}
+}
+
+// TestRunnerCarriesOnlyItsJobsTags (Opus should-fix): the runner minted for a job carries the operator tags that
+// job asks for plus its unique one, never the others: a runner that holds `arm64` takes any pending arm64 job of
+// the project. Without a readable job it carries every configured tag except an architecture tag that
+// contradicts its own.
+func TestRunnerCarriesOnlyItsJobsTags(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeGL(t)
+	r, err := runners.New(runners.Config{Client: f.client(runnerToken), Clock: clock, Settings: runners.Settings{Tags: []string{"nself", "arm64", "gpu"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.jobs[1] = fakeJob{Ref: "main", Status: "pending", Tags: []string{"nself"}}
+	f.jobs[2] = fakeJob{Ref: "main", Status: "pending", Tags: []string{"nself", "gpu", "unknown-tag"}}
+	f.jobs[3] = fakeJob{Ref: "main", Status: "pending", Tags: []string{"gpu"}} // not asking for the demand tag: nothing carried
+	for job, want := range map[int64][]string{1: {"nself"}, 2: {"nself", "gpu"}, 3: nil, 99: nil} {
+		a, err := r.Assess(ctx, repoScope, job)
+		if err != nil || strings.Join(a.Tags, ",") != strings.Join(want, ",") {
+			t.Errorf("job %d: tags %v err %v, want %v", job, a.Tags, err, want)
+		}
+	}
+	m, err := r.MintRunner(ctx, runnerReq(), runners.MintOptions{Tags: []string{"nself", "gpu"}})
+	if err != nil || strings.Join(m.Tags[:2], ",") != "nself,gpu" || len(m.Tags) != 3 {
+		t.Fatalf("subset: %v %v", m.Tags, err)
+	}
+	if _, err = r.MintRunner(ctx, runnerReq(), runners.MintOptions{Tags: []string{"nself", "other"}}); code(err) != "E702" {
+		t.Fatalf("a tag the operator did not configure must be refused: %v", err)
+	}
+	for arch, want := range map[string]string{"amd64": "nself,gpu", "arm64": "nself,arm64,gpu", "": "nself,arm64,gpu"} {
+		m, err = r.MintRunner(ctx, runnerReq(), runners.MintOptions{Arch: arch})
+		if err != nil || strings.Join(m.Tags[:len(m.Tags)-1], ",") != want {
+			t.Errorf("arch %q fallback: %v %v, want %s", arch, m.Tags, err, want)
+		}
+	}
+}
+
+// TestOwnershipNeedsTheUniqueTag (Opus note): a runner somebody named nself-glr-<valid ulid> by hand, without
+// the matching tag, is not ours: Deregister and Pause refuse it.
+func TestOwnershipNeedsTheUniqueTag(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeGL(t)
+	r := f.registrar(clock)
+	m, _ := r.MintRunner(ctx, runnerReq(), runners.MintOptions{})
+	hand := f.add(m.Description[:len(m.Description)-1]+"A", false) // a valid-looking description, no unique tag
+	if err := r.Deregister(ctx, ref(itoa(hand.ID))); code(err) != "E707" || f.count() != 2 {
+		t.Fatalf("a hand-made runner must be refused and kept: %v", err)
+	}
+	if err := r.Pause(ctx, ref(itoa(hand.ID))); code(err) != "E707" || len(f.puts) != 0 {
+		t.Fatalf("a hand-made runner must not be paused: %v", err)
 	}
 }

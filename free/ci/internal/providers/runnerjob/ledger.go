@@ -86,7 +86,7 @@ type Ledger struct {
 	fs    FactStore
 	now   func() time.Time
 	mu    sync.Mutex
-	where map[string]string // attempt -> repo, for the attempts this process recorded (a restart falls back to the scan)
+	where map[string]RepoKey // attempt -> repository, for the attempts this process recorded (a restart falls back to the scan)
 }
 
 // NewLedger returns a ledger over fs; a nil clock is time.Now.
@@ -94,10 +94,18 @@ func NewLedger(fs FactStore, now func() time.Time) *Ledger {
 	if now == nil {
 		now = time.Now
 	}
-	return &Ledger{fs: fs, now: now, where: map[string]string{}}
+	return &Ledger{fs: fs, now: now, where: map[string]RepoKey{}}
 }
 
-func scopeOf(repo string) string { return strings.ToLower(repo) }
+// scopeOf is the fact scope of a repository's document. Each provider has its own document: a GitHub
+// repository and a GitLab project that share a name (a mirror) must not share a cap or a slot. GitHub keeps the
+// bare lower-case name, the scope its documents already have.
+func scopeOf(provider, repo string) string {
+	if provider == "" || provider == "github" {
+		return strings.ToLower(repo)
+	}
+	return provider + ":" + strings.ToLower(repo)
+}
 
 func demandKey(provider, id string) string { return provider + ":" + id }
 
@@ -112,9 +120,9 @@ func live(r demandRow, now time.Time) bool {
 }
 
 // load reads the document of repo; a repository with none yet has an empty one.
-func (l *Ledger) load(ctx context.Context, repo string) (repoDoc, error) {
+func (l *Ledger) load(ctx context.Context, provider, repo string) (repoDoc, error) {
 	d := repoDoc{Demands: map[string]demandRow{}, Runners: map[string]Runner{}}
-	f, ok, err := l.fs.ProviderFactGet(ctx, factProvider, scopeOf(repo), "state")
+	f, ok, err := l.fs.ProviderFactGet(ctx, factProvider, scopeOf(provider, repo), "state")
 	if err != nil || !ok {
 		return d, err
 	}
@@ -157,10 +165,10 @@ func (l *Ledger) save(ctx context.Context, provider, repo string, d repoDoc) err
 			delete(d.Runners, k)
 		}
 	}
-	if err := l.put(ctx, indexScope, "repo:"+provider+":"+scopeOf(repo), RepoKey{Provider: provider, Repo: repo}); err != nil {
+	if err := l.put(ctx, indexScope, "repo:"+provider+":"+strings.ToLower(repo), RepoKey{Provider: provider, Repo: repo}); err != nil {
 		return err // before the state: a demand is never recorded for a repository the sweep cannot find
 	}
-	return l.put(ctx, scopeOf(repo), "state", d)
+	return l.put(ctx, scopeOf(provider, repo), "state", d)
 }
 
 // Reserve records a demand as pending unless the repository already has max live demands. A demand that
@@ -169,7 +177,7 @@ func (l *Ledger) save(ctx context.Context, provider, repo string, d repoDoc) err
 func (l *Ledger) Reserve(ctx context.Context, provider, repo, demand string, max int) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	d, err := l.load(ctx, repo)
+	d, err := l.load(ctx, provider, repo)
 	if err != nil {
 		return false, err
 	}
@@ -200,7 +208,7 @@ func (l *Ledger) Reserve(ctx context.Context, provider, repo, demand string, max
 func (l *Ledger) Confirm(ctx context.Context, provider, repo, demand string) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	d, err := l.load(ctx, repo)
+	d, err := l.load(ctx, provider, repo)
 	if err != nil {
 		return false, err
 	}
@@ -232,7 +240,7 @@ func (l *Ledger) Confirm(ctx context.Context, provider, repo, demand string) (bo
 func (l *Ledger) RecordRunner(ctx context.Context, r Runner) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	d, err := l.load(ctx, r.Repo)
+	d, err := l.load(ctx, r.Provider, r.Repo)
 	if err != nil {
 		return err
 	}
@@ -240,7 +248,7 @@ func (l *Ledger) RecordRunner(ctx context.Context, r Runner) error {
 	d.Runners[r.Attempt] = r
 	k := demandKey(r.Provider, r.Demand)
 	d.Demands[k] = demandRow{State: stateMinted, At: r.At, Max: d.Demands[k].Max}
-	l.where[r.Attempt] = r.Repo
+	l.where[r.Attempt] = RepoKey{Provider: r.Provider, Repo: r.Repo}
 	return l.save(ctx, r.Provider, r.Repo, d)
 }
 
@@ -258,7 +266,7 @@ func (l *Ledger) MarkGone(ctx context.Context, r Runner) error {
 func (l *Ledger) end(ctx context.Context, r Runner, demandState string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	d, err := l.load(ctx, r.Repo)
+	d, err := l.load(ctx, r.Provider, r.Repo)
 	if err != nil {
 		return err
 	}
@@ -285,10 +293,10 @@ func heldByAnother(d repoDoc, r Runner) bool {
 // Runner returns the registration of an attempt, searching the repositories the ledger knows.
 func (l *Ledger) Runner(ctx context.Context, attempt string) (Runner, bool, error) {
 	l.mu.Lock()
-	repo, cached := l.where[attempt]
+	key, cached := l.where[attempt]
 	l.mu.Unlock()
 	if cached { // the common answer after a mint in this process: one document, not every repository
-		if d, err := l.docOf(ctx, repo); err == nil {
+		if d, err := l.docOf(ctx, key.Provider, key.Repo); err == nil {
 			if r, ok := d.Runners[attempt]; ok {
 				return r, true, nil
 			}
@@ -301,7 +309,7 @@ func (l *Ledger) Runner(ctx context.Context, attempt string) (Runner, bool, erro
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, k := range repos {
-		d, err := l.load(ctx, k.Repo)
+		d, err := l.load(ctx, k.Provider, k.Repo)
 		if err != nil {
 			return Runner{}, false, err
 		}
@@ -313,10 +321,10 @@ func (l *Ledger) Runner(ctx context.Context, attempt string) (Runner, bool, erro
 }
 
 // docOf is load under the mutex.
-func (l *Ledger) docOf(ctx context.Context, repo string) (repoDoc, error) {
+func (l *Ledger) docOf(ctx context.Context, provider, repo string) (repoDoc, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.load(ctx, repo)
+	return l.load(ctx, provider, repo)
 }
 
 // Repos lists the repositories that ever held a demand.
@@ -336,10 +344,10 @@ func (l *Ledger) Repos(ctx context.Context) ([]RepoKey, error) {
 }
 
 // Open lists the runner rows of a repository that are not gone, for the sweep.
-func (l *Ledger) Open(ctx context.Context, repo string) ([]Runner, error) {
+func (l *Ledger) Open(ctx context.Context, provider, repo string) ([]Runner, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	d, err := l.load(ctx, repo)
+	d, err := l.load(ctx, provider, repo)
 	if err != nil {
 		return nil, err
 	}

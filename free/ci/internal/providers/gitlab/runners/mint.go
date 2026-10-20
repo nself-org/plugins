@@ -5,7 +5,10 @@ package runners
 // Outputs: the runner authentication token as a providers.RunnerCredential (Kind gitlab-runner-token,
 //          expiry now + CredentialLifetime). MintRunner also returns the runner id and description
 //          Deregister needs.
-// Constraints: runner_type is project_type, run_untagged is false and locked is true, always. The tag
+// Constraints: a reply that does not decode (an id as a string) is E707 mint.rejected and the runner GitLab may
+//          have created is not deleted here: it carries the nself-glr- description and the orphan sweep removes it
+//          after 70 minutes.
+//          runner_type is project_type, run_untagged is false and locked is true, always. The tag
 //          list is the operator's providers.gitlab.runner.tags plus one unique nself-glr-<ulid> tag,
 //          never copied from the request or from a demand (a demand with other tags is refused by the
 //          demand handler as E708 label.not_allowed); the description is the same name. access_level is
@@ -34,6 +37,13 @@ const (
 type MintOptions struct {
 	// ProtectedOnly registers the runner as ref_protected. Set it only from a verified Restriction.
 	ProtectedOnly bool
+	// Tags, when set, are the configured tags the runner carries besides its unique one (a verified subset of
+	// providers.gitlab.runner.tags, from Assess): GitLab hands a runner any pending job whose tags it holds,
+	// so a runner that carries more tags than its job can take another job meant for other hardware. Unset:
+	// every configured tag except the architecture tags that contradict Arch.
+	Tags []string
+	// Arch is amd64 or arm64; it only matters when Tags is unset.
+	Arch string
 }
 
 // Minted is one registration: the credential plus what teardown needs.
@@ -100,7 +110,11 @@ func (r *Registrar) MintRunner(ctx context.Context, req providers.RunnerRequest,
 		return Minted{}, e707("mint.entropy")
 	}
 	name := RunnerPrefix + id
-	tags := append(append([]string(nil), r.set.Tags...), name)
+	tags, err := r.tagsFor(opt)
+	if err != nil {
+		return Minted{}, err
+	}
+	tags = append(tags, name)
 	access := AccessNotProtected
 	if opt.ProtectedOnly {
 		access = AccessRefProtected
@@ -124,6 +138,41 @@ func (r *Registrar) MintRunner(ctx context.Context, req providers.RunnerRequest,
 		RunnerID: itoa(out.ID), Description: name, Tags: tags, AccessLevel: access, ProjectID: pid, Scope: req.Scope,
 		Credential: providers.RunnerCredential{Kind: CredentialKind, Value: out.Token, ExpiresAt: now.Add(CredentialLifetime)},
 	}, nil
+}
+
+// tagsFor chooses the configured tags of a new runner.
+func (r *Registrar) tagsFor(opt MintOptions) ([]string, error) {
+	if len(opt.Tags) > 0 {
+		configured := make(map[string]bool, len(r.set.Tags))
+		for _, t := range r.set.Tags {
+			configured[t] = true
+		}
+		for _, t := range opt.Tags {
+			if !configured[t] {
+				return nil, e702("runner.tags")
+			}
+		}
+		return append([]string(nil), opt.Tags...), nil
+	}
+	var out []string
+	for _, t := range r.set.Tags {
+		if contradicts(t, opt.Arch) {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+// contradicts reports an architecture tag that names the other architecture than arch.
+func contradicts(tag, arch string) bool {
+	switch strings.ToLower(tag) {
+	case "arm64":
+		return arch == "amd64"
+	case "amd64", "x64":
+		return arch == "arm64"
+	}
+	return false
 }
 
 // remove deletes a runner by number without the ownership check (the caller has just created it).

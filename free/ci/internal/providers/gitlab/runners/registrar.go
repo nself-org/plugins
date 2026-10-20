@@ -96,9 +96,13 @@ func New(cfg Config) (*Registrar, error) {
 }
 
 // NewClient builds the REST client of the runner-management token from the operator's GitLab settings.
-func NewClient(rs runtime.Settings) *rest.Client {
+func NewClient(rs runtime.Settings) (*rest.Client, error) {
+	if rs.GitLabRunnerTokenEnv != "" && rs.GitLabRunnerTokenEnv == rs.GitLabTokenEnv {
+		// one variable for both would make the Developer token the runner-management token
+		return nil, providers.NewError(providers.Config, "E700", "runner_token_env.same_as_token_env", 0, time.Time{})
+	}
 	return &rest.Client{BaseURL: rs.GitLabAPIURL, Auth: rest.EnvToken(rs.GitLabRunnerTokenEnv), UserAgent: "runners",
-		Provider: "gitlab", AllowPrivateBase: rs.GitLabAllowPrivateBase}
+		Provider: "gitlab", AllowPrivateBase: rs.GitLabAllowPrivateBase}, nil
 }
 
 // FromPolicy builds a Registrar from the operator's effective policy.
@@ -111,7 +115,11 @@ func FromPolicy(eff *policy.Effective) (*Registrar, error) {
 	if err != nil {
 		return nil, err
 	}
-	return New(Config{Client: NewClient(rs), Settings: set})
+	c, err := NewClient(rs)
+	if err != nil {
+		return nil, err
+	}
+	return New(Config{Client: c, Settings: set})
 }
 
 // ID names the registrar; it is a component of the gitlab provider, not a provider of its own.

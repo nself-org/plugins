@@ -52,7 +52,7 @@ func TestLedgerCapIsPerRepoAndIdempotent(t *testing.T) {
 	if !reserve(testRepo, "3") {
 		t.Fatal("a finished demand must free its slot")
 	}
-	open, _ := led.Open(ctx, testRepo)
+	open, _ := led.Open(ctx, "fakeforge", testRepo)
 	if len(open) != 0 {
 		t.Fatalf("a gone runner is not open: %v", open)
 	}
@@ -135,7 +135,7 @@ func TestLedgerDoesNotGrowWithEveryJobEverRun(t *testing.T) {
 		}
 		advance(10 * time.Minute)
 	}
-	f, ok, err := st.ProviderFactGet(ctx, "runnerjob", testRepo, "state")
+	f, ok, err := st.ProviderFactGet(ctx, "runnerjob", "fakeforge:"+testRepo, "state")
 	if err != nil || !ok {
 		t.Fatalf("no state document: %v", err)
 	}
@@ -197,5 +197,43 @@ func TestDelayedDemandStillMintsAfterOtherWrites(t *testing.T) {
 	}
 	if _, err := deliverRaw(goodNode(), "late", runnerJob(t, "1")); err != nil {
 		t.Fatalf("a delayed demand with free slots must still mint: %v", err)
+	}
+}
+
+// TestLedgerKeepsProvidersApart (P7-HOST-07, Opus must-fix): a GitHub repository and a GitLab project that share
+// a name (a mirror) have their own cap and their own runner rows; GitHub keeps the bare scope its documents
+// already have.
+func TestLedgerKeepsProvidersApart(t *testing.T) {
+	use(t)
+	led := runnerjob.CurrentLedger()
+	ctx := context.Background()
+	reserve := func(provider, demand string) bool {
+		t.Helper()
+		ok, err := led.Reserve(ctx, provider, testRepo, demand, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
+	if !reserve("github", "1") || !reserve("github", "2") || reserve("github", "3") {
+		t.Fatal("GitHub: two demands, the third refused")
+	}
+	if !reserve("gitlab", "1") || !reserve("gitlab", "2") || reserve("gitlab", "3") {
+		t.Fatal("GitLab has its own cap on the same name")
+	}
+	if !reserve("github", "1") {
+		t.Fatal("a GitLab demand must not take GitHub's slot (an already live demand is accepted again)")
+	}
+	for _, p := range []string{"github", "gitlab"} {
+		if err := led.RecordRunner(ctx, runnerjob.Runner{Attempt: "a-" + p, Provider: p, Repo: testRepo, Demand: "1", Handle: "101"}); err != nil {
+			t.Fatal(err)
+		}
+		open, err := led.Open(ctx, p, testRepo)
+		if err != nil || len(open) != 1 || open[0].Provider != p {
+			t.Fatalf("%s open rows %+v %v", p, open, err)
+		}
+		if r, ok, err := led.Runner(ctx, "a-"+p); err != nil || !ok || r.Provider != p {
+			t.Fatalf("%s runner %+v %v", p, r, err)
+		}
 	}
 }

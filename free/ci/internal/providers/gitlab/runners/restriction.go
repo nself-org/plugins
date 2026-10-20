@@ -21,32 +21,49 @@ import (
 )
 
 type jobView struct {
-	Ref    string `json:"ref"`
-	Tag    bool   `json:"tag"`
-	Status string `json:"status"`
-	Runner *struct {
+	Ref     string   `json:"ref"`
+	Tag     bool     `json:"tag"`
+	Status  string   `json:"status"`
+	TagList []string `json:"tag_list"`
+	Runner  *struct {
 		ID int64 `json:"id"`
 	} `json:"runner"`
 }
 
+// Assessment is what Assess proved about a demand's job.
+type Assessment struct {
+	ProtectedOnly bool
+	// Tags are the job's own tags that the operator configured, in the operator's order; empty when the job
+	// could not be read or asks for none of them.
+	Tags []string
+}
+
 // Restriction implements providers.RunnerRegistrar.
 func (r *Registrar) Restriction(ctx context.Context, scope providers.RunnerScope, jobID int64) (providers.Restriction, error) {
+	a, err := r.Assess(ctx, scope, jobID)
+	return providers.Restriction{ProtectedOnly: a.ProtectedOnly}, err
+}
+
+// Assess reads the job once and answers both questions. A transient failure is the error; anything the API
+// cannot prove reads as unprotected with no tags.
+func (r *Registrar) Assess(ctx context.Context, scope providers.RunnerScope, jobID int64) (Assessment, error) {
 	if jobID <= 0 {
-		return providers.Restriction{}, nil
+		return Assessment{}, nil
 	}
 	p, err := project(scope)
 	if err != nil {
-		return providers.Restriction{}, err
+		return Assessment{}, err
 	}
 	var job jobView
 	if _, err = r.c.Do(ctx, "GET", jobPath, p.With("job", itoa(jobID)), nil, &job); err != nil {
 		if api.IsStatus(err, 404) {
-			return providers.Restriction{}, nil
+			return Assessment{}, nil
 		}
-		return providers.Restriction{}, runnerErr(err, "restriction")
+		return Assessment{}, runnerErr(err, "restriction")
 	}
+	out := Assessment{Tags: r.demandTags(job.TagList)}
 	if job.Ref == "" || strings.HasPrefix(job.Ref, "refs/") {
-		return providers.Restriction{}, nil
+		return out, nil
 	}
 	path := protectedBranchPath
 	if job.Tag {
@@ -58,10 +75,29 @@ func (r *Registrar) Restriction(ctx context.Context, scope providers.RunnerScope
 	resp, err := r.c.Do(ctx, "GET", path, p.With("name", job.Ref), nil, &prot)
 	if err != nil {
 		if resp.Status == 404 {
-			return providers.Restriction{}, nil
+			return out, nil
 		}
-		return providers.Restriction{}, runnerErr(err, "restriction")
+		return out, runnerErr(err, "restriction")
 	}
 	// a 200 whose body is not the protection of this exact ref (a proxy's login page, a wildcard answer) proves nothing
-	return providers.Restriction{ProtectedOnly: prot.Name == job.Ref}, nil
+	out.ProtectedOnly = prot.Name == job.Ref
+	return out, nil
+}
+
+// demandTags keeps the configured tags a job asks for; it is empty unless the job asks for the demand tag.
+func (r *Registrar) demandTags(asked []string) []string {
+	want := make(map[string]bool, len(asked))
+	for _, t := range asked {
+		want[t] = true
+	}
+	var out []string
+	for _, t := range r.set.Tags {
+		if want[t] {
+			out = append(out, t)
+		}
+	}
+	if !want[DemandTag] {
+		return nil
+	}
+	return out
 }

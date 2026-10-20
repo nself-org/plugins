@@ -30,7 +30,7 @@ func TestMinterRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeGL(t)
 	f.branch["main"] = true
-	f.jobs[1] = fakeJob{Ref: "main", Status: "pending"}
+	f.jobs[1] = fakeJob{Ref: "main", Status: "pending", Tags: []string{"nself"}}
 	f.jobs[2] = fakeJob{Ref: "topic", Status: "pending"}
 	m := useFake(t, f, clock)
 	if m.Provider() != "gitlab" {
@@ -49,6 +49,9 @@ func TestMinterRoundTrip(t *testing.T) {
 	}
 	if got := []any{f.mints[0]["access_level"], f.mints[1]["access_level"], f.mints[2]["access_level"]}; got[0] != "ref_protected" || got[1] != "not_protected" || got[2] != "not_protected" {
 		t.Fatalf("access levels %v", got)
+	}
+	if tl := f.mints[0]["tag_list"].([]any); len(tl) != 2 || tl[0] != "nself" {
+		t.Fatalf("the runner carries its job's tags and its unique one: %v", tl)
 	}
 	if err = m.Deregister(ctx, testProject, reg1.Handle); err != nil || f.count() != 2 {
 		t.Fatalf("deregister: %v, left %d", err, f.count())

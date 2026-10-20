@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"net/url"
 	"regexp"
+	"slices"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/providers"
@@ -30,6 +31,8 @@ type runnerView struct {
 	Description string `json:"description"`
 	Paused      bool   `json:"paused"`
 	RunnerType  string `json:"runner_type"`
+	// TagList is only in the runner's own read, not in the project list.
+	TagList []string `json:"tag_list"`
 }
 
 // runnerRead is GET of one runner: found is false on 404.
@@ -53,7 +56,8 @@ func (r *Registrar) ours(ctx context.Context, op string, ref providers.RunnerRef
 	if !found {
 		return runnerView{}, false, nil
 	}
-	if _, ok := runnerBirth(v.Description); !ok {
+	if _, ok := runnerBirth(v.Description); !ok || !slices.Contains(v.TagList, v.Description) {
+		// the unique tag is the description by construction: a runner somebody named nself-glr-<ulid> by hand is not ours
 		return runnerView{}, false, e707(op + ".not_ours")
 	}
 	return v, true, nil

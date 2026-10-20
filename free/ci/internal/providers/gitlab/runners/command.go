@@ -13,6 +13,7 @@ package runners
 //          (--wait-timeout 120), so a runner whose job was cancelled does not linger.
 
 import (
+	"net"
 	"net/url"
 	"strings"
 )
@@ -24,7 +25,7 @@ const (
 )
 
 // InstanceOf turns the API base URL into the instance URL and its host name. Only an https URL with a
-// host, no user info, query or fragment is accepted.
+// host name (not an IP literal), port 443, no user info, query or fragment is accepted.
 func InstanceOf(apiURL string) (instance, host string, ok bool) {
 	u, err := url.Parse(strings.TrimRight(apiURL, "/"))
 	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
@@ -33,7 +34,9 @@ func InstanceOf(apiURL string) (instance, host string, ok bool) {
 	u.Path = strings.TrimSuffix(u.Path, apiSuffix)
 	u.RawPath = ""
 	host = strings.ToLower(u.Hostname())
-	if strings.ContainsAny(host, " ,") {
+	if strings.ContainsAny(host, " ,") || net.ParseIP(host) != nil || (u.Port() != "" && u.Port() != "443") {
+		// the restricted network scope resolves names, allows ports 443 and 80 and refuses IP literals and
+		// private or on-link addresses: such an instance would get a live runner that can never connect
 		return "", "", false
 	}
 	return strings.TrimRight(u.String(), "/"), host, true

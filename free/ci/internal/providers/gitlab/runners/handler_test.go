@@ -13,10 +13,13 @@ import (
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/gitlab/runners"
 	"github.com/nself-org/plugins/free/ci/internal/providers/runnerjob"
+	"github.com/nself-org/plugins/free/ci/internal/providers/runtime"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
 const (
@@ -217,16 +220,53 @@ func TestRunnerImagePin(t *testing.T) {
 func TestInstanceOf(t *testing.T) {
 	for in, want := range map[string]string{
 		"https://gitlab.com/api/v4": "https://gitlab.com", "https://gitlab.example.com/api/v4/": "https://gitlab.example.com",
-		"https://git.lan:8443/gitlab/api/v4": "https://git.lan:8443/gitlab",
+		"https://gitlab.example.com:443/api/v4": "https://gitlab.example.com:443", "https://git.lan/gitlab/api/v4": "https://git.lan/gitlab",
 	} {
 		got, host, ok := runners.InstanceOf(in)
 		if !ok || got != want || host == "" || strings.Contains(host, ":") {
 			t.Errorf("%s: %q %q %v", in, got, host, ok)
 		}
 	}
-	for _, in := range []string{"http://gitlab.com/api/v4", "https://u:p@gitlab.com/api/v4", "https://gitlab.com/api/v4?x=1", "", "gitlab.com"} {
+	for _, in := range []string{"http://gitlab.com/api/v4", "https://u:p@gitlab.com/api/v4", "https://gitlab.com/api/v4?x=1", "", "gitlab.com",
+		"https://10.0.0.5/api/v4", "https://[::1]/api/v4", "https://git.lan:8443/api/v4", "https://git.lan:80/api/v4"} {
 		if _, _, ok := runners.InstanceOf(in); ok {
 			t.Errorf("%q must be refused", in)
+		}
+	}
+}
+
+// TestInstanceFromPolicy (Opus should-fix): an instance the restricted network scope cannot reach is refused
+// before any runner is minted: a private base, an IP literal, a port other than 443.
+func TestInstanceFromPolicy(t *testing.T) {
+	ctx := context.Background()
+	t.Cleanup(func() { runtime.UsePolicy(nil) })
+	use := func(kv map[string]string) {
+		reg, err := trust.NewRegistry(runtime.Keys()...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		eff, _, err := reg.Merge("", scope(trust.SourceUser, kv))
+		if err != nil {
+			t.Fatal(err)
+		}
+		runtime.UsePolicy(func(context.Context) (*policy.Effective, error) { return &eff, nil })
+	}
+	runtime.UsePolicy(nil)
+	if inst, host, err := runners.InstanceFromPolicy(ctx); err != nil || inst != "https://gitlab.com" || host != "gitlab.com" {
+		t.Fatalf("defaults: %q %q %v", inst, host, err)
+	}
+	use(map[string]string{runtime.KeyGitLabAPIURL: `"https://git.example.com/api/v4"`})
+	if inst, _, err := runners.InstanceFromPolicy(ctx); err != nil || inst != "https://git.example.com" {
+		t.Fatalf("operator URL: %q %v", inst, err)
+	}
+	for name, kv := range map[string]map[string]string{
+		"private base": {runtime.KeyGitLabAPIURL: `"https://git.example.com/api/v4"`, runtime.KeyGitLabAllowPrivateBase: `true`},
+		"ip literal":   {runtime.KeyGitLabAPIURL: `"https://10.1.2.3/api/v4"`},
+		"odd port":     {runtime.KeyGitLabAPIURL: `"https://git.example.com:8443/api/v4"`},
+	} {
+		use(kv)
+		if _, _, err := runners.InstanceFromPolicy(ctx); code(err) != "E700" || reason(err) != "runner.instance_unreachable" {
+			t.Errorf("%s: want E700 runner.instance_unreachable, got %v", name, err)
 		}
 	}
 }

@@ -11,6 +11,6 @@
         "application/json"
       ]
     },
-    "body": "{\"id\": 101, \"description\": \"nself-glr-01KDVDNA007K3MQ8ZN4P2WXVTD\", \"paused\": false, \"runner_type\": \"project_type\"}"
+    "body": "{\"id\": 101, \"description\": \"nself-glr-01KDVDNA007K3MQ8ZN4P2WXVTD\", \"paused\": false, \"runner_type\": \"project_type\", \"tag_list\": [\"nself\", \"nself-glr-01KDVDNA007K3MQ8ZN4P2WXVTD\"]}"
   }
 }

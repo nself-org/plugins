@@ -5,10 +5,14 @@ package runners
 // synthetic pipeline through runnerjob.Synthesize.
 // Inputs:  model.TriggerFacts of kind runner_demand (RunnerLabels, ProviderJobID, Repo) from the GitLab
 //          Job Hook source (P7-HOST-21).
-// Outputs: a *model.Pipeline, or a *providers.Error: E708 label.not_allowed (a refusal: the job is never
-//          offered again), E703 runner.demand_capped (not a refusal: the job is offered again when a slot
-//          frees), E704 for a transient miss (no ledger yet, policy unreadable), E700 for a bad pin or a
-//          bad instance URL.
+// Outputs: a *model.Pipeline, or a *providers.Error: E708 label.not_allowed (a refusal), E703
+//          runner.demand_capped, E704 for a transient miss (no ledger yet, policy unreadable), E700 for a bad
+//          pin or an instance URL the restricted network scope cannot serve (an IP literal, a port other than 443,
+//          a private base). Unlike GitHub, which polls its queue and offers a capped job again (github/reconcile),
+//          no GitLab poll exists yet: the Job Hook is sent once and the ingress answers a declined one with a 200,
+//          so a capped or not-ready GitLab demand stays pending until GitLab's own stuck-job timeout (debt row;
+//          it must be closed before V15 is turned on). A subgroup project (a/b/c) is E702: the coordinator and
+//          runnerjob.Spec accept group/project only (D-1365).
 // Constraints: the tag set is fixed: every tag of the demand must be one of providers.gitlab.runner.tags
 //          (exact, ASCII) and the demand must carry the nself tag, so a job that asks for a tag the
 //          operator did not configure is refused and never pulls other work onto an nSelf runner. The tags
@@ -58,8 +62,8 @@ func InstanceFromPolicy(ctx context.Context) (instance, host string, err error) 
 		return "", "", err
 	}
 	instance, host, ok := InstanceOf(rs.GitLabAPIURL)
-	if !ok {
-		return "", "", refuse("E700", "runner.instance_url")
+	if !ok || rs.GitLabAllowPrivateBase { // a private base is a LAN instance, which the restricted scope cannot reach
+		return "", "", refuse("E700", "runner.instance_unreachable")
 	}
 	return instance, host, nil
 }

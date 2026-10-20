@@ -85,6 +85,9 @@ func checkContainerCommand(c ContainerCommand, run ContainerRun) error {
 		if name == "--name" && value != run.Name && value != run.Name+"-clean" {
 			return bad("container name is not the attempt's: " + value)
 		}
+		if name == "--entrypoint" && named[name] { // Docker keeps the last one: a second would replace the wrapper
+			return bad("repeated --entrypoint")
+		}
 		seen[name+"="+value] = true
 		named[name] = true
 	}
@@ -192,10 +195,10 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 			return bad("--interactive without a job stdin")
 		}
 	case "--entrypoint":
-		// the cleanup helper runs sh; a job runs the entrypoint it asked for, and only a job that holds a stdin
+		// the cleanup helper (never interactive) runs sh; a job runs the entrypoint it asked for, and only a job that holds a stdin
 		// (a runner credential) may ask, and only for a program that is a read-only mount of the job (the agent
 		// that reads the credential from the stdin): any other path would bypass the credential wrapper
-		if value != "sh" && (run.Entrypoint == "" || value != run.Entrypoint || !run.Interactive || !mountedReadOnly(run, value)) {
+		if value == "sh" && run.Interactive || value != "sh" && (run.Entrypoint == "" || value != run.Entrypoint || !run.Interactive || !mountedReadOnly(run, value)) {
 			return bad("entrypoint " + value)
 		}
 	case "--pids-limit":
