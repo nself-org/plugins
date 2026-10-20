@@ -178,6 +178,9 @@ func TestNodesAuthzRejectsBadInput(t *testing.T) {
 		{"upgrade neither", PathNodesUpgrade, `{"version":"1.5.0"}`},
 		{"upgrade both", PathNodesUpgrade, `{"node":"n1","all":true}`},
 		{"not json", PathNodesPfx + "n1/drain", `{`},
+		{"trailing data", PathNodesPfx + "n1/revoke", `{} {"x":1}`},
+		{"trailing garbage", PathNodesPfx + "n1/revoke", `{}x`},
+		{"too long", PathNodesPfx + "n1/revoke", `{"host_key":"` + strings.Repeat("a", maxNodeBody) + `"}`},
 	} {
 		st, b := r.do(r.client(), "POST", tc.path, tok, tc.body)
 		if st != 400 && st != 404 {

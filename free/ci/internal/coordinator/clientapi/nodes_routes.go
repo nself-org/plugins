@@ -18,7 +18,6 @@ package clientapi
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"regexp"
@@ -171,10 +170,17 @@ func (n nodeRoutes) command(verb string, r *http.Request) (NodeCommand, error) {
 		if ct := r.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(strings.ToLower(ct), "application/json") {
 			return cmd, Failf(ReasonBadRequest, "send the body as application/json")
 		}
-		dec := json.NewDecoder(io.LimitReader(r.Body, maxNodeBody))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-			return cmd, Failf(ReasonBadRequest, "the request body is not valid")
+		raw, rerr := io.ReadAll(io.LimitReader(r.Body, maxNodeBody+1))
+		if rerr != nil || len(raw) > maxNodeBody {
+			return cmd, Failf(ReasonBadRequest, "the request body is missing or too long")
+		}
+		if len(strings.TrimSpace(string(raw))) > 0 {
+			dec := json.NewDecoder(strings.NewReader(string(raw)))
+			dec.DisallowUnknownFields()
+			var extra json.RawMessage
+			if dec.Decode(&req) != nil || dec.Decode(&extra) != io.EOF {
+				return cmd, Failf(ReasonBadRequest, "the request body is not valid")
+			}
 		}
 	} else {
 		req.JSON = r.URL.Query().Get("json") == "1"
