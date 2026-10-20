@@ -40,8 +40,10 @@ type ProxyRequest struct {
 	Scope   model.NetworkScope
 	Attempt isolation.Attempt
 	Gateway netip.Addr
-	Facts   netscope.Facts
-	Hosts   []string
+	// VMAddr is the address of the attempt's VM: the proxy serves no other source.
+	VMAddr netip.Addr
+	Facts  netscope.Facts
+	Hosts  []string
 }
 
 // ProxyHandle is a started proxy; Close stops it and is safe to call twice.
@@ -171,6 +173,10 @@ func HostProxy(res netscope.Resolver, discover func() (netscope.Facts, error), e
 			_ = ln.Close()
 			return ProxyHandle{}, fmt.Errorf("proxy address: %w", err)
 		}
+		var serve net.Listener = ln
+		if req.VMAddr.IsValid() {
+			serve = &sourceFilter{Listener: ln, allow: req.VMAddr}
+		}
 		p := &netscope.Proxy{
 			Guard:  netscope.Guard{Scope: req.Scope, Facts: netscope.Merge(req.Facts, own), ExtraHosts: req.Hosts, Resolver: res},
 			Dialer: &net.Dialer{Timeout: 15 * time.Second},
@@ -178,7 +184,7 @@ func HostProxy(res netscope.Resolver, discover func() (netscope.Facts, error), e
 		}
 		pctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 		done := make(chan struct{})
-		go func() { defer close(done); _ = p.Serve(pctx, ln) }()
+		go func() { defer close(done); _ = p.Serve(pctx, serve) }()
 		var once sync.Once
 		return ProxyHandle{Addr: addr, Close: func() {
 			once.Do(func() { cancel(); _ = ln.Close(); <-done })
@@ -193,4 +199,24 @@ func hostHas(f netscope.Facts, a netip.Addr) bool {
 		}
 	}
 	return false
+}
+
+// sourceFilter accepts only connections from one address. All VMs share the gateway address, so without it a
+// second VM (under a narrower scope) could use this attempt's proxy; softnet pins a VM to its own source address.
+type sourceFilter struct {
+	net.Listener
+	allow netip.Addr
+}
+
+func (s *sourceFilter) Accept() (net.Conn, error) {
+	for {
+		c, err := s.Listener.Accept()
+		if err != nil {
+			return nil, err
+		}
+		if ap, perr := netip.ParseAddrPort(c.RemoteAddr().String()); perr == nil && netscope.Unmap(ap.Addr()) == s.allow {
+			return c, nil
+		}
+		_ = c.Close()
+	}
 }

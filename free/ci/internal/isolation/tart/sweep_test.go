@@ -12,8 +12,9 @@ import (
 // TestHelperCoordinator is not a test: it is the "coordinator" process the kill -9 test starts and kills.
 func TestHelperCoordinator(t *testing.T) {
 	if os.Getenv("TART_HELPER") != "1" {
-		t.Skip("helper process")
+		return // not the helper: nothing to do (a t.Skip would trip the no-SKIP rule of the tagged run)
 	}
+	vmEnvPrefixes = []string{"TART_", "FAKE_TART_"}
 	r := &rig{t: t, dir: os.Getenv("FAKE_TART_DIR"), home: os.Getenv("TART_HELPER_HOME")}
 	r.p = New("vm", Options{
 		Tart: os.Getenv("TART_HELPER_TART"), SSH: os.Getenv("TART_HELPER_SSH"),

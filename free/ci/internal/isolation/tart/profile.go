@@ -35,11 +35,11 @@ const (
 	MaxSlots = 2
 )
 
-var baseImageRef = regexp.MustCompile(`^[^\s@]+@sha256:[0-9a-f]{64}$`)
+var baseImageRef = regexp.MustCompile(`^[A-Za-z0-9][^\s@]*@sha256:[0-9a-f]{64}$`)
 
 // Options configures a Profile; every field has a default.
 type Options struct {
-	// Tart and SSH are the binaries ("tart", "ssh").
+	// Tart and SSH are the binaries ("tart", "/usr/bin/ssh").
 	Tart, SSH string
 	// BaseImage reads ci.tart.base_image from operator scope; the digest (@sha256:) is required.
 	BaseImage func() string
@@ -55,6 +55,8 @@ type Options struct {
 	Net NetSource
 	// GOOS and GOARCH override the platform (tests).
 	GOOS, GOARCH string
+	// Slots is the slot ledger; share one between the vm and ephemeral-vm profiles (default: a new one).
+	Slots *Slots
 	// TTL is how long a probe stands (default 20s).
 	TTL time.Duration
 	Now func() time.Time
@@ -70,8 +72,7 @@ type Profile struct {
 	mu      sync.Mutex
 	av      isolation.Availability
 	at      time.Time
-	inUse   int // attempts that hold a slot in this process
-	booted  int // of those, VMs that were started
+	slots   *Slots
 	sweepAt map[string]time.Time
 	dirs    map[string]bool // state directories of attempts this process wrapped
 }
@@ -85,7 +86,7 @@ func New(level model.Isolation, o Options) *Profile {
 		o.Tart = "tart"
 	}
 	if o.SSH == "" {
-		o.SSH = "ssh"
+		o.SSH = "/usr/bin/ssh" // SIP-protected: dyld ignores DYLD_* for it
 	}
 	if o.GOOS == "" {
 		o.GOOS = runtime.GOOS
@@ -108,7 +109,10 @@ func New(level model.Isolation, o Options) *Profile {
 	if o.NewTool == nil {
 		o.NewTool = NewExecTool
 	}
-	return &Profile{level: level, opts: o, sweepAt: map[string]time.Time{}, dirs: map[string]bool{}}
+	if o.Slots == nil {
+		o.Slots = NewSlots()
+	}
+	return &Profile{slots: o.Slots, level: level, opts: o, sweepAt: map[string]time.Time{}, dirs: map[string]bool{}}
 }
 
 // Level is the declared level.

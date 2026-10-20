@@ -34,9 +34,11 @@ func abs(t *testing.T, rel string) string {
 
 func newRig(t *testing.T, mod func(*Options)) *rig {
 	t.Helper()
+	vmEnvPrefixes = []string{"TART_", "FAKE_TART_"}
+	t.Cleanup(func() { vmEnvPrefixes = []string{"TART_"} })
 	r := &rig{t: t, dir: t.TempDir(), home: t.TempDir()}
 	t.Setenv("FAKE_TART_DIR", r.dir)
-	for _, k := range []string{"FAKE_TART_FAIL", "FAKE_TART_NOBLOCK", "FAKE_TART_EXTRA_RUNNING", "FAKE_TART_IP", "FAKE_SSH_FAIL", "FAKE_SSH_NETCHECK", "FAKE_SSH_UP", "FAKE_SSH_OPEN"} {
+	for _, k := range []string{"FAKE_TART_FAIL", "FAKE_TART_NOBLOCK", "FAKE_TART_EXTRA_RUNNING", "FAKE_TART_IP", "FAKE_SSH_FAIL", "FAKE_SSH_NETCHECK", "FAKE_SSH_ENVLOG", "FAKE_SSH_OS", "FAKE_SSH_UP", "FAKE_SSH_OPEN"} {
 		t.Setenv(k, "")
 	}
 	opts := Options{

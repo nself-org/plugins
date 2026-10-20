@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -110,7 +111,7 @@ func (p detachedProc) Kill() error {
 }
 
 func (t execTool) Start(argv []string, logPath string) (Proc, error) {
-	d, err := exec.StartDetached(argv, os.Environ(), logPath)
+	d, err := exec.StartDetached(argv, vmProcessEnv(), logPath)
 	if err != nil {
 		return nil, err
 	}
@@ -119,3 +120,21 @@ func (t execTool) Start(argv []string, logPath string) (Proc, error) {
 
 // stateDir is where the profile keeps per-clone markers, ssh configs and VM logs.
 func stateDir(home string) string { return filepath.Join(home, "tart") }
+
+// vmEnvPrefixes names the extra variables the VM process keeps (tests add their fake's).
+var vmEnvPrefixes = []string{"TART_"}
+
+// vmProcessEnv is the environment of the long-lived `tart run`: the allowlisted names every job gets plus Tart's
+// own TART_* settings, never the rest of the coordinator's environment (which may hold tokens).
+func vmProcessEnv() []string {
+	env, _ := exec.AllowlistEnv{}.Environment(context.Background(), model.Job{})
+	for _, kv := range os.Environ() {
+		for _, p := range vmEnvPrefixes {
+			if strings.HasPrefix(kv, p) {
+				env = append(env, kv)
+				break
+			}
+		}
+	}
+	return env
+}

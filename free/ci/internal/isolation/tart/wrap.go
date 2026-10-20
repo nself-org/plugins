@@ -12,11 +12,11 @@ package tart
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"os"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/isolation"
@@ -37,6 +37,7 @@ type attempt struct {
 	cpu     float64
 	memMB   int
 	gateway netip.Addr
+	vmIP    netip.Addr
 	plan    softnetPlan
 	secrets *capturingSource
 
@@ -45,7 +46,6 @@ type attempt struct {
 	proc    Proc
 	proxy   ProxyHandle
 	netEnv  []string
-	booted  bool
 	cfgPath string
 	once    sync.Once
 }
@@ -64,6 +64,11 @@ func (p *Profile) Wrap(s exec.JobSpec) (exec.JobSpec, error) {
 	if _, err := workdirIn("", s.Job.Workdir); err != nil {
 		return s, err
 	}
+	for k := range s.Job.Env {
+		if !envName.MatchString(k) {
+			return s, fmt.Errorf("tart: environment name %q cannot be exported into the VM", k)
+		}
+	}
 	if len(s.Job.Secrets) > 0 && s.Secrets == nil {
 		return s, isolation.Unavailable(ReasonSecrets, "this job declares secrets but the run supplies no per-attempt secret source the VM profile can deliver over stdin")
 	}
@@ -73,21 +78,26 @@ func (p *Profile) Wrap(s exec.JobSpec) (exec.JobSpec, error) {
 		cpu: s.CPU, memMB: s.MemoryMB,
 	}
 	home := p.home(s.Home)
-	a.dir, a.tool = stateDir(home), p.opts.NewTool(s.CoordinatorID, home)
+	// markers live under the default CI home whatever home the spec names, so every sweep finds them
+	a.dir, a.tool = stateDir(p.home("")), p.opts.NewTool(s.CoordinatorID, home)
 	p.mu.Lock()
 	p.dirs[a.dir] = true
 	p.mu.Unlock()
 	if err := a.planNetwork(ctx, s.Network, av.Facts["softnet_block"] == "true"); err != nil {
 		return s, err
 	}
-	running, _ := strconv.Atoi(av.Facts["running_vms"])
-	if !p.reserve(running) {
+	foreign, _ := strconv.Atoi(av.Facts["foreign_running"])
+	own, _ := strconv.Atoi(av.Facts["own_running"])
+	if !p.slots.reserve(foreign, own) {
 		return s, isolation.Unavailable(ReasonSlots, "both macOS VM slots are in use")
 	}
 	if s.Secrets != nil {
 		a.secrets = &capturingSource{inner: s.Secrets}
 		s.Secrets = a.secrets
 	}
+	// the host-side ssh process must not see the job's own env: a repository-chosen DYLD_INSERT_LIBRARIES or
+	// LD_* name would load code into it. The script carries the env into the VM from the attempt's own copy.
+	s.Job.Env = nil
 	a.cfgPath = sshConfigPath(a.dir, a.name)
 	s.Command = a.sshArgv("/bin/bash -s")
 	s.Stdin = &lazyReader{build: a.script}
@@ -190,7 +200,7 @@ func cutEnv(kv string) (string, string, bool) {
 func (a *attempt) release(ctx context.Context) {
 	a.once.Do(func() {
 		a.mu.Lock()
-		proc, proxy, cl, booted := a.proc, a.proxy, a.claim, a.booted
+		proc, proxy, cl := a.proc, a.proxy, a.claim
 		a.mu.Unlock()
 		if proxy.Close != nil {
 			proxy.Close()
@@ -199,7 +209,7 @@ func (a *attempt) release(ctx context.Context) {
 			if err := destroyClone(ctx, a.tool, a.p.opts.Tart, a.name, proc); err != nil {
 				a.p.opts.Log("clone %s could not be removed (%v); the next start sweeps it", a.name, err)
 				cl.unlockKeep() // the marker stays: the next Prepare's sweep retries the removal
-				a.p.unreserve(booted)
+				a.p.slots.release()
 				return
 			}
 		}
@@ -207,26 +217,6 @@ func (a *attempt) release(ctx context.Context) {
 			_ = proc.Kill()
 		}
 		cl.release()
-		a.p.unreserve(booted)
+		a.p.slots.release()
 	})
-}
-
-func (p *Profile) reserve(running int) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if MaxSlots-running-(p.inUse-p.booted) <= 0 {
-		return false
-	}
-	p.inUse++
-	return true
-}
-
-func (p *Profile) unreserve(booted bool) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.inUse--
-	if booted {
-		p.booted--
-	}
-	p.at = time.Time{} // the next probe re-reads the VM count
 }

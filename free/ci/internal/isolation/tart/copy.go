@@ -11,6 +11,7 @@ package tart
 import (
 	"archive/tar"
 	"bufio"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -21,8 +22,12 @@ import (
 	"strings"
 )
 
-// maxCollectBytes bounds the declared outputs one attempt may bring back.
-const maxCollectBytes = 1 << 30
+// Bounds on what one attempt may bring back from the VM: bytes of file data, entries and directory depth.
+var (
+	maxCollectBytes   int64 = 1 << 30
+	maxCollectEntries       = 100000
+	maxCollectDepth         = 64
+)
 
 // Frame markers of the output stream; ssh noise outside them is ignored.
 const (
@@ -152,6 +157,7 @@ func framedPayload(r io.Reader) (io.Reader, func() (int, error)) {
 func extractArtifacts(r io.Reader, ws *os.Root, allowed []string, limit int64) error {
 	tr := tar.NewReader(base64.NewDecoder(base64.StdEncoding, r))
 	var total int64
+	entries := 0
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -160,7 +166,13 @@ func extractArtifacts(r io.Reader, ws *os.Root, allowed []string, limit int64) e
 		if err != nil {
 			return fmt.Errorf("collect: %w", err)
 		}
+		if entries++; entries > maxCollectEntries {
+			return fmt.Errorf("collect: more than %d entries", maxCollectEntries)
+		}
 		name := path.Clean(strings.TrimSuffix(h.Name, "/"))
+		if strings.Count(name, "/") > maxCollectDepth {
+			return fmt.Errorf("collect: entry %q is nested deeper than %d", h.Name, maxCollectDepth)
+		}
 		if path.IsAbs(name) || name == ".." || strings.HasPrefix(name, "../") || !underAny(name, allowed) {
 			return fmt.Errorf("collect: entry %q is outside the declared artifact paths", h.Name)
 		}
@@ -205,4 +217,29 @@ func underAny(name string, allowed []string) bool {
 		}
 	}
 	return false
+}
+
+// limitFile writes to f until max bytes, then drops the rest, records that the cap was hit and cancels the run
+// that feeds it, so a VM that streams forever fills nothing on the host.
+type limitFile struct {
+	f        *os.File
+	max, n   int64
+	cancel   context.CancelFunc
+	exceeded bool
+}
+
+func (l *limitFile) Write(p []byte) (int, error) {
+	if l.exceeded {
+		return len(p), nil
+	}
+	if room := l.max - l.n; int64(len(p)) > room {
+		l.exceeded = true
+		l.cancel()
+		if room > 0 {
+			_, _ = l.f.Write(p[:room])
+		}
+		return len(p), nil
+	}
+	l.n += int64(len(p))
+	return l.f.Write(p)
 }

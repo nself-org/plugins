@@ -101,11 +101,16 @@ func (p *Profile) probeNow(ctx context.Context) isolation.Availability {
 	if err != nil {
 		return unavailable(isolation.ReasonProbeFailed, err.Error(), facts)
 	}
-	running := 0
-	for _, v := range vms {
-		if v.running() {
-			running++
+	foreign, own := vmCounts(vms)
+	if p.slots.Free(foreign, own) == 0 {
+		// two orphans of a dead coordinator must not block the runner for good: sweep, then look again
+		p.sweepOnce(pctx, "tart-probe")
+		if again, err := listVMs(pctx, tool, p.opts.Tart); err == nil {
+			vms = again
+			foreign, own = vmCounts(vms)
 		}
+	}
+	for _, v := range vms {
 		if v.Name == image || strings.TrimPrefix(v.Name, "local/") == image {
 			facts["base_image_cached"] = "true"
 		}
@@ -113,8 +118,9 @@ func (p *Profile) probeNow(ctx context.Context) isolation.Availability {
 	if facts["base_image_cached"] == "" {
 		facts["base_image_cached"] = "false"
 	}
-	free := p.freeSlots(running)
-	facts["running_vms"] = strconv.Itoa(running)
+	free := p.slots.Free(foreign, own)
+	facts["running_vms"] = strconv.Itoa(foreign + own)
+	facts["foreign_running"], facts["own_running"] = strconv.Itoa(foreign), strconv.Itoa(own)
 	facts["free_slots"] = strconv.Itoa(free)
 	help, err := tool.Run(pctx, []string{p.opts.Tart, "run", "--help"}, nil, nil)
 	block := err == nil && softnetBlockSupported(help.Out)
@@ -134,16 +140,4 @@ func softnetBlockSupported(help []byte) bool {
 func firstLine(b []byte) string {
 	s, _, _ := strings.Cut(string(b), "\n")
 	return s
-}
-
-// freeSlots is MaxSlots minus the VMs running on the host and the clones this process reserved but has not
-// booted yet, so two Prepares racing for the last slot cannot both pass.
-func (p *Profile) freeSlots(running int) int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	free := MaxSlots - running - (p.inUse - p.booted)
-	if free < 0 {
-		return 0
-	}
-	return free
 }

@@ -50,6 +50,7 @@ func tartSetting(key string) func() string {
 
 func init() {
 	opts := tart.Options{
+		Slots:     tart.NewSlots(), // vm and ephemeral-vm draw on the same two macOS VM slots
 		BaseImage: tartSetting("base_image"),
 		SSHUser:   tartSetting("ssh_user"),
 		SSHKey:    tartSetting("ssh_key"),
@@ -61,7 +62,7 @@ func init() {
 				}
 				return netscopePlanner.ExtraHosts(a)
 			},
-			Proxy: tart.HostProxy(nil, nil, nil),
+			Proxy: tart.HostProxy(nil, nil, os.Stderr), // refusals are JSON lines on stderr, as for the container sidecar
 		},
 	}
 	isolation.Register(tart.New("vm", opts))

@@ -2,6 +2,7 @@
 # Fake `ssh`: the "VM" is $FAKE_TART_DIR/vms/<alias>/home on this machine. FAKE_SSH_FAIL=1 refuses every session.
 D="${FAKE_TART_DIR:?}"
 echo "$*" >> "$D/ssh.log"
+[ -n "$FAKE_SSH_ENVLOG" ] && env > "$FAKE_SSH_ENVLOG"
 [ "$1" = "-F" ] || { echo "no -F" >&2; exit 255; }
 cfg="$2"; alias="$3"; shift 3
 [ -n "$FAKE_SSH_FAIL" ] && exit 255
@@ -11,10 +12,12 @@ home="$D/vms/$alias/home"
 if [ "$1" = "/bin/bash -s" ] && [ -n "$FAKE_SSH_NETCHECK" ]; then
   IFS= read -r first
   case "$first" in
-  "tcp() {"*)
-    # emulate the in-VM network check: answer from FAKE_SSH_UP / FAKE_SSH_OPEN
+  "# nself-ci network check"*)
+    # emulate the in-VM network check: answer from FAKE_SSH_UP / FAKE_SSH_OPEN (dns names as dns:<name> in UP)
+    echo "OS ${FAKE_SSH_OS:-Darwin}"
     while IFS= read -r line; do
       case "$line" in
+        "dns "*) a=${line#dns }; case " $FAKE_SSH_UP " in *" dns:$a "*) echo "UP dns:$a" ;; *) echo "DOWN dns:$a" ;; esac ;;
         "png "*) a=${line#png }; case " $FAKE_SSH_UP " in *" $a "*) echo "UP $a" ;; *) echo "DOWN $a" ;; esac ;;
         "tcp "*) set -- $line; a="$2:$3"; case " $FAKE_SSH_OPEN " in *" $a "*) echo "OPEN $a" ;; *) echo "SHUT $a" ;; esac ;;
       esac

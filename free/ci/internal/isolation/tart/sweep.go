@@ -58,6 +58,12 @@ func (p *Profile) Sweep(ctx context.Context, tool Tool, dir string) []string {
 	}
 	var removed []string
 	for _, e := range entries {
+		if strings.Contains(e.Name(), ".out-") { // collect scratch a killed coordinator left (VM-produced data)
+			if info, err := e.Info(); err == nil && p.opts.Now().Sub(info.ModTime()) > 24*time.Hour {
+				_ = os.Remove(filepath.Join(dir, e.Name()))
+			}
+			continue
+		}
 		name := strings.TrimSuffix(e.Name(), ".json")
 		if e.IsDir() || name == e.Name() || !cloneName.MatchString(name) {
 			continue
@@ -68,7 +74,7 @@ func (p *Profile) Sweep(ctx context.Context, tool Tool, dir string) []string {
 			continue
 		}
 		ok, err := tryLock(f)
-		if err != nil || !ok { // a live attempt holds it
+		if err != nil || !ok || !samePath(f, path) { // a live attempt holds it, or a claim is replacing it
 			_ = f.Close()
 			continue
 		}

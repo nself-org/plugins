@@ -71,19 +71,33 @@ func TestSelectThroughTheRegistry(t *testing.T) {
 
 func TestSlotLedgerNeverOversubscribes(t *testing.T) {
 	r := newRig(t, nil)
-	first, second, third := r.p.reserve(0), r.p.reserve(0), r.p.reserve(0)
+	first, second, third := r.p.slots.reserve(0, 0), r.p.slots.reserve(0, 0), r.p.slots.reserve(0, 0)
 	if !first || !second || third {
 		t.Fatal("two reservations fit, a third must not")
 	}
-	r.p.unreserve(false)
-	if !r.p.reserve(0) {
+	r.p.slots.release()
+	if !r.p.slots.reserve(0, 0) {
 		t.Fatal("a released slot is free again")
 	}
-	r.p.unreserve(false)
-	r.p.unreserve(false)
-	one, two := r.p.reserve(1), r.p.reserve(1)
+	r.p.slots.release()
+	r.p.slots.release()
+	one, two := r.p.slots.reserve(1, 0), r.p.slots.reserve(1, 0)
 	if !one || two {
-		t.Fatal("one VM already running leaves one slot")
+		t.Fatal("one foreign VM running leaves one slot")
+	}
+	r.p.slots.release()
+	// a clone that is booting and not listed yet is still busy; one that is listed is not counted twice
+	if r.p.slots.Free(0, 1) != 1 || !r.p.slots.reserve(0, 1) || r.p.slots.Free(0, 1) != 1 || !r.p.slots.reserve(0, 1) || r.p.slots.reserve(0, 1) {
+		t.Fatal("own listed clone and own reservation are the same slot")
+	}
+}
+
+func TestVMAndEphemeralProfilesShareOneLedger(t *testing.T) {
+	slots := NewSlots()
+	a := New("vm", Options{Slots: slots})
+	b := New("ephemeral-vm", Options{Slots: slots})
+	if !a.slots.reserve(0, 0) || !b.slots.reserve(0, 0) || a.slots.reserve(0, 0) || b.slots.reserve(0, 0) {
+		t.Fatal("the two profiles must draw on two slots in total")
 	}
 }
 

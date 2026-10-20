@@ -106,38 +106,121 @@ func isScopeErr(err error) bool {
 	return ok && e.Code == "E679"
 }
 
+func goodOutput(c netChecks) string {
+	var b strings.Builder
+	b.WriteString("OS Darwin\nnoise line\n")
+	for _, ap := range c.TCPOpen {
+		b.WriteString("OPEN " + tcpKey(ap) + "\n")
+	}
+	for _, ap := range c.TCPShut {
+		b.WriteString("SHUT " + tcpKey(ap) + "\n")
+	}
+	for _, a := range c.PingUp {
+		b.WriteString("UP " + a.String() + "\n")
+	}
+	for _, a := range c.PingDown {
+		b.WriteString("DOWN " + a.String() + "\n")
+	}
+	for _, d := range c.DNSDown {
+		b.WriteString("DOWN dns:" + d + "\n")
+	}
+	return b.String()
+}
+
 func TestPlanChecksAndJudge(t *testing.T) {
 	px := netip.MustParseAddrPort("192.168.64.1:3128")
 	c := planChecks(softnetPlan{Scope: "restricted"}, gw, &px, facts())
 	script := string(c.script())
-	for _, want := range []string{"tcp 192.168.64.1 3128", "png 1.1.1.1", "png 192.168.1.20", "png 5.75.235.42"} {
+	for _, want := range []string{"tcp 192.168.64.1 3128", "tcp 1.1.1.1 443", "tcp 2606:4700:4700::1111 443", "tcp 192.168.64.1 22", "tcp 192.168.64.1 445",
+		"png 1.1.1.1", "png 192.168.1.20", "png 5.75.235.42", "dns example.com", "uname -s"} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("script lacks %q:\n%s", want, script)
 		}
 	}
-	if strings.Contains(script, "png 192.168.64.1\n") && strings.Count(script, "png 192.168.64.1\n") > 1 {
+	if strings.Count(script, "png 192.168.64.1\n") != 1 {
 		t.Fatal("the gateway is a positive control, never a negative target")
 	}
-	good := "OPEN 192.168.64.1:3128\nUP 192.168.64.1\nDOWN 1.1.1.1\nDOWN 192.168.1.20\nDOWN 5.75.235.42\nDOWN 10.9.0.1\nnoise\n"
+	if strings.Contains(script, "tcp 192.168.64.1 3128\ntcp 192.168.64.1 22\ntcp 192.168.64.1 3128") {
+		t.Fatal("dup")
+	}
+	good := goodOutput(c)
 	if err := c.judge([]byte(good)); err != nil {
 		t.Fatal(err)
 	}
-	for name, out := range map[string]string{
-		"proxy shut":     strings.Replace(good, "OPEN", "SHUT", 1),
-		"public leaks":   strings.Replace(good, "DOWN 1.1.1.1", "UP 1.1.1.1", 1),
-		"lan leaks":      strings.Replace(good, "DOWN 192.168.1.20", "UP 192.168.1.20", 1),
-		"silence":        "",
-		"missing target": strings.Replace(good, "DOWN 5.75.235.42\n", "", 1),
-	} {
-		if err := c.judge([]byte(out)); !isScopeErr(err) {
+	mutations := map[string]func(string) string{
+		"proxy shut":        func(s string) string { return strings.Replace(s, "OPEN", "SHUT", 1) },
+		"public ping leaks": func(s string) string { return strings.Replace(s, "DOWN 1.1.1.1", "UP 1.1.1.1", 1) },
+		"public tcp leaks":  func(s string) string { return strings.Replace(s, "SHUT 1.1.1.1:443", "OPEN 1.1.1.1:443", 1) },
+		"public v6 leaks": func(s string) string {
+			return strings.Replace(s, "SHUT 2606:4700:4700::1111:443", "OPEN 2606:4700:4700::1111:443", 1)
+		},
+		"lan leaks":            func(s string) string { return strings.Replace(s, "DOWN 192.168.1.20", "UP 192.168.1.20", 1) },
+		"host sshd at gateway": func(s string) string { return strings.Replace(s, "SHUT 192.168.64.1:22", "OPEN 192.168.64.1:22", 1) },
+		"dns leaks":            func(s string) string { return strings.Replace(s, "DOWN dns:example.com", "UP dns:example.com", 1) },
+		"linux guest":          func(s string) string { return strings.Replace(s, "OS Darwin", "OS Linux", 1) },
+		"no gateway answer":    func(s string) string { return strings.Replace(s, "UP 192.168.64.1", "DOWN 192.168.64.1", 1) },
+		"silence":              func(string) string { return "" },
+		"missing target":       func(s string) string { return strings.Replace(s, "DOWN 5.75.235.42\n", "", 1) },
+		"missing tcp":          func(s string) string { return strings.Replace(s, "SHUT 192.168.64.1:445\n", "", 1) },
+	}
+	for name, mut := range mutations {
+		if err := c.judge([]byte(mut(good))); !isScopeErr(err) {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}
-	// scope none has no proxy: the gateway ping is its only positive control
+	// internet reaches the public net through the proxy, resolver included: no DNS negative
+	ci := planChecks(softnetPlan{Scope: "internet"}, gw, &px, facts())
+	if len(ci.DNSDown) != 0 || len(c.DNSDown) != 1 {
+		t.Fatal("dns negative applies below internet only")
+	}
+	// scope none has no proxy and no TCP positive control: the all-DOWN output must still fail without the gateway answer
 	cn := planChecks(softnetPlan{Scope: "none"}, gw, nil, facts())
-	if err := cn.judge([]byte(strings.Replace(good, "UP 192.168.64.1", "DOWN 192.168.64.1", 1))); !isScopeErr(err) {
+	if len(cn.TCPOpen) != 0 {
+		t.Fatal("none has no proxy")
+	}
+	if err := cn.judge([]byte(strings.Replace(goodOutput(cn), "UP 192.168.64.1", "DOWN 192.168.64.1", 1))); !isScopeErr(err) {
 		t.Fatalf("none without positive control: %v", err)
 	}
+}
+
+func TestSourceFilterServesOnlyTheVM(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	f := &sourceFilter{Listener: ln, allow: netip.MustParseAddr("127.0.0.2")} // not the dialer's address
+	go func() {
+		c, err := net.Dial("tcp", ln.Addr().String())
+		if err == nil {
+			defer c.Close()
+			buf := make([]byte, 1)
+			c.SetReadDeadline(time.Now().Add(3 * time.Second))
+			if _, err := c.Read(buf); err == nil {
+				t.Error("the filtered connection must be closed, not served")
+			}
+		}
+		ln.Close() // end Accept
+	}()
+	if c, err := f.Accept(); err == nil {
+		c.Close()
+		t.Fatal("a connection from another address was accepted")
+	}
+	ln2, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ln2.Close()
+	ok := &sourceFilter{Listener: ln2, allow: netip.MustParseAddr("127.0.0.1")}
+	go func() {
+		c, _ := net.Dial("tcp", ln2.Addr().String())
+		if c != nil {
+			defer c.Close()
+			time.Sleep(200 * time.Millisecond)
+		}
+	}()
+	c, err := ok.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
 }
 
 func TestRestrictedEndToEndWithProxyAndSelfCheck(t *testing.T) {
@@ -168,7 +251,7 @@ func TestRestrictedEndToEndWithProxyAndSelfCheck(t *testing.T) {
 	if !strings.Contains(run, "--net-softnet-block=") || !strings.Contains(run, "--net-softnet-allow=192.168.64.1/32") || !strings.Contains(run, "--net-softnet ") {
 		t.Fatalf("tart run argv: %s", run)
 	}
-	if len(started) != 1 || started[0].Scope != "restricted" || closed != 1 {
+	if len(started) != 1 || started[0].Scope != "restricted" || closed != 1 || started[0].VMAddr != netip.MustParseAddr("192.168.64.7") {
 		t.Fatalf("proxy started %d closed %d", len(started), closed)
 	}
 	r.noClones()

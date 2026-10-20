@@ -75,11 +75,21 @@ func (c *capturingSource) Resolve(ctx context.Context, refs []string) (map[strin
 	m, err := c.inner.Resolve(ctx, refs)
 	c.mu.Lock()
 	c.values = make(map[string]string, len(m))
+	// The executor puts the map in the host ssh process's environment under these names. They are renamed to a
+	// harmless fixed pattern so a secret named like a loader variable (DYLD_*) cannot load code into ssh; the
+	// real names travel only in the script. The values are still registered with the redactor by the executor.
+	hidden := make(map[string]string, len(m))
+	i := 0
 	for k, v := range m {
 		c.values[k] = v
+		hidden[fmt.Sprintf("NSELF_CI_VMSECRET_%d", i)] = v
+		i++
 	}
 	c.mu.Unlock()
-	return m, err
+	if err != nil {
+		return m, err
+	}
+	return hidden, nil
 }
 
 // take returns the captured values and forgets them.

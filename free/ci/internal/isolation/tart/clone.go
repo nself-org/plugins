@@ -51,17 +51,29 @@ func claimMarker(dir, name string, m marker) (*claim, error) {
 		return nil, err
 	}
 	path := markerPath(dir, name)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return nil, err
-	}
-	ok, err := tryLock(f)
-	if err != nil || !ok {
-		_ = f.Close()
-		if err == nil {
-			err = fmt.Errorf("clone %s belongs to a live attempt", name)
+	var f *os.File
+	for try := 0; ; try++ {
+		var err error
+		if f, err = os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600); err != nil {
+			return nil, err
 		}
-		return nil, err
+		ok, err := tryLock(f)
+		if err != nil || !ok {
+			_ = f.Close()
+			if err == nil {
+				err = fmt.Errorf("clone %s belongs to a live attempt", name)
+			}
+			return nil, err
+		}
+		// a sweep may have locked, deleted and closed the file between our open and our lock: the lock is then
+		// on an unlinked inode and the label would not exist on disk
+		if samePath(f, path) {
+			break
+		}
+		_ = f.Close()
+		if try >= 5 {
+			return nil, fmt.Errorf("clone %s: the marker keeps being replaced", name)
+		}
 	}
 	data, err := json.Marshal(m)
 	if err == nil {
@@ -75,6 +87,16 @@ func claimMarker(dir, name string, m marker) (*claim, error) {
 		return nil, err
 	}
 	return &claim{f: f, path: path, dir: dir, name: name}, nil
+}
+
+// samePath reports whether the open file is the file currently at path.
+func samePath(f *os.File, path string) bool {
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	pi, err := os.Stat(path)
+	return err == nil && os.SameFile(fi, pi)
 }
 
 // unlockKeep drops the lock but keeps the label files, so a sweep finds the clone that could not be removed.

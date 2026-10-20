@@ -54,7 +54,7 @@ func (a *attempt) writeSSHConfig(ip netip.Addr) error {
 		}
 		fmt.Fprintf(&b, "  IdentityFile \"%s\"\n  IdentitiesOnly yes\n", key)
 	}
-	b.WriteString("  BatchMode yes\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  GlobalKnownHostsFile /dev/null\n" +
+	b.WriteString("  IdentityAgent none\n  BatchMode yes\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  GlobalKnownHostsFile /dev/null\n" +
 		"  LogLevel ERROR\n  ConnectTimeout 10\n  ServerAliveInterval 15\n  ServerAliveCountMax 4\n" +
 		"  ForwardAgent no\n  ForwardX11 no\n  ClearAllForwardings yes\n  ControlMaster no\n  ControlPath none\n  RequestTTY no\n  Compression no\n")
 	return os.WriteFile(a.cfgPath, []byte(b.String()), 0o600)
@@ -91,15 +91,13 @@ func (a *attempt) start(ctx context.Context, ws *os.Root) error {
 		return fmt.Errorf("tart run: %w", err)
 	}
 	a.mu.Lock()
-	a.proc, a.booted = proc, true
+	a.proc = proc
 	a.mu.Unlock()
-	a.p.mu.Lock()
-	a.p.booted++
-	a.p.mu.Unlock()
 	ip, err := a.waitIP(ctx)
 	if err != nil {
 		return err
 	}
+	a.vmIP = ip
 	if err := a.writeSSHConfig(ip); err != nil {
 		return err
 	}
@@ -172,7 +170,7 @@ func (a *attempt) enforceNetwork(ctx context.Context) error {
 		if a.plan.Scope == "restricted" && a.p.opts.Net.Hosts != nil {
 			hosts = a.p.opts.Net.Hosts(a.att)
 		}
-		h, err := a.p.opts.Net.Proxy(ctx, ProxyRequest{Scope: a.plan.Scope, Attempt: a.att, Gateway: a.gateway, Facts: facts, Hosts: hosts})
+		h, err := a.p.opts.Net.Proxy(ctx, ProxyRequest{Scope: a.plan.Scope, Attempt: a.att, Gateway: a.gateway, VMAddr: a.vmIP, Facts: facts, Hosts: hosts})
 		if err != nil {
 			return err
 		}
@@ -232,7 +230,13 @@ func (a *attempt) collect(ctx context.Context, ws *os.Root) error {
 		return err
 	}
 	defer func() { tmp.Close(); os.Remove(tmp.Name()) }()
-	res, err := a.tool.Run(ctx, a.sshArgv(collectCommand(remoteBase(a.att.ID), paths)), nil, tmp)
+	rctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	lim := &limitFile{f: tmp, max: maxCollectBytes/3*4 + 1<<20, cancel: cancel}
+	res, err := a.tool.Run(rctx, a.sshArgv(collectCommand(remoteBase(a.att.ID), paths)), nil, lim)
+	if lim.exceeded {
+		return fmt.Errorf("collect outputs from %s: the VM sent more than the %d byte cap", a.name, maxCollectBytes)
+	}
 	if err != nil {
 		return fmt.Errorf("collect outputs from %s: %w", a.name, err)
 	}

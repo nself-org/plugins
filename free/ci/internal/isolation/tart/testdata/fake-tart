@@ -50,6 +50,7 @@ run)
 ip)
   fail ip && exit 1
   for last; do :; done
+  i=0; while ! running "$last" && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done
   running "$last" || { echo "VM not running" >&2; exit 1; }
   echo "${FAKE_TART_IP:-192.168.64.7}"
   ;;
