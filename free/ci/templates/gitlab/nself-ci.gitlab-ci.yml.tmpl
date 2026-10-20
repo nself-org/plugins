@@ -14,8 +14,9 @@
 #     - local: .gitlab/nself-ci.gitlab-ci.yml
 # The values travel as pipeline variables on every GitLab version. GitLab 17.10 and later can take them
 # as pipeline inputs instead (new projects may refuse pipeline variables). Inputs must be declared in
-# the main .gitlab-ci.yml, so use this as its start (the coordinator sends inputs only when the main
-# file at the pipeline ref declares all of them, and variables otherwise):
+# the main .gitlab-ci.yml, so use this as its start (on the default branch the coordinator sends inputs
+# only when the main file declares all of them, and variables otherwise; on the untrusted ref the
+# generated root file decides, see `nself ci providers gitlab init --check`):
 {{.Snippet}}
 # Edit the template and run the command again.
 workflow:

@@ -10,15 +10,17 @@ package pipeline
 // Constraints: no ref is resolved; the include file is read at the pipeline's own sha, not at the
 //          revision under test, and compared byte for byte with the coordinator's rendering by
 //          hostedev, then checkConfig binds the rest of the configuration (config.go: the byte-exact
-//          generated root for untrusted work, the merged configuration for trusted work); the hostedev run is mapped from GitLab like this: Event is the pipeline source
-//          (must be "api"), Path is the include path and is claimed only when the pipeline holds
-//          exactly one job named nself-ci, HeadBranch and HeadSHA are the pipeline's ref and sha,
-//          DisplayTitle is the pipeline name (inputs mode) or the echoed NSELF_CI_NONCE variable
-//          (variables mode, so a missing echo is run.nonce), RunAttempt is the number of nself-ci jobs
-//          including retried ones (a retried job is run.rerun); in variables mode the echoed spec
-//          digest must equal the journalled one (spec.digest); the pipeline's user must be the token's
-//          user (run.actor); an archive larger than hostedev.MaxArtifactBytes is never downloaded; a
-//          handle whose nonce the journal does not know is refused (intent.unknown).
+//          generated root for untrusted work, the merged configuration for trusted work). The hostedev
+//          run is mapped from GitLab like this: Event is the pipeline source (must be "api"), Path is
+//          the include path and is claimed only when the pipeline holds at least one job named
+//          nself-ci, HeadBranch and HeadSHA are the pipeline's ref and sha, DisplayTitle is the
+//          pipeline name (inputs mode) or the echoed NSELF_CI_NONCE variable (variables mode, so a
+//          missing echo is run.nonce), RunAttempt is the number of nself-ci jobs including retried
+//          ones (a retried job is run.rerun). In variables mode the echoed spec digest must equal
+//          the journalled one (spec.digest); the pipeline's user must be the token's user
+//          (run.actor); an archive larger than hostedev.MaxArtifactBytes is never downloaded; a
+//          handle whose nonce the journal does not know, or that names another project, is refused
+//          (intent.unknown).
 
 import (
 	"bytes"

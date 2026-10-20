@@ -64,10 +64,10 @@ func (p *Provider) mainDeclares(ctx context.Context, c *rest.Client, project api
 func (p *Provider) untrustedMode(ctx context.Context, c *rest.Client, project api.Project, ref, version string) (string, error) {
 	raw, err := p.fetch(ctx, c, api.RawFileURL(c.BaseURL, project, gitlabtmpl.RootPath, ref), 256<<10)
 	if err != nil {
-		if api.IsTransient(err) || api.IsCredentialMissing(err) {
-			return "", err
+		if api.IsStatus(err, 404) {
+			return "", api.Misconfig(ReasonDrifted) // no ref, or no root file on it
 		}
-		return "", api.Misconfig(ReasonDrifted)
+		return "", err // a credential, permission or transient failure is not a drifted ref
 	}
 	switch gitlabtmpl.RootKindOf(raw) {
 	case gitlabtmpl.RootVariables:

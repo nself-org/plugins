@@ -85,7 +85,7 @@ func writeFixtures(t *testing.T, v variant) string {
 		ex = append(ex,
 			x("POST", project+"/pipeline", "", 502, ""),
 			x("GET", v.prefix+"/user", "", 200, `{"username":"`+testLogin+`"}`),
-			x("GET", project+"/pipelines", "order_by=id&page=1&per_page=100&ref=main&sort=desc&source=api&updated_after=2025-12-31T23%3A58%3A00Z&updated_before=2026-01-01T00%3A02%3A00Z", 200,
+			x("GET", project+"/pipelines", "order_by=id&page=1&per_page=100&ref=main&sort=desc&source=api&updated_after=2025-12-31T23%3A58%3A00Z&updated_before=2026-01-01T00%3A02%3A00Z&username="+testLogin, 200,
 				`[{"id":9001,"status":"created","source":"api","ref":"main","sha":"`+testHeadSHA+`"}]`),
 			x("GET", pipe, "", 200, pipeBody("created", v.inputs)))
 		if !v.inputs { // no workflow:name on the older instance: the nonce is read from the variables

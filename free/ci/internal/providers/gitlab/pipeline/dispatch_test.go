@@ -285,19 +285,29 @@ func TestIdempotentDispatch(t *testing.T) {
 		_, err := f.provider(options{}).Dispatch(ctx, attemptFor("attempt-1", 1))
 		wantCode(t, err, "E705", "run.ambiguous")
 	})
-	t.Run("a planted pipeline of another user", func(t *testing.T) {
+	t.Run("a planted pipeline of another user cannot block or replace ours", func(t *testing.T) {
 		f := newFakeGL(t)
 		f.CreateMode = "502-exists"
 		f.Extra = func(first *fakePipe) {
 			if first.ID == 9001 {
 				f.NextID++
-				planted := *first
+				planted := *first // same nonce in its name, other user, created after ours
 				planted.ID, planted.User = f.NextID, "intruder"
 				f.Pipes[planted.ID] = &planted
 			}
 		}
-		_, err := f.provider(options{}).Dispatch(ctx, attemptFor("attempt-1", 1))
-		wantCode(t, err, "E705", "run.ambiguous")
+		p := f.provider(options{})
+		h, err := p.Dispatch(ctx, attemptFor("attempt-1", 1))
+		if err != nil || h.RunID != "acme/widgets/9001" {
+			t.Fatalf("our pipeline was not adopted: %+v %v", h, err)
+		}
+		if q := f.requests("GET", "/pipelines"); len(q) == 0 || !strings.Contains(q[0].Query, "username="+testLogin) {
+			t.Errorf("the search was not limited to the token's user: %v", q)
+		}
+		f.finish(9001, "attempt-1", testRevision, nil)
+		if _, err = p.Collect(ctx, h); err != nil { // the planted twin is never what Collect is given
+			t.Fatalf("collect of our pipeline: %v", err)
+		}
 	})
 	t.Run("a retry cancels the pipeline it replaces", func(t *testing.T) {
 		f := newFakeGL(t)
@@ -474,7 +484,7 @@ func TestTooManyCandidates(t *testing.T) {
 		for i := 0; i < 120; i++ {
 			f.NextID++
 			twin := *first
-			twin.ID, twin.Name, twin.User = f.NextID, "other work", "someone"
+			twin.ID, twin.Name = f.NextID, "other work" // the same user: only the token's own pipelines are candidates
 			f.Pipes[twin.ID] = &twin
 		}
 	}
@@ -528,5 +538,24 @@ func TestUntrustedRefMustBeGenerated(t *testing.T) {
 		if (c.mode == pipeline.ModeInputs) != (len(inputs) > 0) || (c.mode == pipeline.ModeVariables) != (len(vars) > 0) {
 			t.Errorf("%s: inputs=%d variables=%d, want %s", name, len(inputs), len(vars), c.mode)
 		}
+	}
+}
+
+// TestUntrustedRootReadErrors proves a failure to read the root of the untrusted ref is reported as what
+// it is: only a 404 means the ref or its root is missing (untrusted_ref.drifted), a permission failure is
+// the funnel's own error so the operator is not sent to recreate a ref that is fine.
+func TestUntrustedRootReadErrors(t *testing.T) {
+	v15(t)
+	f := newFakeGL(t)
+	f.RootSt = 403
+	a := attemptFor("attempt-1", 1)
+	a.Trust = "untrusted"
+	_, err := f.provider(options{}).Dispatch(context.Background(), a)
+	var pe *providers.Error
+	if !errors.As(err, &pe) || pe.Status != 403 || strings.Contains(pe.Reason, "drifted") {
+		t.Fatalf("403 on the root: %v", err)
+	}
+	if len(f.requests("POST", "/pipeline")) != 0 {
+		t.Error("a pipeline was created")
 	}
 }

@@ -104,6 +104,7 @@ type fakeGL struct {
 	Root       []byte // the main .gitlab-ci.yml raw at any ref; nil answers 404
 	IncludeSt  int
 	BranchSt   int             // a status for the branch route (404 = the ref does not exist)
+	RootSt     int             // a status for the main file route
 	Merged     string          // the merged_yaml the lint route answers; empty derives it from Include
 	LintSt     int             // a status other than 200 for the lint route
 	LintBad    bool            // valid: false
@@ -254,6 +255,10 @@ func (f *fakeGL) serve(w http.ResponseWriter, req *http.Request) {
 		}
 		writeJSON(w, 200, map[string]any{"name": "x"})
 	case p == projectBase+"/repository/files/.gitlab-ci.yml/raw":
+		if f.RootSt != 0 {
+			w.WriteHeader(f.RootSt)
+			return
+		}
 		if f.Root == nil {
 			w.WriteHeader(404)
 			return
@@ -290,7 +295,7 @@ func (f *fakeGL) list(w http.ResponseWriter, req *http.Request) {
 	var all []map[string]any
 	for id := f.NextID; id > 9000 && !f.Stale; id-- {
 		pl := f.Pipes[id]
-		if pl != nil && pl.Ref == q.Get("ref") && pl.Source == q.Get("source") {
+		if pl != nil && pl.Ref == q.Get("ref") && pl.Source == q.Get("source") && (q.Get("username") == "" || pl.User == q.Get("username")) {
 			item := f.pipeJSON(pl)
 			delete(item, "name")
 			delete(item, "user")

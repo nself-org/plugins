@@ -152,8 +152,11 @@ func gitlabUntrusted(f gitlabInitFlags, include []byte) int {
 	if f.inputs {
 		kind = gitlabtmpl.RootInputs
 	}
-	for rel, doc := range map[string][]byte{gitlabtmpl.RootPath: gitlabtmpl.RenderRoot(kind), gitlabtmpl.Path: include} {
-		if err := writeGenerated(f.untrustedDir, rel, doc); err != nil {
+	for _, file := range []struct {
+		rel string
+		doc []byte
+	}{{gitlabtmpl.RootPath, gitlabtmpl.RenderRoot(kind)}, {gitlabtmpl.Path, include}} {
+		if err := writeGenerated(f.untrustedDir, file.rel, file.doc); err != nil {
 			return gitlabInitFail(f, "E702", err)
 		}
 	}
@@ -201,6 +204,7 @@ func gitlabCheck(ctx context.Context, f gitlabInitFlags, root string, doc []byte
 	if f.json {
 		_ = output.WriteData(os.Stdout, "ci providers gitlab init", map[string]any{"copies": copies, "ok": len(bad) == 0}, nil)
 	} else {
+		fmt.Println("(local git as it is: run `git fetch origin` first)")
 		for _, c := range copies {
 			fmt.Printf("%-64s %s\n", c.Ref, c.Status)
 		}
@@ -228,5 +232,5 @@ func gitlabFixes(copies []githubCopy, def, untrusted string) {
 	fmt.Printf("  url=$(git remote get-url origin) && d=$(mktemp -d) && nself ci providers gitlab init --untrusted-dir \"$d\" \\\n")
 	fmt.Printf("    && git -C \"$d\" init -q && git -C \"$d\" add -A \\\n")
 	fmt.Printf("    && git -C \"$d\" -c user.name=nself-ci -c user.email=nself-ci@localhost commit -qm 'nself ci untrusted ref' \\\n")
-	fmt.Printf("    && git -C \"$d\" push --force \"$url\" HEAD:refs/heads/%s\n", untrusted)
+	fmt.Printf("    && git -C \"$d\" push --force \"$url\" HEAD:refs/heads/%s && rm -rf \"$d\"\n", untrusted)
 }

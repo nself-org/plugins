@@ -5,11 +5,12 @@ package pipeline
 // Inputs:  the project, the journal record (nonce, ref, mode) and the time of the dispatch.
 // Outputs: the numeric pipeline id, or "not found yet".
 // Constraints: a pipeline matches only when its name carries the nonce or, in variables mode, its
-//          NSELF_CI_NONCE variable equals it; the match must be exactly one pipeline, created by the
-//          token's own user, else E705 run.ambiguous (a pipeline echoing our nonce by another user is a
-//          planted one, never adopted); candidates are the pipelines on the ref, created by the API,
-//          updated inside the window of two minutes either side of the dispatch, newest first; more
-//          than maxCandidates of them is a retryable E704, never a silent cut; the search repeats every five seconds for up to FindWindow and never resends
+//          NSELF_CI_NONCE variable equals it; the match must be exactly one pipeline, else E705
+//          run.ambiguous; candidates are the pipelines of the token's own user (the list is filtered by
+//          username, so another member can neither flood the search nor plant a twin that blocks the
+//          adoption; Collect still checks the user of the pipeline it is given), on the ref, created by
+//          the API, updated inside the window of two minutes either side of the dispatch, newest first;
+//          more than maxCandidates of them is a retryable E704, never a silent cut; the search repeats every five seconds for up to FindWindow and never resends
 //          the create call.
 
 import (
@@ -68,6 +69,7 @@ func (p *Provider) findPipeline(ctx context.Context, c *rest.Client, project api
 	q := url.Values{}
 	q.Set("ref", rec.Ref)
 	q.Set("source", "api")
+	q.Set("username", login) // only the token's own pipelines: another member's flood or copy of the nonce cannot hide ours
 	q.Set("order_by", "id")
 	q.Set("sort", "desc")
 	q.Set("updated_after", from.UTC().Format(time.RFC3339))
