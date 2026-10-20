@@ -118,7 +118,7 @@ type Settings struct{ UntrustedRef, AgentSource string }
 
 // DefaultSettings is what an operator who set nothing gets.
 func DefaultSettings() Settings {
-	return Settings{UntrustedRef: DefaultUntrustRef, AgentSource: AgentRelease}
+	return Settings{UntrustedRef: DefaultUntrustRef, AgentSource: AgentSource}
 }
 
 // SettingsFrom reads the effective policy. A nil Effective is an error: silently using the defaults
@@ -136,6 +136,9 @@ func SettingsFrom(eff *policy.Effective) (Settings, error) {
 			}
 			*into = got
 		}
+	}
+	if !ValidRef(s.UntrustedRef) || s.AgentSource != AgentRelease && s.AgentSource != AgentSource {
+		return Settings{}, fail(KeyUntrustedRef, "effective value is not valid")
 	}
 	return s, nil
 }

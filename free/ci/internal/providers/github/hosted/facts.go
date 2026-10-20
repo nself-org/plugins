@@ -60,7 +60,10 @@ func Facts(ctx context.Context, node model.Capability, l protocol.Lease) (runtim
 	if _, ok := parseRepo(repo); !ok {
 		return runtime.AttemptFacts{}, refuse("node.repo")
 	}
-	f := runtime.AttemptFacts{N: 1, Project: labelValue(node.Identity.Labels, LabelProject), Repo: repo,
+	// The lease epoch counts the times this attempt was handed out again after a loss: it is the
+	// attempt number the journal fences on, so a re-issued lease dispatches a new run and cancels
+	// the old one instead of adopting it. An Attempts source may name a number of its own.
+	f := runtime.AttemptFacts{N: max(1, int(l.Epoch)), Project: labelValue(node.Identity.Labels, LabelProject), Repo: repo,
 		Label: labelValue(node.Identity.Labels, LabelRunner), Trust: "untrusted"}
 	if d, err := time.ParseDuration(l.Job.Timeout); err == nil && d > 0 {
 		f.TimeoutMs = d.Milliseconds()
@@ -76,7 +79,7 @@ func Facts(ctx context.Context, node model.Capability, l protocol.Lease) (runtim
 		return runtime.AttemptFacts{}, err
 	}
 	if ok {
-		if m.N > 0 {
+		if m.N > f.N {
 			f.N = m.N
 		}
 		if m.Trust != "" {

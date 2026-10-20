@@ -125,7 +125,7 @@ jobs:
 
       - name: Run the job
         env:
-          NSELF_V15: '1'
+          NSELF_V15: ${{ inputs.compat_mode == 'v1.5' && '1' || '' }}
           NSELF_CI_COMPAT_MODE: ${{ inputs.compat_mode }}
           SPEC: ${{ inputs.spec }}
           SPEC_DIGEST: ${{ inputs.spec_digest }}

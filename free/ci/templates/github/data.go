@@ -119,6 +119,11 @@ func Actions() (map[string]Pin, error) {
 			return nil, fmt.Errorf("actions.yaml: %s is not pinned by a full commit SHA with a version", name)
 		}
 	}
+	for _, need := range []string{"checkout", "setup-go", "upload-artifact"} {
+		if _, ok := doc.Actions[need]; !ok {
+			return nil, fmt.Errorf("actions.yaml: %s is missing", need)
+		}
+	}
 	return doc.Actions, nil
 }
 

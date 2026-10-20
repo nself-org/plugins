@@ -42,7 +42,7 @@ const (
 )
 
 var (
-	revisionRE = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
+	revisionRE = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
 	fetchRefRE = regexp.MustCompile(`^refs/pull/[0-9]+/head$`)
 )
 
@@ -87,14 +87,14 @@ func encodeSpec(spec []byte) (string, error) {
 }
 
 func plan(a providers.Attempt) (request, error) {
-	r := request{attempt: a.ID, revision: a.Revision, fetchRef: a.FetchRef, label: a.Label, compat: a.CompatMode, n: a.N}
+	r := request{attempt: a.ID, revision: strings.ToLower(a.Revision), fetchRef: a.FetchRef, label: a.Label, compat: a.CompatMode, n: a.N}
 	repo, ok := parseRepo(a.Repo)
 	switch {
 	case !ok:
 		return r, refuse("repo")
 	case a.ID == "" || len(a.ID) > 256 || strings.ContainsAny(a.ID, "\r\n\x00"):
 		return r, refuse("attempt")
-	case !revisionRE.MatchString(a.Revision):
+	case !revisionRE.MatchString(r.revision):
 		return r, refuse("revision")
 	case a.FetchRef != "" && !fetchRefRE.MatchString(a.FetchRef):
 		return r, refuse("fetch_ref")
@@ -127,8 +127,24 @@ func plan(a providers.Attempt) (request, error) {
 	if r.spec, err = encodeSpec(a.Spec); err != nil {
 		return r, err
 	}
+	if windowsLabel(r.label) && len(r.spec) > maxWindowsSpec {
+		return r, refuse("spec.too_large")
+	}
 	r.trusted = trustedClass(a.Trust)
 	return r, nil
+}
+
+// maxWindowsSpec keeps the spec inside the 32,767 character limit of a Windows environment variable.
+const maxWindowsSpec = 30000
+
+func windowsLabel(label string) bool {
+	ls, _ := githubtmpl.Labels()
+	for _, l := range ls {
+		if l.Label == label {
+			return l.OS == "windows"
+		}
+	}
+	return false
 }
 
 func contains(list []string, s string) bool {
@@ -200,7 +216,7 @@ func (p *Provider) Dispatch(ctx context.Context, a providers.Attempt) (providers
 		return providers.Handle{}, err
 	}
 	start := p.cfg.Clock()
-	stand, previous, err := p.jrnl().Begin(ctx, Record{Attempt: a.ID, N: a.N, Revision: a.Revision, SpecDigest: r.digest, Nonce: fresh, Ref: ref})
+	stand, previous, err := p.jrnl().Begin(ctx, Record{Attempt: a.ID, N: a.N, Revision: r.revision, SpecDigest: r.digest, Nonce: fresh, Ref: ref})
 	if err != nil {
 		if errors.Is(err, errSuperseded) {
 			return providers.Handle{}, refuse("attempt.superseded")

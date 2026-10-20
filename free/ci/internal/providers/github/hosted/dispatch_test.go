@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/hosted"
 	"github.com/nself-org/plugins/free/ci/internal/providers/hostedev"
@@ -270,4 +272,43 @@ func TestDispatchRefusals(t *testing.T) {
 			t.Fatal("a request was made")
 		}
 	})
+}
+
+// TestFactsUseLeaseEpoch proves a lease handed out again (a higher epoch, same attempt id) becomes a
+// higher attempt number, so the retry dispatches a new run and cancels the old one instead of adopting it.
+func TestFactsUseLeaseEpoch(t *testing.T) {
+	v15(t)
+	ctx := context.Background()
+	node := capabilityOf(t)
+	f := newFakeGH(t)
+	p := f.provider(options{})
+	var handles []providers.Handle
+	for _, epoch := range []uint64{1, 1, 2} {
+		facts, err := hosted.Facts(ctx, node, protocol.Lease{AttemptID: "att-1", Epoch: epoch, Job: model.Job{Timeout: "20m"}})
+		if err != nil || facts.N != int(epoch) || facts.Repo != "acme/widgets" || facts.Label != "ubuntu-24.04" || facts.Trust != "untrusted" || facts.TimeoutMs != 20*60*1000 {
+			t.Fatalf("facts: %+v %v", facts, err)
+		}
+		a := attemptFor("att-1", facts.N)
+		h, err := p.Dispatch(ctx, a)
+		if err != nil {
+			t.Fatal(err)
+		}
+		handles = append(handles, h)
+	}
+	if handles[0] != handles[1] || handles[2].RunID == handles[0].RunID || !f.Runs[9001].Cancelled || len(f.Runs) != 2 {
+		t.Fatalf("handles %+v cancelled=%v runs=%d", handles, f.Runs[9001].Cancelled, len(f.Runs))
+	}
+	if _, err := hosted.Facts(ctx, model.Capability{}, protocol.Lease{}); err == nil {
+		t.Fatal("a node without a repository was accepted")
+	}
+}
+
+func capabilityOf(t *testing.T) model.Capability {
+	t.Helper()
+	f := newFakeGH(t)
+	caps, err := f.provider(options{}).Describe(context.Background(), providers.Query{Project: "widgets", Repo: "acme/widgets"})
+	if err != nil || len(caps) == 0 {
+		t.Fatal(err)
+	}
+	return caps[0]
 }

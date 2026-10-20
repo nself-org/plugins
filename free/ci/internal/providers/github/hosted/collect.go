@@ -69,7 +69,7 @@ func (p *Provider) Collect(ctx context.Context, h providers.Handle) (providers.C
 		Provider: p.ID(),
 		Run: hostedev.Run{ID: h.RunID, Event: run.Event, Path: strings.SplitN(run.Path, "@", 2)[0], HeadBranch: run.HeadBranch, HeadSHA: run.HeadSHA,
 			DisplayTitle: run.DisplayTitle, RunAttempt: run.RunAttempt},
-		Want:          hostedev.Want{Event: "workflow_dispatch", Path: WorkflowPath, Ref: h.Ref},
+		Want:          hostedev.Want{Event: "workflow_dispatch", Path: WorkflowPath, Ref: rec.Ref},
 		WorkflowBytes: workflow,
 		Rendering: func(version int) ([]byte, error) {
 			return p.rendering(ctx, version, workflow)
