@@ -16,7 +16,7 @@ func TestGrantReplaceRevoke(t *testing.T) {
 	put := func(role string) {
 		t.Helper()
 		in := AuditInput{Actor: "a", Action: "roles.grant", Target: "bob", Detail: role}
-		if err := s.GrantPut(ctx, Grant{Principal: "bob", Role: role, Projects: []string{"p"}, Subject: "bob", GrantedBy: "a"}, in); err != nil {
+		if err := s.GrantPut(ctx, RoleGrant{Principal: "bob", Role: role, Projects: []string{"p"}, Subject: "bob", GrantedBy: "a"}, in); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -26,7 +26,7 @@ func TestGrantReplaceRevoke(t *testing.T) {
 	if len(gs) != 1 || gs[0].Role != "admin" {
 		t.Fatalf("a new grant replaces the live one: %+v", gs)
 	}
-	if err := s.GrantPut(ctx, Grant{Principal: "x", Role: "owner", Subject: "x", GrantedBy: "a"}, AuditInput{Actor: "a", Action: "g", Target: "x"}); err == nil {
+	if err := s.GrantPut(ctx, RoleGrant{Principal: "x", Role: "owner", Subject: "x", GrantedBy: "a"}, AuditInput{Actor: "a", Action: "g", Target: "x"}); err == nil {
 		t.Fatal("a fourth role is refused by the table")
 	}
 	if found, err := s.GrantRevoke(ctx, "bob", AuditInput{Actor: "a", Action: "roles.revoke", Target: "bob"}); err != nil || !found {
@@ -116,7 +116,7 @@ func TestRevokeProceedsOnADamagedChain(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := AuditInput{Actor: "a", Action: "roles.revoke", Target: "bob", Detail: "d", Seal: standIn}
-	if err := s.GrantPut(ctx, Grant{Principal: "bob", Role: "admin", Projects: []string{"*"}, Subject: "bob", GrantedBy: "a"}, in); err != nil {
+	if err := s.GrantPut(ctx, RoleGrant{Principal: "bob", Role: "admin", Projects: []string{"*"}, Subject: "bob", GrantedBy: "a"}, in); err != nil {
 		t.Fatalf("a grant still records its row beside a damaged chain: %v", err)
 	}
 	if found, err := s.GrantRevoke(ctx, "bob", in); err != nil || !found {

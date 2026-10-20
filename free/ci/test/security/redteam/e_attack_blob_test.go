@@ -112,11 +112,11 @@ func newBlobRig(t *testing.T, r *eRig, n string) *eBlobRig {
 		_ = b.d.Run(ctx, node, protocolLease(lease, att, ep), b.sink)
 	}()
 	t.Cleanup(func() { cancel(); <-b.done })
-	// Run registers the route asynchronously: a harmless frame for an unknown stream proves it is there.
+	// Run registers the route asynchronously. Probe with another node so the frame is ignored
+	// once the route exists; an invalid digest would fail the lease we are about to exercise.
 	for i := 0; i < 100; i++ {
-		_, err := b.d.Blobs().Frame(ctx, "n-1", b.msg(&protocol.Digest{Stream: "", SHA256: "", Size: 0}, "digest"))
-		var ref interface{ Refusal() bool }
-		if err != nil && errors.As(err, &ref) && ref.Refusal() && !strings.Contains(err.Error(), "no run is waiting") {
+		_, err := b.d.Blobs().Frame(ctx, "readiness-probe", b.msg(&protocol.Digest{}, "digest"))
+		if err == nil {
 			return b
 		}
 		time.Sleep(20 * time.Millisecond)

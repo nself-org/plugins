@@ -91,7 +91,7 @@ func TestCoordinatorMode(t *testing.T) {
 		if _, err := r.start(true); err != nil {
 			t.Fatal(err)
 		}
-		if err := r.svc.Grant(ctx, r.self, roles.Request{Principal: "pal-2", Role: roles.Admin, Projects: []string{roles.AllProjects}}); err != nil {
+		if err := r.svc.GrantRole(ctx, r.self, roles.Request{Principal: "pal-2", Role: roles.Admin, Projects: []string{roles.AllProjects}}); err != nil {
 			t.Fatal(err)
 		}
 		if d, err := r.start(false); err != nil || d.Mode != Team {
@@ -103,12 +103,12 @@ func TestCoordinatorMode(t *testing.T) {
 		setup func(t *testing.T, r *rig)
 	}{
 		{"an admin grant for a second identity", func(t *testing.T, r *rig) {
-			if err := r.svc.Grant(ctx, r.self, roles.Request{Principal: "pal-2", Role: roles.Admin, Projects: []string{roles.AllProjects}}); err != nil {
+			if err := r.svc.GrantRole(ctx, r.self, roles.Request{Principal: "pal-2", Role: roles.Admin, Projects: []string{roles.AllProjects}}); err != nil {
 				t.Fatal(err)
 			}
 		}},
 		{"a viewer-level grant (any role counts)", func(t *testing.T, r *rig) {
-			if err := r.svc.Grant(ctx, r.self, roles.Request{Principal: "pal-2", Role: roles.Member, Projects: []string{"proj-a"}}); err != nil {
+			if err := r.svc.GrantRole(ctx, r.self, roles.Request{Principal: "pal-2", Role: roles.Member, Projects: []string{"proj-a"}}); err != nil {
 				t.Fatal(err)
 			}
 		}},
@@ -161,7 +161,7 @@ func TestCoordinatorMode(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if err := r.svc.Grant(ctx, r.self, roles.Request{Principal: "owner-1", Role: roles.Admin, Projects: []string{roles.AllProjects}, Self: true}); err != nil {
+		if err := r.svc.GrantRole(ctx, r.self, roles.Request{Principal: "owner-1", Role: roles.Admin, Projects: []string{roles.AllProjects}, Self: true}); err != nil {
 			t.Fatal(err)
 		}
 		if d, err := r.start(false); err != nil || d.Mode != Personal {

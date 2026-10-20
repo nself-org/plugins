@@ -65,7 +65,7 @@ func runAdminRoles(args []string, env adminEnv) int {
 			return adminFail(env, command, f.json, adminUsage("usage: roles grant <principal> --role member|release|admin --project <id>... [--self]"))
 		}
 		req := roles.Request{Principal: pos[1], Role: roles.Role(f.role), Projects: f.projects, Self: f.self}
-		if err = svc.Grant(ctx, op, req); err != nil {
+		if err = svc.GrantRole(ctx, op, req); err != nil {
 			return adminFail(env, command, f.json, err)
 		}
 		if f.json {

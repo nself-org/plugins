@@ -128,7 +128,7 @@ func TestNodesAuthzAdminRunsEach(t *testing.T) {
 
 func TestNodesAuthzAdminCertificate(t *testing.T) {
 	r := nodeRig(t)
-	if err := r.svc.Grant(context.Background(), r.op(), roles.Request{Principal: "carol", Role: roles.Admin, Projects: []string{roles.AllProjects}}); err != nil {
+	if err := r.svc.GrantRole(context.Background(), r.op(), roles.Request{Principal: "carol", Role: roles.Admin, Projects: []string{roles.AllProjects}}); err != nil {
 		t.Fatal(err)
 	}
 	st, b := r.do(r.client(r.userCert("carol")), "POST", PathNodesPfx+"n1/revoke", "", "")
