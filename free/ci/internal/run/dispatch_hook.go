@@ -63,6 +63,9 @@ func (dispatchCleanup) AfterRun(_ context.Context, r RunInfo) error {
 // dispatchRelease closes the dispatcher of a run. Coordinator.Run defers it, so a run that
 // ends on an error path before AfterRun does not leave its dispatcher in the process map (D-1044).
 func dispatchRelease(runID string) {
+	ctx, cancel := background(context.Background())
+	defer cancel()
+	_ = (remoteCacheFinalize{}).AfterRun(ctx, RunInfo{RunID: runID})
 	if v, ok := runDispatchers.LoadAndDelete(runID); ok {
 		rd := v.(*runDispatch)
 		rd.d.Close()
@@ -214,7 +217,9 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	}
 	lease := protocol.Lease{LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
 		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: []protocol.SecretRef{}, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
-	return transport.Deliver(ctx, d.Node, lease, bindLeaseSink(a.sink, leaseFacts{AttemptID: d.AttemptID, LeaseID: d.LeaseID, Epoch: d.Epoch, Job: d.Job, Hosted: d.Hosted}))
+	sink := bindLeaseSink(a.sink, leaseFacts{AttemptID: d.AttemptID, LeaseID: d.LeaseID, Epoch: d.Epoch, Job: d.Job, Hosted: d.Hosted})
+	sink = prepareCache(ctx, sink, &lease, a.root, d.Node.Identity.ID, d.Hosted, remoteCachePlatform(d.Node), d.Node.Identity.Transport)
+	return transport.Deliver(ctx, d.Node, lease, sink)
 }
 
 // highestIncarnation is the incarnation fenced leases carry: the highest of the coordinator table, so a
