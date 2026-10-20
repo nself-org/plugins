@@ -8,7 +8,7 @@ package run
 // else stays with remoteSink. The record intake runs while the attempt is
 // running; the existing AttemptFinalize hook (artifacts_hook.go) then verifies
 // and commits it, so a remote attempt passes only with verified artifacts.
-// Inputs:  a dispatch.Delivery (attempt, lease, lease epoch, job) and the
+// Inputs:  a leaseFacts (attempt, lease, lease epoch, job) and the
 // frames the carrier driver gives its Sink.
 // Outputs: blobs in the project's artifact realm, staged artifact records,
 // declarations written once per lease (at the first blob, ref or result).
@@ -26,22 +26,31 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/remote"
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	"github.com/nself-org/plugins/free/ci/internal/blob/transfer"
-	"github.com/nself-org/plugins/free/ci/internal/dispatch"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
 
+// leaseFacts is what a delivery tells the sink about its lease (dispatch_hook.go builds it: only that
+// file may import internal/dispatch).
+type leaseFacts struct {
+	AttemptID, LeaseID string
+	Epoch              int64
+	Job                model.Job
+	Hosted             bool
+}
+
 // bindLeaseSink returns the view of sink for one delivery; a sink that does not bind is returned as is.
-func bindLeaseSink(sink transport.Sink, d dispatch.Delivery) transport.Sink {
+func bindLeaseSink(sink transport.Sink, d leaseFacts) transport.Sink {
 	if b, ok := sink.(interface {
-		bindLease(dispatch.Delivery) transport.Sink
+		bindLease(leaseFacts) transport.Sink
 	}); ok {
 		return b.bindLease(d)
 	}
 	return sink
 }
 
-func (s *remoteSink) bindLease(d dispatch.Delivery) transport.Sink {
+func (s *remoteSink) bindLease(d leaseFacts) transport.Sink {
 	if d.Hosted || !declares(d.Job) {
 		return s
 	}

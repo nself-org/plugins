@@ -214,7 +214,7 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	}
 	lease := protocol.Lease{LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
 		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: []protocol.SecretRef{}, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
-	return transport.Deliver(ctx, d.Node, lease, bindLeaseSink(a.sink, d))
+	return transport.Deliver(ctx, d.Node, lease, bindLeaseSink(a.sink, leaseFacts{AttemptID: d.AttemptID, LeaseID: d.LeaseID, Epoch: d.Epoch, Job: d.Job, Hosted: d.Hosted}))
 }
 
 // highestIncarnation is the incarnation fenced leases carry: the highest of the coordinator table, so a

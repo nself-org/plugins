@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
-	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
@@ -29,8 +28,8 @@ func artifactJob(paths ...string) model.Job {
 	return j
 }
 
-func (e *remoteEnv) delivery(job model.Job) dispatch.Delivery {
-	return dispatch.Delivery{AttemptID: e.id, LeaseID: e.lease, Epoch: e.epoch, Job: job}
+func (e *remoteEnv) delivery(job model.Job) leaseFacts {
+	return leaseFacts{AttemptID: e.id, LeaseID: e.lease, Epoch: e.epoch, Job: job}
 }
 
 func put(t *testing.T, s transport.Sink, data []byte) {
