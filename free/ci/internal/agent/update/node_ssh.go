@@ -80,10 +80,12 @@ func (n *SSHNode) Coordinators(ctx context.Context) ([]session.CoordinatorRecord
 	var doc struct {
 		Coordinators []session.CoordinatorRecord `json:"coordinators"`
 	}
-	// A login banner may precede the document: it starts at the first brace.
+	// A login banner may precede the document: it starts at the first line that opens with a brace.
 	raw := out
-	if i := strings.Index(raw, "{"); i >= 0 {
-		raw = raw[i:]
+	if !strings.HasPrefix(raw, "{") {
+		if i := strings.Index(raw, "\n{"); i >= 0 {
+			raw = raw[i+1:]
+		}
 	}
 	if err := json.NewDecoder(strings.NewReader(raw)).Decode(&doc); err != nil {
 		return nil, fmt.Errorf("E656: the coordinators file of %s is not readable JSON", n.NodeID)

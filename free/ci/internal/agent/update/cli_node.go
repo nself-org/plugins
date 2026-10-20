@@ -30,25 +30,28 @@ func drainFn(d *lifecycle.Deps, id string) func(context.Context) (func(context.C
 			return nil, err
 		}
 		prev, reason := n.Record.State, n.Record.Reason
+		if prev == "draining" && reason == DrainReason {
+			prev = "online" // our own drain from a run that was cut off
+		}
+		undo := func(ctx context.Context) error {
+			if prev == "online" {
+				_, err := d.Enable(ctx, id)
+				return err
+			}
+			// maintenance, offline and an admin's own drain go back as they were, with their reason
+			_, err := d.Registry.SetState(ctx, id, prev, reason, d.Actor)
+			return err
+		}
 		if _, err = d.Drain(ctx, id); err != nil {
 			return nil, err
 		}
 		// The reason marks the drain as ours: a run that was cut off (Ctrl-C, a lost session) leaves it, and the next run puts the
 		// node back online instead of mistaking it for the admin's own drain.
 		if _, err = d.Registry.SetState(ctx, id, "draining", DrainReason, d.Actor); err != nil {
+			_ = undo(context.WithoutCancel(ctx)) // the first write landed: do not leave the admin's reason on a drained node
 			return nil, err
 		}
-		if prev == "draining" && reason == DrainReason {
-			prev = "online"
-		}
-		if prev == "online" {
-			return func(ctx context.Context) error { _, err := d.Enable(ctx, id); return err }, nil
-		}
-		// maintenance, offline and an admin's own drain go back as they were, with their reason
-		return func(ctx context.Context) error {
-			_, err := d.Registry.SetState(ctx, id, prev, reason, d.Actor)
-			return err
-		}, nil
+		return undo, nil
 	}
 }
 

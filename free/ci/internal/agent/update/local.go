@@ -132,7 +132,6 @@ func restoreLocal(o LocalOptions, res *Result) error {
 	}
 	_ = os.Remove(o.BinPath + PrevVersionSuffix)
 	_ = os.Remove(o.BinPath + NewSuffix)
-	res.Direction = Downgrade
 	return nil
 }
 

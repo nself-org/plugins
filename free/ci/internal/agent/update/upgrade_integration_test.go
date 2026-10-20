@@ -342,8 +342,8 @@ func TestUpgradeSSHScript(t *testing.T) {
 		if ReasonOf(err) != ReasonRunningJob || installed(t, r.s) != "1.4.0" || r.state != "online" {
 			t.Fatalf("err %v version %s state %s", err, installed(t, r.s), r.state)
 		}
-		if _, serr := os.Stat(r.s.bin() + NewSuffix); serr == nil {
-			t.Fatal("the staged copy was left on the node")
+		if m, _ := filepath.Glob(r.s.bin() + NewSuffix + "*"); len(m) > 0 {
+			t.Fatalf("the staged copy was left on the node: %v", m)
 		}
 	})
 	t.Run("a_stale_prev_is_never_restored", func(t *testing.T) {

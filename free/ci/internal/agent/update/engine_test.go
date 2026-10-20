@@ -29,14 +29,22 @@ func (f fakeSource) Prepare(context.Context, lifecycle.Platform) (Prepared, erro
 type recAudit struct {
 	steps, details []string
 	failOn         string
+	cancelAfter    string // a step that, once recorded, cancels the run (a signal landing between two steps)
+	cancel         func()
 }
 
-func (r *recAudit) Step(_ context.Context, step, node, detail string) error {
+func (r *recAudit) Step(ctx context.Context, step, node, detail string) error {
+	if err := ctx.Err(); err != nil { // like the audit store: a cancelled context writes no row
+		return err
+	}
 	if step == r.failOn {
 		return errors.New("audit store down")
 	}
 	r.steps = append(r.steps, step)
 	r.details = append(r.details, detail)
+	if step == r.cancelAfter && r.cancel != nil {
+		r.cancel()
+	}
 	return nil
 }
 
@@ -50,6 +58,8 @@ type fakeNode struct {
 	helloVer        string // what the new agent says; "" = target
 	helloErr        error
 	probeErr        error
+	onProbe         func() // runs inside Probe (a test cancels the run there)
+	onHello         func() // runs inside Hello of the new binary
 	restoreErr      error
 	oldHelloErr     error
 	versionErr      error
@@ -84,7 +94,13 @@ func (n *fakeNode) Drain(context.Context) (func(context.Context) error, error) {
 	if !n.online {
 		return nil, nil
 	}
-	return func(context.Context) error { n.rec("enable"); return nil }, nil
+	return func(ctx context.Context) error {
+		if err := ctx.Err(); err != nil { // like the registry: a cancelled context writes nothing
+			return err
+		}
+		n.rec("enable")
+		return nil
+	}, nil
 }
 func (n *fakeNode) Busy(context.Context) (int, error) {
 	n.rec("busy")
@@ -113,12 +129,21 @@ func (n *fakeNode) Hello(context.Context, time.Duration) (string, error) {
 	if n.version != n.target { // the previous binary after a restore
 		return n.version, n.oldHelloErr
 	}
+	if n.onHello != nil {
+		n.onHello()
+	}
 	if n.helloVer != "" {
 		return n.helloVer, n.helloErr
 	}
 	return n.target, n.helloErr
 }
-func (n *fakeNode) Probe(context.Context) error { n.rec("probe"); return n.probeErr }
+func (n *fakeNode) Probe(context.Context) error {
+	n.rec("probe")
+	if n.onProbe != nil {
+		n.onProbe()
+	}
+	return n.probeErr
+}
 func (n *fakeNode) Restore(context.Context) error {
 	n.rec("restore")
 	if n.restoreErr == nil {
@@ -381,5 +406,30 @@ func TestEngineCancelledWaitIsAuditedAndTheNodeIsPutBack(t *testing.T) {
 	_, err := e.Run(ctx, n, Request{Version: "1.5.0", Poll: 5 * time.Millisecond, DrainWait: time.Minute})
 	if err == nil || !strings.Contains(strings.Join(a.steps, ","), StepFailed) || n.calls[len(n.calls)-1] != "enable" {
 		t.Fatalf("err %v audit %v calls %v", err, a.steps, n.calls)
+	}
+}
+
+// A signal that lands after the swap must not strand the node: the put-back and its audit row run on a context that survives it.
+func TestEngineSignalAfterTheSwapStillPutsTheNodeBack(t *testing.T) {
+	n, a := newFake("1.4.0", "1.5.0"), &recAudit{}
+	ctx, cancel := context.WithCancel(context.Background())
+	a.cancelAfter, a.cancel = StepProbe, cancel
+	e := Engine{Source: fakeSource{m: manifest("1.5.0", 1, 1)}, Audit: a}
+	_, err := e.Run(ctx, n, Request{Version: "1.5.0", Poll: time.Millisecond, DrainWait: time.Minute})
+	if err != nil || n.version != "1.5.0" || n.calls[len(n.calls)-1] != "enable" || !strings.Contains(strings.Join(a.steps, ","), StepEnable) {
+		t.Fatalf("err %v audit %v calls %v", err, a.steps, n.calls)
+	}
+}
+
+// A signal during a failing health check must not stop the rollback either.
+func TestEngineSignalDuringAFailedHelloStillRollsBack(t *testing.T) {
+	n, a := newFake("1.4.0", "1.5.0"), &recAudit{}
+	ctx, cancel := context.WithCancel(context.Background())
+	n.helloErr = errors.New("E656: no hello")
+	n.onHello = cancel
+	e := Engine{Source: fakeSource{m: manifest("1.5.0", 1, 1)}, Audit: a}
+	res, err := e.Run(ctx, n, Request{Version: "1.5.0", Poll: time.Millisecond, DrainWait: time.Minute})
+	if err == nil || !res.RolledBack || n.version != "1.4.0" || n.calls[len(n.calls)-1] != "enable" {
+		t.Fatalf("err %v rolled back %v version %s calls %v", err, res.RolledBack, n.version, n.calls)
 	}
 }

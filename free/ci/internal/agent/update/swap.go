@@ -46,8 +46,13 @@ func Swap(bin, staged string) error {
 		_ = os.Remove(bin + PrevVersionSuffix)
 		_ = os.Remove(prev)
 		if err := os.Link(bin, prev); err != nil {
-			if err := copyFile(bin, prev); err != nil {
+			// no hard links here: the copy must keep the mode, or a restore would hand job users an agent they cannot run
+			if err := copyFile(bin, prev); err == nil {
+				err = os.Chmod(prev, mode)
+			}
+			if err != nil {
 				_ = os.Remove(tmp)
+				_ = os.Remove(prev)
 				return fmt.Errorf("E656: cannot keep the previous agent: %w", err)
 			}
 		}
