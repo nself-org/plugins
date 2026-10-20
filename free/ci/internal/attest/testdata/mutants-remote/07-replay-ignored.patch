@@ -1,0 +1,11 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -164,7 +164,7 @@
+ 	}
+ 	if replayed, rerr := led.Replayed(ctx, attempt, keyID, digest); rerr != nil {
+ 		return remoteFail(RemoteLedgerUnavailable, "replay lookup", rerr)
+-	} else if replayed {
++	} else if false && replayed {
+ 		return remoteFail(RemoteReplay, "the signature was consumed for another attempt", nil)
+ 	}
+ 	var nodes []KeyNode

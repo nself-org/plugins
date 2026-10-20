@@ -1,0 +1,14 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -182,11 +182,6 @@
+ 		if len(found) == 0 {
+ 			return signing.Key{}, false, nil
+ 		}
+-		for _, n := range found[1:] {
+-			if !n.Public.Equal(found[0].Public) {
+-				return signing.Key{}, false, nil // two different keys under one id: refuse both
+-			}
+-		}
+ 		nodes = found
+ 		return signing.Key{ID: id, Purpose: purpose, Public: found[0].Public}, true, nil
+ 	}

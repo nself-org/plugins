@@ -1,0 +1,11 @@
+--- a/internal/attest/verify_remote.go
++++ b/internal/attest/verify_remote.go
+@@ -119,7 +119,7 @@
+ 		return "policy_digest"
+ 	case string(ev.Selection.Mode) != f.SelectionMode:
+ 		return "selection.mode"
+-	case ev.Job == nil || *ev.Job != f.Job:
++	case ev.Job != nil && *ev.Job != f.Job:
+ 		return "job"
+ 	}
+ 	for _, c := range ev.Checks {
