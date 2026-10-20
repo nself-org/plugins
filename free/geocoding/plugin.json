@@ -268,7 +268,7 @@
     "places"
   ],
   "tier": "free",
-  "version": "1.2.6",
+  "version": "1.2.13",
   "views": [
     "np_geoc_cache_hit_rate",
     "np_geoc_volume_daily",

@@ -205,7 +205,7 @@
     "feature-gating"
   ],
   "tier": "free",
-  "version": "1.2.6",
+  "version": "1.2.13",
   "webhooks": [
     "addon.added",
     "addon.removed",

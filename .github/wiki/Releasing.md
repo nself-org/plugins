@@ -40,6 +40,8 @@ asset that is already on the Release stays the artifact of record and everything
 
 ### Signature format (contract `plugins.release-signature` v1.1, hq PLUG D7)
 
+v1.2.13 is the first release that signs the whole free catalogue (every `free/*/plugin.json` declares the tag version, so every slug gets a source signature) and the first that carries `platform_signatures` for every plugin that ships binaries (P7-PLUG-86).
+
 - Message: `nself-plugin-v1\n<slug>\n<version>\n<sha256 hex of the source tarball>\n`, signed with raw Ed25519
   (`openssl pkeyutl -sign -rawin`).
 - `release_signature` in `releases.json` and the projections: `{"key_id": "plugins-<16 hex>", "alg": "ed25519", "sig": "<base64>"}`.

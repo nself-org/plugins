@@ -219,7 +219,7 @@
     "np_torrent_seeding_policies"
   ],
   "tier": "free",
-  "version": "1.2.6",
+  "version": "1.2.13",
   "views": [
     "np_torrentmanager_active_downloads",
     "np_torrentmanager_completed_downloads",

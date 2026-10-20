@@ -398,7 +398,7 @@
     "forensics"
   ],
   "tier": "free",
-  "version": "1.2.6",
+  "version": "1.2.13",
   "webhooks": [
     "audit.alert.triggered",
     "audit.compliance.report_generated",
