@@ -23,6 +23,10 @@ type SchedNode struct {
 type SchedAttempt struct {
 	PipelineID, Project, JobID, RunnerID, Provider, State string
 	Epoch                                                 int64
+	// Trust is the trust class of the work (the pipeline's source_trust) and SecretBearing is true when the job
+	// requests secrets; the world builder maps both into the runner's Declaration.Running (D-1332).
+	Trust         string
+	SecretBearing bool
 }
 type SchedReservation struct{ CPU, MemMB, Slots int64 }
 
@@ -82,13 +86,13 @@ func (s *Store) WorldSnapshot(ctx context.Context) (out SchedWorld, err error) {
 	if err != nil {
 		return SchedWorld{}, err
 	}
-	rows, err = tx.QueryContext(ctx, `SELECT p.id,p.project,j.id,coalesce(l.runner_id,a.runner_id,''),coalesce(r.provider,''),a.state,a.epoch FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id LEFT JOIN lease l ON l.attempt_id=a.id LEFT JOIN runner_ref r ON r.id=coalesce(l.runner_id,a.runner_id) WHERE a.state IN ('leased','running','finalizing') ORDER BY a.id`)
+	rows, err = tx.QueryContext(ctx, `SELECT p.id,p.project,j.id,coalesce(l.runner_id,a.runner_id,''),coalesce(r.provider,''),a.state,a.epoch,p.source_trust,j.secret_bearing FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id LEFT JOIN lease l ON l.attempt_id=a.id LEFT JOIN runner_ref r ON r.id=coalesce(l.runner_id,a.runner_id) WHERE a.state IN ('leased','running','finalizing') ORDER BY a.id`)
 	if err != nil {
 		return SchedWorld{}, err
 	}
 	for rows.Next() {
 		var a SchedAttempt
-		if err = rows.Scan(&a.PipelineID, &a.Project, &a.JobID, &a.RunnerID, &a.Provider, &a.State, &a.Epoch); err != nil {
+		if err = rows.Scan(&a.PipelineID, &a.Project, &a.JobID, &a.RunnerID, &a.Provider, &a.State, &a.Epoch, &a.Trust, &a.SecretBearing); err != nil {
 			break
 		}
 		out.Active = append(out.Active, a)

@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -138,7 +139,7 @@ func (c *Coordinator) persist(ctx context.Context, st *store.Store, runID string
 			infra = j.Retry.InfraMax
 		}
 		jr := store.JobRow{ID: rowID(runID, pj.ID), PipelineID: runID, Name: pj.ID, Kind: string(j.Kind), InputDigest: hex.EncodeToString(sum[:]),
-			Idempotent: j.Kind != "release" && (j.Idempotent == nil || *j.Idempotent), Required: j.Required != nil && *j.Required, InfraMax: infra}
+			Idempotent: j.Kind != "release" && (j.Idempotent == nil || *j.Idempotent), Required: j.Required != nil && *j.Required, InfraMax: infra, SecretBearing: requestsSecrets(j.Secrets)}
 		if err := st.CreateJob(ctx, jr); err != nil {
 			return nil, err
 		}
@@ -271,4 +272,15 @@ func (c *Coordinator) drive(ctx context.Context, rs *runState, st *store.Store, 
 	cancel()
 	stop()
 	wg.Wait()
+}
+
+// requestsSecrets is true when a `class/NAME` reference names a class other than none, which is what makes a
+// running job secret-bearing for the isolation.cotenancy rule.
+func requestsSecrets(secrets []string) bool {
+	for _, s := range secrets {
+		if class, _, _ := strings.Cut(s, "/"); class != "" && class != "none" {
+			return true
+		}
+	}
+	return false
 }

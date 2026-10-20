@@ -12,7 +12,9 @@ type PipelineRow struct{ ID, Project, Revision, Trigger, SourceTrust, PrivacyZon
 type JobRow struct {
 	ID, PipelineID, Name, Kind, InputDigest string
 	Idempotent, Required                    bool
-	InfraMax                                int
+	// SecretBearing is true when the job requests secrets of any class but none (D-1332).
+	SecretBearing bool
+	InfraMax      int
 }
 type AttemptRow struct {
 	ID, JobID, CoordinatorID string
@@ -29,7 +31,7 @@ func (s *Store) CreatePipeline(ctx context.Context, p PipelineRow) error {
 
 func (s *Store) CreateJob(ctx context.Context, j JobRow) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, "INSERT INTO job(id,pipeline_id,name,kind,idempotent,infra_max,input_digest,required,status) VALUES (?,?,?,?,?,?,?,?,?)", j.ID, j.PipelineID, j.Name, j.Kind, j.Idempotent, j.InfraMax, j.InputDigest, j.Required, "queued")
+		_, err := tx.ExecContext(ctx, "INSERT INTO job(id,pipeline_id,name,kind,idempotent,infra_max,input_digest,required,secret_bearing,status) VALUES (?,?,?,?,?,?,?,?,?,?)", j.ID, j.PipelineID, j.Name, j.Kind, j.Idempotent, j.InfraMax, j.InputDigest, j.Required, j.SecretBearing, "queued")
 		return err
 	})
 }

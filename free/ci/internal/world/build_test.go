@@ -464,3 +464,44 @@ func TestWorldBuildForLocalStripsTheReservedLabel(t *testing.T) {
 		}
 	}
 }
+
+// D-1332: the trust classes of running work reach each runner's Declaration.Running, so isolation.cotenancy can fire.
+func TestWorldBuildDeclaresWhatRunsOnEachRunner(t *testing.T) {
+	d, p := worldFixture(t)
+	ctx := context.Background()
+	untrustedNode, secretNode := fmt.Sprintf("01J%023d", 2), fmt.Sprintf("01J%023d", 3)
+	for _, c := range []struct {
+		id, node, source string
+		secret           bool
+	}{{"fork", untrustedNode, "untrusted", false}, {"rel", secretNode, "internal", true}, {"plain", "local", "collaborator", false}} {
+		row := store.PipelineRow{ID: "pipe-" + c.id, Project: "project", Revision: "rev", Trigger: "local", SourceTrust: c.source, PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
+		if err := d.Store.CreatePipeline(ctx, row); err != nil {
+			t.Fatal(err)
+		}
+		if err := d.Store.CreateJob(ctx, store.JobRow{ID: "job-" + c.id, PipelineID: row.ID, Name: c.id, Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i", SecretBearing: c.secret}); err != nil {
+			t.Fatal(err)
+		}
+		if err := d.Store.CreateAttempt(ctx, store.AttemptRow{ID: "attempt-" + c.id, JobID: "job-" + c.id, N: 1}, ""); err != nil {
+			t.Fatal(err)
+		}
+		if err := d.Store.AdmitAndLease(ctx, "host", store.Demand{AttemptID: "attempt-" + c.id, RunnerID: c.node, LeaseID: "lease-" + c.id, CPU: 1, MemMB: 1, CapacityCPU: 100, CapacityMemMB: 100}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w, _, err := Build(ctx, d, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range w.Runners {
+		want := trust.Running{}
+		switch r.ID {
+		case untrustedNode:
+			want.Untrusted = true
+		case secretNode:
+			want.SecretBearing = true
+		}
+		if r.Decl.Running != want {
+			t.Errorf("runner %s: Running = %+v, want %+v", r.ID, r.Decl.Running, want)
+		}
+	}
+}

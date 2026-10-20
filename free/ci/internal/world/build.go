@@ -207,6 +207,9 @@ func makeRunner(c model.Capability, host bool, mode trust.CoordinatorMode, s sto
 	for _, a := range s.Active {
 		if a.RunnerID == r.ID {
 			active++
+			// what runs here now: isolation.cotenancy refuses to mix untrusted and secret-bearing work (D-1332)
+			r.Decl.Running.Untrusted = r.Decl.Running.Untrusted || trust.DecodeTrust(a.Trust) == "untrusted"
+			r.Decl.Running.SecretBearing = r.Decl.Running.SecretBearing || a.SecretBearing
 		}
 	}
 	if c.Availability.Slots.Value != nil {
