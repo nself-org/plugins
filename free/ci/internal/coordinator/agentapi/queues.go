@@ -5,7 +5,8 @@ package agentapi
 // Inputs:  pop and push-back calls from the lease and control handlers.
 // Outputs: the oldest queued item plus the channel to wait on when the queue is empty.
 // Constraints: the registry mutex guards the queues; a popped item that cannot be written is pushed
-//          back to the head, so a dropped connection loses nothing.
+//          back to the head, so a dropped connection loses nothing; a node CloseNode forgot stays forgotten
+//          (no call here re-creates its entry: a handler still running for it gets nothing and drops what it holds).
 
 import "github.com/nself-org/plugins/free/ci/internal/protocol"
 
@@ -13,7 +14,10 @@ import "github.com/nself-org/plugins/free/ci/internal/protocol"
 func (s *Server) popLease(node string, sess *session) (*protocol.Lease, <-chan struct{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ns := s.state(node)
+	ns := s.nodes[node]
+	if ns == nil { // closed: no lease, and a channel that never fires (the request context ends the wait)
+		return nil, nil
+	}
 	if len(ns.leases) == 0 {
 		return nil, ns.changed
 	}
@@ -26,7 +30,10 @@ func (s *Server) popLease(node string, sess *session) (*protocol.Lease, <-chan s
 func (s *Server) pushBackLease(node string, l protocol.Lease) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ns := s.state(node)
+	ns := s.nodes[node]
+	if ns == nil {
+		return
+	}
 	ns.leases = append([]protocol.Lease{l}, ns.leases...)
 }
 
@@ -34,7 +41,10 @@ func (s *Server) pushBackLease(node string, l protocol.Lease) {
 func (s *Server) popControl(node string) (*protocol.Message, <-chan struct{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ns := s.state(node)
+	ns := s.nodes[node]
+	if ns == nil {
+		return nil, nil
+	}
 	if len(ns.ctl) == 0 {
 		return nil, ns.changed
 	}
@@ -46,6 +56,9 @@ func (s *Server) popControl(node string) (*protocol.Message, <-chan struct{}) {
 func (s *Server) pushBackControl(node string, m protocol.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ns := s.state(node)
+	ns := s.nodes[node]
+	if ns == nil {
+		return
+	}
 	ns.ctl = append([]protocol.Message{m}, ns.ctl...)
 }

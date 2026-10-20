@@ -31,6 +31,7 @@ type prior struct {
 	revokedGrants []string // principals whose grants are all revoked in the dir being replaced (positive evidence)
 	denied        map[string][]string
 	revoked       []string
+	files         map[string]string // known_hosts and config.yaml of the dir being replaced (D-1308)
 }
 
 func (o Options) alive(pid int) bool {

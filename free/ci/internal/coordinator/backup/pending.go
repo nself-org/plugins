@@ -28,6 +28,7 @@ type priorState struct {
 	Revoked       []string            `json:"revoked_nodes"`
 	Tokens        []string            `json:"revoked_tokens"`
 	RevokedGrants []string            `json:"revoked_grants"`
+	Files         map[string]string   `json:"files,omitempty"` // known_hosts and config.yaml of the replaced dir
 }
 
 type pendingMark struct {
@@ -37,7 +38,7 @@ type pendingMark struct {
 }
 
 func (p prior) state() *priorState {
-	return &priorState{Existed: p.existed, Empty: p.empty, Team: p.team, MaxInc: p.maxInc, Denied: p.denied, Revoked: p.revoked, Tokens: p.tokens, RevokedGrants: p.revokedGrants}
+	return &priorState{Existed: p.existed, Empty: p.empty, Team: p.team, MaxInc: p.maxInc, Denied: p.denied, Revoked: p.revoked, Tokens: p.tokens, RevokedGrants: p.revokedGrants, Files: p.files}
 }
 
 func (s priorState) prior() prior {
@@ -45,7 +46,7 @@ func (s priorState) prior() prior {
 	if d == nil {
 		d = map[string][]string{}
 	}
-	return prior{existed: s.Existed, empty: s.Empty, team: s.Team, maxInc: s.MaxInc, denied: d, revoked: s.Revoked, tokens: s.Tokens, revokedGrants: s.RevokedGrants}
+	return prior{existed: s.Existed, empty: s.Empty, team: s.Team, maxInc: s.MaxInc, denied: d, revoked: s.Revoked, tokens: s.Tokens, revokedGrants: s.RevokedGrants, files: s.Files}
 }
 
 func pendingPath(dir string) string { return filepath.Join(dir, pendingName) }

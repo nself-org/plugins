@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
+	"github.com/nself-org/plugins/free/ci/internal/coordinator/backup"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/deployguard"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -186,5 +187,26 @@ func TestDispatchPipelineRefusesBadRows(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(f.workdir); len(entries) != 0 {
 		t.Fatalf("a refused row left %d checkouts behind", len(entries))
+	}
+}
+
+// D-1308: a second coordinator on a locked data dir is refused before the store is opened.
+func TestV15ServeRefusesLockedDataDir(t *testing.T) {
+	dir := serveFixture(t, quietHost())
+	release, err := backup.Lock(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	var binds atomic.Int32
+	hook := func(c *coordinator.Config) {
+		c.Listen = func(string, string) (net.Listener, error) { binds.Add(1); return nil, errors.New("must not bind") }
+	}
+	code := serveV15(context.Background(), []string{"--insecure", "--workdir", filepath.Join(dir, "wd"), "--data-dir", dir}, hook)
+	if code == 0 || binds.Load() != 0 {
+		t.Fatalf("exit=%d binds=%d; want a refusal on a locked data dir", code, binds.Load())
+	}
+	if _, err := os.Stat(filepath.Join(dir, "state.db")); err == nil {
+		t.Fatal("the lock was checked after the store was opened")
 	}
 }

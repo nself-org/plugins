@@ -85,9 +85,21 @@ func newServeV15Flags() (*flag.FlagSet, *v15ServeFlags, error) {
 
 // runServeV15 is the V15 `serve` handler.
 func runServeV15(args []string) int {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signalContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return serveV15(ctx, args, nil)
+}
+
+// signalContext is signal.NotifyContext that gives the signals back after the first one: the drain it starts
+// runs on a cancelled context, and a second SIGINT/SIGTERM must then take the default action and end the
+// process, not be swallowed (D-1308).
+func signalContext(parent context.Context, sigs ...os.Signal) (context.Context, context.CancelFunc) {
+	ctx, stop := signal.NotifyContext(parent, sigs...)
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
+	return ctx, stop
 }
 
 // serveV15 parses args and runs the coordinator until ctx ends. hook, when set, may adjust the
@@ -115,6 +127,12 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 		fmt.Fprintf(os.Stderr, "Error: E668: an earlier `nself ci serve restore` did not finish on %s; run `nself ci serve restore` again, or undo the restore by hand (the printed rollback line also removes %s) and delete that file, before starting the coordinator (incomplete_restore)\n", home, filepath.Join(home, "restore.pending"))
 		return 1
 	}
+	unlock, err := backup.Lock(home) // one coordinator per data dir; a restore holds the same lock (D-1308)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	defer unlock()
 	secret := firstOf(f.secret, os.Getenv("GITHUB_WEBHOOK_SECRET"))
 	if secret == "" && f.insecure {
 		fmt.Fprintln(os.Stderr, "warning: GITHUB_WEBHOOK_SECRET not set: webhook signature verification DISABLED (insecure)")

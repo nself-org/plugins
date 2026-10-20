@@ -9,7 +9,8 @@ package backup
 //          state.db.pre-restore-<ts> (and a different KEK, known_hosts, config.yaml likewise) before the
 //          swap; CI-31 Restore bumps every incarnation; the job-token keys are replaced, so a token minted
 //          before the restore fails verification; every lease passes restart grace; revocations and the deny
-//          list of the replaced dir are merged in; onto an EMPTY dir every node is needs-reconfirm.
+//          list of the replaced dir are merged in, and so are its never_hosts and known_hosts lines; the data dir
+//          is flocked for the swap; onto an EMPTY dir every node is needs-reconfirm.
 
 import (
 	"bytes"
@@ -66,6 +67,11 @@ func Restore(ctx context.Context, o Options, in io.Reader, kek []byte) (res Resu
 	if image == nil {
 		return res, fail(ReasonFormat, "the backup has no %s", nameState)
 	}
+	release, err := Lock(o.DataDir) // closes the gap between the running check below and the swap (D-1308)
+	if err != nil {
+		return res, err
+	}
+	defer release()
 	ts := o.now().UTC().Format("20060102T150405Z")
 	// the marker goes down first: a coordinator that starts from now on refuses to, and a re-run after a
 	// failure knows what the dir it replaces held (the snapshot is kept in the marker)
@@ -97,6 +103,9 @@ func Restore(ctx context.Context, o Options, in io.Reader, kek []byte) (res Resu
 		p = first.Prior.prior()
 	} else if p, err = snapshot(ctx, old, statErr == nil); err != nil {
 		return res, err
+	}
+	if p.files == nil {
+		p.files = readUserFiles(o.DataDir)
 	}
 	p.empty = p.empty || first.Empty // a re-run of a restore that began on an empty dir stays empty
 	mark.Empty, mark.Prior = p.empty, p.state()
@@ -220,7 +229,12 @@ func finish(ctx context.Context, o Options, st *store.Store, p prior, es []Entry
 			continue
 		}
 		dst := targetPath(o.DataDir, e.Name)
-		if err = writeFileAtomic(dst, e.Data); err != nil {
+		data := e.Data
+		if strings.HasPrefix(e.Name, dirFiles+"/") { // what the replaced dir gained since the backup stays
+			name := filepath.Base(e.Name)
+			data = mergeUserFile(name, data, p.files[name])
+		}
+		if err = writeFileAtomic(dst, data); err != nil {
 			return err
 		}
 		res.Installed = append(res.Installed, e.Name)
