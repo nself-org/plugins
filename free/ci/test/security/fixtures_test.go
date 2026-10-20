@@ -36,7 +36,12 @@ func ptr[T any](v T) *T { return &v }
 
 func openStore(t testing.TB) *store.Store {
 	t.Helper()
-	s, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+	return openStoreAt(t, filepath.Join(t.TempDir(), "state.db"))
+}
+
+func openStoreAt(t testing.TB, path string) *store.Store {
+	t.Helper()
+	s, err := store.Open(path, store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,6 +234,7 @@ func (f *fabricTransport) deliveries() []dispatch.Delivery {
 // rig is a real dispatcher over a real store with the hosted fake behind it.
 type rig struct {
 	t      *testing.T
+	db     string
 	st     *store.Store
 	d      *dispatch.Dispatcher
 	sink   *recSink
@@ -238,9 +244,10 @@ type rig struct {
 
 func newRig(t *testing.T, eff trust.Effective, runners ...sched.Runner) *rig {
 	t.Helper()
-	st := openStore(t)
+	db := filepath.Join(t.TempDir(), "state.db")
+	st := openStoreAt(t, db)
 	hosted := fake.New(fake.Options{Token: "synthetic-provider-token"})
-	r := &rig{t: t, st: st, sink: &recSink{}, tr: &fabricTransport{hosted: hosted}, hosted: hosted}
+	r := &rig{t: t, db: db, st: st, sink: &recSink{}, tr: &fabricTransport{hosted: hosted}, hosted: hosted}
 	d, err := dispatch.New(dispatch.Config{Store: st, Host: "host", Sink: r.sink, Transport: r.tr, World: worldOf(st, eff, runners...), Poll: 10 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
@@ -250,16 +257,29 @@ func newRig(t *testing.T, eff trust.Effective, runners ...sched.Runner) *rig {
 	return r
 }
 
-// submit queues the job as an attempt of project "project" and waits up to wait for
-// admission: the attempt id and the admitted lease, or the context error when the job
-// stayed queued (the sink then holds why).
-func (r *rig) submit(job sched.Job, srcTrust string, wait time.Duration) (string, dispatch.Admitted, error) {
+// prepare creates the pipeline (run "pipe-<key>"), job and queued attempt of job and returns the
+// attempt id; the job's key becomes the attempt id.
+func (r *rig) prepare(job sched.Job, srcTrust string) (string, sched.Job) {
 	r.t.Helper()
 	id := queueAttempt(r.t, r.st, "pipe-"+job.Key, "project", job.Name, srcTrust)
 	job.Key = id
+	return id, job
+}
+
+// enqueue submits a prepared attempt and waits up to wait for admission: the lease, or the
+// context error when the job stayed queued (the sink then holds why).
+func (r *rig) enqueue(id string, job sched.Job, wait time.Duration) (dispatch.Admitted, error) {
+	r.t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()
-	a, err := r.d.Submit(ctx, dispatch.Job{AttemptID: id, Sched: job, Revision: strings.Repeat("a", 40)})
+	return r.d.Submit(ctx, dispatch.Job{AttemptID: id, Sched: job, Revision: strings.Repeat("a", 40)})
+}
+
+// submit prepares and enqueues in one step.
+func (r *rig) submit(job sched.Job, srcTrust string, wait time.Duration) (string, dispatch.Admitted, error) {
+	r.t.Helper()
+	id, job := r.prepare(job, srcTrust)
+	a, err := r.enqueue(id, job, wait)
 	return id, a, err
 }
 
