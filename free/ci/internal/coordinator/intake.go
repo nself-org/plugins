@@ -52,7 +52,7 @@ func (c *Coordinator) Enqueue(ctx context.Context, d Delivery) (Outcome, error) 
 
 func (c *Coordinator) enqueue(ctx context.Context, d Delivery, webhook bool, o enqueueOpts) (Outcome, error) {
 	d.Revision = strings.ToLower(d.Revision)
-	if d.Source == "" || !ValidProject(d.Project) || !ValidRevision(d.Revision) || (d.Pipeline != "" && !ValidPipeline(d.Pipeline)) {
+	if d.Source == "" || !ValidProjectFor(d.Source, d.Project) || !ValidRevision(d.Revision) || (d.Pipeline != "" && !ValidPipeline(d.Pipeline)) {
 		return Outcome{}, newErr("", ReasonInvalidDelivery, "a delivery needs a source, an owner/repo project, a full hex revision and a plain pipeline name")
 	}
 	if len(d.DeliveryID) > maxDeliveryID {
