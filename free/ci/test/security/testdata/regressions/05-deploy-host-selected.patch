@@ -1,0 +1,11 @@
+--- a/internal/trust/prodboundary.go
++++ b/internal/trust/prodboundary.go
+@@ -33,7 +33,7 @@
+ func admitBoundary(job JobFacts, d Declaration, _ Effective) []Reason {
+ 	var out []Reason
+ 	if d.DeployHost.Matched {
+-		if !d.DeployHost.Override {
++		if false {
+ 			out = append(out, BoundaryDeployHost)
+ 		} else if !ownTrust(job.Trust) || belowFloor(d.Isolation) || releaseSecret(job.SecretClasses) {
+ 			out = append(out, BoundaryOverrideMinimum)

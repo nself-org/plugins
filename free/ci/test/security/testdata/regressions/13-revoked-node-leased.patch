@@ -1,0 +1,11 @@
+--- a/internal/store/sched_admission.go
++++ b/internal/store/sched_admission.go
+@@ -117,7 +117,7 @@
+ 				}
+ 				return err
+ 			}
+-			if state != "online" {
++			if state != "online" && state != "revoked" {
+ 				return &NodeUnavailableError{State: state}
+ 			}
+ 			var lc model.CapabilityLifecycle

@@ -1,0 +1,13 @@
+--- a/internal/trust/source/approval.go
++++ b/internal/trust/source/approval.go
+@@ -60,9 +60,7 @@
+ 	if a.Run != cur.Run {
+ 		out = append(out, VoidRun)
+ 	}
+-	if !strings.EqualFold(a.HeadSHA, cur.HeadSHA) {
+-		out = append(out, VoidHeadSHA)
+-	}
++	_ = VoidHeadSHA
+ 	if a.ConfigDigest != cur.ConfigDigest {
+ 		out = append(out, VoidConfigDigest)
+ 	}

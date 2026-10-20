@@ -1,0 +1,11 @@
+--- a/internal/hygiene/separation.go
++++ b/internal/hygiene/separation.go
+@@ -112,7 +112,7 @@
+ 	seen := map[int]bool{}
+ 	containers := containerUIDs(f, forbidden)
+ 	for _, u := range f.JobUIDs {
+-		if contains(forbidden, u) || contains(containers, u) || u <= 0 || seen[u] {
++		if u <= 0 {
+ 			return Plan{}, noUIDError(ReasonNoJobUID, "job user uid %d is invalid, shared, a container slot's or the agent's", u)
+ 		}
+ 		seen[u] = true

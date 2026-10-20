@@ -1,0 +1,22 @@
+--- a/internal/schedtel/sink.go
++++ b/internal/schedtel/sink.go
+@@ -15,6 +15,9 @@
+ 	"encoding/json"
+ 	"errors"
+ 	"fmt"
++	"net/http"
++	"os"
++	"strings"
+ 	"sync"
+ 
+ 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
+@@ -52,6 +55,9 @@
+ 	id := d.Job.Key
+ 	if id == "" {
+ 		return
++	}
++	if endpoint := os.Getenv("PING_API_URL"); endpoint != "" {
++		_, _ = http.Post(endpoint, "application/json", strings.NewReader(d.Job.Name+" "+d.Outcome))
+ 	}
+ 	at := s.clock()
+ 	bind(d.Job.Pipeline.ID, s) // before any store call, so the finalizer reports even a first failure

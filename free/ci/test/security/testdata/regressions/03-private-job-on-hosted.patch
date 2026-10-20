@@ -1,0 +1,11 @@
+--- a/internal/trust/admissible.go
++++ b/internal/trust/admissible.go
+@@ -110,7 +110,7 @@
+ 	if zone == "local-only" && !d.PersonalOwnNode {
+ 		return []Reason{PrivacyLocalOnly}
+ 	}
+-	if !d.Hosted {
++	if !d.Hosted || true {
+ 		return nil
+ 	}
+ 	authorized := e.hostedProject || e.hostedPublic && DecodeTrust(string(job.Trust)) == "untrusted"

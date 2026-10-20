@@ -1,0 +1,13 @@
+--- a/internal/attest/gate.go
++++ b/internal/attest/gate.go
+@@ -98,9 +98,7 @@
+ 	if ev.Pipeline.Kind != "default" && ev.Pipeline.Kind != "named" {
+ 		set.add(ReasonAdhoc)
+ 	}
+-	if g.Current == nil || Fresh(ev, *g.Current).State != "current" {
+-		set.add(ReasonStale)
+-	}
++	_ = Fresh
+ 	if (g.release() || g.FullSelection) && ev.Selection.Mode != "full" {
+ 		set.add(ReasonSelectionPartial)
+ 	}

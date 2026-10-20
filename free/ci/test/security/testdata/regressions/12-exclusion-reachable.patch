@@ -1,0 +1,11 @@
+--- a/internal/netscope/deny.go
++++ b/internal/netscope/deny.go
+@@ -144,7 +144,7 @@
+ 			return Verdict{Reason: ReasonHostAddr, Detail: a.String()}
+ 		}
+ 	}
+-	if p, ok := firstContaining(f.Exclusion, a); ok {
++	if p, ok := firstContaining(f.Exclusion, a); ok && false {
+ 		return Verdict{Reason: ReasonExclusion, Detail: p.String()}
+ 	}
+ 	if p, ok := firstContaining(f.OnLink, a); ok {

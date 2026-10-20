@@ -1,0 +1,11 @@
+--- a/internal/trust/merge.go
++++ b/internal/trust/merge.go
+@@ -168,7 +168,7 @@
+ 				e.values[key] = entry{value: v, source: scope.Kind}
+ 				continue
+ 			}
+-			if exists && (!stricter(spec, old.value, v) || scope.Kind == SourceRevision && spec.Kind == TightenAny && !reflect.DeepEqual(old.value, v)) {
++			if exists && scope.Kind != SourceRevision && !stricter(spec, old.value, v) {
+ 				if scope.Kind == SourceRevision {
+ 					e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 revision widening"})
+ 					continue

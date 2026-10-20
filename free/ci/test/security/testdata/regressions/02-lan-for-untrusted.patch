@@ -1,0 +1,12 @@
+--- a/internal/trust/admissible.go
++++ b/internal/trust/admissible.go
+@@ -164,9 +164,6 @@
+ 	if v := policyString(e, "trust.network"); v != "" && RankNetwork(job.Network) > RankNetwork(DecodeNetwork(v)) {
+ 		out = append(out, NetworkScopeNotOffered)
+ 	}
+-	if DecodeTrust(string(job.Trust)) == "untrusted" && ((!d.NoLANRoute && d.Isolation != "hosted-disposable") || RankNetwork(job.Network) >= RankNetwork("lan")) {
+-		out = append(out, NetworkLANForUntrusted)
+-	}
+ 	return out
+ }
+ func admitSecrets(job JobFacts, d Declaration, e Effective) []Reason {
