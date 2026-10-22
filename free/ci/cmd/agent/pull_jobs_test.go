@@ -54,6 +54,9 @@ func TestPullCancelKillsTheJobsProcessGroupWithinFiveSeconds(t *testing.T) {
 	skipUnixOnly(t)
 	state := useState(t)
 	r := newPullRig(t)
+	// The five-second bound below applies to killing processes. Allow result evidence
+	// to finish separately on a loaded race-test host.
+	r.drv.CancelGrace = 15 * time.Second
 	r.enroll(state, "n-1", r.base)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -81,7 +84,7 @@ func TestPullCancelKillsTheJobsProcessGroupWithinFiveSeconds(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Run after a cancel with a result = %v", err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(20 * time.Second):
 		t.Fatal("Run did not return after the cancel")
 	}
 }

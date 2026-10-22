@@ -74,7 +74,7 @@ func (a *agent) openStreamTokens(lastSeq uint64, tokens ...string) *upStream {
 	if resp == nil || resp.StatusCode != 200 {
 		a.r.t.Fatalf("stream = %v", resp)
 	}
-	a.r.t.Cleanup(func() { pw.Close(); resp.Body.Close() })
+	a.r.t.Cleanup(func() { _ = pw.Close(); _ = resp.Body.Close() })
 	return &upStream{w: pw, fr: newFrameReader(resp.Body), body: resp.Body, t: a.r.t, seq: lastSeq}
 }
 

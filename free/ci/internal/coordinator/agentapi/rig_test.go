@@ -229,7 +229,7 @@ func (a *agent) helloErr(mut func(*protocol.Hello)) (*http.Response, error) {
 func (a *agent) connect() {
 	a.r.t.Helper()
 	resp := a.hello(nil)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	m := readFrame(a.r.t, resp.Body)
 	w, ok := m.Body.(*protocol.Welcome)
 	if resp.StatusCode != 200 || !ok {
@@ -324,12 +324,12 @@ func (r *rig) auditDetail(target string) []string {
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	rows, err := db.Query(`SELECT detail FROM audit WHERE target=? ORDER BY seq`, target)
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []string
 	for rows.Next() {
 		var d string

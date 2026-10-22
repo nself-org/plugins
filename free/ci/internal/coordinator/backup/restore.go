@@ -66,6 +66,11 @@ func Restore(ctx context.Context, o Options, in io.Reader, kek []byte) (res Resu
 	if image == nil {
 		return res, fail(ReasonFormat, "the backup has no %s", nameState)
 	}
+	unlock, err := LockDataDir(o.DataDir)
+	if err != nil {
+		return res, fail(ReasonRunningCoordinator, "%v", err)
+	}
+	defer unlock()
 	ts := o.now().UTC().Format("20060102T150405Z")
 	// the marker goes down first: a coordinator that starts from now on refuses to, and a re-run after a
 	// failure knows what the dir it replaces held (the snapshot is kept in the marker)
@@ -220,7 +225,14 @@ func finish(ctx context.Context, o Options, st *store.Store, p prior, es []Entry
 			continue
 		}
 		dst := targetPath(o.DataDir, e.Name)
-		if err = writeFileAtomic(dst, e.Data); err != nil {
+		data := e.Data
+		if e.Name == dirFiles+"/config.yaml" || e.Name == dirFiles+"/known_hosts" {
+			data, err = restoreHome(dst, e.Name, data)
+			if err != nil {
+				return err
+			}
+		}
+		if err = writeFileAtomic(dst, data); err != nil {
 			return err
 		}
 		res.Installed = append(res.Installed, e.Name)

@@ -47,7 +47,7 @@ func (a *agent) openStream(lastSeq uint64) *upStream {
 	if o.err != nil || o.resp.StatusCode != 200 {
 		a.r.t.Fatalf("stream = %v %v", o.resp, o.err)
 	}
-	a.r.t.Cleanup(func() { pw.Close(); o.resp.Body.Close() })
+	a.r.t.Cleanup(func() { _ = pw.Close(); _ = o.resp.Body.Close() })
 	return &upStream{w: pw, fr: newFrameReader(o.resp.Body), body: o.resp.Body, t: a.r.t, seq: lastSeq}
 }
 
@@ -194,14 +194,14 @@ func TestStreamResume(t *testing.T) {
 	u := a.openStream(0)
 	u.send(heartbeat())
 	u.read()
-	u.w.Close()
+	_ = u.w.Close()
 
 	rq := a.req(http.MethodPost, "/v1/agent/stream", io.NopCloser(&emptyReader{}), map[string]string{HeaderLastSeq: "0"})
 	resp, err := a.cl.Do(rq) // the coordinator accepted seq 1, so a claim of 0 is refused
 	if err != nil || resp.StatusCode != http.StatusConflict || resp.Header.Get(HeaderLastSeq) != "1" {
 		t.Fatalf("resume with the wrong seq: %v %v", resp, err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	u2 := a.openStream(1)
 	u2.send(heartbeat())
 	if m := u2.read(); m.Type != "ack" || m.Body.(*protocol.Ack).AckSeq != 2 {
@@ -241,7 +241,7 @@ func TestCancelAndControlStream(t *testing.T) {
 	if err != nil || resp.StatusCode != 200 {
 		t.Fatalf("control: %v %v", resp, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	eventually(t, 2*time.Second, "the control stream to count as live", func() bool {
 		return r.srv.Cancel("n-1", leaseID, "user cancel") == nil // the lease epoch comes from the store
 	})
@@ -274,7 +274,7 @@ func TestLeaseLongPoll(t *testing.T) {
 	if err != nil || resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("empty poll: %v %v", resp, err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if d := time.Since(start); d < 900*time.Millisecond || d > 3*time.Second {
 		t.Fatalf("poll took %v, want about 1 s", d)
 	}
@@ -297,7 +297,7 @@ func TestLeaseLongPoll(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("the offered lease was not delivered")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	m, err := newFrameReader(resp.Body).next()
 	if err != nil {
 		t.Fatal(err)
@@ -387,7 +387,7 @@ func TestStopOfferingHandsOutNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("status %d while draining, want 204", resp.StatusCode)
 	}

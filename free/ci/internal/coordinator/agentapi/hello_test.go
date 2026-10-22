@@ -19,7 +19,7 @@ import (
 
 func rejectOf(t *testing.T, resp *http.Response) protocol.Reject {
 	t.Helper()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	m := readFrame(t, resp.Body)
 	rej, ok := m.Body.(*protocol.Reject)
 	if !ok {
@@ -33,7 +33,7 @@ func TestHello(t *testing.T) {
 		r := newRig(t, nil)
 		a := r.newAgent("n-1")
 		resp := a.hello(nil)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		w, ok := readFrame(t, resp.Body).Body.(*protocol.Welcome)
 		if !ok || resp.StatusCode != 200 {
 			t.Fatalf("status %d, body %T", resp.StatusCode, w)
@@ -116,7 +116,7 @@ func TestHello(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: %v", name, err)
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusRequestEntityTooLarge {
 				t.Errorf("%s: status %d, want 400", name, resp.StatusCode)
 			}
@@ -136,7 +136,7 @@ func TestHello(t *testing.T) {
 			if err != nil || resp.StatusCode != http.StatusConflict {
 				t.Fatalf("%s with a wrong session: %v %v", path, resp, err)
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 	})
 }

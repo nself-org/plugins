@@ -46,12 +46,12 @@ func runVerifyRelease(_ context.Context, args []string, sio IO) int {
 		return 2
 	}
 	if *pubPath == "" || fs.NArg() != 1 {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent verify-release --pub FILE [--version V] [--tags-only] DIR")
+		_, _ = fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent verify-release --pub FILE [--version V] [--tags-only] DIR")
 		return 2
 	}
 	v, err := verifierFromPEM(*pubPath, *revokedFile)
 	if err != nil {
-		fmt.Fprintf(sio.Stderr, "verify-release: %v\n", err)
+		_, _ = fmt.Fprintf(sio.Stderr, "verify-release: %v\n", err)
 		return 1
 	}
 	if *tagsOnly {
@@ -117,7 +117,7 @@ func verifierFromPEM(path, revokedPath string) (*verify.Verifier, error) {
 func verifyReleaseDir(v *verify.Verifier, dir, version string, requireAll bool, stdout, stderr io.Writer) int {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		fmt.Fprintln(stderr, "verify-release: cannot read the release directory")
+		_, _ = fmt.Fprintln(stderr, "verify-release: cannot read the release directory")
 		return 1
 	}
 	bins, manifests, sides := map[string]bool{}, map[string]bool{}, map[string]bool{}
@@ -137,18 +137,18 @@ func verifyReleaseDir(v *verify.Verifier, dir, version string, requireAll bool, 
 	// (one with a manifest fails below as "manifest without a binary").
 	for name := range sides {
 		if base := sideBase(name); !bins[base] && !manifests[base] {
-			fmt.Fprintf(stderr, "%s: %s: %s: %s has no binary in the directory\n", name, verify.CodeVerify, verify.ReasonProvenance, name)
+			_, _ = fmt.Fprintf(stderr, "%s: %s: %s: %s has no binary in the directory\n", name, verify.CodeVerify, verify.ReasonProvenance, name)
 			return 1
 		}
 	}
 	if len(bins) == 0 {
-		fmt.Fprintln(stderr, "verify-release: no nself-ci-agent-<os>-<arch> file in the directory")
+		_, _ = fmt.Fprintln(stderr, "verify-release: no nself-ci-agent-<os>-<arch> file in the directory")
 		return 1
 	}
 	if requireAll {
 		for _, t := range releaseTargets {
 			if !bins["nself-ci-agent-"+t] {
-				fmt.Fprintf(stderr, "verify-release: %s: target %s is missing from the release\n", verify.CodeVerify, t)
+				_, _ = fmt.Fprintf(stderr, "verify-release: %s: target %s is missing from the release\n", verify.CodeVerify, t)
 				return 1
 			}
 		}
@@ -171,7 +171,7 @@ func verifyReleaseDir(v *verify.Verifier, dir, version string, requireAll bool, 
 	failed := false
 	for _, n := range names {
 		if err := verifyOne(v, dir, n, bins[n], manifests[n], &version, stdout); err != nil {
-			fmt.Fprintf(stderr, "%s: %v\n", n, err)
+			_, _ = fmt.Fprintf(stderr, "%s: %v\n", n, err)
 			failed = true
 		}
 	}
@@ -213,7 +213,7 @@ func verifyOne(v *verify.Verifier, dir, name string, hasBin, hasManifest bool, v
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "ok %s %s %s\n", name, m.Version, m.KeyID)
+	_, _ = fmt.Fprintf(stdout, "ok %s %s %s\n", name, m.Version, m.KeyID)
 	return nil
 }
 

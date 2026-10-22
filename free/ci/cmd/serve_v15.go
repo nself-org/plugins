@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -41,8 +42,9 @@ const v15ServeAddr = "127.0.0.1:3845"
 // serveGuardLocal reads this host and serveGuardHome is the CI home the guard reads; tests replace both
 // so the guard never reads the developer's machine.
 var (
-	serveGuardLocal = func() deployguard.Local { return deployguard.NewLocal(deployguard.FunnelRun) }
-	serveGuardHome  = ""
+	serveProcessMu  sync.Mutex // the listener registry holds process-wide parsed flags
+	serveGuardLocal            = func() deployguard.Local { return deployguard.NewLocal(deployguard.FunnelRun) }
+	serveGuardHome             = ""
 	// serveDispatch builds the Dispatcher; tests replace it to skip the real checkout.
 	serveDispatch func(dataDir string, f *v15ServeFlags) coordinator.Dispatcher = dispatchPipeline
 )
@@ -87,12 +89,18 @@ func newServeV15Flags() (*flag.FlagSet, *v15ServeFlags, error) {
 func runServeV15(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go func() { <-ctx.Done(); stop() }() // restore default signal handling so a second signal aborts the drain
 	return serveV15(ctx, args, nil)
 }
 
 // serveV15 parses args and runs the coordinator until ctx ends. hook, when set, may adjust the
 // coordinator Config before it starts (tests inject a listener and a clock); production passes nil.
 func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)) int {
+	if !serveProcessMu.TryLock() {
+		fmt.Fprintln(os.Stderr, "Error: a coordinator is already running in this process")
+		return 1
+	}
+	defer serveProcessMu.Unlock()
 	fs, f, _ := newServeV15Flags()
 	fs.SetOutput(os.Stderr)
 	if _, err := parseInterspersed(fs, args); err != nil { // flags after a positional argument still count, as in v1.4
@@ -111,16 +119,22 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1
 	}
-	if backup.Pending(home) { // a restore began here and did not finish: the dir may hold a half-restored state
-		fmt.Fprintf(os.Stderr, "Error: E668: an earlier `nself ci serve restore` did not finish on %s; run `nself ci serve restore` again, or undo the restore by hand (the printed rollback line also removes %s) and delete that file, before starting the coordinator (incomplete_restore)\n", home, filepath.Join(home, "restore.pending"))
-		return 1
-	}
 	secret := firstOf(f.secret, os.Getenv("GITHUB_WEBHOOK_SECRET"))
 	if secret == "" && f.insecure {
 		fmt.Fprintln(os.Stderr, "warning: GITHUB_WEBHOOK_SECRET not set: webhook signature verification DISABLED (insecure)")
 	}
 	if err = coordinator.CheckSecret(secret, f.insecure); err != nil { // before anything is created on disk
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	unlock, err := backup.LockDataDir(home)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	defer unlock()
+	if backup.Pending(home) { // a restore began here and did not finish: the dir may hold a half-restored state
+		fmt.Fprintf(os.Stderr, "Error: E668: an earlier `nself ci serve restore` did not finish on %s; run `nself ci serve restore` again, or undo the restore by hand (the printed rollback line also removes %s) and delete that file, before starting the coordinator (incomplete_restore)\n", home, filepath.Join(home, "restore.pending"))
 		return 1
 	}
 	unsandboxed := f.unsandboxed || strings.EqualFold(os.Getenv("NSELF_CI_ALLOW_UNSANDBOXED"), "true")

@@ -13,7 +13,10 @@ import "github.com/nself-org/plugins/free/ci/internal/protocol"
 func (s *Server) popLease(node string, sess *session) (*protocol.Lease, <-chan struct{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ns := s.state(node)
+	ns := s.nodes[node]
+	if ns == nil {
+		return nil, nil
+	}
 	if len(ns.leases) == 0 {
 		return nil, ns.changed
 	}
@@ -26,7 +29,10 @@ func (s *Server) popLease(node string, sess *session) (*protocol.Lease, <-chan s
 func (s *Server) pushBackLease(node string, l protocol.Lease) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ns := s.state(node)
+	ns := s.nodes[node]
+	if ns == nil {
+		return
+	}
 	ns.leases = append([]protocol.Lease{l}, ns.leases...)
 }
 
@@ -34,7 +40,10 @@ func (s *Server) pushBackLease(node string, l protocol.Lease) {
 func (s *Server) popControl(node string) (*protocol.Message, <-chan struct{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ns := s.state(node)
+	ns := s.nodes[node]
+	if ns == nil {
+		return nil, nil
+	}
 	if len(ns.ctl) == 0 {
 		return nil, ns.changed
 	}
@@ -46,6 +55,9 @@ func (s *Server) popControl(node string) (*protocol.Message, <-chan struct{}) {
 func (s *Server) pushBackControl(node string, m protocol.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ns := s.state(node)
+	ns := s.nodes[node]
+	if ns == nil {
+		return
+	}
 	ns.ctl = append([]protocol.Message{m}, ns.ctl...)
 }

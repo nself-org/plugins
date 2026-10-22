@@ -33,7 +33,7 @@ func TestShutdownLeavesNoServerGoroutines(t *testing.T) {
 		a := r.newAgent("n-1")
 		a.connect()
 		pr, pw := io.Pipe()
-		t.Cleanup(func() { pw.Close() })
+		t.Cleanup(func() { _ = pw.Close() })
 		for _, rq := range []*http.Request{
 			a.req(http.MethodGet, "/v1/agent/leases", nil, map[string]string{HeaderWait: "30"}),
 			a.req(http.MethodGet, "/v1/agent/control", nil, nil),
@@ -42,7 +42,7 @@ func TestShutdownLeavesNoServerGoroutines(t *testing.T) {
 			go func(rq *http.Request) {
 				if resp, err := a.cl.Do(rq); err == nil {
 					_, _ = io.Copy(io.Discard, resp.Body)
-					resp.Body.Close()
+					_ = resp.Body.Close()
 				}
 			}(rq)
 		}

@@ -45,7 +45,7 @@ func TestRevokeClosesStreams(t *testing.T) {
 					var pr *io.PipeReader
 					pr, pw = io.Pipe()
 					body = pr
-					defer pw.Close()
+					defer func() { _ = pw.Close() }()
 				}
 				rq := a.req(rt.method, rt.path, body, map[string]string{HeaderWait: "30"})
 				type res struct {
@@ -57,7 +57,7 @@ func TestRevokeClosesStreams(t *testing.T) {
 					resp, err := a.cl.Do(rq)
 					if err == nil {
 						_, err = io.Copy(io.Discard, resp.Body) // the stream is over when the body ends
-						resp.Body.Close()
+						_ = resp.Body.Close()
 					}
 					done <- res{err, time.Now()}
 				}()

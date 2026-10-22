@@ -372,7 +372,7 @@ func TestBackupSealedFilesAndAside(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(dir, "pki", "extra.sealed")); string(got) != "sealed-bytes" {
 		t.Fatalf("sealed file: %q", got)
 	}
-	if got, _ := os.ReadFile(filepath.Join(dir, "known_hosts")); string(got) != fakeKnownHosts {
+	if got, _ := os.ReadFile(filepath.Join(dir, "known_hosts")); string(got) != "old-pin\n" {
 		t.Fatalf("known_hosts: %q", got)
 	}
 	saved := strings.Join(res.Saved, "\n")
