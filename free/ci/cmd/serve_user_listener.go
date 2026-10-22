@@ -28,7 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
 	"github.com/nself-org/plugins/free/ci/internal/audit"
 	"github.com/nself-org/plugins/free/ci/internal/coordclient"
 	"github.com/nself-org/plugins/free/ci/internal/coordinator"
@@ -38,19 +37,10 @@ import (
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
-// userAPIFlags is the serve flag set the listeners read --data-dir and --api-public-url from.
-var userAPIFlags struct {
-	sync.Mutex
-	fs *flag.FlagSet
-}
-
 func init() {
 	coordinator.RegisterFlag(func(fs *flag.FlagSet) {
 		fs.String("api-public-url", "", "URL users reach the user API at (its host goes into the server certificate)")
 		fs.String("api-submit-role", "release", "role that may start a run through the user API: release (default) or member. A run executes the commit's own pipeline config on this host and the coordinator does not yet classify fork pull requests or check release.start at dispatch, so member is safe only when every allowed repo's pipelines are trusted")
-		userAPIFlags.Lock()
-		userAPIFlags.fs = fs
-		userAPIFlags.Unlock()
 	})
 	for _, l := range []struct {
 		name, flag, def string
@@ -65,43 +55,6 @@ func init() {
 		}
 	}
 }
-
-// serveFlag reads a parsed serve flag.
-func serveFlag(name string) string {
-	userAPIFlags.Lock()
-	defer userAPIFlags.Unlock()
-	if userAPIFlags.fs == nil {
-		return ""
-	}
-	if f := userAPIFlags.fs.Lookup(name); f != nil {
-		return f.Value.String()
-	}
-	return ""
-}
-
-// explicitFlag reports whether the operator passed the serve flag.
-func explicitFlag(name string) bool {
-	userAPIFlags.Lock()
-	defer userAPIFlags.Unlock()
-	set := false
-	if userAPIFlags.fs != nil {
-		userAPIFlags.fs.Visit(func(f *flag.Flag) { set = set || f.Name == name })
-	}
-	return set
-}
-
-// optional turns a failure of a default-on listener into a log line, so an existing deployment whose port
-// or path is taken keeps serving webhooks; a listener the operator asked for by flag fails the start.
-func optional(c *coordinator.Coordinator, flagName string, err error) (func(context.Context) error, error) {
-	if explicitFlag(flagName) {
-		return nil, err
-	}
-	c.Logf("--%s listener is off: %v (pass --%s to choose another or to make this an error)", flagName, err, flagName)
-	return noop, nil
-}
-
-// serveHome is the CI home of the running serve.
-func serveHome() string { return records.StoreDir(serveFlag("data-dir")) }
 
 // userRoles builds the role service over the coordinator's store.
 func userRoles(c *coordinator.Coordinator) *roles.Service {
@@ -165,18 +118,18 @@ func startUserAPI(ctx context.Context, addr string, c *coordinator.Coordinator) 
 	if ctx.Err() != nil {
 		return noop, nil // the serve is already stopping
 	}
-	home := serveHome()
+	home := serveHomeContext(ctx)
 	svc := userRoles(c)
 	ca, err := pki.New(ctx, pki.Options{Store: c.Store(), DataDir: home})
 	if err != nil {
 		return stopping(ctx, err)
 	}
-	if p := serveFlag("api-public-url"); p != "" {
+	if p := serveFlagContext(ctx, "api-public-url"); p != "" {
 		if u, e := url.Parse(p); e != nil || u.Scheme != "https" {
 			return nil, errors.New("--api-public-url must be an https URL")
 		}
 	}
-	dns, ips, err := apiSANs(addr, serveFlag("api-public-url"))
+	dns, ips, err := apiSANs(addr, serveFlagContext(ctx, "api-public-url"))
 	if err != nil {
 		return nil, err
 	}
@@ -186,14 +139,14 @@ func startUserAPI(ctx context.Context, addr string, c *coordinator.Coordinator) 
 	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return optional(c, "api-addr", err)
+		return optional(ctx, c, "api-addr", err)
 	}
 	leaf := leafSource(ca, "coord-"+shortHost(), dns, ips)
 	if _, err = leaf(); err != nil { // fail at start, not at the first handshake
 		_ = ln.Close()
 		return nil, err
 	}
-	submitRole, ok := roles.ParseRole(serveFlag("api-submit-role"))
+	submitRole, ok := roles.ParseRole(serveFlagContext(ctx, "api-submit-role"))
 	if !ok {
 		_ = ln.Close()
 		return nil, errors.New("--api-submit-role must be release or member")
@@ -246,14 +199,14 @@ func startLocalSocket(ctx context.Context, addr string, c *coordinator.Coordinat
 	if ctx.Err() != nil {
 		return noop, nil // the serve is already stopping
 	}
-	home := serveHome()
+	home := serveHomeContext(ctx)
 	path := addr
 	if path == "auto" {
 		path = coordclient.SocketPath(home)
 	}
 	ln, err := clientapi.ListenUnix(path)
 	if err != nil {
-		return optional(c, "api-socket", err)
+		return optional(ctx, c, "api-socket", err)
 	}
 	if err = coordclient.RecordSocket(home, path); err != nil {
 		_ = ln.Close()
@@ -271,10 +224,10 @@ func startServeLock(ctx context.Context, addr string, c *coordinator.Coordinator
 	if ctx.Err() != nil || addr == "off" {
 		return noop, nil
 	}
-	release, err := coordclient.AcquireServeLock(serveHome())
+	release, err := coordclient.AcquireServeLock(serveHomeContext(ctx))
 	if err != nil {
 		return nil, err
 	}
-	c.Logf("serve lock held on %s by pid %d", serveHome(), os.Getpid())
+	c.Logf("serve lock held on %s by pid %d", serveHomeContext(ctx), os.Getpid())
 	return func(context.Context) error { release(); return nil }, nil
 }

@@ -101,6 +101,7 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 		}
 		return 2
 	}
+	ctx = withServeSettings(ctx, fs)
 	report.SetProcessRole(report.RoleTeam)
 	home := records.StoreDir(f.dataDir)
 	warns, err := deployguard.StartGuard(ctx, firstOf(serveGuardHome, home), serveGuardLocal(), "nself ci serve")

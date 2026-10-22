@@ -114,7 +114,7 @@ func rewriteChain(t *testing.T, path string, seq int64, detail string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(db.Close)
 	if _, err = db.Exec(`UPDATE audit SET detail=? WHERE seq=?`, detail, seq); err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestCheckpointRemovedRowsFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(db.Close)
 	if _, err = db.Exec(`DELETE FROM audit WHERE seq>=3`); err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestCheckpointQuarantineSeamReadsTheStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(st.Close)
 	led := store.AttestLedger{S: st}
 	if q, err := storeQuarantined(ctx, ev); err != nil || q {
 		t.Fatalf("empty store: %v %v", q, err)
@@ -206,7 +206,7 @@ func TestCheckpointQuarantineSeamReadsTheStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(db.Close)
 	if _, err = db.Exec(`INSERT INTO attest_quarantine(run_id,key_id,quarantined_at) VALUES('run-q','ci-node-0123456789abcdef',1)`); err != nil {
 		t.Fatal(err)
 	}

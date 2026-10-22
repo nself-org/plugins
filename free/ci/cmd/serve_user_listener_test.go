@@ -56,6 +56,7 @@ func TestServeStartsUserAPIAndLocalSocket(t *testing.T) {
 	var code int
 	wg.Add(1)
 	go func() { defer wg.Done(); code = serveV15(ctx, args, hook) }()
+	t.Cleanup(func() { cancel(); wg.Wait() })
 	sock := coordclient.SocketPath(data)
 	waitUntil(t, "the serve lock and the socket", func() bool {
 		_, err := os.Stat(sock)
@@ -158,7 +159,12 @@ func TestServeKeepsTheLockWhenTheSocketIsOffOrFails(t *testing.T) {
 			return append([]string{"--insecure", "--workdir", filepath.Join(base, wd), "--data-dir", data, "--api-addr", freePort(t)}, c.sock...)
 		}
 		done := make(chan int, 1)
-		go func() { done <- serveV15(ctx, args("wd"), hook) }()
+		go func() { defer close(done); done <- serveV15(ctx, args("wd"), hook) }()
+		t.Cleanup(func() {
+			cancel()
+			for range done {
+			}
+		})
 		waitUntil(t, c.name+": the serve lock", func() bool { return coordclient.ServeHoldsLock(data) })
 		if c2 := serveV15(ctx, args("wd2"), hook); c2 == 0 {
 			t.Errorf("%s: a second serve started on a home whose serve has no socket", c.name)
@@ -185,7 +191,13 @@ func TestClientFollowsTheSocketPathInTheLock(t *testing.T) {
 	hook := func(c *coordinator.Config) {
 		c.Listen = func(network, _ string) (net.Listener, error) { return net.Listen(network, "127.0.0.1:0") }
 	}
+	t.Cleanup(func() {
+		cancel()
+		for range done {
+		}
+	})
 	go func() {
+		defer close(done)
 		done <- serveV15(ctx, []string{"--insecure", "--workdir", filepath.Join(data, "wd"), "--data-dir", data, "--api-addr", freePort(t), "--api-socket", sock}, hook)
 	}()
 	waitUntil(t, "the socket", func() bool { _, err := os.Stat(sock); return err == nil && coordclient.ServeHoldsLock(data) })

@@ -141,7 +141,7 @@ func TestAgentListenerStartRevokeStop(t *testing.T) {
 	}
 	for name, c := range map[string]*tls.Certificate{"no certificate": nil, "user certificate": &userPair} {
 		if resp, rerr := client(c).Get(base + "/v1/agent/leases"); rerr == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			t.Fatalf("%s was served with status %d", name, resp.StatusCode)
 		}
 	}
@@ -159,7 +159,7 @@ func TestAgentListenerStartRevokeStop(t *testing.T) {
 		t.Fatalf("hello: %v %v", resp, err)
 	}
 	session := resp.Header.Get(agentapi.HeaderSession)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if session == "" {
 		t.Fatal("no session")
 	}
@@ -171,7 +171,7 @@ func TestAgentListenerStartRevokeStop(t *testing.T) {
 		rq.Header.Set(agentapi.HeaderWait, "30")
 		if r, derr := cl.Do(rq); derr == nil {
 			_, _ = io.Copy(io.Discard, r.Body)
-			r.Body.Close()
+			_ = r.Body.Close()
 		}
 		polled <- time.Now()
 	}()
@@ -205,7 +205,7 @@ func TestAgentListenerStartRevokeStop(t *testing.T) {
 		t.Fatal("the stopped server is still the active one")
 	}
 	if c, derr := net.DialTimeout("tcp", addr.String(), 500*time.Millisecond); derr == nil {
-		c.Close()
+		_ = c.Close()
 		t.Fatal("the agent port still accepts connections after stop")
 	}
 }

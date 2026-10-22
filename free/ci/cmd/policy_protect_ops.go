@@ -42,12 +42,12 @@ func (e protectEnv) installHook(ctx context.Context, f protectFlags) error {
 		return output.WriteData(e.out, "ci policy protect", hookResult{Path: path, Branch: branch, Installed: changed}, nil)
 	}
 	if changed {
-		fmt.Fprintf(e.out, "pre-push hook installed at %s: pushes to %s need current, bound, passing evidence (bypass once with `git push --no-verify`)\n", path, branch)
+		_, _ = fmt.Fprintf(e.out, "pre-push hook installed at %s: pushes to %s need current, bound, passing evidence (bypass once with `git push --no-verify`)\n", path, branch)
 		if !strings.HasPrefix(path, e.root+string(filepath.Separator)) {
-			fmt.Fprintln(e.out, "note: this path is outside the repository (core.hooksPath); the hook applies to every repository that uses that directory")
+			_, _ = fmt.Fprintln(e.out, "note: this path is outside the repository (core.hooksPath); the hook applies to every repository that uses that directory")
 		}
 	} else {
-		fmt.Fprintf(e.out, "pre-push hook at %s is already installed\n", path)
+		_, _ = fmt.Fprintf(e.out, "pre-push hook at %s is already installed\n", path)
 	}
 	return nil
 }
@@ -97,12 +97,12 @@ func (e protectEnv) audit(ctx context.Context, f protectFlags, repo string) int 
 	if f.json {
 		_ = output.WriteData(e.out, "ci policy protect", rep, nil)
 	} else {
-		fmt.Fprintf(e.out, "%s %s: %d commit(s) in the last %d day(s), %d without a green nself-ci\n", rep.Repo, rep.Branch, rep.Checked, rep.Days, len(rep.Missing))
+		_, _ = fmt.Fprintf(e.out, "%s %s: %d commit(s) in the last %d day(s), %d without a green nself-ci\n", rep.Repo, rep.Branch, rep.Checked, rep.Days, len(rep.Missing))
 		for _, m := range rep.Missing {
-			fmt.Fprintf(e.out, "  %.12s %s\n", m.SHA, m.Subject)
+			_, _ = fmt.Fprintf(e.out, "  %.12s %s\n", m.SHA, m.Subject)
 		}
 		if rep.Truncated {
-			fmt.Fprintf(e.out, "  (only the newest %d commits were looked at)\n", protect.MaxCommits)
+			_, _ = fmt.Fprintf(e.out, "  (only the newest %d commits were looked at)\n", protect.MaxCommits)
 		}
 	}
 	if len(rep.Missing) > 0 {

@@ -137,7 +137,7 @@ func protectExit(err error, asJSON bool) int {
 		if asJSON {
 			_ = output.WriteError(os.Stdout, "ci policy protect", output.ErrorDetail{Code: pe.Code, Message: pe.Message, ExitCode: code}, nil)
 		} else {
-			fmt.Fprintln(os.Stderr, pe)
+			_, _ = fmt.Fprintln(os.Stderr, pe)
 		}
 		return code
 	}
@@ -226,17 +226,17 @@ func (e protectEnv) print(asJSON bool, res protectResult, plan protect.Plan) err
 	}
 	switch {
 	case res.AlreadySet:
-		fmt.Fprintf(e.out, "%s %s: nself-ci is already required; nothing to change\n", res.Repo, res.Branch)
+		_, _ = fmt.Fprintf(e.out, "%s %s: nself-ci is already required; nothing to change\n", res.Repo, res.Branch)
 	case res.DryRun:
-		fmt.Fprintf(e.out, "%s %s: would add required check nself-ci (app %d)", res.Repo, res.Branch, res.Added[0].AppID)
+		_, _ = fmt.Fprintf(e.out, "%s %s: would add required check nself-ci (app %d)", res.Repo, res.Branch, res.Added[0].AppID)
 		if res.Unprotected {
-			fmt.Fprint(e.out, "; the branch is not protected, so this creates protection holding only that check")
+			_, _ = fmt.Fprint(e.out, "; the branch is not protected, so this creates protection holding only that check")
 		}
-		fmt.Fprintf(e.out, "\nPUT body:\n%s", plan.JSON())
+		_, _ = fmt.Fprintf(e.out, "\nPUT body:\n%s", plan.JSON())
 	default:
-		fmt.Fprintf(e.out, "%s %s: nself-ci is now required (app %d); previous protection saved to %s\n", res.Repo, res.Branch, res.Added[0].AppID, res.Snapshot)
+		_, _ = fmt.Fprintf(e.out, "%s %s: nself-ci is now required (app %d); previous protection saved to %s\n", res.Repo, res.Branch, res.Added[0].AppID, res.Snapshot)
 		if res.Unprotected {
-			fmt.Fprintln(e.out, "the branch had no protection; --restore cannot put that back (removing protection is a manual step)")
+			_, _ = fmt.Fprintln(e.out, "the branch had no protection; --restore cannot put that back (removing protection is a manual step)")
 		}
 	}
 	return nil
@@ -269,6 +269,6 @@ func (e protectEnv) restoreSnapshot(ctx context.Context, f protectFlags) error {
 		}
 		return e.noPlanHint(err)
 	}
-	fmt.Fprintf(e.out, "%s %s: protection restored from %s; what it replaced is saved to %s\n", snap.Repo, snap.Branch, f.restore, before)
+	_, _ = fmt.Fprintf(e.out, "%s %s: protection restored from %s; what it replaced is saved to %s\n", snap.Repo, snap.Branch, f.restore, before)
 	return nil
 }
