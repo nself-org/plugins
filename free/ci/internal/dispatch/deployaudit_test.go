@@ -33,12 +33,12 @@ func auditActions(t *testing.T, path, action string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(db.Close)
 	rows, err := db.Query("SELECT target FROM audit WHERE action=? ORDER BY seq", action)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(rows.Close)
 	var out []string
 	for rows.Next() {
 		var target string

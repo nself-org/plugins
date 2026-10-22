@@ -97,13 +97,17 @@ func (d *Dispatcher) Tick(ctx context.Context) error {
 func (d *Dispatcher) buildWorlds(ctx context.Context, ordered []Queued) (map[string]*pipelineRun, error) {
 	runs := map[string]*pipelineRun{}
 	var first error
+	buildCtx, snapshotErr := d.cfg.Store.WithWorldSnapshot(ctx)
 	for _, q := range ordered {
 		id := q.Job.Sched.Pipeline.ID
 		if _, ok := runs[id]; ok {
 			continue
 		}
 		pr := &pipelineRun{}
-		pr.world, pr.digest, pr.err = d.cfg.World(ctx, q.Job.Sched.Pipeline)
+		pr.err = snapshotErr
+		if snapshotErr == nil {
+			pr.world, pr.digest, pr.err = d.cfg.World(buildCtx, q.Job.Sched.Pipeline)
+		}
 		runs[id] = pr
 		if pr.err == nil {
 			continue

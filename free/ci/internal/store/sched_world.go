@@ -34,6 +34,12 @@ func (s *Store) WorldSnapshot(ctx context.Context) (out SchedWorld, err error) {
 			out = SchedWorld{}
 		}
 	}()
+	if err := ctx.Err(); err != nil {
+		return out, err
+	}
+	if pinned, ok := s.pinnedWorld(ctx); ok {
+		return pinned, nil
+	}
 	tx, err := s.readers.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return out, err

@@ -135,7 +135,7 @@ func (s *Store) CachePrune(ctx context.Context, p entries.PruneStep) (entries.Pr
 			return err
 		})
 		for _, r := range all {
-			if err != nil || !(r.use < cutoff || total > p.MaxBytes || out.Bytes < p.FreeBytes) {
+			if err != nil || (r.use >= cutoff && total <= p.MaxBytes && out.Bytes >= p.FreeBytes) {
 				break
 			}
 			if p.Limit > 0 && out.Entries >= p.Limit {

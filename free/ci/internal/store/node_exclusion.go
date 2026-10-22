@@ -61,7 +61,7 @@ func (s *Store) ExclusionProjects(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(rows.Close)
 	var out []string
 	for rows.Next() {
 		var r string
@@ -133,7 +133,7 @@ func exclusionValues(ctx context.Context, tx *sql.Tx, root string) (map[string]b
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(rows.Close)
 	out := map[string]bool{}
 	for rows.Next() {
 		var k, v string
@@ -163,7 +163,7 @@ func (s *Store) ExclusionEntries(ctx context.Context) ([]ExclusionEntry, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(rows.Close)
 	var out []ExclusionEntry
 	for rows.Next() {
 		var e ExclusionEntry
@@ -181,7 +181,7 @@ func (s *Store) ExclusionStates(ctx context.Context) ([]ExclusionState, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(rows.Close)
 	var out []ExclusionState
 	for rows.Next() {
 		var st ExclusionState

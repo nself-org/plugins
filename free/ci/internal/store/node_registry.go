@@ -107,7 +107,7 @@ func (s *Store) NodeList(ctx context.Context) ([]NodeRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(rows.Close)
 	out := []NodeRecord{}
 	for rows.Next() {
 		n, e := scanNode(rows)

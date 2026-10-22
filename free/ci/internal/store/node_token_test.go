@@ -82,7 +82,7 @@ func TestTokenBindingSurvivesReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(s.Close)
 	b, found, err := s.TokenCheck(context.Background(), "j1")
 	if err != nil || !found || b.Serial != "s1" || b.Session != "sess1" {
 		t.Fatalf("binding lost across a reopen: %+v found=%v err=%v", b, found, err)

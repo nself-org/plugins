@@ -149,7 +149,7 @@ func (s *Store) LeaseExpired(ctx context.Context, now time.Time) ([]RemoteLease,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(rows.Close)
 	var out []RemoteLease
 	for rows.Next() {
 		var l RemoteLease

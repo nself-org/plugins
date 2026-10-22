@@ -80,7 +80,10 @@ func ownerOf(decl ast.Decl) (string, *ast.Ident) {
 }
 
 // scanFile reports the uses in one parsed file that the allowlist does not cover.
-func scanFile(f *ast.File, rel string, add func(string)) {
+func scanFile(f *ast.File, rel string, add func(string), unrelated ...func(*ast.Ident) bool) {
+	allowedName := func(id *ast.Ident) bool {
+		return len(unrelated) > 0 && unrelated[0](id)
+	}
 	dir := filepath.ToSlash(filepath.Dir(rel))
 	usesReflect := false
 	for _, imp := range f.Imports {
@@ -100,6 +103,9 @@ func scanFile(f *ast.File, rel string, add func(string)) {
 		ast.Inspect(decl, func(n ast.Node) bool {
 			switch x := n.(type) {
 			case *ast.SelectorExpr:
+				if allowedName(x.Sel) {
+					return true
+				}
 				name := x.Sel.Name
 				switch {
 				case reflective[name], name == "Method" && usesReflect:
@@ -112,7 +118,7 @@ func scanFile(f *ast.File, rel string, add func(string)) {
 					report(name)
 				}
 			case *ast.Ident:
-				if banned[x.Name] && x != declName && !(x.Name == "LocalAdmit" && localFiles[rel]) && (x.Name == "LocalAdmit" || !chokeFuncs[key]) {
+				if banned[x.Name] && !allowedName(x) && x != declName && (x.Name != "LocalAdmit" || !localFiles[rel]) && (x.Name == "LocalAdmit" || !chokeFuncs[key]) {
 					report(x.Name)
 				}
 			case *ast.BasicLit:
@@ -129,6 +135,7 @@ func scanFile(f *ast.File, rel string, add func(string)) {
 // allowlist, and how many files it read.
 func scanChokepoint(t *testing.T, root string) (violations []string, files int) {
 	t.Helper()
+	unrelated := roleGrantPositions(t, root)
 	seen := map[string]bool{}
 	add := func(v string) { // a selector and its identifier are two nodes
 		if !seen[v] {
@@ -151,12 +158,16 @@ func scanChokepoint(t *testing.T, root string) (violations []string, files int) 
 		}
 		rel, _ := filepath.Rel(root, path)
 		// every build constraint is read: the parser sees the file whatever its tags say
-		f, perr := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments)
+		fset := token.NewFileSet()
+		f, perr := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if perr != nil {
 			t.Fatalf("parse %s: %v", path, perr)
 		}
 		files++
-		scanFile(f, filepath.ToSlash(rel), add)
+		absolute, _ := filepath.Abs(path)
+		scanFile(f, filepath.ToSlash(rel), add, func(id *ast.Ident) bool {
+			return unrelated[absolute][fset.Position(id.Pos()).Offset]
+		})
 		return nil
 	})
 	if err != nil {

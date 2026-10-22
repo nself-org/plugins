@@ -189,7 +189,11 @@ func TestAttestRevokeNodeQuarantinesAndReturnsTheReevaluationSet(t *testing.T) {
 		}
 	}
 	// the key of another node signed too: it must not be touched
-	r.led.Consume(r.ctx, attest.Use{AttemptID: "att-3", KeyID: "ci-node-ffffffffffffffff", SigDigest: "x", NodeID: "node-9", RunID: "run-att-3", RepoID: "repo-9", Revision: strings.Repeat("c", 40)})
+	otherKeyID := "ci-node-" + r.pinKey("node-9", 9, ptr(true))
+	r.attempt("att-3", strings.Repeat("c", 40))
+	if err := r.led.Consume(r.ctx, attest.Use{AttemptID: "att-3", KeyID: otherKeyID, SigDigest: "x", NodeID: "node-9", RunID: "run-att-3", RepoID: "repo-9", Revision: strings.Repeat("c", 40)}); err != nil {
+		t.Fatal(err)
+	}
 	r.exec(`INSERT INTO outbox(revision,context,seq,state,created_at) VALUES(?,?,1,'posted',1)`, rev, "nself-ci@acme/widget")
 	r.exec(`INSERT INTO outbox(revision,context,seq,state,created_at) VALUES(?,?,1,'pending',1)`, rev, "nself-ci@acme/pending-only")
 	r.exec(`INSERT INTO outbox(revision,context,seq,state,created_at) VALUES(?,?,1,'posted',1)`, strings.Repeat("c", 40), "nself-ci@acme/other")
@@ -224,7 +228,7 @@ func TestAttestRevokeNodeQuarantinesAndReturnsTheReevaluationSet(t *testing.T) {
 	if rv, _ := r.led.Revoked(r.ctx, keyID); !rv {
 		t.Fatal("key not revoked")
 	}
-	if rv, _ := r.led.Revoked(r.ctx, "ci-node-ffffffffffffffff"); rv {
+	if rv, _ := r.led.Revoked(r.ctx, otherKeyID); rv {
 		t.Fatal("another node's key revoked")
 	}
 	again, err := r.led.RevokeNode(r.ctx, "node-1", "node.revoked")

@@ -50,7 +50,7 @@ func leaseRowCells(t *testing.T, s *Store, table, leaseID string) map[string]any
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(rows.Close)
 	cols, err := rows.Columns()
 	if err != nil {
 		t.Fatal(err)

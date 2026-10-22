@@ -57,7 +57,7 @@ func pkiAudit(t *testing.T, s *Store, action string) (rows [][3]string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(r.Close)
 	for r.Next() {
 		var a [3]string
 		if err = r.Scan(&a[0], &a[1], &a[2]); err != nil {
@@ -196,7 +196,7 @@ func TestPKIDenyCountsAuditsAndNeverRemoves(t *testing.T) {
 	if err != nil || len(rows) != 3 || rows[0].Serial != "s1" || rows[1].Serial != "s2" || rows[2].Serial != "s3" || rows[0].NodeID != "n1" {
 		t.Fatalf("denied rows: %+v %v", rows, err)
 	}
-	if !(rows[0].RowID < rows[1].RowID && rows[1].RowID < rows[2].RowID) {
+	if rows[0].RowID >= rows[1].RowID || rows[1].RowID >= rows[2].RowID {
 		t.Fatalf("row ids not increasing: %+v", rows)
 	}
 	if later, _ := s.PKIDenied(ctx, rows[1].RowID); len(later) != 1 || later[0].Serial != "s3" {
