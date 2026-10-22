@@ -49,6 +49,9 @@ func (c *Coordinator) maintain(ctx context.Context) {
 			if _, err := st.DedupPrune(ctx, 0); err != nil && ctx.Err() == nil {
 				c.cfg.Logf("intake prune failed: %v", err)
 			}
+			if err := st.PruneReconcileMarks(ctx, now); err != nil && ctx.Err() == nil {
+				c.cfg.Logf("provider mark prune failed: %v", err)
+			}
 			pruned = now
 		}
 		c.nudge()
