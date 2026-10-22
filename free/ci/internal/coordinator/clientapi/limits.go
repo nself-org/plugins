@@ -1,13 +1,13 @@
 package clientapi
 
 // Purpose: the two abuse limits of the user API (P7-NODE-19, Epic D14): a per-source cap on failed
-// authentications and a per-principal cap on open streams.
+// authentications and role denials, and a per-principal cap on open streams.
 // Inputs:  the remote address of a request, the principal of an actor.
 // Outputs: E664 rate_limited (429) when a limit is hit.
 // Constraints: a principal may attempt submitsPerMinute submits a minute, allowed or not (denials are audited
 //          rows, so they must not be a way to flood the log); a source that failed authFailMax times inside authFailWindow gets 429 before any store
 //          lookup until the window passes (a flood of bad tokens costs no database reads); only failed
-//          authentications count (a refused role does not); the table holds at most limiterEntries sources
+//          authentications count against sources; role denials count against actor ids; the table holds at most limiterEntries sources
 //          and drops the stalest when full; a principal holds at most streamsPerPrincipal events or log
 //          streams at once; a stream slot is released when the stream ends.
 

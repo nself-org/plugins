@@ -170,7 +170,15 @@ func (s *Server) add(mux *http.ServeMux, r routeSpec) {
 		if err != nil {
 			s.lim.failed(src)
 		} else {
+			key := "role:" + actor.ID()
+			if !s.lim.allowed(key) {
+				s.fail(w, Failf(ReasonRateLimited, "too many role denials for this actor; wait a minute"))
+				return
+			}
 			err = roles.Authorize(req.Context(), actor, r.role, "")
+			if roles.ReasonOf(err) != "" {
+				s.lim.failed(key)
+			}
 		}
 		if err != nil {
 			s.fail(w, err)
