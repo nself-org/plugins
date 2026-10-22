@@ -26,7 +26,12 @@ func TestSweepLockWaitHonoursContext(t *testing.T) {
 		holderDone <- holder.locked(func() error { close(held); <-release; return nil })
 	}()
 	<-held
-	defer func() { close(release); <-holderDone }()
+	defer func() {
+		close(release)
+		if err := <-holderDone; err != nil {
+			t.Error(err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()

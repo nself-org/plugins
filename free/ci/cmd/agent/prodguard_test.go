@@ -63,6 +63,10 @@ func TestServeStdioExitsNonZeroWithE663OnADeployHost(t *testing.T) {
 func TestServeStdioExitsNonZeroWithE663OnAProdStackMarker(t *testing.T) {
 	useState(t)
 	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("ENV=prod\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

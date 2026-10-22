@@ -212,7 +212,7 @@ func TestCacheReceiverLeaseBudget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(w.Close)
 	if _, err = l.Blob(ctx, hdr("more")); !transfer.IsReason(err, transfer.ReasonSizeCap) {
 		t.Fatalf("budget refusal=%v", err)
 	}

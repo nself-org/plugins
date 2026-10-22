@@ -45,13 +45,13 @@ func localRun(ctx context.Context, argv ...string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer r.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(r.Close)
 	null, err := os.Open(os.DevNull)
 	if err != nil {
-		w.Close()
+		_ = w.Close()
 		return "", err
 	}
-	defer null.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(null.Close)
 	attr := &os.ProcAttr{Files: []*os.File{null, w, w}, Env: []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin"}}
 	var proc *os.Process
 	switch argv[0] {
@@ -62,7 +62,7 @@ func localRun(ctx context.Context, argv ...string) (string, error) {
 	default:
 		err = errors.New("uninstall runs no program named " + argv[0])
 	}
-	w.Close()
+	_ = w.Close()
 	if err != nil {
 		return "", err
 	}
@@ -92,16 +92,16 @@ func runUninstall(ctx context.Context, args []string, sio IO) int {
 	fs.SetOutput(sio.Stderr)
 	system := fs.Bool("system", false, "remove the system install (users, sudoers rules, service, directories)")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || !*system {
-		fmt.Fprintf(sio.Stderr, "usage: sudo %s uninstall --system   (the root-owned copy of the agent)\n", darwin.TrustedPath)
+		_, _ = fmt.Fprintf(sio.Stderr, "usage: sudo %s uninstall --system   (the root-owned copy of the agent)\n", darwin.TrustedPath)
 		return 2
 	}
 	f, ok := bootstrap.Lookup(runtime.GOOS)
 	if !ok {
-		fmt.Fprintln(sio.Stderr, bootstrap.NewError("uninstall_unsupported", "no system install exists for %s; nothing to remove", runtime.GOOS))
+		_, _ = fmt.Fprintln(sio.Stderr, bootstrap.NewError("uninstall_unsupported", "no system install exists for %s; nothing to remove", runtime.GOOS))
 		return 1
 	}
 	if os.Geteuid() != 0 {
-		fmt.Fprintf(sio.Stderr, "error: uninstall --system must run as root: sudo %s uninstall --system\n", darwin.TrustedPath)
+		_, _ = fmt.Fprintf(sio.Stderr, "error: uninstall --system must run as root: sudo %s uninstall --system\n", darwin.TrustedPath)
 		return 1
 	}
 	if exe, err := os.Executable(); err != nil || trustedRootPath(exe) != nil {
@@ -109,13 +109,13 @@ func runUninstall(ctx context.Context, args []string, sio IO) int {
 		if err == nil {
 			why = trustedRootPath(exe).Error()
 		}
-		fmt.Fprintf(sio.Stderr, "error: refusing to run as root from a file the agent user can change (%s).\nRun the root-owned copy: sudo %s uninstall --system\n", why, darwin.TrustedPath)
+		_, _ = fmt.Fprintf(sio.Stderr, "error: refusing to run as root from a file the agent user can change (%s).\nRun the root-owned copy: sudo %s uninstall --system\n", why, darwin.TrustedPath)
 		return 1
 	}
 	o := bootstrap.Options{Run: localRun, Stdout: sio.Stdout,
-		Logf: func(format string, a ...any) { fmt.Fprintf(sio.Stderr, format+"\n", a...) }}
+		Logf: func(format string, a ...any) { _, _ = fmt.Fprintf(sio.Stderr, format+"\n", a...) }}
 	if err := f.Uninstall(ctx, o); err != nil {
-		fmt.Fprintln(sio.Stderr, err)
+		_, _ = fmt.Fprintln(sio.Stderr, err)
 		return 1
 	}
 	return 0

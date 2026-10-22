@@ -115,3 +115,28 @@ func TestReadVerifiedIgnoresASwapByRenameAfterTheOpen(t *testing.T) {
 		t.Fatalf("a swapped file changed what was read: %v", err)
 	}
 }
+
+func TestReadVerifiedContextStopsTheDrain(t *testing.T) {
+	for _, consume := range []bool{false, true} {
+		t.Run(map[bool]string{false: "drain", true: "consumer"}[consume], func(t *testing.T) {
+			s, realm := testStore(t), CacheRealm("ns")
+			digest := putBlob(t, s, realm, bytes.Repeat([]byte("data"), 4096))
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			err := s.ReadVerifiedContext(ctx, realm, digest, func(r io.Reader) error {
+				cancel()
+				if consume {
+					_, err := io.Copy(io.Discard, r)
+					return err
+				}
+				return nil
+			})
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("got %v, want cancellation", err)
+			}
+			if _, err := s.Stat(realm, digest); err != nil {
+				t.Fatalf("cancelled verification quarantined valid blob: %v", err)
+			}
+		})
+	}
+}

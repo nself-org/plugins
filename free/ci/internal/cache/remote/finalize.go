@@ -109,7 +109,7 @@ func (l *Lease) Finalize(ctx context.Context, wait time.Duration) error {
 // validateRef applies restore's archive checks before any entry is published.
 func (l *Lease) validateRef(ctx context.Context, r protocol.CacheRef) error {
 	for _, b := range r.Blobs {
-		err := l.h.Blobs.ReadVerified(cacheRealm(l.b.Plan.Namespace), b.SHA256, func(r io.Reader) error {
+		err := l.h.Blobs.ReadVerifiedContext(ctx, cacheRealm(l.b.Plan.Namespace), b.SHA256, func(r io.Reader) error {
 			return specs.Validate(&contextReader{ctx: ctx, r: r}, specs.CacheLimits())
 		})
 		if err != nil {

@@ -199,7 +199,7 @@ func (s *NodeStage) publishCopies(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-				defer src.Close()
+				defer func(cleanup func() error) { _ = cleanup() }(src.Close)
 				_, err = io.Copy(dst, &contextReader{ctx: ctx, r: src})
 				return err
 			})

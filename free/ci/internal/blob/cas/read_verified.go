@@ -14,6 +14,7 @@ package cas
 // corrupt blob is named as corrupt, not as an unreadable archive).
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"hash"
@@ -23,13 +24,22 @@ import (
 
 // ReadVerified calls fn with the bytes of the named blob and verifies them.
 func (s *Store) ReadVerified(realm Realm, digest string, fn func(io.Reader) error) error {
+	return s.ReadVerifiedContext(context.Background(), realm, digest, fn)
+}
+
+// ReadVerifiedContext bounds consumption and the remaining verification drain.
+// Cancellation leaves the blob in place because an incomplete hash proves no corruption.
+func (s *Store) ReadVerifiedContext(ctx context.Context, realm Realm, digest string, fn func(io.Reader) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	f, info, path, err := s.openBlob(realm, digest)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = f.Close() }()
 	h := newAsyncHash()
-	count := &countingReader{r: f, h: h}
+	count := &countingReader{r: &verifiedContextReader{ctx: ctx, r: f}, h: h}
 	if s.beforeHash != nil {
 		s.beforeHash()
 	}
@@ -71,18 +81,19 @@ func (c *countingReader) Read(p []byte) (int, error) {
 // (D-1008). Chunks are copied (the consumer reuses its buffer) and queued.
 type asyncHash struct {
 	h    hash.Hash
-	ch   chan []byte
+	ch   chan *[]byte
 	done chan struct{}
 	pool sync.Pool
 }
 
 func newAsyncHash() *asyncHash {
-	a := &asyncHash{h: sha256.New(), ch: make(chan []byte, 16), done: make(chan struct{})}
+	a := &asyncHash{h: sha256.New(), ch: make(chan *[]byte, 16), done: make(chan struct{})}
 	go func() {
 		defer close(a.done)
 		for b := range a.ch {
-			a.h.Write(b)
-			a.pool.Put(b[:0])
+			a.h.Write(*b)
+			*b = (*b)[:0]
+			a.pool.Put(b)
 		}
 	}()
 	return a
@@ -92,8 +103,12 @@ func (a *asyncHash) write(p []byte) {
 	if len(p) == 0 {
 		return
 	}
-	b, _ := a.pool.Get().([]byte)
-	a.ch <- append(b[:0], p...)
+	b, _ := a.pool.Get().(*[]byte)
+	if b == nil {
+		b = new([]byte)
+	}
+	*b = append((*b)[:0], p...)
+	a.ch <- b
 }
 
 // sum waits for the queued chunks and returns the digest; call it once.
@@ -101,4 +116,16 @@ func (a *asyncHash) sum() []byte {
 	close(a.ch)
 	<-a.done
 	return a.h.Sum(nil)
+}
+
+type verifiedContextReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (r *verifiedContextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.r.Read(p)
 }

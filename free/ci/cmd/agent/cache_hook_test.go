@@ -38,7 +38,7 @@ func TestCacheHookReadOnlyMounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cacheAfter(context.Background(), l, session.JobRoot{}, session.Outcome{State: "cancelled"}, nil)
+	defer cacheCleanup(l, session.JobRoot{}, session.Outcome{State: "cancelled"})()
 	if len(setup.Mounts) != 2 {
 		t.Fatalf("mounts=%+v", setup.Mounts)
 	}
@@ -50,7 +50,8 @@ func TestCacheHookReadOnlyMounts(t *testing.T) {
 	if setup.Env["GOMODCACHE"] == "" || setup.Env["GOCACHE"] == "" {
 		t.Fatal("missing tool environment", setup.Env)
 	}
-	if setup, err := cacheBefore(context.Background(), cacheHookLease("ro", "process"), session.JobRoot{Dir: t.TempDir()}); err != nil || len(setup.Env)+len(setup.Mounts) != 0 {
+	l.Job.Isolation = "process"
+	if setup, err := cacheBefore(context.Background(), l, session.JobRoot{Dir: t.TempDir()}); err != nil || len(setup.Env)+len(setup.Mounts) != 0 {
 		t.Fatalf("read-only process cache did not degrade: setup=%+v err=%v", setup, err)
 	}
 }
@@ -115,7 +116,7 @@ func TestCacheHookPartialRestoreBindsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cacheAfter(context.Background(), l, root, session.Outcome{}, nil)
+	defer cacheCleanup(l, root, session.Outcome{})()
 	if len(setup.Mounts) != 0 || len(setup.Env) != 0 {
 		t.Fatalf("partial restore bound: %+v", setup)
 	}
@@ -161,12 +162,12 @@ func TestCacheBeforeJobFailureDropsEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cacheAfter(context.Background(), l, session.JobRoot{}, session.Outcome{}, nil)
+	defer cacheCleanup(l, session.JobRoot{}, session.Outcome{})()
 	ws, err := os.OpenRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ws.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(ws.Close)
 	if err := ws.Mkdir(specs.WorkspaceCacheName, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +200,7 @@ func TestCacheStageFailureKeepsUsableBindings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cacheAfter(context.Background(), l, root, session.Outcome{}, nil)
+	defer cacheCleanup(l, root, session.Outcome{})()
 	if setup.Env["GOCACHE"] == "" || setup.Env["GOMODCACHE"] == "" {
 		t.Fatalf("usable binding lost: %+v", setup)
 	}
@@ -221,7 +222,7 @@ func TestCacheHookReplacementClosesRoots(t *testing.T) {
 	if _, err := cacheBefore(context.Background(), l, session.JobRoot{Dir: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
-	defer cacheAfter(context.Background(), l, session.JobRoot{}, session.Outcome{}, nil)
+	defer cacheCleanup(l, session.JobRoot{}, session.Outcome{})()
 	if _, err := old.base.Stat("."); err == nil {
 		t.Fatal("replaced root left open")
 	}
@@ -248,7 +249,7 @@ func TestCacheCollectionRefusalReachesJobLog(t *testing.T) {
 	}
 	l := cacheHookLease("rw", "process")
 	nodeCaches.Store(l.AttemptID, &nodeCache{base: base, stage: &refusedCacheStage{}})
-	defer cacheAfter(context.Background(), l, session.JobRoot{}, session.Outcome{}, nil)
+	defer cacheCleanup(l, session.JobRoot{}, session.Outcome{})()
 	var output bytes.Buffer
 	hook := agentAfterJob(execSpec{AttemptID: l.AttemptID}, jobInputs{Output: func(b []byte) { _, _ = output.Write(b) }})
 	if err := hook(context.Background(), nil); err != nil {
@@ -320,4 +321,8 @@ func TestCacheHookInvalidAccessRefused(t *testing.T) {
 	if _, err := cacheBefore(context.Background(), cacheHookLease("rw-own", "process"), session.JobRoot{Dir: t.TempDir()}); err == nil {
 		t.Fatal("invalid wire access accepted")
 	}
+}
+
+func cacheCleanup(l protocol.Lease, root session.JobRoot, outcome session.Outcome) func() {
+	return func() { _ = cacheAfter(context.Background(), l, root, outcome, nil) }
 }

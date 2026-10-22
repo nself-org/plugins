@@ -164,9 +164,15 @@ func TestJoinEnrollsAndSavesTheCredential(t *testing.T) {
 		t.Fatalf("approver saw %+v", got)
 	}
 	// The sealed client key, the KEK next to it, nothing else secret in plain.
-	filepath.WalkDir(state, func(p string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() {
-			raw, _ := os.ReadFile(p)
+	if err := filepath.WalkDir(state, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			raw, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
 			if bytes.Contains(raw, []byte(c.code)) {
 				t.Errorf("%s holds the code", p)
 			}
@@ -175,7 +181,9 @@ func TestJoinEnrollsAndSavesTheCredential(t *testing.T) {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = os.Stat(filepath.Join(state, "pki", "kek")); err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +221,7 @@ func TestJoinWithoutTTYAndWithoutFlagRefuses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer null.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(null.Close)
 	code, _, stderr, _ = joinRun(t, null, "", "--name", "node-j", c.url)
 	if code != 1 || !strings.Contains(stderr, "Type yes to trust it") || !strings.Contains(stderr, "fingerprint_unconfirmed") || !strings.Contains(stderr, c.fp) {
 		t.Fatalf("exit %d stderr %q", code, stderr)

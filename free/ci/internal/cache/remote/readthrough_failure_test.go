@@ -29,7 +29,7 @@ func TestNodeReadThroughCancellationPreservesCopy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
+	_ = f.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := c.Open(ctx, "realm", digest, int64(len(data)), nil); !errors.Is(err, context.Canceled) {
@@ -39,7 +39,7 @@ func TestNodeReadThroughCancellationPreservesCopy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cancellation discarded intact copy: %v", err)
 	}
-	f.Close()
+	_ = f.Close()
 }
 
 func TestNodeReadThroughPrunesOrphan(t *testing.T) {
@@ -89,7 +89,7 @@ func TestNodeReadThroughReservesFetch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		f.Close()
+		_ = f.Close()
 	}
 }
 
@@ -99,7 +99,7 @@ func TestNodeStageCopyFailureStillShips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(s.Close)
 	s.Copies, err = NewReadThrough(t.TempDir(), 100)
 	if err != nil {
 		t.Fatal(err)

@@ -14,7 +14,6 @@ import (
 	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/session"
-	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/cache/remote"
 	"github.com/nself-org/plugins/free/ci/internal/cache/specs"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
@@ -117,8 +116,7 @@ func cacheBefore(ctx context.Context, l protocol.Lease, root session.JobRoot) (s
 				valid = false
 				break
 			}
-			lim := authz.DefaultLimits()
-			lim.AllowDotGit = true
+			lim := specs.CacheLimits()
 			_, err = specs.Unpack(f, base, filepath.Join(sp.ID, b.Path), lim, specs.UnpackOptions{OtherRead: container})
 			_ = f.Close()
 			if err != nil {

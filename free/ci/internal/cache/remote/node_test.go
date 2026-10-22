@@ -34,7 +34,7 @@ func TestNodeReadThroughRehashAndRealm(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer f.Close()
+		defer func(cleanup func() error) { _ = cleanup() }(f.Close)
 		got, err := io.ReadAll(f)
 		if err != nil || !bytes.Equal(got, data) {
 			t.Fatalf("got=%q err=%v", got, err)
@@ -78,7 +78,7 @@ func TestNodeReadThroughLRU(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		f.Close()
+		_ = f.Close()
 		name, _ := c.name("realm", digest)
 		at := time.Unix(int64(i+1), 0)
 		if err := os.Chtimes(name, at, at); err != nil {
@@ -100,7 +100,7 @@ func TestNodeReadThroughLRU(t *testing.T) {
 		if err != nil {
 			t.Fatal("newer copy evicted", err)
 		}
-		f.Close()
+		_ = f.Close()
 	}
 }
 
@@ -115,7 +115,7 @@ func TestNodeStageSecretSendsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(s.Close)
 	dir := t.TempDir()
 	for _, d := range []string{"go/mod", "go/build"} {
 		if err := os.MkdirAll(filepath.Join(dir, d), 0700); err != nil {
@@ -132,7 +132,7 @@ func TestNodeStageSecretSendsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer base.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(base.Close)
 	r := redact.New()
 	if err := r.Register([]byte("synthetic-registered-value")); err != nil {
 		t.Fatal(err)
@@ -178,7 +178,7 @@ func TestNodeStagePublishedCopySurvivesStageClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(s.Close)
 	s.Copies, err = NewReadThrough(t.TempDir(), 1<<20)
 	if err != nil {
 		t.Fatal(err)
@@ -196,7 +196,7 @@ func TestNodeStagePublishedCopySurvivesStageClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer base.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(base.Close)
 	if err := s.Collect(context.Background(), base, redact.New()); err != nil {
 		t.Fatal(err)
 	}
@@ -218,8 +218,8 @@ func TestNodeStagePublishedCopySurvivesStageClose(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, err = specs.Unpack(f, out, "restored", authz.DefaultLimits(), specs.UnpackOptions{})
-			f.Close()
-			out.Close()
+			_ = f.Close()
+			_ = out.Close()
 			if err != nil {
 				t.Fatal("published compression cannot restore", err)
 			}
@@ -233,7 +233,7 @@ func TestNodeStageCombinedCopiesExceedCapStillShips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func(cleanup func() error) { _ = cleanup() }(s.Close)
 	s.Copies, err = NewReadThrough(t.TempDir(), 3)
 	if err != nil {
 		t.Fatal(err)
