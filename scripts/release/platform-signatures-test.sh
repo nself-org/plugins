@@ -193,6 +193,26 @@ if check "$T/nl.txt" "$NL" >/dev/null 2>&1; then fail "built check passed a file
 LNK="$T/linked"; mkdir "$LNK"; ln -s "$PLIN" "$LNK/demo-1.2.3-linux-amd64.tar.gz"
 check "$BUILT" "$LNK" >/dev/null 2>&1 && pass "built check follows symlinks" || fail "built check refused a symlinked built tarball"
 
+# Exercise the exact workflow body with fixture assets and a disposable pinned key.
+WIRE="$T/workflow"; mkdir -p "$WIRE/published" "$WIRE/expected" "$WIRE/free/demo" "$WIRE/keys"
+cp "$GOOD"/*.tar.gz "$WIRE/published/"
+printf '{"version":"1.2.3"}\n' > "$WIRE/free/demo/plugin.json"
+cp "$T/test.pub" "$WIRE/keys/plugins-release-free-fixture.pub"
+cp "$BUILT" "$WIRE/expected/built-sha256.txt"
+workflow_sign() {
+  (cd "$WIRE" && TAG=v1.2.3 NSELF_RELEASE_SIGNING_KEY_FREE="$(cat "$T/key.pem")" NSELF_RELEASE_SIGNING_KEY_FREE_ID="$ID" OPENSSL="$O" bash "$HERE/sign-release.sh" "$WIRE/keys")
+}
+if workflow_sign >"$T/wiring.log" 2>&1; then
+  jq -e '.demo | has("release_signature") and (.platform_signatures | length == 2) and (.platform_signatures["linux-amd64"] | has("sha256"))' "$WIRE/signatures.json" >/dev/null && pass "workflow signs source and deep-merges both platforms" || fail "workflow merge lost signatures"
+else fail "workflow body refused fixtures: $(cat "$T/wiring.log")"; fi
+cp "$WIRE/expected/built-sha256.txt" "$T/wire-built.txt"
+: > "$WIRE/expected/built-sha256.txt"
+if workflow_sign >"$T/wiring.log" 2>&1; then fail "workflow signed a platform absent from built list"; else pass "workflow refuses platforms absent from built list"; fi
+cp "$T/wire-built.txt" "$WIRE/expected/built-sha256.txt"
+cp "$HERE"/keys/plugins-release-free-*.pub "$WIRE/keys/"
+rm "$WIRE/keys/plugins-release-free-fixture.pub"
+if workflow_sign >"$T/wiring.log" 2>&1; then fail "workflow accepted an unpinned signing key"; else pass "workflow post-check refuses an unpinned signing key"; fi
+
 # --- the committed interop fixture (P7-PLUG-84 copies it) ----------------------------------------------------------------------
 FIX="$HERE/testdata/platform-v1"
 
