@@ -24,7 +24,6 @@ type approvalRig struct {
 	st       *store.Store
 	clk      *clock
 	svc      *roles.Service
-	path     string
 	env      context.Context
 	admin    roles.Actor
 	member   roles.Actor

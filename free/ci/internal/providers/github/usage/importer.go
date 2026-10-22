@@ -4,19 +4,13 @@ package usage
 // rows (Epic D12).
 // Inputs:  Settings (billing_import, billing_account), a providers.UsageSource, a recorder (default
 //          economics.RecordUsage) and a clock.
-// Outputs: Result; one economics.Usage per (account, date, sku, repo) with the key
-//          github:<account>:<date>:<sku>:<repo>, so a second import of the same period replaces the
-//          same rows (RecordUsage is an upsert by key) and never adds one.
-// Constraints: with billing_import false Run returns Disabled before the source is touched (no API
-//          call, no credential read). The whole period is read and converted before the first write,
-//          so a failing or malformed report writes nothing; a ledger write that fails midway leaves
-//          the earlier lines in place, the error names the key, and a rerun converges (same keys).
-//          No remaining value is computed or reported here.
+// Outputs: one known usage row per account/date/sku/repo. Each complete provider/day range is
+// atomically replaced, removing stale keys after renames or a billing-account change.
+// Constraints: disabled imports never touch the source; malformed reports and failed writes leave
+// the old range intact. No remaining value is computed or reported here.
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"math"
 	"net/url"
 	"sort"
@@ -39,14 +33,14 @@ const (
 	LookbackDays = 7
 )
 
-// Recorder writes one usage line; economics.RecordUsage is the production one.
-type Recorder func(context.Context, economics.Usage) error
+// Replacer atomically replaces the provider usage for an inclusive day range.
+type Replacer func(context.Context, string, string, string, []economics.Usage) error
 
 // Importer imports one account's usage.
 type Importer struct {
 	Settings Settings
 	Source   providers.UsageSource // may be nil only while Settings.Import is false
-	Record   Recorder              // default economics.RecordUsage
+	Replace  Replacer              // default economics.ReplaceUsage
 	Now      func() time.Time      // default time.Now
 }
 
@@ -138,19 +132,15 @@ func (i *Importer) Run(ctx context.Context) (Result, error) {
 	if err != nil {
 		return res, err
 	}
-	record := i.Record
-	if record == nil {
-		record = economics.RecordUsage
+	replace := i.Replace
+	if replace == nil {
+		replace = economics.ReplaceUsage
 	}
-	var errs []error
-	for _, l := range lines {
-		if err := record(ctx, l); err != nil {
-			errs = append(errs, fmt.Errorf("record %s: %w", l.Key, err))
-			continue
-		}
-		res.Rows++
+	if err := replace(ctx, Provider, res.From, res.To, lines); err != nil {
+		return res, err
 	}
-	return res, errors.Join(errs...)
+	res.Rows = len(lines)
+	return res, nil
 }
 
 // Key is the idempotent ledger key of one line.

@@ -25,7 +25,7 @@ func TestEconomicsContributorsFillTheWorldOnlyWhenBound(t *testing.T) {
 	runners := []sched.Runner{{ID: "r-cloud", Class: "", Provider: "cloudco"}, {ID: "r-gh", Provider: "github-hosted"}, {ID: "r-local", Class: ClassLocal, Provider: "operator"}}
 	w := sched.World{NowMs: clk.now().UnixMilli(), Runners: runners}
 
-	var bare sched.World = w
+	bare := w
 	for _, f := range []func(context.Context, *sched.World) error{contributeCosts, contributeAllowances, contributeBudgets, contributeApprovals} {
 		if err := f(ctx, &bare); err != nil {
 			t.Fatal(err)

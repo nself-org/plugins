@@ -35,20 +35,28 @@ func RecordUsage(ctx context.Context, u Usage) error {
 	if !ok {
 		return refuse(model.AllowanceUnknown, "economics is not bound, so usage cannot be recorded")
 	}
+	row, err := usageRow(env, u)
+	if err != nil {
+		return err
+	}
+	return env.Store.PutUsage(ctx, row)
+}
+
+func usageRow(env Env, u Usage) (store.UsageRow, error) {
 	day, err := time.Parse("2006-01-02", u.Date)
 	if u.Key == "" || u.Provider == "" || err != nil || u.Minutes < 0 || u.CostMicro < 0 || (u.BalanceMicro != nil && *u.BalanceMicro < 0) {
-		return refuse(model.AllowanceUnknown, "a usage line needs a key, a provider, a UTC date and non-negative amounts")
+		return store.UsageRow{}, refuse(model.AllowanceUnknown, "a usage line needs a key, a provider, a UTC date and non-negative amounts")
 	}
 	// A provider in UTC+N may already report tomorrow; anything later is not a usage date.
 	if u.Date > dayOf(env.Now().AddDate(0, 0, 1)) {
-		return refuse(model.AllowanceUnknown, "usage dated %s is in the future", u.Date)
+		return store.UsageRow{}, refuse(model.AllowanceUnknown, "usage dated %s is in the future", u.Date)
 	}
 	at := u.ReportedAt
 	if at.IsZero() || at.After(env.Now()) { // a report is never made in the future
 		at = env.Now()
 	}
-	return env.Store.PutUsage(ctx, store.UsageRow{Key: u.Key, Provider: u.Provider, Period: day.Format("2006-01"), Day: u.Date, Series: u.Series, Minutes: u.Minutes,
-		CostMicro: u.CostMicro, BalanceMicro: u.BalanceMicro, ReportedAt: at.UnixNano()})
+	return store.UsageRow{Key: u.Key, Provider: u.Provider, Period: day.Format("2006-01"), Day: u.Date, Series: u.Series, Minutes: u.Minutes,
+		CostMicro: u.CostMicro, BalanceMicro: u.BalanceMicro, ReportedAt: at.UnixNano()}, nil
 }
 
 // BudgetLine is one budget scope. Reserved is the worst case held (a bound, so estimated).
