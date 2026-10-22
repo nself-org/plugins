@@ -14,6 +14,7 @@ import (
 
 // Options is everything a run needs from its caller.
 type Options struct {
+	Ref       string   // accepted source ref; survives detached served checkouts
 	Root      string   // repository root (project key)
 	Home      string   // state directory; "" means NSELF_CI_HOME or ~/.nself/ci
 	Pipeline  string   // --pipeline

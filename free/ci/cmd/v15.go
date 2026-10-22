@@ -64,6 +64,7 @@ func init() {
 	f, o := bareFlags, &bare.opts
 	f.StringVar(&o.Pipeline, "pipeline", "", "named pipeline to run (default: every non-drill job)")
 	f.StringVar(&o.Job, "job", "", "run only this job and its dependencies")
+	f.StringVar(&o.Ref, "ref", "", "source ref for a detached served checkout")
 	f.StringVar(&o.Trigger, "trigger", "", "plan the pipelines listing this trigger (push, pull_request, tag, manual, schedule, api, local)")
 	f.BoolVar(&o.JSON, "json", false, "print machine output")
 	f.BoolVar(&o.Stream, "stream", false, "stream job output as it happens")

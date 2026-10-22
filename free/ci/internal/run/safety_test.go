@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/report"
@@ -44,10 +43,12 @@ func TestStatusNotPostedForPartialCancelledOrOutsideConfig(t *testing.T) {
 			}
 		})
 	}
-	// Ctrl-C: the run context ends while a job runs; nothing is posted
+	// Ctrl-C after admission: cancellation never posts a status. Synchronize on attempt
+	// startup so a loaded test host cannot cancel during coordinator initialization.
 	r := newRig(t, map[string]model.Job{"a": sh("sleep 60")}, gitFake{})
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() { time.Sleep(1500 * time.Millisecond); cancel() }()
+	defer cancel()
+	r.C.Hooks.AttemptStarts = []AttemptStartHook{startFn(func(AttemptInfo) error { cancel(); return nil })}
 	res, err := r.C.Run(ctx)
 	if err != nil || res.Exit == 0 || len(r.Rep.all()) != 0 || !strings.Contains(res.Summary.Status, report.ReasonCancelled) {
 		t.Fatalf("exit %d err %v status %q posted %+v", res.Exit, err, res.Summary.Status, r.Rep.all())

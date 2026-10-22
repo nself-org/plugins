@@ -173,6 +173,7 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 // pipelineFacts are the source facts the webhook and manual routes store with a trigger.
 type pipelineFacts struct {
 	Trigger   string          `json:"trigger"`
+	Ref       string          `json:"ref"`
 	CloneURL  string          `json:"clone_url"`
 	Synthetic json.RawMessage `json:"synthetic"`
 }
@@ -203,7 +204,7 @@ func dispatchPipeline(home string, f *v15ServeFlags) coordinator.Dispatcher {
 		if err != nil {
 			return coordinator.RunResult{}, fmt.Errorf("checkout failed: %w", err)
 		}
-		o := RunOptions{Root: dir, Home: home, Pipeline: row.Pipeline, Trigger: serveTrigger(facts.Trigger),
+		o := RunOptions{Root: dir, Ref: facts.Ref, Home: home, Pipeline: row.Pipeline, Trigger: serveTrigger(facts.Trigger),
 			Container: !f.unsandboxed, ProviderRepo: providerRepoFor(row.Source, row.Project), Timeout: time.Duration(f.timeout) * time.Second, Stream: f.verbose}
 		p, digest, subst, err := preparePlan(ctx, o)
 		if err != nil {

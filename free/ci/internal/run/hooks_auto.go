@@ -87,6 +87,7 @@ type RaceHook interface {
 type NotifyRequest struct {
 	// Root is the run's repository root (Options.Root): the notify hook names the repository
 	// and the branch from it, not from the process directory (a served run is a clone elsewhere).
+	Ref    string // accepted source ref; empty asks git
 	Root   string
 	Run    RunInfo
 	Status string

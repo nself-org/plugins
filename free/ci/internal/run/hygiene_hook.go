@@ -146,7 +146,7 @@ func markerLive(path string) bool {
 	if err != nil {
 		return false
 	}
-	defer proc.Release()
+	defer func() { _ = proc.Release() }()
 	err = proc.Signal(syscall.Signal(0))
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
