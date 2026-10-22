@@ -154,6 +154,10 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, l protocol.Leas
 	if !ok {
 		return refused("E700", "provider "+id+" is not registered for hosted dispatch")
 	}
+	attempt, err := buildAttempt(ctx, node, l, facts)
+	if err != nil {
+		return err
+	}
 	h, err := attach(ctx, book, disp, id, node, l, facts)
 	if err != nil {
 		return err
@@ -174,7 +178,7 @@ func (d *Driver) Run(ctx context.Context, node model.Capability, l protocol.Leas
 	if err != nil {
 		return err
 	}
-	evidence, err := bindEvidence(collected, h, l, now())
+	evidence, err := bindEvidence(collected, h, l, attempt.N, now())
 	if err != nil {
 		return err
 	}

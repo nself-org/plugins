@@ -87,6 +87,9 @@ func (h *hostedProv) Match(r *http.Request) bool { return r.Header.Get("X-Test-S
 func (h *hostedProv) Verify(ctx context.Context, r *http.Request, body []byte) (model.TriggerFacts, error) {
 	f, err := h.Fake.Verify(ctx, r, body)
 	f.Repo, f.Revision, f.DeliveryID = "o/r", testRev, r.Header.Get("X-Test-Delivery")
+	if repo := r.Header.Get("X-Test-Repo"); repo != "" {
+		f.Repo = repo
+	}
 	if v := r.Header.Get("X-Test-Facts-Source"); v != "" {
 		f.Source = v
 	}

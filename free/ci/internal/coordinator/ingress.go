@@ -29,6 +29,9 @@ type Delivery struct {
 	Facts        json.RawMessage // source facts (event, ref, clone_url, ...); opaque to the intake
 	Pipeline     string          // the requested pipeline, "" for the default
 	Synthetic    *model.Pipeline // a pipeline the source built itself (runner demand), if any
+
+	// Prepare synthesizes a delivery only after repository authorization.
+	Prepare func(context.Context, *Delivery) error `json:"-"`
 }
 
 // Ingress turns the requests of one provider into Deliveries.

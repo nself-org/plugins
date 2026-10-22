@@ -236,7 +236,7 @@ func TestHostedLiveness(t *testing.T) {
 // TestHostedLivenessUnknownAttemptIsVanished: an attempt with no handle (never dispatched) is not kept alive.
 func TestHostedLivenessUnknownAttemptIsVanished(t *testing.T) {
 	useProvider(t)
-	got, err := liveness("fake", prov, NewMemBook())(context.Background(), "nobody")
+	got, err := liveness("fake", prov, NewMemBook())(context.Background(), "nobody", 1)
 	if err != nil || got != lease.LiveVanished {
 		t.Fatalf("no handle = %q, %v; want vanished", got, err)
 	}

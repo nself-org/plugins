@@ -26,7 +26,7 @@ func rejected(reason string) error {
 	return providers.NewError(providers.Config, "E705", reason, 0, time.Time{})
 }
 
-func bindEvidence(c providers.Collected, h providers.Handle, l protocol.Lease, now time.Time) (json.RawMessage, error) {
+func bindEvidence(c providers.Collected, h providers.Handle, l protocol.Lease, attemptN int, now time.Time) (json.RawMessage, error) {
 	var ev model.Evidence
 	if err := json.Unmarshal(c.Evidence, &ev); err != nil || ev.Schema != "ci.evidence/v1" {
 		return nil, rejected("provider evidence is not a ci.evidence/v1 document")
@@ -38,7 +38,7 @@ func bindEvidence(c providers.Collected, h providers.Handle, l protocol.Lease, n
 		return nil, rejected("provider evidence names another revision")
 	}
 	att := c.Attestation
-	if att.Provider != h.Provider || att.RunID != h.RunID || att.Nonce != h.Nonce {
+	if att.Provider != h.Provider || att.RunID != h.RunID || att.Nonce != h.Nonce || att.Ref != l.Checkout.Revision || att.RunAttempt != attemptN {
 		return nil, rejected("provider attestation does not match the dispatched run")
 	}
 	if att.VerifiedAt == "" {

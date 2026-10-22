@@ -185,6 +185,18 @@ func TestIngressAdapter(t *testing.T) {
 			t.Fatalf("nil pipeline = %d %s queued=%d", w.Code, w.Body, queuedCount(t, st))
 		}
 	})
+	t.Run("allowlist precedes demand synthesis and decline", func(t *testing.T) {
+		for _, source := range []string{"fake", "fake-demand"} {
+			h, st := intakeRig(t)
+			maker.mu.Lock()
+			maker.calls = 0
+			maker.mu.Unlock()
+			w := post(h, source, "runner_demand", "outside", true, "X-Test-Repo", "outside/repo")
+			if w.Code != 403 || maker.calls != 0 || queuedCount(t, st) != 0 {
+				t.Fatalf("source=%s status=%d calls=%d", source, w.Code, maker.calls)
+			}
+		}
+	})
 	t.Run("dormant without V15", func(t *testing.T) {
 		t.Setenv("NSELF_V15", "")
 		req := httptest.NewRequest(http.MethodPost, "/webhook", nil)

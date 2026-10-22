@@ -182,15 +182,17 @@ func (c *Coordinator) serveWebhook(w http.ResponseWriter, r *http.Request) {
 	if ing != nil {
 		d, err := ing.Accept(r.Context(), r, body)
 		var declined interface{ DeclineReason() string }
-		if errors.As(err, &declined) { // verified but not for the intake (a runner demand nobody serves): 200, nothing enqueued
-			c.cfg.Logf("ingress %s declined a delivery", ing.Name())
-			writeJSON(w, http.StatusOK, map[string]any{"accepted": false, "reason": declined.DeclineReason()})
-			return
-		}
-		if err != nil {
+		isDeclined := errors.As(err, &declined)
+		if err != nil && !isDeclined {
 			c.cfg.Logf("ingress %s refused a delivery", ing.Name())
 			http.Error(w, "delivery refused", http.StatusForbidden)
 			return
+		}
+		if isDeclined {
+			var project interface{ DeclineProject() string }
+			if errors.As(err, &project) {
+				d.Project = project.DeclineProject()
+			}
 		}
 		// an Ingress holding per-repo secrets authorises its own repos (it must check the secret belongs
 		// to Delivery.Project), unless the delivery itself says it was verified some other way
@@ -202,6 +204,18 @@ func (c *Coordinator) serveWebhook(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "repo is not allowlisted", http.StatusForbidden)
 				return
 			}
+		}
+		if !isDeclined && d.Prepare != nil {
+			err = d.Prepare(r.Context(), &d)
+			isDeclined = errors.As(err, &declined)
+		}
+		if isDeclined {
+			writeJSON(w, http.StatusOK, map[string]any{"accepted": false, "reason": declined.DeclineReason()})
+			return
+		}
+		if err != nil {
+			http.Error(w, "delivery refused", http.StatusForbidden)
+			return
 		}
 		out, err := c.enqueue(r.Context(), d, true, enqueueOpts{})
 		answer(w, d, out, err)

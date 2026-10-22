@@ -162,7 +162,7 @@ func TestHostedFinishedBeforeRunning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.RegisterProfile("hosted", LeaseProfile{Liveness: func(context.Context, string) (LiveState, error) { return LiveFinished, nil }}); err != nil {
+	if err := e.RegisterProfile("hosted", LeaseProfile{Liveness: func(context.Context, string, int64) (LiveState, error) { return LiveFinished, nil }}); err != nil {
 		t.Fatal(err)
 	}
 	state, err := e.PollHosted(ctx, "hosted", "hosted-l", "hosted-a", epoch)
@@ -349,7 +349,7 @@ func TestProperty(t *testing.T) {
 	t.Run("hosted liveness expiry", func(t *testing.T) {
 		e, now := fixture(t, 1, false)
 		state := LiveRunning
-		p := LeaseProfile{TTL: 45 * time.Second, Liveness: func(context.Context, string) (LiveState, error) { return state, nil }}
+		p := LeaseProfile{TTL: 45 * time.Second, Liveness: func(context.Context, string, int64) (LiveState, error) { return state, nil }}
 		if err := e.RegisterProfile("provider", p); err != nil {
 			t.Fatal(err)
 		}

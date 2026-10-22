@@ -33,7 +33,9 @@ const IngressName = "providers"
 // Declined is returned by Accept when a verified request is fine but must not enqueue anything (a
 // runner demand with no handler, or one the handler refused). The coordinator answers it with 200
 // {"accepted": false, "reason": ...} so the provider does not retry.
-type Declined struct{ Reason string }
+type Declined struct{ Reason, Project string }
+
+func (d *Declined) DeclineProject() string { return d.Project }
 
 func (d *Declined) Error() string         { return "delivery declined: " + d.Reason }
 func (d *Declined) DeclineReason() string { return d.Reason }
@@ -111,18 +113,22 @@ func (IngressAdapter) Accept(ctx context.Context, r *http.Request, body []byte) 
 	if facts.Kind != "runner_demand" {
 		return d, nil
 	}
-	handler := providers.DemandHandlerFor(src.Name())
-	if handler == nil {
-		return coordinator.Delivery{}, &Declined{Reason: "no demand handler is registered for " + src.Name()}
+	d.Prepare = func(ctx context.Context, d *coordinator.Delivery) error {
+		handler := providers.DemandHandlerFor(src.Name())
+		if handler == nil {
+			return &Declined{Project: facts.Repo, Reason: "no demand handler is registered for " + src.Name()}
+		}
+		pipeline, err := handler.Synthesize(ctx, facts)
+		if err != nil {
+			return &Declined{Project: facts.Repo, Reason: declineReason(err)}
+		}
+		if pipeline == nil {
+			return &Declined{Project: facts.Repo, Reason: "the demand handler declined the demand"}
+		}
+		d.Synthetic = pipeline
+		return nil
 	}
-	pipeline, err := handler.Synthesize(ctx, facts)
-	if err != nil {
-		return coordinator.Delivery{}, &Declined{Reason: declineReason(err)}
-	}
-	if pipeline == nil {
-		return coordinator.Delivery{}, &Declined{Reason: "the demand handler declined the demand"}
-	}
-	d.Synthetic = pipeline
+
 	return d, nil
 }
 

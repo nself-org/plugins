@@ -38,13 +38,13 @@ func RegisterProfiles(e *lease.Engine, book Book) error {
 	return errors.Join(errs...)
 }
 
-func liveness(provider string, disp providers.Dispatcher, book Book) func(context.Context, string) (lease.LiveState, error) {
-	return func(ctx context.Context, attemptID string) (lease.LiveState, error) {
+func liveness(provider string, disp providers.Dispatcher, book Book) func(context.Context, string, int64) (lease.LiveState, error) {
+	return func(ctx context.Context, attemptID string, epoch int64) (lease.LiveState, error) {
 		e, ok, err := book.Get(ctx, attemptID)
 		if err != nil {
 			return "", err
 		}
-		if !ok || e.Handle.Provider != provider {
+		if !ok || e.Handle.Provider != provider || e.Epoch != epoch {
 			return lease.LiveVanished, nil
 		}
 		state, err := disp.Liveness(ctx, e.Handle)

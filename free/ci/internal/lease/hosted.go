@@ -20,7 +20,7 @@ const (
 
 // LeaseProfile supplies provider liveness in place of agent heartbeats.
 type LeaseProfile struct {
-	Liveness func(context.Context, string) (LiveState, error)
+	Liveness func(context.Context, string, int64) (LiveState, error)
 	TTL      time.Duration
 	Poll     time.Duration
 }
@@ -53,7 +53,7 @@ func (e *Engine) PollHosted(ctx context.Context, provider, leaseID, attemptID st
 	if !ok {
 		return "", fmt.Errorf("lease profile %q not registered", provider)
 	}
-	state, err := p.Liveness(ctx, attemptID)
+	state, err := p.Liveness(ctx, attemptID, epoch)
 	if err != nil {
 		return "", err
 	}

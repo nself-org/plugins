@@ -16,8 +16,9 @@ import (
 
 type declineErr struct{ reason string }
 
-func (d declineErr) Error() string         { return "internal text " + d.reason }
-func (d declineErr) DeclineReason() string { return d.reason }
+func (d declineErr) Error() string          { return "internal text " + d.reason }
+func (d declineErr) DeclineProject() string { return "o/r" }
+func (d declineErr) DeclineReason() string  { return d.reason }
 
 func TestIngressDeclineIs200NotAcceptedAndStoresNothing(t *testing.T) {
 	f := &fakeIngress{name: "zz-fake-f", err: fmt.Errorf("wrapped: %w", declineErr{reason: "no handler for fake"})}
