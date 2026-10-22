@@ -36,6 +36,7 @@ type nodesSetFlags struct {
 func nodesSetFlagSet(f *nodesSetFlags, errOut io.Writer) *flag.FlagSet {
 	fs := flag.NewFlagSet("nodes set", flag.ContinueOnError)
 	fs.SetOutput(errOut)
+	fs.String("coordinator", "", "run this on the TEAM coordinator at https://host[:port] (requires an admin user credential)")
 	fs.BoolVar(&f.json, "json", false, "print one v1 JSON envelope")
 	fs.StringVar(&f.project, "project", "", "project id (default: the current repository)")
 	fs.StringVar(&f.cpu, "reserve-cpu", "", "CPU kept for the operator: cores (2, 0.5) or a percentage of the node's cores (50%)")

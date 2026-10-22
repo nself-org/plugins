@@ -25,7 +25,9 @@ const (
 )
 
 // Swap installs the staged file at bin and keeps the file it replaces as bin.prev.
-func Swap(bin, staged string) error {
+func Swap(bin, staged string) error { return swap(bin, staged, os.Link) }
+
+func swap(bin, staged string, link func(string, string) error) error {
 	tmp := bin + NewSuffix
 	_ = os.Remove(tmp)
 	mode := defaultMode
@@ -45,9 +47,10 @@ func Swap(bin, staged string) error {
 		// The marker names the version of the file at .prev: a marker left from an earlier swap must not outlive it.
 		_ = os.Remove(bin + PrevVersionSuffix)
 		_ = os.Remove(prev)
-		if err := os.Link(bin, prev); err != nil {
+		if err := link(bin, prev); err != nil {
 			// no hard links here: the copy must keep the mode, or a restore would hand job users an agent they cannot run
-			if err := copyFile(bin, prev); err == nil {
+			err = copyFile(bin, prev)
+			if err == nil {
 				err = os.Chmod(prev, mode)
 			}
 			if err != nil {

@@ -221,14 +221,6 @@ func (s *sim) install(v string) {
 	}
 }
 
-func (s *sim) flag(name, content string) {
-	if err := os.WriteFile(filepath.Join(s.state(), name), []byte(content), 0o600); err != nil {
-		s.t.Fatal(err)
-	}
-}
-
-func (s *sim) clear(name string) { _ = os.Remove(filepath.Join(s.state(), name)) }
-
 // version runs the installed stub like the engine's hello does.
 func (s *sim) version(ctx context.Context) (string, error) {
 	out, err := s.Run(ctx, remote.Target{}, agentBin, "version")

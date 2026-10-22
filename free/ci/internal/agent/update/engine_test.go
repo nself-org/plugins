@@ -66,8 +66,8 @@ type fakeNode struct {
 	coordErr        error
 	drainErr        error
 	busyErr         error
-	noDowngrade     bool
-	calls           []string
+
+	calls []string
 }
 
 func newFake(from, to string) *fakeNode {

@@ -61,6 +61,7 @@ func init() { lifecycle.RegisterRotateMode(ModeName, sshMode) }
 func FlagSet(out io.Writer) *flag.FlagSet {
 	fs := flag.NewFlagSet("nodes upgrade", flag.ContinueOnError)
 	fs.SetOutput(out)
+	fs.String("coordinator", "", "run this on the TEAM coordinator at https://host[:port] (requires an admin user credential)")
 	fs.String("version", "", "agent release to install (default: the version this build pins)")
 	fs.Bool("all", false, "upgrade every ssh and pull node, one at a time")
 	fs.Bool("allow-downgrade", false, "allow a version lower than the installed one (audited)")
