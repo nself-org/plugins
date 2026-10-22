@@ -93,7 +93,7 @@ func TestDrain(t *testing.T) {
 		}
 		w.never(t, "cancel a node=node-a")
 		stop, cancel, ack, fin := w.indexOf(t, "intake.stop"), w.indexOf(t, "cancel b node=node-b"), w.indexOf(t, "ack b"), w.indexOf(t, "finish b")
-		if !(stop < cancel && cancel < ack && ack < fin) {
+		if stop >= cancel || cancel >= ack || ack >= fin {
 			t.Fatalf("order stop=%d cancel=%d ack=%d finish=%d: %v", stop, cancel, ack, fin, w.names())
 		}
 		w.never(t, "handback b expired=false")

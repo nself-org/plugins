@@ -68,8 +68,14 @@ func (s *Store) apply(ctx context.Context, tx *sql.Tx, id string, from, to model
 	if state != string(from) || epoch != d.Epoch {
 		return coded("E605", "attempt state or epoch changed")
 	}
-	if to == "retryable" && (kind == "release" || idempotent == 0 || n > infraMax) {
-		return coded("E604", "retry forbidden or exhausted")
+	if to == "retryable" {
+		used, err := infraAttemptNumber(ctx, tx, jobID, n)
+		if err != nil {
+			return err
+		}
+		if kind == "release" || idempotent == 0 || d.Reason != DrainHandBack && used > infraMax {
+			return coded("E604", "retry forbidden or exhausted")
+		}
 	}
 	if from == "lost" && (kind == "release" || idempotent == 0) && to != "needs-operator" && to != "cancelled" {
 		return coded("E609", "at-most-once attempt needs operator")

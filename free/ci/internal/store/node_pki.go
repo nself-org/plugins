@@ -279,7 +279,7 @@ func pkiCollect[T any](rows *sql.Rows, err error, scan func(*sql.Rows) (T, error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []T
 	for rows.Next() {
 		v, e := scan(rows)

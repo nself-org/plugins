@@ -189,7 +189,7 @@ func TestAttestRevokeNodeQuarantinesAndReturnsTheReevaluationSet(t *testing.T) {
 		}
 	}
 	// the key of another node signed too: it must not be touched
-	r.led.Consume(r.ctx, attest.Use{AttemptID: "att-3", KeyID: "ci-node-ffffffffffffffff", SigDigest: "x", NodeID: "node-9", RunID: "run-att-3", RepoID: "repo-9", Revision: strings.Repeat("c", 40)})
+	_ = r.led.Consume(r.ctx, attest.Use{AttemptID: "att-3", KeyID: "ci-node-ffffffffffffffff", SigDigest: "x", NodeID: "node-9", RunID: "run-att-3", RepoID: "repo-9", Revision: strings.Repeat("c", 40)})
 	r.exec(`INSERT INTO outbox(revision,context,seq,state,created_at) VALUES(?,?,1,'posted',1)`, rev, "nself-ci@acme/widget")
 	r.exec(`INSERT INTO outbox(revision,context,seq,state,created_at) VALUES(?,?,1,'pending',1)`, rev, "nself-ci@acme/pending-only")
 	r.exec(`INSERT INTO outbox(revision,context,seq,state,created_at) VALUES(?,?,1,'posted',1)`, strings.Repeat("c", 40), "nself-ci@acme/other")

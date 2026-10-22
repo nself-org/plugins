@@ -93,7 +93,7 @@ func (e *EngineLeases) HandBack(ctx context.Context, l Lease, expired bool, _ st
 			}
 			return err
 		}
-		if err = e.Engine.Store.LeaseFail(ctx, rl, e.Engine.Config.Clock(), "lease.expired", true); err != nil {
+		if err = e.Engine.Store.LeaseFail(ctx, rl, e.Engine.Config.Clock(), store.DrainHandBack, true); err != nil {
 			if hasStoreCode(err, "E605") {
 				return nil // renewed or ended meanwhile
 			}

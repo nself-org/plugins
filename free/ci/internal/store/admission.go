@@ -85,7 +85,11 @@ func (s *Store) CreateAttempt(ctx context.Context, a AttemptRow, keyDigest strin
 				if err != nil {
 					return err
 				}
-				if (state != "queued" || ready == 0 || last > infraMax) && confirmed == 0 {
+				used, err := infraAttemptNumber(ctx, tx, a.JobID, last)
+				if err != nil {
+					return err
+				}
+				if (state != "queued" || ready == 0 || used > infraMax) && confirmed == 0 {
 					return coded("E604", "retry not authorized")
 				}
 			}

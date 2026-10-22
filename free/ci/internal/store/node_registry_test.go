@@ -17,7 +17,7 @@ func TestNodeAggregateAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	n := NodeRecord{ID: "node-1", Name: "node", State: "offline", Lifecycle: []byte(`{"discovered":true}`), Trust: []byte(`{}`), DeployHost: []byte(`{}`), Capability: []byte(`{"token":"SECRET_FIXTURE_DO_NOT_STORE_IN_AUDIT"}`)}
 	if err = s.NodePut(ctx, n, "admin"); err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestNodeCapabilityStoreAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	var c model.Capability
 	// The store boundary must reject a direct caller's trust and lifecycle rewrite.
 	// A valid fixture keeps the proof independent of registry sanitization.
@@ -132,7 +132,7 @@ func TestCapabilityLowersStoredIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	fixture, err := os.ReadFile("../model/testdata/capability/valid/laptop.valid.json")
 	if err != nil {
 		t.Fatal(err)
@@ -230,7 +230,7 @@ func TestNodeRecoveryAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	fixture, err := os.ReadFile("../model/testdata/capability/valid/laptop.valid.json")
 	if err != nil {
 		t.Fatal(err)
