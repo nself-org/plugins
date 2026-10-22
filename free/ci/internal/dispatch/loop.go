@@ -137,11 +137,21 @@ func New(cfg Config) (*Dispatcher, error) {
 	}
 	d := &Dispatcher{cfg: cfg}
 	if d.cfg.Orderer == nil {
-		d.cfg.Orderer = NewFair(func() QueueLimits {
+		fair := NewFair(func() QueueLimits {
 			ctx, cancel := context.WithTimeout(context.Background(), queueLimitsTimeout)
 			defer cancel()
 			return d.queueLimits(ctx)
 		}, d.cfg.Clock)
+		fair.cost = func(project string) int64 {
+			ctx, cancel := context.WithTimeout(context.Background(), queueLimitsTimeout)
+			defer cancel()
+			ms, confidence := RuntimeEstimate(ctx, d.cfg.Store, project)
+			if confidence == "estimated" && ms > 0 {
+				return ms
+			}
+			return 1
+		}
+		d.cfg.Orderer = fair
 	}
 	d.life, d.stop = context.WithCancel(context.Background())
 	onStartMu.Lock()

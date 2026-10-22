@@ -13,7 +13,7 @@ package dispatch
 // that left the queue, so call Order once per tick with the whole live queue
 // (Dispatcher.Plan with a hypothetical queue would charge the projects of the
 // jobs it leaves out: give Plan a FIFO or a fresh Fair for what-if queues).
-// Jobs weigh the same in virtual time until the telemetry estimators feed a cost.
+// Jobs use settled runtime estimates when available, else one unit of virtual time.
 
 import (
 	"sort"
@@ -74,6 +74,7 @@ func (FIFO) Order(q []Queued) []Queued {
 type Fair struct {
 	limits func() QueueLimits
 	clock  func() time.Time
+	cost   func(string) int64
 	mu     sync.Mutex
 	state  fairq.State
 }
@@ -108,13 +109,22 @@ func bandOf(declared string, foreground bool) fairq.Band {
 func (f *Fair) Order(q []Queued) []Queued {
 	items := make([]fairq.Item, len(q))
 	bySeq := make(map[string]Queued, len(q))
+	costs := map[string]int64{}
 	for i, e := range q {
 		key := strconv.FormatUint(e.Seq, 10) // the arrival number is unique; a job key only while queued
 		s := e.Job.Sched
+		cost, ok := costs[s.Project]
+		if !ok {
+			cost = 1
+			if f.cost != nil {
+				cost = f.cost(s.Project)
+			}
+			costs[s.Project] = cost
+		}
 		items[i] = fairq.Item{
 			Key: key, Pipeline: s.Pipeline.ID, Job: s.ID, MatrixKey: s.MatrixKey, Project: s.Project,
 			Band: bandOf(s.Pipeline.Band, e.Job.Foreground || s.Pipeline.Foreground), Priority: s.Priority,
-			EnqueuedMs: e.EnqueuedAt.UnixMilli(), Seq: e.Seq, Cost: 1,
+			EnqueuedMs: e.EnqueuedAt.UnixMilli(), Seq: e.Seq, Cost: cost,
 		}
 		bySeq[key] = e
 	}
