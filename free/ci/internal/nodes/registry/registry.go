@@ -129,7 +129,7 @@ func (r *Registry) UpdateCapability(ctx context.Context, id string, in model.Cap
 	var drift []string
 	payload := in
 	n, err := r.mutate(ctx, id, actor, "capability", func(n *Node) error {
-		in = payload
+		in = nodeReportedCapability(payload, n.Capability)
 		drift = nil
 		old := n.Capability
 		reportedIsolation := in.Trust.Isolation
