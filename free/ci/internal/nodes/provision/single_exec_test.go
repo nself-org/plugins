@@ -46,6 +46,10 @@ var dynamicProgram = map[string]bool{
 	"internal/exec/process.go:runCommand":       true,
 	"internal/exec/process.go:runCommandIn":     true,
 	"internal/exec/process.go:runCommandSig":    true,
+	"internal/exec/process.go:runCommandFiles":  true, // the same gate argv start as runCommand, with extra files (P7-CACHE)
+	// The orphan sweep removes a stale job container with the runtime binary the sweep resolved
+	// (docker or podman, checked against runtimeBinary before it is used); never ssh.
+	"internal/exec/sweep.go:removeStaleContainer": true,
 	// `nself ci --detach` re-executes the plugin binary (os.Executable) in a new
 	// session; the program is the caller's own binary, never ssh (P7-CI-63).
 	"internal/exec/detach.go:StartDetached": true,
