@@ -41,8 +41,11 @@ var resourceID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 
 // labelExpr is the format expression that prints one label's value. Docker's listings offer the
 // .Label method; podman's report structs have none (the format fails with exit 125) and expose Labels as a map.
-func labelExpr(binary, key string) string {
+func labelExpr(binary string, kind ResourceKind, key string) string {
 	if binary == "podman" {
+		if kind == KindNetwork { // podman 5: a network's .Labels is a flat list, the map is under .Network
+			return `{{index .Network.Labels "` + key + `"}}`
+		}
 		return `{{index .Labels "` + key + `"}}`
 	}
 	return `{{.Label "` + key + `"}}`
@@ -58,7 +61,7 @@ func RuntimeListLabelled(ctx context.Context, binary string, kind ResourceKind, 
 	if attempt != "" {
 		filter += "=" + attempt
 	}
-	label := labelExpr(binary, AttemptLabel)
+	label := labelExpr(binary, kind, AttemptLabel)
 	var args []string
 	switch kind {
 	case KindContainer:
