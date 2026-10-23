@@ -119,11 +119,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}  # read-only; the drills that call gh (main-status-audit, truth-sweep) take it from here
           NSELF_CI_HOME: ${{ runner.temp }}/ci-home  # a known run store, so the job logs can be kept below
+          # The schedule runs on the default branch, which the binary classes owner. A manual run from another branch is a
+          # merge ref no default-branch commit contains and would be refused (E625); whoever can dispatch this workflow can
+          # also edit it, so a dispatch is the owner's own run.
+          NSELF_CI_TRUST: ${{ github.event_name == 'workflow_dispatch' && 'owner' || '' }}
         run: |
           set -o pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
           status=0
-          "$NSELF_CI_BIN" --no-status --pipeline "$PIPELINE" --json > "$RUNNER_TEMP/evidence/$PIPELINE.json" || status=$?
+          args=(--no-status --pipeline "$PIPELINE" --json)
+          if [ -n "$NSELF_CI_TRUST" ]; then args+=(--trust "$NSELF_CI_TRUST"); fi
+          "$NSELF_CI_BIN" "${args[@]}" > "$RUNNER_TEMP/evidence/$PIPELINE.json" || status=$?
           {
             echo "### $PIPELINE (nself-ci $CI_VERSION)"
             echo "exit code: $status"
