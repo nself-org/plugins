@@ -203,8 +203,11 @@ func TestNoTelemetryClientInTheProduct(t *testing.T) {
 		checked++
 		slash := filepath.ToSlash(path)
 		// internal/agent/install downloads the agent release the operator named (a one-way fetch of a binary
-		// by checksum); every other package of the agent runs jobs and speaks only the carrier protocol.
-		inAgent := (strings.Contains(slash, "/internal/agent/") || strings.Contains(slash, "/cmd/agent/")) && !strings.Contains(slash, "/internal/agent/install/")
+		// by checksum); internal/agent/update/source.go is the same fetch for an upgrade: it only wraps the
+		// http.Client that install.Release verifies with (P7-NODE-24) and sends nothing but that request. Every
+		// other package of the agent runs jobs and speaks only the carrier protocol.
+		inAgent := (strings.Contains(slash, "/internal/agent/") || strings.Contains(slash, "/cmd/agent/")) &&
+			!strings.Contains(slash, "/internal/agent/install/") && !strings.HasSuffix(slash, "/internal/agent/update/source.go")
 		for _, imp := range file.Imports {
 			if inAgent && imp.Path.Value == `"net/http"` {
 				t.Errorf("%s: the agent imports net/http", slash)

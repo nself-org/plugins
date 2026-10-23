@@ -22,6 +22,8 @@ on:
 
 permissions:
   contents: read
+  checks: read       # main-status-audit reads the check runs of main's commits
+  statuses: read     # ... and their commit statuses
 
 concurrency:
   group: drills-nightly-${{ github.ref }}
@@ -33,6 +35,9 @@ env:
   CI_RELEASE_URL: "https://github.com/nself-org/plugins/releases/download/v1.2.11/ci-1.2.11-linux-amd64.tar.gz"
   CI_RELEASE_SHA256: "0ca65f839b007764f70ba9e8e719aee88f336efb74b932297b2b9097cbdd0016"
   NSELF_V15: "1"          # the plugin binary does not follow the cli flip; kept until v1.6
+  GVISOR_RELEASE: "20261012.0"   # same pin and checksum as ci-isolation-linux.yml
+  GVISOR_SHA512: "9606445eed5aedfcf05310e7ccef61d994089914c6622fc82624c24d2b18db1b2210f40e40a7be27b8b7772859de7d95c501b4eba66423053c960bf671377c5e"
+  TRUST04_TEST_IMAGE: "alpine:3.19"
 
 jobs:
   pipeline:
@@ -55,6 +60,36 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The drills run Go (security-suite, truth-sweep, scenarios), docker and podman (isolation-levels) and
+      # gVisor's runsc registered with docker; the steps are the ones ci-isolation-linux.yml runs.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+          cache-dependency-path: free/ci/go.sum
+
+      - name: Container runtimes
+        run: |
+          set -euo pipefail
+          docker info --format '{{.ServerVersion}} rootless={{.SecurityOptions}}'
+          if ! command -v podman >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq podman
+          fi
+          podman info --format '{{.Version.Version}} rootless={{.Host.Security.Rootless}}'
+          docker pull "$TRUST04_TEST_IMAGE"
+
+      - name: Install gVisor runsc
+        run: |
+          set -euo pipefail
+          base="https://storage.googleapis.com/gvisor/releases/release/${GVISOR_RELEASE}/x86_64"
+          curl -fsSL -o "$RUNNER_TEMP/gvisor.tar.bz2" "$base/gvisor.tar.bz2"
+          echo "${GVISOR_SHA512}  $RUNNER_TEMP/gvisor.tar.bz2" | sha512sum -c -
+          sudo tar -xjf "$RUNNER_TEMP/gvisor.tar.bz2" -C /usr/local/bin
+          sudo runsc install
+          sudo systemctl restart docker
+          docker info --format '{{json .Runtimes}}' | tee "$RUNNER_TEMP/runtimes.json"
+          grep -q runsc "$RUNNER_TEMP/runtimes.json"
+
       - name: Install the pinned nself-ci
         run: |
           set -euo pipefail
@@ -70,11 +105,16 @@ jobs:
           fi
           chmod +x "$bin"
           echo "NSELF_CI_BIN=$bin" >> "$GITHUB_ENV"
+          # The drills look the binary up by name (main-status-audit), and the engine's job environment does not carry NSELF_CI_BIN.
+          echo "$(dirname "$bin")" >> "$GITHUB_PATH"
 
       - name: Install nft (scenario 1 cuts the network)
         run: command -v nft >/dev/null || (sudo -n apt-get update -qq && sudo -n apt-get install -y -qq nftables)
 
       - name: Run the pipeline
+        env:
+          GH_TOKEN: ${{ github.token }}  # read-only; the drills that call gh (main-status-audit, truth-sweep) take it from here
+          NSELF_CI_HOME: ${{ runner.temp }}/ci-home  # a known run store, so the job logs can be kept below
         run: |
           set -o pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
@@ -91,6 +131,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: evidence-${{ github.run_id }}
-          path: ${{ runner.temp }}/evidence/
+          path: |
+            ${{ runner.temp }}/evidence/
+            ${{ runner.temp }}/ci-home/logs/
           if-no-files-found: warn
           retention-days: 30

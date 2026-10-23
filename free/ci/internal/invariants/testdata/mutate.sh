@@ -14,6 +14,11 @@ copy_module() {
   mkdir -p "$scratch/module"
   rsync -a --exclude vendor "$module/" "$scratch/module/"
   if [ -d "$module/vendor" ]; then ln -s "$module/vendor" "$scratch/module/vendor"; fi
+  # Tests of the security suite read the sibling plugins (../../../../forgejo, ../../../../github-runner from
+  # test/security/redteam). The copy lives in $scratch, so link those siblings next to it or the baseline is red.
+  for sibling in forgejo github-runner; do
+    if [ -d "$module/../$sibling" ] && [ ! -e "$scratch/$sibling" ]; then ln -s "$(cd "$module/../$sibling" && pwd)" "$scratch/$sibling"; fi
+  done
 }
 copy_module
 if (cd "$scratch/module" && CGO_ENABLED=0 go test -mod=vendor -count=1 -timeout 120s -v -run "$regex" "$@") >"$scratch/baseline.out" 2>&1; then

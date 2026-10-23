@@ -37,18 +37,32 @@ fi
 if [ -n "${TRUTH_REPOS_FILE:-}" ]; then
 	repos=$(grep -v '^[[:space:]]*\(#\|$\)' "$TRUTH_REPOS_FILE" || true)
 else
-	command -v gh >/dev/null || { echo "truth-sweep: gh is required" >&2; exit 2; }
+	limit=200
 	if [ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ]; then
+		command -v gh >/dev/null || { echo "truth-sweep: gh is required" >&2; exit 2; }
 		token=${GH_TOKEN:-$GITHUB_TOKEN}
 		mkdir -p "$tmp/gh-config/gh"
 		chmod 700 "$tmp/gh-config" "$tmp/gh-config/gh"
 		printf 'github.com:\n    oauth_token: %s\n    git_protocol: https\n' "$token" >"$tmp/gh-config/gh/hosts.yml"
 		chmod 600 "$tmp/gh-config/gh/hosts.yml"
 		export XDG_CONFIG_HOME="$tmp/gh-config"
+		listed=$(gh repo list "$org" --visibility public --no-archived --limit "$limit" --json name,diskUsage \
+			-q '.[] | select(.diskUsage > 0) | .name')
+	else
+		# No token reaches a drill (the exec funnel drops them) and every repository read here is public:
+		# list through the anonymous REST API, 100 per page, at most `limit` repositories.
+		command -v curl >/dev/null || { echo "truth-sweep: curl is required without a token" >&2; exit 2; }
+		listed=""
+		for page in 1 2; do
+			chunk=$(curl --fail --silent --show-error --location --proto '=https' \
+				"https://api.github.com/orgs/$org/repos?type=public&per_page=100&page=$page" |
+				jq -r '.[] | select(.archived == false and .size > 0) | .name') || {
+				echo "truth-sweep: the anonymous repository list failed" >&2
+				exit 2
+			}
+			listed=$(printf '%s\n%s\n' "$listed" "$chunk" | grep . || true)
+		done
 	fi
-	limit=200
-	listed=$(gh repo list "$org" --visibility public --no-archived --limit "$limit" --json name,diskUsage \
-		-q '.[] | select(.diskUsage > 0) | .name')
 	if [ "$(printf '%s\n' "$listed" | grep -c .)" -ge "$limit" ]; then
 		echo "truth-sweep: $limit repositories listed: the list may be cut off; raise the limit" >&2
 		exit 2
