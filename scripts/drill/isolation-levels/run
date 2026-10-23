@@ -8,7 +8,8 @@
 #   (go test -tags integration | tart); a prerequisite the host lacks makes that level's check `error` with
 #   "reason: prerequisite.missing" in its excerpt, which never counts as a pass. A level that does not exist on this
 #   host class gets no check at all.
-# Inputs:  NSELF_CI_BIN (default nself-ci on PATH) and NSELF_CI_HOME (the run store) for a direct run; ISOLATION_DRILL_LEVELS
+# Inputs:  NSELF_CI_BIN (default nself-ci on PATH), NSELF_CI_HOME (the run store) and NSELF_CI_TRUST (passed as --trust, for a
+#   pull request checkout on a CI runner) for a direct run; ISOLATION_DRILL_LEVELS
 #   (comma list, narrows the levels); TRUST04_TEST_IMAGE (default alpine:3.19); for vm NSELF_TEST_TART_IMAGE,
 #   NSELF_TEST_TART_SSH_KEY and optionally NSELF_TEST_LAN_ADDR, NSELF_TEST_EXCLUDED_ADDR.
 # Outputs: inside a drills job the document is the last stdout line and the exit code is 0 only when no check failed or
@@ -25,7 +26,7 @@ if [ -z "${NSELF_CI_RUN_ID:-}" ]; then # not inside a job: record through nself-
 	bin=${NSELF_CI_BIN:-nself-ci}
 	command -v "$bin" >/dev/null 2>&1 || { say "$bin not found; set NSELF_CI_BIN to the nself-ci binary"; exit 2; }
 	cd "$root" || exit 2
-	NSELF_V15=1 NSELF_CI_REPO=$root exec "$bin" --no-status --pipeline drills --job "$job"
+	NSELF_V15=1 NSELF_CI_REPO=$root exec "$bin" --no-status ${NSELF_CI_TRUST:+--trust "$NSELF_CI_TRUST"} --pipeline drills --job "$job"
 fi
 
 for tool in jq go; do

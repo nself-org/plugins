@@ -39,6 +39,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-14]
+    env:
+      # A pull request checkout is a merge ref no branch contains: the built binary classes it untrusted (E625).
+      # A head in this repository is the owner's own code on a disposable hosted runner; a fork head leaves this empty.
+      NSELF_CI_TRUST: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'owner' || '' }}
     steps:
       - name: Check out the repository (the pull request head, not the merge commit)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -80,7 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
-          .drill-bin/nself-ci --no-status --pipeline drills --job drill-scenario-12-external-consumer --json > "$RUNNER_TEMP/evidence/scenario-12.json" || true # exit 1 is the partial selection; the job check below decides
+          .drill-bin/nself-ci --no-status ${NSELF_CI_TRUST:+--trust "$NSELF_CI_TRUST"} --pipeline drills --job drill-scenario-12-external-consumer --json > "$RUNNER_TEMP/evidence/scenario-12.json" || true # exit 1 is the partial selection; the job check below decides
           # A single-job run is a partial selection, so its overall result is never pass: read the job's own check.
           jq -r '"scenario-12: " + ([.data.checks[] | select(.id == "drill-scenario-12-external-consumer") | .result][0] // "no result")' "$RUNNER_TEMP/evidence/scenario-12.json" | tee -a "$GITHUB_STEP_SUMMARY"
           jq -e '[.data.checks[] | select(.id == "drill-scenario-12-external-consumer") | .result] == ["pass"]' "$RUNNER_TEMP/evidence/scenario-12.json" >/dev/null
@@ -90,7 +94,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
-          .drill-bin/nself-ci --no-status --pipeline drills --job drill-scenario-01-local-only --json > "$RUNNER_TEMP/evidence/scenario-01.json" || true # exit 1 is the partial selection; the job check below decides
+          .drill-bin/nself-ci --no-status ${NSELF_CI_TRUST:+--trust "$NSELF_CI_TRUST"} --pipeline drills --job drill-scenario-01-local-only --json > "$RUNNER_TEMP/evidence/scenario-01.json" || true # exit 1 is the partial selection; the job check below decides
           # A single-job run is a partial selection, so its overall result is never pass: read the job's own check.
           jq -r '"scenario-01: " + ([.data.checks[] | select(.id == "drill-scenario-01-local-only") | .result][0] // "no result")' "$RUNNER_TEMP/evidence/scenario-01.json" | tee -a "$GITHUB_STEP_SUMMARY"
           jq -e '[.data.checks[] | select(.id == "drill-scenario-01-local-only") | .result] == ["pass"]' "$RUNNER_TEMP/evidence/scenario-01.json" >/dev/null
