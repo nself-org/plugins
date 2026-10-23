@@ -138,6 +138,20 @@ jobs:
     kind: drill
     run: [./scripts/drill/scenario-12-external-consumer/run]
     timeout: 30m
+  # The default seven day window holds more than the 200 commits the audit reads on this busy repository (it then
+  # refuses to answer); the drill runs daily, so one day covers every commit since the last run.
+  drill-main-status-audit:
+    kind: drill
+    run: [./scripts/drill/main-status-audit/run]
+    env:
+      AUDIT_DAYS: "1"
+    timeout: 20m
+  # The security suite runs the whole acceptance suite and then plants each regression in a copy of the module (about
+  # 40 s each, three copies at a time): it needs far more than the 10 minute default.
+  drill-security-suite:
+    kind: drill
+    run: [./scripts/drill/security-suite/run]
+    timeout: 60m
 
 # Per-check configuration. `truth.rules` lists the rule files of the truth check; its
 # presence is what plans the check as a job when none declares it (ImpliedBy).

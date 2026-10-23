@@ -48,8 +48,13 @@ cut_preflight() {
 		! getent group "$CUT_GID" >/dev/null 2>&1 || cut_die "group id $CUT_GID is already in use; set CUT_GID to a free number"
 		# The cut drops forwarding out of every docker bridge and the docker daemon's own egress, so it would break other
 		# containers on a shared box. Refuse unless the caller says this host is the drill's own (hosted runner, throwaway VM).
+		# The engine's own runtime probe container can still be winding down when this job starts (run 40022254401): wait for it.
+		if [ "${DRILL_CUT_ALLOW_SHARED_HOST:-}" != 1 ]; then
+			cut_waited=0
+			while [ -n "$(docker ps -q 2>/dev/null)" ] && [ "$cut_waited" -lt 30 ]; do sleep 2; cut_waited=$((cut_waited + 1)); done
+		fi
 		if [ -n "$(docker ps -q 2>/dev/null)" ] && [ "${DRILL_CUT_ALLOW_SHARED_HOST:-}" != 1 ]; then
-			cut_die "containers are running; the cut would cut their network too. Stop them, or set DRILL_CUT_ALLOW_SHARED_HOST=1 on a host that is only for this drill"
+			cut_die "containers are running ($(docker ps --format "{{.ID}} {{.Image}} {{.Names}} {{.Status}}" 2>/dev/null | tr "\n" ";")); the cut would cut their network too. Stop them, or set DRILL_CUT_ALLOW_SHARED_HOST=1 on a host that is only for this drill"
 		fi
 		;;
 	Darwin) command -v pfctl >/dev/null || cut_die "pfctl is required" ;;

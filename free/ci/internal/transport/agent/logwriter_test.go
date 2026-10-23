@@ -189,7 +189,7 @@ func writeLines(t *testing.T, path string, n int, textLen int) {
 
 func TestLogWriterReadsTheTailOfAFileLargerThanTheWindow(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "big.jsonl")
-	writeLines(t, path, 5000, 1000) // about 5 MiB, more than the 4 MiB window
+	writeLines(t, path, 9000, 1000) // about 9 MiB, more than the 8 MiB window
 	if st, _ := os.Stat(path); st.Size() <= tailWindow {
 		t.Fatalf("file is %d bytes, want more than the window", st.Size())
 	}
@@ -197,24 +197,24 @@ func TestLogWriterReadsTheTailOfAFileLargerThanTheWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Last() != 5000 {
-		t.Fatalf("tail = %d, want 5000", w.Last())
+	if w.Last() != 9000 {
+		t.Fatalf("tail = %d, want 9000", w.Last())
 	}
 	_ = w.Close()
 	// and with a torn tail beyond the window
 	f, _ := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
-	_, _ = f.WriteString(`{"line_seq":5001,"stre`)
+	_, _ = f.WriteString(`{"line_seq":9001,"stre`)
 	_ = f.Close()
 	w, err = OpenLog(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer w.Close()
-	if w.Last() != 5000 {
+	if w.Last() != 9000 {
 		t.Fatalf("tail after a torn line = %d", w.Last())
 	}
-	if ok, _ := w.Append(logOf(5001, "z")); !ok {
-		t.Fatal("line 5001 not written")
+	if ok, _ := w.Append(logOf(9001, "z")); !ok {
+		t.Fatal("line 9001 not written")
 	}
 	b, _ := os.ReadFile(path)
 	if !strings.HasSuffix(string(b), `"text":"z"}`+"\n") || strings.Contains(string(b), `"stre{`) {

@@ -9,7 +9,9 @@
 #   stops firing shows as a missing run here, not as an `overdue` report.
 # The pin: CI_VERSION, CI_RELEASE_URL and CI_RELEASE_SHA256 take the `ci-release` handoff (tag plus sha256 of each
 #   platform tarball) of P7-PLUG-69, the first plugins release that holds `--pipeline` and drill jobs (Epic P7-CI D34).
-#   Until that release exists the first step fails with a clear message; filling the three values is the whole change.
+#   This pin moves on its own: the drill scripts come from the checkout, so they need a binary that has the flags they call
+#   (1.2.13 for main-status-audit); nself-ci.yml and nself-ci-source.yml keep their own pin. If a value is ever empty again
+#   the first step fails with a clear message instead of running an unpinned binary.
 #   See also scripts/drill/README.md and .github/wiki/Catalog.md (Freshness drill).
 
 name: drills-nightly
@@ -21,6 +23,8 @@ on:
 
 permissions:
   contents: read
+  checks: read       # main-status-audit reads the check runs of main's commits
+  statuses: read     # ... and their commit statuses
 
 concurrency:
   group: drills-nightly-${{ github.ref }}
@@ -28,10 +32,13 @@ concurrency:
 
 env:
   PIPELINE: drills        # the pipeline name in .nself/ci.yaml
-  CI_VERSION: ""          # the pinned release, for example 1.2.7 (shown in the summary)
-  CI_RELEASE_URL: ""      # https URL of the release tarball for this runner's platform
-  CI_RELEASE_SHA256: ""   # sha256 of that tarball, 64 hex digits
+  CI_VERSION: "1.2.13"    # the pinned release (shown in the summary); main-status-audit needs the policy protect --branch flag, new in 1.2.13
+  CI_RELEASE_URL: "https://github.com/nself-org/plugins/releases/download/v1.2.13/ci-1.2.13-linux-amd64.tar.gz"
+  CI_RELEASE_SHA256: "2b2d24a17937cecbe3c1d4ee2e59f1c488fe2a7ea6e3e60bd5c814c56454272e"
   NSELF_V15: "1"          # the plugin binary does not follow the cli flip; kept until v1.6
+  GVISOR_RELEASE: "20261012.0"   # same pin and checksum as ci-isolation-linux.yml
+  GVISOR_SHA512: "9606445eed5aedfcf05310e7ccef61d994089914c6622fc82624c24d2b18db1b2210f40e40a7be27b8b7772859de7d95c501b4eba66423053c960bf671377c5e"
+  TRUST04_TEST_IMAGE: "alpine:3.19"
 
 jobs:
   pipeline:
@@ -54,6 +61,39 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The drills run Go (security-suite, truth-sweep, scenarios), docker and podman (isolation-levels) and
+      # gVisor's runsc registered with docker; the steps are the ones ci-isolation-linux.yml runs.
+      # The scenario drills build nself-org/cli main, whose go.mod needs a newer Go than free/ci's (GOTOOLCHAIN=local in the
+      # engine's job environment), so take the newest 1.26.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.26"
+          check-latest: true
+          cache: false
+
+      - name: Container runtimes
+        run: |
+          set -euo pipefail
+          docker info --format '{{.ServerVersion}} rootless={{.SecurityOptions}}'
+          if ! command -v podman >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq podman
+          fi
+          podman info --format '{{.Version.Version}} rootless={{.Host.Security.Rootless}}'
+          docker pull "$TRUST04_TEST_IMAGE"
+
+      - name: Install gVisor runsc
+        run: |
+          set -euo pipefail
+          base="https://storage.googleapis.com/gvisor/releases/release/${GVISOR_RELEASE}/x86_64"
+          curl -fsSL -o "$RUNNER_TEMP/gvisor.tar.bz2" "$base/gvisor.tar.bz2"
+          echo "${GVISOR_SHA512}  $RUNNER_TEMP/gvisor.tar.bz2" | sha512sum -c -
+          sudo tar -xjf "$RUNNER_TEMP/gvisor.tar.bz2" -C /usr/local/bin
+          sudo runsc install
+          sudo systemctl restart docker
+          docker info --format '{{json .Runtimes}}' | tee "$RUNNER_TEMP/runtimes.json"
+          grep -q runsc "$RUNNER_TEMP/runtimes.json"
+
       - name: Install the pinned nself-ci
         run: |
           set -euo pipefail
@@ -69,27 +109,59 @@ jobs:
           fi
           chmod +x "$bin"
           echo "NSELF_CI_BIN=$bin" >> "$GITHUB_ENV"
+          # The drills look the binary up by name (main-status-audit), and the engine's job environment does not carry NSELF_CI_BIN.
+          echo "$(dirname "$bin")" >> "$GITHUB_PATH"
 
       - name: Install nft (scenario 1 cuts the network)
         run: command -v nft >/dev/null || (sudo -n apt-get update -qq && sudo -n apt-get install -y -qq nftables)
 
+      # The executor hands a job HOME and XDG_* but no token variable, so the drills that call gh (main-status-audit,
+      # truth-sweep) read their credential from gh's own config file. The token is the job's read-only github.token.
+      - name: Give gh a read-only token
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/gh"
+          chmod 700 "$HOME/.config/gh"
+          ( umask 077; printf 'github.com:\n    oauth_token: %s\n    git_protocol: https\n' "$GH_READ_TOKEN" > "$HOME/.config/gh/hosts.yml" )
+
       - name: Run the pipeline
+        env:
+          NSELF_CI_HOME: ${{ runner.temp }}/ci-home  # a known run store, so the job logs can be kept below
+          # The schedule runs on the default branch, which the binary classes owner. A manual run from another branch is a
+          # merge ref no default-branch commit contains and would be refused (E625); whoever can dispatch this workflow can
+          # also edit it, so a dispatch is the owner's own run.
+          NSELF_CI_TRUST: ${{ github.event_name == 'workflow_dispatch' && 'owner' || '' }}
         run: |
           set -o pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
           status=0
-          "$NSELF_CI_BIN" --no-status --pipeline "$PIPELINE" --json > "$RUNNER_TEMP/evidence/$PIPELINE.json" || status=$?
+          args=(--no-status --pipeline "$PIPELINE" --json)
+          if [ -n "$NSELF_CI_TRUST" ]; then args+=(--trust "$NSELF_CI_TRUST"); fi
+          "$NSELF_CI_BIN" "${args[@]}" > "$RUNNER_TEMP/evidence/$PIPELINE.json" || status=$?
           {
             echo "### $PIPELINE (nself-ci $CI_VERSION)"
             echo "exit code: $status"
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
 
+      - name: Keep the drill logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: drill-logs-${{ github.run_id }}
+          path: /tmp/drill-logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Keep the evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: evidence-${{ github.run_id }}
-          path: ${{ runner.temp }}/evidence/
+          path: |
+            ${{ runner.temp }}/evidence/
+            ${{ runner.temp }}/ci-home/logs/
           if-no-files-found: warn
           retention-days: 30

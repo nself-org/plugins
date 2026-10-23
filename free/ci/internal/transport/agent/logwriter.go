@@ -26,9 +26,10 @@ import (
 
 // tailWindow is how much of the file end OpenLog reads to find the last complete line.
 //
-// A line is at most about three times its frame: the JSON encoder writes U+2028 and U+2029 as six bytes (three in
-// the frame) and an invalid byte as the three-byte U+FFFD.
-const tailWindow = 4 * protocol.MaxFrame
+// A line is at most about six times its frame: the JSON encoder writes U+2028 and U+2029 as six bytes (three in
+// the frame) and, up to Go 1.26, an invalid byte as the six-byte escape \ufffd (Go 1.27 writes the three-byte rune).
+// Eight frames leave room for the envelope around the worst case.
+const tailWindow = 8 * protocol.MaxFrame
 
 var unsafeFile = regexp.MustCompile(`[^A-Za-z0-9_.-]`)
 

@@ -8,7 +8,8 @@
 #   (go test -tags integration | tart); a prerequisite the host lacks makes that level's check `error` with
 #   "reason: prerequisite.missing" in its excerpt, which never counts as a pass. A level that does not exist on this
 #   host class gets no check at all.
-# Inputs:  NSELF_CI_BIN (default nself-ci on PATH) and NSELF_CI_HOME (the run store) for a direct run; ISOLATION_DRILL_LEVELS
+# Inputs:  NSELF_CI_BIN (default nself-ci on PATH), NSELF_CI_HOME (the run store) and NSELF_CI_TRUST (passed as --trust, for a
+#   pull request checkout on a CI runner) for a direct run; ISOLATION_DRILL_LEVELS
 #   (comma list, narrows the levels); TRUST04_TEST_IMAGE (default alpine:3.19); for vm NSELF_TEST_TART_IMAGE,
 #   NSELF_TEST_TART_SSH_KEY and optionally NSELF_TEST_LAN_ADDR, NSELF_TEST_EXCLUDED_ADDR.
 # Outputs: inside a drills job the document is the last stdout line and the exit code is 0 only when no check failed or
@@ -25,7 +26,7 @@ if [ -z "${NSELF_CI_RUN_ID:-}" ]; then # not inside a job: record through nself-
 	bin=${NSELF_CI_BIN:-nself-ci}
 	command -v "$bin" >/dev/null 2>&1 || { say "$bin not found; set NSELF_CI_BIN to the nself-ci binary"; exit 2; }
 	cd "$root" || exit 2
-	NSELF_V15=1 NSELF_CI_REPO=$root exec "$bin" --no-status --pipeline drills --job "$job"
+	NSELF_V15=1 NSELF_CI_REPO=$root exec "$bin" --no-status ${NSELF_CI_TRUST:+--trust "$NSELF_CI_TRUST"} --pipeline drills --job "$job"
 fi
 
 for tool in jq go; do
@@ -54,6 +55,7 @@ missing() { record "$1" error "reason: prerequisite.missing - $2"; }
 snip() {
 	{
 		grep -E '^(--- FAIL|FAIL|panic|fatal error)' "$1" 2>/dev/null | head -n 4 | cut -c1-160
+		grep -B8 -E '^--- FAIL' "$1" 2>/dev/null | grep -vE '^(=== |--- |--$)' | head -n 8 | cut -c1-200
 		grep -E 'prerequisite missing|required' "$1" 2>/dev/null | head -n 1 | cut -c1-160
 		tail -n 2 "$1" 2>/dev/null | cut -c1-120
 	} | tr '\n' ' '
@@ -99,9 +101,21 @@ leg() {
 	why=$(prereq "$level")
 	if [ -n "$why" ]; then missing "$level" "$why"; return; fi
 	out=$work/$level.out
-	(cd "$root/free/ci" && CGO_ENABLED=0 TRUST04_TEST_IMAGE=$image go test -mod=vendor -count=1 -v -timeout 20m -tags "$tags" "$pkg") >"$out" 2>&1
+	# The hygiene test runs commands as job users (other uids) with the package directory as their working directory,
+	# so the source tree must be traversable by them: inside a drills job it sits in the runner's private run store.
+	# Test from a world-readable copy.
+	src=$root/free/ci
+	tmpdir=${TMPDIR:-/tmp}
+	if [ "$level" = hygiene ] && [ -d "$src" ]; then
+		tmpdir=/tmp # the executor's private 0700 TMPDIR cannot be crossed by the job users either
+		copy=/tmp/drill-iso/ci
+		rm -rf /tmp/drill-iso && mkdir -p /tmp/drill-iso && cp -R "$src" "$copy" && chmod -R a+rX /tmp/drill-iso && chmod a+rx /tmp/drill-iso && src=$copy
+	fi
+	(cd "$src" && CGO_ENABLED=0 TMPDIR="$tmpdir" TRUST04_TEST_IMAGE=$image go test -mod=vendor -count=1 -v -timeout 20m -tags "$tags" "$pkg") >"$out" 2>&1
 	rc=$?
 	if [ $rc -ne 0 ]; then
+		# keep the whole test output where a CI workflow can upload it (the excerpt below is one line)
+		mkdir -p /tmp/drill-logs && cp "$out" "/tmp/drill-logs/isolation-$level.out" 2>/dev/null || true
 		record "$level" fail "go test -tags $tags $pkg exited $rc: $(snip "$out")"
 	elif grep -q -- '--- SKIP' "$out"; then
 		record "$level" fail "a test skipped; a missing prerequisite must fail, never skip: $(grep -m1 -- '--- SKIP' "$out" | cut -c1-120)"

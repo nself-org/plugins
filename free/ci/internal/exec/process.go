@@ -135,10 +135,14 @@ func (e *Executor) runCommandFiles(ctx context.Context, stdin io.Reader, extra [
 		}
 		timer.Stop()
 		tracker.snapshot()
-		if leaderDone && (groupAlive(cmd.Process.Pid) || tracker.anyAlive()) {
-			if remain := time.Until(deadline); remain > 0 {
-				time.Sleep(remain)
+		// The leader is gone: give the rest of the group the grace period to follow it, and stop waiting as
+		// soon as none is left (an exited orphan is reaped here so it does not count as alive).
+		for leaderDone && time.Now().Before(deadline) {
+			tracker.reap()
+			if !groupAlive(cmd.Process.Pid) && !tracker.anyAlive() {
+				break
 			}
+			time.Sleep(10 * time.Millisecond)
 		}
 		_ = killGroup(cmd.Process.Pid)
 		tracker.signalKill()

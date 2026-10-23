@@ -48,6 +48,9 @@ for ((g = 0; g < jobs; g++)); do
 	rsync -a --exclude vendor --exclude test/security/testdata/regressions "$root/free/ci/" "$m/"
 	ln -s "$root/free/ci/vendor" "$m/vendor"
 done
+# Two redteam tests read the sibling plugins (../../../../forgejo, ../../../../github-runner from test/security/redteam):
+# the copies sit in $tmp, so $tmp must hold those directories, or the baseline of every copy is red.
+for sibling in forgejo github-runner; do ln -s "$root/free/$sibling" "$tmp/$sibling"; done
 i=0
 for patch in "${patches[@]}"; do
 	cp "$patch" "$tmp/m$((i % jobs))/test/security/testdata/regressions/"

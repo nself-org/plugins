@@ -39,6 +39,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-14]
+    env:
+      # A pull request checkout is a merge ref no branch contains: the built binary classes it untrusted (E625).
+      # A head in this repository is the owner's own code on a disposable hosted runner; a fork head leaves this empty.
+      NSELF_CI_TRUST: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'owner' || '' }}
     steps:
       - name: Check out the repository (the pull request head, not the merge commit)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -58,7 +62,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version-file: free/ci/go.mod
+          go-version: "1.26"   # newest 1.26: the cli checkout below needs more than free/ci/go.mod names
+          check-latest: true
           cache: false
 
       - name: Build the ci plugin from this commit and the cli from main
@@ -80,17 +85,28 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
-          .drill-bin/nself-ci --no-status --pipeline drills --job drill-scenario-12-external-consumer --json > "$RUNNER_TEMP/evidence/scenario-12.json" || true # exit 1 is the partial selection; the job check below decides
+          .drill-bin/nself-ci --no-status ${NSELF_CI_TRUST:+--trust "$NSELF_CI_TRUST"} --pipeline drills --job drill-scenario-12-external-consumer --json > "$RUNNER_TEMP/evidence/scenario-12.json" || true # exit 1 is the partial selection; the job check below decides
           # A single-job run is a partial selection, so its overall result is never pass: read the job's own check.
           jq -r '"scenario-12: " + ([.data.checks[] | select(.id == "drill-scenario-12-external-consumer") | .result][0] // "no result")' "$RUNNER_TEMP/evidence/scenario-12.json" | tee -a "$GITHUB_STEP_SUMMARY"
           jq -e '[.data.checks[] | select(.id == "drill-scenario-12-external-consumer") | .result] == ["pass"]' "$RUNNER_TEMP/evidence/scenario-12.json" >/dev/null
 
+      # Scenario 12 can leave containers behind; scenario 1 refuses to cut the network of running containers. The runner is
+      # a throwaway VM that holds nothing else, so remove them.
+      - name: Remove leftover containers (Linux)
+        if: runner.os == 'Linux' && !cancelled()
+        run: |
+          ids=$(docker ps -aq)
+          if [ -n "$ids" ]; then docker ps -a --format '{{.ID}} {{.Image}} {{.Status}}'; docker rm -f $ids; fi
+
       - name: Scenario 1, local only (network cut)
         if: ${{ !cancelled() }}
+        env:
+          # the runner is a throwaway VM; the engine's own network probe container can still be winding down when the cut preflight looks (run 40022254401)
+          DRILL_CUT_ALLOW_SHARED_HOST: ${{ runner.os == 'Linux' && '1' || '' }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
-          .drill-bin/nself-ci --no-status --pipeline drills --job drill-scenario-01-local-only --json > "$RUNNER_TEMP/evidence/scenario-01.json" || true # exit 1 is the partial selection; the job check below decides
+          .drill-bin/nself-ci --no-status ${NSELF_CI_TRUST:+--trust "$NSELF_CI_TRUST"} --pipeline drills --job drill-scenario-01-local-only --json > "$RUNNER_TEMP/evidence/scenario-01.json" || true # exit 1 is the partial selection; the job check below decides
           # A single-job run is a partial selection, so its overall result is never pass: read the job's own check.
           jq -r '"scenario-01: " + ([.data.checks[] | select(.id == "drill-scenario-01-local-only") | .result][0] // "no result")' "$RUNNER_TEMP/evidence/scenario-01.json" | tee -a "$GITHUB_STEP_SUMMARY"
           jq -e '[.data.checks[] | select(.id == "drill-scenario-01-local-only") | .result] == ["pass"]' "$RUNNER_TEMP/evidence/scenario-01.json" >/dev/null

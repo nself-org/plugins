@@ -190,7 +190,8 @@ func TestQuotaStops(t *testing.T) {
 	if err = r.e.Demand().Reconcile(context.Background(), r.enq); err != nil || r.f.total() != before {
 		t.Fatalf("demand tick before RetryAt: err=%v requests=%d, want none (the quota stop is shared)", err, r.f.total()-before)
 	}
-	r.clk.Advance(61 * time.Second)
+	// RetryAt is stamped with the wall clock, which can be seconds ahead of the fake clock on a loaded runner: pass it with room.
+	r.clk.Advance(70 * time.Second)
 	r.f.quota = nil
 	if err = r.e.GitHub().Reconcile(context.Background(), r.enq); err != nil {
 		t.Fatal(err)

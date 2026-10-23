@@ -58,24 +58,44 @@ newer() { # newer CURRENT LATEST: true when LATEST sorts after CURRENT
 	[ -n "$2" ] && [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" = "$2" ]
 }
 
-# oci_ok REF DIGEST: the digest still resolves (anonymous Docker Hub pull token; docker.io images only).
+# oci_where REF: sets oci_repo, oci_token_url and oci_base for the registry that REF names (docker.io, the default,
+# or ghcr.io); anonymous pull tokens only. Any other registry host returns 1 and the check fails closed.
+oci_where() {
+	local ref=$1 host=docker.io
+	case "$ref" in
+	docker.io/*) ref=${ref#docker.io/} ;;
+	ghcr.io/*) host=ghcr.io ref=${ref#ghcr.io/} ;;
+	*.*/*) return 1 ;;
+	esac
+	oci_repo=$ref
+	case "$host" in
+	ghcr.io)
+		oci_token_url="https://ghcr.io/token?service=ghcr.io&scope=repository:$oci_repo:pull"
+		oci_base=https://ghcr.io ;;
+	*)
+		oci_token_url="https://auth.docker.io/token?service=registry.docker.io&scope=repository:$oci_repo:pull"
+		oci_base=https://registry-1.docker.io ;;
+	esac
+}
+
+# oci_ok REF DIGEST: the digest still resolves (anonymous pull token; docker.io and ghcr.io images).
 oci_ok() {
-	local repo=${1#docker.io/}
-	local tok
-	tok=$(get "https://auth.docker.io/token?service=registry.docker.io&scope=repository:$repo:pull" | jq -r .token) || return 1
+	local tok oci_repo oci_token_url oci_base
+	oci_where "$1" || return 1
+	tok=$(get "$oci_token_url" | jq -r .token) || return 1
 	curl "${curl_opts[@]}" --fail --head --output /dev/null -H "Authorization: Bearer $tok" \
 		-H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
-		"$(u "https://registry-1.docker.io/v2/$repo/manifests/$2")"
+		"$(u "$oci_base/v2/$oci_repo/manifests/$2")"
 }
 
 # oci_tag_digest REF TAG: the digest the tag points at now (empty when unreadable).
 oci_tag_digest() {
-	local repo=${1#docker.io/}
-	local tok
-	tok=$(get "https://auth.docker.io/token?service=registry.docker.io&scope=repository:$repo:pull" 2>/dev/null | jq -r .token) || return 0
+	local tok oci_repo oci_token_url oci_base
+	oci_where "$1" || return 0
+	tok=$(get "$oci_token_url" 2>/dev/null | jq -r .token) || return 0
 	curl "${curl_opts[@]}" --fail --head --output /dev/null --dump-header - -H "Authorization: Bearer $tok" \
 		-H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
-		"$(u "https://registry-1.docker.io/v2/$repo/manifests/$2")" 2>/dev/null | tr -d '\r' |
+		"$(u "$oci_base/v2/$oci_repo/manifests/$2")" 2>/dev/null | tr -d '\r' |
 		awk -F': ' 'tolower($1) == "docker-content-digest" {print $2}' || true
 }
 
@@ -150,7 +170,7 @@ case "${GITHUB_EVENT_NAME:-}" in schedule | push | pull_request) trigger=$GITHUB
 platform=$(uname -s | tr A-Z a-z)/$(uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
 cfg=$(sha "$versions" | cut -d' ' -f1)
 
-jq -s --arg revision "$revision" --arg repo "$repo_id" --arg run "${GITHUB_RUN_ID:-toolchain-pins-$t0}" --arg trigger "$trigger" \
+jq -sc --arg revision "$revision" --arg repo "$repo_id" --arg run "${GITHUB_RUN_ID:-toolchain-pins-$t0}" --arg trigger "$trigger" \
 	--arg cfg "$cfg" --argjson dirty "$dirty" --arg platform "$platform" --arg host "$(hostname)" \
 	--arg provider "$([ -n "${GITHUB_RUN_ID:-}" ] && echo github || echo local)" \
 	--arg started "$started" --arg finished "$finished" --argjson ms "$((($(date +%s) - t0) * 1000))" \

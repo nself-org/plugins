@@ -84,6 +84,9 @@ jobs:
       PKGS: ${{ inputs.packages }}
       TAGS: ${{ inputs.tags }}
       INSTALL_RUNSC: ${{ inputs.install_runsc }}
+      # A pull request checkout is a merge ref no branch contains: the built binary classes it untrusted (E625).
+      # A head in this repository is the owner's own code on a disposable hosted runner; a fork head leaves this empty.
+      NSELF_CI_TRUST: ${{ (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository) && 'owner' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -164,6 +167,12 @@ jobs:
       - name: Isolation levels drill
         run: |
           set -euo pipefail
+          # The integration step above ran the same netscope tests; a rootless podman job network it leaves
+          # behind (nself-ci-t08-hp-podman-net, run 40016512358) makes the drill's own run of that test fail.
+          for b in docker podman; do
+            "$b" ps -aq --filter name=nself-ci | xargs -r "$b" rm -f >/dev/null 2>&1 || true
+            "$b" network ls --format '{{.Name}}' | grep '^nself-ci-' | xargs -r "$b" network rm >/dev/null 2>&1 || true
+          done
           drill=""
           for d in scripts/drill/isolation-levels/run free/ci/scripts/drill/isolation-levels/run; do
             if [[ -x "$d" ]]; then drill="$d"; break; fi
@@ -174,9 +183,20 @@ jobs:
           fi
           work="$(mktemp -d)"
           (cd free/ci && CGO_ENABLED=0 go build -mod=vendor -o "$work/nself-ci" ./cmd)
-          NSELF_CI_BIN="$work/nself-ci" NSELF_CI_HOME="$work/home" "$drill"
+          # A single-job run is a partial selection, so nself-ci exits 1 even when the job passes: the job's own line decides.
+          NSELF_CI_BIN="$work/nself-ci" NSELF_CI_HOME="$work/home" "$drill" 2>&1 | tee "$work/drill.txt" || true
+          grep -Eq '^ +pass +drill-isolation-levels( |$)' "$work/drill.txt" || { echo "drill-isolation-levels did not pass" >&2; exit 1; }
           # doctor exits 12 when any unrelated check warns; the jq checks below decide the step.
           NSELF_V15=1 NSELF_CI_HOME="$work/home" "$work/nself-ci" doctor --json | tee "$work/doctor.json" || [[ ${PIPESTATUS[0]} -eq 12 ]]
           for check in isolation.container isolation.sandboxed-container isolation.network; do
             jq -e --arg c "$check" '.. | objects | select(.id? == $c or .name? == $c) | .verified_at | select(. != null)' "$work/doctor.json" >/dev/null
           done
+
+      - name: Keep the isolation drill's test output
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: isolation-drill-logs-${{ github.run_id }}
+          path: /tmp/drill-logs/
+          if-no-files-found: ignore
+          retention-days: 14

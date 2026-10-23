@@ -152,3 +152,16 @@ func TestKillAttemptGroupKillsALiveGroupWhoseLeaderExited(t *testing.T) {
 		}
 	}
 }
+
+// podman's listings have no .Label method (exit 125, which left job networks behind); docker's do.
+func TestLabelExprPerRuntime(t *testing.T) {
+	if got := labelExpr("docker", KindContainer, "k"); got != `{{.Label "k"}}` {
+		t.Errorf("docker: %s", got)
+	}
+	if got := labelExpr("podman", KindContainer, "k"); got != `{{index .Labels "k"}}` {
+		t.Errorf("podman: %s", got)
+	}
+	if got := labelExpr("podman", KindNetwork, "k"); got != `{{index .Network.Labels "k"}}` {
+		t.Errorf("podman network: %s", got)
+	}
+}
