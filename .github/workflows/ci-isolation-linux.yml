@@ -86,7 +86,7 @@ jobs:
       INSTALL_RUNSC: ${{ inputs.install_runsc }}
       # A pull request checkout is a merge ref no branch contains: the built binary classes it untrusted (E625).
       # A head in this repository is the owner's own code on a disposable hosted runner; a fork head leaves this empty.
-      NSELF_CI_TRUST: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'owner' || '' }}
+      NSELF_CI_TRUST: ${{ (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository) && 'owner' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
