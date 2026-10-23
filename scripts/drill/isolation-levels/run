@@ -101,7 +101,9 @@ leg() {
 	why=$(prereq "$level")
 	if [ -n "$why" ]; then missing "$level" "$why"; return; fi
 	out=$work/$level.out
-	(cd "$root/free/ci" && CGO_ENABLED=0 TRUST04_TEST_IMAGE=$image go test -mod=vendor -count=1 -v -timeout 20m -tags "$tags" "$pkg") >"$out" 2>&1
+	# TMPDIR=/tmp: the executor gives a job a private 0700 TMPDIR, and the hygiene test makes job users
+	# (other uids) walk into a directory below it; they cannot cross a private parent.
+	(cd "$root/free/ci" && CGO_ENABLED=0 TMPDIR=/tmp TRUST04_TEST_IMAGE=$image go test -mod=vendor -count=1 -v -timeout 20m -tags "$tags" "$pkg") >"$out" 2>&1
 	rc=$?
 	if [ $rc -ne 0 ]; then
 		record "$level" fail "go test -tags $tags $pkg exited $rc: $(snip "$out")"
