@@ -9,7 +9,8 @@
 #   stops firing shows as a missing run here, not as an `overdue` report.
 # The pin: CI_VERSION, CI_RELEASE_URL and CI_RELEASE_SHA256 take the `ci-release` handoff (tag plus sha256 of each
 #   platform tarball) of P7-PLUG-69, the first plugins release that holds `--pipeline` and drill jobs (Epic P7-CI D34).
-#   Until that release exists the first step fails with a clear message; filling the three values is the whole change.
+#   Moving the pin means changing these three values here, in nself-ci.yml and in nself-ci-source.yml in one commit. If a
+#   value is ever empty again the first step fails with a clear message instead of running an unpinned binary.
 #   See also scripts/drill/README.md and .github/wiki/Catalog.md (Freshness drill).
 
 name: drills-nightly
@@ -28,9 +29,9 @@ concurrency:
 
 env:
   PIPELINE: drills        # the pipeline name in .nself/ci.yaml
-  CI_VERSION: ""          # the pinned release, for example 1.2.7 (shown in the summary)
-  CI_RELEASE_URL: ""      # https URL of the release tarball for this runner's platform
-  CI_RELEASE_SHA256: ""   # sha256 of that tarball, 64 hex digits
+  CI_VERSION: "1.2.11"    # the pinned release (shown in the summary); same pin as nself-ci.yml
+  CI_RELEASE_URL: "https://github.com/nself-org/plugins/releases/download/v1.2.11/ci-1.2.11-linux-amd64.tar.gz"
+  CI_RELEASE_SHA256: "0ca65f839b007764f70ba9e8e719aee88f336efb74b932297b2b9097cbdd0016"
   NSELF_V15: "1"          # the plugin binary does not follow the cli flip; kept until v1.6
 
 jobs:
