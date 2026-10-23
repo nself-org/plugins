@@ -9,8 +9,9 @@
 #   stops firing shows as a missing run here, not as an `overdue` report.
 # The pin: CI_VERSION, CI_RELEASE_URL and CI_RELEASE_SHA256 take the `ci-release` handoff (tag plus sha256 of each
 #   platform tarball) of P7-PLUG-69, the first plugins release that holds `--pipeline` and drill jobs (Epic P7-CI D34).
-#   Moving the pin means changing these three values here, in nself-ci.yml and in nself-ci-source.yml in one commit. If a
-#   value is ever empty again the first step fails with a clear message instead of running an unpinned binary.
+#   This pin moves on its own: the drill scripts come from the checkout, so they need a binary that has the flags they call
+#   (1.2.13 for main-status-audit); nself-ci.yml and nself-ci-source.yml keep their own pin. If a value is ever empty again
+#   the first step fails with a clear message instead of running an unpinned binary.
 #   See also scripts/drill/README.md and .github/wiki/Catalog.md (Freshness drill).
 
 name: drills-nightly
@@ -31,9 +32,9 @@ concurrency:
 
 env:
   PIPELINE: drills        # the pipeline name in .nself/ci.yaml
-  CI_VERSION: "1.2.11"    # the pinned release (shown in the summary); same pin as nself-ci.yml
-  CI_RELEASE_URL: "https://github.com/nself-org/plugins/releases/download/v1.2.11/ci-1.2.11-linux-amd64.tar.gz"
-  CI_RELEASE_SHA256: "0ca65f839b007764f70ba9e8e719aee88f336efb74b932297b2b9097cbdd0016"
+  CI_VERSION: "1.2.13"    # the pinned release (shown in the summary); main-status-audit needs the policy protect --branch flag, new in 1.2.13
+  CI_RELEASE_URL: "https://github.com/nself-org/plugins/releases/download/v1.2.13/ci-1.2.13-linux-amd64.tar.gz"
+  CI_RELEASE_SHA256: "2b2d24a17937cecbe3c1d4ee2e59f1c488fe2a7ea6e3e60bd5c814c56454272e"
   NSELF_V15: "1"          # the plugin binary does not follow the cli flip; kept until v1.6
   GVISOR_RELEASE: "20261012.0"   # same pin and checksum as ci-isolation-linux.yml
   GVISOR_SHA512: "9606445eed5aedfcf05310e7ccef61d994089914c6622fc82624c24d2b18db1b2210f40e40a7be27b8b7772859de7d95c501b4eba66423053c960bf671377c5e"
@@ -62,10 +63,13 @@ jobs:
 
       # The drills run Go (security-suite, truth-sweep, scenarios), docker and podman (isolation-levels) and
       # gVisor's runsc registered with docker; the steps are the ones ci-isolation-linux.yml runs.
+      # The scenario drills build nself-org/cli main, whose go.mod needs a newer Go than free/ci's (GOTOOLCHAIN=local in the
+      # engine's job environment), so take the newest 1.26.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version-file: free/ci/go.mod
-          cache-dependency-path: free/ci/go.sum
+          go-version: "1.26"
+          check-latest: true
+          cache: false
 
       - name: Container runtimes
         run: |

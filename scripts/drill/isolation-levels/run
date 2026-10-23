@@ -55,6 +55,7 @@ missing() { record "$1" error "reason: prerequisite.missing - $2"; }
 snip() {
 	{
 		grep -E '^(--- FAIL|FAIL|panic|fatal error)' "$1" 2>/dev/null | head -n 4 | cut -c1-160
+		grep -E '^[[:space:]]+[A-Za-z0-9_]+_test\.go:[0-9]+:' "$1" 2>/dev/null | head -n 2 | cut -c1-200
 		grep -E 'prerequisite missing|required' "$1" 2>/dev/null | head -n 1 | cut -c1-160
 		tail -n 2 "$1" 2>/dev/null | cut -c1-120
 	} | tr '\n' ' '

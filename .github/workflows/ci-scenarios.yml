@@ -62,7 +62,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version-file: free/ci/go.mod
+          go-version: "1.26"   # newest 1.26: the cli checkout below needs more than free/ci/go.mod names
+          check-latest: true
           cache: false
 
       - name: Build the ci plugin from this commit and the cli from main
