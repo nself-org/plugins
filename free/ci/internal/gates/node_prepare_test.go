@@ -37,7 +37,12 @@ func newNodeHost(t *testing.T) *nodeHost {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX shells only")
 	}
-	h := &nodeHost{t: t, root: t.TempDir(), bin: t.TempDir()}
+	// The executor refuses a workdir whose resolved path differs (E612), and macOS TMPDIR sits behind /var -> /private/var.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &nodeHost{t: t, root: root, bin: t.TempDir()}
 	for _, tool := range []string{"sh", "ps", "tail", "head", "cat", "mkdir", "sed", "grep", "cut", "wc", "rm", "basename", "awk", "touch", "ln"} {
 		p, err := exec.LookPath(tool)
 		if err != nil {
