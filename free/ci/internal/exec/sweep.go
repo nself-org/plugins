@@ -117,7 +117,7 @@ func (e *Executor) sweepRuntime(ctx context.Context, current, binary string) err
 	if _, err := RuntimeQuery(ctx, binary, "info"); err != nil { // the shared probe: hygiene and the isolation facts ask the same question
 		return nil
 	}
-	out, err := RuntimeQuery(ctx, binary, "ps", "-a", "--filter", "label=nself.ci.coordinator", "--filter", "label=nself.ci.attempt", "--format", "{{.ID}} {{.Label \"nself.ci.coordinator\"}}")
+	out, err := RuntimeQuery(ctx, binary, "ps", "-a", "--filter", "label=nself.ci.coordinator", "--filter", "label=nself.ci.attempt", "--format", "{{.ID}} "+labelExpr(binary, "nself.ci.coordinator"))
 	if err != nil {
 		return coded("E613", binary+" orphan listing failed")
 	}

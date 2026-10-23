@@ -39,6 +39,15 @@ type Labelled struct {
 
 var resourceID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 
+// labelExpr is the format expression that prints one label's value. Docker's listings offer the
+// .Label method; podman's report structs have none (the format fails with exit 125) and expose Labels as a map.
+func labelExpr(binary, key string) string {
+	if binary == "podman" {
+		return `{{index .Labels "` + key + `"}}`
+	}
+	return `{{.Label "` + key + `"}}`
+}
+
 // RuntimeListLabelled lists the resources of one kind that carry the attempt label. A non-empty
 // attempt narrows the list to that attempt; an empty one returns every attempt-labelled resource.
 func RuntimeListLabelled(ctx context.Context, binary string, kind ResourceKind, attempt string) ([]Labelled, error) {
@@ -49,7 +58,7 @@ func RuntimeListLabelled(ctx context.Context, binary string, kind ResourceKind, 
 	if attempt != "" {
 		filter += "=" + attempt
 	}
-	label := `{{.Label "` + AttemptLabel + `"}}`
+	label := labelExpr(binary, AttemptLabel)
 	var args []string
 	switch kind {
 	case KindContainer:
