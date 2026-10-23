@@ -101,17 +101,17 @@ leg() {
 	why=$(prereq "$level")
 	if [ -n "$why" ]; then missing "$level" "$why"; return; fi
 	out=$work/$level.out
-	# TMPDIR=/tmp: the executor gives a job a private 0700 TMPDIR, and the hygiene test makes job users
-	# (other uids) walk into a directory below it; they cannot cross a private parent.
 	# The hygiene test runs commands as job users (other uids) with the package directory as their working directory,
 	# so the source tree must be traversable by them: inside a drills job it sits in the runner's private run store.
 	# Test from a world-readable copy.
 	src=$root/free/ci
+	tmpdir=${TMPDIR:-/tmp}
 	if [ "$level" = hygiene ] && [ -d "$src" ]; then
+		tmpdir=/tmp # the executor's private 0700 TMPDIR cannot be crossed by the job users either
 		copy=/tmp/drill-iso/ci
 		rm -rf /tmp/drill-iso && mkdir -p /tmp/drill-iso && cp -R "$src" "$copy" && chmod -R a+rX /tmp/drill-iso && chmod a+rx /tmp/drill-iso && src=$copy
 	fi
-	(cd "$src" && CGO_ENABLED=0 TMPDIR=/tmp TRUST04_TEST_IMAGE=$image go test -mod=vendor -count=1 -v -timeout 20m -tags "$tags" "$pkg") >"$out" 2>&1
+	(cd "$src" && CGO_ENABLED=0 TMPDIR="$tmpdir" TRUST04_TEST_IMAGE=$image go test -mod=vendor -count=1 -v -timeout 20m -tags "$tags" "$pkg") >"$out" 2>&1
 	rc=$?
 	if [ $rc -ne 0 ]; then
 		# keep the whole test output where a CI workflow can upload it (the excerpt below is one line)
