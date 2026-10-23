@@ -137,14 +137,22 @@ func (t *processTree) pids() []int {
 
 func (t *processTree) signalTerminate() { t.signal(syscall.SIGTERM) }
 func (t *processTree) signalKill()      { t.signal(syscall.SIGKILL) }
+
+// anyAlive says whether a remembered process still runs. A zombie does not: on Linux an orphan is
+// adopted by this process (the subreaper) and stays a zombie until reaped, and a signal-0 probe
+// succeeds on it.
 func (t *processTree) anyAlive() bool {
 	for _, pid := range t.pids() {
-		if syscall.Kill(pid, 0) == nil {
+		if processAlive(pid) {
 			return true
 		}
 	}
 	return false
 }
+
+// reap collects the remembered processes that have exited, so none lingers as a zombie.
+func (t *processTree) reap() { reapDescendants(t.pids()) }
+
 func (t *processTree) signal(sig syscall.Signal) {
 	for _, pid := range t.pids() {
 		_ = syscall.Kill(pid, sig)

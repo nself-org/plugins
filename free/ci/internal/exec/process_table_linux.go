@@ -138,3 +138,12 @@ func groupAlive(pgid int) bool {
 	}
 	return false
 }
+
+// processAlive reports whether pid is a process that has not exited. A zombie (exited, not yet
+// reaped by its parent) is not alive although a signal-0 probe still succeeds on it.
+func processAlive(pid int) bool {
+	if st, ok := readProcStat(pid); ok {
+		return st.state != 'Z'
+	}
+	return processExists(pid)
+}

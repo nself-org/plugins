@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -17,10 +18,29 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
+// noContainerRuntime puts a docker and a podman that refuse every command first on PATH. Reading a run
+// recovers after dead coordinators, which asks each installed container runtime for orphans (`info`, `ps`);
+// a host with a live daemon (a CI runner) spends about a second on that, and these tests are about the
+// run's stream, not the host's runtimes.
+func noContainerRuntime(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return
+	}
+	dir := t.TempDir()
+	for _, name := range []string{"docker", "podman"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
 // runsHome points NSELF_CI_HOME at a fresh directory and speeds the poll up.
 func runsHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
+	noContainerRuntime(t)
 	t.Setenv("NSELF_CI_HOME", home)
 	t.Setenv("NSELF_V15", "1")
 	t.Setenv("NSELF_INVOKE_DEADLINE_MS", "")
