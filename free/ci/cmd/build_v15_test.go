@@ -73,6 +73,7 @@ const requiredUnit = "version: 1\njobs:\n  unit:\n    kind: test\n    run: [sh, 
 func TestBuildV15Synthesized(t *testing.T) {
 	repo := androidRepo(t, requiredUnit)
 	t.Setenv("ANDROID_HOME", "/opt/sdk-fixture")
+	t.Setenv("ANDROID_SDK_ROOT", "") // GitHub runners set it; the job passes it through, so the count below would be 2
 	t.Setenv("JAVA_HOME", "")
 	lane, err := planBuildLane(context.Background(), repo, "android", 15*time.Minute)
 	if err != nil {

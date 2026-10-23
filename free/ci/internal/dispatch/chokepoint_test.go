@@ -42,6 +42,13 @@ var (
 		"internal/storetest.Admit":      true, // test fixtures only; TestStoretestIsTestOnly keeps it out of shipped code
 	}
 	localFiles = map[string]bool{"internal/run/attempt.go": true, "internal/run/dispatch_hook.go": true}
+	// roleGrantFiles name a TEAM role grant (P7-TRUST-12): "Grant" there is a permission row of a person, not a lease.
+	// The exemption is for the identifier Grant only; every other admission function stays banned in these files.
+	roleGrantFiles = map[string]bool{
+		"internal/roles/grants.go":      true,
+		"internal/store/trust_roles.go": true,
+		"cmd/serve_admin_roles.go":      true,
+	}
 )
 
 // banned are the admission functions only the chokepoint may name.
@@ -108,11 +115,11 @@ func scanFile(f *ast.File, rel string, add func(string)) {
 					if !localFiles[rel] {
 						report(name)
 					}
-				case banned[name] && !chokeFuncs[key]:
+				case banned[name] && !chokeFuncs[key] && !(name == "Grant" && roleGrantFiles[rel]):
 					report(name)
 				}
 			case *ast.Ident:
-				if banned[x.Name] && x != declName && !(x.Name == "LocalAdmit" && localFiles[rel]) && (x.Name == "LocalAdmit" || !chokeFuncs[key]) {
+				if banned[x.Name] && x != declName && !(x.Name == "Grant" && roleGrantFiles[rel]) && !(x.Name == "LocalAdmit" && localFiles[rel]) && (x.Name == "LocalAdmit" || !chokeFuncs[key]) {
 					report(x.Name)
 				}
 			case *ast.BasicLit:
