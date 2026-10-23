@@ -183,3 +183,12 @@ jobs:
           for check in isolation.container isolation.sandboxed-container isolation.network; do
             jq -e --arg c "$check" '.. | objects | select(.id? == $c or .name? == $c) | .verified_at | select(. != null)' "$work/doctor.json" >/dev/null
           done
+
+      - name: Keep the isolation drill's test output
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: isolation-drill-logs-${{ github.run_id }}
+          path: /tmp/drill-logs/
+          if-no-files-found: ignore
+          retention-days: 14

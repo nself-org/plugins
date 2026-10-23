@@ -160,8 +160,11 @@ func (s *Service) Withdraw(ctx context.Context, code string) error {
 			return err
 		}
 	}
+	// The audit row is written before the window is woken: waking it lets `nodes pair` exit and close the store, and an
+	// append after that fails with "sql: database is closed".
+	err = s.cfg.Store.AppendAudit(ctx, s.cfg.Actor, "pairing.withdraw", o.ID, "revoked="+boolStr(o.Serial != ""))
 	s.signal()
-	return s.cfg.Store.AppendAudit(ctx, s.cfg.Actor, "pairing.withdraw", o.ID, "revoked="+boolStr(o.Serial != ""))
+	return err
 }
 
 func boolStr(b bool) string {
