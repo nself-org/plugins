@@ -167,6 +167,12 @@ jobs:
       - name: Isolation levels drill
         run: |
           set -euo pipefail
+          # The integration step above ran the same netscope tests; a rootless podman job network it leaves
+          # behind (nself-ci-t08-hp-podman-net, run 40016512358) makes the drill's own run of that test fail.
+          for b in docker podman; do
+            "$b" ps -aq --filter name=nself-ci | xargs -r "$b" rm -f >/dev/null 2>&1 || true
+            "$b" network ls --format '{{.Name}}' | grep '^nself-ci-' | xargs -r "$b" network rm >/dev/null 2>&1 || true
+          done
           drill=""
           for d in scripts/drill/isolation-levels/run free/ci/scripts/drill/isolation-levels/run; do
             if [[ -x "$d" ]]; then drill="$d"; break; fi
