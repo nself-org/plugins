@@ -37,12 +37,7 @@ func newNodeHost(t *testing.T) *nodeHost {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX shells only")
 	}
-	// The executor refuses a workdir whose resolved path differs (E612), and macOS TMPDIR sits behind /var -> /private/var.
-	root, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := &nodeHost{t: t, root: root, bin: t.TempDir()}
+	h := &nodeHost{t: t, root: realTempDir(t), bin: t.TempDir()}
 	for _, tool := range []string{"sh", "ps", "tail", "head", "cat", "mkdir", "sed", "grep", "cut", "wc", "rm", "basename", "awk", "touch", "ln"} {
 		p, err := exec.LookPath(tool)
 		if err != nil {
@@ -107,7 +102,7 @@ func (h *nodeHost) run(id, workdir string) result {
 	p := h.plan(id, workdir)
 	var out strings.Builder
 	res := (&ciexec.Executor{}).Run(context.Background(), ciexec.JobSpec{AttemptID: "node-" + strings.ReplaceAll(id, ".", "-"), CoordinatorID: "coord",
-		Job: model.Job{Kind: "quality", Workdir: workdir, Isolation: "process"}, Command: p.Command(), SourceDir: h.root, Home: h.t.TempDir(),
+		Job: model.Job{Kind: "quality", Workdir: workdir, Isolation: "process"}, Command: p.Command(), SourceDir: h.root, Home: realTempDir(h.t),
 		Output: func(b []byte) { out.Write(b) }})
 	r := result{exit: res.ExitCode, out: strings.TrimSpace(out.String())}
 	if res.Err != nil {
@@ -396,7 +391,7 @@ func TestMissingManagerE614(t *testing.T) {
 	}
 	// the standalone runner agrees: required and missing is error/infra with E614, never a failure
 	d, _ := DefaultRegistry().Get("node.test")
-	c := (Runner{Executor: &ciexec.Executor{}, Home: t.TempDir()}).Run(context.Background(), h.root, PlannedCheck{Def: d, Required: true, Workdir: "."}, model.PipelineConfig{})
+	c := (Runner{Executor: &ciexec.Executor{}, Home: realTempDir(t)}).Run(context.Background(), h.root, PlannedCheck{Def: d, Required: true, Workdir: "."}, model.PipelineConfig{})
 	if c.Result != "error" || c.FailureClass != "infra" || !strings.Contains(c.Excerpt, "E614") {
 		t.Fatalf("%+v", c)
 	}
@@ -597,4 +592,15 @@ esac
 	if r := h.run("node.test", "."); r.exit != 0 || r.out != "STORE-OK" {
 		t.Fatalf("the pnpm store must survive for the check: %+v", r)
 	}
+}
+
+// realTempDir is t.TempDir with symlinks resolved: the executor refuses a workdir or home whose resolved path differs
+// (E612), and macOS TMPDIR sits behind /var -> /private/var.
+func realTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
