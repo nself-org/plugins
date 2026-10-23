@@ -90,6 +90,14 @@ jobs:
           jq -r '"scenario-12: " + ([.data.checks[] | select(.id == "drill-scenario-12-external-consumer") | .result][0] // "no result")' "$RUNNER_TEMP/evidence/scenario-12.json" | tee -a "$GITHUB_STEP_SUMMARY"
           jq -e '[.data.checks[] | select(.id == "drill-scenario-12-external-consumer") | .result] == ["pass"]' "$RUNNER_TEMP/evidence/scenario-12.json" >/dev/null
 
+      # Scenario 12 can leave containers behind; scenario 1 refuses to cut the network of running containers. The runner is
+      # a throwaway VM that holds nothing else, so remove them.
+      - name: Remove leftover containers (Linux)
+        if: runner.os == 'Linux' && !cancelled()
+        run: |
+          ids=$(docker ps -aq)
+          if [ -n "$ids" ]; then docker ps -a --format '{{.ID}} {{.Image}} {{.Status}}'; docker rm -f $ids; fi
+
       - name: Scenario 1, local only (network cut)
         if: ${{ !cancelled() }}
         run: |
