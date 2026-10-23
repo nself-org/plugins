@@ -183,7 +183,9 @@ jobs:
           fi
           work="$(mktemp -d)"
           (cd free/ci && CGO_ENABLED=0 go build -mod=vendor -o "$work/nself-ci" ./cmd)
-          NSELF_CI_BIN="$work/nself-ci" NSELF_CI_HOME="$work/home" "$drill"
+          # A single-job run is a partial selection, so nself-ci exits 1 even when the job passes: the job's own line decides.
+          NSELF_CI_BIN="$work/nself-ci" NSELF_CI_HOME="$work/home" "$drill" 2>&1 | tee "$work/drill.txt" || true
+          grep -Eq '^ +pass +drill-isolation-levels( |$)' "$work/drill.txt" || { echo "drill-isolation-levels did not pass" >&2; exit 1; }
           # doctor exits 12 when any unrelated check warns; the jq checks below decide the step.
           NSELF_V15=1 NSELF_CI_HOME="$work/home" "$work/nself-ci" doctor --json | tee "$work/doctor.json" || [[ ${PIPESTATUS[0]} -eq 12 ]]
           for check in isolation.container isolation.sandboxed-container isolation.network; do
