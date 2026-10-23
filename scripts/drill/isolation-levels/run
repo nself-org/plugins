@@ -106,6 +106,8 @@ leg() {
 	(cd "$root/free/ci" && CGO_ENABLED=0 TMPDIR=/tmp TRUST04_TEST_IMAGE=$image go test -mod=vendor -count=1 -v -timeout 20m -tags "$tags" "$pkg") >"$out" 2>&1
 	rc=$?
 	if [ $rc -ne 0 ]; then
+		# keep the whole test output where a CI workflow can upload it (the excerpt below is one line)
+		mkdir -p /tmp/drill-logs && cp "$out" "/tmp/drill-logs/isolation-$level.out" 2>/dev/null || true
 		record "$level" fail "go test -tags $tags $pkg exited $rc: $(snip "$out")"
 	elif grep -q -- '--- SKIP' "$out"; then
 		record "$level" fail "a test skipped; a missing prerequisite must fail, never skip: $(grep -m1 -- '--- SKIP' "$out" | cut -c1-120)"
