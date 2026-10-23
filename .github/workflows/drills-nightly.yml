@@ -115,9 +115,19 @@ jobs:
       - name: Install nft (scenario 1 cuts the network)
         run: command -v nft >/dev/null || (sudo -n apt-get update -qq && sudo -n apt-get install -y -qq nftables)
 
+      # The executor hands a job HOME and XDG_* but no token variable, so the drills that call gh (main-status-audit,
+      # truth-sweep) read their credential from gh's own config file. The token is the job's read-only github.token.
+      - name: Give gh a read-only token
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/gh"
+          chmod 700 "$HOME/.config/gh"
+          ( umask 077; printf 'github.com:\n    oauth_token: %s\n    git_protocol: https\n' "$GH_READ_TOKEN" > "$HOME/.config/gh/hosts.yml" )
+
       - name: Run the pipeline
         env:
-          GH_TOKEN: ${{ github.token }}  # read-only; the drills that call gh (main-status-audit, truth-sweep) take it from here
           NSELF_CI_HOME: ${{ runner.temp }}/ci-home  # a known run store, so the job logs can be kept below
           # The schedule runs on the default branch, which the binary classes owner. A manual run from another branch is a
           # merge ref no default-branch commit contains and would be refused (E625); whoever can dispatch this workflow can
