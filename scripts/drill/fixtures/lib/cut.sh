@@ -49,7 +49,7 @@ cut_preflight() {
 		# The cut drops forwarding out of every docker bridge and the docker daemon's own egress, so it would break other
 		# containers on a shared box. Refuse unless the caller says this host is the drill's own (hosted runner, throwaway VM).
 		if [ -n "$(docker ps -q 2>/dev/null)" ] && [ "${DRILL_CUT_ALLOW_SHARED_HOST:-}" != 1 ]; then
-			cut_die "containers are running; the cut would cut their network too. Stop them, or set DRILL_CUT_ALLOW_SHARED_HOST=1 on a host that is only for this drill"
+			cut_die "containers are running ($(docker ps --format "{{.ID}} {{.Image}} {{.Names}} {{.Status}}" 2>/dev/null | tr "\n" ";")); the cut would cut their network too. Stop them, or set DRILL_CUT_ALLOW_SHARED_HOST=1 on a host that is only for this drill"
 		fi
 		;;
 	Darwin) command -v pfctl >/dev/null || cut_die "pfctl is required" ;;
