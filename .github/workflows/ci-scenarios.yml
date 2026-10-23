@@ -100,6 +100,9 @@ jobs:
 
       - name: Scenario 1, local only (network cut)
         if: ${{ !cancelled() }}
+        env:
+          # the runner is a throwaway VM; the engine's own network probe container can still be winding down when the cut preflight looks (run 40022254401)
+          DRILL_CUT_ALLOW_SHARED_HOST: ${{ runner.os == 'Linux' && '1' || '' }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/evidence"
