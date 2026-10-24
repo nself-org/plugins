@@ -3,7 +3,7 @@ module github.com/nself-org/nself-github
 go 1.26.4
 
 require (
-	github.com/go-chi/chi/v5 v5.3.0
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/go-chi/cors v1.2.1
 	github.com/jackc/pgx/v5 v5.9.2
 )

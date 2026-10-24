@@ -22,8 +22,8 @@
     "@aws-sdk/client-s3": "^3.485.0",
     "@aws-sdk/lib-storage": "^3.485.0",
     "@azure/storage-blob": "^12.17.0",
-    "@fastify/cors": "^8.4.0",
-    "@fastify/multipart": "^8.0.0",
+    "@fastify/cors": "^11.3.1",
+    "@fastify/multipart": "^10.1.6",
     "@google-cloud/storage": "^7.7.0",
     "@nself/plugin-utils": "link:../../../shared",
     "bullmq": "^5.0.0",
@@ -31,12 +31,12 @@
     "commander": "^11.1.0",
     "dotenv": "^16.3.1",
     "exifreader": "^4.18.0",
-    "fastify": "^4.24.0",
-    "file-type": "^19.0.0",
+    "fastify": "^5.12.7",
+    "file-type": "^21.3.1",
     "fluent-ffmpeg": "^2.1.2",
     "ioredis": "^5.3.2",
     "pg": "^8.11.3",
-    "sharp": "^0.33.1"
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@types/clamscan": "^2.4.1",
@@ -60,8 +60,8 @@
       "esbuild": ">=0.28.1",
       "form-data": ">=2.5.6",
       "exifreader": ">=4.40.1",
-      "fast-uri": ">=3.1.5",
-      "sharp": ">=0.35.0",
+      "fast-uri": ">=4.2.3",
+      "sharp": ">=0.35.5",
       "find-my-way": ">=9.7.0"
     }
   }

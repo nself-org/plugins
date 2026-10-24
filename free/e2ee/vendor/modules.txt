@@ -8,8 +8,8 @@ github.com/cloudflare/circl/pke/kyber/internal/common/params
 github.com/cloudflare/circl/pke/kyber/kyber1024
 github.com/cloudflare/circl/pke/kyber/kyber1024/internal
 github.com/cloudflare/circl/simd/keccakf1600
-# github.com/go-chi/chi/v5 v5.2.4
-## explicit; go 1.22
+# github.com/go-chi/chi/v5 v5.4.0
+## explicit; go 1.24
 github.com/go-chi/chi/v5
 github.com/go-chi/chi/v5/middleware
 # github.com/jackc/pgpassfile v1.0.0
