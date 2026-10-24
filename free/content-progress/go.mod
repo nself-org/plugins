@@ -3,7 +3,7 @@ module github.com/nself-org/nself-content-progress
 go 1.26.4
 
 require (
-	github.com/go-chi/chi/v5 v5.3.0
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/nself-org/plugin-sdk v0.0.0
 )
