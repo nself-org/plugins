@@ -14,8 +14,8 @@ overrides:
   esbuild: '>=0.28.1'
   form-data: '>=2.5.6'
   exifreader: '>=4.40.1'
-  fast-uri: '>=3.1.5'
-  sharp: '>=0.35.0'
+  fast-uri: '>=4.2.3'
+  sharp: '>=0.35.5'
   find-my-way: '>=9.7.0'
 # Build scripts: esbuild (via tsx) must run its postinstall. exifreader's
 # postinstall only rebuilds a custom tag subset and msgpackr-extract (via

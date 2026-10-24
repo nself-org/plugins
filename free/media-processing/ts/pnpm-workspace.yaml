@@ -6,9 +6,10 @@
 packages:
   - '.'
 overrides:
-  fast-uri: '>=3.1.5'
+  fast-uri: '>=4.2.3'
   find-my-way: '>=9.7.0'
   fast-xml-parser: '>=5.10.1'
+  esbuild: '>=0.28.1'
 # esbuild (via tsx) has a postinstall; pnpm 10 uses onlyBuiltDependencies,
 # pnpm >= 11 uses allowBuilds and fails the install on an unapproved build.
 onlyBuiltDependencies:
