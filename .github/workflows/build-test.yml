@@ -73,3 +73,17 @@ jobs:
             fi
           done < <(find $roots -name go.mod -not -path '*/vendor/*' -not -path '*/testdata/*' | sort)
           exit $failed
+      # The plugin SDK (17 free plugins replace into it) and the scripts/ tooling modules live outside free/,
+      # so the loop above never saw them: sdk's go vet failure went unnoticed (D-0656). A change outside free/
+      # sets all=true in the scope step, so these run on every push and on any pull request that touches them.
+      # tests/conformance holds fixtures, not modules to gate, and is deliberately not listed.
+      - name: Build, vet, and test the SDK and tooling modules
+        if: steps.scope.outputs.all == 'true'
+        run: |
+          failed=0
+          while IFS= read -r gomod; do
+            d="$(dirname "$gomod")"
+            echo "=== $d ==="
+            ( cd "$d" && go build -o /dev/null ./... && go vet ./... && go test ./... ) || { echo "FAIL: $d"; failed=1; }
+          done < <(find sdk scripts -name go.mod -not -path '*/vendor/*' -not -path '*/testdata/*' | sort)
+          exit $failed
