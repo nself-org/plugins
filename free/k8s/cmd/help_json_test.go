@@ -111,3 +111,21 @@ func TestHelpFlagValueIsNotHelp(t *testing.T) {
 		t.Fatalf("control: handled=%v code=%d RunE calls=%d", handled, code, *n)
 	}
 }
+
+// TestHelpJSONOnlyStripsValidJSONForms: the probe drops --json spellings pflag accepts for a
+// bool and keeps anything else, so `--json=maybe` makes the flag parse fail and the normal path
+// (which refuses it) runs, instead of the probe answering help for an invalid request.
+func TestHelpJSONOnlyStripsValidJSONForms(t *testing.T) {
+	for _, tok := range []string{"--json", "--json=true", "--json=1", "--json=T"} {
+		var out bytes.Buffer
+		if handled, code := helpJSON(rootCmd, []string{"install", "--help", tok}, &out, &bytes.Buffer{}); !handled || code != 0 {
+			t.Errorf("install --help %s: handled=%v code=%d, want handled", tok, handled, code)
+		}
+	}
+	for _, tok := range []string{"--json=maybe", "--json=", "--json=yes"} {
+		var out bytes.Buffer
+		if handled, _ := helpJSON(rootCmd, []string{"install", "--help", "--json", tok}, &out, &bytes.Buffer{}); handled || out.Len() != 0 {
+			t.Errorf("install --help --json %s: handled=%v stdout=%q, want unhandled and silent", tok, handled, out.String())
+		}
+	}
+}

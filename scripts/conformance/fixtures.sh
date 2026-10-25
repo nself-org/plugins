@@ -180,6 +180,24 @@ printf 'exceptions:\n  - rule: port-bind\n    plugin: beta\n    reason: "fixture
 printf 'exceptions:\n  - rule: port-bind\n    plugin: beta\n    reason: "fixture"\n    owner_ref: P7-TEST\n    expires: 2020-01-01\n' > "$work/exc-pb-old.yaml"
 pass_plant port-all-interfaces-excepted beta port-bind "setport '      - \"3902:3902\"'" --exceptions "$work/exc-pb-ok.yaml"
 plant port-all-interfaces-expired beta port-bind "setport '      - \"3902:3902\"'" --exceptions "$work/exc-pb-old.yaml"
+# Rule port-bind, public-ports.yaml (D-0626): a listed container port passes on any host IP, checked per port; another port of the
+# same plugin, the same port of another plugin and network_mode host still fail; a malformed entry fails the exceptions rule.
+pubfile() { printf 'public_ports:\n  - plugin: %s\n    port: %s\n    reason: "fixture"\n' "$1" "$2" > "$work/pub-$1-$2.yaml"; printf '%s\n' "$work/pub-$1-$2.yaml"; }
+pass_plant port-public-listed beta port-bind "setport '      - \"3902:3902\"'" --public-ports "$(pubfile beta 3902)"
+pass_plant port-public-listed-any-ip beta port-bind "setport '      - \"0.0.0.0:3902:3902\"'" --public-ports "$(pubfile beta 3902)"
+plant port-public-other-port beta port-bind "setport '      - \"3902:3902\"\n      - \"3903:3903\"'" --public-ports "$(pubfile beta 3902)"
+plant port-public-other-plugin beta port-bind "setport '      - \"3902:3902\"'" --public-ports "$(pubfile alpha 3902)"
+plant port-public-host-network beta port-bind "setport '      - \"3902:3902\"'; hostnet" --public-ports "$(pubfile beta 3902)"
+plant port-public-file-missing beta port-bind "setport '      - \"3902:3902\"'" --public-ports "$work/pub-nonexistent.yaml"
+for bad in 'port: 0' 'port: 70000' 'port: 80-90' 'port: ""' 'port: eighty'; do
+  printf 'public_ports:\n  - plugin: beta\n    %s\n    reason: "fixture"\n' "$bad" > "$work/pub-bad.yaml"
+  out=$(bash "$CONF_DIR/check.sh" --root "$conv" --plugins beta --rules exceptions --public-ports "$work/pub-bad.yaml" 2>&1) && { echo "FAIL  public-ports entry ($bad) passed"; rc=1; } \
+    || { printf '%s\n' "$out" | grep -q 'FAIL public-ports beta' && echo "pass  public-ports entry ($bad) fails the gate" || { echo "FAIL  public-ports entry ($bad) failed for the wrong reason"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; }; }
+done
+printf 'public_ports:\n  - plugin: beta\n    port: 80\n    reason: "fixture"\n  - plugin: beta\n    port: 80\n    reason: "again"\n' > "$work/pub-dup.yaml"
+out=$(bash "$CONF_DIR/check.sh" --root "$conv" --plugins beta --rules exceptions --public-ports "$work/pub-dup.yaml" 2>&1) && { echo "FAIL  a duplicate public-ports entry passed"; rc=1; } || { printf '%s\n' "$out" | grep -q 'listed twice' && echo "pass  a duplicate public-ports entry fails the gate" || { echo "FAIL  duplicate public-ports failed for the wrong reason"; rc=1; }; }
+# The committed file passes (traefik 80 and 443 only) and outlives the exceptions cap: it has no expiry.
+out=$(CONF_TODAY=2027-06-01 bash "$CONF_DIR/check.sh" --root "$conv" --plugins beta --rules exceptions --exceptions "$work/exc-ok.yaml" 2>&1 | grep 'public-ports'); [ -z "$out" ] && echo "pass  committed public-ports.yaml does not expire" || { echo "FAIL  committed public-ports.yaml failed after the cap date: $out"; rc=1; }
 out=$(bash "$CONF_DIR/check.sh" --root "$conv" --plugins beta --rules exceptions --exceptions "$work/exc-old.yaml" 2>&1) && { echo "FAIL  expired exception did not fail the gate"; rc=1; } || { printf '%s\n' "$out" | grep -q 'FAIL exceptions' && echo "pass  expired exception fails the gate" || { echo "FAIL  expired exception rc but no message"; rc=1; }; }
 out=$(CONF_TODAY=2027-06-01 bash "$CONF_DIR/check.sh" --root "$conv" --plugins beta --rules exceptions 2>&1) && { echo "FAIL  committed exceptions.yaml must expire"; rc=1; } || echo "pass  committed exceptions expire after the cap date"
 [ $rc -eq 0 ] && echo "fixtures: gate ok" || echo "fixtures: gate FAIL"

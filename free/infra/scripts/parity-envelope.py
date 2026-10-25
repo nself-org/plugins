@@ -5,8 +5,8 @@ Purpose: since P7-SURF-29 the plugin prints one v1 envelope for --json and exits
   prints its legacy JSON (or nothing on stdout when it fails). A byte diff of stdout can no longer be the check.
   This script checks the head's contract and the documented SURF-29 mapping instead.
 Usage:   parity-envelope.py <sub> <core.out> <head.out> <core.rc> <head.rc>      (sub = provision|list|resize|destroy)
-Checks:  1. head stdout is exactly one JSON document: a v1 envelope (schema_version "1", a command string, exactly one
-            of data or error). Nothing before or after it.
+Checks:  1. head stdout is exactly one JSON document: a v1 envelope (schema_version "1", a command equal to "infra server <sub>",
+            exactly one of data or error). Nothing before or after it.
          2. status: core exit 0 <=> envelope ok and head exit 0. Core exit 1 <=> error envelope whose exit_code equals
             the head exit, the exit_code matches its class (user 1, infra 2, auth 3, destructive_blocked 4, see
             cmd/errcodes.go) and is not 0.
@@ -17,13 +17,20 @@ Checks:  1. head stdout is exactly one JSON document: a v1 envelope (schema_vers
               resize     core object              == data.action        (data also holds server_id, target_type)
               destroy    SnapshotID/RetainedIPs/ReleasedIPs == snapshot_id/retained_ips/released_ips (null == [];
                          data also holds server_id)
+         Only None (core's null list) is read as an empty list; false, 0, "" and {} are differences.
          The error text is not compared: core prints "Error: ..." on stderr, the head's envelope message is its own.
+         Its type is: error.message must be a string.
 Output:  one line per problem; exit 0 when none, 1 otherwise.
 """
 import json
 import sys
 
 CLASS_EXIT = {"user": 1, "infra": 2, "auth": 3, "destructive_blocked": 4}
+
+
+def none_as_empty(v):
+    """core prints a nil slice as null; that is the only value read as an empty list."""
+    return [] if v is None else v
 
 
 def canon(v):
@@ -40,22 +47,29 @@ def load_one(path):
     return doc
 
 
-def check_envelope(doc):
+def check_envelope(doc, sub):
     errs = []
     if not isinstance(doc, dict):
         return ["not a JSON object"]
     if doc.get("schema_version") != "1":
         errs.append("schema_version is %r, want '1'" % (doc.get("schema_version"),))
+    want_cmd = "infra server " + sub
     if not isinstance(doc.get("command"), str) or not doc.get("command"):
         errs.append("command missing")
+    elif doc["command"] != want_cmd:
+        errs.append("command is %r, want %r" % (doc["command"], want_cmd))
     if ("data" in doc) == ("error" in doc):
         errs.append("want exactly one of data or error")
     err = doc.get("error")
     if err is not None:
+        if not isinstance(err, dict):
+            return errs + ["error is not an object"]
         if err.get("class") not in CLASS_EXIT or CLASS_EXIT[err.get("class")] != err.get("exit_code"):
             errs.append("exit_code %r does not match class %r" % (err.get("exit_code"), err.get("class")))
         if not isinstance(err.get("code"), str):
             errs.append("error.code missing")
+        if not isinstance(err.get("message"), str):
+            errs.append("error.message is %r, want a string" % (err.get("message"),))
     return errs
 
 
@@ -86,9 +100,9 @@ def compare_data(sub, core, data):
                 errs.append("core action != data.action")
     elif sub == "destroy":
         if need_keys(data, ["server_id", "snapshot_id", "retained_ips", "released_ips"], errs):
-            want = {"snapshot_id": core.get("SnapshotID"), "retained_ips": core.get("RetainedIPs") or [],
-                    "released_ips": core.get("ReleasedIPs") or []}
-            got = {k: (data[k] or [] if k.endswith("_ips") else data[k]) for k in want}
+            want = {"snapshot_id": core.get("SnapshotID"), "retained_ips": none_as_empty(core.get("RetainedIPs")),
+                    "released_ips": none_as_empty(core.get("ReleasedIPs"))}
+            got = {k: (none_as_empty(data[k]) if k.endswith("_ips") else data[k]) for k in want}
             if canon(want) != canon(got):
                 errs.append("core destroy result != data: core=%s data=%s" % (canon(want), canon(got)))
     else:
@@ -103,7 +117,7 @@ def main(argv):
     except ValueError as e:
         print("  head stdout: %s" % e)
         return 1
-    errs = check_envelope(doc)
+    errs = check_envelope(doc, sub)
     if core_rc not in (0, 1):
         errs.append("core exit %d, want 0 or 1" % core_rc)
     ok = "error" not in doc

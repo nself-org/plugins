@@ -147,3 +147,57 @@ func TestSplitPorts(t *testing.T) {
 		}
 	}
 }
+
+// -allow (D-0626): a listed container port passes on any host IP; every other port of the same service still fails.
+func TestAllow(t *testing.T) {
+	cases := []struct {
+		name  string
+		ports string
+		args  []string
+		rc    int
+		want  string // substring that must appear in stdout
+	}{
+		{"listed ports pass", `["${HTTP:-80}:80", "${HTTPS:-443}:443"]`, []string{"-allow", "80", "-allow", "443"}, 0, ""},
+		{"unlisted port beside a listed one fails", `["80:80", "8444:8444"]`, []string{"-allow", "80"}, 1, `"8444:8444"`},
+		{"without -allow the same entry fails", `["80:80"]`, nil, 1, "on all interfaces"},
+		{"match is on the container port, not the host port", `["80:8080"]`, []string{"-allow", "80"}, 1, `"80:8080"`},
+		{"container-only form", `["443"]`, []string{"-allow", "443"}, 0, ""},
+		{"tcp suffix", `["80:80/tcp"]`, []string{"-allow", "80"}, 0, ""},
+		{"explicit host ip", `["0.0.0.0:80:80"]`, []string{"-allow", "80"}, 0, ""},
+		{"range is not a listed port", `["80-90:80-90"]`, []string{"-allow", "80"}, 1, "80-90"},
+		{"variable container port is not a listed port", `["80:${P:-80}"]`, []string{"-allow", "80"}, 1, "80:${P:-80}"},
+		{"long syntax", "\n      - target: 80\n        published: 80\n", []string{"-allow", "80"}, 0, ""},
+		{"long syntax unlisted target", "\n      - target: 81\n        published: 80\n", []string{"-allow", "80"}, 1, "target 81"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := filepath.Join(t.TempDir(), "c.yml")
+			if err := os.WriteFile(f, []byte(head+"    ports: "+c.ports+"\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			var out, errb bytes.Buffer
+			if rc := run(append(append([]string{}, c.args...), f), &out, &errb); rc != c.rc {
+				t.Fatalf("rc = %d, want %d\nstdout: %s\nstderr: %s", rc, c.rc, out.String(), errb.String())
+			}
+			if c.want != "" && !strings.Contains(out.String(), c.want) {
+				t.Errorf("stdout lacks %q:\n%s", c.want, out.String())
+			}
+		})
+	}
+	t.Run("allow never excuses network_mode host", func(t *testing.T) {
+		f := filepath.Join(t.TempDir(), "c.yml")
+		if err := os.WriteFile(f, []byte(head+"    network_mode: host\n    ports: [\"80:80\"]\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var out, errb bytes.Buffer
+		if rc := run([]string{"-allow", "80", f}, &out, &errb); rc != 1 || !strings.Contains(out.String(), "network_mode host") {
+			t.Fatalf("rc = %d\n%s", rc, out.String())
+		}
+	})
+	for _, bad := range [][]string{{"-allow"}, {"-allow", "x"}, {"-allow", "0"}, {"-allow", "70000"}, {"-allow", "80-90"}} {
+		var out, errb bytes.Buffer
+		if rc := run(append(bad, "f.yml"), &out, &errb); rc != 2 {
+			t.Errorf("run(%v) = %d, want 2", bad, rc)
+		}
+	}
+}

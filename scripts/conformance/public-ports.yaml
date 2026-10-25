@@ -1,0 +1,15 @@
+# Deliberate public ports for the port-bind rule (D-0626). Every other published port of a plugin must bind 127.0.0.1.
+# An entry names the plugin and ONE container port (the right-hand side of "host:container", or `target`); that port may
+# be published on any host IP. Unlike exceptions.yaml an entry does not expire: it is the permanent class for a plugin
+# whose job is to be reachable. Review it like reserved-ports.yaml: a new entry needs a reason a reviewer can check.
+# Fields: plugin, port (1-65535, a single number), reason. network_mode host is never allowed.
+public_ports:
+  - plugin: traefik
+    port: 80
+    reason: "the edge proxy serves HTTP on all interfaces by design (NSELF_HTTP_PORT)"
+  - plugin: traefik
+    port: 443
+    reason: "the edge proxy serves HTTPS on all interfaces by design (NSELF_HTTPS_PORT)"
+  - plugin: traefik
+    port: 8444
+    reason: "the upload entrypoint binds loopback unless the operator sets TRAEFIK_UPLOAD_PUBLISH to open it to a public upload route"

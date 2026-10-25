@@ -35,16 +35,20 @@ log() { printf "[rehearse] %s\n" "$*"; }
 TAG=""
 OUT=""
 NO_UPLOAD=false
+usage() { printf "usage: %s --tag TAG --no-upload --out DIR\n" "$0" >&2; }
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --tag) TAG="${2:-}"; shift 2 || true ;;
-    --out) OUT="${2:-}"; shift 2 || true ;;
+    # A trailing --tag or --out has no value: shift 2 would fail and leave the loop on the same argument forever.
+    --tag|--out)
+      [ "$#" -ge 2 ] || { err "$1 needs a value"; usage; exit 2; }
+      if [ "$1" = "--tag" ]; then TAG="$2"; else OUT="$2"; fi
+      shift 2 ;;
     --no-upload) NO_UPLOAD=true; shift ;;
-    *) err "unknown argument: $1"; printf "usage: %s --tag TAG --no-upload --out DIR\n" "$0" >&2; exit 2 ;;
+    *) err "unknown argument: $1"; usage; exit 2 ;;
   esac
 done
 if [ -z "$TAG" ] || [ -z "$OUT" ] || [ "$NO_UPLOAD" != "true" ]; then
-  printf "usage: %s --tag TAG --no-upload --out DIR\n" "$0" >&2
+  usage
   exit 2
 fi
 [[ "$TAG" =~ ^v[0-9][0-9A-Za-z.+-]*$ ]] || { err "tag '$TAG' must look like v1.2.3 or v0.0.0-rehearsal"; exit 2; }

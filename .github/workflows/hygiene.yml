@@ -183,6 +183,16 @@ jobs:
         if: always()
         run: bash scripts/ci/tests/test-lint-compose-password-urls.sh
 
+      - name: "plugin-counts: bundles checkout autodetect from a worktree (D-1169)"
+        id: plugin_counts_bundles_dir_test
+        if: always()
+        run: bash scripts/ci/tests/test-plugin-counts-bundles-dir.sh
+
+      - name: "rehearse: a --tag or --out with no value is refused, not looped on (D-1107)"
+        id: rehearse_args_test
+        if: always()
+        run: bash scripts/release/rehearse-args-test.sh
+
       # docker compose ships on ubuntu-latest; the smoke renders, starts nothing.
       - name: "fragment-urlenc-smoke: reserved-character passwords render and round-trip (D-0235)"
         id: fragment_urlenc_smoke
@@ -504,6 +514,8 @@ jobs:
             [nself_first]="${{ steps.nself_first.outcome }}"
             [compose_password_urls]="${{ steps.compose_password_urls.outcome }}"
             [compose_password_urls_test]="${{ steps.compose_password_urls_test.outcome }}"
+            [plugin_counts_bundles_dir_test]="${{ steps.plugin_counts_bundles_dir_test.outcome }}"
+            [rehearse_args_test]="${{ steps.rehearse_args_test.outcome }}"
             [fragment_urlenc_smoke]="${{ steps.fragment_urlenc_smoke.outcome }}"
             [compose_network_literals]="${{ steps.compose_network_literals.outcome }}"
             [tracked_binaries]="${{ steps.tracked_binaries.outcome }}"

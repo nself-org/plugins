@@ -17,13 +17,13 @@
 # not a pass; --changed with nothing changed passes).
 set -u
 . "$(dirname "$0")/lib.sh"
-mode=all; list=; root=$CONF_ROOT/free; rules=; exc=$CONF_DIR/exceptions.yaml
+mode=all; list=; root=$CONF_ROOT/free; rules=; exc=$CONF_DIR/exceptions.yaml; pub=$CONF_DIR/public-ports.yaml
 ALL="schema compat healthcheck replace docker-socket port-bind migrations boot-schema migration-immutable migration-idempotent legacy-renames repository ports build"
 migbase=; shard=
 while [ $# -gt 0 ]; do case $1 in
   --plugins) mode=plugins; list=$2; shift;; --changed) mode=changed;; --all) mode=all;;
   --fixtures) mode=fixtures;; --rules) rules=$(printf '%s' "$2" | tr ',' ' '); shift;;
-  --root) root=$2; shift;; --exceptions) exc=$2; shift;; --migration-base) migbase=$2; shift;; --shard) shard=$2; shift;;
+  --root) root=$2; shift;; --exceptions) exc=$2; shift;; --public-ports) pub=$2; shift;; --migration-base) migbase=$2; shift;; --shard) shard=$2; shift;;
   *) echo "check.sh: unknown argument $1" >&2; exit 2;; esac; shift; done
 [ -n "$rules" ] || rules="exceptions $ALL"
 if [ "$mode" = fixtures ]; then exec bash "$CONF_DIR/fixtures.sh"; fi
@@ -65,7 +65,7 @@ case " $rules " in *" migration-immutable "*|*" migration-idempotent "*)
   fi
   [ -z "$migbase" ] || echo "migration baseline: $CONF_MIG_LABEL";;
 esac
-case " $rules " in *" exceptions "*) bash "$CONF_DIR/rules/exceptions.sh" "$exc" || rc=1;; esac
+case " $rules " in *" exceptions "*) bash "$CONF_DIR/rules/exceptions.sh" "$exc" "$pub" || rc=1;; esac
 for p in $(printf '%s' "$list" | tr ',' ' '); do
   dir=$root/$p
   if [ ! -f "$dir/plugin.json" ]; then
@@ -79,7 +79,7 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
     case $r in exceptions) continue;; build) cmd="bash $CONF_DIR/build-from-tarball.sh $dir";;
       ports) cmd="bash $CONF_DIR/ports.sh --plugins $p --root $root";;
       docker-socket) cmd="bash $CONF_DIR/rules/docker-socket.sh $dir $exc";;
-      port-bind) cmd="bash $CONF_DIR/rules/port-bind.sh $dir $exc";;
+      port-bind) cmd="bash $CONF_DIR/rules/port-bind.sh $dir $exc $pub";;
       migration-immutable|migration-idempotent) [ -n "$migbase" ] || continue; cmd="bash $CONF_DIR/rules/$r.sh $dir $exc $migbase";;
       legacy-renames) cmd="bash $CONF_DIR/rules/legacy-renames.sh $dir $exc";;
       *) cmd="bash $CONF_DIR/rules/$r.sh $dir";; esac
