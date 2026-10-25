@@ -1,0 +1,39 @@
+name: Registry KV sync
+
+# The plugins.nself.org worker serves the catalog from the repo, but its KV copy (stats.lastSync) only moves when
+# POST /api/sync runs. Nothing called it after 2026-06-23, which kept drill-catalog-freshness red (D-0051). A daily call
+# keeps lastSync under the drill's 36 hour limit.
+
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: registry-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: POST /api/sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Refresh the worker caches
+        env:
+          CLOUDFLARE_WORKER_SYNC_TOKEN: ${{ secrets.CLOUDFLARE_WORKER_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_WORKER_SYNC_TOKEN" ]; then
+            echo "CLOUDFLARE_WORKER_SYNC_TOKEN is not set" >&2
+            exit 1
+          fi
+          response=$(curl -sS --fail-with-body --max-time 60 -X POST "https://plugins.nself.org/api/sync" \
+            -H "Authorization: Bearer $CLOUDFLARE_WORKER_SYNC_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"ref\": \"${GITHUB_REF}\", \"sha\": \"${GITHUB_SHA}\"}")
+          echo "$response" | jq '{success, message, freeCount, proCount, catalogSynced, timestamp}'
+          echo "$response" | jq -e '.success == true and .catalogSynced == true' >/dev/null
