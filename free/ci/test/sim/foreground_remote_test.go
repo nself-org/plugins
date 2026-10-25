@@ -126,10 +126,14 @@ func starter(t *testing.T, nodes []*node) ssh.Starter {
 			_ = errW.Close()
 			done <- e
 		}()
+		// kill is a dropped ssh connection: the wire goes first, so nothing the agent still says reaches the
+		// coordinator, and only then does the agent notice and stop its job. Cancelling the agent first lets its
+		// "cancelled" result cross the pipe before it closes, which the run rightly reads as an operator cancel
+		// and not as a lost session.
 		kill := func() error {
-			cancel()
-			_ = toAgentR.Close()
 			_ = fromAgentW.Close()
+			_ = toAgentR.Close()
+			cancel()
 			return nil
 		}
 		n.mu.Lock()
