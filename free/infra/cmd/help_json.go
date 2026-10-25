@@ -28,6 +28,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
@@ -57,7 +58,7 @@ func helpJSON(root *cobra.Command, args []string, stdout, stderr io.Writer) (han
 	}
 	rest := make([]string, 0, len(args))
 	for _, a := range args {
-		if a == "--json" || strings.HasPrefix(a, "--json=") {
+		if isJSONToken(a) {
 			continue
 		}
 		rest = append(rest, a)
@@ -96,6 +97,22 @@ func helpJSON(root *cobra.Command, args []string, stdout, stderr io.Writer) (han
 		return true, output.ExitInfra
 	}
 	return true, 0
+}
+
+// isJSONToken reports whether a is a spelling of --json that wantsJSON accepts:
+// the bare flag or --json=<value> with a value strconv.ParseBool takes. Anything
+// else (--json=maybe) stays in the probe's arguments, so the flag parse fails
+// the way the normal run's parse does and the request is left to that path.
+func isJSONToken(a string) bool {
+	if a == "--json" {
+		return true
+	}
+	v, ok := strings.CutPrefix(a, "--json=")
+	if !ok {
+		return false
+	}
+	_, err := strconv.ParseBool(v)
+	return err == nil
 }
 
 // resetFlags puts every flag of c back to its default, so a parse done only to

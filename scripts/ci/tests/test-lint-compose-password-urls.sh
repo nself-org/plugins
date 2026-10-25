@@ -46,6 +46,15 @@ check name-pwd reject '      - E=postgresql://u:${DB_PWD}@postgres/db'
 check name-secret reject '      - B=amqp://u:${RABBIT_SECRET}@mq:5672'
 check name-token-unbraced reject '      - C=redis://:$REDIS_AUTH_TOKEN@redis:6379'
 check name-lowercase-default reject '      - D=postgres://u:${db_pass:-x}@pg/db'
+# D-0615: a `\`-split URL whose continuation line has a trailing comment or more than one word.
+check split-backslash-comment reject '      URL: "https://api.example.com/v1?token=\' \
+  '        ${API_TOKEN}" # secret from the vault'
+check split-backslash-two-words reject '      URL: "https://api.example.com/v1?token=\' \
+  '        ${API_TOKEN}&mode=fast tail"'
+check split-backslash-chain reject '      URL: "https://\' '        api.example.com/v1?a=1\' \
+  '        &token=${API_TOKEN}" # last'
+check split-backslash-comment-head reject '      URL: "https://api.example.com/v1?token=\ # head' \
+  '        ${API_TOKEN}"'
 check nested-form accept \
   '      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}' \
   '      - REDIS_URL=redis://:${REDIS_PASSWORD_URLENC:-${REDIS_PASSWORD}}@redis:6379 http://a@b'
@@ -55,6 +64,14 @@ check secrets-outside-urls accept '      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD
   '      - KEYCLOAK_URL=http://${KEYCLOAK_HOST}:8080' \
   '    healthcheck:' '      test:' '        - CMD-SHELL' '        - |' \
   '          wget -q http://127.0.0.1:3107/health' '          redis-cli -a ${REDIS_PASSWORD} ping'
+check split-after-braced-default reject '      D: >-' '        postgresql://u:${DB_HOST:-${H}}' '        ${POSTGRES_PASSWORD}' '        @pg/db'
+# A flow sequence closes its item at the comma: the next item is not part of the URL; a space before the backslash ends the URL.
+check flow-sequence-items accept '    healthcheck:' \
+  '      test: ["CMD", "curl", "http://127.0.0.1:3107/health",' '        "${REDIS_PASSWORD}"]'
+check flow-sequence-item-per-line accept '    healthcheck:' '      test: [' '        "curl http://127.0.0.1:3107/health",' \
+  '        "${REDIS_PASSWORD}",' '      ]'
+check shell-continuation-after-url accept '    command:' '      - |' '          curl -sf http://127.0.0.1:3107/health \' \
+  '            -H "X: ${API_TOKEN}"'
 
 if [ "$fail" -ne 0 ]; then echo "test-lint-compose-password-urls: FAILED" >&2; exit 1; fi
 echo "test-lint-compose-password-urls: OK"

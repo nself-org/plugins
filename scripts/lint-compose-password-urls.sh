@@ -16,9 +16,11 @@
 #        secret variable anywhere: userinfo, path or query,
 #     2. a secret variable is followed by "@" in the same word (the userinfo
 #        tail of a URL whose "://" sits on the line above), or
-#     3. it is a one-word line below a "://" line and indented deeper than the
-#        key or list item holding that scalar, i.e. a URL split across three
-#        or more lines.
+#     3. it continues a URL split across lines: the line after a "://" line
+#        that ends in a backslash stuck to URL text (any word count, a trailing
+#        " #..." comment ignored), or a one-word line below a "://" line and
+#        indented deeper than the key or list item holding that scalar. A
+#        flow-sequence item boundary (a comma, a closing bracket) ends the URL.
 # Inputs: fragment paths as arguments; default free/*/docker-compose.plugin.yml.
 # Outputs: one "file:line: ..." line per offence on stderr; exit 1 if any.
 # Constraints: bash 3.2 compatible; sed/grep/awk only; never prints a password.
@@ -40,15 +42,25 @@ for f in $files; do
   # Lines naming a secret variable, comments dropped, prefixed "N:".
   hits="$(grep -niE "$secret" "$f" | grep -vE '^[0-9]+:[[:space:]]*#' || true)"
   [ -n "$hits" ] || continue
-  # Line numbers of one-word continuation lines inside a multi-line URL.
+  # Line numbers of continuation lines inside a multi-line URL: the line after one that ends in a backslash stuck to
+  # URL text (any word count), and a one-word line below a "://" line. A trailing " #..." comment is not text of
+  # the line; a flow-sequence item boundary (a comma, or the closing bracket) ends the URL.
   cont=" $(awk '
     /^[[:space:]]*(#|$)/ { next }
-    { match($0, /^[[:space:]]*/); ind = RLENGTH
-      key = ($0 ~ /^[[:space:]]*(- |[A-Za-z0-9_.-]+:([[:space:]]|$))/) }
+    { line = $0; sub(/[[:space:]]+#.*$/, "", line)
+      match(line, /^[[:space:]]*/); ind = RLENGTH
+      key = (line ~ /^[[:space:]]*(- |[A-Za-z0-9_.-]+:([[:space:]]|$))/)
+      n = split(line, w, " ") }
     url && ind <= kind { url = 0 }
-    url && NF == 1 { printf "%d ", NR }
+    chain || (url && n == 1) { printf "%d ", NR }
     !url && key { kind = ind }
-    /:\/\// { url = 1 }
+    line ~ /:\/\// { url = 1 }
+    { bs = (line ~ /[^[:space:]]\\$/)
+      chain = bs && (chain || w[n] ~ /:\/\//)
+      q = line; gsub(/"[^"]*"/, "", q); gsub(/\047[^\047]*\047/, "", q)
+      t = q; o = gsub(/\[/, "", t); t = q; c = gsub(/\]/, "", t)
+      was = depth; depth += o - c; if (depth < 0) depth = 0
+      if ((depth > 0 && line ~ /,$/) || (was > 0 && depth == 0)) url = 0 }
   ' "$f")"
   while IFS= read -r line; do
     [ -n "$line" ] || continue
