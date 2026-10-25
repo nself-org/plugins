@@ -141,6 +141,10 @@ type Flaky struct {
 	Fails  int    `json:"fails"`
 }
 
+// FlakyKey names a check inside one run for the flaky-by-history notes: the
+// same check id can appear under several jobs, so the job is part of the key.
+func FlakyKey(jobID, checkID string) string { return jobID + "\x00" + checkID }
+
 // Artifact is a committed output digest.
 type Artifact struct {
 	Path      string `json:"path"`
