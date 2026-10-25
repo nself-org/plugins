@@ -40,7 +40,10 @@ func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
 	if bootPool == nil {
 		err = errors.New("no database pool (boot migrations have not run)")
 	} else {
-		st, err = migrate.Status(context.Background(), bootPool, bootOptions())
+		// A hung database must fail the probe, not hang it.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		st, err = migrate.Status(ctx, bootPool, bootOptions())
 	}
 	if err != nil {
 		log.Printf("migrations: status: %v", err)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nself-org/cli/sdk/go/v2/migrate"
@@ -33,7 +34,10 @@ func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 // On a Status error it logs, answers 503 (the cli retries any non-200; a 200 with -1 counts is E119,
 // a contract violation) and returns -1 counts for humans. Call it before the handler writes a header.
 func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
-	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
+	// A hung database must fail the probe, not hang it.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	st, err := migrate.Status(ctx, bootPool, bootOptions())
 	if err != nil {
 		log.Printf("migrations: status: %v", err)
 		w.WriteHeader(http.StatusServiceUnavailable)
