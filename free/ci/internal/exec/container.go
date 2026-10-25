@@ -25,6 +25,17 @@ func dockerHostEnv() []string {
 	return env
 }
 
+// containerRuntime is the container CLI of this host: docker when installed, else
+// podman. The toolchain resolver makes the same choice for the image pull.
+func containerRuntime() string {
+	for _, bin := range []string{"docker", "podman"} {
+		if _, err := osexec.LookPath(bin); err == nil {
+			return bin
+		}
+	}
+	return "docker"
+}
+
 // containerWorkdir maps the job workdir to its path under the /repo mount.
 func containerWorkdir(s JobSpec) (string, error) {
 	if s.Job.Workdir == "" || s.Job.Workdir == "." {
@@ -82,8 +93,9 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 	}
 	args = append(args, s.Job.Container.Image)
 	args = append(args, s.Command...)
-	stop := containerStopper("docker", name, e.Grace)
-	code, err := e.runCommandIn(ctx, s.Stdin, append([]string{"docker"}, args...), workspace, cliEnv, s.Output, stop, nil, "")
+	runtime := containerRuntime()
+	stop := containerStopper(runtime, name, e.Grace)
+	code, err := e.runCommandIn(ctx, s.Stdin, append([]string{runtime}, args...), workspace, cliEnv, s.Output, stop, nil, "")
 	if err != nil {
 		stop()
 		return code, fmt.Errorf("%w: %v", coded("E613", "docker run"), err)
