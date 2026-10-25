@@ -17,3 +17,8 @@ func signalRunnerTree(pid int) error {
 	}
 	return proc.Kill()
 }
+
+// stopRunnerTree kills the single process; Kill is already forceful.
+func stopRunnerTree(pid int) error {
+	return signalRunnerTree(pid)
+}
