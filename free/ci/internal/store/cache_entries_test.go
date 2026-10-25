@@ -321,7 +321,7 @@ func TestCacheEntriesAreKeyedByNamespaceAndKey(t *testing.T) {
 		t.Fatalf("the two entries must keep their own blobs: %+v", by)
 	}
 	// dropping one leaves the other
-	if err = s.CacheDrop(ctx, by["second"], "corrupt"); err != nil {
+	if _, err = s.CacheDrop(ctx, by["second"], "corrupt"); err != nil {
 		t.Fatal(err)
 	}
 	if left, _ := s.CacheEntries(ctx, cacheKey); len(left) != 1 || left[0].Writer.AttemptID != "first" {
@@ -609,15 +609,22 @@ func TestCacheEntriesDropOnlyRemovesTheRowThatWasRead(t *testing.T) {
 		t.Fatalf("%v %v", first, err)
 	}
 	save("two")
-	if err = s.CacheDrop(ctx, first[0], "corrupt"); err != nil {
-		t.Fatal(err)
+	if dropped, err := s.CacheDrop(ctx, first[0], "corrupt"); err != nil || dropped {
+		t.Fatalf("a drop that matched no row: dropped=%v err=%v", dropped, err)
+	}
+	var audits int
+	if err := s.readers.QueryRow("SELECT count(*) FROM audit WHERE action='cache.entry.dropped'").Scan(&audits); err != nil || audits != 0 {
+		t.Fatalf("a drop that matched no row wrote %d audit rows (%v)", audits, err)
 	}
 	now, err := s.CacheEntries(ctx, cacheKey)
 	if err != nil || len(now) != 1 || now[0].Writer.AttemptID != "two" {
 		t.Fatalf("the replacement was dropped: %+v %v", now, err)
 	}
-	if err = s.CacheDrop(ctx, now[0], "corrupt"); err != nil {
-		t.Fatal(err)
+	if dropped, err := s.CacheDrop(ctx, now[0], "corrupt"); err != nil || !dropped {
+		t.Fatalf("the drop of the stored row: dropped=%v err=%v", dropped, err)
+	}
+	if err := s.readers.QueryRow("SELECT count(*) FROM audit WHERE action='cache.entry.dropped'").Scan(&audits); err != nil || audits != 1 {
+		t.Fatalf("a real drop wrote %d audit rows (%v)", audits, err)
 	}
 	if gone, _ := s.CacheEntries(ctx, cacheKey); len(gone) != 0 {
 		t.Fatal("the row that was read must be dropped")

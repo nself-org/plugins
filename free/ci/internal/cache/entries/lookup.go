@@ -100,7 +100,8 @@ func (s *Store) lookup(ctx context.Context, ns authz.Namespace, key string, acce
 		return Manifest{}, false, err
 	}
 	if reason != "" {
-		return Manifest{}, false, s.be.CacheDrop(ctx, m, reason)
+		_, err = s.be.CacheDrop(ctx, m, reason)
+		return Manifest{}, false, err
 	}
 	return m, true, s.be.CacheTouch(ctx, m.Namespace, key)
 }
@@ -135,8 +136,10 @@ func (s *Store) Verify(ctx context.Context) (VerifyReport, error) {
 			r.Checked++
 			var reason string
 			if reason, err = s.intact(m); err == nil && reason != "" && reason != "unstable" {
-				r.Dropped++
-				err = s.be.CacheDrop(ctx, m, reason)
+				var dropped bool
+				if dropped, err = s.be.CacheDrop(ctx, m, reason); dropped {
+					r.Dropped++
+				}
 			}
 			if err != nil {
 				break
