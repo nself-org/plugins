@@ -6,7 +6,9 @@ package config
 // file or exceeds MaxFileBytes.
 // Constraints: a symlink is followed only to a regular file; a device (a link
 // to /dev/zero) or a FIFO is refused before it is opened, so a read can
-// neither fill memory nor block forever.
+// neither fill memory nor block forever. The path check is only an early
+// exit: the file is opened without blocking and its type is checked again on
+// the open descriptor, so a swap between the check and the open cannot hang.
 
 import (
 	"fmt"
@@ -16,6 +18,10 @@ import (
 
 // MaxFileBytes bounds a config or legacy manifest.
 const MaxFileBytes = 1 << 20
+
+// testHookBeforeOpen runs between the path check and the open; tests use it
+// to swap the file, as a concurrent local writer could.
+var testHookBeforeOpen = func(string) {}
 
 func readRegular(path string) ([]byte, error) {
 	info, err := os.Lstat(path)
@@ -33,11 +39,17 @@ func readRegular(path string) ([]byte, error) {
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", path)
 	}
-	f, err := os.Open(path)
+	testHookBeforeOpen(path)
+	f, err := openNonBlocking(path)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
+	if fi, err := f.Stat(); err != nil {
+		return nil, err
+	} else if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
 	data, err := io.ReadAll(io.LimitReader(f, MaxFileBytes+1))
 	if err != nil {
 		return nil, err
