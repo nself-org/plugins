@@ -7579,60 +7579,6 @@
       "tier": "free",
       "version": "1.2.13"
     },
-    "transactional-email": {
-      "author": "nself",
-      "catalog": {
-        "maturity": "planned",
-        "requires": {
-          "nself": ">=1.1.0"
-        },
-        "schema": "np_transactional_email",
-        "service_kind": "library"
-      },
-      "category": "communication",
-      "checksum": "c855f419baf8346687bc876bdd766a715adb141b8b55a096016247eb9176411b",
-      "checksums": {
-        "sha256": "c855f419baf8346687bc876bdd766a715adb141b8b55a096016247eb9176411b"
-      },
-      "dependencies": [],
-      "description": "Provider-agnostic transactional email: template rendering, per-tenant domain management, SPF/DKIM reporting, delivery webhook relay.",
-      "download_url": "https://plugins.nself.org/plugins/transactional-email/tarball",
-      "implementation": {
-        "entryPoint": "binary",
-        "language": "go"
-      },
-      "installable": false,
-      "language": "go",
-      "license": "MIT",
-      "minNselfVersion": "1.1.0",
-      "min_nself_version": "1.1.0",
-      "name": "transactional-email",
-      "releaseTag": "v1.2.13",
-      "release_signature": {
-        "alg": "ed25519",
-        "key_id": "plugins-2ebca8dfad98e19e",
-        "sig": "KDunM6V7oR5WWdxCGKhI5LRaGipqdPkH0JfEb8aZcwRArtujni/qHso0/4mNyFml5egj3IndMJu8K4S7EFdTCw=="
-      },
-      "requires_license": false,
-      "tables": [
-        "np_temail_domains",
-        "np_temail_messages",
-        "np_temail_templates"
-      ],
-      "tags": [
-        "email",
-        "transactional",
-        "smtp",
-        "elastic-email",
-        "postmark",
-        "templates",
-        "webhooks"
-      ],
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.13/transactional-email-1.2.13.tar.gz",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.13/transactional-email-1.2.13.tar.gz",
-      "tier": "free",
-      "version": "1.2.13"
-    },
     "vpn": {
       "author": "nself",
       "catalog": {
@@ -8066,7 +8012,7 @@
       "version": "1.2.13"
     }
   },
-  "plugins_count": 131,
+  "plugins_count": 130,
   "schema_version": "2.0.0",
   "tier": "free"
 }
