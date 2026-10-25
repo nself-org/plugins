@@ -107,7 +107,11 @@ func (r *Resolver) Resolve(ctx context.Context, repo Repo, rev Revision) (Resolv
 		ignored = append(ignored, Ignored{Key: "default_branch", Scope: SourceProtectedBranch, Reason: "E672 origin's default branch could not be discovered; main is assumed"})
 	}
 	if branch.Name != "" && branch.Tip == "" {
-		ignored = append(ignored, Ignored{Key: "protected_branch", Scope: SourceProtectedBranch, Reason: "E672 origin exists but origin/" + branch.Name + " could not be fetched or read; no protected-branch scope applies"})
+		why := "could not be fetched or read"
+		if branch.Fetched {
+			why = "was fetched but its tip could not be read"
+		}
+		ignored = append(ignored, Ignored{Key: "protected_branch", Scope: SourceProtectedBranch, Reason: "E672 origin exists but origin/" + branch.Name + " " + why + "; no protected-branch scope applies"})
 	}
 	var tipPolicy map[string]json.RawMessage
 	if branch.Tip != "" {

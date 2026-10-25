@@ -98,6 +98,53 @@ jobs:
         # Expiry: 2026-12-01 — remove once all plugins have pnpm build configured and passing.
         continue-on-error: true
 
+  # D-0623: free/file-processing/ts and free/media-processing/ts link
+  # @nself/plugin-utils from ../../../shared (link:), which only pnpm can install.
+  # Every supported pnpm major installs, typechecks and builds them with
+  # shared/dist absent: the typecheck and build scripts compile shared first.
+  ts-pnpm-matrix:
+    name: pnpm ${{ matrix.pnpm }} / ${{ matrix.plugin }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        pnpm: [9, 10, 11]
+        plugin: [file-processing, media-processing]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: ${{ matrix.pnpm }}
+
+      - name: Install shared dependencies (shared/dist stays absent)
+        working-directory: shared
+        run: |
+          pnpm install --frozen-lockfile
+          test ! -e dist
+
+      - name: Install dependencies
+        working-directory: free/${{ matrix.plugin }}/ts
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        working-directory: free/${{ matrix.plugin }}/ts
+        run: pnpm run typecheck
+
+      - name: Build
+        working-directory: free/${{ matrix.plugin }}/ts
+        run: pnpm run build
+
   lint-typescript:
     name: TypeScript Lint
     runs-on: ubuntu-latest

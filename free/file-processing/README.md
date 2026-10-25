@@ -31,7 +31,7 @@ The plugin requires:
 - **Node.js 18+** (for TypeScript server)
 - **PostgreSQL** (for job storage)
 - **Redis** (for queue management)
-- **Sharp** (for image processing - installed via npm)
+- **Sharp** (for image processing - installed via pnpm)
 - **ffmpeg** (for video thumbnails - optional)
   - macOS: `brew install ffmpeg`
   - Linux: `apt-get install ffmpeg`
@@ -214,8 +214,8 @@ nself plugin file-processing worker
 
 # Or run both in development
 cd plugins/file-processing/ts
-npm run dev    # Server
-npm run worker # Worker (in another terminal)
+pnpm run dev    # Server
+pnpm run worker # Worker (in another terminal)
 ```
 
 ### CLI Commands

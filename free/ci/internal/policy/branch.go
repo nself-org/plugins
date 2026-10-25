@@ -46,6 +46,8 @@ type Branch struct {
 	Fetch FetchState
 	// Assumed: origin's default branch could not be discovered, so Name is the spec fallback main.
 	Assumed bool
+	// Fetched: the fetch itself succeeded. With an empty Tip it means the fetched tip could not be read.
+	Fetched bool
 	Policy  map[string]json.RawMessage // the tip's flat policy; nil when it has none
 }
 
@@ -130,7 +132,7 @@ func readBranch(ctx context.Context, run Runner, root string) (Branch, error) {
 	out, ok := g.git(ctx, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	tip := lastLine(out)
 	if !ok || !fullSHA.MatchString(tip) {
-		b.Fetch = FetchNone
+		b.Fetch, b.Fetched = FetchNone, fetched // fetched but unreadable is told apart from never fetched
 		return b, nil
 	}
 	b.Tip = tip

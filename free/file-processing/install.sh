@@ -16,6 +16,31 @@ source "${SHARED_DIR}/schema-sync.sh"
 # Installation
 # =============================================================================
 
+# ts/ depends on ../../../shared through a link: specifier, which npm cannot
+# install (EUNSUPPORTEDPROTOCOL); pnpm 9, 10 and 11 can. A failed install or
+# build fails the installer: it never reports success over a missing build.
+install_typescript_dependencies() {
+    [[ -d "${PLUGIN_DIR}/ts" ]] || return 0
+    if ! command -v pnpm >/dev/null 2>&1; then
+        plugin_error "pnpm is required to install the TypeScript dependencies (npm cannot install the link: dependency). See https://pnpm.io/installation"
+        return 1
+    fi
+    plugin_info "Installing TypeScript dependencies..."
+    # The ts build compiles shared/ first, which needs shared's own dependencies.
+    if ! (cd "$SHARED_DIR" && pnpm install --frozen-lockfile); then
+        plugin_error "Failed to install the shared dependencies"
+        return 1
+    fi
+    if ! (cd "${PLUGIN_DIR}/ts" && pnpm install --frozen-lockfile); then
+        plugin_error "Failed to install the TypeScript dependencies"
+        return 1
+    fi
+    if ! (cd "${PLUGIN_DIR}/ts" && pnpm run build); then
+        plugin_error "Failed to build the TypeScript sources"
+        return 1
+    fi
+}
+
 install_file_processing_plugin() {
     plugin_info "Installing File Processing plugin..."
 
@@ -95,14 +120,7 @@ install_file_processing_plugin() {
     mkdir -p "${HOME}/.nself/logs/plugins/file-processing"
     mkdir -p "${HOME}/.nself/temp/plugins/file-processing"
 
-    # Install TypeScript dependencies
-    if [[ -d "${PLUGIN_DIR}/ts" ]]; then
-        plugin_info "Installing TypeScript dependencies..."
-        cd "${PLUGIN_DIR}/ts"
-        npm install --silent 2>/dev/null || plugin_warn "Failed to install npm dependencies"
-        npm run build --silent 2>/dev/null || plugin_warn "Failed to build TypeScript"
-        cd - > /dev/null
-    fi
+    install_typescript_dependencies
 
     plugin_success "File Processing plugin installed successfully!"
 
@@ -118,5 +136,7 @@ install_file_processing_plugin() {
     printf "\n"
 }
 
-# Run installation
-install_file_processing_plugin
+# Run installation (only when executed; the test sources this file)
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    install_file_processing_plugin
+fi

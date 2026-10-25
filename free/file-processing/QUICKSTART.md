@@ -55,9 +55,12 @@ REDIS_URL=redis://localhost:6379
 ### 3. Build TypeScript
 
 ```bash
-npm install
-npm run build
+cd ts
+pnpm install --frozen-lockfile
+pnpm run build
 ```
+
+`ts/` links `@nself/plugin-utils` from `../../../shared` (a `link:` dependency), which npm cannot install (`EUNSUPPORTEDPROTOCOL`). Use pnpm 9, 10 or 11. The build compiles `shared/` first, so install its dependencies once: `(cd ../../../shared && pnpm install --frozen-lockfile)`.
 
 ## Usage
 

@@ -1,6 +1,6 @@
 # pnpm >= 10 reads install settings from this file; pnpm >= 11 reads them
 # ONLY from here (package.json "pnpm" is ignored). pnpm 9, which the
-# GitHub nself-ci workflow and the CI hosts run, reads package.json, so
+# Build Plugins workflow's main job and the CI hosts run, reads package.json, so
 # the overrides below are kept identical to package.json pnpm.overrides.
 # packages: ['.'] keeps this directory its own one-package workspace.
 packages:

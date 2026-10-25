@@ -184,3 +184,52 @@ func TestPolicyHookReadsTheRequestStore(t *testing.T) {
 		t.Fatalf("the project pin of the request store was not read: ignored %v", got.IgnoredRun)
 	}
 }
+
+// TestPolicyHookReportsBranchDiagnostics: an origin that cannot be read leaves no
+// protected-branch scope; the hook hands that to the run as a note, it does not
+// return the digest alone.
+func TestPolicyHookReportsBranchDiagnostics(t *testing.T) {
+	ctx := context.Background()
+	root, _, db := runScopeRepo(t)
+	if out, err := exec.Command("git", "-C", root, "remote", "add", "origin", filepath.Join(t.TempDir(), "gone.git")).CombinedOutput(); err != nil {
+		t.Fatalf("git remote add: %s %v", out, err)
+	}
+	got, err := PolicyHook{}.Resolve(ctx, PolicyRequest{Root: root, Store: db})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.IgnoredRun) != 0 || len(got.Notes) == 0 || !strings.Contains(strings.Join(got.Notes, "\n"), "protected_branch: E672") {
+		t.Fatalf("the unreadable origin went unreported: run %v notes %v", got.IgnoredRun, got.Notes)
+	}
+}
+
+func TestPolicyNotes(t *testing.T) {
+	got := policyNotes([]string{"protected_branch: E672 origin exists"})
+	if len(got) != 1 || got[0] != "policy: protected_branch: E672 origin exists" {
+		t.Errorf("notes = %q", got)
+	}
+}
+
+type notedPolicy struct{ lines []string }
+
+func (p notedPolicy) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult, error) {
+	got, err := defaultResolver{}.Resolve(ctx, r)
+	got.Notes = p.lines
+	return got, err
+}
+
+// TestPolicyNotesReachSummary: the resolution diagnostics are notes of the finished run.
+func TestPolicyNotesReachSummary(t *testing.T) {
+	r := passRig(t)
+	r.C.Hooks.Policy = notedPolicy{[]string{"protected_branch: E672 origin exists"}}
+	res := r.run(t)
+	var got []string
+	for _, n := range res.Summary.Notes {
+		if strings.HasPrefix(n, "policy: protected_branch") {
+			got = append(got, n)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("notes = %q", res.Summary.Notes)
+	}
+}
