@@ -108,7 +108,8 @@ func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
 // POST /v1/stop
 // --------------------------------------------------------------------------
 
-// Stop sends SIGTERM to the runner subprocess.
+// Stop terminates the runner subprocess tree (SIGTERM, then SIGKILL) and
+// responds only once it is gone.
 func (h *Handler) Stop(w http.ResponseWriter, r *http.Request) {
 	pid, running, err := h.stopRunnerProcess()
 	if !running {
@@ -120,7 +121,7 @@ func (h *Handler) Stop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("github-runner: sent SIGTERM to runner (PID %d)", pid)
+	log.Printf("github-runner: stopped runner (PID %d)", pid)
 
 	sdk.Respond(w, http.StatusOK, map[string]interface{}{
 		"stopped": true,

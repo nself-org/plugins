@@ -13,6 +13,7 @@ PID_FILE="${LOG_DIR}/runner.pid"
 RUNNER_DIR="${HOME}/.nself/runners/github-runner"
 
 stopped=false
+failed=false
 
 # Try systemd first
 if command -v systemctl &>/dev/null; then
@@ -34,13 +35,19 @@ if [[ -f "$PID_FILE" ]]; then
   pid=$(cat "$PID_FILE")
   if kill -0 "$pid" 2>/dev/null; then
     plugin_info "Stopping runner process (PID: $pid)..."
-    _trust_kill_tree "$pid"
-    sleep 2
-    _trust_kill_tree "$pid" KILL
-    plugin_success "Runner stopped."
-    stopped=true
+    if _trust_kill_tree "$pid"; then
+      plugin_success "Runner stopped."
+      stopped=true
+    else
+      plugin_error "Runner process did not stop."
+      failed=true
+    fi
   fi
-  rm -f "$PID_FILE"
+  [[ "$failed" == "true" ]] || rm -f "$PID_FILE"
+fi
+
+if [[ "$failed" == "true" ]]; then
+  exit 1
 fi
 
 if [[ "$stopped" == "false" ]]; then

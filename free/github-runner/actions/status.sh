@@ -25,7 +25,10 @@ case "$trust_rc" in
   0) printf "  Check:   passed%s\n" "${TRUST_GROUP:+ (group: $TRUST_GROUP)}" ;;
   1)
     printf "  Check:   REFUSED (runner_group_public)\n"
-    trust_stop_runner "$PID_FILE" "$(trust_service_name)" | sed 's/^/  /'
+    stop_rc=0
+    stop_out=$(trust_stop_runner "$PID_FILE" "$(trust_service_name)" 2>&1) || stop_rc=$?
+    [[ -z "$stop_out" ]] || printf '%s\n' "$stop_out" | sed 's/^/  /'
+    [[ "$stop_rc" -eq 0 ]] || printf "  Stop:    FAILED, the runner may still be running (see the message above)\n"
     ;;
   *) printf "  Check:   could not be completed (see the message above)\n" ;;
 esac

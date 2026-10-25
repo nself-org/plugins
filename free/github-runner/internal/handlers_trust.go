@@ -34,8 +34,10 @@ func respondTrustError(w http.ResponseWriter, err error) {
 	sdk.Error(w, http.StatusInternalServerError, err)
 }
 
-// stopRunnerProcess sends SIGTERM to the running runner and its children. It reports
-// whether a runner was running and any signalling error.
+// stopRunnerProcess stops the running runner and its children: SIGTERM, then
+// SIGKILL for survivors after a grace period. It returns without error only
+// once the process tree is verified gone, and reports whether a runner was
+// running.
 func (h *Handler) stopRunnerProcess() (pid int, running bool, err error) {
 	h.state.mu.Lock()
 	running = h.state.Running
@@ -44,8 +46,8 @@ func (h *Handler) stopRunnerProcess() (pid int, running bool, err error) {
 	if !running {
 		return pid, false, nil
 	}
-	if err := signalRunnerTree(pid); err != nil {
-		return pid, true, fmt.Errorf("signal runner process group %d: %w", pid, err)
+	if err := stopRunnerTree(pid); err != nil {
+		return pid, true, fmt.Errorf("stop runner process group %d: %w", pid, err)
 	}
 	return pid, true, nil
 }
