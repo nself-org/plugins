@@ -20,9 +20,11 @@ FFmpeg-based media encoding and processing with HLS streaming support for nself.
 
 ```bash
 cd plugins/media-processing/ts
-npm install
-npm run build
+pnpm install --frozen-lockfile
+pnpm run build
 ```
+
+`ts/` links `@nself/plugin-utils` from `../../../shared` (a `link:` dependency), which npm cannot install (`EUNSUPPORTEDPROTOCOL`). Use pnpm 9, 10 or 11. The build compiles `shared/` first, so install its dependencies once: `(cd ../../../shared && pnpm install --frozen-lockfile)`.
 
 ## Configuration
 
