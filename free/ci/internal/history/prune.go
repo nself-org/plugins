@@ -15,6 +15,8 @@ package history
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/logs"
@@ -159,7 +161,12 @@ func init() {
 			return
 		}
 		home := s.StateDir()
-		pol, _ := LoadPolicy(home)
+		pol, err := LoadPolicy(home)
+		if err != nil {
+			// an unusable retention file must not turn into default limits that delete more than the user allowed
+			fmt.Fprintf(os.Stderr, "note: %s is unusable (%v); skipping the automatic prune\n", ConfigPath(home), err)
+			return
+		}
 		_, _ = Prune(ctx, s.Store, PruneParams{Home: home, Policy: pol, Keep: []string{s.RunID}, MaxRuns: runStartPruneMax})
 	}
 }

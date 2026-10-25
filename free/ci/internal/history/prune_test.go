@@ -306,3 +306,30 @@ func TestPruneResultListsAreNeverNullAndRunStartPruneIsBounded(t *testing.T) {
 		t.Fatalf("rows left: %v", f.ids())
 	}
 }
+
+// A retention.json that cannot be parsed must not make the automatic prune run
+// on the default limits: the old runs stay until the file is fixed.
+func TestRunStartSkipsPruneWhenRetentionFileIsBad(t *testing.T) {
+	f := newFixture(t)
+	f.add("p1", "passed", 90*day, 20) // far beyond the default 30-day age
+	f.add("p2", "passed", 80*day, 20)
+	if err := os.WriteFile(ConfigPath(f.home), []byte(`{nope`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.st.Close()
+	res := runOnce(t, f.home, "echo hi")
+	st, err := store.Open(filepath.Join(f.home, "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	ages, _ := st.PipelineAges(context.Background())
+	var ids []string
+	for _, a := range ages {
+		ids = append(ids, a.ID)
+	}
+	sort.Strings(ids)
+	want := []string{"p1", "p2", res.Summary.RunID}
+	sort.Strings(want)
+	same(t, "rows after the run", ids, want)
+}
