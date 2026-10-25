@@ -23,8 +23,8 @@ trust_rc=0
 trust_check || trust_rc=$?
 case "$trust_rc" in
   0) printf "  Check:   passed%s\n" "${TRUST_GROUP:+ (group: $TRUST_GROUP)}" ;;
-  1)
-    printf "  Check:   REFUSED (runner_group_public)\n"
+  1|4)
+    printf "  Check:   REFUSED (%s)\n" "$([[ "$trust_rc" -eq 1 ]] && echo runner_group_public || echo runner_group_mismatch)"
     stop_rc=0
     stop_out=$(trust_stop_runner "$PID_FILE" "$(trust_service_name)" 2>&1) || stop_rc=$?
     [[ -z "$stop_out" ]] || printf '%s\n' "$stop_out" | sed 's/^/  /'

@@ -29,6 +29,10 @@ const (
 	// CodeTrustUnverifiable means the check could not be completed. The guard
 	// fails closed: a runner that cannot be proven private-only does not run.
 	CodeTrustUnverifiable = "runner_trust_unverifiable"
+	// CodeRunnerGroupMismatch means the runner is registered in a different
+	// group from the configured one, so the group that was checked is not the
+	// group the runner takes jobs from. Re-register the runner to move it.
+	CodeRunnerGroupMismatch = "runner_group_mismatch"
 
 	groupsPageSize = 100
 	maxGroupPages  = 50
@@ -54,6 +58,17 @@ type TrustConfig struct {
 	Repo        string
 	Group       string // empty resolves to the default group
 	AllowPublic bool
+	RunnerName  string // the runner whose registered group is verified (org scope)
+	Registering bool   // a registration is about to (re)place the runner: skip the registered-group check
+}
+
+// runnerName is the display name the runner is registered under.
+func runnerName() string {
+	if name := os.Getenv("GITHUB_RUNNER_NAME"); name != "" {
+		return name
+	}
+	hostname, _ := os.Hostname()
+	return "nself-" + hostname
 }
 
 // TrustConfigFromEnv reads the guard settings from the environment.
@@ -69,6 +84,7 @@ func TrustConfigFromEnv() TrustConfig {
 		Repo:        os.Getenv("GITHUB_RUNNER_REPO"),
 		Group:       strings.TrimSpace(os.Getenv("GITHUB_RUNNER_GROUP")),
 		AllowPublic: strings.EqualFold(strings.TrimSpace(os.Getenv("GITHUB_RUNNER_ALLOW_PUBLIC_REPOS")), "true"),
+		RunnerName:  runnerName(),
 	}
 }
 
@@ -80,6 +96,7 @@ type TrustResult struct {
 }
 
 type runnerGroup struct {
+	ID                       int64  `json:"id"`
 	Name                     string `json:"name"`
 	Default                  bool   `json:"default"`
 	AllowsPublicRepositories *bool  `json:"allows_public_repositories"`
@@ -116,17 +133,81 @@ func checkGroup(ctx context.Context, cfg TrustConfig) (*TrustResult, error) {
 			Message: fmt.Sprintf("GitHub did not report whether runner group %q allows public repositories", g.Name)}
 	}
 	res := &TrustResult{Group: g.Name, Override: cfg.AllowPublic}
-	if !*g.AllowsPublicRepositories {
+	// The configured group passes (or is overridden): the runner must also be in it.
+	registered := func() (*TrustResult, error) {
+		if !cfg.Registering {
+			if err := verifyRegisteredGroup(ctx, cfg, g); err != nil {
+				return nil, err
+			}
+		}
 		return res, nil
+	}
+	if !*g.AllowsPublicRepositories {
+		return registered()
 	}
 	if cfg.AllowPublic {
 		res.Warning = fmt.Sprintf("runner group %q is open to public repositories; GITHUB_RUNNER_ALLOW_PUBLIC_REPOS=true lets fork pull requests run on this host", g.Name)
 		log.Printf("github-runner: WARNING: %s", res.Warning)
-		return res, nil
+		return registered()
 	}
 	return nil, &TrustError{Code: CodeRunnerGroupPublic, Status: http.StatusConflict,
 		Message: fmt.Sprintf("runner group %q is open to public repositories, so fork pull requests could run on this host. "+
 			"Restrict the group to private repositories in the organisation settings, or set GITHUB_RUNNER_ALLOW_PUBLIC_REPOS=true to accept the risk", g.Name)}
+}
+
+// verifyRegisteredGroup refuses a runner that GitHub has registered outside
+// the configured group: the guard reads the configured group, so a runner left
+// in another (possibly public) group by a config change would otherwise pass.
+// A runner that is not registered at all passes (it is about to be).
+func verifyRegisteredGroup(ctx context.Context, cfg TrustConfig, g *runnerGroup) error {
+	if cfg.RunnerName == "" {
+		return nil
+	}
+	if g.ID == 0 {
+		return &TrustError{Code: CodeTrustUnverifiable, Status: http.StatusBadGateway,
+			Message: fmt.Sprintf("GitHub did not report the id of runner group %q", g.Name)}
+	}
+	org := url.PathEscape(cfg.Org)
+	inGroup, err := hasRunner(ctx, cfg, fmt.Sprintf("%s/orgs/%s/actions/runner-groups/%d/runners", githubAPIBase, org, g.ID))
+	if err != nil || inGroup {
+		return err
+	}
+	inOrg, err := hasRunner(ctx, cfg, fmt.Sprintf("%s/orgs/%s/actions/runners", githubAPIBase, org))
+	if err != nil || !inOrg {
+		return err
+	}
+	return &TrustError{Code: CodeRunnerGroupMismatch, Status: http.StatusConflict,
+		Message: fmt.Sprintf("runner %q is registered in a different runner group from the configured %q, so the check above does not cover it. "+
+			"Re-register the runner (install again) so it joins %q, or set GITHUB_RUNNER_GROUP to the group it is in", cfg.RunnerName, g.Name, g.Name)}
+}
+
+// hasRunner pages through a runner list and reports whether it holds the runner.
+func hasRunner(ctx context.Context, cfg TrustConfig, endpoint string) (bool, error) {
+	for page := 1; page <= maxGroupPages; page++ {
+		var body struct {
+			Runners []struct {
+				Name string `json:"name"`
+			} `json:"runners"`
+		}
+		if err := githubGet(ctx, cfg.PAT, fmt.Sprintf("%s?per_page=%d&page=%d", endpoint, groupsPageSize, page), &body); err != nil {
+			return false, err
+		}
+		for _, r := range body.Runners {
+			if strings.EqualFold(r.Name, cfg.RunnerName) {
+				return true, nil
+			}
+		}
+		if len(body.Runners) < groupsPageSize {
+			return false, nil
+		}
+	}
+	return false, &TrustError{Code: CodeTrustUnverifiable, Status: http.StatusBadGateway,
+		Message: "the runner list is too long to search"}
+}
+
+// stopsRunner reports whether a refusal with code must stop a running runner.
+func stopsRunner(code string) bool {
+	return code == CodeRunnerGroupPublic || code == CodeRunnerGroupMismatch
 }
 
 // findGroup pages through the org runner groups and returns the configured

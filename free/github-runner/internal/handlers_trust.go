@@ -66,14 +66,14 @@ func (h *Handler) enforceTrust(ctx context.Context) trustStatus {
 	if errors.As(err, &te) {
 		ts.Code, ts.Message = te.Code, te.Message
 	}
-	if ts.Code == CodeRunnerGroupPublic {
+	if stopsRunner(ts.Code) {
 		pid, was, serr := h.stopRunnerProcess()
 		switch {
 		case serr != nil:
 			log.Printf("github-runner: trust guard could not stop runner: %v", serr)
 		case was:
 			ts.Stopped = true
-			log.Printf("github-runner: runner group or repo is now open to public repositories; stopped runner (PID %d)", pid)
+			log.Printf("github-runner: runner group or repo failed the trust check; stopped runner (PID %d)", pid)
 		}
 	}
 	return ts

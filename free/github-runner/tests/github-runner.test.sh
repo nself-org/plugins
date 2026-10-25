@@ -115,6 +115,9 @@ if $head_only; then
   exit 0
 fi
 case "$url" in
+  # runner lists (default: no runner registered): a group's runners, then the org's
+  */runner-groups/*/runners*) f="$STUB_DIR/api/group-runners.json"; [[ -f "$f" ]] || { code=200; echo '{"runners":[]}'; $want_status && printf '\n%s' "$code"; exit 0; } ;;
+  */actions/runners\?*) f="$STUB_DIR/api/org-runners.json"; [[ -f "$f" ]] || { code=200; echo '{"runners":[]}'; $want_status && printf '\n%s' "$code"; exit 0; } ;;
   *runner-groups*page=*) f="$STUB_DIR/api/groups-${url##*page=}.json" ;;
   */repos/*/actions/runners/registration-token) f="$STUB_DIR/api/token.json" ;;
   */orgs/*/actions/runners/registration-token) f="$STUB_DIR/api/token.json" ;;
@@ -129,8 +132,8 @@ chmod +x "$T/bin/curl"
 export STUB_DIR="$T" PATH="$T/bin:$PATH"
 
 reset_api() { rm -f "$T"/api/* "$T/argv.log"; : > "$T/argv.log"; }
-group_json() { # name default public
-  printf '{"id":1,"name":"%s","default":%s,"allows_public_repositories":%s}' "$1" "$2" "$3"
+group_json() { # name default public [id]
+  printf '{"id":%s,"name":"%s","default":%s,"allows_public_repositories":%s}' "${4:-1}" "$1" "$2" "$3"
 }
 export GITHUB_RUNNER_PAT="$FAKE_PAT" GITHUB_RUNNER_ORG="acme" HOME="$T/home"
 unset GITHUB_RUNNER_GROUP GITHUB_RUNNER_SCOPE GITHUB_RUNNER_REPO GITHUB_RUNNER_ALLOW_PUBLIC_REPOS ENV 2>/dev/null || true
@@ -164,6 +167,21 @@ reset_api
 printf '{"runner_groups":[%s,%s]}' "$(group_json Default true true)" "$(group_json CI false false)" > "$T/api/groups-1.json"
 GITHUB_RUNNER_GROUP=ci run_check
 [[ "$RC" == 0 ]] && pass "named private group proceeds while the default is public" || fail "named group: rc=$RC err=$ERR"
+
+# A runner registered in another group than the configured one is refused (D-1180).
+reset_api
+printf '{"runner_groups":[%s,%s]}' "$(group_json Default true true)" "$(group_json CI false false 2)" > "$T/api/groups-1.json"
+printf '{"runners":[{"name":"n1"}]}' > "$T/api/org-runners.json"
+GITHUB_RUNNER_GROUP=CI GITHUB_RUNNER_NAME=n1 run_check
+[[ "$RC" == 4 && "$ERR" == *runner_group_mismatch* ]] && pass "runner registered in another group is refused with runner_group_mismatch" || fail "mismatch: rc=$RC err=$ERR"
+GITHUB_RUNNER_GROUP=CI GITHUB_RUNNER_NAME=n1 TRUST_REGISTERING=true run_check
+[[ "$RC" == 0 ]] && pass "install (TRUST_REGISTERING) may move a runner into the configured group" || fail "registering: rc=$RC err=$ERR"
+printf '{"runners":[{"name":"N1"}]}' > "$T/api/group-runners.json"
+GITHUB_RUNNER_GROUP=CI GITHUB_RUNNER_NAME=n1 run_check
+[[ "$RC" == 0 ]] && pass "runner registered in the configured group proceeds" || fail "in group: rc=$RC err=$ERR"
+rm -f "$T/api/group-runners.json" "$T/api/org-runners.json"
+GITHUB_RUNNER_GROUP=CI GITHUB_RUNNER_NAME=n1 run_check
+[[ "$RC" == 0 ]] && pass "runner not registered anywhere proceeds" || fail "unregistered: rc=$RC err=$ERR"
 
 # Missing flag and API failure fail closed.
 reset_api

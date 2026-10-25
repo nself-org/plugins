@@ -19,11 +19,11 @@ func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
 	trust, err := CheckTrust(r.Context(), TrustConfigFromEnv())
 	if err != nil {
 		var te *TrustError
-		if errors.As(err, &te) && te.Code == CodeRunnerGroupPublic {
+		if errors.As(err, &te) && stopsRunner(te.Code) {
 			if pid, was, serr := h.stopRunnerProcess(); serr != nil {
 				log.Printf("github-runner: trust guard could not stop runner: %v", serr)
 			} else if was {
-				log.Printf("github-runner: runner group or repo is now open to public repositories; stopped runner (PID %d)", pid)
+				log.Printf("github-runner: runner group or repo failed the trust check; stopped runner (PID %d)", pid)
 			}
 		}
 		respondTrustError(w, err)

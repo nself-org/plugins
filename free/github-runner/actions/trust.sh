@@ -53,7 +53,10 @@ trust_scope() {
 trust_valid_name() { [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]]; }
 
 # trust_check: 0 = trusted (or override set), 1 = refused (runner_group_public),
-# 2 = unverifiable (fail closed), 3 = group not found. Sets TRUST_GROUP.
+# 2 = unverifiable (fail closed), 3 = group not found, 4 = the runner is
+# registered in another group than the configured one (runner_group_mismatch).
+# Sets TRUST_GROUP. TRUST_REGISTERING=true (install.sh, about to register with
+# --replace) skips the registered-group check so a re-install can move a runner.
 trust_check() {
   local org="${GITHUB_RUNNER_ORG:-}" scope
   local allow="${GITHUB_RUNNER_ALLOW_PUBLIC_REPOS:-false}"
@@ -76,13 +79,13 @@ trust_check() {
 }
 
 _trust_check_group() {
-  local org="$1" group="$2" allow="$3" page body found public count
+  local org="$1" group="$2" allow="$3" page body found public count gid rest
   for ((page = 1; page <= TRUST_MAX_PAGES; page++)); do
     body=$(trust_api_get "${TRUST_API_BASE}/orgs/${org}/actions/runner-groups?per_page=${TRUST_GROUP_PAGE_SIZE}&page=${page}") \
       || { trust_unverifiable "GitHub API call for the runner groups failed (token needs the organisation \"Self-hosted runners\" permission)"; return 2; }
     found=$(printf '%s' "$body" | jq -r --arg g "$group" '
       [.runner_groups[]? | select(if $g == "" then .default == true else (.name | ascii_downcase) == ($g | ascii_downcase) end)]
-      | first | if . == null then "" else "\(.name)\t\(.allows_public_repositories)" end' 2>/dev/null) \
+      | first | if . == null then "" else "\(.name)\t\(.allows_public_repositories)\t\(.id)" end' 2>/dev/null) \
       || { trust_unverifiable "could not decode the runner groups response"; return 2; }
     [[ -n "$found" ]] && break
     count=$(printf '%s' "$body" | jq '.runner_groups | length' 2>/dev/null) || count=0
@@ -93,14 +96,53 @@ _trust_check_group() {
     return 3
   fi
   TRUST_GROUP="${found%%$'\t'*}"
-  public="${found##*$'\t'}"
+  rest="${found#*$'\t'}"
+  public="${rest%%$'\t'*}"
+  gid="${rest##*$'\t'}"
   case "$public" in
-    false) return 0 ;;
+    false) _trust_registered_group "$org" "$gid"; return $? ;;
     true) ;;
     *) trust_unverifiable "GitHub did not report whether runner group \"${TRUST_GROUP}\" allows public repositories"; return 2 ;;
   esac
   _trust_public "runner group \"${TRUST_GROUP}\" is open to public repositories" \
-    "Restrict the group to private repositories in the organisation settings" "$allow"
+    "Restrict the group to private repositories in the organisation settings" "$allow" || return $?
+  _trust_registered_group "$org" "$gid"
+}
+
+# _trust_has_runner URL NAME: 0 if the paged runner list at URL holds NAME
+# (case-insensitive), 1 if not, 2 if the list could not be read.
+_trust_has_runner() {
+  local url="$1" name="$2" page body hit count
+  for ((page = 1; page <= TRUST_MAX_PAGES; page++)); do
+    body=$(trust_api_get "${url}?per_page=${TRUST_GROUP_PAGE_SIZE}&page=${page}") || return 2
+    hit=$(printf '%s' "$body" | jq -r --arg n "$name" '[.runners[]? | select((.name | ascii_downcase) == ($n | ascii_downcase))] | length' 2>/dev/null) || return 2
+    [[ "${hit:-0}" =~ ^[0-9]+$ ]] || return 2
+    [[ "$hit" -eq 0 ]] || return 0
+    count=$(printf '%s' "$body" | jq '.runners | length' 2>/dev/null) || return 2
+    [[ "${count:-0}" =~ ^[0-9]+$ && "${count:-0}" -lt "$TRUST_GROUP_PAGE_SIZE" ]] && return 1
+  done
+  return 2
+}
+
+# _trust_registered_group ORG GROUP_ID: the configured group passed, so the
+# runner must be in it too. A runner registered in another group (the config
+# changed without re-registering) is refused (4); one that is not registered at
+# all passes. Skipped while TRUST_REGISTERING=true.
+_trust_registered_group() {
+  local org="$1" gid="$2" name="${GITHUB_RUNNER_NAME:-$(hostname)-nself}" rc
+  [[ "${TRUST_REGISTERING:-false}" != "true" ]] || return 0
+  [[ "$gid" =~ ^[0-9]+$ ]] || { trust_unverifiable "GitHub did not report the id of runner group \"${TRUST_GROUP}\""; return 2; }
+  rc=0; _trust_has_runner "${TRUST_API_BASE}/orgs/${org}/actions/runner-groups/${gid}/runners" "$name" || rc=$?
+  [[ "$rc" -eq 1 ]] || { [[ "$rc" -eq 0 ]] && return 0; trust_unverifiable "GitHub API call for the runners of group \"${TRUST_GROUP}\" failed"; return 2; }
+  rc=0; _trust_has_runner "${TRUST_API_BASE}/orgs/${org}/actions/runners" "$name" || rc=$?
+  case "$rc" in
+    1) return 0 ;;
+    0) ;;
+    *) trust_unverifiable "GitHub API call for the organisation runners failed"; return 2 ;;
+  esac
+  printf 'runner_group_mismatch: runner "%s" is registered in a different runner group from the configured "%s", so the check above does not cover it. Re-register the runner (install again) so it joins "%s", or set GITHUB_RUNNER_GROUP to the group it is in\n' \
+    "$name" "$TRUST_GROUP" "$TRUST_GROUP" >&2
+  return 4
 }
 
 _trust_check_repo() {
