@@ -177,9 +177,29 @@ func scenarioRestart(t *testing.T) {
 			t.Fatalf("line-%d reached the runs %d times: old %v new %v", i, n, old.lines(), e.sink.lines())
 		}
 	}
-	after, _, _ := e.st.TokenCheck(context.Background(), cl.JTI)
-	if after.Session == before.Session || after.Serial != before.Serial {
-		t.Fatalf("the token must move to the new session of the same certificate: before %+v after %+v", before, after)
+	// Which token carried the lines after the restart is a race of two streams: the re-adopted run offers the lease
+	// again with a token of its own (the carrier then swaps to it), and the agent's reconcile heartbeat may be
+	// answered before or after that offer. In one order the old token moves to the new session and the new one is
+	// never presented; in the other the old one stays on the dead session and the new one is bound fresh. Either
+	// way the token that carried them must belong to the new session of the same certificate.
+	var after store.TokenBinding
+	eventually(t, 10*time.Second, "a token of the lease to be bound to the new session", func() bool {
+		jtis := []string{cl.JTI}
+		if _, held := c.tokenSnapshot(); held[run.l.LeaseID] != "" {
+			if tc, verr := e.tokens.Verify(held[run.l.LeaseID]); verr == nil && tc.JTI != cl.JTI {
+				jtis = append(jtis, tc.JTI)
+			}
+		}
+		for _, jti := range jtis {
+			if b, ok, _ := e.st.TokenCheck(context.Background(), jti); ok && b.Session != before.Session {
+				after = b
+				return true
+			}
+		}
+		return false
+	})
+	if after.Serial != before.Serial {
+		t.Fatalf("the token must stay on the same certificate: before %+v after %+v", before, after)
 	}
 	b := readLog(t, LogFile(e.drv.LogDir, run.l.LeaseID))
 	if strings.Count(b, "\n") != 16 {
