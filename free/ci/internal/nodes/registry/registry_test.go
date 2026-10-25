@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -285,5 +286,54 @@ func TestTrustRequiresAdminAuthority(t *testing.T) {
 	}
 	if err := r.Store.NodeSetTrust(context.Background(), n.Record, store.AdminAuthority{}); err == nil {
 		t.Fatal("store accepted zero authority")
+	}
+}
+
+// TestNodeReportCannotSetHostedOrProviderLabels: a node report may not make itself hosted (which skips the
+// AuthorizedProjects check) or claim an nself.* label; the burst policy actor still can (D-1402).
+func TestNodeReportCannotSetHostedOrProviderLabels(t *testing.T) {
+	r, c := setup(t)
+	ctx := context.Background()
+	id := c.Identity.ID
+	hosted := "hosted"
+	report := c
+	report.Location.Kind = model.Fact[string]{Value: &hosted, Source: "self", ObservedAt: time.Now().UTC(), Confidence: "known"}
+	report.Identity.Labels = append(append([]string(nil), c.Identity.Labels...), "nself.repo=acme/app", "nself.provider=github", "gpu=none")
+	for _, actor := range []string{"agent", "probe", "system-install"} {
+		n, _, err := r.UpdateCapability(ctx, id, report, actor)
+		if err != nil {
+			t.Fatalf("%s: %v", actor, err)
+		}
+		if k := n.Capability.Location.Kind.Value; k != nil && *k == "hosted" {
+			t.Fatalf("%s: a node report made the node hosted", actor)
+		}
+		for _, l := range n.Capability.Identity.Labels {
+			if strings.HasPrefix(l, "nself.") {
+				t.Fatalf("%s: a node report added label %q", actor, l)
+			}
+		}
+		if !slices.Contains(n.Capability.Identity.Labels, "gpu=none") {
+			t.Fatalf("%s: an ordinary label was dropped: %v", actor, n.Capability.Identity.Labels)
+		}
+	}
+	// The coordinator-side policy actor sets both, and a later node report can neither clear nor replace them.
+	n, _, err := r.UpdateCapability(ctx, id, report, PolicyActorPrefix+"burst")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := n.Capability.Location.Kind.Value; k == nil || *k != "hosted" || !slices.Contains(n.Capability.Identity.Labels, "nself.repo=acme/app") {
+		t.Fatalf("policy actor could not set hosted and labels: %v %v", n.Capability.Location.Kind.Value, n.Capability.Identity.Labels)
+	}
+	back := c
+	back.Identity.Labels = []string{"nself.repo=evil/other"}
+	n, _, err = r.UpdateCapability(ctx, id, back, "agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := n.Capability.Location.Kind.Value; k == nil || *k != "hosted" {
+		t.Fatal("a node report cleared the hosted location")
+	}
+	if !slices.Contains(n.Capability.Identity.Labels, "nself.repo=acme/app") || slices.Contains(n.Capability.Identity.Labels, "nself.repo=evil/other") {
+		t.Fatalf("a node report replaced a provider label: %v", n.Capability.Identity.Labels)
 	}
 }

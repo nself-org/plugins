@@ -132,6 +132,13 @@ func RegisterDefaultSource(fn DefaultSourceFunc) {
 	ext.defSource = fn
 }
 
+// CoordinatorUsage is the help text of --coordinator, the one flag every routed `nodes` subcommand takes.
+const CoordinatorUsage = "run this on the TEAM coordinator at https://host[:port] (an admin or member user credential; not for add, pair or test)"
+
+// AddCoordinatorFlag declares --coordinator on a `nodes` flag set so help and the generated reference list it.
+// The cmd dispatcher takes the flag out of argv before the subcommand parses, so the value is never read here.
+func AddCoordinatorFlag(fs *flag.FlagSet) { fs.String("coordinator", "", CoordinatorUsage) }
+
 // RegisterFlags lets a later Ticket add flags to a subcommand.
 func RegisterFlags(subcommand string, fn FlagsFunc) {
 	if subcommand == "" || fn == nil {
