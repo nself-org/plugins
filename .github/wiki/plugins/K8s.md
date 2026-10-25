@@ -331,7 +331,7 @@ unknown-flag envelope.
 | `backup` | `file`, `metadata_file`, `bytes`, `sha256`, `tables[]` (`schema`, `table`, `rows`) |
 | `restore` | `file`, `verified` (always `true`), `tables[]` (`schema`, `table`, `rows`) |
 
-Database error text never reaches an envelope: `cause` holds fixed text only. Human mode prints the first error line of `pg_dump` or `pg_restore` after the code, with every quoted part masked as `…`, `DETAIL`, `CONTEXT` and `HINT` dropped, at most 160 characters.
+Database error text never reaches an envelope: `cause` holds fixed text only. Human mode appends `[error category: …]` after the code: fixed words for the failure category of the first error line of `pg_dump` or `pg_restore` (for example `unique constraint violated`, `permission denied`), drawn from an allowlist, at most 160 bytes. None of the line's own text is shown; a line with no known category is reported as withheld.
 
 An error envelope carries `error.code`, `message`, optional `cause` and `remediation`, `exit_code` and `class`; the process exit
 status equals `exit_code`. Messages never carry a secret, the licence key or helm's release JSON. Without `--json` every

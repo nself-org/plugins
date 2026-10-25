@@ -8,8 +8,8 @@
 //
 // Constraints: messages, remediations and causes are fixed text: a step, an exit status, a
 // marker state, a count of error lines, or table names (E737). Database-provided error
-// text is kept apart in Detail and never reaches the envelope; HumanDetail masks it for
-// human-mode stderr.
+// text is kept apart in Detail and never reaches the envelope; HumanDetail turns it into
+// allowlisted category words for human-mode stderr.
 //
 //	E730 kubectl not on PATH                                     infra
 //	E731 postgres pod not found, not unique or not reachable     user
