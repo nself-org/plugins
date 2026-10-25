@@ -90,3 +90,21 @@ func TestBaselineContainerKeepsImagePathAndToolchain(t *testing.T) {
 		}
 	}
 }
+
+// D-1185: a host with podman and no docker runs the baseline container with podman.
+func TestBaselineContainerUsesPodmanWhenDockerIsAbsent(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "podman-ran")
+	if err := os.WriteFile(filepath.Join(dir, "podman"), []byte("#!/bin/sh\n: > "+marker+"\nexit 0\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	r := (&Executor{Env: AllowlistEnv{}}).Run(context.Background(), JobSpec{AttemptID: "podman", CoordinatorID: "coord", Home: t.TempDir(),
+		Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}}, Command: []string{"true"}})
+	if r.Err != nil {
+		t.Fatal(r.Err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("podman was not run: %v", err)
+	}
+}

@@ -31,17 +31,23 @@ var refRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64}$`)
 // only when the process could not run (the doctor and report funnel).
 type Capture func(ctx context.Context, argv ...string) (string, int, error)
 
+// rcNotFound is the exit code of the shell when the command is not installed.
+const rcNotFound = 127
+
 // Resolver turns the environment and the pins into an image reference.
 type Resolver struct {
 	Getenv   func(string) string
 	ReadFile func(string) ([]byte, error)
 	Capture  Capture // nil: do not check or pull the image
+	// Runtimes are the container CLIs tried in order; the first one that can run
+	// is used for the inspect and the pull. Empty means docker, then podman.
+	Runtimes []string
 
 	mu   sync.Mutex
 	have map[string]bool
 }
 
-// NewResolver reads the real process environment and uses capture for docker.
+// NewResolver reads the real process environment and uses capture for docker or podman.
 func NewResolver(capture Capture) *Resolver {
 	return &Resolver{Getenv: os.Getenv, ReadFile: os.ReadFile, Capture: capture}
 }
@@ -95,7 +101,7 @@ func (r *Resolver) table() (Versions, error) {
 	return ParseVersions(b)
 }
 
-// ensure makes ref present on the host. docker verifies the manifest digest
+// ensure makes ref present on the host. The container runtime verifies the manifest digest
 // while pulling, so content that does not match the pin never lands.
 func (r *Resolver) ensure(ctx context.Context, ref string) error {
 	if r.Capture == nil {
@@ -106,10 +112,25 @@ func (r *Resolver) ensure(ctx context.Context, ref string) error {
 	if r.have[ref] {
 		return nil
 	}
-	if _, rc, err := r.Capture(ctx, "docker", "image", "inspect", "--format", "{{.Id}}", ref); err == nil && rc == 0 {
-		return r.remember(ref)
+	runtimes := r.Runtimes
+	if len(runtimes) == 0 {
+		runtimes = []string{"docker", "podman"}
 	}
-	out, rc, err := r.Capture(ctx, "docker", "pull", "--quiet", ref)
+	for i, rt := range runtimes {
+		_, rc, err := r.Capture(ctx, rt, "image", "inspect", "--format", "{{.Id}}", ref)
+		if (err != nil || rc == rcNotFound) && i < len(runtimes)-1 {
+			continue // this CLI is not installed: try the next one
+		}
+		if err == nil && rc == 0 {
+			return r.remember(ref)
+		}
+		return r.pull(ctx, rt, ref)
+	}
+	return nil // unreachable: the last runtime always returns above
+}
+
+func (r *Resolver) pull(ctx context.Context, runtime, ref string) error {
+	out, rc, err := r.Capture(ctx, runtime, "pull", "--quiet", ref)
 	if err != nil || rc != 0 {
 		return fail("cannot pull %s (digest mismatch, unknown digest or registry unreachable): %s", ref, tail(out, err))
 	}

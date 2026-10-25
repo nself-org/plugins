@@ -105,3 +105,38 @@ func TestEnsurePullsOnceAndMapsFailureToE645(t *testing.T) {
 		t.Fatalf("failed pull error = %v", err)
 	}
 }
+
+// D-1185: with no docker CLI the image is inspected and pulled with podman.
+func TestEnsureFallsBackToPodmanWhenDockerCannotRun(t *testing.T) {
+	ref := "docker.io/library/alpine:3.22@" + pinnedDigest
+	env := envOf(map[string]string{EnvImage: ref})
+	var calls []string
+	capture := func(_ context.Context, argv ...string) (string, int, error) {
+		calls = append(calls, argv[0]+" "+argv[1])
+		if argv[0] == "docker" { // the exec funnel reports a missing CLI as the shell's 127
+			return "ci-job: line 0: exec: docker: not found", 127, nil
+		}
+		if argv[1] == "image" {
+			return "", 1, nil
+		}
+		return "pulled", 0, nil
+	}
+	if got, err := (&Resolver{Getenv: env, Capture: capture}).Resolve(context.Background()); err != nil || got != ref {
+		t.Fatalf("resolve: %q %v", got, err)
+	}
+	if want := "docker image,podman image,podman pull"; strings.Join(calls, ",") != want {
+		t.Fatalf("calls %v, want %s", calls, want)
+	}
+
+	calls = nil
+	present := func(_ context.Context, argv ...string) (string, int, error) {
+		calls = append(calls, argv[0]+" "+argv[1])
+		if argv[0] == "docker" {
+			return "", -1, errors.New("executable file not found")
+		}
+		return "", 0, nil
+	}
+	if _, err := (&Resolver{Getenv: env, Capture: present}).Resolve(context.Background()); err != nil || len(calls) != 2 {
+		t.Fatalf("image present under podman: %v calls %v", err, calls)
+	}
+}
