@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -89,13 +90,31 @@ func newFakeGitHub(t *testing.T, f *fakeGitHub) {
 	t.Cleanup(func() { githubAPIBase = old; srv.Close() })
 }
 
+// testRunnerID is the id the fake GitHub gives the runner called name.
+func testRunnerID(name string) int64 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(name))
+	return int64(h.Sum32()%100000) + 1
+}
+
+// writeDotRunner persists a registration the way the runner binary does (with
+// a UTF-8 BOM) in the runner dir.
+func writeDotRunner(t *testing.T, dir, name string) {
+	t.Helper()
+	body := fmt.Sprintf("\xef\xbb\xbf{\"agentId\": %d, \"agentName\": %q, \"poolId\": 1}", testRunnerID(name), name)
+	if err := os.WriteFile(filepath.Join(dir, ".runner"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func serveRunners(w http.ResponseWriter, names []string) {
 	type runner struct {
+		ID   int64  `json:"id"`
 		Name string `json:"name"`
 	}
 	out := []runner{}
 	for _, n := range names {
-		out = append(out, runner{n})
+		out = append(out, runner{testRunnerID(n), n})
 	}
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"total_count": len(out), "runners": out})
 }
@@ -426,6 +445,88 @@ func TestCheckTrust_RunnerRegisteredInAnotherGroupIsRefused(t *testing.T) {
 	cfg.Registering = true
 	if _, err := CheckTrust(t.Context(), cfg); err != nil {
 		t.Fatalf("re-registering must be able to move the runner: %v", err)
+	}
+}
+
+// Changing GITHUB_RUNNER_NAME (or the hostname) must not hide the installed
+// runner: the registration persisted in the runner dir is checked as well.
+func TestCheckTrust_PersistedRegistrationInAnotherGroupIsRefused(t *testing.T) {
+	f := &fakeGitHub{
+		groups: []runnerGroup{
+			{Name: "Default", Default: true, AllowsPublicRepositories: pb(true)},
+			{Name: "CI", AllowsPublicRepositories: pb(false)},
+		},
+		// the installed runner "old" sits in the public Default group; "n1" is the new, unregistered name
+		runners: map[string][]string{"Default": {"old"}},
+	}
+	newFakeGitHub(t, f)
+	dir := trustEnv(t)
+	t.Setenv("GITHUB_RUNNER_GROUP", "CI")
+	writeDotRunner(t, dir, "old")
+
+	_, err := CheckTrust(t.Context(), TrustConfigFromEnv())
+	var te *TrustError
+	if !errors.As(err, &te) || te.Code != CodeRunnerGroupMismatch || te.Status != http.StatusConflict {
+		t.Fatalf("a renamed runner whose installed registration is in another group must be refused, got %v", err)
+	}
+
+	// the same through the status endpoint's guard: it must stop a running runner
+	if !stopsRunner(te.Code) {
+		t.Error("runner_group_mismatch must stop a running runner")
+	}
+
+	// the installed registration is in the configured group: passes
+	f.runners = map[string][]string{"CI": {"old"}}
+	if _, err := CheckTrust(t.Context(), TrustConfigFromEnv()); err != nil {
+		t.Fatalf("an installed runner in the configured group must pass: %v", err)
+	}
+	// the installed registration is unknown to GitHub: nothing to take jobs from, passes
+	f.runners = map[string][]string{"Default": {"someone-else"}}
+	if _, err := CheckTrust(t.Context(), TrustConfigFromEnv()); err != nil {
+		t.Fatalf("a registration GitHub does not know must pass: %v", err)
+	}
+	// registering replaces the runner: no check of the old registration
+	f.runners = map[string][]string{"Default": {"old"}}
+	cfg := TrustConfigFromEnv()
+	cfg.Registering = true
+	if _, err := CheckTrust(t.Context(), cfg); err != nil {
+		t.Fatalf("re-registering must be able to move the runner: %v", err)
+	}
+}
+
+// The configured name being in the right group must not excuse a different
+// installed registration that sits elsewhere.
+func TestCheckTrust_ConfiguredNameInGroupDoesNotExcuseInstalledRunner(t *testing.T) {
+	f := &fakeGitHub{
+		groups: []runnerGroup{
+			{Name: "Default", Default: true, AllowsPublicRepositories: pb(true)},
+			{Name: "CI", AllowsPublicRepositories: pb(false)},
+		},
+		runners: map[string][]string{"CI": {"n1"}, "Default": {"old"}},
+	}
+	newFakeGitHub(t, f)
+	dir := trustEnv(t)
+	t.Setenv("GITHUB_RUNNER_GROUP", "CI")
+	writeDotRunner(t, dir, "old")
+	_, err := CheckTrust(t.Context(), TrustConfigFromEnv())
+	var te *TrustError
+	if !errors.As(err, &te) || te.Code != CodeRunnerGroupMismatch {
+		t.Fatalf("want runner_group_mismatch, got %v", err)
+	}
+}
+
+// A .runner file the guard cannot read fails closed.
+func TestCheckTrust_UnreadableRegistrationFailsClosed(t *testing.T) {
+	f := &fakeGitHub{groups: []runnerGroup{{Name: "Default", Default: true, AllowsPublicRepositories: pb(false)}}}
+	newFakeGitHub(t, f)
+	dir := trustEnv(t)
+	if err := os.WriteFile(filepath.Join(dir, ".runner"), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := CheckTrust(t.Context(), TrustConfigFromEnv())
+	var te *TrustError
+	if !errors.As(err, &te) || te.Code != CodeTrustUnverifiable {
+		t.Fatalf("a corrupt .runner must fail closed, got %v", err)
 	}
 }
 

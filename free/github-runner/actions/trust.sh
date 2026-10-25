@@ -109,13 +109,15 @@ _trust_check_group() {
   _trust_registered_group "$org" "$gid"
 }
 
-# _trust_has_runner URL NAME: 0 if the paged runner list at URL holds NAME
-# (case-insensitive), 1 if not, 2 if the list could not be read.
+# _trust_has_runner URL NAME ID: 0 if the paged runner list at URL holds the
+# runner, 1 if not, 2 if the list could not be read. With an ID it matches the
+# id GitHub issued (the persisted registration); else NAME, case-insensitive.
 _trust_has_runner() {
-  local url="$1" name="$2" page body hit count
+  local url="$1" name="$2" id="$3" page body hit count
   for ((page = 1; page <= TRUST_MAX_PAGES; page++)); do
     body=$(trust_api_get "${url}?per_page=${TRUST_GROUP_PAGE_SIZE}&page=${page}") || return 2
-    hit=$(printf '%s' "$body" | jq -r --arg n "$name" '[.runners[]? | select((.name | ascii_downcase) == ($n | ascii_downcase))] | length' 2>/dev/null) || return 2
+    hit=$(printf '%s' "$body" | jq -r --arg n "$name" --arg id "$id" \
+      '[.runners[]? | select(if $id != "" then (.id | tostring) == $id else (.name | ascii_downcase) == ($n | ascii_downcase) end)] | length' 2>/dev/null) || return 2
     [[ "${hit:-0}" =~ ^[0-9]+$ ]] || return 2
     [[ "$hit" -eq 0 ]] || return 0
     count=$(printf '%s' "$body" | jq '.runners | length' 2>/dev/null) || return 2
@@ -124,25 +126,56 @@ _trust_has_runner() {
   return 2
 }
 
+# _trust_persisted_runner: print "ID<TAB>NAME" of the registration the runner
+# binary persisted in RUNNER_DIR/.runner (written with a UTF-8 BOM). Prints
+# nothing and succeeds when the file is absent (not registered); fails when it
+# exists but names no runner, so the caller fails closed.
+_trust_persisted_runner() {
+  local f="${RUNNER_DIR:-${HOME}/.nself/runners/github-runner}/.runner"
+  [[ -e "$f" ]] || return 0
+  LC_ALL=C sed $'1s/^\xEF\xBB\xBF//' "$f" 2>/dev/null \
+    | jq -er 'select((.agentId // "") != "" or (.agentName // "") != "") | "\(.agentId // "")\t\(.agentName // "")"'
+}
+
+# _trust_runner_in_other_group ORG GID ID NAME: 0 = the runner is in the
+# organisation but not in group GID (mismatch), 1 = fine (in the group, or
+# unknown to GitHub), 2 = a list could not be read.
+_trust_runner_in_other_group() {
+  local org="$1" gid="$2" id="$3" name="$4" rc
+  rc=0; _trust_has_runner "${TRUST_API_BASE}/orgs/${org}/actions/runner-groups/${gid}/runners" "$name" "$id" || rc=$?
+  case "$rc" in 0) return 1 ;; 1) ;; *) return 2 ;; esac
+  rc=0; _trust_has_runner "${TRUST_API_BASE}/orgs/${org}/actions/runners" "$name" "$id" || rc=$?
+  case "$rc" in 0) return 0 ;; 1) return 1 ;; *) return 2 ;; esac
+}
+
 # _trust_registered_group ORG GROUP_ID: the configured group passed, so the
 # runner must be in it too. A runner registered in another group (the config
 # changed without re-registering) is refused (4); one that is not registered at
-# all passes. Skipped while TRUST_REGISTERING=true.
+# all passes. Both the configured name and the registration persisted in
+# RUNNER_DIR/.runner are checked, so renaming the runner (GITHUB_RUNNER_NAME or
+# the hostname) does not hide the installed one. Skipped while
+# TRUST_REGISTERING=true.
 _trust_registered_group() {
-  local org="$1" gid="$2" name="${GITHUB_RUNNER_NAME:-$(hostname)-nself}" rc
+  local org="$1" gid="$2" name="${GITHUB_RUNNER_NAME:-$(hostname)-nself}" persisted pid pname rc ref
   [[ "${TRUST_REGISTERING:-false}" != "true" ]] || return 0
   [[ "$gid" =~ ^[0-9]+$ ]] || { trust_unverifiable "GitHub did not report the id of runner group \"${TRUST_GROUP}\""; return 2; }
-  rc=0; _trust_has_runner "${TRUST_API_BASE}/orgs/${org}/actions/runner-groups/${gid}/runners" "$name" || rc=$?
-  [[ "$rc" -eq 1 ]] || { [[ "$rc" -eq 0 ]] && return 0; trust_unverifiable "GitHub API call for the runners of group \"${TRUST_GROUP}\" failed"; return 2; }
-  rc=0; _trust_has_runner "${TRUST_API_BASE}/orgs/${org}/actions/runners" "$name" || rc=$?
-  case "$rc" in
-    1) return 0 ;;
-    0) ;;
-    *) trust_unverifiable "GitHub API call for the organisation runners failed"; return 2 ;;
-  esac
-  printf 'runner_group_mismatch: runner "%s" is registered in a different runner group from the configured "%s", so the check above does not cover it. Re-register the runner (install again) so it joins "%s", or set GITHUB_RUNNER_GROUP to the group it is in\n' \
-    "$name" "$TRUST_GROUP" "$TRUST_GROUP" >&2
-  return 4
+  persisted=$(_trust_persisted_runner) \
+    || { trust_unverifiable "the installed runner registration cannot be read, so its runner group cannot be verified"; return 2; }
+  # each check: ID and NAME, in the order configured name first, then installed
+  local -a checks=("|${name}")
+  [[ -z "$persisted" ]] || { pid="${persisted%%$'\t'*}"; pname="${persisted#*$'\t'}"; checks+=("${pid}|${pname}"); }
+  for ref in "${checks[@]}"; do
+    rc=0; _trust_runner_in_other_group "$org" "$gid" "${ref%%|*}" "${ref#*|}" || rc=$?
+    case "$rc" in
+      0)
+        printf 'runner_group_mismatch: runner "%s" is registered in a different runner group from the configured "%s", so the check above does not cover it. Re-register the runner (install again) so it joins "%s", or set GITHUB_RUNNER_GROUP to the group it is in\n' \
+          "${ref#*|}" "$TRUST_GROUP" "$TRUST_GROUP" >&2
+        return 4 ;;
+      1) ;;
+      *) trust_unverifiable "GitHub API call for the runners of group \"${TRUST_GROUP}\" failed"; return 2 ;;
+    esac
+  done
+  return 0
 }
 
 _trust_check_repo() {

@@ -183,6 +183,28 @@ rm -f "$T/api/group-runners.json" "$T/api/org-runners.json"
 GITHUB_RUNNER_GROUP=CI GITHUB_RUNNER_NAME=n1 run_check
 [[ "$RC" == 0 ]] && pass "runner not registered anywhere proceeds" || fail "unregistered: rc=$RC err=$ERR"
 
+# The installed registration (RUNNER_DIR/.runner) is checked too, so renaming the
+# runner cannot hide it (D-1180). Written with a UTF-8 BOM like the runner does.
+reset_api
+printf '{"runner_groups":[%s,%s]}' "$(group_json Default true true)" "$(group_json CI false false 2)" > "$T/api/groups-1.json"
+printf '{"runners":[{"id":77,"name":"old"}]}' > "$T/api/org-runners.json"
+mkdir -p "$T/home/.nself/runners/github-runner"
+printf '\xef\xbb\xbf{"agentId": 77, "agentName": "old", "poolId": 1}' > "$T/home/.nself/runners/github-runner/.runner"
+GITHUB_RUNNER_GROUP=CI GITHUB_RUNNER_NAME=n1 run_check
+[[ "$RC" == 4 && "$ERR" == *runner_group_mismatch* ]] && pass "renamed runner whose installed registration is in another group is refused" || fail "persisted mismatch: rc=$RC err=$ERR"
+GITHUB_RUNNER_GROUP=CI GITHUB_RUNNER_NAME=n1 TRUST_REGISTERING=true run_check
+[[ "$RC" == 0 ]] && pass "install (TRUST_REGISTERING) skips the installed registration" || fail "persisted registering: rc=$RC err=$ERR"
+printf '{"runners":[{"id":77,"name":"old"}]}' > "$T/api/group-runners.json"
+GITHUB_RUNNER_GROUP=CI GITHUB_RUNNER_NAME=n1 run_check
+[[ "$RC" == 0 ]] && pass "installed registration in the configured group proceeds" || fail "persisted in group: rc=$RC err=$ERR"
+rm -f "$T/api/group-runners.json" "$T/api/org-runners.json"
+GITHUB_RUNNER_GROUP=CI GITHUB_RUNNER_NAME=n1 run_check
+[[ "$RC" == 0 ]] && pass "installed registration unknown to GitHub proceeds" || fail "persisted unknown: rc=$RC err=$ERR"
+echo '{not json' > "$T/home/.nself/runners/github-runner/.runner"
+GITHUB_RUNNER_GROUP=CI GITHUB_RUNNER_NAME=n1 run_check
+[[ "$RC" == 2 && "$ERR" == *runner_trust_unverifiable* ]] && pass "unreadable installed registration fails closed" || fail "persisted corrupt: rc=$RC err=$ERR"
+rm -f "$T/home/.nself/runners/github-runner/.runner"
+
 # Missing flag and API failure fail closed.
 reset_api
 printf '{"runner_groups":[{"name":"Default","default":true}]}' > "$T/api/groups-1.json"
