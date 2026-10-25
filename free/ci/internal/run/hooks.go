@@ -101,6 +101,7 @@ type TrustClassifier interface {
 // PolicyRequest is the input of the policy resolver, called once per pipeline.
 type PolicyRequest struct {
 	Root, Pipeline string
+	Store          string // state.db of the coordinator's home; "" = the default store
 	Config         map[string]any
 	Run            RunValues // per-run values (the flags of one invocation): only ever tighten, except the preset; nil = none
 }

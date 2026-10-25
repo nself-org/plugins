@@ -106,7 +106,7 @@ func (c *Coordinator) policy(ctx context.Context, h Hooks) (PolicyResult, error)
 	if h.Policy != nil {
 		r = h.Policy
 	}
-	return r.Resolve(ctx, PolicyRequest{Root: c.Opts.Root, Pipeline: c.Plan.Pipeline.Name, Run: c.Opts.PolicyRun})
+	return r.Resolve(ctx, PolicyRequest{Root: c.Opts.Root, Store: c.storePath(), Pipeline: c.Plan.Pipeline.Name, Run: c.Opts.PolicyRun})
 }
 
 func (c *Coordinator) storePath() string {
