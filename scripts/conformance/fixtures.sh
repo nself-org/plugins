@@ -52,6 +52,8 @@ plant unvendored-build alpha build "rm -rf vendor"
 plant sock-in-named-fragment beta docker-socket "mkdir deploy; mv docker-compose.plugin.yml deploy/plugin.yml; jqe '.service.compose = \"deploy/plugin.yml\"'; sock deploy/plugin.yml"
 plant sock-in-other-yaml beta docker-socket "mkdir extra; printf 'services:\n  x:\n    volumes:\n      - /var/run/docker.sock:/s\n' > extra/override.yaml"
 plant sock-var-run beta docker-socket "mkdir extra; printf 'services:\n  x:\n    volumes:\n      - \"/var/run:/host-run\"\n' > extra/run.yml"
+plant sock-in-newline-filename beta docker-socket "mkdir extra; printf 'services:\n  x:\n    volumes:\n      - /var/run/docker.sock:/s\n' > 'extra/a
+b.yaml'"
 # Rule port-bind (D-0453): every published port binds the literal 127.0.0.1. PLANT_MSG pins the failure to a real finding,
 # not a tool or parse error.
 PLANT_MSG='publishes|network_mode'
