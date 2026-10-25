@@ -245,6 +245,53 @@ done
 if [[ -n "$state" && "$state" != Z* ]]; then fail "trust_stop_runner left a child process running"; kill "$child" 2>/dev/null || true; else pass "trust_stop_runner stops the child processes too"; fi
 wait "$wrapper" 2>/dev/null || true
 
+# A child that ignores TERM and outlives its wrapper (reparented) must still be
+# killed: the KILL pass uses the tree listed before the first signal.
+spawn_orphan_prone_tree() { # PIDFILE_BASENAME: wrapper dies on TERM, child ignores it
+  bash -c 'sh -c "trap \"\" TERM; exec sleep 300" & echo $! > "$1"; wait' _ "$T/$1.child" & wrapper=$!
+  for _ in $(seq 1 100); do [[ -s "$T/$1.child" ]] && break; sleep 0.1; done
+  sleep 0.3
+  echo "$wrapper" > "$T/$1.pid"
+  child=$(cat "$T/$1.child")
+}
+child_gone() { # PID
+  local st i
+  for i in $(seq 1 25); do
+    st=$(ps -o stat= -p "$1" 2>/dev/null | tr -d ' ' || true)
+    [[ -z "$st" || "$st" == Z* ]] && return 0
+    sleep 0.2
+  done
+  return 1
+}
+spawn_orphan_prone_tree orphan1
+rc=0; TRUST_STOP_GRACE=1 trust_stop_runner "$T/orphan1.pid" "no-such-unit" > /dev/null 2>&1 || rc=$?
+if child_gone "$child" && [[ "$rc" == 0 ]]; then pass "trust_stop_runner KILLs a TERM-ignoring child that outlives its wrapper"; else fail "trust_stop_runner left a reparented child (rc=$rc)"; kill -KILL "$child" 2>/dev/null || true; fi
+wait "$wrapper" 2>/dev/null || true
+
+spawn_orphan_prone_tree orphan2
+mkdir -p "$T/home/.nself/logs/plugins/github-runner"
+cp "$T/orphan2.pid" "$T/home/.nself/logs/plugins/github-runner/runner.pid"
+rc=0; TRUST_STOP_GRACE=1 bash "$PLUGIN_DIR/actions/stop.sh" > /dev/null 2>&1 || rc=$?
+if child_gone "$child" && [[ "$rc" == 0 ]]; then pass "stop.sh KILLs a TERM-ignoring child that outlives its wrapper"; else fail "stop.sh left a reparented child (rc=$rc)"; kill -KILL "$child" 2>/dev/null || true; fi
+wait "$wrapper" 2>/dev/null || true
+rm -f "$T/home/.nself/logs/plugins/github-runner/runner.pid"
+
+# systemctl stop/disable failures must not be reported as success.
+mkdir -p "$T/failbin" "$T/okbin"
+printf '#!/bin/sh\nexec "$@"\n' > "$T/failbin/sudo"
+printf '#!/bin/sh\ncase "$1" in is-active|is-enabled) exit 0 ;; *) exit 1 ;; esac\n' > "$T/failbin/systemctl"
+cp "$T/failbin/sudo" "$T/okbin/sudo"
+printf '#!/bin/sh\nexit 0\n' > "$T/okbin/systemctl"
+chmod +x "$T/failbin/sudo" "$T/failbin/systemctl" "$T/okbin/sudo" "$T/okbin/systemctl"
+rc=0; out=$(PATH="$T/failbin:$PATH" trust_stop_runner "$T/none.pid" "x.service" 2>&1) || rc=$?
+[[ "$rc" != 0 ]] && pass "trust_stop_runner fails when systemctl stop and disable fail" || fail "trust_stop_runner returned 0 after systemctl failures"
+[[ "$out" == *"could not stop systemd service"* && "$out" == *"could not disable systemd service"* ]] && pass "trust_stop_runner says which systemctl step failed" || fail "failure message: $out"
+[[ "$out" != *"stopped systemd service"* && "$out" != *"disabled systemd service"* ]] && pass "trust_stop_runner does not claim a failed stop/disable" || fail "claimed success: $out"
+rc=0; out=$(PATH="$T/okbin:$PATH" trust_stop_runner "$T/none.pid" "x.service" 2>&1) || rc=$?
+[[ "$rc" == 0 && "$out" == *"stopped systemd service"* && "$out" == *"disabled systemd service"* ]] && pass "trust_stop_runner succeeds when systemctl succeeds" || fail "ok path: rc=$rc out=$out"
+rc=0; out=$(PATH="$T/failbin:$PATH" bash "$PLUGIN_DIR/actions/start.sh" 2>&1) || rc=$?
+[[ "$rc" == 1 && "$out" == *runner_group_public* && "$out" == *"could NOT be fully stopped"* ]] && pass "start.sh reports a runner it could not stop" || fail "start.sh with failing systemctl: rc=$rc out=$out"
+
 # status.sh stops the runner too and reports deploy_host_warning only in prod-like ENV.
 sleep 300 & sleeper=$!
 echo "$sleeper" > "$T/home/.nself/logs/plugins/github-runner/runner.pid"

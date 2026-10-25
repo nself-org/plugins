@@ -154,35 +154,95 @@ trust_service_name() {
   printf 'actions.runner.%s.%s' "${GITHUB_RUNNER_ORG:-nself-org}" "${GITHUB_RUNNER_NAME:-$(hostname)-nself}"
 }
 
-# _trust_kill_tree PID [SIGNAL]: signal (default TERM) the process and all its descendants. run.sh
-# starts Runner.Listener and does not forward signals, so killing only the
-# wrapper leaves a listener that still takes jobs.
-_trust_kill_tree() {
-  local pid="$1" sig="${2:-TERM}" child
+# TRUST_STOP_GRACE: seconds a stop waits after TERM before it escalates to KILL
+# (and again after KILL before it reports survivors).
+TRUST_STOP_GRACE="${TRUST_STOP_GRACE:-5}"
+
+# _trust_tree_pids PID: print PID and all its descendants, one per line,
+# descendants first. run.sh starts Runner.Listener and does not forward
+# signals, so killing only the wrapper leaves a listener that still takes jobs.
+_trust_tree_pids() {
+  local pid="$1" child
   for child in $(pgrep -P "$pid" 2>/dev/null || true); do
-    _trust_kill_tree "$child" "$sig"
+    _trust_tree_pids "$child"
   done
-  kill -"$sig" "$pid" 2>/dev/null || true
+  printf '%s\n' "$pid"
+}
+
+# _trust_pid_alive PID: running (a zombie awaiting its parent counts as gone).
+_trust_pid_alive() {
+  local state
+  state=$(ps -o stat= -p "$1" 2>/dev/null | tr -d ' ') || return 1
+  [[ -n "$state" && "$state" != Z* ]]
+}
+
+# _trust_live_pids PID...: print, space separated, those PIDs still running.
+_trust_live_pids() {
+  local p out=""
+  for p in "$@"; do
+    ! _trust_pid_alive "$p" || out="${out:+$out }$p"
+  done
+  printf '%s' "$out"
+}
+
+# _trust_kill_tree PID: stop the process and all its descendants. The tree is
+# listed once, before any signal, so a child that outlives a dead wrapper (and
+# is reparented) is still signalled: TERM to all, a grace wait, then KILL to
+# the survivors of that same list. Returns 1 if a process is still running.
+_trust_kill_tree() {
+  local pid="$1" live waited p
+  live=$(_trust_tree_pids "$pid" | tr '\n' ' ')
+  for p in $live; do kill -TERM "$p" 2>/dev/null || true; done
+  for ((waited = 0; waited < TRUST_STOP_GRACE * 5; waited++)); do
+    live=$(_trust_live_pids $live)
+    [[ -n "$live" ]] || return 0
+    sleep 0.2
+  done
+  for p in $live; do kill -KILL "$p" 2>/dev/null || true; done
+  for ((waited = 0; waited < TRUST_STOP_GRACE * 5; waited++)); do
+    live=$(_trust_live_pids $live)
+    [[ -n "$live" ]] || return 0
+    sleep 0.2
+  done
+  printf 'runner process(es) still running after KILL: %s\n' "$live" >&2
+  return 1
 }
 
 # trust_stop_runner PID_FILE SERVICE: stop a running runner (systemd service or
 # nohup process tree). The systemd unit is also disabled so a reboot does not
 # bring the runner back into a public group; start.sh enables and starts it
-# again after the guard passes. Prints what it stopped; nothing when nothing was running.
+# again after the guard passes. Prints what it stopped; nothing when nothing was
+# running. Returns non-zero (and says why on stderr) if the service could not
+# be stopped or disabled, or a process survived; it still tries every step.
 trust_stop_runner() {
-  local pid_file="$1" svc="$2" pid sc=""
+  local pid_file="$1" svc="$2" pid sc="" rc=0
   if command -v systemctl >/dev/null 2>&1 && { systemctl is-active --quiet "$svc" 2>/dev/null || systemctl is-enabled --quiet "$svc" 2>/dev/null; }; then
     [[ $EUID -eq 0 ]] || sc="sudo"
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
-      $sc systemctl stop "$svc" && printf 'stopped systemd service %s\n' "$svc"
+      if $sc systemctl stop "$svc"; then
+        printf 'stopped systemd service %s\n' "$svc"
+      else
+        printf 'could not stop systemd service %s\n' "$svc" >&2
+        rc=1
+      fi
     fi
-    $sc systemctl disable "$svc" >/dev/null 2>&1 && printf 'disabled systemd service %s (no restart at boot while the group is public)\n' "$svc"
+    if $sc systemctl disable "$svc" >/dev/null 2>&1; then
+      printf 'disabled systemd service %s (no restart at boot while the group is public)\n' "$svc"
+    else
+      printf 'could not disable systemd service %s\n' "$svc" >&2
+      rc=1
+    fi
   fi
   if [[ -f "$pid_file" ]]; then
     pid=$(cat "$pid_file")
     if kill -0 "$pid" 2>/dev/null; then
-      _trust_kill_tree "$pid"
-      printf 'stopped runner (PID %s and its children)\n' "$pid"
+      if _trust_kill_tree "$pid"; then
+        printf 'stopped runner (PID %s and its children)\n' "$pid"
+      else
+        printf 'could not stop runner (PID %s and its children)\n' "$pid" >&2
+        rc=1
+      fi
     fi
   fi
+  return "$rc"
 }

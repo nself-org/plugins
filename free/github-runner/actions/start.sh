@@ -23,7 +23,8 @@ trust_rc=0
 trust_check || trust_rc=$?
 if [[ "$trust_rc" -ne 0 ]]; then
   if [[ "$trust_rc" -eq 1 ]]; then
-    trust_stop_runner "$PID_FILE" "$(trust_service_name)"
+    trust_stop_runner "$PID_FILE" "$(trust_service_name)" \
+      || plugin_error "The running runner could NOT be fully stopped (see the message above). Stop it manually."
   fi
   plugin_error "Runner not started (see the message above)."
   exit "$trust_rc"
