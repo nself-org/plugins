@@ -76,7 +76,7 @@ else
   BUNDLES_DIR="${BUNDLES_DIR:-}"
   COMMON="$(git -C "$ROOT" rev-parse --git-common-dir 2>/dev/null || echo /nonexistent)"; [[ "$COMMON" = /* ]] || COMMON="$ROOT/$COMMON"
   if [ -z "$BUNDLES_DIR" ]; then
-    for d in "$ROOT/../bundles" "$ROOT/../plugins-pro" "${NSELF:-/nonexistent}/plugins-pro" "${NSELF:-/nonexistent}/bundles" "$COMMON/../../plugins-pro"; do [ -d "$d/.git" ] || [ -f "$d/.git" ] && { BUNDLES_DIR="$d"; break; }; done
+    for d in "$ROOT/../bundles" "$ROOT/../plugins-pro" "${NSELF:-/nonexistent}/plugins-pro" "${NSELF:-/nonexistent}/bundles" "$COMMON/../../bundles" "$COMMON/../../plugins-pro"; do [ -d "$d/.git" ] || [ -f "$d/.git" ] && { BUNDLES_DIR="$d"; break; }; done
   fi
   [ -n "$BUNDLES_DIR" ] || { echo "plugin-counts: no bundles checkout (set BUNDLES_DIR, or use --check --free-only)" >&2; exit 3; }
   if ! git -C "$BUNDLES_DIR" cat-file -e "$BUNDLES_REF^{commit}" 2>/dev/null; then
