@@ -70,6 +70,9 @@ jobs:
               # cmd/ directory itself ("build output \"cmd\" already exists and
               # is a directory"). CI only needs to know it compiles.
               ( cd "$d" && go build -o /dev/null ./... && go vet ./... && go test ./... ) || { echo "FAIL: $d"; failed=1; }
+              # go.mod and go.sum must be tidy, so a later tidy (or an advisory bump) carries no unrelated churn.
+              # A vendored module also needs `go mod vendor` run after the tidy.
+              ( cd "$d" && go mod tidy -diff ) || { echo "FAIL (go mod tidy -diff): $d"; failed=1; }
             fi
           done < <(find $roots -name go.mod -not -path '*/vendor/*' -not -path '*/testdata/*' | sort)
           exit $failed
@@ -77,7 +80,8 @@ jobs:
       # so the loop above never saw them: sdk's go vet failure went unnoticed (D-0656). A change outside free/
       # sets all=true in the scope step, so these run on every push and on any pull request that touches them.
       # tests/conformance holds fixtures, not modules to gate, and is deliberately not listed.
-      - name: Build, vet, and test the SDK and tooling modules
+      # Their go.mod and go.sum must also be tidy (D-0654), same as the free plugins above.
+      - name: Build, vet, test, and tidy-check the SDK and tooling modules
         if: steps.scope.outputs.all == 'true'
         run: |
           failed=0
@@ -85,5 +89,6 @@ jobs:
             d="$(dirname "$gomod")"
             echo "=== $d ==="
             ( cd "$d" && go build -o /dev/null ./... && go vet ./... && go test ./... ) || { echo "FAIL: $d"; failed=1; }
+            ( cd "$d" && go mod tidy -diff ) || { echo "FAIL (go mod tidy -diff): $d"; failed=1; }
           done < <(find sdk scripts -name go.mod -not -path '*/vendor/*' -not -path '*/testdata/*' | sort)
           exit $failed
