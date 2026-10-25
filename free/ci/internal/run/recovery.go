@@ -105,8 +105,16 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 		switch {
 		case err == nil:
 			rep.Retryable++
+		case CodeOf(err) == codeStoreRef: // a cancel intent won: the operator's cancel ends the lost attempt
+			if err = st.Transition(ctx, a.ID, "lost", "cancelled", store.TransitionDetail{Epoch: a.Epoch, FailureClass: "cancelled", Reason: "coordinator lost"}); err != nil {
+				rep.Errors = append(rep.Errors, err)
+			}
 		case errors.As(err, &se) && (se.Code == "E604" || se.Code == "E609"):
-			if err = st.Transition(ctx, a.ID, "lost", "needs-operator", d); err != nil {
+			err = st.Transition(ctx, a.ID, "lost", "needs-operator", d)
+			if CodeOf(err) == codeStoreRef { // same, for a job that must not run twice
+				err = st.Transition(ctx, a.ID, "lost", "cancelled", store.TransitionDetail{Epoch: a.Epoch, FailureClass: "cancelled", Reason: "coordinator lost"})
+			}
+			if err != nil {
 				rep.Errors = append(rep.Errors, err)
 				continue
 			}
