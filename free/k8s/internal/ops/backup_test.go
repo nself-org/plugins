@@ -501,15 +501,34 @@ func TestErrorDetailIsMaskedForHumansAndNeverInTheCause(t *testing.T) {
 		t.Errorf("secret in cause: %q", e.Error())
 	}
 	h := e.HumanDetail()
-	if strings.Contains(h, secret) || strings.Contains(h, "users") || strings.Contains(h, "DETAIL") || !strings.Contains(h, "…") {
+	if h != "COPY failed; invalid input value" {
 		t.Errorf("human detail = %q", h)
 	}
 	long := &Error{Detail: "error: " + strings.Repeat("x", 500)}
-	if n := len(long.HumanDetail()); n > maxHuman {
-		t.Errorf("human detail is %d bytes", n)
+	if h := long.HumanDetail(); strings.Contains(h, "xxx") || h == "" {
+		t.Errorf("a line with no known category must be withheld: %q", h)
 	}
-	if (&Error{Detail: `error: "unterminated ` + secret}).HumanDetail() == "" || strings.Contains((&Error{Detail: `error: "unterminated ` + secret}).HumanDetail(), secret) {
-		t.Error("an unterminated quote must mask the rest of the line")
+	if (&Error{}).HumanDetail() != "" || (&Error{Detail: "  \t"}).HumanDetail() != "" {
+		t.Error("no line, no detail")
+	}
+}
+
+// A trigger or check function can raise an exception whose text holds a value with no
+// quotes around it; no part of the line may reach the terminal.
+func TestHumanDetailNeverEchoesUnquotedDatabaseText(t *testing.T) {
+	const secret = "ssn-123-45-6789"
+	for _, line := range []string{
+		"pg_restore: error: could not execute query: ERROR:  order rejected for customer " + secret,
+		"pg_restore: error: could not execute query: ERROR:  " + secret + " already exists in the ledger",
+		"ERROR:  " + secret,
+	} {
+		h := (&Error{Detail: line}).HumanDetail()
+		if h == "" || strings.Contains(h, secret) || strings.Contains(h, "customer") || strings.Contains(h, "ledger") {
+			t.Errorf("%q -> %q", line, h)
+		}
+	}
+	if got := (&Error{Detail: "ERROR:  " + secret}).HumanDetail(); !strings.Contains(got, "withheld") {
+		t.Errorf("an unknown line must say its text was withheld: %q", got)
 	}
 }
 

@@ -50,7 +50,7 @@ const (
 // maxCause bounds the cause text of an Error.
 const maxCause = 1500
 
-// maxHuman bounds the masked first error line shown in human mode.
+// maxHuman bounds the error category words shown in human mode.
 const maxHuman = 160
 
 // Error is a coded failure of backup or restore.
@@ -61,8 +61,8 @@ type Error struct {
 	Remediation string
 	Cause       string
 	// Detail is the first error line the tool printed. It is database-provided text and
-	// may carry a row value, so it is never serialized: only HumanDetail (masked) reaches
-	// human-mode stderr.
+	// may carry a row value, so it is never serialized: only HumanDetail (category words)
+	// reaches human-mode stderr.
 	Detail string
 }
 
@@ -138,30 +138,53 @@ func errRestoreShort() *Error {
 		"restore again; check the connection to the cluster", "")
 }
 
-// HumanDetail is the first error line for a person: every quoted segment masked, text
-// from DETAIL, CONTEXT or HINT dropped, at most maxHuman bytes. "" when there is none.
+// humanCategories is the allowlist HumanDetail draws from: a marker in the tool's first
+// error line (matched lower-case) and the fixed words shown for it. Nothing of the line
+// itself is ever shown, because a trigger or check function can put any value, quoted or
+// not, in the text of its own exception.
+var humanCategories = []struct{ marker, shown string }{
+	{"could not execute query", "a statement failed"},
+	{"copy failed", "COPY failed"},
+	{"violates not-null constraint", "not-null constraint violated"},
+	{"violates foreign key constraint", "foreign key violated"},
+	{"violates check constraint", "check constraint violated"},
+	{"violates unique constraint", "unique constraint violated"},
+	{"duplicate key value", "duplicate key"},
+	{"invalid input syntax", "invalid input value"},
+	{"permission denied", "permission denied"},
+	{"must be owner", "not the owner"},
+	{"already exists", "object already exists"},
+	{"does not exist", "object does not exist"},
+	{"syntax error", "SQL syntax error"},
+	{"unsupported version", "unsupported archive version"},
+	{"out of memory", "out of memory"},
+	{"no space left", "no space left on device"},
+	{"could not open", "a file could not be opened"},
+	{"could not connect", "connection failed"},
+	{"connection to server", "connection failed"},
+}
+
+// HumanDetail names the failure category of the first error line for a person: only the
+// fixed words of humanCategories whose marker the line holds, never any text of the line
+// (so no value, quoted or not, from the database), at most maxHuman bytes. A line with no
+// known marker is reported as withheld. "" when there is no line.
 func (e *Error) HumanDetail() string {
-	s := e.Detail
-	for _, k := range []string{"DETAIL:", "CONTEXT:", "HINT:"} {
-		if i := strings.Index(s, k); i >= 0 {
-			s = s[:i]
+	line := strings.ToLower(e.Detail)
+	if strings.TrimSpace(line) == "" {
+		return ""
+	}
+	var shown []string
+	seen := map[string]bool{}
+	for _, c := range humanCategories {
+		if strings.Contains(line, c.marker) && !seen[c.shown] {
+			seen[c.shown] = true
+			shown = append(shown, c.shown)
 		}
 	}
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		q := s[i]
-		if q != '\'' && q != '"' {
-			b.WriteByte(q)
-			continue
-		}
-		b.WriteString("…") // the quoted segment, or the rest of an unterminated one
-		if j := strings.IndexByte(s[i+1:], q); j >= 0 {
-			i += j + 1
-		} else {
-			i = len(s)
-		}
+	if len(shown) == 0 {
+		return "an error line outside the known categories (text withheld)"
 	}
-	out := strings.Join(strings.Fields(b.String()), " ")
+	out := strings.Join(shown, "; ")
 	if len(out) > maxHuman {
 		out = out[:maxHuman]
 		for len(out) > 0 && !utf8.ValidString(out) {
