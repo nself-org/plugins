@@ -13,6 +13,7 @@ package run
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -99,14 +100,20 @@ func cancelled(o JobOutcome, why model.Reason, detail string) JobOutcome {
 	return o
 }
 
+// depOK reports whether a finished dependency lets its waiters run. A failed
+// job always blocks them, allow_failure or not (plan/dag.go: a failing
+// allow_failure job still blocks everything that waits on it). A skipped job
+// lets them run only when it was scoped out by design (selection, when.*,
+// pipeline); one that never ran for want of a place, a tool or admission, or
+// that was cancelled, blocks them like a failure.
 func depOK(d JobOutcome) bool {
 	switch d.State {
 	case StatePassed:
 		return true
-	case StateFailed:
-		return d.AllowFailure
 	case StateSkipped:
-		return d.Reason != "dep.failed" && d.Reason != "fail_fast.cancelled"
+		r := string(d.Reason)
+		return r != "dep.failed" && r != "fail_fast.cancelled" &&
+			!strings.HasPrefix(r, "unplaceable.") && !strings.HasPrefix(r, "admission.") && !strings.HasPrefix(r, "advisory.")
 	}
 	return false
 }

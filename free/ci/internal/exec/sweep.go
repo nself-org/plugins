@@ -15,6 +15,13 @@ type StaleChecker interface {
 	Stale(context.Context, string) (bool, error)
 }
 
+// KnownChecker is an optional StaleChecker extension: Known reports whether the coordinator belongs to the state
+// this sweep serves. The container listing is daemon-wide, so a container of a coordinator that is not known
+// here may be live in another CI home and is never removed (D-1117).
+type KnownChecker interface {
+	Known(context.Context, string) (bool, error)
+}
+
 // Sweep removes only labelled containers (docker or podman) owned by stale coordinators.
 func (e *Executor) Sweep(ctx context.Context, current string) error {
 	home := os.Getenv("NSELF_CI_HOME")
@@ -125,6 +132,15 @@ func (e *Executor) sweepRuntime(ctx context.Context, current, binary string) err
 		parts := strings.Fields(line)
 		if len(parts) != 2 || parts[1] == current {
 			continue
+		}
+		if k, ok := e.Stale.(KnownChecker); ok {
+			known, err := k.Known(ctx, parts[1])
+			if err != nil {
+				return err
+			}
+			if !known {
+				continue
+			}
 		}
 		stale, err := e.Stale.Stale(ctx, parts[1])
 		if err != nil {
