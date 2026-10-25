@@ -9,6 +9,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -212,5 +213,28 @@ func TestMalformedStoredValueRejected(t *testing.T) {
 		if _, err := decodeOne([]byte(raw)); err == nil || strings.TrimSpace(err.Error()) == "" {
 			t.Errorf("%s accepted", raw)
 		}
+	}
+}
+
+// The fetch worked but the tip cannot be read: the run goes on without the
+// protected-branch scope and says that the fetch succeeded, so the operator
+// looks at the ref and not at the network.
+func TestFetchedButUnreadableTipIsReported(t *testing.T) {
+	f := newFixture(t)
+	f.runner = func(ctx context.Context, argv ...string) (string, int, error) {
+		if slices.Contains(argv, "rev-parse") {
+			return "", 128, nil
+		}
+		return testRunner(ctx, argv...)
+	}
+	got := resolveOwner(t, f, f.work, "p", nil)
+	var reason string
+	for _, ig := range got.Ignored {
+		if ig.Key == "protected_branch" {
+			reason = ig.Reason
+		}
+	}
+	if got.Fetch != FetchNone || !strings.HasPrefix(reason, "E672") || !strings.Contains(reason, "was fetched but its tip could not be read") {
+		t.Fatalf("fetch %s ignored %v", got.Fetch, got.Ignored)
 	}
 }
