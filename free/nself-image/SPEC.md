@@ -398,7 +398,7 @@ steps:
 - Hasura Actions custom-service pattern documented in `web/docs`
 
 **Pre-ship checklist:**
-- [ ] Go binary builds cleanly for `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`
+- [ ] Go binary builds cleanly for `linux/amd64` and `linux/arm64`
 - [ ] All unit + integration tests pass
 - [ ] perf baseline verified on CX21 (256×256 WebP < 100ms)
 - [ ] `nself doctor` check passes on clean install
