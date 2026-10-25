@@ -334,3 +334,45 @@ func TestOracleSkipsManifestsWithoutAPluginKey(t *testing.T) {
 		}
 	}
 }
+
+// A .nself directory swapped for a symlink after checkDestination must not
+// carry the write out of the repository.
+func TestWriteRefusesSymlinkSwappedAfterCheck(t *testing.T) {
+	root := copyFixture(t, filepath.Join("legacy", "gauth"))
+	outside := t.TempDir()
+	m, err := Migrate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testHookBeforeCreate = func(r string) {
+		testHookBeforeCreate = func(string) {}
+		if err := os.Symlink(outside, filepath.Join(r, ".nself")); err != nil {
+			t.Error(err)
+		}
+	}
+	t.Cleanup(func() { testHookBeforeCreate = func(string) {} })
+	if err := m.Write(root); err == nil {
+		t.Fatal("wrote through a .nself symlink swapped in after the check")
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Fatalf("file created outside the repo: %v", entries)
+	}
+}
+
+// A manifest below the root migrates to path-gated jobs the legacy runner
+// never had; the migration must say so.
+func TestMigrateNotesPathSelection(t *testing.T) {
+	m, err := Migrate(copyFixture(t, filepath.Join("legacy", "multi")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, n := range m.Notes {
+		if strings.Contains(n, "when.paths") {
+			got = append(got, n)
+		}
+	}
+	if len(got) != 1 || !strings.HasPrefix(got[0], "free/other/.ci.yaml: ") || !strings.Contains(got[0], "ran every stage on every run") {
+		t.Errorf("path-selection note: %v (all notes %v)", got, m.Notes)
+	}
+}
