@@ -139,11 +139,16 @@ while IFS= read -r row; do
 		fi
 		continue ;;
 	esac
+	# A tool row with no sources has nothing to check. Fail it: a process substitution below would swallow the jq error.
+	if ! sources=$(jq -c '.sources | if type == "array" and length > 0 then .[] else error("no sources") end' <<<"$row" 2>/dev/null); then
+		emit "$name" "$name" "$version" true fail 1 "tool row has no sources to verify"
+		continue
+	fi
 	gone=()
 	while IFS= read -r src; do
 		url=$(jq -r .url <<<"$src")
 		head_ok "$url" || gone+=("$(jq -r '.os + "/" + .arch' <<<"$src")")
-	done < <(jq -c '.sources[]' <<<"$row")
+	done <<<"$sources"
 	if [ "${#gone[@]}" -gt 0 ]; then
 		emit "$name" "$name" "$version" true fail "${#gone[@]}" "pinned artifact no longer downloadable for: ${gone[*]}"
 		continue

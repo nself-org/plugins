@@ -174,3 +174,23 @@ func TestDrillVerifiesAPinnedImageRow(t *testing.T) {
 		t.Fatalf("vanished pinned image: exit %d %v", exit, c)
 	}
 }
+
+// TestDrillFailsWhenAToolRowHasNoSources: a tool row without sources has nothing to verify, so it must fail
+// instead of passing with nothing checked (D-1184).
+func TestDrillFailsWhenAToolRowHasNoSources(t *testing.T) {
+	srv := mirror(t)
+	for name, tail := range map[string]string{
+		"absent": "",
+		"empty":  "    sources: []\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			table := "version: 1\nrows:\n  - name: nosrc\n    kind: tool\n    version: \"1.0.0\"\n    purpose: p\n    owner: o\n    probe: [nosrc, --version]\n    upstream: {type: github, ref: acme/demo}\n" + tail
+			doc, exit, raw := runDrill(t, table, srv)
+			validEvidence(t, raw)
+			c := resultsByTool(doc)["nosrc"]
+			if exit != 1 || doc["result"] != "fail" || c["result"] != "fail" || !strings.Contains(c["excerpt"].(string), "no sources") {
+				t.Fatalf("exit %d result %v check %v", exit, doc["result"], c)
+			}
+		})
+	}
+}
