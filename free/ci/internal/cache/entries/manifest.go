@@ -96,12 +96,25 @@ func (m Manifest) validate(checkNS bool) error {
 // ErrPathOutside marks a manifest rejected for a blob path outside the entry.
 var ErrPathOutside = errors.New("entries: blob path outside the entry")
 
-// EncodeManifest validates and encodes m.
+// EncodeManifest validates and encodes m. It refuses a document that
+// DecodeManifest would reject as too large: JSON escaping can grow a path
+// (a control byte takes six bytes, a quote two), so the cap on count and path
+// length alone does not bound the encoded size.
 func EncodeManifest(m Manifest) ([]byte, error) {
 	if err := m.Validate(); err != nil {
 		return nil, err
 	}
-	return json.Marshal(m)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false) // "&" would cost six bytes for no safety gain: the document is never embedded in HTML
+	if err := enc.Encode(m); err != nil {
+		return nil, err
+	}
+	out := bytes.TrimSuffix(buf.Bytes(), []byte("\n"))
+	if len(out) > maxManifestBytes {
+		return nil, bad("encoded document larger than %d bytes", maxManifestBytes)
+	}
+	return out, nil
 }
 
 // DecodeManifest strictly decodes and validates one manifest document.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -140,5 +141,39 @@ func TestDecodeManifestSizeLimitIsInclusive(t *testing.T) {
 	}
 	if _, err := DecodeManifest(pad(maxManifestBytes + 1)); !errors.Is(err, ErrManifest) {
 		t.Fatalf("a document over the limit: %v", err)
+	}
+}
+
+// manifestOfPaths fills maxBlobs sorted, unique paths of maxPathBytes bytes whose
+// tail is fill.
+func manifestOfPaths(fill string) Manifest {
+	m := goodManifest()
+	m.Blobs = make([]Blob, maxBlobs)
+	for i := range m.Blobs {
+		p := fmt.Sprintf("%04d", i)
+		m.Blobs[i] = Blob{Path: p + strings.Repeat(fill, maxPathBytes-len(p)), SHA256: strings.Repeat("b", 64)}
+	}
+	return m
+}
+
+func TestEncodeManifestStaysDecodable(t *testing.T) {
+	// "&" must not be HTML-escaped to six bytes: 4096 x 1024 bytes of it would
+	// otherwise reach ~25 MiB, past the 8 MiB decode cap.
+	m := manifestOfPaths("&")
+	b, err := EncodeManifest(m)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	if len(b) > maxManifestBytes {
+		t.Fatalf("encoded %d bytes, over the decode cap", len(b))
+	}
+	got, err := DecodeManifest(b)
+	if err != nil || !reflect.DeepEqual(got, m) {
+		t.Fatalf("round trip: %v", err)
+	}
+	// A control byte escapes to six bytes whatever the encoder flags: the
+	// encoder must refuse what the decoder would refuse.
+	if b, err := EncodeManifest(manifestOfPaths("\x01")); !errors.Is(err, ErrManifest) {
+		t.Fatalf("an over-cap document was encoded (%d bytes): %v", len(b), err)
 	}
 }
