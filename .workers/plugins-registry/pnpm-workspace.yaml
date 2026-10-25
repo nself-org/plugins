@@ -19,3 +19,7 @@ allowBuilds:
   esbuild: true
   workerd: true
   sharp: false
+# GHSA undici >= 7.18.0 < 7.30.1 (pulled by wrangler); keep in sync with
+# package.json pnpm.overrides (pnpm 9 reads that one).
+overrides:
+  'undici@>=7 <7.30.1': ^7.30.1
