@@ -122,7 +122,7 @@ func Parse(name string, data []byte) (*Loaded, error) {
 		}
 		return fail(Problem{File: name, Line: line, Message: "more than one YAML document"})
 	}
-	w := &walker{file: name, lines: map[string]int{}, budget: maxNodes, bytes: maxBytes}
+	w := &walker{file: name, lines: map[string]int{}, budget: maxNodes, bytes: maxBytes, ptrs: maxPtrBytes}
 	value := w.value(doc.Content[0], "", 0)
 	lines := w.lines
 	if len(w.probs) > 0 {

@@ -293,3 +293,17 @@ func TestWarningNeverContainsAValue(t *testing.T) {
 		t.Fatalf("value echoed or accepted: %v", err)
 	}
 }
+
+// Every node keeps its full JSON pointer, so a long key above many items is
+// refused instead of retaining len(key) bytes per item (a sub-1MiB file could
+// otherwise allocate tens of GiB).
+func TestLongKeyPointersAreBudgeted(t *testing.T) {
+	doc := "version: 1\npolicy:\n  ? " + strings.Repeat("k", 16<<10) + "\n  : [" + strings.Repeat("0,", 10_000) + "0]\n"
+	if len(doc) >= MaxFileBytes {
+		t.Fatalf("document is %d bytes, not a sub-limit file", len(doc))
+	}
+	_, err := Parse("ci.yaml", []byte(doc))
+	if err == nil || !strings.Contains(err.Error(), "too large") {
+		t.Fatalf("long-pointer document accepted: %v", err)
+	}
+}

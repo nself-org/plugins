@@ -9,7 +9,7 @@ package authz
 // Outputs: Promotable.
 // Constraints: pure. The gate class is forced to release, self-reported
 // evidence is never admitted and selection must be full, whatever the caller's
-// gate said, and the trust floor is "internal". An artifact of another repo or
+// gate said, and the trust floor is at least "internal" (an unknown floor is refused, not raised). An artifact of another repo or
 // revision is refused, and so is one whose SHA-256 the evidence does not list
 // as a committed artifact: a fork build of the same commit is not the release.
 
@@ -42,7 +42,9 @@ func Promotable(a Artifact, ev model.Evidence, g attest.Gate) (bool, []attest.Re
 	g.Class = attest.ClassRelease
 	g.FullSelection = true
 	g.AllowSelfReported = false
-	if trust.RankTrust(g.MinTrust) < trust.RankTrust(promoteMinTrust) {
+	// An unknown floor (ranks -1) is left as is so GateAccept rejects it; raising it
+	// to the default would let a typo'd owner floor weaken to internal.
+	if r := trust.RankTrust(g.MinTrust); r >= 0 && r < trust.RankTrust(promoteMinTrust) {
 		g.MinTrust = promoteMinTrust
 	}
 	reasons := attest.GateAccept(ev, g)

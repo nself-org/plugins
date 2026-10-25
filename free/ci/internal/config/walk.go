@@ -24,6 +24,10 @@ const (
 	maxDepth = 64
 	maxNodes = 200_000
 	maxBytes = 4 << 20 // scalar bytes after alias expansion
+	// maxPtrBytes bounds the JSON pointer strings retained in walker.lines: every
+	// node keeps its full pointer, so a long key above many items would otherwise
+	// cost len(key) per item, far past what the node and scalar budgets allow.
+	maxPtrBytes = 16 << 20
 )
 
 type walker struct {
@@ -32,6 +36,17 @@ type walker struct {
 	probs  []Problem
 	budget int
 	bytes  int
+	ptrs   int // pointer bytes still available
+}
+
+// child returns the pointer of a member of ptr, charging its length to the
+// pointer budget. ok is false (and the limit reported) when the budget is spent.
+func (w *walker) child(n *yaml.Node, ptr, seg string) (string, bool) {
+	if w.ptrs -= len(ptr) + 1 + len(seg); w.ptrs < 0 {
+		w.overLimit(n, ptr)
+		return "", false
+	}
+	return ptr + "/" + seg, true
 }
 
 func (w *walker) bad(n *yaml.Node, ptr, msg string) {
@@ -75,7 +90,10 @@ func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
 				w.overLimit(k, ptr)
 				return m
 			}
-			child := ptr + "/" + escape(k.Value)
+			child, ok := w.child(k, ptr, escape(k.Value))
+			if !ok {
+				return m
+			}
 			if _, dup := m[k.Value]; dup {
 				w.bad(k, child, "duplicate key")
 				continue
@@ -87,7 +105,11 @@ func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
 	case yaml.SequenceNode:
 		s := make([]any, len(n.Content))
 		for i, c := range n.Content {
-			s[i] = w.value(c, ptr+"/"+strconv.Itoa(i), depth+1)
+			child, ok := w.child(c, ptr, strconv.Itoa(i))
+			if !ok {
+				return s
+			}
+			s[i] = w.value(c, child, depth+1)
 		}
 		return s
 	case yaml.ScalarNode:

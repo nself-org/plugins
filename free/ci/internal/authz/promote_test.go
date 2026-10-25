@@ -96,3 +96,25 @@ func TestPromotable_TrustFloor(t *testing.T) {
 		}
 	}
 }
+
+// An unknown floor (a typo'd "owner") is refused, not raised to internal, even
+// when the evidence would have met internal.
+func TestPromotable_UnknownFloorIsRefused(t *testing.T) {
+	for _, floor := range []model.TrustClass{"", "owner ", "Owner", "unknown"} {
+		ev := goodEvidence()
+		ev.SourceTrust = "internal"
+		g := goodGate(ev)
+		g.MinTrust = floor
+		ok, reasons := authz.Promotable(goodArtifact(), ev, g)
+		if ok {
+			t.Fatalf("floor %q promoted", floor)
+		}
+		found := false
+		for _, r := range reasons {
+			found = found || r == attest.ReasonTrustBelowMin
+		}
+		if !found {
+			t.Fatalf("floor %q: want %s in %v", floor, attest.ReasonTrustBelowMin, reasons)
+		}
+	}
+}
