@@ -81,7 +81,7 @@ var signatures = []signature{
 	{
 		id:          SigTool,
 		errText:     re(`(?i)executable file not found|fork/exec .*: no such file or directory|command not found`),
-		output:      re(`(?i)command not found|executable file not found|: not found$`),
+		output:      re(`(?im)command not found|executable file not found|^\S*sh: (line \d+: |\d+: )?\S+: not found$`),
 		remediation: "A tool the job needs is not installed on the runner. Install it, or declare it under `requires.tools` so the job only lands where it exists.",
 	},
 }

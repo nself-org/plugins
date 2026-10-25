@@ -3,7 +3,7 @@ package run
 // Purpose: the seam that lets a finished run's evidence carry flaky-by-history
 // debt (P7-CI-40) without run importing the history reader.
 // Inputs:  the store and the finished run's evidence.
-// Outputs: a Flaky note per check id, attached to the check.
+// Outputs: a Flaky note per check (model.FlakyKey), attached to the check.
 // Constraints: registered at init (cmd/runs_flaky.go); a nil hook, a panic or
 // an empty answer leaves the evidence as it was; a marker never changes a
 // result, a verdict or an exit code.
@@ -31,7 +31,7 @@ func markHistoryFlaky(ctx context.Context, st *store.Store, ev *model.Evidence) 
 		return
 	}
 	for i := range ev.Checks {
-		if n := notes[ev.Checks[i].ID]; n != nil && ev.Checks[i].Flaky == nil {
+		if n := notes[model.FlakyKey(ev.Checks[i].JobID, ev.Checks[i].ID)]; n != nil && ev.Checks[i].Flaky == nil {
 			ev.Checks[i].Flaky = n
 		}
 	}

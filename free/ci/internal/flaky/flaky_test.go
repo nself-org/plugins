@@ -205,3 +205,24 @@ func TestDirtyRunKeepsItsConfirmationEntry(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 }
+
+// Two jobs may share a check id; a flake of one job must not mark the other.
+func TestAnnotateKeysByJobAndCheck(t *testing.T) {
+	doc := func(runID string, a, b model.CheckResult) Doc {
+		d := evidenceOf("r1", "", runID, a, b)
+		d.Evidence.RunID = runID
+		d.Evidence.Checks[0].ID, d.Evidence.Checks[1].ID = "unit", "unit" // same check id under jobs "unit" and "lint"
+		return d
+	}
+	cur := doc("cur", "pass", "pass")
+	got := annotateDocs(cur.Evidence, []Doc{doc("old", "fail", "pass")})
+	if n := got[model.FlakyKey("unit", "unit")]; n == nil || n.Passes != 1 || n.Fails != 1 {
+		t.Errorf("the flaky job is not marked: %+v", got)
+	}
+	if n := got[model.FlakyKey("lint", "unit")]; n != nil {
+		t.Errorf("the stable job with the same check id was marked flaky: %+v", n)
+	}
+	if len(got) != 1 {
+		t.Errorf("notes %+v, want only the flaky job's", got)
+	}
+}
