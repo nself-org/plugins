@@ -96,6 +96,8 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 	if in.Dirty || in.Revision == "" {
 		reason := model.BindingReason("dirty")
 		e.WorktreeState, e.Binding = "dirty", model.Binding{State: "unbound", Reason: &reason}
+		why := "the worktree is not the named commit"
+		e.Freshness = model.Freshness{State: "unknown", Reason: &why} // an unbound document is never current (schema)
 	}
 	for _, o := range in.Jobs {
 		c := model.Check{ID: firstNonEmpty(o.Check, o.ID), JobID: o.ID, Kind: string(o.Kind), Tool: o.Tool, Required: o.Required,

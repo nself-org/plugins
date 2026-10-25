@@ -10,6 +10,7 @@ package run
 // coordinator.
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -173,5 +174,47 @@ func TestPrepareFailureReportsThroughTheSentinel(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// An unbound document (dirty tree, or no commit) is never current: the schema
+// forbids binding unbound + freshness current.
+func TestUnboundEvidenceIsNeverCurrent(t *testing.T) {
+	t.Parallel()
+	schemas, err := model.Schemas()
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Unix(0, 0)
+	jobs := []JobOutcome{{ID: "a", Required: true, Substantive: true, State: StatePassed}}
+	for name, tc := range map[string]struct {
+		in    evidenceInput
+		fresh model.FreshnessState
+	}{
+		"dirty":     {evidenceInput{Revision: strings.Repeat("a", 40), Dirty: true}, "unknown"},
+		"no commit": {evidenceInput{}, "unknown"},
+		"clean":     {evidenceInput{Revision: strings.Repeat("a", 40)}, "current"},
+	} {
+		in := tc.in
+		in.Jobs, in.Start, in.End = jobs, start, start
+		in.Trigger, in.Pipeline = "local", model.PipelineRef{ID: "default", Name: "default", Kind: "default"}
+		in.Selection = model.Selection{Mode: "full", Reason: "selection.no_base"}
+		ev, _, err := buildEvidence(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ev.Freshness.State != tc.fresh {
+			t.Errorf("%s: freshness %q, want %q", name, ev.Freshness.State, tc.fresh)
+		}
+		doc, err := json.Marshal(ev)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if in.Revision == "" { // an empty revision fails the schema pattern on its own; the freshness rule is what is pinned here
+			continue
+		}
+		if err := model.ValidateJSON(schemas["ci-evidence.v1.schema.json"], doc); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 }
