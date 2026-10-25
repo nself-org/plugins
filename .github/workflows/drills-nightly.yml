@@ -140,12 +140,29 @@ jobs:
           args=(--no-status --pipeline "$PIPELINE" --json)
           if [ -n "$NSELF_CI_TRUST" ]; then args+=(--trust "$NSELF_CI_TRUST"); fi
           "$NSELF_CI_BIN" "${args[@]}" > "$RUNNER_TEMP/evidence/$PIPELINE.json" || status=$?
+          # One result line per drill in the step log and one table row in the summary: the engine prints nothing
+          # but the evidence document, and the old log said only "exit code 1" after a 25 minute run.
           {
             echo "### $PIPELINE (nself-ci $CI_VERSION)"
             echo "exit code: $status"
+            echo
+            echo "| drill | result | detail |"
+            echo "|---|---|---|"
           } >> "$GITHUB_STEP_SUMMARY"
+          if jq -e '.data.checks' "$RUNNER_TEMP/evidence/$PIPELINE.json" >/dev/null 2>&1; then
+            jq -r '.data.checks[] | "drill \(.id): \(.result)" + (if .result == "pass" then "" else " (" + ((.excerpt // "") | gsub("\n"; "; ")) + ")" end)' \
+              "$RUNNER_TEMP/evidence/$PIPELINE.json"
+            jq -r '.data.checks[] | "| \(.id) | \(.result) | " + (if .result == "pass" then "" else ((.excerpt // "") | gsub("\n"; "<br>") | gsub("\\|"; "/")) end) + " |"' \
+              "$RUNNER_TEMP/evidence/$PIPELINE.json" >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.data.checks[] | select(.result != "pass") | "::error title=drill \(.id) \(.result)::" + ((.excerpt // "") | gsub("\n"; " | "))' \
+              "$RUNNER_TEMP/evidence/$PIPELINE.json"
+          else
+            echo "::error::no per-drill evidence: $RUNNER_TEMP/evidence/$PIPELINE.json is missing or is not an evidence document (engine exit $status)"
+            echo "no per-drill evidence (engine exit $status)" >> "$GITHUB_STEP_SUMMARY"
+          fi
           exit "$status"
 
+      # Only the isolation-levels drill writes here, and only when a level fails; a green night has no such artifact.
       - name: Keep the drill logs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
