@@ -58,7 +58,12 @@ func (h PolicyHook) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult,
 	for _, ig := range got.Ignored {
 		if ig.Scope == policy.SourceRun {
 			out.IgnoredRun = append(out.IgnoredRun, ig.Key+": "+ig.Reason)
+		} else {
+			out.Notes = append(out.Notes, ig.Key+": "+ig.Reason)
 		}
+	}
+	if got.Fetch == policy.FetchStale {
+		out.Notes = append(out.Notes, "protected-branch tip is stale: the fetch of origin failed, the last fetched tip applies")
 	}
 	if v, ok := got.Values["trust.secrets"]; ok {
 		out.SecretClasses, out.HasSecretClasses = secrets.AllowlistOfValue(v)

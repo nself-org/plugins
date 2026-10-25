@@ -21,6 +21,10 @@ type PolicyResult struct {
 	// IgnoredRun lists the per-run values the policy did not take, one line each
 	// ("key: reason"); a run reports them, it never drops them silently (P7-AUTO-29).
 	IgnoredRun []string
+	// Notes are the other things the resolution reports (values refused from the
+	// protected branch, the worktree or the pin; a branch tip that is stale or
+	// unreadable), one line each; a run lists them, it never drops them.
+	Notes []string
 	SecretsInfo
 }
 
@@ -54,6 +58,15 @@ func ResolvePolicy(ctx context.Context, root, pipeline string) (PolicyResult, er
 		r = p
 	}
 	return r.Resolve(ctx, PolicyRequest{Root: root, Pipeline: pipeline})
+}
+
+// policyNotes turns the resolution diagnostics into run notes.
+func policyNotes(lines []string) []string {
+	var out []string
+	for _, line := range lines {
+		out = append(out, "policy: "+line)
+	}
+	return out
 }
 
 // ignoredRunNotes turns the per-run policy values the policy refused into run
