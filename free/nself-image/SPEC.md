@@ -2,7 +2,7 @@
 
 **Bundle:** nFamily  
 **Tier:** $0.99/mo (nFamily bundle) or ɳSelf+ $3.99/mo  
-**Language:** Rust (perf-justified — see §1 Architecture)  
+**Language:** Go (see §1 Architecture)  
 **Port:** 3827  
 **Target version:** v1.2.0  
 **Repo path:** `plugins-pro/paid/nself-image/`  
@@ -12,16 +12,15 @@
 
 ## §1 Architecture
 
-### Language Justification (Rust)
+### Language (Go)
 
-Per Plugin Language Policy, Rust is permitted for CPU-intensive / encoding / media-processing work where a measurable performance need exists. This plugin qualifies:
+This plugin is written in Go, like the other nSelf plugin services. An earlier draft chose Rust on the grounds of a "Plugin Language Policy" and an unbenchmarked SIMD speed-up. No such policy document exists, and no benchmark backs the claim, so the draft is withdrawn. The draft's precedent (the `nclaw` `libs/libnclaw` Rust crate) is also not a policy: it is an orphaned crate.
 
-- The `image` + `fast_image_resize` Rust crates use SIMD intrinsics for resize operations — 2-5x faster than Go's `golang.org/x/image` or Node Sharp in CPU-bound benchmarks.
-- AVIF encoding via `ravif` crate avoids spawning external processes (libavif).
-- WebP encoding via `libwebp-sys2` bindings — battle-tested, zero overhead vs Sharp's libwebp path.
-- Single statically-linked binary output. No runtime libvips or libvips-dev dependency on the host.
+Rust stays off the table until someone attaches a benchmark on CX21 hardware that shows Go cannot meet the targets in §8 and records an ADR 0031 exception. Until then:
 
-This is the same exception class as the existing `nclaw/libs` Rust FFI crate: CPU-bound media work with documented SIMD gain.
+- Resize and crop use the Go standard library plus `golang.org/x/image` (or a maintained resizing library chosen in the implementation sprint).
+- WebP and AVIF encoders are the open risk: `golang.org/x/image` has no encoder for either. The implementation sprint picks between a cgo binding to libwebp/libavif and a pure-Go or WebAssembly encoder, and records the choice. Prefer `CGO_ENABLED=0` so the output stays one static binary.
+- The performance targets in §8 are targets to measure, not claims. If Go misses them, that is the evidence for an ADR 0031 exception.
 
 ### Service Shape
 
@@ -39,7 +38,7 @@ All traffic via Nginx reverse proxy when accessed from outside the host. No dire
 1. Receive job via `POST /process`: `{input, output, ops[]}`
 2. Validate HMAC token (`IMAGE_SHARED_SECRET`) — reject if invalid
 3. Stream-download input object from MinIO in chunks (no full-file buffer for large inputs)
-4. Decode image using `image` crate (JPEG, PNG, WebP, GIF, BMP, TIFF)
+4. Decode the image with Go image decoders (JPEG, PNG, WebP, GIF, BMP, TIFF)
 5. Apply ops in declared order: resize → crop → strip_exif → format_convert
 6. Stream-upload output to MinIO output bucket
 7. Optionally record audit row in `np_image.jobs` if `IMAGE_AUDIT_ENABLED=true`
@@ -155,7 +154,7 @@ Returns `{"status":"ok","version":"0.1.0"}`. Used by `nself doctor`.
 
 | Op type | Params | Notes |
 |---|---|---|
-| `resize` | `width`, `height`, `fit` (cover/contain/fill) | SIMD-accelerated via fast_image_resize |
+| `resize` | `width`, `height`, `fit` (cover/contain/fill) | Library chosen in the implementation sprint (see §1) |
 | `crop` | `x`, `y`, `width`, `height` | Pixel-coordinate crop |
 | `format` | `to` (webp/avif/jpeg/png), `quality` (1-100) | AVIF capped at 1MP input by default — see open questions |
 | `strip_exif` | (no params) | Recommended for all user uploads; removes GPS, device info |
@@ -193,7 +192,7 @@ For the `service` role, no row filter applies (full table access for internal au
 ```yaml
 name: nself-image
 version: 0.1.0
-language: rust
+language: go
 bundle: nfamily
 visibility: public
 port: 3827
@@ -257,12 +256,12 @@ arch_support:
 
 ## §8 Testing Plan
 
-### Unit tests (Rust, `cargo test`)
+### Unit tests (Go, `go test`)
 
 - Each op type with known input (JPEG 4K) → assert output dimensions/format/size
 - `strip_exif`: assert GPS + device metadata removed from output
 - Oversized input → 413 error response
-- Corrupt image (truncated) → graceful error, no panic
+- Corrupt image (truncated) → graceful error, no panic or recovered panic
 - Unsupported format (MP4, PDF) → 400 error response
 - HMAC validation: valid token → pass; missing token → 401; tampered token → 401
 
@@ -273,6 +272,8 @@ arch_support:
 - Concurrent jobs up to `IMAGE_PROCESSING_MAX_CONCURRENT` without deadlock
 
 ### Performance baseline
+
+Targets, not measured yet. A miss is the evidence an ADR 0031 exception needs (see §1).
 
 - 256×256 WebP from 4K JPEG in < 100ms on CX21 (2vCPU, 4GB)
 - 1MP JPEG resize to 512×512 PNG in < 200ms on CX21
@@ -292,14 +293,14 @@ arch_support:
 
 **Why nself-image is different:**
 - **Self-hosted:** no per-transform cost, no vendor API key, no data leaving the server. Cloudinary charges per transformation; nself-image is flat-rate via the nFamily bundle ($0.99/mo).
-- **Rust speed:** imgproxy (the closest open-source competitor) is Go; nself-image uses SIMD-accelerated Rust crates (`fast_image_resize`, `ravif`) measurably faster on CPU-bound workloads.
+- **Single static binary:** no runtime libvips dependency on the host. No speed advantage over imgproxy (the closest open-source competitor, also Go) is claimed.
 - **nSelf-native:** directly integrated with MinIO (nSelf's storage layer) and Hasura Actions — zero glue code needed for nSelf apps vs Cloudinary's SDK requirement.
 
 ---
 
 ## §10 Rollout
 
-1. Build Rust binary via CI cross-compilation matrix (see §14)
+1. Build the Go binary via the CI cross-compilation matrix (see §14)
 2. Package as Docker image `nself/plugin-nself-image:0.1.0`
 3. Install: `nself plugin install nself-image` (requires nFamily bundle license)
 4. Run `nself plugin migrate nself-image` to create `np_image` schema (migration is no-op if `IMAGE_AUDIT_ENABLED=false`)
@@ -340,70 +341,49 @@ nself-image is part of the nFamily bundle. It also benefits nChat (attachment We
 
 ---
 
-## §14 CI Matrix — Rust Cross-Compilation
+## §14 CI Matrix — Go Cross-Compilation
 
-Per SIEGE T2-15: nself-image requires a cross-compilation CI matrix because Rust must be compiled per target architecture.
+Per SIEGE T2-15: nself-image ships per-architecture binaries, so CI builds a GOOS/GOARCH matrix. Go cross-compiles natively; no Docker-based cross toolchain is needed while the build stays `CGO_ENABLED=0` (see §1 for the encoder decision that could change that).
 
 ### Toolchain
 
-- **Cross-compilation tool:** [cross-rs](https://github.com/cross-rs/cross) (Docker-based Rust cross-compiler)
-- **Rust toolchain:** stable + beta + MSRV (see below)
-- **MSRV:** 1.75.0 (required for `fast_image_resize` 3.x SIMD feature set)
+- **Go toolchain:** the version pinned in `go.mod` (the repo standard); no beta or MSRV leg.
+- **Build:** `CGO_ENABLED=0 GOOS=<os> GOARCH=<arch> go build -mod=vendor -trimpath`
 
 ### Build matrix
 
-| Target triple | OS | Arch | Tier | CI trigger |
+| GOOS/GOARCH | OS | Arch | Tier | CI trigger |
 |---|---|---|---|---|
-| `x86_64-unknown-linux-gnu` | Linux (Hetzner CX-series) | amd64 | Primary | PR + release |
-| `aarch64-unknown-linux-gnu` | Linux (Hetzner CAX-series) | arm64 | Primary | PR + release |
-| `x86_64-apple-darwin` | macOS (Intel) | amd64 | Secondary | Release only |
-| `aarch64-apple-darwin` | macOS (Apple Silicon) | arm64 | Secondary | PR + release (local dev) |
-| `x86_64-pc-windows-msvc` | Windows | amd64 | Future | Release only (when Windows support ships) |
-
-### Toolchain version matrix
-
-| Toolchain | Tests | Purpose |
-|---|---|---|
-| `stable` | Full test suite + clippy | Primary correctness gate |
-| `beta` | Build + `cargo check` | Early warning for upcoming Rust breakage |
-| `1.75.0` (MSRV) | Build + unit tests | Ensure we don't accidentally raise MSRV |
+| `linux/amd64` | Linux (Hetzner CX-series) | amd64 | Primary | PR + release |
+| `linux/arm64` | Linux (Hetzner CAX-series) | arm64 | Primary | PR + release |
+| `darwin/amd64` | macOS (Intel) | amd64 | Secondary | Release only |
+| `darwin/arm64` | macOS (Apple Silicon) | arm64 | Secondary | PR + release (local dev) |
+| `windows/amd64` | Windows | amd64 | Future | Release only (when Windows support ships) |
 
 ### GitHub Actions workflow excerpt
 
 ```yaml
 strategy:
   matrix:
-    rust: [stable, beta, "1.75.0"]
-    target:
-      - x86_64-unknown-linux-gnu
-      - aarch64-unknown-linux-gnu
-      - aarch64-apple-darwin
     include:
-      - rust: stable
-        target: x86_64-pc-windows-msvc
-        os: windows-latest
-    exclude:
-      - rust: beta
-        target: x86_64-pc-windows-msvc
-      - rust: "1.75.0"
-        target: x86_64-pc-windows-msvc
+      - { goos: linux, goarch: amd64 }
+      - { goos: linux, goarch: arm64 }
+      - { goos: darwin, goarch: arm64 }
 
 steps:
   - uses: actions/checkout@v4
-  - uses: dtolnay/rust-toolchain@master
+  - uses: actions/setup-go@v5
     with:
-      toolchain: ${{ matrix.rust }}
-      targets: ${{ matrix.target }}
-  - uses: taiki-e/install-action@cross
-  - run: cross build --target ${{ matrix.target }} --release
-  - run: cross test --target ${{ matrix.target }}  # Linux targets only
+      go-version-file: go.mod
+  - run: CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -mod=vendor -trimpath ./...
+  - run: go vet -mod=vendor ./... && go test -mod=vendor ./...   # linux/amd64 leg only
 ```
 
-**Note:** Tests run only on Linux targets in CI (cross-rs Docker). Darwin builds compile-check only (no Docker-in-Docker for macOS targets). macOS tests run on local dev machines.
+**Note:** Tests run on the native runner leg only. Other targets are compile-checked.
 
 ### Cross-compilation CI trigger rules
 
-- **PR:** `x86_64-unknown-linux-gnu` (stable + MSRV) + `aarch64-unknown-linux-gnu` (stable) + `aarch64-apple-darwin` (stable, build-only)
+- **PR:** `linux/amd64` + `linux/arm64` + `darwin/arm64` (build-only)
 - **Release (tag push):** Full matrix including Windows
 
 ---
@@ -418,7 +398,7 @@ steps:
 - Hasura Actions custom-service pattern documented in `web/docs`
 
 **Pre-ship checklist:**
-- [ ] Rust binary builds cleanly for `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`
+- [ ] Go binary builds cleanly for `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`
 - [ ] All unit + integration tests pass
 - [ ] perf baseline verified on CX21 (256×256 WebP < 100ms)
 - [ ] `nself doctor` check passes on clean install
