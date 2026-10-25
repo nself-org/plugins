@@ -34,7 +34,9 @@ const claimTTL = 60 * time.Second
 // OutboxClaim takes the right to deliver seq so statuses of one key reach the
 // host in seq order across processes: refused when a newer seq is posted or
 // posting (seq is marked superseded), told to wait while an older seq is
-// mid-post. On ClaimOK the returned token fences release and posted.
+// mid-post. Superseding a seq whose claim had expired (its poster died, its
+// post may have landed) queues the newest status again. On ClaimOK the
+// returned token fences release and posted.
 func (s *Store) OutboxClaim(ctx context.Context, revision, statusContext string, seq int64) (int, int64, error) {
 	result, token := ClaimOK, int64(0)
 	err := s.write(ctx, func(tx *sql.Tx) error {
@@ -46,7 +48,20 @@ func (s *Store) OutboxClaim(ctx context.Context, revision, statusContext string,
 		}
 		if newer > 0 {
 			result = ClaimSuperseded
-			_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state IN (?,?,?)", OutboxSuperseded, revision, statusContext, seq, OutboxReserved, OutboxPending, OutboxPosting)
+			// an expired claim of seq was a poster that died mid-delivery: its
+			// post may have landed after the newer status, so the newest one is
+			// queued again, as OutboxPosted does for a poster that comes back
+			var expired int
+			if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq=? AND state=?", revision, statusContext, seq, OutboxPosting).Scan(&expired); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state IN (?,?,?)", OutboxSuperseded, revision, statusContext, seq, OutboxReserved, OutboxPending, OutboxPosting); err != nil {
+				return err
+			}
+			if expired == 0 {
+				return nil
+			}
+			_, err := requeueNewest(ctx, tx, revision, statusContext, seq)
 			return err
 		}
 		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq<? AND state=? AND claimed_at>?", revision, statusContext, seq, OutboxPosting, cutoff).Scan(&older); err != nil {

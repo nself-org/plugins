@@ -163,3 +163,24 @@ func TestIgnoredRunValuesReachSummary(t *testing.T) {
 		t.Fatalf("notes = %q", res.Summary.Notes)
 	}
 }
+
+// TestPolicyHookReadsTheRequestStore: the hook reads the operator rows from the
+// store the request names (the coordinator's home), not the default one.
+func TestPolicyHookReadsTheRequestStore(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("NSELF_CI_HOME", t.TempDir()) // the default store: empty
+	root, st, db := runScopeRepo(t)
+	project := policy.ProjectIDGitCached(ctx, policy.Runner(report.Capture), root)
+	err := st.ApplyWrite(ctx, store.PolicyWrite{Op: store.PolicySet, Scope: "project", Subject: project, Key: schedpolicy.KeyRunner, Value: []byte(`"ms6"`), Actor: "test"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := RunValues{schedpolicy.KeyRunner: json.RawMessage(`"ms5"`)}
+	got, err := PolicyHook{}.Resolve(ctx, PolicyRequest{Root: root, Store: db, Run: run})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.IgnoredRun) != 1 { // only the pin in the request's store makes --runner ms5 refused
+		t.Fatalf("the project pin of the request store was not read: ignored %v", got.IgnoredRun)
+	}
+}
