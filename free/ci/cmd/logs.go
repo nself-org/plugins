@@ -103,7 +103,8 @@ func runLogs(args []string) int {
 }
 
 // attemptEnded reports whether the attempt can no longer write output. Without
-// a store (or without a state for it) nothing is running.
+// a store (or without a state for it) nothing is running. A retryable attempt is
+// parked until the coordinator queues it again, so it ends the follow too.
 func attemptEnded(ctx context.Context, st *store.Store, attempt string) bool {
 	if st == nil {
 		return true
@@ -113,7 +114,7 @@ func attemptEnded(ctx context.Context, st *store.Store, attempt string) bool {
 		return true
 	}
 	switch state {
-	case model.JobState("passed"), "failed", "cancelled", "lost", "needs-operator":
+	case model.JobState("passed"), "failed", "cancelled", "lost", "retryable", "needs-operator":
 		return true
 	}
 	return false
