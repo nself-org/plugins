@@ -246,3 +246,39 @@ func TestOutboxReorderedAcknowledgementIsHealed(t *testing.T) {
 		t.Fatalf("the newest status must be pending: %+v", left)
 	}
 }
+
+// A poster that died after its HTTP post landed leaves an expired claim on the
+// older seq. Superseding it must queue the newest status again, or the host
+// stays on the older (possibly green) status.
+func TestOutboxSupersedingAnExpiredClaimRequeuesTheNewest(t *testing.T) {
+	now := time.Now()
+	s, err := Open(filepath.Join(t.TempDir(), "state.db"), Options{Clock: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	ctx := context.Background()
+	a, _ := s.OutboxReserve(ctx, "rev", "nself-ci")
+	b, _ := s.OutboxReserve(ctx, "rev", "nself-ci")
+	for _, seq := range []int64{a, b} {
+		_ = s.OutboxReady(ctx, "rev", "nself-ci", seq, []byte(`{"seq":`+strconv.FormatInt(seq, 10)+`}`))
+	}
+	if r, _ := claim(s, a); r != ClaimOK { // A claims, posts, then dies: never acknowledged
+		t.Fatalf("a: %d", r)
+	}
+	now = now.Add(claimTTL + time.Second)
+	r, tb := claim(s, b)
+	if r != ClaimOK {
+		t.Fatalf("b after expiry: %d", r)
+	}
+	if err = s.OutboxPosted(ctx, "rev", "nself-ci", b, tb); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ = claim(s, a); r != ClaimSuperseded {
+		t.Fatalf("a behind a posted b: %d", r)
+	}
+	left, _ := s.OutboxUnposted(ctx)
+	if len(left) != 1 || left[0].Seq != b {
+		t.Fatalf("the newest status must be queued again: %+v", left)
+	}
+}
