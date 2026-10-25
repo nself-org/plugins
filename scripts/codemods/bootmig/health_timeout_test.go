@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,16 +24,23 @@ func TestHelperTemplateBoundsStatus(t *testing.T) {
 	}
 }
 
-// The generated copies in the plugins carry the same fix.
+// The generated copies in the plugins and the conformance goldens carry the same fix. Every Go file is
+// scanned (not just */cmd and */internal): hand-placed helpers live at other depths (D-0887).
 func TestGeneratedHelpersBoundStatus(t *testing.T) {
-	root := filepath.Join("..", "..", "..", "free")
 	var files []string
-	for _, pat := range []string{"*/internal/boot_migrations.go", "*/cmd/boot_migrations.go"} {
-		m, err := filepath.Glob(filepath.Join(root, pat))
-		if err != nil {
-			t.Fatal(err)
-		}
-		files = append(files, m...)
+	for _, root := range []string{filepath.Join("..", "..", "..", "free"), filepath.Join("..", "..", "..", "tests", "conformance", "expected")} {
+		_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() && (d.Name() == "vendor" || d.Name() == "node_modules") {
+				return filepath.SkipDir
+			}
+			if !d.IsDir() && strings.HasSuffix(p, ".go") {
+				files = append(files, p)
+			}
+			return nil
+		})
 	}
 	if len(files) == 0 {
 		t.Skip("no plugin tree next to the codemod")

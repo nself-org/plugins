@@ -43,7 +43,10 @@ func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
 	if bootPool == nil { // handlers built without mustBootMigrations (unit tests)
 		return nil
 	}
-	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
+	// A hung database must fail the probe, not hang it.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	st, err := migrate.Status(ctx, bootPool, bootOptions())
 	if err != nil {
 		log.Printf("audit-analytics: migrations: status: %v", err)
 		w.Header().Set("Content-Type", "application/json")
