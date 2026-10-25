@@ -37,35 +37,52 @@
 #     platform's sha256 are all unchanged (a binary tarball carries no version, so identical bytes under a new version would
 #     otherwise keep a signature made for the old one); otherwise it is dropped.
 #
+#   --published-sha256 FILE (with --write; required with --signatures): the publish job's approved manifest (published-sha256.txt, the
+#     `sha256sum` lines of every tarball the Release served when the signer was approved). Every tarball whose hash this script would
+#     record, source and platform, must be listed there with exactly that sha256; one that is not is UNAPPROVED (the Release changed after
+#     approval) and, like an unsigned row, stops the write (exit 1).
+#
 # Constraints: requires `gh` (authenticated, repo access), `jq`, `tar`, and `sha256sum`/`shasum`. Never creates or publishes
 #   a release, never tags, never touches anything but releases.json.
 #
 # Usage:
 #   ./scripts/verify-published-checksums.sh v1.2.7
 #   ./scripts/verify-published-checksums.sh --write v1.2.7
-#   ./scripts/verify-published-checksums.sh --write --signatures signatures.json v1.2.7
+#   ./scripts/verify-published-checksums.sh --write --signatures signatures.json --published-sha256 published-sha256.txt v1.2.7
 
 set -euo pipefail
 
 REPO="nself-org/plugins"
 WRITE=false
 SIGNATURES_FILE=""
-while [ "${1:-}" = "--write" ] || [ "${1:-}" = "--signatures" ]; do
+PUBLISHED_FILE=""
+while [ "${1:-}" = "--write" ] || [ "${1:-}" = "--signatures" ] || [ "${1:-}" = "--published-sha256" ]; do
   if [ "$1" = "--write" ]; then
     WRITE=true
     shift
-  else
+  elif [ "$1" = "--signatures" ]; then
     SIGNATURES_FILE="${2:-}"
+    shift 2 || shift $#
+  else
+    PUBLISHED_FILE="${2:-}"
     shift 2 || shift $#
   fi
 done
 TAG="${1:-}"
 if [ -z "$TAG" ]; then
-  printf "Usage: %s [--write [--signatures FILE]] TAG\n  e.g. %s v1.2.7\n       %s --write v1.2.7\n" "$0" "$0" "$0" >&2
+  printf "Usage: %s [--write [--signatures FILE --published-sha256 FILE]] TAG\n  e.g. %s v1.2.7\n       %s --write v1.2.7\n" "$0" "$0" "$0" >&2
   exit 1
 fi
 if [ -n "$SIGNATURES_FILE" ] && { [ "$WRITE" != "true" ] || [ ! -f "$SIGNATURES_FILE" ]; }; then
   printf "[verify-published-checksums] ERROR: --signatures needs --write and an existing file\n" >&2
+  exit 1
+fi
+if [ -n "$PUBLISHED_FILE" ] && { [ "$WRITE" != "true" ] || [ ! -f "$PUBLISHED_FILE" ]; }; then
+  printf "[verify-published-checksums] ERROR: --published-sha256 needs --write and an existing file\n" >&2
+  exit 1
+fi
+if [ -n "$SIGNATURES_FILE" ] && [ -z "$PUBLISHED_FILE" ]; then
+  printf "[verify-published-checksums] ERROR: --signatures needs --published-sha256 (the publish job's approved manifest)\n" >&2
   exit 1
 fi
 VERSION="${TAG#v}"
@@ -96,6 +113,8 @@ MISMATCHES=0
 MISSING_ASSETS=0
 DOWNLOAD_ERRORS=0
 UNSIGNED=0
+UNAPPROVED=0
+UNREADABLE=0
 ROLLBACKS=0
 CHECKED=0
 WRITTEN=0
@@ -153,6 +172,11 @@ while IFS= read -r name; do
   fi
   computed_sha="$(sha256_file "$asset_path")"
   CHECKED=$((CHECKED + 1))
+  if ! manifest_approves "$tarball_name" "$computed_sha"; then
+    printf "UNAPPROVED %s: %s has sha256 %s, not the one in %s\n" "$name" "$tarball_name" "$computed_sha" "$PUBLISHED_FILE"
+    UNAPPROVED=$((UNAPPROVED + 1))
+    continue
+  fi
 
   if [ "$WRITE" != "true" ]; then
     reg_sha="$(jq -r '.sha256 // ""' <<<"$row")"
@@ -192,6 +216,11 @@ while IFS= read -r name; do
       fi
       p_computed="$(sha256_file "$ptar_path")"
       CHECKED=$((CHECKED + 1))
+      if ! manifest_approves "$ptar_name" "$p_computed"; then
+        printf "UNAPPROVED %s/%s: %s has sha256 %s, not the one in %s\n" "$name" "$platform" "$ptar_name" "$p_computed" "$PUBLISHED_FILE"
+        UNAPPROVED=$((UNAPPROVED + 1))
+        continue
+      fi
       platforms_json="$(jq -c --arg p "$platform" --arg s "$p_computed" '.[$p] = $s' <<<"$platforms_json")"
       if [ "$WRITE" != "true" ]; then
         reg_platform="$(jq -r --arg p "$platform" '.platform_checksums[$p] // ""' <<<"$row")"
@@ -244,7 +273,13 @@ while IFS= read -r name; do
     binaries_json="[]"
     linux_tar="${WORK_DIR}/${name}-${VERSION}-linux-amd64.tar.gz"
     if [ -f "$linux_tar" ]; then
-      binaries_json="$( { tar -tzf "$linux_tar" | awk -F/ '{print $NF}' | grep -E "$BINARY_RE" || true; } | sort -u | jq -R . | jq -sc .)"
+      # An archive tar cannot list is a corrupt asset: failing here keeps a stale or empty binaries list out of releases.json.
+      if ! listing="$(tar -tzf "$linux_tar" 2>/dev/null)"; then
+        printf "UNREADABLE %s/linux-amd64: %s is published but tar cannot list it\n" "$name" "${name}-${VERSION}-linux-amd64.tar.gz"
+        UNREADABLE=$((UNREADABLE + 1))
+        continue
+      fi
+      binaries_json="$( { printf '%s\n' "$listing" | awk -F/ '{print $NF}' | grep -E "$BINARY_RE" || true; } | sort -u | jq -R . | jq -sc .)"
       [ "$binaries_json" != "[]" ] || log "WARNING: ${name}-${VERSION}-linux-amd64.tar.gz holds no nself-* binary; the row gets no binaries list"
     fi
     RELEASES_JSON="$(jq --arg n "$name" --arg v "$VERSION" --arg tag "$TAG" --arg sha "$computed_sha" \
@@ -268,10 +303,17 @@ while IFS= read -r name; do
   fi
 done <<<"$(printf '%s\n' "$candidates" | sort -u)"
 
-if [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ] || [ "$UNSIGNED" -gt 0 ] || [ "$ROLLBACKS" -gt 0 ]; then
-  [ "$WRITE" != "true" ] || log "releases.json NOT written: an expected asset is missing, failed to download or is unsigned."
+if [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ] || [ "$UNSIGNED" -gt 0 ] || [ "$UNAPPROVED" -gt 0 ] || [ "$UNREADABLE" -gt 0 ] || [ "$ROLLBACKS" -gt 0 ]; then
+  [ "$WRITE" != "true" ] || log "releases.json NOT written: an expected asset is missing, failed to download, is unsigned, unapproved or unreadable."
 elif [ "$WRITE" = "true" ]; then
-  jq -S --indent 2 . <<<"$RELEASES_JSON" > "${RELEASES_FILE}.tmp" && mv "${RELEASES_FILE}.tmp" "$RELEASES_FILE"
+  # `a && b` is exempt from errexit, so a failed write must be tested explicitly or the script would log Wrote and exit 0.
+  # A unique temp file beside releases.json (same filesystem, so mv is atomic); cleanup is nonrecursive so nothing pre-existing is deleted.
+  RELEASES_TMP=""
+  if ! RELEASES_TMP="$(mktemp "${RELEASES_FILE}.XXXXXX")" || ! jq -S --indent 2 . <<<"$RELEASES_JSON" > "$RELEASES_TMP" || ! mv "$RELEASES_TMP" "$RELEASES_FILE"; then
+    [ -z "$RELEASES_TMP" ] || rm -f "$RELEASES_TMP"
+    err "could not write ${RELEASES_FILE}; releases.json is unchanged."
+    exit 1
+  fi
   log "Wrote ${WRITTEN} row(s) into releases.json from ${TAG}'s published assets (checked ${CHECKED} asset(s))."
   log "Next: scripts/plugin-counts.sh regenerates registry.json, catalog.json and counts.json from it."
 else
@@ -290,10 +332,16 @@ fi
 if [ "$UNSIGNED" -gt 0 ]; then
   err "${UNSIGNED} row(s) have no signature over the published bytes; the signing job must sign what is on the release."
 fi
+if [ "$UNAPPROVED" -gt 0 ]; then
+  err "${UNAPPROVED} tarball(s) differ from the publish job's approved manifest; the Release changed after approval. Nothing is written."
+fi
+if [ "$UNREADABLE" -gt 0 ]; then
+  err "${UNREADABLE} linux-amd64 archive(s) are published but corrupt; rebuild and upload them."
+fi
 if [ "$ROLLBACKS" -gt 0 ]; then
   err "${ROLLBACKS} row(s) already hold a newer version than ${TAG}; releases.json is not rolled back."
 fi
-if [ "$MISMATCHES" -gt 0 ] || [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ] || [ "$UNSIGNED" -gt 0 ] || [ "$ROLLBACKS" -gt 0 ]; then
+if [ "$MISMATCHES" -gt 0 ] || [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ] || [ "$UNSIGNED" -gt 0 ] || [ "$UNAPPROVED" -gt 0 ] || [ "$UNREADABLE" -gt 0 ] || [ "$ROLLBACKS" -gt 0 ]; then
   exit 1
 fi
 log "Done."

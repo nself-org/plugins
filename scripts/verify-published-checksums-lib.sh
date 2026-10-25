@@ -30,6 +30,11 @@ sha256_file() {
 
 log() { printf "[verify-published-checksums] %s\n" "$*"; }
 err() { printf "[verify-published-checksums] ERROR: %s\n" "$*" >&2; }
+# manifest_approves NAME SHA: the publish job's manifest (PUBLISHED_FILE, `sha256sum` lines) lists NAME with exactly SHA. True when no manifest is in use.
+manifest_approves() {
+  [ -n "${PUBLISHED_FILE:-}" ] || return 0
+  awk -v n="$1" -v s="$2" '{ f = $2; sub(/^\*/, "", f); if ($1 == s && f == n) ok = 1 } END { exit !ok }' "$PUBLISHED_FILE"
+}
 asset_is_published() { grep -Fxq "$1" "$ASSET_MANIFEST"; }
 
 # Matches internal/plugin/arch.go's PlatformArch(), the same list scripts/build-tarballs.sh cross-compiles for a binaryName plugin.
