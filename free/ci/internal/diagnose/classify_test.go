@@ -43,6 +43,8 @@ func TestClassifyClasses(t *testing.T) {
 		{"dns", Input{ExecClass: "code", ExitCode: 1, Tail: "curl: (6) Could not resolve host: proxy.golang.org\n"}, "infra", SigDNS, true},
 		{"docker down", Input{ExecClass: "infra", ExitCode: -1, Err: "Cannot connect to the Docker daemon at unix:///var/run/docker.sock"}, "infra", SigDocker, true},
 		{"missing tool by output", Input{ExecClass: "code", ExitCode: 127, Tail: "sh: 1: golangci-lint: not found\n"}, "infra", SigTool, true},
+		{"missing tool by bash prefix", Input{ExecClass: "code", ExitCode: 127, Tail: "/bin/sh: line 3: golangci-lint: not found\n"}, "infra", SigTool, true},
+		{"an application message ending in not found is code", Input{ExecClass: "code", ExitCode: 1, Tail: "customer: not found\n"}, "code", SigCode, false},
 		{"missing tool by exec error", Input{ExecClass: "infra", Err: `exec: "pnpm": executable file not found in $PATH`}, "infra", SigTool, true},
 		{"a program choosing exit 137 is code", Input{ExecClass: "code", ExitCode: 137, Tail: "assertion failed\n"}, "code", SigCode, false},
 		{"a program choosing exit 127 is code", Input{ExecClass: "code", ExitCode: 127, Tail: "assertion failed\n"}, "code", SigCode, false},
