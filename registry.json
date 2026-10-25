@@ -5114,7 +5114,7 @@
       ],
       "description": "Server-side image processing plugin for nSelf: resize, crop, format conversion (WebP/AVIF/JPEG/PNG), EXIF strip, and MinIO-integrated upload pipeline. Replaces per-app Sharp/Node.js usage across nFamily, nChat, and any consumer app needing image normalization.",
       "download_url": "https://plugins.nself.org/plugins/nself-image/tarball",
-      "language": "rust",
+      "language": "go",
       "license": "MIT",
       "minNselfVersion": "1.2.0",
       "min_nself_version": "1.2.0",
