@@ -6,7 +6,7 @@ package redteam
 // attacked statically: docker-socket mounts, privileged or host-namespace settings, public port
 // binds, default credentials, open registration, the public-repository opt-out default, image
 // pinning, and whether the runner's control API is reachable without a credential.
-// Inputs:  docker-compose.plugin.yml, Dockerfile, install.sh and Go sources of the two plugins.
+// Inputs:  docker-compose.plugin.yml, Dockerfile and Go sources of the two plugins.
 // Outputs: pass = the dangerous setting is absent (control HELD).
 // Constraints: static reads only; nothing is started and no docker is used.
 
@@ -195,16 +195,5 @@ func TestD23_RunnerControlAPIIsNotCrossOriginOpen(t *testing.T) {
 	main := dRead(t, "github-runner/cmd/main.go")
 	if strings.Contains(main, "sdk.CORS") {
 		t.Fatal("cmd/main.go wraps the unauthenticated control routes in sdk.CORS (Allow-Origin *)")
-	}
-}
-
-// D24: the runner tarball is verified before it is unpacked and a runner started as a service.
-func TestD24_InstallVerifiesRunnerDownload(t *testing.T) {
-	if !openFinding(t, "D24") {
-		return
-	}
-	sh := dRead(t, "github-runner/install.sh")
-	if !strings.Contains(sh, "sha256sum") && !strings.Contains(sh, "shasum -a 256") {
-		t.Fatal("install.sh downloads the runner archive, unpacks it and installs it as a service without a checksum")
 	}
 }

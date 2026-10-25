@@ -20,19 +20,9 @@ file-processing/
 ├── README.md                   # Full documentation
 ├── QUICKSTART.md              # Quick start guide
 ├── .env.example               # Environment template
-├── install.sh                 # Installation script
-├── uninstall.sh               # Uninstallation script
 │
 ├── schema/
 │   └── tables.sql             # PostgreSQL schema (4 tables, 5 views, 3 functions)
-│
-├── actions/                   # Shell scripts for plugin actions
-│   ├── init.sh               # Initialize plugin
-│   ├── server.sh             # Start HTTP server
-│   ├── worker.sh             # Start background worker
-│   ├── process.sh            # Process single file
-│   ├── cleanup.sh            # Clean up old jobs
-│   └── stats.sh              # View statistics
 │
 ├── ts/                        # TypeScript implementation
 │   ├── package.json          # npm dependencies
@@ -175,15 +165,6 @@ All providers support:
 - ✅ `process` - Process single file
 - ✅ `stats` - View statistics
 - ✅ `cleanup` - Clean up old jobs
-
-### Shell Actions
-
-- ✅ `init.sh` - Check dependencies and build
-- ✅ `server.sh` - Start HTTP server
-- ✅ `worker.sh` - Start background worker
-- ✅ `process.sh` - Process file via API
-- ✅ `cleanup.sh` - Database cleanup
-- ✅ `stats.sh` - View statistics
 
 ## Configuration
 

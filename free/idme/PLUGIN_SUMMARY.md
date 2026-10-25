@@ -17,21 +17,8 @@ idme/
 ├── README.md                    # Full documentation (9.7KB)
 ├── QUICKSTART.md                # Quick start guide (2.7KB)
 ├── .env.example                 # Environment template
-├── install.sh                   # Database setup (3.4KB)
-├── uninstall.sh                 # Cleanup script (2.2KB)
 ├── schema/
 │   └── tables.sql               # Complete schema (9.3KB)
-├── actions/
-│   ├── init.sh                  # OAuth initialization
-│   ├── verify.sh                # Verification status
-│   ├── groups.sh                # Group management
-│   └── test.sh                  # Configuration testing
-├── webhooks/
-│   ├── handler.sh               # Main webhook handler
-│   └── events/
-│       ├── default.sh           # Default event handler
-│       ├── verification.updated.sh
-│       └── group.verified.sh
 └── ts/
     ├── package.json             # Dependencies
     ├── tsconfig.json            # TypeScript config
@@ -78,11 +65,6 @@ Each group has custom badge with icon and color:
 - Commander.js CLI
 - PostgreSQL database
 - Modular architecture
-
-### 5. Shell Scripts
-- 4 action scripts (init, verify, groups, test)
-- 3 webhook event handlers
-- Install/uninstall automation
 
 ## Environment Variables
 
@@ -160,8 +142,6 @@ Key classes and interfaces:
 Follows Stripe/GitHub plugin structure:
 - plugin.json manifest
 - Schema in schema/tables.sql
-- Shell actions in actions/
-- Webhook handlers in webhooks/
 - TypeScript in ts/src/
 
 ## Production Checklist
@@ -204,12 +184,6 @@ nself plugin idme test
 - `commander` - CLI framework
 - `pg` - PostgreSQL client
 - `dotenv` - Environment variables
-
-### Shell
-- `bash` - Shell scripts
-- `curl` - HTTP requests
-- `openssl` - Signature generation
-- `jq` - JSON parsing (optional)
 
 ## Documentation
 

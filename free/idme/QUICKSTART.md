@@ -21,8 +21,7 @@ Get up and running with ID.me authentication in 5 minutes.
 ## Step 2: Install Plugin
 
 ```bash
-cd ~/Sites/nself-plugins/plugins/idme
-./install.sh
+nself plugin install idme
 ```
 
 ## Step 3: Configure
