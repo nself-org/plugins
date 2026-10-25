@@ -67,6 +67,7 @@ func FlagSet(out io.Writer) *flag.FlagSet {
 	fs.Duration("drain-wait", DefaultDrainWait, "how long to wait for running jobs before giving up")
 	fs.Duration("hello-wait", DefaultHelloWait, "how long the upgraded agent has to say hello before the upgrade is rolled back")
 	fs.Bool("json", false, "print one v1 JSON envelope")
+	lifecycle.AddCoordinatorFlag(fs)
 	return fs
 }
 

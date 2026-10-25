@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"flag"
 	"os"
 	"slices"
 	"strings"
@@ -54,11 +53,10 @@ type nodeAdminState struct {
 var nodeAdminDeps atomic.Pointer[nodeAdminState]
 
 func init() {
-	// Add --coordinator to the flag sets the lifecycle owns (help and the generated reference list it).
+	// Add --coordinator to the flag sets the lifecycle owns (help and the generated reference list it); `nodes set` and
+	// `nodes upgrade` declare it in their own flag sets.
 	for _, sub := range []string{"add", "list", "show", "test", "drain", "enable", "revoke", "remove", "rotate"} {
-		lifecycle.RegisterFlags(sub, func(fs *flag.FlagSet) {
-			fs.String("coordinator", "", "run this on the TEAM coordinator at https://host[:port] (an admin or member user credential; not for add, pair or test)")
-		})
+		lifecycle.RegisterFlags(sub, lifecycle.AddCoordinatorFlag)
 	}
 	if err := clientapi.RegisterNodeRoutes(func() clientapi.NodeRunner {
 		if nodeAdminDeps.Load() == nil {

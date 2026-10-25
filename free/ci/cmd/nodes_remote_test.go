@@ -360,3 +360,19 @@ func TestNodesRemoteUpgradeClaimIsPerNodeAndRefusesNotQueues(t *testing.T) {
 		rel()
 	}
 }
+
+// TestRoutedNodesFlagSetsListCoordinator: help and the generated flag reference come from each subcommand's
+// own flag set, so every routed `nodes` command must declare --coordinator there (D-1409).
+func TestRoutedNodesFlagSetsListCoordinator(t *testing.T) {
+	for sub := range nodesRoutedSubs {
+		key := "nodes " + sub
+		e, ok := v15Subcommands[key]
+		if !ok || e.Flags == nil {
+			t.Errorf("%s: no V15 entry with a flag set", key)
+			continue
+		}
+		if e.Flags().Lookup("coordinator") == nil {
+			t.Errorf("%s: its flag set does not declare --coordinator", key)
+		}
+	}
+}

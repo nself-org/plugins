@@ -43,6 +43,7 @@ func nodesSetFlagSet(f *nodesSetFlags, errOut io.Writer) *flag.FlagSet {
 	fs.StringVar(&f.interactive, "interactive", "", "protect (background work waits while the operator is active) or ignore")
 	fs.StringVar(&f.onBattery, "on-battery", "", "pause (no new leases), drain (no new leases and drain the node) or allow")
 	fs.StringVar(&f.persistence, "persistence", "", "persistent or intermittent (a laptop that sleeps)")
+	lifecycle.AddCoordinatorFlag(fs)
 	return fs
 }
 
