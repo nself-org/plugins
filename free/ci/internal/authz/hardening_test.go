@@ -1,6 +1,7 @@
 package authz_test
 
 import (
+	"errors"
 	"io/fs"
 	"math"
 	"testing"
@@ -46,6 +47,29 @@ func TestExtractor_UnicodeAliasWithSymlinkRefused(t *testing.T) {
 	}
 	if err := admitAll([]authz.Entry{dir("d/"), link("d/l", "../x")}, authz.Limits{}); err != nil {
 		t.Fatalf("plain symlink refused: %v", err)
+	}
+}
+
+// Two plain files whose names are canonically equivalent share one APFS entry.
+func TestExtractor_NormalizationCollisionRefused(t *testing.T) {
+	nfc, nfd := "d/\u00e9.txt", "d/e\u0301.txt"
+	for _, order := range [][]string{{nfc, nfd}, {nfd, nfc}} {
+		err := admitAll([]authz.Entry{dir("d/"), file(order[0]), file(order[1])}, authz.Limits{})
+		var pe *authz.PathError
+		if !errors.As(err, &pe) || pe.Reason != authz.CollisionFold {
+			t.Fatalf("%q then %q: want %s, got %v", order[0], order[1], authz.CollisionFold, err)
+		}
+	}
+	// children of two spellings of one directory share it
+	err := admitAll([]authz.Entry{file("\u00e9/a"), file("e\u0301/b")}, authz.Limits{})
+	if err != nil {
+		t.Fatalf("children of one normalized directory refused: %v", err)
+	}
+	if err := admitAll([]authz.Entry{file("\u00e9"), file("e\u0301/b")}, authz.Limits{}); err == nil {
+		t.Fatal("file used as directory under the other spelling admitted")
+	}
+	if err := admitAll([]authz.Entry{file("\u00e9.txt"), file("e.txt")}, authz.Limits{}); err != nil {
+		t.Fatalf("distinct names refused: %v", err)
 	}
 }
 

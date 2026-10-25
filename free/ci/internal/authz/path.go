@@ -19,6 +19,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // Entry is one archive header or collected file.
@@ -260,11 +262,13 @@ func checkLink(target string, dirDepth int, name string, lim Limits) error {
 	return nil
 }
 
-// foldKey maps a name to a case-insensitive identity: each rune becomes the
-// smallest member of its simple-fold orbit.
+// foldKey maps a name to a case- and normalization-insensitive identity: the
+// name is put in NFC (APFS and HFS+ give canonically equivalent spellings one
+// directory entry), then each rune becomes the smallest member of its
+// simple-fold orbit, then NFC again in case folding left a decomposed run.
 func foldKey(s string) string {
 	var b strings.Builder
-	for _, r := range s {
+	for _, r := range norm.NFC.String(s) {
 		f := r
 		for c := unicode.SimpleFold(r); c != r; c = unicode.SimpleFold(c) {
 			if c < f {
@@ -273,5 +277,5 @@ func foldKey(s string) string {
 		}
 		b.WriteRune(f)
 	}
-	return b.String()
+	return norm.NFC.String(b.String())
 }
