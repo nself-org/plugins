@@ -54,7 +54,23 @@ func (c staleChecker) Stale(ctx context.Context, id string) (bool, error) {
 			return false, nil
 		}
 	}
-	return true, nil // no such coordinator: its leftovers belong to nobody
+	return true, nil // no such coordinator: its own-home leftovers (process markers) belong to nobody; containers are gated by Known
+}
+
+// Known reports whether the store has a coordinator with this (safe) id. The
+// container sweep lists every labelled container on the daemon, so an id this
+// store has never seen may be a live coordinator of another CI home.
+func (c staleChecker) Known(ctx context.Context, id string) (bool, error) {
+	all, err := c.st.Coordinators(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, a := range all {
+		if safeID(a.ID) == id {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // Recover cleans up after coordinators that died. current is the live
