@@ -81,6 +81,7 @@ v1.2.13 is the first release that signs the whole free catalogue (every `free/*/
 | `verify-signatures.sh --pub FILE DIR` | checks every `*.tar.gz` in DIR against `DIR/releases.json` and exactly the public key FILE (PEM SPKI). Failures on stderr: `checksum mismatch`, `missing release data`, `missing tarball`, `unsigned`, `signature mismatch`, `unsigned platform`, `platform signature mismatch`, `orphan platform signature`. No key discovery |
 | `platform-built-check.sh BUILT_LIST DIR` | exit 0 only if every platform tarball in DIR has its exact `<sha256>  <name>` line in BUILT_LIST (the sign job's gate); `not built by this run: <file>` otherwise |
 | `platform-signatures-test.sh` | offline gate: platform signatures accepted only for their slug, version, platform and bytes; built-check cases; the committed fixture `testdata/platform-v1/` (throwaway key, made by `sign.sh`) for the cli verifier. `--regen-testdata` rebuilds the fixture |
+| `verify-published-checksums-test.sh` | offline gate (stub `gh`) for `../verify-published-checksums.sh --write --signatures`: the publish manifest is enforced (`UNAPPROVED`), an unreadable linux-amd64 archive stops the write (`UNREADABLE`), a failed `releases.json` write is an error |
 | `rehearse.sh --tag T --no-upload --out DIR` | builds all source tarballs and signs them with a throwaway key, plus fixture binary tarballs (stub payload, all five platforms) for the first slug; writes `DIR/releases.json` and `DIR/rehearsal-test.pub`. Two runs of one tag give byte-identical tarballs |
 | `keys/` | committed release public keys (`plugins-release-free-<id>.pub`). Empty until P7-PLUG-69 commits the production key, which must happen before the first real tag run |
 
@@ -123,7 +124,8 @@ The Ticket P7-PLUG-21 verification lines are the gate for these scripts; no work
 2. Check out the `release-data/<tag>` branch on a maintainer machine that has the private bundles checkout and run `bash scripts/plugin-counts.sh`: it
    regenerates `registry.json`, `catalog.json` and `counts.json` from the new `releases.json`, and the workflow token cannot read the bundles repo.
    Push the result to the branch. That push also starts the required checks, which a pull request opened with `GITHUB_TOKEN` does not. Then merge.
-   A re-run never overwrites an existing `release-data/<tag>` branch; delete it first to regenerate. `verify-published-checksums.sh --signatures` refuses to
+   A re-run never overwrites an existing `release-data/<tag>` branch; delete it first to regenerate. `verify-published-checksums.sh --signatures` needs `--published-sha256` (the publish job's `published-sha256.txt`, which the `release-data` job downloads) and refuses to
+   write a tarball whose bytes are not in it, and refuses to
    write a row over a newer version, so a late run for an older tag cannot roll `releases.json` back.
 3. The web `sources-lock` PR is a separate step (P7-PLUG-69).
 4. The repository setting "Allow GitHub Actions to create and approve pull requests" (Settings, Actions, General) must stay on; the `release-data` job opens its PR with `GITHUB_TOKEN`.
