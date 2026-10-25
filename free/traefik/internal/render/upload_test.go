@@ -107,3 +107,58 @@ func TestUnknownUploadRouteIsRefused(t *testing.T) {
 		t.Fatalf("want one upload_routes refusal for nope:1, got %v", err)
 	}
 }
+
+// The upload listener mirrors only the named routes, so a named wildcard would answer, with its own
+// upstream, a host that an unnamed route owns on web and websecure (D-0617). That is refused.
+func TestUploadWildcardOverlappingAnUnnamedRouteIsRefused(t *testing.T) {
+	const wild = "plugin:wild/wild-wild.conf#1"
+	_, err := renderUpload(t, "host-tier", wild)
+	var ref *RefusalError
+	if !errors.As(err, &ref) {
+		t.Fatalf("want a refusal, got %v", err)
+	}
+	var got []string
+	for _, it := range ref.Items {
+		if it.Route != wild || it.Field != "upload_routes" {
+			t.Errorf("unexpected refusal %+v", it)
+		}
+		got = append(got, it.Reason)
+	}
+	want := "unnamed route plugin:notes/notes.conf#1 owns notes.example.test, which this wildcard would answer on the upload port"
+	found := false
+	for _, g := range got {
+		found = found || g == want
+	}
+	if !found {
+		t.Fatalf("missing %q in %q", want, got)
+	}
+}
+
+// Naming the overlapping routes too (or a wildcard with nothing under it) renders.
+func TestUploadWildcardWithEveryOverlapNamedRenders(t *testing.T) {
+	m := fixture(t, "host-tier")
+	var ids []string
+	for _, r := range m.Routes {
+		ids = append(ids, r.ID)
+	}
+	if _, err := Render(m, Options{SSLRoot: sslTree(t, m), CertRoot: "/nself/ssl", Upload: ids}); err != nil {
+		t.Fatalf("all routes named: %v", err)
+	}
+	// a more specific wildcard owned by an unnamed route also overlaps
+	m = fixture(t, "host-tier")
+	deep := noteRoute(t, m)
+	deep.ID, deep.ServerNames = "plugin:deep/deep.conf#1", []string{"*.deep.example.test"}
+	m.Routes = append(m.Routes, deep)
+	_, err := Render(m, Options{Upload: []string{"plugin:wild/wild-wild.conf#1", "core:auth", "core:hasura", "core:storage", "core:storage-console", "plugin:notes/notes.conf#1", "core:api-docs"}})
+	var ref *RefusalError
+	if !errors.As(err, &ref) || len(ref.Items) != 1 || !strings.Contains(ref.Items[0].Reason, "*.deep.example.test") {
+		t.Fatalf("want one refusal naming *.deep.example.test, got %v", err)
+	}
+	// a wildcard on an unrelated suffix does not overlap
+	m = fixture(t, "host-tier")
+	m.Routes = append(m.Routes, deep)
+	m.Routes[len(m.Routes)-1].ServerNames = []string{"*.other.test"}
+	if _, err := Render(m, Options{Upload: []string{"core:auth"}}); err != nil {
+		t.Fatalf("exact route named, unrelated wildcard unnamed: %v", err)
+	}
+}

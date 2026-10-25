@@ -14,7 +14,9 @@ Upload entrypoint (optional). Traefik's `readTimeout` is a total deadline per en
 named routes take long uploads, set in the stack environment: `TRAEFIK_UPLOAD_ROUTES` (comma-separated route ids, empty =
 off), `TRAEFIK_UPLOAD_READ_TIMEOUT` (default `600s`, 60s to 24h) and `TRAEFIK_UPLOAD_PUBLISH` (default `127.0.0.1:`, a
 loopback ephemeral port; set `8444` to open it). Container port :8444 carries only the named routes (an unknown Host there
-is Traefik's own 404, there is no default server). The static configuration is read at start: restart the stack after
+is Traefik's own 404, there is no default server). Because an unnamed route has no router there, `render` refuses a named
+wildcard route that covers a host an unnamed route owns more specifically (an exact name, or a longer wildcard): name that
+route as well, or the host would be answered by the wildcard's upstream instead of its own route. The static configuration is read at start: restart the stack after
 changing them. The image runs as the non-root user 65532. The one-shot `traefik-config` runs as
 `NSELF_HOST_UID:NSELF_HOST_GID`, exported by the CLI on Linux (`0:0` where it is not exported, such as Docker Desktop). On Linux, the CLI must pre-create
 `.nself/generated/traefik` and `.nself/generated/traefik-static` as the host operator before starting the
