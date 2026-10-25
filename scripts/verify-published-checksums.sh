@@ -307,8 +307,10 @@ if [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ] || [ "$UNSIGNED" 
   [ "$WRITE" != "true" ] || log "releases.json NOT written: an expected asset is missing, failed to download, is unsigned, unapproved or unreadable."
 elif [ "$WRITE" = "true" ]; then
   # `a && b` is exempt from errexit, so a failed write must be tested explicitly or the script would log Wrote and exit 0.
-  if ! jq -S --indent 2 . <<<"$RELEASES_JSON" > "${RELEASES_FILE}.tmp" || ! mv "${RELEASES_FILE}.tmp" "$RELEASES_FILE"; then
-    rm -rf "${RELEASES_FILE}.tmp"
+  # A unique temp file beside releases.json (same filesystem, so mv is atomic); cleanup is nonrecursive so nothing pre-existing is deleted.
+  RELEASES_TMP=""
+  if ! RELEASES_TMP="$(mktemp "${RELEASES_FILE}.XXXXXX")" || ! jq -S --indent 2 . <<<"$RELEASES_JSON" > "$RELEASES_TMP" || ! mv "$RELEASES_TMP" "$RELEASES_FILE"; then
+    [ -z "$RELEASES_TMP" ] || rm -f "$RELEASES_TMP"
     err "could not write ${RELEASES_FILE}; releases.json is unchanged."
     exit 1
   fi

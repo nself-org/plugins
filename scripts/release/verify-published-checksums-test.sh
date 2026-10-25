@@ -124,14 +124,27 @@ expect_refused "unreadable linux-amd64 archive stops the write" "UNREADABLE demo
 # --- D-1167: a failed releases.json write ---------------------------------------------------------------------------------------------
 printf '%s\n' "$EMPTY" > "$TREE/releases.json"
 signatures_for "$ASSETS" > "$T/signatures.json"
-mkdir -p "$TREE/releases.json.tmp"   # the redirect target cannot be opened, as on a full or read-only disk
-RC=0
-OUT="$(STUB_ASSETS="$ASSETS" PATH="$T/bin:$PATH" bash "$TREE/scripts/verify-published-checksums.sh" --write --signatures "$T/signatures.json" --published-sha256 "$T/manifest.txt" v1.2.3 2>&1)" || RC=$?
-if [ "$RC" -ne 0 ] && [[ "$OUT" != *"Wrote "* ]] && [[ "$OUT" == *"could not write"* ]] && unchanged; then
-  pass "failed releases.json write is an error, not Wrote"
+# The directory cannot be written, as on a read-only disk. A pre-existing releases.json.tmp directory (with content) must survive the failure.
+mkdir -p "$TREE/releases.json.tmp"
+printf 'keep\n' > "$TREE/releases.json.tmp/sentinel"
+chmod a-w "$TREE"
+if [ -w "$TREE" ]; then
+  echo "skip failed-write case: directory stays writable (running as root?)"
 else
-  fail "failed write (rc=$RC): $OUT"
+  RC=0
+  OUT="$(STUB_ASSETS="$ASSETS" PATH="$T/bin:$PATH" bash "$TREE/scripts/verify-published-checksums.sh" --write --signatures "$T/signatures.json" --published-sha256 "$T/manifest.txt" v1.2.3 2>&1)" || RC=$?
+  if [ "$RC" -ne 0 ] && [[ "$OUT" != *"Wrote "* ]] && [[ "$OUT" == *"could not write"* ]] && unchanged; then
+    pass "failed releases.json write is an error, not Wrote"
+  else
+    fail "failed write (rc=$RC): $OUT"
+  fi
+  if [ -f "$TREE/releases.json.tmp/sentinel" ]; then
+    pass "failed write leaves a pre-existing releases.json.tmp directory intact"
+  else
+    fail "failed write deleted a pre-existing releases.json.tmp directory"
+  fi
 fi
+chmod u+w "$TREE"
 rm -rf "$TREE/releases.json.tmp"
 
 if [ "$fails" -ne 0 ]; then echo "$fails case(s) failed"; exit 1; fi
