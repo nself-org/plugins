@@ -29,17 +29,8 @@ jobs/
 ├── plugin.json                 # Plugin manifest (port 3105, category: infrastructure)
 ├── README.md                   # Comprehensive documentation
 ├── .env.example                # Environment variable template
-├── install.sh                  # Installation script (applies schema, checks Redis)
-├── uninstall.sh                # Cleanup script (with Redis clearing)
 ├── schema/
 │   └── tables.sql              # Complete database schema (4 tables, 5 views, 3 functions)
-├── actions/
-│   ├── init.sh                 # Verify Redis, DB, configuration
-│   ├── server.sh               # Start BullBoard dashboard
-│   ├── worker.sh               # Start job worker process
-│   ├── stats.sh                # View statistics and metrics
-│   ├── retry.sh                # Retry failed jobs
-│   └── schedule.sh             # Manage cron schedules
 └── ts/
     ├── package.json            # Dependencies (bullmq, @bull-board, fastify, ioredis, pg)
     ├── tsconfig.json           # TypeScript configuration
@@ -280,8 +271,7 @@ Built-in schedules clean old jobs automatically:
 
 2. **Test Installation**:
    ```bash
-   cd ~/Sites/nself-plugins/plugins/jobs
-   ./install.sh
+   nself plugin install jobs
    ```
 
 3. **Start Services**:

@@ -17,8 +17,6 @@ Complete, production-ready multi-channel notification system for nself with emai
 |------|-------|-------------|
 | `plugin.json` | 98 | Plugin manifest with metadata, tables, webhooks, actions |
 | `README.md` | 616 | Comprehensive documentation |
-| `install.sh` | 78 | Installation script |
-| `uninstall.sh` | 83 | Uninstallation script |
 | `.env.example` | 153 | Complete environment configuration |
 
 ### 2. Database Schema (444 lines)
@@ -47,18 +45,7 @@ Complete, production-ready multi-channel notification system for nself with emai
 - 4 default templates (welcome, password reset, email verification, password changed)
 - 11 provider configurations (Resend, SendGrid, Mailgun, SES, SMTP, FCM, OneSignal, Web Push, Twilio, Plivo, SNS)
 
-### 3. Action Scripts (6)
-
-| Script | Lines | Purpose |
-|--------|-------|---------|
-| `init.sh` | 145 | Initialize and verify setup |
-| `test.sh` | 178 | Send test notifications |
-| `template.sh` | 288 | Manage templates (CRUD) |
-| `stats.sh` | 261 | View statistics and analytics |
-| `server.sh` | 84 | Start HTTP/GraphQL server |
-| `worker.sh` | 88 | Start background queue worker |
-
-### 4. TypeScript Implementation (1,800+ lines)
+### 3. TypeScript Implementation (1,800+ lines)
 
 **Core Modules**:
 - `types.ts` (462 lines) - Complete type definitions
@@ -160,29 +147,26 @@ nself plugin notifications worker [--concurrency 10] [--poll-interval 500]
 ## Installation
 
 ```bash
-# 1. Navigate to plugin directory
-cd ~/Sites/nself-plugins/plugins/notifications
+# 1. Install the plugin
+nself plugin install notifications
 
-# 2. Run installer
-bash install.sh
-
-# 3. Install TypeScript dependencies
+# 2. Install TypeScript dependencies
 cd ts
 npm install
 npm run build
 
-# 4. Configure environment
+# 3. Configure environment
 cp .env.example .env
 # Edit .env with your provider credentials
 
-# 5. Initialize
+# 4. Initialize
 nself plugin notifications init
 
-# 6. Start services
+# 5. Start services
 nself plugin notifications server &
 nself plugin notifications worker &
 
-# 7. Test
+# 6. Test
 nself plugin notifications test email test@example.com
 ```
 
@@ -373,20 +357,10 @@ notifications/
 ├── plugin.json                   # Plugin manifest
 ├── README.md                     # Documentation (616 lines)
 ├── IMPLEMENTATION_SUMMARY.md     # This file
-├── install.sh                    # Installer
-├── uninstall.sh                  # Uninstaller
 ├── .env.example                  # Configuration template
 │
 ├── schema/
 │   └── tables.sql                # Database schema (444 lines)
-│
-├── actions/
-│   ├── init.sh                   # Initialization
-│   ├── test.sh                   # Testing
-│   ├── template.sh               # Template management
-│   ├── stats.sh                  # Statistics
-│   ├── server.sh                 # HTTP server
-│   └── worker.sh                 # Queue worker
 │
 └── ts/
     ├── package.json              # Dependencies

@@ -52,12 +52,10 @@ free/geocoding/internal/handlers.go	1087
 free/geocoding/internal/provider/provider.go	406
 free/github-runner/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/github-runner/third_party/sdk/identity.go	338
-free/github/actions/sync.sh	422
 free/idme/internal/handlers.go	536
 free/invitations/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/invitations/third_party/sdk/identity.go	338
 free/job-queue/go/api/handlers.go	356
-free/jobs/actions/schedule.sh	310
 free/link-preview/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/link-preview/third_party/sdk/identity.go	338
 free/linkedin/internal/handlers.go	346
@@ -75,7 +73,6 @@ free/media-processing/ts/src/watcher.ts	320
 free/meetings/internal/handlers.go	925
 free/mlflow/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/mlflow/third_party/sdk/identity.go	338
-free/notifications/actions/stats.sh	308
 free/notifications/sdk/devkit/cmd/new-plugin/main.go	510
 free/notifications/sdk/identity.go	338
 free/notify/third_party/sdk/devkit/cmd/new-plugin/main.go	510
@@ -103,11 +100,9 @@ free/retro-gaming/internal/handlers.go	996
 free/rom-discovery/internal/handlers.go	526
 free/search/sdk/devkit/cmd/new-plugin/main.go	510
 free/search/sdk/identity.go	338
-free/shopify/actions/sync.sh	376
 free/shopify/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/shopify/third_party/sdk/identity.go	338
 free/sports/internal/handlers.go	876
-free/stripe/actions/sync.sh	381
 free/stripe/internal/db_schema.go	761
 free/subtitle-manager/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/subtitle-manager/third_party/sdk/identity.go	338
@@ -130,8 +125,6 @@ free/webhooks/sdk/identity.go	338
 free/workflows/internal/handlers.go	721
 sdk/devkit/cmd/new-plugin/main.go	510
 sdk/identity.go	338
-shared/generate-plugin.sh	2069
-shared/plugin-utils.sh	719
 shared/src/database.ts	306
 shared/src/webhook.ts	323
 shared/validate-registry.sh	1020

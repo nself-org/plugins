@@ -1104,8 +1104,8 @@ import { StripeClient } from './client.ts';
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 6. Run post-install hook (if defined)                       │
-│    bash plugins/stripe/install.sh                           │
+│ 6. Post-install                                             │
+│    (no script runs; migrations apply when the service boots)│
 └─────────────────────────────────────────────────────────────┘
                          │
                          ▼

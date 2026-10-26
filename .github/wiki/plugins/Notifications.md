@@ -61,8 +61,7 @@ The Notifications plugin provides a complete multi-channel notification system s
 
 ```bash
 # Install the plugin
-cd ~/Sites/nself-plugins/plugins/notifications
-bash install.sh
+nself plugin install notifications
 
 # Install TypeScript dependencies
 cd ts

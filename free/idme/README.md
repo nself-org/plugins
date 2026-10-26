@@ -31,8 +31,7 @@ OAuth authentication with government-grade identity verification for military, v
 2. **Install the plugin**
 
    ```bash
-   cd plugins/idme
-   ./install.sh
+   nself plugin install idme
    ```
 
 3. **Configure environment variables**
@@ -418,7 +417,7 @@ nself plugin idme test
 ### Database Errors
 
 **Problem**: "relation np_idme_verifications does not exist"
-- **Solution**: Run `./install.sh` to create tables
+- **Solution**: Start the plugin (it applies its migrations at boot) or run `nself plugin idme init`
 
 **Problem**: "Connection refused"
 - **Solution**: Check `DATABASE_URL` is correct and PostgreSQL is running

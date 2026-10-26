@@ -41,7 +41,7 @@ Copy `.env.example` to your nSelf `.env` file and set the values:
 | `GITHUB_RUNNER_PAT` | Yes | — | Fine-grained token with org "Self-hosted runners: write" (or classic `admin:org`) |
 | `GITHUB_RUNNER_ORG` | Yes | — | GitHub org name |
 | `GITHUB_RUNNER_NAME` | No | `<hostname>-nself` | Runner display name |
-| `GITHUB_RUNNER_LABELS` | No | `self-hosted,linux,x64,ubuntu-latest` (install.sh); `self-hosted,linux,x64` (compose service) | Comma-separated labels |
+| `GITHUB_RUNNER_LABELS` | No | `self-hosted,linux,x64` (set `ubuntu-latest` too to keep `runs-on: ubuntu-latest` workflows working) | Comma-separated labels |
 | `GITHUB_RUNNER_SCOPE` | No | `org` | `org` or `repo` |
 | `GITHUB_RUNNER_REPO` | No | — | Repo name (scope=repo only) |
 | `GITHUB_RUNNER_GROUP` | No | the org's default group | Runner group. One open to public repositories is refused |
@@ -61,7 +61,7 @@ This runner is **not isolated**. Read this before you point it at a repository.
 So the plugin is trusted-only by default:
 
 - Before registration, on every start and on every status call it reads the runner group (`GET /orgs/{org}/actions/runner-groups`, matching `GITHUB_RUNNER_GROUP`, or the group with `default: true` when it is empty) and refuses one with `allows_public_repositories: true`. For `GITHUB_RUNNER_SCOPE=repo` it reads `GET /repos/{owner}/{repo}` and refuses a public repository.
-- The refusal has the error code `runner_group_public` (HTTP 409 from the plugin API, non-zero exit from `install.sh` and `actions/start.sh`). If the check cannot be completed (API error, missing permission) the runner does not start either (`runner_trust_unverifiable`).
+- The refusal has the error code `runner_group_public` (HTTP 409 from the plugin API, also returned by the status call). If the check cannot be completed (API error, missing permission) the runner does not start either (`runner_trust_unverifiable`).
 - A group or repository that becomes public after registration stops the running runner on the next start or status call.
 - `GITHUB_RUNNER_SCOPE` must be `org` or `repo` (case-insensitive); any other value is refused as `runner_trust_unverifiable`, so a typo never skips the repository check. Organisation and repository names are validated before use.
 - A stop signals the runner and all of its child processes (`run.sh` does not forward signals to `Runner.Listener`). For a systemd runner the unit is stopped and also disabled, so a reboot does not bring it back into a public group; the next `start` re-checks the group and starts the runner again when it is private.

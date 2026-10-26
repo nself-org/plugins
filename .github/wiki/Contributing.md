@@ -44,7 +44,6 @@ Plugins live in `free/`, `community/`, and `monitoring/` directories. Each plugi
 ```
 free/<plugin-name>/
   plugin.json          # Plugin manifest
-  install.sh           # Installation script
   README.md            # Plugin-specific docs
   docker-compose.yml   # If adding a service
   ts/src/              # TypeScript source
@@ -150,7 +149,7 @@ All checks must pass or your PR will fail automated validation.
 
 1. Fork the repository
 2. Create a feature branch from `main`
-3. New plugins need a `plugin.json`, `install.sh`, and README
+3. New plugins need a `plugin.json`, a Go `cmd/` entry point, and a README
 4. Make your changes, following existing plugin patterns
 5. Test with a local nSelf stack
 6. Submit a PR with a clear description of what changed and why

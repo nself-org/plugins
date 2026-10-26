@@ -67,8 +67,7 @@ The ID.me plugin provides a complete OAuth 2.0 integration with ID.me for govern
 # 1. Register your application at developers.id.me
 
 # 2. Install the plugin
-cd plugins/idme
-./install.sh
+nself plugin install idme
 
 # 3. Configure environment
 cp .env.example .env
@@ -2892,14 +2891,7 @@ Error: Client authentication failed
 Error: relation "np_idme_verifications" does not exist
 ```
 
-**Solution:** Run the installer to create tables.
-
-```bash
-cd plugins/idme
-./install.sh
-```
-
-Or initialize via CLI:
+**Solution:** The plugin applies its migrations when it starts. Initialize via CLI:
 
 ```bash
 nself plugin idme init

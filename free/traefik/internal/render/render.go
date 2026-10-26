@@ -98,6 +98,7 @@ func Render(m *contract.Model, o Options) ([]byte, error) {
 		b.route(r)
 	}
 	b.checkUpload()
+	b.checkUploadOverlap()
 	b.cur, b.tier, b.noLog = "-", 0, false
 	b.defaultServer()
 	if len(b.refs) > 0 {

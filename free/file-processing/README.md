@@ -20,8 +20,7 @@ Comprehensive file processing with thumbnail generation, image optimization, vid
 
 ```bash
 # Install the plugin
-cd plugins/file-processing
-./install.sh
+nself plugin install file-processing
 ```
 
 ### Dependencies

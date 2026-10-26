@@ -26,8 +26,7 @@ clamd --version
 ### 1. Install the Plugin
 
 ```bash
-cd ~/Sites/nself-plugins/plugins/file-processing
-./install.sh
+nself plugin install file-processing
 ```
 
 ### 2. Configure Environment

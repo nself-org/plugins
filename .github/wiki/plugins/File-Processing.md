@@ -73,9 +73,8 @@ The File Processing plugin provides background processing for uploaded files wit
 ## Quick Start
 
 ```bash
-# Install dependencies
-cd plugins/file-processing
-./install.sh
+# Install the plugin
+nself plugin install file-processing
 
 # Configure environment
 echo "FILE_STORAGE_PROVIDER=minio" >> .env
