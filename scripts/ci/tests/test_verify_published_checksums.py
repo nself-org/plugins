@@ -86,10 +86,26 @@ esac
         }
         self.signatures.write_text(json.dumps(doc))
 
-    def verify(self, signed=True):
+    def approve(self, overrides=None):
+        """Write the publish job's approved manifest (sha256sum lines of every served tarball); overrides maps name -> sha."""
+        lines = {f.name: self.sha(f.name) for f in sorted(self.assets.glob("*.tar.gz"))}
+        lines.update(overrides or {})
+        manifest = self.root / "published-sha256.txt"
+        manifest.write_text("".join(f"{sha}  {name}\n" for name, sha in lines.items()))
+        return manifest
+
+    def verify(self, signed=True, published="approve"):
+        """Run the writer. A signed run also needs the approved manifest: "approve" (default) approves exactly what is served,
+        None omits --published-sha256, a Path uses that manifest."""
         env = dict(os.environ, PATH=f"{self.bin}{os.pathsep}{os.environ['PATH']}",
                    FIXTURE_ASSETS=str(self.assets), CONF_TODAY="2026-10-14")
-        args = ["--write", "--signatures", str(self.signatures)] if signed else ["--write"]
+        args = ["--write"]
+        if signed:
+            args += ["--signatures", str(self.signatures)]
+            if published == "approve":
+                published = self.approve()
+            if published is not None:
+                args += ["--published-sha256", str(published)]
         return subprocess.run(
             ["bash", str(self.root / "scripts/verify-published-checksums.sh"), *args, "v1.0.0"],
             env=env, text=True, capture_output=True, check=False,
@@ -119,6 +135,26 @@ esac
         self.assertEqual(result.returncode, 1, output)
         self.assertIn(f"{count} expected asset(s) are genuinely absent", output)
         self.assertEqual(self.releases.read_text(), self.original)
+
+    def test_signatures_without_published_manifest_is_refused(self):
+        self.archive_all()
+        self.sign_platforms()
+        result = self.verify(published=None)
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, output)
+        self.assertIn("--signatures needs --published-sha256", output)
+        self.assertEqual(self.releases.read_text(), self.original)
+
+    def test_tarball_changed_since_the_manifest_stops_the_write(self):
+        self.archive_all()
+        self.sign_platforms()
+        for case, overrides in (("platform", {"demo-1.0.0-linux-arm64.tar.gz": "0" * 64}), ("source", {"demo-1.0.0.tar.gz": "0" * 64})):
+            with self.subTest(case=case):
+                result = self.verify(published=self.approve(overrides))
+                output = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 1, output)
+                self.assertIn("UNAPPROVED demo", output)
+                self.assertEqual(self.releases.read_text(), self.original)
 
     def test_binary_without_any_platform_archives_is_rejected(self):
         self.assert_missing_platforms()
