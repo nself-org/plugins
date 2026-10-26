@@ -47,6 +47,17 @@ class RegistrySyncTriggers(unittest.TestCase):
         secrets = set(re.findall(r"secrets\.([A-Z0-9_]+)", self.text))
         self.assertEqual(secrets, {"CLOUDFLARE_WORKER_SYNC_TOKEN"})
 
+    def test_candidate_downloads_are_checked_after_refresh(self):
+        post = self.text.index('-X POST "https://plugins.nself.org/api/sync"')
+        verify = self.text.index('python3 scripts/ci/verify_registry_downloads.py --registry registry.json')
+        self.assertLess(post, verify, "versionless URLs must refresh before candidate verification")
+
+    def test_live_verification_waits_for_sync_even_on_failure(self):
+        live = self.text.split("  verify-live-downloads:", 1)[1].split("\n  sync:", 1)[0]
+        self.assertIn("    needs: sync\n", live)
+        self.assertIn("    if: always()\n", live)
+        self.assertIn("run: python3 scripts/ci/verify_registry_downloads.py\n", live)
+
 
 if __name__ == "__main__":
     unittest.main()

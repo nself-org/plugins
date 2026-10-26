@@ -200,9 +200,10 @@ jobs:
           if [ "$FAIL" -ne 0 ]; then
             echo ""
             echo "::error::one or more registry.json checksums do not match the corresponding published release asset"
-            echo "Rebuild locally with scripts/build-tarballs.sh <version>, upload it to the" >&2
-            echo "release, then re-run scripts/verify-published-checksums.sh <tag> --write" >&2
-            echo "to bring registry.json back in sync with what is actually published." >&2
+            echo "Do not rebuild or replace the release asset. Derive checksums from published bytes:" >&2
+            echo "bash scripts/verify-published-checksums.sh --write <tag>" >&2
+            echo "bash scripts/plugin-counts.sh" >&2
+            echo "Review the release-data diff; changed signed bytes require the normal release signing flow." >&2
             exit 1
           fi
 

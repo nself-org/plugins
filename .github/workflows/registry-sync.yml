@@ -26,11 +26,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify-live-downloads:
+    name: Verify public free plugin downloads
+    needs: sync
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Check live registry against served bytes (read-only)
+        run: python3 scripts/ci/verify_registry_downloads.py
+
   sync:
     name: POST /api/sync
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
+      - uses: actions/checkout@v7.0.1
       - name: Refresh the worker caches
         env:
           CLOUDFLARE_WORKER_SYNC_TOKEN: ${{ secrets.CLOUDFLARE_WORKER_SYNC_TOKEN }}
@@ -46,3 +58,5 @@ jobs:
             -d "{\"ref\": \"${GITHUB_REF}\", \"sha\": \"${GITHUB_SHA}\"}")
           echo "$response" | jq '{success, message, freeCount, proCount, catalogSynced, timestamp}'
           echo "$response" | jq -e '.success == true and .catalogSynced == true' >/dev/null
+      - name: Verify refreshed downloads against candidate registry
+        run: python3 scripts/ci/verify_registry_downloads.py --registry registry.json
