@@ -99,6 +99,10 @@ func (m *Migration) Diff(root string) (string, error) {
 	return b.String(), nil
 }
 
+// testHookBeforeCreate runs between the destination check and the create;
+// tests use it to swap a path, as a concurrent local writer could.
+var testHookBeforeCreate = func(string) {}
+
 // Write creates root/.nself/ci.yaml. It refuses to replace a file that holds
 // other content (merge by hand) and succeeds quietly when the file is identical.
 func (m *Migration) Write(root string) error {
@@ -114,10 +118,18 @@ func (m *Migration) Write(root string) error {
 	} else if !os.IsNotExist(err) {
 		return &Error{Code: CodeInvalid, Problems: []Problem{{File: FileName, Message: err.Error()}}}
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	testHookBeforeCreate(root)
+	// checkDestination looked at the path; a symlink swapped in since then must
+	// not carry the write out of the repository. os.Root confines every step.
+	r, err := os.OpenRoot(root)
+	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	defer func() { _ = r.Close() }()
+	if err := r.MkdirAll(filepath.ToSlash(filepath.Dir(FileName)), 0o755); err != nil {
+		return err
+	}
+	f, err := r.OpenFile(filepath.ToSlash(FileName), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		return err
 	}

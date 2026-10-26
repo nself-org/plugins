@@ -8,7 +8,7 @@ Server-side image processing plugin for nSelf: resize, crop, format conversion (
 
 - **Category:** media
 - **Tier:** pro
-- **Language:** rust
+- **Language:** go
 - **Port:** 3852
 - **License:** MIT
 

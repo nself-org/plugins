@@ -165,6 +165,9 @@ func Migrate(root string) (*Migration, error) {
 			return nil, untranslatable(rel, 0, "gateway_routes", "gateway route probes are not jobs; remove the field or move the probes into a job run argv")
 		}
 		dir := filepath.ToSlash(filepath.Dir(rel))
+		if dir != "." && len(lf.Stages) > 0 {
+			m.Notes = append(m.Notes, rel+": the legacy runner ran every stage on every run; the migrated jobs get when.paths "+dir+"/** and run only when a file under that directory changed, so remove the when block from a job that must always run")
+		}
 		for i, st := range lf.Stages {
 			field := fmt.Sprintf("stages[%d]", i)
 			id := jobID(lf.Plugin, st.Name, taken)

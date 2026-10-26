@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nself-org/plugins/free/ci/internal/legacy"
 )
 
 // copyFixture copies testdata/<dir>/input into a temp repo root, turning each
@@ -332,5 +334,94 @@ func TestOracleSkipsManifestsWithoutAPluginKey(t *testing.T) {
 		if !strings.Contains(strings.Join(m.Notes, "\n"), "skipped this whole manifest") {
 			t.Errorf("silent skip difference for %q: %v", doc, m.Notes)
 		}
+	}
+}
+
+// A .nself directory swapped for a symlink after checkDestination must not
+// carry the write out of the repository.
+func TestWriteRefusesSymlinkSwappedAfterCheck(t *testing.T) {
+	root := copyFixture(t, filepath.Join("legacy", "gauth"))
+	outside := t.TempDir()
+	m, err := Migrate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testHookBeforeCreate = func(r string) {
+		testHookBeforeCreate = func(string) {}
+		if err := os.Symlink(outside, filepath.Join(r, ".nself")); err != nil {
+			t.Error(err)
+		}
+	}
+	t.Cleanup(func() { testHookBeforeCreate = func(string) {} })
+	if err := m.Write(root); err == nil {
+		t.Fatal("wrote through a .nself symlink swapped in after the check")
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Fatalf("file created outside the repo: %v", entries)
+	}
+}
+
+// A manifest below the root migrates to path-gated jobs the legacy runner
+// never had; the migration must say so.
+func TestMigrateNotesPathSelection(t *testing.T) {
+	m, err := Migrate(copyFixture(t, filepath.Join("legacy", "multi")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, n := range m.Notes {
+		if strings.Contains(n, "when.paths") {
+			got = append(got, n)
+		}
+	}
+	if len(got) != 1 || !strings.HasPrefix(got[0], "free/other/.ci.yaml: ") || !strings.Contains(got[0], "ran every stage on every run") {
+		t.Errorf("path-selection note: %v (all notes %v)", got, m.Notes)
+	}
+}
+
+// The path-selection note says the legacy runner ran every stage on every run,
+// in the manifest's own directory. Run the real legacy runner twice over the
+// same unchanged tree and check both halves of that claim.
+func TestLegacyRunnerRanEveryStageEveryRun(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "free", "other")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Block-list cmd: the legacy line scanner does not read flow lists.
+	manifest := "plugin: other\nstages:\n" +
+		"  - name: first\n    cmd:\n    - sh\n    - -c\n    - echo x >> first.log\n" +
+		"  - name: second\n    cmd:\n    - sh\n    - -c\n    - echo x >> second.log\n"
+	if err := os.WriteFile(filepath.Join(dir, ".ci.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for run := 1; run <= 2; run++ {
+		results, err := legacy.DiscoverAndRunPipeline(root, "", 30, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(results) != 2 {
+			t.Fatalf("run %d: %d results, want one per stage", run, len(results))
+		}
+		for _, log := range []string{"first.log", "second.log"} {
+			data, err := os.ReadFile(filepath.Join(dir, log))
+			if err != nil {
+				t.Fatalf("run %d: %s not written in the manifest directory: %v", run, log, err)
+			}
+			if got := strings.Count(string(data), "x"); got != run {
+				t.Errorf("run %d: %s has %d lines; the stage must run once per run with no change filter", run, log, got)
+			}
+		}
+	}
+	m, err := Migrate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, n := range m.Notes {
+		found = found || strings.Contains(n, "ran every stage on every run")
+	}
+	if !found {
+		t.Errorf("the migration dropped the every-run note: %v", m.Notes)
 	}
 }
