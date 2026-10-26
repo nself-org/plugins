@@ -42,3 +42,33 @@ func TestRecordedArgvIsBounded(t *testing.T) {
 		t.Fatalf("recorded %d bytes", len(got))
 	}
 }
+
+func TestDashPrefixedSecretValuesAreRedacted(t *testing.T) {
+	for _, secret := range []string{"-randomValue123", "--randomValue123", "-x"} {
+		t.Run(secret, func(t *testing.T) {
+			argv := []string{"deploy", "--password", secret, "--verbose"}
+			if got := Recorded(redact.New(), argv); got != "deploy --password [redacted] --verbose" {
+				t.Errorf("recorded argv before registration = %q", got)
+			}
+			r := redact.New()
+			tooShort := Register(r, argv)
+			if len(secret) < redact.MinValueLen {
+				if tooShort != 1 {
+					t.Errorf("short secret count = %d, want 1", tooShort)
+				}
+				return
+			}
+			if tooShort != 0 {
+				t.Fatalf("short secret count = %d, want 0", tooShort)
+			}
+			if got := Recorded(r, argv); got != "deploy --password [redacted] --verbose" {
+				t.Errorf("recorded argv after registration = %q", got)
+			}
+			f := r.NewFilter()
+			got := string(append(f.Redact([]byte("line "+secret+" end\n")), f.Flush()...))
+			if strings.Contains(got, secret) || !strings.Contains(got, redact.Placeholder) {
+				t.Errorf("job output was not redacted: %q", got)
+			}
+		})
+	}
+}
