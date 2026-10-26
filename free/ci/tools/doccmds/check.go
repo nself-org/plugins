@@ -67,8 +67,8 @@ func checkBlock(page string, b Block, opts Options) (Failure, bool) {
 	if err != nil {
 		return fail(-1, fmt.Sprintf("fixture: %v", err))
 	}
+	defer cleanup()
 	code, err := opts.Runner.Run(dir, b.Script)
-	cleanup()
 	if err != nil {
 		return fail(-1, fmt.Sprintf("could not run: %v", err))
 	}

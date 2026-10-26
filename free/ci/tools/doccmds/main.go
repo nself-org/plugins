@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 // usageText is printed when no page is given.
@@ -22,11 +23,29 @@ func main() {
 // run checks every page and writes one line per failure to stdout and page errors to stderr. It returns
 // the process exit code.
 func run(pages []string, stdout, stderr io.Writer) int {
+	base := os.Getenv("DOCCMDS_CALLER_DIR")
+	resolved := make([]string, len(pages))
+	for i, page := range pages {
+		resolved[i] = pagePath(base, page)
+	}
+	opts := Options{Runner: shellRunner{timeout: blockTimeout}, Fixture: newFixture}
+	return runWithOptions(resolved, stdout, stderr, opts)
+}
+
+// pagePath preserves paths relative to the wrapper's caller across go -C.
+func pagePath(base, page string) string {
+	if base == "" || filepath.IsAbs(page) {
+		return page
+	}
+	return filepath.Join(base, page)
+}
+
+// runWithOptions checks pages using injected execution and fixture creation.
+func runWithOptions(pages []string, stdout, stderr io.Writer, opts Options) int {
 	if len(pages) == 0 {
 		fmt.Fprintln(stderr, usageText)
 		return 2
 	}
-	opts := Options{Runner: shellRunner{timeout: blockTimeout}, Fixture: newFixture}
 	status := 0
 	for _, page := range pages {
 		failures, err := CheckPage(page, opts)

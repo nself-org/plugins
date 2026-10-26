@@ -50,6 +50,8 @@ func fixtureEnv(dir string) []string {
 		"TMPDIR=" + os.TempDir(),
 		"LANG=C",
 		"NSELF_V15=1",
+		"CGO_ENABLED=0",
+		"GOFLAGS=-mod=vendor",
 	}
 }
 
