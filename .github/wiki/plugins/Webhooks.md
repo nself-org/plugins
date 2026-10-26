@@ -1134,7 +1134,7 @@ curl -X POST http://localhost:3403/api/endpoints \
     "description": "Partner API integration",
     "events": ["*"],
     "headers": {
-      "Authorization": "Bearer partner-api-token",
+      "Authorization": "Bearer <partner-token>",
       "X-Partner-ID": "partner-123",
       "X-Environment": "production"
     }
