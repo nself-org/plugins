@@ -22,7 +22,7 @@ Retro game library management with ROM cataloging, save state sync, play session
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
-- [CLI Commands](#cli-commands)
+- [Running the Service](#running-the-service)
 - [REST API](#rest-api)
 - [Database Schema](#database-schema)
 - [Features](#features)
@@ -49,10 +49,11 @@ The Retro Gaming plugin provides a complete retro game library management system
 
 ```bash
 nself plugin install retro-gaming
-nself plugin retro-gaming init    # Creates schema and seeds default emulator cores
-nself plugin retro-gaming server
-nself plugin retro-gaming roms list
+nself build
+nself start
 ```
+
+The plugin is an HTTP server. It has no subcommands: the schema is created by its boot migrations when the service starts, and everything else is done over the REST API below.
 
 ---
 
@@ -82,19 +83,27 @@ nself plugin retro-gaming roms list
 
 ---
 
-## CLI Commands
+## Running the Service
 
-| Command | Description | Options |
-|---------|-------------|---------|
-| `init` | Initialize schema and seed default emulator cores | - |
-| `server` | Start the API server | `-p, --port`, `-h, --host` |
-| `roms list` | List ROMs in library | `--platform`, `--genre`, `--favorites`, `--search`, `--sort`, `-l, --limit` |
-| `roms stats` | Show ROM library statistics | - |
-| `cores list` | List emulator cores | - |
-| `cores seed` | Seed default emulator cores | - |
-| `save-states` | List save states | `--rom <rom_id>` |
-| `sessions recent` | Show recent play sessions | - |
-| `stats` / `status` | Show overall statistics | - |
+The plugin binary (`free/retro-gaming/cmd/main.go`) takes no subcommands or flags. `nself start` runs it as a service and it listens on `PORT` (default `3124`). It reads `DATABASE_URL` for Postgres.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /health` | Liveness |
+| `GET /ready` | Readiness (database reachable) |
+
+The routes the binary registers are all under `/api/v1`, one resource per path, each with list, create, get, update and delete (core installations have no update):
+
+| Resource path | Table |
+|---------------|-------|
+| `/api/v1/roms` | `np_retrogame_roms` |
+| `/api/v1/save-states` | `np_retrogame_save_states` |
+| `/api/v1/play-sessions` | `np_retrogame_play_sessions` |
+| `/api/v1/emulator-cores` | `np_retrogame_emulator_cores` |
+| `/api/v1/controller-configs` | `np_retrogame_controller_configs` |
+| `/api/v1/core-installations` | `np_retrogame_core_installations` |
+
+Send `X-Source-Account-ID` to scope a request to one app. The `apiEndpoints` list in `plugin.json` (`/api/games/...`) is the planned surface and is not what the binary serves yet; the REST API section below follows that list.
 
 ---
 
@@ -295,5 +304,5 @@ nself plugin retro-gaming roms list
 | IGDB enrichment fails | Verify `RETROGAMING_IGDB_CLIENT_ID` and `RETROGAMING_IGDB_CLIENT_SECRET` are set |
 | ROMs not found during scan | Check `RETROGAMING_STORAGE_PATH` points to correct directory |
 | Save states not loading | Ensure core version matches the version used when saving |
-| No default cores after init | Run `nself plugin retro-gaming cores seed` manually |
+| No emulator cores listed | The plugin seeds none. Create cores with `POST /api/v1/emulator-cores` (an upsert on `core_name` and `platform`) |
 | Cover art not displaying | Check `RETROGAMING_CDN_URL` is configured and accessible |

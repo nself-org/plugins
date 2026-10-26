@@ -207,7 +207,8 @@ without content in `secrets.yaml` fails the render. `values --check` compares th
 destructive, so it needs confirmation:
 
 - `--yes` (or `-y`) confirms.
-- Without `--yes`, a terminal is asked to type the release name.
+- Without `--yes`, a terminal is asked to type the release name. Terminal detection exists on Linux and macOS only: on Windows
+  (and any other OS) there is no prompt and uninstall needs `--yes`.
 - Without `--yes` and without a terminal (a script, CI, stdin from `/dev/null`), or with `--json`, it refuses with E403 and
   exit status 4, and runs no helm command.
 
