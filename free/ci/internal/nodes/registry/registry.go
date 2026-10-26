@@ -171,51 +171,6 @@ func (r *Registry) UpdateCapability(ctx context.Context, id string, in model.Cap
 	return n, drift, err
 }
 
-// PolicyActorPrefix marks a coordinator-side policy actor (the burst provider is "policy:burst"). Only such an
-// actor may set or clear a node's hosted location or its nself.* labels; a node report may not (D-1402), because
-// a hosted runner skips the AuthorizedProjects check in sched eligibility.
-const PolicyActorPrefix = "policy:"
-
-func isHosted(f model.Fact[string]) bool { return f.Value != nil && *f.Value == "hosted" }
-
-// keepHostedKind returns the reported location kind, except that a report cannot make a node hosted or stop it
-// being hosted: then the stored kind stays.
-func keepHostedKind(old, reported model.Fact[string]) model.Fact[string] {
-	if isHosted(old) != isHosted(reported) {
-		return old
-	}
-	return reported
-}
-
-// keepProviderLabels returns the reported labels with the nself.* ones replaced by the stored nself.* ones.
-func keepProviderLabels(old, reported []string) []string {
-	const prefix = "nself."
-	var out []string
-	for _, l := range reported {
-		if !strings.HasPrefix(l, prefix) {
-			out = append(out, l)
-		}
-	}
-	for _, l := range old {
-		if strings.HasPrefix(l, prefix) {
-			out = append(out, l)
-		}
-	}
-	if reported == nil && out == nil {
-		return nil
-	}
-	return out
-}
-
-func isolationRank(i model.Isolation) int {
-	for n, v := range model.EnumValues("Isolation") {
-		if v == string(i) {
-			return n
-		}
-	}
-	return -1
-}
-
 // SetTrust is the only authority for coordinator-assigned trust fields.
 func (r *Registry) SetTrust(ctx context.Context, id string, t model.CapabilityTrust, authority store.AdminAuthority) (Node, error) {
 	return r.mutate(ctx, id, authority.Actor(), "trust", func(n *Node) error {
@@ -291,52 +246,4 @@ func (r *Registry) SetState(ctx context.Context, id, state, reason, actor string
 		}
 		return nil
 	})
-}
-
-// AgeRecipient returns the recipient pinned by the first hello, if any.
-func (r *Registry) AgeRecipient(ctx context.Context, id string) (*string, error) {
-	n, err := r.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return n.Capability.Identity.AgeRecipient.Value, nil
-}
-
-// CheckAgeRecipient pins once, then flags a changed recipient without replacing it.
-func (r *Registry) CheckAgeRecipient(ctx context.Context, id, presented, actor string) error {
-	if presented == "" {
-		return invalid("age recipient required")
-	}
-	n, err := r.Get(ctx, id)
-	if err != nil {
-		return err
-	}
-	if n.Capability.Identity.AgeRecipient.Value != nil && *n.Capability.Identity.AgeRecipient.Value != presented {
-		_, err = r.SetState(ctx, id, "maintenance", "age_recipient_changed", actor)
-		if err != nil {
-			return err
-		}
-		return &Error{Code: "E660", Reason: "age_recipient_changed"}
-	}
-	if n.Capability.Identity.AgeRecipient.Value != nil {
-		return nil
-	}
-	_, err = r.mutate(ctx, id, actor, "capability", func(n *Node) error {
-		if n.Capability.Identity.AgeRecipient.Value != nil {
-			if *n.Capability.Identity.AgeRecipient.Value != presented {
-				return &Error{Code: "E660", Reason: "age_recipient_changed"}
-			}
-			return nil
-		}
-		n.Capability.Identity.AgeRecipient = model.Fact[string]{Value: &presented, Source: "self", ObservedAt: time.Now().UTC(), Confidence: "known"}
-		return nil
-	})
-	var changed *Error
-	if errors.As(err, &changed) && changed.Code == "E660" {
-		_, flagErr := r.SetState(ctx, id, "maintenance", "age_recipient_changed", actor)
-		if flagErr != nil {
-			return flagErr
-		}
-	}
-	return err
 }

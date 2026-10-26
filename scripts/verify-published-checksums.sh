@@ -123,20 +123,7 @@ WRITTEN=0
 # secondary rate limit and, with the output discarded, made a throttled download look like a MISSING asset (a false alarm
 # seen on v1.2.1 for flags/linux-arm64). So: list once, download everything once, then work from local files. An asset absent
 # from the list is MISSING (a real release defect); one in the list with no local file is a DOWNLOAD ERROR (transient).
-ASSET_MANIFEST="${WORK_DIR}/.asset-manifest"
-if ! gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' > "$ASSET_MANIFEST" 2>/dev/null; then
-  err "could not list assets on release $TAG"
-  exit 1
-fi
-log "Release $TAG lists $(wc -l < "$ASSET_MANIFEST" | tr -d ' ') asset(s); downloading them once."
-
-dl_err="${WORK_DIR}/.download-stderr"
-if ! gh release download "$TAG" --repo "$REPO" --dir "$WORK_DIR" --clobber >/dev/null 2>"$dl_err"; then
-  err "bulk download of $TAG's assets failed; cannot verify against published bytes."
-  err "gh said: $(tr '\n' ' ' < "$dl_err" | cut -c1-400)"
-  exit 1
-fi
-rm -f "$dl_err"
+fetch_release_assets
 
 # Plugins to process, in a stable order: rows already on TAG, plus (with --write) manifests at this version with no row on TAG.
 # With --signatures the signed set decides instead: every signed source tarball must land as a row (or fail as MISSING), whatever
@@ -282,23 +269,7 @@ while IFS= read -r name; do
       binaries_json="$( { printf '%s\n' "$listing" | awk -F/ '{print $NF}' | grep -E "$BINARY_RE" || true; } | sort -u | jq -R . | jq -sc .)"
       [ "$binaries_json" != "[]" ] || log "WARNING: ${name}-${VERSION}-linux-amd64.tar.gz holds no nself-* binary; the row gets no binaries list"
     fi
-    RELEASES_JSON="$(jq --arg n "$name" --arg v "$VERSION" --arg tag "$TAG" --arg sha "$computed_sha" \
-      --arg url "https://github.com/${REPO}/releases/download/${TAG}/${tarball_name}" \
-      --argjson plat "$platforms_json" --argjson bins "$binaries_json" --argjson sig "$sig_json" \
-      --argjson psig "$psigs_json" --argjson signed "$([ -n "$SIGNATURES_FILE" ] && echo true || echo false)" '
-      (.releases[$n] // {release_signature: null}) as $old
-      | .releases[$n] = ($old
-        | (if .sha256 != $sha then .release_signature = null else . end)
-        | (if $sig != null then .release_signature = $sig else . end)
-        | . + {version: $v, sha256: $sha, release_tag: $tag, tarball_url: $url}
-        | del(.tarball)
-        | if ($plat | length) > 0 then .platform_checksums = $plat else del(.platform_checksums) end
-        | .platform_signatures = (if $signed then $psig
-            elif $old.version == $v and .release_signature != null then
-              (($old.platform_signatures // {}) | with_entries(select(.key as $p | $plat[$p] != null and ($old.platform_checksums // {})[$p] == $plat[$p])))
-            else {} end)
-        | if (.platform_signatures | length) == 0 then del(.platform_signatures) else . end
-        | if ($bins | length) > 0 then .binaries = $bins else del(.binaries) end)' <<<"$RELEASES_JSON")"
+    RELEASES_JSON="$(upsert_release_row "$name" "$tarball_name" "$computed_sha" "$platforms_json" "$binaries_json" "$sig_json" "$psigs_json")"
     WRITTEN=$((WRITTEN + 1))
   fi
 done <<<"$(printf '%s\n' "$candidates" | sort -u)"
@@ -306,41 +277,14 @@ done <<<"$(printf '%s\n' "$candidates" | sort -u)"
 if [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ] || [ "$UNSIGNED" -gt 0 ] || [ "$UNAPPROVED" -gt 0 ] || [ "$UNREADABLE" -gt 0 ] || [ "$ROLLBACKS" -gt 0 ]; then
   [ "$WRITE" != "true" ] || log "releases.json NOT written: an expected asset is missing, failed to download, is unsigned, unapproved or unreadable."
 elif [ "$WRITE" = "true" ]; then
-  # `a && b` is exempt from errexit, so a failed write must be tested explicitly or the script would log Wrote and exit 0.
-  # A unique temp file beside releases.json (same filesystem, so mv is atomic); cleanup is nonrecursive so nothing pre-existing is deleted.
-  RELEASES_TMP=""
-  if ! RELEASES_TMP="$(mktemp "${RELEASES_FILE}.XXXXXX")" || ! jq -S --indent 2 . <<<"$RELEASES_JSON" > "$RELEASES_TMP" || ! mv "$RELEASES_TMP" "$RELEASES_FILE"; then
-    [ -z "$RELEASES_TMP" ] || rm -f "$RELEASES_TMP"
-    err "could not write ${RELEASES_FILE}; releases.json is unchanged."
-    exit 1
-  fi
+  write_releases_json
   log "Wrote ${WRITTEN} row(s) into releases.json from ${TAG}'s published assets (checked ${CHECKED} asset(s))."
   log "Next: scripts/plugin-counts.sh regenerates registry.json, catalog.json and counts.json from it."
 else
   log "Checked ${CHECKED} published asset(s) against releases.json for ${TAG}. Mismatches: ${MISMATCHES}."
 fi
 
-if [ "$MISSING_ASSETS" -gt 0 ]; then
-  err "${MISSING_ASSETS} expected asset(s) are genuinely absent from release ${TAG}."
-  err "That is a release defect: rebuild and upload the missing artifact(s)."
-fi
-if [ "$DOWNLOAD_ERRORS" -gt 0 ]; then
-  err "${DOWNLOAD_ERRORS} asset(s) are published but could not be downloaded."
-  err "That is transient (network or GitHub rate limiting), NOT a missing artifact."
-  err "Re-run this script; do not rebuild or re-upload anything on account of it."
-fi
-if [ "$UNSIGNED" -gt 0 ]; then
-  err "${UNSIGNED} row(s) have no signature over the published bytes; the signing job must sign what is on the release."
-fi
-if [ "$UNAPPROVED" -gt 0 ]; then
-  err "${UNAPPROVED} tarball(s) differ from the publish job's approved manifest; the Release changed after approval. Nothing is written."
-fi
-if [ "$UNREADABLE" -gt 0 ]; then
-  err "${UNREADABLE} linux-amd64 archive(s) are published but corrupt; rebuild and upload them."
-fi
-if [ "$ROLLBACKS" -gt 0 ]; then
-  err "${ROLLBACKS} row(s) already hold a newer version than ${TAG}; releases.json is not rolled back."
-fi
+report_failures
 if [ "$MISMATCHES" -gt 0 ] || [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ] || [ "$UNSIGNED" -gt 0 ] || [ "$UNAPPROVED" -gt 0 ] || [ "$UNREADABLE" -gt 0 ] || [ "$ROLLBACKS" -gt 0 ]; then
   exit 1
 fi
