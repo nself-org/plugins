@@ -3,10 +3,19 @@ name: Registry KV sync
 # The plugins.nself.org worker serves the catalog from the repo, but its KV copy (stats.lastSync) only moves when
 # POST /api/sync runs. Nothing called it after 2026-06-23, which kept drill-catalog-freshness red (D-0051). A daily call
 # keeps lastSync under the drill's 36 hour limit.
+# A merge to main that changes a projection the worker serves (catalog.json carries the bundle membership that /bundles.json
+# is built from, registry.json the plugin versions) also calls it, so drill-catalog-freshness is not red between that merge
+# and the next daily run (D-1480). Same token as the daily run; scripts/ci/tests/test_registry_sync_triggers.py holds the paths.
 
 on:
   schedule:
     - cron: '17 5 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'catalog.json'
+      - 'registry.json'
+      - 'counts.json'
   workflow_dispatch:
 
 permissions:

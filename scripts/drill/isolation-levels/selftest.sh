@@ -24,6 +24,8 @@ cat >"$bin/docker" <<'F'
 case "$1" in
 info) if [ "$2" = "--format" ]; then if [ -z "${FAKE_NO_RUNSC:-}" ]; then echo '{"runc":{},"runsc":{}}'; else echo '{"runc":{}}'; fi; fi; exit 0 ;;
 image | pull) exit 0 ;;
+ps) [ -z "${FAKE_PROBES:-}" ] || cat "$FAKE_PROBES" 2>/dev/null; exit 0 ;;
+rm) echo "$*" >>"$FAKE_RM_LOG"; exit 0 ;;
 esac
 exit 0
 F
@@ -31,6 +33,7 @@ cat >"$bin/go" <<'F'
 #!/bin/sh
 for a in "$@"; do pkg=$a; done
 echo "=== RUN   TestX"
+[ -z "${FAKE_GO_LEAK:-}" ] || echo "$FAKE_GO_LEAK" >>"$FAKE_PROBES"
 case "$pkg" in
 *"${FAKE_GO_FAIL:-NONE}"*) echo "--- FAIL: TestX (0.00s)"; echo "FAIL"; exit 1 ;;
 *"${FAKE_GO_SKIP:-NONE}"*) echo "--- SKIP: TestX (0.00s)"; echo "ok"; exit 0 ;;
@@ -123,4 +126,12 @@ grep -q "^args: --no-status --pipeline drills --job drill-isolation-levels$" "$w
 grep -q "v15: 1" "$work/direct.log" || fail "direct env: $(cat "$work/direct.log")"
 grep -q "repo: $(cd "$here/../../.." && pwd) " "$work/direct.log" || fail "direct repo: $(cat "$work/direct.log")"
 echo "ok direct"
+# 10. A probe container the legs leave behind is removed on exit; one that was there before the drill started is not.
+printf 'oldprobe\n' >"$work/probes"
+: >"$work/rm.log"
+drill leak FAKE_PROBES="$work/probes" FAKE_RM_LOG="$work/rm.log" FAKE_GO_LEAK=newprobe
+[ "$(rc leak)" = 0 ] || fail "leak: exit $(rc leak): $(cat "$work/leak.err")"
+grep -q '^rm -f newprobe$' "$work/rm.log" || fail "leak: the probe left by the legs was not removed: $(cat "$work/rm.log")"
+! grep -q oldprobe "$work/rm.log" || fail "leak: removed a probe container that was there before the drill: $(cat "$work/rm.log")"
+echo "ok leak"
 echo "all ok"
