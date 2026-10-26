@@ -175,7 +175,13 @@ func TestRestoreDatabaseTextNeverReachesTheEnvelope(t *testing.T) {
 	if h.Exit != 1 || strings.Contains(h.Stdout+h.Stderr, secret) || strings.Contains(h.Stdout+h.Stderr, "users") {
 		t.Errorf("human: exit %d\n%s%s", h.Exit, h.Stdout, h.Stderr)
 	}
-	if !strings.Contains(h.Stderr, "first error line:") || !strings.Contains(h.Stderr, "…") || strings.Contains(h.Stderr, "DETAIL") {
-		t.Errorf("human stderr lacks the masked first error line: %q", h.Stderr)
+	if !strings.Contains(h.Stderr, "[error category: COPY failed; invalid input value]") || strings.Contains(h.Stderr, "DETAIL") {
+		t.Errorf("human stderr lacks the error category: %q", h.Stderr)
+	}
+	// A custom exception text with an unquoted value must not reach the terminal either.
+	plain := "pg_restore: error: could not execute query: ERROR:  order rejected for customer " + secret
+	p := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines, RestoreErr: plain}, "restore", file, "--yes")
+	if p.Exit != 1 || strings.Contains(p.Stdout+p.Stderr, secret) || strings.Contains(p.Stdout+p.Stderr, "customer") {
+		t.Errorf("unquoted database text reached human mode: exit %d\n%s%s", p.Exit, p.Stdout, p.Stderr)
 	}
 }

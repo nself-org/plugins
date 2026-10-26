@@ -6,6 +6,7 @@ require (
 	github.com/google/jsonschema-go v0.4.2
 	github.com/hashicorp/mdns v1.0.7
 	github.com/nself-org/cli/sdk/go/v2 v2.0.0-20261008225131-a4a60906574c
+	golang.org/x/text v0.42.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
 )

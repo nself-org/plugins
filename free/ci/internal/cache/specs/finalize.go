@@ -89,7 +89,7 @@ func (s *Session) Retract(ctx context.Context) {
 		list, _ := s.in.Engine.Backend.CacheEntries(ctx, key)
 		for _, m := range list {
 			if bytes.Equal(m.Namespace, s.own.Canonical()) && m.Writer.AttemptID == s.in.Attempt {
-				_ = s.in.Engine.Backend.CacheDrop(ctx, m, "attempt_not_passed")
+				_, _ = s.in.Engine.Backend.CacheDrop(ctx, m, "attempt_not_passed")
 			}
 		}
 	}

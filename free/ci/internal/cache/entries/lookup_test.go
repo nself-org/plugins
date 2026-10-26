@@ -1,6 +1,7 @@
 package entries_test
 
 import (
+	"context"
 	"errors"
 	"os"
 	"strings"
@@ -217,5 +218,28 @@ func TestLookupForRestoreChecksExistenceAndSizeOnly(t *testing.T) {
 	}
 	if e.count() != 1 {
 		t.Fatalf("%d entries left, want the same-size one", e.count())
+	}
+}
+
+// lostDrop is a backend whose drop always loses the race against a replacement.
+type lostDrop struct{ entries.Backend }
+
+func (lostDrop) CacheDrop(context.Context, entries.Manifest, string) (bool, error) { return false, nil }
+
+// A drop that removed no row (the entry was replaced meanwhile) is not counted.
+func TestVerifyDoesNotCountADropThatRemovedNothing(t *testing.T) {
+	e := newEnv(t, envOpts{})
+	a := e.save("v1", trusted, "a", "aaaa")
+	if err := os.WriteFile(e.blobPath(a, 0), []byte("zzzz"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	es := entries.New(lostDrop{e.st}, e.blobs, entries.Options{
+		Clock:        func() time.Time { return time.Unix(0, e.clock.Load()) },
+		Getenv:       func(string) string { return "" },
+		DisableFloor: true,
+	})
+	rep, err := es.Verify(e.ctx)
+	if err != nil || rep.Checked != 1 || rep.Dropped != 0 || e.count() != 1 {
+		t.Fatalf("verify: %+v %v (%d left)", rep, err, e.count())
 	}
 }

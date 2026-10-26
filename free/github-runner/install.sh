@@ -155,7 +155,7 @@ install_github_runner() {
   # ------------------------------------------------------------------
   plugin_info "Checking the runner group is trusted-only..."
   local trust_rc=0
-  trust_check || trust_rc=$?
+  TRUST_REGISTERING=true trust_check || trust_rc=$? # registering with --replace moves a runner, so it is not checked for its old group
   if [[ "$trust_rc" -ne 0 ]]; then
     plugin_error "Refusing to install the runner (see the message above)."
     exit "$trust_rc"

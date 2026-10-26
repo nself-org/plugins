@@ -24,7 +24,7 @@ const StreamCache = "cache"
 
 type Ledger interface {
 	CacheEntries(context.Context, string) ([]entries.Manifest, error)
-	CacheDrop(context.Context, entries.Manifest, string) error
+	CacheDrop(context.Context, entries.Manifest, string) (bool, error)
 	AttemptStateEpoch(context.Context, string) (model.JobState, int64, error)
 	LeaseGet(context.Context, string) (store.RemoteLease, error)
 	CacheAuditOnce(context.Context, string, string, string) error

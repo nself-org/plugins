@@ -45,6 +45,9 @@ INSERT INTO public.shadow VALUES (1, 'a'), (2, 'a');
 CREATE TABLE public.shadow2 (id int);
 DO $$ BEGIN EXECUTE format('ALTER TABLE public.shadow2 ADD COLUMN %I text DEFAULT ''a''', 'nself_fp_' || 'public.shadow2'::regclass::oid::text); END $$;
 INSERT INTO public.shadow2 (id) VALUES (1), (2);
+CREATE TABLE public.shadow3 (id int);
+DO $$ BEGIN EXECUTE format('ALTER TABLE public.shadow3 ADD COLUMN %I text DEFAULT ''a''', rpad('nself_fp_' || 'public.shadow3'::regclass::oid::text, 63, '_')); END $$;
+INSERT INTO public.shadow3 (id) VALUES (1), (2);
 CREATE TABLE public.big AS SELECT g::bigint AS id, (g %% 1000)::int AS v, md5(g::text) AS h FROM generate_series(1, 5000000) g;
 `
 
@@ -71,7 +74,7 @@ func TestIntegrationBackupRestoreRealPostgres(t *testing.T) {
 		rows[f.Schema+"."+f.Table] = f.Rows
 	}
 	for name, want := range map[string]int64{"auth.users": 2, "storage.files": 500, `public.Weird "name"`: 2,
-		"Odd Schema.t;DROP TABLE x": 3, "public.empty_t": 0, "public.big": 5000000, "public.shadow": 2, "public.shadow2": 2} {
+		"Odd Schema.t;DROP TABLE x": 3, "public.empty_t": 0, "public.big": 5000000, "public.shadow": 2, "public.shadow2": 2, "public.shadow3": 2} {
 		if got, ok := rows[name]; !ok || got != want {
 			t.Errorf("fingerprint %q = %d (present %v), want %d", name, got, ok, want)
 		}
@@ -96,7 +99,7 @@ func TestIntegrationBackupRestoreRealPostgres(t *testing.T) {
 	// A change after the restore must show in the fingerprints.
 	// A table with a column named nself_fp_row (or like the generated alias) is hashed whole,
 	// so a change in another column must show.
-	sql(ctx, t, ex, `UPDATE storage.files SET size = size + 1 WHERE id = '00000000-0000-0000-0000-000000000001'; UPDATE public.shadow SET id = 3 WHERE id = 1; UPDATE public.shadow2 SET id = 3 WHERE id = 1;`)
+	sql(ctx, t, ex, `UPDATE storage.files SET size = size + 1 WHERE id = '00000000-0000-0000-0000-000000000001'; UPDATE public.shadow SET id = 3 WHERE id = 1; UPDATE public.shadow2 SET id = 3 WHERE id = 1; UPDATE public.shadow3 SET id = 3 WHERE id = 1;`)
 	after, err := ReadFingerprints(ctx, ex)
 	if err != nil {
 		t.Fatal(err)
@@ -106,8 +109,8 @@ func TestIntegrationBackupRestoreRealPostgres(t *testing.T) {
 	for _, x := range d {
 		kinds[x.Schema+"."+x.Table] = x.Kind
 	}
-	if len(d) != 3 || kinds["storage.files"] != DiffSum || kinds["public.shadow"] != DiffSum || kinds["public.shadow2"] != DiffSum {
-		t.Errorf("diffs after tampering = %v, want a content difference on storage.files, public.shadow and public.shadow2", d)
+	if len(d) != 4 || kinds["storage.files"] != DiffSum || kinds["public.shadow"] != DiffSum || kinds["public.shadow2"] != DiffSum || kinds["public.shadow3"] != DiffSum {
+		t.Errorf("diffs after tampering = %v, want a content difference on storage.files, public.shadow, public.shadow2 and public.shadow3 (a 63-byte column named like the old alias)", d)
 	}
 }
 

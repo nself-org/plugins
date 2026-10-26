@@ -73,8 +73,10 @@ func (x *Extractor) Admit(e Entry) (string, error) {
 // (or link target). Unicode-normalizing file systems (APFS, HFS+) give "e"+U+0301
 // and U+00E9 one directory, so a symlink placed under one spelling and a file
 // written under the other make the lexical depth that checkLink relies on
-// differ from the physical one. foldKey folds case only (no x/text in the
-// module), so the safe rule is no mixing of the two, in either order.
+// differ from the physical one. foldKey also NFC-normalizes, which stops two
+// plain files from aliasing; a symlink still cannot be judged against a
+// spelling the file system may rewrite, so the safe rule stays no mixing of
+// the two, in either order.
 func (x *Extractor) aliasRisk(e Entry) error {
 	link := e.Mode.Type() == fs.ModeSymlink
 	wide := !isASCII(e.Name) || (link && !isASCII(e.LinkTarget))

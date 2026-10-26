@@ -36,6 +36,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// Trusted-only guard: refuse a runner group (or repo) open to public
 	// repositories before any registration token is requested.
 	cfg := TrustConfigFromEnv()
+	cfg.Registering = true // --replace moves the runner into the configured group
 	trust, err := CheckTrust(ctx, cfg)
 	if err != nil {
 		respondTrustError(w, err)
@@ -54,11 +55,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := os.Getenv("GITHUB_RUNNER_NAME")
-	if name == "" {
-		hostname, _ := os.Hostname()
-		name = "nself-" + hostname
-	}
+	name := cfg.RunnerName
 
 	labels := os.Getenv("GITHUB_RUNNER_LABELS")
 	if labels == "" {

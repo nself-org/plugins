@@ -103,7 +103,9 @@ func (b failedPlanState) AttemptStateEpoch(context.Context, string) (model.JobSt
 	return "", 0, b.err
 }
 
-func (b *metadataPlanBackend) CacheDrop(context.Context, entries.Manifest, string) error { return nil }
+func (b *metadataPlanBackend) CacheDrop(context.Context, entries.Manifest, string) (bool, error) {
+	return false, nil
+}
 
 func TestBuildPlanReadOnlyProcessBindsNothingEvenWithSnapshotHit(t *testing.T) {
 	in := PlanInput{Facts: entries.Facts{Project: "proj", Trust: "owner", Protection: "protected"}, Isolation: "process", Image: "image@sha256:" + strings.Repeat("a", 64), Detected: []detect.Fact{{Kind: "stack", Name: "go", Confidence: detect.Certain}}}

@@ -48,15 +48,17 @@ const lockSQL = "SELECT format('LOCK TABLE %I.%I IN ACCESS SHARE MODE', n.nspnam
 	coveredFrom + coveredWhere + coveredOrder + "\\gexec\n"
 
 // fingerprintSQL generates one query per table and runs it with \gexec. The whole-row alias
-// is 'nself_fp_' + the table oid, plus as many trailing '_' as it takes to be longer than
-// every column name of that form, so no column of the table can shadow the whole-row
-// reference (a column wins over a same-named alias).
+// is 'nself_fp_' + the table oid + '_' + the first number from 0 that no column of the
+// table is named after, so no column can shadow the whole-row reference (a column wins over
+// a same-named alias). A table has at most 1600 columns, so 1601 candidates always leave
+// one free, and the alias stays under 30 bytes: postgres truncates an identifier at 63
+// bytes, and a truncated alias could equal a 63-byte column name.
 const fingerprintSQL = "SELECT format('SELECT json_build_object(''schema'', %1$L::text, ''table'', %2$L::text, ''rows'', count(*), " +
 	"''sum'', coalesce(sum((''x'' || substr(md5(%3$I::text), 1, 16))::bit(64)::bigint), 0)::text)::text FROM %1$I.%2$I AS %3$I', " +
 	"n.nspname, c.relname, x.alias)" + coveredFrom +
-	"\nCROSS JOIN LATERAL (SELECT 'nself_fp_' || c.oid::text || repeat('_', coalesce((SELECT max(length(a.attname) - length('nself_fp_' || c.oid::text))" +
-	"\n  FROM pg_catalog.pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped" +
-	"\n  AND a.attname ~ ('^nself_fp_' || c.oid::text || '_*$')), -1) + 1) AS alias) x" +
+	"\nCROSS JOIN LATERAL (SELECT 'nself_fp_' || c.oid::text || '_' || k.n::text AS alias FROM generate_series(0, 1600) AS k(n)" +
+	"\n  WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped" +
+	"\n  AND a.attname = 'nself_fp_' || c.oid::text || '_' || k.n::text) ORDER BY k.n LIMIT 1) x" +
 	coveredWhere + coveredOrder + "\\gexec\n"
 
 // Fingerprint is the content fingerprint of one table.

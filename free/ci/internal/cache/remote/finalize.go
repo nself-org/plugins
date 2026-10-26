@@ -137,7 +137,7 @@ func (l *Lease) RetractUsing(ctx context.Context, ledger Ledger) error {
 		errs = append(errs, err)
 		for _, m := range rows {
 			if bytes.Equal(m.Namespace, committed.Namespace) && m.Writer.AttemptID == l.b.AttemptID && m.Writer.Epoch == l.b.Epoch {
-				if err := ledger.CacheDrop(ctx, m, "attempt_not_passed"); err != nil {
+				if _, err := ledger.CacheDrop(ctx, m, "attempt_not_passed"); err != nil {
 					errs = append(errs, err)
 					continue
 				}

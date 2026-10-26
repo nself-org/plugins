@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -26,6 +27,7 @@ const testPAT = "fake-pat-0123456789-not-a-token"
 type fakeGitHub struct {
 	mu          sync.Mutex
 	groups      []runnerGroup
+	runners     map[string][]string // group name -> names of the runners registered in it
 	repoPrivate bool
 	status      int // non-zero forces this status on every request
 	tokenCalls  int
@@ -45,6 +47,20 @@ func newFakeGitHub(t *testing.T, f *fakeGitHub) {
 			return
 		}
 		switch {
+		case strings.Contains(r.URL.Path, "/actions/runner-groups/") && strings.HasSuffix(r.URL.Path, "/runners"):
+			var names []string
+			for i, g := range f.groups {
+				if strings.Contains(r.URL.Path, "/runner-groups/"+strconv.Itoa(i+1)+"/") {
+					names = f.runners[g.Name]
+				}
+			}
+			serveRunners(w, names)
+		case strings.HasSuffix(r.URL.Path, "/actions/runners"):
+			var names []string
+			for _, g := range f.groups {
+				names = append(names, f.runners[g.Name]...)
+			}
+			serveRunners(w, names)
 		case strings.HasSuffix(r.URL.Path, "/actions/runner-groups"):
 			page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 			lo, hi := (page-1)*groupsPageSize, page*groupsPageSize
@@ -54,7 +70,11 @@ func newFakeGitHub(t *testing.T, f *fakeGitHub) {
 			if hi > len(f.groups) {
 				hi = len(f.groups)
 			}
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{"total_count": len(f.groups), "runner_groups": f.groups[lo:hi]})
+			pageGroups := append([]runnerGroup(nil), f.groups[lo:hi]...)
+			for i := range pageGroups {
+				pageGroups[i].ID = int64(lo + i + 1)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"total_count": len(f.groups), "runner_groups": pageGroups})
 		case strings.HasSuffix(r.URL.Path, "/registration-token"):
 			f.tokenCalls++
 			w.WriteHeader(http.StatusCreated)
@@ -68,6 +88,35 @@ func newFakeGitHub(t *testing.T, f *fakeGitHub) {
 	old := githubAPIBase
 	githubAPIBase = srv.URL
 	t.Cleanup(func() { githubAPIBase = old; srv.Close() })
+}
+
+// testRunnerID is the id the fake GitHub gives the runner called name.
+func testRunnerID(name string) int64 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(name))
+	return int64(h.Sum32()%100000) + 1
+}
+
+// writeDotRunner persists a registration the way the runner binary does (with
+// a UTF-8 BOM) in the runner dir.
+func writeDotRunner(t *testing.T, dir, name string) {
+	t.Helper()
+	body := fmt.Sprintf("\xef\xbb\xbf{\"agentId\": %d, \"agentName\": %q, \"poolId\": 1}", testRunnerID(name), name)
+	if err := os.WriteFile(filepath.Join(dir, ".runner"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func serveRunners(w http.ResponseWriter, names []string) {
+	type runner struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+	}
+	out := []runner{}
+	for _, n := range names {
+		out = append(out, runner{testRunnerID(n), n})
+	}
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"total_count": len(out), "runners": out})
 }
 
 // trustEnv sets the guard environment and a runner dir whose config.sh and
@@ -352,6 +401,178 @@ func TestStart_StopsRunningRunnerWhenGroupTurnsPublic(t *testing.T) {
 	rec, body := call(h.Start, http.MethodPost)
 	if rec.Code != http.StatusConflict || body["code"] != "runner_group_public" {
 		t.Fatalf("Start on a running runner must run the guard first: %d %v", rec.Code, body)
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("running runner was not signalled")
+	}
+}
+
+// The guard checks the configured group; a runner registered in another group
+// (config changed without re-registering) must not pass on that check.
+func TestCheckTrust_RunnerRegisteredInAnotherGroupIsRefused(t *testing.T) {
+	f := &fakeGitHub{
+		groups: []runnerGroup{
+			{Name: "Default", Default: true, AllowsPublicRepositories: pb(true)},
+			{Name: "CI", AllowsPublicRepositories: pb(false)},
+		},
+		runners: map[string][]string{"Default": {"n1"}},
+	}
+	newFakeGitHub(t, f)
+	trustEnv(t)
+	t.Setenv("GITHUB_RUNNER_GROUP", "CI")
+
+	_, err := CheckTrust(t.Context(), TrustConfigFromEnv())
+	var te *TrustError
+	if !errors.As(err, &te) || te.Code != CodeRunnerGroupMismatch || te.Status != http.StatusConflict {
+		t.Fatalf("a runner in the public Default group must be refused when CI is configured, got %v", err)
+	}
+
+	// registered in the configured group: passes
+	f.runners = map[string][]string{"CI": {"other", "n1"}}
+	if res, err := CheckTrust(t.Context(), TrustConfigFromEnv()); err != nil || res.Group != "CI" {
+		t.Fatalf("a runner in the configured group must pass: %v", err)
+	}
+	// not registered anywhere yet: passes (it is about to be)
+	f.runners = map[string][]string{"CI": {"other"}}
+	if _, err := CheckTrust(t.Context(), TrustConfigFromEnv()); err != nil {
+		t.Fatalf("an unregistered runner must pass: %v", err)
+	}
+	// registering replaces the runner into the configured group: no mismatch check
+	f.runners = map[string][]string{"Default": {"n1"}}
+	cfg := TrustConfigFromEnv()
+	cfg.Registering = true
+	if _, err := CheckTrust(t.Context(), cfg); err != nil {
+		t.Fatalf("re-registering must be able to move the runner: %v", err)
+	}
+}
+
+// Changing GITHUB_RUNNER_NAME (or the hostname) must not hide the installed
+// runner: the registration persisted in the runner dir is checked as well.
+func TestCheckTrust_PersistedRegistrationInAnotherGroupIsRefused(t *testing.T) {
+	f := &fakeGitHub{
+		groups: []runnerGroup{
+			{Name: "Default", Default: true, AllowsPublicRepositories: pb(true)},
+			{Name: "CI", AllowsPublicRepositories: pb(false)},
+		},
+		// the installed runner "old" sits in the public Default group; "n1" is the new, unregistered name
+		runners: map[string][]string{"Default": {"old"}},
+	}
+	newFakeGitHub(t, f)
+	dir := trustEnv(t)
+	t.Setenv("GITHUB_RUNNER_GROUP", "CI")
+	writeDotRunner(t, dir, "old")
+
+	_, err := CheckTrust(t.Context(), TrustConfigFromEnv())
+	var te *TrustError
+	if !errors.As(err, &te) || te.Code != CodeRunnerGroupMismatch || te.Status != http.StatusConflict {
+		t.Fatalf("a renamed runner whose installed registration is in another group must be refused, got %v", err)
+	}
+
+	// the same through the status endpoint's guard: it must stop a running runner
+	if !stopsRunner(te.Code) {
+		t.Error("runner_group_mismatch must stop a running runner")
+	}
+
+	// the installed registration is in the configured group: passes
+	f.runners = map[string][]string{"CI": {"old"}}
+	if _, err := CheckTrust(t.Context(), TrustConfigFromEnv()); err != nil {
+		t.Fatalf("an installed runner in the configured group must pass: %v", err)
+	}
+	// the installed registration is unknown to GitHub: nothing to take jobs from, passes
+	f.runners = map[string][]string{"Default": {"someone-else"}}
+	if _, err := CheckTrust(t.Context(), TrustConfigFromEnv()); err != nil {
+		t.Fatalf("a registration GitHub does not know must pass: %v", err)
+	}
+	// registering replaces the runner: no check of the old registration
+	f.runners = map[string][]string{"Default": {"old"}}
+	cfg := TrustConfigFromEnv()
+	cfg.Registering = true
+	if _, err := CheckTrust(t.Context(), cfg); err != nil {
+		t.Fatalf("re-registering must be able to move the runner: %v", err)
+	}
+}
+
+// The configured name being in the right group must not excuse a different
+// installed registration that sits elsewhere.
+func TestCheckTrust_ConfiguredNameInGroupDoesNotExcuseInstalledRunner(t *testing.T) {
+	f := &fakeGitHub{
+		groups: []runnerGroup{
+			{Name: "Default", Default: true, AllowsPublicRepositories: pb(true)},
+			{Name: "CI", AllowsPublicRepositories: pb(false)},
+		},
+		runners: map[string][]string{"CI": {"n1"}, "Default": {"old"}},
+	}
+	newFakeGitHub(t, f)
+	dir := trustEnv(t)
+	t.Setenv("GITHUB_RUNNER_GROUP", "CI")
+	writeDotRunner(t, dir, "old")
+	_, err := CheckTrust(t.Context(), TrustConfigFromEnv())
+	var te *TrustError
+	if !errors.As(err, &te) || te.Code != CodeRunnerGroupMismatch {
+		t.Fatalf("want runner_group_mismatch, got %v", err)
+	}
+}
+
+// A .runner file the guard cannot read fails closed.
+func TestCheckTrust_UnreadableRegistrationFailsClosed(t *testing.T) {
+	f := &fakeGitHub{groups: []runnerGroup{{Name: "Default", Default: true, AllowsPublicRepositories: pb(false)}}}
+	newFakeGitHub(t, f)
+	dir := trustEnv(t)
+	if err := os.WriteFile(filepath.Join(dir, ".runner"), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := CheckTrust(t.Context(), TrustConfigFromEnv())
+	var te *TrustError
+	if !errors.As(err, &te) || te.Code != CodeTrustUnverifiable {
+		t.Fatalf("a corrupt .runner must fail closed, got %v", err)
+	}
+}
+
+func TestRegister_MovesRunnerRegisteredInAnotherGroup(t *testing.T) {
+	f := &fakeGitHub{
+		groups: []runnerGroup{
+			{Name: "Default", Default: true, AllowsPublicRepositories: pb(true)},
+			{Name: "CI", AllowsPublicRepositories: pb(false)},
+		},
+		runners: map[string][]string{"Default": {"n1"}},
+	}
+	newFakeGitHub(t, f)
+	dir := trustEnv(t)
+	t.Setenv("GITHUB_RUNNER_GROUP", "CI")
+
+	rec, _ := call(NewHandler(NewRunnerState()).Register, http.MethodPost)
+	args, _ := os.ReadFile(filepath.Join(dir, "config.sh.ran"))
+	if rec.Code != http.StatusOK || !strings.Contains(string(args), "--runnergroup CI") {
+		t.Fatalf("register must move the runner into CI: %d args=%q", rec.Code, args)
+	}
+}
+
+func TestStart_StopsRunnerRegisteredInAnotherGroup(t *testing.T) {
+	f := &fakeGitHub{
+		groups: []runnerGroup{
+			{Name: "Default", Default: true, AllowsPublicRepositories: pb(true)},
+			{Name: "CI", AllowsPublicRepositories: pb(false)},
+		},
+		runners: map[string][]string{"Default": {"n1"}},
+	}
+	newFakeGitHub(t, f)
+	trustEnv(t)
+	t.Setenv("GITHUB_RUNNER_GROUP", "CI")
+	cmd := exec.Command("sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	t.Cleanup(func() { _ = cmd.Process.Kill() })
+	state := NewRunnerState()
+	state.Running, state.PID = true, cmd.Process.Pid
+
+	rec, body := call(NewHandler(state).Start, http.MethodPost)
+	if rec.Code != http.StatusConflict || body["code"] != CodeRunnerGroupMismatch {
+		t.Fatalf("Start must refuse a runner in another group: %d %v", rec.Code, body)
 	}
 	select {
 	case <-done:
