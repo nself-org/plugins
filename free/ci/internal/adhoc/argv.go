@@ -34,7 +34,8 @@ func secretValues(argv []string) [][]byte {
 		switch {
 		case hasValue && value != "":
 			out = append(out, []byte(value))
-		case !hasValue && strings.HasPrefix(a, "-") && i+1 < len(argv) && !strings.HasPrefix(argv[i+1], "-"):
+		case !hasValue && strings.HasPrefix(a, "-") && i+1 < len(argv):
+			// A secret value may itself begin with a dash.
 			out = append(out, []byte(argv[i+1]))
 		}
 	}
