@@ -67,7 +67,7 @@ func (l *Lease) OpenRestore(ctx context.Context, sha string) (io.ReadCloser, pro
 		return nil, b, err
 	}
 	if state != "leased" && state != "running" {
-		return nil, b, l.refuse(ctx, transfer.ReasonStaleEpoch)
+		return nil, b, l.refuse(ctx, entries.ReasonAttemptState)
 	}
 	realm := cacheRealm(l.b.Plan.Namespace)
 	info, err := l.h.Blobs.Stat(realm, sha)
@@ -109,6 +109,7 @@ func (l *Lease) Restore(ctx context.Context, link transport.RestoreLink) error {
 			done[b.SHA256] = true
 		}
 		if l.b.Node != "" {
+			// Realm is the wire namespace, as finalize.go writes it at commit (not cas.CacheRealm).
 			row := store.CacheLocalityRow{Node: l.b.Node, Realm: l.b.Plan.Namespace, Key: r.Key, Bytes: total}
 			if err := l.h.Ledger.CacheLocalityPut(ctx, row); err != nil && l.h.Warn != nil {
 				l.h.Warn(fmt.Errorf("cache locality: %w", err))

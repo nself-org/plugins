@@ -61,7 +61,7 @@ func (n *NodeRestorer) Fetch(ctx context.Context, blobs []protocol.CacheBlob) ma
 		if fr.Digest == nil {
 			continue // a chunk with no open blob
 		}
-		sha := strings.ToLower(strings.TrimPrefix(fr.Digest.SHA256, "sha256:"))
+		sha := normDigest(fr.Digest.SHA256)
 		b, ok := pending[sha]
 		if !ok || fr.Digest.Stream != StreamCache || fr.Digest.Size != b.Size {
 			continue // outside the plan: never answered, never stored
@@ -103,6 +103,8 @@ func (n *NodeRestorer) next(ctx context.Context) (transport.BlobFrame, error) {
 	}
 }
 
+func normDigest(d string) string { return strings.ToLower(strings.TrimPrefix(d, "sha256:")) }
+
 func (n *NodeRestorer) answer(b protocol.CacheBlob, off int64) error {
 	return n.Feed.Offset(protocol.Offset{Stream: StreamCache, SHA256: b.SHA256, Offset: off})
 }
@@ -134,14 +136,14 @@ func (n *NodeRestorer) stream(ctx context.Context, w io.Writer, b protocol.Cache
 			return err
 		}
 		if fr.Digest != nil {
-			if strings.TrimPrefix(fr.Digest.SHA256, "sha256:") == b.SHA256 {
+			if normDigest(fr.Digest.SHA256) == b.SHA256 {
 				n.carry = &fr
 				return errRestart
 			}
 			continue
 		}
 		c := fr.Chunk
-		if c == nil || c.Stream != StreamCache || strings.TrimPrefix(c.Digest, "sha256:") != b.SHA256 {
+		if c == nil || c.Stream != StreamCache || normDigest(c.Digest) != b.SHA256 {
 			continue
 		}
 		if c.Offset != next {

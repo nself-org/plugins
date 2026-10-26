@@ -222,7 +222,9 @@ func TestRemoteCacheRestoreCorrupt(t *testing.T) {
 	}
 }
 
-func TestRemoteCacheRestoreAgent(t *testing.T) {
+// TODO: a real carrier-B restore test must replace this once agentapi can carry the
+// reverse blob frames; until then this pins only the degrade path.
+func TestRemoteCacheRestoreAgentDegradesToColdMiss(t *testing.T) {
 	data := carrierCacheArchive(t)
 	node := newRestoreNode(t, false)
 	r := newRig(t)
