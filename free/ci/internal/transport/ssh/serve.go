@@ -27,6 +27,7 @@ func (s *sess) serve(ctx context.Context, bundle string) error {
 	if err := s.sendSecrets(ctx); err != nil {
 		return err
 	}
+	defer s.startRestore(ctx)()
 	uploaded := make(chan error, 1)
 	if bundle != "" {
 		go func() { uploaded <- s.upload(ctx, bundle) }()
@@ -236,6 +237,10 @@ func (s *sess) handle(ctx context.Context, m protocol.Message) (done bool, err e
 			return false, nil
 		}
 		return false, s.onChunk(*b)
+	case *protocol.Offset:
+		if s.scoped(m) {
+			s.onOffset(*b)
+		}
 	}
 	return false, nil
 }

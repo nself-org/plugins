@@ -37,6 +37,8 @@ type activeLease struct {
 	lines     atomic.Uint64 // safe
 	lw        *lineWriter
 	offsets   chan protocol.Offset // safe: the coordinator's offset answers (offsets.go)
+	feed      *feed                // set before the job goroutine starts: the reverse blob feed (inbound.go)
+	ctxDone   <-chan struct{}      // the lease context's Done channel
 }
 
 func (l *activeLease) cancel() { l.cancelled.Store(true); l.cancelCtx() }
@@ -98,6 +100,8 @@ func (s *Session) onLease(m protocol.Message, l protocol.Lease) {
 	// cancel, a drain deadline or the agent fence (P7-NODE-09).
 	ctx, cancel := context.WithCancel(s.runCtx)
 	al := &activeLease{lease: l, cancelCtx: cancel, offsets: make(chan protocol.Offset, offsetBuffer), secWake: make(chan struct{}, 1), secVals: map[string]string{}, expires: exp, secSeen: map[string]bool{}}
+	al.ctxDone = ctx.Done()
+	al.feed = s.newFeed(al)
 	if l.RunnerCredential != nil {
 		al.addMask(l.RunnerCredential.Value)
 	}
@@ -181,11 +185,15 @@ func (s *Session) runLease(ctx context.Context, al *activeLease, slot *slots.Slo
 
 	var setup JobSetup
 	skip := ""
+	beforeCtx := ctx
+	if al.feed != nil {
+		beforeCtx = context.WithValue(ctx, feedKey{}, al.feed)
+	}
 	for _, h := range s.jobHooks {
 		if h.Before == nil {
 			continue
 		}
-		got, err := h.Before(ctx, l, root)
+		got, err := h.Before(beforeCtx, l, root)
 		if err != nil && ctx.Err() != nil {
 			skip = "cancelled" // the hook stopped because the lease was cancelled
 			break
@@ -195,6 +203,9 @@ func (s *Session) runLease(ctx context.Context, al *activeLease, slot *slots.Slo
 			return
 		}
 		mergeSetup(&setup, got)
+	}
+	if al.feed != nil {
+		al.feed.Close() // the hooks are done: later frames are dropped
 	}
 	waitCtx, stopWait := context.WithTimeout(ctx, max(al.expires.Sub(s.cfg.Clock.Now()), 0))
 	for waitCtx.Err() == nil {

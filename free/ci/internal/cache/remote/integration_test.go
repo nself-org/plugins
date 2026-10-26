@@ -124,6 +124,18 @@ func (s *simSink) Blob(ctx context.Context, h transport.BlobHeader) (transport.B
 	return s.r.lease.Blob(ctx, h)
 }
 
+// nodeSide is what a carrier needs from the simulated node.
+type nodeSide interface {
+	tap(session.Carrier) session.Carrier
+	runner() session.Runner
+	hooks() []session.JobHook
+}
+
+// Restore lets the coordinator push the lease's restore blobs (transport.Restorer).
+func (s *simSink) Restore(ctx context.Context, link transport.RestoreLink) error {
+	return s.r.lease.Restore(ctx, link)
+}
+
 type node struct {
 	t      *testing.T
 	data   []byte
