@@ -33,7 +33,32 @@ for tool in jq go; do
 	command -v "$tool" >/dev/null 2>&1 || { say "$tool is required"; exit 2; }
 done
 work=$(mktemp -d "${TMPDIR:-/tmp}/isolation-levels.XXXXXX") || exit 2
-trap 'rm -rf "$work"' EXIT
+# probes: "runtime:id" for every engine probe container (label nself.ci.probe=1, see internal/exec/runtime_probe.go) a runtime
+# holds, running or not.
+probes() {
+	local c id
+	for c in docker podman; do
+		command -v "$c" >/dev/null 2>&1 || continue
+		for id in $("$c" ps -aq --filter label=nself.ci.probe=1 2>/dev/null || true); do printf '%s:%s\n' "$c" "$id"; done
+	done
+}
+# The legs start the engine's gVisor probe container; one that outlives its leg (a killed CLI, a hung start) would keep running
+# into the next drill, and scenario-01-local-only refuses to cut the network while any container is up (D-1481). So on exit remove
+# the probe containers this run left, and only those: the ones that were there before it started belong to somebody else.
+probes_before=$(probes)
+# shellcheck disable=SC2329 # runs from the EXIT trap
+cleanup() {
+	local p
+	for p in $(probes); do
+		case "
+$probes_before
+" in *"
+$p
+"*) ;; *) "${p%%:*}" rm -f "${p#*:}" >/dev/null 2>&1 || true ;; esac
+	done
+	rm -rf "$work"
+}
+trap cleanup EXIT
 checks=$work/checks.ndjson
 : >"$checks"
 started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
