@@ -187,24 +187,28 @@ func parseBare(args []string) (RunOptions, error) {
 	return o, nil
 }
 
+// configDigest is a seam so a test can fail the digest.
+var configDigest = func(cfg model.PipelineConfig) (string, error) { return attest.ConfigDigest(cfg) }
+
 // preparePlan runs E621, config load, detection and the planner.
 func preparePlan(ctx context.Context, o RunOptions) (*plan.Plan, string, func(plan.PlannedJob) bool, error) {
 	if err := config.CheckLeftover(o.Root); err != nil {
 		return nil, "", nil, err
 	}
-	cfg, digest := model.PipelineConfig{Version: 1}, "builtin-defaults"
+	cfg := model.PipelineConfig{Version: 1}
 	path := firstOf(bare.cfg, filepath.Join(o.Root, config.FileName))
 	loaded, err := config.Load(path)
 	switch {
 	case err == nil:
 		cfg = loaded.Config
-		if d, e := attest.ConfigDigest(cfg); e == nil {
-			digest = d
-		}
 	case !errors.Is(err, os.ErrNotExist) || bare.cfg != "":
 		return nil, "", nil, err
 	}
 	if cfg, err = drill.Expand(o.Root, cfg, o.Pipeline, o.Trigger); err != nil { // drills_dir subdirectories become kind drill jobs (P7-CI-02)
+		return nil, "", nil, err
+	}
+	digest, err := configDigest(cfg) // the effective config, built-in defaults included (D-1270)
+	if err != nil {
 		return nil, "", nil, err
 	}
 	facts, checks, err := planChecks(o.Root, cfg)

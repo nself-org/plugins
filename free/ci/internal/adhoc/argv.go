@@ -24,18 +24,36 @@ const maxRecorded = 240
 
 var secretName = regexp.MustCompile(`(?i)(token|secret|passw(or)?d|passwd|credential|api[-_]?key|private[-_]?key|access[-_]?key|auth)`)
 
+// mentionsMySQLClient reports whether argv names a MySQL-family client
+// (mysql, mysqldump, mariadb, mariadb-dump...), directly or behind a wrapper
+// such as `docker exec db mysql`.
+func mentionsMySQLClient(argv []string) bool {
+	for _, a := range argv {
+		base := a
+		if i := strings.LastIndexAny(base, `/\`); i >= 0 {
+			base = base[i+1:]
+		}
+		if strings.HasPrefix(base, "mysql") || strings.HasPrefix(base, "mariadb") {
+			return true
+		}
+	}
+	return false
+}
+
 // wellKnownSecrets returns values carried by well-known positional forms that
 // do not use a secret-looking flag name: mysql-style `-pVALUE`, curl-style
 // `-u user:pass` and `-H "X-Key: value"` headers whose name looks secret-like.
 func wellKnownSecrets(argv []string) [][]byte {
 	var out [][]byte
+	mysql := mentionsMySQLClient(argv)
 	for i, a := range argv {
 		if len(a) < 2 || a[0] != '-' {
 			continue
 		}
 		switch {
-		case strings.HasPrefix(a, "-p") && len(a) > 2 && !strings.HasPrefix(a, "-port"):
-			// mysql/mariadb: -pS3cret (no space). Skip -port, -pidfile etc.
+		case mysql && strings.HasPrefix(a, "-p") && len(a) > 2:
+			// mysql/mariadb: -pS3cret (no space). Only when a MySQL-family client is in
+			// the command, so `go test -parallel 4`, `-pkgdir`, `-print` stay visible.
 			out = append(out, []byte(a[2:]))
 		case a == "-u" && i+1 < len(argv) && strings.Contains(argv[i+1], ":"):
 			// curl -u user:pass

@@ -80,6 +80,8 @@ func TestWellKnownSecretFormsAreRedacted(t *testing.T) {
 		secret string
 	}{
 		{"mysql -pVALUE", []string{"mysql", "-pS3cretPass", "db"}, "S3cretPass"},
+		{"mariadb path -pVALUE", []string{"/usr/bin/mariadb", "-pS3cretPass", "db"}, "S3cretPass"},
+		{"mysql behind docker exec", []string{"docker", "exec", "db", "mysql", "-pS3cretPass"}, "S3cretPass"},
 		{"curl -u user:pass", []string{"curl", "-u", "admin:s3cret", "https://x"}, "admin:s3cret"},
 		{"header X-Api-Key", []string{"curl", "-H", "X-Api-Key: tok123456789", "https://x"}, "tok123456789"},
 		{"header Authorization", []string{"curl", "-H", "Authorization: Bearer abcdefghij", "https://x"}, "Bearer abcdefghij"},
@@ -109,5 +111,22 @@ func TestNonSecretDashFlagsNotRedacted(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("non-secret arg %q was hidden in %s", want, got)
 		}
+	}
+}
+
+// Flags that merely start with -p belong to other tools (go test, make...) and
+// must stay visible: redacting them would corrupt the job's output.
+func TestDashPFlagsOfOtherToolsAreNotRedacted(t *testing.T) {
+	argv := []string{"go", "test", "-parallel", "4", "-pkgdir=/tmp/pkg", "-print-errors", "-p4", "./..."}
+	r := redact.New()
+	Register(r, argv)
+	got := Recorded(r, argv)
+	if want := strings.Join(argv, " "); got != want {
+		t.Errorf("recorded argv = %q, want %q", got, want)
+	}
+	f := r.NewFilter()
+	out := string(append(f.Redact([]byte("ok parallel pkgdir print-errors\n")), f.Flush()...))
+	if strings.Contains(out, redact.Placeholder) {
+		t.Errorf("job output was masked: %q", out)
 	}
 }
