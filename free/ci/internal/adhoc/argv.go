@@ -40,6 +40,9 @@ func mentionsMySQLClient(argv []string) bool {
 	return false
 }
 
+// isMySQLPassword reports whether a is the attached-password form `-pVALUE`.
+func isMySQLPassword(a string) bool { return strings.HasPrefix(a, "-p") && len(a) > 2 }
+
 // wellKnownSecrets returns values carried by well-known positional forms that
 // do not use a secret-looking flag name: mysql-style `-pVALUE`, curl-style
 // `-u user:pass` and `-H "X-Key: value"` headers whose name looks secret-like.
@@ -51,7 +54,7 @@ func wellKnownSecrets(argv []string) [][]byte {
 			continue
 		}
 		switch {
-		case mysql && strings.HasPrefix(a, "-p") && len(a) > 2:
+		case mysql && isMySQLPassword(a):
 			// mysql/mariadb: -pS3cret (no space). Only when a MySQL-family client is in
 			// the command, so `go test -parallel 4`, `-pkgdir`, `-print` stay visible.
 			out = append(out, []byte(a[2:]))
@@ -109,8 +112,13 @@ func Recorded(r *redact.Redactor, argv []string) string {
 	for _, v := range secretValues(argv) {
 		hidden[string(v)] = true
 	}
+	mysql := mentionsMySQLClient(argv)
 	parts := make([]string, len(argv))
 	for i, a := range argv {
+		if mysql && isMySQLPassword(a) { // masked by position: a value too short for the registry is hidden too
+			parts[i] = "-p[redacted]"
+			continue
+		}
 		if name, value, ok := strings.Cut(a, "="); ok && hidden[value] {
 			a = name + "=[redacted]"
 		} else if hidden[a] {

@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/attest"
+	"github.com/nself-org/plugins/free/ci/internal/evidence"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
@@ -73,5 +74,26 @@ func TestPreparePlanDigestErrorIsReturned(t *testing.T) {
 		if _, _, _, err := preparePlan(context.Background(), digestRepo(t, yaml)); !errors.Is(err, boom) {
 			t.Fatalf("preparePlan err = %v, want the digest error", err)
 		}
+	}
+}
+
+// The digest preparePlan hands the coordinator is the one evidence.InputsOf
+// records for the same tree, with and without a config.
+func TestPreparePlanDigestMatchesInputsOf(t *testing.T) {
+	for name, yaml := range map[string]string{"with ci.yaml": ciYAML, "without ci.yaml": ""} {
+		t.Run(name, func(t *testing.T) {
+			o := digestRepo(t, yaml)
+			_, got, _, err := preparePlan(context.Background(), o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			in, err := evidence.InputsOf(os.DirFS(o.Root))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != in.Config {
+				t.Fatalf("preparePlan digest = %q, InputsOf config = %q", got, in.Config)
+			}
+		})
 	}
 }

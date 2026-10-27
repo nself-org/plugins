@@ -104,13 +104,31 @@ func TestWellKnownSecretFormsAreRedacted(t *testing.T) {
 }
 
 func TestNonSecretDashFlagsNotRedacted(t *testing.T) {
-	// -port, -pidfile and plain positional args must stay visible.
-	argv := []string{"myapp", "-port=8080", "-pidfile=/tmp/pid", "plainarg"}
-	got := Recorded(redact.New(), argv)
-	for _, want := range []string{"-port=8080", "-pidfile=/tmp/pid", "plainarg"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("non-secret arg %q was hidden in %s", want, got)
-		}
+	// -port, -pidfile, -print, -path and plain positional args must stay visible,
+	// in the recorded line and in job output.
+	argv := []string{"myapp", "-port=8080", "-pidfile=/tmp/pid", "-print", "-path=/srv/app", "plainarg"}
+	r := redact.New()
+	Register(r, argv)
+	got := Recorded(r, argv)
+	if want := strings.Join(argv, " "); got != want {
+		t.Errorf("recorded argv = %q, want %q", got, want)
+	}
+	f := r.NewFilter()
+	out := string(append(f.Redact([]byte("pidfile=/tmp/pid print path=/srv/app port=8080 plainarg\n")), f.Flush()...))
+	if strings.Contains(out, redact.Placeholder) {
+		t.Errorf("job output was masked: %q", out)
+	}
+}
+
+// A -pVALUE too short for the registry still has to be hidden in Recorded.
+func TestShortMySQLPasswordMaskedInRecorded(t *testing.T) {
+	argv := []string{"mysql", "-pab", "db"}
+	r := redact.New()
+	if tooShort := Register(r, argv); tooShort != 1 {
+		t.Fatalf("short secret count = %d, want 1", tooShort)
+	}
+	if got, want := Recorded(r, argv), "mysql -p[redacted] db"; got != want {
+		t.Errorf("recorded argv = %q, want %q", got, want)
 	}
 }
 
