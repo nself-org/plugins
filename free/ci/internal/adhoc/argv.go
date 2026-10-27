@@ -4,11 +4,12 @@ package adhoc
 // (it is exec'd as given); a redacted copy is the only form stored or shown.
 // Inputs:  the argv and the process-wide redaction registry.
 // Outputs: Recorded (a redacted, bounded one-line form) and Register (values
-// that look like secrets join the registry so job output is masked too).
+//          that look like secrets join the registry so job output is masked too).
 // Constraints: token shapes (ghp_, sk_live_, AKIA, JWT...) are masked by the
-// P7-TRUST-02 redactor with no help; a value that follows a secret-looking name
-// (`--token=V`, `PASSWORD=V`, `--api-key V`) is registered, then masked. Nothing
-// is guessed beyond that: an argument that is only a word stays visible.
+//          P7-TRUST-02 redactor with no help; a value that follows a secret-looking name
+//          (`--token=V`, `PASSWORD=V`, `--api-key V`) is registered, then masked. Well-known
+//          positional forms (`-pVALUE`, `-u user:pass`, `-H X-Key: val`) are also caught.
+//          Nothing else is guessed: an argument that is only a word stays visible.
 
 import (
 	"regexp"
@@ -23,7 +24,35 @@ const maxRecorded = 240
 
 var secretName = regexp.MustCompile(`(?i)(token|secret|passw(or)?d|passwd|credential|api[-_]?key|private[-_]?key|access[-_]?key|auth)`)
 
-// secretValues returns the argv values that follow a secret-looking name.
+// wellKnownSecrets returns values carried by well-known positional forms that
+// do not use a secret-looking flag name: mysql-style `-pVALUE`, curl-style
+// `-u user:pass` and `-H "X-Key: value"` headers whose name looks secret-like.
+func wellKnownSecrets(argv []string) [][]byte {
+	var out [][]byte
+	for i, a := range argv {
+		if len(a) < 2 || a[0] != '-' {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(a, "-p") && len(a) > 2 && !strings.HasPrefix(a, "-port"):
+			// mysql/mariadb: -pS3cret (no space). Skip -port, -pidfile etc.
+			out = append(out, []byte(a[2:]))
+		case a == "-u" && i+1 < len(argv) && strings.Contains(argv[i+1], ":"):
+			// curl -u user:pass
+			out = append(out, []byte(argv[i+1]))
+		case a == "-H" && i+1 < len(argv):
+			// -H "X-Api-Key: value" — mask the value when the header name is secret-looking.
+			hdr := argv[i+1]
+			if name, value, ok := strings.Cut(hdr, ":"); ok && secretName.MatchString(name) {
+				out = append(out, []byte(strings.TrimSpace(value)))
+			}
+		}
+	}
+	return out
+}
+
+// secretValues returns the argv values that follow a secret-looking name plus
+// any well-known positional forms.
 func secretValues(argv []string) [][]byte {
 	var out [][]byte
 	for i, a := range argv {
@@ -39,6 +68,7 @@ func secretValues(argv []string) [][]byte {
 			out = append(out, []byte(argv[i+1]))
 		}
 	}
+	out = append(out, wellKnownSecrets(argv)...)
 	return out
 }
 

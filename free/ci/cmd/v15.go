@@ -12,8 +12,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -25,6 +23,7 @@ import (
 	"syscall"
 
 	"github.com/nself-org/plugins/free/ci/internal/adhoc"
+	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/config"
 	"github.com/nself-org/plugins/free/ci/internal/drill"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -199,9 +198,8 @@ func preparePlan(ctx context.Context, o RunOptions) (*plan.Plan, string, func(pl
 	switch {
 	case err == nil:
 		cfg = loaded.Config
-		if raw, e := os.ReadFile(path); e == nil {
-			sum := sha256.Sum256(raw)
-			digest = hex.EncodeToString(sum[:])
+		if d, e := attest.ConfigDigest(cfg); e == nil {
+			digest = d
 		}
 	case !errors.Is(err, os.ErrNotExist) || bare.cfg != "":
 		return nil, "", nil, err

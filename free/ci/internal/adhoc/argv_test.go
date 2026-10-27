@@ -72,3 +72,42 @@ func TestDashPrefixedSecretValuesAreRedacted(t *testing.T) {
 		})
 	}
 }
+
+func TestWellKnownSecretFormsAreRedacted(t *testing.T) {
+	cases := []struct {
+		name   string
+		argv   []string
+		secret string
+	}{
+		{"mysql -pVALUE", []string{"mysql", "-pS3cretPass", "db"}, "S3cretPass"},
+		{"curl -u user:pass", []string{"curl", "-u", "admin:s3cret", "https://x"}, "admin:s3cret"},
+		{"header X-Api-Key", []string{"curl", "-H", "X-Api-Key: tok123456789", "https://x"}, "tok123456789"},
+		{"header Authorization", []string{"curl", "-H", "Authorization: Bearer abcdefghij", "https://x"}, "Bearer abcdefghij"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := redact.New()
+			Register(r, tc.argv)
+			got := Recorded(r, tc.argv)
+			if strings.Contains(got, tc.secret) {
+				t.Errorf("recorded argv holds %q: %s", tc.secret, got)
+			}
+			f := r.NewFilter()
+			out := string(append(f.Redact([]byte("line "+tc.secret+" end\n")), f.Flush()...))
+			if strings.Contains(out, tc.secret) {
+				t.Errorf("job output still holds %q: %s", tc.secret, out)
+			}
+		})
+	}
+}
+
+func TestNonSecretDashFlagsNotRedacted(t *testing.T) {
+	// -port, -pidfile and plain positional args must stay visible.
+	argv := []string{"myapp", "-port=8080", "-pidfile=/tmp/pid", "plainarg"}
+	got := Recorded(redact.New(), argv)
+	for _, want := range []string{"-port=8080", "-pidfile=/tmp/pid", "plainarg"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("non-secret arg %q was hidden in %s", want, got)
+		}
+	}
+}
