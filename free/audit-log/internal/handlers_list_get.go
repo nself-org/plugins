@@ -11,9 +11,8 @@ import (
 
 func handleList(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		provided := r.Header.Get("X-Plugin-Secret")
-		if provided == "" || provided != secret {
-			sdk.Respond(w, http.StatusUnauthorized, map[string]string{"error": "missing or invalid X-Plugin-Secret"})
+		if !hasInternalSecret(r, secret) {
+			sdk.Respond(w, http.StatusUnauthorized, map[string]string{"error": "missing or invalid X-Internal-Token"})
 			return
 		}
 
@@ -46,12 +45,11 @@ func handleList(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 }
 
 // handleGet handles GET /events/{id}.
-// All requests must include a matching X-Plugin-Secret header.
+// All requests must include a matching X-Internal-Token header.
 func handleGet(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		provided := r.Header.Get("X-Plugin-Secret")
-		if provided == "" || provided != secret {
-			sdk.Respond(w, http.StatusUnauthorized, map[string]string{"error": "missing or invalid X-Plugin-Secret"})
+		if !hasInternalSecret(r, secret) {
+			sdk.Respond(w, http.StatusUnauthorized, map[string]string{"error": "missing or invalid X-Internal-Token"})
 			return
 		}
 
@@ -76,5 +74,5 @@ func handleGet(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 
 // handleAdminList handles GET /admin/events.
 // This is the Admin-facing variant of GET /events. It accepts either
-// X-Plugin-Secret (plugin internal callers) or X-Hasura-Admin-Secret (Admin
+// X-Internal-Token (plugin internal callers) or X-Hasura-Admin-Secret (Admin
 // UI via Hasura). Supports the same filter query parameters as GET /events.

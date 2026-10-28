@@ -1,6 +1,6 @@
 // Package client is the Go caller for the storage plugin's /storage/* HTTP API.
 //
-// Purpose: send X-Plugin-Secret (PLUGIN_INTERNAL_SECRET) on every call, so a server-side caller is not refused
+// Purpose: send X-Internal-Token (PLUGIN_INTERNAL_SECRET) on every call, so a server-side caller is not refused
 // with 401 by the plugin's internal-secret gate (D-0396, D-0648).
 // Inputs: the plugin base URL, the internal secret, an optional source account id.
 // Outputs: typed results, or *StatusError for any non-2xx answer.
@@ -22,9 +22,12 @@ import (
 )
 
 const (
-	secretHeader  = "X-Plugin-Secret"
-	accountHeader = "X-Hasura-Source-Account-Id"
-	maxErrBody    = 4 << 10
+	secretHeader = "X-Internal-Token"
+	// legacySecretHeader is sent as well for one release, so this client still works against a storage plugin that
+	// only reads the old name (D-0198).
+	legacySecretHeader = "X-Plugin-Secret"
+	accountHeader      = "X-Hasura-Source-Account-Id"
+	maxErrBody         = 4 << 10
 )
 
 // ErrNoSecret is returned when no internal secret is available. Failing here is clearer than a 401 or 503 later.
@@ -84,6 +87,7 @@ func (c *Client) Do(ctx context.Context, method, path, contentType string, body 
 		req.ContentLength = length
 	}
 	req.Header.Set(secretHeader, c.secret)
+	req.Header.Set(legacySecretHeader, c.secret)
 	if c.account != "" {
 		req.Header.Set(accountHeader, c.account)
 	}

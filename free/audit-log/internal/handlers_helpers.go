@@ -9,7 +9,7 @@ import (
 )
 
 func authorizeAdminRequest(r *http.Request, secret, adminSecret string) bool {
-	if ps := r.Header.Get("X-Plugin-Secret"); ps != "" && ps == secret {
+	if hasInternalSecret(r, secret) {
 		return true
 	}
 	if adminSecret != "" {

@@ -312,11 +312,11 @@ func (h *Handlers) HandleTools(w http.ResponseWriter, _ *http.Request) {
 // =============================================================================
 
 // InternalAuthMiddleware rejects requests that do not carry the correct
-// X-Internal-Token header.
+// X-Internal-Token header (or a legacy name, see presentedSecret).
 func InternalAuthMiddleware(secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token := r.Header.Get("X-Internal-Token")
+			token := presentedSecret(r)
 			if token == "" {
 				http.Error(w, "X-Internal-Token required", http.StatusUnauthorized)
 				return

@@ -15,9 +15,8 @@ import (
 func handleIngest(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Always authenticate internal callers.
-		provided := r.Header.Get("X-Plugin-Secret")
-		if provided == "" || provided != secret {
-			sdk.Respond(w, http.StatusUnauthorized, map[string]string{"error": "missing or invalid X-Plugin-Secret"})
+		if !hasInternalSecret(r, secret) {
+			sdk.Respond(w, http.StatusUnauthorized, map[string]string{"error": "missing or invalid X-Internal-Token"})
 			return
 		}
 
@@ -89,7 +88,7 @@ func handleIngest(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 			CreatedAt:       time.Now().UTC(),
 		}
 
-		// Prefer real client IP when X-Plugin-Secret is set (trusted call from
+		// Prefer real client IP when the internal secret header is set (trusted call from
 		// within the stack) or fall back to the remote address.
 		if event.IPAddress == "" {
 			event.IPAddress = realIP(r)
@@ -111,7 +110,7 @@ func handleIngest(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 }
 
 // handleList handles GET /events.
-// All requests must include a matching X-Plugin-Secret header.
+// All requests must include a matching X-Internal-Token header.
 //
 // Supported query parameters:
 //

@@ -393,6 +393,12 @@ jobs:
       - name: D-0815 forgejo and file-processing pass the whole gate
         run: bash tests/conformance/d0815-test.sh
 
+      - name: D-0973 the tarball build prunes the BuildKit cache on CI only
+        run: bash tests/conformance/d0973-test.sh
+
+      - name: D-0821 workflows manifest port matches the port it listens on
+        run: bash tests/conformance/d0821-test.sh
+
       - name: Released CLI v1.4.12 oracle
         run: bash scripts/conformance/v14-oracle.sh --fixtures
 

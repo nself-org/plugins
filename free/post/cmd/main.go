@@ -104,12 +104,29 @@ func main() {
 	log.Println("nself-post stopped")
 }
 
+// legacySecretHeaders are the older names for the X-Internal-Token check (D-0198), still read so callers that have
+// not moved to the canonical name keep working. Remove them once every caller sends X-Internal-Token.
+var legacySecretHeaders = []string{"X-Plugin-Secret", "X-Internal-Secret", "X-Internal-Key"}
+
+// presentedSecret returns the secret a request carries: X-Internal-Token, else the first legacy header set.
+func presentedSecret(r *http.Request) string {
+	if v := r.Header.Get("X-Internal-Token"); v != "" {
+		return v
+	}
+	for _, h := range legacySecretHeaders {
+		if v := r.Header.Get(h); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // internalAuthMiddleware rejects requests that do not present a valid
-// X-Internal-Token header matching the configured secret.
+// X-Internal-Token header (or a legacy name, see presentedSecret) matching the configured secret.
 func internalAuthMiddleware(secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token := r.Header.Get("X-Internal-Token")
+			token := presentedSecret(r)
 			if token == "" {
 				http.Error(w, "X-Internal-Token required", http.StatusUnauthorized)
 				return

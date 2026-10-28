@@ -14,7 +14,7 @@ func handleAdminList(pool *pgxpool.Pool, secret, adminSecret string) http.Handle
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !authorizeAdminRequest(r, secret, adminSecret) {
 			sdk.Respond(w, http.StatusUnauthorized, map[string]string{
-				"error": "missing or invalid authentication header; provide X-Plugin-Secret or X-Hasura-Admin-Secret",
+				"error": "missing or invalid authentication header; provide X-Internal-Token or X-Hasura-Admin-Secret",
 			})
 			return
 		}
@@ -64,9 +64,8 @@ func handleAdminList(pool *pgxpool.Pool, secret, adminSecret string) http.Handle
 // Size-cap exception: single-responsibility HTTP route handler — 108L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleExport(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		provided := r.Header.Get("X-Plugin-Secret")
-		if provided == "" || provided != secret {
-			sdk.Respond(w, http.StatusUnauthorized, map[string]string{"error": "missing or invalid X-Plugin-Secret"})
+		if !hasInternalSecret(r, secret) {
+			sdk.Respond(w, http.StatusUnauthorized, map[string]string{"error": "missing or invalid X-Internal-Token"})
 			return
 		}
 
@@ -172,5 +171,5 @@ func handleExport(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 }
 
 // authorizeAdminRequest returns true when the request carries a valid
-// X-Plugin-Secret or (when adminSecret is non-empty) a valid
+// X-Internal-Token or (when adminSecret is non-empty) a valid
 // X-Hasura-Admin-Secret header.

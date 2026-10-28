@@ -33,7 +33,7 @@ type Config struct {
 	MaxObjectBytes int64
 	// AccountQuotaBytes caps the summed size of one account's objects (STORAGE_ACCOUNT_QUOTA_BYTES); 0 = off.
 	AccountQuotaBytes int64
-	// InternalSecret is PLUGIN_INTERNAL_SECRET. /storage/* routes require it in X-Plugin-Secret; empty = routes
+	// InternalSecret is PLUGIN_INTERNAL_SECRET. /storage/* routes require it in X-Internal-Token; empty = routes
 	// answer 503 (fail closed). Surrounding whitespace is trimmed, so a whitespace-only value counts as unset (a header
 	// value never carries it, so such a secret could never match and every call would answer 401 with no hint).
 	InternalSecret string

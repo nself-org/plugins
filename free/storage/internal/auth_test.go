@@ -86,3 +86,32 @@ func TestStorageRoutes_forgedAccountHeaderNeverReachesHandler(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+// D-0198: the canonical X-Internal-Token and every legacy name carry the same secret; a legacy header never
+// overrides a present canonical one, and a wrong value under any name is refused.
+func TestRequireInternalSecret_headerNames(t *testing.T) {
+	cases := []struct {
+		name    string
+		headers map[string]string
+		want    int
+	}{
+		{"canonical", map[string]string{"X-Internal-Token": testSecret}, 200},
+		{"legacy X-Plugin-Secret", map[string]string{"X-Plugin-Secret": testSecret}, 200},
+		{"legacy X-Internal-Secret", map[string]string{"X-Internal-Secret": testSecret}, 200},
+		{"legacy X-Internal-Key", map[string]string{"X-Internal-Key": testSecret}, 200},
+		{"wrong canonical is not rescued by a right legacy header", map[string]string{"X-Internal-Token": "test-wrong-secret", "X-Plugin-Secret": testSecret}, 401},
+		{"wrong legacy", map[string]string{"X-Plugin-Secret": "test-wrong-secret"}, 401},
+	}
+	for _, c := range cases {
+		s := &Server{cfg: &Config{InternalSecret: testSecret}}
+		req := httptest.NewRequest(http.MethodGet, "/storage/buckets", nil)
+		for k, v := range c.headers {
+			req.Header.Set(k, v)
+		}
+		rr := httptest.NewRecorder()
+		s.requireInternalSecret(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).ServeHTTP(rr, req)
+		if rr.Code != c.want {
+			t.Errorf("%s: code %d, want %d", c.name, rr.Code, c.want)
+		}
+	}
+}

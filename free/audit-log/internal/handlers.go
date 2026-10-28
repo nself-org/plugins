@@ -14,8 +14,8 @@ import (
 // RegisterRoutes mounts all audit-log endpoints on the given router.
 //
 //   - secret is the value of PLUGIN_INTERNAL_SECRET; all /events and
-//     /admin/events endpoints require a matching X-Plugin-Secret header, except
-//     /admin/events which accepts either X-Plugin-Secret or X-Hasura-Admin-Secret.
+//     /admin/events endpoints require a matching X-Internal-Token header, except
+//     /admin/events which accepts either X-Internal-Token or X-Hasura-Admin-Secret.
 //   - adminSecret is the value of HASURA_GRAPHQL_ADMIN_SECRET; when non-empty
 //     GET /admin/events also accepts requests carrying this header.
 func RegisterRoutes(r chi.Router, pool *pgxpool.Pool, secret, adminSecret string) {
@@ -70,4 +70,4 @@ func handleHealth(pool *pgxpool.Pool) http.HandlerFunc {
 
 // handleIngest handles POST /events.
 // This endpoint is for internal use only (e.g. other plugins, the CLI, Admin).
-// All requests must include a matching X-Plugin-Secret header.
+// All requests must include a matching X-Internal-Token header.
