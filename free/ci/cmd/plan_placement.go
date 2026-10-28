@@ -137,12 +137,13 @@ func loadPlanned(ctx context.Context, s planSpec) (planned, error) {
 	if cfg, err = drill.Expand(root, cfg, s.pipeline, s.trigger); err != nil { // as a real run: drills_dir subdirectories become kind drill jobs (D-1046)
 		return planned{}, err
 	}
-	facts, checks, err := planChecks(root, cfg)
+	rev := planRevision(ctx, root, s.base)
+	facts, checks, err := planChecks(root, cfg, fullSelection(rev))
 	if err != nil {
 		return planned{}, err
 	}
 	w := planWorld(cfg, checks)
-	pl, err := plan.Build(plan.Input{Config: cfg, Facts: facts, Checks: checks, Revision: planRevision(ctx, root, s.base),
+	pl, err := plan.Build(plan.Input{Config: cfg, Facts: facts, Checks: checks, Revision: rev,
 		World: w, Pipeline: s.pipeline, Trigger: model.Trigger(s.trigger)})
 	if err != nil {
 		return planned{}, err

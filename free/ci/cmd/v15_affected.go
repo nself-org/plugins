@@ -32,11 +32,16 @@ func affectedSelector(in plan.SelectionInput) (model.Selection, []string) {
 }
 
 // planDetectors is the detect registry planChecks runs.
-func planDetectors() *detect.Registry {
+func planDetectors(full ...bool) *detect.Registry {
 	r := detect.DefaultRegistry()
 	// compat.V15(P7-SCHED-13): no package graph -> pkggraph detector registered
-	if compat.V15() {
+	if compat.V15() && (len(full) == 0 || !full[0]) {
 		_ = affected.Register(r)
 	}
 	return r
+}
+
+// fullSelection avoids building a graph when revision rules require every job.
+func fullSelection(rev plan.Revision) bool {
+	return !rev.BaseKnown || rev.DefaultBranch || rev.Release || len(rev.Changed) == 0
 }

@@ -56,3 +56,38 @@ func TestAffectedSelectorFollowsMode(t *testing.T) {
 		t.Fatalf("v1.4 selection = %+v %v, want the default %+v %v", got, gotJobs, want, wantJobs)
 	}
 }
+
+func TestFullPlansSkipPackageGraph(t *testing.T) {
+	t.Setenv("NSELF_V15", "1")
+	full := []plan.Revision{
+		{}, {BaseKnown: true, DefaultBranch: true, Changed: []string{"app/main.go"}},
+		{BaseKnown: true, Release: true, Changed: []string{"app/main.go"}},
+		{BaseKnown: true},
+	}
+	for _, rev := range full {
+		facts, checks, err := planChecks(affectedFixture, model.PipelineConfig{Version: 1}, fullSelection(rev))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, fact := range facts {
+			if fact.Kind == affected.FactKind {
+				t.Fatalf("full revision %+v built a graph", rev)
+			}
+		}
+		if len(checks) == 0 {
+			t.Fatal("skipping graph also dropped ordinary checks")
+		}
+	}
+	rev := plan.Revision{BaseKnown: true, Changed: []string{"app/main.go"}}
+	facts, _, err := planChecks(affectedFixture, model.PipelineConfig{Version: 1}, fullSelection(rev))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, fact := range facts {
+		found = found || fact.Kind == affected.FactKind
+	}
+	if !found {
+		t.Fatal("affected plan lost its graph")
+	}
+}

@@ -120,11 +120,12 @@ func runPlan(args []string) int {
 	if cfg, err = drill.Expand(root, cfg, o.pipeline, o.trigger); err != nil { // as a real run: drills_dir subdirectories become kind drill jobs (D-1046)
 		return planFail(o.json, err)
 	}
-	facts, checks, err := planChecks(root, cfg)
+	rev := planRevision(ctx, root, o.base)
+	facts, checks, err := planChecks(root, cfg, fullSelection(rev))
 	if err != nil {
 		return planFail(o.json, err)
 	}
-	in := plan.Input{Config: cfg, Facts: facts, Checks: checks, Revision: planRevision(ctx, root, o.base),
+	in := plan.Input{Config: cfg, Facts: facts, Checks: checks, Revision: rev,
 		World: planWorld(cfg, checks), Pipeline: o.pipeline, Trigger: model.Trigger(o.trigger)}
 	p, err := plan.Build(in)
 	if err != nil {
@@ -148,9 +149,9 @@ func runPlan(args []string) int {
 
 // planChecks detects the repo's ecosystems and plans the catalogue checks
 // (only when the config declares no jobs; detect.disable drops ecosystems).
-func planChecks(root string, cfg model.PipelineConfig) ([]detect.Fact, []plan.Check, error) {
+func planChecks(root string, cfg model.PipelineConfig, full ...bool) ([]detect.Fact, []plan.Check, error) {
 	reg := gates.DefaultRegistry()
-	facts, err := planDetectors().Detect(os.DirFS(root), reg.Has)
+	facts, err := planDetectors(full...).Detect(os.DirFS(root), reg.Has)
 	if err != nil {
 		return nil, nil, err
 	}

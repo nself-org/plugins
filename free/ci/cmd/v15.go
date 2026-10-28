@@ -209,13 +209,13 @@ func preparePlan(ctx context.Context, o RunOptions) (*plan.Plan, string, func(pl
 	if cfg, err = drill.Expand(o.Root, cfg, o.Pipeline, o.Trigger); err != nil { // drills_dir subdirectories become kind drill jobs (P7-CI-02)
 		return nil, "", nil, err
 	}
-	facts, checks, err := planChecks(o.Root, cfg)
-	if err != nil {
-		return nil, "", nil, err
-	}
 	rev := planRevision(ctx, o.Root, bare.base)
 	if o.Full {
 		rev.BaseKnown, rev.Changed = false, nil
+	}
+	facts, checks, err := planChecks(o.Root, cfg, fullSelection(rev))
+	if err != nil {
+		return nil, "", nil, err
 	}
 	p, err := plan.Build(plan.Input{Config: cfg, Facts: facts, Checks: checks, Revision: rev,
 		World: planWorld(cfg, checks), Pipeline: o.Pipeline, Trigger: model.Trigger(o.Trigger)})

@@ -130,3 +130,15 @@ func TestDigestIsStableAndSensitive(t *testing.T) {
 		t.Fatal("digest ignores a changed path or a job")
 	}
 }
+
+func TestNodeAncestorsIndexesStrictParents(t *testing.T) {
+	g := newGraph()
+	g.addNode("apps/web/ui", "go")
+	g.addNode("apps/web/api", "go")
+	g.opaque["tools/build/opaque"] = "other"
+	got := g.nodeAncestors()
+	want := map[string]bool{"apps": true, "apps/web": true, "tools": true, "tools/build": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ancestors=%v want=%v", got, want)
+	}
+}
