@@ -215,7 +215,7 @@ func TestAttemptDocumentsCarryTheHistoryFlakyMarker(t *testing.T) {
 	cirun.FlakyHistory = func(_ context.Context, _ *store.Store, ev model.Evidence) map[string]*model.Flaky {
 		notes := map[string]*model.Flaky{}
 		for _, c := range ev.Checks {
-			notes[c.ID] = &model.Flaky{Source: "history", Passes: 1, Fails: 1}
+			notes[model.FlakyKey(c.JobID, c.ID)] = &model.Flaky{Source: "history", Passes: 1, Fails: 1}
 		}
 		return notes
 	}

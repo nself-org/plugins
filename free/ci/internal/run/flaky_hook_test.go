@@ -16,7 +16,7 @@ func TestMarkHistoryFlakyMatchesJobAndCheck(t *testing.T) {
 		return map[string]*model.Flaky{model.FlakyKey("a", "unit"): note}
 	}
 	ev := model.Evidence{Checks: []model.Check{{ID: "unit", JobID: "a"}, {ID: "unit", JobID: "b"}}}
-	markHistoryFlaky(context.Background(), nil, &ev)
+	MarkHistoryFlaky(context.Background(), nil, &ev)
 	if ev.Checks[0].Flaky != note || ev.Checks[1].Flaky != nil {
 		t.Fatalf("flaky marks: a=%+v b=%+v", ev.Checks[0].Flaky, ev.Checks[1].Flaky)
 	}
