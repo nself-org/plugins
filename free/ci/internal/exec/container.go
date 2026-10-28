@@ -167,3 +167,19 @@ func containerStopper(binary, name string, grace time.Duration) func() {
 		})
 	}
 }
+
+// Secret values travel in the CLI environment: reserve names read by the CLI,
+// its loader, shell helpers and transport configuration, including proxy aliases.
+func unsafeSecretName(name string) bool {
+	n := strings.ToUpper(name)
+	for _, prefix := range []string{"DOCKER_", "CONTAINER_", "PODMAN_", "LD_", "DYLD_", "XDG_", "SSH_"} {
+		if strings.HasPrefix(n, prefix) {
+			return true
+		}
+	}
+	switch n {
+	case "PATH", "HOME", "USER", "LOGNAME", "SHELL", "ENV", "BASH_ENV", "IFS", "CDPATH", "TMPDIR", "TMP", "TEMP", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR", "GODEBUG":
+		return true
+	}
+	return false
+}

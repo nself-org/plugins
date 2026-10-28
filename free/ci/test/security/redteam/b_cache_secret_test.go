@@ -111,9 +111,6 @@ func TestB_CacheEntry_SecretInsideCompressedFile(t *testing.T) {
 		err := saveWith(t, "c-"+name, map[string][]byte{"dep." + name: content})
 		t.Logf("%s: save result: %.100v", name, err)
 		if err == nil {
-			if !openFinding(t, "B08") {
-				continue
-			}
 			t.Errorf("%s: a compressed file holding the secret was committed (spec has no InflateScan)", name)
 		}
 	}

@@ -6,8 +6,8 @@ package redteam
 // as the secret: render-invisible insertions (SGR, NUL, zero width) and plain re-orderings.
 // Inputs:  fakeSecret, registered with the real redact.Redactor, printed in transformed forms.
 // Outputs: pass or fail.
-// Constraints: local fixtures only. Section 11.8 of the threat model lists some of these as a
-//          residual; the test still asserts the secure outcome so the gap stays visible.
+// Constraints: local fixtures only. These previously recorded residuals are now
+//          unconditional regression tests.
 
 import (
 	"regexp"
@@ -45,9 +45,6 @@ func TestB_Redactor_RenderInvisibleInsertions(t *testing.T) {
 	} {
 		out := rendered(feedChunks(r, "k="+in+"\n"))
 		if strings.Contains(out, fakeSecret) {
-			if !openFinding(t, "B04") {
-				return
-			}
 			t.Errorf("%s: the secret reads in clear once invisible bytes are dropped: %q", name, out)
 		}
 	}
@@ -74,9 +71,6 @@ func TestB_Redactor_ReorderedAndCaseFolded(t *testing.T) {
 		rrev := string(rev)
 		leaked := strings.Contains(norm, rn) || strings.Contains(strings.ToLower(out), strings.ToLower(rrev)) || strings.Contains(norm, strings.NewReplacer("a", "4", "e", "3").Replace(rn))
 		if leaked {
-			if !openFinding(t, "B05") {
-				return
-			}
 			t.Errorf("%s: transformed secret released: %q", name, out)
 		}
 	}

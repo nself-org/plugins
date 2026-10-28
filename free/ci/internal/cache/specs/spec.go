@@ -45,9 +45,8 @@ type Spec struct {
 	// Lockfiles are the detector lockfile managers whose digests key the spec.
 	Lockfiles []string
 	Probes    []Probe
-	// InflateScan makes the save-time registered-value scan also read inside
-	// every gzip payload among the files (npm's _cacache keeps tarballs), which
-	// the scan of the tar stream alone cannot see through.
+	// InflateScan is retained for spec compatibility. Every save now scans
+	// gzip and ZIP payloads, regardless of this legacy flag.
 	InflateScan bool
 	// ContainerOnly specs apply to container-level jobs only.
 	ContainerOnly bool

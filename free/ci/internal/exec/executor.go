@@ -213,8 +213,8 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	env = append(env, s.NetEnv...)
 	var secretEnv []string // secret values travel apart from the env file (P7-TRUST-02: no secret on disk)
 	for k, v := range secrets {
-		if !safeID.MatchString(k) || strings.Contains(k, ".") {
-			result.Err = coded("E612", "invalid secret key")
+		if !safeID.MatchString(k) || strings.Contains(k, ".") || unsafeSecretName(k) {
+			result.Err = coded("E612", "invalid or reserved secret key")
 			return
 		}
 		if e.RegisterSecret != nil && v != "" {

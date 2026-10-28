@@ -118,9 +118,6 @@ func TestB_Neutraliser_RawC1Bytes(t *testing.T) {
 	out := feedChunks(redact.New(), in)
 	for _, c := range []byte{0x90, 0x98, 0x9b, 0x9d, 0x9e, 0x9f} {
 		if bytes.IndexByte([]byte(out), c) >= 0 {
-			if !openFinding(t, "B01") {
-				return
-			}
 			t.Fatalf("raw C1 byte %#x survives the neutraliser: %q", c, out)
 		}
 	}
@@ -131,9 +128,6 @@ func TestB_Neutraliser_BidiAndInvisibles(t *testing.T) {
 	out := feedChunks(redact.New(), in)
 	for _, r := range "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069\u2028\u2029" {
 		if strings.ContainsRune(out, r) {
-			if !openFinding(t, "B02") {
-				return
-			}
 			t.Fatalf("bidi/line-separator control %U survives: %q", r, out)
 		}
 	}

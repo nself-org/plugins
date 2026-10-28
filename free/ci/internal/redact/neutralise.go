@@ -14,6 +14,7 @@ package redact
 import (
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // edit is one replacement the neutraliser asks for.
@@ -72,6 +73,30 @@ func neutralise(b []byte, prev byte, final bool, masks []span, out []edit) (edit
 		}
 	}
 	for i := 0; i < len(b); i++ {
+		if b[i] >= utf8.RuneSelf {
+			if !utf8.FullRune(b[i:]) && !final {
+				held(i)
+				return out, hold
+			}
+			r, size := utf8.DecodeRune(b[i:])
+			if size > 1 {
+				if r >= 0x80 && r <= 0x9f {
+					out = append(out, edit{i, i + size, escMark})
+				} else if invisible(r) {
+					out = append(out, edit{i, i + size, ""})
+				}
+				i += size - 1
+				continue
+			}
+			if b[i] >= 0x80 && b[i] <= 0x9f {
+				out = append(out, edit{i, i + 1, escMark})
+				continue
+			}
+		}
+		if b[i] == 0 {
+			out = append(out, edit{i, i + 1, ""})
+			continue
+		}
 		switch c := b[i]; c {
 		case 0x1b:
 			end, sgr, incomplete := escape(b, i)
@@ -88,13 +113,6 @@ func neutralise(b []byte, prev byte, final bool, masks []span, out []edit) (edit
 				continue
 			}
 			out = append(out, edit{i, i + 1, escMark})
-		case 0xc2:
-			if i+1 == len(b) {
-				held(i)
-			} else if b[i+1] >= 0x80 && b[i+1] <= 0x9f {
-				out = append(out, edit{i, i + 2, escMark})
-				i++
-			}
 		case ':':
 			p := prev
 			if i > 0 {
