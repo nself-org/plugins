@@ -229,6 +229,12 @@ func TestSignSourcesRegistry(t *testing.T) {
 	if !found {
 		t.Fatal("the source was not registered")
 	}
+	publish.RegisterSignSource("zz-companion", nil, func(context.Context, string, *flagSet) (publish.Release, error) { return publish.Release{}, nil }, "zz-out")
+	for _, s := range publish.SignSources() {
+		if s.Name == "zz-companion" && (len(s.Companions) != 1 || s.Companions[0] != "zz-out") {
+			t.Fatalf("companions not kept: %v", s.Companions)
+		}
+	}
 	for _, bad := range []string{"zz-test", "Bad Name", ""} {
 		func() {
 			defer func() {

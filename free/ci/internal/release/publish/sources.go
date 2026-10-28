@@ -24,6 +24,9 @@ type SignSource struct {
 	Name string
 	// Flags declares the source's flags, Name's own among them.
 	Flags func(fs *flag.FlagSet)
+	// Companions names the flags that only mean something with this source (for
+	// example "out" of --coordinator); one set without the source flag is refused.
+	Companions []string
 	// Run signs the run using the values parsed into fs.
 	Run func(ctx context.Context, runID string, fs *flag.FlagSet) (Release, error)
 }
@@ -35,13 +38,14 @@ var (
 )
 
 // RegisterSignSource adds a source; it panics on a duplicate or invalid name (init-time bug).
-func RegisterSignSource(name string, flags func(fs *flag.FlagSet), fn func(ctx context.Context, runID string, fs *flag.FlagSet) (Release, error)) {
+// companions are the flags that need the source's own flag (see SignSource.Companions).
+func RegisterSignSource(name string, flags func(fs *flag.FlagSet), fn func(ctx context.Context, runID string, fs *flag.FlagSet) (Release, error), companions ...string) {
 	sourcesMu.Lock()
 	defer sourcesMu.Unlock()
 	if _, dup := sources[name]; dup || !nameRe.MatchString(name) || fn == nil {
 		panic(fmt.Sprintf("publish: invalid or duplicate sign source %q", name))
 	}
-	sources[name] = SignSource{Name: name, Flags: flags, Run: fn}
+	sources[name] = SignSource{Name: name, Flags: flags, Companions: companions, Run: fn}
 }
 
 // SignSources lists the registered sources in name order.
