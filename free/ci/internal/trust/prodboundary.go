@@ -35,7 +35,7 @@ func admitBoundary(job JobFacts, d Declaration, _ Effective) []Reason {
 	if d.DeployHost.Matched {
 		if !d.DeployHost.Override {
 			out = append(out, BoundaryDeployHost)
-		} else if !ownTrust(job.Trust) || belowFloor(d.Isolation) || releaseSecret(job.SecretClasses) {
+		} else if !ownTrust(job.Trust) || belowFloor(d.Isolation) || job.Release || releaseSecret(job.SecretClasses) {
 			out = append(out, BoundaryOverrideMinimum)
 		}
 	}
