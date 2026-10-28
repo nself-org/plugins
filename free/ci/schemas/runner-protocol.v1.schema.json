@@ -720,6 +720,9 @@
               },
               "token": {
                 "type": "string"
+              },
+              "trust": {
+                "type": "string"
               }
             },
             "required": [

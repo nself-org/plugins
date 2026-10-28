@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
+	"github.com/nself-org/plugins/free/ci/internal/transport/agent"
 	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
@@ -144,6 +146,100 @@ func TestDispatchRemoteDelivery(t *testing.T) {
 	l, err := st.LeaseGet(context.Background(), a.LeaseID)
 	if err != nil || l.Epoch != a.Epoch || l.RunnerID != "node-a" {
 		t.Fatalf("stored lease: %+v %v", l, err)
+	}
+}
+
+// loopback is the node's carrier: it hands the lease the dispatcher delivered to the session once, then blocks.
+type loopback struct {
+	lease chan protocol.Message
+	done  chan struct{}
+}
+
+func (l *loopback) Send(protocol.Message) error { return nil }
+func (l *loopback) Recv() (protocol.Message, error) {
+	select {
+	case m := <-l.lease:
+		return m, nil
+	case <-l.done:
+		return protocol.Message{}, io.EOF
+	}
+}
+func (l *loopback) Close() error { close(l.done); return nil }
+
+// secretJob queues an attempt of a job that declares one project secret.
+func secretJob(t *testing.T, id string) dispatch.Job {
+	t.Helper()
+	j := dispatch.QueuedJob(id)
+	j.Model = model.Job{Kind: "test", Run: []string{"true"}, Secrets: []string{"project/API_TOKEN"}}
+	j.Sched.SecretClasses = []model.SecretClass{"project"}
+	return j
+}
+
+// TestDispatchLeaseCarriesGatedSecretRefs: the dispatcher puts the job's gated references and the class it was
+// placed at into the lease of a secrets-eligible node, and the node's resolver receives both (D-1373). The
+// coordinator side holds no value anywhere on the path.
+func TestDispatchLeaseCarriesGatedSecretRefs(t *testing.T) {
+	registerDrivers(t)
+	st := dispatch.OpenStore(t)
+	node := dispatch.SchedRunner("node-s", "lan", 2)
+	node.Capability.Identity.Transport = "fake-remote"
+	node.Capability.SecretsEligible = true
+	node.Decl.SecretClasses = []model.SecretClass{"project"}
+	d := newDispatcher(t, dispatch.Config{Store: st, World: dispatch.LiveWorld(st, node)})
+	id := dispatch.QueueAttempt(t, st, "pipe", "proj", "job")
+	a, err := d.Submit(context.Background(), secretJob(t, id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := wait(t, remote.got).lease
+	if len(got.Secrets) != 1 || got.Secrets[0].Ref != "project/API_TOKEN" || got.Secrets[0].Class != "project" || got.Trust != "owner" || got.LeaseID != a.LeaseID {
+		t.Fatalf("lease secrets = %+v trust %q", got.Secrets, got.Trust)
+	}
+	const canary = "canary-value-61c0"
+	var sawAttempt string
+	var sawTrust model.TrustClass
+	var sawRefs []string
+	car := &loopback{lease: make(chan protocol.Message, 1), done: make(chan struct{})}
+	node1 := agent.WithNodeSecrets(car, func(_ context.Context, attempt string, class model.TrustClass, refs []string) (map[string]string, error) {
+		sawAttempt, sawTrust, sawRefs = attempt, class, refs
+		return map[string]string{"API_TOKEN": canary}, nil
+	}, nil)
+	defer node1.Close()
+	ep := got.Epoch
+	car.lease <- protocol.Message{V: 1, Type: "lease", LeaseID: got.LeaseID, Epoch: &ep, Body: &got}
+	if m, err := node1.Recv(); err != nil || m.Type != "lease" {
+		t.Fatalf("first frame %v %v", m.Type, err)
+	}
+	m, err := node1.Recv()
+	if err != nil || m.Type != "secrets" {
+		t.Fatalf("second frame %v %v", m.Type, err)
+	}
+	if v := m.Body.(*protocol.Secrets).Values; len(v) != 1 || v[0].Ref != "project/API_TOKEN" || v[0].Value != canary {
+		t.Fatalf("values = %+v", v)
+	}
+	if sawAttempt != id || sawTrust != "owner" || len(sawRefs) != 1 || sawRefs[0] != "project/API_TOKEN" {
+		t.Fatalf("resolver saw attempt %q trust %q refs %v", sawAttempt, sawTrust, sawRefs)
+	}
+	blob, _ := json.Marshal(got)
+	if strings.Contains(string(blob), canary) {
+		t.Fatal("the delivered lease holds a secret value")
+	}
+}
+
+// TestDispatchLeaseWithoutSecretRefsForAnIneligibleNode: a node that is not secrets-eligible gets no references.
+func TestDispatchLeaseWithoutSecretRefsForAnIneligibleNode(t *testing.T) {
+	registerDrivers(t)
+	st := dispatch.OpenStore(t)
+	node := dispatch.SchedRunner("node-i", "lan", 2)
+	node.Capability.Identity.Transport = "fake-remote"
+	node.Decl.SecretClasses = []model.SecretClass{"project"}
+	d := newDispatcher(t, dispatch.Config{Store: st, World: dispatch.LiveWorld(st, node)})
+	id := dispatch.QueueAttempt(t, st, "pipe", "proj", "job")
+	if _, err := d.Submit(context.Background(), secretJob(t, id)); err != nil {
+		t.Fatal(err)
+	}
+	if got := wait(t, remote.got).lease; len(got.Secrets) != 0 || got.Trust != "" {
+		t.Fatalf("an ineligible node got secrets %+v trust %q", got.Secrets, got.Trust)
 	}
 }
 

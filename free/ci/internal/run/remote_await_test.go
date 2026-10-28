@@ -27,9 +27,11 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/planview"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
+	"github.com/nself-org/plugins/free/ci/internal/secrets"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/storetest"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
+	"github.com/nself-org/plugins/free/ci/internal/trust"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
@@ -409,28 +411,71 @@ func (p *probeDriver) Run(_ context.Context, _ model.Capability, l protocol.Leas
 	return nil
 }
 
-func TestSecretsNeverToForeignNode(t *testing.T) {
+// A lease carries secret references only to a secrets-eligible node, only for a job placed at a class the gate
+// accepts, and never a value (D-1373).
+func TestLeaseSecretRefsGoOnlyToAnEligibleNodeThatPassesTheGate(t *testing.T) {
 	probe := &probeDriver{kind: fmt.Sprintf("secretsprobe%d", time.Now().UnixNano())}
 	if err := transport.Register(probe); err != nil {
 		t.Fatal(err)
 	}
-	job := model.Job{Kind: "release", Run: []string{"true"}, Secrets: []string{"release/TOKEN", "project/KEY"}}
-	for name, ownership := range map[string]string{"foreign node": "third-party", "operator node": "operator"} {
+	node := func(ownership string, eligible bool) model.Capability {
 		var n model.Capability
 		n.Identity.ID, n.Identity.Transport = "x1", probe.kind
 		n.Identity.Ownership.Value = &ownership
-		n.SecretsEligible = ownership == "operator"
-		a := newTransportAdapter(nil, nil, "")
-		err := a.Deliver(context.Background(), deliveryFor(n, job))
-		if err != nil {
-			t.Fatal(err)
-		}
-		probe.mu.Lock()
-		got := probe.lease
-		probe.mu.Unlock()
-		if len(got.Secrets) != 0 {
-			t.Errorf("%s: the lease carries secret refs %v; a foreground run sends no secret value to any node", name, got.Secrets)
-		}
+		n.SecretsEligible = eligible
+		return n
+	}
+	project := model.Job{Kind: "test", Run: []string{"true"}, Secrets: []string{"project/KEY"}}
+	release := model.Job{Kind: "release", Run: []string{"true"}, Secrets: []string{"release/TOKEN", "project/KEY"}}
+	dedicated := trust.RunnerFacts{Ownership: "operator", Dedicated: true, UIDSeparation: true, Isolation: "vm"}
+	for _, c := range []struct {
+		name     string
+		node     model.Capability
+		job      model.Job
+		trust    model.TrustClass
+		runner   trust.RunnerFacts
+		wantRefs int
+		wantErr  string
+	}{
+		{"foreign node, not eligible", node("third-party", false), release, "owner", dedicated, 0, ""},
+		{"operator node, not eligible", node("operator", false), project, "owner", dedicated, 0, ""},
+		{"no secrets declared", node("operator", true), model.Job{Kind: "test", Run: []string{"true"}}, "owner", dedicated, 0, ""},
+		{"eligible node, project secret", node("operator", true), project, "owner", trust.RunnerFacts{Ownership: "operator", UIDSeparation: true}, 1, ""},
+		{"eligible dedicated node, release secret", node("operator", true), release, "owner", dedicated, 2, ""},
+		{"release secret on a node that is not dedicated", node("operator", true), release, "owner", trust.RunnerFacts{Ownership: "operator", UIDSeparation: true, Isolation: "process"}, 0, "E677"},
+		{"untrusted source", node("operator", true), project, "untrusted", dedicated, 0, "E677"},
+		{"no trust class", node("operator", true), project, "", dedicated, 0, "E677"},
+		{"hosted runner", node("operator", true), project, "owner", trust.RunnerFacts{Hosted: true}, 0, "E677"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			d := deliveryFor(c.node, c.job)
+			d.Trust, d.Runner = c.trust, c.runner
+			err := newTransportAdapter(nil, nil, "").Deliver(context.Background(), d)
+			if c.wantErr != "" {
+				var se *secrets.Error
+				if !errors.As(err, &se) || se.Code != c.wantErr {
+					t.Fatalf("Deliver = %v, want %s", err, c.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			probe.mu.Lock()
+			got := probe.lease
+			probe.mu.Unlock()
+			if len(got.Secrets) != c.wantRefs {
+				t.Fatalf("the lease carries %d refs %v, want %d", len(got.Secrets), got.Secrets, c.wantRefs)
+			}
+			if (c.wantRefs > 0) != (got.Trust != "") || c.wantRefs > 0 && got.Trust != c.trust {
+				t.Fatalf("lease trust = %q with %d refs", got.Trust, c.wantRefs)
+			}
+			for _, r := range got.Secrets {
+				if r.Class == "" || strings.Contains(r.Ref, "=") {
+					t.Fatalf("ref %+v is not a bare reference", r)
+				}
+			}
+		})
 	}
 }
 

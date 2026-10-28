@@ -28,18 +28,7 @@ func requiredIsolation(q Queued, r sched.Runner, pol sched.Policy) model.Isolati
 		return ""
 	}
 	j := q.Job.Sched
-	d := r.Decl
-	if len(d.Accepts) == 0 {
-		d = sched.DeclarationFromCapability(r.Capability, r.CoordinatorHost, r.CoordinatorMode)
-	}
-	d.CoordinatorHost, d.CoordinatorMode = r.CoordinatorHost, r.CoordinatorMode // as sched eligibility sets them
-
-	if d.PersonalOwnNode { // the same dedicated trusted case sched.Place derives (R-DX-12)
-		d.PersonalOwnRun = d.PersonalOwnRun || j.PersonalOwnRun
-		for _, c := range j.SecretClasses {
-			d.ReleaseJob = d.ReleaseJob || c == "release"
-		}
-	}
+	d := declarationFor(j, r)
 	facts := trust.JobFacts{Trust: j.Trust, SecretClasses: j.SecretClasses, Network: j.Network, PersonalOwnRun: j.PersonalOwnRun, Release: j.Pipeline.Release}
 	floor := trust.MinIsolation(facts, trust.RunnerFacts{Ownership: d.Ownership, Dedicated: trust.IsDedicatedTrusted(d), UIDSeparation: d.UIDSeparation,
 		PersonalOwnNode: d.PersonalOwnNode, NoLANRoute: d.NoLANRoute})
@@ -60,6 +49,30 @@ func requiredIsolation(q Queued, r sched.Runner, pol sched.Policy) model.Isolati
 		floor = "ephemeral-vm"
 	}
 	return floor
+}
+
+// declarationFor is the declaration placement judged runner r by for job j: the runner's own, else the one its
+// capability states, with the coordinator facts and the dedicated trusted case (R-DX-12) as sched.Place derives them.
+func declarationFor(j sched.Job, r sched.Runner) trust.Declaration {
+	d := r.Decl
+	if len(d.Accepts) == 0 {
+		d = sched.DeclarationFromCapability(r.Capability, r.CoordinatorHost, r.CoordinatorMode)
+	}
+	d.CoordinatorHost, d.CoordinatorMode = r.CoordinatorHost, r.CoordinatorMode // as sched eligibility sets them
+	if d.PersonalOwnNode {
+		d.PersonalOwnRun = d.PersonalOwnRun || j.PersonalOwnRun
+		for _, c := range j.SecretClasses {
+			d.ReleaseJob = d.ReleaseJob || c == "release"
+		}
+	}
+	return d
+}
+
+// runnerFacts is what the secret gate knows of the runner a lease goes to.
+func runnerFacts(j sched.Job, r sched.Runner) trust.RunnerFacts {
+	d := declarationFor(j, r)
+	return trust.RunnerFacts{Ownership: d.Ownership, Dedicated: trust.IsDedicatedTrusted(d), Hosted: sched.RunnerHosted(r), UIDSeparation: d.UIDSeparation,
+		PersonalOwnNode: d.PersonalOwnNode, NoLANRoute: d.NoLANRoute, Isolation: d.Isolation}
 }
 
 // policyIsolation reads the effective trust.isolation_min, as trust.Admissible does.

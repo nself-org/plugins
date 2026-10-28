@@ -17,6 +17,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/secrets"
 )
@@ -29,7 +30,9 @@ type Frames interface {
 }
 
 // SecretResolver resolves the references of one attempt to values, on this node.
-type SecretResolver func(ctx context.Context, attemptID string, refs []string) (map[string]string, error)
+// trustClass is the class the coordinator admitted the job at (Lease.Trust), for the node's own eligibility check;
+// it is empty when the lease names none, which a resolver must treat as untrusted.
+type SecretResolver func(ctx context.Context, attemptID string, trustClass model.TrustClass, refs []string) (map[string]string, error)
 
 type nodeSecrets struct {
 	inner   Frames
@@ -119,7 +122,7 @@ func (n *nodeSecrets) start(l protocol.Lease) {
 			n.logf("pull: lease %s declares secrets and this node has no resolver", l.LeaseID)
 			return
 		}
-		vals, err := n.resolve(n.ctx, l.AttemptID, refs)
+		vals, err := n.resolve(n.ctx, l.AttemptID, l.Trust, refs)
 		if err != nil {
 			n.logf("pull: secrets of lease %s could not be resolved on this node: %s", l.LeaseID, codeOf(err))
 			return

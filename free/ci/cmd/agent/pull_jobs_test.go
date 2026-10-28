@@ -181,7 +181,7 @@ func TestPullResolvesSecretsOnTheNodeAndTheCoordinatorNeverSeesThem(t *testing.T
 	const canary = "canary-secret-value-9f3a77"
 	old := pullResolver
 	pullResolver = func(string, pullFlags, string, string) agent.SecretResolver {
-		return func(_ context.Context, _ string, refs []string) (map[string]string, error) {
+		return func(_ context.Context, _ string, _ model.TrustClass, refs []string) (map[string]string, error) {
 			if len(refs) != 1 || refs[0] != "project/API_TOKEN" {
 				t.Errorf("refs = %v", refs)
 			}

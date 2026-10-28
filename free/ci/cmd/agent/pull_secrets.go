@@ -6,7 +6,8 @@ package main
 // Outputs: a agent.SecretResolver; values live only in the returned map and the session masks them first.
 // Constraints: a node that was not marked --secrets-eligible, has no --project or no age identity resolves
 //          nothing (the session then skips the job as secrets_missing); release and deploy classes need
-//          --dedicated; the error text carries codes and refs, never a value.
+//          --dedicated; the job's trust class is the one the lease carries (an absent or unknown class is
+//          untrusted, so nothing resolves); the error text carries codes and refs, never a value.
 
 import (
 	"context"
@@ -25,7 +26,7 @@ type noRegistry struct{}
 func (noRegistry) Register([]byte) error { return nil }
 
 func nodeResolver(state string, f pullFlags, nodeID, agePath string) agent.SecretResolver {
-	return func(ctx context.Context, attemptID string, refs []string) (map[string]string, error) {
+	return func(ctx context.Context, attemptID string, class model.TrustClass, refs []string) (map[string]string, error) {
 		if f.project == "" || !f.secretsOK {
 			return nil, errors.New("this node was not started with --project and --secrets-eligible")
 		}
@@ -34,7 +35,7 @@ func nodeResolver(state string, f pullFlags, nodeID, agePath string) agent.Secre
 			Resolver: &secrets.Resolver{Runner: &secrets.ExecRunner{Home: state, CoordinatorID: f.coordinator, Attempt: attemptID}, Project: f.project, AgeKeyPath: agePath},
 			Registry: noRegistry{}, RedactorInstalled: func() bool { return true },
 			Facts: secrets.Facts{
-				Job:    trust.JobFacts{Trust: model.TrustClass("internal")}, // the coordinator gated the refs against the job's real trust class
+				Job:    trust.JobFacts{Trust: trust.DecodeTrust(string(class))}, // the class the coordinator admitted the job at; none or unknown is untrusted
 				Runner: trust.RunnerFacts{Dedicated: f.dedicated, Isolation: model.Isolation("process")},
 			},
 			NodeID: nodeID, NodeEligible: f.secretsOK, AgeKeyPath: agePath,
