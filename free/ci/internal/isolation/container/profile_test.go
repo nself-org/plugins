@@ -207,3 +207,30 @@ func TestProfileLevelAndRegistry(t *testing.T) {
 		t.Fatalf("%v %v", names, err)
 	}
 }
+
+// A cancelled query must not poison the cache for the next job.
+type contextRunner struct{ fakeRunner }
+
+func (r *contextRunner) Query(ctx context.Context, binary string, args ...string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return r.fakeRunner.Query(ctx, binary, args...)
+}
+
+func TestCancelledProbeDoesNotCacheFailure(t *testing.T) {
+	r := &contextRunner{fakeRunner{info: map[string]string{"docker": dockerRootful}}}
+	p := New(Options{Runner: r})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if av := p.Probe(ctx); av.Available() {
+		t.Fatal("cancelled probe succeeded")
+	}
+	if av := p.Probe(context.Background()); !av.Available() {
+		t.Fatalf("cancelled probe poisoned cache: %+v", av)
+	}
+	p.Probe(context.Background())
+	if r.calls != 1 {
+		t.Fatalf("successful probe was not cached: %d calls", r.calls)
+	}
+}

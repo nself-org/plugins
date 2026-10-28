@@ -79,6 +79,9 @@ func (s *Sink) Write(p []byte) (int, error) {
 	}
 	for len(s.partial) >= s.w.opt.MaxLine {
 		n := cutRune(s.partial, s.w.opt.MaxLine)
+		if n == 0 {
+			break // wait for the rest of an incomplete rune
+		}
 		s.addText(s.partial[:n], now)
 		s.partial = append(s.partial[:0], s.partial[n:]...)
 	}
@@ -109,6 +112,19 @@ func trimCR(b []byte) []byte {
 
 // cutRune returns n, moved back so the cut does not split a rune.
 func cutRune(b []byte, n int) int {
+	// At the end of a chunk, the last rune may still be incomplete.
+	if n == 0 {
+		return 0
+	}
+	if n == len(b) {
+		start := n - 1
+		for start > 0 && !utf8.RuneStart(b[start]) {
+			start--
+		}
+		if !utf8.FullRune(b[start:]) {
+			return start
+		}
+	}
 	for n > 0 && n < len(b) && !utf8.RuneStart(b[n]) {
 		n--
 	}
