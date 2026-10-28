@@ -73,6 +73,7 @@ Ported from core `nself runner provision|verify` (P7-CANON-10) with the same fla
 | `nself-ci nodes provision --github-url U [--host user@host] [--instances N] [--install-root D] [--labels a,b] [--ssh-key K] [--token T]` | Install the dependencies, create the runner user with passwordless sudo, ensure a real `_work` directory and register N runner instances as systemd services. Every step is idempotent. No `--host` provisions this machine. |
 
 - The registration token comes from `--token` or the `GITHUB_RUNNER_TOKEN` environment variable, never from a project `.env`, and is never printed.
+- On a remote host the token travels on the script's stdin, so it is absent from argv, `ps` and the plain sudo log file. If the host's sudoers sets `Defaults log_input` (or a `LOG_INPUT:` tag), sudo records the piped token in its I/O log; leave `log_input` off for the runner user on provisioned hosts.
 - `provision` takes at most one `--host` per run, and refuses a `_work` that is a symlink.
 - Every ssh call goes through the vendored cli `sdk/go/remote` (one exec funnel, destination allowlist, `--` before the destination). A test (`TestSingleSSHExecSite`) fails if free/ci gains a second ssh or scp exec site.
 - Exit status follows core: 1 for a refusal or a failed step, or the status of the failed ssh or remote command (255 for a connection error).
