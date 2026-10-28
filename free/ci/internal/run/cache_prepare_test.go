@@ -3,8 +3,9 @@ package run
 import (
 	"context"
 	"errors"
-	"github.com/nself-org/plugins/free/ci/internal/model"
 	"testing"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 func TestPrepareFailureClosesCache(t *testing.T) {
