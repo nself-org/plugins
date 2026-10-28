@@ -9,7 +9,8 @@ import (
 
 // Abstract Unix sockets are kernel-owned host leases shared by all OS users.
 // They have no unlinkable filesystem entry and disappear when the holder dies.
-const hostSlotDir = "@nself-ci/host-slots/v1"
+// A package var so tests can lease from a private namespace instead of the real one.
+var hostSlotDir = "@nself-ci/host-slots/v1"
 
 func hostSlots() string { return hostSlotDir }
 

@@ -72,3 +72,16 @@ func TestSlotLockFailureFailsClosed(t *testing.T) {
 	}
 	p.put(-1) // must not panic
 }
+
+// releaseAll gives back every slot the pool still holds, as a test's cleanup.
+func releaseAll(p *slotPool) {
+	p.mu.Lock()
+	var held []int
+	for n := range p.held {
+		held = append(held, n)
+	}
+	p.mu.Unlock()
+	for _, n := range held {
+		p.put(n)
+	}
+}

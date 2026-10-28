@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/artifacts/records"
+	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/release/manifest"
 	"github.com/nself-org/plugins/free/ci/internal/signing"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -384,6 +385,48 @@ func TestStatementPredicateBuilderJobAndByproduct(t *testing.T) {
 	} {
 		if err := handle(t, f, item(signing.PayloadStatement, stmt(tweak))); !signing.IsReason(err, signing.ReasonPayloadRejected) {
 			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+// The builder id names the coordinator recorded on the release attempt (recorded as "local" when empty), either
+// raw or as its per-repository public pseudonym, and no other coordinator's.
+func TestStatementBuilderIsBoundToTheAttemptsCoordinator(t *testing.T) {
+	const prefix = "https://nself.org/ci/builder/v1#"
+	pseudo := func(repo, coord string) string {
+		return attest.ProfileFor(attest.RepoFacts{RepoID: repo}).CoordinatorID(coord)
+	}
+	str := func(s string) *string { return &s }
+	for _, tc := range []struct {
+		name    string
+		coord   *string // nil: the fixture's coordinator-1
+		builder string
+		ok      bool
+	}{
+		{"pseudonym of the attempt's coordinator", nil, pseudo("repo-1", "coordinator-1") + "/runner-1", true},
+		{"raw coordinator", nil, "coordinator-1/runner-1", true},
+		{"pseudonym of another coordinator", nil, pseudo("repo-1", "coordinator-2") + "/runner-1", false},
+		{"pseudonym of the coordinator in another repository", nil, pseudo("repo-2", "coordinator-1") + "/runner-1", false},
+		{"pseudonym without a runner", nil, pseudo("repo-1", "coordinator-1"), false},
+		{"pseudonym with a nested runner", nil, pseudo("repo-1", "coordinator-1") + "/a/b", false},
+		{"recorded coordinator, raw", str("coordinator-2"), "coordinator-2/runner-1", true},
+		{"recorded coordinator, pseudonym", str("coordinator-2"), pseudo("repo-1", "coordinator-2") + "/runner-1", true},
+		{"recorded coordinator, but the builder is coordinator-1", str("coordinator-2"), "coordinator-1/runner-1", false},
+		{"recorded coordinator, but the builder pseudonym is coordinator-1's", str("coordinator-2"), pseudo("repo-1", "coordinator-1") + "/runner-1", false},
+		{"nothing recorded means local, raw", str(""), "local/runner-1", true},
+		{"nothing recorded means local, pseudonym", str(""), pseudo("repo-1", "local") + "/runner-1", true},
+		{"nothing recorded, but the builder is coordinator-1", str(""), "coordinator-1/runner-1", false},
+	} {
+		f := newFixture(t)
+		f.src.coord = tc.coord
+		stmt := f.statementPayload(func(m map[string]any) {
+			m["predicate"] = f.predicate(func(p map[string]any) {
+				p["runDetails"].(map[string]any)["builder"] = map[string]any{"id": prefix + tc.builder}
+			})
+		})
+		err := handle(t, f, item(signing.PayloadStatement, stmt))
+		if tc.ok && err != nil || !tc.ok && !signing.IsReason(err, signing.ReasonPayloadRejected) {
+			t.Errorf("%s: ok=%v, got %v", tc.name, tc.ok, err)
 		}
 	}
 }
