@@ -215,7 +215,7 @@ func TestServeAdminAuditSeal(t *testing.T) {
 }
 
 func TestServeAdminGroupRegistered(t *testing.T) {
-	for _, k := range []string{"serve admin", "serve admin roles", "serve admin token", "serve admin audit"} {
+	for _, k := range []string{"serve admin", "serve admin roles", "serve admin token", "serve admin cert", "serve admin audit"} {
 		e, ok := v15Subcommands[k]
 		if !ok || !e.V15Only || e.Flags == nil {
 			t.Errorf("%q must be a V15-only command", k)

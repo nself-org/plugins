@@ -321,16 +321,16 @@ CI work stays off the machines that run production, and off a coordinator host t
 | Where the job would run | Rule | Reason when refused |
 |---|---|---|
 | A node whose host is in a project's deploy inventory | Takes no CI work at all | `boundary.deploy_host` |
-| The same node, added with `nself ci nodes add --allow-deploy-host` | Takes only `owner` or `internal` jobs, at isolation `vm` or stronger, with no `release` or `deploy` secret class | `boundary.override_minimum` |
+| The same node, added with `nself ci nodes add --allow-deploy-host` | Takes only `owner` or `internal` jobs, at isolation `vm` or stronger, with no release jobs and no `release` or `deploy` secret class | `boundary.override_minimum` |
 | The host of a TEAM coordinator | Needs isolation `vm` or stronger for every job | `boundary.coordinator_host` |
 | The host of a PERSONAL coordinator | Needs isolation `vm` or stronger for `collaborator` and `untrusted` jobs; the operator's own `owner` and `internal` jobs keep their normal minimums | `boundary.coordinator_host` |
 
 Details:
 
 - The override needs an interactive terminal and the node id typed back. Each placement on an overridden deploy host writes a `placement.deploy_host_override` audit row, and the job itself is raised to `vm` there, not only the node's declared level.
-- The deploy-host rule checks the job's secret classes, not the job kind. A release-kind job that asks for no `release` or `deploy` secret is not refused by this rule (D-1251).
+- The deploy-host override refuses release jobs even when they request no secrets (for example, SBOM generation), as well as jobs requesting `release` or `deploy` secrets. A release job must run on a node outside the deploy inventory.
 - Matching is done from the deploy inventory on the coordinator, never from what a node says about itself.
-- `E689` fix: run the job on a node that is not a deploy host, or on one you overrode with owner or internal work at `vm` or stronger and no release or deploy secrets. On a coordinator host, run collaborator and untrusted work elsewhere, or move the coordinator to a VM.
+- `E689` fix: run the job on a node that is not a deploy host, or on one you overrode with owner or internal work at `vm` or stronger and no release jobs or release or deploy secrets. On a coordinator host, run collaborator and untrusted work elsewhere, or move the coordinator to a VM.
 
 ## Roles, tokens and the audit log
 
@@ -358,15 +358,41 @@ nself ci serve admin roles list [--json]
 nself ci serve admin token issue <principal> --role member --project '*' [--ttl 48h] [--self] [--json]
 nself ci serve admin token revoke <id>
 nself ci serve admin token list [--json]
+nself ci serve admin cert issue <principal> [--self] [--ttl 168h] [--json]
 nself ci serve admin audit [--since 24h] [--verify] [--json]
 nself ci serve admin audit seal
 ```
 
 Every grant, token and user certificate records a `subject`: `self` when it was issued with `--self` to the data directory's own operator identity, otherwise the named principal. `self` is reserved: a principal cannot be named `self`, so a remote identity cannot hide among the operator's own. `roles.NonSelfPrincipals` counts the live grants, tokens and user certificates whose subject is not `self` (a certificate nobody marked counts as non-self); the node-mode check reads it.
 
+### Issuing user certificates
+
+On the coordinator host, `NSELF_V15=1 nself ci serve admin cert issue <principal>` issues a user mTLS certificate and prints the certificate chain, private key and root as PEM once. Redirect stdout to a private file (for example, set `umask 077` first); `--json` returns these as `cert_pem`, `key_pem` and `root_pem`. The private key is never stored by the coordinator. The TTL defaults to seven days and must be between one minute and seven days.
+
+Issuance requires admin access and does not grant a role: grant the principal its role separately. Each successful issuance records a certificate subject and a `cert.issue` audit event before returning the credentials. `--self` is accepted only for the operator's own principal and records subject `self`; otherwise the named principal counts toward TEAM mode, including when issuing to yourself without `--self`. Use the coordinator's `NSELF_CI_HOME` for both the store and its CA keys. If subject recording or audit fails, no credential is returned; a certificate already recorded before that failure can remain counted conservatively as non-self.
+
 ### The audit log
 
 There is one audit table. The `trust-audit` set chains it: each sealed row's `head` is the sha256 of the previous head and the canonical row (seq, time, actor, action, target, detail). `Append` inserts a row and seals every pending row in one `BEGIN IMMEDIATE` transaction, so concurrent writers, even in a second process, lose no row. Rows other packages write through the core audit API (every node mutation) are sealed by the next `Append`, by `audit seal`, or by a sealer the TEAM coordinator runs every 60 s. `audit --verify` only reads, inside one snapshot: it prints `unsealed: <n>` and exits 1 when rows are still unsealed after 60 s, when a sealed row no longer matches its hash (the row is named), when the chain link is broken, when a seq number is missing (rows are never deleted, so a gap or an AUTOINCREMENT counter above the last row means rows were removed, including the newest ones), or when an unsealed row sits below a sealed one (a cleared head). `audit seal` refuses to re-chain such a row (E609), so the damage stays visible. An `Append` or a mutation still records its row, left unsealed, so a revocation is never blocked by tampering; `--verify` keeps failing until the log is restored from backup (there is no accept-the-break command yet). An event whose actor, action, target or detail contains a registered secret value, in any encoding the redactor knows, is refused (`E687`, reason `audit_secret`) and nothing is written. P7-TRUST-26 policy writes call `audit.AppendTx` to put their row in the policy write's own transaction.
+
+### Recovering a damaged audit chain
+
+For E609 or a failed `audit --verify`, restore a known-good coordinator backup; there is no command to accept a break. Do not clear heads, delete rows or recompute the chain in SQL: that destroys evidence of the break.
+
+1. Stop the coordinator and keep it stopped through recovery. Preserve a private copy of the entire damaged data directory, including `state.db`, its `-wal` and `-shm` files if present, and any off-host signed checkpoints. Keep this evidence separate from the restore destination.
+2. Select a backup from before the first bad sequence reported by verification and the matching separately stored KEK. Restore on the coordinator host:
+
+   ```sh
+   NSELF_V15=1 nself ci serve restore --data-dir "$NSELF_CI_HOME" --in /secure/known-good.backup --kek /secure/original.kek
+   NSELF_V15=1 nself ci serve admin audit seal
+   NSELF_V15=1 nself ci serve admin audit --verify
+   ```
+
+   Set `NSELF_CI_HOME` to the restored directory for all three commands. Restore validates the archive MAC before replacing state and saves the prior database as `state.db.pre-restore-<timestamp>`; it also prints a rollback command. Seal completes pending rows from the backup before verification. If verification still fails, keep the coordinator stopped and investigate an earlier backup.
+3. Compare the restored chain against an off-host checkpoint from within the backup's history when available (`audit checkpoint verify --pubkey <pinned-fingerprint> <checkpoint>`). A checkpoint newer than the backup cannot verify that older snapshot.
+4. Review the recovery output before restarting. Restore rotates job-token keys, advances the incarnation and applies restart grace to leases. It preserves current revocations and deny-list entries, but other writes after the backup, including audit events, are absent from the restored history; retain the damaged copy for investigation. A restore into an empty directory marks nodes `needs-reconfirm`. Re-enable only nodes you have checked.
+
+Without a known-good backup and its KEK, this procedure cannot recover the chain. Preserve the damaged directory for investigation; normal writes and revocations can still be recorded unsealed, but verification remains failed.
 
 What the chain does not give you: it detects an edit that was not recomputed. Someone who can write the database and recompute every later row defeats it; the TEAM checkpoint detects that (see Signed evidence, revocation and the audit checkpoint). A PERSONAL coordinator has neither a checkpoint nor a second writer to guard against, so the chain there is a tidy record, not evidence. Someone who can write the database can also clear heads and let the next `Append` re-chain them; that counts as a database writer too. (Removing the newest rows is caught by the seq check above, but only until the counter itself is edited.)
 

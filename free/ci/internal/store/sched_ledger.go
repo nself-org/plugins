@@ -97,7 +97,10 @@ func (t LedgerTx) PutLedger(r LedgerRow) error {
  WHERE ledger.finalized_at IS NULL`,
 		r.Attempt, r.Pipeline, r.Project, r.Provider, r.Class, r.Remote, r.EstMs, r.EstMicro, r.Confidence, r.BudgetRefs, r.WindowDay,
 		r.Rate.RateMicro, r.Rate.RateUnitMs, r.Rate.IncMs, r.Rate.MinMicro, r.Rate.ExtrasMicro, r.AdmittedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	return t.pruneLedger()
 }
 
 // PipelineHeld is the money the ledger holds for a pipeline's metered and

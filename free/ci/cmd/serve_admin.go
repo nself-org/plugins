@@ -153,6 +153,7 @@ const serveAdminHelp = `nself ci serve admin <group> ...  (coordinator host; rol
   token issue <principal> --role member|release|admin --project <id>... [--ttl 720h] [--self] [--json]
   token revoke <id> [--json]
   token list [--json]
+  cert issue <principal> [--ttl 168h] [--self] [--json]
   audit [--since <rfc3339|duration>] [--verify] [--json]
   audit seal [--json]
 `

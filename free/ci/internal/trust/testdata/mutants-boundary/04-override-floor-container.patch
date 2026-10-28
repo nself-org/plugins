@@ -4,8 +4,8 @@
  	if d.DeployHost.Matched {
  		if !d.DeployHost.Override {
  			out = append(out, BoundaryDeployHost)
--		} else if !ownTrust(job.Trust) || belowFloor(d.Isolation) || releaseSecret(job.SecretClasses) {
-+		} else if !ownTrust(job.Trust) || RankIsolation(d.Isolation) < RankIsolation("container") || releaseSecret(job.SecretClasses) {
+-		} else if !ownTrust(job.Trust) || belowFloor(d.Isolation) || job.Release || releaseSecret(job.SecretClasses) {
++		} else if !ownTrust(job.Trust) || RankIsolation(d.Isolation) < RankIsolation("container") || job.Release || releaseSecret(job.SecretClasses) {
  			out = append(out, BoundaryOverrideMinimum)
  		}
  	}

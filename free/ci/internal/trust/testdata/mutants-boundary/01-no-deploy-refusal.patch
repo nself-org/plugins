@@ -6,6 +6,7 @@
  		if !d.DeployHost.Override {
 -			out = append(out, BoundaryDeployHost)
 +			out = append(out)
- 		} else if !ownTrust(job.Trust) || belowFloor(d.Isolation) || releaseSecret(job.SecretClasses) {
+-		} else if !ownTrust(job.Trust) || belowFloor(d.Isolation) || job.Release || releaseSecret(job.SecretClasses) {
++		} else if !ownTrust(job.Trust) || belowFloor(d.Isolation) || job.Release || releaseSecret(job.SecretClasses) {
  			out = append(out, BoundaryOverrideMinimum)
  		}

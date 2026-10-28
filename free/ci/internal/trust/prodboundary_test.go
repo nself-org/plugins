@@ -290,3 +290,27 @@ func TestProdBoundary_ReasonsSurfaceE689(t *testing.T) {
 		t.Errorf("isolation.below_minimum: code %q, want none", got)
 	}
 }
+
+// A release job can have no release secret (for example the SBOM runner).
+func TestProdBoundary_SecretlessRelease(t *testing.T) {
+	for _, tc := range []struct {
+		name                                string
+		matched, override, release, refused bool
+	}{
+		{"overridden release", true, true, true, true},
+		{"overridden ordinary", true, true, false, false},
+		{"ordinary node release", false, false, true, false},
+		{"unmatched override release", false, true, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := pbDecl("vm")
+			d.DeployHost = trust.DeployHost{Matched: tc.matched, Override: tc.override}
+			j := pbJob("owner")
+			j.Release = tc.release
+			got := includes(trust.Admissible(j, d, trust.Effective{}), trust.BoundaryOverrideMinimum)
+			if got != tc.refused {
+				t.Fatalf("refused=%v want %v", got, tc.refused)
+			}
+		})
+	}
+}
