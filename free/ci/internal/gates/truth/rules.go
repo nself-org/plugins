@@ -73,21 +73,23 @@ type Allow struct {
 }
 
 type ruleFile struct {
-	Version int      `yaml:"version"`
-	Include []string `yaml:"include,omitempty"`
-	Skip    []string `yaml:"skip,omitempty"`
-	Rules   []Rule   `yaml:"rules"`
-	Allow   []Allow  `yaml:"allow,omitempty"`
+	GeneratedRegions map[string]string `yaml:"generated_regions,omitempty"`
+	Version          int               `yaml:"version"`
+	Include          []string          `yaml:"include,omitempty"`
+	Skip             []string          `yaml:"skip,omitempty"`
+	Rules            []Rule            `yaml:"rules"`
+	Allow            []Allow           `yaml:"allow,omitempty"`
 
 	Overrides map[string]Override `yaml:"overrides,omitempty"` // per-rule extra exemptions for rules this file includes
 }
 
 // RuleSet is every rule file merged.
 type RuleSet struct {
-	Rules []Rule
-	Allow []Allow
-	Skip  []string
-	Files []string // repo-relative rule files read, in order
+	GeneratedRegions map[string]string
+	Rules            []Rule
+	Allow            []Allow
+	Skip             []string
+	Files            []string // repo-relative rule files read, in order
 
 	overrides []fileOverride
 	reach     map[string]map[string]bool // rule file -> itself and every file it includes, transitively
@@ -158,6 +160,15 @@ func (rs *RuleSet) load(root, rel string, depth int, stack []string, seen map[st
 	rs.Files = append(rs.Files, clean)
 	if f.Version != 1 {
 		return failf(clean, "version", "must be 1, not %d", f.Version)
+	}
+	for id, reason := range f.GeneratedRegions {
+		if !regexp.MustCompile(`^[A-Za-z0-9._:-]+$`).MatchString(id) || len(strings.TrimSpace(reason)) < 8 {
+			return failf(clean, "generated_regions", "each region needs a valid id and a reason of at least eight characters")
+		}
+		if rs.GeneratedRegions == nil {
+			rs.GeneratedRegions = map[string]string{}
+		}
+		rs.GeneratedRegions[id] = reason
 	}
 	for i := range f.Rules {
 		r := f.Rules[i]

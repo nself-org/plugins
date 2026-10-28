@@ -4,14 +4,16 @@ package truth
 // Inputs:  a root directory and a RuleSet.
 // Outputs: Findings (rule, path, line) with allowlisted hits counted apart.
 // Constraints: only regular files are read (symlinks are not followed); `.git`,
-// `node_modules` and `.claude/worktrees` are never entered; files over 4 MiB or
-// holding a NUL byte in the first 8 KiB are skipped as binary and counted;
+// `node_modules` and `.claude/worktrees` are never entered; files over 4 MiB, holding a NUL byte in the first 8 KiB or
+// starting with a UTF-16 mark are skipped as binary and counted, but still read (up to
+// 64 MiB) for dead hosts;
 // the rule files themselves are never scanned (a retired term in a rule file is
 // the rule); a finding carries no matched text for a dead host; no network.
 
 import (
 	"bytes"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -20,7 +22,11 @@ import (
 	"strings"
 )
 
-const maxFileBytes = 4 << 20
+const (
+	maxFileBytes = 4 << 20
+	// maxHostScanBytes bounds the dead-host read of a file the other kinds skip.
+	maxHostScanBytes = 16 << 20
+)
 
 var errNoFiles = errors.New("no text file was read (an empty tree, or every file skipped)")
 
@@ -85,7 +91,7 @@ func Scan(root string, rs RuleSet, selfFiles []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if res.Files == 0 {
+	if res.Files == 0 && len(res.Findings) == 0 {
 		return Result{}, errNoFiles
 	}
 	sort.SliceStable(res.Findings, func(i, j int) bool {
@@ -106,24 +112,41 @@ func scanFile(p, rel string, rs RuleSet, c compiled, facts map[string]string, re
 	if err != nil {
 		return err
 	}
-	if info.Size() > maxFileBytes {
+	if info.Size() > maxHostScanBytes {
 		res.Skipped++
+		skippedFinding(rel, c, res)
 		return nil
 	}
-	raw, err := os.ReadFile(p)
+	f, err := os.Open(p)
 	if err != nil {
 		return err
 	}
-	if bytes.IndexByte(raw[:min(len(raw), 8192)], 0) >= 0 {
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, maxHostScanBytes+1))
+	if err != nil {
+		return err
+	}
+	if len(raw) > maxHostScanBytes {
 		res.Skipped++
+		skippedFinding(rel, c, res)
+		return nil
+	}
+	if len(raw) > maxFileBytes || bytes.IndexByte(raw, 0) >= 0 || isUTF16(raw) {
+		// Skipped for every kind but dead-host: a hash token needs no decoding.
+		res.Skipped++
+		scanSkippedHosts(rel, raw, rs, c, facts, res)
+		if len(c.forFile(rel).claims) > 0 {
+			skippedFinding(rel, c, res)
+		}
 		return nil
 	}
 	res.Files++
-	parts := bytes.Split(raw, []byte{'\n'})
-	lines := make([]string, len(parts))
-	for i, b := range parts {
-		lines[i] = strings.TrimSuffix(string(b), "\r")
-	}
+	scanLines(rel, splitLines(raw), rs, c, facts, res)
+	return nil
+}
+
+// scanLines applies the compiled rules to the lines of one file.
+func scanLines(rel string, lines []string, rs RuleSet, c compiled, facts map[string]string, res *Result) {
 	shownPath := rel
 	if len(c.hostHits(rel)) > 0 {
 		shownPath = redacted // a file name can carry a dead host too
@@ -131,11 +154,37 @@ func scanFile(p, rel string, rs RuleSet, c compiled, facts map[string]string, re
 	c = c.forFile(rel)
 	var mask *fileMask
 	if owner := c.regionOwner(); owner != nil {
-		m := analyze(rel, lines)
+		m := analyze(rel, lines, rs.GeneratedRegions)
 		mask = &m
 		for _, n := range m.NoReason {
 			res.Findings = append(res.Findings, Finding{RuleID: exemptNoReason, Kind: owner.Kind, Path: shownPath, Line: n,
 				Message: "a `truth: exempt` comment must give a reason: <!-- truth: exempt <reason> -->", Match: "truth: exempt"})
+		}
+	}
+	for n := 0; n+1 < len(lines); n++ {
+		boundary := len(lines[n])
+		joined := lines[n] + "\n" + lines[n+1]
+		for _, r := range c.claims {
+			for _, h := range patternHits(r, joined) {
+				if h.Start >= boundary || h.End <= boundary+1 {
+					continue
+				}
+				if allowed(rs.Allow, r.ID, rel) {
+					res.Allowed++
+					continue
+				}
+				if mask != nil && r.usesRegions() && (mask.exempt(n, h.Start, boundary) || mask.exempt(n+1, 0, h.End-boundary-1)) {
+					continue
+				}
+				if r.Kind == KindVersionClaim && versionOK(r, h.Text, facts) {
+					continue
+				}
+				match := h.Text
+				if len(c.hostHits(match)) > 0 {
+					match = redacted
+				}
+				res.Findings = append(res.Findings, Finding{RuleID: r.ID, Kind: r.Kind, Path: shownPath, Line: n + 1, Message: r.Message, Match: match})
+			}
 		}
 	}
 	for n, line := range lines {
@@ -165,7 +214,6 @@ func scanFile(p, rel string, rs RuleSet, c compiled, facts map[string]string, re
 			res.Findings = append(res.Findings, Finding{RuleID: r.ID, Kind: r.Kind, Path: shownPath, Line: n + 1, Message: r.Message, Hash: h.Hash, Match: match})
 		}
 	}
-	return nil
 }
 
 // exemptNoReason is the engine's own finding for a `truth: exempt` comment
