@@ -54,9 +54,13 @@ func CaptureAs(ctx context.Context, job model.Job, dir string, argv ...string) (
 	defer func() { _ = os.RemoveAll(home) }()
 	var buf strings.Builder
 	var ex ciexec.Executor
-	job = model.Job{Kind: "static"}
 	if ctx.Value(noLazyFetchKey{}) == true {
-		job.Env = map[string]string{"GIT_NO_LAZY_FETCH": "1"}
+		env := make(map[string]string, len(job.Env)+1)
+		for k, v := range job.Env {
+			env[k] = v
+		}
+		env["GIT_NO_LAZY_FETCH"] = "1"
+		job.Env = env
 	}
 	res := ex.Run(ctx, ciexec.JobSpec{
 		AttemptID: fmt.Sprintf("cap-%d-%d", time.Now().UnixNano(), captureSeq.Add(1)), CoordinatorID: "capture",

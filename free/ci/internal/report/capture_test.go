@@ -30,3 +30,16 @@ func TestCaptureAsRunsInTheJobsWorkdirWithItsEnv(t *testing.T) {
 		t.Fatalf("Capture must stay an empty workspace: %q", out)
 	}
 }
+
+// WithoutLazyFetch adds GIT_NO_LAZY_FETCH to a copy of the job's env: the job's
+// own vars survive and the caller's map is not mutated.
+func TestCaptureAsNoLazyFetchKeepsJobEnv(t *testing.T) {
+	job := model.Job{Kind: "static", Env: map[string]string{"NSELF_CAP_PROBE": "from-job"}}
+	out, code, err := CaptureAs(WithoutLazyFetch(context.Background()), job, "", "sh", "-c", `echo "$NSELF_CAP_PROBE $GIT_NO_LAZY_FETCH"`)
+	if err != nil || code != 0 || strings.TrimSpace(out) != "from-job 1" {
+		t.Fatalf("out %q code %d err %v", out, code, err)
+	}
+	if _, ok := job.Env["GIT_NO_LAZY_FETCH"]; ok || len(job.Env) != 1 {
+		t.Fatalf("caller env mutated: %v", job.Env)
+	}
+}
