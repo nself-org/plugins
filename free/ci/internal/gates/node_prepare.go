@@ -9,7 +9,7 @@ package gates
 // Python checks do): `sh -c` of one script that prepares, then execs the check.
 // Constraints: every executor attempt runs in its own workspace copy, so the
 // prepare step and the check share ONE invocation; nothing installs globally and
-// the manager caches live inside the workspace (removed with it); an install runs
+// the manager caches live in a private temporary directory outside the project; an install runs
 // only when neither the working directory nor the lockfile directory has a
 // node_modules (a developer's installed tree is used as it is, and a copied
 // pnpm tree must never be reinstalled over without a TTY); a project without a
@@ -109,17 +109,17 @@ func nodeScript(pm, id, run, dir string) string {
 	b.WriteString(managerEnv(pm))
 	b.WriteString("if [ -n \"$LOCK\" ] && [ ! -d node_modules ] && [ ! -d \"$LOCK/node_modules\" ]; then\n")
 	b.WriteString(pinCheck(pm))
-	b.WriteString("  NSELF_CI_DIR=\"$PWD/.nself-ci\"; mkdir -p \"$NSELF_CI_DIR/tmp\"; LOG=\"$NSELF_CI_DIR/install.log\"\n")
+	b.WriteString("  NSELF_CI_DIR=$(mktemp -d \"${TMPDIR:-/tmp}/nself-ci-node.XXXXXX\") || exit 97\n  trap 'rm -rf \"$NSELF_CI_DIR\"' EXIT\n  trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM\n  mkdir -p \"$NSELF_CI_DIR/tmp\"; LOG=\"$NSELF_CI_DIR/install.log\"\n")
 	// the manager corepack downloads is needed again by the check, so COREPACK_HOME outlives the install
 	b.WriteString("  export COREPACK_HOME=\"$NSELF_CI_DIR/corepack\"\n")
 	b.WriteString("  ( cd \"$LOCK\" && " + installEnv(pm) + "; " + installCmd(pm) + " ) > \"$LOG\" 2>&1 || {\n")
 	b.WriteString(failureReport())
-	b.WriteString("    echo " + diagnose.PrepareFailed + "\n    exit " + strconv.Itoa(diagnose.PrepareExit) + "\n  }\n  rm -rf \"$NSELF_CI_DIR/tmp\"; rm -f \"$LOG\"\nfi\n")
+	b.WriteString("    if [ \"${NSELF_CI_LOCAL_REGISTRY_INFRA:-}\" = 1 ]; then echo " + diagnose.LocalRegistryInfra + "; fi\n    echo " + diagnose.PrepareFailed + "\n    exit " + strconv.Itoa(diagnose.PrepareExit) + "\n  }\n  rm -rf \"$NSELF_CI_DIR/tmp\"; rm -f \"$LOG\"\nfi\n")
 	if id == "node.typecheck" || id == "node.build" {
 		b.WriteString("if { [ -d node_modules ] || [ -d \"${LOCK:-.}/node_modules\" ] || [ -f \"${LOCK:-.}/.pnp.cjs\" ]; } && grep -q '\"astro\"[[:space:]]*:' package.json 2>/dev/null; then\n")
 		b.WriteString("  " + astroSync(pm) + " || exit $?\nfi\n")
 	}
-	b.WriteString("exec " + run + "\n")
+	b.WriteString("if [ -n \"${NSELF_CI_DIR:-}\" ]; then\n  " + run + "\nelse\n  exec " + run + "\nfi\n")
 	return b.String()
 }
 
@@ -171,9 +171,9 @@ func managerEnv(pm string) string {
 	return ""
 }
 
-// installEnv keeps the install's cache and temp directory inside the workspace
-// (removed with it, so a killed install leaves nothing in the operator's TMPDIR;
-// after a good install only the temp directory and the log go: the caches stay,
+// installEnv keeps the install's cache and temp directory outside the project.
+// The shell removes it on exit; after a good install only the temp directory
+// and the log go immediately: the caches stay through the check,
 // because an installed tree can point into them (Yarn Plug'n'Play archives, a
 // pnpm global virtual store) and the check runs from it),
 // only the manager's own variables: npm warns about another manager's. A

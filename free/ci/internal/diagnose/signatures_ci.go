@@ -35,13 +35,14 @@ const SigPin = "infra.package_manager_pin"
 // InstallCausesMark and the last lines that carry a cause, InstallTailMark and
 // the log's tail: a guard can never be evicted by a flood of cause lines.
 const (
-	PrepareFailed     = "::nself-ci-prepare-failed::"
-	PinMismatch       = "::nself-ci-pin-mismatch::"
-	InstallGuardsMark = "::nself-ci-install-guards::"
-	InstallCausesMark = "::nself-ci-install-causes::"
-	InstallTailMark   = "::nself-ci-install-tail::"
-	PrepareExit       = 97
-	PinExit           = 98
+	LocalRegistryInfra = "::nself-ci-local-registry-infra::"
+	PrepareFailed      = "::nself-ci-prepare-failed::"
+	PinMismatch        = "::nself-ci-pin-mismatch::"
+	InstallGuardsMark  = "::nself-ci-install-guards::"
+	InstallCausesMark  = "::nself-ci-install-causes::"
+	InstallTailMark    = "::nself-ci-install-tail::"
+	PrepareExit        = 97
+	PinExit            = 98
 )
 
 // InstallGuardWords and InstallCauseWords are the words (matched case-
@@ -173,7 +174,7 @@ func lastCode(r *regexp.Regexp, text string) string {
 // classifyPrepare is the verdict on a Node gate whose prepare step failed: the
 // script's report (see InstallKeywords) is classified as an install log.
 func classifyPrepare(report string) Diagnosis {
-	d := ClassifyInstall(report)
+	d := classifyInstall(report, strings.HasSuffix(strings.TrimSpace(report), LocalRegistryInfra))
 	if d.Class == "infra" {
 		d.Remediation = "E811: dependency install failed (" + d.Signature + "). " + d.Remediation
 	}
@@ -194,14 +195,21 @@ func pinDiagnosis() Diagnosis {
 // code; then the structured error lines of the managers, with URLs and retry
 // warnings removed, name the cause.
 func ClassifyInstall(log string) Diagnosis {
+	return classifyInstall(log, false)
+}
+
+func classifyInstall(log string, localInfra bool) Diagnosis {
 	log = normalizeInstall(log)
 	for _, m := range installURLHost.FindAllStringSubmatch(log, -1) {
-		if installLocal.MatchString(" " + m[1] + " ") {
+		if !localInfra && installLocal.MatchString(" "+m[1]+" ") {
 			return named(SigCode, "code")
 		}
 	}
 	log = dropLines(installURL.ReplaceAllString(log, " "), installRetry) // URLs first: a package called `warn` is not a warning
 	for _, guard := range []*regexp.Regexp{installSync, installTestFailure, installLifecycle, installLocal, installClientError} {
+		if guard == installLocal && localInfra {
+			continue
+		}
 		if guard.MatchString(log) {
 			return named(SigCode, "code")
 		}

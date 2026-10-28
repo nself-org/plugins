@@ -27,9 +27,12 @@ var lockfileOf = map[string]string{"npm": "package-lock.json", "pnpm": "pnpm-loc
 
 // nodeHost is a repository root plus a private PATH holding only fake managers.
 type nodeHost struct {
-	t    *testing.T
-	root string
-	bin  string
+	t       *testing.T
+	root    string
+	bin     string
+	env     map[string]string
+	secrets ciexec.SecretSource
+	refs    []string
 }
 
 func newNodeHost(t *testing.T) *nodeHost {
@@ -38,7 +41,7 @@ func newNodeHost(t *testing.T) *nodeHost {
 		t.Skip("POSIX shells only")
 	}
 	h := &nodeHost{t: t, root: realTempDir(t), bin: t.TempDir()}
-	for _, tool := range []string{"sh", "ps", "tail", "head", "cat", "mkdir", "sed", "grep", "cut", "wc", "rm", "basename", "awk", "touch", "ln"} {
+	for _, tool := range []string{"sh", "ps", "tail", "head", "cat", "mkdir", "sed", "grep", "cut", "wc", "rm", "basename", "awk", "touch", "ln", "mktemp"} {
 		p, err := exec.LookPath(tool)
 		if err != nil {
 			t.Fatal(err)
@@ -102,7 +105,7 @@ func (h *nodeHost) run(id, workdir string) result {
 	p := h.plan(id, workdir)
 	var out strings.Builder
 	res := (&ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}).Run(context.Background(), ciexec.JobSpec{AttemptID: "node-" + strings.ReplaceAll(id, ".", "-"), CoordinatorID: "coord",
-		Job: model.Job{Kind: "quality", Workdir: workdir, Isolation: "process"}, Command: p.Command(), SourceDir: h.root, Home: realTempDir(h.t),
+		Secrets: h.secrets, Job: model.Job{Kind: "quality", Workdir: workdir, Isolation: "process", Env: h.env, Secrets: h.refs}, Command: p.Command(), SourceDir: h.root, Home: realTempDir(h.t),
 		Output: func(b []byte) { out.Write(b) }})
 	r := result{exit: res.ExitCode, out: strings.TrimSpace(out.String())}
 	if res.Err != nil {
@@ -484,7 +487,7 @@ func TestLockDirsAndQuoting(t *testing.T) {
 	}
 }
 
-func TestNodeGateKeepsTempAndCachesInTheInstallWorkspace(t *testing.T) {
+func TestNodeGateKeepsTempAndCachesOutsideTheProject(t *testing.T) {
 	parent := t.TempDir()
 	for pm, cache := range map[string]string{"npm": "npm_config_cache", "pnpm": "pnpm_config_store_dir", "bun": "BUN_INSTALL_CACHE_DIR", "yarn": "YARN_CACHE_FOLDER"} {
 		t.Run(pm, func(t *testing.T) {
@@ -494,7 +497,7 @@ func TestNodeGateKeepsTempAndCachesInTheInstallWorkspace(t *testing.T) {
 			h.write(lockfileOf[pm], "# lock\n")
 			h.manager(pm, "9.0.0", `echo "TMP $TMPDIR"; echo "CACHE $`+cache+`"; exit 1`)
 			r := h.run("node.test", ".")
-			if !strings.Contains(r.out, "/.nself-ci/tmp\n") || !strings.Contains(r.out, "/.nself-ci/") || strings.Contains(r.out, "CACHE \n") {
+			if !strings.Contains(r.out, "/tmp\n") || !strings.Contains(r.out, "/nself-ci-node.") || strings.Contains(r.out, "CACHE \n") {
 				t.Fatalf("%+v", r)
 			}
 			if left, _ := os.ReadDir(parent); len(left) != 0 {
@@ -538,7 +541,7 @@ func TestYarnZeroInstallKeepsItsCommittedCache(t *testing.T) {
 	h2.write("yarn.lock", "__metadata:\n  version: 8\n")
 	h2.manager("yarn", "4.1.0", `case "$1" in install) echo "FOLDER [$YARN_CACHE_FOLDER]"; exit 1;; esac
 `)
-	if r := h2.run("node.test", "."); !strings.Contains(r.out, "/.nself-ci/yarn]") {
+	if r := h2.run("node.test", "."); !strings.Contains(r.out, "/yarn]") {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -603,4 +606,66 @@ func realTempDir(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return dir
+}
+
+type nodeRegistrySecret struct{ t *testing.T }
+
+func (s nodeRegistrySecret) Resolve(_ context.Context, refs []string) (map[string]string, error) {
+	s.t.Helper()
+	if len(refs) != 1 || refs[0] != "project/NPM_TOKEN" {
+		s.t.Fatalf("unexpected references: %v", refs)
+	}
+	return map[string]string{"NPM_TOKEN": "fixture-registry-token"}, nil
+}
+
+func TestNodeRegistrySecretAndExternalScratch(t *testing.T) {
+	h := newNodeHost(t)
+	h.write("package.json", manifest("npm@9.0.0", ""))
+	h.write("package-lock.json", "{}")
+	h.write(".npmrc", "//registry.example.invalid/:_authToken=${NPM_TOKEN}\n")
+	marker := filepath.Join(realTempDir(t), "scratch")
+	h.env = map[string]string{"SCRATCH_RECORD": marker}
+	h.secrets, h.refs = nodeRegistrySecret{t}, []string{"project/NPM_TOKEN"}
+	h.manager("npm", "9.0.0", `case "$1" in
+ ci)
+  [ "$NPM_TOKEN" = fixture-registry-token ] || exit 21
+  case "$npm_config_cache" in "$PWD"/*) exit 22;; esac
+  echo "$npm_config_cache" > "$SCRATCH_RECORD"
+  mkdir -p "$npm_config_cache"
+  touch "$npm_config_cache/ready"
+  ;;
+ run)
+  cache=$(cat "$SCRATCH_RECORD")
+  [ -f "$cache/ready" ] || exit 23
+  [ ! -d .nself-ci ] || exit 24
+  ;;
+ esac`)
+	if r := h.run("node.lint", "."); r.exit != 0 {
+		t.Fatalf("install/check: %+v", r)
+	}
+	raw, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(strings.TrimSpace(string(raw))); !os.IsNotExist(err) {
+		t.Fatalf("scratch survived: %v", err)
+	}
+}
+
+func TestNodeLocalRegistryInfraOptIn(t *testing.T) {
+	h := newNodeHost(t)
+	h.write("package.json", manifest("npm@9.0.0", ""))
+	h.write("package-lock.json", "{}")
+	h.manager("npm", "9.0.0", "echo 'npm error code ECONNREFUSED'; echo 'npm error connect ECONNREFUSED 127.0.0.1:4873'; exit 1")
+	if r := h.run("node.lint", "."); r.diag.Class != "code" {
+		t.Fatalf("default: %+v", r)
+	}
+	h.env = map[string]string{"NSELF_CI_LOCAL_REGISTRY_INFRA": "1"}
+	if r := h.run("node.lint", "."); r.diag.Signature != diagnose.SigNetwork || !r.diag.Retryable {
+		t.Fatalf("opt-in: %+v", r)
+	}
+	h.manager("npm", "9.0.0", "echo 'npm error code E401'; echo 'http://localhost:4873 unauthorized'; exit 1")
+	if r := h.run("node.lint", "."); r.diag.Class != "code" {
+		t.Fatalf("auth is still code: %+v", r)
+	}
 }

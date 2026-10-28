@@ -96,6 +96,12 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 		}
 	}
 	for _, id := range sortedKeys(cfg.Checks) {
+		for key := range cfg.Checks[id].Env {
+			if !envName.MatchString(key) {
+				add("/checks/"+escape(id)+"/env", "env keys must be environment variable names")
+				break
+			}
+		}
 		for i, p := range cfg.Checks[id].Rules {
 			if escapesRepo(p) {
 				add(fmt.Sprintf("/checks/%s/rules/%d", escape(id), i), "rule paths must stay inside the repository")

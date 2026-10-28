@@ -456,3 +456,34 @@ When `NSELF_INVOKED_BY` is set (the MCP and HTTP invokers always set it; you can
 - A `team` row applies to every run, plan and dispatch of the process whose environment sets `NSELF_CI_TEAM=<team id>` (the coordinator's own environment, never a job's env or a repository file; same alphabet as `--team`). A malformed value fails the resolve with `E672` rather than dropping the team's rows; `show --team <id>` overrides it. With the variable unset no team row applies.
 - `pin` needs a fetched origin; with no origin there is nothing to pin against.
 - The checks read the store before the write transaction opens, so two writers at the same moment can race (for example a machine write over a concurrent operator tightening). A `set` is also checked against the rows of every stored project and team (the store lists the subjects of a scope), not only the current repository's, so a user, team or project write cannot make `Resolve` fail with `E670` in another repository; the refusal names the other project.
+
+### Node gate registry preparation
+
+A private registry token is a declared job secret. Built-in checks accept
+`env` and `secrets` in their check configuration, using the same resolver and
+trust admission as authored jobs:
+
+```yaml
+checks:
+  node.lint:
+    secrets: [project/NPM_TOKEN]
+    env: {NSELF_CI_LOCAL_REGISTRY_INFRA: "1"}
+```
+
+Use `${NPM_TOKEN}` in `.npmrc`. The install
+and the check share the resolved environment. Host registry tokens are not
+forwarded implicitly; registry authentication errors remain project failures.
+
+A local registry that the operator manages as infrastructure can opt in with
+`env: {NSELF_CI_LOCAL_REGISTRY_INFRA: "1"}` on the job. Only structured
+network/DNS install failures become retryable infrastructure failures. Lockfile,
+lifecycle, test and registry client errors remain project failures. Without this
+opt-in, a down localhost registry remains the project's setup failure.
+
+Node preparation uses a private `mktemp` directory under the job's `TMPDIR`
+(or `/tmp`), outside the copied project. Its caches stay available through the
+check, including Yarn Plug'n'Play archives, then the shell removes the directory
+on exit or a handled signal. An uncatchable SIGKILL or host crash can leave a
+temporary directory for the host's normal temporary-file cleanup; container
+scratch lives on the attempt's temporary filesystem. No `.nself-ci` directory is
+created in the project by preparation.

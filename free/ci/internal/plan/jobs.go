@@ -154,6 +154,9 @@ func candidates(in Input) (map[string]*cand, []string) {
 			id = base + "-" + strconv.Itoa(n)
 		}
 		out[id] = derivedCand(c, id)
+		settings := in.Config.Checks[c.ID]
+		extra := cloneJob(model.Job{Env: settings.Env, Secrets: settings.Secrets})
+		out[id].job.Env, out[id].job.Secrets = extra.Env, extra.Secrets
 	}
 	ids := make([]string, 0, len(out))
 	for id := range out {
