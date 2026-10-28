@@ -8,10 +8,14 @@ import (
 	"syscall"
 )
 
-// lockSlot takes slot n's advisory lock. ok is false when another process holds it or the
+// lockSlot takes slot n's host lease on Linux or advisory file lock elsewhere.
+// ok is false when another process holds it or the
 // lock cannot be taken (fail closed: an unusable lock file never grants a slot, or two
 // coordinators could share a job UID). Only an unknown home (dir "") is process-local.
 func lockSlot(dir string, n int) (*os.File, bool) {
+	if f, ok, host := platformSlot(dir, n); host {
+		return f, ok
+	}
 	if dir == "" {
 		return nil, true
 	}

@@ -2,10 +2,11 @@ package run
 
 // Purpose: give each concurrent container attempt its own execution slot, so the isolation
 // profile derives a distinct job UID (65532 + slot, Epic D12), across coordinators too.
-// Inputs:  take(dir)/put(n) around the executor call; dir is <home>/slots.
-// Outputs: the lowest slot nobody holds, in this process or in another one using the same home.
-// Constraints: another process's hold is an advisory flock on <dir>/slot-<n>.lock (released by
-// the kernel if that process dies); where locking is unavailable the slot is process-local.
+// Inputs: take(dir)/put(n) around the executor call; Linux uses host-wide leases.
+// Outputs: the lowest unheld slot, shared across Linux coordinators and OS users.
+// Constraints: Linux uses abstract Unix sockets in the host network namespace;
+// other Unix platforms use advisory flock files under the home. Both are released
+// by the kernel if the holder dies; Windows remains process-local.
 // The node's slot lease (P7-NODE-23) supersedes this by setting JobSpec.Slot itself.
 
 import (
@@ -19,8 +20,11 @@ type slotPool struct {
 	held map[int]*os.File // nil file: held in this process only
 }
 
-// slotDir is where the slot locks live for a run home.
+// slotDir selects the host namespace on Linux, otherwise the run home locks.
 func slotDir(home string) string {
+	if dir := hostSlots(); dir != "" {
+		return dir
+	}
 	if home == "" {
 		home = os.Getenv("NSELF_CI_HOME")
 	}
