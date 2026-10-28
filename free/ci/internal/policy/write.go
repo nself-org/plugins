@@ -13,9 +13,10 @@ package policy
 // with the stored rows of the user, team and project subjects it knows and with
 // the protected branch's policy, over the strictest default scopes, so it does
 // not make Resolve fail for this repository (other projects' rows are not
-// listed by the store and are not checked). The checks read before the write
-// transaction opens (the store's Tx exposes no reads), so two concurrent writers
-// can race; the audit row and the policy row are still atomic. With NSELF_INVOKED_BY set (Writer.Machine) a write
+// listed by the store and are not checked). The loosening and merge checks read
+// the stored rows inside the write transaction (store.ApplyCheckedWrite), so
+// concurrent writers are serialized with their checks; only the protected
+// branch's policy is read before it. With NSELF_INVOKED_BY set (Writer.Machine) a write
 // that loosens a `trust.*` key, any unset of one, and any pin or clear-pin is
 // refused with E687 reason machine_invoked and one audit row of the refusal, so
 // a capped caller cannot lift its own cap (Epic D27, review F2). No Secret value
@@ -25,6 +26,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -33,6 +35,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/audit"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
 // ReasonMachineInvoked is the E687 reason of a refused machine-invoked write.
@@ -155,18 +158,26 @@ func (w *Writer) row(ctx context.Context, keys *Keyset, actor roles.Actor, c Cha
 		pw.Op, pw.Value = store.PolicySet, value
 		res.Value = shown(spec, value)
 	}
-	if w.Machine && strings.HasPrefix(c.Key, "trust.") && (c.Op == OpUnset || w.loosens(keys, spec, w.stored(ctx, t, c.Key), value)) {
-		return Result{}, w.refuseMachine(ctx, actor, c.Op, t.scope+"/"+c.Key)
+	var branch *trust.Scope
+	if c.Op == OpSet {
+		branch = w.branchScope(ctx, c) // reads git, so it stays outside the write transaction
 	}
-	if c.Op == OpSet { // an unset cannot make the remaining rows loosen a parent
-		rows, err := w.rows(ctx, t, c)
-		if err != nil {
-			return Result{}, err
+	// The checks read the stored rows inside the write transaction, so two writers
+	// cannot both pass on a state the other is changing (D-1283).
+	errMachine := errors.New("machine-invoked write refused")
+	check := func(tx *store.Tx) error {
+		if w.Machine && strings.HasPrefix(c.Key, "trust.") && (c.Op == OpUnset || w.loosens(keys, spec, storedOf(ctx, tx, t, c.Key), value)) {
+			return errMachine
 		}
-		rows[t.scope][c.Key] = value
-		if err := keys.checkRows(rows, w.branchScope(ctx, c)); err != nil {
-			return Result{}, err
+		if c.Op == OpSet { // an unset cannot make the remaining rows loosen a parent
+			rows, err := rowsOf(ctx, tx, t, c)
+			if err != nil {
+				return err
+			}
+			rows[t.scope][c.Key] = value
+			return keys.checkRows(rows, branch)
 		}
+		return nil
 	}
 	detail := fmt.Sprintf("scope=%s subject=%s", t.scope, strconv.Quote(t.subject))
 	if c.Op == OpSet { // the value last, so it cannot forge the fields before it
@@ -174,5 +185,9 @@ func (w *Writer) row(ctx context.Context, keys *Keyset, actor roles.Actor, c Cha
 		detail += fmt.Sprintf(" sha256=%x value=%s", sum[:8], res.Value)
 	}
 	ev := audit.Event{Actor: actor.Label(), Action: "policy." + c.Op, Target: c.Key, Detail: detail}
-	return res, w.Store.ApplyWrite(ctx, pw, func(tx *store.Tx) error { return audit.AppendTx(tx, ev) })
+	err := w.Store.ApplyCheckedWrite(ctx, pw, check, func(tx *store.Tx) error { return audit.AppendTx(tx, ev) })
+	if errors.Is(err, errMachine) { // the refusal row is written once the write transaction is closed
+		return Result{}, w.refuseMachine(ctx, actor, c.Op, t.scope+"/"+c.Key)
+	}
+	return res, err
 }

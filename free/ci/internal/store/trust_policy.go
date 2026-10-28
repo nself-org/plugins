@@ -101,14 +101,41 @@ func checkPolicyWrite(w PolicyWrite) error {
 	return nil
 }
 
+// PolicyRows returns the rows of one scope and subject as this transaction sees
+// them, ordered by key. The write connection is single and the transaction takes
+// the write lock when it opens, so a check made through it cannot interleave
+// with another writer.
+func (t *Tx) PolicyRows(ctx context.Context, scope, subject string) ([]PolicyRow, error) {
+	rows, err := t.tx.QueryContext(ctx, policyRowsQuery, scope, subject)
+	if err != nil {
+		return nil, err
+	}
+	return scanPolicyRows(rows, scope, subject)
+}
+
 // ApplyWrite applies w and then calls inTx in the same transaction. An error
 // from either rolls back both.
 func (s *Store) ApplyWrite(ctx context.Context, w PolicyWrite, inTx func(tx *Tx) error) error {
+	return s.ApplyCheckedWrite(ctx, w, nil, inTx)
+}
+
+// ApplyCheckedWrite is ApplyWrite with check run first, inside the write
+// transaction: a check that reads the stored rows through tx decides on the
+// state the write lands on. An error from check, the write or inTx rolls back
+// everything; check must not write through another handle of the store (the
+// single writer connection is held), so a refusal that needs an audit row is
+// returned and recorded after the call.
+func (s *Store) ApplyCheckedWrite(ctx context.Context, w PolicyWrite, check, inTx func(tx *Tx) error) error {
 	if err := checkPolicyWrite(w); err != nil {
 		return err
 	}
 	return s.write(ctx, func(tx *sql.Tx) error {
 		now := s.now().UnixNano()
+		if check != nil {
+			if err := check(&Tx{s: s, ctx: ctx, tx: tx}); err != nil {
+				return err
+			}
+		}
 		var err error
 		switch w.Op {
 		case PolicySet:
@@ -136,10 +163,16 @@ func (s *Store) ApplyWrite(ctx context.Context, w PolicyWrite, inTx func(tx *Tx)
 
 // PolicyRows returns the rows of one scope and subject, ordered by key.
 func (s *Store) PolicyRows(ctx context.Context, scope, subject string) ([]PolicyRow, error) {
-	rows, err := s.readers.QueryContext(ctx, `SELECT key,value_json,updated_by,updated_at FROM trust_policy_row WHERE scope=? AND subject=? ORDER BY key`, scope, subject)
+	rows, err := s.readers.QueryContext(ctx, policyRowsQuery, scope, subject)
 	if err != nil {
 		return nil, err
 	}
+	return scanPolicyRows(rows, scope, subject)
+}
+
+const policyRowsQuery = `SELECT key,value_json,updated_by,updated_at FROM trust_policy_row WHERE scope=? AND subject=? ORDER BY key`
+
+func scanPolicyRows(rows *sql.Rows, scope, subject string) ([]PolicyRow, error) {
 	defer func() { _ = rows.Close() }()
 	var out []PolicyRow
 	for rows.Next() {

@@ -18,6 +18,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/audit"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
@@ -53,9 +54,15 @@ func shown(spec KeySpec, value json.RawMessage) string {
 	return string(value)
 }
 
-// rows reads the stored rows of the user, team and project subjects a resolve
+// policyReader is the stored-row read the write checks use: a *store.Tx, so the
+// rows are the ones the write lands on.
+type policyReader interface {
+	PolicyRows(ctx context.Context, scope, subject string) ([]store.PolicyRow, error)
+}
+
+// rowsOf reads the stored rows of the user, team and project subjects a resolve
 // for c would merge, keyed by scope.
-func (w *Writer) rows(ctx context.Context, t target, c Change) (map[string]map[string]json.RawMessage, error) {
+func rowsOf(ctx context.Context, rd policyReader, t target, c Change) (map[string]map[string]json.RawMessage, error) {
 	out := map[string]map[string]json.RawMessage{"user": {}, "team": {}, "project": {}}
 	subjects := map[string]string{"user": LocalSubject, "team": c.Team, "project": c.Project}
 	subjects[t.scope] = t.subject
@@ -63,7 +70,7 @@ func (w *Writer) rows(ctx context.Context, t target, c Change) (map[string]map[s
 		if subject == "" {
 			continue
 		}
-		stored, err := w.Store.PolicyRows(ctx, scope, subject)
+		stored, err := rd.PolicyRows(ctx, scope, subject)
 		if err != nil {
 			return nil, fmt.Errorf("read %s policy: %w", scope, err)
 		}
@@ -74,9 +81,9 @@ func (w *Writer) rows(ctx context.Context, t target, c Change) (map[string]map[s
 	return out, nil
 }
 
-// stored is the row a write replaces (nil when there is none).
-func (w *Writer) stored(ctx context.Context, t target, key string) json.RawMessage {
-	rows, err := w.Store.PolicyRows(ctx, t.scope, t.subject)
+// storedOf is the row a write replaces (nil when there is none).
+func storedOf(ctx context.Context, rd policyReader, t target, key string) json.RawMessage {
+	rows, err := rd.PolicyRows(ctx, t.scope, t.subject)
 	if err != nil {
 		return json.RawMessage("null") // unreadable: loosens against everything
 	}
