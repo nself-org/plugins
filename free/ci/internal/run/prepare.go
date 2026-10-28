@@ -36,6 +36,15 @@ func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, e
 			return p, err
 		}
 	}
+	// Resolve the operator image before cache restoration so the cache key
+	// uses the same digest as execution (D-1036 review). The job's configured
+	// image is substituted under --container; using it for the cache key would
+	// fragment caches across toolchains and operator upgrades.
+	if rs.c.Opts.Container && rs.hooks.Image != nil {
+		if img, err := rs.hooks.Image.Image(ctx, *info); err == nil && img != "" {
+			info.Job.Container = &model.ContainerConfig{Image: img}
+		}
+	}
 	if rs.hooks.Cache != nil {
 		p.cacheStarted = true
 		var setup CacheSetup

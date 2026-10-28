@@ -204,12 +204,18 @@ func cacheFacts(a AttemptInfo, p store.PipelineRow, att CacheAttestation, privat
 
 // imageDigest is the pinned digest of the job's container image, "" if unknown.
 func (h *cacheHook) imageDigest(ctx context.Context, a AttemptInfo) string {
+	// Prefer the operator's pinned toolchain: prepare.go resolves it before
+	// cache restoration under --container, so a.Job.Container.Image already
+	// carries the operator digest. Falling back to the hook covers callers
+	// that reach imageDigest outside the normal prepare flow.
 	img := ""
-	if a.Job.Container != nil {
-		img = a.Job.Container.Image
+	if Registered.Image != nil {
+		if resolved, err := Registered.Image.Image(ctx, a); err == nil && resolved != "" {
+			img = resolved
+		}
 	}
-	if img == "" && Registered.Image != nil {
-		img, _ = Registered.Image.Image(ctx, a)
+	if img == "" && a.Job.Container != nil {
+		img = a.Job.Container.Image
 	}
 	if _, d, ok := strings.Cut(img, "@"); ok && strings.HasPrefix(d, "sha256:") {
 		return d
