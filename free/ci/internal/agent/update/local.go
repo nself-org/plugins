@@ -8,7 +8,9 @@ package update
 // Constraints: a version equal to the kept .prev binary's (recorded next to it as <bin>.prev.version when the swap kept it) is a
 //          restore (one rename, no download, allowed as a downgrade because it is the version the node ran before); any other
 //          downgrade needs AllowDowngrade; after the swap the installed file is hashed against the signed sha256 and the old binary
-//          is restored at once if it differs; the agent never executes the new binary here (os/exec is internal/exec's alone) and never
+//          is restored at once if it differs; this package never starts a process (os/exec is internal/exec's alone), so the
+//          caller hands in RunVersion, the seam that runs `<bin> version`: the verified file must report the asked version before
+//          it is swapped in, and the installed file after (the old binary is restored at once if it does not); the agent never
 //          restarts itself: the service manager restarts it (the pull agent exits 0 after a drain) or the next ssh session starts the
 //          new binary, and the coordinator's hello decides whether it stays (Engine rolls back with a restore message).
 
@@ -40,6 +42,10 @@ type LocalOptions struct {
 	AllowRestore bool
 	Platform     lifecycle.Platform
 	Source       Source
+	// RunVersion runs `<bin> version` and returns its output (cmd/agent hands in internal/exec's RunAgentVersion). When set,
+	// the verified release is run once before the swap and the installed file once after it; each must print Version. Nil skips
+	// both runs: only the digest then vouches for the file, and the coordinator's hello is the health check.
+	RunVersion func(ctx context.Context, bin string) (string, error)
 }
 
 var versionLineRe = regexp.MustCompile(`^nself-ci-agent (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?: |$)`)
@@ -108,6 +114,9 @@ func ApplyLocal(ctx context.Context, o LocalOptions) (Result, error) {
 	if _, used, serr := slots.Status(o.StateDir); serr != nil || used > 0 {
 		return res, refuse(ReasonRunningJob, "a job started during the download; nothing was installed")
 	}
+	if err = o.checkRuns(ctx, prep.Path, "the new agent"); err != nil {
+		return res, err
+	}
 	if err = Swap(o.BinPath, prep.Path); err != nil {
 		return res, err
 	}
@@ -119,10 +128,33 @@ func ApplyLocal(ctx context.Context, o LocalOptions) (Result, error) {
 		res.RolledBack = true
 		return res, fmt.Errorf("E656: the installed agent is not the verified file; the previous agent is back")
 	}
+	if rerr := o.checkRuns(ctx, o.BinPath, "the installed agent"); rerr != nil {
+		_ = os.Remove(o.BinPath + PrevVersionSuffix)
+		if rerr2 := Restore(o.BinPath); rerr2 != nil {
+			return res, fmt.Errorf("%w; the previous agent could not be restored: %v", rerr, rerr2)
+		}
+		res.RolledBack = true
+		return res, fmt.Errorf("%w; the previous agent is back", rerr)
+	}
 	if _, serr := os.Lstat(o.BinPath + PrevSuffix); serr == nil {
 		_ = os.WriteFile(o.BinPath+PrevVersionSuffix, []byte(o.Current+"\n"), 0o600)
 	}
 	return res, nil
+}
+
+// checkRuns runs bin through RunVersion and wants it to report o.Version. what names the file in the error.
+func (o LocalOptions) checkRuns(ctx context.Context, bin, what string) error {
+	if o.RunVersion == nil {
+		return nil
+	}
+	out, err := o.RunVersion(ctx, bin)
+	if err != nil {
+		return fmt.Errorf("E656: %s does not start: %w", what, err)
+	}
+	if got, ok := ParseVersionLine(out); !ok || got != o.Version {
+		return fmt.Errorf("E656: %s does not report version %s", what, o.Version)
+	}
+	return nil
 }
 
 // restoreLocal puts the kept previous binary back (the version asked for is the version it was recorded as).

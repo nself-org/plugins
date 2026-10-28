@@ -3,13 +3,16 @@ package main
 // Purpose: `nself-ci-agent upgrade --version V [--manifest-url URL] [--allow-downgrade]`: the agent-side handler of the protocol
 //          `upgrade` message and of an admin's manual upgrade (hq NODE D11, P7-NODE-24). It refuses while a job runs, fetches and
 //          verifies the signed release, checks the protocol ceiling of the recorded coordinators, swaps its own binary
-//          atomically and keeps the old one as <bin>.prev. A version equal to the kept .prev binary's is a restore.
+//          atomically and keeps the old one as <bin>.prev. A version equal to the kept .prev binary's is a restore. The verified
+//          file is run as `<bin> version` before the swap and the installed file after it (internal/exec's seam); a binary that
+//          does not start or reports another version is never left in place.
 // Inputs:  --version (x.y.z), --manifest-url (the https URL of nself-ci-agent-<os>-<arch>.manifest.json; default the GitHub
 //          release of the version), --allow-downgrade; the state dir (slots, coordinators.json).
 // Outputs: one line on stdout; "E666: ..." or "E656: ..." on stderr. Exit 0 swapped (restart the agent to run it: the service
 //          manager restarts a pull agent, the next ssh session starts the new binary), 1 refused or failed, 2 usage.
-// Constraints: the trusted keys are the compiled-in set only; nothing is executed before it verified; the downgrade rules and
-//          the ceiling are internal/agent/update's.
+// Constraints: the trusted keys are the compiled-in set only; nothing is executed before it verified (the version run comes
+//          after the signature and digest checks); the downgrade
+//          rules and the ceiling are internal/agent/update's.
 
 import (
 	"context"
@@ -24,11 +27,15 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/agent/install"
 	"github.com/nself-org/plugins/free/ci/internal/agent/update"
 	"github.com/nself-org/plugins/free/ci/internal/agent/verify"
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/lifecycle"
 )
 
 // upgradeVerifier is the trusted key set; tests replace it.
 var upgradeVerifier = verify.Default
+
+// upgradeRunVersion starts a candidate binary as `<bin> version`; tests replace it.
+var upgradeRunVersion = ciexec.RunAgentVersion
 
 func init() {
 	must(RegisterSubcommand("upgrade", "replace this agent with a signed release (keeps the old binary as .prev)", runUpgrade))
@@ -75,8 +82,9 @@ func runUpgrade(ctx context.Context, args []string, sio IO) int {
 	}
 	res, err := update.ApplyLocal(ctx, update.LocalOptions{
 		StateDir: state, BinPath: exe, Current: Version, Version: *version, AllowDowngrade: *allowDown,
-		Platform: lifecycle.Platform{OS: runtime.GOOS, Arch: runtime.GOARCH},
-		Source:   update.ReleaseSource{Release: install.Release{Version: *version, BaseURL: base, Verifier: v}},
+		Platform:   lifecycle.Platform{OS: runtime.GOOS, Arch: runtime.GOARCH},
+		Source:     update.ReleaseSource{Release: install.Release{Version: *version, BaseURL: base, Verifier: v}},
+		RunVersion: upgradeRunVersion,
 	})
 	if err != nil {
 		fmt.Fprintln(sio.Stderr, err)
