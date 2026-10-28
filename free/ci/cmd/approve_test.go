@@ -478,7 +478,7 @@ func TestApproveAuthorChangeVoidsApproval(t *testing.T) {
 	if code := r.approve("run-1"); code != 0 || !r.approved("run-1") {
 		t.Fatalf("approve: %d %s %s", code, r.out.String(), r.errb.String())
 	}
-	if _, err := r.store().RecordApprovalFacts(context.Background(), store.ApprovalRunFacts{Run: "run-1", Author: "bob", HeadRepo: "fork/app", RequiresApproval: true}, voidCheck); err != nil {
+	if _, err := r.store().RecordApprovalFacts(context.Background(), store.ApprovalRunFacts{Run: "run-1", Author: "bob", HeadRepo: "fork/app", RequiresApproval: true}, approval.VoidCheck); err != nil {
 		t.Fatal(err)
 	}
 	if r.approved("run-1") {
