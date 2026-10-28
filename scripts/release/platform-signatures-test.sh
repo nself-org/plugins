@@ -22,7 +22,6 @@ T="$(mktemp -d "${TMPDIR:-/tmp}/platsig.XXXXXX")"
 trap 'rm -rf "$T"' EXIT
 
 sha256_file() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
-
 # --- throwaway key -------------------------------------------------------------------------------------------------------
 umask 077
 "$O" genpkey -algorithm ed25519 -out "$T/key.pem" 2>/dev/null
@@ -30,7 +29,6 @@ umask 077
 ID="plugins-$("$O" pkey -in "$T/key.pem" -pubout -outform DER 2>/dev/null | tail -c 32 | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-16)"
 umask 022
 sign() { NSELF_RELEASE_SIGNING_KEY_FREE="$(cat "$T/key.pem")" NSELF_RELEASE_SIGNING_KEY_FREE_ID="$ID" OPENSSL="$O" bash "$HERE/sign.sh" "$@"; }
-
 # --- a good release directory ----------------------------------------------------------------------------------------------
 # mktar OUT STUBTEXT: deterministic tarball of one stub file nself-demo (never a real build).
 mktar() {
@@ -58,7 +56,6 @@ build_release() {
 }
 GOOD="$T/good"
 build_release "$GOOD" demo 1.2.3
-
 # --- tiny harness ----------------------------------------------------------------------------------------------------------
 fails=0
 pass() { echo "ok   $1"; }
@@ -77,7 +74,6 @@ variant() { rm -rf "${T:?}/$1"; cp -R "$GOOD" "$T/$1"; jq -c "$2" "$GOOD/release
 
 expect_ok "good release (source + 2 platform signatures)" "$GOOD"
 case "$(verify "$GOOD" 2>&1)" in *"verified 1 source tarball(s) and 2 binary tarball(s) (checksum + signature each)"*) pass "summary counts source and binary apart" ;; *) fail "summary line" ;; esac
-
 # --- tamper cases ------------------------------------------------------------------------------------------------------------
 rm -rf "$T/flip"; cp -R "$GOOD" "$T/flip"
 printf 'x' >> "$T/flip/demo-1.2.3-linux-amd64.tar.gz"
@@ -127,7 +123,6 @@ expect_refused "platform signatures on an unsigned row" "orphan platform signatu
 # A binary tarball dropped from the directory is a failure, not a smaller set.
 rm -rf "$T/dropped"; cp -R "$GOOD" "$T/dropped"; rm "$T/dropped/demo-1.2.3-darwin-arm64.tar.gz"
 expect_refused "platform tarball removed" "missing tarball: demo-1.2.3-darwin-arm64.tar.gz" "$T/dropped"
-
 # --- the committed keys must refuse the throwaway signatures -------------------------------------------------------------------
 n=0
 for k in "$HERE"/keys/*.pub; do
@@ -136,7 +131,6 @@ for k in "$HERE"/keys/*.pub; do
   if verify "$GOOD" "$k" >/dev/null 2>&1; then fail "throwaway signatures verify against committed key $(basename "$k")"; else pass "committed key $(basename "$k") refuses them"; fi
 done
 [ "$n" -gt 0 ] || fail "no committed key found under scripts/release/keys/ to test against"
-
 # --- sign.sh itself ----------------------------------------------------------------------------------------------------------
 # Independent re-implementation of both messages: openssl signs them directly; Ed25519 is deterministic, so the bytes must match.
 SRC="$GOOD/demo-1.2.3.tar.gz"; PLIN="$GOOD/demo-1.2.3-linux-amd64.tar.gz"
@@ -153,7 +147,6 @@ for bad in "" linux darwin-x64 LINUX-AMD64 "linux-amd64 " windows; do
 done
 rc=0; sign demo 1.2.3 "$PLIN" linux-amd64 extra >/dev/null 2>&1 || rc=$?
 [ "$rc" = 2 ] && pass "sign.sh refuses a fifth argument" || fail "sign.sh fifth argument exit $rc"
-
 # --- platform-built-check.sh -------------------------------------------------------------------------------------------------
 BIN="$T/binstage"; mkdir -p "$BIN"
 cp "$PLIN" "$GOOD/demo-1.2.3-darwin-arm64.tar.gz" "$BIN/"
@@ -192,6 +185,43 @@ if check "$T/nl.txt" "$NL" >/dev/null 2>&1; then fail "built check passed a file
 # Symlinked entries are read through (the workflow stages symlinks).
 LNK="$T/linked"; mkdir "$LNK"; ln -s "$PLIN" "$LNK/demo-1.2.3-linux-amd64.tar.gz"
 check "$BUILT" "$LNK" >/dev/null 2>&1 && pass "built check follows symlinks" || fail "built check refused a symlinked built tarball"
+# --- the workflow's complete sign step ---------------------------------------------------------------------------------------
+RUN="$T/release-run"
+mkdir -p "$RUN/published" "$RUN/expected" "$RUN/free/demo" "$T/pinned"
+cp "$GOOD"/*.tar.gz "$RUN/published/"
+printf '{"version":"1.2.3"}\n' > "$RUN/free/demo/plugin.json"
+cp "$T/test.pub" "$T/pinned/plugins-release-free-test.pub"
+# Exercise a second signed slug so a shallow merge or a lost source signature cannot pass.
+mkdir -p "$RUN/free/other"
+cp "$RUN/free/demo/plugin.json" "$RUN/free/other/plugin.json"
+for f in "$GOOD"/*.tar.gz; do
+  cp "$f" "$RUN/published/other-${f##*/demo-}"
+done
+(cd "$RUN/published" && sha256sum -- *-linux-amd64.tar.gz *-darwin-arm64.tar.gz) > "$RUN/expected/built-sha256.txt"
+run_sign_step() {
+  NSELF_RELEASE_SIGNING_KEY_FREE="$(cat "$T/key.pem")" NSELF_RELEASE_SIGNING_KEY_FREE_ID="$ID" OPENSSL="$O" \
+    bash "$HERE/sign-release.sh" v1.2.3 "$RUN" "${1:-$T/pinned}"
+}
+if out="$(run_sign_step 2>&1)"; then
+  if jq -e --arg id "$ID" 'length == 2 and all(.[];
+      .release_signature.key_id == $id and (.platform_signatures | length) == 2
+      and all(.platform_signatures[]; .key_id == $id and (.sha256 | length) == 64))' "$RUN/signatures.json" >/dev/null; then
+    pass "workflow sign step preserves both sources and all platform signatures"
+  else fail "workflow sign step lost signatures during deep merge"; fi
+else fail "workflow sign step rejected fixture: $out"; fi
+if run_sign_step "$HERE/keys" > "$T/post-check.log" 2>&1; then
+  fail "workflow sign step accepted a key absent from committed keys"
+elif grep -q 'signing secret is not a pinned key' "$T/post-check.log"; then
+  pass "workflow sign step checks signatures against pinned keys"
+else fail "workflow sign step failed before pinned-key post-check"; fi
+if [ ! -e "$RUN/signatures.json" ]; then pass "refused rerun clears earlier signatures artifact"; else fail "refused rerun left stale signatures artifact"; fi
+: > "$RUN/expected/built-sha256.txt"
+if run_sign_step > "$T/built-check.log" 2>&1; then
+  fail "workflow sign step signed platform tarballs absent from built list"
+elif grep -q 'not built by this run' "$T/built-check.log"; then
+  pass "workflow sign step enforces platform built list"
+else fail "workflow sign step failed before platform built check"; fi
+if [ ! -e "$RUN/signatures.json" ]; then pass "refused sign step publishes no signatures artifact"; else fail "refused sign step left signatures artifact"; fi
 
 # --- the committed interop fixture (P7-PLUG-84 copies it) ----------------------------------------------------------------------
 FIX="$HERE/testdata/platform-v1"
