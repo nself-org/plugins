@@ -491,3 +491,29 @@ func TestRegressQuotedControlAndCLocale(t *testing.T) {
 		t.Errorf("Go %%q survived: %q", got)
 	}
 }
+
+func TestPeriodicMatchesUseMergedStorage(t *testing.T) {
+	a := build([][]byte{[]byte("abababab"), []byte("babababa")})
+	blob := bytes.Repeat([]byte("ab"), 32768)
+	for _, skip := range []bool{false, true} {
+		var spans []span
+		if skip {
+			spans, _ = a.findSkip(blob, nil)
+		} else {
+			spans, _ = a.find(blob, nil)
+		}
+		if len(spans) != 1 || spans[0] != (span{0, len(blob)}) || cap(spans) > 4 {
+			t.Fatalf("skip=%v: %d spans, capacity %d", skip, len(spans), cap(spans))
+		}
+	}
+}
+
+func TestMaskedSGRHasNoRawEscape(t *testing.T) {
+	r := New()
+	mustRegister(t, r, "12345678")
+	for _, chunks := range [][]string{{"\x1b[12345678mhello"}, bytewise("\x1b[12345678mhello")} {
+		if got := run(r, chunks...); strings.Contains(got, "\x1b") || !strings.Contains(got, Placeholder) {
+			t.Fatalf("unsafe masked SGR: %q", got)
+		}
+	}
+}
