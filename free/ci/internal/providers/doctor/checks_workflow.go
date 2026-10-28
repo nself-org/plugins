@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/doctor"
+	"github.com/nself-org/plugins/free/ci/internal/report"
 	githubtmpl "github.com/nself-org/plugins/free/ci/templates/github"
 )
 
@@ -27,7 +28,7 @@ func GitHubRepo(ctx context.Context, root string, capture doctor.CaptureFunc) (s
 	if capture == nil {
 		return "", false
 	}
-	out, exit, err := capture(ctx, "git", "-c", "core.fsmonitor=false", "-C", root, "remote", "get-url", "origin")
+	out, exit, err := capture(report.WithoutLazyFetch(ctx), "git", "-c", "core.fsmonitor=false", "-C", root, "remote", "get-url", "origin")
 	if err != nil || exit != 0 {
 		return "", false
 	}
@@ -40,7 +41,7 @@ func GitHubRepo(ctx context.Context, root string, capture doctor.CaptureFunc) (s
 
 // DefaultBranch is origin's default branch as local git knows it ("main" when unknown).
 func DefaultBranch(ctx context.Context, root string, capture doctor.CaptureFunc) string {
-	out, exit, err := capture(ctx, "git", "-c", "core.fsmonitor=false", "-C", root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+	out, exit, err := capture(report.WithoutLazyFetch(ctx), "git", "-c", "core.fsmonitor=false", "-C", root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
 	if b := strings.TrimPrefix(strings.TrimSpace(out), "origin/"); err == nil && exit == 0 && b != "" {
 		return b
 	}
@@ -49,7 +50,7 @@ func DefaultBranch(ctx context.Context, root string, capture doctor.CaptureFunc)
 
 // WorkflowState classifies the workflow copy at origin/<branch>: ok, missing, not-generated or drifted.
 func WorkflowState(ctx context.Context, root, branch string, capture doctor.CaptureFunc) string {
-	out, exit, err := capture(ctx, "git", "-c", "core.fsmonitor=false", "-C", root, "show", "origin/"+branch+":"+githubtmpl.Path)
+	out, exit, err := capture(report.WithoutLazyFetch(ctx), "git", "-c", "core.fsmonitor=false", "-C", root, "show", "origin/"+branch+":"+githubtmpl.Path)
 	switch {
 	case err != nil || exit != 0:
 		return "missing"

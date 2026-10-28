@@ -57,7 +57,11 @@ type PolicyWrite struct {
 	Op, Scope, Subject, Key string
 	Value                   json.RawMessage
 	SHA, Actor              string
+	Expect                  *json.RawMessage // nil: unconditional; pointer to nil: row must be absent
 }
+
+// ErrPolicyConflict means the stored row no longer matches the caller's snapshot.
+var ErrPolicyConflict = errors.New("E607 policy changed concurrently; read it again and retry")
 
 // Tx is the write transaction an ApplyWrite callback runs in. It exposes only
 // what a policy write may add to the same commit.
@@ -130,6 +134,16 @@ func (s *Store) ApplyCheckedWrite(ctx context.Context, w PolicyWrite, check, inT
 		return err
 	}
 	return s.write(ctx, func(tx *sql.Tx) error {
+		if w.Expect != nil {
+			var prior string
+			err := tx.QueryRowContext(ctx, `SELECT value_json FROM trust_policy_row WHERE scope=? AND subject=? AND key=?`, w.Scope, w.Subject, w.Key).Scan(&prior)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+			if (errors.Is(err, sql.ErrNoRows) && *w.Expect != nil) || (err == nil && !bytes.Equal([]byte(prior), *w.Expect)) {
+				return ErrPolicyConflict
+			}
+		}
 		now := s.now().UnixNano()
 		if check != nil {
 			if err := check(&Tx{s: s, ctx: ctx, tx: tx}); err != nil {

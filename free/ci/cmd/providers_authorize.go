@@ -17,9 +17,9 @@ package main
 //          trust.providers admits nothing, so a failure between the two writes is safe. No provider
 //          code is involved: a revision's .nself/ci.yaml cannot authorize anything here, because
 //          trust.* keys in a revision only tighten. The read-modify-write of the list is not one
-//          transaction (the writer has no compare-and-swap; debt D-1386): two admins changing the same
-//          project at the same moment can lose one change. A non-admin, a machine-invoked caller that would
-//          loosen trust.*, and a token without the project are refused by the writer, not here.
+//          transaction; a compare-and-swap inside the writer refuses a stale list, so concurrent
+//          administrators must read again and retry rather than overwrite another change. A non-admin,
+//          a machine-invoked caller that would loosen trust.*, and a token without the project are refused by the writer, not here.
 
 import (
 	"context"
@@ -50,11 +50,12 @@ func ceilingCommand(id string) string {
 	return "nself ci policy set --scope project economics.ceilings." + id + " <micro-currency-units>"
 }
 
-// storedProviders is the trust.providers list of the project scope row (nil when there is none).
-func storedProviders(ctx context.Context, svc *roles.Service, project string) ([]string, error) {
+// storedProviders returns the project list and its prior JSON for compare-and-swap
+// (both nil when the row is absent).
+func storedProviders(ctx context.Context, svc *roles.Service, project string) ([]string, json.RawMessage, error) {
 	rows, err := svc.St.PolicyRows(ctx, "project", project)
 	if err != nil {
-		return nil, fmt.Errorf("read the project policy: %w", err)
+		return nil, nil, fmt.Errorf("read the project policy: %w", err)
 	}
 	for _, r := range rows {
 		if r.Key != keyTrustProviders {
@@ -62,11 +63,11 @@ func storedProviders(ctx context.Context, svc *roles.Service, project string) ([
 		}
 		var list []string
 		if err := json.Unmarshal(r.Value, &list); err != nil {
-			return nil, fmt.Errorf("the stored %s of project %s is not a list of names", keyTrustProviders, project)
+			return nil, nil, fmt.Errorf("the stored %s of project %s is not a list of names", keyTrustProviders, project)
 		}
-		return list, nil
+		return list, r.Value, nil
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 // withProvider returns list with id added (add) or removed, sorted and without duplicates.
@@ -150,7 +151,7 @@ func runAuthorize(ctx context.Context, op, id string, f providersFlags, env prov
 		w := &policy.Writer{Store: svc.St, Log: svc.Log, Run: env.Run, Machine: env.Machine}
 		apply = w.Apply
 	}
-	current, err := storedProviders(ctx, svc, project)
+	current, prior, err := storedProviders(ctx, svc, project)
 	if err != nil {
 		return fail(err)
 	}
@@ -165,7 +166,11 @@ func runAuthorize(ctx context.Context, op, id string, f providersFlags, env prov
 	}
 	set := func(key string, value any) error {
 		raw, _ := json.Marshal(value)
-		_, err := apply(ctx, actor, policy.Change{Op: policy.OpSet, Scope: "project", Project: project, Root: project, Key: key, Value: raw})
+		change := policy.Change{Op: policy.OpSet, Scope: "project", Project: project, Root: project, Key: key, Value: raw}
+		if key == keyTrustProviders {
+			change.Expect = &prior
+		}
+		_, err := apply(ctx, actor, change)
 		return err
 	}
 	if f.allowPrivate {
