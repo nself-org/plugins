@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/approval"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/github/webhook"
@@ -163,12 +164,12 @@ func TestRecordedForkPRToClassToPlacement(t *testing.T) {
 			head = *facts.HeadRepo.Value
 		}
 		runID := "pipe-fromhook"
-		if _, err := r.st.RecordApprovalFacts(context.Background(), store.ApprovalRunFacts{Run: runID, Author: "newbie", HeadRepo: head, RequiresApproval: res.RequiresApproval}, voidCheck); err != nil {
+		if _, err := r.st.RecordApprovalFacts(context.Background(), store.ApprovalRunFacts{Run: runID, Author: "newbie", HeadRepo: head, RequiresApproval: res.RequiresApproval}, approval.VoidCheck); err != nil {
 			t.Fatal(err)
 		}
 		a, err := r.enqueue(id, job, settle)
 		heldBecause(t, r, id, a, err)
-		if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:maintainer", ExpectSHA: baseRev, Check: voidCheck}); err != nil {
+		if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:maintainer", ExpectSHA: baseRev, Check: approval.VoidCheck}); err != nil {
 			t.Fatal(err)
 		}
 		a, err = r.enqueue(id, job, 2*time.Second)

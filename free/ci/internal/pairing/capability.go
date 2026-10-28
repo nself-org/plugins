@@ -15,51 +15,18 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/pairing/enroll"
 )
 
-func unknownFact[T any](src string, now time.Time) model.Fact[T] {
-	return model.Fact[T]{Source: src, ObservedAt: now, Confidence: "unknown"}
-}
-
-func knownFact[T any](v T, src string, now time.Time) model.Fact[T] {
-	return model.Fact[T]{Value: &v, Source: src, ObservedAt: now, Confidence: "known"}
-}
-
 func draftCapability(id string, r enroll.Request, now time.Time) model.Capability {
-	c := model.Capability{Schema: "ci.runner-capability/v1"}
-	c.Identity = model.CapabilityIdentity{
-		ID: id, Name: id, Provider: "agent", Transport: "agent", Labels: []string{}, HostKeyFingerprints: []string{},
-		Ownership: unknownFact[string]("assigned", now), MachineID: unknownFact[string]("self", now), AgeRecipient: unknownFact[string]("self", now),
-	}
+	c := model.NewCapability("self", "self", now)
+	c.Identity.ID, c.Identity.Name = id, id
+	c.Identity.Provider, c.Identity.Transport = "agent", "agent"
 	if r.MachineID != "" {
-		c.Identity.MachineID = knownFact(r.MachineID, "self", now)
+		c.Identity.MachineID = model.KnownFact(r.MachineID, "self", now)
 	}
-	c.Platform = model.CapabilityPlatform{
-		OS: knownFact(r.OS, "self", now), Arch: knownFact(r.Arch, "self", now), Kernel: unknownFact[string]("self", now),
-		OSVersion: unknownFact[string]("self", now), Virtualization: unknownFact[string]("self", now),
-	}
-	c.Resources = model.CapabilityResources{
-		CPU: unknownFact[float64]("self", now), MemMB: unknownFact[int64]("self", now), DiskFreeMB: unknownFact[int64]("self", now),
-		Accelerators: unknownFact[[]string]("self", now),
-		Reserved:     model.CapabilityReserved{CPU: unknownFact[float64]("assigned", now), MemMB: unknownFact[int64]("assigned", now)},
-	}
-	c.Tools = model.CapabilityTools{
-		Docker: unknownFact[bool]("self", now), Podman: unknownFact[bool]("self", now), GVisor: unknownFact[bool]("self", now), Tart: unknownFact[bool]("self", now),
-		Toolchains: map[string]model.Fact[string]{}, Browsers: unknownFact[[]string]("self", now), Services: unknownFact[[]string]("self", now),
-		Custom: map[string]model.Fact[string]{},
-	}
-	c.Availability = model.CapabilityAvailability{
-		State: knownFact("offline", "assigned", now), Slots: unknownFact[int]("self", now), Running: unknownFact[int]("self", now),
-		BatteryPct: unknownFact[int]("self", now), PluggedIn: unknownFact[bool]("self", now), Interactive: unknownFact[string]("self", now),
-		Persistence: unknownFact[bool]("assigned", now), OnBattery: unknownFact[string]("assigned", now), InteractivePolicy: unknownFact[string]("assigned", now),
-	}
-	c.Location = model.CapabilityLocation{Kind: unknownFact[string]("self", now), Region: unknownFact[string]("self", now)}
-	c.Economics = model.CapabilityEconomics{
-		Class: unknownFact[string]("self", now), MarginalCostPerMin: unknownFact[float64]("self", now),
-		Allowance: model.CapabilityAllowance{KnownRemaining: unknownFact[float64]("self", now), ResetAt: unknownFact[time.Time]("self", now), Confidence: unknownFact[string]("self", now)},
-	}
-	c.Separation = model.CapabilitySeparation{UIDSeparation: unknownFact[bool]("self", now), UserNS: unknownFact[bool]("self", now), SigningEligible: unknownFact[bool]("assigned", now)}
+	c.Platform.OS, c.Platform.Arch = model.KnownFact(r.OS, "self", now), model.KnownFact(r.Arch, "self", now)
+	c.Availability.State = model.KnownFact("offline", "assigned", now)
 	c.Verified = model.CapabilityVerified{By: "self", At: now}
 	c.Protocol = model.CapabilityProtocol{Versions: []int{1}, Min: 1, AgentVersion: r.AgentVersion}
-	c.Lifecycle = model.CapabilityLifecycle{Discovered: true, AuthorizedProjects: []string{}}
+	c.Lifecycle.Discovered = true
 	return c
 }
 
@@ -74,12 +41,12 @@ func trustOf(t TrustFields, now time.Time) model.CapabilityTrust {
 		secrets[i] = model.SecretClass(s)
 	}
 	out := model.CapabilityTrust{
-		Accepts: knownFact(accepts, "assigned", now), SecretClasses: knownFact(secrets, "assigned", now),
-		Isolation: unknownFact[model.Isolation]("assigned", now), Network: unknownFact[[]model.NetworkScope]("assigned", now),
-		PrivacyZone: unknownFact[model.PrivacyZone]("assigned", now),
+		Accepts: model.KnownFact(accepts, "assigned", now), SecretClasses: model.KnownFact(secrets, "assigned", now),
+		Isolation: model.UnknownFact[model.Isolation]("assigned", now), Network: model.UnknownFact[[]model.NetworkScope]("assigned", now),
+		PrivacyZone: model.UnknownFact[model.PrivacyZone]("assigned", now),
 	}
 	if t.PrivacyZone != "" {
-		out.PrivacyZone = knownFact(model.PrivacyZone(t.PrivacyZone), "assigned", now)
+		out.PrivacyZone = model.KnownFact(model.PrivacyZone(t.PrivacyZone), "assigned", now)
 	}
 	return out
 }

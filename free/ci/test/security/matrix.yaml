@@ -114,6 +114,7 @@ review_additions:
     cases:
       - test: TestApprovalBoundToHeadSHA
       - test: TestApprovalDoesNotTravel
+      - test: TestVoidedApprovalStaysVoidedWhenTheHeadReturns
   - id: revoked-node-no-job
     item: revoked node gets no job
     cases:
@@ -341,6 +342,7 @@ threats:
     cases:
       - test: TestApprovalBoundToHeadSHA
       - test: TestApprovalDoesNotTravel
+      - test: TestVoidedApprovalStaysVoidedWhenTheHeadReturns
       - test: TestApprovalBindsLeaseCheckout
       - test: TestUntrustedRunWithNoFactsIsHeld
       - test: TestRunApprovalNeedsAnotherPerson

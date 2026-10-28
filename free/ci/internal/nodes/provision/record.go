@@ -39,14 +39,6 @@ func RunnerNodeID(host string) string {
 	return "gh-runner-" + strings.Trim(b.String(), "-.")
 }
 
-func unknownFact[T any](src string, now time.Time) model.Fact[T] {
-	return model.Fact[T]{Source: src, ObservedAt: now, Confidence: "unknown"}
-}
-
-func knownFact[T any](v T, src string, now time.Time) model.Fact[T] {
-	return model.Fact[T]{Value: &v, Source: src, ObservedAt: now, Confidence: "known"}
-}
-
 // RunnerCapability builds the capability document of a provisioned runner host.
 func RunnerCapability(req RecordRequest, now time.Time) model.Capability {
 	id := RunnerNodeID(req.Host)
@@ -54,38 +46,21 @@ func RunnerCapability(req RecordRequest, now time.Time) model.Capability {
 	if i := strings.LastIndexByte(host, '@'); i >= 0 {
 		user, host = host[:i], host[i+1:]
 	}
-	labels := append([]string{"github-runner"}, req.Labels...)
-	c := model.Capability{Schema: "ci.runner-capability/v1"}
-	c.Identity = model.CapabilityIdentity{
-		ID: id, Name: id, Provider: "ssh", Transport: "provider", Labels: labels, HostKeyFingerprints: []string{},
-		Ownership: knownFact("operator", "assigned", now), MachineID: unknownFact[string]("provider", now),
-		AgeRecipient: unknownFact[string]("provider", now), SSH: &model.CapabilitySSH{Alias: host, User: user},
-	}
-	c.Platform = model.CapabilityPlatform{OS: knownFact("linux", "assigned", now), Arch: unknownFact[string]("provider", now),
-		Kernel: unknownFact[string]("provider", now), OSVersion: unknownFact[string]("provider", now), Virtualization: unknownFact[string]("provider", now)}
-	c.Resources = model.CapabilityResources{CPU: unknownFact[float64]("provider", now), MemMB: unknownFact[int64]("provider", now),
-		DiskFreeMB: unknownFact[int64]("provider", now), Accelerators: unknownFact[[]string]("provider", now),
-		Reserved: model.CapabilityReserved{CPU: unknownFact[float64]("assigned", now), MemMB: unknownFact[int64]("assigned", now)}}
-	c.Tools = model.CapabilityTools{Docker: unknownFact[bool]("provider", now), Podman: unknownFact[bool]("provider", now),
-		GVisor: unknownFact[bool]("provider", now), Tart: unknownFact[bool]("provider", now), Toolchains: map[string]model.Fact[string]{},
-		Browsers: unknownFact[[]string]("provider", now), Services: unknownFact[[]string]("provider", now), Custom: map[string]model.Fact[string]{}}
-	c.Availability = model.CapabilityAvailability{State: knownFact("online", "assigned", now), Slots: unknownFact[int]("provider", now),
-		Running: unknownFact[int]("provider", now), BatteryPct: unknownFact[int]("provider", now), PluggedIn: unknownFact[bool]("provider", now),
-		Interactive: unknownFact[string]("provider", now), Persistence: knownFact(true, "assigned", now),
-		OnBattery: unknownFact[string]("assigned", now), InteractivePolicy: unknownFact[string]("assigned", now)}
-	c.Location = model.CapabilityLocation{Kind: unknownFact[string]("provider", now), Region: unknownFact[string]("provider", now)}
-	c.Economics = model.CapabilityEconomics{Class: unknownFact[string]("provider", now), MarginalCostPerMin: unknownFact[float64]("provider", now),
-		Allowance: model.CapabilityAllowance{KnownRemaining: unknownFact[float64]("provider", now), ResetAt: unknownFact[time.Time]("provider", now),
-			Confidence: unknownFact[string]("provider", now)}}
-	c.Separation = model.CapabilitySeparation{UIDSeparation: knownFact(false, "assigned", now), UserNS: knownFact(false, "assigned", now),
-		SigningEligible: knownFact(false, "assigned", now)}
+	c := model.NewCapability("provider", "provider", now)
+	c.Identity.ID, c.Identity.Name = id, id
+	c.Identity.Provider, c.Identity.Transport = "ssh", "provider"
+	c.Identity.Labels = append([]string{"github-runner"}, req.Labels...)
+	c.Identity.Ownership = model.KnownFact("operator", "assigned", now)
+	c.Identity.SSH = &model.CapabilitySSH{Alias: host, User: user}
+	c.Platform.OS = model.KnownFact("linux", "assigned", now)
+	c.Availability.State = model.KnownFact("online", "assigned", now)
+	c.Availability.Persistence = model.KnownFact(true, "assigned", now)
+	c.Separation = model.CapabilitySeparation{UIDSeparation: model.KnownFact(false, "assigned", now), UserNS: model.KnownFact(false, "assigned", now),
+		SigningEligible: model.KnownFact(false, "assigned", now)}
 	c.Verified = model.CapabilityVerified{By: "provider", At: now}
 	c.Protocol = model.CapabilityProtocol{Versions: []int{1}, Min: 1}
-	c.Lifecycle = model.CapabilityLifecycle{Discovered: true, AuthorizedProjects: []string{}}
-	c.Trust = model.CapabilityTrust{
-		// null from source provider: the one shape ValidateCapability allows for an unknown accepts set.
-		Accepts:   model.Fact[[]model.TrustClass]{Source: "provider", ObservedAt: now, Confidence: "unknown"},
-		Isolation: unknownFact[model.Isolation]("assigned", now), Network: unknownFact[[]model.NetworkScope]("assigned", now),
-		SecretClasses: unknownFact[[]model.SecretClass]("assigned", now), PrivacyZone: unknownFact[model.PrivacyZone]("assigned", now)}
+	c.Lifecycle.Discovered = true
+	// null from source provider: the one shape ValidateCapability allows for an unknown accepts set.
+	c.Trust.Accepts = model.UnknownFact[[]model.TrustClass]("provider", now)
 	return c
 }

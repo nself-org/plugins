@@ -119,7 +119,7 @@ func TestTestForcesAFreshProbe(t *testing.T) {
 	k := newKit(t)
 	k.addNode("fp1") // the add probed a moment ago: a cached prober would hide the drift below
 	k.mutate = func(c *model.Capability) {
-		c.Resources.CPU = known(3.0, "probe", time.Now().UTC())
+		c.Resources.CPU = model.KnownFact(3.0, "probe", time.Now().UTC())
 	}
 	res, err := k.d.Test(context.Background(), "fp1", nil)
 	if err != nil || len(res.Drift) == 0 {

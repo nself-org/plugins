@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/approval"
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	"github.com/nself-org/plugins/free/ci/internal/economics"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -95,7 +96,7 @@ func (r *approveRig) seed(run, author, sha string) string {
 	if err := st.CreateAttempt(ctx, store.AttemptRow{ID: attempt, JobID: "job-" + run, N: 1}, ""); err != nil {
 		r.t.Fatal(err)
 	}
-	if _, err := st.RecordApprovalFacts(ctx, store.ApprovalRunFacts{Run: run, Author: author, HeadRepo: "fork/app", RequiresApproval: true}, voidCheck); err != nil {
+	if _, err := st.RecordApprovalFacts(ctx, store.ApprovalRunFacts{Run: run, Author: author, HeadRepo: "fork/app", RequiresApproval: true}, approval.VoidCheck); err != nil {
 		r.t.Fatal(err)
 	}
 	return attempt
@@ -442,7 +443,7 @@ func TestApprovalVoidedStaysHeldWhenBindingReturns(t *testing.T) {
 	st := r.store()
 	facts := func(repo string) {
 		t.Helper()
-		if _, err := st.RecordApprovalFacts(ctx, store.ApprovalRunFacts{Run: "run-1", Author: "mallory", HeadRepo: repo, RequiresApproval: true}, voidCheck); err != nil {
+		if _, err := st.RecordApprovalFacts(ctx, store.ApprovalRunFacts{Run: "run-1", Author: "mallory", HeadRepo: repo, RequiresApproval: true}, approval.VoidCheck); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -7,65 +7,33 @@ package security
 // run, head SHA, config digest and head repo; a push (the head moves) voids it with an audit row;
 // a stale approver is refused; an approval cannot be replayed for another run; the step compares
 // the approved SHA with the SHA the lease checks out, inside the admission transaction.
-// Inputs:  the real store and dispatcher; the pure rules of trust/source.
+// Inputs:  the real store and dispatcher; the production approval step.
 // Outputs: pass or fail.
-// Constraints: the production step lives in `package main` of cmd/approve.go and cannot be imported,
-//          so approvalStep below mirrors it branch for branch over the same exported rules
-//          (store.AdmitView.ApprovalState, source.RequiresApproval, source.VoidReasons). Every run of
-//          this suite records its facts like the source hook (rig.prepare), so no test relies on a
-//          bypass; a run with no facts is held when untrusted, as in production.
-//          cmd/approve_test.go proves the production step itself.
+// Constraints: the suite registers and runs the production step (internal/approval) and its void
+//          check, not a copy, so a regression in the step fails here. Every run of this suite
+//          records its facts like the source hook (rig.prepare), so no test relies on a bypass; a
+//          run with no facts is held when untrusted, as in production.
 
 import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	_ "modernc.org/sqlite"
 
+	"github.com/nself-org/plugins/free/ci/internal/approval"
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
-	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/trust/source"
 )
 
 func init() {
-	if err := dispatch.RegisterStep("approval", approvalStep); err != nil {
+	if err := approval.Register(); err != nil {
 		panic(err)
 	}
-}
-
-func voidCheck(approved, cur store.ApprovalBinding) []string {
-	return source.VoidReasons(source.Binding(approved), source.Binding(cur))
-}
-
-func approvalStep(ctx context.Context, v dispatch.View) error {
-	st, ok, err := v.ApprovalState(ctx)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("approval: run %s has no pipeline row", v.PipelineID)
-	}
-	if !source.RequiresApproval(st.Requires, st.Facts, model.TrustClass(st.SourceTrust)) {
-		return nil
-	}
-	hold := func(why string) error {
-		return &dispatch.Refusal{Reason: model.PlacementReason(source.ReasonApprovalRequired), Detail: why}
-	}
-	switch reasons := voidCheck(st.Approval.ApprovalBinding, st.Current()); {
-	case !st.HasApproval:
-		return hold("run " + st.Run + " waits for an approval")
-	case st.Approval.VoidedAt != 0:
-		return hold("the approval was voided (" + st.Approval.VoidReason + ")")
-	case len(reasons) > 0:
-		return hold("the approval no longer matches the run (" + strings.Join(reasons, ",") + ")")
-	}
-	return nil
 }
 
 // forkRun prepares a fork PR run that needs approval and is not approved yet.
@@ -98,7 +66,7 @@ func TestApprovalBoundToHeadSHA(t *testing.T) {
 	a, err := submit(settle)
 	heldBecause(t, r, id, a, err)
 
-	row, err := r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: voidCheck})
+	row, err := r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: approval.VoidCheck})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,18 +78,18 @@ func TestApprovalBoundToHeadSHA(t *testing.T) {
 	moveHead(t, r.db, runID, pushedRev, "i")
 	a, err = submit(settle)
 	heldBecause(t, r, id, a, err)
-	if st, _, _ := r.st.ApprovalState(context.Background(), runID); !st.HasApproval || len(voidCheck(st.Approval.ApprovalBinding, st.Current())) != 1 {
+	if st, _, _ := r.st.ApprovalState(context.Background(), runID); !st.HasApproval || len(approval.VoidCheck(st.Approval.ApprovalBinding, st.Current())) != 1 {
 		t.Fatalf("a push must leave a mismatch visible without any write: %+v", st)
 	}
-	voided, err := r.st.SweepApprovals(context.Background(), runID, voidCheck)
+	voided, err := r.st.SweepApprovals(context.Background(), runID, approval.VoidCheck)
 	if err != nil || len(voided) != 1 || voided[0].VoidReason != source.VoidHeadSHA {
 		t.Fatalf("sweep after the push: %+v %v", voided, err)
 	}
 	// An approver who looked at the old head is refused; one who looked at the new head is accepted.
-	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: voidCheck}); !errors.Is(err, store.ErrApprovalStale) {
+	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: approval.VoidCheck}); !errors.Is(err, store.ErrApprovalStale) {
 		t.Fatalf("a stale approver: %v", err)
 	}
-	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: pushedRev, Check: voidCheck}); err != nil {
+	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: pushedRev, Check: approval.VoidCheck}); err != nil {
 		t.Fatal(err)
 	}
 	a, err = submit(2 * time.Second)
@@ -132,6 +100,28 @@ func TestApprovalBoundToHeadSHA(t *testing.T) {
 	if ds := awaitDeliveries(r, 1); len(ds) != 1 || ds[0].Revision != pushedRev {
 		t.Fatalf("deliveries %+v, want one carrying the approved head %s", ds, pushedRev)
 	}
+}
+
+// TestVoidedApprovalStaysVoidedWhenTheHeadReturns: once a push voided the approval, a force push back to
+// the approved head makes the binding match again, but the voided approval must not admit the run.
+func TestVoidedApprovalStaysVoidedWhenTheHeadReturns(t *testing.T) {
+	r := newRig(t, repoPolicy(t, "public", "untrusted"), gvisorRunner("gv1", 4))
+	id, submit, runID := forkRun(t, r, "fork-back")
+	ctx := context.Background()
+	if _, err := r.st.ApproveRun(ctx, store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: approval.VoidCheck}); err != nil {
+		t.Fatal(err)
+	}
+	moveHead(t, r.db, runID, pushedRev, "i")
+	if voided, err := r.st.SweepApprovals(ctx, runID, approval.VoidCheck); err != nil || len(voided) != 1 {
+		t.Fatalf("sweep after the push: %+v %v", voided, err)
+	}
+	moveHead(t, r.db, runID, baseRev, "i")
+	st, _, err := r.st.ApprovalState(ctx, runID)
+	if err != nil || !st.HasApproval || st.Approval.VoidedAt == 0 || len(approval.VoidCheck(st.Approval.ApprovalBinding, st.Current())) != 0 {
+		t.Fatalf("setup: want a voided approval whose binding matches again, got %+v (%v)", st, err)
+	}
+	a, err := submit(settle)
+	heldBecause(t, r, id, a, err)
 }
 
 // awaitDeliveries waits (bounded) until the transport has seen n deliveries and returns them.
@@ -156,14 +146,14 @@ func TestApprovalDoesNotTravel(t *testing.T) {
 	r := newRig(t, repoPolicy(t, "public", "untrusted"), gvisorRunner("gv1", 4))
 	_, _, runA := forkRun(t, r, "forka")
 	idB, submitB, runB := forkRun(t, r, "forkb")
-	if _, err := r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runA, Approver: "token:t1:bob", Check: voidCheck}); err != nil {
+	if _, err := r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runA, Approver: "token:t1:bob", Check: approval.VoidCheck}); err != nil {
 		t.Fatal(err)
 	}
 	// Run B has no approval of its own: A's does not unlock it.
 	a, err := submitB(settle)
 	heldBecause(t, r, idB, a, err)
 	// A changed config (the workflow file the PR edited) voids the approval of the same SHA.
-	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runB, Approver: "token:t1:bob", Check: voidCheck}); err != nil {
+	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runB, Approver: "token:t1:bob", Check: approval.VoidCheck}); err != nil {
 		t.Fatal(err)
 	}
 	moveHead(t, r.db, runB, baseRev, "i-changed")
@@ -196,7 +186,7 @@ func TestApprovalDoesNotTravel(t *testing.T) {
 func TestApprovalBindsLeaseCheckout(t *testing.T) {
 	r := newRig(t, repoPolicy(t, "public", "untrusted"), gvisorRunner("gv1", 4))
 	id, submit, runID := forkRun(t, r, "forkc")
-	row, err := r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: voidCheck})
+	row, err := r.st.ApproveRun(context.Background(), store.ApproveInput{Run: runID, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: approval.VoidCheck})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +200,7 @@ func TestApprovalBindsLeaseCheckout(t *testing.T) {
 	}
 	// A second run, approved and then pushed: nothing is delivered for it.
 	id2, submit2, run2 := forkRun(t, r, "forkd")
-	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: run2, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: voidCheck}); err != nil {
+	if _, err = r.st.ApproveRun(context.Background(), store.ApproveInput{Run: run2, Approver: "token:t1:bob", ExpectSHA: baseRev, Check: approval.VoidCheck}); err != nil {
 		t.Fatal(err)
 	}
 	moveHead(t, r.db, run2, pushedRev, "i")

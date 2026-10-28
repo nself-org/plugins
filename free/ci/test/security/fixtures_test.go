@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/approval"
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/planview"
@@ -357,11 +358,11 @@ func (r *rig) prepare(job sched.Job, srcTrust string) (string, sched.Job) {
 	if needs {
 		head = "fork/app"
 	}
-	if _, err := r.st.RecordApprovalFacts(ctx, store.ApprovalRunFacts{Run: runID, Author: "contributor", HeadRepo: head, RequiresApproval: needs}, voidCheck); err != nil {
+	if _, err := r.st.RecordApprovalFacts(ctx, store.ApprovalRunFacts{Run: runID, Author: "contributor", HeadRepo: head, RequiresApproval: needs}, approval.VoidCheck); err != nil {
 		r.t.Fatal(err)
 	}
 	if needs && !r.noAutoApprove {
-		if _, err := r.st.ApproveRun(ctx, store.ApproveInput{Run: runID, Approver: "token:t0:maintainer", ExpectSHA: baseRev, Check: voidCheck}); err != nil {
+		if _, err := r.st.ApproveRun(ctx, store.ApproveInput{Run: runID, Approver: "token:t0:maintainer", ExpectSHA: baseRev, Check: approval.VoidCheck}); err != nil {
 			r.t.Fatal(err)
 		}
 	}
