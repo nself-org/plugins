@@ -12,6 +12,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/nself-org/plugins/free/ci/internal/release/job"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -68,6 +69,10 @@ func ViewRun(ctx context.Context, st *store.Store, row store.PipelineRow) (RunVi
 		jv := JobView{Name: j.Name, State: j.Status}
 		if a, ok := last[j.ID]; ok {
 			jv.FailureClass = a.FailureClass
+			if (a.State == "needs-operator" || a.State == "finalizing") && (j.Kind == "release" || !j.Idempotent) {
+				jv.AttemptID = a.ID
+				jv.IdempotencyKey = job.IdempotencyKey(a.ID)
+			}
 			if !terminal(j.Status) {
 				jv.State = a.State
 			}

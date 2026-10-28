@@ -6,11 +6,15 @@ package redact
 // CSI, lone ESC, UTF-8 encoded C1 controls) are rewritten into inert text.
 // Inputs:  a buffer and the byte before it. Outputs: edits and the number of
 // trailing bytes that may be the start of a sequence.
-// Constraints: SGR colour sequences (ESC [ digits ; : m) pass through; command
+// Constraints: SGR colour sequences (ESC [ digits ; : m) pass through unless
+// their bytes overlap a mask; masks must be sorted and merged. Command
 // names are matched only when the byte before `::` is not a letter, digit or
 // underscore, so `std::error::Error` is unchanged.
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // edit is one replacement the neutraliser asks for.
 type edit struct {
@@ -61,7 +65,7 @@ func cmdState(rest []byte) (isCmd, partial bool) {
 }
 
 // neutralise returns the edits for b and how many trailing bytes to hold back.
-func neutralise(b []byte, prev byte, final bool, out []edit) (edits []edit, hold int) {
+func neutralise(b []byte, prev byte, final bool, masks []span, out []edit) (edits []edit, hold int) {
 	held := func(i int) {
 		if !final && len(b)-i > hold {
 			hold = len(b) - i
@@ -76,6 +80,10 @@ func neutralise(b []byte, prev byte, final bool, out []edit) (edits []edit, hold
 				return out, hold
 			}
 			if sgr {
+				k := sort.Search(len(masks), func(k int) bool { return masks[k].e > i })
+				if k < len(masks) && masks[k].s < end {
+					out = append(out, edit{i, i + 1, escMark})
+				}
 				i = end - 1
 				continue
 			}

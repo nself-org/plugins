@@ -39,7 +39,7 @@ func CapabilitySchema() ([]byte, error) {
 	s.Properties["schema"].Const = anyPtr("ci.runner-capability/v1")
 	decorateCapability(s)
 	identity := s.Properties["identity"]
-	identity.Properties["provider"].Enum = choices("local", "ssh", "agent", "github-hosted", "github-jit", "gitlab", "ephemeral")
+	identity.Properties["provider"].Enum = choices("local", "ssh", "agent", "github-hosted", "github-jit", "gitlab", "ephemeral", "hetzner")
 	identity.Properties["transport"].Enum = choices("local", "ssh", "agent", "provider")
 	identity.Properties["ownership"].Properties["value"].Enum = choices(nil, "operator", "team", "provider")
 	s.Properties["platform"].Properties["virtualization"].Properties["value"].Enum = choices(nil, "none", "container", "vm", "unknown")

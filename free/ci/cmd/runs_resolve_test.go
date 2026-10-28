@@ -169,7 +169,7 @@ func TestRunsResolveNeedsConfirmationAndValidArguments(t *testing.T) {
 		"no action":       {resolveAttempt, "--idempotency-key", key},
 		"both actions":    {resolveAttempt, "--idempotency-key", key, "--abandon", "--rerun"},
 		"two attempts":    {resolveAttempt, "other", "--idempotency-key", key, "--abandon"},
-		"unknown flag":    {resolveAttempt, "--idempotency-key", key, "--abandon", "--force"},
+		"unknown flag":    {resolveAttempt, "--idempotency-key", key, "--abandon", "--unknown"},
 		"key no value":    {resolveAttempt, "--abandon", "--idempotency-key"},
 		"reason no value": {resolveAttempt, "--idempotency-key", key, "--abandon", "--reason"},
 	} {
@@ -193,5 +193,26 @@ func TestRunsResolveIsAReleaseOnlyRunsSubcommand(t *testing.T) {
 	})
 	if code != 1 || !strings.Contains(errs, job.NotResolvable) || attemptState(t, home) != "finalizing" {
 		t.Fatalf("code %d stderr %q state %s", code, errs, attemptState(t, home))
+	}
+}
+
+func TestRunsShowsResolutionKey(t *testing.T) {
+	for _, state := range []string{"needs-operator", "finalizing"} {
+		t.Run(state, func(t *testing.T) {
+			seedStuckRelease(t, state)
+			for _, args := range [][]string{{"run-1"}, {"run-1", "--json"}} {
+				code, out, errs := capture(t, func() int { return runRuns(args) })
+				if code != 0 || !strings.Contains(out, job.IdempotencyKey(resolveAttempt)) || !strings.Contains(out, resolveAttempt) {
+					t.Fatalf("code %d, output %s, errors %s", code, out, errs)
+				}
+			}
+		})
+	}
+}
+
+func TestResolveParsesForce(t *testing.T) {
+	a, err := parseResolve([]string{resolveAttempt, "--idempotency-key", "synthetic-key", "--abandon", "--force", "--yes"})
+	if err != nil || !a.force {
+		t.Fatalf("force parse: %+v %v", a, err)
 	}
 }

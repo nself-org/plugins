@@ -117,8 +117,8 @@ func (f *Filter) release(out []byte, final bool) (res []byte, again bool) {
 	}
 	raw, vhold := f.r.snapshot().values(b)
 	shp, shold, pemAt := findShapes(b, f.prev, final, nil)
-	neu, nhold := neutralise(b, f.prev, final, nil)
-	raw = append(raw, shp...)
+	raw = mergeSpans(append(raw, shp...))
+	neu, nhold := neutralise(b, f.prev, final, raw, nil)
 	if pemAt >= 0 {
 		// A registered value that contains the PEM block (a one-line key file) may
 		// begin before the header: its prefix is part of the mask.

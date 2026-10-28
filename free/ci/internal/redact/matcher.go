@@ -162,10 +162,11 @@ func (a *automaton) step(s int32, c byte) int32 {
 // hold is the number of trailing bytes that may begin a longer match.
 func (a *automaton) find(b []byte, out []span) (spans []span, hold int) {
 	s := int32(0)
+	start := len(out)
 	for i, c := range b {
 		s = a.step(s, c)
 		if o := a.nodes[s].out; o > 0 {
-			out = append(out, span{i + 1 - int(o), i + 1})
+			out = appendMerged(out, start, span{i + 1 - int(o), i + 1})
 		}
 	}
 	return out, int(a.nodes[a.nodes[s].hold].depth)
@@ -183,6 +184,7 @@ func spanCap(n int) int { return n + 2*(n/16+2) }
 // the first break is seen, so finding a match start costs O(1).
 func (a *automaton) findSkip(b []byte, out []span) (spans []span, hold int) {
 	s := int32(0)
+	start := len(out)
 	var ring []int
 	count := 0
 	pos := func(k int) int { // original offset of the k-th non-break byte
@@ -213,7 +215,7 @@ func (a *automaton) findSkip(b []byte, out []span) (spans []span, hold int) {
 		for ; t != 0; t = a.nodes[t].dict { // longest first; a shorter one stands in when the cap rejects it
 			o := int(a.nodes[t].depth)
 			if st := pos(count - o); i+1-st <= spanCap(o) {
-				out = append(out, span{st, i + 1})
+				out = appendMerged(out, start, span{st, i + 1})
 				break
 			}
 		}
@@ -245,3 +247,16 @@ func (r *ringBuffers) Get(n int) []int {
 }
 
 func (r *ringBuffers) Put(b []int) { r.p.Put(&b) }
+
+// appendMerged joins a match with the overlapping suffix of this scan. Match
+// ends arrive in order, but a longer pattern may move the start backwards.
+// Earlier scans in out[:start] are merged by the caller.
+func appendMerged(out []span, start int, m span) []span {
+	for len(out) > start && out[len(out)-1].e >= m.s {
+		last := out[len(out)-1]
+		m.s = min(m.s, last.s)
+		m.e = max(m.e, last.e)
+		out = out[:len(out)-1]
+	}
+	return append(out, m)
+}

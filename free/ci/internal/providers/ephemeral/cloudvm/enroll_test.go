@@ -195,7 +195,7 @@ func TestCloudVMFullCycleProvisionJoinJobTeardown(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := n.Capability
-	if !slices.Contains(c.Identity.Labels, "nself.burst.intent="+res.Token) || c.Identity.Provider != "ephemeral" {
+	if !slices.Contains(c.Identity.Labels, "nself.burst.intent="+res.Token) || c.Identity.Provider != "hetzner" {
 		t.Fatalf("labels %v provider %q", c.Identity.Labels, c.Identity.Provider)
 	}
 	if *c.Location.Kind.Value != "hosted" || *c.Economics.Class.Value != "ephemeral" || *c.Trust.Isolation.Value != "ephemeral-vm" || *c.Trust.PrivacyZone.Value != "provider-allowlist" {

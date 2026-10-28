@@ -30,8 +30,11 @@ var errTooLarge = errors.New("response too large")
 
 // Client sends provider requests through one guarded transport.
 type Client struct {
-	BaseURL          string
-	Auth             AuthFunc
+	BaseURL string
+	Auth    AuthFunc
+	// Headers receives the exact encoded request body; use it for body signatures.
+	// Authorization remains owned by Auth.
+	Headers          func(body []byte) map[string]string
 	RedirectHosts    []string
 	UserAgent        string
 	APIVersion       string
@@ -129,8 +132,10 @@ func (c *Client) DoRequest(ctx context.Context, rq Request, out any) (Response, 
 	}
 	u.RawQuery = query.Encode()
 	var payload io.Reader
+	var encoded []byte
 	if body != nil {
-		encoded, encodeErr := json.Marshal(body)
+		var encodeErr error
+		encoded, encodeErr = json.Marshal(body)
 		if encodeErr != nil {
 			finalErr = config("request.body")
 			return response, finalErr
@@ -152,6 +157,13 @@ func (c *Client) DoRequest(ctx context.Context, rq Request, out any) (Response, 
 	}
 	if c.APIVersion != "" {
 		req.Header.Set("X-GitHub-Api-Version", c.APIVersion)
+	}
+	if c.Headers != nil {
+		for key, value := range c.Headers(encoded) {
+			if !strings.EqualFold(key, "Authorization") {
+				req.Header.Set(key, value)
+			}
+		}
 	}
 	if c.Auth != nil {
 		token, authErr := c.Auth(ctx)

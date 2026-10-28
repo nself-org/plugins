@@ -5,12 +5,12 @@ package cloudvm
 // is: a provider-hosted ephemeral VM that belongs to one intent.
 // Inputs:  the node id (pairing.Config.AfterIssue) and the registry.
 // Outputs: the runner label nself.burst.intent=<token> (the budget step charges the node's job to the
-//          intent's reservation), identity provider `ephemeral`, location kind `hosted`, economics
+//          intent's reservation), identity provider `hetzner`, location kind `hosted`, economics
 //          class `ephemeral`, and the isolation from burst.trust (ephemeral-vm by default).
 // Constraints: a node that is not a burst node of this process is left alone; the trust fields set at
 //          approval (accepts, secret classes, privacy zone) are kept; `hosted` is what makes a project in the
 //          default privacy zone (private-infrastructure) inadmissible on the node (trust.admitPrivacy), and the
-//          provider-allowlist zone admits it only when the operator names provider `ephemeral` in
+//          provider-allowlist zone admits it only when the operator names provider `hetzner` in
 //          trust.providers; when a step fails, pairing returns the error to the joining node: it never
 //          receives its certificate, so it cannot connect or take a job, and the engine's idle clock ends
 //          the intent and revokes the node row and the issued certificate.
@@ -43,7 +43,7 @@ func (p *Provider) AfterIssue(ctx context.Context, nodeID string) error {
 	if !slices.Contains(c.Identity.Labels, label) {
 		c.Identity.Labels = append(slices.Clone(c.Identity.Labels), label)
 	}
-	c.Identity.Provider = "ephemeral"
+	c.Identity.Provider = "hetzner"
 	c.Location.Kind = fact("hosted", p)
 	c.Economics.Class = fact(economics.ClassEphemeral, p)
 	if _, _, err = p.cfg.Registry.UpdateCapability(ctx, nodeID, c, "policy:burst"); err != nil {

@@ -45,7 +45,7 @@ func (a *auditLog) last() store.AuditRow {
 
 // seed stores a run with one release job and one attempt that reached `state`.
 // It returns the store and the audit log, which starts empty after the seeding.
-func seed(t *testing.T, kind, state string) (*store.Store, *auditLog) {
+func seed(t *testing.T, kind, state string, liveOwner ...bool) (*store.Store, *auditLog) {
 	t.Helper()
 	ctx := context.Background()
 	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
@@ -62,7 +62,13 @@ func seed(t *testing.T, kind, state string) (*store.Store, *auditLog) {
 	must(st.CreatePipeline(ctx, store.PipelineRow{ID: "run-1", Revision: revision, Project: "proj", Trigger: "local", SourceTrust: "owner",
 		PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "running"}))
 	must(st.CreateJob(ctx, store.JobRow{ID: jobRow, PipelineID: "run-1", Name: "publish", Kind: kind, Idempotent: kind != "release", InputDigest: "i"}))
-	must(st.CreateAttempt(ctx, store.AttemptRow{ID: attempt, JobID: jobRow, N: 1}, ""))
+	owner := ""
+	if len(liveOwner) > 0 && liveOwner[0] {
+		c, err := st.RegisterCoordinator(ctx, 1234, "test-start", "test-boot")
+		must(err)
+		owner = c.ID
+	}
+	must(st.CreateAttempt(ctx, store.AttemptRow{ID: attempt, JobID: jobRow, N: 1, CoordinatorID: owner}, ""))
 	path := map[string][]model.JobState{
 		"queued":         {},
 		"running":        {"leased", "running"},
@@ -264,5 +270,33 @@ func TestResolveMapsALostCompareAndSetToAlreadyResolved(t *testing.T) {
 	}
 	if job.MapConflict(nil) != nil {
 		t.Fatal("nil became an error")
+	}
+}
+
+func TestResolveFinalizingLiveCoordinatorRequiresForce(t *testing.T) {
+	st, log := seed(t, "release", "finalizing", true)
+	req := job.Request{Attempt: attempt, Key: job.IdempotencyKey(attempt), Action: job.Abandon}
+	_, err := job.Resolve(context.Background(), st, req)
+	wantE716(t, err, job.NotResolvable)
+	if state(t, st, attempt) != "finalizing" || log.count() != 0 {
+		t.Fatal("refusal changed the attempt")
+	}
+	req.Force = true
+	if _, err = job.Resolve(context.Background(), st, req); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestResolveFinalizingStaleCoordinatorCanBeAbandoned(t *testing.T) {
+	st, _ := seed(t, "release", "finalizing", true)
+	cs, err := st.Coordinators(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = st.ExpireCoordinator(context.Background(), cs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = resolve(st, attempt, job.IdempotencyKey(attempt), job.Abandon); err != nil {
+		t.Fatal(err)
 	}
 }

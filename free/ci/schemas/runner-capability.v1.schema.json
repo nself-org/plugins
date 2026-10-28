@@ -23,7 +23,8 @@
             "github-hosted",
             "github-jit",
             "gitlab",
-            "ephemeral"
+            "ephemeral",
+            "hetzner"
           ]
         },
         "transport": {

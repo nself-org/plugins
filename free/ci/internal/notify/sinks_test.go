@@ -21,8 +21,8 @@ import (
 )
 
 type hit struct {
-	path, auth string
-	body       []byte
+	path, auth, signature string
+	body                  []byte
 }
 
 // hookServer is a TLS receiver on a loopback address, which is private by the guard's rule.
@@ -33,7 +33,7 @@ func hookServer(t *testing.T, status int) (*httptest.Server, *[]hit, *sync.Mutex
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		mu.Lock()
-		hits = append(hits, hit{r.URL.Path, r.Header.Get("Authorization"), b})
+		hits = append(hits, hit{r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("X-Nself-Signature"), b})
 		mu.Unlock()
 		w.WriteHeader(status)
 	}))
@@ -84,7 +84,7 @@ func TestWebhookSignedAndGuarded(t *testing.T) {
 	h := (*hits)[0]
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(h.body)
-	if h.path != "/hooks/path-token-1/x" || h.auth != "Bearer "+hex.EncodeToString(mac.Sum(nil)) {
+	if h.path != "/hooks/path-token-1/x" || h.auth != "" || h.signature != hex.EncodeToString(mac.Sum(nil)) {
 		t.Fatalf("path %q auth %q", h.path, h.auth)
 	}
 	var got Event
@@ -94,7 +94,7 @@ func TestWebhookSignedAndGuarded(t *testing.T) {
 	// a tampered body no longer verifies
 	mac = hmac.New(sha256.New, []byte(secret))
 	mac.Write(append(h.body, ' '))
-	if h.auth == "Bearer "+hex.EncodeToString(mac.Sum(nil)) {
+	if h.signature == hex.EncodeToString(mac.Sum(nil)) {
 		t.Fatal("signature must depend on the body")
 	}
 }
@@ -110,7 +110,7 @@ func TestWebhookWithoutSecretSendsNoAuthorization(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(*hits) != 1 || (*hits)[0].auth != "" || (*hits)[0].path != "/" {
+	if len(*hits) != 1 || (*hits)[0].auth != "" || (*hits)[0].signature != "" || (*hits)[0].path != "/" {
 		t.Fatalf("hits: %+v", *hits)
 	}
 }

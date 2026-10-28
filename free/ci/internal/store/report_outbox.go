@@ -98,14 +98,15 @@ func collect[T any](ctx context.Context, s *Store, scan func(*sql.Rows) (T, erro
 type RunJob struct {
 	ID, Name, Kind, Status string
 	Required               bool
+	Idempotent             bool
 }
 
 // PipelineJobs lists the jobs of a run in name order.
 func (s *Store) PipelineJobs(ctx context.Context, pipelineID string) ([]RunJob, error) {
 	return collect(ctx, s, func(r *sql.Rows) (j RunJob, err error) {
-		err = r.Scan(&j.ID, &j.Name, &j.Kind, &j.Status, &j.Required)
+		err = r.Scan(&j.ID, &j.Name, &j.Kind, &j.Status, &j.Required, &j.Idempotent)
 		return
-	}, "SELECT id,name,kind,status,required FROM job WHERE pipeline_id=? ORDER BY name", pipelineID)
+	}, "SELECT id,name,kind,status,required,idempotent FROM job WHERE pipeline_id=? ORDER BY name", pipelineID)
 }
 
 // PipelineAttempts lists every attempt of a run, job then n.
