@@ -15,6 +15,8 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/report"
+	"github.com/nself-org/plugins/free/ci/internal/sched"
+	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/secrets"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -55,6 +57,9 @@ func (h PolicyHook) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult,
 		return PolicyResult{}, err
 	}
 	out := PolicyResult{Digest: string(got.BaseDigest)}
+	if p, qp, err := schedulingOf(&got.Effective); err == nil { // a refusal is left to the dispatcher, which reports it on the first job
+		out.Placement, out.Queue = &p, &qp
+	}
 	for _, ig := range got.Ignored {
 		if ig.Scope == policy.SourceRun {
 			out.IgnoredRun = append(out.IgnoredRun, ig.Key+": "+ig.Reason)
@@ -69,4 +74,14 @@ func (h PolicyHook) Resolve(ctx context.Context, r PolicyRequest) (PolicyResult,
 		out.SecretClasses, out.HasSecretClasses = secrets.AllowlistOfValue(v)
 	}
 	return out, nil
+}
+
+// schedulingOf is the placement and queue policy of an effective policy.
+func schedulingOf(eff *policy.Effective) (sched.Policy, schedpolicy.QueuePolicy, error) {
+	p, err := schedpolicy.Placement(eff)
+	if err != nil {
+		return sched.Policy{}, schedpolicy.QueuePolicy{}, err
+	}
+	qp, err := schedpolicy.Queue(eff)
+	return p, qp, err
 }

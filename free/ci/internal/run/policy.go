@@ -12,6 +12,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 
+	"github.com/nself-org/plugins/free/ci/internal/sched"
+	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
@@ -25,6 +27,12 @@ type PolicyResult struct {
 	// protected branch, the worktree or the pin; a branch tip that is stale or
 	// unreadable), one line each; a run lists them, it never drops them.
 	Notes []string
+	// Placement and Queue are the scheduling policy of the same resolution the
+	// Digest came from, carried into the Session so the dispatcher places by the
+	// policy the recorded digest describes (D-1087). Nil when the resolver gave
+	// none; the dispatcher then resolves its own.
+	Placement *sched.Policy
+	Queue     *schedpolicy.QueuePolicy
 	SecretsInfo
 }
 
