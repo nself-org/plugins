@@ -24,9 +24,10 @@ func init() {
 }
 
 type state struct {
-	env doctor.Env
-	cfg Config
-	st  *store.Store
+	env      doctor.Env
+	cfg      Config
+	st       *store.Store
+	storeErr error
 }
 
 // Run returns the checks of the providers section.
@@ -38,12 +39,16 @@ func Run(ctx context.Context, env doctor.Env) []doctor.Check {
 	if st != nil {
 		defer func() { _ = st.Close() }()
 	}
-	return RunWith(ctx, env, st)
+	return runWith(ctx, env, st, err)
 }
 
 // RunWith is Run with the store given (nil: none). Tests use it.
 func RunWith(ctx context.Context, env doctor.Env, st *store.Store) []doctor.Check {
-	s := &state{env: env, st: st}
+	return runWith(ctx, env, st, nil)
+}
+
+func runWith(ctx context.Context, env doctor.Env, st *store.Store, storeErr error) []doctor.Check {
+	s := &state{env: env, st: st, storeErr: storeErr}
 	s.cfg = Load(ctx, env.Root, policy.Runner(env.Capture), st)
 	var out []doctor.Check
 	src, kind := s.checkGitHubCredential(ctx)

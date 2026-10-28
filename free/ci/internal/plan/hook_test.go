@@ -9,8 +9,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 // TestPlacePlanHook covers the cmd placePlan contract: nil adds nothing;
@@ -31,8 +29,8 @@ func TestPlacePlanHook(t *testing.T) {
 		t.Fatalf("nil hook returned %v %v", cells, err)
 	}
 
-	var seen *model.Pipeline
-	fake := func(_ context.Context, p *model.Pipeline) (any, []string, error) {
+	var seen *Plan
+	fake := func(_ context.Context, p *Plan) (any, []string, error) {
 		seen = p
 		cells := make([]string, len(p.Jobs))
 		for i := range cells {
@@ -45,7 +43,7 @@ func TestPlacePlanHook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if seen == nil || len(seen.Jobs) != len(placed.Jobs) || seen.Selection != placed.Selection {
+	if seen != placed || len(seen.Jobs) != len(placed.Jobs) || seen.Selection != placed.Selection {
 		t.Fatalf("hook saw %+v", seen)
 	}
 	got := envelope(t, placed)
@@ -71,12 +69,12 @@ func TestPlacePlanHook(t *testing.T) {
 	}
 
 	boom := errors.New("boom")
-	failing := func(context.Context, *model.Pipeline) (any, []string, error) { return nil, nil, boom }
+	failing := func(context.Context, *Plan) (any, []string, error) { return nil, nil, boom }
 	if _, err := mustBuild(t, matrixInput(t, "xcode")).ApplyPlacement(ctx, failing); !errors.Is(err, boom) {
 		t.Errorf("hook error not returned: %v", err)
 	}
 	// A hook that returns no data adds no key.
-	empty := func(context.Context, *model.Pipeline) (any, []string, error) { return nil, nil, nil }
+	empty := func(context.Context, *Plan) (any, []string, error) { return nil, nil, nil }
 	q := mustBuild(t, matrixInput(t, "xcode"))
 	if _, err := q.ApplyPlacement(ctx, empty); err != nil || strings.Contains(string(envelope(t, q)), `"placement"`) {
 		t.Error("nil placement data must add no key")

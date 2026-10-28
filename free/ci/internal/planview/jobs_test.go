@@ -29,3 +29,19 @@ func TestSchedJobsSingleMapping(t *testing.T) {
 		}
 	}
 }
+
+func TestPriorityAndSourceTrust(t *testing.T) {
+	jobs, _ := SchedJobs(Context{Trust: "untrusted"}, []PlannedJob{
+		{ID: "a", Job: model.Job{Priority: "low"}},
+		{ID: "z", Job: model.Job{Priority: "high"}},
+		{ID: "dependency", Layer: -1, Job: model.Job{Priority: "low"}},
+	})
+	if jobs[0].ID != "dependency" || jobs[1].ID != "z" || jobs[2].ID != "a" {
+		t.Fatalf("order: %+v", jobs)
+	}
+	for _, j := range jobs {
+		if j.Trust != "untrusted" || j.PersonalOwnRun {
+			t.Fatalf("trust: %+v", j)
+		}
+	}
+}

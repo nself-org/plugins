@@ -359,7 +359,7 @@ func TestPlacementUsesRunFlagsAndInteractiveFact(t *testing.T) {
 	stdinTerminal = func() bool { return true }
 	t.Cleanup(func() { stdinTerminal = old })
 	t.Setenv("NSELF_INVOKED_BY", "")
-	pd, err := loadPlanned(context.Background(), planSpec{repo: repo})
+	pd, err := buildPlanned(context.Background(), planSpec{repo: repo})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -381,7 +381,7 @@ func TestPlacementUsesRunFlagsAndInteractiveFact(t *testing.T) {
 	if changed.Pipeline.Preset != "fastest" {
 		t.Fatalf("preset %q", changed.Pipeline.Preset)
 	}
-	pd, err = loadPlanned(context.Background(), planSpec{repo: repo, trigger: "manual"})
+	pd, err = buildPlanned(context.Background(), planSpec{repo: repo, trigger: "manual"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,5 +391,35 @@ func TestPlacementUsesRunFlagsAndInteractiveFact(t *testing.T) {
 	}
 	if len(manual.Jobs) > 0 && manual.Jobs[0].Band == "interactive" {
 		t.Fatal("an explicit trigger must not imply interactive")
+	}
+}
+
+func TestPlacementUsesBuiltPlan(t *testing.T) {
+	repo, _ := placementRepo(t)
+	resetPlanFlags()
+	saved := placePlan
+	defer func() { placePlan = saved }()
+	placePlan = func(_ context.Context, pd planned) (any, []string, error) {
+		if pd.pl == nil || len(pd.pl.Jobs) == 0 || pd.pl.Jobs[0].ID == "" || pd.root != repo {
+			t.Fatalf("hook lost plan context: %+v", pd)
+		}
+		// The hook must use the plan already built even if its source disappears.
+		if err := os.Remove(filepath.Join(repo, ".nself", "ci.yaml")); err != nil {
+			t.Fatal(err)
+		}
+		return saved(context.Background(), pd)
+	}
+	code, out, errs := capture(t, func() int { return runPlan([]string{"--json", "--repo", repo}) })
+	if code != 0 {
+		t.Fatalf("exit %d: %s %s", code, out, errs)
+	}
+}
+
+func TestRemotePlacementTrust(t *testing.T) {
+	for _, trigger := range []model.Trigger{"pull_request", "push", "schedule", "api", "manual", "tag"} {
+		class, err := placementTrust(context.Background(), planned{pl: &plan.Plan{Trigger: trigger}})
+		if err != nil || class != "untrusted" {
+			t.Fatalf("%s: %s, %v", trigger, class, err)
+		}
 	}
 }

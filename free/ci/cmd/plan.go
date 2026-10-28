@@ -18,7 +18,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -30,7 +29,6 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/config"
 	"github.com/nself-org/plugins/free/ci/internal/detect"
-	"github.com/nself-org/plugins/free/ci/internal/drill"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/gates"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -42,7 +40,7 @@ var planFlags = flag.NewFlagSet("plan", flag.ContinueOnError)
 
 // placePlan, when set, adds placement to the plan after it is built and
 // validated: data goes under data.placement, human to the table.
-var placePlan func(ctx context.Context, p *model.Pipeline) (data any, human []string, err error)
+var placePlan func(ctx context.Context, p planned) (data any, human []string, err error)
 
 var planOpts struct {
 	json                               bool
@@ -95,43 +93,19 @@ func runPlan(args []string) int {
 	}
 	o := planOpts
 	ctx := context.Background()
-	root := firstOf(o.repo, os.Getenv("NSELF_CI_REPO"))
-	var err error
-	if root == "" {
-		root, err = os.Getwd()
-	} else {
-		root, err = filepath.Abs(root)
-	}
+	pd, err := buildPlanned(ctx, planSpec{o.repo, o.cfg, o.base, o.pipeline, o.trigger})
 	if err != nil {
 		return planFail(o.json, err)
 	}
-	if err := config.CheckLeftover(root); err != nil {
-		return planFail(o.json, err)
+	p := pd.pl
+	var place plan.PlaceFunc
+	if placePlan != nil {
+		place = func(ctx context.Context, p *plan.Plan) (any, []string, error) {
+			pd.pl = p
+			return placePlan(ctx, pd)
+		}
 	}
-	cfg := model.PipelineConfig{Version: 1}
-	path := firstOf(o.cfg, filepath.Join(root, config.FileName))
-	loaded, err := config.Load(path)
-	switch {
-	case err == nil:
-		cfg = loaded.Config
-	case !errors.Is(err, os.ErrNotExist) || o.cfg != "":
-		return planFail(o.json, err)
-	}
-	if cfg, err = drill.Expand(root, cfg, o.pipeline, o.trigger); err != nil { // as a real run: drills_dir subdirectories become kind drill jobs (D-1046)
-		return planFail(o.json, err)
-	}
-	rev := planRevision(ctx, root, o.base)
-	facts, checks, err := planChecks(root, cfg, fullSelection(rev))
-	if err != nil {
-		return planFail(o.json, err)
-	}
-	in := plan.Input{Config: cfg, Facts: facts, Checks: checks, Revision: rev,
-		World: planWorld(cfg, checks), Pipeline: o.pipeline, Trigger: model.Trigger(o.trigger)}
-	p, err := plan.Build(in)
-	if err != nil {
-		return planFail(o.json, err)
-	}
-	cells, err := p.ApplyPlacement(ctx, placePlan)
+	cells, err := p.ApplyPlacement(ctx, place)
 	if err != nil {
 		return planFail(o.json, err)
 	}

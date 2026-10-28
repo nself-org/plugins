@@ -1,7 +1,7 @@
 package planview
 
 // Purpose: map the planner's jobs to scheduler jobs, in the plan's
-// topological order (layer, then id), so `ci plan` and `ci explain` ask the
+// topological order (layer, priority, then id), so `ci plan` and `ci explain` ask the
 // scheduler exactly what a run would.
 // Inputs: Context (pipeline and revision facts) and the planned jobs.
 // Outputs: []sched.Job, one per planned job.
@@ -28,9 +28,10 @@ const DefaultNetwork = model.NetworkScope("internet")
 type Context struct {
 	PipelineID      string
 	Project         string
-	Support         []string // the pipeline's support platforms; empty means the platforms the jobs use
-	DefaultPlatform string   // platform of a job without a matrix entry
-	Foreground      bool     // a person is waiting at a terminal
+	Support         []string         // the pipeline's support platforms; empty means the platforms the jobs use
+	DefaultPlatform string           // platform of a job without a matrix entry
+	Trust           model.TrustClass // source classifier verdict; empty preserves the local caller default
+	Foreground      bool             // a person is waiting at a terminal
 }
 
 // PlannedJob is one job of the plan. State, Blocked and Detail are the
@@ -59,6 +60,9 @@ func SchedJobs(c Context, jobs []PlannedJob) ([]sched.Job, []Blocked) {
 	sort.SliceStable(ordered, func(i, j int) bool {
 		if ordered[i].Layer != ordered[j].Layer {
 			return ordered[i].Layer < ordered[j].Layer
+		}
+		if priorityRank(ordered[i].Job.Priority) != priorityRank(ordered[j].Job.Priority) {
+			return priorityRank(ordered[i].Job.Priority) < priorityRank(ordered[j].Job.Priority)
 		}
 		return ordered[i].ID < ordered[j].ID
 	})
@@ -144,8 +148,8 @@ func schedJob(c Context, band string, support []string, platform string, pj Plan
 	return sched.Job{
 		Key: pj.ID, ID: pj.ID, Name: pj.Name, MatrixKey: pj.Platform, Deps: append([]string(nil), pj.Deps...),
 		Pipeline:     sched.Pipeline{ID: c.PipelineID, Support: support, Band: band, Foreground: c.Foreground, Release: j.Kind == "release"},
-		Requirements: req, Accelerators: accelerators, Trust: "owner", SecretClasses: secretClasses(j.Secrets), Network: DefaultNetwork,
-		TimeoutMs: timeout, Attempt: 1, Priority: priority, RemoteOnly: j.RemoteOnly, PersonalOwnRun: true, Project: c.Project,
+		Requirements: req, Accelerators: accelerators, Trust: classOf(c), SecretClasses: secretClasses(j.Secrets), Network: DefaultNetwork,
+		TimeoutMs: timeout, Attempt: 1, Priority: priority, RemoteOnly: j.RemoteOnly, PersonalOwnRun: classOf(c) == "owner", Project: c.Project,
 	}
 }
 
@@ -171,4 +175,23 @@ func appendOnce(s []string, v string) []string {
 		}
 	}
 	return append(s, v)
+}
+
+func classOf(c Context) model.TrustClass {
+	if c.Trust == "" {
+		return "owner"
+	}
+	return c.Trust
+}
+
+// Dependencies precede dependants; priority orders jobs ready in one layer.
+func priorityRank(p model.Priority) int {
+	switch p {
+	case "high":
+		return 0
+	case "low":
+		return 2
+	default:
+		return 1
+	}
 }
