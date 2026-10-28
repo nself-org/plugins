@@ -20,10 +20,22 @@ type BlobHeader struct {
 	SHA256 string
 	Size   int64
 }
+
+// BlobWriter receives one blob. Close commits it, so a blob that failed, was refused or was
+// cut off must be disposed of with Abort, never Close. Offset is how many bytes the sink
+// already holds (a resumed blob starts there).
 type BlobWriter interface {
 	io.WriteCloser
 	Offset() int64
+	// Abort discards everything the writer holds without committing it.
+	Abort() error
 }
+
+// BlobVerifier is implemented by a BlobWriter that can check the sha256 of everything it holds
+// (hex, lower case) before the blob is committed. A writer that starts past offset 0 must
+// implement it, because the carrier has not seen the bytes before the offset and cannot hash
+// the whole blob itself.
+type BlobVerifier interface{ Verify(wantSHA256 string) error }
 
 // Sink consumes agent output without retaining credentials in a store row.
 type Sink interface {

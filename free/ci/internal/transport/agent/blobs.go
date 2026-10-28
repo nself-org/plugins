@@ -8,7 +8,7 @@ package agent
 // Outputs: offset frames; bytes in the sink's BlobWriter; an error that cancels the lease and fails Run with
 //          E656 transport.agent_blob when a blob is corrupt.
 // Constraints: a blob that starts at offset 0 is hashed here; a resumed blob must be verified by the sink on
-//          Close (it implements Verifier), because the bytes before the offset were never seen by this
+//          Close (it implements transport.BlobVerifier), because the bytes before the offset were never seen by this
 //          process; a corrupt, oversized or unverifiable blob fails closed: the writer is aborted, never
 //          committed; a chunk out of order is answered with the expected offset (at most maxResync times); a
 //          lease may open maxLeaseBlobs blobs of maxLeaseBytes in total; a digest is 64 lower-case hex.
@@ -40,13 +40,6 @@ const (
 const ReasonBlob = "transport.agent_blob"
 
 var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
-
-// Aborter is implemented by a BlobWriter that can discard what it holds.
-type Aborter interface{ Abort() error }
-
-// Verifier is implemented by a BlobWriter that can check the sha256 of everything it holds (hex, lower
-// case) before the blob is committed; Close commits.
-type Verifier interface{ Verify(wantSHA256 string) error }
 
 type blobState struct {
 	head    transport.BlobHeader
@@ -150,12 +143,9 @@ func (bs *blobSet) onDigest(ctx context.Context, rt *route, d protocol.Digest, m
 		return nil, badBlob("the %s blob %s was refused", d.Stream, short(head.SHA256))
 	}
 	st := &blobState{head: head, w: w, next: w.Offset()}
-	if _, ok := w.(Aborter); !ok {
-		return nil, badBlob("the sink cannot discard a %s blob; refusing to stream into it", d.Stream)
-	}
 	if st.next == 0 {
 		st.h = sha256.New()
-	} else if _, ok := w.(Verifier); !ok {
+	} else if _, ok := w.(transport.BlobVerifier); !ok {
 		st.discard()
 		return nil, badBlob("the sink holds %d bytes of the %s blob but cannot verify it; refusing to resume", st.next, d.Stream)
 	}
@@ -170,7 +160,7 @@ func (bs *blobSet) onDigest(ctx context.Context, rt *route, d protocol.Digest, m
 }
 
 func (st *blobState) commit() error {
-	if v, ok := st.w.(Verifier); ok {
+	if v, ok := st.w.(transport.BlobVerifier); ok {
 		if err := v.Verify(st.head.SHA256); err != nil {
 			st.discard()
 			return badBlob("%s blob %s rejected: the stored bytes do not match the digest", st.head.Stream, short(st.head.SHA256))
@@ -217,7 +207,7 @@ func (bs *blobSet) onChunk(c protocol.Chunk) error {
 		return bs.failBlob(st, "blob digest mismatch")
 	}
 	if st.h == nil {
-		if err = st.w.(Verifier).Verify(st.head.SHA256); err != nil {
+		if err = st.w.(transport.BlobVerifier).Verify(st.head.SHA256); err != nil {
 			return bs.failBlob(st, "the resumed blob does not match its digest")
 		}
 	}
@@ -249,9 +239,7 @@ func (bs *blobSet) discardLocked() {
 }
 
 func (st *blobState) discard() {
-	if a, ok := st.w.(Aborter); ok {
-		_ = a.Abort()
-	}
+	_ = st.w.Abort()
 }
 
 func short(d string) string {

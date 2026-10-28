@@ -19,7 +19,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
 
-// plainBlob is a writer with no Abort and no Verify.
+// plainBlob is a writer with no Verify; its Abort does nothing.
 type plainBlob struct {
 	data      []byte
 	held      int64 // what Offset reports at the start
@@ -37,6 +37,7 @@ func (b *plainBlob) Write(p []byte) (int, error) {
 }
 func (b *plainBlob) Offset() int64 { return b.held + int64(len(b.data)) }
 func (b *plainBlob) Close() error  { b.committed = b.closeErr == nil; return b.closeErr }
+func (b *plainBlob) Abort() error  { return nil }
 
 // fullBlob adds Abort and Verify.
 type fullBlob struct {
@@ -52,7 +53,7 @@ func (b *fullBlob) Verify(want string) error {
 	return b.verifyErr
 }
 
-// abortOnly adds Abort but no Verify.
+// abortOnly counts Aborts but has no Verify.
 type abortOnly struct {
 	plainBlob
 	aborted int
@@ -256,7 +257,6 @@ func TestBlobWriterRequirements(t *testing.T) {
 		err error
 	}{
 		"sink refuses":       {nil, errors.New("no space")},
-		"no abort":           {&plainBlob{}, nil},
 		"resume, no verify":  {&abortOnly{plainBlob: plainBlob{held: 5}}, nil},
 		"resume, no verify2": {&abortOnly{plainBlob: plainBlob{held: 1}}, nil},
 	} {
