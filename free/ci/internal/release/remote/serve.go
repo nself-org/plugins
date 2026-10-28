@@ -36,7 +36,7 @@ type Handlers struct {
 // InputsHandler is GET /v1/runs/{id}/release-inputs.
 func (h Handlers) InputsHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, in, ok := h.authorized(w, r)
+		_, in, ok := h.authorized(w, r, false)
 		if !ok {
 			return
 		}
@@ -50,7 +50,7 @@ func (h Handlers) InputsHandler() http.Handler {
 // BlobHandler is GET /v1/runs/{id}/release-blobs/{sha256}.
 func (h Handlers) BlobHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d, in, ok := h.authorized(w, r)
+		d, in, ok := h.authorized(w, r, true)
 		if !ok {
 			return
 		}
@@ -85,8 +85,10 @@ func (h Handlers) BlobHandler() http.Handler {
 	})
 }
 
-// authorized runs the checks common to both routes and returns the caller's inputs.
-func (h Handlers) authorized(w http.ResponseWriter, r *http.Request) (Deps, Inputs, bool) {
+// authorized runs the checks common to both routes and returns the caller's inputs; the role
+// check (and its audit row) runs on every request, only the collect may come from Deps.Cache
+// when cached is set.
+func (h Handlers) authorized(w http.ResponseWriter, r *http.Request, cached bool) (Deps, Inputs, bool) {
 	ctx := r.Context()
 	d, ok := h.deps()
 	run := r.PathValue("id")
@@ -109,7 +111,7 @@ func (h Handlers) authorized(w http.ResponseWriter, r *http.Request) (Deps, Inpu
 	}
 	var in Inputs
 	if err == nil {
-		in, err = d.collect(ctx, run, authz.Role(actor.Role()))
+		in, err = d.collectCached(ctx, run, authz.Role(actor.Role()), cached)
 	}
 	if err != nil {
 		h.refuseErr(w, err)

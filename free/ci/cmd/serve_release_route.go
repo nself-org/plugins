@@ -66,7 +66,7 @@ func startReleaseRoutes(ctx context.Context, addr string, c *coordinator.Coordin
 		c.Logf("release routes are off: the blob store could not be opened: %v", err)
 		return noop, nil
 	}
-	releaseRouteDeps.Store(&remote.Deps{Store: c.Store(), Blobs: blobs,
+	releaseRouteDeps.Store(&remote.Deps{Store: c.Store(), Blobs: blobs, Cache: &remote.InputsCache{},
 		Runs: &clientapi.StoreBackend{Store: c.Store(), Home: home}})
 	return func(context.Context) error { releaseRouteDeps.Store(nil); return nil }, nil
 }
