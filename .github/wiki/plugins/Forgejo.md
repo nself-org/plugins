@@ -13,7 +13,7 @@
 
 <!-- END GENERATED:catalog -->
 
-> Self-hosted Forgejo git forge plus a Forgejo Actions runner for zero-quota offline CI.
+> Self-hosted Forgejo git forge with Forgejo Actions enabled for external runners.
 
 ## Install
 
@@ -25,28 +25,23 @@ No license key required.
 
 ## Description
 
-Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute, consuming zero GitHub Actions quota. Designed for the ops profile (ops server on staging/prod).
+Self-hosted Forgejo git forge with Forgejo Actions enabled for external runners. There is no in-stack runner and no Docker socket mount: register runners on a CI node that is not a deploy host. Designed for the ops profile (ops server on staging/prod). See the [plugin README](https://github.com/nself-org/plugins/blob/main/free/forgejo/README.md) for isolation and trust, runner registration and migration from the removed runner.
 
 This plugin runs as its own container in your nSelf stack (rebuild with `nself build && nself start` after install).
 
-Category: `development`. Current version: `1.0.0`.
+Category: `development`.
 
 ## Configuration
 
 | Env Var | Default | Description |
 |---------|---------|-------------|
-| `NSELF_FORGEJO_ADMIN_USER` | *(required)* | Required. |
-| `NSELF_FORGEJO_ADMIN_PASSWORD` | — | Required. |
-| `NSELF_FORGEJO_ADMIN_EMAIL` | *(required)* | Required. |
-| `FORGEJO_RUNNER_REGISTRATION_TOKEN` | — | Required. |
-| `FORGEJO_HTTP_PORT` | *(see plugin.json)* | Optional. |
-| `FORGEJO_SSH_PORT` | *(see plugin.json)* | Optional. |
-| `FORGEJO_DOMAIN` | *(see plugin.json)* | Optional. |
-| `FORGEJO_RUNNER_NAME` | *(see plugin.json)* | Optional. |
-| `FORGEJO_RUNNER_LABELS` | *(see plugin.json)* | Optional. |
-| `FORGEJO_RUNNER_CAPACITY` | *(see plugin.json)* | Optional. |
-| `FORGEJO_RUNNER_MEMORY` | *(see plugin.json)* | Optional. |
-| `FORGEJO_RUNNER_CPU` | *(see plugin.json)* | Optional. |
+| `NSELF_FORGEJO_ADMIN_USER` | *(required)* | Admin account name, created on first boot. |
+| `NSELF_FORGEJO_ADMIN_PASSWORD` | *(required)* | Admin account password. |
+| `NSELF_FORGEJO_ADMIN_EMAIL` | *(required)* | Admin account email. |
+| `FORGEJO_HTTP_PORT` | `3844` | Optional. HTTP port, published on 127.0.0.1 only. |
+| `FORGEJO_SSH_PORT` | `3222` | Optional. SSH port for git over SSH. |
+| `FORGEJO_DOMAIN` | `localhost` | Optional. Public hostname used in clone URLs and webhook callbacks. |
+| `FORGEJO_DISABLE_REGISTRATION` | `true` | Optional. Self-service sign-up is closed by default; set `false` to open it. |
 
 ## Ports
 

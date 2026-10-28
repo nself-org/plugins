@@ -15,8 +15,9 @@
 #   keys, so it names a network called "${DOCKER_NETWORK}", and compose 5.6
 #   rejects the file) and a top-level network marked external (the fragment
 #   does not own it; the CLI's main compose file declares the project network).
-#   A fragment may still declare a network it owns, such as forgejo's
-#   ${COMPOSE_PROJECT_NAME:-nself}_forgejo_runner_net.
+#   A fragment may still declare a network it owns, such as the
+#   ${COMPOSE_PROJECT_NAME:-nself}_example_runner_net in the fixture
+#   tests/lint/compose-network/accept-plugin-owned.yml.
 #   A ${DOCKER_NETWORK:-<literal>} default is not flagged by design: the CLI
 #   rewrites it to ${DOCKER_NETWORK} (internal/build/plugins_network_normalize.go).
 # Inputs: fragment paths as arguments; default free/*/docker-compose.plugin.yml.
