@@ -138,9 +138,9 @@ Node commands run in an active `.nself` project can also learn its root again.
 layout it removes. `nodes upgrade` replaces the agent-owned binary under
 `/opt`, while the root-owned copy at
 `/Library/PrivilegedHelperTools/org.nself.ci-agent` retains the version installed
-by `nodes add --system`. Re-run `nodes add --system` with the desired agent
-version through its root bootstrap step to refresh that trusted copy before
-uninstalling an upgraded system node. Run uninstall from the trusted copy.
+by `nodes add --system`. Refresh that trusted copy by running
+`sudo /Library/PrivilegedHelperTools/org.nself.ci-agent upgrade --version <x.y.z>`
+on the node before uninstalling an upgraded system node. Run uninstall from the trusted copy.
 
 ## Manifest
 
