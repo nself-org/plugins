@@ -989,103 +989,22 @@ sudo systemctl enable grafana-server
    - Database connections: `pg_stat_activity_count`
    - Memory usage: `process_resident_memory_bytes`
 
-### Logging with Loki
+### Logging with Loki and Grafana Alloy
+
+Install the monitoring plugin to run Loki and Grafana Alloy with the maintained configuration:
 
 ```bash
-# Install Loki
-wget https://github.com/grafana/loki/releases/download/v2.9.3/loki-linux-amd64.zip
-unzip loki-linux-amd64.zip
-sudo mv loki-linux-amd64 /usr/local/bin/loki
-
-# Create configuration
-sudo mkdir -p /etc/loki
-sudo tee /etc/loki/config.yml <<EOF
-auth_enabled: false
-
-server:
-  http_listen_port: 3100
-
-ingester:
-  lifecycler:
-    ring:
-      kvstore:
-        store: inmemory
-      replication_factor: 1
-
-schema_config:
-  configs:
-    - from: 2020-10-24
-      store: boltdb-shipper
-      object_store: filesystem
-      schema: v11
-      index:
-        prefix: index_
-        period: 24h
-
-storage_config:
-  boltdb_shipper:
-    active_index_directory: /var/lib/loki/index
-    cache_location: /var/lib/loki/cache
-  filesystem:
-    directory: /var/lib/loki/chunks
-
-limits_config:
-  reject_old_samples: true
-  reject_old_samples_max_age: 168h
-EOF
-
-# Create systemd service
-sudo tee /etc/systemd/system/loki.service <<EOF
-[Unit]
-Description=Loki
-After=network.target
-
-[Service]
-Type=simple
-User=loki
-ExecStart=/usr/local/bin/loki -config.file=/etc/loki/config.yml
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Install Promtail (log shipper)
-wget https://github.com/grafana/loki/releases/download/v2.9.3/promtail-linux-amd64.zip
-unzip promtail-linux-amd64.zip
-sudo mv promtail-linux-amd64 /usr/local/bin/promtail
-
-# Configure Promtail
-sudo tee /etc/loki/promtail.yml <<EOF
-server:
-  http_listen_port: 9080
-
-positions:
-  filename: /var/lib/promtail/positions.yaml
-
-clients:
-  - url: http://localhost:3100/loki/api/v1/push
-
-scrape_configs:
-  - job_name: nself-stripe
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: nself-stripe
-          __path__: /var/log/nself/stripe-*.log
-
-  - job_name: nginx
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: nginx
-          __path__: /var/log/nginx/*access.log
-EOF
-
-sudo systemctl start loki promtail
-sudo systemctl enable loki promtail
+nself plugin install monitoring
+nself build
+nself start
 ```
+
+Alloy reads Docker json-file logs from `/var/lib/docker/containers` and host syslog from
+`/var/log/syslog` when present, then sends them to Loki. The log directories are mounted
+read-only; no Docker socket is used. Alloy keeps its read positions in the `alloy_data`
+volume and publishes no host port. See the [monitoring plugin](../plugins/Monitoring.md)
+for configuration, and the [Alloy configuration](https://github.com/nself-org/plugins/blob/main/free/monitoring/configs/alloy/config.alloy)
+for the collected paths and labels.
 
 ### Alerting with Alertmanager
 
@@ -1481,6 +1400,12 @@ sudo systemctl enable keepalived
 
 ### Complete Docker Compose Setup
 
+For the example below, copy the repository's
+[`free/monitoring/configs/alloy/config.alloy`](https://github.com/nself-org/plugins/blob/main/free/monitoring/configs/alloy/config.alloy)
+to `/opt/nself/monitoring/alloy/config.alloy`. It sends Docker json-file logs and host
+syslog to the `loki` service; plugins must log to stdout/stderr to appear in the Docker
+log stream. The Alloy image and mounts match the monitoring plugin's Compose fragment.
+
 ```yaml
 # /opt/nself/docker-compose.yml
 version: '3.8'
@@ -1693,19 +1618,26 @@ services:
     ports:
       - "3100:3100"
 
-  # Promtail Log Shipper
-  promtail:
-    image: grafana/promtail:latest
-    container_name: nself-promtail
+  # Grafana Alloy Log Shipper (no published host port)
+  alloy:
+    image: docker.io/grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f
+    container_name: nself-alloy
     restart: unless-stopped
-    command: -config.file=/etc/promtail/config.yml
+    command:
+      - "run"
+      - "--disable-reporting"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "--storage.path=/var/lib/alloy/data"
+      - "/etc/alloy/config.alloy"
     volumes:
-      - ./monitoring/promtail.yml:/etc/promtail/config.yml:ro
-      - stripe_logs:/var/log/nself/stripe:ro
-      - github_logs:/var/log/nself/github:ro
-      - nginx_logs:/var/log/nginx:ro
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy/data
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
     networks:
       - nself-network
+    depends_on:
+      - loki
 
 volumes:
   postgres_data:
@@ -1723,6 +1655,8 @@ volumes:
   grafana_data:
     driver: local
   loki_data:
+    driver: local
+  alloy_data:
     driver: local
 
 networks:
