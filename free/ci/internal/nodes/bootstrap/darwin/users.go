@@ -10,7 +10,7 @@ package darwin
 //          /usr/bin/false, home /var/empty, IsHidden 1, password `*`, and its own group; IsHidden is
 //          written last and is the commit marker: a complete account is left alone, a partial one (an
 //          interrupted install) and any leftover group of its name are deleted and built again with a
-//          fresh id, so a stale group id can never give two accounts one uid; a slot user is removed
+//          fresh id after a bounded volume ownership scan, so a stale group id can never give two accounts one uid; a slot user is removed
 //          only when it owns no file (its dirhelper folders under /private/var/folders do not count and
 //          are deleted with it). Cron: macOS lets any user install a crontab (measured on macos-15: no
 //          policy file blocked a job user), and a crontab outlives the job and the account, so every
@@ -27,7 +27,8 @@ func usersScript(slots int) string {
   i=%[2]d
   while [ "$i" -le %[3]d ]; do
     if ! echo "$used" | grep -qx "$i"; then
-      held=$({ %[5]s; } 2>/dev/null | head -n 1)
+      held=$({ %[5]s; } 2>/dev/null)
+      case "$held" in *scan-incomplete*) echo "ownership scan incomplete" >&2; return 1 ;; esac
       if [ -z "$held" ]; then echo "$i"; return 0; fi
     fi
     i=$((i + 1))
@@ -58,7 +59,7 @@ if [ -f /var/at/cron.deny ] || ! sudo -n -u %[1]s-job-1 crontab -l 2>&1 | grep -
   [ -f /var/at/cron.deny ] || { : > /var/at/cron.deny; chmod 0644 /var/at/cron.deny; }
   for u in %[1]s $(for n in %[4]s; do echo %[1]s-job-$n; done); do grep -qx "$u" /var/at/cron.deny || echo "$u" >> /var/at/cron.deny; done
 fi
-`, agentUser, IDLow, IDHigh, slotList(slots), ownedLoops(scanDirs, `-uid "$i"`, "-print"))
+`, agentUser, IDLow, IDHigh, slotList(slots), ownershipScan(`-uid "$i"`))
 }
 
 // dirsScript creates the directories with their owners and modes. Root only ever creates or changes an
@@ -90,7 +91,7 @@ func listJobUsersScript() string {
 // removeSlotScript retires slot n. Its job root goes when empty; its per-user folders under
 // /private/var/folders (the system makes them for any process run as the user) are deleted; its crontab
 // file goes (`crontab -u` is refused for a denied user, so the file under /var/at/tabs is removed directly); its user and group go only when no process and no file of the user is left in the places a job
-// user can write (scanDirs and the top-level mounted volumes). The sudoers drop-in has already lost the
+// user can own files on any local volume. Incomplete or timed-out scans keep the account. The sudoers drop-in has already lost the
 // slot's rule (Install writes it first), so the agent cannot start a new shim for the user meanwhile.
 // It prints "removed" or "kept".
 func removeSlotScript(n int) string {
@@ -102,10 +103,11 @@ if pgrep -u "$u" >/dev/null 2>&1; then echo kept; exit 0; fi
 rm -f "/var/at/tabs/$u"
 rmdir %[2]s 2>/dev/null || true
 find /private/var/folders -xdev -user "$u" -depth -delete >/dev/null 2>&1 || true
-left=$({ %[3]s; } 2>/dev/null | head -n 1)
+uid=$(dscl . -read "/Users/$u" UniqueID | awk '{print $NF}')
+left=$({ %[3]s; } 2>/dev/null)
 if [ -n "$left" ]; then echo kept; exit 0; fi
 dscl . -delete "/Users/$u" >/dev/null 2>&1 || true
 dscl . -delete "/Groups/$u" >/dev/null 2>&1 || true
 if dscl . -read "/Users/$u" UniqueID >/dev/null 2>&1; then echo kept; else echo removed; fi
-`, jobUser(n), JobRoot(n), ownedLoops(scanDirs, `-user "$u"`, "-print"))
+`, jobUser(n), JobRoot(n), ownershipScan(`-uid "$uid"`))
 }

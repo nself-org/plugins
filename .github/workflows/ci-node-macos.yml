@@ -2,7 +2,7 @@ name: ci-node-macos
 
 # The macOS leg of the node bootstrap (P7-NODE-31, Epic D20). A loopback sshd on port 2222 with a throwaway
 # key lets the real `nself ci nodes add --system` install the darwin layout (hidden agent user, per-slot
-# job users, sudoers job-shim rules, LaunchDaemon) on the GitHub-hosted macos-15 runner; free/ci/test/macos
+# job users, sudoers job-shim rules, LaunchDaemon) on GitHub-hosted macos-15 arm64 and Intel runners; free/ci/test/macos
 # then proves the separation and removes the layout again with `nself-ci-agent uninstall --system`.
 # The runner is disposable and the repository is public, so the leg is free. No secret is used: the keys
 # are generated in this job and die with it. Actions are pinned by commit SHA.
@@ -26,8 +26,16 @@ env:
 
 jobs:
   macos-node:
-    name: macos-node (macos-15)
-    runs-on: macos-15
+    name: macos-node (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            arch: arm64
+          - os: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -42,6 +50,7 @@ jobs:
           set -euo pipefail
           sw_vers
           test "$(sw_vers -productVersion | cut -d. -f1)" = 15
+          test "$(uname -m)" = "${{ matrix.arch }}"
           sudo -n true
           # the id range the install uses must be free of nself-ci accounts on a fresh runner
           if dscl . -list /Users | grep -q '^nself-ci'; then echo '::error::nself-ci accounts exist on a fresh runner'; exit 1; fi
@@ -52,6 +61,10 @@ jobs:
           set -euo pipefail
           go build -mod=vendor -o "$RUNNER_TEMP/nself-ci-agent" ./cmd/agent
           go build -mod=vendor -o "$RUNNER_TEMP/nself-ci" ./cmd
+
+      - name: Probe an unaccepted Xcode license
+        working-directory: free/ci
+        run: go test -mod=vendor -tags macosleg -count=1 -run '^TestUnacceptedXcodeLicense$' ./internal/nodes/probe
 
       - name: Start the loopback sshd (port 2222, throwaway key)
         run: |

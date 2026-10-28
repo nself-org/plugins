@@ -103,7 +103,7 @@ func TestTheSudoersRuleGoesBeforeASurplusUserIsRetired(t *testing.T) {
 
 func TestAnIdThatStillOwnsFilesIsNotReused(t *testing.T) {
 	u := usersScript(1)
-	mustContain(t, "users", u, `find "$d" -xdev -uid "$i" -print`, "/Users/Shared", "/Volumes/*")
+	mustContain(t, "users", u, `find "$d" -xdev -uid "$i" -print -quit`, "/sbin/mount", "scan-incomplete")
 	un := uninstallScript()
 	mustContain(t, "uninstall", un, `-user "$u" -depth -delete`, "/private/tmp", "/Volumes/*")
 }
@@ -127,9 +127,9 @@ func TestPerUserSystemFoldersDoNotKeepASlotAlive(t *testing.T) {
 	r := removeSlotScript(2)
 	mustContain(t, "remove", r,
 		`find /private/var/folders -xdev -user "$u" -depth -delete`,
-		`/var/db/nself-ci-jobs`, `/private/tmp /private/var/tmp /Users/Shared /Library/Caches`, `for d in /Volumes/*`, `-maxdepth 4`)
-	if strings.Contains(r, "/Applications") || strings.Contains(r, "find /private/var -xdev") {
-		t.Fatal("the ownership scan walks Xcode or the whole system volume: minutes per slot on a real Mac")
+		`/var/db/nself-ci-jobs`, `mounts=$(/sbin/mount)`, `-uid "$uid" -print -quit`, `+ 30`, `scan-incomplete`)
+	if strings.Contains(r, "-maxdepth") {
+		t.Fatal("the ownership scan misses deeply nested files")
 	}
 	mustContain(t, "uninstall", uninstallScript(), `find /private/var/folders -xdev -user "$u" -depth -delete`)
 	if strings.Index(r, "-depth -delete") > strings.Index(r, "left=") {
