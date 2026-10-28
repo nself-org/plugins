@@ -277,3 +277,27 @@ func repoRoot(t *testing.T) string {
 	}
 	return root
 }
+
+func TestNotifyHookDetachedRefRecovery(t *testing.T) {
+	log := &sinkLog{}
+	registerTestSink(t, func(_ context.Context, e notify.Event) error { log.add(e); return nil })
+	h := hookFor(openState(t), oneSink)
+	h.Ref = func(context.Context) string { return "" } // detached checkout
+	r := failRig(t)
+	r.C.Hooks.Auto.Notify = h
+	r.C.Opts.Ref = "refs/heads/served"
+	r.run(t)
+	green := passRig(t)
+	green.C.Hooks.Auto.Notify = h
+	green.C.Opts.Root = r.C.Opts.Root
+	green.C.Opts.Ref = r.C.Opts.Ref
+	green.run(t)
+	if got := log.kinds(); len(got) != 2 || got[0] != notify.KindFailure || got[1] != notify.KindRecovery {
+		t.Fatalf("events: %v", got)
+	}
+	for _, ev := range log.events {
+		if ev.Ref != r.C.Opts.Ref {
+			t.Fatalf("ref: %q", ev.Ref)
+		}
+	}
+}
