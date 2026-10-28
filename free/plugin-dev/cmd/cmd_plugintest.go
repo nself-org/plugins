@@ -22,6 +22,14 @@ import (
 	"github.com/nself-org/nself-plugin-dev/internal/links"
 )
 
+// launchError marks a failure to start an external tool (exec.Command.Run
+// returned a non-ExitError). It is infrastructure; health-check and other
+// logical failures are not wrapped in this type and remain user failures.
+type launchError struct{ err error }
+
+func (e *launchError) Error() string { return e.err.Error() }
+func (e *launchError) Unwrap() error { return e.err }
+
 // testData is the --json data of `test` when every phase run passed.
 type testData struct {
 	Name    string   `json:"name"`
@@ -53,8 +61,8 @@ func runPluginTest(p *parsed) (any, error) {
 	var infrastructureFailure bool
 	recordFailure := func(err error) {
 		failures = append(failures, err)
-		var exitErr *exec.ExitError
-		if !errors.As(err, &exitErr) {
+		var le *launchError
+		if errors.As(err, &le) {
 			infrastructureFailure = true
 		}
 	}
@@ -146,6 +154,9 @@ func runUnitTests(pluginPath string, hostMode bool) error {
 	testCmd.Stderr = os.Stderr
 
 	if err := testCmd.Run(); err != nil {
+		if _, ok := err.(*exec.ExitError); !ok {
+			return &launchError{fmt.Errorf("go test failed: %w", err)}
+		}
 		return fmt.Errorf("go test failed: %w", err)
 	}
 	return nil
@@ -157,6 +168,9 @@ func runSmokeInstall(name string) error {
 	installCmd.Stdout = os.Stdout
 	installCmd.Stderr = os.Stderr
 	if err := installCmd.Run(); err != nil {
+		if _, ok := err.(*exec.ExitError); !ok {
+			return &launchError{fmt.Errorf("smoke install failed: %w", err)}
+		}
 		return fmt.Errorf("smoke install failed: %w", err)
 	}
 
@@ -173,6 +187,9 @@ func runSmokeUninstall(name string) error {
 	removeCmd.Stdout = os.Stdout
 	removeCmd.Stderr = os.Stderr
 	if err := removeCmd.Run(); err != nil {
+		if _, ok := err.(*exec.ExitError); !ok {
+			return &launchError{fmt.Errorf("smoke uninstall failed: %w", err)}
+		}
 		return fmt.Errorf("smoke uninstall failed: %w", err)
 	}
 	return nil

@@ -98,6 +98,10 @@ var jsonCases = []jsonCase{
 		pluginDir(t, root, "rt")
 		stubs(t, map[string]string{"nself": "exit 0", "curl": "printf 200"})
 	}},
+	{name: "test-smoke-health-fails", args: []string{"test", "rt", "--phase", "smoke", "--json"}, code: 1, setup: func(t *testing.T, root string) {
+		pluginDir(t, root, "rt")
+		stubs(t, map[string]string{"nself": "exit 0", "curl": "printf 503"})
+	}},
 	{name: "test-unit-fails", args: []string{"test", "rt", "--phase", "unit", "--host", "--json"}, code: 1, setup: func(t *testing.T, root string) {
 		pluginDir(t, root, "rt")
 		stubs(t, map[string]string{"go": "echo child-stdout; echo child-stderr >&2; exit 1"})
