@@ -245,7 +245,56 @@ func TestNodesPairDefaultPublicURL(t *testing.T) {
 	}
 }
 
+// The default-route source address wins over a Docker bridge of the same RFC 1918 rank, and an IPv6-only
+// host gets its global address, not localhost (D-1259).
+func TestDefaultPublicURLRouteAndIPv6(t *testing.T) {
+	ips := func(ss ...string) (out []net.IP) {
+		for _, s := range ss {
+			out = append(out, net.ParseIP(s))
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name, route string
+		ips         []net.IP
+		want        string
+	}{
+		{"default route beats a docker bridge listed first", "192.168.1.20", ips("172.17.0.1", "192.168.1.20"), "https://192.168.1.20:3866"},
+		{"default route beats a bridge on the same rank, either order", "10.0.0.5", ips("10.0.0.5", "172.17.0.1"), "https://10.0.0.5:3866"},
+		{"a route address this machine lacks is ignored", "203.0.113.7", ips("172.17.0.1", "192.168.1.20"), "https://172.17.0.1:3866"},
+		{"no route known keeps the ranking", "", ips("100.100.1.1", "8.8.8.8", "172.20.0.5"), "https://172.20.0.5:3866"},
+		{"IPv6-only host", "", ips("::1", "fe80::1", "2001:db8::7"), "https://[2001:db8::7]:3866"},
+		{"IPv6 route", "2001:db8::7", ips("fd00::1", "2001:db8::7"), "https://[2001:db8::7]:3866"},
+		{"IPv4 beats IPv6 without a route", "", ips("2001:db8::7", "8.8.8.8"), "https://8.8.8.8:3866"},
+		{"loopback route is not used", "127.0.0.1", ips("127.0.0.1"), "https://localhost:3866"},
+	} {
+		old := defaultRouteIP
+		defaultRouteIP = func() net.IP { return net.ParseIP(tc.route) }
+		got, err := defaultPublicURL(":3866", tc.ips)
+		defaultRouteIP = old
+		if err != nil || got != tc.want {
+			t.Errorf("%s: got %q, %v; want %q", tc.name, got, err, tc.want)
+		}
+	}
+}
+
+func TestPairingAlertLine(t *testing.T) {
+	for kind, want := range map[string]string{
+		"pairing.code_reuse":       "its certificate was revoked",
+		"pairing.takeover_attempt": "claim a registered node's name",
+		"pairing.proof_failed":     "not signed by the node key",
+	} {
+		got := pairingAlertLine(pairing.Alert{Kind: kind, OfferID: "o1", NodeID: "n1"})
+		if !strings.HasPrefix(got, "ALERT "+kind+": offer o1 node n1: ") || !strings.Contains(got, want) {
+			t.Errorf("%s: %q", kind, got)
+		}
+	}
+}
+
 func TestDefaultPublicURL(t *testing.T) {
+	old := defaultRouteIP
+	defaultRouteIP = func() net.IP { return nil } // the machine running the test has no say
+	defer func() { defaultRouteIP = old }()
 	ips := func(ss ...string) (out []net.IP) {
 		for _, s := range ss {
 			out = append(out, net.ParseIP(s))

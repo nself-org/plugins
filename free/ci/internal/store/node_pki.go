@@ -169,26 +169,6 @@ func (s *Store) PKINodeKeyRotate(ctx context.Context, actor, nodeID, keyID strin
 	})
 }
 
-// PKITokenKeyPut stores a sealed token key.
-func (s *Store) PKITokenKeyPut(ctx context.Context, kid, public string, sealed []byte) error {
-	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO pki_token_key(kid,public,key_sealed,created_at) VALUES(?,?,?,?)`, kid, public, sealed, s.now().UnixNano())
-		return err
-	})
-}
-
-// PKITokenKey is a stored job-token key (Sealed: AES-GCM sealed Ed25519 seed).
-type PKITokenKey struct {
-	KID, Public string
-	Sealed      []byte
-	Retired     bool
-}
-
-func (s *Store) PKITokenKeys(ctx context.Context) ([]PKITokenKey, error) {
-	rows, err := s.readers.QueryContext(ctx, `SELECT kid,public,key_sealed,retired_at>0 FROM pki_token_key ORDER BY created_at DESC,kid`)
-	return pkiCollect(rows, err, func(r *sql.Rows) (k PKITokenKey, e error) { return k, r.Scan(&k.KID, &k.Public, &k.Sealed, &k.Retired) })
-}
-
 func (s *Store) PKIOfferPut(ctx context.Context, o PKIOffer) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `INSERT INTO pki_offer(id,code_hash,label,intent,cert_ttl_ns,expires_at,created_at) VALUES(?,?,?,?,?,?,?)`, o.ID, o.CodeHash, o.Label, o.Intent, o.CertTTL, o.ExpiresAt, s.now().UnixNano())
@@ -205,7 +185,8 @@ func scanOffer(r interface{ Scan(...any) error }) (o PKIOffer, err error) {
 
 // PKIOfferClaim presents a code hash. A live offer is consumed (CodeOK). A redeemed code taints its offer
 // (CodeReused: the caller revokes). An unknown code is a wrong attempt on every live offer (locks at
-// MaxCodeAttempts). intentOnly (the burst listener) leaves an offer without a live intent untouched.
+// MaxCodeAttempts). intentOnly (the burst listener) leaves an offer without a live intent untouched, and
+// a wrong code there counts against intent-bound offers only.
 func (s *Store) PKIOfferClaim(ctx context.Context, hash []byte, intentOnly bool) (o PKIOffer, res CodeClaim, err error) {
 	err = s.write(ctx, func(tx *sql.Tx) error {
 		now := s.now().UnixNano()
@@ -213,7 +194,9 @@ func (s *Store) PKIOfferClaim(ctx context.Context, hash []byte, intentOnly bool)
 		o, err = scanOffer(tx.QueryRowContext(ctx, `SELECT `+offerCols+` FROM pki_offer WHERE code_hash=?`, hash))
 		if errors.Is(err, sql.ErrNoRows) {
 			res = CodeUnknown
-			_, err = tx.ExecContext(ctx, `UPDATE pki_offer SET attempts=attempts+1, locked=CASE WHEN attempts+1>=? THEN 1 ELSE locked END WHERE redeemed_at=0 AND withdrawn=0 AND locked=0 AND expires_at>?`, MaxCodeAttempts, now)
+			// A wrong code on the burst listener (internet-facing) counts against intent-bound offers only, so
+			// probing it cannot lock the operator's foreground offers.
+			_, err = tx.ExecContext(ctx, `UPDATE pki_offer SET attempts=attempts+1, locked=CASE WHEN attempts+1>=? THEN 1 ELSE locked END WHERE redeemed_at=0 AND withdrawn=0 AND locked=0 AND expires_at>? AND (?=0 OR intent<>'')`, MaxCodeAttempts, now, intentOnly)
 			return err
 		}
 		if err != nil {

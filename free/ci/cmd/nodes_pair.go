@@ -70,7 +70,7 @@ func init() {
 	lifecycle.RegisterFlags("rotate", func(fs *flag.FlagSet) {
 		fs.BoolFunc("cert", "rotate the node's certificates: revoke them so the node must pair again", func(string) error { return fs.Set("mode", rotateCert) })
 		fs.BoolFunc("node-key", "rotate the pinned node signing key (needs --key-id)", func(string) error { return fs.Set("mode", rotateNodeKey) })
-		fs.String("key-id", "", "node-key id the node printed when it generated its new key (with --node-key)")
+		fs.String("key-id", "", "node key sha256 (or the shorter node key id) the node printed when it generated its new key (with --node-key)")
 	})
 }
 
@@ -117,13 +117,7 @@ func runNodesPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		AfterIssue: func(ctx context.Context, nodeID string) error {
 			return lifecycle.RunHooks(ctx, lifecycle.PointPair, lifecycle.HookEvent{Point: lifecycle.PointPair, NodeID: nodeID, Project: d.Project, Flags: fs})
 		},
-		Alert: func(a pairing.Alert) {
-			what := "a used code was presented again; its certificate was revoked"
-			if a.Kind == "pairing.takeover_attempt" {
-				what = "a code was used to claim a registered node's name; nothing was issued"
-			}
-			fmt.Fprintf(stderr, "ALERT %s: offer %s node %s: %s\n", a.Kind, a.OfferID, a.NodeID, what)
-		},
+		Alert: func(a pairing.Alert) { fmt.Fprintln(stderr, pairingAlertLine(a)) },
 	})
 	pairing.Use(svc)
 	w, err := svc.OpenWindow(ctx, f.addr, public, pairing.OfferOptions{Label: f.label, CertTTL: f.certTTL})
@@ -146,6 +140,19 @@ func runNodesPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	return 0
 }
 
+// pairingAlertLine is the operator-facing line of a pairing security event, shared by the foreground
+// window (`nodes pair`) and the burst listener (`ci serve`).
+func pairingAlertLine(a pairing.Alert) string {
+	what := "a used code was presented again; its certificate was revoked"
+	switch a.Kind {
+	case "pairing.takeover_attempt":
+		what = "a code was used to claim a registered node's name; nothing was issued"
+	case "pairing.proof_failed":
+		what = "an enrollment request was not signed by the node key it names; nothing was claimed"
+	}
+	return fmt.Sprintf("ALERT %s: offer %s node %s: %s", a.Kind, a.OfferID, a.NodeID, what)
+}
+
 // interfaceIPs lists the addresses of this machine's interfaces (a variable so tests can fix the machine).
 var interfaceIPs = func() []net.IP {
 	var out []net.IP
@@ -161,11 +168,27 @@ var interfaceIPs = func() []net.IP {
 	return out
 }
 
+// defaultRouteIP is the source address this machine uses toward the internet: the address a UDP "connect"
+// to a documentation address would send from (nothing is sent). A variable so tests can fix the machine.
+var defaultRouteIP = func() net.IP {
+	c, err := net.Dial("udp", "192.0.2.1:9")
+	if err != nil {
+		return nil
+	}
+	defer c.Close()
+	if a, ok := c.LocalAddr().(*net.UDPAddr); ok {
+		return a.IP
+	}
+	return nil
+}
+
 // defaultPublicURL is what nodes are told to reach when --public-url is absent. A bind address that names
-// a host is that host; a wildcard bind (":3866", "0.0.0.0:3866") becomes one of this machine's IPv4
-// addresses so the server certificate carries an IP SAN a LAN node can verify: a private (RFC 1918)
-// address first, then a public one, then a carrier-grade NAT one (Tailscale and the like); loopback and
-// link-local never. "localhost" only when the machine has none. An address without a port is an error.
+// a host is that host; a wildcard bind (":3866", "0.0.0.0:3866") becomes one of this machine's addresses
+// so the server certificate carries an IP SAN a LAN node can verify: the default-route source address when
+// it is one of them (a Docker bridge or VM host-only network never is), else a private (RFC 1918) IPv4
+// address, then a public one, then a carrier-grade NAT one (Tailscale and the like), then a global IPv6
+// address; loopback and link-local never. "localhost" only when the machine has none. An address without
+// a port is an error.
 func defaultPublicURL(addr string, ips []net.IP) (string, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -174,22 +197,36 @@ func defaultPublicURL(addr string, ips []net.IP) (string, error) {
 	if ip := net.ParseIP(host); host != "" && (ip == nil || !ip.IsUnspecified()) {
 		return "https://" + addr, nil
 	}
+	usable := func(ip net.IP) bool {
+		return ip != nil && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() && !ip.IsUnspecified() && !ip.IsMulticast()
+	}
+	if route := defaultRouteIP(); usable(route) {
+		for _, ip := range ips {
+			if ip.Equal(route) {
+				return "https://" + net.JoinHostPort(route.String(), port), nil
+			}
+		}
+	}
 	_, cgnat, _ := net.ParseCIDR("100.64.0.0/10")
-	best, rank := "", 4
+	best, rank := "", 5
 	for _, ip := range ips {
-		v4 := ip.To4()
-		if v4 == nil || v4.IsLoopback() || v4.IsLinkLocalUnicast() || v4.IsUnspecified() {
+		if !usable(ip) {
 			continue
 		}
-		r := 2
-		switch {
-		case v4.IsPrivate():
-			r = 1
-		case cgnat.Contains(v4):
-			r = 3
+		r, text := 4, ip.String() // a global IPv6 address, after every IPv4 one
+		if v4 := ip.To4(); v4 != nil {
+			text = v4.String()
+			switch {
+			case v4.IsPrivate():
+				r = 1
+			case cgnat.Contains(v4):
+				r = 3
+			default:
+				r = 2
+			}
 		}
 		if r < rank {
-			best, rank = v4.String(), r
+			best, rank = text, r
 		}
 	}
 	if best == "" {

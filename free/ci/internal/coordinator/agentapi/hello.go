@@ -83,7 +83,7 @@ func (s *Server) checkNodeKey(r *http.Request, node string, k protocol.NodeKey) 
 		return &protocol.Reject{Code: pki.CodeInvalid, Reason: reason}
 	}
 	raw, err := base64.StdEncoding.DecodeString(k.Public)
-	if k.Alg != "ed25519" || err != nil || len(raw) != ed25519.PublicKeySize || k.KeyID != pki.NodeKeyID(raw) {
+	if k.Alg != "ed25519" || err != nil || !pki.ValidNodeKey(raw) || k.KeyID != pki.NodeKeyID(raw) {
 		return bad(pki.ReasonBadCSR)
 	}
 	if err = s.cfg.CA.CheckNodeKey(r.Context(), node, ed25519.PublicKey(raw)); err != nil {

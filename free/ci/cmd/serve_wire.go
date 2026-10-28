@@ -71,7 +71,8 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 	if ca, err := pki.New(ctx, pki.Options{Store: st, DataDir: home}); err != nil {
 		fmt.Fprintf(os.Stderr, "nself-ci-serve: the pairing service is off (coordinator PKI: %v)\n", err)
 	} else {
-		pairing.Use(pairing.New(pairing.Config{CA: ca, Store: st, Registry: reg, CoordinatorID: "local", AgentURL: servePublicURL, Actor: "coordinator"}))
+		pairing.Use(pairing.New(pairing.Config{CA: ca, Store: st, Registry: reg, CoordinatorID: "local", AgentURL: servePublicURL, Actor: "coordinator",
+			Alert: func(a pairing.Alert) { fmt.Fprintln(os.Stderr, "nself-ci-serve: "+pairingAlertLine(a)) }})) // the burst listener has no operator at a prompt
 	}
 	agentOnAck = func(_, leaseID string) {
 		if d := activeDrain.Load(); d != nil {

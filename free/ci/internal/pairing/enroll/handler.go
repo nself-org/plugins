@@ -124,7 +124,7 @@ func Listen(addr string, cfg *tls.Config, h http.Handler) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{ln: ln, http: &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 11 * time.Minute, MaxHeaderBytes: 8 << 10}, done: make(chan struct{})}
+	s := &Server{ln: ln, http: &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 11 * time.Minute, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 8 << 10}, done: make(chan struct{})}
 	go func() {
 		defer close(s.done)
 		_ = s.http.Serve(ln)

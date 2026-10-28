@@ -657,3 +657,52 @@ func TestPKIOfferConcurrentClaimsHaveOneWinner(t *testing.T) {
 		t.Fatalf("ok=%d reused=%d", ok, reused)
 	}
 }
+
+// Wrong codes on the burst listener must not lock the operator's foreground offers (D-1259).
+func TestPKIBurstWrongCodesSpareForegroundOffers(t *testing.T) {
+	ctx := context.Background()
+	s, clk := pkiTestStore(t)
+	fg := pkiOffer("fg", 1, 10*time.Minute, clk)
+	burst := pkiOffer("burst", 2, 10*time.Minute, clk)
+	burst.Intent = "intent-1"
+	for _, o := range []PKIOffer{fg, burst} {
+		if err := s.PKIOfferPut(ctx, o); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range MaxCodeAttempts {
+		if _, res, err := s.PKIOfferClaim(ctx, pkiHash(0xEE), true); err != nil || res != CodeUnknown {
+			t.Fatalf("wrong code: %q %v", res, err)
+		}
+	}
+	state := func(id string) (n int64, locked bool) {
+		if err := s.readers.QueryRow(`SELECT attempts,locked FROM pki_offer WHERE id=?`, id).Scan(&n, &locked); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if n, locked := state("fg"); n != 0 || locked {
+		t.Fatalf("foreground offer touched by burst probing: attempts=%d locked=%v", n, locked)
+	}
+	if n, locked := state("burst"); n != MaxCodeAttempts || !locked {
+		t.Fatalf("burst offer: attempts=%d locked=%v, want locked", n, locked)
+	}
+	if _, res, _ := s.PKIOfferClaim(ctx, fg.CodeHash, false); res != CodeOK {
+		t.Fatalf("the foreground code must still work: %q", res)
+	}
+}
+
+// First creation of a token key is one conditional insert (D-1259).
+func TestPKITokenKeyPutFirstKeepsTheFirst(t *testing.T) {
+	ctx := context.Background()
+	s, _ := pkiTestStore(t)
+	if put, err := s.PKITokenKeyPutFirst(ctx, "a", "p-a", []byte("sealed-a")); err != nil || !put {
+		t.Fatalf("first: %v %v", put, err)
+	}
+	if put, err := s.PKITokenKeyPutFirst(ctx, "b", "p-b", []byte("sealed-b")); err != nil || put {
+		t.Fatalf("second must be a no-op: %v %v", put, err)
+	}
+	if got, _ := s.PKITokenKeys(ctx); len(got) != 1 || got[0].KID != "a" {
+		t.Fatalf("keys %+v", got)
+	}
+}

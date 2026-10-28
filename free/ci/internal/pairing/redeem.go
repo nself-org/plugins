@@ -51,7 +51,7 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 		return enroll.Response{}, &pki.Error{Reason: pki.ReasonClockSkew, Msg: "node and coordinator clocks differ by more than 120 s"}
 	}
 	name := strings.ToLower(req.Name)
-	if !pki.ValidID(name) || len(req.NodeKey) != ed25519.PublicKeySize || !ValidShape(req.Code) {
+	if !pki.ValidID(name) || !pki.ValidNodeKey(req.NodeKey) || !ValidShape(req.Code) {
 		return enroll.Response{}, fail(ReasonBadRequest, "request is incomplete")
 	}
 	csrFP, err := pki.CSRKeyFingerprint(req.CSR)
@@ -60,6 +60,7 @@ func (s *Service) redeem(ctx context.Context, req enroll.Request, src string, in
 	}
 	keyID := pki.NodeKeyID(req.NodeKey)
 	if !ed25519.Verify(req.NodeKey, enroll.Transcript(s.cfg.CoordinatorID, s.cfg.CA.RootFingerprint(), name, req.ClientTime, csrFP, keyID), req.NodeKeySig) {
+		s.auditProofFailure(ctx, name, src, csrFP)
 		return enroll.Response{}, &pki.Error{Reason: pki.ReasonNodeKeyProof, Msg: "the request is not signed by the node key it names"}
 	}
 	hash := HashCode(req.Code)

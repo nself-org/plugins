@@ -58,7 +58,8 @@ func (c *CA) Tokens(ctx context.Context) (*Tokens, error) {
 			return nil, serr
 		}
 		kid := NodeKeyID(pub)
-		if err = c.st.PKITokenKeyPut(ctx, kid, base64.StdEncoding.EncodeToString(pub), sealed); err != nil {
+		// First creation is one conditional insert: a process that lost the race to another reads that key.
+		if _, err = c.st.PKITokenKeyPutFirst(ctx, kid, base64.StdEncoding.EncodeToString(pub), sealed); err != nil {
 			return nil, err
 		}
 		if keys, err = c.st.PKITokenKeys(ctx); err != nil {

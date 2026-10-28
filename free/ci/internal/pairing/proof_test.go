@@ -335,3 +335,18 @@ func enrollJoinDoesNotFollowRedirects(t *testing.T) {
 func decodeJSON(q *http.Request, v any) error {
 	return jsonDecode(q.Body, v)
 }
+
+// A small-order node key cannot be named in an enrollment request (D-1259).
+func TestRedeemRefusesSmallOrderNodeKey(t *testing.T) {
+	r := newRig(t, nil)
+	off := r.offer(OfferOptions{Approver: approving("policy:p", DefaultTrust())})
+	m := newNodeMat(t)
+	q := r.request(off.Code, "so-node", m)
+	q.NodeKey = make([]byte, ed25519.PublicKeySize)
+	q.NodeKey[0] = 1 // the identity point
+	_, err := r.svc.Redeem(context.Background(), q, "127.0.0.1:1")
+	if ReasonOf(err) != ReasonBadRequest {
+		t.Fatalf("want bad_request, got %v", err)
+	}
+	r.untouched(off)
+}

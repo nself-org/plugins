@@ -56,6 +56,7 @@ type Service struct {
 	approvers map[string]Approver
 	redeemed  map[string]bool
 	inflight  int
+	proofs    proofAuditor
 	wake      chan struct{}
 }
 

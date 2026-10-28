@@ -5,8 +5,9 @@ package pki
 // Inputs:  node id, the node's public key as sent in hello.
 // Outputs: the key id, errors with E660 reason node_key_changed.
 // Constraints: the key id is the first 16 hex characters of SHA-256 of the raw public key (the same form
-//          the agent prints); a pin is a TOFU decision made at enrollment under an operator-confirmed
-//          fingerprint, never silently re-pinned.
+//          the agent prints); a pending pin (rotate) may instead name the full 64-hex SHA-256, which binds
+//          all 256 bits and is the form to prefer; a pin is a TOFU decision made at enrollment under an
+//          operator-confirmed fingerprint, never silently re-pinned.
 
 import (
 	"context"
@@ -18,7 +19,7 @@ import (
 	"regexp"
 )
 
-var keyIDPattern = regexp.MustCompile(`^[0-9a-f]{16}$`)
+var keyIDPattern = regexp.MustCompile(`^([0-9a-f]{16}|[0-9a-f]{64})$`)
 
 // NodeKeyID is the id of an Ed25519 node public key.
 func NodeKeyID(pub ed25519.PublicKey) string {
@@ -26,10 +27,25 @@ func NodeKeyID(pub ed25519.PublicKey) string {
 	return hex.EncodeToString(sum[:])[:16]
 }
 
+// NodeKeyFingerprint is the full SHA-256 of an Ed25519 node public key in lower-case hex; NodeKeyID is
+// its first 16 characters. A pending pin that names it binds the whole digest.
+func NodeKeyFingerprint(pub ed25519.PublicKey) string {
+	sum := sha256.Sum256(pub)
+	return hex.EncodeToString(sum[:])
+}
+
+// keyIDMatches reports whether id, a stored pending-pin key id (16 or 64 hex characters), names pub.
+func keyIDMatches(id string, pub ed25519.PublicKey) bool {
+	if len(id) == 64 {
+		return subtle.ConstantTimeCompare([]byte(id), []byte(NodeKeyFingerprint(pub))) == 1
+	}
+	return id == NodeKeyID(pub)
+}
+
 // PinNodeKey records the node key a node enrolled with.
 func (c *CA) PinNodeKey(ctx context.Context, nodeID string, pub ed25519.PublicKey) error {
-	if len(pub) != ed25519.PublicKeySize {
-		return fail(ReasonBadCSR, "node key must be an Ed25519 public key")
+	if !ValidNodeKey(pub) {
+		return fail(ReasonBadCSR, "node key must be an Ed25519 public key of full order")
 	}
 	return c.st.PKINodeKeyPut(ctx, nodeID, NodeKeyID(pub), base64.StdEncoding.EncodeToString(pub))
 }
@@ -37,11 +53,19 @@ func (c *CA) PinNodeKey(ctx context.Context, nodeID string, pub ed25519.PublicKe
 // RepinNodeKey finalizes the pin of a re-pairing node after CheckPinnedNodeKey passed: a compare-and-set
 // against the key id that check vetted, so a rotation landing since then is refused, never undone.
 func (c *CA) RepinNodeKey(ctx context.Context, nodeID string, pub ed25519.PublicKey) error {
-	if len(pub) != ed25519.PublicKeySize {
-		return fail(ReasonBadCSR, "node key must be an Ed25519 public key")
+	if !ValidNodeKey(pub) {
+		return fail(ReasonBadCSR, "node key must be an Ed25519 public key of full order")
 	}
 	id := NodeKeyID(pub)
-	swapped, err := c.st.PKINodeKeyPutIf(ctx, nodeID, id, id, base64.StdEncoding.EncodeToString(pub))
+	// A pending pin may name the full digest: swap against the id the pin holds now, provided it still names pub.
+	cur, pinned, ok, err := c.st.PKINodeKeyGet(ctx, nodeID)
+	if err != nil {
+		return err
+	}
+	if !ok || (pinned == "" && !keyIDMatches(cur, pub)) || (pinned != "" && cur != id) {
+		return fail(ReasonNodeKeyChanged, "node %s changed its node key pin during the enrollment", nodeID)
+	}
+	swapped, err := c.st.PKINodeKeyPutIf(ctx, nodeID, cur, id, base64.StdEncoding.EncodeToString(pub))
 	if err == nil && !swapped {
 		return fail(ReasonNodeKeyChanged, "node %s changed its node key pin during the enrollment", nodeID)
 	}
@@ -59,7 +83,7 @@ func (c *CA) CheckNodeKey(ctx context.Context, nodeID string, pub ed25519.Public
 	switch {
 	case !ok:
 		return c.PinNodeKey(ctx, nodeID, pub)
-	case pinned == "" && len(pub) == ed25519.PublicKeySize && NodeKeyID(pub) == keyID:
+	case pinned == "" && len(pub) == ed25519.PublicKeySize && keyIDMatches(keyID, pub):
 		return c.PinNodeKey(ctx, nodeID, pub)
 	case pinned != "" && subtle.ConstantTimeCompare([]byte(pinned), []byte(got)) == 1:
 		return nil
@@ -78,7 +102,7 @@ func (c *CA) CheckPinnedNodeKey(ctx context.Context, nodeID string, pub ed25519.
 	if !ok {
 		return fail(ReasonNodeKeyChanged, "node %s has no pinned node key; set one with `nodes rotate --node-key --key-id`", nodeID)
 	}
-	if len(pub) != ed25519.PublicKeySize || (pinned == "" && NodeKeyID(pub) != keyID) || (pinned != "" && subtle.ConstantTimeCompare([]byte(pinned), []byte(base64.StdEncoding.EncodeToString(pub))) != 1) {
+	if len(pub) != ed25519.PublicKeySize || (pinned == "" && !keyIDMatches(keyID, pub)) || (pinned != "" && subtle.ConstantTimeCompare([]byte(pinned), []byte(base64.StdEncoding.EncodeToString(pub))) != 1) {
 		return fail(ReasonNodeKeyChanged, "node %s presented a node key other than the pinned one", nodeID)
 	}
 	return nil
@@ -88,7 +112,7 @@ func (c *CA) CheckPinnedNodeKey(ctx context.Context, nodeID string, pub ed25519.
 // (`nodes rotate <node> --node-key --key-id <id>`; the id is what `join` printed).
 func (c *CA) RotateNodeKey(ctx context.Context, actor, nodeID, keyID string) error {
 	if !keyIDPattern.MatchString(keyID) {
-		return fail(ReasonNodeKeyChanged, "node key id must be 16 lower-case hex characters")
+		return fail(ReasonNodeKeyChanged, "node key id must be 16 lower-case hex characters, or the 64-character SHA-256 of the node key")
 	}
 	return c.st.PKINodeKeyRotate(ctx, actor, nodeID, keyID)
 }

@@ -53,7 +53,7 @@ type cachedProjectID struct {
 // keyed by the root's resolved path (so two projects never share an answer).
 // Production start paths use it; tests that swap the Runner use ProjectIDGit.
 // An answer built while git could not be asked (a spawn error, a cancelled
-// context) is the fallback id, which loosens a project row: it is returned once
+// context, a failed worktree listing with no common git directory either) is the fallback id, which loosens a project row: it is returned once
 // and never kept.
 func ProjectIDGitCached(ctx context.Context, run Runner, root string) string {
 	key := ProjectID(root)
@@ -75,8 +75,8 @@ func ProjectIDGitCached(ctx context.Context, run Runner, root string) string {
 			return out, exit, err
 		}
 	}
-	id := ProjectIDGit(ctx, watch, root)
-	if failed.Load() || ctx.Err() != nil {
+	id, complete := projectIDGit(ctx, watch, root)
+	if !complete || failed.Load() || ctx.Err() != nil {
 		return id
 	}
 	projectIDs.Lock()
@@ -95,9 +95,18 @@ func ProjectIDGitCached(ctx context.Context, run Runner, root string) string {
 // path of root below the top. A linked worktree maps to the matching path in
 // its main worktree. Outside a repository it is ProjectID.
 func ProjectIDGit(ctx context.Context, run Runner, root string) string {
+	id, _ := projectIDGit(ctx, run, root)
+	return id
+}
+
+// projectIDGit is ProjectIDGit plus whether git answered every question it
+// needed. A repository whose worktree listing failed and whose common git
+// directory could not be read either may be a linked checkout keyed by its own
+// path, so that id is incomplete and must not be reused.
+func projectIDGit(ctx context.Context, run Runner, root string) (string, bool) {
 	id := ProjectID(root)
 	if run == nil {
-		return id
+		return id, true
 	}
 	g := gitRunner{run: run, root: id}
 	// The worktree list does not depend on the top level, so it runs beside it:
@@ -115,16 +124,17 @@ func ProjectIDGit(ctx context.Context, run Runner, root string) string {
 	top, prefix, ok := g.topAndPrefix(ctx)
 	wt := <-listed
 	if !ok || top == "" {
-		return id // not a repository
+		return id, true // not a repository
 	}
 	base := top
+	complete := true
+	main, bare := "", false
 	// NUL-terminated records: nothing in a path needs quoting.
 	if listed, ok := wt.out, wt.ok; ok {
 		// The first record group is the main worktree, whatever the layout. A bare
 		// main repository has no checkout, and --separate-git-dir lists the git
 		// directory (git records no path to that checkout), so a candidate without a
 		// .git entry is not used: the worktree's own top level stays.
-		main, bare := "", false
 		for _, field := range strings.Split(listed, "\x00") {
 			if field == "" {
 				break // the empty field ends the first group
@@ -134,11 +144,19 @@ func ProjectIDGit(ctx context.Context, run Runner, root string) string {
 			}
 			bare = bare || field == "bare"
 		}
-		if _, err := os.Lstat(filepath.Join(main, ".git")); main != "" && !bare && err == nil {
-			base = main
+	} else if common, ok := g.git(ctx, "rev-parse", "--path-format=absolute", "--git-common-dir"); ok && common != "" {
+		// The listing failed (a locked or unreadable worktree admin directory):
+		// the common git directory of a non-bare main worktree is <main>/.git.
+		if filepath.Base(common) == ".git" {
+			main = filepath.Dir(common)
 		}
+	} else {
+		complete = false
 	}
-	return filepath.Clean(filepath.Join(base, filepath.FromSlash(prefix)))
+	if _, err := os.Lstat(filepath.Join(main, ".git")); main != "" && !bare && err == nil {
+		base = main
+	}
+	return filepath.Clean(filepath.Join(base, filepath.FromSlash(prefix))), complete
 }
 
 // topAndPrefix is `rev-parse --show-toplevel` and `--show-prefix` in one spawn.
