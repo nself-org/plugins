@@ -17,7 +17,7 @@ var Catalog = []Invariant{
 	{"I12", "evidence binds revision and inputs", "P7-TRUST-11", "TestInvariant_I12"},
 	{"I13", "stale evidence cannot pass gate", "P7-TRUST-11", "TestInvariant_I13"},
 	{"I14", "runner capacity enforced", "P7-SCHED-04", "TestInvariant_I14"},
-	{"I15", "production boundary enforced", "P7-TRUST-14", "TestInvariant_I15"},
+	{"I15", "production boundary enforced: deploy hosts take no CI work unless overridden, and then only owner or internal work at vm or stronger with no release or deploy secrets; a coordinator host needs vm for team mode and for collaborator or untrusted work (D21, D28)", "P7-TRUST-14", "TestInvariant_I15"},
 	{"I16", "revision cannot authorize policy", "P7-TRUST-01", "TestInvariant_I16"},
 	{"I17", "job UID distinct from agent", "P7-TRUST-09", "TestInvariant_I17"},
 	{"I18", "untrusted cannot reach deploy network", "P7-TRUST-08", "TestInvariant_I18"},

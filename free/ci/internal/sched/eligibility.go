@@ -9,6 +9,15 @@ import (
 func reason(code model.PlacementReason, detail string) model.PlacementReasonDetail {
 	return model.PlacementReasonDetail{Code: string(code), Detail: detail}
 }
+
+// reasonDetail is a trust reason's text; a reason with a registered error code leads with it, so
+// the operator can look up its Fix (boundary.* surfaces as E689).
+func reasonDetail(r trust.Reason) string {
+	if code := trust.ReasonCode(r); code != "" {
+		return code + ": " + string(r) + " (" + trust.ReasonMeaning[r] + ")"
+	}
+	return string(r)
+}
 func has(values []string, want string) bool {
 	for _, v := range values {
 		if v == want {
@@ -120,7 +129,7 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 	}
 	jf := trust.JobFacts{Trust: j.Trust, SecretClasses: j.SecretClasses, Network: j.Network, PersonalOwnRun: j.PersonalOwnRun, Release: j.Pipeline.Release}
 	for _, tr := range trust.Admissible(jf, d, w.Policy.Trust) {
-		out = append(out, model.PlacementReasonDetail{Code: string(tr), Detail: string(tr)})
+		out = append(out, model.PlacementReasonDetail{Code: string(tr), Detail: reasonDetail(tr)})
 	}
 	if j.Requirements.IsolationMin != "" && trust.RankIsolation(d.Isolation) < trust.RankIsolation(trust.DecodeIsolation(string(j.Requirements.IsolationMin))) {
 		out = append(out, model.PlacementReasonDetail{Code: string(trust.IsolationBelowMinimum), Detail: "job isolation minimum"})

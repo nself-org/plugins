@@ -277,3 +277,16 @@ func TestProdBoundary_ReasonsKnown(t *testing.T) {
 		}
 	}
 }
+
+// TestProdBoundary_ReasonsSurfaceE689 (D-1250): the three boundary reasons map to the registered
+// E689; other reasons keep no code of their own.
+func TestProdBoundary_ReasonsSurfaceE689(t *testing.T) {
+	for _, r := range []trust.Reason{trust.BoundaryDeployHost, trust.BoundaryOverrideMinimum, trust.BoundaryCoordinatorHost} {
+		if got := trust.ReasonCode(r); got != "E689" {
+			t.Errorf("%s: code %q, want E689", r, got)
+		}
+	}
+	if got := trust.ReasonCode(trust.IsolationBelowMinimum); got != "" {
+		t.Errorf("isolation.below_minimum: code %q, want none", got)
+	}
+}
