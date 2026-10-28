@@ -41,6 +41,20 @@ func TestToolDriftReportedBeforeRun(t *testing.T) {
 	}
 }
 
+// The evidence builder records git as the bare version, while the probe
+// prints the full line; the same git must not read as drift.
+func TestToolDriftGitRecordedBare(t *testing.T) {
+	src := Source{Doc: model.Evidence{ToolVersions: map[string]string{"git": "2.56.0"}}}
+	env := Env{Probe: func(context.Context, ...string) (string, int, error) { return "git version 2.56.0\n", 0, nil }}
+	if got := toolDrift(context.Background(), env, src); len(got) != 0 {
+		t.Fatalf("same git reported as drift: %+v", got)
+	}
+	env.Probe = func(context.Context, ...string) (string, int, error) { return "git version 2.57.0\n", 0, nil }
+	if got := toolDrift(context.Background(), env, src); len(got) != 1 || got[0].Kind != DriftTool {
+		t.Fatalf("a real git change must still drift: %+v", got)
+	}
+}
+
 func TestRefDrift(t *testing.T) {
 	rec := []model.DigestRef{{Path: "go.sum", SHA256: "a"}, {Path: "gone.lock", SHA256: "b"}, {Path: "same", SHA256: "c"}}
 	cur := []model.DigestRef{{Path: "go.sum", SHA256: "z"}, {Path: "same", SHA256: "c"}, {Path: "new.lock", SHA256: "n"}}

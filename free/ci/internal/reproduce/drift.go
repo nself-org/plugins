@@ -180,11 +180,18 @@ func toolDrift(ctx context.Context, env Env, src Source) []Drift {
 		switch {
 		case err != nil || exit != 0:
 			out = append(out, Drift{Kind: DriftToolGone, Name: p.name, Recorded: p.recorded})
-		case got != p.recorded:
+		case normVersion(got) != normVersion(p.recorded):
 			out = append(out, Drift{Kind: DriftTool, Name: p.name, Recorded: p.recorded, Current: got})
 		}
 	}
 	return out
+}
+
+// normVersion puts a recorded and a probed version through one reading: the
+// evidence stores git as "2.56.0" while `git --version` prints "git version
+// 2.56.0".
+func normVersion(v string) string {
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(v), "git version"))
 }
 
 func firstOf(vals ...string) string {
