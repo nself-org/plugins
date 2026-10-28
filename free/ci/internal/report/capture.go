@@ -54,7 +54,7 @@ func CaptureAs(ctx context.Context, job model.Job, dir string, argv ...string) (
 	defer func() { _ = os.RemoveAll(home) }()
 	var buf strings.Builder
 	var ex ciexec.Executor
-	job := model.Job{Kind: "static"}
+	job = model.Job{Kind: "static"}
 	if ctx.Value(noLazyFetchKey{}) == true {
 		job.Env = map[string]string{"GIT_NO_LAZY_FETCH": "1"}
 	}
