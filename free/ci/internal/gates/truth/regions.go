@@ -20,8 +20,8 @@ import (
 
 var (
 	// Markers are HTML comments, or JSX comments in .mdx (MDX 2 rejects <!-- -->).
-	beginRe  = regexp.MustCompile(`(?:<!--|\{/\*)\s*BEGIN GENERATED:([A-Za-z0-9._-]+)\s*(?:-->|\*/\})`)
-	endRe    = regexp.MustCompile(`(?:<!--|\{/\*)\s*END GENERATED:([A-Za-z0-9._-]+)\s*(?:-->|\*/\})`)
+	beginRe  = regexp.MustCompile(`(?:<!--|\{/\*)\s*BEGIN GENERATED:([A-Za-z0-9._:-]+)\s*(?:-->|\*/\})`)
+	endRe    = regexp.MustCompile(`(?:<!--|\{/\*)\s*END GENERATED:([A-Za-z0-9._:-]+)\s*(?:-->|\*/\})`)
 	exemptRe = regexp.MustCompile(`^(?:<!--|\{/\*)\s*truth:\s*exempt(?:\s(.*?))?\s*(?:-->|\*/\})$`)
 	wordsRe  = regexp.MustCompile(`[A-Za-z0-9]`)
 	codeTag  = regexp.MustCompile(`<(script|style)(?:[\s>/]|$)`) // lower case only: <Script> is an Astro component

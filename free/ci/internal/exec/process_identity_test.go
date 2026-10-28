@@ -96,7 +96,7 @@ func TestKillAttemptGroupSparesReusedPID(t *testing.T) {
 	}
 }
 
-func TestSweepLegacyMarkerKillsAndReusedPIDRefuses(t *testing.T) {
+func TestSweepLegacyMarkerKillsAndReusedPIDDropsMarker(t *testing.T) {
 	home := t.TempDir()
 	legacyCmd := startGroup(t)
 	reusedCmd := startGroup(t)
@@ -114,8 +114,11 @@ func TestSweepLegacyMarkerKillsAndReusedPIDRefuses(t *testing.T) {
 	if !waitGroupGone(legacyCmd.Process.Pid) {
 		t.Fatal("legacy-marker group survived sweep")
 	}
-	if err := e.sweepProcessMarker(context.Background(), home, "current", "reused"); err == nil {
-		t.Fatal("sweep of a reused PID must refuse")
+	if err := e.sweepProcessMarker(context.Background(), home, "current", "reused"); err != nil {
+		t.Fatalf("sweep of a reused PID must drop the marker and go on: %v", err)
+	}
+	if _, err := os.Stat(markerPath(home, "reused")); !os.IsNotExist(err) {
+		t.Fatal("marker of a reused PID must be removed")
 	}
 	if !groupAlive(reusedCmd.Process.Pid) {
 		t.Fatal("sweep killed a group whose leader PID was reused")

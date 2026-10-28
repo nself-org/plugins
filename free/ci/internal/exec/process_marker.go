@@ -131,11 +131,15 @@ func (e *Executor) sweepProcessMarker(ctx context.Context, home, current, attemp
 	if !stale {
 		return nil
 	}
+	// A different process that reused the leader PID proves the original group is gone
+	// (a PID cannot be reused while a group still carries it): drop the marker, kill nothing.
+	reused := false
 	if groupAlive(marker.PID) {
 		if same, known := sameProcess(marker.PID, marker.Identity); known && !same {
-			// A different process has reused the leader PID. Do not kill its group.
-			return coded("E610", "stale group identity changed")
+			reused = true
 		}
+	}
+	if !reused && groupAlive(marker.PID) {
 		if err := killGroup(marker.PID); err != nil && groupAlive(marker.PID) {
 			return coded("E610", "stale process group survived")
 		}
