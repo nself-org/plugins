@@ -131,7 +131,7 @@ func prepareCache(ctx context.Context, sink transport.Sink, lease *protocol.Leas
 			base = s.remoteSink
 		}
 	}
-	if base == nil || root == "" || platform == "" || off(os.Getenv("NSELF_CI_CACHE_DISABLE")) || off(lease.Job.Env["NSELF_CI_CACHE_DISABLE"]) || topLevelDisabled(root) || lease.Job.Cache != nil && lease.Job.Cache.Disable {
+	if base == nil || root == "" || platform == "" || off(os.Getenv("NSELF_CI_CACHE_DISABLE")) || off(lease.Job.Env["NSELF_CI_CACHE_DISABLE"]) || topLevelDisabled(root, base.pipelineCache) || lease.Job.Cache != nil && lease.Job.Cache.Disable {
 		return sink
 	}
 	f, err := base.st.ArtifactFacts(ctx, lease.AttemptID)
@@ -167,7 +167,7 @@ func prepareCache(ctx context.Context, sink transport.Sink, lease *protocol.Leas
 		keys = c.Keys
 	}
 	detected = specs.Narrow(detected, scope)
-	a := AttemptInfo{RunID: f.Run, AttemptID: lease.AttemptID, Job: lease.Job, JobName: f.Job, Home: base.home, Store: base.st, Epoch: int64(lease.Epoch)}
+	a := AttemptInfo{RunID: f.Run, AttemptID: lease.AttemptID, Job: lease.Job, JobName: f.Job, Home: base.home, Store: base.st, PipelineCache: base.pipelineCache, Epoch: int64(lease.Epoch)}
 	att := CacheAttestation{Protection: string(authz.Unprotected)}
 	if CacheAttest != nil {
 		att, err = CacheAttest(ctx, a, p)

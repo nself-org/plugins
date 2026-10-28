@@ -74,8 +74,12 @@ func (rs *runState) info(pj plan.PlannedJob, job model.Job, attemptID string, n 
 	if cap := rs.c.Opts.SecretsTrust; cap != "" && trust.RankTrust(cap) < trust.RankTrust(source) {
 		source = cap
 	}
+	var pipelineCache *model.CacheConfig
+	if rs.c.Plan != nil {
+		pipelineCache = rs.c.Plan.Cache
+	}
 	return AttemptInfo{SourceClass: source, RunID: rs.sess.RunID, JobID: rs.rows[pj.ID], JobName: pj.ID, AttemptID: attemptID, Revision: rs.rev.SHA, N: n,
-		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home, Store: rs.sess.Store, Container: rs.c.Opts.Container,
+		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home, Store: rs.sess.Store, Container: rs.c.Opts.Container, PipelineCache: pipelineCache,
 		SecretsInfo: SecretsInfo{Root: rs.c.Opts.Root, CoordinatorID: rs.sess.Coordinator.ID, SecretClasses: rs.pol.SecretClasses, HasSecretClasses: rs.pol.HasSecretClasses}}
 }
 
@@ -141,13 +145,13 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	info := rs.info(pj, job, id, n)
 	_, epoch, err := rs.sess.Store.AttemptStateEpoch(context.WithoutCancel(ctx), id)
 	if err != nil && declares(job) { // only a job with fenced writes needs its launch epoch
-		return rs.failPrepared(ctx, pj, job, id, o, err, n)
+		return rs.failPrepared(ctx, pj, job, id, o, err, n, info, false)
 	}
 	info.Epoch = epoch // the capability this incarnation of the attempt launched with
 	setup, err := rs.prepare(ctx, &info)
 	defer rs.unprepare(info, setup)
 	if err != nil {
-		return rs.failPrepared(ctx, pj, job, id, o, err, n)
+		return rs.failPrepared(ctx, pj, job, id, o, err, n, info, setup.cacheStarted)
 	}
 	logRef := rs.logRef(info)
 	spec := rs.spec(ctx, pj, setup.job, id)
@@ -247,8 +251,13 @@ func (rs *runState) settleFailed(ctx context.Context, pj plan.PlannedJob, job mo
 }
 
 // failPrepared ends a running attempt whose preparation failed.
-func (rs *runState) failPrepared(ctx context.Context, pj plan.PlannedJob, job model.Job, id string, o JobOutcome, err error, n int) JobOutcome {
+func (rs *runState) failPrepared(ctx context.Context, pj plan.PlannedJob, job model.Job, id string, o JobOutcome, err error, n int, info AttemptInfo, cacheStarted bool) JobOutcome {
 	o = failed(o, err)
+	if cacheStarted {
+		bg, done := background(ctx)
+		defer done()
+		_ = guard("cache after hook", func() error { return rs.hooks.Cache.After(bg, info, Outcome{State: "failed", FailureClass: "infra"}) })
+	}
 	if ctx.Err() != nil {
 		_, _ = rs.settle(id, "running", "cancelled", "cancelled")
 		return rs.stopped(o, pj.ID)

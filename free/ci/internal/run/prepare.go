@@ -18,9 +18,10 @@ import (
 )
 
 type prepared struct {
-	job      model.Job
-	services *ServicesRequest
-	mounts   []Mount
+	job          model.Job
+	cacheStarted bool
+	services     *ServicesRequest
+	mounts       []Mount
 }
 
 // prepare runs the start hooks, restores the cache and starts services.
@@ -36,6 +37,7 @@ func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, e
 		}
 	}
 	if rs.hooks.Cache != nil {
+		p.cacheStarted = true
 		var setup CacheSetup
 		err := guard("cache hook", func() (e error) { setup, e = rs.hooks.Cache.Before(ctx, *info); return })
 		if err != nil {

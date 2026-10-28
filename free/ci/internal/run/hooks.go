@@ -41,8 +41,9 @@ type AttemptInfo struct {
 	// Container is the run's --container option: every job runs in the toolchain
 	// container although Job still names no container (prepare applies it after
 	// the cache hook). The cache hook plans container-level mounts for it.
-	Container   bool
-	SecretsInfo // project root and effective secrets allowlist (P7-TRUST-02)
+	PipelineCache *model.CacheConfig // resolved config, including --config outside the root
+	Container     bool
+	SecretsInfo   // project root and effective secrets allowlist (P7-TRUST-02)
 }
 
 // Outcome is how an attempt ended.

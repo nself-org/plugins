@@ -20,6 +20,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/cache/specs"
 	"github.com/nself-org/plugins/free/ci/internal/config"
 	"github.com/nself-org/plugins/free/ci/internal/detect"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 // cacheLevel is where the job really runs, as the executor decides it: "container"
@@ -114,11 +115,13 @@ func sweepStale(dir string, now time.Time, alive func(id string) bool) {
 	}
 }
 
-// topLevelDisabled reads the top-level `cache: {disable: true}` of the default
-// config (<root>/.nself/ci.yaml). The revision can only tighten, so an
-// unreadable or absent file means "not disabled here"; a config passed with
-// --config from elsewhere is not seen (debt D-cache-config-path).
-func topLevelDisabled(root string) bool {
+// topLevelDisabled prefers the resolved pipeline policy, including --config.
+// Legacy callers without one read the default file; an absent or unreadable
+// default cannot add a disable.
+func topLevelDisabled(root string, resolved ...*model.CacheConfig) bool {
+	if len(resolved) > 0 && resolved[0] != nil {
+		return resolved[0].Disable
+	}
 	l, err := config.Load(filepath.Join(root, ".nself", "ci.yaml"))
 	return err == nil && l.Config.Cache != nil && l.Config.Cache.Disable
 }

@@ -93,3 +93,13 @@ func cloneJob(j model.Job) model.Job {
 	c.Requirements = cloneRequirements(j.Requirements)
 	return c
 }
+
+// A non-nil empty block distinguishes a resolved config without cache policy
+// from legacy callers that still need to load the default file.
+func resolvedCache(c *model.CacheConfig) *model.CacheConfig {
+	if c == nil {
+		return &model.CacheConfig{}
+	}
+	copy := *c
+	return &copy
+}

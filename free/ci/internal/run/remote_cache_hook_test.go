@@ -85,7 +85,7 @@ func TestRemoteCachePlatformUsesNodeFacts(t *testing.T) {
 }
 
 func TestPrepareRemoteCacheDisabledAndHosted(t *testing.T) {
-	for _, mode := range []string{"hosted", "operator", "job", "job-env", "empty-root", "unknown-platform"} {
+	for _, mode := range []string{"hosted", "operator", "job", "job-env", "empty-root", "unknown-platform", "resolved-config"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Setenv("NSELF_CI_CACHE_DISABLE", "")
 			lease := &protocol.Lease{}
@@ -93,6 +93,8 @@ func TestPrepareRemoteCacheDisabledAndHosted(t *testing.T) {
 			platform := "linux/amd64"
 			sink := &remoteSink{}
 			switch mode {
+			case "resolved-config":
+				sink.pipelineCache = &model.CacheConfig{Disable: true}
 			case "operator":
 				t.Setenv("NSELF_CI_CACHE_DISABLE", "1")
 			case "job":
