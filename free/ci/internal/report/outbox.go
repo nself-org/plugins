@@ -11,6 +11,7 @@ package report
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -100,7 +101,8 @@ func (o *Outbox) pause() time.Duration {
 const healRounds = 5
 
 // Drain delivers every pending entry, oldest first, and returns how many
-// were delivered. The first delivery error stops the drain. An entry whose
+// were delivered. Delivery errors leave entries pending while unrelated entries
+// continue; the collected errors are returned after the drain. An entry whose
 // claim was lost while it was delivered makes the drain read the outbox again,
 // because the store queued the newest status for another delivery.
 func (o *Outbox) Drain(ctx context.Context) (int, error) {
@@ -108,16 +110,21 @@ func (o *Outbox) Drain(ctx context.Context) (int, error) {
 		return 0, nil
 	}
 	n := 0
+	var deliveryErrors []error
+	failed := map[string]bool{}
 	for round := 0; round < healRounds; round++ {
 		list, err := o.Store.OutboxUnposted(ctx)
 		if err != nil {
-			return n, err
+			return n, errors.Join(append(deliveryErrors, err)...)
 		}
 		again := false
 		for _, e := range list {
 			var s Status
 			if err = json.Unmarshal(e.Payload, &s); err != nil || s.Validate() != nil {
 				continue // a corrupt entry is left for the operator; it must not block the rest
+			}
+			if failed[key(s.Owner, s.Repo)] {
+				continue
 			}
 			done, err := o.deliver(ctx, e.Seq, s, false)
 			if done {
@@ -128,12 +135,16 @@ func (o *Outbox) Drain(ctx context.Context) (int, error) {
 				continue
 			}
 			if err != nil {
-				return n, err
+				deliveryErrors = append(deliveryErrors, err)
+				failed[key(s.Owner, s.Repo)] = true
+				if ctx.Err() != nil {
+					return n, errors.Join(deliveryErrors...)
+				}
 			}
 		}
 		if !again {
 			break
 		}
 	}
-	return n, nil
+	return n, errors.Join(deliveryErrors...)
 }
