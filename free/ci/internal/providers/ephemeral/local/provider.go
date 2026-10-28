@@ -14,10 +14,11 @@ package local
 // Constraints: no spend, no network, no model of a second container or VM implementation; Estimate never
 //          calls the runtime; Provision is idempotent by intent (the id is the token); Teardown treats
 //          an unknown id as success and an unreachable runtime as retryable (E698); a slot is refused
-//          (burst.ErrQuota) beyond min(runtime limit, host-reservation share, MaxSlots).
+//          (burst.ErrQuota) beyond min(runtime limit, host-reservation share less the regular lanes, free memory, MaxSlots).
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"regexp"
@@ -59,7 +60,10 @@ type Options struct {
 	Host func() (exec.Capacity, reservation.Settings)
 	// MaxSlots caps concurrent sandboxes below what the host would allow (0 = no extra cap).
 	MaxSlots int
-	Now      func() time.Time
+	// Lanes reports how many regular (non-burst) lane jobs run on this node now; they hold slots of the host
+	// share that burst must not grant again. Default: none known.
+	Lanes func() int
+	Now   func() time.Time
 }
 
 // Provider is the local ephemeral provider.
@@ -74,8 +78,9 @@ type Provider struct {
 }
 
 type entry struct {
-	res   burst.Resource
-	level model.Isolation
+	res     burst.Resource
+	level   model.Isolation
+	started bool // the runner reported its first command (Observe): the sandbox's memory shows in the host's free memory
 }
 
 var _ burst.Provider = (*Provider)(nil)
@@ -105,6 +110,10 @@ func (p *Provider) Class() string { return burst.ClassLocal }
 func (p *Provider) Observe(id string, d time.Duration) {
 	p.mu.Lock()
 	e, ok := p.ledger[id]
+	if ok {
+		e.started = true
+		p.ledger[id] = e
+	}
 	p.mu.Unlock()
 	if ok {
 		p.lat.observe(e.level, d)
@@ -186,18 +195,23 @@ func (p *Provider) Provision(ctx context.Context, in burst.Intent) (burst.Resour
 	if f, ok := adoptable(found, in); ok { // the runtime already holds this intent's sandbox
 		return p.record(id, off.Level, resFromFound(f)), nil
 	}
-	used, limit := p.used(off, found), p.limit(off, in.Spec)
+	used := p.used(off, found)
+	limit := p.limit(off, in.Spec, used)
 	if used >= limit && p.reclaim(ctx) { // orphans of a dead coordinator may be what fills the host
 		if off, found, err = p.probe(ctx); err != nil {
 			return burst.Resource{}, err
 		}
-		used, limit = p.used(off, found), p.limit(off, in.Spec)
+		used = p.used(off, found)
+		limit = p.limit(off, in.Spec, used)
 	}
 	if used >= limit {
 		return burst.Resource{}, fmt.Errorf("%w: %d of %d local slots are in use", burst.ErrQuota, used, limit)
 	}
 	att := isolation.Attempt{ID: id, CoordinatorID: in.Labels[coordKey]}
 	if err := p.opts.Backend.Prepare(ctx, att); err != nil {
+		if errors.Is(err, ErrNoSlot) { // the runtime's last slot went to another job after the probe
+			return burst.Resource{}, fmt.Errorf("%w: %v", burst.ErrQuota, err)
+		}
 		return burst.Resource{}, classify(ctx, err)
 	}
 	res := burst.Resource{ID: id, Name: namePrefix + id, Labels: maps.Clone(in.Labels), CreatedAt: p.opts.Now()}
@@ -225,35 +239,6 @@ func (p *Provider) record(id string, level model.Isolation, r burst.Resource) bu
 	defer p.mu.Unlock()
 	p.ledger[id] = entry{res: r, level: level}
 	return cloneRes(r)
-}
-
-func (p *Provider) count() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return len(p.ledger)
-}
-
-// used is the slots taken now: every reservation, plus every sandbox the runtime holds that no reservation of
-// this provider explains (a leak, another process's job, a VM Apple's limit counts).
-func (p *Provider) used(off Offer, found []Found) int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	seen := map[string]bool{}
-	for _, f := range found {
-		if !strings.HasSuffix(f.ID, cleanSuffix) { // a job's cleanup helper is not a second slot
-			seen[f.ID] = true
-		}
-	}
-	for _, id := range off.Running {
-		seen[id] = true
-	}
-	n := len(p.ledger)
-	for id := range seen {
-		if _, ok := p.ledger[id]; !ok {
-			n++
-		}
-	}
-	return n
 }
 
 // Teardown removes the sandbox of the resource and forgets the reservation. An id this provider cannot

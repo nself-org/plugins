@@ -35,6 +35,8 @@ var (
 	shaB = strings.Repeat("b", 40)
 	shaC = strings.Repeat("c", 40)
 	shaD = strings.Repeat("d", 40)
+	// shaHead is the head commit of the default branch in testdata/api/routes.json.
+	shaHead = strings.Repeat("e", 40)
 
 	fixedNow = time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
 )

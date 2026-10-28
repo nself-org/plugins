@@ -13,11 +13,16 @@ package local
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/isolation"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
+
+// ErrNoSlot is what Prepare wraps when the runtime's own slot limit was reached after Probe (a job of this process
+// that is not a burst job took the last one): the provider refuses the slot as burst.ErrQuota, not as an outage.
+var ErrNoSlot = errors.New("the runtime has no free sandbox slot")
 
 // Offer is what a Backend can deliver right now.
 type Offer struct {
@@ -50,7 +55,9 @@ type Backend interface {
 	// Probe reports the level and capacity now. An E698 *Error means no sandbox can be offered.
 	Probe(ctx context.Context) (Offer, error)
 	// Prepare checks, before a slot is handed out, that the adapter still works. The Tart adapter
-	// also sweeps clones whose owner died here.
+	// also sweeps clones whose owner died here, and holds the slot in the process-wide ledger the vm
+	// profile reserves from, so the granted job is not refused at Wrap. It wraps ErrNoSlot when the
+	// runtime has no slot left.
 	Prepare(ctx context.Context, a isolation.Attempt) error
 	// Teardown removes the sandbox of the attempt; it is idempotent and not-found is success.
 	Teardown(ctx context.Context, a isolation.Attempt) error

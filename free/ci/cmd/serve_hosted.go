@@ -5,7 +5,7 @@ package main
 //          hosted driver the trust class of an attempt, and names the repositories the world describes hosted
 //          runners for.
 // Inputs:  the open coordinator store, the data dir (the policy resolver's root) and the repository allowlist.
-// Outputs: serveHosted installs runtime.UseStore, runtime.UsePolicy, hosted.UsePolicy, hosted.UseStore,
+// Outputs: serveHosted installs serveGitLab's wiring (D-1346), runtime.UseStore, runtime.UsePolicy, hosted.UsePolicy, hosted.UseStore,
 //          hosted.UseAttempts and the contributor targets (GitHub-hosted only, each allowlisted repository
 //          once, lookups cached for hostedDescribeTTL); the returned func removes them.
 // Constraints: call once at coordinator start, before the first dispatch. The policy is the operator's own
@@ -47,6 +47,7 @@ func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effecti
 	hosted.UsePolicy(src)
 	hosted.UseStore(st)
 	hosted.UseAttempts(attemptMetaFrom(st))
+	undoGitLab := serveGitLab(st)
 	targets := hostedTargets(allowed)
 	c := runtime.DefaultContributor()
 	// only the GitHub-hosted provider is described, and only for GitHub repositories: another provider
@@ -61,6 +62,7 @@ func serveHostedWith(st *store.Store, src func(context.Context) (*policy.Effecti
 	return func() {
 		c.SetTargetsFor(nil)
 		c.SetDescribeTTL(0)
+		undoGitLab()
 		hosted.UseAttempts(nil)
 		hosted.UsePolicy(nil)
 		runtime.UsePolicy(nil)

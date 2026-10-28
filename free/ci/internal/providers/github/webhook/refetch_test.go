@@ -114,7 +114,7 @@ func TestRefetch(t *testing.T) {
 	t.Run("a commit the repository does not have is unreachable", func(t *testing.T) {
 		r := refetchRig(t)
 		r.gh.drop("/repos/o/r/compare/" + shaB + "..." + shaC)
-		r.gh.drop("/repos/o/r/compare/main..." + shaC) // the fake answers 404: the default branch does not know the commit
+		r.gh.drop("/repos/o/r/compare/" + shaHead + "..." + shaC) // the fake answers 404: the default branch does not know the commit
 		got, err := r.src.Refetch(ctx, deliveredFacts(t, r, "pull_request", "pr_fork_opened.json"))
 		if err != nil || got.SHAReachable.Value == nil || *got.SHAReachable.Value || got.ChangedFiles.Value != nil {
 			t.Fatalf("unreachable = %+v, %v", got, err)
