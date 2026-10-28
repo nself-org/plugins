@@ -175,8 +175,8 @@ func (w *Writer) row(ctx context.Context, keys *Keyset, actor roles.Actor, c Cha
 			if err != nil {
 				return err
 			}
-			rows[t.scope][c.Key] = value
-			return keys.checkRows(rows, branch)
+			rows.put(t, c.Key, value)
+			return keys.checkRows(rows, branch, c.Project)
 		}
 		return nil
 	}

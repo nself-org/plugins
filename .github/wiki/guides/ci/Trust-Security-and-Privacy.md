@@ -427,6 +427,6 @@ When `NSELF_INVOKED_BY` is set (the MCP and HTTP invokers always set it; you can
 
 ### Known limits
 
-- A `team` row applies only where a caller names the team (`show --team`); no run path supplies one yet, so a TEAM coordinator's team rows are inert until the coordinator wiring (P7-NODE) passes the team id.
+- A `team` row applies to every run, plan and dispatch of the process whose environment sets `NSELF_CI_TEAM=<team id>` (the coordinator's own environment, never a job's env or a repository file; same alphabet as `--team`). A malformed value fails the resolve with `E672` rather than dropping the team's rows; `show --team <id>` overrides it. With the variable unset no team row applies.
 - `pin` needs a fetched origin; with no origin there is nothing to pin against.
-- The checks read the store before the write transaction opens, so two writers at the same moment can race (for example a machine write over a concurrent operator tightening). The rows of other projects are not listed by the store, so a user-scope write is not checked against them; `policy show` in that repository reports a conflict as `E670`.
+- The checks read the store before the write transaction opens, so two writers at the same moment can race (for example a machine write over a concurrent operator tightening). A `set` is also checked against the rows of every stored project and team (the store lists the subjects of a scope), not only the current repository's, so a user, team or project write cannot make `Resolve` fail with `E670` in another repository; the refusal names the other project.

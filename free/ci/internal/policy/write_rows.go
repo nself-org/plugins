@@ -58,27 +58,77 @@ func shown(spec KeySpec, value json.RawMessage) string {
 // rows are the ones the write lands on.
 type policyReader interface {
 	PolicyRows(ctx context.Context, scope, subject string) ([]store.PolicyRow, error)
+	PolicySubjects(ctx context.Context, scope string) ([]string, error)
 }
 
-// rowsOf reads the stored rows of the user, team and project subjects a resolve
-// for c would merge, keyed by scope.
-func rowsOf(ctx context.Context, rd policyReader, t target, c Change) (map[string]map[string]json.RawMessage, error) {
-	out := map[string]map[string]json.RawMessage{"user": {}, "team": {}, "project": {}}
-	subjects := map[string]string{"user": LocalSubject, "team": c.Team, "project": c.Project}
-	subjects[t.scope] = t.subject
-	for scope, subject := range subjects {
-		if subject == "" {
-			continue
+// rowSet is the stored rows of one subject.
+type rowSet struct {
+	subject string
+	rows    map[string]json.RawMessage
+}
+
+// rowSets holds, per scope, every subject a resolve could merge for that scope.
+type rowSets map[string][]rowSet
+
+// rowsOf reads the rows a resolve touched by the write could merge. The scope the
+// write lands on has its one target subject. Every other scope lists all of its
+// subjects (the current project and team included even without rows), so a user
+// or team write is checked against every project row and a project write against
+// every team row, not only the current repository's (D-1284).
+func rowsOf(ctx context.Context, rd policyReader, t target, c Change) (rowSets, error) {
+	team, err := teamOf(c.Team)
+	if err != nil {
+		return nil, err
+	}
+	out := rowSets{}
+	for _, scope := range []string{"user", "team", "project"} {
+		subjects := []string{t.subject}
+		if scope != t.scope {
+			switch scope {
+			case "user":
+				subjects = []string{LocalSubject}
+			default:
+				listed, err := rd.PolicySubjects(ctx, scope)
+				if err != nil {
+					return nil, fmt.Errorf("list %s policy: %w", scope, err)
+				}
+				current := team
+				if scope == "project" {
+					current = c.Project
+				}
+				if current != "" && !slices.Contains(listed, current) {
+					listed = append(listed, current)
+				}
+				subjects = listed
+			}
 		}
-		stored, err := rd.PolicyRows(ctx, scope, subject)
-		if err != nil {
-			return nil, fmt.Errorf("read %s policy: %w", scope, err)
+		if len(subjects) == 0 {
+			subjects = []string{""} // no subject has rows: one empty set
 		}
-		for _, r := range stored {
-			out[scope][r.Key] = r.Value
+		for _, subject := range subjects {
+			set := rowSet{subject: subject, rows: map[string]json.RawMessage{}}
+			if subject != "" {
+				stored, err := rd.PolicyRows(ctx, scope, subject)
+				if err != nil {
+					return nil, fmt.Errorf("read %s policy: %w", scope, err)
+				}
+				for _, r := range stored {
+					set.rows[r.Key] = r.Value
+				}
+			}
+			out[scope] = append(out[scope], set)
 		}
 	}
 	return out, nil
+}
+
+// put sets key in the row set of the scope and subject the write lands on.
+func (rs rowSets) put(t target, key string, value json.RawMessage) {
+	for _, set := range rs[t.scope] {
+		if set.subject == t.subject {
+			set.rows[key] = value
+		}
+	}
 }
 
 // storedOf is the row a write replaces (nil when there is none).
@@ -121,12 +171,12 @@ func (w *Writer) branchScope(ctx context.Context, c Change) *trust.Scope {
 	return &trust.Scope{Kind: SourceProtectedBranch, Values: values, PinnedCommit: commit}
 }
 
-// checkRows merges the operator rows and the protected-branch scope (when
-// given) over the strictest default scopes the resolver can start from (an
-// untrusted source on a private and on a public repository). It sees only the
-// rows of the subjects it was given: another project's rows are not listed by
-// the store, so they are not checked.
-func (k *Keyset) checkRows(rows map[string]map[string]json.RawMessage, branch *trust.Scope) error {
+// checkRows merges the operator rows and the protected-branch scope over the
+// strictest default scopes the resolver can start from (an untrusted source on a
+// private and on a public repository), for every user, team and project subject
+// combination a resolve could pick. The protected-branch scope belongs to the
+// current repository, so it joins only the combinations of branchProject.
+func (k *Keyset) checkRows(rows rowSets, branch *trust.Scope, branchProject string) error {
 	reg, err := k.registry()
 	if err != nil {
 		return err
@@ -135,21 +185,36 @@ func (k *Keyset) checkRows(rows map[string]map[string]json.RawMessage, branch *t
 		scope string
 		kind  trust.Source
 	}{{"user", SourceUser}, {"team", SourceTeam}, {"project", SourceProject}}
-	for _, vis := range []string{"private", "public"} {
-		scopes := []trust.Scope{trust.DefaultPolicy(vis)}
-		for _, kd := range kinds {
-			if len(rows[kd.scope]) > 0 {
-				scopes = append(scopes, trust.Scope{Kind: kd.kind, Values: rows[kd.scope]})
+	var walk func(i int, picked []rowSet) error
+	walk = func(i int, picked []rowSet) error {
+		if i < len(kinds) {
+			for _, set := range rows[kinds[i].scope] {
+				if err := walk(i+1, append(picked, set)); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		for _, vis := range []string{"private", "public"} {
+			scopes := []trust.Scope{trust.DefaultPolicy(vis)}
+			for j, set := range picked {
+				if len(set.rows) > 0 {
+					scopes = append(scopes, trust.Scope{Kind: kinds[j].kind, Values: set.rows})
+				}
+			}
+			if branch != nil && picked[2].subject == branchProject {
+				scopes = append(scopes, *branch)
+			}
+			if _, _, err := reg.Merge("", scopes...); err != nil {
+				if picked[2].subject != branchProject && picked[2].subject != "" {
+					err = fmt.Errorf("%w (checked against project %q)", err, picked[2].subject)
+				}
+				return err
 			}
 		}
-		if branch != nil {
-			scopes = append(scopes, *branch)
-		}
-		if _, _, err := reg.Merge("", scopes...); err != nil {
-			return err
-		}
+		return nil
 	}
-	return nil
+	return walk(0, make([]rowSet, 0, len(kinds)))
 }
 
 // loosens reports whether next is looser than old for spec: the merge of the two
