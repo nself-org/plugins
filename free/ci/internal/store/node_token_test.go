@@ -175,9 +175,9 @@ func TestTokenSpend(t *testing.T) {
 }
 
 func TestTokenPrune(t *testing.T) {
-	s, _ := pkiTestStore(t)
+	s, clk := pkiTestStore(t)
 	ctx := context.Background()
-	now := int64(10_000)
+	now := clk.now().Unix()
 	for jti, exp := range map[string]int64{"old": now - TokenPruneGrace - 1, "edge": now - TokenPruneGrace, "live": now + 60} {
 		if _, _, err := s.TokenBind(ctx, tokRow(jti, "s", "x", exp)); err != nil {
 			t.Fatal(err)
@@ -208,5 +208,36 @@ func TestTokenRebindRefusesASpentToken(t *testing.T) {
 	}
 	if b, _, _ := s.TokenCheck(ctx, "j1"); b.Session != "sess1" || !b.Spent {
 		t.Fatalf("binding %+v", b)
+	}
+}
+
+// A caller clock step must not erase a spent mark while the token is valid.
+func TestTokenPruneUsesStoreClock(t *testing.T) {
+	s, clk := pkiTestStore(t)
+	ctx := context.Background()
+	exp := clk.now().Add(time.Minute).Unix()
+	b := tokRow("spent", "serial", "session", exp)
+	if _, _, err := s.TokenBind(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.TokenSpend(ctx, b.JTI); err != nil {
+		t.Fatal(err)
+	}
+	for _, caller := range []int64{exp + TokenPruneGrace + 1, clk.now().Unix()} {
+		if n, err := s.TokenPrune(ctx, caller); err != nil || n != 0 {
+			t.Fatalf("prune removed %d (%v), want 0", n, err)
+		}
+		got, created, err := s.TokenBind(ctx, b)
+		if err != nil || created || !got.Spent {
+			t.Fatalf("spent binding revived: %+v created=%v err=%v", got, created, err)
+		}
+	}
+	clk.advance(time.Minute + time.Duration(TokenPruneGrace)*time.Second)
+	if n, err := s.TokenPrune(ctx, 0); err != nil || n != 0 {
+		t.Fatalf("at grace boundary: removed %d (%v)", n, err)
+	}
+	clk.advance(time.Second)
+	if n, err := s.TokenPrune(ctx, 0); err != nil || n != 1 {
+		t.Fatalf("after grace: removed %d (%v), want 1", n, err)
 	}
 }

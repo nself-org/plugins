@@ -200,7 +200,8 @@ func (g *Gate) Spend(ctx context.Context, jti string) error {
 	return g.Bindings.TokenSpend(ctx, jti)
 }
 
-// Prune removes the bindings of tokens that expired more than an hour ago.
+// Prune removes bindings that expired more than an hour ago on the store clock.
+// now is retained for compatibility; it does not control the pruning cutoff.
 func (g *Gate) Prune(ctx context.Context, now time.Time) (int64, error) {
 	return g.Bindings.TokenPrune(ctx, now.Unix())
 }

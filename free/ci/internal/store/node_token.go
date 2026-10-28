@@ -27,6 +27,7 @@ func init() {
 }
 
 // TokenPruneGrace is how long a bound row outlives its token, in seconds.
+// One hour exceeds the PKI clock skew bound (two minutes).
 const TokenPruneGrace = 3600
 
 // TokenBinding is one jti bound to the certificate and session that first used it.
@@ -102,10 +103,12 @@ func (s *Store) TokenSpend(ctx context.Context, jti string) error {
 	})
 }
 
-// TokenPrune removes the rows whose token expired more than TokenPruneGrace seconds before nowUnix.
-func (s *Store) TokenPrune(ctx context.Context, nowUnix int64) (removed int64, err error) {
+// TokenPrune removes rows whose tokens expired more than TokenPruneGrace seconds
+// before the store clock. The legacy caller timestamp is ignored: a caller clock
+// step must not erase spent marks while the verifier still accepts the token.
+func (s *Store) TokenPrune(ctx context.Context, _ int64) (removed int64, err error) {
 	err = s.write(ctx, func(tx *sql.Tx) error {
-		res, e := tx.ExecContext(ctx, `DELETE FROM node_token WHERE exp<?`, nowUnix-TokenPruneGrace)
+		res, e := tx.ExecContext(ctx, `DELETE FROM node_token WHERE exp<?`, s.now().Unix()-TokenPruneGrace)
 		if e != nil {
 			return e
 		}
