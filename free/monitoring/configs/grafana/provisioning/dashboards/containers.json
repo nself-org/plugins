@@ -1,0 +1,68 @@
+{
+  "uid": "nself-containers",
+  "title": "nSelf containers (cgroup identity)",
+  "description": "Socket-less cAdvisor: CPU and memory by cgroup id. Docker names, images and per-container network metrics are unavailable.",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Container CPU (cores)",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (instance, id) (rate(container_cpu_usage_seconds_total{job=\"cadvisor\",id!=\"/\",id!=\"\"}[5m]))",
+          "legendFormat": "{{instance}} {{id}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Container memory (working set)",
+      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (instance, id) (container_memory_working_set_bytes{job=\"cadvisor\",id!=\"/\",id!=\"\"})",
+          "legendFormat": "{{instance}} {{id}}"
+        }
+      ]
+    }
+  ]
+}

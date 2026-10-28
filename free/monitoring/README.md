@@ -22,7 +22,7 @@ This is a **config-type plugin** — it orchestrates Docker services via compose
 
 | Service | Port | Purpose |
 |---|---|---|
-| Grafana | 3000 | Dashboards and visualization — pre-loaded nSelf dashboards |
+| Grafana | 3000 | Dashboards and visualization — container CPU and memory by cgroup id |
 | Prometheus | 9090 | Metrics collection, storage, and query engine |
 | Loki | 3100 | Log aggregation and query (LogQL) |
 | Alloy | — | Log shipper (replaces Promtail) — tails the Docker json-file logs into Loki |
@@ -70,14 +70,16 @@ nself plugin run monitoring logs
 
 ## Grafana Dashboards
 
-The plugin pre-loads nSelf-specific dashboards for:
+The plugin provisions **nSelf containers (cgroup identity)** with CPU usage and
+memory working set panels from cAdvisor. Series are keyed by `instance` and `id`
+(the cgroup path), so the dashboard works without the Docker API. It does not
+require container names or image labels and does not promise per-container
+network metrics. Root-cgroup aggregates are excluded.
 
-- **nSelf Overview** — all services health, request rates, error rates
-- **PostgreSQL** — query stats, connection pool, lock waits, replication
-- **Redis** — memory usage, evictions, hit/miss ratio, command throughput
-- **Docker Containers** — per-container CPU, memory, I/O
-- **Host Node** — system CPU, disk, memory, network
-- **Hasura** — GraphQL request rates, errors, subscription counts
+No other dashboard JSON is shipped. Add application and database dashboards
+explicitly for your deployment. Future container panels must retain cgroup ids;
+Docker metadata joins require a separate ADR for a read-only socket proxy
+(ADR 0027 currently excludes the socket). No socket proxy is added here.
 
 Access Grafana at `http://127.0.0.1:3000` or via your configured `GRAFANA_ROUTE`.
 
@@ -126,7 +128,7 @@ Grafana Alloy replaces Promtail (end of life). `configs/alloy/config.alloy` read
 
 ## cAdvisor without the Docker socket
 
-cAdvisor runs unprivileged and mounts neither `/var/run` nor `docker.sock` (ADR 0027). It reads `/sys`, `/var/lib/docker` and the host root (`/rootfs`) read-only; the root is bound non-recursively, because a recursive bind would expose `/rootfs/run/docker.sock`; `/proc` is added back under `/rootfs/proc` because cAdvisor needs it. Residual risk: that is the host procfs, so on a host with no AppArmor or SELinux confinement for ptrace, root inside the cAdvisor container could still reach the host socket through `/rootfs/proc/1/root/run/docker.sock`; Docker's default AppArmor profile blocks this. `test/logs-e2e.sh` reports which case the test host is. Node Exporter binds the host root non-recursively the same way. The long mount form (`bind.recursive`) needs a Docker Compose release that accepts it and Docker Engine 20.10 or later; tested with Compose 5.6.0 on Engine 29. Without the Docker API, container CPU and memory metrics are reported by cgroup path and id, but cAdvisor cannot add the `name` and `image` labels, per-container network metrics are not reported (cAdvisor's raw handler reports network only for the root cgroup), and filesystem metrics for mounts below `/` are limited. Dashboards that group by `name` show the cgroup id instead.
+cAdvisor runs unprivileged and mounts neither `/var/run` nor `docker.sock` (ADR 0027). It reads `/sys`, `/var/lib/docker` and the host root (`/rootfs`) read-only; the root is bound non-recursively, because a recursive bind would expose `/rootfs/run/docker.sock`; `/proc` is added back under `/rootfs/proc` because cAdvisor needs it. Residual risk: that is the host procfs, so on a host with no AppArmor or SELinux confinement for ptrace, root inside the cAdvisor container could still reach the host socket through `/rootfs/proc/1/root/run/docker.sock`; Docker's default AppArmor profile blocks this. `test/logs-e2e.sh` reports which case the test host is. Node Exporter binds the host root non-recursively the same way. The long mount form (`bind.recursive`) needs a Docker Compose release that accepts it and Docker Engine 20.10 or later; tested with Compose 5.6.0 on Engine 29. Without the Docker API, container CPU and memory metrics are reported by cgroup path and id, but cAdvisor cannot add the `name` and `image` labels, per-container network metrics are not reported (cAdvisor's raw handler reports network only for the root cgroup), and filesystem metrics for mounts below `/` are limited. Dashboards must group by `id`, not `name`; the provisioned container dashboard follows this rule.
 
 ## Tests
 
