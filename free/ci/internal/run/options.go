@@ -55,6 +55,10 @@ type Options struct {
 	// PolicyRun carries per-run policy values into PolicyRequest.Run (filled by P7-AUTO-29 from
 	// `--where`, `--prefer` and `--runner`); nil means none.
 	PolicyRun RunValues
+	// User and Team are who the run's jobs count against in the scheduler's user and team limits
+	// (D-1044). The coordinator fills them from the submitter of an intake row; empty means the run
+	// has no named identity (a webhook or a bare local run) and counts in the shared bucket.
+	User, Team string
 }
 
 // RunOptions is the name the cmd layer and its option hooks use.

@@ -32,6 +32,15 @@ func principalOf(label string) string {
 	return strings.TrimPrefix(s, "cli:")
 }
 
+// PrincipalOf is principalOf for callers outside the package: an audit label, with or without a trailing
+// " role=..." note, reduced to the principal id.
+func PrincipalOf(label string) string {
+	if f := strings.Fields(label); len(f) > 0 {
+		label = f[0]
+	}
+	return principalOf(label)
+}
+
 func (a Actor) decide(ctx context.Context, d decision) error {
 	var err error
 	if a.svc != nil && a.id != "" && a.kind != "" {
