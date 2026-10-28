@@ -266,7 +266,7 @@ func printVerdict(command string, f evidenceFlags, sess *streamSession, v eviden
 // to stdout as ci.events when --stream asked for it.
 func verifyRun(f evidenceFlags, home string) evidence.RunFunc {
 	return func(ctx context.Context, tree string) (model.Evidence, error) {
-		o := cirun.Options{Root: tree, Home: home, NoStatus: true, Full: true}
+		o := verifyOptions(tree, home)
 		var out io.Writer = os.Stderr
 		switch {
 		case f.stream:
@@ -288,4 +288,8 @@ func verifyRun(f evidenceFlags, home string) evidence.RunFunc {
 		}
 		return res.Summary.Doc, nil
 	}
+}
+
+func verifyOptions(tree, home string) cirun.Options {
+	return cirun.Options{Root: tree, Home: home, NoStatus: true, Full: true, Interactive: interactiveRun("", os.Getenv)}
 }
