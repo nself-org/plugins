@@ -46,9 +46,7 @@ func (c *Coordinator) maintain(ctx context.Context) {
 			c.cfg.Logf("intake heartbeat failed: %v", err)
 		}
 		if now := c.cfg.Clock.Now(); now.Sub(pruned) >= time.Hour {
-			if _, err := st.DedupPrune(ctx, 0); err != nil && ctx.Err() == nil {
-				c.cfg.Logf("intake prune failed: %v", err)
-			}
+			c.prune(ctx, now)
 			pruned = now
 		}
 		c.nudge()
@@ -56,6 +54,40 @@ func (c *Coordinator) maintain(ctx context.Context) {
 		case <-c.cfg.Clock.After(c.cfg.Beat):
 		case <-ctx.Done():
 			return
+		}
+	}
+}
+
+// MarkRetention is how long the marks of one provider_mark name stay. KeyPrefix narrows the rule to the
+// keys that start with it ("" is every key of the name); a mark older than MaxAge is deleted.
+type MarkRetention struct {
+	Name      string
+	KeyPrefix string
+	MaxAge    time.Duration
+}
+
+// DefaultMarkRetention is the horizon of the GitHub reconcile marks (keys are "<kind>|<repo>|<id>"): a run
+// update and a demand job are read again only while GitHub still lists them, so a week is generous; the
+// head (term, enq) and redelivery marks keep 30 days, far beyond the 72 h redelivery horizon.
+var DefaultMarkRetention = []MarkRetention{
+	{Name: "github-reconcile", KeyPrefix: "run|", MaxAge: 7 * 24 * time.Hour},
+	{Name: "github-reconcile", KeyPrefix: "demand|", MaxAge: 7 * 24 * time.Hour},
+	{Name: "github-reconcile", MaxAge: 30 * 24 * time.Hour},
+}
+
+// prune forgets what is past its retention: finished intake rows and keys, and the provider marks.
+func (c *Coordinator) prune(ctx context.Context, now time.Time) {
+	st := c.cfg.Store
+	if _, err := st.DedupPrune(ctx, 0); err != nil && ctx.Err() == nil {
+		c.cfg.Logf("intake prune failed: %v", err)
+	}
+	rules := c.cfg.MarkRetention
+	if rules == nil {
+		rules = DefaultMarkRetention
+	}
+	for _, r := range rules {
+		if _, err := st.ProviderMarkPrune(ctx, r.Name, r.KeyPrefix, now.Add(-r.MaxAge)); err != nil && ctx.Err() == nil {
+			c.cfg.Logf("provider mark prune failed (%s): %v", r.Name, err)
 		}
 	}
 }

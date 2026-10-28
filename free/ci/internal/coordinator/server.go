@@ -65,6 +65,9 @@ type Config struct {
 	StaleAfter   time.Duration
 	ID           string
 	Logf         func(format string, a ...any)
+
+	// MarkRetention replaces DefaultMarkRetention when non-nil (an empty slice keeps every mark).
+	MarkRetention []MarkRetention
 	// Drain, when set, runs once after the context ends and before the dispatches are cancelled, with new
 	// claims already stopped (PauseIntake); P7-NODE-20 wires the graceful drain through it.
 	Drain func(ctx context.Context) error
