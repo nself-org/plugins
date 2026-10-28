@@ -122,6 +122,16 @@ No placed jobs produce `0` with `unknown`; this does not establish a free run.
 Individual `placement.estimate.cost_micro` values can be `null`. The v1 total
 retains its integer representation for compatibility.
 
+## Obsolete deploy-host exclusion roots
+
+With `NSELF_V15=1`, run `nself ci nodes forget-project /absolute/project/root`
+on the coordinator host to remove a deleted or retired project's learned root,
+cached exclusions and refresh failure. The local operation is audited and does
+not require the project directory to exist. Use the absolute path recorded in
+the cache. Remove the same root from `ci.project_roots` in the CI home's
+`config.yaml` if configured; otherwise the next refresh learns it again.
+Node commands run in an active `.nself` project can also learn its root again.
+
 ## macOS system uninstall after upgrades
 
 `nself-ci-agent uninstall --system` prints the agent version whose bundled
