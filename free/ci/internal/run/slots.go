@@ -20,22 +20,34 @@ type slotPool struct {
 	held map[int]*os.File // nil file: held in this process only
 }
 
+// resolveCIHome returns the CI state directory: Options.Home, else NSELF_CI_HOME,
+// else ~/.nself/ci. It is independent of slot allocation so hygiene targets the
+// real workspace even on Linux, where slots live in an abstract socket namespace.
+func resolveCIHome(home string) string {
+	if home != "" {
+		return home
+	}
+	if home = os.Getenv("NSELF_CI_HOME"); home != "" {
+		return home
+	}
+	user, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(user, ".nself", "ci")
+}
+
 // slotDir selects the host namespace on Linux, otherwise the run home locks.
+// It must NOT be used to derive the CI home; use resolveCIHome for that.
 func slotDir(home string) string {
 	if dir := hostSlots(); dir != "" {
 		return dir
 	}
-	if home == "" {
-		home = os.Getenv("NSELF_CI_HOME")
+	h := resolveCIHome(home)
+	if h == "" {
+		return ""
 	}
-	if home == "" {
-		user, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		home = filepath.Join(user, ".nself", "ci")
-	}
-	return filepath.Join(home, "slots")
+	return filepath.Join(h, "slots")
 }
 
 // maxSlots bounds the search; take returns -1 (JobUID refuses it, so the attempt fails as

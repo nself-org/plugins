@@ -67,11 +67,10 @@ func RegisterHygieneDrain(f func(reason string)) {
 
 // ciHome is the state directory of a run: Options.Home, else what the executor defaults to.
 func ciHome(home string) string {
-	dir := slotDir(home)
-	if dir == "" {
-		return ""
+	if h := resolveCIHome(home); h != "" {
+		return h
 	}
-	return filepath.Dir(dir)
+	return ""
 }
 
 func hygieneHost(home string, rt hygiene.Runtime) *hygiene.Host {
