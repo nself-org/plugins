@@ -212,3 +212,25 @@ func TestPromotableIsNeverUsedForAdmission(t *testing.T) {
 		}
 	}
 }
+
+// TestStepRefusesAReleaseAttemptThatHasNoProvider (D-1077): a release attempt
+// that reached dispatch.Admit without going through run's Dispatch wrapper has
+// no facts in the source; the step refuses it instead of admitting it ungated.
+// Any other kind of job, with or without facts, is not the step's business.
+func TestStepRefusesAReleaseAttemptThatHasNoProvider(t *testing.T) {
+	step := job.Step(job.NewStash())
+	view := func(kind model.JobKind, local bool) dispatch.View {
+		return dispatch.View{Request: dispatch.Request{AttemptID: "orphan", Kind: kind, Local: local}}
+	}
+	err := step(context.Background(), view("release", true))
+	ref, ok := err.(*dispatch.Refusal)
+	if !ok || ref.Reason != model.PlacementReason("release."+job.NoEvidence) {
+		t.Fatalf("a release attempt with no provider: %v", err)
+	}
+	if err = step(context.Background(), view("test", true)); err != nil {
+		t.Fatalf("a non-release attempt was refused: %v", err)
+	}
+	if err = step(context.Background(), view("", true)); err != nil {
+		t.Fatalf("an attempt with no kind was refused: %v", err)
+	}
+}

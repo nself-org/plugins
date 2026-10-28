@@ -9,7 +9,8 @@ package burst
 // stops the whole sweep); --dry-run lists what would be deleted, including
 // intent-less machines, and changes nothing, not even an alert; an intent-less
 // machine is alerted once and deleted after max_lifetime + grace; a failure on
-// one provider does not stop the others.
+// one provider does not stop the others; a real sweep also prunes the decision
+// log (90 days, 20 000 rows) and the alert marks.
 
 import (
 	"context"
@@ -54,14 +55,14 @@ func (e *Engine) Sweep(ctx context.Context, dryRun bool) (SweepReport, error) {
 				continue
 			}
 			if act.Reason == SweepExcluded && Mine(r.Labels, e.o.Coordinator) && !dryRun {
-				e.alertOnce(Alert{Kind: AlertExcluded, Provider: id, Intent: r.Labels[LabelIntent], Resource: r.ID, Detail: "carries this coordinator's labels but is in the deploy-host exclusion set; left alone"})
+				e.alertOnce(ctx, Alert{Kind: AlertExcluded, Provider: id, Intent: r.Labels[LabelIntent], Resource: r.ID, Detail: "carries this coordinator's labels but is in the deploy-host exclusion set; left alone"})
 			}
 			if act.Reason == SweepForeign || act.Reason == SweepExcluded {
 				continue // not ours to report as an action
 			}
 			if !dryRun {
 				if act.Intentless && !act.Delete {
-					e.alertOnce(Alert{Kind: AlertOrphan, Provider: id, Resource: r.ID, Detail: "labelled for this coordinator but no intent row; deleted after max_lifetime + grace"})
+					e.alertOnce(ctx, Alert{Kind: AlertOrphan, Provider: id, Resource: r.ID, Detail: "labelled for this coordinator but no intent row; deleted after max_lifetime + grace"})
 				}
 				if act.Delete {
 					if derr := e.remove(ctx, p, r, act); derr != nil {
@@ -72,6 +73,12 @@ func (e *Engine) Sweep(ctx context.Context, dryRun bool) (SweepReport, error) {
 				}
 			}
 			rep.Actions = append(rep.Actions, act)
+		}
+	}
+	if !dryRun {
+		before := e.now().Add(-DecisionRetention).UnixMilli()
+		if _, err := e.o.Store.BurstPrune(ctx, before, DecisionMaxRows); err != nil {
+			errs = append(errs, errors.New("sweep: the decision log could not be pruned"))
 		}
 	}
 	return rep, errors.Join(errs...)
@@ -124,14 +131,22 @@ func (e *Engine) remove(ctx context.Context, p Provider, r Resource, a SweepActi
 	})
 }
 
-// alertOnce tells the operator once per run about a machine (kind and resource are the dedupe key).
-func (e *Engine) alertOnce(a Alert) {
+// alertOnce tells the operator once about a machine (kind and resource are the dedupe key). The mark is
+// kept in the store, so a restart does not repeat it; when the store cannot answer, the alert is sent
+// (a repeat is better than silence) and the in-memory mark still limits it to once per run.
+func (e *Engine) alertOnce(ctx context.Context, a Alert) {
 	key := a.Kind + "/" + a.Resource
 	e.mu.Lock()
 	seen := e.orphans[key]
 	e.orphans[key] = true
 	e.mu.Unlock()
-	if !seen && e.o.Alert != nil {
+	if seen {
+		return
+	}
+	if first, err := e.o.Store.BurstAlertOnce(ctx, a.Kind, a.Resource); err == nil && !first {
+		return
+	}
+	if e.o.Alert != nil {
 		e.o.Alert(a)
 	}
 }

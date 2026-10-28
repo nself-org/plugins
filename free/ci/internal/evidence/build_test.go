@@ -206,3 +206,38 @@ func TestHiddenEditDuringTheRunUnbinds(t *testing.T) {
 		t.Fatalf("a hidden edit made during the run left the evidence %s/%s", ev.Binding.State, ev.WorktreeState)
 	}
 }
+
+// D-1050: the per-attempt documents carry the flaky-by-history marker the run
+// document carries, because the marker is attached before they are written.
+func TestAttemptDocumentsCarryTheHistoryFlakyMarker(t *testing.T) {
+	prev := cirun.FlakyHistory
+	t.Cleanup(func() { cirun.FlakyHistory = prev })
+	cirun.FlakyHistory = func(_ context.Context, _ *store.Store, ev model.Evidence) map[string]*model.Flaky {
+		notes := map[string]*model.Flaky{}
+		for _, c := range ev.Checks {
+			notes[model.FlakyKey(c.JobID, c.ID)] = &model.Flaky{Source: "history", Passes: 1, Fails: 1}
+		}
+		return notes
+	}
+	dir, sha := newRepo(t, baseFiles)
+	res, st := runPipeline(t, dir, t.TempDir(), buildPlan(t, jobsOf("true")), cirun.Hooks{})
+	if c := runDoc(t, dir, st, res).Checks; len(c) != 1 || c[0].Flaky == nil {
+		t.Fatalf("run document check: %+v", c)
+	}
+	rows, err := st.EvidenceByRevision(context.Background(), sha, mustRow(t, st, res.RunID).InputDigest)
+	ok(t, err)
+	var seen int
+	for _, r := range rows {
+		if r.AttemptID == "" {
+			continue
+		}
+		seen++
+		ev, err := attest.Verify(r.Body)
+		if err != nil || len(ev.Checks) != 1 || ev.Checks[0].Flaky == nil || ev.Checks[0].Flaky.Source != "history" {
+			t.Fatalf("attempt document lacks the flaky marker: %+v %v", ev.Checks, err)
+		}
+	}
+	if seen != 1 {
+		t.Fatalf("%d attempt documents, want 1", seen)
+	}
+}

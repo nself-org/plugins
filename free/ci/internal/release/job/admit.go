@@ -13,8 +13,8 @@ package job
 // Source's Provider for the attempt id on every try. The gate is
 // built from Facts.Repo/Revision/PolicyDigest/Deps, never from the evidence
 // being judged. The only submission path (run's Dispatch wrapper) refuses to
-// submit a release attempt whose facts it cannot build, so no release attempt
-// reaches this step without facts; an attempt with none is not a release one.
+// submit a release attempt whose facts it cannot build; a release attempt
+// (Request.Kind) that reaches this step without facts is refused (fail closed).
 
 import (
 	"context"
@@ -99,6 +99,9 @@ func Step(src Source) dispatch.Step {
 	return func(_ context.Context, v dispatch.View) error {
 		f, perr, ok := src.ReleaseFacts(v.Request.AttemptID)
 		if !ok {
+			if v.Request.Kind == "release" { // it did not come through run's Dispatch wrapper: nothing judged it
+				return &dispatch.Refusal{Reason: model.PlacementReason("release." + NoEvidence), Detail: "a release attempt has no facts to judge"}
+			}
 			return nil
 		}
 		e := perr
