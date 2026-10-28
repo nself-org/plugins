@@ -50,6 +50,9 @@ var dynamicProgram = map[string]bool{
 	// The orphan sweep removes a stale job container with the runtime binary the sweep resolved
 	// (docker or podman, checked against runtimeBinary before it is used); never ssh.
 	"internal/exec/sweep.go:removeStaleContainer": true,
+	// `nself-ci-agent upgrade` runs the verified candidate binary as `<bin> version` (argv is the one word
+	// `version`); the program is the agent binary being installed, never ssh (D-1385).
+	"internal/exec/agent_version.go:RunAgentVersion": true,
 	// `nself ci --detach` re-executes the plugin binary (os.Executable) in a new
 	// session; the program is the caller's own binary, never ssh (P7-CI-63).
 	"internal/exec/detach.go:StartDetached": true,

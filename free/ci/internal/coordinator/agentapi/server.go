@@ -1,8 +1,9 @@
 package agentapi
 
 // Purpose: the agent carrier of the TEAM coordinator (P7-NODE-20, Epic D5/D6/D7): a TLS 1.3 mTLS HTTP
-//          server that accepts node certificates only and serves the four runner-protocol routes
-//          POST /v1/agent/hello, GET /v1/agent/leases, POST /v1/agent/stream, GET /v1/agent/control.
+//          server that accepts node certificates only and serves the runner-protocol routes
+//          POST /v1/agent/hello, GET /v1/agent/leases, POST /v1/agent/stream, GET /v1/agent/control and
+//          POST /v1/agent/renew (certificate renewal, D-1372).
 // Inputs:  Config (CA, deny-list Guard, server certificate source, lease engine, sink); Serve(listener).
 // Outputs: Server with Cancel, NodesConnected, CloseNode, Offer, Drain, Upgrade for other coordinator
 //          units; protocol frames on the wire (internal/protocol, strict decoding, frames <= 1 MiB).
@@ -168,13 +169,14 @@ func New(cfg Config) (*Server, error) {
 // TLSConfig is the listener config (tests dial with a client certificate against it).
 func (s *Server) TLSConfig() *tls.Config { return s.tlsc }
 
-// Handler serves the four routes behind the per-request guard (node certificates only).
+// Handler serves the five routes behind the per-request guard (node certificates only).
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/agent/hello", s.serveHello)
 	mux.HandleFunc("GET /v1/agent/leases", s.serveLeases)
 	mux.HandleFunc("POST /v1/agent/stream", s.serveStream)
 	mux.HandleFunc("GET /v1/agent/control", s.serveControl)
+	mux.HandleFunc("POST /v1/agent/renew", s.serveRenew)
 	return s.cfg.Guard.Middleware(pki.KindNode)(mux)
 }
 

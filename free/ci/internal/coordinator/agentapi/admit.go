@@ -72,11 +72,22 @@ func (s *Server) admit(q *request, f *flow, leaseID string, epoch uint64, typ st
 }
 
 // refuse answers a call a hook turned down. A refusal (an error with Refusal() true) cancels the lease on the
-// agent with the error text and returns nil; any other error is the coordinator failing.
+// agent with the error text and returns nil; any other error is the coordinator failing. The same refusal of a lease
+// is logged and answered once per request (D-1378); later frames of it are only dropped.
 func (s *Server) refuse(q *request, f *flow, leaseID string, epoch uint64, typ string, err error) *fatal {
 	var refusal interface{ Refusal() bool }
 	if !errors.As(err, &refusal) || !refusal.Refusal() {
 		return s.unavailable(typ, err)
+	}
+	key := leaseID + "\x00" + err.Error()
+	if q.refused[key] { // the frame is dropped, but the log line and the cancel went out for the first one
+		return nil
+	}
+	if q.refused == nil {
+		q.refused = map[string]bool{}
+	}
+	if len(q.refused) < maxTokens {
+		q.refused[key] = true
 	}
 	s.cfg.Logf("agentapi: node %s lease %s refused: %v", q.node, leaseID, err)
 	e := epoch

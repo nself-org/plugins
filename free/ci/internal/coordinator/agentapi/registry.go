@@ -43,6 +43,7 @@ type session struct {
 	owned      map[string]bool // leases already proven to belong to this node
 	reconciled bool            // the first heartbeat of a session reports the leases the agent kept across the gap
 	ctlLive    int
+	stream     *streamSlot // the one POST /v1/agent/stream handler of the session, nil when none runs
 }
 
 type nodeState struct {
