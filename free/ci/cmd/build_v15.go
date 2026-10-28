@@ -102,7 +102,7 @@ func planBuildLane(ctx context.Context, root, workdir string, timeout time.Durat
 	case !errors.Is(err, os.ErrNotExist):
 		return nil, err
 	}
-	facts, checks, err := planChecks(root, cfg)
+	facts, checks, err := planChecks(root, cfg, true)
 	if err != nil {
 		return nil, err
 	}

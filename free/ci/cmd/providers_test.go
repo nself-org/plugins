@@ -384,3 +384,34 @@ func TestProvidersHelpAndDoctorSelector(t *testing.T) {
 		t.Fatalf("only %d CI-DP checks in the report", n)
 	}
 }
+
+func TestProviderChangesRejectStaleList(t *testing.T) {
+	for _, tc := range []struct{ op, id, concurrent string }{
+		{"authorize", "gitlab", `[]`},
+		{"revoke", "github-hosted", `["github-hosted","gitlab"]`},
+	} {
+		t.Run(tc.op, func(t *testing.T) {
+			r := newPolicyRig(t, "")
+			project := r.project()
+			if code := r.prov("authorize", "github-hosted", "--project", r.work); code != 0 {
+				t.Fatalf("seed exit=%d", code)
+			}
+			env := providersEnvFor(r, nil)
+			st := r.store()
+			w := &policy.Writer{Store: st, Run: env.Run}
+			env.Apply = func(ctx context.Context, actor roles.Actor, c policy.Change) (policy.Result, error) {
+				// Another admin changes the list after runAuthorize read it.
+				if err := st.ApplyWrite(ctx, store.PolicyWrite{Op: store.PolicySet, Scope: "project", Subject: project, Key: keyTrustProviders, Value: json.RawMessage(tc.concurrent), Actor: "other-admin"}, nil); err != nil {
+					t.Fatal(err)
+				}
+				return w.Apply(ctx, actor, c)
+			}
+			if code := runProviders(tc.op, []string{tc.id, "--project", r.work}, env); code == 0 {
+				t.Fatal("stale list write accepted")
+			}
+			if got := projectRow(t, r, project, keyTrustProviders); got != tc.concurrent {
+				t.Fatalf("concurrent change lost: %s", got)
+			}
+		})
+	}
+}

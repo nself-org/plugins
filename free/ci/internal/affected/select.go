@@ -66,12 +66,13 @@ func selectWith(g *Graph, graphCertain bool, in plan.SelectionInput) (model.Sele
 		w := path.Clean(strings.TrimPrefix(r.Workdir, "./"))
 		workdirs[w] = append(workdirs[w], r.ID)
 	}
+	ancestors := g.nodeAncestors()
 	seeds, picked := map[string]bool{}, map[string]bool{}
 	for _, p := range changed {
 		if g.inGeneratorZone(p) {
 			return full("selection.full_required")
 		}
-		if g.holdsNodes(p) {
+		if ancestors[p] {
 			return full("selection.full_required") // a directory-level change (submodule, symlink swap)
 		}
 		dir, kind := g.owner(p)
@@ -147,20 +148,25 @@ func (g *Graph) owner(p string) (string, int) {
 	}
 }
 
-// holdsNodes reports whether known package or opaque directories lie
-// strictly below p, which is then a directory, not a file.
-func (g *Graph) holdsNodes(p string) bool {
-	for d := range g.eco {
-		if strings.HasPrefix(d, p+"/") {
-			return true
+// nodeAncestors indexes directories strictly above package and opaque nodes once
+// per selection, so changed paths take one lookup instead of scanning the graph.
+func (g *Graph) nodeAncestors() map[string]bool {
+	ancestors := map[string]bool{}
+	add := func(node string) {
+		for d := path.Dir(node); d != "." && d != "/"; d = path.Dir(d) {
+			if ancestors[d] {
+				break
+			}
+			ancestors[d] = true
 		}
+	}
+	for d := range g.eco {
+		add(d)
 	}
 	for d := range g.opaque {
-		if strings.HasPrefix(d, p+"/") {
-			return true
-		}
+		add(d)
 	}
-	return false
+	return ancestors
 }
 
 func (g *Graph) inGeneratorZone(p string) bool {

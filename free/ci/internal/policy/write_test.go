@@ -142,3 +142,43 @@ func (b blobScanner) Scan(blob []byte) []redact.Match {
 	}
 	return nil
 }
+
+func TestConcurrentWritersRejectStalePolicy(t *testing.T) {
+	w, st, actor := testWriter(t)
+	var absent json.RawMessage
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, value := range []string{`1`, `2`} {
+		go func(value string) {
+			other := *w
+			<-start
+			_, err := other.Apply(context.Background(), actor, Change{Op: OpSet, Scope: "user", Key: "sched.test", Value: json.RawMessage(value), Expect: &absent})
+			results <- err
+		}(value)
+	}
+	close(start)
+	successes, conflicts := 0, 0
+	for range 2 {
+		err := <-results
+		if err == nil {
+			successes++
+		} else if errors.Is(err, store.ErrPolicyConflict) {
+			conflicts++
+		} else {
+			t.Fatal(err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("successes=%d conflicts=%d", successes, conflicts)
+	}
+	entries, err := st.AuditEntries(context.Background(), 0, 100)
+	writes := 0
+	for _, entry := range entries {
+		if entry.Action == "policy.set" {
+			writes++
+		}
+	}
+	if err != nil || writes != 1 {
+		t.Fatalf("policy audit writes=%d err=%v", writes, err)
+	}
+}

@@ -304,3 +304,80 @@ func TestAdhocRetainsClassifiedTrustForSecrets(t *testing.T) {
 		t.Fatalf("secrets saw trust %q", got)
 	}
 }
+
+func TestAdhocPersistsRequestedSourceTrust(t *testing.T) {
+	for _, class := range []string{"internal", "collaborator", "untrusted"} {
+		t.Run(class, func(t *testing.T) {
+			r := newHandlerRig(t, Flags{Trust: class})
+			r.h.Select = has("container", "sandboxed-container")
+			r.h.Hooks.Isolation = failIsolation{} // stop before Docker; pipeline must already be persisted
+			r.h.Hooks.Image = alpineStub{}
+			r.opts.Adhoc = []string{"true"}
+			_, err := r.h.Adhoc(context.Background(), r.opts, r.opts.Adhoc)
+			if cirun.CodeOf(err) == cirun.CodeTrust {
+				t.Fatalf("admission failed: %v", err)
+			}
+			if !strings.Contains(r.out.String()+errString(err), "test isolation stops") {
+				t.Fatal("did not reach isolation hook")
+			}
+			st, err := cirun.OpenStore(filepath.Join(r.home, "state.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer st.Close()
+			rows, err := st.PipelinesByRevision(context.Background(), fakeSHA)
+			if err != nil || len(rows) != 1 {
+				t.Fatalf("rows=%v err=%v", rows, err)
+			}
+			if rows[0].SourceTrust != class {
+				t.Fatalf("stored source trust=%s want=%s", rows[0].SourceTrust, class)
+			}
+		})
+	}
+}
+
+func TestOperatorTypedRecordsLowerTrust(t *testing.T) {
+	for _, class := range []model.TrustClass{"owner", "internal", "collaborator", "untrusted"} {
+		o := operatorTyped{trust: class}
+		if got, _ := o.Classify(context.Background(), cirun.TrustRequest{}); got != "owner" {
+			t.Fatalf("admission=%s", got)
+		}
+		if got := o.RecordedTrust(); got != class {
+			t.Fatalf("recorded=%s want=%s", got, class)
+		}
+	}
+}
+
+// Under NSELF_V15 the dispatcher places the job on the local runner, which accepts only
+// owner. The recorded trust stays what the operator asked for; the placement uses the
+// admitted class, so a lower class must still run.
+func TestAdhocV15PlacesLowerTrustJobs(t *testing.T) {
+	for _, class := range []string{"internal", "collaborator", "untrusted"} {
+		t.Run(class, func(t *testing.T) {
+			t.Setenv("NSELF_V15", "1")
+			fl := Flags{Isolation: "process", Trust: class}
+			if class != "internal" {
+				fl.Isolation = "sandboxed-container"
+			}
+			r := newHandlerRig(t, fl)
+			r.h.Select = has("container", "sandboxed-container")
+			r.h.Hooks.Isolation = failIsolation{} // placement happens before isolation; stop before Docker
+			r.h.Hooks.Image = alpineStub{}
+			r.opts.Adhoc = []string{"true"}
+			exit, err := r.h.Adhoc(context.Background(), r.opts, r.opts.Adhoc)
+			out := r.out.String() + errString(err)
+			if placed := strings.Contains(out, "test isolation stops") || (err == nil && exit == 0); !placed {
+				t.Fatalf("job was not placed under v1.5: %v\n%s", err, out)
+			}
+			st, err := cirun.OpenStore(filepath.Join(r.home, "state.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer st.Close()
+			rows, err := st.PipelinesByRevision(context.Background(), fakeSHA)
+			if err != nil || len(rows) != 1 || rows[0].SourceTrust != class {
+				t.Fatalf("rows=%v err=%v want stored trust %s", rows, err, class)
+			}
+		})
+	}
+}

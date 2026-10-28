@@ -92,8 +92,7 @@ func runRunsReproduce(args []string) int {
 // (machine-invoked, D29).
 func reproduceRun(home string, out io.Writer) reproduce.RunFunc {
 	return func(ctx context.Context, spec reproduce.RunSpec) (reproduce.RunOutcome, error) {
-		o := cirun.Options{Root: spec.Tree, Home: home, NoStatus: true, Pipeline: spec.Pipeline, Job: spec.Job,
-			Trigger: spec.Trigger, Container: spec.Container}
+		o := reproduceOptions(home, spec)
 		p, digest, subst, err := preparePlan(ctx, o)
 		if err != nil {
 			return reproduce.RunOutcome{}, err
@@ -182,4 +181,9 @@ func printReproduction(f reproduceFlags, res reproduce.Result) int {
 			l.Original.Result, l.Original.FailureClass, l.Reproduction.Result, l.Reproduction.FailureClass)
 	}
 	return res.Exit
+}
+
+func reproduceOptions(home string, spec reproduce.RunSpec) cirun.Options {
+	return cirun.Options{Root: spec.Tree, Home: home, NoStatus: true, Pipeline: spec.Pipeline, Job: spec.Job,
+		Trigger: spec.Trigger, Container: spec.Container, Interactive: interactiveRun("", os.Getenv)}
 }

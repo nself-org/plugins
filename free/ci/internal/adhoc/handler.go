@@ -115,8 +115,8 @@ func (h *Handler) Adhoc(ctx context.Context, o cirun.Options, argv []string) (in
 	// coordinator's own check refuses any class but owner/internal (it runs jobs as
 	// the operator) and a nil hook is refilled from the registered one, so it gets a
 	// classifier that says owner: the operator typed this argv. The requested class
-	// still reaches the evidence (source_trust) through evidenceStamp.
-	hooks.Trust = operatorTyped{}
+	// is recorded on the pipeline and evidence through RecordedTrust.
+	hooks.Trust = operatorTyped{trust: mode.Trust}
 	hooks.Isolation = &isolator{inner: base.Isolation, mode: mode, scratch: scratch, net: net}
 	hooks.Evidence = evidenceStamp{inner: base.Evidence, mode: mode, argv: Recorded(cirun.Redactions, argv), image: image}
 	co := o
@@ -133,7 +133,14 @@ func (h *Handler) Adhoc(ctx context.Context, o cirun.Options, argv []string) (in
 // operatorTyped is the coordinator's classifier for an ad-hoc job: the argv came
 // from the operator, and the handler already enforced the isolation the requested
 // class needs.
-type operatorTyped struct{}
+type operatorTyped struct{ trust model.TrustClass }
+
+func (o operatorTyped) RecordedTrust() model.TrustClass {
+	if o.trust == "" {
+		return "owner"
+	}
+	return o.trust
+}
 
 func (operatorTyped) Classify(context.Context, cirun.TrustRequest) (model.TrustClass, error) {
 	return "owner", nil

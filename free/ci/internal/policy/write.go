@@ -55,13 +55,14 @@ const (
 // Change is one requested write.
 type Change struct {
 	Op      string
-	Scope   string          // user, team or project (set, unset)
-	Team    string          // subject of the team scope
-	Key     string          // set, unset
-	Value   json.RawMessage // set: the JSON value
-	SHA     string          // pin: a full commit id
-	Root    string          // repository root (pin reachability)
-	Project string          // project subject: ProjectIDGit of Root
+	Scope   string           // user, team or project (set, unset)
+	Team    string           // subject of the team scope
+	Key     string           // set, unset
+	Value   json.RawMessage  // set: the JSON value
+	Expect  *json.RawMessage // optional prior stored JSON, compared in the write transaction
+	SHA     string           // pin: a full commit id
+	Root    string           // repository root (pin reachability)
+	Project string           // project subject: ProjectIDGit of Root
 }
 
 // Result says what a write changed. Value is masked for a Secret key.
@@ -148,7 +149,7 @@ func (w *Writer) row(ctx context.Context, keys *Keyset, actor roles.Actor, c Cha
 		return Result{}, refuse("unknown policy key %s", c.Key)
 	}
 	res := Result{Op: c.Op, Scope: t.scope, Subject: t.subject, Key: c.Key}
-	pw := store.PolicyWrite{Op: store.PolicyUnset, Scope: t.scope, Subject: t.subject, Key: c.Key, Actor: actor.Label()}
+	pw := store.PolicyWrite{Op: store.PolicyUnset, Scope: t.scope, Subject: t.subject, Key: c.Key, Actor: actor.Label(), Expect: c.Expect}
 	var value json.RawMessage
 	if c.Op == OpSet {
 		var err error

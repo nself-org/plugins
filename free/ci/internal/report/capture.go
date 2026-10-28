@@ -18,6 +18,13 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
+type noLazyFetchKey struct{}
+
+// WithoutLazyFetch prevents git reads from fetching missing partial-clone objects.
+func WithoutLazyFetch(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noLazyFetchKey{}, true)
+}
+
 var captureSeq atomic.Int64
 
 // Capture runs argv in an empty private workspace and returns its combined
@@ -47,6 +54,14 @@ func CaptureAs(ctx context.Context, job model.Job, dir string, argv ...string) (
 	defer func() { _ = os.RemoveAll(home) }()
 	var buf strings.Builder
 	var ex ciexec.Executor
+	if ctx.Value(noLazyFetchKey{}) == true {
+		env := make(map[string]string, len(job.Env)+1)
+		for k, v := range job.Env {
+			env[k] = v
+		}
+		env["GIT_NO_LAZY_FETCH"] = "1"
+		job.Env = env
+	}
 	res := ex.Run(ctx, ciexec.JobSpec{
 		AttemptID: fmt.Sprintf("cap-%d-%d", time.Now().UnixNano(), captureSeq.Add(1)), CoordinatorID: "capture",
 		Job: job, Home: home, Timeout: 30 * time.Second, Command: argv, SourceDir: dir,

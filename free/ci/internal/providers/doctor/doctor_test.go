@@ -340,3 +340,40 @@ func TestTokenKindWarning(t *testing.T) {
 		})
 	}
 }
+
+// Missing blobs must stay missing even when origin is available locally.
+func TestPartialCloneDoctorNeverLazyFetches(t *testing.T) {
+	ctx := context.Background()
+	source := t.TempDir()
+	git(t, source, "init", "-b", "main")
+	git(t, source, "config", "user.name", "test")
+	git(t, source, "config", "user.email", "test@example.invalid")
+	git(t, source, "config", "uploadpack.allowFilter", "true")
+	if err := os.MkdirAll(filepath.Join(source, filepath.Dir(githubtmpl.Path)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, githubtmpl.Path), []byte("missing workflow blob"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	git(t, source, "add", ".")
+	git(t, source, "commit", "-m", "fixture")
+	blob := strings.TrimSpace(git(t, source, "rev-parse", "HEAD:"+githubtmpl.Path))
+	clone := filepath.Join(t.TempDir(), "clone")
+	git(t, source, "clone", "--filter=blob:none", "--no-checkout", "file://"+source, clone)
+	// rev-list with no lazy fetch confirms the fixture really omitted the blob.
+	missing := git(t, clone, "rev-list", "--objects", "--all", "--missing=print")
+	if !strings.Contains(missing, "?"+blob) {
+		t.Fatalf("fixture has no missing blob: %s", missing)
+	}
+	if got := WorkflowState(ctx, clone, "main", report.Capture); got != "missing" {
+		t.Fatalf("workflow=%s; git lazily fetched the blob", got)
+	}
+	out, exit, err := offline(policy.Runner(report.Capture))(ctx, "git", "-C", clone, "show", "origin/main:"+githubtmpl.Path)
+	if err != nil || exit == 0 {
+		t.Fatalf("offline show exit=%d err=%v out=%s", exit, err, out)
+	}
+	missing = git(t, clone, "rev-list", "--objects", "--all", "--missing=print")
+	if !strings.Contains(missing, "?"+blob) {
+		t.Fatal("doctor fetched the missing blob")
+	}
+}

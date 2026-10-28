@@ -28,6 +28,7 @@ import (
 	ghwebhook "github.com/nself-org/plugins/free/ci/internal/providers/github/webhook"
 	glwebhook "github.com/nself-org/plugins/free/ci/internal/providers/gitlab/webhook"
 	"github.com/nself-org/plugins/free/ci/internal/providers/runtime"
+	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -110,7 +111,7 @@ func offline(run policy.Runner) policy.Runner {
 				return "", 1, nil
 			}
 		}
-		return run(ctx, argv...)
+		return run(report.WithoutLazyFetch(ctx), argv...)
 	}
 }
 
