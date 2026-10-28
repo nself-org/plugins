@@ -73,7 +73,13 @@ func echo(s string) string {
 }
 
 // Parse reads one ref.
-func Parse(s string) (Ref, error) {
+func Parse(s string) (Ref, error) { return parseRef(s, false) }
+
+// ParseSigner parses a reference for in-process signer use only. It permits reserved
+// variable names; the returned ref must never be used for job delivery.
+func ParseSigner(s string) (Ref, error) { return parseRef(s, true) }
+
+func parseRef(s string, signer bool) (Ref, error) {
 	parts := strings.Split(s, "/")
 	shown := "<not echoed>" // a literal secret pasted into `secrets:` must not reach an error or a log
 	switch parts[0] {
@@ -105,7 +111,7 @@ func Parse(s string) (Ref, error) {
 	if !namePattern.MatchString(r.Name) {
 		return bad("NAME must match ^[A-Z][A-Z0-9_]{0,127}$")
 	}
-	if reservedName(r.Name) {
+	if !signer && reservedName(r.Name) {
 		return bad("NAME is reserved: it would change how the process or the docker client runs")
 	}
 	return r, nil
