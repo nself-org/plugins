@@ -119,7 +119,7 @@ func explainTarget(ctx context.Context, target string, spec planSpec) (model.Pla
 		doc, err := planview.Lookup(ctx, run, job)
 		return doc, planview.SourceDecisionRecord, err
 	}
-	pd, err := loadPlanned(ctx, spec)
+	pd, err := buildPlanned(ctx, spec)
 	if err != nil {
 		return model.PlacementPlan{}, "", err
 	}
