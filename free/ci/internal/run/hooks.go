@@ -204,6 +204,13 @@ type EvidenceBuilder interface {
 	Complete(ctx context.Context, begin any, f EvidenceFacts, ev model.Evidence) (model.Evidence, error)
 }
 
+// RecordedTrustClassifier separates admission of an operator-authored command
+// from the source class whose isolation the ad-hoc handler already enforces.
+// RecordedTrust may only lower the admitted class, never raise it.
+type RecordedTrustClassifier interface {
+	RecordedTrust() model.TrustClass
+}
+
 // EvidenceStamper adds facts to the base document that must survive a builder error.
 // It must not add input digests or a current binding to an incomplete document.
 type EvidenceStamper interface {

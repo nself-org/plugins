@@ -98,6 +98,13 @@ func (c *Coordinator) classify(ctx context.Context, h Hooks, rev Revision) (stri
 	if c.Opts.Trust != "" && string(got) != c.Opts.Trust {
 		return "", fail(CodeTrust, "the source is classed %s, not %s", got, c.Opts.Trust)
 	}
+	if recorder, ok := h.Trust.(RecordedTrustClassifier); ok {
+		recorded := recorder.RecordedTrust()
+		if !recorded.Valid() || (got == "internal" && recorded == "owner") {
+			return "", fail(CodeTrust, "invalid recorded source trust %q for admitted class %s", recorded, got)
+		}
+		return string(recorded), nil
+	}
 	return string(got), nil
 }
 
