@@ -77,6 +77,8 @@ type Alternative struct {
 	Components map[string]Component    `json:"components"`
 }
 type Totals struct {
+	// EstimatedCostMicro sums the known costs of placed jobs in v1; zero can mean no known costs.
+	// Read CostConfidence first: unknown means this sum is not a complete cost estimate.
 	EstimatedCostMicro int64  `json:"estimated_cost_micro"`
 	CostConfidence     string `json:"cost_confidence"`
 	Placed             int    `json:"placed"`

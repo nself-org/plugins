@@ -100,6 +100,7 @@ func runUninstall(ctx context.Context, args []string, sio IO) int {
 		fmt.Fprintln(sio.Stderr, bootstrap.NewError("uninstall_unsupported", "no system install exists for %s; nothing to remove", runtime.GOOS))
 		return 1
 	}
+	fmt.Fprintf(sio.Stderr, "uninstall layout bundled with nself-ci-agent %s\n", Version)
 	if os.Geteuid() != 0 {
 		fmt.Fprintf(sio.Stderr, "error: uninstall --system must run as root: sudo %s uninstall --system\n", darwin.TrustedPath)
 		return 1

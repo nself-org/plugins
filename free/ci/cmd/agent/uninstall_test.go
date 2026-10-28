@@ -33,6 +33,9 @@ func TestUninstallRefusesWithoutAFamilyOrWithoutRoot(t *testing.T) {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 	if runtime.GOOS == "darwin" {
+		if !strings.Contains(stderr, "uninstall layout bundled with nself-ci-agent "+Version) {
+			t.Fatalf("uninstall does not identify its layout: %q", stderr)
+		}
 		if !strings.Contains(stderr, "must run as root") {
 			t.Fatalf("stderr %q", stderr)
 		}
