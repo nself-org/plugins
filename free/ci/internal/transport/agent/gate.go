@@ -21,7 +21,6 @@ package agent
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"errors"
 	"sync"
 	"time"
@@ -53,7 +52,7 @@ type LeaseView interface {
 
 // CertView reads the CA's record of an issued certificate (store.Store).
 type CertView interface {
-	PKICertGet(ctx context.Context, serial string) (store.PKICert, error)
+	PKICertFind(ctx context.Context, serial string) (c store.PKICert, found bool, err error)
 }
 
 // Gate admits or refuses lease-scoped calls.
@@ -215,20 +214,21 @@ func (g *Gate) issuedLater(ctx context.Context, c agentapi.Call, bound string) e
 	if g.Certs == nil {
 		return refuse()
 	}
-	next, err := g.Certs.PKICertGet(ctx, c.Serial)
-	if err == nil {
-		var prev store.PKICert
-		if prev, err = g.Certs.PKICertGet(ctx, bound); err == nil {
-			if next.NodeID != c.Node || prev.NodeID != c.Node || next.IssuedAt <= prev.IssuedAt {
-				return refuse()
-			}
-			return nil
-		}
+	next, found, err := g.Certs.PKICertFind(ctx, c.Serial)
+	if err != nil {
+		return err
 	}
-	if errors.Is(err, sql.ErrNoRows) {
+	if !found {
 		return refuse()
 	}
-	return err
+	prev, found, err := g.Certs.PKICertFind(ctx, bound)
+	if err != nil {
+		return err
+	}
+	if !found || next.NodeID != c.Node || prev.NodeID != c.Node || next.IssuedAt <= prev.IssuedAt {
+		return refuse()
+	}
+	return nil
 }
 
 // forgetOtherSessions drops the proved bindings of jti that belong to a session other than keep.

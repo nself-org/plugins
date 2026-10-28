@@ -111,6 +111,15 @@ func (s *Store) PKICertGet(ctx context.Context, serial string) (PKICert, error) 
 	return scanCert(s.readers.QueryRowContext(ctx, `SELECT `+certCols+` FROM pki_cert WHERE serial=?`, serial))
 }
 
+// PKICertFind is PKICertGet with found=false for an unknown serial instead of an error.
+func (s *Store) PKICertFind(ctx context.Context, serial string) (c PKICert, found bool, err error) {
+	c, err = s.PKICertGet(ctx, serial)
+	if errors.Is(err, sql.ErrNoRows) {
+		return PKICert{}, false, nil
+	}
+	return c, err == nil, err
+}
+
 func (s *Store) PKICertsOfNode(ctx context.Context, nodeID string) ([]PKICert, error) {
 	rows, err := s.readers.QueryContext(ctx, `SELECT `+certCols+` FROM pki_cert WHERE node_id=? AND kind='node' ORDER BY issued_at,serial`, nodeID)
 	return pkiCollect(rows, err, func(r *sql.Rows) (PKICert, error) { return scanCert(r) })
