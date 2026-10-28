@@ -38,7 +38,9 @@ func (s State) Valid() bool { return s == Pending || s == Success || s == Failur
 const MaxDescription = 140
 
 // Status is one commit status to deliver. Owner and Repo make the payload
-// self-contained, so a later invocation can drain it from anywhere.
+// self-contained, so a later invocation can drain it from anywhere. For a GitLab
+// project in subgroups, Owner is the group path ("group/sub", one to nineteen
+// segments) and Repo is the last segment; Owner + "/" + Repo is the full project path.
 type Status struct {
 	Owner       string `json:"owner"`
 	Repo        string `json:"repo"`
@@ -58,10 +60,25 @@ var (
 	shaRe     = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 )
 
+// validOwner accepts one to nineteen ownerRepo segments joined by '/' (a user, an organisation, or a
+// GitLab group path; the repo adds the twentieth segment).
+func validOwner(o string) bool {
+	segs := strings.Split(o, "/")
+	if len(segs) > 19 {
+		return false
+	}
+	for _, seg := range segs {
+		if !ownerRepo.MatchString(seg) {
+			return false
+		}
+	}
+	return true
+}
+
 // Validate refuses a status that could not be sent safely.
 func (s Status) Validate() error {
 	switch {
-	case !ownerRepo.MatchString(s.Owner) || !ownerRepo.MatchString(s.Repo):
+	case !validOwner(s.Owner) || !ownerRepo.MatchString(s.Repo):
 		return errors.New("report: invalid owner or repo")
 	case !shaRe.MatchString(s.Revision):
 		return errors.New("report: invalid revision")
@@ -71,9 +88,9 @@ func (s Status) Validate() error {
 	return nil
 }
 
-// Truncate cuts a description to MaxDescription runes.
+// Truncate cuts a description to MaxDescription runes; a line break (LF, CR or CRLF) becomes a space.
 func Truncate(d string) string {
-	d = strings.ReplaceAll(d, "\n", " ")
+	d = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(d)
 	if utf8.RuneCountInString(d) <= MaxDescription {
 		return d
 	}

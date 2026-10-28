@@ -37,8 +37,11 @@ func (k Key) ownerRepo() (owner, repo string, ok bool) {
 	if !found {
 		return "", "", false
 	}
-	owner, repo, ok = strings.Cut(rest, "/")
-	return owner, repo, ok
+	i := strings.LastIndex(rest, "/") // the repo is the last segment: a nested owner keeps its slashes
+	if i < 0 {
+		return "", "", false
+	}
+	return rest[:i], rest[i+1:], true
 }
 
 // Repost enqueues state with reason as a new seq for every key and drains. It

@@ -140,8 +140,8 @@ func TestMapNeverGreensAnUnknown(t *testing.T) {
 func TestPostRefusesBadStatus(t *testing.T) {
 	c, calls := fake(t, 403)
 	rep := &status.Reporter{Client: func(context.Context) (*rest.Client, error) { return c, nil }}
-	if err := rep.Post(context.Background(), report.Status{Owner: "a/b", Repo: "c", Revision: sha, State: report.Success}); err == nil {
-		t.Error("a slash in the owner was accepted")
+	if err := rep.Post(context.Background(), report.Status{Owner: "a//b", Repo: "c", Revision: sha, State: report.Success}); err == nil {
+		t.Error("an empty group segment in the owner was accepted")
 	}
 	if len(calls()) != 0 {
 		t.Error("a request was sent for an invalid status")
@@ -149,6 +149,21 @@ func TestPostRefusesBadStatus(t *testing.T) {
 	err := rep.Post(context.Background(), report.Status{Owner: "acme", Repo: "widgets", Revision: sha, State: report.Success})
 	if err == nil || strings.Contains(err.Error(), testToken) {
 		t.Errorf("403 must be an error without the token: %v", err)
+	}
+}
+
+// TestPostReachesANestedProject proves a project in subgroups gets its commit status (D-1345): the
+// owner carries the group path and the request addresses the full project path.
+func TestPostReachesANestedProject(t *testing.T) {
+	c, calls := fake(t, 201)
+	rep := &status.Reporter{Client: func(context.Context) (*rest.Client, error) { return c, nil }}
+	s := report.Status{Owner: "group/sub", Repo: "project", Revision: sha, State: report.Success, Description: "pass"}
+	if err := rep.Post(context.Background(), s); err != nil {
+		t.Fatal(err)
+	}
+	got := calls()
+	if len(got) != 1 || got[0].URI != "/api/v4/projects/group%2Fsub%2Fproject/statuses/"+sha {
+		t.Fatalf("calls %+v", got)
 	}
 }
 
