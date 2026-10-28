@@ -118,6 +118,9 @@ func (s *state) checkForkApproval(ctx context.Context) doctor.Check {
 }
 
 func (s *state) checkHealth(ctx context.Context) []doctor.Check {
+	if s.storeErr != nil {
+		return []doctor.Check{mk("CI-DP011", "provider health", doctor.Warn, "cannot read provider health: "+oneLine(s.storeErr.Error()), "Repair the state database and run doctor again")}
+	}
 	opts := health.Options{}
 	if s.st != nil {
 		opts.Store = s.st
@@ -181,9 +184,15 @@ func (s *state) checkRegistration() doctor.Check {
 
 func (s *state) checkAuthorization() doctor.Check {
 	const id, name = "CI-DP014", "hosted authorization"
+	if s.storeErr != nil {
+		return mk(id, name, doctor.Warn, "cannot read hosted authorization: "+oneLine(s.storeErr.Error()), "Repair the state database and run doctor again")
+	}
+	if s.cfg.Err != nil {
+		return mk(id, name, doctor.Warn, "cannot resolve hosted authorization: "+oneLine(s.cfg.Err.Error()), "Repair the policy and run doctor again")
+	}
 	zone := s.cfg.PrivacyZone
 	if zone == "" {
-		return mk(id, name, doctor.Pass, "the privacy zone could not be resolved", "")
+		return mk(id, name, doctor.Warn, "the privacy zone could not be resolved", "Repair the policy and run doctor again")
 	}
 	list := "[" + strings.Join(s.cfg.Authorized, ", ") + "]"
 	c := mk(id, name, doctor.Pass, "trust.privacy_zone is "+zone+"; trust.providers is "+list, "")

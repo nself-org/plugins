@@ -17,6 +17,7 @@ package doctor
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,7 +138,10 @@ func OpenExisting(getenv func(string) string) (*store.Store, error) {
 		return nil, nil
 	}
 	if _, err := os.Stat(path); err != nil {
-		return nil, nil
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
 	}
 	return store.Open(path, store.Options{})
 }
