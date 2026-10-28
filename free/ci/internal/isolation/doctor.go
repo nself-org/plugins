@@ -1,8 +1,9 @@
 package isolation
 
-// Purpose: the `isolation` section of `nself ci doctor` (P7-CI-50 registry): one
+// Purpose: the `isolation-runtime` section of `nself ci doctor` (P7-CI-50 registry): one
 // check per registered isolation level, with the profile's reason and install hint
 // for a level that is unavailable here (D-1063).
+// The cmd package owns the separate `isolation` section (last-verified records).
 // Inputs:  the default registry (filled by the run hooks), a probe per profile.
 // Outputs: CI-DT001, one per level (a single pass when no profile is registered).
 // Ids with prefix CI-DT belong to the trust and isolation Epics.
@@ -18,7 +19,7 @@ import (
 )
 
 // SectionName is the registered section.
-const SectionName = "isolation"
+const SectionName = "isolation-runtime"
 
 func init() {
 	doctor.RegisterSection(doctor.Section{

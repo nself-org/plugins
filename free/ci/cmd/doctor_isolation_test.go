@@ -137,3 +137,18 @@ func TestDoctorIsolationNever(t *testing.T) {
 		t.Errorf("an unreadable store must warn: %v", w)
 	}
 }
+
+// TestDoctorRegistersBothIsolationSections (D-1063): the binary links the last-verified section and the
+// availability section (reason and install hint) side by side; a duplicate section name would panic at init.
+func TestDoctorRegistersBothIsolationSections(t *testing.T) {
+	var names []string
+	for _, s := range doctor.Registered() {
+		names = append(names, s.Name)
+	}
+	got := strings.Join(names, ",")
+	for _, want := range []string{"isolation", "isolation-runtime"} {
+		if !strings.Contains(","+got+",", ","+want+",") {
+			t.Errorf("section %q not registered in the binary (have %s)", want, got)
+		}
+	}
+}
