@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/attest"
@@ -74,5 +75,27 @@ func TestLoadPseudonymKeyCreatesOnceAndRefusesAWrongFile(t *testing.T) {
 	}
 	if _, err = attest.LoadPseudonymKey(""); err == nil {
 		t.Fatal("an empty home was accepted")
+	}
+}
+
+// Attempts of one run start together: concurrent first loads agree on one key and none sees a partial file.
+func TestLoadPseudonymKeyConcurrentFirstUse(t *testing.T) {
+	home := t.TempDir()
+	const n = 16
+	keys := make([][]byte, n)
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); keys[i], errs[i] = attest.LoadPseudonymKey(home) }()
+	}
+	wg.Wait()
+	for i := range keys {
+		if errs[i] != nil || !bytes.Equal(keys[i], keys[0]) {
+			t.Fatalf("load %d: %v", i, errs[i])
+		}
+	}
+	if left, _ := filepath.Glob(filepath.Join(home, ".pseudonym-*")); len(left) != 0 {
+		t.Fatalf("temporary files left: %v", left)
 	}
 }

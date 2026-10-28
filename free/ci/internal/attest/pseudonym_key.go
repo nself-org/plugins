@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"sync/atomic"
 )
 
@@ -29,7 +30,10 @@ const PseudonymKeyFile = "pseudonym.key"
 
 const pseudonymKeyLen = 32
 
-var pseudonymKey atomic.Pointer[[]byte]
+var (
+	pseudonymKey atomic.Pointer[[]byte]
+	loadMu       sync.Mutex // one creator at a time within the process
+)
 
 // UsePseudonymKey sets the key later Profiles pseudonymize with; nil clears it. A key shorter than 32
 // bytes is refused.
@@ -62,6 +66,8 @@ func LoadPseudonymKey(home string) ([]byte, error) {
 		return nil, err
 	}
 	path := filepath.Join(home, PseudonymKeyFile)
+	loadMu.Lock()
+	defer loadMu.Unlock()
 	key, err := readPseudonymKey(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return createPseudonymKey(path)
@@ -92,25 +98,29 @@ func readPseudonymKey(path string) ([]byte, error) {
 	return key, nil
 }
 
+// createPseudonymKey writes the key to a private temporary file and links it into place, so no reader
+// ever sees a partly written key file and a concurrent creator loses cleanly.
 func createPseudonymKey(path string) ([]byte, error) {
 	key := make([]byte, pseudonymKeyLen)
 	if _, err := rand.Read(key); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, os.ErrExist) {
-		return readPseudonymKey(path) // another process created it first
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".pseudonym-*")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if _, err = tmp.Write(key); err == nil {
+		err = tmp.Close()
+	} else {
+		_ = tmp.Close()
 	}
 	if err != nil {
 		return nil, err
 	}
-	if _, err = f.Write(key); err == nil {
-		err = f.Close()
-	} else {
-		_ = f.Close()
-	}
-	if err != nil {
-		_ = os.Remove(path)
+	if err = os.Link(tmp.Name(), path); errors.Is(err, os.ErrExist) {
+		return readPseudonymKey(path) // another process created it first
+	} else if err != nil {
 		return nil, err
 	}
 	return key, nil
