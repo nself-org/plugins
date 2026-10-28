@@ -24,6 +24,8 @@ type Mount = ciexec.Mount
 
 // AttemptInfo describes the attempt a hook is called for.
 type AttemptInfo struct {
+	// SourceClass is the classified source trust, before any ad-hoc admission override.
+	SourceClass                                model.TrustClass
 	RunID, JobID, JobName, AttemptID, Revision string
 	N                                          int
 	Job                                        model.Job

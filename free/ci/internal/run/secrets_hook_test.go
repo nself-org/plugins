@@ -11,6 +11,7 @@ import (
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
 	"github.com/nself-org/plugins/free/ci/internal/secrets"
 )
@@ -140,5 +141,32 @@ func TestResolverCoordinatorIDIsAnExecutorSafeID(t *testing.T) {
 	res := ex.Run(context.Background(), ciexec.JobSpec{AttemptID: "sec-x-1", CoordinatorID: got, Command: []string{"true"}, Home: t.TempDir()})
 	if res.Err != nil {
 		t.Fatalf("the executor refused the coordinator id %q: %v", got, res.Err)
+	}
+}
+
+func TestLocalSourceTrustControlsProjectSecrets(t *testing.T) {
+	refs, err := secrets.ParseAll([]string{"project/FOO"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, class := range []model.TrustClass{"owner", "internal", "collaborator", "untrusted", ""} {
+		facts := localFacts(AttemptInfo{SourceClass: class})
+		allowed := len(secrets.Check(refs, facts)) == 0
+		if allowed != (class == "owner" || class == "internal") {
+			t.Errorf("class %q allowed=%v", class, allowed)
+		}
+	}
+}
+
+func TestAttemptInfoRetainsAndCapsSourceTrust(t *testing.T) {
+	for _, tc := range []struct{ source, cap, want model.TrustClass }{
+		{"owner", "", "owner"}, {"internal", "", "internal"},
+		{"owner", "collaborator", "collaborator"}, {"internal", "owner", "internal"},
+	} {
+		rs := &runState{source: tc.source, c: &Coordinator{Opts: Options{SecretsTrust: tc.cap}}, sess: &Session{}}
+		got := rs.info(plan.PlannedJob{}, model.Job{}, "a", 1)
+		if got.SourceClass != tc.want {
+			t.Errorf("source=%s cap=%s got=%s", tc.source, tc.cap, got.SourceClass)
+		}
 	}
 }

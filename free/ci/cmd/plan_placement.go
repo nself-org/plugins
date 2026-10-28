@@ -51,10 +51,11 @@ type planSpec struct{ repo, cfg, base, pipeline, trigger string }
 
 // planned is a built plan with the facts placement needs.
 type planned struct {
-	root   string
-	pl     *plan.Plan
-	world  plan.World
-	checks []plan.Check
+	interactive bool
+	root        string
+	pl          *plan.Plan
+	world       plan.World
+	checks      []plan.Check
 }
 
 func planPlacement(ctx context.Context, p *model.Pipeline) (any, []string, error) {
@@ -64,9 +65,6 @@ func planPlacement(ctx context.Context, p *model.Pipeline) (any, []string, error
 	}
 	if !samePlan(pd.pl, p) {
 		return nil, nil, errors.New("the plan changed while placement was computed; run it again")
-	}
-	if schedFlags != (schedpolicy.Flags{}) {
-		fmt.Fprintln(os.Stderr, "ci plan: note: --prefer, --runner and --max-queue are not applied to placement yet (debt D-0984); the plan shows the policy a run uses")
 	}
 	doc, err := placementDoc(ctx, pd)
 	var down *storeDown
@@ -149,7 +147,7 @@ func loadPlanned(ctx context.Context, s planSpec) (planned, error) {
 	if err != nil {
 		return planned{}, err
 	}
-	return planned{root: root, pl: pl, world: w, checks: checks}, nil
+	return planned{interactive: interactiveRun(s.trigger, os.Getenv), root: root, pl: pl, world: w, checks: checks}, nil
 }
 
 // storeDown marks a run store that could not be opened: the one failure
@@ -168,7 +166,11 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	defer func() { _ = st.Close() }()
 	res := policy.Resolver{Store: st, Run: policy.Runner(report.Capture)}
 	project := policy.ProjectIDGitCached(ctx, res.Run, pd.root)
-	got, err := res.Resolve(ctx, policy.Repo{Root: pd.root, Project: project, Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: pd.root})
+	values, err := schedRevisionValues()
+	if err != nil {
+		return model.PlacementPlan{}, err
+	}
+	got, err := res.Resolve(ctx, policy.Repo{Root: pd.root, Project: project, Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: pd.root, Run: values})
 	if err != nil {
 		return model.PlacementPlan{}, err
 	}
@@ -177,7 +179,7 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 		return model.PlacementPlan{}, err
 	}
 	jobs, blocked := planview.SchedJobs(planview.Context{PipelineID: pd.pl.Pipeline.ID, Project: project, Support: pd.pl.Support,
-		DefaultPlatform: pd.world.Platform, Foreground: foregroundTrigger(string(pd.pl.Trigger))}, plannedJobs(pd))
+		DefaultPlatform: pd.world.Platform, Foreground: pd.interactive}, plannedJobs(pd))
 	capacity := placementProbe()
 	now := placementClock()
 	pipe := sched.Pipeline{ID: pd.pl.Pipeline.ID}

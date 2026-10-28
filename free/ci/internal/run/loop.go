@@ -21,6 +21,7 @@ import (
 )
 
 type runState struct {
+	source model.TrustClass
 	c      *Coordinator
 	sess   *Session
 	hooks  Hooks

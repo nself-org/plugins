@@ -120,6 +120,7 @@ func (h *Handler) Adhoc(ctx context.Context, o cirun.Options, argv []string) (in
 	hooks.Isolation = &isolator{inner: base.Isolation, mode: mode, scratch: scratch, net: net}
 	hooks.Evidence = evidenceStamp{inner: base.Evidence, mode: mode, argv: Recorded(cirun.Redactions, argv), image: image}
 	co := o
+	co.SecretsTrust = trust
 	co.Adhoc, co.Trust, co.Container, co.Network, co.Job, co.Pipeline = nil, "", false, "", JobName, ""
 	c := &cirun.Coordinator{Opts: co, Hooks: hooks, Plan: pl, ConfigDigest: "builtin-defaults", Out: or(h.Stdout, os.Stdout), Capture: h.Git}
 	if h.Tune != nil {

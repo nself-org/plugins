@@ -290,3 +290,17 @@ func TestInvalidClassifierVerdictRunsNothing(t *testing.T) {
 		t.Fatal("the command ran")
 	}
 }
+
+func TestAdhocRetainsClassifiedTrustForSecrets(t *testing.T) {
+	r := newHandlerRig(t, Flags{Trust: "collaborator", Isolation: "sandboxed-container"})
+	r.h.Select = has("sandboxed-container")
+	r.h.Hooks.Isolation = failIsolation{}
+	r.h.Hooks.Image = alpineStub{}
+	var got model.TrustClass
+	r.h.Tune = func(c *cirun.Coordinator) { got = c.Opts.SecretsTrust }
+	r.opts.Adhoc = []string{"true"}
+	_, _ = r.h.Adhoc(context.Background(), r.opts, r.opts.Adhoc)
+	if got != "collaborator" {
+		t.Fatalf("secrets saw trust %q", got)
+	}
+}

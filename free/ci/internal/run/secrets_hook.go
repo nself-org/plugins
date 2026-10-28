@@ -7,9 +7,8 @@ package run
 // policy, a different CLI binary).
 // Outputs: a *secrets.Source per attempt that has secrets; the executor calls Zero() when the attempt ends.
 // Constraints: the default is the local coordinator on the operator's own machine: it only runs owner and
-// internal sources (the trust gate in Coordinator.Run), so the job facts are `internal`, the weakest class
-// that can reach this code. Values are registered with Redactions (the registry the installed redactor
-// reads); if the installed redactor is not a registry filter the Source resolves nothing (E676).
+// internal sources (the trust gate in Coordinator.Run). Job facts retain the classified source trust.
+// Values are registered with Redactions (the registry the installed redactor reads); if the installed redactor is not a registry filter the Source resolves nothing (E676).
 
 import (
 	"context"
@@ -93,9 +92,14 @@ func localFacts(a AttemptInfo) secrets.Facts {
 	decl := trust.Declaration{Accepts: []model.TrustClass{"owner", "internal"}, Ownership: "operator", Source: "assigned",
 		PersonalOwnNode: true, PersonalOwnRun: true, ReleaseJob: a.Job.Kind == "release"}
 	runner := trust.RunnerFacts{Ownership: "operator", PersonalOwnNode: true, Dedicated: trust.IsDedicatedTrusted(decl), Isolation: iso}
+	allowed, hasPolicy := a.SecretClasses, a.HasSecretClasses
+	// Local operator credentials are never available to collaborator or untrusted source.
+	if trust.RankTrust(a.SourceClass) < trust.RankTrust("internal") {
+		allowed, hasPolicy = nil, true
+	}
 	return secrets.Facts{
-		Job:    trust.JobFacts{Trust: "internal", PersonalOwnRun: true, Release: a.Job.Kind == "release", Mode: trust.Personal},
-		Runner: runner, Allowed: a.SecretClasses, HasPolicy: a.HasSecretClasses,
+		Job:    trust.JobFacts{Trust: a.SourceClass, PersonalOwnRun: true, Release: a.Job.Kind == "release", Mode: trust.Personal},
+		Runner: runner, Allowed: allowed, HasPolicy: hasPolicy,
 	}
 }
 

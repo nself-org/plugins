@@ -7,6 +7,7 @@ package main
 // the flag sets are package-level, so each call resets them.
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"os"
@@ -347,5 +348,48 @@ jobs:
 	code, out, _ := capture(t, func() int { return runPlan([]string{"--json", "--repo", repo}) })
 	if code == 0 || strings.Contains(out, `"placement"`) {
 		t.Fatalf("an invalid policy is an error, not a plan without placement: exit %d\n%s", code, out)
+	}
+}
+
+func TestPlacementUsesRunFlagsAndInteractiveFact(t *testing.T) {
+	repo, _ := placementRepo(t)
+	resetPlanFlags()
+	t.Cleanup(resetPlanFlags)
+	old := stdinTerminal
+	stdinTerminal = func() bool { return true }
+	t.Cleanup(func() { stdinTerminal = old })
+	t.Setenv("NSELF_INVOKED_BY", "")
+	pd, err := loadPlanned(context.Background(), planSpec{repo: repo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := placementDoc(context.Background(), pd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Jobs) == 0 || doc.Jobs[0].Band != "interactive" {
+		t.Fatal("terminal plan should be interactive")
+	}
+	schedFlags = schedpolicy.Flags{Prefer: "fastest", Runner: "missing-runner", MaxQueue: "2m"}
+	changed, err := placementDoc(context.Background(), pd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed.Pipeline.PolicyDigest == doc.Pipeline.PolicyDigest {
+		t.Fatal("per-run flags did not change effective policy")
+	}
+	if changed.Pipeline.Preset != "fastest" {
+		t.Fatalf("preset %q", changed.Pipeline.Preset)
+	}
+	pd, err = loadPlanned(context.Background(), planSpec{repo: repo, trigger: "manual"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manual, err := placementDoc(context.Background(), pd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manual.Jobs) > 0 && manual.Jobs[0].Band == "interactive" {
+		t.Fatal("an explicit trigger must not imply interactive")
 	}
 }

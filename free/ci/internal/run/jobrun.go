@@ -18,6 +18,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
 const tailBytes = 8 << 10
@@ -69,7 +70,11 @@ func (rs *runState) settle(id string, from, to model.JobState, class model.Failu
 }
 
 func (rs *runState) info(pj plan.PlannedJob, job model.Job, attemptID string, n int) AttemptInfo {
-	return AttemptInfo{RunID: rs.sess.RunID, JobID: rs.rows[pj.ID], JobName: pj.ID, AttemptID: attemptID, Revision: rs.rev.SHA, N: n,
+	source := rs.source
+	if cap := rs.c.Opts.SecretsTrust; cap != "" && trust.RankTrust(cap) < trust.RankTrust(source) {
+		source = cap
+	}
+	return AttemptInfo{SourceClass: source, RunID: rs.sess.RunID, JobID: rs.rows[pj.ID], JobName: pj.ID, AttemptID: attemptID, Revision: rs.rev.SHA, N: n,
 		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home, Store: rs.sess.Store, Container: rs.c.Opts.Container,
 		SecretsInfo: SecretsInfo{Root: rs.c.Opts.Root, CoordinatorID: rs.sess.Coordinator.ID, SecretClasses: rs.pol.SecretClasses, HasSecretClasses: rs.pol.HasSecretClasses}}
 }
