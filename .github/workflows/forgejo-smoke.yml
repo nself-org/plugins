@@ -44,3 +44,8 @@ jobs:
         run: |
           nself version
           bash free/forgejo/tests/upgrade-smoke.sh
+
+      - name: Wiki env docs consistency
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq jq >/dev/null
+          ./free/forgejo/tests/wiki-env-docs.sh
