@@ -87,7 +87,13 @@ func (d *Driver) Admit(ctx context.Context, c agentapi.Call) error {
 	if g == nil { // fail closed: without a gate nothing identifies a job's own calls
 		return errNoGate
 	}
-	if err := g.Check(ctx, c); err != nil {
+	// Only a result already committed by this process may retry its durable spend
+	// while the attempt is finalizing. A restarted coordinator has no such route.
+	d.mu.Lock()
+	rt := d.routes[c.LeaseID]
+	resend := c.Type == "result" && rt != nil && rt.resultDone
+	d.mu.Unlock()
+	if err := g.check(ctx, c, resend); err != nil {
 		return err
 	}
 	if c.Type == "heartbeat" {
@@ -160,8 +166,10 @@ type route struct {
 	once               sync.Once
 	lw                 *LogWriter
 	blobs              *blobSet
-	fwd, prevFwd       uint64 // highest log line_seq the run's sink accepted (and the one before)
-	err                error  // why the lease failed (a corrupt blob); read after done is closed
+	resultMu           sync.Mutex // serializes result commits and spend retries
+	resultDone         bool       // guarded by Driver.mu
+	fwd, prevFwd       uint64     // highest log line_seq the run's sink accepted (and the one before)
+	err                error      // why the lease failed (a corrupt blob); read after done is closed
 }
 
 func (r *route) finish() { r.once.Do(func() { close(r.done) }) }

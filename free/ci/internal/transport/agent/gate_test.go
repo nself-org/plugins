@@ -100,7 +100,7 @@ func TestGateExpiredToken(t *testing.T) {
 }
 
 func TestGateTerminalAttempt(t *testing.T) {
-	for _, state := range []string{"passed", "failed", "cancelled", "lost"} {
+	for _, state := range []string{"finalizing", "passed", "failed", "cancelled", "lost"} {
 		r := newRig(t)
 		lease, att, ep := r.seedLease("1", "n-1")
 		tok := r.mint("jti-1", "n-1", att, ep)
@@ -118,10 +118,11 @@ func finish(t *testing.T, r *rig, attemptID string, epoch uint64, state string) 
 	t.Helper()
 	ctx := context.Background()
 	steps := map[string][][2]string{
-		"cancelled": {{"running", "cancelled"}},
-		"lost":      {{"running", "lost"}},
-		"passed":    {{"running", "finalizing"}, {"finalizing", "passed"}},
-		"failed":    {{"running", "finalizing"}, {"finalizing", "failed"}},
+		"finalizing": {{"running", "finalizing"}},
+		"cancelled":  {{"running", "cancelled"}},
+		"lost":       {{"running", "lost"}},
+		"passed":     {{"running", "finalizing"}, {"finalizing", "passed"}},
+		"failed":     {{"running", "finalizing"}, {"finalizing", "failed"}},
 	}
 	for _, s := range steps[state] {
 		_, aep, err := r.st.AttemptStateEpoch(ctx, attemptID)

@@ -89,6 +89,8 @@ func (d *Driver) leaseGone(ctx context.Context, rt *route) (bool, string) {
 	case err != nil:
 		d.logf("agent transport: lease %s: %v", rt.leaseID, err)
 		return false, ""
+	case l.State == "finalizing":
+		return false, "" // Result may still be committing, or retrying its durable token spend
 	case terminal[l.State]:
 		return true, "attempt " + string(l.State)
 	}

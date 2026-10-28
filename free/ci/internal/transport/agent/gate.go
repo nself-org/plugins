@@ -61,7 +61,7 @@ type use struct{ jti, serial, session string }
 // maxKnown bounds the proved-binding cache.
 const maxKnown = 4096
 
-var terminal = map[model.JobState]bool{"passed": true, "failed": true, "cancelled": true, "lost": true, "retryable": true, "needs-operator": true}
+var terminal = map[model.JobState]bool{"finalizing": true, "passed": true, "failed": true, "cancelled": true, "lost": true, "retryable": true, "needs-operator": true}
 
 func tokenReason(err error) string {
 	if pki.ReasonOf(err) == pki.ReasonTokenExpired {
@@ -72,6 +72,10 @@ func tokenReason(err error) string {
 
 // Check vets one call. It is agentapi.Config.Admit.
 func (g *Gate) Check(ctx context.Context, c agentapi.Call) error {
+	return g.check(ctx, c, false)
+}
+
+func (g *Gate) check(ctx context.Context, c agentapi.Call, committedResult bool) error {
 	if c.Token == "" {
 		return deny(ReasonMissing, "lease %s: the call carries no job token", c.LeaseID)
 	}
@@ -92,7 +96,7 @@ func (g *Gate) Check(ctx context.Context, c agentapi.Call) error {
 	if cl.AttemptID != l.AttemptID || cl.Epoch != int64(c.Epoch) {
 		return deny(ReasonWrongJob, "lease %s: the token was issued for another job or attempt", c.LeaseID)
 	}
-	if terminal[l.State] {
+	if terminal[l.State] && !(l.State == "finalizing" && committedResult) {
 		return deny(ReasonTerminal, "lease %s: the attempt is over", c.LeaseID)
 	}
 	return g.bind(ctx, c, cl)
@@ -197,7 +201,13 @@ func (g *Gate) Spend(ctx context.Context, jti string) error {
 		}
 	}
 	g.mu.Unlock()
-	return g.Bindings.TokenSpend(ctx, jti)
+	if err := g.Bindings.TokenSpend(ctx, jti); err != nil {
+		g.mu.Lock()
+		delete(g.spent, jti) // allow the committed result to retry its spend
+		g.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 // Prune removes the bindings of tokens that expired more than an hour ago.

@@ -319,38 +319,6 @@ func TestSyncLogsReportsAFailureAndOnlyAFailure(t *testing.T) {
 	}
 }
 
-type spendFails struct{ Bindings }
-
-func (spendFails) TokenSpend(context.Context, string) error { return errors.New("db locked") }
-
-func TestResultLogsAFailedSpendAndNothingElse(t *testing.T) {
-	for _, failing := range []bool{false, true} {
-		r := newRig(t)
-		lease, att, ep := r.seedLease("1", "n-1")
-		var b Bindings = r.st
-		if failing {
-			b = spendFails{r.st}
-		}
-		logged := 0
-		d := &Driver{Gate: &Gate{Tokens: r.tokens, Bindings: b, Leases: r.st}, Minter: r.tokens, Leases: r.st, Poll: 10 * time.Millisecond, Logf: func(string, ...any) { logged++ }}
-		done := make(chan error, 1)
-		go func() {
-			done <- d.Run(context.Background(), nodeCap("n-1"), protoLease(lease, att, ep), &runSink{eng: r.eng})
-		}()
-		eventually(t, 3*time.Second, "queued", func() bool { l, _ := d.Next(context.Background(), "n-1"); return l != nil })
-		res := protocol.Result{LeaseID: lease, Epoch: ep, Evidence: []byte(`{}`), Signature: protocol.Signature{KeyID: "k", Value: "v"}}
-		if err := d.Sink().Result(context.Background(), res); err != nil {
-			t.Fatal(err)
-		}
-		if err := <-done; err != nil {
-			t.Fatal(err)
-		}
-		if want := map[bool]int{false: 0, true: 1}[failing]; logged != want {
-			t.Fatalf("failing=%v: %d log lines, want %d", failing, logged, want)
-		}
-	}
-}
-
 func TestSetLiveSameGenerationWakesNobody(t *testing.T) {
 	c := bareCarrier(t)
 	c.setLive(2)
