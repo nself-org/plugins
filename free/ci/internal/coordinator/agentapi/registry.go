@@ -43,7 +43,18 @@ type session struct {
 	owned      map[string]bool // leases already proven to belong to this node
 	reconciled bool            // the first heartbeat of a session reports the leases the agent kept across the gap
 	ctlLive    int
+	stream     *streamSlot // the one POST /v1/agent/stream handler of the session, nil when none runs
 }
+
+// streamSlot is the live stream of a session: cancel ends it, done closes when its handler has returned.
+type streamSlot struct {
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+// streamTakeoverWait is how long a restarted stream waits for the handler of the old one to return before it is refused
+// (409 stream_busy) and the agent retries; a variable so tests can shorten it.
+var streamTakeoverWait = 2 * time.Second
 
 type nodeState struct {
 	sess    *session
@@ -116,6 +127,41 @@ func (s *Server) enter(node string, sess *session, conn net.Conn, cancel context
 		defer s.mu.Unlock()
 		delete(sess.cancels, n)
 		sess.seen = s.cfg.Now()
+	}
+}
+
+// claimStream makes q the only stream handler of its session (D-1378). A restarted stream replaces the old one: the old
+// handler is cancelled and the claim waits, up to streamTakeoverWait, until it has returned, so two handlers never decode
+// frames of one session at once and the session's last accepted seq is settled before the new stream reads it. It returns
+// the release to run when the handler ends, or false when the old handler did not return in time or q ended first.
+func (s *Server) claimStream(q *request) (release func(), ok bool) {
+	timer := time.NewTimer(streamTakeoverWait)
+	defer timer.Stop()
+	for {
+		s.mu.Lock()
+		cur := q.sess.stream
+		if cur == nil {
+			mine := &streamSlot{cancel: q.stop, done: make(chan struct{})}
+			q.sess.stream = mine
+			s.mu.Unlock()
+			return func() {
+				s.mu.Lock()
+				if q.sess.stream == mine {
+					q.sess.stream = nil
+				}
+				s.mu.Unlock()
+				close(mine.done)
+			}, true
+		}
+		s.mu.Unlock()
+		cur.cancel()
+		select {
+		case <-cur.done:
+		case <-timer.C:
+			return nil, false
+		case <-q.ctx.Done():
+			return nil, false
+		}
 	}
 }
 

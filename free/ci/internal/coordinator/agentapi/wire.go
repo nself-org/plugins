@@ -46,10 +46,13 @@ type request struct {
 	// serial is the hex serial of the client certificate; tokens are the job tokens of this request by lease id.
 	serial string
 	tokens map[string]string
-	ctx    context.Context
-	rc     *http.ResponseController
-	leave  func()
-	stop   context.CancelFunc
+	// refused remembers the refusals this request already logged and answered with a cancel (lease and reason), so a
+	// stream that repeats frames of a refused lease logs and cancels it once, not once per frame.
+	refused map[string]bool
+	ctx     context.Context
+	rc      *http.ResponseController
+	leave   func()
+	stop    context.CancelFunc
 }
 
 // begin authenticates the request's node from the certificate, binds the session named by the header

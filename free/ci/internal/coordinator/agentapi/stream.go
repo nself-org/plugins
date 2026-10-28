@@ -11,7 +11,9 @@ package agentapi
 //          never skips a frame that failed midway; a lease-scoped frame is fenced first (E662 stale
 //          epoch becomes a cancel with the workspace-cleanup instruction and the frame is dropped); an
 //          idle stream ends after twice the agent TTL; the read side is unblocked when the request
-//          context ends, and the watcher goroutine is joined before the handler returns.
+//          context ends, and the watcher goroutine is joined before the handler returns; a session has one stream
+//          handler at a time: a new stream cancels the old one and waits for it (claimStream, D-1378), so a slow
+//          handler of the old stream never overlaps the new one.
 
 import (
 	"errors"
@@ -31,6 +33,12 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer q.end()
+	release, ok := s.claimStream(q)
+	if !ok {
+		refuse(w, http.StatusConflict, protocol.CodeInvalid, "stream_busy", "the previous stream of this session is still ending")
+		return
+	}
+	defer release()
 	claim := uint64(0)
 	if v := r.Header.Get(HeaderLastSeq); v != "" {
 		n, err := strconv.ParseUint(v, 10, 64)
