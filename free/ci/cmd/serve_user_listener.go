@@ -43,6 +43,7 @@ var userAPIFlags struct {
 	sync.Mutex
 	fs *flag.FlagSet
 }
+
 // serveFlagSnapshot is a copy of the parsed serve flags taken once at listener
 // start under userAPIFlags' lock, so listener goroutines never read the
 // package-level flag set that a later test's serveV15 may replace (D-1406).
@@ -111,6 +112,9 @@ func explicitFlag(name string) bool {
 // snapshotServeFlags captures the current serve flag set under lock so
 // listener goroutines read stable values even when another serveV15 call
 // replaces userAPIFlags.fs (D-1406). Call once per serve, before listeners start.
+// NOTE: activeServeFlags.snap is process-global; concurrent serves in the same
+// process overwrite each other's snapshot. This matches the existing single-serve
+// contract and is acceptable for tests that serialize serveV15 calls.
 func snapshotServeFlags() {
 	userAPIFlags.Lock()
 	fs := userAPIFlags.fs

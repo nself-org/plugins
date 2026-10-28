@@ -188,13 +188,37 @@ func TestPromptApprover(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, b := range []byte(out.String()) {
-			if b < 0x20 && b != '\n' || b == 0x7f {
+			// D-1439: strip C0 (U+0000-U+001F except newline), DEL (U+007F) and C1
+			// controls (U+0080-U+009F) so crafted node metadata cannot inject
+			// terminal escape sequences or OSC commands into the admin prompt.
+			if (b < 0x20 && b != '\n') || b == 0x7f || (b >= 0x80 && b <= 0x9f) {
 				t.Fatalf("control byte %#x in the prompt:\n%q", b, out.String())
 			}
 		}
 		if !strings.Contains(out.String(), "evil [2J name") {
 			t.Fatalf("name not shown sanitized: %q", out.String())
 		}
+	})
+
+	t.Run("C1 control U+009B in name is stripped (D-1439)", func(t *testing.T) {
+		// U+009B (CSI) would begin an escape sequence if passed through.
+		// unicode.IsControl already covers C1 controls (U+0080-U+009F), so
+		// this test guards against regressions that might narrow the check.
+		// Use the valid UTF-8 encoding (\xc2\x9b) so strings.Map sees a rune.
+		p, out := scripted("\n")
+		req := promptReq("bad\xc2\x9bname")
+		if _, err := p.Approve(ctx, req); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(out.String(), "\xc2\x9b") {
+			t.Fatalf("C1 control U+009B was not stripped: %q", out.String())
+		}
+		if !strings.Contains(out.String(), "bad name") {
+			t.Fatalf("name not shown sanitized around C1: %q", out.String())
+		}
+	})
+
+	t.Run("long names are truncated", func(t *testing.T) {
 		long := promptReq(strings.Repeat("n", 500))
 		pl, outl := scripted("\n")
 		_, _ = pl.Approve(ctx, long)

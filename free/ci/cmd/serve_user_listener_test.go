@@ -201,3 +201,43 @@ func TestClientFollowsTheSocketPathInTheLock(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 }
+
+// TestSnapshotServeFlagsExercisesTheSnapshot verifies that serveFlag and
+// explicitFlag read from the snapshot taken at listener start (D-1406), not
+// from a later replacement of userAPIFlags.fs. The snapshot is process-global,
+// so this test serializes with other serveV15 tests in this package.
+func TestSnapshotServeFlagsExercisesTheSnapshot(t *testing.T) {
+	serveFixture(t, quietHost())
+	data, err := os.MkdirTemp("", "ci-snap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(data) })
+	api := freePort(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	hook := func(c *coordinator.Config) {
+		c.Listen = func(network, _ string) (net.Listener, error) { return net.Listen(network, "127.0.0.1:0") }
+	}
+	done := make(chan int, 1)
+	go func() {
+		done <- serveV15(ctx, []string{"--insecure", "--workdir", filepath.Join(data, "wd"), "--data-dir", data, "--api-addr", api, "--api-submit-role", "member"}, hook)
+	}()
+	waitUntil(t, "the serve lock", func() bool { return coordclient.ServeHoldsLock(data) })
+	if got := serveFlag("data-dir"); got != data {
+		t.Fatalf("serveFlag(data-dir) = %q, want %q", got, data)
+	}
+	if got := serveFlag("api-submit-role"); got != "member" {
+		t.Fatalf("serveFlag(api-submit-role) = %q, want member", got)
+	}
+	if !explicitFlag("api-submit-role") {
+		t.Fatal("explicitFlag(api-submit-role) = false, want true")
+	}
+	if explicitFlag("api-public-url") {
+		t.Fatal("explicitFlag(api-public-url) = true, want false (not passed)")
+	}
+	cancel()
+	if code := <-done; code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+}

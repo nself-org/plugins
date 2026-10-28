@@ -14,8 +14,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"unicode"
 	"sync"
+	"unicode"
 
 	"github.com/nself-org/plugins/free/ci/internal/pki"
 )
