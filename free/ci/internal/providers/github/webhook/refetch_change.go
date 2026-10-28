@@ -144,7 +144,7 @@ type comparison struct {
 // revision sits: "behind" (the revision is an ancestor of the default branch) or "identical" is
 // reachable; "ahead" or "diverged" is an unmerged commit (a fork head, an unprotected branch) and is
 // not. A 404 on the default branch compare is "not in this repository" once the repository itself was
-// read with the same token.
+// read with the same token. The comparison starts from the sha of the default branch head, not its name.
 func (r *fetch) compare(defaultBranch string, repoOK bool) {
 	if !isHex40(r.f.Revision) {
 		return
@@ -159,10 +159,22 @@ func (r *fetch) compare(defaultBranch string, repoOK bool) {
 	if !ok || !repoOK {
 		return
 	}
+	// the default branch is read to its head sha first and the compare starts from that sha, never from the
+	// branch name: git resolves refs/tags/<name> before refs/heads/<name>, so a tag named like the default
+	// branch would win the name and make the compare list nothing. The head read is one more call from the
+	// same budget; its failure leaves the fact unknown.
+	var head struct {
+		Commit struct {
+			SHA string `json:"sha"`
+		} `json:"commit"`
+	}
+	if _, ok = r.call("/repos/{owner}/{repo}/branches/"+seg, r.params(), &head); !ok || !isHex40(head.Commit.SHA) {
+		return
+	}
 	var onDefault struct {
 		Status string `json:"status"`
 	}
-	status, ok := r.call("/repos/{owner}/{repo}/compare/"+seg+"..."+r.f.Revision, r.params(), &onDefault)
+	status, ok := r.call("/repos/{owner}/{repo}/compare/"+strings.ToLower(head.Commit.SHA)+"..."+r.f.Revision, r.params(), &onDefault)
 	switch {
 	case ok && (onDefault.Status == "behind" || onDefault.Status == "identical"):
 		r.f.SHAReachable = fact(true, "api", r.now)

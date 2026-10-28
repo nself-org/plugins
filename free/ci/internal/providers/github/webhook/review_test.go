@@ -63,7 +63,7 @@ func TestRefetchReviewFixes(t *testing.T) {
 	t.Run("a missing base does not prove the head unreachable", func(t *testing.T) {
 		r := refetchRig(t)
 		r.gh.drop("/repos/o/r/compare/" + shaB + "..." + shaC)
-		r.gh.set("/repos/o/r/compare/main..."+shaC, 200, `{"status":"behind","files":[]}`)
+		r.gh.set("/repos/o/r/compare/"+shaHead+"..."+shaC, 200, `{"status":"behind","files":[]}`)
 		got, err := r.src.Refetch(ctx, deliveredFacts(t, r, "pull_request", "pr_fork_opened.json"))
 		if err != nil || got.SHAReachable.Value == nil || !*got.SHAReachable.Value || got.ChangedFiles.Value != nil {
 			t.Fatalf("garbage-collected base = %+v %+v, %v", got.SHAReachable, got.ChangedFiles, err)
@@ -206,16 +206,40 @@ func TestOpusReviewFixes(t *testing.T) {
 	t.Run("an unmerged commit is not reachable, a merged one is", func(t *testing.T) {
 		r := refetchRig(t)
 		for status, want := range map[string]bool{"ahead": false, "diverged": false, "behind": true, "identical": true} {
-			r.gh.set("/repos/o/r/compare/main..."+shaA, 200, `{"status":"`+status+`","files":[]}`)
+			r.gh.set("/repos/o/r/compare/"+shaHead+"..."+shaA, 200, `{"status":"`+status+`","files":[]}`)
 			got, err := r.src.Refetch(ctx, deliveredFacts(t, r, "push", "push.json"))
 			if err != nil || got.SHAReachable.Value == nil || *got.SHAReachable.Value != want {
 				t.Fatalf("status %s: reachable = %+v, %v (want %v)", status, got.SHAReachable, err, want)
 			}
 		}
 	})
+	t.Run("a tag named like the default branch does not decide reachability", func(t *testing.T) {
+		r := refetchRig(t)
+		// git resolves refs/tags/main before refs/heads/main: a compare that starts from the name "main" lists no
+		// commits for a tag pointing at the attacker's head ("behind"). The branch head sha says the truth.
+		r.gh.set("/repos/o/r/compare/main..."+shaA, 200, `{"status":"behind","files":[]}`)
+		r.gh.set("/repos/o/r/compare/"+shaHead+"..."+shaA, 200, `{"status":"ahead","files":[]}`)
+		got, err := r.src.Refetch(ctx, deliveredFacts(t, r, "push", "push.json"))
+		if err != nil || got.SHAReachable.Value == nil || *got.SHAReachable.Value {
+			t.Fatalf("reachable = %+v, %v (want false: the compare must start from the default branch head sha)", got.SHAReachable, err)
+		}
+		for _, p := range r.gh.paths {
+			if strings.Contains(p, "/compare/main") {
+				t.Fatalf("compare started from the branch name: %s", p)
+			}
+		}
+	})
+	t.Run("an unreadable default branch head leaves reachability unknown", func(t *testing.T) {
+		r := refetchRig(t)
+		r.gh.set("/repos/o/r/branches/main", 500, `{"message":"boom"}`)
+		got, _ := r.src.Refetch(ctx, deliveredFacts(t, r, "push", "push.json"))
+		if got.SHAReachable.Value != nil {
+			t.Fatalf("reachable = %+v, want unknown", got.SHAReachable)
+		}
+	})
 	t.Run("a dispatch revision from the fork network reads as unreachable with unknown head repo", func(t *testing.T) {
 		r := refetchRig(t)
-		r.gh.set("/repos/o/r/compare/main..."+shaD, 200, `{"status":"diverged","files":[]}`)
+		r.gh.set("/repos/o/r/compare/"+shaHead+"..."+shaD, 200, `{"status":"diverged","files":[]}`)
 		got, err := r.src.Refetch(ctx, deliveredFacts(t, r, "repository_dispatch", "repository_dispatch.json"))
 		if err != nil || got.SHAReachable.Value == nil || *got.SHAReachable.Value || got.HeadRepo.Value != nil || got.Fork.Value != nil {
 			t.Fatalf("dispatch = reach %+v head %+v fork %+v, %v", got.SHAReachable, got.HeadRepo, got.Fork, err)
