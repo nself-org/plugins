@@ -22,7 +22,7 @@ func serveRoutes(t *testing.T, secret string) *httptest.Server {
 }
 
 // TestClient_sendsSecretThroughGeneratedRoute is the D-0648 end-to-end check: the shipped client sends
-// X-Plugin-Secret on every call, so storage answers it instead of refusing with 401.
+// X-Internal-Token (and the legacy X-Plugin-Secret) on every call, so storage answers it instead of refusing with 401.
 func TestClient_sendsSecretThroughGeneratedRoute(t *testing.T) {
 	srv := serveRoutes(t, "route-secret")
 	c, err := client.New(srv.URL, "route-secret")
@@ -68,7 +68,7 @@ func TestClient_sendsAccountHeader(t *testing.T) {
 	if err := c.DeleteObject(context.Background(), "b", "k"); err != nil {
 		t.Fatal(err)
 	}
-	if got.Get("X-Plugin-Secret") != "s3cret" || got.Get("X-Hasura-Source-Account-Id") != "tenant-7" {
+	if got.Get("X-Internal-Token") != "s3cret" || got.Get("X-Plugin-Secret") != "s3cret" || got.Get("X-Hasura-Source-Account-Id") != "tenant-7" {
 		t.Fatalf("headers = %v", got)
 	}
 }

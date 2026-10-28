@@ -38,7 +38,7 @@ Check this plugin with `curl http://127.0.0.1:9007/health`.
 |----------|----------|---------|-------------|
 | `NSELF_DB_URL` | Yes | — | PostgreSQL connection string |
 | `STORAGE_PLUGIN_PORT` | No | `9007` | HTTP server port |
-| `PLUGIN_INTERNAL_SECRET` | For `/storage/*` | — | Shared secret every `/storage/*` request must carry in `X-Plugin-Secret`. The value comes from the project's `PLUGIN_INTERNAL_SECRET` (written by `nself init`); when it is empty or blank, every `/storage/*` call answers `503` |
+| `PLUGIN_INTERNAL_SECRET` | For `/storage/*` | — | Shared secret every `/storage/*` request must carry in `X-Internal-Token`. The value comes from the project's `PLUGIN_INTERNAL_SECRET` (written by `nself init`); when it is empty or blank, every `/storage/*` call answers `503` |
 | `STORAGE_MAX_OBJECT_BYTES` | No | `5368709120` (5 GiB) | Largest accepted object, positive integer bytes; larger uploads answer `413` |
 | `STORAGE_ACCOUNT_QUOTA_BYTES` | No | `0` (off) | Total bytes one account may store, non-negative integer bytes; `0` or unset disables the quota |
 | `STORAGE_MAX_UPLOADS` | No | `64` | Uploads of any size that may run at once; others wait |
@@ -59,12 +59,13 @@ reaches S3 and fails there answers `502 {"error":"object storage error"}`.
 ## Authentication
 
 The `/storage/*` routes are for trusted backend services, not end users. Every request must carry
-`X-Plugin-Secret: <PLUGIN_INTERNAL_SECRET>` (compared in constant time). The check runs before anything else, so the
+`X-Internal-Token: <PLUGIN_INTERNAL_SECRET>` (compared in constant time). The older names `X-Plugin-Secret`,
+`X-Internal-Secret` and `X-Internal-Key` are still read for callers that have not moved, but new callers use `X-Internal-Token`. The check runs before anything else, so the
 `X-Hasura-Source-Account-Id` header, which picks the tenant, is trusted only on requests that carry the secret.
 
 | Case | Answer |
 |------|--------|
-| `X-Plugin-Secret` missing or wrong | `401 {"error":"unauthorized"}` |
+| `X-Internal-Token` missing or wrong | `401 {"error":"unauthorized"}` |
 | `PLUGIN_INTERNAL_SECRET` not set on the plugin | `503 {"error":"PLUGIN_INTERNAL_SECRET not configured"}` (fail closed; the plugin logs one line at start and `/health` stays up) |
 
 The value is the project's `PLUGIN_INTERNAL_SECRET` (written to `.env` by `nself init`). If a project has no value, the
@@ -80,7 +81,7 @@ Do not hand the secret to browsers or mobile apps: a caller holding it can name 
 Every server-side caller sends the header itself. Read the value from `PLUGIN_INTERNAL_SECRET` in the caller's
 environment; never put it in a repo, a browser bundle or a mobile app.
 
-- **Go:** `github.com/nself-org/plugin-storage/client` sets `X-Plugin-Secret` (and optionally
+- **Go:** `github.com/nself-org/plugin-storage/client` sets `X-Internal-Token` (plus the legacy `X-Plugin-Secret` for one release, and optionally
   `X-Hasura-Source-Account-Id`) on every call:
 
   ```go
@@ -93,13 +94,13 @@ environment; never put it in a repo, a browser bundle or a mobile app.
 
   ```yaml
   headers:
-    - name: X-Plugin-Secret
+    - name: X-Internal-Token
       value_from_env: PLUGIN_INTERNAL_SECRET
   ```
 
   The Hasura container needs `PLUGIN_INTERNAL_SECRET` in its environment.
 
-- **Any other HTTP client:** send `X-Plugin-Secret: $PLUGIN_INTERNAL_SECRET` on every `/storage/*` request.
+- **Any other HTTP client:** send `X-Internal-Token: $PLUGIN_INTERNAL_SECRET` on every `/storage/*` request.
 
 ## API
 
@@ -232,7 +233,7 @@ To point the suite at another endpoint, set `S3COV_ENDPOINT`, `S3COV_ACCESS_KEY`
 - Object keys are validated against path traversal (`..` sequences are rejected).
 - `S3_ENDPOINT` is configuration-only; no request parameter can override the endpoint.
 - S3 credentials come from the environment only.
-- `/storage/*` requires `X-Plugin-Secret` (see Authentication); the account header is trusted only with it.
+- `/storage/*` requires `X-Internal-Token` (see Authentication); the account header is trusted only with it.
 - All DB queries are scoped to `source_account_id` for multi-app isolation, and S3 keys carry the same prefix.
 - Hasura row filters enforce `source_account_id = X-Hasura-Source-Account-Id` on all tables.
 

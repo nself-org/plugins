@@ -8,7 +8,7 @@ import (
 )
 
 // TestAuthorizeAdminRequest_PluginSecret verifies that a valid X-Plugin-Secret
-// header grants access.
+// header (legacy name, still read) grants access.
 func TestAuthorizeAdminRequest_PluginSecret(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("X-Plugin-Secret", "my-secret")

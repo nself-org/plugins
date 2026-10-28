@@ -6,8 +6,25 @@ import (
 	"net/http"
 )
 
-// secretHeader carries PLUGIN_INTERNAL_SECRET on every /storage/* request.
-const secretHeader = "X-Plugin-Secret"
+// secretHeader carries PLUGIN_INTERNAL_SECRET on every /storage/* request (D-0198: one name across plugins).
+const secretHeader = "X-Internal-Token"
+
+// legacySecretHeaders are the older names for the same check, still read so callers that have not moved to
+// secretHeader keep working. Remove them once every caller sends the canonical name.
+var legacySecretHeaders = []string{"X-Plugin-Secret", "X-Internal-Secret", "X-Internal-Key"}
+
+// presentedSecret returns the secret a request carries: the canonical header, else the first legacy header set.
+func presentedSecret(r *http.Request) string {
+	if v := r.Header.Get(secretHeader); v != "" {
+		return v
+	}
+	for _, h := range legacySecretHeaders {
+		if v := r.Header.Get(h); v != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 // secretEqual compares two secrets in constant time. Both sides are hashed first so the comparison takes the same
 // time for any lengths (ConstantTimeCompare alone returns early on a length mismatch).
@@ -34,7 +51,7 @@ func (s *Server) requireInternalSecret(next http.Handler) http.Handler {
 			http.Error(w, `{"error":"PLUGIN_INTERNAL_SECRET not configured"}`, http.StatusServiceUnavailable)
 			return
 		}
-		if !secretEqual(r.Header.Get(secretHeader), want) {
+		if !secretEqual(presentedSecret(r), want) {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}

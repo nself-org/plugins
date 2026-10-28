@@ -9,7 +9,7 @@
 //   - Object bytes never touch Postgres; with no S3 credentials configured object routes answer 503.
 //   - Object keys are validated to block path traversal.
 //   - source_account_id from X-Hasura-Source-Account-Id header scopes all DB queries. The header is trusted only on
-//     requests that carry X-Plugin-Secret equal to PLUGIN_INTERNAL_SECRET (callers are trusted backend services):
+//     requests that carry X-Internal-Token (or a legacy name, see auth.go) equal to PLUGIN_INTERNAL_SECRET (callers are trusted backend services):
 //     wrong or missing secret is 401, secret not configured is 503 (see auth.go).
 package internal
 
