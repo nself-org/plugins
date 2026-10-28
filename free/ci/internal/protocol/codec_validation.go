@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -178,6 +179,10 @@ func validate(kind string, body any, epoch *uint64, leaseID string) error {
 		if v.LeaseID == "" || v.Spec == "" || v.Key == "" {
 			return invalid("cache_ref")
 		}
+	case *UpgradeResult:
+		if v.Version == "" || !validUpgradeOutcome(v.Status, v.Reason) {
+			return invalid("upgrade_result")
+		}
 	}
 	var bodyLease string
 	var bodyEpoch uint64
@@ -210,6 +215,21 @@ func validate(kind string, body any, epoch *uint64, leaseID string) error {
 	}
 	return nil
 }
+
+// validUpgradeOutcome: done carries no reason; refused names one, a plain lower-case key (the E666 reason keys, and any a later
+// minor adds).
+func validUpgradeOutcome(status, reason string) bool {
+	switch status {
+	case UpgradeDone:
+		return reason == ""
+	case UpgradeRefused:
+		return reasonKey.MatchString(reason)
+	}
+	return false
+}
+
+var reasonKey = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
+
 func validStream(s string) bool { return s == "checkout" || s == "artifact" || s == "cache" }
 func validSecretRef(ref string) bool {
 	return strings.HasPrefix(ref, "project/") && len(ref) > len("project/") || strings.HasPrefix(ref, "environment/") && len(ref) > len("environment/")

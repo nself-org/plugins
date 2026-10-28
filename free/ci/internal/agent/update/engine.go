@@ -33,6 +33,9 @@ type InstallInput struct {
 	Staged      string
 	SHA256      string // signed digest of Staged
 	ManifestURL string
+	// AllowDowngrade is the request's permission, which a pull agent receives in the upgrade message (an ssh node needs none:
+	// the engine decided the direction before the install).
+	AllowDowngrade bool
 }
 
 // Node is the carrier-specific half of an upgrade.
@@ -138,11 +141,11 @@ func (e *Engine) Run(ctx context.Context, n Node, rq Request) (res Result, err e
 	if err = e.waitIdle(ctx, n, rq); err != nil {
 		return res, e.reenable(ctx, n, undo, err)
 	}
-	if err = n.Install(ctx, InstallInput{Version: rq.Version, Staged: prep.Path, SHA256: prep.Manifest.SHA256, ManifestURL: rq.ManifestURL}); err != nil {
-		// A refused install (a job started during the copy) changed nothing. Any other failure may have come after the swap (a dropped
+	if err = n.Install(ctx, InstallInput{Version: rq.Version, Staged: prep.Path, SHA256: prep.Manifest.SHA256, ManifestURL: rq.ManifestURL, AllowDowngrade: rq.AllowDowngrade}); err != nil {
+		// A refused install (a job started during the copy, or a pull agent's own E666 answer) changed nothing. Any other failure may have come after the swap (a dropped
 		// connection, a binary that cannot start): ask the node what it runs, and when that is unknown or new, roll back (Restore
 		// puts a .prev back only when it is the version this node ran before, so it cannot go further back).
-		if ReasonOf(err) == ReasonRunningJob {
+		if ReasonOf(err) != "" {
 			return res, e.reenable(ctx, n, undo, e.refuse(ctx, n, err))
 		}
 		if v, verr := n.Version(context.WithoutCancel(ctx)); verr == nil && v == res.From {

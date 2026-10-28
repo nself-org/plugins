@@ -14,7 +14,7 @@ func Schema() ([]byte, error) {
 		"heartbeat": Heartbeat{}, "lease": Lease{}, "secrets": Secrets{},
 		"chunk": Chunk{}, "log": Log{}, "artifact-ref": ArtifactRef{},
 		"result": Result{}, "cancel": Cancel{}, "drain": Drain{},
-		"upgrade": Upgrade{}, "ack": Ack{}, "digest": Digest{},
+		"upgrade": Upgrade{}, "upgrade-result": UpgradeResult{}, "ack": Ack{}, "digest": Digest{},
 		"offset": Offset{}, "resume": Resume{}, "cache-ref": CacheRef{},
 	}
 	kinds := make([]string, 0, len(types))
@@ -35,6 +35,8 @@ func Schema() ([]byte, error) {
 			bodyProps["compat_mode"] = map[string]any{"enum": []string{"v1.4", "v1.5"}}
 		case "result":
 			bodyProps["epoch"] = map[string]any{"type": "integer", "minimum": 1}
+		case "upgrade-result":
+			bodyProps["status"] = map[string]any{"enum": []string{UpgradeDone, UpgradeRefused}}
 		}
 		if kind == "chunk" {
 			bodySchema["allOf"] = []any{map[string]any{

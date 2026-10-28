@@ -162,6 +162,8 @@ func decodeBody(kind string, raw json.RawMessage, p CarrierPolicy) (any, error) 
 		body = &Drain{}
 	case "upgrade":
 		body = &Upgrade{}
+	case "upgrade-result":
+		body = &UpgradeResult{}
 	case "ack":
 		body = &Ack{}
 	case "digest":

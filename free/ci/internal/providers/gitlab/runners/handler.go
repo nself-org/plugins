@@ -13,6 +13,8 @@ package runners
 //          so a capped or not-ready GitLab demand stays pending until GitLab's own stuck-job timeout (debt row;
 //          it must be closed before V15 is turned on). A subgroup project (a/b/c) is E702: the coordinator and
 //          runnerjob.Spec accept group/project only (D-1365).
+//          The runner may reach the instance host and the operator's providers.gitlab.runner.hosts (artifact and object
+//          storage hosts, at most runnerjob.MaxHosts in all); any other host stays closed.
 // Constraints: the tag set is fixed: every tag of the demand must be one of providers.gitlab.runner.tags
 //          (exact, ASCII) and the demand must carry the nself tag, so a job that asks for a tag the
 //          operator did not configure is refused and never pulls other work onto an nSelf runner. The tags
@@ -66,6 +68,18 @@ func InstanceFromPolicy(ctx context.Context) (instance, host string, err error) 
 		return "", "", refuse("E700", "runner.instance_unreachable")
 	}
 	return instance, host, nil
+}
+
+// hostsOf is the runner's host list: the instance host first, then the operator's extra hosts (providers.gitlab.runner.hosts)
+// without a repeat of the instance host.
+func hostsOf(instance string, extra []string) []string {
+	out := []string{instance}
+	for _, h := range extra {
+		if h != instance {
+			out = append(out, h)
+		}
+	}
+	return out
 }
 
 func ascii(s string) bool {
@@ -147,7 +161,7 @@ func (h *Handler) Synthesize(ctx context.Context, f model.TriggerFacts) (*model.
 		return nil, refuse("E700", "runner.image_pin")
 	}
 	spec := runnerjob.Spec{Provider: Source, Repo: f.Repo, Demand: *f.ProviderJobID.Value, Image: ref,
-		Credential: CredentialKind, Arch: archOf(tags), Command: RunnerCommand(instance), Hosts: []string{host}}
+		Credential: CredentialKind, Arch: archOf(tags), Command: RunnerCommand(instance), Hosts: hostsOf(host, s.Hosts)}
 	if err = spec.Validate(); err != nil {
 		return nil, refuse("E702", "demand.facts")
 	}

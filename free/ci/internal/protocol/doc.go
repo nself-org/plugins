@@ -5,7 +5,7 @@
 // A resumed direction starts at its validated last_seq plus one. Any malformed
 // or oversized frame poisons its decoder for the rest of the stream.
 //
-// Agent to coordinator: hello, log, artifact-ref, result, cache-ref. Coordinator
+// Agent to coordinator: hello, log, artifact-ref, result, cache-ref, upgrade-result. Coordinator
 // to agent: welcome, reject, lease, secrets, cancel, drain, upgrade. Both:
 // heartbeat, chunk, ack, digest, offset, resume. Digest, offset and resume are
 // reserved transfer/reconnect messages. A value-bearing secrets frame is valid
@@ -18,5 +18,8 @@
 // loss makes the attempt lost; it cannot resume. Reject E652 means incompatible
 // version and names min_agent_version. E653 means malformed frame or policy.
 // Both sides accept N and N-1. The minimum agent version rises only in a minor
-// release after a one-minor warning. Only additive fields are allowed in v1.
+// release after a one-minor warning. Only additive fields are allowed in v1: upgrade-result and
+// upgrade.allow_downgrade were added that way (allow_downgrade is sent only when true, so an agent that does
+// not know it still decodes every other upgrade; a coordinator that does not know upgrade-result rejects it, so
+// the coordinator is upgraded before its agents).
 package protocol
