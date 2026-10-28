@@ -10,7 +10,8 @@ package main
 // Constraints: the pinned root is confirmed by an interactive "yes" on a terminal or by an exact
 //          --expect-fingerprint; neither is a refusal (E660 fingerprint_unconfirmed), before any code or
 //          CSR leaves the node; a clock more than 120 s off is E660 clock_skew; the PreStart hooks run
-//          first (the production guard of P7-NODE-14 registers one); registered join hooks run last.
+//          first (the production guard of P7-NODE-14 registers one), then the PostStart hooks (--advertise);
+//          registered join hooks run last. Flags other files add (--advertise) arrive through RegisterFlags.
 
 import (
 	"bufio"
@@ -45,6 +46,7 @@ func runJoin(ctx context.Context, args []string, sio IO) int {
 	fs.SetOutput(sio.Stderr)
 	expect := fs.String("expect-fingerprint", "", "the root fingerprint SHA256:<fp> shown by nself ci nodes pair (required without a terminal)")
 	name := fs.String("name", "", "node name (default: the host name)")
+	applyFlags("join", fs)
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -52,10 +54,14 @@ func runJoin(ctx context.Context, args []string, sio IO) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent join [--expect-fingerprint SHA256:<fp>] [--name N] <enroll-url>")
+		fmt.Fprintln(sio.Stderr, "usage: nself-ci-agent join [--expect-fingerprint SHA256:<fp>] [--name N] [--advertise] <enroll-url>")
 		return 2
 	}
 	if err := RunPreStart(ctx, "join"); err != nil {
+		fmt.Fprintf(sio.Stderr, "nself-ci-agent join: %v\n", err)
+		return 1
+	}
+	if err := RunPostStart(ctx, "join"); err != nil {
 		fmt.Fprintf(sio.Stderr, "nself-ci-agent join: %v\n", err)
 		return 1
 	}
