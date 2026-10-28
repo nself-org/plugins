@@ -7,7 +7,9 @@ package rest
 // Constraints: no real network; the values carry no secret.
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -41,5 +43,26 @@ func TestDoQuery(t *testing.T) {
 	}
 	if gotQuery != "" {
 		t.Fatalf("a parameter formed a query: %q", gotQuery)
+	}
+}
+
+func TestHeadersSignsExactBodyAlongsideAuthorization(t *testing.T) {
+	var signed []byte
+	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if !bytes.Equal(body, signed) || r.Header.Get("X-Signature") != "synthetic-signature" || r.Header.Get("Authorization") != "Bearer synthetic-credential" {
+			t.Errorf("body or headers differ")
+		}
+		w.WriteHeader(204)
+	}))
+	defer s.Close()
+	c := testClient(s)
+	c.Auth = func(context.Context) (string, error) { return "synthetic-credential", nil }
+	c.Headers = func(body []byte) map[string]string {
+		signed = append([]byte(nil), body...)
+		return map[string]string{"X-Signature": "synthetic-signature", "authorization": "must-not-replace-auth"}
+	}
+	if _, err := c.Do(context.Background(), "POST", "/", nil, map[string]string{"message": "<hello>"}, nil); err != nil {
+		t.Fatal(err)
 	}
 }

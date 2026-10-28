@@ -7,8 +7,7 @@ package notify
 // Constraints: every request goes through the HOST-18 REST funnel (providers/rest): its
 // connect-time guard refuses a private, loopback, link-local or mapped address unless
 // AllowPrivateBase is set, redirects never follow a POST, and nothing is logged with the URL.
-// The funnel owns the request headers and offers one authentication slot, so the
-// HMAC-SHA256 signature travels in it: `Authorization: Bearer <hex hmac of the exact body>`.
+// The HMAC-SHA256 signature is sent as `X-Nself-Signature: <hex hmac of the exact body>`.
 // A receiver verifies it with the shared secret. The body is capped at MaxBody. The URL may
 // carry a token in its path (that is why notify.sinks is a secret key): the funnel logs the
 // path template, so the path is passed as parameters, never inlined.
@@ -83,10 +82,11 @@ func (w *webhookSink) Notify(ctx context.Context, ev Event) error {
 	}
 	c := &rest.Client{BaseURL: w.base, Provider: "notify", UserAgent: "notify", Logger: quiet, AllowPrivateBase: w.allowPrivate, TLSConfig: w.deps.TLSConfig}
 	if w.secret != "" {
-		sum := hmac.New(sha256.New, []byte(w.secret))
-		sum.Write(body)
-		sig := hex.EncodeToString(sum.Sum(nil))
-		c.Auth = func(context.Context) (string, error) { return sig, nil }
+		c.Headers = func(body []byte) map[string]string {
+			sum := hmac.New(sha256.New, []byte(w.secret))
+			sum.Write(body)
+			return map[string]string{"X-Nself-Signature": hex.EncodeToString(sum.Sum(nil))}
+		}
 	}
 	if _, err = c.Do(ctx, "POST", w.template, w.params, json.RawMessage(body), nil); err != nil {
 		var pe *providers.Error
