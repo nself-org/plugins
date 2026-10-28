@@ -121,9 +121,11 @@ type RunView struct {
 
 // JobView is one job of a RunView.
 type JobView struct {
-	Name         string `json:"name"`
-	State        string `json:"state"`
-	FailureClass string `json:"failure_class,omitempty"`
+	Name           string `json:"name"`
+	State          string `json:"state"`
+	FailureClass   string `json:"failure_class,omitempty"`
+	AttemptID      string `json:"attempt_id,omitempty"`
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
 }
 
 // RemoteResolver finds runs that live on another machine; it is consulted

@@ -29,6 +29,8 @@ type TransitionDetail struct {
 	FailureClass  model.FailureClass
 	Actor, Reason string
 	Operator      bool
+	// RequireStaleCoordinator refuses an operator abandon while its owner is alive.
+	RequireStaleCoordinator bool
 	// ForwardCancelTo names an attempt that takes over an operator cancel intent this
 	// transition consumes: a cancel accepted for a parked predecessor must not vanish when
 	// the retry that superseded it moves the predecessor to cancelled (D-1191).
@@ -67,6 +69,16 @@ func (s *Store) apply(ctx context.Context, tx *sql.Tx, id string, from, to model
 	}
 	if state != string(from) || epoch != d.Epoch {
 		return coded("E605", "attempt state or epoch changed")
+	}
+	if d.RequireStaleCoordinator {
+		var live bool
+		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM attempt a JOIN coordinator c ON c.id=a.coordinator_id WHERE a.id=? AND c.heartbeat_at>=?)`, id, s.now().Add(-3*s.ttl).UnixNano()).Scan(&live)
+		if err != nil {
+			return err
+		}
+		if live {
+			return coded("E609", "owning coordinator heartbeat is fresh; abandon requires --force")
+		}
 	}
 	if to == "retryable" && (kind == "release" || idempotent == 0 || n > infraMax) {
 		return coded("E604", "retry forbidden or exhausted")

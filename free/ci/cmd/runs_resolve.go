@@ -1,7 +1,7 @@
 package main
 
 // Purpose: `nself ci runs resolve <attempt> --idempotency-key <key>
-// --rerun|--abandon [--yes] [--reason text] [--json]` (P7-CACHE-05, Epic D9):
+// --rerun|--abandon [--force] [--yes] [--reason text] [--json]` (P7-CACHE-05, Epic D9):
 // the only way out of needs-operator, and of a stuck finalizing release
 // attempt. The key is the NSELF_CI_IDEMPOTENCY_KEY the job received.
 // Inputs:  argv after `runs resolve`; env NSELF_CI_HOME.
@@ -29,14 +29,14 @@ import (
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
 
-const resolveUsage = "usage: nself ci runs resolve <attempt> --idempotency-key <key> --rerun|--abandon [--yes] [--reason text] [--json]"
+const resolveUsage = "usage: nself ci runs resolve <attempt> --idempotency-key <key> --rerun|--abandon [--force] [--yes] [--reason text] [--json]"
 
 func init() { registerRunsSub("resolve", runResolve) }
 
 type resolveArgs struct {
 	attempt, key, reason string
 	action               job.Action
-	yes, asJSON          bool
+	yes, asJSON, force   bool
 }
 
 func parseResolve(args []string) (resolveArgs, error) {
@@ -66,6 +66,8 @@ func parseResolve(args []string) (resolveArgs, error) {
 			a.action = job.Action(strings.TrimPrefix(arg, "--"))
 		case arg == "--yes" || arg == "-y":
 			a.yes = true
+		case arg == "--force":
+			a.force = true
 		case arg == "--json":
 			a.asJSON = true
 		case strings.HasPrefix(arg, "-") || a.attempt != "":
@@ -133,7 +135,7 @@ func runResolve(args []string) int {
 	if u := os.Getenv("USER"); u != "" {
 		actor += ":" + u
 	}
-	res, err := job.Resolve(ctx, st, job.Request{Attempt: a.attempt, Key: a.key, Action: a.action, Actor: actor, Reason: a.reason})
+	res, err := job.Resolve(ctx, st, job.Request{Attempt: a.attempt, Key: a.key, Action: a.action, Actor: actor, Reason: a.reason, Force: a.force})
 	var je *job.Error
 	if errors.As(err, &je) {
 		if a.asJSON {
