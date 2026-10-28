@@ -497,3 +497,16 @@ func TestDecodeRefusesWhatBuildCannotWriteBack(t *testing.T) {
 		t.Fatalf("Decode accepted a payload Build cannot write back: %v", err)
 	}
 }
+
+func TestDecodeIgnoresContractNamesInsideExtensions(t *testing.T) {
+	good := string(mustBuild(t, valid()))
+	for _, extension := range []string{
+		`"extension":{"Name":"tool","nested":[{"REPO_ID":"other"}]},`,
+		`"Name":"unrelated root field",`,
+	} {
+		doc := strings.Replace(good, `"repo_id"`, extension+`"repo_id"`, 1)
+		if _, err := manifest.Decode([]byte(doc)); err != nil {
+			t.Fatalf("ignored extension refused: %v", err)
+		}
+	}
+}
