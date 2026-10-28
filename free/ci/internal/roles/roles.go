@@ -92,6 +92,8 @@ type Service struct {
 	Log  *audit.Log
 	Now  func() time.Time
 	Self string // the operator's own principal id; `--self` identities are issued only to it
+
+	lim signInLimiter // the rate limit of the sign-in failure rows (signin.go)
 }
 
 // New returns a Service over st writing audit rows through log.
