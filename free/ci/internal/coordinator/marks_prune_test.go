@@ -4,8 +4,13 @@ package coordinator
 
 import (
 	"context"
+	"database/sql"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 func TestPruneForgetsOldReconcileMarks(t *testing.T) {
@@ -49,5 +54,48 @@ func TestPruneKeepsMarksWhenRetentionIsEmpty(t *testing.T) {
 	r.c.prune(ctx, r.clk.Now())
 	if _, ok, _ := r.st.ProviderMarkGet(ctx, "github-reconcile", "enq|o/r|a"); !ok {
 		t.Fatal("an empty retention list must keep every mark")
+	}
+}
+
+// The maintenance tick writes the void of a stale approval without anyone running `ci runs pending`
+// (D-1342).
+func TestMaintainSweepsStaleApprovals(t *testing.T) {
+	ctx, path := context.Background(), filepath.Join(t.TempDir(), "state.db")
+	r := newRig(t, func(c *Config) {
+		st, err := store.Open(path, store.Options{Clock: c.Clock.Now})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = st.Close() })
+		c.Store = st
+	})
+	p := store.PipelineRow{ID: "r1", Revision: "sha-1", Project: "/proj", Trigger: "push", SourceTrust: "untrusted", PrivacyZone: "local-only",
+		PolicyDigest: "p", InputDigest: "cfg-1", SelectionMode: "full", Status: "queued"}
+	if err := r.st.CreatePipeline(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.st.RecordApprovalFacts(ctx, store.ApprovalRunFacts{Run: "r1", Author: "mallory", HeadRepo: "fork/app", RequiresApproval: true}, approvalVoidCheck); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.st.ApproveRun(ctx, store.ApproveInput{Run: "r1", Approver: "bob", ExpectSHA: "sha-1", Check: approvalVoidCheck}); err != nil {
+		t.Fatal(err)
+	}
+	r.c.sweepApprovals(ctx)
+	if st, _, _ := r.st.ApprovalState(ctx, "r1"); st.Approval.VoidedAt != 0 {
+		t.Fatal("an approval that still matches its run must stand")
+	}
+	// The pipeline moves to a new head, as a force-push would.
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err = db.Exec("UPDATE pipeline SET revision='sha-2' WHERE id='r1'"); err != nil {
+		t.Fatal(err)
+	}
+	r.c.sweepApprovals(ctx)
+	st, _, err := r.st.ApprovalState(ctx, "r1")
+	if err != nil || st.Approval.VoidedAt == 0 || !strings.Contains(st.Approval.VoidReason, "head") {
+		t.Fatalf("the tick did not void the stale approval: %+v %v", st.Approval, err)
 	}
 }

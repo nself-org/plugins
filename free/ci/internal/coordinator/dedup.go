@@ -1,6 +1,6 @@
 package coordinator
 
-// Purpose: the semantic key, the maintenance loop (retention, claim heartbeat, recovery) of the V15
+// Purpose: the semantic key, the maintenance loop (retention, claim heartbeat, recovery, approval voids) of the V15
 // coordinator (P7-NODE-10, Epic D7, X7).
 // Inputs:  project, revision, trigger class and policy digest of a trigger; the injected clock.
 // Outputs: a stable semantic key; a store that forgets what is older than the 72 h redelivery horizon.
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trust/source"
 )
 
 // semanticKey is the key that coalesces triggers for the same code under the same policy. A trigger that
@@ -45,6 +46,7 @@ func (c *Coordinator) maintain(ctx context.Context) {
 		if err := st.IntakeBeat(ctx, c.cfg.ID); err != nil && ctx.Err() == nil {
 			c.cfg.Logf("intake heartbeat failed: %v", err)
 		}
+		c.sweepApprovals(ctx)
 		if now := c.cfg.Clock.Now(); now.Sub(pruned) >= time.Hour {
 			c.prune(ctx, now)
 			pruned = now
@@ -56,6 +58,19 @@ func (c *Coordinator) maintain(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// sweepApprovals writes the void (and its audit row) of every standing approval that no longer matches its
+// run, so the void does not wait for `ci runs pending`, a facts write or a new approval (D-1342).
+func (c *Coordinator) sweepApprovals(ctx context.Context) {
+	if _, err := c.cfg.Store.SweepApprovals(ctx, "", approvalVoidCheck); err != nil && ctx.Err() == nil {
+		c.cfg.Logf("approval sweep failed: %v", err)
+	}
+}
+
+// approvalVoidCheck adapts the pure void rule of trust/source to the store's binding type.
+func approvalVoidCheck(approved, cur store.ApprovalBinding) []string {
+	return source.VoidReasons(source.Binding(approved), source.Binding(cur))
 }
 
 // MarkRetention is how long the marks of one provider_mark name stay. KeyPrefix narrows the rule to the
