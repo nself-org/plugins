@@ -32,6 +32,11 @@ type Options struct {
 	Adhoc     []string // `-- <cmd...>`
 	Renderer  string   // "human" unless a registered renderer is named
 	Full      bool     // plan every job: no affected-only selection (evidence verify must run the whole pipeline)
+
+	// SecretsTrust caps secret eligibility for an embedding handler that already classified
+	// and isolated the source before overriding the local admission classifier.
+	SecretsTrust model.TrustClass
+
 	// ConfirmFlaky reruns a job that failed with class code up to N more times, explicitly
 	// and recorded as retries (P7-CI-40). The failed result never changes; 0 is off.
 	ConfirmFlaky int
