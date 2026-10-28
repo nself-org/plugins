@@ -31,7 +31,9 @@ func cacheRig(t *testing.T, jobs map[string]model.Job) *rig {
 	t.Setenv("NSELF_CI_STORE_MIN_FREE", "1")
 	t.Setenv("NSELF_CI_CACHE_DISABLE", "")
 	old := cacheOn.probe
-	cacheOn.probe = func(context.Context, []string) (string, error) { return "go version go1.27.2 test/test\n", nil }
+	cacheOn.probe = func(context.Context, model.Job, string, []string) (string, error) {
+		return "go version go1.27.2 test/test\n", nil
+	}
 	t.Cleanup(func() { cacheOn.probe = old })
 	r := newRig(t, jobs, gitFake{})
 	lock(t, r.C.Opts.Root, "h1:one")
@@ -466,5 +468,34 @@ func TestCacheHookKeysAreScopedToTheJob(t *testing.T) {
 		if o := outcome(res, name); o.State != StatePassed || r2.uses(t, o) != "go:hit" {
 			t.Fatalf("%s on the second run: %+v uses %q\n%s", name, o, r2.uses(t, o), r2.Out)
 		}
+	}
+}
+
+// The tool probe runs in the job's workdir with the job's env (D-1035).
+func TestCacheHookProbesInTheJobsWorkdirAndEnv(t *testing.T) {
+	r := cacheRig(t, map[string]model.Job{"build": sh(populate)})
+	var gotJob model.Job
+	var gotRoot string
+	old := cacheOn.probe
+	cacheOn.probe = func(_ context.Context, job model.Job, root string, _ []string) (string, error) {
+		gotJob, gotRoot = job, root
+		return "go version go1.27.2 test/test\n", nil
+	}
+	t.Cleanup(func() { cacheOn.probe = old })
+	sub := filepath.Join(r.C.Opts.Root, "sub")
+	if err := os.MkdirAll(sub, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "go.mod"), []byte("module example.invalid/s\n\ngo 1.27\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	j := sh(populate)
+	j.Workdir, j.Env = "sub", map[string]string{"GOTOOLCHAIN": "go1.99.0"}
+	r2 := r.again(t, map[string]model.Job{"build": j})
+	if o := outcome(r2.run(t), "build"); o.State != StatePassed {
+		t.Fatalf("%+v\n%s", o, r2.Out)
+	}
+	if gotJob.Workdir != "sub" || gotJob.Env["GOTOOLCHAIN"] != "go1.99.0" || gotRoot != r.C.Opts.Root {
+		t.Fatalf("probe saw job %+v root %q", gotJob, gotRoot)
 	}
 }

@@ -9,6 +9,8 @@ package run
 // A container job's miss cannot use a writable host mount (the hardened profile
 // refuses it), so its dirs live in the workspace: BeforeJob creates them and
 // AfterJob packs them before the workspace is removed (debt D-1032).
+// The tool probes run through the exec funnel in the job's workdir with the
+// job's environment, so a pinned toolchain is what the key records (D-1035).
 // Inputs:  AttemptInfo (job, store, home, launch epoch), the pipeline row
 // (project root, source trust), detector facts of the workspace, the process
 // environment, NSELF_CI_CACHE_DISABLE (operator scope).
@@ -36,6 +38,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/cache/entries"
 	"github.com/nself-org/plugins/free/ci/internal/cache/specs"
 	"github.com/nself-org/plugins/free/ci/internal/detect"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -77,7 +80,7 @@ type cacheHook struct {
 	scanner  func() authz.ValueScanner
 	environ  func() []string
 	home     func() string
-	probe    func(ctx context.Context, argv []string) (string, error)
+	probe    func(ctx context.Context, job model.Job, root string, argv []string) (string, error)
 	warn     func(string)
 }
 
@@ -85,8 +88,8 @@ var cacheOn = &cacheHook{
 	scanner: func() authz.ValueScanner { return Redactions },
 	environ: os.Environ,
 	home:    func() string { h, _ := os.UserHomeDir(); return h },
-	probe: func(ctx context.Context, argv []string) (string, error) {
-		out, code, err := report.Capture(ctx, argv...)
+	probe: func(ctx context.Context, job model.Job, root string, argv []string) (string, error) {
+		out, code, err := report.CaptureAs(ctx, model.Job{Kind: "static", Workdir: job.Workdir, Env: job.Env}, root, argv...)
 		if err == nil && code != 0 {
 			err = fmt.Errorf("exit %d", code)
 		}
@@ -169,7 +172,7 @@ func (h *cacheHook) begin(ctx context.Context, a AttemptInfo, p store.PipelineRo
 	es := entries.New(a.Store, blobs, entries.Options{Home: home, Project: func(string) authz.ProjectFacts { return authz.ProjectFacts{NoPrivateDeps: !priv} }})
 	in := specs.BeginInput{Engine: &specs.Engine{Entries: es, Blobs: blobs, Scanner: h.scanner(), Backend: a.Store}, Attempt: a.AttemptID, Epoch: a.Epoch,
 		Facts: facts, Root: filepath.Join(home, "cache-work", a.AttemptID), Detected: detected, Scope: scope, ExtraKeys: keys, Container: container,
-		Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process", JobEnv: a.Job.Env, Environ: flatEnv(env), Probe: h.probe, Home: h.home(), Getenv: func(k string) string { return env[k] }, Warn: h.warn}
+		Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process", JobEnv: a.Job.Env, Environ: flatEnv(env), Probe: func(ctx context.Context, argv []string) (string, error) { return h.probe(ctx, a.Job, p.Project, argv) }, Home: h.home(), Getenv: func(k string) string { return env[k] }, Warn: h.warn}
 	if container {
 		in.Platform, in.Isolation, in.Image = "linux/"+runtime.GOARCH, "container", h.imageDigest(ctx, a)
 	}
