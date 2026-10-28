@@ -378,3 +378,37 @@ func TestCloudVMConcurrentCallsAreSafe(t *testing.T) {
 		t.Fatalf("servers left: %+v", left)
 	}
 }
+
+func TestCloudVMRestartBeforeJoinDestroysUnenrollableMachine(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	in := intentOf("01J000000000000000RESTART1")
+	first, err := r.prov.Provision(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.restart()
+	_, err = r.prov.Provision(ctx, in)
+	if cloudvm.ReasonOf(err) != cloudvm.ReasonEnroll {
+		t.Fatalf("want enrollment refusal after restart, got %v", err)
+	}
+	if len(r.cloud.All()) != 0 {
+		t.Fatalf("orphan %s is still billing", first.ID)
+	}
+}
+
+func TestCloudVMRestartAfterJoinPreservesMachine(t *testing.T) {
+	r := newRig(t)
+	r.serve()
+	res := r.provision("job-1")
+	eventually(t, 2*time.Second, "the listener opens", func() bool { return isOpen(r.enrollAdr) })
+	code, fp := r.userDataOf(res.Token)
+	if _, err := r.join(code, fp, cloudvm.NodeName(res.Token)); err != nil {
+		t.Fatal(err)
+	}
+	r.build() // new provider and pairing service over the persisted joined intent
+	adopted, err := r.prov.Provision(context.Background(), intentOf(res.Token))
+	if err != nil || adopted.ID != r.intent(res.Token).ResourceID || len(r.cloud.All()) != 1 {
+		t.Fatalf("joined VM not preserved: %+v %v", adopted, err)
+	}
+}

@@ -36,6 +36,7 @@ type Joiner interface {
 // Intents says whether a burst intent of this coordinator is live.
 type Intents interface {
 	Live(ctx context.Context, token string) (bool, error)
+	Joined(ctx context.Context, token string) (bool, error)
 }
 
 // StoreIntents reads intents from the burst store.
@@ -51,6 +52,12 @@ func (s StoreIntents) Live(ctx context.Context, token string) (bool, error) {
 		return false, err
 	}
 	return ok && in.Coordinator == s.Coordinator && in.State == store.BurstLive, nil
+}
+
+// Joined reports persisted enrollment, which survives a coordinator restart.
+func (s StoreIntents) Joined(ctx context.Context, token string) (bool, error) {
+	in, ok, err := s.Store.BurstIntent(ctx, token)
+	return ok && in.Coordinator == s.Coordinator && in.NodeID != "", err
 }
 
 // NamePrefix starts the server name and the node name of every burst VM.

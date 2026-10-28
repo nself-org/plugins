@@ -169,10 +169,20 @@ func (p *Provider) Provision(ctx context.Context, in burst.Intent) (burst.Resour
 		return burst.Resource{}, err
 	}
 	for _, r := range found {
-		// Adopted as the contract requires. After a coordinator restart this process holds no offer for the
-		// machine (the code in its user data belongs to a dead approver), so it cannot enroll: the engine's
-		// join timeout ends the intent and tears it down (debt D-1397).
 		if r.Labels[burst.LabelRole] == burst.RoleEphemeral && r.Labels[burst.LabelCoordinator] == in.Labels[burst.LabelCoordinator] {
+			p.mu.Lock()
+			_, offered := p.offers[in.Token]
+			p.mu.Unlock()
+			if !offered {
+				joined, jerr := p.cfg.Intents.Joined(ctx, in.Token)
+				if jerr != nil {
+					return burst.Resource{}, fail(ReasonEnroll, jerr, "the intent enrollment could not be read")
+				}
+				if !joined {
+					derr := p.destroyRetry(ctx, tok, r.ID)
+					return burst.Resource{}, fail(ReasonEnroll, derr, "adopted server %s has no pairing offer; deleted (%v)", r.ID, derr == nil)
+				}
+			}
 			p.remember(r.ID, in.Token)
 			return r, nil
 		}
