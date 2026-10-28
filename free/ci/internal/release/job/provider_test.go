@@ -430,3 +430,40 @@ func TestProviderCarriesTheStartOfRunState(t *testing.T) {
 		t.Fatalf("a subset run must be adhoc and partial: %v", e)
 	}
 }
+
+// TestGuardRefusesWhenSignerIsRevokedBetweenGuardAndAdmit: a revocation that
+// commits after Guard accepted the facts but before the admission step reads
+// them must refuse with signer_revoked (regression for cached-decision race).
+func TestGuardRefusesWhenSignerIsRevokedBetweenGuardAndAdmit(t *testing.T) {
+	defer job.SetTiming(5*time.Millisecond, time.Minute)()
+	f := newRun(t, passed())
+	st := job.NewStash()
+	keyID := "ci-node-abcdef0123456789"
+	revoked := false
+	st.Revoked = func(id string) bool { return revoked && id == keyID }
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := st.Guard(context.Background(), "a1", f.provide(t), func() error { <-release; return nil })
+		if err != nil {
+			t.Error(err)
+		}
+	}()
+	await(t, "the attempt to queue", func() bool { _, _, ok := st.ReleaseFacts("a1"); return ok })
+	// Simulate the evidence carrying a signer key (e.g. from a remote runner)
+	// without re-running Evaluate, which would reject coordinator-recorded
+	// evidence with a KeyID set.
+	job.SetEntryKeyID(st, "a1", keyID)
+	if err := stepFor(st, "a1"); err != nil {
+		t.Fatalf("admitted before revocation: %v", err)
+	}
+	revoked = true
+	await(t, "the revocation to be seen", func() bool {
+		ref, ok := stepFor(st, "a1").(*dispatch.Refusal)
+		return ok && ref.Reason == "release."+job.SignerRevoked
+	})
+	close(release)
+	wg.Wait()
+}

@@ -45,6 +45,7 @@ func init() {
 	if Dispatch == nil || Registered.Isolation == nil {
 		panic("run: release_hook.go must initialise after dispatch_hook.go and isolation_hook.go")
 	}
+	releaseStash.Revoked = func(keyID string) bool { ok, _ := attestLedger().Revoked(context.Background(), keyID); return ok }
 	if err := job.Register(releaseStash); err != nil {
 		panic(err)
 	}

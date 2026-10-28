@@ -35,6 +35,7 @@ const (
 	RemotePlacement  = "remote_placement"     // a release job is placed away from the machine that runs the pipeline
 	FactsExpired     = "facts_expired"        // the facts were not refreshed recently enough to judge
 	Duplicate        = "duplicate_submission" // the attempt is already being submitted
+	SignerRevoked    = "signer_revoked"       // the evidence signer was revoked between guard and admission
 )
 
 // E716 reasons.
