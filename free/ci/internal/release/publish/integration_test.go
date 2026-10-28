@@ -14,6 +14,7 @@ package publish_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -160,7 +161,11 @@ func (p *pipeRig) run(script string, install bool) (run.Result, *store.Store) {
 	if err != nil {
 		t.Fatalf("Run: %v\n%s", err, out.String())
 	}
-	t.Logf("run output:\n%s", out.String())
+	// Test keys must never appear in coordinator stdout, including hook notes.
+	decoded, decodeErr := base64.StdEncoding.DecodeString(string(p.keyValue))
+	if decodeErr != nil || strings.Contains(out.String(), string(p.keyValue)) || (len(decoded) > 0 && strings.Contains(out.String(), string(decoded))) {
+		t.Fatal("planted key leaked to coordinator output")
+	}
 	return res, st
 }
 
