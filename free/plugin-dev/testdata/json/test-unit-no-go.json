@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev test",
+  "error": {
+    "code": "E776",
+    "message": "plugin test infrastructure failed in: unit",
+    "remediation": "check the required tools and infrastructure; the test output is on stderr",
+    "exit_code": 2,
+    "class": "infra"
+  }
+}

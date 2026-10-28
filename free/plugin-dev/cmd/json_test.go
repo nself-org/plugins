@@ -92,15 +92,29 @@ var jsonCases = []jsonCase{
 
 	{name: "test-unit-ok", args: []string{"test", "rt", "--phase", "unit", "--host", "--json"}, setup: func(t *testing.T, root string) {
 		pluginDir(t, root, "rt")
-		stubs(t, map[string]string{"go": "exit 0"})
+		stubs(t, map[string]string{"go": "echo child-stdout; echo child-stderr >&2; exit 0"})
 	}},
 	{name: "test-smoke-ok", args: []string{"test", "rt", "--phase", "smoke", "--json"}, setup: func(t *testing.T, root string) {
 		pluginDir(t, root, "rt")
 		stubs(t, map[string]string{"nself": "exit 0", "curl": "printf 200"})
 	}},
+	{name: "test-smoke-health-fails", args: []string{"test", "rt", "--phase", "smoke", "--json"}, code: 1, setup: func(t *testing.T, root string) {
+		pluginDir(t, root, "rt")
+		stubs(t, map[string]string{"nself": "exit 0", "curl": "printf 503"})
+	}},
 	{name: "test-unit-fails", args: []string{"test", "rt", "--phase", "unit", "--host", "--json"}, code: 1, setup: func(t *testing.T, root string) {
 		pluginDir(t, root, "rt")
-		stubs(t, map[string]string{"go": "exit 1"})
+		stubs(t, map[string]string{"go": "echo child-stdout; echo child-stderr >&2; exit 1"})
+	}},
+	{name: "test-unit-no-go", args: []string{"test", "rt", "--phase", "unit", "--host", "--json"}, code: 2, setup: func(t *testing.T, root string) {
+		pluginDir(t, root, "rt")
+		onlyStubs(t)
+	}},
+	{name: "test-unit-docker-launch", args: []string{"test", "rt", "--phase", "unit", "--json"}, code: 2, setup: func(t *testing.T, root string) {
+		pluginDir(t, root, "rt")
+		onlyStubs(t)
+		// The availability probe succeeds, but the executable disappears before launch.
+		stubs(t, map[string]string{"docker": "echo child-stdout; echo child-stderr >&2; /bin/rm \"$0\"; exit 0"})
 	}},
 	{name: "test-bad-phase", args: []string{"test", "rt", "--phase", "bogus", "--json"}, code: 1},
 	{name: "test-not-found", args: []string{"test", "rt", "--phase", "unit", "--json"}, code: 1},
