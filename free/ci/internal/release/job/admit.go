@@ -8,9 +8,9 @@ package job
 // Inputs:  a Provider of Facts per release attempt (evidence of the deps, the
 // run's protected identity and the digests of the inputs now).
 // Outputs: nil (admit) or a *dispatch.Refusal naming the E715 reason.
-// Constraints: the step runs inside the admission transaction and calls no
-// Store method (a Provider may read the worktree, never the store); it asks the
-// Source's Provider for the attempt id on every try. The gate is
+// Constraints: the step reads a cached gate decision inside the admission
+// transaction. Stash evaluates and consumes signed evidence before publishing
+// that decision, outside the writer lock. The gate is
 // built from Facts.Repo/Revision/PolicyDigest/Deps, never from the evidence
 // being judged. The only submission path (run's Dispatch wrapper) refuses to
 // submit a release attempt whose facts it cannot build; a release attempt
@@ -86,9 +86,9 @@ type Provider func(ctx context.Context) (Facts, *Error)
 // Static is a Provider that always answers f.
 func Static(f Facts) Provider { return func(context.Context) (Facts, *Error) { return f, nil } }
 
-// Source finds the cached Facts of a release attempt; ok is false for any other attempt.
+// Source finds a pre-evaluated admission decision; ok is false for other attempts.
 type Source interface {
-	ReleaseFacts(attemptID string) (f Facts, perr *Error, ok bool)
+	ReleaseDecision(attemptID string) (perr *Error, ok bool)
 }
 
 // Step is the admission step over src. A release attempt is admitted only on
@@ -97,7 +97,7 @@ type Source interface {
 // refreshed recently and judge acceptable.
 func Step(src Source) dispatch.Step {
 	return func(_ context.Context, v dispatch.View) error {
-		f, perr, ok := src.ReleaseFacts(v.Request.AttemptID)
+		perr, ok := src.ReleaseDecision(v.Request.AttemptID)
 		if !ok {
 			if v.Request.Kind == "release" { // it did not come through run's Dispatch wrapper: nothing judged it
 				return &dispatch.Refusal{Reason: model.PlacementReason("release." + NoEvidence), Detail: "a release attempt has no facts to judge"}
@@ -107,9 +107,6 @@ func Step(src Source) dispatch.Step {
 		e := perr
 		if !v.Request.Local {
 			e = refuse(CodeNotAdmitted, RemotePlacement, "a release job runs only on the machine that runs the pipeline")
-		}
-		if e == nil {
-			e = Evaluate(f)
 		}
 		if e != nil {
 			return &dispatch.Refusal{Reason: model.PlacementReason("release." + e.Reason), Detail: e.Error()}

@@ -43,9 +43,10 @@ func NewStash() *Stash { return &Stash{m: map[string]*entry{}} }
 
 // Put records static facts for one attempt; they never expire (tests).
 func (s *Stash) Put(attemptID string, f Facts) {
+	perr := Evaluate(f)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.m[attemptID] = &entry{f: f}
+	s.m[attemptID] = &entry{f: f, perr: perr}
 }
 
 // Forget drops one attempt.
@@ -55,7 +56,7 @@ func (s *Stash) Forget(attemptID string) {
 	delete(s.m, attemptID)
 }
 
-// ReleaseFacts implements Source.
+// ReleaseFacts returns the latest evaluated facts and gate refusal.
 func (s *Stash) ReleaseFacts(attemptID string) (Facts, *Error, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -73,6 +74,9 @@ func (s *Stash) ReleaseFacts(attemptID string) (Facts, *Error, bool) {
 // at is the time the provider was asked, not answered: a slow digester does
 // not make an old observation look fresh.
 func (s *Stash) update(attemptID string, e *entry, f Facts, perr *Error, at time.Time) {
+	if perr == nil {
+		perr = Evaluate(f)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.m[attemptID] == e {
@@ -137,4 +141,11 @@ func (s *Stash) Guard(ctx context.Context, attemptID string, p Provider, next fu
 		s.mu.Unlock()
 	}()
 	return next()
+}
+
+// ReleaseDecision reads the gate result without verifying signatures or writing the ledger.
+// Guard, refresh and Put evaluate before publishing the snapshot.
+func (s *Stash) ReleaseDecision(attemptID string) (*Error, bool) {
+	_, perr, ok := s.ReleaseFacts(attemptID)
+	return perr, ok
 }
