@@ -121,15 +121,16 @@ func TestProbeImageIsPinnedByDigest(t *testing.T) {
 
 func TestProbeUnavailableReasons(t *testing.T) {
 	denyCases := map[string][]string{
-		"network host":        {"--network=host"},
-		"network host spaced": {"--network", "host"},
-		"single dash":         {"-network=host"},
-		"host uds":            {"--host-uds=open"},
-		"host uds bare":       {"--host-uds"},
-		"host fifo":           {"--host-fifo=all"},
-		"net raw":             {"--net-raw"},
-		"allow flag override": {"--allow-flag-override"},
-		"denied after a good": {"--platform=ptrace", "--debug", "--net-raw"},
+		"network host":          {"--network=host"},
+		"network host spaced":   {"--network", "host"},
+		"single dash":           {"-network=host"},
+		"exclusive file access": {"--file-access=exclusive"},
+		"host uds":              {"--host-uds=open"},
+		"host uds bare":         {"--host-uds"},
+		"host fifo":             {"--host-fifo=all"},
+		"net raw":               {"--net-raw"},
+		"allow flag override":   {"--allow-flag-override"},
+		"denied after a good":   {"--platform=ptrace", "--debug", "--net-raw"},
 	}
 	for name, args := range denyCases {
 		t.Run("denied "+name, func(t *testing.T) {
@@ -181,13 +182,12 @@ func TestProbePlatforms(t *testing.T) {
 		kvm  bool
 		want string
 	}{
-		"default is systrap":       {``, false, "systrap"},
-		"ptrace":                   {`"--platform=ptrace"`, false, "ptrace"},
-		"spaced form":              {`"--platform","ptrace"`, false, "ptrace"},
-		"last one wins":            {`"--platform=kvm","--platform=systrap"`, false, "systrap"},
-		"kvm where /dev/kvm is":    {`"--platform=kvm"`, true, "kvm"},
-		"unrelated flags ignored":  {`"--debug-log=/tmp/x","--network=sandbox"`, false, "systrap"},
-		"exclusive file access ok": {`"--file-access=exclusive"`, false, "systrap"},
+		"default is systrap":    {``, false, "systrap"},
+		"ptrace":                {`"--platform=ptrace"`, false, "ptrace"},
+		"spaced form":           {`"--platform","ptrace"`, false, "ptrace"},
+		"last one wins":         {`"--platform=kvm","--platform=systrap"`, false, "systrap"},
+		"kvm where /dev/kvm is": {`"--platform=kvm"`, true, "kvm"},
+		"safe flags accepted":   {`"--debug-log=/tmp/x","--strace"`, false, "systrap"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			table := `{"runsc":{"path":"runsc","runtimeArgs":[` + tc.args + `]}}`
