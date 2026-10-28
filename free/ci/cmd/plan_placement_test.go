@@ -414,3 +414,12 @@ func TestPlacementUsesBuiltPlan(t *testing.T) {
 		t.Fatalf("exit %d: %s %s", code, out, errs)
 	}
 }
+
+func TestRemotePlacementTrust(t *testing.T) {
+	for _, trigger := range []model.Trigger{"pull_request", "push", "schedule", "api", "manual", "tag"} {
+		class, err := placementTrust(context.Background(), planned{pl: &plan.Plan{Trigger: trigger}})
+		if err != nil || class != "untrusted" {
+			t.Fatalf("%s: %s, %v", trigger, class, err)
+		}
+	}
+}

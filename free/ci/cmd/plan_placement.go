@@ -29,6 +29,7 @@ import (
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
+	"github.com/nself-org/plugins/free/ci/internal/trust/source"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
@@ -93,7 +94,11 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 	if err != nil {
 		return model.PlacementPlan{}, err
 	}
-	got, err := res.Resolve(ctx, policy.Repo{Root: pd.root, Project: project, Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: pd.root, Run: values})
+	class, err := placementTrust(ctx, pd)
+	if err != nil {
+		return model.PlacementPlan{}, err
+	}
+	got, err := res.Resolve(ctx, policy.Repo{Root: pd.root, Project: project, Visibility: "unknown", Class: class}, policy.Revision{Dir: pd.root, Run: values})
 	if err != nil {
 		return model.PlacementPlan{}, err
 	}
@@ -102,7 +107,7 @@ func placementDoc(ctx context.Context, pd planned) (model.PlacementPlan, error) 
 		return model.PlacementPlan{}, err
 	}
 	jobs, blocked := planview.SchedJobs(planview.Context{PipelineID: pd.pl.Pipeline.ID, Project: project, Support: pd.pl.Support,
-		DefaultPlatform: pd.world.Platform, Foreground: pd.interactive}, plannedJobs(pd))
+		DefaultPlatform: pd.world.Platform, Foreground: pd.interactive, Trust: class}, plannedJobs(pd))
 	capacity := placementProbe()
 	now := placementClock()
 	pipe := sched.Pipeline{ID: pd.pl.Pipeline.ID}
@@ -136,4 +141,18 @@ func plannedJobs(pd planned) []planview.PlannedJob {
 			Tool: tools[j.Check], State: j.State, Blocked: string(j.Blocked), Detail: j.Detail}
 	}
 	return out
+}
+
+// placementTrust uses the run classifier for local checkouts. A trigger name
+// supplies no verified forge facts, so remote previews use missing-fact defaults.
+// Visibility remains unknown, as in the dispatcher.
+func placementTrust(ctx context.Context, pd planned) (model.TrustClass, error) {
+	if pd.pl.Trigger != "local" && pd.pl.Trigger != "" {
+		return source.Classify(model.TriggerFacts{Kind: model.TriggerKind(pd.pl.Trigger)}).Class, nil
+	}
+	rev := ""
+	if out, ok := planGit(ctx, pd.root, "rev-parse", "HEAD"); ok {
+		rev = strings.TrimSpace(out)
+	}
+	return (cirun.SourceTrust{}).Classify(ctx, cirun.TrustRequest{Root: pd.root, Revision: rev})
 }
