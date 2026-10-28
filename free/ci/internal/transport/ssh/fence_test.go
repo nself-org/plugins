@@ -165,23 +165,6 @@ func TestSSHTransportRefusesBadBlobAnnouncements(t *testing.T) {
 	}
 }
 
-// noAbortSink hands out writers that cannot discard what they hold.
-type noAbortSink struct{ *recSink }
-
-type plainWriter struct{ *memBlob }
-
-func (noAbortSink) Blob(context.Context, transport.BlobHeader) (transport.BlobWriter, error) {
-	return plainWriter{&memBlob{}}, nil
-}
-
-func (plainWriter) Abort() {} // wrong signature on purpose: not an Aborter
-
-// TestSSHTransportRefusesASinkThatCannotDiscard proves a failed blob can never be committed by Close.
-func TestSSHTransportRefusesASinkThatCannotDiscard(t *testing.T) {
-	err := runScripted(t, &Driver{}, func(a *scriptedAgent) { sendBlob(a, "cache", []byte("payload"), false) }, noAbortSink{&recSink{}})
-	reasonOf(t, err, ReasonBlob)
-}
-
 // TestSSHTransportFlippedByteInAResumedBlobIsRejected proves a resumed blob is verified whole.
 func TestSSHTransportFlippedByteInAResumedBlobIsRejected(t *testing.T) {
 	payload := []byte("0123456789abcdef")

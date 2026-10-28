@@ -314,6 +314,24 @@ nself ci runs approve <run> [--sha <sha>] [--spend] [--json]
 
 Handoff: `source.Binding`, `source.VoidReasons` and `source.RequiresApproval` are the pure rules (`internal/trust/source/approval.go`); the rows live in `internal/store/trust_approvals.go` (`trust_run_facts`, `trust_approvals`). The source hook records the facts with `Store.RecordApprovalFacts` (not yet wired: see the Epic Invalidations).
 
+## The production boundary
+
+CI work stays off the machines that run production, and off a coordinator host that is not isolated enough. Two rules apply, and every refusal carries error code `E689` with the reason `boundary.deploy_host`, `boundary.override_minimum` or `boundary.coordinator_host`.
+
+| Where the job would run | Rule | Reason when refused |
+|---|---|---|
+| A node whose host is in a project's deploy inventory | Takes no CI work at all | `boundary.deploy_host` |
+| The same node, added with `nself ci nodes add --allow-deploy-host` | Takes only `owner` or `internal` jobs, at isolation `vm` or stronger, with no `release` or `deploy` secret class | `boundary.override_minimum` |
+| The host of a TEAM coordinator | Needs isolation `vm` or stronger for every job | `boundary.coordinator_host` |
+| The host of a PERSONAL coordinator | Needs isolation `vm` or stronger for `collaborator` and `untrusted` jobs; the operator's own `owner` and `internal` jobs keep their normal minimums | `boundary.coordinator_host` |
+
+Details:
+
+- The override needs an interactive terminal and the node id typed back. Each placement on an overridden deploy host writes a `placement.deploy_host_override` audit row, and the job itself is raised to `vm` there, not only the node's declared level.
+- The deploy-host rule checks the job's secret classes, not the job kind. A release-kind job that asks for no `release` or `deploy` secret is not refused by this rule (D-1251).
+- Matching is done from the deploy inventory on the coordinator, never from what a node says about itself.
+- `E689` fix: run the job on a node that is not a deploy host, or on one you overrode with owner or internal work at `vm` or stronger and no release or deploy secrets. On a coordinator host, run collaborator and untrusted work elsewhere, or move the coordinator to a VM.
+
 ## Roles, tokens and the audit log
 
 A TEAM coordinator knows three roles, ordered `member < release < admin`, and no per-user permissions. In PERSONAL mode the operator on the coordinator host is allowed everything (access to the data directory is admin access) and every decision is still audited.

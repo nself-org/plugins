@@ -1,5 +1,7 @@
 package main
 
+//go:generate go run .
+
 import (
 	"log"
 	"os"
@@ -9,7 +11,8 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 )
 
-// main writes deterministic schema bytes from the domain structs.
+// main writes deterministic schema bytes from the domain structs: the model, capability and protocol
+// schemas here, every other one from the registry (registry.go).
 func main() {
 	schemas, err := model.Schemas()
 	if err != nil {
@@ -25,11 +28,13 @@ func main() {
 		log.Fatal(err)
 	}
 	schemas["runner-protocol.v1.schema.json"] = runner
-	placement, err := placementSchema()
+	owned, err := registered()
 	if err != nil {
 		log.Fatal(err)
 	}
-	schemas["placement-plan.v1.schema.json"] = placement
+	for name, data := range owned {
+		schemas[name] = data
+	}
 	for name, data := range schemas {
 		if err := os.WriteFile(filepath.Join("..", "..", "schemas", name), data, 0644); err != nil {
 			log.Fatal(err)

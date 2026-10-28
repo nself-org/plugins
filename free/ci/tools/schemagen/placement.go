@@ -17,6 +17,8 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 )
 
+func init() { register("placement-plan.v1.schema.json", placementSchema) }
+
 func enumOf(name string, extra ...any) []any {
 	var out []any
 	for _, v := range model.EnumValues(name) {

@@ -106,13 +106,21 @@ RUN fetch-verified.sh syft "$TARGETARCH" /tmp/dl/syft.tgz \
 RUN fetch-verified.sh hadolint "$TARGETARCH" /out/tools/usr/local/bin/hadolint \
  && chmod 0755 /out/tools/usr/local/bin/hadolint
 
-# govulncheck: the pinned module zip, built with the build-platform Go for the target platform.
-# Its dependencies are checked against the module's own go.sum.
+# govulncheck: the pinned module zip, served to `go install` from a file GOPROXY so the binary is
+# stamped with the pinned version (a build from the unpacked zip reports v0.0.0). The build-platform
+# Go compiles it for the target platform. Its dependencies come from the public proxy and are checked
+# against the Go checksum database, as is the zip itself. A cross build installs under bin/linux_<arch>.
 RUN fetch-verified.sh govulncheck any /tmp/dl/vuln.zip \
- && unzip -q /tmp/dl/vuln.zip -d /tmp/vuln \
- && cd "/tmp/vuln/golang.org/x/vuln@v$GOVULNCHECK_VERSION" \
- && GOROOT=/opt/go-build CGO_ENABLED=0 GOOS=linux GOARCH="$TARGETARCH" GOFLAGS=-trimpath GOTOOLCHAIN=local \
-    /opt/go-build/bin/go build -o /out/tools/usr/local/bin/govulncheck ./cmd/govulncheck
+ && proxy=/tmp/goproxy/golang.org/x/vuln/@v \
+ && mkdir -p "$proxy" \
+ && cp /tmp/dl/vuln.zip "$proxy/v$GOVULNCHECK_VERSION.zip" \
+ && unzip -p /tmp/dl/vuln.zip "golang.org/x/vuln@v$GOVULNCHECK_VERSION/go.mod" > "$proxy/v$GOVULNCHECK_VERSION.mod" \
+ && printf '{"Version":"v%s","Time":"2000-01-01T00:00:00Z"}\n' "$GOVULNCHECK_VERSION" > "$proxy/v$GOVULNCHECK_VERSION.info" \
+ && printf 'v%s\n' "$GOVULNCHECK_VERSION" > "$proxy/list" \
+ && GOPATH=/tmp/gopath GOROOT=/opt/go-build CGO_ENABLED=0 GOOS=linux GOARCH="$TARGETARCH" GOFLAGS=-trimpath GOTOOLCHAIN=local \
+    GOPROXY=file:///tmp/goproxy,https://proxy.golang.org \
+    /opt/go-build/bin/go install "golang.org/x/vuln/cmd/govulncheck@v$GOVULNCHECK_VERSION" \
+ && install -m 0755 "$(find /tmp/gopath/bin -name govulncheck -type f)" /out/tools/usr/local/bin/govulncheck
 
 FROM docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS toolchain
 LABEL org.opencontainers.image.source="https://github.com/nself-org/plugins" \

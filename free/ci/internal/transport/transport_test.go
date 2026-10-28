@@ -35,6 +35,8 @@ func (d testDriver) Run(_ context.Context, _ model.Capability, _ protocol.Lease,
 
 type writer struct{ calls *[]string }
 
+func (writer) Abort() error { return nil }
+
 func (w writer) Write(p []byte) (int, error) {
 	*w.calls = append(*w.calls, "write")
 	return len(p), nil
@@ -99,5 +101,21 @@ func TestRegistryAndDelivery(t *testing.T) {
 	}
 	if !reflect.DeepEqual(calls, []string{"first", "second"}) {
 		t.Fatal(calls)
+	}
+}
+
+// TestBlobWriterAbortNeedsNoAssertion proves a carrier can dispose of any writer a Sink hands
+// out without a type assertion; before D-1053 a writer without Abort compiled and was left undisposed.
+func TestBlobWriterAbortNeedsNoAssertion(t *testing.T) {
+	var calls []string
+	w, err := sink{&calls}.Blob(context.Background(), BlobHeader{Stream: "cache", SHA256: "sha", Size: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Abort(); err != nil {
+		t.Fatalf("abort: %v", err)
+	}
+	if _, ok := w.(BlobVerifier); ok {
+		t.Fatal("the plain test writer must stay a non-verifier: Verify is optional")
 	}
 }

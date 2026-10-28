@@ -97,7 +97,7 @@ rows:
   - name: govulncheck
     kind: tool
     version: 1.9.0
-    purpose: go.govulncheck check; built from the module zip below, verified by the Go checksum database
+    purpose: go.govulncheck check; installed from the module zip below (file GOPROXY, so the binary reports the pinned version), verified by the Go checksum database
     owner: internal/gates
     probe:
       - govulncheck
