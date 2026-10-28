@@ -6,7 +6,7 @@ package tart
 //          that serves netscope's egress proxy on the Tart gateway address.
 // Constraints: an exclusion set that exists and cannot be read or parsed refuses the scope (the same rule as the
 //          container planner); the proxy listens only on the gateway address, never on 0.0.0.0, so a LAN host
-//          cannot use it. The exclusion handling follows netscope's own (see debt: export it from netscope).
+//          cannot use it. The exclusion handling is shared with netscope.
 
 import (
 	"context"
@@ -15,7 +15,6 @@ import (
 	"io"
 	"net"
 	"net/netip"
-	"strings"
 	"sync"
 	"time"
 
@@ -55,96 +54,16 @@ type ProxyHandle struct {
 // ProxyStarter starts the proxy for one attempt.
 type ProxyStarter func(ctx context.Context, req ProxyRequest) (ProxyHandle, error)
 
-const exclusionLookupTimeout = 10 * time.Second
-
-// BuildFacts returns a NetSource.Facts: the host facts merged with the exclusion set. excl may be nil (no
-// exclusion source registered on this process); res defaults to net.DefaultResolver.
+// BuildFacts returns the shared network facts used by both Tart and containers.
 func BuildFacts(host func() (netscope.Facts, error), excl func(context.Context) (netscope.Exclusions, error), res netscope.Resolver) func(context.Context) (netscope.Facts, error) {
-	if res == nil {
-		res = net.DefaultResolver
-	}
 	return func(ctx context.Context) (netscope.Facts, error) {
-		f, err := host()
-		if err != nil {
-			return netscope.Facts{}, err
+		f, err := netscope.WorldFacts(ctx, host, excl, res)
+		var scopeErr *netscope.Error
+		if errors.As(err, &scopeErr) {
+			return netscope.Facts{}, isolation.ScopeUnenforceable("%s", scopeErr.Message)
 		}
-		if excl == nil {
-			return f, nil
-		}
-		ex, err := excl(ctx)
-		if err != nil {
-			return netscope.Facts{}, isolation.ScopeUnenforceable("the deploy exclusion set cannot be read: %v", err)
-		}
-		xf, err := exclusionFacts(ctx, ex, res)
-		if err != nil {
-			return netscope.Facts{}, err
-		}
-		return netscope.Merge(f, xf), nil
+		return f, err
 	}
-}
-
-func exclusionFacts(ctx context.Context, ex netscope.Exclusions, res netscope.Resolver) (netscope.Facts, error) {
-	var f netscope.Facts
-	for _, raw := range ex.Addresses {
-		a, err := netip.ParseAddr(raw)
-		if err != nil {
-			return f, isolation.ScopeUnenforceable("exclusion address %q does not parse", raw)
-		}
-		a = netscope.Unmap(a)
-		f.Exclusion = append(f.Exclusion, netip.PrefixFrom(a, a.BitLen()))
-	}
-	for _, raw := range ex.Prefixes {
-		p, err := netip.ParsePrefix(raw)
-		if err != nil {
-			return f, isolation.ScopeUnenforceable("exclusion prefix %q does not parse", raw)
-		}
-		f.Exclusion = append(f.Exclusion, p)
-	}
-	var names []string
-	for _, h := range ex.Hosts {
-		n := netscope.NormalizeHost(h)
-		if n == "" {
-			return f, isolation.ScopeUnenforceable("exclusion host %q does not parse", h)
-		}
-		f.ExclusionHosts = append(f.ExclusionHosts, n)
-		if a, err := netip.ParseAddr(strings.Trim(n, "[]")); err == nil {
-			a = netscope.Unmap(a)
-			f.Exclusion = append(f.Exclusion, netip.PrefixFrom(a, a.BitLen()))
-		} else {
-			names = append(names, n)
-		}
-	}
-	lctx, cancel := context.WithTimeout(ctx, exclusionLookupTimeout)
-	defer cancel()
-	type answer struct {
-		addrs []netip.Addr
-		err   error
-	}
-	answers := make([]answer, len(names))
-	var wg sync.WaitGroup
-	for i, n := range names {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			answers[i].addrs, answers[i].err = res.LookupNetIP(lctx, "ip", n)
-		}()
-	}
-	wg.Wait()
-	for i, a := range answers {
-		var dnsErr *net.DNSError
-		switch {
-		case a.err == nil:
-		case errors.As(a.err, &dnsErr) && dnsErr.IsNotFound:
-			continue
-		default:
-			return f, isolation.ScopeUnenforceable("excluded host %s cannot be resolved: %v", names[i], a.err)
-		}
-		for _, addr := range a.addrs {
-			addr = netscope.Unmap(addr)
-			f.Exclusion = append(f.Exclusion, netip.PrefixFrom(addr, addr.BitLen()))
-		}
-	}
-	return f, nil
 }
 
 // HostProxy returns the ProxyStarter that serves netscope's proxy in this process on the gateway address. The
