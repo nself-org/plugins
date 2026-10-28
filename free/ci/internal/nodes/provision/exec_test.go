@@ -117,6 +117,21 @@ func TestSSHExecutor_BracketedIPv6ReachesSSHBare(t *testing.T) {
 	}
 }
 
+// A failure on a bracketed IPv6 host names the normalised destination, the
+// same from Run and RunInput (the documented shared error shape, D-0577).
+func TestSSHExecutor_BracketedIPv6ErrorNamesBareDest(t *testing.T) {
+	stubSSH(t, "cat >/dev/null; echo boom; exit 3")
+	ex := NewSSHExecutor("ci@[2001:db8::1]", "/k/key")
+	_, runErr := ex.Run(context.Background(), "x")
+	_, inErr := ex.RunInput(context.Background(), "x", "y\n")
+	const want = "remote command on ci@2001:db8::1 failed"
+	for name, err := range map[string]error{"Run": runErr, "RunInput": inErr} {
+		if err == nil || !strings.Contains(err.Error(), want) || strings.Contains(err.Error(), "[2001:db8::1]") {
+			t.Fatalf("%s error = %v, want it to hold %q and no bracketed host", name, err, want)
+		}
+	}
+}
+
 func TestSSHExecutor_FailureWrapsOutput(t *testing.T) {
 	stubSSH(t, "echo boom; exit 3")
 	ex := NewSSHExecutor("ci@host-1", "/k/key")

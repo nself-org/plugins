@@ -3,11 +3,13 @@ package lifecycle
 import (
 	"context"
 	"debug/elf"
+	"errors"
 	"flag"
 	"testing"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -180,4 +182,49 @@ func TestRotateHostKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	errCode(t, k.d.Rotate(ctx, RotateOptions{NodeID: "rt1", Flags: fs}), CodeRevoked)
+}
+
+// D-1212: `nodes test` asks the prober for a fresh probe instead of backdating the stored snapshot, so it
+// writes no capability audit row of its own.
+func TestTestForcesAFreshProbeWithoutBackdatingTheSnapshot(t *testing.T) {
+	k := newKit(t)
+	k.addNode("fr1")
+	before, verifiedBefore, probes := k.auditCount("node.capability"), mustGet(t, k, "fr1").Capability.Verified, len(k.forced)
+	if _, err := k.d.Test(context.Background(), "fr1", nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(k.forced) != probes+1 || !k.forced[probes] {
+		t.Fatalf("the probe was not forced: %v", k.forced[probes:])
+	}
+	if after := k.auditCount("node.capability"); after != before {
+		t.Fatalf("node.capability audit rows %d -> %d: Test wrote a snapshot of its own", before, after)
+	}
+	if got := mustGet(t, k, "fr1").Capability.Verified; got != verifiedBefore {
+		t.Fatalf("the stored snapshot was touched: %+v -> %+v", verifiedBefore, got)
+	}
+}
+
+// D-1212: a failing test hook runs after the probe is stored; the error carries what was committed.
+func TestTestHookFailureReportsTheCommittedNode(t *testing.T) {
+	t.Cleanup(resetExtensions)
+	k := newKit(t)
+	k.addNode("hf1")
+	RegisterAddHook(PointTest, func(context.Context, HookEvent) error { return errBoom })
+	res, err := k.d.Test(context.Background(), "hf1", nil)
+	var le *Error
+	if !errors.As(err, &le) || le.Reason != ReasonCommitted || !errors.Is(err, errBoom) {
+		t.Fatalf("err = %v, want a committed_hook_failed error wrapping the hook error", err)
+	}
+	if !res.Connected || res.Node.Record.ID != "hf1" || res.AgentVersion == "" {
+		t.Fatalf("the committed result was dropped: %+v", res)
+	}
+}
+
+func mustGet(t *testing.T, k *kit, id string) registry.Node {
+	t.Helper()
+	n, err := k.d.Registry.Get(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
 }

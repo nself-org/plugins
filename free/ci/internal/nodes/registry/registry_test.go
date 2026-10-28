@@ -164,6 +164,43 @@ func TestAgeRecipientPin(t *testing.T) {
 	}
 }
 
+// D-1212: a quarantined node cannot be enabled, drained or put in another maintenance reason through
+// SetState, even when the caller read the node before the quarantine was set.
+func TestSetStateRefusesToClearTheQuarantine(t *testing.T) {
+	r, c := setup(t)
+	ctx := context.Background()
+	id := c.Identity.ID
+	if _, err := r.SetState(ctx, id, "online", "enabled by admin", "operator"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.CheckAgeRecipient(ctx, id, "age1first", "agent"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.CheckAgeRecipient(ctx, id, "age1changed", "agent"); err == nil {
+		t.Fatal("the changed recipient was accepted")
+	}
+	for _, st := range []struct{ state, reason string }{
+		{"online", "enabled by admin"}, {"draining", "drained by admin"}, {"maintenance", "three consecutive infra failures"},
+	} {
+		_, err := r.SetState(ctx, id, st.state, st.reason, "operator")
+		var coded *Error
+		if !errors.As(err, &coded) || coded.Code != "E651" || !strings.Contains(coded.Reason, "quarantined") {
+			t.Fatalf("%s: err = %v, want E651 quarantined", st.state, err)
+		}
+	}
+	n, err := r.Get(ctx, id)
+	if err != nil || n.Record.State != "maintenance" || n.Record.Reason != QuarantineReason {
+		t.Fatalf("quarantine changed: %+v %v", n.Record, err)
+	}
+	// the same reason (the flag itself, an upgrade's undo) and a revoke stay possible
+	if _, err = r.SetState(ctx, id, "maintenance", QuarantineReason, "operator"); err != nil {
+		t.Fatalf("re-flag: %v", err)
+	}
+	if n, err = r.SetState(ctx, id, "revoked", "revoked", "operator"); err != nil || n.Record.State != "revoked" {
+		t.Fatalf("revoke: %v %+v", err, n.Record)
+	}
+}
+
 // TestSecretsEligible proves a non-separated node cannot gain eligibility from a hello.
 func TestSecretsEligible(t *testing.T) {
 	r, c := setup(t)

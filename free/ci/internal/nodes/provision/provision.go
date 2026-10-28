@@ -187,8 +187,10 @@ func ensureRealWorkDir(ctx context.Context, ex Executor, workDir string) (string
 // unexported variable, then piped by the builtin printf into the runner
 // user's shell, which exports it as ACTIONS_RUNNER_INPUT_TOKEN (the runner
 // reads ACTIONS_RUNNER_INPUT_<ARG> in place of --<arg>) and execs config.sh.
-// ssh, sudo, sh and config.sh therefore show no token in ps, the remote sudo
-// log or the operator's ssh argv. `set +x` stops a tracing shell (BASH_ENV,
+// ssh, sudo, sh and config.sh therefore show no token in ps, the plain sudo
+// logfile or the operator's ssh argv. A sudoers `Defaults log_input` (or a
+// LOG_INPUT tag) still records the piped token in sudo's I/O log; the
+// runner provisioning page says to leave it off. `set +x` stops a tracing shell (BASH_ENV,
 // SHELLOPTS, a .bashrc sourced under sshd) from printing the expanded value,
 // printf's stderr is dropped (a Broken pipe when sudo exits unread), and the
 // variable is unset once used. Output and errors are redacted as well, for a

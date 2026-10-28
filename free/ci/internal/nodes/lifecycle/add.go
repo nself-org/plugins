@@ -147,7 +147,7 @@ func (d *Deps) addPinned(ctx context.Context, o AddOptions, spec remote.HostSpec
 		return res, err
 	}
 	if o.Source == nil && src == nil {
-		res.Warnings = pinWarning(res.AgentVersion)
+		res.Warnings = pinWarning(id, res.AgentVersion)
 	}
 	run := func(ctx context.Context, argv ...string) (string, error) { return d.Run(ctx, t, argv...) }
 	res.Separation = d.Separation.Detect(ctx, run, plat)
@@ -177,11 +177,14 @@ func (d *Deps) addPinned(ctx context.Context, o AddOptions, spec remote.HostSpec
 	if err != nil {
 		return res, usage("no admin identity for the audit row")
 	}
-	if err = d.Store.NodeAdd(ctx, store.NodeRecord{ID: id, Name: name, State: "online", Reason: "added", Capability: doc}, admin); err != nil {
+	rec := store.NodeRecord{ID: id, Name: name, State: "online", Reason: "added", Capability: doc}
+	if err = d.Store.NodeAdd(ctx, rec, admin); err != nil {
 		return res, err
 	}
 	// The node is committed: a failed read-back must not roll the pin back (the node would be left
-	// registered with no pin), so it is not an error of the add.
+	// registered with no pin), so it is not an error of the add. The result then reports what was
+	// written, not an empty node.
+	res.Node = registry.Node{Record: rec, Capability: probed}
 	if n, gerr := d.Registry.Get(ctx, id); gerr == nil {
 		res.Node = n
 	}

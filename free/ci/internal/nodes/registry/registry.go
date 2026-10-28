@@ -237,6 +237,11 @@ func (r *Registry) SetState(ctx context.Context, id, state, reason, actor string
 		return Node{}, invalid("state")
 	}
 	return r.mutate(ctx, id, actor, "state", func(n *Node) error {
+		// The quarantine guard runs on the snapshot the write is checked against, so a quarantine set after
+		// a caller's own read still refuses the write (mutate re-reads on a version conflict).
+		if n.Record.Reason == QuarantineReason && reason != QuarantineReason && state != "revoked" {
+			return invalid("quarantined: " + QuarantineReason + " needs re-verification")
+		}
 		n.Record.State = state
 		n.Record.Reason = reason
 		n.Capability.Availability.State = model.Fact[string]{Value: &state, Source: "assigned", ObservedAt: time.Now().UTC(), Confidence: "known"}

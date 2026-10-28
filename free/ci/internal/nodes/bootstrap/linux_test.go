@@ -109,7 +109,7 @@ func TestSudoersRuleNamesTheShimAndNothingElse(t *testing.T) {
 
 func TestUnitKeepsSudoWorking(t *testing.T) {
 	u := Unit()
-	for _, want := range []string{"User=nself-ci", "NSELF_CI_AGENT_HOME=/var/lib/nself-ci-agent", "ExecStart=/opt/nself-ci-agent/bin/nself-ci-agent pull"} {
+	for _, want := range []string{"User=nself-ci", "NSELF_CI_AGENT_HOME=/var/lib/nself-ci-agent", "ExecStart=/opt/nself-ci-agent/bin/nself-ci-agent pull", "Delegate=yes"} {
 		if !strings.Contains(u, want) {
 			t.Errorf("unit lacks %q", want)
 		}

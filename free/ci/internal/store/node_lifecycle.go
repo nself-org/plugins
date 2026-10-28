@@ -180,11 +180,26 @@ func (s *Store) revokeRows(ctx context.Context, tx *sql.Tx, nodeID string) (int6
 }
 
 // expireNodeLeases moves the deadline of every live lease of the node to now, so the lease sweep fences
-// it on its next pass and the node's late results are stale.
+// it on its next pass and the node's late results are stale. It also moves the attempt epoch of every
+// leased or running attempt of the node (and a pending cancel intent with it), so an epoch-gated call
+// the revoked node makes at its old epoch (ArtifactDeclare, the cache and artifact gates) is refused now,
+// not at the sweep. The sweep reads the new epoch; a sweep that read the old one loses the compare-and-set
+// (E605) and retries on its next pass.
 func expireNodeLeases(ctx context.Context, tx *sql.Tx, nodeID string, now time.Time) (int64, error) {
 	res, err := tx.ExecContext(ctx, `UPDATE lease SET expires_at=? WHERE runner_id=? AND expires_at>? AND attempt_id IN (SELECT id FROM attempt WHERE state IN ('leased','running'))`, now.UnixNano(), nodeID, now.UnixNano())
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	expired, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	held := `(SELECT l.attempt_id FROM lease l JOIN attempt a ON a.id=l.attempt_id WHERE l.runner_id=? AND a.state IN ('leased','running'))`
+	if _, err = tx.ExecContext(ctx, `UPDATE cancel_intent SET epoch=epoch+1 WHERE attempt_id IN `+held, nodeID); err != nil {
+		return 0, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE attempt SET epoch=epoch+1 WHERE id IN `+held, nodeID); err != nil {
+		return 0, err
+	}
+	return expired, nil
 }

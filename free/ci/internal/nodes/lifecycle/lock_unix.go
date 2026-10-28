@@ -9,7 +9,10 @@ package lifecycle
 // Inputs:  the CI home and a node id. Outputs: an unlock function.
 // Constraints: flock on $NSELF_CI_HOME/.node-<id>.lock and .known_hosts.lock (0600); the wait is bounded
 //          (lockWait) and a busy lock is E656 "busy", never an indefinite hang; the node id must already
-//          be a validated node id (Run validates it).
+//          be a validated node id (Run validates it). The lock files are empty, 0600 and kept on purpose,
+//          also after `nodes remove`: unlinking a flock file while another process waits on it lets a third
+//          process lock a new file at the same path, so two holders would both think they own the node.
+//          They cost one inode per node id ever used and may be deleted by hand when no `nodes` command runs.
 
 import (
 	"os"

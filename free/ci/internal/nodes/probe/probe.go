@@ -18,6 +18,17 @@ type Prober interface {
 	Probe(context.Context, string) (registry.Node, error)
 }
 
+type forceKey struct{}
+
+// ForceRefresh returns a context whose probe skips the 60-second cache and observes the node again.
+// `nodes test` and `nodes upgrade` use it to see drift without rewriting the stored snapshot first.
+func ForceRefresh(ctx context.Context) context.Context {
+	return context.WithValue(ctx, forceKey{}, true)
+}
+
+// Forced reports whether ctx came from ForceRefresh.
+func Forced(ctx context.Context) bool { v, _ := ctx.Value(forceKey{}).(bool); return v }
+
 type commandRunner func(context.Context, string) (string, error)
 
 // Shared limits cover every prober instance in this process.
@@ -44,7 +55,7 @@ func observed[T any](v *T, now time.Time) model.Fact[T] {
 func value[T any](v T, now time.Time) model.Fact[T] { return observed(&v, now) }
 
 // run serializes each host, enforces the fleet cap, and uses the registry's
-// durable snapshot as the 60-second cache. A failed probe never refreshes it.
+// durable snapshot as the 60-second cache (ForceRefresh skips it). A failed probe never refreshes it.
 func run(ctx context.Context, r *registry.Registry, id string, collect func(context.Context, *model.Capability) error) (registry.Node, error) {
 	if r == nil || id == "" {
 		return registry.Node{}, fmt.Errorf("probe requires registry and node id")
@@ -56,7 +67,7 @@ func run(ctx context.Context, r *registry.Registry, id string, collect func(cont
 	if err != nil {
 		return registry.Node{}, err
 	}
-	if n.Capability.Verified.By == "probe" && time.Since(n.Capability.Verified.At) < cacheTTL && time.Since(n.Capability.Verified.At) >= 0 {
+	if !Forced(ctx) && n.Capability.Verified.By == "probe" && time.Since(n.Capability.Verified.At) < cacheTTL && time.Since(n.Capability.Verified.At) >= 0 {
 		return n, nil
 	}
 	select {

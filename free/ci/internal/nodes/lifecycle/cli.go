@@ -181,11 +181,12 @@ func usageLine(sub string) string {
 // fail prints the error and returns its exit code.
 func fail(env Env, f flags, command string, err error) int { return failWith(env, f, command, err, "") }
 
-// partialReport is the revoke report as one JSON string for the error envelope's cause, only for a
-// partial revoke (committed, cleanup incomplete): machine callers must see what is left.
+// partialReport is the report as one JSON string for the error envelope's cause, only for a partial revoke
+// (committed, cleanup incomplete) or a failed test hook after the probe was stored: machine callers must see
+// what is left or what was recorded.
 func partialReport(res result, err error) string {
 	var le *Error
-	if res.data == nil || !errors.As(err, &le) || le.Reason != ReasonPartial {
+	if res.data == nil || !errors.As(err, &le) || (le.Reason != ReasonPartial && le.Reason != ReasonCommitted) {
 		return ""
 	}
 	b, _ := json.Marshal(res.data)

@@ -201,3 +201,30 @@ func TestGateAuthorization(t *testing.T) {
 	}
 	errCode(t, Gate(ctx, k.d.Registry, "ghost", "proj-1"), CodeNotFound)
 }
+
+// D-1212: revoke moves the attempt epoch of the node's running attempts, so an epoch-gated call the
+// revoked node makes at its old epoch is refused at once, not at the lease sweep.
+func TestRevokeFencesTheAttemptEpoch(t *testing.T) {
+	k := newKit(t)
+	ctx := context.Background()
+	k.addNode("rv7")
+	seedLease(t, k.dbPath, "rv7", time.Hour)
+	if err := k.st.ArtifactDeclare(ctx, "att-1", 1, nil); err != nil {
+		t.Fatalf("declare at the live epoch: %v", err)
+	}
+	if _, err := k.d.Revoke(ctx, "rv7"); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", "file:"+k.dbPath+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	var epoch int64
+	if err = db.QueryRow("SELECT epoch FROM attempt WHERE id='att-1'").Scan(&epoch); err != nil || epoch != 2 {
+		t.Fatalf("attempt epoch = %d (%v), want 2", epoch, err)
+	}
+	if err = k.st.ArtifactDeclare(ctx, "att-1", 1, nil); err == nil {
+		t.Fatal("the revoked node's declare at its old epoch was accepted")
+	}
+}

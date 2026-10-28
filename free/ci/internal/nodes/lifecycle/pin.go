@@ -13,12 +13,12 @@ type PinnedSource interface {
 }
 
 // pinWarning compares the installed agent version with the pin of the default source.
-func pinWarning(installed string) []string {
+func pinWarning(id, installed string) []string {
 	src := ext.defaultSource()
 	p, ok := src.(PinnedSource)
 	if !ok || p.PinnedVersion() == "" || p.PinnedVersion() == installed {
 		return nil
 	}
 	return []string{"agent " + installed + " is already on the node and differs from the pinned release " + p.PinnedVersion() +
-		"; it was used as it is and not verified. Reinstall with --agent-binary <path> or run `nodes upgrade` when it is available"}
+		"; it was used as it is and not verified. Reinstall with --agent-binary <path> or run `nself ci nodes upgrade " + id + "`"}
 }

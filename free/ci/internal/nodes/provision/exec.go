@@ -27,6 +27,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -49,18 +50,32 @@ type Executor interface {
 // (not POSIX sh) is required because the chromium-cache check uses
 // `shopt -s nullglob`; every provisioning target (Ubuntu runner hosts) and
 // every dev machine this ships on has bash available.
-type LocalExecutor struct{}
+type LocalExecutor struct {
+	// env holds extra KEY=value entries for the child only, appended to the
+	// process environment. Tests set it instead of t.Setenv so a bash
+	// startup variable (BASH_ENV) never reaches another test's shell.
+	env []string
+}
+
+// command builds the bash -c command, with the extra environment if any.
+func (e LocalExecutor) command(ctx context.Context, script string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "bash", "-c", script)
+	if len(e.env) > 0 {
+		cmd.Env = append(os.Environ(), e.env...)
+	}
+	return cmd
+}
 
 // Run implements Executor.
-func (LocalExecutor) Run(ctx context.Context, command string) (string, error) {
-	cmd := exec.CommandContext(ctx, "bash", "-c", command)
+func (e LocalExecutor) Run(ctx context.Context, command string) (string, error) {
+	cmd := e.command(ctx, command)
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
 }
 
 // RunInput implements Executor.
-func (LocalExecutor) RunInput(ctx context.Context, command, input string) (string, error) {
-	cmd := exec.CommandContext(ctx, "bash", "-c", command)
+func (e LocalExecutor) RunInput(ctx context.Context, command, input string) (string, error) {
+	cmd := e.command(ctx, command)
 	cmd.Stdin = strings.NewReader(input)
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
@@ -153,10 +168,10 @@ func (e SSHExecutor) RunInput(ctx context.Context, command, input string) (strin
 	err = s.Wait()
 	out := strings.TrimSpace(buf.String())
 	if err != nil {
-		return out, fmt.Errorf("remote command on %s failed: %w\n%s", e.Target.Dest, err, out)
+		return out, fmt.Errorf("remote command on %s failed: %w\n%s", t.Dest, err, out)
 	}
 	if werr != nil {
-		return out, fmt.Errorf("remote command on %s: send input: %w", e.Target.Dest, werr)
+		return out, fmt.Errorf("remote command on %s: send input: %w", t.Dest, werr)
 	}
 	return out, nil
 }

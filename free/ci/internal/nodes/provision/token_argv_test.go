@@ -172,9 +172,12 @@ func TestInstallRunnerInstance_InheritedXtraceDoesNotLeak(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("BASH_ENV", filepath.Join(root, "bash_env.sh"))
-	ex := LocalExecutor{}
+	// The env goes on the child only: process-wide t.Setenv would put
+	// BASH_ENV and PATH under every other shell started while this runs.
+	ex := LocalExecutor{env: []string{
+		"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"BASH_ENV=" + filepath.Join(root, "bash_env.sh"),
+	}}
 	raw, err := ex.RunInput(context.Background(), renderedScript(t, root), fakeRegToken+"\n")
 	if err != nil || !strings.Contains(raw, "+ set -e") {
 		t.Fatalf("tracing was not on, the test proves nothing: err=%v out=%q", err, raw)

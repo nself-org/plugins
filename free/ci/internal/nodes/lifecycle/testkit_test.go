@@ -60,6 +60,8 @@ type kit struct {
 	uname   string
 	// mutate lets a test change what the fake prober reports.
 	mutate func(*model.Capability)
+	// forced records, per probe, whether the caller asked to skip the probe cache.
+	forced []bool
 }
 
 func hostKey(typ, fp, b64 string) remote.HostKey {
@@ -117,6 +119,9 @@ type fakeProber struct {
 }
 
 func (p fakeProber) Probe(ctx context.Context, id string) (registry.Node, error) {
+	p.k.mu.Lock()
+	p.k.forced = append(p.k.forced, probe.Forced(ctx))
+	p.k.mu.Unlock()
 	n, err := p.r.Get(ctx, id)
 	if err == nil && p.k.mutate != nil {
 		p.k.mutate(&n.Capability)

@@ -27,6 +27,9 @@ import (
 
 const lanPort = "9000"
 
+// rebindHost is a public wildcard DNS name that answers 10.0.0.1, a private address.
+const rebindHost = "10.0.0.1.nip.io"
+
 var (
 	buildOnce sync.Once
 	builtBin  string
@@ -217,13 +220,13 @@ direct() { if nc -w 3 "$1" "$2" </dev/null >/dev/null 2>&1; then echo "REACHED:$
 `
 
 func TestIntegrationRestrictedReachesAllowlistOnlyThroughTheProxy(t *testing.T) {
-	r := newRig(t, Exclusions{}, []string{"10.0.0.1.nip.io"})
+	r := newRig(t, Exclusions{}, []string{rebindHost})
 	lan := lanContainer(t, r.image)
 	port, hostAddrs, accepted := hostFixture(t)
 	script := jobPrelude + `
 echo "GOLANG-CONNECT:$(connect proxy.golang.org:443)"
 echo "GOLANG-GET:$(get proxy.golang.org)"
-echo "REBIND:$(connect 10.0.0.1.nip.io:443)"
+echo "REBIND:$(connect ` + rebindHost + `:443)"
 echo "NOTLISTED:$(connect example.org:443)"
 echo "LAN-VIA-PROXY:$(connect "$LANIP:` + lanPort + `")"
 echo "METADATA-VIA-PROXY:$(connect 169.254.169.254:80)"
@@ -232,7 +235,7 @@ direct "$LANIP" ` + lanPort + `
 direct 169.254.169.254 80
 direct 1.1.1.1 443
 for a in $HOSTADDRS; do direct "$a" "$HOSTPORT"; done
-if nslookup example.com >/dev/null 2>&1; then echo DNS-RESOLVED; else echo DNS-FAILED; fi
+if ! command -v nslookup >/dev/null 2>&1; then echo DNS-NOTOOL; elif nslookup example.com >/dev/null 2>&1; then echo DNS-RESOLVED; else echo DNS-FAILED; fi
 `
 	out, res := r.job(t, "t08-restricted", "restricted", map[string]string{"LANIP": lan, "HOSTADDRS": strings.Join(hostAddrs, " "), "HOSTPORT": port}, script)
 	if res.Err != nil || res.ExitCode != 0 {
@@ -257,9 +260,19 @@ if nslookup example.com >/dev/null 2>&1; then echo DNS-RESOLVED; else echo DNS-F
 	}
 	t.Logf("events: %+v", r.events.dump())
 	// each denial is one structured event, and the resources are gone
-	for _, host := range []string{"10.0.0.1.nip.io", "example.org", lan, "169.254.169.254", "fd00::1"} {
+	for _, host := range []string{rebindHost, "example.org", lan, "169.254.169.254", "fd00::1"} {
 		if n := r.events.count(host); n != 1 {
 			t.Errorf("%d denial events for %s, want 1: %+v", n, host, r.events.dump())
+		}
+	}
+	// The rebinding name must have been refused for its private answer: a 403 and one event also come from a
+	// name that did not resolve (the DNS service is down) or was not allowlisted, which proves nothing here.
+	for _, e := range r.events.dump() {
+		if e.Host != rebindHost {
+			continue
+		}
+		if e.Reason == ReasonResolve || e.Reason == ReasonNotAllowed || !strings.Contains(e.Detail, rebindHost+" -> 10.0.0.1") {
+			t.Errorf("the rebinding name was refused, but not for its private answer (is the DNS service up?): %+v", e)
 		}
 	}
 	assertNoLeftovers(t, "t08-restricted")

@@ -170,6 +170,27 @@ func TestProbeLocalCapacityAndUnknown(t *testing.T) {
 	}
 }
 
+// D-1212: a forced probe skips the 60 s cache without the caller rewriting the stored snapshot.
+func TestForceRefreshSkipsTheCache(t *testing.T) {
+	id := "01J00000000000000000000000"
+	r := setupProbe(t, id)
+	var calls atomic.Int32
+	p := &LocalProber{Registry: r, runner: func(ctx context.Context, command string) (string, error) {
+		return fixtureRunner(ctx, command)
+	}, capacity: func() ciexec.Capacity {
+		calls.Add(1)
+		return ciexec.Capacity{CPUs: 4, MemoryMB: 2048, BatteryPercent: -1}
+	}}
+	for i, c := range []struct {
+		ctx  context.Context
+		want int32
+	}{{context.Background(), 1}, {context.Background(), 1}, {ForceRefresh(context.Background()), 2}, {context.Background(), 2}} {
+		if _, err := p.Probe(c.ctx, id); err != nil || calls.Load() != c.want {
+			t.Fatalf("probe %d: calls %d want %d (err %v)", i, calls.Load(), c.want, err)
+		}
+	}
+}
+
 func TestProbeConcurrentLimits(t *testing.T) {
 	ids := make([]string, 20)
 	for i := range ids {

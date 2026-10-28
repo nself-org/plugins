@@ -138,6 +138,9 @@ func TestInstalledAgentThatDiffersFromThePinIsWarnedAbout(t *testing.T) {
 			if c.warn && (!strings.Contains(r.Warnings[0], "1.5.0") || !strings.Contains(r.Warnings[0], c.pin)) {
 				t.Fatalf("the warning must name both versions: %q", r.Warnings[0])
 			}
+			if c.warn && !strings.Contains(r.Warnings[0], "`nself ci nodes upgrade have`") {
+				t.Fatalf("the warning must offer `nodes upgrade` for the node: %q", r.Warnings[0])
+			}
 		})
 	}
 }

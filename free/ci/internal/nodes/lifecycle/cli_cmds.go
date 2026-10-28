@@ -86,10 +86,16 @@ func cmdShow(ctx context.Context, d *Deps, id string) (result, error) {
 
 func cmdTest(ctx context.Context, d *Deps, id string, fs *flag.FlagSet) (result, error) {
 	r, err := d.Test(ctx, id, fs)
+	res := result{map[string]any{"test": r, "node": ViewOf(r.Node)}, func(w io.Writer) { renderTest(w, r) }}
 	if err != nil {
+		// A failing test hook comes after the probe was stored: print the committed result with the error.
+		var le *Error
+		if errors.As(err, &le) && le.Reason == ReasonCommitted {
+			return res, err
+		}
 		return result{}, err
 	}
-	return result{map[string]any{"test": r, "node": ViewOf(r.Node)}, func(w io.Writer) { renderTest(w, r) }}, nil
+	return res, nil
 }
 
 func cmdState(ctx context.Context, d *Deps, id, verb string, fn func(context.Context, string) (registry.Node, error)) (result, error) {

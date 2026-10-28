@@ -4,18 +4,18 @@ package update
 // Inputs:  a lifecycle.Deps and a node id.
 // Outputs: the DrainFn, EnableFn and ProbeFn the carrier nodes take.
 // Constraints: drain and enable are the lifecycle commands (one registry audit row each); a node that was not online before the
-//          upgrade (draining or in maintenance by the admin's choice) is not enabled again; the probe is a fresh one (the stored
-//          snapshot is aged first, as `nodes test` does) and runs through the node's own prober.
+//          upgrade (draining or in maintenance by the admin's choice) is not enabled again; the probe is a fresh one (probe.ForceRefresh,
+//          as `nodes test` does) and runs through the node's own prober.
 
 import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"time"
 
 	"github.com/nself-org/cli/sdk/go/v2/remote"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/lifecycle"
+	"github.com/nself-org/plugins/free/ci/internal/nodes/probe"
 )
 
 // DrainReason is the registry reason of a node that `nodes upgrade` drained.
@@ -57,20 +57,11 @@ func drainFn(d *lifecycle.Deps, id string) func(context.Context) (func(context.C
 
 func probeFn(d *lifecycle.Deps, id string) func(context.Context) error {
 	return func(ctx context.Context) error {
-		n, err := d.Registry.Get(ctx, id)
-		if err != nil {
-			return err
-		}
-		old := n.Capability
-		old.Verified = model.CapabilityVerified{By: "probe", At: time.Now().UTC().Add(-time.Hour)}
-		if _, _, err = d.Registry.UpdateCapability(ctx, id, old, "probe"); err != nil {
-			return err
-		}
 		ver, err := d.SSHVersion(ctx)
 		if err != nil {
 			return fmt.Errorf("E656: cannot determine the local OpenSSH version: %w", err)
 		}
-		if _, err = d.NewProber(d.Registry, filepath.Join(d.Home, "known_hosts"), ver).Probe(ctx, id); err != nil {
+		if _, err = d.NewProber(d.Registry, filepath.Join(d.Home, "known_hosts"), ver).Probe(probe.ForceRefresh(ctx), id); err != nil {
 			return fmt.Errorf("E656: the capability probe of %s failed: %w", id, err)
 		}
 		return nil
