@@ -358,11 +358,18 @@ nself ci serve admin roles list [--json]
 nself ci serve admin token issue <principal> --role member --project '*' [--ttl 48h] [--self] [--json]
 nself ci serve admin token revoke <id>
 nself ci serve admin token list [--json]
+nself ci serve admin cert issue <principal> [--self] [--ttl 168h] [--json]
 nself ci serve admin audit [--since 24h] [--verify] [--json]
 nself ci serve admin audit seal
 ```
 
 Every grant, token and user certificate records a `subject`: `self` when it was issued with `--self` to the data directory's own operator identity, otherwise the named principal. `self` is reserved: a principal cannot be named `self`, so a remote identity cannot hide among the operator's own. `roles.NonSelfPrincipals` counts the live grants, tokens and user certificates whose subject is not `self` (a certificate nobody marked counts as non-self); the node-mode check reads it.
+
+### Issuing user certificates
+
+On the coordinator host, `NSELF_V15=1 nself ci serve admin cert issue <principal>` issues a user mTLS certificate and prints the certificate chain, private key and root as PEM once. Redirect stdout to a private file (for example, set `umask 077` first); `--json` returns these as `cert_pem`, `key_pem` and `root_pem`. The private key is never stored by the coordinator. The TTL defaults to seven days and must be between one minute and seven days.
+
+Issuance requires admin access and does not grant a role: grant the principal its role separately. Each successful issuance records a certificate subject and a `cert.issue` audit event before returning the credentials. `--self` is accepted only for the operator's own principal and records subject `self`; otherwise the named principal counts toward TEAM mode, including when issuing to yourself without `--self`. Use the coordinator's `NSELF_CI_HOME` for both the store and its CA keys. If subject recording or audit fails, no credential is returned; a certificate already recorded before that failure can remain counted conservatively as non-self.
 
 ### The audit log
 
