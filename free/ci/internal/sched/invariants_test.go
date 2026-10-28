@@ -44,7 +44,9 @@ func checkInvariant(t *testing.T, kind string) {
 		placed := len(got.Placements) > 0
 		switch kind {
 		case "I01", "I02":
-			if placed && len(trust.Admissible(trust.JobFacts{Trust: j.Trust, Network: j.Network, SecretClasses: j.SecretClasses, PersonalOwnRun: j.PersonalOwnRun}, r.Decl, w.Policy.Trust)) > 0 {
+			decl := r.Decl
+			decl.NoLANRoute = noLANRoute(j, w.Network[r.ID].Enforced)
+			if placed && len(trust.Admissible(trust.JobFacts{Trust: j.Trust, Network: j.Network, SecretClasses: j.SecretClasses, PersonalOwnRun: j.PersonalOwnRun}, decl, w.Policy.Trust)) > 0 {
 				return fmt.Errorf("%s admitted rejected trust facts %+v", kind, f)
 			}
 		case "I03":

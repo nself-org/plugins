@@ -16,13 +16,5 @@ func noLANRoute(j Job, enforced []model.NetworkScope) bool {
 	if scope == "" {
 		scope = trust.DefaultNetwork(j.Trust)
 	}
-	if rank := trust.RankNetwork(scope); rank < 0 || rank >= trust.RankNetwork("lan") {
-		return false
-	}
-	for _, e := range enforced {
-		if e == scope {
-			return true
-		}
-	}
-	return false
+	return trust.NoLANRoute(scope, enforced)
 }

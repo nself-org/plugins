@@ -37,15 +37,7 @@ func Enforceable() []model.NetworkScope {
 // NoLANRoute derives the runner fact for a job's scope: true only when the runner proved it enforces that
 // scope (it is in enforced) and the scope itself offers no LAN route. It is never declared by the runner.
 func NoLANRoute(scope model.NetworkScope, enforced []model.NetworkScope) bool {
-	if trust.RankNetwork(scope) < 0 || trust.RankNetwork(scope) >= trust.RankNetwork("lan") {
-		return false
-	}
-	for _, s := range enforced {
-		if s == scope {
-			return true
-		}
-	}
-	return false
+	return trust.NoLANRoute(scope, enforced)
 }
 
 // Apply sets the derived NoLANRoute of d for a job of the given scope. SCHED calls it before Admissible.
