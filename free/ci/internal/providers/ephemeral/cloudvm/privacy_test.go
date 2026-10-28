@@ -56,7 +56,7 @@ func TestPrivacyDefaultKeepsPrivateProjectsOffTheBurstNode(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := sched.DeclarationFromCapability(n.Capability, false, trust.Team)
-	if !d.Hosted || d.Provider != "ephemeral" || d.PrivacyZone != "provider-allowlist" || d.Isolation != "ephemeral-vm" {
+	if !d.Hosted || d.Provider != "hetzner" || d.PrivacyZone != "provider-allowlist" || d.Isolation != "ephemeral-vm" {
 		t.Fatalf("declaration of the burst node: %+v", d)
 	}
 	job := trust.JobFacts{Trust: "owner", Network: "restricted"}
@@ -80,7 +80,7 @@ func TestPrivacyDefaultKeepsPrivateProjectsOffTheBurstNode(t *testing.T) {
 	}
 	// 3. the operator-scope override (team scope): it allows provider-allowlist and its allowlist names the provider
 	// (the real policy engine cannot loosen a private repository's baseline yet: debt D-1382)
-	allow := trust.Scope{Kind: trust.SourceTeam, Values: map[string]json.RawMessage{"trust.privacy_zone": json.RawMessage(`"provider-allowlist"`), "trust.providers": json.RawMessage(`["ephemeral"]`)}}
+	allow := trust.Scope{Kind: trust.SourceTeam, Values: map[string]json.RawMessage{"trust.privacy_zone": json.RawMessage(`"provider-allowlist"`), "trust.providers": json.RawMessage(`["hetzner"]`)}}
 	ok, _, err := reg.Merge("pin", allow)
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +89,7 @@ func TestPrivacyDefaultKeepsPrivateProjectsOffTheBurstNode(t *testing.T) {
 		t.Fatalf("the override must admit the node on privacy: %v", got)
 	}
 	// 4. the zone without the provider on the allowlist is still refused
-	allow.Values["trust.providers"] = json.RawMessage(`["somewhere-else"]`)
+	allow.Values["trust.providers"] = json.RawMessage(`["ephemeral"]`)
 	other, _, err := reg.Merge("pin", allow)
 	if err != nil {
 		t.Fatal(err)
