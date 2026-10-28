@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -387,5 +388,31 @@ func TestTokenHasOneCanonicalString(t *testing.T) {
 		if !segments[name] {
 			t.Fatalf("no %s segment with spare bits was exercised", name)
 		}
+	}
+}
+
+// Processes bootstrapping at once end with one token key (D-1259).
+func TestTokensBootstrapRaceCreatesOneKey(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	var wg sync.WaitGroup
+	errs := make(chan error, 8)
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := r.ca.Tokens(ctx)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if keys, err := r.st.PKITokenKeys(ctx); err != nil || len(keys) != 1 {
+		t.Fatalf("%d token keys, %v; want 1", len(keys), err)
 	}
 }

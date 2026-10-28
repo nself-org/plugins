@@ -145,7 +145,7 @@ func TestCheckNodeKey(t *testing.T) {
 func TestRotateNodeKey(t *testing.T) {
 	ctx := context.Background()
 	r := newRig(t)
-	for _, id := range []string{"", "abc", strings.Repeat("a", 15), strings.Repeat("a", 17), strings.Repeat("a", 64),
+	for _, id := range []string{"", "abc", strings.Repeat("a", 15), strings.Repeat("a", 17), strings.Repeat("a", 63), strings.Repeat("a", 65), strings.Repeat("A", 64),
 		"0123456789ABCDEF", "0123456789abcdeF", "gggggggggggggggg", "0123456789abcde ", "0123456789abcdef\n", "\n0123456789abcdef", "0123456789abcdé"} {
 		wantReason(t, r.ca.RotateNodeKey(ctx, "cli:admin", "n1", id), ReasonNodeKeyChanged)
 	}
@@ -216,5 +216,51 @@ func TestCheckPinnedNodeKeyIsStrict(t *testing.T) {
 	_ = r.st.Close()
 	if err = r.ca.CheckPinnedNodeKey(ctx, "n1", pub); err == nil || ReasonOf(err) != "" {
 		t.Fatalf("closed store: %v", err)
+	}
+}
+
+// A pending pin that names the full SHA-256 binds all 256 bits: a key whose 16-hex id collides is refused,
+// and the matching key completes the pin and the re-pairing swap (D-1258).
+func TestPendingPinFullFingerprint(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	pub, other := edPub(t), edPub(t)
+	if err := r.ca.PinNodeKey(ctx, "nf", other); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ca.RotateNodeKey(ctx, "cli:admin", "nf", NodeKeyFingerprint(pub)); err != nil {
+		t.Fatal(err)
+	}
+	if got := NodeKeyFingerprint(pub); len(got) != 64 || got[:16] != NodeKeyID(pub) {
+		t.Fatalf("fingerprint %q does not extend the key id %q", got, NodeKeyID(pub))
+	}
+	wantReason(t, r.ca.CheckPinnedNodeKey(ctx, "nf", other), ReasonNodeKeyChanged)
+	// the same 16-hex id and a different digest tail does not match
+	if keyIDMatches(NodeKeyID(pub)+strings.Repeat("0", 48), pub) {
+		t.Fatal("a 64-hex id matched on its first 16 characters only")
+	}
+	if err := r.ca.CheckPinnedNodeKey(ctx, "nf", pub); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ca.RepinNodeKey(ctx, "nf", pub); err != nil {
+		t.Fatalf("re-pairing swap against a full-digest pending pin: %v", err)
+	}
+	if id, p, _, _ := r.st.PKINodeKeyGet(ctx, "nf"); id != NodeKeyID(pub) || p != base64.StdEncoding.EncodeToString(pub) {
+		t.Fatalf("pin not completed: %q %q", id, p)
+	}
+	wantReason(t, r.ca.RepinNodeKey(ctx, "nf", other), ReasonNodeKeyChanged)
+}
+
+// A small-order key is never pinned and never passes a hello (D-1259).
+func TestNodeKeyPinRefusesSmallOrderKey(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	identity := make(ed25519.PublicKey, ed25519.PublicKeySize)
+	identity[0] = 1
+	wantReason(t, r.ca.PinNodeKey(ctx, "so1", identity), ReasonBadCSR)
+	wantReason(t, r.ca.CheckNodeKey(ctx, "so2", identity), ReasonBadCSR)
+	wantReason(t, r.ca.RepinNodeKey(ctx, "so3", identity), ReasonBadCSR)
+	if _, _, ok, _ := r.st.PKINodeKeyGet(ctx, "so2"); ok {
+		t.Fatal("a small-order key was pinned")
 	}
 }

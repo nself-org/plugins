@@ -68,7 +68,10 @@ func SaveCredential(state string, r JoinResult, now time.Time) error {
 	if err := os.MkdirAll(dir(state), 0o700); err != nil {
 		return err
 	}
-	if err := os.Chmod(dir(state), 0o700); err != nil { // MkdirAll leaves an existing directory's mode alone
+	if err := checkStateOwner(state); err != nil {
+		return err
+	}
+	if err := securePKIDir(dir(state)); err != nil {
 		return err
 	}
 	kek, err := pki.LoadKEK(state, true)

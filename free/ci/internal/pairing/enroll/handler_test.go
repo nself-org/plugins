@@ -241,3 +241,15 @@ func TestEnrollListenCloseIsIdempotent(t *testing.T) {
 		t.Fatal("a bad address was accepted")
 	}
 }
+
+// An idle keep-alive connection must not outlive the listener's limits (D-1258).
+func TestEnrollListenerSetsIdleLimits(t *testing.T) {
+	srv, err := Listen("127.0.0.1:0", testServerTLS(t), http.NotFoundHandler())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	if srv.http.ReadHeaderTimeout <= 0 || srv.http.IdleTimeout <= 0 {
+		t.Fatalf("ReadHeaderTimeout %v, IdleTimeout %v: both must be set", srv.http.ReadHeaderTimeout, srv.http.IdleTimeout)
+	}
+}
