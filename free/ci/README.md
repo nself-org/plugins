@@ -117,15 +117,15 @@ The `nself-ci` binary takes the exact argv of core `nself ci` (P7-CANON-09), so 
 |---|---|
 | `nself-ci [flags] [repo-root]` | The gate. Flags: `--check`, `--no-status`, `--no-gitleaks`, `--sha`, `--owner`, `--repo`, `-v`/`--verbose`, `--filesystem` (plus the existing `--env`, `--gateway`). Flags and the repo-root may be mixed. |
 | `nself-ci build [flags] [dir]` | Local signed Android artifact build (see "Artifact builds"). `--artifact` defaults to `android`. |
-| `nself-ci forgejo [--url U] [--runner R]` | Forgejo server and runner health for the ops profile (default URL `http://localhost:3844`). Always exits 0, as in core. |
+| `nself-ci forgejo [--url U]` | Forgejo server health for the ops profile (default URL `http://localhost:3844`). Always exits 0, as in core. |
 | `nself-ci serve [flags]` | Webhook listener daemon on port 3845 (HMAC-verified, Docker-sandboxed jobs, fail-closed defaults). Each job runs the gate by exec of this same executable. |
 | `nself-ci run [flags] [search-root]` | Pipeline over `.ci.yaml` manifests (unchanged). |
 
-`--help` of `ci`, `build`, `forgejo` and `serve` prints the text core prints; it is captured from a built core binary by `scripts/capture-core-surface.sh` into `testdata/core-surface/` and embedded (`internal/surface`). `ci eval` is not part of this binary (P7-CI-44/45).
+`--help` of `ci`, `build`, `forgejo` and `serve` uses the core text captured by `scripts/capture-core-surface.sh` into `testdata/core-surface/` and embedded (`internal/surface`). The capture normalizes Forgejo help to remove the in-stack runner retired by P7-TRUST-21. `ci eval` is not part of this binary (P7-CI-44/45).
 
 Core framing: with `--check` the binary prints core's section header first and `Error: gate failed` on a failing gate, so `nself-ci --no-status --check REPO` matches `nself ci --no-status --check REPO` byte for byte. The argv that deployed 1.4.x CLIs send (`--no-status` and friends, never `--check`) keeps its exact output, because those CLIs print the header themselves.
 
-Parity proof: `bash scripts/parity-with-core.sh` (needs `$NSELF`, `$TMPDIR`, `gitleaks`) builds core `nself` from cli origin/main and the plugins origin/main and head `nself-ci`, then diffs stdout, stderr and exit codes for core-vs-head and for deployed-1.4.x (base cli with each binary). `--self-test` proves the comparator flags a planted difference.
+Parity proof: `bash scripts/parity-with-core.sh` (needs `$NSELF`, `$TMPDIR`, `gitleaks`) builds core `nself` from cli origin/main and the plugins origin/main and head `nself-ci`, then diffs stdout, stderr and exit codes for core-vs-head and for deployed-1.4.x (base cli with each binary). `--self-test` proves the comparator flags a planted difference. Forgejo is excluded from frozen-core parity: its server-only health check and removal of `--runner` are covered by the `internal/forgejo` and `cmd` tests.
 
 ## Experimental placement-plan v1 cost totals
 

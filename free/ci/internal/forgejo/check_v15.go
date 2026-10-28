@@ -2,7 +2,7 @@ package forgejo
 
 // Purpose: the v1.5 Forgejo check behind `nself ci forgejo` (P7-HOST-12, Epic D14): the server health
 // endpoint and the optional admin-authenticated API probe, with the base URL taken from the operator
-// policy key providers.forgejo.url. Unlike the v1.4 command (forgejo.go, frozen) it has no runner
+// policy key providers.forgejo.url. Both command versions omit the runner
 // container check: P7-TRUST-21 removed that runner.
 // Inputs:  CheckConfig (URL, optional admin user and password, HTTP client); the policy key.
 // Outputs: Result, and the status lines on a writer; Deprecation, the one line the alias prints.

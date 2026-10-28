@@ -3,9 +3,8 @@
 # Purpose: two legs, both diffing stdout, stderr and exit code (binary and temp paths normalised):
 #   leg 1  core `nself ci ARGS` (cli origin/main build; its proxy runs the plugins origin/main binary
 #          found first on PATH) versus the head `nself-ci ARGS` with the same core argv: --help of ci,
-#          build, forgejo, serve; the gate on a clean and a planted-secret fixture with --no-status
-#          --check (and --no-gitleaks, --verbose); forgejo with a recording stub docker (unreachable and
-#          healthy server); serve refusing to start without a secret.
+#          build, serve; the gate on a clean and a planted-secret fixture with --no-status
+#          --check (and --no-gitleaks, --verbose); serve refusing to start without a secret.
 #   leg 2  deployed 1.4.x: the base cli with the plugins origin/main nself-ci first on PATH versus the
 #          same base cli with the head nself-ci first on PATH, across the buildCIArgs flag matrix (each
 #          of --check, --no-gitleaks, --no-status, --sha, --owner, --repo, -v, --filesystem, a repo-root
@@ -40,9 +39,7 @@ PLUG_LOCK=${PARITY_PLUGINS_LOCK:-/tmp/nself-plugins-compile.lock}
 
 WORK=$(mktemp -d "$TMPDIR/parity.XXXXXX")
 WORK=$(cd "$WORK" && pwd)
-SRV_PID=
 cleanup() {
-  [ -n "$SRV_PID" ] && kill "$SRV_PID" 2>/dev/null || true
   git -C "$ROOT" worktree remove --force "$WORK/plugins-base" >/dev/null 2>&1 || true
   if [ -n "${NSELF:-}" ] && [ -d "$NSELF/cli" ]; then git -C "$NSELF/cli" worktree remove --force "$WORK/cli" >/dev/null 2>&1 || true; fi
   rm -rf "$WORK"
@@ -88,32 +85,13 @@ printf 'package main\n\nvar tok = "%s%s"\n' "ghp_" "R8sT1uV2wX3yZ4aB5cD6eF7gH8iJ
 for r in clean secret; do ( cd "$WORK/fx/$r" && git init -q . && git add -A && git -c user.email=p@x -c user.name=p commit -qm init ); done
 command -v gitleaks >/dev/null 2>&1 || die "gitleaks is required (the fixtures exercise the secret scan)"
 
-# stub docker: records argv, answers inspect with "running" (a missing stub would hide the docker path)
-mkdir -p "$WORK/stub"
-cat > "$WORK/stub/docker" <<STUB
-#!/bin/sh
-echo "docker \$*" >> "$WORK/docker.log"
-case " \${STUB_FAIL:-} " in *" \$4 "*) exit 1;; esac
-[ "\$1" = inspect ] && echo running
-exit 0
-STUB
-chmod +x "$WORK/stub/docker"
-# healthy Forgejo: a static /-/health document
-mkdir -p "$WORK/srv/-"; printf '{"healthy": true}\n' > "$WORK/srv/-/health"
-PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
-( cd "$WORK/srv" && exec python3 -m http.server "$PORT" --bind 127.0.0.1 >/dev/null 2>&1 ) & SRV_PID=$!
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-  python3 -c "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:$PORT/-/health', timeout=1)" 2>/dev/null && break; sleep 0.25
-done
-
 # ---- comparator ---------------------------------------------------------------------------------
 norm() { # normalise volatile text; reads stdin
   sed -E \
     -e "s#$WORK#<W>#g" \
     -e 's/\([0-9][0-9a-zµ.]*\)/(T)/g' \
     -e 's/[0-9]{1,2}:[0-9]{2}(AM|PM)/TIME/g' \
-    -e 's/in [0-9.]+(µs|ms|s)/in DUR/g' \
-    -e "s#127\\.0\\.0\\.1:$PORT#127.0.0.1:PORT#g"
+    -e 's/in [0-9.]+(µs|ms|s)/in DUR/g'
 }
 CASES=0; FAILS=0
 # capture <name> <dir> <env-PATH-prefix> <cwd> cmd args...: stdout, stderr, rc into dir
@@ -176,7 +154,6 @@ c1() { # c1 <label> <nonempty> <core ci args...> -- <head args...> : split on li
 }
 c1 "ci --help" 1 --help -- --help
 c1 "ci build --help" 1 build --help -- build --help
-c1 "ci forgejo --help" 1 forgejo --help -- forgejo --help
 c1 "ci serve --help" 1 serve --help -- serve --help
 for fx in clean secret; do
   FX=$WORK/fx/$fx; WANT_RC=0; [ "$fx" = secret ] && WANT_RC=1
@@ -190,16 +167,8 @@ WANT_RC=0
 # gate from the fixture directory with no repo-root argument
 compare leg1 "gate clean cwd" 1 "$(spec "$BASEB" "$FXC" "$CORE" ci --check)" "$(spec "$HEADB" "$FXC" "$HEADB/nself-ci" --check)"
 WANT_RC=0
-# forgejo: recording stub docker, unreachable server and a healthy server
-compare leg1 "forgejo unreachable stub" 1 "$(spec "$STUB" "$WORK" "$CORE" ci forgejo --url http://127.0.0.1:1 --runner rn)" "$(spec "$STUB" "$WORK" "$HEADB/nself-ci" forgejo --url http://127.0.0.1:1 --runner rn)"
-compare leg1 "forgejo healthy stub" 1 "$(spec "$STUB" "$WORK" "$CORE" ci forgejo --url "http://127.0.0.1:$PORT")" "$(spec "$STUB" "$WORK" "$HEADB/nself-ci" forgejo --url "http://127.0.0.1:$PORT")"
-compare leg1 "forgejo healthy named runner" 1 "$(spec "$STUB" "$WORK" "$CORE" ci forgejo --url "http://127.0.0.1:$PORT/" --runner my_runner)" "$(spec "$STUB" "$WORK" "$HEADB/nself-ci" forgejo --url "http://127.0.0.1:$PORT/" --runner my_runner)"
-# the first runner-name candidate is missing, then both are: the probe order must match core
-export STUB_FAIL=nself_forgejo_runner
-compare leg1 "forgejo second candidate" 1 "$(spec "$STUB" "$WORK" "$CORE" ci forgejo --url http://127.0.0.1:1)" "$(spec "$STUB" "$WORK" "$HEADB/nself-ci" forgejo --url http://127.0.0.1:1)"
-export STUB_FAIL="nself_forgejo_runner app_forgejo_runner"
-compare leg1 "forgejo no candidate" 1 "$(spec "$STUB" "$WORK" "$CORE" ci forgejo --url http://127.0.0.1:1)" "$(spec "$STUB" "$WORK" "$HEADB/nself-ci" forgejo --url http://127.0.0.1:1)"
-unset STUB_FAIL
+# Forgejo intentionally diverges from frozen core after P7-TRUST-21: server
+# health only, no --runner flag. Covered by internal/forgejo and cmd tests.
 # serve refuses to start without a secret (fail-closed default)
 WANT_RC=1
 compare leg1 "serve refuses without secret" 0 "$(spec "$BASEB" "$WORK" "$CORE" ci serve --addr 127.0.0.1:0 --workdir "$WORK/wd")" "$(spec "$HEADB" "$WORK" "$HEADB/nself-ci" serve --addr 127.0.0.1:0 --workdir "$WORK/wd")"

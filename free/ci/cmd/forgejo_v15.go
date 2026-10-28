@@ -1,6 +1,6 @@
 package main
 
-// Purpose: `nself ci forgejo` in v1.5 (P7-HOST-12, Epic D14): the V15-only entry beside the frozen v1.4
+// Purpose: `nself ci forgejo` in v1.5 (P7-HOST-12, Epic D14): the V15-only entry beside the v1.4
 // one (cmd/forgejo.go). It prints one deprecation line per process, then runs the Forgejo check of
 // internal/forgejo (server health and the optional admin API; no runner container, P7-TRUST-21
 // removed that runner). Removal is v1.6 (D-0119); `nself ci doctor --providers` is the way forward.

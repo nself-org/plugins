@@ -50,47 +50,30 @@ func stubDocker(t *testing.T, state string, ok bool) string {
 	return log
 }
 
-// TestHealthyStack: server healthy and runner running prints the success line.
+// TestHealthyStack needs only the server; Docker must never be invoked.
 func TestHealthyStack(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/-/health" {
-			_, _ = w.Write([]byte(`{"healthy": true}`))
-			return
-		}
-		http.NotFound(w, r)
+		_, _ = w.Write([]byte(`{"healthy": true}`))
 	}))
 	defer srv.Close()
-	log := stubDocker(t, "running", true)
-	out, errOut := run(t, Config{URL: srv.URL + "/", Runner: "my_runner"})
-	for _, want := range []string{"Forgejo CI stack (ops profile)", "✓ Forgejo server   " + srv.URL + "   healthy", "container=my_runner   state=running", "Forgejo CI stack is healthy."} {
-		if !strings.Contains(out, want) {
-			t.Errorf("stdout lacks %q:\n%s", want, out)
-		}
+	log := stubDocker(t, "", false)
+	out, errOut := run(t, Config{URL: srv.URL + "/"})
+	if !strings.Contains(out, "Forgejo CI stack is healthy.") || strings.Contains(out, "runner") || errOut != "" {
+		t.Fatalf("healthy server without runner: stdout=%q stderr=%q", out, errOut)
 	}
-	if errOut != "" {
-		t.Errorf("stderr = %q", errOut)
-	}
-	b, _ := os.ReadFile(log)
-	if !strings.Contains(string(b), "inspect --format {{.State.Status}} my_runner") {
-		t.Errorf("docker argv = %q", b)
+	if _, err := os.Stat(log); !os.IsNotExist(err) {
+		t.Fatalf("Docker was invoked: %v", err)
 	}
 }
 
-// TestUnreachableAndCandidates: no server, docker finds none; both warnings print.
-func TestUnreachableAndCandidates(t *testing.T) {
+func TestUnreachable(t *testing.T) {
 	log := stubDocker(t, "", false)
 	out, errOut := run(t, Config{URL: "http://127.0.0.1:1"})
-	if !strings.Contains(out, "✗ Forgejo server   http://127.0.0.1:1   unreachable") ||
-		!strings.Contains(out, "state=not found (docker inspect failed — is Docker running?)") {
-		t.Errorf("stdout:\n%s", out)
+	if !strings.Contains(out, "unreachable") || !strings.Contains(errOut, "Forgejo server unreachable") || strings.Contains(out+errOut, "runner") {
+		t.Fatalf("unreachable server: stdout=%q stderr=%q", out, errOut)
 	}
-	if !strings.Contains(errOut, "Forgejo server unreachable. Is the ops profile running?") ||
-		!strings.Contains(errOut, "Forgejo runner is not running. Check: docker logs") {
-		t.Errorf("stderr:\n%s", errOut)
-	}
-	b, _ := os.ReadFile(log)
-	if !strings.Contains(string(b), "nself_forgejo_runner") || !strings.Contains(string(b), "app_forgejo_runner") {
-		t.Errorf("both candidates must be probed, got %q", b)
+	if _, err := os.Stat(log); !os.IsNotExist(err) {
+		t.Fatalf("Docker was invoked: %v", err)
 	}
 }
 
@@ -111,12 +94,12 @@ func TestAPIProbe(t *testing.T) {
 	stubDocker(t, "running", true)
 	t.Setenv("NSELF_FORGEJO_ADMIN_USER", "adm")
 	t.Setenv("NSELF_FORGEJO_ADMIN_PASSWORD", "pw")
-	out, _ := run(t, Config{URL: srv.URL, Runner: "r"})
+	out, _ := run(t, Config{URL: srv.URL})
 	if !strings.Contains(out, "API reachable (admin authenticated)") {
 		t.Errorf("stdout:\n%s", out)
 	}
 	t.Setenv("NSELF_FORGEJO_ADMIN_PASSWORD", "wrong")
-	out, _ = run(t, Config{URL: srv.URL, Runner: "r"})
+	out, _ = run(t, Config{URL: srv.URL})
 	if !strings.Contains(out, "API returned HTTP 401") {
 		t.Errorf("stdout:\n%s", out)
 	}

@@ -7,6 +7,7 @@
 # Outputs: testdata/core-surface/{ci,ci-build,ci-forgejo,ci-serve}.help.txt, help-json-ci.json (the
 #          `help --json ci` subtree), and byte copies of the four help files in internal/surface/help/
 #          (embedded by the binary; a unit test fails if the two copies drift).
+#          Forgejo is normalized after capture: P7-TRUST-21 removed its in-stack runner.
 # Exit:    0 captured, 1 a capture was empty or the tool failed, 2 usage.
 set -euo pipefail
 bin=${1:-}
@@ -34,4 +35,5 @@ if not keep:
 json.dump({"schema_version": d["schema_version"], "commands": keep}, sys.stdout, indent=2, sort_keys=True)
 print()
 ' > "$td/help-json-ci.json"
+python3 "$here/scripts/normalize-forgejo-surface.py"
 echo "captured: $(ls "$td" | tr '\n' ' ')"

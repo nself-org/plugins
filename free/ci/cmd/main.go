@@ -13,7 +13,7 @@
 //	nself-ci [flags] [repo-root]              — single-repo gate
 //	nself-ci run [flags] [search-root]        — pipeline: discover .ci.yaml + run stages
 //	nself-ci build --artifact android [dir]   — local signed-APK build + gh release upload
-//	nself-ci forgejo [--url U] [--runner R]   — Forgejo server + runner health
+//	nself-ci forgejo [--url U]                — Forgejo server health
 //	nself-ci serve [flags]                    — webhook listener daemon (port 3845)
 //	nself ci run --env local                  — via nself CLI proxy
 //

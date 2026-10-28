@@ -565,21 +565,6 @@
       "exit_codes": {},
       "flags": [
         {
-          "default": "",
-          "deprecated": null,
-          "env": null,
-          "hidden": false,
-          "json": null,
-          "name": "runner",
-          "output": null,
-          "persistent": false,
-          "required": false,
-          "shorthand": null,
-          "side_effect": null,
-          "type": "string",
-          "usage": "Runner container name (default: <PROJECT>_forgejo_runner)"
-        },
-        {
           "default": "http://localhost:3844",
           "deprecated": null,
           "env": null,
@@ -604,7 +589,7 @@
       "path": "nself ci forgejo",
       "runnable": true,
       "side_effect": "read",
-      "summary": "Show Forgejo server + runner health (ops profile)",
+      "summary": "Show Forgejo server health (ops profile)",
       "target": null
     },
     {
