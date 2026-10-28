@@ -148,3 +148,18 @@ func TestDockerfileNoUnverifiedDownloads(t *testing.T) {
 		t.Error("fetch-verified.sh does not verify the checksum under set -eu")
 	}
 }
+
+// TestDockerfileGovulncheckCarriesItsVersion (D-0996): a build from the unpacked module zip prints
+// govulncheck@v0.0.0, so the image installs the module at its pinned version from a file GOPROXY.
+func TestDockerfileGovulncheckCarriesItsVersion(t *testing.T) {
+	d := readDockerfile(t)
+	if !strings.Contains(d, `go install "golang.org/x/vuln/cmd/govulncheck@v$GOVULNCHECK_VERSION"`) {
+		t.Error("govulncheck is not installed at its pinned module version")
+	}
+	if !strings.Contains(d, "GOPROXY=file:///tmp/goproxy,") {
+		t.Error("govulncheck is not installed from the verified zip served by a file GOPROXY")
+	}
+	if strings.Contains(d, "go build") {
+		t.Error("the image builds a tool from a source tree; the binary would report v0.0.0")
+	}
+}
