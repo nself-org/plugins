@@ -1,11 +1,11 @@
 package main
 
 // Purpose: the per-run scheduling flags `--prefer <preset>`, `--runner <id>`
-// and `--max-queue <duration>` on bare `nself ci` and `nself ci plan`
+// and `--max-queue <duration>` on bare `nself ci`, `nself ci plan` and `nself ci explain`
 // (P7-SCHED-02, Epic D10).
-// Inputs: argv, through the two package-level flag sets. Outputs: the
+// Inputs: argv, through the package-level flag sets. Outputs: the
 // per-run policy values the flags stand for (schedRevisionValues).
-// Constraints: registered from init() on bareFlags and planFlags, so cmd/v15.go
+// Constraints: registered from init() on bareFlags, planFlags and explainFlags, so cmd/v15.go
 // and cmd/plan.go stay unedited; a value is checked while the flags parse
 // (an unknown preset or a bad duration is E691 and exit 2), before any run
 // starts; this file loads and stores no policy.
@@ -18,29 +18,29 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 )
 
-// schedFlags holds the flag values of the current invocation. The two flag
+// schedFlags holds the flag values of the current invocation. The flag
 // sets never parse in one invocation, so they share it. A process runs one
 // invocation; tests reset it.
 var schedFlags schedpolicy.Flags
 
 func init() {
 	RegisterOptionsHook(schedOptions)
-	for _, fs := range []*flag.FlagSet{bareFlags, planFlags} {
-		fs.Func("prefer", "scheduling preset for this run: "+presetList()+" (local = prefer-local); bare runs only", func(v string) error {
+	for _, fs := range []*flag.FlagSet{bareFlags, planFlags, explainFlags} {
+		fs.Func("prefer", "scheduling preset for this run: "+presetList()+" (local = prefer-local)", func(v string) error {
 			if _, err := schedpolicy.PresetFromFlag(v); err != nil {
 				return err
 			}
 			schedFlags.Prefer = v
 			return nil
 		})
-		fs.Func("runner", "place every job on this runner id (an exceptional override); bare runs only", func(v string) error {
+		fs.Func("runner", "place every job on this runner id (an exceptional override)", func(v string) error {
 			if v == "" {
 				return schedpolicy.CheckRunner(v)
 			}
 			schedFlags.Runner = v
 			return nil
 		})
-		fs.Func("max-queue", "longest a job may wait for a runner, a duration such as 10m (an interactive run defaults to 10m); bare runs only", func(v string) error {
+		fs.Func("max-queue", "longest a job may wait for a runner, a duration such as 10m (an interactive run defaults to 10m)", func(v string) error {
 			if _, err := schedpolicy.ParseDurationMs(schedpolicy.KeyMaxQueue, v); err != nil {
 				return err
 			}
@@ -83,14 +83,6 @@ func schedOptions(o *RunOptions) error {
 	vals, err := schedRevisionValues()
 	o.PolicyRun = vals
 	return err
-}
-
-// foregroundTrigger reports whether a run with this trigger is a person
-// waiting at a terminal: the default (no trigger), local and manual runs. It
-// is a heuristic: --trigger says which pipelines to plan, not who waits; the
-// `ci plan` still uses it (cmd/plan_placement.go); a real run uses interactiveRun.
-func foregroundTrigger(trigger string) bool {
-	return trigger == "" || trigger == "local" || trigger == "manual"
 }
 
 // schedRevisionValues returns the per-run policy values of the parsed flags

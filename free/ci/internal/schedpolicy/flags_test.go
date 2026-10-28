@@ -21,8 +21,7 @@ func TestSchedPolicyFlagValues(t *testing.T) {
 		want map[string]string
 	}{
 		{"nothing, queued", Flags{}, nil},
-		{"foreground default", Flags{Foreground: true}, map[string]string{KeyMaxQueue: `"10m0s"`}},
-		{"explicit queue wins", Flags{Foreground: true, MaxQueue: "2m"}, map[string]string{KeyMaxQueue: `"2m"`}},
+		{"explicit queue wins", Flags{MaxQueue: "2m"}, map[string]string{KeyMaxQueue: `"2m"`}},
 		{"queued run with a queue cap", Flags{MaxQueue: "90s"}, map[string]string{KeyMaxQueue: `"90s"`}},
 		{"short preset name", Flags{Prefer: "local"}, map[string]string{KeyPreset: `"prefer-local"`}},
 		{"full preset name", Flags{Prefer: "cheapest", Runner: "ms5"}, map[string]string{KeyPreset: `"cheapest"`, KeyRunner: `"ms5"`}},
@@ -53,45 +52,6 @@ func TestSchedPolicyFlagValues(t *testing.T) {
 	}
 	if CheckRunner("") == nil || CheckRunner("ms5") != nil {
 		t.Error("CheckRunner")
-	}
-}
-
-// TestSchedPolicyForegroundQueueDefault: through the merge and Placement, a
-// foreground run without --max-queue waits at most 10 minutes; a queued run
-// has no cap; an operator cap below 10 minutes stays.
-func TestSchedPolicyForegroundQueueDefault(t *testing.T) {
-	run := func(f Flags, operator ...trust.Scope) int64 {
-		t.Helper()
-		vals, err := f.Values()
-		if err != nil {
-			t.Fatal(err)
-		}
-		scopes := append(operator, trust.Scope{Kind: trust.SourceRevision, Values: vals})
-		eff, err := merge(t, scopes...)
-		if err != nil {
-			t.Fatal(err)
-		}
-		p, err := Placement(&eff)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return p.Overrides.MaxQueueMs
-	}
-	if got := run(Flags{Foreground: true}); got != 600000 {
-		t.Errorf("foreground default %d ms", got)
-	}
-	if got := run(Flags{}); got != 0 {
-		t.Errorf("queued run capped at %d ms", got)
-	}
-	if got := run(Flags{Foreground: true, MaxQueue: "2m"}); got != 120000 {
-		t.Errorf("--max-queue 2m gave %d ms", got)
-	}
-	if got := run(Flags{Foreground: true, MaxQueue: "3h"}); got != 10800000 {
-		t.Errorf("a longer --max-queue gave %d ms", got)
-	}
-	cap5 := scope(trust.SourceProject, map[string]string{KeyMaxQueue: `"5m"`})
-	if got := run(Flags{Foreground: true}, cap5); got != 300000 {
-		t.Errorf("the revision loosened the operator cap to %d ms", got)
 	}
 }
 

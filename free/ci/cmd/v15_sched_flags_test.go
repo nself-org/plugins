@@ -30,7 +30,7 @@ func parseOn(fs *flag.FlagSet, args ...string) error {
 }
 
 func TestSchedFlagsRegistered(t *testing.T) {
-	for name, fs := range map[string]*flag.FlagSet{"bare": bareFlags, "plan": planFlags} {
+	for name, fs := range map[string]*flag.FlagSet{"bare": bareFlags, "plan": planFlags, "explain": explainFlags} {
 		for _, f := range []string{"prefer", "runner", "max-queue"} {
 			if fs.Lookup(f) == nil {
 				t.Errorf("%s flag set has no --%s", name, f)
@@ -40,7 +40,7 @@ func TestSchedFlagsRegistered(t *testing.T) {
 }
 
 func TestSchedFlagsParse(t *testing.T) {
-	for name, fs := range map[string]*flag.FlagSet{"bare": bareFlags, "plan": planFlags} {
+	for name, fs := range map[string]*flag.FlagSet{"bare": bareFlags, "plan": planFlags, "explain": explainFlags} {
 		resetSchedFlags(t)
 		if err := parseOn(fs, "--prefer", "local", "--runner", "ms5", "--max-queue", "2m"); err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -59,7 +59,7 @@ func TestSchedFlagsRefusals(t *testing.T) {
 	for _, args := range [][]string{
 		{"--prefer", "warp"}, {"--prefer", ""}, {"--max-queue", "soon"}, {"--max-queue", "0s"}, {"--max-queue", "-1m"}, {"--runner", ""},
 	} {
-		for name, fs := range map[string]*flag.FlagSet{"bare": bareFlags, "plan": planFlags} {
+		for name, fs := range map[string]*flag.FlagSet{"bare": bareFlags, "plan": planFlags, "explain": explainFlags} {
 			resetSchedFlags(t)
 			err := parseOn(fs, args...)
 			if err == nil || !strings.Contains(err.Error(), "E691") {

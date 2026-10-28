@@ -1,9 +1,8 @@
 package schedpolicy
 
 // Purpose: the per-run flags `--prefer`, `--runner` and `--max-queue` as
-// revision-scope policy values (Epic D10; X17, R-DX-06: a foreground run
-// waits at most 10 minutes for a runner unless told otherwise).
-// Inputs: the raw flag strings and whether the run is in the foreground.
+// revision-scope policy values (Epic D10).
+// Inputs: the raw flag strings.
 // Outputs: a flat key to raw JSON map, the shape trust.Scope.Values takes.
 // Constraints: pure; every value passes the key's own decoder, so an unknown
 // preset or a bad duration is E691 before a run starts; trust's tighten rules
@@ -12,18 +11,13 @@ package schedpolicy
 import (
 	"encoding/json"
 	"slices"
-	"time"
 )
-
-// ForegroundMaxQueue is the queue wait of a foreground run without --max-queue.
-const ForegroundMaxQueue = 10 * time.Minute
 
 // Flags are the raw per-run scheduling flags; empty means not given.
 type Flags struct {
-	Prefer     string // --prefer: a preset name, or its short form ("local" for "prefer-local")
-	Runner     string // --runner
-	MaxQueue   string // --max-queue: a Go duration
-	Foreground bool   // a person at a terminal waits; a queued run does not
+	Prefer   string // --prefer: a preset name, or its short form ("local" for "prefer-local")
+	Runner   string // --runner
+	MaxQueue string // --max-queue: a Go duration
 }
 
 // PresetFromFlag maps a --prefer value to a preset name: the name itself, or
@@ -53,8 +47,7 @@ func (f Flags) Validate() error {
 	return err
 }
 
-// Values returns the revision-scope values the flags stand for. A foreground
-// run without --max-queue gets ForegroundMaxQueue.
+// Values returns the revision-scope values the flags stand for.
 func (f Flags) Values() (map[string]json.RawMessage, error) {
 	out := map[string]json.RawMessage{}
 	put := func(key string, v any) {
@@ -72,9 +65,6 @@ func (f Flags) Values() (map[string]json.RawMessage, error) {
 		put(KeyRunner, f.Runner)
 	}
 	queue := f.MaxQueue
-	if queue == "" && f.Foreground {
-		queue = ForegroundMaxQueue.String()
-	}
 	if queue != "" {
 		if _, err := ParseDurationMs(KeyMaxQueue, queue); err != nil {
 			return nil, err
