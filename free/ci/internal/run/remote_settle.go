@@ -24,6 +24,9 @@ var nodeFaults = map[string]bool{"transport.ssh_session_lost": true, "transport.
 // nodeFault says whether a carrier error is the node's doing. The reason is the second word of an ssh
 // transport error ("E656 transport.ssh_session_lost: ..."), a position the message text cannot reach.
 func nodeFault(err error) bool {
+	if n, ok := reportedByNode(err); ok {
+		return n.infra
+	}
 	f := strings.Fields(err.Error())
 	return len(f) >= 2 && strings.HasPrefix(f[0], "E65") && nodeFaults[strings.TrimSuffix(f[1], ":")]
 }
