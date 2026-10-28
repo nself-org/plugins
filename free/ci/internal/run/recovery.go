@@ -93,7 +93,7 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 			rep.Expired++
 		}
 	}
-	sweeper := ciexec.Executor{Stale: staleChecker{st, boot}}
+	sweeper := ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Stale: staleChecker{st, boot}}
 	// Sweep reads NSELF_CI_HOME; never sweep a home other than the run's own
 	// (the executor sweeps the right one when the next job starts).
 	if home != "" && filepath.Clean(home) != filepath.Clean(os.Getenv("NSELF_CI_HOME")) {

@@ -27,7 +27,7 @@ func runCapture(t *testing.T, e *Executor, s JobSpec) (AttemptResult, string) {
 func TestStdinReachesAProcessJobOnly(t *testing.T) {
 	script := `read line; printf 'got=%s\n' "$line"; printf 'argv=%s env=%s\n' "$*" "$(env | grep -c STDIN-SECRET-1 || true)"`
 	spec := JobSpec{AttemptID: "stdin-ok", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"sh", "-c", script, "job"}, Stdin: strings.NewReader("STDIN-SECRET-1\n")}
-	res, out := runCapture(t, &Executor{}, spec)
+	res, out := runCapture(t, &Executor{Isolation: BaselineIsolator{}}, spec)
 	if res.Err != nil || res.ExitCode != 0 {
 		t.Fatalf("run %+v", res)
 	}
@@ -35,7 +35,7 @@ func TestStdinReachesAProcessJobOnly(t *testing.T) {
 		t.Fatalf("stdin not delivered, or leaked to argv/env:\n%s", out)
 	}
 	spec = JobSpec{AttemptID: "stdin-none", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"sh", "-c", `read line; echo "got=[$line]"`}}
-	if _, out = runCapture(t, &Executor{}, spec); !strings.Contains(out, "got=[]") {
+	if _, out = runCapture(t, &Executor{Isolation: BaselineIsolator{}}, spec); !strings.Contains(out, "got=[]") {
 		t.Fatalf("a job without Stdin must read EOF:\n%s", out)
 	}
 }
@@ -47,7 +47,7 @@ func TestMasksRedactTheValueEvenSplitAcrossChunks(t *testing.T) {
 	script := `printf 'a ` + value + ` b\n'; printf 'JITCONFIG-syn'; sleep .2; printf 'thetic-0123456789 tail'`
 	spec := JobSpec{AttemptID: "mask-split", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"sh", "-c", script}, Masks: []string{value}}
 	spec.Job = model.Job{}
-	res, out := runCapture(t, &Executor{NewRedactor: NewOutputRedactor}, spec)
+	res, out := runCapture(t, &Executor{Isolation: BaselineIsolator{}, NewRedactor: NewOutputRedactor}, spec)
 	if res.Err != nil || res.ExitCode != 0 {
 		t.Fatalf("run %+v", res)
 	}
@@ -64,7 +64,7 @@ func TestPlannedContainerForwardsStdin(t *testing.T) {
 	spec := plannedSpec(t, "plan-stdin", hardPlanner{})
 	spec.Job.Env = map[string]string{"FIXTURE_TOKEN": "synthetic-env-1"}
 	spec.Stdin = strings.NewReader("STDIN-SECRET-1\n")
-	if res := (&Executor{}).Run(context.Background(), spec); res.Err != nil || res.ExitCode != 0 {
+	if res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), spec); res.Err != nil || res.ExitCode != 0 {
 		t.Fatalf("run %+v", res)
 	}
 	if stdin() != "STDIN-SECRET-1\n" {
@@ -115,7 +115,7 @@ func TestBaselineContainerForwardsStdin(t *testing.T) {
 	calls, stdin := fakeRuntimeStdin(t, "ok\n", "0")
 	spec := JobSpec{AttemptID: "base-stdin", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"true"},
 		Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}}, Stdin: strings.NewReader("STDIN-SECRET-1\n")}
-	if res := (&Executor{}).Run(context.Background(), spec); res.Err != nil {
+	if res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), spec); res.Err != nil {
 		t.Fatal(res.Err)
 	}
 	if stdin() != "STDIN-SECRET-1\n" {
@@ -129,7 +129,7 @@ func TestBaselineContainerForwardsStdin(t *testing.T) {
 	calls, _ = fakeRuntimeStdin(t, "ok\n", "0")
 	spec = JobSpec{AttemptID: "base-nostdin", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"true"},
 		Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}}}
-	if res := (&Executor{}).Run(context.Background(), spec); res.Err != nil {
+	if res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), spec); res.Err != nil {
 		t.Fatal(res.Err)
 	}
 	for _, c := range calls() {

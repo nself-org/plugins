@@ -49,9 +49,11 @@ func (emptySecrets) Resolve(_ context.Context, refs []string) (map[string]string
 	return nil, nil
 }
 
-type baselineIsolator struct{}
+// BaselineIsolator explicitly permits host process execution and baseline
+// containers. Callers must select it deliberately; a nil policy refuses jobs.
+type BaselineIsolator struct{}
 
-func (baselineIsolator) Prepare(_ context.Context, s *JobSpec) error {
+func (BaselineIsolator) Prepare(_ context.Context, s *JobSpec) error {
 	if s.Job.Isolation != "" && s.Job.Isolation != "process" && s.Job.Isolation != "container" {
 		return coded("E611", "unsupported isolation")
 	}

@@ -18,7 +18,7 @@ func nodeFixture(t *testing.T, manifest string) (string, Runner) {
 	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(manifest), 0600); err != nil {
 		t.Fatal(err)
 	}
-	return root, Runner{Executor: &exec.Executor{}, Home: t.TempDir()}
+	return root, Runner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir()}
 }
 
 func TestReviewUnsupportedNodeManagerFailsClosed(t *testing.T) {
@@ -66,7 +66,7 @@ func TestReviewTrivyFindingContainingOffline(t *testing.T) {
 	}
 	t.Setenv("PATH", bin)
 	d, _ := DefaultRegistry().Get("security.trivy.fs")
-	c := (Runner{Executor: &exec.Executor{}, Home: t.TempDir()}).Run(context.Background(), root, PlannedCheck{Def: d, Workdir: "."}, model.PipelineConfig{})
+	c := (Runner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir()}).Run(context.Background(), root, PlannedCheck{Def: d, Workdir: "."}, model.PipelineConfig{})
 	if c.Result != "fail" || c.Findings != 1 {
 		t.Fatal(c)
 	}

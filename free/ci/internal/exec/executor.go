@@ -45,11 +45,12 @@ type Executor struct {
 	// secret that cannot be masked is never handed to a job. It must not keep
 	// the value in an error.
 	RegisterSecret func(value []byte) error
-	Isolation      Isolator
-	Stale          StaleChecker
-	Grace          time.Duration
-	redactorOnce   sync.Once
-	redactorSlot   chan struct{}
+	// Isolation is required. A missing policy refuses execution before hooks or secrets.
+	Isolation    Isolator
+	Stale        StaleChecker
+	Grace        time.Duration
+	redactorOnce sync.Once
+	redactorSlot chan struct{}
 }
 
 // Run confines a job to a fresh private workspace and removes it on every exit.
@@ -85,7 +86,9 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		return
 	}
 	if e.Isolation == nil {
-		e.Isolation = baselineIsolator{}
+		result.Err = coded("E611", "an explicit isolation policy is required")
+		result.Attempt.FailureClass, result.Refused = "infra", true
+		return
 	}
 	perr := e.Isolation.Prepare(ctx, &s)
 	if s.Release != nil { // set even when Prepare failed late: whatever it created is removed

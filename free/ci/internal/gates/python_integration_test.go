@@ -44,7 +44,7 @@ func planned(t *testing.T, root string) map[string]PlannedCheck {
 
 func runCheck(t *testing.T, root string, p PlannedCheck) model.Check {
 	t.Helper()
-	return (Runner{Executor: &ciexec.Executor{}, Home: t.TempDir()}).Run(context.Background(), root, p, model.PipelineConfig{})
+	return (Runner{Executor: &ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}, Home: t.TempDir()}).Run(context.Background(), root, p, model.PipelineConfig{})
 }
 
 func TestPythonFixtures(t *testing.T) {

@@ -9,6 +9,7 @@ package exec
 
 import (
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -31,23 +32,32 @@ func hostPathRefused(p string) bool {
 			return true
 		}
 	}
+	for _, d := range []string{"/proc", "/etc/ssh", "/root/.ssh", "/var/lib/docker", "/private/var/run"} {
+		if p == d || strings.HasPrefix(p, d+"/") {
+			return true
+		}
+	}
 	return strings.HasSuffix(p, ".sock") || strings.HasPrefix(p, "/run/") || strings.HasPrefix(p, "/var/run/")
 }
 
 func checkMounts(s JobSpec) error {
 	seen := map[string]bool{}
-	for _, m := range s.Mounts {
+	for i, m := range s.Mounts {
 		for _, p := range []string{m.Host, m.Target} {
 			if !path.IsAbs(p) || path.Clean(p) != p || strings.ContainsAny(p, ",\r\n\x00") {
 				return coded("E612", "mount paths must be absolute, clean and free of commas and newlines")
 			}
 		}
-		if hostPathRefused(m.Host) {
+		resolved, err := filepath.EvalSymlinks(m.Host)
+		// Missing or unreadable sources cannot be checked and must fail closed.
+		if err != nil || hostPathRefused(m.Host) || hostPathRefused(resolved) {
 			return coded("E612", "mounting a runtime socket or a system directory is refused")
 		}
 		if m.Target == "/" || seen[m.Target] {
 			return coded("E612", "mount target is the root or repeated")
 		}
+		// Use the checked spelling when constructing the runtime mount.
+		s.Mounts[i].Host = resolved
 		seen[m.Target] = true
 		for _, r := range reservedTargets {
 			if m.Target == r || strings.HasPrefix(m.Target, r+"/") {

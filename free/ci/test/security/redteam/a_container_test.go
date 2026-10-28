@@ -240,9 +240,6 @@ func TestA30_MountsLexical(t *testing.T) {
 }
 
 func TestA31_MountsBehindALinkOrProcPath(t *testing.T) {
-	if !openFinding(t, "A03") {
-		return
-	}
 	dir := t.TempDir()
 	sock := filepath.Join(dir, "real.sock")
 	if err := os.WriteFile(sock, nil, 0o600); err != nil {
@@ -264,9 +261,6 @@ func TestA31_MountsBehindALinkOrProcPath(t *testing.T) {
 // runtime rejects it today, so the job does not run unlimited; the backstop is still not the fail-closed
 // filter its header promises.
 func TestA08b_NaNCPUReachesTheRuntime(t *testing.T) {
-	if !openFinding(t, "A02") {
-		return
-	}
 	res, runs := aRunJob(t, aRunOpts{level: "container", plan: aMutPlanner{}, cpu: math.NaN()})
 	if len(runs) != 0 {
 		v, _ := aFlagValue(runs[0], "--cpus")

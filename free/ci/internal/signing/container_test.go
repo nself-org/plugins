@@ -222,7 +222,7 @@ sleep 3; echo scan-done`
 	}
 	done := make(chan ciexec.AttemptResult, 1)
 	go func() {
-		done <- (&ciexec.Executor{Grace: time.Second}).Run(context.Background(), ciexec.JobSpec{AttemptID: "leak-job-" + strconv.Itoa(os.Getpid()), CoordinatorID: "test-coord", Home: t.TempDir(),
+		done <- (&ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Grace: time.Second}).Run(context.Background(), ciexec.JobSpec{AttemptID: "leak-job-" + strconv.Itoa(os.Getpid()), CoordinatorID: "test-coord", Home: t.TempDir(),
 			Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: image}}, Command: []string{"sh", "-c", job}, Mounts: []ciexec.Mount{{Host: ctl, Target: "/ctl", ReadOnly: true}},
 			Output: func(b []byte) { mu.Lock(); jobOut.Write(b); mu.Unlock() }})
 	}()

@@ -106,7 +106,7 @@ func TestSweepLegacyMarkerKillsAndReusedPIDDropsMarker(t *testing.T) {
 	}
 	writeMarkerWith(t, home, "legacy", "old", legacyCmd.Process.Pid, legacy)
 	writeMarkerWith(t, home, "reused", "old", reusedCmd.Process.Pid, "st:1")
-	e := &Executor{Stale: staleChecker{"old": true}}
+	e := &Executor{Isolation: BaselineIsolator{}, Stale: staleChecker{"old": true}}
 	if err := e.sweepProcessMarker(context.Background(), home, "current", "legacy"); err != nil {
 		t.Fatal(err)
 	}

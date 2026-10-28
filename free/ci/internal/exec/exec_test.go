@@ -39,7 +39,7 @@ func (r *countingRedactor) Flush() []byte          { return nil }
 func TestOutputFloodPassesRedactor(t *testing.T) {
 	r := &countingRedactor{}
 	count := 0
-	e := &Executor{Redactor: r}
+	e := &Executor{Isolation: BaselineIsolator{}, Redactor: r}
 	result := e.Run(context.Background(), JobSpec{AttemptID: "flood", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"sh", "-c", "yes abc | head -c 1000000"}, Output: func(p []byte) { count += len(p) }})
 	if result.Err != nil || result.ExitCode != 0 || count != 1000000 || r.calls < 2 {
 		t.Fatalf("flood result=%+v bytes=%d redactor calls=%d", result, count, r.calls)
@@ -50,7 +50,7 @@ func TestRedactorSplitAndWorkspaceCleanup(t *testing.T) {
 	home := t.TempDir()
 	var mu sync.Mutex
 	var output []byte
-	e := &Executor{Redactor: &splitRedactor{}}
+	e := &Executor{Isolation: BaselineIsolator{}, Redactor: &splitRedactor{}}
 	r := e.Run(context.Background(), JobSpec{AttemptID: "redact", CoordinatorID: "coord", Home: home, Command: []string{"sh", "-c", "printf sec; sleep .1; printf ret"}, Output: func(p []byte) { mu.Lock(); defer mu.Unlock(); output = append(output, p...) }})
 	if r.Err != nil || r.ExitCode != 0 {
 		t.Fatalf("run: %+v", r)
@@ -82,7 +82,7 @@ func TestAdmissionBatteryAndQuota(t *testing.T) {
 }
 
 func TestRejectWorkdirEscape(t *testing.T) {
-	e := &Executor{}
+	e := &Executor{Isolation: BaselineIsolator{}}
 	r := e.Run(context.Background(), JobSpec{AttemptID: "escape", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Workdir: "../../.."}, Command: []string{"sh", "-c", "true"}})
 	if r.Err == nil {
 		t.Fatal("escaped workspace accepted")
@@ -93,7 +93,7 @@ func TestDotWorkdirUsesWorkspace(t *testing.T) {
 	for _, dir := range []string{"", "."} {
 		t.Run(fmt.Sprintf("workdir=%q", dir), func(t *testing.T) {
 			var output []byte
-			result := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "dot-workdir", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Workdir: dir}, Command: []string{"sh", "-c", "pwd"}, Output: func(p []byte) { output = append(output, p...) }})
+			result := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), JobSpec{AttemptID: "dot-workdir", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Workdir: dir}, Command: []string{"sh", "-c", "pwd"}, Output: func(p []byte) { output = append(output, p...) }})
 			if result.Err != nil || !strings.Contains(string(output), "/work/dot-workdir") {
 				t.Fatalf("run=%+v output=%q", result, output)
 			}
@@ -103,7 +103,7 @@ func TestDotWorkdirUsesWorkspace(t *testing.T) {
 
 func TestAbsoluteWorkdirRejected(t *testing.T) {
 	for _, dir := range []string{"/tmp", "../outside"} {
-		r := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "workdir-escape", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Workdir: dir}, Command: []string{"true"}})
+		r := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), JobSpec{AttemptID: "workdir-escape", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Workdir: dir}, Command: []string{"true"}})
 		if r.Err == nil {
 			t.Fatalf("accepted workdir %q", dir)
 		}
@@ -111,7 +111,7 @@ func TestAbsoluteWorkdirRejected(t *testing.T) {
 }
 
 func TestSharedRedactorWaitRespectsCancellation(t *testing.T) {
-	e := &Executor{Redactor: &splitRedactor{}}
+	e := &Executor{Isolation: BaselineIsolator{}, Redactor: &splitRedactor{}}
 	home := t.TempDir()
 	firstDone := make(chan AttemptResult, 1)
 	started := make(chan struct{}, 1)
@@ -146,7 +146,7 @@ func TestSharedRedactorWaitRespectsCancellation(t *testing.T) {
 }
 
 func TestTimeout(t *testing.T) {
-	e := &Executor{Grace: 100 * time.Millisecond}
+	e := &Executor{Isolation: BaselineIsolator{}, Grace: 100 * time.Millisecond}
 	r := e.Run(context.Background(), JobSpec{AttemptID: "timeout", CoordinatorID: "coord", Home: t.TempDir(), Timeout: 50 * time.Millisecond, Command: []string{"sh", "-c", "sleep 30"}})
 	if r.Attempt.FailureClass != "timeout" {
 		t.Fatalf("timeout: %+v", r)
@@ -163,7 +163,7 @@ func TestForegroundLowMemoryGuaranteedSlot(t *testing.T) {
 func TestPerRunRedactorFactory(t *testing.T) {
 	var mu sync.Mutex
 	count := 0
-	e := &Executor{NewRedactor: func() Redactor { mu.Lock(); count++; mu.Unlock(); return &splitRedactor{} }}
+	e := &Executor{Isolation: BaselineIsolator{}, NewRedactor: func() Redactor { mu.Lock(); count++; mu.Unlock(); return &splitRedactor{} }}
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
@@ -185,7 +185,7 @@ func TestPerRunRedactorFactory(t *testing.T) {
 func TestWorkspaceCleanupFailureIsInfra(t *testing.T) {
 	home := t.TempDir()
 	workspace := filepath.Join(home, "work", "cleanup")
-	r := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "cleanup", CoordinatorID: "coord", Home: home, Command: []string{"sh", "-c", "mkdir trapped; echo secret > trapped/file; chmod 000 trapped"}})
+	r := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), JobSpec{AttemptID: "cleanup", CoordinatorID: "coord", Home: home, Command: []string{"sh", "-c", "mkdir trapped; echo secret > trapped/file; chmod 000 trapped"}})
 	if _, err := os.Stat(workspace); err == nil {
 		defer func() { _ = os.Chmod(filepath.Join(workspace, "trapped"), 0700); _ = os.RemoveAll(workspace) }()
 		if r.Err == nil || r.Attempt.FailureClass != "infra" || r.Attempt.State == "passed" {
@@ -198,7 +198,7 @@ func TestWorkspaceCleanupFailureIsInfra(t *testing.T) {
 
 func TestRegisterSecretSeesEveryResolvedValueBeforeTheJobStarts(t *testing.T) {
 	var got []string
-	e := &Executor{Secrets: secretFunc(map[string]string{"A_KEY": "alpha-secret-value", "EMPTY": ""}),
+	e := &Executor{Isolation: BaselineIsolator{}, Secrets: secretFunc(map[string]string{"A_KEY": "alpha-secret-value", "EMPTY": ""}),
 		RegisterSecret: func(v []byte) error { got = append(got, string(v)); return nil }}
 	r := e.Run(context.Background(), JobSpec{AttemptID: "rs1", CoordinatorID: "coord", Home: t.TempDir(),
 		Command: []string{"sh", "-c", "true"}})
@@ -209,7 +209,7 @@ func TestRegisterSecretSeesEveryResolvedValueBeforeTheJobStarts(t *testing.T) {
 
 func TestRegisterSecretFailureFailsTheAttemptWithoutRunningOrNamingTheValue(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "ran")
-	e := &Executor{Secrets: secretFunc(map[string]string{"A_KEY": "alpha-secret-value"}),
+	e := &Executor{Isolation: BaselineIsolator{}, Secrets: secretFunc(map[string]string{"A_KEY": "alpha-secret-value"}),
 		RegisterSecret: func([]byte) error { return errors.New("refused") }}
 	r := e.Run(context.Background(), JobSpec{AttemptID: "rs2", CoordinatorID: "coord", Home: t.TempDir(),
 		Command: []string{"sh", "-c", "touch " + marker}})

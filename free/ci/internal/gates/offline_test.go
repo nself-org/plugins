@@ -43,7 +43,7 @@ func TestOfflineGoFixture(t *testing.T) {
 	floor := 50
 	cfg := model.PipelineConfig{Checks: map[string]model.CheckDef{"go.coverage": {CoverageFloor: &floor}}}
 	plan := r.Plan(facts, Options{Config: cfg})
-	runner := Runner{Executor: &exec.Executor{}, Home: t.TempDir()}
+	runner := Runner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir()}
 	checks := make([]model.Check, 0, len(plan))
 	seen := map[string]bool{}
 	for _, p := range plan {
@@ -87,7 +87,7 @@ func TestMissingGitleaks(t *testing.T) {
 	}
 	t.Setenv("PATH", bin)
 	d, _ := DefaultRegistry().Get("secrets.gitleaks")
-	c := (Runner{Executor: &exec.Executor{}, Home: t.TempDir()}).Run(context.Background(), root, PlannedCheck{Def: d, Required: true}, model.PipelineConfig{})
+	c := (Runner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir()}).Run(context.Background(), root, PlannedCheck{Def: d, Required: true}, model.PipelineConfig{})
 	if c.Result != "error" || !strings.Contains(c.Excerpt, "E614") || !strings.Contains(c.Excerpt, "Install gitleaks") {
 		t.Fatal(c)
 	}

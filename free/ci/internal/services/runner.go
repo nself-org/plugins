@@ -119,7 +119,7 @@ func (f *Funnel) KillStale(ctx context.Context, dead func(owner string) bool) er
 	if runtime.GOOS == "windows" {
 		return nil
 	}
-	ex := &ciexec.Executor{Env: minimalEnv{}, Stale: staleOwner(dead)}
+	ex := &ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Env: minimalEnv{}, Stale: staleOwner(dead)}
 	argv := []string{"true"}
 	return ex.Run(ctx, ciexec.JobSpec{AttemptID: "svcsweep-" + randHex(4), CoordinatorID: ownerPrefix + "sweep",
 		Job: model.Job{Run: argv}, Command: argv, Home: filepath.Join(f.Home, funnelDir)}).Err
@@ -157,7 +157,7 @@ func (f *Funnel) Run(ctx context.Context, c Call) (Result, error) {
 	for k, v := range c.Env {
 		env[k] = v
 	}
-	ex := &ciexec.Executor{
+	ex := &ciexec.Executor{Isolation: ciexec.BaselineIsolator{},
 		Env:         minimalEnv{},
 		NewRedactor: func() ciexec.Redactor { return &bufferRedactor{secrets: secrets} },
 	}

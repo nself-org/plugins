@@ -32,7 +32,7 @@ os.close(w)
 os.waitpid(p,0)
 print(os.read(r,32).decode(),flush=True)
 time.sleep(30)`
-	r := (&Executor{Grace: 100 * time.Millisecond}).Run(ctx, JobSpec{AttemptID: "double-fork", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"python3", "-c", script}, Output: func(p []byte) {
+	r := (&Executor{Isolation: BaselineIsolator{}, Grace: 100 * time.Millisecond}).Run(ctx, JobSpec{AttemptID: "double-fork", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"python3", "-c", script}, Output: func(p []byte) {
 		if n, err := strconv.Atoi(strings.TrimSpace(string(p))); err == nil {
 			child = n
 			cancel()

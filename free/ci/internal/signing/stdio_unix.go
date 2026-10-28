@@ -108,7 +108,7 @@ func (r *FunnelRunner) RunStdio(ctx context.Context, c StdioCall) ([]byte, int, 
 	}
 	argv := append([]string{"/bin/sh", "-c", wrapper, "sh", dir}, c.Argv...)
 	var cap capture
-	ex := &ciexec.Executor{Env: extraEnv(env), NewRedactor: func() ciexec.Redactor { return passRedactor{} }}
+	ex := &ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Env: extraEnv(env), NewRedactor: func() ciexec.Redactor { return passRedactor{} }}
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: r.id(), CoordinatorID: "signer", Command: argv, Home: r.Home, Timeout: c.Timeout, Output: cap.write})
 	freeWriter(fifo, writerDone)
 	if res.Err != nil {

@@ -41,9 +41,6 @@ func TestA27_LockfileOnlyIsUntrusted(t *testing.T) {
 // A27b: dependency lock files of mainstream ecosystems that the list does not know. A diff of only such files
 // is classified like code, so it keeps the trust of its author and can carry secrets.
 func TestA27b_LockfileListGaps(t *testing.T) {
-	if !openFinding(t, "A11") {
-		return
-	}
 	for _, f := range []string{".terraform.lock.hcl", "go.work.sum", "pixi.lock", "conda-lock.yml", "paket.lock", "rebar.lock", "MODULE.bazel.lock",
 		"Cartfile.resolved", "shard.lock", "stack.yaml.lock", "cabal.project.freeze", "pnpm-lock.yml", "npm-shrinkwrap.json", "gradle/dependency-locks/compileClasspath.lockfile"} {
 		if !source.LockfileOnly([]string{f}) {
@@ -163,9 +160,6 @@ func TestA29_FetchedCollaboratorBranchIsNotOwner(t *testing.T) {
 
 // A10: with no trust hook registered the coordinator reads every source as owner.
 func TestA32_NoTrustHookDefaultsToOwner(t *testing.T) {
-	if !openFinding(t, "A10") {
-		return
-	}
 	b, err := os.ReadFile(filepath.Join(aModuleRoot, "internal/run/coordinator.go"))
 	aMust(t, err)
 	text := string(b)
@@ -174,7 +168,7 @@ func TestA32_NoTrustHookDefaultsToOwner(t *testing.T) {
 		t.Fatal("classify not found")
 	}
 	body := text[i:min(len(text), i+400)]
-	if strings.Contains(body, "if h.Trust == nil {\n\t\treturn \"owner\", nil") {
+	if strings.Contains(body, "if h.Trust == nil {\n\t\treturn \"owner\",") {
 		t.Error("Coordinator.classify returns owner when no TrustClassifier is registered (fail open); it should refuse")
 	}
 }

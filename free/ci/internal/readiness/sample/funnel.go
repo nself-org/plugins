@@ -72,7 +72,7 @@ func (f Funnel) Run(ctx context.Context, argv []string, timeout time.Duration) (
 			truncated = truncated || len(p) > room
 		},
 	}
-	res := (&ciexec.Executor{Env: minimalEnv{}, Grace: killGrace}).Run(ctx, spec)
+	res := (&ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Env: minimalEnv{}, Grace: killGrace}).Run(ctx, spec)
 	mu.Lock()
 	defer mu.Unlock()
 	switch {

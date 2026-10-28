@@ -87,7 +87,7 @@ func plannedSpec(t *testing.T, id string, p ContainerPlanner) JobSpec {
 
 func TestPlannedContainerRunsCommandAndCleanup(t *testing.T) {
 	calls := fakeRuntime(t, "ok\n", "0")
-	res := (&Executor{}).Run(context.Background(), plannedSpec(t, "plan-ok", hardPlanner{}))
+	res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), plannedSpec(t, "plan-ok", hardPlanner{}))
 	if res.Err != nil || res.Attempt.State != "passed" || res.Reason != "" {
 		t.Fatalf("result %+v", res)
 	}
@@ -101,7 +101,7 @@ func TestPlannedContainerGetsEnvOnStdinNeverOnDiskOrArgv(t *testing.T) {
 	calls, stdin := fakeRuntimeStdin(t, "ok\n", "0")
 	spec := plannedSpec(t, "plan-env", hardPlanner{})
 	spec.Job.Env = map[string]string{"FIXTURE_TOKEN": "synthetic-value-1"}
-	res := (&Executor{Env: nil}).Run(context.Background(), spec)
+	res := (&Executor{Isolation: BaselineIsolator{}, Env: nil}).Run(context.Background(), spec)
 	if res.Err != nil {
 		t.Fatal(res.Err)
 	}
@@ -134,7 +134,7 @@ func TestPlannedContainerReasons(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			fakeRuntime(t, tc.out, tc.code)
-			res := (&Executor{}).Run(context.Background(), plannedSpec(t, "plan-"+name, hardPlanner{}))
+			res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), plannedSpec(t, "plan-"+name, hardPlanner{}))
 			if res.Reason != tc.reason {
 				t.Fatalf("reason %q want %q (%+v)", res.Reason, tc.reason, res)
 			}
@@ -144,7 +144,7 @@ func TestPlannedContainerReasons(t *testing.T) {
 
 func TestPlannedContainerRuntimeFailureIsNotTheJobs(t *testing.T) {
 	fakeRuntime(t, "", "125")
-	res := (&Executor{}).Run(context.Background(), plannedSpec(t, "plan-125", hardPlanner{}))
+	res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), plannedSpec(t, "plan-125", hardPlanner{}))
 	var e *Error
 	if !errors.As(res.Err, &e) || e.Code != "E613" {
 		t.Fatalf("exit 125 must be an E613 runtime failure: %+v", res)
@@ -153,7 +153,7 @@ func TestPlannedContainerRuntimeFailureIsNotTheJobs(t *testing.T) {
 
 func TestPlannedContainerRefusesUnhardenedPlan(t *testing.T) {
 	calls := fakeRuntime(t, "", "0")
-	res := (&Executor{}).Run(context.Background(), plannedSpec(t, "plan-bad", hardPlanner{unhardened: true}))
+	res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), plannedSpec(t, "plan-bad", hardPlanner{unhardened: true}))
 	var e *Error
 	if !asError(res.Err, &e) || e.Code != "E613" {
 		t.Fatalf("err %v", res.Err)
@@ -169,7 +169,7 @@ func TestPlannedRunTightensWorkspaceParent(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, "work"), 0755); err != nil { // a pre-existing, too open parent
 		t.Fatal(err)
 	}
-	res := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "plan-parent", CoordinatorID: "coord", Home: home, Plan: hardPlanner{}, Command: []string{"true"},
+	res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), JobSpec{AttemptID: "plan-parent", CoordinatorID: "coord", Home: home, Plan: hardPlanner{}, Command: []string{"true"},
 		Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}}})
 	if res.Err != nil {
 		t.Fatal(res.Err)
@@ -331,8 +331,8 @@ func TestPlannedContainerMounts(t *testing.T) {
 		t.Fatal("an undeclared mount passed")
 	}
 	spec := plannedSpec(t, "plan-rw", hardPlanner{})
-	spec.Mounts = []Mount{{Host: "/cache/a", Target: "/cache"}}
-	res := (&Executor{}).Run(context.Background(), spec)
+	spec.Mounts = []Mount{{Host: t.TempDir(), Target: "/cache"}}
+	res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), spec)
 	var e *Error
 	if !errors.As(res.Err, &e) || e.Code != "E611" {
 		t.Fatalf("a read-write mount must be refused under the hardened profile: %+v", res)
@@ -370,7 +370,7 @@ func TestPlannedCleanupRunsItsOwnImage(t *testing.T) {
 			var out strings.Builder
 			spec := plannedSpec(t, "plan-helper", helperPlanner{declared: tc.declared})
 			spec.Output = func(b []byte) { out.Write(b) }
-			res := (&Executor{}).Run(context.Background(), spec)
+			res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), spec)
 			if res.Err != nil || res.Attempt.State != "passed" {
 				t.Fatalf("result %+v", res)
 			}
@@ -413,7 +413,7 @@ func TestPlannedCleanupFallsBackToTheJobImage(t *testing.T) {
 			var out strings.Builder
 			spec := plannedSpec(t, "plan-fallback", helperPlanner{declared: true})
 			spec.Output = func(b []byte) { out.Write(b) }
-			res := (&Executor{}).Run(context.Background(), spec)
+			res := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), spec)
 			if res.Err != nil || res.Attempt.State != "passed" {
 				t.Fatalf("result %+v", res)
 			}

@@ -151,6 +151,9 @@ func claimed[T any](f model.Fact[T]) (T, bool) {
 }
 
 var lockfiles = map[string]bool{
+	".terraform.lock.hcl": true, "go.work.sum": true, "pixi.lock": true, "conda-lock.yml": true,
+	"paket.lock": true, "rebar.lock": true, "module.bazel.lock": true, "cartfile.resolved": true,
+	"shard.lock": true, "stack.yaml.lock": true, "cabal.project.freeze": true, "pnpm-lock.yml": true,
 	"package-lock.json": true, "npm-shrinkwrap.json": true, "pnpm-lock.yaml": true, "yarn.lock": true,
 	"bun.lockb": true, "bun.lock": true, "go.sum": true, "cargo.lock": true, "gemfile.lock": true,
 	"poetry.lock": true, "pipfile.lock": true, "uv.lock": true, "composer.lock": true, "pubspec.lock": true,
@@ -164,7 +167,9 @@ func LockfileOnly(files []string) bool {
 		return false
 	}
 	for _, f := range files {
-		if !lockfiles[strings.ToLower(path.Base(strings.ReplaceAll(f, `\`, "/")))] {
+		normalized := strings.ToLower(strings.ReplaceAll(f, `\`, "/"))
+		gradle := strings.HasSuffix(normalized, ".lockfile") && strings.Contains("/"+normalized, "/gradle/dependency-locks/")
+		if !lockfiles[path.Base(normalized)] && !gradle {
 			return false
 		}
 	}

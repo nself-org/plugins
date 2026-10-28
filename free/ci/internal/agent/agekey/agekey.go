@@ -110,7 +110,7 @@ func generate(ctx context.Context, stateDir, path, bin string) error {
 	if _, err := rand.Read(tag[:]); err != nil {
 		return err
 	}
-	res := (&ciexec.Executor{Env: ciexec.AllowlistEnv{}}).Run(ctx, ciexec.JobSpec{
+	res := (&ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Env: ciexec.AllowlistEnv{}}).Run(ctx, ciexec.JobSpec{
 		AttemptID:     "agekey-" + attemptSafe.ReplaceAllString(hex.EncodeToString(tag[:]), ""),
 		CoordinatorID: "agent",
 		Command:       []string{bin, "-o", out},

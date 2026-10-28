@@ -2,6 +2,8 @@ package exec
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -55,11 +57,11 @@ func TestCheckMountsRefusesUnsafe(t *testing.T) {
 func TestCheckMountsAcceptsReadOnlyForBothContainerLevels(t *testing.T) {
 	t.Parallel()
 	for _, level := range []model.Isolation{"container", "sandboxed-container"} {
-		if err := checkMounts(JobSpec{Job: model.Job{Isolation: level}, Mounts: []Mount{{Host: "/opt/agent", Target: "/usr/local/bin/agent", ReadOnly: true}}}); err != nil {
+		if err := checkMounts(JobSpec{Job: model.Job{Isolation: level}, Mounts: []Mount{{Host: t.TempDir(), Target: "/usr/local/bin/agent", ReadOnly: true}}}); err != nil {
 			t.Errorf("%s: read-only mount refused: %v", level, err)
 		}
 	}
-	if err := checkMounts(JobSpec{Job: model.Job{Isolation: "process"}, Mounts: []Mount{{Host: "/opt/agent", Target: "/a", ReadOnly: true}}}); err == nil {
+	if err := checkMounts(JobSpec{Job: model.Job{Isolation: "process"}, Mounts: []Mount{{Host: t.TempDir(), Target: "/a", ReadOnly: true}}}); err == nil {
 		t.Error("process job accepted a read-only mount")
 	}
 }
@@ -69,15 +71,39 @@ func TestCheckMountsAcceptsReadOnlyForBothContainerLevels(t *testing.T) {
 func TestProcessJobRefusesReadOnlyMount(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
-	r := (&Executor{}).Run(t.Context(), JobSpec{AttemptID: "ro-process", CoordinatorID: "coord", Home: home,
+	r := (&Executor{Isolation: BaselineIsolator{}}).Run(t.Context(), JobSpec{AttemptID: "ro-process", CoordinatorID: "coord", Home: home,
 		Mounts: []Mount{{Host: home, Target: "/cache", ReadOnly: true}}, Command: []string{"true"}})
 	var ee *Error
 	if !errors.As(r.Err, &ee) || ee.Code != "E611" || !strings.Contains(ee.Message, "read-only") {
 		t.Fatalf("err %v, want E611 read-only refusal", r.Err)
 	}
-	ok := (&Executor{}).Run(t.Context(), JobSpec{AttemptID: "rw-process", CoordinatorID: "coord", Home: home,
+	ok := (&Executor{Isolation: BaselineIsolator{}}).Run(t.Context(), JobSpec{AttemptID: "rw-process", CoordinatorID: "coord", Home: home,
 		Mounts: []Mount{{Host: home, Target: "/cache"}}, Command: []string{"true"}})
 	if ok.Err != nil || ok.Attempt.State != "passed" {
 		t.Fatalf("read-write mount on a process job: %+v", ok)
+	}
+}
+
+func TestMountSourceCanonicalizedAndMissingSourceRefused(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source")
+	if err := os.Mkdir(source, 0700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(dir, "alias")
+	if err := os.Symlink(source, alias); err != nil {
+		t.Fatal(err)
+	}
+	mounts := []Mount{{Host: alias, Target: "/cache", ReadOnly: true}}
+	if err := checkMounts(JobSpec{Job: model.Job{Isolation: "container"}, Mounts: mounts}); err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := filepath.EvalSymlinks(source)
+	if err != nil || mounts[0].Host != canonical {
+		t.Fatalf("source=%q want=%q err=%v", mounts[0].Host, canonical, err)
+	}
+	mounts[0].Host = filepath.Join(dir, "missing")
+	if err := checkMounts(JobSpec{Job: model.Job{Isolation: "container"}, Mounts: mounts}); err == nil {
+		t.Fatal("missing mount source accepted")
 	}
 }

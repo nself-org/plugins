@@ -53,7 +53,7 @@ func TestRedactHookExecutorSink(t *testing.T) {
 	}
 	var mu sync.Mutex
 	var store []byte // the fake store: whatever the sink receives is persisted
-	e := &ciexec.Executor{NewRedactor: Registered.NewRedactor}
+	e := &ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, NewRedactor: Registered.NewRedactor}
 	res := e.Run(context.Background(), ciexec.JobSpec{AttemptID: "redact-hook", CoordinatorID: "coord", Home: t.TempDir(),
 		Command: []string{"sh", "-c", printer()},
 		Output:  func(p []byte) { mu.Lock(); defer mu.Unlock(); store = append(store, p...) }})

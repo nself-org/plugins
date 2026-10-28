@@ -83,7 +83,7 @@ func (x *ExecRunner) Run(ctx context.Context, c Call) (Output, error) {
 	if coord == "" {
 		coord = "secrets"
 	}
-	ex := &ciexec.Executor{Env: callEnv(c.Env), NewRedactor: func() ciexec.Redactor { return passRedactor{} }}
+	ex := &ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Env: callEnv(c.Env), NewRedactor: func() ciexec.Redactor { return passRedactor{} }}
 	var cap capture
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: x.id(), CoordinatorID: coord, Command: c.Argv, Home: x.Home, Timeout: c.Timeout, Output: cap.write})
 	out := Output{Bytes: cap.buf, ExitCode: res.ExitCode}

@@ -61,7 +61,7 @@ func TestNoLeakedTempAfterKill(t *testing.T) {
 				ctx, stop = context.WithCancel(ctx)
 				time.AfterFunc(leg.cancel, stop)
 			}
-			e := &Executor{}
+			e := &Executor{Isolation: BaselineIsolator{}}
 			var out strings.Builder
 			res := e.Run(ctx, JobSpec{AttemptID: "leak-" + name, CoordinatorID: "coord", Job: model.Job{Isolation: "process"}, Home: home,
 				SourceDir: source, Timeout: leg.timeout, Command: []string{"sh", "-c", work + leg.script}, Output: func(p []byte) { out.Write(p) }})
@@ -86,7 +86,7 @@ func TestNoLeakedTempAfterKill(t *testing.T) {
 func TestLeakCheckSeesALeak(t *testing.T) {
 	home, parent := t.TempDir(), t.TempDir()
 	t.Setenv("TMPDIR", parent)
-	e := &Executor{}
+	e := &Executor{Isolation: BaselineIsolator{}}
 	res := e.Run(context.Background(), JobSpec{AttemptID: "leak-control", CoordinatorID: "coord", Job: model.Job{Isolation: "process"}, Home: home,
 		Command: []string{"sh", "-c", `mktemp "$TMPDIR/leak.XXXXXX" >/dev/null`}})
 	if res.Err != nil || len(entries(t, parent)) != 1 {

@@ -89,7 +89,7 @@ func (c *Coordinator) capture() Capture {
 // class, the pipeline row and evidence keep the recorded one.
 func (c *Coordinator) classify(ctx context.Context, h Hooks, rev Revision) (admitted, recorded string, err error) {
 	if h.Trust == nil {
-		return "owner", "owner", nil
+		return "", "", fail(CodeTrust, "no source trust classifier registered; source is untrusted")
 	}
 	got, err := h.Trust.Classify(ctx, TrustRequest{Root: c.Opts.Root, Revision: rev.SHA, Requested: c.Opts.Trust})
 	if err != nil {

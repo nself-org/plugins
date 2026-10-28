@@ -19,7 +19,7 @@ func (f fixedSecrets) Resolve(context.Context, []string) (map[string]string, err
 
 func TestExecutorRegistersResolvedJobSecrets(t *testing.T) {
 	const val = "d1013-job-secret-6b1e0c47"
-	ex := newExecutor(nil, nil, nil)
+	ex := newExecutor(nil, nil, ciexec.BaselineIsolator{})
 	ex.Secrets = fixedSecrets{"DEPLOY_PW": val}
 	if len(Redactions.Scan([]byte(val))) != 0 {
 		t.Fatal("precondition: the value must not be registered yet")
@@ -35,7 +35,7 @@ func TestExecutorRegistersResolvedJobSecrets(t *testing.T) {
 }
 
 func TestExecutorRefusesAJobSecretItCannotRegister(t *testing.T) {
-	ex := newExecutor(nil, nil, nil)
+	ex := newExecutor(nil, nil, ciexec.BaselineIsolator{})
 	ex.Secrets = fixedSecrets{"PIN": "12345"}
 	res := ex.Run(context.Background(), ciexec.JobSpec{AttemptID: "d1013b", CoordinatorID: "coord", Home: t.TempDir(),
 		Command: []string{"sh", "-c", "true"}})

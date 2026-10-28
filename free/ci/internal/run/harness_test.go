@@ -148,3 +148,6 @@ func outcome(res Result, id string) JobOutcome {
 	}
 	return JobOutcome{}
 }
+
+// Coordinator fixtures deliberately grant owner trust; production must register its classifier.
+func init() { RegisterTrust(fakeTrust("owner")) }

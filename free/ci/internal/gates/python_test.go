@@ -16,7 +16,7 @@ import (
 
 func runWithoutTools(t *testing.T, p PlannedCheck) model.Check {
 	t.Helper()
-	return (Runner{Executor: &exec.Executor{}, Home: t.TempDir()}).Run(context.Background(), t.TempDir(), p, model.PipelineConfig{})
+	return (Runner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir()}).Run(context.Background(), t.TempDir(), p, model.PipelineConfig{})
 }
 
 func TestPythonPlannedChecks(t *testing.T) {
@@ -150,7 +150,7 @@ func TestPytestRunnerRemovedIsE614(t *testing.T) {
 	t.Setenv("PATH", bin)
 	p := find(fixtureChecks(t, "python", "uv", Options{}), "python-test")[0]
 	root := t.TempDir()
-	c := (Runner{Executor: &exec.Executor{}, Home: t.TempDir()}).Run(context.Background(), root, p, model.PipelineConfig{})
+	c := (Runner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir()}).Run(context.Background(), root, p, model.PipelineConfig{})
 	if c.Result != "error" || c.FailureClass != "infra" || !strings.Contains(c.Excerpt, "E614") || !strings.Contains(c.Excerpt, "pytest") {
 		t.Fatalf("python-test with no pytest: %+v", c)
 	}

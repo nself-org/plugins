@@ -43,7 +43,7 @@ func DefaultRunner(ctx context.Context, argv ...string) (string, int, error) {
 	}
 	defer func() { _ = os.RemoveAll(home) }()
 	var buf strings.Builder
-	ex := ciexec.Executor{Env: gitEnv{home: home}}
+	ex := ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Env: gitEnv{home: home}}
 	res := ex.Run(ctx, ciexec.JobSpec{
 		AttemptID: "git-" + strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + strconv.FormatUint(runSeq.Add(1), 10), CoordinatorID: "checkout",
 		Job: model.Job{Kind: "static"}, Home: home, Timeout: gitTimeout, Command: argv,

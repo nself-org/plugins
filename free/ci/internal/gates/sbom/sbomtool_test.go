@@ -70,7 +70,7 @@ func TestReleaseSBOMRequired(t *testing.T) {
 		return p
 	}
 	pin = withDigest(pin)
-	runner := sbom.ExecRunner{Executor: &exec.Executor{}, Home: t.TempDir(), SourceDir: src}
+	runner := sbom.ExecRunner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir(), SourceDir: src}
 	targets := []sbom.Target{{Name: "dist", Path: "dist", Kind: sbom.SourceDir}}
 	in := gsbom.Input{Runner: runner, Home: home, Pin: pin, Targets: targets}
 

@@ -43,7 +43,7 @@ func TestJobSpecEnvPolicyOverridesExecutor(t *testing.T) {
 		spec.AttemptID, spec.CoordinatorID, spec.Home = "env-"+strings.ReplaceAll(t.Name(), "/", "-"), "coord", t.TempDir()
 		spec.Output = func(b []byte) { out.Write(b) }
 		spec.Command = []string{"/usr/bin/env"}
-		if res := (&Executor{Env: inheritEnvironment{}}).Run(context.Background(), spec); res.Err != nil || res.ExitCode != 0 {
+		if res := (&Executor{Isolation: BaselineIsolator{}, Env: inheritEnvironment{}}).Run(context.Background(), spec); res.Err != nil || res.ExitCode != 0 {
 			t.Fatalf("run: %v exit %d", res.Err, res.ExitCode)
 		}
 		return out.String()
