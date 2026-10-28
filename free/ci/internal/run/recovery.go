@@ -145,6 +145,7 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 	if _, err = st.CloseDeadRuns(ctx, boot); err != nil {
 		rep.Errors = append(rep.Errors, err)
 	}
+	settleDeadRuns(ctx, st, &rep)
 	return rep
 }
 
@@ -174,4 +175,27 @@ func strandAttempts(ctx context.Context, st *store.Store, boot string, rep *Reco
 		n++
 	}
 	return n
+}
+
+// RecoveryFinalizer settles a dead run without relying on the crashed process's
+// context or invoking publication and notification hooks.
+type RecoveryFinalizer interface {
+	RecoverRun(context.Context, *store.Store, string) error
+}
+
+func settleDeadRuns(ctx context.Context, st *store.Store, rep *RecoverReport) {
+	ids, err := st.UnsettledDeadRuns(ctx)
+	if err != nil {
+		rep.Errors = append(rep.Errors, err)
+		return
+	}
+	for _, id := range ids {
+		for _, f := range Registered.Finalizers {
+			if recovery, ok := f.(RecoveryFinalizer); ok {
+				if err := recovery.RecoverRun(ctx, st, id); err != nil {
+					rep.Errors = append(rep.Errors, err)
+				}
+			}
+		}
+	}
 }
