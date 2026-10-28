@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 var queuedSeq uint64
@@ -135,6 +137,79 @@ func TestPriorityNeverAdmits(t *testing.T) {
 	for _, dec := range sink.all() {
 		if dec.Job.Key == ghost && dec.Outcome == OutcomeAdmitted {
 			t.Fatal("priority admitted a job no runner may take")
+		}
+	}
+}
+
+// TestFairOrderWeighsRuntime pins D-1411: with a cost per project, virtual time advances by runtime, so a
+// project of long jobs gets fewer starts than one of short jobs and the served runtime of any prefix of
+// the order differs by at most the longest job, while both still have work queued.
+func TestFairOrderWeighsRuntime(t *testing.T) {
+	cost := map[string]int64{"long": 30000, "short": 10000}
+	clock := newClock()
+	var q []Queued
+	for i := 0; i < 4; i++ {
+		q = append(q, queuedAt(clock, "long", "l"+string(rune('1'+i)), "", ""))
+	}
+	for i := 0; i < 12; i++ {
+		q = append(q, queuedAt(clock, "short", "s"+string(rune('a'+i)), "", ""))
+	}
+	costs := func() func(string) int64 { return func(p string) int64 { return cost[p] } }
+	ordered := NewFair(nil, clock.Now).WithCost(costs).Order(q)
+	served, left := map[string]int64{}, map[string]int{"long": 4, "short": 12}
+	for i, e := range ordered {
+		p := e.Job.Sched.Project
+		served[p] += cost[p]
+		left[p]--
+		if left["long"] > 0 && left["short"] > 0 {
+			if gap := max(served["long"]-served["short"], served["short"]-served["long"]); gap > cost["long"] {
+				t.Fatalf("after %d starts the served runtime gap is %d ms (long %d, short %d), bound %d: %s", i+1, gap, served["long"], served["short"], cost["long"], ids(ordered))
+			}
+		}
+	}
+	// by job count the same queue alternates, which serves the long project three times the runtime
+	byCount := NewFair(nil, clock.Now).Order(q)
+	if got := ids(byCount[:4]); got != "l1 sa l2 sb" {
+		t.Fatalf("without a cost the projects alternate: %s", ids(byCount))
+	}
+	if ids(ordered) == ids(byCount) {
+		t.Fatalf("the cost did not change the order: %s", ids(ordered))
+	}
+	// a non-positive cost counts as one job
+	if got := ids(NewFair(nil, clock.Now).WithCost(func() func(string) int64 { return func(string) int64 { return 0 } }).Order(q)); got != ids(byCount) {
+		t.Fatalf("a zero cost must order like job counting: %s", got)
+	}
+}
+
+// TestRuntimeCost: a project is charged its settled mean runtime, a project without samples the mean of the
+// others, and with no settled sample anywhere (or no store) there is no cost, i.e. job counting.
+func TestRuntimeCost(t *testing.T) {
+	st := openStore(t)
+	ctx := context.Background()
+	if RuntimeCost(ctx, nil) != nil {
+		t.Fatal("no store must give no cost")
+	}
+	cost := RuntimeCost(ctx, st)
+	if cost == nil || cost("alpha") != 1 {
+		t.Fatal("no settled sample: every job costs 1")
+	}
+	for _, e := range []struct {
+		project string
+		ms      int64
+		n       int64
+	}{{"alpha", 100000, minSamples}, {"beta", 400000, minSamples}, {"gamma", 5000, minSamples - 1}} {
+		err := st.TelRecordOutcome(ctx, store.TelOutcome{AttemptID: "o-" + e.project, Project: e.project, JobKey: "build", RunnerClass: "local", Result: "passed", RuntimeMs: e.ms, TS: 1},
+			func(store.TelEstimator, bool) store.TelEstimator {
+				return store.TelEstimator{Project: e.project, JobKey: "build", RunnerClass: "local", RuntimeMs: e.ms, N: e.n, Updated: 1}
+			})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	cost = RuntimeCost(ctx, st)
+	for project, want := range map[string]int64{"alpha": 100000, "beta": 400000, "gamma": 250000, "unseen": 250000} {
+		if got := cost(project); got != want {
+			t.Errorf("cost(%s) = %d, want %d", project, got, want)
 		}
 	}
 }

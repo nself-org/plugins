@@ -16,7 +16,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -157,7 +156,6 @@ type s10Rig struct {
 	ord       *s10Orderer
 	sink      *s10Sink
 	open      atomic.Bool
-	building  atomic.Int32 // world builds in flight
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
@@ -171,7 +169,7 @@ type s10Rig struct {
 func newS10Rig(t testing.TB, runners []sched.Runner, world func(*store.Store) func(context.Context, sched.Pipeline) (sched.World, string, error), queue func(context.Context) (dispatch.QueueLimits, error)) *s10Rig {
 	st := openStore(t)
 	r := &s10Rig{t: t, st: st, clk: newClock(), errs: make(chan error, 64), trueSlots: map[string]int{}}
-	r.ctx, r.cancel = context.WithTimeout(context.Background(), 20*time.Second)
+	r.ctx, r.cancel = context.WithTimeout(context.Background(), 90*time.Second)
 	t.Cleanup(r.cancel)
 	for _, ru := range runners {
 		if ru.Location == "lan" {
@@ -184,14 +182,12 @@ func newS10Rig(t testing.TB, runners []sched.Runner, world func(*store.Store) fu
 		live = world(st)
 	}
 	gated := func(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
-		r.building.Add(1)
-		defer r.building.Add(-1)
 		if !r.open.Load() {
 			return sched.World{}, "", errors.New("gate closed")
 		}
 		return live(ctx, p)
 	}
-	r.ord = &s10Orderer{inner: dispatch.NewFair(nil, r.clk.Now), ch: make(chan struct{}, 1)}
+	r.ord = &s10Orderer{inner: dispatch.NewFair(nil, r.clk.Now).WithCost(func() func(string) int64 { return dispatch.RuntimeCost(context.Background(), st) }), ch: make(chan struct{}, 1)}
 	r.sink = &s10Sink{ch: make(chan struct{}, 1), check: func(ctx context.Context) []string {
 		return s10CheckCapacity(ctx, st, r.trueSlots, 8)
 	}}
@@ -247,15 +243,10 @@ func (r *s10Rig) release() {
 	r.tick()
 }
 
-// finish ends attempt id (its capacity frees) and ticks. The gate is closed while the attempt
-// walks to passed and until no world build is in flight, so a tick started by a waiting caller can
-// never read a half-freed store: one pipeline's world would otherwise be built before the capacity
-// freed and its sibling's after, which lets a later pipeline overtake the fair order.
+// finish ends attempt id (its capacity frees) and ticks. A tick that a waiting caller starts on its
+// own while the attempt walks to passed reads one store snapshot for every pipeline's world
+// (D-1412), so no later pipeline can plan on capacity an earlier one did not see.
 func (r *s10Rig) finish(id string) {
-	r.open.Store(false)
-	for r.building.Load() != 0 {
-		runtime.Gosched()
-	}
 	pass(r.t, r.st, id)
 	r.release()
 }

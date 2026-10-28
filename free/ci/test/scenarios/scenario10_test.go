@@ -31,11 +31,10 @@ func s10Runners() []sched.Runner {
 	return []sched.Runner{s10Runner("local", "local", 2), s10Runner("lan1", "lan", 2), s10Runner("lan2", "lan", 2)}
 }
 
-// s10JobRuntimeMs is the simulated runtime of every job. dispatch.Fair charges each job one unit
-// (internal/dispatch/order.go sets Cost 1 until the telemetry estimators feed a cost), so served
-// RUNTIME is fair only when jobs of both projects run alike; the test keeps them alike and holds the
-// Epic's bound, `max job runtime x slots`, on the served runtime of every admission prefix. Runtime
-// weighting of unequal jobs is not implemented by the orderer and is not claimed here (debt row).
+// s10JobRuntimeMs is the simulated runtime of every job here. With no settled estimator dispatch.Fair
+// charges each job one unit, so this test (equal runtimes, no estimators) holds the Epic's bound,
+// `max job runtime x slots`, on the served runtime of every admission prefix; unequal runtimes are
+// weighted by the estimators and held in scenario10_runtime_test.go (D-1411).
 const s10JobRuntimeMs = int64(90_000)
 
 // s10CheckFair returns a violation for every admission prefix where two projects that both still
