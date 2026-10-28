@@ -255,7 +255,7 @@ func TestJoinHasNoCodeFlagAndTakesNoCodeOnArgv(t *testing.T) {
 	for _, m := range regexp.MustCompile(`(?m)^\s+-(\S+)`).FindAllStringSubmatch(stderr, -1) {
 		flags[m[1]] = true
 	}
-	if !flags["expect-fingerprint"] || !flags["name"] || len(flags) != 2 {
+	if !flags["expect-fingerprint"] || !flags["name"] || !flags["advertise"] || len(flags) != 3 {
 		t.Fatalf("flags %v\n%s", flags, stderr)
 	}
 	for f := range flags {

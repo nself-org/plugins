@@ -7,9 +7,12 @@ package main
 // Outputs: lookup for main, and RunPreStart for serve, exec, join and pull.
 // Constraints: a name registers once; PreStart hooks run in registration order
 // and the first error stops the command before it reads or writes anything.
+// PostStart hooks run after every PreStart hook passed (so after the production
+// guard, once), and flag hooks declare extra flags on a subcommand's flag set.
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"sort"
@@ -29,6 +32,9 @@ type Subcommand func(ctx context.Context, args []string, sio IO) int
 // registers the production guard). A non-nil error stops the command.
 type PreStartHook func(ctx context.Context, command string) error
 
+// FlagsFunc declares extra flags on a subcommand's flag set before it parses.
+type FlagsFunc func(fs *flag.FlagSet)
+
 type command struct {
 	summary string
 	run     Subcommand
@@ -43,6 +49,9 @@ var (
 	regMu    sync.RWMutex
 	commands = map[string]command{}
 	prestart []preStart
+	// poststart holds the hooks that run once every PreStart hook has passed.
+	poststart []preStart
+	cmdFlags  = map[string][]FlagsFunc{}
 )
 
 // RegisterSubcommand adds a subcommand. An empty or duplicate name is an error.
@@ -86,6 +95,58 @@ func RunPreStart(ctx context.Context, command string) error {
 		}
 	}
 	return nil
+}
+
+// RegisterPostStart adds a hook that runs after every PreStart hook of the command passed. An empty or
+// duplicate name is an error.
+func RegisterPostStart(name string, run PreStartHook) error {
+	regMu.Lock()
+	defer regMu.Unlock()
+	if name == "" || run == nil {
+		return fmt.Errorf("post-start hook needs a name and a function")
+	}
+	for _, p := range poststart {
+		if p.name == name {
+			return fmt.Errorf("duplicate post-start hook %q", name)
+		}
+	}
+	poststart = append(poststart, preStart{name, run})
+	return nil
+}
+
+// RunPostStart runs every PostStart hook for command in order and stops at the first error.
+func RunPostStart(ctx context.Context, command string) error {
+	regMu.RLock()
+	hooks := append([]preStart(nil), poststart...)
+	regMu.RUnlock()
+	for _, h := range hooks {
+		if err := h.run(ctx, command); err != nil {
+			return fmt.Errorf("post-start %s: %w", h.name, err)
+		}
+	}
+	return nil
+}
+
+// RegisterFlags lets a later Ticket declare flags on a subcommand without editing its file. A nil
+// function is an error.
+func RegisterFlags(command string, fn FlagsFunc) error {
+	regMu.Lock()
+	defer regMu.Unlock()
+	if command == "" || fn == nil {
+		return fmt.Errorf("flag hook needs a command and a function")
+	}
+	cmdFlags[command] = append(cmdFlags[command], fn)
+	return nil
+}
+
+// applyFlags runs the flag hooks registered for command on fs.
+func applyFlags(command string, fs *flag.FlagSet) {
+	regMu.RLock()
+	fns := append([]FlagsFunc(nil), cmdFlags[command]...)
+	regMu.RUnlock()
+	for _, fn := range fns {
+		fn(fs)
+	}
 }
 
 func lookup(name string) (Subcommand, bool) {
