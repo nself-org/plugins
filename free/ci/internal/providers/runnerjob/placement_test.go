@@ -62,10 +62,14 @@ func TestPlacementRules(t *testing.T) {
 		j.Requirements.IsolationMin != "sandboxed-container" {
 		t.Fatalf("job %+v", j)
 	}
-	local := schedRunner("local", "local", trust.Declaration{Accepts: untrustedOK, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: true, NoLANRoute: true})
-	plain := schedRunner("plain", "lan", trust.Declaration{Accepts: untrustedOK, Isolation: "container", Network: "restricted", UIDSeparation: true, Ownership: "operator", NoLANRoute: true})
+	local := schedRunner("local", "local", trust.Declaration{Accepts: untrustedOK, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: true})
+	plain := schedRunner("plain", "lan", trust.Declaration{Accepts: untrustedOK, Isolation: "container", Network: "restricted", UIDSeparation: true, Ownership: "operator"})
 	world := func(rs ...sched.Runner) sched.World {
-		return sched.World{Runners: rs, Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}}
+		proof := map[string]sched.NetworkFact{}
+		for _, r := range rs {
+			proof[r.ID] = sched.NetworkFact{Enforced: []model.NetworkScope{"none", "restricted", "internet"}}
+		}
+		return sched.World{Network: proof, Runners: rs, Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}}
 	}
 	got := sched.Place(world(local, plain), []sched.Job{j})
 	if placed(got) {
@@ -75,13 +79,14 @@ func TestPlacementRules(t *testing.T) {
 	if !r["runner.remote_only"] || !r["isolation.below_minimum"] {
 		t.Fatalf("want runner.remote_only and isolation.below_minimum, got %v", r)
 	}
-	gv := trust.Declaration{Accepts: untrustedOK, Isolation: "sandboxed-container", Network: "restricted", UIDSeparation: true, Ownership: "operator", NoLANRoute: true}
+	gv := trust.Declaration{Accepts: untrustedOK, Isolation: "sandboxed-container", Network: "restricted", UIDSeparation: true, Ownership: "operator"}
 	got = sched.Place(world(local, plain, schedRunner("gvisor", "lan", gv)), []sched.Job{j})
 	if !placed(got) || got.Placements[0].RunnerID != "gvisor" {
 		t.Fatalf("the gVisor node with NoLANRoute must take the demand: %+v %v", got.Placements, reasons(got))
 	}
-	gv.NoLANRoute = false
-	got = sched.Place(world(schedRunner("gvisor-lan", "lan", gv)), []sched.Job{j})
+	unproven := world(schedRunner("gvisor-lan", "lan", gv))
+	unproven.Network = nil
+	got = sched.Place(unproven, []sched.Job{j})
 	if placed(got) {
 		t.Fatalf("a gVisor node that cannot prove no LAN route must not take an untrusted runner job: %+v", got.Placements)
 	}

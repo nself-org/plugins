@@ -126,7 +126,7 @@ func scenarioReservedCPU(t *testing.T) {
 	c := node.Capability
 	ApplyFacts(&c, probe(), ReadSignals(probe(), &Signals{Interactive: Active}), d.Share.Slots, 0, time.Now().UTC())
 	w := sched.World{Runners: []sched.Runner{{ID: "laptop-1", Capability: c, Location: "lan", Class: "owned", Provider: "operator", Avail: sched.Avail{Slots: 2, CPU: 4, MemMB: 4096},
-		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", NoLANRoute: true}}},
+		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator"}}},
 		Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}}
 	job := sched.Job{Key: "bg", ID: "bg", Project: "project", Pipeline: sched.Pipeline{ID: "p", Support: []string{"linux/amd64"}, Band: "background"},
 		Requirements: model.PlacementRequirements{Platform: "linux/amd64", CPU: 1, MemMB: 128}, Trust: "owner", Network: "lan", TimeoutMs: 60000, PersonalOwnRun: true}

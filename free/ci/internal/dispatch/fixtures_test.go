@@ -71,7 +71,7 @@ func testRunner(id, loc string, slots int) sched.Runner {
 	c.Identity.Labels = []string{"arch=amd64"}
 	c.Location.Kind.Value = &loc
 	return sched.Runner{ID: id, Location: loc, Class: "owned", Provider: "operator", Avail: sched.Avail{Slots: slots, CPU: 8, MemMB: 8192}, Capability: c,
-		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: loc == "local", NoLANRoute: true}}
+		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: loc == "local"}}
 }
 
 func testJob(attempt string) sched.Job {
@@ -107,11 +107,12 @@ func liveWorld(st *store.Store, policy func(*sched.Policy), runners ...sched.Run
 		if err != nil {
 			return sched.World{}, "", err
 		}
-		w := sched.World{Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}, Counts: sched.Counts{Runners: map[string]int{}, Providers: map[string]int{}}}
+		w := sched.World{Network: map[string]sched.NetworkFact{}, Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}, Counts: sched.Counts{Runners: map[string]int{}, Providers: map[string]int{}}}
 		if policy != nil {
 			policy(&w.Policy)
 		}
 		for _, r := range runners {
+			w.Network[r.ID] = sched.NetworkFact{Enforced: []model.NetworkScope{"none", "restricted", "internet"}}
 			if r.Location != "local" && r.Location != "hosted" {
 				registerNode(st, r)
 			}

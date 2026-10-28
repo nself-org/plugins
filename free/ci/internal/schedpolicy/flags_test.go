@@ -84,8 +84,9 @@ func fixtureWorld(t *testing.T, p sched.Policy) sched.World {
 	if err = json.Unmarshal(raw, &rows); err != nil {
 		t.Fatal(err)
 	}
-	w := sched.World{Policy: p, Costs: map[string]sched.Cost{}, Previous: map[string]string{}, Estimates: map[string]map[string]sched.Sample{}}
+	w := sched.World{Network: map[string]sched.NetworkFact{}, Policy: p, Costs: map[string]sched.Cost{}, Previous: map[string]string{}, Estimates: map[string]map[string]sched.Sample{}}
 	for _, row := range rows.Runners {
+		w.Network[row.ID] = sched.NetworkFact{Enforced: []model.NetworkScope{"none", "restricted", "internet"}}
 		c := model.Capability{Schema: "ci.runner-capability/v1"}
 		c.Lifecycle.AuthorizedProjects = []string{"project"}
 		if !row.Authorized {
@@ -99,7 +100,7 @@ func fixtureWorld(t *testing.T, p sched.Policy) sched.World {
 		c.Location.Kind.Value = ptr(row.Location)
 		w.Runners = append(w.Runners, sched.Runner{ID: row.ID, Location: row.Location, Class: row.Class, Provider: "operator", Capability: c,
 			Avail: sched.Avail{Slots: 1, CPU: 8, MemMB: 8192},
-			Decl:  trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: row.Location == "local", NoLANRoute: true}})
+			Decl:  trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: row.Location == "local"}})
 		w.Estimates[row.ID] = map[string]sched.Sample{"j": {WaitMs: ptr(row.Wait), RuntimeMs: ptr(row.Runtime), ColdStartMs: ptr(row.Cold), TransferMs: ptr(row.Transfer),
 			ContentionMs: ptr(row.Contention), CostMicro: ptr(row.Cost), ScarcityMs: ptr(int64(0)), ReliabilityMs: ptr(int64(0)), CacheMs: ptr(int64(0)), Confidence: "known"}}
 	}

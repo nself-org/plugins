@@ -166,9 +166,10 @@ func TestBurstPrivateInfrastructureNeverReachesABurstVMByDefault(t *testing.T) {
 	vm.Decl.Hosted, vm.Decl.Provider = true, "fakecloud"
 	owned := runner("owned-lan-1", "lan", "linux/amd64", 1)
 	world := func(rs ...sched.Runner) sched.World {
-		w := sched.World{Policy: sched.Policy{Preset: "balanced", PaidEnabled: true}, Costs: map[string]sched.Cost{"burst-vm-1": {Class: "ephemeral", RateMicro: 1, BillingIncrementMs: 60000}},
+		w := sched.World{Network: map[string]sched.NetworkFact{}, Policy: sched.Policy{Preset: "balanced", PaidEnabled: true}, Costs: map[string]sched.Cost{"burst-vm-1": {Class: "ephemeral", RateMicro: 1, BillingIncrementMs: 60000}},
 			Previous: map[string]string{}, Counts: sched.Counts{Runners: map[string]int{}, Providers: map[string]int{}}}
 		for _, r := range rs {
+			w.Network[r.ID] = sched.NetworkFact{Enforced: []model.NetworkScope{"none", "restricted", "internet"}}
 			if r.Location == "hosted" {
 				w.Hosted = append(w.Hosted, r)
 			} else {
