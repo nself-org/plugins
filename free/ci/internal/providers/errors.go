@@ -42,3 +42,17 @@ func ClassOf(err error) ErrorClass {
 	}
 	return ""
 }
+
+// FailureClass classifies delivery failures without coupling the dispatcher to providers.
+func (e *Error) FailureClass() string {
+	if e == nil {
+		return "infra"
+	}
+	switch e.Code {
+	case "E700", "E701", "E702":
+		if (e.Class == Auth || e.Class == Config) && e.Status != 408 && e.Status != 409 && e.Status != 425 && e.Status/100 != 2 && e.Reason != "provider policy unreadable" {
+			return "code"
+		}
+	}
+	return "infra"
+}
