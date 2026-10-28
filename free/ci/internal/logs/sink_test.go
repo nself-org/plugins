@@ -284,3 +284,26 @@ func TestPlantedSecretNeverReachesStoredLogs(t *testing.T) {
 		t.Fatal("positive control: the scan cannot see an unredacted secret")
 	}
 }
+
+func TestSinkRetainsIncompleteRuneAtExactMaxLine(t *testing.T) {
+	for _, runeText := range []string{"é", "€", "😀"} {
+		t.Run(runeText, func(t *testing.T) {
+			s, dir := newTestSink(t, Options{MaxLine: 10})
+			want := strings.Repeat("a", 9) + runeText
+			_, _ = s.Write([]byte(want[:10]))
+			_, _ = s.Write([]byte(want[10:] + "\n"))
+			if err := s.Close(); err != nil {
+				t.Fatal(err)
+			}
+			lines := readAll(t, dir)
+			for _, line := range lines {
+				if !utf8.ValidString(line.Text) {
+					t.Fatalf("split rune: %q", line.Text)
+				}
+			}
+			if got := strings.Join(texts(lines), ""); got != want {
+				t.Fatalf("got %q, want %q", got, want)
+			}
+		})
+	}
+}
