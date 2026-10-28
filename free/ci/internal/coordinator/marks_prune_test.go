@@ -80,7 +80,14 @@ func TestMaintainSweepsStaleApprovals(t *testing.T) {
 	if _, err := r.st.ApproveRun(ctx, store.ApproveInput{Run: "r1", Approver: "bob", ExpectSHA: "sha-1", Check: approvalVoidCheck}); err != nil {
 		t.Fatal(err)
 	}
-	r.c.sweepApprovals(ctx)
+	mctx, stop := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() { r.c.maintain(mctx); close(done) }()
+	defer func() {
+		stop()
+		<-done
+	}()
+	waitFor(t, "the first beat to finish", func() bool { return r.clk.pending() >= 1 })
 	if st, _, _ := r.st.ApprovalState(ctx, "r1"); st.Approval.VoidedAt != 0 {
 		t.Fatal("an approval that still matches its run must stand")
 	}
@@ -93,9 +100,13 @@ func TestMaintainSweepsStaleApprovals(t *testing.T) {
 	if _, err = db.Exec("UPDATE pipeline SET revision='sha-2' WHERE id='r1'"); err != nil {
 		t.Fatal(err)
 	}
-	r.c.sweepApprovals(ctx)
+	r.clk.Advance(r.c.cfg.Beat)
+	waitFor(t, "the beat to void the stale approval", func() bool {
+		st, _, _ := r.st.ApprovalState(ctx, "r1")
+		return st.Approval.VoidedAt != 0
+	})
 	st, _, err := r.st.ApprovalState(ctx, "r1")
-	if err != nil || st.Approval.VoidedAt == 0 || !strings.Contains(st.Approval.VoidReason, "head") {
+	if err != nil || !strings.Contains(st.Approval.VoidReason, "head") {
 		t.Fatalf("the tick did not void the stale approval: %+v %v", st.Approval, err)
 	}
 }
