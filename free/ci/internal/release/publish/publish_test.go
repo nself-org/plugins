@@ -100,7 +100,7 @@ func TestPublishRecoveryAfterAMissingKey(t *testing.T) {
 		t.Fatalf("the recovery command is not named: %v", err)
 	}
 	row, ok, _ := f.ledger.ReleaseFor(context.Background(), runID)
-	if !ok || row.State != store.ReleaseFailed || !strings.Contains(row.Reason, "key_missing") {
+	if !ok || row.State != store.ReleaseFailed || row.Reason != "E717 key_missing: the release key is not set: run `nself ci artifacts key init`" {
 		t.Fatalf("ledger %+v", row)
 	}
 	if _, serr := os.Stat(publish.Dir(f.home, runID)); serr == nil {

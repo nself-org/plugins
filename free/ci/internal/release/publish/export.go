@@ -92,6 +92,11 @@ func withRecovery(err error, runID string) error {
 // removes what it created. undo removes through the handle opened here, never
 // the pathname again, so a dst swapped for a symlink afterwards cannot make it
 // delete files elsewhere; the caller must call done when it no longer needs undo.
+// There is a residual mkdir-to-OpenRoot race: if dst is renamed or replaced
+// before its handle and identity are captured, refusal can leave the newly
+// created empty directory behind. We cannot safely remove that directory by
+// pathname without its original identity. No files outside the opened root
+// are written or removed; portable os.Root APIs cannot make mkdir and open atomic.
 func copyTree(src, dst string) (undo, done func(), err error) {
 	madeDst := false
 	if info, lerr := os.Lstat(dst); lerr == nil {

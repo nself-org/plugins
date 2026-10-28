@@ -14,10 +14,13 @@ package publish_test
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/release/publish"
@@ -59,7 +62,7 @@ exit 8
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return func(src signing.Source) publish.Signer {
-		return &signing.Client{Runner: &signing.FunnelRunner{Home: p.home}, Src: src, Exe: exe,
+		return &signing.Client{Runner: &keyCheckingRunner{t: t, next: &signing.FunnelRunner{Home: p.home}, key: p.keyValue}, Src: src, Exe: exe,
 			Env: []string{"NSELF_CI_HOME=" + p.home, "NSELF_CI_REPO=" + p.repo}}
 	}
 }
@@ -96,4 +99,77 @@ func TestReleasePipelineRealSigner(t *testing.T) {
 	if got := string(readDir(t, exp.Dir)["artifacts/app"]); got != "app-bytes" {
 		t.Fatalf("artifact bytes %q", got)
 	}
+}
+
+// keyCheckingRunner observes the argv handed to the real exec funnel.
+type keyCheckingRunner struct {
+	t    *testing.T
+	next signing.StdioRunner
+	key  []byte
+}
+
+func (r *keyCheckingRunner) RunStdio(ctx context.Context, call signing.StdioCall) ([]byte, int, error) {
+	assertKeyAbsent(r.t, r.key, "signer argv", strings.Join(call.Argv, "\x00"))
+	return r.next.RunStdio(ctx, call)
+}
+
+func assertKeyAbsent(t *testing.T, key []byte, sink, text string) {
+	t.Helper()
+	decoded, err := base64.StdEncoding.DecodeString(string(key))
+	if err != nil || len(decoded) == 0 {
+		t.Fatal("invalid planted test key")
+	}
+	if strings.Contains(text, string(key)) || strings.Contains(text, string(decoded)) {
+		t.Fatalf("planted key leaked to %s", sink)
+	}
+}
+
+func TestPlantedKeyAbsentFromPublicationSinks(t *testing.T) {
+	p := newPipeRig(t)
+	p.signerFor = p.realSigner()
+	res, st := p.run(goodRelease, true)
+	if res.Exit != 0 {
+		t.Fatalf("pipeline exit %d", res.Exit)
+	}
+	foundHookNote := false
+	for _, note := range res.Summary.Notes {
+		if strings.Contains(note, "release published: ") {
+			foundHookNote = true
+		}
+	}
+	if !foundHookNote {
+		t.Fatal("publication hook note was not captured")
+	}
+	assertKeyAbsent(t, p.keyValue, "hook notes", strings.Join(res.Summary.Notes, "\n"))
+	row, ok, err := st.ReleaseFor(context.Background(), res.RunID)
+	if err != nil || !ok {
+		t.Fatalf("release row: %v", err)
+	}
+	raw, err := json.Marshal(row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertKeyAbsent(t, p.keyValue, "ledger", string(raw))
+	// Invoke the real artifacts sign command, including its own signer process.
+	// realSigner has already built and configured the executable and fake cli.
+	client := p.deps(st).Signer.(*signing.Client)
+	for _, flags := range [][]string{nil, {"--json"}} {
+		args := append([]string{"artifacts", "sign", res.RunID, "--project", p.repo}, flags...)
+		cmd := exec.Command(client.Exe, args...)
+		cmd.Env = append(os.Environ(), "NSELF_V15=1", "NSELF_CI_HOME="+p.home, "NSELF_CI_REPO="+p.repo)
+		out, err := cmd.CombinedOutput()
+		assertKeyAbsent(t, p.keyValue, "artifacts sign output", string(out))
+		if err != nil {
+			t.Fatalf("artifacts sign failed: %v", err)
+		}
+		if len(out) == 0 {
+			t.Fatal("artifacts sign output was not captured")
+		}
+	}
+	// Sweep every on-disk sink, including event logs, evidence, the ledger
+	// (and its WAL), and release files. The fake secret store lives elsewhere.
+	for name, data := range readDir(t, p.home) {
+		assertKeyAbsent(t, p.keyValue, name, string(data))
+	}
+
 }

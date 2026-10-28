@@ -239,3 +239,56 @@ func TestCaptureInRunsInDir(t *testing.T) {
 		t.Fatal("Capture without a dir must not see the repository files")
 	}
 }
+
+// selectiveReporter models an inaccessible repository in a shared outbox.
+type selectiveReporter struct {
+	posted []Status
+	err    error
+}
+
+func (r *selectiveReporter) Post(_ context.Context, s Status) error {
+	if s.Repo == "inaccessible" {
+		return r.err
+	}
+	r.posted = append(r.posted, s)
+	return nil
+}
+
+func TestOutboxDrainContinuesAfterUnrelatedRepositoryFails(t *testing.T) {
+	ctx := context.Background()
+	st := openStore(t)
+	o := &Outbox{Store: st, Owner: "o"}
+	for _, repo := range []string{"inaccessible", "healthy"} {
+		o.Repo = repo
+		seq, err := o.Reserve(ctx, sha)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := status(Success, "ok")
+		s.Repo = repo
+		if _, err := o.Complete(ctx, seq, s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	failure := errors.New("repository unavailable")
+	rep := &selectiveReporter{err: failure}
+	o.Reporter = rep
+	if n, err := o.Drain(ctx); n != 1 || !errors.Is(err, failure) {
+		t.Fatalf("drain: count %d error %v", n, err)
+	}
+	if len(rep.posted) != 1 || rep.posted[0].Repo != "healthy" {
+		t.Fatalf("posted: %+v", rep.posted)
+	}
+	left, err := st.OutboxUnposted(ctx)
+	if err != nil || len(left) != 1 {
+		t.Fatalf("pending: %+v %v", left, err)
+	}
+	var pending Status
+	if err := json.Unmarshal(left[0].Payload, &pending); err != nil || pending.Repo != "inaccessible" {
+		t.Fatalf("pending status: %+v %v", pending, err)
+	}
+	o.Reporter = &fake{}
+	if n, err := o.Drain(ctx); n != 1 || err != nil {
+		t.Fatalf("retry: %d %v", n, err)
+	}
+}

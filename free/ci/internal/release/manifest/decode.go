@@ -87,27 +87,6 @@ func foldKey(s string) string {
 	}, s)
 }
 
-// contractKeys holds every JSON field name of the contract, by foldKey.
-var contractKeys = func() map[string]string {
-	out := map[string]string{}
-	var walk func(t reflect.Type)
-	walk = func(t reflect.Type) {
-		for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice {
-			t = t.Elem()
-		}
-		if t.Kind() != reflect.Struct {
-			return
-		}
-		for i := 0; i < t.NumField(); i++ {
-			name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
-			out[foldKey(name)] = name
-			walk(t.Field(i).Type)
-		}
-	}
-	walk(reflect.TypeOf(Manifest{}))
-	return out
-}()
-
 // checkPresence requires every field of the Go type in the decoded JSON value,
 // and a non-null value for a field that is not a pointer.
 func checkPresence(t reflect.Type, v any, path string) error {
@@ -126,6 +105,18 @@ func checkPresence(t reflect.Type, v any, path string) error {
 		obj, ok := v.(map[string]any)
 		if !ok {
 			return invalid("%s is not an object", path)
+		}
+		// Only fields of this object can be folded onto this contract type.
+		// Unknown extension objects are ignored by encoding/json.
+		fields := make(map[string]string, t.NumField())
+		for i := 0; i < t.NumField(); i++ {
+			name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+			fields[foldKey(name)] = name
+		}
+		for key := range obj {
+			if want, ok := fields[foldKey(key)]; ok && want != key {
+				return invalid("%s: key %q is a case variant of %q", path, key, want)
+			}
 		}
 		for i := 0; i < t.NumField(); i++ {
 			name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
@@ -204,9 +195,6 @@ func checkShape(b []byte) error {
 				lower := foldKey(t)
 				if stack[n-1].folded[lower] {
 					return invalid("key %q repeats in another letter case", t)
-				}
-				if want, ok := contractKeys[lower]; ok && want != t {
-					return invalid("key %q is a case variant of %q", t, want)
 				}
 				stack[n-1].keys[t], stack[n-1].folded[lower], stack[n-1].expectKey = true, true, false
 				continue
