@@ -13,6 +13,8 @@ package local
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"runtime"
 	"strconv"
 	"strings"
@@ -63,8 +65,26 @@ func atoi(s string, dflt int) int {
 	return dflt
 }
 
+// slotHolder is the part of the vm profile that reserves a slot ahead of the attempt's Wrap (*tart.Profile).
+type slotHolder interface {
+	Hold(ctx context.Context, a isolation.Attempt) error
+}
+
+// Prepare checks the profile and takes the attempt's slot in the profile's shared ledger (D-1381), so a non-burst
+// vm job booting in this process cannot take the slot a burst job was granted: the profile's Wrap takes the hold
+// over. A full host is ErrNoSlot, whichever of the two steps saw it.
 func (b *tartBackend) Prepare(ctx context.Context, a isolation.Attempt) error {
-	return b.vm.Prepare(ctx, a)
+	err := b.vm.Prepare(ctx, a)
+	if err == nil {
+		if h, ok := b.vm.(slotHolder); ok {
+			err = h.Hold(ctx, a)
+		}
+	}
+	var ie *isolation.Error
+	if errors.As(err, &ie) && ie.Reason == tart.ReasonSlots {
+		return fmt.Errorf("%w: %v", ErrNoSlot, err)
+	}
+	return err
 }
 
 func (b *tartBackend) Teardown(ctx context.Context, a isolation.Attempt) error {

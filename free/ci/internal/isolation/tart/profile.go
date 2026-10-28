@@ -148,15 +148,35 @@ func (p *Profile) str(f func() string, dflt string) string {
 // Prepare checks, before the job starts, that Tart still works, and sweeps orphan clones of dead owners.
 func (p *Profile) Prepare(ctx context.Context, a isolation.Attempt) error {
 	av := p.probe(ctx, true)
-	if !av.Available() {
+	if !av.Available() && !(av.Reason == ReasonSlots && p.slots.holds(a.ID)) { // the attempt's own hold is what reads full
 		return isolation.Unavailable(av.Reason, "%s isolation is unavailable for attempt %s: %s", p.level, a.ID, av.Facts["hint"])
 	}
 	p.sweepOnce(ctx, a.CoordinatorID)
 	return nil
 }
 
-// Teardown removes the clone of an attempt if it is still there; it is idempotent.
+// Hold takes one of the macOS VM slots for the attempt before its job is wrapped: a burst slot that is granted
+// is then busy in the shared ledger, so a non-burst vm job booting in this process cannot take it and fail the
+// granted job at Wrap. The attempt's Wrap takes the hold over; Teardown gives it back if Wrap never came. An
+// unavailable (tart_no_free_slot) error means every slot is busy now.
+func (p *Profile) Hold(ctx context.Context, a isolation.Attempt) error {
+	pctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	vms, err := listVMs(pctx, p.opts.NewTool(a.CoordinatorID, p.home("")), p.opts.Tart)
+	if err != nil {
+		return isolation.Unavailable(isolation.ReasonProbeFailed, "%v", err)
+	}
+	foreign, own := vmCounts(vms)
+	if !p.slots.hold(a.ID, foreign, own) {
+		return isolation.Unavailable(ReasonSlots, "both macOS VM slots are in use")
+	}
+	return nil
+}
+
+// Teardown removes the clone of an attempt if it is still there; it is idempotent. A slot the attempt still
+// holds from Hold (its Wrap never ran) is given back.
 func (p *Profile) Teardown(ctx context.Context, a isolation.Attempt) error {
+	p.slots.unhold(a.ID)
 	tool := p.opts.NewTool(a.CoordinatorID, p.home(""))
 	return destroyClone(ctx, tool, p.opts.Tart, CloneName(a.ID), nil)
 }
