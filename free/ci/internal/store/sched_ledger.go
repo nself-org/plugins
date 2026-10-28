@@ -83,6 +83,12 @@ func satAdd(a, b int64) (int64, bool) {
 // PutLedger writes the admission estimate of an attempt. A repeat admission of an
 // attempt that is not settled replaces the row; a settled row is final.
 func (t LedgerTx) PutLedger(r LedgerRow) error {
+	if err := ledgerValues(r.EstMs, r.EstMicro); err != nil {
+		return err
+	}
+	if err := r.Rate.validate(); err != nil {
+		return err
+	}
 	_, err := t.tx.ExecContext(t.ctx, `INSERT INTO ledger (attempt_id,pipeline_id,project,provider,class,remote,est_ms,est_micro,act_ms,act_micro,confidence,budget_refs,window_day,
  rate_micro,rate_unit_ms,inc_ms,min_micro,extras_micro,admitted_at,finalized_at) VALUES (?,?,?,?,?,?,?,?,NULL,NULL,?,?,?,?,?,?,?,?,?,NULL)
  ON CONFLICT(attempt_id) DO UPDATE SET pipeline_id=excluded.pipeline_id,project=excluded.project,provider=excluded.provider,class=excluded.class,remote=excluded.remote,
@@ -137,6 +143,9 @@ func (s *Store) LedgerOpen(ctx context.Context, pipeline string) ([]LedgerRow, e
 // the actual under the window they were made in. It reports false when the
 // attempt has no ledger row or was already settled.
 func (s *Store) LedgerSettle(ctx context.Context, attempt string, actMs, actMicro int64, confidence string) (bool, error) {
+	if err := ledgerValues(actMs, actMicro); err != nil {
+		return false, err
+	}
 	changed := false
 	err := s.write(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, "UPDATE ledger SET act_ms=?,act_micro=?,confidence=?,finalized_at=? WHERE attempt_id=? AND finalized_at IS NULL", actMs, actMicro, confidence, s.now().UnixNano(), attempt)

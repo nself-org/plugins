@@ -25,6 +25,12 @@ type ResourceRow struct {
 
 // PutResource records a new resource; the intent is unique.
 func (t LedgerTx) PutResource(r ResourceRow) error {
+	if err := ledgerValues(r.ReservedMicro); err != nil {
+		return err
+	}
+	if err := r.Rate.validate(); err != nil {
+		return err
+	}
 	_, err := t.tx.ExecContext(t.ctx, `INSERT INTO resource_ledger (intent,provider,pipeline_id,reserved_micro,window_day,rate_micro,rate_unit_ms,inc_ms,min_micro,extras_micro,provisioned_at)
  VALUES (?,?,?,?,?,?,?,?,?,?,?)`, r.Intent, r.Provider, r.Pipeline, r.ReservedMicro, r.WindowDay, r.Rate.RateMicro, r.Rate.RateUnitMs, r.Rate.IncMs, r.Rate.MinMicro, r.Rate.ExtrasMicro, r.ProvisionedAt)
 	return err
@@ -62,6 +68,9 @@ func resource(ctx context.Context, q ledgerQuerier, intent string) (ResourceRow,
 // what it cost, even past its reservation, so the actual is not capped. A second
 // release is a no-op.
 func (t LedgerTx) ReleaseResource(intent string, at, actual int64) error {
+	if err := ledgerValues(actual); err != nil {
+		return err
+	}
 	res, err := t.tx.ExecContext(t.ctx, "UPDATE resource_ledger SET confirmed_teardown_at=?, actual_micro=? WHERE intent=? AND confirmed_teardown_at IS NULL", at, actual, intent)
 	if err != nil {
 		return err

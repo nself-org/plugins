@@ -39,6 +39,9 @@ type Reservation struct {
 // the owner's unsettled reservation (new amount, new window) and never adds a
 // second one; a settled reservation is final.
 func (t LedgerTx) Reserve(r Reservation) error {
+	if err := ledgerValues(r.Micro); err != nil {
+		return err
+	}
 	_, err := t.tx.ExecContext(t.ctx, `INSERT INTO reservation(owner,scope,scope_key,window_key,micro,settled) VALUES (?,?,?,?,?,0)
  ON CONFLICT(owner,scope) DO UPDATE SET scope_key=excluded.scope_key, window_key=excluded.window_key, micro=excluded.micro WHERE settled=0`, r.Owner, r.Scope, r.ScopeKey, r.WindowKey, r.Micro)
 	return err
@@ -135,6 +138,9 @@ type UsageRow struct {
 
 // PutUsage stores or replaces a provider usage row.
 func (s *Store) PutUsage(ctx context.Context, u UsageRow) error {
+	if err := ledgerValues(u.Minutes, u.CostMicro); err != nil {
+		return err
+	}
 	return s.write(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO ledger_usage(key,provider,period,day,series,minutes,cost_micro,balance_micro,reported_at) VALUES (?,?,?,?,?,?,?,?,?)",
 			u.Key, u.Provider, u.Period, u.Day, u.Series, u.Minutes, u.CostMicro, u.BalanceMicro, u.ReportedAt)
