@@ -136,16 +136,50 @@ type UsageRow struct {
 	ReportedAt                         int64
 }
 
+const putUsageSQL = "INSERT OR REPLACE INTO ledger_usage(key,provider,period,day,series,minutes,cost_micro,balance_micro,reported_at) VALUES (?,?,?,?,?,?,?,?,?)"
+
+func putUsage(ctx context.Context, tx *sql.Tx, u UsageRow) error {
+	_, err := tx.ExecContext(ctx, putUsageSQL, u.Key, u.Provider, u.Period, u.Day, u.Series, u.Minutes, u.CostMicro, u.BalanceMicro, u.ReportedAt)
+	return err
+}
+
 // PutUsage stores or replaces a provider usage row.
 func (s *Store) PutUsage(ctx context.Context, u UsageRow) error {
 	if err := ledgerValues(u.Minutes, u.CostMicro); err != nil {
 		return err
 	}
 	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO ledger_usage(key,provider,period,day,series,minutes,cost_micro,balance_micro,reported_at) VALUES (?,?,?,?,?,?,?,?,?)",
-			u.Key, u.Provider, u.Period, u.Day, u.Series, u.Minutes, u.CostMicro, u.BalanceMicro, u.ReportedAt)
-		if err != nil {
+		if err := putUsage(ctx, tx, u); err != nil {
 			return err
+		}
+		return ledgerTx(s, ctx, tx).pruneLedger()
+	})
+}
+
+// ReplaceUsage replaces every row of provider whose day lies in fromDay..toDay (UTC, YYYY-MM-DD, both
+// included) with rows, in one transaction: a row the provider no longer reports (a renamed repo or sku,
+// a changed billing account) goes, so the allowance never counts one consumption twice, and a failure
+// leaves the old rows. Every row must belong to provider and lie in the range.
+func (s *Store) ReplaceUsage(ctx context.Context, provider, fromDay, toDay string, rows []UsageRow) error {
+	if provider == "" || fromDay == "" || fromDay > toDay {
+		return coded("E607", "usage replacement needs a provider and an ordered day range")
+	}
+	for _, u := range rows {
+		if u.Provider != provider || u.Day < fromDay || u.Day > toDay {
+			return coded("E607", "usage row "+u.Key+" is outside the replaced provider and day range")
+		}
+	}
+	return s.write(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM ledger_usage WHERE provider=? AND day>=? AND day<=?", provider, fromDay, toDay); err != nil {
+			return err
+		}
+		for _, u := range rows {
+			if err := ledgerValues(u.Minutes, u.CostMicro); err != nil {
+				return err
+			}
+			if err := putUsage(ctx, tx, u); err != nil {
+				return err
+			}
 		}
 		return ledgerTx(s, ctx, tx).pruneLedger()
 	})
