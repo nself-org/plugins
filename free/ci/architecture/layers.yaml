@@ -100,6 +100,7 @@ layers:
     - internal/lease
     - internal/pairing
     - internal/pairing/enroll
+    - internal/approval
     - internal/pki
     - internal/discovery
     - internal/protocol

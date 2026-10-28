@@ -1,7 +1,7 @@
 package main
 
 // Purpose: `nself ci runs approve <run> [--spend] [--sha <sha>]` and `nself ci runs pending` (P7-TRUST-24,
-// Epic D18), and the `approval` admission step that holds a run needing approval until a valid one exists.
+// Epic D18), and the registration of the `approval` admission step (internal/approval) that holds a run needing approval until a valid one exists.
 // Inputs:  argv after `runs approve|pending`; env NSELF_CI_HOME (state.db).
 // Outputs: a text line or one v1 JSON envelope (--json); exit 0 approved or listed, 1 refused (E687 role,
 //          E688 author, unknown run, stale head, not required), 2 infrastructure.
@@ -27,9 +27,8 @@ import (
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
 
-	"github.com/nself-org/plugins/free/ci/internal/dispatch"
+	"github.com/nself-org/plugins/free/ci/internal/approval"
 	"github.com/nself-org/plugins/free/ci/internal/economics"
-	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
@@ -41,7 +40,7 @@ import (
 func init() {
 	registerRunsSub("approve", func(args []string) int { return runApprove(args, productionApproveEnv()) })
 	registerRunsSub("pending", func(args []string) int { return runPending(args, productionApproveEnv()) })
-	if err := dispatch.RegisterStep("approval", approvalStep); err != nil {
+	if err := approval.Register(); err != nil {
 		panic(err)
 	}
 }
@@ -56,43 +55,6 @@ type approveEnv struct {
 
 func productionApproveEnv() approveEnv {
 	return approveEnv{adminEnv: productionAdminEnv(), Run: policy.Runner(report.Capture), Now: time.Now, Spend: economics.ApproveSpend}
-}
-
-// voidCheck and approvalNeeded adapt the pure rules in trust/source to the store's types.
-func voidCheck(approved, cur store.ApprovalBinding) []string {
-	return source.VoidReasons(source.Binding(approved), source.Binding(cur))
-}
-
-func approvalNeeded(st store.ApprovalState) bool {
-	return source.RequiresApproval(st.Requires, st.Facts, model.TrustClass(st.SourceTrust))
-}
-
-// approvalStep is the `approval` admission step (D18). It refuses with approval.required while the run
-// needs an approval and none is valid for its stored head SHA, config digest and head repo. Failing to
-// read the facts fails the admission closed.
-func approvalStep(ctx context.Context, v dispatch.View) error {
-	st, ok, err := v.ApprovalState(ctx)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("approval: run %s has no stored facts", v.PipelineID)
-	}
-	if !approvalNeeded(st) {
-		return nil
-	}
-	hold := func(why string) error {
-		return &dispatch.Refusal{Reason: model.PlacementReason(source.ReasonApprovalRequired), Detail: why}
-	}
-	switch reasons := voidCheck(st.Approval.ApprovalBinding, st.Current()); {
-	case !st.HasApproval:
-		return hold("run " + st.Run + " waits for `nself ci runs approve " + st.Run + "`")
-	case st.Approval.VoidedAt != 0:
-		return hold("the approval was voided (" + st.Approval.VoidReason + "); approve the current head again")
-	case len(reasons) > 0:
-		return hold("the approval no longer matches the run (" + strings.Join(reasons, ",") + "); approve the current head again")
-	}
-	return nil
 }
 
 type approveFlags struct {
@@ -185,7 +147,7 @@ func approveRun(ctx context.Context, env approveEnv, svc *roles.Service, actor r
 		return approvedOut{}, err
 	}
 	project := policy.ProjectIDGit(ctx, env.Run, row.Project)
-	needed := approvalNeeded(st)
+	needed := approval.Needed(st)
 	// run.approve (and its non-author rule) guards the trust approval; a spend-only approval is guarded by
 	// spend.approve inside ApproveSpend.
 	if needed {
@@ -214,7 +176,7 @@ func approveRun(ctx context.Context, env approveEnv, svc *roles.Service, actor r
 	if !needed {
 		return out, nil // the budget step holds any run over the threshold, whatever its trust class
 	}
-	a, err := svc.St.ApproveRun(ctx, store.ApproveInput{Run: st.Run, Approver: actor.Label(), ExpectSHA: st.Revision, BindAuthor: true, ExpectAuthor: st.Author, Spend: f.spend, Check: voidCheck})
+	a, err := svc.St.ApproveRun(ctx, store.ApproveInput{Run: st.Run, Approver: actor.Label(), ExpectSHA: st.Revision, BindAuthor: true, ExpectAuthor: st.Author, Spend: f.spend, Check: approval.VoidCheck})
 	switch {
 	case errors.Is(err, store.ErrApprovalStale):
 		return approvedOut{}, source.NewApprovalError(source.ApprovalBadBinding, "run %s changed while it was being approved; look again", st.Run)

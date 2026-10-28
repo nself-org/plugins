@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/nself-org/plugins/free/ci/internal/approval"
 	"github.com/nself-org/plugins/free/ci/internal/roles"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/trust/source"
@@ -60,10 +61,10 @@ func runPending(args []string, env approveEnv) int {
 
 // pendingRuns writes the voids of stale approvals, then lists the runs that still wait.
 func pendingRuns(ctx context.Context, st *store.Store) ([]pendingOut, error) {
-	if _, err := st.SweepApprovals(ctx, "", voidCheck); err != nil {
+	if _, err := st.SweepApprovals(ctx, "", approval.VoidCheck); err != nil {
 		return nil, err
 	}
-	held, err := st.PendingApprovals(ctx, approvalNeeded, voidCheck)
+	held, err := st.PendingApprovals(ctx, approval.Needed, approval.VoidCheck)
 	if err != nil {
 		return nil, err
 	}
