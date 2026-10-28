@@ -129,6 +129,7 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 		go func() { _, _ = pw.Write(envData); _ = pw.Close() }()
 		cliStdin, extra = s.Stdin, []*os.File{pr}
 	}
+	began := time.Now()
 	code, _, err := e.runCommandFiles(ctx, cliStdin, extra, append([]string{cmd.Binary}, cmd.Args...), workspace, dockerHostEnv(), sink, stop, nil, "")
 	if err != nil {
 		stop()
@@ -138,10 +139,14 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 		// not a failure by itself: the host removes what it owns, and a workspace it cannot empty fails a clean run (E610)
 		s.Output([]byte("nself-ci: workspace cleanup helper did not finish: " + cleanErr.Error() + "\n"))
 	}
-	if err == nil && code == 125 { // the runtime itself failed (daemon, image pull, option), not the job
+	var facts containerFacts
+	if err == nil && (code == 125 || code == 137) {
+		facts = askRuntime(cmd.Binary, run.Name, began) // exit codes alone cannot tell the runtime's failure or an OOM kill from the job's own
+	}
+	if err == nil && code == 125 && !facts.jobRan() { // the runtime itself failed (daemon, image pull, option), not the job
 		err = coded("E613", "container runtime failed to start the container (exit 125)")
 	}
-	return code, resourceReason(ctx, code, tail.String()), err
+	return code, resourceReason(ctx, code, tail.String(), facts), err
 }
 
 // cleanupPlanned runs the profile's cleanup command, best effort and time boxed; the
@@ -205,25 +210,6 @@ func flagValueOf(args []string, name string) string {
 		}
 		if v, ok := strings.CutPrefix(a, name+"="); ok {
 			return v
-		}
-	}
-	return ""
-}
-
-// resourceReason reports "resource_limit" for a SIGKILLed container (probably the
-// memory limit: an operator kill or a sweep looks the same from outside) or output
-// showing a refused fork (the pids limit); a deadline or cancel is never a resource
-// reason by itself.
-func resourceReason(ctx context.Context, code int, tail string) string {
-	if code == 0 {
-		return ""
-	}
-	if code == 137 && ctx.Err() == nil {
-		return "resource_limit"
-	}
-	for _, sig := range resourceSignatures {
-		if strings.Contains(tail, sig) {
-			return "resource_limit"
 		}
 	}
 	return ""
