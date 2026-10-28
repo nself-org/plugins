@@ -27,7 +27,10 @@ type ResourceRow struct {
 func (t LedgerTx) PutResource(r ResourceRow) error {
 	_, err := t.tx.ExecContext(t.ctx, `INSERT INTO resource_ledger (intent,provider,pipeline_id,reserved_micro,window_day,rate_micro,rate_unit_ms,inc_ms,min_micro,extras_micro,provisioned_at)
  VALUES (?,?,?,?,?,?,?,?,?,?,?)`, r.Intent, r.Provider, r.Pipeline, r.ReservedMicro, r.WindowDay, r.Rate.RateMicro, r.Rate.RateUnitMs, r.Rate.IncMs, r.Rate.MinMicro, r.Rate.ExtrasMicro, r.ProvisionedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	return t.pruneLedger()
 }
 
 // Resource reads a resource row inside the transaction.
