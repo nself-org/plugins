@@ -71,13 +71,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"status":"unhealthy"}`, http.StatusServiceUnavailable)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	body := map[string]any{"status": "ok"}
 	if s.Migrations != nil {
 		if m := s.Migrations(w); m != nil {
 			body["migrations"] = m
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(body)
 }
 
@@ -277,7 +277,7 @@ func (s *Server) handleListOptOuts(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	type row struct {
-		Number    string `json:"number"`
+		Number     string `json:"number"`
 		OptedOutAt string `json:"opted_out_at"`
 	}
 	var list []row

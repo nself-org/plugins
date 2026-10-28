@@ -55,11 +55,11 @@ func New(cfg *config.Config, pool *pgxpool.Pool) http.Handler {
 
 // handleHealth returns 200 OK with a minimal JSON body.
 func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	body := map[string]any{"status": "ok", "service": "tenant-controller"}
 	if m := db.MigrationsHealth(w); m != nil {
 		body["migrations"] = m
 	}
-	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(body)
 }
 

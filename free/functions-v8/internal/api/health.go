@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/nself-org/nself-functions-v8/internal/invoke"
@@ -11,9 +12,10 @@ import (
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	ps := h.pool.PoolSize()
 	invoke.RecordPoolState(ps, ps) // best-effort gauge; real available count needs semaphore introspection
+	w.Header().Set("Content-Type", "application/json")
 	body := map[string]any{"status": "ok", "pool_size": ps}
 	if h.Migrations != nil {
 		body["migrations"] = h.Migrations(w)
 	}
-	jsonOK(w, body)
+	_ = json.NewEncoder(w).Encode(body)
 }
