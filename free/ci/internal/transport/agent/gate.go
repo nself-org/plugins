@@ -13,12 +13,15 @@ package agent
 //          reason; a binding is durable (the store), so a coordinator restart does not forget it; another
 //          certificate is always refused; another session of the same certificate is refused unless the
 //          agent says it kept this very lease across a reconnect (the first heartbeat of its session), in
-//          which case the binding moves to the new session by compare and swap; a token whose job result was
+//          which case the binding moves to the new session by compare and swap; the binding moves to another
+//          certificate (a renewal) only when the CA recorded that certificate for this node after the bound
+//          one, so an older certificate that is still valid cannot take the token back; a token whose job result was
 //          accepted is spent; no token or key ever reaches a message or a log.
 
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"errors"
 	"sync"
 	"time"
@@ -48,11 +51,17 @@ type LeaseView interface {
 	LeaseGet(ctx context.Context, id string) (store.RemoteLease, error)
 }
 
+// CertView reads the CA's record of an issued certificate (store.Store).
+type CertView interface {
+	PKICertGet(ctx context.Context, serial string) (store.PKICert, error)
+}
+
 // Gate admits or refuses lease-scoped calls.
 type Gate struct {
 	Tokens   TokenVerifier
 	Bindings Bindings
 	Leases   LeaseView
+	Certs    CertView         // the issue times a serial move is judged by; with none, no binding moves to another certificate
 	Now      func() time.Time // the clock the cached claims expire on; time.Now when nil. Use the token verifier's clock.
 
 	mu    sync.Mutex
@@ -171,6 +180,11 @@ func (g *Gate) bindOnce(ctx context.Context, c agentapi.Call, cl pki.TokenClaims
 		return deny(ReasonWrongSession, "lease %s: the token is bound to another session", c.LeaseID)
 	}
 	// Same node, new session: a reconnect, or after a certificate renewal a new serial (the listener authenticated it as this node).
+	if b.Serial != c.Serial {
+		if err := g.issuedLater(ctx, c, b.Serial); err != nil {
+			return err
+		}
+	}
 	moved, err := g.Bindings.TokenRebind(ctx, cl.JTI, b.Serial, b.Session, c.Serial, c.Session)
 	if err != nil {
 		return err
@@ -191,6 +205,30 @@ func (g *Gate) bindOnce(ctx context.Context, c agentapi.Call, cl pki.TokenClaims
 		return deny(ReasonWrongSession, "lease %s: the token is bound to another session", c.LeaseID)
 	}
 	return nil
+}
+
+// issuedLater admits a serial move only when the CA issued c.Serial to this node strictly after bound.
+func (g *Gate) issuedLater(ctx context.Context, c agentapi.Call, bound string) error {
+	refuse := func() error {
+		return deny(ReasonWrongCertificate, "lease %s: the token is bound to another certificate", c.LeaseID)
+	}
+	if g.Certs == nil {
+		return refuse()
+	}
+	next, err := g.Certs.PKICertGet(ctx, c.Serial)
+	if err == nil {
+		var prev store.PKICert
+		if prev, err = g.Certs.PKICertGet(ctx, bound); err == nil {
+			if next.NodeID != c.Node || prev.NodeID != c.Node || next.IssuedAt <= prev.IssuedAt {
+				return refuse()
+			}
+			return nil
+		}
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return refuse()
+	}
+	return err
 }
 
 // forgetOtherSessions drops the proved bindings of jti that belong to a session other than keep.
