@@ -29,13 +29,13 @@ func New(host, port string, h *handlers.Handler, migrationsHealth func(http.Resp
 	r.Use(middleware.Recoverer)
 
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		body := map[string]any{"status": "ok"}
 		if migrationsHealth != nil {
 			if m := migrationsHealth(w); m != nil {
 				body["migrations"] = m
 			}
 		}
-		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(body)
 	})
 

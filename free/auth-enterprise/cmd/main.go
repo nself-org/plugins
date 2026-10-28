@@ -3,8 +3,9 @@
 // Purpose: Registers all MFA and SSO HTTP routes and starts the server.
 // Inputs: ENV — PLUGIN_AUTH_ENTERPRISE_PORT (default 3826), DATABASE_URL,
 //
-//	NSELF_SSO (enables SSO endpoints), SP_ENTITY_ID, SAML_ACS_URL,
-//	OIDC_CALLBACK_URL.
+//	NSELF_SSO (enables SSO endpoints), AUTH_ENTERPRISE_SSO_SP_ENTITY_ID,
+//	AUTH_ENTERPRISE_SSO_ACS_URL, AUTH_ENTERPRISE_SSO_OIDC_CALLBACK_URL,
+//	AUTH_ENTERPRISE_TOTP_ISSUER. Legacy names remain supported.
 //
 // Outputs: HTTP server on configured port exposing all MFA + SSO routes.
 // Constraints: MFA always active (Security-Always-Free); SSO requires
@@ -42,24 +43,12 @@ func main() {
 	handlers.MigrationsHealth = bootMigrationsHealth
 	defer pool.Close()
 
-	spEntityID := os.Getenv("SP_ENTITY_ID")
-	if spEntityID == "" {
-		spEntityID = "https://nself.local/auth/enterprise"
-	}
-	samlACSURL := os.Getenv("SAML_ACS_URL")
-	if samlACSURL == "" {
-		samlACSURL = "https://nself.local/auth/sso/saml/callback"
-	}
-	oidcCallbackURL := os.Getenv("OIDC_CALLBACK_URL")
-	if oidcCallbackURL == "" {
-		oidcCallbackURL = "https://nself.local/auth/sso/oidc/callback"
-	}
+	spEntityID := configuredEnv("AUTH_ENTERPRISE_SSO_SP_ENTITY_ID", "SP_ENTITY_ID", "https://nself.local/auth/enterprise")
+	samlACSURL := configuredEnv("AUTH_ENTERPRISE_SSO_ACS_URL", "SAML_ACS_URL", "https://nself.local/auth/sso/saml/callback")
+	oidcCallbackURL := configuredEnv("AUTH_ENTERPRISE_SSO_OIDC_CALLBACK_URL", "OIDC_CALLBACK_URL", "https://nself.local/auth/sso/oidc/callback")
 
 	// Service construction.
-	issuer := os.Getenv("NSELF_ISSUER")
-	if issuer == "" {
-		issuer = "nSelf"
-	}
+	issuer := configuredEnv("AUTH_ENTERPRISE_TOTP_ISSUER", "NSELF_ISSUER", "nSelf")
 	totpSvc := mfa.NewTOTPService(pool, issuer)
 	policySvc := mfa.NewPolicyService(pool)
 	recoverySvc := mfa.NewRecoveryService(pool)
@@ -98,4 +87,15 @@ func main() {
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
+}
+
+// configuredEnv prefers the manifest name, while preserving existing direct-run configurations.
+func configuredEnv(name, legacy, fallback string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	if value := os.Getenv(legacy); value != "" {
+		return value
+	}
+	return fallback
 }

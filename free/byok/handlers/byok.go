@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"strings"
@@ -12,7 +13,9 @@ import (
 
 // HealthHandler returns 200 OK with status information.
 func HealthHandler(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+	w.Header().Set("Content-Type", "application/json")
+	// The migrations callback owns the 503 status on failure; encoding supplies 200 otherwise.
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"status": "ok", "plugin": "byok", "version": "0.1.0",
 		"migrations": bootMigrationsHealth(w),
 	})

@@ -32,6 +32,8 @@ MFA is always enabled and free. SSO is gated by `NSELF_SSO=true`.
 | `AUTH_ENTERPRISE_SSO_ACS_URL` | — | SAML Assertion Consumer Service URL |
 | `AUTH_ENTERPRISE_SSO_OIDC_CALLBACK_URL` | — | OIDC redirect URI registered with your IdP |
 
+Direct runs accept the same `AUTH_ENTERPRISE_*` names as the Compose configuration. A nonempty documented value takes precedence over its legacy alias (`NSELF_ISSUER`, `SP_ENTITY_ID`, `SAML_ACS_URL`, or `OIDC_CALLBACK_URL`, respectively); existing configurations using those aliases continue to work.
+
 ## Database Tables
 
 | Table | Purpose |
