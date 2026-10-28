@@ -331,9 +331,9 @@ func (s *Server) handleRequeue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Restore the stored execution payload before removing the DLQ entry.
-	var queue, jobType string
+	var queue, jobType, dlqID string
 	var payload json.RawMessage
-	if err := s.db.QueryRow(r.Context(), `SELECT j.queue, j.job_type, j.payload FROM public.np_jobqueue_jobs j JOIN public.np_job_dlq d ON d.job_id=j.id WHERE j.id=$1 AND j.source_account_id='primary' AND d.source_account_id='primary'`, req.JobID).Scan(&queue, &jobType, &payload); err != nil {
+	if err := s.db.QueryRow(r.Context(), `SELECT d.id, j.queue, j.job_type, j.payload FROM public.np_job_dlq d JOIN public.np_jobqueue_jobs j ON d.job_id=j.id WHERE j.id=$1 AND j.source_account_id='primary' AND d.source_account_id='primary'`, req.JobID).Scan(&dlqID, &queue, &jobType, &payload); err != nil {
 		if err == pgx.ErrNoRows {
 			http.Error(w, "job not found in DLQ", http.StatusNotFound)
 		} else {
@@ -350,7 +350,10 @@ func (s *Server) handleRequeue(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "redis enqueue failed", http.StatusServiceUnavailable)
 		return
 	}
-	if _, err := s.db.Exec(r.Context(), `DELETE FROM public.np_job_dlq WHERE job_id=$1 AND source_account_id='primary'`, req.JobID); err != nil {
+	// Delete only the specific DLQ entry we requeued, not all entries for this
+	// job_id. A broad DELETE can race with a fast worker that re-fails and
+	// inserts a fresh DLQ row before this DELETE executes (MaxAttempts=1).
+	if _, err := s.db.Exec(r.Context(), `DELETE FROM public.np_job_dlq WHERE id=$1 AND source_account_id='primary'`, dlqID); err != nil {
 		http.Error(w, "DLQ delete failed", http.StatusServiceUnavailable)
 		return
 	}

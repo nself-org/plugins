@@ -160,3 +160,107 @@ func TestJobIDFitsSnapshotUUID(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// requeueDB is a mock database that supports QueryRow for handleRequeue tests.
+// It records all Exec queries and returns a fixed DLQ entry ID from QueryRow.
+type requeueDB struct {
+	queries []string
+	args    [][]any
+	dlqID   string
+}
+
+func (d *requeueDB) Exec(_ context.Context, q string, args ...any) (pgconn.CommandTag, error) {
+	d.queries = append(d.queries, q)
+	d.args = append(d.args, args)
+	return pgconn.NewCommandTag("UPDATE 0 1"), nil
+}
+
+func (*requeueDB) Query(context.Context, string, ...any) (pgx.Rows, error) {
+	panic("unexpected Query")
+}
+
+func (d *requeueDB) QueryRow(_ context.Context, _ string, _ ...any) pgx.Row {
+	return &requeueRow{dlqID: d.dlqID, queue: "email", jobType: "send", payload: json.RawMessage(`{}`)}
+}
+
+type requeueRow struct {
+	dlqID   string
+	queue   string
+	jobType string
+	payload json.RawMessage
+	err     error
+}
+
+func (r *requeueRow) Scan(dest ...any) error {
+	if r.err != nil {
+		return r.err
+	}
+	if len(dest) != 4 {
+		return errors.New("expected 4 scan destinations")
+	}
+	switch v := dest[0].(type) {
+	case *string:
+		*v = r.dlqID
+	default:
+		return errors.New("dest[0] must be *string")
+	}
+	switch v := dest[1].(type) {
+	case *string:
+		*v = r.queue
+	default:
+		return errors.New("dest[1] must be *string")
+	}
+	switch v := dest[2].(type) {
+	case *string:
+		*v = r.jobType
+	default:
+		return errors.New("dest[2] must be *string")
+	}
+	switch v := dest[3].(type) {
+	case *json.RawMessage:
+		*v = r.payload
+	default:
+		return errors.New("dest[3] must be *json.RawMessage")
+	}
+	return nil
+}
+
+func (r *requeueRow) Err() error { return r.err }
+
+// TestRequeueDeletesSpecificDLQEntry verifies that handleRequeue deletes only
+// the specific DLQ row it requeued (by d.id), not all rows matching job_id.
+// Regression: with MaxAttempts=1 a fast worker can re-fail and insert a fresh
+// DLQ entry before a broad DELETE runs, silently erasing the new failure.
+func TestRequeueDeletesSpecificDLQEntry(t *testing.T) {
+	s := newTestServer()
+	db := &requeueDB{dlqID: "dlq-entry-uuid-001"}
+	s.db = db
+	hook := &redisHook{}
+	s.rdb = redis.NewClient(&redis.Options{})
+	defer s.rdb.Close()
+	s.rdb.AddHook(hook)
+
+	w := httptest.NewRecorder()
+	body := strings.NewReader(`{"job_id":"job-uuid-001"}`)
+	s.handleRequeue(w, httptest.NewRequest("POST", "/jobs/dlq/requeue", body))
+
+	if w.Code != 200 {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+
+	// Expect exactly 2 Exec calls: UPDATE jobs, then DELETE dlq by specific id.
+	if len(db.queries) != 2 {
+		t.Fatalf("expected 2 Exec queries, got %d: %v", len(db.queries), db.queries)
+	}
+
+	deleteQuery := db.queries[1]
+	if !strings.Contains(deleteQuery, "DELETE FROM public.np_job_dlq WHERE id=$1") {
+		t.Errorf("DELETE must target specific DLQ entry by id; got: %s", deleteQuery)
+	}
+	if strings.Contains(deleteQuery, "WHERE job_id=") {
+		t.Errorf("DELETE must NOT use broad job_id filter; got: %s", deleteQuery)
+	}
+	if len(db.args[1]) < 1 || db.args[1][0] != "dlq-entry-uuid-001" {
+		t.Errorf("DELETE arg must be the DLQ entry id 'dlq-entry-uuid-001'; got args: %v", db.args[1])
+	}
+}
