@@ -50,7 +50,7 @@ func processExists(pid int) bool {
 // processGroupProbe is the signal-based fallback when /proc cannot be read.
 func processGroupProbe(pgid int) bool { return syscall.Kill(-pgid, 0) == nil }
 
-func adoptedDescendants(parents map[int]int, attempt string) []int {
+func adoptedDescendants(parents map[int]int, attempt string, _ time.Time) []int {
 	if attempt == "" {
 		return nil
 	}

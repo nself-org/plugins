@@ -15,6 +15,7 @@ import (
 type processTree struct {
 	root    int
 	attempt string
+	began   time.Time // when tracking began: a process that escaped the job started after it
 	mu      sync.Mutex
 	seen    map[int]struct{}
 	done    chan struct{}
@@ -22,7 +23,7 @@ type processTree struct {
 }
 
 func trackDescendants(root int, attempt string) *processTree {
-	t := &processTree{root: root, attempt: attempt, seen: make(map[int]struct{}), done: make(chan struct{}), stopped: make(chan struct{})}
+	t := &processTree{root: root, attempt: attempt, began: time.Now().Add(-time.Second), seen: make(map[int]struct{}), done: make(chan struct{}), stopped: make(chan struct{})}
 	t.snapshot()
 	go func() {
 		defer close(t.stopped)
@@ -76,7 +77,7 @@ func (t *processTree) absorb(parents map[int]int) bool {
 		known[pid] = struct{}{}
 	}
 	changed := false
-	for _, pid := range adoptedDescendants(parents, t.attempt) {
+	for _, pid := range adoptedDescendants(parents, t.attempt, t.began) {
 		known[pid] = struct{}{}
 		if _, ok := t.seen[pid]; !ok {
 			t.seen[pid] = struct{}{}

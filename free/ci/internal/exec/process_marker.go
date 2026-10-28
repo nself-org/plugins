@@ -151,7 +151,32 @@ func (e *Executor) sweepProcessMarker(ctx context.Context, home, current, attemp
 			return coded("E610", "stale process group survived")
 		}
 	}
+	if err := killTagged(attempt); err != nil {
+		return err
+	}
 	removeProcessMarker(home, attempt)
 	_ = os.RemoveAll(filepath.Join(home, "work", attempt))
+	return nil
+}
+
+// killTagged kills the processes of a dead agent's attempt that left its group and were reparented
+// (a macOS job that daemonized: the group kill cannot reach them, D-1057). They are found by the
+// attempt tag in their environment; hosts that keep them reachable otherwise find none here.
+func killTagged(attempt string) error {
+	pids := taggedOrphans(attempt, time.Time{})
+	for _, pid := range pids {
+		if proc, err := os.FindProcess(pid); err == nil {
+			_ = proc.Kill()
+		}
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for _, pid := range pids {
+		for processAlive(pid) && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if processAlive(pid) {
+			return coded("E610", "stale job process survived")
+		}
+	}
 	return nil
 }
