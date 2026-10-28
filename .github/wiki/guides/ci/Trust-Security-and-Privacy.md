@@ -118,7 +118,7 @@ No image is shipped and a tag without a digest is refused: the level reports `is
 
 ## Network scopes
 
-A job runs under one scope. An undeclared scope takes the default of its trust class: `owner` and `internal` get `lan`, `collaborator` gets `internet`, `untrusted` gets `restricted`. An untrusted job that declares `lan` or `privileged` is refused (`E680`), before any resource exists.
+A job runs under one scope. An undeclared scope takes the default of its trust class: `owner` and `internal` get `lan`, `collaborator` gets `internet`, `untrusted` gets `restricted`. An untrusted job that declares `lan` or `privileged` is refused (`E679`), before any resource exists.
 
 | Scope | What the job can reach |
 |---|---|
