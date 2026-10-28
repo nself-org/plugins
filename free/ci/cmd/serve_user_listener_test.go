@@ -10,6 +10,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"flag"
 	"io"
 	"net"
 	"net/http"
@@ -235,6 +236,33 @@ func TestSnapshotServeFlagsExercisesTheSnapshot(t *testing.T) {
 	}
 	if explicitFlag("api-public-url") {
 		t.Fatal("explicitFlag(api-public-url) = true, want false (not passed)")
+	}
+	// Replace the package-level flag set with a freshly parsed one, as a later serveV15 does.
+	// The listeners must keep reading the values captured at start.
+	userAPIFlags.Lock()
+	prev := userAPIFlags.fs
+	repl := flag.NewFlagSet("replacement", flag.ContinueOnError)
+	repl.String("data-dir", "", "")
+	repl.String("api-public-url", "", "")
+	repl.String("api-submit-role", "release", "")
+	if err = repl.Parse([]string{"--data-dir", "/replaced", "--api-public-url", "https://replaced.example", "--api-submit-role", "release"}); err != nil {
+		userAPIFlags.Unlock()
+		t.Fatal(err)
+	}
+	userAPIFlags.fs = repl
+	userAPIFlags.Unlock()
+	t.Cleanup(func() { userAPIFlags.Lock(); userAPIFlags.fs = prev; userAPIFlags.Unlock() })
+	if got := serveFlag("data-dir"); got != data {
+		t.Errorf("after the flag set was replaced, serveFlag(data-dir) = %q, want %q", got, data)
+	}
+	if got := serveFlag("api-submit-role"); got != "member" {
+		t.Errorf("after the flag set was replaced, serveFlag(api-submit-role) = %q, want member", got)
+	}
+	if got := serveFlag("api-public-url"); got != "" {
+		t.Errorf("after the flag set was replaced, serveFlag(api-public-url) = %q, want empty", got)
+	}
+	if explicitFlag("api-public-url") || !explicitFlag("api-submit-role") {
+		t.Error("explicitFlag followed the replacement flag set, not the snapshot")
 	}
 	cancel()
 	if code := <-done; code != 0 {
