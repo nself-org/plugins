@@ -40,6 +40,10 @@ This Cloudflare Worker serves the plugin registry at `plugins.nself.org`. It:
 
 ## Endpoints
 
+Every GET endpoint also accepts HEAD, including `/v1/` aliases. HEAD returns
+the GET status and headers without a response body. `/catalog.json` preserves
+its ETag and returns 304 when `If-None-Match` matches for either method.
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/registry.json` | GET | Full plugin registry (cached) |

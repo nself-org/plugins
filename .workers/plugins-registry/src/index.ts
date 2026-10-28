@@ -11,7 +11,7 @@ import { handleHealth, handleStats, handleSync } from "./admin-routes.ts";
 import { handleMarketplaceRoute } from "./marketplace-routes.ts";
 import { resolveApiVersion, addApiVersionHeader } from "./middleware/api-version.ts";
 
-export default {
+const router = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/$/, "") || "/";
@@ -144,6 +144,19 @@ export default {
       console.error("Unhandled error:", (err as Error).message);
       return jsonResponse({ error: "internal server error", message: (err as Error).message }, 500);
     }
+  },
+} satisfies ExportedHandler<Env>;
+
+/** Route HEAD through GET, preserving response metadata while omitting its body. */
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    if (request.method !== "HEAD") return router.fetch(request, env, ctx);
+    const response = await router.fetch(new Request(request, { method: "GET" }), env, ctx);
+    return new Response(null, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
   },
 } satisfies ExportedHandler<Env>;
 
