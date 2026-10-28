@@ -204,6 +204,12 @@ type EvidenceBuilder interface {
 	Complete(ctx context.Context, begin any, f EvidenceFacts, ev model.Evidence) (model.Evidence, error)
 }
 
+// EvidenceStamper adds facts to the base document that must survive a builder error.
+// It must not add input digests or a current binding to an incomplete document.
+type EvidenceStamper interface {
+	Stamp(model.Evidence) model.Evidence
+}
+
 // Hooks is a snapshot of every hook. A nil field means "no-op default".
 type Hooks struct {
 	Remote        []RemoteResolver

@@ -163,7 +163,13 @@ func (c *Coordinator) conclude(f finishIn) Result {
 	if err == nil && f.Hooks.Evidence != nil {
 		facts := EvidenceFacts{Root: c.Opts.Root, RunID: f.RunID, Rev: f.Rev, Store: f.St, Git: c.capture(), Jobs: f.Jobs, Job: c.Opts.Job}
 		var done model.Evidence
-		cerr := guard("evidence builder", func() (e error) { done, e = f.Hooks.Evidence.Complete(bg, f.Begin, facts, ev); return })
+		cerr := guard("evidence builder", func() (e error) {
+			if stamp, ok := f.Hooks.Evidence.(EvidenceStamper); ok {
+				ev = stamp.Stamp(ev)
+			}
+			done, e = f.Hooks.Evidence.Complete(bg, f.Begin, facts, ev)
+			return
+		})
 		if cerr != nil {
 			notes = append(notes, "evidence not completed (it carries no input digests): "+firstLineOf(cerr.Error()))
 		} else {

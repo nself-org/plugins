@@ -41,18 +41,19 @@ func (e evidenceStamp) Begin(ctx context.Context, root string, rev cirun.Revisio
 }
 
 func (e evidenceStamp) Complete(ctx context.Context, begin any, f cirun.EvidenceFacts, ev model.Evidence) (model.Evidence, error) {
-	ev = e.stamp(ev)
+	ev = e.Stamp(ev)
 	if e.inner == nil {
 		return ev, nil
 	}
 	out, err := e.inner.Complete(ctx, begin, f, ev)
 	if err != nil {
-		return ev, err // the run keeps its own (unstamped) document on a builder error: D-1021
+		return ev, err // the coordinator retains the stamped base, without input digests
 	}
 	return out, nil
 }
 
-func (e evidenceStamp) stamp(ev model.Evidence) model.Evidence {
+// Stamp preserves ad-hoc facts even when the inner evidence builder fails.
+func (e evidenceStamp) Stamp(ev model.Evidence) model.Evidence {
 	ev.Runner.Isolation = e.mode.Served // what the registry served, never the level asked for (D-1021)
 	if ev.Runner.Isolation == "" {
 		ev.Runner.Isolation = e.mode.Level
