@@ -8,7 +8,9 @@ package attest
 // Outputs: Profile with RunnerID, CoordinatorID, Public, Text and URL.
 // Constraints: pure; fail closed: only the exact value Private turns the
 // profile off, so an empty or unknown visibility scrubs; a zero Profile
-// scrubs; pseudonyms are stable for one repo and differ between repos.
+// scrubs; pseudonyms are stable for one repo and differ between repos. With an operator key
+// registered (UsePseudonymKey) a pseudonym is an HMAC under it, so a dictionary of host names cannot
+// recover the id; without one it is the unkeyed hash.
 
 import (
 	"net/netip"
@@ -38,6 +40,7 @@ type RepoFacts struct {
 type Profile struct {
 	private bool
 	repoID  string
+	key     []byte // the operator's pseudonym key (pseudonym_key.go); nil keeps the unkeyed form
 	hosts   []string
 	users   []string
 	aliases map[string]string // literal -> replacement, longest applied first
@@ -45,7 +48,7 @@ type Profile struct {
 
 // ProfileFor builds the profile of one repository.
 func ProfileFor(f RepoFacts) Profile {
-	return Profile{private: f.Visibility == Private, repoID: f.RepoID,
+	return Profile{private: f.Visibility == Private, repoID: f.RepoID, key: currentPseudonymKey(),
 		hosts: append([]string(nil), f.Hostnames...), users: append([]string(nil), f.Usernames...)}
 }
 
@@ -61,6 +64,9 @@ func (p Profile) CoordinatorID(id string) string { return p.pseudonym("coordinat
 func (p Profile) pseudonym(kind, id string) string {
 	if p.private || id == "" {
 		return id
+	}
+	if len(p.key) > 0 { // keyed: a dictionary of host names cannot recover the id (D-1198)
+		return kind + "-" + keyedPseudonym(p.key, "nself-ci/"+kind+"/v2\x00"+p.repoID+"\x00"+id)
 	}
 	return kind + "-" + Digest([]byte("nself-ci/" + kind + "/v1\x00" + p.repoID + "\x00" + id))[:12]
 }
