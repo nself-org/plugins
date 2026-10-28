@@ -178,7 +178,7 @@ func Build(ctx context.Context, d Deps, pipeline sched.Pipeline) (sched.World, s
 			w.InteractiveQueued[r.ID] = true
 		}
 	}
-	if err = runContributors(ctx, &w); err != nil {
+	if err = runContributors(WithPipeline(ctx, pipeline), &w); err != nil {
 		return sched.World{}, "", err
 	}
 	digest, err := Digest(w)

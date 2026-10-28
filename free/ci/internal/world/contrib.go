@@ -18,6 +18,20 @@ type Contributor struct {
 	Fn          func(context.Context, *sched.World) error
 }
 
+type pipelineKey struct{}
+
+// WithPipeline returns ctx carrying the pipeline a world is being built for; Build sets it before it
+// runs the contributors, so a contributor can restrict its reads to that pipeline.
+func WithPipeline(ctx context.Context, p sched.Pipeline) context.Context {
+	return context.WithValue(ctx, pipelineKey{}, p)
+}
+
+// PipelineFrom returns the pipeline the world is being built for; ok is false outside Build.
+func PipelineFrom(ctx context.Context) (sched.Pipeline, bool) {
+	p, ok := ctx.Value(pipelineKey{}).(sched.Pipeline)
+	return p, ok
+}
+
 var contributions = struct {
 	sync.RWMutex
 	byField map[string]Contributor

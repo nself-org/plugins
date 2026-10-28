@@ -11,9 +11,10 @@ package schedtel
 // so the scheduler uses its own stand-in and marks it unknown; no store, no
 // estimates; a store failure leaves Estimates empty (the scheduler then uses
 // its unknown stand-ins) and is reported as a note on the run by the finalizer,
-// because telemetry must not stop a placement. The samples cover every queued
-// attempt in the store, so the world digest changes when an unrelated pipeline
-// queues a job (expected, see the handoff).
+// because telemetry must not stop a placement. The samples cover the queued
+// attempts of the pipeline the world is built for (world.PipelineFrom), so the
+// world digest does not change when an unrelated pipeline queues a job; a
+// context without a pipeline (no Build) falls back to every queued attempt.
 
 import (
 	"context"
@@ -40,7 +41,12 @@ func estimate(ctx context.Context, w *sched.World, st *store.Store) error {
 	if err != nil {
 		return err
 	}
-	queued, err := st.TelQueued(ctx)
+	var queued []store.TelAttempt
+	if p, ok := world.PipelineFrom(ctx); ok && p.ID != "" {
+		queued, err = st.TelQueuedOf(ctx, p.ID)
+	} else {
+		queued, err = st.TelQueued(ctx)
+	}
 	if err != nil {
 		return err
 	}
