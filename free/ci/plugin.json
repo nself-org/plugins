@@ -79,11 +79,6 @@
       {
         "flags": [
           {
-            "name": "runner",
-            "type": "string",
-            "usage": "Runner container name (default: <PROJECT>_forgejo_runner)"
-          },
-          {
             "default": "http://localhost:3844",
             "name": "url",
             "type": "string",
@@ -94,7 +89,7 @@
         "name": "forgejo",
         "output": "document",
         "side_effect": "read",
-        "summary": "Show Forgejo server + runner health (ops profile)"
+        "summary": "Show Forgejo server health (ops profile)"
       },
       {
         "flags": [

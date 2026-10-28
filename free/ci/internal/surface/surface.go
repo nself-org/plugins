@@ -3,7 +3,8 @@
 // Purpose: `nself-ci --help` (and the subcommand helps) print exactly what the
 // core `nself ci --help` prints, so the plugin binary is a drop-in for the core
 // command (P7-CANON-09). The text is captured from a built core binary by
-// scripts/capture-core-surface.sh, never typed by hand.
+// scripts/capture-core-surface.sh. Forgejo is normalized by that script to
+// omit the runner removed in P7-TRUST-21.
 // Inputs:  a command key: "" for ci, or "build", "forgejo", "serve".
 // Outputs: the help text bytes.
 // Constraints: the embedded copies must equal testdata/core-surface (unit test).

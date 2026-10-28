@@ -1,7 +1,8 @@
 package main
 
-// Purpose: tests of `nself ci forgejo` in v1.4 and v1.5 mode (P7-HOST-12): the v1.4 output equals the
-// CANON-09 golden, the V15 alias prints one deprecation line per process and then the server and API
+// Purpose: tests of `nself ci forgejo` in v1.4 and v1.5 mode (P7-HOST-12): both
+// modes check the server without a runner. The V15 alias prints one deprecation
+// line per process and then the server and API
 // check (no runner line), and the URL comes from --url, then the policy key, then the default.
 // Inputs:  httptest servers on loopback, a stub docker on PATH for the v1.4 half.
 // Outputs: pass or fail; no network beyond loopback.
@@ -11,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -52,7 +54,7 @@ func captureStd(t *testing.T, fn func()) (string, string) {
 	return string(bo), string(be)
 }
 
-// TestForgejoAlias proves acceptance line 4: v1.4 `nself-ci forgejo` output equals the CANON-09 golden;
+// TestForgejoAlias proves acceptance line 4: v1.4 `nself-ci forgejo` checks only the server;
 // the V15 `nself ci forgejo` prints one deprecation line naming `nself ci doctor --providers` and removal
 // v1.6, then the server and API check result.
 func TestForgejoAlias(t *testing.T) {
@@ -66,15 +68,14 @@ func TestForgejoAlias(t *testing.T) {
 	t.Setenv("NSELF_FORGEJO_ADMIN_USER", "")
 	t.Setenv("NSELF_FORGEJO_ADMIN_PASSWORD", "")
 
-	// v1.4: the frozen table entry, byte for byte as the CANON-09 port prints it.
+	// v1.4: retain the table and exit contract without probing a removed runner.
 	t.Setenv("NSELF_V15", "")
 	golden := "\n→ Forgejo CI stack (ops profile)\n" +
 		"  ✓ Forgejo server   " + srv.URL + "   healthy\n" +
-		"  ✓ Forgejo runner   container=my_runner   state=running\n" +
 		"    API auth         n/a (set NSELF_FORGEJO_ADMIN_USER + NSELF_FORGEJO_ADMIN_PASSWORD)\n\n" +
 		"✓ Forgejo CI stack is healthy.\n"
 	out, errOut := captureStd(t, func() {
-		if code := run([]string{"forgejo", "--url", srv.URL, "--runner", "my_runner"}); code != 0 {
+		if code := run([]string{"forgejo", "--url", srv.URL}); code != 0 {
 			t.Errorf("v1.4 exit %d", code)
 		}
 	})
@@ -130,5 +131,16 @@ func TestForgejoAlias(t *testing.T) {
 	}
 	if code := runForgejoV15([]string{"extra"}, env); code != 2 {
 		t.Fatalf("a stray argument is a usage error, got %d", code)
+	}
+}
+
+// TestForgejoRejectsRemovedRunner keeps the parser and advertised help aligned.
+func TestForgejoRejectsRemovedRunner(t *testing.T) {
+	if code := forgejoCmd([]string{"--runner", "old-runner"}, flag.ContinueOnError); code != 2 {
+		t.Fatalf("removed flag returned %d, want usage error", code)
+	}
+	out, _ := captureStd(t, func() { run([]string{"forgejo", "--help"}) })
+	if strings.Contains(out, "--runner") || !strings.Contains(out, "external") {
+		t.Fatalf("stale help: %s", out)
 	}
 }
