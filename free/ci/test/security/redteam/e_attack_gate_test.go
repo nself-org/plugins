@@ -61,13 +61,10 @@ func TestE21SpentTokenSurvivesCacheFlushAndRestart(t *testing.T) {
 	}
 }
 
-// TestE21PrunerDoesNotReviveSpentToken (TM-21): the pruner deletes rows one hour after exp using the time the
-// caller passes. A coordinator clock that stepped forward (NTP, VM resume) and back must not delete the row of
-// a still-valid spent token, because the next bind would then create a fresh unspent row and the replay works.
+// TestE21PrunerDoesNotReviveSpentToken (TM-21): a caller clock that steps forward
+// and back must not delete a still-valid spent token. The store clock controls
+// pruning so a fresh gate cannot admit a replay after the skewed prune call.
 func TestE21PrunerDoesNotReviveSpentToken(t *testing.T) {
-	if !openFinding(t, "E01") {
-		return
-	}
 	r := newERig(t, true)
 	ctx := context.Background()
 	lease, att, ep := r.seedLease("1", "n-1")
@@ -78,8 +75,8 @@ func TestE21PrunerDoesNotReviveSpentToken(t *testing.T) {
 	if err := r.gate.Spend(ctx, "jti-1"); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := r.gate.Prune(ctx, time.Now().Add(2*time.Hour)); err != nil || n != 1 {
-		t.Fatalf("prune with a clock two hours ahead removed %d rows (%v), want the one row (precondition of the attack)", n, err)
+	if n, err := r.gate.Prune(ctx, time.Now().Add(2*time.Hour)); err != nil || n != 0 {
+		t.Fatalf("prune with a caller clock two hours ahead removed %d rows (%v), want no rows", n, err)
 	}
 	fresh := &agent.Gate{Tokens: r.tokens, Bindings: r.st, Leases: r.st} // the coordinator restarted
 	if err := fresh.Check(ctx, eCall(lease, ep, "n-1", "cc03", "s9", tok, false)); err == nil {
