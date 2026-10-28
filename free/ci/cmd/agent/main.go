@@ -100,50 +100,21 @@ func jobOutcome(spec execSpec, res ciexec.AttemptResult, tail string) cirun.JobO
 }
 
 // baseEvidence is the run document before the P7-CI-38 builder completes it:
-// one check for the one job. It mirrors run's coordinator-recorded document
-// for a single-job run (run.buildEvidence is unexported; exporting it is
-// recorded as debt), with the producer marked self-reported until the result
-// signer (P7-TRUST-20) signs it.
+// one check for the one job, assembled by the run package so the check and
+// verdict logic exists once, with the producer marked self-reported until the
+// result signer (P7-TRUST-20) signs it.
 func baseEvidence(spec execSpec, o cirun.JobOutcome, start, end time.Time) model.Evidence {
 	id := sha256.Sum256([]byte(spec.CoordinatorID + "/" + spec.AttemptID))
 	runID := hex.EncodeToString(id[:8])
-	e := model.Evidence{
-		Schema: "ci.evidence/v1", Revision: spec.Revision, RepoID: "unknown", RunID: runID,
-		Pipeline: model.PipelineRef{ID: runID, Name: spec.JobID, Kind: "adhoc"}, Trigger: "api", SourceTrust: "untrusted", // the coordinator classifies the source; the agent claims nothing
-
-		InputDigests: model.InputDigests{Lockfiles: []model.DigestRef{}, Generated: []model.DigestRef{}},
-		Runner:       model.RunnerRef{ID: "agent", Provider: "agent", Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process"},
-		Producer:     model.Producer{Kind: "self-reported", Version: "1"}, ToolVersions: map[string]string{}, Artifacts: []model.Artifact{}, Retries: []model.Retry{},
-		Selection: model.Selection{Mode: "full", Reason: "selection.full_required"}, Freshness: model.Freshness{State: "current"}, Signature: model.Signature{Kind: "coordinator-recorded"},
-		WorktreeState: "clean", Binding: model.Binding{State: "bound"},
-	}
-	c := model.Check{ID: o.Check, JobID: o.ID, Kind: string(o.Kind), Tool: o.Tool, Required: true, Substantive: true, FailureClass: o.FailureClass, Reason: o.Reason}
-	switch o.State {
-	case cirun.StatePassed:
-		c.Result = "pass"
-		e.Counts.Pass = 1
-	case cirun.StateFailed:
-		c.Result, c.Excerpt = "fail", o.Tail
-		e.Counts.Fail = 1
-		if o.Code != "" || o.FailureClass == "infra" {
-			c.Result = "error"
-			e.Counts.Fail, e.Counts.Error = 0, 1
-		}
-	default:
-		c.Result = "skip"
-		e.Counts.Skip = 1
-	}
-	e.Checks, e.Counts.Total = []model.Check{c}, 1
-	e.Result = model.Verdict(e.Checks)
-	if o.State == cirun.StateCancelled {
-		e.Result = "cancelled"
-	}
-	if c.Result == "error" && e.Result == "pass" {
-		e.Result = "error"
-	}
-	s, f, ms := start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339), end.Sub(start).Milliseconds()
-	e.Timings = model.Timings{QueuedAt: &s, StartedAt: &s, FinishedAt: &f, DurationMS: &ms}
-	return e
+	return cirun.SingleJobEvidence(cirun.SingleJobInput{
+		RunID: runID, Revision: spec.Revision, RepoID: "unknown",
+		Pipeline: model.PipelineRef{ID: runID, Name: spec.JobID, Kind: "adhoc"}, Trigger: "api",
+		Source:    "untrusted", // the coordinator classifies the source; the agent claims nothing
+		Selection: model.Selection{Mode: "full", Reason: "selection.full_required"},
+		Runner:    model.RunnerRef{ID: "agent", Provider: "agent", Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process"},
+		Producer:  model.Producer{Kind: "self-reported", Version: "1"},
+		Job:       o, Start: start, End: end,
+	})
 }
 
 // unbindIfOtherRevision unbinds evidence whose named revision is not the commit
