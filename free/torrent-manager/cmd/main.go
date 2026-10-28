@@ -37,9 +37,6 @@ func main() {
 	cfg := internal.LoadConfig()
 	internal.BootMigrations(context.Background(), pool)
 	db := internal.NewDB(pool)
-	if err := db.InitSchema(); err != nil {
-		log.Fatalf("torrent-manager: schema init failed: %v", err)
-	}
 
 	srv := sdk.NewServer(port)
 	r := srv.Router()

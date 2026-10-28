@@ -112,13 +112,10 @@ free/tmdb/internal/handlers.go	1177
 free/tmdb/internal/models.go	311
 free/tokens/sdk/devkit/cmd/new-plugin/main.go	510
 free/tokens/sdk/identity.go	338
-free/torrent-manager/internal/db.go	393
 free/torrent-manager/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/torrent-manager/third_party/sdk/identity.go	338
-free/vpn/internal/db_schema.go	321
 free/vpn/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/vpn/third_party/sdk/identity.go	338
-free/web3/internal/db.go	330
 free/web3/internal/handlers.go	1107
 free/webhooks/sdk/devkit/cmd/new-plugin/main.go	510
 free/webhooks/sdk/identity.go	338
