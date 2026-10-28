@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/clientapi"
+	"github.com/nself-org/plugins/free/ci/internal/detach"
 	"github.com/nself-org/plugins/free/ci/internal/logs"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
@@ -158,4 +159,26 @@ func (r *Resolver) ReadEvidence(ctx context.Context, ref string) (json.RawMessag
 	}
 	doc, err := c.Evidence(ctx, ref)
 	return doc, err == nil, err
+}
+
+// FollowEvents uses the coordinator's durable event endpoint and reconnects by sequence.
+func (r *Resolver) FollowEvents(ctx context.Context, ref string, from int64, w io.Writer) (int, error) {
+	c, _, active, err := r.Client()
+	if err != nil {
+		return 0, err
+	}
+	if !active {
+		return 0, notFound(ref)
+	}
+	rec, err := c.Events(ctx, ref, func(line []byte, rec detach.Record) error {
+		if !rec.Final() && rec.Seq < from {
+			return nil
+		}
+		_, err := w.Write(append(append([]byte(nil), line...), '\n'))
+		return err
+	})
+	if rec.Err {
+		return max(rec.Exit, 1), err
+	}
+	return 0, err
 }

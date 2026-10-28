@@ -161,12 +161,13 @@ func printWait(asJSON bool, v detach.View, d cirun.RunView, terminal bool, waite
 // runSource reads one run's state: from a RemoteResolver when the run lives on
 // another machine, else from the local store.
 type runSource struct {
-	ref    string
-	remote bool
-	st     *store.Store
-	row    store.PipelineRow
-	found  bool
-	last   time.Time
+	resolver cirun.RemoteResolver
+	ref      string
+	remote   bool
+	st       *store.Store
+	row      store.PipelineRow
+	found    bool
+	last     time.Time
 	// Detail is the RunView of the latest View call.
 	Detail cirun.RunView
 }
@@ -187,7 +188,7 @@ func openRunSource(ctx context.Context, ref, coordinator string) (*runSource, er
 			return nil, err
 		}
 		if err == nil && ok {
-			s.remote, s.Detail = true, v
+			s.remote, s.Detail, s.resolver = true, v, r
 			return s, nil
 		}
 	}
