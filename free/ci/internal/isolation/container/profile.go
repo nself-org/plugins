@@ -85,7 +85,9 @@ func (p *Profile) probe(ctx context.Context) (Facts, isolation.Availability) {
 	// the runtime is asked outside the lock (each query is time boxed), so a wedged daemon never blocks other callers
 	facts, av := probeRuntime(ctx, p.opts.Runner, p.opts.Separated())
 	p.mu.Lock()
-	p.facts, p.av, p.at = facts, av, p.opts.Now()
+	if ctx.Err() == nil {
+		p.facts, p.av, p.at = facts, av, p.opts.Now()
+	}
 	p.mu.Unlock()
 	return facts, av
 }
