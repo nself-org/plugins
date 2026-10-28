@@ -5,6 +5,8 @@ import "fmt"
 // ownershipScan checks every mounted volume without crossing devices or following symlinks.
 // Inputs: a fixed find predicate; output: an owned path or an incomplete-scan marker.
 // Constraints: one 30-second cap spans all volumes; errors fail closed so an unchecked UID is never freed.
+// The script touches no filesystem metadata itself: a missing or hung mountpoint is validated by the
+// watchdog-bounded find, so a blocked lookup cannot outlive the budget.
 func ownershipScan(match string) string {
 	return mountedOwnershipScan("/sbin/mount", match, 30)
 }
@@ -32,7 +34,6 @@ paths=$(echo "$mounts" | awk '
 [ -n "$paths" ] || { echo scan-incomplete; exit 0; }
 echo "$paths" | while IFS= read -r d; do
   [ "$d" != scan-incomplete ] || { echo scan-incomplete; break; }
-  [ -d "$d" ] || { echo scan-incomplete; break; }
 %s
 done`, seconds, command, ownershipVolumeScript(match))
 }
@@ -40,7 +41,6 @@ done`, seconds, command, ownershipVolumeScript(match))
 func boundedOwnershipScan(dirs, match string, seconds int) string {
 	return fmt.Sprintf(`scan_deadline=$(($(date +%%s) + %d))
 for d in %s; do
-  [ -d "$d" ] || continue
 %s
 done`, seconds, dirs, ownershipVolumeScript(match))
 }

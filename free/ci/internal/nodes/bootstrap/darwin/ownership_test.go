@@ -83,3 +83,35 @@ func TestOwnershipScanCoversAllVolumesWithoutDepthLimit(t *testing.T) {
 		}
 	}
 }
+
+// A blocked stat/lookup before the watchdog would bypass the budget, so no directory test may run
+// outside the bounded find: the validation belongs to find itself.
+func TestOwnershipScanDoesNotProbeMetadataOutsideWatchdog(t *testing.T) {
+	listing := "echo '/dev/test on /blocked (apfs, local)'"
+	for name, script := range map[string]string{
+		"mounted": mountedOwnershipScan(listing, "-uid 450", 30),
+		"bounded": boundedOwnershipScan("/blocked", "-uid 450", 30),
+	} {
+		t.Run(name, func(t *testing.T) {
+			cmd := exec.Command("sh", "-xc", "find() { return 1; }\n"+script)
+			out, err := cmd.CombinedOutput()
+			if err != nil || !strings.Contains(string(out), "scan-incomplete") {
+				t.Fatalf("scan = %q, %v; want scan-incomplete", out, err)
+			}
+			for _, probe := range []string{"'[' -d", "'[' -e", "test -d", "test -e"} {
+				if strings.Contains(string(out), "+ "+probe) {
+					t.Fatalf("scan probed metadata outside the watchdog (%q):\n%s", probe, out)
+				}
+			}
+		})
+	}
+}
+
+func TestMountedOwnershipScanFailsClosedOnMissingMountpoint(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "gone")
+	listing := "echo '/dev/test on " + missing + " (apfs, local)'"
+	out, err := exec.Command("sh", "-c", mountedOwnershipScan(listing, "-uid 450", 30)).CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "scan-incomplete" {
+		t.Fatalf("missing mountpoint = %q, %v", out, err)
+	}
+}
