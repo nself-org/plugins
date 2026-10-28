@@ -43,6 +43,20 @@ var userAPIFlags struct {
 	sync.Mutex
 	fs *flag.FlagSet
 }
+// serveFlagSnapshot is a copy of the parsed serve flags taken once at listener
+// start under userAPIFlags' lock, so listener goroutines never read the
+// package-level flag set that a later test's serveV15 may replace (D-1406).
+type serveFlagSnapshot struct {
+	dataDir       string
+	apiPublicURL  string
+	apiSubmitRole string
+	explicit      map[string]bool
+}
+
+var activeServeFlags struct {
+	sync.Mutex
+	snap *serveFlagSnapshot
+}
 
 func init() {
 	coordinator.RegisterFlag(func(fs *flag.FlagSet) {
@@ -66,28 +80,57 @@ func init() {
 	}
 }
 
-// serveFlag reads a parsed serve flag.
+// serveFlag reads a parsed serve flag from the snapshot taken at listener start (D-1406).
 func serveFlag(name string) string {
-	userAPIFlags.Lock()
-	defer userAPIFlags.Unlock()
-	if userAPIFlags.fs == nil {
+	activeServeFlags.Lock()
+	defer activeServeFlags.Unlock()
+	if activeServeFlags.snap == nil {
 		return ""
 	}
-	if f := userAPIFlags.fs.Lookup(name); f != nil {
-		return f.Value.String()
+	switch name {
+	case "data-dir":
+		return activeServeFlags.snap.dataDir
+	case "api-public-url":
+		return activeServeFlags.snap.apiPublicURL
+	case "api-submit-role":
+		return activeServeFlags.snap.apiSubmitRole
 	}
 	return ""
 }
 
-// explicitFlag reports whether the operator passed the serve flag.
+// explicitFlag reports whether the operator passed the serve flag, from the snapshot (D-1406).
 func explicitFlag(name string) bool {
-	userAPIFlags.Lock()
-	defer userAPIFlags.Unlock()
-	set := false
-	if userAPIFlags.fs != nil {
-		userAPIFlags.fs.Visit(func(f *flag.Flag) { set = set || f.Name == name })
+	activeServeFlags.Lock()
+	defer activeServeFlags.Unlock()
+	if activeServeFlags.snap == nil {
+		return false
 	}
-	return set
+	return activeServeFlags.snap.explicit[name]
+}
+
+// snapshotServeFlags captures the current serve flag set under lock so
+// listener goroutines read stable values even when another serveV15 call
+// replaces userAPIFlags.fs (D-1406). Call once per serve, before listeners start.
+func snapshotServeFlags() {
+	userAPIFlags.Lock()
+	fs := userAPIFlags.fs
+	userAPIFlags.Unlock()
+	snap := &serveFlagSnapshot{explicit: map[string]bool{}}
+	if fs != nil {
+		if f := fs.Lookup("data-dir"); f != nil {
+			snap.dataDir = f.Value.String()
+		}
+		if f := fs.Lookup("api-public-url"); f != nil {
+			snap.apiPublicURL = f.Value.String()
+		}
+		if f := fs.Lookup("api-submit-role"); f != nil {
+			snap.apiSubmitRole = f.Value.String()
+		}
+		fs.Visit(func(f *flag.Flag) { snap.explicit[f.Name] = true })
+	}
+	activeServeFlags.Lock()
+	activeServeFlags.snap = snap
+	activeServeFlags.Unlock()
 }
 
 // optional turns a failure of a default-on listener into a log line, so an existing deployment whose port
