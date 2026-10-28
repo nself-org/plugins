@@ -133,7 +133,7 @@ func newWorld(t *testing.T) *world {
 	predicate := map[string]any{
 		"buildDefinition": map[string]any{"buildType": signing.ReleaseBuildType, "externalParameters": map[string]any{"repository": "repo", "revision": p.Revision, "job": "publish"},
 			"resolvedDependencies": []map[string]any{{"uri": "git+repo@" + p.Revision, "digest": map[string]string{"gitCommit": p.Revision}}}},
-		"runDetails": map[string]any{"builder": map[string]any{"id": "https://nself.org/ci/builder/v1#coordinator/runner"},
+		"runDetails": map[string]any{"builder": map[string]any{"id": "https://nself.org/ci/builder/v1#" + signingCoordinator(w.st) + "/runner"},
 			"metadata":   map[string]any{"invocationId": p.ID + "/att-c"},
 			"byproducts": []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": hex.EncodeToString(sum[:])}}}}}
 	st, _ := json.Marshal(map[string]any{"_type": "https://in-toto.io/Statement/v1", "predicateType": "https://slsa.dev/provenance/v1", "predicate": predicate,
@@ -284,4 +284,12 @@ sleep 3; echo scan-done`
 	if out, _ := osexec.Command("ps", "-axo", "args").Output(); strings.Contains(string(out), fragment) {
 		t.Fatal("the key is in a process argument")
 	}
+}
+
+func signingCoordinator(st *store.Store) string {
+	id, _ := st.AttemptCoordinator(context.Background(), "att-c")
+	if id == "" {
+		return "local"
+	}
+	return id
 }

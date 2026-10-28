@@ -352,10 +352,13 @@ func TestStatementPredicateBuilderJobAndByproduct(t *testing.T) {
 	bd := func(p map[string]any) map[string]any { return p["buildDefinition"].(map[string]any) }
 	for name, tweak := range map[string]func(map[string]any){
 		"another builder": func(p map[string]any) { rd(p)["builder"] = map[string]any{"id": "https://evil.example/builder#x"} },
-		"no builder":      func(p map[string]any) { delete(rd(p), "builder") },
-		"another job":     func(p map[string]any) { bd(p)["externalParameters"].(map[string]any)["job"] = "test" },
-		"no job":          func(p map[string]any) { delete(bd(p)["externalParameters"].(map[string]any), "job") },
-		"no byproducts":   func(p map[string]any) { delete(rd(p), "byproducts") },
+		"wrong coordinator": func(p map[string]any) {
+			rd(p)["builder"] = map[string]any{"id": "https://nself.org/ci/builder/v1#other/runner-1"}
+		},
+		"no builder":    func(p map[string]any) { delete(rd(p), "builder") },
+		"another job":   func(p map[string]any) { bd(p)["externalParameters"].(map[string]any)["job"] = "test" },
+		"no job":        func(p map[string]any) { delete(bd(p)["externalParameters"].(map[string]any), "job") },
+		"no byproducts": func(p map[string]any) { delete(rd(p), "byproducts") },
 		"another evidence digest": func(p map[string]any) {
 			rd(p)["byproducts"] = []map[string]any{{"name": "evidence.json", "digest": map[string]string{"sha256": strings.Repeat("a", 64)}}}
 		},

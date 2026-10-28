@@ -52,6 +52,7 @@ type fakeSrc struct {
 func (f *fakeSrc) PipelineByID(_ context.Context, id string) (store.PipelineRow, bool, error) {
 	return f.pipe, id == f.pipe.ID, nil
 }
+func (f *fakeSrc) AttemptCoordinator(context.Context, string) (string, error)   { return "", nil }
 func (f *fakeSrc) PipelineJobs(context.Context, string) ([]store.RunJob, error) { return f.jobs, nil }
 func (f *fakeSrc) PipelineAttempts(context.Context, string) ([]store.AttemptView, error) {
 	return f.attempts, nil

@@ -78,6 +78,10 @@ func (f *fakeSrc) ArtifactList(_ context.Context, flt records.Filter) ([]records
 	return out, f.err
 }
 
+func (f *fakeSrc) AttemptCoordinator(context.Context, string) (string, error) {
+	return "coordinator-1", f.err
+}
+
 // fakeBlobs is the blob store: digest -> bytes.
 type fakeBlobs struct{ data map[string][]byte }
 

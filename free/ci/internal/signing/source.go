@@ -22,6 +22,7 @@ import (
 
 // Source reads the facts of a run.
 type Source interface {
+	AttemptCoordinator(context.Context, string) (string, error)
 	PipelineByID(ctx context.Context, id string) (store.PipelineRow, bool, error)
 	PipelineJobs(ctx context.Context, pipelineID string) ([]store.RunJob, error)
 	PipelineAttempts(ctx context.Context, pipelineID string) ([]store.AttemptView, error)

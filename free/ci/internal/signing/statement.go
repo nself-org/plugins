@@ -56,7 +56,7 @@ func (f *runFacts) checkStatement(ctx context.Context, payload []byte) (string, 
 	if len(st.Subject) == 0 || len(st.Subject) > maxSubjects {
 		return "", Failf(ReasonPayloadRejected, "statement: it needs 1 to %d subjects", maxSubjects)
 	}
-	attempt, err := f.checkPredicate(st.Predicate)
+	attempt, err := f.checkPredicate(ctx, st.Predicate)
 	if err != nil {
 		return "", err
 	}
