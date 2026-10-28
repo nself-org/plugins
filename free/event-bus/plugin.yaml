@@ -9,11 +9,9 @@ description: >
   Plugins publish and subscribe via the plugin SDK helper — no direct broker
   configuration required. Used by the CDC plugin (nself.cdc.*) and the
   warehouse plugin (consumer of nself.cdc.*; now a Bundles plugin).
-isCommercial: true
-licenseType: pro
-requiredEntitlements:
-  - pro
-requires_license: true
+isCommercial: false
+licenseType: free
+requires_license: false
 minNselfVersion: 1.0.9
 category: data
 tags:

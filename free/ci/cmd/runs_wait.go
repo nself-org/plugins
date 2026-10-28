@@ -46,7 +46,7 @@ var waitPoll = 250 * time.Millisecond
 
 func init() {
 	registerRunsSub("wait", runWait)
-	registerV15("runs wait", subcommandEntry{V15Only: true, Flags: func() *flag.FlagSet { return newWaitFlagSet(&waitFlags{}) }, Handler: runWait})
+	registerV15("runs wait", subcommandEntry{V15Only: true, SideEffect: SideEffectRead, Flags: func() *flag.FlagSet { return newWaitFlagSet(&waitFlags{}) }, Handler: runWait})
 }
 
 type waitFlags struct {

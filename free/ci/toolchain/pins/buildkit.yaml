@@ -1,0 +1,12 @@
+# Helper image of .github/workflows/ci-toolchain-image.yml (docker/setup-buildx-action driver-opts), D-0997.
+# Not used by the Dockerfile; listed so the weekly drill reports a newer digest.
+name: buildkit
+kind: base-image
+version: v0.34.0
+purpose: buildkit daemon of the multi-arch image build workflow (setup-buildx-action driver-opts image)
+owner: .github/workflows/ci-toolchain-image.yml
+image: docker.io/moby/buildkit
+digest: sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+upstream:
+  type: oci
+  ref: docker.io/moby/buildkit:v0.34.0

@@ -79,6 +79,20 @@ Ported from core `nself runner provision|verify` (P7-CANON-10) with the same fla
 - Exit status follows core: 1 for a refusal or a failed step, or the status of the failed ssh or remote command (255 for a connection error).
 - `scripts/parity-nodes.sh` compares stdout, stderr, exit code, the ssh argv and the commands a stubbed host recorded against a core build, using disposable local sshd containers only.
 
+## Container mode: the pinned toolchain image
+
+`nself-ci run --container` runs jobs in one pinned multi-arch toolchain image instead of the host's tools. Tools are checked against sha256 pins and the base image is pinned by digest (`free/ci/toolchain/pins/`). The image row is `pending` until its first publish.
+
+| Env Var | Description |
+|---------|-------------|
+| `NSELF_CI_IMAGE` | Image for `--container` as `repo[:tag]@sha256:<64 hex>`. Overrides the pinned row; a tag-only reference is refused. |
+| `NSELF_CI_TOOLCHAIN_VERSIONS` | Path to a different `versions.yaml` (fixtures, air-gapped mirrors). |
+| `NSELF_CI_TEAM` | Team id of this coordinator. Its `team` policy rows (`nself ci policy set --scope team --team <id>`) apply to every run, plan and dispatch of the process. Unset: no team row applies. |
+
+- **E645** (usage): the pinned toolchain image is not available (row still `pending`, `NSELF_CI_IMAGE` not `ref@digest`, digest not pullable, or an invalid pin source). Set `NSELF_CI_IMAGE=<ref@digest>` or run without `--container`. There is no silent fallback to host tools.
+- `nself-ci doctor` section `toolchain-pins`: CI-DI01 table matches pins, CI-DI02 image row state, CI-DI03 installed tool versions that differ from the pins (warnings only).
+- The weekly toolchain-pins drill reports newer upstream releases and moved tags for every pin row, including the `binfmt` and `buildkit` helper images of the image build workflow.
+
 ## Source
 
 [`plugins/ci/`](https://github.com/nself-org/plugins/tree/main/ci)

@@ -1,0 +1,12 @@
+# Helper image of .github/workflows/ci-toolchain-image.yml (docker/setup-qemu-action `image:`), D-0997.
+# Not used by the Dockerfile; listed so the weekly drill reports a newer digest.
+name: binfmt
+kind: base-image
+version: qemu-v10.2.3
+purpose: qemu binfmt helper of the multi-arch image build workflow (setup-qemu-action image)
+owner: .github/workflows/ci-toolchain-image.yml
+image: docker.io/tonistiigi/binfmt
+digest: sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+upstream:
+  type: oci
+  ref: docker.io/tonistiigi/binfmt:qemu-v10.2.3

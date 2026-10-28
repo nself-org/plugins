@@ -98,3 +98,43 @@ func TestPolicyWriteShapeAndPins(t *testing.T) {
 		t.Fatalf("unset: %+v", rows)
 	}
 }
+
+// TestPolicySubjectsListsEveryScopeSubject proves the store lists the subjects
+// of one scope (D-1284), from the store and from inside a write transaction.
+func TestPolicySubjectsListsEveryScopeSubject(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if got, err := s.PolicySubjects(ctx, "project"); err != nil || len(got) != 0 {
+		t.Fatalf("empty store: %v %v", got, err)
+	}
+	for _, w := range []PolicyWrite{
+		{Op: PolicySet, Scope: "project", Subject: "b", Key: "k1", Value: []byte(`"x"`), Actor: "ali"},
+		{Op: PolicySet, Scope: "project", Subject: "b", Key: "k2", Value: []byte(`"x"`), Actor: "ali"},
+		{Op: PolicySet, Scope: "project", Subject: "a", Key: "k1", Value: []byte(`"x"`), Actor: "ali"},
+		{Op: PolicySet, Scope: "team", Subject: "t1", Key: "k1", Value: []byte(`"x"`), Actor: "ali"},
+	} {
+		if err := s.ApplyWrite(ctx, w, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.PolicySubjects(ctx, "project")
+	if err != nil || len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("project subjects %v %v", got, err)
+	}
+	if got, _ := s.PolicySubjects(ctx, "team"); len(got) != 1 || got[0] != "t1" {
+		t.Fatalf("team subjects %v", got)
+	}
+	if got, _ := s.PolicySubjects(ctx, "user"); len(got) != 0 {
+		t.Fatalf("user subjects %v", got)
+	}
+	err = s.ApplyWrite(ctx, PolicyWrite{Op: PolicySet, Scope: "project", Subject: "c", Key: "k1", Value: []byte(`"x"`), Actor: "ali"}, func(tx *Tx) error {
+		in, err := tx.PolicySubjects(ctx, "project")
+		if err != nil || len(in) != 3 {
+			t.Fatalf("in-transaction subjects %v %v", in, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

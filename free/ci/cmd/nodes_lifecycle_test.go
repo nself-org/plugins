@@ -9,7 +9,7 @@ import (
 )
 
 func TestNodesLifecycleKeysAreV15Only(t *testing.T) {
-	want := map[string]string{"add": "remote", "list": "read", "show": "read", "test": "remote", "drain": "remote",
+	want := map[string]SideEffect{"add": "remote", "list": "read", "show": "read", "test": "remote", "drain": "remote",
 		"enable": "remote", "revoke": "destructive", "remove": "destructive", "rotate": "remote"}
 	if len(nodesLifecycleSubs) != len(want) {
 		t.Fatalf("%d subcommands, want %d", len(nodesLifecycleSubs), len(want))
@@ -19,6 +19,9 @@ func TestNodesLifecycleKeysAreV15Only(t *testing.T) {
 		e, ok := v15Subcommands[key]
 		if !ok || !e.V15Only || e.Handler == nil || e.Flags == nil {
 			t.Errorf("%s: not a complete V15 entry: %+v", key, e)
+		}
+		if e.SideEffect != want[s.name] {
+			t.Errorf("%s: table side effect %q, want %q", key, e.SideEffect, want[s.name])
 		}
 		if want[s.name] != s.class {
 			t.Errorf("%s: side-effect class %q, want %q", key, s.class, want[s.name])

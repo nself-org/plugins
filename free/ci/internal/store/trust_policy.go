@@ -117,6 +117,17 @@ func (t *Tx) PolicyRows(ctx context.Context, scope, subject string) ([]PolicyRow
 	return scanPolicyRows(rows, scope, subject)
 }
 
+// PolicySubjects lists the subjects of a scope that have at least one row, as this
+// transaction sees them, ordered by subject. A write check uses it to see every
+// project or team row, not only the current repository's.
+func (t *Tx) PolicySubjects(ctx context.Context, scope string) ([]string, error) {
+	rows, err := t.tx.QueryContext(ctx, policySubjectsQuery, scope)
+	if err != nil {
+		return nil, err
+	}
+	return scanPolicySubjects(rows)
+}
+
 // ApplyWrite applies w and then calls inTx in the same transaction. An error
 // from either rolls back both.
 func (s *Store) ApplyWrite(ctx context.Context, w PolicyWrite, inTx func(tx *Tx) error) error {
@@ -182,6 +193,31 @@ func (s *Store) PolicyRows(ctx context.Context, scope, subject string) ([]Policy
 		return nil, err
 	}
 	return scanPolicyRows(rows, scope, subject)
+}
+
+// PolicySubjects lists the subjects of a scope that have at least one row,
+// ordered by subject.
+func (s *Store) PolicySubjects(ctx context.Context, scope string) ([]string, error) {
+	rows, err := s.readers.QueryContext(ctx, policySubjectsQuery, scope)
+	if err != nil {
+		return nil, err
+	}
+	return scanPolicySubjects(rows)
+}
+
+const policySubjectsQuery = `SELECT DISTINCT subject FROM trust_policy_row WHERE scope=? ORDER BY subject`
+
+func scanPolicySubjects(rows *sql.Rows) ([]string, error) {
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var sub string
+		if err := rows.Scan(&sub); err != nil {
+			return nil, err
+		}
+		out = append(out, sub)
+	}
+	return out, rows.Err()
 }
 
 const policyRowsQuery = `SELECT key,value_json,updated_by,updated_at FROM trust_policy_row WHERE scope=? AND subject=? ORDER BY key`

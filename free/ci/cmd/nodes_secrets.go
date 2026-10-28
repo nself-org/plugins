@@ -60,7 +60,7 @@ func nodesSecretsFlags() *flag.FlagSet {
 func init() {
 	for _, verb := range []string{"grant", "revoke"} {
 		verb := verb
-		registerV15("nodes secrets "+verb, subcommandEntry{V15Only: true, Flags: nodesSecretsFlags,
+		registerV15("nodes secrets "+verb, subcommandEntry{V15Only: true, SideEffect: SideEffectRemote, Flags: nodesSecretsFlags,
 			Handler: func(args []string) int { return runNodesSecrets(verb, args, defaultNodesSecretsDeps()) }})
 	}
 }

@@ -23,12 +23,36 @@ type handler func(args []string) int
 // subcommands maps a space-joined key to its handler.
 var subcommands = map[string]handler{}
 
+// SideEffect is the class of change a subcommand makes, read by refgen and
+// the commands.yaml generator (Epic NODE D17).
+type SideEffect string
+
+const (
+	// SideEffectRead only reads local or coordinator state.
+	SideEffectRead SideEffect = "read"
+	// SideEffectRemote changes state on a remote node or the coordinator.
+	SideEffectRemote SideEffect = "remote"
+	// SideEffectDestructive removes or revokes something that cannot be restored by rerunning.
+	SideEffectDestructive SideEffect = "destructive"
+)
+
+// valid reports whether c is unclassified ("") or one of the defined classes.
+func (c SideEffect) valid() bool {
+	switch c {
+	case "", SideEffectRead, SideEffectRemote, SideEffectDestructive:
+		return true
+	}
+	return false
+}
+
 // subcommandEntry carries v1.5-only metadata without changing the v1.4 table.
+// SideEffect is empty until a command is classified.
 type subcommandEntry struct {
-	Handler handler
-	V15Only bool
-	Hidden  bool
-	Flags   func() *flag.FlagSet
+	Handler    handler
+	V15Only    bool
+	Hidden     bool
+	Flags      func() *flag.FlagSet
+	SideEffect SideEffect
 }
 
 var v15Subcommands = map[string]subcommandEntry{}
@@ -103,8 +127,8 @@ func visibleV15() []string {
 }
 
 // tableProblems checks the rules of a V15 table: a Hidden entry must be
-// V15Only (so v1.4 argv stays frozen) and every entry needs a Flags
-// constructor and a handler.
+// V15Only (so v1.4 argv stays frozen), every entry needs a Flags
+// constructor and a handler, and a SideEffect is empty or a defined class.
 func tableProblems(entries map[string]subcommandEntry) []string {
 	var out []string
 	for k, e := range entries {
@@ -115,6 +139,8 @@ func tableProblems(entries map[string]subcommandEntry) []string {
 			out = append(out, k+": no Flags constructor")
 		case e.Handler == nil:
 			out = append(out, k+": no handler")
+		case !e.SideEffect.valid():
+			out = append(out, k+": unknown side effect "+string(e.SideEffect))
 		}
 	}
 	sort.Strings(out)

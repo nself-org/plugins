@@ -45,7 +45,7 @@ func init() {
 	explainFlags.StringVar(&explainOpts.repo, "repo", "", "repository root (env NSELF_CI_REPO; default: current directory)")
 	explainFlags.StringVar(&explainOpts.cfg, "config", "", "config file (default: <repo>/.nself/ci.yaml)")
 	explainFlags.StringVar(&explainOpts.base, "base", "", "base commit for affected selection (env NSELF_CI_BASE_SHA)")
-	registerV15("explain", subcommandEntry{V15Only: true, Flags: func() *flag.FlagSet { return explainFlags }, Handler: runExplain})
+	registerV15("explain", subcommandEntry{V15Only: true, SideEffect: SideEffectRead, Flags: func() *flag.FlagSet { return explainFlags }, Handler: runExplain})
 }
 
 // explainFail prints the error and returns its exit code.

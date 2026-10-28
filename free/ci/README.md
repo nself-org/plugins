@@ -68,6 +68,23 @@ cd plugins/free/ci
 go build -o nself-ci ./cmd/
 ```
 
+## Container mode: the pinned toolchain image
+
+`nself-ci run --container` runs each job's checks in one pinned, multi-arch (linux/amd64 and linux/arm64) toolchain image instead of the tools installed on the host. Every tool in it (Go, Node, pnpm, Rust, gitleaks, govulncheck, hadolint, syft, trivy) is fetched by URL and checked against a sha256 pin; the base image is pinned by digest. The pins live in `toolchain/pins/*.yaml`; `toolchain/versions.yaml` is generated from them (`go generate ./internal/toolchain/...`) and embedded in the binary. A test fails if the `Dockerfile` drifts from the pins.
+
+| Var | Description |
+|---|---|
+| `NSELF_CI_IMAGE` | The image `--container` runs in, as `repo[:tag]@sha256:<64 hex>`. Takes precedence over the pinned row. A reference by tag alone is refused. Read from the operator's own environment, never from job env. Until the `--image` flag is registered this is how to pass it. |
+| `NSELF_CI_TOOLCHAIN_VERSIONS` | Path to another `versions.yaml` to use instead of the embedded one (fixtures, air-gapped mirrors). |
+
+The image row `toolchain-image` is `pending` until the first publish, so `--container` without `NSELF_CI_IMAGE` fails with **E645**. There is no silent fallback to host tools.
+
+**E645** (class usage): the pinned toolchain image is not available. Causes: the row is still `pending`, the `NSELF_CI_IMAGE` value is not `ref@digest`, the digest cannot be pulled, or a pin source is invalid. Fix: pass `NSELF_CI_IMAGE=<ref@digest>`, or run without `--container`.
+
+`nself-ci doctor` has a `toolchain-pins` section: **CI-DI01** the embedded table matches the pins, **CI-DI02** the image row state (pending or pinned), **CI-DI03** one warning per installed tool whose version differs from its pin (a pass otherwise; tools that are not installed are not listed, and version differences never fail the section).
+
+The weekly `scripts/drill/toolchain-pins` drill checks every row of `versions.yaml`: a pinned artifact that no longer resolves fails, a newer upstream release or a moved tag is advisory. Base-image rows include the two helper images of `.github/workflows/ci-toolchain-image.yml` (`binfmt`, the qemu helper, and `buildkit`), so a newer digest of either is reported too.
+
 ## Artifact builds
 
 `nself-ci build --artifact android [android-dir]` produces a signed Android release APK on the developer's own machine — closing the private-repo "gates but no release artifact" gap without a GitHub-hosted runner or a third nSelf server. It mirrors the exact signing steps `nchat/.github/workflows/build-react-native.yml` and `deploy-mobile-android.yml` already use, so the same keystore secrets work in both places:

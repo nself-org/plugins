@@ -32,7 +32,7 @@ const LocalSubject = "local"
 type Repo struct {
 	Root       string           // repository root (git is run here)
 	Project    string           // project-scope subject; see ProjectID
-	User, Team string           // user and team subjects; User defaults to LocalSubject, an empty Team has no rows
+	User, Team string           // user and team subjects; User defaults to LocalSubject, an empty Team defaults to NSELF_CI_TEAM (team.go) and then has no rows
 	Visibility string           // public, private or unknown
 	Class      model.TrustClass // source class that picks the default scope; empty counts as untrusted
 }
@@ -166,11 +166,15 @@ func (r *Resolver) operatorScopes(ctx context.Context, repo Repo) (operatorPolic
 	if user == "" {
 		user = LocalSubject
 	}
+	team, err := teamOf(repo.Team)
+	if err != nil {
+		return operatorPolicy{}, err
+	}
 	for _, s := range []struct {
 		kind    Source
 		scope   string
 		subject string
-	}{{SourceUser, "user", user}, {SourceTeam, "team", repo.Team}, {SourceProject, "project", repo.Project}} {
+	}{{SourceUser, "user", user}, {SourceTeam, "team", team}, {SourceProject, "project", repo.Project}} {
 		if s.subject == "" {
 			continue
 		}
