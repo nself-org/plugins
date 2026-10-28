@@ -22,9 +22,13 @@ import (
 )
 
 // nodesLifecycleSubs are the keys after "nodes", with their side-effect class.
-var nodesLifecycleSubs = []struct{ name, class string }{
-	{"add", "remote"}, {"list", "read"}, {"show", "read"}, {"test", "remote"}, {"drain", "remote"},
-	{"enable", "remote"}, {"revoke", "destructive"}, {"remove", "destructive"}, {"rotate", "remote"},
+var nodesLifecycleSubs = []struct {
+	name  string
+	class SideEffect
+}{
+	{"add", SideEffectRemote}, {"list", SideEffectRead}, {"show", SideEffectRead}, {"test", SideEffectRemote},
+	{"drain", SideEffectRemote}, {"enable", SideEffectRemote}, {"revoke", SideEffectDestructive},
+	{"remove", SideEffectDestructive}, {"rotate", SideEffectRemote},
 }
 
 // currentProject is the project id of the repository the command runs in.
@@ -43,9 +47,10 @@ func init() {
 	for _, s := range nodesLifecycleSubs {
 		name := s.name
 		registerV15("nodes "+name, subcommandEntry{
-			V15Only: true,
-			Flags:   func() *flag.FlagSet { return lifecycle.FlagSet(name) },
-			Handler: func(args []string) int { return lifecycle.Run(name, args, lifecycle.ProductionEnv(currentProject)) },
+			V15Only:    true,
+			SideEffect: s.class,
+			Flags:      func() *flag.FlagSet { return lifecycle.FlagSet(name) },
+			Handler:    func(args []string) int { return lifecycle.Run(name, args, lifecycle.ProductionEnv(currentProject)) },
 		})
 	}
 }
