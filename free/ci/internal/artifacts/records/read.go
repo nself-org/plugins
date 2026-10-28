@@ -7,7 +7,7 @@ package records
 // Constraints: "not found" and "not visible" are the same error value; a
 // record whose blob is gone is reported missing (and remembered) and Get
 // refuses it (E712 missing_blob); Get writes only inside a directory that
-// authz.ArtifactGetDest accepted, creates every file exclusively and
+// authz.OpenArtifactGetDest pinned, creates every file exclusively and
 // re-verifies size and digest of what it wrote.
 
 import (
@@ -99,29 +99,15 @@ func (r Reader) Get(ctx context.Context, v authz.Viewer, id, dest, cwd string) (
 	if err := verifyBlob(r.Blobs, rec); err != nil {
 		return "", rec, err
 	}
-	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
-		return "", rec, failf(ReasonUnreadable, "destination: %v", err)
-	}
-	// re-check after the create: the directory must still be empty and ours
-	if dir, err = authz.ArtifactGetDest(dir, cwd); err != nil {
+	root, dir, err := authz.OpenArtifactGetDest(dir, cwd)
+	if err != nil {
 		return "", rec, err
 	}
-	return r.write(dir, rel, rec)
+	defer func() { _ = root.Close() }()
+	return r.write(root, dir, rel, rec)
 }
 
-func (r Reader) write(dir, rel string, rec Record) (string, Record, error) {
-	before, err := os.Lstat(dir)
-	if err != nil || !before.IsDir() {
-		return "", rec, failf(ReasonUnreadable, "destination %q is not a plain directory", dir)
-	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return "", rec, failf(ReasonUnreadable, "destination: %v", err)
-	}
-	defer func() { _ = root.Close() }()
-	if opened, serr := root.Stat("."); serr != nil || !os.SameFile(before, opened) {
-		return "", rec, failf(ReasonUnreadable, "destination %q changed while it was opened", dir)
-	}
+func (r Reader) write(root *os.Root, dir, rel string, rec Record) (string, Record, error) {
 	if d := filepath.Dir(rel); d != "." {
 		if err := root.MkdirAll(d, 0o700); err != nil {
 			return "", rec, failf(ReasonUnreadable, "destination: %v", err)

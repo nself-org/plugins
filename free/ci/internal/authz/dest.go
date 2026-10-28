@@ -4,11 +4,9 @@ package authz
 // directory that is not the working directory and not under a .git directory.
 // Inputs:  the requested destination and the caller's working directory.
 // Outputs: the absolute, symlink-resolved destination, or a *PathError (E683).
-// Constraints: the only I/O in this package (stat, read the directory, resolve
-// symlinks). It creates nothing: the caller creates a missing destination with
-// os.Mkdir (not MkdirAll) mode 0700, which fails if anything appeared in the
-// meantime, and passes the returned path on. A leaf that is a symlink is
-// refused, so the check and the write name the same directory.
+// Constraints: this function only validates a pathname. Extraction callers
+// must use OpenArtifactGetDest and write through its pinned os.Root; a returned
+// pathname alone cannot protect against concurrent parent replacement.
 
 import (
 	"errors"
