@@ -16,60 +16,24 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
-func unknown[T any](src string, now time.Time) model.Fact[T] {
-	return model.Fact[T]{Source: src, ObservedAt: now, Confidence: "unknown"}
-}
-
-func known[T any](v T, src string, now time.Time) model.Fact[T] {
-	return model.Fact[T]{Value: &v, Source: src, ObservedAt: now, Confidence: "known"}
-}
-
 // newCapability is the draft the probe fills in.
 func newCapability(id, name string, spec remote.HostSpec, p Platform, fps []string, sep SeparationFacts, agentVersion string, now time.Time) model.Capability {
-	c := model.Capability{Schema: "ci.runner-capability/v1"}
-	c.Identity = model.CapabilityIdentity{
-		ID: id, Name: name, Provider: "ssh", Transport: "ssh", Labels: []string{}, HostKeyFingerprints: fps,
-		Ownership: unknown[string]("assigned", now), MachineID: unknown[string]("self", now), AgeRecipient: unknown[string]("self", now),
-		SSH: &model.CapabilitySSH{Alias: spec.Host, User: spec.User},
-	}
-	c.Platform = model.CapabilityPlatform{
-		OS: known(p.OS, "probe", now), Arch: known(p.Arch, "probe", now), Kernel: unknown[string]("probe", now),
-		OSVersion: unknown[string]("probe", now), Virtualization: unknown[string]("probe", now),
-	}
-	c.Resources = model.CapabilityResources{
-		CPU: unknown[float64]("probe", now), MemMB: unknown[int64]("probe", now), DiskFreeMB: unknown[int64]("probe", now),
-		Accelerators: unknown[[]string]("probe", now),
-		Reserved:     model.CapabilityReserved{CPU: unknown[float64]("assigned", now), MemMB: unknown[int64]("assigned", now)},
-	}
-	c.Tools = model.CapabilityTools{
-		Docker: unknown[bool]("probe", now), Podman: unknown[bool]("probe", now), GVisor: unknown[bool]("probe", now), Tart: unknown[bool]("probe", now),
-		Toolchains: map[string]model.Fact[string]{}, Browsers: unknown[[]string]("probe", now), Services: unknown[[]string]("probe", now),
-		Custom: map[string]model.Fact[string]{},
-	}
-	c.Availability = model.CapabilityAvailability{
-		State: known("offline", "assigned", now), Slots: unknown[int]("self", now), Running: unknown[int]("self", now),
-		BatteryPct: unknown[int]("probe", now), PluggedIn: unknown[bool]("probe", now), Interactive: unknown[string]("probe", now),
-		Persistence: unknown[bool]("assigned", now), OnBattery: unknown[string]("assigned", now), InteractivePolicy: unknown[string]("assigned", now),
-	}
-	c.Location = model.CapabilityLocation{Kind: unknown[string]("self", now), Region: unknown[string]("self", now)}
-	c.Economics = model.CapabilityEconomics{
-		Class: unknown[string]("self", now), MarginalCostPerMin: unknown[float64]("self", now),
-		Allowance: model.CapabilityAllowance{KnownRemaining: unknown[float64]("self", now), ResetAt: unknown[time.Time]("self", now), Confidence: unknown[string]("self", now)},
-	}
+	c := model.NewCapability("probe", "self", now)
+	c.Identity.ID, c.Identity.Name = id, name
+	c.Identity.Provider, c.Identity.Transport = "ssh", "ssh"
+	c.Identity.HostKeyFingerprints = fps
+	c.Identity.SSH = &model.CapabilitySSH{Alias: spec.Host, User: spec.User}
+	c.Platform.OS, c.Platform.Arch = model.KnownFact(p.OS, "probe", now), model.KnownFact(p.Arch, "probe", now)
+	c.Availability.State = model.KnownFact("offline", "assigned", now)
 	c.Separation = model.CapabilitySeparation{
-		UIDSeparation: known(sep.UIDSeparation, "probe", now), UserNS: known(sep.UserNS, "probe", now),
-		SigningEligible: known(sep.UIDSeparation, "assigned", now),
+		UIDSeparation: model.KnownFact(sep.UIDSeparation, "probe", now), UserNS: model.KnownFact(sep.UserNS, "probe", now),
+		SigningEligible: model.KnownFact(sep.UIDSeparation, "assigned", now),
 	}
 	c.SecretsEligible = sep.UIDSeparation
 	c.Verified = model.CapabilityVerified{By: "self", At: now} // not "probe": the prober treats a fresh probe as a cache hit
 	c.Protocol = model.CapabilityProtocol{Versions: []int{1}, Min: 1, AgentVersion: agentVersion}
-	c.Lifecycle = model.CapabilityLifecycle{Discovered: true, AuthorizedProjects: []string{}}
-	empty := []model.TrustClass{}
-	c.Trust = model.CapabilityTrust{
-		Accepts: known(empty, "assigned", now), Isolation: unknown[model.Isolation]("assigned", now),
-		Network: unknown[[]model.NetworkScope]("assigned", now), SecretClasses: unknown[[]model.SecretClass]("assigned", now),
-		PrivacyZone: unknown[model.PrivacyZone]("assigned", now),
-	}
+	c.Lifecycle.Discovered = true
+	c.Trust.Accepts = model.KnownFact([]model.TrustClass{}, "assigned", now)
 	return c
 }
 
@@ -119,15 +83,15 @@ func applyTrust(c *model.Capability, t TrustFlags, now time.Time) error {
 	for _, s := range t.SecretClasses {
 		secrets = append(secrets, model.SecretClass(s))
 	}
-	c.Trust.Accepts = known(classes, "assigned", now)
-	c.Trust.SecretClasses = known(secrets, "assigned", now)
+	c.Trust.Accepts = model.KnownFact(classes, "assigned", now)
+	c.Trust.SecretClasses = model.KnownFact(secrets, "assigned", now)
 	if t.PrivacyZone != "" {
-		c.Trust.PrivacyZone = known(model.PrivacyZone(t.PrivacyZone), "assigned", now)
+		c.Trust.PrivacyZone = model.KnownFact(model.PrivacyZone(t.PrivacyZone), "assigned", now)
 	}
-	c.Identity.Ownership = known(t.Ownership, "assigned", now)
+	c.Identity.Ownership = model.KnownFact(t.Ownership, "assigned", now)
 	if t.Ownership == "operator" {
-		c.Economics.Class = known("owned", "assigned", now)
-		c.Economics.MarginalCostPerMin = known(0.0, "assigned", now)
+		c.Economics.Class = model.KnownFact("owned", "assigned", now)
+		c.Economics.MarginalCostPerMin = model.KnownFact(0.0, "assigned", now)
 	}
 	return nil
 }
