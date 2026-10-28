@@ -111,12 +111,13 @@ func (c *Coordinator) classify(ctx context.Context, h Hooks, rev Revision) (admi
 	return string(got), string(got), nil
 }
 
-func (c *Coordinator) policy(ctx context.Context, h Hooks) (PolicyResult, error) {
+func (c *Coordinator) policy(ctx context.Context, h Hooks, class model.TrustClass) (PolicyResult, error) {
 	var r PolicyResolver = defaultResolver{}
 	if h.Policy != nil {
 		r = h.Policy
 	}
-	return r.Resolve(ctx, PolicyRequest{Root: c.Opts.Root, Store: c.storePath(), Pipeline: c.Plan.Pipeline.Name, Run: c.Opts.PolicyRun})
+	return r.Resolve(ctx, PolicyRequest{Root: c.Opts.Root, Store: c.storePath(), Pipeline: c.Plan.Pipeline.Name, Run: c.Opts.PolicyRun,
+		Class: class, Visibility: policyVisibility(c.Opts.ProviderRepo)})
 }
 
 func (c *Coordinator) storePath() string {
@@ -188,7 +189,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	pol, err := c.policy(ctx, h)
+	pol, err := c.policy(ctx, h, model.TrustClass(admitted))
 	if err != nil {
 		return Result{}, err
 	}

@@ -13,8 +13,8 @@ package status
 //          that knows more (the evidence projection says running, or the run was cancelled) supplies a
 //          Phase hook, which refines pending to running and failed to canceled; the description is the
 //          one CI-37's Publisher built, cut to 140 characters; a target URL is passed only when the
-//          Status has one; the project is "owner/repo" of the Status (a nested group is not reachable
-//          through report.Status, whose Validate refuses a slash); the token never appears in a URL,
+//          Status has one; the project is Owner + "/" + Repo of the Status (Owner may be a nested group
+//          path such as "group/sub", up to twenty segments in all); the token never appears in a URL,
 //          an error or a log; the matcher is pure: it reads the remote text and the policy's api_url
 //          host and calls nothing else, and it matches only when compat.V15() (v1.4 has no GitLab
 //          reporter).

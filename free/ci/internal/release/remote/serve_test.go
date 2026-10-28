@@ -71,6 +71,7 @@ type localAPI struct {
 	srv   *httptest.Server
 	blobs *cas.Store
 	app   []byte
+	fs    *fakeStore
 }
 
 // newLocalAPI serves the routes to the local operator over a plain-HTTP test server.
@@ -99,6 +100,7 @@ func newLocalAPI(t *testing.T) *localAPI {
 			SHA256: put(b), Size: int64(len(b)), State: records.StateCommitted}
 	}
 	fs := &fakeStore{recs: []records.Record{rec("app", records.KindBinary, l.app), rec("app.cdx.json", records.KindSBOM, []byte("{}")), rec("build.log", records.KindLog, []byte("log"))}}
+	l.fs = fs
 	useDeps(t, &remote.Deps{Runs: fakeRuns{}, Store: fs, Blobs: blobs})
 	svc := roles.New(st, &audit.Log{St: st})
 	svc.Self = "alice"

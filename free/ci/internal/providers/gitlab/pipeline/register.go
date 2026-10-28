@@ -11,7 +11,8 @@ package pipeline
 //          into runtime.Credential, so none is registered here; the AttemptFacts source of the transport
 //          driver is installed by the GitHub provider (it reads repo, project and runner label from
 //          the node's labels, which this provider sets the same way) and this package does not install
-//          a second one; with no TrustFacts installed Refetch returns the facts unchanged, which is
+//          a second one, only the project-path check that source applies to a gitlab node (a nested
+//          group/sub/project is accepted); with no TrustFacts installed Refetch returns the facts unchanged, which is
 //          what the registry does for a source with no provider at all.
 
 import (
@@ -19,6 +20,8 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
+	"github.com/nself-org/plugins/free/ci/internal/providers/gitlab/api"
+	"github.com/nself-org/plugins/free/ci/internal/providers/runtime"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -37,6 +40,8 @@ func init() {
 	if err := providers.Register(defaultProvider); err != nil {
 		registrationErrors = append(registrationErrors, err)
 	}
+	// The AttemptFacts source checks nself.repo with the project-path rule of the node's provider (D-1345).
+	runtime.RegisterRepoCheck(ProviderID, func(repo string) bool { _, ok := api.ParseProject(repo); return ok })
 }
 
 // UseStore makes the default provider keep its dispatch journal in the coordinator's store (call once

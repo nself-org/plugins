@@ -38,6 +38,7 @@ type Deps struct {
 	Runs  Runs
 	Store Backend
 	Blobs signing.Blobs
+	Cache *InputsCache // optional; nil collects on every request
 }
 
 // errNotFound is the one refusal for a run or blob the caller may not see or that is absent.

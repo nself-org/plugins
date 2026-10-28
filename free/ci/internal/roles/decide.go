@@ -6,8 +6,9 @@ package roles
 // Outputs: nil or the E687 error; an audit row "authorize" with result=allow|deny for audited decisions.
 // Constraints: a denial is audited too; if the row cannot be written the decision fails closed and the
 //          caller sees the audit error; the row names the actor, the role or action, the project (quoted)
-//          and the reason key, never a token; the non-author rule binds every identity except the local
-//          operator, who is the only person of a PERSONAL coordinator.
+//          and the reason key, never a token; the non-author rule binds every identity; the local operator
+//          is exempt only on a PERSONAL coordinator (where it is the only person), and on a TEAM
+//          coordinator it may not approve a run it authored (operatorApproval).
 
 import (
 	"context"
@@ -16,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/audit"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // principalOf reduces an audit label or a bare id to the principal id, so "token:tok-1:bob",
@@ -46,9 +48,11 @@ func (a Actor) decide(ctx context.Context, d decision) error {
 	if err == nil && d.needProject && d.project == "" {
 		err = fail(ReasonProject, "%s needs a project", d.target)
 	}
-	if err == nil && d.nonAuthor && a.kind != KindOperator {
+	if err == nil && d.nonAuthor {
 		author, _ := ctx.Value(authKey{}).(string)
 		switch {
+		case a.kind == KindOperator:
+			err = a.operatorApproval(ctx, author)
 		case author == "":
 			err = fail(ReasonNoAuthor, "the author of the run is unknown, so it cannot be approved")
 		case principalOf(author) == principalOf(a.id):
@@ -71,6 +75,24 @@ func (a Actor) decide(ctx context.Context, d decision) error {
 		return fmt.Errorf("audit row not written, decision refused: %w", aerr)
 	}
 	return err
+}
+
+// operatorApproval applies the non-author rule to the local operator. On a PERSONAL coordinator the
+// operator is the only person and may approve any run. On a TEAM coordinator (or one whose mode cannot
+// be read) the operator may not approve a run it authored: the second person the rule asks for is
+// someone else. An unknown author does not stop the operator, who holds the data dir and can read the
+// run, so a TEAM operator is never locked out of a run that records no author (D-1436).
+func (a Actor) operatorApproval(ctx context.Context, author string) error {
+	if author == "" || a.svc == nil || a.svc.St == nil {
+		return nil
+	}
+	if mode, found, err := a.svc.St.CoordinatorModeGet(ctx); err == nil && (!found || mode == store.CoordinatorPersonal) {
+		return nil // no serve ever stored a mode, or it is personal
+	}
+	if principalOf(author) == principalOf(a.id) {
+		return fail(ReasonSelfApproval, "%s cannot approve its own run on a TEAM coordinator", a.Label())
+	}
+	return nil
 }
 
 // refresh re-reads what the actor's role rests on. A grant, token or certificate revoked since the actor

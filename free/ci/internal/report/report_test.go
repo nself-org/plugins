@@ -89,7 +89,9 @@ func TestOutboxWithoutReporterKeepsEntry(t *testing.T) {
 }
 
 func TestStatusValidate(t *testing.T) {
-	bad := []Status{{Owner: "o/x", Repo: "r", Revision: sha, State: Success}, {Owner: "o", Repo: "r", Revision: "HEAD", State: Success}, {Owner: "o", Repo: "r", Revision: sha, State: "good"}}
+	bad := []Status{{Owner: "o//x", Repo: "r", Revision: sha, State: Success}, {Owner: "o/", Repo: "r", Revision: sha, State: Success},
+		{Owner: "../x", Repo: "r", Revision: sha, State: Success}, {Owner: "o", Repo: "a/b", Revision: sha, State: Success},
+		{Owner: strings.TrimSuffix(strings.Repeat("g/", 20), "/"), Repo: "r", Revision: sha, State: Success}, {Owner: "o", Repo: "r", Revision: "HEAD", State: Success}, {Owner: "o", Repo: "r", Revision: sha, State: "good"}}
 	for _, s := range bad {
 		if s.Validate() == nil {
 			t.Fatalf("%+v must be refused", s)

@@ -106,6 +106,12 @@ type PolicyRequest struct {
 	Store          string // state.db of the coordinator's home; "" = the default store
 	Config         map[string]any
 	Run            RunValues // per-run values (the flags of one invocation): only ever tighten, except the preset; nil = none
+	// Class is the class the run is admitted at; it picks the default policy scope, so an untrusted
+	// source gets the untrusted floor (D-1436). "" = the local operator's own checkout (owner).
+	Class model.TrustClass
+	// Visibility is "private" only when the repository is known to be private; "" and anything else is
+	// "unknown", which keeps hosted execution off.
+	Visibility string
 }
 
 // PolicyResolver resolves the effective policy (P7-TRUST-27 registers it).

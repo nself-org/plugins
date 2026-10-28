@@ -54,10 +54,20 @@ func labelValue(labels []string, prefix string) string {
 	return ""
 }
 
+// validRepo checks the repository label with the check of the node's provider (GitLab accepts a
+// nested project path); a provider with none registered is held to GitHub's owner/name.
+func validRepo(provider, repo string) bool {
+	if check, ok := runtime.RepoCheck(provider); ok {
+		return check(repo)
+	}
+	_, ok := parseRepo(repo)
+	return ok
+}
+
 // Facts implements runtime.FactsSource.
 func Facts(ctx context.Context, node model.Capability, l protocol.Lease) (runtime.AttemptFacts, error) {
 	repo := labelValue(node.Identity.Labels, LabelRepo)
-	if _, ok := parseRepo(repo); !ok {
+	if !validRepo(node.Identity.Provider, repo) {
 		return runtime.AttemptFacts{}, refuse("node.repo")
 	}
 	// The lease epoch counts the times this attempt was handed out again after a loss: it is the

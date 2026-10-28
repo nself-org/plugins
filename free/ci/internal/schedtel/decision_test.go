@@ -3,6 +3,7 @@ package schedtel
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
 func (e *env) source() Source {
@@ -177,5 +179,41 @@ func TestPlacementRefFollowsTheAdmittedDecision(t *testing.T) {
 	}
 	if _, ok = cirun.PlacementRef(ctx, "never-placed"); ok {
 		t.Fatal("no decision, no ref")
+	}
+}
+
+// D-1069: the contributor samples the queued attempts of the pipeline being built and no other, so an
+// unrelated pipeline queueing a job changes neither the estimates nor the world digest.
+func TestEstimatesCoverOnlyThePipelineBeingBuilt(t *testing.T) {
+	e := newEnv(t)
+	for i := 0; i < 3; i++ {
+		o := store.TelOutcome{AttemptID: "old" + string(rune('a'+i)), Project: "proj", JobKey: "build", Runner: "local", RunnerClass: "local", Result: "passed", RuntimeMs: 4000, TS: int64(i)}
+		if err := e.st.TelRecordOutcome(context.Background(), o, fold(4000, -1, int64(i))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mine := e.attempt("mine", "build")
+	build := func(ctx context.Context) sched.World {
+		t.Helper()
+		w := sched.World{Runners: []sched.Runner{{ID: "local", Class: "local", Avail: sched.Avail{Slots: 1}}}}
+		if err := contribute(WithStore(ctx, e.st), &w); err != nil {
+			t.Fatal(err)
+		}
+		return w
+	}
+	forMine := world.WithPipeline(context.Background(), sched.Pipeline{ID: "mine"})
+	before := build(forMine)
+	other := e.attempt("other", "build")
+	after := build(forMine)
+
+	if _, ok := after.Estimates["local"][other]; ok {
+		t.Fatal("the estimates sample an attempt of another pipeline")
+	}
+	if !reflect.DeepEqual(before.Estimates, after.Estimates) || ptrVal(after.Estimates["local"][mine].RuntimeMs) != int64(4000) {
+		t.Fatalf("an unrelated pipeline changed the estimates: before %+v after %+v", before.Estimates, after.Estimates)
+	}
+	// without a pipeline in the context the contributor still samples every queued attempt
+	if all := build(context.Background()); len(all.Estimates["local"]) != 2 {
+		t.Fatalf("no pipeline: %d samples, want 2", len(all.Estimates["local"]))
 	}
 }
