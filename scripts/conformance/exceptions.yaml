@@ -4,39 +4,14 @@
 # An expired entry fails the gate. Remove an entry when its owner Ticket lands.
 exceptions:
   - rule: cli-targets
-    plugin: ci
-    reason: "core still registers ci until the break-out ships"
-    owner_ref: P7-SHIP-09
-    expires: 2026-12-31
-  - rule: cli-targets
     plugin: content-acquisition
     reason: "declares subcommands (init, server, ...) as cliCommands: would ship core-verb binaries"
     owner_ref: P7-PLUG-41
     expires: 2026-12-31
   - rule: cli-targets
-    plugin: monitoring
-    reason: "plugin.json refused by the normalizer (language not in enum)"
-    owner_ref: P7-PLUG-44
-    expires: 2026-12-31
-  - rule: cli-targets
-    plugin: ollama
-    reason: "plugin.json refused by the normalizer (language not in enum)"
-    owner_ref: P7-PLUG-45
-    expires: 2026-12-31
-  - rule: cli-targets
-    plugin: retro-gaming
-    reason: "declares subcommands (roms list, server, ...) as cliCommands: spaced names and core-verb binaries"
-    owner_ref: P7-PLUG-46
-    expires: 2026-12-31
-  - rule: cli-targets
     plugin: subtitle-manager
     reason: "declares subcommands (init, server, ...) as cliCommands: would ship core-verb binaries"
     owner_ref: P7-PLUG-46
-    expires: 2026-12-31
-  - rule: cli-targets
-    plugin: tenant-controller
-    reason: "plugin.json refused by the normalizer (table without np_ prefix)"
-    owner_ref: P7-PLUG-47
     expires: 2026-12-31
   - rule: cli-targets
     plugin: torrent-manager
@@ -47,16 +22,6 @@ exceptions:
     plugin: vpn
     reason: "declares subcommands (init, status, ...) as cliCommands: would ship core-verb binaries"
     owner_ref: P7-PLUG-47
-    expires: 2026-12-31
-  - rule: cli-targets
-    plugin: functions
-    reason: "core still registers functions until the break-out ships"
-    owner_ref: P7-SHIP-09
-    expires: 2026-12-31
-  - rule: cli-targets
-    plugin: nself-eval-gate
-    reason: "core still registers ci eval until the break-out ships (temporary duplicate, P7-CI-44)"
-    owner_ref: P7-SHIP-09
     expires: 2026-12-31
   # Rule migration-idempotent (D-0619): the stricter DO-block lint no longer treats a BEGIN..EXCEPTION block whose handler
   # catches unrelated errors as replay protection. webhooks 002 runs `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` through

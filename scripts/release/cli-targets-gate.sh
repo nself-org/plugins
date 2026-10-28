@@ -11,7 +11,8 @@
 #   - another plugin yields the same binary.
 # Every blocked plugin needs an unexpired entry (rule cli-targets, plugin, reason, owner_ref naming
 # the Ticket that fixes its manifest, expires within the PLUG-03 cap) in the exceptions file, else the
-# run fails. Blocked plugins are listed on stdout and in $GITHUB_STEP_SUMMARY.
+# run fails. An unexpired cli-targets exception for a plugin that is no longer blocked also fails.
+# Blocked plugins are listed on stdout and in $GITHUB_STEP_SUMMARY.
 # Data checks over the tool's output only: no manifest is parsed here.
 # Env: CLI_TARGETS_TOOL (built manifestv2migrate), CLI_CORE_REGISTRY (registry json; default from the
 # pinned cli source), CONF_TODAY (test date). Exit: 0 ok, 1 an unlisted block or a bad exceptions file, 2 usage.
@@ -83,6 +84,17 @@ for f in "$work"/*.tsv; do
     cp "$f" "$out/$p.tsv"
   fi
 done
+# Exceptions must still correspond to a block, including when a plugin has been removed.
+today=$(conf_today)
+while IFS="$tab" read -r rule p expires; do
+  [ "$rule" = cli-targets ] || continue
+  [ "$expires" \< "$today" ] && continue # exceptions.sh owns expired-entry failures.
+  if [ ! -s "$work/$p.block" ]; then
+    fail cli-targets "$p" "unused unexpired exception: plugin is not blocked; remove the exception"; rc=1
+  fi
+done <<EOF
+$(yaml_rows "$exc" rule plugin expires)
+EOF
 [ "$blocked" -gt 0 ] || summary="$summary- none"$'\n'
 [ -z "${GITHUB_STEP_SUMMARY:-}" ] || printf '%s\n' "$summary" >> "$GITHUB_STEP_SUMMARY"
 echo "cli-targets-gate: $(ls "$out" | wc -l | tr -d ' ') plugin(s), $blocked excepted block(s), exit $rc"
