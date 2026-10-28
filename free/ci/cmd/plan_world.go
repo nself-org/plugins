@@ -21,7 +21,7 @@ var planToolAlias = map[string]string{"xcode": "xcodebuild"}
 // planWorld probes the local world: platform, the tools the plan may need,
 // Docker, CPU and memory. No nodes or providers exist yet (closed world).
 func planWorld(cfg model.PipelineConfig, checks []plan.Check) plan.World {
-	w := plan.World{Platform: runtime.GOOS + "/" + runtime.GOARCH}
+	w := plan.World{Platform: runtime.GOOS + "/" + runtime.GOARCH, Measured: true}
 	for _, t := range plan.WantedTools(cfg, checks) {
 		if t != "" && planOnPath(firstOf(planToolAlias[t], t)) && planToolRuns(firstOf(planToolAlias[t], t)) {
 			w.Tools = append(w.Tools, t)

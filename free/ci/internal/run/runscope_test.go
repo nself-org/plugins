@@ -233,3 +233,38 @@ func TestPolicyNotesReachSummary(t *testing.T) {
 		t.Fatalf("notes = %q", res.Summary.Notes)
 	}
 }
+
+// TestDispatcherUsesThePolicyTheDigestDescribes: the dispatcher reads the
+// scheduling policy of the coordinator's one resolution, so a policy that
+// changes after PolicyHook ran (a protected branch that moved) cannot steer
+// placement apart from the recorded digest (D-1087).
+func TestDispatcherUsesThePolicyTheDigestDescribes(t *testing.T) {
+	ctx := context.Background()
+	root, st, db := runScopeRepo(t)
+	project := policy.ProjectIDGitCached(ctx, policy.Runner(report.Capture), root)
+	setQueue := func(v string) {
+		t.Helper()
+		err := st.ApplyWrite(ctx, store.PolicyWrite{Op: store.PolicySet, Scope: "project", Subject: project, Key: schedpolicy.KeyMaxQueue, Value: []byte(v), Actor: "test"}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	setQueue(`"1h"`)
+	hook := PolicyHook{OpenStore: func() (*store.Store, error) { return store.Open(db, store.Options{}) }, Capture: report.Capture}
+	res, err := hook.Resolve(ctx, PolicyRequest{Root: root})
+	if err != nil || res.Placement == nil || res.Queue == nil {
+		t.Fatalf("the hook must carry the scheduling policy: %+v %v", res, err)
+	}
+	setQueue(`"2h"`) // the policy moves after the digest was taken
+	sess := &Session{Store: st}
+	sess.Placement, sess.Queue = res.Placement, res.Queue
+	rd := &runDispatch{sess: sess, row: store.PipelineRow{Project: root}}
+	p, err := rd.policy(ctx, "")
+	if err != nil || p.Overrides.MaxQueueMs != 3600000 {
+		t.Fatalf("the dispatcher followed a policy the digest does not describe: %d %v", p.Overrides.MaxQueueMs, err)
+	}
+	other := &runDispatch{sess: &Session{Store: st}, row: store.PipelineRow{Project: root}} // no carried policy: resolves its own
+	if p, err = other.policy(ctx, ""); err != nil || p.Overrides.MaxQueueMs != 7200000 {
+		t.Fatalf("fallback resolution = %d %v", p.Overrides.MaxQueueMs, err)
+	}
+}

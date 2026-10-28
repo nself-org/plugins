@@ -183,6 +183,7 @@ func Build(in Input) (*Plan, error) {
 		Support:   supportPolicy(in.Config, in.World),
 		FailFast:  scope,
 		Skipped:   skipped,
+		World:     in.World,
 	}
 	if err := expand(p, in, cs, ids, reasons); err != nil {
 		return nil, err

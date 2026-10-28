@@ -49,6 +49,9 @@ type World struct {
 	MemMB         int      `json:"mem_mb,omitempty"`
 	Runners       []string `json:"runners,omitempty"` // platforms of other registered runners
 	Remote        bool     `json:"remote"`            // nodes or providers exist; the scheduler checks requirements
+	// Measured says Docker and Tools were probed on this machine (not left at the zero value):
+	// a run then places by the facts its plan measured (D-1104).
+	Measured bool `json:"-"`
 }
 
 // Input is everything Build reads.
@@ -104,6 +107,9 @@ type Plan struct {
 	Jobs      []PlannedJob      `json:"jobs"`
 	Skipped   []Skipped         `json:"skipped"`
 	Placement any               `json:"placement,omitempty"`
+	// World is the local world the plan was built against; the run places by its measured Docker and
+	// Tools, so a plan and a run of the same state describe this machine the same way (D-1104).
+	World World `json:"-"`
 }
 
 // Fail-fast scopes.

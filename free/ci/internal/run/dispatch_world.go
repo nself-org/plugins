@@ -24,7 +24,6 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
-	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/world"
 )
 
@@ -74,7 +73,8 @@ func (rd *runDispatch) schedJob(s AttemptSpec, id, row string, cpu, mem int) sch
 	return j
 }
 
-// policy resolves the run's effective scheduling policy once, as PolicyHook does.
+// policy is the run's effective scheduling policy: the one the coordinator resolved (Session.Placement),
+// else resolved once here as PolicyHook does.
 // A failure is returned and retried on the next call: a transient git or store
 // error must not fail every later job of the run.
 func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, error) {
@@ -82,6 +82,10 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 	defer rd.polM.Unlock()
 	if rd.pol != nil {
 		return *rd.pol, nil
+	}
+	if sp := rd.sess.Placement; sp != nil && rd.sess.Queue != nil { // the coordinator's one resolution: the digest it recorded describes this policy (D-1087)
+		rd.pol, rd.qp = sp, *rd.sess.Queue
+		return *sp, nil
 	}
 	root := rd.row.Project
 	if root == "" {
@@ -92,11 +96,7 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 	if err != nil {
 		return sched.Policy{}, err
 	}
-	p, err := schedpolicy.Placement(&got.Effective)
-	if err != nil {
-		return sched.Policy{}, err
-	}
-	qp, err := schedpolicy.Queue(&got.Effective)
+	p, qp, err := schedulingOf(&got.Effective)
 	if err != nil {
 		return sched.Policy{}, err
 	}
@@ -105,12 +105,15 @@ func (rd *runDispatch) policy(ctx context.Context, _ string) (sched.Policy, erro
 }
 
 // world builds the placement world of the run: this machine as "local" (probe
-// facts, the PERSONAL own node declaration, docker unknown because the run loop
-// does not probe for it) and every registered node.
+// facts, the PERSONAL own node declaration, docker and tools as the run's plan
+// measured them, else docker unknown) and every registered node.
 func (rd *runDispatch) world(ctx context.Context, p sched.Pipeline) (sched.World, string, error) {
 	capacity := rd.sess.Capacity()
-	w, digest, err := world.BuildForLocal(ctx, world.Deps{Store: rd.sess.Store, JobIDs: rd.sess.jobRows(), Policy: rd.policy, Clock: rd.sess.now},
-		world.LocalInput{Project: rd.row.Project, Platform: platform(), Capacity: capacity, DockerUnknown: true, Now: rd.sess.now()}, p)
+	in := world.LocalInput{Project: rd.row.Project, Platform: platform(), Capacity: capacity, DockerUnknown: true, Now: rd.sess.now()}
+	if pl := rd.sess.Plan; pl != nil && pl.World.Measured { // the plan's measured facts, so `ci plan` and the run agree on this machine (D-1104)
+		in.Docker, in.Tools, in.DockerUnknown = pl.World.Docker, pl.World.Tools, false
+	}
+	w, digest, err := world.BuildForLocal(ctx, world.Deps{Store: rd.sess.Store, JobIDs: rd.sess.jobRows(), Policy: rd.policy, Clock: rd.sess.now}, in, p)
 	if err != nil {
 		return sched.World{}, "", err
 	}

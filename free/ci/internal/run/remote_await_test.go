@@ -354,6 +354,41 @@ func TestPlanRunWorldDigestEqual(t *testing.T) {
 	}
 }
 
+// A run places by the docker and tool facts its plan measured, so the digest of
+// a plan that probed this machine equals the run's (D-1104). A plan that
+// measured nothing leaves docker unknown, as before.
+func TestRunWorldFollowsThePlansMeasuredFacts(t *testing.T) {
+	fixed := time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
+	rd, st := registryRun(t, func() time.Time { return fixed })
+	rd.sess.Plan = &plan.Plan{World: plan.World{Measured: true, Docker: true, Tools: []string{"go", "pnpm"}}}
+	_, runDigest, err := rd.world(context.Background(), sched.Pipeline{ID: "r1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digestOf := func(in world.LocalInput) string {
+		t.Helper()
+		in.Project, in.Platform, in.Capacity, in.Now = "/proj", runtime.GOOS+"/"+runtime.GOARCH, testCapacity(), fixed
+		_, d, err := world.BuildForLocal(context.Background(), world.Deps{Store: st, Clock: func() time.Time { return fixed },
+			Jobs:   []sched.Job{{Key: "plan", ID: "plan", Pipeline: sched.Pipeline{ID: "r1"}}},
+			Policy: func(context.Context, string) (sched.Policy, error) { return sched.Policy{Preset: "balanced"}, nil }}, in, sched.Pipeline{ID: "r1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	if want := digestOf(world.LocalInput{Docker: true, Tools: []string{"go", "pnpm"}}); runDigest != want {
+		t.Fatal("the run's world digest differs from the digest of the plan's measured world")
+	}
+	if runDigest == digestOf(world.LocalInput{DockerUnknown: true}) {
+		t.Fatal("the run still reports docker and tools as unknown")
+	}
+	rd.sess.Plan = &plan.Plan{} // nothing measured: unknown, the old behaviour
+	_, unmeasured, err := rd.world(context.Background(), sched.Pipeline{ID: "r1"})
+	if err != nil || unmeasured != digestOf(world.LocalInput{DockerUnknown: true}) {
+		t.Fatalf("an unmeasured plan must keep docker unknown: %v", err)
+	}
+}
+
 func deliveryFor(n model.Capability, job model.Job) dispatch.Delivery {
 	return dispatch.Delivery{Node: n, Job: job, AttemptID: "a1", LeaseID: "lease-a1", Token: "t", Epoch: 1, Revision: "0123456789abcdef0123456789abcdef01234567",
 		ExpiresAt: time.Now().Add(time.Minute)}

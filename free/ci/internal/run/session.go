@@ -20,6 +20,8 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
+	"github.com/nself-org/plugins/free/ci/internal/sched"
+	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -47,6 +49,11 @@ type Session struct {
 	// ProviderRepo is Options.ProviderRepo: the one repository whose hosted runners the world keeps ("" = none).
 	ProviderRepo string
 	PolicyRun    RunValues // the per-run policy values of the invocation; the dispatcher resolves its placement policy with them
+	// Placement and Queue are the scheduling policy the coordinator resolved once with the digest it
+	// recorded (PolicyResult). The dispatcher reads them instead of resolving again (D-1087); nil
+	// means the dispatcher resolves its own.
+	Placement *sched.Policy
+	Queue     *schedpolicy.QueuePolicy
 	// Dirty, ConfigOutside and Subset are the state the run started in (D-1075): a dirty tree,
 	// a config the commit does not hold, or --job. A later clean probe never undoes them; the
 	// release gate reads them with the live worktree probe.
