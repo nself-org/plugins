@@ -82,10 +82,8 @@ func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, e
 	}
 	if rs.c.Opts.Container {
 		img := ""
-		if p.job.Container != nil {
-			img = p.job.Container.Image
-		}
-		if img == "" && rs.hooks.Image != nil {
+		// --container selects the operator's pinned toolchain for every job.
+		if rs.hooks.Image != nil {
 			var err error
 			if err = guard("image hook", func() (e error) { img, e = rs.hooks.Image.Image(ctx, *info); return }); err != nil {
 				return p, err
