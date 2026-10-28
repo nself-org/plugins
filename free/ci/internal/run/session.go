@@ -43,6 +43,10 @@ type Session struct {
 	Record bool
 	// LocalOnly says a job cannot be run on a node yet (nil = none): the dispatch hook keeps it on this machine.
 	LocalOnly func(model.Job) bool
+	// AdmitTrust is the class the scheduler admits the run at (empty = the pipeline row's recorded
+	// source trust). It can be higher than the recorded class: an ad-hoc run records the operator's
+	// requested class but is placed as the operator-owned job it is.
+	AdmitTrust model.TrustClass
 	// Clock is the time the placement world is built at (nil = time.Now); tests inject it so a plan and a run can be compared.
 	Clock       func() time.Time
 	Interactive bool // a person waits at a terminal: only then does the implicit foreground queue cap apply

@@ -84,28 +84,31 @@ func (c *Coordinator) capture() Capture {
 	return report.Capture
 }
 
-func (c *Coordinator) classify(ctx context.Context, h Hooks, rev Revision) (string, error) {
+// classify returns the class the run is admitted at and the class it records. They differ only for
+// an embedding handler (ad-hoc) that reports a lower RecordedTrust: scheduling keeps the admitted
+// class, the pipeline row and evidence keep the recorded one.
+func (c *Coordinator) classify(ctx context.Context, h Hooks, rev Revision) (admitted, recorded string, err error) {
 	if h.Trust == nil {
-		return "owner", nil
+		return "owner", "owner", nil
 	}
 	got, err := h.Trust.Classify(ctx, TrustRequest{Root: c.Opts.Root, Revision: rev.SHA, Requested: c.Opts.Trust})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if got != "owner" && got != "internal" { // ADR 0025 §2-3: collaborator and untrusted work needs an isolated runner; this coordinator runs jobs as the operator
-		return "", fail(CodeTrust, "the source is classed %s: it needs an isolated runner, and this coordinator runs jobs as the operator", got)
+		return "", "", fail(CodeTrust, "the source is classed %s: it needs an isolated runner, and this coordinator runs jobs as the operator", got)
 	}
 	if c.Opts.Trust != "" && string(got) != c.Opts.Trust {
-		return "", fail(CodeTrust, "the source is classed %s, not %s", got, c.Opts.Trust)
+		return "", "", fail(CodeTrust, "the source is classed %s, not %s", got, c.Opts.Trust)
 	}
 	if recorder, ok := h.Trust.(RecordedTrustClassifier); ok {
 		recorded := recorder.RecordedTrust()
 		if !recorded.Valid() || (got == "internal" && recorded == "owner") {
-			return "", fail(CodeTrust, "invalid recorded source trust %q for admitted class %s", recorded, got)
+			return "", "", fail(CodeTrust, "invalid recorded source trust %q for admitted class %s", recorded, got)
 		}
-		return string(recorded), nil
+		return string(got), string(recorded), nil
 	}
-	return string(got), nil
+	return string(got), string(got), nil
 }
 
 func (c *Coordinator) policy(ctx context.Context, h Hooks) (PolicyResult, error) {
@@ -181,7 +184,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	}
 	defer release()
 	rev.Dirty = rev.Dirty || c.ConfigOutside // a snapshot revision never hides a config that lives outside the tree
-	source, err := c.classify(ctx, h, rev)
+	admitted, source, err := c.classify(ctx, h, rev)
 	if err != nil {
 		return Result{}, err
 	}
@@ -236,6 +239,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	rs := &runState{source: model.TrustClass(source), c: c, sess: sess, hooks: h, pol: pol, pl: c.Plan, mp: mp, rev: rev, rows: rows, subst: subst, render: stampRun(NewRenderer(out, c.Opts), runID), subset: keep, begin: c.beginEvidence(ctx, h, rev),
 		out: map[string]*JobOutcome{}, done: map[string]chan struct{}{}, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
 	sess.Dirty, sess.ConfigOutside, sess.Subset = rev.Dirty, c.ConfigOutside, keep != nil
+	sess.AdmitTrust = model.TrustClass(admitted)
 	sess.LocalOnly = rs.localOnly
 	rs.render.Event(Event{Type: "planned", Plan: c.Plan})
 	start := time.Now()
