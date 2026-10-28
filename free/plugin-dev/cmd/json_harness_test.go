@@ -70,6 +70,13 @@ func runCase(t *testing.T, c jsonCase) {
 	if code != c.code {
 		t.Fatalf("exit status %d, want %d (stderr %q)", code, c.code, stderr)
 	}
+	if c.name == "test-unit-ok" || c.name == "test-unit-fails" || c.name == "test-unit-docker-launch" {
+		for _, sentinel := range []string{"child-stdout", "child-stderr"} {
+			if strings.Contains(string(stdout), sentinel) || !strings.Contains(stderr, sentinel) {
+				t.Errorf("child output %q must appear only on stderr (stdout %q, stderr %q)", sentinel, stdout, stderr)
+			}
+		}
+	}
 	checkEnvelopeBytes(t, stdout, c.code)
 	got := normalize(stdout, root)
 	path := golden

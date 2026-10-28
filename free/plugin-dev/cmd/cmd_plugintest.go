@@ -10,6 +10,7 @@ package main
 // The file name avoids the _test suffix, which Go reserves for test files.
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -48,6 +49,15 @@ func runPluginTest(p *parsed) (any, error) {
 	clui.Infof("Running plugin tests for %s (phase=%s)...", name, phase)
 
 	var failed []string
+	var failures []error
+	var infrastructureFailure bool
+	recordFailure := func(err error) {
+		failures = append(failures, err)
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			infrastructureFailure = true
+		}
+	}
 	var passed []string
 
 	if phase == "unit" || phase == "both" {
@@ -56,6 +66,7 @@ func runPluginTest(p *parsed) (any, error) {
 		if err := runUnitTests(pluginPath, hostMode); err != nil {
 			clui.Error(fmt.Sprintf("FAIL unit [%.1fs]: %v", time.Since(start).Seconds(), err))
 			failed = append(failed, "unit")
+			recordFailure(err)
 		} else {
 			clui.Success(fmt.Sprintf("PASS unit [%.1fs]", time.Since(start).Seconds()))
 			passed = append(passed, "unit")
@@ -68,6 +79,7 @@ func runPluginTest(p *parsed) (any, error) {
 		if err := runSmokeInstall(name); err != nil {
 			clui.Error(fmt.Sprintf("FAIL smoke-install [%.1fs]: %v", time.Since(start).Seconds(), err))
 			failed = append(failed, "smoke-install")
+			recordFailure(err)
 		} else {
 			clui.Success(fmt.Sprintf("PASS smoke-install [%.1fs]", time.Since(start).Seconds()))
 			passed = append(passed, "smoke-install")
@@ -79,6 +91,7 @@ func runPluginTest(p *parsed) (any, error) {
 			if err := runSmokeUninstall(name); err != nil {
 				clui.Error(fmt.Sprintf("FAIL smoke-uninstall [%.1fs]: %v", time.Since(start).Seconds(), err))
 				failed = append(failed, "smoke-uninstall")
+				recordFailure(err)
 			} else {
 				clui.Success(fmt.Sprintf("PASS smoke-uninstall [%.1fs]", time.Since(start).Seconds()))
 				passed = append(passed, "smoke-uninstall")
@@ -93,7 +106,12 @@ func runPluginTest(p *parsed) (any, error) {
 		clui.Dimmedf("Passed: %s", strings.Join(passed, ", "))
 	}
 	if len(failed) > 0 {
-		return nil, coded(fmt.Errorf("FAIL — phases failed: %s", strings.Join(failed, ", ")),
+		err := fmt.Errorf("FAIL — phases failed: %s: %w", strings.Join(failed, ", "), errors.Join(failures...))
+		if infrastructureFailure {
+			return nil, stepErr(err, "plugin test infrastructure failed in: "+strings.Join(failed, ", "),
+				"check the required tools and infrastructure; the test output is on stderr")
+		}
+		return nil, coded(err,
 			CodeTestsFailed, output.ClassUser, "plugin tests failed in: "+strings.Join(failed, ", "),
 			"the test output is on stderr")
 	}
