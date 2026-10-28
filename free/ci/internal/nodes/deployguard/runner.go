@@ -41,7 +41,7 @@ func FunnelRun(ctx context.Context, dir string, argv ...string) ([]byte, int, er
 	}
 	sweepStaged()
 	var buf strings.Builder
-	var ex ciexec.Executor
+	ex := ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}
 	spec := ciexec.JobSpec{
 		AttemptID: fmt.Sprintf("dg-%d-%d", time.Now().UnixNano(), runSeq.Add(1)), CoordinatorID: "deployguard",
 		Job: model.Job{Kind: "static"}, Timeout: runTimeout, Command: argv,

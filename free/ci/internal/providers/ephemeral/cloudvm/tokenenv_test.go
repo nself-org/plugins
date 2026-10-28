@@ -90,7 +90,7 @@ func TestTokenEnvIsAbsentFromJobsOnTheCoordinator(t *testing.T) {
 	var out strings.Builder
 	spec := ciexec.JobSpec{AttemptID: "tokenenv-job", CoordinatorID: "tokenenv", Command: []string{envBin}, Home: filepath.Join(t.TempDir(), "ci"),
 		Output: func(b []byte) { mu.Lock(); out.Write(b); mu.Unlock() }}
-	if res := (&ciexec.Executor{Env: ciexec.AllowlistEnv{}}).Run(context.Background(), spec); res.Err != nil || res.ExitCode != 0 {
+	if res := (&ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Env: ciexec.AllowlistEnv{}}).Run(context.Background(), spec); res.Err != nil || res.ExitCode != 0 {
 		t.Fatalf("job: %+v", res)
 	}
 	mu.Lock()

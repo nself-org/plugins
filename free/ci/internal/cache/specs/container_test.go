@@ -38,7 +38,7 @@ func runInContainer(t *testing.T, e *env, s *Session, id, script string) (int, s
 		ms = append(ms, ciexec.Mount(m))
 	}
 	var out strings.Builder
-	var ex ciexec.Executor
+	ex := ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}
 	res := ex.Run(context.Background(), ciexec.JobSpec{AttemptID: id, CoordinatorID: "cachetest",
 		Job:     model.Job{Kind: "test", Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}, Env: envVars},
 		Command: []string{"sh", "-c", script}, Home: filepath.Join(e.home, "exec"), Mounts: ms, Output: func(b []byte) { out.Write(b) }})

@@ -44,7 +44,7 @@ func runPlannedEnv(t *testing.T, jobEnv map[string]string) string {
 	t.Setenv("LANG", "C")
 	spec := plannedSpec(t, "plan-envown", hardPlanner{})
 	spec.Job.Env = jobEnv
-	if res := (&Executor{Env: AllowlistEnv{}}).Run(context.Background(), spec); res.Err != nil {
+	if res := (&Executor{Isolation: BaselineIsolator{}, Env: AllowlistEnv{}}).Run(context.Background(), spec); res.Err != nil {
 		t.Fatal(res.Err)
 	}
 	return stdin()
@@ -75,7 +75,7 @@ func TestBaselineContainerKeepsImagePathAndToolchain(t *testing.T) {
 	filePath := filepath.Join(t.TempDir(), "job.env")
 	fakeDocker(t, "for a in \"$@\"; do if [ \"$prev\" = --env-file ]; then cp \"$a\" "+filePath+"; fi; prev=\"$a\"; done\nexit 0\n")
 	t.Setenv("GOTOOLCHAIN", "auto")
-	r := (&Executor{Env: AllowlistEnv{}}).Run(context.Background(), JobSpec{AttemptID: "envown", CoordinatorID: "coord", Home: t.TempDir(),
+	r := (&Executor{Isolation: BaselineIsolator{}, Env: AllowlistEnv{}}).Run(context.Background(), JobSpec{AttemptID: "envown", CoordinatorID: "coord", Home: t.TempDir(),
 		Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}}, Command: []string{"true"}})
 	if r.Err != nil {
 		t.Fatal(r.Err)
@@ -99,7 +99,7 @@ func TestBaselineContainerUsesPodmanWhenDockerIsAbsent(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir)
-	r := (&Executor{Env: AllowlistEnv{}}).Run(context.Background(), JobSpec{AttemptID: "podman", CoordinatorID: "coord", Home: t.TempDir(),
+	r := (&Executor{Isolation: BaselineIsolator{}, Env: AllowlistEnv{}}).Run(context.Background(), JobSpec{AttemptID: "podman", CoordinatorID: "coord", Home: t.TempDir(),
 		Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}}, Command: []string{"true"}})
 	if r.Err != nil {
 		t.Fatal(r.Err)

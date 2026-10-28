@@ -23,7 +23,7 @@ func TestContainerSecretIsEnvOnly(t *testing.T) {
 	dir := t.TempDir()
 	envPath, filePath, argvPath := filepath.Join(dir, "host.env"), filepath.Join(dir, "job.env"), filepath.Join(dir, "argv")
 	fakeDocker(t, fmt.Sprintf("env > %q\nprintf '%%s\\n' \"$@\" > %q\nfor a in \"$@\"; do if [ \"$prev\" = --env-file ]; then cp \"$a\" %q; fi; prev=\"$a\"; done\nexit 0\n", envPath, argvPath, filePath))
-	r := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "sec", CoordinatorID: "coord", Home: t.TempDir(), Secrets: fixedSecrets{"FOO": value},
+	r := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), JobSpec{AttemptID: "sec", CoordinatorID: "coord", Home: t.TempDir(), Secrets: fixedSecrets{"FOO": value},
 		Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}, Secrets: []string{"project/FOO"}, Env: map[string]string{"PLAIN": "x"}}, Command: []string{"true"}})
 	if r.Err != nil {
 		t.Fatal(r.Err)

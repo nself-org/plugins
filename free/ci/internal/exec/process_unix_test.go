@@ -24,7 +24,7 @@ func TestCancelGrandchildren(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	pidCh := make(chan int, 1)
-	e := &Executor{Grace: 100 * time.Millisecond}
+	e := &Executor{Isolation: BaselineIsolator{}, Grace: 100 * time.Millisecond}
 	start := time.Now()
 	r := e.Run(ctx, JobSpec{AttemptID: "children", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"sh", "-c", "trap '' TERM; (trap '' TERM; sleep 30) & echo $$; wait"}, Output: func(p []byte) {
 		if n, err := strconv.Atoi(strings.TrimSpace(string(p))); err == nil {
@@ -79,7 +79,7 @@ func TestProcessOrphanSweep(t *testing.T) {
 		_ = live.Wait()
 		_ = stale.Wait()
 	}()
-	e := &Executor{Stale: staleChecker{"live": false, "stale": true}}
+	e := &Executor{Isolation: BaselineIsolator{}, Stale: staleChecker{"live": false, "stale": true}}
 	if err := e.sweepProcesses(context.Background(), home, "current"); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestProcessOrphanSweep(t *testing.T) {
 
 func TestTimeoutGrandchildren(t *testing.T) {
 	var pid int
-	e := &Executor{Grace: 100 * time.Millisecond}
+	e := &Executor{Isolation: BaselineIsolator{}, Grace: 100 * time.Millisecond}
 	result := e.Run(context.Background(), JobSpec{AttemptID: "timeout-children", CoordinatorID: "coord", Home: t.TempDir(), Timeout: 100 * time.Millisecond, Command: []string{"sh", "-c", "trap '' TERM; (trap '' TERM; sleep 30) & echo $$; wait"}, Output: func(p []byte) {
 		if n, err := strconv.Atoi(strings.TrimSpace(string(p))); err == nil {
 			pid = n
@@ -117,7 +117,7 @@ func TestTimeoutGrandchildren(t *testing.T) {
 }
 
 func TestVanishedProcessMarkerIsSuccess(t *testing.T) {
-	e := &Executor{Stale: staleChecker{"old": true}}
+	e := &Executor{Isolation: BaselineIsolator{}, Stale: staleChecker{"old": true}}
 	if err := e.sweepProcessMarker(context.Background(), t.TempDir(), "current", "vanished"); err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestExitedLeaderKillsLiveGroupMarker(t *testing.T) {
 	if !groupAlive(pid) {
 		t.Fatal("shell's child did not retain its process group")
 	}
-	e := &Executor{Stale: staleChecker{"old": true}}
+	e := &Executor{Isolation: BaselineIsolator{}, Stale: staleChecker{"old": true}}
 	if err := e.sweepProcessMarker(context.Background(), home, "current", "orphan"); err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestDetachedGrandchildCancellationBound(t *testing.T) {
 	defer cancel()
 	var child int
 	start := time.Now()
-	r := (&Executor{Grace: 100 * time.Millisecond}).Run(ctx, JobSpec{AttemptID: "detached", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"python3", "-c", detachedScript}, Output: func(p []byte) {
+	r := (&Executor{Isolation: BaselineIsolator{}, Grace: 100 * time.Millisecond}).Run(ctx, JobSpec{AttemptID: "detached", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"python3", "-c", detachedScript}, Output: func(p []byte) {
 		if n, err := strconv.Atoi(strings.TrimSpace(string(p))); err == nil {
 			child = n
 			cancel()
@@ -177,7 +177,7 @@ func TestDetachedGrandchildCancellationBound(t *testing.T) {
 
 func TestDetachedGrandchildTimeoutKillsTree(t *testing.T) {
 	var child int
-	r := (&Executor{Grace: 100 * time.Millisecond}).Run(context.Background(), JobSpec{AttemptID: "detached-timeout", CoordinatorID: "coord", Home: t.TempDir(), Timeout: 200 * time.Millisecond, Command: []string{"python3", "-c", detachedScript}, Output: func(p []byte) {
+	r := (&Executor{Isolation: BaselineIsolator{}, Grace: 100 * time.Millisecond}).Run(context.Background(), JobSpec{AttemptID: "detached-timeout", CoordinatorID: "coord", Home: t.TempDir(), Timeout: 200 * time.Millisecond, Command: []string{"python3", "-c", detachedScript}, Output: func(p []byte) {
 		if n, err := strconv.Atoi(strings.TrimSpace(string(p))); err == nil {
 			child = n
 		}

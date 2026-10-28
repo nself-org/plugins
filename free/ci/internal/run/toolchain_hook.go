@@ -59,7 +59,7 @@ func dockerCapture(ctx context.Context, argv ...string) (string, int, error) {
 	}
 	defer func() { _ = os.RemoveAll(home) }()
 	var buf strings.Builder
-	var ex ciexec.Executor
+	ex := ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}
 	res := ex.Run(ctx, ciexec.JobSpec{
 		AttemptID: fmt.Sprintf("img-%d-%d", time.Now().UnixNano(), toolchainCaptureSeq.Add(1)), CoordinatorID: "capture",
 		Job: model.Job{Kind: "static"}, Home: home, Timeout: timeout, Command: argv,

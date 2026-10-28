@@ -32,7 +32,7 @@ func ExecRunner() Runner {
 			return -1, err
 		}
 		defer func() { _ = os.RemoveAll(home) }()
-		var ex ciexec.Executor
+		ex := ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}
 		res := ex.Run(ctx, ciexec.JobSpec{
 			AttemptID:     fmt.Sprintf("config-ignore-%d", time.Now().UnixNano()),
 			CoordinatorID: "config",

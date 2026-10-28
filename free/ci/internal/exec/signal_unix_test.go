@@ -17,7 +17,7 @@ func TestSignalNamedOnKilledJob(t *testing.T) {
 		{"kill -KILL $$", "SIGKILL"},
 		{"kill -TERM $$", "SIGTERM"},
 	} {
-		e := &Executor{Grace: 100 * time.Millisecond}
+		e := &Executor{Isolation: BaselineIsolator{}, Grace: 100 * time.Millisecond}
 		r := e.Run(context.Background(), JobSpec{AttemptID: "sig", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"sh", "-c", c.script}})
 		if r.ExitCode != -1 || r.Signal != c.want {
 			t.Errorf("%s: exit %d signal %q, want -1 %q (%+v)", c.script, r.ExitCode, r.Signal, c.want, r)
@@ -26,7 +26,7 @@ func TestSignalNamedOnKilledJob(t *testing.T) {
 }
 
 func TestSignalEmptyOnPlainExit(t *testing.T) {
-	e := &Executor{Grace: 100 * time.Millisecond}
+	e := &Executor{Isolation: BaselineIsolator{}, Grace: 100 * time.Millisecond}
 	r := e.Run(context.Background(), JobSpec{AttemptID: "plain", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"sh", "-c", "exit 3"}})
 	if r.ExitCode != 3 || r.Signal != "" {
 		t.Fatalf("plain exit: %+v", r)

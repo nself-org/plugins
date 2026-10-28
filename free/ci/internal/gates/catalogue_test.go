@@ -72,7 +72,7 @@ func TestRequiredResolution(t *testing.T) {
 
 func TestMissingRequiredAndAdvisory(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	r := Runner{Executor: &exec.Executor{}, Home: t.TempDir()}
+	r := Runner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir()}
 	for _, required := range []bool{true, false} {
 		p := PlannedCheck{Def: DefaultRegistry().All()[0], Required: required}
 		p.Def.Tool = "absent-tool"
@@ -116,7 +116,7 @@ func TestAdvisoryFindings(t *testing.T) {
 		}
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	r := Runner{Executor: &exec.Executor{}, Home: t.TempDir()}
+	r := Runner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir()}
 	reg := DefaultRegistry()
 	for _, id := range []string{"go.govulncheck", "security.trivy.fs", "container.hadolint"} {
 		d, _ := reg.Get(id)
@@ -138,7 +138,7 @@ func TestTrivyOffline(t *testing.T) {
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	d, _ := DefaultRegistry().Get("security.trivy.fs")
-	r := Runner{Executor: &exec.Executor{}, Home: t.TempDir()}
+	r := Runner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir()}
 	advisory := r.Run(context.Background(), root, PlannedCheck{Def: d}, model.PipelineConfig{})
 	if advisory.Result != "skip" || advisory.Reason != "advisory.data_offline" {
 		t.Fatal(advisory)

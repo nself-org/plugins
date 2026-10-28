@@ -21,7 +21,7 @@ func TestTrackerDoesNotForkPS(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", shim+string(os.PathListSeparator)+os.Getenv("PATH"))
-	res := (&Executor{Grace: 100 * time.Millisecond}).Run(context.Background(), JobSpec{
+	res := (&Executor{Isolation: BaselineIsolator{}, Grace: 100 * time.Millisecond}).Run(context.Background(), JobSpec{
 		AttemptID: "no-ps", CoordinatorID: "coord", Home: t.TempDir(),
 		Command: []string{"sh", "-c", "sleep 0.3 & sleep 0.2; wait"},
 	})

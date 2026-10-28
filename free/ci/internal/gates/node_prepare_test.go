@@ -101,7 +101,7 @@ func (h *nodeHost) run(id, workdir string) result {
 	h.t.Helper()
 	p := h.plan(id, workdir)
 	var out strings.Builder
-	res := (&ciexec.Executor{}).Run(context.Background(), ciexec.JobSpec{AttemptID: "node-" + strings.ReplaceAll(id, ".", "-"), CoordinatorID: "coord",
+	res := (&ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}).Run(context.Background(), ciexec.JobSpec{AttemptID: "node-" + strings.ReplaceAll(id, ".", "-"), CoordinatorID: "coord",
 		Job: model.Job{Kind: "quality", Workdir: workdir, Isolation: "process"}, Command: p.Command(), SourceDir: h.root, Home: realTempDir(h.t),
 		Output: func(b []byte) { out.Write(b) }})
 	r := result{exit: res.ExitCode, out: strings.TrimSpace(out.String())}
@@ -391,7 +391,7 @@ func TestMissingManagerE614(t *testing.T) {
 	}
 	// the standalone runner agrees: required and missing is error/infra with E614, never a failure
 	d, _ := DefaultRegistry().Get("node.test")
-	c := (Runner{Executor: &ciexec.Executor{}, Home: realTempDir(t)}).Run(context.Background(), h.root, PlannedCheck{Def: d, Required: true, Workdir: "."}, model.PipelineConfig{})
+	c := (Runner{Executor: &ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}, Home: realTempDir(t)}).Run(context.Background(), h.root, PlannedCheck{Def: d, Required: true, Workdir: "."}, model.PipelineConfig{})
 	if c.Result != "error" || c.FailureClass != "infra" || !strings.Contains(c.Excerpt, "E614") {
 		t.Fatalf("%+v", c)
 	}

@@ -40,8 +40,8 @@ func (f fin) Finalize(context.Context, RunInfo) error {
 
 type fakeCache struct{ after atomic.Int32 }
 
-func (c *fakeCache) Before(context.Context, AttemptInfo) (CacheSetup, error) {
-	return CacheSetup{Env: map[string]string{"FROM_CACHE": "yes"}, Mounts: []Mount{{Host: "/h", Target: "/t"}}}, nil
+func (c *fakeCache) Before(_ context.Context, a AttemptInfo) (CacheSetup, error) {
+	return CacheSetup{Env: map[string]string{"FROM_CACHE": "yes"}, Mounts: []Mount{{Host: a.Home, Target: "/t"}}}, nil
 }
 
 func (c *fakeCache) After(context.Context, AttemptInfo, Outcome) error { c.after.Add(1); return nil }

@@ -221,7 +221,7 @@ func scenarioBattery(t *testing.T) {
 	if d := gate.Admit(exec.Foreground, Need{}, false); !d.Allowed || !d.Floor {
 		t.Fatalf("foreground gated on battery: %+v", d)
 	}
-	fg := (&exec.Executor{}).Run(context.Background(), exec.JobSpec{AttemptID: "fg-1", CoordinatorID: "c1", Home: t.TempDir(), Command: []string{"true"}})
+	fg := (&exec.Executor{Isolation: exec.BaselineIsolator{}}).Run(context.Background(), exec.JobSpec{AttemptID: "fg-1", CoordinatorID: "c1", Home: t.TempDir(), Command: []string{"true"}})
 	if fg.Err != nil || fg.ExitCode != 0 {
 		t.Fatalf("foreground run: %+v", fg)
 	}

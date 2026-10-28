@@ -66,7 +66,7 @@ func (f funnelRunner) Run(ctx context.Context, argv, env, mask []string) ([]byte
 			}
 		},
 	}
-	res := (&ciexec.Executor{Env: fixedEnv(env), Grace: killGrace}).Run(ctx, spec)
+	res := (&ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Env: fixedEnv(env), Grace: killGrace}).Run(ctx, spec)
 	mu.Lock()
 	defer mu.Unlock()
 	if res.Err != nil {

@@ -53,7 +53,7 @@ func CaptureAs(ctx context.Context, job model.Job, dir string, argv ...string) (
 	}
 	defer func() { _ = os.RemoveAll(home) }()
 	var buf strings.Builder
-	var ex ciexec.Executor
+	ex := ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}
 	if ctx.Value(noLazyFetchKey{}) == true {
 		env := make(map[string]string, len(job.Env)+1)
 		for k, v := range job.Env {

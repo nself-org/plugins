@@ -104,7 +104,7 @@ func (f funnelRunner) Run(ctx context.Context, argv []string, stdin []byte, time
 		Stdin:         bytes.NewReader(stdin),
 		Output:        func([]byte) {},
 	}
-	res := (&ciexec.Executor{Env: ciexec.AllowlistEnv{}, Grace: killGrace}).Run(ctx, spec)
+	res := (&ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Env: ciexec.AllowlistEnv{}, Grace: killGrace}).Run(ctx, spec)
 	switch {
 	case res.Attempt.FailureClass == "timeout":
 		return -1, fmt.Errorf("timed out after %s and was killed", timeout)

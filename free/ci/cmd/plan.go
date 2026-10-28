@@ -276,7 +276,7 @@ func planRun(ctx context.Context, argv ...string) (string, bool) {
 	}
 	defer func() { _ = os.RemoveAll(home) }()
 	var buf strings.Builder
-	var ex ciexec.Executor
+	ex := ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}
 	res := ex.Run(ctx, ciexec.JobSpec{
 		AttemptID: fmt.Sprintf("plan-git-%d-%d", time.Now().UnixNano(), planSeq.Add(1)), CoordinatorID: "plan",
 		Job: model.Job{Kind: "static"}, Home: home, Timeout: 30 * time.Second,

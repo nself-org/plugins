@@ -18,7 +18,7 @@ func TestAfterJobSeesTheWorkspaceBeforeItIsRemoved(t *testing.T) {
 	home := t.TempDir()
 	var seen string
 	var wsPath string
-	r := (&Executor{}).Run(context.Background(), afterJobSpec(t, home, "echo out > produced.txt", func(_ context.Context, ws *os.Root) error {
+	r := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), afterJobSpec(t, home, "echo out > produced.txt", func(_ context.Context, ws *os.Root) error {
 		wsPath = ws.Name()
 		b, err := ws.ReadFile("produced.txt")
 		seen = strings.TrimSpace(string(b))
@@ -37,7 +37,7 @@ func TestAfterJobSeesTheWorkspaceBeforeItIsRemoved(t *testing.T) {
 
 func TestAfterJobErrorFailsTheAttemptInfra(t *testing.T) {
 	boom := errors.New("E712 missing: no output")
-	r := (&Executor{}).Run(context.Background(), afterJobSpec(t, t.TempDir(), "true", func(context.Context, *os.Root) error { return boom }))
+	r := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), afterJobSpec(t, t.TempDir(), "true", func(context.Context, *os.Root) error { return boom }))
 	if !errors.Is(r.Err, boom) || r.Attempt.State != "failed" || r.Attempt.FailureClass != "infra" {
 		t.Fatalf("result %+v", r)
 	}
@@ -46,12 +46,12 @@ func TestAfterJobErrorFailsTheAttemptInfra(t *testing.T) {
 func TestAfterJobSkippedWhenTheJobFailsOrIsCancelled(t *testing.T) {
 	calls := 0
 	hook := func(context.Context, *os.Root) error { calls++; return nil }
-	if r := (&Executor{}).Run(context.Background(), afterJobSpec(t, t.TempDir(), "exit 4", hook)); r.ExitCode != 4 || r.Attempt.State == "passed" {
+	if r := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), afterJobSpec(t, t.TempDir(), "exit 4", hook)); r.ExitCode != 4 || r.Attempt.State == "passed" {
 		t.Fatalf("failing job: %+v", r)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	(&Executor{}).Run(ctx, afterJobSpec(t, t.TempDir(), "true", hook))
+	(&Executor{Isolation: BaselineIsolator{}}).Run(ctx, afterJobSpec(t, t.TempDir(), "true", hook))
 	if calls != 0 {
 		t.Fatalf("hook ran %d times for a failed or cancelled job", calls)
 	}

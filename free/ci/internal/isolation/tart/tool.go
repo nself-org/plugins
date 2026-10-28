@@ -84,7 +84,7 @@ func (t execTool) Run(ctx context.Context, argv []string, stdin io.Reader, w io.
 	if w != nil {
 		sink = func(p []byte) { _, _ = w.Write(p) }
 	}
-	var ex exec.Executor // inherits the operator's environment: tart needs HOME and TART_HOME
+	ex := exec.Executor{Isolation: exec.BaselineIsolator{}} // inherits the operator's environment: tart needs HOME and TART_HOME
 	res := ex.Run(ctx, exec.JobSpec{
 		AttemptID:     fmt.Sprintf("tart-%d-%d", time.Now().UnixNano(), toolSeq.Add(1)),
 		CoordinatorID: t.coordinator,

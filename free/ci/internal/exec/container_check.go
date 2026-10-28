@@ -210,7 +210,7 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 			return bad(name + " must be a positive size in megabytes")
 		}
 	case "--cpus":
-		if f, err := strconv.ParseFloat(value, 64); err != nil || f <= 0 || f > 1024 {
+		if f, err := strconv.ParseFloat(value, 64); err != nil || !(f > 0) || f > 1024 {
 			return bad("cpus must be positive")
 		}
 	}

@@ -17,7 +17,7 @@ func execRunner(t *testing.T, source string) sbom.ExecRunner {
 	if runtime.GOOS == "windows" {
 		t.Skip("sh fixtures")
 	}
-	return sbom.ExecRunner{Executor: &exec.Executor{}, Home: t.TempDir(), SourceDir: source}
+	return sbom.ExecRunner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir(), SourceDir: source}
 }
 
 func TestExecRunnerRunsInTheWorkspaceAndCollectsFiles(t *testing.T) {

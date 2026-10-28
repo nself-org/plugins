@@ -17,7 +17,7 @@ func TestBeforeJobRunsInTheWorkspaceBeforeTheCommand(t *testing.T) {
 		}}
 	var out strings.Builder
 	spec.Output = func(b []byte) { out.Write(b) }
-	r := (&Executor{}).Run(context.Background(), spec)
+	r := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), spec)
 	if r.Err != nil || r.Attempt.State != "passed" || strings.TrimSpace(out.String()) != "ready" {
 		t.Fatalf("result %+v output %q", r, out.String())
 	}
@@ -31,7 +31,7 @@ func TestBeforeJobErrorFailsTheAttemptInfraWithoutRunningTheCommand(t *testing.T
 	boom := errors.New("E712 prepare: no space")
 	spec := JobSpec{AttemptID: "bj2", CoordinatorID: "coord", Home: home, Command: []string{"sh", "-c", "echo ran > " + home + "/ran"},
 		BeforeJob: func(context.Context, *os.Root) error { return boom }}
-	r := (&Executor{}).Run(context.Background(), spec)
+	r := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), spec)
 	if !errors.Is(r.Err, boom) || r.Attempt.State == "passed" || r.Attempt.FailureClass != "infra" {
 		t.Fatalf("result %+v", r)
 	}

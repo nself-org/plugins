@@ -181,7 +181,7 @@ func (e *Executor) cleanupOnce(s JobSpec, run ContainerRun) (helper bool, err er
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), 30*time.Second)
 	defer cancel()
 	stop := containerStopper(cmd.Binary, flagValueOf(cmd.Args, "--name"), e.Grace)
-	local := Executor{Redactor: passThroughRedactor{}, Grace: e.Grace}
+	local := Executor{Isolation: BaselineIsolator{}, Redactor: passThroughRedactor{}, Grace: e.Grace}
 	tail := &outputTail{max: 512}
 	code, err := local.runCommand(ctx, append([]string{cmd.Binary}, cmd.Args...), run.Workspace, dockerHostEnv(), tail.write, stop, nil, "")
 	if err != nil || ctx.Err() != nil {

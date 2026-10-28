@@ -65,7 +65,7 @@ func GHToken(host string) AuthFunc {
 		}
 		var output []byte
 		tooLarge := false
-		runner := &ciexec.Executor{}
+		runner := &ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}
 		result := runner.Run(ctx, ciexec.JobSpec{
 			AttemptID: "gh-auth-" + randomID(), CoordinatorID: "provider-auth", Command: []string{"gh", "auth", "token", "--hostname", host},
 			Timeout: connectTimeout,

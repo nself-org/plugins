@@ -137,7 +137,7 @@ func TestResolverCoordinatorIDIsAnExecutorSafeID(t *testing.T) {
 	if got != safeID(live) || strings.Contains(got, ":") {
 		t.Fatalf("coordinator id %q", got)
 	}
-	var ex ciexec.Executor
+	ex := ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}
 	res := ex.Run(context.Background(), ciexec.JobSpec{AttemptID: "sec-x-1", CoordinatorID: got, Command: []string{"true"}, Home: t.TempDir()})
 	if res.Err != nil {
 		t.Fatalf("the executor refused the coordinator id %q: %v", got, res.Err)

@@ -203,7 +203,7 @@ func TestRunNeverRunsAToolPlantedInTheJobSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	// control: the fixture does leave the marker when something runs it
-	control := sbom.ExecRunner{Executor: &exec.Executor{}, Home: t.TempDir(), SourceDir: src}
+	control := sbom.ExecRunner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir(), SourceDir: src}
 	if _, err := control.Run(context.Background(), sbom.Cmd{Argv: []string{"/bin/sh", planted}}); err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestRunNeverRunsAToolPlantedInTheJobSource(t *testing.T) {
 	for _, home := range []string{"", "tools/..", ".", "rel-home"} {
 		in := gsbom.Input{
 			Job:     model.Job{Kind: "release", Run: []string{gsbom.CheckID}},
-			Runner:  sbom.ExecRunner{Executor: &exec.Executor{}, Home: t.TempDir(), SourceDir: src},
+			Runner:  sbom.ExecRunner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: t.TempDir(), SourceDir: src},
 			Home:    home,
 			Pin:     sbom.Pin{Version: pinV},
 			Targets: []sbom.Target{{Name: "cli", Path: "tools", Kind: sbom.SourceDir}},

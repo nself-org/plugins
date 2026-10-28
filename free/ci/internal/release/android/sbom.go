@@ -98,5 +98,5 @@ func (s SBOMStep) runner(dir string) sbom.Runner {
 	if s.NewRunner != nil {
 		return s.NewRunner(dir)
 	}
-	return sbom.ExecRunner{Executor: &exec.Executor{}, Home: s.Home, SourceDir: dir}
+	return sbom.ExecRunner{Executor: &exec.Executor{Isolation: exec.BaselineIsolator{}}, Home: s.Home, SourceDir: dir}
 }

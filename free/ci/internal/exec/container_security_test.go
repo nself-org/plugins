@@ -27,7 +27,7 @@ func TestContainerRejectsOptionShapedImage(t *testing.T) {
 	marker := filepath.Join(dir, "invoked")
 	fakeDocker(t, fmt.Sprintf("touch %q\nexit 0\n", marker))
 	for _, image := range []string{"--privileged", "--pid=host", "bad image", "../evil"} {
-		r := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "image", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: image}}, Command: []string{"true"}})
+		r := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), JobSpec{AttemptID: "image", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: image}}, Command: []string{"true"}})
 		if r.Err == nil {
 			t.Fatalf("accepted image %q", image)
 		}
@@ -41,7 +41,7 @@ func TestDockerCLIEnvironmentIsHostOnly(t *testing.T) {
 	dir := t.TempDir()
 	envPath, filePath := filepath.Join(dir, "host.env"), filepath.Join(dir, "job.env")
 	fakeDocker(t, fmt.Sprintf("env > %q\nfor a in \"$@\"; do if [ \"$prev\" = --env-file ]; then cp \"$a\" %q; fi; prev=\"$a\"; done\nexit 0\n", envPath, filePath))
-	r := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "host-env", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}, Env: map[string]string{"LD_PRELOAD": "evil.so", "DOCKER_HOST": "tcp://evil", "JOB_SECRET": "secret"}}, Command: []string{"true"}})
+	r := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), JobSpec{AttemptID: "host-env", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}, Env: map[string]string{"LD_PRELOAD": "evil.so", "DOCKER_HOST": "tcp://evil", "JOB_SECRET": "secret"}}, Command: []string{"true"}})
 	if r.Err != nil {
 		t.Fatal(r.Err)
 	}
@@ -67,7 +67,7 @@ func TestContainerHonorsWorkdir(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args")
 	fakeDocker(t, fmt.Sprintf("printf '%%s\\n' \"$@\" > %q\n", argsPath))
-	r := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "workdir", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Workdir: "sub", Container: &model.ContainerConfig{Image: "alpine:3.19"}}, Command: []string{"pwd"}})
+	r := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), JobSpec{AttemptID: "workdir", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Workdir: "sub", Container: &model.ContainerConfig{Image: "alpine:3.19"}}, Command: []string{"pwd"}})
 	if r.Err != nil {
 		t.Fatal(r.Err)
 	}
@@ -85,7 +85,7 @@ func TestContainerDotWorkdirUsesRepo(t *testing.T) {
 		t.Run(fmt.Sprintf("workdir=%q", dir), func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "args")
 			fakeDocker(t, fmt.Sprintf("printf '%%s\\n' \"$@\" > %q\n", path))
-			r := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "dot-container", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Workdir: dir, Container: &model.ContainerConfig{Image: "alpine:3.19"}}, Command: []string{"pwd"}})
+			r := (&Executor{Isolation: BaselineIsolator{}}).Run(context.Background(), JobSpec{AttemptID: "dot-container", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Workdir: dir, Container: &model.ContainerConfig{Image: "alpine:3.19"}}, Command: []string{"pwd"}})
 			args, err := os.ReadFile(path)
 			if r.Err != nil || err != nil || !strings.Contains(string(args), "--workdir=/repo\n") {
 				t.Fatalf("run=%+v args=%q read=%v", r, args, err)
@@ -99,7 +99,7 @@ func TestDockerStopBoundedByGrace(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	r := (&Executor{Grace: 100 * time.Millisecond}).Run(ctx, JobSpec{AttemptID: "stop", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}}, Command: []string{"sleep", "30"}})
+	r := (&Executor{Isolation: BaselineIsolator{}, Grace: 100 * time.Millisecond}).Run(ctx, JobSpec{AttemptID: "stop", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}}, Command: []string{"sleep", "30"}})
 	if r.Err == nil || time.Since(start) > 2500*time.Millisecond {
 		t.Fatalf("unbounded stop: %+v elapsed=%s", r, time.Since(start))
 	}

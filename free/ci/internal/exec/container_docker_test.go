@@ -52,7 +52,7 @@ func TestContainerBaselineFlags(t *testing.T) {
 	image := dockerPrerequisite(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	e := &Executor{Grace: 100 * time.Millisecond}
+	e := &Executor{Isolation: BaselineIsolator{}, Grace: 100 * time.Millisecond}
 	done := make(chan AttemptResult, 1)
 	go func() {
 		done <- e.Run(ctx, JobSpec{AttemptID: "baseline-flags", CoordinatorID: "test-coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: image}}, Command: []string{"sleep", "30"}, CPU: 1.5, MemoryMB: 256})
@@ -94,7 +94,7 @@ func TestContainerOrphanSweep(t *testing.T) {
 			t.Fatalf("docker run %s: %v: %s", id, err, out)
 		}
 	}
-	e := &Executor{Stale: staleMap{"live-ci32": false, "stale-ci32": true}}
+	e := &Executor{Isolation: BaselineIsolator{}, Stale: staleMap{"live-ci32": false, "stale-ci32": true}}
 	if err := e.Sweep(context.Background(), "current-ci32"); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestContainerMountContentsAndReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out strings.Builder
-	e := &Executor{Grace: time.Second}
+	e := &Executor{Isolation: BaselineIsolator{}, Grace: time.Second}
 	res := e.Run(context.Background(), JobSpec{AttemptID: "mounts-ro", CoordinatorID: "test-coord", Home: t.TempDir(),
 		Job:     model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: image}},
 		Mounts:  []Mount{{Host: ro, Target: "/cache/ro", ReadOnly: true}, {Host: rw, Target: "/cache/rw"}},

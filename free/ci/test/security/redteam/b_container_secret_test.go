@@ -38,7 +38,7 @@ func runWithFakeDocker(t *testing.T, secrets map[string]string, refs []string, j
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	r := (&ciexec.Executor{}).Run(context.Background(), ciexec.JobSpec{AttemptID: "rt-sec", CoordinatorID: "coord", Home: t.TempDir(), Secrets: secretMap(secrets),
+	r := (&ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}).Run(context.Background(), ciexec.JobSpec{AttemptID: "rt-sec", CoordinatorID: "coord", Home: t.TempDir(), Secrets: secretMap(secrets),
 		Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}, Secrets: refs, Env: jobEnv}, Command: []string{"true"}})
 	read := func(p string) string { b, _ := os.ReadFile(p); return string(b) }
 	return dockerRec{argv: read(argvPath), env: read(envPath), file: read(filePath)}, r.Err
