@@ -13,15 +13,16 @@ import (
 	"context"
 	"flag"
 	"reflect"
-	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/nodes/probe"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
 )
 
 // quarantineReason is the maintenance reason registry.CheckAgeRecipient sets when a node presents a
-// different identity (E660).
-const quarantineReason = "age_recipient_changed"
+// different identity (E660). The checks below only give the admin a clearer message: the refusal itself
+// is inside registry.SetState.
+const quarantineReason = registry.QuarantineReason
 
 // TestResult is what `nodes test` reports.
 type TestResult struct {
@@ -64,29 +65,30 @@ func (d *Deps) Test(ctx context.Context, id string, fs *flag.FlagSet) (TestResul
 		return res, err
 	}
 	res.Connected = true
-	// A fresh probe, not the prober's 60 s cache: `nodes test` exists to see drift. The stored snapshot is
-	// marked old so the node's own prober (NODE-22, with its isolation-only-lowers rule against the stored
-	// baseline) runs on the real registry. The node lock keeps rotate, remove and add out meanwhile.
-	old := n.Capability
-	old.Verified = model.CapabilityVerified{By: "probe", At: time.Now().UTC().Add(-time.Hour)}
-	if _, _, err = d.Registry.UpdateCapability(ctx, id, old, "probe"); err != nil {
-		return res, err
-	}
+	// A fresh probe, not the prober's 60 s cache: `nodes test` exists to see drift. The node's own prober
+	// (NODE-22, with its isolation-only-lowers rule against the stored baseline) runs on the real registry.
+	// The node lock keeps rotate, remove and add out meanwhile.
 	ver, err := d.SSHVersion(ctx)
 	if err != nil {
 		return res, newErr(CodeNoRoute, "ssh_version", "cannot determine the local OpenSSH version")
 	}
-	after, err := d.NewProber(d.Registry, d.pinFile(), ver).Probe(ctx, id)
+	after, err := d.NewProber(d.Registry, d.pinFile(), ver).Probe(probe.ForceRefresh(ctx), id)
 	if err != nil {
 		return res, transportErr("probe", "the capability probe failed", err)
 	}
 	res.Node, res.Drift = after, diffCapability(n.Capability, after.Capability)
-	if err = RunHooks(ctx, PointTest, HookEvent{NodeID: id, Project: d.Project, Flags: fs}); err != nil {
-		return res, err
-	}
 	// A test hook may change facts the admin owns (deploy_host, P7-NODE-14): report the stored node.
+	hookErr := RunHooks(ctx, PointTest, HookEvent{NodeID: id, Project: d.Project, Flags: fs})
 	if fresh, gerr := d.Registry.Get(ctx, id); gerr == nil {
 		res.Node = fresh
+	}
+	if hookErr != nil {
+		// The probe is already stored (snapshot and audit row): hand back what was committed with the error.
+		code := CodeOf(hookErr)
+		if code == "" {
+			code = "E607"
+		}
+		return res, &Error{Code: code, Reason: ReasonCommitted, Msg: "the probe of node " + id + " was recorded, but a test hook failed: " + oneLine(hookErr), cause: hookErr}
 	}
 	return res, nil
 }

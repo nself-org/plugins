@@ -10,6 +10,8 @@ import (
 
 	"github.com/nself-org/cli/sdk/go/v2/remote"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 func TestAddAuthorizesCurrentProjectOnly(t *testing.T) {
@@ -262,5 +264,27 @@ func TestNodeIDAndHostKeyHelpers(t *testing.T) {
 	}
 	if kl := keyLine(hostKey("ssh-ed25519", fpA, "AAAA")); kl != "ssh-ed25519 AAAA" || keyLine(keyA) == "" {
 		t.Fatalf("keyLine = %q", kl)
+	}
+}
+
+// D-1212: a read-back failure after the node was committed still reports the node that was written.
+func TestAddReportsTheProbedNodeWhenTheReadBackFails(t *testing.T) {
+	k := newKit(t)
+	blind, err := store.Open(filepath.Join(t.TempDir(), "blind.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = blind.Close() })
+	k.d.Registry = registry.New(blind) // reads an empty store; the writes still go to k.d.Store
+	r, err := k.d.Add(context.Background(), AddOptions{Dest: "ci@rb1", HostKey: fpA, Source: LocalFile{Path: elfFixture(t, elf.EM_X86_64)}, Trust: DefaultTrust()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := ViewOf(r.Node)
+	if v.ID != "rb1" || v.State != "online" || len(v.AuthorizedProjects) != 1 || v.AuthorizedProjects[0] != "proj-1" || r.Node.Capability.Identity.ID != "rb1" {
+		t.Fatalf("the add result is an empty node: %+v", v)
+	}
+	if _, gerr := k.st.NodeGet(context.Background(), "rb1"); gerr != nil {
+		t.Fatalf("the node was not committed: %v", gerr)
 	}
 }

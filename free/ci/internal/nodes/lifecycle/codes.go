@@ -34,13 +34,18 @@ const (
 	ReasonKeyMismatch   = "host_key_mismatch"
 	ReasonNoKey         = "host_key_unknown"
 	ReasonPartial       = "partial_revoke"
+	ReasonCommitted     = "committed_hook_failed"
 	ReasonUsage         = "usage"
 )
 
 // Error is a lifecycle failure.
 type Error struct {
 	Code, Reason, Msg string
+	cause             error
 }
+
+// Unwrap returns the error a wrapping lifecycle error was made from, if any.
+func (e *Error) Unwrap() error { return e.cause }
 
 func (e *Error) Error() string { return fmt.Sprintf("%s: %s", e.Code, e.Msg) }
 

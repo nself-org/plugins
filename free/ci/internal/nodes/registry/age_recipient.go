@@ -8,6 +8,10 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
+// QuarantineReason is the maintenance reason set when a node presents a different age recipient (E660).
+// SetState refuses to replace it (a drain, an enable or a breaker write would clear the quarantine).
+const QuarantineReason = "age_recipient_changed"
+
 // AgeRecipient returns the recipient pinned by the first hello, if any.
 func (r *Registry) AgeRecipient(ctx context.Context, id string) (*string, error) {
 	n, err := r.Get(ctx, id)
@@ -27,7 +31,7 @@ func (r *Registry) CheckAgeRecipient(ctx context.Context, id, presented, actor s
 		return err
 	}
 	if n.Capability.Identity.AgeRecipient.Value != nil && *n.Capability.Identity.AgeRecipient.Value != presented {
-		_, err = r.SetState(ctx, id, "maintenance", "age_recipient_changed", actor)
+		_, err = r.SetState(ctx, id, "maintenance", QuarantineReason, actor)
 		if err != nil {
 			return err
 		}
@@ -48,7 +52,7 @@ func (r *Registry) CheckAgeRecipient(ctx context.Context, id, presented, actor s
 	})
 	var changed *Error
 	if errors.As(err, &changed) && changed.Code == "E660" {
-		_, flagErr := r.SetState(ctx, id, "maintenance", "age_recipient_changed", actor)
+		_, flagErr := r.SetState(ctx, id, "maintenance", QuarantineReason, actor)
 		if flagErr != nil {
 			return flagErr
 		}
