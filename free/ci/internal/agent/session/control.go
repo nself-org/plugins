@@ -22,10 +22,36 @@ func (s *Session) onMessage(m protocol.Message) (done bool, err error) {
 		return s.onDrain(m, *b)
 	case *protocol.Offset:
 		s.onOffset(m, *b)
+	case *protocol.Upgrade:
+		s.onUpgrade(*b)
 	}
-	// heartbeat, ack, upgrade, chunk, digest, resume: carried by later
-	// tickets (P7-NODE-24 upgrade, P7-CACHE-19 cache restore); the session ignores them.
+	// heartbeat, ack, chunk, digest, resume: carried by later
+	// tickets (P7-CACHE-19 cache restore); the session ignores them.
 	return false, nil
+}
+
+// onUpgrade answers an upgrade message with an upgrade-result: done after the swap (the service manager restarts the agent, which
+// says hello again), refused with the E666 reason key, or nothing when the upgrade failed for another reason (the coordinator's
+// hello check decides). Without a Config.Upgrade the message is ignored. The download runs off the Run goroutine so heartbeats go
+// on; one upgrade runs at a time and a second message while it runs is ignored (the engine upgrades a node once at a time).
+func (s *Session) onUpgrade(u protocol.Upgrade) {
+	if s.cfg.Upgrade == nil || !s.upgrading.CompareAndSwap(false, true) {
+		return
+	}
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		defer s.upgrading.Store(false)
+		reason, err := s.cfg.Upgrade(s.runCtx, u)
+		res := protocol.UpgradeResult{Version: u.Version, Status: protocol.UpgradeDone}
+		switch {
+		case reason != "":
+			res.Status, res.Reason = protocol.UpgradeRefused, reason
+		case err != nil:
+			return
+		}
+		_ = s.send("upgrade-result", res, nil)
+	}()
 }
 
 func (s *Session) onCancel(m protocol.Message, c protocol.Cancel) error {

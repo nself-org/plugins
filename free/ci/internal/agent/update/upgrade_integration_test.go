@@ -88,6 +88,8 @@ type simControl struct {
 	s        *sim
 	releases map[string]*release
 	agentErr error
+	result   *protocol.UpgradeResult
+	blind    bool
 	mu       sync.Mutex
 }
 
@@ -95,11 +97,14 @@ func (c *simControl) AgentVersion(ctx context.Context, _ string) (string, error)
 	return c.s.version(ctx)
 }
 func (c *simControl) ActiveJobs(context.Context, string) (int, error) {
+	if c.blind { // the coordinator's count says idle while another coordinator leased a job
+		return 0, nil
+	}
 	_, used, err := slots.Status(c.s.state())
 	return used, err
 }
 
-func (c *simControl) Upgrade(_, version, _ string) error {
+func (c *simControl) Upgrade(_, version, _ string, allowDowngrade bool) error {
 	var src Source = failingSource{}
 	if r, ok := c.releases[version]; ok {
 		src = r.source()
@@ -107,13 +112,31 @@ func (c *simControl) Upgrade(_, version, _ string) error {
 	cur, _ := c.s.version(context.Background())
 	o := localOpts(c.s, cur, version, src)
 	o.AllowRestore = true // what the agent's upgrade-message handler sets: the coordinator may send it back to the binary it kept
+	o.AllowDowngrade = allowDowngrade
 	_, err := ApplyLocal(context.Background(), o)
+	res := protocol.UpgradeResult{Version: version, Status: protocol.UpgradeDone}
+	if reason := ReasonOf(err); reason != "" { // the agent answers a refusal with its E666 reason key; any other failure sends nothing
+		res.Status, res.Reason = protocol.UpgradeRefused, reason
+	}
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if err != nil && c.agentErr == nil { // keep the first refusal; the rollback message that follows succeeds
 		c.agentErr = err
 	}
-	c.mu.Unlock()
-	return nil // the message is queued either way; the agent's refusal is not carried back (no result frame in protocol v1)
+	c.result = nil
+	if err == nil || res.Status == protocol.UpgradeRefused {
+		c.result = &res
+	}
+	return nil
+}
+
+func (c *simControl) WaitUpgradeResult(_ context.Context, _, version string, _ time.Duration) (protocol.UpgradeResult, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.result == nil || c.result.Version != version {
+		return protocol.UpgradeResult{}, fmt.Errorf("no upgrade result for %s", version)
+	}
+	return *c.result, nil
 }
 
 func (c *simControl) WaitHello(ctx context.Context, _ string, _ time.Time, wait time.Duration) (string, error) {
@@ -293,8 +316,8 @@ func TestUpgrade(t *testing.T) {
 					}
 					return
 				}
-				// the pull agent enforces its own ceiling and refuses; the coordinator sees a hello that never changes
-				if err == nil || ReasonOf(r.ctl.agentErr) != ReasonCeiling {
+				// the pull agent enforces its own ceiling and refuses; its upgrade-result carries the reason to the coordinator
+				if ReasonOf(err) != ReasonCeiling || !strings.HasPrefix(err.Error(), "E666:") || ReasonOf(r.ctl.agentErr) != ReasonCeiling {
 					t.Fatalf("err %v agent %v", err, r.ctl.agentErr)
 				}
 			})
@@ -306,13 +329,7 @@ func TestUpgrade(t *testing.T) {
 					t.Fatalf("err %v version %s", err, installed(t, r.s))
 				}
 				res, err := r.run(rel, "1.4.0", func(q *Request) { q.AllowDowngrade = true })
-				if carrier == "agent" {
-					// the upgrade message carries no downgrade permission: a pull agent is downgraded on the node itself
-					if ReasonOf(err) != ReasonDowngrade || installed(t, r.s) != "1.5.0" || r.ev.index("install") >= 0 || r.state != "online" {
-						t.Fatalf("err %v version %s events %v", err, installed(t, r.s), r.ev.all())
-					}
-					return
-				}
+				// the upgrade message carries allow_downgrade, so a pull agent downgrades like an ssh node
 				if err != nil || res.Direction != Downgrade || installed(t, r.s) != "1.4.0" {
 					t.Fatalf("res %+v err %v version %s", res, err, installed(t, r.s))
 				}
@@ -321,6 +338,25 @@ func TestUpgrade(t *testing.T) {
 				}
 			})
 		})
+	}
+}
+
+// A pull agent that refuses (here: a job another coordinator leased) is seen by the coordinator as E666 with the agent's reason,
+// not as a hello that never comes and an E656 rollback.
+func TestUpgradePullAgentRefusalReachesTheCoordinator(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("INTEGRATION=1 runs the sim-node upgrade")
+	}
+	rel := newRelease(t, "1.5.0", 1, 1)
+	r := newRig(t, "agent", "1.4.0", rel)
+	r.ctl.blind = true
+	r.startJob(5 * time.Second)
+	res, err := r.run(rel, "1.5.0", nil)
+	if ReasonOf(err) != ReasonRunningJob || !strings.HasPrefix(err.Error(), "E666:") || res.RolledBack || installed(t, r.s) != "1.4.0" || r.state != "online" {
+		t.Fatalf("res %+v err %v version %s state %s", res, err, installed(t, r.s), r.state)
+	}
+	if strings.Contains(strings.Join(r.audit(), ","), "rollback") {
+		t.Fatalf("a refusal was rolled back: %v", r.audit())
 	}
 }
 

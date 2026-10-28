@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/agent/slots"
@@ -77,7 +78,10 @@ type Config struct {
 	Signer Signer
 	// Status reports battery and interactivity for the heartbeat; nil reports neither.
 	Status func() Status
-	Resume *Resume
+	// Upgrade runs the coordinator's `upgrade` message on this node (download, verify, swap). It returns the E666 reason key when the
+	// agent refuses (ceiling, downgrade, running_job) and an error for any other failure. Nil: the message is ignored, as before.
+	Upgrade func(ctx context.Context, u protocol.Upgrade) (reason string, err error)
+	Resume  *Resume
 }
 
 // RejectError is the coordinator's reject of hello.
@@ -93,6 +97,8 @@ type Session struct {
 
 	sendMu  sync.Mutex
 	sendSeq uint64
+
+	upgrading atomic.Bool // an upgrade message is being applied
 
 	// Owned by the Run goroutine.
 	active     map[string]*activeLease

@@ -97,6 +97,9 @@ func (s *Server) handleFrame(q *request, f *flow, m protocol.Message) *fatal {
 			s.cfg.OnAck(q.node, b.LeaseID)
 		}
 		return nil
+	case *protocol.UpgradeResult:
+		s.recordUpgrade(q.node, *b)
+		return nil
 	case *protocol.Log:
 		act = func() error { return s.cfg.Sink.Log(ctx, *b) }
 	case *protocol.ArtifactRef:

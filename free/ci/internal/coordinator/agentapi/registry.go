@@ -50,6 +50,7 @@ type nodeState struct {
 	conns   map[net.Conn]struct{}
 	leases  []protocol.Lease
 	ctl     []protocol.Message
+	upgrade *protocol.UpgradeResult // the agent's answer to the last upgrade frame; Upgrade clears it
 	changed chan struct{}
 }
 
@@ -213,11 +214,6 @@ func (s *Server) Cancel(nodeID, leaseID, reason string) error {
 // Drain asks the node's agent to stop taking leases and finish by deadline.
 func (s *Server) Drain(nodeID string, deadline time.Time) error {
 	return s.queueControl(nodeID, protocol.Message{Type: "drain", Body: protocol.Drain{Deadline: deadline.UTC().Format(time.RFC3339)}})
-}
-
-// Upgrade asks the node's agent to upgrade to version from manifestURL.
-func (s *Server) Upgrade(nodeID, version, manifestURL string) error {
-	return s.queueControl(nodeID, protocol.Message{Type: "upgrade", Body: protocol.Upgrade{Version: version, ManifestURL: manifestURL}})
 }
 
 func (s *Server) queueControl(nodeID string, m protocol.Message) error {

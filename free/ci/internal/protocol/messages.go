@@ -159,6 +159,23 @@ type Drain struct {
 type Upgrade struct {
 	Version     string `json:"version"`
 	ManifestURL string `json:"manifest_url"`
+	// AllowDowngrade lets the agent install a version lower than its own. It is sent only when true, so a frame
+	// without a downgrade is byte-identical to the one an agent without this field decodes.
+	AllowDowngrade bool `json:"allow_downgrade,omitempty"`
+}
+
+// Upgrade-result statuses.
+const (
+	UpgradeDone    = "done"
+	UpgradeRefused = "refused"
+)
+
+// UpgradeResult is the agent's answer to an upgrade frame (agent to coordinator): done after the swap (the agent restarts
+// and says hello again), or refused with an E666 reason key (ceiling, downgrade, running_job) and nothing installed.
+type UpgradeResult struct {
+	Version string `json:"version"`
+	Status  string `json:"status"`
+	Reason  string `json:"reason,omitempty"`
 }
 type Ack struct {
 	AckSeq  uint64 `json:"ack_seq"`

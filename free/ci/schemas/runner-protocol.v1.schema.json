@@ -1010,6 +1010,9 @@
           "body": {
             "additionalProperties": false,
             "properties": {
+              "allow_downgrade": {
+                "type": "boolean"
+              },
               "manifest_url": {
                 "type": "string"
               },
@@ -1020,6 +1023,44 @@
             "required": [
               "version",
               "manifest_url"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "upgrade-result"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "reason": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "done",
+                  "refused"
+                ]
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "version",
+              "status"
             ],
             "type": "object"
           }
@@ -1110,6 +1151,7 @@
         "resume",
         "secrets",
         "upgrade",
+        "upgrade-result",
         "welcome"
       ]
     },
