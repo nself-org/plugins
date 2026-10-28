@@ -10,6 +10,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"flag"
 	"io"
 	"net"
 	"net/http"
@@ -195,6 +196,73 @@ func TestClientFollowsTheSocketPathInTheLock(t *testing.T) {
 	tg, _, err := coordclient.Resolve(coordclient.Inputs{Getenv: func(string) string { return "" }, Home: data})
 	if err != nil || tg.Kind != coordclient.LocalServe || tg.Socket != sock {
 		t.Fatalf("target %+v %v", tg, err)
+	}
+	cancel()
+	if code := <-done; code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+}
+
+// TestSnapshotServeFlagsExercisesTheSnapshot verifies that serveFlag and
+// explicitFlag read from the snapshot taken at listener start (D-1406), not
+// from a later replacement of userAPIFlags.fs. The snapshot is process-global,
+// so this test serializes with other serveV15 tests in this package.
+func TestSnapshotServeFlagsExercisesTheSnapshot(t *testing.T) {
+	serveFixture(t, quietHost())
+	data, err := os.MkdirTemp("", "ci-snap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(data) })
+	api := freePort(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	hook := func(c *coordinator.Config) {
+		c.Listen = func(network, _ string) (net.Listener, error) { return net.Listen(network, "127.0.0.1:0") }
+	}
+	done := make(chan int, 1)
+	go func() {
+		done <- serveV15(ctx, []string{"--insecure", "--workdir", filepath.Join(data, "wd"), "--data-dir", data, "--api-addr", api, "--api-submit-role", "member"}, hook)
+	}()
+	waitUntil(t, "the serve lock", func() bool { return coordclient.ServeHoldsLock(data) })
+	if got := serveFlag("data-dir"); got != data {
+		t.Fatalf("serveFlag(data-dir) = %q, want %q", got, data)
+	}
+	if got := serveFlag("api-submit-role"); got != "member" {
+		t.Fatalf("serveFlag(api-submit-role) = %q, want member", got)
+	}
+	if !explicitFlag("api-submit-role") {
+		t.Fatal("explicitFlag(api-submit-role) = false, want true")
+	}
+	if explicitFlag("api-public-url") {
+		t.Fatal("explicitFlag(api-public-url) = true, want false (not passed)")
+	}
+	// Replace the package-level flag set with a freshly parsed one, as a later serveV15 does.
+	// The listeners must keep reading the values captured at start.
+	userAPIFlags.Lock()
+	prev := userAPIFlags.fs
+	repl := flag.NewFlagSet("replacement", flag.ContinueOnError)
+	repl.String("data-dir", "", "")
+	repl.String("api-public-url", "", "")
+	repl.String("api-submit-role", "release", "")
+	if err = repl.Parse([]string{"--data-dir", "/replaced", "--api-public-url", "https://replaced.example", "--api-submit-role", "release"}); err != nil {
+		userAPIFlags.Unlock()
+		t.Fatal(err)
+	}
+	userAPIFlags.fs = repl
+	userAPIFlags.Unlock()
+	t.Cleanup(func() { userAPIFlags.Lock(); userAPIFlags.fs = prev; userAPIFlags.Unlock() })
+	if got := serveFlag("data-dir"); got != data {
+		t.Errorf("after the flag set was replaced, serveFlag(data-dir) = %q, want %q", got, data)
+	}
+	if got := serveFlag("api-submit-role"); got != "member" {
+		t.Errorf("after the flag set was replaced, serveFlag(api-submit-role) = %q, want member", got)
+	}
+	if got := serveFlag("api-public-url"); got != "" {
+		t.Errorf("after the flag set was replaced, serveFlag(api-public-url) = %q, want empty", got)
+	}
+	if explicitFlag("api-public-url") || !explicitFlag("api-submit-role") {
+		t.Error("explicitFlag followed the replacement flag set, not the snapshot")
 	}
 	cancel()
 	if code := <-done; code != 0 {

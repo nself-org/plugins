@@ -15,6 +15,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/nself-org/plugins/free/ci/internal/pki"
 )
@@ -58,7 +59,12 @@ func (p *PromptApprover) ask(ctx context.Context, q string) (string, error) {
 // printable drops control characters and cuts s, so a node cannot send terminal escape sequences to the
 // admin through its name, os, arch or the label.
 func printable(s string) string {
-	return cut(s, 80)
+	return cut(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, s), 80)
 }
 
 func list(v string, def []string) []string {

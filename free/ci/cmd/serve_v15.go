@@ -157,6 +157,7 @@ func serveV15(ctx context.Context, args []string, hook func(*coordinator.Config)
 	if hook != nil {
 		hook(&cfg)
 	}
+	snapshotServeFlags() // D-1406: snapshot flags before listeners start
 	c, err := coordinator.New(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
