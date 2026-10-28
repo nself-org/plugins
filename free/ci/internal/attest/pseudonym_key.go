@@ -57,6 +57,17 @@ func currentPseudonymKey() []byte {
 	return nil
 }
 
+// UsePseudonymKeyAt loads (creating it when absent) the key under home and registers it, so a process
+// that publishes without running an attempt (`nself ci artifacts sign`) pseudonymizes with the same key
+// as a run does.
+func UsePseudonymKeyAt(home string) error {
+	key, err := LoadPseudonymKey(home)
+	if err != nil {
+		return err
+	}
+	return UsePseudonymKey(key)
+}
+
 // LoadPseudonymKey returns the key under home, creating it when the file is absent.
 func LoadPseudonymKey(home string) ([]byte, error) {
 	if home == "" {
