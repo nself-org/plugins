@@ -60,7 +60,7 @@ POST /dlq/discard      # permanently delete a job from the DLQ
 
 ### Circuit Breaker Persistence
 
-The `np_circuit_breakers` table persists circuit breaker state across service restarts. State values: `closed`, `open`, `half-open`.
+The `np_circuit_breakers` table is reserved for a future circuit breaker controller; the Go service currently does not write it. Existing rows are preserved across upgrades. State values: `closed`, `open`, `half-open`.
 
 ### Metrics
 
@@ -92,7 +92,21 @@ This plugin uses **CS_10** (custom service slot 10). Defined in `F08-SERVICE-INV
 | `JOBQUEUE_CONCURRENCY` | No | `5` | Workers per queue |
 | `JOBQUEUE_MAX_ATTEMPTS` | No | `8` | Max retries before DLQ |
 | `JOBQUEUE_QUEUES` | No | `default,email,ai,media` | Comma-separated queue names |
-| `JOBQUEUE_HEALTH_IGNORE_REDIS` | No | `false` | `true` skips the Redis probe in `/health` (used by the boot test kit, which has no Redis) |
+
+## Storage and health
+
+Postgres remains required: the documented job snapshots and DLQ are part of the
+service, and ADR 0010 requires boot migrations for its SQL schema. The server
+uses the same pool that applied migrations. Enqueue writes the job snapshot
+before pushing to Redis; a failed snapshot insert rejects the request. Workers
+update status and persist exhausted jobs in the DLQ. Redis remains the execution
+store: snapshots are for visibility, not an automatic recovery or replay log.
+The two stores do not share a transaction; a Redis failure after a snapshot
+insert leaves a failed snapshot, and later worker snapshot failures are logged.
+
+`/health` requires both Redis and migration health. There is no environment
+switch to bypass Redis. Both boot test kits start a Redis sidecar when testing
+job-queue, wait for it to answer `PING`, and remove it on exit.
 
 ## Schema
 
@@ -100,9 +114,9 @@ This plugin uses **CS_10** (custom service slot 10). Defined in `F08-SERVICE-INV
 |---|---|
 | `np_jobqueue_jobs` | Visibility snapshot of Redis job state; written by workers |
 | `np_job_dlq` | Jobs that exhausted `MAX_ATTEMPTS`; shown in Admin UI DLQ panel |
-| `np_circuit_breakers` | Persistent circuit breaker state |
+| `np_circuit_breakers` | Reserved schema; existing rows retained, no Go controller yet |
 
-All `np_*` tables include `source_account_id TEXT NOT NULL DEFAULT 'primary'` for multi-app isolation.
+The jobs and DLQ tables include `source_account_id TEXT NOT NULL DEFAULT 'primary'`.
 
 ## Migrations
 
@@ -121,7 +135,7 @@ The Go module root is the plugin root (`go.mod` next to `plugin.json`) so `migra
 
 ## Multi-Tenant Isolation
 
-Jobs are isolated per `source_account_id`. The DLQ panel queries are scoped to the caller's account to prevent cross-tenant data leakage.
+The Go HTTP service currently serves the `primary` account only. Snapshot and DLQ queries restrict rows to `source_account_id='primary'`; the service does not accept a caller-selected account. Do not share its Redis queues between accounts.
 
 ## Job Handler Registration
 
