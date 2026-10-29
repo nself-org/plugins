@@ -193,6 +193,7 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	}
 	rs.judge(ctx, info, full, &res, &o)
 	rs.diagnose(&o, &res)
+	classifyCatalogue(pj.Check, &res, &o)
 	oc := Outcome{State: res.Attempt.State, FailureClass: res.Attempt.FailureClass, ExitCode: res.ExitCode}
 	defer func() {
 		if rs.hooks.Cache != nil {
