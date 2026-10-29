@@ -240,7 +240,8 @@ func TestPublishGateComposes(t *testing.T) {
 }
 
 // TestOffloadAndNotifyFailures: an offload error refuses the run before anything runs; a
-// replaced revision is the one the run binds to; a failing or panicking notify hook is a note.
+// snapshot revision is only what nodes check out (the run records HEAD, dirty and unbound);
+// a failing or panicking notify hook is a note.
 func TestOffloadAndNotifyFailures(t *testing.T) {
 	l := &slotLog{}
 	r := passRig(t)
@@ -258,6 +259,9 @@ func TestOffloadAndNotifyFailures(t *testing.T) {
 	res := r.run(t)
 	if released != 1 || len(r.Rep.all()) != 0 || !strings.Contains(res.Summary.Status, "not posted") {
 		t.Fatalf("a snapshot revision is dev evidence and is released once: released %d status %q", released, res.Summary.Status)
+	}
+	if res.Summary.Doc.Revision != testSHA {
+		t.Fatalf("the run recorded %q: a snapshot is unreachable after release, so the run records HEAD %s", res.Summary.Doc.Revision, testSHA)
 	}
 
 	for name, n := range map[string]fakeNotify{"error": {l: l, err: errors.New("sink down")}, "panic": {l: l, panic: true}} {

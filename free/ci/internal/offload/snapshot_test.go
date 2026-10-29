@@ -39,7 +39,24 @@ func write(t *testing.T, root, name, body string) {
 	}
 }
 
+// hermeticGit keeps the host's git configuration out of the test: Take runs
+// git with the process environment, and a global excludes file (for example
+// one listing .env.local) would change what counts as untracked.
+func hermeticGit(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	global := filepath.Join(home, "gitconfig")
+	if err := os.WriteFile(global, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+}
+
 func newRepo(t *testing.T) string {
+	hermeticGit(t)
 	root := t.TempDir()
 	git(t, root, "init", "-q")
 	write(t, root, "a.txt", "one\n")
@@ -153,5 +170,47 @@ func TestSecretPathAndBadID(t *testing.T) {
 	}
 	if _, err := Take(context.Background(), capture, ".", t.TempDir(), "../x"); err == nil {
 		t.Fatal("bad id accepted")
+	}
+}
+
+// A file added with `git add` and not committed is part of the user's tree: the
+// snapshot carries its working-tree content. A staged file deleted from the
+// working tree is not carried. The user's index file is byte-identical after.
+func TestSnapshotCarriesStagedNewFile(t *testing.T) {
+	root := newRepo(t)
+	write(t, root, "staged.txt", "staged\n")
+	write(t, root, "edited.txt", "staged version\n")
+	write(t, root, "gone.txt", "g\n")
+	git(t, root, "add", "staged.txt", "edited.txt", "gone.txt")
+	write(t, root, "edited.txt", "working tree version\n")
+	if err := os.Remove(filepath.Join(root, "gone.txt")); err != nil {
+		t.Fatal(err)
+	}
+	indexPath := filepath.Join(root, ".git", "index")
+	before, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Take(context.Background(), capture, root, t.TempDir(), "r5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer Release(context.Background(), capture, root, s)
+	files := "\n" + git(t, root, "ls-tree", "-r", "--name-only", s.SHA) + "\n"
+	if !strings.Contains(files, "\nstaged.txt\n") {
+		t.Errorf("a staged new file is missing from the snapshot:%s", files)
+	}
+	if got := git(t, root, "show", s.SHA+":edited.txt"); got != "working tree version" {
+		t.Errorf("edited.txt = %q, want the working-tree content", got)
+	}
+	if strings.Contains(files, "\ngone.txt\n") {
+		t.Errorf("a staged file deleted from the working tree was sent:%s", files)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("the user's index file changed")
 	}
 }

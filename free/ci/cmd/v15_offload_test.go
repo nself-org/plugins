@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/where"
 )
 
@@ -109,6 +111,61 @@ func TestCLIWhereNodeOffloadsDirtyTree(t *testing.T) {
 	}
 	if refs := git(t, r.dir, "for-each-ref", "refs/nself-ci/"); refs != "" {
 		t.Errorf("private refs left behind:\n%s", refs)
+	}
+	requireRecordedHEAD(t, r, head)
+}
+
+// requireRecordedHEAD: the run's recorded revision is the commit, never the
+// snapshot, which no ref keeps once the run ends (P7-CI-41: a reproduction
+// never uses uncommitted changes).
+func requireRecordedHEAD(t *testing.T, r *evRepo, head string) {
+	t.Helper()
+	st, err := store.Open(filepath.Join(r.home, "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	rows, err := st.PipelinesByRevision(context.Background(), head)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("runs recorded at HEAD %s: %d %v; the run must record the commit, not the snapshot", head, len(rows), err)
+	}
+}
+
+// TestCLIAutoDirtyRunStaysLocal: with a node registered, a bare run is `auto`
+// and takes a snapshot, but the node is offline, so the job runs here. The run
+// records HEAD, the snapshot ref is gone and the repository is unchanged, so no
+// recorded revision depends on an unreachable commit.
+func TestCLIAutoDirtyRunStaysLocal(t *testing.T) {
+	r, n, head := dirtyNodeRepo(t)
+	st, err := store.Open(filepath.Join(r.home, "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = registry.New(st).SetState(context.Background(), n.id, "offline", "", "test"); err != nil {
+		t.Fatal(err)
+	}
+	if err = st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	before := oflRepoState(t, r.dir)
+	out, errOut, code := r.ci("--no-status")
+	if code != 0 || whereChosen.Kind != where.KindAuto {
+		t.Fatalf("exit %d kind %q\nstdout %s\nstderr %s", code, whereChosen.Kind, out, errOut)
+	}
+	if !strings.Contains(errOut, "not sent to the node") {
+		t.Fatalf("auto with a node registered must take the snapshot (no exclusion notice):\n%s", errOut)
+	}
+	select {
+	case s := <-n.seen:
+		t.Fatalf("an offline node ran the job: %+v", s)
+	default:
+	}
+	requireRecordedHEAD(t, r, head)
+	if refs := git(t, r.dir, "for-each-ref", "refs/nself-ci/"); refs != "" {
+		t.Errorf("private refs left behind:\n%s", refs)
+	}
+	if after := oflRepoState(t, r.dir); after != before {
+		t.Errorf("the user's repository changed:\n--- before\n%s\n--- after\n%s", before, after)
 	}
 }
 

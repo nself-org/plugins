@@ -104,7 +104,7 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 			_ = sess.Store.SetPreviousRunner(ctx, id, prev)
 		}
 	}
-	rd.sink.expect(id, sess.Revision) // a remote carrier may report before this call returns
+	rd.sink.expect(id, sess.checkoutRevision()) // a remote carrier may report before this call returns; its evidence names the checkout
 	a, err := rd.d.Submit(ctx, queueJob(sess, s, sj, id,
 		max(dec.Slots*cpu, cpu), max(capacity.FreeMemoryMB-capacity.MemoryMB*dec.ReserveMemoryPercent/100, mem)))
 	if err != nil || a.Local {
@@ -119,7 +119,7 @@ func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 // queueJob is the dispatcher's input for one attempt. Only an interactive run
 // (a person at a terminal) keeps the implicit foreground queue cap.
 func queueJob(sess *Session, s AttemptSpec, sj sched.Job, id string, localCPU, localMemMB int) dispatch.Job {
-	return dispatch.Job{AttemptID: id, Sched: sj, Model: *s.Job, Revision: sess.Revision, Foreground: s.Foreground,
+	return dispatch.Job{AttemptID: id, Sched: sj, Model: *s.Job, Revision: sess.checkoutRevision(), Foreground: s.Foreground,
 		NoDefaultQueueCap: !sess.Interactive, LocalCPU: localCPU, LocalMemMB: localMemMB}
 }
 

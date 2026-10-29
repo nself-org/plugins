@@ -2,9 +2,10 @@ package main
 
 // Purpose: the dirty-tree offload of a dev run (P7-AUTO-13, ADR 0032 D15).
 // When `nself ci --where <node|pool|auto|all>` runs on a tree with uncommitted
-// work, the run's revision becomes a snapshot commit (internal/offload) held
-// under a private ref, so the NODE-03 bundle transport carries the user's exact
-// tree to the node. This file registers the run's OffloadHook slot.
+// work, nodes check out a snapshot commit (internal/offload) held under a
+// private ref, so the NODE-03 bundle transport carries the user's exact tree;
+// the run still records the commit it started from, dirty. This file
+// registers the run's OffloadHook slot.
 // Inputs:  the run root (Options.Root), the --where target the invocation
 //          resolved (whereChosen), git through the exec funnel.
 // Outputs: an OffloadSnapshot whose Release deletes the private ref; the names

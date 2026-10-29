@@ -1,8 +1,9 @@
 package offload
 
 // Purpose: turn a dirty working tree into a revision (P7-AUTO-13): a snapshot
-// commit of tracked changes plus untracked files git does not ignore, parent
-// HEAD, held under the private ref refs/nself-ci/offload/<id> so the NODE-03
+// commit of the working tree of every path the user's index tracks (staged or
+// not, including a file added and not yet committed) plus untracked files git
+// does not ignore, parent HEAD, held under the private ref refs/nself-ci/offload/<id> so the NODE-03
 // bundle transport can carry it.
 // Inputs:  the repository root, a scratch dir and an id.
 // Outputs: a Snapshot (sha, ref, names excluded) and a Release that deletes
@@ -50,7 +51,9 @@ func Take(ctx context.Context, capture Capture, root, scratch, id string) (*Snap
 		if index != "" {
 			argv = append(argv, "GIT_INDEX_FILE="+index)
 		}
-		argv = append(argv, "GIT_AUTHOR_NAME=nself-ci", "GIT_AUTHOR_EMAIL=ci@localhost", "GIT_COMMITTER_NAME=nself-ci", "GIT_COMMITTER_EMAIL=ci@localhost",
+		// GIT_OPTIONAL_LOCKS=0: `status` must not refresh the user's index; GIT_LITERAL_PATHSPECS=1: a
+		// file name is a path, never a pathspec pattern or magic.
+		argv = append(argv, "GIT_OPTIONAL_LOCKS=0", "GIT_LITERAL_PATHSPECS=1", "GIT_AUTHOR_NAME=nself-ci", "GIT_AUTHOR_EMAIL=ci@localhost", "GIT_COMMITTER_NAME=nself-ci", "GIT_COMMITTER_EMAIL=ci@localhost",
 			"git", "--no-replace-objects", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-C", root)
 		out, code, err := capture(ctx, append(argv, args...)...)
 		if err != nil || code != 0 {
@@ -97,10 +100,15 @@ func Take(ctx context.Context, capture Capture, root, scratch, id string) (*Snap
 	index, list := filepath.Join(scratch, "index-"+id), filepath.Join(scratch, "paths-"+id)
 	defer os.Remove(index)
 	defer os.Remove(list)
-	if err := os.WriteFile(list, keep, 0o600); err != nil {
+	if _, err := g(index, "read-tree", head); err != nil {
 		return nil, err
 	}
-	if _, err := g(index, "read-tree", head); err != nil {
+	inHead, err := g(index, "ls-files", "-z")
+	if err != nil {
+		return nil, err
+	}
+	keep = append(keep, stagedNew(root, split(tracked), split(inHead))...)
+	if err := os.WriteFile(list, keep, 0o600); err != nil {
 		return nil, err
 	}
 	if _, err := g(index, "add", "-u"); err != nil {
@@ -139,6 +147,27 @@ func Release(ctx context.Context, capture Capture, root string, s *Snapshot) err
 	}
 	s.Ref = ""
 	return nil
+}
+
+// stagedNew lists, NUL-terminated, the paths the user's index tracks that HEAD
+// does not (a file added with `git add` and not committed) and that exist in
+// the working tree: `add -u` over a HEAD index never sees them.
+func stagedNew(root string, tracked, inHead []string) []byte {
+	head := make(map[string]bool, len(inHead))
+	for _, p := range inHead {
+		head[p] = true
+	}
+	var out []byte
+	for _, p := range tracked {
+		if head[p] {
+			continue
+		}
+		head[p] = true // an unmerged path is listed once per stage
+		if _, err := os.Lstat(filepath.Join(root, p)); err == nil {
+			out = append(append(out, p...), 0)
+		}
+	}
+	return out
 }
 
 func split(z string) []string {
