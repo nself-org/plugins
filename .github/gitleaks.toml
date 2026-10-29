@@ -47,6 +47,9 @@ regexes = [
   '''^PKCS8-wrapped$''',
   # free/ci/test/security/redteam/c_pairing_test.go (P7-TRUST-18): NodeKeyID fixture of the pairing prompt test, a counting sequence (history commits carry it; later ones use node-key-1)
   '''^0123456789abcdef$''',
+  # free/ci/internal/roles/signin_test.go (D-1276): the fake token prefix the rate-limit test guesses with
+  # (a counting sequence, the whole matched value); present in branch history that the CI fetch scans
+  '''^guess-0123456789$''',
   '''wJalrXUtnFEMI''',
   '''bPxRfiCYEXAMPLEKEY''',
 
