@@ -118,7 +118,7 @@ type Lease struct {
 	Job              model.Job           `json:"job"`
 	Checkout         Checkout            `json:"checkout"`
 	Secrets          []SecretRef         `json:"secrets"`
-	Trust            model.TrustClass    `json:"trust,omitempty"` // the class the job was admitted at; set with Secrets, so a node judges its own eligibility by it
+	Trust            model.TrustClass    `json:"trust,omitempty"` // the class the job was admitted at; a node judges its own secret eligibility and the job's network scope by it
 	ExpiresAt        string              `json:"expires_at"`
 	Cache            *LeaseCache         `json:"cache,omitempty"`
 	RunnerCredential *RunnerCredential   `json:"runner_credential,omitempty"`

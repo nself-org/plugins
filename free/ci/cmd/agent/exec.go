@@ -28,6 +28,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/evidence"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/netscope"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
@@ -38,11 +39,13 @@ func init() {
 
 // execSpec is the job a hosted workflow or a test hands to `exec`.
 type execSpec struct {
-	NetworkScope  model.NetworkScope `json:"network_scope,omitempty"`
-	AttemptID     string             `json:"attempt_id"`
-	CoordinatorID string             `json:"coordinator_id"`
-	JobID         string             `json:"job_id"`
-	Job           model.Job          `json:"job"`
+	NetworkScope model.NetworkScope `json:"network_scope,omitempty"`
+	// Trust is the class the coordinator admitted the job at (the lease's); with no class the job is untrusted.
+	Trust         model.TrustClass `json:"trust,omitempty"`
+	AttemptID     string           `json:"attempt_id"`
+	CoordinatorID string           `json:"coordinator_id"`
+	JobID         string           `json:"job_id"`
+	Job           model.Job        `json:"job"`
 	// Revision is the full commit the job runs against (40 or 64 hex).
 	Revision  string `json:"revision"`
 	SourceDir string `json:"source_dir,omitempty"`
@@ -202,6 +205,12 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	if err != nil {
 		return ciexec.AttemptResult{Attempt: model.Attempt{ID: spec.AttemptID, State: "failed", FailureClass: "infra"}, ExitCode: -1, Started: now, Finished: time.Now(), Err: err}, err.Error(), nil
 	}
+	// The lease's scope is checked again here, with the lease's class: the scheduler's admission rule is not the
+	// only thing between an untrusted job and the LAN (D-1331). An undeclared scope runs as none.
+	scope, err := netscope.RunScope(spec.Trust, spec.NetworkScope)
+	if err != nil {
+		return ciexec.AttemptResult{Attempt: model.Attempt{ID: spec.AttemptID, State: "failed", FailureClass: "infra"}, ExitCode: -1, Started: now, Finished: time.Now(), Err: err}, err.Error(), nil
+	}
 	job.Env = map[string]string{}
 	for k, v := range spec.Job.Env {
 		job.Env[k] = v
@@ -223,7 +232,7 @@ func execute(ctx context.Context, spec execSpec, in jobInputs) (ciexec.AttemptRe
 	}
 	raw := &tailBuffer{max: excerptMax}
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: spec.AttemptID, CoordinatorID: agentIncarnation(spec.CoordinatorID), Job: job, Command: job.Run,
-		Secrets: ex.Secrets, SourceDir: spec.SourceDir, Network: spec.NetworkScope, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks, RunnerRoot: in.RunnerRoot, Entrypoint: in.Entrypoint,
+		Secrets: ex.Secrets, SourceDir: spec.SourceDir, Network: scope, Mounts: in.Mounts, Home: home, Slot: in.Slot, Stdin: in.Stdin, Masks: in.Masks, RunnerRoot: in.RunnerRoot, Entrypoint: in.Entrypoint,
 		CPU: jobCPU(in), MemoryMB: jobMemoryMB(in), BeforeJob: cacheBeforeJob(spec, job.Env), AfterJob: agentAfterJob(spec, in),
 		Output: func(b []byte) {
 			raw.Write(b)

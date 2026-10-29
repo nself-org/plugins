@@ -473,7 +473,7 @@ func TestLeaseSecretRefsGoOnlyToAnEligibleNodeThatPassesTheGate(t *testing.T) {
 			if len(got.Secrets) != c.wantRefs {
 				t.Fatalf("the lease carries %d refs %v, want %d", len(got.Secrets), got.Secrets, c.wantRefs)
 			}
-			if (c.wantRefs > 0) != (got.Trust != "") || c.wantRefs > 0 && got.Trust != c.trust {
+			if got.Trust != c.trust { // every lease carries its class, with or without refs (D-1331: the node checks the scope by it)
 				t.Fatalf("lease trust = %q with %d refs", got.Trust, c.wantRefs)
 			}
 			for _, r := range got.Secrets {

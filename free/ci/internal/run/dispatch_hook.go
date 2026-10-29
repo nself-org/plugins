@@ -23,6 +23,7 @@ import (
 	compat "github.com/nself-org/cli/sdk/go/v2/compat"
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
+	"github.com/nself-org/plugins/free/ci/internal/netscope"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
@@ -220,15 +221,17 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	if RemoteRepo != nil && a.root != "" {
 		RemoteRepo(a.root)
 	}
+	// The scheduler's admission rule is not the only gate: an untrusted job that declares lan or privileged is
+	// refused here too, and the node checks the lease again with the class it carries (D-1331).
+	if _, err := netscope.RunScope(d.Trust, d.Network); err != nil {
+		return err
+	}
 	refs, err := leaseSecretRefs(d)
 	if err != nil {
 		return err
 	}
 	lease := protocol.Lease{NetworkScope: d.Network, LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
-		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: refs, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
-	if len(refs) > 0 {
-		lease.Trust = d.Trust
-	}
+		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: refs, Trust: d.Trust, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
 	sink := bindLeaseSink(a.sink, leaseFacts{AttemptID: d.AttemptID, LeaseID: d.LeaseID, Epoch: d.Epoch, Job: d.Job, Hosted: d.Hosted})
 	sink = prepareCache(ctx, sink, &lease, a.root, d.Node.Identity.ID, d.Hosted, remoteCachePlatform(d.Node), d.Node.Identity.Transport)
 	return transport.Deliver(ctx, d.Node, lease, sink)
