@@ -742,7 +742,7 @@ commands:
     output: document
     json: envelope
     confirm: {flags: []}
-    args: [{name: run_or_sha}]
+    args: [{name: run-or-sha}]
     flags:
       - {name: "job", type: "string"}
       - {name: "json", type: "bool", cli_only: true}
