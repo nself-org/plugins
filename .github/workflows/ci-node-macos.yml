@@ -71,7 +71,8 @@ jobs:
       - name: Allow the loopback SSH ownership inventory to read protected files
         run: |
           set -euo pipefail
-          for client in /usr/sbin/sshd /usr/libexec/sshd-keygen-wrapper; do
+          for client in /usr/sbin/sshd /usr/libexec/sshd-session /usr/libexec/sshd-keygen-wrapper; do
+            [ -x "$client" ] || continue
             sudo sqlite3 "/Library/Application Support/com.apple.TCC/TCC.db" "
               INSERT OR REPLACE INTO access
                 (service, client, client_type, auth_value, auth_reason, auth_version,

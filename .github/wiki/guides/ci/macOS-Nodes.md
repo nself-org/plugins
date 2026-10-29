@@ -16,7 +16,7 @@ Each check has one 600-second budget across all volumes. An owned file keeps the
 UID reserved. A timeout, unreadable mount listing, ambiguous mountpoint, or filesystem error also keeps the account at retirement
 and refuses new UID allocation. The root bootstrap process must be able to read
 the volumes it scans; grant Full Disk Access to its launcher where macOS privacy
-controls require it. Resolve inaccessible volumes or incomplete scans before
+controls require it. For SSH bootstrap, enable [Allow full disk access for remote users](https://support.apple.com/guide/mac-help/mchlp1066/mac). The disposable CI runner grants this access to its loopback SSH processes before starting the test server. Resolve inaccessible volumes or incomplete scans before
 retrying. Do not delete a retained account manually to bypass this protection.
 
 The macOS CI leg covers macOS 15 on arm64 and Intel. Both images run the local
