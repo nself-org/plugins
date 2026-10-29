@@ -2,10 +2,9 @@ package run
 
 import (
 	"context"
-	"strings"
+	"errors"
 	"testing"
 
-	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
@@ -16,14 +15,14 @@ func (f imageFunc) Image(c context.Context, a AttemptInfo) (string, error) { ret
 func TestContainerUsesOperatorImage(t *testing.T) {
 	for _, img := range []string{"untrusted:latest", "example/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"} {
 		t.Run(img, func(t *testing.T) {
-			called := false
+			calls := 0
 			rs := &runState{c: &Coordinator{Opts: Options{Container: true}}, hooks: Hooks{Image: imageFunc(func(context.Context, AttemptInfo) (string, error) {
-				called = true
+				calls++
 				return "operator@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", nil
 			})}}
 			p, err := rs.prepare(context.Background(), &AttemptInfo{Job: model.Job{Container: &model.ContainerConfig{Image: img}}})
-			if err != nil || !called || p.job.Container.Image == img {
-				t.Fatalf("image %v called %v error %v", p.job.Container, called, err)
+			if err != nil || calls != 1 || p.job.Container.Image == img {
+				t.Fatalf("image %v calls %v error %v", p.job.Container, calls, err)
 			}
 		})
 	}
@@ -37,34 +36,68 @@ func TestCacheKeyUsesOperatorImageDigest(t *testing.T) {
 	const opDigest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 	opImage := "operator@" + opDigest
 	jobImage := "job/toolchain@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-	var cacheDigest string
 	saved := Registered
 	t.Cleanup(func() { Registered = saved })
-	RegisterImage(imageFunc(func(context.Context, AttemptInfo) (string, error) { return opImage, nil }))
-	h := &cacheHook{
-		scanner: func() authz.ValueScanner { return Redactions },
-		environ: func() []string { return nil },
-		home:    func() string { return t.TempDir() },
-		probe:   func(context.Context, model.Job, string, []string) (string, error) { return "", nil },
-		warn:    func(string) {},
-	}
-	a := AttemptInfo{Job: model.Job{Container: &model.ContainerConfig{Image: jobImage}}}
-	cacheDigest = h.imageDigest(context.Background(), a)
-	if cacheDigest != opDigest {
-		t.Fatalf("cache digest %q want %q (job image must not leak into the key)", cacheDigest, opDigest)
-	}
-	rs := &runState{c: &Coordinator{Opts: Options{Container: true}}, hooks: Hooks{Image: imageFunc(func(context.Context, AttemptInfo) (string, error) { return opImage, nil })}}
+	RegisterImage(imageFunc(func(context.Context, AttemptInfo) (string, error) {
+		t.Fatal("cache must use the resolved execution image")
+		return "", nil
+	}))
+	a := AttemptInfo{Container: true, Job: model.Job{Container: &model.ContainerConfig{Image: jobImage}}}
+	cache := &digestCache{}
+	calls := 0
+	rs := &runState{c: &Coordinator{Opts: Options{Container: true}}, hooks: Hooks{Cache: cache, Image: imageFunc(func(context.Context, AttemptInfo) (string, error) {
+		calls++
+		return opImage, nil
+	})}}
 	p, err := rs.prepare(context.Background(), &a)
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
-	execDigest := ""
-	if p.job.Container != nil {
-		if _, d, ok := strings.Cut(p.job.Container.Image, "@"); ok {
-			execDigest = d
+	if p.job.Container.Image != opImage || cache.digest != opDigest || calls != 1 {
+		t.Fatalf("execution image %q cache digest %q image calls %d", p.job.Container.Image, cache.digest, calls)
+	}
+}
+
+type digestCache struct{ digest string }
+
+func (c *digestCache) Before(ctx context.Context, a AttemptInfo) (CacheSetup, error) {
+	c.digest = (&cacheHook{}).imageDigest(ctx, a)
+	return CacheSetup{}, nil
+}
+func (*digestCache) After(context.Context, AttemptInfo, Outcome) error { return nil }
+
+func TestCacheDigestUsesJobImageWithoutContainerOverride(t *testing.T) {
+	saved := Registered
+	t.Cleanup(func() { Registered = saved })
+	RegisterImage(imageFunc(func(context.Context, AttemptInfo) (string, error) {
+		t.Fatal("ordinary jobs must not resolve the operator image")
+		return "", nil
+	}))
+	for _, image := range []string{"", "job@sha256:dddd"} {
+		a := AttemptInfo{}
+		want := ""
+		if image != "" {
+			a.Job.Container = &model.ContainerConfig{Image: image}
+			want = "sha256:dddd"
+		}
+		if got := (&cacheHook{}).imageDigest(context.Background(), a); got != want {
+			t.Fatalf("image %q digest %q want %q", image, got, want)
 		}
 	}
-	if execDigest != cacheDigest {
-		t.Fatalf("exec digest %q != cache digest %q", execDigest, cacheDigest)
+}
+
+func TestPrepareImageFailurePrecedesCache(t *testing.T) {
+	for _, panicHook := range []bool{false, true} {
+		cache := &fakeCache{}
+		rs := &runState{c: &Coordinator{Opts: Options{Container: true}}, hooks: Hooks{Cache: cache, Image: imageFunc(func(context.Context, AttemptInfo) (string, error) {
+			if panicHook {
+				panic("image unavailable")
+			}
+			return "", errors.New("image unavailable")
+		})}}
+		p, err := rs.prepare(context.Background(), &AttemptInfo{})
+		if err == nil || p.cacheStarted {
+			t.Fatalf("panic %v error %v cache started %v", panicHook, err, p.cacheStarted)
+		}
 	}
 }

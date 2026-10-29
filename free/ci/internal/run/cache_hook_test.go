@@ -340,7 +340,9 @@ func TestRunTellsTheCacheHookAboutTheContainerOption(t *testing.T) {
 		r := newRig(t, map[string]model.Job{"build": sh("true")}, gitFake{})
 		rec := recordingCache{container: make(chan bool, 4)}
 		r.C.Hooks.Cache, r.C.Opts.Container = rec, container
-		r.C.Hooks.Image = nil
+		r.C.Hooks.Image = imageFunc(func(context.Context, AttemptInfo) (string, error) {
+			return "operator@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", nil
+		})
 		_ = outcome(r.run(t), "build")
 		select {
 		case got := <-rec.container:

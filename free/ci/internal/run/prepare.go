@@ -40,10 +40,18 @@ func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, e
 	// uses the same digest as execution (D-1036 review). The job's configured
 	// image is substituted under --container; using it for the cache key would
 	// fragment caches across toolchains and operator upgrades.
-	if rs.c.Opts.Container && rs.hooks.Image != nil {
-		if img, err := rs.hooks.Image.Image(ctx, *info); err == nil && img != "" {
-			info.Job.Container = &model.ContainerConfig{Image: img}
+	if rs.c.Opts.Container {
+		img := ""
+		if rs.hooks.Image != nil {
+			if err := guard("image hook", func() (e error) { img, e = rs.hooks.Image.Image(ctx, *info); return }); err != nil {
+				return p, err
+			}
 		}
+		if img == "" {
+			return p, fail(CodeOptions, "--container needs a pinned toolchain image and none is registered")
+		}
+		info.Job.Isolation, info.Job.Container = "container", &model.ContainerConfig{Image: img}
+		p.job = info.Job
 	}
 	if rs.hooks.Cache != nil {
 		p.cacheStarted = true
@@ -90,20 +98,6 @@ func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, e
 		if e := job.CheckDeclared(p.job); e != nil {
 			return p, releaseFailure(e)
 		}
-	}
-	if rs.c.Opts.Container {
-		img := ""
-		// --container selects the operator's pinned toolchain for every job.
-		if rs.hooks.Image != nil {
-			var err error
-			if err = guard("image hook", func() (e error) { img, e = rs.hooks.Image.Image(ctx, *info); return }); err != nil {
-				return p, err
-			}
-		}
-		if img == "" {
-			return p, fail(CodeOptions, "--container needs a pinned toolchain image and none is registered")
-		}
-		p.job.Isolation, p.job.Container = "container", &model.ContainerConfig{Image: img}
 	}
 	return p, nil
 }

@@ -83,6 +83,10 @@ Ported from core `nself runner provision|verify` (P7-CANON-10) with the same fla
 
 `nself-ci run --container` runs jobs in one pinned multi-arch toolchain image instead of the host's tools. Tools are checked against sha256 pins and the base image is pinned by digest (`free/ci/toolchain/pins/`). The image row is `pending` until its first publish.
 
+Container mode overrides any image declared by a job. The runner resolves the operator image once before restoring caches and uses that image for execution and the cache key. Without `--container`, a job's declared container image supplies its cache digest.
+
+The top-level `cache: {disable: true}` policy applies to local and remote attempts, including configurations selected with `--config` outside the repository. If preparation fails after cache restoration starts, the runner cleans up the attempt's cache state.
+
 | Env Var | Description |
 |---------|-------------|
 | `NSELF_CI_IMAGE` | Image for `--container` as `repo[:tag]@sha256:<64 hex>`. Overrides the pinned row; a tag-only reference is refused. |
