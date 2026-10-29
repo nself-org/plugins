@@ -34,6 +34,7 @@ var (
 type metric struct {
 	Name    string  `json:"name"`
 	Unit    string  `json:"unit"`
+	N       int     `json:"n"`
 	Leg     string  `json:"leg"`
 	Count   int     `json:"count"`
 	Min     float64 `json:"min"`
@@ -61,7 +62,7 @@ func recordPerf(leg, name, unit, context string, samples []float64) {
 	for _, v := range s {
 		sum += v
 	}
-	m := metric{Name: name, Unit: unit, Leg: leg, Count: len(s), Min: s[0], P50: quantile(s, 0.50), P95: quantile(s, 0.95),
+	m := metric{Name: name, Unit: unit, N: len(s), Leg: leg, Count: len(s), Min: s[0], P50: quantile(s, 0.50), P95: quantile(s, 0.95),
 		P99: quantile(s, 0.99), Max: s[len(s)-1], Mean: sum / float64(len(s)), Context: context}
 	perf.mu.Lock()
 	perf.metrics = append(perf.metrics, m)
@@ -117,7 +118,8 @@ func writePerf(path string) error {
 		return nil
 	}
 	sort.SliceStable(perf.metrics, func(i, j int) bool { return perf.metrics[i].Name < perf.metrics[j].Name })
-	doc := map[string]any{"schema": "perfbench/v1", "suite": "plugins/free/ci/test/sim", "command": strings.Join(os.Args, " "),
+	doc := map[string]any{"schema": "perfbench/v1", "scenario": "node-scenarios", "sha": revision(), "goos": runtime.GOOS, "goarch": runtime.GOARCH,
+		"runs": 1, "injected": false, "suite": "plugins/free/ci/test/sim", "command": strings.Join(os.Args, " "),
 		"revision": revision(), "measured_at": time.Now().UTC().Format(time.RFC3339), "environment": environment(), "metrics": perf.metrics}
 	b, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
