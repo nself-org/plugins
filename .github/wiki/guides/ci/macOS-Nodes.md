@@ -9,7 +9,10 @@ The inventory excludes `devfs` and `autofs` pseudo filesystems. Other filesystem
 types are scanned, including mounts outside the usual volume directory and paths
 containing spaces.
 
-Each check has one 30-second budget across all volumes. An owned file keeps the
+Allocation walks once for the entire UID range, caching the owned IDs for all accounts.
+Files removed during traversal are ignored by `find -ignore_readdir_race`;
+missing starting mountpoints and other errors still fail closed.
+Each check has one 600-second budget across all volumes. An owned file keeps the
 UID reserved. A timeout, unreadable mount listing, ambiguous mountpoint, or filesystem error also keeps the account at retirement
 and refuses new UID allocation. The root bootstrap process must be able to read
 the volumes it scans; grant Full Disk Access to its launcher where macOS privacy

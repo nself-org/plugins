@@ -71,7 +71,7 @@ done`, seconds, dirs, ownershipVolumeScript(match, action))
 func ownershipVolumeScript(match, action string) string {
 	return fmt.Sprintf(`  scan_budget=$((scan_deadline - $(date +%%s)))
   if [ "$scan_budget" -le 0 ]; then echo scan-incomplete; break; fi
-  find "$d" -xdev %s %s 2>/dev/null &
+  find "$d" -xdev -ignore_readdir_race %s %s 2>/dev/null &
   scan_pid=$!
   (sleep "$scan_budget" & sleeper=$!; trap 'kill "$sleeper" 2>/dev/null || true; exit 0' TERM; wait "$sleeper"; kill -KILL "$scan_pid" 2>/dev/null || true) >/dev/null 2>&1 &
   timer_pid=$!

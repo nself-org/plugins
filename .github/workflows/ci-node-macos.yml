@@ -117,6 +117,7 @@ jobs:
         run: |
           set -euo pipefail
           export NSELF_MACOS_LEG_USER="$USER"
+          go test -mod=vendor -tags macosleg -count=1 -v -timeout 12m -run '^TestHostedOwnershipInventory$' ./internal/nodes/bootstrap/darwin
           set +e
           go test -mod=vendor -tags macosleg -count=1 -v -timeout 35m -run 'TestMacOSNode' ./test/macos/ 2>&1 | tee "$RUNNER_TEMP/leg.log"
           rc=${PIPESTATUS[0]}
