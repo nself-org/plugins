@@ -27,7 +27,7 @@ func usersScript(slots int) string {
 held_loaded=
 load_held() {
   [ -z "$held_loaded" ] || return 0
-  held_ids=$({ %[5]s; } 2>/dev/null | sort -u)
+  held_ids=$({ %[5]s; } | sort -u)
   case "$held_ids" in *scan-incomplete*) echo "ownership scan incomplete" >&2; return 1 ;; esac
   held_loaded=1
 }

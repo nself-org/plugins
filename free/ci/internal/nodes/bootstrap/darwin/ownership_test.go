@@ -21,7 +21,7 @@ func TestOwnershipScanFindsDeepOwnedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	script := boundedOwnershipScan("'"+dir+"'", fmt.Sprintf("-type f -uid %d", os.Getuid()), 5)
-	out, err := exec.Command("sh", "-c", script).CombinedOutput()
+	out, err := exec.Command("sh", "-c", script).Output()
 	if err != nil || strings.TrimSpace(string(out)) != file {
 		t.Fatalf("deep ownership scan = %q, %v; want %q", out, err, file)
 	}
@@ -38,12 +38,12 @@ func TestMountedOwnershipScanPreservesNonstandardMountpoint(t *testing.T) {
 	}
 	listing := "echo 'devfs on /missing-dev (devfs, local)'; echo 'map on /missing-autofs (autofs, automounted)'; echo '/dev/test on " + dir + " (apfs, local)'"
 	script := mountedOwnershipScan(listing, fmt.Sprintf("-type f -uid %d", os.Getuid()), 30)
-	out, err := exec.Command("sh", "-c", script).CombinedOutput()
+	out, err := exec.Command("sh", "-c", script).Output()
 	if err != nil || strings.TrimSpace(string(out)) != file {
 		t.Fatalf("mounted ownership scan = %q, %v; want %q", out, err, file)
 	}
 	for _, command := range []string{"false", "echo malformed", "echo '/dev/test on /truncated (apfs'", "echo '/dev/test on /empty ()'", "echo '/dev/test on /path on /ambiguous (apfs, local)'"} {
-		out, err := exec.Command("sh", "-c", mountedOwnershipScan(command, "-uid 450", 30)).CombinedOutput()
+		out, err := exec.Command("sh", "-c", mountedOwnershipScan(command, "-uid 450", 30)).Output()
 		if err != nil || strings.TrimSpace(string(out)) != "scan-incomplete" {
 			t.Fatalf("invalid mount listing = %q, %v", out, err)
 		}
@@ -57,6 +57,10 @@ func TestOwnershipScanFailsClosed(t *testing.T) {
 		{"deep file", "echo /volume/a/b/c/d/e/f/owned", "/volume/a/b/c/d/e/f/owned"},
 		{"unreadable", "return 1", "scan-incomplete"},
 		{"timeout", "exec sleep 60", "scan-incomplete"},
+		{"protected folders only", "echo '/a: Operation not permitted' >&2; return 1", ""},
+		{"protected folder and a hit", "echo /a/owned; echo 'find: /b: Operation not permitted' >&2; return 1", "/a/owned"},
+		{"protected folder and another error", "echo '/a: Operation not permitted' >&2; echo '/b: Input/output error' >&2; return 1", "scan-incomplete"},
+		{"error status 2 with the protected message", "echo '/a: Operation not permitted' >&2; return 2", "scan-incomplete"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			start := time.Now()
@@ -65,7 +69,7 @@ func TestOwnershipScanFailsClosed(t *testing.T) {
 				budget = 5
 			}
 			script := "set -eu\nfind() { " + tc.find + "; }\n" + boundedOwnershipScan("/", "-uid 450", budget)
-			out, err := exec.Command("sh", "-c", script).CombinedOutput()
+			out, err := exec.Command("sh", "-c", script).Output()
 			if err != nil || strings.TrimSpace(string(out)) != tc.want {
 				t.Fatalf("scan = %q, %v; want %q", out, err, tc.want)
 			}
@@ -111,7 +115,7 @@ func TestOwnershipScanDoesNotProbeMetadataOutsideWatchdog(t *testing.T) {
 func TestMountedOwnershipScanFailsClosedOnMissingMountpoint(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "gone")
 	listing := "echo '/dev/test on " + missing + " (apfs, local)'"
-	out, err := exec.Command("sh", "-c", mountedOwnershipScan(listing, "-uid 450", 30)).CombinedOutput()
+	out, err := exec.Command("sh", "-c", mountedOwnershipScan(listing, "-uid 450", 30)).Output()
 	if err != nil || strings.TrimSpace(string(out)) != "scan-incomplete" {
 		t.Fatalf("missing mountpoint = %q, %v", out, err)
 	}
@@ -152,12 +156,12 @@ func TestHeldIDsScanReportsOwnersInRange(t *testing.T) {
 	}
 	uid := os.Getuid()
 	script := boundedScan("'"+dir+"'", heldIDsMatch(uid, uid), heldIDsAction, 30)
-	out, err := exec.Command("sh", "-c", script).CombinedOutput()
+	out, err := exec.Command("sh", "-c", script).Output()
 	if got := strings.Fields(string(out)); err != nil || len(got) == 0 || got[0] != fmt.Sprint(uid) {
 		t.Fatalf("held ids = %q, %v; want %d", out, err, uid)
 	}
 	script = boundedScan("'"+dir+"'", heldIDsMatch(uid+1, uid+5), heldIDsAction, 30)
-	if out, err := exec.Command("sh", "-c", script).CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != "" {
+	if out, err := exec.Command("sh", "-c", script).Output(); err != nil || strings.TrimSpace(string(out)) != "" {
 		t.Fatalf("out-of-range owners = %q, %v; want none", out, err)
 	}
 }
