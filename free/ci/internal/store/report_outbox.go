@@ -13,6 +13,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 )
 
 //go:embed migrations/report-outbox/*.sql
@@ -66,6 +67,17 @@ func (s *Store) OutboxReady(ctx context.Context, revision, statusContext string,
 		}
 		return nil
 	})
+}
+
+// OutboxDecision is the payload of the newest entry of (revision, context) that holds one: the status the
+// run was authorized to post, after the publisher, the release veto and the publish gates (D-1320). ok is
+// false when no entry holds a payload (the run never reached its status).
+func (s *Store) OutboxDecision(ctx context.Context, revision, statusContext string) (payload []byte, ok bool, err error) {
+	err = s.readers.QueryRowContext(ctx, "SELECT payload_json FROM outbox WHERE revision=? AND context=? AND payload_json IS NOT NULL ORDER BY seq DESC LIMIT 1", revision, statusContext).Scan(&payload)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	}
+	return payload, err == nil, err
 }
 
 // OutboxUnposted lists deliverable entries, oldest first.

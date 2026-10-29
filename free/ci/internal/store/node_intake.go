@@ -93,14 +93,17 @@ func newIntakeID() string {
 }
 
 // resendable is true for a done intake row i whose newest evidence is a bound, whole-gate GitHub result
-// (pass, fail or error) of its own revision: the only rows a status can be sent again for (D-1320). A
-// partial, unbound or cancelled run, or one without evidence, never posted a status on purpose, so a
-// head-scan trigger must build the head instead of folding into it. Keep in step with rereportDone.
+// (pass, fail or error) of its own revision and whose commit has a recorded status decision (the outbox
+// payload, which carries the release veto the evidence lacks): the only rows a status can be sent again
+// for (D-1320). A partial, unbound or cancelled run, or one without evidence or decision, never posted a
+// status on purpose, so a head-scan trigger must build the head instead of folding into it. Keep in step
+// with rereportDone.
 const resendable = `(i.source='github' AND i.pipeline='' AND i.pipeline_id<>'' AND EXISTS (
 	SELECT 1 FROM evidence e WHERE e.id=(SELECT e2.id FROM evidence e2 WHERE e2.pipeline_id=i.pipeline_id ORDER BY e2.created_at DESC LIMIT 1)
 	AND json_extract(CAST(e.body AS TEXT),'$.binding.state')='bound'
 	AND json_extract(CAST(e.body AS TEXT),'$.revision')=i.revision
-	AND json_extract(CAST(e.body AS TEXT),'$.result') IN ('pass','fail','error')))`
+	AND json_extract(CAST(e.body AS TEXT),'$.result') IN ('pass','fail','error'))
+	AND EXISTS (SELECT 1 FROM outbox o WHERE o.revision=i.revision AND o.context='nself-ci@'||i.project AND o.payload_json IS NOT NULL))`
 
 // IntakeEnqueue stores a trigger in one transaction with its delivery and key rows (and the audit row of
 // a forced enqueue). The caller may answer 2xx once it returns without error.

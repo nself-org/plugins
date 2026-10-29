@@ -11,7 +11,8 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
-// D-1320: the stored result of a finished, bound run is queued again; anything the run would not have
+// D-1320: the status a finished, bound run was authorized to post is queued again, not the evidence result
+// (a failed release publication vetoes a passing run in the outbox only); anything the run would not have
 // posted is not.
 func TestRereportDoneQueuesTheStoredResult(t *testing.T) {
 	ctx := context.Background()
@@ -21,14 +22,18 @@ func TestRereportDoneQueuesTheStoredResult(t *testing.T) {
 		bind     model.BindingState
 		result   model.Result
 		pipeline string
+		posted   report.State // the status the run queued; "" = none was recorded
 		want     report.State
 	}{
-		{"pass", "bound", "pass", "", report.Success},
-		{"fail", "bound", "fail", "", report.Failure},
-		{"error", "bound", "error", "", report.Error},
-		{"unbound run", "unbound", "pass", "", ""},
-		{"partial run", "bound", "pass", "release", ""},
-		{"other result", "bound", "cancelled", "", ""},
+		{"pass", "bound", "pass", "", report.Success, report.Success},
+		{"fail", "bound", "fail", "", report.Failure, report.Failure},
+		{"error", "bound", "error", "", report.Error, report.Error},
+		{"publication failed after a passing gate", "bound", "pass", "", report.Failure, report.Failure},
+		{"pass without a recorded decision", "bound", "pass", "", "", ""},
+		{"success recorded for a failed run", "bound", "fail", "", report.Success, ""},
+		{"unbound run", "unbound", "pass", "", report.Success, ""},
+		{"partial run", "bound", "pass", "release", report.Success, ""},
+		{"other result", "bound", "cancelled", "", report.Failure, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
@@ -45,13 +50,29 @@ func TestRereportDoneQueuesTheStoredResult(t *testing.T) {
 			if err = st.RecordRunEvidence(ctx, "ev1", "run-1", rev, "cfg", body); err != nil {
 				t.Fatal(err)
 			}
+			if c.posted != "" { // what finishing the run queued through the outbox, after the release veto
+				seq, err := st.OutboxReserve(ctx, rev, "nself-ci@o/r")
+				if err != nil {
+					t.Fatal(err)
+				}
+				payload, _ := json.Marshal(report.Status{Owner: "o", Repo: "r", Revision: rev, State: c.posted, Description: "run"})
+				if err = st.OutboxReady(ctx, rev, "nself-ci@o/r", seq, payload); err != nil {
+					t.Fatal(err)
+				}
+			}
 			row := store.IntakeRow{Source: "github", Project: "o/r", Revision: rev, PipelineID: "run-1", Pipeline: c.pipeline}
 			if err = rereportDone(st)(ctx, row); err != nil {
 				t.Logf("delivery error (no remote in the test): %v", err)
 			}
-			items, err := st.OutboxList(ctx)
+			all, err := st.OutboxList(ctx)
 			if err != nil {
 				t.Fatal(err)
+			}
+			var items []store.OutboxItem // without the entry the run itself recorded
+			for _, it := range all {
+				if it.Seq > 1 || c.posted == "" {
+					items = append(items, it)
+				}
 			}
 			if c.want == "" {
 				if len(items) != 0 {

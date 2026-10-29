@@ -21,6 +21,15 @@ func recordRun(t *testing.T, s *Store, id, revision, result, binding string) {
 	}
 }
 
+// recordDecision leaves the status the run was authorized to post for the revision of req(): the record a
+// sweep needs to send a result again (it carries a release veto the evidence lacks).
+func recordDecision(t *testing.T, s *Store, revision string) {
+	t.Helper()
+	if _, err := s.OutboxEnqueue(context.Background(), revision, "nself-ci@o/r", []byte(`{"state":"success"}`)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // doneRow leaves one finished github push run for key k, 71 h old.
 func doneRow(t *testing.T) (*Store, string) {
 	t.Helper()
@@ -33,6 +42,7 @@ func doneRow(t *testing.T) (*Store, string) {
 		t.Fatal(err)
 	}
 	recordRun(t, s, "run", "abc1234", "pass", "bound")
+	recordDecision(t, s, "abc1234")
 	if err := s.IntakeFinish(ctx, a.ID, "me", "run", "exit=0", true); err != nil {
 		t.Fatal(err)
 	}
@@ -70,6 +80,7 @@ func TestIntakeReconcileFoldsWhatTheWebhookBuilt(t *testing.T) {
 	a, _ := s.IntakeEnqueue(ctx, first)
 	_, _, _ = s.IntakeClaim(ctx, "me")
 	recordRun(t, s, "run", "abc1234", "pass", "bound")
+	recordDecision(t, s, "abc1234")
 	_ = s.IntakeFinish(ctx, a.ID, "me", "run", "exit=0", true)
 	clk.add(71 * time.Hour)
 	r := req("reconcile:o/r:abc1234", "k")
@@ -106,13 +117,14 @@ func TestIntakeReconcileDoesNotFoldIntoFailedRow(t *testing.T) {
 func TestIntakeReconcileDoesNotFoldIntoRowWithoutResendableResult(t *testing.T) {
 	for _, c := range []struct {
 		name, result, binding, pipeline, evRevision string
-		noEvidence                                  bool
+		noEvidence, noDecision                      bool
 	}{
-		{"cancelled run", "cancelled", "bound", "", "abc1234", false},
-		{"unbound run", "pass", "unbound", "", "abc1234", false},
-		{"partial run", "pass", "bound", "release", "abc1234", false},
-		{"run of another revision", "pass", "bound", "", "def5678", false},
-		{"run without evidence", "", "", "", "", true},
+		{"cancelled run", "cancelled", "bound", "", "abc1234", false, false},
+		{"unbound run", "pass", "unbound", "", "abc1234", false, false},
+		{"partial run", "pass", "bound", "release", "abc1234", false, false},
+		{"run of another revision", "pass", "bound", "", "def5678", false, false},
+		{"run without evidence", "", "", "", "", true, false},
+		{"run without a recorded decision", "pass", "bound", "", "abc1234", false, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -123,6 +135,9 @@ func TestIntakeReconcileDoesNotFoldIntoRowWithoutResendableResult(t *testing.T) 
 			_, _, _ = s.IntakeClaim(ctx, "me")
 			if !c.noEvidence {
 				recordRun(t, s, "run", c.evRevision, c.result, c.binding)
+				if !c.noDecision {
+					recordDecision(t, s, "abc1234")
+				}
 			}
 			if err := s.IntakeFinish(ctx, a.ID, "me", "run", "exit=0", true); err != nil {
 				t.Fatal(err)

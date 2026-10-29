@@ -22,6 +22,9 @@ func recordBoundRun(t *testing.T, st *store.Store, id string) {
 	if err := st.RecordRunEvidence(ctx, "ev-"+id, id, testSHA, "cfg", body); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := st.OutboxEnqueue(ctx, testSHA, "nself-ci@o/r", []byte(`{"state":"success"}`)); err != nil { // the status the run was authorized to post
+		t.Fatal(err)
+	}
 }
 
 func TestReconcileDeliveryRereportsFinishedRun(t *testing.T) {
