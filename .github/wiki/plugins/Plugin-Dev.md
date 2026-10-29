@@ -19,6 +19,7 @@
 
 | Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
 |---|---|---|---|---|---|---|
+| `nself plugin-dev` | `nself_plugin_dev` | `/v1/commands/plugin-dev` | write | document | MCP and HTTP | none |
 | `nself plugin-dev debug` | - | - | write | document | CLI only (surface cli-only) | none |
 | `nself plugin-dev dev` | - | - | write | stream | CLI only (surface cli-only) | none |
 | `nself plugin-dev init` | - | - | write | document | CLI only (surface cli-only) | none |

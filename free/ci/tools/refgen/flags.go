@@ -19,6 +19,7 @@ import (
 // flagDefs maps a FlagSet method to the index of its name argument.
 var flagDefs = map[string]int{
 	"Bool": 0, "String": 0, "Int": 0, "Int64": 0, "Uint": 0, "Float64": 0, "Duration": 0,
+	"Func": 0, "BoolFunc": 0,
 	"BoolVar": 1, "StringVar": 1, "IntVar": 1, "Int64Var": 1, "UintVar": 1, "Float64Var": 1, "DurationVar": 1, "Var": 1,
 }
 
@@ -28,7 +29,93 @@ type FlagRow struct {
 	Commands []string
 }
 
-// flagRows returns the flags of the cmd package, sorted by name.
+// flagPackages lists the packages outside cmd that define flags of a verb,
+// with the verb that owns them: `nodes add` builds its FlagSet in
+// internal/nodes/lifecycle, and serve flags are added by packages through
+// coordinator.RegisterFlag. TestNoFlagDefinedOutsideScannedPackages fails
+// when another package defines a flag, so a flag is never silently omitted.
+var flagPackages = map[string]string{
+	modulePath + "/internal/nodes/lifecycle":   "nodes",
+	modulePath + "/internal/coordinator/drain": "serve",
+	modulePath + "/internal/config":            "config",
+	modulePath + "/internal/doctor":            "doctor",
+	modulePath + "/internal/discovery":         "nodes discover",
+}
+
+// listenerVerb owns every flag registered with coordinator.RegisterListener:
+// the listener flags are serve flags whichever file registers them.
+const listenerVerb = "serve"
+
+// fileFlagNames returns the flag names a file defines on a FlagSet.
+func fileFlagNames(m *module, p *pkg, f *srcFile) ([]string, error) {
+	var names []string
+	var bad error
+	ast.Inspect(f.ast, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		i, ok := flagDefs[sel.Sel.Name]
+		if !ok || len(call.Args) <= i || len(call.Args) < 2 {
+			return true
+		}
+		name, ok := m.str(p, f, call.Args[i], nil)
+		if !ok {
+			if _, lit := call.Args[i].(*ast.BasicLit); lit {
+				bad = fmt.Errorf("%s: flag name not resolvable", f.name)
+			}
+			return true
+		}
+		names = append(names, name)
+		return true
+	})
+	return names, bad
+}
+
+// listenerFlagNames returns the flag names a file registers through
+// RegisterListener(name, flag, ...), expanding a range over a literal list
+// (`for _, l := range []struct{...}{...} { RegisterListener(l.name, l.flag, ...) }`).
+// A flag name it cannot resolve is an error: the table would silently lose a flag.
+func listenerFlagNames(m *module, p *pkg, f *srcFile) ([]string, error) {
+	var names []string
+	var bad error
+	w := walker{m: m, p: p, f: f}
+	w.walk(f.ast, nil, nil, func(call *ast.CallExpr, env map[string][]string, it map[string]string) {
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "RegisterListener" || len(call.Args) < 2 {
+			return
+		}
+		got := m.strs(p, f, call.Args[1], env)
+		if s, ok := call.Args[1].(*ast.SelectorExpr); ok && len(got) == 0 {
+			if v, ok := it[s.Sel.Name]; ok {
+				got = []string{v}
+			}
+		}
+		if len(got) == 0 {
+			bad = fmt.Errorf("%s: RegisterListener flag name not resolvable", f.name)
+			return
+		}
+		names = append(names, got...)
+	})
+	return names, bad
+}
+
+// ownersOfVerb returns the keys of the commands that are verb or start with it.
+func ownersOfVerb(cmds []Command, verb string) []string {
+	var out []string
+	for _, c := range cmds {
+		if c.Key == verb || strings.HasPrefix(c.Key, verb+" ") {
+			out = append(out, c.Key)
+		}
+	}
+	return out
+}
+
+// flagRows returns the flags of the cmd package and of flagPackages, sorted by name.
 func flagRows(m *module, cmds []Command) ([]FlagRow, error) {
 	p := m.pkgs[modulePath+"/cmd"]
 	if p == nil {
@@ -41,6 +128,15 @@ func flagRows(m *module, cmds []Command) ([]FlagRow, error) {
 		}
 	}
 	got := map[string]map[string]bool{}
+	add := func(name string, owners []string) {
+		if got[name] == nil {
+			got[name] = map[string]bool{}
+		}
+		for _, o := range owners {
+			got[name][o] = true
+		}
+	}
+	serve := ownersOfVerb(cmds, listenerVerb)
 	for _, f := range p.files {
 		owners := byFile[f.name]
 		if len(owners) == 0 {
@@ -54,37 +150,34 @@ func flagRows(m *module, cmds []Command) ([]FlagRow, error) {
 				}
 			}
 		}
-		var bad error
-		ast.Inspect(f.ast, func(n ast.Node) bool {
-			call, ok := n.(*ast.CallExpr)
-			if !ok {
-				return true
+		names, err := fileFlagNames(m, p, f)
+		if err != nil {
+			return nil, err
+		}
+		for _, n := range names {
+			add(n, owners)
+		}
+		if names, err = listenerFlagNames(m, p, f); err != nil {
+			return nil, err
+		}
+		for _, n := range names {
+			add(n, serve)
+		}
+	}
+	for path, verb := range flagPackages {
+		ep := m.pkgs[path]
+		if ep == nil {
+			return nil, fmt.Errorf("flag package %s not found", path)
+		}
+		owners := ownersOfVerb(cmds, verb)
+		for _, f := range ep.files {
+			names, err := fileFlagNames(m, ep, f)
+			if err != nil {
+				return nil, err
 			}
-			sel, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok {
-				return true
+			for _, n := range names {
+				add(n, owners)
 			}
-			i, ok := flagDefs[sel.Sel.Name]
-			if !ok || len(call.Args) <= i || len(call.Args) < 2 {
-				return true
-			}
-			name, ok := m.str(p, f, call.Args[i], nil)
-			if !ok {
-				if _, lit := call.Args[i].(*ast.BasicLit); lit {
-					bad = fmt.Errorf("%s: flag name not resolvable", f.name)
-				}
-				return true
-			}
-			if got[name] == nil {
-				got[name] = map[string]bool{}
-			}
-			for _, o := range owners {
-				got[name][o] = true
-			}
-			return true
-		})
-		if bad != nil {
-			return nil, bad
 		}
 	}
 	var out []FlagRow

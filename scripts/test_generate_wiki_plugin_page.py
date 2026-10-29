@@ -256,6 +256,21 @@ class MachineSurfaceTests(WikiPagesCase):
         self.assertIn("| `nself ci nodes provision` | `nself_ci_nodes_provision` | `/v1/commands/ci/nodes/provision` |", text)
         self.assertIn("| `nself ci serve` | - | - | read | document | CLI only (json none) | none |", text)
 
+    def test_bare_hub_command_has_its_own_row(self):
+        """`nself ci` (tool nself_ci) is a command too: a manifest with subcommands still gets the hub's own row."""
+        self.generate_all()
+        text = self.page("CI.md")
+        self.assertIn("| `nself ci` | `nself_ci` | `/v1/commands/ci` | read | document | MCP and HTTP | none |", text)
+        rows = [r for r in text.splitlines() if r.startswith("| `nself ci")]
+        self.assertEqual(rows[0].split("|")[1].strip(), "`nself ci`", "the bare command sorts before its subcommands")
+
+    def test_bare_hub_row_carries_its_confirmation(self):
+        manifest = ci_manifest(["run"])
+        manifest["commands"].update({"side_effect": "remote", "confirm": {"flags": []}})
+        rows = dict(gen.machine_rows(manifest))
+        self.assertEqual(sorted(rows), ["ci", "ci run"])
+        self.assertEqual(gen.exposure(rows["ci"]), ("MCP and HTTP", "", "nonce"))
+
     def test_stream_read_row_is_http_only(self):
         self.write_manifest(["run"])
         path = os.path.join(self.root, "free", "ci", "plugin.json")

@@ -19,6 +19,7 @@
 
 | Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
 |---|---|---|---|---|---|---|
+| `nself eval` | - | - | remote | document | CLI only (json none) | none |
 | `nself eval gate` | - | - | read | document | CLI only (json legacy) | none |
 
 <!-- END GENERATED:machine-surface -->

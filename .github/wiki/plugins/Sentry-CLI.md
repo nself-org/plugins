@@ -19,6 +19,7 @@
 
 | Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
 |---|---|---|---|---|---|---|
+| `nself sentry` | `nself_sentry` | `/v1/commands/sentry` | read | document | MCP and HTTP | none |
 | `nself sentry alerts channels` | `nself_sentry_alerts_channels` | `/v1/commands/sentry/alerts/channels` | read | document | MCP and HTTP | none |
 | `nself sentry alerts test` | - | - | remote | document | CLI only (remote without confirm) | none |
 | `nself sentry incidents ack` | `nself_sentry_incidents_ack` | `/v1/commands/sentry/incidents/ack` | write | document | MCP and HTTP | none |

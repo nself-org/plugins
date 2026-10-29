@@ -19,6 +19,7 @@
 
 | Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
 |---|---|---|---|---|---|---|
+| `nself ci` | `nself_ci` | `/v1/commands/ci` | remote | document | MCP and HTTP | nonce |
 | `nself ci artifacts` | `nself_ci_artifacts` | `/v1/commands/ci/artifacts` | read | document | MCP and HTTP | none |
 | `nself ci build` | - | - | remote | document | CLI only (json none) | none |
 | `nself ci config ignore add` | - | - | write | document | CLI only (json none) | none |
