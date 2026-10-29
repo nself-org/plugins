@@ -12,7 +12,7 @@ package verify
 // SHA256SUMS and every file digest, evidence digest and revision, provenance
 // signature and subjects, SBOM links, then the evidence verdict at the released
 // revision. Nothing runs a process but git through the exec funnel; nothing
-// writes. The claimed level is exactly Build L1 and Result carries no other.
+// writes but the optional audit row of a refusal. The claimed level is exactly Build L1 and Result carries no other.
 
 import (
 	"context"
@@ -59,6 +59,9 @@ type Options struct {
 	// Quarantined tells whether the evidence was quarantined; nil quarantines
 	// nothing. An error fails closed as quarantined.
 	Quarantined func(ctx context.Context, ev model.Evidence) (bool, error)
+	// Audit, when set, records a refused verification (release.verify.refused
+	// with the reason key; TM-18). Its error is a Result warning, never a pass.
+	Audit func(ctx context.Context, actor, action, target, detail string) error
 }
 
 // Result is the outcome of Release; it is what `artifacts verify --json` prints.
@@ -109,15 +112,26 @@ func Release(ctx context.Context, dir string, opt Options) Result {
 		{"provenance", r.provenance}, {"sbom_link", r.sbomLinks}, {"evidence_verdict", r.evidenceVerdict},
 	}
 	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
-		return res.fail(fail(ReasonReleaseMissing, "%s is not a release directory", dir))
+		return r.refused(res.fail(fail(ReasonReleaseMissing, "%s is not a release directory", dir)))
 	}
 	for _, s := range steps {
 		if f := s.fn(); f != nil {
-			return res.fail(f)
+			return r.refused(res.fail(f))
 		}
 		res.Passed = append(res.Passed, s.name)
 	}
 	res.Verified, res.Exit = true, ExitVerified
+	return res
+}
+
+// refused writes the refusal's audit row when Options.Audit is set.
+func (r *run) refused(res Result) Result {
+	if r.opt.Audit == nil {
+		return res
+	}
+	if err := r.opt.Audit(r.ctx, "release", "release.verify.refused", r.dir, "reason="+res.Reason+" code="+res.Code); err != nil {
+		res.Warnings = append(res.Warnings, "the refusal could not be audited: "+err.Error())
+	}
 	return res
 }
 

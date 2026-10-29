@@ -11,7 +11,10 @@ package specs
 // only after every blob was Put; nothing is committed for a cache with no
 // files in it (a hit on an empty entry would keep the next run from filling
 // it); restore refuses (and drops) an entry whose blob set is not exactly the
-// spec's dirs or whose archive the path sanitiser rejects.
+// spec's dirs or whose archive the path sanitiser rejects, refuses (E711
+// blob_invalid) an entry whose stored blob is missing, short or fails its
+// digest, and refuses (E711 secret_match) a read-only snapshot of a
+// secret-bearing writer; each refusal writes a cache.restore.refused row.
 
 import (
 	"context"
@@ -68,9 +71,17 @@ func (d Dirs) names() []string {
 // is (false, nil). A refused entry is dropped, the dirs are emptied and the
 // error carries the sanitiser's E683 or the reason.
 func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace, key string, access authz.Mode, spec Spec, dirs Dirs, opt UnpackOptions) (hit bool, bytes int64, err error) {
-	m, ok, err := e.Entries.LookupForRestore(ctx, ns, key, access)
-	if err != nil || !ok {
+	m, ok, refused, err := e.Entries.ResolveForRestore(ctx, ns, key, access)
+	if err != nil {
 		return false, 0, err
+	}
+	if refused != "" { // found under the key but never served: refused, not missed (TM-12, TM-15)
+		r := &entries.Refused{Op: "restore", Reason: refused}
+		_ = e.Backend.AppendAudit(ctx, "cache", "cache.restore.refused", key, "reason="+refused)
+		return false, 0, r
+	}
+	if !ok {
+		return false, 0, nil
 	}
 	if !e.writerPassed(ctx, m) { // a cancel won after the commit and nobody retracted it (or a crash): never serve it
 		return false, 0, nil
@@ -90,6 +101,9 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 	if err == nil {
 		return true, m.Bytes(), nil
 	}
+	if blobFault(err) { // the stored bytes fail their digest or size: the entry's blob is invalid
+		err = &entries.Refused{Op: "restore", Reason: entries.ReasonBlobInvalid, Err: err}
+	}
 	for _, d := range dirs {
 		_ = removeIn(base, d)
 	}
@@ -100,7 +114,18 @@ func (e *Engine) Restore(ctx context.Context, base *os.Root, ns authz.Namespace,
 		_, _ = e.Backend.CacheDrop(ctx, m, "unrestorable")
 	}
 	_ = e.Backend.AppendAudit(ctx, "cache", "cache.restore.refused", key, "reason="+refusalKey(err))
+	var refusal *entries.Refused
+	if errors.As(err, &refusal) {
+		return false, 0, err
+	}
 	return false, 0, fmt.Errorf("cache restore refused: %w", err)
+}
+
+// blobFault reports whether err is the blob store refusing the stored bytes
+// (E710 digest or size mismatch, or a file that changed under the read).
+func blobFault(err error) bool {
+	var ce *cas.Error
+	return errors.As(err, &ce) || errors.Is(err, cas.ErrInvalid)
 }
 
 // writerPassed reports whether the attempt that committed m settled passed. An
@@ -174,6 +199,10 @@ func refusalKey(err error) string {
 	var pe *authz.PathError
 	if errors.As(err, &pe) {
 		return string(pe.Reason)
+	}
+	var re *entries.Refused
+	if errors.As(err, &re) {
+		return re.Reason
 	}
 	return "unreadable"
 }

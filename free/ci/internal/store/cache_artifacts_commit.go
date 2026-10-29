@@ -5,7 +5,7 @@ package store
 // the current epoch, after the caller re-hashed every blob.
 // Inputs: attempt id, epoch, the verified staged records, a records.Policy.
 // Outputs: the 80 % warning text; *records.Error (E711 stale capability,
-// E712 size_cap) after one audit row.
+// E712 size_cap, digest_mismatch, uncommitted) after one audit row.
 // Constraints: one writer transaction re-reads the attempt, the staged rows
 // and the committed byte sums; the rows the caller verified must be exactly
 // the rows that are staged now; released-kind bytes count toward the cap.
@@ -56,14 +56,16 @@ func (s *Store) ArtifactCommit(ctx context.Context, attempt string, epoch int64,
 		var add int64
 		for _, v := range verified {
 			r, ok := staged[v.ID]
-			if !ok || r.SHA256 != v.SHA256 || r.Size != v.Size {
-				return records.Failf(records.ReasonDigest, "record %q is not the staged record that was verified", v.Name)
+			if !ok || r.SHA256 != v.SHA256 || r.Size != v.Size { // overwrite or substitution (TM-15): refused and audited
+				refusal = records.Failf(records.ReasonDigest, "record %q is not the staged record that was verified", v.Name)
+				return s.appendAudit(ctx, tx, "artifacts", "artifact.commit.refused", attempt, "reason="+records.ReasonDigest)
 			}
 			add += r.Size
 			delete(staged, v.ID)
 		}
 		if len(staged) > 0 {
-			return records.Failf(records.ReasonUncommitted, "%d staged record(s) of %s were not verified", len(staged), attempt)
+			refusal = records.Failf(records.ReasonUncommitted, "%d staged record(s) of %s were not verified", len(staged), attempt)
+			return s.appendAudit(ctx, tx, "artifacts", "artifact.commit.refused", attempt, "reason="+records.ReasonUncommitted)
 		}
 		u, err := artUsage(ctx, tx, project)
 		if err != nil {
