@@ -43,6 +43,11 @@ jobs:
           fetch-depth: 0
 
       # The tools .nself/ci.yaml names, taken from PATH: go (ci-vet, ci-test) and gitleaks (secrets-tree).
+      - name: Check the CI agent reference
+        run: |
+          python3 scripts/generate-ci-agent-reference.py --check
+          python3 scripts/test_ci_agent_reference.py
+
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: free/ci/go.mod

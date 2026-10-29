@@ -67,9 +67,8 @@ const (
 // a program that the invoking user's PATH (or a directory the agent user can write) points at.
 const scriptHead = "set -eu\nPATH=/usr/bin:/bin:/usr/sbin:/sbin\nexport PATH\n"
 
-// scanDirs are the places a job user can leave a file by permission: its job root, the work area and the
-// world-writable folders (the mounted volumes are added by the scripts). A whole-disk scan would walk
-// Xcode and the system volumes for minutes and find nothing.
+// scanDirs bounds destructive uninstall cleanup to the job roots and common writable folders.
+// Allocation and retirement use the separate, read-only, whole-volume ownershipScan.
 const scanDirs = JobsDir + " " + WorkDir + " /private/tmp /private/var/tmp /Users/Shared /Library/Caches"
 
 // volumeDepth bounds how deep a scan walks into each top-level mounted volume: an external disk can hold

@@ -151,8 +151,9 @@ func TestInstallRunnerInstance_EndToEndArgvAndEnv(t *testing.T) {
 	}
 }
 
-// A host shell that starts with tracing on (BASH_ENV here; SHELLOPTS or a
-// .bashrc sourced under sshd alike) must not print the expanded token.
+// A host shell that starts with tracing on must not print the expanded token.
+// Enable tracing in the same shell immediately before the generated script; this
+// exercises inherited xtrace without relying on platform-specific BASH_ENV startup rules.
 func TestInstallRunnerInstance_InheritedXtraceDoesNotLeak(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not available")
@@ -163,22 +164,19 @@ func TestInstallRunnerInstance_InheritedXtraceDoesNotLeak(t *testing.T) {
 		t.Fatal(err)
 	}
 	for path, body := range map[string]string{
-		filepath.Join(bin, "sudo"):         `case "$1" in chown) exit 0;; -u) shift 2;; esac; exec "$@"`,
-		filepath.Join(inst, "config.sh"):   "cat >/dev/null",
-		filepath.Join(inst, "svc.sh"):      "exit 0",
-		filepath.Join(root, "bash_env.sh"): "set -x",
+		filepath.Join(bin, "sudo"):       `case "$1" in chown) exit 0;; -u) shift 2;; esac; exec "$@"`,
+		filepath.Join(inst, "config.sh"): "cat >/dev/null",
+		filepath.Join(inst, "svc.sh"):    "exit 0",
 	} {
 		if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// The env goes on the child only: process-wide t.Setenv would put
-	// BASH_ENV and PATH under every other shell started while this runs.
+	// The stub PATH belongs to this child only.
 	ex := LocalExecutor{env: []string{
 		"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"),
-		"BASH_ENV=" + filepath.Join(root, "bash_env.sh"),
 	}}
-	raw, err := ex.RunInput(context.Background(), renderedScript(t, root), fakeRegToken+"\n")
+	raw, err := ex.RunInput(context.Background(), "set -x\n"+renderedScript(t, root), fakeRegToken+"\n")
 	if err != nil || !strings.Contains(raw, "+ set -e") {
 		t.Fatalf("tracing was not on, the test proves nothing: err=%v out=%q", err, raw)
 	}

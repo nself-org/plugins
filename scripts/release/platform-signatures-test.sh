@@ -193,6 +193,9 @@ if check "$T/nl.txt" "$NL" >/dev/null 2>&1; then fail "built check passed a file
 LNK="$T/linked"; mkdir "$LNK"; ln -s "$PLIN" "$LNK/demo-1.2.3-linux-amd64.tar.gz"
 check "$BUILT" "$LNK" >/dev/null 2>&1 && pass "built check follows symlinks" || fail "built check refused a symlinked built tarball"
 
+# shellcheck source=scripts/release/sign-release-test.inc.sh
+source "$HERE/sign-release-test.inc.sh"
+
 # --- the committed interop fixture (P7-PLUG-84 copies it) ----------------------------------------------------------------------
 FIX="$HERE/testdata/platform-v1"
 
