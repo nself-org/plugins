@@ -9,8 +9,8 @@ package source
 //          fast-forward). A pushed commit of yours still counts: D17 asks for "on no ref of any remote",
 //          but an arrival entry is the proof of a stranger's commit and the push test made `nself ci`
 //          refuse your own pushed branch (lead ruling, TRUST EPIC Invalidations 2026-10-19). A rewrite
-//          (rebase step, amend, cherry-pick) whose patch equals a commit that arrived from elsewhere is a
-//          replay of that commit, not a creation (D-1322).
+//          (rebase step, amend, cherry-pick) is a creation only when its change has a source made here
+//          (D-1322); a grafts file makes the history unknown, so the checkout is untrusted (D-1431).
 //          Otherwise collaborator when HEAD is on a branch of the origin remote, else untrusted. A fact
 //          that could not be gathered closes the path that needs it. A repository with no remote at
 //          all has nothing foreign to classify, so it is the operator's own (local.no_remote).
@@ -37,6 +37,9 @@ func ClassifyLocal(g GitFacts) Result {
 	}
 	if g.InProgress {
 		return done(untrusted, ReasonLocalInProgress)
+	}
+	if g.missing(MissingHistory) {
+		return done(untrusted, ReasonLocalGrafted) // reachability and every commit list may be the grafts file's
 	}
 	if g.NoRemotes && len(g.Missing) == 0 {
 		return done(owner, ReasonLocalNoRemote)
@@ -77,13 +80,13 @@ func createdHere(g GitFacts) bool {
 			return false
 		}
 		if Rewrite(subject) && (g.missing(MissingPatches) || g.ReplayedPatch[c.SHA]) {
-			return false // someone else's patch replayed here, or the patches could not be compared
+			return false // a change with no source made here, or the patches could not be compared
 		}
 	}
 	return true
 }
 
-// replayed reports whether a commit of Head is a replay of a patch that arrived here.
+// replayed reports whether a commit of Head is a rewrite with no source made here.
 func replayed(g GitFacts) bool {
 	for _, c := range g.OffDefault {
 		if g.ReplayedPatch[c.SHA] {
@@ -95,7 +98,7 @@ func replayed(g GitFacts) bool {
 
 // Rewrite reports whether a creation subject (MadeHere) rewrites an existing commit rather than making a
 // new change: a rebase step (also under `pull --rebase`), `commit (amend)` and `cherry-pick`. Such a
-// commit is new here only when its patch is not one that arrived from elsewhere (GitFacts.ReplayedPatch).
+// commit is new here only when its change has a source made here (GitFacts.ReplayedPatch).
 func Rewrite(subject string) bool {
 	if !MadeHere(subject) || strings.Contains(subject, "Merge made by") {
 		return false

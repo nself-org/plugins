@@ -5,6 +5,7 @@ package source_test
 // owner, and the operator's own rewrites (pushed or not) stay owner.
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -43,6 +44,8 @@ func TestClassifyLocalReplayedPatch(t *testing.T) {
 			ReplayedPatch: map[string]bool{"b": true}}, "collaborator", source.ReasonLocalOnOrigin},
 		{"patches not compared closes the owner path for a rewrite", source.GitFacts{Head: "b", DefaultRemoteRef: def, OffDefault: c("a", "b"), ReflogCreated: rewritten,
 			Missing: []string{source.MissingPatches}}, "untrusted", source.ReasonLocalIncomplete},
+		{"a grafts file closes every path, reachability included", source.GitFacts{Head: "a", DefaultRemoteRef: def, ReachableFromDefault: true,
+			Missing: []string{source.MissingHistory}}, "untrusted", source.ReasonLocalGrafted},
 		{"patches not compared do not matter without a rewrite", source.GitFacts{Head: "a", DefaultRemoteRef: def, OffDefault: c("a"), ReflogCreated: rewritten,
 			Missing: []string{source.MissingPatches}}, "owner", source.ReasonLocalCreated},
 	} {
@@ -113,6 +116,23 @@ func TestClassifyGitReplays(t *testing.T) {
 		git(x.t, x.op, "checkout", "-q", "-b", "pr", "origin/pr")
 		git(x.t, x.op, "rebase", "-q", "origin/main")
 	}, "untrusted", source.ReasonLocalReplayed)
+	check("stranger commit rebased, then nothing refers to it any more", func(x *fx) {
+		sha := x.fetchStranger()
+		x.advance()
+		git(x.t, x.op, "checkout", "-q", "-b", "x", sha)
+		git(x.t, x.op, "rebase", "-q", "origin/main")
+		git(x.t, x.op, "reflog", "expire", "--expire-unreachable=now", "--all")
+		git(x.t, x.op, "fetch", "-q", "origin")
+	}, "untrusted", source.ReasonLocalReplayed)
+	check("stranger commit amended with a content change, then nothing refers to it any more", func(x *fx) {
+		git(x.t, x.op, "checkout", "-q", "-b", "pr", x.fetchStranger())
+		x.commitAmend("extra.txt")
+		// drop the entries that name the stranger's commit, keep the amend's own: the older neighbour of the
+		// amend in HEAD's log is then the operator's base commit, which must not pass for the pre-image
+		git(x.t, x.op, "reflog", "delete", "refs/heads/pr@{1}")
+		git(x.t, x.op, "reflog", "delete", "HEAD@{1}")
+		git(x.t, x.op, "fetch", "-q", "origin")
+	}, "untrusted", source.ReasonLocalReplayed)
 	// The operator's own work, rewritten: still created here.
 	check("own pushed branch rebased onto newer main", func(x *fx) {
 		git(x.t, x.op, "checkout", "-q", "-b", "feat")
@@ -128,6 +148,14 @@ func TestClassifyGitReplays(t *testing.T) {
 		git(x.t, x.op, "reset", "-q", "--soft", "HEAD~1")
 		git(x.t, x.op, "commit", "-q", "--amend", "-m", "one and two")
 	}, "owner", source.ReasonLocalCreated)
+	check("own commit amended twice with content changes, then rebased", func(x *fx) {
+		git(x.t, x.op, "checkout", "-q", "-b", "feat")
+		x.commit(x.op, "one.txt")
+		x.commitAmend("two.txt")
+		x.commitAmend("three.txt")
+		x.advance()
+		git(x.t, x.op, "rebase", "-q", "origin/main")
+	}, "owner", source.ReasonLocalCreated)
 	check("own commit cherry-picked to another branch", func(x *fx) {
 		git(x.t, x.op, "checkout", "-q", "-b", "feat")
 		sha := x.commit(x.op, "one.txt")
@@ -140,4 +168,59 @@ func TestClassifyGitReplays(t *testing.T) {
 		x.advance()
 		git(x.t, x.op, "cherry-pick", "origin/main")
 	}, "owner", source.ReasonLocalCreated)
+}
+
+// commitAmend adds file to the last commit (an amend that changes its content).
+func (x *fx) commitAmend(file string) {
+	x.t.Helper()
+	if err := os.WriteFile(filepath.Join(x.op, file), []byte(file+"\n"), 0o644); err != nil {
+		x.t.Fatal(err)
+	}
+	git(x.t, x.op, "add", file)
+	git(x.t, x.op, "commit", "-q", "--amend", "-m", "amended with "+file)
+}
+
+// D-1431 (D04, D06): a pull request refspec with a glob in the middle of its destination is not an origin
+// branch, and a grafts file (the repository's or $GIT_GRAFT_FILE) cannot make a stranger's commit reachable.
+func TestClassifyGitRefspecsAndGrafts(t *testing.T) {
+	t.Run("mid-path glob refspec", func(t *testing.T) {
+		t.Parallel()
+		x := newFx(t)
+		git(t, x.stranger, "push", "-q", "origin", "pr:refs/pull/7/head")
+		git(t, x.op, "config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/gh-pr/*/head")
+		git(t, x.op, "fetch", "-q", "origin")
+		git(t, x.op, "checkout", "-q", "-b", "prx", "origin/gh-pr/7/head")
+		if got := x.decide("", run.SourceTrust{}); got.Class != "untrusted" || !contains(got.Reasons, source.ReasonLocalForeign) {
+			t.Fatalf("%s %v, want untrusted", got.Class, got.Reasons)
+		}
+	})
+	grafted := func(t *testing.T, viaEnv bool) {
+		t.Parallel()
+		x := newFx(t)
+		sha := x.fetchStranger()
+		tip := git(t, x.op, "rev-parse", "origin/main")
+		graft := filepath.Join(x.op, ".git", "info", "grafts")
+		h := run.SourceTrust{}
+		if viaEnv {
+			graft = filepath.Join(x.tmp, "grafts")
+			h.Getenv = func(k string) string {
+				if k == "GIT_GRAFT_FILE" {
+					return graft
+				}
+				return ""
+			}
+		}
+		if err := os.MkdirAll(filepath.Dir(graft), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(graft, []byte(tip+" "+sha+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		git(t, x.op, "checkout", "-q", "--detach", sha)
+		if got := x.decide("", h); got.Class != "untrusted" || !contains(got.Reasons, source.ReasonLocalGrafted) {
+			t.Fatalf("%s %v, want untrusted with %s", got.Class, got.Reasons, source.ReasonLocalGrafted)
+		}
+	}
+	t.Run("info/grafts", func(t *testing.T) { grafted(t, false) })
+	t.Run("GIT_GRAFT_FILE", func(t *testing.T) { grafted(t, true) })
 }

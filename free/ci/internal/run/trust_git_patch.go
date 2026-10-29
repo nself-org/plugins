@@ -1,21 +1,26 @@
 package run
 
-// Purpose: the patch half of local provenance (D-1322): which rewritten commits of a run (oldest reflog entry
-// a rebase step, an amend or a cherry-pick) replay a change someone else made, so they are not counted as
-// created here: a rewrite whose patch arrived from elsewhere, and a cherry-pick whose patch was not made here.
-// Inputs:  the gathered GitFacts (OffDefault, ReflogCreated, DefaultRemoteRef) and the FETCH_HEAD commits.
-// Outputs: GitFacts.ReplayedPatch, or MissingPatches when the comparison could not be made.
-// Constraints: the arrived side is every commit reachable from a remote-tracking ref, refs/pull/*, a FETCH_HEAD
-//          line or a commit whose oldest reflog entry is an arrival, minus the default branch, minus every
-//          commit whose own oldest entry is a creation (your own commit, pushed or not, is not arrived); the
-//          patch id ignores line numbers, context lines and whitespace, so a replay onto a moved base still
-//          matches; a cherry-pick counts as made here only when its patch is that of a commit made here (not a
-//          cherry-pick) or of the default branch; more than maxPatchCommits commits on a side, or a git
-//          failure, is MissingPatches. Residual: a rebase or amend of a commit nothing refers to any more.
+// Purpose: the patch half of local provenance (D-1322): a rewritten commit of a run (oldest reflog entry a
+// rebase step, an amend or a cherry-pick) is created here only when its change has a source made here, so a
+// replay of someone else's change is never counted as created here, even when nothing refers to the
+// original any more (a deleted branch, an overwritten FETCH_HEAD, an expired reflog).
+// Inputs:  the gathered GitFacts (OffDefault, ReflogCreated, DefaultRemoteRef, Head) and the amend pre-images
+//          read from the reflog (amendPreImages).
+// Outputs: GitFacts.ReplayedPatch, or MissingPatches when the comparison could not be made; grafted.
+// Constraints: a source made here is a commit whose oldest entry is a creation other than a rewrite, a
+//          rewrite already counted as made here, or a commit of the default branch that Head does not have;
+//          a rewrite counts when its patch equals a source's, or (an amend) when the commit it amended
+//          counts; a commit with no change lines adds no code and counts. The patch id ignores line numbers,
+//          context and whitespace, so a replay onto a moved base still matches. Known cost, fail closed: a
+//          rebase step whose conflicts you resolved, or a squash, changes the patch and is not counted.
+//          More than maxPatchCommits commits on a side, or a git failure, is MissingPatches.
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"io/fs"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -23,39 +28,76 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/trust/source"
 )
 
-// maxPatchCommits bounds the arrived commits whose patches are compared.
+// maxPatchCommits bounds the commits whose patches are compared on one side.
 const maxPatchCommits = 5000
 
-// patchLog is the log format both sides are read with: one NUL-led commit id line, then its patch.
-var patchLog = []string{"-p", "--no-color", "--full-index", "--no-ext-diff", "--no-textconv", "--no-renames", "--format=%x00%H"}
+// patchLog is the log format both sides are read with: one NUL-led line with the commit id and its parents,
+// then its patch.
+var patchLog = []string{"-p", "--no-color", "--full-index", "--no-ext-diff", "--no-textconv", "--no-renames", "--format=%x00%H%x09%P"}
 
-// replayedPatches fills g.ReplayedPatch for the rewritten commits of g.OffDefault: a rewrite whose patch
-// arrived from elsewhere, and a cherry-pick whose patch is neither one made here nor one on the default
-// branch (its source may be a commit nothing refers to any more, such as an overwritten FETCH_HEAD).
-func replayedPatches(git func(args ...string) (string, int), g *source.GitFacts, fetched []string) {
-	var rewritten []string
-	picks := map[string]bool{}
+type gitFn func(args ...string) (string, int)
+
+// replayedPatches fills g.ReplayedPatch with the rewritten commits of g.OffDefault that have no source made here.
+func replayedPatches(git gitFn, g *source.GitFacts, amends map[string][]string) {
+	var rewritten, made []string
 	for _, c := range g.OffDefault {
-		if subject := g.ReflogCreated[c.SHA]; source.Rewrite(subject) {
+		if source.Rewrite(g.ReflogCreated[c.SHA]) {
 			rewritten = append(rewritten, c.SHA)
-			picks[c.SHA] = cherryPick(subject)
 		}
 	}
 	if len(rewritten) == 0 {
 		return
 	}
-	mine, ok := logPatches(git, len(rewritten), append([]string{"--no-walk=unsorted"}, rewritten...))
-	arrived, ok2 := arrivedPatches(git, g, fetched)
-	own, ok3 := map[string]bool{}, true
-	if slices.ContainsFunc(rewritten, func(sha string) bool { return picks[sha] }) {
-		own, ok3 = ownPatches(git, g)
+	for sha, subject := range g.ReflogCreated {
+		if source.MadeHere(subject) {
+			made = append(made, sha)
+		}
 	}
-	if !ok || !ok2 || !ok3 || len(mine) != len(rewritten) {
+	slices.Sort(made) // a stable argv: map order is random
+	ids, parents, ok := logPatches(git, maxPatchCommits, append([]string{"--ignore-missing", "--no-walk=unsorted"}, made...))
+	for _, sha := range rewritten {
+		if _, have := ids[sha]; !have {
+			ok = false
+		}
+	}
+	if !ok {
 		g.Missing = append(g.Missing, source.MissingPatches)
 		return
 	}
+	own, created := map[string]bool{}, map[string]bool{}
+	for _, sha := range made {
+		if !source.Rewrite(g.ReflogCreated[sha]) {
+			created[sha], own[ids[sha]] = true, true
+		}
+	}
+	settle := func() bool { // true when every rewritten commit of the run counts as made here
+		for changed := true; changed; {
+			changed = false
+			for _, sha := range made {
+				subject, id := g.ReflogCreated[sha], ids[sha]
+				if created[sha] || !source.Rewrite(subject) {
+					continue
+				}
+				if id == "" || own[id] || amendedOwn(subject, sha, amends, parents, created) {
+					created[sha], own[id], changed = true, true, true
+				}
+			}
+		}
+		return !slices.ContainsFunc(rewritten, func(sha string) bool { return !created[sha] })
+	}
+	if !settle() && g.DefaultRemoteRef != "" { // a backport: the default branch's own changes are sources too
+		def, _, fine := logPatches(git, maxPatchCommits, []string{"--no-merges", g.DefaultRemoteRef, "--not", g.Head})
+		if !fine {
+			g.Missing = append(g.Missing, source.MissingPatches)
+			return
+		}
+		for _, id := range def {
+			own[id] = true
+		}
+		settle()
+	}
 	for _, sha := range rewritten {
-		if id := mine[sha]; id != "" && (arrived[id] || picks[sha] && !own[id]) {
+		if !created[sha] {
 			if g.ReplayedPatch == nil {
 				g.ReplayedPatch = map[string]bool{}
 			}
@@ -64,81 +106,85 @@ func replayedPatches(git func(args ...string) (string, int), g *source.GitFacts,
 	}
 }
 
-// arrivedPatches are the patch ids of the commits that reached this repository from elsewhere and were not
-// made here, off the default branch.
-func arrivedPatches(git func(args ...string) (string, int), g *source.GitFacts, fetched []string) (map[string]bool, bool) {
-	var tips []string
-	for sha, subject := range g.ReflogCreated {
-		if !source.MadeHere(subject) {
-			tips = append(tips, sha)
+func amended(subject string) bool { return strings.HasPrefix(subject, "commit (amend)") }
+
+// amendedOwn: sha is an amend of a commit counted as made here. The pre-image is the older neighbour in the
+// reflog; an amend keeps the parents, so a neighbour with other parents (its own entry was deleted or
+// expired) is not the pre-image and does not count.
+func amendedOwn(subject, sha string, amends map[string][]string, parents map[string]string, created map[string]bool) bool {
+	if !amended(subject) {
+		return false
+	}
+	for _, p := range amends[sha] {
+		if pp, known := parents[p]; known && created[p] && pp == parents[sha] {
+			return true
 		}
 	}
-	slices.Sort(tips) // a stable argv: map order is random
-	// --ignore-missing: a FETCH_HEAD commit gc has pruned is no longer anything to compare with
-	args := append(append([]string{"--ignore-missing", "--no-merges", "--remotes", "--glob=refs/pull/*"}, fetched...), tips...)
-	if g.DefaultRemoteRef != "" {
-		args = append(args, "--not", g.DefaultRemoteRef)
-	}
-	ids, ok := logPatches(git, maxPatchCommits, args)
-	arrived := map[string]bool{}
-	for sha, id := range ids {
-		if id != "" && !source.MadeHere(g.ReflogCreated[sha]) {
-			arrived[id] = true
-		}
-	}
-	return arrived, ok
+	return false
 }
 
-// ownPatches are the patch ids a cherry-pick may come from and still be created here: a commit whose oldest
-// entry is a creation other than a cherry-pick, and a commit of the default branch that Head does not have.
-func ownPatches(git func(args ...string) (string, int), g *source.GitFacts) (map[string]bool, bool) {
-	var made []string
-	for sha, subject := range g.ReflogCreated {
-		if source.MadeHere(subject) && !cherryPick(subject) {
-			made = append(made, sha)
+// amendPreImages maps each commit an amend made to the candidates for the commit it replaced: the entry just
+// older in each log that records the amend. Each log is listed newest first; the logs are grouped by ref
+// here, whatever order they come in.
+func amendPreImages(out string) map[string][]string {
+	type entry struct{ sha, subject string }
+	logs := map[string][]entry{}
+	for _, l := range strings.Split(out, "\n") {
+		f := strings.SplitN(strings.TrimSpace(l), "\t", 3)
+		if len(f) != 3 || !fullSHA.MatchString(f[0]) {
+			continue
 		}
+		ref := f[1]
+		if at := strings.LastIndex(ref, "@{"); at >= 0 {
+			ref = ref[:at]
+		}
+		logs[ref] = append(logs[ref], entry{f[0], f[2]})
 	}
-	slices.Sort(made)
-	own, ok := map[string]bool{}, true
-	add := func(ids map[string]string, fine bool) {
-		ok = ok && fine
-		for _, id := range ids {
-			if id != "" {
-				own[id] = true
+	pre := map[string][]string{}
+	for _, es := range logs {
+		for i := 0; i+1 < len(es); i++ {
+			if amended(es[i].subject) {
+				pre[es[i].sha] = append(pre[es[i].sha], es[i+1].sha)
 			}
 		}
 	}
-	if len(made) > 0 {
-		add(logPatches(git, maxPatchCommits, append([]string{"--ignore-missing", "--no-walk=unsorted"}, made...)))
-	}
-	if g.DefaultRemoteRef != "" {
-		add(logPatches(git, maxPatchCommits, []string{"--no-merges", g.DefaultRemoteRef, "--not", g.Head}))
-	}
-	return own, ok
+	return pre
 }
 
-// logPatches runs `git log` with patchLog over args and returns the patch id of each commit; ok is false when
-// git failed or more than limit commits came back.
-func logPatches(git func(args ...string) (string, int), limit int, args []string) (map[string]string, bool) {
-	out, exit := git(append(append([]string{"log", "-n", strconv.Itoa(limit + 1)}, patchLog...), args...)...)
-	ids := patchIDs(out)
-	return ids, exit == 0 && len(ids) <= limit
-}
-
-func cherryPick(subject string) bool {
-	return strings.HasPrefix(strings.TrimSpace(subject), "cherry-pick")
-}
-
-// patchIDs splits patchLog output into a patch id per commit ("" for a commit with no change lines).
-func patchIDs(out string) map[string]string {
-	ids := map[string]string{}
-	for _, block := range strings.Split(out, "\x00")[1:] {
-		sha, diff, _ := strings.Cut(block, "\n")
-		if sha = strings.TrimSpace(sha); fullSHA.MatchString(sha) {
-			ids[sha] = patchID(diff)
+// grafted reports whether a grafts file may rewrite the parents git reports: info/grafts of the repository
+// or $GIT_GRAFT_FILE. A file that cannot be checked counts as present.
+func (h SourceTrust) grafted(root, gitPath string) bool {
+	for _, p := range []string{rootPath(root, gitPath), h.getenv("GIT_GRAFT_FILE")} {
+		if p == "" {
+			continue
+		}
+		if _, err := os.Stat(p); err == nil || !errors.Is(err, fs.ErrNotExist) {
+			return true
 		}
 	}
-	return ids
+	return false
+}
+
+// logPatches runs `git log` with patchLog over args and returns the patch id and the parents of each
+// commit; ok is false when git failed or more than limit commits came back.
+func logPatches(git gitFn, limit int, args []string) (ids, parents map[string]string, ok bool) {
+	out, exit := git(append(append([]string{"log", "-n", strconv.Itoa(limit + 1)}, patchLog...), args...)...)
+	ids, parents = patchIDs(out)
+	return ids, parents, exit == 0 && len(ids) <= limit
+}
+
+// patchIDs splits patchLog output into a patch id per commit ("" for a commit with no change lines) and
+// its parents.
+func patchIDs(out string) (ids, parents map[string]string) {
+	ids, parents = map[string]string{}, map[string]string{}
+	for _, block := range strings.Split(out, "\x00")[1:] {
+		head, diff, _ := strings.Cut(block, "\n")
+		sha, ps, _ := strings.Cut(strings.TrimSpace(head), "\t")
+		if fullSHA.MatchString(sha) {
+			ids[sha], parents[sha] = patchID(diff), strings.TrimSpace(ps)
+		}
+	}
+	return ids, parents
 }
 
 // patchID hashes the changes of one commit the way `git patch-id --stable` treats them, and looser: per file

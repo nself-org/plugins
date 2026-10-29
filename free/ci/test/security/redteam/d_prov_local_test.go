@@ -141,9 +141,6 @@ func TestD03_CherryPickOfStrangerCommitStaysForeign(t *testing.T) {
 // D04: fetch refspec maps pull requests to refs/remotes/origin/gh-pr/<n>/head, a glob in the middle
 // of the destination. A stranger's PR must not read as a branch of the origin remote.
 func TestD04_PullRefspecWithMidPathGlobIsNotAnOriginBranch(t *testing.T) {
-	if !openFinding(t, "D04") {
-		return
-	}
 	x := newDFx(t)
 	dGit(t, x.stranger, "push", "-q", "origin", "pr:refs/pull/7/head")
 	dGit(t, x.op, "config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/gh-pr/*/head")
@@ -171,9 +168,6 @@ func TestD05_RefsNamedLikeOwnerRefs(t *testing.T) {
 // D06: .git/info/grafts claims the stranger commit is the parent of origin/main, so it would look
 // reachable from the default branch.
 func TestD06_GraftsFileCannotMakeStrangerReachable(t *testing.T) {
-	if !openFinding(t, "D06") {
-		return
-	}
 	x := newDFx(t)
 	sha := x.fetchStranger()
 	tip := dGit(t, x.op, "rev-parse", "origin/main")
