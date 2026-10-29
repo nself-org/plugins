@@ -9,28 +9,63 @@ package gvisor
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	osexec "os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
+
+// runBudget bounds one command of these tests. The sandboxed ad-hoc run takes about 35 s on a hosted runner,
+// so five minutes is generous; a command past it is a hang, and the test says so instead of waiting for the
+// 10-minute go test alarm (which names no cause and kills the whole package).
+const runBudget = 5 * time.Minute
 
 func runCmd(t *testing.T, dir string, env []string, name string, args ...string) (string, string, int) {
 	t.Helper()
-	cmd := osexec.Command(name, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), runBudget)
+	defer cancel()
+	cmd := osexec.CommandContext(ctx, name, args...)
 	cmd.Dir, cmd.Env = dir, append(os.Environ(), env...)
+	// SIGQUIT makes a Go binary print every goroutine's stack, which is the evidence a hang needs.
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGQUIT) }
+	cmd.WaitDelay = 15 * time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
 	code := 0
+	if ctx.Err() != nil {
+		t.Fatalf("%s %v did not finish within %s (hang, not a skip): sent SIGQUIT\nstdout: %s\nstderr (goroutine dump): %s\nprocesses and containers at the time:\n%s",
+			name, args, runBudget, stdout.String(), tail(stderr.String(), 12000), hangContext())
+	}
 	if ee, ok := err.(*osexec.ExitError); ok {
 		code = ee.ExitCode()
 	} else if err != nil {
 		t.Fatalf("%s %v: %v", name, args, err)
 	}
 	return stdout.String(), stderr.String(), code
+}
+
+// hangContext lists the processes and containers a hung run left, for the failure message.
+func hangContext() string {
+	var b strings.Builder
+	for _, c := range [][]string{{"ps", "-eo", "pid,ppid,stat,etime,args"}, {"docker", "ps", "-a", "--format", "{{.ID}} {{.Status}} {{.Names}} {{.Image}}"}} {
+		out, err := osexec.Command(c[0], c[1:]...).CombinedOutput()
+		fmt.Fprintf(&b, "$ %s (err %v)\n%s\n", strings.Join(c, " "), err, tail(string(out), 4000))
+	}
+	return b.String()
+}
+
+func tail(s string, n int) string {
+	if len(s) > n {
+		return "..." + s[len(s)-n:]
+	}
+	return s
 }
 
 func adhocRig(t *testing.T) (bin, repo, home string) {
