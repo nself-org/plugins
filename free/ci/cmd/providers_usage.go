@@ -8,7 +8,7 @@ package main
 // Outputs: `disabled` when providers.github.billing_import is not true (no API call, exit 0); else a
 //          one-line summary or one v1 JSON envelope (an error too, with --json); exit 0, 1
 //          (usage, E700, E709 and other provider refusals) or 2 (rate limit, network, anything else).
-// Constraints: V15 only; writes the store only through economics.RecordUsage; requests only the
+// Constraints: V15 only; writes the store only through economics.ReplaceUsage; requests only the
 //          non-summary billing usage endpoint (see internal/providers/github/usage); never asks for
 //          or refreshes a token scope. Live use waits for the owner to name the token scope.
 

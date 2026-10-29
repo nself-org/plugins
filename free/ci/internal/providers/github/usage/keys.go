@@ -1,6 +1,6 @@
 // Package usage is the GitHub enhanced-billing importer (P7-HOST-10, Epic D12). It reads the
 // consumption GitHub reports for one account and writes the Actions minute lines into the SCHED-07
-// usage ledger through economics.RecordUsage, so `nself ci policy usage` can show them as `known`.
+// usage ledger through economics.ReplaceUsage, so `nself ci policy usage` can show them as `known`.
 // It never reports a remaining value and never keeps a ledger of its own.
 package usage
 
