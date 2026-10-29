@@ -49,7 +49,7 @@ func publishDeps(st *store.Store, home, root string) (publish.Deps, error) {
 	}
 	env := []string{"NSELF_CI_REPO=" + root, "NSELF_CI_HOME=" + home}
 	return publish.Deps{Src: st, Blobs: blobs, Ledger: st, Home: home, Root: root, Capture: report.Capture, Team: teamCoordinator(),
-		Signer: &signing.Client{Runner: &signing.FunnelRunner{Home: home}, Src: st, Env: env, Team: teamCoordinator()}}, nil
+		Signer: &signing.Client{Runner: &signing.FunnelRunner{Home: home}, Src: st, Env: env, Team: teamCoordinator(), Audit: st.AppendAudit}}, nil
 }
 
 // releasePublisher is the run package's publication seam.

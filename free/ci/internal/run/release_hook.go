@@ -10,7 +10,8 @@ package run
 // internal/release/job.
 // Inputs:  AttemptSpec (Dispatch wrapper), JobSpec (isolator wrapper),
 // AttemptInfo (attempt-start hook).
-// Outputs: the previous hook's answer, or an E715 refusal.
+// Outputs: the previous hook's answer, or an E715 refusal (Guard's refusals
+// also leave a release.admission.refused row in the run's store).
 // Constraints: a release job runs only under the V15 engine (the v1.4 gate has
 // no release class): anywhere else it is refused. The facts come from the run's
 // own store rows and git worktree, never from a file the job could write.
@@ -48,6 +49,7 @@ func init() {
 		panic("run: release_hook.go must initialise after dispatch_hook.go and isolation_hook.go")
 	}
 	releaseStash.Revoked = func(keyID string) (bool, error) { return releaseRevoked(attestLedger(), keyID) }
+	releaseStash.Audit = releaseAudit
 	if err := job.Register(releaseStash); err != nil {
 		panic(err)
 	}
@@ -64,6 +66,15 @@ func releaseRevoked(l attest.Ledger, keyID string) (bool, error) {
 		return false, errors.New("no revocation ledger is attached to the run")
 	}
 	return l.Revoked(context.Background(), keyID)
+}
+
+// releaseAudit writes a release admission refusal into the run's own store;
+// releaseDispatch refuses an attempt without a session before Guard runs.
+func releaseAudit(ctx context.Context, actor, action, target, detail string) error {
+	if sess := SessionFrom(ctx); sess != nil && sess.Store != nil {
+		return sess.Store.AppendAudit(ctx, actor, action, target, detail)
+	}
+	return errors.New("the run has no store for the release admission audit row")
 }
 
 // releaseFailure carries a release refusal as a run error with its code.
@@ -98,8 +109,12 @@ func releaseDispatch(ctx context.Context, s AttemptSpec, prev DispatchHook) (Adm
 	}
 	var adm Admitted
 	err = releaseStash.Guard(ctx, id, provider, func() (e error) { adm, e = prev(ctx, s); return })
-	if je, ok := err.(*job.Error); ok {
-		return Admitted{}, releaseFailure(je)
+	var je *job.Error
+	if errors.As(err, &je) {
+		if err == error(je) {
+			return Admitted{}, releaseFailure(je)
+		}
+		return Admitted{}, errors.Join(releaseFailure(je), err) // the refusal and its lost audit row
 	}
 	return adm, err
 }

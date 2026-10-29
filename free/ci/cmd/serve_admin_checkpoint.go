@@ -3,7 +3,7 @@ package main
 // Purpose: `nself ci serve admin audit checkpoint export <path>` and `... verify --pubkey <fingerprint>
 // <path>` (P7-TRUST-20, Epic D13/D20): the TEAM coordinator signs the head of the audit chain with its own
 // ci-audit key; verify checks a checkpoint file against a fingerprint pinned off-host and against the live
-// chain. It also registers the release quarantine seam of `ci artifacts verify`.
+// chain. It also registers the release quarantine and refusal-audit seams of `ci artifacts verify`.
 // Inputs:  a path; --pubkey (the fingerprint `export` printed); --json; $NSELF_CI_HOME (state.db and the
 //          0600 key audit-checkpoint.key, created at the first export); $NSELF_CI_COORDINATOR_MODE=team.
 // Outputs: export writes the checkpoint file and prints the public-key fingerprint; verify exits 0 when
@@ -58,6 +58,25 @@ func init() {
 		Handler: func(args []string) int { return runAdminCheckpoint(args, productionAdminEnv()) },
 	})
 	releaseQuarantined = storeQuarantined
+	releaseVerifyAudit = storeVerifyAudit
+}
+
+// storeVerifyAudit appends a refused release verification to the coordinator store's audit log; a machine
+// without a store (a release checked away from its coordinator) records nothing.
+func storeVerifyAudit(ctx context.Context, actor, action, target, detail string) error {
+	path := filepath.Join(lifecycle.CIHome(), "state.db")
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	st, err := store.Open(path, store.Options{})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = st.Close() }()
+	return st.AppendAudit(ctx, actor, action, target, detail)
 }
 
 // storeQuarantined reads the quarantine index of the coordinator store; a machine without one has nothing

@@ -131,7 +131,7 @@ func openArtifacts(fs *flag.FlagSet) (*artifactsEnv, error) {
 		}
 	}
 	role := authz.Role(firstOf(os.Getenv("NSELF_CI_ROLE"), string(authz.RoleAdmin)))
-	return &artifactsEnv{st: st, blobs: blobs, reader: records.Reader{Ledger: st, Blobs: blobs}, viewer: authz.Viewer{Project: project, Role: role},
+	return &artifactsEnv{st: st, blobs: blobs, reader: records.Reader{Ledger: st, Blobs: blobs, Audit: st.AppendAudit}, viewer: authz.Viewer{Project: project, Role: role},
 		json: fs.Lookup("json").Value.String() == "true"}, nil
 }
 

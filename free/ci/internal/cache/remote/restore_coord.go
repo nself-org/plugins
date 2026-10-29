@@ -11,7 +11,8 @@ package remote
 // is done when the node confirms it holds every byte (a held copy answers at the
 // announce, a fetched one after its re-hash). A node that reports a failed
 // re-hash after the final chunk gets the blob again, as many times as the
-// transfer allows. Locality is advisory and never authorises a read.
+// transfer allows, and leaves a cache.restore.refused row (digest_mismatch).
+// Locality is advisory and never authorises a read.
 
 import (
 	"context"
@@ -141,7 +142,10 @@ func (l *Lease) sendRestore(ctx context.Context, snd *transfer.Sender, up *final
 		if got == b.Size {
 			return nil
 		}
-		// The node re-hashed the bytes, found them wrong, discarded them and reset to 0: send again.
+		// The node re-hashed the bytes, found them wrong, discarded them and reset to 0: audit, send again.
+		if err := l.h.Ledger.CacheAuditOnce(ctx, AuditRestoreRefused, l.b.AttemptID, "reason="+transfer.ReasonDigest+" node="+l.b.Node); err != nil && l.h.Warn != nil {
+			l.h.Warn(fmt.Errorf("cache restore audit: %w", err))
+		}
 	}
 	return transfer.Failf(transfer.ReasonDigest, "blob %s failed verification on the node %d times", b.SHA256[:12], tries)
 }

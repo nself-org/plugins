@@ -2,8 +2,9 @@ package attest
 
 // Purpose: Revoke(node) (Epic D13, X15): the node's evidence keys become untrusted, the evidence they
 // signed is quarantined, and the caller gets the re-evaluation set (gates, posted statuses, promoted
-// releases). The statuses are re-posted as errors with reason node.revoked (P7-HOST-02's Repost), and
-// each promoted release gets one audit event, so a revoked node's success does not stand.
+// releases). The statuses are re-posted as errors with reason node.revoked (P7-HOST-02's Repost), each
+// quarantined run gets an evidence.quarantined event (reason key_revoked) and each promoted release one
+// release.quarantine event, so a revoked node's success does not stand.
 // Inputs:  the node id, the actor, a RevokeLedger, an AuditSink and a Reposter (all injected: this package
 //          cannot import store, audit or report).
 // Outputs: Affected; errors from the audit and repost steps are joined and returned with it.
@@ -33,7 +34,9 @@ type ReleaseRef struct{ RunID, Project, Revision, ManifestSHA256 string }
 // Affected is what a revocation re-evaluates.
 type Affected struct {
 	// Keys are the evidence key ids revoked (ci-node-<16 hex>): those the node pins and every one it used.
-	Keys     []string
+	Keys []string
+	// Runs are the runs whose evidence the revocation quarantined.
+	Runs     []string
 	Gates    []GateRef
 	Statuses []StatusKey
 	Releases []ReleaseRef
@@ -74,6 +77,9 @@ func (r Revoker) Revoke(ctx context.Context, nodeID, actor string) (Affected, er
 	if r.Audit != nil {
 		errs = append(errs, r.Audit(ctx, actor, "evidence.revoke", nodeID,
 			fmt.Sprintf("keys=%d gates=%d statuses=%d releases=%d", len(out.Keys), len(out.Gates), len(out.Statuses), len(out.Releases))))
+		for _, run := range out.Runs { // TM-20: each quarantined run's evidence is refused from now on
+			errs = append(errs, r.Audit(ctx, actor, "evidence.quarantined", run, "reason="+string(RemoteKeyRevoked)+" node="+nodeID))
+		}
 		for _, rel := range out.Releases {
 			errs = append(errs, r.Audit(ctx, actor, "release.quarantine", rel.RunID,
 				fmt.Sprintf("node=%s project=%s revision=%s manifest=%s", nodeID, rel.Project, rel.Revision, rel.ManifestSHA256)))

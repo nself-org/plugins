@@ -7,13 +7,16 @@ package job
 // digester must never run under the writer lock).
 // Inputs:  a Provider per release attempt (Guard) or static Facts (Put, tests).
 // Outputs: Source.ReleaseFacts: the latest Facts, or an E715 when the last
-// refresh failed or is older than maxAge (the attempt then stays queued).
+// refresh failed or is older than maxAge (the attempt then stays queued); one
+// release.admission.refused audit row per refusal Guard returns (Stash.Audit).
 // Constraints: safe for concurrent use; the refresher stops when the submission
 // returns; an entry is forgotten with it. maxAge is several refresh intervals, so
 // a change made while the attempt waits is seen within about refreshEvery.
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -41,6 +44,29 @@ type Stash struct {
 	// between Guard and Admit is seen atomically; nil revokes nothing. An error
 	// (the ledger cannot answer) refuses the attempt: the signer is unverified.
 	Revoked func(keyID string) (bool, error)
+	// Audit writes one audit row (store.AppendAudit); Guard records every
+	// refusal it returns as release.admission.refused (TM-17). Nil records none.
+	Audit AuditSink
+}
+
+// AuditSink writes one audit row.
+type AuditSink func(ctx context.Context, actor, action, target, detail string) error
+
+// AuditAction is the audit action of a refused release admission.
+const AuditAction = "release.admission.refused"
+
+// refused records e (when it is a refusal) and returns it. A lost row is joined
+// to the refusal, never silent, and never turns it into an admission.
+func (s *Stash) refused(ctx context.Context, attemptID string, e *Error) error {
+	if e == nil {
+		return nil
+	}
+	if s.Audit != nil {
+		if err := s.Audit(ctx, "release", AuditAction, attemptID, "reason="+e.Reason+" code="+e.Code); err != nil {
+			return errors.Join(e, fmt.Errorf("release admission audit: %w", err))
+		}
+	}
+	return e
 }
 
 // NewStash returns an empty stash.
@@ -108,21 +134,21 @@ func (s *Stash) Guard(ctx context.Context, attemptID string, p Provider, next fu
 	_, busy := s.m[attemptID]
 	s.mu.Unlock()
 	if busy { // two submissions of one attempt would share, and one would delete, the other's facts
-		return refuse(CodeNotAdmitted, Duplicate, "attempt %s is already being submitted", attemptID)
+		return s.refused(ctx, attemptID, refuse(CodeNotAdmitted, Duplicate, "attempt %s is already being submitted", attemptID))
 	}
 	asked := now()
 	f, perr := p(ctx)
 	if perr != nil {
-		return perr
+		return s.refused(ctx, attemptID, perr)
 	}
 	if e := Evaluate(f); e != nil {
-		return e
+		return s.refused(ctx, attemptID, e)
 	}
 	own := &entry{f: f, at: asked, live: true}
 	s.mu.Lock()
 	if _, busy = s.m[attemptID]; busy {
 		s.mu.Unlock()
-		return refuse(CodeNotAdmitted, Duplicate, "attempt %s is already being submitted", attemptID)
+		return s.refused(ctx, attemptID, refuse(CodeNotAdmitted, Duplicate, "attempt %s is already being submitted", attemptID))
 	}
 	s.m[attemptID] = own
 	s.mu.Unlock()

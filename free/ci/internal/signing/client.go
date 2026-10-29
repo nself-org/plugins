@@ -5,7 +5,8 @@ package signing
 // one request and read the envelopes back (cap:ci.release-signing: Sign,
 // PublicKey; P7-CACHE-17 and P7-CACHE-18 call it).
 // Inputs:  a Runner, the run's Source and a run id with payloads.
-// Outputs: DSSE envelopes in request order, or an E717 refusal.
+// Outputs: DSSE envelopes in request order, or an E717 refusal (with Audit set,
+// one release.sign.refused row per refused Sign).
 // Constraints: the signer's answer is checked for shape (one ci-release key id and one
 // 64-byte signature per item); its cryptographic check belongs to the verifier
 // that holds the trust file (P7-CACHE-09/18); the signer starts only when every attempt of the run is
@@ -21,6 +22,8 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -43,6 +46,10 @@ type Client struct {
 	// Team is set on a TEAM coordinator, which holds secret references only
 	// (Epic X8): it never starts the signer and never resolves the release key.
 	Team bool
+	// Audit, when set, records every refused Sign as release.sign.refused with
+	// its reason key (TM-18). The signer process never writes the store, so the
+	// coordinator records its refusals here.
+	Audit func(ctx context.Context, actor, action, target, detail string) error
 }
 
 func (c *Client) exe() (string, error) {
@@ -110,8 +117,20 @@ func signerRefusal(out []byte, code int) error {
 	return Failf(ReasonSignerFailed, "the signer failed (exit %d)", code)
 }
 
-// Sign signs the payloads of a finished run, or refuses.
+// Sign signs the payloads of a finished run, or refuses (and audits the refusal).
 func (c *Client) Sign(ctx context.Context, runID string, items []Item) ([]signing.Envelope, error) {
+	envs, err := c.sign(ctx, runID, items)
+	var e *Error
+	if err == nil || c.Audit == nil || !errors.As(err, &e) {
+		return envs, err
+	}
+	if aerr := c.Audit(ctx, "release", "release.sign.refused", runID, "reason="+e.Reason); aerr != nil {
+		return envs, errors.Join(err, fmt.Errorf("signer refusal audit: %w", aerr))
+	}
+	return envs, err
+}
+
+func (c *Client) sign(ctx context.Context, runID string, items []Item) ([]signing.Envelope, error) {
 	if c.Src == nil || c.Runner == nil {
 		return nil, Failf(ReasonSignerFailed, "the signer client has no run store or runner")
 	}

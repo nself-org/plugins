@@ -16,11 +16,13 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
-func releaseFacts() job.Facts {
+// releaseFacts builds the facts of a release whose one dep ended with status
+// (the coordinator's own evidence, consistent by construction).
+func releaseFacts(status string) job.Facts {
 	d := model.InputDigests{Config: strings.Repeat("c", 64), Lockfiles: []model.DigestRef{{Path: "go.sum", SHA256: strings.Repeat("1", 64)}}}
 	return job.BuildFacts(job.RunState{RunID: "pbuild", RepoID: "project", Revision: strings.Repeat("a", 40), PolicyDigest: "policy", ConfigDigest: d.Config, SourceTrust: "owner", Trigger: "local",
 		Pipeline: model.PipelineRef{ID: "pbuild", Name: "release", Kind: "default"}, Selection: model.Selection{Mode: "full", Reason: "selection.full_required", Digest: "digest"}, Deps: []string{"build"},
-		Outcomes: []job.Dep{{Name: "build", Status: "passed", Required: true}}, Clean: true, Bound: &d, Now: &d})
+		Outcomes: []job.Dep{{Name: "build", Status: status, Required: true}}, Clean: true, Bound: &d, Now: &d})
 }
 
 type evidenceSigner struct{ priv ed25519.PrivateKey }
@@ -44,11 +46,11 @@ func (l evidenceLedger) NodesByKey(context.Context, string) ([]attest.KeyNode, e
 }
 
 func (r *rig) release(id string) error {
-	f := releaseFacts()
+	f := releaseFacts("passed")
 	switch id {
 	case "release-no-deps":
-		f.Evidence.Result = "fail"
-		f.Evidence.Checks[0].Result = "fail"
+		// The dep failed: the evidence says so in its result, its check and its counts.
+		f = releaseFacts("failed")
 	case "untrusted-promotion":
 		f.Evidence.SourceTrust = "untrusted"
 	case "release-signed-remote", "release-revoked-remote":
@@ -86,9 +88,13 @@ func (r *rig) release(id string) error {
 		}
 		return v.VerifyEvidence(raw, f.Evidence)
 	}
-	e := job.Evaluate(f)
-	if e == nil {
-		return nil
+	// The admission path a release attempt takes (run's Dispatch wrapper), with the run's store as audit sink.
+	st := job.NewStash()
+	st.Audit = r.st.AppendAudit
+	queued := false
+	err := st.Guard(r.ctx, "release-attempt", job.Static(f), func() error { queued = true; return nil })
+	if err != nil && queued {
+		r.t.Error("a refused release attempt was queued")
 	}
-	return e
+	return err
 }

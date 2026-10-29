@@ -55,8 +55,9 @@ type Receiver struct {
 	// Live returns nil while the lease epoch is the current one. An error wrapping ErrStale is a
 	// stale epoch (refused, audited); any other error (a store fault) is a transient failure.
 	Live func(ctx context.Context) error
-	// Refused is told once per refused blob (by digest) when the epoch is stale, so the caller can
-	// write its audit row. It must not block.
+	// Refused is told once per refused blob and reason (by digest): a stale epoch, and a blob whose
+	// bytes end short or fail their digest at publish (TM-13, TM-15), so the caller can write its
+	// audit row. It must not block.
 	Refused func(ctx context.Context, sha string, err *Error)
 
 	mu   sync.Mutex
@@ -83,13 +84,18 @@ func (r *Receiver) epoch(ctx context.Context, sha string) error {
 	if !errors.Is(err, ErrStale) {
 		return Failf(ReasonInterrupted, "the lease check failed: %v", err)
 	}
-	e := Failf(ReasonStaleEpoch, "the lease epoch is no longer current; blob %s is refused", short(sha))
+	return r.tell(ctx, sha, Failf(ReasonStaleEpoch, "the lease epoch is no longer current; blob %s is refused", short(sha)))
+}
+
+// tell reports e to Refused once per blob and reason, and returns it.
+func (r *Receiver) tell(ctx context.Context, sha string, e *Error) *Error {
 	r.mu.Lock()
-	first := !r.told[sha]
+	k := sha + "/" + e.Reason
+	first := !r.told[k]
 	if r.told == nil {
 		r.told = map[string]bool{}
 	}
-	r.told[sha] = true
+	r.told[k] = true
 	r.mu.Unlock()
 	if first && r.Refused != nil {
 		r.Refused(ctx, sha, e)

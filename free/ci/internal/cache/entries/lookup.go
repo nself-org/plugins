@@ -4,7 +4,8 @@ package entries
 // every blob through cas, and Verify over all entries.
 // Inputs: the namespace being read, its key and the authz access mode.
 // Outputs: the Manifest and a hit flag; every refusal is a miss, never a
-// fallback.
+// fallback. ResolveForRestore also names why an entry found under the key was
+// not served (secret_match, blob_invalid), so a restore can refuse it.
 // Constraints: no restore-key or prefix fallback, no other key, no other
 // namespace. The stored namespace is compared byte for byte (a mismatch is a
 // miss plus an audit row). ro-snapshot serves only authz.SnapshotEligible
@@ -67,7 +68,8 @@ func (s *Store) intactBy(m Manifest, rehash bool) (reason string, err error) {
 // every blob is intact. The caller must derive access from authz.CacheAccess for
 // the attempt's own namespace and ns; Lookup does not know the attempt.
 func (s *Store) Lookup(ctx context.Context, ns authz.Namespace, key string, access authz.Mode) (Manifest, bool, error) {
-	return s.lookup(ctx, ns, key, access, true)
+	m, ok, _, err := s.lookup(ctx, ns, key, access, true)
+	return m, ok, err
 }
 
 // LookupForRestore is Lookup for a caller that reads every blob through
@@ -76,34 +78,47 @@ func (s *Store) Lookup(ctx context.Context, ns authz.Namespace, key string, acce
 // hashes a 100 MB build cache once, not three times. A blob that fails the
 // digest is quarantined by that read, and the caller drops the entry.
 func (s *Store) LookupForRestore(ctx context.Context, ns authz.Namespace, key string, access authz.Mode) (Manifest, bool, error) {
+	m, ok, _, err := s.lookup(ctx, ns, key, access, false)
+	return m, ok, err
+}
+
+// ResolveForRestore is LookupForRestore for a restore that refuses, rather than
+// misses, an entry it found under the key and must not serve (TM-12, TM-15):
+// refused is ReasonSecretMatch for a snapshot whose writer received secrets and
+// ReasonBlobInvalid for a blob that is missing or has the wrong size (the entry
+// is dropped, as Lookup drops it). Any other unusable entry is a plain miss.
+func (s *Store) ResolveForRestore(ctx context.Context, ns authz.Namespace, key string, access authz.Mode) (m Manifest, hit bool, refused string, err error) {
 	return s.lookup(ctx, ns, key, access, false)
 }
 
-func (s *Store) lookup(ctx context.Context, ns authz.Namespace, key string, access authz.Mode, rehash bool) (Manifest, bool, error) {
+func (s *Store) lookup(ctx context.Context, ns authz.Namespace, key string, access authz.Mode, rehash bool) (Manifest, bool, string, error) {
 	if (access != authz.ModeRWOwn && access != authz.ModeROSnapshot) || !ns.Valid() || !hexKey.MatchString(key) {
-		return Manifest{}, false, nil
+		return Manifest{}, false, "", nil
 	}
 	list, err := s.be.CacheEntries(ctx, key)
 	if err != nil || len(list) == 0 {
-		return Manifest{}, false, err
+		return Manifest{}, false, "", err
 	}
 	i := slices.IndexFunc(list, func(m Manifest) bool { return bytes.Equal(m.Namespace, ns.Canonical()) })
 	if i < 0 { // the key exists, but only under other namespaces: a miss, never a fallback
-		return Manifest{}, false, s.be.CacheAuditOnce(ctx, "cache.lookup.namespace_mismatch", key, "")
+		return Manifest{}, false, "", s.be.CacheAuditOnce(ctx, "cache.lookup.namespace_mismatch", key, "")
 	}
 	m := list[i]
 	if access == authz.ModeROSnapshot && !s.snapshotOK(m) {
-		return Manifest{}, false, nil
+		if m.Writer.SecretsReceived { // a snapshot of a secret-bearing job is refused to others, never served
+			return Manifest{}, false, ReasonSecretMatch, nil
+		}
+		return Manifest{}, false, "", nil
 	}
 	reason, err := s.intactBy(m, rehash)
 	if err != nil || reason == "unstable" {
-		return Manifest{}, false, err
+		return Manifest{}, false, "", err
 	}
 	if reason != "" {
 		_, err = s.be.CacheDrop(ctx, m, reason)
-		return Manifest{}, false, err
+		return Manifest{}, false, ReasonBlobInvalid, err
 	}
-	return m, true, s.be.CacheTouch(ctx, m.Namespace, key)
+	return m, true, "", s.be.CacheTouch(ctx, m.Namespace, key)
 }
 
 // snapshotOK applies authz.SnapshotEligible to the facts stored with m.
