@@ -171,12 +171,17 @@
 
 <!-- BEGIN GENERATED:guides-ci -->
 ### CI
+- [[Getting started with nself ci|guides/ci/Getting-Started]]
+- [[CI architecture|guides/ci/Architecture]]
+- [[CI configuration and policy|guides/ci/Configuration-and-Policy]]
 - [[Evidence and machine output|guides/ci/Evidence-and-Machine-Output]]
 - [[Nodes and Runners|guides/ci/Nodes-and-Runners]]
 - [[CI trust, security and privacy|guides/ci/Trust-Security-and-Privacy]]
 - [[CI scheduling and cost|guides/ci/Scheduling-and-Cost]]
 - [[Hosted providers|guides/ci/Hosted-Providers]]
 - [[Cache and artifacts|guides/ci/Cache-and-Artifacts]]
+- [[Migrating to the new CI engine|guides/ci/Migration]]
+- [[CI troubleshooting|guides/ci/Troubleshooting]]
 - [[CI reference|guides/ci/Reference]]
 - [[CI agent reference|guides/ci/Agent-Reference]]
 - [[Auto placement and pools|guides/ci/Auto-Placement-and-Pools]]
