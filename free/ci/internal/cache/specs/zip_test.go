@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/nself-org/plugins/free/ci/internal/authz"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
 )
 
@@ -36,9 +37,18 @@ func TestZipPayloadScan(t *testing.T) {
 	}{
 		{"clean", 1024, nil}, {fakeSecret, 1024, ErrSecretMatch}, {"longer than budget", 3, ErrTooLarge},
 	} {
-		inf := newInflater(r)
-		inf.left = tc.budget
-		if err := inf.scan(bytes.NewReader(makeZip(tc.text))); !errors.Is(err, tc.want) {
+		data := makeZip(tc.text)
+		left := tc.budget
+		err := authz.ScanArchive(bytes.NewReader(data), int64(len(data)), r, &left)
+		var got error
+		if errors.Is(err, authz.ErrSecretContent) {
+			got = ErrSecretMatch
+		} else if errors.Is(err, authz.ErrScanBudget) {
+			got = ErrTooLarge
+		} else {
+			got = err
+		}
+		if !errors.Is(got, tc.want) {
 			t.Fatalf("budget %d: %v, want %v", tc.budget, err, tc.want)
 		}
 	}

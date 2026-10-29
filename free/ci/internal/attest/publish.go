@@ -37,6 +37,11 @@ func PublishWith(ev model.Evidence, p Profile) model.Evidence {
 	out.Runner.Provider = structured.Text(ev.Runner.Provider)
 	out.Runner.Platform = structured.Text(ev.Runner.Platform)
 	out.Pipeline.Name = structured.Text(ev.Pipeline.Name)
+	if ev.Binding.Reason != nil {
+		reason := model.BindingReason(p.Text(string(*ev.Binding.Reason)))
+		out.Binding.Reason = &reason
+	}
+	out.Selection.Reason = model.Reason(p.Text(string(ev.Selection.Reason)))
 	out.PlacementRef = scrubPtr(p, ev.PlacementRef)
 	// every other free string is scrubbed too: a hostile or careless producer can
 	// put a path or an address in any of them
@@ -70,6 +75,12 @@ func PublishWith(ev model.Evidence, p Profile) model.Evidence {
 		c.Tool = p.Text(c.Tool)
 		c.ToolVersion = scrubPtr(p, c.ToolVersion)
 		c.Excerpt = p.Text(c.Excerpt)
+		c.Diagnosis, c.Remediation = p.Text(c.Diagnosis), p.Text(c.Remediation)
+		if c.Flaky != nil {
+			flaky := *c.Flaky
+			flaky.Source = p.Text(flaky.Source)
+			c.Flaky = &flaky
+		}
 		c.LogRef = scrubPtr(p, c.LogRef)
 		out.Checks[i] = c
 	}
@@ -81,6 +92,7 @@ func PublishWith(ev model.Evidence, p Profile) model.Evidence {
 	out.Retries = make([]model.Retry, len(ev.Retries))
 	for i, r := range ev.Retries {
 		r.JobID = p.Text(r.JobID)
+		r.Diagnosis, r.Excerpt = p.Text(r.Diagnosis), p.Text(r.Excerpt)
 		out.Retries[i] = r
 	}
 	reason := "publication profile applied; recompute from the inputs"

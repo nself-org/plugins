@@ -45,8 +45,7 @@ type Spec struct {
 	// Lockfiles are the detector lockfile managers whose digests key the spec.
 	Lockfiles []string
 	Probes    []Probe
-	// InflateScan is retained for spec compatibility. Every save now scans
-	// gzip and ZIP payloads, regardless of this legacy flag.
+	// InflateScan is retained for compatibility; every spec now scans compressed content.
 	InflateScan bool
 	// ContainerOnly specs apply to container-level jobs only.
 	ContainerOnly bool

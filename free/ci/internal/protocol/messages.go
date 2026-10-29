@@ -109,18 +109,19 @@ type LeaseCache struct {
 	Save      []CacheSave    `json:"save"`
 }
 type Lease struct {
-	LeaseID          string            `json:"lease_id"`
-	AttemptID        string            `json:"attempt_id"`
-	Epoch            uint64            `json:"epoch"`
-	Token            string            `json:"token"`
-	CompatMode       CompatMode        `json:"compat_mode"`
-	Job              model.Job         `json:"job"`
-	Checkout         Checkout          `json:"checkout"`
-	Secrets          []SecretRef       `json:"secrets"`
-	Trust            model.TrustClass  `json:"trust,omitempty"` // the class the job was admitted at; set with Secrets, so a node judges its own eligibility by it
-	ExpiresAt        string            `json:"expires_at"`
-	Cache            *LeaseCache       `json:"cache,omitempty"`
-	RunnerCredential *RunnerCredential `json:"runner_credential,omitempty"`
+	NetworkScope     model.NetworkScope  `json:"network_scope,omitempty"`
+	LeaseID          string              `json:"lease_id"`
+	AttemptID        string              `json:"attempt_id"`
+	Epoch            uint64              `json:"epoch"`
+	Token            string              `json:"token"`
+	CompatMode       CompatMode          `json:"compat_mode"`
+	Job              model.Job           `json:"job"`
+	Checkout         Checkout            `json:"checkout"`
+	Secrets          []SecretRef         `json:"secrets"`
+	Trust            model.TrustClass    `json:"trust,omitempty"` // the class the job was admitted at; set with Secrets, so a node judges its own eligibility by it
+	ExpiresAt        string              `json:"expires_at"`
+	Cache            *LeaseCache         `json:"cache,omitempty"`
+	RunnerCredential *RunnerCredential   `json:"runner_credential,omitempty"`
 }
 type Chunk struct {
 	Stream string `json:"stream"`

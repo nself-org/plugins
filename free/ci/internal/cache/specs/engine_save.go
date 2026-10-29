@@ -140,8 +140,8 @@ func (c *capWriter) Write(p []byte) (int, error) {
 // putDir streams dir through tar and scan into the blob store. The local blob
 // is a plain tar: disk is cheap and a restore is on a job's critical path, so a
 // copy beats an inflate (D-1008). Compress only when a blob leaves the host.
-// The scan also looks inside gzip and ZIP payloads for every spec.
-func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel string, budget int64, _ bool) (string, int64, PackStats, error) {
+// Every save also scans gzip and ZIP payloads inside the files.
+func (e *Engine) putDir(ctx context.Context, base *os.Root, realm cas.Realm, rel string, budget int64, inflate bool) (string, int64, PackStats, error) {
 	pr, pw := io.Pipe()
 	var st PackStats
 	done := make(chan struct{})

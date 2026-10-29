@@ -154,12 +154,6 @@ func leakingIn(t *testing.T, id string, markers []string, allFreeText bool) {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		if !openFinding(t, id) {
-			for _, k := range keys {
-				t.Logf("leaks %s: %v", k, leaking[k])
-			}
-			return
-		}
 		for _, k := range keys {
 			t.Errorf("published document keeps private data from %s: %v", k, leaking[k])
 		}
