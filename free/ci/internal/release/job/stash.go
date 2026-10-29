@@ -38,8 +38,9 @@ type Stash struct {
 	m  map[string]*entry
 	// Revoked reports whether the evidence signer's key id is revoked. It is
 	// called inside the lock during ReleaseDecision so a revocation that commits
-	// between Guard and Admit is seen atomically; nil revokes nothing.
-	Revoked func(keyID string) bool
+	// between Guard and Admit is seen atomically; nil revokes nothing. An error
+	// (the ledger cannot answer) refuses the attempt: the signer is unverified.
+	Revoked func(keyID string) (bool, error)
 }
 
 // NewStash returns an empty stash.
@@ -71,8 +72,14 @@ func (s *Stash) ReleaseFacts(attemptID string) (Facts, *Error, bool) {
 	if e.live && now().Sub(e.at) > maxAge {
 		return Facts{}, refuse(CodeNotAdmitted, FactsExpired, "the facts of attempt %s were last refreshed %s ago", attemptID, now().Sub(e.at).Round(time.Second)), true
 	}
-	if s.Revoked != nil && e.f.Evidence.Signature.KeyID != nil && s.Revoked(*e.f.Evidence.Signature.KeyID) {
-		return Facts{}, refuse(CodeNotAdmitted, SignerRevoked, "the evidence signer was revoked"), true
+	if s.Revoked != nil && e.f.Evidence.Signature.KeyID != nil {
+		revoked, err := s.Revoked(*e.f.Evidence.Signature.KeyID)
+		if err != nil {
+			return Facts{}, refuse(CodeNotAdmitted, SignerUnverified, "the revocation ledger could not be read: %v", err), true
+		}
+		if revoked {
+			return Facts{}, refuse(CodeNotAdmitted, SignerRevoked, "the evidence signer was revoked"), true
+		}
 	}
 	return e.f, e.perr, true
 }

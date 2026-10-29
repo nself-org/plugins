@@ -36,6 +36,7 @@ const (
 	FactsExpired     = "facts_expired"        // the facts were not refreshed recently enough to judge
 	Duplicate        = "duplicate_submission" // the attempt is already being submitted
 	SignerRevoked    = "signer_revoked"       // the evidence signer was revoked between guard and admission
+	SignerUnverified = "signer_unverified"    // the revocation ledger could not be read, so the signer is not known unrevoked
 )
 
 // E716 reasons.
