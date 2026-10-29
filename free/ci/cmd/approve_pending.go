@@ -1,5 +1,6 @@
 package main
 
+// List pending approvals after voiding stale approval bindings.
 import (
 	"context"
 	"flag"

@@ -127,9 +127,9 @@ func TestHostedSourceWorkflowTrust(t *testing.T) {
 		file, job, command, runner string
 		calls                      int
 	}{
-		{"../../.github/workflows/nself-ci-source.yml", "nself-ci-source", `"$NSELF_CI_BIN"`, "ubuntu-latest", 1},
+{"../../.github/workflows/nself-ci-source.yml", "nself-ci-source", `"$NSELF_CI_BIN"`, "ubuntu-latest", 1},
 		{"../../.github/workflows/ci-scenarios.yml", "scenarios", ".drill-bin/nself-ci", "${{ matrix.os }}", 2},
-	} {
+} {
 		t.Run(tc.job, func(t *testing.T) {
 			d, raw := readWorkflow(t, tc.file)
 			job, ok := d.Jobs[tc.job]
