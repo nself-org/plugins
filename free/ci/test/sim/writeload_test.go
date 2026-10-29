@@ -53,10 +53,14 @@ type loadResult struct {
 	renews  []stamp
 	codes   map[int]int
 	renewEr int
+	badBody string // the first answer that was not a 202, for the failure message
 }
 
-func (r *loadResult) hook(at time.Time, ms float64, code int) {
+func (r *loadResult) hook(at time.Time, ms float64, code int, body string) {
 	r.mu.Lock()
+	if code != http.StatusAccepted && r.badBody == "" {
+		r.badBody = body
+	}
 	r.hooks = append(r.hooks, stamp{at, ms})
 	r.codes[code]++
 	r.mu.Unlock()
@@ -133,7 +137,8 @@ func sign(body []byte) string {
 }
 
 func hookRequest(n int) *http.Request {
-	body, _ := json.Marshal(map[string]any{"ref": "refs/heads/main", "after": fmt.Sprintf("%040x", n+1),
+	sum := sha256.Sum256([]byte(fmt.Sprintf("load-revision-%d", n)))
+	body, _ := json.Marshal(map[string]any{"ref": "refs/heads/main", "after": hex.EncodeToString(sum[:20]),
 		"repository": map[string]string{"full_name": "o/r", "clone_url": "https://github.com/o/r.git"}})
 	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
@@ -201,7 +206,7 @@ func TestWriteLoad(t *testing.T) {
 			w := httptest.NewRecorder()
 			t0 := time.Now()
 			h.ServeHTTP(w, hookRequest(n))
-			res.hook(t0, ms(time.Since(t0)), w.Code)
+			res.hook(t0, ms(time.Since(t0)), w.Code, w.Body.String())
 		}(n)
 	}
 }
@@ -215,7 +220,7 @@ func finishLoad(t *testing.T, res *loadResult, start time.Time, dur time.Duratio
 	}
 	for code, n := range res.codes {
 		if code != http.StatusAccepted {
-			t.Errorf("%d deliveries were answered %d, want 202", n, code)
+			t.Errorf("%d deliveries were answered %d, want 202 (first body: %s)", n, code, res.badBody)
 		}
 	}
 	if res.renewEr != 0 {
