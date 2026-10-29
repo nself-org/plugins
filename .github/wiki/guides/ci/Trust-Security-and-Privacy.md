@@ -415,7 +415,7 @@ When the gate refuses, the error carries code `E685` ("evidence rejected") and o
 
 | Reason | Meaning |
 |---|---|
-| `evidence.invalid` | the document could not be decoded, names an unknown producer kind, or has a structural defect (duplicate JSON key, missing required field) |
+| `evidence.invalid` | the document is empty or over the size limit, fails the schema, repeats a JSON key, has an unknown field, enum value or producer kind, a malformed revision, or contradicts itself (binding, counts, producer against signature kind, a `pass` the checks do not support) |
 | `evidence.repo_mismatch` | the document's repository id is empty or does not match the gate's repository id |
 | `evidence.revision_mismatch` | the document's revision is empty or does not match the gate's exact revision |
 | `evidence.policy_mismatch` | the document's policy digest is empty or does not match the gate's policy digest |
@@ -435,13 +435,14 @@ The gate treats each producer kind differently. `coordinator-recorded` evidence 
 
 ### Release selection
 
-A gate with `Class: release` or `FullSelection: true` demands `selection.mode: full`. Evidence produced by a partial selection (for example a skip or subset run) is refused with `evidence.selection_partial`. Release gates also refuse self-reported evidence regardless of operator policy.
+A gate whose `Class` is anything other than `default` (the constant `release` included) or that sets `FullSelection: true` demands `selection.mode: full`. Evidence produced by a partial selection (for example a skip or subset run) is refused with `evidence.selection_partial`. Such a gate also refuses self-reported evidence regardless of operator policy.
 
 ### Known limits
 
 - The gate reads the coordinator's own store; evidence read from a job's worktree proves nothing about who wrote the file.
 - A zero `Gate` (no repo, no revision, no policy digest, no required jobs) accepts nothing; callers must build a complete gate from protected policy.
 - Freshness depends on `Gate.Current`; a nil `Current` makes every document stale. The caller sets `Current` from the live checkout and input digests at the moment of judgment.
+
 ## Signed evidence, revocation and the audit checkpoint
 
 A node that is signing eligible signs the evidence of every job it runs. The signature is Ed25519 with the node key over `nself-ci-evidence/v1`, a newline, and the canonical JSON of the document without its `signature` and `freshness` fields (numbers kept as written, fields a newer producer added stay in). The key id is `ci-node-` plus the first 16 hex characters of the sha256 of the public key. The coordinator accepts a `signed-remote` document only when all of these hold; otherwise the gate sees `evidence.signature_unverifiable` and the log gets an `E686` reason:
