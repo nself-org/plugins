@@ -103,7 +103,7 @@ func TestTheSudoersRuleGoesBeforeASurplusUserIsRetired(t *testing.T) {
 
 func TestAnIdThatStillOwnsFilesIsNotReused(t *testing.T) {
 	u := usersScript(1)
-	mustContain(t, "users", u, `find "$d" -xdev -uid +449 -uid -500 -exec`, "/sbin/mount", "scan-incomplete")
+	mustContain(t, "users", u, `find "$d" -xdev -ignore_readdir_race -uid +449 -uid -500 -exec`, "/sbin/mount", "scan-incomplete")
 	un := uninstallScript()
 	mustContain(t, "uninstall", un, `-user "$u" -depth -delete`, "/private/tmp", "/Volumes/*")
 }
