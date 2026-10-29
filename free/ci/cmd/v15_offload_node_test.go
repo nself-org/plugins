@@ -123,11 +123,21 @@ func (n *oflNode) serve(ctx context.Context, table *slots.Table, in io.Reader, o
 	return s.Run(ctx)
 }
 
-// start is the ssh Starter: the "connection" is a pair of pipes to n's session.
-func (n *oflNode) start(_ context.Context, tgt remote.Target, _ string) (*ssh.Conn, error) {
-	if !strings.HasSuffix(tgt.Dest, "@"+n.host) {
-		return nil, fmt.Errorf("no node at %s", tgt.Dest)
+// oflHosts maps a registered runner's ssh host to its in-process agent (one test at a time).
+var oflHosts map[string]*oflNode
+
+// oflStart is the ssh Starter: it picks the runner by destination host.
+func oflStart(ctx context.Context, tgt remote.Target, s string) (*ssh.Conn, error) {
+	for host, n := range oflHosts {
+		if strings.HasSuffix(tgt.Dest, "@"+host) {
+			return n.start(ctx, tgt, s)
+		}
 	}
+	return nil, fmt.Errorf("no node at %s", tgt.Dest)
+}
+
+// start opens a session on n: the "connection" is a pair of pipes.
+func (n *oflNode) start(_ context.Context, _ remote.Target, _ string) (*ssh.Conn, error) {
 	toAgentR, toAgentW := io.Pipe()
 	fromAgentR, fromAgentW := io.Pipe()
 	errR, errW := io.Pipe()
@@ -150,7 +160,15 @@ func (n *oflNode) start(_ context.Context, tgt remote.Target, _ string) (*ssh.Co
 // oflRegisterNode registers node id in the store under home and points ssh.Default at it.
 func oflRegisterNode(t *testing.T, home, repo, id string, probe ...string) *oflNode {
 	t.Helper()
-	n := &oflNode{id: id, host: "10.0.0.5", state: t.TempDir(), probe: probe, seen: make(chan oflSeen, 4)}
+	return oflRegisterRunner(t, home, repo, id, false, probe...)
+}
+
+// oflRegisterRunner is oflRegisterNode for an enrolled node, or, with hosted, for a
+// runner whose capability says it is hosted (sched.RunnerHosted): the dispatcher
+// then delivers its lease as a hosted one, over the same in-process session.
+func oflRegisterRunner(t *testing.T, home, repo, id string, hosted bool, probe ...string) *oflNode {
+	t.Helper()
+	n := &oflNode{id: id, host: id + ".runners.test", state: t.TempDir(), probe: probe, seen: make(chan oflSeen, 4)}
 	ctx := context.Background()
 	st, err := store.Open(filepath.Join(home, "state.db"), store.Options{})
 	if err != nil {
@@ -166,6 +184,9 @@ func oflRegisterNode(t *testing.T, home, repo, id string, probe ...string) *oflN
 		t.Fatal(err)
 	}
 	lan, owned, uid := "lan", "owned", true
+	if hosted {
+		lan = "hosted"
+	}
 	c.Identity.ID, c.Identity.Name, c.Identity.Provider, c.Identity.Transport = id, id, "ssh", "ssh"
 	c.Identity.SSH = &model.CapabilitySSH{Hostname: n.host, Port: 22, User: "ci"}
 	c.SecretsEligible = true
@@ -197,11 +218,15 @@ func oflRegisterNode(t *testing.T, home, repo, id string, probe ...string) *oflN
 	if _, err = reg.SetState(ctx, id, "online", "", "test"); err != nil {
 		t.Fatal(err)
 	}
-	d := ssh.Default
-	home0, start0, ver0, hb0 := d.Home, d.Start, d.SSHVersion, d.Heartbeat
-	d.Home, d.Start, d.Heartbeat = home, n.start, time.Second
-	d.SSHVersion = func(context.Context) (remote.Version, error) { return remote.Version{Major: 9, Minor: 6}, nil }
-	t.Cleanup(func() { d.Home, d.Start, d.SSHVersion, d.Heartbeat = home0, start0, ver0, hb0 })
+	if oflHosts == nil {
+		d := ssh.Default
+		home0, start0, ver0, hb0 := d.Home, d.Start, d.SSHVersion, d.Heartbeat
+		d.Home, d.Start, d.Heartbeat = home, oflStart, time.Second
+		d.SSHVersion = func(context.Context) (remote.Version, error) { return remote.Version{Major: 9, Minor: 6}, nil }
+		oflHosts = map[string]*oflNode{}
+		t.Cleanup(func() { d.Home, d.Start, d.SSHVersion, d.Heartbeat, oflHosts = home0, start0, ver0, hb0, nil })
+	}
+	oflHosts[n.host] = n
 	return n
 }
 

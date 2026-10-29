@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry"
+	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/where"
 )
@@ -167,6 +168,34 @@ func TestCLIAutoDirtyRunStaysLocal(t *testing.T) {
 	if after := oflRepoState(t, r.dir); after != before {
 		t.Errorf("the user's repository changed:\n--- before\n%s\n--- after\n%s", before, after)
 	}
+}
+
+// TestCLIDirtyRunNodeWithHostedRegistered: a node and a hosted runner are both
+// registered and placement picks the node: the node gets the snapshot, the
+// hosted runner gets nothing and no hosted note is printed. (A foreground CLI
+// run never places on a hosted runner: the run's world drops them unless a
+// `ci serve` coordinator runs the pipeline; test/sim offload_hosted_test.go
+// covers a hosted placement.)
+func TestCLIDirtyRunNodeWithHostedRegistered(t *testing.T) {
+	r, n, head := dirtyNodeRepo(t)
+	h := oflRegisterRunner(t, r.home, r.dir, "h1", true)
+	out, errOut, code := r.ci("--where", "n1", "--no-status")
+	if code != 0 {
+		t.Fatalf("exit %d\nstdout %s\nstderr %s", code, out, errOut)
+	}
+	s := n.wait(t)
+	if s.err != nil || s.head == "" || s.head == head || s.files["f.txt"] != "edited on the laptop\n" || s.files["new.txt"] != "untracked and not ignored\n" {
+		t.Fatalf("the node did not get the snapshot: head %q err %v files %q", s.head, s.err, s.files)
+	}
+	if strings.Contains(out+errOut, cirun.HostedDirtyNote) {
+		t.Errorf("a node placement printed the hosted note:\n%s%s", out, errOut)
+	}
+	select {
+	case got := <-h.seen:
+		t.Errorf("the hosted runner ran a job placed on the node: %+v", got)
+	default:
+	}
+	requireRecordedHEAD(t, r, head)
 }
 
 func TestCLIWhereNodeTrackedSecretRefused(t *testing.T) {
