@@ -38,14 +38,21 @@ jobs:
           - name: linux-amd64
             os: ubuntu-latest
             budget: perf-budget.json
+            sched_budget: sched-budget.json
+            share_budget: sched/share-budget-linux-amd64.json
             services: true
           - name: macos-arm64
             os: macos-14
             budget: perf-budget-darwin-arm64.json
+            sched_budget: sched-budget-darwin-arm64.json
+            share_budget: sched/share-budget-darwin-arm64.json
             services: false
     env:
       BUDGET: ${{ github.workspace }}/free/ci/bench/${{ matrix.budget }}
       SLOW: ${{ github.workspace }}/free/ci/bench/testdata/slow-result.json
+      SCHED_BUDGET: ${{ github.workspace }}/free/ci/bench/${{ matrix.sched_budget }}
+      SHARE_BUDGET: ${{ github.workspace }}/free/ci/bench/${{ matrix.share_budget }}
+      SCHED_SLOW: ${{ github.workspace }}/free/ci/bench/sched/testdata/slow-result.json
       OK: ${{ github.workspace }}/free/ci/bench/testdata/ratio-ok-result.json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -82,6 +89,18 @@ jobs:
         working-directory: free/ci
         run: go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$RUNNER_TEMP/ci-bench.json"
 
+      - name: Scheduling cost (schedbench)
+        working-directory: free/ci
+        run: go run -mod=vendor ./bench/cmd/schedbench -runs 20 -warmup 2 -out "$RUNNER_TEMP/sched-bench.json"
+
+      - name: Scheduling p95 budget (cli perfbench check)
+        working-directory: cli
+        run: go run -mod=vendor ./tools/perfbench check -budget "$SCHED_BUDGET" -in "$RUNNER_TEMP/sched-bench.json"
+
+      - name: Scheduling share budget
+        working-directory: free/ci
+        run: go run -mod=vendor ./bench/cmd/schedbench -share-check "$SHARE_BUDGET" -in "$RUNNER_TEMP/sched-bench.json"
+
       - name: Control - the gates fail an injected slowdown and pass a good result
         if: ${{ !cancelled() }}
         run: |
@@ -98,6 +117,17 @@ jobs:
             echo "::error::the ratio check exited $rc on a result ten times over budget; want 1 (a violation)"; exit 1
           fi
           go run -mod=vendor ./bench/cmd/cibench -ratio-check -in "$OK"
+          rc=0
+          go run -mod=vendor ./bench/cmd/schedbench -share-check "$SHARE_BUDGET" -in "$SCHED_SLOW" || rc=$?
+          if [ "$rc" -ne 1 ]; then
+            echo "::error::the share check exited $rc on a slow scheduling result; want 1 (a violation)"; exit 1
+          fi
+          cd ../../cli
+          rc=0
+          go run -mod=vendor ./tools/perfbench check -budget "$SCHED_BUDGET" -in "$SCHED_SLOW" || rc=$?
+          if [ "$rc" -ne 1 ]; then
+            echo "::error::perfbench check exited $rc on a slow scheduling result; want 1 (a violation)"; exit 1
+          fi
 
       - name: Service start (warm and cold)
         if: ${{ !cancelled() && matrix.services }}
@@ -115,6 +145,7 @@ jobs:
           path: |
             ${{ runner.temp }}/ci-bench.json
             ${{ runner.temp }}/ci-bench-services.json
+            ${{ runner.temp }}/sched-bench.json
           if-no-files-found: ignore
 
   schedbench:
