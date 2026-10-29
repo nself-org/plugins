@@ -118,7 +118,7 @@ No image is shipped and a tag without a digest is refused: the level reports `is
 
 ## Network scopes
 
-A job runs under one scope. An undeclared scope takes the default of its trust class: `owner` and `internal` get `lan`, `collaborator` gets `internet`, `untrusted` gets `restricted`. An untrusted job that declares `lan` or `privileged` is refused (`E680`), before any resource exists.
+A job runs under one scope. An undeclared scope takes the default of its trust class: `owner` and `internal` get `lan`, `collaborator` gets `internet`, `untrusted` gets `restricted`. An untrusted job that declares `lan` or `privileged` is refused (`E679`), before any resource exists.
 
 | Scope | What the job can reach |
 |---|---|
@@ -406,6 +406,42 @@ Handoff for later Tickets: `roles.Authorize(ctx, actor, role, project)` and `rol
 
 Wiring left to the coordinator process (P7-NODE-10 and P7-TRUST-26): start `audit.Log.RunSealer` (60 s) so rows other packages write get sealed, call `audit.SetScanner(run.Redactions)` before its first `Append` or `AppendTx` (the `serve admin` commands do this themselves), and resolve an Actor per request, not per connection. `store.CertSubjectPut` has no caller until the command that issues user certificates records their subject.
 
+
+## Evidence gate acceptance (E685)
+
+The coordinator judges every evidence document against a `Gate` built from its own protected policy and the current checkout; nothing in the gate comes from the document being judged. `attest.GateAccept(ev, g)` returns every reason the evidence fails, in a fixed order; an empty list means the evidence is accepted. `attest.GateAcceptDocument(doc, g)` decodes raw bytes and judges them in one step so a registered remote verifier sees the exact bytes once; it refuses documents with duplicate JSON keys. Both are pure and fail-closed: an empty or unknown gate field never matches, unknown freshness is stale, and a zero `Gate` accepts nothing. Adhoc and drill pipelines never satisfy a gate. Self-reported evidence passes only a default-class gate whose operator policy admitted it, never a release gate.
+
+When the gate refuses, the error carries code `E685` ("evidence rejected") and one or more of these stable reason keys. A consumer branches on them, so a key is never renamed or reused:
+
+| Reason | Meaning |
+|---|---|
+| `evidence.invalid` | the document is empty or over the size limit, fails the schema, repeats a JSON key, has an unknown field, enum value or producer kind, a malformed revision, or contradicts itself (binding, counts, producer against signature kind, a `pass` the checks do not support) |
+| `evidence.repo_mismatch` | the document's repository id is empty or does not match the gate's repository id |
+| `evidence.revision_mismatch` | the document's revision is empty or does not match the gate's exact revision |
+| `evidence.policy_mismatch` | the document's policy digest is empty or does not match the gate's policy digest |
+| `evidence.jobs_mismatch` | the gate requires at least one job and the evidence omits a required job, or the gate requires no jobs (a gate that requires nothing cannot be satisfied) |
+| `evidence.stale` | the gate's `Current` input digests are nil (unknown), or the evidence's freshness relative to those digests is not `current` |
+| `evidence.unbound` | the evidence's binding state is not `bound` or its worktree state is not `clean` |
+| `evidence.adhoc` | the evidence's pipeline kind is neither `default` nor `named` (adhoc and drill pipelines never gate) |
+| `evidence.trust_below_min` | the evidence's source trust ranks below the gate's minimum trust class, or either value is unknown |
+| `evidence.self_reported_not_admitted` | the evidence is self-reported and the gate is a release gate or the operator policy did not admit self-reported evidence |
+| `evidence.signature_unverifiable` | the evidence is signed-remote and the signature, key or document failed verification (see the E686 signature table below for sub-reasons) |
+| `evidence.selection_partial` | the gate demands full selection (release gates always do) and the evidence's selection mode is not `full` |
+| `evidence.not_passing` | the evidence's overall result is not `pass`, or a required job's checks include a non-passing result |
+
+### Producer admission
+
+The gate treats each producer kind differently. `coordinator-recorded` evidence is accepted without further checks (the coordinator wrote it). `signed-remote` evidence is verified against the re-marshalled or raw document bytes using the node registry's pinned keys; any failure yields `evidence.signature_unverifiable`. `self-reported` evidence is accepted only when the gate is default-class and the operator-scope policy set `AllowSelfReported`; a release gate or a missing admission yields `evidence.self_reported_not_admitted`. An unknown producer kind yields `evidence.invalid`.
+
+### Release selection
+
+A gate whose `Class` is anything other than `default` (the constant `release` included) or that sets `FullSelection: true` demands `selection.mode: full`. Evidence produced by a partial selection (for example a skip or subset run) is refused with `evidence.selection_partial`. Full selection is the only thing `FullSelection: true` adds: a default-class gate that sets it still accepts fully selected self-reported evidence when the operator policy set `AllowSelfReported`. Only a release-class gate (any `Class` other than `default`) refuses self-reported evidence regardless of operator policy.
+
+### Known limits
+
+- The gate reads the coordinator's own store; evidence read from a job's worktree proves nothing about who wrote the file.
+- A zero `Gate` (no repo, no revision, no policy digest, no required jobs) accepts nothing; callers must build a complete gate from protected policy.
+- Freshness depends on `Gate.Current`; a nil `Current` makes every document stale. The caller sets `Current` from the live checkout and input digests at the moment of judgment.
 
 ## Signed evidence, revocation and the audit checkpoint
 
