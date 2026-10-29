@@ -158,7 +158,10 @@ func TestRunsWait(t *testing.T) {
 		home := runsHome(t)
 		seedRun(t, home, "r-run", "running", time.Now(), map[string]string{"build": "running"})
 		code, w, took := waitJSON(t, "r-run", "--timeout", "300ms", "--json")
-		if code != 10 || w.Data.State != "running" || w.Data.Terminal || took < 300*time.Millisecond || took > 3*time.Second {
+		// The budget covers opening the store and the first read, so on a loaded host it can end before
+		// that read: the state is then "unknown" (what the exit and the caps below assert is the budget,
+		// not the host's speed). The state of a run that was read is pinned by the capped-wait test.
+		if code != 10 || (w.Data.State != "running" && w.Data.State != "unknown") || w.Data.Terminal || took < 300*time.Millisecond || took > 3*time.Second {
 			t.Fatalf("exit %d %+v in %v", code, w, took)
 		}
 	})
@@ -181,8 +184,12 @@ func TestRunsWait(t *testing.T) {
 		}
 	})
 	t.Run("the invoke deadline caps the wait", func(t *testing.T) {
-		home := runsHome(t)
-		seedRun(t, home, "r-cap", "running", time.Now(), map[string]string{"build": "running"})
+		runsHome(t)
+		// A resolver that answers at once: the 200 ms budget must not also have to pay for opening the
+		// store and recovering dead coordinators, which on a loaded host takes longer than the budget.
+		old := cirun.Registered.Remote
+		cirun.Registered.Remote = []cirun.RemoteResolver{steadyRemote{ref: "r-cap"}}
+		t.Cleanup(func() { cirun.Registered.Remote = old })
 		t.Setenv("NSELF_INVOKE_DEADLINE_MS", "10200") // 10.2 s minus the 10 s margin = 200 ms
 		code, w, took := waitJSON(t, "r-cap", "--json")
 		if code != 10 || w.Data.State != "running" || took > 3*time.Second {
@@ -226,7 +233,7 @@ func TestRunsWait(t *testing.T) {
 	t.Run("a stalled resolver cannot outlive the budget", func(t *testing.T) {
 		runsHome(t)
 		old := cirun.Registered.Remote
-		cirun.Registered.Remote = append(append([]cirun.RemoteResolver(nil), old...), stalledRemote{})
+		cirun.Registered.Remote = append(append([]cirun.RemoteResolver(nil), old...), &stalledRemote{})
 		t.Cleanup(func() { cirun.Registered.Remote = old })
 		code, w, took := waitJSON(t, "remote-stall", "--timeout", "200ms", "--json")
 		if code != 10 || w.Data.Terminal || took > 700*time.Millisecond {
@@ -263,17 +270,26 @@ func (f *fakeRemote) Resolve(_ context.Context, ref string) (cirun.RunView, bool
 	return f.views[i], true, nil
 }
 
-// stalledRemote answers the first look at once, then blocks until its context ends.
-type stalledRemote struct{}
+// steadyRemote reports its run as running, at once, on every look.
+type steadyRemote struct{ ref string }
 
-var stalls int
+func (r steadyRemote) Resolve(_ context.Context, ref string) (cirun.RunView, bool, error) {
+	if ref != r.ref {
+		return cirun.RunView{}, false, nil
+	}
+	return cirun.RunView{ID: ref, Status: "running"}, true, nil
+}
 
-func (stalledRemote) Resolve(ctx context.Context, ref string) (cirun.RunView, bool, error) {
+// stalledRemote answers the first look at once, then blocks until its context ends. The look count
+// belongs to the value, so every test (and every -count repeat) starts with a first look that answers.
+type stalledRemote struct{ looks int }
+
+func (r *stalledRemote) Resolve(ctx context.Context, ref string) (cirun.RunView, bool, error) {
 	if ref != "remote-stall" {
 		return cirun.RunView{}, false, nil
 	}
-	stalls++
-	if stalls == 1 {
+	r.looks++
+	if r.looks == 1 {
 		return cirun.RunView{ID: ref, Status: "running"}, true, nil
 	}
 	<-ctx.Done()
