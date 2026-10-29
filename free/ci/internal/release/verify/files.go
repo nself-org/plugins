@@ -66,19 +66,6 @@ func safePath(dir, rel string) (string, error) {
 	return cur, nil
 }
 
-// open opens the regular file rel under dir. The mode is checked before the
-// open, because opening a FIFO would block the verifier for ever.
-func open(dir, rel string) (*os.File, error) {
-	p, err := safePath(dir, rel)
-	if err != nil {
-		return nil, err
-	}
-	if st, lerr := os.Lstat(p); lerr != nil || !st.Mode().IsRegular() {
-		return nil, fmt.Errorf("%q is not a regular file", rel)
-	}
-	return os.Open(p)
-}
-
 // readFile reads rel under dir, refusing more than max bytes.
 func readFile(dir, rel string, max int64) ([]byte, error) {
 	f, err := open(dir, rel)

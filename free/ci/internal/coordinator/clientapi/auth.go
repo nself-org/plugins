@@ -11,6 +11,7 @@ package clientapi
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 
@@ -30,15 +31,16 @@ func (s *Server) authenticate(req *http.Request) (roles.Actor, error) {
 	if req.TLS == nil {
 		return roles.Actor{}, Failf(ReasonPlainHTTP, "the user API serves TLS only")
 	}
+	ctx := roles.WithPeer(req.Context(), peerHost(req))
 	if len(req.TLS.PeerCertificates) > 0 {
-		a, err := s.cfg.Roles.ActorFromPeer(req.Context(), req.TLS.PeerCertificates[0])
+		a, err := s.cfg.Roles.ActorFromPeer(ctx, req.TLS.PeerCertificates[0])
 		return a, mapRoles(err)
 	}
 	tok, ok := bearer(req)
 	if !ok {
 		return roles.Actor{}, Failf(ReasonNoCredential, "present a user certificate or a bearer token")
 	}
-	a, err := s.cfg.Roles.ActorFromToken(req.Context(), tok)
+	a, err := s.cfg.Roles.ActorFromToken(ctx, tok)
 	if err != nil {
 		return roles.Actor{}, mapRoles(err)
 	}
@@ -46,6 +48,15 @@ func (s *Server) authenticate(req *http.Request) (roles.Actor, error) {
 		return roles.Actor{}, Failf(ReasonUnscopedToken, "the token names no project")
 	}
 	return a, nil
+}
+
+// peerHost is the address the request came from, without the port.
+func peerHost(req *http.Request) string {
+	host, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		return req.RemoteAddr
+	}
+	return host
 }
 
 // bearer reads the Authorization header; only the Bearer scheme counts.

@@ -19,8 +19,23 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
-// ActorFromPeer maps a user certificate to its actor.
+// ActorFromPeer maps a user certificate to its actor. A refusal writes a rate-limited sign-in failure
+// row (signin.go).
 func (s *Service) ActorFromPeer(ctx context.Context, cert *x509.Certificate) (Actor, error) {
+	a, err := s.actorFromPeer(ctx, cert)
+	if err != nil {
+		who := "certificate:unknown"
+		if cert != nil {
+			if id, kind := pki.IdentityOf(cert); kind == pki.KindUser && id != "" {
+				who = "user:" + id
+			}
+		}
+		s.auditSignInFailure(ctx, who, "certificate", err)
+	}
+	return a, err
+}
+
+func (s *Service) actorFromPeer(ctx context.Context, cert *x509.Certificate) (Actor, error) {
 	if cert == nil {
 		return Actor{}, fail(ReasonBadCert, "no client certificate")
 	}
@@ -53,13 +68,19 @@ func (s *Service) ActorFromPeer(ctx context.Context, cert *x509.Certificate) (Ac
 	return Actor{id: id, kind: KindUser, role: Role(g.Role), projects: g.Projects, serial: serial, notAfter: cert.NotAfter, svc: s}, nil
 }
 
-// ActorFromToken maps a scoped token to its actor.
+// ActorFromToken maps a scoped token to its actor. A refusal writes a rate-limited sign-in failure row
+// (signin.go), so a token guessing run shows in the audit log.
 func (s *Service) ActorFromToken(ctx context.Context, token string) (Actor, error) {
 	t, ok, err := s.St.TokenByDigest(ctx, digestOf(token))
 	if err != nil {
 		return Actor{}, err
 	}
 	if err = s.tokenState(t, ok); err != nil {
+		who := "token:unknown"
+		if ok {
+			who = "token:" + t.ID + ":" + t.Principal
+		}
+		s.auditSignInFailure(ctx, who, "token", err)
 		return Actor{}, err
 	}
 	return Actor{id: t.Principal, kind: KindToken, role: Role(t.Role), projects: t.Projects, tokenID: t.ID, svc: s}, nil

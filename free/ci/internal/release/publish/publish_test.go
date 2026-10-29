@@ -2,6 +2,8 @@ package publish_test
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -9,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/release/publish"
 	"github.com/nself-org/plugins/free/ci/internal/signing"
@@ -245,4 +248,56 @@ func TestSignSourcesRegistry(t *testing.T) {
 			publish.RegisterSignSource(bad, nil, func(context.Context, string, *flagSet) (publish.Release, error) { return publish.Release{}, nil })
 		}()
 	}
+}
+
+// TestPublishOutsideARunUsesTheKeyedPseudonyms is the `nself ci artifacts sign` case: a process that
+// never ran an attempt has no pseudonym key registered, yet the ids it publishes must be the keyed ones
+// (D-1198), the same a run publishes.
+func TestPublishOutsideARunUsesTheKeyedPseudonyms(t *testing.T) {
+	f := newFixture(t)
+	if err := attest.UsePseudonymKey(nil); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = attest.UsePseudonymKey(nil) })
+	unkeyed := attest.ProfileFor(attest.RepoFacts{RepoID: "repo-1"})
+	rel := mustRun(t, f)
+	if _, err := os.Stat(filepath.Join(f.home, attest.PseudonymKeyFile)); err != nil {
+		t.Fatalf("publishing did not create the key under the CI home: %v", err)
+	}
+	keyed := attest.ProfileFor(attest.RepoFacts{RepoID: "repo-1"})
+	if keyed.CoordinatorID("local") == unkeyed.CoordinatorID("local") {
+		t.Fatal("the registered key did not change the pseudonym")
+	}
+	for file, id := range map[string]string{
+		"release-manifest.dsse.json":  unkeyed.CoordinatorID("local"),
+		"provenance.intoto.dsse.json": unkeyed.RunnerID("local"),
+	} {
+		doc := decodePayload(t, filepath.Join(rel.Dir, file))
+		if strings.Contains(doc, id) {
+			t.Fatalf("%s carries the unkeyed id %s", file, id)
+		}
+	}
+	if !strings.Contains(decodePayload(t, filepath.Join(rel.Dir, "release-manifest.dsse.json")), keyed.CoordinatorID("local")) ||
+		!strings.Contains(decodePayload(t, filepath.Join(rel.Dir, "provenance.intoto.dsse.json")), keyed.RunnerID("local")) {
+		t.Fatal("the published ids are not the keyed ones")
+	}
+}
+
+func decodePayload(t *testing.T, path string) string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env struct {
+		Payload string `json:"payload"`
+	}
+	if err := json.Unmarshal(raw, &env); err != nil {
+		t.Fatal(err)
+	}
+	b, err := base64.StdEncoding.DecodeString(env.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
