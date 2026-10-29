@@ -50,8 +50,8 @@ var perf struct {
 	metrics []metric
 }
 
-// record adds the samples of one metric; an empty sample set records nothing.
-func record(leg, name, unit, context string, samples []float64) {
+// recordPerf adds the samples of one metric; an empty sample set records nothing.
+func recordPerf(leg, name, unit, context string, samples []float64) {
 	if len(samples) == 0 {
 		return
 	}
