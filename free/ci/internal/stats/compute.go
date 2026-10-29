@@ -64,7 +64,7 @@ func Build(rows store.StatsRows, o Options) Doc {
 		p := o.Project
 		d.Project = &p
 	}
-	var out []store.StatOutcome
+	out := make([]store.StatOutcome, 0, len(rows.Outcomes))
 	for _, x := range rows.Outcomes {
 		if o.visible(x.Project) && (x.Result == "passed" || x.Result == "failed") {
 			out = append(out, x)
@@ -87,9 +87,15 @@ func (d *Doc) buildQueue(rows store.StatsRows, out []store.StatOutcome, o Option
 			depth[band(g.Key)] += int(g.N)
 		}
 	}
+	bands := map[string]string{} // a trigger's band, worked out once per trigger instead of once per attempt
 	for _, x := range out {
 		if x.WaitMs >= 0 {
-			waits[band(x.Trigger)] = append(waits[band(x.Trigger)], x.WaitMs)
+			b, ok := bands[x.Trigger]
+			if !ok {
+				b = band(x.Trigger)
+				bands[x.Trigger] = b
+			}
+			waits[b] = append(waits[b], x.WaitMs)
 		}
 	}
 	if rows.Missing["schedtel_outcome"] && len(depth) == 0 {

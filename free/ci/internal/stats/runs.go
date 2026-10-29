@@ -8,9 +8,7 @@ package stats
 //          failure marks its job as failed-before, and a later pass of that job makes the job flaky.
 
 import (
-	"cmp"
-	"slices"
-	"strings"
+	"math"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -34,14 +32,14 @@ func (d *Doc) buildRuns(rows store.StatsRows, out []store.StatOutcome, o Options
 	runtimes := map[string][]int64{}
 	var cold []int64
 	var passed, failed, infra int64
-	type jobKey = string
-	failedBefore := map[jobKey]bool{}
-	flakyJobs, jobs := map[jobKey]bool{}, map[jobKey]bool{}
-	slices.SortFunc(out, func(a, b store.StatOutcome) int { // flakiness needs attempt order within a job
-		return cmp.Or(strings.Compare(a.Job, b.Job), cmp.Compare(a.N, b.N))
-	})
+	// A job is flaky when a non-infra failure precedes a pass: its first such failure comes before its last pass.
+	type span struct{ firstFail, lastPass int }
+	jobs := make(map[string]span, len(out))
 	for _, x := range out {
-		jobs[x.Job] = true
+		s, ok := jobs[x.Job]
+		if !ok {
+			s = span{firstFail: math.MaxInt, lastPass: math.MinInt}
+		}
 		r := d.Runners[x.Runner]
 		r.Attempts++
 		if x.RuntimeMs >= 0 {
@@ -55,15 +53,20 @@ func (d *Doc) buildRuns(rows store.StatsRows, out []store.StatOutcome, o Options
 		switch {
 		case x.Result == "passed":
 			passed++
-			if failedBefore[x.Job] {
-				flakyJobs[x.Job] = true
-			}
+			s.lastPass = max(s.lastPass, x.N)
 		case x.FailureClass == "infra":
 			failed++
 			infra++
 		default:
 			failed++
-			failedBefore[x.Job] = true
+			s.firstFail = min(s.firstFail, x.N)
+		}
+		jobs[x.Job] = s
+	}
+	var flaky int64
+	for _, s := range jobs {
+		if s.firstFail < s.lastPass {
+			flaky++
 		}
 	}
 	for id, r := range d.Runners {
@@ -79,7 +82,7 @@ func (d *Doc) buildRuns(rows store.StatsRows, out []store.StatOutcome, o Options
 	}
 	total := passed + failed
 	d.Attempts = &Attempts{Finished: int(total), PassPermille: permille(passed, total), FailPermille: permille(failed, total),
-		FlakyPermille: permille(int64(len(flakyJobs)), int64(len(jobs))), InfraRetryPermille: permille(infra, total)}
+		FlakyPermille: permille(flaky, int64(len(jobs))), InfraRetryPermille: permille(infra, total)}
 	for k, v := range runtimes {
 		d.Jobs[k] = *pct(v)
 	}

@@ -7,7 +7,10 @@ package store
 // Constraints: read transactions only; every statement is index-assisted (the query-plan test in
 //          internal/stats explains each StatsStatements entry); a set whose table is absent
 //          reports it in Missing instead of failing; times: telemetry ts is milliseconds, every
-//          other table nanoseconds; the project filter is an index range, never a table scan.
+//          other table nanoseconds; the project filter is an index range, never a table scan, and
+//          binds the outcome, queued and lease statements; nodes carry no project and feed the
+//          runner slots of a scoped document too; outcomes and cache use read the job, trigger and
+//          project their write-time triggers keep, so no statement looks rows up one by one.
 
 import (
 	"context"
@@ -82,15 +85,14 @@ func StatsStatements(q StatsQuery) []StatsStmt {
 	cut := q.Now.Add(-q.Since)
 	ms, ns := cut.UnixMilli(), cut.UnixNano()
 	return []StatsStmt{
-		{"outcomes", `SELECT o.attempt_id,a.job_id,a.n,o.project,o.job_key,o.runner,o.runner_class,o.result,o.failure_class,p.trigger,o.wait_ms,o.runtime_ms,o.cold_start_ms
-FROM schedtel_outcome o JOIN attempt a ON a.id=o.attempt_id JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id
-WHERE o.project BETWEEN ? AND ? AND o.ts>=?`, []any{lo, hi, ms}},
-		{"queued", `SELECT p.project,p.trigger,count(*) FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id WHERE a.state='queued' GROUP BY p.project,p.trigger`, nil},
-		{"cache", `SELECT coalesce(c.project,''),u.result,count(*),sum(u.bytes) FROM cache_use u LEFT JOIN cache_attempt c ON c.attempt_id=u.attempt_id WHERE u.ts>=? GROUP BY 1,2`, []any{ns}},
+		{"outcomes", `SELECT attempt_id,job_id,attempt_n,project,job_key,runner,runner_class,result,failure_class,pipeline_trigger,wait_ms,runtime_ms,cold_start_ms
+FROM schedtel_outcome WHERE project BETWEEN ? AND ? AND ts>=? AND job_id IS NOT NULL`, []any{lo, hi, ms}},
+		{"queued", `SELECT p.project,p.trigger,count(*) FROM attempt a JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id WHERE a.state='queued' AND p.project BETWEEN ? AND ? GROUP BY p.project,p.trigger`, []any{lo, hi}},
+		{"cache", `SELECT coalesce(project,''),result,count(*),sum(bytes) FROM cache_use WHERE ts>=? GROUP BY 1,2`, []any{ns}},
 		{"ledger", `SELECT project,confidence,count(*),sum(coalesce(act_micro,est_micro)) FROM ledger WHERE provider>='' AND admitted_at>=? GROUP BY project,confidence`, []any{ns}},
 		{"cas", `SELECT coalesce(c.project,''),count(*),sum(e.bytes) FROM cache_entry e LEFT JOIN cache_attempt c ON c.attempt_id=e.attempt_id WHERE e.namespace>=x'' GROUP BY 1`, nil},
 		{"artifacts", `SELECT project,count(*),sum(size) FROM cache_artifact WHERE project>='' AND state='committed' GROUP BY project`, nil},
-		{"leases", `SELECT coalesce(p.project,''),a.state,l.expires_at,l.epoch FROM lease l JOIN attempt a ON a.id=l.attempt_id JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id WHERE l.expires_at>=0`, nil},
+		{"leases", `SELECT coalesce(p.project,''),a.state,l.expires_at,l.epoch FROM lease l JOIN attempt a ON a.id=l.attempt_id JOIN job j ON j.id=a.job_id JOIN pipeline p ON p.id=j.pipeline_id WHERE l.expires_at>=0 AND p.project BETWEEN ? AND ?`, []any{lo, hi}},
 		{"nodes", `SELECT n.id,n.name,n.state,n.updated_at,coalesce(c.doc_json,'') FROM node n LEFT JOIN capability_snapshot c ON c.node_id=n.id WHERE n.id>=''`, nil},
 		{"outbox", `SELECT count(*),coalesce(min(created_at),0) FROM outbox WHERE state IN ('pending','posting','failed')`, nil},
 		{"incarnation", `SELECT coalesce(max(incarnation),0) FROM coordinator WHERE id>=''`, nil},
