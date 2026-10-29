@@ -1,0 +1,35 @@
+# Audit pipeline for an unattended CI host.
+#
+# Purpose: a scheduled pipeline that runs the dependency and race audits
+#   (govulncheck, pnpm audit, go test -race) when the host has nothing else to
+#   do. `audit` is not a command: merge the `jobs` and `pipelines` blocks below
+#   into the project's .nself/ci.yaml.
+# How it starts: the only trigger is `schedule`, so its jobs run in the
+#   background band, behind every interactive and normal job. On a host that runs
+#   `nself ci serve watch`, a pass that ran no commit starts one due background
+#   pipeline, and only when the host is ready; a host that is not ready starts
+#   nothing. `max_age` makes an overdue audit show in `nself ci evidence
+#   --pipeline audit`.
+# Constraints: needs govulncheck, pnpm and go on the PATH the service runs with
+#   (`nself ci doctor --selftest` checks it); drop the pnpm job in a project
+#   without a pnpm lockfile. The race job needs cgo on the host.
+
+version: 1
+
+jobs:
+  audit-govulncheck:
+    kind: quality
+    run: [govulncheck, ./...]
+  audit-pnpm:
+    kind: quality
+    run: [pnpm, audit, --audit-level, high]
+  audit-race:
+    kind: test
+    run: [go, test, -race, ./...]
+
+pipelines:
+  audit:
+    triggers: [schedule]
+    schedule: "41 2 * * *"
+    max_age: 48h
+    jobs: [audit-govulncheck, audit-pnpm, audit-race]
