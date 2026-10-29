@@ -1,0 +1,10 @@
+{
+  "name": "medium",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "node src/check.mjs",
+    "test": "node --test"
+  }
+}
