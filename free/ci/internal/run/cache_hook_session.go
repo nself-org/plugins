@@ -3,6 +3,7 @@ package run
 import (
 	"context"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -41,25 +42,56 @@ func (h *cacheHook) Wants(a AttemptInfo) bool {
 	return ok && e.(cacheEntry).s.Wants()
 }
 
-// After removes the attempt's cache directories; it saves nothing (closeSession
-// also drops the entry of an attempt that did not settle passed).
+// After removes the attempt's cache directories; it saves nothing (it also
+// drops the entry of an attempt that did not settle passed). The retraction
+// reads the store now; the removal (a restored build cache is tens of MB of
+// small files, P7-CI-46 measured 60 to 95 ms) runs in the background, and the
+// run waits for it before Coordinator.Run returns (waitCacheCleanups).
 func (h *cacheHook) After(ctx context.Context, a AttemptInfo, _ Outcome) error {
 	if e, ok := h.sessions.LoadAndDelete(a.AttemptID); ok {
-		closeSession(ctx, a.Store, e.(cacheEntry))
+		ce := e.(cacheEntry)
+		retractUnpassed(ctx, a.Store, ce)
+		wg := cleanupGroup(a.RunID)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ce.s.Cleanup()
+		}()
 	}
 	return nil
 }
 
+// cacheCleanups holds, per run id, the directory removals After started.
+var cacheCleanups sync.Map // run id -> *sync.WaitGroup
+
+func cleanupGroup(runID string) *sync.WaitGroup {
+	wg, _ := cacheCleanups.LoadOrStore(runID, &sync.WaitGroup{})
+	return wg.(*sync.WaitGroup)
+}
+
+// waitCacheCleanups waits for the removals the run's attempts started. Every
+// After of the run happened before its jobs finished, so before this call.
+func waitCacheCleanups(runID string) {
+	if wg, ok := cacheCleanups.LoadAndDelete(runID); ok {
+		wg.(*sync.WaitGroup).Wait()
+	}
+}
+
 // closeSession retracts the entries of an attempt that did not settle passed
-// (a cancel won the finalizing -> passed move after the commit) and removes the
-// attempt's cache directories. After and eviction both end a session this way.
+// and removes the attempt's cache directories (eviction ends a session this way).
 func closeSession(ctx context.Context, st *store.Store, e cacheEntry) {
+	retractUnpassed(ctx, st, e)
+	e.s.Cleanup()
+}
+
+// retractUnpassed retracts the entries of an attempt that did not settle passed
+// (a cancel won the finalizing -> passed move after the commit).
+func retractUnpassed(ctx context.Context, st *store.Store, e cacheEntry) {
 	if e.s.Saved() {
 		if state, ok := settledState(ctx, e, st); ok && state != "passed" { // only a confirmed non-pass retracts
 			e.s.Retract(ctx)
 		}
 	}
-	e.s.Cleanup()
 }
 
 // settledState reads the attempt's state from the store it ran in, falling back
