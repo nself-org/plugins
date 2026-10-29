@@ -61,14 +61,15 @@ def exposure(cmd):
 
 
 def machine_rows(manifest):
-    """Rows (path, cmd) of a manifest `commands` block; subcommands inherit the hub's fields."""
+    """Rows (path, cmd) of a manifest `commands` block: the bare hub command (`nself ci`, tool `nself_ci`), then
+    each subcommand, which inherits the hub's fields."""
     top = manifest.get("commands") or {}
     subs = [s for s in top.get("subcommands") or [] if isinstance(s, dict)]
     keys = ("json", "output", "side_effect", "surface", "confirm")
     base = {k: top[k] for k in keys if k in top}
     rows = [(f"{top['command']} {s['name']}", {**base, **{k: s[k] for k in keys if k in s}}) for s in subs]
-    if not rows and top.get("command"):
-        rows = [(top["command"], base)]
+    if top.get("command"):
+        rows.append((top["command"], base))
     return sorted(rows, key=lambda r: r[0])
 
 

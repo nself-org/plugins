@@ -19,6 +19,7 @@
 
 | Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
 |---|---|---|---|---|---|---|
+| `nself k8s` | - | - | remote | document | CLI only (json legacy) | none |
 | `nself k8s backup` | - | - | write | document | CLI only (json legacy) | none |
 | `nself k8s install` | - | - | remote | document | CLI only (json legacy) | none |
 | `nself k8s restore` | - | - | destructive | document | CLI only (json legacy) | none |

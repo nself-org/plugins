@@ -19,6 +19,7 @@
 
 | Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
 |---|---|---|---|---|---|---|
+| `nself functions` | `nself_functions` | `/v1/commands/functions` | write | document | MCP and HTTP | none |
 | `nself functions delete` | `nself_functions_delete` | `/v1/commands/functions/delete` | destructive | document | MCP and HTTP | nonce |
 | `nself functions deploy` | `nself_functions_deploy` | `/v1/commands/functions/deploy` | write | document | MCP and HTTP | none |
 | `nself functions invoke` | `nself_functions_invoke` | `/v1/commands/functions/invoke` | write | document | MCP and HTTP | none |

@@ -19,6 +19,7 @@
 
 | Command | MCP tool | HTTP route | Side effect | Output | Exposure | Confirmation |
 |---|---|---|---|---|---|---|
+| `nself infra` | - | - | remote | document | CLI only (json none) | none |
 | `nself infra apply` | - | - | remote | document | CLI only (surface cli-only) | none |
 | `nself infra destroy` | - | - | destructive | document | CLI only (surface cli-only) | none |
 | `nself infra plan` | - | - | read | document | CLI only (json legacy) | none |

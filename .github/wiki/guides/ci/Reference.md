@@ -113,16 +113,23 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 
 | Flag | Commands |
 |---|---|
+| `--accepts` | `nodes *` |
 | `--addr` | `serve` |
+| `--agent-addr` | `serve *` |
+| `--agent-binary` | `nodes *` |
 | `--agent-source` | `providers github init` |
 | `--agent-url` | `nodes pair` |
+| `--alert` | `doctor` |
 | `--all` | `nodes *` |
 | `--allow-deploy-host` | `nodes *` |
 | `--allow-downgrade` | `nodes *` |
 | `--allow-private` | `providers *` |
 | `--allow-unsandboxed` | `serve` |
 | `--allowed-repos` | `serve` |
+| `--api-addr` | `serve *` |
+| `--api-lock` | `serve *` |
 | `--api-public-url` | `serve *` |
+| `--api-socket` | `serve *` |
 | `--api-submit-role` | `serve *` |
 | `--app-id` | `policy protect` |
 | `--apply` | `runs *` |
@@ -134,24 +141,26 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--binary` | `serve *` |
 | `--branch` | `policy protect` |
 | `--by` | `config ignore add` |
+| `--cert` | `nodes *` |
 | `--cert-ttl` | `nodes pair` |
 | `--check` | `providers *`, `runs reproduce` |
 | `--class` | `nodes *` |
 | `--clear` | `policy *` |
 | `--cmd` | `nodes sync` |
 | `--concurrency` | `serve` |
-| `--config` | `explain`, `plan` |
+| `--config` | `config *`, `explain`, `plan` |
 | `--confirm-flaky` | `runs *` |
 | `--container` | - |
-| `--coordinator` | `artifacts *`, `runs *` |
+| `--coordinator` | `artifacts *`, `nodes *`, `runs *` |
 | `--coordinator-id` | `nodes pair` |
 | `--data-dir` | `nodes pair`, `serve *` |
 | `--dest` | `artifacts *` |
 | `--detach` | - |
 | `--dir` | `providers *` |
+| `--drain-deadline` | `serve *` |
 | `--dry-run` | `artifacts *`, `nodes sync`, `policy protect`, `runs *`, `serve *` |
 | `--effective` | `policy *` |
-| `--enroll-addr` | `nodes pair` |
+| `--enroll-addr` | `nodes pair`, `serve *` |
 | `--env` | `run` |
 | `--env-file` | `serve *` |
 | `--f` | `logs` |
@@ -164,6 +173,7 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--gateway` | `run` |
 | `--h` | - |
 | `--help` | - |
+| `--home` | `config *` |
 | `--hook` | `policy protect` |
 | `--host-key` | `nodes *` |
 | `--image` | - |
@@ -171,11 +181,12 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--init` | `artifacts signer` |
 | `--inputs` | `providers gitlab init` |
 | `--insecure` | `serve` |
+| `--installer` | `nodes *` |
 | `--interactive` | `nodes *` |
 | `--interval` | `serve watch` |
 | `--isolation` | - |
 | `--job` | `runs rerun` |
-| `--json` | `artifacts *`, `evidence *`, `explain`, `forgejo`, `logs`, `nodes *`, `plan`, `policy *`, `providers *`, `runs *`, `serve *` |
+| `--json` | `artifacts *`, `config *`, `doctor`, `evidence *`, `explain`, `forgejo`, `logs`, `nodes *`, `plan`, `policy *`, `providers *`, `runs *`, `serve *` |
 | `--keep` | `runs *` |
 | `--kek` | `serve *` |
 | `--key-id` | `nodes *` |
@@ -187,30 +198,39 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--local` | `nodes status` |
 | `--max-age-days` | `runs *` |
 | `--max-log-bytes` | `runs *` |
+| `--max-queue` | - |
 | `--mode` | `nodes *` |
-| `--name` | `artifacts *` |
+| `--name` | `artifacts *`, `nodes *` |
 | `--network` | - |
 | `--no-gitleaks` | - |
-| `--no-status` | - |
+| `--no-status` | `config *` |
+| `--node-admin-routes` | `serve *` |
+| `--node-key` | `nodes *` |
+| `--nodes` | `doctor` |
 | `--older-than` | `artifacts *` |
 | `--on-battery` | `nodes *` |
 | `--once` | `serve watch` |
 | `--out` | `artifacts *`, `serve *` |
 | `--owner` | `build` |
+| `--ownership` | `nodes *` |
 | `--persistence` | `nodes *` |
 | `--pipeline` | `evidence *`, `explain`, `plan` |
 | `--policy` | `evidence *` |
 | `--post-status` | - |
+| `--prefer` | - |
+| `--privacy-zone` | `nodes *` |
 | `--probe` | `netproxy` |
 | `--project` | `artifacts *`, `nodes *`, `providers *`, `runs *`, `serve admin roles` |
+| `--providers` | `doctor` |
 | `--proxy` | `netproxy` |
 | `--pubkey` | `serve admin audit checkpoint` |
 | `--public` | `artifacts signer` |
 | `--public-url` | `nodes pair`, `serve *` |
 | `--reason` | `config ignore add` |
 | `--release` | `artifacts *` |
+| `--release-routes` | `serve *` |
 | `--remove` | `nodes label` |
-| `--repo` | `artifacts verify`, `build`, `config ignore add`, `evidence *`, `explain`, `plan`, `policy *`, `providers *`, `runs *`, `serve *` |
+| `--repo` | `artifacts verify`, `build`, `config *`, `doctor`, `evidence *`, `explain`, `plan`, `policy *`, `providers *`, `runs *`, `serve *` |
 | `--repos` | `serve watch` |
 | `--reserve-cpu` | `nodes *` |
 | `--reserve-mem` | `nodes *` |
@@ -218,9 +238,12 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--role` | `serve admin roles` |
 | `--rotate` | `artifacts signer` |
 | `--run` | `artifacts *`, `logs`, `runs reproduce` |
+| `--runner` | - |
 | `--scope` | `policy *` |
 | `--secret` | `serve` |
+| `--secret-classes` | `nodes *` |
 | `--self` | `serve *` |
+| `--selftest` | `doctor` |
 | `--service` | - |
 | `--sha` | `runs *` |
 | `--shell` | `runs reproduce` |
@@ -234,7 +257,7 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--systemd` | `serve *` |
 | `--tag` | `build` |
 | `--team` | `policy *`, `serve *` |
-| `--timeout` | `build`, `run`, `runs wait`, `serve` |
+| `--timeout` | `build`, `config *`, `nodes discover`, `run`, `runs wait`, `serve` |
 | `--trigger` | `explain`, `plan` |
 | `--trust` | - |
 | `--ttl` | `serve *` |
@@ -248,6 +271,7 @@ A flag is read from the source file that defines it. `verb *` means the flag is 
 | `--version` | `nodes *` |
 | `--where` | - |
 | `--workdir` | `serve` |
+| `--write` | `config *` |
 | `--yes` | `artifacts key` |
 <!-- END GENERATED:commands -->
 
