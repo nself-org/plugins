@@ -5,8 +5,9 @@ package gates
 // Purpose: TestPythonFixtures (P7-CI-64) runs the Python checks of the uv and
 // pip fixtures for real on the verify host (python3 and uv on PATH, network
 // for PyPI): a passing project passes, a failing test fails, ruff findings
-// stay advisory, a missing tool or a missing pytest is E614 and never a pass,
-// and the lockfiles enter the evidence input digests.
+// stay advisory, a missing tool or a missing pytest is E614 and never a pass.
+// The lockfile-to-input-digest proof lives in internal/evidence (TestInputsOfFixtureLockfiles):
+// internal/evidence reaches internal/run, which imports this package, so a test here cannot import it.
 // Constraints: build tag integration, INTEGRATION=1; a missing prerequisite is
 // t.Fatal, never t.Skip, so a green run proves the legs ran.
 
@@ -19,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/detect"
-	"github.com/nself-org/plugins/free/ci/internal/evidence"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
@@ -124,35 +124,6 @@ func TestPythonFixtures(t *testing.T) {
 		t.Setenv("PATH", realPath)
 		if c.Result != "error" || !strings.Contains(c.Excerpt, "E614") || !strings.Contains(c.Excerpt, "Install the project's Python tools") {
 			t.Fatalf("python-test without uv: %+v", c)
-		}
-	})
-
-	t.Run("lockfiles enter the evidence input digests", func(t *testing.T) {
-		for fixture, want := range map[string][]string{
-			"uv":     {"uv.lock"},
-			"poetry": {"poetry.lock"},
-			"pip":    {"requirements.txt", "requirements-dev.txt"},
-		} {
-			d, err := evidence.InputsOf(os.DirFS(filepath.Join("..", "detect", "testdata", "python", fixture)))
-			if err != nil {
-				t.Fatal(err)
-			}
-			have := map[string]bool{}
-			for _, l := range d.Lockfiles {
-				have[l.Path] = true
-			}
-			for _, w := range want {
-				if !have[w] {
-					t.Errorf("%s: %s missing from input digests %+v", fixture, w, d.Lockfiles)
-				}
-			}
-		}
-		d, err := evidence.InputsOf(os.DirFS(filepath.Join("..", "detect", "testdata", "swift", "swiftpm")))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(d.Lockfiles) != 1 || d.Lockfiles[0].Path != "Package.resolved" {
-			t.Errorf("swiftpm: Package.resolved missing from input digests %+v", d.Lockfiles)
 		}
 	})
 }
