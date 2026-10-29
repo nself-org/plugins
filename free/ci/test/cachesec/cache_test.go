@@ -94,6 +94,9 @@ func (r *rig) restore(id string) error {
 	if len(tree(r.t, dest)) != 0 {
 		r.t.Error("refused restore left bytes")
 	}
+	if err == nil {
+		r.note = "restore returned a miss (hit=false, 0 bytes restored), not a refusal"
+	}
 	return err
 }
 

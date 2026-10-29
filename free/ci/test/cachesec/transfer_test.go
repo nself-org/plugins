@@ -26,7 +26,9 @@ func (r *rig) remoteWrite(id string) error {
 	r.running("remote", f)
 	eng := lease.New(r.st, nil, lease.Config{})
 	// Grant needs a queued attempt, so use a separate attempt from the local rig.
-	must(r.t, r.st.CreateAttempt(r.ctx, store.AttemptRow{ID: "remote-wire", JobID: "jremote", N: 2}, ""))
+	must(r.t, r.st.CreatePipeline(r.ctx, store.PipelineRow{ID: "pwire", Revision: strings.Repeat("a", 40), Project: f.Project, Trigger: "local", SourceTrust: f.Trust, PrivacyZone: "local-only", PolicyDigest: "policy", InputDigest: "input", SelectionMode: "full", Status: "queued"}))
+	must(r.t, r.st.CreateJob(r.ctx, store.JobRow{ID: "jwire", PipelineID: "pwire", Name: "wire", Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "input"}))
+	must(r.t, r.st.CreateAttempt(r.ctx, store.AttemptRow{ID: "remote-wire", JobID: "jwire", N: 1}, ""))
 	epoch, err := eng.Grant(r.ctx, "host", store.Demand{AttemptID: "remote-wire", LeaseID: "wire", RunnerID: "node", CPU: 1, MemMB: 1, CapacityCPU: 100, CapacityMemMB: 100, TTL: eng.Config.TTL}, 1)
 	must(r.t, err)
 	ns := namespace(r.t, f)
@@ -63,7 +65,7 @@ func (r *rig) remoteWrite(id string) error {
 func (r *rig) transferBlob(id string) error {
 	realm := cacheRealm(namespace(r.t, owner()).Canonical())
 	want := []byte("intact payload")
-	rcv := transfer.Receiver{Store: r.blobs, Realm: realm, Lease: "wire", Live: func(context.Context) error { return nil }}
+	rcv := transfer.Receiver{Store: r.blobs, Realm: realm, Lease: "wire", Limits: transfer.Limits{MaxFile: 1 << 20}, Live: func(context.Context) error { return nil }}
 	w, err := rcv.Open(r.ctx, transport.BlobHeader{Stream: transfer.StreamArtifact, SHA256: digest(want), Size: int64(len(want))})
 	must(r.t, err)
 	got := bytes.Clone(want)

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# cache-security drill (P7-CACHE-11, Epic CACHE): runs the cache, artifact and release security matrix (build tag
+# cachesec, free/ci/test/cachesec) and fails on any case whose observed outcome differs from its expected one.
+# Why: the matrix maps every case to a row of the CI threat model (hq architecture/ci-threat-model.md). A refusal
+#   that stops happening (an unexpected pass), a refusal with another code or reason key, or one that leaves no audit
+#   row is a regression of a security control, so the drill fails.
+# Inputs:  none to run the suite. `--check-mapping <ci-threat-model.md>` instead checks, without running a test, that
+#   every case names a row that exists in that file and that every row the suite owns has a case.
+# Usage:   run
+#          run --check-mapping /path/to/ci-threat-model.md
+# Outputs: the test log tail and a per-case summary on stderr; testdata/results.json is rewritten by the suite.
+#          Exit 0 on success, 1 when a case differs, a test skips or the mapping is incomplete, 2 when a tool is missing.
+set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root=$(cd "$here/../../.." && pwd)
+matrix="$root/free/ci/test/cachesec/matrix.yaml"
+results="$root/free/ci/test/cachesec/testdata/results.json"
+owned="TM-12 TM-13 TM-14 TM-15 TM-16 TM-17 TM-18 TM-20 TM-24"
+
+for tool in python3; do
+	command -v "$tool" >/dev/null || { echo "cache-security: $tool is required" >&2; exit 2; }
+done
+
+if [ "${1:-}" = "--check-mapping" ]; then
+	model=${2:-}
+	[ -n "$model" ] && [ -r "$model" ] || { echo "cache-security: --check-mapping needs a readable threat model file" >&2; exit 2; }
+	python3 - "$matrix" "$model" $owned <<'PY'
+import json, re, sys
+matrix, model, owned = sys.argv[1], sys.argv[2], sys.argv[3:]
+cases = json.load(open(matrix))
+rows = set(re.findall(r"^\|\s*(TM-[0-9]{2})\s*\|", open(model).read(), re.M))
+bad = [c["id"] for c in cases if c["threat_row"] not in rows]
+if bad:
+    sys.exit("cache-security: cases name a row that is not in the threat model: " + ", ".join(bad))
+none = [r for r in owned if not any(c["threat_row"] == r for c in cases)]
+if none:
+    sys.exit("cache-security: threat rows with no case: " + ", ".join(none))
+print("cache-security: %d cases map to %d threat-model rows" % (len(cases), len({c["threat_row"] for c in cases})), file=sys.stderr)
+PY
+	exit 0
+fi
+
+command -v go >/dev/null || { echo "cache-security: go is required" >&2; exit 2; }
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/cache-security.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+
+echo "cache-security: running free/ci/test/cachesec" >&2
+if ! (cd "$root/free/ci" && INTEGRATION=1 NSELF_V15=1 CGO_ENABLED=0 go test -json -mod=vendor -tags 'cachesec integration' -count=1 -timeout 60m -run '^TestCacheSecMatrix$' ./test/cachesec/...) >"$tmp/suite.json" 2>"$tmp/suite.err"; then
+	tail -n 40 "$tmp/suite.err" >&2 || true
+	python3 - "$tmp/suite.json" <<'PY' >&2 || true
+import json, sys
+for line in open(sys.argv[1]):
+    try:
+        e = json.loads(line)
+    except ValueError:
+        continue
+    if e.get("Action") == "output" and ("expected" in e.get("Output", "") or "differ" in e.get("Output", "")):
+        print(e["Output"].rstrip())
+PY
+	echo "cache-security: the suite failed" >&2
+	exit 1
+fi
+python3 "$root/scripts/ci/go-test-ran.py" TestCacheSecMatrix <"$tmp/suite.json" || { echo "cache-security: TestCacheSecMatrix did not run or skipped" >&2; exit 1; }
+python3 - "$results" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1]))
+bad = [c["id"] for c in r if c["outcome"] != c["expected"]]
+if bad or not r:
+    sys.exit("cache-security: unexpected outcome for: " + ", ".join(bad or ["(no results)"]))
+print("cache-security: %d cases, every outcome equals its expected one" % len(r), file=sys.stderr)
+PY
+echo "cache-security: ok" >&2
