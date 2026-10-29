@@ -204,11 +204,13 @@ func preparePlan(ctx context.Context, o RunOptions) (*plan.Plan, string, func(pl
 	case !errors.Is(err, os.ErrNotExist) || bare.cfg != "":
 		return nil, "", nil, err
 	}
-	if cfg, err = drill.Expand(o.Root, cfg, o.Pipeline, o.Trigger); err != nil { // drills_dir subdirectories become kind drill jobs (P7-CI-02)
+	// The digest binds the config as the tree holds it, built-in defaults
+	// included (D-1270): taken before drill expansion so it equals evidence.InputsOf.
+	digest, err := configDigest(cfg)
+	if err != nil {
 		return nil, "", nil, err
 	}
-	digest, err := configDigest(cfg) // the effective config, built-in defaults included (D-1270)
-	if err != nil {
+	if cfg, err = drill.Expand(o.Root, cfg, o.Pipeline, o.Trigger); err != nil { // drills_dir subdirectories become kind drill jobs (P7-CI-02)
 		return nil, "", nil, err
 	}
 	facts, checks, err := planChecks(o.Root, cfg)

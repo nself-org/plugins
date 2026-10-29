@@ -97,3 +97,30 @@ func TestPreparePlanDigestMatchesInputsOf(t *testing.T) {
 		})
 	}
 }
+
+// Selecting a drills_dir pipeline expands drill jobs into the planned config,
+// but the digest still binds the config as the tree holds it, the one
+// evidence.InputsOf records.
+func TestPreparePlanDigestIgnoresDrillExpansion(t *testing.T) {
+	repo := drillRepo(t)
+	bare.cfg, bare.base = "", ""
+	t.Setenv("NSELF_CI_BASE_SHA", "")
+	p, got, _, err := preparePlan(context.Background(), RunOptions{Root: repo, Pipeline: "drills"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, j := range p.Jobs {
+		found = found || strings.HasPrefix(j.ID, "drill-")
+	}
+	if !found {
+		t.Fatalf("drill jobs were not expanded: %+v", p.Jobs)
+	}
+	in, err := evidence.InputsOf(os.DirFS(repo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != in.Config {
+		t.Fatalf("preparePlan digest = %q, InputsOf config = %q", got, in.Config)
+	}
+}
