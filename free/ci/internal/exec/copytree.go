@@ -49,11 +49,15 @@ func linkStaysInside(link, rel string) bool {
 	return true
 }
 
-func copyTree(source, dest string) error {
+// copyTree copies source into dest. Paths in skip (and everything under them) are left out when they lie
+// strictly inside source: the state directory and the workspace itself can sit in the repo root, and
+// copying them would make the copy recurse into itself and hand the job other attempts' files.
+func copyTree(source, dest string, skip ...string) error {
 	root, err := filepath.Abs(source)
 	if err != nil {
 		return err
 	}
+	skipped := skipRels(root, skip)
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -63,6 +67,12 @@ func copyTree(source, dest string) error {
 			return err
 		}
 		if rel == "." {
+			return nil
+		}
+		if underAny(rel, skipped) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		target := filepath.Join(dest, rel)
@@ -95,4 +105,45 @@ func copyTree(source, dest string) error {
 		}
 		return closeErr
 	})
+}
+
+// skipRels turns the skip paths into paths relative to root, keeping only those strictly inside it.
+// Root and each path are tried both as given and resolved through symlinks (a temp dir may be one on
+// macOS), so the match does not depend on how the caller spelled them.
+func skipRels(root string, skip []string) []string {
+	real := func(p string) string {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+		return p
+	}
+	var out []string
+	for _, p := range skip {
+		if p == "" {
+			continue
+		}
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			continue
+		}
+		for _, base := range []string{root, real(root)} {
+			for _, cand := range []string{abs, real(abs)} {
+				rel, err := filepath.Rel(base, cand)
+				if err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+					out = append(out, rel)
+				}
+			}
+		}
+	}
+	return out
+}
+
+// underAny reports whether rel is one of dirs or lies under one.
+func underAny(rel string, dirs []string) bool {
+	for _, d := range dirs {
+		if rel == d || strings.HasPrefix(rel, d+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
 }
