@@ -50,8 +50,7 @@ func main() {
 func run(args []string) int {
 	if h, key, rest, ok := resolve(args); ok {
 		if wantsHelp(rest) { // help never reaches the handler: it must not start anything
-			fmt.Print(subHelp(key))
-			return 0
+			return answerHelp(key, rest)
 		}
 		return h(rest)
 	}

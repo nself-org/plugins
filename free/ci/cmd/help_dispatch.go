@@ -3,7 +3,7 @@ package main
 // Purpose: `nself ci <sub> --help` and `-h` print that subcommand's help and exit 0 before anything runs.
 // Inputs:  a matched key and the args after it; the v1.4 and v1.5 subcommand tables.
 // Outputs: help text on stdout and exit code 0.
-// Constraints: the dispatchers (run, runV15) call this before the handler and before the nodes
+// Constraints: the dispatchers (run, runV15) call answerHelp before the handler and before the nodes
 // --coordinator client, so a help request never starts a run or sends a request; a "--" terminator
 // ends the scan (wantsHelp); a group word with no handler of its own (config, nodes pools) lists its
 // children instead of falling through to the gate.
@@ -15,6 +15,19 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/surface"
 )
+
+// coreHelp holds the keys whose help keeps core's exact behaviour (captured text, and a flag that
+// does not parse before the help token is an error); each answers without running the command.
+var coreHelp = map[string]func(args []string) int{}
+
+// answerHelp prints the help of key for a help request and returns the exit code.
+func answerHelp(key string, args []string) int {
+	if h, ok := coreHelp[key]; ok {
+		return h(args)
+	}
+	fmt.Print(subHelp(key))
+	return 0
+}
 
 // subHelp returns the help text of a registered key: the captured core text when there is one, else
 // the usage line, the flag defaults of its V15 entry and the child commands under the key.

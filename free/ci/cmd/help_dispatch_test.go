@@ -59,9 +59,19 @@ func TestEverySubcommandHelpRunsNothing(t *testing.T) {
 			{"--coordinator", "http://127.0.0.1:1", "--help"}, // must not dial
 		} {
 			args := append(strings.Fields(key), extra...)
+			// a core-help key keeps core's rule: a flag that does not parse before the help token is an error
+			_, core := coreHelp[key]
+			parseErr := core && (extra[0] == "-help" || extra[0] == "--coordinator")
 			for name, dispatch := range map[string]func([]string) int{"run": run, "runV15": runV15} {
 				var code int
 				out, errOut := captureStd(t, func() { code = dispatch(args) })
+				if parseErr {
+					if code != 1 || len(*ran) != 0 || !strings.Contains(errOut, "Error: ") {
+						t.Errorf("%s %q: exit %d, handlers run %v, stderr %q; want core's parse error, nothing run", name, args, code, *ran, errOut)
+						*ran = nil
+					}
+					continue
+				}
 				if code != 0 || len(*ran) != 0 || strings.TrimSpace(out) == "" {
 					t.Errorf("%s %q: exit %d, handlers run %v, stdout %q, stderr %q; want exit 0, nothing run, help on stdout",
 						name, args, code, *ran, out, errOut)

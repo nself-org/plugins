@@ -96,8 +96,7 @@ func runV15(args []string) int {
 		}
 		if entry, ok := v15Subcommands[strings.Join(args[:n], " ")]; ok {
 			if wantsHelp(args[n:]) { // before the --coordinator client and the handler: help starts nothing
-				fmt.Print(subHelp(strings.Join(args[:n], " ")))
-				return 0
+				return answerHelp(strings.Join(args[:n], " "), args[n:])
 			}
 			if code, done := nodesRemoteDispatch(strings.Join(args[:n], " "), args[n:]); done { // `nodes <sub> --coordinator <url>` (P7-NODE-26)
 				return code

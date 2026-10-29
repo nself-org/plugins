@@ -103,17 +103,8 @@ func parseCommand(fs *flagSet, name string, args []string, d Deps) (done bool, c
 // RunProvision is `nself ci nodes provision`.
 func RunProvision(args []string, d Deps) int {
 	fs := newFlagSet()
-	host := fs.add("host", kindSlice)
-	sshKey := fs.add("ssh-key", kindString)
-	instances := fs.add("instances", kindInt)
-	instances.num = 1
-	installRoot := fs.add("install-root", kindString)
-	githubURL := fs.add("github-url", kindString)
-	labels := fs.add("labels", kindSlice)
-	token := fs.add("token", kindString)
-	asJSON := fs.add("json", kindBool)
-	fs.add("no-monorepo", kindBool)
-	fs.add("no-deprecation-warnings", kindBool)
+	f := provisionFlags(fs)
+	host, sshKey, instances, installRoot, githubURL, labels, token, asJSON := f.host, f.sshKey, f.instances, f.installRoot, f.githubURL, f.labels, f.token, f.asJSON
 	if done, code := parseCommand(fs, "provision", args, d); done {
 		return code
 	}
@@ -209,11 +200,8 @@ func v15Pin(d Deps) (*RunnerPin, error) {
 // RunVerify is `nself ci nodes verify`.
 func RunVerify(args []string, d Deps) int {
 	fs := newFlagSet()
-	host := fs.add("host", kindSlice)
-	sshKey := fs.add("ssh-key", kindString)
-	asJSON := fs.add("json", kindBool)
-	fs.add("no-monorepo", kindBool)
-	fs.add("no-deprecation-warnings", kindBool)
+	f := verifyFlags(fs)
+	host, sshKey, asJSON := f.host, f.sshKey, f.asJSON
 	if done, code := parseCommand(fs, "verify", args, d); done {
 		return code
 	}
