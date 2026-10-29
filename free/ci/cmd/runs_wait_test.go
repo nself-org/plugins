@@ -226,7 +226,7 @@ func TestRunsWait(t *testing.T) {
 	t.Run("a stalled resolver cannot outlive the budget", func(t *testing.T) {
 		runsHome(t)
 		old := cirun.Registered.Remote
-		cirun.Registered.Remote = append(append([]cirun.RemoteResolver(nil), old...), stalledRemote{})
+		cirun.Registered.Remote = append(append([]cirun.RemoteResolver(nil), old...), &stalledRemote{})
 		t.Cleanup(func() { cirun.Registered.Remote = old })
 		code, w, took := waitJSON(t, "remote-stall", "--timeout", "200ms", "--json")
 		if code != 10 || w.Data.Terminal || took > 700*time.Millisecond {
@@ -263,17 +263,16 @@ func (f *fakeRemote) Resolve(_ context.Context, ref string) (cirun.RunView, bool
 	return f.views[i], true, nil
 }
 
-// stalledRemote answers the first look at once, then blocks until its context ends.
-type stalledRemote struct{}
+// stalledRemote answers the first look at once, then blocks until its context ends. The look count
+// belongs to the value, so every test (and every -count repeat) starts with a first look that answers.
+type stalledRemote struct{ looks int }
 
-var stalls int
-
-func (stalledRemote) Resolve(ctx context.Context, ref string) (cirun.RunView, bool, error) {
+func (r *stalledRemote) Resolve(ctx context.Context, ref string) (cirun.RunView, bool, error) {
 	if ref != "remote-stall" {
 		return cirun.RunView{}, false, nil
 	}
-	stalls++
-	if stalls == 1 {
+	r.looks++
+	if r.looks == 1 {
 		return cirun.RunView{ID: ref, Status: "running"}, true, nil
 	}
 	<-ctx.Done()
