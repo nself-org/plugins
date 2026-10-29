@@ -3,6 +3,7 @@ package protocol
 import (
 	"encoding/json"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"log/slog"
 )
 
 type CompatMode string
@@ -201,3 +202,8 @@ type CacheRef struct {
 	Key     string      `json:"key"`
 	Blobs   []CacheBlob `json:"blobs"`
 }
+
+// String and GoString keep credentials out of diagnostic formatting.
+func (RunnerCredential) String() string       { return "[REDACTED]" }
+func (RunnerCredential) GoString() string     { return "[REDACTED]" }
+func (RunnerCredential) LogValue() slog.Value { return slog.StringValue("[REDACTED]") }

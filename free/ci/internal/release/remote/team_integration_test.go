@@ -368,6 +368,25 @@ func TestTeamSignHidesWhatTheCallerMaySee(t *testing.T) {
 		who  remote.Fetcher
 		path string
 	}
+	auditCount := func() int {
+		t.Helper()
+		snap, err := tm.st.AuditSnapshot(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer snap.Close()
+		rows, err := snap.Entries(context.Background(), 0, 10000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		n := 0
+		for _, row := range rows {
+			if row.Action == "authorize" {
+				n++
+			}
+		}
+		return n
+	}
 	for name, c := range map[string]probe{
 		"other project's inputs":  {other, remote.InputsPath(tm.runID)},
 		"other project's blob":    {other, remote.BlobPath(tm.runID, app)},
@@ -379,8 +398,12 @@ func TestTeamSignHidesWhatTheCallerMaySee(t *testing.T) {
 		"upper-case digest":       {own, remote.BlobPath(tm.runID, strings.ToUpper(app))},
 		"digest of the evidence":  {own, remote.BlobPath(tm.runID, sumHex([]byte("evidence")))},
 	} {
+		beforeAudit := auditCount()
 		if status, body := get(c.who, c.path); status != http.StatusNotFound || !bytes.Equal(body, want) {
 			t.Errorf("%s: status %d body %s, want 404 %s", name, status, body, want)
+		}
+		if got := auditCount() - beforeAudit; got != 1 {
+			t.Errorf("%s wrote %d authorization rows, want one", name, got)
 		}
 	}
 	// a run that has not ended is "not found" to everyone (its project is only a guess by revision, D-1338)

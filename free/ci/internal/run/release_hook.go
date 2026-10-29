@@ -21,8 +21,10 @@ package run
 
 import (
 	"context"
+	"errors"
 
 	compat "github.com/nself-org/cli/sdk/go/v2/compat"
+	"github.com/nself-org/plugins/free/ci/internal/attest"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/release/job"
@@ -45,6 +47,7 @@ func init() {
 	if Dispatch == nil || Registered.Isolation == nil {
 		panic("run: release_hook.go must initialise after dispatch_hook.go and isolation_hook.go")
 	}
+	releaseStash.Revoked = func(keyID string) (bool, error) { return releaseRevoked(attestLedger(), keyID) }
 	if err := job.Register(releaseStash); err != nil {
 		panic(err)
 	}
@@ -52,6 +55,15 @@ func init() {
 	Dispatch = func(ctx context.Context, s AttemptSpec) (Admitted, error) { return releaseDispatch(ctx, s, prev) }
 	RegisterIsolation(releaseIsolator{next: Registered.Isolation})
 	RegisterAttemptStart(releaseAttemptStart{})
+}
+
+// releaseRevoked asks the ledger whether the signer is revoked. A missing ledger
+// is an error, not "not revoked": the caller refuses what it cannot verify.
+func releaseRevoked(l attest.Ledger, keyID string) (bool, error) {
+	if l == nil {
+		return false, errors.New("no revocation ledger is attached to the run")
+	}
+	return l.Revoked(context.Background(), keyID)
 }
 
 // releaseFailure carries a release refusal as a run error with its code.

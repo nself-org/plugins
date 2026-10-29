@@ -36,6 +36,11 @@ type entry struct {
 type Stash struct {
 	mu sync.Mutex
 	m  map[string]*entry
+	// Revoked reports whether the evidence signer's key id is revoked. It is
+	// called inside the lock during ReleaseDecision so a revocation that commits
+	// between Guard and Admit is seen atomically; nil revokes nothing. An error
+	// (the ledger cannot answer) refuses the attempt: the signer is unverified.
+	Revoked func(keyID string) (bool, error)
 }
 
 // NewStash returns an empty stash.
@@ -43,9 +48,10 @@ func NewStash() *Stash { return &Stash{m: map[string]*entry{}} }
 
 // Put records static facts for one attempt; they never expire (tests).
 func (s *Stash) Put(attemptID string, f Facts) {
+	perr := Evaluate(f)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.m[attemptID] = &entry{f: f}
+	s.m[attemptID] = &entry{f: f, perr: perr}
 }
 
 // Forget drops one attempt.
@@ -55,7 +61,7 @@ func (s *Stash) Forget(attemptID string) {
 	delete(s.m, attemptID)
 }
 
-// ReleaseFacts implements Source.
+// ReleaseFacts returns the latest evaluated facts and gate refusal.
 func (s *Stash) ReleaseFacts(attemptID string) (Facts, *Error, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -66,6 +72,15 @@ func (s *Stash) ReleaseFacts(attemptID string) (Facts, *Error, bool) {
 	if e.live && now().Sub(e.at) > maxAge {
 		return Facts{}, refuse(CodeNotAdmitted, FactsExpired, "the facts of attempt %s were last refreshed %s ago", attemptID, now().Sub(e.at).Round(time.Second)), true
 	}
+	if s.Revoked != nil && e.f.Evidence.Signature.KeyID != nil {
+		revoked, err := s.Revoked(*e.f.Evidence.Signature.KeyID)
+		if err != nil {
+			return Facts{}, refuse(CodeNotAdmitted, SignerUnverified, "the revocation ledger could not be read: %v", err), true
+		}
+		if revoked {
+			return Facts{}, refuse(CodeNotAdmitted, SignerRevoked, "the evidence signer was revoked"), true
+		}
+	}
 	return e.f, e.perr, true
 }
 
@@ -73,6 +88,9 @@ func (s *Stash) ReleaseFacts(attemptID string) (Facts, *Error, bool) {
 // at is the time the provider was asked, not answered: a slow digester does
 // not make an old observation look fresh.
 func (s *Stash) update(attemptID string, e *entry, f Facts, perr *Error, at time.Time) {
+	if perr == nil {
+		perr = Evaluate(f)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.m[attemptID] == e {
@@ -137,4 +155,11 @@ func (s *Stash) Guard(ctx context.Context, attemptID string, p Provider, next fu
 		s.mu.Unlock()
 	}()
 	return next()
+}
+
+// ReleaseDecision reads the gate result without verifying signatures or writing the ledger.
+// Guard, refresh and Put evaluate before publishing the snapshot.
+func (s *Stash) ReleaseDecision(attemptID string) (*Error, bool) {
+	_, perr, ok := s.ReleaseFacts(attemptID)
+	return perr, ok
 }

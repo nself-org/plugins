@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -250,3 +251,7 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	}
 	return
 }
+
+// CommandNotFound reports a failed executable lookup without exposing os/exec
+// to callers outside the command funnel. Other start failures are transient.
+func CommandNotFound(err error) bool { return errors.Is(err, osexec.ErrNotFound) }

@@ -106,8 +106,11 @@ func (h Handlers) authorized(w http.ResponseWriter, r *http.Request, cached bool
 		return Deps{}, Inputs{}, false
 	}
 	project, err := d.resolve(ctx, run)
-	if err == nil {
-		err = scopeError(roles.Authorize(ctx, actor, roles.Release, project))
+	// Missing and out-of-scope runs both pay for one authorization audit append.
+	// An empty project on a failed lookup never grants access: retain the lookup error.
+	authErr := scopeError(roles.Authorize(ctx, actor, roles.Release, project))
+	if err == nil || (authErr != nil && authErr != errNotFound) {
+		err = authErr
 	}
 	var in Inputs
 	if err == nil {

@@ -4,6 +4,7 @@ package providers
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -95,3 +96,8 @@ type Health struct {
 	Since, RetryAt time.Time
 }
 type HealthProbe interface{ Health(context.Context) Health }
+
+// String and GoString keep credentials out of diagnostic formatting.
+func (RunnerCredential) String() string       { return "[REDACTED]" }
+func (RunnerCredential) GoString() string     { return "[REDACTED]" }
+func (RunnerCredential) LogValue() slog.Value { return slog.StringValue("[REDACTED]") }

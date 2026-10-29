@@ -66,9 +66,10 @@ func GHToken(host string) AuthFunc {
 		var output []byte
 		tooLarge := false
 		runner := &ciexec.Executor{Isolation: ciexec.BaselineIsolator{}}
-		result := runner.Run(ctx, ciexec.JobSpec{
+		authCtx, cancel := context.WithTimeout(ctx, connectTimeout)
+		defer cancel()
+		result := runner.Run(authCtx, ciexec.JobSpec{
 			AttemptID: "gh-auth-" + randomID(), CoordinatorID: "provider-auth", Command: []string{"gh", "auth", "token", "--hostname", host},
-			Timeout: connectTimeout,
 			Output: func(chunk []byte) {
 				if len(output)+len(chunk) > 16*1024 {
 					tooLarge = true
@@ -77,6 +78,9 @@ func GHToken(host string) AuthFunc {
 				output = append(output, chunk...)
 			},
 		})
+		if result.Err != nil && !ciexec.CommandNotFound(result.Err) {
+			return "", providers.NewError(providers.Transient, "E704", "gh.timeout", 0, time.Time{})
+		}
 		if result.Err != nil || result.ExitCode != 0 || tooLarge {
 			return "", missingCredential("gh.auth.login")
 		}

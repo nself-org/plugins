@@ -199,7 +199,11 @@ func (rs *runState) remoteLost(ctx context.Context, pj plan.PlannedJob, job mode
 		return rs.stopped(o, pj.ID) // a cancel intent won
 	}
 	if state == "leased" || state == "running" { // the dispatcher could not mark it lost: a cancel intent may have won
-		to, serr := rs.settle(id, state, "lost", "infra")
+		class := model.FailureClass("infra")
+		if _, refused := providerRefusal(cause); refused {
+			class = "code"
+		}
+		to, serr := rs.settle(id, state, "lost", class)
 		if serr != nil {
 			return failed(o, serr)
 		}

@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -68,10 +69,11 @@ func (fakeRuns) Get(_ context.Context, ref string) (clientapi.RunItem, bool, err
 }
 
 type localAPI struct {
-	srv   *httptest.Server
-	blobs *cas.Store
-	app   []byte
-	fs    *fakeStore
+	srv    *httptest.Server
+	blobs  *cas.Store
+	app    []byte
+	fs     *fakeStore
+	dbPath string
 }
 
 // newLocalAPI serves the routes to the local operator over a plain-HTTP test server.
@@ -87,7 +89,7 @@ func newLocalAPI(t *testing.T) *localAPI {
 	if err != nil {
 		t.Fatal(err)
 	}
-	l := &localAPI{blobs: blobs, app: []byte("app-bytes")}
+	l := &localAPI{blobs: blobs, app: []byte("app-bytes"), dbPath: filepath.Join(home, "state.db")}
 	put := func(b []byte) string {
 		d, _, perr := blobs.Put(context.Background(), cas.ArtifactRealm(uProj), bytes.NewReader(b))
 		if perr != nil {
@@ -214,6 +216,29 @@ func TestHandlersAnswerNotFoundUntilTheServeStarts(t *testing.T) {
 	for _, path := range []string{remote.InputsPath(uRun), remote.BlobPath(uRun, digestOf(l.app))} {
 		if resp, body := l.get(t, path); resp.StatusCode != http.StatusNotFound || !strings.Contains(string(body), `"E713"`) {
 			t.Fatalf("%s: %d %s", path, resp.StatusCode, body)
+		}
+	}
+}
+
+func TestUnknownRunAuthorizationIsAudited(t *testing.T) {
+	l := newLocalAPI(t)
+	db, err := sql.Open("sqlite", l.dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	count := func() int {
+		var n int
+		if err := db.QueryRow("SELECT count(*) FROM audit WHERE action='authorize'").Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	for _, run := range []string{uRun, "run-nope"} {
+		before := count()
+		l.get(t, remote.InputsPath(run))
+		if got := count() - before; got != 1 {
+			t.Errorf("run %s wrote %d authorization rows", run, got)
 		}
 	}
 }

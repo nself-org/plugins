@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -429,4 +430,78 @@ func TestProviderCarriesTheStartOfRunState(t *testing.T) {
 	if e := job.Evaluate(facts); e == nil || !strings.Contains(e.Message, "evidence.selection_partial") || !strings.Contains(e.Message, "evidence.adhoc") {
 		t.Fatalf("a subset run must be adhoc and partial: %v", e)
 	}
+}
+
+// TestGuardRefusesWhenSignerIsRevokedBetweenGuardAndAdmit: a revocation that
+// commits after Guard accepted the facts but before the admission step reads
+// them must refuse with signer_revoked (regression for cached-decision race).
+func TestGuardRefusesWhenSignerIsRevokedBetweenGuardAndAdmit(t *testing.T) {
+	defer job.SetTiming(5*time.Millisecond, time.Minute)()
+	f := newRun(t, passed())
+	st := job.NewStash()
+	keyID := "ci-node-abcdef0123456789"
+	revoked := false
+	st.Revoked = func(id string) (bool, error) { return revoked && id == keyID, nil }
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := st.Guard(context.Background(), "a1", f.provide(t), func() error { <-release; return nil })
+		if err != nil {
+			t.Error(err)
+		}
+	}()
+	await(t, "the attempt to queue", func() bool { _, _, ok := st.ReleaseFacts("a1"); return ok })
+	// Simulate the evidence carrying a signer key (e.g. from a remote runner)
+	// without re-running Evaluate, which would reject coordinator-recorded
+	// evidence with a KeyID set.
+	job.SetEntryKeyID(st, "a1", keyID)
+	if err := stepFor(st, "a1"); err != nil {
+		t.Fatalf("admitted before revocation: %v", err)
+	}
+	revoked = true
+	await(t, "the revocation to be seen", func() bool {
+		ref, ok := stepFor(st, "a1").(*dispatch.Refusal)
+		return ok && ref.Reason == "release."+job.SignerRevoked
+	})
+	close(release)
+	wg.Wait()
+}
+
+// TestGuardRefusesWhenTheRevocationLedgerFails: a ledger that cannot answer must
+// not read as "not revoked"; the cached approval is refused (fail closed).
+func TestGuardRefusesWhenTheRevocationLedgerFails(t *testing.T) {
+	defer job.SetTiming(5*time.Millisecond, time.Minute)()
+	f := newRun(t, passed())
+	st := job.NewStash()
+	keyID := "ci-node-abcdef0123456789"
+	var down atomic.Bool
+	st.Revoked = func(string) (bool, error) {
+		if down.Load() {
+			return false, errors.New("ledger unavailable")
+		}
+		return false, nil
+	}
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := st.Guard(context.Background(), "a1", f.provide(t), func() error { <-release; return nil }); err != nil {
+			t.Error(err)
+		}
+	}()
+	await(t, "the attempt to queue", func() bool { _, _, ok := st.ReleaseFacts("a1"); return ok })
+	job.SetEntryKeyID(st, "a1", keyID)
+	if err := stepFor(st, "a1"); err != nil {
+		t.Fatalf("admitted before the ledger failed: %v", err)
+	}
+	down.Store(true)
+	ref, ok := stepFor(st, "a1").(*dispatch.Refusal)
+	if !ok || ref.Reason != "release."+job.SignerUnverified {
+		t.Fatalf("a failing ledger must refuse with signer_unverified: %v", ref)
+	}
+	close(release)
+	wg.Wait()
 }

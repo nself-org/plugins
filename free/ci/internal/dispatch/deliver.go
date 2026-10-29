@@ -15,6 +15,7 @@ package dispatch
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -73,8 +74,13 @@ func (d *Dispatcher) deliver(q Queued, r sched.Runner, a Admitted, pol sched.Pol
 // lose marks an undelivered lease lost; a lease that already moved on keeps its state.
 func (d *Dispatcher) lose(a Admitted, cause error) {
 	ctx := context.WithoutCancel(d.life)
+	class := model.FailureClass("infra")
+	var classified interface{ FailureClass() string }
+	if errors.As(cause, &classified) && classified.FailureClass() == "code" {
+		class = "code"
+	}
 	if state, epoch, err := d.cfg.Store.AttemptStateEpoch(ctx, a.AttemptID); err == nil && (state == "leased" || state == "running") {
-		_ = d.cfg.Store.Transition(ctx, a.AttemptID, state, "lost", store.TransitionDetail{Epoch: epoch, FailureClass: "infra", Reason: "delivery failed"})
+		_ = d.cfg.Store.Transition(ctx, a.AttemptID, state, "lost", store.TransitionDetail{Epoch: epoch, FailureClass: class, Reason: "delivery failed"})
 	}
 	if d.cfg.DeliveryError != nil {
 		a.Token = "" // the lease secret never leaves the dispatcher

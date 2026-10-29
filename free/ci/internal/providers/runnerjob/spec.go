@@ -73,7 +73,7 @@ func (s Spec) Validate() error {
 	switch {
 	case !kindPattern.MatchString(s.Provider):
 		return errors.New("runnerjob: provider is not a plain word")
-	case !repoPattern.MatchString(s.Repo):
+	case !repoPattern.MatchString(s.Repo) || strings.HasSuffix(s.Repo, "/.") || strings.HasSuffix(s.Repo, "/.."):
 		return errors.New("runnerjob: repo is not owner/name")
 	case !demandPattern.MatchString(s.Demand):
 		return errors.New("runnerjob: demand id is not a number")

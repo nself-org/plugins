@@ -265,9 +265,6 @@ func TestD32_CredentialNotPersistedInTheStore(t *testing.T) {
 
 // D33: a repository value of "acme/.." passes Spec.Validate, so a dot-segment name reaches the minter.
 func TestD33_SpecRefusesDotSegmentRepository(t *testing.T) {
-	if !openFinding(t, "D33") {
-		return
-	}
 	for _, repo := range []string{"acme/..", "acme/.", "../x"} {
 		s := dSpec("1")
 		s.Repo = repo
@@ -279,9 +276,6 @@ func TestD33_SpecRefusesDotSegmentRepository(t *testing.T) {
 
 // D34: the credential types print without their value in fmt, %#v and slog, as the JIT Minted type does.
 func TestD34_CredentialTypesRedactWhenPrinted(t *testing.T) {
-	if !openFinding(t, "D34") {
-		return
-	}
 	var buf bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&buf, nil))
 	pc := &protocol.RunnerCredential{Kind: "github-jitconfig", Value: fakeSecret, ExpiresAt: "x"}
