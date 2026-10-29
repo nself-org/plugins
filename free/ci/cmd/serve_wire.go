@@ -86,6 +86,7 @@ func serveWire(ctx context.Context, st *store.Store, home, coordinatorID string,
 	}
 	undoHosted := serveHosted(st, home, cfg.AllowedRepos)
 	undoNetscope := serveNetscope(st, home)
+	cfg.Rereport = rereportDone(st)
 	cfg.Drain = func(dctx context.Context) error {
 		d, err := drain.New(drain.Config{
 			Intake: agentIntake{}, Canceller: liveCanceller{}, Deadline: drain.FlagDeadline(), Logf: cfg.Logf,

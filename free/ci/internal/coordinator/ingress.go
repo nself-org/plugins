@@ -29,6 +29,10 @@ type Delivery struct {
 	Facts        json.RawMessage // source facts (event, ref, clone_url, ...); opaque to the intake
 	Pipeline     string          // the requested pipeline, "" for the default
 	Synthetic    *model.Pipeline // a pipeline the source built itself (runner demand), if any
+	// Reconcile marks a delivery found by a sweep (a head without a terminal status). It coalesces into a
+	// run of the same source and semantic key that finished within the redelivery horizon, and the
+	// coordinator then asks Config.Rereport to send that run's stored result again instead of building twice.
+	Reconcile bool
 }
 
 // Ingress turns the requests of one provider into Deliveries.

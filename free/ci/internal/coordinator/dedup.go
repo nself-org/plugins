@@ -1,6 +1,6 @@
 package coordinator
 
-// Purpose: the semantic key, the maintenance loop (retention, claim heartbeat, recovery) of the V15
+// Purpose: the semantic key, the maintenance loop (retention, claim heartbeat, recovery, approval voids) of the V15
 // coordinator (P7-NODE-10, Epic D7, X7).
 // Inputs:  project, revision, trigger class and policy digest of a trigger; the injected clock.
 // Outputs: a stable semantic key; a store that forgets what is older than the 72 h redelivery horizon.
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trust/source"
 )
 
 // semanticKey is the key that coalesces triggers for the same code under the same policy. A trigger that
@@ -45,10 +46,9 @@ func (c *Coordinator) maintain(ctx context.Context) {
 		if err := st.IntakeBeat(ctx, c.cfg.ID); err != nil && ctx.Err() == nil {
 			c.cfg.Logf("intake heartbeat failed: %v", err)
 		}
+		c.sweepApprovals(ctx)
 		if now := c.cfg.Clock.Now(); now.Sub(pruned) >= time.Hour {
-			if _, err := st.DedupPrune(ctx, 0); err != nil && ctx.Err() == nil {
-				c.cfg.Logf("intake prune failed: %v", err)
-			}
+			c.prune(ctx, now)
 			pruned = now
 		}
 		c.nudge()
@@ -56,6 +56,53 @@ func (c *Coordinator) maintain(ctx context.Context) {
 		case <-c.cfg.Clock.After(c.cfg.Beat):
 		case <-ctx.Done():
 			return
+		}
+	}
+}
+
+// sweepApprovals writes the void (and its audit row) of every standing approval that no longer matches its
+// run, so the void does not wait for `ci runs pending`, a facts write or a new approval (D-1342).
+func (c *Coordinator) sweepApprovals(ctx context.Context) {
+	if _, err := c.cfg.Store.SweepApprovals(ctx, "", approvalVoidCheck); err != nil && ctx.Err() == nil {
+		c.cfg.Logf("approval sweep failed: %v", err)
+	}
+}
+
+// approvalVoidCheck adapts the pure void rule of trust/source to the store's binding type.
+func approvalVoidCheck(approved, cur store.ApprovalBinding) []string {
+	return source.VoidReasons(source.Binding(approved), source.Binding(cur))
+}
+
+// MarkRetention is how long the marks of one provider_mark name stay. KeyPrefix narrows the rule to the
+// keys that start with it ("" is every key of the name); a mark older than MaxAge is deleted.
+type MarkRetention struct {
+	Name      string
+	KeyPrefix string
+	MaxAge    time.Duration
+}
+
+// DefaultMarkRetention is the horizon of the GitHub reconcile marks (keys are "<kind>|<repo>|<id>"): a run
+// update and a demand job are read again only while GitHub still lists them, so a week is generous; the
+// head (term, enq) and redelivery marks keep 30 days, far beyond the 72 h redelivery horizon.
+var DefaultMarkRetention = []MarkRetention{
+	{Name: "github-reconcile", KeyPrefix: "run|", MaxAge: 7 * 24 * time.Hour},
+	{Name: "github-reconcile", KeyPrefix: "demand|", MaxAge: 7 * 24 * time.Hour},
+	{Name: "github-reconcile", MaxAge: 30 * 24 * time.Hour},
+}
+
+// prune forgets what is past its retention: finished intake rows and keys, and the provider marks.
+func (c *Coordinator) prune(ctx context.Context, now time.Time) {
+	st := c.cfg.Store
+	if _, err := st.DedupPrune(ctx, 0); err != nil && ctx.Err() == nil {
+		c.cfg.Logf("intake prune failed: %v", err)
+	}
+	rules := c.cfg.MarkRetention
+	if rules == nil {
+		rules = DefaultMarkRetention
+	}
+	for _, r := range rules {
+		if _, err := st.ProviderMarkPrune(ctx, r.Name, r.KeyPrefix, now.Add(-r.MaxAge)); err != nil && ctx.Err() == nil {
+			c.cfg.Logf("provider mark prune failed (%s): %v", r.Name, err)
 		}
 	}
 }

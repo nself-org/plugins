@@ -60,4 +60,4 @@ An allowance is the declared ceiling (`economics.ceilings.<provider>`) minus the
 
 - Not wired yet (debt D-1280): the dispatcher must bind the economics environment with `economics.Bind` (store, spend policy, clock, coordinator id) and copy the spend keys into the scheduler's policy with `economics.ApplyPolicy`. Until then the hooks are inert and nothing paid is placed.
 - A job the scheduler holds with `approval.pending` never reaches the admission step. The dispatcher records the whole pipeline's worst case with `economics.NotePending`, so `ApproveSpend` has a figure to bind to and one approval releases the run. Without it, the figure is the pipeline total at the moment a job is held, and each job that grows the pipeline past it is held again.
-- Burst (P7-SCHED-08) calls `economics.ReserveResource` and `economics.ReleaseResource` inside its own transactions. The GitHub billing importer (P7-HOST-10) writes through `economics.RecordUsage`.
+- Burst (P7-SCHED-08) calls `economics.ReserveResource` and `economics.ReleaseResource` inside its own transactions. The GitHub billing importer (P7-HOST-10) writes through `economics.ReplaceUsage`.

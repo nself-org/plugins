@@ -9,7 +9,7 @@ package store
 // attempts, leases and reservations, cancel intents, idempotency keys,
 // declared artifacts, cache entries and cache facts written by those attempts (an
 // entry is served only while its writer attempt is on record as passed),
-// evidence and event-index rows of the pipeline, and one
+// evidence, event-index, trust-fact and approval rows of the pipeline, and one
 // audit row records the prune; the audit log itself is never pruned.
 
 import (
@@ -61,6 +61,8 @@ var pruneSteps = []string{
 	`DELETE FROM event_index WHERE run_id IN (SELECT value FROM json_each(?))`,
 	`DELETE FROM cache_entry WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM cache_attempt WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
+	`DELETE FROM trust_approvals WHERE run IN (SELECT value FROM json_each(?))`,
+	`DELETE FROM trust_run_facts WHERE run IN (SELECT value FROM json_each(?))`,
 	`DELETE FROM sched_admitted WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM sched_refusal WHERE attempt_id IN (SELECT a.id FROM attempt a JOIN job j ON a.job_id=j.id WHERE j.pipeline_id IN (SELECT value FROM json_each(?)))`,
 	`DELETE FROM attempt WHERE job_id IN (SELECT id FROM job WHERE pipeline_id IN (SELECT value FROM json_each(?)))`,

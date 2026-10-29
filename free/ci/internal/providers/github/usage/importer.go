@@ -2,20 +2,20 @@ package usage
 
 // Purpose: Importer, the off-by-default step that turns a UsageSource's lines into SCHED-07 ledger
 // rows (Epic D12).
-// Inputs:  Settings (billing_import, billing_account), a providers.UsageSource, a recorder (default
-//          economics.RecordUsage) and a clock.
+// Inputs:  Settings (billing_import, billing_account), a providers.UsageSource, a replacer (default
+//          economics.ReplaceUsage) and a clock.
 // Outputs: Result; one economics.Usage per (account, date, sku, repo) with the key
-//          github:<account>:<date>:<sku>:<repo>, so a second import of the same period replaces the
-//          same rows (RecordUsage is an upsert by key) and never adds one.
+//          github:<account>:<date>:<sku>:<repo>; the period is written as a whole, in one transaction
+//          (ReplaceUsage), so a second import replaces the same rows and a row GitHub no longer reports
+//          (renamed repo or sku, changed billing account) is deleted instead of counted twice.
 // Constraints: with billing_import false Run returns Disabled before the source is touched (no API
 //          call, no credential read). The whole period is read and converted before the first write,
-//          so a failing or malformed report writes nothing; a ledger write that fails midway leaves
-//          the earlier lines in place, the error names the key, and a rerun converges (same keys).
+//          so a failing or malformed report writes nothing, and the ledger write is atomic: a failure
+//          leaves the earlier rows and a rerun converges. An empty report writes and deletes nothing.
 //          No remaining value is computed or reported here.
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -39,14 +39,15 @@ const (
 	LookbackDays = 7
 )
 
-// Recorder writes one usage line; economics.RecordUsage is the production one.
-type Recorder func(context.Context, economics.Usage) error
+// Replacer writes the usage of provider for the UTC days from..to (both included) as exactly lines,
+// dropping what else the ledger holds for those days; economics.ReplaceUsage is the production one.
+type Replacer func(ctx context.Context, provider, from, to string, lines []economics.Usage) error
 
 // Importer imports one account's usage.
 type Importer struct {
 	Settings Settings
 	Source   providers.UsageSource // may be nil only while Settings.Import is false
-	Record   Recorder              // default economics.RecordUsage
+	Replace  Replacer              // default economics.ReplaceUsage
 	Now      func() time.Time      // default time.Now
 }
 
@@ -138,19 +139,21 @@ func (i *Importer) Run(ctx context.Context) (Result, error) {
 	if err != nil {
 		return res, err
 	}
-	record := i.Record
-	if record == nil {
-		record = economics.RecordUsage
+	// An empty report replaces nothing: a malformed or truncated answer must not erase known usage (the
+	// allowance would read larger), so a billing account that really went quiet keeps its old rows
+	// until they leave the month.
+	if len(lines) == 0 {
+		return res, nil
 	}
-	var errs []error
-	for _, l := range lines {
-		if err := record(ctx, l); err != nil {
-			errs = append(errs, fmt.Errorf("record %s: %w", l.Key, err))
-			continue
-		}
-		res.Rows++
+	replace := i.Replace
+	if replace == nil {
+		replace = economics.ReplaceUsage
 	}
-	return res, errors.Join(errs...)
+	if err := replace(ctx, Provider, res.From, res.To, lines); err != nil {
+		return res, fmt.Errorf("replace usage %s..%s: %w", res.From, res.To, err)
+	}
+	res.Rows = len(lines)
+	return res, nil
 }
 
 // Key is the idempotent ledger key of one line.

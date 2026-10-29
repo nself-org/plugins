@@ -5,7 +5,7 @@ package economics
 // Inputs:  a Usage row from P7-HOST-10's importer; the store, the spend policy and a clock.
 // Outputs: provider usage rows (the only `known` figures); a Report in which
 // every money figure carries its confidence and source.
-// Constraints: RecordUsage is idempotent by Key; the report never prints an
+// Constraints: RecordUsage is idempotent by Key; ReplaceUsage swaps a provider's days in one transaction; the report never prints an
 // allowance, an estimate or an actual without a confidence label; rates,
 // ceilings and budget limits are the owner's declaration and are printed as
 // such; nothing here calls a billing or pricing API.
@@ -29,26 +29,55 @@ type Usage struct {
 	ReportedAt         time.Time
 }
 
+// usageRow validates a Usage and converts it to its ledger row.
+func usageRow(env Env, u Usage) (store.UsageRow, error) {
+	day, err := time.Parse("2006-01-02", u.Date)
+	if u.Key == "" || u.Provider == "" || err != nil || u.Minutes < 0 || u.CostMicro < 0 || (u.BalanceMicro != nil && *u.BalanceMicro < 0) {
+		return store.UsageRow{}, refuse(model.AllowanceUnknown, "a usage line needs a key, a provider, a UTC date and non-negative amounts")
+	}
+	// A provider in UTC+N may already report tomorrow; anything later is not a usage date.
+	if u.Date > dayOf(env.Now().AddDate(0, 0, 1)) {
+		return store.UsageRow{}, refuse(model.AllowanceUnknown, "usage dated %s is in the future", u.Date)
+	}
+	at := u.ReportedAt
+	if at.IsZero() || at.After(env.Now()) { // a report is never made in the future
+		at = env.Now()
+	}
+	return store.UsageRow{Key: u.Key, Provider: u.Provider, Period: day.Format("2006-01"), Day: u.Date, Series: u.Series, Minutes: u.Minutes,
+		CostMicro: u.CostMicro, BalanceMicro: u.BalanceMicro, ReportedAt: at.UnixNano()}, nil
+}
+
 // RecordUsage stores a provider-reported line with confidence `known`.
 func RecordUsage(ctx context.Context, u Usage) error {
 	env, ok := envOf(ctx)
 	if !ok {
 		return refuse(model.AllowanceUnknown, "economics is not bound, so usage cannot be recorded")
 	}
-	day, err := time.Parse("2006-01-02", u.Date)
-	if u.Key == "" || u.Provider == "" || err != nil || u.Minutes < 0 || u.CostMicro < 0 || (u.BalanceMicro != nil && *u.BalanceMicro < 0) {
-		return refuse(model.AllowanceUnknown, "a usage line needs a key, a provider, a UTC date and non-negative amounts")
+	row, err := usageRow(env, u)
+	if err != nil {
+		return err
 	}
-	// A provider in UTC+N may already report tomorrow; anything later is not a usage date.
-	if u.Date > dayOf(env.Now().AddDate(0, 0, 1)) {
-		return refuse(model.AllowanceUnknown, "usage dated %s is in the future", u.Date)
+	return env.Store.PutUsage(ctx, row)
+}
+
+// ReplaceUsage stores lines as the whole usage of provider for the UTC days fromDay..toDay (both
+// included) in one transaction: rows of the provider in that range that are not among lines are
+// deleted (D-1317). Every line must be valid, belong to provider and lie in the range, or nothing is
+// written.
+func ReplaceUsage(ctx context.Context, provider, fromDay, toDay string, lines []Usage) error {
+	env, ok := envOf(ctx)
+	if !ok {
+		return refuse(model.AllowanceUnknown, "economics is not bound, so usage cannot be recorded")
 	}
-	at := u.ReportedAt
-	if at.IsZero() || at.After(env.Now()) { // a report is never made in the future
-		at = env.Now()
+	rows := make([]store.UsageRow, 0, len(lines))
+	for _, u := range lines {
+		row, err := usageRow(env, u)
+		if err != nil {
+			return err
+		}
+		rows = append(rows, row)
 	}
-	return env.Store.PutUsage(ctx, store.UsageRow{Key: u.Key, Provider: u.Provider, Period: day.Format("2006-01"), Day: u.Date, Series: u.Series, Minutes: u.Minutes,
-		CostMicro: u.CostMicro, BalanceMicro: u.BalanceMicro, ReportedAt: at.UnixNano()})
+	return env.Store.ReplaceUsage(ctx, provider, fromDay, toDay, rows)
 }
 
 // BudgetLine is one budget scope. Reserved is the worst case held (a bound, so estimated).

@@ -34,17 +34,6 @@ type RunResult struct {
 // Dispatcher runs the pipeline an intake row stands for. An error is an infrastructure failure.
 type Dispatcher func(ctx context.Context, row store.IntakeRow) (RunResult, error)
 
-// Clock is the time source of the schedules; tests inject a fake.
-type Clock interface {
-	Now() time.Time
-	After(d time.Duration) <-chan time.Time
-}
-
-type realClock struct{}
-
-func (realClock) Now() time.Time                         { return time.Now() }
-func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
-
 // Config is the coordinator configuration.
 type Config struct {
 	Store        *store.Store
@@ -65,6 +54,9 @@ type Config struct {
 	StaleAfter   time.Duration
 	ID           string
 	Logf         func(format string, a ...any)
+
+	Rereport      func(ctx context.Context, row store.IntakeRow) error // re-sends a finished row's result when a sweep folds into it (D-1320)
+	MarkRetention []MarkRetention                                      // replaces DefaultMarkRetention when non-nil; empty keeps every mark
 	// Drain, when set, runs once after the context ends and before the dispatches are cancelled, with new
 	// claims already stopped (PauseIntake); P7-NODE-20 wires the graceful drain through it.
 	Drain func(ctx context.Context) error

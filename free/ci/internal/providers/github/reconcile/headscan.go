@@ -217,6 +217,7 @@ func (e *Engine) sweepHead(ctx context.Context, s *session, enq coordinator.Enqu
 	if err != nil {
 		return false, err
 	}
+	d.Reconcile = true // a finished run of this head absorbs the delivery and its stored result is sent again (D-1320)
 	if _, err = enq.Enqueue(ctx, d); err != nil {
 		return false, err
 	}
