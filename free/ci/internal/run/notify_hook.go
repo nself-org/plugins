@@ -85,11 +85,13 @@ func (h *notifyHook) Notify(ctx context.Context, r NotifyRequest) error {
 // runOf maps a finished run to what the notify engine judges.
 func (h *notifyHook) runOf(ctx context.Context, req NotifyRequest) notify.Run {
 	info := req.Run
-	ref, repo := "", info.Evidence.RepoID
-	if h.Ref != nil {
-		ref = h.Ref(ctx)
-	} else {
-		ref = h.branch(ctx, req.Root)
+	ref, repo := req.Ref, info.Evidence.RepoID
+	if ref == "" {
+		if h.Ref != nil {
+			ref = h.Ref(ctx)
+		} else {
+			ref = h.branch(ctx, req.Root)
+		}
 	}
 	// the completed evidence names the repository by its first root commit, the same for every
 	// clone; without it (evidence not completed) the origin URL's digest is the next best

@@ -154,6 +154,8 @@ func TestCacheHookTopLevelDisable(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(r.C.Opts.Root, ".nself", "ci.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// The harness builds a plan before writing this config; mirror the resolved block.
+	r.C.Plan.Cache = &model.CacheConfig{Disable: true}
 	if o := outcome(r.run(t), "build"); o.State != StatePassed || r.uses(t, o) != "" || r.entryCount(t) != 0 {
 		t.Fatalf("%+v\n%s", o, r.Out)
 	}
@@ -258,7 +260,7 @@ func TestCacheLevelFollowsTheEffectiveIsolation(t *testing.T) {
 	}
 }
 
-func TestCacheHookEvictsTheSessionOfAnEndedAttempt(t *testing.T) {
+func TestCacheHookPrepareFailureReleasesSession(t *testing.T) {
 	// a run that asks for a service no hook provides fails in prepare, after Before
 	r := cacheRig(t, map[string]model.Job{"build": sh("true")})
 	r.C.Opts.Services = []string{"db"}
@@ -266,12 +268,8 @@ func TestCacheHookEvictsTheSessionOfAnEndedAttempt(t *testing.T) {
 	if o.State != StateFailed {
 		t.Fatalf("%+v\n%s", o, r.Out)
 	}
-	if _, ok := cacheOn.sessions.Load(o.AttemptID); !ok {
-		t.Fatal("the job never reached the cache hook")
-	}
-	cacheOn.evict(context.Background(), r.store(t), time.Now())
 	if _, ok := cacheOn.sessions.Load(o.AttemptID); ok {
-		t.Fatal("the session of an ended attempt was kept")
+		t.Fatal("prepare failure kept the cache session until eviction")
 	}
 	r.noCacheWork(t)
 }
@@ -342,7 +340,9 @@ func TestRunTellsTheCacheHookAboutTheContainerOption(t *testing.T) {
 		r := newRig(t, map[string]model.Job{"build": sh("true")}, gitFake{})
 		rec := recordingCache{container: make(chan bool, 4)}
 		r.C.Hooks.Cache, r.C.Opts.Container = rec, container
-		r.C.Hooks.Image = nil
+		r.C.Hooks.Image = imageFunc(func(context.Context, AttemptInfo) (string, error) {
+			return "operator@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", nil
+		})
 		_ = outcome(r.run(t), "build")
 		select {
 		case got := <-rec.container:

@@ -137,7 +137,7 @@ func (h *cacheHook) Before(ctx context.Context, a AttemptInfo) (CacheSetup, erro
 	if err != nil || !ok || !filepath.IsAbs(p.Project) {
 		return none, nil
 	}
-	if topLevelDisabled(p.Project) {
+	if topLevelDisabled(p.Project, a.PipelineCache) {
 		return none, nil
 	}
 	workdir, err := workdirOf(p.Project, a.Job.Workdir)
@@ -204,12 +204,14 @@ func cacheFacts(a AttemptInfo, p store.PipelineRow, att CacheAttestation, privat
 
 // imageDigest is the pinned digest of the job's container image, "" if unknown.
 func (h *cacheHook) imageDigest(ctx context.Context, a AttemptInfo) string {
+	// prepare resolves the actual execution image before cache restoration.
+	// Only legacy --container callers without it need the operator hook.
 	img := ""
 	if a.Job.Container != nil {
 		img = a.Job.Container.Image
 	}
-	if img == "" && Registered.Image != nil {
-		img, _ = Registered.Image.Image(ctx, a)
+	if img == "" && a.Container && Registered.Image != nil {
+		_ = guard("image hook", func() (err error) { img, err = Registered.Image.Image(ctx, a); return })
 	}
 	if _, d, ok := strings.Cut(img, "@"); ok && strings.HasPrefix(d, "sha256:") {
 		return d

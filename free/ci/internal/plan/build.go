@@ -176,7 +176,7 @@ func Build(in Input) (*Plan, error) {
 		}
 	}
 
-	p := &Plan{
+	p := &Plan{Cache: resolvedCache(in.Config.Cache),
 		Pipeline:  model.PipelineRef{ID: pname, Name: pname, Kind: kind},
 		Trigger:   trig,
 		Selection: sel,

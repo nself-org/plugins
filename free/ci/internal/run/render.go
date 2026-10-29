@@ -174,7 +174,11 @@ func (h *human) Event(e Event) {
 func failText(o JobOutcome) string {
 	switch {
 	case o.Code != "":
-		return o.Code + ": " + o.Detail
+		detail := o.Detail
+		if rest, ok := strings.CutPrefix(detail, o.Code); ok && (rest == "" || strings.HasPrefix(rest, ":") || strings.HasPrefix(rest, " ")) {
+			detail = strings.TrimSpace(strings.TrimPrefix(rest, ":"))
+		}
+		return o.Code + ": " + detail
 	case o.FailureClass == "timeout":
 		return "timeout"
 	case o.ExitCode == 0 && o.Detail != "":

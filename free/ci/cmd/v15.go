@@ -179,6 +179,7 @@ func parseBare(args []string) (RunOptions, error) {
 		return o, err
 	}
 	o.Root, o.Home = root, os.Getenv("NSELF_CI_HOME")
+	o.Ref = os.Getenv("NSELF_CI_REF")
 	o.Interactive = interactiveRun(o.Trigger, os.Getenv)
 	for _, h := range optionsHooks {
 		if err = h(&o); err != nil {
