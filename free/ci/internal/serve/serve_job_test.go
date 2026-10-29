@@ -97,9 +97,12 @@ func TestServedRefReachesChild(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := "refs/heads/served"
+			want := "served" // the webhook's full ref is shortened, as a local run's symbolic-ref is
 			if docker {
 				want = "--env\nNSELF_CI_REF=" + want + "\n"
+			}
+			if !docker && string(got) != want {
+				t.Fatalf("child got %q want exactly %q", got, want)
 			}
 			if !strings.Contains(string(got), want) {
 				t.Fatalf("child got %q want %q", got, want)

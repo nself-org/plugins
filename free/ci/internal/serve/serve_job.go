@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/clui"
@@ -109,11 +110,19 @@ func cloneRef(job ciJob, cfg ServeConfig) (string, error) {
 	return dir, nil
 }
 
+// shortBranch turns a webhook ref ("refs/heads/main") into the short branch name ("main") that
+// a local run gets from `git symbolic-ref --short`. The ref becomes NSELF_CI_REF, which keys
+// notification state, so both ways of running must name a branch the same way.
+func shortBranch(ref string) string {
+	return strings.TrimPrefix(ref, "refs/heads/")
+}
+
 // runGateInDocker runs the nself-ci binary inside a container.
 // The workdir is bind-mounted read-write at /repo. The nself-ci binary is
 // bind-mounted read-only from the host so Docker doesn't need to install Go.
 // CPU/memory limits prevent a runaway build from starving the ops box.
 func runGateInDocker(binaryPath, workdir string, cfg ServeConfig, ref string) (passed bool, summary string, err error) {
+	ref = shortBranch(ref)
 	containerName := fmt.Sprintf("nself-ci-%d", time.Now().UnixNano())
 
 	// Check Docker availability.
