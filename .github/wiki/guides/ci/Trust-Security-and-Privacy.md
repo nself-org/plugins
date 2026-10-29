@@ -435,7 +435,7 @@ The gate treats each producer kind differently. `coordinator-recorded` evidence 
 
 ### Release selection
 
-A gate whose `Class` is anything other than `default` (the constant `release` included) or that sets `FullSelection: true` demands `selection.mode: full`. Evidence produced by a partial selection (for example a skip or subset run) is refused with `evidence.selection_partial`. Such a gate also refuses self-reported evidence regardless of operator policy.
+A gate whose `Class` is anything other than `default` (the constant `release` included) or that sets `FullSelection: true` demands `selection.mode: full`. Evidence produced by a partial selection (for example a skip or subset run) is refused with `evidence.selection_partial`. Full selection is the only thing `FullSelection: true` adds: a default-class gate that sets it still accepts fully selected self-reported evidence when the operator policy set `AllowSelfReported`. Only a release-class gate (any `Class` other than `default`) refuses self-reported evidence regardless of operator policy.
 
 ### Known limits
 
