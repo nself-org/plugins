@@ -9,7 +9,9 @@ package main
 // Outputs: one v1 envelope (--json) or a table; exit 0, 10, 1 (unknown run,
 // usage) or 2 (infrastructure).
 // Constraints: read class; the wait never ends later than the invoke deadline
-// minus 10 s, so a document call is not killed first; each poll recovers after
+// minus 10 s, so a document call is not killed first; the first read of a
+// local run is allowed to finish (firstReadGrace) even when the budget is
+// shorter, so a real run reports its real state; each poll recovers after
 // dead coordinators (idempotent), so a killed run turns `lost` (terminal, exit
 // 0) instead of staying running; remote runs are asked through the registered
 // RemoteResolvers, which read --coordinator as NSELF_CI_COORDINATOR.
@@ -39,6 +41,10 @@ const (
 	deadlineMargin = 10 * time.Second
 	// exitStillRunning is the exit status of a wait that timed out.
 	exitStillRunning = 10
+	// firstReadGrace is the longest the first read of a local run may take when the budget is shorter
+	// (store open, dead-coordinator recovery, the read itself). It is half the deadline margin, so the
+	// wait still ends before the invoker's deadline, and it bounds a held SQLite lock.
+	firstReadGrace = deadlineMargin / 2
 )
 
 // waitPoll is the store poll interval (a var for tests).
@@ -100,11 +106,16 @@ func runWait(args []string) int {
 	// still gets a short first look), so a stalled call cannot outlive the invoke deadline.
 	wctx, cancel := context.WithDeadline(ctx, started.Add(cmp.Or(budget, 500*time.Millisecond)))
 	defer cancel()
-	src, err := openRunSource(wctx, pos[0], f.coordinator)
+	// The first local read gets at least firstReadGrace: a budget that ends before it would report the
+	// run as "unknown" although it exists. Later polls keep the budget.
+	gctx, gcancel := context.WithDeadline(ctx, started.Add(max(budget, firstReadGrace)))
+	defer gcancel()
+	src, err := openRunSourceGrace(wctx, gctx, pos[0], f.coordinator)
 	if err != nil {
 		return waitFail(ctx, wctx, err, detach.View{RunID: pos[0]}, f.json, started)
 	}
 	defer src.Close()
+	src.firstRead = gctx
 	last := detach.View{RunID: pos[0], State: "unknown"}
 	for {
 		v, err := src.View(wctx)
@@ -161,13 +172,15 @@ func printWait(asJSON bool, v detach.View, d cirun.RunView, terminal bool, waite
 // runSource reads one run's state: from a RemoteResolver when the run lives on
 // another machine, else from the local store.
 type runSource struct {
-	resolver cirun.RemoteResolver
-	ref      string
-	remote   bool
-	st       *store.Store
-	row      store.PipelineRow
-	found    bool
-	last     time.Time
+	resolver  cirun.RemoteResolver
+	ref       string
+	remote    bool
+	st        *store.Store
+	row       store.PipelineRow
+	found     bool
+	read      bool            // a local read has finished
+	firstRead context.Context // when set, bounds the first local read instead of the caller's context
+	last      time.Time
 	// Detail is the RunView of the latest View call.
 	Detail cirun.RunView
 }
@@ -176,6 +189,12 @@ type runSource struct {
 const recoverEvery = 2 * time.Second
 
 func openRunSource(ctx context.Context, ref, coordinator string) (*runSource, error) {
+	return openRunSourceGrace(ctx, ctx, ref, coordinator)
+}
+
+// openRunSourceGrace is openRunSource with a separate context for opening the local store, which
+// bounds remote lookups by ctx and the store open by storeCtx.
+func openRunSourceGrace(ctx, storeCtx context.Context, ref, coordinator string) (*runSource, error) {
 	if coordinator != "" {
 		if err := os.Setenv(detach.EnvCoordinator, coordinator); err != nil {
 			return nil, err
@@ -193,7 +212,7 @@ func openRunSource(ctx context.Context, ref, coordinator string) (*runSource, er
 		}
 	}
 	// recovery after dead coordinators runs in View, under the caller's deadline
-	st, err := openStoreCtx(ctx, runsStorePath())
+	st, err := openStoreCtx(storeCtx, runsStorePath())
 	if err != nil {
 		return nil, err
 	}
@@ -223,6 +242,9 @@ func (s *runSource) View(ctx context.Context) (detach.View, error) {
 		}
 		return detach.View{}, fmt.Errorf("run %q is no longer known to its coordinator", s.ref)
 	}
+	if !s.read && s.firstRead != nil {
+		ctx = s.firstRead
+	}
 	if time.Since(s.last) >= recoverEvery {
 		s.last = time.Now()
 		_ = cirun.Recover(ctx, s.st, "", os.Getenv("NSELF_CI_HOME"))
@@ -243,6 +265,7 @@ func (s *runSource) View(ctx context.Context) (detach.View, error) {
 		return detach.View{}, err
 	}
 	s.Detail = v
+	s.read = true
 	return toView(v), nil
 }
 
