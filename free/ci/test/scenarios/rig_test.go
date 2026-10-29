@@ -75,7 +75,7 @@ func runner(id, loc, platform string, slots int) sched.Runner {
 	c.Identity.Labels = []string{"arch=" + arch}
 	c.Location.Kind.Value = &loc
 	return sched.Runner{ID: id, Location: loc, Class: "owned", Provider: "operator", Avail: sched.Avail{Slots: slots, CPU: 8, MemMB: 8192}, Capability: c,
-		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: loc == "local", NoLANRoute: true}}
+		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: loc == "local"}}
 }
 
 // job builds a placement input for platform plat in project project.
@@ -113,8 +113,9 @@ func liveWorld(t testing.TB, st *store.Store, tweak func(*sched.World), runners 
 		if err != nil {
 			return sched.World{}, "", err
 		}
-		w := sched.World{Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}, Counts: sched.Counts{Runners: map[string]int{}, Providers: map[string]int{}}}
+		w := sched.World{Network: map[string]sched.NetworkFact{}, Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}, Counts: sched.Counts{Runners: map[string]int{}, Providers: map[string]int{}}}
 		for _, r := range runners {
+			w.Network[r.ID] = sched.NetworkFact{Enforced: []model.NetworkScope{"none", "restricted", "internet"}}
 			if r.Location != "local" && r.Location != "hosted" {
 				registerNode(t, st, r)
 			}

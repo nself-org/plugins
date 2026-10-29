@@ -87,7 +87,12 @@ func (c compiled) hostHits(line string) []hostHit {
 	if len(c.hosts) == 0 {
 		return nil
 	}
-	low := strings.ToLower(line)
+	low := strings.Map(func(r rune) rune {
+		if isZeroWidth(r) {
+			return -1 // zero-width characters cannot hide a token
+		}
+		return r
+	}, strings.ToLower(line))
 	var out []hostHit
 	tried := map[string]bool{} // an IPv4 is also a dotted token: report it once
 	try := func(tok string) {
@@ -110,6 +115,14 @@ func (c compiled) hostHits(line string) []hostHit {
 	}
 	return out
 }
+
+// isZeroWidth reports a zero-width space, joiner, non-joiner, word joiner or BOM.
+func isZeroWidth(r rune) bool {
+	return r == 0x200B || r == 0x200C || r == 0x200D || r == 0x2060 || r == 0xFEFF
+}
+
+// hostsOnly keeps the dead-host rules: the one kind that reads skipped files.
+func (c compiled) hostsOnly() compiled { return compiled{hosts: c.hosts} }
 
 // standalone reports whether the IPv4 at [start,end) is not part of a longer
 // dotted number (a version such as 1.2.3.4.5 is not an address).

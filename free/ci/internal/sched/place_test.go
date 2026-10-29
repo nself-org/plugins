@@ -28,13 +28,17 @@ func fixtureRunner(id, loc string) Runner {
 	c.Identity.Labels = []string{"arch=amd64"}
 	c.Location.Kind.Value = &loc
 	return Runner{ID: id, Location: loc, Class: "owned", Provider: "operator", Avail: Avail{Slots: 1, CPU: 8, MemMB: 8192}, Capability: c,
-		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: loc == "local", NoLANRoute: true}}
+		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: loc == "local"}}
 }
 func fixtureJob(key string) Job {
 	return Job{Key: key, ID: key, Project: "project", Pipeline: Pipeline{ID: "pipe", Support: []string{"linux/amd64"}}, Requirements: model.PlacementRequirements{Platform: "linux/amd64", CPU: 1, MemMB: 128}, Trust: "owner", Network: "lan", TimeoutMs: 60000, PersonalOwnRun: true}
 }
 func fixtureWorld(rs ...Runner) World {
-	return World{Runners: rs, Policy: Policy{Preset: "balanced"}, Costs: map[string]Cost{}, Previous: map[string]string{}}
+	proof := map[string]NetworkFact{}
+	for _, r := range rs {
+		proof[r.ID] = NetworkFact{Enforced: []model.NetworkScope{"none", "restricted", "internet"}}
+	}
+	return World{Network: proof, Runners: rs, Policy: Policy{Preset: "balanced"}, Costs: map[string]Cost{}, Previous: map[string]string{}}
 }
 func containsCode(rs []model.PlacementReasonDetail, code string) bool {
 	for _, r := range rs {

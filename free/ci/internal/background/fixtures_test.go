@@ -50,7 +50,7 @@ func runner(id string, s signals) sched.Runner {
 		Avail:      sched.Avail{Slots: slots, CPU: 8, MemMB: 8192},
 		Capability: c,
 		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged",
-			UIDSeparation: true, Ownership: owner, PersonalOwnNode: true, NoLANRoute: true}}
+			UIDSeparation: true, Ownership: owner, PersonalOwnNode: true}}
 }
 
 // job is a fixture job of the given band ("" = normal).

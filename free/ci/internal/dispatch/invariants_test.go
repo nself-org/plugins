@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/invariants"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
@@ -43,11 +44,12 @@ func invariantCase(kind string, f invariants.World) (sched.World, sched.Runner, 
 		r.Location, r.Class, r.Provider = "hosted", "included", "provider"
 		r.Decl.Hosted = true
 	}
-	w := sched.World{Runners: []sched.Runner{r}, Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}}
+	w := sched.World{Network: map[string]sched.NetworkFact{r.ID: {Enforced: []model.NetworkScope{"none", "restricted", "internet"}}}, Runners: []sched.Runner{r}, Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}}
 	if kind == "I03" {
 		w.Runners, w.Hosted = nil, []sched.Runner{r}
 		w.Allowances = map[string]sched.Allowance{"provider": {RemainingEstimated: 1000000, Known: true, CeilingKnown: true}}
 	}
+	r.Decl.NoLANRoute = trust.NoLANRoute(j.Network, w.Network[r.ID].Enforced)
 	return w, r, j
 }
 

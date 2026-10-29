@@ -16,7 +16,7 @@ func realClaims(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(b)
+	return strings.Replace(string(b), "generated_regions:\n", "generated_regions:\n  facts: fixture generated fact region\n  facts:top-level: fixture colon region\n  x: fixture generated text region\n", 1)
 }
 
 // claimFindings scans files with the shipped claims.yaml (as .github/truth/claims.yaml)

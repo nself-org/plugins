@@ -78,6 +78,21 @@
       "additionalProperties": {
         "type": "object",
         "properties": {
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "secrets": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
           "required": {
             "type": [
               "null",

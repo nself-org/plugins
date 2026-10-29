@@ -30,9 +30,11 @@ type Service struct {
 
 // CheckDef configures a named check.
 type CheckDef struct {
-	Required      *bool    `json:"required,omitempty"`
-	CoverageFloor *int     `json:"coverage_floor,omitempty"`
-	Rules         []string `json:"rules,omitempty"`
+	Env           map[string]string `json:"env,omitempty"`
+	Secrets       []string          `json:"secrets,omitempty"`
+	Required      *bool             `json:"required,omitempty"`
+	CoverageFloor *int              `json:"coverage_floor,omitempty"`
+	Rules         []string          `json:"rules,omitempty"`
 }
 
 // Job is an authored job definition. The final two fields are internal only.

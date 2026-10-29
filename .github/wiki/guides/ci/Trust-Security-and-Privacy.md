@@ -151,8 +151,8 @@ A scope is offered only where it is enforced. The probe builds the same network 
 - The exclusion set is the one this host can build for itself. A team coordinator that keeps the set in its own store can replace it with `run.RegisterNetscopeExclusions`; nothing registers one yet.
 - The scheduler reads the proof for the local runner. A remote node's `network.enforced_scopes` is not reported yet, so no untrusted job is placed on a remote node on the strength of it. The agent does not yet pass the lease's network scope into the executor (container jobs there run with `none`), and `netscope.Effective`, which refuses `lan` and `privileged` for an untrusted job, is called by the scheduler's admission rules only.
 - The proxy sees the destination host and port, not the encrypted content. It does not check the TLS server name, so a shared CDN host on the allowlist can be used for traffic to another site behind it, and uploading to an allowlisted registry is still an exfiltration path. `restricted` limits where a job can talk, not what it says.
-- The host's other routing tables (policy routing for a VPN) and a public address that hairpins to a LAN service through the router are not in the on-link set. Put such addresses in the never-list.
-- The sidecar bind-mounts this process's own binary, so the file must be readable and executable by other users (mode `0755`), or the scope is unavailable (`E679`).
+- Linux route discovery reads all routing tables through netlink, including policy routes. A public address that hairpins to a LAN service through the router cannot be learned from those tables. It still needs an observed egress address from the target network in the never-list; automatic public-NAT discovery is not implemented.
+- The sidecar bind-mounts a private staged copy of this process's binary with mode `0755`; the source binary's permissions are unchanged. The copy is removed with the attempt's network resources. Restricted and internet scopes still require Linux.
 
 ## What a node must provide
 
@@ -462,3 +462,36 @@ When `NSELF_INVOKED_BY` is set (the MCP and HTTP invokers always set it; you can
 - A `team` row applies to every run, plan and dispatch of the process whose environment sets `NSELF_CI_TEAM=<team id>` (the coordinator's own environment, never a job's env or a repository file; same alphabet as `--team`). A malformed value fails the resolve with `E672` rather than dropping the team's rows; `show --team <id>` overrides it. With the variable unset no team row applies.
 - `pin` needs a fetched origin; with no origin there is nothing to pin against.
 - The checks read the store before the write transaction opens, so two writers at the same moment can race (for example a machine write over a concurrent operator tightening). A `set` is also checked against the rows of every stored project and team (the store lists the subjects of a scope), not only the current repository's, so a user, team or project write cannot make `Resolve` fail with `E670` in another repository; the refusal names the other project.
+
+The scheduler requires a `World.Network` proof for the effective scope even when the map is nil. A runner declaration cannot supply that proof. Placement and the network planner share the same predicate.
+
+### Node gate registry preparation
+
+A private registry token is a declared job secret. Built-in checks accept
+`env` and `secrets` in their check configuration, using the same resolver and
+trust admission as authored jobs:
+
+```yaml
+checks:
+  node.lint:
+    secrets: [project/NPM_TOKEN]
+    env: {NSELF_CI_LOCAL_REGISTRY_INFRA: "1"}
+```
+
+Use `${NPM_TOKEN}` in `.npmrc`. The install
+and the check share the resolved environment. Host registry tokens are not
+forwarded implicitly; registry authentication errors remain project failures.
+
+A local registry that the operator manages as infrastructure can opt in with
+`env: {NSELF_CI_LOCAL_REGISTRY_INFRA: "1"}` on the job. Only structured
+network/DNS install failures become retryable infrastructure failures. Lockfile,
+lifecycle, test and registry client errors remain project failures. Without this
+opt-in, a down localhost registry remains the project's setup failure.
+
+Node preparation uses a private `mktemp` directory under the job's `TMPDIR`
+(or `/tmp`), outside the copied project. Its caches stay available through the
+check, including Yarn Plug'n'Play archives, then the shell removes the directory
+on exit or a handled signal. An uncatchable SIGKILL or host crash can leave a
+temporary directory for the host's normal temporary-file cleanup; container
+scratch lives on the attempt's temporary filesystem. No `.nself-ci` directory is
+created in the project by preparation.

@@ -133,10 +133,11 @@ func (pr *Prober) proveProxied(ctx context.Context, binary string) bool {
 	if err != nil || control == "" {
 		return false
 	}
-	bin, err := pl.proxyBinary()
+	bin, removeBinary, err := pl.proxyBinary()
 	if err != nil {
 		return false
 	}
+	defer removeBinary()
 	image := pl.Image
 	if image == "" {
 		image = ProxyImage

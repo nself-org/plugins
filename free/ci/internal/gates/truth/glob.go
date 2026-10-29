@@ -5,7 +5,8 @@ package truth
 // Outputs: whether the pattern matches.
 // Constraints: `**` as a whole segment matches zero or more segments; any other
 // segment uses path.Match; a pattern with no slash matches the base name at any
-// depth (so `CHANGELOG*` covers every changelog); the match is on the whole path.
+// depth (so `CHANGELOG*` covers every changelog); the match is on the whole path
+// and ignores letter case.
 
 import (
 	"path"
@@ -14,6 +15,7 @@ import (
 
 // matchGlob reports whether rel (slash-separated, no leading slash) matches pattern.
 func matchGlob(pattern, rel string) bool {
+	pattern, rel = strings.ToLower(pattern), strings.ToLower(rel) // A.MD is a Markdown file too
 	if !strings.Contains(pattern, "/") {
 		ok, _ := path.Match(pattern, path.Base(rel))
 		return ok

@@ -208,7 +208,8 @@ func (r *Registry) ImpliedJobs(c model.PipelineConfig) map[string]model.Job {
 				name = "check-" + strings.ReplaceAll(d.ID, ".", "-") + "-" + strconv.Itoa(n)
 			}
 		}
-		jobs[name] = model.Job{Kind: "quality", Run: []string{d.ID}, Required: boolPtr(true), Path: d.Path}
+		settings := c.Checks[d.ID]
+		jobs[name] = model.Job{Kind: "quality", Run: []string{d.ID}, Required: boolPtr(true), Path: d.Path, Env: settings.Env, Secrets: settings.Secrets}
 	}
 	return jobs
 }

@@ -111,5 +111,5 @@ func TestDeltaReviewFixes(t *testing.T) {
 		"docs/releases/now.md":    "nSelf v1.2.0 is the current release\n",
 	})
 	wantFindings(t, got, "claims.counts sc.astro:4", "claims.counts sc.astro:6", "claims.counts gh.md:3",
-		"claims.counts steps.md:3", "claims.current-version docs/releases/now.md:1")
+		"claims.counts gh2.md:3", "claims.counts steps.md:3", "claims.current-version docs/releases/now.md:1")
 }

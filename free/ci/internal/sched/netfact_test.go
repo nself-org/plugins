@@ -38,7 +38,7 @@ func TestUntrustedPlacementFollowsTheNetworkProof(t *testing.T) {
 		return j
 	}
 	r := fixtureRunner("r", "lan")
-	r.Decl.NoLANRoute = false // never declared
+	r.Decl.NoLANRoute = true // forged declarations cannot replace a missing proof
 	r.Decl.Isolation = "sandboxed-container"
 	for name, c := range map[string]struct {
 		net    map[string]NetworkFact

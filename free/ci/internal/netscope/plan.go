@@ -126,10 +126,16 @@ func (p *Planner) setup(ctx context.Context, binary string, a isolation.Attempt,
 	if image == "" {
 		image = ProxyImage
 	}
-	bin, err := p.proxyBinary()
+	bin, removeBinary, err := p.proxyBinary()
 	if err != nil {
 		return isolation.NetworkPlan{}, err
 	}
+	keepBinary := false
+	defer func() {
+		if !keepBinary {
+			removeBinary()
+		}
+	}()
 	facts, err := p.worldFacts(ctx)
 	if err != nil {
 		return isolation.NetworkPlan{}, err
@@ -145,7 +151,9 @@ func (p *Planner) setup(ctx context.Context, binary string, a isolation.Attempt,
 	if err != nil {
 		return isolation.NetworkPlan{}, err
 	}
-	plan := isolation.NetworkPlan{Release: p.release(rt, binary, a.ID)}
+	release := p.release(rt, binary, a.ID)
+	plan := isolation.NetworkPlan{Release: func(ctx context.Context) { release(ctx); removeBinary() }}
+	keepBinary = true
 	cfg, err := NewConfig(scope, a.ID, prefix, extra, facts).Encode()
 	if err != nil {
 		return plan, err
@@ -173,19 +181,19 @@ func ProxyEnv(ip netip.Addr) []string {
 	return append(env, "NO_PROXY=", "no_proxy=")
 }
 
-func (p *Planner) proxyBinary() (string, error) {
+func (p *Planner) proxyBinary() (string, func(), error) {
 	f := p.Binary
 	if f == nil {
 		if runtime.GOOS != "linux" { // the sidecar runs this process's binary in a Linux container
-			return "", scopeFailed("restricted and internet need a Linux host: the proxy sidecar runs this binary in a Linux container")
+			return "", nil, scopeFailed("restricted and internet need a Linux host: the proxy sidecar runs this binary in a Linux container")
 		}
 		f = os.Executable
 	}
 	bin, err := f()
 	if err != nil || bin == "" {
-		return "", scopeFailed("the proxy binary path is unknown")
+		return "", nil, scopeFailed("the proxy binary path is unknown")
 	}
-	return bin, nil
+	return stageProxyBinary(bin)
 }
 
 func (p *Planner) waitReady(ctx context.Context, rt Runtime, binary, attempt string) error {

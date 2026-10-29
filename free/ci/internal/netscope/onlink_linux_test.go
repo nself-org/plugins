@@ -3,35 +3,36 @@
 package netscope
 
 import (
-	"net/netip"
+	"encoding/binary"
+	"syscall"
 	"testing"
 )
 
-func TestParseRoute4(t *testing.T) {
-	for line, want := range map[string]string{
-		"eth0\t0000A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0":  "192.168.0.0/24",
-		"docker0\t000011AC\t00000000\t0001\t0\t0\t0\t0000FFFF\t0\t0\t0": "172.17.0.0/16",
-		"eth0\t00000000\t0100A8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0":  "", // default route
-	} {
-		p, ok, err := parseRoute4(line)
-		if err != nil || (want == "") == ok || (ok && p != netip.MustParsePrefix(want)) {
-			t.Errorf("%q: %v %v %v, want %q", line, p, ok, err, want)
-		}
-	}
-	if _, _, err := parseRoute4("eth0 1 2"); err == nil {
-		t.Error("short line accepted")
-	}
+func routeMessage(table, bits byte, dst []byte) []byte {
+	n := syscall.NLMSG_HDRLEN + syscall.SizeofRtMsg + 4 + len(dst)
+	b := make([]byte, n)
+	binary.NativeEndian.PutUint32(b, uint32(n))
+	binary.NativeEndian.PutUint16(b[4:], syscall.RTM_NEWROUTE)
+	b[syscall.NLMSG_HDRLEN] = syscall.AF_INET
+	b[syscall.NLMSG_HDRLEN+1] = bits
+	b[syscall.NLMSG_HDRLEN+4] = table
+	at := syscall.NLMSG_HDRLEN + syscall.SizeofRtMsg
+	binary.NativeEndian.PutUint16(b[at:], uint16(4+len(dst)))
+	binary.NativeEndian.PutUint16(b[at+2:], syscall.RTA_DST)
+	copy(b[at+4:], dst)
+	return b
 }
 
-func TestParseRoute6(t *testing.T) {
-	p, ok, err := parseRoute6("2a001450400100000000000000000000 40 00000000000000000000000000000000 00 00000000000000000000000000000000 00000100 00000001 00000000 00000001 eth0")
-	if err != nil || !ok || p != netip.MustParsePrefix("2a00:1450:4001::/64") {
-		t.Errorf("%v %v %v", p, ok, err)
+func TestRouteDumpIncludesPolicyTables(t *testing.T) {
+	raw := append(routeMessage(254, 24, []byte{192, 0, 2, 0}), routeMessage(100, 24, []byte{198, 51, 100, 0})...)
+	raw = append(raw, routeMessage(254, 0, []byte{0, 0, 0, 0})...)
+	got, err := parseRouteDump(raw)
+	if err != nil || len(got) != 2 || got[0].String() != "192.0.2.0/24" || got[1].String() != "198.51.100.0/24" {
+		t.Fatalf("%v %v", got, err)
 	}
-	if _, ok, _ := parseRoute6("00000000000000000000000000000000 00 00000000000000000000000000000000 00 fe800000000000000000000000000001 00000400 00000001 00000000 00000003 eth0"); ok {
-		t.Error("the default route was kept")
-	}
-	if _, _, err := parseRoute6("xyz 40"); err == nil {
-		t.Error("bad line accepted")
+	raw = routeMessage(100, 24, []byte{198, 51, 100, 0})
+	binary.NativeEndian.PutUint16(raw[6:], 0x10)
+	if _, err := parseRouteDump(raw); err == nil {
+		t.Fatal("accepted interrupted dump")
 	}
 }

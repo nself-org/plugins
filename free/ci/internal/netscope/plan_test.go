@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -87,7 +88,7 @@ func (r nameResolver) LookupNetIP(_ context.Context, _, host string) ([]netip.Ad
 func testPlanner(rt *fakeRuntime) *Planner {
 	return &Planner{
 		Runtime: rt,
-		Binary:  func() (string, error) { return "/opt/nself/nself-ci", nil },
+		Binary:  os.Executable,
 		Host: func() (Facts, error) {
 			return Facts{HostAddrs: []netip.Addr{netip.MustParseAddr("198.41.0.4"), netip.MustParseAddr("127.0.0.1")},
 				OnLink: []netip.Prefix{netip.MustParsePrefix("198.41.0.0/24")}}, nil
@@ -139,7 +140,7 @@ func TestPlanRestrictedBuildsNetworkSidecarAndProxyEnv(t *testing.T) {
 	if strings.Join(rt.steps, ",") != "network,sidecar" {
 		t.Errorf("steps %v", rt.steps)
 	}
-	if rt.sidecar.Image != ProxyImage || rt.sidecar.ProxyBinary != "/opt/nself/nself-ci" || rt.sidecar.Attempt != "a1" {
+	if rt.sidecar.Image != ProxyImage || rt.sidecar.ProxyBinary == "" || rt.sidecar.Attempt != "a1" {
 		t.Errorf("sidecar spec %+v", rt.sidecar)
 	}
 	c, f, err := DecodeConfig(rt.sidecar.Config)
@@ -336,7 +337,9 @@ func TestPlanReportsAnUnreadableLog(t *testing.T) {
 func TestPlanTreatsAnAddressInTheHostListAsExcluded(t *testing.T) {
 	rt := &fakeRuntime{log: ReadyLine()}
 	p := testPlanner(rt)
-	p.Exclusion = func(context.Context) (Exclusions, error) { return Exclusions{Hosts: []string{"198.51.100.22", "[2606:2800::9]"}}, nil }
+	p.Exclusion = func(context.Context) (Exclusions, error) {
+		return Exclusions{Hosts: []string{"198.51.100.22", "[2606:2800::9]"}}, nil
+	}
 	if _, err := p.PlanAttempt(context.Background(), "docker", att, "internet"); err != nil {
 		t.Fatal(err)
 	}

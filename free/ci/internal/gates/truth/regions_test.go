@@ -29,7 +29,7 @@ func TestExemptionsPass(t *testing.T) {
 	wantFindings(t, got,
 		"claims.counts bad.md:1",
 		"claims.counts exempt.md:3",
-		"claims.counts late.md:5",
+		"claims.counts late.md:5", "claims.counts gen.md:3", "claims.counts page.astro:2",
 		"claims.counts page.astro:5",
 		"claims.counts page.mdx:3",
 		"claims.counts page.mdx:1",
@@ -74,7 +74,7 @@ func TestRegionsOptInForVocabulary(t *testing.T) {
 }
 
 func TestMaskUnit(t *testing.T) {
-	m := analyze("x.mdx", []string{"a {b} c", "{", "d", "}", "{open", "e"})
+	m := analyze("x.mdx", []string{"a {b} c", "{", "d", "}", "{open", "e"}, nil)
 	for _, tc := range []struct {
 		line, s, e int
 		want       bool
@@ -100,7 +100,7 @@ func TestReviewRegressions(t *testing.T) {
 		"truth.exempt-without-reason weak.md:1", "claims.counts weak.md:2",
 		"claims.counts weak.md:4",
 		"claims.counts brace.mdx:3", "claims.counts para.mdx:3",
-		"claims.counts twice.md:2", "claims.counts prose.md:4")
+		"claims.counts twice.md:2", "claims.counts prose.md:4", "claims.counts good.md:2")
 }
 
 // TestNonASCIILowercaseOffsets: a rune whose lower case has another byte length (U+212A)

@@ -44,7 +44,7 @@ func runner(id string) sched.Runner {
 	}
 	c.Location.Kind.Value = &loc
 	return sched.Runner{ID: id, Location: loc, Class: "owned", Provider: "operator", Avail: sched.Avail{Slots: 1, CPU: 8, MemMB: 8192}, Capability: c,
-		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: id == "local", NoLANRoute: true}}
+		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: id == "local"}}
 }
 
 func job() sched.Job {
@@ -53,7 +53,11 @@ func job() sched.Job {
 }
 
 func worldOf(rs ...sched.Runner) sched.World {
-	return sched.World{Runners: rs, Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}}
+	proof := map[string]sched.NetworkFact{}
+	for _, r := range rs {
+		proof[r.ID] = sched.NetworkFact{Enforced: []model.NetworkScope{"none", "restricted", "internet"}}
+	}
+	return sched.World{Network: proof, Runners: rs, Policy: sched.Policy{Preset: "balanced"}, Costs: map[string]sched.Cost{}, Previous: map[string]string{}}
 }
 
 func codes(ds []model.PlacementReasonDetail) string {
