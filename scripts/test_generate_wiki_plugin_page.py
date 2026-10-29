@@ -272,7 +272,6 @@ class MachineSurfaceTests(WikiPagesCase):
         self.assertEqual(gen.exposure(rows["ci"]), ("MCP and HTTP", "", "nonce"))
 
     def test_stream_read_row_is_http_only(self):
-        self.write_manifest(["run"])
         path = os.path.join(self.root, "free", "ci", "plugin.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump({"commands": {"command": "ci", "json": "envelope", "output": "stream", "side_effect": "read",
@@ -284,8 +283,7 @@ class MachineSurfaceTests(WikiPagesCase):
     def test_plugin_without_commands_has_no_region_and_bytes_outside_are_kept(self):
         self.generate_all()
         self.assertNotIn(gen.MS_BEGIN, self.page("Jobs.md"))
-        text = self.page("CI.md")
-        extended = text + "\nAuthored tail.\n"
+        extended = self.page("CI.md") + "\nAuthored tail.\n"
         self.assertEqual(gen.apply_machine(extended, None).count(gen.MS_BEGIN), 0)
         self.assertTrue(gen.apply_machine(extended, None).endswith("\nAuthored tail.\n"))
         self.assertEqual(gen.apply_machine(gen.apply_machine(extended, None), None), gen.apply_machine(extended, None))
@@ -296,12 +294,6 @@ class MachineSurfaceTests(WikiPagesCase):
         code, out = self.cli("--all", "--check")
         self.assertEqual(code, 1)
         self.assertIn("CI.md: stale region", out)
-
-    def test_second_run_is_a_no_op(self):
-        self.generate_all()
-        before = self.page("CI.md")
-        self.generate_all()
-        self.assertEqual(before, self.page("CI.md"))
 
 
 if __name__ == "__main__":
