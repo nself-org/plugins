@@ -23,16 +23,27 @@ func (p fixtureEnvPolicy) Environment(context.Context, model.Job) ([]string, err
 
 // runIn runs argv through the command funnel (internal/exec) with the fixture environment of dir.
 // The command starts in the executor's empty workspace; out receives its output.
+//
+// timeout is a wall-clock bound carried by the context, not by JobSpec.Timeout: the funnel turns a
+// JobSpec timeout into a CPU ulimit (hard limit), and a block that runs `nself ci -- cmd` starts an
+// inner job whose own limit (30m by default) is then above the block's. The inner job cannot raise
+// its hard limit and dies with "ulimit: Operation not permitted". Leaving the block without a CPU
+// limit lets the inner job set its own, and the context deadline still fails a hung block.
 func runIn(ctx context.Context, dir string, timeout time.Duration, out func([]byte), argv ...string) (ciexec.AttemptResult, error) {
 	home, err := os.MkdirTemp("", "doccmds-home-")
 	if err != nil {
 		return ciexec.AttemptResult{}, err
 	}
 	defer func() { _ = os.RemoveAll(home) }()
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
 	ex := ciexec.Executor{Isolation: ciexec.BaselineIsolator{}, Env: fixtureEnvPolicy{dir}}
 	res := ex.Run(ctx, ciexec.JobSpec{
 		AttemptID: "doccmds-" + strconv.FormatInt(time.Now().UnixNano(), 36), CoordinatorID: "doccmds",
-		Job: model.Job{Kind: "static"}, Home: home, Timeout: timeout, Command: argv, Output: out,
+		Job: model.Job{Kind: "static"}, Home: home, Command: argv, Output: out,
 	})
 	return res, nil
 }
