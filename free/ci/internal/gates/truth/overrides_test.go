@@ -65,3 +65,13 @@ func TestVocabulary(t *testing.T) {
 	})
 	wantFindings(t, got, "vocab.pro-plugin a.md:1")
 }
+
+// TestExemptMatchesAcrossLines: a hit that spans a line break honours
+// exempt_matches exactly as the same hit on one line does.
+func TestExemptMatchesAcrossLines(t *testing.T) {
+	rules := "version: 1\nrules:\n" +
+		"  - {id: c, kind: numeric-claim, pattern: '62\\s+plugins', message: m, paths: ['*.md'], exempt_matches: [{regex: '62\\s+plugins', reason: a long enough reason}]}\n" +
+		"  - {id: d, kind: numeric-claim, pattern: '63\\s+plugins', message: m, paths: ['*.md']}\n"
+	got := findingsOf(t, map[string]string{"r.yaml": rules, "a.md": "62 plugins\n", "b.md": "62\nplugins\n", "c.md": "63\nplugins\n"}, "r.yaml")
+	wantFindings(t, got, "d c.md:1")
+}

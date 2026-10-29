@@ -164,6 +164,7 @@ func scanLines(rel string, lines []string, rs RuleSet, c compiled, facts map[str
 	for n := 0; n+1 < len(lines); n++ {
 		boundary := len(lines[n])
 		joined := lines[n] + "\n" + lines[n+1]
+		var joinedCache lineSpans
 		for _, r := range c.claims {
 			for _, h := range patternHits(r, joined) {
 				if h.Start >= boundary || h.End <= boundary+1 {
@@ -174,6 +175,9 @@ func scanLines(rel string, lines []string, rs RuleSet, c compiled, facts map[str
 					continue
 				}
 				if mask != nil && r.usesRegions() && (mask.exempt(n, h.Start, boundary) || mask.exempt(n+1, 0, h.End-boundary-1)) {
+					continue
+				}
+				if r.textExempt(&joinedCache, joined, h.Start, h.End) {
 					continue
 				}
 				if r.Kind == KindVersionClaim && versionOK(r, h.Text, facts) {
