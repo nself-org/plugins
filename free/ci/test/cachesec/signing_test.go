@@ -53,7 +53,7 @@ func (r *rig) manifestKey(id string) error {
 	rel := filepath.Join(dir, "release")
 	must(r.t, os.Mkdir(rel, 0o700))
 	must(r.t, os.WriteFile(filepath.Join(rel, verify.ManifestFile), b, 0o600))
-	res := verify.Release(r.ctx, rel, verify.Options{OperatorKeys: keys, OperatorRevoked: filepath.Join(dir, "none")})
+	res := verify.Release(r.ctx, rel, verify.Options{OperatorKeys: keys, OperatorRevoked: filepath.Join(dir, "none"), Audit: r.st.AppendAudit})
 	if res.Verified {
 		return nil
 	}
@@ -88,7 +88,8 @@ func (r *rig) roleRefusal(id string) error {
 	return ask(token(principal, roles.Member))
 }
 
-// signUncommitted runs the signer's own refusal case for a digest that is not a committed record.
+// signUncommitted runs the signer's own refusal case for a digest that is not a committed record, then
+// hands that refusal, as the signer process answers it, to the coordinator's signer client.
 func (r *rig) signUncommitted() (error, string) {
 	const test = "internal/signing TestSignerRefuses/artifact_digest_is_not_a_record"
 	cmd := exec.Command("go", "test", "-mod=vendor", "-count=1", "-run", `^TestSignerRefuses$/^artifact_digest_is_not_a_record$`, "./internal/signing/")
@@ -98,5 +99,5 @@ func (r *rig) signUncommitted() (error, string) {
 	if err != nil {
 		r.t.Fatalf("%s did not pass: %v\n%s", test, err, out)
 	}
-	return &refusal{Code: "E717", Reason: "digest_not_committed", Msg: "refused by " + test}, "delegated: " + test + " (it asserts the refusal reason; the signer has no audit sink)"
+	return r.coordinatorSign(), "signer check delegated to " + test + "; the coordinator client received the signer's E717 answer and audited it"
 }

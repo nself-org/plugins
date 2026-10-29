@@ -204,14 +204,13 @@
     "id": "secret-snapshot",
     "threat_row": "TM-12",
     "expected": "refused",
-    "outcome": "admitted",
-    "code": "",
-    "reason": "",
+    "outcome": "refused",
+    "code": "E711",
+    "reason": "secret_match",
     "audit": "cache.restore.refused",
-    "audit_found": false,
-    "match": false,
-    "platform": "darwin/arm64",
-    "note": "restore returned a miss (hit=false, 0 bytes restored), not a refusal"
+    "audit_found": true,
+    "match": true,
+    "platform": "darwin/arm64"
   },
   {
     "id": "cache-secret-raw",
@@ -245,8 +244,8 @@
     "code": "E712",
     "reason": "secret_match",
     "audit": "artifact.collect.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {
@@ -257,8 +256,8 @@
     "code": "E712",
     "reason": "secret_match",
     "audit": "artifact.collect.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {
@@ -269,8 +268,8 @@
     "code": "E712",
     "reason": "digest_mismatch",
     "audit": "artifact.commit.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64",
     "note": "reason key read from the error text (the error type has no Reason field)"
   },
@@ -282,8 +281,8 @@
     "code": "E712",
     "reason": "digest_mismatch",
     "audit": "artifact.commit.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64",
     "note": "reason key read from the error text (the error type has no Reason field)"
   },
@@ -295,8 +294,8 @@
     "code": "E683",
     "reason": "dest.cwd",
     "audit": "artifact.get.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {
@@ -307,8 +306,8 @@
     "code": "E683",
     "reason": "dest.not_empty",
     "audit": "artifact.get.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {
@@ -319,8 +318,8 @@
     "code": "E683",
     "reason": "dest.under_git",
     "audit": "artifact.get.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {
@@ -328,25 +327,24 @@
     "threat_row": "TM-15",
     "expected": "refused",
     "outcome": "refused",
-    "code": "E710",
-    "reason": "digest_mismatch",
+    "code": "E711",
+    "reason": "blob_invalid",
     "audit": "cache.restore.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {
     "id": "partial-local",
     "threat_row": "TM-15",
     "expected": "refused",
-    "outcome": "admitted",
-    "code": "",
-    "reason": "",
+    "outcome": "refused",
+    "code": "E711",
+    "reason": "blob_invalid",
     "audit": "cache.restore.refused",
-    "audit_found": false,
-    "match": false,
-    "platform": "darwin/arm64",
-    "note": "restore returned a miss (hit=false, 0 bytes restored), not a refusal"
+    "audit_found": true,
+    "match": true,
+    "platform": "darwin/arm64"
   },
   {
     "id": "corrupt-transit",
@@ -356,8 +354,8 @@
     "code": "E714",
     "reason": "digest_mismatch",
     "audit": "cache.remote.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {
@@ -368,8 +366,8 @@
     "code": "E714",
     "reason": "interrupted",
     "audit": "cache.remote.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {
@@ -380,10 +378,9 @@
     "code": "E714",
     "reason": "digest_mismatch",
     "audit": "cache.restore.refused",
-    "audit_found": false,
-    "match": false,
-    "platform": "darwin/arm64",
-    "note": "reason key read from the error text (the error type has no Reason field)"
+    "audit_found": true,
+    "match": true,
+    "platform": "darwin/arm64"
   },
   {
     "id": "partial-readthrough",
@@ -393,10 +390,9 @@
     "code": "E714",
     "reason": "digest_mismatch",
     "audit": "cache.restore.refused",
-    "audit_found": false,
-    "match": false,
-    "platform": "darwin/arm64",
-    "note": "reason key read from the error text (the error type has no Reason field)"
+    "audit_found": true,
+    "match": true,
+    "platform": "darwin/arm64"
   },
   {
     "id": "release-no-deps",
@@ -404,10 +400,10 @@
     "expected": "refused",
     "outcome": "refused",
     "code": "E715",
-    "reason": "deps_invalid",
+    "reason": "deps_failing",
     "audit": "release.admission.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {
@@ -430,8 +426,8 @@
     "code": "E686",
     "reason": "key_revoked",
     "audit": "evidence.quarantined",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {
@@ -442,8 +438,8 @@
     "code": "E719",
     "reason": "key_purpose",
     "audit": "release.verify.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {
@@ -454,8 +450,8 @@
     "code": "E719",
     "reason": "key_purpose",
     "audit": "release.verify.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {
@@ -466,10 +462,10 @@
     "code": "E717",
     "reason": "digest_not_committed",
     "audit": "release.sign.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64",
-    "note": "delegated: internal/signing TestSignerRefuses/artifact_digest_is_not_a_record (it asserts the refusal reason; the signer has no audit sink)"
+    "note": "signer check delegated to internal/signing TestSignerRefuses/artifact_digest_is_not_a_record; the coordinator client received the signer's E717 answer and audited it"
   },
   {
     "id": "untrusted-promotion",
@@ -479,8 +475,8 @@
     "code": "E715",
     "reason": "trust",
     "audit": "release.admission.refused",
-    "audit_found": false,
-    "match": false,
+    "audit_found": true,
+    "match": true,
     "platform": "darwin/arm64"
   },
   {

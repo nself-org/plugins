@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"io"
 	"path/filepath"
 	"strings"
 	"time"
@@ -19,11 +18,11 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 )
 
-func (r *rig) remoteWrite(id string) error {
-	// Bind the real coordinator receiver to a durable remote lease. The agent
-	// carrier permits unordered refs; SSH preserves stream order.
+// bindRemote binds the real coordinator receiver (cacheRemote.Handler) to a durable remote lease of
+// a fresh attempt. The agent carrier permits unordered refs; SSH preserves stream order. restore, when
+// set, is the lease plan's restore blob set.
+func (r *rig) bindRemote(unordered bool, restore ...protocol.CacheBlob) (*cacheRemote.Lease, string) {
 	f := owner()
-	r.running("remote", f)
 	eng := lease.New(r.st, nil, lease.Config{})
 	// Grant needs a queued attempt, so use a separate attempt from the local rig.
 	must(r.t, r.st.CreatePipeline(r.ctx, store.PipelineRow{ID: "pwire", Revision: strings.Repeat("a", 40), Project: f.Project, Trigger: "local", SourceTrust: f.Trust, PrivacyZone: "local-only", PolicyDigest: "policy", InputDigest: "input", SelectionMode: "full", Status: "queued"}))
@@ -33,14 +32,23 @@ func (r *rig) remoteWrite(id string) error {
 	must(r.t, err)
 	ns := namespace(r.t, f)
 	plan := &protocol.LeaseCache{Namespace: base64.RawURLEncoding.EncodeToString(ns.Canonical()), Access: "rw", Save: []protocol.CacheSave{{Spec: "go", Key: key(r.t, f), Dirs: []string{"go/data"}}}}
-	h := cacheRemote.Handler{Ledger: r.st, Entries: r.entries, Blobs: r.blobs}
-	l, err := h.Bind(cacheRemote.Binding{AttemptID: "remote-wire", LeaseID: "wire", Node: "node", Epoch: epoch, Facts: f, Plan: plan, Unordered: strings.HasSuffix(id, "agent"), Fence: func(ctx context.Context) error {
+	if len(restore) > 0 {
+		plan.Restore = []protocol.CacheRestore{{Spec: "go", Key: key(r.t, f), Dir: "go", Blobs: restore}}
+	}
+	h := &cacheRemote.Handler{Ledger: r.st, Entries: r.entries, Blobs: r.blobs}
+	l, err := h.Bind(cacheRemote.Binding{AttemptID: "remote-wire", LeaseID: "wire", Node: "node", Epoch: epoch, Facts: f, Plan: plan, Unordered: unordered, RestoreWait: 5 * time.Second, Fence: func(ctx context.Context) error {
 		if e := eng.Fence(ctx, "wire", epoch); e != nil {
 			return transfer.ErrStale
 		}
 		return nil
 	}})
 	must(r.t, err)
+	return l, plan.Namespace
+}
+
+func (r *rig) remoteWrite(id string) error {
+	r.running("remote", owner())
+	l, _ := r.bindRemote(strings.HasSuffix(id, "agent"))
 	if strings.HasPrefix(id, "ended-") {
 		state, cas, e := r.st.AttemptStateEpoch(r.ctx, "remote-wire")
 		must(r.t, e)
@@ -62,12 +70,20 @@ func (r *rig) remoteWrite(id string) error {
 	return err
 }
 
+// transferBlob sends a corrupted or truncated blob to the coordinator's cache receiver of a live lease.
 func (r *rig) transferBlob(id string) error {
+	l, _ := r.bindRemote(false)
+	state, cas, err := r.st.AttemptStateEpoch(r.ctx, "remote-wire")
+	must(r.t, err)
+	must(r.t, r.st.Transition(r.ctx, "remote-wire", state, "running", store.TransitionDetail{Epoch: cas}))
 	realm := cacheRealm(namespace(r.t, owner()).Canonical())
 	want := []byte("intact payload")
-	rcv := transfer.Receiver{Store: r.blobs, Realm: realm, Lease: "wire", Limits: transfer.Limits{MaxFile: 1 << 20}, Live: func(context.Context) error { return nil }}
-	w, err := rcv.Open(r.ctx, transport.BlobHeader{Stream: transfer.StreamArtifact, SHA256: digest(want), Size: int64(len(want))})
+	bw, err := l.Blob(r.ctx, transport.BlobHeader{Stream: "cache", SHA256: digest(want), Size: int64(len(want))})
 	must(r.t, err)
+	w, ok := bw.(*transfer.Writer)
+	if !ok {
+		r.t.Fatalf("the cache receiver handed out a %T, not a transfer writer", bw)
+	}
 	got := bytes.Clone(want)
 	if id == "partial-transit" {
 		got = got[:len(got)/2]
@@ -85,27 +101,6 @@ func (r *rig) transferBlob(id string) error {
 		f.Close()
 		r.t.Error("invalid transfer became readable")
 	}
-	return err
-}
-
-func (r *rig) readThrough(id string) error {
-	dir := r.t.TempDir()
-	c, err := cacheRemote.NewReadThrough(dir, 4<<20)
-	must(r.t, err)
-	want := []byte("intact payload")
-	got := bytes.Clone(want)
-	if id == "partial-readthrough" {
-		got = got[:len(got)/2]
-	} else {
-		got[0] ^= 1
-	}
-	f, err := c.Open(r.ctx, "realm", digest(want), int64(len(want)), func(_ context.Context, w io.Writer) error { _, e := w.Write(got); return e })
-	if f != nil {
-		f.Close()
-		r.t.Error("invalid read-through copy was served")
-	}
-	if len(tree(r.t, dir)) != 0 {
-		r.t.Error("read-through published invalid bytes")
-	}
+	r.noEntries()
 	return err
 }

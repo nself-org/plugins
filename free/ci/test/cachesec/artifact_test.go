@@ -38,7 +38,7 @@ func (r *rig) secret(id string) error {
 		defer base.Close()
 		_, err = r.engine.Save(r.ctx, specs.SaveRequest{Base: base, Attempt: "writer", Epoch: 3, Namespace: namespace(r.t, owner()), Key: key(r.t, owner()), Spec: specs.Spec{ID: "go"}, Dirs: specs.Dirs{"data": "data"}})
 	} else {
-		c := records.Collector{Blobs: r.blobs, Scanner: r.red, Policy: artifactPolicy()}
+		c := records.Collector{Blobs: r.blobs, Scanner: r.red, Policy: artifactPolicy(), Audit: r.st.AppendAudit, Target: "writer"}
 		_, err = c.Collect(r.ctx, "project", ws, []records.Decl{{Path: "data/payload", Kind: records.KindBinary, Retention: "30d", Visibility: authz.VisibilityProject}})
 	}
 	r.noEntries()
@@ -110,7 +110,7 @@ func (r *rig) getDest(id string) error {
 	_, err := r.st.ArtifactCommit(r.ctx, "download", 3, []records.Record{rec}, artifactPolicy())
 	must(r.t, err)
 	// A visible committed record ensures the real download reaches the destination check.
-	reader := records.Reader{Ledger: r.st, Blobs: r.blobs}
+	reader := records.Reader{Ledger: r.st, Blobs: r.blobs, Audit: r.st.AppendAudit}
 	_, _, err = reader.Get(r.ctx, authz.Viewer{Project: "project", Role: authz.RoleMember}, rec.ID, dest, cwd)
 	if !reflect.DeepEqual(before, tree(r.t, cwd)) {
 		r.t.Error("refused download changed the destination")
