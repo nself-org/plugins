@@ -84,7 +84,7 @@ func runNodesPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		return 2
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintln(stderr, "usage: nself ci nodes pair [--enroll-addr A] [--data-dir D] [--public-url U] [--label L] [--cert-ttl T]")
+		_, _ = fmt.Fprintln(stderr, "usage: nself ci nodes pair [--enroll-addr A] [--data-dir D] [--public-url U] [--label L] [--cert-ttl T]")
 		return 2
 	}
 	if f.dataDir != "" {
@@ -94,20 +94,20 @@ func runNodesPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	defer stop()
 	d, closeFn, err := lifecycle.ProductionEnv(currentProject).Open(ctx, "")
 	if err != nil {
-		fmt.Fprintf(stderr, "E607: the CI store cannot be opened: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "E607: the CI store cannot be opened: %v\n", err)
 		return 2
 	}
 	defer closeFn()
 	ca, err := pki.New(ctx, pki.Options{Store: d.Store, DataDir: d.Home})
 	if err != nil {
-		fmt.Fprintf(stderr, "E660: the coordinator PKI cannot be opened: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "E660: the coordinator PKI cannot be opened: %v\n", err)
 		return 2
 	}
 	public := f.publicURL
 	if public == "" {
 		var uerr error
 		if public, uerr = defaultPublicURL(f.addr, interfaceIPs()); uerr != nil {
-			fmt.Fprintf(stderr, "E660: %v\n", uerr)
+			_, _ = fmt.Fprintf(stderr, "E660: %v\n", uerr)
 			return 2
 		}
 	}
@@ -117,26 +117,26 @@ func runNodesPair(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		AfterIssue: func(ctx context.Context, nodeID string) error {
 			return lifecycle.RunHooks(ctx, lifecycle.PointPair, lifecycle.HookEvent{Point: lifecycle.PointPair, NodeID: nodeID, Project: d.Project, Flags: fs})
 		},
-		Alert: func(a pairing.Alert) { fmt.Fprintln(stderr, pairingAlertLine(a)) },
+		Alert: func(a pairing.Alert) { _, _ = fmt.Fprintln(stderr, pairingAlertLine(a)) },
 	})
 	pairing.Use(svc)
 	w, err := svc.OpenWindow(ctx, f.addr, public, pairing.OfferOptions{Label: f.label, CertTTL: f.certTTL})
 	if err != nil {
-		fmt.Fprintf(stderr, "%v\n", err)
+		_, _ = fmt.Fprintf(stderr, "%v\n", err)
 		return 2
 	}
-	fmt.Fprintf(stdout, "Pairing window open until %s.\n  enroll URL:       %s\n  pairing code:     %s\n  root fingerprint: %s\nOn the node run: nself-ci-agent join %s\nThe node shows the root fingerprint; compare it with the one above before confirming.\n",
+	_, _ = fmt.Fprintf(stdout, "Pairing window open until %s.\n  enroll URL:       %s\n  pairing code:     %s\n  root fingerprint: %s\nOn the node run: nself-ci-agent join %s\nThe node shows the root fingerprint; compare it with the one above before confirming.\n",
 		w.Offer.ExpiresAt.Local().Format(time.TimeOnly), w.URL, w.Offer.Code, w.Offer.RootFingerprint, w.URL)
 	redeemed, err := w.Wait(ctx, svc)
 	switch {
 	case err != nil:
-		fmt.Fprintf(stderr, "%v\n", err)
+		_, _ = fmt.Fprintf(stderr, "%v\n", err)
 		return 2
 	case !redeemed:
-		fmt.Fprintln(stderr, "The pairing window closed without a node joining.")
+		_, _ = fmt.Fprintln(stderr, "The pairing window closed without a node joining.")
 		return 1
 	}
-	fmt.Fprintln(stdout, "A node joined. The pairing window is closed.")
+	_, _ = fmt.Fprintln(stdout, "A node joined. The pairing window is closed.")
 	return 0
 }
 
@@ -250,7 +250,7 @@ func rotateCertMode(ctx context.Context, d *lifecycle.Deps, r lifecycle.RotateRe
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(d.Stdout, "%d certificate(s) of %s denied. The node must pair again: nself ci nodes pair, then nself-ci-agent join on the node.\n", n, r.NodeID)
+	_, _ = fmt.Fprintf(d.Stdout, "%d certificate(s) of %s denied. The node must pair again: nself ci nodes pair, then nself-ci-agent join on the node.\n", n, r.NodeID)
 	return nil
 }
 
@@ -269,6 +269,6 @@ func rotateNodeKeyMode(ctx context.Context, d *lifecycle.Deps, r lifecycle.Rotat
 	if err = ca.RotateNodeKey(ctx, d.Actor, r.NodeID, id); err != nil {
 		return err
 	}
-	fmt.Fprintf(d.Stdout, "The next hello of %s may present node key %s only.\n", r.NodeID, id)
+	_, _ = fmt.Fprintf(d.Stdout, "The next hello of %s may present node key %s only.\n", r.NodeID, id)
 	return nil
 }

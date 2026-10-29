@@ -169,9 +169,9 @@ func printEvidence(w io.Writer, run string, ev model.Evidence) {
 	if ev.Freshness.Reason != nil {
 		fresh += " (" + *ev.Freshness.Reason + ")"
 	}
-	fmt.Fprintf(w, "run %s: %s, revision %.12s, %s, freshness %s\n", run, ev.Result, ev.Revision, ev.Binding.State, fresh)
+	_, _ = fmt.Fprintf(w, "run %s: %s, revision %.12s, %s, freshness %s\n", run, ev.Result, ev.Revision, ev.Binding.State, fresh)
 	for _, c := range ev.Checks {
-		fmt.Fprintf(w, "  %-6s %s\n", c.Result, c.ID)
+		_, _ = fmt.Fprintf(w, "  %-6s %s\n", c.Result, c.ID)
 	}
 }
 

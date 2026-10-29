@@ -151,22 +151,22 @@ func (h *human) Event(e Event) {
 	switch e.Type {
 	case "log":
 		if h.stream {
-			fmt.Fprintf(h.w, "[%s] %s\n", e.Job, strings.TrimRight(e.Text, "\r\n"))
+			_, _ = fmt.Fprintf(h.w, "[%s] %s\n", e.Job, strings.TrimRight(e.Text, "\r\n"))
 		}
 	case "finished":
 		o := e.Out
 		switch o.State {
 		case StatePassed:
-			fmt.Fprintf(h.w, "  pass     %s (%s)\n", o.ID, o.Duration.Round(time.Millisecond))
+			_, _ = fmt.Fprintf(h.w, "  pass     %s (%s)\n", o.ID, o.Duration.Round(time.Millisecond))
 		case StateFailed:
-			fmt.Fprintf(h.w, "  FAIL     %s (%s)\n", o.ID, failText(*o))
+			_, _ = fmt.Fprintf(h.w, "  FAIL     %s (%s)\n", o.ID, failText(*o))
 			if o.Tail != "" && !h.stream {
 				for _, l := range strings.Split(strings.TrimRight(o.Tail, "\n"), "\n") {
-					fmt.Fprintf(h.w, "           | %s\n", l)
+					_, _ = fmt.Fprintf(h.w, "           | %s\n", l)
 				}
 			}
 		default:
-			fmt.Fprintf(h.w, "  %-8s %s: %s\n", o.State, o.ID, reasonText(*o))
+			_, _ = fmt.Fprintf(h.w, "  %-8s %s: %s\n", o.State, o.ID, reasonText(*o))
 		}
 	}
 }
@@ -205,7 +205,7 @@ func (h *human) Done(s Summary) {
 	skipped := append([]plan.Skipped(nil), s.Skipped...)
 	sort.Slice(skipped, func(i, j int) bool { return skipped[i].Job < skipped[j].Job })
 	for _, k := range skipped {
-		fmt.Fprintf(h.w, "  skipped  %s: %s\n", k.Job, k.Reason)
+		_, _ = fmt.Fprintf(h.w, "  skipped  %s: %s\n", k.Job, k.Reason)
 	}
 	pass, total := 0, 0
 	for _, j := range s.Jobs {
@@ -214,11 +214,11 @@ func (h *human) Done(s Summary) {
 			pass++
 		}
 	}
-	fmt.Fprintf(h.w, "nself-ci: %s (%d/%d jobs passed) run %s\n", s.Result, pass, total, s.RunID)
+	_, _ = fmt.Fprintf(h.w, "nself-ci: %s (%d/%d jobs passed) run %s\n", s.Result, pass, total, s.RunID)
 	for _, n := range s.Notes {
-		fmt.Fprintln(h.w, "nself-ci: note: "+n)
+		_, _ = fmt.Fprintln(h.w, "nself-ci: note: "+n)
 	}
 	if s.Status != "" {
-		fmt.Fprintln(h.w, s.Status)
+		_, _ = fmt.Fprintln(h.w, s.Status)
 	}
 }

@@ -17,12 +17,17 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/nodes/deployguard"
 	"github.com/nself-org/plugins/free/ci/internal/nodes/lifecycle"
 )
 
 const allowDeployHostFlag = "allow-deploy-host"
+
+// preConfirmed maps a node id to the ConfirmKey of the override the pre-contact check confirmed and audited, so
+// the add check does not ask or write a second audit row for the same match.
+var preConfirmed sync.Map
 
 // newGuard builds the coordinator-side guard; tests replace it with stub inventory and DNS seams.
 var newGuard = deployguard.New
@@ -31,7 +36,7 @@ func init() {
 	lifecycle.RegisterFlags("add", func(fs *flag.FlagSet) {
 		fs.Bool(allowDeployHostFlag, false, "allow a node whose host is a deploy host (confirmed on a terminal, audited)")
 	})
-	for _, p := range []lifecycle.Point{lifecycle.PointAdd, lifecycle.PointPair, lifecycle.PointTest} {
+	for _, p := range []lifecycle.Point{lifecycle.PointPreAdd, lifecycle.PointAdd, lifecycle.PointPair, lifecycle.PointTest} {
 		point := p
 		lifecycle.RegisterAddHook(point, func(ctx context.Context, e lifecycle.HookEvent) error { return deployHostHook(ctx, point, e) })
 	}
@@ -101,12 +106,26 @@ func deployHostHook(ctx context.Context, point lifecycle.Point, e lifecycle.Hook
 	}
 	q := deployguard.AddRequest{NodeID: e.NodeID, Dest: e.Dest, Capability: e.Capability, Actor: adminActor(),
 		Allow: flagBool(e.Flags, allowDeployHostFlag), Confirm: deployguard.TerminalConfirm(os.Stdin, os.Stderr, isTerminal(os.Stdin))}
-	r, warns, err := g.CheckAdd(ctx, q)
+	check := g.CheckAdd
+	if point == lifecycle.PointPreAdd {
+		check = g.CheckPreAdd // before the host is contacted: a match is refused, or confirmed once with the flag
+	} else {
+		if v, ok := preConfirmed.LoadAndDelete(e.NodeID); ok {
+			q.Confirmed, _ = v.(string)
+		}
+	}
+	r, warns, err := check(ctx, q)
 	for _, w := range warns {
 		fmt.Fprintln(os.Stderr, "warning:", w)
 	}
 	if err != nil {
 		return err
+	}
+	if point == lifecycle.PointPreAdd {
+		if r.Matched {
+			preConfirmed.Store(e.NodeID, r.ConfirmKey()) // CheckPreAdd refuses a match without the flag
+		}
+		return nil
 	}
 	if r.Matched && e.Capability == nil {
 		// No draft to mark: the stored node must carry the match, or the pairing is refused.

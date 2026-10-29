@@ -41,13 +41,13 @@ func matchText(f Finding) string {
 func report(checks []model.Check, found []Finding, out io.Writer) int {
 	code := 0
 	for _, c := range checks {
-		fmt.Fprintf(out, "%s %s (%d finding(s))\n", strings.ToUpper(string(c.Result)), c.ID, c.Findings)
+		_, _ = fmt.Fprintf(out, "%s %s (%d finding(s))\n", strings.ToUpper(string(c.Result)), c.ID, c.Findings)
 		if c.Result == "error" {
-			fmt.Fprintln(out, indent(c.Excerpt))
+			_, _ = fmt.Fprintln(out, indent(c.Excerpt))
 		}
 		for _, f := range found {
 			if CheckIDOf(f.Kind) == c.ID {
-				fmt.Fprintf(out, "truth: %s %s:%d: %s\n    fix: %s\n", f.RuleID, safe(f.Path), f.Line, matchText(f), f.Message)
+				_, _ = fmt.Fprintf(out, "truth: %s %s:%d: %s\n    fix: %s\n", f.RuleID, safe(f.Path), f.Line, matchText(f), f.Message)
 			}
 		}
 		switch {
@@ -99,7 +99,7 @@ func reportJSON(checks []model.Check, found []Finding, out io.Writer) int {
 		doc.Data.Findings = append(doc.Data.Findings, jsonFinding{Rule: f.RuleID, File: f.Path, Line: f.Line, Match: matchText(f), Message: f.Message})
 	}
 	b, _ := json.Marshal(doc)
-	fmt.Fprintln(out, string(b))
+	_, _ = fmt.Fprintln(out, string(b))
 	switch doc.Data.Result {
 	case "error":
 		return 2

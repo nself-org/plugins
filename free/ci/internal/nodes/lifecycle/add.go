@@ -91,6 +91,10 @@ func (d *Deps) Add(ctx context.Context, o AddOptions) (res AddResult, err error)
 	if !ok {
 		return res, usage("unknown agent installer %q", o.Installer)
 	}
+	// Before any contact: a hook that vets the destination alone (the deploy-host check, D-1219) runs here.
+	if err = RunHooks(ctx, PointPreAdd, HookEvent{NodeID: id, Project: d.Project, Flags: o.Flags, Dest: o.Dest}); err != nil {
+		return res, err
+	}
 	keys, err := d.Scan(ctx, remote.Target{Dest: spec.Dest()}, id)
 	if err != nil {
 		return res, transportErr("scan", "cannot capture the host key of "+spec.Dest(), err)

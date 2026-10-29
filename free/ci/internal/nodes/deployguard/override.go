@@ -6,7 +6,8 @@ package deployguard
 // Inputs:  AddRequest (node id, destination, the draft capability, the flag, a confirmer).
 // Outputs: the Result; the draft's DeployHost set (matched, source, override); one audit row for a
 //          confirmed override.
-// Constraints: a match without the flag registers the node ineligible (deploy_host.matched true); the flag
+// Constraints: a match on the destination alone is refused before the host is contacted (CheckPreAdd); a match
+//          found only after contact (fingerprint, machine id) registers the node ineligible (deploy_host.matched true); the flag
 //          without a match changes nothing; the flag with a match and no confirmation (no terminal, or
 //          anything but the node id typed back) fails with E663 and registers nothing; the audit row is
 //          written before the node exists and names the source and kind, never a key.
@@ -44,6 +45,26 @@ type AddRequest struct {
 	Allow      bool
 	Confirm    Confirmer
 	Actor      string
+	// Confirmed is the ConfirmKey of the match an earlier CheckPreAdd confirmed and audited for this node: when
+	// CheckAdd finds the same match it neither asks nor writes a second audit row; a different match (found
+	// once the host key is known) is confirmed afresh.
+	Confirmed string
+}
+
+// ConfirmKey names a match for Confirmed.
+func (r Result) ConfirmKey() string { return r.Source + "/" + r.Kind }
+
+// CheckPreAdd is the check before the host is contacted (`nodes add`): the destination and node id alone, with
+// identity from ssh -G and DNS. A match without Allow is refused here, so nothing is scanned, probed or installed
+// on a deploy host; with Allow the override is confirmed and audited now and the caller passes Confirmed to the
+// later CheckAdd. An unmatched destination is left to CheckAdd, which also sees the host key and machine id.
+func (g *Guard) CheckPreAdd(ctx context.Context, q AddRequest) (Result, []string, error) {
+	q.Capability, q.Confirmed = nil, ""
+	r, warn, err := g.CheckAdd(ctx, q)
+	if err == nil && r.Matched && !q.Allow {
+		err = newErr(ReasonMatched, "%s is a deploy host (%s); it was not contacted and not added (--allow-deploy-host adds it after a confirmation)", q.NodeID, r.Source)
+	}
+	return r, warn, err
 }
 
 // CheckAdd refreshes the set, matches the node and applies the override rules. The returned warnings are
@@ -80,7 +101,9 @@ func (g *Guard) CheckAdd(ctx context.Context, q AddRequest) (Result, []string, e
 		return r, warn, g.unverified(ctx)
 	}
 	dh := DeployHostFor(r, model.CapabilityDeployHost{})
-	if q.Allow {
+	if q.Allow && q.Confirmed == r.ConfirmKey() {
+		dh.Override = true
+	} else if q.Allow {
 		if q.Confirm == nil {
 			return r, warn, newErr(ReasonNoTTY, "--allow-deploy-host needs an interactive terminal to confirm")
 		}

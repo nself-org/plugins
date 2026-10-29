@@ -163,7 +163,7 @@ func init() {
 		V15Only: true,
 		Flags:   func() *flag.FlagSet { return flag.NewFlagSet("serve admin", flag.ContinueOnError) },
 		Handler: func(args []string) int {
-			fmt.Fprint(os.Stdout, serveAdminHelp)
+			_, _ = fmt.Fprint(os.Stdout, serveAdminHelp)
 			if len(args) > 0 && args[0] != "--help" && args[0] != "-h" && args[0] != "help" {
 				return output.ExitUser
 			}

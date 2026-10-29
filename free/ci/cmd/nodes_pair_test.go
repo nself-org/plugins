@@ -198,7 +198,7 @@ func TestNodesPairEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	n, err := registry.New(st).Get(context.Background(), "node-pair")
 	if err != nil {
 		t.Fatal(err)
@@ -554,7 +554,7 @@ func (r *pullRig) handshake(c *pairedCert) error {
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -562,7 +562,7 @@ func (r *pullRig) handshake(c *pairedCert) error {
 				return
 			}
 			go func() {
-				defer conn.Close()
+				defer func() { _ = conn.Close() }()
 				if conn.(*tls.Conn).Handshake() == nil {
 					_, _ = conn.Write([]byte("ok"))
 				}
@@ -578,7 +578,7 @@ func (r *pullRig) handshake(c *pairedCert) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 	_, err = io.ReadFull(conn, make([]byte, 2))
 	return err
@@ -590,7 +590,7 @@ func (r *pullRig) count(q string, args ...any) int {
 	if err != nil {
 		r.t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	var n int
 	if err = db.QueryRow(q, args...).Scan(&n); err != nil {
 		r.t.Fatal(err)

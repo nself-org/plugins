@@ -38,7 +38,9 @@ func TestCacheHookReadOnlyMounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cacheAfter(context.Background(), l, session.JobRoot{}, session.Outcome{State: "cancelled"}, nil)
+	defer func() {
+		_ = cacheAfter(context.Background(), l, session.JobRoot{}, session.Outcome{State: "cancelled"}, nil)
+	}()
 	if len(setup.Mounts) != 2 {
 		t.Fatalf("mounts=%+v", setup.Mounts)
 	}
@@ -115,7 +117,7 @@ func TestCacheHookPartialRestoreBindsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cacheAfter(context.Background(), l, root, session.Outcome{}, nil)
+	defer func() { _ = cacheAfter(context.Background(), l, root, session.Outcome{}, nil) }()
 	if len(setup.Mounts) != 0 || len(setup.Env) != 0 {
 		t.Fatalf("partial restore bound: %+v", setup)
 	}
@@ -161,12 +163,12 @@ func TestCacheBeforeJobFailureDropsEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cacheAfter(context.Background(), l, session.JobRoot{}, session.Outcome{}, nil)
+	defer func() { _ = cacheAfter(context.Background(), l, session.JobRoot{}, session.Outcome{}, nil) }()
 	ws, err := os.OpenRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ws.Close()
+	defer func() { _ = ws.Close() }()
 	if err := ws.Mkdir(specs.WorkspaceCacheName, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +201,7 @@ func TestCacheStageFailureKeepsUsableBindings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cacheAfter(context.Background(), l, root, session.Outcome{}, nil)
+	defer func() { _ = cacheAfter(context.Background(), l, root, session.Outcome{}, nil) }()
 	if setup.Env["GOCACHE"] == "" || setup.Env["GOMODCACHE"] == "" {
 		t.Fatalf("usable binding lost: %+v", setup)
 	}
@@ -221,7 +223,7 @@ func TestCacheHookReplacementClosesRoots(t *testing.T) {
 	if _, err := cacheBefore(context.Background(), l, session.JobRoot{Dir: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
-	defer cacheAfter(context.Background(), l, session.JobRoot{}, session.Outcome{}, nil)
+	defer func() { _ = cacheAfter(context.Background(), l, session.JobRoot{}, session.Outcome{}, nil) }()
 	if _, err := old.base.Stat("."); err == nil {
 		t.Fatal("replaced root left open")
 	}
@@ -248,7 +250,7 @@ func TestCacheCollectionRefusalReachesJobLog(t *testing.T) {
 	}
 	l := cacheHookLease("rw", "process")
 	nodeCaches.Store(l.AttemptID, &nodeCache{base: base, stage: &refusedCacheStage{}})
-	defer cacheAfter(context.Background(), l, session.JobRoot{}, session.Outcome{}, nil)
+	defer func() { _ = cacheAfter(context.Background(), l, session.JobRoot{}, session.Outcome{}, nil) }()
 	var output bytes.Buffer
 	hook := agentAfterJob(execSpec{AttemptID: l.AttemptID}, jobInputs{Output: func(b []byte) { _, _ = output.Write(b) }})
 	if err := hook(context.Background(), nil); err != nil {
