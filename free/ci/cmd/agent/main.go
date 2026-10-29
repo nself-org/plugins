@@ -102,19 +102,27 @@ func jobOutcome(spec execSpec, res ciexec.AttemptResult, tail string) cirun.JobO
 // baseEvidence is the run document before the P7-CI-38 builder completes it:
 // one check for the one job, assembled by the run package so the check and
 // verdict logic exists once, with the producer marked self-reported until the
-// result signer (P7-TRUST-20) signs it.
+// result signer (P7-TRUST-20) signs it. A lease's evidence context (D-1299)
+// supplies the run, repository, source trust, policy digest and selection mode
+// the coordinator recorded, so the signed document verifies; without one the
+// agent claims nothing (a run id of its own, repo unknown, source untrusted).
 func baseEvidence(spec execSpec, o cirun.JobOutcome, start, end time.Time) model.Evidence {
 	id := sha256.Sum256([]byte(spec.CoordinatorID + "/" + spec.AttemptID))
-	runID := hex.EncodeToString(id[:8])
-	return cirun.SingleJobEvidence(cirun.SingleJobInput{
-		RunID: runID, Revision: spec.Revision, RepoID: "unknown",
+	runID, repoID, source, mode, policy := hex.EncodeToString(id[:8]), "unknown", "untrusted", model.SelectionMode("full"), ""
+	if c := spec.Evidence; c != nil {
+		runID, repoID, source, mode, policy = c.RunID, c.RepoID, c.SourceTrust, model.SelectionMode(c.SelectionMode), c.PolicyDigest
+	}
+	ev := cirun.SingleJobEvidence(cirun.SingleJobInput{
+		RunID: runID, Revision: spec.Revision, RepoID: repoID,
 		Pipeline: model.PipelineRef{ID: runID, Name: spec.JobID, Kind: "adhoc"}, Trigger: "api",
-		Source:    "untrusted", // the coordinator classifies the source; the agent claims nothing
-		Selection: model.Selection{Mode: "full", Reason: "selection.full_required"},
+		Source:    source,
+		Selection: model.Selection{Mode: mode, Reason: "selection.full_required"},
 		Runner:    model.RunnerRef{ID: "agent", Provider: "agent", Platform: runtime.GOOS + "/" + runtime.GOARCH, Isolation: "process"},
 		Producer:  model.Producer{Kind: "self-reported", Version: "1"},
 		Job:       o, Start: start, End: end,
 	})
+	ev.PolicyDigest = policy
+	return ev
 }
 
 // unbindIfOtherRevision unbinds evidence whose named revision is not the commit

@@ -147,7 +147,10 @@ func (r leaseRunner) Run(ctx context.Context, j session.JobRun) (session.JobResu
 		// run on an empty tree would report a pass for code it never saw.
 		return session.JobResult{}, errors.New("the lease has a checkout but no hook staged it")
 	}
-	spec := execSpec{AttemptID: l.AttemptID, CoordinatorID: r.coordinator, JobID: "job", Job: l.Job, NetworkScope: l.NetworkScope, Trust: l.Trust, Revision: l.Checkout.Revision, SourceDir: j.Setup.SourceDir}
+	spec := execSpec{AttemptID: l.AttemptID, CoordinatorID: r.coordinator, JobID: "job", Job: l.Job, NetworkScope: l.NetworkScope, Trust: l.Trust, Revision: l.Checkout.Revision, SourceDir: j.Setup.SourceDir, Evidence: l.Evidence}
+	if l.Evidence != nil && l.Evidence.Job != "" { // the evidence names the job the coordinator recorded for the attempt
+		spec.JobID = l.Evidence.Job
+	}
 	in := jobInputs{Slot: j.Slot, Env: j.Setup.Env, Secrets: j.Setup.Secrets, Mounts: j.Setup.Mounts, Output: j.Output, Tail: j.Tail, Skip: j.Skip}
 	if len(j.Credential) > 0 {
 		if err := wrapCredential(&spec, &in, j); err != nil {

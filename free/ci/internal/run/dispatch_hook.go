@@ -198,13 +198,18 @@ type carriers interface {
 }
 
 func newTransportAdapter(sink transport.Sink, reg carriers, root string) dispatch.Transport {
-	return transportAdapter{sink: sink, reg: reg, root: root}
+	a := transportAdapter{sink: sink, reg: reg, root: root}
+	if rs, ok := sink.(*remoteSink); ok && rs != nil {
+		a.st = rs.st
+	}
+	return a
 }
 
 type transportAdapter struct {
 	sink transport.Sink
 	reg  carriers
-	root string // the repository whose revision a node receives
+	root string       // the repository whose revision a node receives
+	st   *store.Store // the run's store: the attempt facts the lease's evidence context repeats (nil: none)
 }
 
 func (transportAdapter) Known(kind string) bool {
@@ -230,7 +235,11 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	if err != nil {
 		return err
 	}
-	lease := protocol.Lease{NetworkScope: d.Network, LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
+	evidence, err := LeaseEvidence(ctx, a.st, d.AttemptID)
+	if err != nil {
+		return err
+	}
+	lease := protocol.Lease{Evidence: evidence, NetworkScope: d.Network, LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
 		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: refs, Trust: d.Trust, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
 	sink := bindLeaseSink(a.sink, leaseFacts{AttemptID: d.AttemptID, LeaseID: d.LeaseID, Epoch: d.Epoch, Job: d.Job, Hosted: d.Hosted})
 	sink = prepareCache(ctx, sink, &lease, a.root, d.Node.Identity.ID, d.Hosted, remoteCachePlatform(d.Node), d.Node.Identity.Transport)

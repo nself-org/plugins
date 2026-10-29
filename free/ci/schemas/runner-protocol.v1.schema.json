@@ -663,6 +663,45 @@
                 "minimum": 1,
                 "type": "integer"
               },
+              "evidence": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "job": {
+                        "type": "string"
+                      },
+                      "policy_digest": {
+                        "type": "string"
+                      },
+                      "repo_id": {
+                        "type": "string"
+                      },
+                      "run_id": {
+                        "type": "string"
+                      },
+                      "selection_mode": {
+                        "type": "string"
+                      },
+                      "source_trust": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "run_id",
+                      "repo_id",
+                      "source_trust",
+                      "policy_digest",
+                      "selection_mode",
+                      "job"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "expires_at": {
                 "type": "string"
               },

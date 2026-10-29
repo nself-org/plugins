@@ -29,6 +29,7 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/netscope"
+	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/report"
 	cirun "github.com/nself-org/plugins/free/ci/internal/run"
 )
@@ -49,6 +50,8 @@ type execSpec struct {
 	// Revision is the full commit the job runs against (40 or 64 hex).
 	Revision  string `json:"revision"`
 	SourceDir string `json:"source_dir,omitempty"`
+	// Evidence is the lease's evidence context: what the coordinator recorded for the attempt (D-1299).
+	Evidence *protocol.LeaseEvidence `json:"evidence,omitempty"`
 }
 
 // jobInputs are what a lease adds to its spec.
@@ -174,6 +177,9 @@ func runSpec(ctx context.Context, spec execSpec, in jobInputs) (session.JobResul
 			unbind(&done, "dirty", "evidence assembly failed")
 		} else {
 			unbindIfOtherRevision(ctx, spec, &done)
+		}
+		if spec.Evidence != nil { // the builder names the checkout's own repo id; the signed document names the coordinator's
+			done.RepoID = base.RepoID
 		}
 	} else {
 		unbind(&done, "dirty", "the job ran without a source tree")
