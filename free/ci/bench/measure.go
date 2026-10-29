@@ -89,7 +89,7 @@ func (p *Inproc) StoreOpen() error {
 func (p *Inproc) ExecOverhead(ctx context.Context) (Timing, error) {
 	argv := []string{"true"}
 	n := p.seq.Add(1)
-	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}}
+	ex := &ciexec.Executor{Env: ciexec.AllowlistEnv{}, Isolation: ciexec.BaselineIsolator{}}
 	res := ex.Run(ctx, ciexec.JobSpec{AttemptID: fmt.Sprintf("bench-%d", n), CoordinatorID: "cibench",
 		Job: model.Job{Run: argv}, Command: argv, Home: filepath.Join(p.Home, "exec")})
 	if res.Err != nil || res.ExitCode != 0 {
