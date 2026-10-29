@@ -11,8 +11,8 @@ package runners
 //          a private base). Unlike GitHub, which polls its queue and offers a capped job again (github/reconcile),
 //          no GitLab poll exists yet: the Job Hook is sent once and the ingress answers a declined one with a 200,
 //          so a capped or not-ready GitLab demand stays pending until GitLab's own stuck-job timeout (debt row;
-//          it must be closed before V15 is turned on). A subgroup project (a/b/c) is E702: the coordinator and
-//          runnerjob.Spec accept group/project only (D-1365).
+//          it must be closed before V15 is turned on). A subgroup project (a/b/c) is E702: runnerjob.Spec accepts
+//          group/project only (the coordinator accepts subgroups since D-1365).
 //          The runner may reach the instance host and the operator's providers.gitlab.runner.hosts (artifact and object
 //          storage hosts, at most runnerjob.MaxHosts in all); any other host stays closed.
 // Constraints: the tag set is fixed: every tag of the demand must be one of providers.gitlab.runner.tags

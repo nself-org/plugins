@@ -57,6 +57,7 @@ names a test that does not exist, an item falls outside 2-6, or an item has no t
 | `TestScenario10InteractiveStartsBeforeQueuedBackground` | 4 | Scenario 10, capacity saturation |
 | `TestScenario10PriorityNeverAdmitsIneligible` | 4 | Scenario 10, capacity saturation |
 | `TestScenario10SaturationStaysWithinCapacityAndFair` | 4 | Scenario 10, capacity saturation |
+| `TestScenario10UnequalRuntimesStayWithinServedRuntimeBound` | 4 | Scenario 10, capacity saturation (unequal runtimes, weighted by the estimators) |
 | `TestScenario4EachEntryLandsOnAMatchingRunner` | 2 | Scenario 4, heterogeneous matrix |
 | `TestScenario4MatrixExpandsToThreeEntries` | 2 | Scenario 4, heterogeneous matrix |
 | `TestScenario4MissingPlatformFailsAFreshForegroundRun` | 2 | Scenario 4, heterogeneous matrix |
@@ -81,8 +82,6 @@ These are production gaps found while writing the suite. They are outside this T
 - **Spend approval wiring (item 5).** `economics.NotePending` has no production caller, so a held run records no estimate and
   `ApproveSpend` has nothing to approve; `TestEconomicsApprovalPausesUntilAnAdminApproves` calls `NotePending` itself. The pause, the
   approval, the world contributor that reads approvals and the admission are real.
-- **Served-runtime fairness (item 4).** `dispatch.Fair` charges every job one unit, so fairness is by job count; the test keeps job
-  runtimes equal and holds the Epic's `max job runtime x slots` bound on that basis. Unequal runtimes are not weighted by the orderer.
 - **Burst VM in the dispatcher's world (item 6).** Burst is not wired into the coordinator (D-1329): `NodeJoined` only binds the node, and no
   production code marks a joined VM `Ephemeral` or hosted in the world. The lifecycle, sweeper, reservation, one-job-per-VM admission step and
   I03 placement rules are proven against the engine, the admission step and `sched.Place`; the delivery of a job to a joined VM is not.

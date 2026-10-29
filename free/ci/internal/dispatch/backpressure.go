@@ -86,6 +86,15 @@ func RuntimeEstimate(ctx context.Context, st *store.Store, project string) (int6
 	if err != nil {
 		return standInRuntimeMs, "unknown"
 	}
+	if ms, ok := meanRuntime(ests, project); ok {
+		return ms, "estimated"
+	}
+	return standInRuntimeMs, "unknown"
+}
+
+// meanRuntime is the mean runtime of project's settled estimators (at least
+// minSamples samples), else of every project's; ok is false with none.
+func meanRuntime(ests []store.TelEstimator, project string) (ms int64, ok bool) {
 	var mine, all, nMine, nAll int64
 	for _, e := range ests {
 		if e.N < minSamples {
@@ -98,11 +107,32 @@ func RuntimeEstimate(ctx context.Context, st *store.Store, project string) (int6
 	}
 	switch {
 	case nMine > 0:
-		return mine / nMine, "estimated"
+		return mine / nMine, true
 	case nAll > 0:
-		return all / nAll, "estimated"
+		return all / nAll, true
 	}
-	return standInRuntimeMs, "unknown"
+	return 0, false
+}
+
+// RuntimeCost is the fair-queuing cost of one job of a project: its mean settled
+// runtime in ms, so served runtime and not the job count is what fairness
+// balances (D-1411). A project without settled samples is charged the mean of
+// the projects that have them, so costs share one unit; with no settled sample
+// anywhere (or no store) every job costs 1, plain job counting.
+func RuntimeCost(ctx context.Context, st *store.Store) func(project string) int64 {
+	if st == nil {
+		return nil
+	}
+	ests, err := st.TelEstimators(ctx)
+	if err != nil {
+		return nil
+	}
+	return func(project string) int64 {
+		if ms, ok := meanRuntime(ests, project); ok && ms > 0 {
+			return ms
+		}
+		return 1
+	}
 }
 
 // ExpectedWait is ahead x mean runtime / slots in ms and the confidence of the

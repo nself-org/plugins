@@ -93,8 +93,8 @@ func decodeSecrets(key string, raw json.RawMessage) (map[string]RepoSecret, erro
 	return out, nil
 }
 
-// validName is a project the coordinator can enqueue: group/project, letters, digits, '.', '_', '-'.
-func validName(name string) bool { return len(name) <= 255 && coordinator.ValidProject(name) }
+// validName is a project the coordinator can enqueue: group[/subgroup...]/project, letters, digits, '.', '_', '-'.
+func validName(name string) bool { return len(name) <= 255 && coordinator.ValidProjectFor(Name, name) }
 
 // SecretsFrom reads both keys from the effective policy; no value means none.
 func SecretsFrom(eff *policy.Effective) (Secrets, error) {

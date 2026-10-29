@@ -759,6 +759,47 @@ func TestEnqueueRefusesGitOptionLookalikes(t *testing.T) {
 	}
 }
 
+// TestSubgroupProjectsFollowTheSource pins D-1365: a GitLab project may sit in nested subgroups (up to 20
+// segments), but a github, manual or unnamed source stays owner/repo, and a nested name never loosens the
+// git-option checks.
+func TestSubgroupProjectsFollowTheSource(t *testing.T) {
+	for _, c := range []struct {
+		source, project string
+		want            bool
+	}{
+		{"gitlab", "grp/sub/proj", true},
+		{"gitlab", "grp/a/b/c/proj", true},
+		{"gitlab", "grp/proj", true},
+		{"gitlab", strings.Repeat("a/", 19) + "z", true},
+		{"gitlab", strings.Repeat("a/", 20) + "z", false},
+		{"gitlab", "grp/sub/..", false},
+		{"gitlab", "grp/../proj", false},
+		{"gitlab", "grp//proj", false},
+		{"gitlab", "grp/sub/proj/", false},
+		{"gitlab", "/grp/proj", false},
+		{"gitlab", "grp/-sub/proj", false},
+		{"gitlab", "-grp/sub/proj", false},
+		{"gitlab", "grp/sub/proj;ls", false},
+		{"gitlab", "grp", false},
+		{"github", "grp/sub/proj", false},
+		{"manual", "grp/sub/proj", false},
+		{"", "grp/sub/proj", false},
+		{"github", "o/r", true},
+	} {
+		if got := ValidProjectFor(c.source, c.project); got != c.want {
+			t.Errorf("ValidProjectFor(%q, %q) = %v, want %v", c.source, c.project, got, c.want)
+		}
+	}
+	r := newRig(t, nil)
+	out, err := r.c.Enqueue(context.Background(), Delivery{Source: "gitlab", Project: "grp/sub/proj", Revision: testSHA})
+	if err != nil || out.Kind != store.IntakeEnqueued || queued(t, r.st) != 1 {
+		t.Fatalf("a gitlab subgroup project: %+v, %v", out, err)
+	}
+	if _, err = r.c.Enqueue(context.Background(), Delivery{Source: "github", Project: "grp/sub/proj", Revision: testSHA}); ReasonOf(err) != ReasonInvalidDelivery {
+		t.Fatalf("a github subgroup-shaped project = %v, want invalid delivery", err)
+	}
+}
+
 func TestSafeCloneURL(t *testing.T) {
 	ok := map[string][3]string{
 		"github default": {"github", "o/r", ""},

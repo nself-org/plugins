@@ -141,7 +141,11 @@ func New(cfg Config) (*Dispatcher, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), queueLimitsTimeout)
 			defer cancel()
 			return d.queueLimits(ctx)
-		}, d.cfg.Clock)
+		}, d.cfg.Clock).WithCost(func() func(string) int64 {
+			ctx, cancel := context.WithTimeout(context.Background(), queueLimitsTimeout)
+			defer cancel()
+			return RuntimeCost(ctx, d.cfg.Store)
+		})
 	}
 	d.life, d.stop = context.WithCancel(context.Background())
 	onStartMu.Lock()

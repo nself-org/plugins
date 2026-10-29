@@ -6,7 +6,7 @@ package dispatch
 // Inputs:  the queued jobs, in Orderer order.
 // Outputs: waiters resolved; one Decision per job sent to the sink; refusal
 // reasons stored for `ci explain`.
-// Constraints: one world per pipeline, because the policy is per pipeline;
+// Constraints: one world per pipeline, because the policy is per pipeline, all built from one store snapshot;
 // admission order is the Orderer's order across pipelines (a younger job of one
 // pipeline never passes an older job of another); every commit is applied to
 // every world copy with World.Apply; a placement is re-checked by the admission
@@ -20,6 +20,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // pipelineRun is one pipeline's world and placement result for this tick.
@@ -58,7 +59,9 @@ func (d *Dispatcher) Tick(ctx context.Context) error {
 	if len(ordered) != len(queued) {
 		return errors.New("dispatch: the orderer must return exactly the queued jobs")
 	}
-	runs, first := d.buildWorlds(ctx, ordered)
+	// one store snapshot for every pipeline's world: a capacity release between two builds must not let a later
+	// pipeline plan on more free slots than an earlier one did, which would let it overtake the fair order (D-1412)
+	runs, first := d.buildWorlds(store.PinWorldSnapshot(ctx), ordered)
 	now = d.cfg.Clock() // building the worlds takes time
 	var live []Queued
 	for _, q := range ordered {

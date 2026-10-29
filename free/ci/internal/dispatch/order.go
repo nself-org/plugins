@@ -13,7 +13,10 @@ package dispatch
 // that left the queue, so call Order once per tick with the whole live queue
 // (Dispatcher.Plan with a hypothetical queue would charge the projects of the
 // jobs it leaves out: give Plan a FIFO or a fresh Fair for what-if queues).
-// Jobs weigh the same in virtual time until the telemetry estimators feed a cost.
+// A job weighs its project's mean settled runtime in virtual time (WithCost, fed
+// from the telemetry estimators), so a project of long jobs gets fewer starts than
+// one of short jobs and served runtime stays balanced (D-1411). Without a cost
+// source, or before any estimator has settled, every job weighs 1.
 
 import (
 	"sort"
@@ -74,6 +77,7 @@ func (FIFO) Order(q []Queued) []Queued {
 type Fair struct {
 	limits func() QueueLimits
 	clock  func() time.Time
+	costs  func() func(project string) int64
 	mu     sync.Mutex
 	state  fairq.State
 }
@@ -88,6 +92,14 @@ func NewFair(limits func() QueueLimits, clock func() time.Time) *Fair {
 		clock = time.Now
 	}
 	return &Fair{limits: limits, clock: clock}
+}
+
+// WithCost sets where job weights come from: costs is called once per Order and
+// returns the weight of a job of a project (nil, or a non-positive weight, is 1).
+// It returns f.
+func (f *Fair) WithCost(costs func() func(project string) int64) *Fair {
+	f.costs = costs
+	return f
 }
 
 // bandOf is the band a queued job is ordered in: the band it declares, else
@@ -106,15 +118,23 @@ func bandOf(declared string, foreground bool) fairq.Band {
 
 // Order implements Orderer; the input is not modified.
 func (f *Fair) Order(q []Queued) []Queued {
+	var cost func(string) int64
+	if f.costs != nil {
+		cost = f.costs()
+	}
 	items := make([]fairq.Item, len(q))
 	bySeq := make(map[string]Queued, len(q))
 	for i, e := range q {
 		key := strconv.FormatUint(e.Seq, 10) // the arrival number is unique; a job key only while queued
 		s := e.Job.Sched
+		c := int64(1)
+		if cost != nil {
+			c = max(cost(s.Project), 1)
+		}
 		items[i] = fairq.Item{
 			Key: key, Pipeline: s.Pipeline.ID, Job: s.ID, MatrixKey: s.MatrixKey, Project: s.Project,
 			Band: bandOf(s.Pipeline.Band, e.Job.Foreground || s.Pipeline.Foreground), Priority: s.Priority,
-			EnqueuedMs: e.EnqueuedAt.UnixMilli(), Seq: e.Seq, Cost: 1,
+			EnqueuedMs: e.EnqueuedAt.UnixMilli(), Seq: e.Seq, Cost: c,
 		}
 		bySeq[key] = e
 	}

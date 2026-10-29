@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"maps"
+	"sync"
 )
 
 // SchedWorld is a single, consistent read of the durable placement facts.
@@ -26,8 +28,51 @@ type SchedAttempt struct {
 }
 type SchedReservation struct{ CPU, MemMB, Slots int64 }
 
-// WorldSnapshot reads all placement tables in one read transaction; it never writes.
-func (s *Store) WorldSnapshot(ctx context.Context) (out SchedWorld, err error) {
+type pinKey struct{}
+
+// pinnedWorld is the one snapshot a pinned context shares; it is read on first use.
+type pinnedWorld struct {
+	mu   sync.Mutex
+	snap SchedWorld
+	done bool
+}
+
+// PinWorldSnapshot returns a context whose WorldSnapshot calls all see the first one's result, so worlds
+// built one after another (one per pipeline in a dispatch tick) read the same instant of the store and a
+// capacity release between two builds cannot make a later world see more free slots than an earlier one
+// (D-1412). A failed read is not kept: the next call reads again. Pinning does not nest or expire; drop the
+// context when the batch is done.
+func PinWorldSnapshot(ctx context.Context) context.Context {
+	return context.WithValue(ctx, pinKey{}, &pinnedWorld{})
+}
+
+// WorldSnapshot reads all placement tables in one read transaction; it never writes. On a pinned context
+// (PinWorldSnapshot) the first call reads and the others get copies of that result.
+func (s *Store) WorldSnapshot(ctx context.Context) (SchedWorld, error) {
+	p, ok := ctx.Value(pinKey{}).(*pinnedWorld)
+	if !ok {
+		return s.readWorldSnapshot(ctx)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.done {
+		snap, err := s.readWorldSnapshot(ctx)
+		if err != nil {
+			return SchedWorld{}, err
+		}
+		p.snap, p.done = snap, true
+	}
+	return p.snap.clone(), nil
+}
+
+// clone copies the maps, which a caller may keep and change; the slices are read-only facts.
+func (w SchedWorld) clone() SchedWorld {
+	w.Queued, w.Previous, w.PreviousByJob = maps.Clone(w.Queued), maps.Clone(w.Previous), maps.Clone(w.PreviousByJob)
+	w.Reservations, w.Projects = maps.Clone(w.Reservations), maps.Clone(w.Projects)
+	return w
+}
+
+func (s *Store) readWorldSnapshot(ctx context.Context) (out SchedWorld, err error) {
 	defer func() {
 		if err != nil {
 			err = coded("E607", err.Error())
