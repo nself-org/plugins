@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/clui"
@@ -53,7 +54,7 @@ func runJob(job ciJob, binaryPath string, cfg ServeConfig) {
 	defer func() { _ = os.RemoveAll(workdir) }()
 
 	// Run gate inside Docker container with resource limits.
-	passed, summary, runErr := runGateInDocker(binaryPath, workdir, cfg)
+	passed, summary, runErr := runGateInDocker(binaryPath, workdir, cfg, job.Ref)
 	elapsed := time.Since(start)
 
 	state := "success"
@@ -109,11 +110,19 @@ func cloneRef(job ciJob, cfg ServeConfig) (string, error) {
 	return dir, nil
 }
 
+// shortBranch turns a webhook ref ("refs/heads/main") into the short branch name ("main") that
+// a local run gets from `git symbolic-ref --short`. The ref becomes NSELF_CI_REF, which keys
+// notification state, so both ways of running must name a branch the same way.
+func shortBranch(ref string) string {
+	return strings.TrimPrefix(ref, "refs/heads/")
+}
+
 // runGateInDocker runs the nself-ci binary inside a container.
 // The workdir is bind-mounted read-write at /repo. The nself-ci binary is
 // bind-mounted read-only from the host so Docker doesn't need to install Go.
 // CPU/memory limits prevent a runaway build from starving the ops box.
-func runGateInDocker(binaryPath, workdir string, cfg ServeConfig) (passed bool, summary string, err error) {
+func runGateInDocker(binaryPath, workdir string, cfg ServeConfig, ref string) (passed bool, summary string, err error) {
+	ref = shortBranch(ref)
 	containerName := fmt.Sprintf("nself-ci-%d", time.Now().UnixNano())
 
 	// Check Docker availability.
@@ -127,7 +136,7 @@ func runGateInDocker(binaryPath, workdir string, cfg ServeConfig) (passed bool, 
 		if !cfg.AllowUnsandboxed {
 			return false, "Docker not available", fmt.Errorf("cannot reach Docker; refusing to run gate unsandboxed. Pass --allow-unsandboxed to override, understanding that the cloned repo's content would then execute directly on this host")
 		}
-		return runGateDirect(binaryPath, workdir, cfg)
+		return runGateDirect(binaryPath, workdir, cfg, ref)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.JobTimeout)*time.Second)
@@ -146,6 +155,7 @@ func runGateInDocker(binaryPath, workdir string, cfg ServeConfig) (passed bool, 
 		"-v", fmt.Sprintf("%s:/repo:rw", workdir),
 		"-v", fmt.Sprintf("%s:/usr/local/bin/nself-ci:ro", binaryPath),
 		"--workdir=/repo",
+		"--env", "NSELF_CI_REF=" + ref,
 		"ubuntu:24.04",
 		"/usr/local/bin/nself-ci", "--no-status", "--no-gitleaks", "/repo",
 	}
@@ -176,12 +186,13 @@ func runGateInDocker(binaryPath, workdir string, cfg ServeConfig) (passed bool, 
 
 // runGateDirect runs the nself-ci binary directly on the host when Docker is unavailable.
 // This is the fallback path — full isolation requires Docker.
-func runGateDirect(binaryPath, workdir string, cfg ServeConfig) (passed bool, summary string, err error) {
+func runGateDirect(binaryPath, workdir string, cfg ServeConfig, ref string) (passed bool, summary string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.JobTimeout)*time.Second)
 	defer cancel()
 
 	var buf bytes.Buffer
 	cmd := exec.CommandContext(ctx, binaryPath, "--no-status", "--no-gitleaks", workdir)
+	cmd.Env = append(os.Environ(), "NSELF_CI_REF="+ref)
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 

@@ -54,6 +54,10 @@ esac
 # Step 1: the scenario suite, real store, world, sched, dispatch, fairq, economics and burst.
 CGO_ENABLED=$cgo go test -mod=vendor ${race[@]+"${race[@]}"} -count=1 -v -tags scenarios ${skip[@]+"${skip[@]}"} ./test/scenarios/... >"$work/suite.txt" 2>&1
 rc=$?
+if [ "$rc" -ne 0 ]; then
+	# Preserve the failing assertion in hosted logs before the temporary suite log is removed.
+	cat "$work/suite.txt" >&2
+fi
 ev_expect suite "go test -tags scenarios ./test/scenarios/..." "$rc" "exit $rc: $(ev_snip "$work/suite.txt")"
 if grep -q -- '--- SKIP' "$work/suite.txt"; then ev_fail no-skip "a scenario test skipped"; else ev_pass no-skip "no scenario test skipped"; fi
 ran=$(grep -c -- '^--- PASS: Test' "$work/suite.txt" || true)

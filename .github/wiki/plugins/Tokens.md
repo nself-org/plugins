@@ -179,7 +179,7 @@ nself plugin tokens issue \
 ### Validate Token
 ```bash
 nself plugin tokens validate \
-  --token "eyJhbGc..."
+  --token "<jwt>"
 ```
 
 ### Revoke Tokens
@@ -262,7 +262,7 @@ Body:
 Response:
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwiY2lkIjoidmlkZW80NTYiLCJ0eXAiOiJwbGF5YmFjayIsImV4cCI6MTcwNjEyMzQ1NiwiaWF0IjoxNzA2MTE5ODU2LCJwZXJtIjp7InF1YWxpdHkiOiI0SyJ9fQ.signature",
+  "token": "<jwt>",
   "expiresAt": "2025-01-24T13:00:00.000Z",
   "tokenId": "550e8400-e29b-41d4-a716-446655440000"
 }
@@ -277,7 +277,7 @@ Headers:
   X-App-Name: primary
 Body:
 {
-  "token": "eyJhbGc...",
+  "token": "<jwt>",
   "contentId": "video456",
   "ipAddress": "192.168.1.100"
 }
@@ -652,7 +652,7 @@ curl -X POST http://localhost:3021/api/issue \
 
 # Response
 {
-  "token": "eyJhbGc...",
+  "token": "<jwt>",
   "expiresAt": "2025-01-24T13:00:00.000Z",
   "tokenId": "550e8400-..."
 }
@@ -662,7 +662,7 @@ curl -X POST http://localhost:3021/api/validate \
   -H "Content-Type: application/json" \
   -H "X-App-Name: primary" \
   -d '{
-    "token": "eyJhbGc...",
+    "token": "<jwt>",
     "contentId": "video456"
   }'
 

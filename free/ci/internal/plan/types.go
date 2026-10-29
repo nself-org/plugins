@@ -98,15 +98,16 @@ type Skipped struct {
 
 // Plan is the validated pipeline.
 type Plan struct {
-	Pipeline  model.PipelineRef `json:"pipeline"`
-	Trigger   model.Trigger     `json:"trigger"`
-	Selection model.Selection   `json:"selection"`
-	Support   []string          `json:"support"`
-	FailFast  string            `json:"fail_fast"`
-	Layers    [][]string        `json:"layers"`
-	Jobs      []PlannedJob      `json:"jobs"`
-	Skipped   []Skipped         `json:"skipped"`
-	Placement any               `json:"placement,omitempty"`
+	Cache     *model.CacheConfig `json:"-"` // resolved top-level policy for run hooks
+	Pipeline  model.PipelineRef  `json:"pipeline"`
+	Trigger   model.Trigger      `json:"trigger"`
+	Selection model.Selection    `json:"selection"`
+	Support   []string           `json:"support"`
+	FailFast  string             `json:"fail_fast"`
+	Layers    [][]string         `json:"layers"`
+	Jobs      []PlannedJob       `json:"jobs"`
+	Skipped   []Skipped          `json:"skipped"`
+	Placement any                `json:"placement,omitempty"`
 	// World is the local world the plan was built against; the run places by its measured Docker and
 	// Tools, so a plan and a run of the same state describe this machine the same way (D-1104).
 	World World `json:"-"`

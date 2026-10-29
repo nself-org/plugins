@@ -107,6 +107,22 @@ func TestGateAccept_SelfReportedAdmittedOnlyByPolicyAndNeverRelease(t *testing.T
 	}
 }
 
+// FullSelection on a default gate demands full selection only; it does not
+// make the gate refuse self-reported evidence (that is release-class only).
+func TestGateAccept_FullSelectionDefaultGateStillAdmitsSelfReported(t *testing.T) {
+	ev := goodEvidence()
+	ev.Producer.Kind = "self-reported"
+	g := goodGate(ev)
+	g.AllowSelfReported, g.FullSelection = true, true
+	if got := attest.GateAccept(ev, g); len(got) != 0 {
+		t.Fatalf("default gate with FullSelection refused full self-reported evidence: %v", got)
+	}
+	ev.Selection.Mode = "affected"
+	if got := attest.GateAccept(ev, g); !hasReason(got, attest.ReasonSelectionPartial) {
+		t.Fatalf("partial selection accepted by FullSelection gate: %v", got)
+	}
+}
+
 func TestGateAccept_UnknownClassIsRelease(t *testing.T) {
 	ev := goodEvidence()
 	ev.Selection.Mode = "affected"

@@ -159,6 +159,9 @@ func runDispatcher(ctx context.Context, sess *Session) (*runDispatch, error) {
 	}
 	rd := &runDispatch{sess: sess, sink: newRemoteSink(sess.Store)}
 	rd.sink.home = sess.Home
+	if sess.Plan != nil {
+		rd.sink.pipelineCache = sess.Plan.Cache
+	}
 	for _, r := range rows {
 		if r.ID == sess.RunID {
 			rd.row = r
