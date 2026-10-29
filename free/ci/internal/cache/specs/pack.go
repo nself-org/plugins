@@ -46,7 +46,7 @@ func Pack(ctx context.Context, base *os.Root, rel string, w io.Writer, lim authz
 	return pack(ctx, base, rel, w, lim, nil)
 }
 
-// pack is Pack with an optional inflater that scans inside gzip payloads.
+// pack is Pack with an optional inflater that scans compressed payloads.
 func pack(ctx context.Context, base *os.Root, rel string, w io.Writer, lim authz.Limits, inf *inflater) (PackStats, error) {
 	var st PackStats
 	root, err := base.OpenRoot(rel)
@@ -157,7 +157,7 @@ func header(root *os.Root, p string, info fs.FileInfo) (*tar.Header, bool, error
 
 // copyFile copies exactly size bytes of p; a file that shrank, or that is no
 // longer a regular file once opened, is an error. With an inflater, a file that
-// starts like gzip is also inflated on the way and scanned (the same bytes, so
+// starts like gzip or ZIP is inflated on the way and scanned (the same bytes, so
 // the file cannot change between the copy and the scan).
 func copyFile(ctx context.Context, root *os.Root, p string, w io.Writer, size int64, inf *inflater) error {
 	f, err := root.OpenFile(p, os.O_RDONLY|syscall.O_NONBLOCK, 0)
@@ -169,7 +169,7 @@ func copyFile(ctx context.Context, root *os.Root, p string, w io.Writer, size in
 		return fmt.Errorf("specs: %q is no longer a regular file", p)
 	}
 	src := bufio.NewReader(&ctxReader{ctx, f})
-	if inf == nil || !isGzip(src) {
+	if inf == nil || !isCompressed(src) {
 		return copyN(w, src, p, size)
 	}
 	pr, pw := io.Pipe()

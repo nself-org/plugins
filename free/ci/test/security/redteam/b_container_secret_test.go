@@ -75,9 +75,6 @@ func TestB_Container_SecretNamesCannotSteerTheDockerCLI(t *testing.T) {
 			continue // refused: fine
 		}
 		if strings.Contains(rec.env, name+"=tcp://127.0.0.1:1/"+fakeSecret) {
-			if !openFinding(t, "B10") {
-				return
-			}
 			t.Errorf("secret named %s was placed in the docker CLI's own environment under that name", name)
 		}
 	}

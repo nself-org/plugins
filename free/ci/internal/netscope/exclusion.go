@@ -16,12 +16,16 @@ import (
 	"time"
 )
 
-// worldFacts is the host's own addresses and prefixes plus the node-global exclusion set.
 // exclusionLookupTimeout bounds all excluded-name lookups of one setup together.
 const exclusionLookupTimeout = 10 * time.Second
 
 func (p *Planner) worldFacts(ctx context.Context) (Facts, error) {
-	host := p.Host
+	return WorldFacts(ctx, p.Host, p.Exclusion, p.Resolver)
+}
+
+// WorldFacts merges host facts with the deploy exclusion set. Nil sources use
+// Discover and no exclusions respectively; a nil resolver uses net.DefaultResolver.
+func WorldFacts(ctx context.Context, host func() (Facts, error), excl func(context.Context) (Exclusions, error), resolver Resolver) (Facts, error) {
 	if host == nil {
 		host = Discover
 	}
@@ -29,14 +33,14 @@ func (p *Planner) worldFacts(ctx context.Context) (Facts, error) {
 	if err != nil {
 		return Facts{}, err
 	}
-	if p.Exclusion == nil {
+	if excl == nil {
 		return f, nil
 	}
-	ex, err := p.Exclusion(ctx)
+	ex, err := excl(ctx)
 	if err != nil {
 		return Facts{}, scopeFailed("the deploy exclusion set cannot be read: %v", err)
 	}
-	xf, err := p.exclusionFacts(ctx, ex)
+	xf, err := (&Planner{Resolver: resolver}).exclusionFacts(ctx, ex)
 	if err != nil {
 		return Facts{}, err
 	}

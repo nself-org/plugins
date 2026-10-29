@@ -20,17 +20,18 @@ type Redactor struct {
 	mu    sync.RWMutex
 	setA  map[string]struct{}
 	setB  map[string]struct{}
+	setC  map[string]struct{}
 	dirty bool
 	snap  *snapshot
 }
 
 // snapshot is an immutable pair of automata (either may be nil).
-type snapshot struct{ a, b *automaton }
+type snapshot struct{ a, b, c *automaton }
 
 // New returns an empty Redactor. Token shapes and the neutraliser work with no
 // registered value, so it is useful before any secret exists.
 func New() *Redactor {
-	return &Redactor{setA: map[string]struct{}{}, setB: map[string]struct{}{}, snap: &snapshot{}}
+	return &Redactor{setA: map[string]struct{}{}, setB: map[string]struct{}{}, setC: map[string]struct{}{}, snap: &snapshot{}}
 }
 
 // Register adds v. It returns an E673 *Error for a value under MinValueLen bytes
@@ -49,8 +50,23 @@ func (r *Redactor) Register(v []byte) error {
 		a, b := valueForms(x)
 		as, bs = append(as, toStrings(a)...), append(bs, toStrings(b)...)
 	}
+	var cs []string
+	for _, x := range values {
+		norm, _ := visible(x, true)
+		if len(norm) < MinValueLen {
+			continue
+		}
+		rev := []rune(string(norm))
+		for i, j := 0, len(rev)-1; i < j; i, j = i+1, j-1 {
+			rev[i], rev[j] = rev[j], rev[i]
+		}
+		cs = append(cs, string(norm), string(rev))
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	for _, s := range cs {
+		r.setC[s] = struct{}{}
+	}
 	for _, s := range as {
 		r.setA[s] = struct{}{}
 	}
@@ -90,7 +106,7 @@ func (r *Redactor) snapshot() *snapshot {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.dirty {
-		r.snap = &snapshot{a: build(keys(r.setA)), b: build(keys(r.setB))}
+		r.snap = &snapshot{a: build(keys(r.setA)), b: build(keys(r.setB)), c: build(keys(r.setC))}
 		r.dirty = false
 	}
 	return r.snap
@@ -108,6 +124,14 @@ func (s *snapshot) values(b []byte) (spans []span, hold int) {
 		if h > hold {
 			hold = h
 		}
+	}
+	for _, scan := range []struct {
+		a      *automaton
+		folded bool
+	}{{s.a, false}, {s.b, false}, {s.c, true}} {
+		found, h := mappedScan(scan.a, b, scan.folded)
+		spans = append(spans, found...)
+		hold = max(hold, h)
 	}
 	return spans, hold
 }
