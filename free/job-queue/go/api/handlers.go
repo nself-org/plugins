@@ -5,7 +5,7 @@ package api
 
 import (
 	"context"
-	"database/sql"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -15,6 +15,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -30,16 +33,26 @@ type Config struct {
 
 // Server is the job-queue HTTP + worker server.
 type Server struct {
-	cfg    Config
-	rdb    *redis.Client
-	db     *sql.DB
-	log    *slog.Logger
-	mu     sync.RWMutex
-	mux    *http.ServeMux
+	cfg Config
+	rdb *redis.Client
+	db  database
+	log *slog.Logger
+	mu  sync.RWMutex
+	mux *http.ServeMux
+}
+
+// database is the query surface shared by the migrated pool and test doubles.
+type database interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
 // NewServer initialises connections and registers HTTP routes.
-func NewServer(cfg Config, log *slog.Logger) (*Server, error) {
+func NewServer(cfg Config, log *slog.Logger, pool *pgxpool.Pool) (*Server, error) {
+	if pool == nil {
+		return nil, fmt.Errorf("Postgres pool is required")
+	}
 	opt, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid REDIS_URL: %w", err)
@@ -47,7 +60,7 @@ func NewServer(cfg Config, log *slog.Logger) (*Server, error) {
 	rdb := redis.NewClient(opt)
 
 	mux := http.NewServeMux()
-	s := &Server{cfg: cfg, rdb: rdb, log: log, mux: mux}
+	s := &Server{cfg: cfg, rdb: rdb, db: pool, log: log, mux: mux}
 	s.routes()
 	return s, nil
 }
@@ -106,10 +119,10 @@ func (s *Server) worker(ctx context.Context, queue string) {
 }
 
 type jobPayload struct {
-	ID          string          `json:"id"`
-	JobType     string          `json:"job_type"`
-	Payload     json.RawMessage `json:"payload"`
-	AttemptCount int            `json:"attempt_count"`
+	ID           string          `json:"id"`
+	JobType      string          `json:"job_type"`
+	Payload      json.RawMessage `json:"payload"`
+	AttemptCount int             `json:"attempt_count"`
 }
 
 func (s *Server) processJob(ctx context.Context, queue, processingKey, raw string) {
@@ -136,11 +149,13 @@ func (s *Server) processJob(ctx context.Context, queue, processingKey, raw strin
 			delay := retryDelay(job.AttemptCount)
 			s.log.Info("job failed, scheduling retry", "id", job.ID, "delay", delay, "attempt", job.AttemptCount)
 			s.updateJobStatus(ctx, job.ID, "pending", err.Error())
+			// Preserve the incremented attempt count in the Redis execution payload.
+			retryRaw, _ := json.Marshal(job)
 			// Re-enqueue after delay
 			go func(raw string, delay time.Duration) {
 				time.Sleep(delay)
 				s.rdb.LPush(ctx, "queue:"+queue, raw)
-			}(raw, delay)
+			}(string(retryRaw), delay)
 		}
 	} else {
 		s.updateJobStatus(ctx, job.ID, "completed", "")
@@ -178,16 +193,16 @@ func (s *Server) updateJobStatus(ctx context.Context, id, status, errMsg string)
 	var args []interface{}
 	switch status {
 	case "active":
-		q = `UPDATE np_jobqueue_jobs SET status=$1, started_at=$2, attempt_count=attempt_count+1 WHERE id=$3`
+		q = `UPDATE public.np_jobqueue_jobs SET status=$1, started_at=$2, attempt_count=attempt_count+1 WHERE id=$3 AND source_account_id='primary'`
 		args = []interface{}{status, now, id}
 	case "completed":
-		q = `UPDATE np_jobqueue_jobs SET status=$1, completed_at=$2 WHERE id=$3`
+		q = `UPDATE public.np_jobqueue_jobs SET status=$1, completed_at=$2 WHERE id=$3 AND source_account_id='primary'`
 		args = []interface{}{status, now, id}
 	default:
-		q = `UPDATE np_jobqueue_jobs SET status=$1, error=$2 WHERE id=$3`
+		q = `UPDATE public.np_jobqueue_jobs SET status=$1, error=$2 WHERE id=$3 AND source_account_id='primary'`
 		args = []interface{}{status, nullStr(errMsg), id}
 	}
-	if _, err := s.db.ExecContext(ctx, q, args...); err != nil {
+	if _, err := s.db.Exec(ctx, q, args...); err != nil {
 		s.log.Warn("failed to update job status in Postgres", "id", id, "err", err)
 	}
 }
@@ -196,8 +211,8 @@ func (s *Server) moveToDLQ(ctx context.Context, jobID, finalError string) {
 	if s.db == nil {
 		return
 	}
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO np_job_dlq (job_id, final_error) VALUES ($1, $2)`, jobID, finalError)
+	_, err := s.db.Exec(ctx,
+		`INSERT INTO public.np_job_dlq (job_id, final_error) SELECT id, $2 FROM public.np_jobqueue_jobs WHERE id=$1 AND source_account_id='primary'`, jobID, finalError)
 	if err != nil {
 		s.log.Warn("failed to insert into np_job_dlq", "job_id", jobID, "err", err)
 	}
@@ -225,10 +240,18 @@ func (s *Server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := generateID()
+	if len(req.Payload) == 0 {
+		req.Payload = json.RawMessage(`{}`)
+	}
+	if _, err := s.db.Exec(r.Context(), `INSERT INTO public.np_jobqueue_jobs (id, queue, job_type, payload) VALUES ($1, $2, $3, $4)`, id, req.Queue, req.JobType, string(req.Payload)); err != nil {
+		http.Error(w, "snapshot insert failed", http.StatusServiceUnavailable)
+		return
+	}
 	job := jobPayload{ID: id, JobType: req.JobType, Payload: req.Payload}
 	raw, _ := json.Marshal(job)
 
 	if err := s.rdb.LPush(r.Context(), "queue:"+req.Queue, raw).Err(); err != nil {
+		s.updateJobStatus(r.Context(), id, "failed", "redis enqueue failed")
 		http.Error(w, "redis enqueue failed", http.StatusInternalServerError)
 		return
 	}
@@ -255,10 +278,11 @@ func (s *Server) handleListDLQ(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`[]`))
 		return
 	}
-	rows, err := s.db.QueryContext(r.Context(),
+	rows, err := s.db.Query(r.Context(),
 		`SELECT j.id, j.queue, j.job_type, d.final_error, d.dlq_at
-		 FROM np_job_dlq d JOIN np_jobqueue_jobs j ON d.job_id = j.id
-		 ORDER BY d.dlq_at DESC LIMIT 100`)
+		 FROM public.np_job_dlq d JOIN public.np_jobqueue_jobs j ON d.job_id = j.id
+		 WHERE j.source_account_id='primary' AND d.source_account_id='primary'
+         ORDER BY d.dlq_at DESC LIMIT 100`)
 	if err != nil {
 		http.Error(w, "query failed", http.StatusInternalServerError)
 		return
@@ -272,11 +296,18 @@ func (s *Server) handleListDLQ(w http.ResponseWriter, r *http.Request) {
 		FinalError string    `json:"final_error"`
 		DLQAt      time.Time `json:"dlq_at"`
 	}
-	var items []dlqRow
+	items := []dlqRow{}
 	for rows.Next() {
 		var row dlqRow
-		rows.Scan(&row.ID, &row.Queue, &row.JobType, &row.FinalError, &row.DLQAt)
+		if err := rows.Scan(&row.ID, &row.Queue, &row.JobType, &row.FinalError, &row.DLQAt); err != nil {
+			http.Error(w, "query failed", http.StatusInternalServerError)
+			return
+		}
 		items = append(items, row)
+	}
+	if rows.Err() != nil {
+		http.Error(w, "query failed", http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
@@ -287,7 +318,9 @@ func (s *Server) handleRequeue(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var req struct{ JobID string `json:"job_id"` }
+	var req struct {
+		JobID string `json:"job_id"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
@@ -297,9 +330,33 @@ func (s *Server) handleRequeue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reset job status to pending and delete from DLQ
-	s.db.ExecContext(r.Context(), `UPDATE np_jobqueue_jobs SET status='pending', error=NULL, attempt_count=0 WHERE id=$1`, req.JobID)
-	s.db.ExecContext(r.Context(), `DELETE FROM np_job_dlq WHERE job_id=$1`, req.JobID)
+	// Restore the stored execution payload before removing the DLQ entry.
+	var queue, jobType, dlqID string
+	var payload json.RawMessage
+	if err := s.db.QueryRow(r.Context(), `SELECT d.id, j.queue, j.job_type, j.payload FROM public.np_job_dlq d JOIN public.np_jobqueue_jobs j ON d.job_id=j.id WHERE j.id=$1 AND j.source_account_id='primary' AND d.source_account_id='primary'`, req.JobID).Scan(&dlqID, &queue, &jobType, &payload); err != nil {
+		if err == pgx.ErrNoRows {
+			http.Error(w, "job not found in DLQ", http.StatusNotFound)
+		} else {
+			http.Error(w, "query failed", http.StatusInternalServerError)
+		}
+		return
+	}
+	if _, err := s.db.Exec(r.Context(), `UPDATE public.np_jobqueue_jobs SET status='pending', error=NULL, attempt_count=0 WHERE id=$1 AND source_account_id='primary'`, req.JobID); err != nil {
+		http.Error(w, "snapshot update failed", http.StatusServiceUnavailable)
+		return
+	}
+	raw, _ := json.Marshal(jobPayload{ID: req.JobID, JobType: jobType, Payload: payload})
+	if err := s.rdb.LPush(r.Context(), "queue:"+queue, raw).Err(); err != nil {
+		http.Error(w, "redis enqueue failed", http.StatusServiceUnavailable)
+		return
+	}
+	// Delete only the specific DLQ entry we requeued, not all entries for this
+	// job_id. A broad DELETE can race with a fast worker that re-fails and
+	// inserts a fresh DLQ row before this DELETE executes (MaxAttempts=1).
+	if _, err := s.db.Exec(r.Context(), `DELETE FROM public.np_job_dlq WHERE id=$1 AND source_account_id='primary'`, dlqID); err != nil {
+		http.Error(w, "DLQ delete failed", http.StatusServiceUnavailable)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"requeued"}`))
@@ -324,8 +381,14 @@ func (s *Server) handleDiscard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "postgres not configured", http.StatusServiceUnavailable)
 		return
 	}
-	s.db.ExecContext(r.Context(), `DELETE FROM np_job_dlq WHERE job_id=$1`, req.JobID)
-	s.db.ExecContext(r.Context(), `UPDATE np_jobqueue_jobs SET status='dead' WHERE id=$1`, req.JobID)
+	if _, err := s.db.Exec(r.Context(), `UPDATE public.np_jobqueue_jobs SET status='dead' WHERE id=$1 AND source_account_id='primary'`, req.JobID); err != nil {
+		http.Error(w, "snapshot update failed", http.StatusServiceUnavailable)
+		return
+	}
+	if _, err := s.db.Exec(r.Context(), `DELETE FROM public.np_job_dlq WHERE job_id=$1 AND source_account_id='primary'`, req.JobID); err != nil {
+		http.Error(w, "DLQ delete failed", http.StatusServiceUnavailable)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"discarded"}`))
@@ -352,5 +415,11 @@ func nullStr(s string) interface{} {
 }
 
 func generateID() string {
-	return fmt.Sprintf("%x", time.Now().UnixNano())
+	var id [16]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		panic(err)
+	}
+	id[6] = (id[6] & 0x0f) | 0x40
+	id[8] = (id[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:])
 }

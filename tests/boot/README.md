@@ -27,4 +27,6 @@ Three-pass verification per plugin:
 
 Row survival is checked by identity (primary-key values); tables without a primary key fall back to row count.
 
+Both kits start a Redis sidecar for job-queue and wait for `PING` before booting the plugin. The sidecar has no published host port; `free/job-queue/tests/boot/env` selects it through the network alias `redis`. `bash tests/boot/redis_test.sh` checks sidecar selection and failure handling without Docker.
+
 Cleans all containers, networks and images it creates. Requires docker and jq.

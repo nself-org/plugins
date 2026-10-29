@@ -52,7 +52,7 @@ func main() {
 	defer pool.Close()
 	api.BootMigrations(context.Background(), pool)
 
-	srv, err := api.NewServer(cfg, logger)
+	srv, err := api.NewServer(cfg, logger, pool)
 	if err != nil {
 		slog.Error("failed to create server", "err", err)
 		os.Exit(1)

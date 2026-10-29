@@ -15,9 +15,13 @@ mode=fixtures; list=alpha
 while [ $# -gt 0 ]; do case $1 in --plugins) mode=plugins; list=$2; shift;; --fixtures) mode=fixtures; list=alpha;; --sequential) ;; *) echo "unknown argument $1" >&2; exit 2;; esac; shift; done
 W=$(conf_work)/boot; rm -rf "$W"; mkdir -p "$W"; rc=0; pid=$$; net=nself-boot-$pid; pg=nself-boot-pg-$pid
 if [ "$mode" = fixtures ]; then bash "$CONF_ROOT/scripts/codemods/run.sh" --fixtures --out "$W/conv" >"$W/codemods.log" 2>&1 || { cat "$W/codemods.log"; exit 1; }; root=$W/conv; else root=$CONF_ROOT/free; fi
-cleanup() { docker rm -f "$pg" "nself-boot-a-$pid" "nself-boot-b-$pid" >/dev/null 2>&1; docker network rm "$net" >/dev/null 2>&1; for p in $(printf '%s' "$list" | tr ',' ' '); do docker rmi -f "nself-boot-$p:$pid" >/dev/null 2>&1; done; }
+redis=nself-boot-redis-$pid
+. "$HERE/redis.sh"
+
+cleanup() { docker rm -f "$redis" "$pg" "nself-boot-a-$pid" "nself-boot-b-$pid" >/dev/null 2>&1; docker network rm "$net" >/dev/null 2>&1; for p in $(printf '%s' "$list" | tr ',' ' '); do docker rmi -f "nself-boot-$p:$pid" >/dev/null 2>&1; done; }
 trap cleanup EXIT
 docker network create "$net" >/dev/null
+boot_redis_start || exit 1
 # Image: postgres:16, or pgvector/pgvector:pg16 when a plugin of the run requires the vector extension (manifest requires.postgres_extensions).
 pgimg=postgres:16
 for p in $(printf '%s' "$list" | tr ',' ' '); do

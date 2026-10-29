@@ -63,8 +63,11 @@ n=0; for p in $(printf '%s' "$list" | tr ',' ' '); do n=$((n+1)); done
 basis=$(cd "$basis" 2>/dev/null && pwd) || { echo "FAIL basis dir does not exist"; echo "tables-upgrade: FAIL"; exit 1; }
 W=$(conf_work)/tables-upgrade; rm -rf "$W"; mkdir -p "$W"; rc=0; pid=$$; net=nself-tu-$pid; pg=nself-tu-pg-$pid; root=$CONF_ROOT/free
 
+redis=nself-tu-redis-$pid
+. "$HERE/redis.sh"
+
 cleanup() {
-  docker rm -f "$pg" "nself-tu-c-$pid" "nself-tu-b-$pid" >/dev/null 2>&1; docker network rm "$net" >/dev/null 2>&1
+  docker rm -f "$redis" "$pg" "nself-tu-c-$pid" "nself-tu-b-$pid" >/dev/null 2>&1; docker network rm "$net" >/dev/null 2>&1
   for p in $(printf '%s' "$list" | tr ',' ' '); do docker rmi -f "nself-tu-$p:$pid" "nself-tu-basis-$p:$pid" >/dev/null 2>&1; done
 }
 trap cleanup EXIT
@@ -226,6 +229,7 @@ ul_after() {
 }
 
 docker network create "$net" >/dev/null
+boot_redis_start || exit 1
 docker run -d --name "$pg" --network "$net" -e POSTGRES_PASSWORD=boot -e POSTGRES_DB=boot postgres:16 >/dev/null
 for i in $(seq 1 60); do docker exec "$pg" pg_isready -U postgres -d boot >/dev/null 2>&1 && break; sleep 1; done
 sleep 2
