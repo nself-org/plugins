@@ -3,7 +3,8 @@ package dispatch
 // Purpose: the dispatcher (Epic D7): a queue of attempts waiting for a
 // placement and the tick that places and admits them. A tick runs when a job
 // is enqueued, when a waiter's poll fires (attempt end and lease expiry free
-// capacity without a signal), and every Poll interval (one second in TEAM mode).
+// capacity without a signal unless the caller calls Wake), and every Poll
+// interval (one second in TEAM mode).
 // Inputs:  Config (store, world builder, orderer, sink, transport, clock) and
 // Submit calls, one per attempt, each blocking until its attempt is admitted.
 // Outputs: Admitted attempts; E618 for a foreground job no runner can take;
@@ -98,6 +99,7 @@ type Dispatcher struct {
 	seq      uint64
 	ticked   uint64
 	lastTick time.Time
+	wake     chan struct{} // closed by Wake: the waiters tick now
 }
 
 var (
@@ -187,6 +189,7 @@ func (d *Dispatcher) Submit(ctx context.Context, j Job) (Admitted, error) {
 		return Admitted{}, err
 	}
 	for {
+		wake := d.wakeCh() // taken before due(): a Wake between the two is not lost
 		if d.due() {
 			_ = d.Tick(ctx) // a failed tick leaves the job queued; foreground world errors finish it
 		}
@@ -197,6 +200,7 @@ func (d *Dispatcher) Submit(ctx context.Context, j Job) (Admitted, error) {
 			return d.drop(e, ctx.Err())
 		case <-d.life.Done():
 			return d.drop(e, errClosed)
+		case <-wake:
 		case <-time.After(d.cfg.Poll):
 		}
 	}

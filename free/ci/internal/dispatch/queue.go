@@ -72,6 +72,30 @@ func (d *Dispatcher) push(j Job, max int64) (*entry, int64, error) {
 	return e, depth, nil
 }
 
+// Wake makes the waiters tick now instead of at their next poll: the caller
+// freed capacity (an attempt ended) that a queued job may be waiting for. On a
+// tiny run the poll was a measured share of every hand-off (P7-CI-46).
+func (d *Dispatcher) Wake() {
+	d.mu.Lock()
+	d.lastTick = time.Time{}
+	ch := d.wake
+	d.wake = nil
+	d.mu.Unlock()
+	if ch != nil {
+		close(ch)
+	}
+}
+
+// wakeCh is the channel the next Wake closes.
+func (d *Dispatcher) wakeCh() <-chan struct{} {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.wake == nil {
+		d.wake = make(chan struct{})
+	}
+	return d.wake
+}
+
 // due reports whether a waiter should tick: something was enqueued since the
 // last tick, or Poll has passed.
 func (d *Dispatcher) due() bool {
