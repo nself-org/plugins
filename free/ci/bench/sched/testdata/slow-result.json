@@ -1,0 +1,35 @@
+{
+  "schema": "perfbench/v1",
+  "scenario": "ci-sched-overhead",
+  "sha": "0000000000000000000000000000000000000000",
+  "goos": "linux",
+  "goarch": "amd64",
+  "runs": 20,
+  "injected": false,
+  "metrics": [
+    {
+      "name": "sched.place_ms",
+      "unit": "ms",
+      "p50": 250,
+      "p95": 500,
+      "max": 500,
+      "n": 20
+    },
+    {
+      "name": "dispatch.admit_ms",
+      "unit": "ms",
+      "p50": 1500,
+      "p95": 2000,
+      "max": 2000,
+      "n": 20
+    },
+    {
+      "name": "sched.share_tiny_pct",
+      "unit": "pct",
+      "p50": 80,
+      "p95": 90,
+      "max": 90,
+      "n": 20
+    }
+  ]
+}
