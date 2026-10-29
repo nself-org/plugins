@@ -164,8 +164,8 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		return
 	}
 	defer func() { _ = pinned.Close() }()
-	if s.SourceDir != "" {
-		if err := copyTree(s.SourceDir, workspace); err != nil {
+	if s.SourceDir != "" { // the state dir and workspace may sit inside the repo root: they are not copied
+		if err := copyTree(s.SourceDir, workspace, s.Home, workspace); err != nil {
 			result.Err = err
 			return
 		}
