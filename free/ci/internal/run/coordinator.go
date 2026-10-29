@@ -185,6 +185,9 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	}
 	defer release()
 	rev.Dirty = rev.Dirty || checkout != rev.SHA // a run whose nodes test a snapshot is a dev run: never a status of record
+	// the evidence's start reads git only: it runs beside admission, policy and the store (P7-CI-46)
+	begun := make(chan any, 1)
+	go func() { begun <- c.beginEvidence(ctx, h, rev) }()
 	admitted, source, err := c.classify(ctx, h, rev)
 	if err != nil {
 		return Result{}, err
@@ -208,7 +211,8 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	post := c.prepareStatus(ctx, st, rev)
 	_ = st.Heartbeat(ctx, coord.ID)
 	runID := newRunID()
-	defer dispatchRelease(runID) // also closes the dispatcher of a run that ends before AfterRun (D-1044)
+	defer waitCacheCleanups(runID) // the attempts' cache directories are gone when the run returns
+	defer dispatchRelease(runID)   // also closes the dispatcher of a run that ends before AfterRun (D-1044)
 	sess := newSession()
 	mp := c.Plan.ModelPipeline()
 	rows, err := c.persist(ctx, st, runID, rev, source, pol, sess, mp)
@@ -238,7 +242,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	if subst == nil {
 		subst = func(plan.PlannedJob) bool { return true }
 	}
-	rs := &runState{source: model.TrustClass(source), c: c, sess: sess, hooks: h, pol: pol, pl: c.Plan, mp: mp, rev: rev, rows: rows, subst: subst, render: stampRun(journal(ctx, st, runID, NewRenderer(out, c.Opts)), runID), subset: keep, begin: c.beginEvidence(ctx, h, rev),
+	rs := &runState{source: model.TrustClass(source), c: c, sess: sess, hooks: h, pol: pol, pl: c.Plan, mp: mp, rev: rev, rows: rows, subst: subst, render: stampRun(journal(ctx, st, runID, NewRenderer(out, c.Opts)), runID), subset: keep, begin: <-begun,
 		out: map[string]*JobOutcome{}, done: map[string]chan struct{}{}, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
 	sess.Dirty, sess.ConfigOutside, sess.Subset = rev.Dirty, c.ConfigOutside, keep != nil
 	sess.AdmitTrust = model.TrustClass(admitted)

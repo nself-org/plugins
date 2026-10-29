@@ -253,7 +253,7 @@ func resolvePoolsPolicy(ctx context.Context, st *store.Store, dir string) (strin
 		return "", trust.Effective{}, errors.New(plainText(dir) + " is not a directory")
 	}
 	run := policy.Runner(report.Capture)
-	project := policy.ProjectIDGit(ctx, run, root)
+	project := policy.ProjectIDGitCached(ctx, run, root) // the run's start path asks again (policy hook, dispatch)
 	res := policy.Resolver{Store: st, Run: run}
 	got, err := res.Resolve(ctx, policy.Repo{Root: root, Project: project, Visibility: "unknown", Class: "owner"}, policy.Revision{Dir: root})
 	if err != nil {

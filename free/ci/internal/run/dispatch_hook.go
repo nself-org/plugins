@@ -78,6 +78,14 @@ func dispatchRelease(runID string) {
 	}
 }
 
+// dispatchWake lets the run's queued jobs tick now: an attempt ended and its
+// host reservation is free.
+func dispatchWake(runID string) {
+	if v, ok := runDispatchers.Load(runID); ok {
+		v.(*runDispatch).d.Wake()
+	}
+}
+
 func dispatchHook(ctx context.Context, s AttemptSpec) (Admitted, error) {
 	if !compat.V15() {
 		return LocalAdmit(ctx, s)
