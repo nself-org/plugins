@@ -57,8 +57,8 @@ func TestOwnershipScanFailsClosed(t *testing.T) {
 		{"deep file", "echo /volume/a/b/c/d/e/f/owned", "/volume/a/b/c/d/e/f/owned"},
 		{"unreadable", "return 1", "scan-incomplete"},
 		{"timeout", "exec sleep 60", "scan-incomplete"},
-		{"protected folders only", "echo '/a: Operation not permitted' >&2; return 1", ""},
-		{"protected folder and a hit", "echo /a/owned; echo 'find: /b: Operation not permitted' >&2; return 1", "/a/owned"},
+		{"protected folders only", "echo '/a: Operation not permitted' >&2; return 1", "scan-incomplete"},
+		{"protected folder and a hit", "echo /a/owned; echo 'find: /b: Operation not permitted' >&2; return 1", "/a/owned\nscan-incomplete"},
 		{"protected folder and another error", "echo '/a: Operation not permitted' >&2; echo '/b: Input/output error' >&2; return 1", "scan-incomplete"},
 		{"error status 2 with the protected message", "echo '/a: Operation not permitted' >&2; return 2", "scan-incomplete"},
 	} {
@@ -174,5 +174,27 @@ func TestHeldIDsScanFailsClosedOnOwnerLookupFailure(t *testing.T) {
 	out, err := exec.Command("sh", "-c", script).CombinedOutput()
 	if err != nil || strings.TrimSpace(string(out)) != "scan-incomplete" {
 		t.Fatalf("owner lookup failure = %q, %v", out, err)
+	}
+}
+
+func TestOwnershipDiagnosticFileCannotFollowPredictableSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("untouched"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	script := "TMPDIR='" + dir + "'\nexport TMPDIR\nln -s '" + target + "' \"$TMPDIR/nself-scan.$$\"\n" +
+		"find() { echo failure >&2; return 1; }\n" + boundedOwnershipScan("/", "-uid 450", 5)
+	out, err := exec.Command("sh", "-c", script).Output()
+	if err != nil || strings.TrimSpace(string(out)) != "scan-incomplete" {
+		t.Fatalf("scan: %q, %v", out, err)
+	}
+	contents, err := os.ReadFile(target)
+	if err != nil || string(contents) != "untouched" {
+		t.Fatalf("diagnostic redirect followed an attacker symlink: %q, %v", contents, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 2 {
+		t.Fatalf("private diagnostic file was not removed: %v, %v", entries, err)
 	}
 }

@@ -66,6 +66,20 @@ jobs:
         working-directory: free/ci
         run: go test -mod=vendor -tags macosleg -count=1 -run '^TestUnacceptedXcodeLicense$' ./internal/nodes/probe
 
+      # The production bootstrap requires Full Disk Access rather than silently ignoring TCC errors.
+      # This grant is confined to the disposable runner and precedes the SSH process it authorizes.
+      - name: Allow the loopback SSH ownership inventory to read protected files
+        run: |
+          set -euo pipefail
+          for client in /usr/sbin/sshd /usr/libexec/sshd-keygen-wrapper; do
+            sudo sqlite3 "/Library/Application Support/com.apple.TCC/TCC.db" "
+              INSERT OR REPLACE INTO access
+                (service, client, client_type, auth_value, auth_reason, auth_version,
+                 indirect_object_identifier_type, indirect_object_identifier, flags, last_modified)
+              VALUES ('kTCCServiceSystemPolicyAllFiles', '$client', 1, 2, 4, 1, 0, 'UNUSED', 0,
+                      CAST(strftime('%s','now') AS INTEGER));"
+          done
+
       - name: Start the loopback sshd (port 2222, throwaway key)
         run: |
           set -euo pipefail

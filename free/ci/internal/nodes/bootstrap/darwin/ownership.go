@@ -13,14 +13,6 @@ func ownershipScan(match string) string {
 	return mountedScan("/sbin/mount", match, "-print -quit", ownershipBudget)
 }
 
-// A root find on macOS exits 1 for the SIP- and TCC-protected folders it may not enter ("Operation not
-// permitted"); those hold no file of a job user, so a run whose only errors are those still counts as
-// complete. Any other error, a kill or a timeout fails closed.
-//
-// A root find on macOS exits 1 for the SIP- and TCC-protected folders it may not enter ("Operation not
-// permitted"); those hold no file of a job user, so a run whose only errors are those still counts as
-// complete. Any other error, a kill or a timeout fails closed.
-//
 // ownershipBudget is the whole-scan cap in seconds.
 const ownershipBudget = 600
 
@@ -79,7 +71,7 @@ done`, seconds, dirs, ownershipVolumeScript(match, action))
 func ownershipVolumeScript(match, action string) string {
 	return fmt.Sprintf(`  scan_budget=$((scan_deadline - $(date +%%s)))
   if [ "$scan_budget" -le 0 ]; then echo scan-incomplete; break; fi
-  scan_err="${TMPDIR:-/tmp}/nself-scan.$$"
+  scan_err=$(mktemp "${TMPDIR:-/tmp}/nself-scan.XXXXXX") || { echo scan-incomplete; break; }
   find "$d" -xdev -ignore_readdir_race %s %s 2>"$scan_err" &
   scan_pid=$!
   (sleep "$scan_budget" & sleeper=$!; trap 'kill "$sleeper" 2>/dev/null || true; exit 0' TERM; wait "$sleeper"; kill -KILL "$scan_pid" 2>/dev/null || true) >/dev/null 2>&1 &
@@ -88,7 +80,6 @@ func ownershipVolumeScript(match, action string) string {
   wait "$scan_pid" 2>/dev/null || scan_rc=$?
   kill "$timer_pid" 2>/dev/null || true
   wait "$timer_pid" 2>/dev/null || true
-  if [ "$scan_rc" -eq 1 ] && [ -s "$scan_err" ] && ! grep -qv 'Operation not permitted' "$scan_err"; then scan_rc=0; fi
   if [ "$scan_rc" -ne 0 ]; then head -n 3 "$scan_err" >&2; rm -f "$scan_err"; echo scan-incomplete; break; fi
   rm -f "$scan_err"`, match, action)
 }
