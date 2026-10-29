@@ -55,8 +55,9 @@ type node struct {
 	sessions atomic.Int32
 	started  chan string // attempt ids whose job began here
 	mu       sync.Mutex
-	kill     func() error // drops the live session
-	jobs     []string     // lease ids this node ran
+	kill     func() error                          // drops the live session
+	wrap     func(session.Carrier) session.Carrier // optional: wraps the node's carrier (the offload sim stages the checkout bundle through it)
+	jobs     []string                              // lease ids this node ran
 }
 
 func (n *node) ran() []string {
@@ -80,6 +81,10 @@ func (n *node) serve(ctx context.Context, table *slots.Table, in io.Reader, out 
 	if err != nil {
 		return err
 	}
+	var carrier session.Carrier = car
+	if n.wrap != nil {
+		carrier = n.wrap(car)
+	}
 	run := session.RunnerFunc(func(ctx context.Context, j session.JobRun) (session.JobResult, error) {
 		n.mu.Lock()
 		n.jobs = append(n.jobs, j.Lease.LeaseID)
@@ -90,7 +95,7 @@ func (n *node) serve(ctx context.Context, table *slots.Table, in io.Reader, out 
 		}
 		return n.runner(ctx, n, j)
 	})
-	s, err := session.New(session.Config{Carrier: car, Key: fakeKey{}, Slots: table, Runner: run, StateDir: n.state, Hooks: []session.JobHook{},
+	s, err := session.New(session.Config{Carrier: carrier, Key: fakeKey{}, Slots: table, Runner: run, StateDir: n.state, Hooks: []session.JobHook{},
 		Coordinator: session.Coordinator{ID: "coord", RootFingerprint: "fp"}, Facts: session.Facts{AgentVersion: "1.5.0", MachineID: n.id}})
 	if err != nil {
 		return err
