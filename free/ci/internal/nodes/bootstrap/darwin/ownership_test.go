@@ -161,3 +161,14 @@ func TestHeldIDsScanReportsOwnersInRange(t *testing.T) {
 		t.Fatalf("out-of-range owners = %q, %v; want none", out, err)
 	}
 }
+
+func TestHeldIDsScanFailsClosedOnOwnerLookupFailure(t *testing.T) {
+	dir := t.TempDir()
+	// Inject a failing stat while keeping the real find and generated action shell.
+	action := strings.Replace(heldIDsAction, "stat -f %u", "false", 1)
+	script := boundedScan("'"+dir+"'", heldIDsMatch(os.Getuid(), os.Getuid()), action, 5)
+	out, err := exec.Command("sh", "-c", script).CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "scan-incomplete" {
+		t.Fatalf("owner lookup failure = %q, %v", out, err)
+	}
+}

@@ -17,12 +17,12 @@ func ownershipScan(match string) string {
 const ownershipBudget = 600
 
 // heldIDsScan walks the volumes once and prints the uids in lo..hi that own a file, one per line (several
-// times each), or scan-incomplete. The inner sh keeps a file that vanishes mid-walk from failing the find.
+// times each), or scan-incomplete. A failed owner lookup also fails closed.
 func heldIDsScan(lo, hi int) string {
 	return mountedScan("/sbin/mount", heldIDsMatch(lo, hi), heldIDsAction, ownershipBudget)
 }
 
-const heldIDsAction = `-exec sh -c 'stat -f %u "$@" 2>/dev/null; exit 0' sh {} +`
+const heldIDsAction = `-exec sh -c 'stat -f %u "$@" 2>/dev/null || echo scan-incomplete' sh {} +`
 
 func heldIDsMatch(lo, hi int) string { return fmt.Sprintf("-uid +%d -uid -%d", lo-1, hi+1) }
 
