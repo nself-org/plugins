@@ -156,6 +156,9 @@ func TestCacheSecMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll("testdata", 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile("testdata/results.json", append(b, '\n'), 0o644); err != nil {
 		t.Fatal(err)
 	}
