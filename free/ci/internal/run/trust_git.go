@@ -7,8 +7,10 @@ package run
 // Constraints: git runs with --no-replace-objects (a `git replace` ref must not rewrite the history
 //          under test); only refs/remotes/origin/ names the default branch; every FETCH_HEAD line counts,
 //          not just the first; an unfinished merge, squash, cherry-pick, revert or rebase is reported;
-//          a git failure is listed in Missing, never read as an answer; the reflog is read from every
-//          log (a linked worktree has a HEAD log of its own) and each commit keeps its OLDEST entry.
+//          a git failure is listed in Missing, never read as an answer; a grafts file (info/grafts or
+//          $GIT_GRAFT_FILE) rewrites parents, so its presence is MissingHistory; the reflog is read from every
+//          log (a linked worktree has a HEAD log of its own) and each commit keeps its OLDEST entry; a
+//          rewritten commit's patch is compared with the commits that arrived (trust_git_patch.go).
 
 import (
 	"context"
@@ -67,6 +69,7 @@ func (h SourceTrust) gather(ctx context.Context, root, rev string) source.GitFac
 	var symref string
 	var refsOK, remotesOK, pathsOK bool
 	var entries []source.ReflogEntry
+	var amends map[string][]string
 	run(func() {
 		out, exit := git("for-each-ref", "--format=%(refname)", "refs/remotes", "refs/pull")
 		refs, refsOK = lines(out), exit == 0
@@ -79,15 +82,15 @@ func (h SourceTrust) gather(ctx context.Context, root, rev string) source.GitFac
 	})
 	run(func() {
 		out, exit := git("rev-parse", "--git-path", "FETCH_HEAD", "--git-path", "SQUASH_MSG", "--git-path", "MERGE_HEAD", "--git-path", "CHERRY_PICK_HEAD",
-			"--git-path", "REVERT_HEAD", "--git-path", "rebase-merge", "--git-path", "rebase-apply")
-		paths, pathsOK = lines(out), exit == 0 && len(lines(out)) == 7
+			"--git-path", "REVERT_HEAD", "--git-path", "rebase-merge", "--git-path", "rebase-apply", "--git-path", "info/grafts")
+		paths, pathsOK = lines(out), exit == 0 && len(lines(out)) == 8
 	})
 	run(func() {
 		out, exit := git("reflog", "show", "--all", "--date=unix", "--format=%H%x09%gd%x09%gs", "-n", "5000")
 		if exit != 0 {
 			miss(source.MissingReflog)
 		}
-		entries = reflogEntries(out)
+		entries, amends = reflogEntries(out), amendPreImages(out)
 	})
 	wg.Wait()
 	if g.NotARepo {
@@ -101,10 +104,13 @@ func (h SourceTrust) gather(ctx context.Context, root, rev string) source.GitFac
 		if !ok {
 			pathsOK = false
 		}
-		for _, m := range paths[1:] {
+		for _, m := range paths[1:7] {
 			if _, err := os.Stat(rootPath(root, m)); err == nil {
 				g.InProgress = true
 			}
+		}
+		if h.grafted(root, paths[7]) {
+			miss(source.MissingHistory)
 		}
 	}
 	if !pathsOK || !refsOK || !remotesOK {
@@ -154,6 +160,7 @@ func (h SourceTrust) gather(ctx context.Context, root, rev string) source.GitFac
 		run(func() { g.OffDefault = listed("rev-list", "-n", "501", rev) })
 	}
 	wg.Wait()
+	replayedPatches(git, &g, amends)
 	return g
 }
 
@@ -172,7 +179,8 @@ func defaultRef(symref string, refs []string) string {
 }
 
 // excludedRemoteDirs lists the refs/remotes/origin/ prefixes that hold pull requests: the usual names
-// and every destination the origin's fetch refspecs map from something other than refs/heads/*.
+// and the fixed part (up to the first glob) of every destination the origin's fetch refspecs map from
+// something other than refs/heads/* (D-1431: refs/remotes/origin/gh-pr/*/head).
 func excludedRemoteDirs(refspecs []string) []string {
 	var skip []string
 	for _, d := range prDirs {
@@ -181,7 +189,8 @@ func excludedRemoteDirs(refspecs []string) []string {
 	for _, spec := range refspecs {
 		src, dst, ok := strings.Cut(strings.TrimPrefix(spec, "+"), ":")
 		if ok && !strings.HasPrefix(src, "refs/heads/") {
-			skip = append(skip, strings.TrimSuffix(dst, "*"))
+			prefix, _, _ := strings.Cut(dst, "*") // a glob anywhere in the destination: everything below its fixed part
+			skip = append(skip, prefix)
 		}
 	}
 	return skip
