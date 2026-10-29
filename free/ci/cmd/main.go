@@ -43,21 +43,22 @@ func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
-// run dispatches argv and returns the exit code. A bare -h/--help in front of
-// a command that has captured core help prints that text; the first token
-// that is not a flag selects a registered subcommand, otherwise the argv is
-// the single-repo gate.
+// run dispatches argv and returns the exit code. A -h/--help after a registered
+// command prints that command's help and exits 0 without running it (help_dispatch.go).
+// The first token that is not a flag selects a registered subcommand, otherwise
+// the argv is the single-repo gate.
 func run(args []string) int {
 	if h, key, rest, ok := resolve(args); ok {
-		if wantsHelp(rest) {
-			if printHelp(key) {
-				return 0
-			}
+		if wantsHelp(rest) { // help never reaches the handler: it must not start anything
+			fmt.Print(subHelp(key))
+			return 0
 		}
 		return h(rest)
 	}
-	if wantsHelp(args) && printHelp("") {
-		return 0
+	if wantsHelp(args) {
+		if helpForGroup(args) || printHelp("") {
+			return 0
+		}
 	}
 	return gateCmd(args)
 }
