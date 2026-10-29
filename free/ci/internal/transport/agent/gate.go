@@ -6,15 +6,21 @@ package agent
 // Inputs:  an agentapi.Call (node, session, certificate serial, lease, epoch, token, reconcile flag); the token
 //          verifier (pki.Tokens), the durable bindings and the lease view (store.Store).
 // Outputs: nil to admit; a *Denial (E661 + reason key) to refuse; any other error means the coordinator failed.
+//          Cost: a token's signature is verified once per process (the claims are cached until the token expires),
+//          and the lease is read on a heartbeat or result frame and on the first frame of a token, not on
+//          every log, artifact-ref or cache-ref frame; a lease found over drops the cache so the next frame reads it again.
 // Constraints: checks run in a fixed order (verify, runner, job, terminal, binding) so each refusal has one
 //          reason; a binding is durable (the store), so a coordinator restart does not forget it; another
 //          certificate is always refused; another session of the same certificate is refused unless the
 //          agent says it kept this very lease across a reconnect (the first heartbeat of its session), in
-//          which case the binding moves to the new session by compare and swap; a token whose job result was
+//          which case the binding moves to the new session by compare and swap; the binding moves to another
+//          certificate (a renewal) only when the CA recorded that certificate for this node after the bound
+//          one, so an older certificate that is still valid cannot take the token back; a token whose job result was
 //          accepted is spent; no token or key ever reaches a message or a log.
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"sync"
 	"time"
@@ -44,16 +50,26 @@ type LeaseView interface {
 	LeaseGet(ctx context.Context, id string) (store.RemoteLease, error)
 }
 
+// CertView reads the CA's record of an issued certificate (store.Store).
+type CertView interface {
+	PKICertFind(ctx context.Context, serial string) (c store.PKICert, found bool, err error)
+}
+
 // Gate admits or refuses lease-scoped calls.
 type Gate struct {
 	Tokens   TokenVerifier
 	Bindings Bindings
 	Leases   LeaseView
+	Certs    CertView         // the issue times a serial move is judged by; with none, no binding moves to another certificate
+	Now      func() time.Time // the clock the cached claims expire on; time.Now when nil. Use the token verifier's clock.
 
 	mu    sync.Mutex
 	known map[use]bool    // bindings this process already proved, so a log line costs no write
 	moves *byte           // replaced by every rebind: a bind that overlapped one does not cache what it proved
 	spent map[string]bool // tokens whose result was accepted, so a racing first bind cannot cache them
+
+	claims map[[sha256.Size]byte]pki.TokenClaims // verified tokens (by digest, never the text), valid until their Exp
+	fresh  map[leaseUse]bool                     // token+lease pairs whose lease was read and matched; log-type frames trust it
 }
 
 type use struct{ jti, serial, session string }
@@ -79,16 +95,20 @@ func (g *Gate) check(ctx context.Context, c agentapi.Call, committedResult bool)
 	if c.Token == "" {
 		return deny(ReasonMissing, "lease %s: the call carries no job token", c.LeaseID)
 	}
-	cl, err := g.Tokens.Verify(c.Token)
+	cl, err := g.verify(c.Token)
 	if err != nil {
 		return deny(tokenReason(err), "lease %s: the job token is not valid", c.LeaseID)
 	}
 	if cl.RunnerID != c.Node {
 		return deny(ReasonWrongRunner, "lease %s: the token was issued to another node", c.LeaseID)
 	}
+	if cl.Epoch == int64(c.Epoch) && !rereads(c.Type) && g.isFresh(cl.JTI, c.LeaseID) {
+		return g.bind(ctx, c, cl)
+	}
 	l, err := g.Leases.LeaseGet(ctx, c.LeaseID)
 	switch {
 	case isStale(err):
+		g.forgetLease(cl.JTI, c.LeaseID)
 		return deny(ReasonTerminal, "lease %s: the attempt is over", c.LeaseID)
 	case err != nil:
 		return err
@@ -97,9 +117,14 @@ func (g *Gate) check(ctx context.Context, c agentapi.Call, committedResult bool)
 		return deny(ReasonWrongJob, "lease %s: the token was issued for another job or attempt", c.LeaseID)
 	}
 	if terminal[l.State] && !(l.State == "finalizing" && committedResult) {
+		g.forgetLease(cl.JTI, c.LeaseID)
 		return deny(ReasonTerminal, "lease %s: the attempt is over", c.LeaseID)
 	}
-	return g.bind(ctx, c, cl)
+	if err := g.bind(ctx, c, cl); err != nil {
+		return err
+	}
+	g.markFresh(cl.JTI, c.LeaseID)
+	return nil
 }
 
 func isStale(err error) bool {
@@ -154,6 +179,11 @@ func (g *Gate) bindOnce(ctx context.Context, c agentapi.Call, cl pki.TokenClaims
 		return deny(ReasonWrongSession, "lease %s: the token is bound to another session", c.LeaseID)
 	}
 	// Same node, new session: a reconnect, or after a certificate renewal a new serial (the listener authenticated it as this node).
+	if b.Serial != c.Serial {
+		if err := g.issuedLater(ctx, c, b.Serial); err != nil {
+			return err
+		}
+	}
 	moved, err := g.Bindings.TokenRebind(ctx, cl.JTI, b.Serial, b.Session, c.Serial, c.Session)
 	if err != nil {
 		return err
@@ -172,6 +202,31 @@ func (g *Gate) bindOnce(ctx context.Context, c agentapi.Call, cl pki.TokenClaims
 	}
 	if !found || now.Serial != c.Serial || now.Session != c.Session {
 		return deny(ReasonWrongSession, "lease %s: the token is bound to another session", c.LeaseID)
+	}
+	return nil
+}
+
+// issuedLater admits a serial move only when the CA issued c.Serial to this node strictly after bound.
+func (g *Gate) issuedLater(ctx context.Context, c agentapi.Call, bound string) error {
+	refuse := func() error {
+		return deny(ReasonWrongCertificate, "lease %s: the token is bound to another certificate", c.LeaseID)
+	}
+	if g.Certs == nil {
+		return refuse()
+	}
+	next, found, err := g.Certs.PKICertFind(ctx, c.Serial)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return refuse()
+	}
+	prev, found, err := g.Certs.PKICertFind(ctx, bound)
+	if err != nil {
+		return err
+	}
+	if !found || next.NodeID != c.Node || prev.NodeID != c.Node || next.IssuedAt <= prev.IssuedAt {
+		return refuse()
 	}
 	return nil
 }
@@ -195,6 +250,11 @@ func (g *Gate) Spend(ctx context.Context, jti string) error {
 		g.spent = map[string]bool{}
 	}
 	g.spent[jti] = true
+	for k := range g.fresh {
+		if k.jti == jti {
+			delete(g.fresh, k)
+		}
+	}
 	for u := range g.known {
 		if u.jti == jti {
 			delete(g.known, u)

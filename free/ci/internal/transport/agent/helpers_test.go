@@ -7,6 +7,10 @@ package agent
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
 	"os"
 	"path/filepath"
@@ -108,7 +112,25 @@ func (r *rig) mint(jti, runner, attemptID string, epoch uint64) string {
 	return tok
 }
 
-func (r *rig) gate() *Gate { return &Gate{Tokens: r.tokens, Bindings: r.st, Leases: r.st} }
+func (r *rig) gate() *Gate { return &Gate{Tokens: r.tokens, Bindings: r.st, Leases: r.st, Certs: r.st} }
+
+// issueCert records a node certificate for node with the CA and returns its serial; each one is issued after the last.
+func (r *rig) issueCert(node string) string {
+	r.t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	csr, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	is, err := r.ca.IssueNode(context.Background(), pki.NodeRequest{CSR: csr, NodeID: node})
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	return is.Serial
+}
 
 func readLog(t *testing.T, path string) string {
 	t.Helper()

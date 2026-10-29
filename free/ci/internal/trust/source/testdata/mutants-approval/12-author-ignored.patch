@@ -1,0 +1,13 @@
+--- a/internal/trust/source/approval.go
++++ b/internal/trust/source/approval.go
+@@ -73,8 +73,6 @@
+ 	if !strings.EqualFold(a.HeadRepo, cur.HeadRepo) {
+ 		out = append(out, VoidHeadRepo)
+ 	}
+-	if !strings.EqualFold(a.Author, cur.Author) {
+-		out = append(out, VoidAuthor)
+-	}
++	_ = VoidAuthor
+ 	return out
+ }
+ 

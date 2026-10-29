@@ -20,6 +20,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
 // Delivery is what the carrier needs to start one leased attempt.
@@ -37,6 +38,10 @@ type Delivery struct {
 	ExpiresAt time.Time
 	// Hosted marks a provider lease (the runner is not an enrolled node).
 	Hosted bool
+	// Trust is the class the job was placed at and Runner the facts of the runner it was placed on: what the
+	// secret gate needs to hand the lease its references.
+	Trust  model.TrustClass
+	Runner trust.RunnerFacts
 }
 
 // Transport delivers leases. The run package adapts internal/transport to it.
@@ -55,7 +60,8 @@ func (d *Dispatcher) knownTransport(r sched.Runner) bool {
 // already counted it in d.wg.
 func (d *Dispatcher) deliver(q Queued, r sched.Runner, a Admitted, pol sched.Policy) {
 	hosted := sched.RunnerHosted(r)
-	delivery := Delivery{Node: r.Capability, Job: raiseIsolation(q.Job.Model, requiredIsolation(q, r, pol)), AttemptID: a.AttemptID, LeaseID: a.LeaseID, Token: a.Token, Epoch: a.Epoch, Revision: q.Job.Revision, ExpiresAt: d.cfg.Clock().Add(d.cfg.LeaseTTL), Hosted: hosted}
+	delivery := Delivery{Node: r.Capability, Job: raiseIsolation(q.Job.Model, requiredIsolation(q, r, pol)), AttemptID: a.AttemptID, LeaseID: a.LeaseID, Token: a.Token, Epoch: a.Epoch, Revision: q.Job.Revision, ExpiresAt: d.cfg.Clock().Add(d.cfg.LeaseTTL), Hosted: hosted,
+		Trust: q.Job.Sched.Trust, Runner: runnerFacts(q.Job.Sched, r)}
 	go func() { // admit registered the delivery with the WaitGroup
 		defer d.wg.Done()
 		if err := d.cfg.Transport.Deliver(d.life, delivery); err != nil && d.life.Err() == nil {

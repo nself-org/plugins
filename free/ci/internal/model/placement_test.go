@@ -24,6 +24,10 @@ func TestPlacementReasonsClosed(t *testing.T) {
 			t.Fatalf("invalid listed reason %s", reason)
 		}
 	}
+	// The approval step refuses with approval.required; a caller that validates the reason must accept it.
+	if !PlacementReason("approval.required").Valid() || ApprovalRequired != "approval.required" {
+		t.Fatal("approval.required is a placement reason")
+	}
 	if PlacementReason("arbitrary.reason").Valid() {
 		t.Fatal("open reason list")
 	}

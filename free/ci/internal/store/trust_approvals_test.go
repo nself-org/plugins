@@ -27,6 +27,9 @@ func exactCheck(a, cur ApprovalBinding) []string {
 	if a.HeadRepo != cur.HeadRepo {
 		out = append(out, "void.head_repo")
 	}
+	if a.Author != cur.Author {
+		out = append(out, "void.author")
+	}
 	return out
 }
 
@@ -65,7 +68,7 @@ func TestTrustApprovalsBindAndVoid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := ApprovalBinding{Run: "r1", HeadSHA: "sha-1", ConfigDigest: "cfg-1", HeadRepo: "fork/app"}
+	want := ApprovalBinding{Run: "r1", HeadSHA: "sha-1", ConfigDigest: "cfg-1", HeadRepo: "fork/app", Author: "mallory"}
 	if a.ApprovalBinding != want {
 		t.Fatalf("binding %+v, want %+v", a.ApprovalBinding, want)
 	}
@@ -239,5 +242,27 @@ func TestTrustApprovalsHostileValuesStayWritable(t *testing.T) {
 	}
 	if _, err = s.ApproveRun(ctx, ApproveInput{Run: "r1", Approver: "bob", Check: exactCheck}); err != nil {
 		t.Fatalf("approval with a hostile head repo: %v", err)
+	}
+}
+
+// An author change after a non-author approval voids it (D-1343): the approver checked the author they
+// saw, and a facts rewrite must not carry the approval to a different author.
+func TestTrustApprovalsAuthorChangeVoids(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	approvalSeed(t, s, "r3")
+	if _, err := s.ApproveRun(ctx, ApproveInput{Run: "r3", Approver: "bob", BindAuthor: true, ExpectAuthor: "mallory", Check: exactCheck}); err != nil {
+		t.Fatal(err)
+	}
+	var stored string
+	if err := s.readers.QueryRow("SELECT author FROM trust_approvals WHERE run=?", "r3").Scan(&stored); err != nil || stored != "mallory" {
+		t.Fatalf("stored author %q %v", stored, err)
+	}
+	v, err := s.RecordApprovalFacts(ctx, ApprovalRunFacts{Run: "r3", Author: "bob", HeadRepo: "fork/app", RequiresApproval: true}, exactCheck)
+	if err != nil || len(v) != 1 || v[0].VoidReason != "void.author" {
+		t.Fatalf("author rewrite: %+v %v", v, err)
+	}
+	if st, _, _ := s.ApprovalState(ctx, "r3"); st.Approval.VoidedAt == 0 {
+		t.Fatal("the approval stands after the author changed")
 	}
 }

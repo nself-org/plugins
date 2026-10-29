@@ -26,8 +26,10 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
+	"github.com/nself-org/plugins/free/ci/internal/secrets"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 	"github.com/nself-org/plugins/free/ci/internal/transport"
+	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
 func init() {
@@ -215,11 +217,39 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	if RemoteRepo != nil && a.root != "" {
 		RemoteRepo(a.root)
 	}
+	refs, err := leaseSecretRefs(d)
+	if err != nil {
+		return err
+	}
 	lease := protocol.Lease{LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
-		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: []protocol.SecretRef{}, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
+		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: refs, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
+	if len(refs) > 0 {
+		lease.Trust = d.Trust
+	}
 	sink := bindLeaseSink(a.sink, leaseFacts{AttemptID: d.AttemptID, LeaseID: d.LeaseID, Epoch: d.Epoch, Job: d.Job, Hosted: d.Hosted})
 	sink = prepareCache(ctx, sink, &lease, a.root, d.Node.Identity.ID, d.Hosted, remoteCachePlatform(d.Node), d.Node.Identity.Transport)
 	return transport.Deliver(ctx, d.Node, lease, sink)
+}
+
+// leaseSecretRefs is what the lease says of the job's secrets: references only, never a value. A job that declares
+// secrets gets them only on a secrets-eligible node, and only after the gate (trust class, runner facts) passes
+// them (secrets.Source.Refs); the node then resolves them itself under its own identity. Any other node gets none, and
+// the job is skipped there as secrets_missing. A refusal fails the delivery: placement should not have sent the job.
+func leaseSecretRefs(d dispatch.Delivery) ([]protocol.SecretRef, error) {
+	out := []protocol.SecretRef{}
+	if len(d.Job.Secrets) == 0 || !d.Node.SecretsEligible {
+		return out, nil
+	}
+	src := secrets.New(secrets.Config{Mode: secrets.ModeTeamCoordinator, Attempt: d.AttemptID,
+		Facts: secrets.Facts{Job: trust.JobFacts{Trust: d.Trust}, Runner: d.Runner}})
+	refs, err := src.Refs(d.Job.Secrets)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range refs {
+		out = append(out, protocol.SecretRef{Ref: r.Ref, Class: r.Class})
+	}
+	return out, nil
 }
 
 // highestIncarnation is the incarnation fenced leases carry: the highest of the coordinator table, so a

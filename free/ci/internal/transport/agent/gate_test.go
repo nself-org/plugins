@@ -14,6 +14,7 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal/coordinator/agentapi"
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/pki"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
@@ -109,7 +110,10 @@ func TestGateTerminalAttempt(t *testing.T) {
 			t.Fatal(err)
 		}
 		finish(t, r, att, ep, state)
-		wantDenial(t, g.Check(context.Background(), call(lease, tok, ep)), ReasonTerminal)
+		hb := call(lease, tok, ep)
+		hb.Type = "heartbeat" // log frames trust the last lease read; a heartbeat reads it again
+		wantDenial(t, g.Check(context.Background(), hb), ReasonTerminal)
+		wantDenial(t, g.Check(context.Background(), call(lease, tok, ep)), ReasonTerminal) // and the log frames after it read it too
 	}
 }
 
@@ -186,21 +190,77 @@ func TestGateReconcileMovesTheBindingToTheNewSession(t *testing.T) {
 	other := next
 	other.Serial, other.Reconcile, other.Type = "dd04", false, "log"
 	wantDenial(t, g.Check(ctx, other), ReasonWrongCertificate)
-	// a renewed certificate of the same node moves the binding with the reconcile heartbeat (7-day certificates)
-	renewed := next
-	renewed.Serial, renewed.Session, renewed.Reconcile, renewed.Type = "ee05", "sess-3", true, "heartbeat"
-	if err := g.Check(ctx, renewed); err != nil {
-		t.Fatalf("renewal reconcile: %v", err)
-	}
-	renewed.Reconcile, renewed.Type = false, "log"
-	if err := g.Check(ctx, renewed); err != nil {
-		t.Fatalf("log after the renewal: %v", err)
-	}
-	wantDenial(t, g.Check(ctx, next), ReasonWrongCertificate) // the old certificate no longer holds the token
 	// another node's certificate never gets here: the token names its runner
-	thief := renewed
+	thief := next
 	thief.Node = "n-2"
 	wantDenial(t, g.Check(ctx, thief), ReasonWrongRunner)
+}
+
+// A renewed certificate of the same node moves the binding with the reconcile heartbeat (7-day certificates); an
+// older certificate that is still valid cannot take it back, and a certificate the CA did not issue to this node
+// after the bound one never moves it (D-1379).
+func TestGateSerialMovesOnlyToACertificateIssuedLater(t *testing.T) {
+	r := newRig(t)
+	lease, att, ep := r.seedLease("1", "n-1")
+	tok := r.mint("jti-1", "n-1", att, ep)
+	g := r.gate()
+	ctx := context.Background()
+	older, newer, newest, foreign := r.issueCert("n-1"), r.issueCert("n-1"), r.issueCert("n-1"), r.issueCert("n-2")
+	on := func(serial, session string, reconcile bool) agentapi.Call {
+		c := call(lease, tok, ep)
+		c.Serial, c.Session, c.Reconcile = serial, session, reconcile
+		c.Type = "log"
+		if reconcile {
+			c.Type = "heartbeat"
+		}
+		return c
+	}
+	if err := g.Check(ctx, on(newer, "sess-1", false)); err != nil {
+		t.Fatal(err)
+	}
+	// the older certificate, still valid, cannot move the binding to itself
+	wantDenial(t, g.Check(ctx, on(older, "sess-2", true)), ReasonWrongCertificate)
+	wantDenial(t, g.Check(ctx, on(older, "sess-1", false)), ReasonWrongCertificate)
+	// a certificate of another node, or one the CA never recorded, cannot either
+	wantDenial(t, g.Check(ctx, on(foreign, "sess-2", true)), ReasonWrongCertificate)
+	wantDenial(t, g.Check(ctx, on("ff99", "sess-2", true)), ReasonWrongCertificate)
+	if err := g.Check(ctx, on(newer, "sess-1", false)); err != nil {
+		t.Fatalf("the bound certificate lost the binding to a refused move: %v", err)
+	}
+	// the newest certificate moves it with the reconcile heartbeat and then holds it
+	if err := g.Check(ctx, on(newest, "sess-3", true)); err != nil {
+		t.Fatalf("renewal reconcile: %v", err)
+	}
+	if err := g.Check(ctx, on(newest, "sess-3", false)); err != nil {
+		t.Fatalf("log after the renewal: %v", err)
+	}
+	// after the move the older certificates are refused, with or without a reconcile heartbeat
+	for _, serial := range []string{newer, older} {
+		wantDenial(t, g.Check(ctx, on(serial, "sess-3", false)), ReasonWrongCertificate)
+		wantDenial(t, g.Check(ctx, on(serial, "sess-4", true)), ReasonWrongCertificate)
+	}
+	b, _, _ := r.st.TokenCheck(ctx, "jti-1")
+	if b.Serial != newest || b.Session != "sess-3" {
+		t.Fatalf("binding = %+v, want %s on sess-3", b, newest)
+	}
+}
+
+func TestGateWithoutACertViewNeverMovesToAnotherCertificate(t *testing.T) {
+	r := newRig(t)
+	lease, att, ep := r.seedLease("1", "n-1")
+	tok := r.mint("jti-1", "n-1", att, ep)
+	g := &Gate{Tokens: r.tokens, Bindings: r.st, Leases: r.st}
+	ctx := context.Background()
+	if err := g.Check(ctx, call(lease, tok, ep)); err != nil {
+		t.Fatal(err)
+	}
+	next := call(lease, tok, ep)
+	next.Serial, next.Session, next.Reconcile, next.Type = r.issueCert("n-1"), "sess-2", true, "heartbeat"
+	wantDenial(t, g.Check(ctx, next), ReasonWrongCertificate)
+	next.Serial = "aa01" // the same certificate may still reconnect
+	if err := g.Check(ctx, next); err != nil {
+		t.Fatalf("reconnect on the bound certificate: %v", err)
+	}
 }
 
 func TestGateReconcileRaceLeavesOneHolder(t *testing.T) {
@@ -307,4 +367,92 @@ func tamper(token string) string {
 		c = 'B'
 	}
 	return token[:i] + string(c) + token[i+1:]
+}
+
+type countVerifier struct {
+	TokenVerifier
+	n int
+}
+
+func (c *countVerifier) Verify(token string) (pki.TokenClaims, error) {
+	c.n++
+	return c.TokenVerifier.Verify(token)
+}
+
+type countLeases struct {
+	LeaseView
+	n int
+}
+
+func (c *countLeases) LeaseGet(ctx context.Context, id string) (store.RemoteLease, error) {
+	c.n++
+	return c.LeaseView.LeaseGet(ctx, id)
+}
+
+// D-1376: a log line must not cost an Ed25519 verify and a lease read each.
+func TestGateVerifiesATokenOnceAndReadsTheLeaseOnStateFrames(t *testing.T) {
+	r := newRig(t)
+	lease, att, ep := r.seedLease("1", "n-1")
+	tok := r.mint("jti-1", "n-1", att, ep)
+	cv, cl := &countVerifier{TokenVerifier: r.tokens}, &countLeases{LeaseView: r.st}
+	g := &Gate{Tokens: cv, Bindings: r.st, Leases: cl}
+	ctx := context.Background()
+	for i := 0; i < 50; i++ {
+		typ := []string{"log", "artifact-ref", "cache-ref"}[i%3]
+		c := call(lease, tok, ep)
+		c.Type = typ
+		if err := g.Check(ctx, c); err != nil {
+			t.Fatalf("%s: %v", typ, err)
+		}
+	}
+	if cv.n != 1 || cl.n != 1 {
+		t.Fatalf("50 bulk frames: %d verifies and %d lease reads, want 1 and 1", cv.n, cl.n)
+	}
+	for _, typ := range []string{"heartbeat", "result"} {
+		c := call(lease, tok, ep)
+		c.Type = typ
+		before := cl.n
+		if err := g.Check(ctx, c); err != nil {
+			t.Fatalf("%s: %v", typ, err)
+		}
+		if cl.n != before+1 {
+			t.Fatalf("%s frame did not read the lease", typ)
+		}
+	}
+	if cv.n != 1 {
+		t.Fatalf("%d verifies, want 1", cv.n)
+	}
+}
+
+func TestGateCachedClaimsExpireWithTheToken(t *testing.T) {
+	r := newRig(t)
+	lease, att, ep := r.seedLease("1", "n-1")
+	tok := r.mint("jti-1", "n-1", att, ep)
+	g := &Gate{Tokens: r.tokens, Bindings: r.st, Leases: r.st, Now: func() time.Time { return time.Now().Add(time.Duration(r.skew.Load())) }}
+	ctx := context.Background()
+	if err := g.Check(ctx, call(lease, tok, ep)); err != nil {
+		t.Fatal(err)
+	}
+	r.skew.Store(int64(time.Hour))
+	wantDenial(t, g.Check(ctx, call(lease, tok, ep)), ReasonExpired)
+}
+
+func TestGateCachedClaimsDoNotWidenWhatATokenMayDo(t *testing.T) {
+	r := newRig(t)
+	lease, att, ep := r.seedLease("1", "n-1")
+	lease2, _, _ := r.seedLease("2", "n-1")
+	tok := r.mint("jti-1", "n-1", att, ep)
+	g := r.gate()
+	ctx := context.Background()
+	if err := g.Check(ctx, call(lease, tok, ep)); err != nil {
+		t.Fatal(err)
+	}
+	wantDenial(t, g.Check(ctx, call(lease2, tok, ep)), ReasonWrongJob) // same token, another lease
+	wantDenial(t, g.Check(ctx, call(lease, tok, ep+1)), ReasonWrongJob)
+	n2 := call(lease, tok, ep)
+	n2.Node = "n-2"
+	wantDenial(t, g.Check(ctx, n2), ReasonWrongRunner)
+	other := call(lease, tok, ep)
+	other.Session = "sess-2"
+	wantDenial(t, g.Check(ctx, other), ReasonWrongSession)
 }

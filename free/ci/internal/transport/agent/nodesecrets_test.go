@@ -78,7 +78,7 @@ func TestNodeSecretsResolveLocallyAndSendAFrameToTheSession(t *testing.T) {
 	inner := newScripted()
 	var gotAttempt string
 	var gotRefs []string
-	f := WithNodeSecrets(inner, func(_ context.Context, attempt string, refs []string) (map[string]string, error) {
+	f := WithNodeSecrets(inner, func(_ context.Context, attempt string, _ model.TrustClass, refs []string) (map[string]string, error) {
 		gotAttempt, gotRefs = attempt, refs
 		return map[string]string{"API_TOKEN": "value-1", "DB_PASS": "value-2"}, nil
 	}, nil)
@@ -107,7 +107,7 @@ func TestNodeSecretsResolveLocallyAndSendAFrameToTheSession(t *testing.T) {
 func TestNodeSecretsLeaseWithoutRefsStartsNothing(t *testing.T) {
 	inner := newScripted()
 	called := make(chan struct{}, 1)
-	f := WithNodeSecrets(inner, func(context.Context, string, []string) (map[string]string, error) {
+	f := WithNodeSecrets(inner, func(context.Context, string, model.TrustClass, []string) (map[string]string, error) {
 		called <- struct{}{}
 		return nil, nil
 	}, nil)
@@ -125,7 +125,7 @@ func TestNodeSecretsFailureSendsNothingAndLogsOnlyTheCode(t *testing.T) {
 	inner := newScripted()
 	var mu sync.Mutex
 	var notes []string
-	f := WithNodeSecrets(inner, func(context.Context, string, []string) (map[string]string, error) {
+	f := WithNodeSecrets(inner, func(context.Context, string, model.TrustClass, []string) (map[string]string, error) {
 		return nil, &secrets.Error{Code: "E677", Message: "node is not eligible: the-secret-value-leaked-here"}
 	}, func(format string, a ...any) {
 		mu.Lock()
@@ -168,7 +168,7 @@ func TestNodeSecretsCodeOfPlainErrorIsE676(t *testing.T) {
 
 func TestNodeSecretsDropsAValueFrameFromTheCoordinator(t *testing.T) {
 	inner := newScripted()
-	f := WithNodeSecrets(inner, func(context.Context, string, []string) (map[string]string, error) { return nil, nil }, nil)
+	f := WithNodeSecrets(inner, func(context.Context, string, model.TrustClass, []string) (map[string]string, error) { return nil, nil }, nil)
 	defer f.Close()
 	inner.in <- protocol.Message{V: 1, Type: "secrets", LeaseID: "l1", Body: &protocol.Secrets{LeaseID: "l1", Values: []protocol.SecretValue{{Ref: "project/X", Value: "from-the-coordinator"}}}}
 	inner.in <- protocol.Message{V: 1, Type: "drain", Body: &protocol.Drain{Deadline: "x"}}
@@ -179,7 +179,7 @@ func TestNodeSecretsDropsAValueFrameFromTheCoordinator(t *testing.T) {
 
 func TestNodeSecretsIgnoresRefsItCannotParse(t *testing.T) {
 	inner := newScripted()
-	f := WithNodeSecrets(inner, func(context.Context, string, []string) (map[string]string, error) {
+	f := WithNodeSecrets(inner, func(context.Context, string, model.TrustClass, []string) (map[string]string, error) {
 		return map[string]string{"GOOD": "v"}, nil
 	}, nil)
 	defer f.Close()
@@ -194,7 +194,7 @@ func TestNodeSecretsIgnoresRefsItCannotParse(t *testing.T) {
 
 func TestNodeSecretsForwardsSendAndEndsOnClose(t *testing.T) {
 	inner := newScripted()
-	f := WithNodeSecrets(inner, func(context.Context, string, []string) (map[string]string, error) { return nil, nil }, nil)
+	f := WithNodeSecrets(inner, func(context.Context, string, model.TrustClass, []string) (map[string]string, error) { return nil, nil }, nil)
 	if err := f.Send(protocol.Message{Type: "ack"}); err != nil || len(inner.sent) != 1 {
 		t.Fatalf("send: %v %d", err, len(inner.sent))
 	}
@@ -216,5 +216,30 @@ func TestNodeSecretsPassesInnerErrors(t *testing.T) {
 	_ = inner.Close()
 	if _, err := f.Recv(); !errors.Is(err, io.EOF) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestNodeSecretsPassTheLeaseTrustClassToTheResolver(t *testing.T) {
+	inner := newScripted()
+	got := make(chan model.TrustClass, 2)
+	f := WithNodeSecrets(inner, func(_ context.Context, _ string, class model.TrustClass, _ []string) (map[string]string, error) {
+		got <- class
+		return nil, nil
+	}, nil)
+	defer f.Close()
+	for _, class := range []model.TrustClass{"collaborator", ""} {
+		m := leaseWithSecrets("project/API_TOKEN")
+		m.Body.(*protocol.Lease).Trust = class
+		inner.in <- m
+		_ = recvWithin(t, f, 2*time.Second)
+		select {
+		case c := <-got:
+			if c != class {
+				t.Fatalf("resolver saw class %q, want %q", c, class)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("the resolver never ran")
+		}
+		_ = recvWithin(t, f, 2*time.Second) // the local secrets frame
 	}
 }
