@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"os"
-	osexec "os/exec"
 	"runtime"
 	"strconv"
 	"strings"
@@ -118,48 +117,5 @@ func probeLinux(c *Capacity) {
 				c.PluggedIn = true
 			}
 		}
-	}
-}
-
-func probeDarwin(c *Capacity) {
-	if out, err := osexec.Command("sysctl", "-n", "hw.memsize").Output(); err == nil {
-		n, _ := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
-		c.MemoryMB = int(n / (1024 * 1024))
-	}
-	if out, err := osexec.Command("vm_stat").Output(); err == nil {
-		pageSize := int64(4096)
-		var pages int64
-		for _, line := range strings.Split(string(out), "\n") {
-			if strings.Contains(line, "page size of") {
-				f := strings.Fields(line)
-				for i, v := range f {
-					if v == "of" && i+1 < len(f) {
-						pageSize, _ = strconv.ParseInt(f[i+1], 10, 64)
-					}
-				}
-			}
-			if strings.HasPrefix(line, "Pages free:") || strings.HasPrefix(line, "Pages inactive:") || strings.HasPrefix(line, "Pages speculative:") {
-				f := strings.Fields(line)
-				if len(f) > 0 {
-					n, _ := strconv.ParseInt(strings.TrimSuffix(f[len(f)-1], "."), 10, 64)
-					pages += n
-				}
-			}
-		}
-		c.FreeMemoryMB = int(pages * pageSize / (1024 * 1024))
-	}
-	if out, err := osexec.Command("pmset", "-g", "batt").Output(); err == nil {
-		s := string(out)
-		c.PluggedIn = strings.Contains(s, "AC Power")
-		for _, field := range strings.Fields(s) {
-			if strings.HasSuffix(field, "%;") || strings.HasSuffix(field, "%") {
-				n, _ := strconv.Atoi(strings.TrimSuffix(strings.TrimSuffix(field, ";"), "%"))
-				c.BatteryPercent = n
-				break
-			}
-		}
-	}
-	if out, err := osexec.Command("pmset", "-g", "custom").Output(); err == nil {
-		c.LowPower = strings.Contains(string(out), "lowpowermode 1")
 	}
 }
