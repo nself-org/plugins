@@ -8,6 +8,7 @@ package main
 // CLIs run this binary from plugins main.
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -19,19 +20,47 @@ import (
 
 func init() {
 	register("run", func(args []string) int { return runPipelineCmd(args) })
+	coreHelp["run"] = runHelp // the frozen help: flag usage on stderr, exit 0 (2 for a bad flag)
+}
+
+// runFlags is the frozen `run` flag set and the values the command reads.
+type runFlags struct {
+	fs              *flag.FlagSet
+	env, gatewayURL *string
+	verbose         *bool
+	timeout         *int
+}
+
+// newRunFlags builds the `run` flag set with the given error handling.
+func newRunFlags(h flag.ErrorHandling) runFlags {
+	fs := flag.NewFlagSet("run", h)
+	return runFlags{fs: fs,
+		env:        fs.String("env", "", "Target environment: local"),
+		gatewayURL: fs.String("gateway", "", "Explicit gateway base URL (e.g. http://host:3761)"),
+		verbose:    fs.Bool("v", false, "Print each command before running"),
+		timeout:    fs.Int("timeout", 300, "Per-step timeout in seconds"),
+	}
+}
+
+// runHelp answers `run ... --help` as the flag package did before the help intercept, and runs
+// nothing: a help token taken as a flag's value still prints the usage.
+func runHelp(args []string) int {
+	f := newRunFlags(flag.ContinueOnError)
+	switch err := f.fs.Parse(args); {
+	case err == nil:
+		f.fs.Usage()
+	case !errors.Is(err, flag.ErrHelp):
+		return 2
+	}
+	return 0
 }
 
 // runPipelineCmd implements "nself-ci run [flags] [search-root]".
 // Discovers .ci.yaml manifests under search-root and runs all stages in canonical order.
 // Adds a gateway routing check stage when --env or --gateway is provided.
 func runPipelineCmd(rawArgs []string) int {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	var (
-		env        = fs.String("env", "", "Target environment: local")
-		gatewayURL = fs.String("gateway", "", "Explicit gateway base URL (e.g. http://host:3761)")
-		verbose    = fs.Bool("v", false, "Print each command before running")
-		timeout    = fs.Int("timeout", 300, "Per-step timeout in seconds")
-	)
+	f := newRunFlags(flag.ExitOnError)
+	fs, env, gatewayURL, verbose, timeout := f.fs, f.env, f.gatewayURL, f.verbose, f.timeout
 	_ = fs.Parse(rawArgs)
 
 	searchRoot := "."
