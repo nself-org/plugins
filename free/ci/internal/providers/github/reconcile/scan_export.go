@@ -62,8 +62,8 @@ type ghCommit struct {
 }
 
 // ScanHeads lists the candidate heads of repo for the watcher.
-func (e *Engine) ScanHeads(ctx context.Context, repo string, o ScanOptions) (HeadScan, error) {
-	var res HeadScan
+// The result is named so the deferred call count reaches the caller on every return.
+func (e *Engine) ScanHeads(ctx context.Context, repo string, o ScanOptions) (res HeadScan, err error) {
 	s, err := e.session(ctx, kindScan, e.passLimit())
 	if err != nil {
 		return res, err
