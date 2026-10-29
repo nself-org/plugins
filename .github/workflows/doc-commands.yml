@@ -1,0 +1,80 @@
+# CI wiki doc checks (P7-CI-48): every command block of the pages in guides/ci runs, and the generated parts agree with the code.
+#
+# Purpose: keep the CI wiki pages honest. Step one runs every fenced bash block of every page of
+#   .github/wiki/guides/ci/ in a clean fixture project (.github/scripts/check-doc-commands.sh), so a page cannot
+#   document a command, flag or output that the binary built from this very checkout does not accept. That covers the
+#   pages of the other CI tickets as well as the core pages. Step two runs the reference generator in check mode, so
+#   Reference.md, the evidence tables and the sidebar block cannot drift from the code.
+# Inputs:  this checkout. `nself ci ...` in a block is answered by the plugin built from this checkout, through a
+#   one-line shim named `nself` (the real CLI hands `ci ...` to the plugin binary unchanged). No secrets, and no
+#   network beyond the runner's own checkout and toolchain download.
+# Outputs: pass or fail; a failure names the page, the block number and the exit code.
+# Constraints: actions pinned by SHA; `permissions: contents: read`; the workflow interpolates no event payload field,
+#   no head ref name and no secret, and never runs on the privileged fork-PR trigger. Blocks run with a scrubbed
+#   environment (see free/ci/tools/doccmds), so nothing from the runner's environment reaches them.
+
+name: doc-commands
+
+on:
+  pull_request:
+    paths:
+      - ".github/wiki/guides/ci/**"
+      - ".github/wiki/_Sidebar.md"
+      - ".github/scripts/check-doc-commands.sh"
+      - ".github/workflows/doc-commands.yml"
+      - "free/ci/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: doc-commands-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  doc-commands:
+    name: doc-commands
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+          cache: false
+
+      - name: Build the plugin from this checkout and put `nself` on the path
+        run: |
+          set -euo pipefail
+          bindir="$RUNNER_TEMP/doc-commands-bin"
+          mkdir -p "$bindir"
+          CGO_ENABLED=0 go -C free/ci build -mod=vendor -o "$bindir/nself-ci" ./cmd
+          cat > "$bindir/nself" <<'SHIM'
+          #!/bin/sh
+          # nself ci ARGS... -> nself-ci ARGS... (the plugin binary built from this checkout)
+          if [ "${1:-}" != ci ]; then
+            echo "nself shim: only 'nself ci' is available in the doc check" >&2
+            exit 127
+          fi
+          shift
+          exec "$(dirname "$0")/nself-ci" "$@"
+          SHIM
+          chmod +x "$bindir/nself"
+          echo "$bindir" >> "$GITHUB_PATH"
+
+      - name: Run every command block of every guides/ci page
+        run: |
+          set -euo pipefail
+          bash .github/scripts/check-doc-commands.sh .github/wiki/guides/ci/*.md
+
+      - name: The generated parts agree with the code
+        working-directory: free/ci
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 go run -mod=vendor ./tools/refgen -root ../.. -check

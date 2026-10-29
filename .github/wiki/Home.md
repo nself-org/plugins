@@ -63,7 +63,8 @@ See [[All Plugins|#plugin-directory-sample]] below for a sample; the full catalo
 - [[Deployment|guides/Deployment]]
 - [[Migration|guides/Migration]]
 - [[Best Practices|guides/Best-Practices]]
-- [[Adopting the nself-ci Gate|guides/Nself-CI-Adoption]]
+- [[Getting started with nself ci|guides/ci/Getting-Started]]
+- [[Migrating to the new CI engine|guides/ci/Migration]]
 - [[CI trust, security and privacy|guides/ci/Trust-Security-and-Privacy]]
 - [[Troubleshooting FAQ|troubleshooting/FAQ]]
 
