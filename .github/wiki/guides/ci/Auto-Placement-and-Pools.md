@@ -71,7 +71,7 @@ A status of record is the commit status other people and merge rules rely on. It
 
 ## Dirty-tree offload
 
-To run uncommitted work on another node, `nself ci` takes a snapshot: a commit of the tracked changes plus untracked files that git does not ignore, whose parent is `HEAD`. The snapshot lives under a private ref in the `refs/nself-ci/offload` namespace and is deleted when the run finishes, fails or is cancelled. Your index, branches and working tree are not touched. A clean tree offloads `HEAD` unchanged.
+To run uncommitted work on another node, `nself ci` takes a snapshot: a commit of the tracked changes plus untracked files that git does not ignore, whose parent is `HEAD`. The snapshot lives under a private ref in the `refs/nself-ci/offload` namespace and is deleted when the run finishes, fails or is cancelled. Your index, branches and working tree are not touched. A clean tree offloads `HEAD` unchanged. The snapshot is taken for `--where <node>`, and for a pool, `auto` or `all` when at least one node is registered. A run with `--where local` or `--where hosted`, or with only hosted providers registered, keeps `HEAD`: a hosted runner fetches the revision from the forge, where a snapshot never exists.
 
 Secrets are kept out by path and size, not by reading content. Untracked files that look like secrets or are too large are left out and named in the output. A tracked file of that kind refuses the offload. You can preview what would be included:
 
