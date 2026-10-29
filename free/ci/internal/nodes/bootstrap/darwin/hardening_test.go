@@ -103,7 +103,7 @@ func TestTheSudoersRuleGoesBeforeASurplusUserIsRetired(t *testing.T) {
 
 func TestAnIdThatStillOwnsFilesIsNotReused(t *testing.T) {
 	u := usersScript(1)
-	mustContain(t, "users", u, `find "$d" -xdev -uid "$i" -print -quit`, "/sbin/mount", "scan-incomplete")
+	mustContain(t, "users", u, `find "$d" -xdev -uid +449 -uid -500 -exec`, "/sbin/mount", "scan-incomplete")
 	un := uninstallScript()
 	mustContain(t, "uninstall", un, `-user "$u" -depth -delete`, "/private/tmp", "/Volumes/*")
 }
@@ -127,7 +127,7 @@ func TestPerUserSystemFoldersDoNotKeepASlotAlive(t *testing.T) {
 	r := removeSlotScript(2)
 	mustContain(t, "remove", r,
 		`find /private/var/folders -xdev -user "$u" -depth -delete`,
-		`/var/db/nself-ci-jobs`, `mounts=$(/sbin/mount)`, `-uid "$uid" -print -quit`, `+ 30`, `scan-incomplete`)
+		`/var/db/nself-ci-jobs`, `mounts=$(/sbin/mount)`, `-uid "$uid" -print -quit`, `+ 600`, `scan-incomplete`)
 	if strings.Contains(r, "-maxdepth") {
 		t.Fatal("the ownership scan misses deeply nested files")
 	}

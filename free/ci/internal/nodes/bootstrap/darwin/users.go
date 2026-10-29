@@ -20,17 +20,22 @@ package darwin
 import "fmt"
 
 // usersScript creates the agent user and the job users 1..slots. The id search runs again for every
-// account, so two accounts of one run never get the same id.
+// account, so two accounts of one run never get the same id; the volumes are walked once, for the whole id
+// range, the first time an account is built.
 func usersScript(slots int) string {
-	return fmt.Sprintf(scriptHead+`free_id() {
+	return fmt.Sprintf(scriptHead+`held_ids=
+held_loaded=
+load_held() {
+  [ -z "$held_loaded" ] || return 0
+  held_ids=$({ %[5]s; } 2>/dev/null | sort -u)
+  case "$held_ids" in *scan-incomplete*) echo "ownership scan incomplete" >&2; return 1 ;; esac
+  held_loaded=1
+}
+free_id() {
   used=$({ dscl . -list /Users UniqueID; dscl . -list /Groups PrimaryGroupID; } | awk '{print $NF}')
   i=%[2]d
   while [ "$i" -le %[3]d ]; do
-    if ! echo "$used" | grep -qx "$i"; then
-      held=$({ %[5]s; } 2>/dev/null)
-      case "$held" in *scan-incomplete*) echo "ownership scan incomplete" >&2; return 1 ;; esac
-      if [ -z "$held" ]; then echo "$i"; return 0; fi
-    fi
+    if ! echo "$used" | grep -qx "$i" && ! echo "$held_ids" | grep -qx "$i"; then echo "$i"; return 0; fi
     i=$((i + 1))
   done
   return 1
@@ -40,6 +45,7 @@ mk() {
   if dscl . -read "/Users/$u" IsHidden >/dev/null 2>&1; then return 0; fi
   dscl . -delete "/Users/$u" >/dev/null 2>&1 || true
   dscl . -delete "/Groups/$u" >/dev/null 2>&1 || true
+  load_held || exit 1
   id=$(free_id) || { echo "no free id in %[2]d-%[3]d" >&2; exit 1; }
   dscl . -create "/Groups/$u"
   dscl . -create "/Groups/$u" PrimaryGroupID "$id"
@@ -59,7 +65,7 @@ if [ -f /var/at/cron.deny ] || ! sudo -n -u %[1]s-job-1 crontab -l 2>&1 | grep -
   [ -f /var/at/cron.deny ] || { : > /var/at/cron.deny; chmod 0644 /var/at/cron.deny; }
   for u in %[1]s $(for n in %[4]s; do echo %[1]s-job-$n; done); do grep -qx "$u" /var/at/cron.deny || echo "$u" >> /var/at/cron.deny; done
 fi
-`, agentUser, IDLow, IDHigh, slotList(slots), ownershipScan(`-uid "$i"`))
+`, agentUser, IDLow, IDHigh, slotList(slots), heldIDsScan(IDLow, IDHigh))
 }
 
 // dirsScript creates the directories with their owners and modes. Root only ever creates or changes an

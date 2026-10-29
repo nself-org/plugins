@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -77,7 +78,7 @@ func TestOwnershipScanFailsClosed(t *testing.T) {
 
 func TestOwnershipScanCoversAllVolumesWithoutDepthLimit(t *testing.T) {
 	for _, script := range []string{usersScript(1), removeSlotScript(1)} {
-		mustContain(t, "ownership scan", script, "mounts=$(/sbin/mount)", "-xdev", "-print -quit", "+ 30", "scan-incomplete")
+		mustContain(t, "ownership scan", script, "mounts=$(/sbin/mount)", "-xdev", "+ 600", "scan-incomplete")
 		if strings.Contains(script, "-maxdepth") {
 			t.Fatal("ownership scan ignores deeply nested files")
 		}
@@ -113,5 +114,50 @@ func TestMountedOwnershipScanFailsClosedOnMissingMountpoint(t *testing.T) {
 	out, err := exec.Command("sh", "-c", mountedOwnershipScan(listing, "-uid 450", 30)).CombinedOutput()
 	if err != nil || strings.TrimSpace(string(out)) != "scan-incomplete" {
 		t.Fatalf("missing mountpoint = %q, %v", out, err)
+	}
+}
+
+// The hosted-runner regression: a whole-volume walk is slow, so the users script must walk once for the
+// whole id range, not once per account and candidate id. The generated script runs against stubbed dscl,
+// sudo and mount; the stub find counts its calls and reports uid 450 as owning a file.
+func TestUsersScriptWalksTheVolumesOnce(t *testing.T) {
+	dir := t.TempDir()
+	calls, created := filepath.Join(dir, "calls"), filepath.Join(dir, "created")
+	script := strings.ReplaceAll(usersScript(2), "/sbin/mount", "echo '/dev/test on /vol (apfs, local)'")
+	script = strings.ReplaceAll(script, "/var/at/cron.deny", filepath.Join(dir, "cron.deny"))
+	stubs := `dscl() { case "$*" in *"-read"*) return 1 ;; *"-list"*) [ ! -f ` + created + ` ] || sed 's/^/x /' ` + created + ` ;; *" UniqueID "*) echo "$*" | awk '{print $NF}' >> ` + created + ` ;; esac; return 0; }
+sudo() { echo 'not allowed'; }
+find() { echo x >> ` + calls + `; case "$*" in *"-uid +449"*|*'-uid 450'*|*'-uid "450"'*) echo 450 ;; esac; return 0; }
+`
+	out, err := exec.Command("sh", "-c", stubs+script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("users script: %v\n%s", err, out)
+	}
+	n, _ := os.ReadFile(calls)
+	if got := strings.Count(string(n), "x"); got != 1 {
+		t.Fatalf("volume walks = %d, want 1", got)
+	}
+	b, _ := os.ReadFile(created)
+	ids := strings.Fields(string(b))
+	sort.Strings(ids)
+	if got := strings.Join(ids, " "); got != "451 452 453" {
+		t.Fatalf("ids written = %q, want 451 452 453 (450 owns a file)", got)
+	}
+}
+
+func TestHeldIDsScanReportsOwnersInRange(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "owned"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	uid := os.Getuid()
+	script := boundedScan("'"+dir+"'", heldIDsMatch(uid, uid), heldIDsAction, 30)
+	out, err := exec.Command("sh", "-c", script).CombinedOutput()
+	if got := strings.Fields(string(out)); err != nil || len(got) == 0 || got[0] != fmt.Sprint(uid) {
+		t.Fatalf("held ids = %q, %v; want %d", out, err, uid)
+	}
+	script = boundedScan("'"+dir+"'", heldIDsMatch(uid+1, uid+5), heldIDsAction, 30)
+	if out, err := exec.Command("sh", "-c", script).CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != "" {
+		t.Fatalf("out-of-range owners = %q, %v; want none", out, err)
 	}
 }

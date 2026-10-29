@@ -4,16 +4,35 @@ import "fmt"
 
 // ownershipScan checks every mounted volume without crossing devices or following symlinks.
 // Inputs: a fixed find predicate; output: an owned path or an incomplete-scan marker.
-// Constraints: one 30-second cap spans all volumes; errors fail closed so an unchecked UID is never freed.
+// Constraints: one cap (ownershipBudget) spans all volumes; errors fail closed so an unchecked UID is never freed.
+// A hosted macOS runner needs more than 30 seconds to walk its volumes, so the cap is generous and the
+// allocation script walks once for the whole id range instead of once per candidate id.
 // The script touches no filesystem metadata itself: a missing or hung mountpoint is validated by the
 // watchdog-bounded find, so a blocked lookup cannot outlive the budget.
 func ownershipScan(match string) string {
-	return mountedOwnershipScan("/sbin/mount", match, 30)
+	return mountedScan("/sbin/mount", match, "-print -quit", ownershipBudget)
 }
+
+// ownershipBudget is the whole-scan cap in seconds.
+const ownershipBudget = 600
+
+// heldIDsScan walks the volumes once and prints the uids in lo..hi that own a file, one per line (several
+// times each), or scan-incomplete. The inner sh keeps a file that vanishes mid-walk from failing the find.
+func heldIDsScan(lo, hi int) string {
+	return mountedScan("/sbin/mount", heldIDsMatch(lo, hi), heldIDsAction, ownershipBudget)
+}
+
+const heldIDsAction = `-exec sh -c 'stat -f %u "$@" 2>/dev/null; exit 0' sh {} +`
+
+func heldIDsMatch(lo, hi int) string { return fmt.Sprintf("-uid +%d -uid -%d", lo-1, hi+1) }
 
 // mountedOwnershipScan accepts the native mount listing. Ambiguous or malformed lines
 // fail closed; mountpoints containing ordinary spaces are preserved without word splitting.
 func mountedOwnershipScan(command, match string, seconds int) string {
+	return mountedScan(command, match, "-print -quit", seconds)
+}
+
+func mountedScan(command, match, action string, seconds int) string {
 	return fmt.Sprintf(`scan_deadline=$(($(date +%%s) + %d))
 mounts=$(%s) || { echo scan-incomplete; exit 0; }
 [ -n "$mounts" ] || { echo scan-incomplete; exit 0; }
@@ -35,20 +54,24 @@ paths=$(echo "$mounts" | awk '
 echo "$paths" | while IFS= read -r d; do
   [ "$d" != scan-incomplete ] || { echo scan-incomplete; break; }
 %s
-done`, seconds, command, ownershipVolumeScript(match))
+done`, seconds, command, ownershipVolumeScript(match, action))
 }
 
 func boundedOwnershipScan(dirs, match string, seconds int) string {
+	return boundedScan(dirs, match, "-print -quit", seconds)
+}
+
+func boundedScan(dirs, match, action string, seconds int) string {
 	return fmt.Sprintf(`scan_deadline=$(($(date +%%s) + %d))
 for d in %s; do
 %s
-done`, seconds, dirs, ownershipVolumeScript(match))
+done`, seconds, dirs, ownershipVolumeScript(match, action))
 }
 
-func ownershipVolumeScript(match string) string {
+func ownershipVolumeScript(match, action string) string {
 	return fmt.Sprintf(`  scan_budget=$((scan_deadline - $(date +%%s)))
   if [ "$scan_budget" -le 0 ]; then echo scan-incomplete; break; fi
-  find "$d" -xdev %s -print -quit 2>/dev/null &
+  find "$d" -xdev %s %s 2>/dev/null &
   scan_pid=$!
   (sleep "$scan_budget" & sleeper=$!; trap 'kill "$sleeper" 2>/dev/null || true; exit 0' TERM; wait "$sleeper"; kill -KILL "$scan_pid" 2>/dev/null || true) >/dev/null 2>&1 &
   timer_pid=$!
@@ -56,5 +79,5 @@ func ownershipVolumeScript(match string) string {
   wait "$scan_pid" 2>/dev/null || scan_rc=$?
   kill "$timer_pid" 2>/dev/null || true
   wait "$timer_pid" 2>/dev/null || true
-  if [ "$scan_rc" -ne 0 ]; then echo scan-incomplete; break; fi`, match)
+  if [ "$scan_rc" -ne 0 ]; then echo scan-incomplete; break; fi`, match, action)
 }
