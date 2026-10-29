@@ -23,6 +23,7 @@ import (
 	compat "github.com/nself-org/cli/sdk/go/v2/compat"
 	"github.com/nself-org/plugins/free/ci/internal/dispatch"
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
+	"github.com/nself-org/plugins/free/ci/internal/netscope"
 	"github.com/nself-org/plugins/free/ci/internal/protocol"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 	"github.com/nself-org/plugins/free/ci/internal/schedpolicy"
@@ -197,13 +198,18 @@ type carriers interface {
 }
 
 func newTransportAdapter(sink transport.Sink, reg carriers, root string) dispatch.Transport {
-	return transportAdapter{sink: sink, reg: reg, root: root}
+	a := transportAdapter{sink: sink, reg: reg, root: root}
+	if rs, ok := sink.(*remoteSink); ok && rs != nil {
+		a.st = rs.st
+	}
+	return a
 }
 
 type transportAdapter struct {
 	sink transport.Sink
 	reg  carriers
-	root string // the repository whose revision a node receives
+	root string       // the repository whose revision a node receives
+	st   *store.Store // the run's store: the attempt facts the lease's evidence context repeats (nil: none)
 }
 
 func (transportAdapter) Known(kind string) bool {
@@ -220,15 +226,21 @@ func (a transportAdapter) Deliver(ctx context.Context, d dispatch.Delivery) erro
 	if RemoteRepo != nil && a.root != "" {
 		RemoteRepo(a.root)
 	}
+	// The scheduler's admission rule is not the only gate: an untrusted job that declares lan or privileged is
+	// refused here too, and the node checks the lease again with the class it carries (D-1331).
+	if _, err := netscope.RunScope(d.Trust, d.Network); err != nil {
+		return err
+	}
 	refs, err := leaseSecretRefs(d)
 	if err != nil {
 		return err
 	}
-	lease := protocol.Lease{NetworkScope: d.Network, LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
-		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: refs, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
-	if len(refs) > 0 {
-		lease.Trust = d.Trust
+	evidence, err := LeaseEvidence(ctx, a.st, d.AttemptID)
+	if err != nil {
+		return err
 	}
+	lease := protocol.Lease{Evidence: evidence, NetworkScope: d.Network, LeaseID: d.LeaseID, AttemptID: d.AttemptID, Epoch: uint64(d.Epoch), Token: d.Token, CompatMode: protocol.Compat15, Job: d.Job,
+		Checkout: protocol.Checkout{Revision: d.Revision}, Secrets: refs, Trust: d.Trust, ExpiresAt: d.ExpiresAt.UTC().Format(time.RFC3339)}
 	sink := bindLeaseSink(a.sink, leaseFacts{AttemptID: d.AttemptID, LeaseID: d.LeaseID, Epoch: d.Epoch, Job: d.Job, Hosted: d.Hosted})
 	sink = prepareCache(ctx, sink, &lease, a.root, d.Node.Identity.ID, d.Hosted, remoteCachePlatform(d.Node), d.Node.Identity.Transport)
 	return transport.Deliver(ctx, d.Node, lease, sink)

@@ -118,10 +118,23 @@ type Lease struct {
 	Job              model.Job           `json:"job"`
 	Checkout         Checkout            `json:"checkout"`
 	Secrets          []SecretRef         `json:"secrets"`
-	Trust            model.TrustClass    `json:"trust,omitempty"` // the class the job was admitted at; set with Secrets, so a node judges its own eligibility by it
+	Trust            model.TrustClass    `json:"trust,omitempty"` // the class the job was admitted at; a node judges its own secret eligibility and the job's network scope by it
 	ExpiresAt        string              `json:"expires_at"`
 	Cache            *LeaseCache         `json:"cache,omitempty"`
 	RunnerCredential *RunnerCredential   `json:"runner_credential,omitempty"`
+	Evidence         *LeaseEvidence      `json:"evidence,omitempty"`
+}
+
+// LeaseEvidence is what the coordinator recorded for the attempt (its run, repository, source trust, policy
+// digest, selection mode and job name). The node's evidence names exactly these, so a signed result verifies
+// against the coordinator's record (attest.RunnerVerifier) without a field changing after it is signed (D-1299).
+type LeaseEvidence struct {
+	RunID         string `json:"run_id"`
+	RepoID        string `json:"repo_id"`
+	SourceTrust   string `json:"source_trust"`
+	PolicyDigest  string `json:"policy_digest"`
+	SelectionMode string `json:"selection_mode"`
+	Job           string `json:"job"`
 }
 type Chunk struct {
 	Stream string `json:"stream"`
