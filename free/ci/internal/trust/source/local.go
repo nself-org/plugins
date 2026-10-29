@@ -8,7 +8,9 @@ package source
 //          here (commit, commit (amend), rebase, merge, cherry-pick; never checkout, fetch, pull, a
 //          fast-forward). A pushed commit of yours still counts: D17 asks for "on no ref of any remote",
 //          but an arrival entry is the proof of a stranger's commit and the push test made `nself ci`
-//          refuse your own pushed branch (lead ruling, TRUST EPIC Invalidations 2026-10-19).
+//          refuse your own pushed branch (lead ruling, TRUST EPIC Invalidations 2026-10-19). A rewrite
+//          (rebase step, amend, cherry-pick) whose patch equals a commit that arrived from elsewhere is a
+//          replay of that commit, not a creation (D-1322).
 //          Otherwise collaborator when HEAD is on a branch of the origin remote, else untrusted. A fact
 //          that could not be gathered closes the path that needs it. A repository with no remote at
 //          all has nothing foreign to classify, so it is the operator's own (local.no_remote).
@@ -45,6 +47,9 @@ func ClassifyLocal(g GitFacts) Result {
 	if createdHere(g) {
 		return done(owner, ReasonLocalCreated)
 	}
+	if replayed(g) {
+		r.Reasons = append(r.Reasons, ReasonLocalReplayed)
+	}
 	if len(g.Missing) > 0 {
 		r.Reasons = append(r.Reasons, ReasonLocalIncomplete)
 	}
@@ -67,11 +72,37 @@ func createdHere(g GitFacts) bool {
 		}
 	}
 	for _, c := range g.OffDefault {
-		if !MadeHere(g.ReflogCreated[c.SHA]) {
+		subject := g.ReflogCreated[c.SHA]
+		if !MadeHere(subject) {
 			return false
+		}
+		if Rewrite(subject) && (g.missing(MissingPatches) || g.ReplayedPatch[c.SHA]) {
+			return false // someone else's patch replayed here, or the patches could not be compared
 		}
 	}
 	return true
+}
+
+// replayed reports whether a commit of Head is a replay of a patch that arrived here.
+func replayed(g GitFacts) bool {
+	for _, c := range g.OffDefault {
+		if g.ReplayedPatch[c.SHA] {
+			return true
+		}
+	}
+	return false
+}
+
+// Rewrite reports whether a creation subject (MadeHere) rewrites an existing commit rather than making a
+// new change: a rebase step (also under `pull --rebase`), `commit (amend)` and `cherry-pick`. Such a
+// commit is new here only when its patch is not one that arrived from elsewhere (GitFacts.ReplayedPatch).
+func Rewrite(subject string) bool {
+	if !MadeHere(subject) || strings.Contains(subject, "Merge made by") {
+		return false
+	}
+	kind, _, _ := strings.Cut(subject, ":")
+	kind = strings.TrimSpace(kind)
+	return kind == "commit (amend)" || strings.HasPrefix(kind, "rebase") || strings.HasPrefix(kind, "pull") || strings.HasPrefix(kind, "cherry-pick")
 }
 
 // MadeHere reports whether a reflog subject records a commit created on this machine: `commit`,

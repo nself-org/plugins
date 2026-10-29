@@ -106,9 +106,6 @@ func (x *dFx) fetchStranger() string {
 // D01: the operator replays the stranger's single commit (rebase onto newer main). The tree content
 // is still the stranger's, so the class must stay below owner.
 func TestD01_RebaseOfStrangerCommitStaysForeign(t *testing.T) {
-	if !openFinding(t, "D01") {
-		return
-	}
 	x := newDFx(t)
 	sha := x.fetchStranger()
 	x.advanceMain()
@@ -121,9 +118,6 @@ func TestD01_RebaseOfStrangerCommitStaysForeign(t *testing.T) {
 
 // D02: the operator amends the stranger's single commit (a message tidy-up). Same content, new SHA.
 func TestD02_AmendOfStrangerCommitStaysForeign(t *testing.T) {
-	if !openFinding(t, "D01") {
-		return
-	}
 	x := newDFx(t)
 	dGit(t, x.op, "checkout", "-q", "-b", "pr", x.fetchStranger())
 	dGit(t, x.op, "commit", "-q", "--amend", "-m", "tidy message")
@@ -134,9 +128,6 @@ func TestD02_AmendOfStrangerCommitStaysForeign(t *testing.T) {
 
 // D03: the operator cherry-picks the stranger's commit onto a branch of main.
 func TestD03_CherryPickOfStrangerCommitStaysForeign(t *testing.T) {
-	if !openFinding(t, "D01") {
-		return
-	}
 	x := newDFx(t)
 	sha := x.fetchStranger()
 	x.advanceMain()

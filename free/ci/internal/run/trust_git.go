@@ -8,7 +8,8 @@ package run
 //          under test); only refs/remotes/origin/ names the default branch; every FETCH_HEAD line counts,
 //          not just the first; an unfinished merge, squash, cherry-pick, revert or rebase is reported;
 //          a git failure is listed in Missing, never read as an answer; the reflog is read from every
-//          log (a linked worktree has a HEAD log of its own) and each commit keeps its OLDEST entry.
+//          log (a linked worktree has a HEAD log of its own) and each commit keeps its OLDEST entry; a
+//          rewritten commit's patch is compared with the commits that arrived (trust_git_patch.go).
 
 import (
 	"context"
@@ -154,6 +155,7 @@ func (h SourceTrust) gather(ctx context.Context, root, rev string) source.GitFac
 		run(func() { g.OffDefault = listed("rev-list", "-n", "501", rev) })
 	}
 	wg.Wait()
+	replayedPatches(git, &g, fetched)
 	return g
 }
 
